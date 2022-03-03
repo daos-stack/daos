@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2018-2021 Intel Corporation.
+ * (C) Copyright 2018-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -168,10 +168,10 @@ struct bio_dma_buffer {
 	  "minutes", D_TM_COUNTER)					\
 	X(bdh_avail_spare, "reliability/avail_spare",			\
 	  "Percentage of remaining spare capacity available",		\
-	  "%", D_TM_COUNTER)						\
+	  "%", D_TM_GAUGE)						\
 	X(bdh_avail_spare_thres, "reliability/avail_spare_threshold",	\
 	  "Threshold for available spare value",			\
-	  "%", D_TM_COUNTER)						\
+	  "%", D_TM_GAUGE)						\
 	X(bdh_avail_spare_warn, "reliability/avail_spare_warn",		\
 	  "Set to 1 when available spare has fallen below threshold",	\
 	  "", D_TM_GAUGE)						\
@@ -201,16 +201,16 @@ struct bio_dma_buffer {
 	  "", D_TM_COUNTER)						\
 	Y(bdh_wear_leveling_cnt_norm, "vendor/wear_leveling_cnt_norm",	\
 	  "Wear leveling count remaining, decrements from 100 to 0",	\
-	  "", D_TM_COUNTER)						\
+	  "", D_TM_GAUGE)						\
 	Y(bdh_wear_leveling_cnt_min, "vendor/wear_leveling_cnt_min",	\
 	  "Wear leveling minimum erase cycle",				\
-	  "", D_TM_COUNTER)						\
+	  "", D_TM_GAUGE)						\
 	Y(bdh_wear_leveling_cnt_max, "vendor/wear_leveling_cnt_max",    \
 	  "Wear leveling maximum erase cycle",                          \
-	  "", D_TM_COUNTER)                                             \
+	  "", D_TM_GAUGE)                                             \
 	Y(bdh_wear_leveling_cnt_avg, "vendor/wear_leveling_cnt_avg",    \
 	  "Wear leveling average erase cycle",                          \
-	  "", D_TM_COUNTER)						\
+	  "", D_TM_GAUGE)						\
 	Y(bdh_endtoend_err_cnt_raw, "vendor/endtoend_err_cnt_raw",	\
 	  "End-to-End detected and corrected errors by hardware",	\
 	  "", D_TM_COUNTER)						\
@@ -219,16 +219,16 @@ struct bio_dma_buffer {
 	  "", D_TM_COUNTER)						\
 	Y(bdh_media_wear_raw, "vendor/media_wear_raw",			\
 	  "Wear seen by the SSD as a percentage of the maximum rated cycles", \
-	  "%", D_TM_COUNTER)						\
+	  "%", D_TM_GAUGE)						\
 	Y(bdh_host_reads_raw, "vendor/host_reads_raw",			\
 	  "Percentage of I/O operations that are a read operation",	\
-	  "%", D_TM_COUNTER)						\
+	  "%", D_TM_GAUGE)						\
 	Y(bdh_workload_timer_raw, "vendor/crc_workload_timer_raw",	\
 	  "The elapsed time since starting the workload timer",		\
 	  "minutes", D_TM_COUNTER)					\
 	Y(bdh_thermal_throttle_status, "vendor/thermal_throttle_status_raw", \
 	  "Thermal throttle status",					\
-	  "%", D_TM_COUNTER)						\
+	  "%", D_TM_GAUGE)						\
 	Y(bdh_thermal_throttle_event_cnt, "vendor/thermal_throttle_event_cnt", \
 	  "Thermal throttling event count",				\
 	  "", D_TM_COUNTER)						\
@@ -491,6 +491,7 @@ extern bool		bio_scm_rdma;
 extern bool		bio_spdk_inited;
 extern unsigned int	bio_chk_sz;
 extern unsigned int	bio_chk_cnt_max;
+extern unsigned int	bio_numa_node;
 int xs_poll_completion(struct bio_xs_context *ctxt, unsigned int *inflights,
 		       uint64_t timeout);
 void bio_bdev_event_cb(enum spdk_bdev_event_type type, struct spdk_bdev *bdev,
@@ -610,6 +611,6 @@ void bio_led_event_monitor(struct bio_xs_context *ctxt, uint64_t now);
 int fill_in_traddr(struct bio_dev_info *b_info, char *dev_name);
 
 /* bio_config.c */
-int bio_add_allowed_alloc(const char *json_config_file,
-			  struct spdk_env_opts *opts);
+int bio_add_allowed_alloc(const char *nvme_conf, struct spdk_env_opts *opts);
+int bio_set_hotplug_filter(const char *nvme_conf);
 #endif /* __BIO_INTERNAL_H__ */

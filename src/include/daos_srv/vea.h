@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2018-2021 Intel Corporation.
+ * (C) Copyright 2018-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -19,9 +19,6 @@
 #include <gurt/list.h>
 #include <daos/mem.h>
 #include <daos/btree.h>
-
-/* Maximum age, indicating a non-active free extent */
-#define VEA_EXT_AGE_MAX		0
 
 /* Common free extent structure for both SCM & in-memory index */
 struct vea_free_extent {

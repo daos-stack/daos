@@ -10,10 +10,12 @@
 
 dnf --nodocs install \
     boost-python3-devel \
+    bzip2 \
     clang \
     clang-tools-extra \
     cmake \
     CUnit-devel \
+    diffutils \
     e2fsprogs \
     file \
     flex \
@@ -43,7 +45,6 @@ dnf --nodocs install \
     Lmod \
     lz4-devel \
     make \
-    maven \
     meson \
     ndctl \
     ninja-build \
@@ -58,10 +59,21 @@ dnf --nodocs install \
     python3-distro \
     python3-junit_xml \
     python3-pip \
+    python3-pyelftools \
     python3-pyxattr \
     python3-tabulate \
-    python3-scons \
     python3-yaml \
     sg3_utils \
     valgrind-devel \
+    which \
     yasm
+
+# For fedora, java-11 is installed along with maven if we install maven from
+# repo. But we need java-8 (1.8). The 'devel' package also needs to be
+# installed specifically.
+
+if [ -e /etc/fedora-release ]; then
+        dnf install java-1.8.0-openjdk-devel maven-openjdk8
+else
+        dnf install maven
+fi

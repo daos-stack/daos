@@ -1,6 +1,6 @@
 #!/usr/bin/python
 """
-  (C) Copyright 2018-2021 Intel Corporation.
+  (C) Copyright 2018-2022 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -61,7 +61,7 @@ class DaosCommand(DaosCommandBase):
 
     def container_create(self, pool, sys_name=None, cont=None,
                          path=None, cont_type=None, oclass=None,
-                         chunk_size=None, properties=None, acl_file=None):
+                         chunk_size=None, properties=None, acl_file=None, label=None):
         # pylint: disable=too-many-arguments
         """Create a container.
 
@@ -80,6 +80,7 @@ class DaosCommand(DaosCommandBase):
             properties (str, optional): String of comma-separated <name>:<value>
                 pairs defining the container properties. Defaults to None
             acl_file (str, optional): ACL file. Defaults to None.
+            label (str, optional): Container label. Defaults to None.
 
         Returns:
             dict: the daos json command output converted to a python dictionary
@@ -91,7 +92,7 @@ class DaosCommand(DaosCommandBase):
         return self._get_json_result(
             ("container", "create"), pool=pool, sys_name=sys_name,
             cont=cont, path=path, type=cont_type, oclass=oclass,
-            chunk_size=chunk_size, properties=properties, acl_file=acl_file)
+            chunk_size=chunk_size, properties=properties, acl_file=acl_file, label=label)
 
     def container_clone(self, src, dst):
         """Clone a container to a new container.
@@ -601,8 +602,8 @@ class DaosCommand(DaosCommandBase):
         # replica 1 1
         data = {}
         vals = re.findall(
-            r"oid:\s+([\d.]+)\s+ver\s+(\d+)\s+grp_nr:\s+(\d+)|"\
-            r"grp:\s+(\d+)\s+|"\
+            r"oid:\s+([\d.]+)\s+ver\s+(\d+)\s+grp_nr:\s+(\d+)|"
+            r"grp:\s+(\d+)\s+|"
             r"replica\s+(\d+)\s+(\d+)\s*", self.result.stdout_text)
 
         try:
@@ -652,3 +653,16 @@ class DaosCommand(DaosCommandBase):
         """
         return self._get_result(
             ("filesystem", "copy"), src=src, dst=dst, preserve_props=preserve_props)
+
+    def version(self):
+        """Call daos version.
+
+        Returns:
+            CmdResult: an avocado CmdResult object containing the dmg command
+                information, e.g. exit status, stdout, stderr, etc.
+
+        Raises:
+            CommandFailure: if the dmg storage query command fails.
+
+        """
+        return self._get_result(["version"])

@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2021 Intel Corporation.
+// (C) Copyright 2020-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -15,7 +15,7 @@ import (
 	"github.com/pkg/errors"
 
 	"github.com/daos-stack/daos/src/control/common"
-	nd "github.com/daos-stack/daos/src/control/lib/netdetect"
+	"github.com/daos-stack/daos/src/control/lib/hardware"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/server/config"
 	"github.com/daos-stack/daos/src/control/server/engine"
@@ -30,9 +30,7 @@ const (
 	defaultTargetCount    = 16
 	defaultEngineLogFile  = "/tmp/daos_engine"
 	defaultControlLogFile = "/tmp/daos_server.log"
-	// NetDevAny matches any netdetect network device class
-	NetDevAny    = math.MaxUint32
-	minDMABuffer = 1024
+	minDMABuffer          = 1024
 
 	errNoNuma            = "zero numa nodes reported on hosts %s"
 	errUnsupNetDevClass  = "unsupported net dev class in request: %s"
@@ -50,7 +48,7 @@ type (
 		msRequest
 		NrEngines    int
 		MinNrSSDs    int
-		NetClass     uint32
+		NetClass     hardware.NetDevClass
 		Client       UnaryInvoker
 		HostList     []string
 		AccessPoints []string
@@ -115,7 +113,7 @@ func ConfigGenerate(ctx context.Context, req ConfigGenerateReq) (*ConfigGenerate
 		return nil, err
 	}
 
-	cfg, err := genConfig(req.Log, req.AccessPoints, nd, sd, ccs)
+	cfg, err := genConfig(req.Log, defaultEngineCfg, req.AccessPoints, nd, sd, ccs)
 	if err != nil {
 		return nil, err
 	}
@@ -182,7 +180,7 @@ func (nnim numaNetIfaceMap) hasNUMAs(numaCount int) bool {
 
 // classInterfaces is an alias for a map of netdev class ID to slice of
 // fabric network interfaces.
-type classInterfaces map[uint32]numaNetIfaceMap
+type classInterfaces map[hardware.NetDevClass]numaNetIfaceMap
 
 // add network device to bucket corresponding to provider, network class type and
 // NUMA node binding. Ignore add if there is an existing entry as the interfaces
@@ -195,7 +193,7 @@ func (cis classInterfaces) add(log logging.Logger, iface *HostFabricInterface) {
 	if _, exists := cis[iface.NetDevClass][nn]; exists {
 		return // already have interface for this NUMA
 	}
-	log.Debugf("%s class iface %s found for NUMA %d", nd.DevClassName(iface.NetDevClass),
+	log.Debugf("%s class iface %s found for NUMA %d", iface.NetDevClass,
 		iface.Device, nn)
 	cis[iface.NetDevClass][nn] = iface
 }
@@ -206,7 +204,7 @@ func (cis classInterfaces) add(log logging.Logger, iface *HostFabricInterface) {
 //
 // Returns when network devices matching criteria have been found for each
 // required NUMA node.
-func parseInterfaces(log logging.Logger, reqClass uint32, engineCount int, interfaces []*HostFabricInterface) (numaNetIfaceMap, bool) {
+func parseInterfaces(log logging.Logger, reqClass hardware.NetDevClass, engineCount int, interfaces []*HostFabricInterface) (numaNetIfaceMap, bool) {
 	// sort network interfaces by priority to get best available
 	sort.Slice(interfaces, func(i, j int) bool {
 		return interfaces[i].Priority < interfaces[j].Priority
@@ -216,9 +214,9 @@ func parseInterfaces(log logging.Logger, reqClass uint32, engineCount int, inter
 	buckets := make(map[string]classInterfaces)
 	for _, iface := range interfaces {
 		switch iface.NetDevClass {
-		case nd.Ether, nd.Infiniband:
+		case hardware.Ether, hardware.Infiniband:
 			switch reqClass {
-			case NetDevAny, iface.NetDevClass:
+			case hardware.NetDevAny, iface.NetDevClass:
 			default:
 				continue // iface class not requested
 			}
@@ -244,18 +242,18 @@ func parseInterfaces(log logging.Logger, reqClass uint32, engineCount int, inter
 
 // getNetIfaces scans fabric network devices and returns a NUMA keyed map for a
 // provider/class combination.
-func getNetIfaces(log logging.Logger, reqClass uint32, engineCount int, hfs *HostFabricSet) (numaNetIfaceMap, error) {
+func getNetIfaces(log logging.Logger, reqClass hardware.NetDevClass, engineCount int, hfs *HostFabricSet) (numaNetIfaceMap, error) {
 	switch reqClass {
-	case NetDevAny, nd.Ether, nd.Infiniband:
+	case hardware.NetDevAny, hardware.Ether, hardware.Infiniband:
 	default:
-		return nil, errors.Errorf(errUnsupNetDevClass, nd.DevClassName(reqClass))
+		return nil, errors.Errorf(errUnsupNetDevClass, reqClass.String())
 	}
 
 	matchIfaces, complete := parseInterfaces(log, reqClass, engineCount, hfs.HostFabric.Interfaces)
 	if !complete {
 		class := "best-available"
-		if reqClass != NetDevAny {
-			class = nd.DevClassName(reqClass)
+		if reqClass != hardware.NetDevAny {
+			class = reqClass.String()
 		}
 		return nil, errors.Errorf(errInsufNrIfaces, class, engineCount, len(matchIfaces),
 			matchIfaces)
@@ -390,8 +388,9 @@ func mapSSDs(ssds storage.NvmeControllers) numaSSDsMap {
 }
 
 type storageDetails struct {
-	numaPMems numaPMemsMap
-	numaSSDs  numaSSDsMap
+	hugePageSize int
+	numaPMems    numaPMemsMap
+	numaSSDs     numaSSDsMap
 }
 
 // validate checks sufficient PMem devices and SSD NUMA groups exist for the
@@ -444,8 +443,9 @@ func getStorageDetails(ctx context.Context, req ConfigGenerateReq, engineCount i
 	}
 
 	sd := &storageDetails{
-		numaPMems: mapPMems(storageSet.HostStorage.ScmNamespaces),
-		numaSSDs:  mapSSDs(storageSet.HostStorage.NvmeDevices),
+		numaPMems:    mapPMems(storageSet.HostStorage.ScmNamespaces),
+		numaSSDs:     mapSSDs(storageSet.HostStorage.NvmeDevices),
+		hugePageSize: storageSet.HostStorage.HugePageInfo.PageSizeKb,
 	}
 	if err := sd.validate(req.Log, engineCount, req.MinNrSSDs); err != nil {
 		return nil, err
@@ -547,89 +547,102 @@ func getCPUDetails(log logging.Logger, numaSSDs numaSSDsMap, coresPerNuma int) (
 	return numaCoreCounts, nil
 }
 
+type newEngineCfgFn func(int) *engine.Config
+
 func defaultEngineCfg(idx int) *engine.Config {
 	return engine.NewConfig().
 		WithTargetCount(defaultTargetCount).
 		WithLogFile(fmt.Sprintf("%s.%d.log", defaultEngineLogFile, idx))
 }
 
-// genConfig generates server config file from details of available network,
-// storage and CPU hardware.
-func genConfig(log logging.Logger, accessPoints []string, nd *networkDetails, sd *storageDetails, ccs numaCoreCountsMap) (*config.Server, error) {
-	// basic sanity checks
+// genConfig generates server config file from details of network, storage and CPU hardware after
+// performing some basic sanity checks.
+func genConfig(log logging.Logger, newEngineCfg newEngineCfgFn, accessPoints []string, nd *networkDetails, sd *storageDetails, ccs numaCoreCountsMap) (*config.Server, error) {
 	if nd.engineCount == 0 {
 		return nil, errors.Errorf(errInvalNrEngines, 1, 0)
 	}
+
 	if len(nd.numaIfaces) < nd.engineCount {
 		return nil, errors.Errorf(errInsufNrIfaces, "", nd.engineCount,
 			len(nd.numaIfaces), nd.numaIfaces)
 	}
+
 	if len(sd.numaPMems) < nd.engineCount {
 		return nil, errors.Errorf(errInsufNrPMemGroups, sd.numaPMems, nd.engineCount,
 			len(sd.numaPMems))
 	}
-	if len(sd.numaSSDs) > 0 && (len(sd.numaSSDs) < nd.engineCount) {
-		return nil, errors.New("invalid number of ssd groups") // shouldn't happen
+
+	// enforce consistent ssd count across engine configs
+	minSsds := math.MaxUint32
+	numaWithMinSsds := 0
+	if len(sd.numaSSDs) > 0 {
+		if len(sd.numaSSDs) < nd.engineCount {
+			return nil, errors.New("invalid number of ssd groups") // should never happen
+		}
+
+		for numa, ssds := range sd.numaSSDs {
+			if len(ssds) < minSsds {
+				minSsds = len(ssds)
+				numaWithMinSsds = numa
+			}
+		}
 	}
+
 	if len(ccs) < nd.engineCount {
-		return nil, errors.New("invalid number of core count groups") // shouldn't happen
+		return nil, errors.New("invalid number of core count groups") // should never happen
 	}
+	// enforce consistent target and helper count across engine configs
+	nrTgts := ccs[numaWithMinSsds].nrTgts
+	nrHlprs := ccs[numaWithMinSsds].nrHlprs
 
 	engines := make([]*engine.Config, 0, nd.engineCount)
 	for nn := 0; nn < nd.engineCount; nn++ {
-		engineCfg := defaultEngineCfg(nn).
-			WithTargetCount(ccs[nn].nrTgts).
-			WithHelperStreamCount(ccs[nn].nrHlprs)
+		engineCfg := newEngineCfg(nn).
+			WithTargetCount(nrTgts).
+			WithHelperStreamCount(nrHlprs)
 		if len(sd.numaPMems) > 0 {
 			engineCfg.WithStorage(
 				storage.NewTierConfig().
-					WithScmClass(storage.ClassDcpm.String()).
+					WithStorageClass(storage.ClassDcpm.String()).
 					WithScmMountPoint(fmt.Sprintf("%s%d", scmMountPrefix, nn)).
 					WithScmDeviceList(sd.numaPMems[nn][0]),
 			)
 		}
-		if len(sd.numaSSDs) > 0 {
+		if len(sd.numaSSDs) > 0 && len(sd.numaSSDs[nn]) > 0 {
 			engineCfg.WithStorage(
 				storage.NewTierConfig().
-					WithBdevClass(storage.ClassNvme.String()).
-					WithBdevDeviceList(sd.numaSSDs[nn]...),
+					WithStorageClass(storage.ClassNvme.String()).
+					WithBdevDeviceList(sd.numaSSDs[nn][:minSsds]...),
 			)
 		}
 
 		pnn := uint(nn)
+		engineCfg.PinnedNumaNode = &pnn
 		engineCfg.Fabric = engine.FabricConfig{
-			Provider:       nd.numaIfaces[nn].Provider,
-			Interface:      nd.numaIfaces[nn].Device,
-			InterfacePort:  int(defaultFiPort + (nn * defaultFiPortInterval)),
-			PinnedNumaNode: &pnn,
+			Provider:      nd.numaIfaces[nn].Provider,
+			Interface:     nd.numaIfaces[nn].Device,
+			InterfacePort: int(defaultFiPort + (nn * defaultFiPortInterval)),
 		}
 
 		engines = append(engines, engineCfg)
 	}
 
-	// determine a reasonable amount of hugepages to use
-	hugepage_info, err := common.GetHugePageInfo()
+	numTargets := 0
+	for _, e := range engines {
+		numTargets += e.TargetCount
+	}
+
+	reqHugePages, err := common.CalcMinHugePages(sd.hugePageSize, numTargets)
 	if err != nil {
-		return nil, errors.New("unable to read system hugepage info")
+		return nil, errors.Wrap(err, "unable to calculate minimum hugepages")
 	}
-	hugepage_size := hugepage_info.PageSizeKb >> 10
-	if hugepage_size == 0 {
-		return nil, errors.New("unable to read system hugepage size")
-	}
-	max_nrTgts := 0
-	for i := 0; i < nd.engineCount; i++ {
-		if ccs[i].nrTgts > max_nrTgts {
-			max_nrTgts = ccs[i].nrTgts
-		}
-	}
-	nr_hugepages := (minDMABuffer * max_nrTgts) / hugepage_size
 
 	cfg := config.DefaultServer().
 		WithAccessPoints(accessPoints...).
 		WithFabricProvider(engines[0].Fabric.Provider).
 		WithEngines(engines...).
 		WithControlLogFile(defaultControlLogFile).
-		WithNrHugePages(nr_hugepages)
+		WithNrHugePages(reqHugePages)
 
-	return cfg, cfg.Validate(log)
+	return cfg, cfg.Validate(log, sd.hugePageSize, nil)
 }

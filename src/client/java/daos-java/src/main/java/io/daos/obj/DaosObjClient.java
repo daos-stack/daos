@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2018-2021 Intel Corporation.
+ * (C) Copyright 2018-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -69,15 +69,19 @@ public class DaosObjClient extends ShareableClient implements ForceCloseable {
    *
    * @param oidBufferAddress
    * address of direct byte buffer with original object id's high and low. encode object id is set back to this buffer.
-   * @param feats
+   * @param contPtr
+   * container handle
+   * @param objectType
    * object feature bits
-   * @param objectTypeName
-   * object type name, see {@link DaosObjectType}
+   * @param objectClassName
+   * object type name, see {@link DaosObjectClass}
+   * @param objClassHint
+   * object class hint
    * @param args
    * reserved
    */
-  native static void encodeObjectId(long oidBufferAddress, int feats, String objectTypeName,
-                                           int args);
+  native static void encodeObjectId(long oidBufferAddress, long contPtr, int objectType, String objectClassName,
+                                           int objClassHint, int args);
 
   /**
    * open object denoted by object id stored in <code>buffer</code>.
@@ -394,7 +398,7 @@ public class DaosObjClient extends ShareableClient implements ForceCloseable {
 
   public static native void releaseDescSimple(long nativeDescPtr);
 
-  protected long getContPtr() {
+  public long getContPtr() {
     return contPtr;
   }
 

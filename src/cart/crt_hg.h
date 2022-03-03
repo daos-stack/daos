@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2021 Intel Corporation.
+ * (C) Copyright 2016-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -36,14 +36,24 @@ enum crt_na_type {
 	CRT_NA_SM		= 0,
 	CRT_NA_OFI_SOCKETS	= 1,
 	CRT_NA_OFI_VERBS_RXM	= 2,
-	CRT_NA_OFI_VERBS	= 3,
-	CRT_NA_OFI_GNI		= 4,
-	CRT_NA_OFI_PSM2		= 5,
-	CRT_NA_OFI_TCP_RXM	= 6,
-	CRT_NA_OFI_CXI		= 7,
+	CRT_NA_OFI_GNI		= 3,
+	CRT_NA_OFI_PSM2		= 4,
+	CRT_NA_OFI_TCP_RXM	= 5,
+	CRT_NA_OFI_CXI		= 6,
+	CRT_NA_OFI_LAST         = CRT_NA_OFI_CXI,
+	CRT_NA_UCX_RC		= 7,
+	CRT_NA_UCX_UD		= 8,
+	CRT_NA_UCX_RC_UD	= 9,
+	CRT_NA_UCX_RC_O		= 10,
+	CRT_NA_UCX_UD_O		= 11,
+	CRT_NA_UCX_RC_UD_O	= 12,
+	CRT_NA_UCX_RC_X		= 13,
+	CRT_NA_UCX_UD_X		= 14,
+	CRT_NA_UCX_RC_UD_X      = 15,
+	CRT_NA_UCX_DC_X         = 16,
 
 	/* Note: This entry should be the last valid one in enum */
-	CRT_NA_OFI_COUNT,
+	CRT_NA_COUNT,
 	CRT_NA_UNKNOWN = -1,
 };
 
@@ -54,18 +64,29 @@ int
 crt_hg_parse_uri(const char *uri, enum crt_na_type *prov, char *addr);
 
 static inline bool
+crt_na_type_is_ucx(int na_type)
+{
+
+	return (na_type >= CRT_NA_UCX_RC) &&
+	       (na_type < CRT_NA_COUNT);
+}
+
+static inline bool
 crt_na_type_is_ofi(int na_type)
 {
 	return (na_type >= CRT_NA_OFI_SOCKETS) &&
-	       (na_type < CRT_NA_OFI_COUNT);
+	       (na_type <= CRT_NA_OFI_LAST);
 }
 
 struct crt_na_dict {
+	/** String identifying the provider */
 	char	*nad_str;
+	/** Alternative string */
+	char	*nad_alt_str;
 	int	nad_type;
-	/* a flag of explicitly bind with IP:port to create NA class */
+	/** a flag of explicitly bind with IP:port to create NA class */
 	bool	nad_port_bind;
-	/* a flag to indicate if endpoints are contiguous */
+	/** a flag to indicate if endpoints are contiguous */
 	bool	nad_contig_eps;
 };
 

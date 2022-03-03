@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2021 Intel Corporation.
+// (C) Copyright 2019-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -13,9 +13,12 @@ package storage
 import "C"
 
 import (
+	"context"
+	"encoding/json"
 	"fmt"
 	"strings"
 	"sync"
+	"unsafe"
 
 	"github.com/dustin/go-humanize"
 	"github.com/pkg/errors"
@@ -36,14 +39,14 @@ type NvmeDevState uint32
 // NvmeDevState values representing individual bit-flags.
 const (
 	NvmeStatePlugged  NvmeDevState = C.NVME_DEV_FL_PLUGGED
-	NvmeStateFaulty   NvmeDevState = C.NVME_DEV_FL_FAULTY
 	NvmeStateInUse    NvmeDevState = C.NVME_DEV_FL_INUSE
+	NvmeStateFaulty   NvmeDevState = C.NVME_DEV_FL_FAULTY
 	NvmeStateIdentify NvmeDevState = C.NVME_DEV_FL_IDENTIFY
 )
 
 // IsNew returns true if SSD is not in use by DAOS.
 func (bs NvmeDevState) IsNew() bool {
-	return bs&NvmeStatePlugged != 0 && bs&NvmeStateFaulty == 0 && bs&NvmeStateInUse == 0
+	return bs&NvmeStatePlugged != 0 && bs&NvmeStateInUse == 0
 }
 
 // IsNormal returns true if SSD is in a normal, non-faulty state.
@@ -58,18 +61,7 @@ func (bs NvmeDevState) IsFaulty() bool {
 
 // StatusString summarizes the device status.
 func (bs NvmeDevState) StatusString() string {
-	switch {
-	case bs&C.NVME_DEV_FL_PLUGGED == 0:
-		return "UNPLUGGED"
-	case bs&C.NVME_DEV_FL_IDENTIFY != 0:
-		return "IDENTIFY"
-	case bs&C.NVME_DEV_FL_FAULTY != 0:
-		return "EVICTED"
-	case bs&C.NVME_DEV_FL_INUSE != 0:
-		return "NORMAL"
-	default:
-		return "NEW"
-	}
+	return C.GoString(C.nvme_state2str(C.int(bs)))
 }
 
 func (bs NvmeDevState) String() string {
@@ -81,6 +73,20 @@ func (bs NvmeDevState) String() string {
 // Uint32 returns uint32 representation of BIO device state.
 func (bs NvmeDevState) Uint32() uint32 {
 	return uint32(bs)
+}
+
+// NvmeDevStateFromString converts a status string into a state bitset.
+func NvmeDevStateFromString(status string) (NvmeDevState, error) {
+	cStr := C.CString(status)
+	defer C.free(unsafe.Pointer(cStr))
+
+	cState := C.nvme_str2state(cStr)
+
+	if cState == C.NVME_DEV_STATE_INVALID {
+		return NvmeDevState(0), errors.Errorf("%q is an invalid nvme dev status string", status)
+	}
+
+	return NvmeDevState(cState), nil
 }
 
 // NvmeHealth represents a set of health statistics for a NVMe device
@@ -153,12 +159,59 @@ type NvmeNamespace struct {
 type SmdDevice struct {
 	UUID       string       `json:"uuid"`
 	TargetIDs  []int32      `hash:"set" json:"tgt_ids"`
-	NvmeState  NvmeDevState `json:"dev_state"`
+	NvmeState  NvmeDevState `json:"-"`
 	Rank       system.Rank  `json:"rank"`
 	TotalBytes uint64       `json:"total_bytes"`
 	AvailBytes uint64       `json:"avail_bytes"`
 	Health     *NvmeHealth  `json:"health"`
 	TrAddr     string       `json:"tr_addr"`
+}
+
+// MarshalJSON marshals SmdDevice to JSON.
+func (sd *SmdDevice) MarshalJSON() ([]byte, error) {
+	if sd == nil {
+		return nil, errors.New("tried to marshal nil SmdDevice")
+	}
+
+	// use a type alias to leverage the default marshal for
+	// most fields
+	type toJSON SmdDevice
+	return json.Marshal(&struct {
+		NvmeStateStr string `json:"dev_state"`
+		*toJSON
+	}{
+		NvmeStateStr: sd.NvmeState.StatusString(),
+		toJSON:       (*toJSON)(sd),
+	})
+}
+
+// UnmarshalJSON unmarshals SmaDevice from JSON.
+func (sd *SmdDevice) UnmarshalJSON(data []byte) error {
+	if string(data) == "null" {
+		return nil
+	}
+
+	// use a type alias to leverage the default unmarshal for
+	// most fields
+	type fromJSON SmdDevice
+	from := &struct {
+		NvmeStateStr string `json:"dev_state"`
+		*fromJSON
+	}{
+		fromJSON: (*fromJSON)(sd),
+	}
+
+	if err := json.Unmarshal(data, from); err != nil {
+		return err
+	}
+
+	state, err := NvmeDevStateFromString(from.NvmeStateStr)
+	if err != nil {
+		return err
+	}
+	sd.NvmeState = state
+
+	return nil
 }
 
 // NvmeController represents a NVMe device controller which includes health
@@ -278,6 +331,12 @@ func (ncs NvmeControllers) Update(ctrlrs ...*NvmeController) NvmeControllers {
 	return ncs
 }
 
+// NvmeAioDevice returns struct representing an emulated NVMe AIO device (file or kdev).
+type NvmeAioDevice struct {
+	Path string `json:"path"`
+	Size uint64 `json:"size"` // in unit of bytes
+}
+
 type (
 	// BdevProvider defines an interface to be implemented by a Block Device provider.
 	BdevProvider interface {
@@ -292,25 +351,28 @@ type (
 	// BdevPrepareRequest defines the parameters for a Prepare operation.
 	BdevPrepareRequest struct {
 		pbin.ForwardableRequest
-		HugePageCount         int
-		DisableCleanHugePages bool
-		PCIAllowList          string
-		PCIBlockList          string
-		TargetUser            string
-		Reset_                bool
-		DisableVFIO           bool
-		EnableVMD             bool
+		HugePageCount      int
+		HugeNodes          string
+		CleanHugePagesOnly bool
+		CleanHugePagesPID  uint64
+		PCIAllowList       string
+		PCIBlockList       string
+		TargetUser         string
+		Reset_             bool
+		DisableVFIO        bool
+		EnableVMD          bool
 	}
 
 	// BdevPrepareResponse contains the results of a successful Prepare operation.
 	BdevPrepareResponse struct {
-		VMDPrepared bool
+		NrHugePagesRemoved uint
+		VMDPrepared        bool
 	}
 
 	// BdevScanRequest defines the parameters for a Scan operation.
 	BdevScanRequest struct {
 		pbin.ForwardableRequest
-		DeviceList  []string
+		DeviceList  *BdevDeviceList
 		VMDEnabled  bool
 		BypassCache bool
 	}
@@ -324,7 +386,7 @@ type (
 	// BdevTierProperties contains basic configuration properties of a bdev tier.
 	BdevTierProperties struct {
 		Class          Class
-		DeviceList     []string
+		DeviceList     *BdevDeviceList
 		DeviceFileSize uint64 // size in bytes for NVMe device emulation
 		Tier           int
 	}
@@ -343,14 +405,16 @@ type (
 	// BdevWriteConfigRequest defines the parameters for a WriteConfig operation.
 	BdevWriteConfigRequest struct {
 		pbin.ForwardableRequest
-		ConfigOutputPath string
-		OwnerUID         int
-		OwnerGID         int
-		TierProps        []BdevTierProperties
-		VMDEnabled       bool
-		HotplugEnabled   bool
-		Hostname         string
-		BdevCache        *BdevScanResponse
+		ConfigOutputPath  string
+		OwnerUID          int
+		OwnerGID          int
+		TierProps         []BdevTierProperties
+		VMDEnabled        bool
+		HotplugEnabled    bool
+		HotplugBusidBegin uint8
+		HotplugBusidEnd   uint8
+		Hostname          string
+		BdevCache         *BdevScanResponse
 	}
 
 	// BdevWriteConfigResponse contains the result of a WriteConfig operation.
@@ -416,6 +480,40 @@ type (
 		Results []NVMeDeviceFirmwareUpdateResult
 	}
 )
+
+// getNumaNodeBusidRange sets range parameters in the input request either to user configured
+// values if provided in the server config file, or automatically derive them by querying
+// hardware configuration.
+func getNumaNodeBusidRange(ctx context.Context, getTopology topologyGetter, numaNodeIdx uint) (uint8, uint8, error) {
+	topo, err := getTopology(ctx)
+	if err != nil {
+		return 0, 0, err
+	}
+	if topo == nil {
+		return 0, 0, errors.New("nil topology")
+	}
+
+	// Take the lowest and highest buses in all of the ranges for an engine following the
+	// assumption that bus-IDs assigned to each NUMA node will always be contiguous.
+	// TODO: add each range individually if unsure about assumption
+
+	nodes := topo.NUMANodes
+	if len(nodes) <= int(numaNodeIdx) {
+		return 0, 0, errors.Errorf("insufficient numa nodes in topology, want %d got %d",
+			numaNodeIdx+1, len(nodes))
+	}
+
+	buses := nodes[numaNodeIdx].PCIBuses
+	if len(buses) == 0 {
+		return 0, 0, errors.Errorf("no PCI buses found on numa node %d in topology",
+			numaNodeIdx)
+	}
+
+	lowAddr := topo.NUMANodes[numaNodeIdx].PCIBuses[0].LowAddress
+	highAddr := topo.NUMANodes[numaNodeIdx].PCIBuses[len(buses)-1].HighAddress
+
+	return lowAddr.Bus, highAddr.Bus, nil
+}
 
 type BdevForwarder struct {
 	BdevAdminForwarder

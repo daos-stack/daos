@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2018-2021 Intel Corporation.
+// (C) Copyright 2018-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -20,6 +20,7 @@ import (
 	"github.com/daos-stack/daos/src/control/common/proto/convert"
 	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
+	"github.com/daos-stack/daos/src/control/lib/hardware"
 	"github.com/daos-stack/daos/src/control/lib/hostlist"
 	"github.com/daos-stack/daos/src/control/system"
 )
@@ -30,7 +31,7 @@ type HostFabricInterface struct {
 	Device      string
 	NumaNode    uint32
 	Priority    uint32
-	NetDevClass uint32
+	NetDevClass hardware.NetDevClass
 }
 
 func (hfi *HostFabricInterface) String() string {
@@ -56,6 +57,7 @@ func (hf *HostFabric) AddInterface(hfi *HostFabricInterface) {
 	hf.Interfaces = append(hf.Interfaces, hfi)
 	hf.Providers = append(hf.Providers, hfi.Provider)
 	hf.Providers = common.DedupeStringSlice(hf.Providers)
+	sort.Strings(hf.Providers)
 }
 
 // HostFabricSet contains a HostFabric configuration and the

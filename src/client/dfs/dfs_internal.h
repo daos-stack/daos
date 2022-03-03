@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2019-2021 Intel Corporation.
+ * (C) Copyright 2019-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -18,6 +18,30 @@ extern "C" {
 #include <sys/stat.h>
 #include <daos.h>
 #include <daos_fs.h>
+
+/** enum for hash entry type */
+enum {
+	DFS_H_POOL,
+	DFS_H_CONT,
+};
+
+/** hash entry for open pool/container handles */
+struct dfs_mnt_hdls {
+	d_list_t	entry;
+	char		value[DAOS_PROP_LABEL_MAX_LEN + 1];
+	daos_handle_t	handle;
+	int		ref;
+	int		type;
+};
+
+struct dfs_mnt_hdls *
+dfs_hdl_lookup(const char *str, int type);
+void
+dfs_hdl_release(struct dfs_mnt_hdls *hdl);
+int
+dfs_hdl_insert(const char *str, int type, daos_handle_t *oh, struct dfs_mnt_hdls **_hdl);
+int
+dfs_is_init();
 
 /*
  * Get the DFS superblock D-Key and A-Keys
@@ -58,8 +82,9 @@ dfs_lookupx(dfs_t *dfs, dfs_obj_t *parent, const char *name, int flags,
  * destination exists.
  */
 int
-dfs_move_internal(dfs_t *dfs, unsigned int flags, dfs_obj_t *parent, char *name,
-		  dfs_obj_t *new_parent, char *new_name, daos_obj_id_t *moid, daos_obj_id_t *oid);
+dfs_move_internal(dfs_t *dfs, unsigned int flags, dfs_obj_t *parent, const char *name,
+		  dfs_obj_t *new_parent, const char *new_name, daos_obj_id_t *moid,
+		  daos_obj_id_t *oid);
 
 /* Set the in-memory parent, but takes the parent, rather than another file object */
 void

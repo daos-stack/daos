@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2017-2021 Intel Corporation.
+ * (C) Copyright 2017-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -512,7 +512,7 @@ rebuild_obj_scan_cb(daos_handle_t ch, vos_iter_entry_t *ent,
 		D_GOTO(out, rc = -DER_INVAL);
 	}
 
-	oc_attr = daos_oclass_attr_find(oid.id_pub, NULL, NULL);
+	oc_attr = daos_oclass_attr_find(oid.id_pub, NULL);
 	if (oc_attr == NULL) {
 		D_INFO(DF_UUID" skip invalid "DF_UOID"\n", DP_UUID(rpt->rt_pool_uuid),
 		       DP_UOID(oid));
@@ -553,7 +553,7 @@ rebuild_obj_scan_cb(daos_handle_t ch, vos_iter_entry_t *ent,
 		 * still includes the current rank. If not, the object can be
 		 * deleted/reclaimed because it is no longer reachable
 		 */
-		rc = pl_obj_place(map, &md, NULL, &layout);
+		rc = pl_obj_place(map, &md, DAOS_OO_RO, NULL, &layout);
 		if (rc != 0)
 			D_GOTO(out, rc);
 

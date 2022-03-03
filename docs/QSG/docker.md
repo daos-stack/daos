@@ -72,7 +72,7 @@ following command:
 ```bash
 $ cat <<< "vm.nr_hugepages = 8192" > /etc/sysctl.d/50-hugepages.conf
 $ sysctl -p
-````
+```
 
 ## Building Docker Images
 
@@ -200,7 +200,7 @@ $ docker exec daos-admin dmg -i storage format
 
 Upon successful completion of the format, the storage engine is started, and pools
 can be created using the daos admin tool.  For more advanced configurations and usage refer to the
-section [DAOS Tour](https://docs.daos.io/QSG/tour/).
+section [DAOS Tour](https://docs.daos.io/v2.2/QSG/tour/).
 
 
 ### Via docker-compose

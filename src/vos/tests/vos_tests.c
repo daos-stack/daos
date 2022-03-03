@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2021 Intel Corporation.
+ * (C) Copyright 2016-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -22,6 +22,9 @@
 #include <daos_srv/vos.h>
 #include <vos_internal.h>
 
+#define		FORCE_CSUM 0x1001
+#define		FORCE_NO_ZERO_COPY 0x1002
+
 static void
 print_usage()
 {
@@ -37,12 +40,16 @@ print_usage()
 	print_message("vos_tests -l|--incarnation-log-tests\n");
 	print_message("vos_tests -z|--csum_tests\n");
 	print_message("vos_tests -A|--all_tests\n");
-	print_message("vos_tests -f|--filter <filter>\n");
-	print_message("vos_tests -e|--exclude <filter>\n");
 	print_message("vos_tests -m|--punch-model-tests\n");
 	print_message("vos_tests -C|--mvcc-tests\n");
+	print_message("-S|--storage <storage path>\n");
 	print_message("vos_tests -h|--help\n");
 	print_message("Default <vos_tests> runs all tests\n");
+	print_message("The following options can be used with any of the above:\n");
+	print_message("  -f|--filter <filter>\n");
+	print_message("  -e|--exclude <filter>\n");
+	print_message("  --force_checksum\n");
+	print_message("  --force_no_zero_copy\n");
 }
 
 static int dkey_feats[] = {
@@ -115,7 +122,7 @@ main(int argc, char **argv)
 	int	ofeats;
 	int	keys;
 	bool	nest_iterators = false;
-	const char *short_options = "apcdglzni:mXA:hf:e:tC";
+	const char *short_options = "apcdglzni:mXA:S:hf:e:tC";
 	static struct option long_options[] = {
 		{"all_tests",		required_argument, 0, 'A'},
 		{"pool_tests",		no_argument, 0, 'p'},
@@ -134,6 +141,10 @@ main(int argc, char **argv)
 		{"help",		no_argument, 0, 'h'},
 		{"filter",		required_argument, 0, 'f'},
 		{"exclude",		required_argument, 0, 'e'},
+		{"storage",		required_argument, 0, 'S'},
+		{"force_csum",		no_argument, 0, FORCE_CSUM},
+		{"force_no_zero_copy",	no_argument, 0, FORCE_NO_ZERO_COPY},
+		{NULL},
 	};
 
 	d_register_alt_assert(mock_assert);
@@ -144,18 +155,23 @@ main(int argc, char **argv)
 		return rc;
 	}
 
-	rc = vos_self_init("/mnt/daos");
-	if (rc) {
-		print_error("Error initializing VOS instance\n");
-		goto exit_0;
-	}
-
 	gc = 0;
 	bool test_run = false;
 
 	while ((opt = getopt_long(argc, argv, short_options,
 				  long_options, &index)) != -1) {
 		switch (opt) {
+		case 'S':
+			if (strnlen(optarg, STORAGE_PATH_LEN) >= STORAGE_PATH_LEN) {
+				print_error("%s is longer than STORAGE_PATH_LEN.\n", optarg);
+				goto exit_0;
+			}
+			strncpy(vos_path, optarg, STORAGE_PATH_LEN);
+			break;
+		case 'h':
+			print_usage();
+			goto exit_0;
+
 		case 'e':
 #if CMOCKA_FILTER_SUPPORTED == 1 /** requires cmocka 1.1.5 */
 			cmocka_set_skip_filter(optarg);
@@ -178,10 +194,27 @@ main(int argc, char **argv)
 			D_PRINT("filter not enabled");
 #endif
 			break;
+		case FORCE_CSUM:
+			g_force_checksum = true;
+			break;
+		case FORCE_NO_ZERO_COPY:
+			g_force_no_zero_copy = true;
+			break;
 		default:
 			break;
 		}
 	}
+
+	if (vos_path[0] == '\0') {
+		strcpy(vos_path, "/mnt/daos");
+	}
+
+	rc = vos_self_init(vos_path);
+	if (rc) {
+		print_error("Error initializing VOS instance\n");
+		goto exit_0;
+	}
+
 	index = 0;
 	optind = 0;
 
@@ -248,13 +281,13 @@ main(int argc, char **argv)
 			nr_failed += run_mvcc_tests("");
 			test_run = true;
 			break;
+		case 'S':
 		case 'f':
 		case 'e':
+		case FORCE_CSUM:
+		case FORCE_NO_ZERO_COPY:
 			/** already handled */
 			break;
-		case 'h':
-			print_usage();
-			goto exit_1;
 		default:
 			print_error("Unknown option\n");
 			print_usage();

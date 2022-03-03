@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2021 Intel Corporation.
+ * (C) Copyright 2016-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -441,12 +441,12 @@ sched_metrics_init(struct dss_xstream *dx)
 	if (rc)
 		D_WARN("Failed to create relax_time telemetry: "DF_RC"\n", DP_RC(rc));
 
-	rc = d_tm_add_metric(&stats->ss_wq_len, D_TM_COUNTER, "Wait queue length", "req",
+	rc = d_tm_add_metric(&stats->ss_wq_len, D_TM_GAUGE, "Wait queue length", "req",
 			     "sched/wait_queue/xs_%u", dx->dx_xs_id);
 	if (rc)
 		D_WARN("Failed to create wait_queue telemetry: "DF_RC"\n", DP_RC(rc));
 
-	rc = d_tm_add_metric(&stats->ss_sq_len, D_TM_COUNTER, "Sleep queue length", "req",
+	rc = d_tm_add_metric(&stats->ss_sq_len, D_TM_GAUGE, "Sleep queue length", "req",
 			     "sched/sleep_queue/xs_%u", dx->dx_xs_id);
 	if (rc)
 		D_WARN("Failed to create sleep_queue telemetry: "DF_RC"\n", DP_RC(rc));
@@ -596,7 +596,8 @@ req_kickoff_internal(struct dss_xstream *dx, struct sched_req_attr *attr,
 	D_ASSERT(attr->sra_type < SCHED_REQ_MAX);
 
 	return sched_create_thread(dx, func, arg, ABT_THREAD_ATTR_NULL, NULL,
-				   0);
+				   attr->sra_flags & SCHED_REQ_FL_PERIODIC ?
+					DSS_ULT_FL_PERIODIC : 0);
 }
 
 static int
@@ -1613,7 +1614,7 @@ sched_try_relax(struct dss_xstream *dx, ABT_pool *pools, uint32_t running)
 	 * Wait on external network request if the xstream has Cart context,
 	 * otherwise, sleep for a while.
 	 */
-	if (sched_relax_mode != SCHED_RELAX_MODE_SLEEP && dx->dx_comm) {
+	if (sched_relax_mode != SCHED_RELAX_MODE_SLEEP && dx->dx_progress_started) {
 		/* convert to micro-seconds */
 		dx->dx_timeout = sleep_time * 1000;
 	} else {
@@ -1671,8 +1672,8 @@ sched_start_cycle(struct sched_data *data, ABT_pool *pools)
 		sched_try_relax(dx, pools, cycle->sc_ults_tot);
 
 	d_tm_inc_counter(info->si_stats.ss_total_time, duration);
-	d_tm_set_counter(info->si_stats.ss_wq_len, info->si_req_cnt);
-	d_tm_set_counter(info->si_stats.ss_sq_len, info->si_sleep_cnt);
+	d_tm_set_gauge(info->si_stats.ss_wq_len, info->si_req_cnt);
+	d_tm_set_gauge(info->si_stats.ss_sq_len, info->si_sleep_cnt);
 	if (cycle->sc_ults_tot) {
 		d_tm_set_gauge(info->si_stats.ss_cycle_duration, duration);
 		d_tm_set_gauge(info->si_stats.ss_cycle_size, cycle->sc_ults_tot);

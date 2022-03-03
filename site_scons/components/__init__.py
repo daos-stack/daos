@@ -1,5 +1,5 @@
 #!/usr/bin/python
-# Copyright (c) 2016-2020 Intel Corporation
+# Copyright 2016-2022 Intel Corporation
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -22,10 +22,10 @@
 """Defines common components used by HPDD projects"""
 
 import sys
-import os
 import platform
+import distro
 from prereq_tools import GitRepoRetriever
-from prereq_tools import WebRetriever
+# from prereq_tools import WebRetriever
 from prereq_tools import ProgramBinary
 
 SCONS_EXE = sys.argv[0]
@@ -169,9 +169,20 @@ def define_mercury(reqs):
         MERCURY_DEBUG = '-DMERCURY_ENABLE_DEBUG=ON '
     else:
         MERCURY_DEBUG = '-DMERCURY_ENABLE_DEBUG=OFF '
-    retriever = \
-        GitRepoRetriever('https://github.com/mercury-hpc/mercury.git',
-                         True)
+    retriever = GitRepoRetriever('https://github.com/mercury-hpc/mercury.git', True)
+
+    reqs.define("ucx", libs=['ucp'])
+
+    if reqs.check_component('ucx'):
+        ucx = '-DNA_USE_UCX=ON ' \
+        '-DUCX_INCLUDE_DIR=/usr/include '\
+        '-DUCP_LIBRARY=/usr/lib64/libucp.so '\
+        '-DUCS_LIBRARY=/usr/lib64/libucs.so '\
+        '-DUCT_LIBRARY=/usr/lib64/libuct.so '
+        libs.append('ucx')
+    else:
+        ucx = ""
+
     reqs.define('mercury',
                 retriever=retriever,
                 commands=['cmake -DMERCURY_USE_CHECKSUMS=OFF '
@@ -185,6 +196,7 @@ def define_mercury(reqs):
                           + MERCURY_DEBUG +
                           '-DBUILD_TESTING=OFF '
                           '-DNA_USE_OFI=ON '
+                          + ucx +
                           '-DBUILD_DOCUMENTATION=OFF '
                           '-DBUILD_SHARED_LIBS=ON ../mercury ' +
                           check(reqs, 'ofi',
@@ -197,7 +209,6 @@ def define_mercury(reqs):
                 out_of_src_build=True,
                 package='mercury-devel' if inst(reqs, 'mercury') else None,
                 patch_rpath=['lib'])
-
 
 
 def define_common(reqs):
@@ -250,7 +261,6 @@ def define_ompi(reqs):
     reqs.define('ompi', pkgconfig='ompi', package='ompi-devel')
     reqs.define('mpich', pkgconfig='mpich', package='mpich-devel')
 
-
 def define_components(reqs):
     """Define all of the components"""
     define_common(reqs)
@@ -273,7 +283,6 @@ def define_components(reqs):
                           '--libdir=$ISAL_CRYPTO_PREFIX/lib',
                           'make $JOBS_OPT', 'make install'],
                 libs=['isal_crypto'])
-
 
     retriever = GitRepoRetriever("https://github.com/pmem/pmdk.git")
 
@@ -311,25 +320,41 @@ def define_components(reqs):
                 headers=['fuse3/fuse.h'], package='fuse3-devel')
 
     retriever = GitRepoRetriever("https://github.com/spdk/spdk.git", True)
+
+    # Tell SPDK which CPU to optimize for, by default this is native which works well unless you
+    # are relocating binaries across systems, for example in CI under github actions etc.  There
+    # isn't a minimum value needed here, but getting this wrong will cause daos server to exit
+    # prematurely with SIGILL (-4).
+    # https://docs.microsoft.com/en-us/azure/virtual-machines/dv2-dsv2-series#dsv2-series says
+    # that GHA can schedule on any of Skylake, Broadwell or Haswell CPUs.
+    # Ubuntu systems seem to fail more often, there may be something different going on here,
+    # it has also failed with sandybridge.
+    # https://gcc.gnu.org/onlinedocs/gcc/x86-Options.html
+    dist = distro.linux_distribution()
+    if dist[0] == 'CentOS Linux' and dist[1] == '7':
+        spdk_arch='native'
+    elif dist[0] == 'Ubuntu' and dist[1] == '20.04':
+        spdk_arch = 'nehalem'
+    else:
+        spdk_arch = 'haswell'
+
     reqs.define('spdk',
                 retriever=retriever,
-                commands=['./configure --prefix="$SPDK_PREFIX"'                \
-                          ' --disable-tests --disable-unit-tests '             \
-                          ' --disable-apps --without-vhost '                   \
-                          ' --without-crypto --without-pmdk --without-rbd '    \
-                          ' --with-rdma --without-iscsi-initiator '            \
-                          ' --without-isal --without-vtune --with-shared',
-                          'make $JOBS_OPT', 'make install',
+                commands=['./configure --prefix="$SPDK_PREFIX" --disable-tests '
+                          '--disable-unit-tests --disable-apps --without-vhost --without-crypto '
+                          '--without-pmdk --without-rbd --with-rdma --without-iscsi-initiator '
+                          '--without-isal --without-vtune --with-shared',
+                          'make CONFIG_ARCH={} $JOBS_OPT'.format(spdk_arch),
+                          'make install',
                           'cp -r -P dpdk/build/lib/* "$SPDK_PREFIX/lib"',
                           'mkdir -p "$SPDK_PREFIX/include/dpdk"',
-                          'cp -r -P dpdk/build/include/* '                     \
-                          '"$SPDK_PREFIX/include/dpdk"',
+                          'cp -r -P dpdk/build/include/* "$SPDK_PREFIX/include/dpdk"',
                           'mkdir -p "$SPDK_PREFIX/share/spdk"',
                           'cp -r include scripts "$SPDK_PREFIX/share/spdk"',
-                          'cp build/examples/lsvmd "$SPDK_PREFIX/bin"',
-                          'cp build/examples/nvme_manage "$SPDK_PREFIX/bin"',
-                          'cp build/examples/identify "$SPDK_PREFIX/bin"',
-                          'cp build/examples/perf "$SPDK_PREFIX/bin"'],
+                          'cp build/examples/lsvmd "$SPDK_PREFIX/bin/spdk_nvme_lsvmd"',
+                          'cp build/examples/nvme_manage "$SPDK_PREFIX/bin/spdk_nvme_manage"',
+                          'cp build/examples/identify "$SPDK_PREFIX/bin/spdk_nvme_identify"',
+                          'cp build/examples/perf "$SPDK_PREFIX/bin/spdk_nvme_perf"'],
                 headers=['spdk/nvme.h', 'dpdk/rte_eal.h'],
                 extra_include_path=['/usr/include/dpdk',
                                     '$SPDK_PREFIX/include/dpdk',
@@ -346,5 +371,6 @@ def define_components(reqs):
                           'make install'],
                 libs=['protobuf-c'],
                 headers=['protobuf-c/protobuf-c.h'])
+
 
 __all__ = ['define_components']

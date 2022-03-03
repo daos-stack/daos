@@ -1,5 +1,5 @@
 #!/usr/bin/python3
-# Copyright (c) 2019-2020 Intel Corporation
+# Copyright 2019-2022 Intel Corporation
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -39,14 +39,10 @@ class _env_module(): # pylint: disable=invalid-name
         """Load Modules for initializing envirables"""
         # Leap 15's lmod-lua doesn't include the usual module path
         # in it's MODULEPATH, for some unknown reason
-        os.environ["MODULEPATH"] = ":".join([os.path.sep +
-                                             os.path.join("usr", "share",
-                                                          "modules"),
-                                             os.path.sep +
-                                             os.path.join("etc",
-                                                          "modulefiles")] +
-                                            os.environ.get("MODULEPATH",
-                                                           "").split(":"))
+        os.environ["MODULEPATH"] = ":".join([os.path.join(os.sep, "usr", "share", "modules"),
+                                             os.path.join(os.sep, "usr", "share", "modulefiles"),
+                                             os.path.join(os.sep, "etc", "modulefiles")] +
+                                            os.environ.get("MODULEPATH", "").split(":"))
         self._module_load = self._init_mpi_module()
 
     def _module_func(self, command, *arguments): # pylint: disable=no-self-use
@@ -57,6 +53,7 @@ class _env_module(): # pylint: disable=invalid-name
         else:
             cmd += list(arguments)
 
+        # pylint: disable=consider-using-with
         try:
             proc = Popen(cmd, stdout=PIPE, stderr=PIPE)
         except OSError as error:
@@ -72,9 +69,12 @@ class _env_module(): # pylint: disable=invalid-name
 
             return ns['_mlstatus'], stderr.decode()
 
-        exec(stdout.decode()) # nosec
+        # Should not get to this point.
+        assert False
 
-        return _mlstatus, stderr.decode() # pylint: disable=undefined-variable
+        # exec(stdout.decode()) # nosec
+
+        # return _mlstatus, stderr.decode() # pylint: disable=undefined-variable
         # pylint: enable=exec-used
 
     def _init_mpi_module(self):
@@ -170,6 +170,7 @@ def load_mpi(mpi):
         if not updatealternatives:
             print("No update-alternatives found in path.")
             return False
+        # pylint: disable=consider-using-with
         try:
             proc = Popen([updatealternatives, '--query', 'mpi'],
                          stdout=PIPE)

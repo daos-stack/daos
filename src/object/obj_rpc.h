@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2021 Intel Corporation.
+ * (C) Copyright 2016-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -165,6 +165,8 @@ enum obj_rpc_flags {
 	ORF_EC_RECOV_FROM_PARITY = (1 << 19),
 	/* The forward targets array contains leader information. */
 	ORF_CONTAIN_LEADER	= (1 << 20),
+	/*Ascending Order - 0, descending order - 1*/
+	ORF_DESCENDING_ORDER	= (1 << 21),
 };
 
 /* common for update/fetch */
@@ -585,6 +587,12 @@ obj_is_modification_opc(uint32_t opc)
 		opc == DAOS_OBJ_RPC_TGT_PUNCH_DKEYS ||
 		opc == DAOS_OBJ_RPC_PUNCH_AKEYS ||
 		opc == DAOS_OBJ_RPC_TGT_PUNCH_AKEYS;
+}
+
+static inline bool
+obj_is_fetch_opc(uint32_t opc)
+{
+	return opc == DAOS_OBJ_RPC_FETCH;
 }
 
 static inline bool

@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2019-2021 Intel Corporation.
+ * (C) Copyright 2019-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -79,6 +79,7 @@ struct dtx_req_rec {
 	uint32_t			 drr_tag; /* The VOS ID */
 	int				 drr_count; /* DTX count */
 	int				 drr_result; /* The RPC result */
+	uint32_t			 drr_comp:1;
 	struct dtx_id			*drr_dti; /* The DTX array */
 	struct dtx_share_peer		**drr_cb_args; /* Used by dtx_req_cb. */
 };
@@ -108,6 +109,8 @@ D_CASSERT(sizeof(((struct dtx_cf_rec_bundle *)0)->dcrb_rank) +
 	  sizeof(((struct dtx_cf_rec_bundle *)0)->dcrb_tag) ==
 	  sizeof(((struct dtx_cf_rec_bundle *)0)->dcrb_key));
 
+uint32_t dtx_rpc_helper_thd;
+
 static void
 dtx_req_cb(const struct crt_cb_info *cb_info)
 {
@@ -118,6 +121,8 @@ dtx_req_cb(const struct crt_cb_info *cb_info)
 	struct dtx_out		*dout;
 	int			 rc = cb_info->cci_rc;
 	int			 i;
+
+	D_ASSERT(drr->drr_comp == 0);
 
 	if (rc != 0)
 		goto out;
@@ -193,7 +198,7 @@ dtx_req_cb(const struct crt_cb_info *cb_info)
 			/* The leader does not have related DTX info, we may miss related DTX abort
 			 * request, let's abort it locally.
 			 */
-			rc1 = vos_dtx_abort(dra->dra_cont->sc_hdl, &dsp->dsp_xid, DAOS_EPOCH_MAX);
+			rc1 = vos_dtx_abort(dra->dra_cont->sc_hdl, &dsp->dsp_xid, dsp->dsp_epoch);
 			if (rc1 < 0 && rc1 != -DER_NONEXIST && dra->dra_abt_list != NULL)
 				d_list_add_tail(&dsp->dsp_link, dra->dra_abt_list);
 			else
@@ -206,6 +211,7 @@ dtx_req_cb(const struct crt_cb_info *cb_info)
 	}
 
 out:
+	drr->drr_comp = 1;
 	drr->drr_result = rc;
 	rc = ABT_future_set(dra->dra_future, drr);
 	D_ASSERTF(rc == ABT_SUCCESS,
@@ -251,7 +257,8 @@ dtx_req_send(struct dtx_req_rec *drr, daos_epoch_t epoch)
 		drr->drr_tag, req, dra->dra_future,
 		din != NULL ? din->di_epoch : 0, rc);
 
-	if (rc != 0) {
+	if (rc != 0 && drr->drr_comp == 0) {
+		drr->drr_comp = 1;
 		drr->drr_result = rc;
 		ABT_future_set(dra->dra_future, drr);
 	}
@@ -420,6 +427,7 @@ dtx_cf_rec_alloc(struct btr_instance *tins, d_iov_t *key_iov,
 	drr->drr_rank = dcrb->dcrb_rank;
 	drr->drr_tag = dcrb->dcrb_tag;
 	drr->drr_count = 1;
+	drr->drr_comp = 0;
 	drr->drr_dti[0] = *dcrb->dcrb_dti;
 	d_list_add_tail(&drr->drr_link, dcrb->dcrb_head);
 	++(*dcrb->dcrb_length);
@@ -481,8 +489,6 @@ btr_ops_t dbtree_dtx_cf_ops = {
 };
 
 #define DTX_CF_BTREE_ORDER	20
-/* The threshold for using helper ULT when handle DTX RPC. */
-#define DTX_RPC_HELPER_THD	10
 
 static int
 dtx_classify_one(struct ds_pool *pool, daos_handle_t tree, d_list_t *head,
@@ -643,7 +649,8 @@ dtx_rpc_helper(void *arg)
 static int
 dtx_rpc_prep(struct ds_cont_child *cont, d_list_t *head, struct btr_root *tree_root,
 	     daos_handle_t *tree_hdl, struct dtx_req_args *dra, ABT_thread *helper,
-	     struct dtx_id dtis[], struct dtx_entry **dtes, daos_epoch_t epoch, int count, int opc)
+	     struct dtx_id dtis[], struct dtx_entry **dtes, daos_epoch_t epoch,
+	     uint32_t count, int opc)
 {
 	d_rank_t	my_rank;
 	uint32_t	my_tgtid;
@@ -654,7 +661,9 @@ dtx_rpc_prep(struct ds_cont_child *cont, d_list_t *head, struct btr_root *tree_r
 	crt_group_rank(NULL, &my_rank);
 	my_tgtid = dss_get_module_info()->dmi_tgt_id;
 
-	if (dtes[0]->dte_mbs->dm_tgt_cnt * count >= DTX_RPC_HELPER_THD) {
+	/* Use helper ULT to handle DTX RPC if there are enough helper XS. */
+	if (dss_has_enough_helper() &&
+	    (dtes[0]->dte_mbs->dm_tgt_cnt - 1) * count >= dtx_rpc_helper_thd) {
 		struct dtx_helper_args	*dha = NULL;
 
 		D_ALLOC_PTR(dha);
@@ -892,6 +901,7 @@ dtx_refresh_internal(struct ds_cont_child *cont, int *check_count,
 	d_list_for_each_entry_safe(dsp, tmp, check_list, dsp_link) {
 		int		leader_tgt = PO_COMP_ID_ALL;
 		int		tgt;
+		int		count = 0;
 		bool		drop = false;
 
 		if (!(dsp->dsp_mbs.dm_flags & DMF_CONTAIN_LEADER)) {
@@ -967,8 +977,15 @@ again:
 		 * then pool map may be refreshed during that. Let's retry
 		 * to find out the new leader.
 		 */
-		if (target->ta_comp.co_status != PO_COMP_ST_UPIN)
+		if (target->ta_comp.co_status != PO_COMP_ST_UPIN) {
+			if (unlikely(++count % 10 == 3))
+				D_WARN("Get stale DTX leader %u/%u (st: %x) for "DF_DTI
+				       " %d times, maybe dead loop\n",
+				       target->ta_comp.co_rank, target->ta_comp.co_id,
+				       target->ta_comp.co_status, DP_DTI(&dsp->dsp_xid), count);
+
 			goto again;
+		}
 
 		d_list_for_each_entry(drr, &head, drr_link) {
 			if (drr->drr_rank == target->ta_comp.co_rank &&
@@ -1055,8 +1072,7 @@ next:
 			if (failout)
 				D_GOTO(out, rc = -DER_INPROGRESS);
 			continue;
-		case DSHR_COMMITTED:
-		case DSHR_ABORTED:
+		case DSHR_IGNORE:
 			D_FREE(dsp);
 			continue;
 		case DSHR_ABORT_FAILED:

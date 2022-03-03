@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2019-2021 Intel Corporation.
+ * (C) Copyright 2019-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -110,6 +110,13 @@ extern uint32_t dtx_agg_thd_age_up;
  */
 extern uint32_t dtx_agg_thd_age_lo;
 
+/* The threshold for using helper ULT when handle DTX RPC. */
+#define DTX_RPC_HELPER_THD_MAX	(~0U)
+#define DTX_RPC_HELPER_THD_MIN	18
+#define DTX_RPC_HELPER_THD_DEF	(DTX_THRESHOLD_COUNT + 1)
+
+extern uint32_t dtx_rpc_helper_thd;
+
 struct dtx_pool_metrics {
 	struct d_tm_node_t	*dpm_batched_degree;
 	struct d_tm_node_t	*dpm_batched_total;
@@ -131,6 +138,12 @@ dtx_tls_get(void)
 	return dss_module_key_get(dss_tls_get(), &dtx_module_key);
 }
 
+static inline bool
+dtx_cont_opened(struct ds_cont_child *cont)
+{
+	return cont->sc_open > 0;
+}
+
 extern struct crt_proto_format dtx_proto_fmt;
 extern btr_ops_t dbtree_dtx_cf_ops;
 extern btr_ops_t dtx_btr_cos_ops;
@@ -139,6 +152,7 @@ extern uint64_t dtx_agg_gen;
 /* dtx_common.c */
 int dtx_handle_reinit(struct dtx_handle *dth);
 void dtx_batched_commit(void *arg);
+void dtx_aggregation_main(void *arg);
 
 /* dtx_cos.c */
 int dtx_fetch_committable(struct ds_cont_child *cont, uint32_t max_cnt,
@@ -166,10 +180,9 @@ int dtx_status_handle_one(struct ds_cont_child *cont, struct dtx_entry *dte,
 enum dtx_status_handle_result {
 	DSHR_NEED_COMMIT	= 1,
 	DSHR_NEED_RETRY		= 2,
-	DSHR_COMMITTED		= 3,
-	DSHR_ABORTED		= 4,
-	DSHR_ABORT_FAILED	= 5,
-	DSHR_CORRUPT		= 6,
+	DSHR_IGNORE		= 3,
+	DSHR_ABORT_FAILED	= 4,
+	DSHR_CORRUPT		= 5,
 };
 
 #endif /* __DTX_INTERNAL_H__ */
