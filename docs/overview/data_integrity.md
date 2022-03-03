@@ -20,6 +20,7 @@ checksums on the data received and verify.
 ### Key Requirements
 
 There are two key requirements that DAOS will support.
+
 1. Detect silent data corruption - Corruption will be detected on the
  distribution and attribute keys and records within a DAOS object. At a minimum,
  when corruption is detected, an error will be reported.
@@ -28,7 +29,8 @@ There are two key requirements that DAOS will support.
 
 ### Supportive/Additional Requirements
 
-Additionally, DAOS will support ...
+Additionally, DAOS will support:
+
 1. End to End Data Integrity as a Quality of Service Attribute - Container
  properties are used to enable/disable the use of checksums for data integrity
  as well as define specific attributes of data integrity feature.  See
@@ -40,12 +42,13 @@ Additionally, DAOS will support ...
  Work is ongoing to minimize performance impact.
 1. Inject Errors - The ability to corrupt data within a specific record, key,
  or checksum will be necessary for testing purposes. Fault injection is used to
- simulate corruption over the network and on disk. The DAOS_CSUM_CORRUPT_*
+ simulate corruption over the network and on disk. The DAOS_CSUM_CORRUPT_\*
  flags used for data corruption are defined in src/include/daos/common.h.
 1. Logging - When data corruption is detected, error logs are captured in
  the client and server logs.
 
-Up coming features not supported yet
+Upcoming features not supported yet:
+
 1. Event Logging - When silent data corruption is discovered, an event should
  be logged in such a way that it can be retrieved with other system health and
  diagnostic information.
@@ -54,12 +57,14 @@ Up coming features not supported yet
  corruption and corrects.
 
 # Keys and Value Objects
+
 Because DAOS is a key/value store, the data for both keys and values is
 protected, however, the approach for both is slightly different. For the two
 different value types, single and array, the approach is also slightly
 different.
 
 ## Keys
+
 On an update and fetch, the client calculates a checksum for the data used
 as the distribution and attribute keys and will send it to the server within the
 RPC. The server verifies the keys with the checksum.
@@ -70,11 +75,12 @@ received.
 !!! note
     Checksums for keys are not stored on the server. A hash of the key is
     calculated and used to index the key in the server tree of the keys
-    (see [VOS Key Array Stores](../../src/vos/README.md#key-array-stores)).
+    (see [VOS Key Array Stores](https://github.com/daos-stack/daos/blob/release/1.2/src/vos/README.md#key-array-stores)).
     It is also expected that keys are stored only in Storage Class Memory which
     has reliable data integrity protection.
 
 ## Values
+
 On an update, the client will calculate a checksum for the data of the value and
 will send it to the server within the RPC. If "server verify" is enabled, the
 server will calculate a new checksum for the value and compare with the checksum
@@ -82,8 +88,8 @@ received from the client to verify the integrity of the value. If the checksums
 don't match, then data corruption has occurred and an error is returned to the
 client indicating that the client should try the update again. Whether "server
 verify" is enabled or not, the server will store the checksum.
-See [VOS](../../src/vos/README.md) for more info about checksum management and
-storage in VOS.
+See [VOS](https://github.com/daos-stack/daos/blob/release/1.2/src/vos/README.md)
+for more info about checksum management and storage in VOS.
 
 On a fetch, the server will return the stored checksum to the client with the
 values fetched so the client can verify the values received. If the checksums
@@ -98,6 +104,7 @@ of values. The following diagram illustrates a basic example.
 ![](../graph/data_integrity/basic_checksum_flow.png)
 
 ### Single Value
+
 A Single Value is an atomic value, meaning that writes to a single value will
 update the entire value and reads retrieve the entire value. Other DAOS features
 such as Erasure Codes might split a Single Value into multiple shards to be
@@ -110,12 +117,14 @@ be smaller than the checksum derived from it. It is advised that if an
 application needs many small single values to use an Array Type instead.
 
 ### Array Values
+
 Unlike Single Values, Array Values can be updated and fetched at any part of
 an array. In addition, updates to an array are versioned, so a fetch can include
 parts from multiple versions of the array. Each of these versioned parts of an
 array are called extents. The following diagrams illustrate a couple examples
-(also see [VOS Key Array Stores](../../src/vos/README.md#key-array-stores) for
-more information):
+(also see
+[VOS Key Array Stores](https://github.com/daos-stack/daos/blob/release/1.2/src/vos/README.md#key-array-stores)
+for more information):
 
 <div>
 A single extent update (blue line) from index 2-13. A fetched extent (orange
@@ -143,24 +152,27 @@ The gray boxes around the extents represent the chunks.
 
 <img src="../graph/data_integrity/array_with_chunks.png" width="700" />
 
-(See [Object Layer](../../src/object/README.md) for more details about the
-checksum process on object update and fetch)
+(See [Object Layer](https://github.com/daos-stack/daos/blob/release/1.2/src/object/README.md)
+for more details about the checksum process on object update and fetch)
 
 # Checksum calculations
+
 The actual checksum calculations are done by the
  [isa-l](https://github.com/intel/isa-l)
 and [isa-l_crypto](https://github.com/intel/isa-l_crypto) libraries. However,
 these libraries are abstracted away from much of DAOS and a common checksum
 library is used with appropriate adapters to the actual isa-l implementations.
-[common checksum library](../../src/common/README.md#checksum)
+[common checksum library](https://github.com/daos-stack/daos/blob/release/1.2/src/common/README.md#checksum)
 
 # Performance Impact
+
 Calculating checksums can be CPU intensive and will impact performance. To
  mitigate performance impact, checksum types with hardware acceleration should
  be chosen. For example, CRC32C is supported by recent Intel CPUs, and many are
  accelerated via SIMD.
 
 # Quality
+
 Unit and functional testing is performed at many layers.
 
 | Test executable   | What's tested | Key test files |
@@ -171,6 +183,7 @@ Unit and functional testing is performed at many layers.
 | daos_test | daos_obj_update/fetch with checksums enabled. The -z flag can be used for specific checksum tests. Also --csum_type flag can be used to enable  checksums with any of the other daos_tests | src/tests/suite/daos_checksum.c |
 
 ## Running Tests
+
 **With daos_server not running**
 
 ```
@@ -186,7 +199,9 @@ export DAOS_CSUM_TEST_ALL_TYPE=1
 ```
 
 # Life of a checksum (WIP)
+
 ## Rebuild
+
 In order for rebuild/migrate process to get checksums so it doesn't have to
 recalculate them, the object list and object fetch task api's provide a checksum
 iov parameter. If memory is allocated for the iov, then the daos client will
@@ -195,6 +210,7 @@ buffer, the iov_len will be set to the required capacity and the checksums
 packed into the buffer is truncated.
 
 ### Client Task API Touch Points
+
 - **dc_obj_fetch_task_create**: sets csum iov to daos_obj_fetch_t args. These
   args are set to the rw_cb_args.shard_args.api_args and accessed through an
   accessor function (rw_args2csum_iov) in cli_shard.c so that rw_args_store_csum
@@ -206,6 +222,7 @@ packed into the buffer is truncated.
   args to obj_enum_args.csum (which points to the same buffer as the caller's)
 
 ### Rebuild Touch Points
+
 - migrate_fetch_update_(inline|single|bulk) - the rebuild/migrate functions that
   write to vos locally must ensure that the checksum is also written. These must
   use the csum iov param for fetch to get the checksum, then unpack the csums
@@ -218,6 +235,7 @@ packed into the buffer is truncated.
   structure in **migrate_one_insert()**.
 
 ### Packing/unpacking checksums
+
 When checksums are packed (either for fetch or object list) only the data
 checksums are included. For object list, only checksums for data that is inlined
 is included. During a rebuild, if the data is not inlined, then the rebuild
@@ -235,9 +253,12 @@ process will fetch the rest of the data and also get the checksums.
   structure it is best to use a copy of the iov as a temp structure.
 
 ## VOS
+
 - akey_update_begin - determines how much extra space needs to be allocated in
   SCM to account for the checksum
+
 ### Arrays
+
 - evt_root_activate - evtree root is activated. If has a csum them the root csum
   properties are set (csum_len, csum_type, csum_chunk_size)
 - *evt_desc_csum_fill* - if root was activated with a punched record then it
@@ -251,30 +272,36 @@ process will fetch the rest of the data and also get the checksums.
   be used to be added to to the result later.
 
 ### Update/Fetch (copied from vos/README.md)
+
 - SV Update: vos_update_end -> akey_update_single -> svt_rec_store
 - Sv Fetch: vos_fetch_begin -> akey_fetch_single -> svt_rec_load
 - EV Update: vos_update_end -> akey_update_recx -> evt_insert
 - EV Fetch: vos_fetch_begin -> akey_fetch_recx -> evt_fill_entry
 
 ## Enumeration
+
 For enumeration the csums for the keys and values are packed into an iov
 dedicated to csums.
 - fill_key_csum - Checksum is calcuated for the key and packed into the iov
 - fill_data_csum - pack/serialize the csum_info structure into the iov.
 
 ## Aggregation
+
 - srv_csum_recalc.c - the checksum verification and calculations occur here
 
 ---
 
 # Checksum Scrubbing (In Development)
+
 A background task will scan (when the storage server is idle to limit
 performance impact) the Version Object Store (VOS) trees to verify the data
 integrity with the checksums. Corrective actions can be taken when corruption is
 detected. See [Corrective Actions](#corrective-actions)
 
 ## Scanner
+
 ### Goals/Requirements
+
 - **Detect Silent Data Corruption Proactively** - The whole point of the
   scrubber is to detect silent data corruption before it is fetched.
 - **Minimize CPU and I/O Bandwidth** - Checksum scrubbing scanner will impact
@@ -291,6 +318,7 @@ detected. See [Corrective Actions](#corrective-actions)
   approaches should prevent from scrubbing same objects too frequently.
 
 ### High Level Design
+
 - Per Pool ULT (I/O xstream) that will iterate containers. If checksums and
   scrubber is enabled then iterate the object tree. If a record value (SV or
   array) is not marked corrupted then scan.
@@ -305,6 +333,7 @@ detected. See [Corrective Actions](#corrective-actions)
   the next appropriate I/O.
 
 #### Sleep or Yield
+
 Sleep for sufficient amount of time to ensure that scanning completes no sooner
 than configured interval (i.e. once a week or month). For example, if the
 interval is 1 week and there are 70 checksums that need to be calculated, then
@@ -313,10 +342,12 @@ If it doesn't need to sleep, then it will yield to allow the server scheduler to
 prioritize other jobs.
 
 ## Corrective Actions
+
 There are two main options for corrective actions when data corruption is
 discovered, in place data repair and SSD eviction.
 
 ### In Place Data Repair
+
 If enabled, when corruption is detected, the value identifier (dkey, akey, recx)
 will be placed in a queue. When there are available cycles, the value identifier
 will be used to request the data from a replica if exists and rewrite the data
@@ -325,6 +356,7 @@ which case, the SSD is assumed to be bad enough that it isn't worth fixing
 locally and it will be requested to be evicted.
 
 ### SSD Eviction
+
 If enabled, when the SSD Eviction Threshold is reached the SSD will be evicted.
 Current eviction methods are pool and target based so there will need to be a
 mapping and mechanism in place to evict an SSD. When an SSD is evicted, the
@@ -334,6 +366,7 @@ Also, once the SSD Eviction Threshold is reached, the scanner should quit
 scanning anything on that SSD.
 
 ## Additional Checksum Properties > doc/user/container.md / doc/user/pool.md?
+
 These properties are provided when a container or pool is created, but should
 also be able to update them. When updated, they should be active right away.
 - Scanner Interval - Minimum number of days scanning will take. Could take
@@ -347,6 +380,7 @@ also be able to update them. When updated, they should be active right away.
 ## Design Details & Implementation
 
 ### Pool ULT
+
 The code for the pool ULT is found in `srv_pool_scrub.c`. It can be a bit
 difficult to follow because there are several layers of callback functions due
 to the nature of how ULTs and the vos_iterator work, but the file is organized
@@ -360,6 +394,7 @@ ds_start_scrubbing_ult ~> scrubbing_ult -> scrub_pool ~> cont_iter_scrub_cb ->
 ```
 
 #### Silent Data Corruption Detection (TODO)
+
 ::Still todo::
 ```c
 obj_iter_scrub(coh, epr, csummer, pool_uuid, event_handlers, entry, type)
@@ -376,6 +411,7 @@ obj_iter_scrub(coh, epr, csummer, pool_uuid, event_handlers, entry, type)
 ```
 
 ### VOS Layer
+
 - In order to mark data as corrupted a flag field is added to bio_addr_t which
   includes a CORRUPTED bit.
 - The vos update api already accepts a flag, so a CORRUPTED flag is added and
@@ -384,6 +420,7 @@ obj_iter_scrub(coh, epr, csummer, pool_uuid, event_handlers, entry, type)
 - On fetch, if a value is already marked corrupted, return -DER_CSUM
 
 ### Object Layer
+
 - When corruption is detected on the server during a fetch, aggregation, or
   rebuild the server calls VOS to update value as corrupted.
 - (TBD) Add Server Side Verifying on fetch so can know if media or network
@@ -391,6 +428,7 @@ obj_iter_scrub(coh, epr, csummer, pool_uuid, event_handlers, entry, type)
 
 
 ## Debugging
+
 - In the server.yml configuration file set the following env_vars
 
 ```
