@@ -130,6 +130,115 @@
 {
    <insert_a_suppression_name_here>
    Memcheck:Addr32
+   ...
+   fun:runtime.*
+}
+{
+   <insert_a_suppression_name_here>
+   Memcheck:Value8
+   ...
+   fun:runtime.*
+}
+{
+   <insert_a_suppression_name_here>
+   Memcheck:Addr8
+   ...
+   fun:internal*
+}
+{
+   <insert_a_suppression_name_here>
+   Memcheck:Addr8
+   ...
+   fun:math.*
+}
+{
+   <insert_a_suppression_name_here>
+   Memcheck:Addr1
+   fun:regexp*
+}
+{
+   <insert_a_suppression_name_here>
+   Memcheck:Addr2
+   fun:regexp*
+}
+{
+   <insert_a_suppression_name_here>
+   Memcheck:Addr4
+   fun:regexp*
+}
+{
+   <insert_a_suppression_name_here>
+   Memcheck:Addr8
+   fun:regexp*
+}
+{
+   <insert_a_suppression_name_here>
+   Memcheck:Addr16
+   fun:regexp*
+}
+{
+   <insert_a_suppression_name_here>
+   Memcheck:Addr8
+   fun:sort.*
+}
+{
+   <insert_a_suppression_name_here>
+   Memcheck:Addr8
+   fun:encoding/*
+}
+{
+   <insert_a_suppression_name_here>
+   Memcheck:Addr1
+   fun:hash/*
+}
+{
+   <insert_a_suppression_name_here>
+   Memcheck:Addr4
+   fun:hash/*
+}
+{
+   <insert_a_suppression_name_here>
+   Memcheck:Addr16
+   fun:hash/*
+}
+{
+   <insert_a_suppression_name_here>
+   Memcheck:Value8
+   fun:hash/*
+}
+{
+   <insert_a_suppression_name_here>
+   Memcheck:Addr1
+   fun:compress/*
+}
+{
+   <insert_a_suppression_name_here>
+   Memcheck:Addr8
+   fun:compress/*
+}
+{
+   <insert_a_suppression_name_here>
+   Memcheck:Addr8
+   fun:sync.*
+}
+{
+   <insert_a_suppression_name_here>
+   Memcheck:Addr16
+   fun:sync.*
+}
+{
+   <insert_a_suppression_name_here>
+   Memcheck:Addr16
+   fun:aeshash*
+}
+{
+   <insert_a_suppression_name_here>
+   Memcheck:Cond
+   fun:memeqbody
+}
+{
+   <insert_a_suppression_name_here>
+   Memcheck:Addr32
    fun:indexbytebody
 }
 {
@@ -158,17 +267,62 @@
 {
    <insert_a_suppression_name_here>
    Memcheck:Addr1
-   fun:github.com/jessevdk/*
+   ...
+   fun:github.com/*
 }
 {
    <insert_a_suppression_name_here>
    Memcheck:Addr4
-   fun:github.com/jessevdk/*
+   ...
+   fun:github.com/*
 }
 {
    <insert_a_suppression_name_here>
    Memcheck:Addr8
-   fun:github.com/jessevdk/*
+   ...
+   fun:github.com/*
+}
+{
+   <insert_a_suppression_name_here>
+   Memcheck:Addr16
+   ...
+   fun:github.com/*
+}
+{
+   <insert_a_suppression_name_here>
+   Memcheck:Cond
+   ...
+   fun:*golang.org/*
+}
+{
+   <insert_a_suppression_name_here>
+   Memcheck:Addr1
+   ...
+   fun:*golang.org/*
+}
+{
+   <insert_a_suppression_name_here>
+   Memcheck:Addr4
+   ...
+   fun:*golang.org/*
+}
+{
+   <insert_a_suppression_name_here>
+   Memcheck:Addr8
+   ...
+   fun:*golang.org/*
+}
+{
+   <insert_a_suppression_name_here>
+   Memcheck:Addr16
+   ...
+   fun:*golang.org/*
+}
+{
+   <insert_a_suppression_name_here>
+   Memcheck:Value8
+   ...
+   fun:*golang.org/*
 }
 {
    <insert_a_suppression_name_here>
@@ -192,23 +346,13 @@
 }
 {
    <insert_a_suppression_name_here>
-   Memcheck:Addr8
-   fun:github.com/daos-stack/daos/*
+   Memcheck:Cond
+   fun:racecalladdr
 }
 {
    <insert_a_suppression_name_here>
    Memcheck:Cond
    fun:indexbytebody
-}
-{
-   <insert_a_suppression_name_here>
-   Memcheck:Addr1
-   fun:*protobuf*
-}
-{
-   <insert_a_suppression_name_here>
-   Memcheck:Addr8
-   fun:*protobuf*
 }
 {
    FI leak 8
@@ -252,9 +396,8 @@
    Tcp provider with ofi rxm
    Memcheck:Param
    sendmsg(msg.msg_iov[1])
-   obj:*
+   ...
    fun:ofi_bsock_sendv
    ...
    fun:fi_tsend
-   ...
 }
