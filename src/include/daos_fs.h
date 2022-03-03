@@ -16,8 +16,6 @@
 #ifndef __DAOS_FS_H__
 #define __DAOS_FS_H__
 
-#define dfs_cont_create dfs_cont_create2
-
 #if defined(__cplusplus)
 extern "C" {
 #endif
