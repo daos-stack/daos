@@ -685,6 +685,7 @@ degrade_ec_agg_punch(void **state, int shard)
 			punch_recxs(dkey, "a_key", &recx, 1, DAOS_TX_NONE, &req);
 		}
 	}
+	ioreq_fini(&req);
 
 	/* Trigger aggregation */
 	daos_pool_set_prop(arg->pool.pool_uuid, "reclaim", "time");
@@ -694,6 +695,7 @@ degrade_ec_agg_punch(void **state, int shard)
 	rank = get_rank_by_oid_shard(arg, oid, shard);
 	rebuild_pools_ranks(&arg, 1, &rank, 1, false);
 
+	ioreq_init(&req, arg->coh, oid, DAOS_IOD_ARRAY, arg);
 	for (i = 0; i < 12; i++) {
 		char	    dkey[32];
 		daos_off_t offset = i * EC_CELL_SIZE;
@@ -706,6 +708,7 @@ degrade_ec_agg_punch(void **state, int shard)
 					      (daos_size_t)EC_CELL_SIZE, verify_data,
 					      DAOS_TX_NONE, true);
 	}
+	ioreq_fini(&req);
 
 	free(data);
 	free(verify_data);
