@@ -358,8 +358,9 @@ verify_1p(struct ec_agg_test_ctx *ctx, daos_oclass_id_t ec_agg_oc,
 	unsigned char		**data = NULL;
 	unsigned char		**parity = NULL;
 	unsigned char		*buf = NULL;
-	unsigned int		 k, p, len;
-	int			 i, j, rc;
+	unsigned int		p_shard;
+	unsigned int		k, p, len;
+	int			i, j, rc;
 
 	if (shard > 2)
 		ec_setup_obj(ctx, ec_agg_oc, 3);
@@ -400,12 +401,13 @@ verify_1p(struct ec_agg_test_ctx *ctx, daos_oclass_id_t ec_agg_oc,
 						  k * (daos_size_t)len, j,
 						  false, false, 0);
 			ctx->fetch_iom.iom_flags = DAOS_IOMF_DETAIL;
+			p_shard = test_ec_get_parity_off(&ctx->dkey, oca);
 			rc = dc_obj_fetch_task_create(ctx->oh, DAOS_TX_NONE, 0,
 						      &ctx->dkey, 1,
 						      DIOF_TO_SPEC_SHARD,
 						      &ctx->fetch_iod,
 						      &ctx->fetch_sgl,
-						      &ctx->fetch_iom, &shard,
+						      &ctx->fetch_iom, &p_shard,
 						      NULL, NULL, NULL, &task);
 			assert_rc_equal(rc, 0);
 			rc = dc_task_schedule(task, true);
@@ -424,7 +426,7 @@ verify_1p(struct ec_agg_test_ctx *ctx, daos_oclass_id_t ec_agg_oc,
 						      DIOF_TO_SPEC_SHARD,
 						      &ctx->fetch_iod,
 						      &ctx->fetch_sgl,
-						      &ctx->fetch_iom, &shard,
+						      &ctx->fetch_iom, &p_shard,
 						      NULL, NULL, NULL, &task);
 			assert_rc_equal(rc, 0);
 			rc = dc_task_schedule(task, true);
@@ -495,7 +497,8 @@ verify_2p(struct ec_agg_test_ctx *ctx, daos_oclass_id_t ec_agg_oc)
 	unsigned char		**data = NULL;
 	unsigned char		**parity = NULL;
 	unsigned char		*buf = NULL;
-	unsigned int		 k, p, len, shard = 2;
+	unsigned int		 k, p, len;
+	uint32_t		p_shard;
 	int			 i, j, rc;
 
 	ec_setup_obj(ctx, ec_agg_oc, 2);
@@ -524,20 +527,20 @@ verify_2p(struct ec_agg_test_ctx *ctx, daos_oclass_id_t ec_agg_oc)
 
 	codec = obj_ec_codec_get(daos_obj_id2class(ctx->oid));
 	ec_encode_data(len, k, p, codec->ec_gftbls, data, parity);
-
 	for (j = 0; j < NUM_KEYS; j++)
 		for (i = 0; i < NUM_STRIPES; i++) {
 			ec_setup_single_recx_data(ctx, EC_SPECIFIED,
 						  i * (2 * len), 2 * len, j,
 						  false, false, 0);
+			p_shard = test_ec_get_parity_off(&ctx->dkey, oca);
 			ctx->fetch_iom.iom_flags = DAOS_IOMF_DETAIL;
-			shard++;
+			p_shard = (p_shard + 1) % (k + p);
 			rc = dc_obj_fetch_task_create(ctx->oh, DAOS_TX_NONE, 0,
 						      &ctx->dkey, 1,
 						      DIOF_TO_SPEC_SHARD,
 						      &ctx->fetch_iod,
 						      &ctx->fetch_sgl,
-						      &ctx->fetch_iom, &shard,
+						      &ctx->fetch_iom, &p_shard,
 						      NULL, NULL, NULL, &task);
 			assert_rc_equal(rc, 0);
 			rc = dc_task_schedule(task, true);
@@ -547,13 +550,13 @@ verify_2p(struct ec_agg_test_ctx *ctx, daos_oclass_id_t ec_agg_oc)
 			task = NULL;
 			memset(&ctx->fetch_iom, 0, sizeof(daos_iom_t));
 			ctx->fetch_iom.iom_flags = DAOS_IOMF_DETAIL;
-			shard--;
+			p_shard = (p_shard - 1) % (k + p);
 			rc = dc_obj_fetch_task_create(ctx->oh, DAOS_TX_NONE, 0,
 						      &ctx->dkey, 1,
 						      DIOF_TO_SPEC_SHARD,
 						      &ctx->fetch_iod,
 						      &ctx->fetch_sgl,
-						      &ctx->fetch_iom, &shard,
+						      &ctx->fetch_iom, &p_shard,
 						      NULL, NULL, NULL, &task);
 			assert_rc_equal(rc, 0);
 			rc = dc_task_schedule(task, true);
@@ -562,7 +565,7 @@ verify_2p(struct ec_agg_test_ctx *ctx, daos_oclass_id_t ec_agg_oc)
 			assert_int_equal(ctx->fetch_iom.iom_nr_out, 0);
 			task = NULL;
 			memset(&ctx->fetch_iom, 0, sizeof(daos_iom_t));
-			shard++;
+			p_shard = (p_shard + 1) % (k + p);
 			ctx->fetch_iom.iom_flags = DAOS_IOMF_DETAIL;
 			ctx->fetch_iod.iod_recxs[0].rx_idx = (i * len) |
 							PARITY_INDICATOR;
@@ -573,7 +576,7 @@ verify_2p(struct ec_agg_test_ctx *ctx, daos_oclass_id_t ec_agg_oc)
 						      DIOF_TO_SPEC_SHARD,
 						      &ctx->fetch_iod,
 						      &ctx->fetch_sgl,
-						      &ctx->fetch_iom, &shard,
+						      &ctx->fetch_iom, &p_shard,
 						      NULL, NULL, NULL, &task);
 			assert_rc_equal(rc, 0);
 			rc = dc_task_schedule(task, true);
@@ -585,7 +588,7 @@ verify_2p(struct ec_agg_test_ctx *ctx, daos_oclass_id_t ec_agg_oc)
 						parity[1], len), 0);
 			task = NULL;
 			memset(&ctx->fetch_iom, 0, sizeof(daos_iom_t));
-			shard--;
+			p_shard = (p_shard - 1) % (k + p);
 			ctx->fetch_iom.iom_flags = DAOS_IOMF_DETAIL;
 			ctx->iom_recx.rx_nr = len;
 			rc = dc_obj_fetch_task_create(ctx->oh, DAOS_TX_NONE, 0,
@@ -593,7 +596,7 @@ verify_2p(struct ec_agg_test_ctx *ctx, daos_oclass_id_t ec_agg_oc)
 						      DIOF_TO_SPEC_SHARD,
 						      &ctx->fetch_iod,
 						      &ctx->fetch_sgl,
-						      &ctx->fetch_iom, &shard,
+						      &ctx->fetch_iom, &p_shard,
 						      NULL, NULL, NULL, &task);
 			assert_rc_equal(rc, 0);
 			rc = dc_task_schedule(task, true);
@@ -710,13 +713,13 @@ test_range_punch(struct ec_agg_test_ctx *ctx)
 }
 
 static void
-verify_rp1p(struct ec_agg_test_ctx *ctx, daos_oclass_id_t ec_agg_oc,
-	    unsigned int shard)
+verify_rp1p(struct ec_agg_test_ctx *ctx, daos_oclass_id_t ec_agg_oc)
 {
 	struct daos_oclass_attr	*oca, oca1;
 	tse_task_t		*task = NULL;
 	unsigned int		 k, len;
 	int			 i, j, rc;
+	unsigned int		p_shard;
 
 	ec_setup_obj(ctx, ec_agg_oc, 4);
 
@@ -739,12 +742,13 @@ verify_rp1p(struct ec_agg_test_ctx *ctx, daos_oclass_id_t ec_agg_oc,
 			ctx->fetch_iod.iod_recxs[0].rx_nr = len;
 			ctx->iom_recx.rx_nr = len;
 			ctx->iom_recx.rx_idx = i * k * len + len;
+			p_shard = test_ec_get_parity_off(&ctx->dkey, oca);
 			rc = dc_obj_fetch_task_create(ctx->oh, DAOS_TX_NONE, 0,
 						      &ctx->dkey, 1,
 						      DIOF_TO_SPEC_SHARD,
 						      &ctx->fetch_iod,
 						      &ctx->fetch_sgl,
-						      &ctx->fetch_iom, &shard,
+						      &ctx->fetch_iom, &p_shard,
 						      NULL, NULL, NULL, &task);
 			assert_rc_equal(rc, 0);
 			rc = dc_task_schedule(task, true);
@@ -764,7 +768,7 @@ verify_rp1p(struct ec_agg_test_ctx *ctx, daos_oclass_id_t ec_agg_oc,
 						      DIOF_TO_SPEC_SHARD,
 						      &ctx->fetch_iod,
 						      &ctx->fetch_sgl,
-						      &ctx->fetch_iom, &shard,
+						      &ctx->fetch_iom, &p_shard,
 						      NULL, NULL, NULL, &task);
 			assert_rc_equal(rc, 0);
 			rc = dc_task_schedule(task, true);
@@ -784,7 +788,7 @@ verify_rp1p(struct ec_agg_test_ctx *ctx, daos_oclass_id_t ec_agg_oc,
 						      DIOF_TO_SPEC_SHARD,
 						      &ctx->fetch_iod,
 						      &ctx->fetch_sgl,
-						      &ctx->fetch_iom, &shard,
+						      &ctx->fetch_iom, &p_shard,
 						      NULL, NULL, NULL, &task);
 			assert_rc_equal(rc, 0);
 			rc = dc_task_schedule(task, true);
@@ -803,7 +807,7 @@ verify_rp1p(struct ec_agg_test_ctx *ctx, daos_oclass_id_t ec_agg_oc,
 						      DIOF_TO_SPEC_SHARD,
 						      &ctx->fetch_iod,
 						      &ctx->fetch_sgl,
-						      &ctx->fetch_iom, &shard,
+						      &ctx->fetch_iom, &p_shard,
 						      NULL, NULL, NULL, &task);
 			assert_rc_equal(rc, 0);
 			rc = dc_task_schedule(task, true);
@@ -858,7 +862,7 @@ test_all_ec_agg(void **statep)
 	verify_1p(&ctx, OC_EC_2P1G1, 2);
 	verify_2p(&ctx, OC_EC_2P2G1);
 	verify_1p(&ctx, OC_EC_4P1G1, 4);
-	verify_rp1p(&ctx, OC_EC_4P1G1, 4);
+	verify_rp1p(&ctx, OC_EC_4P1G1);
 	cleanup_ec_agg_tests(&ctx);
 	daos_debug_set_params(arg->group, -1, DMG_KEY_FAIL_LOC,
 			      0, 0, NULL);
@@ -881,7 +885,7 @@ fetch_snap_with_agg(void **statep)
 	char			 *wbuf2;
 	char			 *rbuf;
 	daos_handle_t		 th;
-	uint16_t		 fail_shard = 1;
+	uint16_t		 fail_shard = 0;
 	uint64_t		 fail_val;
 	bool			 snap_higher = false;
 	int			 rc;
