@@ -4,7 +4,7 @@
 
 SPDX-License-Identifier: BSD-2-Clause-Patent
 """
-from avocado.utils.distro import *
+from avocado.utils.distro import *      # pylint: disable=wildcard-import
 import re
 
 
