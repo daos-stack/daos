@@ -4,11 +4,11 @@
 
 SPDX-License-Identifier: BSD-2-Clause-Patent
 """
-from avocado.utils import distro
+from avocado.utils.distro import *
 import re
 
 
-class RockyProbe(distro.Probe):
+class RockyProbe(Probe):
     """Probe with version checks for Rocky Linux systems."""
 
     CHECK_FILE = "/etc/rocky-release"
@@ -17,7 +17,7 @@ class RockyProbe(distro.Probe):
     CHECK_VERSION_REGEX = re.compile(r"Rocky Linux release (\d{1,2})\.(\d{1,2}).*")
 
 
-class AlmaProbe(distro.Probe):
+class AlmaProbe(Probe):
     """Probe with version checks for AlmaLinux systems."""
 
     CHECK_FILE = "/etc/almalinux-release"
@@ -26,10 +26,5 @@ class AlmaProbe(distro.Probe):
     CHECK_VERSION_REGEX = re.compile(r"AlmaLinux release (\d{1,2})\.(\d{1,2}).*")
 
 
-distro.register_probe(RockyProbe)
-distro.register_probe(AlmaProbe)
-
-
-def detect():
-    """Detect the current distribution."""
-    return distro.detect()
+register_probe(RockyProbe)
+register_probe(AlmaProbe)
