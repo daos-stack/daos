@@ -491,6 +491,9 @@ dss_srv_handler(void *arg)
 		ABT_cond_wait(xstream_data.xd_ult_barrier, xstream_data.xd_mutex);
 	ABT_mutex_unlock(xstream_data.xd_mutex);
 
+	if (dx->dx_comm)
+		dx->dx_progress_started = true;
+
 	signal_caller = false;
 	/* main service progress loop */
 	for (;;) {
@@ -510,6 +513,9 @@ dss_srv_handler(void *arg)
 
 		ABT_thread_yield();
 	}
+
+	if (dx->dx_comm)
+		dx->dx_progress_started = false;
 
 	wait_all_exited(dx);
 	if (dmi->dmi_dp) {

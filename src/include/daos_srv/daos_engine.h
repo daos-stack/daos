@@ -225,6 +225,7 @@ enum {
 
 enum {
 	SCHED_REQ_FL_NO_DELAY	= (1 << 0),
+	SCHED_REQ_FL_PERIODIC	= (1 << 1),
 };
 
 struct sched_req_attr {
@@ -403,10 +404,6 @@ dss_ult_yield(void *arg)
 struct dss_module_ops {
 	/* Get schedule request attributes from RPC */
 	int (*dms_get_req_attr)(crt_rpc_t *rpc, struct sched_req_attr *attr);
-
-	/* Each module to start/stop the profiling */
-	int	(*dms_profile_start)(char *path, int avg);
-	int	(*dms_profile_stop)(void);
 };
 
 int srv_profile_stop();
