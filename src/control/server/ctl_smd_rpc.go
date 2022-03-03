@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2021 Intel Corporation.
+// (C) Copyright 2020-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -92,23 +92,40 @@ func (svc *ControlService) querySmdDevices(ctx context.Context, req *ctlpb.SmdQu
 			}
 		}
 
-		if !req.IncludeBioHealth {
-			continue
-		}
-
+		i := 0 // output index
 		for _, dev := range rResp.Devices {
-			/* Skip health query if the device is in "NEW" state */
-			if storage.NvmeDevState(dev.DevState).IsNew() {
-				continue
-			}
-			health, err := ei.GetBioHealth(ctx, &ctlpb.BioHealthReq{
-				DevUuid: dev.Uuid,
-			})
+			state, err := storage.NvmeDevStateFromString(dev.DevState)
 			if err != nil {
-				return errors.Wrapf(err, "device %s, states %q", dev,
-					storage.NvmeDevState(dev.DevState).String())
+				return errors.Wrapf(err, "eval state for dev %q", dev.TrAddr)
 			}
-			dev.Health = health
+
+			if req.StateMask != 0 && req.StateMask&state.Uint32() == 0 {
+				continue // skip device completely if mask doesn't match
+			}
+
+			// skip health query if the device is in "NEW" state
+			if req.IncludeBioHealth && !state.IsNew() {
+				health, err := ei.GetBioHealth(ctx, &ctlpb.BioHealthReq{
+					DevUuid: dev.Uuid,
+				})
+				if err != nil {
+					return errors.Wrapf(err, "device %s, states %q", dev, state.String())
+				}
+				dev.Health = health
+			}
+
+			if req.StateMask != 0 {
+				// as mask is set and matches state, rewrite slice in place
+				rResp.Devices[i] = dev
+				i++
+			}
+		}
+		if req.StateMask != 0 {
+			// prevent memory leak by erasing truncated values
+			for j := i; j < len(rResp.Devices); j++ {
+				rResp.Devices[j] = nil
+			}
+			rResp.Devices = rResp.Devices[:i]
 		}
 	}
 	return nil
@@ -187,7 +204,7 @@ func (svc *ControlService) smdQueryDevice(ctx context.Context, req *ctlpb.SmdQue
 			continue
 		case 1:
 			svc.log.Debugf("smdQueryDevice(): uuid %q, rank %d, states %q", req.Uuid,
-				rr.Rank, storage.NvmeDevState(rr.Devices[0].DevState).String())
+				rr.Rank, rr.Devices[0].DevState)
 			rank = system.Rank(rr.Rank)
 
 			return rank, rr.Devices[0], nil
@@ -272,7 +289,7 @@ func (svc *ControlService) smdReplace(ctx context.Context, req *ctlpb.SmdQueryRe
 
 	dresp, err := eis[0].CallDrpc(ctx, drpc.MethodReplaceStorage, &ctlpb.DevReplaceReq{
 		OldDevUuid: req.Uuid,
-		NewDevUuid: req.ReplaceUUID,
+		NewDevUuid: req.ReplaceUuid,
 		NoReint:    req.NoReint,
 	})
 	if err != nil {
@@ -371,7 +388,7 @@ func (svc *ControlService) SmdQuery(ctx context.Context, req *ctlpb.SmdQueryReq)
 		return svc.smdSetFaulty(ctx, req)
 	}
 
-	if req.ReplaceUUID != "" {
+	if req.ReplaceUuid != "" {
 		return svc.smdReplace(ctx, req)
 	}
 

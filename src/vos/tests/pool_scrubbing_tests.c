@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2020-2021 Intel Corporation.
+ * (C) Copyright 2020-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -594,7 +594,8 @@ test_yield_deletes_extent(void *arg)
 	sts_ctx_update(ctx, 1, TEST_IOD_ARRAY_1, "dkey", "akey",
 		       2, false);
 
-	rc = vos_aggregate(ctx->tsc_coh, &epr, NULL, NULL, NULL, true);
+	rc = vos_aggregate(ctx->tsc_coh, &epr, NULL, NULL,
+			   VOS_AGG_FL_FORCE_SCAN | VOS_AGG_FL_FORCE_MERGE);
 	assert_success(rc);
 	/*
 	 * not totally sure why this is needed, but maybe to wait for
@@ -637,7 +638,8 @@ test_yield_deletes_dkey(void *arg)
 
 	sts_ctx_punch_dkey(ctx, 1, "dkey", 2);
 
-	rc = vos_aggregate(ctx->tsc_coh, &epr, NULL, NULL, NULL, true);
+	rc = vos_aggregate(ctx->tsc_coh, &epr, NULL, NULL,
+			   VOS_AGG_FL_FORCE_SCAN | VOS_AGG_FL_FORCE_MERGE);
 	assert_success(rc);
 
 	return 0;

@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2021 Intel Corporation.
+// (C) Copyright 2020-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -1385,14 +1385,14 @@ host1
 									TrAddr:    "0000:8a:00.0",
 									TargetIDs: []int32{0, 1, 2},
 									Rank:      0,
-									NvmeState: storage.NvmeDevStateNormal,
+									NvmeState: storage.MockNvmeStateNormal,
 								},
 								{
 									UUID:      common.MockUUID(1),
 									TrAddr:    "0000:8b:00.0",
 									TargetIDs: []int32{3, 4, 5},
 									Rank:      0,
-									NvmeState: storage.NvmeDevStateFaulty,
+									NvmeState: storage.MockNvmeStateEvicted,
 								},
 								{
 									UUID:      common.MockUUID(2),
@@ -1406,7 +1406,7 @@ host1
 									TrAddr:    "0000:db:00.0",
 									TargetIDs: []int32{3, 4, 5},
 									Rank:      1,
-									NvmeState: storage.NvmeDevStateIdentify,
+									NvmeState: storage.MockNvmeStateIdentify,
 								},
 							},
 						},
@@ -1425,7 +1425,7 @@ host1
     UUID:00000002-0002-0002-0002-000000000002 [TrAddr:0000:da:00.0]
       Targets:[0 1 2] Rank:1 State:UNPLUGGED
     UUID:00000003-0003-0003-0003-000000000003 [TrAddr:0000:db:00.0]
-      Targets:[3 4 5] Rank:1 State:IDENTIFY
+      Targets:[3 4 5] Rank:1 State:NORMAL|IDENTIFY
 `,
 		},
 		"list-devices (none found)": {
@@ -1461,7 +1461,7 @@ host1
 									UUID:      common.MockUUID(0),
 									TargetIDs: []int32{0, 1, 2},
 									Rank:      0,
-									NvmeState: storage.NvmeDevStateNormal,
+									NvmeState: storage.MockNvmeStateNormal,
 									Health:    mockController.HealthStats,
 								},
 							},

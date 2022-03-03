@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2018-2021 Intel Corporation.
+ * (C) Copyright 2018-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -666,25 +666,25 @@ out:
 #else /* FAULT_INJECT */
 int d_fault_inject_init(void)
 {
-	D_WARN("Fault Injection not initialized feature not included in build");
+	D_INFO("Fault Injection not initialized feature not included in build");
 	return -DER_NOSYS;
 }
 
 int d_fault_inject_fini(void)
 {
-	D_WARN("Fault Injection not finalized feature not included in build");
+	D_INFO("Fault Injection not finalized feature not included in build");
 	return -DER_NOSYS;
 }
 
 int d_fault_inject_enable(void)
 {
-	D_WARN("Fault Injection not enabled feature not included in build");
+	D_INFO("Fault Injection not enabled feature not included in build");
 	return -DER_NOSYS;
 }
 
 int d_fault_inject_disable(void)
 {
-	D_WARN("Fault Injection not disabled feature not included in build");
+	D_INFO("Fault Injection not disabled feature not included in build");
 	return -DER_NOSYS;
 }
 
@@ -703,7 +703,7 @@ d_should_fail(struct d_fault_attr_t *fault_attr)
 int
 d_fault_attr_set(uint32_t fault_id, struct d_fault_attr_t fa_in)
 {
-	D_WARN("Fault Injection attr not set feature not included in build");
+	D_INFO("Fault Injection attr not set feature not included in build");
 	return 0;
 }
 

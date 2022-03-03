@@ -1,3 +1,27 @@
+daos (2.1.100-19) unstable; urgency=low
+  [ Michael MacDonald ]
+  * Move libdaos_common.so from daos-client to daos package
+
+ -- Michael MacDonald <mjmac.macdonald@intel.com>  Wed, 19 Jan 2022 13:58:03 -0000
+
+daos (2.1.100-18) unstable; urgency=medium
+  [ Johann Lombardi ]
+  * Update libfabric to 1.14.0 GA and apply fix for DAOS-9376
+
+ -- Johann Lombardi <johann.lombardi@intel.com>  Mon, 17 Jan 2022 10:00:00 -0100
+
+daos (2.1.100-17) unstable; urgency=medium
+  [ Alexander Oganezov ]
+  * Update to mercury v2.1.0-rc4-3 to pick fix for DAOS-9325 high cpu usage
+
+ -- Alexander Oganezov <alexander.a.oganezov@intel.com>  Thu, 23 Dec 2021 10:00:01 -0100
+
+daos (2.1.100-16) unstable; urgency=medium
+  [ Brian J. Murrell ]
+  * NOOP change to keep in parity with RPM version
+
+ -- Brian J. Murrell <brian.murrell@intel.com>  Thu, 16 Dec 2021 15:08:11 -0400
+
 daos (2.1.100-15) unstable; urgency=medium
   [ Brian J. Murrell ]
   * NOOP change to keep in parity with RPM version

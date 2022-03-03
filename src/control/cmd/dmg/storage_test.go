@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2021 Intel Corporation.
+// (C) Copyright 2019-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -19,6 +19,8 @@ func TestStorageCommands(t *testing.T) {
 	storageFormatReq := &control.StorageFormatReq{Reformat: true}
 	storageFormatReq.SetHostList([]string{})
 	systemQueryReq := &control.SystemQueryReq{FailOnUnavailable: true}
+	nvmeRebindReq := &control.NvmeRebindReq{PCIAddr: "0000:80:00.0"}
+	nvmeRebindReq.SetHostList([]string{"foo2.com"})
 
 	runCmdTests(t, []cmdTest{
 		{
@@ -96,6 +98,30 @@ func TestStorageCommands(t *testing.T) {
 			"storage scan --nvme-meta --nvme-health --verbose",
 			"",
 			errors.New("cannot use --nvme-health and --nvme-meta"),
+		},
+		{
+			"Rebind NVMe; no PCI address",
+			"storage nvme-rebind",
+			"",
+			errors.New("required flag"),
+		},
+		{
+			"Rebind NVMe; 0 hosts in hostlist",
+			"storage nvme-rebind --pci-address 0000:80:00.0",
+			"",
+			errors.New("expects a single host"),
+		},
+		{
+			"Rebind NVMe; 2 hosts in hostlist",
+			"storage nvme-rebind -l foo[1,2].com --pci-address 0000:80:00.0",
+			"",
+			errors.New("expects a single host"),
+		},
+		{
+			"Rebind NVMe",
+			"storage nvme-rebind -l foo2.com --pci-address 0000:80:00.0",
+			printRequest(t, nvmeRebindReq),
+			nil,
 		},
 		{
 			"Set FAULTY device status (force)",

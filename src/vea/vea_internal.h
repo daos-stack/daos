@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2018-2021 Intel Corporation.
+ * (C) Copyright 2018-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -154,12 +154,9 @@ static inline bool ext_is_idle(struct vea_free_extent *vfe)
 static inline uint32_t
 get_current_age(void)
 {
-	uint64_t	age = 0;
-	int		rc;
+	uint64_t age = 0;
 
-	rc = daos_gettime_coarse(&age);
-	D_ASSERT(rc == 0);
-
+	age = daos_gettime_coarse();
 	return (uint32_t)age;
 }
 

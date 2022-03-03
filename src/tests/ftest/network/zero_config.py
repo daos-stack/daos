@@ -1,6 +1,6 @@
 #!/usr/bin/python
 """
-  (C) Copyright 2020-2021 Intel Corporation.
+  (C) Copyright 2020-2022 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -242,7 +242,6 @@ class ZeroConfigTest(TestWithServers):
                 "access_points": self.access_points}
         }
         self.start_agents(agent_groups)
-        self.write_string_to_logfile('"Test.name: ' + str(self) + '"')
         self.log.info("-" * 100)
 
         # Verify

@@ -200,11 +200,58 @@ See `daos_metrics -h` for details on how to filter metrics.
 
 ## Storage Operations
 
+Storage subcommands can be used to operate on host storage.
+```bash
+$ dmg storage --help
+Usage:
+  dmg [OPTIONS] storage <command>
+
+...
+
+Available commands:
+  format    Format SCM and NVMe storage attached to remote servers.
+  identify  Blink the status LED on a given VMD device for visual SSD identification.
+  query     Query storage commands, including raw NVMe SSD device health stats and internal blobstore health info.
+  replace   Replace a storage device that has been hot-removed with a new device.
+  scan      Scan SCM and NVMe storage attached to remote servers.
+  set       Manually set the device state.
+```
+
+Storage query subcommands can be used to get detailed information about how DAOS
+is using host storage.
+```bash
+$ dmg storage query --help
+Usage:
+  dmg [OPTIONS] storage query <command>
+
+...
+
+Available commands:
+  device-health  Query the device health
+  list-devices   List storage devices on the server
+  list-pools     List pools on the server
+  target-health  Query the target health
+  usage          Show SCM & NVMe storage space utilization per storage server
+```
+
 ### Space Utilization
 
 To query SCM and NVMe storage space usage and show how much space is available to
 create new DAOS pools with, run the following command:
 
+- Query Per-Server Space Utilization:
+```bash
+$ dmg storage query usage --help
+Usage:
+  dmg [OPTIONS] storage query usage
+
+...
+```
+
+The command output shows online DAOS storage utilization, only including storage
+statistics for devices that have been formatted by DAOS control-plane and assigned
+to a currently running rank of the DAOS system. This represents the storage that
+can host DAOS pools.
 ```bash
 $ dmg storage query usage
 Hosts   SCM-Total SCM-Free SCM-Used NVMe-Total NVMe-Free NVMe-Used
@@ -212,11 +259,6 @@ Hosts   SCM-Total SCM-Free SCM-Used NVMe-Total NVMe-Free NVMe-Used
 wolf-71 6.4 TB    2.0 TB   68 %     1.5 TB     1.1 TB    27 %
 wolf-72 6.4 TB    2.0 TB   68 %     1.5 TB     1.1 TB    27 %
 ```
-
-The command output shows online DAOS storage utilization, only including storage
-statistics for devices that have been formatted by DAOS control-plane and assigned
-to a currently running rank of the DAOS system. This represents the storage that
-can host DAOS pools.
 
 Note that the table values are per-host (storage server) and SCM/NVMe capacity
 pool component values specified in
@@ -242,8 +284,43 @@ overhead).
 Useful admin dmg commands to query NVMe SSD health:
 
 - Query Per-Server Metadata:
-  - `dmg storage query (list-devices|list-pools)`
-  - `dmg storage scan --nvme-meta` shows mapping of metadata to NVMe controllers
+```bash
+$ dmg storage query list-devices --help
+Usage:
+  dmg [OPTIONS] storage query list-devices [list-devices-OPTIONS]
+
+...
+
+[list-devices command options]
+      -r, --rank=         Constrain operation to the specified server rank
+      -b, --health        Include device health in results
+      -u, --uuid=         Device UUID (all devices if blank)
+      -e, --show-evicted  Show only evicted faulty devices
+```
+```bash
+$ dmg storage query list-pools --help
+Usage:
+  dmg [OPTIONS] storage query list-pools [list-pools-OPTIONS]
+
+...
+
+[list-pools command options]
+      -r, --rank=     Constrain operation to the specified server rank
+      -u, --uuid=     Pool UUID (all pools if blank)
+      -v, --verbose   Show more detail about pools
+```
+```bash
+$ dmg storage scan --nvme-meta --help
+Usage:
+  dmg [OPTIONS] storage scan [scan-OPTIONS]
+
+...
+
+[scan command options]
+      -v, --verbose      List SCM & NVMe device details
+      -n, --nvme-health  Display NVMe device health statistics
+      -m, --nvme-meta    Display server meta data held on NVMe storage
+```
 
 The NVMe storage query list-devices and list-pools commands query the persistently
 stored SMD device and pool tables, respectively. The device table maps the internal
@@ -254,6 +331,9 @@ states are the following:
   - EVICTED: the device is no longer in-use by DAOS
   - UNPLUGGED: the device is currently unplugged from the system (may or not be evicted)
   - NEW: the device is plugged and available and not currently in-use by DAOS
+
+To list only devices in the EVICTED state, use the (--show-evicted|-e) option to the
+list-devices command.
 
 The transport address is also listed for the device. This is either the PCIe address
 for normal NVMe SSDs, or the BDF format address of the backing NVMe SSDs behind a
@@ -303,8 +383,39 @@ boro-11
 ```
 
 - Query Storage Device Health Data:
-  - `dmg storage query (device-health|target-health)`
-  - `dmg storage scan --nvme-health` shows NVMe controller health stats
+```bash
+$ dmg storage query device-health --help
+Usage:
+  dmg [OPTIONS] storage query device-health [device-health-OPTIONS]
+
+...
+
+[device-health command options]
+      -u, --uuid=     Device UUID
+```
+```bash
+$ dmg storage query target-health --help
+Usage:
+  dmg [OPTIONS] storage query target-health [target-health-OPTIONS]
+
+...
+
+[target-health command options]
+      -r, --rank=     Server rank hosting target
+      -t, --tgtid=    VOS target ID to query
+```
+```bash
+$ dmg storage scan --nvme-health --help
+Usage:
+  dmg [OPTIONS] storage scan [scan-OPTIONS]
+
+...
+
+[scan command options]
+      -v, --verbose      List SCM & NVMe device details
+      -n, --nvme-health  Display NVMe device health statistics
+      -m, --nvme-meta    Display server meta data held on NVMe storage
+```
 
 The NVMe storage query device-health and target-health commands query the device
 health data, including NVMe SSD health stats and in-memory I/O error and checksum
@@ -371,7 +482,18 @@ boro-11
 ```
 #### Exclusion and Hotplug
 
-- Manually exclude an NVMe SSD: `dmg storage set nvme-faulty`
+- Manually exclude an NVMe SSD:
+```bash
+$ dmg storage set nvme-faulty --help
+Usage:
+  dmg [OPTIONS] storage set nvme-faulty [nvme-faulty-OPTIONS]
+
+...
+
+[nvme-faulty command options]
+      -u, --uuid=     Device UUID to set
+      -f, --force     Do not require confirmation
+```
 
 To manually evict an NVMe SSD (auto eviction will be supported in a future release),
 the device state needs to be set to "FAULTY" by running the following command:
@@ -391,7 +513,33 @@ will remain evicted until device replacement occurs).
     Full NVMe hot plug capability will be available and supported in DAOS 2.2 release.
     Use is currently intended for testing only and is not supported for production.
 
-- Replace an excluded SSD with a New Device: `dmg storage replace nvme`
+- To use a newly added (hot-inserted) SSD it needs to be unbound from the kernel driver
+and bound instead to a user-space driver so that the device can be used with DAOS.
+
+To rebind a SSD on a single host, run the following command (replace SSD PCI address and
+hostname with appropriate values):
+```bash
+$ dmg storage nvme-rebind -a 0000:84:00.0 -l wolf-167
+Command completed successfully
+```
+
+The device will now be bound to a user-space driver (e.g. VFIO) and can be accessed by
+DAOS I/O engine processes (and used in the following `dmg storage replace nvme` command
+as a new device).
+
+- Replace an excluded SSD with a New Device:
+```bash
+$ dmg storage replace nvme --help
+Usage:
+  dmg [OPTIONS] storage replace nvme [nvme-OPTIONS]
+
+...
+
+[nvme command options]
+          --old-uuid= Device UUID of hot-removed SSD
+          --new-uuid= Device UUID of new device
+          --no-reint  Bypass reintegration of device and just bring back online.
+```
 
 To replace an NVMe SSD with an evicted device and reintegrate it into use with
 DAOS, run the following command:
@@ -406,7 +554,7 @@ boro-11
 The old, now replaced device will remain in an "EVICTED" state until it is unplugged.
 The new device will transition from a "NEW" state to a "NORMAL" state (shown above).
 
-- Reuse a FAULTY Device: `dmg storage replace nvme`
+- Reuse a FAULTY Device:
 
 In order to reuse a device that was previously set as FAULTY and evicted from the DAOS
 system, an admin can run the following command (setting the old device UUID to be the
@@ -431,7 +579,17 @@ to be physically available on the hardware as well as enabled in the system BIOS
 The feature supports two LED device events: locating a healthy device and locating
 an evicted device.
 
-- Locate a Healthy SSD: `dmg storage identify vmd`
+- Locate a Healthy SSD:
+```bash
+$ dmg storage identify vmd --help
+Usage:
+  dmg [OPTIONS] storage identify vmd [vmd-OPTIONS]
+
+...
+
+[vmd command options]
+          --uuid=     Device UUID of the VMD device to identify
+```
 
 To quickly identify an SSD in question, an administrator can run the following
 command:
@@ -471,27 +629,56 @@ made to the rank's metadata stored on persistent memory.
 Storage reformat can also be performed after system shutdown. Pools will be
 removed and storage wiped.
 
-System commands will be handled by the DAOS Server listening at the access point
-address specified as the first entry in the DMG config file "hostlist" parameter.
+System commands will be handled by a DAOS Server acting as access point and
+listening on the address specified in the DMG config file "hostlist" parameter.
 See
 [`daos_control.yml`](https://github.com/daos-stack/daos/blob/master/utils/config/daos_control.yml)
 for details.
 
-The "access point" address should be the same as that specified in the server
-config file
+At least one of the addresses in the hostlist parameters should match one of the
+"access point" addresses specified in the server config file
 [`daos_server.yml`](https://github.com/daos-stack/daos/blob/master/utils/config/daos_server.yml)
-specified when starting `daos_server` instances.
+that is supplied when starting `daos_server` instances.
+
+- Commands used to manage a DAOS System:
+```bash
+$ dmg system --help
+Usage:
+  dmg [OPTIONS] system <command>
+
+...
+
+Available commands:
+  cleanup       Clean up all resources associated with the specified machine
+  erase         Erase system metadata prior to reformat
+  leader-query  Query for current Management Service leader
+  list-pools    List all pools in the DAOS system
+  query         Query DAOS system status
+  start         Perform start of stopped DAOS system
+  stop          Perform controlled shutdown of DAOS system
+```
 
 ### Membership
 
-The system membership can be queried using the command:
+The system membership refers to the DAOS engine processes that have registered,
+or joined, a specific DAOS system.
 
-`$ dmg system query [--verbose] [--ranks <rankset>|--host-ranks <hostset>]`
+- Query System Membership:
+```bash
+$ dmg system query --help
+Usage:
+  dmg [OPTIONS] system query [query-OPTIONS]
 
-- `<rankset>` is a pattern describing rank ranges e.g., 0,5-10,20-100
-- `<hostset>` is a pattern describing host ranges e.g.,
-storagehost[0,5-10],10.8.1.[20-100]
-- `--verbose` flag gives more information on each rank
+...
+
+[query command options]
+      -r, --ranks=      Comma separated ranges or individual system ranks to operate on
+          --rank-hosts= Hostlist representing hosts whose managed ranks are to be operated on
+      -v, --verbose     Display more member details
+```
+
+The `--ranks` takes a pattern describing rank ranges e.g., 0,5-10,20-100.
+The `--rank-hosts` takes a pattern describing host ranges e.g. storagehost[0,5-10],10.8.1.[20-100].
 
 The output table will provide system rank mappings to host address and instance
 UUID, in addition to the rank state.
@@ -506,9 +693,24 @@ reintegrate an excluded engine.
 
 ### Shutdown
 
-When up and running, the entire system can be shutdown with the command:
+When up and running, the entire system can be shutdown.
 
-`$ dmg system stop [--force]`
+- Stop a System:
+```bash
+$ dmg system stop --help
+Usage:
+  dmg [OPTIONS] system stop [stop-OPTIONS]
+
+...
+
+[stop command options]
+      -r, --ranks=      Comma separated ranges or individual system ranks to operate on
+          --rank-hosts= Hostlist representing hosts whose managed ranks are to be operated on
+          --force       Force stop DAOS system members
+```
+
+The `--ranks` takes a pattern describing rank ranges e.g., 0,5-10,20-100.
+The `--rank-hosts` takes a pattern describing host ranges e.g. storagehost[0,5-10],10.8.1.[20-100].
 
 The output table will indicate action and result.
 
@@ -522,55 +724,54 @@ operate and listen on the management network.
     storage nodes. An abrupt reboot of the storage nodes might result
     in massive exclusion that will take time to recover.
 
-The force option can be passed to dmg system stop for cases when a clean
-shutown is not working. Monitoring is not disabled in this case and spurious
-exclusion might happen, but the engines are guaranteed to be killed.
+The force option can be passed to for cases when a clean shutown is not working.
+Monitoring is not disabled in this case and spurious exclusion might happen,
+but the engines are guaranteed to be killed.
 
-dmg also allows to stop a list of engines identified by ranks or hostnames.
+dmg also allows to stop a subsection of engines identified by ranks or hostnames.
 This is useful to stop (and restart) misbehaving engines.
-
-`$ dmg system stop [--force] [--ranks <rankset>|--host-ranks <hostset>]`
-
-- `<rankset>` is a pattern describing rank ranges e.g., 0,5-10,20-100
-- `<hostset>` is a pattern describing host ranges e.g.,
-storagehost[0,5-10],10.8.1.[20-100]
 
 ### Start
 
-To start the system after a controlled shutdown, run the command:
+The system can be started backup after a controlled shutdown.
 
-`$ dmg system start`
+- Start a System:
+```bash
+$ dmg system start --help
+Usage:
+  dmg [OPTIONS] system start [start-OPTIONS]
 
-- `<rankset>` is a pattern describing rank ranges e.g., 0,5-10,20-100
-- `<hostset>` is a pattern describing host ranges e.g.,
-storagehost[0,5-10],10.8.1.[20-100]
+...
+
+[start command options]
+      -r, --ranks=      Comma separated ranges or individual system ranks to operate on
+          --rank-hosts= Hostlist representing hosts whose managed ranks are to be operated on
+```
+
+The `--ranks` takes a pattern describing rank ranges e.g., 0,5-10,20-100.
+The `--rank-hosts` takes a pattern describing host ranges e.g. storagehost[0,5-10],10.8.1.[20-100].
 
 The output table will indicate action and result.
 
 DAOS I/O Engines will be started.
 
-As for shutdown, a list of engines to restart can be specified on the command
-line:
-
-`$ dmg system start [--ranks <rankset>|--host-ranks <hostset>]`
-
-- `<rankset>` is a pattern describing rank ranges e.g., 0,5-10,20-100
-- `<hostset>` is a pattern describing host ranges e.g.,
-storagehost[0,5-10],10.8.1.[20-100]
+As for shutdown, a subsection of engines identified by ranks or hostname can be
+specified on the command line:
 
 If the ranks were excluded from pools (e.g., unclean shutdown), they will need to
 be reintegrated. Please see the pool operation section for more information.
 
-### Reformat
+### Storage Reformat
 
 To reformat the system after a controlled shutdown, run the command:
 
-`$ dmg storage format --reformat`
+`$ dmg storage format --force`
 
-- `--reformat` flag indicates that a reformat operation should be
+- `--force` flag indicates that a (re)format operation should be
 performed disregarding existing filesystems
 - if no record of previously running ranks can be found, reformat is
-performed on hosts in dmg config file hostlist
+performed on the hosts that are specified in the `daos_control.yml`
+config file's `hostlist` parameter.
 - if system membership has records of previously running ranks, storage
 allocated to those ranks will be formatted
 
@@ -594,6 +795,27 @@ DAOS I/O Engines will be started, and all DAOS pools will have been removed.
     ```
     Then restart DAOS Servers and format.
 
+
+### System Erase
+
+To erase the DAOS sorage configuration, the `dmg system erase`
+command can be used. Before doing this, the affected engines need to be
+stopped by running `dmg system stop` (if necessary with the `--force` flag).
+The erase operation will destroy any pools that may still exist, and will
+unconfigure the storage. It will not stop the daos\_server process, so
+the `dmg` command can still be used. For example, the system can be
+formatted again by running `dmg storage format`.
+
+!!! note
+    Note that `dmg system erase` does not currently reset the SCM.
+    The `/dev/pmemX` devices will remain mounted,
+    and the PMem configuration will not be reset to Memory Mode.
+    To completely unconfigure the SCM, it is advisable to run
+    `daos_server storage prepare --scm-only --reset` which will
+    completely reset the PMem. A reboot will be required to finalize
+    the change of the PMem allocation goals.
+
+
 ### System Extension
 
 To add a new server to an existing DAOS system, one should install:
@@ -602,9 +824,9 @@ To add a new server to an existing DAOS system, one should install:
 - the server yaml file pointing to the access points of the running
   DAOS system
 
-The daos_control.yml file should also be updated to include the new DAOS server.
+The daos\_control.yml file should also be updated to include the new DAOS server.
 
-Then starts the daos_server via systemd and format the new server via
+Then starts the daos\_server via systemd and format the new server via
 dmg as follows:
 
 ```

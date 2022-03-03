@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2018-2021 Intel Corporation.
+// (C) Copyright 2018-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -12,6 +12,7 @@ import (
 	"os"
 	"os/user"
 	"path/filepath"
+	"sort"
 	"syscall"
 	"testing"
 	"time"
@@ -22,6 +23,7 @@ import (
 	"github.com/pkg/errors"
 
 	"github.com/daos-stack/daos/src/control/common"
+	"github.com/daos-stack/daos/src/control/lib/hardware"
 	"github.com/daos-stack/daos/src/control/lib/spdk"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/server/storage"
@@ -38,7 +40,13 @@ func defCmpOpts() []cmp.Option {
 	return []cmp.Option{
 		// ignore these fields on most tests, as they are intentionally not stable
 		cmpopts.IgnoreFields(storage.NvmeController{}, "HealthStats", "Serial"),
-		cmp.AllowUnexported(common.PCIAddressSet{}),
+		cmp.AllowUnexported(hardware.PCIAddressSet{}),
+		cmp.Comparer(func(x, y *storage.BdevDeviceList) bool {
+			if x == nil && y == nil {
+				return true
+			}
+			return x.Equals(y)
+		}),
 	}
 }
 
@@ -138,7 +146,7 @@ func TestBackend_groomDiscoveredBdevs(t *testing.T) {
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
-			reqAddrs, err := common.NewPCIAddressSet(tc.reqAddrList...)
+			reqAddrs, err := hardware.NewPCIAddressSet(tc.reqAddrList...)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -159,6 +167,12 @@ func TestBackend_groomDiscoveredBdevs(t *testing.T) {
 func TestBackend_Scan(t *testing.T) {
 	ctrlr1 := storage.MockNvmeController(1)
 
+	mockScanReq := func() storage.BdevScanRequest {
+		return storage.BdevScanRequest{
+			DeviceList: &storage.BdevDeviceList{},
+		}
+	}
+
 	for name, tc := range map[string]struct {
 		req     storage.BdevScanRequest
 		mec     spdk.MockEnvCfg
@@ -167,20 +181,21 @@ func TestBackend_Scan(t *testing.T) {
 		expErr  error
 	}{
 		"binding scan fail": {
+			req: mockScanReq(),
 			mnc: spdk.MockNvmeCfg{
 				DiscoverErr: errors.New("spdk says no"),
 			},
 			expErr: errors.New("spdk says no"),
 		},
 		"empty results from binding": {
-			req:     storage.BdevScanRequest{},
+			req:     mockScanReq(),
 			expResp: &storage.BdevScanResponse{},
 		},
 		"binding scan success": {
 			mnc: spdk.MockNvmeCfg{
 				DiscoverCtrlrs: storage.NvmeControllers{ctrlr1},
 			},
-			req: storage.BdevScanRequest{},
+			req: mockScanReq(),
 			expResp: &storage.BdevScanResponse{
 				Controllers: storage.NvmeControllers{ctrlr1},
 			},
@@ -213,10 +228,10 @@ func TestBackend_Format(t *testing.T) {
 	testDir, clean := common.CreateTestDir(t)
 	defer clean()
 
-	addrList := func(t *testing.T, in ...string) *common.PCIAddressSet {
+	addrList := func(t *testing.T, in ...string) *hardware.PCIAddressSet {
 		t.Helper()
 
-		addrs, err := common.NewPCIAddressSet(in...)
+		addrs, err := hardware.NewPCIAddressSet(in...)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -236,7 +251,7 @@ func TestBackend_Format(t *testing.T) {
 			req: storage.BdevFormatRequest{
 				Properties: storage.BdevTierProperties{
 					Class:      storage.Class("whoops"),
-					DeviceList: []string{pci1},
+					DeviceList: storage.MustNewBdevDeviceList(pci1),
 				},
 			},
 			expErr: FaultFormatUnknownClass("whoops"),
@@ -252,7 +267,7 @@ func TestBackend_Format(t *testing.T) {
 			req: storage.BdevFormatRequest{
 				Properties: storage.BdevTierProperties{
 					Class:          storage.ClassFile,
-					DeviceList:     []string{filepath.Join(testDir, "daos-bdev")},
+					DeviceList:     storage.MustNewBdevDeviceList(filepath.Join(testDir, "daos-bdev")),
 					DeviceFileSize: humanize.MiByte,
 				},
 			},
@@ -272,7 +287,7 @@ func TestBackend_Format(t *testing.T) {
 			req: storage.BdevFormatRequest{
 				Properties: storage.BdevTierProperties{
 					Class:      storage.ClassKdev,
-					DeviceList: []string{"/dev/sdc", "/dev/sdd"},
+					DeviceList: storage.MustNewBdevDeviceList("/dev/sdc", "/dev/sdd"),
 				},
 			},
 			expResp: &storage.BdevFormatResponse{
@@ -289,7 +304,7 @@ func TestBackend_Format(t *testing.T) {
 			req: storage.BdevFormatRequest{
 				Properties: storage.BdevTierProperties{
 					Class:      storage.ClassNvme,
-					DeviceList: []string{pci1},
+					DeviceList: storage.MustNewBdevDeviceList(pci1),
 				},
 			},
 			expErr: errors.New("spdk says no"),
@@ -298,7 +313,7 @@ func TestBackend_Format(t *testing.T) {
 			req: storage.BdevFormatRequest{
 				Properties: storage.BdevTierProperties{
 					Class:      storage.ClassNvme,
-					DeviceList: []string{pci1},
+					DeviceList: storage.MustNewBdevDeviceList(pci1),
 				},
 			},
 			expErr: errors.New("empty results from spdk binding format request"),
@@ -312,7 +327,7 @@ func TestBackend_Format(t *testing.T) {
 			req: storage.BdevFormatRequest{
 				Properties: storage.BdevTierProperties{
 					Class:      storage.ClassNvme,
-					DeviceList: []string{pci1},
+					DeviceList: storage.MustNewBdevDeviceList(pci1),
 				},
 			},
 			expResp: &storage.BdevFormatResponse{
@@ -340,7 +355,7 @@ func TestBackend_Format(t *testing.T) {
 			req: storage.BdevFormatRequest{
 				Properties: storage.BdevTierProperties{
 					Class:      storage.ClassNvme,
-					DeviceList: []string{pci1, pci2, pci3},
+					DeviceList: storage.MustNewBdevDeviceList(pci1, pci2, pci3),
 				},
 			},
 			expResp: &storage.BdevFormatResponse{
@@ -377,7 +392,7 @@ func TestBackend_Format(t *testing.T) {
 			req: storage.BdevFormatRequest{
 				Properties: storage.BdevTierProperties{
 					Class:      storage.ClassNvme,
-					DeviceList: []string{pci1, pci2, pci3},
+					DeviceList: storage.MustNewBdevDeviceList(pci1, pci2, pci3),
 				},
 			},
 			expResp: &storage.BdevFormatResponse{
@@ -413,7 +428,7 @@ func TestBackend_Format(t *testing.T) {
 			req: storage.BdevFormatRequest{
 				Properties: storage.BdevTierProperties{
 					Class:      storage.ClassNvme,
-					DeviceList: []string{pci1},
+					DeviceList: storage.MustNewBdevDeviceList(pci1),
 				},
 			},
 			expResp: &storage.BdevFormatResponse{
@@ -451,7 +466,7 @@ func TestBackend_Format(t *testing.T) {
 			req: storage.BdevFormatRequest{
 				Properties: storage.BdevTierProperties{
 					Class:      storage.ClassNvme,
-					DeviceList: []string{pci1},
+					DeviceList: storage.MustNewBdevDeviceList(pci1),
 				},
 			},
 			expResp: &storage.BdevFormatResponse{
@@ -479,7 +494,7 @@ func TestBackend_Format(t *testing.T) {
 			req: storage.BdevFormatRequest{
 				Properties: storage.BdevTierProperties{
 					Class:      storage.ClassNvme,
-					DeviceList: []string{vmdAddr},
+					DeviceList: storage.MustNewBdevDeviceList(vmdAddr),
 				},
 				VMDEnabled: true,
 				BdevCache: &storage.BdevScanResponse{
@@ -532,7 +547,7 @@ func TestBackend_Format(t *testing.T) {
 			switch tc.req.Properties.Class {
 			case storage.ClassFile:
 				// verify empty files created for AIO class
-				for _, testFile := range tc.req.Properties.DeviceList {
+				for _, testFile := range tc.req.Properties.DeviceList.Devices() {
 					if _, err := os.Stat(testFile); err != nil {
 						t.Fatal(err)
 					}
@@ -561,7 +576,7 @@ func TestBackend_writeNvmeConfig(t *testing.T) {
 					},
 					{
 						Class:      storage.ClassNvme,
-						DeviceList: []string{common.MockPCIAddr(1)},
+						DeviceList: storage.MustNewBdevDeviceList(common.MockPCIAddr(1)),
 					},
 				},
 			},
@@ -572,7 +587,7 @@ func TestBackend_writeNvmeConfig(t *testing.T) {
 					},
 					{
 						Class:      storage.ClassNvme,
-						DeviceList: []string{common.MockPCIAddr(1)},
+						DeviceList: storage.MustNewBdevDeviceList(common.MockPCIAddr(1)),
 					},
 				},
 			},
@@ -585,7 +600,7 @@ func TestBackend_writeNvmeConfig(t *testing.T) {
 					},
 					{
 						Class:      storage.ClassNvme,
-						DeviceList: []string{common.MockPCIAddr(1)},
+						DeviceList: storage.MustNewBdevDeviceList(common.MockPCIAddr(1)),
 					},
 				},
 			},
@@ -597,7 +612,7 @@ func TestBackend_writeNvmeConfig(t *testing.T) {
 					},
 					{
 						Class:      storage.ClassNvme,
-						DeviceList: []string{common.MockPCIAddr(1)},
+						DeviceList: storage.MustNewBdevDeviceList(common.MockPCIAddr(1)),
 					},
 				},
 			},
@@ -612,7 +627,7 @@ func TestBackend_writeNvmeConfig(t *testing.T) {
 					},
 					{
 						Class:      storage.ClassNvme,
-						DeviceList: []string{vmdAddr},
+						DeviceList: storage.MustNewBdevDeviceList(vmdAddr),
 					},
 				},
 				BdevCache: &storage.BdevScanResponse{
@@ -624,7 +639,7 @@ func TestBackend_writeNvmeConfig(t *testing.T) {
 				TierProps: []storage.BdevTierProperties{
 					{
 						Class:      storage.ClassNvme,
-						DeviceList: []string{vmdBackingAddr1, vmdBackingAddr2},
+						DeviceList: storage.MustNewBdevDeviceList(vmdBackingAddr1, vmdBackingAddr2),
 					},
 				},
 				BdevCache: &storage.BdevScanResponse{
@@ -641,11 +656,14 @@ func TestBackend_writeNvmeConfig(t *testing.T) {
 			b := newBackend(log, sr)
 
 			var gotCall *storage.BdevWriteConfigRequest
-			gotErr := b.writeNVMEConf(tc.req, func(l logging.Logger, r *storage.BdevWriteConfigRequest) error {
-				l.Debugf("req: %+v", r)
-				gotCall = r
-				return tc.writeErr
-			})
+			gotErr := b.writeNvmeConfig(
+				tc.req,
+				func(l logging.Logger, r *storage.BdevWriteConfigRequest) error {
+					l.Debugf("req: %+v", r)
+					gotCall = r
+					return tc.writeErr
+				},
+			)
 			if diff := cmp.Diff(tc.expCall, gotCall, defCmpOpts()...); diff != "" {
 				t.Fatalf("\nunexpected request made (-want, +got):\n%s\n", diff)
 			}
@@ -868,8 +886,8 @@ func TestBackend_Prepare(t *testing.T) {
 		username              = "bob"
 	)
 
-	mockAddrList := func(t *testing.T, idxs ...int) *common.PCIAddressSet {
-		var addrs common.PCIAddressSet
+	mockAddrList := func(t *testing.T, idxs ...int) *hardware.PCIAddressSet {
+		var addrs hardware.PCIAddressSet
 
 		for _, idx := range idxs {
 			if err := addrs.AddStrings(common.MockPCIAddr(int32(idx))); err != nil {
@@ -889,7 +907,7 @@ func TestBackend_Prepare(t *testing.T) {
 		mbc            *MockBackendConfig
 		userLookupRet  *user.User
 		userLookupErr  error
-		vmdDetectRet   *common.PCIAddressSet
+		vmdDetectRet   *hardware.PCIAddressSet
 		vmdDetectErr   error
 		hpCleanErr     error
 		expScriptCalls *[]scriptCall
@@ -1211,6 +1229,21 @@ func TestBackend_Prepare(t *testing.T) {
 				},
 			},
 		},
+		"prepare setup; -1 huge pages": {
+			req: storage.BdevPrepareRequest{
+				HugePageCount: -1,
+				TargetUser:    username,
+			},
+			expScriptCalls: &[]scriptCall{
+				{
+					Env: []string{
+						fmt.Sprintf("PATH=%s", os.Getenv("PATH")),
+						fmt.Sprintf("%s=%d", nrHugepagesEnv, defaultNrHugepages),
+						fmt.Sprintf("%s=%s", targetUserEnv, username),
+					},
+				},
+			},
+		},
 		"prepare setup; huge page clean enabled; clean fail": {
 			req: storage.BdevPrepareRequest{
 				HugePageCount:         testNrHugePages,
@@ -1247,7 +1280,7 @@ func TestBackend_Prepare(t *testing.T) {
 			mockUserLookup := func(string) (*user.User, error) {
 				return tc.userLookupRet, tc.userLookupErr
 			}
-			mockVmdDetect := func() (*common.PCIAddressSet, error) {
+			mockVmdDetect := func() (*hardware.PCIAddressSet, error) {
 				return tc.vmdDetectRet, tc.vmdDetectErr
 			}
 			mockHpClean := func(string, string, string) error {
@@ -1265,8 +1298,19 @@ func TestBackend_Prepare(t *testing.T) {
 				return
 			}
 
-			if diff := cmp.Diff(tc.expScriptCalls, calls); diff != "" {
-				t.Fatalf("\nunexpected cmd env (-want, +got):\n%s\n", diff)
+			if len(*tc.expScriptCalls) != len(*calls) {
+				t.Fatalf("\nunmatched number of calls (-want, +got):\n%s\n",
+					cmp.Diff(tc.expScriptCalls, calls))
+			}
+			for i, expected := range *tc.expScriptCalls {
+				// env list doesn't need to be ordered
+				sort.Strings(expected.Env)
+				actual := (*calls)[i]
+				sort.Strings(actual.Env)
+
+				if diff := cmp.Diff(expected, actual); diff != "" {
+					t.Fatalf("\nunexpected cmd env (-want, +got):\n%s\n", diff)
+				}
 			}
 
 		})

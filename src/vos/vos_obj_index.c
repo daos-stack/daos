@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2021 Intel Corporation.
+ * (C) Copyright 2016-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -253,6 +253,8 @@ vos_oi_find_alloc(struct vos_container *cont, daos_unit_oid_t oid,
 		return rc;
 	}
 	obj = val_iov.iov_buf;
+	/** Since we just allocated it, we can save a tx_add later to set this */
+	obj->vo_max_write = epoch;
 
 	vos_ilog_ts_ignore(vos_cont2umm(cont), &obj->vo_ilog);
 	vos_ilog_ts_mark(ts_set, &obj->vo_ilog);
@@ -622,8 +624,8 @@ oi_iter_fetch(struct vos_iterator *iter, vos_iter_entry_t *it_entry,
 	}
 	it_entry->ie_child_type = VOS_ITER_DKEY;
 
-	vos_ilog_last_update(&obj->vo_ilog, VOS_TS_TYPE_OBJ,
-			     &it_entry->ie_last_update);
+	it_entry->ie_last_update = obj->vo_max_write;
+
 	return 0;
 }
 
@@ -659,7 +661,7 @@ oi_iter_aggregate(daos_handle_t ih, bool range_discard)
 	struct vos_obj_df	*obj;
 	daos_unit_oid_t		 oid;
 	d_iov_t			 rec_iov;
-	bool			 reprobe = false;
+	bool			 delete = false, invisible = false;
 	int			 rc;
 
 	D_ASSERT(iter->it_type == VOS_ITER_OBJ);
@@ -685,7 +687,7 @@ oi_iter_aggregate(daos_handle_t ih, bool range_discard)
 		/* Incarnation log is empty, delete the object */
 		D_DEBUG(DB_IO, "Removing object "DF_UOID" from tree\n",
 			DP_UOID(oid));
-		reprobe = true;
+		delete = true;
 		if (!dbtree_is_empty_inplace(&obj->vo_tree)) {
 			/* This can be an assert once we have sane under punch
 			 * detection.
@@ -702,14 +704,14 @@ oi_iter_aggregate(daos_handle_t ih, bool range_discard)
 		D_ASSERT(rc != -DER_NONEXIST);
 	} else if (rc == -DER_NONEXIST) {
 		/** ilog isn't visible in range but still has some enrtries */
-		reprobe = true;
+		invisible = true;
 		rc = 0;
 	}
 
 	rc = umem_tx_end(vos_cont2umm(oiter->oit_cont), rc);
 exit:
-	if (rc == 0 && reprobe)
-		return 1;
+	if (rc == 0 && (delete || invisible))
+		return delete ? 1 : 2;
 
 	return rc;
 }

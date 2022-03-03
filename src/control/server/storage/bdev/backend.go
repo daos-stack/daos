@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2021 Intel Corporation.
+// (C) Copyright 2019-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -17,7 +17,7 @@ import (
 
 	"github.com/pkg/errors"
 
-	"github.com/daos-stack/daos/src/control/common"
+	"github.com/daos-stack/daos/src/control/lib/hardware"
 	"github.com/daos-stack/daos/src/control/lib/spdk"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/server/storage"
@@ -42,7 +42,7 @@ type (
 
 	removeFn     func(string) error
 	userLookupFn func(string) (*user.User, error)
-	vmdDetectFn  func() (*common.PCIAddressSet, error)
+	vmdDetectFn  func() (*hardware.PCIAddressSet, error)
 	hpCleanFn    func(string, string, string) error
 	writeConfFn  func(logging.Logger, *storage.BdevWriteConfigRequest) error
 	restoreFn    func()
@@ -235,7 +235,7 @@ func (sb *spdkBackend) Prepare(req storage.BdevPrepareRequest) (*storage.BdevPre
 // groomDiscoveredBdevs ensures that for a non-empty device list, restrict output controller data
 // to only those devices discovered and in device list and confirm that the devices specified in
 // the device list have all been discovered.
-func groomDiscoveredBdevs(reqDevs *common.PCIAddressSet, discovered storage.NvmeControllers, vmdEnabled bool) (storage.NvmeControllers, error) {
+func groomDiscoveredBdevs(reqDevs *hardware.PCIAddressSet, discovered storage.NvmeControllers, vmdEnabled bool) (storage.NvmeControllers, error) {
 	if reqDevs == nil {
 		return nil, errors.New("nil device list in bdev scan request")
 	}
@@ -245,7 +245,7 @@ func groomDiscoveredBdevs(reqDevs *common.PCIAddressSet, discovered storage.Nvme
 		return discovered, nil
 	}
 
-	var missing common.PCIAddressSet
+	var missing hardware.PCIAddressSet
 	out := make(storage.NvmeControllers, 0)
 
 	vmds, err := mapVMDToBackingDevs(discovered)
@@ -290,11 +290,11 @@ func groomDiscoveredBdevs(reqDevs *common.PCIAddressSet, discovered storage.Nvme
 func (sb *spdkBackend) Scan(req storage.BdevScanRequest) (*storage.BdevScanResponse, error) {
 	sb.log.Debugf("spdk backend scan (bindings discover call): %+v", req)
 
-	needDevs, err := common.NewPCIAddressSet(req.DeviceList...)
-	if err != nil {
-		return nil, err
+	if req.DeviceList == nil {
+		return nil, errors.New("nil device list in bdev scan request")
 	}
 
+	needDevs := &req.DeviceList.PCIAddressSet
 	spdkOpts := &spdk.EnvOptions{
 		PCIAllowList: needDevs,
 		EnableVMD:    req.VMDEnabled,
@@ -390,7 +390,7 @@ func (sb *spdkBackend) formatAioFile(req *storage.BdevFormatRequest) (*storage.B
 		DeviceResponses: make(storage.BdevDeviceFormatResponses),
 	}
 
-	for _, path := range req.Properties.DeviceList {
+	for _, path := range req.Properties.DeviceList.Devices() {
 		devResp := new(storage.BdevDeviceFormatResponse)
 		resp.DeviceResponses[path] = devResp
 		if err := createEmptyFile(sb.log, path, req.Properties.DeviceFileSize); err != nil {
@@ -413,7 +413,7 @@ func (sb *spdkBackend) formatKdev(req *storage.BdevFormatRequest) (*storage.Bdev
 		DeviceResponses: make(storage.BdevDeviceFormatResponses),
 	}
 
-	for _, device := range req.Properties.DeviceList {
+	for _, device := range req.Properties.DeviceList.Devices() {
 		resp.DeviceResponses[device] = new(storage.BdevDeviceFormatResponse)
 		sb.log.Debugf("%s format for non-NVMe bdev skipped on %s", req.Properties.Class, device)
 	}
@@ -422,10 +422,7 @@ func (sb *spdkBackend) formatKdev(req *storage.BdevFormatRequest) (*storage.Bdev
 }
 
 func (sb *spdkBackend) formatNvme(req *storage.BdevFormatRequest) (*storage.BdevFormatResponse, error) {
-	needDevs, err := common.NewPCIAddressSet(req.Properties.DeviceList...)
-	if err != nil {
-		return nil, err
-	}
+	needDevs := &req.Properties.DeviceList.PCIAddressSet
 
 	if needDevs.IsEmpty() {
 		sb.log.Debug("skip nvme format as bdev device list is empty")
@@ -481,7 +478,7 @@ func (sb *spdkBackend) Format(req storage.BdevFormatRequest) (resp *storage.Bdev
 	}
 }
 
-func (sb *spdkBackend) writeNVMEConf(req storage.BdevWriteConfigRequest, confWriter writeConfFn) error {
+func (sb *spdkBackend) writeNvmeConfig(req storage.BdevWriteConfigRequest, confWriter writeConfFn) error {
 	sb.log.Debugf("spdk backend write config (system calls): %+v", req)
 
 	// Substitute addresses in bdev tier's DeviceLists if VMD is in use.
@@ -494,16 +491,13 @@ func (sb *spdkBackend) writeNVMEConf(req storage.BdevWriteConfigRequest, confWri
 				continue
 			}
 
-			bdevs, err := common.NewPCIAddressSet(props.DeviceList...)
-			if err != nil {
-				return errors.Wrapf(err, "storage tier %d", props.Tier)
-			}
+			bdevs := &props.DeviceList.PCIAddressSet
 
 			dl, err := substituteVMDAddresses(sb.log, bdevs, req.BdevCache)
 			if err != nil {
 				return errors.Wrapf(err, "storage tier %d", props.Tier)
 			}
-			props.DeviceList = dl.Strings()
+			props.DeviceList = &storage.BdevDeviceList{PCIAddressSet: *dl}
 			tps = append(tps, props)
 		}
 		req.TierProps = tps
@@ -513,7 +507,7 @@ func (sb *spdkBackend) writeNVMEConf(req storage.BdevWriteConfigRequest, confWri
 }
 
 func (sb *spdkBackend) WriteConfig(req storage.BdevWriteConfigRequest) (*storage.BdevWriteConfigResponse, error) {
-	return &storage.BdevWriteConfigResponse{}, sb.writeNVMEConf(req, writeJSONConf)
+	return &storage.BdevWriteConfigResponse{}, sb.writeNvmeConfig(req, writeJsonConfig)
 }
 
 // UpdateFirmware uses the SPDK bindings to update an NVMe controller's firmware.

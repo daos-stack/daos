@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2020-2021 Intel Corporation.
+ * (C) Copyright 2020-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -9,9 +9,8 @@
 
 #include <daos/common.h>
 #include <daos/checksum.h>
-#include <daos_srv/daos_engine.h>
-#include <daos_srv/container.h>
 #include <daos_srv/evtree.h>
+#include "vos_internal.h"
 
 /*
  * Checksum recalculation code. Called from vos_aggregate.c.
@@ -19,19 +18,6 @@
  * Recalculation is driven by an array of csum_recalc structs,
  * one per input segment. These segments are coalecsed into a single
  * output segment by the overall aggregation process.
- *
- * The input data is held in a buffer that is specified by a bio sg_list.
- * The data for the output segment is place within the initial range of
- * the buffer. Following this range, the additional data required for
- * checksum data is stored. These additional segments, either prefix
- * or suffix ranges of each input physical extent, are appended in order
- * at the end of the buffer, with corresponding * entries in the bgsl's
- * biov array.
- *
- * A temporary sg_list is constructed for each input segment, with an
- * optional prefix entry, the outputable range, and an optional suffix
- * making up the data used to calculate the checksum used to verify
- * the data for each input segment.
  *
  * The calculated checksums, are then compared to the checksums
  * associated with the input segments. These input checksums were
@@ -51,50 +37,6 @@
  * The calculations are offloaded to a helper Xstream, when one is available.
  *
  */
-
-/* Construct sgl to send to csummer for verify of an input segment. */
-static unsigned int
-csum_agg_set_sgl(d_sg_list_t *sgl, struct bio_sglist *bsgl,
-		 struct csum_recalc *recalcs, uint8_t *buf,
-		 unsigned int buf_len, int add_start, daos_size_t seg_size,
-		 unsigned int idx, unsigned int add_offset,
-		 unsigned int *buf_idx, unsigned int *add_idx)
-{
-	unsigned int sgl_idx = 0;
-
-	sgl->sg_nr = 1;
-	if (recalcs[idx].cr_prefix_len) {
-		sgl->sg_iovs[sgl_idx].iov_buf = &buf[*add_idx+seg_size];
-		D_ASSERT(recalcs[idx].cr_prefix_len ==
-			 bsgl->bs_iovs[add_start + add_offset].bi_data_len);
-		sgl->sg_iovs[sgl_idx].iov_buf_len =
-			bsgl->bs_iovs[add_start + add_offset].bi_data_len;
-		sgl->sg_iovs[sgl_idx++].iov_len =
-			bsgl->bs_iovs[add_start + add_offset].bi_data_len;
-		*add_idx += bsgl->bs_iovs[add_start + add_offset].bi_data_len;
-		add_offset++;
-		sgl->sg_nr++;
-	}
-
-	sgl->sg_iovs[sgl_idx].iov_buf = &buf[*buf_idx];
-	sgl->sg_iovs[sgl_idx].iov_buf_len = bsgl->bs_iovs[idx].bi_data_len;
-	sgl->sg_iovs[sgl_idx++].iov_len = bsgl->bs_iovs[idx].bi_data_len;
-	*buf_idx += bsgl->bs_iovs[idx].bi_data_len;
-
-	if (recalcs[idx].cr_suffix_len) {
-		sgl->sg_iovs[sgl_idx].iov_buf = &buf[*add_idx + seg_size];
-		D_ASSERT(recalcs[idx].cr_suffix_len ==
-			 bsgl->bs_iovs[add_start + add_offset].bi_data_len);
-		sgl->sg_iovs[sgl_idx].iov_buf_len =
-			bsgl->bs_iovs[add_start + add_offset].bi_data_len;
-		sgl->sg_iovs[sgl_idx].iov_len =
-			bsgl->bs_iovs[add_start + add_offset].bi_data_len;
-		*add_idx += bsgl->bs_iovs[add_start + add_offset].bi_data_len;
-		add_offset++;
-		sgl->sg_nr++;
-	}
-	return add_offset;
-}
 
 /* Determine checksum parameters for verification of an input segemnt. */
 static unsigned int
@@ -177,73 +119,70 @@ csum_agg_verify(struct csum_recalc *recalc, struct dcs_csum_info *new_csum,
 	return match;
 }
 
-/* Driver for the checksum verification of input segments, and calculation
- * of checksum array for the output segment. This function is called directly
- * from the VOS unit test, but is invoked in a ULT (running in a helper xstream
- * when available) for standard aggregation running within the DAOS server.
+/*
+ * Driver for the checksum verification of input segments, and calculation
+ * of checksum array for the output segment.
  */
-void
-ds_csum_agg_recalc(void *recalc_args)
+int
+vos_csum_recalc_fn(void *recalc_args)
 {
-	d_sg_list_t		 sgl;
+	d_sg_list_t		 sgl, sgl_dst;
 	struct csum_recalc_args *args = recalc_args;
 	struct bio_sglist	*bsgl = args->cra_bsgl;
 	struct evt_entry_in	*ent_in = args->cra_ent_in;
 	struct csum_recalc	*recalcs = args->cra_recalcs;
 	struct daos_csummer	*csummer;
 	struct dcs_csum_info	 csum_info = args->cra_ent_in->ei_csum;
-	unsigned int		 buf_idx = 0;
-	unsigned int		 add_idx = 0;
-	unsigned int		 i,  add_offset = 0;
-	int			 rc = 0;
+	struct bio_iov		*biov;
+	int			 i, rc = 0;
 
-	/* need at most prefix + buf + suffix in sgl */
-	rc = d_sgl_init(&sgl, 3);
+	D_ASSERT(args->cra_seg_cnt > 0);
+	rc = d_sgl_init(&sgl, 1);
 	if (rc) {
 		args->cra_rc = rc;
-		return;
+		return rc;
 	}
+
+	rc = d_sgl_init(&sgl_dst, args->cra_seg_cnt);
+	if (rc) {
+		d_sgl_fini(&sgl, false);
+		args->cra_rc = rc;
+		return rc;
+	}
+
 	daos_csummer_init_with_type(&csummer, csum_info.cs_type,
 				    csum_info.cs_chunksize, 0);
 	for (i = 0; i < args->cra_seg_cnt; i++) {
 		bool		is_valid = false;
-		unsigned int	this_buf_nr, this_buf_idx;
+		unsigned int	this_rec_nr, this_rec_idx;
 
+		biov = &bsgl->bs_iovs[i];
+		/* Number of records in this input segment */
+		this_rec_nr = bio_iov2raw_len(biov) / ent_in->ei_inob;
 
-		/* Number of records in this input segment, include added
-		 * segments.
-		 */
-		this_buf_nr = (bsgl->bs_iovs[i].bi_data_len +
-			       recalcs[i].cr_prefix_len +
-			       recalcs[i].cr_suffix_len) / ent_in->ei_inob;
-		/* Sets up the SGL for the (verification) checksum calculation.
-		 * Returns the offset of the next add-on (prefix/suffix)
-		 * segment.
-		 */
-		add_offset = csum_agg_set_sgl(&sgl, bsgl, recalcs,
-					      args->cra_buf, args->cra_buf_len,
-					      args->cra_seg_cnt,
-					      args->cra_seg_size, i, add_offset,
-					      &buf_idx, &add_idx);
 		D_ASSERT(recalcs[i].cr_log_ext.ex_hi -
 			 recalcs[i].cr_log_ext.ex_lo + 1 ==
-			 bsgl->bs_iovs[i].bi_data_len / ent_in->ei_inob);
+			 bio_iov2req_len(biov) / ent_in->ei_inob);
+
+		D_ASSERT(bio_iov2raw_buf(biov) != NULL);
+		D_ASSERT(bio_iov2raw_len(biov) > 0);
+
+		d_iov_set(&sgl.sg_iovs[0], bio_iov2raw_buf(biov), bio_iov2raw_len(biov));
+		d_iov_set(&sgl_dst.sg_iovs[i], bio_iov2req_buf(biov), bio_iov2req_len(biov));
 
 		/* Determines number of checksum entries, and start index, for
 		 * calculating verification checksum,
 		 */
-		this_buf_idx = calc_csum_params(&csum_info, &recalcs[i],
-						recalcs[i].cr_prefix_len,
-						recalcs[i].cr_suffix_len,
-						ent_in->ei_inob);
+		this_rec_idx = calc_csum_params(&csum_info, &recalcs[i], biov->bi_prefix_len,
+						biov->bi_suffix_len, ent_in->ei_inob);
 
 		/* Ensure buffer is zero-ed. */
 		memset(csum_info.cs_csum, 0, csum_info.cs_buf_len);
 
 		/* Calculates the checksums for the input segment. */
 		rc = daos_csummer_calc_one(csummer, &sgl, &csum_info,
-					   ent_in->ei_inob, this_buf_nr,
-					   this_buf_idx);
+					   ent_in->ei_inob, this_rec_nr,
+					   this_rec_idx);
 		if (rc)
 			goto out;
 
@@ -251,8 +190,7 @@ ds_csum_agg_recalc(void *recalc_args)
 		 * checksums, for the appropriate range.
 		 */
 		is_valid = csum_agg_verify(&recalcs[i], &csum_info,
-					   ent_in->ei_inob,
-					   recalcs[i].cr_prefix_len);
+					   ent_in->ei_inob, biov->bi_prefix_len);
 		if (!is_valid) {
 			rc = -DER_CSUM;
 			goto out;
@@ -263,40 +201,16 @@ ds_csum_agg_recalc(void *recalc_args)
 	 * checksum infos share a buffer range.)
 	 */
 	memset(ent_in->ei_csum.cs_csum, 0, ent_in->ei_csum.cs_buf_len);
-	args->cra_sgl->sg_iovs[0].iov_len = args->cra_seg_size;
 
 	/* Calculate checksum(s) for output segment. */
-	rc = daos_csummer_calc_one(csummer, args->cra_sgl, &ent_in->ei_csum,
+	rc = daos_csummer_calc_one(csummer, &sgl_dst, &ent_in->ei_csum,
 				   ent_in->ei_inob,
 				   evt_extent_width(&ent_in->ei_rect.rc_ex),
 				   ent_in->ei_rect.rc_ex.ex_lo);
 out:
-	/* Eventual set okay, even with no offload (unit test). */
-	ABT_eventual_set(args->csum_eventual, NULL, 0);
 	daos_csummer_destroy(&csummer);
-	D_FREE(sgl.sg_iovs);
+	d_sgl_fini(&sgl, false);
+	d_sgl_fini(&sgl_dst, false);
 	args->cra_rc = rc;
+	return rc;
 }
-
-#ifndef VOS_UNIT_TEST
-/* Entry point for offload invocation. */
-void
-ds_csum_recalc(void *args)
-{
-	struct csum_recalc_args	*cs_args = (struct csum_recalc_args *) args;
-	struct dss_module_info *info;
-
-	C_TRACE("Checksum Aggregation\n");
-
-	info = dss_get_module_info();
-	D_ASSERT(info != NULL);
-	cs_args->cra_bio_ctxt = info->dmi_nvme_ctxt;
-	cs_args->cra_tgt_id = info->dmi_tgt_id;
-
-	ABT_eventual_create(0, &cs_args->csum_eventual);
-	dss_ult_create(ds_csum_agg_recalc, args,
-		       DSS_XS_OFFLOAD, cs_args->cra_tgt_id, 0, NULL);
-	ABT_eventual_wait(cs_args->csum_eventual, NULL);
-	ABT_eventual_free(&cs_args->csum_eventual);
-}
-#endif

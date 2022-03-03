@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2018-2021 Intel Corporation.
+ * (C) Copyright 2018-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -18,6 +18,7 @@
 #include <daos.h>
 #include "vos_internal.h"
 #include "evt_priv.h"
+#include "vos_policy.h"
 
 /** I/O context */
 struct vos_io_context {
@@ -1145,11 +1146,10 @@ key_ilog_check(struct vos_io_context *ioc, struct vos_krec_df *krec,
 
 	rc = vos_ilog_check(info, &epr, epr_out, true);
 out:
-	D_DEBUG(DB_TRACE, "ilog check returned "DF_RC" epr_in="DF_X64"-"DF_X64
-		" punch="DF_PUNCH" epr_out="DF_X64"-"DF_X64"\n", DP_RC(rc),
-		epr.epr_lo, epr.epr_hi, DP_PUNCH(&info->ii_prior_punch),
-		epr_out ? epr_out->epr_lo : 0,
-		epr_out ? epr_out->epr_hi : 0);
+	D_CDEBUG(rc == 0, DB_TRACE, DB_IO, "ilog check returned "DF_RC" epr_in="
+		 DF_X64"-"DF_X64" punch="DF_PUNCH" epr_out="DF_X64"-"DF_X64"\n",
+		 DP_RC(rc), epr.epr_lo, epr.epr_hi, DP_PUNCH(&info->ii_prior_punch),
+		 epr_out ? epr_out->epr_lo : 0, epr_out ? epr_out->epr_hi : 0);
 	return rc;
 }
 
@@ -1401,9 +1401,10 @@ dkey_fetch(struct vos_io_context *ioc, daos_key_t *dkey)
 	rc = key_tree_prepare(obj, obj->obj_toh, VOS_BTR_DKEY,
 			      dkey, 0, DAOS_INTENT_DEFAULT, &krec,
 			      &toh, ioc->ic_ts_set);
-
 	if (stop_check(ioc, VOS_COND_FETCH_MASK | VOS_OF_COND_PER_AKEY, NULL,
 		       &rc, true)) {
+		D_DEBUG(DB_IO, "Stop fetch "DF_UOID": "DF_RC"\n", DP_UOID(obj->obj_id),
+			DP_RC(rc));
 		if (rc == 0 && !ioc->ic_read_ts_only) {
 			for (i = 0; i < ioc->ic_iod_nr; i++)
 				iod_empty_sgl(ioc, i);
@@ -1420,6 +1421,8 @@ dkey_fetch(struct vos_io_context *ioc, daos_key_t *dkey)
 	if (stop_check(ioc, VOS_COND_FETCH_MASK | VOS_OF_COND_PER_AKEY, NULL,
 		       &rc, false)) {
 		if (rc == 0 && !ioc->ic_read_ts_only) {
+			D_DEBUG(DB_IO, "Stop fetch "DF_UOID": "DF_RC"\n", DP_UOID(obj->obj_id),
+				DP_RC(rc));
 			if (has_uncertainty(ioc, &ioc->ic_dkey_info)) {
 				/** There is a value in the uncertainty range so
 				 *  we need to continue the fetch.
@@ -1906,6 +1909,23 @@ vos_reserve_scm(struct vos_container *cont, struct vos_rsrvd_scm *rsrvd_scm,
 		umoff = umem_alloc(vos_cont2umm(cont), size);
 	}
 
+	if (UMOFF_IS_NULL(umoff)) {
+		daos_size_t scm_used, scm_active;
+		int rc;
+
+		rc = pmemobj_ctl_get(vos_cont2pool(cont)->vp_umm.umm_pool,
+				     "stats.heap.run_allocated", &scm_used);
+		if (rc)
+			goto out;
+		rc = pmemobj_ctl_get(vos_cont2pool(cont)->vp_umm.umm_pool,
+				     "stats.heap.run_active", &scm_active);
+		if (rc)
+			goto out;
+		D_ERROR("Reserve "DF_U64" from SCM failed, run_allocated: "
+			""DF_U64", run_active: "DF_U64"\n",
+			size, scm_used, scm_active);
+	}
+out:
 	return umoff;
 }
 
@@ -2125,8 +2145,8 @@ akey_update_begin(struct vos_io_context *ioc)
 		size = (iod->iod_type == DAOS_IOD_SINGLE) ? iod->iod_size :
 				iod->iod_recxs[i].rx_nr * iod->iod_size;
 
-		media = vos_media_select(vos_cont2pool(ioc->ic_cont),
-					 iod->iod_type, size);
+		media = vos_policy_media_select(vos_cont2pool(ioc->ic_cont),
+					 iod->iod_type, size, VOS_IOS_GENERIC);
 
 		recx_csum = (iod_csums != NULL) ? &iod_csums[i] : NULL;
 
@@ -2247,13 +2267,13 @@ vos_update_end(daos_handle_t ioh, uint32_t pm_ver, daos_key_t *dkey, int err,
 	D_ASSERT(ioc->ic_update);
 	vos_dedup_verify_fini(ioh);
 
+	umem = vos_ioc2umm(ioc);
+
 	if (err != 0)
 		goto abort;
 
 	err = vos_ts_set_add(ioc->ic_ts_set, ioc->ic_cont->vc_ts_idx, NULL, 0);
 	D_ASSERT(err == 0);
-
-	umem = vos_ioc2umm(ioc);
 
 	err = vos_tx_begin(dth, umem);
 	if (err != 0)
@@ -2275,8 +2295,7 @@ vos_update_end(daos_handle_t ioh, uint32_t pm_ver, daos_key_t *dkey, int err,
 			D_GOTO(abort, err = -DER_NOMEM);
 
 		err = vos_dtx_commit_internal(ioc->ic_cont, dth->dth_dti_cos,
-					      dth->dth_dti_cos_count,
-					      0, false, NULL, daes, dces);
+					      dth->dth_dti_cos_count, 0, NULL, daes, dces);
 		if (err <= 0)
 			D_FREE(daes);
 	}
@@ -2312,6 +2331,15 @@ abort:
 				  ioc->ic_bound)) {
 			err = -DER_TX_RESTART;
 		}
+	}
+
+	if (err == 0 && ioc->ic_epr.epr_hi > ioc->ic_obj->obj_df->vo_max_write) {
+		if (DAOS_ON_VALGRIND)
+			err = umem_tx_xadd_ptr(umem, &ioc->ic_obj->obj_df->vo_max_write,
+					       sizeof(ioc->ic_obj->obj_df->vo_max_write),
+					       POBJ_XADD_NO_SNAPSHOT);
+		if (err == 0)
+			ioc->ic_obj->obj_df->vo_max_write = ioc->ic_epr.epr_hi;
 	}
 
 	err = vos_tx_end(ioc->ic_cont, dth, &ioc->ic_rsrvd_scm,
@@ -2689,17 +2717,17 @@ static int
 vos_obj_copy(struct vos_io_context *ioc, d_sg_list_t *sgls,
 	     unsigned int sgl_nr)
 {
-	int rc, err;
+	int rc;
 
 	D_ASSERT(sgl_nr == ioc->ic_iod_nr);
 	rc = bio_iod_prep(ioc->ic_biod, BIO_CHK_TYPE_IO, NULL, 0);
 	if (rc)
 		return rc;
 
-	err = bio_iod_copy(ioc->ic_biod, sgls, sgl_nr);
-	rc = bio_iod_post(ioc->ic_biod);
+	rc = bio_iod_copy(ioc->ic_biod, sgls, sgl_nr);
+	rc = bio_iod_post(ioc->ic_biod, rc);
 
-	return err ? err : rc;
+	return rc;
 }
 
 int

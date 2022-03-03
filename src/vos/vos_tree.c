@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2021 Intel Corporation.
+ * (C) Copyright 2016-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -758,7 +758,7 @@ svt_check_availability(struct btr_instance *tins, struct btr_record *rec,
 
 	svt = umem_off2ptr(&tins->ti_umm, rec->rec_off);
 	return vos_dtx_check_availability(tins->ti_coh, svt->ir_dtx, *epc,
-					  intent, DTX_RT_SVT);
+					  intent, DTX_RT_SVT, true);
 }
 
 static umem_off_t
@@ -827,14 +827,13 @@ evt_dop_bio_free(struct umem_instance *umm, struct evt_desc *desc,
 
 static int
 evt_dop_log_status(struct umem_instance *umm, daos_epoch_t epoch,
-		   struct evt_desc *desc, int intent, void *args)
+		   struct evt_desc *desc, int intent, bool retry, void *args)
 {
 	daos_handle_t coh;
 
 	coh.cookie = (unsigned long)args;
 	D_ASSERT(coh.cookie != 0);
-	return vos_dtx_check_availability(coh, desc->dc_dtx,
-					  epoch, intent, DTX_RT_EVT);
+	return vos_dtx_check_availability(coh, desc->dc_dtx, epoch, intent, DTX_RT_EVT, retry);
 }
 
 int
@@ -1085,6 +1084,8 @@ key_tree_prepare(struct vos_object *obj, daos_handle_t toh,
 	if (krecp != NULL)
 		*krecp = krec;
  out:
+	D_CDEBUG(rc == 0, DB_TRACE, DB_IO, "prepare tree, flags=%x, tclass=%d %d\n",
+		 flags, tclass, rc);
 	return rc;
 }
 

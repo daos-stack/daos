@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2021 Intel Corporation.
+ * (C) Copyright 2016-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -670,6 +670,9 @@ dfuse_reply_entry(struct dfuse_projection_info *fs_handle,
 		  struct fuse_file_info *fi_out,
 		  bool is_new,
 		  fuse_req_t req);
+
+int
+_dfuse_mode_update(fuse_req_t req, struct dfuse_inode_entry *parent, mode_t *_mode);
 
 /* Mark object as removed and invalidate any kernel data for it */
 void

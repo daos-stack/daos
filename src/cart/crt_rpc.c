@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2021 Intel Corporation.
+ * (C) Copyright 2016-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -1432,20 +1432,17 @@ crt_reply_send(crt_rpc_t *req)
 
 	rpc_priv = container_of(req, struct crt_rpc_priv, crp_pub);
 
-	D_DEBUG(DB_ALL, "rpc_priv: %p\n", rpc_priv);
 	if (rpc_priv->crp_coll == 1) {
 		struct crt_cb_info	cb_info;
 
-		D_DEBUG(DB_ALL, "call crp_corpc_reply_hdlf: rpc_priv: %p\n",
-			rpc_priv);
+		RPC_TRACE(DB_ALL, rpc_priv, "collect reply.\n");
 		cb_info.cci_rpc = &rpc_priv->crp_pub;
 		cb_info.cci_rc = 0;
 		cb_info.cci_arg = rpc_priv;
 
 		crt_corpc_reply_hdlr(&cb_info);
 	} else {
-		D_DEBUG(DB_ALL, "call crt_hg_reply_send: rpc_priv: %p\n",
-			rpc_priv);
+		RPC_TRACE(DB_ALL, rpc_priv, "reply_send\n");
 		rc = crt_hg_reply_send(rpc_priv);
 		if (rc != 0)
 			D_ERROR("crt_hg_reply_send failed, rc: %d,opc: %#x.\n",
