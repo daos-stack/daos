@@ -821,7 +821,7 @@ check_name(const char *name, size_t *_len)
 }
 
 static int
-check_access(dfs_t *dfs, uid_t uid, gid_t gid, mode_t mode, int mask)
+check_access(uid_t c_uid, gid_t c_gid, uid_t uid, gid_t gid, mode_t mode, int mask)
 {
 	mode_t	base_mask;
 
@@ -835,10 +835,10 @@ check_access(dfs_t *dfs, uid_t uid, gid_t gid, mode_t mode, int mask)
 	/** set base_mask to others at first step */
 	base_mask = S_IRWXO;
 	/** update base_mask if uid matches */
-	if (uid == dfs->uid)
+	if (uid == c_uid)
 		base_mask |= S_IRWXU;
 	/** update base_mask if gid matches */
-	if (gid == dfs->gid)
+	if (gid == c_gid)
 		base_mask |= S_IRWXG;
 
 	/** AND the object mode with the base_mask to determine access */
@@ -1723,13 +1723,13 @@ mount:
 		if (rc)
 			D_GOTO(err, rc);
 	} else {
+		cont_h_bump = true;
 		rc = dfs_mount(poh, cont_hdl->handle, amode, &dfs);
 		if (rc) {
 			D_ERROR("Failed to mount DFS %d (%s)\n", rc, strerror(rc));
 			D_GOTO(err, rc);
 		}
 	}
-	cont_h_bump = true;
 
 	dfs->pool_hdl = pool_hdl;
 	dfs->cont_hdl = cont_hdl;
@@ -1834,31 +1834,6 @@ dfs_mount(daos_handle_t poh, daos_handle_t coh, int flags, dfs_t **_dfs)
 	if (rc != 0)
 		D_GOTO(err_dfs, rc = daos_der2errno(rc));
 
-	/* Convert the owner information to uid/gid */
-	entry = daos_prop_entry_get(prop, DAOS_PROP_CO_OWNER);
-	D_ASSERT(entry != NULL);
-	rc = daos_acl_principal_to_uid(entry->dpe_str, &dfs->uid);
-	if (rc == -DER_NONEXIST)
-		/** Set uid to nobody */
-		rc = daos_acl_principal_to_uid("nobody@", &dfs->uid);
-	if (rc) {
-		D_ERROR("Unable to convert owner to uid "DF_RC"\n",
-			DP_RC(rc));
-		D_GOTO(err_dfs, rc = daos_der2errno(rc));
-	}
-
-	entry = daos_prop_entry_get(prop, DAOS_PROP_CO_OWNER_GROUP);
-	D_ASSERT(entry != NULL);
-	rc = daos_acl_principal_to_gid(entry->dpe_str, &dfs->gid);
-	if (rc == -DER_NONEXIST)
-		/** Set gid to nobody */
-		rc = daos_acl_principal_to_gid("nobody@", &dfs->gid);
-	if (rc) {
-		D_ERROR("Unable to convert owner to gid "DF_RC"\n",
-			DP_RC(rc));
-		D_GOTO(err_dfs, rc = daos_der2errno(rc));
-	}
-
 	entry = daos_prop_entry_get(prop, DAOS_PROP_CO_ROOTS);
 	D_ASSERT(entry != NULL);
 	roots = (struct daos_prop_co_roots *)entry->dpe_val_ptr;
@@ -1876,6 +1851,32 @@ dfs_mount(daos_handle_t poh, daos_handle_t coh, int flags, dfs_t **_dfs)
 	rc = open_sb(coh, false, dfs->super_oid, &dfs->attr, &dfs->super_oh, &dfs->layout_v);
 	if (rc)
 		D_GOTO(err_dfs, rc);
+
+	/** older layout versions don't have uid/gid for each entry, so use the ACL. */
+	if (dfs->layout_v <= 2) {
+		/* Convert the owner information to uid/gid */
+		entry = daos_prop_entry_get(prop, DAOS_PROP_CO_OWNER);
+		D_ASSERT(entry != NULL);
+		rc = daos_acl_principal_to_uid(entry->dpe_str, &dfs->uid);
+		if (rc == -DER_NONEXIST)
+			/** Set uid to nobody */
+			rc = daos_acl_principal_to_uid("nobody@", &dfs->uid);
+		if (rc) {
+			D_ERROR("Unable to convert owner to uid "DF_RC"\n", DP_RC(rc));
+			D_GOTO(err_dfs, rc = daos_der2errno(rc));
+		}
+
+		entry = daos_prop_entry_get(prop, DAOS_PROP_CO_OWNER_GROUP);
+		D_ASSERT(entry != NULL);
+		rc = daos_acl_principal_to_gid(entry->dpe_str, &dfs->gid);
+		if (rc == -DER_NONEXIST)
+			/** Set gid to nobody */
+			rc = daos_acl_principal_to_gid("nobody@", &dfs->gid);
+		if (rc) {
+			D_ERROR("Unable to convert owner to gid "DF_RC"\n", DP_RC(rc));
+			D_GOTO(err_dfs, rc = daos_der2errno(rc));
+		}
+	}
 
 	/*
 	 * If container was created with balanced mode, only balanced mode
@@ -4233,22 +4234,29 @@ dfs_access(dfs_t *dfs, dfs_obj_t *parent, const char *name, int mask)
 			return 0;
 
 		/** Use real uid and gid for access() */
-		return check_access(dfs, getuid(), getgid(), entry.mode, mask);
+		if (dfs->layout_v <= 2)
+			return check_access(dfs->uid, dfs->gid, getuid(), getgid(), entry.mode,
+					    mask);
+		else
+			return check_access(entry.uid, entry.gid, getuid(), getgid(), entry.mode,
+					    mask);
 	}
 
 	D_ASSERT(entry.value);
 
-	rc = lookup_rel_path(dfs, parent, entry.value, O_RDONLY, &sym,
-			     NULL, NULL, 0);
+	rc = lookup_rel_path(dfs, parent, entry.value, O_RDONLY, &sym, NULL, NULL, 0);
 	if (rc) {
-		D_DEBUG(DB_TRACE, "Failed to lookup symlink %s\n",
-			entry.value);
+		D_DEBUG(DB_TRACE, "Failed to lookup symlink %s\n", entry.value);
 		D_GOTO(out, rc);
 	}
 
-	if (mask != F_OK)
-		rc = check_access(dfs, getuid(), getgid(), sym->mode, mask);
-
+	if (mask != F_OK) {
+		if (dfs->layout_v <= 2)
+			rc = check_access(dfs->uid, dfs->gid, getuid(), getgid(), sym->mode, mask);
+		else
+			rc = check_access(entry.uid, entry.gid, getuid(), getgid(), sym->mode,
+					  mask);
+	}
 	dfs_release(sym);
 
 out:
@@ -4755,8 +4763,8 @@ dfs_get_symlink_value(dfs_obj_t *obj, char *buf, daos_size_t *size)
 }
 
 static int
-xattr_copy(daos_handle_t src_oh, char *src_name, daos_handle_t dst_oh,
-	   char *dst_name, daos_handle_t th)
+xattr_copy(daos_handle_t src_oh, const char *src_name, daos_handle_t dst_oh, const char *dst_name,
+	   daos_handle_t th)
 {
 	daos_key_t	src_dkey, dst_dkey;
 	daos_anchor_t	anchor = {0};
@@ -4858,8 +4866,9 @@ out:
 
 /* Returns oids for both moved and clobbered files, but does not check either of them */
 int
-dfs_move_internal(dfs_t *dfs, unsigned int flags, dfs_obj_t *parent, char *name,
-		  dfs_obj_t *new_parent, char *new_name, daos_obj_id_t *moid, daos_obj_id_t *oid)
+dfs_move_internal(dfs_t *dfs, unsigned int flags, dfs_obj_t *parent, const char *name,
+		  dfs_obj_t *new_parent, const char *new_name, daos_obj_id_t *moid,
+		  daos_obj_id_t *oid)
 {
 	struct dfs_entry	entry = {0}, new_entry = {0};
 	daos_handle_t		th = DAOS_TX_NONE;
@@ -5050,15 +5059,15 @@ out:
 
 /* Wrapper function, only permit oid as a input parameter and return if it has data */
 int
-dfs_move(dfs_t *dfs, dfs_obj_t *parent, char *name, dfs_obj_t *new_parent,
-	 char *new_name, daos_obj_id_t *oid)
+dfs_move(dfs_t *dfs, dfs_obj_t *parent, const char *name, dfs_obj_t *new_parent,
+	 const char *new_name, daos_obj_id_t *oid)
 {
 	return dfs_move_internal(dfs, 0, parent, name, new_parent, new_name, NULL, oid);
 }
 
 int
-dfs_exchange(dfs_t *dfs, dfs_obj_t *parent1, char *name1, dfs_obj_t *parent2,
-	     char *name2)
+dfs_exchange(dfs_t *dfs, dfs_obj_t *parent1, const char *name1, dfs_obj_t *parent2,
+	     const char *name2)
 {
 	struct dfs_entry	entry1 = {0}, entry2 = {0};
 	daos_handle_t		th = DAOS_TX_NONE;
