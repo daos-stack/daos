@@ -63,7 +63,8 @@ def get_job_manager(test, class_name=None, job=None, subprocess=None, mpi_type=N
     if class_name is not None:
         job_manager = get_job_manager_class(class_name, job, subprocess, mpi_type)
         job_manager.timeout = timeout
-        job_manager.tmpdir_base.update(test.test_dir, "tmpdir_base")
+        if mpi_type == "openmpi":
+            job_manager.tmpdir_base.update(test.test_dir, "tmpdir_base")
         if isinstance(test.job_manager, list):
             test.job_manager.append(job_manager)
         else:
