@@ -4,6 +4,7 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
+from avocado.core.exceptions import TestFail
 from apricot import TestWithServers
 from pydaos.raw import DaosApiError, c_uuid_to_str
 
@@ -97,7 +98,9 @@ class EvictTests(TestWithServers):
         verify that the evict didn't cause the ill effect to the pool file.
         8. For all pools, call pool_query() over API. The first two pools should
         succeed. The last pool should fail because it was evicted.
-        9. For the first two pools, check the UUID obtained from the pool_query() in
+        9. For all pools, write objects to the container. The first two pools should
+        succeed. The last pool should fail because it was evicted.
+        10. For the first two pools, check the UUID obtained from the pool_query() in
         the previous step and verify that the evict on the third pool didn't have ill
         effect.
 
@@ -178,6 +181,9 @@ class EvictTests(TestWithServers):
             try:
                 # Call daos api directly to avoid connecting to pool.
                 pool_info = pool.pool.pool_query()
+                if failure_expected:
+                    self.fail(
+                        "Pool # {} was evicted, but pool_query worked!".format(index))
             except DaosApiError as error:
                 # Expected error for evicted pool.
                 if failure_expected and "-1002" in str(error):
@@ -192,7 +198,22 @@ class EvictTests(TestWithServers):
 
                 pool_info = None
 
-            # 9. Check that we were able to obtain the UUID of the non-evicted pools.
+            # 9. Try to write object to the container. It should fail for the evicted pool
+            # and should work for other pools.
+            try:
+                containers[index].write_objects()
+                if failure_expected:
+                    self.fail(
+                        "Pool {} was evicted, but write_objects worked!".format(index))
+            except TestFail as error:
+                if failure_expected and "-1002" in str(error):
+                    msg = "Pool # {}: write_objects failed as expected.\n\t{}".format(
+                        index, error)
+                    self.log.info(msg)
+                else:
+                    self.fail("Pool # {} write_objects failed! {}".format(index, error))
+
+            # 10. Check that we were able to obtain the UUID of the non-evicted pools.
             if pool_info:
                 if c_uuid_to_str(pool_info.pi_uuid) == pool.uuid:
                     self.log.info(
