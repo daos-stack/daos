@@ -1,0 +1,62 @@
+access_points:
+- server00:10001
+control_log_file: /var/log/daos/daos_server.log
+control_log_mask: DEBUG
+disable_vfio: false
+enable_hotplug: true
+enable_vmd: true
+engines:
+- env_vars:
+  - FI_OFI_RXM_USE_SRX=1
+  fabric_iface: ib0
+  fabric_iface_port: 31416
+  first_core: 0
+  log_file: /var/log/daos/daos_engine.0.log
+  nr_xs_helpers: 2
+  pinned_numa_node: 0
+  provider: ofi+verbs;ofi_rxm
+  storage:
+  - class: dcpm
+    scm_list:
+    - /dev/pmem0
+    scm_mount: /var/lib/daos_server/scm/pmem0
+  - bdev_list:
+    - 0000:4a:00.5
+    - 0000:64:00.5
+    class: nvme
+  targets: 24
+- env_vars:
+  - FI_OFI_RXM_USE_SRX=1
+  fabric_iface: ib1
+  fabric_iface_port: 32416
+  first_core: 0
+  log_file: /var/log/daos/daos_engine.1.log
+  nr_xs_helpers: 2
+  pinned_numa_node: 1
+  provider: ofi+verbs;ofi_rxm
+  storage:
+  - class: dcpm
+    scm_list:
+    - /dev/pmem1
+    scm_mount: /var/lib/daos_server/scm/pmem1
+  - bdev_list:
+    - 0000:97:00.5
+    - 0000:e2:00.5
+    class: nvme
+  targets: 24
+fault_cb: ''
+fault_path: /hostname
+firmware_helper_log_file: ''
+helper_log_file: ''
+hyperthreads: false
+name: daos_server
+nr_hugepages: 12288
+port: 10001
+provider: ofi+verbs;ofi_rxm
+socket_dir: /var/run/daos_server
+transport_config:
+  allow_insecure: false
+  ca_cert: /etc/daos/certs/daosCA.crt
+  cert: /etc/daos/certs/server.crt
+  client_cert_dir: /etc/daos/certs/clients
+  key: /etc/daos/certs/server.key
