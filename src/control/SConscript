@@ -11,8 +11,9 @@ from binascii import b2a_hex
 
 Import('env', 'prereqs', 'daos_version', 'conf_dir', 'gurt_lib', 'cart_lib')
 
+GO_COMPILER = 'go'
 MIN_GO_VERSION = '1.12.0'
-GO_BIN = None
+GO_BIN = env.get("GO_BIN", env.WhereIs(GO_COMPILER))
 
 def check_dir_exists(path):
     """
@@ -128,11 +129,7 @@ def configure_go(denv):
         return
     def check_go_version(context):
         """Check GO Version"""
-        context.Display('Checking for Go compiler in $PATH... ')
-
-        global GO_BIN
-
-        GO_BIN = denv.get("GO_BIN", denv.WhereIs('go'))
+        context.Display('Checking for Go compiler... ')
         if GO_BIN:
             context.Display(GO_BIN + '\n')
         else:
@@ -140,10 +137,7 @@ def configure_go(denv):
             return 0
 
         context.Display('Checking %s version... ' % GO_BIN)
-        cmd_rc = subprocess.run([GO_BIN, 'version'],
-                                check=True,
-                                shell=False,
-                                stdout=subprocess.PIPE)
+        cmd_rc = subprocess.run([GO_BIN, 'version'], check=True, stdout=subprocess.PIPE)
         out = cmd_rc.stdout.decode('utf-8')
         if len(out.split(' ')) < 3:
             context.Result('failed to get version from "%s"' % out)

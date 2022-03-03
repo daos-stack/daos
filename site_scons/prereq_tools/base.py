@@ -1719,8 +1719,7 @@ class _Component():
                 if not lib.endswith(".so"):
                     continue
                 full_lib = os.path.join(path, lib)
-                cmd = "patchelf --set-rpath '%s' %s" % (":".join(rpath),
-                                                        full_lib)
+                cmd = "patchelf --set-rpath %s %s" % (":".join(rpath), full_lib)
                 if not RUNNER.run_commands([cmd]):
                     print("Skipped patching %s" % full_lib)
 
