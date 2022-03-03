@@ -80,8 +80,7 @@ enum daos_pool_props {
 	 */
 	DAOS_PROP_PO_REDUN_FAC,
 	/**
-	 * The pool performance domain affinity level
-	 * of EC object.
+	 * The pool performance domain affinity level of EC object.
 	 */
 	DAOS_PROP_PO_EC_PDA,
 	/**

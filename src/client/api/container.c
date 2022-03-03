@@ -71,8 +71,8 @@ daos_cont_create1(daos_handle_t poh, const uuid_t cuuid, daos_prop_t *cont_prop,
 }
 
 static int
-daos_cont_inherit_redunc_fac(daos_handle_t poh, daos_prop_t *cont_prop,
-			     daos_prop_t **merged_prop)
+cont_inherit_redunc_fac(daos_handle_t poh, daos_prop_t *cont_prop,
+			daos_prop_t **merged_prop)
 {
 	struct daos_prop_entry	*entry;
 	daos_prop_t		*redunc_prop;
@@ -98,12 +98,14 @@ daos_cont_inherit_redunc_fac(daos_handle_t poh, daos_prop_t *cont_prop,
 
 	if (cont_prop) {
 		*merged_prop = daos_prop_merge(cont_prop, redunc_prop);
+		daos_prop_free(redunc_prop);
 		if (merged_prop == NULL) {
 			D_ERROR("failed to merge cont_prop and redunc_prop\n");
 			rc = -DER_NOMEM;
 		}
+	} else {
+		*merged_prop = redunc_prop;
 	}
-	daos_prop_free(redunc_prop);
 
 	return rc;
 }
@@ -128,7 +130,7 @@ daos_cont_create2(daos_handle_t poh, uuid_t *cuuid, daos_prop_t *cont_prop,
 		return -DER_INVAL;
 	}
 
-	rc = daos_cont_inherit_redunc_fac(poh, cont_prop, &merged_props);
+	rc = cont_inherit_redunc_fac(poh, cont_prop, &merged_props);
 	if (rc)
 		return rc;
 
