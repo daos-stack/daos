@@ -284,7 +284,7 @@ ent2recx(daos_recx_t *recx, const struct evt_entry *ent)
 {
 	recx->rx_idx = ent->en_sel_ext.ex_lo;
 	recx->rx_nr = ent->en_sel_ext.ex_hi - ent->en_sel_ext.ex_lo + 1;
-	D_DEBUG(DB_TRACE, "ec_recx size is "DF_X64"\n", recx->rx_idx + recx->rx_nr);
+	D_DEBUG(DB_TRACE, "ec_recx size is "DF_U64"\n", recx->rx_idx + recx->rx_nr);
 }
 
 static bool

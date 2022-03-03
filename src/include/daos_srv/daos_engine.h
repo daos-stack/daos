@@ -806,6 +806,7 @@ obj_enum_iterate(daos_key_desc_t *kdss, d_sg_list_t *sgl, int nr,
 struct dss_enum_unpack_io {
 	daos_unit_oid_t		 ui_oid;	/**< type <= OBJ */
 	daos_key_t		 ui_dkey;	/**< type <= DKEY */
+	uint64_t		 ui_dkey_hash;
 	daos_iod_t		*ui_iods;
 	d_iov_t			 ui_csum_iov;
 	/* punched epochs per akey */

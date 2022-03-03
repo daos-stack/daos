@@ -13,6 +13,7 @@
 #include <daos_srv/daos_engine.h>
 #include <daos_srv/vos.h>
 #include <daos/object.h>
+#include "obj_internal.h"
 
 static d_iov_t *
 io_csums_iov(struct dss_enum_unpack_io *io)
@@ -676,10 +677,12 @@ fill_rec(daos_handle_t ih, vos_iter_entry_t *key_ent, struct dss_enum_arg *arg,
 		/* Check if there are still space */
 		if (is_sgl_full(arg, size) || arg->kds_len >= arg->kds_cap) {
 			/* NB: if it is rebuild object iteration, let's
-			 * check if both dkey & akey was already packed
-			 * (kds_len < 3) before return KEY2BIG.
+			 * check if there are any recxs being packed, otherwise
+			 * it will need return -DER_KEY2BIG to re-allocate
+			 * the buffer and retry.
 			 */
-			if ((arg->chk_key2big && arg->kds_len < 3)) {
+			if (arg->chk_key2big &&
+			    (arg->kds_len < 3 || (arg->kds_len == 3 && !bump_kds_len))) {
 				if (arg->kds[0].kd_key_len < size)
 					arg->kds[0].kd_key_len = size;
 				D_GOTO(out, rc = -DER_KEY2BIG);
@@ -974,7 +977,6 @@ out:
  * \a sgls[\a iods_cap].
  *
  * \param[in,out]	io		I/O descriptor
- * \param[in]		oid		oid
  * \param[in]		iods		daos_iod_t array
  * \param[in]		recxs_caps	recxs capacity array
  * \param[in]		sgls		optional sgl array for inline recxs
@@ -984,8 +986,8 @@ out:
  *					\a recxs_caps, \a sgls, and \a ephs
  */
 static void
-dss_enum_unpack_io_init(struct dss_enum_unpack_io *io, daos_unit_oid_t oid,
-			daos_iod_t *iods, int *recxs_caps, d_sg_list_t *sgls,
+dss_enum_unpack_io_init(struct dss_enum_unpack_io *io, daos_iod_t *iods,
+			int *recxs_caps, d_sg_list_t *sgls,
 			daos_epoch_t *akey_ephs, daos_epoch_t *punched_ephs,
 			daos_epoch_t **recx_ephs, int iods_cap)
 {
@@ -1229,6 +1231,9 @@ enum_unpack_key(daos_key_desc_t *kds, char *key_data,
 	if (kds->kd_val_type == OBJ_ITER_DKEY) {
 		if (io->ui_dkey.iov_len == 0) {
 			rc = daos_iov_copy(&io->ui_dkey, &key);
+			if (rc)
+				return rc;
+			io->ui_dkey_hash = obj_dkey2hash(io->ui_oid.id_pub, &key);
 		} else if (!daos_key_match(&io->ui_dkey, &key)) {
 			/* Close current IOD if dkey are different */
 			rc = complete_io(io, cb, cb_arg);
@@ -1238,6 +1243,7 @@ enum_unpack_key(daos_key_desc_t *kds, char *key_data,
 			/* Update to the new dkey */
 			daos_iov_free(&io->ui_dkey);
 			rc = daos_iov_copy(&io->ui_dkey, &key);
+			io->ui_dkey_hash = obj_dkey2hash(io->ui_oid.id_pub, &key);
 		}
 		D_DEBUG(DB_IO, "process dkey "DF_KEY": rc "DF_RC"\n",
 			DP_KEY(&key), DP_RC(rc));
@@ -1550,7 +1556,7 @@ dss_enum_unpack(daos_unit_oid_t oid, daos_key_desc_t *kds, int kds_num,
 		 */
 		csum_iov_in = *csum;
 
-	dss_enum_unpack_io_init(&io, oid, iods, recxs_caps, sgls,
+	dss_enum_unpack_io_init(&io, iods, recxs_caps, sgls,
 				ephs, punched_ephs, recx_ephs,
 				DSS_ENUM_UNPACK_MAX_IODS);
 
