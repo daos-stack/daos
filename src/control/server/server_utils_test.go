@@ -668,15 +668,13 @@ func TestServer_prepBdevStorage(t *testing.T) {
 // also be covered.
 func TestServer_scanBdevStorage(t *testing.T) {
 	for name, tc := range map[string]struct {
-		nrHugepages int
-		bmbc        *bdev.MockBackendConfig
-		expErr      error
+		bmbc   *bdev.MockBackendConfig
+		expErr error
 	}{
 		"spdk fails init": {
 			bmbc: &bdev.MockBackendConfig{
 				ScanErr: errors.New("spdk failed"),
 			},
-			expErr: errors.New("spdk failed"),
 		},
 		"bdev in config not found by spdk": {
 			bmbc: &bdev.MockBackendConfig{
@@ -691,19 +689,12 @@ func TestServer_scanBdevStorage(t *testing.T) {
 				},
 			},
 		},
-		"hugepages disabled": {
-			nrHugepages: -1,
-			bmbc: &bdev.MockBackendConfig{
-				ScanErr: errors.New("spdk failed"),
-			},
-		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(name)
 			defer common.ShowBufferOnFailure(t, buf)
 
-			cfg := config.DefaultServer().WithFabricProvider("ofi+verbs").
-				WithNrHugePages(tc.nrHugepages)
+			cfg := config.DefaultServer().WithFabricProvider("ofi+verbs")
 
 			// test only with 2M hugepage size
 			if err := cfg.Validate(log, 2048, nil); err != nil {

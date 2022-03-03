@@ -203,6 +203,8 @@ class DaosServerManager(SubprocessManager):
         if storage:
             # Prepare server storage
             if self.manager.job.using_nvme or self.manager.job.using_dcpm:
+                self.log.info("Preparing storage in <format> mode")
+                self.prepare_storage("root")
                 if hasattr(self.manager, "mca"):
                     self.manager.mca.update({"plm_rsh_args": "-l root"}, "orterun.mca", True)
 
@@ -535,6 +537,12 @@ class DaosServerManager(SubprocessManager):
         self.manager.kill()
 
         if self.manager.job.using_nvme:
+            # Reset the storage
+            try:
+                self.reset_storage()
+            except ServerFailed as error:
+                messages.append(str(error))
+
             # Make sure the mount directory belongs to non-root user
             self.set_scm_mount_ownership()
 
