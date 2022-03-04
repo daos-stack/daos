@@ -711,6 +711,11 @@ int evt_iter_prepare(daos_handle_t toh, unsigned int options,
  */
 int evt_iter_finish(daos_handle_t ih);
 
+/**
+ * Returns true if iterator skipped anything (sorted only)
+ */
+bool evt_iter_skipped(daos_handle_t ih);
+
 enum evt_iter_opc {
 	EVT_ITER_FIRST,
 	EVT_ITER_FIND,

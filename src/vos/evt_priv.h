@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2017-2021 Intel Corporation.
+ * (C) Copyright 2017-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -36,7 +36,8 @@ struct evt_iterator {
 	/** options for iterator */
 	unsigned int			it_options;
 	unsigned int			it_forward:1,
-					it_skip_move:1;
+					it_skip_move:1,
+					it_skipped:1;
 	/** index */
 	int				it_index;
 	/** For sorted iterators */

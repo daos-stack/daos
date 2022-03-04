@@ -522,6 +522,7 @@ oi_iter_match_probe(struct vos_iterator *iter)
 			str = "ilog check";
 			goto failed;
 		}
+		iter->it_skipped = 1;
 		probe = BTR_PROBE_GT;
 
 		d_iov_set(&iov, &obj->vo_id, sizeof(obj->vo_id));
@@ -551,7 +552,13 @@ oi_iter_probe(struct vos_iterator *iter, daos_anchor_t *anchor)
 
 	D_ASSERT(iter->it_type == VOS_ITER_OBJ);
 
-	opc = anchor == NULL ? BTR_PROBE_FIRST : BTR_PROBE_GE;
+	if (anchor == NULL) {
+		opc = BTR_PROBE_FIRST;
+	} else {
+		opc = BTR_PROBE_GE;
+		/** If we start from an anchor, assume skipped entries */
+		iter->it_skipped = 1;
+	}
 	rc = dbtree_iter_probe(oiter->oit_hdl, opc, vos_iter_intent(iter), NULL,
 			       anchor);
 	if (rc)
@@ -728,7 +735,7 @@ exit:
 }
 
 int
-oi_iter_aggregate(daos_handle_t ih, bool range_discard)
+oi_iter_aggregate(daos_handle_t ih, bool range_discard, uint64_t *skipped)
 {
 	struct vos_iterator	*iter = vos_hdl2iter(ih);
 	struct vos_oi_iter	*oiter = iter2oiter(iter);
@@ -739,6 +746,7 @@ oi_iter_aggregate(daos_handle_t ih, bool range_discard)
 	bool			 delete = false, invisible = false;
 	int			 rc;
 
+	*skipped = 0;
 	D_ASSERT(iter->it_type == VOS_ITER_OBJ);
 
 	d_iov_set(&rec_iov, NULL, 0);
@@ -778,6 +786,7 @@ oi_iter_aggregate(daos_handle_t ih, bool range_discard)
 		rc = dbtree_iter_delete(oiter->oit_hdl, NULL);
 		D_ASSERT(rc != -DER_NONEXIST);
 	} else {
+		*skipped = iter->it_skipped;
 		if (rc == -DER_NONEXIST) {
 			/** ilog isn't visible in range but still has some enrtries */
 			invisible = true;
@@ -786,7 +795,9 @@ oi_iter_aggregate(daos_handle_t ih, bool range_discard)
 		if (iter->it_for_purge) {
 			feats = dbtree_feats_get(&obj->vo_tree);
 			if (feats & VOS_TREE_AGG_FLAG) {
-				feats = feats & ~(VOS_TREE_AGG_FLAG | VOS_TREE_AGG_NEEDED);
+				feats = feats & ~VOS_TREE_AGG_FLAG;
+				if (!iter->it_skipped)
+					feats = feats & ~VOS_TREE_AGG_NEEDED;
 				rc = dbtree_feats_set(&obj->vo_tree, vos_cont2umm(oiter->oit_cont),
 						      feats, true);
 			}

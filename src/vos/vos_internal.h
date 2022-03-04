@@ -826,6 +826,7 @@ struct vos_iterator {
 	enum vos_iter_state	 it_state;
 	uint32_t		 it_ref_cnt;
 	uint32_t		 it_from_parent:1,
+				 it_skipped:1,
 				 it_for_purge:1,
 				 it_for_discard:1,
 				 it_for_migration:1,
@@ -1125,6 +1126,7 @@ oi_iter_pre_aggregate(daos_handle_t ih, bool full_scan);
  *
  * \param ih[IN]		Iterator handle
  * \param range_discard[IN]	Discard only uncommitted ilog entries (for reintegration)
+ * \param skipped[OUT]		Return 1 if any item was skipped in scan
  *
  * \return		Zero on Success
  *			Positive value if a reprobe is needed
@@ -1132,7 +1134,7 @@ oi_iter_pre_aggregate(daos_handle_t ih, bool full_scan);
  *			Negative value otherwise
  */
 int
-oi_iter_aggregate(daos_handle_t ih, bool range_discard);
+oi_iter_aggregate(daos_handle_t ih, bool range_discard, uint64_t *skipped);
 
 /**
  * If the key is fully punched, bypass normal aggregation and move it to container

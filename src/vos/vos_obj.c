@@ -771,8 +771,11 @@ key_iter_fetch(struct vos_obj_iter *oiter, vos_iter_entry_t *ent,
 
 	rc = key_iter_ilog_check(krec, oiter, oiter->it_iter.it_type, &epr,
 				 check_existence, NULL);
-	if (rc == -DER_NONEXIST)
+	if (rc == -DER_NONEXIST) {
+		/** Skipped a key that doesn't match iterator condition */
+		oiter->it_iter.it_skipped = 1;
 		return IT_OPC_NEXT;
+	}
 	if (rc != 0) {
 		if (!oiter->it_iter.it_show_uncommitted || rc != -DER_INPROGRESS)
 			return rc;
@@ -955,6 +958,9 @@ key_iter_probe(struct vos_obj_iter *oiter, daos_anchor_t *anchor)
 {
 	int	rc;
 
+	/** If we are reprobing, assume we've skipped something */
+	if (anchor)
+		oiter->it_iter.it_skipped = 1;
 	rc = dbtree_iter_probe(oiter->it_hdl,
 			       anchor ? BTR_PROBE_GE : BTR_PROBE_FIRST,
 			       vos_iter_intent(&oiter->it_iter),
@@ -1147,10 +1153,13 @@ singv_iter_probe_epr(struct vos_obj_iter *oiter, vos_iter_entry_t *entry)
 			return 0;
 
 		case VOS_IT_EPC_RR:
-			if (entry->ie_epoch < epr->epr_lo)
+			if (entry->ie_epoch < epr->epr_lo) {
+				oiter->it_iter.it_skipped = 1;
 				return -DER_NONEXIST; /* end of story */
+			}
 
 			if (entry->ie_epoch > epr->epr_hi) {
+				oiter->it_iter.it_skipped = 1;
 				entry->ie_epoch = epr->epr_hi;
 				opc = BTR_PROBE_LE;
 				break;
@@ -1191,6 +1200,10 @@ singv_iter_probe(struct vos_obj_iter *oiter, daos_anchor_t *anchor)
 		opc = anchor == NULL ? BTR_PROBE_LAST : BTR_PROBE_LE;
 	else
 		opc = anchor == NULL ? BTR_PROBE_FIRST : BTR_PROBE_GE;
+
+	/** If we are reprobing, assume we've skipped something */
+	if (anchor)
+		oiter->it_iter.it_skipped = 1;
 
 	rc = dbtree_iter_probe(oiter->it_hdl, opc,
 			       vos_iter_intent(&oiter->it_iter), NULL, anchor);
@@ -1466,6 +1479,8 @@ recx_iter_next(struct vos_obj_iter *oiter)
 static int
 recx_iter_fini(struct vos_obj_iter *oiter)
 {
+	if (oiter->it_iter.it_parent != NULL && evt_iter_skipped(oiter->it_hdl))
+		oiter->it_iter.it_parent->it_skipped = 1;
 	return evt_iter_finish(oiter->it_hdl);
 }
 
@@ -1500,6 +1515,7 @@ vos_obj_iter_prep(vos_iter_type_t type, vos_iter_param_t *param,
 
 	oiter->it_flags = param->ip_flags;
 	oiter->it_recx = param->ip_recx;
+	oiter->it_iter.it_skipped = 0;
 	if (param->ip_flags & VOS_IT_FOR_PURGE)
 		oiter->it_iter.it_for_purge = 1;
 	if (param->ip_flags & VOS_IT_FOR_DISCARD)
@@ -1692,6 +1708,7 @@ vos_obj_iter_nested_prep(vos_iter_type_t type, struct vos_iter_info *info,
 	oiter->it_punched = info->ii_punched;
 	oiter->it_epc_expr = info->ii_epc_expr;
 	oiter->it_flags = info->ii_flags;
+	oiter->it_iter.it_skipped = 0;
 	if (type != VOS_ITER_DKEY)
 		oiter->it_obj = obj;
 	if (info->ii_flags & VOS_IT_FOR_PURGE)
@@ -1780,9 +1797,10 @@ vos_obj_iter_fini(struct vos_iterator *iter)
 	case VOS_ITER_DKEY:
 	case VOS_ITER_AKEY:
 	case VOS_ITER_SINGLE:
+		if (oiter->it_iter.it_parent != NULL && oiter->it_iter.it_skipped)
+			oiter->it_iter.it_parent->it_skipped = 1;
 		rc = dbtree_iter_finish(oiter->it_hdl);
 		break;
-
 	case VOS_ITER_RECX:
 		rc = recx_iter_fini(oiter);
 		break;
@@ -2064,9 +2082,12 @@ vos_obj_iter_aggregate(daos_handle_t ih, bool range_discard)
 			feats = evt_feats_get(&krec->kr_evt);
 		if (oiter->it_iter.it_for_purge && feats & VOS_TREE_AGG_FLAG) {
 			/** We got through aggregation without anyone clearing the flag,
-			 *  so we can clear the needed flag
+			 *  so we can clear the needed flag if we scanned the whole subtree.
+			 *  Either way, we can clear the aggregation flag.
 			 */
-			feats = feats & ~(VOS_TREE_AGG_FLAG | VOS_TREE_AGG_NEEDED);
+			feats = feats & ~VOS_TREE_AGG_FLAG;
+			if (!oiter->it_iter.it_skipped)
+				feats = feats & ~VOS_TREE_AGG_NEEDED;
 			if (krec->kr_bmap & KREC_BF_BTR)
 				rc = dbtree_feats_set(&krec->kr_btr, umm, feats, true);
 			else

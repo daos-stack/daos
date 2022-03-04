@@ -2465,6 +2465,7 @@ evt_ent_array_fill(struct evt_context *tcx, enum evt_find_opc find_opc,
 				V_TRACE(DB_TRACE, "Filtered "DF_RECT" filter=("
 					DF_FILTER")\n", DP_RECT(&rtmp),
 					DP_FILTER(filter));
+				tcx->tc_iter.it_skipped = 1;
 				continue; /* Doesn't match the filter */
 			}
 
@@ -2474,6 +2475,7 @@ evt_ent_array_fill(struct evt_context *tcx, enum evt_find_opc find_opc,
 			default:
 				D_ASSERT(0);
 			case RT_OVERLAP_NO:
+				tcx->tc_iter.it_skipped = 1;
 				continue; /* skip, no overlap */
 
 			case RT_OVERLAP_SAME:
@@ -2495,6 +2497,7 @@ evt_ent_array_fill(struct evt_context *tcx, enum evt_find_opc find_opc,
 				D_ASSERT(0);
 			case RT_OVERLAP_NO:
 			case RT_OVERLAP_UNDER:
+				tcx->tc_iter.it_skipped = 1;
 				continue; /* skip, no overlap */
 			case RT_OVERLAP_OVER:
 			case RT_OVERLAP_SAME:
@@ -2571,7 +2574,6 @@ evt_ent_array_fill(struct evt_context *tcx, enum evt_find_opc find_opc,
 					if (evt_data_loss_add(&data_loss_list,
 							      &rtmp) == NULL)
 						D_GOTO(out, rc = -DER_NOMEM);
-
 					continue;
 				}
 
