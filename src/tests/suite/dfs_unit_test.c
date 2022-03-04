@@ -395,11 +395,7 @@ dfs_test_syml(void **state)
 	rc = dfs_get_symlink_value(sym, NULL, &size);
 	assert_int_equal(rc, 0);
 	assert_int_equal(size, strlen(val) + 1);
-#if 1
-	assert_int_equal(size, stbuf.st_size);
-#else
 	assert_int_equal(size, stbuf.st_size + 1);
-#endif
 
 	rc = dfs_get_symlink_value(sym, tmp_buf, &size);
 	assert_int_equal(rc, 0);
