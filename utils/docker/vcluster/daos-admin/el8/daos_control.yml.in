@@ -2,7 +2,8 @@
 # DAOS Administration configuration file
 
 name: daos_server
-hostlist: ['daos-server']
+hostlist:
+  - daos-server
 port: 10001
 
 transport_config:

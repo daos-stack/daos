@@ -10,7 +10,7 @@ using DAOS as backend storage.  This small cluster is composed of the following 
 
 At this time only emulated hardware storage are supported by this Docker platform:
 
-- SCM (i.e. Stoarage Class Memory) are emulated with standard RAM memory.
+- SCM (i.e. Storage Class Memory) are emulated with standard RAM memory.
 - NVMe disks are emulated with a file device.
 
 !!! warning
@@ -24,8 +24,31 @@ At this time only emulated hardware storage are supported by this Docker platfor
 
 To build and deploy the Docker images, `docker` and optionally `docker-compose` shall be available.
 The docker host should have access to the [Docker Hub](https://hub.docker.com/) and
-[CentOS](https://www.centos.org/) official repositories.  Finally,
-[hugepages](https://www.kernel.org/doc/Documentation/vm/hugetlbpage.txt) linux kernel feature shall
+[Rocky Linux](https://rockylinux.org/) official repositories.
+
+The hosthardware must support virtualized device access, and it must be enabled in the system BIOS.
+On Intel® systems, this capability is named Intel® Virtualization Technology for
+Directed I/O (VT-d). Once enabled in BIOS, IOMMU support must also be enabled in
+the Linux kernel. Exact details depend on the distribution, but the following
+example should be illustrative:
+
+```bash
+# Enable IOMMU on CentOS 7
+# All commands must be run as root/sudo!
+
+$ sudo vi /etc/default/grub # add the following line:
+GRUB_CMDLINE_LINUX_DEFAULT="intel_iommu=on"
+
+# after saving the file, run the following to reconfigure
+# the bootloader:
+$ sudo grub2-mkconfig --output=/boot/grub2/grub.cfg
+
+# if the command completed with no errors, reboot the system
+# in order to make the changes take effect
+$ sudo reboot
+```
+
+Finally, [hugepages](https://www.kernel.org/doc/Documentation/vm/hugetlbpage.txt) linux kernel feature shall
 be enabled on the docker host.  At least, 4096 pages of 2048kB should be available.  The number of
 huge pages allocated could be checked with the following command:
 
@@ -40,8 +63,15 @@ following command:
 $ cat /proc/meminfo | grep -e "^Huge"
 ```
 
-The platform was tested and validated with the [CentOS8](https://hub.docker.com/_/centos) official
-docker image.
+The platform was tested and validated with the
+[rockylinux/rockylinux:8.4](https://hub.docker.com/r/rockylinux/rockylinux) official docker image.
+
+!!! warning
+    Some distributions are not yet well supported such as
+    [rockylinux/rockylinux:8.5](https://hub.docker.com/r/rockylinux/rockylinux):
+    - issue [DAOS-10046](https://daosio.atlassian.net/browse/DAOS-10046): management of
+      hugepages with the [spdk](https://spdk.io/) library.
+
 
 ### Configuring HugePages
 
@@ -74,14 +104,14 @@ a base image for building the other three daos images.  This first image could b
 from GitHub with the following command:
 
 ```bash
-$ docker build --tag daos-base:centos8 \
+$ docker build --tag daos-base:rocky8.4 \
 	https://github.com/daos-stack/daos.git#release/2.0:utils/docker/vcluster/daos-base/el8
 ```
 
 This Docker file accept the following arguments:
 
-- `RHEL_BASE_IMAGE`: Base docker image to use (default centos)
-- `RHEL_BASE_VERSION`: Version of the base docker image to use (default 8)
+- `RHEL_BASE_IMAGE`: Base docker image to use (default "rockylinux/rockylinux")
+- `RHEL_BASE_VERSION`: Version of the base docker image to use (default "8.4")
 - `BUST_CACHE`: Manage docker building cache (default undefined).  To invalidate the cache, a random
 	value such as the date of the day shall be given.
 - `DAOS_AUTH`: Enable DAOS authentication when set to "yes" (default "no")
@@ -96,14 +126,14 @@ For example, building a DAOS base image with authentication enabled could be don
 following command:
 
 ```bash
-$ docker build --tag daos-base:centos8 --build-arg DAOS_AUTH=yes \
+$ docker build --tag daos-base:rocky8.4 --build-arg DAOS_AUTH=yes \
 	https://github.com/daos-stack/daos.git#release/2.0:utils/docker/vcluster/daos-base/el8
 ```
 
 It is also possible to build the `daos-base` image from a local tree with the following command:
 
 ```bash
-$ docker build --tag daos-base:centos8 utils/docker/vcluster/daos-base/el8
+$ docker build --tag daos-base:rocky8.4 utils/docker/vcluster/daos-base/el8
 ```
 
 ### DAOS Nodes Images
@@ -114,15 +144,15 @@ to build directly the three images from GitHub:
 
 ```bash
 $ for image in daos-server daos-admin daos-client ; do \
-	docker build --tag "$image:centos8" \
+	docker build --tag "$image:rocky8.4" \
 		"https://github.com/daos-stack/daos.git#release/2.0:utils/docker/vcluster/$image/el8"; \
   done
 ```
 
 The Docker file of the `daos-server` image accept the following arguments:
 
-- `DAOS_BASE_IMAGE`: Base docker image to use (default daos-base)
-- `DAOS_BASE_VERSION`: Version of the base docker image to use (default centos8)
+- `DAOS_BASE_IMAGE`: Base docker image to use (default "daos-base")
+- `DAOS_BASE_VERSION`: Version of the base docker image to use (default "rocky8.4")
 - `DAOS_AUTH`: Enable DAOS authentication when set to "yes" (default "no")
 - `DAOS_HUGEPAGES_NBR`: Number of huge pages to allocate for SPDK (default 4096)
 - `DAOS_SCM_SIZE`: Size in GB of the RAM emulating SCM devices (default 4)
@@ -135,8 +165,8 @@ The Docker file of the `daos-server` image accept the following arguments:
 
 The Dockerfile of the `daos-client` and `daos-admin` images accept the following arguments:
 
-- `DAOS_BASE_IMAGE`: Base docker image to use (default daos-base)
-- `DAOS_BASE_VERSION`: Version of the base docker image to use (default centos8)
+- `DAOS_BASE_IMAGE`: Base docker image to use (default "daos-base")
+- `DAOS_BASE_VERSION`: Version of the base docker image to use (default "rocky8.4")
 - `DAOS_AUTH`: Enable DAOS authentication when set to "yes" (default "no")
 - `DAOS_ADMIN_USER`: Name or uid of the daos administrattor user (default "root")
 - `DAOS_ADMIN_GROUP`: Name or gid of the daos administrattor group (default "root")
@@ -168,15 +198,15 @@ $ docker run --detach --privileged --name=daos-server --hostname=daos-server \
 	--add-host "daos-server:$DAOS_IFACE_IP" --add-host "daos-admin:$DAOS_IFACE_IP" \
 	--add-host "daos-client:$DAOS_IFACE_IP" --volume=/sys/fs/cgroup:/sys/fs/cgroup:ro \
 	--volume=/dev/hugepages:/dev/hugepages  --tmpfs=/run --network=host \
-	daos-server:centos8
+	daos-server:rocky8.4
 $ docker run --detach --privileged --name=daos-agent --hostname=daos-agent \
 	--add-host "daos-server:$DAOS_IFACE_IP" --add-host "daos-admin:$DAOS_IFACE_IP" \
 	--add-host "daos-client:$DAOS_IFACE_IP" --volume=/sys/fs/cgroup:/sys/fs/cgroup:ro \
-	--tmpfs=/run --network=host daos-agent:centos8
+	--tmpfs=/run --network=host daos-agent:rocky8.4
 $ docker run --detach --privileged --name=daos-client --hostname=daos-client \
 	--add-host "daos-server:$DAOS_IFACE_IP" --add-host "daos-admin:$DAOS_IFACE_IP" \
 	--add-host "daos-client:$DAOS_IFACE_IP" --volume=/sys/fs/cgroup:/sys/fs/cgroup:ro \
-	--tmpfs=/run --network=host daos-client:centos8
+	--tmpfs=/run --network=host daos-client:rocky8.4
 ```
 
 The value of the `DAOS_IFACE_IP` shall be replaced with the one of the network interface which was

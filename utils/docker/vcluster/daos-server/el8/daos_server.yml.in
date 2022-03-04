@@ -2,7 +2,8 @@
 # DAOS Server configuration file
 
 name: daos_server
-access_points: ['daos-server']
+access_points:
+  - daos-server
 port: 10001
 
 provider: ofi+sockets
@@ -40,5 +41,6 @@ engines:
     scm_size: @DAOS_SCM_SIZE@
 
     bdev_class: file
-    bdev_list: [/tmp/daos-bdev]
+    bdev_list:
+      - /tmp/daos-bdev
     bdev_size: @DAOS_BDEV_SIZE@
