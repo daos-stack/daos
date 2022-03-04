@@ -1348,6 +1348,7 @@ test_drpc_pool_query_success(void **state)
 		return;
 	assert_int_equal(uuid_compare(exp_uuid, ds_mgmt_pool_query_uuid), 0);
 	assert_non_null(ds_mgmt_pool_query_info_ptr);
+	assert_non_null(ds_mgmt_pool_query_ranks_out);
 	assert_int_equal(ds_mgmt_pool_query_info_in.pi_bits, DPI_ALL);
 
 	expect_query_resp_with_info(&exp_info,
