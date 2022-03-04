@@ -1,56 +1,62 @@
-# change host names to your reserved nodes, the
-# required quantity is indicated by the placeholders
 hosts:
   test_servers:
     - server-A
+
 timeout: 60
+
 server_config:
   name: daos_server
+
 pool:
-  mode: 511
-  scm_size: 1073741824
-  name: daos_server
+  scm_size: 1G
   control_method: dmg
-createtests:
-  ContainerUUIDS: !mux
-    gooduid:
-      uuid:
-        - 0cf3086e-daa3-44a7-a5d4-cba9d639bf19
+
+container:
+  control_method: API
+
+destroy_variants:
+  destroy_uuid: !mux
+    good_uid:
+      change_result:
+        - FALSE
         - PASS
-    nonexistingUUID:
-      uuid:
-        - INVALID
+    nonexisting_uuid:
+      change_result:
+        - TRUE
         - FAIL
-  ConnectionOpened: !mux
+
+  connection_open: !mux
     # opened=TRUE and force=0 should FAIL (noForce below causes FAIL)
-    CTopened:
+    connection_opened:
       opened:
         - TRUE
         - PASS
-    CTclosed:
+    connection_closed:
       opened:
         - FALSE
         - PASS
-  ForceDestroy: !mux
+
+  force_destroy: !mux
     # force=0 and opened=FALSE expected to PASS (delete.py overrides this FAIL)
-    noForce:
+    no_force:
       force:
         - 0
         - FAIL
-    validForce:
+    valid_force:
       force:
         - 1
         - PASS
-    randomForce:
+    invalid_force:
       force:
         - 99999999
         - PASS
-  PoolHandles: !mux
-    validPH:
+
+  destroy_pool_handle: !mux
+    valid_pool_handle:
       poh:
         - VALID
         - PASS
-    invalidPH:
+    invalid_pool_handle:
       poh:
-        - 99999
+        - INVALID
         - FAIL
