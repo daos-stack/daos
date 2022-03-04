@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2016-2021 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -666,51 +666,6 @@ struct dfuse_inode_ops dfuse_dfs_ops = {
 	.create		= dfuse_cb_create,
 	.rename		= dfuse_cb_rename,
 	.symlink	= dfuse_cb_symlink,
-	.setxattr	= dfuse_cb_setxattr,
-	.getxattr	= dfuse_cb_getxattr,
-	.listxattr	= dfuse_cb_listxattr,
-	.removexattr	= dfuse_cb_removexattr,
-	.setattr	= dfuse_cb_setattr,
-	.statfs		= dfuse_cb_statfs,
-};
-
-/* dfuse ops that are used for accessing multi-user dfs mounts.
- *
- * These are the same as single user, but have extra checks around
- * create operations to avoid the creation of files by 3rd party
- * users.
- */
-struct dfuse_inode_ops dfuse_dfs_ops_safe = {
-	.lookup		= dfuse_cb_lookup,
-	.opendir	= dfuse_cb_opendir,
-	.releasedir	= dfuse_cb_releasedir,
-	.getattr	= dfuse_cb_getattr,
-	.unlink		= dfuse_cb_unlink,
-	.create		= dfuse_cb_create_safe,
-	.mknod		= dfuse_cb_mknod_safe,
-	.rename		= dfuse_cb_rename,
-	.symlink	= dfuse_cb_symlink_safe,
-	.setxattr	= dfuse_cb_setxattr,
-	.getxattr	= dfuse_cb_getxattr,
-	.listxattr	= dfuse_cb_listxattr,
-	.removexattr	= dfuse_cb_removexattr,
-	.setattr	= dfuse_cb_setattr,
-	.statfs		= dfuse_cb_statfs,
-};
-
-/* Operations for root/multi-user container.
- *
- * This is for the 'root' container where the only allowed operation is to
- * create subcontainers, so the only write operations are mkdir/setattr/setxattr
- */
-struct dfuse_inode_ops dfuse_login_ops = {
-	.lookup		= dfuse_cb_lookup,
-	.opendir	= dfuse_cb_opendir,
-	.releasedir	= dfuse_cb_releasedir,
-	.getattr	= dfuse_cb_getattr,
-	.unlink		= dfuse_cb_unlink,
-	.mknod		= dfuse_cb_mknod,
-	.rename		= dfuse_cb_rename,
 	.setxattr	= dfuse_cb_setxattr,
 	.getxattr	= dfuse_cb_getxattr,
 	.listxattr	= dfuse_cb_listxattr,

@@ -10,8 +10,8 @@
 void
 dfuse_cb_setattr(fuse_req_t req, struct dfuse_inode_entry *ie, struct stat *attr, int to_set)
 {
-	int	dfs_flags = 0;
-	int	rc;
+	int dfs_flags = 0;
+	int rc;
 
 	DFUSE_TRA_DEBUG(ie, "flags %#x", to_set);
 
@@ -36,13 +36,11 @@ dfuse_cb_setattr(fuse_req_t req, struct dfuse_inode_entry *ie, struct stat *attr
 	}
 
 	if (to_set & (FUSE_SET_ATTR_GID | FUSE_SET_ATTR_UID)) {
-
 		DFUSE_TRA_DEBUG(ie, "uid flags %#x uid %d gid %d",
 				(to_set & (FUSE_SET_ATTR_UID | FUSE_SET_ATTR_GID)),
 				attr->st_uid, attr->st_gid);
 
 		if (ie->ie_dfs->dfs_multi_user) {
-
 			if (to_set & FUSE_SET_ATTR_UID)
 				dfs_flags |= DFS_SET_ATTR_UID;
 

@@ -2773,12 +2773,6 @@ restart:
 	if (!exists)
 		D_GOTO(out, rc = ENOENT);
 
-	/* Check if the file is the expected one */
-	if (oid && (oid->lo != 0 || oid->hi != 0)) {
-		if (oid->lo != entry.oid.lo || oid->hi != entry.oid.hi)
-			D_GOTO(out, rc = EBADF);
-	}
-
 	if (S_ISDIR(entry.mode)) {
 		uint32_t nr = 0;
 		daos_handle_t oh;
@@ -3548,7 +3542,6 @@ dfs_open_stat(dfs_t *dfs, dfs_obj_t *parent, const char *name, mode_t mode,
 			D_DEBUG(DB_TRACE, "Failed to open symlink (%d)\n", rc);
 			D_GOTO(out, rc);
 		}
-		file_size = strlen(value);
 		break;
 	default:
 		D_ERROR("Invalid entry type (not a dir, file, symlink).\n");

@@ -23,9 +23,6 @@ dfuse_cb_getattr(fuse_req_t req, struct dfuse_inode_entry *ie)
 	if (rc != 0)
 		D_GOTO(err, rc);
 
-	/* Copy the inode number from the inode struct, to avoid having to
-	 * recompute it each time.
-	 */
 	attr.st_ino = ie->ie_stat.st_ino;
 
 	/* Update the size as dfuse knows about it for future use.

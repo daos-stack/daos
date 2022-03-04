@@ -1095,8 +1095,7 @@ dfuse_fs_start(struct dfuse_projection_info *fs_handle, struct dfuse_cont *dfs)
 	ie->ie_stat.st_mode = 0700 | S_IFDIR;
 	dfs->dfs_ino = ie->ie_stat.st_ino;
 
-	if (dfs->dfs_ops == &dfuse_dfs_ops ||
-	    dfs->dfs_ops == &dfuse_login_ops) {
+	if (dfs->dfs_ops == &dfuse_dfs_ops) {
 		rc = dfs_lookup(dfs->dfs_ns, "/", O_RDWR, &ie->ie_obj, NULL, NULL);
 		if (rc) {
 			DFUSE_TRA_ERROR(ie, "dfs_lookup() failed: %d (%s)", rc, strerror(rc));
@@ -1129,9 +1128,6 @@ err_ie_remove:
 err:
 	DFUSE_TRA_ERROR(fs_handle, "Failed to start dfuse, rc: "DF_RC, DP_RC(rc));
 	D_FREE(ie);
-#if 0
-	fuse_session_destroy(fs_handle->dpi_info->di_session);
-#endif
 	return rc;
 }
 

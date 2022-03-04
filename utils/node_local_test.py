@@ -1180,7 +1180,7 @@ class DFuse():
                 if os.path.exists(self.log_file):
                     log_test(self.conf, self.log_file)
                 os.rmdir(self.dir)
-                raise Exception('dfuse exited waiting for start')
+                raise Exception('dfuse died waiting for start')
             except subprocess.TimeoutExpired:
                 pass
             total_time += 1

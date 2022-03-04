@@ -646,13 +646,9 @@ dfs_mkdir(dfs_t *dfs, dfs_obj_t *parent, const char *name, mode_t mode,
  * \param[in]	parent	Opened parent directory object. If NULL, use root obj.
  * \param[in]	name	Name of object to remove in parent dir.
  * \param[in]	force	If true, remove dir even if non-empty.
- * \param[in,out]
- *		oid	[in]: Only delete this object
- *			[out]: Optionally return the DAOS Object ID of the
- *			removed obj.
+ * \param[in]	oid	Optionally return the DAOS Object ID of the removed obj.
  *
  * \return		0 on success, errno code on failure.
- *			EBADF if file does not match oid.
  */
 int
 dfs_remove(dfs_t *dfs, dfs_obj_t *parent, const char *name, bool force,

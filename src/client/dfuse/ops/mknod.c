@@ -57,20 +57,3 @@ err:
 	DFUSE_REPLY_ERR_RAW(parent, req, rc);
 	D_FREE(ie);
 }
-
-void
-dfuse_cb_mknod_safe(fuse_req_t req, struct dfuse_inode_entry *parent,
-		    const char *name, mode_t mode)
-{
-	const struct fuse_ctx *ctx = fuse_req_ctx(req);
-	int rc;
-
-	if ((ctx->uid != parent->ie_stat.st_uid) || ctx->gid != parent->ie_stat.st_gid)
-		D_GOTO(out, rc = ENOTSUP);
-
-	dfuse_cb_mknod(req, parent, name, mode);
-	return;
-
-out:
-	DFUSE_REPLY_ERR_RAW(parent, req, rc);
-}

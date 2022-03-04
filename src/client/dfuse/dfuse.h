@@ -147,8 +147,6 @@ struct dfuse_event {
 };
 
 extern struct dfuse_inode_ops dfuse_dfs_ops;
-extern struct dfuse_inode_ops dfuse_dfs_ops_safe;
-extern struct dfuse_inode_ops dfuse_login_ops;
 extern struct dfuse_inode_ops dfuse_cont_ops;
 extern struct dfuse_inode_ops dfuse_pool_ops;
 
@@ -222,8 +220,6 @@ struct dfuse_cont {
 	 */
 	bool			dfs_multi_user;
 };
-
-extern char *duns_xattr_name;
 
 void
 dfuse_set_default_cont_cache_values(struct dfuse_cont *dfc);
@@ -574,6 +570,8 @@ dfuse_compute_inode(struct dfuse_cont *dfs,
 	*_ino = hi ^ (oid->lo << 32);
 };
 
+extern char *duns_xattr_name;
+
 int
 check_for_uns_ep(struct dfuse_projection_info *fs_handle,
 		 struct dfuse_inode_entry *ie, char *attr, daos_size_t len);
@@ -603,12 +601,6 @@ dfuse_cb_mknod(fuse_req_t, struct dfuse_inode_entry *,
 	       const char *, mode_t);
 
 void
-dfuse_cb_mknod_safe(fuse_req_t, struct dfuse_inode_entry *, const char *, mode_t);
-
-void
-dfuse_cb_mknod_with_id(fuse_req_t, struct dfuse_inode_entry *, const char *, mode_t);
-
-void
 dfuse_cb_opendir(fuse_req_t, struct dfuse_inode_entry *,
 		 struct fuse_file_info *fi);
 
@@ -619,10 +611,6 @@ dfuse_cb_releasedir(fuse_req_t, struct dfuse_inode_entry *,
 void
 dfuse_cb_create(fuse_req_t, struct dfuse_inode_entry *,
 		const char *, mode_t, struct fuse_file_info *);
-
-void
-dfuse_cb_create_safe(fuse_req_t, struct dfuse_inode_entry *, const char *, mode_t,
-		     struct fuse_file_info *);
 
 void
 dfuse_cb_open(fuse_req_t, fuse_ino_t, struct fuse_file_info *);
@@ -652,9 +640,6 @@ dfuse_cb_write(fuse_req_t, fuse_ino_t, struct fuse_bufvec *, off_t,
 void
 dfuse_cb_symlink(fuse_req_t, const char *, struct dfuse_inode_entry *,
 		 const char *);
-
-void
-dfuse_cb_symlink_safe(fuse_req_t, const char *, struct dfuse_inode_entry *, const char *);
 
 void
 dfuse_cb_setxattr(fuse_req_t, struct dfuse_inode_entry *, const char *,
