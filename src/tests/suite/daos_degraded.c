@@ -211,6 +211,8 @@ insert_lookup_enum_with_ops(test_arg_t *arg, int op_kill)
 	}
 	D_FREE(buf);
 	D_FREE(dkey_enum);
+	/* Sleep 3 seconds before next cycle. */
+	sleep(3);
 }
 
 static void
