@@ -661,8 +661,6 @@ err:
 	return rc;
 }
 
-#define PW_BUF_SIZE 1024
-
 static int
 duns_set_fuse_acl(const char *path, daos_handle_t coh)
 {
@@ -703,7 +701,7 @@ duns_set_fuse_acl(const char *path, daos_handle_t coh)
 
 	rc = daos_cont_update_acl(coh, acl, NULL);
 	if (rc) {
-		D_ERROR("daos_cont_update_acl() failed, " DF_RC "\n", DP_RC(rc));
+		D_ERROR("daos_cont_update_acl() failed, "DF_RC"\n", DP_RC(rc));
 	}
 
 	daos_acl_free(acl);
@@ -725,9 +723,9 @@ create_cont(daos_handle_t poh,
 	int rc;
 
 	if (attrp->da_type == DAOS_PROP_CO_LAYOUT_POSIX) {
-		dfs_attr_t dfs_attr = {};
-		daos_handle_t   coh;
-		daos_handle_t *ch = NULL;
+		dfs_attr_t	dfs_attr = {};
+		daos_handle_t	coh;
+		daos_handle_t	*ch = NULL;
 
 		if (backend_dfuse)
 			ch = &coh;
@@ -1019,8 +1017,7 @@ duns_create_path(daos_handle_t poh, const char *path, struct duns_attr_t *attrp)
 	}
 
 	/** store the daos attributes in the path xattr */
-	len = snprintf(str, DUNS_MAX_XATTR_LEN, DUNS_XATTR_FMT, type,
-		       attrp->da_pool, attrp->da_cont);
+	len = snprintf(str, DUNS_MAX_XATTR_LEN, DUNS_XATTR_FMT, type, attrp->da_pool, attrp->da_cont);
 	if (len < 0) {
 		D_ERROR("Failed to create xattr value\n");
 		D_GOTO(err_cont, rc = EINVAL);
@@ -1048,11 +1045,7 @@ duns_create_path(daos_handle_t poh, const char *path, struct duns_attr_t *attrp)
 		rc = stat(path, &finfo);
 		if (rc) {
 			rc = errno;
-			if (rc == ENOTSUP)
-				D_INFO("Path is not in a filesystem that supports the DAOS unified "
-					"namespace\n");
-			else
-				D_ERROR("Failed to set DAOS xattr: %s\n", strerror(rc));
+			D_ERROR("Failed to access new container: %s\n", strerror(rc));
 			goto err_link;
 		}
 	}

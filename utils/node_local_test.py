@@ -3365,7 +3365,12 @@ def run_in_fg(server, conf, args):
     if not container:
         container = create_cont(conf, pool.uuid, label=label, ctype="POSIX")
 
-    dfuse = DFuse(server, conf, pool=pool.uuid, caching=True, wbcache=False)
+    dfuse = DFuse(server,
+                  conf,
+                  pool=pool.uuid,
+                  caching=True,
+                  wbcache=False,
+                  multi_user=args.multi_user)
     dfuse.start()
 
     run_daos_cmd(conf,
@@ -3379,10 +3384,7 @@ def run_in_fg(server, conf, args):
                   '--attr', 'dfuse-data-cache', '--value', 'off'],
                  show_stdout=True)
 
-    dfuse = DFuse(server, conf, pool=pool, container=container, multi_user=args.multi_user)
-    dfuse.start()
-
-    t_dir = dfuse.dir
+    t_dir = join(dfuse.dir, container)
 
     print('Running at {}'.format(t_dir))
     print('export PATH={}:$PATH'.format(join(conf['PREFIX'], 'bin')))
@@ -3390,8 +3392,8 @@ def run_in_fg(server, conf, args):
     print('export DAOS_AGENT_DRPC_DIR={}'.format(conf.agent_dir))
     print('export D_IL_REPORT=-1')
     if args.multi_user:
-        print('dmg pool --insecure update-acl -e A::root@:rw {}'.format(pool))
-    print('daos container create --type POSIX {} --path {}/uns-link'.format(pool, t_dir))
+        print('dmg pool --insecure update-acl -e A::root@:rw {}'.format(pool.id()))
+    print('daos container create --type POSIX {} --path {}/uns-link'.format(pool.id(), t_dir))
     print('daos container destroy --path {}/uns-link'.format(t_dir))
     print('daos cont list {}'.format(pool.label))
     try:
