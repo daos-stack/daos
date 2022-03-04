@@ -862,21 +862,21 @@ class PreReqComponent():
                 os.remove(covfile)
             commands = ['$COV01 -1',
                         '$COV01 -s',
-                        '$CVS --add \'!**/src/cart/test/utest/\'',
-                        '$CVS --add \'!**/src/common/tests/\'',
-                        '$CVS --add \'!**/src/gurt/tests/\'',
-                        '$CVS --add \'!**/src/iosrv/tests/\'',
-                        '$CVS --add \'!**/src/mgmt/tests/\'',
-                        '$CVS --add \'!**/src/object/tests/\'',
-                        '$CVS --add \'!**/src/placement/tests/\'',
-                        '$CVS --add \'!**/src/rdb/tests/\'',
-                        '$CVS --add \'!**/src/security/tests/\'',
-                        '$CVS --add \'!**/src/utils/self_test/\'',
-                        '$CVS --add \'!**/src/utils/ctl/\'',
-                        '$CVS --add \'!**/src/vea/tests/\'',
-                        '$CVS --add \'!**/src/vos/tests/\'',
-                        '$CVS --add \'!**/src/engine/tests/\'',
-                        '$CVS --add \'!**/src/tests/\'']
+                        '$CVS --add !**/src/cart/test/utest/',
+                        '$CVS --add !**/src/common/tests/',
+                        '$CVS --add !**/src/gurt/tests/',
+                        '$CVS --add !**/src/iosrv/tests/',
+                        '$CVS --add !**/src/mgmt/tests/',
+                        '$CVS --add !**/src/object/tests/',
+                        '$CVS --add !**/src/placement/tests/',
+                        '$CVS --add !**/src/rdb/tests/',
+                        '$CVS --add !**/src/security/tests/',
+                        '$CVS --add !**/src/utils/self_test/',
+                        '$CVS --add !**/src/utils/ctl/',
+                        '$CVS --add !**/src/vea/tests/',
+                        '$CVS --add !**/src/vos/tests/',
+                        '$CVS --add !**/src/engine/tests/',
+                        '$CVS --add !**/src/tests/']
             if not RUNNER.run_commands(commands):
                 raise BuildFailure("cov01")
 
