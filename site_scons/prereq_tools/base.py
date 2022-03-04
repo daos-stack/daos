@@ -465,6 +465,10 @@ class WebRetriever():
 
         basename = os.path.basename(self.url)
 
+        if os.path.exists(subdir):
+            # assume that nothing has changed
+            return
+
         if not self.check_md5(basename) and not self.download(basename):
             raise DownloadFailure(self.url, subdir)
 
