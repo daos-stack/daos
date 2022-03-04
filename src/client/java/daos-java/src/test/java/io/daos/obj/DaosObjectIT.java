@@ -271,17 +271,17 @@ public class DaosObjectIT {
     fetchObjectSimple(high, low, client.getContPtr(), null, null, null, bytes);
   }
 
-  @Test
-  public void testObjectFetchSimpleWithNoObjectClass() throws IOException {
-    int dataSize = 30;
-    byte[] bytes = generateDataArray(dataSize);
-    long high = random.nextInt();
-    long low = lowSeq.incrementAndGet();
-    updateObjectSimple(high, low, client.getContPtr(), DaosObjectType.DAOS_OT_DKEY_UINT64, DaosObjectClass.OC_UNKNOWN,
-        DaosObjClassHint.DAOS_OCH_SHD_MAX, bytes);
-    fetchObjectSimple(high, low, client.getContPtr(), DaosObjectType.DAOS_OT_DKEY_UINT64, DaosObjectClass.OC_UNKNOWN,
-        DaosObjClassHint.DAOS_OCH_SHD_MAX, bytes);
-  }
+//  @Test
+//  public void testObjectFetchSimpleWithNoObjectClass() throws IOException {
+//    int dataSize = 30;
+//    byte[] bytes = generateDataArray(dataSize);
+//    long high = random.nextInt();
+//    long low = lowSeq.incrementAndGet();
+//    updateObjectSimple(high, low, client.getContPtr(), DaosObjectType.DAOS_OT_DKEY_UINT64, DaosObjectClass.OC_UNKNOWN,
+//        DaosObjClassHint.DAOS_OCH_SHD_MAX, bytes);
+//    fetchObjectSimple(high, low, client.getContPtr(), DaosObjectType.DAOS_OT_DKEY_UINT64, DaosObjectClass.OC_UNKNOWN,
+//        DaosObjClassHint.DAOS_OCH_SHD_MAX, bytes);
+//  }
 
   @Test
   public void testObjectFetchSimpleWithObjectHintMax() throws IOException {
