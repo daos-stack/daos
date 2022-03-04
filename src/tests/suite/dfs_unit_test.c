@@ -391,10 +391,15 @@ dfs_test_syml(void **state)
 			   O_RDWR | O_CREAT | O_EXCL, 0, 0, val, &sym, &stbuf);
 	assert_int_equal(rc, 0);
 
+	/* symlink_value uses size plus space for the terminator, so it does not match stbuf */
 	rc = dfs_get_symlink_value(sym, NULL, &size);
 	assert_int_equal(rc, 0);
 	assert_int_equal(size, strlen(val) + 1);
+#if 1
 	assert_int_equal(size, stbuf.st_size);
+#else
+	assert_int_equal(size, stbuf.st_size + 1);
+#endif
 
 	rc = dfs_get_symlink_value(sym, tmp_buf, &size);
 	assert_int_equal(rc, 0);

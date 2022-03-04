@@ -3530,14 +3530,15 @@ dfs_open_stat(dfs_t *dfs, dfs_obj_t *parent, const char *name, mode_t mode,
 			D_DEBUG(DB_TRACE, "Failed to open dir (%d)\n", rc);
 			D_GOTO(out, rc);
 		}
+		file_size = sizeof(entry);
 		break;
 	case S_IFLNK:
-		rc = open_symlink(dfs, parent, flags, cid, value, &entry, len,
-				  obj);
+		rc = open_symlink(dfs, parent, flags, cid, value, &entry, len, obj);
 		if (rc) {
 			D_DEBUG(DB_TRACE, "Failed to open symlink (%d)\n", rc);
 			D_GOTO(out, rc);
 		}
+		file_size = entry.value_len;
 		break;
 	default:
 		D_ERROR("Invalid entry type (not a dir, file, symlink).\n");
