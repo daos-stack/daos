@@ -2155,9 +2155,9 @@ dbtree_update(daos_handle_t toh, d_iov_t *key, d_iov_t *val)
 }
 
 /**
- * Set the tree feats.  Must be in tx.
+ * Set the tree feats.
  *
- * \param root[in]	Tree roo
+ * \param root[in]	Tree root
  * \param umm[in]	umem instance
  * \param feats[in]	feats to set
  * \param in_tx[in]	in transaction already
@@ -2173,7 +2173,7 @@ dbtree_feats_set(struct btr_root *root, struct umem_instance *umm, uint64_t feat
 		return 0;
 
 	if ((root->tr_feats & BTR_FEAT_MASK) != (feats & BTR_FEAT_MASK)) {
-		D_ERROR("Attempt to set internal features via dbtree_feats_set denied\n");
+		D_ERROR("Attempt to set internal features "DF_X64" denied\n", feats);
 		return -DER_INVAL;
 	}
 

@@ -1661,33 +1661,25 @@ akey_update_recx(daos_handle_t toh, uint32_t pm_ver, daos_recx_t *recx,
 	return rc;
 }
 
-int
-vos_key_mark_agg(struct umem_instance *umm, struct vos_krec_df *krec)
+static int
+vos_evt_mark_agg(struct umem_instance *umm, struct evt_root *root)
 {
-	int	rc;
-	uint8_t	bmap;
+	uint64_t	feats;
 
-	bmap = krec->kr_bmap;
-	if ((bmap & KREC_BF_AGG_OPT) == 0)
+	feats = evt_feats_get(root);
+	if ((feats & EVT_FEAT_AGG_OPT) == 0)
 		return 0;
 
-	if ((bmap & KREC_BF_AGG_NEEDED) == 0)
-		bmap |= KREC_BF_AGG_NEEDED;
-	else if (bmap & KREC_BF_AGG_FLAG)
-		bmap &= ~KREC_BF_AGG_FLAG;
+	if ((feats & EVT_FEAT_AGG_NEEDED) == 0)
+		feats |= EVT_FEAT_AGG_NEEDED;
+	else if (feats & EVT_FEAT_AGG_FLAG)
+		feats &= ~EVT_FEAT_AGG_FLAG;
 
-	if (bmap == krec->kr_bmap)
-		return 0;
-
-	rc = umem_tx_add_ptr(umm, &krec->kr_bmap, sizeof(krec->kr_bmap));
-	if (rc == 0)
-		krec->kr_bmap = bmap;
-
-	return rc;
+	return evt_feats_set(root, umm, feats, true);
 }
 
 static int
-vos_tree_mark_agg(struct umem_instance *umm, struct btr_root *root)
+vos_btr_mark_agg(struct umem_instance *umm, struct btr_root *root)
 {
 	uint64_t	feats;
 
@@ -1704,13 +1696,22 @@ vos_tree_mark_agg(struct umem_instance *umm, struct btr_root *root)
 }
 
 int
+vos_key_mark_agg(struct umem_instance *umm, struct vos_krec_df *krec)
+{
+	if (krec->kr_bmap & KREC_BF_BTR)
+		return vos_btr_mark_agg(umm, &krec->kr_btr);
+
+	return vos_evt_mark_agg(umm, &krec->kr_evt);
+}
+
+int
 vos_mark_agg(struct umem_instance *umm, struct btr_root *dkey_root, struct btr_root *obj_root)
 {
 	int	rc;
 
-	rc = vos_tree_mark_agg(umm, dkey_root);
+	rc = vos_btr_mark_agg(umm, dkey_root);
 	if (rc == 0)
-		rc = vos_tree_mark_agg(umm, obj_root);
+		rc = vos_btr_mark_agg(umm, obj_root);
 
 	return rc;
 }

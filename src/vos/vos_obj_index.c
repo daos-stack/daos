@@ -681,6 +681,12 @@ oi_iter_pre_aggregate(daos_handle_t ih, bool full_scan)
 	if (iter->it_for_purge) {
 		if (feats & VOS_TREE_AGG_OPT) {
 			if ((feats & VOS_TREE_AGG_NEEDED) == 0) {
+				/** We can skip aggregation here unless one of these conditions is
+				 *  true
+				 *  1. We are doing a full scan (or snapshot deletion)
+				 *  2. If the whole tree is punched, we'll just fall through and
+				 *     move it to GC.
+				 */
 				if (!full_scan && !punched)
 					return 2;
 			} else {

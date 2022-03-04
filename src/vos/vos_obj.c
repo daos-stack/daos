@@ -1921,7 +1921,8 @@ vos_obj_iter_pre_aggregate(daos_handle_t ih, bool full_scan)
 	daos_key_t		 key;
 	struct vos_rec_bundle	 rbund;
 	int			 rc;
-	uint8_t			 bmap;
+	uint64_t		 new_feats;
+	uint64_t		 old_feats;
 	bool			 punched;
 
 	D_ASSERTF(iter->it_type == VOS_ITER_AKEY ||
@@ -1941,17 +1942,28 @@ vos_obj_iter_pre_aggregate(daos_handle_t ih, bool full_scan)
 	punched = vos_ilog_is_punched(vos_cont2hdl(obj->obj_cont), &krec->kr_ilog, &oiter->it_epr,
 				      &oiter->it_punched, &oiter->it_ilog_info);
 
-	bmap = krec->kr_bmap;
-	if (oiter->it_iter.it_for_purge && bmap & KREC_BF_AGG_OPT) {
-		if ((bmap & KREC_BF_AGG_NEEDED) == 0) {
+	if (krec->kr_bmap & KREC_BF_BTR)
+		new_feats = old_feats = dbtree_feats_get(&krec->kr_btr);
+	else
+		new_feats = old_feats = evt_feats_get(&krec->kr_evt);
+	if (oiter->it_iter.it_for_purge && old_feats & VOS_TREE_AGG_OPT) {
+		if ((old_feats & VOS_TREE_AGG_NEEDED) == 0) {
+			/** We can skip aggregation here unless one of these conditions is true
+			 *  1. We are doing a full scan (or snapshot deletion)
+			 *  2. If the whole tree is punched, we'll just fall through and move it
+			 *     to GC.
+			 *  3. The upper layer is punched (or epc == 0). Normally, this would
+			 *     move the whole subtree to garbage collection but only if there
+			 *     are no ilog entries outside of the aggregation epoch range.
+			 */
 			if (!full_scan && !punched && oiter->it_punched.pr_epc == 0)
 				return 2;
 		} else {
-			bmap |= KREC_BF_AGG_FLAG;
+			new_feats |= VOS_TREE_AGG_FLAG;
 		}
 	}
 
-	if (!punched && bmap == krec->kr_bmap)
+	if (!punched && new_feats == old_feats)
 		return 0;
 
 	/** Ok, ilog is fully punched, so we can move it to gc heap */
@@ -1967,9 +1979,10 @@ vos_obj_iter_pre_aggregate(daos_handle_t ih, bool full_scan)
 		rc = dbtree_iter_delete(oiter->it_hdl, obj->obj_cont);
 		D_ASSERT(rc != -DER_NONEXIST);
 	} else {
-		rc = umem_tx_add_ptr(umm, &krec->kr_bmap, sizeof(krec->kr_bmap));
-		if (rc == 0)
-			krec->kr_bmap = bmap;
+		if (krec->kr_bmap & KREC_BF_BTR)
+			rc = dbtree_feats_set(&krec->kr_btr, umm, new_feats, true);
+		else
+			rc = evt_feats_set(&krec->kr_evt, umm, new_feats, true);
 	}
 
 	rc = umem_tx_end(umm, rc);
@@ -1990,9 +2003,9 @@ vos_obj_iter_aggregate(daos_handle_t ih, bool range_discard)
 	struct umem_attr	 uma;
 	daos_key_t		 key;
 	struct vos_rec_bundle	 rbund;
+	uint64_t		 feats;
 	bool			 delete = false, invisible = false;
 	int			 rc;
-	uint8_t			 bmap;
 
 	D_ASSERTF(iter->it_type == VOS_ITER_AKEY ||
 		  iter->it_type == VOS_ITER_DKEY,
@@ -2045,15 +2058,19 @@ vos_obj_iter_aggregate(daos_handle_t ih, bool range_discard)
 			invisible = true;
 			rc = 0;
 		}
-		bmap = krec->kr_bmap;
-		if (oiter->it_iter.it_for_purge && bmap & KREC_BF_AGG_FLAG) {
+		if (krec->kr_bmap & KREC_BF_BTR)
+			feats = dbtree_feats_get(&krec->kr_btr);
+		else
+			feats = evt_feats_get(&krec->kr_evt);
+		if (oiter->it_iter.it_for_purge && feats & VOS_TREE_AGG_FLAG) {
 			/** We got through aggregation without anyone clearing the flag,
 			 *  so we can clear the needed flag
 			 */
-			bmap = bmap & ~(KREC_BF_AGG_FLAG | KREC_BF_AGG_NEEDED);
-			rc = umem_tx_add_ptr(umm, &krec->kr_bmap, sizeof(krec->kr_bmap));
-			if (rc == 0)
-				krec->kr_bmap = bmap;
+			feats = feats & ~(VOS_TREE_AGG_FLAG | VOS_TREE_AGG_NEEDED);
+			if (krec->kr_bmap & KREC_BF_BTR)
+				rc = dbtree_feats_set(&krec->kr_btr, umm, feats, true);
+			else
+				rc = evt_feats_set(&krec->kr_evt, umm, feats, true);
 		}
 	}
 

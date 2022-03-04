@@ -16,7 +16,7 @@
 #include <daos_srv/vos.h>
 #include "vos_internal.h"
 
-int vos_evt_feats = EVT_FEAT_SORT_DIST;
+uint64_t vos_evt_feats = EVT_FEAT_SORT_DIST | EVT_FEAT_AGG_OPT;
 
 /**
  * VOS Btree attributes, for tree registration and tree creation.
@@ -869,7 +869,7 @@ tree_open_create(struct vos_object *obj, enum vos_tree_class tclass, int flags,
 		}
 	} else {
 		struct vos_btr_attr	*ta;
-		uint64_t		 tree_feats = 0;
+		uint64_t		 tree_feats = VOS_TREE_AGG_OPT;
 
 		/* Step-1: find the btree attributes and create btree */
 		if (tclass == VOS_BTR_DKEY) {
@@ -901,7 +901,7 @@ tree_open_create(struct vos_object *obj, enum vos_tree_class tclass, int flags,
 	 * At akey level, this bit map is used for the optimization.  At higher
 	 * levels, only the tree_feats version is used.
 	 */
-	krec->kr_bmap |= expected_flag | KREC_BF_AGG_OPT;
+	krec->kr_bmap |= expected_flag;
 out:
 	return rc;
 }

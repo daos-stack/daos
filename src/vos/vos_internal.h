@@ -332,14 +332,14 @@ struct vos_dtx_cmt_ent {
 #define DCE_EPOCH(dce)		((dce)->dce_base.dce_epoch)
 #define DCE_HANDLE_TIME(dce)	((dce)->dce_base.dce_handle_time)
 
-extern int vos_evt_feats;
+extern uint64_t vos_evt_feats;
 
 #define VOS_KEY_CMP_LEXICAL	(1ULL << 63)
-#define VOS_TREE_AGG_OPT	(1ULL << 62)
-#define VOS_TREE_AGG_NEEDED	(1ULL << 61)
-#define VOS_TREE_AGG_FLAG	(1ULL << 60)
+#define VOS_TREE_AGG_OPT	EVT_FEAT_AGG_OPT
+#define VOS_TREE_AGG_NEEDED	EVT_FEAT_AGG_NEEDED
+#define VOS_TREE_AGG_FLAG	EVT_FEAT_AGG_FLAG
 #define CHECK_VOS_TREE_FLAG(flag)	\
-	D_CASSERT(((flag) & BTR_FEAT_MASK) == 0)
+	D_CASSERT(((flag) & (EVT_FEATS_SUPPORTED | BTR_FEAT_MASK)) == 0)
 CHECK_VOS_TREE_FLAG(VOS_KEY_CMP_LEXICAL);
 CHECK_VOS_TREE_FLAG(VOS_TREE_AGG_OPT);
 CHECK_VOS_TREE_FLAG(VOS_TREE_AGG_NEEDED);

@@ -2815,6 +2815,7 @@ evt_close(daos_handle_t toh)
 	return 0;
 }
 
+#define EVT_AGG_MASK (EVT_FEAT_AGG_NEEDED | EVT_FEAT_AGG_FLAG | EVT_FEAT_AGG_OPT)
 /**
  * Create a new tree inplace of \a root, return the open handle.
  * Please check API comment in evtree.h for the details.
@@ -2826,7 +2827,7 @@ evt_create(struct evt_root *root, uint64_t feats, unsigned int order,
 	struct evt_context *tcx;
 	int		    rc;
 
-	if (!(feats & EVT_FEATS_SUPPORTED)) {
+	if (!(feats & (EVT_AGG_MASK | EVT_FEATS_SUPPORTED))) {
 		D_ERROR("Unknown feature bits "DF_X64"\n", feats);
 		return -DER_INVAL;
 	}
@@ -3857,3 +3858,34 @@ out:
 	tcx->tc_creds = 0;
 	return rc;
 }
+
+int
+evt_feats_set(struct evt_root *root, struct umem_instance *umm, uint64_t feats, bool in_tx)
+{
+	int			 rc;
+
+	if (root->tr_feats == feats)
+		return 0;
+
+	if ((feats & ~EVT_AGG_MASK) != (root->tr_feats & EVT_FEATS_SUPPORTED)) {
+		D_ERROR("Attempt to set internal features denied "DF_X64"\n", feats);
+		return -DER_INVAL;
+	}
+
+	if (!in_tx) {
+		rc = umem_tx_begin(umm, NULL);
+		if (rc != 0)
+			return rc;
+	}
+
+	rc = umem_tx_add_ptr(umm, &root->tr_feats, sizeof(root->tr_feats));
+
+	if (rc == 0)
+		root->tr_feats = feats;
+
+	if (!in_tx)
+		rc = umem_tx_end(umm, rc);
+
+	return rc;
+}
+
