@@ -1507,13 +1507,21 @@ obj_local_rw_internal(crt_rpc_t *rpc, struct obj_io_context *ioc,
 			goto post;
 		}
 
-		if (ioc->ioc_coc->sc_props.dcp_csum_enabled) {
+		if (ioc->ioc_coc->sc_props.dcp_csum_enabled &&
+		    daos_csummer_initialized(ioc->ioc_coc->sc_csummer)) {
+			struct daos_csummer *csummer = daos_csummer_copy(ioc->ioc_coc->sc_csummer);
+
+			if (csummer == NULL) {
+				rc = -DER_NOMEM;
+				goto post;
+			}
 			rc = csum_add2iods(ioh,
 					   orw->orw_iod_array.oia_iods,
 					   orw->orw_iod_array.oia_iod_nr,
-					   ioc->ioc_coc->sc_csummer,
+					   csummer,
 					   orwo->orw_iod_csums.ca_arrays,
 					   orw->orw_oid, &orw->orw_dkey);
+			daos_csummer_destroy(&csummer);
 			if (rc) {
 				D_ERROR(DF_UOID" fetch verify failed: %d.\n",
 					DP_UOID(orw->orw_oid), rc);
