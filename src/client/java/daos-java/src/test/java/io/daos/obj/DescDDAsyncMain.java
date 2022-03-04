@@ -1,14 +1,28 @@
 package io.daos.obj;
 
+import io.daos.BufferAllocator;
 import io.daos.DaosClient;
 import io.daos.DaosEventQueue;
 import io.netty.buffer.ByteBuf;
 
-import java.io.*;
-import java.util.*;
-import java.util.concurrent.*;
+import java.io.BufferedReader;
+import java.io.File;
+import java.io.FileOutputStream;
+import java.io.FileReader;
+import java.io.IOException;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
+import java.util.LinkedList;
+import java.util.List;
+import java.util.Map;
+import java.util.concurrent.Callable;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
 
-public class DescSimpleMain {
+public class DescDDAsyncMain {
 
   private static final String OUTPUT_PATH = "./output";
   private static final String FILE_NAME_DKEY = "dkeys.txt";
@@ -17,62 +31,65 @@ public class DescSimpleMain {
   private static final long DEFAULT_TOTAL_BYTES = 210L*1024*1024*1024;
   private static final int DEFAULT_NUMBER_OF_MAPS = 1000;
   private static final int DEFAULT_NUMBER_OF_REDUCES = 125;
+  private static final int DEFAULT_BLOCK_SIZE = 200 * 1024;
 
   private static final StringBuilder sb = new StringBuilder();
 
   public static void main(String[] args) throws Exception {
     String poolId = args[0];
     String containerId = args[1];
-    String svc = args[2];
-    long oid = Long.valueOf(args[3]);
-    String op = args[4];
-    long totalBytes = Long.valueOf(args[5]);
-    if (totalBytes <= 0) {
-      totalBytes = DEFAULT_TOTAL_BYTES;
+    int blockSize = Integer.valueOf(args[2]);
+    if (blockSize <= 0) {
+      blockSize = DEFAULT_BLOCK_SIZE;
     }
-    int maps = Integer.valueOf(args[6]);
+
+    long oid = Long.valueOf(args[3]);
+
+    String op = args[4];
+
+    int maps = Integer.valueOf(args[5]);
     if (maps <= 0) {
       maps = DEFAULT_NUMBER_OF_MAPS;
     }
-    int reduces = Integer.valueOf(args[7]);
+
+    int reduces = Integer.valueOf(args[6]);
     if (reduces <= 0) {
       reduces = DEFAULT_NUMBER_OF_REDUCES;
     }
 
-    int sizeLimit = 2 * 1024 * 1024;
-    int nbrOfDkeys = reduces;
-    int offset = 0;
-    if (args.length >= 9) {
-      sizeLimit = Integer.valueOf(args[8]);
-    }
-    if (args.length >= 11) {
-      offset = Integer.valueOf(args[9]);
-      nbrOfDkeys = Integer.valueOf(args[10]);
+    int threads = Integer.valueOf(args[7]);
+    if (threads <= 0) {
+      threads = 1;
     }
 
-    int threads = 1;
-    if (args.length >= 12) {
-      threads = Integer.valueOf(args[11]);
+    int mapOffset = Integer.valueOf(args[8]);
+    int nbrOfMaps = Integer.valueOf(args[9]);
+
+    if (mapOffset + nbrOfMaps > maps) {
+      throw new IllegalArgumentException("map offset and number of maps are not correct.");
     }
+
+    int nbrOfDkeys = reduces;
+    int offset = 0;
 
     DaosObjClient objClient = null;
     DaosObject object = null;
     try {
-      objClient = getObjClient(poolId, containerId, svc);
+      objClient = getObjClient(poolId, containerId);
       object = openObject(objClient, oid);
       if (op.toLowerCase().startsWith("write")) {
         if (op.equalsIgnoreCase("write")) {
-          write(object, totalBytes, maps, reduces, sizeLimit, offset, nbrOfDkeys, true);
+          write(object, 1, reduces, blockSize, true);
         } else if (op.equalsIgnoreCase("write-threads")) {
-          writeThreads(object, totalBytes, maps, reduces, sizeLimit, offset, nbrOfDkeys, threads);
+          writeThreads(object, maps, mapOffset, nbrOfMaps, reduces, blockSize, threads);
         } else {
           System.out.println("unknown write operation: " + op);
         }
       } else if (op.toLowerCase().startsWith("read")) {
         if (op.equalsIgnoreCase("read")) {
-          read(object, totalBytes, maps, reduces, sizeLimit, offset, nbrOfDkeys, true);
+          read(object, 1, maps, reduces, blockSize, offset, nbrOfDkeys, true);
         } else if (op.equalsIgnoreCase("read-threads")) {
-          readThreads(object, totalBytes, maps, reduces, sizeLimit, offset, nbrOfDkeys,
+          readThreads(object, 1, maps, reduces, blockSize, offset, nbrOfDkeys,
             threads);
         } else {
           System.out.println("unknown read operation: " + op);
@@ -81,37 +98,41 @@ public class DescSimpleMain {
         System.out.println("unknown operation: " + op);
       }
     } finally {
-      if (objClient != null) {
-        objClient.close();
-      }
       if (object != null) {
         object.close();
+      }
+      if (objClient != null) {
+        objClient.close();
       }
       DaosClient.FINALIZER.run();
     }
   }
 
-  private static void writeThreads(DaosObject object, long totalBytes, int maps, int reduces,
-                                   int sizeLimit, int offset, int nbrOfDkeys, int threads) throws Exception {
-    int ext = nbrOfDkeys/threads;
-    if (nbrOfDkeys%threads != 0) {
-      throw new IOException("nbrOfDkeys: " + nbrOfDkeys +", should be a multiple of threads " + threads);
-    }
+  private static void writeThreads(DaosObject object, int maps, int mapOffset,
+                                   int nbrOfMaps, int reduces,
+                                   int blockSize, int threads) throws Exception {
     ExecutorService exe = Executors.newFixedThreadPool(threads);
     List<WriteTask> tasks = new ArrayList<>();
-    for (int i = offset; i < offset + nbrOfDkeys; i+=ext) {
-      tasks.add(new WriteTask(object, totalBytes, maps, reduces, sizeLimit, i, ext));
+    for (int i = mapOffset; i < mapOffset + nbrOfMaps; i++) {
+      tasks.add(new WriteTask(object, i, reduces, blockSize));
     }
     try {
       List<Future<Float>> rstList = new ArrayList<>();
-      for (int i = 0; i < threads; i++) {
+      long start = System.currentTimeMillis();
+      for (int i = 0; i < tasks.size(); i++) {
         rstList.add(exe.submit(tasks.get(i)));
       }
       float total = 0.0f;
       for (Future<Float> f : rstList) {
         total += f.get();
       }
-      System.out.println("perf: " + total);
+      long end = System.currentTimeMillis();
+      long totalBytes = 1L * nbrOfMaps * reduces * blockSize;
+      double dur = 1.0 * (end - start)/1000;
+      System.out.println("maps: " + nbrOfMaps + ", reduces: " + reduces + ", blocksize: " + blockSize);
+      System.out.println("total bytes: " + totalBytes);
+      System.out.println("total dur: " + dur);
+      System.out.println("perf: " + (1.0*totalBytes/(1024*1024*dur)));
       exe.shutdownNow();
       exe.awaitTermination(2, TimeUnit.SECONDS);
     } finally {
@@ -127,77 +148,46 @@ public class DescSimpleMain {
     return bytes;
   }
 
-  private static float write(DaosObject object, long totalBytes, int maps, int reduces,
-                                   int sizeLimit, int offset, int nbrOfDkeys, boolean destroy)
+  private static float write(DaosObject object, int mapId, int reduces,
+                                   int blockSize, boolean destroy)
       throws IOException, InterruptedException {
-    int akeyValLen = (int)(totalBytes/maps/reduces);
-//    ByteBuf buf = BufferAllocator.objBufWithNativeOrder(akeyValLen);
-//    IOSimpleDataDesc desc = object.createSimpleDataDesc(3, 1, akeyValLen,
-//         null);
-    System.out.println("block size: " + akeyValLen);
-    if (offset < 0 || offset >= reduces) {
-      throw new IOException("offset should be no less than 0 and less than reduces: " + reduces +", offset: " + offset);
-    }
-    if (nbrOfDkeys <= 0) {
-      throw new IOException("number of dkeys should be more than 0, " + nbrOfDkeys);
-    }
-    int end = nbrOfDkeys + offset;
-    if (end > reduces) {
-      throw new IOException("offset + nbrOfDkeys should not exceed reduces. " +
-          (nbrOfDkeys + offset) + " > " + reduces);
-    }
+    byte[] data = generateDataArray(blockSize);
+    DaosEventQueue eq = DaosEventQueue.getInstance(0);
 
-    byte[] data = generateDataArray(akeyValLen);
-    DaosEventQueue dq = DaosEventQueue.getInstance(128);
-    SimpleDataDescGrp grp = object.createSimpleDataDescGrp(128, 4, 1,
-        akeyValLen, dq);
-    List<IOSimpleDataDesc> descList = grp.getDescList();
-    for (int i = 0; i < dq.getNbrOfEvents(); i++) {
-      DaosEventQueue.Event e = dq.getEvent(i);
-      descList.get(i).setEvent(e);
-      IOSimpleDataDesc.SimpleEntry entry = descList.get(i).getEntry(0);
-      ByteBuf buf = entry.reuseBuffer();
-      buf.writeBytes(data);
-    }
-    DaosEventQueue.Event e;
-    IOSimpleDataDesc desc;
-    IOSimpleDataDesc.SimpleEntry entry;
-    ByteBuf buf;
     List<DaosEventQueue.Attachment> compList = new LinkedList<>();
     long start = System.nanoTime();
     try {
-      for (int i = offset; i < end; i++) {
-        for (int j = 0; j < maps; j++) {
-          compList.clear();
-          e = dq.acquireEventBlocking(1000, compList, IOSimpleDataDesc.class, null);
-          for (DaosEventQueue.Attachment d : compList) {
-            if (!((IOSimpleDataDesc)d).isSucceeded()) {
-              throw new IOException("failed " + d);
-            }
+      for (int i = 0; i < reduces; i++) {
+        compList.clear();
+        DaosEventQueue.Event e = eq.acquireEventBlocking(1000, compList, IOSimpleDDAsync.class, null);
+        for (DaosEventQueue.Attachment d : compList) {
+          d.release();
+          if (!((IOSimpleDDAsync)d).isSucceeded()) {
+            throw new IOException("failed " + d);
           }
-          desc = (IOSimpleDataDesc) e.getAttachment();
-          desc.reuse();
-          desc.setDkey(String.valueOf(i));
-          entry = desc.getEntry(0);
-          buf = entry.reuseBuffer();
-          buf.writerIndex(buf.capacity());
-          entry.setEntryForUpdate(String.valueOf(j), 0, buf);
-          object.updateSimple(desc);
         }
+
+        ByteBuf buf = BufferAllocator.objBufWithNativeOrder(blockSize);
+        buf.writeBytes(data, 0, data.length);
+        IOSimpleDDAsync desc = object.createAsyncDataDescForUpdate(String.valueOf(i), eq.getEqWrapperHdl());
+        desc.addEntryForUpdate(String.valueOf(mapId), 0, buf);
+        desc.setEvent(e);
+        object.updateAsync(desc);
       }
       compList.clear();
-      dq.waitForCompletion(10000, IOSimpleDataDesc.class, compList);
+      eq.waitForCompletion(10000, IOSimpleDDAsync.class, compList);
       for (DaosEventQueue.Attachment d : compList) {
-        if (!((IOSimpleDataDesc)d).isSucceeded()) {
+        d.release();
+        if (!((IOSimpleDDAsync)d).isSucceeded()) {
           throw new IOException("failed " + d);
         }
       }
       float seconds = ((float)(System.nanoTime()-start))/1000000000;
-      long expected = 1L*akeyValLen*nbrOfDkeys*maps;
+      long expected = 1L*blockSize*reduces;
       float rst = ((float)expected)/seconds/1024/1024;
-      System.out.println("perf (MB/s): " + rst);
-      System.out.println("total read (MB): " + expected/1024/1024);
-      System.out.println("seconds: " + seconds);
+      //System.out.println("perf (MB/s): " + rst);
+      //System.out.println("total write (MB): " + expected/1024/1024);
+      //System.out.println("seconds: " + seconds);
       return rst;
     } finally {
       if (destroy) {
@@ -221,27 +211,21 @@ public class DescSimpleMain {
   static class WriteTask implements Callable<Float> {
 
     private DaosObject object;
-    private long totalBytes;
-    private final int maps;
     private final int reduces;
-    private int sizeLimit;
-    private final int offset;
-    private final int nbrOfDkeys;
+    private int blockSize;
+    private final int mapId;
 
-    public WriteTask(DaosObject object, long totalBytes, int maps, int reduces,
-                    int sizeLimit, int offset, int nbrOfDkeys){
+    public WriteTask(DaosObject object, int mapId, int reduces,
+                    int blockSize){
       this.object = object;
-      this.totalBytes = totalBytes;
-      this.maps = maps;
       this.reduces = reduces;
 
-      this.sizeLimit = sizeLimit;
-      this.offset = offset;
-      this.nbrOfDkeys = nbrOfDkeys;
+      this.blockSize = blockSize;
+      this.mapId = mapId;
     }
     @Override
     public Float call() throws Exception {
-      return write(object, totalBytes, maps, reduces, sizeLimit, offset, nbrOfDkeys, false);
+      return write(object, mapId, reduces, blockSize, false);
     }
   }
 
@@ -485,7 +469,7 @@ public class DescSimpleMain {
     return object;
   }
 
-  private static DaosObjClient getObjClient(String pid, String cid, String svc) throws IOException {
+  private static DaosObjClient getObjClient(String pid, String cid) throws IOException {
     DaosObjClient objClient = new DaosObjClient.DaosObjClientBuilder()
         .poolId(pid).containerId(cid)
         .build();
