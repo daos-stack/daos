@@ -600,7 +600,6 @@ dtx_resync(daos_handle_t po_hdl, uuid_t po_uuid, uuid_t co_uuid, uint32_t ver,
 	d_rank_t			 myrank;
 	int				 rc = 0;
 	int				 rc1 = 0;
-	bool				 resynced = false;
 
 	rc = ds_cont_child_lookup(po_uuid, co_uuid, &cont);
 	if (rc != 0) {
@@ -632,11 +631,12 @@ dtx_resync(daos_handle_t po_hdl, uuid_t po_uuid, uuid_t co_uuid, uint32_t ver,
 		D_DEBUG(DB_TRACE, "Waiting for resync of "DF_UUID"\n",
 			DP_UUID(co_uuid));
 		ABT_cond_wait(cont->sc_dtx_resync_cond, cont->sc_mutex);
-		resynced = true;
-	}
-	if (resynced /* Someone just did the DTX resync*/ || !dtx_cont_opened(cont)) {
-		ABT_mutex_unlock(cont->sc_mutex);
-		goto out;
+
+		if (!dra.for_discard) {
+			/* Someone just did the DTX resync*/
+			ABT_mutex_unlock(cont->sc_mutex);
+			goto out;
+		}
 	}
 
 	if (myrank == daos_fail_value_get() && DAOS_FAIL_CHECK(DAOS_DTX_SRV_RESTART)) {
