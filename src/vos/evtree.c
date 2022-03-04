@@ -3862,7 +3862,8 @@ out:
 }
 
 int
-evt_feats_set(struct evt_root *root, struct umem_instance *umm, uint64_t feats, bool in_tx)
+evt_feats_set(struct evt_root *root, struct umem_instance *umm, uint64_t feats, bool in_tx,
+	      bool safe)
 {
 	int			 rc;
 
@@ -3880,7 +3881,13 @@ evt_feats_set(struct evt_root *root, struct umem_instance *umm, uint64_t feats, 
 			return rc;
 	}
 
-	rc = umem_tx_add_ptr(umm, &root->tr_feats, sizeof(root->tr_feats));
+	if (!safe) {
+		rc = umem_tx_add_ptr(umm, &root->tr_feats, sizeof(root->tr_feats));
+	} else if (DAOS_ON_VALGRIND) {
+		rc = umem_tx_xadd_ptr(umm, &root->tr_feats, sizeof(root->tr_feats),
+				      POBJ_XADD_NO_SNAPSHOT);
+
+	}
 
 	if (rc == 0)
 		root->tr_feats = feats;

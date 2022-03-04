@@ -2161,13 +2161,16 @@ dbtree_update(daos_handle_t toh, d_iov_t *key, d_iov_t *val)
  * \param umm[in]	umem instance
  * \param feats[in]	feats to set
  * \param in_tx[in]	in transaction already
+ * \param safe[in]	If true, no need to snapshot.  It's ok if we set the corresponding value
+ *			and there is no rollback on failure.
  *
  * \return 0 on success
  */
 int
-dbtree_feats_set(struct btr_root *root, struct umem_instance *umm, uint64_t feats, bool in_tx)
+dbtree_feats_set(struct btr_root *root, struct umem_instance *umm, uint64_t feats, bool in_tx,
+		 bool safe)
 {
-	int			 rc;
+	int			 rc = 0;
 
 	if (root->tr_feats == feats)
 		return 0;
@@ -2183,7 +2186,15 @@ dbtree_feats_set(struct btr_root *root, struct umem_instance *umm, uint64_t feat
 			return rc;
 	}
 
-	rc = umem_tx_add_ptr(umm, &root->tr_feats, sizeof(root->tr_feats));
+#ifdef DAOS_PMEM_BUILD
+	if (!safe) {
+		rc = umem_tx_add_ptr(umm, &root->tr_feats, sizeof(root->tr_feats));
+	} else if (DAOS_ON_VALGRIND) {
+		rc = umem_tx_xadd_ptr(umm, &root->tr_feats, sizeof(root->tr_feats),
+				      POBJ_XADD_NO_SNAPSHOT);
+
+	}
+#endif
 
 	if (rc == 0)
 		root->tr_feats = feats;

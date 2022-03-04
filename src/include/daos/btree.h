@@ -559,7 +559,8 @@ dbtree_feats_get(struct btr_root *root)
 {
 	return root->tr_feats;
 }
-int  dbtree_feats_set(struct btr_root *root, struct umem_instance *umm, uint64_t feats, bool in_tx);
+int  dbtree_feats_set(struct btr_root *root, struct umem_instance *umm, uint64_t feats, bool in_tx,
+		      bool safe);
 struct umem_instance *btr_hdl2umm(daos_handle_t toh);
 
 /**

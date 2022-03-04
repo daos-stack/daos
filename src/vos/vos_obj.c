@@ -1997,10 +1997,11 @@ vos_obj_iter_pre_aggregate(daos_handle_t ih, bool full_scan)
 		rc = dbtree_iter_delete(oiter->it_hdl, obj->obj_cont);
 		D_ASSERT(rc != -DER_NONEXIST);
 	} else {
+		/** Should always be safe to set the flag */
 		if (krec->kr_bmap & KREC_BF_BTR)
-			rc = dbtree_feats_set(&krec->kr_btr, umm, new_feats, true);
+			rc = dbtree_feats_set(&krec->kr_btr, umm, new_feats, true, true);
 		else
-			rc = evt_feats_set(&krec->kr_evt, umm, new_feats, true);
+			rc = evt_feats_set(&krec->kr_evt, umm, new_feats, true, true);
 	}
 
 	rc = umem_tx_end(umm, rc);
@@ -2088,10 +2089,13 @@ vos_obj_iter_aggregate(daos_handle_t ih, bool range_discard)
 			feats = feats & ~VOS_TREE_AGG_FLAG;
 			if (!oiter->it_iter.it_skipped)
 				feats = feats & ~VOS_TREE_AGG_NEEDED;
+			/** Set the safe flag to false so we don't clear the flag if something
+			 *  goes wrong here.
+			 */
 			if (krec->kr_bmap & KREC_BF_BTR)
-				rc = dbtree_feats_set(&krec->kr_btr, umm, feats, true);
+				rc = dbtree_feats_set(&krec->kr_btr, umm, feats, true, false);
 			else
-				rc = evt_feats_set(&krec->kr_evt, umm, feats, true);
+				rc = evt_feats_set(&krec->kr_evt, umm, feats, true, false);
 		}
 	}
 

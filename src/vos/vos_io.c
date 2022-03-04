@@ -1675,7 +1675,8 @@ vos_evt_mark_agg(struct umem_instance *umm, struct evt_root *root)
 	else if (feats & EVT_FEAT_AGG_FLAG)
 		feats &= ~EVT_FEAT_AGG_FLAG;
 
-	return evt_feats_set(root, umm, feats, true);
+	/* Set safe flag here.  It should always be ok if we end up setting the flag */
+	return evt_feats_set(root, umm, feats, true, true);
 }
 
 static int
@@ -1692,7 +1693,8 @@ vos_btr_mark_agg(struct umem_instance *umm, struct btr_root *root)
 	else if (feats & VOS_TREE_AGG_FLAG)
 		feats &= ~VOS_TREE_AGG_FLAG;
 
-	return dbtree_feats_set(root, umm, feats, true);
+	/* Set safe flag here.  It should always be ok if we end up setting the flag */
+	return dbtree_feats_set(root, umm, feats, true, true);
 }
 
 int
