@@ -86,6 +86,7 @@ func LabelIsValid(label string) bool {
 
 	return bool(C.daos_label_is_valid(cLabel))
 }
+
 // EcCellSizeIsValid checks EC cell Size to verify that it meets size
 // requirements.
 func EcCellSizeIsValid(sz uint64) bool {
