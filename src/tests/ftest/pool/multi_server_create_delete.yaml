@@ -3,6 +3,8 @@ hosts:
     - server-A
     - server-B
 
+timeout: 240
+
 server_config:
   name: daos_server
 
