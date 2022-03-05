@@ -1999,9 +1999,9 @@ vos_obj_iter_pre_aggregate(daos_handle_t ih, bool full_scan)
 	} else {
 		/** Should always be safe to set the flag */
 		if (krec->kr_bmap & KREC_BF_BTR)
-			rc = dbtree_feats_set(&krec->kr_btr, umm, new_feats, true, true);
+			rc = dbtree_feats_set(&krec->kr_btr, umm, new_feats, true);
 		else
-			rc = evt_feats_set(&krec->kr_evt, umm, new_feats, true, true);
+			rc = evt_feats_set(&krec->kr_evt, umm, new_feats, true);
 	}
 
 	rc = umem_tx_end(umm, rc);
@@ -2093,9 +2093,9 @@ vos_obj_iter_aggregate(daos_handle_t ih, bool range_discard)
 			 *  goes wrong here.
 			 */
 			if (krec->kr_bmap & KREC_BF_BTR)
-				rc = dbtree_feats_set(&krec->kr_btr, umm, feats, true, false);
+				rc = dbtree_feats_set(&krec->kr_btr, umm, feats, true);
 			else
-				rc = evt_feats_set(&krec->kr_evt, umm, feats, true, false);
+				rc = evt_feats_set(&krec->kr_evt, umm, feats, true);
 		}
 	}
 

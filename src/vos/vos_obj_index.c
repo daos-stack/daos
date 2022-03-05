@@ -724,8 +724,7 @@ oi_iter_pre_aggregate(daos_handle_t ih, bool full_scan)
 		D_ASSERT(rc != -DER_NONEXIST);
 	} else {
 		/* Should be safe to set flags without snapshot */
-		rc = dbtree_feats_set(&obj->vo_tree, vos_cont2umm(oiter->oit_cont), feats, true,
-				      true);
+		rc = dbtree_feats_set(&obj->vo_tree, vos_cont2umm(oiter->oit_cont), feats, true);
 	}
 
 	rc = umem_tx_end(vos_cont2umm(oiter->oit_cont), rc);
@@ -802,7 +801,7 @@ oi_iter_aggregate(daos_handle_t ih, bool range_discard, uint64_t *skipped)
 					feats = feats & ~VOS_TREE_AGG_NEEDED;
 				/** Set safe to false when clearing flags */
 				rc = dbtree_feats_set(&obj->vo_tree, vos_cont2umm(oiter->oit_cont),
-						      feats, true, false);
+						      feats, true);
 			}
 		}
 	}

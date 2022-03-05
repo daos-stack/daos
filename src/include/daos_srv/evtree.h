@@ -812,12 +812,9 @@ evt_feats_get(struct evt_root *root)
  * \param umm[in]	umem instance
  * \param feats[in]	feats to set
  * \param in_tx[in]	in transaction already
- * \param safe[in]	If true, no need to snapshot.  It's ok if we set the corresponding value
- *			and there is no rollback on failure.
  *
  * \return 0 on success
  */
-int  evt_feats_set(struct evt_root *root, struct umem_instance *umm, uint64_t feats, bool in_tx,
-		   bool safe);
+int  evt_feats_set(struct evt_root *root, struct umem_instance *umm, uint64_t feats, bool in_tx);
 
 #endif /* __DAOS_EV_TREE_H__ */
