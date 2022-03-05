@@ -41,11 +41,11 @@ const (
 	PoolPropertyOwnerGroup = C.DAOS_PROP_PO_OWNER_GROUP
 	// PoolPropertyECCellSize is the EC Cell size.
 	PoolPropertyECCellSize = C.DAOS_PROP_PO_EC_CELL_SZ
-	// PoolPropertyRedunFac
+	// PoolPropertyRedunFac defines redundancy factor of the pool.
 	PoolPropertyRedunFac = C.DAOS_PROP_PO_REDUN_FAC
-	//PoolPropertyECPda is performance domain affinity level of EC object.
+	// PoolPropertyECPda is performance domain affinity level of EC object.
 	PoolPropertyECPda = C.DAOS_PROP_PO_EC_PDA
-	//PoolPropertyRPPda is performance domain affinity level of replicated object.
+	// PoolPropertyRPPda is performance domain affinity level of replicated object.
 	PoolPropertyRPPda = C.DAOS_PROP_PO_RP_PDA
 	// PoolPropertyPolicy is the tiering policy set for a pool
 	PoolPropertyPolicy = C.DAOS_PROP_PO_POLICY
@@ -86,7 +86,8 @@ func LabelIsValid(label string) bool {
 
 	return bool(C.daos_label_is_valid(cLabel))
 }
-
+// EcCellSizeIsValid checks EC cell Size to verify that it meets size
+// requirements.
 func EcCellSizeIsValid(sz uint64) bool {
 	if sz > math.MaxUint32 {
 		return false
@@ -94,6 +95,8 @@ func EcCellSizeIsValid(sz uint64) bool {
 	return bool(C.daos_ec_cs_valid(C.uint32_t(sz)))
 }
 
+// EcPdaIsValid checks EC performance domain affinity level that it
+// doesn't exceed max unsigned int 32 bits.
 func EcPdaIsValid(pda uint64) bool {
 	if pda > math.MaxUint32 {
 		return false
@@ -101,6 +104,8 @@ func EcPdaIsValid(pda uint64) bool {
 	return bool(C.daos_ec_pda_valid(C.uint32_t(pda)))
 }
 
+// RpPdaIsValid checks RP performance domain affinity level that it
+// doesn't exceed max unsigned int 32 bits.
 func RpPdaIsValid(pda uint64) bool {
 	if pda > math.MaxUint32 {
 		return false

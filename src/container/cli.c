@@ -1405,24 +1405,24 @@ dc_cont_set_prop(tse_task_t *task)
 	D_ASSERTF(args != NULL, "Task Argument OPC does not match DC OPC\n");
 
 	if (daos_prop_entry_get(args->prop, DAOS_PROP_CO_ALLOCED_OID)) {
-		D_ERROR("Can't set OID property if container is created.\n");
+		D_ERROR("Can't set OID property on existed container.\n");
 		D_GOTO(err, rc = -DER_NO_PERM);
 	}
 
 	if (daos_prop_entry_get(args->prop, DAOS_PROP_CO_EC_CELL_SZ)) {
-		D_ERROR("Can't set EC cell size if container is created.\n");
+		D_ERROR("Can't set EC cell size on existed container\n");
 		D_GOTO(err, rc = -DER_NO_PERM);
 	}
 
 	if (daos_prop_entry_get(args->prop, DAOS_PROP_CO_EC_PDA)) {
 		D_ERROR("Can't set EC performance domain affinity "
-			"if container is created.\n");
+			"on existed container.\n");
 		D_GOTO(err, rc = -DER_NO_PERM);
 	}
 
 	if (daos_prop_entry_get(args->prop, DAOS_PROP_CO_RP_PDA)) {
 		D_ERROR("Can't set RP performance domain affinity "
-			"if container is created.\n");
+			"on existed container.\n");
 		D_GOTO(err, rc = -DER_NO_PERM);
 	}
 
