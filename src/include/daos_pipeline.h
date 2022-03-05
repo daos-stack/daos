@@ -43,6 +43,7 @@ typedef struct {
 	 *          DAOS_FILTER_FUNC_SUB:		-
 	 *          DAOS_FILTER_FUNC_MUL:		*
 	 *          DAOS_FILTER_FUNC_DIV:		/
+	 *          DAOS_FILTER_FUNC_BITAND:		&
 	 *      - aggeration functions:
 	 *          DAOS_FILTER_FUNC_SUM:		SUM(a1, a2, ..., an)
 	 *          DAOS_FILTER_FUNC_MIN:		MIN(a1, a2, ..., an)
@@ -59,14 +60,18 @@ typedef struct {
 	/**
 	 * Type of data. Only relevant for keys and constant filter part type
 	 * objects:
-	 *          DAOS_FILTER_TYPE_BINARY:	Raw string (or array of bytes)
-	 *          DAOS_FILTER_TYPE_STRING:	First 8B (size_t) indicate size
-	 *          DAOS_FILTER_TYPE_CSTRING:	Always null ('\0') terminated
-	 *          DAOS_FILTER_TYPE_INTEGER1
+	 *          DAOS_FILTER_TYPE_BINARY	Raw string (or array of bytes)
+	 *          DAOS_FILTER_TYPE_STRING	First 8B (size_t) indicate size
+	 *          DAOS_FILTER_TYPE_CSTRING	Always null ('\0') terminated
+	 *          DAOS_FILTER_TYPE_UINTEGER1	Unsigned integers
+	 *          DAOS_FILTER_TYPE_UINTEGER2
+	 *          DAOS_FILTER_TYPE_UINTEGER4
+	 *          DAOS_FILTER_TYPE_UINTEGER8
+	 *          DAOS_FILTER_TYPE_INTEGER1	Signed integers
 	 *          DAOS_FILTER_TYPE_INTEGER2
 	 *          DAOS_FILTER_TYPE_INTEGER4
 	 *          DAOS_FILTER_TYPE_INTEGER8
-	 *          DAOS_FILTER_TYPE_REAL4
+	 *          DAOS_FILTER_TYPE_REAL4	Floating point numbers
 	 *          DAOS_FILTER_TYPE_REAL8
 	 */
 	d_iov_t		data_type;
