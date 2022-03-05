@@ -21,7 +21,10 @@ struct filter_part_run_t {
 	size_t				data_len_out;
 	bool				log_out;
 	d_iov_t				*iov_aggr;
-	double				value_out;
+	uint64_t			value_u_out;
+	int64_t				value_i_out;
+	double				value_r_out;
+	double				value_d_out;
 };
 
 typedef int filter_func_t(struct filter_part_run_t *args);
@@ -71,6 +74,10 @@ int pipeline_compile(daos_pipeline_t *pipe,
 
 void pipeline_compile_free(struct pipeline_compiled_t *comp_pipe);
 
+typedef uint8_t _uint8_t;
+typedef uint16_t _uint16_t;
+typedef uint32_t _uint32_t;
+typedef uint64_t _uint64_t;
 typedef int8_t _int8_t;
 typedef int16_t _int16_t;
 typedef int32_t _int32_t;
@@ -78,32 +85,65 @@ typedef int64_t _int64_t;
 typedef float _float;
 typedef double _double;
 
-filter_func_t filter_func_eq;
+filter_func_t filter_func_eq_u;
+filter_func_t filter_func_eq_i;
+filter_func_t filter_func_eq_d;
 filter_func_t filter_func_eq_st;
 
-filter_func_t filter_func_ne;
+filter_func_t filter_func_ne_u;
+filter_func_t filter_func_ne_i;
+filter_func_t filter_func_ne_d;
 filter_func_t filter_func_ne_st;
 
-filter_func_t filter_func_lt;
+filter_func_t filter_func_lt_u;
+filter_func_t filter_func_lt_i;
+filter_func_t filter_func_lt_d;
 filter_func_t filter_func_lt_st;
 
-filter_func_t filter_func_le;
+filter_func_t filter_func_le_u;
+filter_func_t filter_func_le_i;
+filter_func_t filter_func_le_d;
 filter_func_t filter_func_le_st;
 
-filter_func_t filter_func_ge;
+filter_func_t filter_func_ge_u;
+filter_func_t filter_func_ge_i;
+filter_func_t filter_func_ge_d;
 filter_func_t filter_func_ge_st;
 
-filter_func_t filter_func_gt;
+filter_func_t filter_func_gt_u;
+filter_func_t filter_func_gt_i;
+filter_func_t filter_func_gt_d;
 filter_func_t filter_func_gt_st;
 
-filter_func_t filter_func_add;
-filter_func_t filter_func_sub;
-filter_func_t filter_func_mul;
-filter_func_t filter_func_div;
+filter_func_t filter_func_add_u;
+filter_func_t filter_func_add_i;
+filter_func_t filter_func_add_d;
 
-filter_func_t aggr_func_sum;
-filter_func_t aggr_func_max;
-filter_func_t aggr_func_min;
+filter_func_t filter_func_sub_u;
+filter_func_t filter_func_sub_i;
+filter_func_t filter_func_sub_d;
+
+filter_func_t filter_func_mul_u;
+filter_func_t filter_func_mul_i;
+filter_func_t filter_func_mul_d;
+
+filter_func_t filter_func_div_u;
+filter_func_t filter_func_div_i;
+filter_func_t filter_func_div_d;
+
+filter_func_t aggr_func_sum_u;
+filter_func_t aggr_func_sum_i;
+filter_func_t aggr_func_sum_d;
+
+filter_func_t aggr_func_max_u;
+filter_func_t aggr_func_max_i;
+filter_func_t aggr_func_max_d;
+
+filter_func_t aggr_func_min_u;
+filter_func_t aggr_func_min_i;
+filter_func_t aggr_func_min_d;
+
+filter_func_t filter_func_bitand;
 
 filter_func_t filter_func_like;
 filter_func_t filter_func_isnull;
@@ -112,6 +152,10 @@ filter_func_t filter_func_not;
 filter_func_t filter_func_and;
 filter_func_t filter_func_or;
 
+filter_func_t getdata_func_dkey_u1;
+filter_func_t getdata_func_dkey_u2;
+filter_func_t getdata_func_dkey_u4;
+filter_func_t getdata_func_dkey_u8;
 filter_func_t getdata_func_dkey_i1;
 filter_func_t getdata_func_dkey_i2;
 filter_func_t getdata_func_dkey_i4;
@@ -122,6 +166,10 @@ filter_func_t getdata_func_dkey_raw;
 filter_func_t getdata_func_dkey_st;
 filter_func_t getdata_func_dkey_cst;
 
+filter_func_t getdata_func_akey_u1;
+filter_func_t getdata_func_akey_u2;
+filter_func_t getdata_func_akey_u4;
+filter_func_t getdata_func_akey_u8;
 filter_func_t getdata_func_akey_i1;
 filter_func_t getdata_func_akey_i2;
 filter_func_t getdata_func_akey_i4;
@@ -132,6 +180,10 @@ filter_func_t getdata_func_akey_raw;
 filter_func_t getdata_func_akey_st;
 filter_func_t getdata_func_akey_cst;
 
+filter_func_t getdata_func_const_u1;
+filter_func_t getdata_func_const_u2;
+filter_func_t getdata_func_const_u4;
+filter_func_t getdata_func_const_u8;
 filter_func_t getdata_func_const_i1;
 filter_func_t getdata_func_const_i2;
 filter_func_t getdata_func_const_i4;
