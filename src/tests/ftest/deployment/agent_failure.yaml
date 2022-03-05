@@ -32,9 +32,12 @@ ior:
     iorflags:
         flags: "-k -D 300 -v -w -W"
         api: DFS
-        transfer_size: '10K'
-        block_size: '1G'
+        # This test doesn't work if the IOR runs too fast. In that case, increase
+        # block_size and/or decrease transfer_size. To decrease transfer_size, divide it
+        # by 2, 4, 8, etc.
+        transfer_size: '256K'
+        block_size: '20G'
         write_x: 4
         read_x: 2
-        dfs_oclass: "S1"
-        dfs_dir_oclass: "S1"
+        dfs_oclass: "SX"
+        dfs_dir_oclass: "SX"
