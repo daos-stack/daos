@@ -1939,9 +1939,7 @@ vos_obj_iter_pre_aggregate(daos_handle_t ih, bool full_scan)
 	daos_key_t		 key;
 	struct vos_rec_bundle	 rbund;
 	int			 rc;
-	uint64_t		 new_feats;
-	uint64_t		 old_feats;
-	bool			 punched;
+	uint64_t		 feats;
 
 	D_ASSERTF(iter->it_type == VOS_ITER_AKEY ||
 		  iter->it_type == VOS_ITER_DKEY,
@@ -1957,57 +1955,56 @@ vos_obj_iter_pre_aggregate(daos_handle_t ih, bool full_scan)
 	krec = rbund.rb_krec;
 	umm = vos_obj2umm(oiter->it_obj);
 
-	punched = vos_ilog_is_punched(vos_cont2hdl(obj->obj_cont), &krec->kr_ilog, &oiter->it_epr,
-				      &oiter->it_punched, &oiter->it_ilog_info);
+	if (!vos_ilog_is_punched(vos_cont2hdl(obj->obj_cont), &krec->kr_ilog, &oiter->it_epr,
+				      &oiter->it_punched, &oiter->it_ilog_info)) {
 
-	if (krec->kr_bmap & KREC_BF_BTR)
-		new_feats = old_feats = dbtree_feats_get(&krec->kr_btr);
-	else
-		new_feats = old_feats = evt_feats_get(&krec->kr_evt);
-	if (oiter->it_iter.it_for_purge && old_feats & VOS_TREE_AGG_OPT) {
-		if ((old_feats & VOS_TREE_AGG_NEEDED) == 0) {
-			/** We can skip aggregation here unless one of these conditions is true
-			 *  1. We are doing a full scan (or snapshot deletion)
-			 *  2. If the whole tree is punched, we'll just fall through and move it
-			 *     to GC.
-			 *  3. The upper layer is punched (or epc == 0). Normally, this would
-			 *     move the whole subtree to garbage collection but only if there
-			 *     are no ilog entries outside of the aggregation epoch range.
-			 */
-			if (!full_scan && !punched && oiter->it_punched.pr_epc == 0)
-				return 2;
-		} else {
-			new_feats |= VOS_TREE_AGG_FLAG;
+		if (!oiter->it_iter.it_for_purge)
+			return 0;
+		if (krec->kr_bmap & KREC_BF_BTR)
+			feats = dbtree_feats_get(&krec->kr_btr);
+		else
+			feats = evt_feats_get(&krec->kr_evt);
+		if (oiter->it_iter.it_for_purge && feats & VOS_TREE_AGG_OPT) {
+			if ((feats & VOS_TREE_AGG_NEEDED) == 0) {
+				/** We can skip aggregation here unless one of these conditions is
+				 *  true
+				 *  1. We are doing a full scan (or snapshot deletion)
+				 *  2. If the whole tree is punched, we'll just fall through and
+				 *     move it to GC.
+				 *  3. The upper layer is punched (or epc == 0). Normally, this
+				 *     would move the whole subtree to garbage collection but only
+				 *     if there are no ilog entries outside of the aggregation epoch
+				 *     range.
+				 */
+				if (!full_scan && oiter->it_punched.pr_epc == 0)
+					return 2;
+			} else {
+				feats |= VOS_TREE_AGG_FLAG;
+				if (krec->kr_bmap & KREC_BF_BTR)
+					rc = dbtree_feats_set(&krec->kr_btr, umm, feats, false);
+				else
+					rc = evt_feats_set(&krec->kr_evt, umm, feats, false);
+			}
 		}
-	}
-
-	if (!punched && new_feats == old_feats)
 		return 0;
+	}
 
 	/** Ok, ilog is fully punched, so we can move it to gc heap */
 	rc = umem_tx_begin(umm, NULL);
 	if (rc != 0)
 		goto exit;
 
-	if (punched) {
-		/* Incarnation log is empty, delete the object */
-		D_DEBUG(DB_IO, "Moving %s to gc heap\n",
-			iter->it_type == VOS_ITER_DKEY ? "dkey" : "akey");
+	/* Incarnation log is empty, delete the object */
+	D_DEBUG(DB_IO, "Moving %s to gc heap\n",
+		iter->it_type == VOS_ITER_DKEY ? "dkey" : "akey");
 
-		rc = dbtree_iter_delete(oiter->it_hdl, obj->obj_cont);
-		D_ASSERT(rc != -DER_NONEXIST);
-	} else {
-		/** Should always be safe to set the flag */
-		if (krec->kr_bmap & KREC_BF_BTR)
-			rc = dbtree_feats_set(&krec->kr_btr, umm, new_feats, true);
-		else
-			rc = evt_feats_set(&krec->kr_evt, umm, new_feats, true);
-	}
+	rc = dbtree_iter_delete(oiter->it_hdl, obj->obj_cont);
+	D_ASSERT(rc != -DER_NONEXIST);
 
 	rc = umem_tx_end(umm, rc);
 exit:
 	if (rc == 0)
-		return punched ? 1 : 0;
+		return 1;
 
 	return rc;
 }

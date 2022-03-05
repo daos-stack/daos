@@ -667,7 +667,6 @@ oi_iter_pre_aggregate(daos_handle_t ih, bool full_scan)
 	d_iov_t			 rec_iov;
 	int			 rc;
 	uint64_t		 feats;
-	bool			 punched;
 
 	D_ASSERT(iter->it_type == VOS_ITER_OBJ);
 
@@ -681,11 +680,11 @@ oi_iter_pre_aggregate(daos_handle_t ih, bool full_scan)
 	obj = (struct vos_obj_df *)rec_iov.iov_buf;
 	oid = obj->vo_id;
 
-	punched = vos_ilog_is_punched(vos_cont2hdl(oiter->oit_cont), &obj->vo_ilog, &oiter->oit_epr,
-				      NULL, &oiter->oit_ilog_info);
-
-	feats = dbtree_feats_get(&obj->vo_tree);
-	if (iter->it_for_purge) {
+	if (!vos_ilog_is_punched(vos_cont2hdl(oiter->oit_cont), &obj->vo_ilog, &oiter->oit_epr,
+				 NULL, &oiter->oit_ilog_info)) {
+		if (!iter->it_for_purge)
+			return 0;
+		feats = dbtree_feats_get(&obj->vo_tree);
 		if (feats & VOS_TREE_AGG_OPT) {
 			if ((feats & VOS_TREE_AGG_NEEDED) == 0) {
 				/** We can skip aggregation here unless one of these conditions is
@@ -694,43 +693,38 @@ oi_iter_pre_aggregate(daos_handle_t ih, bool full_scan)
 				 *  2. If the whole tree is punched, we'll just fall through and
 				 *     move it to GC.
 				 */
-				if (!full_scan && !punched)
+				if (!full_scan)
 					return 2;
 			} else {
 				feats |= VOS_TREE_AGG_FLAG;
+				rc = dbtree_feats_set(&obj->vo_tree, vos_cont2umm(oiter->oit_cont),
+						      feats, false);
 			}
 		}
-	}
-
-	if (!punched && feats == dbtree_feats_get(&obj->vo_tree))
 		return 0;
+	}
 
 	/** Ok, ilog is fully punched, so we can move it to gc heap */
 	rc = umem_tx_begin(vos_cont2umm(oiter->oit_cont), NULL);
 	if (rc != 0)
 		goto exit;
 
-	if (punched) {
-		/* Incarnation log is empty, delete the object */
-		D_DEBUG(DB_IO, "Moving object "DF_UOID" to gc heap\n",
-			DP_UOID(oid));
-		/* Evict the object from cache */
-		rc = vos_obj_evict_by_oid(vos_obj_cache_current(),
-					  oiter->oit_cont, oid);
-		if (rc != 0)
-			D_ERROR("Could not evict object "DF_UOID" "DF_RC"\n",
-				DP_UOID(oid), DP_RC(rc));
-		rc = dbtree_iter_delete(oiter->oit_hdl, oiter->oit_cont);
-		D_ASSERT(rc != -DER_NONEXIST);
-	} else {
-		/* Should be safe to set flags without snapshot */
-		rc = dbtree_feats_set(&obj->vo_tree, vos_cont2umm(oiter->oit_cont), feats, true);
-	}
+	/* Incarnation log is empty, delete the object */
+	D_DEBUG(DB_IO, "Moving object "DF_UOID" to gc heap\n",
+		DP_UOID(oid));
+	/* Evict the object from cache */
+	rc = vos_obj_evict_by_oid(vos_obj_cache_current(),
+				  oiter->oit_cont, oid);
+	if (rc != 0)
+		D_ERROR("Could not evict object "DF_UOID" "DF_RC"\n",
+			DP_UOID(oid), DP_RC(rc));
+	rc = dbtree_iter_delete(oiter->oit_hdl, oiter->oit_cont);
+	D_ASSERT(rc != -DER_NONEXIST);
 
 	rc = umem_tx_end(vos_cont2umm(oiter->oit_cont), rc);
 exit:
 	if (rc == 0)
-		return punched ? 1 : 0;
+		return 1;
 
 	return rc;
 }
