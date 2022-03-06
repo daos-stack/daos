@@ -140,6 +140,12 @@ dtx_tls_get(void)
 	return dss_module_key_get(dss_tls_get(), &dtx_module_key);
 }
 
+static inline bool
+dtx_cont_opened(struct ds_cont_child *cont)
+{
+	return cont->sc_open > 0;
+}
+
 extern struct crt_proto_format dtx_proto_fmt;
 extern btr_ops_t dbtree_dtx_cf_ops;
 extern btr_ops_t dtx_btr_cos_ops;
@@ -148,6 +154,7 @@ extern uint64_t dtx_agg_gen;
 /* dtx_common.c */
 int dtx_handle_reinit(struct dtx_handle *dth);
 void dtx_batched_commit(void *arg);
+void dtx_aggregation_main(void *arg);
 
 /* dtx_cos.c */
 int dtx_fetch_committable(struct ds_cont_child *cont, uint32_t max_cnt,

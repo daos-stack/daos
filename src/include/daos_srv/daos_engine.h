@@ -198,7 +198,8 @@ struct dss_module_info {
 	/* the cart context id */
 	int			dmi_ctx_id;
 	uint32_t		dmi_dtx_batched_started:1;
-	d_list_t		dmi_dtx_batched_cont_list;
+	d_list_t		dmi_dtx_batched_cont_open_list;
+	d_list_t		dmi_dtx_batched_cont_close_list;
 	d_list_t		dmi_dtx_batched_pool_list;
 	/* the profile information */
 	struct daos_profile	*dmi_dp;
