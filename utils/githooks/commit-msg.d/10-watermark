@@ -1,6 +1,5 @@
 #!/bin/bash
 
-exit 0
 if ! grep 'Required-githooks: true' "$1"; then
     echo 'Required-githooks: true' >> "$1"
 fi

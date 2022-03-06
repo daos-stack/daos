@@ -44,10 +44,11 @@ def submodule_check(modname, msg_file):
 
 def main(msg_file):
     """main"""
-    for l in subprocess.check_output(['git', 'submodule',
+    for line in subprocess.check_output(['git', 'submodule',
                                       'status']).decode().rstrip().split('\n'):
-        if l:
-            submodule_check(l[1:].split(' ')[1], msg_file)
+        if line:
+            submodule_check(line[1:].split(' ')[1], msg_file)
+
 
 if __name__ == '__main__':
 
