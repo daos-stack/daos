@@ -1,4 +1,4 @@
-# Copyright (c) 2016-2020 Intel Corporation
+# Copyright 2016-2022 Intel Corporation
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -392,6 +392,7 @@ def Platform():
 
 def Depends(*_args, **_kw):
     """Fake Depends"""
+
 
 COMMAND_LINE_TARGETS = []
 BUILD_TARGETS = []

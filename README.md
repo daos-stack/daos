@@ -34,12 +34,12 @@ information.
 ## Documentation
 
 The DAOS documentation is available [online](https://docs.daos.io/latest).
-More information can also be found on the [wiki](http://wiki.daos.io).
+More information can also be found on the [wiki](http://wiki.daos.io/).
 
 ## Contacts
 
 For any questions, please post to our [user forum](https://daos.groups.io/g/daos).
-Bugs should be reported through our [issue tracker](http://jira.daos.io)
+Bugs should be reported through our [issue tracker](http://jira.daos.io/)
 with a test case to reproduce the issue (when applicable) and [debug logs](https://docs.daos.io/latest/admin/troubleshooting/).
 
 ## Community
@@ -51,5 +51,5 @@ the community [mailing list](https://daos.groups.io/g/daos).
 DAOS is a SODA Foundation project.
 
 <a href="https://sodafoundation.io/">
-<img src="https://sodafoundation.io/wp-content/uploads/2020/01/SODA_logo_outline_color_800x800.png"  width="200" height="200">
+<img src="https://sodafoundation.io/wp-content/uploads/2020/01/SODA_logo_outline_color_800x800.png" width="200" height="200">
 </a>

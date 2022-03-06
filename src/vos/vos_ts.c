@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2020-2021 Intel Corporation.
+ * (C) Copyright 2020-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -358,6 +358,7 @@ vos_ts_check_read_conflict(struct vos_ts_set *ts_set, int idx,
 	struct vos_ts_set_entry	*se;
 	struct vos_ts_entry	*entry;
 	int			 write_level;
+	bool			 conflict;
 
 	D_ASSERT(ts_set != NULL);
 
@@ -372,15 +373,31 @@ vos_ts_check_read_conflict(struct vos_ts_set *ts_set, int idx,
 	if (se->se_etype > write_level)
 		return false; /** Check is redundant */
 
+	/** NB: If there is a negative entry, we should also check it.  Otherwise, we can miss
+	 *  timestamp updates associated with conditional operations where the tree exists but
+	 *  we don't load it
+	 */
 	if (se->se_etype < write_level) {
 		/* check the low time */
-		return vos_ts_check_conflict(entry->te_ts.tp_ts_rl,
-					     &entry->te_ts.tp_tx_rl,
+		conflict = vos_ts_check_conflict(entry->te_ts.tp_ts_rl, &entry->te_ts.tp_tx_rl,
+						 write_time, &ts_set->ts_tx_id);
+
+		if (conflict || entry->te_negative == NULL)
+			return conflict;
+
+		return vos_ts_check_conflict(entry->te_negative->te_ts.tp_ts_rl,
+					     &entry->te_negative->te_ts.tp_tx_rl,
 					     write_time, &ts_set->ts_tx_id);
 	}
 
 	/* check the high time */
-	return vos_ts_check_conflict(entry->te_ts.tp_ts_rh,
-				     &entry->te_ts.tp_tx_rh,
-				     write_time, &ts_set->ts_tx_id);
+	conflict = vos_ts_check_conflict(entry->te_ts.tp_ts_rh, &entry->te_ts.tp_tx_rh, write_time,
+					 &ts_set->ts_tx_id);
+
+	if (conflict || entry->te_negative == NULL)
+		return conflict;
+
+	return vos_ts_check_conflict(entry->te_negative->te_ts.tp_ts_rh,
+				     &entry->te_negative->te_ts.tp_tx_rh, write_time,
+				     &ts_set->ts_tx_id);
 }
