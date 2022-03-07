@@ -105,15 +105,15 @@ struct daos_rebuild_status {
 
 	/* Failure on which rank */
 	int32_t			rs_fail_rank;
-	/** # total to-be-rebuilt objects, it's non-zero and increase when
-	 * rebuilding in progress, when rs_done is 1 it will not change anymore
+	/** total number of objects to be rebuilt. Non-zero and increases when
+	 * rebuilding in progress. When rs_done is 1 it will not change anymore
 	 * and should equal to rs_obj_nr. With both rs_toberb_obj_nr and
 	 * rs_obj_nr the user can know the progress of the rebuilding.
 	 */
 	uint64_t		rs_toberb_obj_nr;
-	/** # rebuilt objects, it's non-zero only if rs_done is 1 */
+	/** number of rebuilt object. Non-zero only if rs_done is 1 */
 	uint64_t		rs_obj_nr;
-	/** # rebuilt records, it's non-zero only if rs_done is 1 */
+	/** number of rebuilt records. Non-zero only if rs_done is 1 */
 	uint64_t		rs_rec_nr;
 
 	/** rebuild space cost */

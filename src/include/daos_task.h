@@ -951,7 +951,7 @@ typedef struct {
 	/** Transaction open handle. */
 	daos_handle_t		th;
 	/*
-	 * [in]: number of key descriptors in \a kds.
+	 * [in]: number of key descriptors in #kds.
 	 * [out]: number of returned key descriptors.
 	 */
 	uint32_t		*nr;
