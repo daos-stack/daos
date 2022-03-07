@@ -77,16 +77,17 @@ class DaosBuild(DfuseTestBase):
         build_dir = os.path.join(mount_dir, 'daos')
 
         # This will apply to SCons, but not sub-commands.
-        preload_cmd = 'export LD_PRELOAD=/usr/lib64/libioil.so; export D_LOG_FILE=/tmp/daos.log'
+        preload_cmd = 'export LD_PRELOAD=/usr/lib64/libioil.so;export D_LOG_FILE=/tmp/daos.log'
 
-        cmds = ['git clone https://github.com/daos-stack/daos.git {}'.format(build_dir),
+        cmds = ['sudo yum install daos-debuginfo',
+                'valgrind git clone https://github.com/daos-stack/daos.git {}'.format(build_dir),
                 'git -C {} submodule init'.format(build_dir),
                 'git -C {} submodule update'.format(build_dir),
                 '{} -C {} --jobs 50 build --build-deps=yes'.format(scons, build_dir)]
         for cmd in cmds:
             try:
                 # Set a timeout of 1500 seconds, the whole test will timeout after 1800
-                command = '{};valgrind {}'.format(preload_cmd, cmd)
+                command = '{};{}'.format(preload_cmd, cmd)
                 ret_code = general_utils.pcmd(self.hostlist_clients, command, timeout=1500)
                 if 0 in ret_code:
                     continue
