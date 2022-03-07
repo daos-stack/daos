@@ -179,7 +179,13 @@ $ docker-compose --file utils/docker/vcluster/docker-compose.yml -- build
 ```
 
 The same arguments are accepted but they must be defined in the Docker Compose environment file
-`utils/docker/vcluster/.env`.
+`utils/docker/vcluster/.env`.  For example, on system with non standard network interface names such
+as "ino1" instead of "eth0", the following command could be used to update the Docker Compose
+environment file.
+
+```bash
+$ sed -i -e s/eth0/eno1/ utils/docker/vcluster/.env
+```
 
 !!! warning
     For working properly, the DAOS authentication has to be enabled in all the images (i.e., nodes
