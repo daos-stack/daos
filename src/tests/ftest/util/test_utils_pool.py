@@ -551,7 +551,7 @@ class TestPool(TestDaosApiBase):
             rs_version (int, optional): rebuild version. Defaults to None.
             rs_seconds (int, optional): rebuild seconds. Defaults to None.
             rs_errno (int, optional): rebuild error number. Defaults to None.
-            rs_state (int, optional): rebuild done flag. Defaults to None.
+            rs_state (int, optional): rebuild state flag. Defaults to None.
             rs_padding32 (int, optional): padding. Defaults to None.
             rs_fail_rank (int, optional): rebuild fail target. Defaults to None.
             rs_toberb_obj_nr (int, optional): number of objects to be rebuilt.
