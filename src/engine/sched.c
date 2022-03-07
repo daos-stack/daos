@@ -563,7 +563,8 @@ req_kickoff_internal(struct dss_xstream *dx, struct sched_req_attr *attr,
 	D_ASSERT(attr->sra_type < SCHED_REQ_MAX);
 
 	return sched_create_thread(dx, func, arg, ABT_THREAD_ATTR_NULL, NULL,
-				   0);
+				   attr->sra_flags & SCHED_REQ_FL_PERIODIC ?
+					DSS_ULT_FL_PERIODIC : 0);
 }
 
 static int

@@ -898,7 +898,7 @@ events_handler(void *arg)
 				d_list_del_init(&event->psv_link);
 				break;
 			}
-			ABT_cond_wait(events->pse_cv, events->pse_mutex);
+			sched_cond_wait(events->pse_cv, events->pse_mutex);
 		}
 		ABT_mutex_unlock(events->pse_mutex);
 		if (stop)
