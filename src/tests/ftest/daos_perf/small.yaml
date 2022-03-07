@@ -13,7 +13,7 @@ timeout: 540
 job_manager:
     class_name: Orterun
     mpi_type: openmpi
-    timeout: 480
+    manager_timeout: 480
 pool:
     size: 500GB
     control_method: dmg

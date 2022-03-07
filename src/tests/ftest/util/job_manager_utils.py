@@ -53,7 +53,8 @@ def get_job_manager(test, class_name=None, job=None, subprocess=None, mpi_type=N
     if mpi_type is None:
         mpi_type = test.params.get("mpi_type", namespace, default="mpich")
     if timeout is None:
-        timeout = test.params.get(test.get_test_name(), namespace.replace("*", "timeout/*"), None)
+        timeout = test.params.get(
+            test.get_test_name(), namespace.replace("*", "manager_timeout/*"), None)
         if timeout is None:
             timeout = test.params.get("timeout", namespace, None)
             if timeout is None:

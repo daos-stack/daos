@@ -9,7 +9,7 @@ hosts:
     - client-D
 timeout: 1000
 job_manager:
-  timeout: 300
+  manager_timeout: 300
 setup:
   start_servers_once: False
 skip_add_log_msg: True

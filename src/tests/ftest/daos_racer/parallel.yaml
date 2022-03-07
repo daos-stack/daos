@@ -41,7 +41,7 @@ server_config:
 job_manager:
     class_name: Orterun
     mpi_type: openmpi
-    timeout: 630
+    manager_timeout: 630
 daos_racer:
   runtime: 600
   clush_timeout: 900

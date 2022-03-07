@@ -13,7 +13,7 @@ extra_servers:
     - server-C
 timeout: 1000
 job_manager:
-  timeout: 330
+  manager_timeout: 330
 setup:
   start_servers_once: False
 skip_add_log_msg: True

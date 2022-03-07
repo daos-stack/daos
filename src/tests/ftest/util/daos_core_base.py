@@ -13,7 +13,7 @@ from avocado.utils import process
 from apricot import TestWithServers
 from env_modules import load_mpi
 from general_utils import get_log_file
-from command_utils import CommandFailure
+from command_utils import CommandFailure, ExecutableCommand
 from agent_utils import include_local_host
 from job_manager_utils import get_job_manager
 
@@ -135,7 +135,9 @@ class DaosCoreBase(TestWithServers):
             ]
         )
 
-        job = get_job_manager(self, "Orterun", cmd, mpi_type="openmpi")
+        job_cmd = ExecutableCommand(namespace=None, command=cmd)
+        job = get_job_manager(self, "Orterun", job_cmd, mpi_type="openmpi")
+        # Assign the test to run
         job.hostfile.update(self.hostfile_clients)
         job.processes.update(num_clients)
         job_str = str(job)

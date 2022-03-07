@@ -7,7 +7,7 @@ hosts:
     - client-D
 timeout: 1110
 job_manager:
-  timeout: 400
+  manager_timeout: 400
 skip_add_log_msg: True
 server_config:
   name: daos_server
