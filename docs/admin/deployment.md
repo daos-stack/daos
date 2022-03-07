@@ -1033,7 +1033,7 @@ for details.
 ### Agent Certificate Generation
 
 The DAOS security framework relies on SSL certificates to authenticate
-the DAOS deamon processes, as well as the DAOS administrators who run the
+the DAOS daemon processes, as well as the DAOS administrators who run the
 `dmg` command.
 Refer to [Certificate Generation](https://docs.daos.io/v2.0/admin/deployment/?h=gen_#certificate-configuration)
 for details on creating the necessary certificates.
