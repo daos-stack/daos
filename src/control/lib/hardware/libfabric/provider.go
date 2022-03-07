@@ -47,14 +47,27 @@ type fabricResult struct {
 }
 
 func (p *Provider) getFabricInterfaces(ch chan *fabricResult) {
-	fiInfo, cleanup, err := fiGetInfo("")
+	hdl, err := openLib()
 	if err != nil {
 		ch <- &fabricResult{
 			err: err,
 		}
 		return
 	}
-	defer cleanup()
+	defer hdl.Close()
+
+	fiInfo, cleanup, err := fiGetInfo(hdl, "")
+	if err != nil {
+		ch <- &fabricResult{
+			err: err,
+		}
+		return
+	}
+	defer func() {
+		if err := cleanup(); err != nil {
+			p.log.Errorf("unable to clean up fi_info: %s", err.Error())
+		}
+	}()
 
 	fis := hardware.NewFabricInterfaceSet()
 
