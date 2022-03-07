@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2019-2021 Intel Corporation.
+ * (C) Copyright 2019-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -244,6 +244,8 @@ static int
 vos_agg_obj(daos_handle_t ih, vos_iter_entry_t *entry,
 	    struct vos_agg_param *agg_param, unsigned int *acts)
 {
+	int			 rc;
+
 	D_ASSERT(agg_param != NULL);
 	if (daos_unit_oid_compare(agg_param->ap_oid, entry->ie_oid)) {
 		if (need_aggregate(agg_param, entry)) {
@@ -252,6 +254,14 @@ vos_agg_obj(daos_handle_t ih, vos_iter_entry_t *entry,
 			agg_param->ap_oid = entry->ie_oid;
 			reset_agg_pos(VOS_ITER_DKEY, agg_param);
 			reset_agg_pos(VOS_ITER_AKEY, agg_param);
+			rc = oi_iter_pre_aggregate(ih);
+			if (rc < 0)
+				return rc;
+			if (rc != 0) {
+				/** We removed the key so let's reprobe */
+				*acts |= VOS_ITER_CB_DELETE;
+				return 0;
+			}
 		} else {
 			D_DEBUG(DB_EPC, "Skip untouched oid:"DF_UOID"\n",
 				DP_UOID(agg_param->ap_oid));
@@ -286,11 +296,21 @@ static int
 vos_agg_dkey(daos_handle_t ih, vos_iter_entry_t *entry,
 	     struct vos_agg_param *agg_param, unsigned int *acts)
 {
+	int			 rc;
+
 	D_ASSERT(agg_param != NULL);
 	if (vos_agg_key_compare(agg_param->ap_dkey, entry->ie_key)) {
 		if (need_aggregate(agg_param, entry)) {
 			agg_param->ap_dkey = entry->ie_key;
 			reset_agg_pos(VOS_ITER_AKEY, agg_param);
+			rc = vos_obj_iter_pre_aggregate(ih);
+			if (rc < 0)
+				return rc;
+			if (rc != 0) {
+				/** We removed the key so let's reprobe */
+				*acts |= VOS_ITER_CB_DELETE;
+				return 0;
+			}
 		} else {
 			D_DEBUG(DB_EPC, "Skip untouched dkey: "DF_KEY"\n",
 				DP_KEY(&entry->ie_key));
@@ -374,10 +394,20 @@ static int
 vos_agg_akey(daos_handle_t ih, vos_iter_entry_t *entry,
 	     struct vos_agg_param *agg_param, unsigned int *acts)
 {
+	int			 rc;
+
 	D_ASSERT(agg_param != NULL);
 	if (vos_agg_key_compare(agg_param->ap_akey, entry->ie_key)) {
 		if (need_aggregate(agg_param, entry)) {
 			agg_param->ap_akey = entry->ie_key;
+			rc = vos_obj_iter_pre_aggregate(ih);
+			if (rc < 0)
+				return rc;
+			if (rc != 0) {
+				/** We removed the key so let's reprobe */
+				*acts |= VOS_ITER_CB_DELETE;
+				return 0;
+			}
 		} else {
 			D_DEBUG(DB_EPC, "Skip untouched akey: "DF_KEY"\n",
 				DP_KEY(&entry->ie_key));
