@@ -331,11 +331,14 @@ class DaosPool():
         """Retrieve a list of user-defined pool attribute values.
 
         Args:
-            attr_names:         list of attributes to retrieve
-            poh [Optional]:     Pool Handle if you really want to override it
-            cb_func[Optional]:  To run API in Asynchronous mode.
+            attr_names (list): list of attributes to retrieve
+            poh (ctypes.c_uint64, optional): Pool Handle if you really want to override it
+            cb_func (CallbackHandler, optional): To run API in Asynchronous mode.
+
         return:
-            Requested Attributes as a dictionary.
+            dict/tuple: Requested Attributes as a dictionary for synchronous and tuple
+                for asynchronous mode.
+
         """
         if not attr_names:
             raise DaosApiError("Attribute list should not be blank")
@@ -362,25 +365,29 @@ class DaosPool():
             if ret != 0:
                 raise DaosApiError("Pool Get Attribute returned non-zero. "
                                    "RC: {0}".format(ret))
-        else:
-            event = daos_cref.DaosEvent()
-            params = [self.handle, no_of_att, ctypes.byref(attr_names_c),
-                      ctypes.byref(buff), sizes, event]
-            thread = threading.Thread(target=daos_cref.AsyncWorker1,
-                                      args=(func,
-                                            params,
-                                            self.context,
-                                            cb_func,
-                                            self))
-            thread.start()
 
-        results = {}
-        i = 0
-        for attr in attr_names:
-            results[attr] = buff[i][:sizes[i]]
-            i += 1
+            # Construct the results dictionary from buff and sizes set in the function
+            # call.
+            results = {}
+            i = 0
+            for attr in attr_names:
+                results[attr] = buff[i][:sizes[i]]
+                i += 1
+            return results
 
-        return results
+        # Asynchronous mode.
+        event = daos_cref.DaosEvent()
+        params = [self.handle, no_of_att, ctypes.byref(attr_names_c), ctypes.byref(buff),
+                  sizes, event]
+        thread = threading.Thread(
+            target=daos_cref.AsyncWorker1, args=(
+                func, params, self.context, cb_func, self))
+        thread.start()
+
+        # Return buff and sizes because at this point, the values aren't set. The
+        # caller should wait with the callback handler. When the wait is over, obtain
+        # the name and value from buff and sizes as in synchronous mode.
+        return (buff, sizes)
 
     # pylint: disable=unused-private-member
     @staticmethod
