@@ -651,6 +651,57 @@ exit:
 }
 
 int
+oi_iter_pre_aggregate(daos_handle_t ih)
+{
+	struct vos_iterator	*iter = vos_hdl2iter(ih);
+	struct vos_oi_iter	*oiter = iter2oiter(iter);
+	struct vos_obj_df	*obj;
+	daos_unit_oid_t		 oid;
+	d_iov_t			 rec_iov;
+	int			 rc;
+
+	D_ASSERT(iter->it_type == VOS_ITER_OBJ);
+
+	d_iov_set(&rec_iov, NULL, 0);
+	rc = dbtree_iter_fetch(oiter->oit_hdl, NULL, &rec_iov, NULL);
+	D_ASSERTF(rc != -DER_NONEXIST,
+		  "Probe should be done before aggregation\n");
+	if (rc != 0)
+		return rc;
+	D_ASSERT(rec_iov.iov_len == sizeof(struct vos_obj_df));
+	obj = (struct vos_obj_df *)rec_iov.iov_buf;
+	oid = obj->vo_id;
+
+	if (!vos_ilog_is_punched(vos_cont2hdl(oiter->oit_cont), &obj->vo_ilog, &oiter->oit_epr,
+				 NULL, &oiter->oit_ilog_info))
+		return 0;
+
+	/** Ok, ilog is fully punched, so we can move it to gc heap */
+	rc = umem_tx_begin(vos_cont2umm(oiter->oit_cont), NULL);
+	if (rc != 0)
+		goto exit;
+
+	/* Incarnation log is empty, delete the object */
+	D_DEBUG(DB_IO, "Moving object "DF_UOID" to gc heap\n",
+		DP_UOID(oid));
+	/* Evict the object from cache */
+	rc = vos_obj_evict_by_oid(vos_obj_cache_current(),
+				  oiter->oit_cont, oid);
+	if (rc != 0)
+		D_ERROR("Could not evict object "DF_UOID" "DF_RC"\n",
+			DP_UOID(oid), DP_RC(rc));
+	rc = dbtree_iter_delete(oiter->oit_hdl, oiter->oit_cont);
+	D_ASSERT(rc != -DER_NONEXIST);
+
+	rc = umem_tx_end(vos_cont2umm(oiter->oit_cont), rc);
+exit:
+	if (rc == 0)
+		return 1;
+
+	return rc;
+}
+
+int
 oi_iter_aggregate(daos_handle_t ih, bool range_discard)
 {
 	struct vos_iterator	*iter = vos_hdl2iter(ih);
