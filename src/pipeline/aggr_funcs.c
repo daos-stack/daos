@@ -29,6 +29,7 @@ int aggr_func_sum_##type(struct filter_part_run_t *args)\
 \
 	aggr   = (double *) args->iov_aggr->iov_buf;\
 	*aggr += (double) args->value_##type##_out;\
+\
 	return 0;\
 }
 
@@ -56,10 +57,12 @@ int aggr_func_max_##type(struct filter_part_run_t *args)\
 \
 	aggr   = (double *) args->iov_aggr->iov_buf;\
 	val    = (double) args->value_##type##_out;\
+\
 	if (val > *aggr)\
 	{\
 		*aggr = val;\
 	}\
+\
 	return 0;\
 }
 
