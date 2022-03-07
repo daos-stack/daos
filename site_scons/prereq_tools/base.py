@@ -278,13 +278,23 @@ class Runner():
         if subdir:
             print('Running commands in {}'.format(subdir))
         for command in commands:
-            command = self.env.subst(command)
+            if isinstance(command, list):
+                parts = list(command)
+            else:
+                parts = command.split(' ')
+
+            cmd = []
+            for part in parts:
+                if part == '$JOBS_OPT':
+                    cmd.append('-j')
+                    cmd.append(str(GetOption('num_jobs')))
+                else:
+                    cmd.append(self.env.subst(part))
             if self.__dry_run:
-                print('Would RUN: %s' % command)
+                print('Would RUN: %s' % ' '.join(cmd))
                 retval = True
             else:
-                print('RUN: %s' % command)
-                cmd = command.split(' ')
+                print('RUN: %s' % ' '.join(cmd))
                 if subprocess.call(cmd, shell=False, cwd=subdir, env=self.env['ENV']) != 0:
                     retval = False
                     break
@@ -325,7 +335,7 @@ class GitRepoRetriever():
     def checkout_commit(self, subdir):
         """ checkout a certain commit SHA or branch """
         if self.commit_sha is not None:
-            commands = ['git checkout %s' % (self.commit_sha)]
+            commands = [['git', 'checkout', self.commit_sha]]
             if not RUNNER.run_commands(commands, subdir=subdir):
                 raise DownloadFailure(self.url, subdir)
 
@@ -334,14 +344,14 @@ class GitRepoRetriever():
         if patches is not None:
             for patch in patches:
                 print("Applying patch %s" % (patch))
-                commands = ['git apply %s' % (patch)]
+                commands = [['git', 'apply', patch]]
                 if not RUNNER.run_commands(commands, subdir=subdir):
                     raise DownloadFailure(self.url, subdir)
 
     def update_submodules(self, subdir):
         """ update the git submodules """
         if self.has_submodules:
-            commands = ['git submodule init', 'git submodule update']
+            commands = [['git', 'submodule', 'init'], ['git', 'submodule', 'update']]
             if not RUNNER.run_commands(commands, subdir=subdir):
                 raise DownloadFailure(self.url, subdir)
 
@@ -361,7 +371,7 @@ build with random upstream changes.
             raise DownloadFailure(self.url, subdir)
 
         if not os.path.exists(subdir):
-            commands = ['git clone %s %s' % (self.url, subdir)]
+            commands = [['git', 'clone', self.url, subdir]]
             if not RUNNER.run_commands(commands):
                 raise DownloadFailure(self.url, subdir)
         self.get_specific(subdir, **kw)
@@ -375,9 +385,9 @@ build with random upstream changes.
             branch = self.branch
         self.branch = branch
         if self.branch:
-            command = ['git checkout %s' % (branch)]
+            command = [['git', 'checkout', branch]]
             if not RUNNER.run_commands(command, subdir=subdir):
-                command = ['git fetch -t -a']
+                command = [['git', 'fetch', '-t', '-a']]
                 if not RUNNER.run_commands(command, subdir=subdir):
                     raise DownloadFailure(self.url, subdir)
             self.commit_sha = self.branch
@@ -386,16 +396,16 @@ build with random upstream changes.
         # Now checkout the commit_sha if specified
         passed_commit_sha = kw.get("commit_sha", None)
         if passed_commit_sha is not None:
-            command = ['git checkout %s' % (passed_commit_sha)]
+            command = [['git', 'checkout', passed_commit_sha]]
             if not RUNNER.run_commands(command, subdir=subdir):
-                command = ['git fetch -t -a']
+                command = [['git', 'fetch', '-t', '-a']]
                 if not RUNNER.run_commands(command, subdir=subdir):
                     raise DownloadFailure(self.url, subdir)
             self.commit_sha = passed_commit_sha
             self.checkout_commit(subdir)
 
         # reset patched diff
-        command = ['git reset --hard HEAD']
+        command = [['git', 'reset', '--hard', 'HEAD']]
         if not RUNNER.run_commands(command, subdir=subdir):
             raise DownloadFailure(self.url, subdir)
         # Now apply any patches specified
@@ -445,7 +455,7 @@ class WebRetriever():
                        self.url]
 
             failure_reason = "Download command failed"
-            if RUNNER.run_commands([' '.join(command)]):
+            if RUNNER.run_commands(command):
                 if self.check_md5(basename):
                     print("Successfully downloaded %s" % self.url)
                     return True
@@ -716,7 +726,7 @@ class PreReqComponent():
         self.setup_path_var('GOPATH')
         self.__build_info.update("PREFIX", self.__env.subst("$PREFIX"))
         self.prereq_prefix = self.__env.subst("$PREFIX/prereq/$TTYPE_REAL")
-        self.setup_parallel_build()
+        self._setup_parallel_build()
 
         self.config_file = config_file
         if config_file is not None:
@@ -885,14 +895,11 @@ class PreReqComponent():
             # Restore the dry run state
             env.SetOption('no_exec', True)
 
-    def setup_parallel_build(self):
+    def _setup_parallel_build(self):
         """Set the JOBS_OPT variable for builds"""
-        jobs_opt = GetOption('num_jobs')
-        self.__env["JOBS_OPT"] = "-j %d" % jobs_opt
-        #Multiple go jobs can be running at once via the -j option so limit each
-        #to 1 proc.   This allows for compilation to continue on systems with
-        #limited processor resources where the number of go procs will be
-        #multiplied by jobs_opt.
+        # Multiple go jobs can be running at once via the -j option so limit each to 1 proc.
+        # This allows for compilation to continue on systems with limited processor resources where
+        # the number of go procs will be multiplied by jobs_opt.
         self.__env["ENV"]["GOMAXPROCS"] = "1"
 
     def get_build_info(self):
@@ -1383,8 +1390,8 @@ class _Component():
             patches.append(patch_path)
             if os.path.exists(patch_path):
                 continue
-            command = ['curl -sSfL --retry 10 --retry-max-time 60 -o %s %s'
-                       % (patch_path, raw)]
+            command = [['curl', '-sSfL', '--retry', '10', '--retry-max-time', '60',
+                        '-o', patch_path, raw]]
             if not RUNNER.run_commands(command):
                 raise BuildFailure(raw)
         return patches
@@ -1723,7 +1730,7 @@ class _Component():
                 if not lib.endswith(".so"):
                     continue
                 full_lib = os.path.join(path, lib)
-                cmd = "patchelf --set-rpath %s %s" % (":".join(rpath), full_lib)
+                cmd = ['patchelf', '--set-rpath' ':'.join(rpath), full_lib]
                 if not RUNNER.run_commands([cmd]):
                     print("Skipped patching %s" % full_lib)
 

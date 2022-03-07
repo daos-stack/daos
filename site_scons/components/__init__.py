@@ -118,8 +118,8 @@ def define_mercury(reqs):
                           '\\/usr\\/lib\\)64/\\1/" ' +
                           '       -e "s/\\(INSTALL_LIB_TARG=\\)\\/usr/\\1/" ' +
                           'Makefile compat/Makefile',
-                          'make $JOBS_OPT LIBDIR="/lib64"',
-                          'make DESTDIR=$PSM2_PREFIX LIBDIR="/lib64" install'],
+                          ['make', '$JOBS_OPT', 'LIBDIR=/lib64'],
+                          ['make', 'DESTDIR=$PSM2_PREFIX', 'LIBDIR=/lib64', 'install']],
                 headers=['psm2.h'],
                 libs=['psm2'])
 
@@ -147,7 +147,7 @@ def define_mercury(reqs):
                           include(reqs, 'psm3',
                                   '--enable-psm3 ',
                                   '--disable-psm3 '),
-                          'make $JOBS_OPT',
+                          ['make', '$JOBS_OPT'],
                           'make install'],
                 libs=['fabric'],
                 requires=include(reqs, 'psm2', ['psm2'], []),
@@ -159,10 +159,11 @@ def define_mercury(reqs):
     reqs.define('openpa',
                 retriever=GitRepoRetriever(
                     'https://github.com/pmodels/openpa.git'),
-                commands=['$LIBTOOLIZE', './autogen.sh',
-                          './configure --prefix=$OPENPA_PREFIX',
-                          'make $JOBS_OPT',
-                          'make install'], libs=['opa'],
+                commands=['libtoolize', './autogen.sh',
+                          ['./configure', '--prefix=$OPENPA_PREFIX'],
+                          ['make', '$JOBS_OPT'],
+                          'make install'],
+                libs=['opa'],
                 package='openpa-devel' if inst(reqs, 'openpa') else None)
 
     if reqs.target_type == 'debug':
@@ -202,7 +203,7 @@ def define_mercury(reqs):
                           check(reqs, 'ofi',
                                 '-DOFI_INCLUDE_DIR=$OFI_PREFIX/include '
                                 '-DOFI_LIBRARY=$OFI_PREFIX/lib/libfabric.so'),
-                          'make $JOBS_OPT', 'make install'],
+                          ['make', '$JOBS_OPT'], 'make install'],
                 libs=['mercury', 'na', 'mercury_util'],
                 pkgconfig='mercury',
                 requires=[atomic, 'boost', 'ofi'] + libs,
@@ -268,8 +269,8 @@ def define_components(reqs):
     define_ompi(reqs)
 
     isal_build = ['./autogen.sh ',
-                  './configure --prefix=$ISAL_PREFIX --libdir=$ISAL_PREFIX/lib',
-                  'make $JOBS_OPT', 'make install']
+                  ['./configure', '--prefix=$ISAL_PREFIX', '--libdir=$ISAL_PREFIX/lib'],
+                  ['make', '$JOBS_OPT'], 'make install']
     reqs.define('isal',
                 retriever=GitRepoRetriever(
                     'https://github.com/01org/isa-l.git'),
@@ -279,16 +280,16 @@ def define_components(reqs):
                 retriever=GitRepoRetriever("https://github.com/intel/"
                                            "isa-l_crypto"),
                 commands=['./autogen.sh ',
-                          './configure --prefix=$ISAL_CRYPTO_PREFIX '
-                          '--libdir=$ISAL_CRYPTO_PREFIX/lib',
-                          'make $JOBS_OPT', 'make install'],
+                          ['./configure',
+                           '--prefix=$ISAL_CRYPTO_PREFIX',
+                           '--libdir=$ISAL_CRYPTO_PREFIX/lib'],
+                          ['make', '$JOBS_OPT'], 'make install'],
                 libs=['isal_crypto'])
 
     retriever = GitRepoRetriever("https://github.com/pmem/pmdk.git")
 
-    pmdk_build = ['make all BUILD_RPMEM=n NDCTL_ENABLE=n '
-                  'NDCTL_DISABLE=y DOC=n $JOBS_OPT install '
-                  'prefix=$PMDK_PREFIX']
+    pmdk_build = [['make', 'all', 'BUILD_RPMEM=n', 'NDCTL_ENABLE=n', 'NDCTL_DISABLE=y', 'DOC=n'
+                  '$JOBS_OPT', 'install', 'prefix=$PMDK_PREFIX']]
 
     reqs.define('pmdk',
                 retriever=retriever,
@@ -296,9 +297,9 @@ def define_components(reqs):
                 libs=["pmemobj"])
 
     if reqs.target_type == 'debug':
-        ABT_DEBUG = ' --enable-debug=most'
+        ABT_DEBUG = '--enable-debug=most'
     else:
-        ABT_DEBUG = ' --disable-debug'
+        ABT_DEBUG = '--disable-debug'
 
     retriever = GitRepoRetriever("https://github.com/pmodels/argobots.git",
                                  True)
@@ -306,12 +307,10 @@ def define_components(reqs):
                 retriever=retriever,
                 commands=['git clean -dxf',
                           './autogen.sh',
-                          './configure --prefix=$ARGOBOTS_PREFIX CC=gcc'
-                          ' --enable-valgrind'
-                          ' --enable-stack-unwind' +
-                          ABT_DEBUG,
-                          'make $JOBS_OPT',
-                          'make $JOBS_OPT install'],
+                          ['./configure', '--prefix=$ARGOBOTS_PREFIX', 'CC=gcc', '--enable-valgrind'
+                           '--enable-stack-unwind', ABT_DEBUG],
+                          ['make', '$JOBS_OPT'],
+                          ['make', '$JOBS_OPT', 'install']],
                 requires=['valgrind_devel', 'libunwind'],
                 libs=['abt'],
                 headers=['abt.h'])
@@ -344,8 +343,8 @@ def define_components(reqs):
                           '--disable-unit-tests --disable-apps --without-vhost --without-crypto '
                           '--without-pmdk --without-rbd --with-rdma --without-iscsi-initiator '
                           '--without-isal --without-vtune --with-shared',
-                          'make CONFIG_ARCH={} $JOBS_OPT'.format(spdk_arch),
-                          'make $JOBS_OPT install',
+                          ['make', 'CONFIG_ARCH={}'.format(spdk_arch), '$JOBS_OPT'],
+                          ['make', '$JOBS_OPT', 'install'],
                           'cp -r -P dpdk/build/lib/ $SPDK_PREFIX',
                           'cp -r -P dpdk/build/include/ $SPDK_PREFIX/include/dpdk',
                           'mkdir -p $SPDK_PREFIX/share/spdk',
@@ -365,8 +364,8 @@ def define_components(reqs):
     reqs.define('protobufc',
                 retriever=retriever,
                 commands=['./autogen.sh',
-                          './configure --prefix=$PROTOBUFC_PREFIX '
-                          '--disable-protoc', 'make $JOBS_OPT',
+                          ['./configure', '--prefix=$PROTOBUFC_PREFIX', '--disable-protoc'],
+                          ['make', '$JOBS_OPT'],
                           'make install'],
                 libs=['protobuf-c'],
                 headers=['protobuf-c/protobuf-c.h'])
