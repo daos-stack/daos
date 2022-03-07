@@ -13,7 +13,7 @@ import re
 
 from avocado import Test as avocadoTest
 from avocado import skip, TestFail, fail_on
-from avocado.utils.distro import detect
+from distro_utils import detect
 from avocado.core import exceptions
 from ast import literal_eval
 from ClusterShell.NodeSet import NodeSet
