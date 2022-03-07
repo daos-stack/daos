@@ -85,7 +85,7 @@ class IorInterceptVerifyDataIntegrity(DfuseTestBase):
                 log=self.client_log,
                 hosts=clients,
                 path=self.workdir,
-                slots=self.hostfile_clients_slots,
+                slots=None,
                 group=self.server_group,
                 pool=self.pool,
                 container=self.container,
