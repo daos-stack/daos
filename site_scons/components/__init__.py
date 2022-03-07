@@ -110,8 +110,7 @@ def define_mercury(reqs):
         atomic = 'openpa'
 
     reqs.define('psm2',
-                retriever=GitRepoRetriever(
-                    'https://github.com/intel/opa-psm2.git'),
+                retriever=GitRepoRetriever('https://github.com/intel/opa-psm2.git'),
                 # psm2 hard-codes installing into /usr/...
                 commands=['sed -i -e "s/\\(.{DESTDIR}\\/\\)usr\\//\\1/" ' +
                           '       -e "s/\\(INSTALL_LIB_TARG=' +
@@ -157,8 +156,7 @@ def define_mercury(reqs):
                 patch_rpath=['lib'])
 
     reqs.define('openpa',
-                retriever=GitRepoRetriever(
-                    'https://github.com/pmodels/openpa.git'),
+                retriever=GitRepoRetriever('https://github.com/pmodels/openpa.git'),
                 commands=['libtoolize', './autogen.sh',
                           ['./configure', '--prefix=$OPENPA_PREFIX'],
                           ['make', '$JOBS_OPT'],
@@ -170,7 +168,6 @@ def define_mercury(reqs):
         MERCURY_DEBUG = '-DMERCURY_ENABLE_DEBUG=ON '
     else:
         MERCURY_DEBUG = '-DMERCURY_ENABLE_DEBUG=OFF '
-    retriever = GitRepoRetriever('https://github.com/mercury-hpc/mercury.git', True)
 
     reqs.define("ucx", libs=['ucp'])
 
@@ -185,7 +182,7 @@ def define_mercury(reqs):
         ucx = ""
 
     reqs.define('mercury',
-                retriever=retriever,
+                retriever=GitRepoRetriever('https://github.com/mercury-hpc/mercury.git', True),
                 commands=['cmake -DMERCURY_USE_CHECKSUMS=OFF '
                           '-DOPA_LIBRARY=$OPENPA_PREFIX/lib' +
                           check(reqs, 'openpa', '', '64') + '/libopa.a '
@@ -272,13 +269,11 @@ def define_components(reqs):
                   ['./configure', '--prefix=$ISAL_PREFIX', '--libdir=$ISAL_PREFIX/lib'],
                   ['make', '$JOBS_OPT'], 'make install']
     reqs.define('isal',
-                retriever=GitRepoRetriever(
-                    'https://github.com/01org/isa-l.git'),
+                retriever=GitRepoRetriever('https://github.com/01org/isa-l.git'),
                 commands=isal_build,
                 libs=["isal"])
     reqs.define('isal_crypto',
-                retriever=GitRepoRetriever("https://github.com/intel/"
-                                           "isa-l_crypto"),
+                retriever=GitRepoRetriever("https://github.com/intel/isa-l_crypto"),
                 commands=['./autogen.sh ',
                           ['./configure',
                            '--prefix=$ISAL_CRYPTO_PREFIX',
@@ -286,13 +281,11 @@ def define_components(reqs):
                           ['make', '$JOBS_OPT'], 'make install'],
                 libs=['isal_crypto'])
 
-    retriever = GitRepoRetriever("https://github.com/pmem/pmdk.git")
-
     pmdk_build = [['make', 'all', 'BUILD_RPMEM=n', 'NDCTL_ENABLE=n', 'NDCTL_DISABLE=y', 'DOC=n'
                   '$JOBS_OPT', 'install', 'prefix=$PMDK_PREFIX']]
 
     reqs.define('pmdk',
-                retriever=retriever,
+                retriever=GitRepoRetriever("https://github.com/pmem/pmdk.git"),
                 commands=pmdk_build,
                 libs=["pmemobj"])
 
@@ -301,10 +294,8 @@ def define_components(reqs):
     else:
         ABT_DEBUG = '--disable-debug'
 
-    retriever = GitRepoRetriever("https://github.com/pmodels/argobots.git",
-                                 True)
     reqs.define('argobots',
-                retriever=retriever,
+                retriever=GitRepoRetriever("https://github.com/pmodels/argobots.git", True),
                 commands=['git clean -dxf',
                           './autogen.sh',
                           ['./configure', '--prefix=$ARGOBOTS_PREFIX', 'CC=gcc', '--enable-valgrind'
@@ -317,8 +308,6 @@ def define_components(reqs):
 
     reqs.define('fuse', libs=['fuse3'], defines=["FUSE_USE_VERSION=35"],
                 headers=['fuse3/fuse.h'], package='fuse3-devel')
-
-    retriever = GitRepoRetriever("https://github.com/spdk/spdk.git", True)
 
     # Tell SPDK which CPU to optimize for, by default this is native which works well unless you
     # are relocating binaries across systems, for example in CI under github actions etc.  There
@@ -338,7 +327,7 @@ def define_components(reqs):
         spdk_arch = 'haswell'
 
     reqs.define('spdk',
-                retriever=retriever,
+                retriever=GitRepoRetriever("https://github.com/spdk/spdk.git", True),
                 commands=['./configure --prefix=$SPDK_PREFIX --disable-tests '
                           '--disable-unit-tests --disable-apps --without-vhost --without-crypto '
                           '--without-pmdk --without-rbd --with-rdma --without-iscsi-initiator '
@@ -360,9 +349,8 @@ def define_components(reqs):
                                     '/usr/include/x86_64-linux-gnu/dpdk'],
                 patch_rpath=['lib'])
 
-    retriever = GitRepoRetriever("https://github.com/protobuf-c/protobuf-c.git")
     reqs.define('protobufc',
-                retriever=retriever,
+                retriever=GitRepoRetriever("https://github.com/protobuf-c/protobuf-c.git"),
                 commands=['./autogen.sh',
                           ['./configure', '--prefix=$PROTOBUFC_PREFIX', '--disable-protoc'],
                           ['make', '$JOBS_OPT'],
