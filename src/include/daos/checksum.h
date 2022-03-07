@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2019-2021 Intel Corporation.
+ * (C) Copyright 2019-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -187,6 +187,12 @@ daos_csummer_copy(const struct daos_csummer *obj);
 /** Destroy the daos_csummer */
 void
 daos_csummer_destroy(struct daos_csummer **obj);
+
+/* Copy a csummer without allocating memory for the csummer from the heap */
+int daos_csummer_copy_inplace(struct daos_csummer *dst, struct daos_csummer *src);
+
+/* Destroy a csummer that was copied 'inplace' */
+void daos_csummer_destroy_in_place(struct daos_csummer *obj);
 
 /** Get the checksum length from the configured csummer. */
 uint16_t

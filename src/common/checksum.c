@@ -125,7 +125,8 @@ daos_csummer_copy(const struct daos_csummer *obj)
 	return result;
 }
 
-void daos_csummer_destroy(struct daos_csummer **obj)
+void
+daos_csummer_destroy(struct daos_csummer **obj)
 {
 	struct daos_csummer *csummer = *obj;
 
@@ -137,6 +138,36 @@ void daos_csummer_destroy(struct daos_csummer **obj)
 	D_MUTEX_DESTROY(&csummer->dcs_lock);
 	D_FREE(csummer);
 	*obj = NULL;
+}
+
+int
+daos_csummer_copy_inplace(struct daos_csummer *dst, struct daos_csummer *src)
+{
+	int rc = 0;
+
+	dst->dcs_algo = src->dcs_algo;
+	dst->dcs_chunk_size = src->dcs_chunk_size;
+	dst->dcs_srv_verify = src->dcs_srv_verify;
+	dst->dcs_skip_key_calc = src->dcs_skip_key_calc;
+	dst->dcs_skip_key_verify = src->dcs_skip_key_verify;
+	dst->dcs_skip_data_verify = src->dcs_skip_data_verify;
+
+	if (dst->dcs_algo->cf_init)
+		rc = dst->dcs_algo->cf_init(&dst->dcs_ctx);
+	D_MUTEX_INIT(&dst->dcs_lock, NULL);
+
+	return rc;
+}
+
+void
+daos_csummer_destroy_in_place(struct daos_csummer *obj)
+{
+	if (!obj)
+		return;
+
+	if (obj->dcs_algo->cf_destroy)
+		obj->dcs_algo->cf_destroy(obj->dcs_ctx);
+	D_MUTEX_DESTROY(&obj->dcs_lock);
 }
 
 uint16_t
