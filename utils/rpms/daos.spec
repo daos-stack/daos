@@ -2,7 +2,7 @@
 %define server_svc_name daos_server.service
 %define agent_svc_name daos_agent.service
 
-%global mercury_version 2.1.0~rc4-3%{?dist}
+%global mercury_version 2.1.0~rc4-4%{?dist}
 %global libfabric_version 1.14.0-1
 %global __python %{__python3}
 
@@ -14,7 +14,7 @@
 
 Name:          daos
 Version:       2.0.1
-Release:       3%{?relval}%{?dist}
+Release:       5%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       BSD-2-Clause-Patent
@@ -66,10 +66,7 @@ BuildRequires: fuse3-devel >= 3
 BuildRequires: fuse3-devel >= 3.4.2
 %endif
 %if (0%{?suse_version} >= 1500)
-# NB: OpenSUSE is stupid about this... If we just
-# specify go >= 1.X, it installs go=1.11 AND 1.X.
-BuildRequires: go1.14
-BuildRequires: go1.14-race
+BuildRequires: go-race
 BuildRequires: libprotobuf-c-devel
 BuildRequires: liblz4-devel
 %else
@@ -91,10 +88,10 @@ BuildRequires: libyaml-devel
 BuildRequires: libcmocka-devel
 BuildRequires: valgrind-devel
 BuildRequires: systemd
+BuildRequires: go >= 1.14
 %if (0%{?rhel} >= 7)
 BuildRequires: numactl-devel
 BuildRequires: CUnit-devel
-BuildRequires: golang-bin >= 1.12
 # needed to retrieve PMM region info through control-plane
 BuildRequires: libipmctl-devel
 BuildRequires: python36-devel
@@ -517,6 +514,12 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 # No files in a meta-package
 
 %changelog
+* Wed Mar 02 2022 Liu Xuezhao <xuezhao.liu@intel.com> 2.0.1-5
+- Update mercury to include DAOS-9561 workaround
+
+* Tue Feb 22 2022 Michael MacDonald <mjmac.macdonald@intel.com> 2.0.1-4
+- Update go toolchain requirements
+
 * Wed Feb 16 2022 Li Wei <wei.g.li@intel.com> 2.0.1-3
 - Update raft to 0.9.0-1394.gc81505f to fix membership change bugs
 

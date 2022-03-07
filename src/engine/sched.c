@@ -563,7 +563,8 @@ req_kickoff_internal(struct dss_xstream *dx, struct sched_req_attr *attr,
 	D_ASSERT(attr->sra_type < SCHED_REQ_MAX);
 
 	return sched_create_thread(dx, func, arg, ABT_THREAD_ATTR_NULL, NULL,
-				   0);
+				   attr->sra_flags & SCHED_REQ_FL_PERIODIC ?
+					DSS_ULT_FL_PERIODIC : 0);
 }
 
 static int
@@ -1571,7 +1572,7 @@ sched_try_relax(struct dss_xstream *dx, ABT_pool *pools, uint32_t running)
 	 * Wait on external network request if the xstream has Cart context,
 	 * otherwise, sleep for a while.
 	 */
-	if (sched_relax_mode != SCHED_RELAX_MODE_SLEEP && dx->dx_comm) {
+	if (sched_relax_mode != SCHED_RELAX_MODE_SLEEP && dx->dx_progress_started) {
 		/* convert to micro-seconds */
 		dx->dx_timeout = sleep_time * 1000;
 	} else {
