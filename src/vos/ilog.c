@@ -1083,74 +1083,6 @@ ilog_fetch_move(struct ilog_entries *dest, struct ilog_entries *src)
 	priv_src->ip_removals = NULL;
 }
 
-static void
-ilog_status_refresh(struct ilog_context *lctx, uint32_t intent,
-		    struct ilog_entries *entries)
-{
-	struct ilog_priv	*priv = ilog_ent2priv(entries);
-	struct ilog_entry	 entry;
-	int32_t			 status;
-	bool			 same_intent = (intent == priv->ip_intent);
-
-	priv->ip_intent = intent;
-	priv->ip_rc = 0;
-	ilog_foreach_entry(entries, &entry) {
-		if (same_intent &&
-		    (entry.ie_status == ILOG_COMMITTED ||
-		     entry.ie_status == ILOG_REMOVED))
-			continue;
-		status = ilog_status_get(lctx, &entry.ie_id, intent,
-					 (intent == DAOS_INTENT_UPDATE ||
-					  intent == DAOS_INTENT_PUNCH) ? false : true);
-		if (status < 0) {
-			priv->ip_rc = status;
-			return;
-		}
-		entries->ie_statuses[entry.ie_idx] = status;
-	}
-}
-
-static bool
-ilog_fetch_cached(struct umem_instance *umm, struct ilog_root *root,
-		  const struct ilog_desc_cbs *cbs, uint32_t intent,
-		  struct ilog_entries *entries)
-{
-	struct ilog_priv	*priv = ilog_ent2priv(entries);
-	struct ilog_context	*lctx = &priv->ip_lctx;
-
-	D_ASSERT(entries->ie_statuses != NULL);
-	D_ASSERT(priv->ip_alloc_size != 0 ||
-		 entries->ie_statuses == &priv->ip_embedded[0]);
-
-	if (priv->ip_lctx.ic_root != root ||
-	    priv->ip_log_version != ilog_mag2ver(root->lr_magic)) {
-		goto reset;
-	}
-
-	if (priv->ip_rc == -DER_NONEXIST)
-		return true;
-
-	D_ASSERT(entries->ie_ids != NULL);
-	ilog_status_refresh(&priv->ip_lctx, intent, entries);
-
-	return true;
-reset:
-	lctx->ic_root = root;
-	lctx->ic_root_off = umem_ptr2off(umm, root);
-	lctx->ic_umm = *umm;
-	lctx->ic_cbs = *cbs;
-	lctx->ic_ref = 0;
-	lctx->ic_in_txn = false;
-	lctx->ic_ver_inc = false;
-
-	entries->ie_num_entries = 0;
-	priv->ip_intent = intent;
-	priv->ip_log_version = ilog_mag2ver(lctx->ic_root->lr_magic);
-	priv->ip_rc = 0;
-
-	return false;
-}
-
 static int
 prepare_entries(struct ilog_entries *entries, struct ilog_array_cache *cache)
 {
@@ -1210,22 +1142,19 @@ ilog_fetch(struct umem_instance *umm, struct ilog_df *root_df,
 	ILOG_ASSERT_VALID(root_df);
 
 	root = (struct ilog_root *)root_df;
-
-	if (ilog_fetch_cached(umm, root, cbs, intent, entries)) {
-		if (priv->ip_rc == -DER_INPROGRESS ||
-		    priv->ip_rc == -DER_NONEXIST)
-			return priv->ip_rc;
-		if (priv->ip_rc < 0) {
-			/* Don't cache error return codes */
-			rc = priv->ip_rc;
-			priv->ip_rc = 0;
-			priv->ip_log_version = ILOG_MAGIC;
-			return rc;
-		}
-		return 0;
-	}
-
 	lctx = &priv->ip_lctx;
+	lctx->ic_root = root;
+	lctx->ic_root_off = umem_ptr2off(umm, root);
+	lctx->ic_umm = *umm;
+	lctx->ic_cbs = *cbs;
+	lctx->ic_ref = 0;
+	lctx->ic_in_txn = false;
+	lctx->ic_ver_inc = false;
+	entries->ie_num_entries = 0;
+	priv->ip_intent = intent;
+	priv->ip_log_version = ilog_mag2ver(lctx->ic_root->lr_magic);
+	priv->ip_rc = 0;
+
 	if (ilog_empty(root))
 		D_GOTO(out, rc = 0);
 
