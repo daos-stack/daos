@@ -1,9 +1,15 @@
-daos (2.1.100-22) unstable; urgency=medium
+daos (2.1.100-24) unstable; urgency=medium
   [ Jeff Olivier ]
   * Extract MPI from many binaries create dpar and dpar_mpi providing a
     similar interface to abstract away the direct MPI dependence
 
- -- Jeff Olivier <jeffrey.v.olivier@intel.com>  Tue, 15 Feb 2022 10:30:01 -0100
+ -- Jeff Olivier <jeffrey.v.olivier@intel.com>  Tue, 08 Mar 2022 10:30:01 -0100
+
+daos (2.1.100-22) unstable; urgency=medium
+  [ Alexander Oganezov ]
+  * Update mercury to include DAOS-9561 workaround
+
+ -- Alexander Oganezov <alexander.a.oganezov@intel.com>  Tue, 22 Feb 2022 14:33:00 +0800
 
 daos (2.1.100-20) unstable; urgency=medium
   [ Li Wei ]

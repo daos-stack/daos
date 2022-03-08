@@ -675,7 +675,8 @@ show_result(struct pf_param *param, uint64_t start, uint64_t end,
 			total = ts_ctx.tsc_mpi_size * param->pa_iteration *
 				ts_obj_p_cont;
 		} else if (strcmp(test_name, "AGGREGATE") == 0 ||
-			   strcmp(test_name, "DISCARD") == 0) {
+			   strcmp(test_name, "DISCARD") == 0 ||
+			   strcmp(test_name, "GARBAGE COLLECTION") == 0) {
 			total = ts_ctx.tsc_mpi_size * param->pa_iteration;
 		} else if (strcmp(test_name, "PUNCH") == 0) {
 			total = ts_ctx.tsc_mpi_size * param->pa_iteration * ts_obj_p_cont;
