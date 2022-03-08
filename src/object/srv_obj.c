@@ -1512,9 +1512,8 @@ obj_local_rw_internal(crt_rpc_t *rpc, struct obj_io_context *ioc,
 			struct daos_csummer csummer = {0};
 
 			rc = daos_csummer_copy_inplace(&csummer, ioc->ioc_coc->sc_csummer);
-
 			if (rc != 0) {
-				rc = -DER_NOMEM;
+				D_ERROR("csummer_copy_inplace failed: "DF_RC"\n", DP_RC(rc));
 				goto post;
 			}
 			rc = csum_add2iods(ioh,
