@@ -295,7 +295,6 @@ dss_topo_init()
 {
 	int		depth;
 	int		numa_node_nr;
-	int		num_cores_visited;
 	char		*cpuset;
 	int		k;
 	hwloc_obj_t	corenode;
@@ -310,9 +309,14 @@ dss_topo_init()
 	numa_node_nr = hwloc_get_nbobjs_by_depth(dss_topo, depth);
 	d_getenv_bool("DAOS_TARGET_OVERSUBSCRIBE", &tgt_oversub);
 
-	/* if no NUMA node was specified, or NUMA data unavailable */
-	/* fall back to the legacy core allocation algorithm */
-	if (dss_numa_node == -1 || numa_node_nr <= 0) {
+	/*
+	 * Use legacy core allocation algorithm when:
+	 *
+	 * - No NUMA node was specified, or;
+	 * - NUMA data unavailable, or;
+	 * - Oversubscribe is specified (which isn't supported in NUMA mode);
+	 */
+	if (dss_numa_node == -1 || numa_node_nr <= 0 || tgt_oversub) {
 		D_PRINT("Using legacy core allocation algorithm\n");
 		dss_tgt_nr = dss_tgt_nr_get(dss_core_nr, nr_threads,
 					    tgt_oversub);
@@ -350,7 +354,6 @@ dss_topo_init()
 	}
 
 	dss_num_cores_numa_node = 0;
-	num_cores_visited = 0;
 
 	for (k = 0; k < dss_core_nr; k++) {
 		corenode = hwloc_get_obj_by_depth(dss_topo, dss_core_depth, k);
@@ -358,11 +361,8 @@ dss_topo_init()
 			continue;
 		if (hwloc_bitmap_isincluded(corenode->cpuset,
 					    numa_obj->cpuset) != 0) {
-			if (num_cores_visited++ >= dss_core_offset) {
-				hwloc_bitmap_set(core_allocation_bitmap, k);
-				hwloc_bitmap_asprintf(&cpuset,
-						      corenode->cpuset);
-			}
+			hwloc_bitmap_set(core_allocation_bitmap, k);
+			hwloc_bitmap_asprintf(&cpuset, corenode->cpuset);
 			dss_num_cores_numa_node++;
 		}
 	}
