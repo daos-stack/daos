@@ -1408,6 +1408,7 @@ static int
 iterate_records(struct ioreq *req, char *dkey, char *akey, int iod_size)
 {
 	daos_anchor_t	anchor;
+	daos_anchor_t	anchor_des;
 	int		key_nr;
 	int		i;
 	uint32_t	number;
@@ -1415,6 +1416,7 @@ iterate_records(struct ioreq *req, char *dkey, char *akey, int iod_size)
 	/** Enumerate all mixed NVMe and SCM records */
 	key_nr = 0;
 	memset(&anchor, 0, sizeof(anchor));
+	memset(&anchor_des, 0, sizeof(anchor));
 	while (!daos_anchor_is_eof(&anchor)) {
 		daos_epoch_range_t	eprs[5];
 		daos_recx_t		recxs[5];
@@ -1428,6 +1430,7 @@ iterate_records(struct ioreq *req, char *dkey, char *akey, int iod_size)
 
 		for (i = 0; i < (number - 1); i++) {
 			assert_true(size == iod_size);
+			assert_true(recxs[i].rx_idx < recxs[i+1].rx_idx);
 			/* Print a subset of enumerated records */
 			if ((i + key_nr) % ENUM_PRINT != 0)
 				continue;
@@ -1440,8 +1443,17 @@ iterate_records(struct ioreq *req, char *dkey, char *akey, int iod_size)
 				      i + key_nr, (int)size,
 				      (int)recxs[i].rx_nr,
 				      (int)recxs[i].rx_idx);
-
 		}
+
+		number = 5;
+		enumerate_rec(DAOS_TX_NONE, dkey, akey, &size,
+			      &number, recxs, eprs, &anchor_des, false, req);
+		if (number == 0)
+			continue;
+		for (i = 0; i < (number - 1); i++) {
+			assert_true(recxs[i].rx_idx > recxs[i+1].rx_idx);
+		}
+
 		key_nr += number;
 	}
 
@@ -4203,12 +4215,28 @@ check_oclass(daos_handle_t coh, int domain_nr, daos_oclass_hints_t hints,
 		assert_int_equal(attr->u.rp.r_num, nr);
 	} else if (res == DAOS_RES_EC) {
 		assert_int_equal(attr->u.ec.e_p, nr - 1);
-		if (domain_nr >= 10)
-			assert_int_equal(attr->u.ec.e_k, 8);
-		else if (domain_nr >= 6)
-			assert_int_equal(attr->u.ec.e_k, 4);
-		else
-			assert_int_equal(attr->u.ec.e_k, 2);
+
+		if (nr == 1 || nr == 2) {
+			if (domain_nr >= 18)
+				assert_int_equal(attr->u.ec.e_k, 16);
+			if (domain_nr >= 10)
+				assert_int_equal(attr->u.ec.e_k, 8);
+			else if (domain_nr >= 6)
+				assert_int_equal(attr->u.ec.e_k, 4);
+			else
+				assert_int_equal(attr->u.ec.e_k, 2);
+		} else if (nr == 3) {
+			if (domain_nr >= 20)
+				assert_int_equal(attr->u.ec.e_k, 16);
+			if (domain_nr >= 12)
+				assert_int_equal(attr->u.ec.e_k, 8);
+			else if (domain_nr >= 8)
+				assert_int_equal(attr->u.ec.e_k, 4);
+			else
+				assert_int_equal(attr->u.ec.e_k, 2);
+		} else {
+			D_ASSERT(0);
+		}
 	}
 
 	/** need an easier way to determine grp nr. for now use fit for GX */
@@ -4247,7 +4275,10 @@ oclass_auto_setting(void **state)
 	assert_rc_equal(rc, 0);
 
 	/** set the expect EC object class ID based on domain nr */
-	if (attr.pa_domain_nr >= 10) {
+	if (attr.pa_domain_nr >= 18) {
+		ecidx = OC_EC_16P1GX;
+		ecid1 = OC_EC_16P1G1;
+	} else if (attr.pa_domain_nr >= 10) {
 		ecidx = OC_EC_8P1GX;
 		ecid1 = OC_EC_8P1G1;
 	} else if (attr.pa_domain_nr >= 6) {
@@ -4400,10 +4431,13 @@ oclass_auto_setting(void **state)
 	assert_rc_equal(rc, 0);
 
 	/** adjust the expected EC object class ID based on domain nr */
-	if (attr.pa_domain_nr >= 10) {
+	if (attr.pa_domain_nr >= 20) {
+		ecidx = OC_EC_16P2GX;
+		ecid1 = OC_EC_16P2G1;
+	} else if (attr.pa_domain_nr >= 12) {
 		ecidx = OC_EC_8P2GX;
 		ecid1 = OC_EC_8P2G1;
-	} else if (attr.pa_domain_nr >= 6) {
+	} else if (attr.pa_domain_nr >= 8) {
 		ecidx = OC_EC_4P2GX;
 		ecid1 = OC_EC_4P2G1;
 	} else {
@@ -4424,7 +4458,7 @@ oclass_auto_setting(void **state)
 	assert_rc_equal(rc, 0);
 
 	/** oid with EC hint should be OC_EC_NP2G1 */
-	print_message("oid with hint class:\t");
+	print_message("oid with hint DAOS_OCH_RDD_EC class:\t");
 	rc = check_oclass(coh, attr.pa_domain_nr, DAOS_OCH_RDD_EC, 0,
 			  DAOS_RES_EC, 3, ecid1);
 	assert_rc_equal(rc, 0);
@@ -4504,19 +4538,32 @@ oclass_auto_setting(void **state)
 }
 
 static void
-int_key_setting(void **state)
+int_key_setting(void **state, int size)
 {
 	test_arg_t              *arg = *state;
 	daos_obj_id_t		oid;
 	daos_handle_t		oh;
 	d_iov_t			dkey;
-	char			dkey_buf[128];
-	char			akey_buf[128];
+	char			*dkey_buf;
+	char			*akey_buf;
 	d_sg_list_t		sgl;
 	d_iov_t			sg_iov;
 	daos_iod_t		iod;
 	char			buf[STACK_BUF_LEN];
 	int                     rc;
+
+	dkey_buf = malloc(size);
+	if (!dkey_buf) {
+		print_message("allocation memory failed\n");
+		return;
+	}
+
+	akey_buf = malloc(size);
+	if (!akey_buf) {
+		print_message("allocation memory failed\n");
+		free(dkey_buf);
+		return;
+	}
 
 	/*
 	 * Object with integer dkey / akey should fail IO with -DER_INVAL if
@@ -4526,11 +4573,11 @@ int_key_setting(void **state)
 				arg->myrank);
 
 	dts_buf_render(buf, STACK_BUF_LEN);
-	dts_buf_render(dkey_buf, 128);
-	dts_buf_render(akey_buf, 128);
+	dts_buf_render(dkey_buf, size);
+	dts_buf_render(akey_buf, size);
 
 	/** init dkey */
-	d_iov_set(&dkey, dkey_buf, sizeof(dkey_buf));
+	d_iov_set(&dkey, dkey_buf, size);
 
 	/** init scatter/gather */
 	d_iov_set(&sg_iov, buf, sizeof(buf));
@@ -4539,7 +4586,7 @@ int_key_setting(void **state)
 	sgl.sg_iovs		= &sg_iov;
 
 	/** init I/O descriptor */
-	d_iov_set(&iod.iod_name, akey_buf, sizeof(akey_buf));
+	d_iov_set(&iod.iod_name, akey_buf, size);
 	iod.iod_size    = STACK_BUF_LEN;
 	iod.iod_type	= DAOS_IOD_SINGLE;
 	iod.iod_recxs	= NULL;
@@ -4595,6 +4642,15 @@ int_key_setting(void **state)
 
 	rc = daos_obj_close(oh, NULL);
 	assert_rc_equal(rc, 0);
+
+	free(dkey_buf);
+	free(akey_buf);
+}
+
+static void invalid_int_key_setting(void **state)
+{
+	int_key_setting(state, 128);
+	int_key_setting(state, 3);
 }
 
 static void
@@ -4750,7 +4806,7 @@ static const struct CMUnitTest io_tests[] = {
 	{ "IO43: Object class selection",
 	  oclass_auto_setting, async_disable, test_case_teardown},
 	{ "IO44: INT dkey/akey checks",
-	  int_key_setting, async_disable, test_case_teardown},
+	  invalid_int_key_setting, async_disable, test_case_teardown},
 	{ "IO45: enum recxs with aggregation",
 	  enum_recxs_with_aggregation, async_disable, test_case_teardown},
 };

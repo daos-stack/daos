@@ -1,6 +1,6 @@
 #!/usr/bin/python
 """
-  (C) Copyright 2020-2021 Intel Corporation.
+  (C) Copyright 2020-2022 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -13,7 +13,7 @@ import re
 
 from avocado import Test as avocadoTest
 from avocado import skip, TestFail, fail_on
-from avocado.utils.distro import detect
+from distro_utils import detect
 from avocado.core import exceptions
 from ast import literal_eval
 from ClusterShell.NodeSet import NodeSet
@@ -1594,7 +1594,8 @@ class TestWithServers(TestWithoutServers):
         """
         pool = TestPool(
             context=self.context, dmg_command=self.get_dmg_command(index),
-            label_generator=self.label_generator)
+            label_generator=self.label_generator,
+            crt_timeout=self.server_managers[index].get_config_value("crt_timeout"))
         if namespace is not None:
             pool.namespace = namespace
         pool.get_params(self)

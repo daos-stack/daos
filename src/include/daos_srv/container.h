@@ -65,8 +65,6 @@ struct ds_cont_child {
 	uint32_t		 sc_dtx_resyncing:1,
 				 sc_dtx_reindex:1,
 				 sc_dtx_reindex_abort:1,
-				 sc_dtx_cos_shutdown:1,
-				 sc_closing:1,
 				 sc_props_fetched:1,
 				 sc_stopping:1,
 				 sc_vos_agg_active:1,
@@ -155,6 +153,7 @@ struct ds_cont_hdl {
 	uint64_t		sch_sec_capas;	/* access control capas */
 	struct ds_cont_child	*sch_cont;
 	int32_t			sch_ref;
+	uint32_t		sch_closed:1;
 };
 
 struct ds_cont_hdl *ds_cont_hdl_lookup(const uuid_t uuid);

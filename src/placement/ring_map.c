@@ -1103,7 +1103,7 @@ out:
 
 static int
 ring_obj_place(struct pl_map *map, struct daos_obj_md *md,
-	       struct daos_obj_shard_md *shard_md,
+	       unsigned int mode, struct daos_obj_shard_md *shard_md,
 	       struct pl_obj_layout **layout_pp)
 {
 	struct ring_obj_placement  rop;
@@ -1253,8 +1253,10 @@ ring_obj_find_reint(struct pl_map *map, struct daos_obj_md *md,
 			return rc;
 		rc = pl_obj_layout_alloc(rop.rop_grp_size, rop.rop_grp_nr,
 				&reint_layout);
-		if (rc)
+		if (rc) {
+			pl_obj_layout_free(layout);
 			return rc;
+		}
 	} else {
 		layout = &layout_on_stack;
 		reint_layout = &reint_layout_on_stack;

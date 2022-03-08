@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2020-2021 Intel Corporation.
+ * (C) Copyright 2020-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -59,35 +59,41 @@ enum daos_media_type_t {
 
 /** Pool target space usage information */
 struct daos_space {
-	/* Total space in bytes */
+	/** Total space in bytes */
 	uint64_t		s_total[DAOS_MEDIA_MAX];
-	/* Free space in bytes */
+	/** Free space in bytes */
 	uint64_t		s_free[DAOS_MEDIA_MAX];
 };
 
 /** Target information */
 typedef struct {
+	/** Target type */
 	daos_target_type_t	ta_type;
+	/** Target state */
 	daos_target_state_t	ta_state;
+	/** Target performance */
 	daos_target_perf_t	ta_perf;
+	/** Target space usage */
 	struct daos_space	ta_space;
 } daos_target_info_t;
 
 /** Pool space usage information */
 struct daos_pool_space {
-	/* Aggregated space for all live targets */
+	/** Aggregated space for all live targets */
 	struct daos_space	ps_space;
-	/* Min target free space in bytes */
+	/** Min target free space in bytes */
 	uint64_t		ps_free_min[DAOS_MEDIA_MAX];
-	/* Max target free space in bytes */
+	/** Max target free space in bytes */
 	uint64_t		ps_free_max[DAOS_MEDIA_MAX];
-	/* Average target free space in bytes */
+	/** Average target free space in bytes */
 	uint64_t		ps_free_mean[DAOS_MEDIA_MAX];
-	/* Target(VOS) count */
+	/** Target(VOS) count */
 	uint32_t		ps_ntargets;
+	/** padding - not used */
 	uint32_t		ps_padding;
 };
 
+/** Pool rebuild status */
 struct daos_rebuild_status {
 	/** pool map version in rebuilding or last completed rebuild */
 	uint32_t		rs_version;
@@ -96,14 +102,14 @@ struct daos_rebuild_status {
 	/** errno for rebuild failure */
 	int32_t			rs_errno;
 	/**
-	 * rebuild is done or not, it is valid only if @rs_version is non-zero
+	 * rebuild is done or not, it is valid only if #rs_version is non-zero
 	 */
 	int32_t			rs_done;
 
-	/* padding of rebuild status */
+	/** padding of rebuild status */
 	int32_t			rs_padding32;
 
-	/* Failure on which rank */
+	/** Failure on which rank */
 	int32_t			rs_fail_rank;
 	/** # total to-be-rebuilt objects, it's non-zero and increase when
 	 * rebuilding in progress, when rs_done is 1 it will not change anymore
@@ -161,7 +167,9 @@ typedef struct {
 
 /** DAOS pool container information */
 struct daos_pool_cont_info {
+	/** Container UUID */
 	uuid_t		pci_uuid;
+	/** Container label */
 	char		pci_label[DAOS_PROP_LABEL_MAX_LEN+1];
 };
 
@@ -416,53 +424,8 @@ int
 daos_pool_list_cont(daos_handle_t poh, daos_size_t *ncont,
 		    struct daos_pool_cont_info *cbuf, daos_event_t *ev);
 
-/**
- * Backward compatibility code.
- * Please don't use directly
- */
-int
-daos_pool_connect2(const char *pool, const char *sys, unsigned int flags,
-		   daos_handle_t *poh, daos_pool_info_t *info, daos_event_t *ev);
-
-
 #if defined(__cplusplus)
 }
-#define daos_pool_connect daos_pool_connect_cpp
-static inline int
-daos_pool_connect_cpp(const char *pool, const char *sys, unsigned int flags, daos_handle_t *poh,
-		      daos_pool_info_t *info, daos_event_t *ev)
-{
-	return daos_pool_connect2(pool, sys, flags, poh, info, ev);
-}
-
-static inline int
-daos_pool_connect_cpp(const uuid_t pool, const char *sys, unsigned int flags, daos_handle_t *poh,
-		      daos_pool_info_t *info, daos_event_t *ev)
-{
-	char str[37];
-
-	uuid_unparse(pool, str);
-	return daos_pool_connect2(str, sys, flags, poh, info, ev);
-}
-#else
-/**
- * For backward compatibility, support old API where a const uuid_t was used
- * instead of a string to identify the pool.
- */
-#define daos_pool_connect(po, ...)					\
-	({								\
-		int _ret;						\
-		char _str[37];						\
-		const char *__str = NULL;				\
-		if (d_is_string(po)) {					\
-			__str = (const char *)(po);			\
-		} else if (d_is_uuid(po)) {				\
-			uuid_unparse((unsigned char *)(po), _str);	\
-			__str = _str;					\
-		}							\
-		_ret = daos_pool_connect2(__str, __VA_ARGS__);		\
-		_ret;							\
-	})
 #endif
 
 #endif /* __DAOS_POOL_H__ */

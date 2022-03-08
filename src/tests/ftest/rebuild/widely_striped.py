@@ -1,6 +1,6 @@
 #!/usr/bin/python3
 """
-  (C) Copyright 2018-2021 Intel Corporation.
+  (C) Copyright 2018-2022 Intel Corporation.
 
     SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -71,7 +71,6 @@ class RbldWidelyStriped(MdtestBase):
             self.pool.check_rebuild_status(rs_errno=0, rs_done=1,
                                            rs_obj_nr=0, rs_rec_nr=0),
             "Invalid pool rebuild info detected before rebuild")
-
 
         # create 1st container
         self.add_container(self.pool)
