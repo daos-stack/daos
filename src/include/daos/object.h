@@ -311,35 +311,39 @@ daos_oid_is_oit(daos_obj_id_t oid)
 	return daos_obj_id2type(oid) == DAOS_OT_OIT;
 }
 
-static inline enum daos_otype_t
-daos_obj_type(enum daos_otype_t type)
+static inline int
+is_daos_obj_type_set(enum daos_otype_t type, enum daos_otype_t sub_type)
 {
-	if (type == (DAOS_OT_AKEY_UINT64 | DAOS_OT_DKEY_UINT64))
-		return DAOS_OT_MULTI_UINT64;
-	else if (type == DAOS_OT_AKEY_UINT64)
-		return DAOS_OT_AKEY_UINT64;
-	else if (type == DAOS_OT_DKEY_UINT64)
-		return DAOS_OT_DKEY_UINT64;
-	else if (type == DAOS_OT_DKEY_LEXICAL)
-		return DAOS_OT_DKEY_LEXICAL;
-	else if (type == DAOS_OT_AKEY_LEXICAL)
-		return DAOS_OT_AKEY_LEXICAL;
-	else if (type == (DAOS_OT_DKEY_LEXICAL | DAOS_OT_AKEY_LEXICAL))
-		return DAOS_OT_MULTI_LEXICAL;
-	else if (type == (DAOS_OT_DKEY_UINT64 | DAOS_OT_KV_FLAT | DAOS_OT_ARRAY))
-		return DAOS_OT_ARRAY;
-	else if (type == (DAOS_OT_DKEY_UINT64 | DAOS_OT_KV_FLAT | DAOS_OT_ARRAY_BYTE))
-		return DAOS_OT_ARRAY_BYTE;
-	else if (type == (DAOS_OT_DKEY_UINT64 | DAOS_OT_KV_FLAT))
-		return DAOS_OT_ARRAY_ATTR;
-	else if (type == DAOS_OT_KV_FLAT)
-		return DAOS_OT_KV_HASHED;
-	else if (type == (DAOS_OT_KV_FLAT | DAOS_OT_DKEY_LEXICAL))
-		return DAOS_OT_KV_LEXICAL;
+	int is_type_set = 0;
 
-	/** default */
-	return DAOS_OT_MULTI_HASHED;
+	switch (sub_type) {
+	case DAOS_OT_AKEY_UINT64:
+		if ((type == DAOS_OT_MULTI_UINT64) || (type == DAOS_OT_AKEY_UINT64))
+			is_type_set = DAOS_OT_AKEY_UINT64;
+		break;
+	case DAOS_OT_DKEY_UINT64:
+		if ((type == DAOS_OT_MULTI_UINT64) || (type == DAOS_OT_DKEY_UINT64) ||
+		    (type == DAOS_OT_ARRAY) || (type == DAOS_OT_ARRAY_BYTE) ||
+		    (type == DAOS_OT_ARRAY_ATTR))
+			is_type_set = DAOS_OT_DKEY_UINT64;
+		break;
+	case DAOS_OT_AKEY_LEXICAL:
+		if ((type == DAOS_OT_AKEY_LEXICAL) || (type == DAOS_OT_MULTI_LEXICAL))
+			is_type_set = DAOS_OT_AKEY_LEXICAL;
+		break;
+	case DAOS_OT_DKEY_LEXICAL:
+		if ((type == DAOS_OT_DKEY_LEXICAL) || (type == DAOS_OT_MULTI_LEXICAL) ||
+		    (type == DAOS_OT_KV_LEXICAL))
+			is_type_set = DAOS_OT_DKEY_LEXICAL;
+		break;
+	default:
+		D_ERROR("Unexpected parameter.\n");
+		break;
+	}
+
+	return is_type_set;
 }
+
 /*
  * generate ID for Object ID Table which is just an object, caller should
  * provide valid cont_rf value (DAOS_PROP_CO_REDUN_RF0 ~ DAOS_PROP_CO_REDUN_RF4)

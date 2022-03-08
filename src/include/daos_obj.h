@@ -96,8 +96,6 @@ enum daos_otype_t {
 
 	DAOS_OT_MAX		= 14,
 
-	/** Mask for convenience (16-bit) */
-	DAOS_OT_MASK		= ((1 << 16) - 1),
 	/**
 	 * reserved: Multi Dimensional Array
 	 * DAOS_OT_ARRAY_MD	= 64,

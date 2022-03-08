@@ -6263,7 +6263,7 @@ daos_obj_get_oclass(daos_handle_t coh, enum daos_otype_t type,
 
 	rf_factor = dc_cont_hdl2redunfac(coh);
 	rc = dc_set_oclass(rf_factor, attr.pa_domain_nr,
-			   attr.pa_target_nr, daos_obj_type(type), hints,
+			   attr.pa_target_nr, type, hints,
 			   &ord, &nr_grp);
 	if (rc)
 		return 0;
