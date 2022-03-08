@@ -14,7 +14,7 @@
 
 Name:          daos
 Version:       2.0.1
-Release:       5%{?relval}%{?dist}
+Release:       6%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       BSD-2-Clause-Patent
