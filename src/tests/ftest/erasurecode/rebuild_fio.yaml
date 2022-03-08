@@ -70,6 +70,7 @@ container:
 fio:
   names:
     - test
+  api: POSIX
   test:
     numjobs: 10
     directory: "/tmp/daos_dfuse"
@@ -77,7 +78,7 @@ fio:
     verify_pattern: '0xabcdabcd'
     do_verify: 1
     iodepth: 10
-    size: 33MB
+    size: 133MB
     read_write: !mux
       write_read:
         rw: 'write'
