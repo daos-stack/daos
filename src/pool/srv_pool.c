@@ -5703,57 +5703,6 @@ out:
 	crt_reply_send(rpc);
 }
 
-/**
- * Get leader shard_id and target id(from pool map) for the current object.
- */
-int
-ds_pool_elect_dtx_leader(struct ds_pool *pool, daos_unit_oid_t *oid,
-			 struct dtx_memberships *mbs, uint32_t version, int *tgt_id)
-{
-	struct daos_oclass_attr *oca;
-	struct pl_map		*map;
-	struct pl_obj_layout	*layout = NULL;
-	struct daos_obj_md	 md = { 0 };
-	int			leader_idx;
-	int			 rc = 0;
-
-	map = pl_map_find(pool->sp_uuid, oid->id_pub);
-	if (map == NULL) {
-		D_ERROR("Failed to find pool map to select leader for "
-			DF_UOID" version = %d\n", DP_UOID(*oid), version);
-		return -DER_INVAL;
-	}
-
-	md.omd_id = oid->id_pub;
-	md.omd_ver = version;
-	rc = pl_obj_place(map, &md, DAOS_OO_RO, NULL, &layout);
-	if (rc != 0)
-		goto out;
-
-	oca = daos_oclass_attr_find(oid->id_pub, NULL);
-	leader_idx = pl_select_leader(oid->id_pub, oid->id_shard / daos_oclass_grp_size(oca),
-				      layout->ol_grp_size, NIL_BITMAP, mbs, tgt_id,
-				      pl_obj_get_shard, layout);
-	if (leader_idx < 0) {
-		D_WARN("Failed to select leader for "DF_UOID
-		       "version = %d: rc = %d\n",
-		       DP_UOID(*oid), version, leader_idx);
-		D_GOTO(out, rc = leader_idx);
-	}
-
-	/* Convert the leader shard idx to shard id */
-	D_ASSERTF(leader_idx % layout->ol_grp_size <= daos_oclass_grp_size(oca),
-		  "leader %d grp_size %u class grp size %u\n", leader_idx, layout->ol_grp_size,
-		  daos_oclass_grp_size(oca));
-	rc = (leader_idx / layout->ol_grp_size) * daos_oclass_grp_size(oca) +
-	      leader_idx % layout->ol_grp_size;
-out:
-	if (layout != NULL)
-		pl_obj_layout_free(layout);
-	pl_map_decref(map);
-	return rc;
-}
-
 /* Update pool map version for current xstream. */
 int
 ds_pool_child_map_refresh_sync(struct ds_pool_child *dpc)
@@ -5855,5 +5804,23 @@ is_pool_from_srv(uuid_t pool_uuid, uuid_t poh_uuid)
 	}
 
 	return !uuid_compare(poh_uuid, hdl_uuid);
+}
+
+/* Check if the target(by id) matched the status */
+int
+ds_pool_target_status_check(struct ds_pool *pool, uint32_t id, uint8_t matched_status,
+			    struct pool_target **p_tgt)
+{
+	struct pool_target *target;
+	int		   rc;
+
+	rc = pool_map_find_target(pool->sp_map, id, &target);
+	if (rc <= 0)
+		return rc == 0 ? -DER_NONEXIST : rc;
+
+	if (p_tgt)
+		*p_tgt = target;
+
+	return target->ta_comp.co_status == matched_status ? 1 : 0;
 }
 
