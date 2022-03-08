@@ -294,6 +294,7 @@ vos_agg_obj(daos_handle_t ih, vos_iter_entry_t *entry,
 	    struct vos_agg_param *agg_param, unsigned int *acts)
 {
 	struct vos_container	*cont = vos_hdl2cont(agg_param->ap_coh);
+	int			 rc;
 
 	if (daos_unit_oid_compare(agg_param->ap_oid, entry->ie_oid)) {
 		if (need_aggregate(agg_param, entry)) {
@@ -302,6 +303,15 @@ vos_agg_obj(daos_handle_t ih, vos_iter_entry_t *entry,
 			agg_param->ap_oid = entry->ie_oid;
 			reset_agg_pos(VOS_ITER_DKEY, agg_param);
 			reset_agg_pos(VOS_ITER_AKEY, agg_param);
+			rc = oi_iter_pre_aggregate(ih);
+			if (rc < 0)
+				return rc;
+			if (rc != 0) {
+				/** We removed the key so let's reprobe */
+				*acts |= VOS_ITER_CB_DELETE;
+				inc_agg_counter(cont, VOS_ITER_OBJ, AGG_OP_DEL);
+				return 0;
+			}
 			inc_agg_counter(cont, VOS_ITER_OBJ, AGG_OP_SCAN);
 		} else {
 			D_DEBUG(DB_EPC, "Skip untouched oid:"DF_UOID"\n",
@@ -339,11 +349,21 @@ vos_agg_dkey(daos_handle_t ih, vos_iter_entry_t *entry,
 	     struct vos_agg_param *agg_param, unsigned int *acts)
 {
 	struct vos_container	*cont = vos_hdl2cont(agg_param->ap_coh);
+	int			 rc;
 
 	if (vos_agg_key_compare(agg_param->ap_dkey, entry->ie_key)) {
 		if (need_aggregate(agg_param, entry)) {
 			agg_param->ap_dkey = entry->ie_key;
 			reset_agg_pos(VOS_ITER_AKEY, agg_param);
+			rc = vos_obj_iter_pre_aggregate(ih);
+			if (rc < 0)
+				return rc;
+			if (rc != 0) {
+				/** We removed the key so let's reprobe */
+				*acts |= VOS_ITER_CB_DELETE;
+				inc_agg_counter(cont, VOS_ITER_DKEY, AGG_OP_DEL);
+				return 0;
+			}
 			inc_agg_counter(cont, VOS_ITER_DKEY, AGG_OP_SCAN);
 		} else {
 			D_DEBUG(DB_EPC, "Skip untouched dkey: "DF_KEY"\n",
@@ -428,10 +448,20 @@ vos_agg_akey(daos_handle_t ih, vos_iter_entry_t *entry,
 	     struct vos_agg_param *agg_param, unsigned int *acts)
 {
 	struct vos_container	*cont = vos_hdl2cont(agg_param->ap_coh);
+	int			 rc;
 
 	if (vos_agg_key_compare(agg_param->ap_akey, entry->ie_key)) {
 		if (need_aggregate(agg_param, entry)) {
 			agg_param->ap_akey = entry->ie_key;
+			rc = vos_obj_iter_pre_aggregate(ih);
+			if (rc < 0)
+				return rc;
+			if (rc != 0) {
+				/** We removed the key so let's reprobe */
+				*acts |= VOS_ITER_CB_DELETE;
+				inc_agg_counter(cont, VOS_ITER_AKEY, AGG_OP_DEL);
+				return 0;
+			}
 			inc_agg_counter(cont, VOS_ITER_AKEY, AGG_OP_SCAN);
 		} else {
 			D_DEBUG(DB_EPC, "Skip untouched akey: "DF_KEY"\n",
