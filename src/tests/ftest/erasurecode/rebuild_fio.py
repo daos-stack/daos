@@ -47,12 +47,17 @@ class EcodFioRebuild(ErasureCodeFio):
             self.server_managers[0].stop_ranks(
                 [self.server_count - 1], self.d_log, force=True)
 
+        # Adding unlink option for final read command
+        if int(self.container.properties.value.split(":")[1]) == 1:
+            self.fio_cmd._jobs['test'].unlink.value = 1
+
         # Read and verify the original data.
         self.fio_cmd._jobs['test'].rw.value = self.read_option
         self.fio_cmd.run()
 
         # If RF is 2 kill one more server and validate the data is not corrupted.
         if int(self.container.properties.value.split(":")[1]) == 2:
+            self.fio_cmd._jobs['test'].unlink.value = 1
             self.log.info("RF is 2,So kill another server and verify data")
             # Kill one more server rank
             self.server_managers[0].stop_ranks([self.server_count - 2],
@@ -83,7 +88,6 @@ class EcodFioRebuild(ErasureCodeFio):
         """
         self.execution('on-line')
 
-    @skipForTicket("DAOS-8640")
     def test_ec_offline_rebuild_fio(self):
         """Jira ID: DAOS-7320.
 
