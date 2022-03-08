@@ -429,7 +429,7 @@ func TestHwloc_Provider_findNUMANodeWithCPUSet(t *testing.T) {
 		},
 		"no match": {
 			getCPUIn: func() (*cpuSet, func()) {
-				return mustCPUSetFromString("0xffffffff", testTopo)
+				return mustCPUSetFromString("0x00000000", testTopo)
 			},
 			expErr: errors.New("no NUMA node"),
 		},

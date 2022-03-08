@@ -439,7 +439,7 @@ func (p *Provider) findNUMANodeWithCPUSet(topo *topology, cpuSet *cpuSet) (uint,
 
 	currentNode, err := topo.getNextObjByType(objTypeNUMANode, nil)
 	for err == nil {
-		if nodeSet.isSubsetOf(currentNode.nodeSet()) || cpuSet.isSubsetOf(currentNode.cpuSet()) {
+		if nodeSet.intersects(currentNode.nodeSet()) || cpuSet.intersects(currentNode.cpuSet()) {
 			return currentNode.osIndex(), nil
 		}
 
