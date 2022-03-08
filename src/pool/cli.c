@@ -275,7 +275,7 @@ out:
 }
 
 static void
-pool_print_range_list(struct dc_pool *pool, d_rank_range_list_t *list, bool enabled)
+pool_print_range_list(struct dc_pool *pool, d_rank_range_list_t *list)
 {
 	const size_t	MAXBYTES = 512;
 	char		line[MAXBYTES];
@@ -285,8 +285,8 @@ pool_print_range_list(struct dc_pool *pool, d_rank_range_list_t *list, bool enab
 	unsigned int	remaining = MAXBYTES;
 	int		i;
 
-	ret = snprintf(linepos, remaining, DF_UUID": %s ranks: ", DP_UUID(pool->dp_pool),
-		       enabled ? "ENABLED" : "DISABLED");
+	ret = snprintf(linepos, remaining, DF_UUID": disabled ranks: %s", DP_UUID(pool->dp_pool),
+		       (list->rrl_nr == 0) ? "NONE" : "");
 	if ((ret < 0) || (ret >= remaining))
 		goto err;
 	written += ret;
@@ -316,19 +316,14 @@ err:
 	D_ERROR(DF_UUID": snprintf failed, %d\n", DP_UUID(pool->dp_pool), ret);
 }
 
-/* Return a list of engine ranks from the pool map.
- * get_enabled == true: ranks of engines whose targets are all up or draining (i.e., not disabled).
- * get_enabled != true: ranks of engines having one or more targets disabled (i.e., down).
- */
+/* Return a list of engine ranks from the pool map. */
 static int
-pool_map_get_ranks(struct dc_pool *pool, struct pool_map *map, bool get_enabled,
-		   d_rank_list_t **ranks)
+pool_map_get_disabled_ranks(struct dc_pool *pool, struct pool_map *map, d_rank_list_t **ranks)
 {
 	int			 rc;
 	int			 i;
 	int			 j;
 	unsigned int		 nnodes_tot;
-	unsigned int		 nnodes_alloc;
 	unsigned int		 nnodes_enabled = 0;	/* nodes with all targets enabled */
 	unsigned int		 nnodes_disabled = 0;	/* nodes with some, all targets disabled */
 	const unsigned int	 ENABLED = (PO_COMP_ST_UP | PO_COMP_ST_UPIN | PO_COMP_ST_DRAIN);
@@ -345,19 +340,16 @@ pool_map_get_ranks(struct dc_pool *pool, struct pool_map *map, bool get_enabled,
 	D_DEBUG(DF_DSMC, DF_UUID": nnodes=%u, nnodes_enabled=%u, nnodes_disabled=%u\n",
 		DP_UUID(pool->dp_pool), nnodes_tot, nnodes_enabled, nnodes_disabled);
 
-	nnodes_alloc = get_enabled ? nnodes_enabled : nnodes_disabled;
-	ranklist = d_rank_list_alloc(nnodes_alloc);
+	ranklist = d_rank_list_alloc(nnodes_disabled);
 	if (!ranklist) {
-		D_ERROR(DF_UUID": failed to allocate ranklist with %u ranks\n",
-			DP_UUID(pool->dp_pool), nnodes_alloc);
+		D_ERROR(DF_UUID": failed to allocate ranklist\n", DP_UUID(pool->dp_pool));
 		D_GOTO(err, rc = -DER_NOMEM);
 	}
 
 	for (i = 0, j = 0; i < nnodes_tot; i++) {
 		struct	pool_domain *d = &domains[i];
 
-		if ((get_enabled && pool_map_node_status_match(d, ENABLED)) ||
-		    (!get_enabled && !pool_map_node_status_match(d, ENABLED))) {
+		if (!pool_map_node_status_match(d, ENABLED)) {
 			D_ASSERT(j < ranklist->rl_nr);
 			ranklist->rl_ranks[j++] = domains[i].do_comp.co_rank;
 		}
@@ -402,8 +394,7 @@ process_query_reply(struct dc_pool *pool, struct pool_buf *map_buf,
 		goto out_unlock;
 
 	/* Scan all targets for populating info->pi_ndisabled and ranks.
-	 * If no targets disabled, get all pool storage engine ranks.
-	 * Otherwise, get the ranks associated with the disabled targets.
+	 * Get the list of ranks associated with any disabled targets.
 	 */
 	rc = pool_map_find_failed_tgts(map, NULL, &num_disabled);
 	if (rc != 0) {
@@ -413,15 +404,13 @@ process_query_reply(struct dc_pool *pool, struct pool_buf *map_buf,
 	if (info != NULL)
 		info->pi_ndisabled = num_disabled;
 	if (ranks != NULL) {
-		bool	get_enabled = (num_disabled == 0) ? true : false;
-
-		rc = pool_map_get_ranks(pool, map, get_enabled, ranks);
+		rc = pool_map_get_disabled_ranks(pool, map, ranks);
 		if (rc == 0) {
 			d_rank_range_list_t	*range_list;
 
 			range_list = d_rank_range_list_create_from_ranks(*ranks);
 			if (range_list) {
-				pool_print_range_list(pool, range_list, get_enabled);
+				pool_print_range_list(pool, range_list);
 				d_rank_range_list_free(range_list);
 			} else {
 				D_ERROR(DF_UUID": failed to get rank range list\n",

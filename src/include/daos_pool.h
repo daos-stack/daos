@@ -259,9 +259,9 @@ daos_pool_global2local(d_iov_t glob, daos_handle_t *poh);
  * \a ranks as output buffer.
  *
  * \param[in]	poh	Pool connection handle.
- * \param[out]	ranks	Optional, returned storage ranks in this pool.
+ * \param[out]	ranks	Optional, returned disabled storage ranks in this pool.
  *			If any pool targets are disabled, \a ranks is the list of affected engines.
- *			If no pool targets are disabled, \a ranks is the list of all engines.
+ *			If no pool targets are disabled, \a ranks will be a list with zero items.
  *			Caller is responsible for freeing the list with d_rank_list_free().
  * \param[in,out]
  *		info	Optional, returned pool information,
