@@ -1724,7 +1724,7 @@ def install_debuginfos():
     """
     # The distro_utils.py file is installed in the util sub-directory relative to this file location
     sys.path.append(os.path.join(os.getcwd(), "util"))
-    from distro_utils import detect
+    from distro_utils import detect         # pylint: disable=import-outside-toplevel
 
     distro_info = detect()
     install_pkgs = [{'name': 'gdb'}]
