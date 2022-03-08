@@ -79,7 +79,7 @@ class DaosBuild(DfuseTestBase):
         # This will apply to SCons, but not sub-commands.
         preload_cmd = 'export LD_PRELOAD=/usr/lib64/libioil.so;export D_LOG_FILE=/tmp/daos.log'
 
-        cmds = ['sudo yum install daos-debuginfo',
+        cmds = ['sudo yum -y install daos-debuginfo',
                 'valgrind git clone https://github.com/daos-stack/daos.git {}'.format(build_dir),
                 'git -C {} submodule init'.format(build_dir),
                 'git -C {} submodule update'.format(build_dir),
