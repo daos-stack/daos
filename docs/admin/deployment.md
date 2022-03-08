@@ -721,7 +721,7 @@ To illustrate, assume a cluster with homogeneous hardware configurations that
 returns the following from scan for each host:
 
 ```bash
-[daos@wolf-72 daos_m]$ dmg -l wolf-7[1-2] -i storage scan --verbose
+[daos@wolf-72 daos_m]$ dmg -l wolf-7[1-2] storage scan --verbose
 -------
 wolf-7[1-2]
 -------
@@ -960,7 +960,7 @@ and waits for a `dmg storage format` call to be issued from the management tool.
 This remote call will trigger the formatting of the locally attached storage on
 the host for use with DAOS using the parameters defined in the server config file.
 
-`dmg -i -l <host>[,...] storage format` will normally be run on a login
+`dmg -l <host>[,...] storage format` will normally be run on a login
 node specifying a hostlist (`-l <host>[,...]`) of storage nodes with SCM/PMem
 modules and NVMe SSDs installed and prepared.
 
@@ -968,7 +968,7 @@ Upon successful format, DAOS Control Servers will start DAOS I/O engines that
 have been specified in the server config file.
 
 Successful start-up is indicated by the following on stdout:
-`DAOS I/O Engine (v0.8.0) process 433456 started on rank 1 with 8 target, 2 helper XS per target, firstcore 0, host wolf-72.wolf.hpdd.intel.com.`
+`DAOS I/O Engine (v2.0.1) process 433456 started on rank 1 with 8 target, 2 helper XS, firstcore 0, host wolf-72.wolf.hpdd.intel.com.`
 
 ### SCM Format
 
@@ -1018,8 +1018,7 @@ I/O engines if valid DAOS metadata is found in `scm_mount`.
 
 ## Agent Setup
 
-This section addresses how to configure the DAOS Agents on the client nodes
-(and optionally on the DAOS server nodes).
+This section addresses how to configure the DAOS Agents on the client nodes.
 
 ### Agent User and Group Setup
 
@@ -1038,10 +1037,11 @@ the DAOS daemon processes, as well as the DAOS administrators who run the
 Refer to [Certificate Generation](https://docs.daos.io/v2.0/admin/deployment/?h=gen_#certificate-configuration)
 for details on creating the necessary certificates.
 
-It is possible to disable the use of certificates for testing purposes.
-This is strongly discouraged in production environments, as it will allow
-arbitrary un-authenticated user processes to access and potentially damage
-the DAOS storage.
+!!! note
+    It is possible to disable the use of certificates for testing purposes.
+    This should *never* be done in production environments.
+    Running in insecure mode will allow arbitrary un-authenticated user processes
+    to access and potentially damage the DAOS storage.
 
 ### Agent Configuration File
 
@@ -1130,14 +1130,14 @@ To start the DAOS Agent from the command line, for example to run with a
 non-default configuration file, run:
 
 ```bash
-$ daos_agent -i -o <'path to agent configuration file/daos_agent.yml'> &
+$ daos_agent -o <'path to agent configuration file/daos_agent.yml'> &
 ```
 
 If you wish to use systemd with a development build, you must copy the Agent service
 file from `utils/systemd/` to `/usr/lib/systemd/system/`.
 Then modify the `ExecStart` line to point to your Agent configuration file:
 
-`ExecStart=/usr/bin/daos_agent -i -o <'path to agent configuration file/daos_agent.yml'>`
+`ExecStart=/usr/bin/daos_agent -o <'path to agent configuration file/daos_agent.yml'>`
 
 Once the service file is installed and `systemctl daemon-reload` has been run to
 reload the configuration, the `daos_agent` can be started through systemd
