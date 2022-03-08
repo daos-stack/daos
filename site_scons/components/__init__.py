@@ -157,10 +157,11 @@ def define_mercury(reqs):
 
     reqs.define('openpa',
                 retriever=GitRepoRetriever('https://github.com/pmodels/openpa.git'),
-                commands=['libtoolize', './autogen.sh',
+                commands=[['libtoolize'],
+                          ['./autogen.sh'],
                           ['./configure', '--prefix=$OPENPA_PREFIX'],
                           ['make', '$JOBS_OPT'],
-                          'make install'],
+                          ['make', 'install']],
                 libs=['opa'],
                 package='openpa-devel' if inst(reqs, 'openpa') else None)
 
@@ -169,38 +170,49 @@ def define_mercury(reqs):
     else:
         MERCURY_DEBUG = '-DMERCURY_ENABLE_DEBUG=OFF '
 
-    reqs.define("ucx", libs=['ucp'])
+    reqs.define('ucx', libs=['ucp'])
+
+    mercury_build = ['cmake',
+                     '-DMERCURY_USE_CHECKSUMS=OFF',
+                     '-DOPA_INCLUDE_DIR=$OPENPA_PREFIX/include/',
+                     '-DCMAKE_INSTALL_PREFIX=$MERCURY_PREFIX',
+                     '-DCMAKE_CXX_FLAGS="-std=c++11"',
+                     '-DBUILD_EXAMPLES=OFF',
+                     '-DMERCURY_USE_BOOST_PP=ON',
+                     '-DBUILD_TESTING=OFF',
+                     '-DNA_USE_OFI=ON',
+                     '-DBUILD_DOCUMENTATION=OFF',
+                     '-DBUILD_SHARED_LIBS=ON',
+                     '../mercury']
+
+    if reqs.target_type == 'debug':
+        mercury_build.append('-DMERCURY_ENABLE_DEBUG=ON')
+    else:
+        mercury_build.append('-DMERCURY_ENABLE_DEBUG=OFF')
 
     if reqs.check_component('ucx'):
-        ucx = '-DNA_USE_UCX=ON ' \
-        '-DUCX_INCLUDE_DIR=/usr/include '\
-        '-DUCP_LIBRARY=/usr/lib64/libucp.so '\
-        '-DUCS_LIBRARY=/usr/lib64/libucs.so '\
-        '-DUCT_LIBRARY=/usr/lib64/libuct.so '
+        mercury_build.extend(['-DNA_USE_UCX=ON',
+                              '-DUCX_INCLUDE_DIR=/usr/include',
+                              '-DUCP_LIBRARY=/usr/lib64/libucp.so',
+                              '-DUCS_LIBRARY=/usr/lib64/libucs.so',
+                              '-DUCT_LIBRARY=/usr/lib64/libuct.so'])
         libs.append('ucx')
+
+    ic = installed_comps(reqs)
+    if ic.check('openpa'):
+        mercury_build.append('-DOPA_LIBRARY=$OPENPA_PREFIX/lib/libopa.a')
     else:
-        ucx = ""
+        mercury_build.append('-DOPA_LIBRARY=$OPENPA_PREFIX/lib64/libopa.a')
+
+    if not ic.check('ofi'):
+        mercury_build.extend(['-DOFI_INCLUDE_DIR=$OFI_PREFIX/include',
+                              '-DOFI_LIBRARY=$OFI_PREFIX/lib/libfabric.so'])
 
     reqs.define('mercury',
                 retriever=GitRepoRetriever('https://github.com/mercury-hpc/mercury.git', True),
-                commands=['cmake -DMERCURY_USE_CHECKSUMS=OFF '
-                          '-DOPA_LIBRARY=$OPENPA_PREFIX/lib' +
-                          check(reqs, 'openpa', '', '64') + '/libopa.a '
-                          '-DOPA_INCLUDE_DIR=$OPENPA_PREFIX/include/ '
-                          '-DCMAKE_INSTALL_PREFIX=$MERCURY_PREFIX '
-                          '-DCMAKE_CXX_FLAGS="-std=c++11" '
-                          '-DBUILD_EXAMPLES=OFF '
-                          '-DMERCURY_USE_BOOST_PP=ON '
-                          + MERCURY_DEBUG +
-                          '-DBUILD_TESTING=OFF '
-                          '-DNA_USE_OFI=ON '
-                          + ucx +
-                          '-DBUILD_DOCUMENTATION=OFF '
-                          '-DBUILD_SHARED_LIBS=ON ../mercury ' +
-                          check(reqs, 'ofi',
-                                '-DOFI_INCLUDE_DIR=$OFI_PREFIX/include '
-                                '-DOFI_LIBRARY=$OFI_PREFIX/lib/libfabric.so'),
-                          ['make', '$JOBS_OPT'], 'make install'],
+                commands=[mercury_build,
+                          ['make', '$JOBS_OPT'],
+                          ['make', 'install']],
                 libs=['mercury', 'na', 'mercury_util'],
                 pkgconfig='mercury',
                 requires=[atomic, 'boost', 'ofi'] + libs,
@@ -265,29 +277,35 @@ def define_components(reqs):
     define_mercury(reqs)
     define_ompi(reqs)
 
-    isal_build = ['./autogen.sh ',
-                  ['./configure', '--prefix=$ISAL_PREFIX', '--libdir=$ISAL_PREFIX/lib'],
-                  ['make', '$JOBS_OPT'], 'make install']
     reqs.define('isal',
                 retriever=GitRepoRetriever('https://github.com/01org/isa-l.git'),
-                commands=isal_build,
-                libs=["isal"])
+                commands=[['./autogen.sh'],
+                          ['./configure', '--prefix=$ISAL_PREFIX', '--libdir=$ISAL_PREFIX/lib'],
+                          ['make', '$JOBS_OPT'],
+                          ['make', 'install']],
+                libs=['isal'])
     reqs.define('isal_crypto',
-                retriever=GitRepoRetriever("https://github.com/intel/isa-l_crypto"),
-                commands=['./autogen.sh ',
+                retriever=GitRepoRetriever('https://github.com/intel/isa-l_crypto'),
+                commands=[['./autogen.sh'],
                           ['./configure',
                            '--prefix=$ISAL_CRYPTO_PREFIX',
                            '--libdir=$ISAL_CRYPTO_PREFIX/lib'],
-                          ['make', '$JOBS_OPT'], 'make install'],
+                          ['make', '$JOBS_OPT'],
+                          ['make', 'install']],
                 libs=['isal_crypto'])
 
-    pmdk_build = [['make', 'all', 'BUILD_RPMEM=n', 'NDCTL_ENABLE=n', 'NDCTL_DISABLE=y', 'DOC=n'
-                  '$JOBS_OPT', 'install', 'prefix=$PMDK_PREFIX']]
-
     reqs.define('pmdk',
-                retriever=GitRepoRetriever("https://github.com/pmem/pmdk.git"),
-                commands=pmdk_build,
-                libs=["pmemobj"])
+                retriever=GitRepoRetriever('https://github.com/pmem/pmdk.git'),
+                commands=[['make',
+                           'all',
+                           'BUILD_RPMEM=n',
+                           'NDCTL_ENABLE=n',
+                           'NDCTL_DISABLE=y',
+                           'DOC=n'
+                           '$JOBS_OPT',
+                           'install',
+                           'prefix=$PMDK_PREFIX']],
+                libs=['pmemobj'])
 
     if reqs.target_type == 'debug':
         ABT_DEBUG = '--enable-debug=most'
@@ -295,18 +313,22 @@ def define_components(reqs):
         ABT_DEBUG = '--disable-debug'
 
     reqs.define('argobots',
-                retriever=GitRepoRetriever("https://github.com/pmodels/argobots.git", True),
-                commands=['git clean -dxf',
-                          './autogen.sh',
-                          ['./configure', '--prefix=$ARGOBOTS_PREFIX', 'CC=gcc', '--enable-valgrind'
-                           '--enable-stack-unwind', ABT_DEBUG],
+                retriever=GitRepoRetriever('https://github.com/pmodels/argobots.git', True),
+                commands=[['git', 'clean', '-dxf'],
+                          ['./autogen.sh'],
+                          ['./configure',
+                           '--prefix=$ARGOBOTS_PREFIX',
+                           'CC=gcc',
+                           '--enable-valgrind',
+                           '--enable-stack-unwind',
+                           ABT_DEBUG],
                           ['make', '$JOBS_OPT'],
                           ['make', '$JOBS_OPT', 'install']],
                 requires=['valgrind_devel', 'libunwind'],
                 libs=['abt'],
                 headers=['abt.h'])
 
-    reqs.define('fuse', libs=['fuse3'], defines=["FUSE_USE_VERSION=35"],
+    reqs.define('fuse', libs=['fuse3'], defines=['FUSE_USE_VERSION=35'],
                 headers=['fuse3/fuse.h'], package='fuse3-devel')
 
     # Tell SPDK which CPU to optimize for, by default this is native which works well unless you
@@ -327,21 +349,31 @@ def define_components(reqs):
         spdk_arch = 'haswell'
 
     reqs.define('spdk',
-                retriever=GitRepoRetriever("https://github.com/spdk/spdk.git", True),
-                commands=['./configure --prefix=$SPDK_PREFIX --disable-tests '
-                          '--disable-unit-tests --disable-apps --without-vhost --without-crypto '
-                          '--without-pmdk --without-rbd --with-rdma --without-iscsi-initiator '
-                          '--without-isal --without-vtune --with-shared',
+                retriever=GitRepoRetriever('https://github.com/spdk/spdk.git', True),
+                commands=[['./configure',
+                           '--prefix=$SPDK_PREFIX',
+                           '--disable-tests',
+                           '--disable-unit-tests',
+                           '--disable-apps',
+                           '--without-vhost',
+                           '--without-crypto',
+                           '--without-pmdk',
+                           '--without-rbd',
+                           '--with-rdma',
+                           '--without-iscsi-initiator',
+                           '--without-isal',
+                           '--without-vtune',
+                           '--with-shared'],
                           ['make', 'CONFIG_ARCH={}'.format(spdk_arch), '$JOBS_OPT'],
                           ['make', '$JOBS_OPT', 'install'],
-                          'cp -r -P dpdk/build/lib/ $SPDK_PREFIX',
-                          'cp -r -P dpdk/build/include/ $SPDK_PREFIX/include/dpdk',
-                          'mkdir -p $SPDK_PREFIX/share/spdk',
-                          'cp -r include scripts $SPDK_PREFIX/share/spdk',
-                          'cp build/examples/lsvmd $SPDK_PREFIX/bin/spdk_nvme_lsvmd',
-                          'cp build/examples/nvme_manage $SPDK_PREFIX/bin/spdk_nvme_manage',
-                          'cp build/examples/identify $SPDK_PREFIX/bin/spdk_nvme_identify',
-                          'cp build/examples/perf $SPDK_PREFIX/bin/spdk_nvme_perf'],
+                          ['cp', '-r', '-P', 'dpdk/build/lib/', '$SPDK_PREFIX'],
+                          ['cp', '-r', '-P', 'dpdk/build/include/', '$SPDK_PREFIX/include/dpdk'],
+                          ['mkdir', '-p', '$SPDK_PREFIX/share/spdk'],
+                          ['cp', '-r', 'include', 'scripts', '$SPDK_PREFIX/share/spdk'],
+                          ['cp', 'build/examples/lsvmd', '$SPDK_PREFIX/bin/spdk_nvme_lsvmd'],
+                          ['cp', 'build/examples/nvme_manage', '$SPDK_PREFIX/bin/spdk_nvme_manage'],
+                          ['cp', 'build/examples/identify', '$SPDK_PREFIX/bin/spdk_nvme_identify'],
+                          ['cp', 'build/examples/perf', '$SPDK_PREFIX/bin/spdk_nvme_perf']],
                 headers=['spdk/nvme.h', 'dpdk/rte_eal.h'],
                 extra_include_path=['/usr/include/dpdk',
                                     '$SPDK_PREFIX/include/dpdk',
@@ -350,11 +382,11 @@ def define_components(reqs):
                 patch_rpath=['lib'])
 
     reqs.define('protobufc',
-                retriever=GitRepoRetriever("https://github.com/protobuf-c/protobuf-c.git"),
-                commands=['./autogen.sh',
+                retriever=GitRepoRetriever('https://github.com/protobuf-c/protobuf-c.git'),
+                commands=[['./autogen.sh'],
                           ['./configure', '--prefix=$PROTOBUFC_PREFIX', '--disable-protoc'],
                           ['make', '$JOBS_OPT'],
-                          'make install'],
+                          ['make', 'install']],
                 libs=['protobuf-c'],
                 headers=['protobuf-c/protobuf-c.h'])
 
