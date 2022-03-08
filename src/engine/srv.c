@@ -605,16 +605,21 @@ dss_xstream_free(struct dss_xstream *dx)
 {
 #ifdef ULT_MMAP_STACK
 	mmap_stack_desc_t *mmap_stack_desc;
+	int	nb_freed_stacks = 0;
 
 	while ((mmap_stack_desc = d_list_pop_entry(&dx->stack_free_list,
 						   mmap_stack_desc_t,
 						   stack_list)) != NULL) {
-		D_INFO("Draining a mmap()'ed stack, dx=%p, free="DF_U64"\n",
-		       dx, dx->free_stacks);
+		D_DEBUG(DB_MEM, "Draining a mmap()'ed stack at %p of size %zd, dx=%p, free="DF_U64"\n",
+			mmap_stack_desc->stack, mmap_stack_desc->stack_size,
+			dx, dx->free_stacks);
 		munmap(mmap_stack_desc->stack, mmap_stack_desc->stack_size);
 		--dx->free_stacks;
 		atomic_fetch_sub(&nb_mmap_stacks, 1);
+		nb_freed_stacks++;
 	}
+	D_INFO("freed/mmap()'ed %d stacks, %d remaining allocated\n",
+	       nb_freed_stacks, atomic_load_relaxed(&nb_mmap_stacks)); 
 #endif
 	hwloc_bitmap_free(dx->dx_cpuset);
 	D_FREE(dx);
