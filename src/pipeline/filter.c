@@ -14,7 +14,7 @@
 #define NTYPES 13
 
 static filter_func_t *
-filter_func_ptrs[52] = { filter_func_eq_u,
+filter_func_ptrs[53] = { filter_func_eq_u,
 			 filter_func_eq_i,
 			 filter_func_eq_d,
 			 filter_func_eq_st,
@@ -59,7 +59,8 @@ filter_func_ptrs[52] = { filter_func_eq_u,
 			 aggr_func_min_u,
 			 aggr_func_min_i,
 			 aggr_func_min_d,
-			 filter_func_bitand,
+			 filter_func_bitand_u,
+			 filter_func_bitand_i,
 			 filter_func_like,
 			 filter_func_isnull,
 			 filter_func_isnotnull,
@@ -283,27 +284,27 @@ calc_filterfunc_idx(daos_filter_part_t **parts, uint32_t idx)
 	}
 	else if (!strncmp(part_type, "DAOS_FILTER_FUNC_LIKE", part_type_s))
 	{
-		return 46;
+		return 47;
 	}
 	else if (!strncmp(part_type, "DAOS_FILTER_FUNC_ISNULL", part_type_s))
 	{
-		return 47;
+		return 48;
 	}
 	else if (!strncmp(part_type, "DAOS_FILTER_FUNC_ISNOTNULL", part_type_s))
 	{
-		return 48;
+		return 49;
 	}
 	else if (!strncmp(part_type, "DAOS_FILTER_FUNC_NOT", part_type_s))
 	{
-		return 49;
+		return 50;
 	}
 	else if (!strncmp(part_type, "DAOS_FILTER_FUNC_AND", part_type_s))
 	{
-		return 50;
+		return 51;
 	}
 	else /* if (!strncmp(part_type, "DAOS_FILTER_FUNC_OR", part_type_s)) */
 	{
-		return 51;
+		return 52;
 	}
 }
 
@@ -463,7 +464,7 @@ compile_filter(daos_filter_t *filter, struct filter_compiled_t *comp_filter,
 	func_idx  = calc_filterfunc_idx(filter->parts, idx);
 	type_idx  = calc_type_nosize_idx(calc_type_idx(*type, *type_len));
 
-	if (func_idx < 45)
+	if (func_idx < 47)
 	{
 		func_idx += type_idx;
 	}

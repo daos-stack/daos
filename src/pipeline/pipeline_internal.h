@@ -143,7 +143,8 @@ filter_func_t aggr_func_min_u;
 filter_func_t aggr_func_min_i;
 filter_func_t aggr_func_min_d;
 
-filter_func_t filter_func_bitand;
+filter_func_t filter_func_bitand_u;
+filter_func_t filter_func_bitand_i;
 
 filter_func_t filter_func_like;
 filter_func_t filter_func_isnull;

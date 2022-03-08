@@ -369,31 +369,35 @@ filter_func_arith(div, u, uint64_t)
 filter_func_arith(div, i, int64_t)
 filter_func_arith(div, d, double)
 
-int filter_func_bitand(struct filter_part_run_t *args)
-{
-	uint64_t left;
-	uint64_t right;
-	int      rc = 0;
-
-	rc = filter_func_getdata_u(args, &left);
-	if (unlikely(rc != 0))
-	{
-		D_GOTO(exit, rc);
-	}
-	rc = filter_func_getdata_u(args, &right);
-	if (unlikely(rc != 0))
-	{
-		D_GOTO(exit, rc);
-	}
-
-	args->value_u_out = left & right;
-exit:
-	if (rc < 0)
-	{
-		return rc;
-	}
-	return 0;
+#define filter_func_bitand(type, ctype)\
+int filter_func_bitand_##type(struct filter_part_run_t *args)\
+{\
+	_##ctype left;\
+	_##ctype right;\
+	int      rc = 0;\
+\
+	rc = filter_func_getdata_##type(args, &left);\
+	if (unlikely(rc != 0))\
+	{\
+		D_GOTO(exit, rc);\
+	}\
+	rc = filter_func_getdata_##type(args, &right);\
+	if (unlikely(rc != 0))\
+	{\
+		D_GOTO(exit, rc);\
+	}\
+\
+	args->value_##type##_out = left & right;\
+exit:\
+	if (rc < 0)\
+	{\
+		return rc;\
+	}\
+	return 0;\
 }
+
+filter_func_bitand(u, uint64_t)
+filter_func_bitand(i, int64_t);
 
 int
 filter_func_like(struct filter_part_run_t *args)
