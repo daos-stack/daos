@@ -40,7 +40,6 @@
  * getline, getdelim
 
  * fgetln
- * fscanf vfscanf
  * fprintf, vfprintf
  * fflush
  * fgetpos, fsetpos
@@ -420,9 +419,8 @@ fetch_dfs_obj_handle(int fd, struct fd_entry *entry)
 	if (rc != 0) {
 		int err = errno;
 
-		DFUSE_LOG_WARNING("ioctl call on %d failed %d %s", fd,
-				  err, strerror(err));
-
+		if (errno != EISDIR)
+			DFUSE_LOG_WARNING("ioctl call on %d failed %d %s", fd, err, strerror(err));
 		return err;
 	}
 
@@ -810,14 +808,15 @@ get_file:
 	if ((il_reply.fir_flags & DFUSE_IOCTL_FLAGS_MCACHE) == 0)
 		entry->fd_fstat = true;
 
-	DFUSE_LOG_INFO("Flags are %#lx %d", il_reply.fir_flags, entry->fd_fstat);
-
 	/* Now open the file object to allow read/write */
 	rc = fetch_dfs_obj_handle(fd, entry);
 	if (rc == EISDIR)
 		D_GOTO(err, rc);
 	else if (rc)
 		D_GOTO(shrink, rc);
+
+	DFUSE_LOG_DEBUG("fd:%d flags %#lx fstat %s",
+			fd, il_reply.fir_flags, entry->fd_fstat ? "yes" : "no");
 
 	rc = vector_set(&fd_table, fd, entry);
 	if (rc != 0) {
@@ -1813,25 +1812,24 @@ dfuse_fopen(const char *path, const char *mode)
 
 	fp = __real_fopen(path, mode);
 
-	if (!ioil_iog.iog_initialized || fp == NULL)
+	if (!ioil_iog.iog_initialized || fp == NULL) {
+		DFUSE_LOG_DEBUG("fopen(pathname=%s) not initialized %p", path, fp);
 		return fp;
+	}
 
 	fd = fileno(fp);
-
 	if (fd == -1)
 		return fp;
 
 	if (!dfuse_check_valid_path(path)) {
-		DFUSE_LOG_DEBUG("fopen(pathname=%s) ignoring by path",
-				path);
+		DFUSE_LOG_DEBUG("fopen(pathname=%s) ignoring by path %d %p", path, fd, fp);
 		return fp;
 	}
 
 	atomic_fetch_add_relaxed(&ioil_iog.iog_file_count, 1);
 
 	if (!check_ioctl_on_open(fd, &entry, O_CREAT | O_WRONLY | O_TRUNC, DFUSE_IO_DIS_STREAM)) {
-		DFUSE_LOG_DEBUG("fopen(pathname=%s) interception not possible",
-				path);
+		DFUSE_LOG_DEBUG("fopen(pathname=%s) interception not possible %d %p", path, fd, fp);
 		return fp;
 	}
 
@@ -2120,6 +2118,10 @@ dfuse_ftell(FILE *stream)
 	int rc;
 	long off;
 
+	D_ERROR("Unsupported function %p\n", stream);
+
+	goto do_real_ftell;
+
 	fd = fileno(stream);
 	if (fd == -1)
 		goto do_real_ftell;
@@ -2134,6 +2136,8 @@ dfuse_ftell(FILE *stream)
 	off = entry->fd_pos;
 
 	vector_decref(&fd_table, entry);
+
+	DFUSE_TRA_DEBUG(entry->fd_dfsoh, "Returning offset %ld", off);
 
 	return off;
 do_real_ftell:
@@ -2292,8 +2296,8 @@ do_real_fn:
 	return __real_fgetc(stream);
 }
 
-DFUSE_PUBLIC char *
-dfuse_fgets(char *str, int n, FILE *stream)
+DFUSE_PUBLIC int
+dfuse_getc(FILE *stream)
 {
 	struct fd_entry	*entry = NULL;
 	int fd;
@@ -2302,6 +2306,35 @@ dfuse_fgets(char *str, int n, FILE *stream)
 	D_ERROR("Unsupported function\n");
 
 	fd = fileno(stream);
+	if (fd == -1)
+		goto do_real_fn;
+
+	rc = vector_get(&fd_table, fd, &entry);
+	if (rc != 0)
+		goto do_real_fn;
+
+	if (drop_reference_if_disabled(entry))
+		goto do_real_fn;
+
+	entry->fd_status = DFUSE_IO_DIS_STREAM;
+
+	vector_decref(&fd_table, entry);
+
+do_real_fn:
+	return __real_getc(stream);
+}
+
+DFUSE_PUBLIC char *
+dfuse_fgets(char *str, int n, FILE *stream)
+{
+	struct fd_entry	*entry = NULL;
+	int fd;
+	int rc;
+
+	fd = fileno(stream);
+
+	D_ERROR("Unsupported function fd:%d stream %p\n", fd, stream);
+
 	if (fd == -1)
 		goto do_real_fn;
 

@@ -68,11 +68,12 @@
 	ACTION(int,     fputc,     (int c, FILE *stream))                     \
 	ACTION(int,     fputs,     (const char *str, FILE *stream))           \
 	ACTION(int,     fputws,    (const wchar_t *ws, FILE *stream))         \
-	ACTION(int,     fgetc,     (FILE *stream))		              \
+	ACTION(int,     fgetc,     (FILE *stream))                            \
+	ACTION(int,     getc,      (FILE *stream))                            \
 	ACTION(char *,  fgets,     (char *str, int, FILE *stream))            \
 	ACTION(wchar_t *, fgetws,  (const wchar_t *ws, FILE *stream))         \
-	ACTION(int,     ungetc,    (int, FILE *))		              \
-	ACTION(int,     fscanf,    (FILE *, const char *, ...))	              \
+	ACTION(int,     ungetc,    (int, FILE *))                             \
+	ACTION(int,     fscanf,    (FILE *, const char *, ...))               \
 	ACTION(int,     vfscanf,   (FILE *, const char *, va_list))
 
 #define FOREACH_INTERCEPT(ACTION)            \
