@@ -13,11 +13,11 @@ import re
 
 from avocado import Test as avocadoTest
 from avocado import skip, TestFail, fail_on
-from distro_utils import detect
 from avocado.core import exceptions
 from ast import literal_eval
 from ClusterShell.NodeSet import NodeSet
 
+from distro_utils import detect
 from fault_config_utils import FaultInjection
 from pydaos.raw import DaosContext, DaosLog, DaosApiError
 from command_utils_base import CommandFailure, EnvironmentVariables
