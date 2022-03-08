@@ -1,8 +1,0 @@
-diff a/src/pool/rpc.c b/src/pool/rpc.c	(rejected hunks)
-@@ -1,5 +1,5 @@
- /**
-- * (C) Copyright 2016-2021 Intel Corporation.
-+ * (C) Copyright 2016-2022 Intel Corporation.
-  *
-  * SPDX-License-Identifier: BSD-2-Clause-Patent
-  */
