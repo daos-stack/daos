@@ -63,7 +63,7 @@ ior:
   sizes: !mux
      Full_Striped:
        chunk_block_transfer_sizes:
-        - [32M, 8G, 8M]
+        - [32M, 24G, 8M]
      Partial_Striped:
        chunk_block_transfer_sizes:
         - [32M, 512M, 2K]
