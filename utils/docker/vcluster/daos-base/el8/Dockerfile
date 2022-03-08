@@ -4,8 +4,8 @@
 # 'recipe' for building a base RHEL variant docker image of a DAOS node
 #
 # This Dockerfile accept the following input build arguments:
-# - RHEL_BASE_IMAGE     Base docker image to use (default centos)
-# - RHEL_BASE_VERSION   Version of the base docker image to use (default 8)
+# - RHEL_BASE_IMAGE     Base docker image to use (default "rockylinux/rockylinux")
+# - RHEL_BASE_VERSION   Version of the base docker image to use (default "8.4")
 # - BUST_CACHE          Manage docker building cache (default undefined).  To invalidate the cache,
 #                       a random value such as the date of day shall be given.
 # - DAOS_AUTH           Enable DAOS authentication when set to "yes" (default "no")
@@ -17,8 +17,8 @@
 #                       (default "")
 
 # Pull base image
-ARG	RHEL_BASE_IMAGE=centos
-ARG	RHEL_BASE_VERSION=8
+ARG	RHEL_BASE_IMAGE=rockylinux/rockylinux
+ARG	RHEL_BASE_VERSION=8.4
 FROM	$RHEL_BASE_IMAGE:$RHEL_BASE_VERSION
 LABEL	maintainer="daos@daos.groups.io"
 

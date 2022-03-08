@@ -9,10 +9,12 @@ version: "3"
 services:
 
   daos_server:
-    image: daos-server:centos8
+    image: "daos-server:${DAOS_SERVER_VERSION}"
     build:
       context: "https://github.com/daos-stack/daos.git#release/2.0:utils/docker/vcluster/daos-server/el8"
       args:
+        - "DAOS_BASE_IMAGE=${DAOS_BASE_IMAGE}"
+        - "DAOS_BASE_VERSION=${DAOS_BASE_VERSION}"
         - "DAOS_AUTH=${DAOS_AUTH}"
         - "DAOS_HUGEPAGES_NBR=${DAOS_HUGEPAGES_NBR}"
         - "DAOS_IFACE_NAME=${DAOS_IFACE_NAME}"
@@ -43,10 +45,12 @@ services:
         target: /run
 
   daos_admin:
-    image: daos-admin:centos8
+    image: "daos-admin:${DAOS_ADMIN_VERSION}"
     build:
       context: "https://github.com/daos-stack/daos.git#release/2.0:utils/docker/vcluster/daos-admin/el8"
       args:
+        - "DAOS_BASE_IMAGE=${DAOS_BASE_IMAGE}"
+        - "DAOS_BASE_VERSION=${DAOS_BASE_VERSION}"
         - "DAOS_AUTH=${DAOS_AUTH}"
         - "DAOS_ADMIN_USER=${DAOS_ADMIN_USER}"
         - "DAOS_ADMIN_GROUP=${DAOS_ADMIN_GROUP}"
@@ -73,10 +77,12 @@ services:
       - daos_server
 
   daos_client:
-    image: daos-client:centos8
+    image: "daos-client:${DAOS_CLIENT_VERSION}"
     build:
       context: "https://github.com/daos-stack/daos.git#release/2.0:utils/docker/vcluster/daos-client/el8"
       args:
+        - "DAOS_BASE_IMAGE=${DAOS_BASE_IMAGE}"
+        - "DAOS_BASE_VERSION=${DAOS_BASE_VERSION}"
         - "DAOS_AUTH=${DAOS_AUTH}"
         - "DAOS_ADMIN_USER=${DAOS_ADMIN_USER}"
         - "DAOS_ADMIN_GROUP=${DAOS_ADMIN_GROUP}"

@@ -2,7 +2,8 @@
 # DAOS Agent configuration file
 
 name: daos_server
-access_points: ['daos-server']
+access_points:
+  - daos-server
 port: 10001
 
 runtime_dir: /var/run/daos_agent
