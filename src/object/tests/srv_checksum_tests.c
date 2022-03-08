@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2019-2021 Intel Corporation.
+ * (C) Copyright 2019-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -1127,8 +1127,15 @@ fetch_with_hole3(void **state)
 }
 
 /**
+ *
  * 2 holes, first spans a whole chunk, second starts in middle of a chunk and
  * ends in middle of next chunk
+ *
+ * Should look like this:
+ * Fetch extent:	_  _  _  _  _  _  _  _ | A  B  C  D  E  F  _  _ | _  _  G  H  I  J  K  L
+ * epoch 2 extent:	                       |                        |       G  H  I  J  K  L
+ * epoch 1 extent:	                       | A  B  C  D  E  F       |
+ * index:		0  1  2  3  4  5  6  7 | 8  9 10 11 12 13 14 15 |16 17 18 19 20 21 22 23
  */
 static void
 fetch_with_hole4(void **state)
@@ -1146,7 +1153,7 @@ fetch_with_hole4(void **state)
 			{.data = "ABCDEF", .sel = {8, 13}, .ful = {8, 13} },
 			{.data = "", .sel = {14, 17}, .ful = {14, 17},
 				.is_hole = true},
-			{.data = "GHIJKL", .sel = {18, 23}, .ful = {8, 23} },
+			{.data = "GHIJKL", .sel = {18, 23}, .ful = {18, 23} },
 			{.data = NULL}
 		}
 	});
@@ -1242,6 +1249,45 @@ fetch_with_hole6(void **state)
 	FAKE_UPDATE_SAW(">A|>ABCD|");
 	ASSERT_CSUM_EMPTY(ctx, 0);
 	ASSERT_CSUM_IDX(ctx, "NNNN", 1);
+
+	/** clean up */
+	test_case_destroy(&ctx);
+}
+
+
+/**
+ * Hole within a single chunk
+ *
+ * Should look like this:
+ * Fetch extent:	   A | B  _ | _  _ |      | H  I |  J  K |  L  M
+ * epoch 3 punch:            |    _ | _  _ | _  _ |
+ * epoch 1 extent:	   A | B  C | D  E | F  G | H  I |  J  K |  L  M
+ * index:		0  1 | 2  3 | 4  5 | 6  7 | 8  9 | 10 11 | 12 13
+ */
+static void
+fetch_with_hole7(void **state)
+{
+	struct vos_fetch_test_context ctx;
+
+	ARRAY_TEST_CASE_CREATE(&ctx, {
+		.request_idx = 1,
+		.request_len = 13,
+		.chunksize = 2,
+		.rec_size = 1,
+		.layout = {
+			{.data = "ABCDEFGHIJKLM", .sel = {1, 2}, .ful = {1, 13} },
+			{.data = "", .sel = {3, 7}, .ful = {3, 7}, .is_hole = true},
+			{.data = "HIJKLM", .sel = {8, 13}, .ful = {1, 13} },
+			{.data = NULL}
+		}
+	});
+
+	/** Act */
+	assert_success(fetch_csum_verify_bsgl_with_args(&ctx));
+
+	/** Verify */
+	FAKE_UPDATE_SAW(">B|>BC|");
+	ASSERT_CSUM(ctx, "SSSS");
 
 	/** clean up */
 	test_case_destroy(&ctx);
@@ -1418,19 +1464,17 @@ static const struct CMUnitTest array_tests[] = {
 	TA("SRV_CSUM_ARRAY15: Full and partial chunks",
 	   fetch_multiple_unaligned_extents),
 	TA("SRV_CSUM_ARRAY16: Many sequential extents", many_extents),
-	TA("SRV_CSUM_ARRAY17: Begins with hole",
-	   request_that_begins_before_extent),
+	TA("SRV_CSUM_ARRAY17: Begins with hole", request_that_begins_before_extent),
 	TA("SRV_CSUM_ARRAY18: Hole in middle", fetch_with_hole),
 	TA("SRV_CSUM_ARRAY19: Hole in middle", fetch_with_hole2),
 	TA("SRV_CSUM_ARRAY20: Many holes in middle", fetch_with_hole3),
 	TA("SRV_CSUM_ARRAY21: First chunk is hole", fetch_with_hole4),
-	TA("SRV_CSUM_ARRAY22: Handle holes while creating csums",
-	   fetch_with_hole5),
+	TA("SRV_CSUM_ARRAY22: Handle holes while creating csums", fetch_with_hole5),
 	TA("SRV_CSUM_ARRAY22: Hole spans past first chunk", fetch_with_hole6),
-	TA("SRV_CSUM_ARRAY23: First recx request of multiple",
-	   request_is_only_part_of_biovs),
-	TA("SRV_CSUM_ARRAY24: Fetch with larger records1", larger_records),
-	TA("SRV_CSUM_ARRAY25: Fetch with larger records2", larger_records2),
+	TA("SRV_CSUM_ARRAY13: Hole in middle spans multiple chunks", fetch_with_hole7),
+	TA("SRV_CSUM_ARRAY24: First recx request of multiple", request_is_only_part_of_biovs),
+	TA("SRV_CSUM_ARRAY25: Fetch with larger records1", larger_records),
+	TA("SRV_CSUM_ARRAY26: Fetch with larger records2", larger_records2),
 };
 
 /**

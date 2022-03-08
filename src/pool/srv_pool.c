@@ -935,7 +935,7 @@ events_handler(void *arg)
 				d_list_del_init(&event->psv_link);
 				break;
 			}
-			ABT_cond_wait(events->pse_cv, events->pse_mutex);
+			sched_cond_wait(events->pse_cv, events->pse_mutex);
 		}
 		ABT_mutex_unlock(events->pse_mutex);
 		if (stop)
@@ -5643,7 +5643,7 @@ ds_pool_elect_dtx_leader(struct ds_pool *pool, daos_unit_oid_t *oid,
 
 	md.omd_id = oid->id_pub;
 	md.omd_ver = version;
-	rc = pl_obj_place(map, &md, NULL, &layout);
+	rc = pl_obj_place(map, &md, DAOS_OO_RO, NULL, &layout);
 	if (rc != 0)
 		goto out;
 

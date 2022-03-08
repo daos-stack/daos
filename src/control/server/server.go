@@ -261,7 +261,10 @@ func (srv *server) addEngines(ctx context.Context) error {
 
 	// Retrieve NVMe device details (before engines are started) so static details can be
 	// recovered by the engine storage provider(s) during scan even if devices are in use.
-	nvmeScanResp := scanBdevStorage(srv)
+	nvmeScanResp, err := scanBdevStorage(srv)
+	if err != nil {
+		return err
+	}
 
 	for i, c := range srv.cfg.Engines {
 		engine, err := srv.createEngine(ctx, i, c)
@@ -419,6 +422,12 @@ func Start(log *logging.LeveledLogger, cfg *config.Server) error {
 	// that they can be shut down from one place.
 	ctx, shutdown := context.WithCancel(context.Background())
 	defer shutdown()
+
+	hwprovFini, err := hwprov.Init(log)
+	if err != nil {
+		return err
+	}
+	defer hwprovFini()
 
 	scanner := hwprov.DefaultFabricScanner(log)
 	fiSet, err := scanner.Scan(ctx)

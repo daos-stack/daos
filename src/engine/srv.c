@@ -461,8 +461,7 @@ dss_srv_handler(void *arg)
 		}
 
 		rc = daos_abt_thread_create(dx, dx->dx_pools[DSS_POOL_NVME_POLL],
-					    dss_nvme_poll_ult, attr,
-					    ABT_THREAD_ATTR_NULL, NULL);
+					    dss_nvme_poll_ult, NULL, attr, NULL);
 		ABT_thread_attr_free(&attr);
 		if (rc != ABT_SUCCESS) {
 			D_ERROR("create NVMe poll ULT failed: %d\n", rc);
@@ -492,6 +491,9 @@ dss_srv_handler(void *arg)
 		ABT_cond_wait(xstream_data.xd_ult_barrier, xstream_data.xd_mutex);
 	ABT_mutex_unlock(xstream_data.xd_mutex);
 
+	if (dx->dx_comm)
+		dx->dx_progress_started = true;
+
 	signal_caller = false;
 	/* main service progress loop */
 	for (;;) {
@@ -511,6 +513,9 @@ dss_srv_handler(void *arg)
 
 		ABT_thread_yield();
 	}
+
+	if (dx->dx_comm)
+		dx->dx_progress_started = false;
 
 	wait_all_exited(dx);
 	if (dmi->dmi_dp) {
@@ -1445,4 +1450,10 @@ void
 dss_set_start_epoch(void)
 {
 	dss_start_epoch = crt_hlc_get();
+}
+
+bool
+dss_has_enough_helper(void)
+{
+	return dss_tgt_offload_xs_nr > 1 && dss_tgt_offload_xs_nr >= dss_tgt_nr / 4;
 }

@@ -85,6 +85,7 @@ struct dss_xstream {
 	d_list_t		stack_free_list;
 	uint64_t		free_stacks;
 #endif
+	bool			dx_progress_started;	/* Network poll started */
 };
 
 /** Engine module's metrics */

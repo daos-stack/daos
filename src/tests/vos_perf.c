@@ -498,6 +498,20 @@ pf_discard(struct pf_test *ts, struct pf_param *param)
 }
 
 static int
+pf_gc(struct pf_test *ts, struct pf_param *param)
+{
+	uint64_t		start = 0;
+
+	TS_TIME_START(&param->pa_duration, start);
+
+	gc_wait();
+
+	TS_TIME_END(&param->pa_duration, start);
+
+	return 0;
+}
+
+static int
 pf_verify(struct pf_test *ts, struct pf_param *param)
 {
 	int	rc;
@@ -656,6 +670,12 @@ struct pf_test pf_tests[] = {
 		.ts_name	= "DISCARD",
 		.ts_parse	= pf_parse_aggregate,
 		.ts_func	= pf_discard,
+	},
+	{
+		.ts_code	= 'G',
+		.ts_name	= "GARBAGE COLLECTION",
+		.ts_parse	= pf_parse_aggregate,
+		.ts_func	= pf_gc,
 	},
 	{
 		.ts_code	= 0,
