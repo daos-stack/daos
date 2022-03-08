@@ -320,7 +320,7 @@ btr_context_create(umem_off_t root_off, struct btr_root *root,
 static int
 btr_context_clone(struct btr_context *tcx, struct btr_context **tcx_p)
 {
-	struct umem_attr uma;
+	struct umem_attr uma = {0};
 	int		 rc;
 
 	umem_attr_get(&tcx->tc_tins.ti_umm, &uma);
