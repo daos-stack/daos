@@ -380,23 +380,6 @@ ds_pipeline_run(daos_handle_t vos_coh, daos_unit_oid_t oid,
 
 		nr_kds_pass++;
 
-		/*{
-			char *buf = (char *) sgl_recx_iter[0].sg_iovs->iov_buf;
-			size_t sbuf = *((size_t *) &buf[8]);
-			printf("name=%.*s\n", (int)sbuf, &buf[16]);
-			sbuf= *((size_t *) &buf[37]);
-			printf("owner=%.*s\n", (int)sbuf, &buf[45]);
-			sbuf= *((size_t *) &buf[66]);
-			printf("species=%.*s\n", (int)sbuf, &buf[74]);
-			sbuf= *((size_t *) &buf[95]);
-			printf("sex=%.*s\n", (int)sbuf, &buf[103]);
-			printf("weight=%d\n", *((int *) &buf[104]));
-			printf("r=%f\n", *((double *) &buf[108]));
-			sbuf= *((size_t *) &buf[116]);
-			printf("birth=%.*s\n", (int)sbuf, &buf[124]);
-			fflush(stdout);
-		}*/
-
 		/** -- aggregations */
 
 		rc = pipeline_aggregations(&pipeline_compiled, &pipe_run_args,

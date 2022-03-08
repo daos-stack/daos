@@ -386,7 +386,7 @@ int filter_func_bitand(struct filter_part_run_t *args)
 		D_GOTO(exit, rc);
 	}
 
-	args->value_i_out = left & right;
+	args->value_u_out = left & right;
 exit:
 	if (rc < 0)
 	{
