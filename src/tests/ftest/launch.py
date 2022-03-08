@@ -1716,7 +1716,7 @@ def resolve_debuginfo(pkg):
 
 def is_el(distro):
     """Return True if a distro is an EL"""
-    return [d for d in ["rocky", "centos"] if d in distro.name.lower()]
+    return [d for d in ["almalinux", "rocky", "centos"] if d in distro.name.lower()]
 
 
 def install_debuginfos():
@@ -1727,6 +1727,7 @@ def install_debuginfos():
         on this node also.
 
     """
+    sys.path.append(os.path.join(os.getcwd(), "util"))
     from distro_utils import detect     # pylint: disable=import-outside-toplevel
 
     distro_info = detect()
