@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2021 Intel Corporation.
+ * (C) Copyright 2016-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -22,6 +22,9 @@
 #include <daos_srv/vos.h>
 #include <vos_internal.h>
 
+#define		FORCE_CSUM 0x1001
+#define		FORCE_NO_ZERO_COPY 0x1002
+
 static void
 print_usage()
 {
@@ -37,12 +40,15 @@ print_usage()
 	print_message("vos_tests -l|--incarnation-log-tests\n");
 	print_message("vos_tests -z|--csum_tests\n");
 	print_message("vos_tests -A|--all_tests\n");
-	print_message("vos_tests -f|--filter <filter>\n");
-	print_message("vos_tests -e|--exclude <filter>\n");
 	print_message("vos_tests -m|--punch-model-tests\n");
 	print_message("vos_tests -C|--mvcc-tests\n");
 	print_message("vos_tests -h|--help\n");
 	print_message("Default <vos_tests> runs all tests\n");
+	print_message("The following options can be used with any of the above:\n");
+	print_message("  -f|--filter <filter>\n");
+	print_message("  -e|--exclude <filter>\n");
+	print_message("  --force_checksum\n");
+	print_message("  --force_no_zero_copy\n");
 }
 
 static int dkey_feats[] = {
@@ -134,6 +140,9 @@ main(int argc, char **argv)
 		{"help",		no_argument, 0, 'h'},
 		{"filter",		required_argument, 0, 'f'},
 		{"exclude",		required_argument, 0, 'e'},
+		{"force_csum",		no_argument, 0, FORCE_CSUM},
+		{"force_no_zero_copy",	no_argument, 0, FORCE_NO_ZERO_COPY},
+		{NULL},
 	};
 
 	d_register_alt_assert(mock_assert);
@@ -177,6 +186,12 @@ main(int argc, char **argv)
 #else
 			D_PRINT("filter not enabled");
 #endif
+			break;
+		case FORCE_CSUM:
+			g_force_checksum = true;
+			break;
+		case FORCE_NO_ZERO_COPY:
+			g_force_no_zero_copy = true;
 			break;
 		default:
 			break;
@@ -250,6 +265,8 @@ main(int argc, char **argv)
 			break;
 		case 'f':
 		case 'e':
+		case FORCE_CSUM:
+		case FORCE_NO_ZERO_COPY:
 			/** already handled */
 			break;
 		case 'h':
