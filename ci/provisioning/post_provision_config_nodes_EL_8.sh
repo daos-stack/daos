@@ -49,6 +49,44 @@ distro_custom() {
 
     dnf config-manager --disable powertools
 
+    # Need to remove the upstream [debuginfo] repos
+    rm -f /etc/yum.repos.d/{Rocky-Debuginfo,epel{,{,-testing}-modular}}.repo
+
+    # add local debuginfo repos
+    if [ -f /etc/yum.repos.d/daos_ci-rocky8-artifactory.repo ]; then
+        echo >> /etc/yum.repos.d/daos_ci-rocky8-artifactory.repo
+    fi
+
+    cat <<EOF >> /etc/yum.repos.d/daos_ci-rocky8-artifactory.repo
+[daos_ci-rocky8-base-nexus-debuginfo]
+name=daos_ci-rocky8-base-nexus-debuginfo
+baseurl=https://$REPOSITORY_URL/repository/rocky-$releasever-proxy/BaseOS/$arch/debug/tree/'
+enabled=0
+gpgcheck=1
+gpgkey=file:///etc/pki/rpm-gpg/RPM-GPG-KEY-rockyofficial
+
+[daos_ci-rocky8-appstream-nexus-debuginfo]
+name=daos_ci-rocky8-appstream-nexus-debuginfo
+baseurl=https://$REPOSITORY_URL/repository/rocky-$releasever-proxy/AppStream/$arch/debug/tree/'
+enabled=0
+gpgcheck=1
+gpgkey=file:///etc/pki/rpm-gpg/RPM-GPG-KEY-rockyofficial
+
+[daos_ci-rocky8-powertools-nexus-debuginfo]
+name=daos_ci-rocky8-powertools-nexus-debuginfo
+baseurl=https://$REPOSITORY_URL/repository/rocky-$releasever-proxy/PowerTools/$arch/debug/tree/'
+enabled=0
+gpgcheck=1
+gpgkey=file:///etc/pki/rpm-gpg/RPM-GPG-KEY-rockyofficial
+
+[daos_ci-rocky8-extras-nexus-debuginfo]
+name=daos_ci-rocky8-extras-nexus-debuginfo
+baseurl=https://$REPOSITORY_URL/repository/rocky-$releasever-proxy/extras/$arch/debug/tree/'
+enabled=0
+gpgcheck=1
+gpgkey=file:///etc/pki/rpm-gpg/RPM-GPG-KEY-rockyofficial
+EOF
+
     # Mellanox OFED hack
     if ls -d /usr/mpi/gcc/openmpi-*; then
         version="$(rpm -q --qf "%{version}" openmpi)"
