@@ -732,6 +732,7 @@ key_iter_fetch(struct vos_obj_iter *oiter, vos_iter_entry_t *ent,
 	       daos_anchor_t *anchor, bool check_existence)
 {
 
+	vos_iter_desc_t		 desc;
 	struct vos_krec_df	*krec;
 	struct vos_rec_bundle	 rbund;
 	daos_epoch_range_t	 epr = {0, DAOS_EPOCH_MAX};
@@ -743,6 +744,13 @@ key_iter_fetch(struct vos_obj_iter *oiter, vos_iter_entry_t *ent,
 		  "Iterator should probe before fetch\n");
 	if (rc != 0)
 		return rc;
+
+	if (check_existence && oiter->it_iter.it_filter_cb != NULL) {
+		desc.id_type = oiter->it_iter.it_type;
+		desc.id_key = ent->ie_key;
+		if (oiter->it_iter.it_filter_cb(&desc, oiter->it_iter.it_filter_arg))
+			return IT_OPC_NEXT;
+	}
 
 	D_ASSERT(rbund.rb_krec);
 	if (oiter->it_iter.it_type == VOS_ITER_AKEY) {
@@ -864,8 +872,9 @@ key_iter_match(struct vos_obj_iter *oiter, vos_iter_entry_t *ent)
 
 	rc = key_iter_fetch(oiter, ent, NULL, true);
 	if (rc != 0) {
-		VOS_TX_TRACE_FAIL(rc, "Failed to fetch the entry: "DF_RC"\n",
-				  DP_RC(rc));
+		if (rc < 0)
+			VOS_TX_TRACE_FAIL(rc, "Failed to fetch the entry: "DF_RC"\n",
+					  DP_RC(rc));
 		return rc;
 	}
 
@@ -1485,6 +1494,8 @@ vos_obj_iter_prep(vos_iter_type_t type, vos_iter_param_t *param,
 	bound = dtx_is_valid_handle(dth) ? dth->dth_epoch_bound :
 		param->ip_epr.epr_hi;
 	oiter->it_iter.it_bound = MAX(bound, param->ip_epr.epr_hi);
+	oiter->it_iter.it_filter_cb = param->ip_filter_cb;
+	oiter->it_iter.it_filter_arg = param->ip_filter_arg;
 	vos_ilog_fetch_init(&oiter->it_ilog_info);
 	oiter->it_iter.it_type = type;
 	oiter->it_epr = param->ip_epr;

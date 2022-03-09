@@ -469,6 +469,8 @@ oi_iter_prep(vos_iter_type_t type, vos_iter_param_t *param,
 		oiter->oit_iter.it_bound = param->ip_epr.epr_hi;
 	vos_cont_addref(cont);
 
+	oiter->oit_iter.it_filter_cb = param->ip_filter_cb;
+	oiter->oit_iter.it_filter_arg = param->ip_filter_arg;
 	oiter->oit_flags = param->ip_flags;
 	if (param->ip_flags & VOS_IT_FOR_PURGE)
 		oiter->oit_iter.it_for_purge = 1;
@@ -498,12 +500,12 @@ oi_iter_match_probe(struct vos_iterator *iter)
 {
 	struct vos_oi_iter	*oiter	= iter2oiter(iter);
 	char			*str	= NULL;
+	vos_iter_desc_t		 desc;
 
 	int			 rc;
 
 	while (1) {
 		struct vos_obj_df *obj;
-		int		   probe;
 		d_iov_t	   iov;
 
 		rc = dbtree_iter_fetch(oiter->oit_hdl, NULL, &iov, NULL);
@@ -515,6 +517,13 @@ oi_iter_match_probe(struct vos_iterator *iter)
 		D_ASSERT(iov.iov_len == sizeof(struct vos_obj_df));
 		obj = (struct vos_obj_df *)iov.iov_buf;
 
+		if (iter->it_filter_cb != NULL) {
+			desc.id_type = VOS_ITER_OBJ;
+			desc.id_oid = obj->vo_id;
+			if (iter->it_filter_cb(&desc, iter->it_filter_arg))
+				goto next;
+		}
+
 		rc = oi_iter_ilog_check(obj, oiter, NULL, true);
 		if (rc == 0)
 			break;
@@ -522,13 +531,10 @@ oi_iter_match_probe(struct vos_iterator *iter)
 			str = "ilog check";
 			goto failed;
 		}
-		probe = BTR_PROBE_GT;
-
-		d_iov_set(&iov, &obj->vo_id, sizeof(obj->vo_id));
-		rc = dbtree_iter_probe(oiter->oit_hdl, probe,
-				       vos_iter_intent(iter), &iov, NULL);
+next:
+		rc = dbtree_iter_next(oiter->oit_hdl);
 		if (rc != 0) {
-			str = "probe";
+			str = "next";
 			goto failed;
 		}
 	}
