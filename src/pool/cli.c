@@ -384,7 +384,6 @@ process_query_reply(struct dc_pool *pool, struct pool_buf *map_buf,
 		    bool connect)
 {
 	struct pool_map	       *map;
-	unsigned int		num_disabled = 0;
 	int			rc;
 
 	D_DEBUG(DF_DSMC, DF_UUID": info=%p (pi_bits="DF_X64"), ranks=%p\n",
@@ -397,36 +396,39 @@ process_query_reply(struct dc_pool *pool, struct pool_buf *map_buf,
 	}
 
 	D_RWLOCK_WRLOCK(&pool->dp_map_lock);
+
 	rc = dc_pool_map_update(pool, map, connect);
 	if (rc)
 		goto out_unlock;
 
-	/* Scan all targets for populating info->pi_ndisabled and ranks.
-	 * If no targets disabled, get all pool storage engine ranks.
-	 * Otherwise, get the ranks associated with the disabled targets.
-	 */
-	rc = pool_map_find_failed_tgts(map, NULL, &num_disabled);
-	if (rc != 0) {
-		D_ERROR("Couldn't get failed targets, "DF_RC"\n", DP_RC(rc));
-		goto out_unlock;
+	/* Scan all targets for populating info->pi_ndisabled */
+	if (info != NULL) {
+		rc = pool_map_find_failed_tgts(map, NULL, &info->pi_ndisabled);
+		if (rc != 0) {
+			D_ERROR("Couldn't get failed targets, "DF_RC"\n", DP_RC(rc));
+			goto out_unlock;
+		}
 	}
-	if (info != NULL)
-		info->pi_ndisabled = num_disabled;
+
+	/* Scan all targets for populating ranks */
 	if (ranks != NULL) {
-		bool	get_enabled = (num_disabled == 0) ? true : false;
+		d_rank_range_list_t	*range_list;
+		bool	get_enabled = (info ? ((info->pi_bits & DPI_ENGINES_ENABLED) != 0) : false);
 
 		rc = pool_map_get_ranks(pool, map, get_enabled, ranks);
-		if (rc == 0) {
-			d_rank_range_list_t	*range_list;
+		if (rc != 0) {
+			D_ERROR(DF_UUID": failed to get %s pool ranks\n",
+				DP_UUID(pool->dp_pool), get_enabled ? "enabled" : "disabled");
+			goto out_unlock;
+		}
 
-			range_list = d_rank_range_list_create_from_ranks(*ranks);
-			if (range_list) {
-				pool_print_range_list(pool, range_list, get_enabled);
-				d_rank_range_list_free(range_list);
-			} else {
-				D_ERROR(DF_UUID": failed to get rank range list\n",
-					DP_UUID(pool->dp_pool));
-			}
+		/* For debug logging - convert to rank ranges */
+		range_list = d_rank_range_list_create_from_ranks(*ranks);
+		if (range_list) {
+			pool_print_range_list(pool, range_list, get_enabled);
+			d_rank_range_list_free(range_list);
+		} else {
+			D_ERROR(DF_UUID": failed to get rank range list\n", DP_UUID(pool->dp_pool));
 		}
 	}
 
