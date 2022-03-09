@@ -16,9 +16,6 @@ class MacsioTest(DfuseTestBase, MacsioTestBase):
     :avocado: recursive
     """
 
-    # Cancel any test using MPICH w/ MACSio due to DAOS-5265
-    CANCEL_FOR_TICKET = [["DAOS-5265", "job_manager_mpi_type", "mpich"]]
-
     def test_macsio(self):
         """JIRA ID: DAOS-3658.
 
