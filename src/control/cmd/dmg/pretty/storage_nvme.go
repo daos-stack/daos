@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2021 Intel Corporation.
+// (C) Copyright 2020-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -159,6 +159,19 @@ func printNvmeHealth(stat *storage.NvmeHealth, out io.Writer, opts ...PrintConfi
 	return w.Err
 }
 
+// Strip NVMe controller format results of skip entries.
+func parseNvmeFormatResults(inResults storage.NvmeControllers) storage.NvmeControllers {
+	parsedResults := make(storage.NvmeControllers, 0, len(inResults))
+	for _, result := range inResults {
+		if result.PciAddr != storage.NilBdevAddress {
+			// ignore skip results
+			parsedResults = append(parsedResults, result)
+		}
+	}
+
+	return parsedResults
+}
+
 func printNvmeFormatResults(devices storage.NvmeControllers, out io.Writer, opts ...PrintConfigOption) error {
 	if len(devices) == 0 {
 		fmt.Fprintln(out, "\tNo NVMe devices found")
@@ -174,7 +187,7 @@ func printNvmeFormatResults(devices storage.NvmeControllers, out io.Writer, opts
 
 	sort.Slice(devices, func(i, j int) bool { return devices[i].PciAddr < devices[j].PciAddr })
 
-	for _, device := range devices {
+	for _, device := range parseNvmeFormatResults(devices) {
 		row := txtfmt.TableRow{pciTitle: device.PciAddr}
 		row[resultTitle] = device.Info
 
