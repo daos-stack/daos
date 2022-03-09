@@ -178,7 +178,7 @@ def set_test_environment(args):
 
     if not args.list:
         # Get the default fabric_iface value (DAOS_TEST_FABRIC_IFACE)
-        set_interface_environment()
+        set_interface_environment(args)
 
         # Get the default provider if CRT_PHY_ADDR_STR is not set
         set_provider_environment(os.environ["DAOS_TEST_FABRIC_IFACE"], args)
@@ -206,7 +206,7 @@ def set_test_environment(args):
             print("  {}: {}".format(key, os.environ[key]))
 
 
-def set_interface_environment():
+def set_interface_environment(args):
     """Set up the interface environment variables.
 
     Use the existing OFI_INTERFACE setting if already defined, or select the fastest, active
@@ -214,6 +214,9 @@ def set_interface_environment():
 
     The DAOS_TEST_FABRIC_IFACE defines the default fabric_iface value in the daos_server
     configuration file.
+
+    Args:
+        args (argparse.Namespace): command line arguments for this program
     """
     # Get the default interface to use if OFI_INTERFACE is not set
     interface = os.environ.get("OFI_INTERFACE")
@@ -221,48 +224,13 @@ def set_interface_environment():
         # Find all the /sys/class/net interfaces on the launch node
         # (excluding lo)
         print("Detecting network devices - OFI_INTERFACE not set")
-        available_interfaces = {}
-        net_path = os.path.join(os.path.sep, "sys", "class", "net")
-        net_list = [dev for dev in os.listdir(net_path) if dev != "lo"]
-        for device in sorted(net_list):
-            if device == "bonding_masters":
-                continue
-            # Get the interface state - only include active (up) interfaces
-            device_operstate = os.path.join(net_path, device, "operstate")
-            with open(device_operstate, "r") as file_handle:
-                state = file_handle.read().strip()
-            # Only include interfaces that are up
-            if state.lower() == "up":
-                # Get the interface speed - used to select the fastest
-                # available
-                device_speed = os.path.join(net_path, device, "speed")
-                with open(device_speed, "r") as file_handle:
-                    try:
-                        speed = int(file_handle.read().strip())
-                        # KVM/Qemu/libvirt returns an EINVAL
-                    except IOError as ioerror:
-                        if ioerror.errno == errno.EINVAL:
-                            speed = 1000
-                        else:
-                            raise
-                print(
-                    "  - {0:<5} (speed: {1:>6} state: {2})".format(
-                        device, speed, state))
-                # Only include the first active interface for each speed -
-                # first is determined by an alphabetic sort: ib0 will be
-                # checked before ib1
-                if speed not in available_interfaces:
-                    available_interfaces[speed] = device
-        print("Available interfaces: {}".format(available_interfaces))
+        available_interfaces = get_available_interfaces(args)
         try:
             # Select the fastest active interface available by sorting
             # the speed
-            interface = \
-                available_interfaces[sorted(available_interfaces)[-1]]
+            interface = available_interfaces[sorted(available_interfaces)[-1]]
         except IndexError:
-            print(
-                "Error obtaining a default interface from: {}".format(
-                    os.listdir(net_path)))
+            print("Error obtaining a default interface!")
             sys.exit(1)
 
     # Update env definitions
@@ -274,6 +242,96 @@ def set_interface_environment():
             print("Testing with {}={}".format(name, os.environ[name]))
         except KeyError:
             print("Testing with {} unset".format(name))
+
+
+def get_available_interfaces(args):
+    """Get a dictionary of active available interfaces and their speeds.
+
+    Args:
+        args (argparse.Namespace): command line arguments for this program
+
+    Returns:
+        dict: a dictionary of speeds with the first available active interface providing that speed
+
+    """
+    available_interfaces = {}
+    all_hosts = NodeSet()
+    all_hosts.update(args.test_servers)
+    all_hosts.update(args.test_clients)
+    host_list = list(all_hosts)
+
+    # Find any active network interfaces on the server or client hosts
+    net_path = os.path.join(os.path.sep, "sys", "class", "net")
+    operstate = os.path.join(net_path, "*", "operstate")
+    command = " | ".join(
+        ["grep -l 'up' {}".format(operstate), "grep -Ev '/(lo|bonding_masters)/'", "sort"])
+    task = get_remote_output(list(host_list), command)
+    if check_remote_output(task, command):
+        # Populate a dictionary of active interfaces with a NodSet of hosts on which it was found
+        active_interfaces = {}
+        for output, nodelist in task.iter_buffers():
+            output_lines = [line.decode("utf-8") for line in output]
+            nodeset = NodeSet.fromlist(nodelist)
+            for line in output_lines:
+                try:
+                    interface = line.split("/")[-2]
+                    if interface not in active_interfaces:
+                        active_interfaces[interface] = nodeset
+                    else:
+                        active_interfaces[interface].update(nodeset)
+                except IndexError:
+                    pass
+
+        # From the active interface dictionary find all the interfaces that are common to all hosts
+        print("Active network interfaces detected:")
+        common_interfaces = []
+        for interface, node_set in active_interfaces.items():
+            print(
+                "  - {0:<8} on {1} (Common={2})".format(interface, node_set, node_set == all_hosts))
+            if node_set == all_hosts:
+                common_interfaces.append(interface)
+
+        # Find the speed of each common active interface in order to be able to choose the fastest
+        interface_speeds = {}
+        for interface in common_interfaces:
+            speed = None
+            command = "cat {}".format(os.path.join(net_path, interface, "speed"))
+            task = get_remote_output(list(host_list), command)
+            if check_remote_output(task, command):
+                # Verify each host has the same interface speed
+                output_data = list(task.iter_buffers())
+                if len(output_data) > 1:
+                    print(
+                        "ERROR: Non-homogeneous interface speed detected for {} on {}.".format(
+                            interface, all_hosts))
+                else:
+                    for line in output_data[0][0]:
+                        try:
+                            interface_speeds[interface] = int(line.strip())
+                        except IOError as io_error:
+                            # KVM/Qemu/libvirt returns an EINVAL
+                            if io_error.errno == errno.EINVAL:
+                                interface_speeds[interface] = 1000
+                        except ValueError:
+                            # Any line not containing a speed (integer)
+                            pass
+            else:
+                print("Error detecting speed of {} on {}".format(interface, all_hosts))
+
+        if interface_speeds:
+            print("Active network interface speeds on {}:".format(all_hosts))
+
+        for interface, speed in interface_speeds.items():
+            print("  - {0:<8} (speed: {1:>6})".format(interface, speed))
+            # Only include the first active interface for each speed - first is
+            # determined by an alphabetic sort: ib0 will be checked before ib1
+            if speed is not None and speed not in available_interfaces:
+                available_interfaces[speed] = interface
+    else:
+        print("Error obtaining a default interface on {} from {}".format(all_hosts, net_path))
+
+    print("Available interfaces on {}: {}".format(all_hosts, available_interfaces))
+    return available_interfaces
 
 
 def set_provider_environment(interface, args):
@@ -681,13 +739,19 @@ def get_test_files(test_list, args, yaml_dir, vmd_flag=False):
             dictionary entry will be set to None.
 
     """
+    # Replace any placeholders in the extra yaml file, if provided
+    extra_env_vars = {}
+    if args.extra_yaml:
+        args.extra_yaml, env_vars = replace_yaml_file(args.extra_yaml, args, yaml_dir, vmd_flag)
+        extra_env_vars.update(env_vars)
+
     test_files = [{"py": test, "yaml": None, "env": {}} for test in test_list]
     for test_file in test_files:
         base, _ = os.path.splitext(test_file["py"])
-        yaml_file, env_vars = replace_yaml_file(
-            "{}.yaml".format(base), args, yaml_dir, vmd_flag)
+        yaml_file, env_vars = replace_yaml_file("{}.yaml".format(base), args, yaml_dir, vmd_flag)
         test_file["yaml"] = yaml_file
-        test_file["env"] = env_vars
+        test_file["env"] = extra_env_vars.copy()
+        test_file["env"].update(env_vars)
 
         # Display the modified yaml file variants with debug
         command = ["avocado", "variants", "--mux-yaml", test_file["yaml"]]
