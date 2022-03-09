@@ -137,8 +137,9 @@ class IorTestBase(DfuseTestBase):
                 This will enable dfuse (xattr) working directory which is
                 needed to run vol connector for DAOS. Default is None.
             timeout (int, optional): command timeout. Defaults to None.
-            fail_on_warning (bool, optional): Controls whether the test
-                should fail if a 'WARNING' is found. Default is False.
+            fail_on_warning (bool/callable, optional): Controls test behavior when a 'WARNING' is
+                found. If True, call self.fail. If False, call self.log.warn. If callable, call it.
+                Default is False.
             mount_dir (str, optional): Create specific mount point
             out_queue (queue, optional): Pass the exception to the queue.
                 Defaults to None
@@ -240,8 +241,9 @@ class IorTestBase(DfuseTestBase):
             plugin_path (str, optional): HDF5 vol connector library path.
                 This will enable dfuse (xattr) working directory which is
                 needed to run vol connector for DAOS. Default is None.
-            fail_on_warning (bool, optional): Controls whether the test
-                should fail if a 'WARNING' is found. Default is False.
+            fail_on_warning (bool/callable, optional): Controls test behavior when a 'WARNING' is
+                found. If True, call self.fail. If False, call self.log.warn. If callable, call it.
+                Defaults is False.
             pool (TestPool, optional): The pool for which to display space.
                 Default is self.pool.
             out_queue (queue, optional): Pass the exception to the queue.
@@ -286,7 +288,9 @@ class IorTestBase(DfuseTestBase):
             if self.subprocess:
                 return out
 
-            if fail_on_warning:
+            if callable(fail_on_warning):
+                report_warning = fail_on_warning
+            elif fail_on_warning:
                 report_warning = self.fail
             else:
                 report_warning = self.log.warning
