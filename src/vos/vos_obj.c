@@ -681,10 +681,11 @@ key_iter_ilog_check(struct vos_krec_df *krec, struct vos_obj_iter *oiter,
 
 	rc = vos_ilog_check(&oiter->it_ilog_info, &oiter->it_epr, epr,
 			    (oiter->it_flags & VOS_IT_PUNCHED) == 0);
-
 out:
 	D_ASSERTF(check_existence || rc != -DER_NONEXIST,
 		  "Probe is required before fetch\n");
+	if (check_existence && !oiter->it_ilog_info.ii_full_scan)
+		oiter->it_iter.it_skipped = 1;
 	return rc;
 }
 
@@ -773,7 +774,6 @@ key_iter_fetch(struct vos_obj_iter *oiter, vos_iter_entry_t *ent,
 				 check_existence, NULL);
 	if (rc == -DER_NONEXIST) {
 		/** Skipped a key that doesn't match iterator condition */
-		oiter->it_iter.it_skipped = 1;
 		return IT_OPC_NEXT;
 	}
 	if (rc != 0) {

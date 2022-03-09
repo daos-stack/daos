@@ -390,6 +390,8 @@ oi_iter_ilog_check(struct vos_obj_df *obj, struct vos_oi_iter *oiter,
 out:
 	D_ASSERTF(check_existence || rc != -DER_NONEXIST,
 		  "Probe is required before fetch\n");
+	if (check_existence && !oiter->oit_ilog_info.ii_full_scan)
+		oiter->oit_iter.it_skipped = 1;
 	return rc;
 }
 
@@ -523,7 +525,6 @@ oi_iter_match_probe(struct vos_iterator *iter)
 			str = "ilog check";
 			goto failed;
 		}
-		iter->it_skipped = 1;
 		probe = BTR_PROBE_GT;
 
 		d_iov_set(&iov, &obj->vo_id, sizeof(obj->vo_id));
