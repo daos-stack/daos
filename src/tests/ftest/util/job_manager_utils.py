@@ -403,8 +403,36 @@ class Mpirun(JobManager):
         self.genv = FormattedParameter("-genv {}", None)
         self.mca = FormattedParameter("--mca {}", mca_default)
         self.working_dir = FormattedParameter("-wdir {}", None)
-        self.tmpdir_base = FormattedParameter("--mca orte_tmpdir_base {}", None)
+        self.tmpdir = FormattedParameter("-tmpdir {}", None)
         self.mpitype = mpitype
+
+    @property
+    def tmpdir_base(self):
+        """Get the tmpdir/tmpdir_base value.
+
+        Returns:
+            str: the current tmpdir/tmpdir_base value or None if not set
+
+        """
+        if self.mpitype == "openmpi":
+            if "orte_tmpdir_base" in self.mca.value:
+                return self.mca.value["orte_tmpdir_base"]
+            else:
+                return None
+        else:
+            return self.tmpdir.value
+
+    @tmpdir_base.setter
+    def tmpdir_base(self, value):
+        """Set the tmpdir/tmpdir_base value.
+
+        Args:
+            value (str): the tmpdir/tmpdir_base value to set
+        """
+        if self.mpitype == "openmpi":
+            self.mca.update({"orte_tmpdir_base": value}, "mca.orte_tmpdir_base", True)
+        else:
+            self.tmpdir.update(value, "tmpdir")
 
     def assign_hosts(self, hosts, path=None, slots=None):
         """Assign the hosts to use with the command (-f).
