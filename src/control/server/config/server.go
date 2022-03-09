@@ -574,7 +574,7 @@ func (cfg *Server) validateMultiServerConfig(log logging.Logger) error {
 	seenHelperStreamCount := -1
 
 	for idx, engine := range cfg.Engines {
-		fabricConfig := fmt.Sprintf("fabric:%s-%s-%d",
+		fabricConfig := fmt.Sprintf("fabric:%q-%q-%q",
 			engine.Fabric.Provider,
 			engine.Fabric.Interface,
 			engine.Fabric.InterfacePort)

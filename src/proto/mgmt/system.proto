@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2021 Intel Corporation.
+// (C) Copyright 2019-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -28,6 +28,7 @@ message SystemMember {
 	string info = 8;
 	string fault_domain = 9;
 	string last_update = 10;
+	repeated string secondary_fabric_uris = 11;
 }
 
 // SystemStopReq supplies system shutdown parameters.

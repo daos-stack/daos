@@ -621,7 +621,7 @@ func genConfig(log logging.Logger, newEngineCfg newEngineCfgFn, accessPoints []s
 		engineCfg.Fabric = engine.FabricConfig{
 			Provider:      nd.numaIfaces[nn].Provider,
 			Interface:     nd.numaIfaces[nn].Device,
-			InterfacePort: int(defaultFiPort + (nn * defaultFiPortInterval)),
+			InterfacePort: fmt.Sprintf("%d", defaultFiPort+(nn*defaultFiPortInterval)),
 		}
 
 		engines = append(engines, engineCfg)
