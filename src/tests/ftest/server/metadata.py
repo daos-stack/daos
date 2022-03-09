@@ -330,7 +330,7 @@ class ObjectMetadata(TestWithServers):
                 # but make sure the number does not decrease more than 3 times
                 # in a row.
                 variation = quantity - containers_created[loop - 1]
-                # Variation is nagative value and absolute variation greater
+                # Variation is negative value and absolute variation greater
                 # than 5.
                 if variation < 0 and abs(variation) > 5:
                     sequential_negative_count += 1
