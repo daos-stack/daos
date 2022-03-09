@@ -50,7 +50,10 @@ distro_custom() {
     dnf config-manager --disable powertools
 
     # Need to remove the upstream [debuginfo] repos
-    rm -f /etc/yum.repos.d/{Rocky-Debuginfo,epel{,{,-testing}-modular}}.repo
+    # But need to have the files present so that re-installation is blocked
+    for file in /etc/yum.repos.d/{Rocky-Debuginfo,epel{,{,-testing}-modular}}.repo; do
+        true > $file 
+    done
 
     # add local debuginfo repos
     if [ -f /etc/yum.repos.d/daos_ci-rocky8-artifactory.repo ]; then
