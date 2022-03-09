@@ -94,6 +94,7 @@ func (cmd *startCmd) Execute(_ []string) error {
 		numaAware:  numaAware,
 		netCtx:     netCtx,
 		monitor:    procmon,
+		provider:   cmd.cfg.Provider,
 	})
 
 	err = drpcServer.Start()

@@ -36,6 +36,7 @@ type mgmtModule struct {
 	numaAware  bool
 	netCtx     context.Context
 	monitor    *procMon
+	provider   string
 }
 
 func (mod *mgmtModule) HandleCall(session *drpc.Session, method drpc.Method, req []byte) ([]byte, error) {
@@ -131,13 +132,19 @@ func (mod *mgmtModule) handleGetAttachInfo(ctx context.Context, reqb []byte, pid
 }
 
 func (mod *mgmtModule) getAttachInfo(ctx context.Context, numaNode int, sys string) (*mgmtpb.GetAttachInfoResp, error) {
-	resp, err := mod.getAttachInfoResp(ctx, numaNode, sys)
+	rawResp, err := mod.getAttachInfoResp(ctx, numaNode, sys)
 	if err != nil {
 		mod.log.Errorf("failed to fetch remote AttachInfo: %s", err.Error())
 		return nil, err
 	}
 
-	fabricIF, err := mod.getFabricInterface(ctx, numaNode, hardware.NetDevClass(resp.ClientNetHint.NetDevClass), resp.ClientNetHint.Provider)
+	resp, err := mod.getProviderAttachInfo(rawResp)
+	if err != nil {
+		return nil, err
+	}
+
+	fabricIF, err := mod.getFabricInterface(ctx, numaNode, hardware.NetDevClass(resp.ClientNetHint.NetDevClass),
+		resp.ClientNetHint.Provider)
 	if err != nil {
 		mod.log.Errorf("failed to fetch fabric interface of type %s: %s",
 			hardware.NetDevClass(resp.ClientNetHint.NetDevClass), err.Error())
@@ -157,6 +164,37 @@ func (mod *mgmtModule) getAttachInfo(ctx context.Context, numaNode int, sys stri
 
 func (mod *mgmtModule) getAttachInfoResp(ctx context.Context, numaNode int, sys string) (*mgmtpb.GetAttachInfoResp, error) {
 	return mod.attachInfo.Get(ctx, numaNode, sys, mod.getAttachInfoRemote)
+}
+
+func (mod *mgmtModule) getProviderAttachInfo(srvResp *mgmtpb.GetAttachInfoResp) (*mgmtpb.GetAttachInfoResp, error) {
+	if mod.provider == "" || mod.provider == srvResp.ClientNetHint.Provider {
+		return srvResp, nil
+	}
+
+	uris := []*mgmtpb.GetAttachInfoResp_RankUri{}
+	for _, uri := range srvResp.SecondaryRankUris {
+		if uri.Provider == mod.provider {
+			uris = append(uris, uri)
+		}
+	}
+
+	if len(uris) == 0 {
+		return nil, errors.Errorf("no rank URIs for provider %q", mod.provider)
+	}
+
+	for _, hint := range srvResp.SecondaryClientNetHints {
+		if hint.Provider == mod.provider {
+
+			return &mgmtpb.GetAttachInfoResp{
+				Status:        srvResp.Status,
+				RankUris:      uris,
+				MsRanks:       srvResp.MsRanks,
+				ClientNetHint: hint,
+			}, nil
+		}
+	}
+
+	return nil, errors.Errorf("no ClientNetHint for provider %q", mod.provider)
 }
 
 func (mod *mgmtModule) getAttachInfoRemote(ctx context.Context, numaNode int, sys string) (*mgmtpb.GetAttachInfoResp, error) {

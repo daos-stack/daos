@@ -62,6 +62,7 @@ fabric_ifaces:
   -
      iface: ib3
      domain: mlx5_3
+provider: ofi+tcp
 `)
 
 	badLogMaskCfg := common.CreateTestFile(t, dir, `
@@ -155,6 +156,7 @@ transport_config:
 						},
 					},
 				},
+				Provider: "ofi+tcp",
 			},
 		},
 	} {
