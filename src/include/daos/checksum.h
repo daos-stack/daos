@@ -510,6 +510,29 @@ void
 ci_cast(struct dcs_csum_info **obj, const d_iov_t *iov);
 
 /**
+ * A dcs_ci_list and associated functions manages the memory for storing a list of csum_infos.
+ */
+struct dcs_ci_list {
+	uint8_t			*dcl_csum_infos;
+	uint32_t		 dcl_csum_infos_nr;
+	uint32_t		 dcl_buf_used;
+	uint32_t		 dcl_buf_size;
+};
+
+/**
+ * Initialize memory for storing the csum_infos. The nr helps to allocate an amount of memory,
+ * but depending on the number of checksums in each csum_info, the list may need to reallocate
+ * more memory to store nr checksums. The reallocation happens internally and the caller doesn't
+ * need to worry about that. dcs_csum_info_list_fini must be called when done so that the memory
+ * allocated is freed.
+ */
+int dcs_csum_info_list_init(struct dcs_ci_list *list, uint32_t nr);
+void dcs_csum_info_list_fini(struct dcs_ci_list *list);
+int dcs_csum_info_save(struct dcs_ci_list *list, struct dcs_csum_info *info,
+		       struct dcs_csum_info **ci_out);
+struct dcs_csum_info *dcs_csum_info_get(struct dcs_ci_list *list, uint32_t idx);
+
+/**
  * change the iov so that buf points to the next csum_info, assuming the
  * current csum info's csum buf is right after it in the buffer.
  */

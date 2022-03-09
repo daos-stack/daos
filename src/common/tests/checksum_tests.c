@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2019-2021 Intel Corporation.
+ * (C) Copyright 2019-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -588,6 +588,69 @@ test_skip_csum_calculations_when_skip_set(void **state)
 	daos_csummer_destroy(&csummer);
 }
 
+#define assert_dcs_csum_info_list_init(list, nr)            \
+	do {                                                \
+	assert_success(dcs_csum_info_list_init(&list, nr)); \
+	if (nr == 0)                                        \
+		assert_null(list.dcl_csum_infos);           \
+	if (nr > 0)                                         \
+		assert_non_null(list.dcl_csum_infos);       \
+	assert_int_equal(0, list.dcl_csum_infos_nr);        \
+	} while (0)
+
+
+static void
+test_csum_info_list_handling(void **state)
+{
+	struct dcs_ci_list list = {0};
+	int i;
+
+	/* set to garbage so can test that all fields are set */
+	memset(&list, 0xFF, sizeof(list));
+
+	assert_dcs_csum_info_list_init(list, 0);
+	dcs_csum_info_list_fini(&list);
+	assert_dcs_csum_info_list_init(list, 1);
+
+	dcs_csum_info_list_fini(&list);
+	assert_dcs_csum_info_list_init(list, 2);
+
+	uint16_t csum1 = 0xABCD;
+	uint32_t csum2 = 0x4321EFAB;
+	uint64_t csum3 = 0x1234567890ABCDEF;
+	struct dcs_csum_info info[] = {
+		{
+			.cs_len = 2, .cs_nr = 1, .cs_csum = (uint8_t *) &csum1,
+			.cs_chunksize = 1024, .cs_type = 99, .cs_buf_len = 2
+		}, {
+			.cs_len = 2, .cs_nr = 2, .cs_csum = (uint8_t *) &csum2,
+			.cs_chunksize = 1024, .cs_type = 99, .cs_buf_len = 4
+		}, {
+			.cs_len = 2, .cs_nr = 4, .cs_csum = (uint8_t *) &csum3,
+			.cs_chunksize = 1024, .cs_type = 99, .cs_buf_len = 8
+		},
+	};
+
+	for (i = 0; i < ARRAY_SIZE(info); i++)
+		dcs_csum_info_save(&list, &info[i], NULL);
+
+	assert_int_equal(ARRAY_SIZE(info), list.dcl_csum_infos_nr);
+	for (i = 0; i < ARRAY_SIZE(info); i++) {
+		assert_ci_equal(info[i], *dcs_csum_info_get(&list, i));
+		/* shouldn't be using the same buffer */
+		assert_int_not_equal(info[i].cs_csum, dcs_csum_info_get(&list, i)->cs_csum);
+	}
+
+
+	assert_null(dcs_csum_info_get(&list, 999));
+
+	dcs_csum_info_list_fini(&list);
+	assert_null(list.dcl_csum_infos);
+	assert_int_equal(0, list.dcl_buf_size);
+	assert_int_equal(0, list.dcl_csum_infos_nr);
+	assert_int_equal(0, list.dcl_buf_used);
+}
+
 #define MAP_MAX 10
 #define	HOLES_TESTCASE(...) \
 	holes_test_case(&(struct holes_test_args)__VA_ARGS__)
@@ -1058,8 +1121,6 @@ test_repeat_updates(void **state)
 	memset(data_buf, 0xA, data_buf_len);
 
 	for (type = HASH_TYPE_UNKNOWN + 1; type < HASH_TYPE_END; type++) {
-		type = HASH_TYPE_SHA512;
-
 		struct hash_ft *ft = daos_mhash_type2algo(type);
 
 		rc = daos_csummer_init(&csummer, ft, CSUM_NO_CHUNK, 0);
@@ -1849,6 +1910,7 @@ static const struct CMUnitTest tests[] = {
 	TEST("CSUM29: csum_info serialization", test_ci_serialize),
 	TEST("CSUM29: Skip calculations based on csummer settings",
 	     test_skip_csum_calculations_when_skip_set),
+	TEST("CSUM30: csum_info list handling", test_csum_info_list_handling),
 	TEST("CSUM_HOLES01: With 2 mapped extents that leave a hole "
 	     "at the beginning, in between and "
 	     "at the end, all within a single chunk.", holes_1),
