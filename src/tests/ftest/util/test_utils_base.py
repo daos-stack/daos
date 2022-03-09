@@ -161,12 +161,12 @@ class TestDaosApiBase(ObjectWithParameters):
             compare = ("==", lambda x, y: x == y, "does not match")
             if isinstance(expect, str):
                 comparisons = {
-                    "<": (lambda x, y: x < y, "is too large"),
-                    ">": (lambda x, y: x > y, "is too small"),
                     "<=": (
                         lambda x, y: x <= y, "is too large or does not match"),
+                    "<": (lambda x, y: x < y, "is too large"),
                     ">=": (
                         lambda x, y: x >= y, "is too small or does not match"),
+                    ">": (lambda x, y: x > y, "is too small"),
                 }
                 for key, val in list(comparisons.items()):
                     # If the expected value is preceded by one of the known
