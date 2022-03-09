@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2021 Intel Corporation.
+ * (C) Copyright 2016-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -2767,3 +2767,10 @@ ds_cont_status_pm_ver_update(uuid_t pool_uuid, uuid_t cont_uuid,
 
 	return rc;
 }
+
+void
+ds_cont_ec_timestamp_update(struct ds_cont_child *cont)
+{
+	cont->sc_ec_update_timestamp = crt_hlc_get();
+}
+

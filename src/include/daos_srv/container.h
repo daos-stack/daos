@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2015-2021 Intel Corporation.
+ * (C) Copyright 2015-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -106,6 +106,14 @@ struct ds_cont_child {
 	uint64_t		sc_ec_agg_eph_boundry;
 	/* The current EC aggregate epoch for this xstream */
 	uint64_t		sc_ec_agg_eph;
+
+	/**
+	 * Timestamp of last EC update, which is used by aggregation to check
+	 * if it needs to do EC aggregate, and it is to avoid unnecessary EC
+	 * aggregation for 2.0 temporarily. XXX
+	 */
+	uint64_t		sc_ec_update_timestamp;
+
 	/* The objects with committable DTXs in DRAM. */
 	daos_handle_t		 sc_dtx_cos_hdl;
 	/* The DTX COS-btree. */
@@ -262,5 +270,7 @@ struct daos_csummer *dsc_cont2csummer(daos_handle_t coh);
 int dsc_cont_get_props(daos_handle_t coh, struct cont_props *props);
 
 void ds_cont_tgt_ec_eph_query_ult(void *data);
+
+void ds_cont_ec_timestamp_update(struct ds_cont_child *cont);
 
 #endif /* ___DAOS_SRV_CONTAINER_H_ */

@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2020-2021 Intel Corporation.
+ * (C) Copyright 2020-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -2500,6 +2500,14 @@ cont_ec_aggregate_cb(struct ds_cont_child *cont, daos_epoch_range_t *epr,
 			return rc;
 	}
 
+	if (cont->sc_ec_agg_eph != 0 &&
+	    cont->sc_ec_agg_eph >= cont->sc_ec_update_timestamp) {
+		D_DEBUG(DB_EPC, DF_CONT" skip EC agg "DF_U64">= "DF_U64"\n",
+			DP_CONT(cont->sc_pool_uuid, cont->sc_uuid), cont->sc_ec_agg_eph,
+			cont->sc_ec_update_timestamp);
+		goto update_hae;
+	}
+
 	iter_param.ip_hdl		= cont->sc_hdl;
 	iter_param.ip_epr.epr_lo	= epr->epr_lo;
 	iter_param.ip_epr.epr_hi	= epr->epr_hi;
@@ -2553,6 +2561,7 @@ again:
 			*msec = 5 * 1000;
 	}
 
+update_hae:
 	if (rc == 0 && ec_agg_param->ap_obj_skipped == 0)
 		cont->sc_ec_agg_eph = max(cont->sc_ec_agg_eph, epr->epr_hi);
 
