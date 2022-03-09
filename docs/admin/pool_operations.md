@@ -17,8 +17,8 @@ $ dmg pool create --size=<N>TB tank
 ```
 
 This command creates a pool labeled `tank` distributed across the DAOS servers
-with a target size on each server that is comprised of N TB of NVMe storage
-and N * 0.06 (i.e., 6% of NVMe) of SCM storage. The default SCM:NVMe ratio
+with a target size on each server that is comprised of N * 0.94 TB of NVMe storage
+and N * 0.06 TB (i.e., 6% of NVMe) of SCM storage. The default SCM:NVMe ratio
 may be adjusted at pool creation time as described below.
 
 The UUID allocated to the newly created pool is printed to stdout
@@ -44,12 +44,12 @@ $ dmg pool create --help
       -P, --properties= Pool properties to be set
       -a, --acl-file=   Access Control List file path for DAOS pool
       -z, --size=       Total size of DAOS pool (auto)
-      -t, --tier-ratio= Distribution of pool storage allocation over storage tiers (auto) (default: 6)
+      -t, --tier-ratio= Percentage of storage tiers for pool storage (auto) (default: 6% SCM, 94% NVMe)
       -k, --nranks=     Number of ranks to use (auto)
       -v, --nsvc=       Number of pool service replicas
-      -s, --scm-size=   Per-server SCM allocation for DAOS pool (manual)
-      -n, --nvme-size=  Per-server NVMe allocation for DAOS pool (manual)
-      -r, --ranks=      Storage server unique identifiers (ranks) for DAOS pool
+      -s, --scm-size=   Per-engine SCM allocation for DAOS pool (manual)
+      -n, --nvme-size=  Per-engine NVMe allocation for DAOS pool (manual)
+      -r, --ranks=      Storage engine unique identifiers (ranks) for DAOS pool
 ```
 
 The typical output of this command is as follows:
@@ -59,16 +59,17 @@ $ dmg pool create --size 50GB tank
 Creating DAOS pool with automatic storage allocation: 50 GB NVMe + 6.00% SCM
 Pool created with 6.00% SCM/NVMe ratio
 -----------------------------------------
-  UUID          : 8a05bf3a-a088-4a77-bb9f-df989fce7cc8
-  Replica Ranks : [1-3]
-  Target Ranks  : [0-15]
-  Size          : 50 GB
-  SCM           : 3.0 GB (188 MB / rank)
-  NVMe          : 47 GB (3.0 GB / rank)
+  UUID                 : 8a05bf3a-a088-4a77-bb9f-df989fce7cc8
+  Service Ranks        : [1-3]
+  Storage Ranks        : [0-15]
+  Total Size           : 50 GB
+  Storage tier 0 (SCM) : 3.0 GB (188 MB / rank)
+  Storage tier 1 (NVMe): 47 GB (3.0 GB / rank)
 ```
 
 This created a pool with UUID 8a05bf3a-a088-4a77-bb9f-df989fce7cc8,
-with redundancy enabled by default (pool service replicas on ranks 1-3).
+with pool service redundancy enabled by default
+(pool service replicas on ranks 1-3).
 
 If no redundancy is desired, use --nsvc=1 in order to specify that only
 a single pool service replica should be created.
@@ -79,10 +80,10 @@ will be distributed as follows:
 - 6% is allocated on SCM (i.e., 3GB in the example above)
 - 94% is allocated on NVMe SSD (i.e., 47GB in the example above)
 
-Note that it is difficult to determine the usable space by the user and
+Note that it is difficult to determine the usable space by the user, and
 currently we cannot provide the precise value. The usable space depends not only
 on pool size, but also on number of targets, target size, object class,
-redundancy factor, etc.
+storage redundancy factor, etc.
 
 ### Listing Pools
 
@@ -276,19 +277,27 @@ Three options are supported:
 ### Self-healing Policy (self\_heal)
 
 This property defines whether a failing node is automatically evicted from the
-pool. Once excluded, the self-healing mechasnism will be triggered to restore
+pool. Once excluded, the self-healing mechanism will be triggered to restore
 the pool data redundancy on the surviving storage nodes.
+Two options are supported: "exclude" (default strategy) and "rebuild".
 
-### Reserve Space (space\_rb)
+### Reserved Space for Rebuilds (space\_rb)
 
 This property defines the percentage of total space reserved on each storage
-node for self-healing purpose. The reserved space cannot be consumed by the
-applications.
+node for self-healing purpose. The reserved space cannot be consumed by
+applications. Valid values are 0% to 100%, the default is 0%.
+When setting this property, specifying the percentage symbol is optional:
+`space_rb:2%` and `space_rb:2` both specify two percent of storage capacity.
 
-### EC Cell Size (ec\_cell\_sz)
+### Default EC Cell Size (ec\_cell\_sz)
 
 This property defines the default erasure code cell size inherited to DAOS
-containers. The value is typically between 32K and 1MB.
+containers. The EC cell size can be between 1kiB and 1GiB,
+although it should typically be set to a value between 32kiB and 1MiB.
+The default is 1MiB.
+When setting this property, the cell size can be specified in Bytes
+(as a number with no suffix), with a base-10 suffix like `k` or `MB`,
+or with a base-2 suffix like `ki` or `MiB`.
 
 ## Access Control Lists
 
@@ -453,7 +462,7 @@ $ dmg pool exclude --rank=${rank} --target-idx=${idx1},${idx2},${idx3} <pool_lab
 
 The pool target exclude command accepts 2 parameters:
 
-* The rank of the target(s) to be excluded.
+* The engine rank of the target(s) to be excluded.
 * The target Indices of the targets to be excluded from that rank (optional).
 
 Upon successful manual exclusion, the self-healing mechanism will be triggered
@@ -479,7 +488,7 @@ $ dmg pool drain --rank=${rank} --target-idx=${idx1},${idx2},${idx3} $DAOS_POOL
 
 The pool target drain command accepts 2 parameters:
 
-* The rank of the target(s) to be drained.
+* The engine rank of the target(s) to be drained.
 * The target Indices of the targets to be drained from that rank (optional).
 
 ### Reintegration
@@ -500,8 +509,8 @@ The pool reintegrate command accepts 3 parameters:
 * The engine rank of the affected targets.
 * The target indices of the targets to be reintegrated on that rank (optional).
 
-When rebuild is triggered it will list the operations and their related targets by their rank ID
-and target index.
+When rebuild is triggered it will list the operations and their related engines/targets
+by their engine rank and target index.
 
 ```
 Target (rank 5 idx 0) is down.
@@ -545,7 +554,7 @@ $ dmg pool extend $DAOS_POOL --ranks=${rank1},${rank2}...
 ```
 
 The pool extend command accepts one required parameter which is a comma
-separated list of server ranks to include in the pool.
+separated list of engine ranks to include in the pool.
 
 The pool rebalance operation will work most efficiently when the pool is
 extended to its desired size in a single operation, as opposed to multiple,
