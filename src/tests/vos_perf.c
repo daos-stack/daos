@@ -103,6 +103,8 @@ _vos_update_or_fetch(int obj_idx, enum ts_op_type op_type,
 	uint64_t	start = 0;
 	int		rc = 0;
 
+	D_PRINT(DF_UOID" dkey="DF_KEY" akey="DF_KEY"\n", DP_UOID(ts_uoids[obj_idx]),
+		DP_KEY(&cred->tc_dkey), DP_KEY(&cred->tc_iod.iod_name));
 	TS_TIME_START(duration, start);
 	if (!ts_zero_copy) {
 		if (op_type == TS_DO_UPDATE)

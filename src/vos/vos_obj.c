@@ -958,9 +958,6 @@ key_iter_probe(struct vos_obj_iter *oiter, daos_anchor_t *anchor)
 {
 	int	rc;
 
-	/** If we are reprobing, assume we've skipped something */
-	if (anchor)
-		oiter->it_iter.it_skipped = 1;
 	rc = dbtree_iter_probe(oiter->it_hdl,
 			       anchor ? BTR_PROBE_GE : BTR_PROBE_FIRST,
 			       vos_iter_intent(&oiter->it_iter),
