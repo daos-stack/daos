@@ -303,6 +303,8 @@ class ObjectMetadata(TestWithServers):
         """
         self.create_pool()
         self.container = []
+        mean_cont_cnt = 0
+        percent_cont = self.params.get("mean_percent", "/run/metadata/*")
 
         test_failed = False
         containers_created = []
@@ -319,28 +321,25 @@ class ObjectMetadata(TestWithServers):
                 self.log.error("Errors during remove iteration %d/9", loop)
                 test_failed = True
 
+            # Calculate the mean container count
+            mean_cont_cnt = mean_cont_cnt + containers_created[loop]
+            mean_cont_cnt = int(mean_cont_cnt / (loop + 1))
+
         self.log.info("Summary")
         self.log.info("  Loop  Containers Created  Variation")
         self.log.info("  ----  ------------------  ---------")
-        sequential_negative_count = 0
         for loop, quantity in enumerate(containers_created):
             variation = 0
             if loop > 0:
-                # Variations in the number of containers created is expected,
-                # but make sure the number does not decrease more than 3 times
-                # in a row.
-                variation = quantity - containers_created[loop - 1]
-                # Variation is negative value and absolute variation greater
-                # than 5.
-                if variation < 0 and abs(variation) > 5:
-                    sequential_negative_count += 1
-                    if sequential_negative_count > 2:
-                        test_failed = True
-                        variation = \
-                            "{}  **FAIL: {} sequential decreases".format(
-                                variation, sequential_negative_count)
-                else:
-                    sequential_negative_count = 0
+                # Variation in the number of containers created
+                # should be less than %x from mean containers created
+                variation = mean_cont_cnt - containers_created[loop - 1]
+                percent_from_mean = int(mean_cont_cnt * (percent_cont / 100))
+                if variation > percent_from_mean:
+                    test_failed = True
+                    variation = \
+                        "{}  **FAIL: {} variation failure from mean".format(
+                            variation, percent_from_mean)
             self.log.info("  %-4d  %-18d  %s", loop + 1, quantity, variation)
 
         if test_failed:
