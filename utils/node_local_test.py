@@ -2289,8 +2289,12 @@ class posix_tests():
         print(ps)
 
         with open(join(dfuse.dir, 'rw_dir', 'new_file'), 'r') as fd:
-            data = fd.read()
+            data = fd.read(14)
             print(data)
+            if data != 'read-only-data':
+                fd.close()
+                print('Read wrong content. ')
+                self.fail()
 
         if dfuse.stop():
             self.fatal_errors = True
