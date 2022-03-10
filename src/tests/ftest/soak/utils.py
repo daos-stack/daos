@@ -849,6 +849,7 @@ def create_ior_cmdline(self, job_spec, pool, ppn, nodesperjob):
     tsize_list = self.params.get("transfer_size", ior_params)
     bsize_list = self.params.get("block_size", ior_params)
     oclass_list = self.params.get("dfs_oclass", ior_params)
+    plugin_path = self.params.get("plugin_path", "/run/hdf5_vol/")
     # update IOR cmdline for each additional IOR obj
     for api in api_list:
         for b_size in bsize_list:
@@ -913,7 +914,7 @@ def create_ior_cmdline(self, job_spec, pool, ppn, nodesperjob):
                     if api == "HDF5-VOL":
                         vol = True
                         env["HDF5_VOL_CONNECTOR"] = "daos"
-                        env["HDF5_PLUGIN_PATH"] = "{}".format(mpirun_cmd.get_lib_path())
+                        env["HDF5_PLUGIN_PATH"] = "{}".format(plugin_path)
                         # env["H5_DAOS_BYPASS_DUNS"] = 1
                     mpirun_cmd.assign_processes(nodesperjob * ppn)
                     mpirun_cmd.assign_environment(env, True)

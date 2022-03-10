@@ -16,6 +16,7 @@ from ClusterShell.NodeSet import NodeSet
 from command_utils import ExecutableCommand, SystemctlCommand
 from command_utils_base import FormattedParameter, EnvironmentVariables
 from command_utils_base import CommandFailure
+from env_modules import load_mpi
 from general_utils import pcmd, stop_processes, run_pcmd, get_job_manager_class
 from write_host_file import write_host_file
 
@@ -357,19 +358,6 @@ class Orterun(JobManager):
         """
         self.export.update_default(env_vars.get_list())
 
-    def get_lib_path(self):
-        """Get path to mpi lib.
-
-        Returns:
-            str: mpi library path
-
-        """
-        if not self._path:
-            raise CommandFailure(
-                "Unable to obtain MPI library path: Full path for {} undefined!".format(
-                    self.command))
-        return os.path.join(os.path.split(self._path)[0], 'lib')
-
     def run(self):
         """Run the orterun command.
 
@@ -472,19 +460,6 @@ class Mpirun(JobManager):
                 assign as the default
         """
         self.genv.update_default(env_vars.get_list())
-
-    def get_lib_path(self):
-        """Get path to mpi lib.
-
-        Returns:
-            str: mpi library path
-
-        """
-        if not self._path:
-            raise CommandFailure(
-                "Unable to obtain MPI library path: Full path for {} undefined!".format(
-                    self.command))
-        return os.path.join(os.path.split(self._path)[0], 'lib')
 
     def run(self):
         """Run the mpirun command.
