@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2019-2021 Intel Corporation.
+ * (C) Copyright 2019-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -517,6 +517,8 @@ struct dcs_ci_list {
 	uint32_t		 dcl_csum_infos_nr;
 	uint32_t		 dcl_buf_used;
 	uint32_t		 dcl_buf_size;
+	/* hack for supporting biov_csums_used usage in csum_add2iods */
+	uint32_t		 dcl_csum_offset;
 };
 
 /**

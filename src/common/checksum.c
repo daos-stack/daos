@@ -1244,6 +1244,7 @@ csum_info_get_local(struct dcs_ci_list *list, uint32_t idx, bool check_idx)
 	struct dcs_csum_info	*result;
 	int			 i;
 
+	idx += list->dcl_csum_offset;
 	if (check_idx && idx >= list->dcl_csum_infos_nr)
 		return NULL;
 
