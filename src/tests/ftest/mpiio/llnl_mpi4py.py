@@ -1,11 +1,12 @@
 #!/usr/bin/python3
 """
-  (C) Copyright 2019-2021 Intel Corporation.
+  (C) Copyright 2019-2022 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 
 from mpio_test_base import MpiioTests
+from job_manager_utils import get_job_manager
 
 
 # pylint: disable=too-many-ancestors
@@ -29,10 +30,11 @@ class LlnlMpi4py(MpiioTests):
 
         :avocado: tags=all,pr,daily_regression
         :avocado: tags=large
-        :avocado: tags=mpiio,smoke,mpich,lnll
+        :avocado: tags=mpiio,smoke,mpich,llnl
         """
         test_repo = self.params.get("llnl", '/run/test_repo/')
-        self.run_test(test_repo, "llnl")
+        manager = get_job_manager(self, mpi_type="mpich")
+        self.run_test(manager, test_repo, "llnl")
 
     def test_mpi4py(self):
         """
@@ -50,4 +52,5 @@ class LlnlMpi4py(MpiioTests):
         :avocado: tags=mpiio,mpich,mpi4py
         """
         test_repo = self.params.get("mpi4py", '/run/test_repo/')
-        self.run_test(test_repo, "mpi4py")
+        manager = get_job_manager(self, mpi_type="mpich")
+        self.run_test(manager, test_repo, "mpi4py")

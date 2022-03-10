@@ -11,7 +11,6 @@ import write_host_file
 from avocado import fail_on
 from avocado.utils import process
 from apricot import TestWithServers
-from env_modules import load_mpi
 from general_utils import get_log_file
 from command_utils import CommandFailure, ExecutableCommand
 from agent_utils import include_local_host
@@ -150,9 +149,6 @@ class DaosCoreBase(TestWithServers):
         if not nvme_size:
             nvme_size = 0
         env['POOL_NVME_SIZE'] = "{}".format(nvme_size)
-
-        if not load_mpi("openmpi"):
-            self.fail("Failed to load openmpi")
 
         # Update the expected status for each ranks that will be stopped by this
         # test to avoid a false failure during tearDown().

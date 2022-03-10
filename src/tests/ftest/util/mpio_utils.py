@@ -1,6 +1,6 @@
 #!/usr/bin/python
 """
-  (C) Copyright 2019-2021 Intel Corporation.
+  (C) Copyright 2019-2022 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -8,9 +8,8 @@
 
 import os
 import sys
-from env_modules import load_mpi
-from command_utils_base import EnvironmentVariables
-from general_utils import run_command, DaosTestError
+from command_utils_base import EnvironmentVariables, CommandFailure
+from command_utils import ExecutableCommand
 
 
 class MpioFailed(Exception):
@@ -22,49 +21,10 @@ class MpioUtils():
 
     def __init__(self):
         """Initialize a MpioUtils object."""
-        self.mpichinstall = None
-
-    def mpich_installed(self, hostlist):
-        """Check if mpich is installed.
-
-        Args:
-            hostlist (list): list of hosts
-
-        Returns:
-            bool: whether mpich is installed on the first host in the list
-
-        """
-        if not load_mpi('mpich'):
-            print("Failed to load mpich")
-            return False
-
-        # checking mpich install
-        cmd = "set -e; "                                           \
-              "export MODULEPATH=/usr/share/modulefiles:"          \
-                                 "/usr/share/modules:"             \
-                                 "/etc/modulefiles; "              \
-              "for mod in mpi/mpich-x86_64 gnu-mpich; do "         \
-                  "if module is-avail $mod >/dev/null 2>&1; then " \
-                      "module load $mod >/dev/null 2>&1; "         \
-                      "break; "                                    \
-                  "fi; "                                           \
-              "done; "                                             \
-              "command -v mpichversion"
-        cmd = '/usr/bin/ssh {} {}'.format(hostlist[0], cmd)
-        try:
-            result = run_command(cmd)
-            self.mpichinstall = \
-                result.stdout_text.rstrip()[:-len('bin/mpichversion')]
-            return True
-
-        except DaosTestError as excep:
-            print("Mpich not installed \n {}".format(excep))
-            return False
-        return False
 
     # pylint: disable=R0913
-    def run_mpiio_tests(self, hostfile, pool_uuid, test_repo,
-                        test_name, client_processes, cont_uuid):
+    def run_mpiio_tests(self, hostlist, pool_uuid, test_repo,
+                        test_name, client_processes, cont_uuid, job_manager):
         """Run the LLNL, MPI4PY, and HDF5 testsuites.
 
         Args:
@@ -74,6 +34,7 @@ class MpioUtils():
             test_name (str): name of test to be tested
             client_processes (int): number of client processes
             cont_uuid (str): container UUID
+            job_manager (obj): j job manager obj
 
         Raises:
             MpioFailed: for an invalid test name or test execution failure
@@ -83,12 +44,14 @@ class MpioUtils():
                 result of the command execution.
 
         """
-        print("self.mpichinstall: {}".format(self.mpichinstall))
+        path = os.path.split(job_manager.command_path)[0]
+        # fix up a relative test_repo specification
+        if test_repo[0] != '/':
+            test_repo = os.path.join(path, test_repo)
 
         # environment variables only to be set on client node
         env = EnvironmentVariables()
         env["DAOS_UNS_PREFIX"] = "daos://{}/{}/".format(pool_uuid, cont_uuid)
-        mpirun = os.path.join(self.mpichinstall, "bin", "mpirun")
 
         executables = {
             "romio": [os.path.join(test_repo, "runtests")],
@@ -114,37 +77,29 @@ class MpioUtils():
         # Setup the commands to run for this test name
         commands = []
         if test_name == "romio":
-            commands.append(
-                "{} -fname=daos:/test1 -subset".format(
-                    executables[test_name][0]))
+            commands.append("{} -fname=daos:/test1 -subset".format(executables[test_name][0]))
         elif test_name == "llnl":
             env["MPIO_USER_PATH"] = "daos:/"
             for exe in executables[test_name]:
-                commands.append(
-                    "{} -np {} --hostfile {} {} 1".format(
-                        mpirun, client_processes, hostfile, exe))
+                commands.append("{} 1".format(exe))
         elif test_name == "mpi4py":
             for exe in executables[test_name]:
-                commands.append(
-                    "{} -np {} --hostfile {} python{} {}".format(
-                        mpirun, client_processes, hostfile,
-                        sys.version_info.major, exe))
+                commands.append("python{} {}".format(sys.version_info.major, exe))
         elif test_name == "hdf5":
             env["HDF5_PARAPREFIX"] = "daos:"
             for exe in executables[test_name]:
-                commands.append(
-                    "{} -np {} --hostfile {} {}".format(
-                        mpirun, client_processes, hostfile, exe))
+                commands.append("{}".format(exe))
+
+        job_manager.assign_hosts(hostlist)
+        job_manager.assign_processes(client_processes)
+        job_manager.assign_environment(env, True)
 
         for command in commands:
             print("run command: {}".format(command))
+            job_manager.job = ExecutableCommand(namespace=None, command=command)
             try:
-                result = run_command(
-                    command, timeout=None, verbose=True, env=env)
-
-            except DaosTestError as excep:
-                raise MpioFailed(
-                    "<Test FAILED> \nException occurred: {}".format(
-                        str(excep))) from excep
-
+                result = job_manager.run()
+            except CommandFailure as _error:
+                self.fail(
+                    "{} FAILED> \nException occurred: {}".format(job_manager.job, str(_error)))
         return result

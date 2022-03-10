@@ -1,11 +1,13 @@
 #!/usr/bin/python3
 '''
-  (C) Copyright 2019-2021 Intel Corporation.
+  (C) Copyright 2019-2022 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
 
 from mpio_test_base import MpiioTests
+from job_manager_utils import get_job_manager
+
 
 # pylint: disable=too-many-ancestors
 class Romio(MpiioTests):
@@ -25,4 +27,5 @@ class Romio(MpiioTests):
         """
         # setting romio parameters
         test_repo = self.params.get("romio_repo", '/run/romio/')
-        self.run_test(test_repo, "romio")
+        manager = get_job_manager(self, mpi_type="mpich")
+        self.run_test(manager, test_repo, "romio")
