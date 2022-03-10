@@ -2342,7 +2342,7 @@ class posix_tests():
             data = fd.read(14)
             print(data)
             if data != 'read-only-data':
-                print('Read wrong content. ')
+                print('Read wrong content.')
                 self.fail()
 
         if dfuse.stop():
