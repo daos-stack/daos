@@ -99,7 +99,7 @@ class MpioUtils():
             job_manager.job = ExecutableCommand(namespace=None, command=command)
             try:
                 result = job_manager.run()
-            except CommandFailure as _error:
-                self.fail(
-                    "{} FAILED> \nException occurred: {}".format(job_manager.job, str(_error)))
+            except CommandFailure as excep:
+                raise MpioFailed(
+                    "<Test FAILED> \nException occurred: {}".format(str(excep))) from excep
         return result
