@@ -49,18 +49,20 @@ distro_custom() {
 
     dnf config-manager --disable powertools
 
-    # Need to remove the upstream [debuginfo] repos
-    # But need to have the files present so that re-installation is blocked
-    for file in /etc/yum.repos.d/{Rocky-Debuginfo,epel{,{,-testing}-modular}}.repo; do
-        true > $file 
-    done
+    # New Rocky images don't have debuginfo baked into them
+    if [ "$(lsb_release -s -i)" = "Rocky" ]; then
+        # Need to remove the upstream [debuginfo] repos
+        # But need to have the files present so that re-installation is blocked
+        for file in /etc/yum.repos.d/{Rocky-Debuginfo,epel{,{,-testing}-modular}}.repo; do
+            true > $file 
+        done
 
-    # add local debuginfo repos
-    if [ -f /etc/yum.repos.d/daos_ci-rocky8-artifactory.repo ]; then
-        echo >> /etc/yum.repos.d/daos_ci-rocky8-artifactory.repo
-    fi
+        # add local debuginfo repos
+        if [ -f /etc/yum.repos.d/daos_ci-rocky8-artifactory.repo ]; then
+            echo >> /etc/yum.repos.d/daos_ci-rocky8-artifactory.repo
+        fi
 
-    cat <<EOF >> /etc/yum.repos.d/daos_ci-rocky8-artifactory.repo
+        cat <<EOF >> /etc/yum.repos.d/daos_ci-rocky8-artifactory.repo
 [daos_ci-rocky8-base-nexus-debuginfo]
 name=daos_ci-rocky8-base-nexus-debuginfo
 baseurl=${REPOSITORY_URL}repository/rocky-\$releasever-proxy/BaseOS/\$arch/debug/tree/
@@ -89,6 +91,7 @@ enabled=0
 gpgcheck=1
 gpgkey=file:///etc/pki/rpm-gpg/RPM-GPG-KEY-rockyofficial
 EOF
+    fi
 
     # Mellanox OFED hack
     if ls -d /usr/mpi/gcc/openmpi-*; then
