@@ -2334,11 +2334,14 @@ class posix_tests():
         os.close(fd)
         print(ps)
 
-        with open(join(dfuse.dir, 'rw_dir', 'new_file'), 'r') as fd:
+        if os.path.getsize(testfile) != 14:
+            print('File has wrong size.')
+            self.fail()
+
+        with open(testfile, 'r') as fd:
             data = fd.read(14)
             print(data)
             if data != 'read-only-data':
-                fd.close()
                 print('Read wrong content. ')
                 self.fail()
 
