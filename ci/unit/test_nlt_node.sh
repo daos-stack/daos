@@ -8,7 +8,9 @@ set -uex
 sudo bash -c 'echo 1 > /proc/sys/kernel/sysrq'
 sudo mkdir -p /mnt/daos
 # using mmap()'ed ULT stacks requires to bump system default
-sudo sysctl vm.max_map_count=1000000
+if [ "$(sudo sysctl -n vm.max_map_count)" -lt "1000000" ] ; then
+    sudo sysctl vm.max_map_count=1000000
+fi
 
 # Create the directory path as root, then replace the actual directory itself
 # with a symlink back to the data.  This avoids a copy, and allows the remote

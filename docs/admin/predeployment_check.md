@@ -289,6 +289,22 @@ commandline (including source builds), limits should be adjusted in
 [this article](https://access.redhat.com/solutions/61334) (which is a RHEL
 specific document but the instructions apply to most Linux distributions).
 
+### Memory mapped areas
+
+Low max number of per-process mapped areas (vm.max_map_count) can cause ULT
+stack allocation to fall-back from DAOS mmap()'ed way into Argobots preferred
+allocation method.
+
+For RPM installations, this is achieved thru installed
+`/etc/sysctl.d/10-daos-server.conf` file.
+
+For non-RPM installations, this may need to be bumped (usual default of
+65530 is too low for non-testing configurations), and the best way to do
+so is to copy `utils/rpms/10-daos_server.conf` into `/usr/lib/sysctl.d/`
+to apply the setting automatically on boot.
+Running `/usr/lib/systemd/systemd-sysctl /usr/lib/sysctl.d/10-daos_server.conf`
+will apply these settings immediately (avoiding the need for an immediate reboot).
+
 ## Socket receive buffer size
 
 Low socket receive buffer size can cause SPDK to fail and emit the following
