@@ -1,6 +1,6 @@
-# Distributed Asynchronous Object Storage (DAOS) on Google Cloud Platform (GCP)
+# [Distributed Asynchronous Object Storage (DAOS)](https://docs.daos.io/) on [Google Cloud Platform (GCP)](https://cloud.google.com/)
 
-This repository contains scripts to deploy DAOS on GCP.
+This repository contains scripts to deploy [DAOS](https://docs.daos.io/) on [GCP](https://cloud.google.com/).
 
 It consists of the directories:
 - [images](images) - which contains scripts to prepare DAOS images for GCP used by Terraform code

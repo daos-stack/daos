@@ -1,14 +1,14 @@
 # IO500 Example
 
-This example leverages another example `terraform/examples/full_cluster_setup`
+This example leverages another example [full_cluster_setup](../full_cluster_setup)
 to provision a DAOS cluster and configure the clients so that an IO500 benchmark
 may be run.
 
-The default configuration is a very small DAOS cluster consisiting of 1 DAOS
+The default configuration is a very small DAOS cluster consisting of 1 DAOS
 server and 1 DAOS client.
 
 Different configurations can be used to deploy larger DAOS clusters.
-See Configuration below.
+See [Configuration](#configuration) below.
 
 ## Dependencies
 
@@ -25,7 +25,7 @@ The example is intended to be run from a Linux system that has access to GCP.
 
 ### Deploying the DAOS Cluster
 
-Run start.sh
+Run [start.sh](start.sh) script:
 
 ```bash
 cd terraform/examples/io500
@@ -39,7 +39,7 @@ logging into the first daos-client instance and running the IO500 benchmark.
 
 ### Shutting Down the DAOS Cluster
 
-To destroy the DAOS instances run the `stop.sh` script.
+To destroy the DAOS instances run the [stop.sh](stop.sh) script.
 
 ```bash
 cd terraform/examples/io500
@@ -106,4 +106,3 @@ These are called by other scripts and used for
 - building custom images with the IO500
 - configuring instances
 - cleaning DAOS storage before each IO500 run
-

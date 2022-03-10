@@ -1,19 +1,17 @@
-# Terraform deployment of Distributed Asynchronous Object Storage (DAOS) on Google Cloud Platform (GCP)
+# terraform
 
-This directory contains Terraform code to deploy DAOS on GCP.
+This directory contains [Terraform](https://www.terraform.io/) code to deploy [DAOS](https://docs.daos.io/) on [GCP](https://cloud.google.com/).
 
-This module consists of a collection of Terraform submodules to deploy DAOS client and server instances on GCP.
-Below is the list of available submodules:
 
+## [examples](examples):
+
+Under [examples](examples) directory are examples of the [DAOS](https://docs.daos.io/) deployment for different use cases.
+
+
+## [modules](modules):
+
+Under the [modules](modules) directory are Terraform modules to deploy DAOS server and DAOS client instances on GCP.
+
+Below is the list of available modules:
 * [DAOS Server](modules/daos_server)
 * [DAOS Client](modules/daos_client)
-
-To deploy full DAOS cluster use [full_cluster_setup](examples/full_cluster_setup) example.
-
-## Compatibility
-
-This module is meant to use with Terraform 0.14.
-
-## Examples
-
-[examples](examples) directory contains Terraform code of how to use these particular submodules.

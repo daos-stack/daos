@@ -1,24 +1,27 @@
 # Full DAOS cluster setup
 
-Deploys full DAOS cluster with servers and clients.
+This example provisions full DAOS cluster with servers and clients on GCP.
 
-## Usage
+## Usage:
 
-1. Create ```terraform.tfvars``` in this directory or the directory where you're running this example.
-2. Copy the ```terraform.tfvars.example``` content into ```terraform.tfvars``` file and update the contents to match your environment.
-3. Run below commands to deploy DAOS cluster:
+- Create GCP deployment:
+    - Create ```terraform.tfvars``` in this directory or the directory where you're running this example.
+    - Copy the ```terraform.tfvars.example``` content into ```terraform.tfvars``` file and update the contents to match your environment.
+    - Run below commands to deploy DAOS cluster:
+        ```
+        terraform init -input=false
+        terraform plan -out=tfplan -input=false
+        terraform apply -input=false tfplan
+        ```
 
-```
-terraform init -input=false
-terraform plan -out=tfplan -input=false
-terraform apply -input=false tfplan
-```
+- Cluster operation:
+    - Please check [DASOS documentation](https://docs.daos.io/) on how to manage the cluster and create pool with container.
 
-To destroy DAOS environment, use below command:
-
-```
-terraform destroy
-```
+- Remove GCP deployment:
+    - To destroy DAOS environment, use below command:
+        ```
+        terraform destroy
+        ```
 
 <!-- BEGINNING OF PRE-COMMIT-TERRAFORM DOCS HOOK -->
 ## Requirements
