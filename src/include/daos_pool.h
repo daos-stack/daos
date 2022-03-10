@@ -59,35 +59,41 @@ enum daos_media_type_t {
 
 /** Pool target space usage information */
 struct daos_space {
-	/* Total space in bytes */
+	/** Total space in bytes */
 	uint64_t		s_total[DAOS_MEDIA_MAX];
-	/* Free space in bytes */
+	/** Free space in bytes */
 	uint64_t		s_free[DAOS_MEDIA_MAX];
 };
 
 /** Target information */
 typedef struct {
+	/** Target type */
 	daos_target_type_t	ta_type;
+	/** Target state */
 	daos_target_state_t	ta_state;
+	/** Target performance */
 	daos_target_perf_t	ta_perf;
+	/** Target space usage */
 	struct daos_space	ta_space;
 } daos_target_info_t;
 
 /** Pool space usage information */
 struct daos_pool_space {
-	/* Aggregated space for all live targets */
+	/** Aggregated space for all live targets */
 	struct daos_space	ps_space;
-	/* Min target free space in bytes */
+	/** Min target free space in bytes */
 	uint64_t		ps_free_min[DAOS_MEDIA_MAX];
-	/* Max target free space in bytes */
+	/** Max target free space in bytes */
 	uint64_t		ps_free_max[DAOS_MEDIA_MAX];
-	/* Average target free space in bytes */
+	/** Average target free space in bytes */
 	uint64_t		ps_free_mean[DAOS_MEDIA_MAX];
-	/* Target(VOS) count */
+	/** Target(VOS) count */
 	uint32_t		ps_ntargets;
+	/** padding - not used */
 	uint32_t		ps_padding;
 };
 
+/** Pool rebuild status */
 struct daos_rebuild_status {
 	/** pool map version in rebuilding or last completed rebuild */
 	uint32_t		rs_version;
@@ -96,14 +102,14 @@ struct daos_rebuild_status {
 	/** errno for rebuild failure */
 	int32_t			rs_errno;
 	/**
-	 * rebuild is done or not, it is valid only if @rs_version is non-zero
+	 * rebuild is done or not, it is valid only if #rs_version is non-zero
 	 */
 	int32_t			rs_done;
 
-	/* padding of rebuild status */
+	/** padding of rebuild status */
 	int32_t			rs_padding32;
 
-	/* Failure on which rank */
+	/** Failure on which rank */
 	int32_t			rs_fail_rank;
 	/** # total to-be-rebuilt objects, it's non-zero and increase when
 	 * rebuilding in progress, when rs_done is 1 it will not change anymore
@@ -122,17 +128,26 @@ struct daos_rebuild_status {
 
 /**
  * Pool info query bits.
- * The basic pool info like fields from pi_uuid to pi_leader will always be
- * queried for each daos_pool_query() calling. But the pi_space and
- * pi_rebuild_st are optional based on pi_mask's value.
+ * The basic pool info fields from \a pi_uuid to \a pi_leader will always be queried for each
+ * daos_pool_query() call and are unaffected by these bits.
+ *
+ * \a pi_space and \a pi_rebuild_st are optionally returned, based on the value of \a pi_bits.
+ *
+ * The daos_pool_query() ranks argument is populated by default with ranks of those pool
+ * storage engines with _some (or all)_ targets disabled. Optionally, based on \a pi_bits,
+ * the ranks of pool storage engines with _all_ targets enabled are returned.
  */
 enum daos_pool_info_bit {
-	/** true to query pool space usage */
-	DPI_SPACE		= 1ULL << 0,
-	/** true to query rebuild status */
-	DPI_REBUILD_STATUS	= 1ULL << 1,
+	/** true to query pool space usage false to not query space usage. */
+	DPI_SPACE			= 1ULL << 0,
+	/** true to query pool rebuild status. false to not query rebuild status. */
+	DPI_REBUILD_STATUS		= 1ULL << 1,
+	/** true to return (in \a ranks) engines with all targets enabled (up or draining).
+	 *  false to return (in \a ranks) the engines with some or all targets disabled (down).
+	 */
+	DPI_ENGINES_ENABLED		= 1ULL << 2,
 	/** query all above optional info */
-	DPI_ALL			= -1,
+	DPI_ALL				= -1,
 };
 
 /**
@@ -161,7 +176,9 @@ typedef struct {
 
 /** DAOS pool container information */
 struct daos_pool_cont_info {
+	/** Container UUID */
 	uuid_t		pci_uuid;
+	/** Container label */
 	char		pci_label[DAOS_PROP_LABEL_MAX_LEN+1];
 };
 
@@ -259,10 +276,12 @@ daos_pool_global2local(d_iov_t glob, daos_handle_t *poh);
  * \a ranks as output buffer.
  *
  * \param[in]	poh	Pool connection handle.
- * \param[out]	ranks	Optional, returned storage ranks in this pool.
- *			If any pool targets are disabled, \a ranks is the list of affected engines.
- *			If no pool targets are disabled, \a ranks is the list of all engines.
- *			Caller is responsible for freeing the list with d_rank_list_free().
+ * \param[out]	ranks	Optional, returned pool storage engine ranks.
+ *			If #info is not passed, a list of engines with any targets disabled.
+ *			If #info is passed, a list of enabled or disabled engines according to the
+ *			#pi_bits flag specified by the caller (DPI_ENGINES_ENABLED bit).
+ *			Note: ranks may be empty (i.e., *ranks->rl_nr may be 0) in some situations.
+ *			The caller is responsible for freeing the list with d_rank_list_free().
  * \param[in,out]
  *		info	Optional, returned pool information,
  *			see daos_pool_info_bit.

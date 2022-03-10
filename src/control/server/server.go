@@ -266,6 +266,10 @@ func (srv *server) addEngines(ctx context.Context) error {
 		return err
 	}
 
+	if len(srv.cfg.Engines) == 0 {
+		return nil
+	}
+
 	for i, c := range srv.cfg.Engines {
 		engine, err := srv.createEngine(ctx, i, c)
 		if err != nil {
@@ -422,6 +426,12 @@ func Start(log *logging.LeveledLogger, cfg *config.Server) error {
 	// that they can be shut down from one place.
 	ctx, shutdown := context.WithCancel(context.Background())
 	defer shutdown()
+
+	hwprovFini, err := hwprov.Init(log)
+	if err != nil {
+		return err
+	}
+	defer hwprovFini()
 
 	scanner := hwprov.DefaultFabricScanner(log)
 	fiSet, err := scanner.Scan(ctx)

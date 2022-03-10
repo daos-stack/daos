@@ -671,6 +671,9 @@ disabled_targets(test_arg_t *arg, d_rank_list_t **affected_engines)
 	int			rc;
 	daos_pool_info_t	info;
 
+	/* Note: (info.pi_bits & DPI_ENGINES_ENABLED) == 0, so we get a list of engines with
+	 * some (or all) of their targets disabled.
+	 */
 	rc = daos_pool_query(arg->pool.poh, affected_engines, &info, NULL, NULL);
 
 	if (rc < 0)
