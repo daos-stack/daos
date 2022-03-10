@@ -37,10 +37,12 @@
 # THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 set -eux
-# using mmap()'ed ULT stacks requires to bump system default
-sudo sysctl vm.max_map_count=1000000
 # allow core files to be generated
 sudo bash -c "set -ex
+# using mmap()'ed ULT stacks requires to bump system default
+cat <<EOF > /etc/sysctl.d/10-daos-server.conf
+vm.max_map_count=1000000
+EOF
 # disable Leap15.3 (at least) from restricting dmesg to root
 cat <<EOF > /etc/sysctl.d/10-dmesg-for-all.conf
 kernel.dmesg_restrict=0

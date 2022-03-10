@@ -364,11 +364,6 @@ getent passwd daos_server >/dev/null || useradd -s /sbin/nologin -r -g daos_serv
 %post server
 /sbin/ldconfig
 %systemd_post %{server_svc_name}
-if [ $(sysctl -n vm.max_map_count) -lt 1000000 ]
-then
-	# XXX we may want to set it to MAXINT ??
-	echo "vm.max_map_count=1000000" >> %{_sysctldir}/%{sysctl_script_name}
-fi
 %sysctl_apply %{sysctl_script_name}
 %preun server
 %systemd_preun %{server_svc_name}

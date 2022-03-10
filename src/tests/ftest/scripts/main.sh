@@ -39,11 +39,9 @@
 set -eux
 
 # check that vm.max_map_count has been configured/bumped
-if [ $(sudo sysctl -n vm.max_map_count) != 1000000 ] ; then
-    echo vm.max_map_count is not set as expected
+if [ "$(sudo sysctl -n vm.max_map_count)" -lt "1000000" ] ; then
+    echo "vm.max_map_count is not set as expected"
     exit 1
-else
-    echo vm.max_map_count is set as expected
 fi
 
 # shellcheck disable=SC2153
