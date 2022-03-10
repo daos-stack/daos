@@ -114,5 +114,5 @@ class IorInterceptVerifyDataIntegrity(DfuseTestBase):
             with_intercept = "without" if intercept is None else "with"
             IorCommand.log_metrics(
                 self.log, "{} clients {} interception library".format(len(clients), with_intercept),
-                results[index]
+                IorCommand.get_ior_metrics(results[index])
             )
