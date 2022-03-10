@@ -443,6 +443,16 @@ copy_files_to_first_client() {
 
 }
 
+propagate_ssh_keys_to_all_nodes () {
+  # Clear ~/.ssh/known_hosts so we don't run into any issues
+  ssh -q -F "${SSH_CONFIG_FILE}" "${FIRST_CLIENT_IP}" \
+    "clush --hostfile=hosts_all --dsh 'rm -f ~/.ssh/known_hosts'"
+
+  # Copy ~/.ssh directory to all instances
+  ssh -q -F "${SSH_CONFIG_FILE}" "${FIRST_CLIENT_IP}" \
+    "clush --hostfile=hosts_all --dsh --copy ~/.ssh --dest ~/"
+}
+
 configure_daos() {
   log "Configure DAOS instances"
   ssh -q -F "${SSH_CONFIG_FILE}" ${FIRST_CLIENT_IP} "~/configure_daos.sh"
@@ -485,6 +495,7 @@ main() {
   configure_first_client_nat_ip
   configure_ssh
   copy_files_to_first_client
+  propagate_ssh_keys_to_all_nodes
   show_instances
   show_run_steps
 }
