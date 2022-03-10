@@ -126,14 +126,14 @@ func TestBackend_groomDiscoveredBdevs(t *testing.T) {
 		"missing": {
 			reqAddrList: []string{ctrlr1.PciAddr, ctrlr2.PciAddr, ctrlr3.PciAddr},
 			inCtrlrs:    storage.NvmeControllers{ctrlr1, ctrlr3},
-			expErr:      FaultBdevNotFound(ctrlr2.PciAddr),
+			expErr:      storage.FaultBdevNotFound(ctrlr2.PciAddr),
 		},
 		"vmd devices; vmd not enabled": {
 			reqAddrList: []string{"0000:85:05.5"},
 			inCtrlrs: ctrlrsFromPCIAddrs("850505:07:00.0", "850505:09:00.0",
 				"850505:0b:00.0", "850505:0d:00.0", "850505:0f:00.0",
 				"850505:11:00.0", "850505:14:00.0", "5d0505:03:00.0"),
-			expErr: FaultBdevNotFound("0000:85:05.5"),
+			expErr: storage.FaultBdevNotFound("0000:85:05.5"),
 		},
 		"vmd devices; vmd enabled": {
 			vmdEnabled:  true,
@@ -168,9 +168,9 @@ func TestBackend_groomDiscoveredBdevs(t *testing.T) {
 func TestBackend_Scan(t *testing.T) {
 	ctrlr1 := storage.MockNvmeController(1)
 
-	mockScanReq := func() storage.BdevScanRequest {
+	mockScanReq := func(dl ...string) storage.BdevScanRequest {
 		return storage.BdevScanRequest{
-			DeviceList: &storage.BdevDeviceList{},
+			DeviceList: storage.MustNewBdevDeviceList(dl...),
 		}
 	}
 
@@ -181,18 +181,18 @@ func TestBackend_Scan(t *testing.T) {
 		expResp *storage.BdevScanResponse
 		expErr  error
 	}{
-		"binding scan fail": {
+		"empty results": {
+			req:     mockScanReq(),
+			expResp: &storage.BdevScanResponse{},
+		},
+		"fail": {
 			req: mockScanReq(),
 			mnc: spdk.MockNvmeCfg{
 				DiscoverErr: errors.New("spdk says no"),
 			},
 			expErr: errors.New("spdk says no"),
 		},
-		"empty results from binding": {
-			req:     mockScanReq(),
-			expResp: &storage.BdevScanResponse{},
-		},
-		"binding scan success": {
+		"success": {
 			mnc: spdk.MockNvmeCfg{
 				DiscoverCtrlrs: storage.NvmeControllers{ctrlr1},
 			},
@@ -200,6 +200,21 @@ func TestBackend_Scan(t *testing.T) {
 			expResp: &storage.BdevScanResponse{
 				Controllers: storage.NvmeControllers{ctrlr1},
 			},
+		},
+		"missing nvme device": {
+			mnc: spdk.MockNvmeCfg{
+				DiscoverCtrlrs: storage.NvmeControllers{ctrlr1},
+			},
+			req:    mockScanReq(storage.MockNvmeController(2).PciAddr),
+			expErr: storage.FaultBdevNotFound(storage.MockNvmeController(2).PciAddr),
+		},
+		"emulated nvme; AIO-file": {
+			req:     mockScanReq(storage.MockNvmeAioFile(2).Path),
+			expResp: &storage.BdevScanResponse{},
+		},
+		"emulated nvme; AIO-kdev": {
+			req:     mockScanReq(storage.MockNvmeAioKdev(2).Path),
+			expResp: &storage.BdevScanResponse{},
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
