@@ -69,7 +69,7 @@ class IoConfGen(ExecutableCommand):
                 return False
 
         #Return False if Command failed.
-        except CommandFailure as _error:
+        except CommandFailure:
             return False
 
         return True

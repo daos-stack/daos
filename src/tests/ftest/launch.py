@@ -746,10 +746,12 @@ def auto_detect_devices(host_list, device_type, length, device_filter=None):
 
     # Find the devices on each host
     if device_type == "VMD":
+        # Exclude the controller revision as this causes heterogeneous clush output
         command_list = [
             "/sbin/lspci -D",
             "grep -E '^[0-9a-f]{{{0}}}:[0-9a-f]{{2}}:[0-9a-f]{{2}}.[0-9a-f] '".format(length),
-            "grep -E 'Volume Management Device NVMe RAID Controller'"]
+            "grep -E 'Volume Management Device NVMe RAID Controller'",
+            r"sed -E 's/\(rev\s+([a-f0-9])+\)//I'"]
     elif device_type == "NVMe":
         command_list = [
             "/sbin/lspci -D",
@@ -1769,10 +1771,10 @@ def install_debuginfos():
             cmds.append(["sudo", "dnf", "-y", "install"] + dnf_args)
         rpm_version = get_output(["rpm", "-q", "--qf", "%{evr}", "daos"], check=False)
         cmds.append(
-            ["sudo", "dnf", "debuginfo-install", "-y"] + dnf_args +
-            ["daos-client-" + rpm_version,
-             "daos-server-" + rpm_version,
-             "daos-tests-" + rpm_version])
+            ["sudo", "dnf", "debuginfo-install", "-y"] + dnf_args
+            + ["daos-client-" + rpm_version,
+               "daos-server-" + rpm_version,
+               "daos-tests-" + rpm_version])
     else:
         # We're not using the yum API to install packages
         # See the comments below.
@@ -1943,7 +1945,7 @@ def process_the_cores(avocado_logs_dir, test_yaml, args):
             except IOError as error:
                 print("Error writing {}: {}".format(stack_trace_file, error))
                 return_status = False
-            except RuntimeError:
+            except RuntimeError as error:
                 print("Error creating {}: {}".format(stack_trace_file, error))
                 return_status = False
         else:

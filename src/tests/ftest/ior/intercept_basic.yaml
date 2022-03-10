@@ -3,7 +3,7 @@ hosts:
         - server-A
     test_clients:
         - client-A
-timeout: 2400
+timeout: 1000
 server_config:
     name: daos_server
     servers:
@@ -15,9 +15,7 @@ server_config:
 pool:
     mode: 146 # 146 is RW
     name: daos_server
-    # 300 G
-    scm_size: 30000000000
-    nvme_size: 420000000000
+    size: 90%
     svcn: 1
     control_method: dmg
 container:
@@ -25,29 +23,15 @@ container:
     control_method: daos
 ior:
     client_processes:
-        np_16:
-            np: 16
+        np: 32
     test_file: testFile
-    repetitions: 5
-    iorflags:
-        ssf:
-          flags: "-v -D 600 -w -r"
-          ior_api:
-            - DFS
-            - POSIX
-          transfersize_blocksize:
-            1M:
-              transfer_size: '1M'
-              block_size: '2G'
-              # Expected performance improvement
-              # of write and read for the specific
-              # transfer/block size when using
-              # interception library.
-              write_x: 1.5
-              read_x: 1.5
-          objectclass:
-            oclass_SX:
-              dfs_oclass: "SX"
+    repetitions: 3
+    flags: "-v -D 60 -w -r -R"
+    dfs_oclass: 'SX'
+    transfer_size: '1M'
+    block_size: '100G'
+    write_x: 0.08 # Max 8% performance difference.
+    read_x: 0.08  # Loosely derived from 3% stddev + 5% actual deviation.
 dfuse:
     mount_dir: "/tmp/daos_dfuse/"
     disable_caching: True
