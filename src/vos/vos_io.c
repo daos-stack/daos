@@ -774,7 +774,9 @@ save_csum(struct vos_io_context *ioc, struct dcs_csum_info *csum_info,
 	if (ioc->ic_size_fetch)
 		return 0;
 
-	dcs_csum_info_save(&ioc->ic_csum_list, csum_info, &saved_csum_info);
+	rc = dcs_csum_info_save(&ioc->ic_csum_list, csum_info, &saved_csum_info);
+	if (rc != 0)
+		return rc;
 	if (entry != NULL)
 		evt_entry_csum_update(&entry->en_ext, &entry->en_sel_ext,
 				      saved_csum_info, rec_size);

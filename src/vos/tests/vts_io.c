@@ -670,7 +670,7 @@ io_test_vos_obj_fetch(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch
 		}
 
 		rc = ds_csum_add2iod(iod, csummer, bio_iod_sgl(biod, 0),
-				     dcs_csum_info_get(csum_infos, 0), NULL, iod_csums);
+				     csum_infos, NULL, iod_csums);
 		if (rc != DER_SUCCESS) {
 			daos_csummer_free_ic(csummer, &iod_csums);
 			daos_csummer_destroy(&csummer);

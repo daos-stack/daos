@@ -642,6 +642,7 @@ test_csum_info_list_handling(void **state)
 	}
 
 
+	/* invalid index returns NULL */
 	assert_null(dcs_csum_info_get(&list, 999));
 
 	dcs_csum_info_list_fini(&list);
