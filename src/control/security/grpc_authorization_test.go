@@ -53,6 +53,7 @@ func TestSecurity_ComponentHasAccess(t *testing.T) {
 		"/ctl.CtlSvc/StorageScan":              {ComponentAdmin},
 		"/ctl.CtlSvc/StorageFormat":            {ComponentAdmin},
 		"/ctl.CtlSvc/StorageNvmeRebind":        {ComponentAdmin},
+		"/ctl.CtlSvc/StorageNvmeAddDevice":     {ComponentAdmin},
 		"/ctl.CtlSvc/NetworkScan":              {ComponentAdmin},
 		"/ctl.CtlSvc/FirmwareQuery":            {ComponentAdmin},
 		"/ctl.CtlSvc/FirmwareUpdate":           {ComponentAdmin},
