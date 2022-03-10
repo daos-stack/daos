@@ -1604,6 +1604,7 @@ ds_mgmt_drpc_pool_query(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	if (svc_ranks == NULL)
 		D_GOTO(out, rc = -DER_NOMEM);
 
+	/* TODO: dmg client choose what to query, especially DPI_ENGINES_ENABLED bit set or not. */
 	pool_info.pi_bits = DPI_ALL;
 	rc = ds_mgmt_pool_query(uuid, svc_ranks, &ranks, &pool_info);
 	if (rc != 0) {

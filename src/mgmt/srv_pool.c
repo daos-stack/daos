@@ -418,9 +418,11 @@ ds_mgmt_pool_list_cont(uuid_t uuid, d_rank_list_t *svc_ranks,
  * \param[in]		pool_uuid	UUID of the pool
  * \param[in]		svc_ranks	Ranks of pool svc replicas.
  * \param[out]		ranks		Optional, returned storage ranks in this pool.
- *					If any targets are disabled, a list of affected engines.
- *					If no targets are disabled, a list of all engines.
- *					Caller responsible for freeing list with d_rank_list_free().
+ *					If #pool_info is NULL, engines with disabled targets.
+ *					If #pool_info is passed, engines with enabled or disabled
+ *					targets according to #pi_bits (DPI_ENGINES_ENABLED bit).
+ *					Note: ranks may be empty (i.e., *ranks->rl_nr may be 0).
+ *					The caller must free the list with d_rank_list_free().
  * \param[in][out]	pool_info	Query results
  *
  * \return		0		Success

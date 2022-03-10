@@ -3077,7 +3077,7 @@ process_query_result(d_rank_list_t **ranks, daos_pool_info_t *info, uuid_t pool_
 	info->pi_ndisabled = num_disabled;
 
 	if (ranks != NULL) {
-		bool get_enabled = (num_disabled == 0) ? true : false;
+		bool	get_enabled = (info ? ((info->pi_bits & DPI_ENGINES_ENABLED) != 0) : false);
 
 		rc = pool_map_get_ranks(pool_uuid, map, get_enabled, ranks);
 		if (rc != 0) {
@@ -3102,9 +3102,11 @@ out:
  * \param[in]	pool_uuid	UUID of the pool
  * \param[in]	ps_ranks	Ranks of pool svc replicas
  * \param[out]	ranks		Optional, returned storage ranks in this pool.
- *				If any targets are disabled, \a ranks is a list of affected engines.
- *				If no targets are disabled, \a ranks is a list of all engines.
- *				Caller is responsible for freeing the list with d_rank_list_free().
+ *				If #pool_info is NULL, engines with disabled targets.
+ *				If #pool_info is passed, engines with enabled or disabled
+ *				targets according to #pi_bits (DPI_ENGINES_ENABLED bit).
+ *				Note: ranks may be empty (i.e., *ranks->rl_nr may be 0).
+ *				The caller must free the list with d_rank_list_free().
  * \param[out]	pool_info	Results of the pool query
  *
  * \return	0		Success

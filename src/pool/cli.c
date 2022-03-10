@@ -360,7 +360,7 @@ process_query_reply(struct dc_pool *pool, struct pool_buf *map_buf,
 		d_rank_range_list_t	*range_list;
 		bool	get_enabled = (info ? ((info->pi_bits & DPI_ENGINES_ENABLED) != 0) : false);
 
-		rc = pool_map_get_ranks(pool, map, get_enabled, ranks);
+		rc = pool_map_get_ranks(pool->dp_pool, map, get_enabled, ranks);
 		if (rc != 0) {
 			D_ERROR(DF_UUID": failed to get %s pool ranks\n",
 				DP_UUID(pool->dp_pool), get_enabled ? "enabled" : "disabled");
