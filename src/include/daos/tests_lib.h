@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2015-2021 Intel Corporation.
+ * (C) Copyright 2015-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -99,6 +99,8 @@ typedef struct {
 	char		host[DSS_HOSTNAME_MAX_LEN];
 	int		tgtidx[MAX_TEST_TARGETS_PER_DEVICE];
 	int		n_tgtidx;
+	char		traddr[16];
+	char		led[16];
 }  device_list;
 
 /** Initialize an SGL with a variable number of IOVs and set the IOV buffers
@@ -307,5 +309,47 @@ int dmg_storage_query_device_health(const char *dmg_config_file, char *host,
 int verify_blobstore_state(int state, const char *state_str);
 
 const char *daos_target_state_enum_to_str(int state);
+
+/**
+ * Replace an evicted NVMe SSD or hot-removed SSD with another device.
+ *
+ * \param dmg_config_file [IN]	DMG config file
+ * \param host		  [IN]	Nvme replace on host name provided.
+ * \param old_uuid	  [IN]	UUID of the evicted/hot-removed device.
+ * \param new_uuid	  [IN]	UUID of the new device.
+ */
+int dmg_storage_replace_device(const char *dmg_config_file, char *host,
+			       const uuid_t old_uuid, const uuid_t new_uuid);
+
+/**
+ * Set VMD device LED to identify state (quick blink).
+ *
+ * \param dmg_config_file  [IN]	DMG config file
+ * \param host		   [IN]	Device identify on host name provided.
+ * \param uuid		   [IN]	UUID of the device.
+ */
+int dmg_storage_identify_vmd(const char *dmg_config_file, char *host,
+			     const uuid_t uuid);
+
+/**
+ * Reset VMD device LED to normal state (off).
+ *
+ * \param dmg_config_file   [IN] DMG config file
+ * \param host		    [IN] LED reset on host name provided.
+ * \param uuid		    [IN] UUID of the device.
+ */
+int dmg_storage_ledmanage_reset(const char *dmg_config_file, char *host,
+				const uuid_t uuid);
+
+/**
+ * Get LED state of VMD device.
+ *
+ * \param dmg_config_file   [IN] DMG config file
+ * \param host		    [IN] LED get state on host name provided.
+ * \param uuid		    [IN] UUID of the device.
+ * \param state		    [OUT] LED state
+ */
+int dmg_storage_ledmanage_getstate(const char *dmg_config_file, char *host,
+				   const uuid_t uuid, char *state);
 
 #endif /* __DAOS_TESTS_LIB_H__ */
