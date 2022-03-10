@@ -28,7 +28,7 @@ DAOS_CLIENT_INSTANCE_COUNT="1"
 DAOS_CLIENT_MACHINE_TYPE=c2-standard-16
 
 # Storage
-DAOS_POOL_SIZE="$(( 375 * ${DAOS_SERVER_DISK_COUNT} * ${DAOS_SERVER_INSTANCE_COUNT} / 1000 ))TB"
+DAOS_POOL_SIZE="$(awk -v disk_count=${DAOS_SERVER_DISK_COUNT} -v server_count=${DAOS_SERVER_INSTANCE_COUNT} 'BEGIN {pool_size = 375 * disk_count * server_count / 1000; print pool_size"TB"}')"
 DAOS_CONT_REPLICATION_FACTOR="rf:0"
 
 # IO500
