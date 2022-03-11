@@ -6,7 +6,6 @@
 
 """
 import os
-
 from apricot import TestWithServers
 from command_utils_base import CommandFailure, EnvironmentVariables
 from job_manager_utils import get_job_manager
@@ -32,8 +31,7 @@ class MpiioTests(TestWithServers):
     def run_test(self, test_repo, test_name):
         """Execute function to be used by test functions below.
 
-        test_repo       --absolute or relative (to self.mpichinstall) location
-                          of test repository
+        test_repo       --absolute or relative location of test repository
         test_name       --name of the test to be run
         """
         # Select the commands to run
@@ -52,6 +50,8 @@ class MpiioTests(TestWithServers):
         # Pass pool and container information to the commands
         env = EnvironmentVariables()
         env["DAOS_UNS_PREFIX"] = "daos://{}/{}/".format(self.pool.uuid, self.container.uuid)
+        if test_name == "llnl":
+            env["MPIO_USER_PATH"] = "daos:/"
 
         # Create commands
         kwargs_list = [{"path": test_repo}]
@@ -59,21 +59,23 @@ class MpiioTests(TestWithServers):
             kwargs_list[0]["command"] = "testphdf5"
             kwargs_list.append(kwargs_list[0].copy())
             kwargs_list[1]["command"] = "t_shapesame"
+            env["HDF5_PARAPREFIX"] = "daos:"
 
-        self.job_manager = []
         job_managers = []
         for kwargs in kwargs_list:
+            job_managers.append(get_job_manager(self))
+
+            # fix up a relative test_repo specification
+            if not kwargs["path"].startswith("/"):
+                mpi_path = os.path.split(job_managers[-1].command_path)[0]
+                kwargs["path"] = os.path.join(mpi_path, kwargs["path"])
             if test_name == "romio":
                 # Romio is not run via mpirun
-                job_managers.append(self._test_name_class[test_name](**kwargs))
+                romio_job = self._test_name_class[test_name](**kwargs)
+                romio_job.env = env
+                job_managers = [romio_job]
+                self.job_manager = []
             else:
-                job_managers.append(get_job_manager(self))
-
-                # fix up a relative test_repo specification
-                if not kwargs["path"].startswith("/"):
-                    mpi_path = os.path.split(job_managers[-1].command_path)[0]
-                    kwargs["path"] = os.path.join(mpi_path, kwargs["path"])
-
                 # finish job manager setup
                 job_managers[-1].job = self._test_name_class[test_name](**kwargs)
                 job_managers[-1].assign_hosts(self.hostlist_clients)

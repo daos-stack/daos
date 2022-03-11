@@ -32,7 +32,7 @@ class Mpi4pyCommand(ExecutableCommand):
             path (str): path to the macsio command.
         """
         super().__init__(
-            "/run/mpi4py/*", "python{} test_io_daos.py".format(version_info.major), path)
+            "/run/mpi4py/*", "test_io_daos.py", "python{} {}".format(version_info.major, path))
 
 
 class RomioCommand(ExecutableCommand):
