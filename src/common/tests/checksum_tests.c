@@ -685,9 +685,8 @@ test_csum_info_list_handle_many(void **state)
 
 	dcs_csum_info_list_fini(&list);
 
-	for (i = 0; i < ARRAY_SIZE(info); i++) {
+	for (i = 0; i < ARRAY_SIZE(info); i++)
 		D_FREE(info->cs_csum);
-	}
 }
 
 #define MAP_MAX 10

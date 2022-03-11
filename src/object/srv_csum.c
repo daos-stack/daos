@@ -437,7 +437,7 @@ cc_biov_move_next(struct csum_context *ctx, bool biov_csum_used)
 	}
 
 	C_TRACE("Moving to biov %d, biov_csum_used: %s, csums_idx: %lu\n", ctx->cc_bsgl_idx.iov_idx,
-		biov_csum_used ? "YES": "NO", ctx->cc_biov_csums_idx);
+		biov_csum_used ? "YES" : "NO", ctx->cc_biov_csums_idx);
 
 	set_biov_ranges(ctx, ctx->cc_cur_recx_idx);
 }
