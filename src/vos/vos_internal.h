@@ -887,7 +887,7 @@ struct vos_iter_ops {
 	int	(*iop_probe)(struct vos_iterator *iter,
 			     daos_anchor_t *anchor);
 	/** move forward the iterating cursor */
-	int	(*iop_next)(struct vos_iterator *iter);
+	int	(*iop_next)(struct vos_iterator *iter, daos_anchor_t *anchor);
 	/** fetch the record that the cursor points to */
 	int	(*iop_fetch)(struct vos_iterator *iter,
 			     vos_iter_entry_t *it_entry,
@@ -950,6 +950,15 @@ static inline struct vos_obj_iter *
 vos_hdl2oiter(daos_handle_t hdl)
 {
 	return vos_iter2oiter(vos_hdl2iter(hdl));
+}
+
+static inline daos_handle_t
+vos_iter2hdl(struct vos_iterator *iter)
+{
+	daos_handle_t	hdl;
+
+	hdl.cookie = (uint64_t)iter;
+	return hdl;
 }
 
 /**
@@ -1375,6 +1384,12 @@ recx_csum_len(daos_recx_t *recx, struct dcs_csum_info *csum,
 		return 0;
 	return (daos_size_t)csum->cs_len * csum_chunk_count(csum->cs_chunksize,
 			recx->rx_idx, recx->rx_idx + recx->rx_nr - 1, rsize);
+}
+
+static inline bool
+vos_anchor_is_zero(daos_anchor_t *anchor)
+{
+	return anchor == NULL || daos_anchor_is_zero(anchor);
 }
 
 #endif /* __VOS_INTERNAL_H__ */

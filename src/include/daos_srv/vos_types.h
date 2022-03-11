@@ -347,9 +347,12 @@ typedef struct {
 /**
  * Iteration object/key filter callback
  *
- * User returns true if the object/key should be filtered by the iterator
+ * Supports only VOS_ITER_CB_SKIP
+ *
+ * Return 1 to abort iterator
  */
-typedef bool (*vos_iter_filter_cb_t)(vos_iter_desc_t *desc, void *cb_arg);
+typedef int (*vos_iter_filter_cb_t)(daos_handle_t ih, vos_iter_desc_t *desc,
+				    void *cb_arg, unsigned int *acts);
 
 /**
  * Parameters for initializing VOS iterator
@@ -375,9 +378,9 @@ typedef struct {
 	daos_epoch_range_t	ip_epr;
 	/** epoch logic expression for the iterator. */
 	vos_it_epc_expr_t	ip_epc_expr;
-	/** filter callback for object/key */
+	/** filter callback for object/key (vos_iterate only) */
 	vos_iter_filter_cb_t	ip_filter_cb;
-	/** filter callback argument */
+	/** filter callback argument (vos_iterate only) */
 	void			*ip_filter_arg;
 	/** flags for for iterator */
 	uint32_t		ip_flags;

@@ -496,19 +496,20 @@ exit:
  * to the object matching the condition.
  */
 static int
-oi_iter_match_probe(struct vos_iterator *iter)
+oi_iter_match_probe(struct vos_iterator *iter, daos_anchor_t *anchor)
 {
+	uint64_t		 start_seq;
 	struct vos_oi_iter	*oiter	= iter2oiter(iter);
 	char			*str	= NULL;
 	vos_iter_desc_t		 desc;
-
+	unsigned int		 acts;
 	int			 rc;
 
 	while (1) {
 		struct vos_obj_df *obj;
 		d_iov_t	   iov;
 
-		rc = dbtree_iter_fetch(oiter->oit_hdl, NULL, &iov, NULL);
+		rc = dbtree_iter_fetch(oiter->oit_hdl, NULL, &iov, anchor);
 		if (rc != 0) {
 			str = "fetch";
 			goto failed;
@@ -520,8 +521,20 @@ oi_iter_match_probe(struct vos_iterator *iter)
 		if (iter->it_filter_cb != NULL) {
 			desc.id_type = VOS_ITER_OBJ;
 			desc.id_oid = obj->vo_id;
-			if (iter->it_filter_cb(&desc, iter->it_filter_arg))
-				goto next;
+			acts = 0;
+			start_seq = vos_sched_seq();
+			rc = iter->it_filter_cb(vos_iter2hdl(iter), &desc, iter->it_filter_arg,
+						&acts);
+			if (rc != 0)
+				goto failed;
+			if (start_seq != vos_sched_seq())
+				return IT_OPC_PROBE;
+			if (acts != 0) {
+				if (acts & VOS_ITER_CB_SKIP)
+					goto next;
+				D_ASSERTF(0, "Invalid acts returned from iterator filter %x\n",
+					  acts);
+			}
 		}
 
 		rc = oi_iter_ilog_check(obj, oiter, NULL, true);
@@ -557,7 +570,7 @@ oi_iter_probe(struct vos_iterator *iter, daos_anchor_t *anchor)
 
 	D_ASSERT(iter->it_type == VOS_ITER_OBJ);
 
-	opc = anchor == NULL ? BTR_PROBE_FIRST : BTR_PROBE_GE;
+	opc = vos_anchor_is_zero(anchor) ? BTR_PROBE_FIRST : BTR_PROBE_GE;
 	rc = dbtree_iter_probe(oiter->oit_hdl, opc, vos_iter_intent(iter), NULL,
 			       anchor);
 	if (rc)
@@ -566,13 +579,13 @@ oi_iter_probe(struct vos_iterator *iter, daos_anchor_t *anchor)
 	/* NB: these probe cannot guarantee the returned entry is within
 	 * the condition epoch range.
 	 */
-	rc = oi_iter_match_probe(iter);
+	rc = oi_iter_match_probe(iter, anchor);
  out:
 	return rc;
 }
 
 static int
-oi_iter_next(struct vos_iterator *iter)
+oi_iter_next(struct vos_iterator *iter, daos_anchor_t *anchor)
 {
 	struct vos_oi_iter	*oiter = iter2oiter(iter);
 	int			 rc;
@@ -582,7 +595,7 @@ oi_iter_next(struct vos_iterator *iter)
 	if (rc)
 		D_GOTO(out, rc);
 
-	rc = oi_iter_match_probe(iter);
+	rc = oi_iter_match_probe(iter, anchor);
  out:
 	return rc;
 }

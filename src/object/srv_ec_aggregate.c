@@ -2212,32 +2212,48 @@ out:
 	return rc;
 }
 
-static bool
-agg_filter(vos_iter_desc_t *desc, void *cb_arg)
+static int
+agg_filter(daos_handle_t ih, vos_iter_desc_t *desc, void *cb_arg, unsigned int *acts)
 {
 	struct ec_agg_param	*agg_param = (struct ec_agg_param *)cb_arg;
+	struct ec_agg_entry	*agg_entry = &agg_param->ap_agg_entry;
 	struct ec_agg_pool_info	*info = &agg_param->ap_pool_info;
 	struct daos_oclass_attr  oca;
-	int			 rc;
+	int			 rc = 0;
 
 	if (desc->id_type != VOS_ITER_OBJ)
-		return false;
+		return 0;
 
 	rc = dsc_obj_id2oc_attr(desc->id_oid.id_pub, &info->api_props, &oca);
 	if (rc) {
 		D_ERROR("Skip object("DF_OID") with unknown class(%u)\n",
 			DP_OID(desc->id_oid.id_pub),
 			daos_obj_id2class(desc->id_oid.id_pub));
-		return true;
+		*acts = VOS_ITER_CB_SKIP;
+		agg_param->ap_credits++;
+		goto done;
 	}
 
 	if (!daos_oclass_is_ec(&oca)) { /* Skip non-EC object */
 		D_DEBUG(DB_EPC, "Skip oid:"DF_UOID" non-ec obj\n",
 			DP_UOID(desc->id_oid));
-		return true;
+		agg_param->ap_credits++;
+		*acts = VOS_ITER_CB_SKIP;
+	}
+done:
+	if (agg_param->ap_credits > agg_param->ap_credits_max) {
+		agg_param->ap_credits = 0;
+		D_DEBUG(DB_EPC, "EC aggregation yield type %d. acts %u\n",
+			desc->id_type, *acts);
+		if (!(*acts & VOS_ITER_CB_SKIP))
+			agg_reset_pos(desc->id_type, agg_entry);
+		if (ec_aggregate_yield(agg_param)) {
+			D_DEBUG(DB_EPC, "EC aggregation aborted\n");
+			rc = 1;
+		}
 	}
 
-	return false;
+	return rc;
 }
 
 /* Iterator pre-callback for objects. Determines if object is subject
