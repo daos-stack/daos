@@ -176,7 +176,6 @@ int
 daos_cont_open(daos_handle_t poh, const char *cont, unsigned int flags,
 	       daos_handle_t *coh, daos_cont_info_t *info, daos_event_t *ev)
 	       __attribute__ ((weak, alias("daos_cont_open2")));
-#define daos_cont_open daos_cont_open2
 
 int
 daos_cont_close(daos_handle_t coh, daos_event_t *ev)
@@ -229,7 +228,6 @@ int
 daos_cont_destroy(daos_handle_t poh, const char *cont, int force,
 		  daos_event_t *ev)
 		  __attribute__ ((weak, alias("daos_cont_destroy2")));
-#define daos_cont_destroy daos_cont_destroy2
 
 int
 daos_cont_query(daos_handle_t coh, daos_cont_info_t *info,
