@@ -626,6 +626,13 @@ def get_test_list(tags):
         for test_tag in test_tags:
             command.append(str(test_tag))
         command.extend(test_list if test_list else ["./"])
+
+        # FIXME To remove
+        print(">>>> [SPY_002] avocado command:")
+        for item in command:
+            print(">>>> [SPY_002]\t- {}".format(item))
+        # FIXME To remove
+
         tagged_tests = re.findall(r"INSTRUMENTED\s+(.*):", get_output(command))
         test_list = list(set(tagged_tests))
 

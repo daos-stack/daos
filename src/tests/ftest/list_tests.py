@@ -1,6 +1,6 @@
 #!/usr/bin/python2 -u
 """
-  (C) Copyright 2021 Intel Corporation.
+  (C) Copyright 2021-2022 Intel Corporation.
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 from __future__ import print_function
@@ -8,6 +8,10 @@ from __future__ import print_function
 from argparse import ArgumentParser, RawDescriptionHelpFormatter
 import sys
 from launch import get_test_list, set_python_environment
+
+# FIXME To remove
+import os
+# FIXME To remove
 
 
 def main():
@@ -52,6 +56,12 @@ def main():
 
     # Setup the user environment
     set_python_environment()
+
+    # FIXME To remove
+    print(">>>> [SPY_001] list of pool files:")
+    for filename in os.listdir("./pool"):
+        print(">>>> [SPY_001]\t- {}".format(filename))
+    # FIXME To remove
 
     # Process the tags argument to determine which tests to run
     _, test_list = get_test_list(args.tags)
