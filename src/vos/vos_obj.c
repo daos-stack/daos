@@ -1400,7 +1400,7 @@ recx_iter_probe(struct vos_obj_iter *oiter, daos_anchor_t *anchor)
 	int	rc;
 
 	opc = vos_anchor_is_zero(anchor) ? EVT_ITER_FIRST : EVT_ITER_FIND;
-	rc = evt_iter_probe(oiter->it_hdl, opc, NULL, daos_anchor_is_zero(anchor) ? NULL : anchor);
+	rc = evt_iter_probe(oiter->it_hdl, opc, NULL, vos_anchor_is_zero(anchor) ? NULL : anchor);
 	return rc;
 }
 
