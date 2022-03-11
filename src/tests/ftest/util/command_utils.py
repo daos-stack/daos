@@ -1,6 +1,6 @@
 #!/usr/bin/python
 """
-  (C) Copyright 2018-2021 Intel Corporation.
+  (C) Copyright 2018-2022 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -705,45 +705,50 @@ class SubProcessCommand(CommandWithSubCommand):
             #   - the time out is reached (failure)
             #   - the subprocess is no longer running (failure)
             while not complete and not timed_out and sub_process.poll() is None:
-                output = get_subprocess_stdout(sub_process)
-                detected = len(re.findall(self.pattern, output))
+                detected = len(re.findall(self.pattern, get_subprocess_stdout(sub_process)))
                 complete = detected == self.pattern_count
                 timed_out = time.time() - start > self.pattern_timeout.value
 
             # Summarize results
-            msg = "{}/{} '{}' messages detected in".format(
-                detected, self.pattern_count, self.pattern)
-            runtime = "{}/{} seconds".format(
-                time.time() - start, self.pattern_timeout.value)
-
-            if not complete:
-                # Report the error / timeout
-                reason = "ERROR detected"
-                details = ""
-                if timed_out:
-                    reason = "TIMEOUT detected, exceeded {} seconds".format(
-                        self.pattern_timeout.value)
-                    runtime = "{} seconds".format(time.time() - start)
-                if not self.verbose:
-                    # Include the stdout if verbose is not enabled
-                    details = ":\n{}".format(get_subprocess_stdout(sub_process))
-                self.log.info("%s - %s %s%s", reason, msg, runtime, details)
-                if timed_out:
-                    self.log.debug(
-                        "If needed the %s second timeout can be adjusted via "
-                        "the 'pattern_timeout' test yaml parameter under %s",
-                        self.pattern_timeout.value, self.namespace)
-
-                # Stop the timed out process
-                if timed_out:
-                    self.stop()
-            else:
-                # Report the successful start
-                self.log.info(
-                    "%s subprocess startup detected - %s %s",
-                    self._command, msg, runtime)
+            self.report_subprocess_status(start, detected, complete, timed_out, sub_process)
 
         return complete
+
+    def report_subprocess_status(self, start, detected, complete, timed_out, sub_process):
+        """Summarize the results of checking the status of the command.
+
+        Args:
+            start (float): start time of check
+            detected (int): number of patterns detected in the check
+            complete (bool): whether the check succeeded
+            timed_out (bool): whether the check timed out
+            sub_process (process.SubProcess): subprocess used to run the command
+        """
+        msg = "{}/{} '{}' messages detected in".format(detected, self.pattern_count, self.pattern)
+        runtime = "{}/{} seconds".format(time.time() - start, self.pattern_timeout.value)
+
+        if not complete:
+            # Report the error / timeout
+            reason = "ERROR detected"
+            details = ""
+            if timed_out:
+                reason = "TIMEOUT detected, exceeded {} seconds".format(self.pattern_timeout.value)
+                runtime = "{} seconds".format(time.time() - start)
+            if not self.verbose:
+                # Include the stdout if verbose is not enabled
+                details = ":\n{}".format(get_subprocess_stdout(sub_process))
+            self.log.info("%s - %s %s%s", reason, msg, runtime, details)
+            if timed_out:
+                self.log.debug(
+                    "If needed the %s second timeout can be adjusted via the 'pattern_timeout' "
+                    "test yaml parameter under %s", self.pattern_timeout.value, self.namespace)
+
+            # Stop the timed out process
+            if timed_out:
+                self.stop()
+        else:
+            # Report the successful start
+            self.log.info("%s subprocess startup detected - %s %s", self._command, msg, runtime)
 
 
 class YamlCommand(SubProcessCommand):
@@ -1177,7 +1182,7 @@ class SubprocessManager():
         return data
 
     def update_expected_states(self, ranks, state):
-        """Update the expected state of the specified job rank.
+        """Update the expected state of the specified job rank(s).
 
         Args:
             ranks (object): job ranks to update. Can be a single rank (int),
@@ -1197,6 +1202,22 @@ class SubprocessManager():
                     rank, self._expected_states[rank]["host"],
                     self._expected_states[rank]["state"], state)
                 self._expected_states[rank]["state"] = state
+
+    def get_expected_states(self, ranks=None):
+        """Get the expected state of the specified job rank(s).
+
+        Args:
+            ranks (object, optional): job ranks to update. Can be a single rank (int),
+                multiple ranks (list), or all the ranks (None). Default is None.
+
+        Returns:
+            dict: states for the specified rank(s).
+        """
+        if ranks is None:
+            ranks = list(self._expected_states.keys())
+        elif not isinstance(ranks, (list, tuple)):
+            ranks = [ranks]
+        return {rank: self._expected_states[rank]["state"] for rank in ranks}
 
     def verify_expected_states(self, set_expected=False, show_logs=True):
         """Verify that the expected job process states match the current states.
@@ -1224,8 +1245,8 @@ class SubprocessManager():
         if set_expected:
             # Assign the expected states to the current job process states
             self.log.info(
-                "<%s> Assigning expected %s states.",
-                self._id.upper(), self._id)
+                "<%s> Assigning expected %s states: %s",
+                self._id.upper(), self._id, current_states)
             self._expected_states = current_states.copy()
 
         # Verify the expected states match the current states
@@ -1233,7 +1254,7 @@ class SubprocessManager():
             "<%s> Verifying %s states: group=%s, hosts=%s",
             self._id.upper(), self._id, self.get_config_value("name"),
             NodeSet.fromlist(self._hosts))
-        if current_states:
+        if current_states and self._expected_states:
             log_format = "  %-4s  %-15s  %-36s  %-22s  %-14s  %s"
             self.log.info(
                 log_format,

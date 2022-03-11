@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2021 Intel Corporation.
+ * (C) Copyright 2016-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -68,7 +68,7 @@ oi_hkey_cmp(struct btr_instance *tins, struct btr_record *rec, void *hkey)
 
 static int
 oi_rec_alloc(struct btr_instance *tins, d_iov_t *key_iov,
-	     d_iov_t *val_iov, struct btr_record *rec)
+	     d_iov_t *val_iov, struct btr_record *rec, d_iov_t *val_out)
 {
 	struct dtx_handle	*dth = vos_dth_get();
 	struct vos_obj_df	*obj;
@@ -155,7 +155,7 @@ oi_rec_fetch(struct btr_instance *tins, struct btr_record *rec,
 
 static int
 oi_rec_update(struct btr_instance *tins, struct btr_record *rec,
-		  d_iov_t *key, d_iov_t *val)
+		  d_iov_t *key, d_iov_t *val, d_iov_t *val_out)
 {
 	D_ASSERTF(0, "Should never been called\n");
 	return 0;
@@ -246,12 +246,14 @@ vos_oi_find_alloc(struct vos_container *cont, daos_unit_oid_t oid,
 	d_iov_set(&key_iov, &oid, sizeof(oid));
 
 	rc = dbtree_upsert(cont->vc_btr_hdl, BTR_PROBE_EQ, DAOS_INTENT_DEFAULT,
-			   &key_iov, &val_iov);
+			   &key_iov, &val_iov, NULL);
 	if (rc) {
 		D_ERROR("Failed to update Key for Object index\n");
 		return rc;
 	}
 	obj = val_iov.iov_buf;
+	/** Since we just allocated it, we can save a tx_add later to set this */
+	obj->vo_max_write = epoch;
 
 	vos_ilog_ts_ignore(vos_cont2umm(cont), &obj->vo_ilog);
 	vos_ilog_ts_mark(ts_set, &obj->vo_ilog);
@@ -621,8 +623,8 @@ oi_iter_fetch(struct vos_iterator *iter, vos_iter_entry_t *it_entry,
 	}
 	it_entry->ie_child_type = VOS_ITER_DKEY;
 
-	vos_ilog_last_update(&obj->vo_ilog, VOS_TS_TYPE_OBJ,
-			     &it_entry->ie_last_update);
+	it_entry->ie_last_update = obj->vo_max_write;
+
 	return 0;
 }
 
@@ -649,6 +651,57 @@ exit:
 }
 
 int
+oi_iter_pre_aggregate(daos_handle_t ih)
+{
+	struct vos_iterator	*iter = vos_hdl2iter(ih);
+	struct vos_oi_iter	*oiter = iter2oiter(iter);
+	struct vos_obj_df	*obj;
+	daos_unit_oid_t		 oid;
+	d_iov_t			 rec_iov;
+	int			 rc;
+
+	D_ASSERT(iter->it_type == VOS_ITER_OBJ);
+
+	d_iov_set(&rec_iov, NULL, 0);
+	rc = dbtree_iter_fetch(oiter->oit_hdl, NULL, &rec_iov, NULL);
+	D_ASSERTF(rc != -DER_NONEXIST,
+		  "Probe should be done before aggregation\n");
+	if (rc != 0)
+		return rc;
+	D_ASSERT(rec_iov.iov_len == sizeof(struct vos_obj_df));
+	obj = (struct vos_obj_df *)rec_iov.iov_buf;
+	oid = obj->vo_id;
+
+	if (!vos_ilog_is_punched(vos_cont2hdl(oiter->oit_cont), &obj->vo_ilog, &oiter->oit_epr,
+				 NULL, &oiter->oit_ilog_info))
+		return 0;
+
+	/** Ok, ilog is fully punched, so we can move it to gc heap */
+	rc = umem_tx_begin(vos_cont2umm(oiter->oit_cont), NULL);
+	if (rc != 0)
+		goto exit;
+
+	/* Incarnation log is empty, delete the object */
+	D_DEBUG(DB_IO, "Moving object "DF_UOID" to gc heap\n",
+		DP_UOID(oid));
+	/* Evict the object from cache */
+	rc = vos_obj_evict_by_oid(vos_obj_cache_current(),
+				  oiter->oit_cont, oid);
+	if (rc != 0)
+		D_ERROR("Could not evict object "DF_UOID" "DF_RC"\n",
+			DP_UOID(oid), DP_RC(rc));
+	rc = dbtree_iter_delete(oiter->oit_hdl, oiter->oit_cont);
+	D_ASSERT(rc != -DER_NONEXIST);
+
+	rc = umem_tx_end(vos_cont2umm(oiter->oit_cont), rc);
+exit:
+	if (rc == 0)
+		return 1;
+
+	return rc;
+}
+
+int
 oi_iter_aggregate(daos_handle_t ih, bool range_discard)
 {
 	struct vos_iterator	*iter = vos_hdl2iter(ih);
@@ -656,7 +709,7 @@ oi_iter_aggregate(daos_handle_t ih, bool range_discard)
 	struct vos_obj_df	*obj;
 	daos_unit_oid_t		 oid;
 	d_iov_t			 rec_iov;
-	bool			 reprobe = false;
+	bool			 delete = false, invisible = false;
 	int			 rc;
 
 	D_ASSERT(iter->it_type == VOS_ITER_OBJ);
@@ -682,7 +735,7 @@ oi_iter_aggregate(daos_handle_t ih, bool range_discard)
 		/* Incarnation log is empty, delete the object */
 		D_DEBUG(DB_IO, "Removing object "DF_UOID" from tree\n",
 			DP_UOID(oid));
-		reprobe = true;
+		delete = true;
 		if (!dbtree_is_empty_inplace(&obj->vo_tree)) {
 			/* This can be an assert once we have sane under punch
 			 * detection.
@@ -699,14 +752,14 @@ oi_iter_aggregate(daos_handle_t ih, bool range_discard)
 		D_ASSERT(rc != -DER_NONEXIST);
 	} else if (rc == -DER_NONEXIST) {
 		/** ilog isn't visible in range but still has some enrtries */
-		reprobe = true;
+		invisible = true;
 		rc = 0;
 	}
 
 	rc = umem_tx_end(vos_cont2umm(oiter->oit_cont), rc);
 exit:
-	if (rc == 0 && reprobe)
-		return 1;
+	if (rc == 0 && (delete || invisible))
+		return delete ? 1 : 2;
 
 	return rc;
 }

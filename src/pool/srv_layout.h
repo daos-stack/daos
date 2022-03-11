@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2021 Intel Corporation.
+ * (C) Copyright 2016-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -56,6 +56,7 @@ extern d_iov_t ds_pool_prop_nhandles;		/* uint32_t */
 extern d_iov_t ds_pool_prop_handles;		/* pool handle KVS */
 extern d_iov_t ds_pool_prop_ec_cell_sz;		/* pool EC cell size */
 extern d_iov_t ds_pool_attr_user;		/* pool user attributes KVS */
+extern d_iov_t ds_pool_prop_policy;		/* tiering policy uint32_t */
 
 /*
  * Pool handle KVS (RDB_KVS_GENERIC)
@@ -66,6 +67,7 @@ extern d_iov_t ds_pool_attr_user;		/* pool user attributes KVS */
 struct pool_hdl {
 	uint64_t	ph_flags;
 	uint64_t	ph_sec_capas;
+	char		ph_machine[MAXHOSTNAMELEN+1];
 };
 
 /*

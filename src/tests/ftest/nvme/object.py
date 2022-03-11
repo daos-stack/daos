@@ -1,6 +1,6 @@
 #!/usr/bin/python3
 """
-  (C) Copyright 2020-2021 Intel Corporation.
+  (C) Copyright 2020-2022 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -109,14 +109,7 @@ def test_runner(self, namespace, record_size, array_size, thread_per_size=4):
     # display free space after reads and writes
     self.pool[-1].display_pool_daos_space("after writes and reads")
 
-    # destroy container
-    if self.container[-1] is not None:
-        self.container[-1].destroy()
-
-    # destroy pool
-    if self.pool[-1] is not None:
-        self.pool[-1].destroy(1)
-
+    # container and pool destroy handled by cleanup
 
 class NvmeObject(TestWithServers):
     """Test class for NVMe storage.

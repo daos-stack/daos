@@ -1,6 +1,6 @@
 #!/usr/bin/python
 """
-  (C) Copyright 2018-2021 Intel Corporation.
+  (C) Copyright 2018-2022 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -406,17 +406,34 @@ def run_pcmd(hosts, command, verbose=True, timeout=None, expect_rc=0):
         for item in results
         if expect_rc is not None and item["exit_status"] != expect_rc]
     if verbose or bad_exit_status:
-        log.info("Command: %s", command)
-        log.info("Results:")
-        for result in results:
-            log.info(
-                "  %s: exit_status=%s, interrupted=%s:",
-                result["hosts"], result["exit_status"], result["interrupted"])
-            for line in result["stdout"]:
-                log.info("    %s", line)
+        log.info(colate_results(command, results))
 
     return results
 
+
+def colate_results(command, results):
+    """Colate the output of run_pcmd.
+
+    Args:
+        command (str): command used to obtain the data on each server
+        results (list): list: a list of dictionaries with each entry
+                        containing output, exit status, and interrupted
+                        status common to each group of hosts (see run_pcmd()'s
+                        return for details)
+    Returns:
+        str: a string colating run_pcmd()'s results
+
+    """
+    res = ""
+    res += "Command: %s\n" % command
+    res += "Results:\n"
+    for result in results:
+        res += "  %s: exit_status=%s, interrupted=%s:" % (
+               result["hosts"], result["exit_status"], result["interrupted"])
+        for line in result["stdout"]:
+            res += "    %s\n" % line
+
+    return res
 
 def get_host_data(hosts, command, text, error, timeout=None):
     """Get the data requested for each host using the specified command.
@@ -696,7 +713,7 @@ def stop_processes(hosts, pattern, verbose=True, timeout=60, added_filter=None,
                 "then rc=1",
                 "sudo pkill --signal USR2 {}".format(pattern),
                 # leave time for ABT info/stacks dump vs xstream/pool/ULT number
-		"sleep 20",
+                "sleep 20",
                 "fi",
                 "exit $rc",
             ]

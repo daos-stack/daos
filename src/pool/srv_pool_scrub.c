@@ -232,7 +232,8 @@ scrubbing_ult(void *arg)
 	C_TRACE("Scrubbing ULT started for pool: "DF_UUIDF"[%d]\n",
 		DP_UUID(child->spc_uuid), dmi->dmi_tgt_id);
 
-	D_ASSERT(child->spc_scrubbing_req != NULL);
+	if (child->spc_scrubbing_req == NULL)
+		return;
 
 	sc_init(&ctx, child);
 	sleep_sec = between_scrub_sec();
@@ -270,8 +271,6 @@ ds_start_scrubbing_ult(struct ds_pool_child *child)
 {
 	struct dss_module_info	*dmi = dss_get_module_info();
 	struct sched_req_attr	 attr;
-	ABT_thread		 thread = ABT_THREAD_NULL;
-	int			 rc;
 
 	D_ASSERT(child != NULL);
 	D_ASSERT(child->spc_scrubbing_req == NULL);
@@ -291,22 +290,12 @@ ds_start_scrubbing_ult(struct ds_pool_child *child)
 	/* There will be several levels iteration, such as pool, container, object, and lower,
 	 * and so on. Let's use DSS_DEEP_STACK_SZ to avoid ULT overflow.
 	 */
-	rc = dss_ult_create(scrubbing_ult, child, DSS_XS_SELF, 0, DSS_DEEP_STACK_SZ, &thread);
-	if (rc) {
-		D_ERROR(DF_UUID"[%d]: Failed to create Scrubbing ULT. %d\n",
-			DP_UUID(child->spc_uuid), dmi->dmi_tgt_id, rc);
-		return rc;
-	}
-
-	D_ASSERT(thread != ABT_THREAD_NULL);
-
 	sched_req_attr_init(&attr, SCHED_REQ_SCRUB, &child->spc_uuid);
-	attr.sra_flags = SCHED_REQ_FL_NO_DELAY;
-	child->spc_scrubbing_req = sched_req_get(&attr, thread);
+	child->spc_scrubbing_req = sched_create_ult(&attr, scrubbing_ult, child,
+						    DSS_DEEP_STACK_SZ);
 	if (child->spc_scrubbing_req == NULL) {
-		D_CRIT(DF_UUID"[%d]: Failed to get req for Scrubbing ULT\n",
-		       DP_UUID(child->spc_uuid), dmi->dmi_tgt_id);
-		ABT_thread_join(thread);
+		D_ERROR(DF_UUID"[%d]: Failed to create Scrubbing ULT.n",
+			DP_UUID(child->spc_uuid), dmi->dmi_tgt_id);
 		return -DER_NOMEM;
 	}
 

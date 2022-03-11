@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2021 Intel Corporation.
+// (C) Copyright 2020-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -472,6 +472,7 @@ Errors:
 -----
 host1
 -----
+HugePage Size: 2048 KB
 	No SCM modules found
 
 NVMe PCI     Model   FW Revision Socket ID Capacity 
@@ -500,6 +501,7 @@ Errors:
 -----
 host1
 -----
+HugePage Size: 2048 KB
 SCM Module ID Socket ID Memory Ctrlr ID Channel ID Channel Slot Capacity 
 ------------- --------- --------------- ---------- ------------ -------- 
 1             1         1               1          1            954 MiB  
@@ -533,6 +535,7 @@ Errors:
 ---------
 host[1-2]
 ---------
+HugePage Size: 2048 KB
 	No SCM modules found
 
 	No NVMe devices found
@@ -558,6 +561,7 @@ host[1-2]
 ---------
 host[1-2]
 ---------
+HugePage Size: 2048 KB
 	No SCM modules found
 
 	No NVMe devices found
@@ -579,6 +583,7 @@ host[1-2]
 -----
 host1
 -----
+HugePage Size: 2048 KB
 SCM Module ID Socket ID Memory Ctrlr ID Channel ID Channel Slot Capacity 
 ------------- --------- --------------- ---------- ------------ -------- 
 1             1         1               1          1            954 MiB  
@@ -604,6 +609,7 @@ NVMe PCI     Model   FW Revision Socket ID Capacity
 -----
 host1
 -----
+HugePage Size: 2048 KB
 SCM Namespace Socket ID Capacity 
 ------------- --------- -------- 
 pmem0         0         1.0 TB   
@@ -633,6 +639,7 @@ NVMe PCI     Model   FW Revision Socket ID Capacity
 ---------
 host[1-2]
 ---------
+HugePage Size: 2048 KB
 SCM Module ID Socket ID Memory Ctrlr ID Channel ID Channel Slot Capacity 
 ------------- --------- --------------- ---------- ------------ -------- 
 1             1         1               1          1            954 MiB  
@@ -662,6 +669,7 @@ NVMe PCI     Model   FW Revision Socket ID Capacity
 -----
 host1
 -----
+HugePage Size: 2048 KB
 SCM Module ID Socket ID Memory Ctrlr ID Channel ID Channel Slot Capacity 
 ------------- --------- --------------- ---------- ------------ -------- 
 1             1         1               1          1            954 MiB  
@@ -671,6 +679,7 @@ SCM Module ID Socket ID Memory Ctrlr ID Channel ID Channel Slot Capacity
 -----
 host2
 -----
+HugePage Size: 2048 KB
 	No SCM modules found
 
 NVMe PCI     Model   FW Revision Socket ID Capacity 
@@ -690,6 +699,7 @@ NVMe PCI     Model   FW Revision Socket ID Capacity
 ------------
 host[0-1023]
 ------------
+HugePage Size: 2048 KB
 SCM Module ID Socket ID Memory Ctrlr ID Channel ID Channel Slot Capacity 
 ------------- --------- --------------- ---------- ------------ -------- 
 1             1         1               1          1            954 MiB  
@@ -727,6 +737,7 @@ NVMe PCI     Model   FW Revision Socket ID Capacity
 ----------------
 host-[0001-0004]
 ----------------
+HugePage Size: 2048 KB
 	No SCM modules found
 
 NVMe PCI     Model   FW Revision Socket ID Capacity 
@@ -762,6 +773,7 @@ NVMe PCI     Model   FW Revision Socket ID Capacity
 ------------------
 host-j-[0001-0004]
 ------------------
+HugePage Size: 2048 KB
 	No SCM modules found
 
 NVMe PCI     Model   FW Revision Socket ID Capacity 
@@ -797,6 +809,7 @@ NVMe PCI     Model   FW Revision Socket ID Capacity
 ---------
 host[1,3]
 ---------
+HugePage Size: 2048 KB
 SCM Namespace Socket ID Capacity 
 ------------- --------- -------- 
 pmem0         0         1.0 TB   
@@ -810,6 +823,7 @@ NVMe PCI     Model FW Revision Socket ID Capacity
 ---------
 host[2,4]
 ---------
+HugePage Size: 2048 KB
 SCM Namespace Socket ID Capacity 
 ------------- --------- -------- 
 pmem0         0         1.0 TB   
@@ -1385,14 +1399,28 @@ host1
 									TrAddr:    "0000:8a:00.0",
 									TargetIDs: []int32{0, 1, 2},
 									Rank:      0,
-									State:     "NORMAL",
+									NvmeState: storage.MockNvmeStateNormal,
 								},
 								{
 									UUID:      common.MockUUID(1),
 									TrAddr:    "0000:8b:00.0",
+									TargetIDs: []int32{3, 4, 5},
+									Rank:      0,
+									NvmeState: storage.MockNvmeStateEvicted,
+								},
+								{
+									UUID:      common.MockUUID(2),
+									TrAddr:    "0000:da:00.0",
 									TargetIDs: []int32{0, 1, 2},
 									Rank:      1,
-									State:     "FAULTY",
+									NvmeState: storage.NvmeDevState(0),
+								},
+								{
+									UUID:      common.MockUUID(3),
+									TrAddr:    "0000:db:00.0",
+									TargetIDs: []int32{3, 4, 5},
+									Rank:      1,
+									NvmeState: storage.MockNvmeStateIdentify,
 								},
 							},
 						},
@@ -1407,7 +1435,11 @@ host1
     UUID:00000000-0000-0000-0000-000000000000 [TrAddr:0000:8a:00.0]
       Targets:[0 1 2] Rank:0 State:NORMAL
     UUID:00000001-0001-0001-0001-000000000001 [TrAddr:0000:8b:00.0]
-      Targets:[0 1 2] Rank:1 State:FAULTY
+      Targets:[3 4 5] Rank:0 State:EVICTED
+    UUID:00000002-0002-0002-0002-000000000002 [TrAddr:0000:da:00.0]
+      Targets:[0 1 2] Rank:1 State:UNPLUGGED
+    UUID:00000003-0003-0003-0003-000000000003 [TrAddr:0000:db:00.0]
+      Targets:[3 4 5] Rank:1 State:NORMAL|IDENTIFY
 `,
 		},
 		"list-devices (none found)": {
@@ -1443,7 +1475,7 @@ host1
 									UUID:      common.MockUUID(0),
 									TargetIDs: []int32{0, 1, 2},
 									Rank:      0,
-									State:     "NORMAL",
+									NvmeState: storage.MockNvmeStateNormal,
 									Health:    mockController.HealthStats,
 								},
 							},

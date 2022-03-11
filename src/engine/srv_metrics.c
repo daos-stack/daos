@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2021 Intel Corporation.
+ * (C) Copyright 2021-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -40,7 +40,7 @@ dss_engine_metrics_init(void)
 		return rc;
 	}
 
-	rc = d_tm_add_metric(&dss_engine_metrics.rank_id, D_TM_COUNTER,
+	rc = d_tm_add_metric(&dss_engine_metrics.rank_id, D_TM_GAUGE,
 			     "Rank ID of this engine", "", "rank");
 	if (rc != 0) {
 		D_ERROR("unable to add metric for rank ID: "

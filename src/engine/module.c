@@ -431,7 +431,7 @@ int
 dss_module_nr_pool_metrics(void)
 {
 	struct loaded_mod	*mod;
-	int			 total = 0;
+	int			 total = 0, nr;
 
 	d_list_for_each_entry(mod, &loaded_mod_list, lm_lk) {
 		struct dss_module_metrics *met = mod->lm_dss_mod->sm_metrics;
@@ -441,7 +441,17 @@ dss_module_nr_pool_metrics(void)
 		if (met->dmm_nr_metrics == NULL)
 			continue;
 
-		total += met->dmm_nr_metrics();
+		/* Support SYS and TGT tag so far */
+		D_ASSERT(!(met->dmm_tags & ~(DAOS_SYS_TAG | DAOS_TGT_TAG)));
+
+		nr = 0;
+		if (met->dmm_tags & DAOS_SYS_TAG)
+			nr += 1;
+		if (met->dmm_tags & DAOS_TGT_TAG)
+			nr += dss_tgt_nr;
+		D_ASSERT(nr > 0);
+
+		total += (met->dmm_nr_metrics() * nr);
 	}
 
 	return total;

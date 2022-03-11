@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2019-2021 Intel Corporation.
+ * (C) Copyright 2019-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -14,15 +14,14 @@
 
 static int
 vos_ilog_status_get(struct umem_instance *umm, uint32_t tx_id,
-		    daos_epoch_t epoch, uint32_t intent, void *args)
+		    daos_epoch_t epoch, uint32_t intent, bool retry, void *args)
 {
 	int	rc;
 	daos_handle_t coh;
 
 	coh.cookie = (unsigned long)args;
 
-	rc = vos_dtx_check_availability(coh, tx_id, epoch, intent,
-					DTX_RT_ILOG);
+	rc = vos_dtx_check_availability(coh, tx_id, epoch, intent, DTX_RT_ILOG, retry);
 	if (rc < 0)
 		return rc;
 
@@ -129,13 +128,13 @@ vos_ilog_punch_covered(const struct ilog_entry *entry,
 }
 
 static int
-vos_parse_ilog(struct vos_ilog_info *info, daos_epoch_t epoch,
+vos_parse_ilog(struct vos_ilog_info *info, const daos_epoch_range_t *epr,
 	       daos_epoch_t bound, const struct vos_punch_record *punch) {
 	struct ilog_entry	entry;
 	struct vos_punch_record	*any_punch = &info->ii_prior_any_punch;
 	daos_epoch_t		 entry_epc;
 
-	D_ASSERT(punch->pr_epc <= epoch);
+	D_ASSERT(punch->pr_epc <= epr->epr_hi);
 
 	ilog_foreach_entry_reverse(&info->ii_entries, &entry) {
 		if (entry.ie_status == ILOG_REMOVED)
@@ -155,7 +154,14 @@ vos_parse_ilog(struct vos_ilog_info *info, daos_epoch_t epoch,
 		}
 
 		entry_epc = entry.ie_id.id_epoch;
-		if (entry_epc > epoch) {
+		if (entry_epc > epr->epr_hi) {
+			info->ii_full_scan = false;
+			if (epr->epr_lo != 0) {
+				/** If this is non-zero, we know this is used for punch check */
+				D_DEBUG(DB_TRACE, "Detected ilog entries outside epoch range "
+					DF_X64"-"DF_X64"\n", epr->epr_lo, epr->epr_hi);
+				return 0;
+			}
 			if (ilog_has_punch(&entry)) {
 				/** Entry is punched within uncertainty range,
 				 * so restart the transaction.
@@ -202,7 +208,8 @@ vos_parse_ilog(struct vos_ilog_info *info, daos_epoch_t epoch,
 		if (entry.ie_id.id_epoch > info->ii_uncommitted)
 			info->ii_uncommitted = 0;
 
-		D_ASSERT(entry.ie_status == ILOG_COMMITTED);
+		D_ASSERTF(entry.ie_status == ILOG_COMMITTED, "entry.ie_status is %d\n",
+			  entry.ie_status);
 
 		if (ilog_has_punch(&entry)) {
 			info->ii_prior_punch.pr_epc = entry.ie_id.id_epoch;
@@ -216,6 +223,21 @@ vos_parse_ilog(struct vos_ilog_info *info, daos_epoch_t epoch,
 		info->ii_create = entry.ie_id.id_epoch;
 	}
 
+	if (epr->epr_lo != 0) {
+		ilog_foreach_entry(&info->ii_entries, &entry) {
+			if (entry.ie_id.id_epoch >= epr->epr_lo)
+				break;
+
+			if (entry.ie_status == ILOG_REMOVED)
+				continue;
+
+			info->ii_full_scan = false;
+			D_DEBUG(DB_TRACE, "Detected ilog entries outside epoch range "DF_X64"-"
+				DF_X64"\n", epr->epr_lo, epr->epr_hi);
+			return 0;
+		}
+	}
+
 	if (vos_epc_punched(info->ii_prior_punch.pr_epc,
 			    info->ii_prior_punch.pr_minor_epc,
 			    punch))
@@ -226,18 +248,18 @@ vos_parse_ilog(struct vos_ilog_info *info, daos_epoch_t epoch,
 		info->ii_prior_any_punch = *punch;
 
 	D_DEBUG(DB_TRACE, "After fetch at "DF_X64": create="DF_X64
-		" prior_punch="DF_PUNCH" next_punch="DF_X64"%s\n", epoch,
+		" prior_punch="DF_PUNCH" next_punch="DF_X64"%s\n", epr->epr_hi,
 		info->ii_create, DP_PUNCH(&info->ii_prior_punch),
 		info->ii_next_punch, info->ii_empty ? " is empty" : "");
 
 	return 0;
 }
 
-int
-vos_ilog_fetch_(struct umem_instance *umm, daos_handle_t coh, uint32_t intent,
-		struct ilog_df *ilog, daos_epoch_t epoch, daos_epoch_t bound,
-		const struct vos_punch_record *punched,
-		const struct vos_ilog_info *parent, struct vos_ilog_info *info)
+static int
+vos_ilog_fetch_internal(struct umem_instance *umm, daos_handle_t coh, uint32_t intent,
+			struct ilog_df *ilog, const daos_epoch_range_t *epr, daos_epoch_t bound,
+			const struct vos_punch_record *punched, const struct vos_ilog_info *parent,
+			struct vos_ilog_info *info)
 {
 	struct ilog_desc_cbs	 cbs;
 	struct vos_punch_record	 punch = {0};
@@ -256,6 +278,7 @@ vos_ilog_fetch_(struct umem_instance *umm, daos_handle_t coh, uint32_t intent,
 init:
 	info->ii_uncommitted = 0;
 	info->ii_create = 0;
+	info->ii_full_scan = true;
 	info->ii_next_punch = 0;
 	info->ii_uncertain_create = 0;
 	info->ii_empty = true;
@@ -272,9 +295,22 @@ init:
 	}
 
 	if (rc == 0)
-		rc = vos_parse_ilog(info, epoch, bound, &punch);
+		rc = vos_parse_ilog(info, epr, bound, &punch);
 
 	return rc;
+}
+
+int
+vos_ilog_fetch_(struct umem_instance *umm, daos_handle_t coh, uint32_t intent, struct ilog_df *ilog,
+		daos_epoch_t epoch, daos_epoch_t bound, const struct vos_punch_record *punched,
+		const struct vos_ilog_info *parent, struct vos_ilog_info *info)
+{
+	daos_epoch_range_t epr;
+
+	epr.epr_lo = 0;
+	epr.epr_hi = epoch;
+
+	return vos_ilog_fetch_internal(umm, coh, intent, ilog, &epr, bound, punched, parent, info);
 }
 
 int
@@ -400,7 +436,7 @@ update:
 
 	ilog_close(loh);
 
-	if (rc == -DER_ALREADY) /* operation had no effect */
+	if (rc == -DER_ALREADY && (dth == NULL || !dth->dth_already)) /* operation had no effect */
 		rc = 0;
 done:
 	VOS_TX_LOG_FAIL(rc, "Could not update ilog %p at "DF_X64": "DF_RC"\n",
@@ -500,7 +536,7 @@ punch_log:
 
 	ilog_close(loh);
 
-	if (rc == -DER_ALREADY) /* operation had no effect */
+	if (rc == -DER_ALREADY && (dth == NULL || !dth->dth_already)) /* operation had no effect */
 		rc = 0;
 	VOS_TX_LOG_FAIL(rc, "Could not update incarnation log: "DF_RC"\n",
 			DP_RC(rc));
@@ -533,6 +569,27 @@ vos_ilog_aggregate(daos_handle_t coh, struct ilog_df *ilog, const daos_epoch_ran
 
 	return vos_ilog_fetch(umm, coh, DAOS_INTENT_PURGE, ilog, epr->epr_hi, 0,
 			      &punch_rec, NULL, info);
+}
+
+bool
+vos_ilog_is_punched(daos_handle_t coh, struct ilog_df *ilog, const daos_epoch_range_t *epr,
+		    const struct vos_punch_record *parent_punch, struct vos_ilog_info *info)
+{
+	struct vos_container	*cont = vos_hdl2cont(coh);
+	struct umem_instance	*umm = vos_cont2umm(cont);
+	struct vos_punch_record	 punch_rec = {0, 0};
+	int			 rc;
+
+	if (parent_punch)
+		punch_rec = *parent_punch;
+
+	rc = vos_ilog_fetch_internal(umm, coh, DAOS_INTENT_PURGE, ilog, epr, 0, &punch_rec, NULL,
+				     info);
+
+	if (rc != 0 || !info->ii_full_scan || info->ii_create != 0)
+		return false;
+
+	return true;
 }
 
 void

@@ -1,6 +1,6 @@
 #!/usr/bin/python3
 '''
-  (C) Copyright 2018-2021 Intel Corporation.
+  (C) Copyright 2018-2022 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
@@ -207,8 +207,8 @@ class ConfigGenerateOutput(TestWithServers):
                         device_name = scm_dev.split("/")[-1]
                         if device_name not in self.scm_namespace_set:
                             errors.append(
-                                "Cannot find SCM device name {} in expected set {}"\
-                                    .format(device_name, self.scm_namespace_set))
+                                "Cannot find SCM device name {} in expected set {}"
+                                .format(device_name, self.scm_namespace_set))
                         scm_found = True
 
                 # Verify the bdev_list values are in the NVMe PCI address set.
@@ -483,7 +483,7 @@ class ConfigGenerateOutput(TestWithServers):
                             "Unexpected fabric_iface! {}".format(fabric_iface))
                     elif provider not in \
                         self.interface_to_providers[fabric_iface]:
-                        # Now check the provider field, e.g., ofi+sockets by
+                        # Now check the provider field, e.g., ofi+tcp by
                         # checking the corresponding list in the dictionary.
                         msg = "Unexpected provider in fabric_iface! provider ="\
                             " {}; fabric_iface = {}".format(
@@ -531,7 +531,7 @@ class ConfigGenerateOutput(TestWithServers):
                             "Unexpected fabric_iface! {}".format(fabric_iface))
                     elif provider not in \
                         self.interface_to_providers[fabric_iface]:
-                        # Now check the provider field, e.g., ofi+sockets by
+                        # Now check the provider field, e.g., ofi+tcp by
                         # checking the corresponding list in the dictionary.
                         msg = "Unexpected provider in fabric_iface! provider ="\
                             " {}; fabric_iface = {}".format(

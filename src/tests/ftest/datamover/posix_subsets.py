@@ -1,11 +1,12 @@
 #!/usr/bin/python
 '''
-  (C) Copyright 2020-2021 Intel Corporation.
+  (C) Copyright 2020-2022 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
 from data_mover_test_base import DataMoverTestBase
-
+from os.path import join
+import re
 
 class DmvrPosixSubsets(DataMoverTestBase):
     # pylint: disable=too-many-ancestors
@@ -52,6 +53,13 @@ class DmvrPosixSubsets(DataMoverTestBase):
         # Create 1 pool
         pool1 = self.create_pool()
 
+        # create dfuse containers to test copying to dfuse subdirectories
+        dfuse_cont1 = self.create_cont(pool1)
+        dfuse_cont2 = self.create_cont(pool1)
+        dfuse_cont1_dir = join(self.dfuse.mount_dir.value, pool1.uuid, dfuse_cont1.uuid)
+        # destination directory should be created by program
+        dfuse_cont2_dir = self.new_posix_test_path(create=False,
+            parent=join(self.dfuse.mount_dir.value, pool1.uuid, dfuse_cont2.uuid))
         # Create a special container to hold UNS entries
         uns_cont = self.create_cont(pool1)
 
@@ -65,8 +73,14 @@ class DmvrPosixSubsets(DataMoverTestBase):
         # Create initial test files
         self.write_location("DAOS_UUID", sub_dir, pool1, container1)
         self.write_location("DAOS_UUID", sub_sub_dir, pool1, container1)
+        self.write_location("POSIX", dfuse_cont1_dir)
 
         copy_list = []
+
+        if self.tool == "FS_COPY":
+            copy_list.append(["dfuse copy (dfuse cont1 dir to dfuse cont2 dir that doesn't exist)",
+                ["POSIX", dfuse_cont1_dir, None, None],
+                ["POSIX", dfuse_cont2_dir, None, None]])
 
         # For each copy, use a new destination directory.
         # This ensures that the source directory is copied
@@ -113,11 +127,14 @@ class DmvrPosixSubsets(DataMoverTestBase):
         # Each src or dst is a list of params:
         #   [param_type, path, pool, cont]
         for (test_desc, src, dst) in copy_list:
-            self.run_datamover(
+            result = self.run_datamover(
                 test_desc,
                 src[0], src[1], src[2], src[3],
                 dst[0], dst[1], dst[2], dst[3])
             self.read_verify_location(*dst)
+            if self.tool == "FS_COPY":
+                if not re.search(r"Successfully copied to DAOS", result.stdout_text):
+                    self.fail("Failed to copy to DAOS")
 
     def write_location(self, param_type, path, pool=None, cont=None):
         """Write the test data using ior."""

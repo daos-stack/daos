@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2021 Intel Corporation.
+// (C) Copyright 2021-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -11,7 +11,6 @@ import (
 	"fmt"
 	"io"
 	"sort"
-	"strconv"
 	"strings"
 	"unsafe"
 
@@ -392,10 +391,9 @@ var propHdlrs = propHdlrMap{
 		C.DAOS_PROP_CO_EC_CELL_SZ,
 		"EC Cell Size",
 		func(_ *propHdlr, e *C.struct_daos_prop_entry, v string) error {
-			size, err := strconv.ParseUint(v, 10, 64)
+			size, err := humanize.ParseBytes(v)
 			if err != nil {
-				return errors.Wrapf(err,
-					"unable to parse EC cell size %q", v)
+				return propError("invalid EC cell size %q (try N<unit>)", v)
 			}
 
 			if !C.daos_ec_cs_valid(C.uint32_t(size)) {
@@ -676,7 +674,7 @@ func createPropSlice(props *C.daos_prop_t, numProps int) propSlice {
 func allocProps(numProps int) (props *C.daos_prop_t, entries propSlice, err error) {
 	props = C.daos_prop_alloc(C.uint(numProps))
 	if props == nil {
-		return nil, nil, errors.New("failed to allocate properties list")
+		return nil, nil, errors.Wrap(drpc.DaosNoMemory, "failed to allocate properties list")
 	}
 
 	props.dpp_nr = 0

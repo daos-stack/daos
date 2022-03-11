@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2021 Intel Corporation.
+// (C) Copyright 2019-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -7,9 +7,7 @@
 package main
 
 import (
-	"fmt"
 	"net"
-	"strings"
 
 	"github.com/pkg/errors"
 	"golang.org/x/net/context"
@@ -20,6 +18,8 @@ import (
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	"github.com/daos-stack/daos/src/control/drpc"
 	"github.com/daos-stack/daos/src/control/lib/control"
+	"github.com/daos-stack/daos/src/control/lib/hardware"
+	"github.com/daos-stack/daos/src/control/lib/hardware/hwprov"
 	"github.com/daos-stack/daos/src/control/lib/netdetect"
 	"github.com/daos-stack/daos/src/control/logging"
 )
@@ -137,21 +137,16 @@ func (mod *mgmtModule) getAttachInfo(ctx context.Context, numaNode int, sys stri
 		return nil, err
 	}
 
-	fabricIF, err := mod.getFabricInterface(ctx, numaNode, resp.ClientNetHint.NetDevClass)
+	fabricIF, err := mod.getFabricInterface(ctx, numaNode, hardware.NetDevClass(resp.ClientNetHint.NetDevClass), resp.ClientNetHint.Provider)
 	if err != nil {
 		mod.log.Errorf("failed to fetch fabric interface of type %s: %s",
-			netdetect.DevClassName(resp.ClientNetHint.NetDevClass), err.Error())
+			hardware.NetDevClass(resp.ClientNetHint.NetDevClass), err.Error())
 		return nil, err
 	}
 
 	resp.ClientNetHint.Interface = fabricIF.Name
 	resp.ClientNetHint.Domain = fabricIF.Name
-	if strings.HasPrefix(resp.ClientNetHint.Provider, verbsProvider) {
-		if fabricIF.Domain == "" {
-			mod.log.Errorf("domain is required for verbs provider, none found on interface %s", fabricIF.Name)
-			return nil, fmt.Errorf("no domain on interface %s", fabricIF.Name)
-		}
-
+	if fabricIF.Domain != "" {
 		resp.ClientNetHint.Domain = fabricIF.Domain
 		mod.log.Debugf("OFI_DOMAIN for %s has been detected as: %s",
 			resp.ClientNetHint.Interface, resp.ClientNetHint.Domain)
@@ -187,25 +182,21 @@ func (mod *mgmtModule) getAttachInfoRemote(ctx context.Context, numaNode int, sy
 	return pbResp, nil
 }
 
-func (mod *mgmtModule) getFabricInterface(ctx context.Context, numaNode int, netDevClass uint32) (*FabricInterface, error) {
+func (mod *mgmtModule) getFabricInterface(ctx context.Context, numaNode int, netDevClass hardware.NetDevClass, provider string) (*FabricInterface, error) {
 	if mod.fabricInfo.IsCached() {
-		return mod.fabricInfo.GetDevice(numaNode, netDevClass)
+		return mod.fabricInfo.GetDevice(numaNode, netDevClass, provider)
 	}
 
-	netCtx, err := netdetect.Init(ctx)
-	if err != nil {
-		return nil, err
-	}
-	defer netdetect.CleanUp(netCtx)
+	scanner := hwprov.DefaultFabricScanner(mod.log)
 
-	result, err := netdetect.ScanFabric(netCtx, "")
+	result, err := scanner.Scan(ctx)
 	if err != nil {
 		return nil, err
 	}
 
-	mod.fabricInfo.CacheScan(netCtx, result)
+	mod.fabricInfo.CacheScan(ctx, result)
 
-	return mod.fabricInfo.GetDevice(numaNode, netDevClass)
+	return mod.fabricInfo.GetDevice(numaNode, netDevClass, provider)
 }
 
 func (mod *mgmtModule) handleNotifyPoolConnect(ctx context.Context, reqb []byte, pid int32) error {

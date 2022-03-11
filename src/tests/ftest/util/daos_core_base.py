@@ -1,6 +1,6 @@
 #!/usr/bin/python
 """
-  (C) Copyright 2018-2021 Intel Corporation.
+  (C) Copyright 2018-2022 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -170,12 +170,14 @@ class DaosCoreBase(TestWithServers):
         except process.CmdError as result:
             if result.result.exit_status != 0:
                 # fake a JUnit failure output
-                self.create_results_xml(self.subtest_name, result)
+                self.create_results_xml(self.subtest_name, result,
+                                        "Failed to run {}.".format(
+                    self.daos_test))
                 self.fail(
                     "{0} failed with return code={1}.\n".format(
                         cmd, result.result.exit_status))
 
-    def create_results_xml(self, testname, result):
+    def create_results_xml(self, testname, result, error_message="Test failed to start up"):
         """Create a JUnit result.xml file for the failed command.
 
         Args:
@@ -189,7 +191,7 @@ class DaosCoreBase(TestWithServers):
                 results_xml.write('''<?xml version="1.0" encoding="UTF-8"?>
 <testsuite name="{0}" errors="1" failures="0" skipped="0" tests="1" time="0.0">
   <testcase name="ALL" time="0.0" >
-    <error message="Test failed to start up"/>
+    <error message="{3}"/>
     <system-out>
 <![CDATA[{1}]]>
     </system-out>
@@ -198,6 +200,6 @@ class DaosCoreBase(TestWithServers):
     </system-err>
   </testcase>
 </testsuite>'''.format(
-    testname, result.result.stdout_text, result.result.stderr_text))
+    testname, result.result.stdout_text, result.result.stderr_text, error_message))
         except IOError as error:
             self.log.error("Error creating %s: %s", filename, error)

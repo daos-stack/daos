@@ -26,5 +26,6 @@ usr/lib64/daos_srv/libplacement.so
 usr/lib64/libdaos_common_pmem.so
 usr/share/daos/control/setup_spdk.sh
 usr/lib/systemd/system/daos_server.service
+usr/lib/sysctl.d/10-daos_server.conf
 usr/bin/daos_storage_estimator.py
 usr/lib64/python3.8/site-packages/storage_estimator/*.py

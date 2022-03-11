@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2019-2021 Intel Corporation.
+ * (C) Copyright 2019-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -65,8 +65,10 @@ vts_dtx_begin(const daos_unit_oid_t *oid, daos_handle_t coh, daos_epoch_t epoch,
 	dth->dth_dist = 0;
 	dth->dth_for_migration = 0;
 	dth->dth_ignore_uncommitted = 0;
-	dth->dth_force_refresh = 0;
 	dth->dth_prepared = 0;
+	dth->dth_verified = 0;
+	dth->dth_aborted = 0;
+	dth->dth_already = 0;
 
 	dth->dth_dti_cos_count = 0;
 	dth->dth_dti_cos = NULL;
@@ -123,6 +125,7 @@ vts_dtx_end(struct dtx_handle *dth)
 	}
 
 	vos_dtx_rsrvd_fini(dth);
+	vos_dtx_detach(dth);
 	D_FREE(dth->dth_dte.dte_mbs);
 	D_FREE_PTR(dth);
 }
@@ -825,8 +828,7 @@ dtx_18(void **state)
 	assert_rc_equal(rc, 10);
 
 	for (i = 0; i < 10; i++) {
-		rc = vos_dtx_check(args->ctx.tc_co_hdl, &xid[i],
-				   NULL, NULL, NULL, NULL, false);
+		rc = vos_dtx_check(args->ctx.tc_co_hdl, &xid[i], NULL, NULL, NULL, NULL);
 		assert_rc_equal(rc, DTX_ST_COMMITTED);
 	}
 
@@ -837,8 +839,7 @@ dtx_18(void **state)
 	assert_rc_equal(rc, 0);
 
 	for (i = 0; i < 10; i++) {
-		rc = vos_dtx_check(args->ctx.tc_co_hdl, &xid[i],
-				   NULL, NULL, NULL, NULL, false);
+		rc = vos_dtx_check(args->ctx.tc_co_hdl, &xid[i], NULL, NULL, NULL, NULL);
 		assert_rc_equal(rc, -DER_NONEXIST);
 	}
 
