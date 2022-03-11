@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2020-2021 Intel Corporation.
+ * (C) Copyright 2020-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -2216,7 +2216,6 @@ static int
 agg_filter(daos_handle_t ih, vos_iter_desc_t *desc, void *cb_arg, unsigned int *acts)
 {
 	struct ec_agg_param	*agg_param = (struct ec_agg_param *)cb_arg;
-	struct ec_agg_entry	*agg_entry = &agg_param->ap_agg_entry;
 	struct ec_agg_pool_info	*info = &agg_param->ap_pool_info;
 	struct daos_oclass_attr  oca;
 	int			 rc = 0;
