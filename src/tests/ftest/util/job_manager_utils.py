@@ -270,8 +270,8 @@ class Orterun(JobManager):
             subprocess (bool, optional): whether the command is run as a
                 subprocess. Defaults to False.
         """
-        if not load_mpi("openmpi"):
-            raise MPILoadError("openmpi")
+        if not load_mpi(mpi_type):
+            raise MPILoadError(mpi_type)
 
         path = os.path.dirname(find_executable("orterun"))
         super().__init__("/run/orterun/*", "orterun", job, path, subprocess)
@@ -299,6 +299,7 @@ class Orterun(JobManager):
         self.ompi_server = FormattedParameter("--ompi-server {}", None)
         self.working_dir = FormattedParameter("-wdir {}", None)
         self.tmpdir_base = FormattedParameter("--mca orte_tmpdir_base {}", None)
+        self.mpi_type = mpi_type
 
     def assign_hosts(self, hosts, path=None, slots=None):
         """Assign the hosts to use with the command (--hostfile).
@@ -363,8 +364,8 @@ class Orterun(JobManager):
             CommandFailure: if there is an error running the command
 
         """
-        if not load_mpi("openmpi"):
-            raise MPILoadError("openmpi")
+        if not load_mpi(self.mpi_type):
+            raise MPILoadError(self.mpi_type)
 
         return super().run()
 

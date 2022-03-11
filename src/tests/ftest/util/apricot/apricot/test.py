@@ -19,7 +19,7 @@ from ClusterShell.NodeSet import NodeSet
 from agent_utils import DaosAgentManager, include_local_host
 from cart_ctl_utils import CartCtl
 from command_utils_base import EnvironmentVariables
-from exception_utils import CommandFailure, MPILoadError
+from exception_utils import CommandFailure
 from daos_utils import DaosCommand
 from distro_utils import detect
 from dmg_utils import get_dmg_command
@@ -674,7 +674,7 @@ class TestWithServers(TestWithoutServers):
 
         # If there's no server started, then there's no server log to write to.
         if (self.setup_start_servers and self.setup_start_agents and
-            not self.skip_add_log_msg):
+                not self.skip_add_log_msg):
             # Write an ID string to the log file for cross-referencing logs
             # with test ID
             id_str = '"Test.name: ' + str(self) + '"'
