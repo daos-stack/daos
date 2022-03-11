@@ -796,6 +796,9 @@ enum vos_iter_opc {
 	IT_OPC_NEXT,
 };
 
+D_CASSERT((int)VOS_ITER_CB_ABORT > (int)IT_OPC_NEXT);
+D_CASSERT((int)VOS_ITER_CB_YIELD > (int)IT_OPC_NEXT);
+
 struct vos_iter_ops;
 
 /** the common part of vos iterators */
@@ -804,6 +807,8 @@ struct vos_iterator {
 	struct vos_iter_ops	*it_ops;
 	struct vos_iterator	*it_parent; /* parent iterator */
 	struct vos_ts_set	*it_ts_set;
+	vos_iter_filter_cb_t	 it_filter_cb;
+	void			*it_filter_arg;
 	daos_epoch_t		 it_bound;
 	vos_iter_type_t		 it_type;
 	enum vos_iter_state	 it_state;
@@ -877,7 +882,7 @@ struct vos_iter_ops {
 	int	(*iop_probe)(struct vos_iterator *iter,
 			     daos_anchor_t *anchor);
 	/** move forward the iterating cursor */
-	int	(*iop_next)(struct vos_iterator *iter);
+	int	(*iop_next)(struct vos_iterator *iter, daos_anchor_t *anchor);
 	/** fetch the record that the cursor points to */
 	int	(*iop_fetch)(struct vos_iterator *iter,
 			     vos_iter_entry_t *it_entry,
@@ -940,6 +945,15 @@ static inline struct vos_obj_iter *
 vos_hdl2oiter(daos_handle_t hdl)
 {
 	return vos_iter2oiter(vos_hdl2iter(hdl));
+}
+
+static inline daos_handle_t
+vos_iter2hdl(struct vos_iterator *iter)
+{
+	daos_handle_t	hdl;
+
+	hdl.cookie = (uint64_t)iter;
+	return hdl;
 }
 
 /**
@@ -1324,6 +1338,12 @@ recx_csum_len(daos_recx_t *recx, struct dcs_csum_info *csum,
 		return 0;
 	return (daos_size_t)csum->cs_len * csum_chunk_count(csum->cs_chunksize,
 			recx->rx_idx, recx->rx_idx + recx->rx_nr - 1, rsize);
+}
+
+static inline bool
+vos_anchor_is_zero(daos_anchor_t *anchor)
+{
+	return anchor == NULL || daos_anchor_is_zero(anchor);
 }
 
 #endif /* __VOS_INTERNAL_H__ */

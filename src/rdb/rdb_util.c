@@ -493,7 +493,7 @@ rdb_vos_iterate(daos_handle_t cont, daos_epoch_t epoch, rdb_oid_t oid,
 		}
 
 		/* Move to next a-key. */
-		rc = vos_iter_next(iter);
+		rc = vos_iter_next(iter, NULL /* anchor */);
 		if (rc != 0) {
 			if (rc == -DER_NONEXIST)
 				/* No more a-keys. */

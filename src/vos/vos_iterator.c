@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2021 Intel Corporation.
+ * (C) Copyright 2016-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -75,15 +75,6 @@ vos_iter_type2name(vos_iter_type_t type)
 			break;
 	}
 	return dict->id_name;
-}
-
-static daos_handle_t
-vos_iter2hdl(struct vos_iterator *iter)
-{
-	daos_handle_t	hdl;
-
-	hdl.cookie = (uint64_t)iter;
-	return hdl;
 }
 
 static int
@@ -360,7 +351,7 @@ iter_verify_state(struct vos_iterator *iter)
 }
 
 int
-vos_iter_next(daos_handle_t ih)
+vos_iter_next(daos_handle_t ih, daos_anchor_t *anchor)
 {
 	struct vos_iterator *iter = vos_hdl2iter(ih);
 	struct dtx_handle   *old;
@@ -374,7 +365,7 @@ vos_iter_next(daos_handle_t ih)
 
 	old = vos_dth_get();
 	vos_dth_set(iter->it_dth);
-	rc = iter->it_ops->iop_next(iter);
+	rc = iter->it_ops->iop_next(iter, anchor);
 	vos_dth_set(old);
 	if (rc == 0)
 		iter->it_state = VOS_ITS_OK;
@@ -620,7 +611,7 @@ vos_iterate_internal(vos_iter_param_t *param, vos_iter_type_t type,
 		     vos_iter_cb_t pre_cb, vos_iter_cb_t post_cb, void *arg,
 		     struct dtx_handle *dth)
 {
-	daos_anchor_t		*anchor, *probe_anchor = NULL;
+	daos_anchor_t		*anchor = NULL;
 	struct vos_iterator	*iter;
 	vos_iter_entry_t	iter_ent = {0};
 	daos_epoch_t		read_time = 0;
@@ -666,10 +657,13 @@ vos_iterate_internal(vos_iter_param_t *param, vos_iter_type_t type,
 	}
 	read_time = dtx_is_valid_handle(dth) ? dth->dth_epoch : 0 /* unused */;
 probe:
-	if (!daos_anchor_is_zero(anchor))
-		probe_anchor = anchor;
-
-	rc = vos_iter_probe(ih, probe_anchor);
+	rc = vos_iter_probe(ih, anchor);
+	if (rc == VOS_ITER_CB_YIELD) {
+		printf("reprobe1\n");
+		set_reprobe(type, VOS_ITER_CB_YIELD, anchors, 0);
+		D_ASSERT(need_reprobe(type, anchors));
+		goto probe;
+	}
 	if (rc != 0) {
 		if (rc == -DER_NONEXIST || rc == -DER_AGAIN) {
 			daos_anchor_set_eof(anchor);
@@ -677,7 +671,7 @@ probe:
 		} else {
 			VOS_TX_TRACE_FAIL(rc, "Failed to probe iterator "
 					  "(type=%d anchor=%p): "DF_RC"\n",
-					  type, probe_anchor, DP_RC(rc));
+					  type, anchor, DP_RC(rc));
 		}
 		D_GOTO(out, rc);
 	}
@@ -706,7 +700,6 @@ probe:
 
 			if (acts & VOS_ITER_CB_RESTART) {
 				daos_anchor_set_zero(anchor);
-				probe_anchor = NULL;
 				goto probe;
 			}
 
@@ -776,7 +769,6 @@ probe:
 
 			if (acts & VOS_ITER_CB_RESTART) {
 				daos_anchor_set_zero(anchor);
-				probe_anchor = NULL;
 				goto probe;
 			}
 
@@ -787,7 +779,12 @@ probe:
 			}
 		}
 
-		rc = vos_iter_next(ih);
+		rc = vos_iter_next(ih, anchor);
+		if (rc == VOS_ITER_CB_YIELD) {
+			set_reprobe(type, VOS_ITER_CB_YIELD, anchors, 0);
+			D_ASSERT(need_reprobe(type, anchors));
+			goto probe;
+		}
 		if (rc) {
 			VOS_TX_TRACE_FAIL(rc,
 					  "failed to iterate next (type=%d): "

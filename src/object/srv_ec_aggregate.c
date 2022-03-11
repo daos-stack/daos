@@ -2212,6 +2212,50 @@ out:
 	return rc;
 }
 
+static int
+agg_filter(daos_handle_t ih, vos_iter_desc_t *desc, void *cb_arg, unsigned int *acts)
+{
+	struct ec_agg_param	*agg_param = (struct ec_agg_param *)cb_arg;
+	struct ec_agg_entry	*agg_entry = &agg_param->ap_agg_entry;
+	struct ec_agg_pool_info	*info = &agg_param->ap_pool_info;
+	struct daos_oclass_attr  oca;
+	int			 rc = 0;
+
+	if (desc->id_type != VOS_ITER_OBJ)
+		return 0;
+
+	rc = dsc_obj_id2oc_attr(desc->id_oid.id_pub, &info->api_props, &oca);
+	if (rc) {
+		D_ERROR("Skip object("DF_OID") with unknown class(%u)\n",
+			DP_OID(desc->id_oid.id_pub),
+			daos_obj_id2class(desc->id_oid.id_pub));
+		*acts = VOS_ITER_CB_SKIP;
+		agg_param->ap_credits++;
+		goto done;
+	}
+
+	if (!daos_oclass_is_ec(&oca)) { /* Skip non-EC object */
+		D_DEBUG(DB_EPC, "Skip oid:"DF_UOID" non-ec obj\n",
+			DP_UOID(desc->id_oid));
+		agg_param->ap_credits++;
+		*acts = VOS_ITER_CB_SKIP;
+	}
+done:
+	if (agg_param->ap_credits > agg_param->ap_credits_max) {
+		agg_param->ap_credits = 0;
+		D_DEBUG(DB_EPC, "EC aggregation yield type %d. acts %u\n",
+			desc->id_type, *acts);
+		if (!(*acts & VOS_ITER_CB_SKIP))
+			agg_reset_pos(desc->id_type, agg_entry);
+		if (ec_aggregate_yield(agg_param)) {
+			D_DEBUG(DB_EPC, "EC aggregation aborted\n");
+			*acts |= VOS_ITER_CB_ABORT;
+		}
+	}
+
+	return 0;
+}
+
 /* Iterator pre-callback for objects. Determines if object is subject
  * to aggregation. Skips objects that are not EC, or are not led by
  * this target.
@@ -2232,22 +2276,9 @@ agg_object(daos_handle_t ih, vos_iter_entry_t *entry,
 		goto out;
 	}
 
+	/** We should have filtered it if it isn't EC */
 	rc = dsc_obj_id2oc_attr(entry->ie_oid.id_pub, &info->api_props, &oca);
-	if (rc) {
-		D_ERROR("SKip object("DF_OID") with unknown class(%u)\n",
-			DP_OID(entry->ie_oid.id_pub),
-			daos_obj_id2class(entry->ie_oid.id_pub));
-		*acts |= VOS_ITER_CB_SKIP;
-		goto out;
-	}
-
-	if (!daos_oclass_is_ec(&oca)) { /* Skip non-EC object */
-		D_DEBUG(DB_EPC, "Skip oid:"DF_UOID" non-ec obj\n",
-			DP_UOID(entry->ie_oid));
-		*acts |= VOS_ITER_CB_SKIP;
-		goto out;
-	}
-
+	D_ASSERT(rc == 0 && daos_oclass_is_ec(&oca));
 	rc = agg_obj_is_leader(info->api_pool, &oca, &entry->ie_oid,
 			       info->api_pool->sp_map_version);
 	if (rc == 1) {
@@ -2507,6 +2538,8 @@ cont_ec_aggregate_cb(struct ds_cont_child *cont, daos_epoch_range_t *epr,
 	iter_param.ip_flags		= VOS_IT_RECX_VISIBLE;
 	iter_param.ip_recx.rx_idx	= 0ULL;
 	iter_param.ip_recx.rx_nr	= ~PARITY_INDICATOR;
+	iter_param.ip_filter_cb		= agg_filter;
+	iter_param.ip_filter_arg	= ec_agg_param;
 
 	agg_reset_entry(&ec_agg_param->ap_agg_entry, NULL, NULL);
 

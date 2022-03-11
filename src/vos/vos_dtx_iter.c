@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2019-2021 Intel Corporation.
+ * (C) Copyright 2019-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -105,7 +105,7 @@ dtx_iter_probe(struct vos_iterator *iter, daos_anchor_t *anchor)
 
 	D_ASSERT(iter->it_type == VOS_ITER_DTX);
 
-	if (anchor == NULL) {
+	if (vos_anchor_is_zero(anchor)) {
 		oiter->oit_linear = true;
 		if (d_list_empty(&oiter->oit_cont->vc_dtx_act_list)) {
 			oiter->oit_cur = NULL;
@@ -170,7 +170,7 @@ out:
 }
 
 static int
-dtx_iter_next(struct vos_iterator *iter)
+dtx_iter_next(struct vos_iterator *iter, daos_anchor_t *anchor)
 {
 	struct vos_dtx_iter	*oiter = iter2oiter(iter);
 	struct vos_dtx_act_ent	*dae;

@@ -737,7 +737,7 @@ cont_iter_fetch(struct vos_iterator *iter, vos_iter_entry_t *it_entry,
 }
 
 static int
-cont_iter_next(struct vos_iterator *iter)
+cont_iter_next(struct vos_iterator *iter, daos_anchor_t *anchor)
 {
 	struct cont_iterator	*co_iter = vos_iter2co_iter(iter);
 
@@ -753,7 +753,7 @@ cont_iter_probe(struct vos_iterator *iter, daos_anchor_t *anchor)
 
 	D_ASSERT(iter->it_type == VOS_ITER_COUUID);
 
-	opc = anchor == NULL ? BTR_PROBE_FIRST : BTR_PROBE_GE;
+	opc = vos_anchor_is_zero(anchor) ? BTR_PROBE_FIRST : BTR_PROBE_GE;
 	/* The container tree will not be affected by the iterator intent,
 	 * just set it as DAOS_INTENT_DEFAULT.
 	 */

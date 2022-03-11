@@ -334,7 +334,7 @@ io_recx_iterate(struct io_test_args *arg, vos_iter_param_t *param,
 			D_PRINT("\tepoch: "DF_U64"\n", ent.ie_epoch);
 		}
 
-		rc = vos_iter_next(ih);
+		rc = vos_iter_next(ih, NULL);
 		if (rc != 0 && rc != -DER_NONEXIST) {
 			print_error("Failed to move cursor: "DF_RC"\n",
 				DP_RC(rc));
@@ -402,7 +402,7 @@ io_akey_iterate(struct io_test_args *arg, vos_iter_param_t *param,
 				     recs, print_ent);
 
 		nr++;
-		rc = vos_iter_next(ih);
+		rc = vos_iter_next(ih, NULL);
 		if (rc != 0 && rc != -DER_NONEXIST) {
 			print_error("Failed to move cursor: "DF_RC"\n",
 				DP_RC(rc));
@@ -482,7 +482,7 @@ io_obj_iter_test(struct io_test_args *arg, daos_epoch_range_t *epr,
 			goto out;
 
 		nr++;
-		rc = vos_iter_next(ih);
+		rc = vos_iter_next(ih, NULL);
 		if (rc == -DER_NONEXIST) {
 			print_message("Finishing d-key iteration\n");
 			break;
@@ -1448,7 +1448,7 @@ io_oid_iter_test(struct io_test_args *arg)
 			DP_UOID(ent.ie_oid));
 		nr++;
 
-		rc = vos_iter_next(ih);
+		rc = vos_iter_next(ih, NULL);
 		if (rc == -DER_NONEXIST)
 			break;
 

@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2015-2021 Intel Corporation.
+ * (C) Copyright 2015-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -334,6 +334,24 @@ enum {
 	VOS_IT_MASK		= (1 << 10) - 1,
 };
 
+typedef struct {
+	union {
+		/** The object id of the entry */
+		daos_unit_oid_t	 id_oid;
+		/** The key for the entry */
+		d_iov_t		 id_key;
+	};
+	vos_iter_type_t		 id_type;
+} vos_iter_desc_t;
+
+/**
+ * Iteration object/key filter callback
+ *
+ * Supports only VOS_ITER_CB_SKIP or VOS_ITER_CB_ABORT
+ */
+typedef int (*vos_iter_filter_cb_t)(daos_handle_t ih, vos_iter_desc_t *desc,
+				    void *cb_arg, unsigned int *acts);
+
 /**
  * Parameters for initializing VOS iterator
  */
@@ -358,6 +376,10 @@ typedef struct {
 	daos_epoch_range_t	ip_epr;
 	/** epoch logic expression for the iterator. */
 	vos_it_epc_expr_t	ip_epc_expr;
+	/** filter callback for object/key (vos_iterate only) */
+	vos_iter_filter_cb_t	ip_filter_cb;
+	/** filter callback argument (vos_iterate only) */
+	void			*ip_filter_arg;
 	/** flags for for iterator */
 	uint32_t		ip_flags;
 } vos_iter_param_t;
@@ -460,20 +482,21 @@ typedef struct {
 typedef int (*vos_iter_cb_t)(daos_handle_t ih, vos_iter_entry_t *entry,
 			     vos_iter_type_t type, vos_iter_param_t *param,
 			     void *cb_arg, unsigned int *acts);
+
 /**
  * Actions performed in iteration callback
  */
 enum {
-	/** Yield */
-	VOS_ITER_CB_YIELD	= (1UL << 0),
 	/** Delete entry */
-	VOS_ITER_CB_DELETE	= (1UL << 1),
+	VOS_ITER_CB_DELETE	= (1UL << 0),
 	/** Skip entry, don't iterate into next level for current entry */
-	VOS_ITER_CB_SKIP	= (1UL << 2),
+	VOS_ITER_CB_SKIP	= (1UL << 1),
+	/** Abort the current level iterator and restart */
+	VOS_ITER_CB_RESTART	= (1UL << 2),
 	/** Abort current level iteration */
 	VOS_ITER_CB_ABORT	= (1UL << 3),
-	/** Abort the current level iterator and restart */
-	VOS_ITER_CB_RESTART	= (1UL << 4),
+	/** Yield */
+	VOS_ITER_CB_YIELD	= (1UL << 4),
 };
 
 /**
