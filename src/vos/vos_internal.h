@@ -804,6 +804,9 @@ enum vos_iter_opc {
 	IT_OPC_NEXT,
 };
 
+D_CASSERT((int)VOS_ITER_CB_ABORT > (int)IT_OPC_NEXT);
+D_CASSERT((int)VOS_ITER_CB_YIELD > (int)IT_OPC_NEXT);
+
 struct vos_iter_ops;
 
 /** the common part of vos iterators */

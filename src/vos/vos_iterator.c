@@ -325,7 +325,7 @@ vos_iter_probe(daos_handle_t ih, daos_anchor_t *anchor)
 	vos_dth_set(iter->it_dth);
 	rc = iter->it_ops->iop_probe(iter, anchor);
 	vos_dth_set(old);
-	if (rc == 0 || rc == IT_OPC_PROBE || rc == 1)
+	if (rc == 0)
 		iter->it_state = VOS_ITS_OK;
 	else if (rc == -DER_NONEXIST)
 		iter->it_state = VOS_ITS_END;
@@ -367,7 +367,7 @@ vos_iter_next(daos_handle_t ih, daos_anchor_t *anchor)
 	vos_dth_set(iter->it_dth);
 	rc = iter->it_ops->iop_next(iter, anchor);
 	vos_dth_set(old);
-	if (rc == 0 || rc == IT_OPC_PROBE || rc == 1)
+	if (rc == 0)
 		iter->it_state = VOS_ITS_OK;
 	else if (rc == -DER_NONEXIST)
 		iter->it_state = VOS_ITS_END;
@@ -658,7 +658,8 @@ vos_iterate_internal(vos_iter_param_t *param, vos_iter_type_t type,
 	read_time = dtx_is_valid_handle(dth) ? dth->dth_epoch : 0 /* unused */;
 probe:
 	rc = vos_iter_probe(ih, anchor);
-	if (rc == IT_OPC_PROBE) {
+	if (rc == VOS_ITER_CB_YIELD) {
+		printf("reprobe1\n");
 		set_reprobe(type, VOS_ITER_CB_YIELD, anchors, 0);
 		D_ASSERT(need_reprobe(type, anchors));
 		goto probe;
@@ -779,7 +780,7 @@ probe:
 		}
 
 		rc = vos_iter_next(ih, anchor);
-		if (rc == IT_OPC_PROBE) {
+		if (rc == VOS_ITER_CB_YIELD) {
 			set_reprobe(type, VOS_ITER_CB_YIELD, anchors, 0);
 			D_ASSERT(need_reprobe(type, anchors));
 			goto probe;

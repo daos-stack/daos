@@ -347,9 +347,7 @@ typedef struct {
 /**
  * Iteration object/key filter callback
  *
- * Supports only VOS_ITER_CB_SKIP
- *
- * Return 1 to abort iterator
+ * Supports only VOS_ITER_CB_SKIP or VOS_ITER_CB_ABORT
  */
 typedef int (*vos_iter_filter_cb_t)(daos_handle_t ih, vos_iter_desc_t *desc,
 				    void *cb_arg, unsigned int *acts);
@@ -489,16 +487,16 @@ typedef int (*vos_iter_cb_t)(daos_handle_t ih, vos_iter_entry_t *entry,
  * Actions performed in iteration callback
  */
 enum {
-	/** Yield */
-	VOS_ITER_CB_YIELD	= (1UL << 0),
 	/** Delete entry */
-	VOS_ITER_CB_DELETE	= (1UL << 1),
+	VOS_ITER_CB_DELETE	= (1UL << 0),
 	/** Skip entry, don't iterate into next level for current entry */
-	VOS_ITER_CB_SKIP	= (1UL << 2),
+	VOS_ITER_CB_SKIP	= (1UL << 1),
+	/** Abort the current level iterator and restart */
+	VOS_ITER_CB_RESTART	= (1UL << 2),
 	/** Abort current level iteration */
 	VOS_ITER_CB_ABORT	= (1UL << 3),
-	/** Abort the current level iterator and restart */
-	VOS_ITER_CB_RESTART	= (1UL << 4),
+	/** Yield */
+	VOS_ITER_CB_YIELD	= (1UL << 4),
 };
 
 /**

@@ -2249,11 +2249,11 @@ done:
 			agg_reset_pos(desc->id_type, agg_entry);
 		if (ec_aggregate_yield(agg_param)) {
 			D_DEBUG(DB_EPC, "EC aggregation aborted\n");
-			rc = 1;
+			*acts |= VOS_ITER_CB_ABORT;
 		}
 	}
 
-	return rc;
+	return 0;
 }
 
 /* Iterator pre-callback for objects. Determines if object is subject

@@ -757,8 +757,10 @@ key_iter_fetch(struct vos_obj_iter *oiter, vos_iter_entry_t *ent,
 						 &acts);
 		if (rc != 0)
 			return rc;
+		if (acts & VOS_ITER_CB_ABORT)
+			return VOS_ITER_CB_ABORT;
 		if (start_seq != vos_sched_seq())
-			return IT_OPC_PROBE;
+			return VOS_ITER_CB_YIELD;
 		if (acts != 0) {
 			if (acts & VOS_ITER_CB_SKIP)
 				return IT_OPC_NEXT;
@@ -886,9 +888,7 @@ key_iter_match(struct vos_obj_iter *oiter, vos_iter_entry_t *ent, daos_anchor_t 
 
 	rc = key_iter_fetch(oiter, ent, anchor, true);
 	if (rc != 0) {
-		if (rc < 0)
-			VOS_TX_TRACE_FAIL(rc, "Failed to fetch the entry: "DF_RC"\n",
-					  DP_RC(rc));
+		VOS_TX_TRACE_FAIL(rc, "Failed to fetch the entry: "DF_RC"\n", DP_RC(rc));
 		return rc;
 	}
 
@@ -957,7 +957,7 @@ retry:
 		if (rc == 0)
 			goto retry;
 	}
-	D_ASSERT(rc <= 0 || rc == 1 || rc == IT_OPC_PROBE);
+	D_ASSERT(rc <= 0 || rc == VOS_ITER_CB_ABORT || rc == VOS_ITER_CB_YIELD);
 	VOS_TX_TRACE_FAIL(rc, "match failed, rc="DF_RC"\n",
 			  DP_RC(rc));
 	return rc;
@@ -1400,7 +1400,7 @@ recx_iter_probe(struct vos_obj_iter *oiter, daos_anchor_t *anchor)
 	int	rc;
 
 	opc = vos_anchor_is_zero(anchor) ? EVT_ITER_FIRST : EVT_ITER_FIND;
-	rc = evt_iter_probe(oiter->it_hdl, opc, NULL, anchor);
+	rc = evt_iter_probe(oiter->it_hdl, opc, NULL, daos_anchor_is_zero(anchor) ? NULL : anchor);
 	return rc;
 }
 
