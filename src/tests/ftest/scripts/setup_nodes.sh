@@ -64,28 +64,101 @@ ulimit -a
 echo \"/var/tmp/core.%e.%t.%p\" > /proc/sys/kernel/core_pattern"
 sudo rm -f /var/tmp/core.*
 if [ "${HOSTNAME%%.*}" != "$FIRST_NODE" ]; then
-    if grep /mnt/daos\  /proc/mounts; then
-        sudo umount /mnt/daos
-    else
-        if [ ! -d /mnt/daos ]; then
-            sudo mkdir -p /mnt/daos
+    if /sbin/lspci | grep "Non-Volatile memory controller"; then
+        if /sbin/lspci | grep -e "Non-Volatile memory controller: Intel Corporation QEMU NVM Express Controller" \
+                              -e "Non-Volatile memory controller: Red Hat, Inc. QEMU NVM Express Controller"     \
+                              -e "Non-Volatile memory controller: Red Hat, Inc. Device 0010"; then
+            sudo bash -c "set -ex
+# VMs don't have IOMMU (except https://wiki.qemu.org/Features/VT-d)
+mkdir -p /etc/systemd/system/daos_server.service.d/
+cat <<EOF > /etc/systemd/system/daos_server.service.d/override.conf
+[Service]
+User=root
+Group=root
+EOF
+
+create_namespaces() {
+    for x in 0 1; do
+        if ! ndctl destroy-namespace -f namespace\${x}.0; then
+            echo \"Failed to destroy namespaces\"
+            exit 1
+        fi
+    done
+    ndctl list -Nu || true
+    created=0
+    for x in 0 1; do
+        if ndctl create-namespace -f; then
+            (( created++ )) || true
+        fi
+    done
+    ndctl list -Nu || true
+
+    echo $\created
+}
+
+ls -l /dev/pmem*
+ndctl list --regions
+ndctl list -Nu
+ndctl disable-region all || true
+ndctl init-labels -f all || true
+ndctl enable-region all || true
+ndctl list -Nu || true
+modified=0
+ndctl list -Ni || true
+if [[ $(lsb_release -s -r) = 8.* ]]; then
+    for x in 0 1; do
+        if ! ndctl create-namespace; then
+            echo \"Failed to create namespace\"
+            if ! ndctl create-namespace -e namespace\${x}.0 -m fsdax -f; then
+                echo \"Failed to modify namespace\"
+            else
+                (( modified++ )) || true
+            fi
+        else
+            (( modified++ )) || true
+        fi
+    done
+    ndctl list -Nu || true
+    if [ \"\$modified\" -lt 2 ]; then
+        echo \"Failed to modify namespaces, trying to recreate them...\"
+        created=\$(create_namespaces)
+        if [ \"\$created\" -lt 2 ]; then
+            echo \"Failed to create namespaces\"
+            exit 1
         fi
     fi
-
-    tmpfs_size=16777216
-    memsize="$(sed -ne '/MemTotal:/s/.* \([0-9][0-9]*\) kB/\1/p' \
-               /proc/meminfo)"
-    if [ "$memsize" -gt "32000000" ]; then
-        # make it twice as big on the hardware cluster
-        tmpfs_size=$((tmpfs_size*2))
+else
+    created=\$(create_namespaces)
+    if [ \"\$created\" -lt 2 ]; then
+        echo \"Failed to create namespaces\"
+        exit 1
     fi
-    sudo ed <<EOF /etc/fstab
+fi"
+        fi
+    else
+        if grep /mnt/daos\  /proc/mounts; then
+            sudo umount /mnt/daos
+        else
+            if [ ! -d /mnt/daos ]; then
+                sudo mkdir -p /mnt/daos
+            fi
+        fi
+
+        tmpfs_size=16777216
+        memsize="$(sed -ne '/MemTotal:/s/.* \([0-9][0-9]*\) kB/\1/p' \
+                   /proc/meminfo)"
+        if [ "$memsize" -gt "32000000" ]; then
+            # make it twice as big on the hardware cluster
+            tmpfs_size=$((tmpfs_size*2))
+        fi
+        sudo ed <<EOF /etc/fstab
 \$a
 tmpfs /mnt/daos tmpfs rw,relatime,size=${tmpfs_size}k 0 0 # added by ftest.sh
 .
 wq
 EOF
-    sudo mount /mnt/daos
+        sudo mount /mnt/daos
+    fi
 fi
 
 rm -f /tmp/test.cov

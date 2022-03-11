@@ -49,8 +49,10 @@ class DmgStorageQuery(ControlTestBase):
 
         Test Description: Test 'dmg storage query list-devices' command.
 
-        :avocado: tags=all,daily_regression,hw,small,storage_query_devs,basic
-        :avocado: tags=dmg
+        :avocado: tags=all,daily_regression
+        :avocado: tags=hw,small
+        :avocado: tags=storage_query,storage_query_devs
+        :avocado: tags=basic,dmg
         """
         # Get the storage device information, parse and check devices info
         devs_info = self.get_device_info()
@@ -65,7 +67,8 @@ class DmgStorageQuery(ControlTestBase):
         for devs in list(devs_info.values())[0]:
             targets += len(devs[2].split(" "))
         if self.targets != targets:
-            self.fail("Wrong number of targets found: {}".format(targets))
+            self.fail("Wrong number of targets found: {}, expecting {}".format(
+                targets, self.targets))
 
     @avocado.fail_on(CommandFailure)
     def test_dmg_storage_query_pools(self):
@@ -74,8 +77,10 @@ class DmgStorageQuery(ControlTestBase):
 
         Test Description: Test 'dmg storage query list-pools' command.
 
-        :avocado: tags=all,daily_regression,hw,small,storage_query_pools,basic
-        :avocado: tags=dmg
+        :avocado: tags=all,daily_regression
+        :avocado: tags=hw,small
+        :avocado: tags=storage_query,storage_query_pools
+        :avocado: tags=basic,dmg
         """
         # Create pool and get the storage smd information, then verify info
         self.prepare_pool()
@@ -111,7 +116,10 @@ class DmgStorageQuery(ControlTestBase):
 
         Test Description: Test 'dmg storage query list-devices --health' cmd.
 
-        :avocado: tags=all,daily_regression,hw,small,storage_query_health,basic
+        :avocado: tags=all,daily_regression
+        :avocado: tags=hw,small
+        :avocado: tags=storage_query,storage_query_health
+        :avocado: tags=basic
         """
         dmg_info = self.get_device_info(health=True)
 
@@ -148,7 +156,10 @@ class DmgStorageQuery(ControlTestBase):
         In addition this test also does a basic test of nvme-faulty cmd:
         'dmg storage set nvme-faulty'
 
-        :avocado: tags=all,daily_regression,hw,small,storage_query_faulty,basic
+        :avocado: tags=all,daily_regression
+        :avocado: tags=hw,small
+        :avocado: tags=storage_query,storage_query_faulty
+        :avocado: tags=basic
         """
         # Get device info and check state is NORMAL
         devs_info = self.get_device_info()

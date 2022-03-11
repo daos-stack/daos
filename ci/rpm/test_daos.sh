@@ -4,7 +4,8 @@ set -uex
 
 # DAOS_PKG_VERSION environment variable needs to be set for this script
 
-nodelist=(${NODELIST//,/ })
+# shellcheck disable=SC2153
+IFS=, read -r -a nodelist <<< "$NODELIST"
 export PYTHONPATH="${PWD}/src/tests/ftest/util"
 src/tests/ftest/config_file_gen.py -n "${nodelist[0]}" \
   -a /tmp/daos_agent.yml -s /tmp/daos_server.yml

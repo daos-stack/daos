@@ -2,6 +2,7 @@
 
 REPOS_DIR=/etc/dnf/repos.d
 DISTRO_NAME=leap15
+LSB_RELEASE=lsb-release
 EXCLUDE_UPGRADE=fuse,fuse-libs,fuse-devel,mercury,daos,daos-\*
 
 bootstrap_dnf() {
@@ -49,12 +50,25 @@ post_provision_config_nodes() {
                      slurm-example-configs slurmctld slurm-slurmmd
     fi
 
-    time dnf repolist
+    # shellcheck disable=SC2154
+    update_repos "$DISTRO_NAME"
+
+    time dnf -y repolist
     # the group repo is always on the test image
     #add_group_repo
     # in fact is's on the Leap image twice so remove one
     rm -f $REPOS_DIR/daos-stack-ext-opensuse-15-stable-group.repo
+    # local repo won't be configured on Vagrant test nodes
     add_local_repo
+
+    # CORCI-1096
+    # workaround until new snapshot images are produced
+    # Assume if APPSTREAM is locally proxied so is epel-modular
+    # so disable the upstream epel-modular repo
+    # I don't think this is needed any more
+    #if [ -n "${DAOS_STACK_EL_8_APPSTREAM_REPO:-}" ]; then
+    #    dnf -y config-manager --disable epel-modular appstream powertools
+    #fi
     time dnf repolist
 
     if [ -n "$INST_REPOS" ]; then
@@ -71,7 +85,7 @@ post_provision_config_nodes() {
                 fi
             fi
             local repo_url="${JENKINS_URL}"job/daos-stack/job/"${repo}"/job/"${branch//\//%252F}"/"${build_number}"/artifact/artifacts/$DISTRO_NAME/
-            dnf config-manager --add-repo="${repo_url}"
+            dnf -y config-manager --add-repo="${repo_url}"
             disable_gpg_check "$repo_url"
         done
     fi
@@ -81,21 +95,47 @@ post_provision_config_nodes() {
     fi
     rm -f /etc/profile.d/openmpi.sh
     rm -f /tmp/daos_control.log
+    if [ -n "${LSB_RELEASE:-}" ]; then
+        if ! rpm -q "$LSB_RELEASE"; then
+            RETRY_COUNT=4 retry_dnf 360 install "$LSB_RELEASE"
+        fi
+    fi
 
+    if [ "$DISTRO_NAME" = "centos7" ] && lspci | grep "ConnectX-6"; then
+        # No openmpi3 or MACSio-openmpi3 can be installed currently
+        # when the ConnnectX-6 driver is installed
+        INST_RPMS="${INST_RPMS// openmpi3/}"
+        INST_RPMS="${INST_RPMS// MACSio-openmpi3}"
+    fi
+
+    # shellcheck disable=SC2001
     # shellcheck disable=SC2086
-    if [ -n "$INST_RPMS" ] && ! retry_cmd 360 dnf -y install $INST_RPMS; then
-        rc=${PIPESTATUS[0]}
-        dump_repos
-        exit "$rc"
+    if ! rpm -q "$(echo "$INST_RPMS" |
+                   sed -e 's/--exclude [^ ]*//'                 \
+                       -e 's/[^ ]*-daos-[0-9][0-9]*//g')"; then
+        # shellcheck disable=SC2086
+        if [ -n "$INST_RPMS" ]; then
+            # shellcheck disable=SC2154
+            if ! RETRY_COUNT=4 retry_dnf 360 install $INST_RPMS; then
+                rc=${PIPESTATUS[0]}
+                dump_repos
+                exit "$rc"
+            fi
+        fi
     fi
 
     distro_custom
 
+    lsb_release -a
+
     # now make sure everything is fully up-to-date
-    if ! retry_cmd 600 dnf -y upgrade --exclude "$EXCLUDE_UPGRADE"; then
+    # shellcheck disable=SC2154
+    if ! RETRY_COUNT=4 retry_dnf 600 upgrade --exclude "$EXCLUDE_UPGRADE"; then
         dump_repos
         exit 1
     fi
+
+    lsb_release -a
 
     if [ -f /etc/do-release ]; then
         cat /etc/do-release

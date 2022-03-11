@@ -72,8 +72,9 @@ LOGS_THRESHOLD="1G"
 pre_clean () {
     i=5
     while [ $i -gt 0 ]; do
-        if clush "${CLUSH_ARGS[@]}" -B -l "${REMOTE_ACCT:-jenkins}" -R ssh \
-                 -S -w "$(IFS=','; echo "${nodes[*]}")"                    \
+        if clush --nostdin "${CLUSH_ARGS[@]}" -B                              \
+                 -l "${REMOTE_ACCT:-jenkins}" -R ssh                          \
+                 -S -w "$(IFS=','; echo "${nodes[*]}")"                       \
                  "$(sed -e '1,/^$/d' "$SCRIPT_LOC"/pre_clean_nodes.sh)"; then
             break
         fi
@@ -84,10 +85,11 @@ pre_clean () {
 cleanup() {
     i=5
     while [ $i -gt 0 ]; do
-        if clush "${CLUSH_ARGS[@]}" -B -l "${REMOTE_ACCT:-jenkins}" -R ssh \
-             -S -w "$(IFS=','; echo "${nodes[*]}")"                        \
-             "DAOS_BASE=$DAOS_BASE
-             $(sed -e '1,/^$/d' "$SCRIPT_LOC"/cleanup_nodes.sh)"; then
+        if clush --nostdin "${CLUSH_ARGS[@]}" -B        \
+                 -l "${REMOTE_ACCT:-jenkins}" -R ssh    \
+                 -S -w "$(IFS=','; echo "${nodes[*]}")" \
+                 "DAOS_BASE=$DAOS_BASE
+                  $(sed -e '1,/^$/d' "$SCRIPT_LOC"/cleanup_nodes.sh)"; then
             break
         fi
         ((i-=1)) || true
@@ -120,8 +122,9 @@ trap 'set +e; cleanup' EXIT
 CLUSH_ARGS=($CLUSH_ARGS)
 
 DAOS_BASE=${SL_PREFIX%/install}
-if ! clush "${CLUSH_ARGS[@]}" -B -l "${REMOTE_ACCT:-jenkins}" -R ssh -S \
-    -w "$(IFS=','; echo "${nodes[*]}")"                                 \
+if ! clush --nostdin "${CLUSH_ARGS[@]}" -B        \
+           -l "${REMOTE_ACCT:-jenkins}" -R ssh -S \
+    -w "$(IFS=','; echo "${nodes[*]}")"           \
     "FIRST_NODE=${nodes[0]}
      TEST_RPMS=$TEST_RPMS
      DAOS_BASE=$DAOS_BASE
