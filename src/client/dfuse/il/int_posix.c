@@ -38,12 +38,13 @@
  * We need to intercept, and disable/pass through all these functions:
 
  * getline, getdelim
-
+ * ioctl
  * fgetln
- * fprintf, vfprintf
  * fflush
  * fgetpos, fsetpos
  * setbuf, setbuffer, setlinebuf, setvbuf
+ *
+ * ftell and fseeko with 64 bit files.
  *
  * How does streaming I/O position match fd position.
  */
@@ -2118,10 +2119,6 @@ dfuse_ftell(FILE *stream)
 	int rc;
 	long off;
 
-	D_ERROR("Unsupported function %p\n", stream);
-
-	goto do_real_ftell;
-
 	fd = fileno(stream);
 	if (fd == -1)
 		goto do_real_ftell;
@@ -2133,11 +2130,16 @@ dfuse_ftell(FILE *stream)
 	if (drop_reference_if_disabled(entry))
 		goto do_real_ftell;
 
+	D_ERROR("Badly supported function %p\n", stream);
+
 	off = entry->fd_pos;
 
 	vector_decref(&fd_table, entry);
 
 	DFUSE_TRA_DEBUG(entry->fd_dfsoh, "Returning offset %ld", off);
+
+	if (off == 0)
+		return __real_ftell(stream);
 
 	return off;
 do_real_ftell:
@@ -2179,8 +2181,6 @@ dfuse_fputc(int __c, FILE *stream)
 	int fd;
 	int rc;
 
-	D_ERROR("Unsupported function\n");
-
 	fd = fileno(stream);
 	if (fd == -1)
 		goto do_real_fn;
@@ -2191,6 +2191,8 @@ dfuse_fputc(int __c, FILE *stream)
 
 	if (drop_reference_if_disabled(entry))
 		goto do_real_fn;
+
+	D_ERROR("Unsupported function\n");
 
 	entry->fd_err = ENOTSUP;
 
@@ -2210,8 +2212,6 @@ dfuse_fputs(char *__str, FILE *stream)
 	int fd;
 	int rc;
 
-	D_ERROR("Unsupported function\n");
-
 	fd = fileno(stream);
 	if (fd == -1)
 		goto do_real_fn;
@@ -2222,6 +2222,8 @@ dfuse_fputs(char *__str, FILE *stream)
 
 	if (drop_reference_if_disabled(entry))
 		goto do_real_fn;
+
+	D_ERROR("Unsupported function\n");
 
 	entry->fd_err = ENOTSUP;
 
@@ -2272,8 +2274,6 @@ dfuse_fgetc(FILE *stream)
 	int fd;
 	int rc;
 
-	D_ERROR("Unsupported function\n");
-
 	fd = fileno(stream);
 	if (fd == -1)
 		goto do_real_fn;
@@ -2284,6 +2284,8 @@ dfuse_fgetc(FILE *stream)
 
 	if (drop_reference_if_disabled(entry))
 		goto do_real_fn;
+
+	D_ERROR("Unsupported function\n");
 
 	entry->fd_err = ENOTSUP;
 
@@ -2302,8 +2304,6 @@ dfuse_getc(FILE *stream)
 	struct fd_entry	*entry = NULL;
 	int fd;
 	int rc;
-
-	D_ERROR("Unsupported function\n");
 
 	fd = fileno(stream);
 	if (fd == -1)
@@ -2394,8 +2394,6 @@ dfuse_ungetc(int c, FILE *stream)
 	int fd;
 	int rc;
 
-	D_ERROR("Unsupported function\n");
-
 	fd = fileno(stream);
 	if (fd == -1)
 		goto do_real_fn;
@@ -2404,9 +2402,12 @@ dfuse_ungetc(int c, FILE *stream)
 	if (rc != 0)
 		goto do_real_fn;
 
-	vector_decref(&fd_table, entry);
+	if (drop_reference_if_disabled(entry))
+		goto do_real_fn;
 
-	return EOF;
+	entry->fd_status = DFUSE_IO_DIS_STREAM;
+
+	vector_decref(&fd_table, entry);
 
 do_real_fn:
 	return __real_ungetc(c, stream);
@@ -2428,6 +2429,9 @@ dfuse_fscanf(FILE *stream, const char *format, ...)
 
 	rc = vector_get(&fd_table, fd, &entry);
 	if (rc != 0)
+		goto do_real_fn;
+
+	if (drop_reference_if_disabled(entry))
 		goto do_real_fn;
 
 	vector_decref(&fd_table, entry);
@@ -2459,6 +2463,9 @@ dfuse_vfscanf(FILE *stream, const char *format, va_list arg)
 	if (rc != 0)
 		goto do_real_fn;
 
+	if (drop_reference_if_disabled(entry))
+		goto do_real_fn;
+
 	vector_decref(&fd_table, entry);
 
 	errno = ENOTSUP;
@@ -2466,6 +2473,68 @@ dfuse_vfscanf(FILE *stream, const char *format, va_list arg)
 
 do_real_fn:
 	return __real_vfscanf(stream, format, arg);
+}
+
+DFUSE_PUBLIC int
+dfuse_fprintf(FILE *stream, const char *format, ...)
+{
+	struct fd_entry	*entry = NULL;
+	va_list ap;
+	int fd;
+	int rc;
+
+	fd = fileno(stream);
+	if (fd == -1)
+		goto do_real_fn;
+
+	rc = vector_get(&fd_table, fd, &entry);
+	if (rc != 0)
+		goto do_real_fn;
+
+	if (drop_reference_if_disabled(entry))
+		goto do_real_fn;
+
+	vector_decref(&fd_table, entry);
+
+	D_ERROR("Unsupported function\n");
+
+	errno = ENOTSUP;
+	return EOF;
+
+do_real_fn:
+	va_start(ap, format);
+	rc = __real_vfprintf(stream, format, ap);
+	va_end(ap);
+	return rc;
+}
+
+DFUSE_PUBLIC int
+dfuse_vfprintf(FILE *stream, const char *format, va_list arg)
+{
+	struct fd_entry	*entry = NULL;
+	int fd;
+	int rc;
+
+	D_ERROR("Unsupported function\n");
+
+	fd = fileno(stream);
+	if (fd == -1)
+		goto do_real_fn;
+
+	rc = vector_get(&fd_table, fd, &entry);
+	if (rc != 0)
+		goto do_real_fn;
+
+	if (drop_reference_if_disabled(entry))
+		goto do_real_fn;
+
+	vector_decref(&fd_table, entry);
+
+	errno = ENOTSUP;
+	return EOF;
+
+do_real_fn:
+	return __real_vfprintf(stream, format, arg);
 }
 
 DFUSE_PUBLIC int

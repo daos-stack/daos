@@ -74,7 +74,9 @@
 	ACTION(wchar_t *, fgetws,  (const wchar_t *ws, FILE *stream))         \
 	ACTION(int,     ungetc,    (int, FILE *))                             \
 	ACTION(int,     fscanf,    (FILE *, const char *, ...))               \
-	ACTION(int,     vfscanf,   (FILE *, const char *, va_list))
+	ACTION(int,     vfscanf,   (FILE *, const char *, va_list))           \
+	ACTION(int,     fprintf,   (FILE *, const char *, ...))               \
+	ACTION(int,     vfprintf,   (FILE *, const char *, va_list ap))
 
 #define FOREACH_INTERCEPT(ACTION)            \
 	FOREACH_SINGLE_INTERCEPT(ACTION)     \

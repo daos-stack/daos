@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2021 Intel Corporation.
+ * (C) Copyright 2016-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -277,13 +277,13 @@ void dfuse_cb_ioctl(fuse_req_t req, fuse_ino_t ino, unsigned int cmd, void *arg,
 	gid_t			gid;
 
 	if (cmd == TCGETS) {
-		DFUSE_TRA_DEBUG(oh, "Ignoring TCGETS ioctl");
-		D_GOTO(out_err, rc = ENOTTY);
+		DFUSE_TRA_INFO(oh, "Ignoring TCGETS ioctl");
+		D_GOTO(out_err, rc = EINVAL);
 	}
 
 	if (cmd == TIOCGPGRP) {
-		DFUSE_TRA_DEBUG(oh, "Ignoring TIOCGPGRP ioctl");
-		D_GOTO(out_err, rc = ENOTTY);
+		DFUSE_TRA_INFO(oh, "Ignoring TIOCGPGRP ioctl");
+		D_GOTO(out_err, rc = EINVAL);
 	}
 
 	/* Check the IOCTl type is correct */
