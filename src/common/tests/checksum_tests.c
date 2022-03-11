@@ -632,7 +632,7 @@ test_csum_info_list_handling(void **state)
 	};
 
 	for (i = 0; i < ARRAY_SIZE(info); i++)
-		dcs_csum_info_save(&list, &info[i], NULL);
+		dcs_csum_info_save(&list, &info[i]);
 
 	assert_int_equal(ARRAY_SIZE(info), list.dcl_csum_infos_nr);
 	for (i = 0; i < ARRAY_SIZE(info); i++) {
@@ -650,6 +650,44 @@ test_csum_info_list_handling(void **state)
 	assert_int_equal(0, list.dcl_buf_size);
 	assert_int_equal(0, list.dcl_csum_infos_nr);
 	assert_int_equal(0, list.dcl_buf_used);
+}
+
+static void
+test_csum_info_list_handle_many(void **state)
+{
+	struct dcs_ci_list list = {0};
+	int i;
+	struct dcs_csum_info info[100];
+
+	assert_dcs_csum_info_list_init(list, 2);
+
+	srand(time(NULL));
+	for (i = 0; i < ARRAY_SIZE(info); i++) {
+		int j;
+
+		info[i].cs_type = 99;
+		info[i].cs_len = 2;
+		info[i].cs_nr = rand() % 4 + 1;
+		info[i].cs_buf_len = info[i].cs_len * info[i].cs_nr;
+		D_ALLOC(info[i].cs_csum, info[i].cs_buf_len);
+		for (j = 0; j < info[i].cs_buf_len; j++)
+			info[i].cs_csum[j] = rand();
+
+		dcs_csum_info_save(&list, &info[i]);
+	}
+
+	assert_int_equal(ARRAY_SIZE(info), list.dcl_csum_infos_nr);
+	for (i = 0; i < ARRAY_SIZE(info); i++) {
+		assert_ci_equal(info[i], *dcs_csum_info_get(&list, i));
+		/* shouldn't be using the same buffer */
+		assert_int_not_equal(info[i].cs_csum, dcs_csum_info_get(&list, i)->cs_csum);
+	}
+
+	dcs_csum_info_list_fini(&list);
+
+	for (i = 0; i < ARRAY_SIZE(info); i++) {
+		D_FREE(info->cs_csum);
+	}
 }
 
 #define MAP_MAX 10
@@ -1911,7 +1949,8 @@ static const struct CMUnitTest tests[] = {
 	TEST("CSUM29: csum_info serialization", test_ci_serialize),
 	TEST("CSUM29: Skip calculations based on csummer settings",
 	     test_skip_csum_calculations_when_skip_set),
-	TEST("CSUM30: csum_info list handling", test_csum_info_list_handling),
+	TEST("CSUM30: csum_info list basic handling", test_csum_info_list_handling),
+	TEST("CSUM30.1: csum_info list handle many", test_csum_info_list_handle_many),
 	TEST("CSUM_HOLES01: With 2 mapped extents that leave a hole "
 	     "at the beginning, in between and "
 	     "at the end, all within a single chunk.", holes_1),

@@ -427,7 +427,6 @@ cc_biov_move_next(struct csum_context *ctx, bool biov_csum_used)
 	/** move to the next biov */
 	ctx->cc_bsgl_idx.iov_idx++;
 	ctx->cc_bsgl_idx.iov_offset = 0;
-	C_TRACE("Moving to biov %d\n", ctx->cc_bsgl_idx.iov_idx);
 
 	/** Need to know if biov csum was used. For holes there is no csum, but
 	 * still need to move to next biov
@@ -436,6 +435,9 @@ cc_biov_move_next(struct csum_context *ctx, bool biov_csum_used)
 		ctx->cc_biov_csum_idx = 0;
 		ctx->cc_biov_csums_idx++;
 	}
+
+	C_TRACE("Moving to biov %d, biov_csum_used: %s, csums_idx: %lu\n", ctx->cc_bsgl_idx.iov_idx,
+		biov_csum_used ? "YES": "NO", ctx->cc_biov_csums_idx);
 
 	set_biov_ranges(ctx, ctx->cc_cur_recx_idx);
 }
@@ -675,8 +677,7 @@ ds_csum_add2iod(daos_iod_t *iod, struct daos_csummer *csummer, struct bio_sglist
 
 		C_TRACE("Adding fetched to IOD: "DF_C_IOD", csum: "DF_CI"\n",
 			DP_C_IOD(iod), DP_CI(*ci));
-		ci_insert(&iod_csums->ic_data[0], 0,
-			  ci->cs_csum, ci->cs_len);
+		ci_insert(&iod_csums->ic_data[0], 0, ci->cs_csum, ci->cs_len);
 		if (biov_csums_used != NULL)
 			(*biov_csums_used) = 1;
 		return 0;

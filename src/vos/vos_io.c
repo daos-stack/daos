@@ -768,19 +768,17 @@ static int
 save_csum(struct vos_io_context *ioc, struct dcs_csum_info *csum_info,
 	  struct evt_entry *entry, daos_size_t rec_size)
 {
-	struct dcs_csum_info	*saved_csum_info;
-	int			 rc;
+	struct dcs_csum_info ci_duplicate;
 
 	if (ioc->ic_size_fetch)
 		return 0;
 
-	rc = dcs_csum_info_save(&ioc->ic_csum_list, csum_info, &saved_csum_info);
-	if (rc != 0)
-		return rc;
-	if (entry != NULL)
-		evt_entry_csum_update(&entry->en_ext, &entry->en_sel_ext,
-				      saved_csum_info, rec_size);
-	return 0;
+	if (entry == NULL)
+		return dcs_csum_info_save(&ioc->ic_csum_list, csum_info);
+
+	ci_duplicate = *csum_info;
+	evt_entry_csum_update(&entry->en_ext, &entry->en_sel_ext, &ci_duplicate, rec_size);
+	return dcs_csum_info_save(&ioc->ic_csum_list, &ci_duplicate);
 }
 
 /** Fetch the single value within the specified epoch range of an key */

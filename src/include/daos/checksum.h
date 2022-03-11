@@ -530,8 +530,7 @@ struct dcs_ci_list {
  */
 int dcs_csum_info_list_init(struct dcs_ci_list *list, uint32_t nr);
 void dcs_csum_info_list_fini(struct dcs_ci_list *list);
-int dcs_csum_info_save(struct dcs_ci_list *list, struct dcs_csum_info *info,
-		       struct dcs_csum_info **ci_out);
+int dcs_csum_info_save(struct dcs_ci_list *list, struct dcs_csum_info *info);
 struct dcs_csum_info *dcs_csum_info_get(struct dcs_ci_list *list, uint32_t idx);
 
 /**

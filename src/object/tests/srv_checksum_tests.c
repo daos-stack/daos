@@ -240,8 +240,7 @@ array_test_case_create(struct vos_fetch_test_context *ctx,
 			info.cs_chunksize = cs;
 			for (j = 0; j < num_of_csum; j++)
 				ci_insert(&info, j, dummy_csums, csum_len);
-			dcs_csum_info_save(&ctx->biov_csums, &info, NULL);
-
+			dcs_csum_info_save(&ctx->biov_csums, &info);
 		}
 	}
 
@@ -1519,7 +1518,7 @@ update_fetch_sv(void **state)
 	ci_set(&from_vos_begin, &csum, sizeof(uint32_t), sizeof(uint32_t), 1,
 	       CSUM_NO_CHUNK, 1);
 	dcs_csum_info_list_init(&from_vos_begin_list, 1);
-	dcs_csum_info_save(&from_vos_begin_list, &from_vos_begin, NULL);
+	dcs_csum_info_save(&from_vos_begin_list, &from_vos_begin);
 
 	ds_csum_add2iod(&iod, csummer, &bsgl, &from_vos_begin_list, NULL,
 			&iod_csums);

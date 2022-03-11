@@ -1303,8 +1303,7 @@ dcs_csum_info_list_fini(struct dcs_ci_list *list)
 }
 
 int
-dcs_csum_info_save(struct dcs_ci_list *list, struct dcs_csum_info *info,
-		   struct dcs_csum_info **ci_out)
+dcs_csum_info_save(struct dcs_ci_list *list, struct dcs_csum_info *info)
 {
 	daos_size_t		 size_needed;
 	struct dcs_csum_info	*dst;
@@ -1321,9 +1320,6 @@ dcs_csum_info_save(struct dcs_ci_list *list, struct dcs_csum_info *info,
 
 	list->dcl_csum_infos_nr++;
 	list->dcl_buf_used += size_needed;
-
-	if (ci_out)
-		*ci_out = dst;
 
 	return 0;
 }
