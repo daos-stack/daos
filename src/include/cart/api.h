@@ -85,8 +85,7 @@ crt_context_create(crt_context_t *crt_ctx);
 
 
 int
-crt_context_create_secondary(crt_context_t *ctx_ctx);
-
+crt_context_create_on_provider(crt_context_t *crt_ctx, const char *provider);
 
 /**
  * Set the timeout value for all RPC requests created on the specified context.

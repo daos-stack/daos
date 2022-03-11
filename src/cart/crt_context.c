@@ -182,10 +182,15 @@ crt_context_create_on_provider(crt_context_t *crt_ctx, const char *provider)
 	int	i;
 
 	for (i = 0; crt_na_dict[i].nad_str != NULL; i++) {
+	D_ERROR("ALEXMOD, checking provider '%s' to match '%s'\n",
+		crt_na_dict[i].nad_str, provider);
+
 		if (!strncmp(provider, crt_na_dict[i].nad_str, strlen(crt_na_dict[i].nad_str) + 1) ||
 		    (crt_na_dict[i].nad_alt_str &&
 		     !strncmp(provider, crt_na_dict[i].nad_alt_str, strlen(crt_na_dict[i].nad_alt_str) + 1))) {
 			provider_idx = crt_na_dict[i].nad_type;
+			D_ERROR("ALEXMOD, Found provider %s at index %d\n",
+				provider, provider_idx);
 			break;
 		}
 	}
@@ -197,6 +202,7 @@ crt_context_create_on_provider(crt_context_t *crt_ctx, const char *provider)
 
 	return crt_context_provider_create(crt_ctx, provider_idx);
 }
+
 
 int
 crt_context_provider_create(crt_context_t *crt_ctx, int provider)
@@ -214,10 +220,12 @@ crt_context_provider_create(crt_context_t *crt_ctx, int provider)
 		D_GOTO(out, rc = -DER_INVAL);
 	}
 
+	D_ERROR("ALEXMOD: on line %d\n", __LINE__);
 	sep_mode = crt_provider_is_sep(provider);
 	cur_ctx_num = crt_provider_get_cur_ctx_num(provider);
 	max_ctx_num = crt_provider_get_max_ctx_num(provider);
 
+	D_ERROR("ALEXMOD: on line %d\n", __LINE__);
 	if (sep_mode &&
 	    cur_ctx_num >= max_ctx_num) {
 		D_ERROR("Number of active contexts (%d) reached limit (%d).\n",
@@ -229,6 +237,7 @@ crt_context_provider_create(crt_context_t *crt_ctx, int provider)
 	if (ctx == NULL)
 		D_GOTO(out, rc = -DER_NOMEM);
 
+	D_ERROR("ALEXMOD: on line %d\n", __LINE__);
 	rc = crt_context_init(ctx);
 	if (rc != 0) {
 		D_ERROR("crt_context_init() failed, " DF_RC "\n", DP_RC(rc));
@@ -238,6 +247,7 @@ crt_context_provider_create(crt_context_t *crt_ctx, int provider)
 
 	D_RWLOCK_WRLOCK(&crt_gdata.cg_rwlock);
 
+	D_ERROR("ALEXMOD: on line %d\n", __LINE__);
 	rc = crt_hg_ctx_init(&ctx->cc_hg_ctx, provider, cur_ctx_num);
 
 	if (rc != 0) {
@@ -247,6 +257,7 @@ crt_context_provider_create(crt_context_t *crt_ctx, int provider)
 		D_GOTO(out, rc);
 	}
 
+	D_ERROR("ALEXMOD: on line %d\n", __LINE__);
 	rc = crt_hg_get_addr(ctx->cc_hg_ctx.chc_hgcla,
 			     ctx->cc_self_uri, &uri_len);
 	if (rc != 0) {
@@ -256,6 +267,7 @@ crt_context_provider_create(crt_context_t *crt_ctx, int provider)
 		D_GOTO(out, rc);
 	}
 
+	D_ERROR("ALEXMOD: on line %d\n", __LINE__);
 	ctx->cc_idx = cur_ctx_num;
 
 	ctx_list = crt_provider_get_ctx_list(provider);
@@ -265,11 +277,13 @@ crt_context_provider_create(crt_context_t *crt_ctx, int provider)
 
 	D_RWLOCK_UNLOCK(&crt_gdata.cg_rwlock);
 
+	D_ERROR("ALEXMOD: on line %d\n", __LINE__);
 	/** initialize sensors */
 	if (crt_gdata.cg_use_sensors) {
 		int	ret;
 		char	*prov;
 
+	D_ERROR("ALEXMOD: on line %d\n", __LINE__);
 		prov = crt_provider_name_get(ctx->cc_hg_ctx.chc_provider);
 		ret = d_tm_add_metric(&ctx->cc_timedout, D_TM_COUNTER,
 				      "Total number of timed out RPC requests",
@@ -301,7 +315,9 @@ crt_context_provider_create(crt_context_t *crt_ctx, int provider)
 	if (crt_is_service() &&
 	    crt_gdata.cg_auto_swim_disable == 0 &&
 	    ctx->cc_idx == crt_gdata.cg_swim_crt_idx) {
+	D_ERROR("ALEXMOD: on line %d\n", __LINE__);
 		rc = crt_swim_init(crt_gdata.cg_swim_crt_idx);
+	D_ERROR("ALEXMOD: on line %d\n", __LINE__);
 		if (rc) {
 			D_ERROR("crt_swim_init() failed rc: %d.\n", rc);
 			crt_context_destroy(ctx, true);
@@ -323,10 +339,13 @@ crt_context_provider_create(crt_context_t *crt_ctx, int provider)
 
 	}
 
+	D_ERROR("ALEXMOD: on line %d\n", __LINE__);
 	*crt_ctx = (crt_context_t)ctx;
 	D_DEBUG(DB_TRACE, "created context (idx %d)\n", ctx->cc_idx);
+	D_ERROR("ALEXMOD: on line %d\n", __LINE__);
 
 out:
+	D_ERROR("ALEXMOD: on line %d\n", __LINE__);
 	return rc;
 }
 

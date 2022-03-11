@@ -22,8 +22,8 @@ exit_on_line(int line)
 #define MY_BASE 0x010000000
 #define MY_VER  0
 
-#define NUM_PRIMARY_CTX 8
-#define NUM_SECONDARY_CTX 8
+#define NUM_PRIMARY_CTX_MAX 8
+#define NUM_SECONDARY_CTX_MAX 8
 
 #define SERVER_GROUP_NAME "dual_provider_group"
 

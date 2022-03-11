@@ -137,7 +137,7 @@ int main(int argc, char **argv)
 
 		rank = rank_list->rl_ranks[i];
 
-		for (tag = 0; tag < NUM_PRIMARY_CTX; tag++) {
+		for (tag = 0; tag < NUM_PRIMARY_CTX_MAX; tag++) {
 			DBG_PRINT("Sending ping to %d:%d\n", rank, tag);
 
 			server_ep.ep_rank = rank;
