@@ -68,6 +68,9 @@ unset OFI_INTERFACE
 # shellcheck disable=SC2153
 export D_LOG_FILE="$TEST_TAG_DIR/daos.log"
 
+# The dmg pool destroy can take up to 3 minutes to timeout.  To help ensure
+# that the avocado test tearDown method is run long enough to account for this
+# use a 240 second timeout when running tearDown after the test has timed out.
 mkdir -p ~/.config/avocado/
 cat <<EOF > ~/.config/avocado/avocado.conf
 [datadir.paths]
@@ -78,7 +81,7 @@ data_dir = $logs_prefix/ftest/avocado/data
 loglevel = DEBUG
 
 [runner.timeout]
-process_died = 60
+process_died = 240
 
 [sysinfo.collectibles]
 files = \$HOME/.config/avocado/sysinfo/files
