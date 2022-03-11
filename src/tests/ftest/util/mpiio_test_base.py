@@ -61,22 +61,24 @@ class MpiioTests(TestWithServers):
             kwargs_list[1]["command"] = "t_shapesame"
             env["HDF5_PARAPREFIX"] = "daos:"
 
+        self.job_manager = []
         job_managers = []
         for kwargs in kwargs_list:
-            job_managers.append(get_job_manager(self))
+            manager = get_job_manager(self)
 
             # fix up a relative test_repo specification
             if not kwargs["path"].startswith("/"):
-                mpi_path = os.path.split(job_managers[-1].command_path)[0]
+                mpi_path = os.path.split(manager.command_path)[0]
                 kwargs["path"] = os.path.join(mpi_path, kwargs["path"])
             if test_name == "romio":
                 # Romio is not run via mpirun
                 romio_job = self._test_name_class[test_name](**kwargs)
                 romio_job.env = env
-                job_managers = [romio_job]
-                self.job_manager = []
+                job_managers.append(romio_job)
+                self.job_manager[-1] = romio_job
             else:
                 # finish job manager setup
+                job_managers.append(manager)
                 job_managers[-1].job = self._test_name_class[test_name](**kwargs)
                 job_managers[-1].assign_hosts(self.hostlist_clients)
                 job_managers[-1].assign_processes(client_processes)

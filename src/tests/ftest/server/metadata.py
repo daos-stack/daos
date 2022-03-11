@@ -13,7 +13,7 @@ from avocado.core.exceptions import TestFail
 
 from apricot import TestWithServers
 from ior_utils import IorCommand
-from command_utils_base import CommandFailure
+from exception_utils import CommandFailure
 from job_manager_utils import get_job_manager
 from thread_manager import ThreadManager
 

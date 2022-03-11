@@ -12,7 +12,8 @@ from avocado import fail_on
 from avocado.utils import process
 from apricot import TestWithServers
 from general_utils import get_log_file
-from command_utils import CommandFailure, ExecutableCommand
+from command_utils import ExecutableCommand
+from exception_utils import CommandFailure
 from agent_utils import include_local_host
 from job_manager_utils import get_job_manager
 

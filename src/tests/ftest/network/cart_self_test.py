@@ -7,7 +7,8 @@
 from apricot import TestWithServers
 
 from command_utils_base import \
-    EnvironmentVariables, FormattedParameter, CommandFailure
+     EnvironmentVariables, FormattedParameter
+from exception_utils import CommandFailure
 from command_utils import ExecutableCommand
 from job_manager_utils import get_job_manager
 

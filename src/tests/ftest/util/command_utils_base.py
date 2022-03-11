@@ -7,10 +7,7 @@
 from logging import getLogger
 import os
 import yaml
-
-
-class CommandFailure(Exception):
-    """Base exception for this module."""
+from exception_utils import CommandFailure
 
 
 class BasicParameter():

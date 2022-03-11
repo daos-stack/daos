@@ -31,8 +31,16 @@ class Mpi4pyCommand(ExecutableCommand):
         Args:
             path (str): path to the macsio command.
         """
-        super().__init__(
-            "/run/mpi4py/*", "test_io_daos.py", "python{} {}".format(version_info.major, path))
+        super().__init__("/run/mpi4py/*", "test_io_daos.py", path)
+
+    def __str__(self):
+        """Return the command with all of its defined parameters as a string.
+
+        Returns:
+            str: the command with all the defined parameters
+
+        """
+        return " ".join(["python{}".format(version_info.major), super().__str__()])
 
 
 class RomioCommand(ExecutableCommand):

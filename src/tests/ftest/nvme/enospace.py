@@ -13,7 +13,7 @@ from avocado.core.exceptions import TestFail
 from daos_utils import DaosCommand
 from job_manager_utils import get_job_manager
 from ior_utils import IorCommand, IorMetrics
-from command_utils_base import CommandFailure
+from exception_utils import CommandFailure
 from general_utils import error_count
 import queue
 

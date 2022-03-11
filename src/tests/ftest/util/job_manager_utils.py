@@ -15,7 +15,7 @@ from ClusterShell.NodeSet import NodeSet
 
 from command_utils import ExecutableCommand, SystemctlCommand
 from command_utils_base import FormattedParameter, EnvironmentVariables
-from command_utils_base import CommandFailure
+from exception_utils import CommandFailure, MPILoadError
 from env_modules import load_mpi
 from general_utils import pcmd, stop_processes, run_pcmd, get_job_manager_class
 from write_host_file import write_host_file
@@ -270,8 +270,8 @@ class Orterun(JobManager):
             subprocess (bool, optional): whether the command is run as a
                 subprocess. Defaults to False.
         """
-        if not load_mpi(mpi_type):
-            raise CommandFailure("Failed to load {}".format(mpi_type))
+        if not load_mpi("openmpi"):
+            raise MPILoadError("openmpi")
 
         path = os.path.dirname(find_executable("orterun"))
         super().__init__("/run/orterun/*", "orterun", job, path, subprocess)
@@ -364,7 +364,7 @@ class Orterun(JobManager):
 
         """
         if not load_mpi("openmpi"):
-            raise CommandFailure("Failed to load openmpi")
+            raise MPILoadError("openmpi")
 
         return super().run()
 
@@ -381,7 +381,7 @@ class Mpirun(JobManager):
                 subprocess. Defaults to False.
         """
         if not load_mpi(mpi_type):
-            raise CommandFailure("Failed to load {}".format(mpi_type))
+            raise MPILoadError(mpi_type)
 
         path = os.path.dirname(find_executable("mpirun"))
         super().__init__("/run/mpirun", "mpirun", job, path, subprocess)
@@ -467,7 +467,7 @@ class Mpirun(JobManager):
 
         """
         if not load_mpi(self.mpi_type):
-            raise CommandFailure("Failed to load {}".format(self.mpi_type))
+            raise MPILoadError(self.mpi_type)
 
         return super().run()
 

@@ -14,7 +14,7 @@ from write_host_file import write_host_file
 from test_utils_container import TestContainer
 from ior_utils import IorCommand
 from job_manager_utils import get_job_manager
-from command_utils_base import CommandFailure
+from exception_utils import CommandFailure
 import queue
 
 

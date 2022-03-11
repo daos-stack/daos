@@ -18,7 +18,8 @@ from ClusterShell.NodeSet import NodeSet
 
 from agent_utils import DaosAgentManager, include_local_host
 from cart_ctl_utils import CartCtl
-from command_utils_base import CommandFailure, EnvironmentVariables
+from command_utils_base import EnvironmentVariables
+from exception_utils import CommandFailure, MPILoadError
 from daos_utils import DaosCommand
 from distro_utils import detect
 from dmg_utils import get_dmg_command
@@ -414,7 +415,6 @@ class TestWithoutServers(Test):
     def setUp(self):
         """Set up run before each test."""
         super().setUp()
-
         self.bin = os.path.join(self.prefix, 'bin')
         self.daos_test = os.path.join(self.prefix, 'bin', 'daos_test')
 
@@ -1240,10 +1240,11 @@ class TestWithServers(TestWithoutServers):
         """
         error_list = []
         if self.job_manager:
-            if not isinstance(self.job_manager, list):
-                self.job_manager = [self.job_manager]
             self.test_log.info("Stopping test job manager")
-            error_list = self._stop_managers(self.job_manager, "test job manager")
+            if isinstance(self.job_manager, list):
+                error_list = self._stop_managers(self.job_manager, "test job manager")
+            else:
+                error_list = self._stop_managers([self.job_manager], "test job manager")
         return error_list
 
     def destroy_containers(self, containers):
