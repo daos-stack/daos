@@ -51,19 +51,19 @@ def get_job_manager(test, class_name=None, job=None, subprocess=None, mpi_type=N
     if subprocess is None:
         subprocess = test.params.get("subprocess", namespace, default=False)
     if mpi_type is None:
-        mpi_type = test.params.get("mpi_type", namespace, default="mpich")
+        mpi_type_default = "mpich" if class_name == "Mpirun" else "openmpi"
+        mpi_type = test.params.get("mpi_type", namespace, default=mpi_type_default)
     if timeout is None:
-        timeout = test.params.get(test.get_test_name(), namespace.replace("*", "timeout/*"), None)
+        timeout = test.params.get(
+            test.get_test_name(), namespace.replace("*", "timeout/*"), None)
         if timeout is None:
             timeout = test.params.get("timeout", namespace, None)
-            if timeout is None:
-                timeout = test.timeout - 30
 
     # Setup a job manager command for running the test command
     if class_name is not None:
         job_manager = get_job_manager_class(class_name, job, subprocess, mpi_type)
         job_manager.timeout = timeout
-        if class_name == "Orterun" or mpi_type == "openmpi":
+        if mpi_type == "openmpi":
             job_manager.tmpdir_base.update(test.test_dir, "tmpdir_base")
         if isinstance(test.job_manager, list):
             test.job_manager.append(job_manager)
