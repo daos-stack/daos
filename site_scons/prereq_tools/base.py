@@ -759,7 +759,7 @@ class PreReqComponent():
                 path = self.get_src_path(comp)
                 if not os.path.exists(path):
                     return False
-            except MissingPath as _error:
+            except MissingPath:
                 print("%s source not found" % comp)
                 return False
 
@@ -793,7 +793,7 @@ class PreReqComponent():
         try:
             env = self.__env.Clone(tools=['doneapi'])
             self.has_icx = True
-        except InternalError as _err:
+        except InternalError:
             print("No oneapi compiler, trying legacy")
             env = self.__env.Clone(tools=['intelc'])
         self.__env["ENV"]["PATH"] = env["ENV"]["PATH"]
@@ -1580,8 +1580,7 @@ class _Component():
             ensure_dir_exists(self.build_path, self.__dry_run)
 
     def set_environment(self, env, needed_libs):
-        """Modify the specified construction environment to build with
-           the external component"""
+        """Modify the specified construction environment to build with the external component"""
         lib_paths = []
 
         # Make sure CheckProg() looks in the component's bin/ dir

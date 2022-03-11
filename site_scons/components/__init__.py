@@ -127,11 +127,6 @@ def define_mercury(reqs):
                 headers=['psm2.h'],
                 libs=['psm2'])
 
-    if reqs.target_type == 'debug':
-        OFI_DEBUG = '--enable-debug '
-    else:
-        OFI_DEBUG = '--disable-debug '
-
     ofi_build = ['./configure',
                  '--prefix=$OFI_PREFIX',
                  '--disable-efa',
@@ -174,11 +169,6 @@ def define_mercury(reqs):
                           ['make', 'install']],
                 libs=['opa'],
                 package='openpa-devel' if inst(reqs, 'openpa') else None)
-
-    if reqs.target_type == 'debug':
-        MERCURY_DEBUG = '-DMERCURY_ENABLE_DEBUG=ON '
-    else:
-        MERCURY_DEBUG = '-DMERCURY_ENABLE_DEBUG=OFF '
 
     reqs.define('ucx', libs=['ucp'])
 
@@ -312,7 +302,7 @@ def define_components(reqs):
                            'BUILD_RPMEM=n',
                            'NDCTL_ENABLE=n',
                            'NDCTL_DISABLE=y',
-                           'DOC=n'
+                           'DOC=n',
                            'install',
                            'prefix=$PMDK_PREFIX']],
                 libs=['pmemobj'])
