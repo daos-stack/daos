@@ -1,6 +1,6 @@
 #!/usr/bin/python3
 """
-  (C) Copyright 2019-2021 Intel Corporation.
+  (C) Copyright 2019-2022 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -13,7 +13,7 @@ from avocado.core.exceptions import TestFail
 
 from apricot import TestWithServers
 from ior_utils import IorCommand
-from command_utils_base import CommandFailure
+from exception_utils import CommandFailure
 from job_manager_utils import Orterun
 from thread_manager import ThreadManager
 

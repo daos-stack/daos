@@ -1,13 +1,14 @@
 #!/usr/bin/python3
 """
-  (C) Copyright 2018-2021 Intel Corporation.
+  (C) Copyright 2018-2022 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 from apricot import TestWithServers
 
 from command_utils_base import \
-    EnvironmentVariables, FormattedParameter, CommandFailure
+     EnvironmentVariables, FormattedParameter
+from exception_utils import CommandFailure
 from command_utils import ExecutableCommand
 from job_manager_utils import Orterun
 

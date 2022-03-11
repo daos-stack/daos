@@ -9,7 +9,8 @@ import uuid
 import time
 from enum import IntEnum
 
-from command_utils_base import CommandFailure, FormattedParameter, BasicParameter
+from command_utils_base import FormattedParameter, BasicParameter
+from exception_utils import CommandFailure
 from command_utils import ExecutableCommand
 from general_utils import get_subprocess_stdout
 
