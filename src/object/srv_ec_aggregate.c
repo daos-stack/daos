@@ -2245,8 +2245,6 @@ done:
 		agg_param->ap_credits = 0;
 		D_DEBUG(DB_EPC, "EC aggregation yield type %d. acts %u\n",
 			desc->id_type, *acts);
-		if (!(*acts & VOS_ITER_CB_SKIP))
-			agg_reset_pos(desc->id_type, agg_entry);
 		if (ec_aggregate_yield(agg_param)) {
 			D_DEBUG(DB_EPC, "EC aggregation aborted\n");
 			*acts |= VOS_ITER_CB_ABORT;
