@@ -127,7 +127,6 @@ vts_ctx_init(struct vos_test_ctx *tcx, size_t psize)
 		print_error("vos container open error: "DF_RC"\n", DP_RC(rc));
 		goto failed;
 	}
-	tcx->tc_step = TCX_CO_OPEN;
 	tcx->tc_step = TCX_READY;
 	return 0;
 
