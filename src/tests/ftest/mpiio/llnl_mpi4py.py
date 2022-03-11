@@ -32,8 +32,7 @@ class LlnlMpi4py(MpiioTests):
         :avocado: tags=mpiio,smoke,mpich,llnl
         """
         test_repo = self.params.get("llnl", '/run/test_repo/')
-        manager = get_job_manager(self, mpi_type="mpich")
-        self.run_test(manager, test_repo, "llnl")
+        self.run_test(test_repo, "llnl")
 
     def test_mpi4py(self):
         """

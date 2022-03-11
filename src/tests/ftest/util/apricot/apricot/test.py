@@ -21,9 +21,7 @@ from cart_ctl_utils import CartCtl
 from command_utils_base import CommandFailure, EnvironmentVariables
 from daos_utils import DaosCommand
 from distro_utils import detect
-from distutils.spawn import find_executable
 from dmg_utils import get_dmg_command
-from env_modules import load_mpi
 from fault_config_utils import FaultInjection
 from general_utils import \
     get_partition_hosts, stop_processes, \

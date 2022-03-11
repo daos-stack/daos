@@ -37,7 +37,7 @@ class MpiioTests(TestWithServers):
         test_name       --name of the test to be run
         """
         # Select the commands to run
-        if not test_name in self._test_name_class:
+        if test_name not in self._test_name_class:
             self.fail("Unknown mpiio test name: %s", test_name)
 
         # initialize test specific variables
