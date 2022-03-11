@@ -407,11 +407,12 @@ class TestWithTelemetryIOLatency(IorTestBase, TestWithTelemetry):
                         value = metrics_data[test_metric][host][str(rank)][str(target)]["-"]
                         metrics[test_metric] = metrics[test_metric] + value
 
-        # calculate diff from initial baseline test value for committed and max metrics
+        # TODO: calculate diff from initial baseline test value for
+        # committed and max metrics with DAOS-9003
         dtx_value = metrics["engine_io_dtx_committed"]
-        dtx_value -= baseline_data["engine_io_dtx_committed"]
+        #dtx_value -= baseline_data["engine_io_dtx_committed"]
         max_value = metrics["engine_io_dtx_committed_max"]
-        max_value -= baseline_data["engine_io_dtx_committed_max"]
+        #max_value -= baseline_data["engine_io_dtx_committed_max"]
         # expected min value after the test should be 1
         min_value = metrics["engine_io_dtx_committed_min"]
         # TODO: Validate stddev and mean value metrics
