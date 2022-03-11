@@ -307,24 +307,28 @@ def define_components(reqs):
                            'prefix=$PMDK_PREFIX']],
                 libs=['pmemobj'])
 
+
+    abt_build = ['./configure',
+                 '--prefix=$ARGOBOTS_PREFIX',
+                 'CC=gcc',
+                 '--enable-stack-unwind']
+
     if reqs.target_type == 'debug':
-        ABT_DEBUG = '--enable-debug=most'
+        abt_build.append('--enable-debug=most')
     else:
-        ABT_DEBUG = '--disable-debug'
+        abt_build.append('--disable-debug')
+
+    if inst(reqs, 'valgrind_devel'):
+        abt_build.append('--enable-valgrind')
 
     reqs.define('argobots',
                 retriever=GitRepoRetriever('https://github.com/pmodels/argobots.git', True),
                 commands=[['git', 'clean', '-dxf'],
                           ['./autogen.sh'],
-                          ['./configure',
-                           '--prefix=$ARGOBOTS_PREFIX',
-                           'CC=gcc',
-                           '--enable-valgrind',
-                           '--enable-stack-unwind',
-                           ABT_DEBUG],
+                          abt_build,
                           ['make'],
                           ['make', 'install']],
-                requires=['valgrind_devel', 'libunwind'],
+                requires=['libunwind'],
                 libs=['abt'],
                 headers=['abt.h'])
 
