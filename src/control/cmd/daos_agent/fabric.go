@@ -14,6 +14,7 @@ import (
 
 	"github.com/pkg/errors"
 
+	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/lib/hardware"
 	"github.com/daos-stack/daos/src/control/logging"
 )
@@ -32,8 +33,14 @@ type FabricInterface struct {
 	hw          *hardware.FabricInterface
 }
 
+// Providers returns a slice of the providers associated with the interface.
 func (f *FabricInterface) Providers() []string {
 	return f.hw.Providers.ToSlice()
+}
+
+// ProviderSet returns a StringSet of the providers associated with the interface.
+func (f *FabricInterface) ProviderSet() common.StringSet {
+	return f.hw.Providers
 }
 
 func (f *FabricInterface) String() string {
@@ -135,7 +142,7 @@ func (n *NUMAFabric) GetDevice(numaNode int, netDevClass hardware.NetDevClass, p
 
 	fi, err := n.getDeviceFromNUMA(numaNode, netDevClass, provider)
 	if err == nil {
-		return copyFI(fi, provider), nil
+		return copyFI(fi), nil
 	}
 
 	fi, err = n.findOnAnyNUMA(netDevClass, provider)
@@ -143,29 +150,13 @@ func (n *NUMAFabric) GetDevice(numaNode int, netDevClass hardware.NetDevClass, p
 		return nil, err
 	}
 
-	return copyFI(fi, provider), nil
+	return copyFI(fi), nil
 }
 
-func copyFI(fi *FabricInterface, provider string) *FabricInterface {
+func copyFI(fi *FabricInterface) *FabricInterface {
 	fiCopy := new(FabricInterface)
 	*fiCopy = *fi
 	return fiCopy
-}
-
-// Find finds a specific fabric device by name.
-func (n *NUMAFabric) Find(name string) (*FabricInterface, error) {
-	if n == nil {
-		return nil, errors.New("nil NUMAFabric")
-	}
-
-	for _, devs := range n.numaMap {
-		for _, fi := range devs {
-			if fi.Name == name {
-				return fi, nil
-			}
-		}
-	}
-	return nil, fmt.Errorf("fabric interface %q not found", name)
 }
 
 func (n *NUMAFabric) getDeviceFromNUMA(numaNode int, netDevClass hardware.NetDevClass, provider string) (*FabricInterface, error) {
@@ -271,6 +262,76 @@ func (n *NUMAFabric) setDefaultNUMANode() {
 		n.log.Debugf("The default NUMA node is: %d", numa)
 		break
 	}
+}
+
+// Find finds a specific fabric device by name. There may be more than one domain associated.
+func (n *NUMAFabric) Find(name string) ([]*FabricInterface, error) {
+	if n == nil {
+		return nil, errors.New("nil NUMAFabric")
+	}
+
+	result := make([]*FabricInterface, 0)
+	for _, devs := range n.numaMap {
+		for _, fi := range devs {
+			if fi.Name == name {
+				result = append(result, copyFI(fi))
+			}
+		}
+	}
+
+	if len(result) > 0 {
+		return result, nil
+	}
+
+	return nil, fmt.Errorf("fabric interface %q not found", name)
+}
+
+// FindDevice looks up a fabric device with a given name, domain, and provider.
+// NB: The domain and provider are optional. All other parameters are required. If there is more
+// than one match, all of them are returned.
+func (n *NUMAFabric) FindDevice(name, domain, provider string) ([]*FabricInterface, error) {
+	fiList, err := n.Find(name)
+	if err != nil {
+		return nil, err
+	}
+
+	if domain != "" {
+		fiList = filterDomain(domain, fiList)
+		if len(fiList) == 0 {
+			return nil, errors.Errorf("fabric interface %q doesn't have requested domain %q",
+				name, domain)
+		}
+	}
+
+	if provider != "" {
+		fiList = filterProvider(provider, fiList)
+		if len(fiList) == 0 {
+			return nil, errors.Errorf("fabric interface %q doesn't support provider %q",
+				name, provider)
+		}
+	}
+
+	return fiList, nil
+}
+
+func filterDomain(domain string, fiList []*FabricInterface) []*FabricInterface {
+	result := make([]*FabricInterface, 0, len(fiList))
+	for _, fi := range fiList {
+		if fi.Domain == domain || (fi.Name == domain && fi.Domain == "") {
+			result = append(result, fi)
+		}
+	}
+	return result
+}
+
+func filterProvider(provider string, fiList []*FabricInterface) []*FabricInterface {
+	result := make([]*FabricInterface, 0, len(fiList))
+	for _, fi := range fiList {
+		if fi.HasProvider(provider) {
+			result = append(result, fi)
+		}
+	}
+	return result
 }
 
 func newNUMAFabric(log logging.Logger) *NUMAFabric {
