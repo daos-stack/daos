@@ -399,7 +399,6 @@ dfs_test_syml(void **state)
 	assert_int_equal(rc, 0);
 	assert_int_equal(size, strlen(val) + 1);
 	assert_string_equal(val, tmp_buf);
-
 	rc = dfs_release(sym);
 	assert_int_equal(rc, 0);
 
@@ -1197,6 +1196,105 @@ dfs_test_mt_connect(void **state)
 	MPI_Barrier(MPI_COMM_WORLD);
 }
 
+static void
+dfs_test_chown(void **state)
+{
+	test_arg_t	*arg = *state;
+	dfs_obj_t	*obj, *sym;
+	char		*filename = "chown_test";
+	char		*symname = "sym_chown_test";
+	struct stat	stbuf;
+	uid_t		orig_uid;
+	gid_t		orig_gid;
+	int		rc;
+
+	if (arg->myrank != 0)
+		return;
+
+	rc = dfs_open(dfs_mt, NULL, filename, S_IFREG | S_IWUSR | S_IRUSR | S_IXUSR,
+		      O_RDWR | O_CREAT | O_EXCL, 0, 0, NULL, &obj);
+	assert_int_equal(rc, 0);
+
+	rc = dfs_stat(dfs_mt, NULL, filename, &stbuf);
+	assert_int_equal(rc, 0);
+
+	orig_uid = stbuf.st_uid;
+	orig_gid = stbuf.st_gid;
+
+	/** should succeed but not change anything */
+	rc = dfs_chown(dfs_mt, NULL, filename, -1, -1, 0);
+	assert_int_equal(rc, 0);
+	rc = dfs_stat(dfs_mt, NULL, filename, &stbuf);
+	assert_int_equal(rc, 0);
+	assert_int_equal(stbuf.st_uid, orig_uid);
+	assert_int_equal(stbuf.st_gid, orig_gid);
+
+	/** set uid to 0 */
+	rc = dfs_chown(dfs_mt, NULL, filename, 0, -1, 0);
+	assert_int_equal(rc, 0);
+	rc = dfs_stat(dfs_mt, NULL, filename, &stbuf);
+	assert_int_equal(rc, 0);
+	assert_int_equal(stbuf.st_uid, 0);
+	assert_int_equal(stbuf.st_gid, orig_gid);
+
+	/** set gid to 0 */
+	rc = dfs_chown(dfs_mt, NULL, filename, -1, 0, 0);
+	assert_int_equal(rc, 0);
+	rc = dfs_stat(dfs_mt, NULL, filename, &stbuf);
+	assert_int_equal(rc, 0);
+	assert_int_equal(stbuf.st_uid, 0);
+	assert_int_equal(stbuf.st_gid, 0);
+
+	/** set uid to 3, gid to 4 - using dfs_osetattr */
+	stbuf.st_uid = 3;
+	stbuf.st_gid = 4;
+	rc = dfs_osetattr(dfs_mt, obj, &stbuf, DFS_SET_ATTR_UID | DFS_SET_ATTR_GID);
+	assert_int_equal(rc, 0);
+	memset(&stbuf, 0, sizeof(stbuf));
+	rc = dfs_stat(dfs_mt, NULL, filename, &stbuf);
+	assert_int_equal(rc, 0);
+	assert_int_equal(stbuf.st_uid, 3);
+	assert_int_equal(stbuf.st_gid, 4);
+
+	/** set uid to 1, gid to 2 */
+	rc = dfs_chown(dfs_mt, NULL, filename, 1, 2, 0);
+	assert_int_equal(rc, 0);
+	rc = dfs_stat(dfs_mt, NULL, filename, &stbuf);
+	assert_int_equal(rc, 0);
+	assert_int_equal(stbuf.st_uid, 1);
+	assert_int_equal(stbuf.st_gid, 2);
+
+	/** create a symlink to that file */
+	rc = dfs_open(dfs_mt, NULL, symname, S_IFLNK | S_IWUSR | S_IRUSR,
+		      O_RDWR | O_CREAT | O_EXCL, 0, 0, filename, &sym);
+	assert_int_equal(rc, 0);
+
+	/** chown of file through symlink */
+	rc = dfs_chown(dfs_mt, NULL, symname, 3, 4, 0);
+	assert_int_equal(rc, 0);
+	rc = dfs_stat(dfs_mt, NULL, filename, &stbuf);
+	assert_int_equal(rc, 0);
+	assert_int_equal(stbuf.st_uid, 3);
+	assert_int_equal(stbuf.st_gid, 4);
+
+	/** chown of symlink itself */
+	rc = dfs_chown(dfs_mt, NULL, symname, 5, 6, O_NOFOLLOW);
+	assert_int_equal(rc, 0);
+	rc = dfs_stat(dfs_mt, NULL, filename, &stbuf);
+	assert_int_equal(rc, 0);
+	assert_int_equal(stbuf.st_uid, 3);
+	assert_int_equal(stbuf.st_gid, 4);
+	rc = dfs_stat(dfs_mt, NULL, symname, &stbuf);
+	assert_int_equal(rc, 0);
+	assert_int_equal(stbuf.st_uid, 5);
+	assert_int_equal(stbuf.st_gid, 6);
+
+	rc = dfs_release(obj);
+	assert_int_equal(rc, 0);
+	rc = dfs_release(sym);
+	assert_int_equal(rc, 0);
+}
+
 static const struct CMUnitTest dfs_unit_tests[] = {
 	{ "DFS_UNIT_TEST1: DFS mount / umount",
 	  dfs_test_mount, async_disable, test_case_teardown},
@@ -1226,13 +1324,15 @@ static const struct CMUnitTest dfs_unit_tests[] = {
 	  dfs_test_handles, async_disable, test_case_teardown},
 	{ "DFS_UNIT_TEST14: multi-threads connect to same container",
 	  dfs_test_mt_connect, async_disable, test_case_teardown},
+	{ "DFS_UNIT_TEST15: DFS chown",
+	  dfs_test_chown, async_disable, test_case_teardown},
 };
 
 static int
 dfs_setup(void **state)
 {
-	test_arg_t		*arg;
-	int			rc = 0;
+	test_arg_t	*arg;
+	int		rc = 0;
 
 	rc = test_setup(state, SETUP_POOL_CONNECT, true, DEFAULT_POOL_SIZE, 0, NULL);
 	assert_int_equal(rc, 0);
@@ -1240,6 +1340,14 @@ dfs_setup(void **state)
 	arg = *state;
 
 	if (arg->myrank == 0) {
+		bool	use_dtx = false;
+
+		d_getenv_bool("DFS_USE_DTX", &use_dtx);
+		if (use_dtx)
+			print_message("Running DFS Serial tests with DTX enabled\n");
+		else
+			print_message("Running DFS Serial tests with DTX disabled\n");
+
 		rc = dfs_cont_create(arg->pool.poh, &co_uuid, NULL, &co_hdl, &dfs_mt);
 		assert_int_equal(rc, 0);
 		printf("Created DFS Container "DF_UUIDF"\n", DP_UUID(co_uuid));
@@ -1284,6 +1392,14 @@ run_dfs_unit_test(int rank, int size)
 	MPI_Barrier(MPI_COMM_WORLD);
 	rc = cmocka_run_group_tests_name("DAOS_FileSystem_DFS_Unit", dfs_unit_tests, dfs_setup,
 					 dfs_teardown);
+	MPI_Barrier(MPI_COMM_WORLD);
+
+	/** run tests again with DTX */
+	setenv("DFS_USE_DTX", "1", 1);
+
+	MPI_Barrier(MPI_COMM_WORLD);
+	rc += cmocka_run_group_tests_name("DAOS_FileSystem_DFS_Unit_DTX", dfs_unit_tests,
+					  dfs_setup, dfs_teardown);
 	MPI_Barrier(MPI_COMM_WORLD);
 	return rc;
 }

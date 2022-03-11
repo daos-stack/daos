@@ -2191,7 +2191,7 @@ agg_obj_is_leader(struct ds_pool *pool, struct daos_oclass_attr *oca,
 
 	md.omd_id = oid->id_pub;
 	md.omd_ver = version;
-	rc = pl_obj_place(map, &md, NULL, &layout);
+	rc = pl_obj_place(map, &md, DAOS_OO_RO, NULL, &layout);
 	if (rc != 0)
 		goto out;
 

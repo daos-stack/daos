@@ -1290,6 +1290,7 @@ ds_cont_local_close(uuid_t cont_hdl_uuid)
 	if (hdl == NULL)
 		return 0;
 
+	hdl->sch_closed = 1;
 	cont_hdl_delete(&tls->dt_cont_hdl_hash, hdl);
 
 	ds_cont_hdl_put(hdl);
@@ -1409,6 +1410,7 @@ ds_cont_local_open(uuid_t pool_uuid, uuid_t cont_hdl_uuid, uuid_t cont_uuid,
 	uuid_copy(hdl->sch_uuid, cont_hdl_uuid);
 	hdl->sch_flags = flags;
 	hdl->sch_sec_capas = sec_capas;
+	hdl->sch_closed = 0;
 
 	rc = cont_hdl_add(&tls->dt_cont_hdl_hash, hdl);
 	if (rc != 0)
