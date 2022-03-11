@@ -5,8 +5,7 @@
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
 
-from mpio_test_base import MpiioTests
-from job_manager_utils import get_job_manager
+from mpiio_test_base import MpiioTests
 
 
 # pylint: disable=too-many-ancestors
@@ -27,5 +26,4 @@ class Romio(MpiioTests):
         """
         # setting romio parameters
         test_repo = self.params.get("romio_repo", '/run/romio/')
-        manager = get_job_manager(self, mpi_type="mpich")
-        self.run_test(manager, test_repo, "romio")
+        self.run_test(test_repo, "romio")

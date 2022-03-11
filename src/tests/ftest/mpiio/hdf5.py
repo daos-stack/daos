@@ -4,8 +4,7 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
-from mpio_test_base import MpiioTests
-from job_manager_utils import get_job_manager
+from mpiio_test_base import MpiioTests
 
 
 # pylint: disable=too-many-ancestors
@@ -68,5 +67,4 @@ class Hdf5(MpiioTests):
         :avocado: tags=mpiio,mpich,llnlmpi4pyhdf5,hdf5,hdf5testsuite
         """
         test_repo = self.params.get("hdf5", '/run/test_repo/')
-        manager = get_job_manager(self, mpi_type="mpich")
-        self.run_test(manager, test_repo, "hdf5")
+        self.run_test(test_repo, "hdf5")

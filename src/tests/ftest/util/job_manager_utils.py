@@ -58,8 +58,6 @@ def get_job_manager(test, class_name=None, job=None, subprocess=None, mpi_type=N
             test.get_test_name(), namespace.replace("*", "manager_timeout/*"), None)
         if timeout is None:
             timeout = test.params.get("timeout", namespace, None)
-            if timeout is None:
-                timeout = test.timeout - 30
 
     # Setup a job manager command for running the test command
     if class_name is not None:
