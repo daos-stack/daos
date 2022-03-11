@@ -209,7 +209,8 @@ vos_parse_ilog(struct vos_ilog_info *info, const daos_epoch_range_t *epr,
 		if (entry.ie_id.id_epoch > info->ii_uncommitted)
 			info->ii_uncommitted = 0;
 
-		D_ASSERT(entry.ie_status == ILOG_COMMITTED);
+		D_ASSERTF(entry.ie_status == ILOG_COMMITTED, "entry.ie_status is %d\n",
+			  entry.ie_status);
 
 		if (ilog_has_punch(&entry)) {
 			info->ii_prior_punch.pr_epc = entry.ie_id.id_epoch;
