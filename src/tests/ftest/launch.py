@@ -244,6 +244,7 @@ def set_interface_environment(args):
 
 
 def get_available_interfaces(args):
+    # pylint: disable=too-many-nested-blocks
     """Get a dictionary of active available interfaces and their speeds.
 
     Args:
