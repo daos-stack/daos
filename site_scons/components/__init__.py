@@ -147,7 +147,7 @@ def define_mercury(reqs):
                              check(reqs,
                                    'psm2',
                                    ['--enable-psm2=$PSM2_PREFIX',
-                                    'LDFLAGS="-Wl,--enable-new-dtags -Wl,-rpath=$PSM2_PREFIX/lib64"'],
+                                    'LDFLAGS=-Wl,--enable-new-dtags -Wl,-rpath=$PSM2_PREFIX/lib64'],
                                    ['--enable-psm2']),
                             ['--disable-psm2']))
     ofi_build.append(include(reqs, 'psm3', '--enable-psm3', '--disable-psm3'))
