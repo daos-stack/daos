@@ -278,13 +278,8 @@ class Runner():
         if subdir:
             print('Running commands in {}'.format(subdir))
         for command in commands:
-            if isinstance(command, list):
-                parts = list(command)
-            else:
-                parts = command.split(' ')
-
             cmd = []
-            for part in parts:
+            for part in command:
                 if part == '$JOBS_OPT':
                     cmd.append('-j')
                     cmd.append(str(GetOption('num_jobs')))

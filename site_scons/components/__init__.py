@@ -112,11 +112,15 @@ def define_mercury(reqs):
     reqs.define('psm2',
                 retriever=GitRepoRetriever('https://github.com/intel/opa-psm2.git'),
                 # psm2 hard-codes installing into /usr/...
-                commands=['sed -i -e "s/\\(.{DESTDIR}\\/\\)usr\\//\\1/" ' +
-                          '       -e "s/\\(INSTALL_LIB_TARG=' +
-                          '\\/usr\\/lib\\)64/\\1/" ' +
-                          '       -e "s/\\(INSTALL_LIB_TARG=\\)\\/usr/\\1/" ' +
-                          'Makefile compat/Makefile',
+                commands=[['sed',
+                           '-i',
+                           '-e',
+                           '"s/\\(.{DESTDIR}\\/\\)usr\\//\\1/"'
+                           '-e',
+                           '"s/\\(INSTALL_LIB_TARG=\\/usr\\/lib\\)64/\\1/"'
+                           '-e', '"s/\\(INSTALL_LIB_TARG=\\)\\/usr/\\1/"'
+                           'Makefile'
+                           ',compat/Makefile'],
                           ['make', '$JOBS_OPT', 'LIBDIR=/lib64'],
                           ['make', 'DESTDIR=$PSM2_PREFIX', 'LIBDIR=/lib64', 'install']],
                 headers=['psm2.h'],
@@ -126,28 +130,33 @@ def define_mercury(reqs):
         OFI_DEBUG = '--enable-debug '
     else:
         OFI_DEBUG = '--disable-debug '
-    retriever = GitRepoRetriever('https://github.com/ofiwg/libfabric')
+
+    ofi_build = ['./configure',
+                 '--prefix=$OFI_PREFIX',
+                 '--disable-efa',
+                 '--disable-psm3',
+                 '--without-gdrcopy']
+    if reqs.target_type == 'debug':
+        ofi_build.append('--enable-debug')
+    else:
+        ofi_build.append('--disable-debug')
+
+    ofi_build.extend(include(reqs,
+                             'psm2',
+                             check(reqs,
+                                   'psm2',
+                                   ['--enable-psm2=$PSM2_PREFIX',
+                                    'LDFLAGS="-Wl,--enable-new-dtags -Wl,-rpath=$PSM2_PREFIX/lib64"'],
+                                   ['--enable-psm2']),
+                            ['--disable-psm2']))
+    ofi_build.append(include(reqs, 'psm3', '--enable-psm3', '--disable-psm3'))
+
     reqs.define('ofi',
-                retriever=retriever,
-                commands=['./autogen.sh',
-                          './configure --prefix=$OFI_PREFIX ' +
-                          '--disable-efa ' +
-                          '--disable-psm3 ' +
-                          '--without-gdrcopy ' +
-                          OFI_DEBUG +
-                          include(reqs, 'psm2',
-                                  '--enable-psm2' +
-                                  check(reqs, 'psm2',
-                                        "=$PSM2_PREFIX "
-                                        'LDFLAGS="-Wl,--enable-new-dtags ' +
-                                        '-Wl,-rpath=$PSM2_PREFIX/lib64" ',
-                                        ''),
-                                  '--disable-psm2 ') +
-                          include(reqs, 'psm3',
-                                  '--enable-psm3 ',
-                                  '--disable-psm3 '),
+                retriever=GitRepoRetriever('https://github.com/ofiwg/libfabric'),
+                commands=[['./autogen.sh'],
+                          ofi_build,
                           ['make', '$JOBS_OPT'],
-                          'make install'],
+                          ['make', 'install']],
                 libs=['fabric'],
                 requires=include(reqs, 'psm2', ['psm2'], []),
                 config_cb=ofi_config,
@@ -198,15 +207,16 @@ def define_mercury(reqs):
                               '-DUCT_LIBRARY=/usr/lib64/libuct.so'])
         libs.append('ucx')
 
-    ic = installed_comps(reqs)
-    if ic.check('openpa'):
-        mercury_build.append('-DOPA_LIBRARY=$OPENPA_PREFIX/lib/libopa.a')
-    else:
-        mercury_build.append('-DOPA_LIBRARY=$OPENPA_PREFIX/lib64/libopa.a')
+    mercury_build.append(check(reqs,
+                               'openpa',
+                               '-DOPA_LIBRARY=$OPENPA_PREFIX/lib/libopa.a',
+                               '-DOPA_LIBRARY=$OPENPA_PREFIX/lib64/libopa.a'))
 
-    if not ic.check('ofi'):
-        mercury_build.extend(['-DOFI_INCLUDE_DIR=$OFI_PREFIX/include',
-                              '-DOFI_LIBRARY=$OFI_PREFIX/lib/libfabric.so'])
+    mercury_build.extend(check(reqs,
+                               'ofi',
+                               ['-DOFI_INCLUDE_DIR=$OFI_PREFIX/include',
+                                '-DOFI_LIBRARY=$OFI_PREFIX/lib/libfabric.so'],
+                               []))
 
     reqs.define('mercury',
                 retriever=GitRepoRetriever('https://github.com/mercury-hpc/mercury.git', True),
