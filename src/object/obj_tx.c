@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2020-2021 Intel Corporation.
+ * (C) Copyright 2020-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -1188,8 +1188,8 @@ dc_tx_classify_common(struct dc_tx *tx, struct daos_cpd_sub_req *dcsr,
 							oca->u.ec.e_p)
 					skipped_parity++;
 
-				if (skipped_parity == oca->u.ec.e_p) {
-					D_ERROR("Two many (%d) shards in the "
+				if (skipped_parity > oca->u.ec.e_p) {
+					D_ERROR("Too many (%d) shards in the "
 						"redundancy group for opc %u "
 						"against the obj "DF_OID
 						" for DTX "DF_DTI" are lost\n",

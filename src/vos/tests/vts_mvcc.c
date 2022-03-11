@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2020-2021 Intel Corporation.
+ * (C) Copyright 2020-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -765,7 +765,7 @@ tx_query(daos_handle_t coh, struct tx_helper *txh, daos_epoch_t epoch,
 	dth = start_tx(coh, oid, epoch, txh);
 
 	rc = vos_obj_query_key(coh, oid, flags, epoch, dkey, akey, recx,
-			       0, 0, dth);
+			       NULL, 0, 0, dth);
 
 	stop_tx(coh, txh, rc == 0, false);
 
@@ -1466,8 +1466,8 @@ uncertainty_check_exec_one(struct io_test_args *arg, int i, int j, bool empty,
 		char		pp[L_COUNT + 1] = "coda";
 		daos_epoch_t	pe = ae - 1;
 
-		D_ASSERT(strlen(wp) <= sizeof(pp) - 1);
-		memcpy(pp, wp, strlen(wp));
+		D_ASSERT(strnlen(wp, L_COUNT) <= sizeof(pp) - 1);
+		memcpy(pp, wp, strnlen(wp, L_COUNT));
 		print_message("  update(%s, "DF_U64") (expect DER_SUCCESS): ",
 			      pp, pe);
 		rc = update_f(arg, NULL /* txh */, pp, pe);

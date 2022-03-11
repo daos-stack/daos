@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2021 Intel Corporation.
+// (C) Copyright 2020-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -10,10 +10,12 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"math"
 	"strconv"
 	"strings"
 	"time"
 
+	"github.com/dustin/go-humanize"
 	"github.com/google/uuid"
 	"github.com/pkg/errors"
 	"google.golang.org/grpc"
@@ -31,7 +33,7 @@ const (
 	// request can take before being timed out.
 	PoolCreateTimeout = 10 * time.Minute // be generous for large pools
 	// DefaultPoolTimeout is the default timeout for a pool request.
-	DefaultPoolTimeout = 60 * time.Second // fail faster if it's going to fail
+	DefaultPoolTimeout = drpc.DefaultCartTimeout * 3
 )
 
 // checkUUID is a helper function for validating that the supplied
@@ -163,7 +165,6 @@ func genPoolCreateRequest(in *PoolCreateReq) (out *mgmtpb.PoolCreateReq, err err
 	}
 
 	out.Uuid = uuid.New().String()
-
 	return
 }
 
@@ -197,7 +198,8 @@ func (r *poolRequest) canRetry(reqErr error, try uint) bool {
 		switch e {
 		// These pool errors can be retried.
 		case drpc.DaosTimedOut, drpc.DaosGroupVersionMismatch,
-			drpc.DaosTryAgain, drpc.DaosOutOfGroup, drpc.DaosUnreachable:
+			drpc.DaosTryAgain, drpc.DaosOutOfGroup, drpc.DaosUnreachable,
+			drpc.DaosExcluded:
 			return true
 		default:
 			return false
@@ -269,6 +271,7 @@ func PoolCreate(ctx context.Context, rpcClient UnaryInvoker, req *PoolCreateReq)
 
 	pcr := new(PoolCreateResp)
 	pcr.UUID = pbReq.Uuid
+
 	return pcr, convert.Types(pbPcr, pcr)
 }
 
@@ -568,7 +571,6 @@ func PoolGetProp(ctx context.Context, rpcClient UnaryInvoker, req *PoolGetPropRe
 	if err != nil {
 		return nil, err
 	}
-
 	pbResp, ok := msResp.(*mgmtpb.PoolGetPropResp)
 	if !ok {
 		return nil, errors.New("unable to extract PoolGetPropResp from MS response")
@@ -958,4 +960,88 @@ func ListPools(ctx context.Context, rpcClient UnaryInvoker, req *ListPoolsReq) (
 	}
 
 	return resp, nil
+}
+
+// PoolMetadataBytes defines the amount of storage reserved for pool metadata.
+//
+// Some extra bytes are needed for the metadata of the pool: at least 135 MB are needed.  The
+// extraByes is a little bigger than this limit, because the size of the metadata will eventually
+// grow along the life of the pool.
+const PoolMetadataBytes uint64 = uint64(200) * uint64(humanize.MiByte)
+
+// Return the maximal SCM and NVMe size of a pool which could be created with all the storage nodes.
+//
+// TODO (DAOS-9557) This function should takes an extra parameter to filter the engine ranks to use.
+func GetMaxPoolSize(ctx context.Context, rpcClient UnaryInvoker) (uint64, uint64, error) {
+	storageScanReq := &StorageScanReq{Usage: true}
+	resp, err := StorageScan(ctx, rpcClient, storageScanReq)
+	if err != nil {
+		return 0, 0, err
+	}
+
+	if len(resp.HostStorage) == 0 {
+		return 0, 0, errors.New("No DAOS server available")
+	}
+
+	hostStorageMap := resp.HostStorage
+	var scmBytes uint64 = math.MaxUint64
+	var nvmeBytes uint64 = math.MaxUint64
+	for _, key := range hostStorageMap.Keys() {
+		hostStorageSet := hostStorageMap[key]
+		hostStorage := hostStorageSet.HostStorage
+
+		if hostStorage.ScmNamespaces.Free() == uint64(0) {
+			return 0, 0, errors.Errorf("Host without SCM storage: hostname=%s",
+				hostStorageSet.HostSet.String())
+		}
+
+		// FIXME (DAOS-9557) At this time the rank associated to one namespace is not
+		// defined in the StorageScanResp.  Thus we rely on the hypothesis that each SCM
+		// namespace is associated to one and only one rank. Eventually, the protocol should
+		// be changed to define if a SCM namespace is associated with one rank or not. If
+		// yes, it should define with which rank the SCM namespace is associated.
+		for _, scmNamespace := range hostStorage.ScmNamespaces {
+			if scmNamespace.Mount == nil {
+				continue
+			}
+			scmNamespaceFreeBytes := scmNamespace.Mount.AvailBytes
+
+			if scmNamespaceFreeBytes < PoolMetadataBytes {
+				missingBytes := PoolMetadataBytes - scmNamespaceFreeBytes
+				msg := "Not enough SCM storage available with the SCM namespace"
+				msg += " \"%s\" of the the host %s:"
+				msg += " at least %s of SCM storage (%s missing) is needed"
+				return 0, 0, errors.Errorf(msg,
+					scmNamespace.Mount.Path,
+					hostStorageSet.HostSet.String(),
+					humanize.Bytes(PoolMetadataBytes),
+					humanize.Bytes(missingBytes))
+			}
+
+			if scmBytes > scmNamespaceFreeBytes {
+				scmBytes = scmNamespaceFreeBytes
+			}
+		}
+
+		nvmeRanksBytes := make(map[system.Rank]uint64, 0)
+		for _, nvmeController := range hostStorage.NvmeDevices {
+			for _, smdDevice := range nvmeController.SmdDevices {
+				nvmeRanksBytes[smdDevice.Rank] += smdDevice.AvailBytes
+			}
+		}
+		for _, nvmeRankBytes := range nvmeRanksBytes {
+			if nvmeBytes > nvmeRankBytes {
+				nvmeBytes = nvmeRankBytes
+			}
+		}
+	}
+
+	if nvmeBytes == math.MaxUint64 {
+		nvmeBytes = 0
+	}
+
+	// TODO (DAOS-9557) Check if there is no ranks (i.e. rank with SCM available) with some NVMe
+	// storage and other without
+
+	return scmBytes, nvmeBytes, nil
 }

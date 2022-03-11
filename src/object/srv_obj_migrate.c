@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2019-2021 Intel Corporation.
+ * (C) Copyright 2019-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -1487,7 +1487,7 @@ migrate_dkey(struct migrate_pool_tls *tls, struct migrate_one *mrone,
 		D_GOTO(pool_close, rc);
 
 	/* Open the remote object */
-	rc = dsc_obj_open(coh, mrone->mo_oid.id_pub, DAOS_OO_RW, &oh);
+	rc = dsc_obj_open(coh, mrone->mo_oid.id_pub, DAOS_OO_RO, &oh);
 	if (rc)
 		D_GOTO(cont_close, rc);
 
@@ -1532,6 +1532,8 @@ migrate_dkey(struct migrate_pool_tls *tls, struct migrate_one *mrone,
 
 	if (mrone->mo_iods[0].iod_type == DAOS_IOD_SINGLE)
 		rc = migrate_fetch_update_single(mrone, oh, cont);
+	else if (obj_shard_is_ec_parity(mrone->mo_oid, &mrone->mo_oca))
+		rc = migrate_fetch_update_parity(mrone, oh, cont);
 	else if (data_size < MAX_BUF_SIZE || data_size == (daos_size_t)(-1))
 		rc = migrate_fetch_update_inline(mrone, oh, cont);
 	else
@@ -2375,7 +2377,7 @@ migrate_one_epoch_object(daos_epoch_range_t *epr, struct migrate_pool_tls *tls,
 		D_GOTO(out_pool, rc);
 	}
 
-	rc = dsc_obj_open(coh, arg->oid.id_pub, DAOS_OO_RW, &oh);
+	rc = dsc_obj_open(coh, arg->oid.id_pub, DAOS_OO_RO, &oh);
 	if (rc) {
 		D_ERROR("dsc_obj_open failed: "DF_RC"\n", DP_RC(rc));
 		D_GOTO(out_cont, rc);
@@ -2420,11 +2422,11 @@ migrate_one_epoch_object(daos_epoch_range_t *epr, struct migrate_pool_tls *tls,
 		if (p_csum != NULL)
 			p_csum->iov_len = 0;
 
-		num = KDS_NUM;
 		daos_anchor_set_flags(&dkey_anchor,
 				      DIOF_TO_LEADER | DIOF_WITH_SPEC_EPOCH |
 				      DIOF_TO_SPEC_GROUP | DIOF_FOR_MIGRATION);
 retry:
+		num = KDS_NUM;
 		rc = dsc_obj_list_obj(oh, epr, NULL, NULL, NULL,
 				     &num, kds, &sgl, &anchor,
 				     &dkey_anchor, &akey_anchor, p_csum);

@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2021 Intel Corporation.
+// (C) Copyright 2019-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -163,7 +163,7 @@ func newTestEngine(log logging.Logger, isAP bool, provider *storage.Provider, en
 			WithTargetCount(1).
 			WithStorage(
 				storage.NewTierConfig().
-					WithBdevClass("nvme").
+					WithStorageClass("nvme").
 					WithBdevDeviceList("foo", "bar"),
 			),
 		)

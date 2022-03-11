@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2021 Intel Corporation.
+// (C) Copyright 2020-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -94,9 +94,9 @@ func (svc *ControlService) querySmdDevices(ctx context.Context, req *ctlpb.SmdQu
 
 		i := 0 // output index
 		for _, dev := range rResp.Devices {
-			state := storage.NvmeDevState(dev.DevState)
+			state := storage.NvmeDevStateFromString(dev.DevState)
 
-			if req.StateMask != 0 && req.StateMask&dev.DevState == 0 {
+			if req.StateMask != 0 && req.StateMask&state.Uint32() == 0 {
 				continue // skip device completely if mask doesn't match
 			}
 
@@ -106,7 +106,7 @@ func (svc *ControlService) querySmdDevices(ctx context.Context, req *ctlpb.SmdQu
 					DevUuid: dev.Uuid,
 				})
 				if err != nil {
-					return errors.Wrapf(err, "device %s, states %q", dev, state.String())
+					return errors.Wrapf(err, "device %s, states %q", dev, state.States())
 				}
 				dev.Health = health
 			}
@@ -201,7 +201,7 @@ func (svc *ControlService) smdQueryDevice(ctx context.Context, req *ctlpb.SmdQue
 			continue
 		case 1:
 			svc.log.Debugf("smdQueryDevice(): uuid %q, rank %d, states %q", req.Uuid,
-				rr.Rank, storage.NvmeDevState(rr.Devices[0].DevState).String())
+				rr.Rank, rr.Devices[0].DevState)
 			rank = system.Rank(rr.Rank)
 
 			return rank, rr.Devices[0], nil

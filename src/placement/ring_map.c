@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2021 Intel Corporation.
+ * (C) Copyright 2016-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -815,7 +815,7 @@ ring_obj_placement_get(struct pl_ring_map *rimap, struct daos_obj_md *md,
 	int rc;
 
 	oid = md->omd_id;
-	oc_attr = daos_oclass_attr_find(oid, NULL, &nr_grps);
+	oc_attr = daos_oclass_attr_find(oid, &nr_grps);
 
 	if (oc_attr == NULL) {
 		D_ERROR("Can not find obj class, invalid oid="DF_OID"\n",
@@ -1023,7 +1023,7 @@ ring_obj_remap_shards(struct pl_ring_map *rimap, struct daos_obj_md *md,
 		spare_tgt = &tgts[plts[spare_idx].pt_pos];
 
 		determine_valid_spares(spare_tgt, md, spare_avail, &current,
-				       remap_list, for_reint, f_shard, l_shard,
+				       remap_list, for_reint, -1, f_shard, l_shard,
 				       NULL);
 	}
 
@@ -1103,7 +1103,7 @@ out:
 
 static int
 ring_obj_place(struct pl_map *map, struct daos_obj_md *md,
-	       struct daos_obj_shard_md *shard_md,
+	       unsigned int mode, struct daos_obj_shard_md *shard_md,
 	       struct pl_obj_layout **layout_pp)
 {
 	struct ring_obj_placement  rop;
@@ -1253,8 +1253,10 @@ ring_obj_find_reint(struct pl_map *map, struct daos_obj_md *md,
 			return rc;
 		rc = pl_obj_layout_alloc(rop.rop_grp_size, rop.rop_grp_nr,
 				&reint_layout);
-		if (rc)
+		if (rc) {
+			pl_obj_layout_free(layout);
 			return rc;
+		}
 	} else {
 		layout = &layout_on_stack;
 		reint_layout = &reint_layout_on_stack;

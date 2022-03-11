@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2021 Intel Corporation.
+ * (C) Copyright 2016-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -573,6 +573,8 @@ obj_ec_recx_encode(struct obj_ec_codec *codec, struct daos_oclass_attr *oca,
 
 	if (recx_array->oer_stripe_total == 0)
 		D_GOTO(out, rc = 0);
+	if (iod->iod_size == DAOS_REC_ANY) /* punch case */
+		D_GOTO(out, rc = 0);
 	singv = (iod->iod_type == DAOS_IOD_SINGLE);
 	if (singv) {
 		cell_bytes = obj_ec_singv_cell_bytes(iod->iod_size, oca);
@@ -841,7 +843,8 @@ ec_data_seg_add(daos_recx_t *recx, daos_size_t iod_size, d_sg_list_t *sgl,
 	recx_size = recx_nr * iod_size;
 	tgt = obj_ec_tgt_of_recx_idx(recx_idx, stripe_rec_nr, cell_rec_nr);
 	daos_sgl_consume(sgl, iov_idx, iov_off, recx_size, iovs, iov_nr);
-	D_ASSERT(iov_nr <= iov_capa);
+	D_ASSERTF(iov_nr <= iov_capa, "%d > %d, iod_size "DF_U64"\n",
+		  iov_nr, iov_capa, iod_size);
 	obj_ec_seg_insert(sorter, tgt, iovs, iov_nr);
 	/* add remaining recxs */
 	recx_idx = roundup(recx_idx + 1, cell_rec_nr);
@@ -1573,6 +1576,9 @@ obj_ec_encode(struct obj_reasb_req *reasb_req)
 	uint32_t	i;
 	int		rc;
 
+	if (reasb_req->orr_usgls == NULL) /* punch case */
+		return 0;
+
 	codec = codec_get(reasb_req, reasb_req->orr_oid);
 	if (codec == NULL) {
 		D_ERROR(DF_OID" can not get codec.\n",
@@ -1931,7 +1937,6 @@ obj_ec_parity_check(struct obj_reasb_req *reasb_req,
 		parity_lists = reasb_req->orr_parity_lists;
 		if (parity_lists == NULL)
 			rc = -DER_NOMEM;
-		daos_recx_ep_lists_merge(parity_lists, nr);
 		goto out;
 	}
 
@@ -1939,7 +1944,6 @@ obj_ec_parity_check(struct obj_reasb_req *reasb_req,
 		rc = -DER_FETCH_AGAIN;
 		D_ERROR("simulate parity list mismatch, "DF_RC"\n", DP_RC(rc));
 	} else {
-		daos_recx_ep_lists_merge(recx_lists, nr);
 		rc = obj_ec_parity_lists_match(parity_lists, recx_lists, nr);
 		if (rc) {
 			D_ERROR("got different parity lists, "DF_RC"\n", DP_RC(rc));

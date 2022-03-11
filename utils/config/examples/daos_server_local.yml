@@ -2,10 +2,12 @@
 
 name: daos_server
 access_points: ['localhost']
-provider: ofi+sockets
+provider: ofi+tcp
 control_log_file: /tmp/daos_server.log
 transport_config:
    allow_insecure: true
+
+telemetry_port: 9191
 
 engines:
 -

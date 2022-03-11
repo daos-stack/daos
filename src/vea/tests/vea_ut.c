@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2018-2021 Intel Corporation.
+ * (C) Copyright 2018-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -43,13 +43,15 @@ print_usage(void)
 	fprintf(stdout, "vea_ut [-f <pool_file_name>]\n");
 }
 
+#define	UT_TOTAL_BLKS	(((VEA_LARGE_EXT_MB * 2) + 1) << 20) /* 129MB */
+
 static void
 ut_format(void **state)
 {
 	struct vea_ut_args *args = *state;
 	uint32_t blk_sz = 0; /* use the default size */
 	uint32_t hdr_blks = 1;
-	uint64_t capacity = ((VEA_LARGE_EXT_MB * 2) << 20); /* 128MB */
+	uint64_t capacity = UT_TOTAL_BLKS;
 	int rc;
 
 	/* format */
@@ -100,7 +102,7 @@ ut_query(void **state)
 	/* the values from ut_format() */
 	blk_sz = (1 << 12);
 	hdr_blks = 1;
-	tot_blks = ((VEA_LARGE_EXT_MB * 2) << 20) / blk_sz - hdr_blks;
+	tot_blks = UT_TOTAL_BLKS / blk_sz - hdr_blks;
 
 	/* verify the attributes */
 	assert_int_equal(attr.va_blk_sz, blk_sz);
@@ -222,22 +224,22 @@ ut_reserve(void **state)
 	ext = d_list_entry(r_list->prev, struct vea_resrvd_ext, vre_link);
 	assert_int_equal(ext->vre_hint_off, VEA_HINT_OFF_INVAL);
 	assert_int_equal(ext->vre_blk_cnt, blk_cnt);
-	/* start from the end of the stream 0 */
-	assert_int_equal(ext->vre_blk_off, off_a);
+	/* start from the end of the stream 1 */
+	assert_int_equal(ext->vre_blk_off, off_b);
 
 	/* Verify transient is allocated */
-	rc = vea_verify_alloc(args->vua_vsi, true, off_a, blk_cnt);
+	rc = vea_verify_alloc(args->vua_vsi, true, off_b, blk_cnt);
 	assert_rc_equal(rc, 0);
 	/* Verify persistent is not allocated */
-	rc = vea_verify_alloc(args->vua_vsi, false, off_a, blk_cnt);
+	rc = vea_verify_alloc(args->vua_vsi, false, off_b, blk_cnt);
 	assert_rc_equal(rc, 1);
 
 	/* Verify statistics */
 	rc = vea_query(args->vua_vsi, NULL, &stat);
 	assert_rc_equal(rc, 0);
 
-	assert_int_equal(stat.vs_frags_large, 0);
-	assert_int_equal(stat.vs_frags_small, 2);
+	assert_int_equal(stat.vs_frags_large, 1);
+	assert_int_equal(stat.vs_frags_small, 1);
 	/* 2 hint from the second reserve for io stream 0 & 1 */
 	assert_int_equal(stat.vs_resrv_hint, 2);
 	/* 2 large from the first reserve for io stream 0 & 1 */
@@ -402,7 +404,7 @@ static int
 ut_setup(struct vea_ut_args *test_args)
 {
 	daos_size_t pool_size = (50 << 20); /* 50MB */
-	struct umem_attr uma;
+	struct umem_attr uma = {0};
 	PMEMoid root;
 	void *root_addr;
 	int rc, i;

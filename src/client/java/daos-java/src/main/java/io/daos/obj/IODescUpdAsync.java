@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2018-2021 Intel Corporation.
+ * (C) Copyright 2018-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -14,6 +14,8 @@ import io.daos.DaosUtils;
 import io.netty.buffer.ByteBuf;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import java.io.UnsupportedEncodingException;
 
 /**
  * IO Description for asynchronously update only one entry, dkey/akey.
@@ -57,7 +59,7 @@ public class IODescUpdAsync implements DaosEventQueue.Attachment {
     this.nativeHdl = 0L;
     this.offset = offset;
     this.dataBuffer = dataBuffer;
-    byte[] dkeyBytes = DaosUtils.keyToBytes(dkey);
+    byte[] dkeyBytes = DaosUtils.keyToBytes8(dkey);
     byte[] akeyBytes = DaosUtils.keyToBytes(akey);
     // 8 for null native handle, 4 = 2 + 2 for lens,
     requestLen = 8 + dkeyBytes.length + akeyBytes.length + 4;
@@ -96,7 +98,7 @@ public class IODescUpdAsync implements DaosEventQueue.Attachment {
   public void setDkey(String dkey) {
     checkReusable();
     checkState();
-    byte[] bytes = DaosUtils.keyToBytes(dkey, maxKeyLen);
+    byte[] bytes = DaosUtils.keyToBytes8(dkey, maxKeyLen);
     descBuffer.writerIndex(10); // 8 (native desc hdl) + 2 (max key len)
     descBuffer.writeShort(bytes.length);
     descBuffer.writeBytes(bytes);
@@ -251,5 +253,49 @@ public class IODescUpdAsync implements DaosEventQueue.Attachment {
 
   public long descMemoryAddress() {
     return descBuffer.memoryAddress();
+  }
+
+  private String readKey(ByteBuf buf, int len) {
+    if (len < 0 || len >= buf.capacity() - 10) {
+      return "not set";
+    }
+    byte[] bytes = new byte[len];
+    buf.readBytes(bytes);
+    try {
+      return new String(bytes, Constants.KEY_CHARSET);
+    } catch (UnsupportedEncodingException e) {
+      return "not set";
+    }
+  }
+
+  @Override
+  public String toString() {
+    String dkey, akey;
+    if (maxKeyLen == 0) {
+      descBuffer.writerIndex(descBuffer.capacity());
+      descBuffer.readerIndex(8);
+      int l = descBuffer.readShort();
+      dkey = readKey(descBuffer, l);
+      l = descBuffer.readShort();
+      akey = readKey(descBuffer, l);
+    } else {
+      descBuffer.writerIndex(descBuffer.capacity());
+      descBuffer.readerIndex(10);
+      int l = descBuffer.readShort();
+      dkey = l > maxKeyLen ? "not set" : readKey(descBuffer, l);
+      descBuffer.readerIndex(12 + maxKeyLen);
+      l = descBuffer.readShort();
+      akey = l > maxKeyLen ? "not set" : readKey(descBuffer, l);
+    }
+    StringBuilder sb = new StringBuilder();
+    sb.append("dkey: ").append(dkey).append(", akey entries\n");
+    sb.append("[update entry|").append(maxKeyLen > 0 ? "" : "not ")
+        .append("reusable|")
+        .append(akey).append('|')
+        .append(offset).append('|')
+        .append(dataBuffer == null ? 0 : dataBuffer.readableBytes()).append('|')
+        .append(resultParsed).append('|')
+        .append(retCode).append(']');
+    return sb.toString();
   }
 }

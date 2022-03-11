@@ -11,6 +11,7 @@ hosts:
     client_reservation: daos-test
 orterun:
     allow_run_as_root: True
+mpi_module: mpich/gnu-sockets/43.2
 # This timeout must be longer than the test_timeout param (+15minutes)
 # 2 hour test
 timeout: 1H15M
@@ -19,7 +20,7 @@ setup:
     start_agents: False
 server_config:
     name: daos_server
-    provider: ofi+sockets
+    provider: ofi+tcp
     control_log_mask: INFO
     control_log_file: daos_control0.log
     servers:

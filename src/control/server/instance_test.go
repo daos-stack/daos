@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2021 Intel Corporation.
+// (C) Copyright 2019-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -39,7 +39,7 @@ var (
 func getTestEngineInstance(log logging.Logger) *EngineInstance {
 	cfg := engine.MockConfig().WithStorage(
 		storage.NewTierConfig().
-			WithScmClass("ram").
+			WithStorageClass("ram").
 			WithScmMountPoint("/foo/bar"),
 	)
 	runner := engine.NewRunner(log, cfg)
@@ -194,7 +194,6 @@ type (
 		StopErr             error
 		ScmTierConfig       *storage.TierConfig
 		ScanBdevTiersResult []storage.BdevTierScanResult
-		HasBlockDevices     bool
 	}
 
 	MockInstance struct {
@@ -258,14 +257,6 @@ func (mi *MockInstance) Stop(os.Signal) error {
 	return mi.cfg.StopErr
 }
 
-func (mi *MockInstance) GetScmConfig() (*storage.TierConfig, error) {
-	return mi.cfg.ScmTierConfig, nil
-}
-
-func (mi *MockInstance) HasBlockDevices() bool {
-	return mi.cfg.HasBlockDevices
-}
-
 func (mi *MockInstance) ScanBdevTiers() ([]storage.BdevTierScanResult, error) {
 	return nil, nil
 }
@@ -302,10 +293,6 @@ func (mi *MockInstance) GetBioHealth(context.Context, *ctlpb.BioHealthReq) (*ctl
 	return nil, nil
 }
 
-func (mi *MockInstance) GetScmUsage() (*storage.ScmMountPoint, error) {
-	return nil, nil
-}
-
 func (mi *MockInstance) ListSmdDevices(context.Context, *ctlpb.SmdDevReq) (*ctlpb.SmdDevResp, error) {
 	return nil, nil
 }
@@ -318,6 +305,6 @@ func (mi *MockInstance) StorageFormatSCM(context.Context, bool) *ctlpb.ScmMountR
 	return nil
 }
 
-func (mi *MockInstance) StorageWriteNvmeConfig(context.Context) error {
+func (mi *MockInstance) GetStorage() *storage.Provider {
 	return nil
 }

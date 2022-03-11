@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2018-2021 Intel Corporation.
+// (C) Copyright 2018-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -105,6 +105,7 @@ const (
 	ClientConnectionClosed
 	ClientFormatRunningSystem
 	ClientRpcTimeout
+	ClientConfigVMDImbalance
 )
 
 // server fault codes
@@ -118,7 +119,7 @@ const (
 	ServerPoolInvalidRanks
 	ServerPoolInvalidServiceReps
 	ServerPoolDuplicateLabel
-	ServerInsufficientFreeHugePages
+	ServerInsufficientFreeHugePageMem
 	ServerHarnessNotStarted
 	ServerDataPlaneNotStarted
 	ServerInstancesNotStopped
@@ -154,6 +155,9 @@ const (
 	ServerConfigBothFaultPathAndCb
 	ServerConfigFaultCallbackEmpty
 	ServerConfigFaultDomainTooManyLayers
+	ServerConfigInsufficientHugePages
+	ServerConfigNrHugepagesOutOfRange
+	ServerConfigHugepagesDisabled
 )
 
 // SPDK library bindings codes

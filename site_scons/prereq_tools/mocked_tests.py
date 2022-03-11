@@ -1,5 +1,5 @@
 #!/usr/bin/python
-# Copyright (c) 2017 Intel Corporation
+# Copyright 2017-2022 Intel Corporation
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -53,6 +53,7 @@ class TestFunction():
         :return: string description of the test.
         """
         return '"%s"' % self.name
+
 
 UnitTests = namedtuple('UnitTests',
                        ['sources',
@@ -186,7 +187,6 @@ def _create_source_files(unit_tests):
     global_teardowns = '\n'.join('int %s(void **state);' % gt
                                  for gt in unit_tests.global_teardowns)
 
-
     test_source = """
 // Auto generated file to run the cmocka tests
 
@@ -211,14 +211,14 @@ static struct CMUnitTest generated_unit_tests[] = %s;
 
 struct _cmocka_tests *
 generated_cmocka_tests() {
-	static struct _cmocka_tests cmocka_tests;
+        static struct _cmocka_tests cmocka_tests;
 
-	cmocka_tests.group_name = "Unit Tests";
-	cmocka_tests.tests = generated_unit_tests;
-	cmocka_tests.number_of_tests = sizeof(generated_unit_tests) /
-	                                     sizeof(generated_unit_tests[0]);
+        cmocka_tests.group_name = "Unit Tests";
+        cmocka_tests.tests = generated_unit_tests;
+        cmocka_tests.number_of_tests = sizeof(generated_unit_tests) /
+                                             sizeof(generated_unit_tests[0]);
 
-	return &cmocka_tests;
+        return &cmocka_tests;
 }
 
 int (*global_setup_functions[])(void **state) = {%s};

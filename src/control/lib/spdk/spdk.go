@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2018-2021 Intel Corporation.
+// (C) Copyright 2018-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -13,8 +13,8 @@ package spdk
 /*
 #cgo CFLAGS: -I .
 #cgo LDFLAGS: -L . -lnvme_control
-#cgo LDFLAGS: -lspdk_log -lspdk_env_dpdk -lspdk_nvme -lspdk_vmd -lrte_mempool
-#cgo LDFLAGS: -lrte_mempool_ring -lrte_bus_pci
+#cgo LDFLAGS: -lspdk_util -lspdk_log -lspdk_env_dpdk -lspdk_nvme -lspdk_vmd
+#cgo LDFLAGS: -lrte_mempool -lrte_mempool_ring -lrte_bus_pci
 
 #include "stdlib.h"
 #include "daos_srv/control.h"
@@ -49,7 +49,7 @@ import (
 
 	"github.com/pkg/errors"
 
-	"github.com/daos-stack/daos/src/control/common"
+	"github.com/daos-stack/daos/src/control/lib/hardware"
 	"github.com/daos-stack/daos/src/control/logging"
 )
 
@@ -62,27 +62,37 @@ type Env interface {
 // EnvImpl is a an implementation of the Env interface.
 type EnvImpl struct{}
 
-// Rc2err returns error from label and rc.
-func Rc2err(label string, rc C.int) error {
-	return fmt.Errorf("%s: %d", label, rc)
+// rc2err returns error from label and rc.
+func rc2err(label string, rc C.int) error {
+	msgErrno := C.GoString(C.spdk_strerror(-rc))
+
+	if msgErrno != "" {
+		return fmt.Errorf("%s: %s (rc=%d)", label, msgErrno, rc)
+	}
+	return fmt.Errorf("%s: rc=%d", label, rc)
 }
 
 // EnvOptions describe parameters to be used when initializing a processes
 // SPDK environment.
 type EnvOptions struct {
-	PCIAllowList *common.PCIAddressSet // restrict SPDK device access
-	EnableVMD    bool                  // flag if VMD functionality should be enabled
+	PCIAllowList *hardware.PCIAddressSet // restrict SPDK device access
+	EnableVMD    bool                    // flag if VMD functionality should be enabled
 }
 
-func (o *EnvOptions) sanitizeAllowList(log logging.Logger) error {
-	if o.EnableVMD {
-		// DPDK will not accept VMD backing device addresses so convert to VMD addresses
-		newSet, err := o.PCIAllowList.BackingToVMDAddresses(log)
-		if err != nil {
-			return err
-		}
-		o.PCIAllowList = newSet
+func (eo *EnvOptions) sanitizeAllowList(log logging.Logger) error {
+	if eo == nil {
+		return errors.New("nil EnvOptions")
 	}
+	if eo.PCIAllowList == nil {
+		return errors.New("nil EnvOptions.PCIAllowList")
+	}
+
+	// DPDK will not accept VMD backing device addresses so convert to VMD addresses
+	newSet, err := eo.PCIAllowList.BackingToVMDAddresses(log)
+	if err != nil {
+		return err
+	}
+	eo.PCIAllowList = newSet
 
 	return nil
 }
@@ -92,7 +102,17 @@ func (o *EnvOptions) sanitizeAllowList(log logging.Logger) error {
 // SPDK relies on an abstraction around the local environment
 // named env that handles memory allocation and PCI device operations.
 // The library must be initialized first.
-func (e *EnvImpl) InitSPDKEnv(log logging.Logger, opts *EnvOptions) error {
+func (ei *EnvImpl) InitSPDKEnv(log logging.Logger, opts *EnvOptions) error {
+	if ei == nil {
+		return errors.New("nil EnvImpl")
+	}
+	if opts == nil {
+		return errors.New("nil EnvOptions")
+	}
+	if opts.PCIAllowList == nil {
+		opts.PCIAllowList = hardware.MustNewPCIAddressSet()
+	}
+
 	log.Debugf("spdk init go opts: %+v", opts)
 
 	// Only print error and more severe to stderr.
@@ -114,14 +134,15 @@ func (e *EnvImpl) InitSPDKEnv(log logging.Logger, opts *EnvOptions) error {
 
 	retPtr := C.daos_spdk_init(0, envCtx, C.ulong(opts.PCIAllowList.Len()),
 		cAllowList)
+	defer clean(retPtr)
+
 	if err := checkRet(retPtr, "daos_spdk_init()"); err != nil {
 		return err
 	}
-	clean(retPtr)
 
 	if opts.EnableVMD {
 		if rc := C.spdk_vmd_init(); rc != 0 {
-			return Rc2err("spdk_vmd_init()", rc)
+			return rc2err("spdk_vmd_init()", rc)
 		}
 	}
 
@@ -129,7 +150,14 @@ func (e *EnvImpl) InitSPDKEnv(log logging.Logger, opts *EnvOptions) error {
 }
 
 // FiniSPDKEnv initializes the SPDK environment.
-func (e *EnvImpl) FiniSPDKEnv(log logging.Logger, opts *EnvOptions) {
+func (ei *EnvImpl) FiniSPDKEnv(log logging.Logger, opts *EnvOptions) {
+	if ei == nil {
+		return
+	}
+	if opts == nil {
+		return
+	}
+
 	log.Debugf("spdk fini go opts: %+v", opts)
 
 	if opts.EnableVMD {
