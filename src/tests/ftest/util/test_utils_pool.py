@@ -11,7 +11,8 @@ import json
 
 from test_utils_base import TestDaosApiBase, LabelGenerator
 from avocado import fail_on
-from command_utils import BasicParameter, CommandFailure
+from command_utils import BasicParameter
+from exception_utils import CommandFailure
 from pydaos.raw import (DaosApiError, DaosPool, c_uuid_to_str, daos_cref)
 from general_utils import check_pool_files, DaosTestError, run_command
 from env_modules import load_mpi
