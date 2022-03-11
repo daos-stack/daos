@@ -1,8 +1,8 @@
-#!/usr/bin/python3
+#!/usr/bin/python
 """
-  (C) Copyright 2018-2022 Intel Corporation.
+(C) Copyright 2018-2022 Intel Corporation.
 
-  SPDX-License-Identifier: BSD-2-Clause-Patent
+SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 import sys
 
@@ -11,8 +11,7 @@ from command_utils_base import CommandFailure
 
 
 class PoolCreateAllHwTests(PoolTestBase):
-    # pylint: disable=too-few-public-methods
-    """Tests pool create all basics
+    """Tests pool creation with percentage storage on HW platform.
 
     :avocado: recursive
     """

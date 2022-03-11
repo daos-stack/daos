@@ -6,7 +6,6 @@ hosts:
     - server-D
     - server-E
     - server-F
-    - server-G
 timeouts:
   test_one_pool: 120
   test_two_pools: 160
