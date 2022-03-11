@@ -1,12 +1,12 @@
 #!/usr/bin/python3
 """
-(C) Copyright 2021 Intel Corporation.
+(C) Copyright 2021-2022 Intel Corporation.
 
 SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 
 from apricot import TestWithServers
-from command_utils import CommandFailure
+from exception_utils import CommandFailure
 from daos_racer_utils import DaosRacerCommand
 
 
@@ -29,7 +29,8 @@ class DaosRacerTest(TestWithServers):
 
         :avocado: tags=all,full_regression
         :avocado: tags=hw,large
-        :avocado: tags=io,daosracer,daos_racer_parallel
+        :avocado: tags=io,daosracer
+        :avocado: tags=daos_racer_parallel
         """
         # Create the dmg command
         daos_racer = DaosRacerCommand(self.bin, self.hostlist_clients[0], self.get_dmg_command())
@@ -44,7 +45,7 @@ class DaosRacerTest(TestWithServers):
         self.job_manager.timeout = daos_racer.clush_timeout.value
         self.log.info("Multi-process command: %s", str(self.job_manager))
 
-        # Run the daos_perf command and check for errors
+        # Run the daos_racer command and check for errors
         try:
             self.job_manager.run()
 
