@@ -1,7 +1,7 @@
 hosts:
   test_servers:
     - server-A
-timeout: 90
+timeout: 900
 setup:
   start_servers_once: False
 pool:
