@@ -280,9 +280,8 @@ class Runner():
         for command in commands:
             cmd = []
             for part in command:
-                if part == '$JOBS_OPT':
-                    cmd.append('-j')
-                    cmd.append(str(GetOption('num_jobs')))
+                if part == 'make':
+                    cmd.extend(['make', '-j', str(GetOption('num_jobs'))])
                 else:
                     cmd.append(self.env.subst(part))
             if self.__dry_run:
@@ -891,7 +890,7 @@ class PreReqComponent():
             env.SetOption('no_exec', True)
 
     def _setup_parallel_build(self):
-        """Set the JOBS_OPT variable for builds"""
+        """Set the parallel options for builds"""
         # Multiple go jobs can be running at once via the -j option so limit each to 1 proc.
         # This allows for compilation to continue on systems with limited processor resources where
         # the number of go procs will be multiplied by jobs_opt.

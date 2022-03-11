@@ -115,13 +115,14 @@ def define_mercury(reqs):
                 commands=[['sed',
                            '-i',
                            '-e',
-                           '"s/\\(.{DESTDIR}\\/\\)usr\\//\\1/"'
+                           's/\\(.{DESTDIR}\\/\\)usr\\//\\1/',
                            '-e',
-                           '"s/\\(INSTALL_LIB_TARG=\\/usr\\/lib\\)64/\\1/"'
-                           '-e', '"s/\\(INSTALL_LIB_TARG=\\)\\/usr/\\1/"'
-                           'Makefile'
-                           ',compat/Makefile'],
-                          ['make', '$JOBS_OPT', 'LIBDIR=/lib64'],
+                           's/\\(INSTALL_LIB_TARG=\\/usr\\/lib\\)64/\\1/',
+                           '-e',
+                           's/\\(INSTALL_LIB_TARG=\\)\\/usr/\\1/',
+                           'Makefile',
+                           'compat/Makefile'],
+                          ['make', 'LIBDIR=/lib64'],
                           ['make', 'DESTDIR=$PSM2_PREFIX', 'LIBDIR=/lib64', 'install']],
                 headers=['psm2.h'],
                 libs=['psm2'])
@@ -155,7 +156,7 @@ def define_mercury(reqs):
                 retriever=GitRepoRetriever('https://github.com/ofiwg/libfabric'),
                 commands=[['./autogen.sh'],
                           ofi_build,
-                          ['make', '$JOBS_OPT'],
+                          ['make'],
                           ['make', 'install']],
                 libs=['fabric'],
                 requires=include(reqs, 'psm2', ['psm2'], []),
@@ -169,7 +170,7 @@ def define_mercury(reqs):
                 commands=[['libtoolize'],
                           ['./autogen.sh'],
                           ['./configure', '--prefix=$OPENPA_PREFIX'],
-                          ['make', '$JOBS_OPT'],
+                          ['make'],
                           ['make', 'install']],
                 libs=['opa'],
                 package='openpa-devel' if inst(reqs, 'openpa') else None)
@@ -221,7 +222,7 @@ def define_mercury(reqs):
     reqs.define('mercury',
                 retriever=GitRepoRetriever('https://github.com/mercury-hpc/mercury.git', True),
                 commands=[mercury_build,
-                          ['make', '$JOBS_OPT'],
+                          ['make'],
                           ['make', 'install']],
                 libs=['mercury', 'na', 'mercury_util'],
                 pkgconfig='mercury',
@@ -291,7 +292,7 @@ def define_components(reqs):
                 retriever=GitRepoRetriever('https://github.com/01org/isa-l.git'),
                 commands=[['./autogen.sh'],
                           ['./configure', '--prefix=$ISAL_PREFIX', '--libdir=$ISAL_PREFIX/lib'],
-                          ['make', '$JOBS_OPT'],
+                          ['make'],
                           ['make', 'install']],
                 libs=['isal'])
     reqs.define('isal_crypto',
@@ -300,7 +301,7 @@ def define_components(reqs):
                           ['./configure',
                            '--prefix=$ISAL_CRYPTO_PREFIX',
                            '--libdir=$ISAL_CRYPTO_PREFIX/lib'],
-                          ['make', '$JOBS_OPT'],
+                          ['make'],
                           ['make', 'install']],
                 libs=['isal_crypto'])
 
@@ -312,7 +313,6 @@ def define_components(reqs):
                            'NDCTL_ENABLE=n',
                            'NDCTL_DISABLE=y',
                            'DOC=n'
-                           '$JOBS_OPT',
                            'install',
                            'prefix=$PMDK_PREFIX']],
                 libs=['pmemobj'])
@@ -332,8 +332,8 @@ def define_components(reqs):
                            '--enable-valgrind',
                            '--enable-stack-unwind',
                            ABT_DEBUG],
-                          ['make', '$JOBS_OPT'],
-                          ['make', '$JOBS_OPT', 'install']],
+                          ['make'],
+                          ['make', 'install']],
                 requires=['valgrind_devel', 'libunwind'],
                 libs=['abt'],
                 headers=['abt.h'])
@@ -374,8 +374,8 @@ def define_components(reqs):
                            '--without-isal',
                            '--without-vtune',
                            '--with-shared'],
-                          ['make', 'CONFIG_ARCH={}'.format(spdk_arch), '$JOBS_OPT'],
-                          ['make', '$JOBS_OPT', 'install'],
+                          ['make', 'CONFIG_ARCH={}'.format(spdk_arch)],
+                          ['make', 'install'],
                           ['cp', '-r', '-P', 'dpdk/build/lib/', '$SPDK_PREFIX'],
                           ['cp', '-r', '-P', 'dpdk/build/include/', '$SPDK_PREFIX/include/dpdk'],
                           ['mkdir', '-p', '$SPDK_PREFIX/share/spdk'],
@@ -395,7 +395,7 @@ def define_components(reqs):
                 retriever=GitRepoRetriever('https://github.com/protobuf-c/protobuf-c.git'),
                 commands=[['./autogen.sh'],
                           ['./configure', '--prefix=$PROTOBUFC_PREFIX', '--disable-protoc'],
-                          ['make', '$JOBS_OPT'],
+                          ['make'],
                           ['make', 'install']],
                 libs=['protobuf-c'],
                 headers=['protobuf-c/protobuf-c.h'])
