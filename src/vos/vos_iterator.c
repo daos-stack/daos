@@ -659,11 +659,11 @@ vos_iterate_internal(vos_iter_param_t *param, vos_iter_type_t type,
 probe:
 	rc = vos_iter_probe(ih, anchor);
 	if (rc == VOS_ITER_CB_YIELD) {
-		printf("reprobe1\n");
 		set_reprobe(type, VOS_ITER_CB_YIELD, anchors, 0);
 		D_ASSERT(need_reprobe(type, anchors));
 		goto probe;
 	}
+	/** Let VOS_ITER_CB_ABORT fall through and get handled as a non-zero exit */
 	if (rc != 0) {
 		if (rc == -DER_NONEXIST || rc == -DER_AGAIN) {
 			daos_anchor_set_eof(anchor);
@@ -785,6 +785,7 @@ probe:
 			D_ASSERT(need_reprobe(type, anchors));
 			goto probe;
 		}
+		/** Let VOS_ITER_CB_ABORT fall through and get handled as a non-zero exit */
 		if (rc) {
 			VOS_TX_TRACE_FAIL(rc,
 					  "failed to iterate next (type=%d): "
