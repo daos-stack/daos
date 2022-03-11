@@ -1756,7 +1756,7 @@ failed:
 }
 
 static void
-obj_ioc_fini(struct obj_io_context *ioc)
+obj_ioc_fini(struct obj_io_context *ioc, int err)
 {
 	if (ioc->ioc_coh != NULL) {
 		ds_cont_hdl_put(ioc->ioc_coh);
@@ -1764,6 +1764,9 @@ obj_ioc_fini(struct obj_io_context *ioc)
 	}
 
 	if (ioc->ioc_coc != NULL) {
+		if (obj_is_modification_opc(ioc->ioc_opc) && err == 0 &&
+		    daos_oclass_is_ec(&ioc->ioc_oca))
+			ds_cont_ec_timestamp_update(ioc->ioc_coc);
 		ds_cont_child_put(ioc->ioc_coc);
 		ioc->ioc_coc = NULL;
 	}
@@ -1914,7 +1917,7 @@ obj_ioc_end(struct obj_io_context *ioc, int err)
 		/** Update sensors */
 		obj_update_sensors(ioc, err);
 	}
-	obj_ioc_fini(ioc);
+	obj_ioc_fini(ioc, err);
 }
 
 static int
