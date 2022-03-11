@@ -851,8 +851,7 @@ class PreReqComponent():
 
         for name, prog in compiler_map[compiler].items():
             if not config.CheckProg(prog):
-                print("%s must be installed when COMPILER=%s" %
-                      (prog, compiler))
+                print("%s must be installed when COMPILER=%s" % (prog, compiler))
                 if self.__check_only:
                     continue
                 config.Finish()
@@ -861,26 +860,26 @@ class PreReqComponent():
             self.__env.Replace(**args)
 
         if compiler == 'covc':
-            covfile = self.__top_dir + "/test.cov"
+            covfile = os.path.join(self.__top_dir, 'test.cov')
             if os.path.isfile(covfile):
                 os.remove(covfile)
-            commands = ['$COV01 -1',
-                        '$COV01 -s',
-                        '$CVS --add !**/src/cart/test/utest/',
-                        '$CVS --add !**/src/common/tests/',
-                        '$CVS --add !**/src/gurt/tests/',
-                        '$CVS --add !**/src/iosrv/tests/',
-                        '$CVS --add !**/src/mgmt/tests/',
-                        '$CVS --add !**/src/object/tests/',
-                        '$CVS --add !**/src/placement/tests/',
-                        '$CVS --add !**/src/rdb/tests/',
-                        '$CVS --add !**/src/security/tests/',
-                        '$CVS --add !**/src/utils/self_test/',
-                        '$CVS --add !**/src/utils/ctl/',
-                        '$CVS --add !**/src/vea/tests/',
-                        '$CVS --add !**/src/vos/tests/',
-                        '$CVS --add !**/src/engine/tests/',
-                        '$CVS --add !**/src/tests/']
+            commands = [['$COV01', '-1'],
+                        ['$COV01', '-s'],
+                        ['$CVS', '--add', '!**/src/cart/test/utest/'],
+                        ['$CVS', '--add', '!**/src/common/tests/'],
+                        ['$CVS', '--add', '!**/src/gurt/tests/'],
+                        ['$CVS', '--add', '!**/src/iosrv/tests/'],
+                        ['$CVS', '--add', '!**/src/mgmt/tests/'],
+                        ['$CVS', '--add', '!**/src/object/tests/'],
+                        ['$CVS', '--add', '!**/src/placement/tests/'],
+                        ['$CVS', '--add', '!**/src/rdb/tests/'],
+                        ['$CVS', '--add', '!**/src/security/tests/'],
+                        ['$CVS', '--add', '!**/src/utils/self_test/'],
+                        ['$CVS', '--add', '!**/src/utils/ctl/'],
+                        ['$CVS', '--add', '!**/src/vea/tests/'],
+                        ['$CVS', '--add', '!**/src/vos/tests/'],
+                        ['$CVS', '--add', '!**/src/engine/tests/'],
+                        ['$CVS', '--add', '!**/src/tests/']]
             if not RUNNER.run_commands(commands):
                 raise BuildFailure("cov01")
 
@@ -973,8 +972,7 @@ class PreReqComponent():
         """Create a command line variable for a path"""
         tmp = self.__env.get(var)
         if tmp:
-            realpath = lambda x: os.path.realpath(os.path.join(self.__top_dir,
-                                                               x))
+            realpath = lambda x: os.path.realpath(os.path.join(self.__top_dir, x))
             if multiple:
                 value = os.pathsep.join(map(realpath, tmp.split(os.pathsep)))
             else:
@@ -1243,8 +1241,7 @@ class PreReqComponent():
         self.__build_info.update(var, value)
 
     def get_prefixes(self, name, prebuilt_path):
-        """Get the location of the scons prefix as well as the external
-           component prefix."""
+        """Get the location of the scons prefix as well as the external component prefix."""
         prefix = self.__env.get('PREFIX')
         comp_prefix = '%s_PREFIX' % name.upper()
         if prebuilt_path:
@@ -1566,16 +1563,15 @@ class _Component():
         else:
             self.prebuilt_path = self.prereqs.get_prebuilt_path(self, self.name)
 
-        (self.component_prefix, self.prefix) = \
-            self.prereqs.get_prefixes(self.name, self.prebuilt_path)
+        (self.component_prefix, self.prefix) = self.prereqs.get_prefixes(self.name,
+                                                                         self.prebuilt_path)
         self.src_path = None
         if self.retriever:
             self.src_path = self.prereqs.get_src_path(self.name)
         self.build_path = self.src_path
         if self.out_of_src_build:
-            self.build_path = \
-                os.path.join(self.prereqs.get_build_dir(), '%s.build'
-                             % self.name)
+            self.build_path = os.path.join(self.prereqs.get_build_dir(),
+                                           '{}.build'.format(self.name))
 
             ensure_dir_exists(self.build_path, self.__dry_run)
 
