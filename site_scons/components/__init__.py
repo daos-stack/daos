@@ -306,8 +306,6 @@ def define_components(reqs):
                            'install',
                            'prefix=$PMDK_PREFIX']],
                 libs=['pmemobj'])
-
-
     abt_build = ['./configure',
                  '--prefix=$ARGOBOTS_PREFIX',
                  'CC=gcc',
