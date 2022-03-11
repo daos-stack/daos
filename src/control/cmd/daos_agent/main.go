@@ -181,6 +181,11 @@ func parseOpts(args []string, opts *cliOptions, invoker control.Invoker, log *lo
 			if cfg, err = LoadConfig(cfgPath); err != nil {
 				return errors.WithMessage(err, "failed to load agent configuration")
 			}
+
+			// Command line debug option overrides log level in config file
+			if !opts.Debug {
+				log.WithLogLevel(logging.LogLevel(cfg.LogLevel))
+			}
 			log.Debugf("agent config loaded from %s", cfgPath)
 		}
 
