@@ -17,40 +17,40 @@
  */
 struct crt_na_dict crt_na_dict[] = {
 	{
-		.nad_type	= CRT_NA_SM,
+		.nad_type	= CRT_PROVIDER_SM,
 		.nad_str	= "sm",
 		.nad_contig_eps	= false,
 		.nad_port_bind  = false,
 	}, {
-		.nad_type	= CRT_NA_OFI_SOCKETS,
+		.nad_type	= CRT_PROVIDER_OFI_SOCKETS,
 		.nad_str	= "ofi+sockets",
 		.nad_alt_str	= "ofi+socket",
 		.nad_contig_eps	= true,
 		.nad_port_bind  = true,
 	}, {
-		.nad_type	= CRT_NA_OFI_VERBS_RXM,
+		.nad_type	= CRT_PROVIDER_OFI_VERBS_RXM,
 		.nad_str	= "ofi+verbs;ofi_rxm",
 		.nad_alt_str	= "ofi+verbs",
 		.nad_contig_eps	= true,
 		.nad_port_bind  = true,
 	}, {
-		.nad_type	= CRT_NA_OFI_GNI,
+		.nad_type	= CRT_PROVIDER_OFI_GNI,
 		.nad_str	= "ofi+gni",
 		.nad_contig_eps	= true,
 		.nad_port_bind  = false,
 	}, {
-		.nad_type	= CRT_NA_OFI_PSM2,
+		.nad_type	= CRT_PROVIDER_OFI_PSM2,
 		.nad_str	= "ofi+psm2",
 		.nad_contig_eps	= false,
 		.nad_port_bind  = false,
 	}, {
-		.nad_type	= CRT_NA_OFI_TCP_RXM,
+		.nad_type	= CRT_PROVIDER_OFI_TCP_RXM,
 		.nad_str	= "ofi+tcp;ofi_rxm",
 		.nad_alt_str	= "ofi+tcp",
 		.nad_contig_eps	= true,
 		.nad_port_bind  = true,
 	}, {
-		.nad_type	= CRT_NA_OFI_CXI,
+		.nad_type	= CRT_PROVIDER_OFI_CXI,
 		.nad_str	= "ofi+cxi",
 		.nad_contig_eps	= true,
 		.nad_port_bind  = false,
@@ -100,14 +100,14 @@ crt_prov_str_to_na_type(const char *prov_str)
 {
 	int i;
 
-	for (i = 0; i < CRT_NA_OFI_COUNT; i++) {
+	for (i = 0; i < CRT_PROVIDER_OFI_COUNT; i++) {
 		if (strcmp(prov_str, crt_na_dict[i].nad_str) == 0 ||
 		    (crt_na_dict[i].nad_alt_str &&
 		     strcmp(prov_str, crt_na_dict[i].nad_alt_str) == 0))
 			return crt_na_dict[i].nad_type;
 	}
 
-	return CRT_NA_UNKNOWN;
+	return CRT_PROVIDER_UNKNOWN;
 }
 
 /**
@@ -432,7 +432,7 @@ crt_provider_ip_str_get(int provider)
 static bool
 crt_provider_is_block_mode(int provider)
 {
-	if (provider == CRT_NA_OFI_PSM2)
+	if (provider == CRT_PROVIDER_OFI_PSM2)
 		return false;
 
 	return true;
@@ -519,7 +519,7 @@ crt_get_info_string(int provider, char **string, int ctx_idx)
 	domain_str = crt_provider_domain_get(provider);
 	ip_str = crt_provider_ip_str_get(provider);
 
-	if (provider == CRT_NA_SM) {
+	if (provider == CRT_PROVIDER_SM) {
 		D_ASPRINTF(*string, "%s://", provider_str);
 		D_GOTO(out, 0);
 	}

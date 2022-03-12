@@ -200,7 +200,6 @@ int main(int argc, char **argv)
 	       arg_mmap_file ? arg_mmap_file : "none");
 	printf("----------------------------------------\n\n");
 
-
 	/* Done with parsing, now start the server up */
 	rc = d_log_init();
 	if (rc != 0) {
@@ -208,8 +207,15 @@ int main(int argc, char **argv)
 		error_exit();
 	}
 
-	rc = crt_init(SERVER_GROUP_NAME,
-			CRT_FLAG_BIT_SERVER | CRT_FLAG_BIT_AUTO_SWIM_DISABLE);
+	crt_init_options_t init_opts = {0};
+
+	init_opts.cio_provider = arg_provider;
+	init_opts.cio_interface = arg_interface;
+	init_opts.cio_domain = arg_domain;
+
+	rc = crt_init_opt(SERVER_GROUP_NAME,
+			CRT_FLAG_BIT_SERVER | CRT_FLAG_BIT_AUTO_SWIM_DISABLE,
+			&init_opts);
 	if (rc != 0) {
 		D_ERROR("crt_init() failed; rc=%d\n", rc);
 		error_exit();
@@ -244,7 +250,6 @@ int main(int argc, char **argv)
 			error_exit();
 		}
 	}
-
 	printf("Finished allocating all contexts\n");
 
 	rc = crt_proto_register(&my_proto_fmt);

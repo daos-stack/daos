@@ -20,6 +20,7 @@
 
 #include <stdint.h>
 #include <gurt/types.h>
+
 /**
  * Initialization options passed during crt_init() call.
  *
@@ -87,6 +88,22 @@ typedef struct crt_init_options {
 	char		*cio_port;
 
 } crt_init_options_t;
+
+// TODO: document
+typedef enum {
+	CRT_PROVIDER_SM			= 0,
+	CRT_PROVIDER_OFI_SOCKETS	= 1,
+	CRT_PROVIDER_OFI_VERBS_RXM	= 2,
+	CRT_PROVIDER_OFI_GNI		= 3,
+	CRT_PROVIDER_OFI_PSM2		= 4,
+	CRT_PROVIDER_OFI_TCP_RXM	= 5,
+	CRT_PROVIDER_OFI_CXI		= 6,
+
+	/* Note: This entry should be the last valid one in enum */
+	CRT_PROVIDER_COUNT,
+	CRT_PROVIDER_UNKNOWN = -1,
+} crt_provider_t;
+
 
 typedef int		crt_status_t;
 /**

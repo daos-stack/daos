@@ -179,24 +179,10 @@ int
 crt_context_create_on_provider(crt_context_t *crt_ctx, const char *provider)
 {
 	int	provider_idx = -1;
-	int	i;
 
-	for (i = 0; crt_na_dict[i].nad_str != NULL; i++) {
-	D_ERROR("ALEXMOD, checking provider '%s' to match '%s'\n",
-		crt_na_dict[i].nad_str, provider);
-
-		if (!strncmp(provider, crt_na_dict[i].nad_str, strlen(crt_na_dict[i].nad_str) + 1) ||
-		    (crt_na_dict[i].nad_alt_str &&
-		     !strncmp(provider, crt_na_dict[i].nad_alt_str, strlen(crt_na_dict[i].nad_alt_str) + 1))) {
-			provider_idx = crt_na_dict[i].nad_type;
-			D_ERROR("ALEXMOD, Found provider %s at index %d\n",
-				provider, provider_idx);
-			break;
-		}
-	}
-
+	provider_idx = crt_str_to_provider(provider);
 	if (provider_idx == -1) {
-		D_ERROR("Requested provider '%s' not found\n", provider);
+		D_ERROR("Invalid requested provider '%s'\n", provider);
 		return -DER_INVAL;
 	}
 

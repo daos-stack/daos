@@ -31,33 +31,13 @@ struct crt_rpc_priv;
 struct crt_common_hdr;
 struct crt_corpc_hdr;
 
-/** type of NA plugin */
-enum crt_na_type {
-	CRT_NA_SM		= 0,
-	CRT_NA_OFI_SOCKETS	= 1,
-	CRT_NA_OFI_VERBS_RXM	= 2,
-	CRT_NA_OFI_GNI		= 3,
-	CRT_NA_OFI_PSM2		= 4,
-	CRT_NA_OFI_TCP_RXM	= 5,
-	CRT_NA_OFI_CXI		= 6,
 
-	/* Note: This entry should be the last valid one in enum */
-	CRT_NA_OFI_COUNT,
-	CRT_NA_UNKNOWN = -1,
-};
-
-enum crt_na_type
-crt_prov_str_to_na_type(const char *prov_str);
+crt_provider_t
+crt_str_to_provider(const char *prov_str);
 
 int
-crt_hg_parse_uri(const char *uri, enum crt_na_type *prov, char *addr);
+crt_hg_parse_uri(const char *uri, enum crt_prov_type *prov, char *addr);
 
-static inline bool
-crt_na_type_is_ofi(int na_type)
-{
-	return (na_type >= CRT_NA_OFI_SOCKETS) &&
-	       (na_type < CRT_NA_OFI_COUNT);
-}
 
 struct crt_na_dict {
 	/** String identifying the provider */
