@@ -9,6 +9,7 @@ from os.path import join
 from pydaos.raw import DaosApiError
 import avocado
 
+
 class DmvrPreserveProps(DataMoverTestBase):
     # pylint: disable=too-many-ancestors
     """Data Mover validation for --preserve-props option only for DFS copies.
@@ -150,14 +151,12 @@ class DmvrPreserveProps(DataMoverTestBase):
             cont (TestContainer): the container to get props of.
 
         Returns:
-            list: string list of properties and values from daos command.
+            list: list of dictionaries that contain properties and values from daos
+                command.
 
         """
-        prop_result = self.daos_cmd.container_get_prop(
-            cont.pool.uuid, cont.uuid)
-        prop_text = prop_result.stdout_text
-        prop_list = prop_text.split('\n')[1:]
-        return prop_list
+        prop_result = self.daos_cmd.container_get_prop(cont.pool.uuid, cont.uuid)
+        return prop_result["response"]
 
     def verify_cont_prop(self, cont, prop_list, api):
         """Verify container properties against an input list.
@@ -179,7 +178,7 @@ class DmvrPreserveProps(DataMoverTestBase):
         # Make sure each property matches
         for prop_idx, prop in enumerate(prop_list):
             # This one is not set
-            if (api == "DFS") and ("OID" in prop_list[prop_idx] or "ROOTS" in prop_list[prop_idx]):
+            if (api == "DFS") and ("OID" in prop["value"] or "ROOTS" in prop["value"]):
                 continue
             if prop != actual_list[prop_idx]:
                 self.log.info("Expected\n%s\nbut got\n%s\n",

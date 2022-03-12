@@ -380,14 +380,13 @@ class DaosCommand(DaosCommandBase):
             cont (str): Container UUID.
 
         Returns:
-            CmdResult: Object that contains exit status, stdout, and other
-                information.
+            str: JSON that contains the command output.
 
         Raises:
             CommandFailure: if the daos container get-prop command fails.
 
         """
-        return self._get_result(
+        return self._get_json_result(
             ("container", "get-prop"), pool=pool, cont=cont)
 
     def container_set_owner(self, pool, cont, user, group):
