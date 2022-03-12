@@ -386,6 +386,111 @@ class DaosCommand(DaosCommandBase):
             CommandFailure: if the daos container get-prop command fails.
 
         """
+        # Sample output
+        # {
+        #     "response": [
+        #         {
+        #         "value": 0,
+        #         "name": "alloc_oid",
+        #         "description": "Highest Allocated OID"
+        #         },
+        #         {
+        #         "value": "off",
+        #         "name": "cksum",
+        #         "description": "Checksum"
+        #         },
+        #         {
+        #         "value": 32768,
+        #         "name": "cksum_size",
+        #         "description": "Checksum Chunk Size"
+        #         },
+        #         {
+        #         "value": "off",
+        #         "name": "compression",
+        #         "description": "Compression"
+        #         },
+        #         {
+        #         "value": "off",
+        #         "name": "dedup",
+        #         "description": "Deduplication"
+        #         },
+        #         {
+        #         "value": 4096,
+        #         "name": "dedup_threshold",
+        #         "description": "Dedupe Threshold"
+        #         },
+        #         {
+        #         "value": 65536,
+        #         "name": "ec_cell",
+        #         "description": "EC Cell Size"
+        #         },
+        #         {
+        #         "value": "off",
+        #         "name": "encryption",
+        #         "description": "Encryption"
+        #         },
+        #         {
+        #         "value": "mkano@",
+        #         "name": "group",
+        #         "description": "Group"
+        #         },
+        #         {
+        #         "value": "mkc1",
+        #         "name": "label",
+        #         "description": "Label"
+        #         },
+        #         {
+        #         "value": "POSIX (1)",
+        #         "name": "layout_type",
+        #         "description": "Layout Type"
+        #         },
+        #         {
+        #         "value": 1,
+        #         "name": "layout_version",
+        #         "description": "Layout Version"
+        #         },
+        #         {
+        #         "value": 0,
+        #         "name": "max_snapshot",
+        #         "description": "Max Snapshot"
+        #         },
+        #         {
+        #         "value": "mkano@",
+        #         "name": "owner",
+        #         "description": "Owner"
+        #         },
+        #         {
+        #         "value": "rf0",
+        #         "name": "rf",
+        #         "description": "Redundancy Factor"
+        #         },
+        #         {
+        #         "value": "rank (1)",
+        #         "name": "rf_lvl",
+        #         "description": "Redundancy Level"
+        #         },
+        #         {
+        #         "value": "off",
+        #         "name": "srv_cksum",
+        #         "description": "Server Checksumming"
+        #         },
+        #         {
+        #         "value": "HEALTHY",
+        #         "name": "status",
+        #         "description": "Health"
+        #         },
+        #         {
+        #         "value": [
+        #             "A::OWNER@:rwdtTaAo",
+        #             "A:G:GROUP@:rwtT"
+        #         ],
+        #         "name": "acl",
+        #         "description": "Access Control List"
+        #         }
+        #     ],
+        #     "error": null,
+        #     "status": 0
+        # }
         return self._get_json_result(
             ("container", "get-prop"), pool=pool, cont=cont)
 
