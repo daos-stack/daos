@@ -1,13 +1,14 @@
 #!/usr/bin/python
 """
-  (C) Copyright 2019-2021 Intel Corporation.
+  (C) Copyright 2019-2022 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 from general_utils import pcmd
 
 from command_utils_base import \
-    CommandFailure, BasicParameter, FormattedParameter, CommandWithParameters
+    BasicParameter, FormattedParameter, CommandWithParameters
+from exception_utils import CommandFailure
 from command_utils import ExecutableCommand
 
 
