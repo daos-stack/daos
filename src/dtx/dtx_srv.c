@@ -17,8 +17,6 @@
 #include <gurt/telemetry_consumer.h>
 #include "dtx_internal.h"
 
-#define DTX_YIELD_CYCLE		(DTX_THRESHOLD_COUNT >> 3)
-
 static void *
 dtx_tls_init(int xs_id, int tgt_id)
 {
