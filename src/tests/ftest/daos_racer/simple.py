@@ -1,6 +1,6 @@
 #!/usr/bin/python
 """
-  (C) Copyright 2020-2021 Intel Corporation.
+  (C) Copyright 2020-2022 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -30,7 +30,9 @@ class DaosRacerTest(TestWithServers):
             Running simultaneous, conflicting I/O requests.
 
         :avocado: tags=all,daily_regression,pr
-        :avocado: tags=hw,large,io,daosracer
+        :avocado: tags=hw,large
+        :avocado: tags=io,daosracer
+        :avocado: tags=daosracer_simple
 
         """
         dmg = self.get_dmg_command()

@@ -12,6 +12,9 @@
 #ifndef __DAOS_CONT_H__
 #define __DAOS_CONT_H__
 
+#define daos_cont_open daos_cont_open2
+#define daos_cont_destroy daos_cont_destroy2
+
 #if defined(__cplusplus)
 extern "C" {
 #endif

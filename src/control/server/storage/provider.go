@@ -206,6 +206,11 @@ func (p *Provider) FormatScm(force bool) error {
 	return nil
 }
 
+// GetBdevConfig returns the Bdev tier configs.
+func (p *Provider) GetBdevConfigs() []*TierConfig {
+	return p.engineStorage.Tiers.BdevConfigs()
+}
+
 // PrepareBdevs attempts to configure NVMe devices to be usable by DAOS.
 func (p *Provider) PrepareBdevs(req BdevPrepareRequest) (*BdevPrepareResponse, error) {
 	resp, err := p.bdev.Prepare(req)
