@@ -52,17 +52,23 @@ rec_decref(struct d_hash_table *htable, d_list_t *rlink)
 static void
 rec_free(struct d_hash_table *htable, d_list_t *rlink)
 {
-	struct dfs_mnt_hdls *hdl = hdl_obj(rlink);
+	struct dfs_mnt_hdls	*hdl = hdl_obj(rlink);
+	int			rc;
 
 	D_ASSERT(d_hash_rec_unlinked(&hdl->entry));
 	D_ASSERT(hdl->ref == 0);
 
-	if (hdl->type == DFS_H_POOL)
-		daos_pool_disconnect(hdl->handle, NULL);
-	else if (hdl->type == DFS_H_CONT)
-		daos_cont_close(hdl->handle, NULL);
-	else
+	if (hdl->type == DFS_H_POOL) {
+		rc = daos_pool_disconnect(hdl->handle, NULL);
+		if (rc)
+			D_ERROR("daos_pool_connect() Failed "DF_RC"\n", DP_RC(rc));
+	} else if (hdl->type == DFS_H_CONT) {
+		rc = daos_cont_close(hdl->handle, NULL);
+		if (rc)
+			D_ERROR("daos_cont_close() Failed "DF_RC"\n", DP_RC(rc));
+	} else {
 		D_ASSERT(0);
+	}
 	D_FREE(hdl);
 }
 

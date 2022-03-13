@@ -28,6 +28,8 @@ service CtlSvc {
 	rpc StorageFormat(StorageFormatReq) returns(StorageFormatResp) {};
 	// Rebind SSD from kernel and bind instead to user-space for use with DAOS
 	rpc StorageNvmeRebind(NvmeRebindReq) returns(NvmeRebindResp) {};
+	// Add newly inserted SSD to DAOS engine config
+	rpc StorageNvmeAddDevice(NvmeAddDeviceReq) returns(NvmeAddDeviceResp) {};
 	// Perform a fabric scan to determine the available provider, device, NUMA node combinations
 	rpc NetworkScan (NetworkScanReq) returns (NetworkScanResp) {};
 	// Retrieve firmware details from storage devices on server

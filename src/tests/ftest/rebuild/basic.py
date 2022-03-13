@@ -1,6 +1,6 @@
 #!/usr/bin/python3
 """
-  (C) Copyright 2018-2021 Intel Corporation.
+  (C) Copyright 2018-2022 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -57,7 +57,7 @@ class RbldBasic(TestWithServers):
                 pi_ndisabled=0
             )
             status &= self.pool[index].check_rebuild_status(
-                rs_done=1, rs_obj_nr=0, rs_rec_nr=0, rs_errno=0)
+                rs_state=1, rs_obj_nr=0, rs_rec_nr=0, rs_errno=0)
         self.assertTrue(status, "Error confirming pool info before rebuild")
 
         # Create containers in each pool and fill them with data
@@ -110,7 +110,7 @@ class RbldBasic(TestWithServers):
                 pi_ndisabled=target_count
             )
             status &= self.pool[index].check_rebuild_status(
-                rs_done=1, rs_obj_nr=rs_obj_nr[index],
+                rs_state=2, rs_obj_nr=rs_obj_nr[index],
                 rs_rec_nr=rs_rec_nr[index], rs_errno=0)
         self.assertTrue(status, "Error confirming pool info after rebuild")
 
