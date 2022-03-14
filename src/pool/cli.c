@@ -347,11 +347,8 @@ pool_map_get_ranks(struct dc_pool *pool, struct pool_map *map, bool get_enabled,
 
 	nnodes_alloc = get_enabled ? nnodes_enabled : nnodes_disabled;
 	ranklist = d_rank_list_alloc(nnodes_alloc);
-	if (!ranklist) {
-		D_ERROR(DF_UUID": failed to allocate ranklist with %u ranks\n",
-			DP_UUID(pool->dp_pool), nnodes_alloc);
+	if (!ranklist)
 		D_GOTO(err, rc = -DER_NOMEM);
-	}
 
 	for (i = 0, j = 0; i < nnodes_tot; i++) {
 		struct	pool_domain *d = &domains[i];
@@ -416,19 +413,14 @@ process_query_reply(struct dc_pool *pool, struct pool_buf *map_buf,
 		bool	get_enabled = (info ? ((info->pi_bits & DPI_ENGINES_ENABLED) != 0) : false);
 
 		rc = pool_map_get_ranks(pool, map, get_enabled, ranks);
-		if (rc != 0) {
-			D_ERROR(DF_UUID": failed to get %s pool ranks\n",
-				DP_UUID(pool->dp_pool), get_enabled ? "enabled" : "disabled");
+		if (rc != 0)
 			goto out_unlock;
-		}
 
 		/* For debug logging - convert to rank ranges */
 		range_list = d_rank_range_list_create_from_ranks(*ranks);
 		if (range_list) {
 			pool_print_range_list(pool, range_list, get_enabled);
 			d_rank_range_list_free(range_list);
-		} else {
-			D_ERROR(DF_UUID": failed to get rank range list\n", DP_UUID(pool->dp_pool));
 		}
 	}
 
