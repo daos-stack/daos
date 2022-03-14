@@ -470,7 +470,7 @@ pool_buf_parse(struct pool_buf *buf, struct pool_domain **tree_pp)
 	       sizeof(struct pool_domain) * (buf->pb_node_nr) +
 	       sizeof(struct pool_target) * (buf->pb_target_nr);
 
-	D_DEBUG(DB_MGMT, "domain %d node %d target %d\n", buf->pb_domain_nr,
+	D_DEBUG(DB_TRACE, "domain %d node %d target %d\n", buf->pb_domain_nr,
 		buf->pb_node_nr, buf->pb_target_nr);
 
 	D_ALLOC(tree, size);
