@@ -17,7 +17,7 @@ fi
 
 BRANCH=$(git rev-parse --abbrev-ref HEAD 2> /dev/null)
 
-if [ "$BRANCH" == "master" ]
+if [ "$BRANCH" = "master" ]
 then
     echo Checking tree
     flake8 --statistics

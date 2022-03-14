@@ -49,7 +49,7 @@ class DaosCommandBase(CommandWithSubCommand):
         def get_sub_command_class(self):
             # pylint: disable=redefined-variable-type
             """Get the dmg network sub command object."""
-            if (self.sub_command.value in ("list-containers", "list")):
+            if self.sub_command.value in ("list-containers", "list"):
                 self.sub_command_class = self.ListContainersSubCommand()
             elif self.sub_command.value == "query":
                 self.sub_command_class = self.QuerySubCommand()
