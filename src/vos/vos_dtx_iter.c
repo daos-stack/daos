@@ -96,7 +96,7 @@ dtx_iter_prep(vos_iter_type_t type, vos_iter_param_t *param,
 }
 
 static int
-dtx_iter_probe(struct vos_iterator *iter, daos_anchor_t *anchor)
+dtx_iter_probe(struct vos_iterator *iter, daos_anchor_t *anchor, bool next /* Unimplemented */)
 {
 	struct vos_dtx_iter	*oiter = iter2oiter(iter);
 	struct vos_dtx_act_ent	*dae;

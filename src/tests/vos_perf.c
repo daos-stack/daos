@@ -408,10 +408,98 @@ objects_close(void)
 	return 0;
 }
 
+struct counts {
+	int	calls;
+	int	aborts;
+	int	skips;
+};
+
+struct all_counts {
+	struct counts	obj[3];
+	struct counts	dkey[3];
+	struct counts	akey[3];
+	struct counts	value[3];
+};
+
+static void
+handle_cb(vos_iter_type_t type, struct all_counts *counts, int level, unsigned int *acts)
+{
+	struct counts		*type_count = NULL;
+	static int		 count[3];
+
+	switch (type) {
+	case VOS_ITER_OBJ:
+		type_count = &counts->obj[0];
+		break;
+	case VOS_ITER_DKEY:
+		type_count = &counts->dkey[0];
+		break;
+	case VOS_ITER_AKEY:
+		type_count = &counts->akey[0];
+		break;
+	case VOS_ITER_SINGLE:
+	case VOS_ITER_RECX:
+		type_count = &counts->value[0];
+		break;
+	default:
+		D_ASSERT(0);
+		break;
+	}
+
+	D_ASSERT(type_count != NULL);
+
+	*acts = 0;
+	type_count[level].calls++;
+	if (level != 0 && (count[level] + 1) % 2 == 0)
+		*acts |= VOS_ITER_CB_YIELD;
+	if ((count[level] + 1) % 3 == 0) {
+		type_count[level].skips++;
+		*acts |= VOS_ITER_CB_SKIP;
+	} else if (level != 0 && (count[level] + 1) % 4 == 0) {
+		type_count[level].aborts++;
+		*acts |= VOS_ITER_CB_ABORT;
+	}
+
+	count[level]++;
+}
+
+static int
+filter_cb(daos_handle_t ih, vos_iter_desc_t *desc, void *cb_arg, unsigned int *acts)
+{
+	struct all_counts	*counts = cb_arg;
+
+	handle_cb(desc->id_type, counts, 0, acts);
+	return 0;
+}
+
+static int
+pre_cb(daos_handle_t ih, vos_iter_entry_t *entry, vos_iter_type_t type, vos_iter_param_t *param,
+       void *cb_arg, unsigned int *acts)
+{
+	struct all_counts	*counts = cb_arg;
+
+	handle_cb(type, counts, 1, acts);
+	return 0;
+}
+
+static int
+post_cb(daos_handle_t ih, vos_iter_entry_t *entry, vos_iter_type_t type, vos_iter_param_t *param,
+	void *cb_arg, unsigned int *acts)
+{
+	struct all_counts	*counts = cb_arg;
+
+	handle_cb(type, counts, 2, acts);
+	return 0;
+}
+
 static int
 pf_update(struct pf_test *ts, struct pf_param *param)
 {
-	int	rc;
+	vos_iter_param_t	iter_param = {0};
+	struct vos_iter_anchors	anchors = {0};
+	struct all_counts	counts = {0};
+	int			rc;
+	int			i;
 
 	rc = objects_open();
 	if (rc)
@@ -422,6 +510,48 @@ pf_update(struct pf_test *ts, struct pf_param *param)
 		return rc;
 
 	rc = objects_close();
+
+	iter_param.ip_hdl = ts_ctx.tsc_coh;
+	iter_param.ip_flags = 0;
+	iter_param.ip_ih = DAOS_HDL_INVAL;
+	iter_param.ip_epr.epr_hi = crt_hlc_get();
+	iter_param.ip_epr.epr_lo = 0;
+	iter_param.ip_filter_cb = filter_cb;
+	iter_param.ip_filter_arg = &counts;
+	rc = vos_iterate(&iter_param, VOS_ITER_OBJ, true, &anchors, pre_cb, post_cb, &counts, NULL);
+
+	for (i = 0; i < 3; i++)
+	{
+		switch(i) {
+		case 0:
+			printf("\nFILTER:\n");
+			break;
+		case 1:
+			printf("\nPRECALL:\n");
+			break;
+		case 2:
+			printf("\nPOSTCALL:\n");
+			break;
+		}
+
+		printf(" OBJECT:\n");
+		printf("  calls:  %10d\n", counts.obj[i].calls);
+		printf("  skips:  %10d\n", counts.obj[i].skips);
+		printf("  aborts: %10d\n", counts.obj[i].aborts);
+		printf(" DKEY:\n");
+		printf("  calls:  %10d\n", counts.dkey[i].calls);
+		printf("  skips:  %10d\n", counts.dkey[i].skips);
+		printf("  aborts: %10d\n", counts.dkey[i].aborts);
+		printf(" AKEY:\n");
+		printf("  calls:  %10d\n", counts.akey[i].calls);
+		printf("  skips:  %10d\n", counts.akey[i].skips);
+		printf("  aborts: %10d\n", counts.akey[i].aborts);
+		printf(" VALUE:\n");
+		printf("  calls:  %10d\n", counts.value[i].calls);
+		printf("  skips:  %10d\n", counts.value[i].skips);
+		printf("  aborts: %10d\n", counts.value[i].aborts);
+	}
+
 	return rc;
 }
 

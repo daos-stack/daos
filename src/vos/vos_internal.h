@@ -888,7 +888,7 @@ struct vos_iter_ops {
 	int	(*iop_finish)(struct vos_iterator *iter);
 	/** Set the iterating cursor to the provided @anchor */
 	int	(*iop_probe)(struct vos_iterator *iter,
-			     daos_anchor_t *anchor);
+			     daos_anchor_t *anchor, bool next);
 	/** move forward the iterating cursor */
 	int	(*iop_next)(struct vos_iterator *iter, daos_anchor_t *anchor);
 	/** fetch the record that the cursor points to */

@@ -527,8 +527,8 @@ oi_iter_match_probe(struct vos_iterator *iter, daos_anchor_t *anchor)
 						&acts);
 			if (rc != 0)
 				goto failed;
-			if (acts & VOS_ITER_CB_ABORT)
-				return VOS_ITER_CB_ABORT;
+			if (acts & VOS_ITER_CB_EXIT)
+				return VOS_ITER_CB_EXIT;
 			if (start_seq != vos_sched_seq())
 				return acts | VOS_ITER_CB_YIELD;
 			if (acts != 0) {
@@ -564,15 +564,17 @@ next:
 }
 
 static int
-oi_iter_probe(struct vos_iterator *iter, daos_anchor_t *anchor)
+oi_iter_probe(struct vos_iterator *iter, daos_anchor_t *anchor, bool next)
 {
 	struct vos_oi_iter	*oiter = iter2oiter(iter);
+	dbtree_probe_opc_t	 next_opc;
 	dbtree_probe_opc_t	 opc;
 	int			 rc;
 
 	D_ASSERT(iter->it_type == VOS_ITER_OBJ);
 
-	opc = vos_anchor_is_zero(anchor) ? BTR_PROBE_FIRST : BTR_PROBE_GE;
+	next_opc = next ? BTR_PROBE_GT : BTR_PROBE_GE;
+	opc = vos_anchor_is_zero(anchor) ? BTR_PROBE_FIRST : next_opc;
 	rc = dbtree_iter_probe(oiter->oit_hdl, opc, vos_iter_intent(iter), NULL,
 			       anchor);
 	if (rc)

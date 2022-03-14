@@ -312,7 +312,7 @@ vos_iter_finish(daos_handle_t ih)
 }
 
 int
-vos_iter_probe(daos_handle_t ih, daos_anchor_t *anchor)
+vos_iter_probe_ex(daos_handle_t ih, daos_anchor_t *anchor, bool next)
 {
 	struct vos_iterator *iter = vos_hdl2iter(ih);
 	struct dtx_handle   *old;
@@ -323,7 +323,7 @@ vos_iter_probe(daos_handle_t ih, daos_anchor_t *anchor)
 
 	old = vos_dth_get();
 	vos_dth_set(iter->it_dth);
-	rc = iter->it_ops->iop_probe(iter, anchor);
+	rc = iter->it_ops->iop_probe(iter, anchor, next);
 	vos_dth_set(old);
 	if (rc == 0)
 		iter->it_state = VOS_ITS_OK;
@@ -334,6 +334,12 @@ vos_iter_probe(daos_handle_t ih, daos_anchor_t *anchor)
 	D_DEBUG(DB_IO, "done probing iterator rc = "DF_RC"\n", DP_RC(rc));
 
 	return rc;
+}
+
+int
+vos_iter_probe(daos_handle_t ih, daos_anchor_t *anchor)
+{
+	return vos_iter_probe_ex(ih, anchor, false);
 }
 
 static inline int
@@ -606,16 +612,14 @@ is_skip(unsigned int acts)
 	return (acts & VOS_ITER_CB_SKIP);
 }
 
-static inline bool
-clear_flag(unsigned int *acts, unsigned int flag)
-{
-	*acts &= ~flag;
-}
-
 enum {
+	/** Pre-call should run */
 	VOS_ITER_STAGE_PRE,
+	/** Pre-call already ran, recurse to child */
+	VOS_ITER_STAGE_RECURSE,
+	/** Already ran child itertor, run post */
 	VOS_ITER_STAGE_POST,
-}
+};
 
 /**
  * Iterate VOS entries (i.e., containers, objects, dkeys, etc.) and call \a
@@ -634,8 +638,7 @@ vos_iterate_internal(vos_iter_param_t *param, vos_iter_type_t type,
 	daos_epoch_t		read_time = 0;
 	daos_handle_t		ih;
 	unsigned int		acts;
-	int			stage;
-	bool			skipped;
+	int			stage = VOS_ITER_STAGE_PRE;
 	int			rc;
 
 	D_ASSERT(type >= VOS_ITER_COUUID && type <= VOS_ITER_RECX);
@@ -677,13 +680,14 @@ vos_iterate_internal(vos_iter_param_t *param, vos_iter_type_t type,
 	acts = 0;
 probe:
 	rc = vos_iter_probe_ex(ih, anchor, is_skip(acts));
-	if (rc & VOS_ITER_CB_YIELD) {
-		set_reprobe(type, VOS_ITER_CB_YIELD, anchors, param->ip_flags);
+	if (rc > 0 && rc & VOS_ITER_CB_YIELD) {
+		set_reprobe(type, rc, anchors, param->ip_flags);
 		D_ASSERT(need_reprobe(type, anchors));
 		acts = rc; /** In case skip was set */
+		stage = VOS_ITER_STAGE_PRE;
 		goto probe;
 	}
-	/** Let VOS_ITER_CB_ABORT fall through and get handled as a non-zero exit */
+	/** Let VOS_ITER_CB_EXIT fall through and get handled as a non-zero exit */
 	if (rc != 0) {
 		if (rc == -DER_NONEXIST || rc == -DER_AGAIN) {
 			daos_anchor_set_eof(anchor);
@@ -706,9 +710,8 @@ probe:
 		}
 
 		acts = 0;
-		if (stage == VOS_ITER_STAGE_POST)
-			goto post;
-		if (pre_cb) {
+
+		if (pre_cb && stage == VOS_ITER_STAGE_PRE) {
 			acts = 0;
 			rc = vos_iter_cb(pre_cb, ih, &iter_ent, type, param, arg, &acts);
 			if (rc != 0)
@@ -720,13 +723,13 @@ probe:
 				break;
 
 			if (acts & VOS_ITER_CB_RESTART) {
-				clear_flag(&acts, VOS_ITER_CB_SKIP);
+				acts = 0;
 				daos_anchor_set_zero(anchor);
 				goto probe;
 			}
 
 			if (!is_skip(acts))
-				stage = VOS_ITER_STAGE_POST;
+				stage = VOS_ITER_STAGE_RECURSE;
 
 			if (need_reprobe(type, anchors)) {
 				D_ASSERT(!daos_anchor_is_zero(anchor) &&
@@ -739,10 +742,9 @@ probe:
 		if (is_skip(acts))
 			goto next;
 
-		D_ASSERT(acts == 0);
-
 		if (recursive && !is_last_level(type) &&
-		    iter_ent.ie_child_type != VOS_ITER_NONE) {
+		    iter_ent.ie_child_type != VOS_ITER_NONE &&
+		    stage == VOS_ITER_STAGE_RECURSE) {
 			vos_iter_param_t	child_param = *param;
 
 			child_param.ip_ih = ih;
@@ -772,6 +774,7 @@ probe:
 
 			reset_anchors(iter_ent.ie_child_type, anchors);
 
+			stage = VOS_ITER_STAGE_POST;
 			/** The child iterator may yield during iteration.
 			 *  It isn't necessary to reprobe the parent in order
 			 *  to continue iterating on the child because it
@@ -792,6 +795,8 @@ probe:
 			if (rc != 0)
 				break;
 
+			stage = VOS_ITER_STAGE_PRE;
+
 			set_reprobe(type, acts, anchors, param->ip_flags);
 
 			if (acts & VOS_ITER_CB_ABORT)
@@ -799,25 +804,29 @@ probe:
 
 			if (acts & VOS_ITER_CB_RESTART) {
 				daos_anchor_set_zero(anchor);
+				acts = 0;
 				goto probe;
 			}
 
 			if (need_reprobe(type, anchors)) {
 				D_ASSERT(!daos_anchor_is_zero(anchor) &&
 					 !daos_anchor_is_eof(anchor));
+				/** Advance the iterator */
+				acts = VOS_ITER_CB_SKIP;
 				goto probe;
 			}
 		}
 
 next:
+		stage = VOS_ITER_STAGE_PRE;
 		rc = vos_iter_next(ih, anchor);
-		if (rc & VOS_ITER_CB_YIELD) {
+		if (rc > 0 && rc & VOS_ITER_CB_YIELD) {
 			set_reprobe(type, VOS_ITER_CB_YIELD, anchors, param->ip_flags);
 			D_ASSERT(need_reprobe(type, anchors));
 			acts = rc; /** In case skip was set */
 			goto probe;
 		}
-		/** Let VOS_ITER_CB_ABORT fall through and get handled as a non-zero exit */
+		/** Let VOS_ITER_CB_EXIT fall through and get handled as a non-zero exit */
 		if (rc) {
 			VOS_TX_TRACE_FAIL(rc,
 					  "failed to iterate next (type=%d): "

@@ -750,14 +750,16 @@ cont_iter_next(struct vos_iterator *iter, daos_anchor_t *anchor)
 }
 
 static int
-cont_iter_probe(struct vos_iterator *iter, daos_anchor_t *anchor)
+cont_iter_probe(struct vos_iterator *iter, daos_anchor_t *anchor, bool next)
 {
 	struct cont_iterator	*co_iter = vos_iter2co_iter(iter);
+	dbtree_probe_opc_t	next_opc;
 	dbtree_probe_opc_t	opc;
 
 	D_ASSERT(iter->it_type == VOS_ITER_COUUID);
 
-	opc = vos_anchor_is_zero(anchor) ? BTR_PROBE_FIRST : BTR_PROBE_GE;
+	next_opc = next ? BTR_PROBE_GT : BTR_PROBE_GE;
+	opc = vos_anchor_is_zero(anchor) ? BTR_PROBE_FIRST : next_opc;
 	/* The container tree will not be affected by the iterator intent,
 	 * just set it as DAOS_INTENT_DEFAULT.
 	 */
