@@ -79,6 +79,7 @@ def library(env, *args, **kwargs):
             kwargs['LIBS'].append('$LIBS')
     return denv.SharedLibrary(*args, **kwargs)
 
+
 def program(env, *args, **kwargs):
     """build Program with relative RPATH"""
     denv = env.Clone()
@@ -89,6 +90,7 @@ def program(env, *args, **kwargs):
             kwargs['LIBS'].append('$LIBS')
     return denv.Program(*args, **kwargs)
 
+
 def test(env, *args, **kwargs):
     """build Program with fixed RPATH"""
     denv = env.Clone()
@@ -98,6 +100,7 @@ def test(env, *args, **kwargs):
         if '$LIBS' not in kwargs['LIBS']:
             kwargs['LIBS'].append('$LIBS')
     return denv.Program(*args, **kwargs)
+
 
 def install(env, subdir, files):
     """install file to the subdir"""

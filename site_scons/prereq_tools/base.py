@@ -56,9 +56,9 @@ from SCons.Errors import UserError
 # pylint: enable=no-name-in-module
 # pylint: enable=import-error
 from prereq_tools import mocked_tests
-import subprocess #nosec
+import subprocess  # nosec
 try:
-    from subprocess import DEVNULL # nosec
+    from subprocess import DEVNULL  # nosec
 except ImportError:
     # pylint: disable=consider-using-with
     DEVNULL = open(os.devnull, "wb")
