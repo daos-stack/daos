@@ -2,6 +2,17 @@
 
 We are pleased to announce the release of DAOS version 2.0.
 
+# DAOS Version 2.0.2 (2022-03-21)
+
+TBD
+
+## Updates in this Release
+
+TBD
+
+## Known Issues and limitations
+
+TBD
 
 # DAOS Version 2.0.1 (2022-01-31)
 
