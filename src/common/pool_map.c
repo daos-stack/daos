@@ -2695,11 +2695,8 @@ pool_map_get_ranks(uuid_t pool_uuid, struct pool_map *map, bool get_enabled, d_r
 
 	nnodes_alloc = get_enabled ? nnodes_enabled : nnodes_disabled;
 	ranklist = d_rank_list_alloc(nnodes_alloc);
-	if (!ranklist) {
-		D_ERROR(DF_UUID": failed to allocate ranklist with %u ranks\n",
-			DP_UUID(pool_uuid), nnodes_alloc);
+	if (!ranklist)
 		D_GOTO(err, rc = -DER_NOMEM);
-	}
 
 	for (i = 0, j = 0; i < nnodes_tot; i++) {
 		struct	pool_domain *d = &domains[i];

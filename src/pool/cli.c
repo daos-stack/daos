@@ -361,19 +361,14 @@ process_query_reply(struct dc_pool *pool, struct pool_buf *map_buf,
 		bool	get_enabled = (info ? ((info->pi_bits & DPI_ENGINES_ENABLED) != 0) : false);
 
 		rc = pool_map_get_ranks(pool->dp_pool, map, get_enabled, ranks);
-		if (rc != 0) {
-			D_ERROR(DF_UUID": failed to get %s pool ranks\n",
-				DP_UUID(pool->dp_pool), get_enabled ? "enabled" : "disabled");
+		if (rc != 0)
 			goto out_unlock;
-		}
 
 		/* For debug logging - convert to rank ranges */
 		range_list = d_rank_range_list_create_from_ranks(*ranks);
 		if (range_list) {
 			pool_print_range_list(pool, range_list, get_enabled);
 			d_rank_range_list_free(range_list);
-		} else {
-			D_ERROR(DF_UUID": failed to get rank range list\n", DP_UUID(pool->dp_pool));
 		}
 	}
 
