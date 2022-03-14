@@ -228,7 +228,7 @@ def start_slurm(args):
         "chown {}. {}".format(args.user, "/var/spool/slurmctld"),
         "chmod 775 {}".format("/var/spool/slurmctld"),
         "rm -f /var/spool/slurmctld/clustername"
-        ]
+                ]
 
     if execute_cluster_cmds(all_nodes, cmd_list, args.sudo) > 0:
         return 1
