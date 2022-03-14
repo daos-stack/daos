@@ -28,13 +28,22 @@ import compiler_setup
 from prereq_tools import PreReqComponent
 import stack_analyzer
 
-def get_version():
+def get_version(env):
     """ Read version from VERSION file """
     with open("VERSION", "r") as version_file:
-        return version_file.read().rstrip()
+        version = version_file.read().rstrip()
+
+        (major, minor, fix) = version.split('.')
+
+        env.Append(DAOS_VERSION_MAJOR=major)
+        env.Append(DAOS_VERSION_MINOR=minor)
+        env.Append(DAOS_VERSION_FIX=fix)
+
+        return version
+
 
 API_VERSION_MAJOR = "2"
-API_VERSION_MINOR = "1"
+API_VERSION_MINOR = "2"
 API_VERSION_FIX = "0"
 API_VERSION = "{}.{}.{}".format(API_VERSION_MAJOR, API_VERSION_MINOR,
                                 API_VERSION_FIX)
@@ -366,7 +375,7 @@ def scons(): # pylint: disable=too-many-locals
     conf_dir = ARGUMENTS.get('CONF_DIR', '$PREFIX/etc')
 
     env.Alias('install', '$PREFIX')
-    daos_version = get_version()
+    daos_version = get_version(env)
 
     set_defaults(env, daos_version)
 

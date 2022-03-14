@@ -25,15 +25,13 @@ import yaml
 from defusedxml import minidom
 import defusedxml.ElementTree as ET
 
+from ClusterShell.NodeSet import NodeSet
+from ClusterShell.Task import task_self
+
 # Graft some functions from xml.etree into defusedxml etree.
 ET.Element = Element
 ET.SubElement = SubElement
 ET.tostring = tostring
-
-
-from avocado.utils.distro import detect
-from ClusterShell.NodeSet import NodeSet
-from ClusterShell.Task import task_self
 
 try:
     # For python versions >= 3.2
@@ -746,10 +744,12 @@ def auto_detect_devices(host_list, device_type, length, device_filter=None):
 
     # Find the devices on each host
     if device_type == "VMD":
+        # Exclude the controller revision as this causes heterogeneous clush output
         command_list = [
             "/sbin/lspci -D",
             "grep -E '^[0-9a-f]{{{0}}}:[0-9a-f]{{2}}:[0-9a-f]{{2}}.[0-9a-f] '".format(length),
-            "grep -E 'Volume Management Device NVMe RAID Controller'"]
+            "grep -E 'Volume Management Device NVMe RAID Controller'",
+            r"sed -E 's/\(rev\s+([a-f0-9])+\)//I'"]
     elif device_type == "NVMe":
         command_list = [
             "/sbin/lspci -D",
@@ -1714,6 +1714,11 @@ def resolve_debuginfo(pkg):
     return package_info
 
 
+def is_el(distro):
+    """Return True if a distro is an EL"""
+    return [d for d in ["almalinux", "rocky", "centos", "rhel"] if d in distro.name.lower()]
+
+
 def install_debuginfos():
     """Install debuginfo packages.
 
@@ -1722,9 +1727,13 @@ def install_debuginfos():
         on this node also.
 
     """
+    # The distro_utils.py file is installed in the util sub-directory relative to this file location
+    sys.path.append(os.path.join(os.getcwd(), "util"))
+    from distro_utils import detect         # pylint: disable=import-outside-toplevel
+
     distro_info = detect()
     install_pkgs = [{'name': 'gdb'}]
-    if "centos" in distro_info.name.lower():
+    if is_el(distro_info):
         install_pkgs.append({'name': 'python3-debuginfo'})
 
     cmds = []
@@ -1758,8 +1767,7 @@ def install_debuginfos():
                 dnf_args.extend(["--enablerepo=*-debuginfo", "--exclude",
                                  "nvml-debuginfo", "libpmemobj",
                                  "python36", "openmpi3", "gcc"])
-            elif "centos" in distro_info.name.lower() and \
-                 distro_info.version == "8":
+            elif is_el(distro_info) and distro_info.version == "8":
                 dnf_args.extend(["--enablerepo=*-debuginfo", "libpmemobj",
                                  "python3", "openmpi", "gcc"])
             else:
@@ -1794,7 +1802,7 @@ def install_debuginfos():
 
     # Now install a few pkgs that debuginfo-install wouldn't
     cmd = ["sudo", "dnf", "-y"]
-    if "centos" in distro_info.name.lower():
+    if is_el(distro_info):
         cmd.append("--enablerepo=*debug*")
     cmd.append("install")
     for pkg in install_pkgs:
@@ -1819,7 +1827,7 @@ def install_debuginfos():
     if retry:
         print("Going to refresh caches and try again")
         cmd_prefix = ["sudo", "dnf"]
-        if "centos" in distro_info.name.lower():
+        if is_el(distro_info):
             cmd_prefix.append("--enablerepo=*debug*")
         cmds.insert(0, cmd_prefix + ["clean", "all"])
         cmds.insert(1, cmd_prefix + ["makecache"])

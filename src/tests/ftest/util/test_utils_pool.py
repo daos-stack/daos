@@ -11,7 +11,8 @@ import json
 
 from test_utils_base import TestDaosApiBase, LabelGenerator
 from avocado import fail_on
-from command_utils import BasicParameter, CommandFailure
+from command_utils import BasicParameter
+from exception_utils import CommandFailure
 from pydaos.raw import (DaosApiError, DaosPool, c_uuid_to_str, daos_cref)
 from general_utils import check_pool_files, DaosTestError, run_command
 from env_modules import load_mpi
@@ -535,7 +536,7 @@ class TestPool(TestDaosApiBase):
         return self._check_info(checks)
 
     def check_rebuild_status(self, rs_version=None, rs_seconds=None,
-                             rs_errno=None, rs_done=None, rs_padding32=None,
+                             rs_errno=None, rs_state=None, rs_padding32=None,
                              rs_fail_rank=None, rs_toberb_obj_nr=None,
                              rs_obj_nr=None, rs_rec_nr=None, rs_size=None):
         # pylint: disable=unused-argument
@@ -551,7 +552,7 @@ class TestPool(TestDaosApiBase):
             rs_version (int, optional): rebuild version. Defaults to None.
             rs_seconds (int, optional): rebuild seconds. Defaults to None.
             rs_errno (int, optional): rebuild error number. Defaults to None.
-            rs_done (int, optional): rebuild done flag. Defaults to None.
+            rs_state (int, optional): rebuild state flag. Defaults to None.
             rs_padding32 (int, optional): padding. Defaults to None.
             rs_fail_rank (int, optional): rebuild fail target. Defaults to None.
             rs_toberb_obj_nr (int, optional): number of objects to be rebuilt.
@@ -590,7 +591,7 @@ class TestPool(TestDaosApiBase):
 
         if self.control_method.value == self.USE_API:
             self.display_pool_rebuild_status()
-            status = self.info.pi_rebuild_st.rs_done == 1
+            status = self.info.pi_rebuild_st.rs_state == 2
         elif self.control_method.value == self.USE_DMG:
             self.set_query_data()
             self.log.info(
@@ -785,7 +786,7 @@ class TestPool(TestDaosApiBase):
         """
         self.get_info()
         keys = (
-            "rs_version", "rs_padding32", "rs_errno", "rs_done",
+            "rs_version", "rs_padding32", "rs_errno", "rs_state",
             "rs_toberb_obj_nr", "rs_obj_nr", "rs_rec_nr")
         return {key: getattr(self.info.pi_rebuild_st, key) for key in keys}
 
