@@ -28,8 +28,7 @@ class DmvrDstCreate(DataMoverTestBase):
         super().setUp()
 
         # Get the parameters
-        self.ior_flags = self.params.get(
-            "ior_flags", "/run/ior/*")
+        self.ior_flags = self.params.get("ior_flags", "/run/ior/*")
         self.test_file = self.ior_cmd.test_file.value
 
         # For dataset_gen and dataset_verify
@@ -281,7 +280,8 @@ class DmvrDstCreate(DataMoverTestBase):
             container properties and user attributes.
 
         :avocado: tags=all,full_regression
-        :avocado: tags=datamover,dcp
+        :avocado: tags=vm
+        :avocado: tags=datamover,mfu,mfu_dcp,dfs,ior
         :avocado: tags=dm_dst_create,dm_dst_create_dcp_posix_dfs
         """
         self.run_dm_dst_create("DCP", "POSIX", "DFS", True)
@@ -295,7 +295,8 @@ class DmvrDstCreate(DataMoverTestBase):
             container properties and user attributes.
 
         :avocado: tags=all,full_regression
-        :avocado: tags=datamover,dcp
+        :avocado: tags=vm
+        :avocado: tags=datamover,mfu,mfu_dcp
         :avocado: tags=dm_dst_create,dm_dst_create_dcp_posix_daos
         """
         self.run_dm_dst_create("DCP", "POSIX", "DAOS", True)
@@ -309,7 +310,8 @@ class DmvrDstCreate(DataMoverTestBase):
             container properties and user attributes.
 
         :avocado: tags=all,full_regression
-        :avocado: tags=datamover,dcp
+        :avocado: tags=vm
+        :avocado: tags=datamover,mfu,mfu_dcp
         :avocado: tags=dm_dst_create,dm_dst_create_dcp_unknown_daos
         """
         self.run_dm_dst_create("DCP", None, "DAOS", True)
@@ -323,7 +325,8 @@ class DmvrDstCreate(DataMoverTestBase):
             container properties and user attributes.
 
         :avocado: tags=all,full_regression
-        :avocado: tags=datamover,fs_copy
+        :avocado: tags=vm
+        :avocado: tags=datamover,daos_fs_copy,dfs,ior
         :avocado: tags=dm_dst_create,dm_dst_create_fs_copy_posix_dfs
         """
         self.run_dm_dst_create("FS_COPY", "POSIX", "DFS", False)
