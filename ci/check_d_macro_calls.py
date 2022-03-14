@@ -364,6 +364,7 @@ def check_lines(lines):
                 line.mark('Add check for alloc fail')
     show_patch(lines)
 
+
 CODE_MATCH = ['D_FREE', 'D_ALLOC']
 
 
@@ -401,6 +402,7 @@ def main():
             continue
         match_lines.append(CodeLine(line))
     check_lines(match_lines)
+
 
 if __name__ == '__main__':
     main()
