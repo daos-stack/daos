@@ -44,14 +44,14 @@ def is_ucx_build(benv):
 
 def get_build_tags(benv):
     "Get custom go build tags."
-    tags = ""
+    tags = []
     if is_firmware_mgmt_build(benv):
-        tags += "firmware "
+        tags.append("firmware")
     if is_ucx_build(benv):
-        tags += "ucx "
+        tags.append("ucx")
     if tags == "":
         return ""
-    return "-tags " + tags
+    return "-tags {}".format(','.join(tags))
 
 def is_release_build(benv):
     "Check whether this build is for release."
