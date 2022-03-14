@@ -760,7 +760,7 @@ key_iter_fetch(struct vos_obj_iter *oiter, vos_iter_entry_t *ent,
 		if (acts & VOS_ITER_CB_ABORT)
 			return VOS_ITER_CB_ABORT;
 		if (start_seq != vos_sched_seq())
-			return VOS_ITER_CB_YIELD;
+			return acts | VOS_ITER_CB_YIELD;
 		if (acts != 0) {
 			if (acts & VOS_ITER_CB_SKIP)
 				return IT_OPC_NEXT;
@@ -957,7 +957,7 @@ retry:
 		if (rc == 0)
 			goto retry;
 	}
-	D_ASSERT(rc <= 0 || rc == VOS_ITER_CB_ABORT || rc == VOS_ITER_CB_YIELD);
+	D_ASSERT(rc <= 0 || rc == VOS_ITER_CB_ABORT || (rc & VOS_ITER_CB_YIELD));
 	VOS_TX_TRACE_FAIL(rc, "match failed, rc="DF_RC"\n",
 			  DP_RC(rc));
 	return rc;

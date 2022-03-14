@@ -530,7 +530,7 @@ oi_iter_match_probe(struct vos_iterator *iter, daos_anchor_t *anchor)
 			if (acts & VOS_ITER_CB_ABORT)
 				return VOS_ITER_CB_ABORT;
 			if (start_seq != vos_sched_seq())
-				return VOS_ITER_CB_YIELD;
+				return acts | VOS_ITER_CB_YIELD;
 			if (acts != 0) {
 				if (acts & VOS_ITER_CB_SKIP)
 					goto next;

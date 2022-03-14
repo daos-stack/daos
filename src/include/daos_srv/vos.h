@@ -913,6 +913,24 @@ int
 vos_iter_probe(daos_handle_t ih, daos_anchor_t *anchor);
 
 /**
+ * Set the iterator cursor to the specified position \a anchor if it is
+ * not NULL, otherwise move the cursor to the begin of the iterator.
+ * This function must be called before using vos_iter_next or vos_iter_fetch.
+ *
+ * \param ih	[IN]		Iterator handle.
+ * \param pos	[IN,OUT]	Optional, position cursor to move to. May
+ *				be modified if entries are skipped during
+ *				probe.
+ * \param next	[IN]		Probe entry after anchor if true
+ *
+ * \return		zero if there is an entry at/after @anchor
+ *			-DER_NONEXIST if no more entry
+ *			negative value if error
+ */
+int
+vos_iter_probe_ex(daos_handle_t ih, daos_anchor_t *anchor, bool next);
+
+/**
  * Move forward the iterator cursor.
  *
  * \param ih	[IN]	Iterator handle.

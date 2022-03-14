@@ -600,6 +600,23 @@ vos_iter_cb(vos_iter_cb_t iter_cb, daos_handle_t ih, vos_iter_entry_t *iter_ent,
 	return rc;
 }
 
+static inline bool
+is_skip(unsigned int acts)
+{
+	return (acts & VOS_ITER_CB_SKIP);
+}
+
+static inline bool
+clear_flag(unsigned int *acts, unsigned int flag)
+{
+	*acts &= ~flag;
+}
+
+enum {
+	VOS_ITER_STAGE_PRE,
+	VOS_ITER_STAGE_POST,
+}
+
 /**
  * Iterate VOS entries (i.e., containers, objects, dkeys, etc.) and call \a
  * cb(\a arg) for each entry.
@@ -617,6 +634,7 @@ vos_iterate_internal(vos_iter_param_t *param, vos_iter_type_t type,
 	daos_epoch_t		read_time = 0;
 	daos_handle_t		ih;
 	unsigned int		acts;
+	int			stage;
 	bool			skipped;
 	int			rc;
 
@@ -656,11 +674,13 @@ vos_iterate_internal(vos_iter_param_t *param, vos_iter_type_t type,
 		iter->it_ignore_uncommitted = 0;
 	}
 	read_time = dtx_is_valid_handle(dth) ? dth->dth_epoch : 0 /* unused */;
+	acts = 0;
 probe:
-	rc = vos_iter_probe(ih, anchor);
-	if (rc == VOS_ITER_CB_YIELD) {
-		set_reprobe(type, VOS_ITER_CB_YIELD, anchors, 0);
+	rc = vos_iter_probe_ex(ih, anchor, is_skip(acts));
+	if (rc & VOS_ITER_CB_YIELD) {
+		set_reprobe(type, VOS_ITER_CB_YIELD, anchors, param->ip_flags);
 		D_ASSERT(need_reprobe(type, anchors));
+		acts = rc; /** In case skip was set */
 		goto probe;
 	}
 	/** Let VOS_ITER_CB_ABORT fall through and get handled as a non-zero exit */
@@ -685,7 +705,9 @@ probe:
 			break;
 		}
 
-		skipped = false;
+		acts = 0;
+		if (stage == VOS_ITER_STAGE_POST)
+			goto post;
 		if (pre_cb) {
 			acts = 0;
 			rc = vos_iter_cb(pre_cb, ih, &iter_ent, type, param, arg, &acts);
@@ -693,15 +715,18 @@ probe:
 				break;
 
 			set_reprobe(type, acts, anchors, param->ip_flags);
-			skipped = (acts & VOS_ITER_CB_SKIP);
 
 			if (acts & VOS_ITER_CB_ABORT)
 				break;
 
 			if (acts & VOS_ITER_CB_RESTART) {
+				clear_flag(&acts, VOS_ITER_CB_SKIP);
 				daos_anchor_set_zero(anchor);
 				goto probe;
 			}
+
+			if (!is_skip(acts))
+				stage = VOS_ITER_STAGE_POST;
 
 			if (need_reprobe(type, anchors)) {
 				D_ASSERT(!daos_anchor_is_zero(anchor) &&
@@ -711,7 +736,12 @@ probe:
 
 		}
 
-		if (recursive && !is_last_level(type) && !skipped &&
+		if (is_skip(acts))
+			goto next;
+
+		D_ASSERT(acts == 0);
+
+		if (recursive && !is_last_level(type) &&
 		    iter_ent.ie_child_type != VOS_ITER_NONE) {
 			vos_iter_param_t	child_param = *param;
 
@@ -779,10 +809,12 @@ probe:
 			}
 		}
 
+next:
 		rc = vos_iter_next(ih, anchor);
-		if (rc == VOS_ITER_CB_YIELD) {
-			set_reprobe(type, VOS_ITER_CB_YIELD, anchors, 0);
+		if (rc & VOS_ITER_CB_YIELD) {
+			set_reprobe(type, VOS_ITER_CB_YIELD, anchors, param->ip_flags);
 			D_ASSERT(need_reprobe(type, anchors));
+			acts = rc; /** In case skip was set */
 			goto probe;
 		}
 		/** Let VOS_ITER_CB_ABORT fall through and get handled as a non-zero exit */
