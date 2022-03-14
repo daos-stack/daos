@@ -130,9 +130,7 @@ import (
 	"github.com/daos-stack/daos/src/control/lib/hardware"
 )
 
-type api struct {
-	sync.Mutex
-}
+type api struct{}
 
 func (a *api) runtimeVersion() uint {
 	return uint(C.hwloc_get_api_version())
@@ -143,22 +141,23 @@ func (a *api) compiledVersion() uint {
 }
 
 func (a *api) newTopology() (*topology, func(), error) {
-	topo := &topology{
-		api: a,
-	}
+	topo := &topology{}
 	status := C.hwloc_topology_init(&topo.cTopology)
 	if status != 0 {
 		return nil, nil, errors.Errorf("hwloc topology init failed: %v", status)
 	}
 
 	return topo, func() {
+		topo.Lock()
+		defer topo.Unlock()
 		C.hwloc_topology_destroy(topo.cTopology)
+		topo.cTopology = nil
 	}, nil
 }
 
 // topology is a thin wrapper for the hwloc topology and related functions.
 type topology struct {
-	api       *api
+	sync.RWMutex
 	cTopology C.hwloc_topology_t
 }
 
@@ -167,10 +166,6 @@ func (t *topology) raw() C.hwloc_topology_t {
 }
 
 func (t *topology) getProcessCPUSet(pid int32, flags int) (*cpuSet, func(), error) {
-	// Access to hwloc_get_proc_cpubind must be synchronized
-	t.api.Lock()
-	defer t.api.Unlock()
-
 	cpuset := C.hwloc_bitmap_alloc()
 	if cpuset == nil {
 		return nil, nil, errors.New("hwloc_bitmap_alloc failed")
@@ -179,6 +174,9 @@ func (t *topology) getProcessCPUSet(pid int32, flags int) (*cpuSet, func(), erro
 		C.hwloc_bitmap_free(cpuset)
 	}
 
+	// Access to topology must be synchronized
+	t.RLock()
+	defer t.RUnlock()
 	if status := C.hwloc_get_proc_cpubind(t.cTopology, C.int(pid), cpuset, C.int(flags)); status != 0 {
 		cleanup()
 		return nil, nil, errors.Errorf("hwloc get proc cpubind failed: %v", status)
@@ -188,6 +186,9 @@ func (t *topology) getProcessCPUSet(pid int32, flags int) (*cpuSet, func(), erro
 }
 
 func (t *topology) setFlags() error {
+	t.Lock()
+	defer t.Unlock()
+
 	if status := C.topo_setFlags(t.cTopology); status != 0 {
 		return errors.Errorf("hwloc set flags failed: %v", status)
 	}
@@ -195,6 +196,9 @@ func (t *topology) setFlags() error {
 }
 
 func (t *topology) load() error {
+	t.Lock()
+	defer t.Unlock()
+
 	if status := C.hwloc_topology_load(t.cTopology); status != 0 {
 		return errors.Errorf("hwloc topology load failed: %v", status)
 	}
@@ -202,6 +206,9 @@ func (t *topology) load() error {
 }
 
 func (t *topology) getNextObjByType(objType int, prev *object) (*object, error) {
+	t.RLock()
+	defer t.RUnlock()
+
 	var cPrev C.hwloc_obj_t
 	if prev != nil {
 		cPrev = prev.cObj
@@ -214,6 +221,9 @@ func (t *topology) getNextObjByType(objType int, prev *object) (*object, error) 
 }
 
 func (t *topology) getNumObjByType(objType int) uint {
+	t.RLock()
+	defer t.RUnlock()
+
 	return uint(C.hwloc_get_nbobjs_by_type(t.cTopology, C.hwloc_obj_type_t(objType)))
 }
 
@@ -231,17 +241,16 @@ const (
 	bridgeTypePCI  = C.HWLOC_OBJ_BRIDGE_PCI
 )
 
-type rawTopology interface {
-	raw() C.hwloc_topology_t
-}
-
 // object is a thin wrapper for hwloc_obj_t and related functions.
 type object struct {
 	cObj C.hwloc_obj_t
-	topo rawTopology
+	topo *topology
 }
 
 func (o *object) name() string {
+	o.topo.RLock()
+	defer o.topo.RUnlock()
+
 	objName := C.GoString(o.cObj.name)
 	if objName == "" {
 		var id string
@@ -262,18 +271,30 @@ func (o *object) name() string {
 }
 
 func (o *object) osIndex() uint {
+	o.topo.RLock()
+	defer o.topo.RUnlock()
+
 	return uint(o.cObj.os_index)
 }
 
 func (o *object) logicalIndex() uint {
+	o.topo.RLock()
+	defer o.topo.RUnlock()
+
 	return uint(o.cObj.logical_index)
 }
 
 func (o *object) getNumSiblings() uint {
+	o.topo.RLock()
+	defer o.topo.RUnlock()
+
 	return uint(C.node_get_parent_arity(o.cObj))
 }
 
 func (o *object) getSibling(index uint) (*object, error) {
+	o.topo.RLock()
+	defer o.topo.RUnlock()
+
 	cResult := C.node_get_sibling(o.cObj, C.int(index))
 	if cResult == nil {
 		return nil, errors.Errorf("sibling of object %q not found", o.name())
@@ -283,10 +304,16 @@ func (o *object) getSibling(index uint) (*object, error) {
 }
 
 func (o *object) getNumChildren() uint {
+	o.topo.RLock()
+	defer o.topo.RUnlock()
+
 	return uint(C.node_get_arity(o.cObj))
 }
 
 func (o *object) getChild(index uint) (*object, error) {
+	o.topo.RLock()
+	defer o.topo.RUnlock()
+
 	if o.cObj.children == nil {
 		return nil, errors.Errorf("object %q has no children", o.name())
 	}
@@ -300,6 +327,9 @@ func (o *object) getChild(index uint) (*object, error) {
 }
 
 func (o *object) getAncestorByType(objType int) (*object, error) {
+	o.topo.RLock()
+	defer o.topo.RUnlock()
+
 	cResult := C.hwloc_get_ancestor_obj_by_type(o.topo.raw(), C.hwloc_obj_type_t(objType), o.cObj)
 	if cResult == nil {
 		return nil, errors.Errorf("type %d ancestor of object %q not found", objType, o.name())
@@ -309,6 +339,9 @@ func (o *object) getAncestorByType(objType int) (*object, error) {
 }
 
 func (o *object) getNonIOAncestor() (*object, error) {
+	o.topo.RLock()
+	defer o.topo.RUnlock()
+
 	cResult := C.hwloc_get_non_io_ancestor_obj(o.topo.raw(), o.cObj)
 	if cResult == nil {
 		return nil, errors.Errorf("unable to find non-io ancestor for object %q", o.name())
@@ -318,14 +351,23 @@ func (o *object) getNonIOAncestor() (*object, error) {
 }
 
 func (o *object) cpuSet() *cpuSet {
+	o.topo.RLock()
+	defer o.topo.RUnlock()
+
 	return newCPUSet(o.topo, o.cObj.cpuset)
 }
 
 func (o *object) nodeSet() *nodeSet {
+	o.topo.RLock()
+	defer o.topo.RUnlock()
+
 	return newNodeSet(o.cObj.nodeset)
 }
 
 func (o *object) objType() int {
+	o.topo.RLock()
+	defer o.topo.RUnlock()
+
 	return int(o.cObj._type)
 }
 
@@ -346,6 +388,9 @@ func (o *object) objTypeString() string {
 }
 
 func (o *object) busRange() (*hardware.PCIAddress, *hardware.PCIAddress, error) {
+	o.topo.RLock()
+	defer o.topo.RUnlock()
+
 	if o.objType() != objTypeBridge {
 		return nil, nil, errors.Errorf("device %q is not a Bridge", o.name())
 	}
@@ -364,6 +409,9 @@ func (o *object) busRange() (*hardware.PCIAddress, *hardware.PCIAddress, error) 
 }
 
 func (o *object) bridgeType() (int, error) {
+	o.topo.RLock()
+	defer o.topo.RUnlock()
+
 	if o.objType() != objTypeBridge {
 		return 0, errors.Errorf("device %q is not a Bridge", o.name())
 	}
@@ -375,6 +423,9 @@ func (o *object) bridgeType() (int, error) {
 }
 
 func (o *object) osDevType() (int, error) {
+	o.topo.RLock()
+	defer o.topo.RUnlock()
+
 	if o.objType() != objTypeOSDevice {
 		return 0, errors.Errorf("device %q is not an OS Device", o.name())
 	}
@@ -386,6 +437,9 @@ func (o *object) osDevType() (int, error) {
 }
 
 func (o *object) pciAddr() (*hardware.PCIAddress, error) {
+	o.topo.RLock()
+	defer o.topo.RUnlock()
+
 	switch o.objType() {
 	case objTypePCIDevice, objTypeBridge:
 	default:
@@ -400,6 +454,9 @@ func (o *object) pciAddr() (*hardware.PCIAddress, error) {
 }
 
 func (o *object) linkSpeed() (float64, error) {
+	o.topo.RLock()
+	defer o.topo.RUnlock()
+
 	if o.objType() != objTypePCIDevice {
 		return 0, errors.Errorf("device %q is not a PCI Device", o.name())
 	}
@@ -410,7 +467,7 @@ func (o *object) linkSpeed() (float64, error) {
 	return float64(pciDevAttr.linkspeed), nil
 }
 
-func newObject(topo rawTopology, cObj C.hwloc_obj_t) *object {
+func newObject(topo *topology, cObj C.hwloc_obj_t) *object {
 	if cObj == nil {
 		panic("nil hwloc_obj_t")
 	}
@@ -449,7 +506,7 @@ func (b *bitmap) isSubsetOfBitmap(other *bitmap) bool {
 
 type cpuSet struct {
 	bitmap
-	topo rawTopology
+	topo *topology
 }
 
 func (c *cpuSet) intersects(other *cpuSet) bool {
@@ -468,9 +525,26 @@ func (c *cpuSet) toNodeSet() (*nodeSet, func(), error) {
 	cleanup := func() {
 		C.hwloc_bitmap_free(nodeset)
 	}
+
+	c.topo.RLock()
+	defer c.topo.RUnlock()
 	C.hwloc_cpuset_to_nodeset(c.topo.raw(), c.cSet, nodeset)
 
 	return newNodeSet(nodeset), cleanup, nil
+}
+
+func mustCPUSetFromString(str string, topo *topology) (*cpuSet, func()) {
+	cStr := C.CString(str)
+	defer C.free(unsafe.Pointer(cStr))
+
+	result := C.hwloc_bitmap_alloc()
+	status := C.hwloc_bitmap_sscanf(result, cStr)
+	if status != 0 {
+		C.hwloc_bitmap_free(result)
+		panic(errors.Errorf("failed to construct bitmap from %q, status=%d", str, status))
+	}
+
+	return newCPUSet(topo, result), func() { C.hwloc_bitmap_free(result) }
 }
 
 type nodeSet struct {
@@ -481,7 +555,11 @@ func (n *nodeSet) intersects(other *nodeSet) bool {
 	return n.intersectsBitmap(&other.bitmap)
 }
 
-func newCPUSet(topo rawTopology, cSet C.hwloc_bitmap_t) *cpuSet {
+func (c *nodeSet) isSubsetOf(other *nodeSet) bool {
+	return c.isSubsetOfBitmap(&other.bitmap)
+}
+
+func newCPUSet(topo *topology, cSet C.hwloc_bitmap_t) *cpuSet {
 	return &cpuSet{
 		bitmap: bitmap{
 			cSet: cSet,

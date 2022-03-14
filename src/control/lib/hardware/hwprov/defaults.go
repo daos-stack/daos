@@ -31,6 +31,11 @@ func DefaultTopologyProvider(log logging.Logger) hardware.TopologyProvider {
 	)
 }
 
+// DefaultProcessNUMAProvider gets the default provider for process-related NUMA info.
+func DefaultProcessNUMAProvider(log logging.Logger) hardware.ProcessNUMAProvider {
+	return hwloc.NewProvider(log)
+}
+
 // DefaultFabricInterfaceProviders returns the default fabric interface providers.
 func DefaultFabricInterfaceProviders(log logging.Logger) []hardware.FabricInterfaceProvider {
 	return []hardware.FabricInterfaceProvider{

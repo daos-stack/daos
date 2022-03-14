@@ -293,6 +293,17 @@ int
 crt_req_set_timeout(crt_rpc_t *req, uint32_t timeout_sec);
 
 /**
+ * Get the timeout value of an RPC request.
+ *
+ * \param[in] req              pointer to RPC request
+ * \param[out] timeout_sec     timeout value in seconds
+ *
+ * \return                     DER_SUCCESS on success, negative value if error
+ */
+int
+crt_req_get_timeout(crt_rpc_t *req, uint32_t *timeout_sec);
+
+/**
  * Add reference of the RPC request.
  *
  * The typical usage is that user needs to do some asynchronous operations in

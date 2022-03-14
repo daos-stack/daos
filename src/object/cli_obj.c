@@ -3657,8 +3657,9 @@ update_sub_anchor_cb(struct shard_auxi_args *shard_auxi,
 		struct shard_anchors *sub_anchors;
 
 		sub_anchors = (struct shard_anchors *)obj_arg->akey_anchor->da_sub_anchors;
-		memcpy(&sub_anchors->sa_anchors[shard].ssa_anchor,
-		       shard_arg->la_akey_anchor, sizeof(daos_anchor_t));
+		if (shard_arg->la_akey_anchor)
+			memcpy(&sub_anchors->sa_anchors[shard].ssa_anchor,
+			       shard_arg->la_akey_anchor, sizeof(daos_anchor_t));
 	}
 
 	return 0;
