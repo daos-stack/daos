@@ -9,6 +9,8 @@
 #ifndef __DAOS_POOL_H__
 #define __DAOS_POOL_H__
 
+#define daos_pool_connect daos_pool_connect2
+
 #if defined(__cplusplus)
 extern "C" {
 #endif
