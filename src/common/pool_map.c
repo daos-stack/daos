@@ -495,7 +495,6 @@ pool_buf_parse(struct pool_buf *buf, struct pool_domain **tree_pp)
 		parent->do_child_nr = buf->pb_domain_nr;
 	}
 	parent->do_children = &tree[1];
-	D_DEBUG(DB_MGMT, "root children %d\n", parent->do_child_nr);
 
 	parent++;
 	type = buf->pb_comps[0].co_type;
@@ -511,7 +510,7 @@ pool_buf_parse(struct pool_buf *buf, struct pool_domain **tree_pp)
 			goto out;
 		}
 
-		D_DEBUG(DB_MGMT, "Parse %s[%d] i %d nr %d\n",
+		D_DEBUG(DB_TRACE, "Parse %s[%d] i %d nr %d\n",
 			pool_comp_type2str(comp->co_type), comp->co_id,
 			i, comp->co_nr);
 
@@ -522,7 +521,7 @@ pool_buf_parse(struct pool_buf *buf, struct pool_domain **tree_pp)
 
 		for (; parent < &tree[i]; parent++) {
 			if (type != PO_COMP_TP_TARGET) {
-				D_DEBUG(DB_MGMT, "Setup children for %s[%d]"
+				D_DEBUG(DB_TRACE, "Setup children for %s[%d]"
 					" child nr %d\n",
 					pool_domain_name(parent),
 					parent->do_comp.co_id,
@@ -532,7 +531,7 @@ pool_buf_parse(struct pool_buf *buf, struct pool_domain **tree_pp)
 				nr += parent->do_child_nr;
 			} else {
 				/* parent is the last level domain */
-				D_DEBUG(DB_MGMT, "Setup targets for %s[%d]\n",
+				D_DEBUG(DB_TRACE, "Setup targets for %s[%d]\n",
 					pool_domain_name(parent),
 					parent->do_comp.co_id);
 
@@ -541,7 +540,7 @@ pool_buf_parse(struct pool_buf *buf, struct pool_domain **tree_pp)
 				parent->do_targets    = targets;
 				targets += parent->do_target_nr;
 
-				D_DEBUG(DB_MGMT, "%s[%d] has %d targets\n",
+				D_DEBUG(DB_TRACE, "%s[%d] has %d targets\n",
 					pool_domain_name(parent),
 					parent->do_comp.co_id,
 					parent->do_target_nr);
@@ -552,7 +551,7 @@ pool_buf_parse(struct pool_buf *buf, struct pool_domain **tree_pp)
 			break;
 	}
 
-	D_DEBUG(DB_MGMT, "Build children and targets pointers\n");
+	D_DEBUG(DB_TRACE, "Build children and targets pointers\n");
 
 	for (domain = &tree[0]; domain->do_targets == NULL;
 	     domain = &tree[0]) {
@@ -572,7 +571,7 @@ pool_buf_parse(struct pool_buf *buf, struct pool_domain **tree_pp)
 			for (i = 0; i < parent->do_child_nr; i++, domain++)
 				parent->do_target_nr += domain->do_target_nr;
 
-			D_DEBUG(DB_MGMT, "Set %d target for %s[%d]\n",
+			D_DEBUG(DB_TRACE, "Set %d target for %s[%d]\n",
 				parent->do_target_nr,
 				pool_comp_type2str(parent->do_comp.co_type),
 				parent->do_comp.co_id);
