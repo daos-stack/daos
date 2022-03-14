@@ -9,6 +9,8 @@
 #ifndef __DAOS_POOL_H__
 #define __DAOS_POOL_H__
 
+#define daos_pool_connect daos_pool_connect2
+
 #if defined(__cplusplus)
 extern "C" {
 #endif
@@ -59,35 +61,47 @@ enum daos_media_type_t {
 
 /** Pool target space usage information */
 struct daos_space {
-	/* Total space in bytes */
+	/** Total space in bytes */
 	uint64_t		s_total[DAOS_MEDIA_MAX];
-	/* Free space in bytes */
+	/** Free space in bytes */
 	uint64_t		s_free[DAOS_MEDIA_MAX];
 };
 
 /** Target information */
 typedef struct {
+	/** Target type */
 	daos_target_type_t	ta_type;
+	/** Target state */
 	daos_target_state_t	ta_state;
+	/** Target performance */
 	daos_target_perf_t	ta_perf;
+	/** Target space usage */
 	struct daos_space	ta_space;
 } daos_target_info_t;
 
 /** Pool space usage information */
 struct daos_pool_space {
-	/* Aggregated space for all live targets */
+	/** Aggregated space for all live targets */
 	struct daos_space	ps_space;
-	/* Min target free space in bytes */
+	/** Min target free space in bytes */
 	uint64_t		ps_free_min[DAOS_MEDIA_MAX];
-	/* Max target free space in bytes */
+	/** Max target free space in bytes */
 	uint64_t		ps_free_max[DAOS_MEDIA_MAX];
-	/* Average target free space in bytes */
+	/** Average target free space in bytes */
 	uint64_t		ps_free_mean[DAOS_MEDIA_MAX];
-	/* Target(VOS) count */
+	/** Target(VOS) count */
 	uint32_t		ps_ntargets;
+	/** padding - not used */
 	uint32_t		ps_padding;
 };
 
+enum daos_rebuild_state_t {
+	DRS_IN_PROGRESS		= 0,
+	DRS_NOT_STARTED		= 1,
+	DRS_COMPLETED		= 2,
+};
+
+/** Pool rebuild status */
 struct daos_rebuild_status {
 	/** pool map version in rebuilding or last completed rebuild */
 	uint32_t		rs_version;
@@ -96,24 +110,27 @@ struct daos_rebuild_status {
 	/** errno for rebuild failure */
 	int32_t			rs_errno;
 	/**
-	 * rebuild is done or not, it is valid only if @rs_version is non-zero
+	 * rebuild state, DRS_COMPLETED is valid only if @rs_version is non-zero
 	 */
-	int32_t			rs_done;
-
-	/* padding of rebuild status */
+	union {
+		int32_t		rs_state;
+		int32_t		rs_done;
+	};
+	/** padding of rebuild status */
 	int32_t			rs_padding32;
 
-	/* Failure on which rank */
+	/** Failure on which rank */
 	int32_t			rs_fail_rank;
 	/** total number of objects to be rebuilt. Non-zero and increases when
-	 * rebuilding in progress. When rs_done is 1 it will not change anymore
-	 * and should equal to rs_obj_nr. With both rs_toberb_obj_nr and
-	 * rs_obj_nr the user can know the progress of the rebuilding.
+	 * rebuilding is in progress. When rs_state is DRS_COMPLETED it will
+	 * not change anymore and should be equal to rs_obj_nr. With both
+	 * rs_toberb_obj_nr and rs_obj_nr the user can know the progress
+	 * of rebuilding.
 	 */
 	uint64_t		rs_toberb_obj_nr;
-	/** number of rebuilt objects. Non-zero only if rs_done is 1 */
+	/** number of rebuilt objects. Non-zero only if rs_state is completed. */
 	uint64_t		rs_obj_nr;
-	/** number of rebuilt records. Non-zero only if rs_done is 1 */
+	/** number of rebuilt records. Non-zero only if rs_state is completed. */
 	uint64_t		rs_rec_nr;
 
 	/** rebuild space cost */
@@ -161,7 +178,9 @@ typedef struct {
 
 /** DAOS pool container information */
 struct daos_pool_cont_info {
+	/** Container UUID */
 	uuid_t		pci_uuid;
+	/** Container label */
 	char		pci_label[DAOS_PROP_LABEL_MAX_LEN+1];
 };
 

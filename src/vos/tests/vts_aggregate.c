@@ -1244,6 +1244,11 @@ agg_punches_test(void **state, int record_type, bool discard)
 			}
 		}
 	}
+	/** cleanup() sets the flag to assert if there are items in container garbage collection
+	 *  heap which will always be the case for these punch tests.  So let's run garbage
+	 *  collection before cleanup in this case.
+	 */
+	gc_wait();
 }
 static void
 discard_14(void **state)
