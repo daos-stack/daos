@@ -658,7 +658,7 @@ vos_iterate_internal(vos_iter_param_t *param, vos_iter_type_t type,
 	read_time = dtx_is_valid_handle(dth) ? dth->dth_epoch : 0 /* unused */;
 probe:
 	rc = vos_iter_probe(ih, anchor);
-	if (rc == VOS_ITER_CB_YIELD) {
+	if (rc > 0 && rc == VOS_ITER_CB_YIELD) {
 		set_reprobe(type, VOS_ITER_CB_YIELD, anchors, 0);
 		D_ASSERT(need_reprobe(type, anchors));
 		goto probe;
@@ -780,7 +780,7 @@ probe:
 		}
 
 		rc = vos_iter_next(ih, anchor);
-		if (rc == VOS_ITER_CB_YIELD) {
+		if (rc > 0 && rc == VOS_ITER_CB_YIELD) {
 			set_reprobe(type, VOS_ITER_CB_YIELD, anchors, 0);
 			D_ASSERT(need_reprobe(type, anchors));
 			goto probe;
