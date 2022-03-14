@@ -304,8 +304,9 @@ dss_topo_init()
 	hwloc_topology_init(&dss_topo);
 	hwloc_topology_load(dss_topo);
 
-	dss_core_depth = hwloc_get_type_depth(dss_topo, HWLOC_OBJ_CORE);
-	dss_core_nr = hwloc_get_nbobjs_by_type(dss_topo, HWLOC_OBJ_CORE);
+	/** XXX Usage Processing Unit, i.e. hyperthreading */
+	dss_core_depth = hwloc_get_type_depth(dss_topo, HWLOC_OBJ_PU);
+	dss_core_nr = hwloc_get_nbobjs_by_type(dss_topo, HWLOC_OBJ_PU);
 	depth = hwloc_get_type_depth(dss_topo, HWLOC_OBJ_NUMANODE);
 	numa_node_nr = hwloc_get_nbobjs_by_depth(dss_topo, depth);
 	d_getenv_bool("DAOS_TARGET_OVERSUBSCRIBE", &tgt_oversub);
