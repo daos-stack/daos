@@ -28,6 +28,8 @@ type CtlSvcClient interface {
 	StorageFormat(ctx context.Context, in *StorageFormatReq, opts ...grpc.CallOption) (*StorageFormatResp, error)
 	// Rebind SSD from kernel and bind instead to user-space for use with DAOS
 	StorageNvmeRebind(ctx context.Context, in *NvmeRebindReq, opts ...grpc.CallOption) (*NvmeRebindResp, error)
+	// Add newly inserted SSD to DAOS engine config
+	StorageNvmeAddDevice(ctx context.Context, in *NvmeAddDeviceReq, opts ...grpc.CallOption) (*NvmeAddDeviceResp, error)
 	// Perform a fabric scan to determine the available provider, device, NUMA node combinations
 	NetworkScan(ctx context.Context, in *NetworkScanReq, opts ...grpc.CallOption) (*NetworkScanResp, error)
 	// Retrieve firmware details from storage devices on server
@@ -79,6 +81,15 @@ func (c *ctlSvcClient) StorageFormat(ctx context.Context, in *StorageFormatReq, 
 func (c *ctlSvcClient) StorageNvmeRebind(ctx context.Context, in *NvmeRebindReq, opts ...grpc.CallOption) (*NvmeRebindResp, error) {
 	out := new(NvmeRebindResp)
 	err := c.cc.Invoke(ctx, "/ctl.CtlSvc/StorageNvmeRebind", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *ctlSvcClient) StorageNvmeAddDevice(ctx context.Context, in *NvmeAddDeviceReq, opts ...grpc.CallOption) (*NvmeAddDeviceResp, error) {
+	out := new(NvmeAddDeviceResp)
+	err := c.cc.Invoke(ctx, "/ctl.CtlSvc/StorageNvmeAddDevice", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -185,6 +196,8 @@ type CtlSvcServer interface {
 	StorageFormat(context.Context, *StorageFormatReq) (*StorageFormatResp, error)
 	// Rebind SSD from kernel and bind instead to user-space for use with DAOS
 	StorageNvmeRebind(context.Context, *NvmeRebindReq) (*NvmeRebindResp, error)
+	// Add newly inserted SSD to DAOS engine config
+	StorageNvmeAddDevice(context.Context, *NvmeAddDeviceReq) (*NvmeAddDeviceResp, error)
 	// Perform a fabric scan to determine the available provider, device, NUMA node combinations
 	NetworkScan(context.Context, *NetworkScanReq) (*NetworkScanResp, error)
 	// Retrieve firmware details from storage devices on server
@@ -220,6 +233,9 @@ func (UnimplementedCtlSvcServer) StorageFormat(context.Context, *StorageFormatRe
 }
 func (UnimplementedCtlSvcServer) StorageNvmeRebind(context.Context, *NvmeRebindReq) (*NvmeRebindResp, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method StorageNvmeRebind not implemented")
+}
+func (UnimplementedCtlSvcServer) StorageNvmeAddDevice(context.Context, *NvmeAddDeviceReq) (*NvmeAddDeviceResp, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method StorageNvmeAddDevice not implemented")
 }
 func (UnimplementedCtlSvcServer) NetworkScan(context.Context, *NetworkScanReq) (*NetworkScanResp, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method NetworkScan not implemented")
@@ -314,6 +330,24 @@ func _CtlSvc_StorageNvmeRebind_Handler(srv interface{}, ctx context.Context, dec
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(CtlSvcServer).StorageNvmeRebind(ctx, req.(*NvmeRebindReq))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _CtlSvc_StorageNvmeAddDevice_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(NvmeAddDeviceReq)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(CtlSvcServer).StorageNvmeAddDevice(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/ctl.CtlSvc/StorageNvmeAddDevice",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(CtlSvcServer).StorageNvmeAddDevice(ctx, req.(*NvmeAddDeviceReq))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -516,6 +550,10 @@ var CtlSvc_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "StorageNvmeRebind",
 			Handler:    _CtlSvc_StorageNvmeRebind_Handler,
+		},
+		{
+			MethodName: "StorageNvmeAddDevice",
+			Handler:    _CtlSvc_StorageNvmeAddDevice_Handler,
 		},
 		{
 			MethodName: "NetworkScan",
