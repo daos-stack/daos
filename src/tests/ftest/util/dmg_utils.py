@@ -10,7 +10,7 @@ from grp import getgrgid
 from pwd import getpwuid
 import re
 
-from command_utils_base import CommandFailure
+from exception_utils import CommandFailure
 from dmg_utils_base import DmgCommandBase
 from general_utils import get_numeric_list
 from dmg_utils_params import DmgYamlParameters, DmgTransportCredentials
