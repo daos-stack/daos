@@ -516,7 +516,7 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 # No files in a meta-package
 
 %changelog
-* Wed Mar 03 2022 Michael Hennecke <michael.hennecke@intel.com> 2.0.1-6
+* Mon Mar 14 2022 Michael Hennecke <michael.hennecke@intel.com> 2.0.1-6
 - DAOS-6344: Create secondary group daos_daemons for daos_server and daos_agent
 
 * Wed Mar 02 2022 Liu Xuezhao <xuezhao.liu@intel.com> 2.0.1-5
