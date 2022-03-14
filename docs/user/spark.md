@@ -158,7 +158,6 @@ $ mvn -Pdistribute,with-proto3-netty4-deps clean package -DskipTests -Dgpg.skip 
 After build, the package `daos-java-<version>-assemble.tgz` will be available
 under `distribution/target`.
 
-
 ### <a name="uris"></a>DAOS More URIs
 
 DAOS FileSystem binds to schema "daos".  DAOS URIs are in the format of
@@ -215,7 +214,6 @@ DAOS UNS URI. YARN has some working directories defaulting to local path
 without schema, like "/tmp/yarn", which is then constructed as
 "daos:///tmp/yarn". With this URI, Hadoop cannot connect to DAOS since no
 pool/container UUIDs can be found if daos-site.xml is not provided too.
-               .
 
 Then append below configuration to this file and
 `$HADOOP_HOME/etc/hadoop/yarn-site.xml`.
@@ -273,9 +271,9 @@ $ java -Dpath="your path" -Dattr=user.daos.hadoop -Dvalue="fs.daos.server.group=
 ```
 
 For the "value" property, you need to follow pattern, key1=value1:key2=value2..
-.. And key* should be from
-[daos-site-example.xml](hadoop-daos/src/main/resources/daos-site-example.xml).
-If value* contains characters of '=' or ':', you need to escape the value with
+.. And key\* should be from
+[daos-site-example.xml](https://github.com/daos-stack/daos/blob/release/master/src/client/java/hadoop-daos/src/main/resources/daos-site-example.xml).
+If value\* contains characters of '=' or ':', you need to escape the value with
 below command.
 
 ```bash
