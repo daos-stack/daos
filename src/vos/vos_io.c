@@ -35,9 +35,7 @@ struct vos_io_context {
 	struct bio_desc		*ic_biod;
 	struct vos_ts_set	*ic_ts_set;
 	/** Checksums for bio_iovs in \ic_biod */
-	struct dcs_csum_info	*ic_biov_csums;
-	uint32_t		 ic_biov_csums_at;
-	uint32_t		 ic_biov_csums_nr;
+	struct dcs_ci_list	 ic_csum_list;
 	/** current dkey info */
 	struct vos_ilog_info	 ic_dkey_info;
 	/** current akey info */
@@ -580,7 +578,7 @@ vos_ioc_destroy(struct vos_io_context *ioc, bool evict)
 	if (ioc->ic_biod != NULL)
 		bio_iod_free(ioc->ic_biod);
 
-	D_FREE(ioc->ic_biov_csums);
+	dcs_csum_info_list_fini(&ioc->ic_csum_list);
 
 	if (ioc->ic_obj)
 		vos_obj_release(vos_obj_cache_current(), ioc->ic_obj, evict);
@@ -696,13 +694,9 @@ vos_ioc_create(daos_handle_t coh, daos_unit_oid_t oid, bool read_only,
 		goto error;
 	}
 
-	ioc->ic_biov_csums_nr = 1;
-	ioc->ic_biov_csums_at = 0;
-	D_ALLOC_ARRAY(ioc->ic_biov_csums, ioc->ic_biov_csums_nr);
-	if (ioc->ic_biov_csums == NULL) {
-		rc = -DER_NOMEM;
+	rc = dcs_csum_info_list_init(&ioc->ic_csum_list, iod_nr);
+	if (rc != 0)
 		goto error;
-	}
 
 	for (i = 0; i < iod_nr; i++) {
 		int iov_nr = iods[i].iod_nr;
@@ -768,55 +762,22 @@ iod_fetch(struct vos_io_context *ioc, struct bio_iov *biov)
 	return 0;
 }
 
-static int
-bsgl_csums_resize(struct vos_io_context *ioc)
-{
-	struct dcs_csum_info *csums = ioc->ic_biov_csums;
-	uint32_t	 dcb_nr = ioc->ic_biov_csums_nr;
-
-	if (ioc->ic_biov_csums_at == dcb_nr - 1) {
-		struct dcs_csum_info *new_infos;
-		uint32_t	 new_nr = dcb_nr * 2;
-
-		D_REALLOC_ARRAY(new_infos, csums, dcb_nr, new_nr);
-		if (new_infos == NULL)
-			return -DER_NOMEM;
-
-		ioc->ic_biov_csums = new_infos;
-		ioc->ic_biov_csums_nr = new_nr;
-	}
-
-	return 0;
-}
-
 /** Save the checksum to a list that can be retrieved later */
 static int
 save_csum(struct vos_io_context *ioc, struct dcs_csum_info *csum_info,
 	  struct evt_entry *entry, daos_size_t rec_size)
 {
-	struct dcs_csum_info	*saved_csum_info;
-	int			 rc;
+	struct dcs_csum_info ci_duplicate;
 
 	if (ioc->ic_size_fetch)
 		return 0;
 
-	rc = bsgl_csums_resize(ioc);
-	if (rc != 0)
-		return rc;
+	if (entry == NULL)
+		return dcs_csum_info_save(&ioc->ic_csum_list, csum_info);
 
-	/**
-	 * it's expected that the csum the csum_info points to is in memory
-	 * that will persist until fetch is complete ... so memcpy isn't needed
-	 */
-	saved_csum_info = &ioc->ic_biov_csums[ioc->ic_biov_csums_at];
-	*saved_csum_info = *csum_info;
-	if (entry != NULL)
-		evt_entry_csum_update(&entry->en_ext, &entry->en_sel_ext,
-				      saved_csum_info, rec_size);
-
-	ioc->ic_biov_csums_at++;
-
-	return 0;
+	ci_duplicate = *csum_info;
+	evt_entry_csum_update(&entry->en_ext, &entry->en_sel_ext, &ci_duplicate, rec_size);
+	return dcs_csum_info_save(&ioc->ic_csum_list, &ci_duplicate);
 }
 
 /** Fetch the single value within the specified epoch range of an key */
@@ -2416,12 +2377,12 @@ vos_ioh2desc(daos_handle_t ioh)
 	return ioc->ic_biod;
 }
 
-struct dcs_csum_info *
+struct dcs_ci_list *
 vos_ioh2ci(daos_handle_t ioh)
 {
 	struct vos_io_context *ioc = vos_ioh2ioc(ioh);
 
-	return ioc->ic_biov_csums;
+	return &ioc->ic_csum_list;
 }
 
 uint32_t
@@ -2429,7 +2390,7 @@ vos_ioh2ci_nr(daos_handle_t ioh)
 {
 	struct vos_io_context *ioc = vos_ioh2ioc(ioh);
 
-	return ioc->ic_biov_csums_at;
+	return ioc->ic_csum_list.dcl_csum_infos_nr;
 }
 
 struct bio_sglist *
