@@ -17,7 +17,8 @@ $ ./check_d_macro_calls.py | patch -p1
 """
 
 import sys
-import subprocess # nosec
+import subprocess  # nosec
+
 
 class CodeLine():
 
@@ -212,7 +213,10 @@ class CodeLine():
         else:
             self._set_itext('D_ALLOC_PTR({});'.format(alloc_var))
 
+
 prev_file = None
+
+
 def show_patch(lines):
     """Print a number of lines as a patch to stdout
 
@@ -280,6 +284,7 @@ def show_patch(lines):
         else:
             print(' {}'.format(line.text))
 
+
 def check_lines(lines):
     """Run the checks"""
 
@@ -310,13 +315,11 @@ def check_lines(lines):
             lines[idx-2].remove_brace()
 
         # Check for assignment of NULL after free.
-        elif line.free_var and \
-             lines[idx+1].is_assign_null(line.free_var):
+        elif line.free_var and lines[idx+1].is_assign_null(line.free_var):
             lines[idx+1].drop_line()
 
         # Check for conditional free.
-        elif line.free_var and \
-             lines[idx-1].is_cond_on_var(line.free_var):
+        elif line.free_var and lines[idx-1].is_cond_on_var(line.free_var):
             if lines[idx-1].conditional_brace:
                 if lines[idx+1].close_brace:
                     line.shift_left()
@@ -327,8 +330,7 @@ def check_lines(lines):
                 lines[idx-1].drop_line()
 
         # Check for conditional free with other tests.
-        elif line.free_var and \
-             lines[idx-1].is_cond_part_on_var(line.free_var):
+        elif line.free_var and lines[idx-1].is_cond_part_on_var(line.free_var):
             if lines[idx-1].conditional_brace:
                 if lines[idx+1].close_brace:
                     lines[idx-1].remove_brace()
@@ -354,14 +356,16 @@ def check_lines(lines):
             elif lines[next_line].conditional:
                 if not lines[next_line].is_cond_on_null_var(line.alloc_var):
                     line.mark('Revolve suspect code block')
-            elif lines[next_line].text == '' and len(lines) < next_line and \
-                 lines[next_line+1].conditional:
+            elif (lines[next_line].text == '' and
+                  len(lines) < next_line and
+                  lines[next_line+1].conditional):
                 lines[next_line].drop_line()
             else:
                 line.mark('Add check for alloc fail')
     show_patch(lines)
 
 CODE_MATCH = ['D_FREE', 'D_ALLOC']
+
 
 def main():
     """Check the source tree for D_FREE() usage.
