@@ -2660,26 +2660,36 @@ rdb_raft_resign(struct rdb *db, uint64_t term)
 	D_ASSERTF(rc == 0, DF_RC"\n", DP_RC(rc));
 }
 
-/* Call new election (campaign to be leader) by a follower */
+/* Call a new election (campaign to be leader) by a voting follower. */
 int
 rdb_raft_campaign(struct rdb *db)
 {
+	raft_node_t	       *node;
 	struct rdb_raft_state	state;
 	int			rc;
 
 	ABT_mutex_lock(db->d_raft_mutex);
+
 	if (!raft_is_follower(db->d_raft)) {
-		ABT_mutex_unlock(db->d_raft_mutex);
-		D_DEBUG(DB_MD, DF_DB": no election called, must be follower\n",
-			DP_DB(db));
-		return 0;
+		D_DEBUG(DB_MD, DF_DB": already candidate or leader\n", DP_DB(db));
+		rc = 0;
+		goto out_mutex;
 	}
 
+	node = raft_get_my_node(db->d_raft);
+	if (node == NULL || !raft_node_is_voting(node)) {
+		D_DEBUG(DB_MD, DF_DB": must be voting node\n", DP_DB(db));
+		rc = -DER_INVAL;
+		goto out_mutex;
+	}
+
+	D_DEBUG(DB_MD, DF_DB": calling election from current term %ld\n", DP_DB(db),
+		raft_get_current_term(db->d_raft));
 	rdb_raft_save_state(db, &state);
-	D_DEBUG(DB_MD, DF_DB": calling election from current term %ld\n",
-		DP_DB(db), raft_get_current_term(db->d_raft));
 	rc = raft_election_start(db->d_raft);
 	rc = rdb_raft_check_state(db, &state, rc);
+
+out_mutex:
 	ABT_mutex_unlock(db->d_raft_mutex);
 	return rc;
 }

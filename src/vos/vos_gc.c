@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2019-2021 Intel Corporation.
+ * (C) Copyright 2019-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -1170,6 +1170,6 @@ vos_gc_pool_idle(daos_handle_t poh)
 inline void
 gc_reserve_space(daos_size_t *rsrvd)
 {
-	rsrvd[DAOS_MEDIA_SCM]	+= gc_bag_size * GC_CREDS_MAX;
+	rsrvd[DAOS_MEDIA_SCM]	+= gc_bag_size * (daos_size_t)GC_CREDS_MAX;
 	rsrvd[DAOS_MEDIA_NVME]	+= 0;
 }
