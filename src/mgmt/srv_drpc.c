@@ -1551,7 +1551,7 @@ pool_rebuild_status_from_info(Mgmt__PoolRebuildStatus *rebuild,
 
 		if (info->rs_version == 0)
 			rebuild->state = MGMT__POOL_REBUILD_STATUS__STATE__IDLE;
-		else if (info->rs_done)
+		else if (info->rs_state == DRS_COMPLETED)
 			rebuild->state = MGMT__POOL_REBUILD_STATUS__STATE__DONE;
 		else
 			rebuild->state = MGMT__POOL_REBUILD_STATUS__STATE__BUSY;

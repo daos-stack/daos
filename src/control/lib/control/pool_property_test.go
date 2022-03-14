@@ -129,6 +129,17 @@ func TestControl_PoolProperties(t *testing.T) {
 			value:  "wat",
 			expErr: errors.New("invalid"),
 		},
+		"rf-valid": {
+			name:    "rf",
+			value:   "1",
+			expStr:  "rf:1",
+			expJson: []byte(`{"name":"rf","description":"Pool redundancy factor","value":1}`),
+		},
+		"rf-invalid": {
+			name:   "rf",
+			value:  "100",
+			expErr: errors.New("invalid"),
+		},
 		"space_rb-valid": {
 			name:    "space_rb",
 			value:   "25",
@@ -160,6 +171,28 @@ func TestControl_PoolProperties(t *testing.T) {
 		"self_heal-invalid": {
 			name:   "self_heal",
 			value:  "wat",
+			expErr: errors.New("invalid"),
+		},
+		"ec_pda-valid": {
+			name:    "ec_pda",
+			value:   "1",
+			expStr:  "ec_pda:1",
+			expJson: []byte(`{"name":"ec_pda","description":"Performance domain affinity level of EC","value":1}`),
+		},
+		"ec_pda-invalid": {
+			name:   "ec_pda",
+			value:  "-1",
+			expErr: errors.New("invalid"),
+		},
+		"rp_pda-valid": {
+			name:    "rp_pda",
+			value:   "2",
+			expStr:  "rp_pda:2",
+			expJson: []byte(`{"name":"rp_pda","description":"Performance domain affinity level of RP","value":2}`),
+		},
+		"rp_pda-invalid": {
+			name:   "rp_pda",
+			value:  "-1",
 			expErr: errors.New("invalid"),
 		},
 		"policy-valid": {

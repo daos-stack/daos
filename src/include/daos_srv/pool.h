@@ -37,8 +37,13 @@ struct ds_pool {
 	uint32_t		sp_map_version;	/* temporary */
 	uint32_t		sp_ec_cell_sz;
 	uint64_t		sp_reclaim;
+	uint32_t		sp_redun_fac;
+	/* Performance Domain Affinity Level of EC object. */
+	uint32_t		sp_ec_pda;
+	/* Performance Domain Affinity Level of replicated object */
+	uint32_t		sp_rp_pda;
+	crt_group_t	       *sp_group;
 	struct policy_desc_t	sp_policy_desc;	/* tiering policy descriptor */
-	crt_group_t		*sp_group;
 	ABT_mutex		sp_mutex;
 	ABT_cond		sp_fetch_hdls_cond;
 	ABT_cond		sp_fetch_hdls_done_cond;
