@@ -31,34 +31,32 @@ for file in files:
         continue
     if file != "":
         print(file)
-        file_handle = open('{0}'.format(file), "r+")
-        lines = file_handle.readlines()
-        lines = [tmp.strip(' ') for tmp in lines]
-        while parent_footer in lines:
-            lines.remove(parent_footer)
-        while parent_header in lines:
-            lines.remove(parent_header)
-        file_handle.truncate(0)
-        file_handle.seek(0)
-        file_handle.writelines(lines)
-        file_handle.close()
-#Reconstruct the header and footer
+        with open('{0}'.format(file), "r+") as file_handle:
+            lines = file_handle.readlines()
+            lines = [tmp.strip(' ') for tmp in lines]
+            while parent_footer in lines:
+                lines.remove(parent_footer)
+            while parent_header in lines:
+                lines.remove(parent_header)
+            file_handle.truncate(0)
+            file_handle.seek(0)
+            file_handle.writelines(lines)
+# Reconstruct the header and footer
 for file in files:
     if os.path.isdir(file):
         print("Skipping %s, it's a directory" % file)
         continue
     if file != "":
-        file_handle = open('{0}'.format(file), "r+")
-        lines = file_handle.readlines()
-        print(lines[0])
-        if "xml" in lines[0]:
-            lines[0] = lines[0].replace(lines[0],lines[0]+parent_header)
-        else:
-            line = lines[0],xml_header+parent_header+lines[0]
-            lines[0] = lines[0].replace(line)
-        file_handle.truncate(0)
-        file_handle.seek(0)
-        file_handle.writelines(lines)
-        file_handle.seek(0,os.SEEK_END)
-        file_handle.writelines(parent_footer)
-        file_handle.close()
+        with open('{0}'.format(file), "r+") as file_handle:
+            lines = file_handle.readlines()
+            print(lines[0])
+            if "xml" in lines[0]:
+                lines[0] = lines[0].replace(lines[0], lines[0]+parent_header)
+            else:
+                line = lines[0], xml_header+parent_header+lines[0]
+                lines[0] = lines[0].replace(line)
+            file_handle.truncate(0)
+            file_handle.seek(0)
+            file_handle.writelines(lines)
+            file_handle.seek(0, os.SEEK_END)
+            file_handle.writelines(parent_footer)
