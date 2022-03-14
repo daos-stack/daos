@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2021 Intel Corporation.
+ * (C) Copyright 2016-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -182,6 +182,14 @@ pool_query_bits(daos_pool_info_t *po_info, daos_prop_t *prop)
 		case DAOS_PROP_PO_EC_CELL_SZ:
 			bits |= DAOS_PO_QUERY_PROP_EC_CELL_SZ;
 			break;
+		case DAOS_PROP_PO_REDUN_FAC:
+			bits |= DAOS_PO_QUERY_PROP_REDUN_FAC;
+		case DAOS_PROP_PO_EC_PDA:
+			bits |= DAOS_PO_QUERY_PROP_EC_PDA;
+			break;
+		case DAOS_PROP_PO_RP_PDA:
+			bits |= DAOS_PO_QUERY_PROP_RP_PDA;
+			break;
 		case DAOS_PROP_PO_ACL:
 			bits |= DAOS_PO_QUERY_PROP_ACL;
 			break;
@@ -190,6 +198,9 @@ pool_query_bits(daos_pool_info_t *po_info, daos_prop_t *prop)
 			break;
 		case DAOS_PROP_PO_OWNER_GROUP:
 			bits |= DAOS_PO_QUERY_PROP_OWNER_GROUP;
+			break;
+		case DAOS_PROP_PO_POLICY:
+			bits |= DAOS_PO_QUERY_PROP_POLICY;
 			break;
 		default:
 			D_ERROR("ignore bad dpt_type %d.\n", entry->dpe_type);

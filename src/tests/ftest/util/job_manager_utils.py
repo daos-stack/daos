@@ -1,6 +1,6 @@
 #!/usr/bin/python
 """
-  (C) Copyright 2020-2021 Intel Corporation.
+  (C) Copyright 2020-2022 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -15,7 +15,7 @@ from ClusterShell.NodeSet import NodeSet
 
 from command_utils import ExecutableCommand, SystemctlCommand
 from command_utils_base import FormattedParameter, EnvironmentVariables
-from command_utils_base import CommandFailure
+from exception_utils import CommandFailure, MPILoadError
 from env_modules import load_mpi
 from general_utils import pcmd, stop_processes, run_pcmd
 from write_host_file import write_host_file
@@ -219,7 +219,7 @@ class Orterun(JobManager):
                 subprocess. Defaults to False.
         """
         if not load_mpi("openmpi"):
-            raise CommandFailure("Failed to load openmpi")
+            raise MPILoadError("openmpi")
 
         path = os.path.dirname(find_executable("orterun"))
         super().__init__("/run/orterun/*", "orterun", job, path, subprocess)
@@ -349,6 +349,7 @@ class Mpirun(JobManager):
         self.processes = FormattedParameter("-np {}", 1)
         self.ppn = FormattedParameter("-ppn {}", None)
         self.envlist = FormattedParameter("-envlist {}", None)
+        self.genv = FormattedParameter("-genv {}", None)
         self.mca = FormattedParameter("--mca {}", mca_default)
         self.working_dir = FormattedParameter("-wdir {}", None)
         self.tmpdir_base = FormattedParameter("--mca orte_tmpdir_base {}", None)
@@ -504,7 +505,7 @@ class Srun(JobManager):
 
 
 class Systemctl(JobManager):
-    # pylint: disable=too-many-public-methods,too-many-public-methods
+    # pylint: disable=too-many-public-methods
     """A class for the systemctl job manager command."""
 
     def __init__(self, job):

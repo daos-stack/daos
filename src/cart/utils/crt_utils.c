@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2019-2021 Intel Corporation.
+ * (C) Copyright 2019-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -361,8 +361,8 @@ crtu_dc_mgmt_net_cfg_rank_add(const char *name, crt_group_t *group,
 {
 	int				  i;
 	int				  rc = 0;
-	struct dc_mgmt_sys_info		  crt_net_cfg_info;
-	Mgmt__GetAttachInfoResp		 *crt_net_cfg_resp;
+	struct dc_mgmt_sys_info		  crt_net_cfg_info = {0};
+	Mgmt__GetAttachInfoResp		 *crt_net_cfg_resp = NULL;
 	Mgmt__GetAttachInfoResp__RankUri *rank_uri;
 
 	/* Query the agent for the CaRT network configuration parameters */
@@ -372,6 +372,11 @@ crtu_dc_mgmt_net_cfg_rank_add(const char *name, crt_group_t *group,
 				&crt_net_cfg_resp);
 	if (opts.assert_on_error)
 		D_ASSERTF(rc == 0, "dc_get_attach_info() failed, rc=%d\n", rc);
+
+	if (rc != 0) {
+		D_ERROR("dc_get_attach_info() failed, rc=%d\n", rc);
+		D_GOTO(err_group, rc);
+	}
 
 	for (i = 0; i < crt_net_cfg_resp->n_rank_uris; i++) {
 		rank_uri = crt_net_cfg_resp->rank_uris[i];
@@ -392,9 +397,6 @@ crtu_dc_mgmt_net_cfg_rank_add(const char *name, crt_group_t *group,
 	}
 
 err_group:
-	if (rc != 0) {
-		crt_group_view_destroy(group);
-	}
 	dc_put_attach_info(&crt_net_cfg_info, crt_net_cfg_resp);
 
 	return rc;
@@ -409,8 +411,8 @@ crtu_dc_mgmt_net_cfg_setenv(const char *name)
 	char			*ofi_interface;
 	char			*ofi_domain;
 	char			*cli_srx_set;
-	struct dc_mgmt_sys_info  crt_net_cfg_info;
-	Mgmt__GetAttachInfoResp *crt_net_cfg_resp;
+	struct dc_mgmt_sys_info  crt_net_cfg_info = {0};
+	Mgmt__GetAttachInfoResp *crt_net_cfg_resp = NULL;
 
 	/* Query the agent for the CaRT network configuration parameters */
 	rc = dc_get_attach_info(name,
@@ -422,7 +424,7 @@ crtu_dc_mgmt_net_cfg_setenv(const char *name)
 
 	if (rc != 0) {
 		D_ERROR("dc_get_attach_info() failed, rc=%d\n", rc);
-		D_GOTO(cleanup, rc = d_errno2der(errno));
+		D_GOTO(cleanup, rc);
 	}
 
 	/* These two are always set */
@@ -599,6 +601,14 @@ crtu_cli_start_basic(char *local_group_name, char *srv_group_name,
 			D_ASSERTF(rc == 0,
 				  "crtu_dc_mgmt_net_cfg_rank_add failed; rc=%d",
 				  rc);
+
+		if (rc != 0) {
+			D_ERROR("Failed to add ranks to their service group %s; rc=%d\n",
+				srv_group_name,
+				rc);
+			crt_group_view_destroy(*grp);
+			assert(0);
+		}
 	}
 
 	rc = crt_group_size(*grp, &grp_size);
@@ -621,6 +631,11 @@ crtu_cli_start_basic(char *local_group_name, char *srv_group_name,
 	if ((*rank_list)->rl_nr != grp_size) {
 		D_ERROR("rank_list differs in size. expected %d got %d\n",
 			grp_size, (*rank_list)->rl_nr);
+		assert(0);
+	}
+
+	if ((*rank_list)->rl_nr == 0) {
+		D_ERROR("Rank list is empty\n");
 		assert(0);
 	}
 

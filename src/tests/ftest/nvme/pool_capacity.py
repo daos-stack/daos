@@ -1,6 +1,6 @@
 #!/usr/bin/python
 """
-  (C) Copyright 2020-2021 Intel Corporation.
+  (C) Copyright 2020-2022 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -14,7 +14,7 @@ from write_host_file import write_host_file
 from test_utils_container import TestContainer
 from ior_utils import IorCommand
 from job_manager_utils import Mpirun
-from command_utils_base import CommandFailure
+from exception_utils import CommandFailure
 from mpio_utils import MpioUtils
 import queue
 
@@ -201,8 +201,7 @@ class NvmePoolCapacity(TestWithServers):
             # Verify the queue and make sure no FAIL for any IOR run
             # Test should fail with ENOSPC.
             while not self.out_queue.empty():
-                if (self.out_queue.get() == "FAIL" and test[4] == "PASS") \
-                     or (self.out_queue.get() != "FAIL" and test[4] == "FAIL"):
+                if (self.out_queue.get() == "FAIL" and test[4] == "PASS"):
                     self.fail("FAIL")
 
             # Destroy the last num_pool pools created

@@ -9,9 +9,10 @@ from time import sleep, time
 import ctypes
 import json
 
-from test_utils_base import TestDaosApiBase
+from test_utils_base import TestDaosApiBase, LabelGenerator
 from avocado import fail_on
-from command_utils import BasicParameter, CommandFailure
+from command_utils import BasicParameter
+from exception_utils import CommandFailure
 from pydaos.raw import (DaosApiError, DaosPool, c_uuid_to_str, daos_cref)
 from general_utils import check_pool_files, DaosTestError, run_command
 from env_modules import load_mpi
@@ -24,7 +25,7 @@ class TestPool(TestDaosApiBase):
     """A class for functional testing of DaosPools objects."""
 
     def __init__(self, context, dmg_command, cb_handler=None,
-                 label_generator=None):
+                 label_generator=None, crt_timeout=None):
         # pylint: disable=unused-argument
         """Initialize a TestPool object.
 
@@ -42,8 +43,10 @@ class TestPool(TestDaosApiBase):
                 There's a link between label_generator and label. If the label
                 is used as it is, i.e., not None, label_generator must be
                 provided in order to call create(). Defaults to None.
+            crt_timeout (str, optional): value to use for the CRT_TIMEOUT when running pydaos
+                commands. Defaults to None.
         """
-        super().__init__("/run/pool/*", cb_handler)
+        super().__init__("/run/pool/*", cb_handler, crt_timeout)
         self.context = context
         self.uid = os.geteuid()
         self.gid = os.getegid()
@@ -101,16 +104,15 @@ class TestPool(TestDaosApiBase):
 
         # Autosize any size/scm_size/nvme_size parameters
         # pylint: disable=too-many-boolean-expressions
-        if ((self.size.value is not None and str(self.size.value).endswith("%"))
-                or (self.scm_size.value is not None
-                    and str(self.scm_size.value).endswith("%"))
+        if ((self.scm_size.value is not None
+             and str(self.scm_size.value).endswith("%"))
                 or (self.nvme_size.value is not None
                     and str(self.nvme_size.value).endswith("%"))):
             index = self.server_index.value
             try:
                 params = test.server_managers[index].autosize_pool_params(
-                    size=self.size.value,
-                    tier_ratio=self.tier_ratio.value,
+                    size=None,
+                    tier_ratio=None,
                     scm_size=self.scm_size.value,
                     nvme_size=self.nvme_size.value,
                     min_targets=self.min_targets.value,
@@ -135,8 +137,7 @@ class TestPool(TestDaosApiBase):
         if self.label.value is not None:
             if not isinstance(self.label_generator, LabelGenerator):
                 raise CommandFailure(
-                    "Unable to create a unique pool label; " +\
-                        "Undefined label_generator")
+                    "Unable to create a unique pool label; Undefined label_generator")
             self.label.update(self.label_generator.get_label(self.label.value))
 
     @property
@@ -535,7 +536,7 @@ class TestPool(TestDaosApiBase):
         return self._check_info(checks)
 
     def check_rebuild_status(self, rs_version=None, rs_seconds=None,
-                             rs_errno=None, rs_done=None, rs_padding32=None,
+                             rs_errno=None, rs_state=None, rs_padding32=None,
                              rs_fail_rank=None, rs_toberb_obj_nr=None,
                              rs_obj_nr=None, rs_rec_nr=None, rs_size=None):
         # pylint: disable=unused-argument
@@ -551,7 +552,7 @@ class TestPool(TestDaosApiBase):
             rs_version (int, optional): rebuild version. Defaults to None.
             rs_seconds (int, optional): rebuild seconds. Defaults to None.
             rs_errno (int, optional): rebuild error number. Defaults to None.
-            rs_done (int, optional): rebuild done flag. Defaults to None.
+            rs_state (int, optional): rebuild state flag. Defaults to None.
             rs_padding32 (int, optional): padding. Defaults to None.
             rs_fail_rank (int, optional): rebuild fail target. Defaults to None.
             rs_toberb_obj_nr (int, optional): number of objects to be rebuilt.
@@ -590,7 +591,7 @@ class TestPool(TestDaosApiBase):
 
         if self.control_method.value == self.USE_API:
             self.display_pool_rebuild_status()
-            status = self.info.pi_rebuild_st.rs_done == 1
+            status = self.info.pi_rebuild_st.rs_state == 2
         elif self.control_method.value == self.USE_DMG:
             self.set_query_data()
             self.log.info(
@@ -785,7 +786,7 @@ class TestPool(TestDaosApiBase):
         """
         self.get_info()
         keys = (
-            "rs_version", "rs_padding32", "rs_errno", "rs_done",
+            "rs_version", "rs_padding32", "rs_errno", "rs_state",
             "rs_toberb_obj_nr", "rs_obj_nr", "rs_rec_nr")
         return {key: getattr(self.info.pi_rebuild_st, key) for key in keys}
 
@@ -940,32 +941,3 @@ class TestPool(TestDaosApiBase):
                 pool=self.identifier, acl_file=self.acl_file.value)
         else:
             self.log.error("self.acl_file isn't defined!")
-
-
-class LabelGenerator():
-    # pylint: disable=too-few-public-methods
-    """Generates label used for pool."""
-
-    def __init__(self, value=1):
-        """Constructor.
-
-        Args:
-            value (int): Number that's attached after the base_label.
-        """
-        self.value = value
-
-    def get_label(self, base_label):
-        """Create a label by adding number after the given base_label.
-
-        Args:
-            base_label (str): Label prefix. Don't include space.
-
-        Returns:
-            str: Created label.
-
-        """
-        label = base_label
-        if label is not None:
-            label = "_".join([base_label, str(self.value)])
-            self.value += 1
-        return label

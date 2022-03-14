@@ -105,6 +105,7 @@ const (
 	ClientConnectionClosed
 	ClientFormatRunningSystem
 	ClientRpcTimeout
+	ClientConfigVMDImbalance
 )
 
 // server fault codes
@@ -118,7 +119,7 @@ const (
 	ServerPoolInvalidRanks
 	ServerPoolInvalidServiceReps
 	ServerPoolDuplicateLabel
-	ServerInsufficientFreeHugePages
+	ServerInsufficientFreeHugePageMem
 	ServerHarnessNotStarted
 	ServerDataPlaneNotStarted
 	ServerInstancesNotStopped
@@ -154,6 +155,9 @@ const (
 	ServerConfigBothFaultPathAndCb
 	ServerConfigFaultCallbackEmpty
 	ServerConfigFaultDomainTooManyLayers
+	ServerConfigInsufficientHugePages
+	ServerConfigNrHugepagesOutOfRange
+	ServerConfigHugepagesDisabled
 )
 
 // SPDK library bindings codes

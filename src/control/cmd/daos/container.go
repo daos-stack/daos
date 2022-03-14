@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2021 Intel Corporation.
+// (C) Copyright 2021-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -88,7 +88,7 @@ func (cmd *containerBaseCmd) openContainer(openFlags C.uint) error {
 		defer freeString(cLabel)
 
 		cmd.Debugf("opening container: %s", cmd.contLabel)
-		rc = C.daos_cont_open2(cmd.cPoolHandle, cLabel, openFlags,
+		rc = C.daos_cont_open(cmd.cPoolHandle, cLabel, openFlags,
 			&cmd.cContHandle, &contInfo, nil)
 		if rc == 0 {
 			var err error
@@ -102,7 +102,7 @@ func (cmd *containerBaseCmd) openContainer(openFlags C.uint) error {
 		cmd.Debugf("opening container: %s", cmd.contUUID)
 		cUUIDstr := C.CString(cmd.contUUID.String())
 		defer freeString(cUUIDstr)
-		rc = C.daos_cont_open2(cmd.cPoolHandle, cUUIDstr,
+		rc = C.daos_cont_open(cmd.cPoolHandle, cUUIDstr,
 			openFlags, &cmd.cContHandle, nil, nil)
 	default:
 		return errors.New("no container UUID or label supplied")
@@ -111,9 +111,19 @@ func (cmd *containerBaseCmd) openContainer(openFlags C.uint) error {
 	return daosError(rc)
 }
 
-func (cmd *containerBaseCmd) closeContainer() error {
+func (cmd *containerBaseCmd) closeContainer() {
 	cmd.Debugf("closing container: %s", cmd.contUUID)
-	return daosError(C.daos_cont_close(cmd.cContHandle, nil))
+	// Hack for NLT fault injection testing: If the rc
+	// is -DER_NOMEM, retry once in order to actually
+	// shut down and release resources.
+	rc := C.daos_cont_close(cmd.cContHandle, nil)
+	if rc == -C.DER_NOMEM {
+		rc = C.daos_cont_close(cmd.cContHandle, nil)
+	}
+
+	if err := daosError(rc); err != nil {
+		cmd.Errorf("container close failed: %s", err)
+	}
 }
 
 func (cmd *containerBaseCmd) queryContainer() (*containerInfo, error) {
@@ -425,11 +435,13 @@ func (cmd *existingContainerCmd) resolveAndConnect(contFlags C.uint, ap *C.struc
 	}
 
 	if err = cmd.openContainer(contFlags); err != nil {
+		cleanupPool()
 		return
 	}
 
 	if ap != nil {
 		if err = copyUUID(&ap.c_uuid, cmd.contUUID); err != nil {
+			cleanupPool()
 			return
 		}
 		ap.cont = cmd.cContHandle
@@ -585,12 +597,12 @@ func (cmd *containerDestroyCmd) Execute(_ []string) error {
 	case cmd.ContainerID().HasUUID():
 		cUUIDstr := C.CString(cmd.contUUID.String())
 		defer freeString(cUUIDstr)
-		rc = C.daos_cont_destroy2(cmd.cPoolHandle, cUUIDstr,
+		rc = C.daos_cont_destroy(cmd.cPoolHandle, cUUIDstr,
 			goBool2int(cmd.Force), nil)
 	case cmd.ContainerID().Label != "":
 		cLabel := C.CString(cmd.ContainerID().Label)
 		defer freeString(cLabel)
-		rc = C.daos_cont_destroy2(cmd.cPoolHandle,
+		rc = C.daos_cont_destroy(cmd.cPoolHandle,
 			cLabel, goBool2int(cmd.Force), nil)
 	default:
 		return errors.New("no UUID or label or path for container")

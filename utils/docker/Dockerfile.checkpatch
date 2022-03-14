@@ -1,4 +1,4 @@
-# Copyright (C) 2021 Intel Corporation
+# Copyright 2021-2022 Intel Corporation
 # All rights reserved.
 #
 # 'recipe' for Docker to build a image for running static analysis checking.

@@ -76,6 +76,7 @@ rebuild_ec_internal(void **state, daos_oclass_id_t oclass, int kill_data_nr,
 		verify_ec_full(&req, arg->index, 0);
 	ioreq_fini(&req);
 
+	print_message("daos_obj_verify ...\n");
 	rc = daos_obj_verify(arg->coh, oid, DAOS_EPOCH_MAX);
 	assert_int_equal(rc, 0);
 
@@ -802,6 +803,7 @@ enumerate_cb(void *data)
 				    buf_len, req);
 		assert_rc_equal(rc, 0);
 		total += number;
+		print_message("total %d  number %d\n", total, number);
 	}
 
 	assert_int_equal(total, 100);

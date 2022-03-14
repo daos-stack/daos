@@ -1,5 +1,5 @@
 /*
- *  (C) Copyright 2016-2021 Intel Corporation.
+ *  (C) Copyright 2016-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -756,7 +756,7 @@ dc_shard_update_size(struct rw_cb_args *rw_args, int fetch_rc)
 		/* single-value, trust the size replied from first shard or parity shard,
 		 * because if overwrite those shards must be updated.
 		 */
-		if ((orw->orw_oid.id_shard % obj_ec_tgt_nr(oca)) ==
+		if ((orw->orw_oid.id_shard % obj_get_grp_size(rw_args->shard_args->auxi.obj)) ==
 		     obj_ec_singv_small_idx(oca, iod) ||
 		    is_ec_parity_shard(orw->orw_oid.id_shard, oca)) {
 			if (uiod->iod_size != 0 && uiod->iod_size < sizes[i] && fetch_rc == 0) {
@@ -1701,7 +1701,7 @@ dc_enumerate_cb(tse_task_t *task, void *arg)
 		/* If any failure happens inside Cart, let's reset
 		 * failure to TIMEDOUT, so the upper layer can retry
 		 **/
-		D_ERROR("RPC %d failed: %d\n", opc, ret);
+		D_ERROR("RPC %d failed: "DF_RC"\n", opc, DP_RC(ret));
 		D_GOTO(out, ret);
 	}
 
@@ -1886,6 +1886,8 @@ dc_obj_shard_list(struct dc_obj_shard *obj_shard, enum obj_rpc_opc opc,
 		oei->oei_epr.epr_hi = args->la_auxi.epoch.oe_value;
 		oei->oei_flags |= ORF_ENUM_WITHOUT_EPR;
 	}
+	if ((!obj_args->incr_order) && (opc == DAOS_OBJ_RECX_RPC_ENUMERATE))
+		oei->oei_flags |= ORF_DESCENDING_ORDER;
 
 	oei->oei_nr		= args->la_nr;
 	oei->oei_rec_type	= obj_args->type;
@@ -2008,7 +2010,7 @@ obj_shard_query_recx_post(struct obj_query_key_cb_args *cb_args, uint32_t shard,
 		return;
 	}
 
-	tgt_idx = shard % obj_ec_tgt_nr(oca);
+	tgt_idx = shard % obj_get_grp_size(cb_args->obj);
 	from_data_tgt = tgt_idx < obj_ec_data_tgt_nr(oca);
 	stripe_rec_nr = obj_ec_stripe_rec_nr(oca);
 	cell_rec_nr = obj_ec_cell_rec_nr(oca);

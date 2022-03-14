@@ -1,6 +1,6 @@
 #!/usr/bin/python
 """
-  (C) Copyright 2018-2021 Intel Corporation.
+  (C) Copyright 2018-2022 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -13,7 +13,7 @@ from avocado.utils import process
 from apricot import TestWithServers
 from env_modules import load_mpi
 from general_utils import get_log_file
-from command_utils import CommandFailure
+from exception_utils import CommandFailure
 from agent_utils import include_local_host
 
 
@@ -176,7 +176,6 @@ class DaosCoreBase(TestWithServers):
                 self.fail(
                     "{0} failed with return code={1}.\n".format(
                         cmd, result.result.exit_status))
-
 
     def create_results_xml(self, testname, result, error_message="Test failed to start up"):
         """Create a JUnit result.xml file for the failed command.

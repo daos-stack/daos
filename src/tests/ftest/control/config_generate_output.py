@@ -8,7 +8,7 @@ from collections import defaultdict
 import yaml
 
 from apricot import TestWithServers
-from command_utils import CommandFailure
+from exception_utils import CommandFailure
 from dmg_utils import DmgCommand
 
 
@@ -207,8 +207,8 @@ class ConfigGenerateOutput(TestWithServers):
                         device_name = scm_dev.split("/")[-1]
                         if device_name not in self.scm_namespace_set:
                             errors.append(
-                                "Cannot find SCM device name {} in expected set {}"\
-                                    .format(device_name, self.scm_namespace_set))
+                                "Cannot find SCM device name {} in expected set {}"
+                                .format(device_name, self.scm_namespace_set))
                         scm_found = True
 
                 # Verify the bdev_list values are in the NVMe PCI address set.

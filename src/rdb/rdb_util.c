@@ -371,7 +371,8 @@ rdb_vos_query_key_max(daos_handle_t cont, daos_epoch_t epoch, rdb_oid_t oid, dao
 
 	rdb_oid_to_uoid(oid, &uoid);
 	rc = vos_obj_query_key(cont, uoid, DAOS_GET_AKEY|DAOS_GET_MAX, epoch, &rdb_dkey, akey,
-			       NULL /* recx */, 0 /* cell sz */, 0 /* stripe sz */, NULL /* dth */);
+			       NULL /* recx */, NULL /* max_write */, 0 /* cell sz */,
+			       0 /* stripe sz */, NULL /* dth */);
 	if (rc != 0) {
 		D_ERROR("vos_obj_query_key((rdb,vos) oids=("DF_U64",lo="DF_U64", hi="DF_U64"), "
 			"epoch="DF_U64" ...) failed, "DF_RC"\n", oid, uoid.id_pub.lo,

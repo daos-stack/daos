@@ -1,39 +1,39 @@
 #!/usr/bin/python
 """
-  (C) Copyright 2020-2021 Intel Corporation.
+  (C) Copyright 2020-2022 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 # pylint: disable=too-many-lines
 
-# Some useful test classes inherited from avocado.Test
+from ast import literal_eval
 import os
 import json
 import re
 
+from avocado import fail_on, skip, TestFail
 from avocado import Test as avocadoTest
-from avocado import skip, TestFail, fail_on
-from avocado.utils.distro import detect
 from avocado.core import exceptions
-from ast import literal_eval
 from ClusterShell.NodeSet import NodeSet
 
-from fault_config_utils import FaultInjection
-from pydaos.raw import DaosContext, DaosLog, DaosApiError
-from command_utils_base import CommandFailure, EnvironmentVariables
 from agent_utils import DaosAgentManager, include_local_host
-from dmg_utils import get_dmg_command
-from daos_utils import DaosCommand
 from cart_ctl_utils import CartCtl
-from server_utils import DaosServerManager
+from command_utils_base import EnvironmentVariables
+from exception_utils import CommandFailure, MPILoadError
+from daos_utils import DaosCommand
+from distro_utils import detect
+from distutils.spawn import find_executable
+from dmg_utils import get_dmg_command
+from env_modules import load_mpi
+from fault_config_utils import FaultInjection
 from general_utils import \
     get_partition_hosts, stop_processes, get_job_manager_class, \
     get_default_config_file, pcmd, get_file_listing, DaosTestError, run_command
 from logger_utils import TestLogger
-from test_utils_pool import TestPool, LabelGenerator
+from pydaos.raw import DaosContext, DaosLog, DaosApiError
+from server_utils import DaosServerManager
 from test_utils_container import TestContainer
-from env_modules import load_mpi
-from distutils.spawn import find_executable
+from test_utils_pool import TestPool, LabelGenerator
 from write_host_file import write_host_file
 
 
@@ -419,7 +419,7 @@ class TestWithoutServers(Test):
         """Set up run before each test."""
         super().setUp()
         if not load_mpi("openmpi"):
-            self.fail("Failed to load openmpi")
+            raise MPILoadError("openmpi")
 
         self.orterun = find_executable('orterun')
         if self.orterun is None:
@@ -846,6 +846,7 @@ class TestWithServers(TestWithoutServers):
                 "Starting server: group=%s, hosts=%s, config=%s",
                 manager.get_config_value("name"), manager.hosts,
                 manager.get_config_value("filename"))
+            manager.manager.job.update_pattern("normal", len(manager.hosts))
             try:
                 manager.manager.run()
             except CommandFailure as error:
@@ -1593,7 +1594,8 @@ class TestWithServers(TestWithoutServers):
         """
         pool = TestPool(
             context=self.context, dmg_command=self.get_dmg_command(index),
-            label_generator=self.label_generator)
+            label_generator=self.label_generator,
+            crt_timeout=self.server_managers[index].get_config_value("crt_timeout"))
         if namespace is not None:
             pool.namespace = namespace
         pool.get_params(self)

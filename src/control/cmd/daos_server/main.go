@@ -19,7 +19,6 @@ import (
 	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/common/cmdutil"
 	"github.com/daos-stack/daos/src/control/fault"
-	"github.com/daos-stack/daos/src/control/lib/netdetect"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/pbin"
 )
@@ -137,9 +136,6 @@ func main() {
 	if err := pbin.CheckHelper(log, pbin.DaosAdminName); err != nil {
 		exitWithError(log, err)
 	}
-
-	// Set the package-level logger for netdetect.
-	netdetect.SetLogger(log)
 
 	if err := parseOpts(os.Args[1:], &opts, log); err != nil {
 		if errors.Cause(err) == context.Canceled {

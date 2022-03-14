@@ -1,6 +1,6 @@
 #!/usr/bin/python
 """
-  (C) Copyright 2020-2021 Intel Corporation.
+  (C) Copyright 2020-2022 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -8,7 +8,7 @@ import threading
 import re
 import time
 import queue
-from command_utils_base import CommandFailure
+from exception_utils import CommandFailure
 from avocado.core.exceptions import TestFail
 from ior_test_base import IorTestBase
 from ior_utils import IorCommand
@@ -120,7 +120,7 @@ class ServerFillUp(IorTestBase):
                                          fail_on_warning=self.fail_on_warning)
             self.ior_matrix = IorCommand.get_ior_metrics(out)
             results.put("PASS")
-        except (CommandFailure, TestFail) as _error:
+        except (CommandFailure, TestFail):
             results.put("FAIL")
 
     def calculate_ior_block_size(self):
