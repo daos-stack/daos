@@ -111,7 +111,7 @@ struct daos_rebuild_status {
 	 * rs_obj_nr the user can know the progress of the rebuilding.
 	 */
 	uint64_t		rs_toberb_obj_nr;
-	/** number of rebuilt object. Non-zero only if rs_done is 1 */
+	/** number of rebuilt objects. Non-zero only if rs_done is 1 */
 	uint64_t		rs_obj_nr;
 	/** number of rebuilt records. Non-zero only if rs_done is 1 */
 	uint64_t		rs_rec_nr;
