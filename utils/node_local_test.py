@@ -761,7 +761,7 @@ class DaosServer():
                 break
 
             if start_timeout < 5:
-                start_timeout *=2
+                start_timeout *= 2
 
             self._check_timing('format', start, self.max_start_time)
         duration = time.time() - start
@@ -777,7 +777,7 @@ class DaosServer():
                 break
 
             if start_timeout < 5:
-                start_timeout *=2
+                start_timeout *= 2
 
             self._check_timing("start", start, self.max_start_time)
         duration = time.time() - start
