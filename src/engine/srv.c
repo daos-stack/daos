@@ -983,17 +983,18 @@ ca_alloc(unsigned int xs_nr)
 	return ca;
 }
 
+/* Reuse a core form the cores assigned to 'assigned_type' xstream */
 static unsigned
-reuse_offload_cores(struct core_assignment *ca, unsigned int xs_id)
+ca_reuse_core(struct core_assignment *ca, unsigned int xs_id, unsigned int assigned_type)
 {
-	int	sub_off, sub_nr, idx;
+	int sub_off, sub_nr, idx;
 
-	D_ASSERT(xs_id2type(xs_id) == DSS_XS_SEC);
-	sub_off = ca->ca_sub_off[DSS_XS_IOFW];
-	sub_nr = ca->ca_sub_nr[DSS_XS_IOFW];
+	sub_off = ca->ca_sub_off[assigned_type];
+	sub_nr = ca->ca_sub_nr[assigned_type];
 
-	D_ASSERT(sub_nr == dss_tgt_offload_xs_nr);
-	sub_off += (xs_id % sub_nr);
+	D_ASSERT(sub_nr > 0);
+	if (sub_nr > 1)
+		sub_off += (xs_id % sub_nr);
 
 	idx = ca->ca_assigned[sub_off];
 	D_ASSERT(idx != -1);
@@ -1002,11 +1003,13 @@ reuse_offload_cores(struct core_assignment *ca, unsigned int xs_id)
 }
 
 /* There are not enough cores for DRPC and SEC xstreams */
-static bool
+static inline bool
 insufficient_cores()
 {
-	return numa_obj ? (DSS_XS_NR_TOTAL > dss_num_cores_numa_node) :
-			(DSS_XS_NR_TOTAL > dss_core_nr);
+	if (numa_obj)
+		return (dss_num_cores_numa_node < DSS_XS_NR_TOTAL);
+	else
+		return (dss_core_nr < DSS_XS_NR_TOTAL);
 }
 
 static int
@@ -1034,16 +1037,13 @@ dss_start_xs_id(int xs_id, struct core_assignment *ca)
 	/* if we are NUMA aware, use the NUMA information */
 	if (numa_obj) {
 		if (xs_type == DSS_XS_DRPC && insufficient_cores()) {
-			int sub_off = ca->ca_sub_off[DSS_XS_SYS];
-
-			idx = ca->ca_assigned[sub_off];
-			D_ASSERT(idx != -1);
+			idx = ca_reuse_core(ca, xs_id, DSS_XS_SYS);
 		} else if (xs_type == DSS_XS_SEC && insufficient_cores()) {
 			if (dss_tgt_offload_xs_nr == 0) {
 				D_ERROR("No avail cores for secondary context\n");
 				return -DER_INVAL;
 			}
-			idx = reuse_offload_cores(ca, xs_id);
+			idx = ca_reuse_core(ca, xs_id, DSS_XS_IOFW);
 		} else {
 			idx = hwloc_bitmap_first(core_allocation_bitmap);
 			if (idx == -1) {
@@ -1093,7 +1093,7 @@ dss_start_xs_id(int xs_id, struct core_assignment *ca)
 					D_ERROR("No avail cores for secondary context\n");
 					return -DER_INVAL;
 				}
-				idx = reuse_offload_cores(ca, xs_id);
+				idx = ca_reuse_core(ca, xs_id, DSS_XS_IOFW);
 			} else {
 				idx = (dss_core_offset + xs_id) % dss_core_nr;
 			}
