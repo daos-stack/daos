@@ -23,6 +23,9 @@
 #include "cli_internal.h"
 #include "rpc.h"
 
+/** DAOS metrics cont rpc counters */
+daos_metrics_cntr_t   *cont_rpc_cntrs;
+
 /**
  * Initialize container interface
  */
@@ -126,6 +129,7 @@ out:
 	crt_req_decref(arg->rpc);
 	dc_pool_put(pool);
 	daos_prop_free(arg->prop);
+	dc_cont_metrics_incr_completecntr(CONT_CREATE, rc);
 	return rc;
 }
 
@@ -330,6 +334,7 @@ dc_cont_create(tse_task_t *task)
 	if (rc != 0)
 		D_GOTO(err_rpc, rc);
 
+	dc_cont_metrics_incr_inflightcntr(CONT_CREATE);
 	return daos_rpc_send(rpc, task);
 
 err_rpc:
@@ -377,6 +382,7 @@ cont_destroy_complete(tse_task_t *task, void *data)
 out:
 	crt_req_decref(arg->rpc);
 	dc_pool_put(pool);
+	dc_cont_metrics_incr_completecntr(CONT_DESTROY, rc);
 	return rc;
 }
 
@@ -456,6 +462,7 @@ dc_cont_destroy(tse_task_t *task)
 	if (rc != 0)
 		D_GOTO(err_rpc, rc);
 
+	dc_cont_metrics_incr_inflightcntr(CONT_DESTROY);
 	return daos_rpc_send(rpc, task);
 
 err_rpc:
@@ -782,6 +789,7 @@ out:
 	if (put_cont)
 		dc_cont_put(cont);
 	dc_pool_put(pool);
+	dc_cont_metrics_incr_completecntr(arg->rpc->cr_opc, rc);
 	return rc;
 }
 
@@ -860,6 +868,7 @@ dc_cont_open_internal(tse_task_t *task, const char *label, struct dc_pool *pool)
 		D_GOTO(err_rpc, rc);
 
 	/** send the request */
+	dc_cont_metrics_incr_inflightcntr(rpc->cr_opc);
 	return daos_rpc_send(rpc, task);
 
 err_rpc:
@@ -1001,6 +1010,7 @@ out:
 	crt_req_decref(arg->rpc);
 	dc_pool_put(pool);
 	dc_cont_put(cont);
+	dc_cont_metrics_incr_completecntr(CONT_CLOSE, rc);
 	return rc;
 }
 
@@ -1093,6 +1103,7 @@ dc_cont_close(tse_task_t *task)
 		D_GOTO(err_rpc, rc);
 
 	/** send the request */
+	dc_cont_metrics_incr_inflightcntr(CONT_CLOSE);
 	return daos_rpc_send(rpc, task);
 
 err_rpc:
@@ -1168,6 +1179,7 @@ out:
 	crt_req_decref(arg->rpc);
 	dc_cont_put(cont);
 	dc_pool_put(pool);
+	dc_cont_metrics_incr_completecntr(CONT_QUERY, rc);
 	return rc;
 }
 
@@ -1315,6 +1327,7 @@ dc_cont_query(tse_task_t *task)
 	if (rc != 0)
 		D_GOTO(err_rpc, rc);
 
+	dc_cont_metrics_incr_inflightcntr(CONT_QUERY);
 	return daos_rpc_send(rpc, task);
 
 err_rpc:
@@ -1376,6 +1389,7 @@ out:
 	crt_req_decref(arg->rpc);
 	dc_cont_put(cont);
 	dc_pool_put(pool);
+	dc_cont_metrics_incr_completecntr(CONT_PROP_SET, rc);
 	return rc;
 }
 
@@ -1461,6 +1475,7 @@ dc_cont_set_prop(tse_task_t *task)
 	if (rc != 0)
 		D_GOTO(err_rpc, rc);
 
+	dc_cont_metrics_incr_inflightcntr(CONT_PROP_SET);
 	return daos_rpc_send(rpc, task);
 
 err_rpc:
@@ -1523,6 +1538,7 @@ out:
 	crt_req_decref(arg->rpc);
 	dc_cont_put(cont);
 	dc_pool_put(pool);
+	dc_cont_metrics_incr_completecntr(CONT_ACL_UPDATE, rc);
 	return rc;
 }
 
@@ -1584,6 +1600,7 @@ dc_cont_update_acl(tse_task_t *task)
 	if (rc != 0)
 		D_GOTO(err_rpc, rc);
 
+	dc_cont_metrics_incr_inflightcntr(CONT_ACL_UPDATE);
 	return daos_rpc_send(rpc, task);
 
 err_rpc:
@@ -1646,6 +1663,7 @@ out:
 	crt_req_decref(arg->rpc);
 	dc_cont_put(cont);
 	dc_pool_put(pool);
+	dc_cont_metrics_incr_completecntr(CONT_ACL_DELETE, rc);
 	return rc;
 }
 
@@ -1708,6 +1726,7 @@ dc_cont_delete_acl(tse_task_t *task)
 	if (rc != 0)
 		D_GOTO(err_rpc, rc);
 
+	dc_cont_metrics_incr_inflightcntr(CONT_ACL_DELETE);
 	return daos_rpc_send(rpc, task);
 
 err_rpc:
@@ -1790,6 +1809,7 @@ out:
 	crt_req_decref(arg->rpc);
 	dc_cont_put(cont);
 	dc_pool_put(pool);
+	dc_cont_metrics_incr_completecntr(CONT_OID_ALLOC, rc);
 	return rc;
 }
 
@@ -1875,6 +1895,7 @@ dc_cont_alloc_oids(tse_task_t *task)
 	if (rc != 0)
 		D_GOTO(err_rpc, rc);
 
+	dc_cont_metrics_incr_inflightcntr(CONT_OID_ALLOC);
 	return daos_rpc_send(rpc, task);
 
 err_rpc:
@@ -2226,6 +2247,7 @@ cont_req_complete(tse_task_t *task, void *data)
 		args->cra_callback(task, data);
 out:
 	cont_req_cleanup(CLEANUP_BULK, args);
+	dc_cont_metrics_incr_completecntr(args->cra_rpc->cr_opc, rc);
 	return rc;
 }
 
@@ -2341,6 +2363,7 @@ dc_cont_list_attr(tse_task_t *task)
 	}
 
 	crt_req_addref(cb_args.cra_rpc);
+	dc_cont_metrics_incr_inflightcntr(cb_args.cra_rpc->cr_opc);
 	return daos_rpc_send(cb_args.cra_rpc, task);
 
 out:
@@ -2537,6 +2560,7 @@ dc_cont_get_attr(tse_task_t *task)
 	}
 
 	crt_req_addref(cb_args.cra_rpc);
+	dc_cont_metrics_incr_inflightcntr(cb_args.cra_rpc->cr_opc);
 	return daos_rpc_send(cb_args.cra_rpc, task);
 
 out_rpc:
@@ -2647,6 +2671,7 @@ dc_cont_set_attr(tse_task_t *task)
 	}
 
 	crt_req_addref(cb_args.cra_rpc);
+	dc_cont_metrics_incr_inflightcntr(cb_args.cra_rpc->cr_opc);
 	return daos_rpc_send(cb_args.cra_rpc, task);
 
 out:
@@ -2726,6 +2751,7 @@ dc_cont_del_attr(tse_task_t *task)
 	}
 
 	crt_req_addref(cb_args.cra_rpc);
+	dc_cont_metrics_incr_inflightcntr(cb_args.cra_rpc->cr_opc);
 	return daos_rpc_send(cb_args.cra_rpc, task);
 
 out:
@@ -2798,6 +2824,7 @@ dc_epoch_op(daos_handle_t coh, crt_opcode_t opc, daos_epoch_t *epoch,
 	}
 
 	crt_req_addref(arg.eoa_req.cra_rpc);
+	dc_cont_metrics_incr_inflightcntr(arg.eoa_req.cra_rpc->cr_opc);
 	return daos_rpc_send(arg.eoa_req.cra_rpc, task);
 
 out:
@@ -2969,6 +2996,7 @@ dc_cont_list_snap(tse_task_t *task)
 	}
 
 	crt_req_addref(cb_args.cra_rpc);
+	dc_pool_metrics_incr_inflightcntr(cb_args.cra_rpc->cr_opc);
 	return daos_rpc_send(cb_args.cra_rpc, task);
 
 out:
@@ -3130,4 +3158,68 @@ dc_cont_hdl2props(daos_handle_t coh)
 	dc_cont_put(dc);
 
 	return result;
+}
+
+int
+dc_cont_metrics_init()
+{
+	int rc = 0;
+
+	D_ALLOC_ARRAY(cont_rpc_cntrs, CONT_PROTO_CLI_COUNT);
+	if (cont_rpc_cntrs == NULL)
+		D_GOTO(out, rc = -DER_NOMEM);
+out:
+	return rc;
+}
+
+void
+dc_cont_metrics_fini()
+{
+	D_FREE(cont_rpc_cntrs);
+}
+
+int
+dc_cont_metrics_get_rpccntrs(daos_metrics_cont_rpc_cntrs_t *cntrs)
+{
+	int rc = 0;
+
+	if (cont_rpc_cntrs == NULL)
+		D_GOTO(out, rc = -DER_UNINIT);
+
+	dc_metrics_cntr_copy(&cntrs->crc_create_cnt, &cont_rpc_cntrs[CONT_CREATE]);
+	dc_metrics_cntr_copy(&cntrs->crc_destroy_cnt, &cont_rpc_cntrs[CONT_DESTROY]);
+	dc_metrics_cntr_merge(&cntrs->crc_destroy_cnt, &cont_rpc_cntrs[CONT_DESTROY_BYLABEL]);
+	dc_metrics_cntr_copy(&cntrs->crc_open_cnt, &cont_rpc_cntrs[CONT_OPEN]);
+	dc_metrics_cntr_merge(&cntrs->crc_open_cnt, &cont_rpc_cntrs[CONT_OPEN_BYLABEL]);
+	dc_metrics_cntr_copy(&cntrs->crc_close_cnt, &cont_rpc_cntrs[CONT_CLOSE]);
+	dc_metrics_cntr_copy(&cntrs->crc_oidalloc_cnt, &cont_rpc_cntrs[CONT_OID_ALLOC]);
+	dc_metrics_cntr_copy(&cntrs->crc_query_cnt, &cont_rpc_cntrs[CONT_QUERY]);
+	dc_metrics_cntr_copy(&cntrs->crc_snapshot_cnt, &cont_rpc_cntrs[CONT_SNAP_CREATE]);
+	dc_metrics_cntr_copy(&cntrs->crc_snaplist_cnt, &cont_rpc_cntrs[CONT_SNAP_LIST]);
+	dc_metrics_cntr_copy(&cntrs->crc_snapdel_cnt, &cont_rpc_cntrs[CONT_SNAP_DESTROY]);
+	dc_metrics_cntr_copy(&cntrs->crc_aggregate_cnt, &cont_rpc_cntrs[CONT_EPOCH_AGGREGATE]);
+	dc_metrics_cntr_copy(&cntrs->crc_query_cnt, &cont_rpc_cntrs[CONT_QUERY]);
+	dc_metrics_cntr_copy(&cntrs->crc_attr_cnt, &cont_rpc_cntrs[CONT_ATTR_LIST]);
+	dc_metrics_cntr_merge(&cntrs->crc_attr_cnt, &cont_rpc_cntrs[CONT_ATTR_GET]);
+	dc_metrics_cntr_merge(&cntrs->crc_attr_cnt, &cont_rpc_cntrs[CONT_ATTR_SET]);
+	dc_metrics_cntr_merge(&cntrs->crc_attr_cnt, &cont_rpc_cntrs[CONT_ATTR_DEL]);
+	dc_metrics_cntr_copy(&cntrs->crc_acl_cnt, &cont_rpc_cntrs[CONT_ACL_UPDATE]);
+	dc_metrics_cntr_merge(&cntrs->crc_acl_cnt, &cont_rpc_cntrs[CONT_ACL_DELETE]);
+	dc_metrics_cntr_copy(&cntrs->crc_prop_cnt, &cont_rpc_cntrs[CONT_PROP_SET]);
+out:
+	return rc;
+}
+
+int
+dc_cont_metrics_reset()
+{
+	int i;
+	int rc = 0;
+
+	if (cont_rpc_cntrs == NULL)
+		D_GOTO(out, rc = -DER_UNINIT);
+	for (i = 0; i < CONT_PROTO_CLI_COUNT; i++)
+		dc_metrics_clr_cntr(&cont_rpc_cntrs[i]);
+out:
+	return rc;
 }

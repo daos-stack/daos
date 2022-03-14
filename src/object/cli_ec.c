@@ -335,6 +335,7 @@ obj_ec_recx_scan(daos_iod_t *iod, d_sg_list_t *sgl,
 	ec_recx_array->oer_k = oca->u.ec.e_k;
 	ec_recx_array->oer_p = oca->u.ec.e_p;
 	punch = (update && iod->iod_size == DAOS_REC_ANY);
+	reasb_req->orr_part_stripe = 1;
 
 	for (i = 0, idx = 0, rec_off = 0; i < iod->iod_nr; i++) {
 		recx = &iod->iod_recxs[i];
@@ -435,6 +436,7 @@ obj_ec_recx_scan(daos_iod_t *iod, d_sg_list_t *sgl,
 	if (update && full_stripe_only) {
 		D_ASSERT(tgt_nr == obj_ec_tgt_nr(oca));
 		oiod_flags = OBJ_SIOD_EVEN_DIST;
+		reasb_req->orr_part_stripe = 0;
 	}
 	rc = obj_io_desc_init(&reasb_req->orr_oiods[iod_idx], tgt_nr,
 			      oiod_flags);

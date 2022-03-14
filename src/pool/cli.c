@@ -30,6 +30,9 @@ struct rsvc_client_state {
 	struct dc_mgmt_sys *scs_sys;
 };
 
+/** DAOS metrics pool rpc counters */
+daos_metrics_cntr_t	*pool_rpc_cntrs;
+
 /**
  * Initialize pool interface
  */
@@ -141,9 +144,8 @@ dc_pool_alloc(unsigned int nr)
 
 	/** allocate and fill in pool connection */
 	D_ALLOC_PTR(pool);
-	if (pool == NULL) {
+	if (pool == NULL)
 		return NULL;
-	}
 
 	daos_hhash_hlink_init(&pool->dp_hlink, &pool_h_ops);
 	D_INIT_LIST_HEAD(&pool->dp_co_list);
@@ -438,6 +440,7 @@ out:
 	daos_iov_free(&pci->pci_cred);
 	if (put_pool)
 		dc_pool_put(pool);
+	dc_pool_metrics_incr_completecntr(POOL_CONNECT, rc);
 	return rc;
 }
 
@@ -549,6 +552,7 @@ dc_pool_connect_internal(tse_task_t *task, daos_pool_info_t *info,
 	if (rc != 0)
 		D_GOTO(out_bulk, rc);
 
+	dc_pool_metrics_incr_inflightcntr(POOL_CONNECT);
 	return daos_rpc_send(rpc, task);
 
 out_bulk:
@@ -682,6 +686,7 @@ pool_disconnect_cp(tse_task_t *task, void *data)
 out:
 	crt_req_decref(arg->rpc);
 	dc_pool_put(pool);
+	dc_pool_metrics_incr_completecntr(POOL_DISCONNECT, rc);
 	return rc;
 }
 
@@ -760,6 +765,7 @@ dc_pool_disconnect(tse_task_t *task)
 	if (rc != 0)
 		D_GOTO(out_rpc, rc);
 
+	dc_pool_metrics_incr_inflightcntr(POOL_DISCONNECT);
 	return daos_rpc_send(rpc, task);
 
 out_rpc:
@@ -1110,6 +1116,7 @@ out:
 		dc_mgmt_sys_detach(state->sys);
 		D_FREE(state);
 	}
+	dc_pool_metrics_incr_completecntr(rpc->cr_opc, rc);
 	return rc;
 }
 
@@ -1136,9 +1143,8 @@ dc_pool_update_internal(tse_task_t *task, daos_pool_update_t *args,
 
 	if (state == NULL) {
 		D_ALLOC_PTR(state);
-		if (state == NULL) {
+		if (state == NULL)
 			D_GOTO(out_task, rc = -DER_NOMEM);
-		}
 
 		rc = dc_mgmt_sys_attach(args->grp, &state->sys);
 		if (rc != 0) {
@@ -1196,6 +1202,7 @@ dc_pool_update_internal(tse_task_t *task, daos_pool_update_t *args,
 	if (rc != 0)
 		D_GOTO(out_list, rc);
 
+	dc_pool_metrics_incr_inflightcntr(opc);
 	return daos_rpc_send(rpc, task);
 
 out_list:
@@ -1315,6 +1322,7 @@ out:
 	crt_req_decref(arg->rpc);
 	dc_pool_put(arg->dqa_pool);
 	map_bulk_destroy(in->pqi_map_bulk, map_buf);
+	dc_pool_metrics_incr_completecntr(POOL_QUERY, rc);
 	return rc;
 }
 
@@ -1388,6 +1396,7 @@ dc_pool_query(tse_task_t *task)
 	if (rc != 0)
 		D_GOTO(out_bulk, rc);
 
+	dc_pool_metrics_incr_inflightcntr(POOL_QUERY);
 	return daos_rpc_send(rpc, task);
 
 out_bulk:
@@ -1887,6 +1896,7 @@ out:
 	crt_req_decref(arg->rpc);
 	dc_pool_put(arg->lca_pool);
 	list_cont_bulk_destroy(in->plci_cont_bulk);
+	dc_pool_metrics_incr_completecntr(POOL_LIST_CONT, rc);
 	return rc;
 }
 
@@ -1968,6 +1978,7 @@ dc_pool_list_cont(tse_task_t *task)
 	if (rc != 0)
 		D_GOTO(out_bulk, rc);
 
+	dc_pool_metrics_incr_inflightcntr(POOL_LIST_CONT);
 	return daos_rpc_send(rpc, task);
 
 out_bulk:
@@ -2095,7 +2106,7 @@ dc_pool_query_target(tse_task_t *task)
 	if (rc != 0) {
 		D_ERROR(DF_UUID": failed to create pool tgt info rpc: %d\n",
 			DP_UUID(pool->dp_pool), rc);
-		 goto out_pool;
+		goto out_pool;
 	}
 
 	in = crt_req_get(rpc);
@@ -2193,6 +2204,7 @@ pool_req_complete(tse_task_t *task, void *data)
 		rc = args->pra_callback(task, data);
 out:
 	pool_req_cleanup(CLEANUP_BULK, args);
+	dc_pool_metrics_incr_completecntr(args->pra_rpc->cr_opc, rc);
 	return rc;
 }
 
@@ -2302,6 +2314,7 @@ dc_pool_list_attr(tse_task_t *task)
 	}
 
 	crt_req_addref(cb_args.pra_rpc);
+	dc_pool_metrics_incr_inflightcntr(POOL_ATTR_LIST);
 	return daos_rpc_send(cb_args.pra_rpc, task);
 
 out:
@@ -2497,6 +2510,7 @@ dc_pool_get_attr(tse_task_t *task)
 	}
 
 	crt_req_addref(cb_args.pra_rpc);
+	dc_pool_metrics_incr_inflightcntr(POOL_ATTR_GET);
 	return daos_rpc_send(cb_args.pra_rpc, task);
 
 out:
@@ -2603,6 +2617,7 @@ dc_pool_set_attr(tse_task_t *task)
 	}
 
 	crt_req_addref(cb_args.pra_rpc);
+	dc_pool_metrics_incr_inflightcntr(POOL_ATTR_SET);
 	return daos_rpc_send(cb_args.pra_rpc, task);
 
 out:
@@ -2680,6 +2695,7 @@ dc_pool_del_attr(tse_task_t *task)
 	}
 
 	crt_req_addref(cb_args.pra_rpc);
+	dc_pool_metrics_incr_inflightcntr(POOL_ATTR_DEL);
 	return daos_rpc_send(cb_args.pra_rpc, task);
 
 out:
@@ -2720,6 +2736,7 @@ pool_svc_stop_cb(tse_task_t *task, void *data)
 out:
 	crt_req_decref(arg->rpc);
 	dc_pool_put(arg->dsa_pool);
+	dc_pool_metrics_incr_completecntr(POOL_SVC_STOP, rc);
 	return rc;
 }
 
@@ -2772,6 +2789,7 @@ dc_pool_stop_svc(tse_task_t *task)
 	if (rc != 0)
 		D_GOTO(out_rpc, rc);
 
+	dc_pool_metrics_incr_inflightcntr(POOL_SVC_STOP);
 	return daos_rpc_send(rpc, task);
 
 out_rpc:
@@ -2781,5 +2799,59 @@ out_pool:
 	dc_pool_put(pool);
 out_task:
 	tse_task_complete(task, rc);
+	return rc;
+}
+
+int
+dc_pool_metrics_init()
+{
+	int rc = 0;
+
+	D_ALLOC_ARRAY(pool_rpc_cntrs, POOL_PROTO_CLI_COUNT);
+	if (pool_rpc_cntrs == NULL)
+		D_GOTO(out, rc = -DER_NOMEM);
+out:
+	return rc;
+}
+
+void
+dc_pool_metrics_fini()
+{
+	D_FREE(pool_rpc_cntrs);
+}
+
+int
+dc_pool_metrics_get_rpccntrs(daos_metrics_pool_rpc_cntrs_t *cntrs)
+{
+	int rc = 0;
+
+	if (pool_rpc_cntrs == NULL)
+		D_GOTO(out, rc = -DER_UNINIT);
+
+	dc_metrics_cntr_copy(&cntrs->prc_connect_cnt, &pool_rpc_cntrs[POOL_CONNECT]);
+	dc_metrics_cntr_copy(&cntrs->prc_disconnect_cnt, &pool_rpc_cntrs[POOL_DISCONNECT]);
+	dc_metrics_cntr_copy(&cntrs->prc_attr_cnt, &pool_rpc_cntrs[POOL_ATTR_LIST]);
+	dc_metrics_cntr_merge(&cntrs->prc_attr_cnt, &pool_rpc_cntrs[POOL_ATTR_GET]);
+	dc_metrics_cntr_merge(&cntrs->prc_attr_cnt, &pool_rpc_cntrs[POOL_ATTR_SET]);
+	dc_metrics_cntr_merge(&cntrs->prc_attr_cnt, &pool_rpc_cntrs[POOL_ATTR_DEL]);
+	dc_metrics_cntr_copy(&cntrs->prc_query_cnt, &pool_rpc_cntrs[POOL_QUERY]);
+	dc_metrics_cntr_merge(&cntrs->prc_query_cnt, &pool_rpc_cntrs[POOL_QUERY_INFO]);
+	dc_metrics_cntr_merge(&cntrs->prc_query_cnt, &pool_rpc_cntrs[POOL_LIST_CONT]);
+
+out:
+	return rc;
+}
+
+int
+dc_pool_metrics_reset()
+{
+	int i;
+	int rc = 0;
+
+	if (pool_rpc_cntrs == NULL)
+		D_GOTO(out, rc = -DER_UNINIT);
+	for (i = 0; i < POOL_PROTO_CLI_COUNT; i++)
+		dc_metrics_clr_cntr(&pool_rpc_cntrs[i]);
+out:
 	return rc;
 }

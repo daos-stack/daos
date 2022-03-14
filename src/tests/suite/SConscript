@@ -97,9 +97,9 @@ def scons():
     newenv = configure_cmocka(denv.Clone())
 
     c_files = Split("""daos_array.c daos_base_tx.c daos_capa.c daos_checksum.c
-                    daos_container.c daos_dedup.c daos_degraded.c
-                    daos_dist_tx.c daos_drain_simple.c daos_epoch.c
-                    daos_epoch_io.c daos_epoch_recovery.c daos_kv.c
+                    daos_cmetrics.c daos_container.c daos_dedup.c
+                    daos_degraded.c daos_dist_tx.c daos_drain_simple.c
+                    daos_epoch.c daos_epoch_io.c daos_epoch_recovery.c daos_kv.c
                     daos_md_replication.c daos_mgmt.c daos_nvme_recovery.c
                     daos_obj_array.c daos_obj.c daos_oid_alloc.c daos_pool.c
                     daos_rebuild.c daos_rebuild_common.c daos_rebuild_ec.c

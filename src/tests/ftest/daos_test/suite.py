@@ -223,6 +223,21 @@ class DaosCoreTest(DaosCoreBase):
         """
         self.run_subtest()
 
+    def test_daos_client_metrics(self):
+        """Jira ID: DAOS-8331
+
+        Test Description:
+            Run daos_test -M
+
+        Use cases:
+            Core tests for daos_test
+
+        :avocado: tags=all,pr,daily_regression
+        :avocado: tags=hw,ib2,medium
+        :avocado: tags=daos_test,daos_core_test,test_daos_client_metrics
+        """
+        self.run_subtest()
+
     def test_daos_capability(self):
         """Jira ID: DAOS-1568
 

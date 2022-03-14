@@ -188,7 +188,9 @@ struct obj_reasb_req {
 	/* the flag of IOM re-allocable (used for EC IOM merge) */
 					 orr_iom_realloc:1,
 	/* orr_fail allocated flag, recovery task's orr_fail is inherited */
-					 orr_fail_alloc:1;
+					 orr_fail_alloc:1,
+	/* for use by daos client side metrics */
+					 orr_part_stripe:1;
 };
 
 static inline void

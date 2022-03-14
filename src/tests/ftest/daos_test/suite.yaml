@@ -23,6 +23,7 @@ timeouts:
     test_daos_object_array: 105
     test_daos_array: 106
     test_daos_kv: 105
+    test_daos_client_metrics: 450
     test_daos_capability: 104
     test_daos_epoch_recovery: 104
     test_daos_md_replication: 104
@@ -99,6 +100,7 @@ daos_tests:
     test_daos_object_array: 1
     test_daos_array: 1
     test_daos_kv: 1
+    test_daos_client_metrics: 1
     test_daos_capability: 1
     test_daos_epoch_recovery: 1
     test_daos_md_replication: 2
@@ -126,6 +128,7 @@ daos_tests:
     test_daos_object_array: DAOS_Object_Array
     test_daos_array: DAOS_Array
     test_daos_kv: DAOS_KV
+    test_daos_client_metrics: DAOS_Client_metrics
     test_daos_capability: DAOS_Capability
     test_daos_epoch_recovery: DAOS_Epoch_Recovery
     test_daos_md_replication: DAOS_MD_Replication
@@ -153,6 +156,7 @@ daos_tests:
     test_daos_object_array: A
     test_daos_array: D
     test_daos_kv: K
+    test_daos_client_metrics: M
     test_daos_capability: C
     test_daos_epoch_recovery: o
     test_daos_md_replication: R
