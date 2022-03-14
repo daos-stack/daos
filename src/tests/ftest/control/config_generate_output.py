@@ -481,8 +481,7 @@ class ConfigGenerateOutput(TestWithServers):
                     if not self.interface_to_providers[fabric_iface]:
                         errors.append(
                             "Unexpected fabric_iface! {}".format(fabric_iface))
-                    elif provider not in \
-                        self.interface_to_providers[fabric_iface]:
+                    elif provider not in self.interface_to_providers[fabric_iface]:
                         # Now check the provider field, e.g., ofi+tcp by
                         # checking the corresponding list in the dictionary.
                         msg = "Unexpected provider in fabric_iface! provider ="\
@@ -529,8 +528,7 @@ class ConfigGenerateOutput(TestWithServers):
                     if not self.interface_to_providers[fabric_iface]:
                         errors.append(
                             "Unexpected fabric_iface! {}".format(fabric_iface))
-                    elif provider not in \
-                        self.interface_to_providers[fabric_iface]:
+                    elif provider not in self.interface_to_providers[fabric_iface]:
                         # Now check the provider field, e.g., ofi+tcp by
                         # checking the corresponding list in the dictionary.
                         msg = "Unexpected provider in fabric_iface! provider ="\

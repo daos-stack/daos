@@ -43,26 +43,22 @@ class TestWithTelemetryIOBasic(IorTestBase,TestWithTelemetry):
                 for host in sorted(m_data[name]):
                     for rank in sorted(m_data[name][host]):
                         for target in sorted(m_data[name][host][rank]):
-                            for size in sorted(
-                                m_data[name][host][rank][target]):
+                            for size in sorted(m_data[name][host][rank][target]):
                                 value = m_data[name][host][rank][target][size]
                                 invalid = ""
-                                #Verify value within range
-                                if (value < threshold[0]
-                                    or value >= threshold[1]):
+                                # Verify value within range
+                                if (value < threshold[0] or value >= threshold[1]):
                                     status = False
                                     invalid = "*out of valid range"
-                                #Verify if min < max
+                                # Verify if min < max
                                 if "_min" in name:
                                     name2 = name.replace("_min", "_max")
-                                    if value > m_data\
-                                        [name2][host][rank][target][size]:
+                                    if value > m_data[name2][host][rank][target][size]:
                                         status = False
                                         invalid += " *_min > _max"
-                                #Verify if value decremental
+                                # Verify if value decremental
                                 if ("_min" in name or "_max" in name) and key > 0:
-                                    if value < metrics_data[key-1]\
-                                        [name][host][rank][target][size]:
+                                    if value < metrics_data[key-1][name][host][rank][target][size]:
                                         status = False
                                         invalid += " *value decreased"
                                 self.log.info(

@@ -1,4 +1,4 @@
-# (C) Copyright 2019-2021 Intel Corporation.
+# (C) Copyright 2019-2022 Intel Corporation.
 #
 # SPDX-License-Identifier: BSD-2-Clause-Patent
 #
@@ -62,18 +62,18 @@ class DCont():
         Create new DArray object.
     """
     def __init__(self, pool=None, cont=None, path=None):
-        self._dc   = DaosClient()
-        self._hdl  = None
+        self._dc = DaosClient()
+        self._hdl = None
         if path is None and (pool is None or cont is None):
             raise PyDError("invalid pool or container UUID",
                            -pydaos_shim.DER_INVAL)
         if path is not None:
-            self.pool  = None
+            self.pool = None
             self.cont = None
             (ret, hdl) = pydaos_shim.cont_open_by_path(DAOS_MAGIC, path, 0)
         else:
-            self.pool  = pool
-            self.cont  = cont
+            self.pool = pool
+            self.cont = cont
             (ret, hdl) = pydaos_shim.cont_open(DAOS_MAGIC, pool, cont, 0)
         if ret != pydaos_shim.DER_SUCCESS:
             raise PyDError("failed to access container", ret)

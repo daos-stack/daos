@@ -97,7 +97,8 @@ def base_setup(env, prereqs=None):
     env['BSETUP'] = compiler
 
 
-_TO_STRIP=['_FORTIFY_SOURCE']
+_TO_STRIP = ['_FORTIFY_SOURCE']
+
 
 def remove_fortify(env):
     """Remove the _FORTIFY_SOURCE option"""

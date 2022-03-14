@@ -818,13 +818,13 @@ class PreReqComponent():
 
     def _setup_compiler(self, warning_level):
         """Setup the compiler to use"""
-        compiler_map = {'gcc': {'CC' : 'gcc', 'CXX' : 'g++'},
-                        'covc' : {'CC' : '/opt/BullseyeCoverage/bin/gcc',
-                                  'CXX' : '/opt/BullseyeCoverage/bin/g++',
-                                  'CVS' : '/opt/BullseyeCoverage/bin/covselect',
-                                  'COV01' : '/opt/BullseyeCoverage/bin/cov01'},
-                        'clang' : {'CC' : 'clang', 'CXX' : 'clang++'},
-                       }
+        compiler_map = {'gcc': {'CC': 'gcc', 'CXX': 'g++'},
+                        'covc': {'CC': '/opt/BullseyeCoverage/bin/gcc',
+                                 'CXX': '/opt/BullseyeCoverage/bin/g++',
+                                 'CVS': '/opt/BullseyeCoverage/bin/covselect',
+                                 'COV01': '/opt/BullseyeCoverage/bin/cov01'},
+                        'clang': {'CC': 'clang', 'CXX': 'clang++'},
+                        }
         self.add_opts(EnumVariable('COMPILER', "Set the compiler family to use",
                                    'gcc', ['gcc', 'covc', 'clang', 'icc'],
                                    ignorecase=1))
