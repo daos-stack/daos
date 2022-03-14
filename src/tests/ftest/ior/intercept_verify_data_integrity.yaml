@@ -15,7 +15,7 @@ server_config:
     servers:
         log_mask: INFO
         bdev_class: nvme
-        bdev_list: ["0000:5e:00.0","0000:5f:00.0"]
+        bdev_list: ["aaaa:aa:aa.a","bbbb:bb:bb.b"]
         #scm_size needed for tmpfs
         #scm_size: 35
         scm_class: dcpm
@@ -41,9 +41,9 @@ ior:
     dfs_oclass: "SX"
     file_options: !mux
         ssf:
-        flags: "-k -e -D 600 -v -w -W -r -R"
+            flags: "-k -e -D 600 -v -w -W -r -R"
         fpp:
-        flags: "-F -k -e -D 600 -v -w -W -r -R"
+            flags: "-F -k -e -D 600 -v -w -W -r -R"
 dfuse:
     mount_dir: "/tmp/daos_dfuse/"
     disable_caching: True
