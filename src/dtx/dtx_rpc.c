@@ -975,7 +975,8 @@ again:
 		 * then pool map may be refreshed during that. Let's retry
 		 * to find out the new leader.
 		 */
-		if (target->ta_comp.co_status != PO_COMP_ST_UPIN)
+		if (target->ta_comp.co_status != PO_COMP_ST_UP &&
+		    target->ta_comp.co_status != PO_COMP_ST_UPIN)
 			goto again;
 
 		d_list_for_each_entry(drr, &head, drr_link) {

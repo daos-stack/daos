@@ -340,7 +340,8 @@ mv %{buildroot}/%{conf_dir}/bash_completion.d %{buildroot}/%{_sysconfdir}
 %pre server
 getent group daos_metrics >/dev/null || groupadd -r daos_metrics
 getent group daos_server >/dev/null || groupadd -r daos_server
-getent passwd daos_server >/dev/null || useradd -s /sbin/nologin -r -g daos_server -G daos_metrics daos_server
+getent group daos_daemons >/dev/null || groupadd -r daos_daemons
+getent passwd daos_server >/dev/null || useradd -s /sbin/nologin -r -g daos_server -G daos_metrics,daos_daemons daos_server
 %post server
 /sbin/ldconfig
 %systemd_post %{server_svc_name}
@@ -352,7 +353,8 @@ getent passwd daos_server >/dev/null || useradd -s /sbin/nologin -r -g daos_serv
 
 %pre client
 getent group daos_agent >/dev/null || groupadd -r daos_agent
-getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent daos_agent
+getent group daos_daemons >/dev/null || groupadd -r daos_daemons
+getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent -G daos_daemons daos_agent
 %post client
 %systemd_post %{agent_svc_name}
 %preun client
@@ -516,6 +518,9 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %changelog
 * Mon Mar 14 2022 Johann Lombardi <johann.lombardi@intel.com> 2.0.2-1
 - Version bump to 2.0.2
+
+* Mon Mar 14 2022 Michael Hennecke <michael.hennecke@intel.com> 2.0.1-6
+- DAOS-6344: Create secondary group daos_daemons for daos_server and daos_agent
 
 * Wed Mar 02 2022 Liu Xuezhao <xuezhao.liu@intel.com> 2.0.1-5
 - Update mercury to include DAOS-9561 workaround
