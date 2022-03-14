@@ -194,7 +194,7 @@ func convertPoolRebuildStatus(in *C.struct_daos_rebuild_status) *mgmtpb.PoolRebu
 		switch {
 		case in.rs_version == 0:
 			out.State = mgmtpb.PoolRebuildStatus_IDLE
-		case in.rs_done == 1:
+		case C.get_rebuild_state(in) == C.DRS_COMPLETED:
 			out.State = mgmtpb.PoolRebuildStatus_DONE
 		default:
 			out.State = mgmtpb.PoolRebuildStatus_BUSY
