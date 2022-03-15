@@ -834,7 +834,7 @@ csum_add2iods(daos_handle_t ioh, daos_iod_t *iods, uint32_t iods_nr,
 	int	 i;
 
 	struct bio_desc *biod = vos_ioh2desc(ioh);
-	struct dcs_csum_info *csum_infos = vos_ioh2ci(ioh);
+	struct dcs_ci_list *csum_infos = vos_ioh2ci(ioh);
 	uint32_t csum_info_nr = vos_ioh2ci_nr(ioh);
 
 	for (i = 0; i < iods_nr; i++) {
@@ -843,11 +843,11 @@ csum_add2iods(daos_handle_t ioh, daos_iod_t *iods, uint32_t iods_nr,
 		D_DEBUG(DB_CSUM, DF_C_UOID_DKEY"Adding fetched to IOD: "
 				 DF_C_IOD", csum: "DF_CI"\n",
 			DP_C_UOID_DKEY(oid, dkey),
-			DP_C_IOD(&iods[i]), DP_CI(csum_infos[biov_csums_idx]));
+			DP_C_IOD(&iods[i]), DP_CI(*dcs_csum_info_get(csum_infos, biov_csums_idx)));
+		csum_infos->dcl_csum_offset += biov_csums_used;
 		rc = ds_csum_add2iod(
 			&iods[i], csummer,
-			bio_iod_sgl(biod, i),
-			&csum_infos[biov_csums_idx],
+			bio_iod_sgl(biod, i), csum_infos,
 			&biov_csums_used, get_iod_csum(iod_csums, i));
 
 		if (rc != 0) {
