@@ -556,6 +556,18 @@ func (cmd *PoolSetPropCmd) Execute(_ []string) error {
 		cmd.Args.Props.ToSet = []*control.PoolProperty{p}
 	}
 
+	for _, prop := range cmd.Args.Props.ToSet {
+		if prop.Name == "rf" {
+			return errors.New("can't set redundancy factor on existing pool.")
+		}
+		if prop.Name == "ec_pda" {
+			return errors.New("can't set EC performance domain affinity on existing pool.")
+		}
+		if prop.Name == "rp_pda" {
+			return errors.New("can't set RP performance domain affinity on existing pool.")
+		}
+	}
+
 	req := &control.PoolSetPropReq{
 		ID:         cmd.PoolID().String(),
 		Properties: cmd.Args.Props.ToSet,

@@ -1,6 +1,6 @@
 #!/usr/bin/python
 """
-  (C) Copyright 2021 Intel Corporation.
+  (C) Copyright 2021-2022 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -27,7 +27,8 @@ class HarnessAdvancedTest(TestWithServers):
         This test can be run in any CI stage: vm, small, medium, large
 
         :avocado: tags=all
-        :avocado: tags=harness,harness_advanced_test,test_core_files
+        :avocado: tags=harness,harness_advanced_test,core_files
+        :avocado: tags=test_core_files
         """
         # Choose a server find the pid of its daos_engine process
         host = choice(self.server_managers[0].hosts) #nosec
@@ -72,6 +73,7 @@ class HarnessAdvancedTest(TestWithServers):
 
         :avocado: tags=all
         :avocado: tags=hw,small,medium,ib2,large
-        :avocado: tags=harness,harness_advanced_test,test_core_files
+        :avocado: tags=harness,harness_advanced_test,core_files
+        :avocado: tags=test_core_files_hw
         """
         self.test_core_files()
