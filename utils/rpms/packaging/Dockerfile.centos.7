@@ -11,13 +11,16 @@ MAINTAINER daos-stack <daos@daos.groups.io>
 # use same UID as host and default value of 1000 if not specified
 ARG UID=1000
 
+ARG CB0
+
 # Update distribution
-#Nothing to do for CentOS
+RUN yum -y update && yum clean all
 
 # Install basic tools
-RUN yum install -y epel-release
+RUN yum install -y epel-release && yum clean all
 RUN yum install -y mock make rpm-build curl createrepo rpmlint redhat-lsb-core \
-                   git python-srpm-macros dnf
+                   git python-srpm-macros dnf && \
+    yum clean all
 
 # Add build user (to keep rpmbuild happy)
 ENV USER build

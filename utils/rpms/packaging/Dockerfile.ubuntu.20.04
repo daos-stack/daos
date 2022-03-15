@@ -12,6 +12,8 @@ ARG UID=1000
 ARG REPO_URL=""
 ARG REPO_UBUNTU_20_04=""
 
+ARG CB0
+
 # Install basic tools
 RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y \
             autoconf bash ca-certificates curl debhelper dh-make        \

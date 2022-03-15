@@ -10,6 +10,8 @@ Maintainer daos-stack <daos@daos.groups.io>
 # use same UID as host and default value of 1000 if not specified
 ARG UID=1000
 
+ARG CB0
+
 # Install basic tools
 RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y \
             autoconf bash curl debhelper dh-make dpkg-dev doxygen gcc \
