@@ -32,7 +32,7 @@ else
 
     # Try and use the gh command to work out the target branch, or if not installed
     # then assume master.
-    if command -v gh &> /dev/null
+    if command -v gh > /dev/null 2>&1
     then
 	TARGET=$(gh pr view "$BRANCH" --json baseRefName -t "{{.baseRefName}}")
     else
