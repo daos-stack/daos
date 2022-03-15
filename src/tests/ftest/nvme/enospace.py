@@ -6,6 +6,7 @@
 '''
 import time
 import threading
+import queue
 
 from apricot import skipForTicket
 from nvme_utils import ServerFillUp
@@ -16,8 +17,6 @@ from job_manager_utils import Mpirun
 from ior_utils import IorCommand, IorMetrics
 from command_utils_base import CommandFailure
 from general_utils import error_count
-import queue
-
 
 
 class NvmeEnospace(ServerFillUp):
@@ -33,6 +32,7 @@ class NvmeEnospace(ServerFillUp):
         self.daos_cmd = None
 
     def setUp(self):
+        """Initial setup"""
         super().setUp()
 
         # initialize daos command
@@ -107,7 +107,6 @@ class NvmeEnospace(ServerFillUp):
         # Define the job manager for the IOR command
         job_manager = Mpirun(ior_bg_cmd, mpitype="mpich")
         self.create_cont()
-        job_manager.job.dfs_cont.update(self.container.uuid)
         env = ior_bg_cmd.get_default_env(str(job_manager))
         job_manager.assign_hosts(self.hostlist_clients, self.workdir, None)
         job_manager.assign_processes(1)
@@ -313,7 +312,7 @@ class NvmeEnospace(ServerFillUp):
             #Delete all the containers
             self.delete_all_containers()
             #Delete container will take some time to release the space
-            time.sleep(120)
+            time.sleep(60)
 
         #Run last IO
         self.start_ior_load(storage='SCM', operation="Auto_Write", percent=1)

@@ -11,8 +11,9 @@ import queue
 from command_utils_base import CommandFailure
 from avocado.core.exceptions import TestFail
 from ior_test_base import IorTestBase
-from ior_utils import IorCommand
 from server_utils import ServerFailed
+from ior_utils import IorCommand
+from job_manager_utils import Mpirun
 
 
 def get_device_ids(dmg, servers):
@@ -68,8 +69,9 @@ class ServerFillUp(IorTestBase):
         self.rank_to_kill = None
         self.scm_fill = False
         self.nvme_fill = False
-        self.ior_matrix = None
         self.fail_on_warning = False
+        self.ior_matrix = None
+        self.ior_local_cmd = None
 
     def setUp(self):
         """Set up each test case."""
@@ -78,7 +80,9 @@ class ServerFillUp(IorTestBase):
         # Start the servers and agents
         super().setUp()
         self.hostfile_clients = None
-        self.ior_default_flags = self.ior_cmd.flags.value
+        self.ior_local_cmd = IorCommand()
+        self.ior_local_cmd.get_params(self)
+        self.ior_default_flags = self.ior_local_cmd.flags.value
         self.ior_scm_xfersize = self.params.get("transfer_size",
                                                 '/run/ior/transfersize_blocksize/*', '2048')
         self.ior_read_flags = self.params.get("read_flags", '/run/ior/iorflags/*', '-r -R -k -G 1')
@@ -100,25 +104,43 @@ class ServerFillUp(IorTestBase):
                                         storage % to be fill.
         """
         # IOR flag can be Write only or Write/Read based on test yaml
-        self.ior_cmd.flags.value = self.ior_default_flags
+        self.ior_local_cmd.flags.value = self.ior_default_flags
 
         # Calculate the block size based on server % to fill up.
         if 'Auto' in operation:
             block_size = self.calculate_ior_block_size()
-            self.ior_cmd.block_size.update('{}'.format(block_size))
+            self.ior_local_cmd.block_size.update('{}'.format(block_size))
 
-        # For IOR Read operation update the read flax from yaml file.
+        # IOR Read operation update the read only flag from yaml file.
         if 'Auto_Read' in operation or operation == "Read":
             create_cont = False
-            self.ior_cmd.flags.value = self.ior_read_flags
+            self.ior_local_cmd.flags.value = self.ior_read_flags
+
+        self.ior_local_cmd.set_daos_params(self.server_group, self.pool)
+        self.ior_local_cmd.test_file.update('/testfile')
+
+        # Created new container
+        if create_cont:
+            self.create_cont()
+        else:
+            self.ior_local_cmd.dfs_cont.update(self.container.uuid)
+
+        # Define the job manager for the IOR command
+        job_manager_main = Mpirun(self.ior_local_cmd, mpitype="mpich")
+        env = self.ior_local_cmd.get_default_env(str(job_manager_main))
+        job_manager_main.assign_hosts(self.hostlist_clients, self.workdir, None)
+        job_manager_main.assign_environment(env, True)
+        job_manager_main.assign_processes(self.params.get("np", '/run/ior/client_processes/*'))
 
         # run IOR Command
         try:
-            out = self.run_ior_with_pool(create_cont=create_cont,
-                                         display_space=False,
-                                         fail_on_warning=self.fail_on_warning)
-            self.ior_matrix = IorCommand.get_ior_metrics(out)
-            results.put("PASS")
+            output = job_manager_main.run()
+            self.ior_matrix = IorCommand.get_ior_metrics(output)
+
+            for line in output.stdout_text.splitlines():
+                if 'WARNING' in line and self.fail_on_warning:
+                    results.put("FAIL-IOR command issued warnings.")
+
         except (CommandFailure, TestFail) as _error:
             results.put("FAIL")
 
@@ -131,10 +153,10 @@ class ServerFillUp(IorTestBase):
         """
         if self.scm_fill:
             free_space = self.pool.get_pool_daos_space()["s_total"][0]
-            self.ior_cmd.transfer_size.value = self.ior_scm_xfersize
+            self.ior_local_cmd.transfer_size.value = self.ior_scm_xfersize
         elif self.nvme_fill:
             free_space = self.pool.get_pool_daos_space()["s_total"][1]
-            self.ior_cmd.transfer_size.value = self.ior_nvme_xfersize
+            self.ior_local_cmd.transfer_size.value = self.ior_nvme_xfersize
         else:
             self.fail('Provide storage type (SCM/NVMe) to be filled')
 
@@ -144,7 +166,7 @@ class ServerFillUp(IorTestBase):
         _tmp_block_size = ((free_space/100)*self.capacity)
 
         # Check the IOR object type to calculate the correct block size.
-        _replica = re.findall(r'_(.+?)G', self.ior_cmd.dfs_oclass.value)
+        _replica = re.findall(r'_(.+?)G', self.ior_local_cmd.dfs_oclass.value)
 
         # This is for non replica and EC class where _tmp_block_size will not change.
         if not _replica:
@@ -169,8 +191,8 @@ class ServerFillUp(IorTestBase):
         _tmp_block_size = int(_tmp_block_size) / self.processes
 
         # Calculate the Final block size of IOR multiple of Transfer size.
-        block_size = (int(_tmp_block_size / int(self.ior_cmd.transfer_size.value)) * int(
-            self.ior_cmd.transfer_size.value))
+        block_size = (int(_tmp_block_size / int(self.ior_local_cmd.transfer_size.value)) * int(
+            self.ior_local_cmd.transfer_size.value))
 
         return block_size
 
@@ -293,5 +315,6 @@ class ServerFillUp(IorTestBase):
 
         # Verify the queue and make sure no FAIL for any IOR run
         while not self.out_queue.empty():
-            if self.out_queue.get() == "FAIL":
-                self.fail("FAIL")
+            queue_result = self.out_queue.get()
+            if "FAIL" in queue_result:
+                self.fail(queue_result)
