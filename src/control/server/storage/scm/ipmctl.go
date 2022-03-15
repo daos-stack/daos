@@ -104,8 +104,18 @@ func (cr *cmdRunner) showIpmctlVersion() (string, error) {
 	return cr.runCmd(cmdShowIpmctlVersion)
 }
 
-func (cr *cmdRunner) showRegions() (string, error) {
-	return cr.runCmd(cmdShowRegions)
+func (cr *cmdRunner) showRegions() {
+	if err := cr.checkIpmctl(badIpmctlVers); err != nil {
+		cr.log.Error(errors.WithMessage(err, "checkIpmctl").Error())
+	} else {
+		// Print ipmctl commandline output for show regions for debug purposes.
+		out, err := cr.runCmd(cmdShowRegions)
+		if err != nil {
+			cr.log.Error(errors.WithMessage(err, "show regions cmd").Error())
+		} else {
+			cr.log.Debugf("show region output: %s\n", out)
+		}
+	}
 }
 
 func (cr *cmdRunner) createRegions() (string, error) {
@@ -265,18 +275,7 @@ func (cr *cmdRunner) getState() (storage.ScmState, error) {
 	// Retrieve region detail from ipmctl bindings.
 	regions, err := cr.binding.GetRegions()
 	if err != nil {
-		if err = cr.checkIpmctl(badIpmctlVers); err != nil {
-			cr.log.Error(errors.WithMessage(err, "checkIpmctl").Error())
-		} else {
-			// Print ipmctl commandline output for show regions for debug purposes.
-			out, err := cr.showRegions()
-			if err != nil {
-				cr.log.Error(errors.WithMessage(err, "show regions cmd").Error())
-			} else {
-				cr.log.Debugf("show region output: %s\n", out)
-			}
-		}
-
+		cr.showRegions()
 		return storage.ScmStateUnknown, errors.Wrap(err, "failed to discover PMem regions")
 	}
 	cr.log.Debugf("discovered pmem regions: %+v", regions)
@@ -289,19 +288,22 @@ func (cr *cmdRunner) getState() (storage.ScmState, error) {
 	for _, region := range regions {
 		regionHealth := ipmctl.PMemRegionHealth(region.Health)
 		if regionHealth != ipmctl.RegionHealthNormal {
+			cr.showRegions()
 			cr.log.Errorf("unexpected PMem region health %q, want %q",
 				regionHealth, ipmctl.RegionHealthNormal)
 		}
 
 		regionType := ipmctl.PMemRegionType(region.Type)
 		switch regionType {
-		case ipmctl.RegionTypePersistent:
+		case ipmctl.RegionTypeNotInterleaved:
+			cr.showRegions()
 			return storage.ScmStateNotInterleaved, nil
-		case ipmctl.RegionTypePersistentMirror:
+		case ipmctl.RegionTypeAppDirect:
 		default:
+			cr.showRegions()
 			return storage.ScmStateUnknown, errors.Errorf(
 				"unexpected PMem region type %q, want %q", regionType,
-				ipmctl.RegionTypePersistentMirror)
+				ipmctl.RegionTypeAppDirect)
 		}
 
 		if region.Free_capacity > 0 {
