@@ -6,6 +6,12 @@
 #
 # Picks up config files from .flake8
 
+if ! command -v flake8 &> /dev/null
+then
+    echo "No flake checking, install flake8 command"
+    exit 0
+fi
+
 echo checking uncommitted code.
 git diff -u | flake8 --diff
 
@@ -23,5 +29,15 @@ then
     flake8 --statistics
 else
     echo Checking against master.
-    git diff master... -u | flake8 --diff
+
+    # Try and use the gh command to work out the target branch, or if not installed
+    # then assume master.
+    if command -v gh &> /dev/null
+    then
+	TARGET=$(gh pr view $BRANCH --json baseRefName -t "{{.baseRefName}}")
+    else
+	TARGET=master
+    fi
+
+    git diff $TARGET... -u | flake8 --diff
 fi
