@@ -52,6 +52,7 @@ func DefaultProvider(log logging.Logger, idx int, engineStorage *Config) *Provid
 // PrepareScm calls into storage SCM provider to attempt to configure PMem devices to be usable by
 // DAOS.
 func (p *Provider) PrepareScm(req ScmPrepareRequest) (*ScmPrepareResponse, error) {
+	p.log.Debugf("calling scm storage provider prepare: %+v", req)
 	return p.scm.Prepare(req)
 }
 

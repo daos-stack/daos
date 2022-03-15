@@ -119,13 +119,13 @@ func (cmd *storagePrepareCmd) prepScm(scanErrors *errs, prep scmPrepFn) error {
 		msg := ""
 		switch state {
 		case storage.ScmStateNoRegions:
-			msg = "PMem AppDirect-interleaved regions will be created. "
+			msg = "PMem AppDirect interleaved regions will be created. "
 		case storage.ScmStateNotInterleaved:
-			msg = "PMem AppDirect regions will be removed. "
+			msg = "PMem AppDirect non-interleaved regions will be removed. "
 		case storage.ScmStateFreeCapacity:
-			msg = "PMem AppDirect-interleaved regions will be removed. "
+			msg = "PMem AppDirect interleaved regions will be removed. "
 		case storage.ScmStateNoFreeCapacity:
-			msg = "PMem namespaces removed and AppDirect-interleaved regions will be removed. "
+			msg = "PMem namespaces removed and AppDirect interleaved regions will be removed. "
 		}
 		cmd.log.Info(msg + storage.ScmMsgRebootRequired)
 
@@ -200,11 +200,15 @@ func (cmd *storagePrepareCmd) Execute(args []string) error {
 		return err
 	}
 
-	if len(scanErrors) > 0 {
+	switch len(scanErrors) {
+	case 0:
+		return nil
+	case 1:
+		return scanErrors[0]
+	default:
+		// When calling ConcatErrors the Fault resolution is lost.
 		return common.ConcatErrors(scanErrors, nil)
 	}
-
-	return nil
 }
 
 type storageScanCmd struct {
