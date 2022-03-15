@@ -473,7 +473,7 @@ do_init:
 			setenv("FI_PSM2_NAME_SERVER", "1", true);
 			D_DEBUG(DB_ALL, "Setting FI_PSM2_NAME_SERVER to 1\n");
 		}
-		if (crt_na_type_is_ofi(prov)) {
+		if (crt_na_type_is_ofi(prov) || crt_na_type_is_ucx(prov)) {
 			rc = crt_na_ofi_config_init(prov, opt);
 			if (rc != 0) {
 				D_ERROR("crt_na_ofi_config_init() failed, "
