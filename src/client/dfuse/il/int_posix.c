@@ -216,7 +216,7 @@ pread_rpc(struct fd_entry *entry, char *buff, size_t len, off_t offset)
 	counter = atomic_fetch_add_relaxed(&ioil_iog.iog_read_count, 1);
 
 	if (counter < ioil_iog.iog_report_count)
-		fprintf(stderr, "[libioil] Intercepting read of size %zi\n", len);
+		__real_fprintf(stderr, "[libioil] Intercepting read of size %zi\n", len);
 
 	/* Just get rpc working then work out how to really do this */
 	bytes_read = ioil_do_pread(buff, len, offset, entry, &errcode);
@@ -237,7 +237,7 @@ preadv_rpc(struct fd_entry *entry, const struct iovec *iov, int count,
 	counter = atomic_fetch_add_relaxed(&ioil_iog.iog_read_count, 1);
 
 	if (counter < ioil_iog.iog_report_count)
-		fprintf(stderr, "[libioil] Intercepting read\n");
+		__real_fprintf(stderr, "[libioil] Intercepting read\n");
 
 	/* Just get rpc working then work out how to really do this */
 	bytes_read = ioil_do_preadv(iov, count, offset, entry,
@@ -257,7 +257,7 @@ pwrite_rpc(struct fd_entry *entry, const char *buff, size_t len, off_t offset)
 	counter = atomic_fetch_add_relaxed(&ioil_iog.iog_write_count, 1);
 
 	if (counter < ioil_iog.iog_report_count)
-		fprintf(stderr, "[libioil] Intercepting write of size %zi\n", len);
+		__real_fprintf(stderr, "[libioil] Intercepting write of size %zi\n", len);
 
 	/* Just get rpc working then work out how to really do this */
 	bytes_written = ioil_do_writex(buff, len, offset, entry,
@@ -280,7 +280,7 @@ pwritev_rpc(struct fd_entry *entry, const struct iovec *iov, int count,
 	counter = atomic_fetch_add_relaxed(&ioil_iog.iog_write_count, 1);
 
 	if (counter < ioil_iog.iog_report_count)
-		fprintf(stderr, "[libioil] Intercepting write\n");
+		__real_fprintf(stderr, "[libioil] Intercepting write\n");
 
 	/* Just get rpc working then work out how to really do this */
 	bytes_written = ioil_do_pwritev(iov, count, offset, entry,
@@ -361,7 +361,7 @@ ioil_show_summary()
 	if (ioil_iog.iog_file_count == 0 || !ioil_iog.iog_show_summary)
 		return;
 
-	fprintf(stderr,
+	__real_fprintf(stderr,
 		"[libioil] Performed %"PRIu64" reads and %"PRIu64" writes from %"PRIu64" files\n",
 		ioil_iog.iog_read_count, ioil_iog.iog_write_count, ioil_iog.iog_file_count);
 }
@@ -1961,7 +1961,7 @@ dfuse_fread(void *ptr, size_t size, size_t nmemb, FILE *stream)
 	counter = atomic_fetch_add_relaxed(&ioil_iog.iog_read_count, 1);
 
 	if (counter < ioil_iog.iog_report_count)
-		fprintf(stderr, "[libioil] Intercepting fread of size %zi\n", len);
+		__real_fprintf(stderr, "[libioil] Intercepting fread of size %zi\n", len);
 
 	oldpos = entry->fd_pos;
 	bytes_read = ioil_do_pread(ptr, len, oldpos, entry, &errcode);
@@ -2012,7 +2012,7 @@ dfuse_fwrite(const void *ptr, size_t size, size_t nmemb, FILE *stream)
 	counter = atomic_fetch_add_relaxed(&ioil_iog.iog_write_count, 1);
 
 	if (counter < ioil_iog.iog_report_count)
-		fprintf(stderr, "[libioil] Intercepting fwrite of size %zi\n", len);
+		__real_fprintf(stderr, "[libioil] Intercepting fwrite of size %zi\n", len);
 
 	DFUSE_TRA_INFO(entry->fd_dfsoh, "Could perform fwrite");
 	oldpos = entry->fd_pos;
@@ -2561,7 +2561,7 @@ dfuse___fxstat(int ver, int fd, struct stat *buf)
 	counter = atomic_fetch_add_relaxed(&ioil_iog.iog_fstat_count, 1);
 
 	if (counter < ioil_iog.iog_report_count)
-		fprintf(stderr, "[libioil] Intercepting fstat\n");
+		__real_fprintf(stderr, "[libioil] Intercepting fstat\n");
 
 	/* fstat needs to return both the device magic number and the inode
 	 * neither of which can change over time, but they're also not known
