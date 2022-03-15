@@ -610,7 +610,7 @@ pipeline_create_layout(daos_handle_t coh, struct dc_pool *pool,
 		D_GOTO(out, rc = -DER_INVAL);
 	}
 
-	rc = pl_obj_place(map, obj_md, NULL, layout);
+	rc = pl_obj_place(map, obj_md, 0, NULL, layout);
 	pl_map_decref(map);
 	if (rc != 0)
 	{
@@ -666,7 +666,7 @@ dc_pipeline_run(tse_task_t *api_task)
 	uuid_t				coh_uuid;
 	uuid_t				cont_uuid;
 	struct pipeline_auxi_args	*pipeline_auxi;
-	bool				priv;
+	uint32_t			nr_grps;
 	struct shard_task_sched_args	sched_arg;
 	int				total_shards;
 	struct pipeline_comp_cb_args	comp_cb_args;
@@ -704,7 +704,7 @@ dc_pipeline_run(tse_task_t *api_task)
 
 	/** object class and number of replicas */
 
-	oca = daos_oclass_attr_find(obj_md.omd_id, &priv);
+	oca = daos_oclass_attr_find(obj_md.omd_id, &nr_grps);
 	if (oca == NULL)
 	{
 		D_DEBUG(DB_PL, "Failed to find oclass attr\n");
@@ -801,8 +801,8 @@ dc_pipeline_run(tse_task_t *api_task)
 			int leader;
 
 			leader	= pl_select_leader(obj_md.omd_id, i,
-						   layout->ol_grp_size,
-						   NULL, pl_obj_get_shard,
+						   layout->ol_grp_size, NIL_BITMAP,
+						   NULL, NULL, pl_obj_get_shard,
 						   layout);
 
 			if (leader >= 0)

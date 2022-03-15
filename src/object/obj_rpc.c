@@ -15,6 +15,29 @@
 #include "obj_rpc.h"
 #include "rpc_csum.h"
 
+static int
+crt_proc_daos_key_desc_t(crt_proc_t proc, crt_proc_op_t proc_op,
+			 daos_key_desc_t *key)
+{
+	int rc;
+
+	rc = crt_proc_uint64_t(proc, proc_op, &key->kd_key_len);
+	if (unlikely(rc))
+		return rc;
+
+	rc = crt_proc_uint32_t(proc, proc_op, &key->kd_val_type);
+	if (unlikely(rc))
+		return rc;
+
+	return 0;
+}
+
+static inline int
+crt_proc_daos_unit_oid_t(crt_proc_t proc, crt_proc_op_t proc_op,
+			 daos_unit_oid_t *p)
+{
+	return crt_proc_memcpy(proc, proc_op, p, sizeof(*p));
+}
 
 static int
 crt_proc_daos_recx_t(crt_proc_t proc, crt_proc_op_t proc_op, daos_recx_t *recx)
@@ -469,6 +492,52 @@ crt_proc_struct_obj_iod_array(crt_proc_t proc, crt_proc_op_t proc_op,
 }
 
 static int
+crt_proc_d_sg_list_t(crt_proc_t proc, crt_proc_op_t proc_op, d_sg_list_t *p)
+{
+	int		i;
+	int		rc;
+
+	if (FREEING(proc_op)) {
+		/* NB: don't need free in crt_proc_d_iov_t() */
+		D_FREE(p->sg_iovs);
+		return 0;
+	}
+
+	rc = crt_proc_uint32_t(proc, proc_op, &p->sg_nr);
+	if (unlikely(rc))
+		return rc;
+
+	rc = crt_proc_uint32_t(proc, proc_op, &p->sg_nr_out);
+	if (unlikely(rc))
+		return rc;
+
+	if (p->sg_nr == 0)
+		return 0;
+
+	switch (proc_op) {
+	case CRT_PROC_DECODE:
+		D_ALLOC_ARRAY(p->sg_iovs, p->sg_nr);
+		if (p->sg_iovs == NULL)
+			return -DER_NOMEM;
+		/* fall through to fill sg_iovs */
+	case CRT_PROC_ENCODE:
+		for (i = 0; i < p->sg_nr; i++) {
+			rc = crt_proc_d_iov_t(proc, proc_op, &p->sg_iovs[i]);
+			if (unlikely(rc)) {
+				if (DECODING(proc_op))
+					D_FREE(p->sg_iovs);
+				return rc;
+			}
+		}
+		break;
+	default:
+		return -DER_INVAL;
+	}
+
+	return rc;
+}
+
+static int
 crt_proc_struct_daos_shard_tgt(crt_proc_t proc, crt_proc_op_t proc_op,
 			       struct daos_shard_tgt *p)
 {
@@ -524,6 +593,59 @@ crt_proc_struct_daos_cpd_sub_head(crt_proc_t proc, crt_proc_op_t proc_op,
 	if (unlikely(rc)) {
 		if (DECODING(proc_op))
 			D_FREE(dcsh->dcsh_mbs);
+		return rc;
+	}
+
+	return 0;
+}
+
+static int
+crt_proc_daos_iod_t(crt_proc_t proc, crt_proc_op_t proc_op, daos_iod_t *iod)
+{
+	int rc;
+
+	rc = crt_proc_daos_key_t(proc, proc_op, &iod->iod_name);
+	if (unlikely(rc))
+		return rc;
+
+	if (FREEING(proc_op)) {
+		/* NB: don't need free in crt_proc_d_iov_t() */
+		D_FREE(iod->iod_recxs);
+		return 0;
+	}
+
+	rc = crt_proc_memcpy(proc, proc_op,
+			     &iod->iod_type, sizeof(iod->iod_type));
+	if (unlikely(rc))
+		return rc;
+
+	rc = crt_proc_uint64_t(proc, proc_op, &iod->iod_size);
+	if (unlikely(rc))
+		return rc;
+
+	rc = crt_proc_uint64_t(proc, proc_op, &iod->iod_flags);
+	if (unlikely(rc))
+		return rc;
+
+	rc = crt_proc_uint32_t(proc, proc_op, &iod->iod_nr);
+	if (unlikely(rc))
+		return rc;
+
+	if (iod->iod_nr == 0)
+		return 0;
+
+	if (DECODING(proc_op)) {
+		D_ALLOC_ARRAY(iod->iod_recxs, iod->iod_nr);
+		if (iod->iod_recxs == NULL)
+			return -DER_NOMEM;
+	}
+	rc = crt_proc_memcpy(proc, proc_op, iod->iod_recxs,
+			     iod->iod_nr * sizeof(*iod->iod_recxs));
+	if (unlikely(rc)) {
+		if (DECODING(proc_op)) {
+			D_FREE(iod->iod_name.iov_buf);
+			D_FREE(iod->iod_recxs);
+		}
 		return rc;
 	}
 

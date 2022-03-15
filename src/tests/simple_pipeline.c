@@ -832,13 +832,12 @@ free_pipeline(daos_pipeline_t *pipe)
 int
 main(int argc, char **argv)
 {
-	uuid_t			co_uuid;
 	daos_obj_id_t		oid;
 	int			rc;
 	daos_pipeline_t		pipeline1, pipeline2, pipeline3, pipeline4;
 
 	if (argc != 2) {
-		fprintf(stderr, "args: pool_uuid\n");
+		fprintf(stderr, "args: pool_uuid/pool_label\n");
 		exit(1);
 	}
 
@@ -850,17 +849,12 @@ main(int argc, char **argv)
 	rc = daos_pool_connect(argv[1], NULL, DAOS_PC_RW, &poh, NULL, NULL);
 	ASSERT(rc == 0, "pool connect failed with %d", rc);
 
-	/*
-	 * Create and open a container.
-	 * Alternatively, one could create the container outside of this
-	 * program using the daos utility: daos cont create --pool=puuid
-	 * and pass the uuid to the app.
-	 */
-	rc = daos_cont_create(poh, &co_uuid, NULL, NULL);
+	rc = daos_cont_create_with_label(poh, "simple_pipeline_cont", NULL,
+					 NULL, NULL);
 	ASSERT(rc == 0, "container create failed with %d", rc);
 
-	rc = daos_cont_open(poh, co_uuid, DAOS_COO_RW, &coh, NULL,
-			    NULL);
+	rc = daos_cont_open(poh, "simple_pipeline_cont", DAOS_COO_RW, &coh,
+			    NULL, NULL);
 	ASSERT(rc == 0, "container open failed with %d", rc);
 
 	/** create/open object */
@@ -919,6 +913,10 @@ main(int argc, char **argv)
 	printf("filtering by (Age & 1) > 0:\n");
 	/** Running pipeline */
 	run_pipeline(&pipeline4);
+
+	/** destroying container */
+	rc = daos_cont_destroy(poh, "simple_pipeline_cont", 1, NULL);
+	ASSERT(rc == 0, "Container destroy failed with %d", rc);
 
 	/** Freeing used memory */
 	free_pipeline(&pipeline1);
