@@ -63,7 +63,8 @@ def base_setup(env, prereqs=None):
             env.AppendUnique(CPPDEFINES='DAOS_BUILD_RELEASE')
 
         env.AppendUnique(CCFLAGS=['-O2'])
-        env.AppendUnique(CPPDEFINES={'_FORTIFY_SOURCE':'2'})
+        # Interception of fprintf doesn't work with this flag.
+#        env.AppendUnique(CPPDEFINES={'_FORTIFY_SOURCE':'2'})
 
     if build_type != 'release':
         env.AppendUnique(CPPDEFINES={'FAULT_INJECTION':'1'})

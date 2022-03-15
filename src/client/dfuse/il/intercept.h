@@ -97,17 +97,15 @@
 	DFUSE_PUBLIC type name##64 params __attribute__((weak, alias(#name)));
 
 /* Initialize the __real_##name function pointer */
-#define IOIL_FORWARD_MAP_OR_FAIL(type, name, params)                        \
-	do {                                                                \
-		if (__real_##name != NULL)                                  \
-			break;                                              \
-		__real_##name = (__typeof__(__real_##name))dlsym(RTLD_NEXT, \
-								 #name);    \
-		if (__real_ ## name == NULL) {                              \
-			fprintf(stderr,                                     \
-				"libioil couldn't map " #name "\n");        \
-			exit(1);                                            \
-		}                                                           \
+#define IOIL_FORWARD_MAP_OR_FAIL(type, name, params)                                \
+	do {                                                                        \
+		if (__real_##name != NULL)                                          \
+			break;                                                      \
+		__real_##name = (__typeof__(__real_##name))dlsym(RTLD_NEXT, #name); \
+		if (__real_ ## name == NULL) {                                      \
+			fprintf(stderr, "libioil couldn't map " #name "\n");        \
+			exit(1);                                                    \
+		}                                                                   \
 	} while (0);
 
 #else /* !IOIL_PRELOAD */
