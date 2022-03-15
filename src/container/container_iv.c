@@ -306,6 +306,12 @@ cont_iv_prop_l2g(daos_prop_t *prop, struct cont_iv_prop *iv_prop)
 		case DAOS_PROP_CO_EC_CELL_SZ:
 			iv_prop->cip_ec_cell_sz = prop_entry->dpe_val;
 			break;
+		case DAOS_PROP_CO_EC_PDA:
+			iv_prop->cip_ec_pda = prop_entry->dpe_val;
+			break;
+		case DAOS_PROP_CO_RP_PDA:
+			iv_prop->cip_rp_pda = prop_entry->dpe_val;
+			break;
 		case DAOS_PROP_CO_ACL:
 			acl = prop_entry->dpe_val_ptr;
 			if (acl != NULL)
@@ -1138,6 +1144,12 @@ cont_iv_prop_g2l(struct cont_iv_prop *iv_prop, daos_prop_t *prop)
 			break;
 		case DAOS_PROP_CO_EC_CELL_SZ:
 			prop_entry->dpe_val = iv_prop->cip_ec_cell_sz;
+			break;
+		case DAOS_PROP_CO_EC_PDA:
+			prop_entry->dpe_val = iv_prop->cip_ec_pda;
+			break;
+		case DAOS_PROP_CO_RP_PDA:
+			prop_entry->dpe_val = iv_prop->cip_rp_pda;
 			break;
 		case DAOS_PROP_CO_ACL:
 			acl = &iv_prop->cip_acl;
