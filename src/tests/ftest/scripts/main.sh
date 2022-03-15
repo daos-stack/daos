@@ -81,6 +81,7 @@ data_dir = $logs_prefix/ftest/avocado/data
 loglevel = DEBUG
 
 [runner.timeout]
+process_alive = 240
 process_died = 240
 
 [sysinfo.collectibles]
