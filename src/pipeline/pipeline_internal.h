@@ -13,11 +13,11 @@ struct filter_part_run_t {
 	d_iov_t				*dkey;
 	uint32_t			nr_iods;
 	daos_iod_t			*iods;
+	daos_iom_t			*ioms;
 	d_sg_list_t			*akeys;
 	struct filter_part_compiled_t	*parts;
 	uint32_t			part_idx;
-	d_iov_t				*iov_out;
-	size_t				data_offset_out;
+	char				*data_out;
 	size_t				data_len_out;
 	bool				log_out;
 	d_iov_t				*iov_aggr;

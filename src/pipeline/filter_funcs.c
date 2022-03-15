@@ -15,7 +15,6 @@ static int filter_func_getdata_##type(struct filter_part_run_t *args,\
 				      _##ctype *data)\
 {\
 	int     rc;\
-	d_iov_t *iov;\
 \
 	args->part_idx += 1;\
 	rc = args->parts[args->part_idx].filter_func(args);\
@@ -23,8 +22,7 @@ static int filter_func_getdata_##type(struct filter_part_run_t *args,\
 	{\
 		return rc;\
 	}\
-	iov    = args->iov_out;\
-	if (iov == NULL)\
+	if (args->data_out == NULL)\
 	{\
 		return 1;\
 	}\
@@ -40,9 +38,7 @@ filter_func_getdata(d, double)
 static int filter_func_getdata_st(struct filter_part_run_t *args,
 				  char **st, size_t *st_len)
 {
-	int     rc;
-	d_iov_t *iov;
-	char    *buf;
+	int rc;
 
 	args->part_idx += 1;
 	rc = args->parts[args->part_idx].filter_func(args);
@@ -50,14 +46,11 @@ static int filter_func_getdata_st(struct filter_part_run_t *args,
 	{
 		return rc;
 	}
-	iov    = args->iov_out;
-	if (iov == NULL)
+	if (args->data_out == NULL)
 	{
 		return 1;
 	}
-	buf     = (char *) iov->iov_buf;
-	buf     = &buf[args->data_offset_out];
-	*st     = buf;
+	*st     = args->data_out;
 	*st_len = args->data_len_out;
 
 	return 0;
@@ -500,7 +493,7 @@ filter_func_isnull(struct filter_part_run_t *args)
 	{
 		return rc;
 	}
-	args->log_out = (args->iov_out == NULL);
+	args->log_out = (args->data_out == NULL);
 
 	return 0;
 }
@@ -516,7 +509,7 @@ filter_func_isnotnull(struct filter_part_run_t *args)
 	{
 		return rc;
 	}
-	args->log_out = (args->iov_out != NULL);
+	args->log_out = (args->data_out != NULL);
 
 	return 0;
 }

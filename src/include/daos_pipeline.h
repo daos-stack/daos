@@ -95,11 +95,16 @@ typedef struct {
 	/**
 	 * If filter should only be applied starting at an offset of the data.
 	 * Only relevant for keys part type objects.
+	 * If object is an akey, and the akey is an array, data_offset
+	 * corresponds to the first record in the extent (same as rx_idx in
+	 * daos_recx_t).
 	 */
 	size_t		data_offset;
 	/**
 	 * Size of the data to be filtered. Only relevant for keys part type
-	 * objects.
+	 * objects. If key is akey, and the akey is an array, data_len
+	 * corresponds to the number of contiguous records in the extent (same
+	 * as rx_nr in daos_recx_t).
 	 */
 	size_t		data_len;
 } daos_filter_part_t;

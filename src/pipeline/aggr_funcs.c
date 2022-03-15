@@ -22,7 +22,7 @@ int aggr_func_sum_##type(struct filter_part_run_t *args)\
 	{\
 		return rc;\
 	}\
-	if (args->iov_out == NULL)\
+	if (args->data_out == NULL)\
 	{\
 		return 0;\
 	}\
@@ -50,7 +50,7 @@ int aggr_func_max_##type(struct filter_part_run_t *args)\
 	{\
 		return rc;\
 	}\
-	if (args->iov_out == NULL)\
+	if (args->data_out == NULL)\
 	{\
 		return 0;\
 	}\
@@ -83,7 +83,7 @@ int aggr_func_min_##type(struct filter_part_run_t *args)\
 	{\
 		return rc;\
 	}\
-	if (args->iov_out == NULL)\
+	if (args->data_out == NULL)\
 	{\
 		return 0;\
 	}\

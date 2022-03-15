@@ -161,6 +161,7 @@ int d_pipeline_check(daos_pipeline_t *pipeline)
 
 	// TODO: Check that functions' operands always have the right type
 	// TODO: Check that arithmetic functions only support number types
+	// TODO: Check that isnull and isnotnull operands are always akeys
 	// TODO: Check that offsets and sizes are correct (i.e, offset <= size)
 	// TODO: Check that parts of type CTRING always end in \0
 	// TODO: Check that parts of type STRING have a sane size

@@ -24,6 +24,7 @@ struct pipeline_enum_arg {
 	daos_iod_t		*iods;
 	uint32_t		nr_iods;
 	d_sg_list_t		*sgl_recx;
+	daos_iom_t		*ioms;
 	int			akey_idx;
 	iter_copy_data_cb_t	copy_data_cb;
 };
@@ -57,28 +58,34 @@ enum_pack_cb(daos_handle_t ih, vos_iter_entry_t *entry, vos_iter_type_t type,
 {
 	int				rc = 0;
 	struct pipeline_enum_arg	*pipe_arg = cb_arg;
+	daos_iod_t			*iods;
 	d_sg_list_t			*sgls;
+	daos_iom_t			*iom;
 	d_iov_t				*iov;
 	uint32_t			i;
 
 	switch(type)
 	{
 	case VOS_ITER_AKEY:
-		D_ASSERT(pipe_arg->akey_idx < 0);
 		D_ASSERT(entry->ie_key.iov_len > 0);
+
+		iods			= pipe_arg->iods;
+		pipe_arg->akey_idx	= -1;
 
 		for (i = 0; i < pipe_arg->nr_iods; i++)
 		{
-			if (pipe_arg->iods[i].iod_name.iov_len !=
-				entry->ie_key.iov_len)
+			if (iods[i].iod_name.iov_len != entry->ie_key.iov_len)
 			{
 				continue;
 			}
-			if (memcmp(pipe_arg->iods[i].iod_name.iov_buf,
+			if (memcmp(iods[i].iod_name.iov_buf,
 				   entry->ie_key.iov_buf,
 				   entry->ie_key.iov_len) == 0)
 			{
-				pipe_arg->akey_idx = i;
+				pipe_arg->akey_idx	= i;
+				sgls			= pipe_arg->sgl_recx;
+				iov			= sgls[i].sg_iovs;
+				iov->iov_len		= 0;
 				break;
 			}
 		}
@@ -95,8 +102,11 @@ enum_pack_cb(daos_handle_t ih, vos_iter_entry_t *entry, vos_iter_type_t type,
 		}
 		break;
 	case VOS_ITER_SINGLE:
+	case VOS_ITER_RECX:
 	{
-		void *ptr;
+		void		*ptr;
+		size_t		total_data_size = 0;
+		daos_recx_t	*iod_recxs;
 
 		D_ASSERT(pipe_arg->copy_data_cb != NULL);
 
@@ -105,30 +115,60 @@ enum_pack_cb(daos_handle_t ih, vos_iter_entry_t *entry, vos_iter_type_t type,
 			break; /** akey is not in iods passed by client */
 		}
 
+		iods	= pipe_arg->iods;
 		sgls	= pipe_arg->sgl_recx;
 		iov	= sgls[pipe_arg->akey_idx].sg_iovs;
+		iom	= &pipe_arg->ioms[pipe_arg->akey_idx];
 
-		iov->iov_len = 0;
-
-		if (entry->ie_rsize > iov->iov_buf_len)
+		if (type == VOS_ITER_SINGLE)
 		{
-			D_REALLOC(ptr, iov->iov_buf,
-				  iov->iov_buf_len, entry->ie_rsize);
+			total_data_size = iov->iov_len + entry->ie_gsize;
+		}
+		else if (iom->iom_nr_out < iom->iom_nr) /** RECX */
+		{
+			iod_recxs = iods[pipe_arg->akey_idx].iod_recxs;
+			for (i = 0; i < iods[pipe_arg->akey_idx].iod_nr; i++)
+			{
+				if (iod_recxs[i].rx_idx <= entry->ie_recx.rx_idx
+				    &&
+				    (iod_recxs[i].rx_idx + iod_recxs[i].rx_nr) >
+				    entry->ie_recx.rx_idx)
+				{
+					total_data_size  = entry->ie_rsize;
+					total_data_size *= entry->ie_recx.rx_nr;
+					total_data_size += iov->iov_len;
+
+					iom->iom_recxs[iom->iom_nr_out] =
+								entry->ie_recx;
+					iom->iom_nr_out                 += 1;
+					break;
+				}
+			}
+		}
+		else /** RECX */
+		{
+			/** iom_nr_out is greater than iom_nr. In this case,
+			 *  no more data is copied (record truncated). */
+			break;
+		}
+
+		if (total_data_size > iov->iov_buf_len)
+		{
+			D_REALLOC(ptr, iov->iov_buf, iov->iov_buf_len,
+				  total_data_size);
 			if (ptr == NULL)
 			{
 				return -DER_NOMEM;
 			}
 			iov->iov_buf     = ptr;
-			iov->iov_buf_len = entry->ie_rsize;
+			iov->iov_buf_len = total_data_size;
 		}
 
 		rc = pipe_arg->copy_data_cb(ih, entry, iov);
 		if (rc == 0)
 		{
 			sgls[pipe_arg->akey_idx].sg_nr_out = 1;
-			pipe_arg->akey_idx		   = -1;
 		}
-
 		break;
 	}
 	default:
@@ -143,12 +183,13 @@ static int
 pipeline_fetch_record(daos_handle_t vos_coh, daos_unit_oid_t oid,
 		      struct vos_iter_anchors *anchors, daos_epoch_range_t epr,
 		      daos_iod_t *iods, uint32_t nr_iods, d_iov_t *d_key,
-		      d_sg_list_t *sgl_recx)
+		      d_sg_list_t *sgl_recx, daos_iom_t *ioms)
 {
-	int			rc;
-	int			type;
-	struct pipeline_enum_arg	enum_arg = { 0 };
-	vos_iter_param_t	param = { 0 };
+	uint32_t			i;
+	int				rc;
+	int				type;
+	struct pipeline_enum_arg	enum_arg	= { 0 };
+	vos_iter_param_t		param		= { 0 };
 
 	param.ip_hdl		= vos_coh;
 	param.ip_oid		= oid;
@@ -160,11 +201,20 @@ pipeline_fetch_record(daos_handle_t vos_coh, daos_unit_oid_t oid,
 	/* TODO: Set enum_arg.csummer !  Figure out how checksum works */
 
 	type			= VOS_ITER_DKEY;
+	enum_arg.dkey_set	= false;
 	enum_arg.iods		= iods;
 	enum_arg.nr_iods	= nr_iods;
 	enum_arg.sgl_recx	= sgl_recx;
+	enum_arg.ioms		= ioms;
 	enum_arg.akey_idx	= -1;
 	enum_arg.copy_data_cb	= vos_iter_copy;
+
+	for (i = 0; i < nr_iods; i++) /** reseting for new record */
+	{
+		sgl_recx[i].sg_iovs->iov_len	= 0;
+		sgl_recx[i].sg_nr_out		= 0;
+		ioms[i].iom_nr_out		= 0;
+	}
 
 	rc = vos_iterate(&param, type, true, anchors, enum_pack_cb, NULL,
 			 &enum_arg, NULL);
@@ -176,7 +226,10 @@ pipeline_fetch_record(daos_handle_t vos_coh, daos_unit_oid_t oid,
 	}
 	if (enum_arg.dkey_set == true)
 	{
-		*d_key	= enum_arg.dkey;
+		*d_key = enum_arg.dkey;
+
+		/** TODO: Fix iom_recx_lo/hi before returning */
+
 		return 0;
 	}
 
@@ -185,13 +238,15 @@ pipeline_fetch_record(daos_handle_t vos_coh, daos_unit_oid_t oid,
 
 int pipeline_aggregations(struct pipeline_compiled_t *pipe,
 			  struct filter_part_run_t *args, d_iov_t *dkey,
-			  d_sg_list_t *akeys, d_sg_list_t *sgl_agg)
+			  d_sg_list_t *akeys, daos_iom_t *ioms,
+			  d_sg_list_t *sgl_agg)
 {
 	uint32_t 	i;
 	int		rc = 0;
 
 	args->dkey	= dkey;
 	args->akeys	= akeys;
+	args->ioms	= ioms;
 
 	for (i = 0; i < pipe->num_aggr_filters; i++)
 	{
@@ -212,13 +267,14 @@ exit:
 
 int pipeline_filters(struct pipeline_compiled_t *pipe,
 		     struct filter_part_run_t *args, d_iov_t *dkey,
-		     d_sg_list_t *akeys)
+		     d_sg_list_t *akeys, daos_iom_t *ioms)
 {
 	uint32_t 	i;
 	int		rc = 0;
 
 	args->dkey	= dkey;
 	args->akeys	= akeys;
+	args->ioms	= ioms;
 
 	for (i = 0; i < pipe->num_filters; i++)
 	{
@@ -240,7 +296,7 @@ exit:
 	return rc;
 }
 
-// TODO: This code still assumes dkey!=NULL. The code for dkey=NULL has to be
+// TODO: This code still assumes dkey==NULL. The code for dkey!=NULL has to be
 // written
 static int
 ds_pipeline_run(daos_handle_t vos_coh, daos_unit_oid_t oid,
@@ -248,7 +304,8 @@ ds_pipeline_run(daos_handle_t vos_coh, daos_unit_oid_t oid,
 		daos_key_t *dkey, uint32_t *nr_iods, daos_iod_t *iods,
 		daos_anchor_t *anchor, uint32_t nr_kds, uint32_t *nr_kds_out,
 		daos_key_desc_t **kds, d_sg_list_t **sgl_keys,
-		uint32_t *nr_recx, d_sg_list_t **sgl_recx, d_sg_list_t *sgl_agg)
+		uint32_t *nr_recx, d_sg_list_t **sgl_recx,
+		daos_iom_t **ioms, d_sg_list_t *sgl_agg)
 {
 	int				rc;
 	uint32_t			nr_kds_pass;
@@ -262,8 +319,13 @@ ds_pipeline_run(daos_handle_t vos_coh, daos_unit_oid_t oid,
 	d_iov_t				*d_key_ptr;
 	d_sg_list_t			*sgl_recx_iter		= NULL;
 	d_iov_t				*sgl_recx_iter_iovs	= NULL;
-	uint32_t			i;
+	size_t				iov_alloc_size;
+	daos_iom_t			*ioms_			= NULL;
+	daos_iom_t			*ioms_iter		= NULL;
+	uint32_t			ioms_alloc		= 0;
+	uint32_t			i, k;
 	uint32_t			j			= 0;
+	uint32_t			l			= 0;
 	uint32_t			sr_idx			= 0;
 	struct vos_iter_anchors		anchors			= { 0 };
 	struct pipeline_compiled_t	pipeline_compiled	= { 0 };
@@ -318,17 +380,57 @@ ds_pipeline_run(daos_handle_t vos_coh, daos_unit_oid_t oid,
 	}
 	for (; j < *nr_iods; j++)
 	{
-		D_ALLOC(sgl_recx_iter_iovs[j].iov_buf, iods[j].iod_size);
+		if (iods[j].iod_type == DAOS_IOD_ARRAY)
+		{
+			iov_alloc_size = 0;
+			for (k = 0; k < iods[j].iod_nr; k++)
+			{
+				iov_alloc_size += iods[j].iod_recxs[k].rx_nr;
+			}
+			iov_alloc_size *= iods[j].iod_size;
+		}
+		else
+		{
+			iov_alloc_size = iods[j].iod_size;
+		}
+
+		D_ALLOC(sgl_recx_iter_iovs[j].iov_buf, iov_alloc_size);
 		if (sgl_recx_iter_iovs[j].iov_buf == NULL)
 		{
 			D_GOTO(exit, rc = -DER_NOMEM);
 		}
 		sgl_recx_iter_iovs[j].iov_len     = 0;
-		sgl_recx_iter_iovs[j].iov_buf_len = iods[j].iod_size;
+		sgl_recx_iter_iovs[j].iov_buf_len = iov_alloc_size;
 
 		sgl_recx_iter[j].sg_iovs   = &sgl_recx_iter_iovs[j];
 		sgl_recx_iter[j].sg_nr     = 1;
 		sgl_recx_iter[j].sg_nr_out = 0;
+	}
+
+	/** -- allocating space for ioms_iter */
+
+	D_ALLOC_ARRAY(ioms_iter, *nr_iods);
+	if (ioms_iter == NULL)
+	{
+		D_GOTO(exit, rc = -DER_NOMEM);
+	}
+	bzero((void *) ioms_iter, sizeof(*ioms_iter)*(*nr_iods));
+
+	for (; l < *nr_iods; l++)
+	{
+		ioms_iter[l].iom_type = iods[l].iod_type;
+		ioms_iter[l].iom_nr   = iods[l].iod_nr;
+		ioms_iter[l].iom_size = iods[l].iod_size;
+
+		if (ioms_iter[l].iom_type == DAOS_IOD_ARRAY)
+		{
+			D_ALLOC_ARRAY(ioms_iter[l].iom_recxs,
+				      ioms_iter[l].iom_nr);
+			if (ioms_iter[l].iom_recxs == NULL)
+			{
+				D_GOTO(exit, rc = -DER_NOMEM);
+			}
+		}
 	}
 
 	/**
@@ -352,8 +454,7 @@ ds_pipeline_run(daos_handle_t vos_coh, daos_unit_oid_t oid,
 
 		rc = pipeline_fetch_record(vos_coh, oid, &anchors, epr, iods,
 					   *nr_iods, &d_key_iter,
-					   sgl_recx_iter);
-
+					   sgl_recx_iter, ioms_iter);
 		if (rc < 0)
 		{
 			D_GOTO(exit, rc); /** error */
@@ -366,7 +467,7 @@ ds_pipeline_run(daos_handle_t vos_coh, daos_unit_oid_t oid,
 		/** -- doing filtering... */
 
 		rc = pipeline_filters(&pipeline_compiled, &pipe_run_args,
-				      &d_key_iter, sgl_recx_iter);
+				      &d_key_iter, sgl_recx_iter, ioms_iter);
 		if (rc < 0)
 		{
 			D_GOTO(exit, rc); /** error */
@@ -383,7 +484,8 @@ ds_pipeline_run(daos_handle_t vos_coh, daos_unit_oid_t oid,
 		/** -- aggregations */
 
 		rc = pipeline_aggregations(&pipeline_compiled, &pipe_run_args,
-					   &d_key_iter, sgl_recx_iter, sgl_agg);
+					   &d_key_iter, sgl_recx_iter,
+					   ioms_iter, sgl_agg);
 		if (rc < 0)
 		{
 			D_GOTO(exit, rc);
@@ -416,8 +518,8 @@ ds_pipeline_run(daos_handle_t vos_coh, daos_unit_oid_t oid,
 		kds_alloc++;
 		*kds = kds_;
 
-		D_REALLOC_ARRAY(sgl_keys_, *sgl_keys,
-				nr_kds_pass-1, nr_kds_pass);
+		D_REALLOC_ARRAY(sgl_keys_, *sgl_keys, nr_kds_pass - 1,
+				nr_kds_pass);
 		if (sgl_keys_ == NULL)
 		{
 			D_GOTO(exit, rc = -DER_NOMEM);
@@ -449,7 +551,7 @@ ds_pipeline_run(daos_handle_t vos_coh, daos_unit_oid_t oid,
 
 		/** akeys */
 		D_REALLOC_ARRAY(sgl_recx_, *sgl_recx,
-				(nr_kds_pass-1) * (*nr_iods),
+				(nr_kds_pass - 1) * (*nr_iods),
 				nr_kds_pass * (*nr_iods));
 		if (sgl_recx_ == NULL)
 		{
@@ -457,9 +559,27 @@ ds_pipeline_run(daos_handle_t vos_coh, daos_unit_oid_t oid,
 		}
 		sgl_recx_alloc += *nr_iods;
 		*sgl_recx = sgl_recx_;
+		sgl_recx_[sr_idx].sg_iovs = NULL;
 
-		for (i = 0; i < *nr_iods; i++, sr_idx++)
+		D_REALLOC_ARRAY(ioms_, *ioms, (nr_kds_pass - 1) * (*nr_iods),
+				nr_kds_pass * (*nr_iods));
+		if (ioms_ == NULL)
 		{
+			D_GOTO(exit, rc = -DER_NOMEM);
+		}
+		ioms_alloc += *nr_iods;
+		*ioms = ioms_;
+		ioms_[sr_idx].iom_nr    = 0;
+		ioms_[sr_idx].iom_recxs = NULL;
+
+		for (i = 0; i < *nr_iods; i++)
+		{
+			if (sgl_recx_iter[i].sg_nr_out == 0)
+			{
+				continue;
+			}
+
+			/** copying sgl_recx */
 			sgl_recx_[sr_idx].sg_iovs = NULL;
 			D_ALLOC(sgl_recx_[sr_idx].sg_iovs,
 				sizeof(*sgl_recx_[sr_idx].sg_iovs));
@@ -486,7 +606,33 @@ ds_pipeline_run(daos_handle_t vos_coh, daos_unit_oid_t oid,
 					      sgl_recx_iter[i].sg_iovs->iov_len;
 			sgl_recx_[sr_idx].sg_nr     = 1;
 			sgl_recx_[sr_idx].sg_nr_out = 1;
-			sgl_recx_iter[i].sg_nr_out = 0; /** to re-utilize */
+
+			/** copying ioms */
+
+			ioms_[sr_idx].iom_nr   = 0;
+			ioms_[sr_idx].iom_recxs = NULL;
+			D_ALLOC_ARRAY(ioms_[sr_idx].iom_recxs,
+				      ioms_iter[i].iom_nr);
+			if (ioms_[sr_idx].iom_recxs == NULL)
+			{
+				D_GOTO(exit, rc = -DER_NOMEM);
+			}
+			if (ioms_iter[l].iom_type == DAOS_IOD_ARRAY)
+			{
+				memcpy(ioms_[sr_idx].iom_recxs,
+				       ioms_iter[i].iom_recxs,
+				       (ioms_iter[i].iom_nr) *
+				              sizeof(*ioms_iter[i].iom_recxs));
+			}
+			ioms_[sr_idx].iom_type    = ioms_iter[i].iom_type;
+			ioms_[sr_idx].iom_nr      = ioms_iter[i].iom_nr;
+			ioms_[sr_idx].iom_nr_out  = ioms_iter[i].iom_nr_out;
+			ioms_[sr_idx].iom_flags   = ioms_iter[i].iom_flags;
+			ioms_[sr_idx].iom_size    = ioms_iter[i].iom_size;
+			ioms_[sr_idx].iom_recx_lo = ioms_iter[i].iom_recx_lo;
+			ioms_[sr_idx].iom_recx_hi = ioms_iter[i].iom_recx_hi;
+
+			sr_idx++;
 		}
 	}
 
@@ -541,6 +687,15 @@ exit:
 		D_FREE(sgl_recx_iter);
 	}
 
+	for (i = 0; i < l; i++)
+	{
+		D_FREE(ioms_iter[i].iom_recxs);
+	}
+	if (ioms_iter != NULL)
+	{
+		D_FREE(ioms_iter);
+	}
+
 	if (rc != 0)
 	{
 		uint32_t limit;
@@ -549,7 +704,6 @@ exit:
 		{
 			D_FREE(*kds);
 		}
-
 		if (sgl_keys_alloc > 0)
 		{
 			for (i = 0; i < sgl_keys_alloc; i++)
@@ -565,7 +719,6 @@ exit:
 			}		
 			D_FREE(*sgl_keys);
 		}
-
 		if (sgl_recx_alloc > 0)
 		{
 			if (sr_idx == sgl_recx_alloc)
@@ -589,6 +742,25 @@ exit:
 			}
 			D_FREE(*sgl_recx);
 		}
+		if (ioms_alloc > 0)
+		{
+			if (sr_idx == ioms_alloc)
+			{
+				limit = sr_idx;
+			}
+			else
+			{
+				limit = sr_idx + 1;
+			}
+			for (i = 0; i < limit; i++)
+			{
+				if (ioms[0][i].iom_nr != 0)
+				{
+					D_FREE(ioms[0][i].iom_recxs);
+				}
+			}
+			D_FREE(*ioms);
+		}
 	}
 
 	return rc;
@@ -610,8 +782,10 @@ ds_pipeline_run_handler(crt_rpc_t *rpc)
 	uint32_t			nr_kds_out	= 0;
 	d_sg_list_t			*sgl_keys	= NULL;
 	d_sg_list_t			*sgl_recx	= NULL;
+	daos_iom_t			*ioms		= NULL;
 	uint32_t			nr_recx		= 0;
 	d_sg_list_t			*sgl_aggr	= NULL;
+	int				shard_id	= 0; // DELETE ME
 
 	pri	= crt_req_get(rpc);
 	D_ASSERT(pri != NULL);
@@ -668,9 +842,14 @@ ds_pipeline_run_handler(crt_rpc_t *rpc)
 			     pri->pri_flags, &pri->pri_dkey, &nr_iods,
 			     pri->pri_iods.iods, &pri->pri_anchor, nr_kds,
 			     &nr_kds_out, &kds, &sgl_keys, &nr_recx, &sgl_recx,
-			     sgl_aggr);
+			     &ioms, sgl_aggr);
 
 exit:
+
+	shard_id = pri->pri_oid.id_shard;
+
+	printf("(shard=%d) exit\n", shard_id); // DELETE ME
+	fflush(stdout);
 
 	/** set output data */
 
@@ -714,25 +893,50 @@ exit:
 		D_ERROR("send reply failed: "DF_RC"\n", DP_RC(rc));
 	}
 
+	printf("(shard=%d) rpc sent\n", shard_id); // DELETE ME
+	fflush(stdout);
+
 	/** free memory */
+
+	printf("(shard=%d) nr_kds_out=%u\n", shard_id, nr_kds_out); // DELETE ME
+	fflush(stdout);
 
 	if (nr_kds_out > 0)
 	{
 		for (i = 0; i < nr_kds_out; i++)
 		{
+			printf("(shard=%d) freeing sgl_keys[%u].sg_iovs=%p sgl_keys[%u].sg_iovs->iov_buf=%p v=%.*s\n",
+				shard_id, i, sgl_keys[i].sg_iovs, i,
+				sgl_keys[i].sg_iovs->iov_buf,
+				(int) sgl_keys[i].sg_iovs->iov_len,
+				(char *) sgl_keys[i].sg_iovs->iov_buf); // DELETE ME
+			fflush(stdout);
 			D_FREE(sgl_keys[i].sg_iovs->iov_buf);
 			D_FREE(sgl_keys[i].sg_iovs);
 		}
+		printf("(shard=%d) freeing sgl_keys, kds\n", shard_id); // DELETE ME
+		fflush(stdout);
 		D_FREE(sgl_keys);
 		D_FREE(kds);
 	}
+
+	printf("(shard=%d) nr_recx=%u\n", shard_id, nr_recx); // DELETE ME
+	fflush(stdout);
+
 	if (nr_recx > 0)
 	{
 		for (i = 0; i < nr_recx; i++)
 		{
+			printf("(shard=%d) freeing sgl_recx[%u]\n", shard_id, i); // DELETE ME
+			fflush(stdout);
 			D_FREE(sgl_recx[i].sg_iovs->iov_buf);
 			D_FREE(sgl_recx[i].sg_iovs);
 		}
+		printf("(shard=%d) freeing sgl_recx\n", shard_id); // DELETE ME
+		fflush(stdout);
 		D_FREE(sgl_recx);
 	}
+
+	printf("(shard=%d) memory freed, BYE\n", shard_id); // DELETE ME
+	fflush(stdout);
 }
