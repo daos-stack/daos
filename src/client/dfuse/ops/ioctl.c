@@ -278,12 +278,12 @@ void dfuse_cb_ioctl(fuse_req_t req, fuse_ino_t ino, unsigned int cmd, void *arg,
 
 	if (cmd == TCGETS) {
 		DFUSE_TRA_INFO(oh, "Ignoring TCGETS ioctl");
-		D_GOTO(out_err, rc = EINVAL);
+		D_GOTO(out_err, rc = ENOTTY);
 	}
 
 	if (cmd == TIOCGPGRP) {
 		DFUSE_TRA_INFO(oh, "Ignoring TIOCGPGRP ioctl");
-		D_GOTO(out_err, rc = EINVAL);
+		D_GOTO(out_err, rc = ENOTTY);
 	}
 
 	/* Check the IOCTl type is correct */

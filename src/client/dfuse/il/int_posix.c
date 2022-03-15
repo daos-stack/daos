@@ -2138,8 +2138,10 @@ dfuse_ftell(FILE *stream)
 
 	DFUSE_TRA_DEBUG(entry->fd_dfsoh, "Returning offset %ld", off);
 
+#if 0
 	if (off == 0)
 		return __real_ftell(stream);
+#endif
 
 	return off;
 do_real_ftell:
@@ -2181,6 +2183,8 @@ dfuse_fputc(int __c, FILE *stream)
 	int fd;
 	int rc;
 
+	D_ERROR("Unsupported function\n");
+
 	fd = fileno(stream);
 	if (fd == -1)
 		goto do_real_fn;
@@ -2191,8 +2195,6 @@ dfuse_fputc(int __c, FILE *stream)
 
 	if (drop_reference_if_disabled(entry))
 		goto do_real_fn;
-
-	D_ERROR("Unsupported function\n");
 
 	entry->fd_err = ENOTSUP;
 
