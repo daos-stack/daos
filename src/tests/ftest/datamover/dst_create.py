@@ -223,7 +223,7 @@ class DmvrDstCreate(DataMoverTestBase):
         # Make sure each property matches
         for prop_idx, prop in enumerate(prop_list):
             # This one is not set
-            if api == "DFS" and "OID" in str(prop["value"]):
+            if api == "DFS" and "OID" in str(prop["description"]):
                 continue
             if prop != actual_list[prop_idx]:
                 self.log.info("Expected\n%s\nbut got\n%s\n",
