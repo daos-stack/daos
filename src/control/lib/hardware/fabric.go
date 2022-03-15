@@ -96,12 +96,12 @@ func (fi *FabricInterface) TopologyName() (string, error) {
 		return "", errors.New("FabricInterface is nil")
 	}
 
-	if fi.Name == "" {
-		return "", errors.New("FabricInterface has no name")
-	}
-
 	if fi.OSName != "" {
 		return fi.OSName, nil
+	}
+
+	if fi.Name == "" {
+		return "", errors.New("FabricInterface has no name")
 	}
 
 	return fi.Name, nil

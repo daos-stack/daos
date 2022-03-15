@@ -93,8 +93,9 @@ func Init(log logging.Logger) (func(), error) {
 	}
 
 	return func() {
-		for _, cleanup := range cleanupFns {
-			cleanup()
+		// Unload libraries in reverse order
+		for i := len(cleanupFns) - 1; i >= 0; i-- {
+			cleanupFns[i]()
 		}
 	}, nil
 }
