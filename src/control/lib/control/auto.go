@@ -127,7 +127,9 @@ func ConfigGenerate(ctx context.Context, req ConfigGenerateReq) (*ConfigGenerate
 //
 // Return host errors, network scan results for the host set or error.
 func getNetworkSet(ctx context.Context, log logging.Logger, hostList []string, client UnaryInvoker) (*HostFabricSet, error) {
-	scanReq := new(NetworkScanReq)
+	scanReq := &NetworkScanReq{
+		Provider: "all", // explicitly request all providers
+	}
 	scanReq.SetHostList(hostList)
 
 	scanResp, err := NetworkScan(ctx, client, scanReq)

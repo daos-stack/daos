@@ -438,3 +438,59 @@ func TestAgent_mgmtModule_getAttachInfo_Parallel(t *testing.T) {
 
 	wg.Wait()
 }
+
+type mockNUMAProvider struct {
+	GetNUMANodeIDForPIDResult uint
+	GetNUMANodeIDForPIDErr    error
+}
+
+func (m *mockNUMAProvider) GetNUMANodeIDForPID(_ context.Context, _ int32) (uint, error) {
+	return m.GetNUMANodeIDForPIDResult, m.GetNUMANodeIDForPIDErr
+}
+
+func TestAgent_mgmtModule_getNUMANode(t *testing.T) {
+	for name, tc := range map[string]struct {
+		useDefaultNUMA bool
+		numaGetter     hardware.ProcessNUMAProvider
+		expResult      uint
+		expErr         error
+	}{
+		"default": {
+			useDefaultNUMA: true,
+			numaGetter:     &mockNUMAProvider{GetNUMANodeIDForPIDResult: 2},
+			expResult:      0,
+		},
+		"got NUMA": {
+			numaGetter: &mockNUMAProvider{GetNUMANodeIDForPIDResult: 2},
+			expResult:  2,
+		},
+		"error": {
+			numaGetter: &mockNUMAProvider{
+				GetNUMANodeIDForPIDErr: errors.New("mock GetNUMANodeIDForPID"),
+			},
+			expErr: errors.New("mock GetNUMANodeIDForPID"),
+		},
+		"non-NUMA-aware": {
+			numaGetter: &mockNUMAProvider{
+				GetNUMANodeIDForPIDErr: hardware.ErrNoNUMANodes,
+			},
+			expResult: 0,
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(t.Name())
+			defer common.ShowBufferOnFailure(t, buf)
+
+			mod := &mgmtModule{
+				log:            log,
+				useDefaultNUMA: tc.useDefaultNUMA,
+				numaGetter:     tc.numaGetter,
+			}
+
+			result, err := mod.getNUMANode(context.Background(), 123)
+
+			common.AssertEqual(t, tc.expResult, result, "")
+			common.CmpErr(t, tc.expErr, err)
+		})
+	}
+}

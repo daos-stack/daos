@@ -1,6 +1,6 @@
 #!/usr/bin/python
 """
-  (C) Copyright 2020-2021 Intel Corporation.
+  (C) Copyright 2020-2022 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -65,7 +65,7 @@ class RebuildTestBase(TestWithServers):
             "pi_ndisabled": 0,
         }
         self.rebuild_checks = {
-            "rs_done": 1,
+            "rs_state": 1,
             "rs_obj_nr": 0,
             "rs_rec_nr": 0,
             "rs_errno": 0,
