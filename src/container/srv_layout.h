@@ -32,7 +32,7 @@
 #include <daos_types.h>
 
 /* Default layout version */
-#define DS_CONT_MD_VERSION 4
+#define DS_CONT_MD_VERSION 6
 
 /* Lowest compatible layout version */
 #define DS_CONT_MD_VERSION_LOW 4
@@ -92,6 +92,8 @@ extern d_iov_t ds_cont_attr_user;		/* user attribute KVS */
 extern d_iov_t ds_cont_prop_handles;		/* handle index KVS */
 extern d_iov_t ds_cont_prop_roots;		/* container first citizens */
 extern d_iov_t ds_cont_prop_ec_cell_sz;		/* cell size of EC */
+extern d_iov_t ds_cont_prop_ec_pda;		/* uint32 */
+extern d_iov_t ds_cont_prop_rp_pda;		/* uint32 */
 
 /*
  * Snapshot KVS (RDB_KVS_INTEGER)

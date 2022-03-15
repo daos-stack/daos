@@ -94,6 +94,18 @@ daos_ec_cs_valid(uint32_t cell_sz)
 	return true;
 }
 
+static inline bool
+daos_ec_pda_valid(uint32_t ec_pda)
+{
+	return ec_pda > 0;
+}
+
+static inline bool
+daos_rp_pda_valid(uint32_t rp_pda)
+{
+	return rp_pda > 0;
+}
+
 enum daos_io_mode {
 	DIM_DTX_FULL_ENABLED	= 0,	/* by default */
 	DIM_SERVER_DISPATCH	= 1,
