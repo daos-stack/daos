@@ -6,7 +6,7 @@
 #
 # Picks up config files from .flake8
 
-if ! command -v flake8 &> /dev/null
+if ! command -v flake8 > /dev/null 2>&1
 then
     echo "No flake checking, install flake8 command"
     exit 0
@@ -21,7 +21,7 @@ then
     exit $RC
 fi
 
-BRANCH=$(git rev-parse --abbrev-ref HEAD 2> /dev/null)
+BRANCH=$(git rev-parse --abbrev-ref HEAD > /dev/null 2>&1)
 
 if [ "$BRANCH" = "master" ]
 then
@@ -34,7 +34,7 @@ else
     # then assume master.
     if command -v gh &> /dev/null
     then
-	TARGET=$(gh pr view $BRANCH --json baseRefName -t "{{.baseRefName}}")
+	TARGET=$(gh pr view "$BRANCH" --json baseRefName -t "{{.baseRefName}}")
     else
 	TARGET=master
     fi
