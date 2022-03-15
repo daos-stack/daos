@@ -401,9 +401,6 @@ class DaosServerYamlParameters(YamlParameters):
             # global CRT_CTX_SHARE_ADDR shared with client
             self.crt_ctx_share_addr = BasicParameter(None, default_share_addr)
 
-            # global CRT_TIMEOUT shared with client
-            self.crt_timeout = BasicParameter(None, 30)
-
             # Storage definition parameters:
             #
             # When scm_class is set to ram, tmpfs will be used to emulate SCM.
