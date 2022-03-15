@@ -34,6 +34,7 @@ type Config struct {
 	LogLevel         common.ControlLogLevel    `yaml:"control_log_mask,omitempty"`
 	TransportConfig  *security.TransportConfig `yaml:"transport_config"`
 	FabricInterfaces []*NUMAFabricConfig       `yaml:"fabric_ifaces,omitempty"`
+	Provider         string                    `yaml:"provider,omitempty"`
 }
 
 // NUMAFabricConfig defines a list of fabric interfaces that belong to a NUMA

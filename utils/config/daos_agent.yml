@@ -84,3 +84,8 @@
 #  -
 #    iface: ib3
 #    domain: mlx5_3
+
+# Manually force a specific fabric provider to be used by all clients, in the event that the server
+# supports multiple providers.
+#
+#provider: ofi+verbs
