@@ -2287,14 +2287,9 @@ dfuse_fgetc(FILE *stream)
 	if (drop_reference_if_disabled(entry))
 		goto do_real_fn;
 
-	D_ERROR("Unsupported function\n");
-
-	entry->fd_err = ENOTSUP;
+	entry->fd_status = DFUSE_IO_DIS_STREAM;
 
 	vector_decref(&fd_table, entry);
-
-	errno = ENOTSUP;
-	return EOF;
 
 do_real_fn:
 	return __real_fgetc(stream);
