@@ -254,12 +254,10 @@ dfuse_cb_readdir(fuse_req_t req, struct dfuse_obj_hdl *oh,
 		 * many entries. This is the telldir/seekdir use case.
 		 */
 
-		DFUSE_TRA_INFO(oh,
-			       "Seeking from offset %ld(%d) to %ld (index %d)",
-			       oh->doh_dre[oh->doh_dre_index].dre_offset,
-			       oh->doh_anchor_index,
-			       offset,
-			       oh->doh_dre_index);
+		DFUSE_TRA_DEBUG(oh,
+				"Seeking from offset %ld(%d) to %ld (index %d)",
+				oh->doh_dre[oh->doh_dre_index].dre_offset, oh->doh_anchor_index,
+				offset,	oh->doh_dre_index);
 
 		dfuse_readdir_reset(oh);
 		num = (uint32_t)offset - OFFSET_BASE;
@@ -273,7 +271,7 @@ dfuse_cb_readdir(fuse_req_t req, struct dfuse_obj_hdl *oh,
 
 			if (daos_anchor_is_eof(&oh->doh_anchor)) {
 				dfuse_readdir_reset(oh);
-				D_GOTO(reply, 0);
+				D_GOTO(reply, rc = 0);
 			}
 
 			oh->doh_anchor_index += num;
@@ -309,15 +307,14 @@ dfuse_cb_readdir(fuse_req_t req, struct dfuse_obj_hdl *oh,
 
 			rc = fetch_dir_entries(oh, offset, to_fetch, &eod);
 			if (rc != 0)
-				D_GOTO(out_reset, 0);
+				D_GOTO(out_reset, rc);
 
 			if (eod)
-				D_GOTO(reply, 0);
+				D_GOTO(reply, rc = 0);
 
 			fetched = true;
 		} else {
-			D_ASSERT(offset ==
-				oh->doh_dre[oh->doh_dre_index].dre_offset);
+			D_ASSERT(offset == oh->doh_dre[oh->doh_dre_index].dre_offset);
 		}
 
 		DFUSE_TRA_DEBUG(oh, "processing offset %ld", offset);
@@ -346,14 +343,14 @@ dfuse_cb_readdir(fuse_req_t req, struct dfuse_obj_hdl *oh,
 			if (plus)
 				rc = dfs_lookupx(oh->doh_dfs, oh->doh_obj,
 						 dre->dre_name,
-						 O_RDONLY | O_NOFOLLOW, &obj,
+						 O_RDWR | O_NOFOLLOW, &obj,
 						 &stbuf.st_mode, &stbuf,
 						 1, &duns_xattr_name,
 						 (void **)&outp, &attr_len);
 			else
 				rc = dfs_lookup_rel(oh->doh_dfs, oh->doh_obj,
 						    dre->dre_name,
-						    O_RDONLY | O_NOFOLLOW,
+						    O_RDWR | O_NOFOLLOW,
 						    &obj, &stbuf.st_mode, NULL);
 			if (rc == ENOENT) {
 				DFUSE_TRA_DEBUG(oh, "File does not exist");
@@ -404,7 +401,7 @@ dfuse_cb_readdir(fuse_req_t req, struct dfuse_obj_hdl *oh,
 			if (written > size - buff_offset) {
 				DFUSE_TRA_DEBUG(oh, "Buffer is full");
 				oh->doh_dre_index -= 1;
-				D_GOTO(reply, 0);
+				D_GOTO(reply, rc = 0);
 			}
 
 			/* This entry has been added to the buffer so mark it as
@@ -418,7 +415,7 @@ dfuse_cb_readdir(fuse_req_t req, struct dfuse_obj_hdl *oh,
 			if (dre->dre_next_offset == READDIR_EOD) {
 				DFUSE_TRA_DEBUG(oh, "Reached end of directory");
 				dfuse_readdir_reset(oh);
-				D_GOTO(reply, 0);
+				D_GOTO(reply, rc = 0);
 			}
 		}
 		if (oh->doh_dre_index == oh->doh_dre_last_index) {
@@ -435,7 +432,7 @@ reply:
 		DFUSE_TRA_DEBUG(oh, "Replying with %d entries", added);
 
 	if (added == 0 && rc != 0)
-		D_GOTO(out_reset, 0);
+		D_GOTO(out_reset, rc);
 
 	DFUSE_REPLY_BUF(oh, req, reply_buff, buff_offset);
 	D_FREE(reply_buff);

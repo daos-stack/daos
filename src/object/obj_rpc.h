@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2021 Intel Corporation.
+ * (C) Copyright 2016-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -31,7 +31,7 @@
  * These are for daos_rpc::dr_opc and DAOS_RPC_OPCODE(opc, ...) rather than
  * crt_req_create(..., opc, ...). See daos_rpc.h.
  */
-#define DAOS_OBJ_VERSION 6
+#define DAOS_OBJ_VERSION 7
 /* LIST of internal RPCS in form of:
  * OPCODE, flags, FMT, handler, corpc_hdlr and name
  */
@@ -153,7 +153,7 @@ enum obj_rpc_flags {
 	ORF_CREATE_MAP_DETAIL	= (1 << 13),
 	/* For data migration. */
 	ORF_FOR_MIGRATION	= (1 << 14),
-	/* Force DTX refresh if hit non-committed DTX on non-leader. */
+	/* Force DTX refresh if hit non-committed DTX on non-leader. Out-of-date DAOS-7878. */
 	ORF_DTX_REFRESH		= (1 << 15),
 	/* for EC aggregate (to bypass read perm check related with RF) */
 	ORF_FOR_EC_AGG		= (1 << 16),
@@ -163,6 +163,10 @@ enum obj_rpc_flags {
 	ORF_EC_RECOV_SNAP	= (1 << 18),
 	/* EC data recovery from parity */
 	ORF_EC_RECOV_FROM_PARITY = (1 << 19),
+	/* The forward targets array contains leader information. */
+	ORF_CONTAIN_LEADER	= (1 << 20),
+	/*Ascending Order - 0, descending order - 1*/
+	ORF_DESCENDING_ORDER	= (1 << 21),
 };
 
 /* common for update/fetch */
@@ -325,7 +329,7 @@ CRT_RPC_DECLARE(obj_sync, DAOS_ISEQ_OBJ_SYNC, DAOS_OSEQ_OBJ_SYNC)
 	((uint64_t)		(om_ephs)		CRT_ARRAY)	\
 	((uint64_t)		(om_punched_ephs)	CRT_ARRAY)	\
 	((uint32_t)		(om_shards)		CRT_ARRAY)	\
-	((int32_t)		(om_del_local_obj)	CRT_VAR)
+	((uint32_t)		(om_opc)		CRT_VAR)
 
 #define DAOS_OSEQ_OBJ_MIGRATE	/* output fields */		 \
 	((int32_t)		(om_status)		CRT_VAR)
@@ -583,6 +587,12 @@ obj_is_modification_opc(uint32_t opc)
 		opc == DAOS_OBJ_RPC_TGT_PUNCH_DKEYS ||
 		opc == DAOS_OBJ_RPC_PUNCH_AKEYS ||
 		opc == DAOS_OBJ_RPC_TGT_PUNCH_AKEYS;
+}
+
+static inline bool
+obj_is_fetch_opc(uint32_t opc)
+{
+	return opc == DAOS_OBJ_RPC_FETCH;
 }
 
 static inline bool

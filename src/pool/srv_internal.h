@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2021 Intel Corporation.
+ * (C) Copyright 2016-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -54,10 +54,14 @@ struct pool_iv_prop {
 	char		pip_label[DAOS_PROP_MAX_LABEL_BUF_LEN];
 	char		pip_owner[DAOS_ACL_MAX_PRINCIPAL_BUF_LEN];
 	char		pip_owner_grp[DAOS_ACL_MAX_PRINCIPAL_BUF_LEN];
+	char		pip_policy_str[DAOS_PROP_POLICYSTR_MAX_LEN];
 	uint64_t	pip_space_rb;
 	uint64_t	pip_self_heal;
 	uint64_t	pip_reclaim;
 	uint64_t	pip_ec_cell_sz;
+	uint32_t	pip_redun_fac;
+	uint32_t	pip_ec_pda;
+	uint32_t	pip_rp_pda;
 	struct daos_acl	*pip_acl;
 	d_rank_list_t   pip_svc_list;
 	uint32_t	pip_acl_offset;

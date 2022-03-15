@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2019-2021 Intel Corporation.
+ * (C) Copyright 2019-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -73,18 +73,20 @@ struct dtx_handle {
 					 dth_touched_leader_oid:1,
 					 /* Local TX is started. */
 					 dth_local_tx_started:1,
-					 /* Retry with this server. */
-					 dth_local_retry:1,
 					 /* The DTX share lists are inited. */
 					 dth_shares_inited:1,
 					 /* Distributed transaction. */
 					 dth_dist:1,
 					 /* For data migration. */
 					 dth_for_migration:1,
-					 /* Force refresh for non-committed */
-					 dth_force_refresh:1,
 					 /* Has prepared locally, for resend. */
 					 dth_prepared:1,
+					 /* The DTX handle has been verified. */
+					 dth_verified:1,
+					 /* The DTX handle is aborted. */
+					 dth_aborted:1,
+					 /* The modification is done by others. */
+					 dth_already:1,
 					 /* Ignore other uncommitted DTXs. */
 					 dth_ignore_uncommitted:1;
 
@@ -134,6 +136,7 @@ struct dtx_handle {
 struct dtx_sub_status {
 	struct daos_shard_tgt		dss_tgt;
 	int				dss_result;
+	uint32_t			dss_comp:1;
 };
 
 struct dtx_leader_handle;
@@ -172,6 +175,8 @@ struct dtx_stat {
 	uint32_t	dtx_cont_cmt_count;
 	/* pool-based committed DTX entries count. */
 	uint32_t	dtx_pool_cmt_count;
+	/* The epoch for the most new DTX entry that is aggregated. */
+	uint64_t	dtx_newest_aggregated;
 };
 
 enum dtx_flags {
@@ -187,7 +192,7 @@ enum dtx_flags {
 	DTX_IGNORE_UNCOMMITTED	= (1 << 4),
 	/** Resent request. */
 	DTX_RESEND		= (1 << 5),
-	/** Force DTX refresh if hit non-committed DTX on non-leader. */
+	/** Force DTX refresh if hit non-committed DTX on non-leader. Out-of-date DAOS-7878. */
 	DTX_FORCE_REFRESH	= (1 << 6),
 	/** Transaction has been prepared locally. */
 	DTX_PREPARED		= (1 << 7),
@@ -201,10 +206,9 @@ dtx_leader_begin(daos_handle_t coh, struct dtx_id *dti,
 		 uint32_t pm_ver, daos_unit_oid_t *leader_oid,
 		 struct dtx_id *dti_cos, int dti_cos_cnt,
 		 struct daos_shard_tgt *tgts, int tgt_cnt, uint32_t flags,
-		 struct dtx_memberships *mbs, struct dtx_leader_handle *dlh);
+		 struct dtx_memberships *mbs, struct dtx_leader_handle **p_dlh);
 int
-dtx_leader_end(struct dtx_leader_handle *dlh, struct ds_cont_child *cont,
-	       int result);
+dtx_leader_end(struct dtx_leader_handle *dlh, struct ds_cont_hdl *coh, int result);
 
 typedef void (*dtx_sub_comp_cb_t)(struct dtx_leader_handle *dlh, int idx,
 				  int rc);
@@ -216,7 +220,7 @@ dtx_begin(daos_handle_t coh, struct dtx_id *dti,
 	  struct dtx_epoch *epoch, uint16_t sub_modification_cnt,
 	  uint32_t pm_ver, daos_unit_oid_t *leader_oid,
 	  struct dtx_id *dti_cos, int dti_cos_cnt, uint32_t flags,
-	  struct dtx_memberships *mbs, struct dtx_handle *dth);
+	  struct dtx_memberships *mbs, struct dtx_handle **p_dth);
 int
 dtx_end(struct dtx_handle *dth, struct ds_cont_child *cont, int result);
 int
@@ -226,15 +230,19 @@ int
 dtx_leader_exec_ops(struct dtx_leader_handle *dlh, dtx_sub_func_t func,
 		    dtx_agg_cb_t agg_cb, void *agg_cb_arg, void *func_arg);
 
-int dtx_batched_commit_register(struct ds_cont_child *cont);
+int dtx_cont_open(struct ds_cont_child *cont);
 
-void dtx_batched_commit_deregister(struct ds_cont_child *cont);
+void dtx_cont_close(struct ds_cont_child *cont);
+
+int dtx_cont_register(struct ds_cont_child *cont);
+
+void dtx_cont_deregister(struct ds_cont_child *cont);
 
 int dtx_obj_sync(struct ds_cont_child *cont, daos_unit_oid_t *oid,
 		 daos_epoch_t epoch);
 
-int dtx_abort(struct ds_cont_child *cont, daos_epoch_t epoch,
-	      struct dtx_entry **dtes, int count);
+int dtx_abort(struct ds_cont_child *cont, struct dtx_entry *dte, daos_epoch_t epoch);
+
 int dtx_refresh(struct dtx_handle *dth, struct ds_cont_child *cont);
 
 /**

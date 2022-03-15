@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2018-2021 Intel Corporation.
+ * (C) Copyright 2018-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -26,6 +26,8 @@ unsigned int svc_nreplicas = 1;
 unsigned int	dt_csum_type;
 unsigned int	dt_csum_chunksize;
 bool		dt_csum_server_verify;
+/** container cell size */
+unsigned int	dt_cell_size;
 int		dt_obj_class;
 
 
@@ -211,11 +213,14 @@ test_setup_cont_create(void **state, daos_prop_t *co_prop)
 	int rc = 0;
 
 	if (arg->myrank == 0) {
-		/** use daos_test label if none is provided */
 		if (!co_prop || daos_prop_entry_get(co_prop, DAOS_PROP_CO_LABEL) == NULL) {
-			print_message("setup: creating container with label \"daos_test\"\n");
-			rc = daos_cont_create_with_label(arg->pool.poh, "daos_test", co_prop,
-							 &arg->co_uuid, NULL);
+			char cont_label[32];
+			static int cont_idx;
+
+			sprintf(cont_label, "daos_test_%d", cont_idx++);
+			print_message("setup: creating container with label %s\n", cont_label);
+			rc = daos_cont_create_with_label(arg->pool.poh, cont_label,
+							 co_prop, &arg->co_uuid, NULL);
 		} else {
 			print_message("setup: creating container\n");
 			rc = daos_cont_create(arg->pool.poh, &arg->co_uuid, co_prop, NULL);
@@ -314,7 +319,7 @@ test_setup(void **state, unsigned int step, bool multi_rank,
 	unsigned int		 seed;
 	int			 rc = 0;
 	daos_prop_t		 co_props = {0};
-	struct daos_prop_entry	 csum_entry[3] = {0};
+	struct daos_prop_entry	 dpp_entry[4] = {0};
 	struct daos_prop_entry	*entry;
 
 	/* feed a seed for pseudo-random number generator */
@@ -367,7 +372,7 @@ test_setup(void **state, unsigned int step, bool multi_rank,
 		print_message("\n-------\n"
 			      "Checksum enabled in test!"
 			      "\n-------\n");
-		entry = &csum_entry[co_props.dpp_nr];
+		entry = &dpp_entry[co_props.dpp_nr];
 		entry->dpe_type = DAOS_PROP_CO_CSUM;
 		entry->dpe_val = dt_csum_type;
 
@@ -375,14 +380,14 @@ test_setup(void **state, unsigned int step, bool multi_rank,
 	}
 
 	if (dt_csum_chunksize) {
-		entry = &csum_entry[co_props.dpp_nr];
+		entry = &dpp_entry[co_props.dpp_nr];
 		entry->dpe_type = DAOS_PROP_CO_CSUM_CHUNK_SIZE;
 		entry->dpe_val = dt_csum_chunksize;
 		co_props.dpp_nr++;
 	}
 
 	if (dt_csum_server_verify) {
-		entry = &csum_entry[co_props.dpp_nr];
+		entry = &dpp_entry[co_props.dpp_nr];
 		entry->dpe_type = DAOS_PROP_CO_CSUM_SERVER_VERIFY;
 		entry->dpe_val = dt_csum_server_verify ?
 			DAOS_PROP_CO_CSUM_SV_ON :
@@ -391,8 +396,15 @@ test_setup(void **state, unsigned int step, bool multi_rank,
 		co_props.dpp_nr++;
 	}
 
+	if (dt_cell_size) {
+		entry = &dpp_entry[co_props.dpp_nr];
+		entry->dpe_type = DAOS_PROP_CO_EC_CELL_SZ;
+		entry->dpe_val = dt_cell_size;
+		co_props.dpp_nr++;
+	}
+
 	if (co_props.dpp_nr > 0)
-		co_props.dpp_entries = csum_entry;
+		co_props.dpp_entries = dpp_entry;
 
 	while (!rc && step != arg->setup_state)
 		rc = test_setup_next_step(state, pool, NULL, &co_props);
@@ -438,7 +450,7 @@ pool_destroy_safe(test_arg_t *arg, struct test_pool *extpool)
 			return rc;
 		}
 
-		if (rstat->rs_done == 0) {
+		if (rstat->rs_state == DRS_IN_PROGRESS) {
 			print_message("waiting for rebuild\n");
 			sleep(1);
 			continue;
@@ -448,7 +460,10 @@ pool_destroy_safe(test_arg_t *arg, struct test_pool *extpool)
 		break;
 	}
 
-	daos_pool_disconnect(poh, NULL);
+	rc = daos_pool_disconnect(poh, NULL);
+	if (rc) {
+		print_message("daos_pool_disconnect failed, rc: %d\n", rc);
+	}
 
 	rc = dmg_pool_destroy(dmg_config_file,
 			      pool->pool_uuid, arg->group, 1);
@@ -622,8 +637,8 @@ d_rank_t ranks_to_kill[MAX_KILLS];
 bool
 test_runable(test_arg_t *arg, unsigned int required_nodes)
 {
-	int		 i;
-	static bool	 runable = true;
+	int	i;
+	int	runable = 1;
 
 	if (arg == NULL) {
 		print_message("state not set, likely due to group-setup"
@@ -645,7 +660,7 @@ test_runable(test_arg_t *arg, unsigned int required_nodes)
 					      required_nodes,
 					      arg->srv_ntgts,
 					      arg->srv_disabled_ntgts);
-			runable = false;
+			runable = 0;
 		}
 
 		for (i = 0; i < MAX_KILLS; i++)
@@ -657,7 +672,7 @@ test_runable(test_arg_t *arg, unsigned int required_nodes)
 
 	MPI_Bcast(&runable, 1, MPI_INT, 0, MPI_COMM_WORLD);
 	MPI_Barrier(MPI_COMM_WORLD);
-	return runable;
+	return runable == 1;
 }
 
 int
@@ -706,7 +721,7 @@ rebuild_pool_wait(test_arg_t *arg)
 	pinfo.pi_bits = DPI_REBUILD_STATUS;
 	rc = test_pool_get_info(arg, &pinfo);
 	rst = &pinfo.pi_rebuild_st;
-	if ((rst->rs_done || rc != 0) && rst->rs_version != 0 &&
+	if ((rst->rs_state == DRS_COMPLETED || rc != 0) && rst->rs_version != 0 &&
 	     rst->rs_version != arg->rebuild_pre_pool_ver) {
 		print_message("Rebuild "DF_UUIDF" (ver=%u orig_ver=%u) is done %d/%d, "
 			      "obj="DF_U64", rec="DF_U64".\n",

@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2021 Intel Corporation.
+ * (C) Copyright 2016-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -19,36 +19,146 @@ struct crt_na_dict crt_na_dict[] = {
 	{
 		.nad_type	= CRT_NA_SM,
 		.nad_str	= "sm",
-		.nad_port_bind	= false,
+		.nad_contig_eps	= false,
+		.nad_port_bind  = false,
 	}, {
 		.nad_type	= CRT_NA_OFI_SOCKETS,
 		.nad_str	= "ofi+sockets",
-		.nad_port_bind	= true,
+		.nad_alt_str	= "ofi+socket",
+		.nad_contig_eps	= true,
+		.nad_port_bind  = true,
 	}, {
 		.nad_type	= CRT_NA_OFI_VERBS_RXM,
 		.nad_str	= "ofi+verbs;ofi_rxm",
-		.nad_port_bind	= true,
-	}, {
-	/* verbs is not supported. Keep entry in order to print warning */
-		.nad_type	= CRT_NA_OFI_VERBS,
-		.nad_str	= "ofi+verbs",
-		.nad_port_bind	= true,
+		.nad_alt_str	= "ofi+verbs",
+		.nad_contig_eps	= true,
+		.nad_port_bind  = true,
 	}, {
 		.nad_type	= CRT_NA_OFI_GNI,
 		.nad_str	= "ofi+gni",
-		.nad_port_bind	= true,
+		.nad_contig_eps	= true,
+		.nad_port_bind  = false,
 	}, {
 		.nad_type	= CRT_NA_OFI_PSM2,
 		.nad_str	= "ofi+psm2",
-		.nad_port_bind	= true,
+		.nad_contig_eps	= false,
+		.nad_port_bind  = false,
 	}, {
 		.nad_type	= CRT_NA_OFI_TCP_RXM,
 		.nad_str	= "ofi+tcp;ofi_rxm",
+		.nad_alt_str	= "ofi+tcp",
+		.nad_contig_eps	= true,
+		.nad_port_bind  = true,
+	}, {
+		.nad_type	= CRT_NA_OFI_CXI,
+		.nad_str	= "ofi+cxi",
+		.nad_contig_eps	= true,
+		.nad_port_bind  = false,
+	}, {
+		.nad_type	= CRT_NA_UCX_RC,
+		.nad_str	= "ucx+rc_v",
+		.nad_contig_eps	= true,
+		.nad_port_bind	= true,
+	}, {
+		.nad_type	= CRT_NA_UCX_UD,
+		.nad_str	= "ucx+ud_v",
+		.nad_contig_eps	= true,
+		.nad_port_bind	= true,
+	}, {
+		.nad_type	= CRT_NA_UCX_RC_UD,
+		.nad_str	= "ucx+rc_v,ud_v",
+		.nad_contig_eps	= true,
+		.nad_port_bind	= true,
+	}, {
+		.nad_type	= CRT_NA_UCX_RC_O,
+		.nad_str	= "ucx+rc",
+		.nad_contig_eps	= true,
+		.nad_port_bind	= true,
+	}, {
+		.nad_type	= CRT_NA_UCX_UD_O,
+		.nad_str	= "ucx+ud",
+		.nad_contig_eps	= true,
+		.nad_port_bind	= true,
+	}, {
+		.nad_type	= CRT_NA_UCX_RC_UD_O,
+		.nad_str	= "ucx+rc,ud",
+		.nad_contig_eps	= true,
+		.nad_port_bind	= true,
+	}, {
+		.nad_type	= CRT_NA_UCX_RC_X,
+		.nad_str	= "ucx+rc_x",
+		.nad_contig_eps	= true,
+		.nad_port_bind	= true,
+	}, {
+		.nad_type	= CRT_NA_UCX_UD_X,
+		.nad_str	= "ucx+ud_x",
+		.nad_contig_eps	= true,
+		.nad_port_bind	= true,
+	}, {
+		.nad_type	= CRT_NA_UCX_RC_UD_X,
+		.nad_str	= "ucx+rc_x,ud_x",
+		.nad_contig_eps	= true,
+		.nad_port_bind	= true,
+	}, {
+		.nad_type	= CRT_NA_UCX_DC_X,
+		.nad_str	= "ucx+dc_x",
+		.nad_contig_eps	= true,
 		.nad_port_bind	= true,
 	}, {
 		.nad_str	= NULL,
 	}
 };
+
+int
+crt_hg_parse_uri(const char *uri, enum crt_na_type *prov, char *addr)
+{
+	char	copy_uri[CRT_ADDR_STR_MAX_LEN];
+	char	*provider_str;
+	char	*addr_str;
+	char	*track;
+
+	strncpy(copy_uri, uri, CRT_ADDR_STR_MAX_LEN - 1);
+
+	/*
+	 * Addresses have a form of "provider://[address]
+	 * For auto_sm feature address will be "provider://[address] na+sm://[sm_addr]"
+	 * We only care about parsing out main provider address for now
+	 */
+	provider_str = strtok_r(copy_uri, "://", &track);
+	if (!provider_str) {
+		D_ERROR("Failed to parse provider string from uri=%s\n", uri);
+		return -DER_INVAL;
+	}
+
+	addr_str = strtok_r(NULL, " ", &track);
+	if (!addr_str) {
+		D_ERROR("Failed to parse address string from uri=%s\n", uri);
+		return -DER_INVAL;
+	}
+
+	if (prov)
+		*prov = crt_prov_str_to_na_type(provider_str);
+
+	if (addr)
+		strncpy(addr, addr_str+2, CRT_ADDR_STR_MAX_LEN - 1);
+
+	return 0;
+}
+
+enum crt_na_type
+crt_prov_str_to_na_type(const char *prov_str)
+{
+	int i;
+
+	for (i = 0; i < CRT_NA_COUNT; i++) {
+		if (strcmp(prov_str, crt_na_dict[i].nad_str) == 0 ||
+		    (crt_na_dict[i].nad_alt_str &&
+		     strcmp(prov_str, crt_na_dict[i].nad_alt_str) == 0))
+			return crt_na_dict[i].nad_type;
+	}
+
+	return CRT_NA_UNKNOWN;
+}
 
 /**
  * Enable the HG handle pool, can change/tune the max_num and prepost_num.
@@ -381,9 +491,12 @@ crt_provider_is_block_mode(int provider)
 bool
 crt_provider_is_contig_ep(int provider)
 {
-	if (provider == CRT_NA_OFI_PSM2)
-		return false;
+	return crt_na_dict[provider].nad_contig_eps;
+}
 
+bool
+crt_provider_is_port_based(int provider)
+{
 	return crt_na_dict[provider].nad_port_bind;
 }
 
@@ -461,6 +574,7 @@ crt_get_info_string(int provider, char **string, int ctx_idx)
 		D_GOTO(out, 0);
 	}
 
+	/* TODO: for now pass same info for all providers including CXI */
 	if (crt_provider_is_contig_ep(provider) && start_port != -1) {
 		D_ASPRINTF(*string, "%s://%s/%s:%d",
 			   provider_str, domain_str, ip_str,
@@ -498,9 +612,8 @@ crt_hg_log(FILE *stream, const char *fmt, ...)
 int
 crt_hg_init(void)
 {
-	const char	*log_subsys;
-	char		*log_level;
-	int		rc = 0;
+	int	rc = 0;
+	char	*env;
 
 	if (crt_initialized()) {
 		D_ERROR("CaRT already initialized.\n");
@@ -509,17 +622,15 @@ crt_hg_init(void)
 
 	#define EXT_FAC DD_FAC(external)
 
-	log_subsys = getenv("HG_LOG_SUBSYS");
-	log_level = getenv("HG_LOG_LEVEL");
+	env = getenv("HG_LOG_SUBSYS");
+	if (!env)
+		HG_Set_log_subsys("hg,na");
 
-	if (!log_level)
-		log_level = "warning";
-
-	HG_Set_log_level(log_level);
-
-	/* set default subsystem with the provided log level */
-	if (!log_subsys)
-		HG_Util_set_log_level(log_level);
+	env = getenv("HG_LOG_LEVEL");
+	if (!env) {
+		HG_Set_log_level("warning");
+		HG_Util_set_log_level("warning");
+	}
 
 	/* import HG log */
 	hg_log_set_func(crt_hg_log);
@@ -603,11 +714,13 @@ crt_hg_class_init(int provider, int idx, hg_class_t **ret_hg_class)
 		D_GOTO(out, rc = -DER_HG);
 	}
 
-	rc = crt_hg_get_addr(hg_class, addr_str, &str_size);
-	if (rc != 0) {
-		D_ERROR("crt_hg_get_addr() failed, rc: %d.\n", rc);
-		HG_Finalize(hg_class);
-		D_GOTO(out, rc = -DER_HG);
+	if (crt_is_service()) {
+		rc = crt_hg_get_addr(hg_class, addr_str, &str_size);
+		if (rc != 0) {
+			D_ERROR("crt_hg_get_addr() failed, rc: %d.\n", rc);
+			HG_Finalize(hg_class);
+			D_GOTO(out, rc = -DER_HG);
+		}
 	}
 
 	D_DEBUG(DB_NET, "New context(idx:%d), listen address: %s.\n",
@@ -831,7 +944,7 @@ crt_rpc_handler_common(hg_handle_t hg_hdl)
 	rpc_pub->cr_ep.ep_rank = rpc_priv->crp_req_hdr.cch_dst_rank;
 	rpc_pub->cr_ep.ep_tag = rpc_priv->crp_req_hdr.cch_dst_tag;
 
-	RPC_TRACE(DB_TRACE, rpc_priv,
+	RPC_TRACE(DB_ALL, rpc_priv,
 		  "(opc: %#x rpc_pub: %p) allocated per RPC request received.\n",
 		  rpc_priv->crp_opc_info->coi_opc,
 		  &rpc_priv->crp_pub);
@@ -1029,7 +1142,6 @@ crt_hg_req_send_cb(const struct hg_cb_info *hg_cbinfo)
 	D_ASSERT(hg_cbinfo->type == HG_CB_FORWARD);
 
 	rpc_pub = &rpc_priv->crp_pub;
-
 	if (crt_rpc_completed(rpc_priv)) {
 		RPC_ERROR(rpc_priv, "already completed, possibly due to duplicated completions.\n");
 		return rc;
@@ -1103,8 +1215,8 @@ crt_hg_req_send_cb(const struct hg_cb_info *hg_cbinfo)
 	crt_cbinfo.cci_rc = rc;
 
 	if (crt_cbinfo.cci_rc != 0)
-		RPC_ERROR(rpc_priv, "RPC failed; rc: " DF_RC "\n",
-			  DP_RC(crt_cbinfo.cci_rc));
+		RPC_CERROR(crt_quiet_error(crt_cbinfo.cci_rc), DB_NET, rpc_priv,
+			   "RPC failed; rc: " DF_RC "\n", DP_RC(crt_cbinfo.cci_rc));
 
 	RPC_TRACE(DB_TRACE, rpc_priv,
 		  "Invoking RPC callback (rank %d tag %d) rc: " DF_RC "\n",

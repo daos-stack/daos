@@ -1,13 +1,13 @@
 #!/usr/bin/python3
 '''
-  (C) Copyright 2018-2021 Intel Corporation.
+  (C) Copyright 2018-2022 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
 import time
 import os
 import shlex
-import subprocess
+import subprocess #nosec
 import logging
 import cart_logparse
 import cart_logtest
@@ -18,6 +18,8 @@ import glob
 from apricot import TestWithoutServers
 from general_utils import stop_processes
 from write_host_file import write_host_file
+from job_manager_utils import Orterun
+
 
 class CartTest(TestWithoutServers):
     """Define a Cart test case."""
@@ -34,12 +36,22 @@ class CartTest(TestWithoutServers):
         self.src_dir = os.path.dirname(os.path.dirname(os.path.dirname(
                        os.path.dirname(os.path.dirname(os.path.dirname(
                        os.path.dirname(os.path.abspath(__file__))))))))
+        self.attach_dir = None
 
     def setUp(self):
         """Set up the test case."""
         super().setUp()
         self.set_other_env_vars()
         self.env = self.get_env()
+
+        # clean CRT_ATTACH_INFO_PATH dir of stale attach files
+        files_in_attach = os.listdir(self.attach_dir)
+        filtered = [f for f in files_in_attach if f.endswith(".attach_info_tmp")]
+
+        for f in filtered:
+            to_del = os.path.join(self.attach_dir, f)
+            print("WARN: stale file {} found, deleting...\n".format(to_del))
+            os.remove(to_del)
 
         # Add test binaries and daos binaries to PATH
         test_dirs = {"TESTING": "tests", "install": "bin"}
@@ -208,10 +220,12 @@ class CartTest(TestWithoutServers):
                                          os.getenv('HOME'))
 
         log_path = os.environ['DAOS_TEST_LOG_DIR']
+        log_path = log_path.replace(";", "_")
+
         log_file = os.path.join(log_path, log_dir,
-                                test_name + "_" + \
-                                env_CCSA + "_" + \
-                                env_PHY_ADDR_STR + "_cart.log")
+                                test_name + "_" +
+                                env_CCSA + "_" +
+                                env_PHY_ADDR_STR + "_cart.log").replace(";", "_")
 
         # Default env vars for orterun to None
         log_mask = None
@@ -242,7 +256,7 @@ class CartTest(TestWithoutServers):
                        env_PHY_ADDR_STR + "_" + \
                        "output.orterun_log"
 
-        output_filename_path = os.path.join(log_path, log_dir, log_filename)
+        output_filename_path = os.path.join(log_path, log_dir, log_filename).replace(";", "_")
         env = " --output-filename {!s}".format(output_filename_path)
         env += " -x D_LOG_FILE={!s}".format(log_file)
         env += " -x D_LOG_FILE_APPEND_PID=1"
@@ -269,6 +283,7 @@ class CartTest(TestWithoutServers):
         env += " -x DAOS_TEST_SHARED_DIR={!s}".format(daos_test_shared_dir)
         env += " -x COVFILE=/tmp/test.cov"
 
+        self.attach_dir = daos_test_shared_dir
         self.log_path = log_path
 
         if not os.path.exists(log_path):
@@ -370,6 +385,7 @@ class CartTest(TestWithoutServers):
 
         tst_host = self.params.get("{}".format(host), "/run/hosts/*/")
         tst_ppn = self.params.get("{}_ppn".format(host), "/run/tests/*/")
+        tst_processes = len(tst_host)*int(tst_ppn)
         logparse = self.params.get("logparse", "/run/tests/*/")
 
         if tst_slt is not None:
@@ -380,16 +396,12 @@ class CartTest(TestWithoutServers):
             hostfile = write_host_file(tst_host,
                                        daos_test_shared_dir,
                                        tst_ppn)
-
-        mca_flags = "--mca btl self,tcp "
+        mca_flags = ["btl self,tcp"]
 
         if self.provider == "ofi+psm2":
-            mca_flags += "--mca pml ob1 "
+            mca_flags.append("pml ob1")
 
-        tst_cmd = "{} {} -N {} --hostfile {} ".format(
-            self.orterun, mca_flags, tst_ppn, hostfile)
-
-        tst_cmd += env
+        tst_cmd = env
 
         tst_cont = os.getenv("CRT_TEST_CONT", "0")
         if tst_cont is not None:
@@ -416,7 +428,12 @@ class CartTest(TestWithoutServers):
         if tst_arg is not None:
             tst_cmd += " " + tst_arg
 
-        return tst_cmd
+        job = Orterun(tst_cmd)
+        job.mca.update(mca_flags)
+        job.hostfile.update(hostfile)
+        job.pprnode.update(tst_ppn)
+        job.processes.update(tst_processes)
+        return str(job)
 
     def convert_xml(self, xml_file):
         """Modify the xml file"""

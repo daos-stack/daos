@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2018-2021 Intel Corporation.
+ * (C) Copyright 2018-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -162,7 +162,7 @@ rdb_decode_iov_backward(const void *buf_end, size_t len, d_iov_t *iov)
 void
 rdb_oid_to_uoid(rdb_oid_t oid, daos_unit_oid_t *uoid)
 {
-	daos_ofeat_t feat = 0;
+	enum daos_otype_t type = DAOS_OT_MULTI_HASHED;
 
 	uoid->id_pub.lo = oid & ~RDB_OID_CLASS_MASK;
 	uoid->id_pub.hi = 0;
@@ -170,9 +170,9 @@ rdb_oid_to_uoid(rdb_oid_t oid, daos_unit_oid_t *uoid)
 	uoid->id_pad_32 = 0;
 	/* Since we don't really use d-keys, use HASHED for both classes. */
 	if ((oid & RDB_OID_CLASS_MASK) != RDB_OID_CLASS_GENERIC)
-		feat = DAOS_OF_AKEY_UINT64;
+		type = DAOS_OT_AKEY_UINT64;
 
-	daos_obj_set_oid(&uoid->id_pub, feat, 0 /* cid */, 0);
+	daos_obj_set_oid(&uoid->id_pub, type, OR_RP_1, 1, 0);
 }
 
 void
@@ -354,7 +354,7 @@ rdb_vos_fetch_addr(daos_handle_t cont, daos_epoch_t epoch, rdb_oid_t oid,
 		value->iov_len = bio_iov2len(biov);
 	}
 
-	rc = bio_iod_post(vos_ioh2desc(io));
+	rc = bio_iod_post(vos_ioh2desc(io), 0);
 	D_ASSERTF(rc == 0, ""DF_RC"\n", DP_RC(rc));
 out:
 	rc = vos_fetch_end(io, NULL, 0 /* err */);
@@ -371,7 +371,8 @@ rdb_vos_query_key_max(daos_handle_t cont, daos_epoch_t epoch, rdb_oid_t oid, dao
 
 	rdb_oid_to_uoid(oid, &uoid);
 	rc = vos_obj_query_key(cont, uoid, DAOS_GET_AKEY|DAOS_GET_MAX, epoch, &rdb_dkey, akey,
-			       NULL /* recx */, 0 /* cell sz */, 0 /* stripe sz */, NULL /* dth */);
+			       NULL /* recx */, NULL /* max_write */, 0 /* cell sz */,
+			       0 /* stripe sz */, NULL /* dth */);
 	if (rc != 0) {
 		D_ERROR("vos_obj_query_key((rdb,vos) oids=("DF_U64",lo="DF_U64", hi="DF_U64"), "
 			"epoch="DF_U64" ...) failed, "DF_RC"\n", oid, uoid.id_pub.lo,
@@ -559,7 +560,8 @@ rdb_vos_aggregate(daos_handle_t cont, daos_epoch_t high)
 	epr.epr_lo = 0;
 	epr.epr_hi = high;
 
-	return vos_aggregate(cont, &epr, NULL, NULL, NULL, true);
+	return vos_aggregate(cont, &epr, NULL, NULL,
+			     VOS_AGG_FL_FORCE_SCAN | VOS_AGG_FL_FORCE_MERGE);
 }
 
 /* Return amount of vos pool SCM memory available accounting for

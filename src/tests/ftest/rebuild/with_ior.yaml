@@ -1,48 +1,45 @@
-# change host names to your reserved nodes, the
-# required quantity is indicated by the placeholders
 hosts:
   test_servers:
     - server-A
     - server-B
     - server-C
     - server-D
+    - server-E
   test_clients:
-    - client-E
     - client-F
-timeout: 600
+    - client-G
+timeout: 360
 server_config:
-  name: daos_server
-  servers:
-    targets: 8
-testparams:
-  ranks:
-    rank_to_kill: 3
+    name: daos_server
+    targets: 2
+    servers:
+        log_mask: INFO
+        bdev_class: nvme
+        bdev_list: ["aaaa:aa:aa.a","bbbb:bb:bb.b"]
+        scm_class: dcpm
+        scm_list: ["/dev/pmem0"]
 pool:
   mode: 146
   name: daos_server
-  scm_size: 30000000000
+  scm_size: 6G
   svcn: 3
   control_method: dmg
   pool_query_timeout: 30
+container:
+    type: POSIX
+    properties: rf:1
+    control_method: daos
 ior:
+    ior_timeout: 120
+    rank_to_kill: 3
     client_processes:
-        np_8:
-            np: 8
+        np: 8
     repetitions: 1
-    api: MPIIO
+    test_file: daos:/testFile
+    api: DFS
     dfs_oclass: "RP_2GX"
+    transfer_size: '1M'
+    block_size: '128M'
     iorflags:
-        write:
-          F: "-w -W -k -G 1"
-        read:
-          F: "-r -R -G 1 -E"
-    transfersize_blocksize: !mux
-        64M:
-            transfer_size: '1M'
-            block_size: '64M'
-        512M:
-            transfer_size: '1M'
-            block_size: '512M'
-        1G:
-            transfer_size: '1M'
-            block_size: '1G'
+        write_flg: "-C -k -e -w -g -G 27 -Q 1 -vv"
+        read_flg: "-C -k -e -r -R -g -G 27 -Q 1 -vv"

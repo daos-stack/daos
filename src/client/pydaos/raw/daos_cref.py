@@ -1,6 +1,6 @@
 #!/usr/bin/python
 """
-  (C) Copyright 2018-2021 Intel Corporation.
+  (C) Copyright 2018-2022 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -60,7 +60,7 @@ class RebuildStatus(ctypes.Structure):
     _fields_ = [("rs_version", ctypes.c_uint32),
                 ("rs_seconds", ctypes.c_uint32),
                 ("rs_errno", ctypes.c_uint32),
-                ("rs_done", ctypes.c_uint32),
+                ("rs_state", ctypes.c_uint32),
                 ("rs_padding32", ctypes.c_uint32),
                 ("rs_fail_rank", ctypes.c_uint32),
                 ("rs_toberb_obj_nr", ctypes.c_uint64),
@@ -220,6 +220,12 @@ class Anchor(ctypes.Structure):
                 ('da_flags', ctypes.c_uint32),
                 ('da_sub_anchors', ctypes.c_uint64),
                 ('da_buff', ctypes.c_uint8 * 104)]
+
+
+class DaosKeyDescriptor(ctypes.Structure):
+    """Represents struct: daos_key_desc_t"""
+    _fields_ = [("kd_key_len", ctypes.c_uint64),
+                ("kd_val_type", ctypes.c_uint32)]
 
 
 class CallbackEvent():

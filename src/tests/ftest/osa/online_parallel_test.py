@@ -1,6 +1,6 @@
 #!/usr/bin/python
 """
-  (C) Copyright 2020-2021 Intel Corporation.
+  (C) Copyright 2020-2022 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -11,7 +11,7 @@ import copy
 
 from itertools import product
 from write_host_file import write_host_file
-from command_utils import CommandFailure
+from exception_utils import CommandFailure
 from daos_racer_utils import DaosRacerCommand
 from osa_utils import OSAUtils
 from apricot import skipForTicket
@@ -99,7 +99,7 @@ class OSAOnlineParallelTest(OSAUtils):
         target_list = []
 
         # Exclude target : random two targets  (target idx : 0-7)
-        n = random.randint(0, 6)
+        n = random.randint(0, 6) #nosec
         target_list.append(n)
         target_list.append(n+1)
         t_string = "{},{}".format(target_list[0], target_list[1])

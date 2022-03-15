@@ -1,47 +1,60 @@
 # Project Information
-site_name: DAOS v2.0 - dev
+site_name: DAOS v2.2 - dev
 site_description: Distributed Asynchronous Object Storage
 site_author: DAOS Project
 
 # Repository
 repo_name: daos-stack/daos
 repo_url: https://github.com/daos-stack/daos
-copyright: Copyright &copy; 2016 - 2021 Intel Corporation
+copyright: Copyright 2016-2022 Intel Corporation
 
 # Theme
 theme:
     name: 'material'
     logo: daos_logo_wh.png
+    favicon: daos_logo_wh.png
     font:
         text: Ubuntu
         code: Roboto Mono
     language: en
     palette:
-        scheme:  'slate'
-        primary: 'light blue'
-        accent:  'blue'
+        primary: light blue
+        accent: blue
+        scheme: default
+    include_search_page: false
+    search_index_only: true
     features:
         - navigation.tabs
         - navigation.tabs.sticky
         - navigation.instant
         - navigation.top
-        - toc.integrate
         - navigation.indexes
+        - toc.integrate
+        - search.suggest
+        - search.highlight
 
 extra:
-    homepage: http://daos.io
+    homepage: https://docs.daos.io/
+    version:
+        provider: mike
+
+plugins:
+    - search
+    - mike:
+        version_selector: true
 
 markdown_extensions:
     - admonition
     - footnotes
+    - tables
     - toc:
         permalink: true
-        toc_depth: 3
+        toc_depth: 4
 
 # Page tree
 nav:
     - Intro:
-        - 'Welcome': 'index.md'
+        - 'index.md'
         - 'Community Wiki': 'http://wiki.daos.io'
         - 'Community Roadmap': 'http://wiki.daos.io/spaces/DC/pages/4836661105/Roadmap'
         - 'Community Mailing list': 'https://daos.groups.io/g/daos'
@@ -56,13 +69,13 @@ nav:
         - 'Use Cases': 'overview/use_cases.md'
         - 'Terminology': 'overview/terminology.md'
     - Installation and Setup:
-        - 'CentOS': 'QSG/setup.md'
-        - 'openSUSE': 'QSG/suse_setup.md'
-        - 'Build from Scratch': 'QSG/scratch.md'
+        - 'CentOS': 'QSG/setup_centos.md'
+        - 'openSUSE': 'QSG/setup_suse.md'
+        - 'DAOS in Docker': 'QSG/docker.md'
+        - 'Build from Scratch': 'QSG/build_from_scratch.md'
         - 'Admin/Client Tools': 'QSG/tour.md'
     - Administration Guide:
         - 'Hardware Requirements': 'admin/hardware.md'
-        - 'Software Installation': 'admin/installation.md'
         - 'Pre-deployment Checklist': 'admin/predeployment_check.md'
         - 'System Deployment': 'admin/deployment.md'
         - 'System Administration': 'admin/administration.md'
@@ -70,16 +83,14 @@ nav:
         - 'Tiering and Unified Namespace': 'admin/tiering_uns.md'
         - 'Performance Tuning': 'admin/performance_tuning.md'
         - 'Troubleshooting': 'admin/troubleshooting.md'
-        - 'Utilities and Usage Examples': 'admin/utilities_examples.md'
         - 'Environment Variables': 'admin/env_variables.md'
     - Test and Benchmarking:
-        - 'Run DAOS Autotest': 'QSG/autotest.md'
-        - 'Run CaRT Self_test': 'QSG/cartselftest.md'
-        - 'Run IOR': 'QSG/runior.md'
-        - 'Run mdtest': 'QSG/mdtest.md'
-        - 'Run dbench': 'QSG/dbench.md'
-        - 'Datamover test': 'QSG/datamover.md'
-        - 'IO500 Setup': 'http://wiki.daos.io/spaces/DC/pages/4873388103/DAOS+IO-500+Instructions'
+        - 'Run DAOS Autotest': 'testing/autotest.md'
+        - 'Run CaRT Self_test': 'testing/cartselftest.md'
+        - 'Run IOR and mdtest': 'testing/ior.md'
+        - 'Run dbench': 'testing/dbench.md'
+        - 'Run Datamover test': 'testing/datamover.md'
+        - 'Run IO500': 'http://wiki.daos.io/spaces/DC/pages/4873388103/DAOS+IO-500+Instructions'
     - User Guide:
         - 'Workflow': 'user/workflow.md'
         - 'Container Management': 'user/container.md'
@@ -91,11 +102,12 @@ nav:
         - 'Data Mover': 'user/datamover.md'
         - 'Native Programming Interface': 'user/interface.md'
     - Releases:
-        - 'Release Notes v2.0': 'release/release_notes_v2_0.md'
+        - 'Release Notes v2.2': 'release/release_notes.md'
         - 'Support Matrix': 'release/support_matrix.md'
         - 'Roadmap': 'http://wiki.daos.io/spaces/DC/pages/4836661105/Roadmap'
     - Developer Zone:
         - 'Dev Environment': 'dev/development.md'
         - 'Contributing': 'dev/contributing.md'
         - 'DAOS Internals': 'https://github.com/daos-stack/daos/blob/master/src/README.md'
-        - 'DAOS API Documentation': 'html/index.html'
+        - 'DAOS API Documentation': 'https://docs.daos.io/v2.2/doxygen/html/index.html'
+        # Attention: Don't change that doxygen path to a relative path, or mkdocs will stumble...

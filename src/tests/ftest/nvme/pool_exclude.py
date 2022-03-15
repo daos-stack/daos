@@ -9,7 +9,8 @@ import random
 import threading
 import re
 
-from test_utils_pool import TestPool, LabelGenerator
+from test_utils_pool import TestPool
+from test_utils_base import LabelGenerator
 from osa_utils import OSAUtils
 from write_host_file import write_host_file
 
@@ -90,9 +91,9 @@ class NvmePoolExclude(OSAUtils):
                 self.pool.display_pool_daos_space("Pool space: Before Exclude")
                 pver_begin = self.get_pool_version()
 
-                index = random.randint(1, len(rank_list))
+                index = random.randint(1, len(rank_list)) #nosec
                 rank = rank_list.pop(index-1)
-                tgt_exclude = random.randint(1, 6)
+                tgt_exclude = random.randint(1, 6) #nosec
                 self.log.info("Removing rank %d, target %d", rank, tgt_exclude)
 
                 self.log.info("Pool Version at the beginning %s", pver_begin)

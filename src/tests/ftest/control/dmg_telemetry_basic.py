@@ -1,6 +1,6 @@
 #!/usr/bin/python3
 """
-(C) Copyright 2021 Intel Corporation.
+(C) Copyright 2021-2022 Intel Corporation.
 
 SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -107,30 +107,24 @@ class TestWithTelemetryBasic(TestWithTelemetry):
         self.add_pool(connect=False)
         self.pool.set_query_data()
         pool_leader_rank = self.pool.query_data["response"]["leader"]
-        self.pool_leader_host = self.server_managers[0].get_host(
-            pool_leader_rank)
+        self.pool_leader_host = self.server_managers[0].get_host(pool_leader_rank)
         self.log.info(
             "Pool leader host: %s (rank: %s)",
             self.pool_leader_host, pool_leader_rank)
 
         # Verify container telemetry metrics report 0 before container creation
         self.log.info("Before container creation")
-        data = self.telemetry.get_container_metrics()
-        for host in data:
-            self.metrics["open_count"][host] = \
-                data[host]["engine_pool_ops_cont_open"]
-            self.metrics["active_count"][host] = \
-                data[host]["engine_pool_container_handles"]
-            self.metrics["close_count"][host] = \
-                data[host]["engine_pool_ops_cont_close"]
-            self.metrics["destroy_count"][host] = \
-                data[host]["engine_pool_ops_cont_destroy"]
+        container_metrics = self.telemetry.get_container_metrics()
+        for host, data in container_metrics.items():
+            self.metrics["open_count"][host] = data["engine_pool_ops_cont_open"]
+            self.metrics["active_count"][host] = data["engine_pool_container_handles"]
+            self.metrics["close_count"][host] = data["engine_pool_ops_cont_close"]
+            self.metrics["destroy_count"][host] = data["engine_pool_ops_cont_destroy"]
 
         # Create a number of containers and verify metrics
         for loop in range(1, container_qty + 1):
-            self.create_container(random.choice([True, False]))
-            self.log.info(
-                "Container %s/%s: After create()", loop, container_qty)
+            self.create_container(random.choice([True, False])) #nosec
+            self.log.info("Container %s/%s: After create()", loop, container_qty)
             self.check_metrics()
 
         # Open each container and verify metrics

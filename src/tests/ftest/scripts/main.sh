@@ -1,5 +1,5 @@
 #!/bin/bash
-# Copyright (C) Copyright 2020-2021 Intel Corporation
+# Copyright 2020-2022 Intel Corporation
 # All rights reserved.
 #
 # Redistribution and use in source and binary forms, with or without
@@ -56,7 +56,8 @@ else
     cd "$DAOS_BASE"
 fi
 
-export CRT_PHY_ADDR_STR=ofi+sockets
+# Disable CRT_PHY_ADDR_STR to allow launch.py to set it
+unset CRT_PHY_ADDR_STR
 
 # Disable OFI_INTERFACE to allow launch.py to pick the fastest interface
 unset OFI_INTERFACE
@@ -67,6 +68,9 @@ unset OFI_INTERFACE
 # shellcheck disable=SC2153
 export D_LOG_FILE="$TEST_TAG_DIR/daos.log"
 
+# The dmg pool destroy can take up to 3 minutes to timeout.  To help ensure
+# that the avocado test tearDown method is run long enough to account for this
+# use a 240 second timeout when running tearDown after the test has timed out.
 mkdir -p ~/.config/avocado/
 cat <<EOF > ~/.config/avocado/avocado.conf
 [datadir.paths]
@@ -77,7 +81,7 @@ data_dir = $logs_prefix/ftest/avocado/data
 loglevel = DEBUG
 
 [runner.timeout]
-process_died = 60
+process_died = 240
 
 [sysinfo.collectibles]
 files = \$HOME/.config/avocado/sysinfo/files
@@ -213,7 +217,7 @@ fi
 
 # check if slurm needs to be configured for soak
 if [[ "${TEST_TAG_ARG}" =~ soak ]]; then
-    if ! ./slurm_setup.py -c "$FIRST_NODE" -n "${TEST_NODES}" -s -i; then
+    if ! ./slurm_setup.py -d -c "$FIRST_NODE" -n "${TEST_NODES}" -s -i; then
         exit "${PIPESTATUS[0]}"
     else
         rc=0
@@ -225,9 +229,11 @@ ulimit -n 4096
 
 launch_args="-jcrisa"
 # can only process cores on EL7 currently
-if [ "$(lsb_release -s -i)" = "CentOS" ] ||
+if [ "$(lsb_release -s -i)" = "CentOS" ]    ||
+   [ "$(lsb_release -s -i)" = "Rocky" ]     ||
+   [ "$(lsb_release -s -i)" = "AlmaLinux" ] ||
    [ "$(lsb_release -s -i)" = "openSUSE" ]; then
-    launch_args="-jcrispa"
+    launch_args+="p"
 fi
 
 # Clean stale job results

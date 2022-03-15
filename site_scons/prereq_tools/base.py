@@ -1,5 +1,5 @@
 #!/usr/bin/python
-# Copyright (c) 2016-2020 Intel Corporation
+# Copyright 2016-2022 Intel Corporation
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -56,17 +56,16 @@ from SCons.Errors import UserError
 # pylint: enable=no-name-in-module
 # pylint: enable=import-error
 from prereq_tools import mocked_tests
-import subprocess
+import subprocess #nosec
 try:
-    from subprocess import DEVNULL
+    from subprocess import DEVNULL #nosec
 except ImportError:
     DEVNULL = open(os.devnull, "wb")
 import tarfile
 import copy
 if sys.version_info < (3, 0):
-# pylint: disable=import-error
+    # pylint: disable=import-error
     import ConfigParser
-# pylint: enable=import-error
 else:
     import configparser as ConfigParser
 
@@ -368,9 +367,10 @@ build with random upstream changes.
 *********************** ERROR ************************\n""" % comp)
             raise DownloadFailure(self.url, subdir)
 
-        commands = ['git clone %s %s' % (self.url, subdir)]
-        if not RUNNER.run_commands(commands):
-            raise DownloadFailure(self.url, subdir)
+        if not os.path.exists(subdir):
+            commands = ['git clone %s %s' % (self.url, subdir)]
+            if not RUNNER.run_commands(commands):
+                raise DownloadFailure(self.url, subdir)
         self.get_specific(subdir, **kw)
 
     def get_specific(self, subdir, **kw):
@@ -382,15 +382,29 @@ build with random upstream changes.
             branch = self.branch
         self.branch = branch
         if self.branch:
+            command = ['cd %s && git checkout %s' % (subdir, branch)]
+            if not RUNNER.run_commands(command):
+                command = ['cd %s && git fetch -t -a' % (subdir)]
+                if not RUNNER.run_commands(command):
+                    raise DownloadFailure(self.url, subdir)
             self.commit_sha = self.branch
             self.checkout_commit(subdir)
 
         # Now checkout the commit_sha if specified
         passed_commit_sha = kw.get("commit_sha", None)
         if passed_commit_sha is not None:
+            command = ['cd %s && git checkout %s' % (subdir, passed_commit_sha)]
+            if not RUNNER.run_commands(command):
+                command = ['cd %s && git fetch -t -a' % (subdir)]
+                if not RUNNER.run_commands(command):
+                    raise DownloadFailure(self.url, subdir)
             self.commit_sha = passed_commit_sha
             self.checkout_commit(subdir)
 
+        # reset patched diff
+        command = ['cd %s && git reset --hard HEAD' % (subdir)]
+        if not RUNNER.run_commands(command):
+            raise DownloadFailure(self.url, subdir)
         # Now apply any patches specified
         self.apply_patches(subdir, kw.get("patches", None))
         self.update_submodules(subdir)
@@ -413,7 +427,7 @@ class WebRetriever():
             return False
 
         with open(filename, "rb") as src:
-            hexdigest = hashlib.md5(src.read()).hexdigest()
+            hexdigest = hashlib.md5(src.read()).hexdigest() #nosec
 
         if hexdigest != self.md5:
             print("Removing existing file %s: md5 %s != %s" % (filename,
@@ -599,7 +613,8 @@ class PreReqComponent():
         for var in ["HOME", "TERM", "SSH_AUTH_SOCK",
                     "http_proxy", "https_proxy",
                     "PKG_CONFIG_PATH", "MODULEPATH",
-                    "MODULESHOME", "MODULESLOADED"]:
+                    "MODULESHOME", "MODULESLOADED",
+                    "I_MPI_ROOT"]:
             value = os.environ.get(var)
             if value:
                 real_env[var] = value
@@ -911,8 +926,7 @@ class PreReqComponent():
                   type='choice',
                   choices=['yes', 'no', 'build-only'],
                   default='no',
-                  help="Automatically download and build sources.  " \
-                       "(yes|no|build-only) [no]")
+                  help="Automatically download and build sources.  (yes|no|build-only) [no]")
 
         # We want to be able to check what dependencies are needed with out
         # doing a build, similar to --dry-run.  We can not use --dry-run
@@ -1348,12 +1362,6 @@ class _Component():
                                      '_%s.crc' % self.name)
         self.patch_path = self.prereqs.get_build_dir()
 
-    def src_exists(self):
-        """Check if the source directory exists"""
-        if self.src_path and os.path.exists(self.src_path):
-            return True
-        return False
-
     def _delete_old_file(self, path):
         """delete the old file"""
         if os.path.exists(path):
@@ -1377,12 +1385,13 @@ class _Component():
             patch_name = "%s_patch_%03d" % (self.name, patchnum)
             patch_path = os.path.join(self.patch_path, patch_name)
             patchnum += 1
-            command = ['rm -f %s' % patch_path,
-                       'curl -sSfL --retry 10 --retry-max-time 60 -o %s %s'
+            patches.append(patch_path)
+            if os.path.exists(patch_path):
+                continue
+            command = ['curl -sSfL --retry 10 --retry-max-time 60 -o %s %s'
                        % (patch_path, raw)]
             if not RUNNER.run_commands(command):
                 raise BuildFailure(raw)
-            patches.append(patch_path)
         return patches
 
     def get(self):
@@ -1392,11 +1401,6 @@ class _Component():
             return
         branch = self.prereqs.get_config("branches", self.name)
         commit_sha = self.prereqs.get_config("commit_versions", self.name)
-        if self.src_exists():
-            print('Using existing sources at %s for %s' \
-                % (self.src_path, self.name))
-            # NB: Don't apply patches to existing sources
-            return
 
         if not self.retriever:
             print('Using installed version of %s' % self.name)
@@ -1463,7 +1467,7 @@ class _Component():
             return False
 
         path = os.environ.get("PKG_CONFIG_PATH", None)
-        if not path is None:
+        if path is not None:
             env["ENV"]["PKG_CONFIG_PATH"] = path
         if self.component_prefix:
             for path in ["lib", "lib64"]:
@@ -1758,8 +1762,7 @@ class _Component():
 
             self._check_prereqs_build_deps()
 
-            if not self.src_exists():
-                self.get()
+            self.get()
 
             self.prereqs.load_config(self.name, self.src_path)
 
@@ -1788,6 +1791,7 @@ class _Component():
         if self.has_missing_targets(envcopy) and not self.__dry_run:
             raise MissingTargets(self.name, None)
         return changes
+
 
 __all__ = ["GitRepoRetriever", "WebRetriever",
            "DownloadFailure", "ExtractionError",

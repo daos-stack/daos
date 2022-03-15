@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2018-2021 Intel Corporation.
+// (C) Copyright 2018-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -13,8 +13,8 @@ package spdk
 /*
 #cgo CFLAGS: -I .
 #cgo LDFLAGS: -L . -lnvme_control
-#cgo LDFLAGS: -lspdk_log -lspdk_env_dpdk -lspdk_nvme -lspdk_vmd -lrte_mempool
-#cgo LDFLAGS: -lrte_mempool_ring -lrte_bus_pci
+#cgo LDFLAGS: -lspdk_util -lspdk_log -lspdk_env_dpdk -lspdk_nvme -lspdk_vmd
+#cgo LDFLAGS: -lrte_mempool -lrte_mempool_ring -lrte_bus_pci
 
 #include "stdlib.h"
 #include "daos_srv/control.h"
@@ -49,7 +49,7 @@ import (
 
 	"github.com/pkg/errors"
 
-	"github.com/daos-stack/daos/src/control/common"
+	"github.com/daos-stack/daos/src/control/lib/hardware"
 	"github.com/daos-stack/daos/src/control/logging"
 )
 
@@ -62,65 +62,39 @@ type Env interface {
 // EnvImpl is a an implementation of the Env interface.
 type EnvImpl struct{}
 
-// Rc2err returns error from label and rc.
-func Rc2err(label string, rc C.int) error {
-	return fmt.Errorf("%s: %d", label, rc)
+// rc2err returns error from label and rc.
+func rc2err(label string, rc C.int) error {
+	msgErrno := C.GoString(C.spdk_strerror(-rc))
+
+	if msgErrno != "" {
+		return fmt.Errorf("%s: %s (rc=%d)", label, msgErrno, rc)
+	}
+	return fmt.Errorf("%s: rc=%d", label, rc)
 }
 
 // EnvOptions describe parameters to be used when initializing a processes
 // SPDK environment.
 type EnvOptions struct {
-	PCIAllowList []string // restrict SPDK device access
-	EnableVMD    bool     // flag if VMD functionality should be enabled
+	PCIAllowList *hardware.PCIAddressSet // restrict SPDK device access
+	EnableVMD    bool                    // flag if VMD functionality should be enabled
 }
 
-func (o *EnvOptions) sanitizeAllowList(log logging.Logger) error {
-	if o.EnableVMD {
-		// DPDK will not accept VMD backing device addresses
-		// so convert to VMD address
-		newAllowList, err := revertBackingToVmd(log, o.PCIAllowList)
-		if err != nil {
-			return err
-		}
-		o.PCIAllowList = newAllowList
+func (eo *EnvOptions) sanitizeAllowList(log logging.Logger) error {
+	if eo == nil {
+		return errors.New("nil EnvOptions")
 	}
+	if eo.PCIAllowList == nil {
+		return errors.New("nil EnvOptions.PCIAllowList")
+	}
+
+	// DPDK will not accept VMD backing device addresses so convert to VMD addresses
+	newSet, err := eo.PCIAllowList.BackingToVMDAddresses(log)
+	if err != nil {
+		return err
+	}
+	eo.PCIAllowList = newSet
 
 	return nil
-}
-
-// revertBackingToVmd converts VMD backing device PCI addresses (with the VMD
-// address encoded in the domain component of the PCI address) back to the PCI
-// address of the VMD e.g. [5d0505:01:00.0, 5d0505:03:00.0] -> [0000:5d:05.5].
-//
-// Many assumptions are made as to the input and output PCI address structure in
-// the conversion.
-func revertBackingToVmd(log logging.Logger, pciAddrs []string) ([]string, error) {
-	var outAddrs []string
-
-	for _, inAddr := range pciAddrs {
-		domain, _, _, _, err := common.ParsePCIAddress(inAddr)
-		if err != nil {
-			return nil, err
-		}
-		if domain == 0 {
-			outAddrs = append(outAddrs, inAddr)
-			continue
-		}
-
-		domainStr := fmt.Sprintf("%x", domain)
-		if len(domainStr) != 6 {
-			return nil, errors.New("unexpected length of domain")
-		}
-
-		outAddr := fmt.Sprintf("0000:%s:%s.%s",
-			domainStr[:2], domainStr[2:4], domainStr[5:])
-		if !common.Includes(outAddrs, outAddr) {
-			log.Debugf("replacing backing device %s with vmd %s", inAddr, outAddr)
-			outAddrs = append(outAddrs, outAddr)
-		}
-	}
-
-	return outAddrs, nil
 }
 
 // InitSPDKEnv initializes the SPDK environment.
@@ -128,7 +102,17 @@ func revertBackingToVmd(log logging.Logger, pciAddrs []string) ([]string, error)
 // SPDK relies on an abstraction around the local environment
 // named env that handles memory allocation and PCI device operations.
 // The library must be initialized first.
-func (e *EnvImpl) InitSPDKEnv(log logging.Logger, opts *EnvOptions) error {
+func (ei *EnvImpl) InitSPDKEnv(log logging.Logger, opts *EnvOptions) error {
+	if ei == nil {
+		return errors.New("nil EnvImpl")
+	}
+	if opts == nil {
+		return errors.New("nil EnvOptions")
+	}
+	if opts.PCIAllowList == nil {
+		opts.PCIAllowList = hardware.MustNewPCIAddressSet()
+	}
+
 	log.Debugf("spdk init go opts: %+v", opts)
 
 	// Only print error and more severe to stderr.
@@ -139,25 +123,26 @@ func (e *EnvImpl) InitSPDKEnv(log logging.Logger, opts *EnvOptions) error {
 	}
 
 	// Build C array in Go from opts.PCIAllowList []string
-	cAllowList := C.makeCStringArray(C.int(len(opts.PCIAllowList)))
-	defer C.freeCStringArray(cAllowList, C.int(len(opts.PCIAllowList)))
+	cAllowList := C.makeCStringArray(C.int(opts.PCIAllowList.Len()))
+	defer C.freeCStringArray(cAllowList, C.int(opts.PCIAllowList.Len()))
 
-	for i, s := range opts.PCIAllowList {
+	for i, s := range opts.PCIAllowList.Strings() {
 		C.setArrayString(cAllowList, C.CString(s), C.int(i))
 	}
 
 	envCtx := C.dpdk_cli_override_opts
 
-	retPtr := C.daos_spdk_init(0, envCtx, C.ulong(len(opts.PCIAllowList)),
+	retPtr := C.daos_spdk_init(0, envCtx, C.ulong(opts.PCIAllowList.Len()),
 		cAllowList)
+	defer clean(retPtr)
+
 	if err := checkRet(retPtr, "daos_spdk_init()"); err != nil {
 		return err
 	}
-	clean(retPtr)
 
 	if opts.EnableVMD {
 		if rc := C.spdk_vmd_init(); rc != 0 {
-			return Rc2err("spdk_vmd_init()", rc)
+			return rc2err("spdk_vmd_init()", rc)
 		}
 	}
 
@@ -165,7 +150,14 @@ func (e *EnvImpl) InitSPDKEnv(log logging.Logger, opts *EnvOptions) error {
 }
 
 // FiniSPDKEnv initializes the SPDK environment.
-func (e *EnvImpl) FiniSPDKEnv(log logging.Logger, opts *EnvOptions) {
+func (ei *EnvImpl) FiniSPDKEnv(log logging.Logger, opts *EnvOptions) {
+	if ei == nil {
+		return
+	}
+	if opts == nil {
+		return
+	}
+
 	log.Debugf("spdk fini go opts: %+v", opts)
 
 	if opts.EnableVMD {

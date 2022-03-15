@@ -10,7 +10,7 @@ set -x
 
 . utils/sl/setup_local.sh
 
-sudo --preserve-env=SL_PREFIX ./utils/setup_daos_admin.sh
+sudo --preserve-env=SL_PREFIX,SL_SPDK_PREFIX ./utils/setup_daos_admin.sh
 
 TMP_DIR=$(mktemp -d)
 
@@ -29,6 +29,7 @@ popd
 
 cp "$TMP_DIR"/*.json .
 cp "$TMP_DIR"/*.xml .
+sudo chmod -R o+r "$TMP_DIR"/nlt_logs
 cp -r "$TMP_DIR"/nlt_logs .
 
 exit $RC

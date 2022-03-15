@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2020-2021 Intel Corporation.
+ * (C) Copyright 2020-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -1165,7 +1165,7 @@ dc_tx_classify_common(struct dc_tx *tx, struct daos_cpd_sub_req *dcsr,
 	if (dcsr->dcsr_opc == DCSO_UPDATE) {
 		dcu = &dcsr->dcsr_update;
 		reasb_req = dcsr->dcsr_reasb;
-		if (dcu->dcu_flags & ORF_EC && reasb_req->tgt_bitmap != NULL) {
+		if (dcu->dcu_flags & ORF_EC && reasb_req->tgt_bitmap != NIL_BITMAP) {
 			D_ALLOC_ARRAY(dcu->dcu_ec_tgts, obj->cob_grp_size);
 			if (dcu->dcu_ec_tgts == NULL)
 				D_GOTO(out, rc = -DER_NOMEM);
@@ -1176,8 +1176,8 @@ dc_tx_classify_common(struct dc_tx *tx, struct daos_cpd_sub_req *dcsr,
 
 	/* Descending order to guarantee that EC parity is handled firstly. */
 	for (idx = start + obj->cob_grp_size - 1; idx >= start; idx--) {
-		if (reasb_req != NULL && reasb_req->tgt_bitmap != NULL &&
-		    !isset(reasb_req->tgt_bitmap, idx - start))
+		if (reasb_req != NULL && reasb_req->tgt_bitmap != NIL_BITMAP &&
+		    isclr(reasb_req->tgt_bitmap, idx - start))
 			continue;
 
 		rc = obj_shard_open(obj, idx, tx->tx_pm_ver, &shard);
@@ -1188,8 +1188,8 @@ dc_tx_classify_common(struct dc_tx *tx, struct daos_cpd_sub_req *dcsr,
 							oca->u.ec.e_p)
 					skipped_parity++;
 
-				if (skipped_parity == oca->u.ec.e_p) {
-					D_ERROR("Two many (%d) shards in the "
+				if (skipped_parity > oca->u.ec.e_p) {
+					D_ERROR("Too many (%d) shards in the "
 						"redundancy group for opc %u "
 						"against the obj "DF_OID
 						" for DTX "DF_DTI" are lost\n",
@@ -1601,12 +1601,14 @@ dc_tx_commit_prepare(struct dc_tx *tx, tse_task_t *task)
 		D_GOTO(out, rc = -DER_NOMEM);
 
 	mbs = dcsh->dcsh_mbs;
-	mbs->dm_flags = DMF_CONTAIN_LEADER;
+	mbs->dm_flags = DMF_CONTAIN_LEADER | DMF_SORTED_TGT_ID;
 
 	/* For the case of modification(s) within single RDG,
 	 * elect leader as standalone modification case does.
 	 */
 	if (mod_grp_cnt == 1) {
+		uint8_t	*bit_map;
+
 		i = dc_tx_leftmost_req(tx, true);
 		dcsr = &tx->tx_req_cache[i];
 		obj = dcsr->dcsr_obj;
@@ -1616,9 +1618,13 @@ dc_tx_commit_prepare(struct dc_tx *tx, tse_task_t *task)
 		if (grp_idx < 0)
 			D_GOTO(out, rc = grp_idx);
 
-		i = pl_select_leader(obj->cob_md.omd_id, grp_idx,
-				     obj->cob_grp_size, NULL,
-				     obj_get_shard, obj);
+		if (obj_is_ec(obj))
+			bit_map = ((struct obj_reasb_req *)(dcsr->dcsr_reasb))->tgt_bitmap;
+		else
+			bit_map = NIL_BITMAP;
+
+		i = pl_select_leader(obj->cob_md.omd_id, grp_idx, obj->cob_grp_size, bit_map, NULL,
+				     NULL, obj_get_shard, obj);
 		if (i < 0)
 			D_GOTO(out, rc = i);
 
@@ -1774,6 +1780,10 @@ dc_tx_commit_trigger(tse_task_t *task, struct dc_tx *tx, daos_tx_commit_t *args)
 	struct tx_commit_cb_args	 tcca;
 	crt_endpoint_t			 tgt_ep;
 	int				 rc;
+
+	if (tx->tx_pm_ver != 0 && tx->tx_pm_ver != dc_pool_get_version(tx->tx_pool) &&
+	    (tx->tx_retry || tx->tx_read_cnt > 0))
+		D_GOTO(out, rc = -DER_TX_RESTART);
 
 	if (!tx->tx_retry) {
 		rc = dc_tx_commit_prepare(tx, task);

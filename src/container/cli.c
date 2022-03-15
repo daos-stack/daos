@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2021 Intel Corporation.
+ * (C) Copyright 2016-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -45,7 +45,11 @@ dc_cont_init(void)
 void
 dc_cont_fini(void)
 {
-	daos_rpc_unregister(&cont_proto_fmt);
+	int rc;
+
+	rc = daos_rpc_unregister(&cont_proto_fmt);
+	if (rc != 0)
+		D_ERROR("failed to unregister cont RPCs: "DF_RC"\n", DP_RC(rc));
 }
 
 /*
@@ -832,7 +836,9 @@ dc_cont_open_internal(tse_task_t *task, const char *label, struct dc_pool *pool)
 				  DAOS_CO_QUERY_PROP_DEDUP |
 				  DAOS_CO_QUERY_PROP_DEDUP_THRESHOLD |
 				  DAOS_CO_QUERY_PROP_REDUN_FAC |
-				  DAOS_CO_QUERY_PROP_EC_CELL_SZ;
+				  DAOS_CO_QUERY_PROP_EC_CELL_SZ |
+				  DAOS_CO_QUERY_PROP_EC_PDA |
+				  DAOS_CO_QUERY_PROP_RP_PDA;
 
 	/* open bylabel RPC input */
 	if (label) {
@@ -1243,6 +1249,12 @@ cont_query_bits(daos_prop_t *prop)
 		case DAOS_PROP_CO_EC_CELL_SZ:
 			bits |= DAOS_CO_QUERY_PROP_EC_CELL_SZ;
 			break;
+		case DAOS_PROP_CO_EC_PDA:
+			bits |= DAOS_CO_QUERY_PROP_EC_PDA;
+			break;
+		case DAOS_PROP_CO_RP_PDA:
+			bits |= DAOS_CO_QUERY_PROP_RP_PDA;
+			break;
 		default:
 			D_ERROR("ignore bad dpt_type %d.\n", entry->dpe_type);
 			break;
@@ -1393,12 +1405,24 @@ dc_cont_set_prop(tse_task_t *task)
 	D_ASSERTF(args != NULL, "Task Argument OPC does not match DC OPC\n");
 
 	if (daos_prop_entry_get(args->prop, DAOS_PROP_CO_ALLOCED_OID)) {
-		D_ERROR("Can't set OID property if container is created.\n");
+		D_ERROR("Can't set OID property on existed container.\n");
 		D_GOTO(err, rc = -DER_NO_PERM);
 	}
 
 	if (daos_prop_entry_get(args->prop, DAOS_PROP_CO_EC_CELL_SZ)) {
-		D_ERROR("Can't set EC cell size if container is created.\n");
+		D_ERROR("Can't set EC cell size on existed container\n");
+		D_GOTO(err, rc = -DER_NO_PERM);
+	}
+
+	if (daos_prop_entry_get(args->prop, DAOS_PROP_CO_EC_PDA)) {
+		D_ERROR("Can't set EC performance domain affinity "
+			"on existed container.\n");
+		D_GOTO(err, rc = -DER_NO_PERM);
+	}
+
+	if (daos_prop_entry_get(args->prop, DAOS_PROP_CO_RP_PDA)) {
+		D_ERROR("Can't set RP performance domain affinity "
+			"on existed container.\n");
 		D_GOTO(err, rc = -DER_NO_PERM);
 	}
 
@@ -1803,7 +1827,7 @@ get_tgt_rank(struct dc_pool *pool, unsigned int *rank)
 	if (tgt_cnt == 0 || tgts == NULL)
 		return -DER_INVAL;
 
-	*rank = tgts[rand() % tgt_cnt].ta_comp.co_rank;
+	*rank = tgts[d_rand() % tgt_cnt].ta_comp.co_rank;
 
 	D_FREE(tgts);
 
@@ -1906,6 +1930,8 @@ struct dc_cont_glob {
 	uint32_t        dcg_dedup_th;
 	uint32_t	dcg_redun_fac;
 	uint32_t	dcg_ec_cell_sz;
+	uint32_t	dcg_ec_pda;
+	uint32_t	dcg_rp_pda;
 	/** minimal required pool map version, as a fence to make sure after
 	 * cont_open/g2l client-side pm_ver >= pm_ver@cont_create.
 	 */
@@ -1918,7 +1944,7 @@ struct dc_cont_glob {
 static inline daos_size_t
 dc_cont_glob_buf_size()
 {
-       return sizeof(struct dc_cont_glob);
+	return sizeof(struct dc_cont_glob);
 }
 
 static inline void
@@ -1986,6 +2012,8 @@ dc_cont_l2g(daos_handle_t coh, d_iov_t *glob)
 	cont_glob->dcg_encrypt_type	= cont->dc_props.dcp_encrypt_type;
 	cont_glob->dcg_redun_fac	= cont->dc_props.dcp_redun_fac;
 	cont_glob->dcg_ec_cell_sz	= cont->dc_props.dcp_ec_cell_sz;
+	cont_glob->dcg_ec_pda		= cont->dc_props.dcp_ec_pda;
+	cont_glob->dcg_rp_pda		= cont->dc_props.dcp_rp_pda;
 	cont_glob->dcg_min_ver		= cont->dc_min_ver;
 
 	dc_pool_put(pool);
@@ -2072,6 +2100,8 @@ dc_cont_g2l(daos_handle_t poh, struct dc_cont_glob *cont_glob,
 	cont->dc_props.dcp_encrypt_type	 = cont_glob->dcg_encrypt_type;
 	cont->dc_props.dcp_redun_fac	 = cont_glob->dcg_redun_fac;
 	cont->dc_props.dcp_ec_cell_sz	 = cont_glob->dcg_ec_cell_sz;
+	cont->dc_props.dcp_ec_pda	 = cont_glob->dcg_ec_pda;
+	cont->dc_props.dcp_rp_pda	 = cont_glob->dcg_rp_pda;
 	cont->dc_min_ver		 = cont_glob->dcg_min_ver;
 	rc = dc_cont_props_init(cont);
 	if (rc != 0)
@@ -2493,12 +2523,13 @@ dc_cont_get_attr(tse_task_t *task)
 	 */
 	D_ALLOC_ARRAY(new_names, args->n);
 	if (!new_names)
-		D_GOTO(out, rc = -DER_NOMEM);
+		D_GOTO(out_rpc, rc = -DER_NOMEM);
+
 	rc = tse_task_register_comp_cb(task, free_heap_copy, &new_names,
 				       sizeof(char *));
 	if (rc) {
 		D_FREE(new_names);
-		D_GOTO(out, rc);
+		D_GOTO(out_rpc, rc);
 	}
 	for (i = 0 ; i < args->n ; i++) {
 		uint64_t len;
@@ -2507,22 +2538,21 @@ dc_cont_get_attr(tse_task_t *task)
 		in->cagi_key_length += len + 1;
 		D_STRNDUP(new_names[i], args->names[i], len);
 		if (new_names[i] == NULL)
-			D_GOTO(out, rc = -DER_NOMEM);
+			D_GOTO(out_rpc, rc = -DER_NOMEM);
+
 		rc = tse_task_register_comp_cb(task, free_heap_copy,
 					       &new_names[i], sizeof(char *));
 		if (rc) {
 			D_FREE(new_names[i]);
-			D_GOTO(out, rc);
+			D_GOTO(out_rpc, rc);
 		}
 	}
 
 	rc = attr_bulk_create(args->n, new_names, (void **)args->values,
 			      (size_t *)args->sizes, daos_task2ctx(task),
 			      CRT_BULK_RW, &in->cagi_bulk);
-	if (rc != 0) {
-		cont_req_cleanup(CLEANUP_RPC, &cb_args);
-		D_GOTO(out, rc);
-	}
+	if (rc != 0)
+		D_GOTO(out_rpc, rc);
 
 	cb_args.cra_bulk = in->cagi_bulk;
 	rc = tse_task_register_comp_cb(task, cont_req_complete,
@@ -2535,6 +2565,8 @@ dc_cont_get_attr(tse_task_t *task)
 	crt_req_addref(cb_args.cra_rpc);
 	return daos_rpc_send(cb_args.cra_rpc, task);
 
+out_rpc:
+	cont_req_cleanup(CLEANUP_RPC, &cb_args);
 out:
 	tse_task_complete(task, rc);
 	D_DEBUG(DF_DSMC, "Failed to get container attributes: "DF_RC"\n",

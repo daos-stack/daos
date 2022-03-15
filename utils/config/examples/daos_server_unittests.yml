@@ -3,10 +3,11 @@
 name: daos_server           # sys group daos_server
 access_points: ['example']  # management service leader (bootstrap)
 # port: 10001               # control listen port, default 10001
-provider: ofi+sockets       # map to CRT_PHY_ADDR_STR=ofi+sockets
-socket_dir: /tmp/daos_sockets
+provider: ofi+tcp
 control_log_mask: DEBUG
 control_log_file: /tmp/daos_server.log
+
+telemetry_port: 9191
 
 ## Transport Credentials Specifying certificates to secure communications
 ##
@@ -25,6 +26,7 @@ control_log_file: /tmp/daos_server.log
 
 engines:
 -
+  pinned_numa_node: 0
   targets: 1                # number of I/O service threads per-engine
   first_core: 0             # offset of the first core for service threads
   nr_xs_helpers: 0          # count of I/O offload threads per engine
@@ -63,3 +65,4 @@ engines:
   # engine with -n <path>)
   bdev_class: nvme
   bdev_list: []
+  bdev_busid_range: ""

@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2021 Intel Corporation.
+// (C) Copyright 2019-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -27,7 +27,7 @@ func mockControlService(t *testing.T, log logging.Logger, cfg *config.Server, bm
 
 	if cfg == nil {
 		cfg = config.DefaultServer().WithEngines(
-			engine.NewConfig().WithTargetCount(1),
+			engine.MockConfig().WithTargetCount(1),
 		)
 	}
 

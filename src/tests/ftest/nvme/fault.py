@@ -1,13 +1,13 @@
 #!/usr/bin/python
 '''
-  (C) Copyright 2020-2021 Intel Corporation.
+  (C) Copyright 2020-2022 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
 import os
 from nvme_utils import ServerFillUp
 from dmg_utils import DmgCommand
-from command_utils_base import CommandFailure
+from exception_utils import CommandFailure
 
 class NvmeFault(ServerFillUp):
     # pylint: disable=too-many-ancestors
@@ -48,7 +48,7 @@ class NvmeFault(ServerFillUp):
         self.create_pool_max_size(nvme=True)
 
         #Start the IOR Command and generate the NVMe fault.
-        self.start_ior_load(percent=self.capacity)
+        self.start_ior_load(operation="Auto_Write", percent=self.capacity)
 
         print(
             "pool_percentage_used -- After -- {}".format(

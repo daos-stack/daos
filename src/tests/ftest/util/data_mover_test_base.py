@@ -1,11 +1,12 @@
 #!/usr/bin/python
 """
-(C) Copyright 2018-2021 Intel Corporation.
+(C) Copyright 2018-2022 Intel Corporation.
 
 SPDX-License-Identifier: BSD-2-Clause-Patent
 """
-from command_utils_base import CommandFailure
-from daos_utils import DaosCommand
+import os
+
+from exception_utils import CommandFailure
 from test_utils_container import TestContainer
 from pydaos.raw import str_to_c_uuid, DaosContainer, DaosObj, IORequest
 from ior_test_base import IorTestBase
@@ -80,12 +81,19 @@ class DataMoverTestBase(IorTestBase, MdtestBase):
         self.uuids = []
         self.dfuse_hosts = None
         self.num_run_datamover = 0  # Number of times run_datamover was called
+        self.job_manager = None
+        self.parent = None
 
         # Temp directory for serialize/deserialize
         self.serial_tmp_dir = self.tmp
 
-        # List of test paths to create and remove
-        self.posix_test_paths = []
+        self.preserve_props_path = None
+
+        # List of local test paths to create and remove
+        self.posix_local_test_paths = []
+
+        # List of shared test paths to create and remove
+        self.posix_shared_test_paths = []
 
         # paths to unmount in teardown
         self.mounted_posix_test_paths = []
@@ -101,7 +109,7 @@ class DataMoverTestBase(IorTestBase, MdtestBase):
         self.dfuse_hosts = self.agent_managers[0].hosts
 
         # initialize daos_cmd
-        self.daos_cmd = DaosCommand(self.bin)
+        self.daos_cmd = self.get_daos_command()
 
         # Get the processes for each explicitly
         # This is needed because both IorTestBase and MdtestBase
@@ -119,6 +127,8 @@ class DataMoverTestBase(IorTestBase, MdtestBase):
         self.ddeserialize_processes = self.params.get(
             "np", "/run/ddeserialize/client_processes/*", 1)
 
+        self.parent = self.params.get("parent", "/run/datamover/*", self.tmp)
+
         tool = self.params.get("tool", "/run/datamover/*")
         if tool:
             self.set_tool(tool)
@@ -130,8 +140,17 @@ class DataMoverTestBase(IorTestBase, MdtestBase):
             list: a list of error strings to report at the end of tearDown().
 
         """
+        # doesn't append to error list because it reports an error if all
+        # processes completed successfully (nothing to stop), but this call is
+        # necessary in the case that mpi processes are ran across multiple nodes
+        # and a timeout occurs. If this happens then cleanup on shared posix
+        # directories causes errors (because an MPI process might still have it open)
         error_list = []
 
+        if self.job_manager:
+            self.job_manager.kill()
+
+        # cleanup mounted paths
         if self.mounted_posix_test_paths:
             path_list = self._get_posix_test_path_list(path_list=self.mounted_posix_test_paths)
             for item in path_list:
@@ -146,12 +165,25 @@ class DataMoverTestBase(IorTestBase, MdtestBase):
                     self._execute_command(umount_cmd)
                 except CommandFailure as error:
                     error_list.append("Error umounting posix test directory: {}".format(error))
-        if self.posix_test_paths:
+
+        # cleanup local paths
+        if self.posix_local_test_paths:
             command = "rm -rf {}".format(self._get_posix_test_path_string())
             try:
                 self._execute_command(command)
             except CommandFailure as error:
                 error_list.append("Error removing created directories: {}".format(error))
+
+        # cleanup shared paths (only runs on one node in job)
+        if self.posix_shared_test_paths:
+            shared_path_strs = self._get_posix_test_path_string(path=self.posix_shared_test_paths)
+            command = "rm -rf {}".format(shared_path_strs)
+            try:
+                # only call rm on one client since this is cleaning up shared dir
+                self._execute_command(command, hosts=self.hostlist_clients[0:1])
+            except CommandFailure as error:
+                error_list.append(
+                    "Error removing created directories: {}".format(error))
         return error_list
 
     def set_api(self, api):
@@ -186,45 +218,51 @@ class DataMoverTestBase(IorTestBase, MdtestBase):
             list: a list of quoted posix test path strings
 
         """
-        # default
-        if path_list == None:
-            path_list = self.posix_test_paths
+        if path_list is None:
+            path_list = self.posix_local_test_paths
 
         return ["'{}'".format(item) for item in path_list]
 
-    def _get_posix_test_path_string(self):
+    def _get_posix_test_path_string(self, path=None):
         """Get a string of all of the quoted posix test path strings.
 
         Returns:
             str: a string of all of the quoted posix test path strings
 
         """
-        return " ".join(self._get_posix_test_path_list())
+        return " ".join(self._get_posix_test_path_list(path_list=path))
 
-    def new_posix_test_path(self, create=True, parent=None, mount_dir=False):
+    def new_posix_test_path(self, shared=False, create=True, parent=None, mount_dir=False):
         """Generate a new, unique posix path.
 
         Args:
+            shared (bool): Whether to create a directory shared across nodes or local.
+                Defaults to False.
             create (bool): Whether to create the directory.
                 Defaults to True.
             mount_dir (bool): Whether or not posix directory will be manually
-	        mounted in tmpfs.
+                mounted in tmpfs.
             parent (str, optional): The parent directory to create the
-                path in. Defaults to self.tmp.
+                path in. Defaults to self.parent, which has a default of self.tmp.
 
         Returns:
             str: the posix path.
 
         """
-        dir_name = "posix_test{}".format(len(self.posix_test_paths))
+        # make dirname unique to datamover test
+        method = self.get_test_info()["method"]
+        dir_name = "{}{}".format(method, len(self.posix_local_test_paths))
 
         if parent:
             path = join(parent, dir_name)
         else:
-            path = join(self.tmp, dir_name)
+            path = join(self.parent, dir_name)
 
         # Add to the list of posix paths
-        self.posix_test_paths.append(path)
+        if shared:
+            self.posix_shared_test_paths.append(path)
+        else:
+            self.posix_local_test_paths.append(path)
 
         if create:
             # Create the directory
@@ -232,7 +270,7 @@ class DataMoverTestBase(IorTestBase, MdtestBase):
             self.execute_cmd(cmd)
 
         # mount small tmpfs filesystem on posix path, using size required sudo
-        # add mount_dir to mounted list for use when umounting 
+        # add mount_dir to mounted list for use when umounting
         if mount_dir:
             self.mounted_posix_test_paths.append(path)
             self.execute_cmd("sudo mount -t tmpfs none '{}' -o size=128M".format(path))
@@ -306,7 +344,7 @@ class DataMoverTestBase(IorTestBase, MdtestBase):
 
     def create_cont(self, pool, use_dfuse_uns=False,
                     dfuse_uns_pool=None, dfuse_uns_cont=None,
-                    cont_type=None):
+                    cont_type=None, oclass=None):
         # pylint: disable=arguments-differ
         """Create a TestContainer object.
 
@@ -347,6 +385,8 @@ class DataMoverTestBase(IorTestBase, MdtestBase):
 
         if cont_type:
             container.type.update(cont_type)
+        if oclass:
+            container.oclass.update(oclass)
 
         # Create container
         container.create()
@@ -567,10 +607,9 @@ class DataMoverTestBase(IorTestBase, MdtestBase):
                             self.log.info("Expected:\n%s\nBut got:\n%s",
                                 data[:100] + "...",
                                 actual_idx + "...")
-                            self.log.info(
-                                "For:\nobj: %s.%s\ndkey: %s\nakey: %s",
-                                    str(obj.c_oid.hi), str(obj.c_oid.lo),
-                                    dkey, akey)
+                            self.log.info("For:\nobj: %s.%s\ndkey: %s\nakey: %s",
+                                          str(obj.c_oid.hi), str(obj.c_oid.lo),
+                                          dkey, akey)
                             self.fail("Array verification failed.")
 
             obj.close()
@@ -631,9 +670,6 @@ class DataMoverTestBase(IorTestBase, MdtestBase):
         """Set the params for dcp.
         This is a wrapper for DcpCommand.set_params.
 
-        When both src_type and dst_type are DAOS_UNS, a prefix will
-        only work for either the src or the dst, but not both.
-
         Args:
             src_type (str): how to interpret the src params.
                 Must be in PARAM_TYPES.
@@ -678,7 +714,6 @@ class DataMoverTestBase(IorTestBase, MdtestBase):
                         src_path=src_cont.path.value)
                 else:
                     self.dcp_cmd.set_params(
-                        daos_prefix=src_cont.path.value,
                         src_path=src_cont.path.value + src_path)
 
         # Set the destination params
@@ -695,7 +730,6 @@ class DataMoverTestBase(IorTestBase, MdtestBase):
                         dst_path=dst_cont.path.value)
                 else:
                     self.dcp_cmd.set_params(
-                        daos_prefix=dst_cont.path.value,
                         dst_path=dst_cont.path.value + dst_path)
 
     def _set_dsync_params(self,
@@ -705,9 +739,6 @@ class DataMoverTestBase(IorTestBase, MdtestBase):
                           dst_pool=None, dst_cont=None):
         """Set the params for dsync.
         This is a wrapper for DsyncCommand.set_params.
-
-        When both src_type and dst_type are DAOS_UNS, a prefix will
-        only work for either the src or the dst, but not both.
 
         Args:
             src_type (str): how to interpret the src params.
@@ -743,7 +774,6 @@ class DataMoverTestBase(IorTestBase, MdtestBase):
                         src_path=src_cont.path.value)
                 else:
                     self.dsync_cmd.set_params(
-                        daos_prefix=src_cont.path.value,
                         src_path=src_cont.path.value + src_path)
 
         # Set the destination params
@@ -760,7 +790,6 @@ class DataMoverTestBase(IorTestBase, MdtestBase):
                         dst_path=dst_cont.path.value)
                 else:
                     self.dsync_cmd.set_params(
-                        daos_prefix=dst_cont.path.value,
                         dst_path=dst_cont.path.value + dst_path)
 
     def _set_fs_copy_params(self,
@@ -769,9 +798,6 @@ class DataMoverTestBase(IorTestBase, MdtestBase):
                             dst_type=None, dst_path=None,
                             dst_pool=None, dst_cont=None):
         """Set the params for fs copy.
-
-        daos fs copy does not support a "prefix" on UNS paths,
-        so the param type for DAOS_UNS must have the path "/".
 
         Args:
             src_type (str): how to interpret the src params.
@@ -799,6 +825,10 @@ class DataMoverTestBase(IorTestBase, MdtestBase):
         # First, initialize a new fs copy command
         self.fs_copy_cmd = FsCopy(self.daos_cmd, self.log)
 
+        # set preserve-props path if it was used in test case
+        if self.preserve_props_path:
+            self.fs_copy_cmd.set_fs_copy_params(preserve_props=self.preserve_props_path)
+
         # Set the source params
         if src_type == "POSIX":
             self.fs_copy_cmd.set_fs_copy_params(
@@ -812,7 +842,7 @@ class DataMoverTestBase(IorTestBase, MdtestBase):
                 if src_path == "/":
                     path = str(src_cont.path)
                 else:
-                    self.fail("daos fs copy does not support a prefix")
+                    path = str(src_cont.path) + src_path
             self.fs_copy_cmd.set_fs_copy_params(
                 src=path)
 
@@ -829,7 +859,7 @@ class DataMoverTestBase(IorTestBase, MdtestBase):
                 if dst_path == "/":
                     path = str(dst_cont.path)
                 else:
-                    self.fail("daos fs copy does not support a prefix")
+                    path = str(dst_cont.path) + dst_path
             self.fs_copy_cmd.set_fs_copy_params(
                 dst=path)
 
@@ -895,7 +925,6 @@ class DataMoverTestBase(IorTestBase, MdtestBase):
             self.ddeserialize_cmd.set_params(
                 src_path=tmp_path,
                 pool=uuid_from_obj(dst_pool))
-
 
     def set_ior_params(self, param_type, path, pool=None, cont=None,
                        path_suffix=None, flags=None, display=True):
@@ -1115,21 +1144,21 @@ class DataMoverTestBase(IorTestBase, MdtestBase):
                     processes = self.dcp_processes
                 # If we expect an rc other than 0, don't fail
                 self.dcp_cmd.exit_status_exception = (expected_rc == 0)
-                result = self.dcp_cmd.run(processes)
+                result = self.dcp_cmd.run(processes, self.job_manager)
             elif self.tool == "DSYNC":
                 if not processes:
                     processes = self.dsync_processes
                 # If we expect an rc other than 0, don't fail
                 self.dsync_cmd.exit_status_exception = (expected_rc == 0)
-                result = self.dsync_cmd.run(processes)
-            elif self.tool== "DSERIAL":
+                result = self.dsync_cmd.run(processes, self.job_manager)
+            elif self.tool == "DSERIAL":
                 if processes:
                     processes1 = processes2 = processes
                 else:
                     processes1 = self.dserialize_processes
                     processes2 = self.ddeserialize_processes
-                result = self.dserialize_cmd.run(processes1)
-                result = self.ddeserialize_cmd.run(processes2)
+                result = self.dserialize_cmd.run(processes1, self.job_manager)
+                result = self.ddeserialize_cmd.run(processes2, self.job_manager)
             elif self.tool == "FS_COPY":
                 result = self.fs_copy_cmd.run()
             elif self.tool == "CONT_CLONE":
@@ -1156,3 +1185,99 @@ class DataMoverTestBase(IorTestBase, MdtestBase):
                 self.fail("stderr expected {}: {}".format(s, test_desc))
 
         return result
+
+    def run_dm_activities_with_ior(self, tool, create_dataset=False, pool=None,
+                                   cont=None):
+        """Generic method to perform varios datamover activities
+           using ior
+        Args:
+            tool(str): specify the tool name to be used
+            create_dataset(bool): boolean to create initial set of
+                                  data using ior. Defaults to False.
+            pool(TestPool): Pool object. Defaults to None
+            cont(TestContainer): Container object. Defaults to None
+        """
+        # Set the tool to use
+        self.set_tool(tool)
+
+        if create_dataset:
+            # create initial datasets
+            if not pool:
+                pool = self.create_pool()
+            cont = self.create_cont(pool, oclass=self.ior_cmd.dfs_oclass.value)
+
+            # update and run ior on container 1
+            self.run_ior_with_params(
+                "DAOS", self.ior_cmd.test_file.value,
+                pool, cont)
+        else:
+            if not pool:
+                pool = self.pool[0]
+            if not cont:
+                cont = self.container[-1]
+
+        # create cont2
+        cont2 = self.create_cont(pool, oclass=self.ior_cmd.dfs_oclass.value)
+
+        # perform various datamover activities
+        if tool == 'CONT_CLONE':
+            read_back_cont = self.gen_uuid()
+            self.run_datamover(
+                self.test_id + " (cont to cont2)",
+                "DAOS", None, pool, cont,
+                "DAOS", None, pool, read_back_cont)
+            read_back_pool = pool
+        elif tool == 'DSERIAL':
+            # Create pool2
+            pool2 = self.get_pool()
+            # Use dfuse as a shared intermediate for serialize + deserialize
+            dfuse_cont = self.create_cont(pool, oclass=self.ior_cmd.dfs_oclass.value)
+            self.start_dfuse(self.dfuse_hosts, pool, dfuse_cont)
+            self.serial_tmp_dir = self.dfuse.mount_dir.value
+
+            # Serialize/Deserialize container 1 to a new cont2 in pool2
+            result = self.run_datamover(
+                self.test_id + " (cont->HDF5->cont2)",
+                "DAOS_UUID", None, pool, cont,
+                "DAOS_UUID", None, pool2, None)
+
+            # Get the destination cont2 uuid
+            read_back_cont = self.parse_create_cont_uuid(result.stdout_text)
+            read_back_pool = pool2
+        elif tool in ['FS_COPY', 'DCP']:
+            # copy from daos cont to cont2
+            self.run_datamover(
+                self.test_id + " (cont to cont2)",
+                "DAOS", "/", pool, cont,
+                "DAOS", "/", pool, cont2)
+        else:
+            self.fail("Invalid tool: {}".format(tool))
+
+        # move data from daos to posix FS and vice versa
+        if tool in ['FS_COPY', 'DCP']:
+            posix_path = self.new_posix_test_path(shared=True)
+            # copy from daos cont2 to posix file system
+            self.run_datamover(
+                self.test_id + " (cont2 to posix)",
+                "DAOS", "/", pool, cont2,
+                "POSIX", posix_path)
+
+            # create cont3
+            cont3 = self.create_cont(pool, oclass=self.ior_cmd.dfs_oclass.value)
+
+            # copy from posix file system to daos cont3
+            self.run_datamover(
+                self.test_id + " (posix to cont3)",
+                "POSIX", posix_path, None, None,
+                "DAOS", "/", pool, cont3)
+            read_back_cont = cont3
+            read_back_pool = pool
+        # the result is that a NEW directory is created in the destination
+        if tool == 'FS_COPY':
+            daos_path = "/" + os.path.basename(posix_path) + self.ior_cmd.test_file.value
+        else:
+            daos_path = self.ior_cmd.test_file.value
+        # update ior params, read back and verify data from cont3
+        self.run_ior_with_params(
+            "DAOS", daos_path, read_back_pool, read_back_cont,
+            flags="-r -R -F -k")

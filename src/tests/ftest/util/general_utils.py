@@ -1,6 +1,6 @@
 #!/usr/bin/python
 """
-  (C) Copyright 2018-2021 Intel Corporation.
+  (C) Copyright 2018-2022 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -406,16 +406,34 @@ def run_pcmd(hosts, command, verbose=True, timeout=None, expect_rc=0):
         for item in results
         if expect_rc is not None and item["exit_status"] != expect_rc]
     if verbose or bad_exit_status:
-        log.info("Command: %s", command)
-        log.info("Results:")
-        for result in results:
-            log.info(
-                "  %s: exit_status=%s, interrupted=%s:",
-                result["hosts"], result["exit_status"], result["interrupted"])
-            for line in result["stdout"]:
-                log.info("    %s", line)
+        log.info(colate_results(command, results))
 
     return results
+
+
+def colate_results(command, results):
+    """Colate the output of run_pcmd.
+
+    Args:
+        command (str): command used to obtain the data on each server
+        results (list): list: a list of dictionaries with each entry
+                        containing output, exit status, and interrupted
+                        status common to each group of hosts (see run_pcmd()'s
+                        return for details)
+    Returns:
+        str: a string colating run_pcmd()'s results
+
+    """
+    res = ""
+    res += "Command: %s\n" % command
+    res += "Results:\n"
+    for result in results:
+        res += "  %s: exit_status=%s, interrupted=%s:" % (
+               result["hosts"], result["exit_status"], result["interrupted"])
+        for line in result["stdout"]:
+            res += "    %s\n" % line
+
+    return res
 
 
 def get_host_data(hosts, command, text, error, timeout=None):
@@ -582,7 +600,7 @@ def get_random_string(length, exclude=None, include=None):
 
     random_string = None
     while not isinstance(random_string, str) or random_string in exclude:
-        random_string = "".join(random.choice(include) for _ in range(length))
+        random_string = "".join(random.choice(include) for _ in range(length)) #nosec
     return random_string
 
 
@@ -696,7 +714,7 @@ def stop_processes(hosts, pattern, verbose=True, timeout=60, added_filter=None,
                 "then rc=1",
                 "sudo pkill --signal USR2 {}".format(pattern),
                 # leave time for ABT info/stacks dump vs xstream/pool/ULT number
-		"sleep 20",
+                "sleep 20",
                 "fi",
                 "exit $rc",
             ]
@@ -944,8 +962,8 @@ def get_job_manager_class(name, job=None, subprocess=False, mpi="openmpi"):
 
     """
     manager_class = get_module_class(name, "job_manager_utils")
-    if name == "Mpirun":
-        manager = manager_class(job, subprocess=subprocess, mpitype=mpi)
+    if name in ["Mpirun", "Orterun"]:
+        manager = manager_class(job, subprocess=subprocess, mpi_type=mpi)
     elif name == "Systemctl":
         manager = manager_class(job)
     else:
@@ -1265,3 +1283,19 @@ def report_errors(test, errors):
         test.fail(error_msg)
 
     test.log.info("No errors detected.")
+
+
+def percent_change(val1, val2):
+    """Calculate percent change between two values as a decimal.
+
+    Args:
+        val1 (float): first value.
+        val2 (float): second value.
+
+    Returns:
+        float: decimal percent change.
+
+    """
+    if val1 and val2:
+        return (float(val2) - float(val1)) / float(val1)
+    return 0.0

@@ -1,10 +1,10 @@
 #!/usr/bin/python
 """
-  (C) Copyright 2019-2021 Intel Corporation.
+  (C) Copyright 2019-2022 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
-from mpio_test_base import MpiioTests
+from mpiio_test_base import MpiioTests
 
 
 # pylint: disable=too-many-ancestors
@@ -64,7 +64,7 @@ class Hdf5(MpiioTests):
 
         :avocado: tags=all,daily_regression
         :avocado: tags=hw,small
-        :avocado: tags=mpio,llnlmpi4pyhdf5,hdf5,hdf5testsuite
+        :avocado: tags=mpiio,mpich,llnlmpi4pyhdf5,hdf5,hdf5testsuite
         """
         test_repo = self.params.get("hdf5", '/run/test_repo/')
         self.run_test(test_repo, "hdf5")

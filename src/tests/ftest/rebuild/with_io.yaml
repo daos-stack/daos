@@ -12,7 +12,7 @@ timeout: 5000
 server_config:
   name: daos_server
   servers:
-    targets: 8
+    targets: 2
 pool:
   mode: 511
   name: daos_server
@@ -26,5 +26,5 @@ container:
 testparams:
   ranks:
     rank0:
-      rank: 0
-  object_class: DAOS_OC_R3_RW
+      rank: 4
+  object_class: OC_RP_3G1

@@ -1,6 +1,6 @@
 #!/usr/bin/python
 """
-  (C) Copyright 2020-2021 Intel Corporation.
+  (C) Copyright 2020-2022 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -12,7 +12,7 @@ import random
 from avocado import fail_on
 from apricot import TestWithServers
 from daos_racer_utils import DaosRacerCommand
-from command_utils import CommandFailure
+from exception_utils import CommandFailure
 from general_utils import check_file_exists, get_host_data, get_log_file, run_pcmd
 
 
@@ -168,6 +168,7 @@ class ZeroConfigTest(TestWithServers):
         racer_env = daos_racer.get_environment(self.server_managers[0], log_file)
         racer_env["FI_LOG_LEVEL"] = "info"
         racer_env["D_LOG_MASK"] = "INFO,object=ERR,placement=ERR"
+        racer_env["OFI_DOMAIN"] = self.interfaces[exp_iface]["domain"]
         daos_racer.set_environment(racer_env)
 
         # Run client
@@ -218,7 +219,7 @@ class ZeroConfigTest(TestWithServers):
 
         # Get the available interfaces and their domains
         self.get_device_info()
-        exp_iface = random.choice(list(self.interfaces.keys()))
+        exp_iface = random.choice(list(self.interfaces.keys())) #nosec
 
         # Configure the daos server
         self.setup_servers()
@@ -241,7 +242,6 @@ class ZeroConfigTest(TestWithServers):
                 "access_points": self.access_points}
         }
         self.start_agents(agent_groups)
-        self.write_string_to_logfile('"Test.name: ' + str(self) + '"')
         self.log.info("-" * 100)
 
         # Verify

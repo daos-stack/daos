@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2021 Intel Corporation.
+// (C) Copyright 2021-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 	"strings"
 	"unsafe"
 
@@ -87,7 +88,7 @@ func (cmd *containerBaseCmd) openContainer(openFlags C.uint) error {
 		defer freeString(cLabel)
 
 		cmd.log.Debugf("opening container: %s", cmd.contLabel)
-		rc = C.daos_cont_open2(cmd.cPoolHandle, cLabel, openFlags,
+		rc = C.daos_cont_open(cmd.cPoolHandle, cLabel, openFlags,
 			&cmd.cContHandle, &contInfo, nil)
 		if rc == 0 {
 			var err error
@@ -101,7 +102,7 @@ func (cmd *containerBaseCmd) openContainer(openFlags C.uint) error {
 		cmd.log.Debugf("opening container: %s", cmd.contUUID)
 		cUUIDstr := C.CString(cmd.contUUID.String())
 		defer freeString(cUUIDstr)
-		rc = C.daos_cont_open2(cmd.cPoolHandle, cUUIDstr,
+		rc = C.daos_cont_open(cmd.cPoolHandle, cUUIDstr,
 			openFlags, &cmd.cContHandle, nil, nil)
 	default:
 		return errors.New("no container UUID or label supplied")
@@ -110,9 +111,19 @@ func (cmd *containerBaseCmd) openContainer(openFlags C.uint) error {
 	return daosError(rc)
 }
 
-func (cmd *containerBaseCmd) closeContainer() error {
+func (cmd *containerBaseCmd) closeContainer() {
 	cmd.log.Debugf("closing container: %s", cmd.contUUID)
-	return daosError(C.daos_cont_close(cmd.cContHandle, nil))
+	// Hack for NLT fault injection testing: If the rc
+	// is -DER_NOMEM, retry once in order to actually
+	// shut down and release resources.
+	rc := C.daos_cont_close(cmd.cContHandle, nil)
+	if rc == -C.DER_NOMEM {
+		rc = C.daos_cont_close(cmd.cContHandle, nil)
+	}
+
+	if err := daosError(rc); err != nil {
+		cmd.log.Errorf("container close failed: %s", err)
+	}
 }
 
 func (cmd *containerBaseCmd) queryContainer() (*containerInfo, error) {
@@ -201,18 +212,6 @@ type containerCreateCmd struct {
 	User        string               `long:"user" short:"u" description:"user who will own the container (username@[domain])"`
 	Group       string               `long:"group" short:"g" description:"group who will own the container (group@[domain])"`
 	ContFlag    ContainerID          `long:"cont" short:"c" description:"container UUID (optional)"`
-	Args        struct {
-		Container ContainerID `positional-arg-name:"<container UUID (optional)>"`
-	} `positional-args:"yes"`
-}
-
-func (cmd *containerCreateCmd) getUserUUID() uuid.UUID {
-	for _, id := range []ContainerID{cmd.Args.Container, cmd.ContFlag} {
-		if id.HasUUID() {
-			return id.UUID
-		}
-	}
-	return uuid.Nil
 }
 
 func (cmd *containerCreateCmd) Execute(_ []string) (err error) {
@@ -222,11 +221,30 @@ func (cmd *containerCreateCmd) Execute(_ []string) (err error) {
 	}
 	defer deallocCmdArgs()
 
-	if cu := cmd.getUserUUID(); cu != uuid.Nil {
-		cmd.contUUID = cu
+	if cmd.ContFlag.HasUUID() {
+		cmd.contUUID = cmd.ContFlag.UUID
 		if err := copyUUID(&ap.c_uuid, cmd.contUUID); err != nil {
 			return err
 		}
+	}
+
+	if cmd.PoolID().Empty() {
+		if cmd.Path == "" {
+			return errors.New("no pool ID or dfs path supplied")
+		}
+
+		ap.path = C.CString(cmd.Path)
+		rc := C.resolve_duns_pool(ap)
+		freeString(ap.path)
+		if err := daosError(rc); err != nil {
+			return errors.Wrapf(err, "failed to resolve pool id from %q; use --pool <id>", filepath.Dir(cmd.Path))
+		}
+
+		pu, err := uuidFromC(ap.p_uuid)
+		if err != nil {
+			return err
+		}
+		cmd.poolBaseCmd.Args.Pool.UUID = pu
 	}
 
 	disconnectPool, err := cmd.connectPool(C.DAOS_PC_RW, ap)
@@ -417,11 +435,13 @@ func (cmd *existingContainerCmd) resolveAndConnect(contFlags C.uint, ap *C.struc
 	}
 
 	if err = cmd.openContainer(contFlags); err != nil {
+		cleanupPool()
 		return
 	}
 
 	if ap != nil {
 		if err = copyUUID(&ap.c_uuid, cmd.contUUID); err != nil {
+			cleanupPool()
 			return
 		}
 		ap.cont = cmd.cContHandle
@@ -482,6 +502,8 @@ func listContainers(hdl C.daos_handle_t) ([]*ContainerID, error) {
 		out[i].UUID = uuid.Must(uuidFromC(dpciSlice[i].pci_uuid))
 		out[i].Label = C.GoString(&dpciSlice[i].pci_label[0])
 	}
+
+	C.free(unsafe.Pointer(cConts))
 
 	return out, nil
 }
@@ -575,12 +597,12 @@ func (cmd *containerDestroyCmd) Execute(_ []string) error {
 	case cmd.ContainerID().HasUUID():
 		cUUIDstr := C.CString(cmd.contUUID.String())
 		defer freeString(cUUIDstr)
-		rc = C.daos_cont_destroy2(cmd.cPoolHandle, cUUIDstr,
+		rc = C.daos_cont_destroy(cmd.cPoolHandle, cUUIDstr,
 			goBool2int(cmd.Force), nil)
 	case cmd.ContainerID().Label != "":
 		cLabel := C.CString(cmd.ContainerID().Label)
 		defer freeString(cLabel)
-		rc = C.daos_cont_destroy2(cmd.cPoolHandle,
+		rc = C.daos_cont_destroy(cmd.cPoolHandle,
 			cLabel, goBool2int(cmd.Force), nil)
 	default:
 		return errors.New("no UUID or label or path for container")

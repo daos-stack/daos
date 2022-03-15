@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2018-2021 Intel Corporation.
+ * (C) Copyright 2018-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -342,9 +342,9 @@ daos_test_cb_add(test_arg_t *arg, struct test_op_record *op,
 		 char **rbuf, daos_size_t *rbuf_size)
 {
 	print_message("add rank %u\n", op->ae_arg.ua_rank);
-	test_rebuild_wait(&arg, 1);
 	daos_reint_server(arg->pool.pool_uuid, arg->group, arg->dmg_config,
 			  op->ae_arg.ua_rank);
+	test_rebuild_wait(&arg, 1);
 	return 0;
 }
 
@@ -364,6 +364,9 @@ daos_test_cb_exclude(test_arg_t *arg, struct test_op_record *op,
 				    arg->dmg_config,
 				    op->ae_arg.ua_rank, op->ae_arg.ua_tgt);
 	}
+
+	test_rebuild_wait(&arg, 1);
+	daos_cont_status_clear(arg->coh, NULL);
 	return 0;
 }
 
@@ -403,7 +406,7 @@ static int
 test_cb_noop(test_arg_t *arg, struct test_op_record *op,
 	     char **rbuf, daos_size_t *rbuf_size)
 {
-	return -DER_NOSYS;
+	return 0;
 }
 
 struct test_op_dict op_dict[] = {
@@ -474,8 +477,9 @@ squeeze_spaces(char *line)
 	char	*current = line;
 	int	 spacing = 0;
 	int	 leading_space = 1;
+	int	 i;
 
-	for (; line && *line != '\n'; line++) {
+	for (i = 0; line && *line != '\n' && i < CMD_LINE_LEN_MAX - 1; line++, i++) {
 		if (isspace(*line)) {
 			if (!spacing && !leading_space) {
 				*current++ = *line;
@@ -494,13 +498,16 @@ static int
 cmd_line_get(FILE *fp, char *line)
 {
 	char	*p;
+	int	 i;
 
 	D_ASSERT(line != NULL && fp != NULL);
 	do {
 		if (fgets(line, CMD_LINE_LEN_MAX - 1, fp) == NULL)
 			return -DER_ENOENT;
-		for (p = line; isspace(*p); p++)
+		for (p = line, i = 0; isspace(*p) && i < CMD_LINE_LEN_MAX - 1; p++, i++)
 			;
+		if (i == CMD_LINE_LEN_MAX - 1)
+			continue;
 		if (*p != '\0' && *p != '#' && *p != '\n')
 			break;
 	} while (1);
@@ -1158,9 +1165,9 @@ static int
 cmd_line_parse(test_arg_t *arg, const char *cmd_line,
 	       struct test_op_record **op)
 {
-	char			 cmd[CMD_LINE_LEN_MAX] = { 0 };
+	char			 cmd[CMD_LINE_LEN_MAX + 1] = { 0 };
 	struct test_op_record	*op_rec = NULL;
-	char			*argv[CMD_LINE_ARGC_MAX] = { 0 };
+	char			*argv[CMD_LINE_ARGC_MAX + 1] = { 0 };
 	char			*dkey = NULL;
 	char			*akey = NULL;
 	size_t			 cmd_size;
@@ -1214,15 +1221,13 @@ cmd_line_parse(test_arg_t *arg, const char *cmd_line,
 			arg->eio_args.op_ec = 1;
 			if ((argc == 3 && strcmp(argv[2], "OC_EC_2P2G1") == 0)
 			    || argc == 2) {
-				print_message("EC obj class "
-					      "DAOS_OC_EC_K2P2_L32K\n");
-				dts_ec_obj_class = DAOS_OC_EC_K2P2_L32K;
+				print_message("EC obj class OC_EC_2P2G1\n");
+				dts_ec_obj_class = OC_EC_2P2G1;
 				dts_ec_grp_size = 4;
 			} else if (argc == 3 &&
 				   strcmp(argv[2], "OC_EC_4P2G1") == 0) {
-				print_message("EC obj class "
-					      "DAOS_OC_EC_K4P2_L32K\n");
-				dts_ec_obj_class = DAOS_OC_EC_K4P2_L32K;
+				print_message("EC obj class OC_EC_4P2G1\n");
+				dts_ec_obj_class = OC_EC_4P2G1;
 				dts_ec_grp_size = 6;
 			} else {
 				print_message("bad parameter");
@@ -1257,8 +1262,7 @@ cmd_line_parse(test_arg_t *arg, const char *cmd_line,
 					      shard[i]);
 			}
 			fail_val = daos_shard_fail_value(shard, argc - 2);
-			arg->fail_loc = DAOS_FAIL_SHARD_FETCH |
-					DAOS_FAIL_ALWAYS;
+			arg->fail_loc = DAOS_FAIL_SHARD_OPEN | DAOS_FAIL_ALWAYS;
 			arg->fail_value = fail_val;
 		} else if (strcmp(argv[1], "clear") == 0) {
 			arg->fail_loc = 0;
@@ -1475,6 +1479,8 @@ io_conf_run(test_arg_t *arg, const char *io_conf)
 		return daos_errno2der(errno);
 	}
 
+	int line_nr = 0;
+
 	do {
 		size_t	cmd_size;
 
@@ -1497,6 +1503,7 @@ io_conf_run(test_arg_t *arg, const char *io_conf)
 
 		if (op != NULL) {
 			op->snap_epoch = &sn_epoch[op->tx];
+			print_message("will run cmd_line %s, line_nr %d\n", cmd_line, ++line_nr);
 			rc = cmd_line_run(arg, op);
 			if (rc) {
 				print_message("run cmd_line %s failed, "
@@ -1557,15 +1564,20 @@ epoch_io_setup(void **state)
 	struct epoch_io_args	*eio_arg;
 	char			*tmp_str;
 	int			 rc;
+	unsigned int		 orig_dt_cell_size;
 
+	orig_dt_cell_size = dt_cell_size;
+	dt_cell_size = 1 << 15;
 	obj_setup(state);
+	dt_cell_size = orig_dt_cell_size;
 	arg = *state;
+
 	eio_arg = &arg->eio_args;
 	D_INIT_LIST_HEAD(&eio_arg->op_list);
 	eio_arg->op_lvl = TEST_LVL_DAOS;
 	eio_arg->op_iod_size = 1;
 	eio_arg->op_oid = daos_test_oid_gen(arg->coh, dts_obj_class, 0, 0,
-				      arg->myrank);
+					    arg->myrank);
 
 	/* generate the temporary IO dir for epoch IO test */
 	if (test_io_dir == NULL) {

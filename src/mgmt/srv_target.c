@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2021 Intel Corporation.
+ * (C) Copyright 2016-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -161,6 +161,7 @@ subtree_destroy(const char *path)
 
 struct tgt_destroy_args {
 	struct d_uuid		 tda_id;
+	struct dss_xstream	*tda_dx;
 	char			*tda_path;
 	int			 tda_rc;
 };
@@ -504,6 +505,8 @@ tgt_vos_preallocate(uuid_t uuid, daos_size_t scm_size, int tgt_nr)
 			break;
 		}
 
+		/** Align to 4K or locking the region based on the size will fail */
+		scm_size = D_ALIGNUP(scm_size, 1ULL << 12);
 		/**
 		 * Pre-allocate blocks for vos files in order to provide
 		 * consistent performance and avoid entering into the backend
@@ -545,7 +548,6 @@ ds_mgmt_tgt_create_post_reply(crt_rpc_t *rpc, void *priv)
 	struct mgmt_tgt_create_out	*tc_out;
 
 	tc_out = crt_reply_get(rpc);
-	D_FREE(tc_out->tc_tgt_uuids.ca_arrays);
 	D_FREE(tc_out->tc_ranks.ca_arrays);
 
 	return 0;
@@ -557,70 +559,52 @@ ds_mgmt_tgt_create_aggregator(crt_rpc_t *source, crt_rpc_t *result,
 {
 	struct mgmt_tgt_create_out	*tc_out;
 	struct mgmt_tgt_create_out	*ret_out;
-	uuid_t				*tc_uuids;
 	d_rank_t			*tc_ranks;
-	unsigned int			tc_uuids_nr;
-	uuid_t				*ret_uuids;
+	unsigned int			tc_ranks_nr;
 	d_rank_t			*ret_ranks;
-	unsigned int			ret_uuids_nr;
-	uuid_t				*new_uuids;
+	unsigned int			ret_ranks_nr;
 	d_rank_t			*new_ranks;
-	unsigned int			new_uuids_nr;
+	unsigned int			new_ranks_nr;
 	int				i;
 
 	tc_out = crt_reply_get(source);
-	tc_uuids_nr = tc_out->tc_tgt_uuids.ca_count;
-	tc_uuids = tc_out->tc_tgt_uuids.ca_arrays;
 	tc_ranks = tc_out->tc_ranks.ca_arrays;
+	tc_ranks_nr = tc_out->tc_ranks.ca_count;
 
 	ret_out = crt_reply_get(result);
-	ret_uuids_nr = ret_out->tc_tgt_uuids.ca_count;
-	ret_uuids = ret_out->tc_tgt_uuids.ca_arrays;
 	ret_ranks = ret_out->tc_ranks.ca_arrays;
+	ret_ranks_nr = ret_out->tc_ranks.ca_count;
 
 	if (tc_out->tc_rc != 0)
 		ret_out->tc_rc = tc_out->tc_rc;
-	if (tc_uuids_nr == 0)
+	if (tc_ranks_nr == 0)
 		return 0;
 
-	new_uuids_nr = ret_uuids_nr + tc_uuids_nr;
+	new_ranks_nr = ret_ranks_nr + tc_ranks_nr;
 
-	/* Append tc_uuids to ret_uuids */
-	D_ALLOC_ARRAY(new_uuids, new_uuids_nr);
-	if (new_uuids == NULL)
+	D_ALLOC_ARRAY(new_ranks, new_ranks_nr);
+	if (new_ranks == NULL)
 		return -DER_NOMEM;
 
-	D_ALLOC_ARRAY(new_ranks, new_uuids_nr);
-	if (new_ranks == NULL) {
-		D_FREE(new_uuids);
-		return -DER_NOMEM;
-	}
-
-	for (i = 0; i < new_uuids_nr; i++) {
-		if (i < ret_uuids_nr) {
-			uuid_copy(new_uuids[i], ret_uuids[i]);
+	for (i = 0; i < new_ranks_nr; i++) {
+		if (i < ret_ranks_nr)
 			new_ranks[i] = ret_ranks[i];
-		} else {
-			uuid_copy(new_uuids[i], tc_uuids[i - ret_uuids_nr]);
-			new_ranks[i] = tc_ranks[i - ret_uuids_nr];
-		}
+		else
+			new_ranks[i] = tc_ranks[i - ret_ranks_nr];
 	}
 
-	D_FREE(ret_uuids);
 	D_FREE(ret_ranks);
 
-	ret_out->tc_tgt_uuids.ca_arrays = new_uuids;
-	ret_out->tc_tgt_uuids.ca_count = new_uuids_nr;
 	ret_out->tc_ranks.ca_arrays = new_ranks;
-	ret_out->tc_ranks.ca_count = new_uuids_nr;
+	ret_out->tc_ranks.ca_count = new_ranks_nr;
 	return 0;
 }
 
 struct tgt_create_args {
-	uuid_t			 tca_tgt_uuid;
 	char			*tca_newborn;
 	char			*tca_path;
 	struct ds_pooltgts_rec	*tca_ptrec;
+	struct dss_xstream	*tca_dx;
 	daos_size_t		 tca_scm_size;
 	daos_size_t		 tca_nvme_size;
 	int			 tca_rc;
@@ -632,6 +616,8 @@ tgt_create_preallocate(void *arg)
 	struct tgt_create_args	*tca = arg;
 	int			 rc;
 
+	(void)dss_xstream_set_affinity(tca->tca_dx);
+
 	/** generate path to the target directory */
 	rc = ds_mgmt_tgt_file(tca->tca_ptrec->dptr_uuid, NULL, NULL,
 			      &tca->tca_path);
@@ -642,8 +628,6 @@ tgt_create_preallocate(void *arg)
 	rc = access(tca->tca_path, F_OK);
 	if (rc >= 0) {
 		/** target already exists, let's reuse it for idempotence */
-		/** TODO: fetch tgt uuid from existing DSM pool */
-		uuid_generate(tca->tca_tgt_uuid);
 
 		/**
 		 * flush again in case the previous one in tgt_create()
@@ -679,14 +663,6 @@ tgt_create_preallocate(void *arg)
 					     1 << 24), dss_tgt_nr);
 		if (rc)
 			goto out;
-
-		/** initialize DAOS-M target and fetch uuid */
-		rc = ds_pool_create(tca->tca_ptrec->dptr_uuid, tca->tca_newborn,
-				    tca->tca_tgt_uuid);
-		if (rc) {
-			D_ERROR("ds_pool_create failed: "DF_RC"\n", DP_RC(rc));
-			goto out;
-		}
 	} else {
 		rc = daos_errno2der(errno);
 	}
@@ -707,7 +683,6 @@ ds_mgmt_hdlr_tgt_create(crt_rpc_t *tc_req)
 	struct mgmt_tgt_create_out	*tc_out;
 	struct tgt_create_args		 tca = {0};
 	d_rank_t			*rank = NULL;
-	uuid_t				*tmp_tgt_uuid = NULL;
 	pthread_t			 thread;
 	bool				 canceled_thread = false;
 	int				 rc = 0;
@@ -749,6 +724,7 @@ ds_mgmt_hdlr_tgt_create(crt_rpc_t *tc_req)
 
 	tca.tca_scm_size  = tc_in->tc_scm_size;
 	tca.tca_nvme_size = tc_in->tc_nvme_size;
+	tca.tca_dx = dss_current_xstream();
 	rc = pthread_create(&thread, NULL, tgt_create_preallocate, &tca);
 	if (rc) {
 		rc = daos_errno2der(errno);
@@ -779,7 +755,6 @@ ds_mgmt_hdlr_tgt_create(crt_rpc_t *tc_req)
 		rc = pthread_tryjoin_np(thread, &res);
 		if (rc == 0) {
 			if (canceled_thread) {
-				D_ASSERT(res == PTHREAD_CANCELED);
 				D_DEBUG(DB_MGMT,
 					DF_UUID": tgt_create thread canceled\n",
 					DP_UUID(tc_in->tc_pool_uuid));
@@ -823,14 +798,6 @@ ds_mgmt_hdlr_tgt_create(crt_rpc_t *tc_req)
 		(void)dir_fsync(tca.tca_path);
 	}
 
-	D_ALLOC_PTR(tmp_tgt_uuid);
-	if (tmp_tgt_uuid == NULL)
-		D_GOTO(out, rc = -DER_NOMEM);
-
-	uuid_copy(*tmp_tgt_uuid, tca.tca_tgt_uuid);
-	tc_out->tc_tgt_uuids.ca_arrays = tmp_tgt_uuid;
-	tc_out->tc_tgt_uuids.ca_count  = 1;
-
 	D_ALLOC_PTR(rank);
 	if (rank == NULL)
 		D_GOTO(out, rc = -DER_NOMEM);
@@ -868,10 +835,8 @@ out_rec:
 out_reply:
 	tc_out->tc_rc = rc;
 	rc = crt_reply_send(tc_req);
-	if (rc) {
+	if (rc)
 		D_FREE(rank);
-		D_FREE(tmp_tgt_uuid);
-	}
 }
 
 static void *
@@ -880,6 +845,8 @@ tgt_destroy_cleanup(void *arg)
 	struct tgt_destroy_args	*tda = arg;
 	char			*zombie;
 	int			 rc;
+
+	(void)dss_xstream_set_affinity(tda->tda_dx);
 
 	/** move target directory to ZOMBIES */
 	rc = path_gen(tda->tda_id.uuid, zombies_path, NULL, NULL, &zombie);
@@ -928,8 +895,9 @@ tgt_destroy(uuid_t pool_uuid, char *path)
 	if (rc && rc != -DER_BUSY)
 		goto out;
 
-	tda.tda_path   = path;
-	tda.tda_rc     = rc;
+	tda.tda_path = path;
+	tda.tda_rc   = rc;
+	tda.tda_dx   = dss_current_xstream();
 	rc = pthread_create(&thread, NULL, tgt_destroy_cleanup, &tda);
 	if (rc) {
 		rc = daos_errno2der(errno);

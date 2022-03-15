@@ -31,6 +31,8 @@ struct crt_swim_membs {
 	struct crt_swim_target		*csm_target;
 	struct swim_context		*csm_ctx;
 	uint64_t			 csm_incarnation;
+	uint64_t			 csm_last_unpack_hlc;
+	uint64_t			 csm_alive_count;
 	int				 csm_crt_ctx_idx;
 	int				 csm_nglitches;
 	int				 csm_nmessages;

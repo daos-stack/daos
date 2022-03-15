@@ -1,6 +1,6 @@
 #!/usr/bin/python
 """
-  (C) Copyright 2020-2021 Intel Corporation.
+  (C) Copyright 2020-2022 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -11,8 +11,9 @@ import copy
 from osa_utils import OSAUtils
 from daos_utils import DaosCommand
 from dmg_utils import check_system_query_status
-from command_utils import CommandFailure
-from test_utils_pool import TestPool, LabelGenerator
+from exception_utils import CommandFailure
+from test_utils_pool import TestPool
+from test_utils_base import LabelGenerator
 from apricot import skipForTicket
 import queue
 
@@ -93,7 +94,7 @@ class OSAOfflineParallelTest(OSAUtils):
             oclass = self.ior_cmd.dfs_oclass.value
 
         # Exclude target : random two targets (target idx : 0-7)
-        n = random.randint(0, 6)
+        n = random.randint(0, 6) #nosec
         target_list.append(n)
         target_list.append(n+1)
         t_string = "{},{}".format(target_list[0], target_list[1])
@@ -196,7 +197,6 @@ class OSAOfflineParallelTest(OSAUtils):
             else:
                 self.assertTrue(pver_end >= 25,
                                 "Pool Version Error:  at the end")
-
 
         # Finally run IOR to read the data and perform daos_container_check
         for val in range(0, num_pool):

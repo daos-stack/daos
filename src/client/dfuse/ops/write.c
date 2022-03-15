@@ -29,9 +29,9 @@ dfuse_cb_write(fuse_req_t req, fuse_ino_t ino, struct fuse_bufvec *bufv,
 	size_t				len = fuse_buf_size(bufv);
 	struct fuse_bufvec		ibuf = FUSE_BUFVEC_INIT(len);
 
-	DFUSE_TRA_INFO(oh, "%#zx-%#zx requested flags %#x pid=%d",
-		       position, position + len - 1,
-		       bufv->buf[0].flags, fc->pid);
+	DFUSE_TRA_DEBUG(oh, "%#zx-%#zx requested flags %#x pid=%d",
+			position, position + len - 1,
+			bufv->buf[0].flags, fc->pid);
 
 	D_ALLOC_PTR(ev);
 	if (ev == NULL)
@@ -90,7 +90,7 @@ dfuse_cb_write(fuse_req_t req, fuse_ino_t ino, struct fuse_bufvec *bufv,
 	rc = dfs_write(oh->doh_dfs, oh->doh_obj, &ev->de_sgl,
 		       position, &ev->de_ev);
 	if (rc != 0)
-		D_GOTO(err, 0);
+		D_GOTO(err, rc);
 
 	/* Send a message to the async thread to wake it up and poll for events
 	 */

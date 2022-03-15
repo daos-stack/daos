@@ -1,6 +1,6 @@
 #!/usr/bin/python
 """
-  (C) Copyright 2020-2021 Intel Corporation.
+  (C) Copyright 2020-2022 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -44,7 +44,7 @@ class RebuildTestBase(TestWithServers):
         self.inputs.get_params(self)
 
         # Get the number of targets per engine for pool info calculations
-        self.targets = self.params.get("targets", "/run/server_config/*")
+        self.targets = self.server_managers[0].get_config_value("targets")
 
         self.server_count = len(self.hostlist_servers)
 
@@ -65,7 +65,7 @@ class RebuildTestBase(TestWithServers):
             "pi_ndisabled": 0,
         }
         self.rebuild_checks = {
-            "rs_done": 1,
+            "rs_state": 1,
             "rs_obj_nr": 0,
             "rs_rec_nr": 0,
             "rs_errno": 0,

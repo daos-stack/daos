@@ -1,6 +1,6 @@
 #!/usr/bin/python3
 '''
-  (C) Copyright 2018-2021 Intel Corporation.
+  (C) Copyright 2018-2022 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
@@ -63,14 +63,14 @@ class CreateManyDkeys(TestWithServers):
             val = ioreq.single_fetch(c_dkey,
                                      c_akey,
                                      len(the_data)+1)
-
-            if the_data != (repr(val.value)[1:-1]):
+            exp_value = val.value.decode("utf-8")
+            if the_data != exp_value:
                 self.fail("ERROR: Data mismatch for dkey = {0}, akey={1}, "
                           "Expected Value={2} and Received Value={3}\n"
                           .format("dkey {0}".format(key),
                                   "akey {0}".format(key),
                                   the_data,
-                                  repr(val.value)[1:-1]))
+                                  exp_value))
 
             if key > last_key:
                 print("veried: {}".format(key))
@@ -89,15 +89,17 @@ class CreateManyDkeys(TestWithServers):
         Test Description: Test many of dkeys in same object.
         Use Cases: 1. large key counts
                    2. space reclamation after destroy
-        :avocado: tags=all,full,small,object,many_dkeys
 
+        :avocado: tags=all,full_regression
+        :avocado: tags=small
+        :avocado: tags=object
+        :avocado: tags=many_dkeys
         """
         self.prepare_pool()
         no_of_dkeys = self.params.get("number_of_dkeys", '/run/dkeys/')
 
         # write a lot of individual data items, verify them, then destroy
         self.write_a_bunch_of_values(no_of_dkeys)
-
 
         # do it again, which should verify the first container
         # was truly destroyed because a second round won't fit otherwise

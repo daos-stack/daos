@@ -145,7 +145,8 @@ static int self_test_init(char *dest_name, crt_context_t *crt_ctx,
 			return ret;
 		}
 	} else {
-		while (attach_retries-- > 0) {
+		/* DAOS-8839: Do not limit retries, instead rely on global test timeout */
+		while (1) {
 			ret = crt_group_attach(dest_name, srv_grp);
 			if (ret == 0)
 				break;

@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2017-2021 Intel Corporation.
+ * (C) Copyright 2017-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -435,9 +435,7 @@ rdb_start(const char *path, const uuid_t uuid, struct rdb_cbs *cbs, void *arg,
 	if (rc != 0)
 		goto err_mc;
 
-	D_DEBUG(DB_MD, DF_DB": started db %s %p with %u replicas\n",
-		DP_DB(*dbp), path, *dbp,
-		(*dbp)->d_replicas == NULL ? 0 : (*dbp)->d_replicas->rl_nr);
+	D_DEBUG(DB_MD, DF_DB": started db %s %p\n", DP_DB(*dbp), path, *dbp);
 	return 0;
 
 err_mc:
@@ -483,16 +481,31 @@ rdb_stop(struct rdb *db)
 int
 rdb_add_replicas(struct rdb *db, d_rank_list_t *replicas)
 {
-	int i;
-	int rc = -DER_INVAL;
+	int	i;
+	int	rc;
 
 	D_DEBUG(DB_MD, DF_DB": Adding %d replicas\n",
 		DP_DB(db), replicas->rl_nr);
+
+	ABT_mutex_lock(db->d_raft_mutex);
+
+	rc = rdb_raft_wait_applied(db, db->d_debut, raft_get_current_term(db->d_raft));
+	if (rc != 0) {
+		ABT_mutex_unlock(db->d_raft_mutex);
+		return rc;
+	}
+
+	rc = -DER_INVAL;
 	for (i = 0; i < replicas->rl_nr; ++i) {
 		rc = rdb_raft_add_replica(db, replicas->rl_ranks[i]);
-		if (rc != 0)
+		if (rc != 0) {
+			D_ERROR(DF_DB": failed to add rank %u: "DF_RC"\n", DP_DB(db),
+				replicas->rl_ranks[i], DP_RC(rc));
 			break;
+		}
 	}
+
+	ABT_mutex_unlock(db->d_raft_mutex);
 
 	/* Update list to only contain ranks which could not be added. */
 	replicas->rl_nr -= i;
@@ -505,16 +518,31 @@ rdb_add_replicas(struct rdb *db, d_rank_list_t *replicas)
 int
 rdb_remove_replicas(struct rdb *db, d_rank_list_t *replicas)
 {
-	int i;
-	int rc = -DER_INVAL;
+	int	i;
+	int	rc;
 
 	D_DEBUG(DB_MD, DF_DB": Removing %d replicas\n",
 		DP_DB(db), replicas->rl_nr);
+
+	ABT_mutex_lock(db->d_raft_mutex);
+
+	rc = rdb_raft_wait_applied(db, db->d_debut, raft_get_current_term(db->d_raft));
+	if (rc != 0) {
+		ABT_mutex_unlock(db->d_raft_mutex);
+		return rc;
+	}
+
+	rc = -DER_INVAL;
 	for (i = 0; i < replicas->rl_nr; ++i) {
 		rc = rdb_raft_remove_replica(db, replicas->rl_ranks[i]);
-		if (rc != 0)
+		if (rc != 0) {
+			D_ERROR(DF_DB": failed to remove rank %u: "DF_RC"\n", DP_DB(db),
+				replicas->rl_ranks[i], DP_RC(rc));
 			break;
+		}
 	}
+
+	ABT_mutex_unlock(db->d_raft_mutex);
 
 	/* Update list to only contain ranks which could not be removed. */
 	replicas->rl_nr -= i;
@@ -540,7 +568,11 @@ rdb_resign(struct rdb *db, uint64_t term)
 }
 
 /**
- * Call for a new election (campaign to become leader).
+ * Call a new election (campaign to become leader). Must be a voting replica.
+ *
+ * \param[in]	db	database
+ *
+ * \retval -DER_INVAL	not a voting replica
  */
 int
 rdb_campaign(struct rdb *db)
@@ -608,17 +640,5 @@ rdb_get_leader(struct rdb *db, uint64_t *term, d_rank_t *rank)
 int
 rdb_get_ranks(struct rdb *db, d_rank_list_t **ranksp)
 {
-	return daos_rank_list_dup(ranksp, db->d_replicas);
-}
-
-/**
- * Get the UUID of the database.
- *
- * \param[in]	db	database
- * \param[out]	uuid	UUID
- */
-
-void rdb_get_uuid(struct rdb *db, uuid_t uuid)
-{
-	uuid_copy(uuid, db->d_uuid);
+	return rdb_raft_get_ranks(db, ranksp);
 }

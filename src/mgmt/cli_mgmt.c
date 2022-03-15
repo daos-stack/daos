@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2021 Intel Corporation.
+ * (C) Copyright 2016-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -380,22 +380,29 @@ int dc_mgmt_net_cfg(const char *name)
 	}
 
 	ofi_interface = getenv("OFI_INTERFACE");
+	ofi_domain = getenv("OFI_DOMAIN");
 	if (!ofi_interface) {
 		rc = setenv("OFI_INTERFACE", info.interface, 1);
 		if (rc != 0)
 			D_GOTO(cleanup, rc = d_errno2der(errno));
-	} else {
-		D_INFO("Using client provided OFI_INTERFACE: %s\n",
-			ofi_interface);
-	}
 
-	ofi_domain = getenv("OFI_DOMAIN");
-	if (!ofi_domain) {
+		/*
+		 * If we use the agent as the source, client env shouldn't be allowed to override
+		 * the domain. Otherwise we could get a mismatch between interface and domain.
+		 */
+		if (ofi_domain)
+			D_WARN("Ignoring OFI_DOMAIN '%s' because OFI_INTERFACE is not set; using "
+			       "automatic configuration instead\n", ofi_domain);
+
 		rc = setenv("OFI_DOMAIN", info.domain, 1);
 		if (rc != 0)
 			D_GOTO(cleanup, rc = d_errno2der(errno));
 	} else {
-		D_INFO("Using client provided OFI_DOMAIN: %s\n", ofi_domain);
+		D_INFO("Using client provided OFI_INTERFACE: %s\n", ofi_interface);
+
+		/* If the client env didn't provide a domain, we can assume we don't need one. */
+		if (ofi_domain)
+			D_INFO("Using client provided OFI_DOMAIN: %s\n", ofi_domain);
 	}
 
 	D_DEBUG(DB_MGMT,
@@ -414,7 +421,6 @@ cleanup:
 
 static int send_monitor_request(struct dc_pool *pool, int request_type)
 {
-	struct drpc_alloc	 alloc = PROTO_ALLOCATOR_INIT(alloc);
 	struct drpc		 *ctx;
 	Mgmt__PoolMonitorReq	 req = MGMT__POOL_MONITOR_REQ__INIT;
 	uint8_t			 *reqb;
@@ -449,8 +455,7 @@ static int send_monitor_request(struct dc_pool *pool, int request_type)
 	}
 	mgmt__pool_monitor_req__pack(&req, reqb);
 
-	rc = drpc_call_create(ctx, DRPC_MODULE_MGMT,
-			      request_type, &dreq);
+	rc = drpc_call_create(ctx, DRPC_MODULE_MGMT, request_type, &dreq);
 	if (rc != 0) {
 		D_FREE(reqb);
 		goto out_ctx;
@@ -503,7 +508,6 @@ dc_mgmt_notify_pool_connect(struct dc_pool *pool) {
 int
 dc_mgmt_notify_exit(void)
 {
-	struct drpc_alloc	 alloc = PROTO_ALLOCATOR_INIT(alloc);
 	struct drpc		 *ctx;
 	Drpc__Call		 *dreq;
 	Drpc__Response		 *dresp;
@@ -812,7 +816,7 @@ dc_mgmt_pool_find(struct dc_mgmt_sys *sys, const char *label, uuid_t puuid,
 	 */
 	ms_ranks = sys->sy_info.ms_ranks;
 	D_ASSERT(ms_ranks->rl_nr > 0);
-	idx = rand() % ms_ranks->rl_nr;
+	idx = d_rand() % ms_ranks->rl_nr;
 	ctx = daos_get_crt_ctx();
 	opc = DAOS_RPC_OPCODE(MGMT_POOL_FIND, DAOS_MGMT_MODULE,
 			      DAOS_MGMT_VERSION);
@@ -820,6 +824,8 @@ dc_mgmt_pool_find(struct dc_mgmt_sys *sys, const char *label, uuid_t puuid,
 	srv_ep.ep_grp = sys->sy_group;
 	srv_ep.ep_tag = daos_rpc_tag(DAOS_REQ_MGMT, 0);
 	for (i = 0 ; i < ms_ranks->rl_nr; i++) {
+		uint32_t	timeout;
+
 		srv_ep.ep_rank = ms_ranks->rl_ranks[idx];
 		rpc = NULL;
 		rc = crt_req_create(ctx, &srv_ep, opc, &rpc);
@@ -829,6 +835,12 @@ dc_mgmt_pool_find(struct dc_mgmt_sys *sys, const char *label, uuid_t puuid,
 			idx = (idx + 1) % ms_ranks->rl_nr;
 			continue;
 		}
+
+		/* Shorten the timeout (but not lower than 10 seconds) to speed up pool find */
+		rc = crt_req_get_timeout(rpc, &timeout);
+		D_ASSERTF(rc == 0, "crt_req_get_timeout: "DF_RC"\n", DP_RC(rc));
+		rc = crt_req_set_timeout(rpc, max(10, timeout / 4));
+		D_ASSERTF(rc == 0, "crt_req_set_timeout: "DF_RC"\n", DP_RC(rc));
 
 		rpc_in = NULL;
 		rpc_in = crt_req_get(rpc);
@@ -924,7 +936,11 @@ dc_mgmt_init()
 void
 dc_mgmt_fini()
 {
-	daos_rpc_unregister(&mgmt_proto_fmt);
+	int rc;
+
+	rc = daos_rpc_unregister(&mgmt_proto_fmt);
+	if (rc != 0)
+		D_ERROR("failed to unregister mgmt RPCs: "DF_RC"\n", DP_RC(rc));
 }
 
 int dc2_mgmt_svc_rip(tse_task_t *task)

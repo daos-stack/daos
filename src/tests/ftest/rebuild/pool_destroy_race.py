@@ -1,6 +1,6 @@
 #!/usr/bin/python3
 """
-  (C) Copyright 2018-2021 Intel Corporation.
+  (C) Copyright 2018-2022 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -31,7 +31,7 @@ class RbldPoolDestroyWithIO(IorTestBase):
           Perform io using ior with RP_3GX replication.
           Kill one of the ranks and trigger rebuild.
           Destroy Pool during rebuild.
-          Re-create pool on reamining ranks.
+          Re-create pool on remaining ranks.
 
         :avocado: tags=all,pr,hw
         :avocado: tags=medium,ib2
@@ -59,7 +59,7 @@ class RbldPoolDestroyWithIO(IorTestBase):
             "Invalid pool information detected before rebuild")
 
         self.assertTrue(
-            self.pool.check_rebuild_status(rs_errno=0, rs_done=1,
+            self.pool.check_rebuild_status(rs_errno=0, rs_state=1,
                                            rs_obj_nr=0, rs_rec_nr=0),
             "Invalid pool rebuild info detected before rebuild")
 
@@ -68,8 +68,8 @@ class RbldPoolDestroyWithIO(IorTestBase):
             self.log.info("Starting ior run number %s", run)
             self.run_ior_with_pool()
 
-        self.log.info("Starting rebuild by killing rank %s", rank)
         # Kill the server and trigger rebuild
+        self.log.info("Starting rebuild by killing rank %s", rank)
         self.server_managers[0].stop_ranks([rank], self.d_log, force=True)
 
         # Wait for rebuild to start. If True just wait for rebuild to start,

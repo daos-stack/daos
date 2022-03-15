@@ -5,11 +5,11 @@ hosts:
     - server-C
     - server-D
     - server-E
+    - server-F
+    - server-G
   test_clients:
     - client-F
-    - client-G
-    - client-H
-timeout: 480 
+timeout: 420
 server_config:
   name: daos_server
   servers:
@@ -33,26 +33,22 @@ mdtest:
     dcp: 30
   api: DFS
   test_dir: "/"
-  iteration: 1
   dfs_destroy: False
   manager: "MPICH"
   mux_dataset: !mux
-    many_files:                # total 50K files for dcp
-      num_of_files_dirs: 1667
+    many_files:                # total 15K files for dcp
+      num_of_files_dirs: 500
       mdtest_flags:
         - "-F -C"
         - "-F -E"
-    many_files_and_dirs:       # total 40K files and 40K dirs for dcp
-      num_of_files_dirs: 1667
+    many_files_and_dirs:       # total 15K files and 15K dirs for dcp
+      num_of_files_dirs: 500
       mdtest_flags:
         - "-C"
         - "-E"
       depth: 4
       branching_factor: 4
   bytes: 4096
-dfuse:
-  mount_dir: "/tmp/daos_dfuse/"
-  disable_caching: True
 dcp:
   client_processes:
     np: 16

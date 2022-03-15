@@ -7,7 +7,7 @@
   <parent>
     <groupId>io.daos</groupId>
     <artifactId>daos-java-root</artifactId>
-    <version>1.2.1-SNAPSHOT</version>
+    <version>2.2.0-SNAPSHOT</version>
   </parent>
 
   <groupId>io.daos</groupId>
@@ -36,7 +36,7 @@
     <dependency>
       <groupId>com.google.protobuf</groupId>
       <artifactId>protobuf-java</artifactId>
-      <version>3.11.4</version>
+      <version>3.16.1</version>
     </dependency>
     <dependency>
       <groupId>io.netty</groupId>
@@ -141,18 +141,14 @@
             <configuration>
               <tasks>
                 <mkdir dir="${native.build.path}"/>
-                <exec executable="sh" outputproperty="java-home" failonerror="true">
-                  <arg value="./find_java_home.sh"/>
-                </exec>
+                <exec executable="./find_java_home.sh" outputproperty="java-home" failonerror="true"/>
                 <echo message="Java home is ${java-home}" />
-                <exec executable="bash" outputproperty="sl-prefix" failonerror="true">
-                  <arg value="./find_build_paths.sh"/>
+                <exec executable="./find_build_paths.sh" outputproperty="sl-prefix" failonerror="true">
                   <arg value="${daos.install.path}"/>
                   <arg value="SL_PREFIX"/>
                 </exec>
                 <echo message="SL_PREFIX is ${sl-prefix}" />
-                <exec executable="bash" outputproperty="sl-protobufc-prefix" failonerror="true">
-                  <arg value="./find_build_paths.sh"/>
+                <exec executable="./find_build_paths.sh" outputproperty="sl-protobufc-prefix" failonerror="true">
                   <arg value="${daos.install.path}"/>
                   <arg value="SL_PROTOBUFC_PREFIX"/>
                 </exec>
@@ -174,6 +170,7 @@
                   <arg value="-c"/>
                   <arg value="-fPIC"/>
                   <arg value="--std=gnu99"/>
+                  <arg value="-Werror"/>
                 </exec>
                 <exec dir="${native.build.path}"
                       failonerror="true"
@@ -189,6 +186,7 @@
                   <arg value="-c"/>
                   <arg value="-fPIC"/>
                   <arg value="--std=gnu99"/>
+                  <arg value="-Werror"/>
                 </exec>
                 <exec dir="${native.build.path}"
                       failonerror="true"
@@ -205,6 +203,7 @@
                   <arg value="-c"/>
                   <arg value="-fPIC"/>
                   <arg value="--std=gnu99"/>
+                  <arg value="-Werror"/>
                 </exec>
                 <exec dir="${native.build.path}"
                       failonerror="true"
@@ -221,6 +220,7 @@
                   <arg value="-c"/>
                   <arg value="-fPIC"/>
                   <arg value="--std=gnu99"/>
+                  <arg value="-Werror"/>
                 </exec>
                 <exec dir="${native.build.path}"
                       failonerror="true"

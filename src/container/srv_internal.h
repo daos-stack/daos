@@ -65,9 +65,10 @@ struct ec_eph {
 struct cont_ec_agg {
 	uuid_t			ea_cont_uuid;
 	daos_epoch_t		ea_current_eph;
-	int			ea_servers_num;
 	struct ec_eph		*ea_server_ephs;
 	d_list_t		ea_list;
+	int			ea_servers_num;
+	uint32_t		ea_deleted:1;
 };
 
 /*
@@ -139,6 +140,8 @@ struct cont_iv_prop {
 	uint64_t	cip_compress;
 	uint64_t	cip_encrypt;
 	uint64_t	cip_ec_cell_sz;
+	uint32_t	cip_ec_pda;
+	uint32_t	cip_rp_pda;
 	struct daos_prop_co_roots	cip_roots;
 	struct daos_co_status		cip_co_status;
 	/* MUST be the last member */

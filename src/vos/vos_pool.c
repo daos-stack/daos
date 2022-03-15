@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2021 Intel Corporation.
+ * (C) Copyright 2016-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -20,12 +20,17 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <sys/mman.h>
+#include <sys/time.h>
+#include <sys/resource.h>
 #include <vos_layout.h>
 #include <vos_internal.h>
 #include <errno.h>
 #include <unistd.h>
 #include <string.h>
 #include <fcntl.h>
+
+#include <daos_pool.h>
+#include <daos_srv/policy.h>
 
 /* NB: None of pmemobj_create/open/close is thread-safe */
 pthread_mutex_t vos_pmemobj_lock = PTHREAD_MUTEX_INITIALIZER;
@@ -140,6 +145,15 @@ pool_hop_free(struct d_ulink *hlink)
 	if (daos_handle_is_valid(pool->vp_cont_th))
 		dbtree_close(pool->vp_cont_th);
 
+	if (pool->vp_size != 0) {
+		rc = munlock((void *)pool->vp_umm.umm_base, pool->vp_size);
+		if (rc != 0)
+			D_WARN("Failed to unlock pool memory at "DF_X64": errno=%d (%s)\n",
+			       pool->vp_umm.umm_base, errno, strerror(errno));
+		else
+			D_DEBUG(DB_MGMT, "Unlocked VOS pool memory: "DF_U64" bytes at "DF_X64"\n",
+				pool->vp_size, pool->vp_umm.umm_base);
+	}
 	if (pool->vp_uma.uma_pool)
 		vos_pmemobj_close(pool->vp_uma.uma_pool);
 
@@ -253,7 +267,7 @@ vos_blob_unmap_cb(uint64_t off, uint64_t cnt, void *data)
 }
 
 static int pool_open(PMEMobjpool *ph, struct vos_pool_df *pool_df, uuid_t uuid,
-		     unsigned int flags, daos_handle_t *poh);
+		     unsigned int flags, void *metrics, daos_handle_t *poh);
 
 int
 vos_pool_create(const char *path, uuid_t uuid, daos_size_t scm_sz,
@@ -270,7 +284,7 @@ vos_pool_create(const char *path, uuid_t uuid, daos_size_t scm_sz,
 	struct vos_pool		*pool = NULL;
 	int			 rc = 0, enabled = 1;
 
-	if (!path || uuid_is_null(uuid))
+	if (!path || uuid_is_null(uuid) || daos_file_is_dax(path))
 		return -DER_INVAL;
 
 	D_DEBUG(DB_MGMT, "Pool Path: %s, size: "DF_U64":"DF_U64", "
@@ -412,7 +426,7 @@ open:
 		goto close;
 
 	/* Create a VOS pool handle using ph. */
-	rc = pool_open(ph, pool_df, uuid, flags, poh);
+	rc = pool_open(ph, pool_df, uuid, flags, NULL, poh);
 	ph = NULL;
 
 close:
@@ -486,48 +500,19 @@ vos_pool_destroy(const char *path, uuid_t uuid)
 	if (rc)
 		return rc;
 
+	if (daos_file_is_dax(path))
+		return -DER_INVAL;
+
 	/**
 	 * NB: no need to explicitly destroy container index table because
 	 * pool file removal will do this for free.
 	 */
-	if (daos_file_is_dax(path)) {
-		int	 fd;
-		int	 len = 2 * (1 << 20UL);
-		void	*addr;
-
-		fd = open(path, O_RDWR);
-		if (fd < 0) {
-			if (errno == ENOENT)
-				D_GOTO(exit, rc = 0);
-
-			D_ERROR("Failed to open %s: %d\n", path, errno);
-			D_GOTO(exit, rc = daos_errno2der(errno));
-		}
-
-		addr = mmap(NULL, len, PROT_READ|PROT_WRITE, MAP_SHARED, fd, 0);
-		if (addr == MAP_FAILED) {
-			close(fd);
-			D_ERROR("Failed to mmap %s, len:%d: %d\n", path, len,
-				errno);
-			D_GOTO(exit, rc = daos_errno2der(errno));
-		}
-		memset((char *)addr, 0, len);
-
-		rc = munmap(addr, len);
-		if (rc) {
-			close(fd);
-			D_ERROR("Failed to munmap %s: %d\n", path, errno);
-			D_GOTO(exit, rc = daos_errno2der(errno));
-		}
-		close(fd);
-	} else {
-		rc = remove(path);
-		if (rc) {
-			if (errno == ENOENT)
-				D_GOTO(exit, rc = 0);
-			D_ERROR("Failure deleting file from PMEM: %s\n",
-				strerror(errno));
-		}
+	rc = remove(path);
+	if (rc) {
+		if (errno == ENOENT)
+			D_GOTO(exit, rc = 0);
+		D_ERROR("Failure deleting file from PMEM: %s\n",
+			strerror(errno));
 	}
 exit:
 	return rc;
@@ -592,7 +577,8 @@ static int
 vos_register_slabs(struct umem_attr *uma)
 {
 	struct pobj_alloc_class_desc	*slab;
-	int				 i, rc;
+	int				 i, rc, j;
+	bool				 skip_set;
 
 	D_ASSERT(uma->uma_pool != NULL);
 	for (i = 0; i < VOS_SLAB_MAX; i++) {
@@ -604,6 +590,22 @@ vos_register_slabs(struct umem_attr *uma)
 			D_ERROR("Failed to get unit size %d. rc:%d\n", i, rc);
 			return rc;
 		}
+
+		skip_set = false;
+		for (j = 0; j < i; j++) {
+			if (uma->uma_slabs[j].unit_size == slab->unit_size) {
+				/** PMDK will fail to register a new slab of the same size
+				 *  so reuse the class id
+				 */
+				slab->class_id = uma->uma_slabs[j].class_id;
+				skip_set = true;
+				D_ASSERT(slab->class_id != 0);
+				break;
+			}
+		}
+
+		if (skip_set)
+			continue;
 
 		rc = pmemobj_ctl_set(uma->uma_pool, "heap.alloc_class.new.desc",
 				     slab);
@@ -619,13 +621,63 @@ vos_register_slabs(struct umem_attr *uma)
 	return 0;
 }
 
+enum {
+	/** Memory locking flag not initialized */
+	LM_FLAG_UNINIT,
+	/** Memory locking disabled */
+	LM_FLAG_DISABLED,
+	/** Memory locking enabled */
+	LM_FLAG_ENABLED
+};
+
+static void
+lock_pool_memory(struct vos_pool *pool)
+{
+	static		 int lock_mem = LM_FLAG_UNINIT;
+	struct rlimit	 rlim;
+	int		 rc;
+
+	if (lock_mem == LM_FLAG_UNINIT) {
+		rc = getrlimit(RLIMIT_MEMLOCK, &rlim);
+		if (rc != 0) {
+			D_WARN("getrlimit() failed; errno=%d (%s)\n", errno, strerror(errno));
+			lock_mem = LM_FLAG_DISABLED;
+			return;
+		}
+
+		if (rlim.rlim_cur != RLIM_INFINITY || rlim.rlim_max != RLIM_INFINITY) {
+			D_WARN("Infinite rlimit not detected, not locking VOS pool memory\n");
+			lock_mem = LM_FLAG_DISABLED;
+			return;
+		}
+
+		lock_mem = LM_FLAG_ENABLED;
+	}
+
+	if (lock_mem == LM_FLAG_DISABLED)
+		return;
+
+	rc = mlock((void *)pool->vp_umm.umm_base, pool->vp_pool_df->pd_scm_sz);
+	if (rc != 0) {
+		D_WARN("Could not lock memory for VOS pool "DF_U64" bytes at "DF_X64
+		       "; errno=%d (%s)\n", pool->vp_pool_df->pd_scm_sz, pool->vp_umm.umm_base,
+		       errno, strerror(errno));
+		return;
+	}
+
+	/* Only save the size if the locking was successful */
+	pool->vp_size = pool->vp_pool_df->pd_scm_sz;
+	D_DEBUG(DB_MGMT, "Locking VOS pool in memory "DF_U64" bytes at "DF_X64"\n", pool->vp_size,
+		pool->vp_umm.umm_base);
+}
+
 /*
  * If successful, this function consumes ph, and closes it upon any error.
  * So the caller shall not close ph in any case.
  */
 static int
 pool_open(PMEMobjpool *ph, struct vos_pool_df *pool_df, uuid_t uuid,
-	  unsigned int flags, daos_handle_t *poh)
+	  unsigned int flags, void *metrics, daos_handle_t *poh)
 {
 	struct bio_xs_context	*xs_ctxt;
 	struct vos_pool		*pool = NULL;
@@ -679,14 +731,19 @@ pool_open(PMEMobjpool *ph, struct vos_pool_df *pool_df, uuid_t uuid,
 		goto failed;
 	}
 
+	pool->vp_metrics = metrics;
 	if (bio_nvme_configured() && pool_df->pd_nvme_sz != 0) {
-		struct vea_unmap_context unmap_ctxt;
+		struct vea_unmap_context	 unmap_ctxt;
+		struct vos_pool_metrics		*vp_metrics = metrics;
+		void				*vea_metrics = NULL;
 
+		if (vp_metrics)
+			vea_metrics = vp_metrics->vp_vea_metrics;
 		/* set unmap callback fp */
 		unmap_ctxt.vnc_unmap = vos_blob_unmap_cb;
 		unmap_ctxt.vnc_data = pool->vp_io_ctxt;
 		rc = vea_load(&pool->vp_umm, vos_txd_get(), &pool_df->pd_vea_df,
-			      &unmap_ctxt, &pool->vp_vea_info);
+			      &unmap_ctxt, vea_metrics, &pool->vp_vea_info);
 		if (rc) {
 			D_ERROR("Failed to load block space info: "DF_RC"\n",
 				DP_RC(rc));
@@ -711,9 +768,11 @@ pool_open(PMEMobjpool *ph, struct vos_pool_df *pool_df, uuid_t uuid,
 	pool->vp_opened = 1;
 	pool->vp_excl = !!(flags & VOS_POF_EXCL);
 	pool->vp_small = !!(flags & VOS_POF_SMALL);
+
 	vos_space_sys_init(pool);
 	/* Ensure GC is triggered after server restart */
 	gc_add_pool(pool);
+	lock_pool_memory(pool);
 	D_DEBUG(DB_MGMT, "Opened pool %p\n", pool);
 	return 0;
 failed:
@@ -722,8 +781,8 @@ failed:
 }
 
 int
-vos_pool_open(const char *path, uuid_t uuid, unsigned int flags,
-	      daos_handle_t *poh)
+vos_pool_open_metrics(const char *path, uuid_t uuid, unsigned int flags, void *metrics,
+		      daos_handle_t *poh)
 {
 	struct vos_pool_df	*pool_df;
 	struct vos_pool		*pool = NULL;
@@ -802,7 +861,7 @@ vos_pool_open(const char *path, uuid_t uuid, unsigned int flags,
 		goto out;
 	}
 
-	rc = pool_open(ph, pool_df, uuid, flags, poh);
+	rc = pool_open(ph, pool_df, uuid, flags, metrics, poh);
 	ph = NULL;
 
 out:
@@ -812,6 +871,12 @@ out:
 	if (ph != NULL)
 		vos_pmemobj_close(ph);
 	return rc;
+}
+
+int
+vos_pool_open(const char *path, uuid_t uuid, unsigned int flags, daos_handle_t *poh)
+{
+	return vos_pool_open_metrics(path, uuid, flags, NULL, poh);
 }
 
 /**
@@ -907,9 +972,11 @@ vos_pool_space_sys_set(daos_handle_t poh, daos_size_t *space_sys)
 }
 
 int
-vos_pool_ctl(daos_handle_t poh, enum vos_pool_opc opc)
+vos_pool_ctl(daos_handle_t poh, enum vos_pool_opc opc, void *param)
 {
 	struct vos_pool		*pool;
+	int			i;
+	struct policy_desc_t	*p;
 
 	pool = vos_hdl2pool(poh);
 	if (pool == NULL)
@@ -921,13 +988,16 @@ vos_pool_ctl(daos_handle_t poh, enum vos_pool_opc opc)
 	case VOS_PO_CTL_RESET_GC:
 		memset(&pool->vp_gc_stat, 0, sizeof(pool->vp_gc_stat));
 		break;
-	case VOS_PO_CTL_VEA_PLUG:
-		if (pool->vp_vea_info != NULL)
-			vea_flush(pool->vp_vea_info, true);
-		break;
-	case VOS_PO_CTL_VEA_UNPLUG:
-		if (pool->vp_vea_info != NULL)
-			vea_flush(pool->vp_vea_info, false);
+	case VOS_PO_CTL_SET_POLICY:
+		if (param == NULL)
+			return -DER_INVAL;
+
+		p = param;
+		pool->vp_policy_desc.policy = p->policy;
+
+		for (i = 0; i < DAOS_MEDIA_POLICY_PARAMS_MAX; i++)
+			pool->vp_policy_desc.params[i] = p->params[i];
+
 		break;
 	}
 

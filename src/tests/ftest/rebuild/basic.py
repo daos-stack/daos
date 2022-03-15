@@ -1,10 +1,10 @@
 #!/usr/bin/python3
 """
-  (C) Copyright 2018-2021 Intel Corporation.
+  (C) Copyright 2018-2022 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
-from apricot import TestWithServers, skipForTicket
+from apricot import TestWithServers
 from daos_utils import DaosCommand
 
 class RbldBasic(TestWithServers):
@@ -57,7 +57,7 @@ class RbldBasic(TestWithServers):
                 pi_ndisabled=0
             )
             status &= self.pool[index].check_rebuild_status(
-                rs_done=1, rs_obj_nr=0, rs_rec_nr=0, rs_errno=0)
+                rs_state=1, rs_obj_nr=0, rs_rec_nr=0, rs_errno=0)
         self.assertTrue(status, "Error confirming pool info before rebuild")
 
         # Create containers in each pool and fill them with data
@@ -94,9 +94,8 @@ class RbldBasic(TestWithServers):
             else:
                 self.pool[index].exclude(ranks=[rank])
 
-        # Wait for recovery to start
-        for index in range(pool_quantity):
-            self.pool[index].wait_for_rebuild(True)
+        # Wait for recovery to start for first pool.
+        self.pool[0].wait_for_rebuild(True)
 
         # Wait for recovery to complete
         for index in range(pool_quantity):
@@ -111,7 +110,7 @@ class RbldBasic(TestWithServers):
                 pi_ndisabled=target_count
             )
             status &= self.pool[index].check_rebuild_status(
-                rs_done=1, rs_obj_nr=rs_obj_nr[index],
+                rs_state=2, rs_obj_nr=rs_obj_nr[index],
                 rs_rec_nr=rs_rec_nr[index], rs_errno=0)
         self.assertTrue(status, "Error confirming pool info after rebuild")
 
@@ -144,7 +143,6 @@ class RbldBasic(TestWithServers):
         """
         self.run_rebuild_test(1)
 
-    @skipForTicket("DAOS-7050, DAOS-7134")
     def test_multipool_rebuild(self):
         """JIRA ID: DAOS-XXXX (Rebuild-002).
 
