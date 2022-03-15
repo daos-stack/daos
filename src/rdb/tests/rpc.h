@@ -15,7 +15,7 @@
  * These are for daos_rpc::dr_opc and DAOS_RPC_OPCODE(opc, ...) rather than
  * crt_req_create(..., opc, ...). See src/include/daos/rpc.h.
  */
-#define DAOS_RDBT_VERSION 2
+#define DAOS_RDBT_VERSION 3
 /* LIST of internal RPCS in form of:
  * OPCODE, flags, FMT, handler, corpc_hdlr,
  */
@@ -46,7 +46,13 @@
 		rdbt_replicas_remove_handler, NULL),			\
 	X(RDBT_START_ELECTION,						\
 		0, &CQF_rdbt_start_election,				\
-		rdbt_start_election_handler, NULL)
+		rdbt_start_election_handler, NULL),			\
+	X(RDBT_DESTROY_REPLICA,						\
+		0, &CQF_rdbt_destroy_replica,				\
+		rdbt_destroy_replica_handler, NULL),			\
+	X(RDBT_DICTATE,							\
+		0, &CQF_rdbt_dictate,					\
+		rdbt_dictate_handler, NULL)
 
 /* Define for RPC enum population below */
 #define X(a, b, c, d, e) a
@@ -166,5 +172,21 @@ CRT_RPC_DECLARE(rdbt_replicas_stop, DAOS_ISEQ_RDBT_STARTSTOP,
 
 CRT_RPC_DECLARE(rdbt_start_election, DAOS_ISEQ_RDBT_START_ELECTION,
 		DAOS_OSEQ_RDBT_START_ELECTION)
+
+#define DAOS_ISEQ_RDBT_DESTROY_REPLICA /* input fields (none) */
+
+#define DAOS_OSEQ_RDBT_DESTROY_REPLICA /* output fields */	\
+	((int32_t)		(reo_rc)		CRT_VAR)
+
+CRT_RPC_DECLARE(rdbt_destroy_replica, DAOS_ISEQ_RDBT_DESTROY_REPLICA,
+		DAOS_OSEQ_RDBT_DESTROY_REPLICA)
+
+#define DAOS_ISEQ_RDBT_DICTATE /* input fields (none) */
+
+#define DAOS_OSEQ_RDBT_DICTATE /* output fields */	\
+	((int32_t)		(rto_rc)		CRT_VAR)
+
+CRT_RPC_DECLARE(rdbt_dictate, DAOS_ISEQ_RDBT_DICTATE,
+		DAOS_OSEQ_RDBT_DICTATE)
 
 #endif /* RDB_TESTS_RPC_H */

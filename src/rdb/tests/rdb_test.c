@@ -795,6 +795,54 @@ out:
 
 }
 
+static void
+rdbt_destroy_replica_handler(crt_rpc_t *rpc)
+{
+	struct rdbt_destroy_replica_out	*out = crt_reply_get(rpc);
+	d_rank_t			 rank;
+	int				 rc;
+
+	MUST(crt_group_rank(NULL /* grp */, &rank));
+	D_WARN("destroying replica on rank %u\n", rank);
+
+	rc = ds_rsvc_stop(DS_RSVC_CLASS_TEST, &test_svc_id, true /* destroy */);
+
+	D_WARN("rpc reply from rank %u: rc=%d\n", rank, rc);
+	out->reo_rc = rc;
+	crt_reply_send(rpc);
+}
+
+static void
+rdbt_dictate_handler(crt_rpc_t *rpc)
+{
+	struct ds_rsvc		*rsvc;
+	uuid_t			 db_uuid;
+	struct rdbt_dictate_out	*out = crt_reply_get(rpc);
+	d_rank_t		 rank;
+	int			 rc;
+
+	MUST(crt_group_rank(NULL /* grp */, &rank));
+	D_WARN("calling dictate on rank %u\n", rank);
+
+	rc = ds_rsvc_lookup(DS_RSVC_CLASS_TEST, &test_svc_id, &rsvc);
+	if (rc != 0)
+		goto out;
+	uuid_copy(db_uuid, rsvc->s_db_uuid);
+	ds_rsvc_put(rsvc);
+
+	rc = ds_rsvc_stop(DS_RSVC_CLASS_TEST, &test_svc_id, false /* destroy */);
+	if (rc != 0)
+		goto out;
+
+	rc = ds_rsvc_start(DS_RSVC_CLASS_TEST, &test_svc_id, db_uuid, DS_RSVC_DICTATE,
+			   0 /* size */, NULL /* replicas */, NULL /* arg */);
+
+out:
+	D_WARN("rpc reply from rank %u: rc=%d\n", rank, rc);
+	out->rto_rc = rc;
+	crt_reply_send(rpc);
+}
+
 /* Define for cont_rpcs[] array population below.
  * See RDBT_PROTO_*_RPC_LIST macro definition
  */

@@ -509,6 +509,39 @@ restore_initial_replicas(crt_group_t *grp, uint32_t nranks,
 
 	return 0;
 }
+
+static int
+destroy_replica(crt_group_t *grp, d_rank_t rank)
+{
+	crt_rpc_t			*rpc;
+	struct rdbt_destroy_replica_out	*out;
+	int				 rc;
+
+	rpc = create_rpc(RDBT_DESTROY_REPLICA, grp, rank);
+	rc = invoke_rpc(rpc);
+	D_ASSERTF(rc == 0, "%d\n", rc);
+	out = crt_reply_get(rpc);
+	rc = out->reo_rc;
+	destroy_rpc(rpc);
+	return rc;
+}
+
+static int
+dictate(crt_group_t *grp, d_rank_t rank)
+{
+	crt_rpc_t		*rpc;
+	struct rdbt_dictate_out	*out;
+	int			 rc;
+
+	rpc = create_rpc(RDBT_DICTATE, grp, rank);
+	rc = invoke_rpc(rpc);
+	D_ASSERTF(rc == 0, "%d\n", rc);
+	out = crt_reply_get(rpc);
+	rc = out->rto_rc;
+	destroy_rpc(rpc);
+	return rc;
+}
+
 /**** init command functions ****/
 
 static int
@@ -1146,6 +1179,89 @@ testm_disruptive_membership(crt_group_t *grp, uint32_t nranks,
 }
 
 static int
+testm_dictate(crt_group_t *grp, uint32_t nranks, uint32_t nreplicas, uint64_t key, uint64_t val)
+{
+	int			rc;
+	d_rank_t		ldr_rank;
+	d_rank_t		rank;
+	uint64_t		term;
+	uint64_t		val_out = 0;
+	struct rsvc_hint	h;
+	const int		NO_UPDATE = 0;
+	const int		UPDATE = 1;
+	int			i;
+
+	printf("\n==== TEST: RDB update, destroy majority, dictate, and lookup\n");
+
+	rc = rdbt_find_leader(grp, nranks, nreplicas, &ldr_rank, &term);
+	if (rc) {
+		fprintf(stderr, "ERR: RDB find leader failed\n");
+		return rc;
+	}
+	printf("INFO: RDB discovered leader rank %u, term="DF_U64"\n",
+	       ldr_rank, term);
+
+	rc = rdbt_test_rank(grp, ldr_rank, UPDATE, RDBT_MEMBER_NOOP, key, val,
+			    &val_out, &h);
+	if (rc) {
+		fprintf(stderr, "FAIL: update RDB failed via RPC to leader "
+				"rank %u: "DF_RC", hint:(r=%u, t="DF_U64"\n",
+				ldr_rank, DP_RC(rc), h.sh_rank, h.sh_term);
+		return rc;
+	}
+	if (val_out != val) {
+		fprintf(stderr, "FAIL: update val="DF_U64" expect "DF_U64"\n", val_out, val);
+		return -1;
+	}
+
+	/* The leader dictates; others stop. */
+	for (rank = 0; rank < nreplicas; rank++) {
+		if (rank == ldr_rank) {
+			rc = dictate(grp, rank);
+			if (rc) {
+				fprintf(stderr, "FAIL: failed to dictate: "DF_RC"\n", DP_RC(rc));
+				return rc;
+			}
+		} else {
+			rc = destroy_replica(grp, rank);
+			if (rc) {
+				fprintf(stderr, "ERR: cannot stop RDB on rank %u: "DF_RC"\n", rank,
+					DP_RC(rc));
+				return rc;
+			}
+		}
+	}
+
+	for (i = 0; i < 20; i++) {
+		rc = rdbt_ping_rank(grp, ldr_rank, &h);
+		if (rc != -DER_NOTLEADER)
+			break;
+		sleep(1);
+	}
+	if (rc != 0) {
+		fprintf(stderr, "FAIL: no leader after dictating: "DF_RC"\n", DP_RC(rc));
+		return rc;
+	}
+
+	val_out = 0;
+	rc = rdbt_test_rank(grp, ldr_rank, NO_UPDATE, RDBT_MEMBER_NOOP,
+			    key, val, &val_out, &h);
+	if (rc) {
+		fprintf(stderr, "FAIL: lookup RDB failed via RPC to leader "
+			       "rank %u: "DF_RC", hint:(r=%u, t="DF_U64"\n",
+			       ldr_rank, DP_RC(rc), h.sh_rank, h.sh_term);
+		return rc;
+	}
+	if (val_out != val) {
+		fprintf(stderr, "FAIL: lookup val="DF_U64" expect "DF_U64"\n", val_out, val);
+		return -1;
+	}
+	printf("====== PASS: dictate\n");
+
+	return 0;
+}
+
+static int
 rdbt_test_multi(crt_group_t *grp, uint32_t nranks, uint32_t nreplicas)
 {
 	int			rc;
@@ -1205,6 +1321,12 @@ rdbt_test_multi(crt_group_t *grp, uint32_t nranks, uint32_t nreplicas)
 					 RDBT_MEMBER_RESIGN);
 	if (rc != 0)
 		return rc;
+
+	val *= 2;
+	rc = testm_dictate(grp, nranks, nreplicas, key, val);
+	if (rc != 0)
+		return rc;
+
 	return 0;
 }
 

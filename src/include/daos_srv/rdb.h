@@ -144,6 +144,7 @@ int rdb_open(const char *path, const uuid_t uuid, struct rdb_cbs *cbs, void *arg
 void rdb_close(struct rdb_storage *storage);
 int rdb_destroy(const char *path, const uuid_t uuid);
 int rdb_glance(struct rdb_storage *storage, struct rdb_clue *clue);
+int rdb_dictate(struct rdb_storage *storage);
 
 /** Database (opaque) */
 struct rdb;

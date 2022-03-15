@@ -1686,7 +1686,7 @@ start_one(uuid_t uuid, void *varg)
 	}
 
 	d_iov_set(&id, uuid, sizeof(uuid_t));
-	ds_rsvc_start(DS_RSVC_CLASS_POOL, &id, uuid, false /* create */, 0 /* size */,
+	ds_rsvc_start(DS_RSVC_CLASS_POOL, &id, uuid, DS_RSVC_START /* mode */, 0 /* size */,
 		      NULL /* replicas */, NULL /* arg */);
 	return 0;
 }
