@@ -2130,18 +2130,19 @@ dfuse_ftell(FILE *stream)
 	if (drop_reference_if_disabled(entry))
 		goto do_real_ftell;
 
-	D_ERROR("Badly supported function %p\n", stream);
-
 	off = entry->fd_pos;
 
-	vector_decref(&fd_table, entry);
+	if (off == 0) {
+		off =  __real_ftell(stream);
+		if (off != 0) {
+			D_ERROR("Missing interception, patching up %p\n", stream);
+			entry->fd_status = DFUSE_IO_DIS_STREAM;
+		}
+	}
 
 	DFUSE_TRA_DEBUG(entry->fd_dfsoh, "Returning offset %ld", off);
 
-#if 0
-	if (off == 0)
-		return __real_ftell(stream);
-#endif
+	vector_decref(&fd_table, entry);
 
 	return off;
 do_real_ftell:
