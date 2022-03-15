@@ -274,7 +274,7 @@ func (p *Provider) Scan(req storage.ScmScanRequest) (*storage.ScmScanResponse, e
 	if err != nil {
 		return nil, err
 	}
-	p.log.Debugf("scm provider scan discovered %d modules", len(modules))
+	p.log.Debugf("scm backend: %d modules", len(modules))
 
 	// If there are no modules, don't bother with the rest of the scan.
 	if len(modules) == 0 {
@@ -287,13 +287,13 @@ func (p *Provider) Scan(req storage.ScmScanRequest) (*storage.ScmScanResponse, e
 	if err != nil {
 		return nil, err
 	}
-	p.log.Debugf("scm backend returned namespaces: %+v", namespaces)
+	p.log.Debugf("scm backend: namespaces %+v", namespaces)
 
 	state, err := p.backend.getState()
 	if err != nil {
 		return nil, err
 	}
-	p.log.Debugf("scm backend returned state %q", state)
+	p.log.Debugf("scm backend: state %q", state)
 
 	return &storage.ScmScanResponse{
 		State:      state,
@@ -305,6 +305,7 @@ func (p *Provider) Scan(req storage.ScmScanRequest) (*storage.ScmScanResponse, e
 type scanFn func(storage.ScmScanRequest) (*storage.ScmScanResponse, error)
 
 func (p *Provider) prepare(req storage.ScmPrepareRequest, scan scanFn) (*storage.ScmPrepareResponse, error) {
+	p.log.Debug("scm provider prepare: calling provider scan")
 	scanResp, err := scan(storage.ScmScanRequest{})
 	if err != nil {
 		return nil, err
@@ -339,9 +340,11 @@ func (p *Provider) prepare(req storage.ScmPrepareRequest, scan scanFn) (*storage
 			}
 		}
 
+		p.log.Debug("scm provider prepare: calling backend prepReset")
 		return p.backend.prepReset(scanResp)
 	}
 
+	p.log.Debug("scm provider prepare: calling backend prep")
 	return p.backend.prep(scanResp)
 }
 

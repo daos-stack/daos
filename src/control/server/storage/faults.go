@@ -18,7 +18,7 @@ import (
 // mode, this is unsupported.
 var FaultScmNotInterleaved = storageFault(code.ScmNotInterleaved,
 	"PMem regions are in AppDirect non-interleaved mode",
-	"Remove the PMem regions and recreate in AppDirect interleaved mode")
+	"Rerun the command first with the reset option and then without to recreate the PMem regions in the recommended mode")
 
 // FaultScmNoPMemModules represents an error where no PMem modules exist.
 var FaultScmNoModules = storageFault(code.ScmNoModules,

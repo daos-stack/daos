@@ -144,7 +144,7 @@ func TestIpmctl_checkIpmctl(t *testing.T) {
 	}
 }
 
-// TestIpmctl_getState tests the internals of GetState and verifies correct behaviour based
+// TestIpmctl_getState tests the internals of GetState and verifies correct behavior based
 // on different output from GetRegions() bindings call.
 func TestIpmctl_getState(t *testing.T) {
 	for name, tc := range map[string]struct {
@@ -437,7 +437,7 @@ func TestIpmctl_getModules(t *testing.T) {
 			cfg: &mockIpmctlCfg{
 				getModulesErr: errors.New("mock GetModules"),
 			},
-			expErr: errors.New("failed to discover SCM modules: mock GetModules"),
+			expErr: errors.New("failed to discover pmem modules: mock GetModules"),
 		},
 		"no modules": {
 			cfg:       &mockIpmctlCfg{},
