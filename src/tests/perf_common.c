@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2018-2021 Intel Corporation.
+ * (C) Copyright 2018-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -680,7 +680,8 @@ show_result(struct pf_param *param, uint64_t start, uint64_t end,
 			total = ts_ctx.tsc_mpi_size * param->pa_iteration *
 				ts_obj_p_cont;
 		} else if (strcmp(test_name, "AGGREGATE") == 0 ||
-			   strcmp(test_name, "DISCARD") == 0) {
+			   strcmp(test_name, "DISCARD") == 0 ||
+			   strcmp(test_name, "GARBAGE COLLECTION") == 0) {
 			total = ts_ctx.tsc_mpi_size * param->pa_iteration;
 		} else if (strcmp(test_name, "PUNCH") == 0) {
 			total = ts_ctx.tsc_mpi_size * param->pa_iteration * ts_obj_p_cont;
@@ -736,10 +737,8 @@ const char perf_common_usage[] = "\n"
 "	Number of strides per akey. The number can have 'k' or 'm' as postfix\n"
 "	which stands for kilo or million.\n\n"
 "-s number\n"
-"	Stride size, it is the offset distance between two array writes,\n"
-"	it is also the default size for write if 'U' has no size parameter\n"
-"	The number can have 'K' or 'M' as postfix which stands for kilobyte\n"
-"	or megabytes.\n\n"
+"	Value size. The number can have 'K' or 'M' as postfix which stands for\n"
+"	kilobyte or megabytes.\n\n"
 "-A [R]\n"
 "	Use array value of akey, single value is selected by default.\n"
 "	optional parameter 'R' indicates random writes\n\n"
@@ -779,7 +778,6 @@ const struct option perf_common_opts[] = {
 	{ "dkey",	required_argument,	NULL,	'd' },
 	{ "akey",	required_argument,	NULL,	'a' },
 	{ "num",	required_argument,	NULL,	'n' },
-	{ "stride",	required_argument,	NULL,	's' },
 	{ "size",	required_argument,	NULL,	's' },
 	{ "array",	optional_argument,	NULL,	'A' },
 	{ "run",	required_argument,	NULL,	'R' },

@@ -65,8 +65,6 @@ struct ds_cont_child {
 	uint32_t		 sc_dtx_resyncing:1,
 				 sc_dtx_reindex:1,
 				 sc_dtx_reindex_abort:1,
-				 sc_dtx_cos_shutdown:1,
-				 sc_closing:1,
 				 sc_props_fetched:1,
 				 sc_stopping:1,
 				 sc_vos_agg_active:1,
@@ -110,6 +108,12 @@ struct ds_cont_child {
 	 * local VOS.
 	 */
 	uint64_t		*sc_ec_query_agg_eph;
+	/**
+	 * Timestamp of last EC update, which is used by aggregation to check
+	 * if it needs to do EC aggregate.
+	 */
+	uint64_t		sc_ec_update_timestamp;
+
 	/* The objects with committable DTXs in DRAM. */
 	daos_handle_t		 sc_dtx_cos_hdl;
 	/* The DTX COS-btree. */
@@ -155,6 +159,7 @@ struct ds_cont_hdl {
 	uint64_t		sch_sec_capas;	/* access control capas */
 	struct ds_cont_child	*sch_cont;
 	int32_t			sch_ref;
+	uint32_t		sch_closed:1;
 };
 
 struct ds_cont_hdl *ds_cont_hdl_lookup(const uuid_t uuid);
@@ -236,4 +241,7 @@ void ds_cont_tgt_ec_eph_query_ult(void *data);
 int ds_cont_ec_eph_insert(struct ds_pool *pool, uuid_t cont_uuid, int tgt_idx,
 			  uint64_t **epoch_p);
 int ds_cont_ec_eph_delete(struct ds_pool *pool, uuid_t cont_uuid, int tgt_idx);
+
+void ds_cont_ec_timestamp_update(struct ds_cont_child *cont);
+
 #endif /* ___DAOS_SRV_CONTAINER_H_ */

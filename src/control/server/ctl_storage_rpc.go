@@ -14,6 +14,7 @@ import (
 	"golang.org/x/net/context"
 
 	"github.com/daos-stack/daos/src/control/common/proto"
+	"github.com/daos-stack/daos/src/control/common/proto/convert"
 	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
 	"github.com/daos-stack/daos/src/control/server/storage"
 )
@@ -87,7 +88,7 @@ func (c *ControlService) scanBdevs(ctx context.Context, req *ctlpb.ScanNvmeReq) 
 
 	var bdevsInCfg bool
 	for _, ei := range c.harness.Instances() {
-		if ei.HasBlockDevices() {
+		if ei.GetStorage().HasBlockDevices() {
 			bdevsInCfg = true
 		}
 	}
@@ -101,7 +102,6 @@ func (c *ControlService) scanBdevs(ctx context.Context, req *ctlpb.ScanNvmeReq) 
 		return newScanNvmeResp(req, resp, err)
 	}
 
-	c.log.Debugf("scanning only bdevs in cfg")
 	resp, err := c.scanAssignedBdevs(ctx, req.GetHealth() || req.GetMeta())
 
 	return newScanNvmeResp(req, resp, err)
@@ -172,6 +172,14 @@ func (c *ControlService) StorageScan(ctx context.Context, req *ctlpb.StorageScan
 	}
 	resp.Scm = respScm
 
+	hpi, err := c.getHugePageInfo()
+	if err != nil {
+		return nil, err
+	}
+	if err := convert.Types(hpi, &resp.HugePageInfo); err != nil {
+		return nil, err
+	}
+
 	c.log.Debug("responding to StorageScan RPC")
 
 	return resp, nil
@@ -223,7 +231,7 @@ func (c *ControlService) StorageFormat(ctx context.Context, req *ctlpb.StorageFo
 	for _, ei := range instances {
 		if _, hasError := instanceErrored[ei.Index()]; hasError {
 			// if scm errored, indicate skipping bdev format
-			ret := ei.newCret("", nil)
+			ret := ei.newCret(storage.NilBdevAddress, nil)
 			ret.State.Info = fmt.Sprintf(msgNvmeFormatSkip, ei.Index())
 			resp.Crets = append(resp.Crets, ret)
 			continue
@@ -237,7 +245,7 @@ func (c *ControlService) StorageFormat(ctx context.Context, req *ctlpb.StorageFo
 			continue
 		}
 
-		if err := ei.StorageWriteNvmeConfig(ctx); err != nil {
+		if err := ei.GetStorage().WriteNvmeConfig(ctx, c.log); err != nil {
 			instanceErrored[ei.Index()] = err.Error()
 			cResults = append(cResults, ei.newCret("", err))
 		}
@@ -295,6 +303,69 @@ func (c *ControlService) StorageNvmeRebind(ctx context.Context, req *ctlpb.NvmeR
 	}
 
 	c.log.Debug("responding to StorageNvmeRebind RPC")
+
+	return resp, nil
+}
+
+// StorageNvmeAddDevice adds a newly added SSD to a DAOS engine's NVMe config to allow it to be used.
+//
+//
+// If StorageTierIndex is set to -1 in request, add the device to the first configured bdev tier.
+func (c *ControlService) StorageNvmeAddDevice(ctx context.Context, req *ctlpb.NvmeAddDeviceReq) (resp *ctlpb.NvmeAddDeviceResp, err error) {
+	c.log.Debugf("received StorageNvmeAddDevice RPC %v", req)
+
+	if req == nil {
+		return nil, errors.New("nil request")
+	}
+
+	engines := c.harness.Instances()
+	engineIndex := req.GetEngineIndex()
+
+	if len(engines) <= int(engineIndex) {
+		return nil, errors.Errorf("engine with index %d not found", engineIndex)
+	}
+	defer func() {
+		err = errors.Wrapf(err, "engine %d", engineIndex)
+	}()
+
+	var tierCfg *storage.TierConfig
+	engineStorage := engines[engineIndex].GetStorage()
+	tierIndex := req.GetStorageTierIndex()
+
+	for _, tier := range engineStorage.GetBdevConfigs() {
+		if tierIndex == -1 || int(tierIndex) == tier.Tier {
+			tierCfg = tier
+			break
+		}
+	}
+
+	if tierCfg == nil {
+		if tierIndex == -1 {
+			return nil, errors.New("no bdev storage tiers in config")
+		}
+		return nil, errors.Errorf("bdev storage tier with index %d not found in config",
+			tierIndex)
+	}
+
+	c.log.Debugf("bdev list to be updated: %+v", tierCfg.Bdev.DeviceList)
+	if err := tierCfg.Bdev.DeviceList.AddStrings(req.PciAddr); err != nil {
+		return nil, errors.Errorf("updating bdev list for tier %d", tierIndex)
+	}
+	c.log.Debugf("updated bdev list: %+v", tierCfg.Bdev.DeviceList)
+
+	resp = new(ctlpb.NvmeAddDeviceResp)
+	if err := engineStorage.WriteNvmeConfig(ctx, c.log); err != nil {
+		err = errors.Wrapf(err, "write nvme config for engine %d", engineIndex)
+		c.log.Error(err.Error())
+
+		// report write conf call result in response
+		resp.State = &ctlpb.ResponseState{
+			Error:  err.Error(),
+			Status: ctlpb.ResponseStatus_CTL_ERR_NVME,
+		}
+	}
+
+	c.log.Debug("responding to StorageNvmeAddDevice RPC")
 
 	return resp, nil
 }

@@ -274,7 +274,7 @@ func TestServer_CtlSvc_StorageScan_PreEngineStart(t *testing.T) {
 
 			tCfg := storage.NewTierConfig().
 				WithStorageClass(storage.ClassNvme.String()).
-				WithBdevDeviceList(storage.MockNvmeController().PciAddr)
+				WithBdevDeviceList(common.MockPCIAddr(0))
 
 			engineCfg := engine.MockConfig().WithStorage(tCfg)
 			engineCfgs := []*engine.Config{engineCfg}
@@ -296,7 +296,6 @@ func TestServer_CtlSvc_StorageScan_PreEngineStart(t *testing.T) {
 				}
 			}
 
-			// cs.StorageScan should never return err
 			resp, err := cs.StorageScan(context.TODO(), tc.req)
 			if err != nil {
 				t.Fatal(err)
@@ -382,7 +381,7 @@ func TestServer_CtlSvc_StorageScan_PostEngineStart(t *testing.T) {
 		ctrlr.Namespaces = make([]*ctlpb.NvmeController_Namespace, len(smdIndexes))
 		for i, idx := range smdIndexes {
 			sd := proto.MockSmdDevice(ctrlr.PciAddr, idx+1)
-			sd.DevState = storage.MockNvmeStateNormal.StatusString()
+			sd.DevState = storage.MockNvmeStateNormal.String()
 			sd.Rank = uint32(ctrlrIdx)
 			sd.TrAddr = ctrlr.PciAddr
 			ctrlr.SmdDevices[i] = sd
@@ -422,12 +421,17 @@ func TestServer_CtlSvc_StorageScan_PostEngineStart(t *testing.T) {
 	}
 
 	smdDevRespStateNew := newSmdDevResp(1)
-	smdDevRespStateNew.Devices[0].DevState = storage.MockNvmeStateNew.StatusString()
+	smdDevRespStateNew.Devices[0].DevState = storage.MockNvmeStateNew.String()
 
 	ctrlrPBwMetaNew := newCtrlrPBwMeta(1)
 	ctrlrPBwMetaNew.SmdDevices[0].AvailBytes = 0
 	ctrlrPBwMetaNew.SmdDevices[0].TotalBytes = 0
-	ctrlrPBwMetaNew.SmdDevices[0].DevState = storage.MockNvmeStateNew.StatusString()
+	ctrlrPBwMetaNew.SmdDevices[0].DevState = storage.MockNvmeStateNew.String()
+
+	ctrlrPBwMetaNormal := newCtrlrPBwMeta(1)
+	ctrlrPBwMetaNormal.SmdDevices[0].AvailBytes = 0
+	ctrlrPBwMetaNormal.SmdDevices[0].TotalBytes = 0
+	ctrlrPBwMetaNormal.SmdDevices[0].DevState = storage.MockNvmeStateNormal.String()
 
 	mockPbScmMount0 := proto.MockScmMountPoint(0)
 	mockPbScmNamespace0 := proto.MockScmNamespace(0)
@@ -438,7 +442,8 @@ func TestServer_CtlSvc_StorageScan_PostEngineStart(t *testing.T) {
 
 	for name, tc := range map[string]struct {
 		req         *ctlpb.StorageScanReq
-		bmbc        *bdev.MockBackendConfig
+		csCtrlrs    *storage.NvmeControllers   // control service storage provider
+		eCtrlrs     []*storage.NvmeControllers // engine storage provider
 		smbc        *scm.MockBackendConfig
 		smsc        *scm.MockSysConfig
 		storageCfgs []storage.TierConfigs
@@ -453,11 +458,7 @@ func TestServer_CtlSvc_StorageScan_PostEngineStart(t *testing.T) {
 				Scm:  new(ctlpb.ScanScmReq),
 				Nvme: &ctlpb.ScanNvmeReq{Basic: true},
 			},
-			bmbc: &bdev.MockBackendConfig{
-				ScanRes: &storage.BdevScanResponse{
-					Controllers: storage.NvmeControllers{newCtrlr(1)},
-				},
-			},
+			csCtrlrs: &storage.NvmeControllers{newCtrlr(1)},
 			storageCfgs: []storage.TierConfigs{
 				{
 					storage.NewTierConfig().
@@ -481,13 +482,7 @@ func TestServer_CtlSvc_StorageScan_PostEngineStart(t *testing.T) {
 				Scm:  new(ctlpb.ScanScmReq),
 				Nvme: &ctlpb.ScanNvmeReq{Health: true},
 			},
-			bmbc: &bdev.MockBackendConfig{
-				ScanRes: &storage.BdevScanResponse{
-					Controllers: storage.NvmeControllers{
-						newCtrlr(1),
-					},
-				},
-			},
+			csCtrlrs: &storage.NvmeControllers{newCtrlr(1)},
 			storageCfgs: []storage.TierConfigs{
 				{
 					storage.NewTierConfig().
@@ -514,11 +509,7 @@ func TestServer_CtlSvc_StorageScan_PostEngineStart(t *testing.T) {
 				Scm:  new(ctlpb.ScanScmReq),
 				Nvme: &ctlpb.ScanNvmeReq{Meta: true},
 			},
-			bmbc: &bdev.MockBackendConfig{
-				ScanRes: &storage.BdevScanResponse{
-					Controllers: storage.NvmeControllers{newCtrlr(1)},
-				},
-			},
+			csCtrlrs: &storage.NvmeControllers{newCtrlr(1)},
 			storageCfgs: []storage.TierConfigs{
 				{
 					storage.NewTierConfig().
@@ -545,14 +536,8 @@ func TestServer_CtlSvc_StorageScan_PostEngineStart(t *testing.T) {
 				Scm:  new(ctlpb.ScanScmReq),
 				Nvme: &ctlpb.ScanNvmeReq{Health: true},
 			},
-			bmbc: &bdev.MockBackendConfig{
-				ScanRes: &storage.BdevScanResponse{
-					Controllers: storage.NvmeControllers{
-						newCtrlr(1),
-						newCtrlr(2),
-					},
-				},
-			},
+			csCtrlrs: &storage.NvmeControllers{newCtrlr(1), newCtrlr(2)},
+			eCtrlrs:  []*storage.NvmeControllers{{newCtrlr(1)}, {newCtrlr(2)}},
 			storageCfgs: []storage.TierConfigs{
 				{
 					storage.NewTierConfig().
@@ -591,14 +576,8 @@ func TestServer_CtlSvc_StorageScan_PostEngineStart(t *testing.T) {
 				Scm:  new(ctlpb.ScanScmReq),
 				Nvme: &ctlpb.ScanNvmeReq{Meta: true},
 			},
-			bmbc: &bdev.MockBackendConfig{
-				ScanRes: &storage.BdevScanResponse{
-					Controllers: storage.NvmeControllers{
-						newCtrlr(1),
-						newCtrlr(2),
-					},
-				},
-			},
+			csCtrlrs: &storage.NvmeControllers{newCtrlr(1), newCtrlr(2)},
+			eCtrlrs:  []*storage.NvmeControllers{{newCtrlr(1)}, {newCtrlr(2)}},
 			storageCfgs: []storage.TierConfigs{
 				{
 					storage.NewTierConfig().
@@ -632,20 +611,14 @@ func TestServer_CtlSvc_StorageScan_PostEngineStart(t *testing.T) {
 				Scm: &ctlpb.ScanScmResp{State: new(ctlpb.ResponseState)},
 			},
 		},
-		// make sure information is not duplicated in cache
-		"verify cache integrity over multiple storage scan calls": {
+		// make sure stale information is cleared and not used from cache
+		"verify cache invalidation over multiple storage scan calls": {
 			req: &ctlpb.StorageScanReq{
 				Scm:  new(ctlpb.ScanScmReq),
 				Nvme: &ctlpb.ScanNvmeReq{Meta: true},
 			},
-			bmbc: &bdev.MockBackendConfig{
-				ScanRes: &storage.BdevScanResponse{
-					Controllers: storage.NvmeControllers{
-						newCtrlr(1),
-						newCtrlr(2),
-					},
-				},
-			},
+			csCtrlrs: &storage.NvmeControllers{newCtrlr(1), newCtrlr(2)},
+			eCtrlrs:  []*storage.NvmeControllers{{newCtrlr(1)}, {newCtrlr(2)}},
 			storageCfgs: []storage.TierConfigs{
 				{
 					storage.NewTierConfig().
@@ -661,14 +634,18 @@ func TestServer_CtlSvc_StorageScan_PostEngineStart(t *testing.T) {
 			scanTwice: true,
 			drpcResps: map[int][]*mockDrpcResponse{
 				0: {
-					{Message: newSmdDevResp(1)},
-					{Message: newBioHealthResp(1)},
+					{Message: newSmdDevResp(1, 1, 2, 3)},
+					{Message: newBioHealthResp(1, 1)},
+					{Message: newBioHealthResp(1, 2)},
+					{Message: newBioHealthResp(1, 3)},
 					{Message: newSmdDevResp(1)},
 					{Message: newBioHealthResp(1)},
 				},
 				1: {
-					{Message: newSmdDevResp(2)},
-					{Message: newBioHealthResp(2)},
+					{Message: newSmdDevResp(2, 1, 2, 3)},
+					{Message: newBioHealthResp(1, 1)},
+					{Message: newBioHealthResp(1, 2)},
+					{Message: newBioHealthResp(1, 3)},
 					{Message: newSmdDevResp(2)},
 					{Message: newBioHealthResp(2)},
 				},
@@ -689,12 +666,11 @@ func TestServer_CtlSvc_StorageScan_PostEngineStart(t *testing.T) {
 				Scm:  new(ctlpb.ScanScmReq),
 				Nvme: &ctlpb.ScanNvmeReq{Meta: true},
 			},
-			bmbc: &bdev.MockBackendConfig{
-				ScanRes: &storage.BdevScanResponse{
-					Controllers: storage.NvmeControllers{
-						newCtrlrMultiNs(1, 2), newCtrlrMultiNs(2, 2),
-					},
-				},
+			csCtrlrs: &storage.NvmeControllers{
+				newCtrlrMultiNs(1, 2), newCtrlrMultiNs(2, 2),
+			},
+			eCtrlrs: []*storage.NvmeControllers{
+				{newCtrlrMultiNs(1, 2)}, {newCtrlrMultiNs(2, 2)},
 			},
 			storageCfgs: []storage.TierConfigs{
 				{
@@ -863,14 +839,8 @@ func TestServer_CtlSvc_StorageScan_PostEngineStart(t *testing.T) {
 				Scm:  &ctlpb.ScanScmReq{Usage: true},
 				Nvme: &ctlpb.ScanNvmeReq{Meta: true},
 			},
-			bmbc: &bdev.MockBackendConfig{
-				ScanRes: &storage.BdevScanResponse{
-					Controllers: storage.NvmeControllers{
-						newCtrlr(1),
-						newCtrlr(2),
-					},
-				},
-			},
+			csCtrlrs: &storage.NvmeControllers{newCtrlr(1), newCtrlr(2)},
+			eCtrlrs:  []*storage.NvmeControllers{{newCtrlr(1)}, {newCtrlr(2)}},
 			smbc: &scm.MockBackendConfig{
 				DiscoverRes: storage.ScmModules{
 					storage.MockScmModule(0),
@@ -947,11 +917,7 @@ func TestServer_CtlSvc_StorageScan_PostEngineStart(t *testing.T) {
 				Scm:  new(ctlpb.ScanScmReq),
 				Nvme: &ctlpb.ScanNvmeReq{Meta: true},
 			},
-			bmbc: &bdev.MockBackendConfig{
-				ScanRes: &storage.BdevScanResponse{
-					Controllers: storage.NvmeControllers{newCtrlr(1)},
-				},
-			},
+			csCtrlrs: &storage.NvmeControllers{newCtrlr(1)},
 			storageCfgs: []storage.TierConfigs{
 				{
 					storage.NewTierConfig().
@@ -982,11 +948,7 @@ func TestServer_CtlSvc_StorageScan_PostEngineStart(t *testing.T) {
 				Scm:  new(ctlpb.ScanScmReq),
 				Nvme: &ctlpb.ScanNvmeReq{Meta: true},
 			},
-			bmbc: &bdev.MockBackendConfig{
-				ScanRes: &storage.BdevScanResponse{
-					Controllers: storage.NvmeControllers{newCtrlr(1)},
-				},
-			},
+			csCtrlrs: &storage.NvmeControllers{newCtrlr(1)},
 			storageCfgs: []storage.TierConfigs{
 				{
 					storage.NewTierConfig().
@@ -1006,11 +968,8 @@ func TestServer_CtlSvc_StorageScan_PostEngineStart(t *testing.T) {
 			},
 			expResp: &ctlpb.StorageScanResp{
 				Nvme: &ctlpb.ScanNvmeResp{
-					State: &ctlpb.ResponseState{
-						Error: fmt.Sprintf("instance 0, ctrlr %s: GetBioHealth response status: %s",
-							newCtrlr(1).PciAddr, drpc.DaosFreeMemError.Error()),
-						Status: ctlpb.ResponseStatus_CTL_ERR_NVME,
-					},
+					Ctrlrs: proto.NvmeControllers{ctrlrPBwMetaNew},
+					State:  new(ctlpb.ResponseState),
 				},
 				Scm: &ctlpb.ScanScmResp{State: new(ctlpb.ResponseState)},
 			},
@@ -1020,11 +979,7 @@ func TestServer_CtlSvc_StorageScan_PostEngineStart(t *testing.T) {
 				Scm:  new(ctlpb.ScanScmReq),
 				Nvme: &ctlpb.ScanNvmeReq{Meta: true},
 			},
-			bmbc: &bdev.MockBackendConfig{
-				ScanRes: &storage.BdevScanResponse{
-					Controllers: storage.NvmeControllers{newCtrlr(1)},
-				},
-			},
+			csCtrlrs: &storage.NvmeControllers{newCtrlr(1)},
 			storageCfgs: []storage.TierConfigs{
 				{
 					storage.NewTierConfig().
@@ -1044,11 +999,8 @@ func TestServer_CtlSvc_StorageScan_PostEngineStart(t *testing.T) {
 			},
 			expResp: &ctlpb.StorageScanResp{
 				Nvme: &ctlpb.ScanNvmeResp{
-					State: &ctlpb.ResponseState{
-						Error: fmt.Sprintf("instance 0, ctrlr %s: GetBioHealth response status: %s",
-							newCtrlr(1).PciAddr, drpc.DaosNonexistant.Error()),
-						Status: ctlpb.ResponseStatus_CTL_ERR_NVME,
-					},
+					Ctrlrs: proto.NvmeControllers{ctrlrPBwMetaNormal},
+					State:  new(ctlpb.ResponseState),
 				},
 				Scm: &ctlpb.ScanScmResp{State: new(ctlpb.ResponseState)},
 			},
@@ -1062,52 +1014,68 @@ func TestServer_CtlSvc_StorageScan_PostEngineStart(t *testing.T) {
 				t.Fatalf("number of tc.storageCfgs doesn't match num drpc msg groups")
 			}
 
+			if len(tc.storageCfgs) == 1 && tc.eCtrlrs == nil && tc.csCtrlrs != nil {
+				log.Debugf("using control service storage provider for first engine")
+				tc.eCtrlrs = []*storage.NvmeControllers{tc.csCtrlrs}
+			}
+
+			var csbmbc *bdev.MockBackendConfig
+			if tc.csCtrlrs != nil {
+				csbmbc = &bdev.MockBackendConfig{
+					ScanRes: &storage.BdevScanResponse{Controllers: *tc.csCtrlrs},
+				}
+			}
+
 			var engineCfgs []*engine.Config
 			for _, sc := range tc.storageCfgs {
 				engineCfgs = append(engineCfgs, engine.MockConfig().WithStorage(sc...))
 			}
 			sCfg := config.DefaultServer().WithEngines(engineCfgs...)
-			cs := mockControlService(t, log, sCfg, tc.bmbc, tc.smbc, tc.smsc)
+			cs := mockControlService(t, log, sCfg, csbmbc, tc.smbc, tc.smsc)
 
 			// In production, during server/server.go:srv.addEngines() and after
 			// srv.createEngine(), engine.storage.SetBdevCache() is called to load the
 			// results of the start-up bdev scan from the control service storage
 			// provider into the engine's storage provider. The control service and
 			// each of the engines have distinct storage provider instances so cached
-			// cached results have to be explicitly shared so cache is available when
+			// cached results have to be explicitly shared so results are available when
 			// engines are up.
 
-			// This block mimics control service start-up and engine creation where
-			// cache is shared, Setup() runs discovery for nvme & scm.
-			cs.Setup()
-			nvmeScanResp, err := cs.NvmeScan(storage.BdevScanRequest{})
-			if err != nil {
-				t.Fatal(err)
-			}
-			for i, ec := range engineCfgs {
+			for idx, ec := range engineCfgs {
+				var ebmbc *bdev.MockBackendConfig
+				if tc.eCtrlrs != nil && len(tc.eCtrlrs) > idx {
+					log.Debugf("bdevs %v for engine %d", *tc.eCtrlrs[idx], idx)
+					ebmbc = &bdev.MockBackendConfig{
+						ScanRes: &storage.BdevScanResponse{
+							Controllers: *tc.eCtrlrs[idx],
+						},
+					}
+				}
+
 				// replace harness instance with mock I/O Engine
 				// to enable mocking of harness instance drpc channel
-				sp := storage.MockProvider(log, 0, &ec.Storage,
+				sp := storage.MockProvider(log, idx, &ec.Storage,
 					cs.storage.Sys, // share system provider cfo
 					scm.NewMockProvider(log, tc.smbc, nil),
-					bdev.NewMockProvider(log, tc.bmbc))
-				// share bdev cache with control service
-				sp.SetBdevCache(*nvmeScanResp)
-				ne := newTestEngine(log, false, sp)
+					bdev.NewMockProvider(log, ebmbc))
+				ne := newTestEngine(log, false, sp, ec)
 
 				// mock drpc responses
 				dcc := new(mockDrpcClientConfig)
 				if tc.junkResp {
-					dcc.setSendMsgResponse(drpc.Status_SUCCESS, makeBadBytes(42), nil)
-				} else if len(tc.drpcResps) > i {
-					dcc.setSendMsgResponseList(t, tc.drpcResps[i]...)
+					dcc.setSendMsgResponse(drpc.Status_SUCCESS,
+						makeBadBytes(42), nil)
+				} else if len(tc.drpcResps) > idx {
+					t.Logf("setting %d drpc responses for engine %d",
+						len(tc.drpcResps[idx]), idx)
+					dcc.setSendMsgResponseList(t, tc.drpcResps[idx]...)
 				} else {
 					t.Fatal("drpc response mocks unpopulated")
 				}
 				ne.setDrpcClient(newMockDrpcClient(dcc))
-				ne._superblock.Rank = system.NewRankPtr(uint32(i + 1))
+				ne._superblock.Rank = system.NewRankPtr(uint32(idx + 1))
 
-				cs.harness.instances[i] = ne
+				cs.harness.instances[idx] = ne
 			}
 			cs.harness.started.SetTrue()
 
@@ -1314,7 +1282,7 @@ func TestServer_CtlSvc_StorageFormat(t *testing.T) {
 			expResp: &ctlpb.StorageFormatResp{
 				Crets: []*ctlpb.NvmeControllerResult{
 					{
-						PciAddr: "<nil>",
+						PciAddr: storage.NilBdevAddress,
 						State: &ctlpb.ResponseState{
 							Status: ctlpb.ResponseStatus_CTL_SUCCESS,
 							Info:   fmt.Sprintf(msgNvmeFormatSkip, 0),
@@ -1350,7 +1318,7 @@ func TestServer_CtlSvc_StorageFormat(t *testing.T) {
 			expResp: &ctlpb.StorageFormatResp{
 				Crets: []*ctlpb.NvmeControllerResult{
 					{
-						PciAddr: "<nil>",
+						PciAddr: storage.NilBdevAddress,
 						State: &ctlpb.ResponseState{
 							Status: ctlpb.ResponseStatus_CTL_SUCCESS,
 							Info:   fmt.Sprintf(msgNvmeFormatSkip, 0),
@@ -1419,7 +1387,7 @@ func TestServer_CtlSvc_StorageFormat(t *testing.T) {
 			expResp: &ctlpb.StorageFormatResp{
 				Crets: []*ctlpb.NvmeControllerResult{
 					{
-						PciAddr: "<nil>",
+						PciAddr: storage.NilBdevAddress,
 						State: &ctlpb.ResponseState{
 							Status: ctlpb.ResponseStatus_CTL_SUCCESS,
 							Info:   fmt.Sprintf(msgNvmeFormatSkip, 0),
@@ -1629,11 +1597,17 @@ func TestServer_CtlSvc_StorageFormat(t *testing.T) {
 			instances := cs.harness.Instances()
 			common.AssertEqual(t, len(tc.sMounts), len(instances), name)
 
-			// runs discovery for nvme & scm
-			cs.Setup()
+			// Mimic control service start-up and engine creation where cache is shared
+			// to the engines from the base control service storage provider.
+			nvmeScanResp, err := cs.NvmeScan(storage.BdevScanRequest{})
+			if err != nil {
+				t.Fatal(err)
+			}
 
 			for i, e := range instances {
 				ei := e.(*EngineInstance)
+				ei.storage.SetBdevCache(*nvmeScanResp)
+
 				root := filepath.Dir(tc.sMounts[i])
 				if tc.scmMounted {
 					root = tc.sMounts[i]
@@ -1835,6 +1809,323 @@ func TestServer_CtlSvc_StorageNvmeRebind(t *testing.T) {
 			}
 
 			if diff := cmp.Diff(tc.expResp, resp, common.DefaultCmpOpts()...); diff != "" {
+				t.Fatalf("unexpected response (-want, +got):\n%s\n", diff)
+			}
+		})
+	}
+}
+
+func TestServer_CtlSvc_StorageNvmeAddDevice(t *testing.T) {
+	for name, tc := range map[string]struct {
+		req         *ctlpb.NvmeAddDeviceReq
+		bmbc        *bdev.MockBackendConfig
+		storageCfgs []storage.TierConfigs
+		expErr      error
+		expDevList  []string
+		expResp     *ctlpb.NvmeAddDeviceResp
+	}{
+		"nil request": {
+			expErr: errors.New("nil request"),
+		},
+		"missing engine index 0": {
+			req: &ctlpb.NvmeAddDeviceReq{
+				PciAddr:          common.MockPCIAddr(1),
+				StorageTierIndex: -1,
+			},
+			expErr: errors.New("engine with index 0"),
+		},
+		"missing engine index 1": {
+			req: &ctlpb.NvmeAddDeviceReq{
+				PciAddr:          common.MockPCIAddr(1),
+				EngineIndex:      1,
+				StorageTierIndex: -1,
+			},
+			storageCfgs: []storage.TierConfigs{
+				{
+					storage.NewTierConfig().
+						WithStorageClass(storage.ClassNvme.String()).
+						WithBdevDeviceList(common.MockPCIAddr(0)),
+				},
+			},
+			expErr: errors.New("engine with index 1"),
+		},
+		"zero bdev configs": {
+			req: &ctlpb.NvmeAddDeviceReq{
+				PciAddr:          common.MockPCIAddr(1),
+				StorageTierIndex: -1,
+			},
+			storageCfgs: []storage.TierConfigs{
+				{
+					storage.NewTierConfig().
+						WithStorageClass(storage.ClassDcpm.String()),
+				},
+			},
+			expErr: errors.New("no bdev storage tiers"),
+		},
+		"missing bdev config index 0": {
+			req: &ctlpb.NvmeAddDeviceReq{
+				PciAddr:          common.MockPCIAddr(1),
+				StorageTierIndex: 0,
+			},
+			storageCfgs: []storage.TierConfigs{
+				{
+					storage.NewTierConfig().
+						WithStorageClass(storage.ClassDcpm.String()),
+					storage.NewTierConfig().
+						WithStorageClass(storage.ClassNvme.String()).
+						WithBdevDeviceList(common.MockPCIAddr(0)),
+				},
+			},
+			expErr: errors.New("storage tier with index 0"),
+		},
+		"missing bdev config index 2": {
+			req: &ctlpb.NvmeAddDeviceReq{
+				PciAddr:          common.MockPCIAddr(1),
+				StorageTierIndex: 2,
+			},
+			storageCfgs: []storage.TierConfigs{
+				{
+					storage.NewTierConfig().
+						WithStorageClass(storage.ClassDcpm.String()),
+					storage.NewTierConfig().
+						WithStorageClass(storage.ClassNvme.String()).
+						WithBdevDeviceList(common.MockPCIAddr(0)),
+				},
+			},
+			expErr: errors.New("storage tier with index 2"),
+		},
+		"success; bdev config index unspecified": {
+			req: &ctlpb.NvmeAddDeviceReq{
+				PciAddr:          common.MockPCIAddr(1),
+				StorageTierIndex: -1,
+			},
+			storageCfgs: []storage.TierConfigs{
+				{
+					storage.NewTierConfig().
+						WithStorageClass(storage.ClassDcpm.String()),
+					storage.NewTierConfig().
+						WithStorageClass(storage.ClassNvme.String()).
+						WithBdevDeviceList(common.MockPCIAddr(0)),
+				},
+			},
+			expResp: &ctlpb.NvmeAddDeviceResp{},
+			expDevList: []string{
+				common.MockPCIAddr(0), common.MockPCIAddr(1),
+			},
+		},
+		"success; bdev config index specified": {
+			req: &ctlpb.NvmeAddDeviceReq{
+				PciAddr:          common.MockPCIAddr(1),
+				StorageTierIndex: 1,
+			},
+			storageCfgs: []storage.TierConfigs{
+				{
+					storage.NewTierConfig().
+						WithStorageClass(storage.ClassDcpm.String()),
+					storage.NewTierConfig().
+						WithStorageClass(storage.ClassNvme.String()).
+						WithBdevDeviceList(common.MockPCIAddr(0)),
+				},
+			},
+			expResp: &ctlpb.NvmeAddDeviceResp{},
+			expDevList: []string{
+				common.MockPCIAddr(0), common.MockPCIAddr(1),
+			},
+		},
+		"failure; write config failed": {
+			req: &ctlpb.NvmeAddDeviceReq{
+				PciAddr:          common.MockPCIAddr(1),
+				StorageTierIndex: -1,
+			},
+			bmbc: &bdev.MockBackendConfig{
+				WriteConfErr: errors.New("failure"),
+			},
+			storageCfgs: []storage.TierConfigs{
+				{
+					storage.NewTierConfig().
+						WithStorageClass(storage.ClassDcpm.String()),
+					storage.NewTierConfig().
+						WithStorageClass(storage.ClassNvme.String()).
+						WithBdevDeviceList(common.MockPCIAddr(0)),
+				},
+			},
+			expResp: &ctlpb.NvmeAddDeviceResp{
+				State: &ctlpb.ResponseState{
+					Status: ctlpb.ResponseStatus_CTL_ERR_NVME,
+					Error:  "write nvme config for engine 0: failure",
+				},
+			},
+			expDevList: []string{
+				common.MockPCIAddr(0), common.MockPCIAddr(1),
+			},
+		},
+		"zero bdev configs; engine index 1": {
+			req: &ctlpb.NvmeAddDeviceReq{
+				PciAddr:          common.MockPCIAddr(1),
+				EngineIndex:      1,
+				StorageTierIndex: -1,
+			},
+			storageCfgs: []storage.TierConfigs{
+				{
+					storage.NewTierConfig().
+						WithStorageClass(storage.ClassDcpm.String()),
+					storage.NewTierConfig().
+						WithStorageClass(storage.ClassNvme.String()).
+						WithBdevDeviceList(common.MockPCIAddr(0)),
+				},
+				{
+					storage.NewTierConfig().
+						WithStorageClass(storage.ClassDcpm.String()),
+				},
+			},
+			expErr: errors.New("no bdev storage tiers"),
+		},
+		"missing bdev config index 0; engine index 1": {
+			req: &ctlpb.NvmeAddDeviceReq{
+				PciAddr:          common.MockPCIAddr(1),
+				EngineIndex:      1,
+				StorageTierIndex: 0,
+			},
+			storageCfgs: []storage.TierConfigs{
+				{
+					storage.NewTierConfig().
+						WithStorageClass(storage.ClassDcpm.String()),
+					storage.NewTierConfig().
+						WithStorageClass(storage.ClassNvme.String()).
+						WithBdevDeviceList(common.MockPCIAddr(0)),
+				},
+				{
+					storage.NewTierConfig().
+						WithStorageClass(storage.ClassDcpm.String()),
+					storage.NewTierConfig().
+						WithStorageClass(storage.ClassNvme.String()).
+						WithBdevDeviceList(common.MockPCIAddr(0)),
+				},
+			},
+			expErr: errors.New("storage tier with index 0"),
+		},
+		"missing bdev config index 2; engine index 1": {
+			req: &ctlpb.NvmeAddDeviceReq{
+				PciAddr:          common.MockPCIAddr(1),
+				EngineIndex:      1,
+				StorageTierIndex: 2,
+			},
+			storageCfgs: []storage.TierConfigs{
+				{
+					storage.NewTierConfig().
+						WithStorageClass(storage.ClassDcpm.String()),
+					storage.NewTierConfig().
+						WithStorageClass(storage.ClassNvme.String()).
+						WithBdevDeviceList(common.MockPCIAddr(0)),
+				},
+				{
+					storage.NewTierConfig().
+						WithStorageClass(storage.ClassDcpm.String()),
+					storage.NewTierConfig().
+						WithStorageClass(storage.ClassNvme.String()).
+						WithBdevDeviceList(common.MockPCIAddr(0)),
+				},
+			},
+			expErr: errors.New("storage tier with index 2"),
+		},
+		"success; bdev config index specified; engine index 1": {
+			req: &ctlpb.NvmeAddDeviceReq{
+				PciAddr:          common.MockPCIAddr(1),
+				EngineIndex:      1,
+				StorageTierIndex: 1,
+			},
+			storageCfgs: []storage.TierConfigs{
+				{
+					storage.NewTierConfig().
+						WithStorageClass(storage.ClassDcpm.String()),
+					storage.NewTierConfig().
+						WithStorageClass(storage.ClassNvme.String()).
+						WithBdevDeviceList(common.MockPCIAddr(0)),
+				},
+				{
+					storage.NewTierConfig().
+						WithStorageClass(storage.ClassDcpm.String()),
+					storage.NewTierConfig().
+						WithStorageClass(storage.ClassNvme.String()).
+						WithBdevDeviceList(common.MockPCIAddr(0)),
+				},
+			},
+			expResp: &ctlpb.NvmeAddDeviceResp{},
+			expDevList: []string{
+				common.MockPCIAddr(0), common.MockPCIAddr(1),
+			},
+		},
+		"failure; write config failed; engine index 1": {
+			req: &ctlpb.NvmeAddDeviceReq{
+				PciAddr:          common.MockPCIAddr(1),
+				EngineIndex:      1,
+				StorageTierIndex: -1,
+			},
+			bmbc: &bdev.MockBackendConfig{
+				WriteConfErr: errors.New("failure"),
+			},
+			storageCfgs: []storage.TierConfigs{
+				{
+					storage.NewTierConfig().
+						WithStorageClass(storage.ClassDcpm.String()),
+					storage.NewTierConfig().
+						WithStorageClass(storage.ClassNvme.String()).
+						WithBdevDeviceList(common.MockPCIAddr(0)),
+				},
+				{
+					storage.NewTierConfig().
+						WithStorageClass(storage.ClassDcpm.String()),
+					storage.NewTierConfig().
+						WithStorageClass(storage.ClassNvme.String()).
+						WithBdevDeviceList(common.MockPCIAddr(0)),
+				},
+			},
+			expResp: &ctlpb.NvmeAddDeviceResp{
+				State: &ctlpb.ResponseState{
+					Status: ctlpb.ResponseStatus_CTL_ERR_NVME,
+					Error:  "write nvme config for engine 1: failure",
+				},
+			},
+			expDevList: []string{
+				common.MockPCIAddr(0), common.MockPCIAddr(1),
+			},
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(t.Name())
+			defer common.ShowBufferOnFailure(t, buf)
+
+			engineCfgs := []*engine.Config{}
+			for idx, tierCfgs := range tc.storageCfgs {
+				ec := engine.MockConfig().WithStorage(tierCfgs...)
+				ec.Index = uint32(idx)
+				engineCfgs = append(engineCfgs, ec)
+			}
+			serverCfg := config.DefaultServer().WithEngines(engineCfgs...)
+
+			cs := mockControlService(t, log, serverCfg, tc.bmbc, nil, nil)
+
+			resp, err := cs.StorageNvmeAddDevice(context.TODO(), tc.req)
+			common.CmpErr(t, tc.expErr, err)
+			if err != nil {
+				return
+			}
+
+			if diff := cmp.Diff(tc.expResp, resp, common.DefaultCmpOpts()...); diff != "" {
+				t.Fatalf("unexpected response (-want, +got):\n%s\n", diff)
+			}
+
+			// Verify device list has been updated
+			es := cs.harness.Instances()[tc.req.EngineIndex].GetStorage()
+			// Assumption made that all test cases have 1 SCM tier and by this point
+			// at least one bdev tier
+			if tc.req.StorageTierIndex == -1 {
+				tc.req.StorageTierIndex = 1
+			} else if tc.req.StorageTierIndex == 0 {
+				t.Fatal("tier index expected to be > 0")
+			}
+			gotDevs := es.GetBdevConfigs()[tc.req.StorageTierIndex-1].Bdev.DeviceList.Strings()
+			if diff := cmp.Diff(tc.expDevList, gotDevs, common.DefaultCmpOpts()...); diff != "" {
 				t.Fatalf("unexpected response (-want, +got):\n%s\n", diff)
 			}
 		})

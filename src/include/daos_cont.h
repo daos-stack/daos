@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2020-2021 Intel Corporation.
+ * (C) Copyright 2020-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -11,6 +11,9 @@
 
 #ifndef __DAOS_CONT_H__
 #define __DAOS_CONT_H__
+
+#define daos_cont_open daos_cont_open2
+#define daos_cont_destroy daos_cont_destroy2
 
 #if defined(__cplusplus)
 extern "C" {
@@ -655,60 +658,11 @@ daos_cont_destroy_snap(daos_handle_t coh, daos_epoch_range_t epr,
  * Please don't use directly
  */
 int
-daos_cont_open2(daos_handle_t poh, const char *cont, unsigned int flags, daos_handle_t *coh,
-		daos_cont_info_t *info, daos_event_t *ev);
-
-/**
- * Backward compatibility code.
- * Please don't use directly
- */
-int
-daos_cont_destroy2(daos_handle_t poh, const char *cont, int force, daos_event_t *ev);
-
-/**
- * Backward compatibility code.
- * Please don't use directly
- */
-int
 daos_cont_create2(daos_handle_t poh, uuid_t *uuid, daos_prop_t *cont_prop, daos_event_t *ev);
 int
 daos_cont_create1(daos_handle_t poh, const uuid_t uuid, daos_prop_t *cont_prop, daos_event_t *ev);
 
 #if defined(__cplusplus)
-}
-
-#define daos_cont_open daos_cont_open_cpp
-static inline int
-daos_cont_open_cpp(daos_handle_t poh, const char *cont, unsigned int flags, daos_handle_t *coh,
-		   daos_cont_info_t *info, daos_event_t *ev)
-{
-	return daos_cont_open2(poh, cont, flags, coh, info, ev);
-}
-
-static inline int
-daos_cont_open_cpp(daos_handle_t poh, const uuid_t cont, unsigned int flags, daos_handle_t *coh,
-	       daos_cont_info_t *info, daos_event_t *ev)
-{
-	char str[37];
-
-	uuid_unparse(cont, str);
-	return daos_cont_open2(poh, str, flags, coh, info, ev);
-}
-
-#define daos_cont_destroy daos_cont_destroy_cpp
-static inline int
-daos_cont_destroy_cpp(daos_handle_t poh, const char *cont, int force, daos_event_t *ev)
-{
-	return daos_cont_destroy2(poh, cont, force, ev);
-}
-
-static inline int
-daos_cont_destroy_cpp(daos_handle_t poh, const uuid_t cont, int force, daos_event_t *ev)
-{
-	char str[37];
-
-	uuid_unparse(cont, str);
-	return daos_cont_destroy2(poh, str, force, ev);
 }
 
 #define daos_cont_create daos_cont_create_cpp
@@ -724,43 +678,6 @@ daos_cont_create_cpp(daos_handle_t poh, const uuid_t uuid, daos_prop_t *cont_pro
 	return daos_cont_create1(poh, uuid, cont_prop, ev);
 }
 #else
-/**
- * for backward compatility, support old api where a const uuid_t was used instead of a string to
- * identify the container.
- */
-#define daos_cont_open(poh, co, ...)					\
-	({								\
-		int _ret;						\
-		char _str[37];						\
-		const char *__str = NULL;				\
-		if (d_is_string(co)) {					\
-			__str = (const char *)(co);			\
-		} else if (d_is_uuid(co)) {				\
-			uuid_unparse((unsigned char *)(co), _str);	\
-			__str = _str;					\
-		}							\
-		_ret = daos_cont_open2((poh), __str, __VA_ARGS__);	\
-		_ret;							\
-	})
-
-/**
- * for backward compatility, support old api where a const uuid_t was used instead of a string to
- * identify the container.
- */
-#define daos_cont_destroy(poh, co, ...)					\
-	({								\
-		int _ret;						\
-		char _str[37];						\
-		const char *__str = NULL;				\
-		if (d_is_string(co)) {					\
-			__str = (const char *)(co);			\
-		} else if (d_is_uuid(co)) {				\
-			uuid_unparse((unsigned char *)(co), _str);	\
-			__str = _str;					\
-		}							\
-		_ret = daos_cont_destroy2((poh), __str, __VA_ARGS__);	\
-		_ret;							\
-	})
 
 /**
  * for backward compatility, support old api where a const uuid_t was required to be passed in for
