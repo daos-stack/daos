@@ -2266,7 +2266,7 @@ class posix_tests():
     @needs_dfuse_with_opt(caching=False)
     def test_il_stream(self):
         """Test git with interception library
-        
+
         This is looking for a bug with the streaming functions where ftell is intercepted
         gut putc is not.
         """
