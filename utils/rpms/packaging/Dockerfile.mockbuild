@@ -17,7 +17,7 @@ ARG CB0
 RUN dnf -y update && \
     dnf -y install mock make rpm-build curl createrepo rpmlint redhat-lsb-core git \
                    python-srpm-macros rpmdevtools mock-core-configs\ \<\ 37.1 && \
-    dnf clean
+    dnf clean all
 
 # Add build user (to keep rpmbuild happy)
 ENV USER build
