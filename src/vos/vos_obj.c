@@ -189,7 +189,8 @@ vos_propagate_check(struct vos_object *obj, umem_off_t *known_key, daos_handle_t
 		read_flag = VOS_TS_READ_OBJ;
 		write_flag = VOS_TS_WRITE_OBJ;
 		tree_name = "DKEY";
-		break;
+		/** For now, don't propagate the punch to object layer */
+		return 0;
 	case VOS_ITER_AKEY:
 		read_flag = VOS_TS_READ_DKEY;
 		write_flag = VOS_TS_WRITE_DKEY;
