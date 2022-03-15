@@ -84,18 +84,18 @@ type PMemRegionType uint32
 
 // PMemRegionType values represent the ipmctl region_type enum. Type of region.
 const (
-	RegionTypeUnknown          PMemRegionType = iota
-	RegionTypePersistent                      // Non-mirrored App Direct.
-	RegionTypeVolatile                        // Volatile.
-	RegionTypePersistentMirror                // Persistent.
+	RegionTypeUnknown        PMemRegionType = iota
+	RegionTypeAppDirect                     // App Direct mode.
+	RegionTypeNotInterleaved                // Non-interleaved App Direct mode.
+	RegionTypeVolatile                      // Volatile.
 )
 
 func (pmrt PMemRegionType) String() string {
 	return map[PMemRegionType]string{
-		RegionTypeUnknown:          "Unknown",
-		RegionTypePersistent:       "AppDirectNotInterleaved",
-		RegionTypeVolatile:         "Volatile",
-		RegionTypePersistentMirror: "AppDirect",
+		RegionTypeUnknown:        "Unknown",
+		RegionTypeAppDirect:      "AppDirect",
+		RegionTypeNotInterleaved: "AppDirectNotInterleaved",
+		RegionTypeVolatile:       "Volatile",
 	}[pmrt]
 }
 

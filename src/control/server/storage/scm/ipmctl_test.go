@@ -144,183 +144,6 @@ func TestIpmctl_checkIpmctl(t *testing.T) {
 	}
 }
 
-//// TestIpmctl_GetState tests the internals of ipmCtlRunner, pass in mock runCmd to verify
-//// behavior. Don't use mockPrepScm as we want to test prepScm logic.
-//func TestIpmctl_GetState(t *testing.T) {
-//	var regionsOut string  // variable cmd output
-//	commands := []string{} // external commands issued
-//	// ndctl create-namespace command return json format
-//	nsOut := `{
-//   "dev":"namespace%d.0",
-//   "mode":"fsdax",
-//   "map":"dev",
-//   "size":3183575302144,
-//   "uuid":"842fc847-28e0-4bb6-8dfc-d24afdba1528",
-//   "raw_uuid":"dedb4b28-dc4b-4ccd-b7d1-9bd475c91264",
-//   "sector_size":512,
-//   "blockdev":"pmem%d",
-//   "numa_node":%d
-//}
-//`
-//	oneNs, _ := parseNamespaces(fmt.Sprintf(nsOut, 1, 1, 0))
-//	twoNsJSON := "[" + fmt.Sprintf(nsOut, 1, 1, 0) + "," + fmt.Sprintf(nsOut, 2, 2, 1) + "]"
-//	twoNs, _ := parseNamespaces(twoNsJSON)
-//	createRegionsOut := "hooray it worked\n"
-//	pmemID := 1
-//
-//	mockRun := func(in string) (string, error) {
-//		retString := in
-//
-//		switch in {
-//		case cmdCreateRegions:
-//			retString = createRegionsOut // example successful output
-//		case cmdShowRegions:
-//			retString = regionsOut
-//		case cmdCreateNamespace:
-//			// stimulate free capacity of region being used
-//			regionsOut = strings.Replace(regionsOut, "3012.0", "0.0", 1)
-//			retString = fmt.Sprintf(nsOut, pmemID, pmemID, pmemID-1)
-//			pmemID++
-//		case cmdListNamespaces:
-//			retString = twoNsJSON
-//		case cmdShowIpmctlVersion:
-//			retString = "02.00.00.3825\n"
-//		}
-//
-//		commands = append(commands, in)
-//		return retString, nil
-//	}
-//
-//	tests := map[string]struct {
-//		showRegionOut         string
-//		expGetStateErrMsg string
-//		expErrMsg             string
-//		expRebootRequired     bool
-//		expNamespaces         storage.ScmNamespaces
-//		expCommands           []string
-//		lookPathErrMsg        string
-//	}{
-//		"modules but no regions": {
-//			showRegionOut:     outScmNoRegions,
-//			expRebootRequired: true,
-//			expCommands: []string{
-//				cmdShowRegions, cmdShowIpmctlVersion, cmdDeleteGoal, cmdCreateRegions,
-//			},
-//		},
-//		"single region with free capacity": {
-//			showRegionOut: "\n" +
-//				"---ISetID=0x2aba7f4828ef2ccc---\n" +
-//				"   PersistentMemoryType=AppDirect\n" +
-//				"   FreeCapacity=0.0 GiB\n" +
-//				"---ISetID=0x81187f4881f02ccc---\n" +
-//				"   PersistentMemoryType=AppDirect\n" +
-//				"   FreeCapacity=3012.0 GiB\n" +
-//				"\n",
-//			expCommands: []string{
-//				cmdShowRegions, cmdShowIpmctlVersion, cmdCreateNamespace, cmdShowRegions,
-//			},
-//			expNamespaces: oneNs,
-//		},
-//		"regions with free capacity": {
-//			showRegionOut: "\n" +
-//				"---ISetID=0x2aba7f4828ef2ccc---\n" +
-//				"   PersistentMemoryType=AppDirect\n" +
-//				"   FreeCapacity=3012.0 GiB\n" +
-//				"---ISetID=0x81187f4881f02ccc---\n" +
-//				"   PersistentMemoryType=AppDirect\n" +
-//				"   FreeCapacity=3012.0 GiB\n" +
-//				"\n",
-//			expCommands: []string{
-//				cmdShowRegions, cmdShowIpmctlVersion, cmdCreateNamespace, cmdShowRegions,
-//				cmdCreateNamespace, cmdShowRegions,
-//			},
-//			expNamespaces: twoNs,
-//		},
-//		"regions with no capacity": {
-//			showRegionOut: "\n" +
-//				"---ISetID=0x2aba7f4828ef2ccc---\n" +
-//				"   PersistentMemoryType=AppDirect\n" +
-//				"   FreeCapacity=0.0 GiB\n" +
-//				"---ISetID=0x81187f4881f02ccb---\n" +
-//				"   PersistentMemoryType=AppDirect\n" +
-//				"   FreeCapacity=0.0 GiB\n" +
-//				"\n",
-//			expCommands:   []string{cmdShowRegions, cmdShowIpmctlVersion, cmdListNamespaces},
-//			expNamespaces: twoNs,
-//		},
-//		"v2 regions with no capacity": {
-//			showRegionOut: "\n" +
-//				"---ISetID=0x2aba7f4828ef2ccc---\n" +
-//				"   PersistentMemoryType=AppDirect\n" +
-//				"   FreeCapacity=0.000 GiB\n" +
-//				"---ISetID=0x81187f4881f02ccb---\n" +
-//				"   PersistentMemoryType=AppDirect\n" +
-//				"   FreeCapacity=0.000 GiB\n" +
-//				"\n",
-//			expCommands:   []string{cmdShowRegions, cmdShowIpmctlVersion, cmdListNamespaces},
-//			expNamespaces: twoNs,
-//		},
-//		"unexpected output": {
-//			showRegionOut: "\n" +
-//				"---ISetID=0x2aba7f4828ef2ccc---\n",
-//			expGetStateErrMsg: "checking scm region capacity: expecting at least 4 lines, got 3",
-//		},
-//	}
-//
-//	for _, tc := range tests {
-//		t.Run(tc.desc, func(t *testing.T) {
-//			log, buf := logging.NewTestLogger(t.Name())
-//			defer ShowBufferOnFailure(t, buf)
-//
-//			//			mockLookPath := func(string) (s string, err error) {
-//			//				return
-//			//			}
-//			mockBinding := newMockIpmctl(tc.mockCfg)
-//			//&mockIpmctlCfg{
-//			//modules:       []ipmctl.DeviceDiscovery{MockDiscovery()},
-//			//	getRegionsErr: tc.
-//			//})
-//			cr := newCmdRunner(log, mockBinding, mockRun, mockLookPath)
-//			//			if _, err := cr.GetModules(); err != nil {
-//			//				t.Fatal(err)
-//			//			}
-//
-//			// reset to initial values between tests
-//			//			regionsOut = tc.showRegionOut
-//			//			pmemID = 1
-//			//			commands = nil
-//
-//			scmState, err := cr.GetState()
-//			CmpErr(t, tc.expErr, gotErr)
-//			if tc.expErr != nil {
-//				return
-//			}
-//			AssertEqual(t, tc.expState, scmState, "unexpected scm state")
-//
-//			//			if diff := cmp.Diff(tc.expNamespaces, gotNamespaces); diff != "" {
-//			//				t.Fatalf("unexpected namespace result (-want, +got):\n%s\n", diff)
-//			//			}
-//			//			ExpectError(t, err, tc.expGetStateErrMsg, tc.desc)
-//			//			if tc.expGetStateErrMsg != "" {
-//			//				return
-//			//			}
-//			//
-//			//			needsReboot, namespaces, err := cr.Prep(scmState)
-//			//			if tt.expErrMsg != "" {
-//			//				ExpectError(t, err, tt.expErrMsg, tt.desc)
-//			//				return
-//			//			}
-//			//			if err != nil {
-//			//				t.Fatal(tt.desc + ": " + err.Error())
-//			//			}
-//			//
-//			//			AssertEqual(t, commands, tt.expCommands, tt.desc+": unexpected list of commands run")
-//			//			AssertEqual(t, needsReboot, tt.expRebootRequired, tt.desc+": unexpected value for is reboot required")
-//			//			AssertEqual(t, namespaces, tt.expNamespaces, tt.desc+": unexpected list of pmem device file names")
-//		})
-//	}
-//}
-
 // TestIpmctl_getState tests the internals of GetState and verifies correct behaviour based
 // on different output from GetRegions() bindings call.
 func TestIpmctl_getState(t *testing.T) {
@@ -354,7 +177,7 @@ func TestIpmctl_getState(t *testing.T) {
 				regions: []ipmctl.PMemRegion{
 					{
 						Free_capacity: 111111,
-						Type:          uint32(ipmctl.RegionTypePersistent),
+						Type:          uint32(ipmctl.RegionTypeNotInterleaved),
 					},
 				},
 			},
@@ -365,7 +188,7 @@ func TestIpmctl_getState(t *testing.T) {
 				regions: []ipmctl.PMemRegion{
 					{
 						Free_capacity: 111111,
-						Type:          uint32(ipmctl.RegionTypePersistentMirror),
+						Type:          uint32(ipmctl.RegionTypeAppDirect),
 					},
 				},
 			},
@@ -374,10 +197,10 @@ func TestIpmctl_getState(t *testing.T) {
 		"regions with free capacity": {
 			ipmctlCfg: &mockIpmctlCfg{
 				regions: []ipmctl.PMemRegion{
-					{Type: uint32(ipmctl.RegionTypePersistentMirror)},
+					{Type: uint32(ipmctl.RegionTypeAppDirect)},
 					{
 						Free_capacity: 111111,
-						Type:          uint32(ipmctl.RegionTypePersistentMirror),
+						Type:          uint32(ipmctl.RegionTypeAppDirect),
 					},
 				},
 			},
@@ -386,24 +209,12 @@ func TestIpmctl_getState(t *testing.T) {
 		"regions with no capacity": {
 			ipmctlCfg: &mockIpmctlCfg{
 				regions: []ipmctl.PMemRegion{
-					{Type: uint32(ipmctl.RegionTypePersistentMirror)},
-					{Type: uint32(ipmctl.RegionTypePersistentMirror)},
+					{Type: uint32(ipmctl.RegionTypeAppDirect)},
+					{Type: uint32(ipmctl.RegionTypeAppDirect)},
 				},
 			},
 			expState: storage.ScmStateNoFreeCapacity,
 		},
-		//		"v2 regions with no capacity": {
-		//			showRegionOut: "\n" +
-		//				"---ISetID=0x2aba7f4828ef2ccc---\n" +
-		//				"   PersistentMemoryType=AppDirect\n" +
-		//				"   FreeCapacity=0.000 GiB\n" +
-		//				"---ISetID=0x81187f4881f02ccb---\n" +
-		//				"   PersistentMemoryType=AppDirect\n" +
-		//				"   FreeCapacity=0.000 GiB\n" +
-		//				"\n",
-		//			expCommands:   []string{cmdShowRegions, cmdShowIpmctlVersion, cmdListNamespaces},
-		//			expNamespaces: twoNs,
-		//		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
