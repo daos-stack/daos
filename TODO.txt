@@ -1,0 +1,3 @@
+[task1] Validate functional tests with the CI
+[task2] Fix it if needed, and restart from task1
+[task3] Integrate the modification in the main branch
