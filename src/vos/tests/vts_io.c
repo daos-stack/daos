@@ -1348,31 +1348,26 @@ handle_cb(vos_iter_type_t type, const union entry_info *entry, struct all_info *
 	  unsigned int *acts)
 {
 	struct iter_info	*type_info = NULL;
-	static int		 count[NUM_LEVELS][4];
 	int			 current;
 
 	switch (type) {
 	case VOS_ITER_OBJ:
-		current = ++count[level][0];
 		type_info = &info->obj[0];
 		assert(daos_unit_oid_compare(type_info[level].oid, entry->oid));
 		type_info[level].oid = entry->oid;
 		break;
 	case VOS_ITER_DKEY:
-		current = ++count[level][1];
 		type_info = &info->dkey[0];
 		assert(key_compare(&type_info[level].key, &entry->key));
 		type_info[level].key = entry->key;
 		break;
 	case VOS_ITER_AKEY:
-		current = ++count[level][2];
 		type_info = &info->akey[0];
 		assert(key_compare(&type_info[level].key, &entry->key));
 		type_info[level].key = entry->key;
 		break;
 	case VOS_ITER_SINGLE:
 	case VOS_ITER_RECX:
-		current = ++count[level][3];
 		type_info = &info->value[0];
 		break;
 	default:
@@ -1383,7 +1378,7 @@ handle_cb(vos_iter_type_t type, const union entry_info *entry, struct all_info *
 	D_ASSERT(type_info != NULL);
 
 	*acts = 0;
-	type_info[level].calls++;
+	current = ++type_info[level].calls;
 	if ((current % 2) == 0) {
 		*acts |= VOS_ITER_CB_YIELD;
 		type_info[level].yields++;
@@ -1441,7 +1436,6 @@ gen_io(struct io_test_args *arg, int obj_nr, int dkey_nr, int sv_nr, int ev_nr, 
 	int			oidx, didx, aidx, rc;
 	d_iov_t			val_iov;
 	daos_key_t		dkey;
-	daos_key_t		akey;
 	daos_recx_t		rex;
 	char			dkey_buf[UPDATE_DKEY_SIZE];
 	char			akey_buf[UPDATE_AKEY_SIZE];
@@ -1453,8 +1447,6 @@ gen_io(struct io_test_args *arg, int obj_nr, int dkey_nr, int sv_nr, int ev_nr, 
 	memset(&rex, 0, sizeof(rex));
 	memset(&sgl, 0, sizeof(sgl));
 
-	set_iov(&dkey, &dkey_buf[0], arg->ofeat & DAOS_OF_DKEY_UINT64);
-	set_iov(&akey, &akey_buf[0], arg->ofeat & DAOS_OF_AKEY_UINT64);
 	dts_buf_render(update_buf, UPDATE_BUF_SIZE);
 	d_iov_set(&val_iov, &update_buf[0], UPDATE_BUF_SIZE);
 	sgl.sg_nr = 1;
@@ -1462,9 +1454,7 @@ gen_io(struct io_test_args *arg, int obj_nr, int dkey_nr, int sv_nr, int ev_nr, 
 	iod.iod_size	= val_iov.iov_len;
 
 	rex.rx_nr	= 1;
-	rex.rx_idx	= hash_key(&dkey, arg->ofeat & DAOS_OF_DKEY_UINT64);
 
-	iod.iod_name	= akey;
 	iod.iod_nr	= 1;
 	iod.iod_type	= DAOS_IOD_ARRAY;
 
@@ -1473,9 +1463,13 @@ gen_io(struct io_test_args *arg, int obj_nr, int dkey_nr, int sv_nr, int ev_nr, 
 		arg->oid = gen_oid(arg->ofeat);
 		for (didx = 0; didx < dkey_nr; didx++) {
 			vts_key_gen(&dkey_buf[0], arg->dkey_size, true, arg);
+			set_iov(&dkey, &dkey_buf[0], arg->ofeat & DAOS_OF_DKEY_UINT64);
+			rex.rx_idx	= hash_key(&dkey, arg->ofeat & DAOS_OF_DKEY_UINT64);
 			iod.iod_type	= DAOS_IOD_SINGLE;
 			for (aidx = 0; aidx < sv_nr; aidx++) {
 				vts_key_gen(&akey_buf[0], arg->akey_size, false, arg);
+				set_iov(&iod.iod_name, &akey_buf[0],
+					arg->ofeat & DAOS_OF_AKEY_UINT64);
 				rc = io_test_obj_update(arg, (*epoch)++, 0, &dkey, &iod, &sgl,
 							NULL, true);
 				assert_rc_equal(rc, 0);
@@ -1484,6 +1478,8 @@ gen_io(struct io_test_args *arg, int obj_nr, int dkey_nr, int sv_nr, int ev_nr, 
 			iod.iod_type	= DAOS_IOD_ARRAY;
 			for (aidx = 0; aidx < ev_nr; aidx++) {
 				vts_key_gen(&akey_buf[0], arg->akey_size, false, arg);
+				set_iov(&iod.iod_name, &akey_buf[0],
+					arg->ofeat & DAOS_OF_AKEY_UINT64);
 				rc = io_test_obj_update(arg, (*epoch)++, 0, &dkey, &iod, &sgl,
 							NULL, true);
 				assert_rc_equal(rc, 0);
@@ -1502,6 +1498,7 @@ vos_iterate_test(void **state)
 	struct vos_iter_anchors	anchors = {0};
 	daos_epoch_t		epoch = 1;
 	int			rc = 0;
+	unsigned long		old_flags = arg->ta_flags;
 
 	arg->ta_flags = 0;
 	test_args_reset(arg, VPOOL_SIZE);
@@ -1588,6 +1585,8 @@ vos_iterate_test(void **state)
 	assert_int_equal(info.value[POST_LEVEL].calls, 1069);
 	assert_int_equal(info.value[POST_LEVEL].skips, 0);
 	assert_int_equal(info.value[POST_LEVEL].aborts, 0);
+
+	arg->ta_flags = old_flags;
 }
 
 static int
