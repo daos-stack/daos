@@ -67,7 +67,7 @@ def base_setup(env, prereqs=None):
 #        env.AppendUnique(CPPDEFINES={'_FORTIFY_SOURCE':'2'})
 
     if build_type != 'release':
-        env.AppendUnique(CPPDEFINES={'FAULT_INJECTION':'1'})
+        env.AppendUnique(CPPDEFINES={'FAULT_INJECTION': '1'})
 
     env.AppendUnique(CPPDEFINES={'CMOCKA_FILTER_SUPPORTED':'0'})
 

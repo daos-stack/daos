@@ -1296,8 +1296,7 @@ dfuse_lseek(int fd, off_t offset, int whence)
 	if (rc != 0)
 		goto do_real_lseek;
 
-	DFUSE_LOG_DEBUG("lseek(fd=%d, offset=%zd, whence=%d) "
-			"intercepted, bypass=%s",
+	DFUSE_LOG_DEBUG("lseek(fd=%d, offset=%zd, whence=%#x) intercepted, bypass=%s",
 			fd, offset, whence, bypass_status[entry->fd_status]);
 
 	if (drop_reference_if_disabled(entry))
@@ -1354,8 +1353,7 @@ dfuse_fseek(FILE *stream, long offset, int whence)
 	if (rc != 0)
 		goto do_real_fseek;
 
-	DFUSE_LOG_DEBUG("fseek(fd=%d, offset=%zd, whence=%d) "
-			"intercepted, bypass=%s",
+	DFUSE_LOG_DEBUG("fseek(fd=%d, offset=%zd, whence=%#x) intercepted, bypass=%s",
 			fd, offset, whence, bypass_status[entry->fd_status]);
 
 	if (drop_reference_if_disabled(entry))
@@ -1414,8 +1412,7 @@ dfuse_fseeko(FILE *stream, off_t offset, int whence)
 	if (rc != 0)
 		goto do_real_fseeko;
 
-	DFUSE_LOG_DEBUG("fseeko(fd=%d, offset=%zd, whence=%d) "
-			"intercepted, bypass=%s",
+	DFUSE_LOG_DEBUG("fseeko(fd=%d, offset=%zd, whence=%#x) intercepted, bypass=%s",
 			fd, offset, whence, bypass_status[entry->fd_status]);
 
 	if (drop_reference_if_disabled(entry))
@@ -1424,6 +1421,10 @@ dfuse_fseeko(FILE *stream, off_t offset, int whence)
 	if (whence == SEEK_SET) {
 		new_offset = offset;
 		entry->fd_eof = false;
+		if (offset != 0) {
+			D_ERROR("Patching up %p\n", stream);
+			new_offset = __real_fseeko(stream, offset, whence);
+		}
 	} else if (whence == SEEK_CUR) {
 		new_offset = entry->fd_pos + offset;
 		entry->fd_eof = false;
@@ -1836,7 +1837,8 @@ dfuse_fopen(const char *path, const char *mode)
 
 	atomic_fetch_add_relaxed(&ioil_iog.iog_file_count, 1);
 
-	DFUSE_LOG_DEBUG("fopen(path=%s, mode=%s) = %p(fd=%d) intercepted, bypass=%s",
+	DFUSE_TRA_DEBUG(entry.fd_dfsoh,
+			"fopen(path=%s, mode=%s) = %p(fd=%d) intercepted, bypass=%s",
 			path, mode, fp, fd, bypass_status[entry.fd_status]);
 
 	return fp;
@@ -2014,7 +2016,7 @@ dfuse_fwrite(const void *ptr, size_t size, size_t nmemb, FILE *stream)
 	if (counter < ioil_iog.iog_report_count)
 		__real_fprintf(stderr, "[libioil] Intercepting fwrite of size %zi\n", len);
 
-	DFUSE_TRA_INFO(entry->fd_dfsoh, "Could perform fwrite");
+	DFUSE_TRA_INFO(entry->fd_dfsoh, "Doing fwrite to %p at %#zx", stream, entry->fd_pos);
 	oldpos = entry->fd_pos;
 	bytes_written = ioil_do_writex(ptr, len, oldpos, entry, &errcode);
 	if (bytes_written > 0) {
@@ -2178,13 +2180,13 @@ do_real_ftello:
 }
 
 DFUSE_PUBLIC int
-dfuse_fputc(int __c, FILE *stream)
+dfuse_fputc(int c, FILE *stream)
 {
 	struct fd_entry	*entry = NULL;
 	int fd;
 	int rc;
 
-	D_ERROR("Unsupported function\n");
+	D_ERROR("Unsupported function %p\n", stream);
 
 	fd = fileno(stream);
 	if (fd == -1)
@@ -2197,15 +2199,13 @@ dfuse_fputc(int __c, FILE *stream)
 	if (drop_reference_if_disabled(entry))
 		goto do_real_fn;
 
-	entry->fd_err = ENOTSUP;
+	D_ERROR("Unsupported function, disabling streaming %p\n", stream);
+	entry->fd_status = DFUSE_IO_DIS_STREAM;
 
 	vector_decref(&fd_table, entry);
 
-	errno = ENOTSUP;
-	return EOF;
-
 do_real_fn:
-	return __real_fputc(__c, stream);
+	return __real_fputc(c, stream);
 }
 
 DFUSE_PUBLIC int
@@ -2288,6 +2288,7 @@ dfuse_fgetc(FILE *stream)
 	if (drop_reference_if_disabled(entry))
 		goto do_real_fn;
 
+	D_ERROR("Unsupported function, disabling streaming %p\n", stream);
 	entry->fd_status = DFUSE_IO_DIS_STREAM;
 
 	vector_decref(&fd_table, entry);
@@ -2314,6 +2315,7 @@ dfuse_getc(FILE *stream)
 	if (drop_reference_if_disabled(entry))
 		goto do_real_fn;
 
+	D_ERROR("Unsupported function, disabling streaming %p\n", stream);
 	entry->fd_status = DFUSE_IO_DIS_STREAM;
 
 	vector_decref(&fd_table, entry);
@@ -2331,8 +2333,6 @@ dfuse_fgets(char *str, int n, FILE *stream)
 
 	fd = fileno(stream);
 
-	D_ERROR("Unsupported function fd:%d stream %p\n", fd, stream);
-
 	if (fd == -1)
 		goto do_real_fn;
 
@@ -2343,12 +2343,10 @@ dfuse_fgets(char *str, int n, FILE *stream)
 	if (drop_reference_if_disabled(entry))
 		goto do_real_fn;
 
-	entry->fd_err = ENOTSUP;
+	D_ERROR("Unsupported function, disabling streaming %p\n", stream);
+	entry->fd_status = DFUSE_IO_DIS_STREAM;
 
 	vector_decref(&fd_table, entry);
-
-	errno = ENOTSUP;
-	return NULL;
 
 do_real_fn:
 	return __real_fgets(str, n, stream);
@@ -2403,6 +2401,7 @@ dfuse_ungetc(int c, FILE *stream)
 	if (drop_reference_if_disabled(entry))
 		goto do_real_fn;
 
+	D_ERROR("Unsupported function, disabling streaming %p\n", stream);
 	entry->fd_status = DFUSE_IO_DIS_STREAM;
 
 	vector_decref(&fd_table, entry);
@@ -2434,8 +2433,7 @@ dfuse_fscanf(FILE *stream, const char *format, ...)
 
 	vector_decref(&fd_table, entry);
 
-	errno = ENOTSUP;
-	return EOF;
+	entry->fd_status = DFUSE_IO_DIS_STREAM;
 
 do_real_fn:
 	va_start(ap, format);
@@ -2464,11 +2462,9 @@ dfuse_vfscanf(FILE *stream, const char *format, va_list arg)
 	if (drop_reference_if_disabled(entry))
 		goto do_real_fn;
 
+	entry->fd_status = DFUSE_IO_DIS_STREAM;
+
 	vector_decref(&fd_table, entry);
-
-	errno = ENOTSUP;
-	return EOF;
-
 do_real_fn:
 	return __real_vfscanf(stream, format, arg);
 }
@@ -2492,12 +2488,9 @@ dfuse_fprintf(FILE *stream, const char *format, ...)
 	if (drop_reference_if_disabled(entry))
 		goto do_real_fn;
 
+	entry->fd_status = DFUSE_IO_DIS_STREAM;
+
 	vector_decref(&fd_table, entry);
-
-	D_ERROR("Unsupported function\n");
-
-	errno = ENOTSUP;
-	return EOF;
 
 do_real_fn:
 	va_start(ap, format);
@@ -2526,11 +2519,9 @@ dfuse_vfprintf(FILE *stream, const char *format, va_list arg)
 	if (drop_reference_if_disabled(entry))
 		goto do_real_fn;
 
+	entry->fd_status = DFUSE_IO_DIS_STREAM;
+
 	vector_decref(&fd_table, entry);
-
-	errno = ENOTSUP;
-	return EOF;
-
 do_real_fn:
 	return __real_vfprintf(stream, format, arg);
 }
