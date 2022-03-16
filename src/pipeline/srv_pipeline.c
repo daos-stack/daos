@@ -21,6 +21,7 @@
 struct pipeline_enum_arg {
 	d_iov_t			dkey;
 	bool			dkey_set;
+	bool			any_rec;
 	daos_iod_t		*iods;
 	uint32_t		nr_iods;
 	d_sg_list_t		*sgl_recx;
@@ -109,6 +110,15 @@ enum_pack_cb(daos_handle_t ih, vos_iter_entry_t *entry, vos_iter_type_t type,
 		daos_recx_t	*iod_recxs;
 
 		D_ASSERT(pipe_arg->copy_data_cb != NULL);
+
+		/** TODO: OMG ! This is a horrible hack. I just don't know why
+		 * I read garbage sometimes (old deleted records seem to leave
+		 * some stuff behind in the form of loose dkeys and akeys),
+		 * but I do. Maybe I have to manage epocs better. In any case,
+		 * my only way to avoid reading a garbage record as valid, is by
+		 * setting this to true when we finally iterate over record
+		 * data (single or array) */
+		pipe_arg->any_rec = true;
 
 		if (pipe_arg->akey_idx < 0)
 		{
@@ -202,6 +212,7 @@ pipeline_fetch_record(daos_handle_t vos_coh, daos_unit_oid_t oid,
 
 	type			= VOS_ITER_DKEY;
 	enum_arg.dkey_set	= false;
+	enum_arg.any_rec	= false;
 	enum_arg.iods		= iods;
 	enum_arg.nr_iods	= nr_iods;
 	enum_arg.sgl_recx	= sgl_recx;
@@ -224,7 +235,7 @@ pipeline_fetch_record(daos_handle_t vos_coh, daos_unit_oid_t oid,
 	{
 		return rc;
 	}
-	if (enum_arg.dkey_set == true)
+	if (enum_arg.dkey_set == true && enum_arg.any_rec == true)
 	{
 		*d_key = enum_arg.dkey;
 
@@ -559,8 +570,8 @@ ds_pipeline_run(daos_handle_t vos_coh, daos_unit_oid_t oid,
 		}
 		sgl_recx_alloc += *nr_iods;
 		*sgl_recx = sgl_recx_;
-		sgl_recx_[sr_idx].sg_iovs = NULL;
 
+		/** i/o maps */
 		D_REALLOC_ARRAY(ioms_, *ioms, (nr_kds_pass - 1) * (*nr_iods),
 				nr_kds_pass * (*nr_iods));
 		if (ioms_ == NULL)
@@ -569,9 +580,18 @@ ds_pipeline_run(daos_handle_t vos_coh, daos_unit_oid_t oid,
 		}
 		ioms_alloc += *nr_iods;
 		*ioms = ioms_;
-		ioms_[sr_idx].iom_nr    = 0;
-		ioms_[sr_idx].iom_recxs = NULL;
 
+		/* init structs */
+		for (i = 0; i < *nr_iods; i++)
+		{
+			sgl_recx_[sr_idx + i].sg_nr     = 0;
+			sgl_recx_[sr_idx + i].sg_nr_out = 0;
+			sgl_recx_[sr_idx + i].sg_iovs   = NULL;
+			ioms_[sr_idx + i].iom_nr        = 0;
+			ioms_[sr_idx + i].iom_recxs     = NULL;
+		}
+
+		/** copying data */
 		for (i = 0; i < *nr_iods; i++)
 		{
 			if (sgl_recx_iter[i].sg_nr_out == 0)
@@ -580,7 +600,6 @@ ds_pipeline_run(daos_handle_t vos_coh, daos_unit_oid_t oid,
 			}
 
 			/** copying sgl_recx */
-			sgl_recx_[sr_idx].sg_iovs = NULL;
 			D_ALLOC(sgl_recx_[sr_idx].sg_iovs,
 				sizeof(*sgl_recx_[sr_idx].sg_iovs));
 			if (sgl_recx_[sr_idx].sg_iovs == NULL)
@@ -608,9 +627,6 @@ ds_pipeline_run(daos_handle_t vos_coh, daos_unit_oid_t oid,
 			sgl_recx_[sr_idx].sg_nr_out = 1;
 
 			/** copying ioms */
-
-			ioms_[sr_idx].iom_nr   = 0;
-			ioms_[sr_idx].iom_recxs = NULL;
 			D_ALLOC_ARRAY(ioms_[sr_idx].iom_recxs,
 				      ioms_iter[i].iom_nr);
 			if (ioms_[sr_idx].iom_recxs == NULL)
@@ -785,7 +801,6 @@ ds_pipeline_run_handler(crt_rpc_t *rpc)
 	daos_iom_t			*ioms		= NULL;
 	uint32_t			nr_recx		= 0;
 	d_sg_list_t			*sgl_aggr	= NULL;
-	int				shard_id	= 0; // DELETE ME
 
 	pri	= crt_req_get(rpc);
 	D_ASSERT(pri != NULL);
@@ -846,11 +861,6 @@ ds_pipeline_run_handler(crt_rpc_t *rpc)
 
 exit:
 
-	shard_id = pri->pri_oid.id_shard;
-
-	printf("(shard=%d) exit\n", shard_id); // DELETE ME
-	fflush(stdout);
-
 	/** set output data */
 
 	if (rc == 0)
@@ -893,50 +903,31 @@ exit:
 		D_ERROR("send reply failed: "DF_RC"\n", DP_RC(rc));
 	}
 
-	printf("(shard=%d) rpc sent\n", shard_id); // DELETE ME
-	fflush(stdout);
-
 	/** free memory */
-
-	printf("(shard=%d) nr_kds_out=%u\n", shard_id, nr_kds_out); // DELETE ME
-	fflush(stdout);
 
 	if (nr_kds_out > 0)
 	{
 		for (i = 0; i < nr_kds_out; i++)
 		{
-			printf("(shard=%d) freeing sgl_keys[%u].sg_iovs=%p sgl_keys[%u].sg_iovs->iov_buf=%p v=%.*s\n",
-				shard_id, i, sgl_keys[i].sg_iovs, i,
-				sgl_keys[i].sg_iovs->iov_buf,
-				(int) sgl_keys[i].sg_iovs->iov_len,
-				(char *) sgl_keys[i].sg_iovs->iov_buf); // DELETE ME
-			fflush(stdout);
 			D_FREE(sgl_keys[i].sg_iovs->iov_buf);
 			D_FREE(sgl_keys[i].sg_iovs);
 		}
-		printf("(shard=%d) freeing sgl_keys, kds\n", shard_id); // DELETE ME
-		fflush(stdout);
 		D_FREE(sgl_keys);
 		D_FREE(kds);
 	}
-
-	printf("(shard=%d) nr_recx=%u\n", shard_id, nr_recx); // DELETE ME
-	fflush(stdout);
-
 	if (nr_recx > 0)
 	{
 		for (i = 0; i < nr_recx; i++)
 		{
-			printf("(shard=%d) freeing sgl_recx[%u]\n", shard_id, i); // DELETE ME
-			fflush(stdout);
-			D_FREE(sgl_recx[i].sg_iovs->iov_buf);
-			D_FREE(sgl_recx[i].sg_iovs);
+			if (sgl_recx[i].sg_iovs != NULL)
+			{
+				if (sgl_recx[i].sg_iovs->iov_buf != NULL)
+				{
+					D_FREE(sgl_recx[i].sg_iovs->iov_buf);
+				}
+				D_FREE(sgl_recx[i].sg_iovs);
+			}
 		}
-		printf("(shard=%d) freeing sgl_recx\n", shard_id); // DELETE ME
-		fflush(stdout);
 		D_FREE(sgl_recx);
 	}
-
-	printf("(shard=%d) memory freed, BYE\n", shard_id); // DELETE ME
-	fflush(stdout);
 }
