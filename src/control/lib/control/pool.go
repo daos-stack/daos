@@ -317,8 +317,8 @@ type PoolUpgradeReq struct {
 func PoolUpgrade(ctx context.Context, rpcClient UnaryInvoker, req *PoolUpgradeReq) error {
 	req.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
 		return mgmtpb.NewMgmtSvcClient(conn).PoolUpgrade(ctx, &mgmtpb.PoolUpgradeReq{
-			Sys:   req.getSystem(rpcClient),
-			Id:    req.ID,
+			Sys: req.getSystem(rpcClient),
+			Id: req.ID,
 		})
 	})
 

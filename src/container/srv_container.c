@@ -445,7 +445,7 @@ cont_create_prop_prepare(struct ds_pool_hdl *pool_hdl,
 		entry = &prop->dpp_entries[i];
 		entry_def = daos_prop_entry_get(prop_def, entry->dpe_type);
 		if (entry_def == NULL) {
-			D_ERROR("type: %d not supportd in default prop.\n",
+			D_ERROR("type: %d not supported in default prop.\n",
 				entry->dpe_type);
 			return -DER_INVAL;
 		}
@@ -3498,7 +3498,7 @@ upgrade_cont_cb(daos_handle_t ih, d_iov_t *key, d_iov_t *val, void *varg)
 		rc = rdb_tx_update(ap->tx, &cont->c_prop,
 				   &ds_cont_prop_ec_pda, &value);
 		if (rc) {
-			D_ERROR("failt to upgrade container ec_pda pool/cont: "DF_CONTF"\n",
+			D_ERROR("failed to upgrade container ec_pda pool/cont: "DF_CONTF"\n",
 				DP_CONT(ap->pool_uuid, cont_uuid));
 			goto out_put_cont;
 		}
@@ -3514,7 +3514,7 @@ upgrade_cont_cb(daos_handle_t ih, d_iov_t *key, d_iov_t *val, void *varg)
 		rc = rdb_tx_update(ap->tx, &cont->c_prop, &ds_cont_prop_rp_pda,
 				   &value);
 		if (rc) {
-			D_ERROR("failt to upgrade container rp_pda pool/cont: "DF_CONTF"\n",
+			D_ERROR("failed to upgrade container rp_pda pool/cont: "DF_CONTF"\n",
 				DP_CONT(ap->pool_uuid, cont_uuid));
 			goto out_put_cont;
 		}

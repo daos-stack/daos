@@ -327,7 +327,7 @@ daos_prop_valid(daos_prop_t *prop, bool pool, bool input)
 		case DAOS_PROP_PO_GLOBAL_VERSION:
 			val = prop->dpp_entries[i].dpe_val;
 			if (val > DAOS_PO_GLOBAL_VERSION) {
-				D_ERROR("invald pool global version "DF_U64".\n",
+				D_ERROR("invalid pool global version "DF_U64".\n",
 					val);
 				return false;
 			}
@@ -335,7 +335,7 @@ daos_prop_valid(daos_prop_t *prop, bool pool, bool input)
 		case DAOS_PROP_PO_UPGRADE_STATUS:
 			val = prop->dpp_entries[i].dpe_val;
 			if (val > DAOS_UPGRADE_STATUS_COMPLETED) {
-				D_ERROR("invald pool upgrade status "DF_U64".\n",
+				D_ERROR("invalid pool upgrade status "DF_U64".\n",
 					val);
 				return false;
 			}
