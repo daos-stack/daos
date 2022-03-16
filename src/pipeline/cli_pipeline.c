@@ -264,7 +264,7 @@ pipeline_shard_run_cb(tse_task_t *task, void *data)
 		daos_filter_t *aggr_filter = api_args->pipeline.aggr_filters[i];
 		daos_filter_part_t *part   = aggr_filter->parts[0];
 		double *src, *dst;
-		size_t lenght_part_type;
+		size_t length_part_type;
 
 		dst = (double *) api_args->sgl_agg[i].sg_iovs->iov_buf;
 		src = (double *) pro->pro_sgl_agg.ca_arrays[i].sg_iovs->iov_buf;
@@ -275,17 +275,17 @@ pipeline_shard_run_cb(tse_task_t *task, void *data)
 			continue;
 		}
 
-		// TODO: right now, all functions' names are same lenght.
-		//       change this in the future if the lenght changes
-		lenght_part_type = 20;
+		// TODO: right now, all functions' names are same length.
+		//       change this in the future if the length changes
+		length_part_type = 20;
 
 		if (!strncmp(part->part_type.iov_buf, "DAOS_FILTER_FUNC_SUM",
-			     lenght_part_type))
+			     length_part_type))
 		{
 			*dst += *src;
 		}
 		else if (!strncmp(part->part_type.iov_buf, "DAOS_FILTER_FUNC_MIN",
-				  lenght_part_type))
+				  length_part_type))
 		{
 			if (*src < *dst)
 			{
@@ -293,7 +293,7 @@ pipeline_shard_run_cb(tse_task_t *task, void *data)
 			}
 		}
 		else if (!strncmp(part->part_type.iov_buf, "DAOS_FILTER_FUNC_MAX",
-				  lenght_part_type))
+				  length_part_type))
 		{
 			if (*src > *dst)
 			{
@@ -301,7 +301,7 @@ pipeline_shard_run_cb(tse_task_t *task, void *data)
 			}
 		}
 		else if (!strncmp(part->part_type.iov_buf, "DAOS_FILTER_FUNC_AVG",
-				  lenght_part_type))
+				  length_part_type))
 		{
 			*dst += *src;
 		}
