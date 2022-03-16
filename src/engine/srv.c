@@ -937,8 +937,8 @@ ca_assign(struct core_assignment *ca, unsigned int xs_type, unsigned idx)
 static void
 ca_free(struct core_assignment *ca)
 {
-	D_FREE_PTR(ca->ca_assigned);
-	D_FREE_PTR(ca);
+	D_FREE(ca->ca_assigned);
+	D_FREE(ca);
 }
 
 static struct core_assignment *
