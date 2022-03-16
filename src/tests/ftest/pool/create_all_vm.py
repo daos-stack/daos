@@ -6,7 +6,7 @@ SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 import sys
 
-from apricot import TestWithServers
+from create_all_base import PoolCreateAllBaseTests
 from command_utils_base import CommandFailure
 
 
@@ -15,6 +15,12 @@ class PoolCreateAllVmTests(PoolCreateAllBaseTests):
 
     :avocado: recursive
     """
+
+    def setUp(self):
+        """Set up each test case."""
+        super().setUp()
+
+        self.scm_avail_bytes = self.get_pool_available_bytes()
 
     def get_pool_available_bytes(self):
         """Return the available size of SCM storage."""

@@ -4,6 +4,9 @@ hosts:
     - server-B
     - server-C
     - server-D
+    - server-E
+    - server-F
+    - server-G
 timeouts:
   test_one_pool: 120
   test_two_pools: 160
@@ -14,17 +17,10 @@ server_config:
     0:
       targets: 4
       bdev_class: nvme
-      bdev_list: ["aaaa:aa:aa.a"]
+      bdev_list: ["aaaa:aa:aa.a", "bbbb:bb:bb.b"]
       scm_class: dcpm
       scm_list: ["/dev/pmem0"]
       scm_mount: /mnt/daos0
-    1:
-      targets: 4
-      bdev_class: nvme
-      bdev_list: ["bbbb:bb:bb.b"]
-      scm_class: dcpm
-      scm_list: ["/dev/pmem1"]
-      scm_mount: /mnt/daos1
 pool:
   name: daos_server
   control_method: dmg
