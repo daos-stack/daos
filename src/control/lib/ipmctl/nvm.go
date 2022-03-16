@@ -31,7 +31,10 @@ import (
 	"github.com/daos-stack/daos/src/control/logging"
 )
 
-const NvmVersionMajor = 2
+const (
+	NvmVersionMajor = 2
+	useNfit         = C.NVM_BOOL(0) // NVM API requires this to work
+)
 
 // Rc2err returns an failure if rc != NVM_SUCCESS.
 //
@@ -120,7 +123,7 @@ func getNumberOfPMemRegions(out *C.NVM_UINT8) C.int {
 }
 
 func getPMemRegions(regions *C.struct_region, count *C.NVM_UINT8) C.int {
-	return C.nvm_get_regions(regions, count)
+	return C.nvm_get_regions_ex(useNfit, regions, count)
 }
 
 func getRegions(log logging.Logger, getNum getNumberOfRegionsFn, get getRegionsFn) (regions []PMemRegion, err error) {
