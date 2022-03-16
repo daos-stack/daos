@@ -641,11 +641,11 @@ DAOS servers and clients.
 
 ### required RPMs
 
-      $ sudo yum install -y mpich
-      $ sudo yum install -y ior
-      $ sudo yum install -y Lmod
-      $ sudo module load mpi/mpich-x86_64
-      $ /usr/bin/touch /tmp/daos_test1/testfile
+      sudo yum install -y mpich
+      sudo yum install -y ior
+      sudo yum install -y Lmod
+      sudo module load mpi/mpich-x86_64
+      /usr/bin/touch /tmp/daos_test1/testfile
 
 ### run mpirun ior and mdtest
 
@@ -689,7 +689,6 @@ DAOS servers and clients.
       Operation Max(MiB) Min(MiB) Mean(MiB) StdDev Max(OPs) Min(OPs) Mean(OPs) StdDev Mean(s) Stonewall(s) Stonewall(MiB) Test# #Tasks tPN reps fPP reord reordoff reordrand seed segcnt blksiz xsize aggs(MiB) API RefNum
       write 1499.68 1499.68 1499.68 0.00 59.99 59.99 59.99 0.00 0.50011 NA NA 0 30 30 1 0 0 1 0 0 1 26214400 26214400 750.0 POSIX 0
       Finished : Fri Apr 16 18:07:57 2021
-
 
 ### Run mpirun mdtest
 

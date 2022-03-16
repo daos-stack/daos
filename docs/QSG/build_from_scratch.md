@@ -1,6 +1,6 @@
 # Build from scratch
 
-The following instructions describe how to build DAOS from source code. The following steps are required:
+The following instructions describe how to build DAOS 2.0 from source code. The following steps are required:
 
 1. Download Source Code
 2. Install Prerequisites
@@ -11,25 +11,23 @@ The approximate time to read and execute the steps on this guide is approximatel
 
 ## Download Source Code
 
-Download DAOS source code using the following command:
-
 The DAOS repository is hosted on [GitHub](https://github.com/daos-stack/daos).
 
-To check out the 2.0 version, run:
+Download DAOS 2.0 source code using the following command:
 
 ```bash
 git clone --recurse-submodules -b release/2.0 https://github.com/daos-stack/daos.git
 cd daos
 ```
 
-This command clones the DAOS git repository (path referred as ${daospath}
+This command used above clones the DAOS git repository (path referred as ${daospath}
 below) and initializes all the submodules automatically.
 
 ## Install Prerequisites
 
 Building DAOS and its dependencies will require the installation of several
-software packages on the system. Example: scons, libuuid, cmocka, ipmctl, 
-and several other packages are usually available on all the Linux 
+software packages on the system. Example: scons, libuuid, cmocka, ipmctl,
+and several other packages are usually available on all the Linux
 distributions. Moreover, a Go version of at least 1.10 is required.
 
 Some DAOS tests use MPI. The DAOS build process uses the environment modules
@@ -41,19 +39,7 @@ distribution.
 
 ### CentOS
 
-Run the following command from the DAOS tree as root or via
-On CentOS7, use the following command: 
-sudo.
-
-```bash
-./utils/scripts/install-centos7.sh
-```
-
-For CenOS8, use the following command:
-
-```bash
-./utils/scripts/install-centos8.sh
-```
+Run the following command from the DAOS tree as root or via sudo.
 
 ### openSUSE
 
@@ -81,9 +67,8 @@ scons-3 --config=force --build-deps=yes install
 ```
 
 By default, DAOS and its dependencies are installed under the `install`
-directory.
-The installation path is modified by adding the PREFIX= option to the above
-command line (e.g., PREFIX=/usr/local).
+directory. The installation path is modified by adding the PREFIX= option to
+the above command line (e.g., PREFIX=/usr/local).
 
 !!! note
     Several other parameters can be set, such as COMPILER=clang or
