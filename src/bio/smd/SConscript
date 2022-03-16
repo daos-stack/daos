@@ -8,7 +8,7 @@ def scons():
     prereqs.require(denv, 'pmdk', 'argobots', 'protobufc')
 
     denv.Library('smd', Glob('*.c'),
-                 LIBS=['$LIBS'])
+                 LIBS=[])
 
     if prereqs.test_requested():
         SConscript('tests/SConscript', exports='denv')
