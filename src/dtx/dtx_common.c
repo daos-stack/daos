@@ -180,12 +180,20 @@ dtx_cleanup_stale_iter_cb(uuid_t co_uuid, vos_iter_entry_t *ent, void *args)
 
 	D_ASSERT(!(ent->ie_dtx_flags & DTE_INVALID));
 
+	/* Skip the DTX entry which leader resides on current target and may be still alive. */
+	if (ent->ie_dtx_flags & DTE_LEADER)
+		return 0;
+
 	/* Skip corrupted entry that will be handled via other special tool. */
 	if (ent->ie_dtx_flags & DTE_CORRUPTED)
 		return 0;
 
 	/* Skip orphan entry that will be handled via other special tool. */
 	if (ent->ie_dtx_flags & DTE_ORPHAN)
+		return 0;
+
+	/* Skip unprepared entry. */
+	if (ent->ie_dtx_tgt_cnt == 0)
 		return 0;
 
 	/* Stop the iteration if current DTX is not too old. */
@@ -231,8 +239,7 @@ dtx_cleanup_stale(void *arg)
 	D_INIT_LIST_HEAD(&dcsca.dcsca_list);
 	dcsca.dcsca_count = 0;
 	rc = ds_cont_iter(cont->sc_pool->spc_hdl, cont->sc_uuid,
-			  dtx_cleanup_stale_iter_cb, &dcsca, VOS_ITER_DTX,
-			  VOS_IT_CLEANUP_DTX);
+			  dtx_cleanup_stale_iter_cb, &dcsca, VOS_ITER_DTX, 0);
 	if (rc < 0)
 		D_WARN("Failed to scan stale DTX entry for "
 		       DF_UUID": "DF_RC"\n", DP_UUID(cont->sc_uuid), DP_RC(rc));

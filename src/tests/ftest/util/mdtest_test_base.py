@@ -4,11 +4,11 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
+
 from dfuse_test_base import DfuseTestBase
-from mpio_utils import MpioUtils
 from mdtest_utils import MdtestCommand
-from command_utils_base import CommandFailure
-from job_manager_utils import Mpirun, Orterun
+from exception_utils import CommandFailure
+from job_manager_utils import get_job_manager
 
 
 class MdtestBase(DfuseTestBase):
@@ -73,7 +73,7 @@ class MdtestBase(DfuseTestBase):
             self.container = None
         self.stop_dfuse()
 
-    def get_mdtest_job_manager_command(self, manager):
+    def get_mdtest_job_manager_command(self, mpi_type):
         """Get the MPI job manager command for Mdtest.
 
         Returns:
@@ -82,15 +82,12 @@ class MdtestBase(DfuseTestBase):
         """
         # pylint: disable=redefined-variable-type
         # Initialize MpioUtils if mdtest needs to be run using mpich
-        if manager == "MPICH":
-            mpio_util = MpioUtils()
-            if mpio_util.mpich_installed(self.hostlist_clients) is False:
-                self.fail("Exiting Test: Mpich not installed")
-            self.job_manager = Mpirun(self.mdtest_cmd, self.subprocess, mpitype="mpich")
+        if mpi_type == "MPICH":
+            manager = get_job_manager(
+                self, "Mpirun", self.mdtest_cmd, self.subprocess, mpi_type="mpich")
         else:
-            self.job_manager = Orterun(self.mdtest_cmd, self.subprocess)
-
-        return self.job_manager
+            manager = get_job_manager(self, "Orterun", self.mdtest_cmd, self.subprocess)
+        return manager
 
     def run_mdtest(self, manager, processes, display_space=True, pool=None, out_queue=None):
         """Run the Mdtest command.

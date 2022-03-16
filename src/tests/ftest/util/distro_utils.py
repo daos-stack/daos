@@ -4,11 +4,11 @@
 
 SPDX-License-Identifier: BSD-2-Clause-Patent
 """
-from avocado.utils.distro import *      # pylint: disable=wildcard-import
+from avocado.utils.distro import *      # noqa: F403    # pylint: disable=wildcard-import
 import re
 
 
-class RockyProbe(Probe):
+class RockyProbe(Probe):                # noqa: F405
     """Probe with version checks for Rocky Linux systems."""
 
     CHECK_FILE = "/etc/rocky-release"
@@ -17,7 +17,7 @@ class RockyProbe(Probe):
     CHECK_VERSION_REGEX = re.compile(r"Rocky Linux release (\d{1,2})\.(\d{1,2}).*")
 
 
-class AlmaProbe(Probe):
+class AlmaProbe(Probe):                 # noqa: F405
     """Probe with version checks for AlmaLinux systems."""
 
     CHECK_FILE = "/etc/almalinux-release"
@@ -26,5 +26,5 @@ class AlmaProbe(Probe):
     CHECK_VERSION_REGEX = re.compile(r"AlmaLinux release (\d{1,2})\.(\d{1,2}).*")
 
 
-register_probe(RockyProbe)
-register_probe(AlmaProbe)
+register_probe(RockyProbe)              # noqa: F405
+register_probe(AlmaProbe)               # noqa: F405
