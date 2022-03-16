@@ -795,7 +795,7 @@ vos_ioh2recx_list(daos_handle_t ioh);
 struct bio_desc *
 vos_ioh2desc(daos_handle_t ioh);
 
-struct dcs_csum_info *
+struct dcs_ci_list *
 vos_ioh2ci(daos_handle_t ioh);
 
 uint32_t

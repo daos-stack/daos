@@ -325,13 +325,11 @@ enum {
 	/** Iterate only show punched records in interval */
 	VOS_IT_PUNCHED		= (1 << 6),
 	/** Cleanup stale DTX entry. */
-	VOS_IT_CLEANUP_DTX	= (1 << 7),
-	/** Cleanup stale DTX entry. */
-	VOS_IT_FOR_DISCARD	= (1 << 8),
+	VOS_IT_FOR_DISCARD	= (1 << 7),
 	/** Entry is not committed */
-	VOS_IT_UNCOMMITTED	= (1 << 9),
+	VOS_IT_UNCOMMITTED	= (1 << 8),
 	/** Mask for all flags */
-	VOS_IT_MASK		= (1 << 10) - 1,
+	VOS_IT_MASK		= (1 << 9) - 1,
 };
 
 typedef struct {

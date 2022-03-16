@@ -2940,13 +2940,14 @@ rdb_raft_process_reply(struct rdb *db, crt_rpc_t *rpc)
 		return;
 	}
 
+	ABT_mutex_lock(db->d_raft_mutex);
+
 	node = raft_get_node(db->d_raft, rank);
 	if (node == NULL) {
-		D_WARN(DF_DB": Rank %d no longer exists\n", DP_DB(db), rank);
-		return;
+		D_DEBUG(DB_MD, DF_DB": rank %u not in current membership\n", DP_DB(db), rank);
+		goto out_mutex;
 	}
 
-	ABT_mutex_lock(db->d_raft_mutex);
 	rdb_raft_save_state(db, &state);
 	switch (opc) {
 	case RDB_REQUESTVOTE:
@@ -2968,10 +2969,12 @@ rdb_raft_process_reply(struct rdb *db, crt_rpc_t *rpc)
 		D_ASSERTF(0, DF_DB": unexpected opc: %u\n", DP_DB(db), opc);
 	}
 	rc = rdb_raft_check_state(db, &state, rc);
-	ABT_mutex_unlock(db->d_raft_mutex);
 	if (rc != 0 && rc != -DER_NOTLEADER)
 		D_ERROR(DF_DB": failed to process opc %u response: %d\n",
 			DP_DB(db), opc, rc);
+
+out_mutex:
+	ABT_mutex_unlock(db->d_raft_mutex);
 }
 
 /* The buffer belonging to bulk must a single d_iov_t. */

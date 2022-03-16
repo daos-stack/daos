@@ -656,7 +656,7 @@ io_test_vos_obj_fetch(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch
 	assert_success(rc);
 
 	if (use_checksums) {
-		struct dcs_csum_info	*csum_infos = vos_ioh2ci(ioh);
+		struct dcs_ci_list	*csum_infos = vos_ioh2ci(ioh);
 		struct dcs_iod_csums	*iod_csums = NULL;
 		struct daos_csummer	*csummer;
 		daos_iom_t		*maps = NULL;
@@ -671,7 +671,7 @@ io_test_vos_obj_fetch(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch
 		}
 
 		rc = ds_csum_add2iod(iod, csummer, bio_iod_sgl(biod, 0),
-				     &csum_infos[0], NULL, iod_csums);
+				     csum_infos, NULL, iod_csums);
 		if (rc != DER_SUCCESS) {
 			daos_csummer_free_ic(csummer, &iod_csums);
 			daos_csummer_destroy(&csummer);
