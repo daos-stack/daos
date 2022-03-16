@@ -139,6 +139,9 @@ pool_iv_prop_l2g(daos_prop_t *prop, struct pool_iv_prop *iv_prop)
 		case DAOS_PROP_PO_EC_CELL_SZ:
 			iv_prop->pip_ec_cell_sz = prop_entry->dpe_val;
 			break;
+		case DAOS_PROP_PO_REDUN_FAC:
+			iv_prop->pip_redun_fac = prop_entry->dpe_val;
+			break;
 		case DAOS_PROP_PO_ACL:
 			acl = prop_entry->dpe_val_ptr;
 			if (acl != NULL) {
@@ -167,6 +170,12 @@ pool_iv_prop_l2g(daos_prop_t *prop, struct pool_iv_prop *iv_prop)
 				offset += roundup(
 					svc_list->rl_nr * sizeof(d_rank_t), 8);
 			}
+			break;
+		case DAOS_PROP_PO_EC_PDA:
+			iv_prop->pip_ec_pda = prop_entry->dpe_val;
+			break;
+		case DAOS_PROP_PO_RP_PDA:
+			iv_prop->pip_rp_pda = prop_entry->dpe_val;
 			break;
 		case DAOS_PROP_PO_POLICY:
 			D_ASSERT(strlen(prop_entry->dpe_str) <=
@@ -238,6 +247,9 @@ pool_iv_prop_g2l(struct pool_iv_prop *iv_prop, daos_prop_t *prop)
 		case DAOS_PROP_PO_EC_CELL_SZ:
 			prop_entry->dpe_val = iv_prop->pip_ec_cell_sz;
 			break;
+		case DAOS_PROP_PO_REDUN_FAC:
+			prop_entry->dpe_val = iv_prop->pip_redun_fac;
+			break;
 		case DAOS_PROP_PO_ACL:
 			iv_prop->pip_acl =
 				(void *)(iv_prop->pip_iv_buf +
@@ -265,6 +277,12 @@ pool_iv_prop_g2l(struct pool_iv_prop *iv_prop, daos_prop_t *prop)
 					D_GOTO(out, rc);
 				prop_entry->dpe_val_ptr = dst_list;
 			}
+			break;
+		case DAOS_PROP_PO_EC_PDA:
+			prop_entry->dpe_val = iv_prop->pip_ec_pda;
+			break;
+		case DAOS_PROP_PO_RP_PDA:
+			prop_entry->dpe_val = iv_prop->pip_rp_pda;
 			break;
 		case DAOS_PROP_PO_POLICY:
 			D_ASSERT(strnlen(iv_prop->pip_policy_str,
