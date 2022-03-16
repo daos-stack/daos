@@ -18,9 +18,9 @@ jobs:
         with:
           ref: ${{ github.event.pull_request.head.sha }}
       - name: Set up Python environment
-        uses: actions/setup-python@v1
+        uses: actions/setup-python@v3
         with:
-          python-version: "3.9"
+          python-version: "3"
       - name: Add parser
         run: echo -n "::add-matcher::ci/daos-flake-matcher.json"
       - name: Add whitespace parser

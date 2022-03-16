@@ -6,6 +6,8 @@
 #
 # Picks up config files from .flake8
 
+set -u
+
 if ! command -v flake8 > /dev/null 2>&1
 then
     echo "No flake checking, install flake8 command"
@@ -28,7 +30,6 @@ then
     echo Checking tree
     flake8 --statistics
 else
-    echo Checking against master.
 
     # Try and use the gh command to work out the target branch, or if not installed
     # then assume master.
@@ -44,5 +45,6 @@ else
 	TARGET=master
     fi
 
+    echo Checking against branch ${TARGET}
     git diff $TARGET... -u | flake8 --diff
 fi
