@@ -82,7 +82,7 @@ func (m *mockIpmctl) GetModules() ([]ipmctl.DeviceDiscovery, error) {
 	return m.cfg.modules, m.cfg.getModulesErr
 }
 
-func (m *mockIpmctl) GetRegions() ([]ipmctl.PMemRegion, error) {
+func (m *mockIpmctl) GetRegions(_ logging.Logger) ([]ipmctl.PMemRegion, error) {
 	return m.cfg.regions, m.cfg.getRegionsErr
 }
 
