@@ -4,10 +4,7 @@
 
 SPDX-License-Identifier: BSD-2-Clause-Patent
 """
-import sys
-
 from apricot import TestWithServers
-from command_utils_base import CommandFailure
 
 
 class PoolCreateAllBaseTests(TestWithServers):
@@ -35,8 +32,6 @@ class PoolCreateAllBaseTests(TestWithServers):
         self.ranks_size = len(self.hostlist_servers)
         self.delta_bytes = self.ranks_size * self.epsilon_bytes
 
-        self.scm_avail_bytes, self.smd_avail_bytes = self.get_pool_available_bytes()
-
     def create_one_pool(self):
         """Create one pool with all the available storage capacity"""
         self.add_pool_qty(1, namespace="/run/pool/*", create=False)
@@ -44,12 +39,10 @@ class PoolCreateAllBaseTests(TestWithServers):
 
         self.log.info("Creating a pool with 100% of the available storage")
         self.pool[0].create()
-        self.assertEqual(self.pool[0].dmg.result.exit_status, 0,
-                "Pool {} could not be created".format(index))
+        self.assertEqual(self.pool[0].dmg.result.exit_status, 0, "Pool could not be created")
 
     def destroy_one_pool(self, index):
         """Destroying one pool"""
-
         self.log.info("Destroying pool %d", index)
         self.pool[0].destroy()
         self.assertEqual(self.pool[0].dmg.result.exit_status, 0,
@@ -65,7 +58,7 @@ class PoolCreateAllBaseTests(TestWithServers):
         self.pool[0].create()
         self.pool[0].get_info()
         self.assertEqual(self.pool[0].dmg.result.exit_status, 0,
-                "First pool 0 could not be created")
+                "First pool could not be created")
 
     def create_second_of_two_pools(self):
         """Create the second pool with 50% the available storage capacity"""

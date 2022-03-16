@@ -6,7 +6,7 @@ SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 import sys
 
-from apricot import TestWithServers
+from create_all_base import PoolCreateAllBaseTests
 from command_utils_base import CommandFailure
 
 
@@ -30,6 +30,8 @@ class PoolCreateAllHwTests(PoolCreateAllBaseTests):
     def setUp(self):
         """Set up each test case."""
         super().setUp()
+
+        self.scm_avail_bytes, self.smd_avail_bytes = self.get_pool_available_bytes()
 
         self.smd_device_size = self.get_smd_device_size()
 
@@ -93,7 +95,7 @@ class PoolCreateAllHwTests(PoolCreateAllBaseTests):
             effectively used all the available storage and there is no more available storage.
 
         :avocado: tags=all,pr,daily_regression
-        :avocado: tags=hw,medium
+        :avocado: tags=hw,large
         :avocado: tags=pool,pool_create_all
         :avocado: tags=pool_create_all_one_hw
         """
@@ -127,7 +129,7 @@ class PoolCreateAllHwTests(PoolCreateAllBaseTests):
             times. For each iteration, check that the size of the created pool is always the same.
 
         :avocado: tags=all,pr,daily_regression
-        :avocado: tags=hw,medium
+        :avocado: tags=hw,large
         :avocado: tags=pool,pool_create_all
         :avocado: tags=pool_create_all_recycle_hw
         """
@@ -224,7 +226,7 @@ class PoolCreateAllHwTests(PoolCreateAllBaseTests):
             effectively used all the available storage and there is no more available storage.
 
         :avocado: tags=all,pr,daily_regression
-        :avocado: tags=hw,medium
+        :avocado: tags=hw,large
         :avocado: tags=pool,pool_create_all
         :avocado: tags=pool_create_all_two_hw
         """
