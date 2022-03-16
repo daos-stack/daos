@@ -39,10 +39,11 @@
 set -eux
 # allow core files to be generated
 sudo bash -c "set -ex
-# using mmap()'ed ULT stacks requires to bump system default
+if ! $TEST_RPMS; then
 cat <<EOF > /etc/sysctl.d/10-daos-server.conf
-vm.max_map_count=1000000
+$(cat utils/rpms/10-daos_server.conf)
 EOF
+fi
 # disable Leap15.3 (at least) from restricting dmesg to root
 cat <<EOF > /etc/sysctl.d/10-dmesg-for-all.conf
 kernel.dmesg_restrict=0
