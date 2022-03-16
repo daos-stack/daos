@@ -31,6 +31,8 @@ import (
 	"github.com/daos-stack/daos/src/control/logging"
 )
 
+const NvmVersionMajor = 2
+
 // Rc2err returns an failure if rc != NVM_SUCCESS.
 //
 // TODO: print human readable error with provided lib macros
@@ -96,6 +98,17 @@ func getModules(getNumDevs getNumberOfDevicesFn, getDevs getDevicesFn) (devices 
 	return
 }
 
+func checkVersion() error {
+	gotVer := C.nvm_get_major_version()
+
+	if int(gotVer) != NvmVersionMajor {
+		return errors.Errorf("libipmctl version mismatch, want major version %d but got %d",
+			NvmVersionMajor, gotVer)
+	}
+
+	return nil
+}
+
 // GetModules queries number of PMem modules and retrieves device_discovery structs for each before
 // converting to Go DeviceDiscovery structs.
 func (n *NvmMgmt) GetModules() (devices []DeviceDiscovery, err error) {
@@ -125,8 +138,7 @@ func getRegions(log logging.Logger, getNum getNumberOfRegionsFn, get getRegionsF
 		return
 	}
 	for idx, pmr := range pmemRegions {
-		log.Debugf("region %d free capacity: %d", idx, uint64(pmr.free_capacity))
-		log.Debugf("region %d capacity: %d", idx, uint64(pmr.capacity))
+		log.Debugf("ipmctl pmem region %d: %+v", idx, pmr)
 	}
 
 	// Cast struct array to slice of go equivalent structs.
