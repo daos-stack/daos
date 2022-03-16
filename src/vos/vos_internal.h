@@ -844,7 +844,7 @@ struct vos_iter_info {
 	struct vos_punch_record	 ii_punched;
 	/** Filter callback */
 	vos_iter_filter_cb_t	 ii_filter_cb;
-	void *			 ii_filter_arg;
+	void			*ii_filter_arg;
 	/** epoch logic expression for the iterator. */
 	vos_it_epc_expr_t	 ii_epc_expr;
 	/** iterator flags */

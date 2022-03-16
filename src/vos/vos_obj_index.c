@@ -530,9 +530,9 @@ oi_iter_match_probe(struct vos_iterator *iter, daos_anchor_t *anchor, uint32_t f
 			if (rc != 0)
 				goto failed;
 			if (start_seq != vos_sched_seq())
-				return acts | VOS_ITER_CB_YIELD;
+				acts |= VOS_ITER_CB_YIELD;
 			if (acts & (VOS_ITER_CB_EXIT | VOS_ITER_CB_ABORT | VOS_ITER_CB_RESTART |
-				    VOS_ITER_CB_DELETE))
+				    VOS_ITER_CB_DELETE | VOS_ITER_CB_YIELD))
 				return acts;
 			if (acts & VOS_ITER_CB_SKIP)
 				goto next;
