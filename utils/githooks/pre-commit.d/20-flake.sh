@@ -35,13 +35,13 @@ else
     # then assume master.
     if command -v gh > /dev/null 2>&1
     then
-	TARGET=$(gh pr view "$BRANCH" --json baseRefName -t "{{.baseRefName}}")
-	# If there is no PR yet then use master.
-	if [ $? -ne 0 ]
+	# If there is no PR created yet then do not check anything.
+	if ! TARGET=$(gh pr view "$BRANCH" --json baseRefName -t "{{.baseRefName}}")
 	then
 	    exit 0
 	fi
     else
+	# With no 'gh' command installed then check against master.
 	TARGET=master
     fi
 
