@@ -345,10 +345,11 @@ typedef struct {
 /** Probe flags for vos_iter_probe_ex */
 enum {
 	/** Indicate that we should skip the current entry */
-	VOS_ITER_PROBE_NEXT = (1 << 0),
+	VOS_ITER_PROBE_NEXT	= (1 << 0),
 	/** Indicate that we've already invoked probe for this entry */
-	VOS_ITER_PROBE_AGAIN = (1 << 1),
+	VOS_ITER_PROBE_AGAIN	= (1 << 1),
 };
+
 /**
  * Iteration object/key filter callback
  */
