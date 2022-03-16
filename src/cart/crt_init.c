@@ -38,6 +38,9 @@ dump_envariables(void)
 	}
 }
 
+static int
+crt_na_config_init(crt_provider_t provider, const char *interface, const char *domain, const char *port);
+
 /* Workaround for CART-890 */
 static void
 mem_pin_workaround(void)
@@ -84,14 +87,16 @@ exit:
 }
 
 static void
-prov_data_init(struct crt_prov_gdata *prov_data, int provider, bool primary,
-		crt_init_options_t *opt)
+prov_data_init(struct crt_prov_gdata *prov_data, crt_provider_t provider,
+		bool primary, crt_init_options_t *opt)
+
 {
-	bool		set_sep = false;
 	bool		share_addr = false;
-	int		ctx_num = 0;
+	bool		set_sep = false;
+	uint32_t	ctx_num = 0;
 	uint32_t	max_expect_size = 0;
 	uint32_t	max_unexpect_size = 0;
+	uint32_t	max_num_ctx = 256;
 
 	/* Assume for now this option is only available for a primary provider */
 	if (primary) {
@@ -121,15 +126,15 @@ prov_data_init(struct crt_prov_gdata *prov_data, int provider, bool primary,
 	prov_data->cpg_inited = true;
 	prov_data->cpg_provider = provider;
 	prov_data->cpg_ctx_num = 0;
-	prov_data->cpg_sep_mode = sep_mode;
+	prov_data->cpg_sep_mode = set_sep;
 	prov_data->cpg_contig_ports = true;
-	prov_data->cpg_ctx_max_num = max_ctx_num;
-	prov_data->cpg_max_exp_size = max_exp_size;
-	prov_data->cpg_max_unexp_size = max_unexp_size;
+	prov_data->cpg_ctx_max_num = max_num_ctx;
+	prov_data->cpg_max_exp_size = max_expect_size;
+	prov_data->cpg_max_unexp_size = max_unexpect_size;
 	prov_data->cpg_primary = primary;
 
-	D_DEBUG(DB_ALL, "prov_idx: %d primary: %b sep_mode: %b sizes: (%d/%d)\n",
-		provider, primary, sep_mode, max_exp_size, max_unexp_size);
+	D_DEBUG(DB_ALL, "prov_idx: %d primary: %d sep_mode: %d sizes: (%d/%d)\n",
+		provider, primary, set_sep, max_expect_size, max_unexpect_size);
 
 	D_INIT_LIST_HEAD(&prov_data->cpg_ctx_list);
 }
@@ -163,7 +168,7 @@ static int data_init(int server, crt_init_options_t *opt)
 
 	crt_gdata.cg_refcount = 0;
 	crt_gdata.cg_inited = 0;
-	crt_gdata.cg_init_prov = CRT_PROVIDER_OFI_SOCKETS;
+	crt_gdata.cg_primary_prov = CRT_PROVIDER_OFI_SOCKETS;
 
 	d_srand(d_timeus_secdiff(0) + getpid());
 	start_rpcid = ((uint64_t)d_rand()) << 32;
@@ -393,9 +398,10 @@ out:
 }
 
 static int
-prov_settings_apply(int prov)
+prov_settings_apply(crt_provider_t prov, crt_init_options_t *opt)
 {
-	char *srx_env;
+	char	*srx_env;
+	int	rc = 0;
 
 	/* rxm and verbs providers only works with regular EP */
 	if ((prov == CRT_PROVIDER_OFI_VERBS_RXM ||
@@ -423,37 +429,29 @@ prov_settings_apply(int prov)
 		D_DEBUG(DB_ALL, "Setting FI_PSM2_NAME_SERVER to 1\n");
 	}
 
-	/* Initialize a network abstraction layer for all providers except for SM */
-	if (prov != CRT_PROVIDER_SM) {
-		rc = crt_na_config_init(prov, opt);
-		if (rc != 0) {
-			D_ERROR("crt_na_config_init() failed, "
-				DF_RC"\n", DP_RC(rc));
-			D_GOTO(out, rc);
-		}
-	}
 
+	return rc;
 }
 
 int
 crt_init_opt(crt_group_id_t grpid, uint32_t flags, crt_init_options_t *opt)
 {
 	char		*provider_env;
+	char		*interface_env;
+	char		*domain_env;
+	char		*tmp;
 	struct timeval	now;
 	unsigned int	seed;
 	const char	*path;
 	bool		server;
-	bool		provider_found = false;
-	int		plugin_idx;
-	bool		set_sep = false;
-	int		max_num_ctx = 256;
-	uint32_t	ctx_num;
-	bool		share_addr;
 	int		rc = 0;
-	char		*provider_str1 = NULL;
-	char 		*provider_str2 = NULL;
-	int		primary_provider;
-	int		secondary_provider;
+	char		*provider_str0 = NULL;
+	char 		*provider_str1 = NULL;
+	crt_provider_t	primary_provider;
+	crt_provider_t	secondary_provider;
+	crt_provider_t	tmp_prov;
+	int		num_secondaries = 0;
+	int		i;
 
 	server = flags & CRT_FLAG_BIT_SERVER;
 
@@ -467,6 +465,10 @@ crt_init_opt(crt_group_id_t grpid, uint32_t flags, crt_init_options_t *opt)
 	crt_setup_log_fac();
 
 	D_INFO("libcart version %s initializing\n", CART_VERSION);
+
+	if (opt)
+	D_ERROR("START ALEXmOD: '%s' '%s' '%s'\n",
+		opt->cio_provider, opt->cio_interface, opt->cio_domain);
 
 	/* d_fault_inject_init() is reference counted */
 	rc = d_fault_inject_init();
@@ -523,7 +525,6 @@ crt_init_opt(crt_group_id_t grpid, uint32_t flags, crt_init_options_t *opt)
 				provider_env = tmp;
 		}
 
-
 		if (opt && opt->cio_interface)
 			interface_env = opt->cio_interface;
 		else {
@@ -534,7 +535,6 @@ crt_init_opt(crt_group_id_t grpid, uint32_t flags, crt_init_options_t *opt)
 				interface_env = tmp;
 		}
 
-			
 		if (opt && opt->cio_domain)
 			domain_env = opt->cio_domain;
 		else {
@@ -546,33 +546,82 @@ crt_init_opt(crt_group_id_t grpid, uint32_t flags, crt_init_options_t *opt)
 		}
 
 		if (domain_env == NULL) {
-			D_DEBUG(DB_ALL, "OFI_DOMAIN is not set. Setting it to %s\n", interface);
-			if (provider == CRT_PROVIDER_OFI_VERBS_RXM ||
-			    provider == CRT_PROVIDER_OFI_CXI)
-				D_WARN("Domain and interface name expected to be different "
-				       "for verbs/cxi, it might fail without specifying OFI_DOMAIN\n");
-			domain = interface;
+			D_DEBUG(DB_ALL, "OFI_DOMAIN is not set. Setting it to %s\n", interface_env);
+			domain_env = interface_env;
 		}
 
+		char	*port_str;
+		char	*iface0, *iface1, *domain0, *domain1, *port0, *port1;
 
-		__split_arg(provider_env, &provider_str1, &provider_str2);
-		primary_provider = crt_str_to_provider(provider_str1);
-		secondary_provider = crt_str_to_provider(provider_str2);
+		if (opt && opt->cio_port)
+			port_str = opt->cio_port;
+		else {
+			port_str = getenv("OFI_PORT");
+
+			tmp = getenv("CRT_PORT");
+			if (tmp)
+				port_str = tmp;
+		}
+
+		D_ERROR("ALXMOD: '%s' '%s' '%s'\n", provider_env, interface_env, domain_env);
+
+		__split_arg(provider_env, &provider_str0, &provider_str1);
+		primary_provider = crt_str_to_provider(provider_str0);
+		secondary_provider = crt_str_to_provider(provider_str1);
 
 		if (primary_provider == CRT_PROVIDER_UNKNOWN) {
 			D_ERROR("Requested provider %s not found\n", provider_env);
 			D_GOTO(out, rc = -DER_NONEXIST);
 		}
+		__split_arg(interface_env, &iface0, &iface1);
+		__split_arg(domain_env, &domain0, &domain1);
+		__split_arg(port_str, &port0, &port1);
 
 		prov_data_init(&crt_gdata.cg_prov_gdata[primary_provider],
-			       primary_provider, true, set_sep, max_num_ctx,
-			       max_expect_size, max_unexpect_size);
+			       primary_provider, true, opt);
+		prov_settings_apply(primary_provider, opt);
+		crt_gdata.cg_primary_prov = primary_provider;
 
-		prov_data_init(&crt_gdata.cg_prov_gdata[secondary_provider],
-				secondary_provider, false, false, 0, 0, 0);
+		rc = crt_na_config_init(primary_provider, iface0, domain0, port0);
+		if (rc != 0) {
+			D_ERROR("crt_na_config_init() failed, "DF_RC"\n", DP_RC(rc));
+			D_GOTO(out, rc);
+		}
 
-		prov_settings_apply(primary_provider);
-		prov_settings_apply(secondary_provider);
+
+		D_ERROR("ALEXMOD: '%s' '%s', '%s' '%s', '%s' '%s', '%s' '%s'\n",
+			provider_str0, provider_str1,
+			iface0, iface1,
+			domain0, domain1,
+			port0, port1);
+
+
+		if (secondary_provider != CRT_PROVIDER_UNKNOWN) {
+			//TODO: Assume 1 secondary provider for now
+			num_secondaries = 1;
+
+			D_ALLOC_ARRAY(crt_gdata.cg_secondary_provs, num_secondaries);
+			if (crt_gdata.cg_secondary_provs == NULL)
+				D_GOTO(out, rc = -DER_NOMEM);
+
+			crt_gdata.cg_secondary_provs[0] = secondary_provider;
+		}
+
+		for (i = 0;  i < num_secondaries; i++) {
+			tmp_prov = crt_gdata.cg_secondary_provs[i];
+
+			prov_data_init(&crt_gdata.cg_prov_gdata[tmp_prov],
+					tmp_prov, false, opt);
+			prov_settings_apply(tmp_prov, opt);
+
+
+			rc = crt_na_config_init(tmp_prov, iface1, domain1, port1);
+			if (rc != 0) {
+				D_ERROR("crt_na_config_init() failed, "DF_RC"\n", DP_RC(rc));
+				D_GOTO(out, rc);
+			}
+		}
+		crt_gdata.cg_num_secondary_provs = num_secondaries;
 
 		rc = crt_hg_init();
 		if (rc != 0) {
@@ -634,7 +683,7 @@ cleanup:
 	if (crt_gdata.cg_opc_map != NULL)
 		crt_opc_map_destroy(crt_gdata.cg_opc_map);
 
-	crt_na_config_fini(crt_gdata.cg_init_prov);
+	crt_na_config_fini(crt_gdata.cg_primary_prov);
 
 unlock:
 	D_RWLOCK_UNLOCK(&crt_gdata.cg_rwlock);
@@ -659,7 +708,7 @@ crt_finalize(void)
 {
 	int local_rc;
 	int rc = 0;
-
+	int i;
 	struct crt_prov_gdata *prov_data;
 
 	D_RWLOCK_WRLOCK(&crt_gdata.cg_rwlock);
@@ -675,10 +724,10 @@ crt_finalize(void)
 		crt_self_test_fini();
 
 		/* TODO: Needs to happen for every initialized provider */
-		prov_data = &crt_gdata.cg_prov_gdata[crt_gdata.cg_init_prov];
+		prov_data = &crt_gdata.cg_prov_gdata[crt_gdata.cg_primary_prov];
 
 		if (prov_data->cpg_ctx_num > 0) {
-			D_ASSERT(!crt_context_empty(crt_gdata.cg_init_prov,
+			D_ASSERT(!crt_context_empty(crt_gdata.cg_primary_prov,
 				 CRT_LOCKED));
 			D_ERROR("cannot finalize, current ctx_num(%d).\n",
 				prov_data->cpg_ctx_num);
@@ -686,7 +735,7 @@ crt_finalize(void)
 			D_RWLOCK_UNLOCK(&crt_gdata.cg_rwlock);
 			D_GOTO(out, rc = -DER_BUSY);
 		} else {
-			D_ASSERT(crt_context_empty(crt_gdata.cg_init_prov,
+			D_ASSERT(crt_context_empty(crt_gdata.cg_primary_prov,
 				 CRT_LOCKED));
 		}
 
@@ -720,7 +769,12 @@ crt_finalize(void)
 		crt_gdata.cg_inited = 0;
 		gdata_init_flag = 0;
 
-		crt_na_config_fini(crt_gdata.cg_init_prov);
+		crt_na_config_fini(crt_gdata.cg_primary_prov);
+
+		if (crt_gdata.cg_secondary_provs != NULL) {
+			for (i = 0; i < crt_gdata.cg_num_secondary_provs; i++)
+				crt_na_config_fini(crt_gdata.cg_secondary_provs[i]);
+		}
 	} else {
 		D_RWLOCK_UNLOCK(&crt_gdata.cg_rwlock);
 	}
@@ -740,24 +794,25 @@ direct_out:
 	return rc;
 }
 
-static inline na_bool_t is_integer_str(char *str)
+static inline bool
+is_integer_str(const char *str)
 {
-	char *p;
+	const char *p;
 
 	p = str;
 	if (p == NULL || strlen(p) == 0)
-		return NA_FALSE;
+		return false;
 
 	while (*p != '\0') {
 		if (*p <= '9' && *p >= '0') {
 			p++;
 			continue;
 		} else {
-			return NA_FALSE;
+			return false;
 		}
 	}
 
-	return NA_TRUE;
+	return true;
 }
 
 static inline int
@@ -836,15 +891,18 @@ crt_port_range_verify(int port)
 static int
 crt_na_fill_ip_addr(struct crt_na_config *na_cfg)
 {
-	struct ifaddrs *if_addrs = NULL;
-	struct ifaddrs *ifa = NULL;
-	
+	struct ifaddrs	*if_addrs = NULL;
+	struct ifaddrs	*ifa = NULL;
+	void		*tmp_ptr;
+	const char	*ip_str = NULL;
+	int		rc = 0;
+
 	rc = getifaddrs(&if_addrs);
 	if (rc != 0) {
 		D_ERROR("cannot getifaddrs, errno: %d(%s).\n", errno, strerror(errno));
 		D_GOTO(out, rc = -DER_PROTO);
 	}
-	
+
 	for (ifa = if_addrs; ifa != NULL; ifa = ifa->ifa_next) {
 		if (ifa->ifa_addr == NULL)
 			continue;
@@ -877,26 +935,25 @@ crt_na_fill_ip_addr(struct crt_na_config *na_cfg)
 	}
 	freeifaddrs(if_addrs);
 	if (ip_str == NULL) {
-		D_ERROR("no IP addr found on interface %s\n", interface);
+		D_ERROR("no IP addr found on interface %s\n", na_cfg->noc_interface);
 		D_GOTO(out, rc = -DER_PROTO);
 	}
 
+out:
+	return rc;
 }
 
 static int
-crt_na_config_init(crt_provider_t prov, const char *interface, const char *domain,
-		int port)
+crt_na_config_init(crt_provider_t provider, const char *interface, const char *domain, const char *port_str)
 {
-	char				*port_str;
-	char				*interface;
-	int				port;
-	void				*tmp_ptr;
-	const char			*ip_str = NULL;
-	char				*domain = NULL;
 	struct crt_na_config 		*na_cfg;
 	int				rc = 0;
+	int				port = -1;
 
-	na_cfg = &crt_gdata.cg_prov_gdata[prov].cpg_na_config;
+	if (provider == CRT_PROVIDER_SM)
+		return 0;
+
+	na_cfg = &crt_gdata.cg_prov_gdata[provider].cpg_na_config;
 	D_STRNDUP(na_cfg->noc_interface, interface, 64);
 	if (!na_cfg->noc_interface)
 		D_GOTO(out, rc = -DER_NOMEM);
@@ -906,13 +963,6 @@ crt_na_config_init(crt_provider_t prov, const char *interface, const char *domai
 		D_GOTO(out, rc = -DER_NOMEM);
 
 	crt_na_fill_ip_addr(na_cfg);
-	port = -1;
-
-	if (opt && opt->cio_port)
-		port_str = opt->cio_port;
-	else
-		port_str = getenv("OFI_PORT");
-
 	if (crt_is_service() && port_str != NULL && strlen(port_str) > 0) {
 		if (!is_integer_str(port_str)) {
 			D_DEBUG(DB_ALL, "ignoring invalid OFI_PORT %s.", port_str);
@@ -945,7 +995,7 @@ out:
 	return rc;
 }
 
-void crt_na_config_fini(int provider)
+void crt_na_config_fini(crt_provider_t provider)
 {
 	struct crt_na_config *na_cfg;
 

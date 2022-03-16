@@ -125,6 +125,11 @@ int main(int argc, char **argv)
 	uint32_t	grp_size;
 	crt_group_t	*grp;
 
+	char		*saved_provider;
+	char		*saved_iface;
+	char		*saved_domain;
+
+
 	/* Get self rank and a group config file from envs set by crt_launch */
 	env_self_rank = getenv("CRT_L_RANK");
 	env_group_cfg = getenv("CRT_L_GRP_CFG");
@@ -170,6 +175,10 @@ int main(int argc, char **argv)
 		}
 	}
 	
+	saved_provider = strdup(arg_provider);
+	saved_domain = strdup(arg_domain);
+	saved_iface = strdup(arg_interface);
+
 	__split_arg(arg_interface, &iface0, &iface1);
 	__split_arg(arg_domain, &domain0, &domain1);
 	__split_arg(arg_provider, &provider0, &provider1);
@@ -209,9 +218,9 @@ int main(int argc, char **argv)
 
 	crt_init_options_t init_opts = {0};
 
-	init_opts.cio_provider = arg_provider;
-	init_opts.cio_interface = arg_interface;
-	init_opts.cio_domain = arg_domain;
+	init_opts.cio_provider = saved_provider;
+	init_opts.cio_interface = saved_iface;
+	init_opts.cio_domain = saved_domain;
 
 	rc = crt_init_opt(SERVER_GROUP_NAME,
 			CRT_FLAG_BIT_SERVER | CRT_FLAG_BIT_AUTO_SWIM_DISABLE,
@@ -221,7 +230,6 @@ int main(int argc, char **argv)
 		error_exit();
 	}
 
-	printf("Allocating primary contexts\n");
 	for (i = 0; i < num_primary_ctx; i++) {
 		rc = crt_context_create(&primary_ctx[i]);
 		if (rc != 0) {
@@ -235,7 +243,6 @@ int main(int argc, char **argv)
 		}
 	}
 
-	printf("Allocating secondary contexts\n");
 	for (i = 0;  i< num_secondary_ctx; i++) {
 		printf("Alloc %d\n", i);
 		rc = crt_context_create_on_provider(&secondary_ctx[i], provider1);
@@ -250,7 +257,6 @@ int main(int argc, char **argv)
 			error_exit();
 		}
 	}
-	printf("Finished allocating all contexts\n");
 
 	rc = crt_proto_register(&my_proto_fmt);
 	if (rc != 0) {
@@ -334,6 +340,9 @@ int main(int argc, char **argv)
 
 	d_log_fini();
 
+	free(saved_provider);
+	free(saved_domain);
+	free(saved_iface);
 	return 0;
 }
 

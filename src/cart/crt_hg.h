@@ -33,10 +33,10 @@ struct crt_corpc_hdr;
 
 
 crt_provider_t
-crt_str_to_provider(const char *prov_str);
+crt_prov_str_to_prov(const char *prov_str);
 
 int
-crt_hg_parse_uri(const char *uri, enum crt_prov_type *prov, char *addr);
+crt_hg_parse_uri(const char *uri, crt_provider_t *prov, char *addr);
 
 
 struct crt_na_dict {

@@ -12,7 +12,7 @@
 #include "mercury_util.h"
 
 /*
- * na_dict table should be in the same order of enum crt_na_type, the last one
+ * na_dict table should be in the same order of enum crt_provider_t, the last one
  * is terminator with NULL nad_str.
  */
 struct crt_na_dict crt_na_dict[] = {
@@ -60,7 +60,7 @@ struct crt_na_dict crt_na_dict[] = {
 };
 
 int
-crt_hg_parse_uri(const char *uri, enum crt_na_type *prov, char *addr)
+crt_hg_parse_uri(const char *uri, crt_provider_t *prov, char *addr)
 {
 	char	copy_uri[CRT_ADDR_STR_MAX_LEN];
 	char	*provider_str;
@@ -87,7 +87,7 @@ crt_hg_parse_uri(const char *uri, enum crt_na_type *prov, char *addr)
 	}
 
 	if (prov)
-		*prov = crt_prov_str_to_na_type(provider_str);
+		*prov = crt_prov_str_to_prov(provider_str);
 
 	if (addr)
 		strncpy(addr, addr_str+2, CRT_ADDR_STR_MAX_LEN - 1);
@@ -95,12 +95,12 @@ crt_hg_parse_uri(const char *uri, enum crt_na_type *prov, char *addr)
 	return 0;
 }
 
-enum crt_na_type
-crt_prov_str_to_na_type(const char *prov_str)
+crt_provider_t
+crt_prov_str_to_prov(const char *prov_str)
 {
 	int i;
 
-	for (i = 0; i < CRT_PROVIDER_OFI_COUNT; i++) {
+	for (i = 0; i < CRT_PROVIDER_COUNT; i++) {
 		if (strcmp(prov_str, crt_na_dict[i].nad_str) == 0 ||
 		    (crt_na_dict[i].nad_alt_str &&
 		     strcmp(prov_str, crt_na_dict[i].nad_alt_str) == 0))
@@ -404,7 +404,7 @@ crt_provider_ctx0_port_get(int provider)
 {
 	struct crt_prov_gdata *prov_data = crt_get_prov_gdata(provider);
 
-	return prov_data->cpg_na_ofi_config.noc_port;
+	return prov_data->cpg_na_config.noc_port;
 }
 
 static char*
@@ -412,7 +412,7 @@ crt_provider_domain_get(int provider)
 {
 	struct crt_prov_gdata *prov_data = crt_get_prov_gdata(provider);
 
-	return prov_data->cpg_na_ofi_config.noc_domain;
+	return prov_data->cpg_na_config.noc_domain;
 }
 
 char *
@@ -426,7 +426,7 @@ crt_provider_ip_str_get(int provider)
 {
 	struct crt_prov_gdata *prov_data = crt_get_prov_gdata(provider);
 
-	return prov_data->cpg_na_ofi_config.noc_ip_str;
+	return prov_data->cpg_na_config.noc_ip_str;
 }
 
 static bool

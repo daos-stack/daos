@@ -206,12 +206,10 @@ crt_context_provider_create(crt_context_t *crt_ctx, int provider)
 		D_GOTO(out, rc = -DER_INVAL);
 	}
 
-	D_ERROR("ALEXMOD: on line %d\n", __LINE__);
 	sep_mode = crt_provider_is_sep(provider);
 	cur_ctx_num = crt_provider_get_cur_ctx_num(provider);
 	max_ctx_num = crt_provider_get_max_ctx_num(provider);
 
-	D_ERROR("ALEXMOD: on line %d\n", __LINE__);
 	if (sep_mode &&
 	    cur_ctx_num >= max_ctx_num) {
 		D_ERROR("Number of active contexts (%d) reached limit (%d).\n",
@@ -223,7 +221,6 @@ crt_context_provider_create(crt_context_t *crt_ctx, int provider)
 	if (ctx == NULL)
 		D_GOTO(out, rc = -DER_NOMEM);
 
-	D_ERROR("ALEXMOD: on line %d\n", __LINE__);
 	rc = crt_context_init(ctx);
 	if (rc != 0) {
 		D_ERROR("crt_context_init() failed, " DF_RC "\n", DP_RC(rc));
@@ -233,7 +230,6 @@ crt_context_provider_create(crt_context_t *crt_ctx, int provider)
 
 	D_RWLOCK_WRLOCK(&crt_gdata.cg_rwlock);
 
-	D_ERROR("ALEXMOD: on line %d\n", __LINE__);
 	rc = crt_hg_ctx_init(&ctx->cc_hg_ctx, provider, cur_ctx_num);
 
 	if (rc != 0) {
@@ -243,7 +239,6 @@ crt_context_provider_create(crt_context_t *crt_ctx, int provider)
 		D_GOTO(out, rc);
 	}
 
-	D_ERROR("ALEXMOD: on line %d\n", __LINE__);
 	rc = crt_hg_get_addr(ctx->cc_hg_ctx.chc_hgcla,
 			     ctx->cc_self_uri, &uri_len);
 	if (rc != 0) {
@@ -252,8 +247,9 @@ crt_context_provider_create(crt_context_t *crt_ctx, int provider)
 		crt_context_destroy(ctx, true);
 		D_GOTO(out, rc);
 	}
+	D_ERROR("ALEXMOD: ocntext %d on provider %d, uri='%s'\n",
+		cur_ctx_num, provider, ctx->cc_self_uri);
 
-	D_ERROR("ALEXMOD: on line %d\n", __LINE__);
 	ctx->cc_idx = cur_ctx_num;
 
 	ctx_list = crt_provider_get_ctx_list(provider);
@@ -263,13 +259,11 @@ crt_context_provider_create(crt_context_t *crt_ctx, int provider)
 
 	D_RWLOCK_UNLOCK(&crt_gdata.cg_rwlock);
 
-	D_ERROR("ALEXMOD: on line %d\n", __LINE__);
 	/** initialize sensors */
 	if (crt_gdata.cg_use_sensors) {
 		int	ret;
 		char	*prov;
 
-	D_ERROR("ALEXMOD: on line %d\n", __LINE__);
 		prov = crt_provider_name_get(ctx->cc_hg_ctx.chc_provider);
 		ret = d_tm_add_metric(&ctx->cc_timedout, D_TM_COUNTER,
 				      "Total number of timed out RPC requests",
@@ -301,16 +295,14 @@ crt_context_provider_create(crt_context_t *crt_ctx, int provider)
 	if (crt_is_service() &&
 	    crt_gdata.cg_auto_swim_disable == 0 &&
 	    ctx->cc_idx == crt_gdata.cg_swim_crt_idx) {
-	D_ERROR("ALEXMOD: on line %d\n", __LINE__);
 		rc = crt_swim_init(crt_gdata.cg_swim_crt_idx);
-	D_ERROR("ALEXMOD: on line %d\n", __LINE__);
 		if (rc) {
 			D_ERROR("crt_swim_init() failed rc: %d.\n", rc);
 			crt_context_destroy(ctx, true);
 			D_GOTO(out, rc);
 		}
 
-		if (provider == CRT_NA_OFI_SOCKETS || provider == CRT_NA_OFI_TCP_RXM) {
+		if (provider == CRT_PROVIDER_OFI_SOCKETS || provider == CRT_PROVIDER_OFI_TCP_RXM) {
 			struct crt_grp_priv	*grp_priv = crt_gdata.cg_grp->gg_primary_grp;
 			struct crt_swim_membs	*csm = &grp_priv->gp_membs_swim;
 
@@ -325,20 +317,17 @@ crt_context_provider_create(crt_context_t *crt_ctx, int provider)
 
 	}
 
-	D_ERROR("ALEXMOD: on line %d\n", __LINE__);
 	*crt_ctx = (crt_context_t)ctx;
 	D_DEBUG(DB_TRACE, "created context (idx %d)\n", ctx->cc_idx);
-	D_ERROR("ALEXMOD: on line %d\n", __LINE__);
 
 out:
-	D_ERROR("ALEXMOD: on line %d\n", __LINE__);
 	return rc;
 }
 
 int
 crt_context_create(crt_context_t *crt_ctx)
 {
-	return crt_context_provider_create(crt_ctx, crt_gdata.cg_init_prov);
+	return crt_context_provider_create(crt_ctx, crt_gdata.cg_primary_prov);
 }
 
 int
@@ -678,7 +667,8 @@ crt_rank_abort(d_rank_t rank)
 
 	D_RWLOCK_RDLOCK(&crt_gdata.cg_rwlock);
 
-	ctx_list = crt_provider_get_ctx_list(crt_gdata.cg_init_prov);
+	//TODO: Do we need to handle secondary provs?
+	ctx_list = crt_provider_get_ctx_list(crt_gdata.cg_primary_prov);
 	d_list_for_each_entry(ctx, ctx_list, cc_link) {
 		rc = 0;
 		D_MUTEX_LOCK(&ctx->cc_mutex);
@@ -1222,7 +1212,7 @@ crt_context_lookup_locked(int ctx_idx)
 	struct crt_context	*ctx;
 	d_list_t		*ctx_list;
 
-	ctx_list = crt_provider_get_ctx_list(crt_gdata.cg_init_prov);
+	ctx_list = crt_provider_get_ctx_list(crt_gdata.cg_primary_prov);
 
 	d_list_for_each_entry(ctx, ctx_list, cc_link) {
 		if (ctx->cc_idx == ctx_idx)
@@ -1242,7 +1232,7 @@ crt_context_lookup(int ctx_idx)
 
 	D_RWLOCK_RDLOCK(&crt_gdata.cg_rwlock);
 
-	ctx_list = crt_provider_get_ctx_list(crt_gdata.cg_init_prov);
+	ctx_list = crt_provider_get_ctx_list(crt_gdata.cg_primary_prov);
 
 	d_list_for_each_entry(ctx, ctx_list, cc_link) {
 		if (ctx->cc_idx == ctx_idx) {
@@ -1308,7 +1298,7 @@ crt_context_num(int *ctx_num)
 		return -DER_INVAL;
 	}
 
-	*ctx_num = crt_gdata.cg_prov_gdata[crt_gdata.cg_init_prov].cpg_ctx_num;
+	*ctx_num = crt_gdata.cg_prov_gdata[crt_gdata.cg_primary_prov].cpg_ctx_num;
 	return 0;
 }
 

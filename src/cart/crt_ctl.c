@@ -202,7 +202,7 @@ crt_hdlr_ctl_ls(crt_rpc_t *rpc_req)
 	D_RWLOCK_RDLOCK(&crt_gdata.cg_rwlock);
 
 	/* TODO: Need to derive provider from rpc struct */
-	provider = crt_gdata.cg_init_prov;
+	provider = crt_gdata.cg_primary_prov;
 
 	ctx_list = crt_provider_get_ctx_list(provider);
 

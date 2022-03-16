@@ -38,7 +38,7 @@ struct crt_prov_gdata {
 	/** NA plugin type */
 	int			cpg_provider;
 
-	struct crt_na_config cpg_na_config;
+	struct crt_na_config	cpg_na_config;
 	/** Context0 URI */
 	char			cpg_addr[CRT_ADDR_STR_MAX_LEN];
 
@@ -55,6 +55,7 @@ struct crt_prov_gdata {
 
 	/** Set of flags */
 	unsigned int		cpg_sep_mode		: 1,
+				cpg_primary		: 1,
 				cpg_contig_ports	: 1,
 				cpg_inited		: 1;
 };
@@ -285,7 +286,6 @@ struct crt_opc_map {
 };
 
 
-int crt_na_config_init(int provider, crt_init_options_t *opt);
 void crt_na_config_fini(int provider);
 
 #endif /* __CRT_INTERNAL_TYPES_H__ */
