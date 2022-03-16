@@ -1390,6 +1390,8 @@ cleanup:
 
 	RESTORE_ERRNO(new_offset < 0);
 
+	if (new_offset > 0)
+		return 0;
 	return new_offset;
 
 do_real_fseek:
@@ -1412,19 +1414,20 @@ dfuse_fseeko(FILE *stream, off_t offset, int whence)
 	if (rc != 0)
 		goto do_real_fseeko;
 
-	DFUSE_LOG_DEBUG("fseeko(fd=%d, offset=%zd, whence=%#x) intercepted, bypass=%s",
+	DFUSE_TRA_DEBUG(entry->fd_dfsoh,
+			"fseeko(fd=%d, offset=%zd, whence=%#x) intercepted, bypass=%s",
 			fd, offset, whence, bypass_status[entry->fd_status]);
 
 	if (drop_reference_if_disabled(entry))
 		goto do_real_fseeko;
 
 	if (whence == SEEK_SET) {
+		off_t ni = __real_fseeko(stream, offset, whence);
+
+		DFUSE_TRA_ERROR(entry->fd_dfsoh, "Patching up, offset %#zx", ni);
 		new_offset = offset;
 		entry->fd_eof = false;
-		if (offset != 0) {
-			D_ERROR("Patching up %p\n", stream);
-			new_offset = __real_fseeko(stream, offset, whence);
-		}
+
 	} else if (whence == SEEK_CUR) {
 		new_offset = entry->fd_pos + offset;
 		entry->fd_eof = false;
@@ -1453,6 +1456,8 @@ cleanup:
 
 	RESTORE_ERRNO(new_offset < 0);
 
+	if (new_offset > 0)
+		return 0;
 	return new_offset;
 
 do_real_fseeko:
@@ -1838,7 +1843,7 @@ dfuse_fopen(const char *path, const char *mode)
 	atomic_fetch_add_relaxed(&ioil_iog.iog_file_count, 1);
 
 	DFUSE_TRA_DEBUG(entry.fd_dfsoh,
-			"fopen(path=%s, mode=%s) = %p(fd=%d) intercepted, bypass=%s",
+			"fopen(path='%s', mode=%s) = %p(fd=%d) intercepted, bypass=%s",
 			path, mode, fp, fd, bypass_status[entry.fd_status]);
 
 	return fp;
@@ -1872,7 +1877,7 @@ dfuse_freopen(const char *path, const char *mode, FILE *stream)
 	if (newfd == -1 ||
 	    !check_ioctl_on_open(newfd, &new_entry, 0, DFUSE_IO_DIS_STREAM)) {
 		if (rc == 0) {
-			DFUSE_LOG_DEBUG("freopen(path=%s, mode=%s, stream=%p"
+			DFUSE_LOG_DEBUG("freopen(path='%s', mode=%s, stream=%p"
 					"(fd=%d) = %p(fd=%d) "
 					"intercepted, bypass=%s", path, mode,
 					stream, oldfd,
@@ -1884,13 +1889,13 @@ dfuse_freopen(const char *path, const char *mode, FILE *stream)
 	}
 
 	if (rc == 0) {
-		DFUSE_LOG_DEBUG("freopen(path=%s, mode=%s, stream=%p(fd=%d) = %p(fd=%d)"
+		DFUSE_LOG_DEBUG("freopen(path='%s', mode=%s, stream=%p(fd=%d) = %p(fd=%d)"
 				" intercepted, bypass=%s", path, mode, stream,
 				oldfd, newstream, newfd,
 				bypass_status[DFUSE_IO_DIS_STREAM]);
 		vector_decref(&fd_table, old_entry);
 	} else {
-		DFUSE_LOG_DEBUG("freopen(path=%s, mode=%s, stream=%p(fd=%d)) "
+		DFUSE_LOG_DEBUG("freopen(path='%s', mode=%s, stream=%p(fd=%d)) "
 				"= %p(fd=%d) intercepted, "
 				"bypass=%s", path, mode, stream, oldfd,
 				newstream, newfd,
@@ -1922,8 +1927,7 @@ dfuse_fclose(FILE *stream)
 	if (rc != 0)
 		goto do_real_fclose;
 
-	DFUSE_LOG_DEBUG("fclose(stream=%p(fd=%d)) intercepted, "
-			"bypass=%s", stream, fd,
+	DFUSE_LOG_DEBUG("fclose(stream=%p(fd=%d)) intercepted, bypass=%s", stream, fd,
 			bypass_status[entry->fd_status]);
 
 	vector_decref(&fd_table, entry);
@@ -1956,7 +1960,7 @@ dfuse_fread(void *ptr, size_t size, size_t nmemb, FILE *stream)
 	if (drop_reference_if_disabled(entry))
 		goto do_real_fread;
 
-	DFUSE_TRA_INFO(entry->fd_dfsoh, "performing fread");
+	DFUSE_TRA_INFO(entry->fd_dfsoh, "performing fread from %#zx", entry->fd_pos);
 
 	len = nmemb * size;
 
