@@ -408,120 +408,10 @@ objects_close(void)
 	return 0;
 }
 
-struct counts {
-	int	calls;
-	int	aborts;
-	int	skips;
-	int	yields;
-};
-
-struct all_counts {
-	struct counts	obj[3];
-	struct counts	dkey[3];
-	struct counts	akey[3];
-	struct counts	value[3];
-};
-
-static int	skip_freqs[] = {13, 11, 7, 3};
-
-static void
-handle_cb(vos_iter_type_t type, struct all_counts *counts, int level, unsigned int *acts)
-{
-	struct counts		*type_count = NULL;
-	static int		 count[3][4];
-	int			 current;
-	int			 skip_freq;
-
-	switch (type) {
-	case VOS_ITER_OBJ:
-		current = ++count[level][0];
-		skip_freq = skip_freqs[0];
-		type_count = &counts->obj[0];
-		break;
-	case VOS_ITER_DKEY:
-		current = ++count[level][1];
-		skip_freq = skip_freqs[1];
-		type_count = &counts->dkey[0];
-		break;
-	case VOS_ITER_AKEY:
-		current = ++count[level][2];
-		skip_freq = skip_freqs[2];
-		type_count = &counts->akey[0];
-		break;
-	case VOS_ITER_SINGLE:
-	case VOS_ITER_RECX:
-		current = ++count[level][3];
-		skip_freq = skip_freqs[3];
-		type_count = &counts->value[0];
-		break;
-	default:
-		D_ASSERT(0);
-		break;
-	}
-
-	D_ASSERT(type_count != NULL);
-
-	*acts = 0;
-	type_count[level].calls++;
-	if (level != 0 && current % 2 == 0) {
-		*acts |= VOS_ITER_CB_YIELD;
-		type_count[level].yields++;
-	}
-	if (level != 2 && current % skip_freq == 0) {
-		type_count[level].skips++;
-		*acts |= VOS_ITER_CB_SKIP;
-	} else if (level != 0 && current % 20 == 0) {
-		type_count[level].aborts++;
-		*acts |= VOS_ITER_CB_ABORT;
-	}
-}
-
-static int
-filter_cb(daos_handle_t ih, vos_iter_desc_t *desc, void *cb_arg, unsigned int *acts)
-{
-	struct all_counts	*counts = cb_arg;
-
-	handle_cb(desc->id_type, counts, 0, acts);
-	return 0;
-}
-
-static int
-pre_cb(daos_handle_t ih, vos_iter_entry_t *entry, vos_iter_type_t type, vos_iter_param_t *param,
-       void *cb_arg, unsigned int *acts)
-{
-	struct all_counts	*counts = cb_arg;
-
-	handle_cb(type, counts, 1, acts);
-	return 0;
-}
-
-static int
-post_cb(daos_handle_t ih, vos_iter_entry_t *entry, vos_iter_type_t type, vos_iter_param_t *param,
-	void *cb_arg, unsigned int *acts)
-{
-	struct all_counts	*counts = cb_arg;
-
-	handle_cb(type, counts, 2, acts);
-	return 0;
-}
-
-#define PRINT_TYPE(name, field, level)					\
-	do {								\
-		printf(" " #name "\n");					\
-		printf("  calls:  %10d\n", counts.field[level].calls);	\
-		printf("  skips:  %10d\n", counts.field[level].skips);	\
-		printf("  aborts: %10d\n", counts.field[level].aborts);	\
-		printf("  yields: %10d\n", counts.field[level].yields);	\
-	} while (0)
-
 static int
 pf_update(struct pf_test *ts, struct pf_param *param)
 {
-	vos_iter_param_t	iter_param = {0};
-	struct vos_iter_anchors	anchors = {0};
-	struct all_counts	counts = {0};
-	int			rc;
-	int			i;
+	int	rc;
 
 	rc = objects_open();
 	if (rc)
@@ -532,36 +422,6 @@ pf_update(struct pf_test *ts, struct pf_param *param)
 		return rc;
 
 	rc = objects_close();
-
-	iter_param.ip_hdl = ts_ctx.tsc_coh;
-	iter_param.ip_flags = VOS_IT_RECX_VISIBLE;
-	iter_param.ip_ih = DAOS_HDL_INVAL;
-	iter_param.ip_epr.epr_hi = crt_hlc_get();
-	iter_param.ip_epr.epr_lo = 0;
-	iter_param.ip_filter_cb = filter_cb;
-	iter_param.ip_filter_arg = &counts;
-	rc = vos_iterate(&iter_param, VOS_ITER_OBJ, true, &anchors, pre_cb, post_cb, &counts, NULL);
-
-	for (i = 0; i < 3; i++)
-	{
-		switch(i) {
-		case 0:
-			printf("\nFILTER:\n");
-			break;
-		case 1:
-			printf("\nPRECALL:\n");
-			break;
-		case 2:
-			printf("\nPOSTCALL:\n");
-			break;
-		}
-
-		PRINT_TYPE(OBJECT, obj, i);
-		PRINT_TYPE(DKEY, dkey, i);
-		PRINT_TYPE(AKEY, akey, i);
-		PRINT_TYPE(VALUE, value, i);
-	}
-
 	return rc;
 }
 
