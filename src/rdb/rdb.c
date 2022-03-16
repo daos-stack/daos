@@ -568,7 +568,11 @@ rdb_resign(struct rdb *db, uint64_t term)
 }
 
 /**
- * Call for a new election (campaign to become leader).
+ * Call a new election (campaign to become leader). Must be a voting replica.
+ *
+ * \param[in]	db	database
+ *
+ * \retval -DER_INVAL	not a voting replica
  */
 int
 rdb_campaign(struct rdb *db)

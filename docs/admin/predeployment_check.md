@@ -295,8 +295,8 @@ Low max number of per-process mapped areas (vm.max_map_count) can cause ULT
 stack allocation to fall-back from DAOS mmap()'ed way into Argobots preferred
 allocation method.
 
-For RPM installations, this is achieved thru installed
-`/etc/sysctl.d/10-daos-server.conf` file.
+For RPM installations, this is achieved through installed
+`/etc/sysctl.d/10-daos_server.conf` file.
 
 For non-RPM installations, this may need to be bumped (usual default of
 65530 is too low for non-testing configurations), and the best way to do
