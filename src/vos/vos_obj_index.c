@@ -233,8 +233,12 @@ vos_oi_find_alloc(struct vos_container *cont, daos_unit_oid_t oid,
 		DP_UOID(oid));
 
 	rc = vos_oi_find(cont, oid, &obj, ts_set);
-	if (rc == 0)
+	if (rc == 0) {
+		/* upgrading case, set it to current epoch */
+		if (obj->vo_max_write == 0)
+			obj->vo_max_write = epoch;
 		goto do_log;
+	}
 	if (rc != -DER_NONEXIST)
 		return rc;
 
