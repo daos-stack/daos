@@ -2176,7 +2176,6 @@ agg_filter(daos_handle_t ih, vos_iter_desc_t *desc, void *cb_arg, unsigned int *
 	int			 rc = 0;
 
 	if (desc->id_type != VOS_ITER_OBJ) {
-		*acts = VOS_ITER_CB_SKIP;
 		agg_param->ap_credits++;
 		goto done;
 	}
