@@ -145,6 +145,46 @@
    fun:runtime.*
 }
 {
+   Go conditional
+   Memcheck:Cond
+   src:*.go
+}
+{
+   Go addr1
+   Memcheck:Addr1
+   src:*.go
+}
+{
+   Go addr 2
+   Memcheck:Addr2
+   src:*.go
+}
+{
+   Go addr 4
+   Memcheck:Addr4
+   src:*.go
+}
+{
+   Go addr 8
+   Memcheck:Addr8
+   src:*.go
+}
+{
+   Go addr 16
+   Memcheck:Addr16
+   src:*.go
+}
+{
+   Go addr 32
+   Memcheck:Addr32
+   src:*.go
+}
+{
+   Ga value 8
+   Memcheck:Value8
+   src:*.go
+}
+{
    <insert_a_suppression_name_here>
    Memcheck:Addr8
    ...

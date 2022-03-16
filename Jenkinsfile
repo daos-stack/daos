@@ -539,6 +539,7 @@ pipeline {
                             filename 'utils/docker/Dockerfile.leap.15'
                             label 'docker_runner'
                             additionalBuildArgs dockerBuildArgs(repo_type: 'stable',
+                                                                parallel_build: true,
                                                                 deps_build: true) +
                                                 " -t ${sanitized_JOB_NAME}-leap15" +
                                                 " --build-arg COMPILER=icc"
@@ -905,6 +906,7 @@ pipeline {
                             filename 'utils/docker/Dockerfile.centos.7'
                             label 'docker_runner'
                             additionalBuildArgs dockerBuildArgs(repo_type: 'stable',
+                                                                parallel_build: true,
                                                                 deps_build: true)
                             args '--tmpfs /mnt/daos_0'
                         }

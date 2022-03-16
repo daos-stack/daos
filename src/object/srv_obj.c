@@ -834,7 +834,7 @@ csum_add2iods(daos_handle_t ioh, daos_iod_t *iods, uint32_t iods_nr,
 	int	 i;
 
 	struct bio_desc *biod = vos_ioh2desc(ioh);
-	struct dcs_csum_info *csum_infos = vos_ioh2ci(ioh);
+	struct dcs_ci_list *csum_infos = vos_ioh2ci(ioh);
 	uint32_t csum_info_nr = vos_ioh2ci_nr(ioh);
 
 	for (i = 0; i < iods_nr; i++) {
@@ -843,11 +843,11 @@ csum_add2iods(daos_handle_t ioh, daos_iod_t *iods, uint32_t iods_nr,
 		D_DEBUG(DB_CSUM, DF_C_UOID_DKEY"Adding fetched to IOD: "
 				 DF_C_IOD", csum: "DF_CI"\n",
 			DP_C_UOID_DKEY(oid, dkey),
-			DP_C_IOD(&iods[i]), DP_CI(csum_infos[biov_csums_idx]));
+			DP_C_IOD(&iods[i]), DP_CI(*dcs_csum_info_get(csum_infos, biov_csums_idx)));
+		csum_infos->dcl_csum_offset += biov_csums_used;
 		rc = ds_csum_add2iod(
 			&iods[i], csummer,
-			bio_iod_sgl(biod, i),
-			&csum_infos[biov_csums_idx],
+			bio_iod_sgl(biod, i), csum_infos,
 			&biov_csums_used, get_iod_csum(iod_csums, i));
 
 		if (rc != 0) {
@@ -1773,7 +1773,7 @@ failed:
 }
 
 static void
-obj_ioc_fini(struct obj_io_context *ioc)
+obj_ioc_fini(struct obj_io_context *ioc, int err)
 {
 	if (ioc->ioc_coh != NULL) {
 		ds_cont_hdl_put(ioc->ioc_coh);
@@ -1781,6 +1781,9 @@ obj_ioc_fini(struct obj_io_context *ioc)
 	}
 
 	if (ioc->ioc_coc != NULL) {
+		if (obj_is_modification_opc(ioc->ioc_opc) && err == 0 &&
+		    daos_oclass_is_ec(&ioc->ioc_oca))
+			ds_cont_ec_timestamp_update(ioc->ioc_coc);
 		ds_cont_child_put(ioc->ioc_coc);
 		ioc->ioc_coc = NULL;
 	}
@@ -1931,7 +1934,7 @@ obj_ioc_end(struct obj_io_context *ioc, int err)
 		/** Update sensors */
 		obj_update_sensors(ioc, err);
 	}
-	obj_ioc_fini(ioc);
+	obj_ioc_fini(ioc, err);
 }
 
 static int

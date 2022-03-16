@@ -736,12 +736,11 @@ oi_iter_aggregate(daos_handle_t ih, bool range_discard)
 		D_DEBUG(DB_IO, "Removing object "DF_UOID" from tree\n",
 			DP_UOID(oid));
 		delete = true;
-		if (!dbtree_is_empty_inplace(&obj->vo_tree)) {
-			/* This can be an assert once we have sane under punch
-			 * detection.
-			 */
-			D_ERROR("Removing orphaned dkey tree\n");
-		}
+
+		/* XXX: The dkey tree may be not empty because related prepared transaction can
+		 *	be aborted. Then it will be added and handled via GC when oi_rec_free().
+		 */
+
 		/* Evict the object from cache */
 		rc = vos_obj_evict_by_oid(vos_obj_cache_current(),
 					  oiter->oit_cont, oid);
