@@ -15,11 +15,11 @@ Download DAOS source code using the following command:
 
 The DAOS repository is hosted on [GitHub](https://github.com/daos-stack/daos).
 
-To checkout the 2.0 version, simply run:
+To check out the 2.0 version, run:
 
-```
-$ git clone --recurse-submodules -b release/2.0 https://github.com/daos-stack/daos.git
-$ cd daos
+```bash
+git clone --recurse-submodules -b release/2.0 https://github.com/daos-stack/daos.git
+cd daos
 ```
 
 This command clones the DAOS git repository (path referred as ${daospath}
@@ -27,10 +27,10 @@ below) and initializes all the submodules automatically.
 
 ## Install Prerequisites
 
-To build DAOS and its dependencies, several software packages must be installed
-on the system. This includes scons, libuuid, cmocka, ipmctl, and several other
-packages usually available on all the Linux distributions. Moreover, a Go
-version of at least 1.10 is required.
+Building DAOS and its dependencies will require the installation of several
+software packages on the system. Example: scons, libuuid, cmocka, ipmctl, 
+and several other packages are usually available on all the Linux 
+distributions. Moreover, a Go version of at least 1.10 is required.
 
 Some DAOS tests use MPI. The DAOS build process uses the environment modules
 package to detect the presence of MPI. If none is found, the build will skip
@@ -41,17 +41,18 @@ distribution.
 
 ### CentOS
 
-On CentOS7, please run the following command from the DAOS tree as root or via
+Run the following command from the DAOS tree as root or via
+On CentOS7, use the following command: 
 sudo.
 
 ```bash
-$ ./utils/scripts/install-centos7.sh
+./utils/scripts/install-centos7.sh
 ```
 
-For CenOS8, the following script must be used instead:
+For CenOS8, use the following command:
 
 ```bash
-$ ./utils/scripts/install-centos8.sh
+./utils/scripts/install-centos8.sh
 ```
 
 ### openSUSE
@@ -59,45 +60,45 @@ $ ./utils/scripts/install-centos8.sh
 For openSUSE, the following command should be executed as root or via sudo:
 
 ```bash
-$ ./utils/scripts/install-leap15.sh
+./utils/scripts/install-leap15.sh
 ```
 
 ### Unbuntu
 
-As for Ubuntu, please run the following script as the root user or via sudo:
+As for Ubuntu, please run the following command as the root user or via sudo:
 
 ```bash
-$ ./utils/scripts/install-ubuntu20.sh
+./utils/scripts/install-ubuntu20.sh
 ```
 
 ## Build DAOS
 
-Once all prerequisites installed and the sources are downloaded,
+Once all prerequisites are installed, and the sources are downloaded,
 DAOS can be built via the following command:
 
 ```bash
-$ scons-3 --config=force --build-deps=yes install
+scons-3 --config=force --build-deps=yes install
 ```
 
 By default, DAOS and its dependencies are installed under the `install`
 directory.
-The installation path can be modified by adding the PREFIX= option to the above
+The installation path is modified by adding the PREFIX= option to the above
 command line (e.g., PREFIX=/usr/local).
 
 !!! note
-    Several parameters can be set (e.g., COMPILER=clang or COMPILER=icc) on the
-    scons command line. Please see `scons-3 --help` for all the possible options.
-    Those options are also saved for future compilations.
+    Several other parameters can be set, such as COMPILER=clang or
+    COMPILER=icc on the scons command line. Please see `scons-3 --help` for
+    all the possible options.
 
 ## Environment setup
 
-Once built, the environment must be modified to search for binaries and header
-files in the installation path. This step is not required if standard locations
-(e.g. /bin, /sbin, /usr/lib, ...) are used.
+Once built, the environment may need to be modified to search for binaries
+and header files in the installation path. This step is not required if
+standard locations (e.g. /bin, /sbin, /usr/lib, ...) are used.
 
 ```bash
-$ export CPATH=${daospath}/install/include/:$CPATH
-$ export PATH=${daospath}/install/bin/:${daospath}/install/sbin:$PATH
+export CPATH=${daospath}/install/include/:$CPATH
+export PATH=${daospath}/install/bin/:${daospath}/install/sbin:$PATH
 ```
 
 If using bash, PATH can be set up for you after a build by sourcing the script
