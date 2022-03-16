@@ -2292,7 +2292,6 @@ dfuse_fgetc(FILE *stream)
 	if (drop_reference_if_disabled(entry))
 		goto do_real_fn;
 
-	D_ERROR("Unsupported function, disabling streaming %p\n", stream);
 	entry->fd_status = DFUSE_IO_DIS_STREAM;
 
 	vector_decref(&fd_table, entry);
