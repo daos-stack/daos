@@ -287,11 +287,12 @@ func (cmd *PoolListCmd) Execute(_ []string) (errOut error) {
 		return errors.New("no configuration loaded")
 	}
 
-	req := &control.ListPoolsReq{
+	// PoolQueryReq with empty UUID list will retrieve all pools.
+	req := &control.PoolQueryReq{
 		NoQuery: cmd.NoQuery,
 	}
 
-	resp, err := control.ListPools(context.Background(), cmd.ctlInvoker, req)
+	resp, err := control.PoolQuery(context.Background(), cmd.ctlInvoker, req)
 	if err != nil {
 		return err // control api returned an error, disregard response
 	}
@@ -513,9 +514,12 @@ func (cmd *PoolQueryCmd) Execute(args []string) error {
 	if err != nil {
 		return errors.Wrap(err, "pool query failed")
 	}
+	if len(resp.Pools) != 1 {
+		return errors.Errorf("expected 1 pool in response, got %d", len(resp.Pools))
+	}
 
 	var bld strings.Builder
-	if err := pretty.PrintPoolQueryResponse(resp, &bld); err != nil {
+	if err := pretty.PrintPoolInfo(resp.Pools[0], &bld); err != nil {
 		return err
 	}
 	cmd.log.Info(bld.String())

@@ -9,6 +9,7 @@ package server
 import (
 	"context"
 	"fmt"
+	"sort"
 	"testing"
 	"time"
 
@@ -17,7 +18,6 @@ import (
 	uuid "github.com/google/uuid"
 	"github.com/pkg/errors"
 	"google.golang.org/protobuf/proto"
-	"google.golang.org/protobuf/testing/protocmp"
 
 	"github.com/daos-stack/daos/src/control/build"
 	"github.com/daos-stack/daos/src/control/common"
@@ -1226,77 +1226,77 @@ func TestServer_MgmtSvc_PoolEvict(t *testing.T) {
 	}
 }
 
-func newTestListPoolsReq() *mgmtpb.ListPoolsReq {
-	return &mgmtpb.ListPoolsReq{
-		Sys: build.DefaultSystemName,
-	}
-}
-
-func TestListPools_NoMS(t *testing.T) {
-	log, buf := logging.NewTestLogger(t.Name())
-	defer common.ShowBufferOnFailure(t, buf)
-
-	h := NewEngineHarness(log)
-	h.started.SetTrue()
-	svc := newTestMgmtSvcNonReplica(t, log)
-
-	resp, err := svc.ListPools(context.TODO(), newTestListPoolsReq())
-
-	if resp != nil {
-		t.Errorf("Expected no response, got: %+v", resp)
-	}
-
-	common.CmpErr(t, errors.New("replica"), err)
-}
-
-func TestListPools_Success(t *testing.T) {
-	log, buf := logging.NewTestLogger(t.Name())
-	defer common.ShowBufferOnFailure(t, buf)
-
-	testPools := []*system.PoolService{
-		{
-			PoolUUID:  uuid.MustParse(common.MockUUID(0)),
-			PoolLabel: "0",
-			State:     system.PoolServiceStateReady,
-			Replicas:  []system.Rank{0, 1, 2},
-		},
-		{
-			PoolUUID:  uuid.MustParse(common.MockUUID(1)),
-			PoolLabel: "1",
-			State:     system.PoolServiceStateReady,
-			Replicas:  []system.Rank{0, 1, 2},
-		},
-	}
-	expectedResp := new(mgmtpb.ListPoolsResp)
-
-	svc := newTestMgmtSvc(t, log)
-	for _, ps := range testPools {
-		if err := svc.sysdb.AddPoolService(ps); err != nil {
-			t.Fatal(err)
-		}
-		expectedResp.Pools = append(expectedResp.Pools, &mgmtpb.ListPoolsResp_Pool{
-			Uuid:    ps.PoolUUID.String(),
-			Label:   ps.PoolLabel,
-			SvcReps: []uint32{0, 1, 2},
-		})
-	}
-
-	resp, err := svc.ListPools(context.TODO(), newTestListPoolsReq())
-
-	if err != nil {
-		t.Errorf("Expected no error, got: %v", err)
-	}
-
-	cmpOpts := common.DefaultCmpOpts()
-	cmpOpts = append(cmpOpts,
-		protocmp.SortRepeated(func(a, b *mgmtpb.ListPoolsResp_Pool) bool {
-			return a.GetUuid() < b.GetUuid()
-		}),
-	)
-	if diff := cmp.Diff(expectedResp, resp, cmpOpts...); diff != "" {
-		t.Fatalf("bad response (-want, +got): \n%s\n", diff)
-	}
-}
+//func newTestListPoolsReq() *mgmtpb.ListPoolsReq {
+//	return &mgmtpb.ListPoolsReq{
+//		Sys: build.DefaultSystemName,
+//	}
+//}
+//
+//func TestListPools_NoMS(t *testing.T) {
+//	log, buf := logging.NewTestLogger(t.Name())
+//	defer common.ShowBufferOnFailure(t, buf)
+//
+//	h := NewEngineHarness(log)
+//	h.started.SetTrue()
+//	svc := newTestMgmtSvcNonReplica(t, log)
+//
+//	resp, err := svc.ListPools(context.TODO(), newTestListPoolsReq())
+//
+//	if resp != nil {
+//		t.Errorf("Expected no response, got: %+v", resp)
+//	}
+//
+//	common.CmpErr(t, errors.New("replica"), err)
+//}
+//
+//func TestListPools_Success(t *testing.T) {
+//	log, buf := logging.NewTestLogger(t.Name())
+//	defer common.ShowBufferOnFailure(t, buf)
+//
+//	testPools := []*system.PoolService{
+//		{
+//			PoolUUID:  uuid.MustParse(common.MockUUID(0)),
+//			PoolLabel: "0",
+//			State:     system.PoolServiceStateReady,
+//			Replicas:  []system.Rank{0, 1, 2},
+//		},
+//		{
+//			PoolUUID:  uuid.MustParse(common.MockUUID(1)),
+//			PoolLabel: "1",
+//			State:     system.PoolServiceStateReady,
+//			Replicas:  []system.Rank{0, 1, 2},
+//		},
+//	}
+//	expectedResp := new(mgmtpb.ListPoolsResp)
+//
+//	svc := newTestMgmtSvc(t, log)
+//	for _, ps := range testPools {
+//		if err := svc.sysdb.AddPoolService(ps); err != nil {
+//			t.Fatal(err)
+//		}
+//		expectedResp.Pools = append(expectedResp.Pools, &mgmtpb.ListPoolsResp_Pool{
+//			Uuid:    ps.PoolUUID.String(),
+//			Label:   ps.PoolLabel,
+//			SvcReps: []uint32{0, 1, 2},
+//		})
+//	}
+//
+//	resp, err := svc.ListPools(context.TODO(), newTestListPoolsReq())
+//
+//	if err != nil {
+//		t.Errorf("Expected no error, got: %v", err)
+//	}
+//
+//	cmpOpts := common.DefaultCmpOpts()
+//	cmpOpts = append(cmpOpts,
+//		protocmp.SortRepeated(func(a, b *mgmtpb.ListPoolsResp_Pool) bool {
+//			return a.GetUuid() < b.GetUuid()
+//		}),
+//	)
+//	if diff := cmp.Diff(expectedResp, resp, cmpOpts...); diff != "" {
+//		t.Fatalf("bad response (-want, +got): \n%s\n", diff)
+//	}
+//}
 
 func newTestGetACLReq() *mgmtpb.GetACLReq {
 	return &mgmtpb.GetACLReq{
@@ -1635,6 +1635,15 @@ func TestPoolDeleteACL_Success(t *testing.T) {
 	}
 }
 
+func getLastMockCall(svc *mgmtSvc) *drpc.Call {
+	mi := svc.harness.instances[0].(*EngineInstance)
+	if mi == nil || mi._drpcClient == nil {
+		return nil
+	}
+
+	return mi._drpcClient.(*mockDrpcClient).SendMsgInputCall
+}
+
 func TestServer_MgmtSvc_PoolQuery(t *testing.T) {
 	testLog, _ := logging.NewTestLogger(t.Name())
 	missingSB := newTestMgmtSvc(t, testLog)
@@ -1658,35 +1667,47 @@ func TestServer_MgmtSvc_PoolQuery(t *testing.T) {
 		req           *mgmtpb.PoolQueryReq
 		expResp       *mgmtpb.PoolQueryResp
 		expErr        error
+		expDrpcCalls  []drpc.Method        // expected drpc method ids called
+		expDrpcReq    *mgmtpb.PoolQueryReq // expected last drpc request
 	}{
 		"nil request": {
 			expErr: errors.New("nil request"),
 		},
 		"wrong system": {
-			req:    &mgmtpb.PoolQueryReq{Id: mockUUID, Sys: "bad"},
+			req: &mgmtpb.PoolQueryReq{
+				Pools: []*mgmtpb.PoolQueryReq_Pool{
+					{Id: common.MockUUID(1)},
+				},
+				Sys: "bad",
+			},
 			expErr: FaultWrongSystem("bad", build.DefaultSystemName),
 		},
 		"missing superblock": {
 			mgmtSvc: missingSB,
 			req: &mgmtpb.PoolQueryReq{
-				Id: mockUUID,
+				Pools: []*mgmtpb.PoolQueryReq_Pool{
+					{Id: common.MockUUID(1)},
+				},
 			},
 			expErr: errors.New("not an access point"),
 		},
 		"dRPC send fails": {
 			req: &mgmtpb.PoolQueryReq{
-				Id: mockUUID,
+				Pools: []*mgmtpb.PoolQueryReq_Pool{
+					{Id: common.MockUUID(1)},
+				},
 			},
 			expErr: errors.New("send failure"),
 		},
 		"garbage resp": {
 			req: &mgmtpb.PoolQueryReq{
-				Id: mockUUID,
+				Pools: []*mgmtpb.PoolQueryReq_Pool{
+					{Id: common.MockUUID(1)},
+				},
 			},
 			setupMockDrpc: func(svc *mgmtSvc, err error) {
 				// dRPC call returns junk in the message body
 				badBytes := makeBadBytes(42)
-
 				setupMockDrpcClientBytes(svc, badBytes, err)
 			},
 			expErr: errors.New("unmarshal"),
@@ -1694,16 +1715,107 @@ func TestServer_MgmtSvc_PoolQuery(t *testing.T) {
 		"no ranks available": {
 			mgmtSvc: allRanksDown,
 			req: &mgmtpb.PoolQueryReq{
-				Id: downRanksPool,
+				Pools: []*mgmtpb.PoolQueryReq_Pool{
+					{Id: common.MockUUID(1)},
+				},
 			},
 			expErr: errors.New("available"),
 		},
-		"successful query": {
+		"single uuid in req; uuid not found": {
 			req: &mgmtpb.PoolQueryReq{
-				Id: mockUUID,
+				Pools: []*mgmtpb.PoolQueryReq_Pool{
+					{Id: common.MockUUID(1111)},
+				},
+			},
+			expErr: errors.New("unable to find pool service with uuid"),
+		},
+		"single label in req; label not found": {
+			req: &mgmtpb.PoolQueryReq{
+				Pools: []*mgmtpb.PoolQueryReq_Pool{
+					{Id: "absentTestPool-1"},
+				},
+			},
+			expErr: errors.New("unable to find pool with label"),
+		},
+		"single uuid in req": {
+			req: &mgmtpb.PoolQueryReq{
+				Pools: []*mgmtpb.PoolQueryReq_Pool{
+					{Id: common.MockUUID(1)},
+				},
 			},
 			expResp: &mgmtpb.PoolQueryResp{
-				Uuid: mockUUID,
+				Pools: []*mgmtpb.PoolQueryResp_Pool{
+					{Uuid: common.MockUUID(1)},
+				},
+			},
+			expDrpcCalls: []drpc.Method{
+				drpc.MethodPoolQuery,
+			},
+			// expect last request to have pool detail annotated with svc ranks
+			expDrpcReq: &mgmtpb.PoolQueryReq{
+				Sys: build.DefaultSystemName,
+				Pools: []*mgmtpb.PoolQueryReq_Pool{
+					{Id: common.MockUUID(1), SvcReps: []uint32{0}},
+				},
+			},
+		},
+		"single label in req": {
+			req: &mgmtpb.PoolQueryReq{
+				Pools: []*mgmtpb.PoolQueryReq_Pool{
+					{Id: "1"},
+				},
+			},
+			expResp: &mgmtpb.PoolQueryResp{
+				Pools: []*mgmtpb.PoolQueryResp_Pool{
+					{Uuid: common.MockUUID(1)},
+				},
+			},
+			expDrpcCalls: []drpc.Method{
+				drpc.MethodPoolQuery,
+			},
+			// expect last request to have pool uuid resolved from label
+			expDrpcReq: &mgmtpb.PoolQueryReq{
+				Sys: build.DefaultSystemName,
+				Pools: []*mgmtpb.PoolQueryReq_Pool{
+					{Id: common.MockUUID(1), SvcReps: []uint32{0}},
+				},
+			},
+		},
+		"no id in req; no-drpc set": {
+			req: &mgmtpb.PoolQueryReq{
+				NoDrpc: true, // interrogate MS but don't forward req to engine
+				Pools:  []*mgmtpb.PoolQueryReq_Pool{},
+			},
+			expResp: &mgmtpb.PoolQueryResp{
+				Pools: []*mgmtpb.PoolQueryResp_Pool{
+					{Uuid: common.MockUUID(0), SvcReps: []uint32{0}},
+					{Uuid: common.MockUUID(1), SvcReps: []uint32{0}},
+					{Uuid: common.MockUUID(2), SvcReps: []uint32{0}},
+				},
+			},
+		},
+		"no id in req": {
+			req: &mgmtpb.PoolQueryReq{
+				Pools: []*mgmtpb.PoolQueryReq_Pool{},
+			},
+			expResp: &mgmtpb.PoolQueryResp{
+				Pools: []*mgmtpb.PoolQueryResp_Pool{
+					{Uuid: common.MockUUID(0), SvcReps: []uint32{0}},
+					{Uuid: common.MockUUID(1), SvcReps: []uint32{0}},
+					{Uuid: common.MockUUID(2), SvcReps: []uint32{0}},
+				},
+			},
+			expDrpcCalls: []drpc.Method{
+				drpc.MethodPoolQuery,
+			},
+			// expect last request to have list of enumerated pools
+			expDrpcReq: &mgmtpb.PoolQueryReq{
+				Sys: build.DefaultSystemName,
+				Pools: []*mgmtpb.PoolQueryReq_Pool{
+					{Id: common.MockUUID(0), SvcReps: []uint32{0}},
+					{Id: common.MockUUID(1), SvcReps: []uint32{0}},
+					{Id: common.MockUUID(2), SvcReps: []uint32{0}},
+				},
 			},
 		},
 	} {
@@ -1715,11 +1827,12 @@ func TestServer_MgmtSvc_PoolQuery(t *testing.T) {
 				tc.mgmtSvc = newTestMgmtSvc(t, log)
 			}
 			tc.mgmtSvc.log = log
-			addTestPools(t, tc.mgmtSvc.sysdb, mockUUID)
+			addTestPools(t, tc.mgmtSvc.sysdb, common.MockUUID(0), common.MockUUID(1),
+				common.MockUUID(2))
 
 			if tc.setupMockDrpc == nil {
 				tc.setupMockDrpc = func(svc *mgmtSvc, err error) {
-					setupMockDrpcClient(tc.mgmtSvc, tc.expResp, tc.expErr)
+					setupMockDrpcClient(svc, tc.expResp, tc.expErr)
 				}
 			}
 			tc.setupMockDrpc(tc.mgmtSvc, tc.expErr)
@@ -1729,26 +1842,52 @@ func TestServer_MgmtSvc_PoolQuery(t *testing.T) {
 			}
 
 			gotResp, gotErr := tc.mgmtSvc.PoolQuery(context.TODO(), tc.req)
+
+			log.Debugf("query response: %+v", gotResp)
+			log.Debugf("query gotErr: %+v", gotErr)
+
 			common.CmpErr(t, tc.expErr, gotErr)
 			if tc.expErr != nil {
 				return
 			}
 
 			cmpOpts := common.DefaultCmpOpts()
+
+			sort.Slice(gotResp.Pools, func(i, j int) bool {
+				return gotResp.Pools[i].Uuid < gotResp.Pools[j].Uuid
+			})
 			if diff := cmp.Diff(tc.expResp, gotResp, cmpOpts...); diff != "" {
 				t.Fatalf("unexpected response (-want, +got)\n%s\n", diff)
 			}
+
+			engine := tc.mgmtSvc.harness.Instances()[0]
+			dc, err := engine.(*EngineInstance).getDrpcClient()
+			if err != nil {
+				t.Fatal(err)
+			}
+			gotDrpcCalls := dc.(*mockDrpcClient).CalledMethods()
+
+			if diff := cmp.Diff(tc.expDrpcCalls, gotDrpcCalls, cmpOpts...); diff != "" {
+				t.Fatalf("unexpected dRPC calls (-want, +got)\n%s\n", diff)
+			}
+
+			if len(tc.expDrpcCalls) == 0 {
+				return
+			}
+
+			lastReq := new(mgmtpb.PoolQueryReq)
+			if err := proto.Unmarshal(getLastMockCall(tc.mgmtSvc).Body, lastReq); err != nil {
+				t.Fatal(err)
+			}
+
+			sort.Slice(lastReq.Pools, func(i, j int) bool {
+				return lastReq.Pools[i].Id < lastReq.Pools[j].Id
+			})
+			if diff := cmp.Diff(tc.expDrpcReq, lastReq, cmpOpts...); diff != "" {
+				t.Fatalf("unexpected final dRPC request (-want, +got):\n%s\n", diff)
+			}
 		})
 	}
-}
-
-func getLastMockCall(svc *mgmtSvc) *drpc.Call {
-	mi := svc.harness.instances[0].(*EngineInstance)
-	if mi == nil || mi._drpcClient == nil {
-		return nil
-	}
-
-	return mi._drpcClient.(*mockDrpcClient).SendMsgInputCall
 }
 
 func TestServer_MgmtSvc_PoolSetProp(t *testing.T) {

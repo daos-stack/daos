@@ -14,6 +14,7 @@ import (
 
 	"github.com/dustin/go-humanize"
 	"github.com/google/go-cmp/cmp"
+	"github.com/google/uuid"
 
 	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/lib/control"
@@ -21,6 +22,15 @@ import (
 )
 
 func TestPretty_PrintPoolQueryResp(t *testing.T) {
+	mockUUID := func(u string) uuid.UUID {
+		t.Helper()
+		o, err := uuid.Parse(u)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return o
+	}
+
 	for name, tc := range map[string]struct {
 		pqr         *control.PoolQueryResp
 		expPrintStr string
@@ -35,26 +45,28 @@ Pool space info:
 		},
 		"normal response": {
 			pqr: &control.PoolQueryResp{
-				UUID: common.MockUUID(),
-				PoolInfo: control.PoolInfo{
-					TotalTargets:    2,
-					DisabledTargets: 1,
-					ActiveTargets:   1,
-					Leader:          42,
-					Version:         100,
-					Rebuild: &control.PoolRebuildStatus{
-						State:   control.PoolRebuildStateBusy,
-						Objects: 42,
-						Records: 21,
-					},
-					TierStats: []*control.StorageUsageStats{
-						{
-							Total: 2,
-							Free:  1,
+				Pools: []*control.PoolInfo{
+					{
+						UUID:            mockUUID(common.MockUUID()),
+						TotalTargets:    2,
+						DisabledTargets: 1,
+						ActiveTargets:   1,
+						Leader:          42,
+						Version:         100,
+						Rebuild: &control.PoolRebuildStatus{
+							State:   control.PoolRebuildStateBusy,
+							Objects: 42,
+							Records: 21,
 						},
-						{
-							Total: 2,
-							Free:  1,
+						TierStats: []*control.StorageUsageStats{
+							{
+								Total: 2,
+								Free:  1,
+							},
+							{
+								Total: 2,
+								Free:  1,
+							},
 						},
 					},
 				},
@@ -74,27 +86,29 @@ Rebuild busy, 42 objs, 21 recs
 		},
 		"rebuild failed": {
 			pqr: &control.PoolQueryResp{
-				UUID: common.MockUUID(),
-				PoolInfo: control.PoolInfo{
-					TotalTargets:    2,
-					DisabledTargets: 1,
-					ActiveTargets:   1,
-					Leader:          42,
-					Version:         100,
-					Rebuild: &control.PoolRebuildStatus{
-						Status:  2,
-						State:   control.PoolRebuildStateBusy,
-						Objects: 42,
-						Records: 21,
-					},
-					TierStats: []*control.StorageUsageStats{
-						{
-							Total: 2,
-							Free:  1,
+				Pools: []*control.PoolInfo{
+					{
+						UUID:            mockUUID(common.MockUUID()),
+						TotalTargets:    2,
+						DisabledTargets: 1,
+						ActiveTargets:   1,
+						Leader:          42,
+						Version:         100,
+						Rebuild: &control.PoolRebuildStatus{
+							Status:  2,
+							State:   control.PoolRebuildStateBusy,
+							Objects: 42,
+							Records: 21,
 						},
-						{
-							Total: 2,
-							Free:  1,
+						TierStats: []*control.StorageUsageStats{
+							{
+								Total: 2,
+								Free:  1,
+							},
+							{
+								Total: 2,
+								Free:  1,
+							},
 						},
 					},
 				},
@@ -115,7 +129,7 @@ Rebuild failed, rc=0, status=2
 	} {
 		t.Run(name, func(t *testing.T) {
 			var bld strings.Builder
-			if err := PrintPoolQueryResponse(tc.pqr, &bld); err != nil {
+			if err := PrintPoolInfo(tc.pqr, &bld); err != nil {
 				t.Fatal(err)
 			}
 

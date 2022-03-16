@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2021 Intel Corporation.
+// (C) Copyright 2019-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -8,7 +8,6 @@ package proto
 
 import (
 	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
-	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	"github.com/daos-stack/daos/src/control/server/storage"
 )
 
@@ -101,11 +100,4 @@ func MockScmMountPoint(varIdx ...int32) *ctlpb.ScmNamespace_Mount {
 	}
 
 	return pb.AsProto()
-}
-
-// MockPoolList returns a slice of mock protobuf Pool messages used in tests for
-// multiple packages.
-var MockPoolList = []*mgmtpb.ListPoolsResp_Pool{
-	{Uuid: "12345678-1234-1234-1234-123456789abc", SvcReps: []uint32{1, 2}},
-	{Uuid: "12345678-1234-1234-1234-cba987654321", SvcReps: []uint32{0}},
 }

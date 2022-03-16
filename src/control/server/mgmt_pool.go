@@ -16,6 +16,7 @@ import (
 	"golang.org/x/net/context"
 	"google.golang.org/protobuf/proto"
 
+	"github.com/daos-stack/daos/src/control/common/proto/convert"
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	"github.com/daos-stack/daos/src/control/drpc"
 	"github.com/daos-stack/daos/src/control/server/engine"
@@ -734,19 +735,103 @@ func (svc *mgmtSvc) PoolReintegrate(ctx context.Context, req *mgmtpb.PoolReinteg
 	return resp, nil
 }
 
-// PoolQuery forwards a pool query request to the I/O Engine.
+//// ListPools returns a set of all pools in the system.
+//func (svc *mgmtSvc) ListPools(ctx context.Context, req *mgmtpb.ListPoolsReq) (*mgmtpb.ListPoolsResp, error) {
+//	if err := svc.checkReplicaRequest(req); err != nil {
+//		return nil, err
+//	}
+//	svc.log.Debugf("MgmtSvc.ListPools dispatch, req:%+v\n", req)
+//
+//	psList, err := svc.sysdb.PoolServiceList(false)
+//	if err != nil {
+//		return nil, err
+//	}
+//
+//	resp := new(mgmtpb.ListPoolsResp)
+//	for _, ps := range psList {
+//		resp.Pools = append(resp.Pools, &mgmtpb.ListPoolsResp_Pool{
+//			Uuid:    ps.PoolUUID.String(),
+//			Label:   ps.PoolLabel,
+//			SvcReps: system.RanksToUint32(ps.Replicas),
+//		})
+//	}
+//
+//	svc.log.Debugf("MgmtSvc.ListPools dispatch, resp:%+v\n", resp)
+//
+//	return resp, nil
+//}
+
+// PoolQuery forwards a pool query request to the I/O Engine over dRPC.
+//
+// If no pool IDs in request, retrieve all pool service details from db and use to populate request.
+// If single pool ID in request, retrieve single pool service details from db to update request.
+//
+// TODO: If NoForward (previously ListPoolsReq.NoQuery) flag set in request, just return UUIDs and
+//       SvcRanks and don't forward request to engine.
 func (svc *mgmtSvc) PoolQuery(ctx context.Context, req *mgmtpb.PoolQueryReq) (*mgmtpb.PoolQueryResp, error) {
-	if err := svc.checkReplicaRequest(req); err != nil {
+	err := svc.checkReplicaRequest(req)
+	if err != nil {
 		return nil, err
 	}
 	svc.log.Debugf("MgmtSvc.PoolQuery dispatch, req:%+v\n", req)
 
-	dresp, err := svc.makePoolServiceCall(ctx, drpc.MethodPoolQuery, req)
+	var psList []*system.PoolService
+	reqPools := req.GetPools()
+
+	switch len(reqPools) {
+	case 0:
+		// No supplied IDs, retrieve list of pool services from MS DB.
+		psList, err = svc.sysdb.PoolServiceList(false)
+		if err != nil {
+			return nil, err
+		}
+	case 1:
+		// Fetch single pool, retrieve single pool service from MS DB.
+		// Request can contain either a label (which will be resolved) or UUID.
+		ps, err := svc.getPoolService(reqPools[0].Id)
+		if err != nil {
+			return nil, err
+		}
+		psList = []*system.PoolService{ps}
+	default:
+		return nil, errors.Errorf("MgmtSvc.PoolQuery req can have 0 or 1 UUIDs, got %d",
+			len(reqPools))
+	}
+
+	for idx, ps := range psList {
+		if idx >= len(reqPools) {
+			reqPools = append(reqPools, &mgmtpb.PoolQueryReq_Pool{})
+		}
+		rp := reqPools[idx]
+
+		rp.SetUUID(ps.PoolUUID)
+
+		if len(rp.GetSvcReps()) == 0 {
+			rl, err := svc.getPoolServiceRanks(ps)
+			if err != nil {
+				return nil, err
+			}
+			rp.SetSvcReps(rl)
+			svc.log.Debugf("ps %d, u %s, sr %v", idx, ps.PoolUUID.String(), rl)
+		}
+	}
+
+	resp := &mgmtpb.PoolQueryResp{}
+
+	if req.GetNoDrpc() {
+		// Return only pool UUIDs and svc ranks gathered from MS.
+		svc.log.Debug("MgmtSvc.PoolQuery skipping request forwarding over dRPC")
+		svc.log.Debugf("reqPools: %+v, resp.Pools: %+v", reqPools, resp.Pools)
+		return resp, convert.Types(&reqPools, &resp.Pools)
+	}
+
+	req.Pools = reqPools
+
+	dresp, err := svc.harness.CallDrpc(ctx, drpc.MethodPoolQuery, req)
 	if err != nil {
 		return nil, err
 	}
 
-	resp := &mgmtpb.PoolQueryResp{}
 	if err = proto.Unmarshal(dresp.Body, resp); err != nil {
 		return nil, errors.Wrap(err, "unmarshal PoolQuery response")
 	}
@@ -984,32 +1069,6 @@ func (svc *mgmtSvc) PoolDeleteACL(ctx context.Context, req *mgmtpb.DeleteACLReq)
 	}
 
 	svc.log.Debugf("MgmtSvc.PoolDeleteACL dispatch, resp:%+v\n", resp)
-
-	return resp, nil
-}
-
-// ListPools returns a set of all pools in the system.
-func (svc *mgmtSvc) ListPools(ctx context.Context, req *mgmtpb.ListPoolsReq) (*mgmtpb.ListPoolsResp, error) {
-	if err := svc.checkReplicaRequest(req); err != nil {
-		return nil, err
-	}
-	svc.log.Debugf("MgmtSvc.ListPools dispatch, req:%+v\n", req)
-
-	psList, err := svc.sysdb.PoolServiceList(false)
-	if err != nil {
-		return nil, err
-	}
-
-	resp := new(mgmtpb.ListPoolsResp)
-	for _, ps := range psList {
-		resp.Pools = append(resp.Pools, &mgmtpb.ListPoolsResp_Pool{
-			Uuid:    ps.PoolUUID.String(),
-			Label:   ps.PoolLabel,
-			SvcReps: system.RanksToUint32(ps.Replicas),
-		})
-	}
-
-	svc.log.Debugf("MgmtSvc.ListPools dispatch, resp:%+v\n", resp)
 
 	return resp, nil
 }

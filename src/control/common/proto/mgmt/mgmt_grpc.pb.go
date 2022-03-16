@@ -60,8 +60,6 @@ type MgmtSvcClient interface {
 	PoolDeleteACL(ctx context.Context, in *DeleteACLReq, opts ...grpc.CallOption) (*ACLResp, error)
 	// Get the information required by libdaos to attach to the system.
 	GetAttachInfo(ctx context.Context, in *GetAttachInfoReq, opts ...grpc.CallOption) (*GetAttachInfoResp, error)
-	// List all pools in a DAOS system: basic info: UUIDs, service ranks.
-	ListPools(ctx context.Context, in *ListPoolsReq, opts ...grpc.CallOption) (*ListPoolsResp, error)
 	// List all containers in a pool
 	ListContainers(ctx context.Context, in *ListContReq, opts ...grpc.CallOption) (*ListContResp, error)
 	// Change the owner of a DAOS container
@@ -248,15 +246,6 @@ func (c *mgmtSvcClient) GetAttachInfo(ctx context.Context, in *GetAttachInfoReq,
 	return out, nil
 }
 
-func (c *mgmtSvcClient) ListPools(ctx context.Context, in *ListPoolsReq, opts ...grpc.CallOption) (*ListPoolsResp, error) {
-	out := new(ListPoolsResp)
-	err := c.cc.Invoke(ctx, "/mgmt.MgmtSvc/ListPools", in, out, opts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
 func (c *mgmtSvcClient) ListContainers(ctx context.Context, in *ListContReq, opts ...grpc.CallOption) (*ListContResp, error) {
 	out := new(ListContResp)
 	err := c.cc.Invoke(ctx, "/mgmt.MgmtSvc/ListContainers", in, out, opts...)
@@ -361,8 +350,6 @@ type MgmtSvcServer interface {
 	PoolDeleteACL(context.Context, *DeleteACLReq) (*ACLResp, error)
 	// Get the information required by libdaos to attach to the system.
 	GetAttachInfo(context.Context, *GetAttachInfoReq) (*GetAttachInfoResp, error)
-	// List all pools in a DAOS system: basic info: UUIDs, service ranks.
-	ListPools(context.Context, *ListPoolsReq) (*ListPoolsResp, error)
 	// List all containers in a pool
 	ListContainers(context.Context, *ListContReq) (*ListContResp, error)
 	// Change the owner of a DAOS container
@@ -437,9 +424,6 @@ func (UnimplementedMgmtSvcServer) PoolDeleteACL(context.Context, *DeleteACLReq) 
 }
 func (UnimplementedMgmtSvcServer) GetAttachInfo(context.Context, *GetAttachInfoReq) (*GetAttachInfoResp, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetAttachInfo not implemented")
-}
-func (UnimplementedMgmtSvcServer) ListPools(context.Context, *ListPoolsReq) (*ListPoolsResp, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method ListPools not implemented")
 }
 func (UnimplementedMgmtSvcServer) ListContainers(context.Context, *ListContReq) (*ListContResp, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method ListContainers not implemented")
@@ -799,24 +783,6 @@ func _MgmtSvc_GetAttachInfo_Handler(srv interface{}, ctx context.Context, dec fu
 	return interceptor(ctx, in, info, handler)
 }
 
-func _MgmtSvc_ListPools_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(ListPoolsReq)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(MgmtSvcServer).ListPools(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: "/mgmt.MgmtSvc/ListPools",
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(MgmtSvcServer).ListPools(ctx, req.(*ListPoolsReq))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
 func _MgmtSvc_ListContainers_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(ListContReq)
 	if err := dec(in); err != nil {
@@ -1021,10 +987,6 @@ var MgmtSvc_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "GetAttachInfo",
 			Handler:    _MgmtSvc_GetAttachInfo_Handler,
-		},
-		{
-			MethodName: "ListPools",
-			Handler:    _MgmtSvc_ListPools_Handler,
 		},
 		{
 			MethodName: "ListContainers",

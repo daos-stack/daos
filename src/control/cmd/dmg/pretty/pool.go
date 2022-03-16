@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2021 Intel Corporation.
+// (C) Copyright 2020-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -9,6 +9,7 @@ package pretty
 import (
 	"fmt"
 	"io"
+	"strings"
 
 	"github.com/dustin/go-humanize"
 	"github.com/pkg/errors"
@@ -18,21 +19,21 @@ import (
 	"github.com/daos-stack/daos/src/control/system"
 )
 
-// PrintPoolQueryResponse generates a human-readable representation of the supplied
+// PrintPoolInfo generates a human-readable representation of the supplied
 // PoolQueryResp struct and writes it to the supplied io.Writer.
-func PrintPoolQueryResponse(pqr *control.PoolQueryResp, out io.Writer, opts ...PrintConfigOption) error {
-	if pqr == nil {
-		return errors.Errorf("nil %T", pqr)
+func PrintPoolInfo(pi *control.PoolInfo, out io.Writer, opts ...PrintConfigOption) error {
+	if pi == nil {
+		return errors.Errorf("nil %T", pi)
 	}
 	w := txtfmt.NewErrWriter(out)
 
 	// Maintain output compatibility with the `daos pool query` output.
 	fmt.Fprintf(w, "Pool %s, ntarget=%d, disabled=%d, leader=%d, version=%d\n",
-		pqr.UUID, pqr.TotalTargets, pqr.DisabledTargets, pqr.Leader, pqr.Version)
+		pi.UUID, pi.TotalTargets, pi.DisabledTargets, pi.Leader, pi.Version)
 	fmt.Fprintln(w, "Pool space info:")
-	fmt.Fprintf(w, "- Target(VOS) count:%d\n", pqr.ActiveTargets)
-	if pqr.TierStats != nil {
-		for tierIdx, tierStats := range pqr.TierStats {
+	fmt.Fprintf(w, "- Target(VOS) count:%d\n", pi.ActiveTargets)
+	if pi.TierStats != nil {
+		for tierIdx, tierStats := range pi.TierStats {
 			var tierName string
 			if tierIdx == 0 {
 				tierName = "- Storage tier 0 (SCM):"
@@ -46,12 +47,12 @@ func PrintPoolQueryResponse(pqr *control.PoolQueryResp, out io.Writer, opts ...P
 				humanize.Bytes(tierStats.Max), humanize.Bytes(tierStats.Mean))
 		}
 	}
-	if pqr.Rebuild != nil {
-		if pqr.Rebuild.Status == 0 {
+	if pi.Rebuild != nil {
+		if pi.Rebuild.Status == 0 {
 			fmt.Fprintf(w, "Rebuild %s, %d objs, %d recs\n",
-				pqr.Rebuild.State, pqr.Rebuild.Objects, pqr.Rebuild.Records)
+				pi.Rebuild.State, pi.Rebuild.Objects, pi.Rebuild.Records)
 		} else {
-			fmt.Fprintf(w, "Rebuild failed, rc=%d, status=%d\n", pqr.Status, pqr.Rebuild.Status)
+			fmt.Fprintf(w, "Rebuild failed, rc=%d, status=%d\n", pi.Status, pi.Rebuild.Status)
 		}
 	}
 
@@ -110,21 +111,21 @@ func PrintPoolCreateResponse(pcr *control.PoolCreateResp, out io.Writer, opts ..
 	return err
 }
 
-func poolListCreateRow(pool *control.Pool) txtfmt.TableRow {
+func createPoolListRow(pool *control.PoolInfo) txtfmt.TableRow {
 	// display size of the largest non-empty tier
 	var size uint64
-	for ti := len(pool.Usage) - 1; ti >= 0; ti-- {
-		if pool.Usage[ti].Size != 0 {
-			size = pool.Usage[ti].Size
+	for ti := len(pool.TierStats) - 1; ti >= 0; ti-- {
+		if pool.TierStats[ti].Total != 0 {
+			size = pool.TierStats[ti].Total
 			break
 		}
 	}
 
 	// display usage of the most used tier
 	var used int
-	for ti := 0; ti < len(pool.Usage); ti++ {
-		t := pool.Usage[ti]
-		u := float64(t.Size-t.Free) / float64(t.Size)
+	for ti := 0; ti < len(pool.TierStats); ti++ {
+		t := pool.TierStats[ti]
+		u := float64(t.Total-t.Free) / float64(t.Total)
 
 		if int(u*100) > used {
 			used = int(u * 100)
@@ -133,25 +134,25 @@ func poolListCreateRow(pool *control.Pool) txtfmt.TableRow {
 
 	// display imbalance of the most imbalanced tier
 	var imbalance uint32
-	for ti := 0; ti < len(pool.Usage); ti++ {
-		if pool.Usage[ti].Imbalance > imbalance {
-			imbalance = pool.Usage[ti].Imbalance
+	for ti := 0; ti < len(pool.TierStats); ti++ {
+		if pool.TierStats[ti].Imbalance > imbalance {
+			imbalance = pool.TierStats[ti].Imbalance
 		}
 	}
 
 	row := txtfmt.TableRow{
 		"Pool":      pool.GetName(),
-		"Size":      fmt.Sprintf("%s", humanize.Bytes(size)),
+		"Size":      humanize.Bytes(size),
 		"Used":      fmt.Sprintf("%d%%", used),
 		"Imbalance": fmt.Sprintf("%d%%", imbalance),
-		"Disabled":  fmt.Sprintf("%d/%d", pool.TargetsDisabled, pool.TargetsTotal),
+		"Disabled":  fmt.Sprintf("%d/%d", pool.DisabledTargets, pool.TotalTargets),
 	}
 
 	return row
 }
 
-func printListPoolsResp(out io.Writer, resp *control.ListPoolsResp) error {
-	if len(resp.Pools) == 0 {
+func printPoolList(out io.Writer, pqr *control.PoolQueryResp) error {
+	if len(pqr.Pools) == 0 {
 		fmt.Fprintln(out, "no pools in system")
 		return nil
 	}
@@ -159,11 +160,8 @@ func printListPoolsResp(out io.Writer, resp *control.ListPoolsResp) error {
 	formatter := txtfmt.NewTableFormatter("Pool", "Size", "Used", "Imbalance", "Disabled")
 
 	var table []txtfmt.TableRow
-	for _, pool := range resp.Pools {
-		if pool.HasErrors() {
-			continue
-		}
-		table = append(table, poolListCreateRow(pool))
+	for _, pool := range pqr.Pools {
+		table = append(table, createPoolListRow(pool))
 	}
 
 	fmt.Fprintln(out, formatter.Format(table))
@@ -171,62 +169,57 @@ func printListPoolsResp(out io.Writer, resp *control.ListPoolsResp) error {
 	return nil
 }
 
-func addVerboseTierUsage(row txtfmt.TableRow, usage *control.PoolTierUsage) txtfmt.TableRow {
-	row[usage.TierName+" Size"] = humanize.Bytes(usage.Size)
-	row[usage.TierName+" Used"] = humanize.Bytes(usage.Size - usage.Free)
-	row[usage.TierName+" Imbalance"] = fmt.Sprintf("%d%%", usage.Imbalance)
-
-	return row
+func getStorageStatsTitles(tu *control.StorageUsageStats, idx int) (string, string, string) {
+	name := fmt.Sprintf("%s-%d", strings.ToUpper(tu.MediaType), idx)
+	return name + " Size", name + " Used", name + " Imbalance"
 }
 
-func poolListCreateRowVerbose(pool *control.Pool) txtfmt.TableRow {
-	label := pool.Label
+func createPoolListRowVerbose(pi *control.PoolInfo) txtfmt.TableRow {
+	label := pi.Label
 	if label == "" {
 		label = "-"
 	}
 
 	svcReps := "N/A"
-	if len(pool.ServiceReplicas) != 0 {
-		rl := system.RanksToUint32(pool.ServiceReplicas)
+	if len(pi.ServiceReplicas) != 0 {
+		rl := system.RanksToUint32(pi.ServiceReplicas)
 		svcReps = formatRanks(rl)
 	}
 
 	row := txtfmt.TableRow{
 		"Label":    label,
-		"UUID":     pool.UUID,
+		"UUID":     pi.UUID.String(),
 		"SvcReps":  svcReps,
-		"Disabled": fmt.Sprintf("%d/%d", pool.TargetsDisabled, pool.TargetsTotal),
+		"Disabled": fmt.Sprintf("%d/%d", pi.DisabledTargets, pi.TotalTargets),
 	}
 
-	for _, tu := range pool.Usage {
-		row = addVerboseTierUsage(row, tu)
+	for idx, ts := range pi.TierStats {
+		size, used, imbalance := getStorageStatsTitles(ts, idx)
+		row[size] = humanize.Bytes(ts.Total)
+		row[used] = humanize.Bytes(ts.Total - ts.Free)
+		row[imbalance] = fmt.Sprintf("%d%%", ts.Imbalance)
 	}
 
 	return row
 }
 
-func printListPoolsRespVerbose(out io.Writer, resp *control.ListPoolsResp) error {
-	if len(resp.Pools) == 0 {
+func printPoolListVerbose(out io.Writer, pqr *control.PoolQueryResp) error {
+	if len(pqr.Pools) == 0 {
 		fmt.Fprintln(out, "no pools in system")
 		return nil
 	}
 
 	titles := []string{"Label", "UUID", "SvcReps"}
-	for _, t := range resp.Pools[0].Usage {
-		titles = append(titles,
-			t.TierName+" Size",
-			t.TierName+" Used",
-			t.TierName+" Imbalance")
+	for idx, ts := range pqr.Pools[0].TierStats {
+		size, used, imbalance := getStorageStatsTitles(ts, idx)
+		titles = append(titles, size, used, imbalance)
 	}
 	titles = append(titles, "Disabled")
 	formatter := txtfmt.NewTableFormatter(titles...)
 
 	var table []txtfmt.TableRow
-	for _, pool := range resp.Pools {
-		if pool.HasErrors() {
-			continue
-		}
-		table = append(table, poolListCreateRowVerbose(pool))
+	for _, pi := range pqr.Pools {
+		table = append(table, createPoolListRowVerbose(pi))
 	}
 
 	fmt.Fprintln(out, formatter.Format(table))
@@ -234,23 +227,15 @@ func printListPoolsRespVerbose(out io.Writer, resp *control.ListPoolsResp) error
 	return nil
 }
 
-// PrintListPoolsResponse generates a human-readable representation of the
-// supplied ListPoolsResp struct and writes it to the supplied io.Writer.
-// Additional columns for pool UUID and service replicas if verbose is set.
-func PrintListPoolsResponse(out, outErr io.Writer, resp *control.ListPoolsResp, verbose bool) error {
-	warn, err := resp.Validate()
-	if err != nil {
-		return err
-	}
-	if warn != "" {
-		fmt.Fprintln(outErr, warn)
-	}
-
+// PrintPoolList generates a human-readable representation of the supplied PoolQueryResp struct and
+// writes it to the supplied io.Writer. Additional columns for pool UUID and service replicas are
+// displayed if verbose is set.
+func PrintPoolList(out, outErr io.Writer, pqr *control.PoolQueryResp, verbose bool) error {
 	if verbose {
-		return printListPoolsRespVerbose(out, resp)
+		return printPoolListVerbose(out, pqr)
 	}
 
-	return printListPoolsResp(out, resp)
+	return printPoolList(out, pqr)
 }
 
 // PrintPoolProperties displays a two-column table of pool property names and values.

@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2021 Intel Corporation.
+// (C) Copyright 2019-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -130,22 +130,6 @@ message PoolReintegrateResp {
 	int32 status = 1; // DAOS error code
 }
 
-// ListPoolsReq represents a request to list pools on a given DAOS system.
-message ListPoolsReq {
-	string sys = 1; // DAOS system identifier
-}
-
-// ListPoolsResp returns the list of pools in the system.
-message ListPoolsResp {
-	message Pool {
-		string uuid = 1; // uuid of pool
-		string label = 2; // pool label
-		repeated uint32 svc_reps = 3; // pool service replica ranks
-	}
-	int32 status = 1; // DAOS error code
-	repeated Pool pools = 2; // pools list
-}
-
 // ListContainers
 // Initial implementation differs from C API
 // (numContainers not provided in request - get whole list)
@@ -165,9 +149,15 @@ message ListContResp {
 
 // PoolQueryReq represents a pool query request.
 message PoolQueryReq {
+	reserved 2, 3, 4;
+	reserved "id";
 	string sys = 1; // DAOS system identifier
-	string id = 2;
-	repeated uint32 svc_ranks = 3; // List of pool service ranks
+	message Pool {
+		string id = 1; // uuid or label of pool to query
+		repeated uint32 svc_reps = 2; // list of pool service ranks
+	}
+	repeated Pool pools = 5;
+	bool no_drpc = 6; // do not forward to engine over dRPC
 }
 
 // StorageUsageStats represents usage statistics for a storage subsystem.
@@ -195,17 +185,23 @@ message PoolRebuildStatus {
 
 // PoolQueryResp represents a pool query response.
 message PoolQueryResp {
-	int32 status = 1; // DAOS error code
-	string uuid = 2; // pool uuid
-	string label = 3; // pool label
-	uint32 total_targets = 4; // total targets in pool
-	uint32 active_targets = 5; // active targets in pool
-	uint32 disabled_targets = 6; // number of disabled targets in pool
-	PoolRebuildStatus rebuild = 7; // pool rebuild status
-	repeated StorageUsageStats tier_stats = 8; // storage tiers usage stats
-	uint32 total_nodes = 9; // total nodes in pool
-	uint32 version = 10; // latest pool map version
-	uint32 leader = 11; // current raft leader
+	reserved 1 to 11;
+	message Pool {
+		int32 status = 1; // DAOS error code
+		string uuid = 2; // pool uuid
+		string label = 3; // pool label
+		uint32 total_targets = 4; // total targets in pool
+		uint32 active_targets = 5; // active targets in pool
+		uint32 disabled_targets = 6; // number of disabled targets in pool
+		PoolRebuildStatus rebuild = 7; // pool rebuild status
+		repeated StorageUsageStats tier_stats = 8; // storage tiers usage stats
+		uint32 total_nodes = 9; // total nodes in pool
+		uint32 version = 10; // latest pool map version
+		uint32 leader = 11; // current raft leader
+		repeated uint32 svc_reps = 12; // pool service replica ranks
+	}
+	int32 status = 12; // DAOS error code
+	repeated Pool pools = 13; // list of pool details
 }
 
 message PoolProperty {

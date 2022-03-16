@@ -215,23 +215,27 @@ func convertPoolRebuildStatus(in *C.struct_daos_rebuild_status) *mgmtpb.PoolRebu
 // that's shared between this code and the drpc handlers to deal
 // with stuffing the protobuf message but it's probably overkill.
 func convertPoolInfo(pinfo *C.daos_pool_info_t) (*control.PoolQueryResp, error) {
-	pqp := new(mgmtpb.PoolQueryResp)
+	pi := new(mgmtpb.PoolQueryResp_Pool)
 
-	pqp.Uuid = uuid.Must(uuidFromC(pinfo.pi_uuid)).String()
-	pqp.TotalTargets = uint32(pinfo.pi_ntargets)
-	pqp.DisabledTargets = uint32(pinfo.pi_ndisabled)
-	pqp.ActiveTargets = uint32(pinfo.pi_space.ps_ntargets)
-	pqp.TotalNodes = uint32(pinfo.pi_nnodes)
-	pqp.Leader = uint32(pinfo.pi_leader)
-	pqp.Version = uint32(pinfo.pi_map_ver)
+	pi.Uuid = uuid.Must(uuidFromC(pinfo.pi_uuid)).String()
+	pi.TotalTargets = uint32(pinfo.pi_ntargets)
+	pi.DisabledTargets = uint32(pinfo.pi_ndisabled)
+	pi.ActiveTargets = uint32(pinfo.pi_space.ps_ntargets)
+	pi.TotalNodes = uint32(pinfo.pi_nnodes)
+	pi.Leader = uint32(pinfo.pi_leader)
+	pi.Version = uint32(pinfo.pi_map_ver)
 
-	pqp.TierStats = []*mgmtpb.StorageUsageStats{
+	pi.TierStats = []*mgmtpb.StorageUsageStats{
 		convertPoolSpaceInfo(&pinfo.pi_space, C.DAOS_MEDIA_SCM),
 		convertPoolSpaceInfo(&pinfo.pi_space, C.DAOS_MEDIA_NVME),
 	}
-	pqp.Rebuild = convertPoolRebuildStatus(&pinfo.pi_rebuild_st)
+	pi.Rebuild = convertPoolRebuildStatus(&pinfo.pi_rebuild_st)
 
+	pqp := &mgmtpb.PoolQueryResp{
+		Pools: []*mgmtpb.PoolQueryResp_Pool{pi},
+	}
 	pqr := new(control.PoolQueryResp)
+
 	return pqr, convert.Types(pqp, pqr)
 }
 
@@ -265,9 +269,12 @@ func (cmd *poolQueryCmd) Execute(_ []string) error {
 	if cmd.jsonOutputEnabled() {
 		return cmd.outputJSON(pqr, nil)
 	}
+	if len(pqr.Pools) != 1 {
+		return errors.Errorf("expected 1 pool in response, got %d", len(pqr.Pools))
+	}
 
 	var bld strings.Builder
-	if err := pretty.PrintPoolQueryResponse(pqr, &bld); err != nil {
+	if err := pretty.PrintPoolInfo(pqr.Pools[0], &bld); err != nil {
 		return err
 	}
 

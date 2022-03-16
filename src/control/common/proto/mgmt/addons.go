@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2021 Intel Corporation.
+// (C) Copyright 2019-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -133,14 +133,38 @@ func (r *PoolExtendReq) SetUUID(id uuid.UUID) {
 	r.Id = id.String()
 }
 
-// SetSvcRanks sets the request's Pool Service Ranks.
-func (r *PoolQueryReq) SetSvcRanks(rl []uint32) {
-	r.SvcRanks = rl
+// SetSvcRanks sets the pool's Service Ranks.
+func (rp *PoolQueryReq_Pool) SetSvcReps(rl []uint32) {
+	rp.SvcReps = rl
 }
 
-// SetUUID sets the request's ID to a UUID.
-func (r *PoolQueryReq) SetUUID(id uuid.UUID) {
-	r.Id = id.String()
+// SetUUIDs sets the pool's ID to a UUID.
+func (rp *PoolQueryReq_Pool) SetUUID(id uuid.UUID) {
+	rp.Id = id.String()
+}
+
+func (rp *PoolQueryReq_Pool) MarshalJSON() ([]byte, error) {
+	var u, l string
+
+	if rp.Id != "" {
+		var err error
+		if _, err = uuid.Parse(rp.Id); err == nil {
+			u = rp.Id
+		} else {
+			l = rp.Id
+		}
+	}
+
+	type toJSON PoolQueryReq_Pool
+	return json.Marshal(struct {
+		Uuid  string `json:"uuid"`
+		Label string `json:"label"`
+		*toJSON
+	}{
+		Uuid:   u,
+		Label:  l,
+		toJSON: (*toJSON)(rp),
+	})
 }
 
 // SetSvcRanks sets the request's Pool Service Ranks.

@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2021 Intel Corporation.
+// (C) Copyright 2019-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -60,8 +60,6 @@ service MgmtSvc {
 	rpc PoolDeleteACL(DeleteACLReq) returns (ACLResp) {}
 	// Get the information required by libdaos to attach to the system.
 	rpc GetAttachInfo(GetAttachInfoReq) returns (GetAttachInfoResp) {}
-	// List all pools in a DAOS system: basic info: UUIDs, service ranks.
-	rpc ListPools(ListPoolsReq) returns (ListPoolsResp) {}
 	// List all containers in a pool
 	rpc ListContainers(ListContReq) returns (ListContResp) {}
 	// Change the owner of a DAOS container
