@@ -665,18 +665,6 @@ vos_iter_cb(vos_iter_cb_t iter_cb, daos_handle_t ih, vos_iter_entry_t *iter_ent,
 	return rc;
 }
 
-static inline bool
-is_skip(unsigned int acts)
-{
-	return (acts & VOS_ITER_CB_SKIP);
-}
-
-static inline bool
-is_delete(unsigned int acts)
-{
-	return (acts & VOS_ITER_CB_DELETE);
-}
-
 #define JUMP_TO_STAGE(rc, next_label, probe_label, abort_label)				\
 	do {										\
 		switch (rc) {								\
