@@ -5,12 +5,12 @@ Maintainer: daos-stack <daos@daos.groups.io>
 Build-Depends: debhelper (>= 10),
                dh-python,
                libcmocka-dev,
-               libfabric-dev (>= 1.12.0),
+               libfabric-dev (>= 1.14.0-1),
                libhwloc-dev,
                libopenmpi-dev,
                libssl-dev,
                libyaml-dev,
-               libmercury-dev (= 2.0.1-1),
+               libmercury-dev (>= 2.1.0~rc4-3),
                scons,
                uuid-dev,
                pkg-config,
@@ -28,7 +28,7 @@ Build-Depends: debhelper (>= 10),
                libboost-dev,
                libspdk-dev,
                libipmctl-dev,
-               libraft-dev (= 0.8.1-1389.g304b19b),
+               libraft-dev (= 0.9.0-1394.gc81505f),
                python3-tabulate,
                liblz4-dev
 Standards-Version: 4.1.2
@@ -147,7 +147,7 @@ Package: daos-client
 Section: net
 Architecture: any
 Multi-Arch: same
-Depends: ${shlibs:Depends}, ${misc:Depends}, openmpi-bin, libfabric (>= 1.12.0)
+Depends: ${shlibs:Depends}, ${misc:Depends}, openmpi-bin, libfabric (>= 1.14.0-1)
 Description: The Distributed Asynchronous Object Storage (DAOS) is an open-source
  software-defined object store designed from the ground up for
  massively distributed Non Volatile Memory (NVM). DAOS takes advantage
@@ -166,7 +166,7 @@ Section: net
 Architecture: any
 Multi-Arch: same
 Depends: ${shlibs:Depends}, ${misc:Depends}, openmpi-bin,
-         ipmctl (>02.00.00.3816), libfabric (>= 1.12.0)
+         ipmctl (>02.00.00.3816), libfabric (>= 1.14.0-1)
 Description: The Distributed Asynchronous Object Storage (DAOS) is an open-source
  software-defined object store designed from the ground up for
  massively distributed Non Volatile Memory (NVM). DAOS takes advantage

@@ -25,12 +25,15 @@ enum {
 };
 
 struct sched_stats {
-	uint64_t	ss_tot_time;	/* Total CPU time (ms) */
-	uint64_t	ss_relax_time;	/* CPU relax time (ms) */
-	uint64_t	ss_busy_ts;	/* Last busy timestamp (ms) */
-	uint64_t	ss_print_ts;	/* Last stats print timestamp (ms) */
-	uint64_t	ss_watchdog_ts;	/* Last watchdog print ts (ms) */
-	void		*ss_last_unit;	/* Last executed unit */
+	struct d_tm_node_t	*ss_total_time;		/* Total CPU time (ms) */
+	struct d_tm_node_t	*ss_relax_time;		/* CPU relax time (ms) */
+	struct d_tm_node_t	*ss_wq_len;		/* Wait queue length */
+	struct d_tm_node_t	*ss_sq_len;		/* Sleep queue length */
+	struct d_tm_node_t	*ss_cycle_duration;	/* Cycle duration (ms) */
+	struct d_tm_node_t	*ss_cycle_size;		/* Total ULTs in a cycle */
+	uint64_t		 ss_busy_ts;		/* Last busy timestamp (ms) */
+	uint64_t		 ss_watchdog_ts;	/* Last watchdog print ts (ms) */
+	void			*ss_last_unit;		/* Last executed unit */
 };
 
 struct sched_info {
@@ -76,6 +79,7 @@ struct dss_xstream {
 	bool			dx_main_xs;	/* true for main XS */
 	bool			dx_comm;	/* true with cart context */
 	bool			dx_dsc_started;	/* DSC progress ULT started */
+	bool			dx_progress_started;	/* Network poll started */
 };
 
 /** Engine module's metrics */
@@ -100,7 +104,7 @@ extern int		dss_core_depth;
 /** number of physical cores, w/o hyper-threading */
 extern int		dss_core_nr;
 /** start offset index of the first core for service XS */
-extern int		dss_core_offset;
+extern unsigned int	dss_core_offset;
 /** NUMA node to bind to */
 extern int		dss_numa_node;
 /** bitmap describing core allocation */

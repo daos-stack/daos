@@ -72,10 +72,10 @@
 #
 ## Force a specific libfabric provider to be used by all the engines.
 ## The default provider depends on the interfaces that will be auto-detected:
-##  ofi+verbs;ofi_rxm for Infiniband/RoCE and
-##  ofi+sockets for non-RDMA-capable Ethernet.
+##  ofi+verbs for Infiniband/RoCE and
+##  ofi+tcp for non-RDMA-capable Ethernet.
 #
-#provider: ofi+verbs;ofi_rxm
+#provider: ofi+verbs
 #
 #
 ## CART: Whether to enable share address in the network stack
@@ -89,6 +89,13 @@
 ## parameters shared with client.
 #
 #crt_timeout: 30
+#
+#
+## CART: Disable SRX
+## parameters shared with client. set it to true if network card
+## does not support shared receive context, eg intel E810-C.
+#
+#disable_srx: false
 #
 #
 ## NVMe SSD inclusion list
@@ -167,15 +174,23 @@
 #socket_dir: ./.daos/daos_server
 #
 #
-## Number of hugepages to allocate for use by NVMe SSDs
+## Number of hugepages to allocate for DMA buffer memory
 #
 ## Specifies the number (not size) of hugepages to allocate for use by NVMe
-## through SPDK. This indicates the number to be used for each spawned
-## I/O Engines, so the total will be this number * number of I/O Engines.
-## Default system hugepage size will be used.
+## through SPDK. Note that each target requires 1 GiB of hugepage space.
+## In DAOS version 2.2 and newer, nr_hugepages specifies the total across all
+## engines on a host. It needs to represent the total amount of hugepages memory
+## required for all targets across all engines on a host, divided by the system
+## hugepage size. If not set here, it will be automatically calculated based on
+## the number of targets (using the default system hugepage size).
 #
-## default: 4096
-#nr_hugepages: 4096
+## Example: (2 engines * (16 targets/engine * 1GiB)) / 2MiB hugepage size = 16834
+#
+## Hugepages are mandatory with NVME SSDs configured and optional without.
+## To disabled the use of hugepages when no NVMe SSDs are configured, set
+## nr_hugepages to -1.
+#
+##nr_hugepages: -1
 #
 #
 ## Force specific debug mask for daos_server (control plane).
@@ -203,6 +218,13 @@
 #
 ## default: disabled (errors only to control plane log)
 #firmware_helper_log_file: /tmp/daos_firmware.log
+#
+#
+## Enable HTTP endpoint for remote telemetry collection.
+#
+## default endpoint state: disabled
+## default endpoint port: 9191
+#telemetry_port: 9191
 #
 #
 ## When per-engine definitions exist, auto-allocation of resources is not
@@ -337,11 +359,19 @@
 #    # When class is set to nvme, bdev_list is the list of unique NVMe IDs
 #    # that should be different across different engine instance.
 #    # Immutable after running "dmg storage format".
-#    bdev_list: ["0000:81:00.0"]  # generate regular nvme.conf
+#    bdev_list: ["0000:81:00.0", "0000:82:00.0"]  # generate regular nvme.conf
+#
 #    # If VMD-enabled NVMe SSDs are used, the bdev_list should consist of the VMD
 #    # PCIe addresses, and not the BDF format transport IDs of the backing NVMe SSDs
 #    # behind the VMD address. Also, 'disable_vmd' needs to be set to false.
 #    #bdev_list: ["0000:5d:05.5"]
+#
+#    # Optional override, will be automatically generated based on NUMA affinity.
+#    # Filter hot-pluggable devices by PCI bus-ID by specifying a hexadecimal
+#    # range. Hotplug events relating to devices with PCI bus-IDs outside this range
+#    # will not be processed by this engine. Empty or unset range signifies allow all.
+#    bdev_busid_range: 0x80-0x8f
+#    #bdev_busid_range: 128-143
 
 #-
 #  # Rank to be assigned as identifier for this engine.
@@ -477,5 +507,15 @@
 #    # If Volume Management Devices (VMD) are to be used, then the disable_vmd
 #    # flag needs to be set to false (default). The class will remain the
 #    # default "nvme" type, and bdev_list will include the VMD addresses.
-#    class: nvme
-#    bdev_list: ["0000:82:00.0","0000:5d:05.5"]
+#    #class: nvme
+#    #bdev_list: ["0000:5d:05.5"]
+#
+#    #class: nvme
+#    #bdev_list: ["0000:da:00.0", "0000:db:00.0"]  # generate regular nvme.conf
+#
+#    # Optional override, will be automatically generated based on NUMA affinity.
+#    # Filter hot-pluggable devices by PCI bus-ID by specifying a hexadecimal
+#    # range. Hotplug events relating to devices with PCI bus-IDs outside this range
+#    # will not be processed by this engine. Empty or unset range signifies allow all.
+#    #bdev_busid_range: 0xd0-0xdf
+#    #bdev_busid_range: 208-223

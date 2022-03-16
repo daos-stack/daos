@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2017-2021 Intel Corporation.
+ * (C) Copyright 2017-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -140,12 +140,12 @@ rebuild_iv_ent_update(struct ds_iv_entry *entry, struct ds_iv_key *key,
 				rgt->rgt_status.rs_fail_rank = src_iv->riv_rank;
 		}
 		D_DEBUG(DB_TRACE, "update rebuild "DF_UUID" ver %d "
-			"toberb_obj/rb_obj/rec/global done/status/rank "
+			"toberb_obj/rb_obj/rec/global state/status/rank "
 			DF_U64"/"DF_U64"/"DF_U64"/%d/%d/%d\n",
 			DP_UUID(rgt->rgt_pool_uuid), rgt->rgt_rebuild_ver,
 			rgt->rgt_status.rs_toberb_obj_nr,
 			rgt->rgt_status.rs_obj_nr, rgt->rgt_status.rs_rec_nr,
-			rgt->rgt_status.rs_done, rgt->rgt_status.rs_errno,
+			rgt->rgt_status.rs_state, rgt->rgt_status.rs_errno,
 			src_iv->riv_rank);
 	}
 	rgt_put(rgt);
@@ -266,7 +266,8 @@ rebuild_iv_update(void *ns, struct rebuild_iv *iv, unsigned int shortcut,
 	key.class_id = IV_REBUILD;
 	rc = ds_iv_update(ns, &key, &sgl, shortcut, sync_mode, 0, retry);
 	if (rc)
-		D_ERROR("iv update failed "DF_RC"\n", DP_RC(rc));
+		D_CDEBUG(daos_quiet_error(rc), DB_REBUILD, DLOG_ERR, "iv update failed "DF_RC"\n",
+			 DP_RC(rc));
 
 	return rc;
 }

@@ -13,7 +13,7 @@ to access DAOS from Hadoop and Spark.
 
 We assume that the DAOS servers and agents have already been deployed in the
 environment. Otherwise, they can be deployed by following the
-[DAOS Installation Guide](https://daos-stack.github.io/admin/installation/).
+[DAOS Installation Guide](https://docs.daos.io/v2.2/admin/installation/).
 
 ## Maven Download
 
@@ -73,8 +73,10 @@ If the DAOS pool and container have not been created, we can use the following
 command to create them and get the pool UUID and container UUID.
 
 ```bash
-$ dmg pool create --scm-size=<scm size> --nvme-size=<nvme size>
-$ daos cont create --pool <pool UUID> --type POSIX
+$ export DAOS_POOL="mypool"
+$ export DAOS_CONT="mycont"
+$ dmg pool create --scm-size=<scm size> --nvme-size=<nvme size> $DAOS_POOL
+$ daos cont create --label $DAOS_CONT --type POSIX $DAOS_POOL
 ```
 
 After that, configure `daos-site.xml` with the pool and container created.
@@ -156,7 +158,6 @@ $ mvn -Pdistribute,with-proto3-netty4-deps clean package -DskipTests -Dgpg.skip 
 After build, the package `daos-java-<version>-assemble.tgz` will be available
 under `distribution/target`.
 
-
 ### <a name="uris"></a>DAOS More URIs
 
 DAOS FileSystem binds to schema "daos".  DAOS URIs are in the format of
@@ -173,12 +174,12 @@ DAOS UNS method, `DaosUns.create()`. The "\[sub path\]" is optional. You can
 create the UNS path with below command.
 
 ```bash
-$ daos cont create --pool <pool UUID> -path <your path> --type=POSIX
+$ daos cont create --label $DAOS_CONT --path <your_path> --type POSIX $DAOS_POOL
 ```
 Or
 
 ```bash
-$ java -Dpath="your path" -Dpool_id="your pool uuid" -cp ./daos-java-<version>-shaded.jar io.daos.dfs.DaosUns create
+$ java -Dpath="your_path" -Dpool_id=$DAOS_POOL -cp ./daos-java-<version>-shaded.jar io.daos.dfs.DaosUns create
 ```
 
 After creation, you can use below command to see what DAOS properties set to
@@ -213,7 +214,6 @@ DAOS UNS URI. YARN has some working directories defaulting to local path
 without schema, like "/tmp/yarn", which is then constructed as
 "daos:///tmp/yarn". With this URI, Hadoop cannot connect to DAOS since no
 pool/container UUIDs can be found if daos-site.xml is not provided too.
-               .
 
 Then append below configuration to this file and
 `$HADOOP_HOME/etc/hadoop/yarn-site.xml`.
@@ -242,8 +242,10 @@ Then replicate `daos-site.xml`, `core-site.xml`, `yarn-site.xml` and
 
 #### Known Issues
 
-If you use Omni-path PSM2 provider in DAOS, you'll get connection issue in
+If you use Omni-Path PSM2 provider in DAOS, you'll get connection issue in
 Yarn container due to PSM2 resource not being released properly in time.
+The PSM2 provides has known issues with DAOS and is not supported in
+production environments.
 
 ### Tune More Configurations
 
@@ -269,9 +271,9 @@ $ java -Dpath="your path" -Dattr=user.daos.hadoop -Dvalue="fs.daos.server.group=
 ```
 
 For the "value" property, you need to follow pattern, key1=value1:key2=value2..
-.. And key* should be from
-[daos-site-example.xml](hadoop-daos/src/main/resources/daos-site-example.xml).
-If value* contains characters of '=' or ':', you need to escape the value with
+.. And key\* should be from
+[daos-site-example.xml](https://github.com/daos-stack/daos/blob/release/master/src/client/java/hadoop-daos/src/main/resources/daos-site-example.xml).
+If value\* contains characters of '=' or ':', you need to escape the value with
 below command.
 
 ```bash

@@ -1,6 +1,5 @@
 package io.daos.obj;
 
-import com.sun.corba.se.impl.orbutil.concurrent.Sync;
 import io.daos.DaosClient;
 import io.netty.buffer.ByteBuf;
 
@@ -406,7 +405,7 @@ public class ReusableDescMain {
   private static DaosObject openObject(DaosObjClient objClient, long high)
     throws Exception {
     DaosObjectId oid = new DaosObjectId(high, 0L);
-    oid.encode();
+    oid.encode(objClient.getContPtr());
     DaosObject object = objClient.getObject(oid);
     object.open();
     return object;

@@ -3,8 +3,8 @@
 %define agent_svc_name daos_agent.service
 %define sysctl_script_name 10-daos_server.conf
 
-%global mercury_version 2.1.0~rc2-1%{?dist}
-%global libfabric_version 1.14.0~rc3-1
+%global mercury_version 2.1.0~rc4-4%{?dist}
+%global libfabric_version 1.14.0-1
 %global __python %{__python3}
 
 %if (0%{?rhel} >= 8)
@@ -15,7 +15,7 @@
 
 Name:          daos
 Version:       2.1.100
-Release:       9%{?relval}%{?dist}
+Release:       23%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       BSD-2-Clause-Patent
@@ -32,7 +32,7 @@ BuildRequires: python36-scons >= 2.4
 BuildRequires: scons >= 2.4
 %endif
 BuildRequires: libfabric-devel >= %{libfabric_version}
-BuildRequires: mercury-devel = %{mercury_version}
+BuildRequires: mercury-devel >= %{mercury_version}
 %if (0%{?rhel} < 8) || (0%{?suse_version} > 0)
 BuildRequires: openpa-devel
 BuildRequires: libpsm2-devel
@@ -67,10 +67,7 @@ BuildRequires: fuse3-devel >= 3
 BuildRequires: fuse3-devel >= 3.4.2
 %endif
 %if (0%{?suse_version} >= 1500)
-# NB: OpenSUSE is stupid about this... If we just
-# specify go >= 1.X, it installs go=1.11 AND 1.X.
-BuildRequires: go1.14
-BuildRequires: go1.14-race
+BuildRequires: go-race
 BuildRequires: libprotobuf-c-devel
 BuildRequires: liblz4-devel
 %else
@@ -85,17 +82,17 @@ BuildRequires: libisa-l_crypto-devel
 BuildRequires: libisal-devel
 BuildRequires: libisal_crypto-devel
 %endif
-BuildRequires: daos-raft-devel = 0.8.1
+BuildRequires: daos-raft-devel = 0.9.0-1394.gc81505f%{?dist}%{?dist}
 BuildRequires: openssl-devel
 BuildRequires: libevent-devel
 BuildRequires: libyaml-devel
 BuildRequires: libcmocka-devel
 BuildRequires: valgrind-devel
 BuildRequires: systemd
+BuildRequires: go >= 1.14
 %if (0%{?rhel} >= 7)
 BuildRequires: numactl-devel
 BuildRequires: CUnit-devel
-BuildRequires: golang-bin >= 1.12
 # needed to retrieve PMM region info through control-plane
 BuildRequires: libipmctl-devel
 BuildRequires: python36-devel
@@ -120,6 +117,7 @@ BuildRequires: cunit-devel
 BuildRequires: ipmctl-devel
 BuildRequires: python3-devel
 BuildRequires: python3-distro
+BuildRequires: python-rpm-macros
 BuildRequires: lua-lmod
 BuildRequires: systemd-rpm-macros
 %if 0%{?is_opensuse}
@@ -138,7 +136,7 @@ Requires: openssl
 # This should only be temporary until we can get a stable upstream release
 # of mercury, at which time the autoprov shared library version should
 # suffice
-Requires: mercury = %{mercury_version}
+Requires: mercury >= %{mercury_version}
 
 %description
 The Distributed Asynchronous Object Storage (DAOS) is an open-source
@@ -166,7 +164,7 @@ Requires: ipmctl > 02.00.00.3816
 # When 1.11.2 is released, we can change this to >= 1.11.2
 Requires: libpmemobj = 1.11.0-3%{?dist}
 %endif
-Requires: mercury = %{mercury_version}
+Requires: mercury >= %{mercury_version}
 Requires(post): /sbin/ldconfig
 Requires(postun): /sbin/ldconfig
 Requires: libfabric >= %{libfabric_version}
@@ -179,7 +177,7 @@ This is the package needed to run a DAOS server
 %package client
 Summary: The DAOS client
 Requires: %{name}%{?_isa} = %{version}-%{release}
-Requires: mercury = %{mercury_version}
+Requires: mercury >= %{mercury_version}
 Requires: libfabric >= %{libfabric_version}
 %if (0%{?rhel} >= 8)
 Requires: fuse3 >= 3
@@ -224,11 +222,16 @@ Requires: python3-tabulate
 Requires: python3-defusedxml
 %endif
 Requires: fio
+Requires: meson
+Requires: python3-pyelftools
 Requires: dbench
 Requires: lbzip2
 Requires: attr
 %if (0%{?suse_version} >= 1315)
 Requires: libpsm_infinipath1
+Requires: lua-lmod
+%else
+Requires: Lmod
 %endif
 
 %description client-tests
@@ -270,14 +273,25 @@ Requires: %{name}-server%{?_isa} = %{version}-%{release}
 %description firmware
 This is the package needed to manage server storage firmware on DAOS servers.
 
-%package daos_serialize
+%package serialize
 Summary: DAOS serialization library that uses HDF5
 BuildRequires: hdf5-devel
 Requires: hdf5
 
-%description daos_serialize
+%description serialize
 This is the package needed to use the DAOS serialization and deserialization
 tools, as well as the preserve option for the filesystem copy tool.
+
+%package mofed-shim
+Summary: A shim to bridge MOFED's openmpi to distribution dependency tags
+Provides: libmpi.so.40()(64bit)(openmpi-x86_64)
+Requires: libmpi.so.40()(64bit)
+Provides: libmpi_cxx.so.40()(64bit)(openmpi-x86_64)
+Provides: libmpi_cxx.so.40()(64bit)
+
+%description mofed-shim
+This is the package that bridges the difference between the MOFED openmpi
+"Provides" and distribution-openmpi consumers "Requires".
 
 %if (0%{?suse_version} > 0)
 %global __debug_package 1
@@ -345,7 +359,8 @@ mv %{buildroot}/%{conf_dir}/bash_completion.d %{buildroot}/%{_sysconfdir}
 %pre server
 getent group daos_metrics >/dev/null || groupadd -r daos_metrics
 getent group daos_server >/dev/null || groupadd -r daos_server
-getent passwd daos_server >/dev/null || useradd -s /sbin/nologin -r -g daos_server -G daos_metrics daos_server
+getent group daos_daemons >/dev/null || groupadd -r daos_daemons
+getent passwd daos_server >/dev/null || useradd -s /sbin/nologin -r -g daos_server -G daos_metrics,daos_daemons daos_server
 %post server
 /sbin/ldconfig
 %systemd_post %{server_svc_name}
@@ -358,7 +373,8 @@ getent passwd daos_server >/dev/null || useradd -s /sbin/nologin -r -g daos_serv
 
 %pre client
 getent group daos_agent >/dev/null || groupadd -r daos_agent
-getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent daos_agent
+getent group daos_daemons >/dev/null || groupadd -r daos_daemons
+getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent -G daos_daemons daos_agent
 %post client
 %systemd_post %{agent_svc_name}
 %preun client
@@ -380,6 +396,7 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %{_libdir}/%{name}/VERSION
 %{_libdir}/libcart.so.*
 %{_libdir}/libgurt.so.*
+%{_libdir}/libdaos_common.so
 %doc
 
 %files server
@@ -423,7 +440,6 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %{_sysctldir}/%{sysctl_script_name}
 
 %files client
-%{_libdir}/libdaos_common.so
 %{_libdir}/libdaos.so.*
 %{_bindir}/cart_ctl
 %{_bindir}/self_test
@@ -437,7 +453,6 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %{_libdir}/libduns.so
 %{_libdir}/libdfuse.so
 %{_libdir}/libioil.so
-%{_libdir}/libdfs_internal.so
 %dir %{python3_sitearch}/pydaos
 %{python3_sitearch}/pydaos/*.py
 %dir %{python3_sitearch}/pydaos/raw
@@ -515,13 +530,63 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 # set daos_firmware to be setuid root in order to perform privileged tasks
 %attr(4750,root,daos_server) %{_bindir}/daos_firmware
 
-%files daos_serialize
+%files serialize
 %{_libdir}/libdaos_serialize.so
 
 %files tests
 # No files in a meta-package
 
+%files mofed-shim
+# No files in a shim package
+
 %changelog
+* Mon Mar 14 2022 Michael Hennecke <michael.hennecke@intel.com> 2.1.100-23
+- DAOS-6344: Create secondary group daos_daemons for daos_server and daos_agent
+
+* Tue Feb 22 2022 Alexander Oganezov <alexander.a.oganezov@intel.com> 2.1.100-22
+- Update mercury to include DAOS-9561 workaround
+
+* Sun Feb 13 2022 Michael MacDonald <mjmac.macdonald@intel.com> 2.1.100-21
+- Update go toolchain requirements
+
+* Thu Feb 10 2022 Li Wei <wei.g.li@intel.com> 2.1.100-20
+- Update raft to 0.9.0-1394.gc81505f to fix membership change bugs
+
+* Wed Jan 19 2022 Michael MacDonald <mjmac.macdonald@intel.com> 2.1.100-19
+- Move libdaos_common.so from daos-client to daos package
+
+* Mon Jan 17 2022 Johann Lombardi <johann.lombardi@intel.com> 2.1.100-18
+- Update libfabric to 1.14.0 GA and apply fix for DAOS-9376
+
+* Thu Dec 23 2021 Alexander Oganezov <alexander.a.oganezov@intel.com> 2.1.100-17
+- Update to v2.1.0-rc4-3 to pick fix for DAOS-9325 high cpu usage
+- Change mercury pinning to be >= instead of strict =
+
+* Thu Dec 16 2021 Brian J. Murrell <brian.murrell@intel.com> 2.1.100-16
+- Add BR: python-rpm-macros for Leap 15 as python3-base dropped that
+  as a R:
+
+* Sat Dec 11 2021 Brian J. Murrell <brian.murrell@intel.com> 2.1.100-15
+- Create a shim package to allow daos openmpi packages built with the
+  distribution openmpi to install on MOFED systems
+
+* Fri Dec 10 2021 Brian J. Murrell <brian.murrell@intel.com> 2.1.100-14
+- Don't make daos-*-tests-openmi a dependency of anything
+  - If they are wanted, they should be installed explicitly, due to
+    potential conflicts with other MPI stacks
+
+* Wed Dec 08 2021 Alexander Oganezov <alexander.a.oganezov@intel.com> 2.1.100-13
+- Remove DAOS-9173 workaround from mercury. Apply DAOS-9173 to ofi
+
+* Tue Dec 07 2021 Alexander Oganezov <alexander.a.oganezov@intel.com> 2.1.100-12
+- Apply DAOS-9173 workaround to mercury
+
+* Fri Dec 03 2021 Alexander Oganezov <alexander.a.oganezov@intel.com> 2.1.100-11
+- Update mercury to v2.1.0rc4
+
+* Thu Dec 02 2021 Danielle M. Sikich <danielle.sikich@intel.com> 2.1.100-10
+- Fix name of daos serialize package
+
 * Sun Nov 28 2021 Tom Nabarro <tom.nabarro@intel.com> 2.1.100-9
 - Set rmem_{max,default} sysctl values on server package install to enable
   SPDK pci_event module to operate in unprivileged process (daos_engine).

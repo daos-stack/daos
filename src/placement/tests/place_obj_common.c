@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2021 Intel Corporation.
+ * (C) Copyright 2016-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -51,7 +51,7 @@ plt_obj_place(daos_obj_id_t oid, struct pl_obj_layout **layout,
 	D_ASSERT(pl_map != NULL);
 	md.omd_ver = pool_map_get_version(pl_map->pl_poolmap);
 
-	rc = pl_obj_place(pl_map, &md, NULL, layout);
+	rc = pl_obj_place(pl_map, &md, 0, NULL, layout);
 
 	if (print_layout_flag) {
 		if (*layout != NULL)
@@ -842,7 +842,7 @@ is_max_class_obj(daos_oclass_id_t cid)
 	rc = daos_obj_set_oid_by_class(&oid, 0, cid, 0);
 	assert_success(rc == 0);
 
-	oc_attr = daos_oclass_attr_find(oid, NULL, &grp_nr);
+	oc_attr = daos_oclass_attr_find(oid, &grp_nr);
 
 	if (grp_nr == DAOS_OBJ_GRP_MAX ||
 	    oc_attr->u.rp.r_num == DAOS_OBJ_REPL_MAX)

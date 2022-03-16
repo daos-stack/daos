@@ -1,6 +1,6 @@
 #!/usr/bin/python
 """
-  (C) Copyright 2020-2021 Intel Corporation.
+  (C) Copyright 2020-2022 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -33,6 +33,8 @@ class DaosCommandBase(CommandWithSubCommand):
             self.sub_command_class = self.ObjectSubCommand()
         elif self.sub_command.value == "filesystem":
             self.sub_command_class = self.FilesystemSubCommand()
+        elif self.sub_command.value == "version":
+            self.sub_command_class = self.VersionSubCommand()
         else:
             self.sub_command_class = None
 
@@ -256,10 +258,10 @@ class DaosCommandBase(CommandWithSubCommand):
                 #               RP_3G1_SR, RP_2G1_SR, S1_SR, EC_2P1G1, EC_2P2G1,
                 #               EC_8P2G1
                 self.oclass = FormattedParameter("--oclass={}")
-                #   --chunk_size=BYTES
+                #   --chunk-size=BYTES
                 #           chunk size of files created. Supports suffixes:
                 #               K (KB), M (MB), G (GB), T (TB), P (PB), E (EB)
-                self.chunk_size = FormattedParameter("--chunk_size={}")
+                self.chunk_size = FormattedParameter("--chunk-size={}")
                 #   --properties=<name>:<value>[,<name>:<value>,...]
                 #           - supported names:
                 #               label, cksum, cksum_size, srv_cksum, rf
@@ -276,6 +278,8 @@ class DaosCommandBase(CommandWithSubCommand):
                 #    -c, --cont=<UUID>
                 #           container UUID (optional)
                 self.cont = FormattedParameter("--cont={}")
+                #     -l, --label=<container label>
+                self.label = FormattedParameter("--label={}")
 
         class CreateSnapSubCommand(CommonContainerSubCommand):
             """Defines an object for the daos container create-snap command."""
@@ -548,3 +552,12 @@ class DaosCommandBase(CommandWithSubCommand):
                 #   --src=<type>:<pool/cont | path>
                 #   supported types are daos, posix
                 self.dst = FormattedParameter("--dst={}")
+                # filename to write and read container properties
+                self.preserve_props = FormattedParameter("--preserve-props={}")
+
+    class VersionSubCommand(CommandWithSubCommand):
+        """Defines an object for the daos version sub command."""
+
+        def __init__(self):
+            """Create a dmg version subcommand object."""
+            super().__init__("/run/daos/version/*", "version")

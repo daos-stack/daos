@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2021 Intel Corporation.
+// (C) Copyright 2019-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -12,6 +12,13 @@ import (
 
 	"github.com/daos-stack/daos/src/control/lib/atm"
 )
+
+// MockConfig returns an I/O Engine config set up for testing.
+func MockConfig() *Config {
+	return &Config{
+		HelperStreamCount: maxHelperStreamCount,
+	}
+}
 
 type (
 	TestRunnerConfig struct {

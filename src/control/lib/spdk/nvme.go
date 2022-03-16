@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2018-2021 Intel Corporation.
+// (C) Copyright 2018-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -12,8 +12,8 @@ package spdk
 /*
 #cgo CFLAGS: -I .
 #cgo LDFLAGS: -L . -lnvme_control
-#cgo LDFLAGS: -lspdk_env_dpdk -lspdk_nvme -lspdk_vmd -lrte_mempool
-#cgo LDFLAGS: -lrte_mempool_ring -lrte_bus_pci
+#cgo LDFLAGS: -lspdk_env_dpdk -lspdk_nvme -lspdk_vmd -lspdk_util
+#cgo LDFLAGS: -lrte_mempool -lrte_mempool_ring -lrte_bus_pci
 
 #include "stdlib.h"
 #include "daos_srv/control.h"
@@ -28,10 +28,12 @@ import "C"
 
 import (
 	"os"
+	"strings"
 	"unsafe"
 
 	"github.com/pkg/errors"
 
+	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/server/storage"
 )
@@ -44,8 +46,6 @@ type Nvme interface {
 	Discover(logging.Logger) (storage.NvmeControllers, error)
 	// Format NVMe controller namespaces
 	Format(logging.Logger) ([]*FormatResult, error)
-	// CleanLockfiles removes SPDK lockfiles for specific PCI addresses
-	CleanLockfiles(logging.Logger, ...string) error
 	// Update updates the firmware on a specific PCI address and slot
 	Update(log logging.Logger, ctrlrPciAddr string, path string, slot int32) error
 }
@@ -68,7 +68,9 @@ func realRemove(name string) error {
 	return os.Remove(name)
 }
 
+// cleanLockfiles removes SPDK lockfiles after binding operations.
 func cleanLockfiles(log logging.Logger, remove remFunc, pciAddrs ...string) error {
+	pciAddrs = common.DedupeStringSlice(pciAddrs)
 	removed := make([]string, 0, len(pciAddrs))
 
 	for _, pciAddr := range pciAddrs {
@@ -101,12 +103,7 @@ func wrapCleanError(inErr error, cleanErr error) (outErr error) {
 	return
 }
 
-// CleanLockfiles removes SPDK lockfiles after binding operations.
-func (n *NvmeImpl) CleanLockfiles(log logging.Logger, pciAddrs ...string) error {
-	return cleanLockfiles(log, realRemove, pciAddrs...)
-}
-
-func pciAddressList(ctrlrs storage.NvmeControllers) []string {
+func ctrlrPCIAddresses(ctrlrs storage.NvmeControllers) []string {
 	pciAddrs := make([]string, 0, len(ctrlrs))
 	for _, c := range ctrlrs {
 		pciAddrs = append(pciAddrs, c.PciAddr)
@@ -120,27 +117,56 @@ func pciAddressList(ctrlrs storage.NvmeControllers) []string {
 //
 // Calls C.nvme_discover which returns pointers to single linked list of
 // ctrlr_t structs. These are converted and returned as Controller slices
-// containing any Namespace and DeviceHealth structs. Afterwards remove
-// lockfile for each discovered device.
+// containing any Namespace and DeviceHealth structs.
+// Afterwards remove lockfile for each discovered device.
 func (n *NvmeImpl) Discover(log logging.Logger) (storage.NvmeControllers, error) {
+	if n == nil {
+		return nil, errors.New("nil NvmeImpl")
+	}
+
 	ctrlrs, err := collectCtrlrs(C.nvme_discover(), "NVMe Discover(): C.nvme_discover")
 
-	pciAddrs := pciAddressList(ctrlrs)
+	pciAddrs := ctrlrPCIAddresses(ctrlrs)
 	log.Debugf("discovered nvme ssds: %v", pciAddrs)
 
-	return ctrlrs, wrapCleanError(err, n.CleanLockfiles(log, pciAddrs...))
+	return ctrlrs, wrapCleanError(err, cleanLockfiles(log, realRemove, pciAddrs...))
+}
+
+func resultPCIAddresses(results []*FormatResult) []string {
+	pciAddrs := make([]string, 0, len(results))
+	for _, r := range results {
+		pciAddrs = append(pciAddrs, r.CtrlrPCIAddr)
+	}
+
+	return common.DedupeStringSlice(pciAddrs)
 }
 
 // Format devices available through SPDK, destructive operation!
 //
 // Attempt wipe of each controller namespace's LBA-0.
+// Afterwards remove lockfile for each formatted device.
 func (n *NvmeImpl) Format(log logging.Logger) ([]*FormatResult, error) {
-	return collectFormatResults(C.nvme_wipe_namespaces(),
+	if n == nil {
+		return nil, errors.New("nil NvmeImpl")
+	}
+
+	results, err := collectFormatResults(C.nvme_wipe_namespaces(),
 		"NVMe Format(): C.nvme_wipe_namespaces()")
+
+	pciAddrs := resultPCIAddresses(results)
+	log.Debugf("formatted nvme ssds: %v", pciAddrs)
+
+	return results, wrapCleanError(err, cleanLockfiles(log, realRemove, pciAddrs...))
 }
 
 // Update updates the firmware image via SPDK in a given slot on the device.
+//
+// Afterwards remove lockfile for the updated device.
 func (n *NvmeImpl) Update(log logging.Logger, ctrlrPciAddr string, path string, slot int32) error {
+	if n == nil {
+		return errors.New("nil NvmeImpl")
+	}
+
 	csPath := C.CString(path)
 	defer C.free(unsafe.Pointer(csPath))
 
@@ -150,7 +176,7 @@ func (n *NvmeImpl) Update(log logging.Logger, ctrlrPciAddr string, path string, 
 	_, err := collectCtrlrs(C.nvme_fwupdate(csPci, csPath, C.uint(slot)),
 		"NVMe Update(): C.nvme_fwupdate")
 
-	return wrapCleanError(err, n.CleanLockfiles(log, ctrlrPciAddr))
+	return wrapCleanError(err, cleanLockfiles(log, realRemove, ctrlrPciAddr))
 }
 
 // c2GoController is a private translation function.
@@ -215,7 +241,7 @@ func c2GoNamespace(ns *C.struct_ns_t) *storage.NvmeNamespace {
 func c2GoFormatResult(fmtResult *C.struct_wipe_res_t) *FormatResult {
 	var err error
 	if fmtResult.rc != 0 {
-		err = Rc2err(C.GoString(&fmtResult.info[0]), fmtResult.rc)
+		err = rc2err(C.GoString(&fmtResult.info[0]), fmtResult.rc)
 	}
 
 	return &FormatResult{
@@ -231,29 +257,44 @@ func clean(retPtr *C.struct_ret_t) {
 	C.free(unsafe.Pointer(retPtr))
 }
 
-// checkRet returns early if return struct is nil or rc is non-zero.
-func checkRet(retPtr *C.struct_ret_t, failMsg string) error {
+// checkRet returns fault if ret_t struct input is nil or rc is non-zero.
+func checkRet(retPtr *C.struct_ret_t, msgFail string) error {
 	if retPtr == nil {
-		return errors.Wrap(FaultBindingRetNull, failMsg)
+		return FaultBindingRetNull(msgFail)
 	}
 
 	if retPtr.rc != 0 {
-		clean(retPtr)
+		var msgs []string
 
-		return errors.Wrap(FaultBindingFailed(int(retPtr.rc),
-			C.GoString(&retPtr.info[0])), failMsg)
+		if msgFail != "" {
+			msgs = append(msgs, msgFail)
+		}
+
+		msgInfo := C.GoString(&retPtr.info[0])
+		if msgInfo != "" {
+			msgs = append(msgs, msgInfo)
+		}
+
+		msgErrno := C.GoString(C.spdk_strerror(-retPtr.rc))
+		if msgErrno != "" {
+			msgs = append(msgs, msgErrno)
+		}
+
+		return FaultBindingFailed(int(retPtr.rc), strings.Join(msgs, ": "))
 	}
 
 	return nil
 }
 
 // collectCtrlrs parses return struct to collect slice of nvme.Controller.
-func collectCtrlrs(retPtr *C.struct_ret_t, failMsg string) (ctrlrs storage.NvmeControllers, err error) {
-	if err := checkRet(retPtr, failMsg); err != nil {
-		return nil, err
-	}
+func collectCtrlrs(retPtr *C.struct_ret_t, msgFail string) (storage.NvmeControllers, error) {
 	defer clean(retPtr)
 
+	if err := checkRet(retPtr, msgFail); err != nil {
+		return nil, err
+	}
+
+	var ctrlrs storage.NvmeControllers
 	ctrlrPtr := retPtr.ctrlrs
 	for ctrlrPtr != nil {
 		ctrlr := c2GoController(ctrlrPtr)
@@ -268,9 +309,7 @@ func collectCtrlrs(retPtr *C.struct_ret_t, failMsg string) (ctrlrs storage.NvmeC
 
 		healthPtr := ctrlrPtr.stats
 		if healthPtr == nil {
-			err = FaultCtrlrNoHealth
-
-			return
+			return ctrlrs, errors.Wrapf(FaultCtrlrNoHealth, "ctrlr %s", ctrlr.PciAddr)
 		}
 		ctrlr.HealthStats = c2GoDeviceHealth(healthPtr)
 
@@ -279,16 +318,17 @@ func collectCtrlrs(retPtr *C.struct_ret_t, failMsg string) (ctrlrs storage.NvmeC
 		ctrlrPtr = ctrlrPtr.next
 	}
 
-	return
+	return ctrlrs, nil
 }
 
 // collectFormatResults parses return struct to collect slice of
 // nvme.FormatResult.
-func collectFormatResults(retPtr *C.struct_ret_t, failMsg string) ([]*FormatResult, error) {
-	if err := checkRet(retPtr, failMsg); err != nil {
+func collectFormatResults(retPtr *C.struct_ret_t, msgFail string) ([]*FormatResult, error) {
+	defer clean(retPtr)
+
+	if err := checkRet(retPtr, msgFail); err != nil {
 		return nil, err
 	}
-	defer clean(retPtr)
 
 	var fmtResults []*FormatResult
 	fmtResult := retPtr.wipe_results

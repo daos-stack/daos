@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2020-2021 Intel Corporation.
+ * (C) Copyright 2020-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -23,6 +23,7 @@
 
 #include "daos_hdlr.h"
 #include "math.h"
+
 /** Input arguments passed to daos utility */
 struct cmd_args_s *autotest_ap;
 
@@ -79,7 +80,7 @@ setup_progress()
 {
 	ticks = 20;
 	tick_size = total_nr / ticks;
-	fprintf(autotest_ap->outstream, "    ");
+	fprintf(autotest_ap->outstream, "     ");
 }
 
 void
@@ -89,8 +90,8 @@ increment_progress(int progress)
 		int percentage;
 
 		percentage = ceil((double) progress / (double) total_nr * 100.0);
-		fprintf(autotest_ap->outstream, "\b\b\b\b");
-		fprintf(autotest_ap->outstream, "% 4d", percentage);
+		fprintf(autotest_ap->outstream, "\b\b\b\b\b");
+		fprintf(autotest_ap->outstream, "% 4d%%", percentage);
 		fflush(autotest_ap->outstream);
 	}
 }
@@ -98,7 +99,7 @@ increment_progress(int progress)
 void
 finish_progress()
 {
-	fprintf(autotest_ap->outstream, "\b\b\b\b");
+	fprintf(autotest_ap->outstream, "\b\b\b\b\b");
 }
 
 
@@ -136,7 +137,7 @@ step_print(const char *status, const char *comment, va_list ap)
 	int	i;
 
 	end = clock();
-	fprintf(autotest_ap->outstream, "  %s    ", status);
+	fprintf(autotest_ap->outstream, "  %s  ", status);
 	sprintf(timing, "%03.3f", duration());
 	for (i = strlen(timing); i < 7; i++)
 		fprintf(autotest_ap->outstream, " ");
@@ -151,7 +152,7 @@ step_success(const char *comment, ...)
 	va_list	ap;
 
 	va_start(ap, comment);
-	step_print("\033[0;32mOK\033[0m", comment, ap);
+	step_print("\033[0;32mPASS\033[0m", comment, ap);
 	va_end(ap);
 }
 
@@ -161,7 +162,7 @@ step_fail(const char *comment, ...)
 	va_list	ap;
 
 	va_start(ap, comment);
-	step_print("\033[0;31mKO\033[0m", comment, ap);
+	step_print("\033[0;31mFAIL\033[0m", comment, ap);
 	va_end(ap);
 }
 
@@ -171,7 +172,7 @@ step_skip(const char *comment, ...)
 	va_list ap;
 
 	va_start(ap, comment);
-	step_print("\033[0;37mSK\033[0m", comment, ap);
+	step_print("\033[0;33mSKIP\033[0m", comment, ap);
 	va_end(ap);
 }
 static inline void
@@ -189,7 +190,7 @@ static inline void
 step_init(void)
 {
 	fprintf(autotest_ap->outstream,
-		"\033[1;35mStep Operation               ");
+		"\033[1;35mStep Operation                 ");
 	fprintf(autotest_ap->outstream, "Status Time(sec) Comment\033[0m\n");
 }
 
@@ -213,7 +214,7 @@ pconnect(void)
 	int rc;
 
 	/** Connect to pool */
-	rc = daos_pool_connect(autotest_ap->p_uuid, autotest_ap->sysname,
+	rc = daos_pool_connect(autotest_ap->pool_str, autotest_ap->sysname,
 			       DAOS_PC_RW, &poh, NULL, NULL);
 	if (rc) {
 		step_fail(d_errdesc(rc));
@@ -418,14 +419,11 @@ kv_put(daos_handle_t oh, daos_size_t size)
 	daos_event_t	*evp;
 	int		rc, usage_ratio1, usage_ratio2;
 	int		eq_rc;
-	double		timeout;
-	double		step_adj;
-	double		t;
 	clock_t		last_query = start, current;
 
 	deadline_count = 1;
 
-	total_nr = ticks;
+	total_nr = deadline_limit / CLOCKS_PER_SEC;
 	setup_progress();
 
 	usage_ratio1 = pool_space_usage_ratio();
@@ -504,6 +502,7 @@ kv_put(daos_handle_t oh, daos_size_t size)
 			break;
 
 		if (last_query + CLOCKS_PER_SEC < current) {
+			increment_progress((current - start) / CLOCKS_PER_SEC);
 			last_query = current;
 			usage_ratio2 = pool_space_usage_ratio();
 			if (usage_ratio2 < 0) {
@@ -520,10 +519,6 @@ kv_put(daos_handle_t oh, daos_size_t size)
 
 		deadline_count++;
 
-		timeout = deadline_limit / CLOCKS_PER_SEC;
-		step_adj = ticks / timeout;
-		t = ((start + deadline_limit) - clock()) / CLOCKS_PER_SEC;
-		increment_progress((int)((timeout - t) * step_adj));
 	}
 
 	/** Wait for completion of all in-flight requests */
@@ -1214,6 +1209,8 @@ pool_autotest_hdlr(struct cmd_args_s *ap)
 
 	assert(ap != NULL);
 	assert(ap->p_op == POOL_AUTOTEST);
+
+	uuid_unparse(ap->p_uuid, ap->pool_str);
 
 	autotest_ap = ap;
 

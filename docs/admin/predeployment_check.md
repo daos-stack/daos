@@ -33,31 +33,58 @@ $ sudo reboot
     'disable_vfio' in the [server config file](https://github.com/daos-stack/daos/blob/master/utils/config/daos_server.yml#L109),
     but note that this will require running daos_server as root.
 
-!!! note
-	If VFIO is not enabled, you will run into the issue described in:
-	https://github.com/spdk/spdk/issues/1153
+!!! warning
+    If VFIO is not enabled on RHEL 8.x and derivatives, you will run into the issue described in:
+    https://github.com/spdk/spdk/issues/1153
 
-	When using RHEL 8.1 with official kernel from distribution (4.18.0-147.el8.x86_64)
-	it is not possible to bind nvme devices to uio_pci_generic driver and due to that
-	to use them within SPDK environment:
+    The problem manifests with the following signature in the kernel logs:
 
-		[82734.333834] genirq: Threaded irq requested with handler=NULL and !ONESHOT for irq 113
-		[82734.341761] uio_pci_generic: probe of 0000:18:00.0 failed with error -22
+    ```
+    [82734.333834] genirq: Threaded irq requested with handler=NULL and !ONESHOT for irq 113
+    [82734.341761] uio_pci_generic: probe of 0000:18:00.0 failed with error -22
+    ```
 
-	The issue was previously reported in SPDK bugzilla [here](https://github.com/spdk/spdk/issues/399) for vanilla kernel 4.18. Unfortunately the kernel used in RHEL 8 does not contain the proper [bugfix](https://git.kernel.org/pub/scm/linux/kernel/git/stable/linux.git/commit/?h=linux-4.18.y&id=a34e4f42055a7fe8e804fc9e71dfc1e324c657f1) backported.
+    As a consequence, the use of VFIO on these distributions is a requirement
+    since UIO is not supported.
 
 ## Time Synchronization
 
 The DAOS transaction model relies on timestamps and requires time to be
-synchronized across all the storage and client nodes. This can be done
-using NTP or any other equivalent protocol.
+synchronized across all the storage nodes. This can be done using NTP or
+any other equivalent protocol.
 
-## User/Group Synchronization
+## User and Group Management
 
-DAOS ACLs store the actual user and group names (instead of numeric IDs), and
-therefore the servers do not need access to a synchronized user/group database.
-The DAOS Agent (running on the client nodes) is responsible for resolving
-UID/GID to user/group names which are added to a signed credential and sent to
+### DAOS User/Groups on the Servers
+
+The `daos_server` and `daos_engine` processes run under a non-privileged userid `daos_server`.
+If that user does not exist at the time the `daos-server` RPM is installed, the user will be
+created as part of the RPM installation. A group `daos-server` will also be created as its
+primary group, as well as two additional groups `daos_metrics` and `daos_daemons` to which
+the `daos_server` user will be added.
+
+If there are site-specific rules for the creation of users and groups, it is advisable to
+create these users and groups following the site-specific conventions _before_ installing the
+`daos-server` RPM.
+
+### DAOS User/Groups on the Clients
+
+The `daos_agent` process runs under a non-privileged userid `daos_agent`.
+If that user does not exist at the time the `daos-client` RPM is installed, the user will be
+created as part of the RPM installation. A group `daos-agent` will also be created as its
+primary group, as well as an additional group `daos_daemons` to which the `daos_agent` user
+will be added.
+
+If there are site-specific rules for the creation of users and groups, it is advisable to
+create these users and groups following the site-specific conventions _before_ installing the
+`daos-client` RPM.
+
+### User/Group Synchronization for End Users
+
+DAOS ACLs for pools and containers store the actual user and group names (instead of numeric
+IDs). Therefore the servers do not need access to a synchronized user/group database.
+The DAOS Agent (running on the client nodes) is responsible for resolving a user's
+UID/GID to user/group names, which are then added to a signed credential and sent to
 the DAOS storage nodes.
 
 ## Multi-rail/NIC Setup
@@ -65,6 +92,13 @@ the DAOS storage nodes.
 Storage nodes can be configured with multiple network interfaces to run
 multiple engine instances.
 
+### Subnet
+
+Since all engines need to be able to communicate, the different network
+interfaces must be on the same subnet or you must configuring routing
+across the different subnets.
+
+### Infiniband Settings
 
 Some special configuration is required to use librdmacm with multiple
 interfaces.
@@ -108,14 +142,12 @@ with all the relevant settings.
 
 For more information, please refer to the [librdmacm documentation](https://github.com/linux-rdma/rdma-core/blob/master/Documentation/librdmacm.md)
 
-### Subnet
+## Install from Source
 
-Since all engines need to be able to communicate, the different network
-interfaces need to be on the same subnet or routing capabilities across the
-different subnet must be configured.
+When DAOS is installed from source (and not from pre-built packages), extra manual
+settings detailed in this section are required.
 
-
-## Runtime Directory Setup
+### Runtime Directory Setup
 
 DAOS uses a series of Unix Domain Sockets to communicate between its
 various components. On modern Linux systems, Unix Domain Sockets are
@@ -129,7 +161,7 @@ or daos_agent, you may see the message:
 $ mkdir /var/run/daos_server: permission denied
 Unable to create socket directory: /var/run/daos_server
 ```
-### Non-default Directory
+#### Non-default Directory
 
 By default, daos_server and daos_agent will use the directories
 /var/run/daos_server and /var/run/daos_agent respectively. To change
@@ -139,14 +171,15 @@ For the daos_agent, either uncomment and set the runtime_dir configuration value
 /etc/daos/daos_agent.yml or a location can be passed on the command line using
 the --runtime_dir flag (`daos_agent -d /tmp/daos_agent`).
 
-NOTE: Do not change these when running under `systemd` control.
-      If these directories need to be changed, then make sure that they match the
-      RuntimeDirectory setting in the /usr/lib/systemd/system/daos_agent.service
-      and /usr/lib/systemd/system/daos_server.service configuration files.
-      The socket directories will be created and removed by `systemd` when the
-      services are started and stopped.
+!!! warning
+    Do not change these when running under `systemd` control.
+    If these directories need to be changed, insure they match the
+    RuntimeDirectory setting in the /usr/lib/systemd/system/daos_agent.service
+    and /usr/lib/systemd/system/daos_server.service configuration files.
+    The socket directories will be created and removed by `systemd` when the
+    services are started and stopped.
 
-### Default Directory (non-persistent)
+#### Default Directory (non-persistent)
 
 Files and directories created in /run and /var/run only survive until
 the next reboot. These directories are required for subsequent runs;
@@ -169,7 +202,7 @@ $ chown user:user /var/run/daos_agent (where user is the user you
     will run daos_agent as)
 ```
 
-### Default Directory (persistent)
+#### Default Directory (persistent)
 
 The following steps are not necessary if DAOS is installed from rpms.
 
@@ -189,12 +222,11 @@ To tell systemd to create the necessary directories for DAOS:
 -   Reboot the system, and the directories will be created automatically
     on all subsequent reboots.
 
-## Elevated Privileges
+### Privileged Helper
 
 DAOS employs a privileged helper binary (`daos_admin`) to perform tasks
 that require elevated privileges on behalf of `daos_server`.
 
-### Privileged Helper Configuration
 
 When DAOS is installed from RPM, the `daos_admin` helper is automatically installed
 to the correct location with the correct permissions. The RPM creates a "daos_server"
@@ -232,7 +264,7 @@ $ sudo ln -s $daospath/include \
     installation is most appropriate for development and predeployment
     proof-of-concept scenarios.
 
-## Memory Lock Limits
+### Memory Lock Limits
 
 Low ulimit for memlock can cause SPDK to fail and emit the following error:
 
@@ -281,3 +313,159 @@ For further information see
 [this article on network kernel settings](https://access.redhat.com/documentation/en-us/red_hat_enterprise_linux/5/html/tuning_and_optimizing_red_hat_enterprise_linux_for_oracle_9i_and_10g_databases/sect-oracle_9i_and_10g_tuning_guide-adjusting_network_settings-changing_network_kernel_settings)
 using any of the methods described in
 [this article on adjusting kernel tunables](https://access.redhat.com/documentation/en-us/red_hat_enterprise_linux/7/html/kernel_administration_guide/working_with_sysctl_and_kernel_tunables).
+
+## Optimize NVMe SSD Block Size
+
+DAOS server performs NVMe I/O in 4K granularity so in order to avoid alignment
+issues it is beneficial to format the SSDs that will be used with a 4K block size.
+
+First the SSDs need to be bound to a user-space driver to be usable with SPDK, to do
+this, use the SPDK setup script.
+
+`setup.sh` script is provided by SPDK and will be found in the following locations:
+- `/usr/share/spdk/scripts/setup.sh` if DAOS-maintained spdk-tools-21.07 (or greater) RPM
+is installed
+- `<daos_src>/install/share/spdk/scripts/setup.sh` after build from DAOS source
+
+Bind the SSDs with the following commands:
+```bash
+$ sudo /usr/share/spdk/scripts/setup.sh
+0000:01:00.0 (8086 0953): nvme -> vfio-pci
+"daos" user memlock limit: 2048 MB
+
+This is the maximum amount of memory you will be
+able to use with DPDK and VFIO if run as user "daos".
+To change this, please adjust limits.conf memlock limit for user "daos".
+```
+
+Now the SSDs can be accessed by SPDK we can use the `spdk_nvme_manage` tool to format
+the SSDs with a 4K block size.
+
+`spdk_nvme_manage` tool is provided by SPDK and will be found in the following locations:
+- `/usr/bin/spdk_nvme_manage` if DAOS-maintained spdk-21.07-10 (or greater) RPM is installed
+- `<daos_src>/install/prereq/release/spdk/bin/spdk_nvme_manage` after build from DAOS source
+
+Choose to format a SSD, use option "6" for formatting:
+```bash
+$ sudo /usr/bin/spdk_nvme_manage
+NVMe Management Options
+[1: list controllers]
+[2: create namespace]
+[3: delete namespace]
+[4: attach namespace to controller]
+[5: detach namespace from controller]
+[6: format namespace or controller]
+[7: firmware update]
+[8: quit]
+6
+```
+
+Available SSDs will then be listed and you will be prompted to select one.
+
+Select the SSD to format, enter PCI Address "01:00.00":
+```bash
+0000:01:00.00 INTEL SSDPEDMD800G4 CVFT45050002800CGN 0
+Please Input PCI Address(domain:bus:dev.func):
+01:00.00
+```
+
+Erase settings will be displayed and you will be prompted to select one.
+
+Erase the SSD using option "0":
+```bash
+Please Input Secure Erase Setting:
+0: No secure erase operation requested
+1: User data erase
+2: Cryptographic erase
+0
+```
+
+Supported LBA formats will then be displayed and you will be prompted to select one.
+
+Format the SSD into 4KB block size using option "3".
+```bash
+Supported LBA formats:
+0: 512 data bytes
+1: 512 data bytes + 8 metadata bytes
+2: 512 data bytes + 16 metadata bytes
+3: 4096 data bytes
+4: 4096 data bytes + 8 metadata bytes
+5: 4096 data bytes + 64 metadata bytes
+6: 4096 data bytes + 128 metadata bytes
+Please input LBA format index (0 - 6):
+3
+```
+
+A warning will be displayed and you will be prompted to confirm format action.
+
+Confirm format request by entering "Y":
+```bash
+Warning: use this utility at your own risk.
+This command will format your namespace and all data will be lost.
+This command may take several minutes to complete,
+so do not interrupt the utility until it completes.
+Press 'Y' to continue with the format operation.
+Y
+```
+
+Format will now proceed and a reset notice will be displayed for the given SSD.
+
+Format is complete if you see something like the following:
+```bash
+[2022-01-04 12:56:30.075104] nvme_ctrlr.c:1414:nvme_ctrlr_reset: *NOTICE*: [0000:01:00.0] resetting
+controller
+press Enter to display cmd menu ...
+<enter>
+```
+
+Once formats has completed, verify LBA format has been applied as expected.
+
+Choose to list SSD controller details, use option "1":
+```bash
+NVMe Management Options
+[1: list controllers]
+[2: create namespace]
+[3: delete namespace]
+[4: attach namespace to controller]
+[5: detach namespace from controller]
+[6: format namespace or controller]
+[7: firmware update]
+[8: quit]
+1
+```
+
+Controller details should show new "Current LBA Format".
+
+Verify "Current LBA Format" is set to "LBA Format #03":
+```bash
+=====================================================
+NVMe Controller:        0000:01:00.00
+============================
+Controller Capabilities/Features
+Controller ID:          0
+Serial Number:          CVFT550400F4800HGN
+
+Admin Command Set Attributes
+============================
+Namespace Manage And Attach:            Not Supported
+Namespace Format:                       Supported
+
+NVM Command Set Attributes
+============================
+Namespace format operation applies to all namespaces
+
+Namespace Attributes
+============================
+Namespace ID:1
+Size (in LBAs):              195353046 (186M)
+Capacity (in LBAs):          195353046 (186M)
+Utilization (in LBAs):       195353046 (186M)
+Format Progress Indicator:   Not Supported
+Number of LBA Formats:       7
+Current LBA Format:          LBA Format #03
+...
+```
+
+Displayed details for controller show LBA format is now "#03".
+
+Perform the above process for all SSDs that will be used by DAOS.

@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2021 Intel Corporation.
+// (C) Copyright 2020-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -46,6 +46,9 @@ func mockSmdQueryMap(t *testing.T, mocks ...*mockSmdQueryResp) HostStorageMap {
 }
 
 func TestControl_SmdQuery(t *testing.T) {
+	stateNormal := storage.MockNvmeStateNormal
+	stateFaulty := storage.MockNvmeStateEvicted
+
 	for name, tc := range map[string]struct {
 		mic     *MockInvokerConfig
 		req     *SmdQueryReq
@@ -167,8 +170,9 @@ func TestControl_SmdQuery(t *testing.T) {
 										Rank: 0,
 										Devices: []*ctlpb.SmdQueryResp_Device{
 											{
-												Uuid:   common.MockUUID(0),
-												TgtIds: []int32{0},
+												Uuid:     common.MockUUID(0),
+												TgtIds:   []int32{0},
+												DevState: stateNormal.String(),
 											},
 										},
 									},
@@ -176,8 +180,9 @@ func TestControl_SmdQuery(t *testing.T) {
 										Rank: 1,
 										Devices: []*ctlpb.SmdQueryResp_Device{
 											{
-												Uuid:   common.MockUUID(1),
-												TgtIds: []int32{0},
+												Uuid:     common.MockUUID(1),
+												TgtIds:   []int32{0},
+												DevState: stateFaulty.String(),
 											},
 										},
 									},
@@ -197,11 +202,55 @@ func TestControl_SmdQuery(t *testing.T) {
 								UUID:      common.MockUUID(0),
 								Rank:      system.Rank(0),
 								TargetIDs: []int32{0},
+								NvmeState: stateNormal,
 							},
 							{
 								UUID:      common.MockUUID(1),
 								Rank:      system.Rank(1),
 								TargetIDs: []int32{0},
+								NvmeState: stateFaulty,
+							},
+						},
+						Pools: make(map[string][]*SmdPool),
+					},
+				}),
+			},
+		},
+		"list devices; missing state": {
+			mic: &MockInvokerConfig{
+				UnaryResponse: &UnaryResponse{
+					Responses: []*HostResponse{
+						{
+							Addr: "host-0",
+							Message: &ctlpb.SmdQueryResp{
+								Ranks: []*ctlpb.SmdQueryResp_RankResp{
+									{
+										Rank: 0,
+										Devices: []*ctlpb.SmdQueryResp_Device{
+											{
+												Uuid:     common.MockUUID(0),
+												TgtIds:   []int32{0},
+												DevState: "",
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			req: &SmdQueryReq{},
+			expResp: &SmdQueryResp{
+				HostStorage: mockSmdQueryMap(t, &mockSmdQueryResp{
+					Hosts: "host-0",
+					SmdInfo: &SmdInfo{
+						Devices: []*storage.SmdDevice{
+							{
+								UUID:      common.MockUUID(0),
+								Rank:      system.Rank(0),
+								TargetIDs: []int32{0},
+								NvmeState: storage.NvmeStateUnknown,
 							},
 						},
 						Pools: make(map[string][]*SmdPool),
@@ -237,6 +286,7 @@ func TestControl_SmdQuery(t *testing.T) {
 													DevReliabilityWarn: true,
 													VolatileMemWarn:    true,
 												},
+												DevState: stateNormal.String(),
 											},
 										},
 									},
@@ -269,6 +319,7 @@ func TestControl_SmdQuery(t *testing.T) {
 									ReliabilityWarn: true,
 									VolatileWarn:    true,
 								},
+								NvmeState: stateNormal,
 							},
 						},
 						Pools: make(map[string][]*SmdPool),
@@ -296,6 +347,11 @@ func TestControl_SmdQuery(t *testing.T) {
 			}
 
 			if diff := cmp.Diff(tc.expResp, gotResp, defResCmpOpts()...); diff != "" {
+				for _, sqr := range gotResp.HostStorage {
+					for _, dev := range sqr.HostStorage.SmdInfo.Devices {
+						t.Logf("%+v", *dev)
+					}
+				}
 				t.Fatalf("unexpected resp (-want, +got):\n%s\n", diff)
 			}
 		})

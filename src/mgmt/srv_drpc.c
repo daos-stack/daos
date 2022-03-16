@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2019-2021 Intel Corporation.
+ * (C) Copyright 2019-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -1551,7 +1551,7 @@ pool_rebuild_status_from_info(Mgmt__PoolRebuildStatus *rebuild,
 
 		if (info->rs_version == 0)
 			rebuild->state = MGMT__POOL_REBUILD_STATUS__STATE__IDLE;
-		else if (info->rs_done)
+		else if (info->rs_state == DRS_COMPLETED)
 			rebuild->state = MGMT__POOL_REBUILD_STATUS__STATE__DONE;
 		else
 			rebuild->state = MGMT__POOL_REBUILD_STATUS__STATE__BUSY;
@@ -1722,10 +1722,10 @@ ds_mgmt_drpc_smd_list_devs(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 				D_FREE(resp->devices[i]->uuid);
 			if (resp->devices[i]->tgt_ids != NULL)
 				D_FREE(resp->devices[i]->tgt_ids);
-			if (resp->devices[i]->state != NULL)
-				D_FREE(resp->devices[i]->state);
 			if (resp->devices[i]->tr_addr != NULL)
 				D_FREE(resp->devices[i]->tr_addr);
+			if (resp->devices[i]->dev_state != NULL)
+				D_FREE(resp->devices[i]->dev_state);
 			D_FREE(resp->devices[i]);
 		}
 	}
@@ -1969,6 +1969,9 @@ ds_mgmt_drpc_dev_state_query(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 
 	/* Response status is populated with SUCCESS on init. */
 	ctl__dev_state_resp__init(resp);
+	/* Init empty strings to NULL to avoid error cleanup with free */
+	resp->dev_state = NULL;
+	resp->dev_uuid = NULL;
 
 	if (strlen(req->dev_uuid) != 0) {
 		if (uuid_parse(req->dev_uuid, uuid) != 0) {
@@ -2041,6 +2044,9 @@ ds_mgmt_drpc_dev_set_faulty(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 
 	/* Response status is populated with SUCCESS on init. */
 	ctl__dev_state_resp__init(resp);
+	/* Init empty strings to NULL to avoid error cleanup with free */
+	resp->dev_state = NULL;
+	resp->dev_uuid = NULL;
 
 	if (strlen(req->dev_uuid) != 0) {
 		if (uuid_parse(req->dev_uuid, uuid) != 0) {
@@ -2128,6 +2134,9 @@ ds_mgmt_drpc_dev_replace(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 
 	/* Response status is populated with SUCCESS on init. */
 	ctl__dev_replace_resp__init(resp);
+	/* Init empty strings to NULL to avoid error cleanup with free */
+	resp->dev_state = NULL;
+	resp->new_dev_uuid = NULL;
 
 	if (uuid_parse(req->old_dev_uuid, old_uuid) != 0) {
 		D_ERROR("Unable to parse device UUID %s: %d\n",
@@ -2213,8 +2222,8 @@ ds_mgmt_drpc_dev_identify(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	/* Response status is populated with SUCCESS on init. */
 	ctl__dev_identify_resp__init(resp);
 	/* Init empty strings to NULL to avoid error cleanup with free */
+	resp->dev_state = NULL;
 	resp->dev_uuid = NULL;
-	resp->led_state = NULL;
 
 	if (uuid_parse(req->dev_uuid, dev_uuid) != 0) {
 		D_ERROR("Unable to parse device UUID %s: %d\n",
@@ -2242,8 +2251,8 @@ ds_mgmt_drpc_dev_identify(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	ctl__dev_identify_req__free_unpacked(req, &alloc.alloc);
 
 	if (rc == 0) {
-		if (resp->led_state != NULL)
-			D_FREE(resp->led_state);
+		if (resp->dev_state != NULL)
+			D_FREE(resp->dev_state);
 		if (resp->dev_uuid != NULL)
 			D_FREE(resp->dev_uuid);
 	}

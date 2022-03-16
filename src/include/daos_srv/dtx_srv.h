@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2019-2021 Intel Corporation.
+ * (C) Copyright 2019-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -81,6 +81,12 @@ struct dtx_handle {
 					 dth_for_migration:1,
 					 /* Has prepared locally, for resend. */
 					 dth_prepared:1,
+					 /* The DTX handle has been verified. */
+					 dth_verified:1,
+					 /* The DTX handle is aborted. */
+					 dth_aborted:1,
+					 /* The modification is done by others. */
+					 dth_already:1,
 					 /* Ignore other uncommitted DTXs. */
 					 dth_ignore_uncommitted:1;
 
@@ -130,6 +136,7 @@ struct dtx_handle {
 struct dtx_sub_status {
 	struct daos_shard_tgt		dss_tgt;
 	int				dss_result;
+	uint32_t			dss_comp:1;
 };
 
 struct dtx_leader_handle;
@@ -201,8 +208,7 @@ dtx_leader_begin(daos_handle_t coh, struct dtx_id *dti,
 		 struct daos_shard_tgt *tgts, int tgt_cnt, uint32_t flags,
 		 struct dtx_memberships *mbs, struct dtx_leader_handle **p_dlh);
 int
-dtx_leader_end(struct dtx_leader_handle *dlh, struct ds_cont_child *cont,
-	       int result);
+dtx_leader_end(struct dtx_leader_handle *dlh, struct ds_cont_hdl *coh, int result);
 
 typedef void (*dtx_sub_comp_cb_t)(struct dtx_leader_handle *dlh, int idx,
 				  int rc);
@@ -224,9 +230,13 @@ int
 dtx_leader_exec_ops(struct dtx_leader_handle *dlh, dtx_sub_func_t func,
 		    dtx_agg_cb_t agg_cb, void *agg_cb_arg, void *func_arg);
 
-int dtx_batched_commit_register(struct ds_cont_child *cont);
+int dtx_cont_open(struct ds_cont_child *cont);
 
-void dtx_batched_commit_deregister(struct ds_cont_child *cont);
+void dtx_cont_close(struct ds_cont_child *cont);
+
+int dtx_cont_register(struct ds_cont_child *cont);
+
+void dtx_cont_deregister(struct ds_cont_child *cont);
 
 int dtx_obj_sync(struct ds_cont_child *cont, daos_unit_oid_t *oid,
 		 daos_epoch_t epoch);

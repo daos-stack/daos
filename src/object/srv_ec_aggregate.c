@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2020-2021 Intel Corporation.
+ * (C) Copyright 2020-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -2176,12 +2176,11 @@ agg_obj_is_leader(struct ds_pool *pool, struct daos_oclass_attr *oca,
 	struct pl_map		*map;
 	struct pl_obj_layout	*layout = NULL;
 	struct pl_obj_shard	*shard;
-	uint32_t		 start;
+	uint32_t		 idx;
 	int			 rc;
-	int			 i;
 
-	/* Only parity shard can be EC-AGG leader. */
-	if (oid->id_shard % daos_oclass_grp_size(oca) < oca->u.ec.e_k)
+	/* Only last parity shard can be EC-AGG leader. */
+	if ((oid->id_shard % daos_oclass_grp_size(oca)) != (daos_oclass_grp_size(oca) - 1))
 		return 0;
 
 	map = pl_map_find(pool->sp_uuid, oid->id_pub);
@@ -2192,20 +2191,19 @@ agg_obj_is_leader(struct ds_pool *pool, struct daos_oclass_attr *oca,
 
 	md.omd_id = oid->id_pub;
 	md.omd_ver = version;
-	rc = pl_obj_place(map, &md, NULL, &layout);
+	rc = pl_obj_place(map, &md, DAOS_OO_RO, NULL, &layout);
 	if (rc != 0)
 		goto out;
 
-	start = oid->id_shard / daos_oclass_grp_size(oca) * layout->ol_grp_size;
-	for (i = start + oca->u.ec.e_k + oca->u.ec.e_p - 1; i >= start + oca->u.ec.e_k; i--) {
-		shard = pl_obj_get_shard(layout, i);
-		if (shard->po_target != -1 && shard->po_shard != -1 && !shard->po_rebuilding)
-			/* Select the last non-rebuilding parity shard as the EC-AGG leader. */
-			D_GOTO(out, rc = (oid->id_shard == shard->po_shard ? 1 : 0));
+	idx = (oid->id_shard / daos_oclass_grp_size(oca)) * layout->ol_grp_size +
+	      daos_oclass_grp_size(oca) - 1;
+	shard = pl_obj_get_shard(layout, idx);
+	if (shard->po_target != -1 && shard->po_shard != -1 && !shard->po_rebuilding) {
+		rc = (oid->id_shard == shard->po_shard) ? 1 : 0;
+	} else {
+		/* If last parity unavailable, then skip the object via returning -DER_STALE. */
+		rc = -DER_STALE;
 	}
-
-	/* If all parity shards are unavailable, then skip the object via returning -DER_STALE. */
-	rc = -DER_STALE;
 
 out:
 	if (layout != NULL)
@@ -2252,7 +2250,9 @@ agg_object(daos_handle_t ih, vos_iter_entry_t *entry,
 
 	rc = agg_obj_is_leader(info->api_pool, &oca, &entry->ie_oid,
 			       info->api_pool->sp_map_version);
-	if (rc == 1 && entry->ie_oid.id_shard >= oca.u.ec.e_k) {
+	if (rc == 1) {
+		D_ASSERT((entry->ie_oid.id_shard % obj_ec_tgt_nr(&oca)) ==
+			 obj_ec_tgt_nr(&oca) - 1);
 		D_DEBUG(DB_EPC, "oid:"DF_UOID" ec agg starting\n",
 			DP_UOID(entry->ie_oid));
 
@@ -2489,7 +2489,7 @@ out:
  */
 static int
 cont_ec_aggregate_cb(struct ds_cont_child *cont, daos_epoch_range_t *epr,
-		     bool full_scan, struct agg_param *agg_param, uint64_t *msec)
+		     uint32_t flags, struct agg_param *agg_param, uint64_t *msec)
 {
 	struct ec_agg_param	 *ec_agg_param = agg_param->ap_data;
 	struct dtx_handle	 *dth = NULL;
@@ -2512,6 +2512,14 @@ cont_ec_aggregate_cb(struct ds_cont_child *cont, daos_epoch_range_t *epr,
 		rc = ec_agg_param_init(cont, agg_param);
 		if (rc)
 			return rc;
+	}
+
+	if (cont->sc_ec_agg_eph != 0 &&
+	    cont->sc_ec_agg_eph >= cont->sc_ec_update_timestamp) {
+		D_DEBUG(DB_EPC, DF_CONT" skip EC agg "DF_U64">= "DF_U64"\n",
+			DP_CONT(cont->sc_pool_uuid, cont->sc_uuid), cont->sc_ec_agg_eph,
+			cont->sc_ec_update_timestamp);
+		goto update_hae;
 	}
 
 	iter_param.ip_hdl		= cont->sc_hdl;
@@ -2567,6 +2575,7 @@ again:
 			*msec = 5 * 1000;
 	}
 
+update_hae:
 	if (rc == 0 && ec_agg_param->ap_obj_skipped == 0) {
 		cont->sc_ec_agg_eph = max(cont->sc_ec_agg_eph, epr->epr_hi);
 		if (!cont->sc_stopping && cont->sc_ec_query_agg_eph)

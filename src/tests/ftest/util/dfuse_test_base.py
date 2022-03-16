@@ -1,6 +1,6 @@
 #!/usr/bin/python
 """
-(C) Copyright 2020-2021 Intel Corporation.
+(C) Copyright 2020-2022 Intel Corporation.
 
 SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -8,7 +8,7 @@ import agent_utils as agu
 from ClusterShell.NodeSet import NodeSet
 
 from apricot import TestWithServers
-from command_utils_base import CommandFailure
+from exception_utils import CommandFailure
 from dfuse_utils import Dfuse
 
 
@@ -56,6 +56,8 @@ class DfuseTestBase(TestWithServers):
         self.dfuse = Dfuse(hosts, self.tmp)
         self.dfuse.get_params(self)
 
+        dfuse_cores = self.params.get('cores', self.dfuse.namespace, None)
+
         # Update dfuse params
         if mount_dir:
             self.dfuse.mount_dir.update(mount_dir)
@@ -67,7 +69,7 @@ class DfuseTestBase(TestWithServers):
 
         try:
             # Start dfuse
-            self.dfuse.run()
+            self.dfuse.run(bind_cores=dfuse_cores)
         except CommandFailure as error:
             self.log.error(
                 "Dfuse command %s failed on hosts %s", str(self.dfuse),

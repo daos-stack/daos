@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2021 Intel Corporation.
+ * (C) Copyright 2016-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -68,7 +68,7 @@ cont_df_rec_free(struct btr_instance *tins, struct btr_record *rec, void *args)
 
 static int
 cont_df_rec_alloc(struct btr_instance *tins, d_iov_t *key_iov,
-		  d_iov_t *val_iov, struct btr_record *rec)
+		  d_iov_t *val_iov, struct btr_record *rec, d_iov_t *val_out)
 {
 	struct vos_pool		*pool;
 	struct cont_df_args	*args;
@@ -128,7 +128,7 @@ cont_df_rec_fetch(struct btr_instance *tins, struct btr_record *rec,
 
 static int
 cont_df_rec_update(struct btr_instance *tins, struct btr_record *rec,
-		   d_iov_t *key, d_iov_t *val)
+		   d_iov_t *key, d_iov_t *val, d_iov_t *val_out)
 {
 	D_DEBUG(DB_DF, "Record exists already. Nothing to do\n");
 	return 0;
@@ -368,6 +368,10 @@ vos_cont_open(daos_handle_t poh, uuid_t co_uuid, daos_handle_t *coh)
 	cont->vc_ts_idx = &cont->vc_cont_df->cd_ts_idx;
 	cont->vc_dtx_active_hdl = DAOS_HDL_INVAL;
 	cont->vc_dtx_committed_hdl = DAOS_HDL_INVAL;
+	if (umoff_is_null(cont->vc_cont_df->cd_dtx_committed_head))
+		cont->vc_cmt_dtx_indexed = 1;
+	else
+		cont->vc_cmt_dtx_indexed = 0;
 	D_INIT_LIST_HEAD(&cont->vc_dtx_act_list);
 	cont->vc_dtx_committed_count = 0;
 	gc_check_cont(cont);
