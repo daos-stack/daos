@@ -139,6 +139,14 @@ func FaultWrongSystem(reqName, sysName string) *fault.Fault {
 	)
 }
 
+func FaultIncompatibleComponents(self, other *build.VersionedComponent) *fault.Fault {
+	return serverFault(
+		code.ServerIncompatibleComponents,
+		fmt.Sprintf("components %s and %s are not compatible", self, other),
+		"retry the request with compatible components",
+	)
+}
+
 func serverFault(code code.Code, desc, res string) *fault.Fault {
 	return &fault.Fault{
 		Domain:      "server",
