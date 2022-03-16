@@ -3346,6 +3346,7 @@ def run_dfuse(server, conf):
         print('Reached the end, no errors')
     return fatal_errors.errors
 
+
 def run_in_fg(server, conf, args):
     """Run dfuse in the foreground.
 
@@ -3400,6 +3401,7 @@ def run_in_fg(server, conf, args):
         dfuse.wait_for_exit()
     except KeyboardInterrupt:
         pass
+
 
 def check_readdir_perf(server, conf):
     """ Check and report on readdir performance
