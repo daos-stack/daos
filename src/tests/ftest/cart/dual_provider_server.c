@@ -124,7 +124,7 @@ int main(int argc, char **argv)
 	char		*my_uri;
 	uint32_t	grp_size;
 	crt_group_t	*grp;
-
+	char		*uri;
 	char		*saved_provider;
 	char		*saved_iface;
 	char		*saved_domain;
@@ -237,20 +237,34 @@ int main(int argc, char **argv)
 			error_exit();
 		}
 
+		rc = crt_context_uri_get(primary_ctx[i], &uri);
+		if (rc != 0) {
+			D_ERROR("crt_context_uri_get(%d) failed; rc=%d\n", i, rc);
+			error_exit();
+		}
+		printf("Primary context[%d] uri=%s\n", i, uri);
+
 		rc = pthread_create(&primary_progress_thread[i], 0, progress_fn, &primary_ctx[i]);
 		if (rc != 0) {
 			error_exit();
 		}
+
 	}
 
 	for (i = 0;  i< num_secondary_ctx; i++) {
-		printf("Alloc %d\n", i);
 		rc = crt_context_create_on_provider(&secondary_ctx[i], provider1);
 		if (rc != 0) {
 			D_ERROR("Context %d creation failed; rc=%d\n", i, rc);
 			error_exit();
 		}
-		printf("Alloc %d done\n", i);
+
+		rc = crt_context_uri_get(secondary_ctx[i], &uri);
+		if (rc != 0) {
+			D_ERROR("crt_context_uri_get(%d) failed; rc=%d\n", i, rc);
+			error_exit();
+		}
+		printf("Secondary context[%d] uri=%s\n", i, uri);
+
 
 		rc = pthread_create(&secondary_progress_thread[i], 0, progress_fn, &secondary_ctx[i]);
 		if (rc != 0) {

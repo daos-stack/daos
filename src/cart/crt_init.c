@@ -23,7 +23,8 @@ dump_envariables(void)
 {
 	int	i;
 	char	*val;
-	char	*envars[] = {"CRT_PHY_ADDR_STR", "D_LOG_STDERR_IN_LOG",
+	char	*envars[] = {"CRT_PROVIDER", "CRT_INTERFACE", "CRT_DOMAIN", "CRT_PORT",
+		"CRT_PHY_ADDR_STR", "D_LOG_STDERR_IN_LOG",
 		"D_LOG_FILE", "D_LOG_FILE_APPEND_PID", "D_LOG_MASK", "DD_MASK",
 		"DD_STDERR", "DD_SUBSYS", "CRT_TIMEOUT", "CRT_ATTACH_INFO_PATH",
 		"OFI_PORT", "OFI_INTERFACE", "OFI_DOMAIN", "CRT_CREDIT_EP_CTX",
@@ -39,7 +40,8 @@ dump_envariables(void)
 }
 
 static int
-crt_na_config_init(crt_provider_t provider, const char *interface, const char *domain, const char *port);
+crt_na_config_init(crt_provider_t provider, const char *interface,
+		   const char *domain, const char *port);
 
 /* Workaround for CART-890 */
 static void
@@ -88,7 +90,7 @@ exit:
 
 static void
 prov_data_init(struct crt_prov_gdata *prov_data, crt_provider_t provider,
-		bool primary, crt_init_options_t *opt)
+	       bool primary, crt_init_options_t *opt)
 
 {
 	bool		share_addr = false;
@@ -335,14 +337,16 @@ crt_plugin_fini(void)
 }
 
 static void
-__split_arg(char *arg_to_split, char **first_arg, char **second_arg)
+__split_arg(char *s_arg_to_split, char **first_arg, char **second_arg)
 {
 	char	*save_ptr;
+	char	*arg_to_split;
 
-	D_ASSERT(arg_to_split != NULL);
+	D_ASSERT(s_arg_to_split != NULL);
 	D_ASSERT(first_arg != NULL);
 	D_ASSERT(second_arg != NULL);
 
+	D_STRNDUP(arg_to_split, s_arg_to_split, 255);
 	*first_arg = 0;
 	*second_arg = 0;
 
@@ -446,7 +450,7 @@ crt_init_opt(crt_group_id_t grpid, uint32_t flags, crt_init_options_t *opt)
 	bool		server;
 	int		rc = 0;
 	char		*provider_str0 = NULL;
-	char 		*provider_str1 = NULL;
+	char		*provider_str1 = NULL;
 	crt_provider_t	primary_provider;
 	crt_provider_t	secondary_provider;
 	crt_provider_t	tmp_prov;
@@ -563,8 +567,6 @@ crt_init_opt(crt_group_id_t grpid, uint32_t flags, crt_init_options_t *opt)
 				port_str = tmp;
 		}
 
-		D_ERROR("ALXMOD: '%s' '%s' '%s'\n", provider_env, interface_env, domain_env);
-
 		__split_arg(provider_env, &provider_str0, &provider_str1);
 		primary_provider = crt_str_to_provider(provider_str0);
 		secondary_provider = crt_str_to_provider(provider_str1);
@@ -588,16 +590,7 @@ crt_init_opt(crt_group_id_t grpid, uint32_t flags, crt_init_options_t *opt)
 			D_GOTO(out, rc);
 		}
 
-
-		D_ERROR("ALEXMOD: '%s' '%s', '%s' '%s', '%s' '%s', '%s' '%s'\n",
-			provider_str0, provider_str1,
-			iface0, iface1,
-			domain0, domain1,
-			port0, port1);
-
-
 		if (secondary_provider != CRT_PROVIDER_UNKNOWN) {
-			//TODO: Assume 1 secondary provider for now
 			num_secondaries = 1;
 
 			D_ALLOC_ARRAY(crt_gdata.cg_secondary_provs, num_secondaries);
@@ -611,9 +604,8 @@ crt_init_opt(crt_group_id_t grpid, uint32_t flags, crt_init_options_t *opt)
 			tmp_prov = crt_gdata.cg_secondary_provs[i];
 
 			prov_data_init(&crt_gdata.cg_prov_gdata[tmp_prov],
-					tmp_prov, false, opt);
+				       tmp_prov, false, opt);
 			prov_settings_apply(tmp_prov, opt);
-
 
 			rc = crt_na_config_init(tmp_prov, iface1, domain1, port1);
 			if (rc != 0) {
@@ -944,9 +936,10 @@ out:
 }
 
 static int
-crt_na_config_init(crt_provider_t provider, const char *interface, const char *domain, const char *port_str)
+crt_na_config_init(crt_provider_t provider, const char *interface,
+		   const char *domain, const char *port_str)
 {
-	struct crt_na_config 		*na_cfg;
+	struct crt_na_config		*na_cfg;
 	int				rc = 0;
 	int				port = -1;
 

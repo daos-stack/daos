@@ -173,7 +173,7 @@ out:
 }
 
 int
-crt_context_provider_create(crt_context_t *crt_ctx, int provider);
+crt_context_provider_create(crt_context_t *crt_ctx, crt_provider_t provider);
 
 int
 crt_context_create_on_provider(crt_context_t *crt_ctx, const char *provider)
@@ -189,9 +189,24 @@ crt_context_create_on_provider(crt_context_t *crt_ctx, const char *provider)
 	return crt_context_provider_create(crt_ctx, provider_idx);
 }
 
+int
+crt_context_uri_get(crt_context_t crt_ctx, char **uri)
+{
+	struct crt_context	*ctx = NULL;
+
+	if (crt_ctx == NULL || uri == NULL) {
+		D_ERROR("Invalid null parameters\n");
+		return -DER_INVAL;
+	}
+
+	ctx = crt_ctx;
+	*uri = ctx->cc_self_uri;
+
+	return DER_SUCCESS;
+}
 
 int
-crt_context_provider_create(crt_context_t *crt_ctx, int provider)
+crt_context_provider_create(crt_context_t *crt_ctx, crt_provider_t provider)
 {
 	struct crt_context	*ctx = NULL;
 	int			rc = 0;
@@ -247,8 +262,6 @@ crt_context_provider_create(crt_context_t *crt_ctx, int provider)
 		crt_context_destroy(ctx, true);
 		D_GOTO(out, rc);
 	}
-	D_ERROR("ALEXMOD: ocntext %d on provider %d, uri='%s'\n",
-		cur_ctx_num, provider, ctx->cc_self_uri);
 
 	ctx->cc_idx = cur_ctx_num;
 
