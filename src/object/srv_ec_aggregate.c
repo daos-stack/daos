@@ -2175,8 +2175,11 @@ agg_filter(daos_handle_t ih, vos_iter_desc_t *desc, void *cb_arg, unsigned int *
 	struct daos_oclass_attr  oca;
 	int			 rc = 0;
 
-	if (desc->id_type != VOS_ITER_OBJ)
-		return 0;
+	if (desc->id_type != VOS_ITER_OBJ) {
+		*acts = VOS_ITER_CB_SKIP;
+		agg_param->ap_credits++;
+		goto done;
+	}
 
 	rc = dsc_obj_id2oc_attr(desc->id_oid.id_pub, &info->api_props, &oca);
 	if (rc) {
@@ -2200,8 +2203,8 @@ done:
 		D_DEBUG(DB_EPC, "EC aggregation yield type %d. acts %u\n",
 			desc->id_type, *acts);
 		if (ec_aggregate_yield(agg_param)) {
-			D_DEBUG(DB_EPC, "EC aggregation aborted\n");
-			*acts |= VOS_ITER_CB_ABORT;
+			D_DEBUG(DB_EPC, "EC aggregation quit\n");
+			*acts |= VOS_ITER_CB_EXIT;
 		}
 	}
 
@@ -2213,8 +2216,8 @@ done:
  * this target.
  */
 static int
-agg_object(daos_handle_t ih, vos_iter_entry_t *entry,
-	   struct ec_agg_param *agg_param, unsigned int *acts)
+ec_agg_object(daos_handle_t ih, vos_iter_entry_t *entry, struct ec_agg_param *agg_param,
+	      unsigned int *acts)
 {
 	struct ec_agg_pool_info *info = &agg_param->ap_pool_info;
 	struct daos_oclass_attr  oca;
@@ -2264,7 +2267,7 @@ agg_iterate_pre_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 	switch (type) {
 	case VOS_ITER_OBJ:
 		agg_param->ap_epr = param->ip_epr;
-		rc = agg_object(ih, entry, agg_param, acts);
+		rc = ec_agg_object(ih, entry, agg_param, acts);
 		break;
 	case VOS_ITER_DKEY:
 		rc = agg_dkey(ih, entry, agg_entry, acts);
@@ -2292,8 +2295,8 @@ agg_iterate_pre_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 		D_DEBUG(DB_EPC, "EC aggregation yield type %d. acts %u\n",
 			type, *acts);
 		if (ec_aggregate_yield(agg_param)) {
-			D_DEBUG(DB_EPC, "EC aggregation aborted\n");
-			rc = 1;
+			D_DEBUG(DB_EPC, "EC aggregation quit\n");
+			*acts |= VOS_ITER_CB_EXIT;
 		}
 	}
 

@@ -677,6 +677,27 @@ is_delete(unsigned int acts)
 	return (acts & VOS_ITER_CB_DELETE);
 }
 
+#define JUMP_TO_STAGE(rc, next_label, probe_label, abort_label)				\
+	do {										\
+		switch (rc) {								\
+		case ITER_ABORT:							\
+			(rc) = 0;							\
+			/* fallthrough */						\
+		case ITER_EXIT:								\
+			goto abort_label;						\
+		case ITER_NEXT:								\
+			goto next_label;						\
+		case ITER_PROBE:							\
+			goto probe_label;						\
+		case ITER_CONTINUE:							\
+			(rc) = 0;							\
+			break;								\
+		default:								\
+			D_ASSERTF(rc == 0, "Unexpected positive return code: %d\n",	\
+				  rc);							\
+		}									\
+	} while (0)
+
 /**
  * Iterate VOS entries (i.e., containers, objects, dkeys, etc.) and call \a
  * cb(\a arg) for each entry.
@@ -736,24 +757,7 @@ vos_iterate_internal(vos_iter_param_t *param, vos_iter_type_t type,
 	read_time = dtx_is_valid_handle(dth) ? dth->dth_epoch : 0 /* unused */;
 probe:
 	rc = vos_iter_probe_ex(ih, anchor, probe_flags);
-	if (rc >= 0) {
-		rc = advance_stage(type, rc, param, anchors, anchor, &stage, stage, &probe_flags);
-		switch (rc) {
-		case ITER_ABORT:
-			rc = 0;
-			/* fallthrough */
-		case ITER_EXIT:
-			goto out;
-		case ITER_NEXT:
-			goto next;
-		case ITER_PROBE:
-			goto probe;
-		case ITER_CONTINUE:
-			rc = 0;
-			break;
-		}
-	}
-	if (rc != 0) {
+	if (rc < 0) {
 		if (rc == -DER_NONEXIST || rc == -DER_AGAIN) {
 			daos_anchor_set_eof(anchor);
 			rc = 0;
@@ -763,6 +767,9 @@ probe:
 					  type, anchor, DP_RC(rc));
 		}
 		D_GOTO(out, rc);
+	} else {
+		rc = advance_stage(type, rc, param, anchors, anchor, &stage, stage, &probe_flags);
+		JUMP_TO_STAGE(rc, next, probe, out);
 	}
 
 	while (1) {
@@ -785,19 +792,7 @@ probe:
 
 			rc = advance_stage(type, acts, param, anchors, anchor, &stage,
 					   VOS_ITER_STAGE_RECURSE, &probe_flags);
-			switch (rc) {
-			case ITER_ABORT:
-				rc = 0;
-				/* fallthrough */
-			case ITER_EXIT:
-				goto out;
-			case ITER_NEXT:
-				goto next;
-			case ITER_PROBE:
-				goto probe;
-			case ITER_CONTINUE:
-				break;
-			}
+			JUMP_TO_STAGE(rc, next, probe, out);
 		}
 
 		if (stage == VOS_ITER_STAGE_PRE)
@@ -838,19 +833,7 @@ probe:
 
 			rc = advance_stage(type, 0, param, anchors, anchor, &stage,
 					   VOS_ITER_STAGE_POST, &probe_flags);
-			switch (rc) {
-			case ITER_ABORT:
-				rc = 0;
-				/* fallthrough */
-			case ITER_EXIT:
-				goto out;
-			case ITER_NEXT:
-				goto next;
-			case ITER_PROBE:
-				goto probe;
-			case ITER_CONTINUE:
-				break;
-			}
+			JUMP_TO_STAGE(rc, next, probe, out);
 		}
 
 		if (stage == VOS_ITER_STAGE_RECURSE)
@@ -870,46 +853,20 @@ probe:
 
 			rc = advance_stage(type, acts, param, anchors, anchor,
 					   &stage, VOS_ITER_STAGE_FILTER, &probe_flags);
-			switch (rc) {
-			case ITER_ABORT:
-				rc = 0;
-				/* fallthrough */
-			case ITER_EXIT:
-				goto out;
-			case ITER_NEXT:
-				goto next;
-			case ITER_PROBE:
-				goto probe;
-			case ITER_CONTINUE:
-				break;
-			}
+			JUMP_TO_STAGE(rc, next, probe, out);
 		}
 next:
 		stage = VOS_ITER_STAGE_FILTER;
 		rc = vos_iter_next(ih, anchor);
-		if (rc >= 0) {
-			rc = advance_stage(type, rc, param, anchors, anchor,
-					   &stage, VOS_ITER_STAGE_FILTER, &probe_flags);
-			switch (rc) {
-			case ITER_ABORT:
-				rc = 0;
-				/* fallthrough */
-			case ITER_EXIT:
-				goto out;
-			case ITER_NEXT:
-				goto next;
-			case ITER_PROBE:
-				goto probe;
-			case ITER_CONTINUE:
-				rc = 0;
-				break;
-			}
-		}
-		if (rc) {
+		if (rc < 0) {
 			VOS_TX_TRACE_FAIL(rc,
 					  "failed to iterate next (type=%d): "
 					  DF_RC"\n", type, DP_RC(rc));
 			break;
+		} else {
+			rc = advance_stage(type, rc, param, anchors, anchor,
+					   &stage, VOS_ITER_STAGE_FILTER, &probe_flags);
+			JUMP_TO_STAGE(rc, next, probe, out);
 		}
 	}
 

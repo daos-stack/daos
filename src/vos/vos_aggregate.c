@@ -2244,7 +2244,7 @@ vos_aggregate_pre_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 
 		if (vos_aggregate_yield(agg_param)) {
 			D_DEBUG(DB_EPC, "VOS discard/aggregation aborted\n");
-			return 1;
+			*acts |= VOS_ITER_CB_EXIT;
 		}
 	}
 
