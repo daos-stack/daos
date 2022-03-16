@@ -35,6 +35,11 @@ else
     if command -v gh > /dev/null 2>&1
     then
 	TARGET=$(gh pr view "$BRANCH" --json baseRefName -t "{{.baseRefName}}")
+	# If there is no PR yet then use master.
+	if [ $? -ne 0 ]
+	then
+	    exit 0
+	fi
     else
 	TARGET=master
     fi
