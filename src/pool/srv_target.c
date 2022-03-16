@@ -1385,9 +1385,14 @@ update_vos_prop_on_targets(void *in)
 int
 ds_pool_tgt_prop_update(struct ds_pool *pool, struct pool_iv_prop *iv_prop)
 {
+	int ret;
+
 	D_ASSERT(dss_get_module_info()->dmi_xs_id == 0);
 	pool->sp_ec_cell_sz = iv_prop->pip_ec_cell_sz;
 	pool->sp_reclaim = iv_prop->pip_reclaim;
+	pool->sp_redun_fac = iv_prop->pip_redun_fac;
+	pool->sp_ec_pda = iv_prop->pip_ec_pda;
+	pool->sp_rp_pda = iv_prop->pip_rp_pda;
 
 	if (!daos_policy_try_parse(iv_prop->pip_policy_str,
 				   &pool->sp_policy_desc)) {
@@ -1395,7 +1400,7 @@ ds_pool_tgt_prop_update(struct ds_pool *pool, struct pool_iv_prop *iv_prop)
 			iv_prop->pip_policy_str);
 		return -DER_MISMATCH;
 	}
-	int ret = dss_thread_collective(update_vos_prop_on_targets, pool, 0);
+	ret = dss_thread_collective(update_vos_prop_on_targets, pool, 0);
 
 	return ret;
 }

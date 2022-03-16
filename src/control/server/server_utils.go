@@ -46,10 +46,6 @@ const (
 func engineCfgGetBdevs(engineCfg *engine.Config) *storage.BdevDeviceList {
 	bdevs := []string{}
 	for _, bc := range engineCfg.Storage.Tiers.BdevConfigs() {
-		if bc.Class != storage.ClassNvme {
-			// don't scan if any tier is using emulated NVMe
-			return new(storage.BdevDeviceList)
-		}
 		bdevs = append(bdevs, bc.Bdev.DeviceList.Devices()...)
 	}
 
@@ -261,16 +257,23 @@ func prepBdevStorage(srv *server, iommuEnabled bool) error {
 }
 
 // scanBdevStorage performs discovery and validates existence of configured NVMe SSDs.
-func scanBdevStorage(srv *server) *storage.BdevScanResponse {
-	nvmeScanResp, err := srv.ctlSvc.NvmeScan(storage.BdevScanRequest{
-		DeviceList: cfgGetBdevs(srv.cfg),
-	})
-	if err != nil {
-		srv.log.Debugf("%s\n", errors.Wrap(err, "Warning, NVMe Scan Failed"))
-		return &storage.BdevScanResponse{}
+func scanBdevStorage(srv *server) (*storage.BdevScanResponse, error) {
+	if srv.cfg.NrHugepages < 0 {
+		srv.log.Debugf("skip nvme scan as hugepages have been disabled in config")
+		return &storage.BdevScanResponse{}, nil
 	}
 
-	return nvmeScanResp
+	nvmeScanResp, err := srv.ctlSvc.NvmeScan(storage.BdevScanRequest{
+		DeviceList:  cfgGetBdevs(srv.cfg),
+		BypassCache: true, // init cache on first scan
+	})
+	if err != nil {
+		err = errors.Wrap(err, "NVMe Scan Failed")
+		srv.log.Errorf("%s", err)
+		return nil, err
+	}
+
+	return nvmeScanResp, nil
 }
 
 // Minimum recommended number of hugepages has already been calculated and set in config so verify
@@ -481,6 +484,7 @@ func getGrpcOpts(cfgTransport *security.TransportConfig) ([]grpc.ServerOption, e
 	unaryInterceptors := []grpc.UnaryServerInterceptor{
 		unaryErrorInterceptor,
 		unaryStatusInterceptor,
+		unaryVersionInterceptor,
 	}
 	streamInterceptors := []grpc.StreamServerInterceptor{
 		streamErrorInterceptor,

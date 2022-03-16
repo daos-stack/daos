@@ -24,5 +24,7 @@ ior:
     F: "-w -k -G 1"
   iorfetchflags:
     F: "-r -k -G 1"
+  iorrwflags:
+    F: "-w -W -k -G 1"
   dfs_oclass: "SX"
   dfs_chunk: 8388608

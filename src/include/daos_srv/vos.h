@@ -200,11 +200,12 @@ vos_dtx_cleanup(struct dtx_handle *dth);
  * Reset DTX related cached information in VOS.
  *
  * \param coh	[IN]	Container open handle.
+ * \param force	[IN]	Reset all DTX tables by force.
  *
  * \return	Zero on success, negative value if error.
  */
 int
-vos_dtx_cache_reset(daos_handle_t coh);
+vos_dtx_cache_reset(daos_handle_t coh, bool force);
 
 /**
  * Initialize the environment for a VOS instance
@@ -794,7 +795,7 @@ vos_ioh2recx_list(daos_handle_t ioh);
 struct bio_desc *
 vos_ioh2desc(daos_handle_t ioh);
 
-struct dcs_csum_info *
+struct dcs_ci_list *
 vos_ioh2ci(daos_handle_t ioh);
 
 uint32_t
