@@ -2026,49 +2026,13 @@ agg_akey_post(daos_handle_t ih, struct ec_agg_param *agg_param,
 	return rc;
 }
 
-/* Compare function for keys.  Used to reset iterator position.
-*/
-static inline int
-agg_key_compare(daos_key_t key1, daos_key_t key2)
-{
-	if (key1.iov_len != key2.iov_len)
-		return 1;
-
-	return memcmp(key1.iov_buf, key2.iov_buf, key1.iov_len);
-}
-
-static inline void
-agg_reset_pos(vos_iter_type_t type, struct ec_agg_entry *agg_entry)
-{
-	switch (type) {
-	case VOS_ITER_OBJ:
-		memset(&agg_entry->ae_oid, 0, sizeof(agg_entry->ae_oid));
-		break;
-	case VOS_ITER_DKEY:
-		memset(&agg_entry->ae_dkey, 0, sizeof(agg_entry->ae_dkey));
-		break;
-	case VOS_ITER_AKEY:
-		memset(&agg_entry->ae_akey, 0, sizeof(agg_entry->ae_akey));
-		break;
-	default:
-		break;
-	}
-}
-
 /* Handles dkeys returned by the per-object nested iteratior.
 */
 static int
 agg_dkey(daos_handle_t ih, vos_iter_entry_t *entry,
 	 struct ec_agg_entry *agg_entry, unsigned int *acts)
 {
-	if (agg_key_compare(agg_entry->ae_dkey, entry->ie_key)) {
-		agg_entry->ae_dkey	= entry->ie_key;
-		agg_reset_pos(VOS_ITER_AKEY, agg_entry);
-	} else {
-		D_DEBUG(DB_EPC, "Skip dkey: "DF_KEY" ec agg on re-probe\n",
-			DP_KEY(&entry->ie_key));
-		*acts |= VOS_ITER_CB_SKIP;
-	}
+	agg_entry->ae_dkey	= entry->ie_key;
 
 	return 0;
 }
@@ -2084,14 +2048,8 @@ agg_akey(daos_handle_t ih, vos_iter_entry_t *entry,
 		*acts |= VOS_ITER_CB_SKIP;
 		return 0;
 	}
-	if (agg_key_compare(agg_entry->ae_akey, entry->ie_key)) {
-		agg_entry->ae_akey = entry->ie_key;
-		agg_entry->ae_thdl = ih;
-	} else {
-		D_DEBUG(DB_EPC, "Skip akey: "DF_KEY" ec agg on re-probe\n",
-			DP_KEY(&entry->ie_key));
-		*acts |= VOS_ITER_CB_SKIP;
-	}
+	agg_entry->ae_akey = entry->ie_key;
+	agg_entry->ae_thdl = ih;
 
 	return 0;
 }
@@ -2146,7 +2104,6 @@ agg_reset_entry(struct ec_agg_entry *agg_entry, vos_iter_entry_t *entry,
 		agg_entry->ae_codec	= obj_id2ec_codec(entry->ie_oid.id_pub);
 		D_ASSERT(agg_entry->ae_codec);
 	} else {
-		agg_reset_pos(VOS_ITER_OBJ, agg_entry);
 		agg_entry->ae_codec = NULL;
 	}
 	if (oca)
@@ -2156,8 +2113,6 @@ agg_reset_entry(struct ec_agg_entry *agg_entry, vos_iter_entry_t *entry,
 		dsc_obj_close(agg_entry->ae_obj_hdl);
 		agg_entry->ae_obj_hdl = DAOS_HDL_INVAL;
 	}
-	agg_reset_pos(VOS_ITER_DKEY, agg_entry);
-	agg_reset_pos(VOS_ITER_AKEY, agg_entry);
 	memset(agg_entry->ae_peer_pshards, 0,
 	       (OBJ_EC_MAX_P) * sizeof(struct daos_shard_loc));
 
@@ -2265,14 +2220,6 @@ agg_object(daos_handle_t ih, vos_iter_entry_t *entry,
 	struct daos_oclass_attr  oca;
 	int			 rc = 0;
 
-	if (!daos_unit_oid_compare(agg_param->ap_agg_entry.ae_oid,
-				   entry->ie_oid)) {
-		D_DEBUG(DB_EPC, "Skip oid:"DF_UOID" ec agg on re-probe.\n",
-			DP_UOID(entry->ie_oid));
-		*acts |= VOS_ITER_CB_SKIP;
-		goto out;
-	}
-
 	/** We should have filtered it if it isn't EC */
 	rc = dsc_obj_id2oc_attr(entry->ie_oid.id_pub, &info->api_props, &oca);
 	D_ASSERT(rc == 0 && daos_oclass_is_ec(&oca));
@@ -2344,8 +2291,6 @@ agg_iterate_pre_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 		agg_param->ap_credits = 0;
 		D_DEBUG(DB_EPC, "EC aggregation yield type %d. acts %u\n",
 			type, *acts);
-		if (!(*acts & VOS_ITER_CB_SKIP))
-			agg_reset_pos(type, agg_entry);
 		if (ec_aggregate_yield(agg_param)) {
 			D_DEBUG(DB_EPC, "EC aggregation aborted\n");
 			rc = 1;

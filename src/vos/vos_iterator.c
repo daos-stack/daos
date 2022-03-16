@@ -312,18 +312,17 @@ vos_iter_finish(daos_handle_t ih)
 }
 
 int
-vos_iter_probe_ex(daos_handle_t ih, daos_anchor_t *anchor, bool next)
+vos_iter_probe_ex(daos_handle_t ih, daos_anchor_t *anchor, uint32_t flags)
 {
 	struct vos_iterator *iter = vos_hdl2iter(ih);
 	struct dtx_handle   *old;
 	int		     rc;
 
-	D_DEBUG(DB_IO, "probing iterator\n");
 	D_ASSERT(iter->it_ops != NULL);
 
 	old = vos_dth_get();
 	vos_dth_set(iter->it_dth);
-	rc = iter->it_ops->iop_probe(iter, anchor, next);
+	rc = iter->it_ops->iop_probe(iter, anchor, flags);
 	vos_dth_set(old);
 	if (rc == 0)
 		iter->it_state = VOS_ITS_OK;
@@ -331,7 +330,6 @@ vos_iter_probe_ex(daos_handle_t ih, daos_anchor_t *anchor, bool next)
 		iter->it_state = VOS_ITS_END;
 	else
 		iter->it_state = VOS_ITS_NONE;
-	D_DEBUG(DB_IO, "done probing iterator rc = "DF_RC"\n", DP_RC(rc));
 
 	return rc;
 }
@@ -591,6 +589,67 @@ need_reprobe(vos_iter_type_t type, struct vos_iter_anchors *anchors)
 	return reprobe;
 }
 
+enum {
+	ITER_NEXT,
+	ITER_CONTINUE,
+	ITER_PROBE,
+	ITER_ABORT,
+	ITER_EXIT,
+};
+
+enum {
+	/** Filter stage */
+	VOS_ITER_STAGE_FILTER,
+	/** Pre-call should run */
+	VOS_ITER_STAGE_PRE,
+	/** Pre-call already ran, recurse to child */
+	VOS_ITER_STAGE_RECURSE,
+	/** Already ran child itertor, run post */
+	VOS_ITER_STAGE_POST,
+	/** Finished post iterator */
+	VOS_ITER_STAGE_DONE,
+};
+
+static int
+advance_stage(vos_iter_type_t type, unsigned int acts, vos_iter_param_t *param,
+	      struct vos_iter_anchors *anchors, daos_anchor_t *anchor, int *stage,
+	      int next_stage, uint32_t *probe_flags)
+{
+	int	rc = ITER_CONTINUE;
+
+	if (acts & VOS_ITER_CB_EXIT)
+		D_GOTO(out, rc = ITER_EXIT);
+
+	set_reprobe(type, acts, anchors, param->ip_flags);
+	if (acts & VOS_ITER_CB_ABORT)
+		D_GOTO(out, rc = ITER_ABORT);
+
+	if (acts & VOS_ITER_CB_RESTART) {
+		*stage = VOS_ITER_STAGE_FILTER;
+		*probe_flags = 0;
+		daos_anchor_set_zero(anchor);
+		D_GOTO(out, rc = ITER_PROBE);
+	}
+
+	if (acts & (VOS_ITER_CB_SKIP | VOS_ITER_CB_DELETE)) {
+		*probe_flags = VOS_ITER_PROBE_NEXT;
+		*stage = VOS_ITER_STAGE_FILTER;
+		rc = ITER_NEXT;
+	} else {
+		*probe_flags = VOS_ITER_PROBE_AGAIN;
+		*stage = next_stage;
+	}
+
+	if (need_reprobe(type, anchors)) {
+		D_ASSERT(!daos_anchor_is_zero(anchor) &&
+			 !daos_anchor_is_eof(anchor));
+		rc = ITER_PROBE;
+	}
+out:
+	return rc;
+}
+
+
 static inline int
 vos_iter_cb(vos_iter_cb_t iter_cb, daos_handle_t ih, vos_iter_entry_t *iter_ent,
 	    vos_iter_type_t type, vos_iter_param_t *param, void *arg, unsigned int *acts)
@@ -612,14 +671,11 @@ is_skip(unsigned int acts)
 	return (acts & VOS_ITER_CB_SKIP);
 }
 
-enum {
-	/** Pre-call should run */
-	VOS_ITER_STAGE_PRE,
-	/** Pre-call already ran, recurse to child */
-	VOS_ITER_STAGE_RECURSE,
-	/** Already ran child itertor, run post */
-	VOS_ITER_STAGE_POST,
-};
+static inline bool
+is_delete(unsigned int acts)
+{
+	return (acts & VOS_ITER_CB_DELETE);
+}
 
 /**
  * Iterate VOS entries (i.e., containers, objects, dkeys, etc.) and call \a
@@ -638,7 +694,8 @@ vos_iterate_internal(vos_iter_param_t *param, vos_iter_type_t type,
 	daos_epoch_t		read_time = 0;
 	daos_handle_t		ih;
 	unsigned int		acts;
-	int			stage = VOS_ITER_STAGE_PRE;
+	uint32_t		probe_flags = 0;
+	int			stage = VOS_ITER_STAGE_FILTER;
 	int			rc;
 
 	D_ASSERT(type >= VOS_ITER_COUUID && type <= VOS_ITER_RECX);
@@ -677,17 +734,25 @@ vos_iterate_internal(vos_iter_param_t *param, vos_iter_type_t type,
 		iter->it_ignore_uncommitted = 0;
 	}
 	read_time = dtx_is_valid_handle(dth) ? dth->dth_epoch : 0 /* unused */;
-	acts = 0;
 probe:
-	rc = vos_iter_probe_ex(ih, anchor, is_skip(acts));
-	if (rc > 0 && rc & VOS_ITER_CB_YIELD) {
-		set_reprobe(type, rc, anchors, param->ip_flags);
-		D_ASSERT(need_reprobe(type, anchors));
-		acts = rc; /** In case skip was set */
-		stage = VOS_ITER_STAGE_PRE;
-		goto probe;
+	rc = vos_iter_probe_ex(ih, anchor, probe_flags);
+	if (rc >= 0) {
+		rc = advance_stage(type, rc, param, anchors, anchor, &stage, stage, &probe_flags);
+		switch (rc) {
+		case ITER_ABORT:
+			rc = 0;
+			/* fallthrough */
+		case ITER_EXIT:
+			goto out;
+		case ITER_NEXT:
+			goto next;
+		case ITER_PROBE:
+			goto probe;
+		case ITER_CONTINUE:
+			rc = 0;
+			break;
+		}
 	}
-	/** Let VOS_ITER_CB_EXIT fall through and get handled as a non-zero exit */
 	if (rc != 0) {
 		if (rc == -DER_NONEXIST || rc == -DER_AGAIN) {
 			daos_anchor_set_eof(anchor);
@@ -709,7 +774,8 @@ probe:
 			break;
 		}
 
-		acts = 0;
+		if (stage == VOS_ITER_STAGE_FILTER)
+			stage = VOS_ITER_STAGE_PRE;
 
 		if (pre_cb && stage == VOS_ITER_STAGE_PRE) {
 			acts = 0;
@@ -717,30 +783,25 @@ probe:
 			if (rc != 0)
 				break;
 
-			set_reprobe(type, acts, anchors, param->ip_flags);
-
-			if (acts & VOS_ITER_CB_ABORT)
+			rc = advance_stage(type, acts, param, anchors, anchor, &stage,
+					   VOS_ITER_STAGE_RECURSE, &probe_flags);
+			switch (rc) {
+			case ITER_ABORT:
+				rc = 0;
+				/* fallthrough */
+			case ITER_EXIT:
+				goto out;
+			case ITER_NEXT:
+				goto next;
+			case ITER_PROBE:
+				goto probe;
+			case ITER_CONTINUE:
 				break;
-
-			if (acts & VOS_ITER_CB_RESTART) {
-				acts = 0;
-				daos_anchor_set_zero(anchor);
-				goto probe;
 			}
-
-			if (!is_skip(acts))
-				stage = VOS_ITER_STAGE_RECURSE;
-
-			if (need_reprobe(type, anchors)) {
-				D_ASSERT(!daos_anchor_is_zero(anchor) &&
-					 !daos_anchor_is_eof(anchor));
-				goto probe;
-			}
-
 		}
 
-		if (is_skip(acts))
-			goto next;
+		if (stage == VOS_ITER_STAGE_PRE)
+			stage = VOS_ITER_STAGE_RECURSE;
 
 		if (recursive && !is_last_level(type) &&
 		    iter_ent.ie_child_type != VOS_ITER_NONE &&
@@ -766,6 +827,7 @@ probe:
 				goto out;
 			}
 
+
 			rc = vos_iterate(&child_param, iter_ent.ie_child_type,
 					 recursive, anchors, pre_cb, post_cb,
 					 arg, dth);
@@ -774,20 +836,27 @@ probe:
 
 			reset_anchors(iter_ent.ie_child_type, anchors);
 
-			stage = VOS_ITER_STAGE_POST;
-			/** The child iterator may yield during iteration.
-			 *  It isn't necessary to reprobe the parent in order
-			 *  to continue iterating on the child because it
-			 *  would remain in the same location in memory.
-			 *  However, it is necessary to reprobe this iterator
-			 *  before continuing.
-			 */
-			if (need_reprobe(type, anchors)) {
-				D_ASSERT(!daos_anchor_is_zero(anchor) &&
-					 !daos_anchor_is_eof(anchor));
+			rc = advance_stage(type, 0, param, anchors, anchor, &stage,
+					   VOS_ITER_STAGE_POST, &probe_flags);
+			switch (rc) {
+			case ITER_ABORT:
+				rc = 0;
+				/* fallthrough */
+			case ITER_EXIT:
+				goto out;
+			case ITER_NEXT:
+				goto next;
+			case ITER_PROBE:
 				goto probe;
+			case ITER_CONTINUE:
+				break;
 			}
 		}
+
+		if (stage == VOS_ITER_STAGE_RECURSE)
+			stage = VOS_ITER_STAGE_POST;
+
+		D_ASSERT(stage == VOS_ITER_STAGE_POST);
 
 		if (post_cb) {
 			acts = 0;
@@ -795,38 +864,47 @@ probe:
 			if (rc != 0)
 				break;
 
-			stage = VOS_ITER_STAGE_PRE;
+			/** Make sure we advance to next entry on re-probe */
+			if ((acts & (VOS_ITER_CB_SKIP | VOS_ITER_CB_DELETE)) == 0)
+				acts |= VOS_ITER_CB_SKIP;
 
-			set_reprobe(type, acts, anchors, param->ip_flags);
-
-			if (acts & VOS_ITER_CB_ABORT)
+			rc = advance_stage(type, acts, param, anchors, anchor,
+					   &stage, VOS_ITER_STAGE_FILTER, &probe_flags);
+			switch (rc) {
+			case ITER_ABORT:
+				rc = 0;
+				/* fallthrough */
+			case ITER_EXIT:
+				goto out;
+			case ITER_NEXT:
+				goto next;
+			case ITER_PROBE:
+				goto probe;
+			case ITER_CONTINUE:
 				break;
-
-			if (acts & VOS_ITER_CB_RESTART) {
-				daos_anchor_set_zero(anchor);
-				acts = 0;
-				goto probe;
-			}
-
-			if (need_reprobe(type, anchors)) {
-				D_ASSERT(!daos_anchor_is_zero(anchor) &&
-					 !daos_anchor_is_eof(anchor));
-				/** Advance the iterator */
-				acts = VOS_ITER_CB_SKIP;
-				goto probe;
 			}
 		}
-
 next:
-		stage = VOS_ITER_STAGE_PRE;
+		stage = VOS_ITER_STAGE_FILTER;
 		rc = vos_iter_next(ih, anchor);
-		if (rc > 0 && rc & VOS_ITER_CB_YIELD) {
-			set_reprobe(type, VOS_ITER_CB_YIELD, anchors, param->ip_flags);
-			D_ASSERT(need_reprobe(type, anchors));
-			acts = rc; /** In case skip was set */
-			goto probe;
+		if (rc >= 0) {
+			rc = advance_stage(type, rc, param, anchors, anchor,
+					   &stage, VOS_ITER_STAGE_FILTER, &probe_flags);
+			switch (rc) {
+			case ITER_ABORT:
+				rc = 0;
+				/* fallthrough */
+			case ITER_EXIT:
+				goto out;
+			case ITER_NEXT:
+				goto next;
+			case ITER_PROBE:
+				goto probe;
+			case ITER_CONTINUE:
+				rc = 0;
+				break;
+			}
 		}
-		/** Let VOS_ITER_CB_EXIT fall through and get handled as a non-zero exit */
 		if (rc) {
 			VOS_TX_TRACE_FAIL(rc,
 					  "failed to iterate next (type=%d): "

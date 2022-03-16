@@ -729,7 +729,7 @@ fail:
 
 static int
 key_iter_fetch(struct vos_obj_iter *oiter, vos_iter_entry_t *ent,
-	       daos_anchor_t *anchor, bool check_existence)
+	       daos_anchor_t *anchor, bool check_existence, uint32_t flags)
 {
 
 	uint64_t		 start_seq;
@@ -747,7 +747,8 @@ key_iter_fetch(struct vos_obj_iter *oiter, vos_iter_entry_t *ent,
 	if (rc != 0)
 		return rc;
 
-	if (check_existence && oiter->it_iter.it_filter_cb != NULL) {
+	if (check_existence && oiter->it_iter.it_filter_cb != NULL &&
+	    (flags & VOS_ITER_PROBE_AGAIN) == 0) {
 		desc.id_type = oiter->it_iter.it_type;
 		desc.id_key = ent->ie_key;
 		acts = 0;
@@ -757,15 +758,13 @@ key_iter_fetch(struct vos_obj_iter *oiter, vos_iter_entry_t *ent,
 						 &acts);
 		if (rc != 0)
 			return rc;
-		if (acts & VOS_ITER_CB_EXIT)
-			return VOS_ITER_CB_EXIT;
 		if (start_seq != vos_sched_seq())
 			return acts | VOS_ITER_CB_YIELD;
-		if (acts != 0) {
-			if (acts & VOS_ITER_CB_SKIP)
-				return IT_OPC_NEXT;
-			D_ASSERTF(0, "Invalid acts returned from iterator filter %x\n", acts);
-		}
+		if (acts & (VOS_ITER_CB_EXIT | VOS_ITER_CB_ABORT | VOS_ITER_CB_RESTART |
+			    VOS_ITER_CB_DELETE))
+			return acts;
+		if (acts & VOS_ITER_CB_SKIP)
+			return VOS_ITER_CB_SKIP;
 	}
 
 	D_ASSERT(rbund.rb_krec);
@@ -788,7 +787,7 @@ key_iter_fetch(struct vos_obj_iter *oiter, vos_iter_entry_t *ent,
 	rc = key_iter_ilog_check(krec, oiter, oiter->it_iter.it_type, &epr,
 				 check_existence, NULL);
 	if (rc == -DER_NONEXIST)
-		return IT_OPC_NEXT;
+		return VOS_ITER_CB_SKIP;
 	if (rc != 0) {
 		if (!oiter->it_iter.it_show_uncommitted || rc != -DER_INPROGRESS)
 			return rc;
@@ -833,6 +832,8 @@ key_iter_fetch_root(struct vos_obj_iter *oiter, vos_iter_type_t type,
 
 	info->ii_epr = oiter->it_epr;
 	info->ii_punched = oiter->it_punched;
+	info->ii_filter_cb = oiter->it_iter.it_filter_cb;
+	info->ii_filter_arg = oiter->it_iter.it_filter_arg;
 	/* Update the lower bound for nested iterator */
 	rc = key_iter_ilog_check(krec, oiter, type, &info->ii_epr, false, NULL);
 	if (rc != 0)
@@ -873,12 +874,12 @@ key_iter_copy(struct vos_obj_iter *oiter, vos_iter_entry_t *ent,
 
 /**
  * Check if the current entry can match the iterator condition, this function
- * returns IT_OPC_NOOP for true, returns IT_OPC_NEXT or IT_OPC_PROBE if further
- * operation is required. If IT_OPC_PROBE is returned, then the key to be
- * probed and its epoch range are also returned to @ent.
+ * returns VOS_ITER_CB_NONE for true, returns VOS_ITER_CB_SKIP if further
+ * operation is required.
  */
 static int
-key_iter_match(struct vos_obj_iter *oiter, vos_iter_entry_t *ent, daos_anchor_t *anchor)
+key_iter_match(struct vos_obj_iter *oiter, vos_iter_entry_t *ent, daos_anchor_t *anchor,
+	       uint32_t flags)
 {
 	struct vos_object	*obj = oiter->it_obj;
 	daos_epoch_range_t	*epr = &oiter->it_epr;
@@ -886,7 +887,7 @@ key_iter_match(struct vos_obj_iter *oiter, vos_iter_entry_t *ent, daos_anchor_t 
 	daos_handle_t		 toh;
 	int			 rc;
 
-	rc = key_iter_fetch(oiter, ent, anchor, true);
+	rc = key_iter_fetch(oiter, ent, anchor, true, flags);
 	if (rc != 0) {
 		VOS_TX_TRACE_FAIL(rc, "Failed to fetch the entry: "DF_RC"\n", DP_RC(rc));
 		return rc;
@@ -894,7 +895,7 @@ key_iter_match(struct vos_obj_iter *oiter, vos_iter_entry_t *ent, daos_anchor_t 
 
 	if ((oiter->it_iter.it_type == VOS_ITER_AKEY) ||
 	    (oiter->it_akey.iov_buf == NULL)) /* dkey w/o akey as condition */
-		return IT_OPC_NOOP;
+		return VOS_ITER_CB_NONE;
 
 	/* else: has akey as condition */
 	if (epr->epr_lo != epr->epr_hi || (oiter->it_flags & VOS_IT_PUNCHED)) {
@@ -916,10 +917,10 @@ key_iter_match(struct vos_obj_iter *oiter, vos_iter_entry_t *ent, daos_anchor_t 
 	rc = key_ilog_prepare(oiter, toh, VOS_BTR_AKEY, &oiter->it_akey, 0,
 			      NULL, NULL, NULL, &info, NULL);
 	if (rc == 0)
-		rc = IT_OPC_NOOP;
+		rc = VOS_ITER_CB_NONE;
 
 	if (rc == -DER_NONEXIST)
-		rc = IT_OPC_NEXT;
+		rc = VOS_ITER_CB_SKIP;
 
 	vos_ilog_fetch_finish(&info);
 	key_tree_release(toh, false);
@@ -933,13 +934,13 @@ key_iter_match(struct vos_obj_iter *oiter, vos_iter_entry_t *ent, daos_anchor_t 
  * traverses the tree until a matched item is found.
  */
 static int
-key_iter_match_probe(struct vos_obj_iter *oiter, daos_anchor_t *anchor)
+key_iter_match_probe(struct vos_obj_iter *oiter, daos_anchor_t *anchor, uint32_t flags)
 {
 	static __thread vos_iter_entry_t	entry;
 	int					rc;
 
 retry:
-	rc = key_iter_match(oiter, &entry, anchor);
+	rc = key_iter_match(oiter, &entry, anchor, flags);
 	switch (rc) {
 	default:
 		/** Either there is an error, we aborted the iterator, or
@@ -947,29 +948,31 @@ retry:
 		 *  layer to re-probe
 		 */
 		break;
-	case IT_OPC_NOOP:
+	case VOS_ITER_CB_NONE:
 		/* already match the condition, no further operation */
 		rc = 0;
 		break;
-	case IT_OPC_NEXT:
+	case VOS_ITER_CB_SKIP:
+		flags = 0;
 		/* move to the next tree record */
 		rc = dbtree_iter_next(oiter->it_hdl);
 		if (rc == 0)
 			goto retry;
 	}
-	D_ASSERT(rc <= 0 || rc == VOS_ITER_CB_EXIT || (rc & VOS_ITER_CB_YIELD));
+	D_ASSERT(rc <= 0 || (rc & (VOS_ITER_CB_EXIT | VOS_ITER_CB_DELETE | VOS_ITER_CB_YIELD |
+				   VOS_ITER_CB_ABORT)) != 0);
 	VOS_TX_TRACE_FAIL(rc, "match failed, rc="DF_RC"\n",
 			  DP_RC(rc));
 	return rc;
 }
 
 static int
-key_iter_probe(struct vos_obj_iter *oiter, daos_anchor_t *anchor, bool next)
+key_iter_probe(struct vos_obj_iter *oiter, daos_anchor_t *anchor, uint32_t flags)
 {
 	int	next_opc;
 	int	rc;
 
-	next_opc = next ? BTR_PROBE_GT : BTR_PROBE_GE;
+	next_opc = (flags & VOS_ITER_PROBE_NEXT) ? BTR_PROBE_GT : BTR_PROBE_GE;
 	rc = dbtree_iter_probe(oiter->it_hdl,
 			       vos_anchor_is_zero(anchor) ? BTR_PROBE_FIRST : next_opc,
 			       vos_iter_intent(&oiter->it_iter),
@@ -977,7 +980,7 @@ key_iter_probe(struct vos_obj_iter *oiter, daos_anchor_t *anchor, bool next)
 	if (rc)
 		D_GOTO(out, rc);
 
-	rc = key_iter_match_probe(oiter, anchor);
+	rc = key_iter_match_probe(oiter, anchor, flags);
  out:
 	return rc;
 }
@@ -991,7 +994,7 @@ key_iter_next(struct vos_obj_iter *oiter, daos_anchor_t *anchor)
 	if (rc)
 		D_GOTO(out, rc);
 
-	rc = key_iter_match_probe(oiter, anchor);
+	rc = key_iter_match_probe(oiter, anchor, 0);
 out:
 	return rc;
 }
@@ -1191,7 +1194,7 @@ singv_iter_probe_epr(struct vos_obj_iter *oiter, vos_iter_entry_t *entry)
 }
 
 static int
-singv_iter_probe(struct vos_obj_iter *oiter, daos_anchor_t *anchor, bool next)
+singv_iter_probe(struct vos_obj_iter *oiter, daos_anchor_t *anchor, uint32_t flags)
 {
 	vos_iter_entry_t	entry;
 	daos_anchor_t		tmp = {0};
@@ -1200,10 +1203,10 @@ singv_iter_probe(struct vos_obj_iter *oiter, daos_anchor_t *anchor, bool next)
 	int			rc;
 
 	if (oiter->it_epc_expr == VOS_IT_EPC_RR) {
-		next_opc = next ? BTR_PROBE_LT : BTR_PROBE_LE;
+		next_opc = (flags & VOS_ITER_PROBE_NEXT) ? BTR_PROBE_LT : BTR_PROBE_LE;
 		opc = vos_anchor_is_zero(anchor) ? BTR_PROBE_LAST : next_opc;
 	} else {
-		next_opc = next ? BTR_PROBE_GT : BTR_PROBE_GE;
+		next_opc = (flags & VOS_ITER_PROBE_NEXT) ? BTR_PROBE_GT : BTR_PROBE_GE;
 		opc = vos_anchor_is_zero(anchor) ? BTR_PROBE_FIRST : next_opc;
 	}
 
@@ -1706,6 +1709,8 @@ vos_obj_iter_nested_prep(vos_iter_type_t type, struct vos_iter_info *info,
 		info->ii_epr.epr_hi;
 	oiter->it_iter.it_bound = MAX(bound, info->ii_epr.epr_hi);
 	oiter->it_epr = info->ii_epr;
+	oiter->it_iter.it_filter_cb = info->ii_filter_cb;
+	oiter->it_iter.it_filter_arg = info->ii_filter_arg;
 	oiter->it_punched = info->ii_punched;
 	oiter->it_epc_expr = info->ii_epc_expr;
 	oiter->it_flags = info->ii_flags;
@@ -1820,7 +1825,7 @@ vos_obj_iter_fini(struct vos_iterator *iter)
 }
 
 int
-vos_obj_iter_probe(struct vos_iterator *iter, daos_anchor_t *anchor, bool next)
+vos_obj_iter_probe(struct vos_iterator *iter, daos_anchor_t *anchor, uint32_t flags)
 {
 	struct vos_obj_iter *oiter = vos_iter2oiter(iter);
 
@@ -1831,10 +1836,10 @@ vos_obj_iter_probe(struct vos_iterator *iter, daos_anchor_t *anchor, bool next)
 
 	case VOS_ITER_DKEY:
 	case VOS_ITER_AKEY:
-		return key_iter_probe(oiter, anchor, next);
+		return key_iter_probe(oiter, anchor, flags);
 
 	case VOS_ITER_SINGLE:
-		return singv_iter_probe(oiter, anchor, next);
+		return singv_iter_probe(oiter, anchor, flags);
 
 	case VOS_ITER_RECX:
 		return recx_iter_probe(oiter, anchor);
@@ -1876,7 +1881,7 @@ vos_obj_iter_fetch(struct vos_iterator *iter, vos_iter_entry_t *it_entry,
 
 	case VOS_ITER_DKEY:
 	case VOS_ITER_AKEY:
-		return key_iter_fetch(oiter, it_entry, anchor, false);
+		return key_iter_fetch(oiter, it_entry, anchor, false, 0);
 
 	case VOS_ITER_SINGLE:
 		return singv_iter_fetch(oiter, it_entry, anchor);

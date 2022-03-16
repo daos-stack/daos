@@ -412,6 +412,7 @@ struct counts {
 	int	calls;
 	int	aborts;
 	int	skips;
+	int	yields;
 };
 
 struct all_counts {
@@ -421,24 +422,36 @@ struct all_counts {
 	struct counts	value[3];
 };
 
+static int	skip_freqs[] = {13, 11, 7, 3};
+
 static void
 handle_cb(vos_iter_type_t type, struct all_counts *counts, int level, unsigned int *acts)
 {
 	struct counts		*type_count = NULL;
-	static int		 count[3];
+	static int		 count[3][4];
+	int			 current;
+	int			 skip_freq;
 
 	switch (type) {
 	case VOS_ITER_OBJ:
+		current = ++count[level][0];
+		skip_freq = skip_freqs[0];
 		type_count = &counts->obj[0];
 		break;
 	case VOS_ITER_DKEY:
+		current = ++count[level][1];
+		skip_freq = skip_freqs[1];
 		type_count = &counts->dkey[0];
 		break;
 	case VOS_ITER_AKEY:
+		current = ++count[level][2];
+		skip_freq = skip_freqs[2];
 		type_count = &counts->akey[0];
 		break;
 	case VOS_ITER_SINGLE:
 	case VOS_ITER_RECX:
+		current = ++count[level][3];
+		skip_freq = skip_freqs[3];
 		type_count = &counts->value[0];
 		break;
 	default:
@@ -450,17 +463,17 @@ handle_cb(vos_iter_type_t type, struct all_counts *counts, int level, unsigned i
 
 	*acts = 0;
 	type_count[level].calls++;
-	if (level != 0 && (count[level] + 1) % 2 == 0)
+	if (level != 0 && current % 2 == 0) {
 		*acts |= VOS_ITER_CB_YIELD;
-	if ((count[level] + 1) % 3 == 0) {
+		type_count[level].yields++;
+	}
+	if (level != 2 && current % skip_freq == 0) {
 		type_count[level].skips++;
 		*acts |= VOS_ITER_CB_SKIP;
-	} else if (level != 0 && (count[level] + 1) % 4 == 0) {
+	} else if (level != 0 && current % 20 == 0) {
 		type_count[level].aborts++;
 		*acts |= VOS_ITER_CB_ABORT;
 	}
-
-	count[level]++;
 }
 
 static int
@@ -492,6 +505,15 @@ post_cb(daos_handle_t ih, vos_iter_entry_t *entry, vos_iter_type_t type, vos_ite
 	return 0;
 }
 
+#define PRINT_TYPE(name, field, level)					\
+	do {								\
+		printf(" " #name "\n");					\
+		printf("  calls:  %10d\n", counts.field[level].calls);	\
+		printf("  skips:  %10d\n", counts.field[level].skips);	\
+		printf("  aborts: %10d\n", counts.field[level].aborts);	\
+		printf("  yields: %10d\n", counts.field[level].yields);	\
+	} while (0)
+
 static int
 pf_update(struct pf_test *ts, struct pf_param *param)
 {
@@ -512,7 +534,7 @@ pf_update(struct pf_test *ts, struct pf_param *param)
 	rc = objects_close();
 
 	iter_param.ip_hdl = ts_ctx.tsc_coh;
-	iter_param.ip_flags = 0;
+	iter_param.ip_flags = VOS_IT_RECX_VISIBLE;
 	iter_param.ip_ih = DAOS_HDL_INVAL;
 	iter_param.ip_epr.epr_hi = crt_hlc_get();
 	iter_param.ip_epr.epr_lo = 0;
@@ -534,22 +556,10 @@ pf_update(struct pf_test *ts, struct pf_param *param)
 			break;
 		}
 
-		printf(" OBJECT:\n");
-		printf("  calls:  %10d\n", counts.obj[i].calls);
-		printf("  skips:  %10d\n", counts.obj[i].skips);
-		printf("  aborts: %10d\n", counts.obj[i].aborts);
-		printf(" DKEY:\n");
-		printf("  calls:  %10d\n", counts.dkey[i].calls);
-		printf("  skips:  %10d\n", counts.dkey[i].skips);
-		printf("  aborts: %10d\n", counts.dkey[i].aborts);
-		printf(" AKEY:\n");
-		printf("  calls:  %10d\n", counts.akey[i].calls);
-		printf("  skips:  %10d\n", counts.akey[i].skips);
-		printf("  aborts: %10d\n", counts.akey[i].aborts);
-		printf(" VALUE:\n");
-		printf("  calls:  %10d\n", counts.value[i].calls);
-		printf("  skips:  %10d\n", counts.value[i].skips);
-		printf("  aborts: %10d\n", counts.value[i].aborts);
+		PRINT_TYPE(OBJECT, obj, i);
+		PRINT_TYPE(DKEY, dkey, i);
+		PRINT_TYPE(AKEY, akey, i);
+		PRINT_TYPE(VALUE, value, i);
 	}
 
 	return rc;

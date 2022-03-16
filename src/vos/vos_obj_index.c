@@ -428,6 +428,8 @@ oi_iter_nested_tree_fetch(struct vos_iterator *iter, vos_iter_type_t type,
 	info->ii_oid = obj->vo_id;
 	info->ii_punched = oiter->oit_ilog_info.ii_prior_punch;
 	info->ii_hdl = vos_cont2hdl(oiter->oit_cont);
+	info->ii_filter_cb = iter->it_filter_cb;
+	info->ii_filter_arg = iter->it_filter_arg;
 
 	return 0;
 }
@@ -496,7 +498,7 @@ exit:
  * to the object matching the condition.
  */
 static int
-oi_iter_match_probe(struct vos_iterator *iter, daos_anchor_t *anchor)
+oi_iter_match_probe(struct vos_iterator *iter, daos_anchor_t *anchor, uint32_t flags)
 {
 	uint64_t		 start_seq;
 	struct vos_oi_iter	*oiter	= iter2oiter(iter);
@@ -518,7 +520,7 @@ oi_iter_match_probe(struct vos_iterator *iter, daos_anchor_t *anchor)
 		D_ASSERT(iov.iov_len == sizeof(struct vos_obj_df));
 		obj = (struct vos_obj_df *)iov.iov_buf;
 
-		if (iter->it_filter_cb != NULL) {
+		if (iter->it_filter_cb != NULL && (flags & VOS_ITER_PROBE_AGAIN) == 0) {
 			desc.id_type = VOS_ITER_OBJ;
 			desc.id_oid = obj->vo_id;
 			acts = 0;
@@ -527,16 +529,13 @@ oi_iter_match_probe(struct vos_iterator *iter, daos_anchor_t *anchor)
 						&acts);
 			if (rc != 0)
 				goto failed;
-			if (acts & VOS_ITER_CB_EXIT)
-				return VOS_ITER_CB_EXIT;
 			if (start_seq != vos_sched_seq())
 				return acts | VOS_ITER_CB_YIELD;
-			if (acts != 0) {
-				if (acts & VOS_ITER_CB_SKIP)
-					goto next;
-				D_ASSERTF(0, "Invalid acts returned from iterator filter %x\n",
-					  acts);
-			}
+			if (acts & (VOS_ITER_CB_EXIT | VOS_ITER_CB_ABORT | VOS_ITER_CB_RESTART |
+				    VOS_ITER_CB_DELETE))
+				return acts;
+			if (acts & VOS_ITER_CB_SKIP)
+				goto next;
 		}
 
 		rc = oi_iter_ilog_check(obj, oiter, NULL, true);
@@ -547,6 +546,7 @@ oi_iter_match_probe(struct vos_iterator *iter, daos_anchor_t *anchor)
 			goto failed;
 		}
 next:
+		flags = 0;
 		rc = dbtree_iter_next(oiter->oit_hdl);
 		if (rc != 0) {
 			str = "next";
@@ -564,7 +564,7 @@ next:
 }
 
 static int
-oi_iter_probe(struct vos_iterator *iter, daos_anchor_t *anchor, bool next)
+oi_iter_probe(struct vos_iterator *iter, daos_anchor_t *anchor, uint32_t flags)
 {
 	struct vos_oi_iter	*oiter = iter2oiter(iter);
 	dbtree_probe_opc_t	 next_opc;
@@ -573,7 +573,7 @@ oi_iter_probe(struct vos_iterator *iter, daos_anchor_t *anchor, bool next)
 
 	D_ASSERT(iter->it_type == VOS_ITER_OBJ);
 
-	next_opc = next ? BTR_PROBE_GT : BTR_PROBE_GE;
+	next_opc = (flags & VOS_ITER_PROBE_NEXT) ? BTR_PROBE_GT : BTR_PROBE_GE;
 	opc = vos_anchor_is_zero(anchor) ? BTR_PROBE_FIRST : next_opc;
 	rc = dbtree_iter_probe(oiter->oit_hdl, opc, vos_iter_intent(iter), NULL,
 			       anchor);
@@ -583,7 +583,7 @@ oi_iter_probe(struct vos_iterator *iter, daos_anchor_t *anchor, bool next)
 	/* NB: these probe cannot guarantee the returned entry is within
 	 * the condition epoch range.
 	 */
-	rc = oi_iter_match_probe(iter, anchor);
+	rc = oi_iter_match_probe(iter, anchor, flags);
  out:
 	return rc;
 }
@@ -599,7 +599,7 @@ oi_iter_next(struct vos_iterator *iter, daos_anchor_t *anchor)
 	if (rc)
 		D_GOTO(out, rc);
 
-	rc = oi_iter_match_probe(iter, anchor);
+	rc = oi_iter_match_probe(iter, anchor, 0);
  out:
 	return rc;
 }

@@ -921,14 +921,14 @@ vos_iter_probe(daos_handle_t ih, daos_anchor_t *anchor);
  * \param pos	[IN,OUT]	Optional, position cursor to move to. May
  *				be modified if entries are skipped during
  *				probe.
- * \param next	[IN]		Probe entry after anchor if true
+ * \param flags	[IN]		Probe flags (See VOS_ITER_PROBE*)
  *
  * \return		zero if there is an entry at/after @anchor
  *			-DER_NONEXIST if no more entry
  *			negative value if error
  */
 int
-vos_iter_probe_ex(daos_handle_t ih, daos_anchor_t *anchor, bool next);
+vos_iter_probe_ex(daos_handle_t ih, daos_anchor_t *anchor, uint32_t flags);
 
 /**
  * Move forward the iterator cursor.

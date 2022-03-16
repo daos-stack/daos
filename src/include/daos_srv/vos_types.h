@@ -344,10 +344,15 @@ typedef struct {
 	vos_iter_type_t		 id_type;
 } vos_iter_desc_t;
 
+/** Probe flags for vos_iter_probe_ex */
+enum {
+	/** Indicate that we should skip the current entry */
+	VOS_ITER_PROBE_NEXT = (1 << 0),
+	/** Indicate that we've already invoked probe for this entry */
+	VOS_ITER_PROBE_AGAIN = (1 << 1),
+};
 /**
  * Iteration object/key filter callback
- *
- * Supports only VOS_ITER_CB_SKIP or VOS_ITER_CB_EXIT
  */
 typedef int (*vos_iter_filter_cb_t)(daos_handle_t ih, vos_iter_desc_t *desc,
 				    void *cb_arg, unsigned int *acts);
@@ -487,6 +492,8 @@ typedef int (*vos_iter_cb_t)(daos_handle_t ih, vos_iter_entry_t *entry,
  * Actions performed in iteration callback
  */
 enum {
+	/** No action */
+	VOS_ITER_CB_NONE	= 0,
 	/** Delete entry */
 	VOS_ITER_CB_DELETE	= (1UL << 0),
 	/** Skip entry, don't iterate into next level for current entry */

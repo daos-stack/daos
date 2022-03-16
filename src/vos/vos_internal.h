@@ -793,20 +793,6 @@ enum vos_iter_state {
 	VOS_ITS_END,
 };
 
-/**
- * operation code for VOS iterator.
- */
-enum vos_iter_opc {
-	IT_OPC_NOOP,
-	IT_OPC_FIRST,
-	IT_OPC_LAST,
-	IT_OPC_PROBE,
-	IT_OPC_NEXT,
-};
-
-D_CASSERT((int)VOS_ITER_CB_ABORT > (int)IT_OPC_NEXT);
-D_CASSERT((int)VOS_ITER_CB_YIELD > (int)IT_OPC_NEXT);
-
 struct vos_iter_ops;
 
 /** the common part of vos iterators */
@@ -856,6 +842,9 @@ struct vos_iter_info {
 	daos_epoch_range_t	 ii_epr;
 	/** highest epoch where parent obj/key was punched */
 	struct vos_punch_record	 ii_punched;
+	/** Filter callback */
+	vos_iter_filter_cb_t	 ii_filter_cb;
+	void *			 ii_filter_arg;
 	/** epoch logic expression for the iterator. */
 	vos_it_epc_expr_t	 ii_epc_expr;
 	/** iterator flags */
@@ -888,7 +877,7 @@ struct vos_iter_ops {
 	int	(*iop_finish)(struct vos_iterator *iter);
 	/** Set the iterating cursor to the provided @anchor */
 	int	(*iop_probe)(struct vos_iterator *iter,
-			     daos_anchor_t *anchor, bool next);
+			     daos_anchor_t *anchor, uint32_t flags);
 	/** move forward the iterating cursor */
 	int	(*iop_next)(struct vos_iterator *iter, daos_anchor_t *anchor);
 	/** fetch the record that the cursor points to */
