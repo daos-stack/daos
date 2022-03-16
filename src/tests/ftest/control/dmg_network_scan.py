@@ -124,8 +124,7 @@ class DmgNetworkScanTest(TestWithServers):
         """Set up each test case."""
         super().setUp()
 
-        # Run the dmg command locally, unset config to run locally
-        self.hostlist_servers = socket.gethostname().split(".")[0].split(",")
+        # create dmg command obj
         self.access_points = self.hostlist_servers[:1]
         self.start_servers()
         self.dmg = self.get_dmg_command()
