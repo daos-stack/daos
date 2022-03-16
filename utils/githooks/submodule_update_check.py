@@ -6,14 +6,10 @@ import sys
 modified_re = re.compile(r'^(?:M|A)(\s+)(?P<name>.*)')
 
 def rebasing():
-    """Detemrines if the current operation is a rebase"""
+    """Determines if the current operation is a rebase"""
     with subprocess.Popen(["git", "branch"],
                                stdout=subprocess.PIPE,
                                stderr=subprocess.PIPE) as process:
-
-        if process.wait():
-            print("prepare-commit-hook error running git: %s" % process.communicate()[1])
-            sys.exit(-1)
 
         return process.communicate()[0].decode().split('\n', maxsplit=1)[0].startswith("* (no branch, rebasing")
 

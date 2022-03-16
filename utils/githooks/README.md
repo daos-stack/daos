@@ -11,8 +11,8 @@ To use the pre-commit hook here, do the following locally
 
 ```
 for d in utils/githooks/*.d; do
-    h=${d%.d};
-    h=${h##*/}; echo $h; done
+    h=${d%.d}
+    h=${h##*/}
     ln -s ../../utils/githooks/$h .git/hooks/$h
 done
 ```
