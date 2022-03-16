@@ -1365,6 +1365,7 @@ dfs_cont_create_int(daos_handle_t poh, uuid_t *cuuid, bool uuid_is_set, uuid_t i
 	char			str[37];
 	struct daos_prop_co_roots roots;
 	int			rc;
+	struct daos_prop_entry  *dpe;
 
 	if (cuuid == NULL)
 		return EINVAL;
@@ -1412,7 +1413,15 @@ dfs_cont_create_int(daos_handle_t poh, uuid_t *cuuid, bool uuid_is_set, uuid_t i
 	}
 
 	/** check if RF factor is set on property */
-	rf_factor = daos_cont_prop2redunfac(prop);
+	dpe = daos_prop_entry_get(prop, DAOS_PROP_CO_REDUN_FAC);
+	if (!dpe) {
+		rc = dc_pool_get_redunc(poh);
+		if (rc < 0)
+			D_GOTO(err_prop, rc = daos_der2errno(rc));
+		rf_factor = rc;
+	} else {
+		rf_factor = dpe->dpe_val;
+	}
 
 	/* select oclass and generate SB OID */
 	roots.cr_oids[0].lo = RESERVED_LO;

@@ -105,6 +105,7 @@ const (
 	ClientConnectionClosed
 	ClientFormatRunningSystem
 	ClientRpcTimeout
+	ClientConfigVMDImbalance
 )
 
 // server fault codes
@@ -125,6 +126,7 @@ const (
 	ServerConfigInvalidNetDevClass
 	ServerVfioDisabled
 	ServerPoolNoLabel
+	ServerIncompatibleComponents
 )
 
 // server config fault codes
