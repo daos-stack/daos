@@ -27,6 +27,8 @@ import (
 	"unsafe"
 
 	"github.com/pkg/errors"
+
+	"github.com/daos-stack/daos/src/control/logging"
 )
 
 // Rc2err returns an failure if rc != NVM_SUCCESS.
@@ -45,7 +47,7 @@ type (
 		// GetModules discovers persistent memory modules.
 		GetModules() ([]DeviceDiscovery, error)
 		// GetRegions discovers persistent memory regions.
-		GetRegions() ([]PMemRegion, error)
+		GetRegions(logging.Logger) ([]PMemRegion, error)
 		// GetFirmwareInfo retrieves firmware information from persistent memory modules.
 		GetFirmwareInfo(uid DeviceUID) (DeviceFirmwareInfo, error)
 		// UpdateFirmware updates persistent memory module firmware.
@@ -108,7 +110,7 @@ func getPMemRegions(regions *C.struct_region, count *C.NVM_UINT8) C.int {
 	return C.nvm_get_regions(regions, count)
 }
 
-func getRegions(getNum getNumberOfRegionsFn, get getRegionsFn) (regions []PMemRegion, err error) {
+func getRegions(log logging.Logger, getNum getNumberOfRegionsFn, get getRegionsFn) (regions []PMemRegion, err error) {
 	var count C.NVM_UINT8
 	if err = Rc2err("get_number_of_regions", getNum(&count)); err != nil {
 		return
@@ -122,6 +124,10 @@ func getRegions(getNum getNumberOfRegionsFn, get getRegionsFn) (regions []PMemRe
 	if err = Rc2err("get_regions", get(&pmemRegions[0], &count)); err != nil {
 		return
 	}
+	for idx, pmr := range pmemRegions {
+		log.Debugf("region %d free capacity: %d", idx, uint64(pmr.free_capacity))
+		log.Debugf("region %d capacity: %d", idx, uint64(pmr.capacity))
+	}
 
 	// Cast struct array to slice of go equivalent structs.
 	regions = (*[1 << 30]PMemRegion)(unsafe.Pointer(&pmemRegions[0]))[:count:count]
@@ -134,8 +140,8 @@ func getRegions(getNum getNumberOfRegionsFn, get getRegionsFn) (regions []PMemRe
 
 // GetRegions queries number of PMem regions and retrieves region structs for each before
 // converting to Go PMemRegion structs.
-func (n *NvmMgmt) GetRegions() (regions []PMemRegion, err error) {
-	return getRegions(getNumberOfPMemRegions, getPMemRegions)
+func (n *NvmMgmt) GetRegions(log logging.Logger) (regions []PMemRegion, err error) {
+	return getRegions(log, getNumberOfPMemRegions, getPMemRegions)
 }
 
 // GetFirmwareInfo fetches the firmware revision and other information from the device

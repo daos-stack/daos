@@ -36,6 +36,7 @@ import (
 	"github.com/pkg/errors"
 
 	"github.com/daos-stack/daos/src/control/common"
+	"github.com/daos-stack/daos/src/control/logging"
 )
 
 func testGetModules(t *testing.T) {
@@ -133,19 +134,22 @@ func testGetRegions(t *testing.T) {
 		"get regions succeeds": {
 			getNumRet: 1,
 			expRegions: []PMemRegion{
-				{Free_capacity: 1111, Socket_id: 1, Dimm_count: 1},
+				{Capacity: 2222, Free_capacity: 1111, Socket_id: 1, Dimm_count: 1},
 			},
 		},
 		"get regions succeeds; multiple": {
 			getNumRet: 3,
 			expRegions: []PMemRegion{
-				{Free_capacity: 1111, Socket_id: 1, Dimm_count: 1},
-				{Free_capacity: 2222, Socket_id: 0, Dimm_count: 2},
-				{Free_capacity: 3333, Socket_id: 1, Dimm_count: 3},
+				{Capacity: 2222, Free_capacity: 1111, Socket_id: 1, Dimm_count: 1},
+				{Capacity: 4444, Free_capacity: 2222, Socket_id: 0, Dimm_count: 2},
+				{Capacity: 6666, Free_capacity: 3333, Socket_id: 1, Dimm_count: 3},
 			},
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(name)
+			defer common.ShowBufferOnFailure(t, buf)
+
 			mockGetNum := func(out *C.NVM_UINT8) C.int {
 				*out = tc.getNumRet
 				return tc.getNumRC
@@ -166,6 +170,9 @@ func testGetRegions(t *testing.T) {
 					// - update struct field value
 					(*(*C.struct_region)(unsafe.Pointer(
 						uintptr(unsafe.Pointer(regions)) + (uintptr(i) * size),
+					))).capacity = C.NVM_UINT64((i + 1) * 2222)
+					(*(*C.struct_region)(unsafe.Pointer(
+						uintptr(unsafe.Pointer(regions)) + (uintptr(i) * size),
 					))).free_capacity = C.NVM_UINT64((i + 1) * 1111)
 					(*(*C.struct_region)(unsafe.Pointer(
 						uintptr(unsafe.Pointer(regions)) + (uintptr(i) * size),
@@ -177,7 +184,7 @@ func testGetRegions(t *testing.T) {
 				return 0
 			}
 
-			regions, err := getRegions(mockGetNum, mockGet)
+			regions, err := getRegions(log, mockGetNum, mockGet)
 			common.CmpErr(t, tc.expErr, err)
 			if tc.expErr != nil {
 				return

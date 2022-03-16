@@ -315,7 +315,7 @@ func (cr *cmdRunner) UpdateFirmware(deviceUID string, firmwarePath string) error
 // getState establishes state of PMem by fetching region detail from ipmctl bindings and checking
 // memory mode types and free capacity.
 func (cr *cmdRunner) getState() (storage.ScmState, error) {
-	regions, err := cr.binding.GetRegions()
+	regions, err := cr.binding.GetRegions(cr.log)
 	if err != nil {
 		cr.showRegions()
 		return storage.ScmStateUnknown, errors.Wrap(err, "failed to discover PMem regions")
