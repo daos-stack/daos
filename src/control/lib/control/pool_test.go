@@ -1368,7 +1368,7 @@ func TestControl_GetMaxPoolSize(t *testing.T) {
 			ExpectedOutput: ExpectedOutput{
 				ScmBytes:  uint64(100) * uint64(humanize.GByte),
 				NvmeBytes: 0,
-				Debug:     "device not usable",
+				Debug:     "not usable",
 			},
 		},
 	} {
@@ -1399,7 +1399,7 @@ func TestControl_GetMaxPoolSize(t *testing.T) {
 			}
 			mockInvoker := NewMockInvoker(log, mockInvokerConfig)
 
-			scmBytes, nvmeBytes, err := GetMaxPoolSize(context.TODO(), mockInvoker)
+			scmBytes, nvmeBytes, err := GetMaxPoolSize(context.TODO(), log, mockInvoker)
 
 			if tc.ExpectedOutput.Error != nil {
 				common.AssertTrue(t, err != nil, "Expected error")

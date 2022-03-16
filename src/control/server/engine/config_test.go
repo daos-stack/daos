@@ -130,74 +130,50 @@ func TestConfig_HasEnvVar(t *testing.T) {
 
 func TestConfig_GetEnvVar(t *testing.T) {
 
-	type DataInput struct {
+	for name, tc := range map[string]struct {
 		environment []string
 		key         string
-	}
-
-	type ExpectedOutput struct {
-		value string
-		err   error
-	}
-
-	for name, tc := range map[string]struct {
-		input  DataInput
-		output ExpectedOutput
+		expValue    string
+		expErr      error
 	}{
 		"present": {
-			input: DataInput{
-				environment: []string{"FOO=BAR"},
-				key:         "FOO",
-			},
-			output: ExpectedOutput{
-				value: "BAR",
-			},
+			environment: []string{"FOO=BAR"},
+			key:         "FOO",
+			expValue:    "BAR",
 		},
 		"invalid prefix": {
-			input: DataInput{
-				environment: []string{"FOO=BAR"},
-				key:         "FFOO",
-			},
-			output: ExpectedOutput{
-				err: errors.New("Undefined environment variable"),
-			},
+			environment: []string{"FOO=BAR"},
+			key:         "FFOO",
+			expErr:      errors.New("Undefined environment variable"),
 		},
 		"invalid suffix": {
-			input: DataInput{
-				environment: []string{"FOO=BAR"},
-				key:         "FOOO",
-			},
-			output: ExpectedOutput{
-				err: errors.New("Undefined environment variable"),
-			},
+			environment: []string{"FOO=BAR"},
+			key:         "FOOO",
+			expErr:      errors.New("Undefined environment variable"),
 		},
 		"empty env": {
-			input: DataInput{
-				key: "FOO",
-			},
-			output: ExpectedOutput{
-				err: errors.New("Undefined environment variable"),
-			},
+			key:    "FOO",
+			expErr: errors.New("Undefined environment variable"),
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
-			cfg := MockConfig().WithEnvVars(tc.input.environment...)
+			cfg := MockConfig().WithEnvVars(tc.environment...)
 
-			value, err := cfg.GetEnvVar(tc.input.key)
+			value, err := cfg.GetEnvVar(tc.key)
 
 			if err != nil {
-				common.AssertTrue(t, tc.output.err != nil,
+				common.AssertTrue(t, tc.expErr != nil,
 					fmt.Sprintf("Unexpected error %q", err))
-				common.CmpErr(t, tc.output.err, err)
+				common.CmpErr(t, tc.expErr, err)
 				common.AssertEqual(t, value, "",
 					fmt.Sprintf("Unexpected value %q for key %q",
-						tc.input.key, value))
+						tc.key, value))
 				return
 			}
 
-			common.AssertTrue(t, tc.output.err == nil,
-				fmt.Sprintf("Expected error %q", tc.output.err))
-			common.AssertEqual(t, value, tc.output.value, "Invalid value returned")
+			common.AssertTrue(t, tc.expErr == nil,
+				fmt.Sprintf("Expected error %q", tc.expErr))
+			common.AssertEqual(t, value, tc.expValue, "Invalid value returned")
 		})
 	}
 }

@@ -1171,7 +1171,7 @@ func TestDmg_PoolCreateAllCmd(t *testing.T) {
 				},
 			},
 			ExpectedOutput: ExpectedOutput{
-				Error: errors.New("Not enough SMC storage available with ratio 1%"),
+				Error: errors.New("Not enough SCM storage available with ratio 1%"),
 			},
 		},
 	} {

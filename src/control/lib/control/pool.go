@@ -24,6 +24,7 @@ import (
 	"github.com/daos-stack/daos/src/control/common/proto/convert"
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	"github.com/daos-stack/daos/src/control/drpc"
+	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/security/auth"
 	"github.com/daos-stack/daos/src/control/system"
 )
@@ -965,7 +966,7 @@ func ListPools(ctx context.Context, rpcClient UnaryInvoker, req *ListPoolsReq) (
 // Return the maximal SCM and NVMe size of a pool which could be created with all the storage nodes.
 //
 // TODO (DAOS-9557) This function should takes an extra parameter to filter the engine ranks to use.
-func GetMaxPoolSize(ctx context.Context, rpcClient UnaryInvoker) (uint64, uint64, error) {
+func GetMaxPoolSize(ctx context.Context, log logging.Logger, rpcClient UnaryInvoker) (uint64, uint64, error) {
 	storageScanReq := &StorageScanReq{Usage: true}
 	resp, err := StorageScan(ctx, rpcClient, storageScanReq)
 	if err != nil {
@@ -1008,10 +1009,10 @@ func GetMaxPoolSize(ctx context.Context, rpcClient UnaryInvoker) (uint64, uint64
 		for _, nvmeController := range hostStorage.NvmeDevices {
 			for _, smdDevice := range nvmeController.SmdDevices {
 				if !smdDevice.NvmeState.IsNormal() {
-					msg := fmt.Sprintf("instance %d: smd %s: ctrlr %s",
-						smdDevice.Rank, smdDevice.UUID, smdDevice.TrAddr)
-					rpcClient.Debugf("%s: device not usable (device state: %s)",
-						msg, smdDevice.NvmeState.String())
+					log.Infof("WARNING: SMD device %s (instance %d, ctrlr %s) "+
+						"not usable (device state %q)",
+						smdDevice.UUID, smdDevice.Rank, smdDevice.TrAddr,
+						smdDevice.NvmeState.String())
 					continue
 				}
 

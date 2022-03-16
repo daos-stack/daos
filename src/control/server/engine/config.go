@@ -269,7 +269,7 @@ func (c *Config) HasEnvVar(name string) bool {
 	return false
 }
 
-// GetLineEnv return the value of the given environment variable to be supplied when starting an I/O
+// GetEnvVar returns the value of the given environment variable to be supplied when starting an I/O
 // engine instance.
 func (c *Config) GetEnvVar(name string) (string, error) {
 	env, err := c.CmdLineEnv()
@@ -280,8 +280,9 @@ func (c *Config) GetEnvVar(name string) (string, error) {
 	env = mergeEnvVars(cleanEnvVars(os.Environ(), c.EnvPassThrough), env)
 
 	for _, keyPair := range c.EnvVars {
-		if strings.HasPrefix(keyPair, name+"=") {
-			return keyPair[len(name+"="):], nil
+		keyValue := strings.SplitN(keyPair, "=", 2)
+		if keyValue[0] == name {
+			return keyValue[1], nil
 		}
 	}
 

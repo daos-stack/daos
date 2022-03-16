@@ -6,11 +6,6 @@
 
 package server
 
-/*
-#include "daos_srv/control.h"
-*/
-import "C"
-
 import (
 	"fmt"
 	"os/user"
@@ -23,6 +18,7 @@ import (
 	"github.com/daos-stack/daos/src/control/common/proto"
 	"github.com/daos-stack/daos/src/control/common/proto/convert"
 	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
+	"github.com/daos-stack/daos/src/control/drpc"
 	"github.com/daos-stack/daos/src/control/server/engine"
 	"github.com/daos-stack/daos/src/control/server/storage"
 )
@@ -33,11 +29,11 @@ const (
 	// Storage size reserved for storing DAOS metadata stored on SCM device.
 	//
 	// NOTE This storage size value is larger than the minimal size observed (i.e. 36864B),
-	// because some metada files such as the control plane RDB (i.e. daos_system.db file) does
+	// because some metadata files such as the control plane RDB (i.e. daos_system.db file) does
 	// not have fixed size.  Indeed this last one will eventually grow along the life of the
-	// DAOS file system.  However, with 16 MiB (i.e. 16777216 B) of storage we should never have
-	// out of space issue.  The size of the memory mapped VOS metadata file (i.e. rdb_pool file)
-	// is not included.  This last one is configurable by the end user, and thus should be
+	// DAOS file system.  However, with 16 MiB (i.e. 16777216 Bytes) of storage we should never
+	// have out of space issue.  The size of the memory mapped VOS metadata file (i.e. rdb_pool
+	// file) is not included.  This last one is configurable by the end user, and thus should be
 	// defined at runtime.
 	mdDaosScmBytes uint64 = 16 * humanize.MiByte
 )
@@ -174,8 +170,10 @@ func (c *ControlService) adjustNvmeSize(resp *ctlpb.ScanNvmeResp) {
 	for _, ctl := range resp.GetCtrlrs() {
 		for _, dev := range ctl.GetSmdDevices() {
 			if dev.GetDevState() != "NORMAL" {
-				c.log.Infof("Skipping unusable device %s (%s): state=%s",
+				c.log.Infof("WARNING: Adjusting available size of unusable SMD "+
+					"device %s (ctlr %s) to O Bytes: device state %q",
 					dev.GetUuid(), ctl.GetPciAddr(), dev.GetDevState())
+				dev.AvailBytes = 0
 				continue
 			}
 			if dev.GetClusterSize() == 0 || len(dev.GetTgtIds()) == 0 {
@@ -186,9 +184,10 @@ func (c *ControlService) adjustNvmeSize(resp *ctlpb.ScanNvmeResp) {
 
 			targetCount := uint64(len(dev.GetTgtIds()))
 			unalignedBytes := dev.GetAvailBytes() % (targetCount * dev.GetClusterSize())
-			c.log.Infof("removing %s (%d B) storage from SMD device %s (%s)",
-				humanize.Bytes(unalignedBytes), unalignedBytes,
-				dev.GetUuid(), ctl.GetPciAddr())
+			c.log.Debugf("Adjusting available size of SMD device %s (ctlr %s): "+
+				"excluding %s (%d Bytes) of unaligned storage",
+				dev.GetUuid(), ctl.GetPciAddr(),
+				humanize.Bytes(unalignedBytes), unalignedBytes)
 			dev.AvailBytes -= unalignedBytes
 		}
 	}
@@ -205,6 +204,7 @@ loop:
 			}
 
 			engineCfg = c.srvCfg.Engines[index]
+			// We break the two nested loops thanks to the labelled break
 			break loop
 		}
 	}
@@ -213,11 +213,11 @@ loop:
 		return 0, errors.Errorf("unknown SCM mount point %s", mountPoint)
 	}
 
-	mdCapStr, err := engineCfg.GetEnvVar(C.DAOS_MD_CAP_ENV)
+	mdCapStr, err := engineCfg.GetEnvVar(drpc.DaosMdCapEnv)
 	if err != nil {
-		c.log.Debugf("using default metadata capacity with SCM %s: %s (%d B)", mountPoint,
-			humanize.Bytes(C.DEFAULT_DAOS_MD_CAP_SIZE), C.DEFAULT_DAOS_MD_CAP_SIZE)
-		return uint64(C.DEFAULT_DAOS_MD_CAP_SIZE), nil
+		c.log.Debugf("using default metadata capacity with SCM %s: %s (%d Bytes)", mountPoint,
+			humanize.Bytes(drpc.DefaultDaosMdCapSize), drpc.DefaultDaosMdCapSize)
+		return uint64(drpc.DefaultDaosMdCapSize), nil
 	}
 
 	mdCap, err := strconv.ParseUint(mdCapStr, 10, 64)
@@ -226,7 +226,7 @@ loop:
 			mdCapStr)
 	}
 	mdCap = mdCap << 20
-	c.log.Debugf("using custom metadata capacity with SCM %s: %s (%d B)",
+	c.log.Debugf("using custom metadata capacity with SCM %s: %s (%d Bytes)",
 		mountPoint, humanize.Bytes(mdCap), mdCap)
 
 	return mdCap, nil
@@ -244,13 +244,18 @@ func (c *ControlService) adjustScmSize(resp *ctlpb.ScanScmResp) {
 		}
 		mdBytes += mdCapBytes
 
-		if mdBytes < scmNamespace.Mount.GetAvailBytes() {
-			c.log.Infof("Removing %s (%d B) storage from SCM %s",
-				humanize.Bytes(mdBytes), mdBytes, scmNamespace.Mount.GetPath())
+		availBytes := scmNamespace.Mount.GetAvailBytes()
+		if mdBytes <= availBytes {
+			c.log.Debugf("Adjusting available size of SCM device %q: "+
+				"excluding %s (%d Bytes) of storage reserved for DAOS metadata",
+				scmNamespace.Mount.GetPath(), humanize.Bytes(mdBytes), mdBytes)
 			scmNamespace.Mount.AvailBytes -= mdBytes
 		} else {
-			c.log.Errorf("No more storage space within SCM %s",
-				scmNamespace.Mount.GetPath())
+			c.log.Infof("WARNING: Adjusting available size to 0 Bytes of SCM device %q: "+
+				"old available size %s (%d Bytes), metadata size %s (%d Bytes)",
+				scmNamespace.Mount.GetPath(),
+				humanize.Bytes(availBytes), availBytes,
+				humanize.Bytes(mdBytes), mdBytes)
 			scmNamespace.Mount.AvailBytes = 0
 		}
 	}

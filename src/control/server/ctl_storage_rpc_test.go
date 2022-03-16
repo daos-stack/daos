@@ -2263,9 +2263,9 @@ func TestServer_adjustNvmeSize(t *testing.T) {
 			output: ExpectedOutput{
 				availableBytes: []uint64{
 					8 * humanize.GiByte,
-					10 * humanize.GiByte,
+					0,
 				},
-				message: "Skipping unusable device",
+				message: "WARNING: Adjusting available size of unusable SMD device",
 			},
 		},
 		"missing targets": {
@@ -2619,7 +2619,7 @@ func TestServer_adjustScmSize(t *testing.T) {
 			},
 			output: ExpectedOutput{
 				availableBytes: []uint64{0},
-				message:        "No more storage space within SCM",
+				message:        "WARNING: Adjusting available size to 0 Bytes of SCM device",
 			},
 		},
 	} {

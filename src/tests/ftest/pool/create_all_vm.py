@@ -10,32 +10,11 @@ from apricot import TestWithServers
 from command_utils_base import CommandFailure
 
 
-class PoolCreateAllVmTests(TestWithServers):
+class PoolCreateAllVmTests(PoolCreateAllBaseTests):
     """Tests pool creation with percentage storage on functional platform.
 
     :avocado: recursive
     """
-
-    def __init__(self, *args, **kwargs):
-        """Initialize a PoolCreateAllVmTest object."""
-        super().__init__(*args, **kwargs)
-
-        self.epsilon_bytes = 1 << 20 # 1MiB
-        # Maximal size of DAOS metadata stored for one pool on a SCM device:
-        #   - 1 GiB for the control plane RDB
-        #   - 16 MiB for the other metadata
-        # More details could be found with the definition of the constant mdDaosScmBytes in the file
-        # src/control/server/ctl_storage_rpc.go
-        self.max_scm_metadata_bytes = 1 << 30 + 1 << 24
-
-    def setUp(self):
-        """Set up each test case."""
-        super().setUp()
-
-        self.ranks_size = len(self.hostlist_servers)
-        self.delta_bytes = self.ranks_size * self.epsilon_bytes
-
-        self.scm_avail_bytes = self.get_pool_available_bytes()
 
     def get_pool_available_bytes(self):
         """Return the available size of SCM storage."""
@@ -76,12 +55,7 @@ class PoolCreateAllVmTests(TestWithServers):
         """
         self.log.info("Test  basic pool creation with full storage")
 
-        self.log.info("Creating a pool with 100% of the available storage")
-        self.add_pool_qty(1, namespace="/run/pool/*", create=False)
-        self.pool[0].size.update("100%")
-        self.pool[0].create()
-        self.assertEqual(self.pool[0].dmg.result.exit_status, 0,
-                "Pool could not be created")
+        self.create_one_pool()
 
         self.log.info("Checking size of the pool")
         self.pool[0].get_info()
@@ -113,12 +87,8 @@ class PoolCreateAllVmTests(TestWithServers):
         self.log.info("Test pool creation and destruction")
 
         for index in range(10):
-            self.log.info("Creating pool %d with 100%% of the available storage", index)
-            self.add_pool_qty(1, namespace="/run/pool/*", create=False)
-            self.pool[0].size.update("100%")
-            self.pool[0].create()
-            self.assertEqual(self.pool[0].dmg.result.exit_status, 0,
-                    "Pool {} could not be created".format(index))
+            self.log.info("Creating pool %d", index)
+            self.create_one_pool()
 
             self.log.info("Checking size of pool %d", index)
             self.pool[0].get_info()
@@ -129,10 +99,7 @@ class PoolCreateAllVmTests(TestWithServers):
             self.assertEqual(0, tier_bytes[1],
                     "Invalid SMD size: want=0, got={}".format(tier_bytes[1]))
 
-            self.log.info("Destroying pool %d", index)
-            self.pool[0].destroy()
-            self.assertEqual(self.pool[0].dmg.result.exit_status, 0,
-                    "Pool {} could not be destroyed".format(index))
+            self.destroy_one_pool(index)
 
             self.log.info("Checking size of available storage at iteration %d", index)
             scm_avail_bytes = self.get_pool_available_bytes()
@@ -198,15 +165,7 @@ class PoolCreateAllVmTests(TestWithServers):
         """
         self.log.info("Test pool creation of two pools with 50% and 100% of the available storage")
 
-        self.add_pool_qty(2, namespace="/run/pool/*", create=False)
-        self.pool[0].size.update("50%")
-        self.pool[1].size.update("100%")
-
-        self.log.info("Creating a first pool with 50% of the available storage")
-        self.pool[0].create()
-        self.pool[0].get_info()
-        self.assertEqual(self.pool[0].dmg.result.exit_status, 0,
-                "First pool 0 could not be created")
+        self.create_first_of_two_pools()
 
         self.log.info("Checking size of the first pool")
         self.pool[0].get_info()
@@ -222,11 +181,7 @@ class PoolCreateAllVmTests(TestWithServers):
 
         self.scm_avail_bytes = self.get_pool_available_bytes()
 
-        self.log.info("Creating a second pool with 100% of the available storage")
-        self.pool[1].create()
-        self.pool[1].get_info()
-        self.assertEqual(self.pool[1].dmg.result.exit_status, 0,
-                "Second pool could not be created")
+        self.create_second_of_two_pools()
 
         self.pool[1].get_info()
         tier_bytes.append(self.pool[1].info.pi_space.ps_space.s_total)
@@ -250,4 +205,4 @@ class PoolCreateAllVmTests(TestWithServers):
 
         self.log.info("Checking size of available storage after the creation of the second pool")
         self.assertLessEqual(self.scm_avail_bytes, self.delta_bytes,
-                "Invalid SCM size: want=0, got={}".format(self.scm_avail_bytes))
+                "Invalid SCM size: want=0, got={}, delta={}".format(self.scm_avail_bytes, self.delta_bytes))

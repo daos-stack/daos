@@ -10,7 +10,7 @@ from apricot import TestWithServers
 from command_utils_base import CommandFailure
 
 
-class PoolCreateAllHwTests(TestWithServers):
+class PoolCreateAllHwTests(PoolCreateAllBaseTests):
     """Tests pool creation with percentage storage on HW platform.
 
     :avocado: recursive
@@ -19,14 +19,6 @@ class PoolCreateAllHwTests(TestWithServers):
     def __init__(self, *args, **kwargs):
         """Initialize a PoolCreateAllHwTest object."""
         super().__init__(*args, **kwargs)
-
-        self.epsilon_bytes = 1 << 20 # 1MiB
-        # Maximal size of DAOS metadata stored for one pool on a SCM device:
-        #   - 1 GiB for the control plane RDB
-        #   - 16 MiB for the other metadata
-        # More details could be found with the definition of the constant mdDaosScmBytes in the file
-        # src/control/server/ctl_storage_rpc.go
-        self.max_scm_metadata_bytes = 1 << 30 + 1 << 24
 
         # blobstore cluster size in bytes
         self.smd_cluster_bytes = 1 << 30
@@ -38,11 +30,6 @@ class PoolCreateAllHwTests(TestWithServers):
     def setUp(self):
         """Set up each test case."""
         super().setUp()
-
-        self.ranks_size = len(self.hostlist_servers)
-        self.delta_bytes = self.ranks_size * self.epsilon_bytes
-
-        self.scm_avail_bytes, self.smd_avail_bytes = self.get_pool_available_bytes()
 
         self.smd_device_size = self.get_smd_device_size()
 
@@ -106,18 +93,13 @@ class PoolCreateAllHwTests(TestWithServers):
             effectively used all the available storage and there is no more available storage.
 
         :avocado: tags=all,pr,daily_regression
-        :avocado: tags=hw,large
+        :avocado: tags=hw,medium
         :avocado: tags=pool,pool_create_all
         :avocado: tags=pool_create_all_one_hw
         """
         self.log.info("Test  basic pool creation with full storage")
 
-        self.log.info("Creating a pool with 100% of the available storage")
-        self.add_pool_qty(1, namespace="/run/pool/*", create=False)
-        self.pool[0].size.update("100%")
-        self.pool[0].create()
-        self.assertEqual(self.pool[0].dmg.result.exit_status, 0,
-                "Pool could not be created")
+        self.create_one_pool()
 
         self.log.info("Checking size of the pool")
         self.pool[0].get_info()
@@ -141,23 +123,19 @@ class PoolCreateAllHwTests(TestWithServers):
 
         Test Description:
             Create a pool with all the capacity of all servers. Verify that the pool created
-            effectively used all the available storage. Destroy the pool and repeat these steps 100
+            effectively used all the available storage. Destroy the pool and repeat these steps 10
             times. For each iteration, check that the size of the created pool is always the same.
 
         :avocado: tags=all,pr,daily_regression
-        :avocado: tags=hw,large
+        :avocado: tags=hw,medium
         :avocado: tags=pool,pool_create_all
         :avocado: tags=pool_create_all_recycle_hw
         """
         self.log.info("Test pool creation and destruction")
 
         for index in range(10):
-            self.log.info("Creating pool %d with 100%% of the available storage", index)
-            self.add_pool_qty(1, namespace="/run/pool/*", create=False)
-            self.pool[0].size.update("100%")
-            self.pool[0].create()
-            self.assertEqual(self.pool[0].dmg.result.exit_status, 0,
-                    "Pool {} could not be created".format(index))
+            self.log.info("Creating pool %d", index)
+            self.create_one_pool()
 
             self.log.info("Checking size of pool %d", index)
             self.pool[0].get_info()
@@ -169,10 +147,7 @@ class PoolCreateAllHwTests(TestWithServers):
                     "Invalid SMD size: want={}, got={}, delta={}".format(self.smd_avail_bytes,
                         tier_bytes[1], self.delta_bytes))
 
-            self.log.info("Destroying pool %d", index)
-            self.pool[0].destroy()
-            self.assertEqual(self.pool[0].dmg.result.exit_status, 0,
-                    "Pool {} could not be destroyed".format(index))
+            self.destroy_one_pool(index)
 
             self.log.info("Checking size of available storage at iteration %d", index)
             tier_bytes = self.get_pool_available_bytes()
@@ -249,21 +224,13 @@ class PoolCreateAllHwTests(TestWithServers):
             effectively used all the available storage and there is no more available storage.
 
         :avocado: tags=all,pr,daily_regression
-        :avocado: tags=hw,large
+        :avocado: tags=hw,medium
         :avocado: tags=pool,pool_create_all
         :avocado: tags=pool_create_all_two_hw
         """
         self.log.info("Test pool creation of two pools with 50% and 100% of the available storage")
 
-        self.add_pool_qty(2, namespace="/run/pool/*", create=False)
-        self.pool[0].size.update("50%")
-        self.pool[1].size.update("100%")
-
-        self.log.info("Creating a first pool with 50% of the available storage")
-        self.pool[0].create()
-        self.pool[0].get_info()
-        self.assertEqual(self.pool[0].dmg.result.exit_status, 0,
-                "First pool 0 could not be created")
+        self.create_first_of_two_pools()
 
         self.log.info("Checking size of the first pool")
         self.pool[0].get_info()
@@ -280,11 +247,7 @@ class PoolCreateAllHwTests(TestWithServers):
 
         self.scm_avail_bytes, self.smd_avail_bytes = self.get_pool_available_bytes()
 
-        self.log.info("Creating a second pool with 100% of the available storage")
-        self.pool[1].create()
-        self.pool[1].get_info()
-        self.assertEqual(self.pool[1].dmg.result.exit_status, 0,
-                "Second pool could not be created")
+        self.create_second_of_two_pools()
 
         self.pool[1].get_info()
         tier_bytes.append(self.pool[1].info.pi_space.ps_space.s_total)
@@ -314,6 +277,6 @@ class PoolCreateAllHwTests(TestWithServers):
 
         self.log.info("Checking size of available storage after the creation of the second pool")
         self.assertLessEqual(self.scm_avail_bytes, self.delta_bytes,
-                "Invalid SCM size: want=0, got={}".format(self.scm_avail_bytes))
+                "Invalid SCM size: want=0, got={}, delta={}".format(self.scm_avail_bytes, self.delta_bytes))
         self.assertLessEqual(self.smd_avail_bytes, self.delta_bytes,
-                "Invalid SMD size: want=0, got={}".format(self.smd_avail_bytes))
+                "Invalid SMD size: want=0, got={}, delta={}".format(self.smd_avail_bytes, self.delta_bytes))

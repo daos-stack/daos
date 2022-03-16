@@ -112,10 +112,6 @@ struct  _Ctl__BioHealthResp
    */
   uint64_t avail_bytes;
   /*
-   * blobstore cluster size in bytes
-   */
-  uint64_t cluster_size;
-  /*
    * Intel vendor SMART attributes
    */
   /*
@@ -143,6 +139,13 @@ struct  _Ctl__BioHealthResp
   uint64_t pll_lock_loss_cnt;
   uint64_t nand_bytes_written;
   uint64_t host_bytes_written;
+  /*
+   * Engine configs properties
+   */
+  /*
+   * blobstore cluster size in bytes
+   */
+  uint64_t cluster_size;
 };
 #define CTL__BIO_HEALTH_RESP__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&ctl__bio_health_resp__descriptor) \
