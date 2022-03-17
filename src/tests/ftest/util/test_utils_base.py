@@ -153,18 +153,18 @@ class TestDaosApiBase(ObjectWithParameters):
             # Determine which comparison to utilize for this check
             compare = ("==", lambda x, y: x == y, "does not match")
             if isinstance(expect, str):
-                comparisons = {
-                    "<": (lambda x, y: x < y, "is too large"),
-                    ">": (lambda x, y: x > y, "is too small"),
-                    "<=": (
-                        lambda x, y: x <= y, "is too large or does not match"),
-                    ">=": (
-                        lambda x, y: x >= y, "is too small or does not match"),
-                }
-                for key, val in list(comparisons.items()):
+                comparisons = [
+                    ["<=", (lambda x, y: x <= y, "is too large or does not match")],
+                    ["<", (lambda x, y: x < y, "is too large")],
+                    [">=", (lambda x, y: x >= y, "is too small or does not match")],
+                    [">", (lambda x, y: x > y, "is too small")],
+                ]
+                for comparison in comparisons:
                     # If the expected value is preceded by one of the known
                     # comparison keys, use the comparison and remove the key
                     # from the expected value
+                    key = comparison[0]
+                    val = comparison[1]
                     if expect[:len(key)] == key:
                         compare = (key, val[0], val[1])
                         expect = expect[len(key):]
