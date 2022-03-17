@@ -58,6 +58,7 @@ type Server struct {
 	RecreateSuperblocks bool                   `yaml:"recreate_superblocks,omitempty"`
 	FaultPath           string                 `yaml:"fault_path"`
 	TelemetryPort       int                    `yaml:"telemetry_port,omitempty"`
+	CoreDumpFilter      uint8                  `yaml:"core_dump_filter,omitempty"`
 
 	// duplicated in engine.Config
 	SystemName string              `yaml:"name"`
@@ -72,6 +73,12 @@ type Server struct {
 	Hyperthreads bool   `yaml:"hyperthreads"`
 
 	Path string `yaml:"-"` // path to config file
+}
+
+// WithCoreDumpFilter sets the core dump filter written to /proc/self/coredump_filter.
+func (cfg *Server) WithCoreDumpFilter(filter uint8) *Server {
+	cfg.CoreDumpFilter = filter
+	return cfg
 }
 
 // WithRecreateSuperblocks indicates that a missing superblock should not be treated as
@@ -289,8 +296,9 @@ func DefaultServer() *Server {
 		Hyperthreads:    false,
 		Path:            defaultConfigPath,
 		ControlLogMask:  common.ControlLogLevel(logging.LogLevelInfo),
-		EnableVMD:       false, // disabled by default
-		EnableHotplug:   false, // disabled by default
+		EnableVMD:       false,      // disabled by default
+		EnableHotplug:   false,      // disabled by default
+		CoreDumpFilter:  0b00010011, // private, shared, ELF
 	}
 }
 

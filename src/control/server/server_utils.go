@@ -11,10 +11,12 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net"
+	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
 	"sync"
+	"syscall"
 
 	"github.com/pkg/errors"
 	"google.golang.org/grpc"
@@ -87,6 +89,33 @@ func cfgGetRaftDir(cfg *config.Server) string {
 	}
 
 	return filepath.Join(cfg.Engines[0].Storage.Tiers.ScmConfigs()[0].Scm.MountPoint, "control_raft")
+}
+
+func writeCoreDumpFilter(log logging.Logger, path string, filter uint8) error {
+	// Add a workaround for a testing oddity that seems to be related to
+	// launching the server via SSH, with the result that the /proc file
+	// is owned by root and is therefore unwritable.
+	st, err := os.Stat(path)
+	if err != nil {
+		return errors.Wrapf(err, "unable to stat %s", path)
+	}
+	sys, ok := st.Sys().(*syscall.Stat_t)
+	if !ok {
+		return errors.New("os.Stat() did not return a *syscall.Stat_t")
+	}
+	if sys.Uid != uint32(syscall.Geteuid()) {
+		log.Debugf("%s is not owned by current user, skipping core dump filter", path)
+		return nil
+	}
+
+	f, err := os.OpenFile(path, os.O_WRONLY, 0644)
+	if err != nil {
+		return errors.Wrapf(err, "unable to open core dump filter file %s", path)
+	}
+	defer f.Close()
+
+	_, err = f.WriteString(fmt.Sprintf("0x%x\n", filter))
+	return err
 }
 
 func iommuDetected() bool {
