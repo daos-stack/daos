@@ -19,6 +19,7 @@ git diff -u | flake8 --diff
 
 RC=$?
 if [ $RC -ne 0 ]
+then
    exit $RC
 fi
 
