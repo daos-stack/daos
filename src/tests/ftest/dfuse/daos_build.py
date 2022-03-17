@@ -8,6 +8,7 @@
 import os
 import distro
 import general_utils
+from collections import OrderedDict
 
 from avocado import skip
 from dfuse_test_base import DfuseTestBase
@@ -77,7 +78,20 @@ class DaosBuild(DfuseTestBase):
         build_dir = os.path.join(mount_dir, 'daos')
 
         # This will apply to SCons, but not sub-commands.
-        preload_cmd = 'export LD_PRELOAD=/usr/lib64/libioil.so;export D_LOG_FILE=/tmp/daos.log'
+
+        remote_env = OrderedDict()
+
+        remote_env['LD_PRELOAD'] = '/usr/lib64/libioil.so'
+        remote_env['D_LOG_FILE'] = '/tmp/daos.log'
+        remote_env['DD_MASK'] = 'all'
+        remote_env['DD_SUBSYS'] = 'all'
+        remote_env['D_LOG_MASK'] = 'debug'
+
+        envs = []
+        for env, value in remote_env.items():
+            envs.append('export {}={}'.format(env, value))
+
+        preload_cmd = ';'.join(envs)
 
         cmds = ['sudo yum -y install daos-debuginfo',
                 'valgrind git clone https://github.com/daos-stack/daos.git {}'.format(build_dir),
