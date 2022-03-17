@@ -1,0 +1,35 @@
+name: Bandit
+
+on:
+  pull_request:
+    paths:
+      - '**/*.py'
+
+jobs:
+  banditlint:
+    runs-on: ubuntu-latest
+    name: Lint
+    steps:
+      - name: Check out source repository
+        uses: actions/checkout@v2
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+      - name: Set up Python environment
+        uses: actions/setup-python@v3
+        with:
+          python-version: "3"
+      - name: Install bandit
+        run: pip install bandit
+      - name: Python Bandit
+        run: ./ci/python_bandit_check.sh
+      - name: Show results
+        run: cat bandit.xml
+      - name: Publish bandit test results
+        if: always()
+        uses: EnricoMi/publish-unit-test-result-action@v1.31
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          files: bandit.xml
+          comment_mode: update last
+          fail_on: nothing
+          check_name: Python Bandit
