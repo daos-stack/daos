@@ -911,7 +911,7 @@ again:
 			 * sponsor can retry sometime later.
 			 */
 			D_WARN("Failed to find DTX leader for "DF_DTI", ver %d: "DF_RC"\n",
-				 DP_DTI(&dsp->dsp_xid), pool->sp_map_version, DP_RC(rc));
+			       DP_DTI(&dsp->dsp_xid), pool->sp_map_version, DP_RC(rc));
 			if (failout)
 				goto out;
 

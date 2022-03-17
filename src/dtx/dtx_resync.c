@@ -144,7 +144,7 @@ dtx_leader_get(struct ds_pool *pool, struct dtx_memberships *mbs, struct pool_ta
 	/* The first UPIN target is the leader of the DTX */
 	for (i = 0; i < mbs->dm_tgt_cnt; i++) {
 		rc = ds_pool_target_status_check(pool, mbs->dm_tgts[i].ddt_id,
-						(uint8_t)PO_COMP_ST_UPIN, p_tgt);
+						 (uint8_t)PO_COMP_ST_UPIN, p_tgt);
 		if (rc < 0)
 			D_GOTO(out, rc);
 

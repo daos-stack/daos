@@ -1285,7 +1285,7 @@ obj_shards_2_fwtgts(struct dc_object *obj, uint32_t map_ver, uint8_t *bit_map,
 		shard_idx = start_shard + i * grp_size;
 		head = tgt = req_tgts->ort_shard_tgts + i * grp_size;
 		if (req_tgts->ort_srv_disp) {
-			rc = obj_grp_leader_get(obj, shard_idx/grp_size, map_ver, bit_map);
+			rc = obj_grp_leader_get(obj, shard_idx / grp_size, map_ver, bit_map);
 			if (rc < 0) {
 				D_ERROR(DF_OID" no valid shard %u, grp size %u "
 					"grp nr %u, shards %u, reps %u, is %s: "
