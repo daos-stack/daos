@@ -1,5 +1,7 @@
 #!/usr/bin/python3
 
+"""Git hook to copy forward commit message metadata to new commits."""
+
 import os
 import sys
 import subprocess
@@ -25,6 +27,8 @@ def get_tag_kv(line):
 
 
 def main():
+    """Run the check"""
+
     input_file = sys.argv[1]
 
     def add_text():
@@ -65,7 +69,6 @@ def main():
                     del tags[tag]
                 except KeyError:
                     file_lines.pop()
-                    pass
             except NotTag:
                 pass
 
