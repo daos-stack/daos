@@ -4,11 +4,13 @@ on:
   pull_request:
     paths:
       - '**/*.py'
+      - .github/workflows/bandit.yml
+      - ci/bandit.config
 
 jobs:
   banditlint:
     runs-on: ubuntu-latest
-    name: Lint
+    name: Bandit
     steps:
       - name: Check out source repository
         uses: actions/checkout@v2
@@ -21,9 +23,7 @@ jobs:
       - name: Install bandit
         run: pip install bandit
       - name: Python Bandit
-        run: ./ci/python_bandit_check.sh
-      - name: Show results
-        run: cat bandit.xml
+        run: bandit --format xml -o bandit.xml -r . -c ci/bandit.config
       - name: Publish bandit test results
         if: always()
         uses: EnricoMi/publish-unit-test-result-action@v1.31

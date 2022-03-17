@@ -267,31 +267,6 @@ pipeline {
                         */
                     }
                 } // stage('checkpatch')
-                stage('Python Bandit check') {
-                    when {
-                      beforeAgent true
-                      expression { ! skipStage() }
-                    }
-                    agent {
-                        dockerfile {
-                            filename 'Dockerfile.code_scanning'
-                            dir 'utils/docker'
-                            label 'docker_runner'
-                            additionalBuildArgs dockerBuildArgs(add_repos: false)
-                        }
-                    }
-                    steps {
-                        pythonBanditCheck()
-                    }
-                    post {
-                        always {
-                            // Bandit will have empty results if it does not
-                            // find any issues.
-                            junit testResults: 'bandit.xml',
-                                  allowEmptyResults: true
-                        }
-                    }
-                } // stage('Python Bandit check')
             }
         }
         stage('Build') {
