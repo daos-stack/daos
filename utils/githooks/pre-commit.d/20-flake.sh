@@ -10,17 +10,14 @@ set -u
 
 if ! command -v flake8 > /dev/null 2>&1
 then
-    echo "No flake checking, install flake8 command"
+    echo "No flake checking, install flake8 command to improve pre-commit checks"
     exit 0
 fi
 
-echo checking uncommitted code.
-git diff -u | flake8 --diff
-
-RC=$?
-if [ $RC -ne 0 ]
+echo Checking uncommitted code with flake.
+if ! git diff -u | flake8 --diff
 then
-    exit $RC
+    exit ${PIPESTATUS[@]}
 fi
 
 BRANCH=$(git rev-parse --abbrev-ref HEAD > /dev/null 2>&1)
@@ -42,6 +39,7 @@ else
 	fi
     else
 	# With no 'gh' command installed then check against master.
+	echo "Install gh command to auto-detect target branch, assuming master."
 	TARGET=master
     fi
 
