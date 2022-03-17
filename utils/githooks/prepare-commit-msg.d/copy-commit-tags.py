@@ -27,7 +27,7 @@ def main():
         if ' ' in key:
             raise NotTag
         return (key, value.strip())
-    
+
     def add_text():
         output = '# ------------------------ >8 ------------------------\n'
         output += 'Skip-func-hw-test: true\n'
