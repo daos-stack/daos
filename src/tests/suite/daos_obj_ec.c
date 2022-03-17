@@ -297,7 +297,7 @@ ec_rec_list_punch(void **state)
 	ioreq_fini(&req);
 }
 
-#define ec_parity_rotate	0
+#define ec_parity_rotate	1
 
 uint32_t
 test_ec_get_parity_off(daos_key_t *dkey, struct daos_oclass_attr *oca)

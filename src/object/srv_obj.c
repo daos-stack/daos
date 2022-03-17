@@ -1775,7 +1775,7 @@ out:
 	ioc->ioc_vos_coh = coc->sc_hdl;
 	ioc->ioc_coc	 = coc;
 	ioc->ioc_coh	 = coh;
-	ioc->ioc_ec_rotate_parity = 0;
+	ioc->ioc_ec_rotate_parity = 1;
 	return 0;
 failed:
 	if (coc != NULL)

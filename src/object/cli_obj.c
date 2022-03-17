@@ -1365,7 +1365,7 @@ dc_obj_open(tse_task_t *task)
 	if (rc)
 		D_GOTO(fail_layout_created, rc);
 
-	obj->cob_ec_parity_rotate = 0;
+	obj->cob_ec_parity_rotate = 1;
 	obj_hdl_link(obj);
 	*args->oh = obj_ptr2hdl(obj);
 	obj_decref(obj);
@@ -6287,7 +6287,7 @@ dc_obj_verify(daos_handle_t oh, daos_epoch_t *epochs, unsigned int nr)
 
 		dova[i].fetch_buf = NULL;
 		dova[i].fetch_buf_len = 0;
-		dova[i].ec_parity_rotate = 0;
+		dova[i].ec_parity_rotate = 1;
 	}
 
 	for (i = 0; i < obj->cob_grp_nr && rc == 0; i++) {

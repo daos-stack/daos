@@ -2336,7 +2336,7 @@ migrate_one_epoch_object(daos_epoch_range_t *epr, struct migrate_pool_tls *tls,
 	unpack_arg.epr = *epr;
 	unpack_arg.oh = oh;
 	unpack_arg.version = tls->mpt_version;
-	unpack_arg.ec_rotate_parity = 0;
+	unpack_arg.ec_rotate_parity = 1;
 	D_INIT_LIST_HEAD(&unpack_arg.merge_list);
 	buf = stack_buf;
 	buf_len = ITER_BUF_SIZE;
