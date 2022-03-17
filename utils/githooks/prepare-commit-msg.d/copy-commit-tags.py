@@ -12,25 +12,22 @@ class NotTag(Exception):
     """Nothing"""
 
 
-def get_tag_kv(line):
-    """Convert a line of test to a key/value"""
-
-    if ':' not in line:
-        raise NotTag
-    (raw_key, value) = line.split(':', maxsplit=1)
-    key = raw_key.strip()
-    if key in ('Date', 'Author', 'Signed-off-by', 'Merge', 'Co-authored-by'):
-        raise NotTag
-    if ' ' in key:
-        raise NotTag
-    return (key, value.strip())
-
-
 def main():
     """Run the check"""
 
-    input_file = sys.argv[1]
+    def get_tag_kv(line):
+        """Convert a line of test to a key/value"""
 
+        if ':' not in line:
+            raise NotTag
+        (raw_key, value) = line.split(':', maxsplit=1)
+        key = raw_key.strip()
+        if key in ('Date', 'Author', 'Signed-off-by', 'Merge', 'Co-authored-by'):
+            raise NotTag
+        if ' ' in key:
+            raise NotTag
+        return (key, value.strip())
+    
     def add_text():
         output = '# ------------------------ >8 ------------------------\n'
         output += 'Skip-func-hw-test: true\n'
@@ -57,7 +54,7 @@ def main():
 
         tags[key] = value.strip()
 
-    with open(input_file, 'r+') as fd:
+    with open(sys.argv[1], 'r+') as fd:
 
         file_lines = []
         # Check for existing tags.
