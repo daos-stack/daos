@@ -42,22 +42,22 @@ type Server struct {
 	ControlPort     int                       `yaml:"port"`
 	TransportConfig *security.TransportConfig `yaml:"transport_config"`
 	// Detect outdated "servers" config, to direct users to change their config file
-	Servers             []*engine.Config `yaml:"servers,omitempty"`
-	Engines             []*engine.Config `yaml:"engines"`
-	BdevInclude         []string         `yaml:"bdev_include,omitempty"`
-	BdevExclude         []string         `yaml:"bdev_exclude,omitempty"`
-	DisableVFIO         bool             `yaml:"disable_vfio"`
-	EnableVMD           bool             `yaml:"enable_vmd"`
-	EnableHotplug       bool             `yaml:"enable_hotplug"`
-	NrHugepages         int              `yaml:"nr_hugepages"` // total for all engines
-	ControlLogMask      ControlLogLevel  `yaml:"control_log_mask"`
-	ControlLogFile      string           `yaml:"control_log_file"`
-	ControlLogJSON      bool             `yaml:"control_log_json,omitempty"`
-	HelperLogFile       string           `yaml:"helper_log_file"`
-	FWHelperLogFile     string           `yaml:"firmware_helper_log_file"`
-	RecreateSuperblocks bool             `yaml:"recreate_superblocks,omitempty"`
-	FaultPath           string           `yaml:"fault_path"`
-	TelemetryPort       int              `yaml:"telemetry_port,omitempty"`
+	Servers             []*engine.Config       `yaml:"servers,omitempty"`
+	Engines             []*engine.Config       `yaml:"engines"`
+	BdevInclude         []string               `yaml:"bdev_include,omitempty"`
+	BdevExclude         []string               `yaml:"bdev_exclude,omitempty"`
+	DisableVFIO         bool                   `yaml:"disable_vfio"`
+	EnableVMD           bool                   `yaml:"enable_vmd"`
+	EnableHotplug       bool                   `yaml:"enable_hotplug"`
+	NrHugepages         int                    `yaml:"nr_hugepages"` // total for all engines
+	ControlLogMask      common.ControlLogLevel `yaml:"control_log_mask"`
+	ControlLogFile      string                 `yaml:"control_log_file"`
+	ControlLogJSON      bool                   `yaml:"control_log_json,omitempty"`
+	HelperLogFile       string                 `yaml:"helper_log_file"`
+	FWHelperLogFile     string                 `yaml:"firmware_helper_log_file"`
+	RecreateSuperblocks bool                   `yaml:"recreate_superblocks,omitempty"`
+	FaultPath           string                 `yaml:"fault_path"`
+	TelemetryPort       int                    `yaml:"telemetry_port,omitempty"`
 
 	// duplicated in engine.Config
 	SystemName string              `yaml:"name"`
@@ -242,7 +242,7 @@ func (cfg *Server) WithNrHugePages(nr int) *Server {
 }
 
 // WithControlLogMask sets the daos_server log level.
-func (cfg *Server) WithControlLogMask(lvl ControlLogLevel) *Server {
+func (cfg *Server) WithControlLogMask(lvl common.ControlLogLevel) *Server {
 	cfg.ControlLogMask = lvl
 	return cfg
 }
@@ -288,7 +288,7 @@ func DefaultServer() *Server {
 		TransportConfig: security.DefaultServerTransportConfig(),
 		Hyperthreads:    false,
 		Path:            defaultConfigPath,
-		ControlLogMask:  ControlLogLevel(logging.LogLevelInfo),
+		ControlLogMask:  common.ControlLogLevel(logging.LogLevelInfo),
 		EnableVMD:       false, // disabled by default
 		EnableHotplug:   false, // disabled by default
 	}
@@ -416,24 +416,6 @@ func (cfg *Server) Validate(log logging.Logger, hugePageSize int, fis *hardware.
 	log.Debugf("vfio=%v hotplug=%v vmd=%v requested in config", !cfg.DisableVFIO,
 		cfg.EnableHotplug, cfg.EnableVMD)
 
-	// A config without engines is valid when initially discovering hardware prior to adding
-	// per-engine sections with device allocations.
-	if len(cfg.Engines) == 0 {
-		log.Infof("No %ss in configuration, %s starting in discovery mode",
-			build.DataPlaneName, build.ControlPlaneName)
-		cfg.Engines = nil
-		return nil
-	}
-
-	switch {
-	case cfg.Fabric.Provider == "":
-		return FaultConfigNoProvider
-	case cfg.ControlPort <= 0:
-		return FaultConfigBadControlPort
-	case cfg.TelemetryPort < 0:
-		return FaultConfigBadTelemetryPort
-	}
-
 	// Update access point addresses with control port if port is not supplied.
 	newAPs := make([]string, 0, len(cfg.AccessPoints))
 	for _, ap := range cfg.AccessPoints {
@@ -449,11 +431,29 @@ func (cfg *Server) Validate(log logging.Logger, hugePageSize int, fis *hardware.
 	}
 	cfg.AccessPoints = newAPs
 
+	// A config without engines is valid when initially discovering hardware prior to adding
+	// per-engine sections with device allocations.
+	if len(cfg.Engines) == 0 {
+		log.Infof("No %ss in configuration, %s starting in discovery mode",
+			build.DataPlaneName, build.ControlPlaneName)
+		cfg.Engines = nil
+		return nil
+	}
+
 	switch {
 	case len(cfg.AccessPoints) < 1:
 		return FaultConfigBadAccessPoints
 	case len(cfg.AccessPoints)%2 == 0:
 		return FaultConfigEvenAccessPoints
+	}
+
+	switch {
+	case cfg.Fabric.Provider == "":
+		return FaultConfigNoProvider
+	case cfg.ControlPort <= 0:
+		return FaultConfigBadControlPort
+	case cfg.TelemetryPort < 0:
+		return FaultConfigBadTelemetryPort
 	}
 
 	cfgHasBdevs := false

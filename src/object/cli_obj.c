@@ -1893,7 +1893,8 @@ obj_rw_bulk_prep(struct dc_object *obj, daos_iod_t *iods, d_sg_list_t *sgls,
 	 * if need bulk transferring.
 	 */
 	sgls_size = daos_sgls_packed_size(sgls, nr, NULL);
-	if (sgls_size >= DAOS_BULK_LIMIT || obj_auxi->reasb_req.orr_tgt_nr > 1) {
+	if (sgls_size >= DAOS_BULK_LIMIT ||
+	    (obj_is_ec(obj) && !obj_auxi->reasb_req.orr_single_tgt)) {
 		bulk_perm = update ? CRT_BULK_RO : CRT_BULK_RW;
 		rc = obj_bulk_prep(sgls, nr, bulk_bind, bulk_perm, task,
 				   &obj_auxi->bulks);
@@ -3657,8 +3658,9 @@ update_sub_anchor_cb(struct shard_auxi_args *shard_auxi,
 		struct shard_anchors *sub_anchors;
 
 		sub_anchors = (struct shard_anchors *)obj_arg->akey_anchor->da_sub_anchors;
-		memcpy(&sub_anchors->sa_anchors[shard].ssa_anchor,
-		       shard_arg->la_akey_anchor, sizeof(daos_anchor_t));
+		if (shard_arg->la_akey_anchor)
+			memcpy(&sub_anchors->sa_anchors[shard].ssa_anchor,
+			       shard_arg->la_akey_anchor, sizeof(daos_anchor_t));
 	}
 
 	return 0;
@@ -3728,8 +3730,7 @@ static void
 anchor_update_check_eof(struct obj_auxi_args *obj_auxi, daos_anchor_t *anchor)
 {
 	struct shard_anchors	*sub_anchors;
-	struct daos_oclass_attr	*oca = obj_get_oca(obj_auxi->obj);
-	int i;
+	int			i;
 
 	if (!anchor->da_sub_anchors || !obj_is_ec(obj_auxi->obj))
 		return;
@@ -3741,7 +3742,7 @@ anchor_update_check_eof(struct obj_auxi_args *obj_auxi, daos_anchor_t *anchor)
 	if (!d_list_empty(&sub_anchors->sa_merged_list))
 		return;
 
-	for (i = 0; i < obj_ec_data_tgt_nr(oca); i++) {
+	for (i = 0; i < sub_anchors->sa_anchors_nr; i++) {
 		daos_anchor_t *sub_anchor;
 
 		sub_anchor = &sub_anchors->sa_anchors[i].ssa_anchor;
@@ -3749,7 +3750,7 @@ anchor_update_check_eof(struct obj_auxi_args *obj_auxi, daos_anchor_t *anchor)
 			break;
 	}
 
-	if (i == obj_ec_data_tgt_nr(oca)) {
+	if (i == sub_anchors->sa_anchors_nr) {
 		daos_obj_list_t *obj_args;
 
 		daos_anchor_set_eof(anchor);
@@ -3767,8 +3768,8 @@ dump_key_and_anchor_eof_check(struct obj_auxi_args *obj_auxi,
 	struct obj_auxi_list_key *key;
 	struct obj_auxi_list_key *tmp;
 	daos_obj_list_t *obj_args;
-	daos_key_t	last_key = { 0 };
-	d_sg_list_t *sgl;
+	d_sg_list_t	*sgl;
+	daos_key_desc_t	*kds;
 	int sgl_off = 0;
 	int iov_off = 0;
 	int cnt = 0;
@@ -3778,18 +3779,23 @@ dump_key_and_anchor_eof_check(struct obj_auxi_args *obj_auxi,
 	D_ASSERT(obj_auxi->is_ec_obj);
 	obj_args = dc_task_get_args(obj_auxi->obj_task);
 	sgl = obj_args->sgl;
+	kds = obj_args->kds;
 	iov = &sgl->sg_iovs[sgl_off];
-	d_list_for_each_entry_safe(key, tmp, arg->merged_list,
-				   key_list) {
+	d_list_for_each_entry_safe(key, tmp, arg->merged_list, key_list) {
 		int left = key->key.iov_len;
 
-		last_key.iov_len = last_key.iov_buf_len = left;
-		last_key.iov_buf = iov->iov_buf + iov_off;
+		D_DEBUG(DB_TRACE, DF_OID" opc 0x%x cnt %d key "DF_KEY"\n",
+			DP_OID(obj_auxi->obj->cob_md.omd_id), obj_auxi->opc,
+			cnt + 1, DP_KEY(&key->key));
 		while (left > 0) {
 			int copy_size = min(iov->iov_buf_len - iov_off,
 					    key->key.iov_len);
-			memcpy(iov->iov_buf + iov_off, key->key.iov_buf,
-			       copy_size);
+			memcpy(iov->iov_buf + iov_off, key->key.iov_buf, copy_size);
+			kds[cnt].kd_key_len = copy_size;
+			if (obj_auxi->opc == DAOS_OBJ_DKEY_RPC_ENUMERATE)
+				kds[cnt].kd_val_type = OBJ_ITER_DKEY;
+			else
+				kds[cnt].kd_val_type = OBJ_ITER_AKEY;
 			left -= copy_size;
 			iov_off += copy_size;
 			if (iov_off == iov->iov_buf_len - 1) {
@@ -3800,7 +3806,8 @@ dump_key_and_anchor_eof_check(struct obj_auxi_args *obj_auxi,
 		d_list_del(&key->key_list);
 		D_FREE(key->key.iov_buf);
 		D_FREE(key);
-		cnt++;
+		if (++cnt >= *obj_args->nr)
+			break;
 	}
 	*obj_args->nr = cnt;
 
@@ -4899,11 +4906,19 @@ dc_obj_update(tse_task_t *task, struct dtx_epoch *epoch, uint32_t map_ver,
 		goto out_task;
 	}
 
+	/* For update, based on re-assembled sgl for csum calculate (to match with iod).
+	 * Then if with single data target use original user sgl in IO request to avoid
+	 * pack the same data multiple times.
+	 */
+	if (obj_auxi->is_ec_obj && obj_auxi->req_reasbed)
+		args->sgls = obj_auxi->reasb_req.orr_sgls;
 	rc = obj_csum_update(obj, args, obj_auxi);
 	if (rc) {
 		D_ERROR("obj_csum_update error: "DF_RC"\n", DP_RC(rc));
 		goto out_task;
 	}
+	if (obj_auxi->is_ec_obj && obj_auxi->req_reasbed && obj_auxi->reasb_req.orr_single_tgt)
+		args->sgls = obj_auxi->reasb_req.orr_usgls;
 
 	if (DAOS_FAIL_CHECK(DAOS_DTX_COMMIT_SYNC))
 		obj_auxi->flags |= ORF_DTX_SYNC;

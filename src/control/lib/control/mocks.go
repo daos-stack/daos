@@ -525,7 +525,8 @@ func MockFormatResp(t *testing.T, mfc MockFormatConf) *StorageFormatResp {
 
 		for j := 0; j < mfc.ScmPerHost; j++ {
 			if _, failed := mfc.ScmFailures[j]; failed {
-				if err := hem.Add(hostName, errors.Errorf("/mnt/%d format failed", j+1)); err != nil {
+				err := hem.Add(hostName, errors.Errorf("/mnt/%d format failed", j+1))
+				if err != nil {
 					t.Fatal(err)
 				}
 				continue
@@ -538,7 +539,8 @@ func MockFormatResp(t *testing.T, mfc MockFormatConf) *StorageFormatResp {
 
 		for j := 0; j < mfc.NvmePerHost; j++ {
 			if _, failed := mfc.NvmeFailures[j]; failed {
-				if err := hem.Add(hostName, errors.Errorf("NVMe device %d format failed", j+1)); err != nil {
+				err := hem.Add(hostName, errors.Errorf("NVMe device %d format failed", j+1))
+				if err != nil {
 					t.Fatal(err)
 				}
 				continue
