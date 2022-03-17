@@ -1918,30 +1918,34 @@ pool_prop_read(struct rdb_tx *tx, const struct pool_svc *svc, uint64_t bits,
 		d_iov_set(&value, &val, sizeof(val));
 		rc = rdb_tx_lookup(tx, &svc->ps_root, &ds_pool_prop_ec_pda,
 				   &value);
-		if (rc == -DER_NONEXIST && global_ver < 1) {
-			rc = 0;
-			val = DAOS_PROP_PO_EC_PDA_DEFAULT;
-		} else  if (rc != 0) {
-			return rc;
-		}
 		D_ASSERT(idx < nr);
+		if (rc == -DER_NONEXIST && global_ver < 1)
+			val = DAOS_PROP_PO_EC_PDA_DEFAULT;
+		else  if (rc != 0)
+			return rc;
 		prop->dpp_entries[idx].dpe_type = DAOS_PROP_PO_EC_PDA;
 		prop->dpp_entries[idx].dpe_val = val;
+		if (rc == -DER_NONEXIST) {
+			rc = 0;
+			prop->dpp_entries[idx].dpe_flags |= DAOS_PROP_ENTRY_NEGATIVE;
+		}
 		idx++;
 	}
 	if (bits & DAOS_PO_QUERY_PROP_RP_PDA) {
 		d_iov_set(&value, &val, sizeof(val));
 		rc = rdb_tx_lookup(tx, &svc->ps_root, &ds_pool_prop_rp_pda,
 				   &value);
-		if (rc == -DER_NONEXIST && global_ver < 1) {
-			rc = 0;
+		if (rc == -DER_NONEXIST && global_ver < 1)
 			val = DAOS_PROP_PO_RP_PDA_DEFAULT;
-		} else  if (rc != 0) {
+		else  if (rc != 0)
 			return rc;
-		}
 		D_ASSERT(idx < nr);
 		prop->dpp_entries[idx].dpe_type = DAOS_PROP_PO_RP_PDA;
 		prop->dpp_entries[idx].dpe_val = val;
+		if (rc == -DER_NONEXIST) {
+			rc = 0;
+			prop->dpp_entries[idx].dpe_flags |= DAOS_PROP_ENTRY_NEGATIVE;
+		}
 		idx++;
 	}
 
@@ -1966,15 +1970,17 @@ pool_prop_read(struct rdb_tx *tx, const struct pool_svc *svc, uint64_t bits,
 			  value.iov_len);
 		if (prop->dpp_entries[idx].dpe_str == NULL)
 			return -DER_NOMEM;
+		if (rc == -DER_NONEXIST) {
+			rc = 0;
+			prop->dpp_entries[idx].dpe_flags |= DAOS_PROP_ENTRY_NEGATIVE;
+		}
 		idx++;
 	}
 
 	if (bits & DAOS_PO_QUERY_PROP_GLOBAL_VERSION) {
-		if (global_ver < 1) {
-			rc = 0;
-			val = 0;
-		}
 		D_ASSERT(idx < nr);
+		if (global_ver < 1)
+			prop->dpp_entries[idx].dpe_flags |= DAOS_PROP_ENTRY_NEGATIVE;
 		prop->dpp_entries[idx].dpe_type = DAOS_PROP_PO_GLOBAL_VERSION;
 		prop->dpp_entries[idx].dpe_val = global_ver;
 		idx++;
@@ -1984,16 +1990,18 @@ pool_prop_read(struct rdb_tx *tx, const struct pool_svc *svc, uint64_t bits,
 		d_iov_set(&value, &val32, sizeof(val32));
 		rc = rdb_tx_lookup(tx, &svc->ps_root, &ds_pool_prop_upgrade_status,
 				   &value);
-		if (rc == -DER_NONEXIST && global_ver < 1) {
-			rc = 0;
+		if (rc == -DER_NONEXIST && global_ver < 1)
 			val32 = DAOS_UPGRADE_STATUS_NOT_STARTED;
-		} else  if (rc != 0) {
+		else  if (rc != 0)
 			return rc;
-		}
 
 		D_ASSERT(idx < nr);
 		prop->dpp_entries[idx].dpe_type = DAOS_PROP_PO_UPGRADE_STATUS;
 		prop->dpp_entries[idx].dpe_val = val32;
+		if (rc == -DER_NONEXIST) {
+			rc = 0;
+			prop->dpp_entries[idx].dpe_flags |= DAOS_PROP_ENTRY_NEGATIVE;
+		}
 		idx++;
 	}
 
@@ -3835,8 +3843,17 @@ int pool_upgrade_props(struct rdb_tx *tx, struct pool_svc *svc, uuid_t pool_uuid
 		need_commit = true;
 	}
 
-	if (need_commit)
+	if (need_commit) {
+		daos_prop_t *prop = NULL;
+
 		rc = rdb_tx_commit(tx);
+		if (rc)
+			D_GOTO(out_free, rc);
+		rc = pool_prop_read(tx, svc, DAOS_PO_QUERY_PROP_ALL, &prop);
+		if (rc)
+			D_GOTO(out_free, rc);
+		rc = ds_pool_iv_prop_update(svc->ps_pool, prop);
+	}
 
 out_free:
 	D_FREE(hdl_uuids);
@@ -3851,6 +3868,7 @@ static int ds_pool_mark_upgrade_completed(uuid_t pool_uuid,
 	uint32_t			val;
 	int				rc1;
 	bool				need_put_leader = false;
+	daos_prop_t			*prop = NULL;
 
 	if (!svc) {
 		rc1 = pool_svc_lookup_leader(pool_uuid, &svc, NULL);
@@ -3871,6 +3889,14 @@ static int ds_pool_mark_upgrade_completed(uuid_t pool_uuid,
 	d_iov_set(&value, &val, sizeof(val));
 	rc1 = rdb_tx_update(&tx, &svc->ps_root, &ds_pool_prop_upgrade_status,
 			   &value);
+	if (rc1)
+		D_GOTO(out_tx, rc1);
+
+	rc1 = pool_prop_read(&tx, svc, DAOS_PO_QUERY_PROP_ALL, &prop);
+	if (rc1)
+		D_GOTO(out_tx, rc1);
+	rc1 = ds_pool_iv_prop_update(svc->ps_pool, prop);
+	daos_prop_free(prop);
 	if (rc1)
 		D_GOTO(out_tx, rc1);
 
@@ -3977,10 +4003,9 @@ out_svc:
 	}
 
 	if (upgraded) {
-		/* put it in the background ? */
-		rc = ds_cont_upgrade(pool_uuid, svc->ps_cont_svc);
-		rc1 = ds_pool_mark_upgrade_completed(pool_uuid, svc, rc);
-		if (rc1 && !rc)
+		rc1 = ds_cont_upgrade(pool_uuid, svc->ps_cont_svc);
+		rc = ds_pool_mark_upgrade_completed(pool_uuid, svc, rc1);
+		if (rc == 0 && rc1)
 			rc = rc1;
 	}
 

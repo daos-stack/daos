@@ -710,26 +710,6 @@ func TestPoolGetProp(t *testing.T) {
 			},
 			expErr: errors.New("got > 1"),
 		},
-		"missing prop in response": {
-			mic: &MockInvokerConfig{
-				UnaryResponse: MockMSResponse("host1", nil, &mgmtpb.PoolGetPropResp{
-					Properties: []*mgmtpb.PoolProperty{
-						{
-							Number: propWithVal("label", "").Number,
-							Value:  &mgmtpb.PoolProperty_Strval{"foo"},
-						},
-					},
-				}),
-			},
-			req: &PoolGetPropReq{
-				ID: common.MockUUID(),
-				Properties: []*PoolProperty{
-					propWithVal("label", ""),
-					propWithVal("space_rb", ""),
-				},
-			},
-			expErr: errors.New("unable to find prop"),
-		},
 		"nil prop value in response": {
 			mic: &MockInvokerConfig{
 				UnaryResponse: MockMSResponse("host1", nil, &mgmtpb.PoolGetPropResp{
@@ -762,6 +742,10 @@ func TestPoolGetProp(t *testing.T) {
 							Value:  &mgmtpb.PoolProperty_Numval{42},
 						},
 						{
+							Number: propWithVal("upgrade_status", "").Number,
+							Value:  &mgmtpb.PoolProperty_Numval{1},
+						},
+						{
 							Number: propWithVal("reclaim", "").Number,
 							Value:  &mgmtpb.PoolProperty_Numval{drpc.PoolSpaceReclaimDisabled},
 						},
@@ -782,6 +766,10 @@ func TestPoolGetProp(t *testing.T) {
 							Value:  &mgmtpb.PoolProperty_Numval{1},
 						},
 						{
+							Number: propWithVal("global_version", "").Number,
+							Value:  &mgmtpb.PoolProperty_Numval{1},
+						},
+						{
 							Number: propWithVal("rp_pda", "").Number,
 							Value:  &mgmtpb.PoolProperty_Numval{2},
 						},
@@ -798,6 +786,7 @@ func TestPoolGetProp(t *testing.T) {
 			expResp: []*PoolProperty{
 				propWithVal("ec_cell_sz", "4096"),
 				propWithVal("ec_pda", "1"),
+				propWithVal("global_version", "1"),
 				propWithVal("label", "foo"),
 				propWithVal("policy", "type=io_size"),
 				propWithVal("reclaim", "disabled"),
@@ -805,6 +794,7 @@ func TestPoolGetProp(t *testing.T) {
 				propWithVal("rp_pda", "2"),
 				propWithVal("self_heal", "exclude"),
 				propWithVal("space_rb", "42"),
+				propWithVal("upgrade_status", "in progress"),
 			},
 		},
 		"specific props requested": {

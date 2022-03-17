@@ -42,7 +42,7 @@ type PoolCmd struct {
 	DeleteACL    PoolDeleteACLCmd    `command:"delete-acl" description:"Delete an entry from a DAOS pool's Access Control List"`
 	SetProp      PoolSetPropCmd      `command:"set-prop" description:"Set pool property"`
 	GetProp      PoolGetPropCmd      `command:"get-prop" description:"Get pool properties"`
-	Upgrade      PoolUpgradeCmd	 `command:"upgrade" description:"Upgrade pool to latest format"`
+	Upgrade      PoolUpgradeCmd      `command:"upgrade" description:"Upgrade pool to latest format"`
 }
 
 // PoolCreateCmd is the struct representing the command to create a DAOS pool.

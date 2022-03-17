@@ -514,6 +514,7 @@ daos_prop_entry_copy(struct daos_prop_entry *entry,
 	daos_prop_entry_free_value(entry_dup);
 
 	entry_dup->dpe_type = entry->dpe_type;
+	entry_dup->dpe_flags = entry->dpe_flags;
 	switch (entry->dpe_type) {
 	case DAOS_PROP_PO_LABEL:
 	case DAOS_PROP_CO_LABEL:
@@ -584,19 +585,30 @@ daos_prop_dup(daos_prop_t *prop, bool pool, bool input)
 {
 	daos_prop_t		*prop_dup;
 	struct daos_prop_entry	*entry, *entry_dup;
-	int			 i;
+	int			 i, j;
 	int			 rc;
+	int			 valid_nr = 0;
 
 	if (!daos_prop_valid(prop, pool, input))
 		return NULL;
 
-	prop_dup = daos_prop_alloc(prop->dpp_nr);
+	for (i = 0; i < prop->dpp_nr; i++) {
+		entry = &prop->dpp_entries[i];
+		if (!(entry->dpe_flags & DAOS_PROP_ENTRY_NEGATIVE))
+			valid_nr++;
+	}
+	if (valid_nr == 0)
+		return NULL;
+	prop_dup = daos_prop_alloc(valid_nr);
 	if (prop_dup == NULL)
 		return NULL;
 
+	j = 0;
 	for (i = 0; i < prop->dpp_nr; i++) {
 		entry = &prop->dpp_entries[i];
-		entry_dup = &prop_dup->dpp_entries[i];
+		if (entry->dpe_flags & DAOS_PROP_ENTRY_NEGATIVE)
+			continue;
+		entry_dup = &prop_dup->dpp_entries[j++];
 		rc = daos_prop_entry_copy(entry, entry_dup);
 		if (rc != 0) {
 			daos_prop_free(prop_dup);
@@ -763,11 +775,13 @@ daos_prop_copy(daos_prop_t *prop_req, daos_prop_t *prop_reply)
 			type = prop_reply->dpp_entries[i].dpe_type;
 			entry_req->dpe_type = type;
 		}
+		/* this is possible now */
 		entry_reply = daos_prop_entry_get(prop_reply, type);
 		if (entry_reply == NULL) {
-			D_ERROR("cannot find prop entry for type %d.\n", type);
-			D_GOTO(out, rc = -DER_PROTO);
+			entry_req->dpe_flags |= DAOS_PROP_ENTRY_NEGATIVE;
+			continue;
 		}
+		entry_req->dpe_flags = entry_reply->dpe_flags;
 		if (type == DAOS_PROP_PO_LABEL || type == DAOS_PROP_CO_LABEL) {
 			D_STRNDUP(entry_req->dpe_str, entry_reply->dpe_str,
 				  DAOS_PROP_LABEL_MAX_LEN);

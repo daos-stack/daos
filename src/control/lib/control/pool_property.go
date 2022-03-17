@@ -229,8 +229,8 @@ func PoolProperties() PoolPropertyMap {
 			values: map[string]uint64{
 				"not started": drpc.PoolUpgradeStatusNotStarted,
 				"in progress": drpc.PoolUpgradeStatusInProgress,
-				"completed": drpc.PoolUpgradeStatusCompleted,
-				"failed": drpc.PoolUpgradeStatusFailed,
+				"completed":   drpc.PoolUpgradeStatusCompleted,
+				"failed":      drpc.PoolUpgradeStatusFailed,
 			},
 		},
 	}

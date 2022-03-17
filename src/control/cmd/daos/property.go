@@ -439,6 +439,9 @@ var propHdlrs = propHdlrMap{
 			if e == nil {
 				return propNotFound(name)
 			}
+			if C.dpe_is_negative(e) {
+				return fmt.Sprintf("not set")
+			}
 
 			value := C.get_dpe_val(e)
 			if !C.daos_ec_pda_valid(C.uint32_t(value)) {
@@ -470,6 +473,9 @@ var propHdlrs = propHdlrMap{
 				return propNotFound(name)
 			}
 
+			if C.dpe_is_negative(e) {
+				return fmt.Sprintf("not set")
+			}
 			value := C.get_dpe_val(e)
 			if !C.daos_ec_pda_valid(C.uint32_t(value)) {
 				return fmt.Sprintf("invalid ec pda %d", value)

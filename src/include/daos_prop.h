@@ -406,12 +406,18 @@ daos_prop_val_2_co_status(uint64_t val, struct daos_co_status *co_status)
 	co_status->dcs_pm_ver = (uint32_t)(val & 0xFFFFFFFF);
 }
 
+enum {
+	DAOS_PROP_ENTRY_NEGATIVE = (1 << 0),
+};
+
 /** daos property entry */
 struct daos_prop_entry {
 	/** property type, see enum daos_pool_props/daos_cont_props */
 	uint32_t		 dpe_type;
+	/** property flags, eg negative entry*/
+	uint16_t		 dpe_flags;
 	/** reserved for future usage (for 64 bits alignment now) */
-	uint32_t		 dpe_reserv;
+	uint16_t		 dpe_reserv;
 	/**
 	 * value can be either a uint64_t, or a string, or any other type
 	 * data such as the struct daos_acl pointer.

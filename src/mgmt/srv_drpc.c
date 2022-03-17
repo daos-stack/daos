@@ -1049,25 +1049,35 @@ add_props_to_resp(daos_prop_t *prop, Mgmt__PoolGetPropResp *resp)
 {
 	Mgmt__PoolProperty	**resp_props;
 	struct daos_prop_entry	*entry;
-	int			 i, rc = 0;
+	int			 i, rc = 0, valid_prop_nr = 0, j = 0;
 
 	if (prop == NULL || prop->dpp_nr == 0)
 		return 0;
 
-	D_ALLOC_ARRAY(resp_props, prop->dpp_nr);
+	for (i = 0; i < prop->dpp_nr; i++) {
+		entry = &prop->dpp_entries[i];
+		if (!(entry->dpe_flags & DAOS_PROP_ENTRY_NEGATIVE))
+			valid_prop_nr++;
+	}
+
+	if (valid_prop_nr == 0)
+		return 0;
+
+	D_ALLOC_ARRAY(resp_props, valid_prop_nr);
 	if (resp_props == NULL) {
 		return -DER_NOMEM;
 	}
 
 	for (i = 0; i < prop->dpp_nr; i++) {
-		D_ALLOC(resp_props[i], sizeof(Mgmt__PoolProperty));
-		if (resp_props[i] == NULL) {
-			D_GOTO(out, rc = -DER_NOMEM);
-		}
-		mgmt__pool_property__init(resp_props[i]);
-
 		entry = &prop->dpp_entries[i];
-		resp_props[i]->number = entry->dpe_type;
+		if (entry->dpe_flags & DAOS_PROP_ENTRY_NEGATIVE)
+			continue;
+		D_ALLOC(resp_props[j], sizeof(Mgmt__PoolProperty));
+		if (resp_props[j] == NULL)
+			D_GOTO(out, rc = -DER_NOMEM);
+		mgmt__pool_property__init(resp_props[j]);
+
+		resp_props[j]->number = entry->dpe_type;
 
 		if (daos_prop_has_str(entry)) {
 			if (entry->dpe_str == NULL) {
@@ -1075,29 +1085,29 @@ add_props_to_resp(daos_prop_t *prop, Mgmt__PoolGetPropResp *resp)
 				D_GOTO(out, rc = -DER_INVAL);
 			}
 
-			resp_props[i]->value_case =
+			resp_props[j]->value_case =
 				MGMT__POOL_PROPERTY__VALUE_STRVAL;
-			D_STRNDUP(resp_props[i]->strval, entry->dpe_str,
+			D_STRNDUP(resp_props[j]->strval, entry->dpe_str,
 				  DAOS_PROP_LABEL_MAX_LEN);
-			if (resp_props[i]->strval == NULL) {
+			if (resp_props[j]->strval == NULL)
 				D_GOTO(out, rc = -DER_NOMEM);
-			}
 		} else if (daos_prop_has_ptr(entry)) {
 			D_ERROR("pointer-value props not supported\n");
 			D_GOTO(out, rc = -DER_INVAL);
 		} else {
-			resp_props[i]->numval = entry->dpe_val;
-			resp_props[i]->value_case =
+			resp_props[j]->numval = entry->dpe_val;
+			resp_props[j]->value_case =
 				MGMT__POOL_PROPERTY__VALUE_NUMVAL;
 		}
+		j++;
 	}
 
 	resp->properties = resp_props;
-	resp->n_properties = prop->dpp_nr;
+	resp->n_properties = valid_prop_nr;
 
 out:
 	if (rc != 0)
-		free_response_props(resp_props, prop->dpp_nr);
+		free_response_props(resp_props, valid_prop_nr);
 
 	return rc;
 }

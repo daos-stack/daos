@@ -318,7 +318,7 @@ func PoolUpgrade(ctx context.Context, rpcClient UnaryInvoker, req *PoolUpgradeRe
 	req.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
 		return mgmtpb.NewMgmtSvcClient(conn).PoolUpgrade(ctx, &mgmtpb.PoolUpgradeReq{
 			Sys: req.getSystem(rpcClient),
-			Id: req.ID,
+			Id:  req.ID,
 		})
 	})
 
@@ -618,7 +618,7 @@ func PoolGetProp(ctx context.Context, rpcClient UnaryInvoker, req *PoolGetPropRe
 	for _, prop := range resp {
 		pbProp, found := pbMap[prop.Number]
 		if !found {
-			return nil, errors.Errorf("unable to find prop %d (%s) in resp", prop.Number, prop.Name)
+			continue
 		}
 		switch v := pbProp.GetValue().(type) {
 		case *mgmtpb.PoolProperty_Strval:

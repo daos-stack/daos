@@ -1765,7 +1765,7 @@ cont_open(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl, struct cont *cont,
 	if (rc != 0)
 		D_GOTO(out, rc);
 	D_ASSERT(prop != NULL);
-	D_ASSERT(prop->dpp_nr == CONT_PROP_NUM);
+	D_ASSERT(prop->dpp_nr <= CONT_PROP_NUM);
 
 	get_cont_prop_access_info(prop, &owner, &acl);
 
@@ -2139,6 +2139,7 @@ cont_prop_read(struct rdb_tx *tx, struct cont *cont, uint64_t bits,
 	uint64_t	 val, bitmap;
 	uint32_t	 idx = 0, nr = 0;
 	int		 rc = 0;
+	int		 negative_nr = 0;
 
 	bitmap = bits & DAOS_CO_QUERY_PROP_ALL;
 	while (idx < DAOS_CO_QUERY_PROP_BITS_NR) {
@@ -2417,37 +2418,54 @@ cont_prop_read(struct rdb_tx *tx, struct cont *cont, uint64_t bits,
 		d_iov_set(&value, &val, sizeof(val));
 		rc = rdb_tx_lookup(tx, &cont->c_prop, &ds_cont_prop_ec_pda,
 				   &value);
-		if (rc == -DER_NONEXIST) {
-			rc = 0;
+		if (rc == -DER_NONEXIST)
 			val = DAOS_PROP_PO_EC_PDA_DEFAULT;
-		} else  if (rc != 0) {
+		else if (rc != 0)
 			D_GOTO(out, rc);
-		}
 		D_ASSERT(idx < nr);
 		prop->dpp_entries[idx].dpe_type = DAOS_PROP_CO_EC_PDA;
 		prop->dpp_entries[idx].dpe_val = val;
+		if (rc == -DER_NONEXIST) {
+			prop->dpp_entries[idx].dpe_flags |= DAOS_PROP_ENTRY_NEGATIVE;
+			negative_nr++;
+			rc = 0;
+		}
 		idx++;
 	}
 	if (bits & DAOS_CO_QUERY_PROP_RP_PDA) {
 		d_iov_set(&value, &val, sizeof(val));
 		rc = rdb_tx_lookup(tx, &cont->c_prop, &ds_cont_prop_rp_pda,
 				   &value);
-		if (rc == -DER_NONEXIST) {
-			rc = 0;
+		if (rc == -DER_NONEXIST)
 			val = DAOS_PROP_PO_RP_PDA_DEFAULT;
-		} else  if (rc != 0) {
+		else  if (rc != 0)
 			D_GOTO(out, rc);
-		}
 		D_ASSERT(idx < nr);
 		prop->dpp_entries[idx].dpe_type = DAOS_PROP_CO_RP_PDA;
 		prop->dpp_entries[idx].dpe_val = val;
+		if (rc == -DER_NONEXIST) {
+			prop->dpp_entries[idx].dpe_flags |= DAOS_PROP_ENTRY_NEGATIVE;
+			negative_nr++;
+			rc = 0;
+		}
 		idx++;
 	}
 out:
-	if (rc)
+	if (rc == 0) {
+		if (negative_nr == nr) {
+			daos_prop_free(prop);
+			return 0;
+		} else if (negative_nr > 0) {
+			*prop_out = daos_prop_dup(prop, false, false);
+			daos_prop_free(prop);
+			if (*prop_out == NULL)
+				rc = -DER_NOMEM;
+		} else {
+			*prop_out = prop;
+		}
+	} else {
 		daos_prop_free(prop);
-	else
-		*prop_out = prop;
+	}
 	return rc;
 }
 
@@ -3492,7 +3510,7 @@ upgrade_cont_cb(daos_handle_t ih, d_iov_t *key, d_iov_t *val, void *varg)
 	rc = rdb_tx_lookup(ap->tx, &cont->c_prop,
 			   &ds_cont_prop_ec_pda, &value);
 	if (rc && rc != -DER_NONEXIST)
-		goto out_put_cont;
+		goto out;
 	if (rc == -DER_NONEXIST) {
 		pda = DAOS_PROP_PO_EC_PDA_DEFAULT;
 		rc = rdb_tx_update(ap->tx, &cont->c_prop,
@@ -3500,7 +3518,7 @@ upgrade_cont_cb(daos_handle_t ih, d_iov_t *key, d_iov_t *val, void *varg)
 		if (rc) {
 			D_ERROR("failed to upgrade container ec_pda pool/cont: "DF_CONTF"\n",
 				DP_CONT(ap->pool_uuid, cont_uuid));
-			goto out_put_cont;
+			goto out;
 		}
 		upgraded = true;
 	}
@@ -3508,7 +3526,7 @@ upgrade_cont_cb(daos_handle_t ih, d_iov_t *key, d_iov_t *val, void *varg)
 	rc = rdb_tx_lookup(ap->tx, &cont->c_prop, &ds_cont_prop_rp_pda,
 			   &value);
 	if (rc && rc != -DER_NONEXIST)
-		goto out_put_cont;
+		goto out;
 	if (rc == -DER_NONEXIST) {
 		pda = DAOS_PROP_PO_RP_PDA_DEFAULT;
 		rc = rdb_tx_update(ap->tx, &cont->c_prop, &ds_cont_prop_rp_pda,
@@ -3516,17 +3534,32 @@ upgrade_cont_cb(daos_handle_t ih, d_iov_t *key, d_iov_t *val, void *varg)
 		if (rc) {
 			D_ERROR("failed to upgrade container rp_pda pool/cont: "DF_CONTF"\n",
 				DP_CONT(ap->pool_uuid, cont_uuid));
-			goto out_put_cont;
+			goto out;
 		}
 		upgraded = true;
 	}
-out_put_cont:
+
+out:
 	if (rc == 0) {
-		if (upgraded)
+		ap->cont_nrs++;
+		if (upgraded) {
+			daos_prop_t *prop = NULL;
+
 			ap->cont_upgraded_nrs++;
-		else
-			ap->cont_nrs++;
+			rc = cont_prop_read(ap->tx, cont, DAOS_CO_QUERY_PROP_ALL, &prop);
+			if (rc)
+				goto out_put_cont;
+
+			rc = cont_iv_prop_update(ap->svc->cs_pool->sp_iv_ns,
+						 cont_uuid, prop);
+			daos_prop_free(prop);
+			if (rc) {
+				D_ERROR(DF_UUID": failed to update prop IV for cont, "
+					DF_RC"\n", DP_UUID(cont_uuid), DP_RC(rc));
+			}
+		}
 	}
+out_put_cont:
 	cont_put(cont);
 	return rc;
 }
@@ -4067,7 +4100,7 @@ ds_cont_get_prop(uuid_t pool_uuid, uuid_t cont_uuid, daos_prop_t **prop_out)
 		D_GOTO(out_lock, rc);
 
 	D_ASSERT(prop != NULL);
-	D_ASSERT(prop->dpp_nr == CONT_PROP_NUM);
+	D_ASSERT(prop->dpp_nr <= CONT_PROP_NUM);
 
 	*prop_out = prop;
 
