@@ -244,6 +244,309 @@ func TestIpmctl_getState(t *testing.T) {
 	}
 }
 
+func TestIpmctl_prep(t *testing.T) {
+	verStr := "Intel(R) Optane(TM) Persistent Memory Command Line Interface Version 02.00.00.3825"
+	ndctlNsStr := `[{
+   "dev":"namespace1.0",
+   "mode":"fsdax",
+   "map":"dev",
+   "size":3183575302144,
+   "uuid":"842fc847-28e0-4bb6-8dfc-d24afdba1528",
+   "raw_uuid":"dedb4b28-dc4b-4ccd-b7d1-9bd475c91264",
+   "sector_size":512,
+   "blockdev":"pmem1",
+   "numa_node":1
+}]`
+
+	for name, tc := range map[string]struct {
+		scanResp    *storage.ScmScanResponse
+		runOut      string
+		runErr      error
+		regions     []ipmctl.PMemRegion
+		regionsErr  error
+		expErr      error
+		expPrepResp *storage.ScmPrepareResponse
+		expCalls    []string
+	}{
+		"state unknown": {
+			scanResp: &storage.ScmScanResponse{
+				State: storage.ScmStateUnknown,
+			},
+			expErr: errors.New("unhandled scm state"),
+		},
+		"state non-interleaved": {
+			scanResp: &storage.ScmScanResponse{
+				State: storage.ScmStateNotInterleaved,
+			},
+			expErr: storage.FaultScmNotInterleaved,
+		},
+		"state no regions": {
+			scanResp: &storage.ScmScanResponse{
+				State: storage.ScmStateNoRegions,
+			},
+			expPrepResp: &storage.ScmPrepareResponse{
+				State:          storage.ScmStateNoRegions,
+				RebootRequired: true,
+			},
+			expCalls: []string{
+				"ipmctl version", "ipmctl delete -goal",
+				"ipmctl create -f -goal PersistentMemoryType=AppDirect",
+			},
+		},
+		"state no regions; create regions fails": {
+			scanResp: &storage.ScmScanResponse{
+				State: storage.ScmStateNoRegions,
+			},
+			runErr: errors.New("cmd failed"),
+			expCalls: []string{
+				"ipmctl version",
+			},
+			expErr: errors.New("cmd failed"),
+		},
+		"state free capacity": {
+			scanResp: &storage.ScmScanResponse{
+				State: storage.ScmStateFreeCapacity,
+			},
+			runOut:  ndctlNsStr,
+			regions: []ipmctl.PMemRegion{{Type: uint32(ipmctl.RegionTypeAppDirect)}},
+			expPrepResp: &storage.ScmPrepareResponse{
+				State: storage.ScmStateNoFreeCapacity,
+				Namespaces: storage.ScmNamespaces{
+					{
+						UUID:        "842fc847-28e0-4bb6-8dfc-d24afdba1528",
+						BlockDevice: "pmem1",
+						Name:        "namespace1.0",
+						NumaNode:    1,
+						Size:        3183575302144,
+					},
+				},
+			},
+			expCalls: []string{
+				"ndctl create-namespace", "ipmctl version",
+				"ipmctl show -d PersistentMemoryType,FreeCapacity -region",
+			},
+		},
+		"state free capacity; create namespaces fails": {
+			scanResp: &storage.ScmScanResponse{
+				State: storage.ScmStateFreeCapacity,
+			},
+			runErr: errors.New("cmd failed"),
+			expErr: errors.New("cmd failed"),
+			expCalls: []string{
+				"ndctl create-namespace",
+			},
+		},
+		"state free capacity; get regions fails": {
+			scanResp: &storage.ScmScanResponse{
+				State: storage.ScmStateFreeCapacity,
+			},
+			runOut:     ndctlNsStr,
+			regionsErr: errors.New("fail"),
+			expCalls: []string{
+				"ndctl create-namespace", "ipmctl version",
+				"ipmctl show -d PersistentMemoryType,FreeCapacity -region",
+			},
+			expErr: errors.New("discover PMem regions: fail"),
+		},
+		"state no free capacity": {
+			scanResp: &storage.ScmScanResponse{
+				State: storage.ScmStateNoFreeCapacity,
+				Namespaces: storage.ScmNamespaces{
+					{
+						UUID:        "842fc847-28e0-4bb6-8dfc-d24afdba1528",
+						BlockDevice: "pmem1",
+						Name:        "namespace1.0",
+						NumaNode:    1,
+						Size:        3183575302144,
+					},
+				},
+			},
+			expPrepResp: &storage.ScmPrepareResponse{
+				State: storage.ScmStateNoFreeCapacity,
+				Namespaces: storage.ScmNamespaces{
+					{
+						UUID:        "842fc847-28e0-4bb6-8dfc-d24afdba1528",
+						BlockDevice: "pmem1",
+						Name:        "namespace1.0",
+						NumaNode:    1,
+						Size:        3183575302144,
+					},
+				},
+			},
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(t.Name())
+			defer common.ShowBufferOnFailure(t, buf)
+
+			var calls []string
+
+			if tc.runOut == "" {
+				tc.runOut = verStr
+			}
+
+			mockBinding := newMockIpmctl(&mockIpmctlCfg{
+				regions:       tc.regions,
+				getRegionsErr: tc.regionsErr,
+			})
+
+			mockRun := func(cmd string) (string, error) {
+				calls = append(calls, cmd)
+				return tc.runOut, tc.runErr
+			}
+
+			mockLookPath := func(string) (string, error) {
+				return "", nil
+			}
+
+			cr := newCmdRunner(log, mockBinding, mockRun, mockLookPath)
+
+			resp, err := cr.prep(tc.scanResp)
+			common.CmpErr(t, tc.expErr, err)
+
+			if diff := cmp.Diff(tc.expPrepResp, resp); diff != "" {
+				t.Fatalf("unexpected response (-want, +got):\n%s\n", diff)
+			}
+			if diff := cmp.Diff(tc.expCalls, calls); diff != "" {
+				t.Fatalf("unexpected cli calls (-want, +got):\n%s\n", diff)
+			}
+		})
+	}
+}
+
+func TestIpmctl_prepReset(t *testing.T) {
+	verStr := "Intel(R) Optane(TM) Persistent Memory Command Line Interface Version 02.00.00.3825"
+
+	for name, tc := range map[string]struct {
+		scanResp    *storage.ScmScanResponse
+		runOut      string
+		runErr      error
+		regions     []ipmctl.PMemRegion
+		regionsErr  error
+		expErr      error
+		expPrepResp *storage.ScmPrepareResponse
+		expCalls    []string
+	}{
+		"state unknown": {
+			scanResp: &storage.ScmScanResponse{
+				State: storage.ScmStateUnknown,
+			},
+			expErr: errors.New("unhandled scm state"),
+		},
+		"state no regions": {
+			scanResp: &storage.ScmScanResponse{
+				State: storage.ScmStateNoRegions,
+			},
+			expPrepResp: &storage.ScmPrepareResponse{
+				State: storage.ScmStateNoRegions,
+			},
+		},
+		"state regions": {
+			scanResp: &storage.ScmScanResponse{
+				State: storage.ScmStateFreeCapacity,
+			},
+			expPrepResp: &storage.ScmPrepareResponse{
+				State:          storage.ScmStateFreeCapacity,
+				RebootRequired: true,
+			},
+			expCalls: []string{
+				"ipmctl version", "ipmctl delete -goal",
+				"ipmctl create -f -goal MemoryMode=100",
+			},
+		},
+		"state regions; remove regions fails": {
+			scanResp: &storage.ScmScanResponse{
+				State: storage.ScmStateFreeCapacity,
+			},
+			runErr: errors.New("cmd failed"),
+			expErr: errors.New("cmd failed"),
+			expCalls: []string{
+				"ipmctl version",
+			},
+		},
+		"state no free capacity": {
+			scanResp: &storage.ScmScanResponse{
+				State: storage.ScmStateNoFreeCapacity,
+				Namespaces: storage.ScmNamespaces{
+					{
+						UUID:        "842fc847-28e0-4bb6-8dfc-d24afdba1528",
+						BlockDevice: "pmem1",
+						Name:        "namespace1.0",
+						NumaNode:    1,
+						Size:        3183575302144,
+					},
+				},
+			},
+			expPrepResp: &storage.ScmPrepareResponse{
+				State:          storage.ScmStateNoFreeCapacity,
+				RebootRequired: true,
+			},
+			expCalls: []string{
+				"ndctl disable-namespace namespace1.0",
+				"ndctl destroy-namespace namespace1.0",
+				"ipmctl version", "ipmctl delete -goal",
+				"ipmctl create -f -goal MemoryMode=100",
+			},
+		},
+		"state no free capacity; remove namespace fails": {
+			scanResp: &storage.ScmScanResponse{
+				State: storage.ScmStateNoFreeCapacity,
+				Namespaces: storage.ScmNamespaces{
+					{
+						UUID:        "842fc847-28e0-4bb6-8dfc-d24afdba1528",
+						BlockDevice: "pmem1",
+						Name:        "namespace1.0",
+						NumaNode:    1,
+						Size:        3183575302144,
+					},
+				},
+			},
+			runErr: errors.New("cmd failed"),
+			expErr: errors.New("cmd failed"),
+			expCalls: []string{
+				"ndctl disable-namespace namespace1.0",
+			},
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(t.Name())
+			defer common.ShowBufferOnFailure(t, buf)
+
+			var calls []string
+
+			if tc.runOut == "" {
+				tc.runOut = verStr
+			}
+
+			mockBinding := newMockIpmctl(&mockIpmctlCfg{
+				regions:       tc.regions,
+				getRegionsErr: tc.regionsErr,
+			})
+
+			mockRun := func(cmd string) (string, error) {
+				calls = append(calls, cmd)
+				return tc.runOut, tc.runErr
+			}
+
+			mockLookPath := func(string) (string, error) {
+				return "", nil
+			}
+
+			cr := newCmdRunner(log, mockBinding, mockRun, mockLookPath)
+
+			resp, err := cr.prepReset(tc.scanResp)
+			common.CmpErr(t, tc.expErr, err)
+
+			if diff := cmp.Diff(tc.expPrepResp, resp); diff != "" {
+				t.Fatalf("unexpected response (-want, +got):\n%s\n", diff)
+			}
+			if diff := cmp.Diff(tc.expCalls, calls); diff != "" {
+				t.Fatalf("unexpected cli calls (-want, +got):\n%s\n", diff)
+			}
+		})
+	}
+}
+
 // TestIpTestIpmctl_parseNamespaces verified expected output from ndctl utility
 // can be converted into native storage ScmNamespaces type.
 func TestIpmctl_parseNamespaces(t *testing.T) {

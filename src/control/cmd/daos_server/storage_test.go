@@ -51,8 +51,9 @@ func TestDaosServer_StoragePrepare_SCM(t *testing.T) {
 			expScanErr: errors.New("fail"),
 		},
 		"create regions; no consent": {
-			noForce:    true,
-			expScanErr: errors.New("consent not given"), // prompts for confirmation and gets EOF
+			noForce: true,
+			// prompts for confirmation and gets EOF
+			expScanErr: errors.New("consent not given"),
 		},
 		"create regions; no state change": {
 			prepResp: &storage.ScmPrepareResponse{
@@ -68,10 +69,12 @@ func TestDaosServer_StoragePrepare_SCM(t *testing.T) {
 			expLogMsg: storage.ScmMsgRebootRequired,
 		},
 		"non-interleaved regions": {
+			// If non-interleaved regions are detected, prep will return an
+			// error. So returning the state is unexpected.
 			prepResp: &storage.ScmPrepareResponse{
 				State: storage.ScmStateNotInterleaved,
 			},
-			expScanErr: storage.FaultScmNotInterleaved,
+			expScanErr: errors.New("unexpected state"),
 		},
 		"create namespaces; no state change": {
 			prepResp: &storage.ScmPrepareResponse{
@@ -93,9 +96,10 @@ func TestDaosServer_StoragePrepare_SCM(t *testing.T) {
 			expLogMsg: printNamespace.String(),
 		},
 		"reset; remove regions; no consent": {
-			reset:      true,
-			noForce:    true,
-			expScanErr: errors.New("consent not given"), // prompts for confirmation and gets EOF
+			reset:   true,
+			noForce: true,
+			// prompts for confirmation and gets EOF
+			expScanErr: errors.New("consent not given"),
 		},
 		"reset; remove regions; reboot required": {
 			reset: true,

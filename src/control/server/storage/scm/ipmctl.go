@@ -124,10 +124,6 @@ func (cr *cmdRunner) checkIpmctl(badList []semVer) error {
 	return nil
 }
 
-func (cr *cmdRunner) showIpmctlVersion() (string, error) {
-	return cr.runCmd(cmdShowIpmctlVersion)
-}
-
 func (cr *cmdRunner) showRegions() {
 	if err := cr.checkIpmctl(badIpmctlVers); err != nil {
 		cr.log.Error(errors.WithMessage(err, "checkIpmctl").Error())
@@ -328,11 +324,11 @@ func (cr *cmdRunner) getState() (storage.ScmState, error) {
 
 	var totalFree uint64
 	for _, region := range regions {
-		regionHealth := ipmctl.PMemRegionHealth(region.Health)
-		if regionHealth != ipmctl.RegionHealthNormal {
+		health := ipmctl.PMemRegionHealth(region.Health)
+		if health != ipmctl.RegionHealthNormal && health != ipmctl.RegionHealthPending {
 			cr.showRegions()
 			cr.log.Errorf("unexpected PMem region health %q, want %q",
-				regionHealth, ipmctl.RegionHealthNormal)
+				health, ipmctl.RegionHealthNormal)
 		}
 
 		regionType := ipmctl.PMemRegionType(region.Type)
@@ -378,10 +374,9 @@ func (cr *cmdRunner) prep(scanRes *storage.ScmScanResponse) (resp *storage.ScmPr
 	cr.log.Debugf("scm backend prep: state %q", state)
 
 	switch state {
-	case storage.ScmStateUnknown:
-		err = errors.New("unknown scm state")
 	case storage.ScmStateNotInterleaved:
 		// Non-interleaved AppDirect memory mode is unsupported.
+		err = storage.FaultScmNotInterleaved
 	case storage.ScmStateNoRegions:
 		// No regions exist, create interleaved AppDirect PMem regions.
 		if err = cr.createRegions(); err != nil {
@@ -424,8 +419,6 @@ func (cr *cmdRunner) prepReset(scanRes *storage.ScmScanResponse) (*storage.ScmPr
 	case storage.ScmStateFreeCapacity, storage.ScmStateNoFreeCapacity, storage.ScmStateNotInterleaved:
 		// Continue to remove namespaces and regions.
 		resp.RebootRequired = true
-	case storage.ScmStateUnknown:
-		return nil, errors.New("unknown scm state")
 	default:
 		return nil, errors.Errorf("unhandled scm state %q", state)
 	}
