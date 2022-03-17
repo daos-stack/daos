@@ -809,16 +809,20 @@ io_update_and_fetch_dkey(struct io_test_args *arg, daos_epoch_t update_epoch,
 			memcpy(last_akey, akey_buf, arg->akey_size);
 		}
 
-		set_iov(&dkey, &dkey_buf[0], is_daos_obj_type_set(arg->otype, DAOS_OT_DKEY_UINT64));
-		set_iov(&akey, &akey_buf[0], is_daos_obj_type_set(arg->otype, DAOS_OT_AKEY_UINT64));
+		set_iov(&dkey, &dkey_buf[0],
+			is_daos_obj_type_set(arg->otype, DAOS_OT_DKEY_UINT64));
+		set_iov(&akey, &akey_buf[0],
+			is_daos_obj_type_set(arg->otype, DAOS_OT_AKEY_UINT64));
 
 		dts_buf_render(update_buf, UPDATE_BUF_SIZE);
 		d_iov_set(&val_iov, &update_buf[0], UPDATE_BUF_SIZE);
 		iod.iod_size = recx_size;
 		rex.rx_nr    = recx_nr;
 	} else {
-		set_iov(&dkey, &last_dkey[0], is_daos_obj_type_set(arg->otype, DAOS_OT_DKEY_UINT64));
-		set_iov(&akey, &last_akey[0], is_daos_obj_type_set(arg->otype, DAOS_OT_AKEY_UINT64));
+		set_iov(&dkey, &last_dkey[0],
+			is_daos_obj_type_set(arg->otype, DAOS_OT_DKEY_UINT64));
+		set_iov(&akey, &last_akey[0],
+			is_daos_obj_type_set(arg->otype, DAOS_OT_AKEY_UINT64));
 
 		memset(update_buf, 0, UPDATE_BUF_SIZE);
 		d_iov_set(&val_iov, &update_buf[0], UPDATE_BUF_SIZE);

@@ -95,7 +95,7 @@ run_all_tests(int keys, bool nest_iterators)
 	}
 	dts_create_config(cfg_desc_io, "keys=%d iterator=%s", keys, it);
 
-	for (i = 0; i < (sizeof(type_list)/sizeof(int)); i++) {
+	for (i = 0; i < (sizeof(type_list) / sizeof(int)); i++) {
 		failed += run_io_test(type_list[i], keys, nest_iterators, cfg_desc_io);
 	}
 
