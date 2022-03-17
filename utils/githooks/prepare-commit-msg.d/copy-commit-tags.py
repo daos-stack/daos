@@ -4,7 +4,7 @@
 
 import os
 import sys
-import subprocess
+import subprocess  # nosec
 from collections import OrderedDict
 
 
@@ -44,7 +44,7 @@ def main():
         return
 
     tags = OrderedDict()
-    rc = subprocess.run(['git', 'log', '-1'], stdout=subprocess.PIPE)
+    rc = subprocess.run(['git', 'log', '-1'], capture_output=True, check=True)
     for line in rc.stdout.decode('utf-8').splitlines():
         if ':' not in line:
             continue
