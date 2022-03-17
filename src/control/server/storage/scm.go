@@ -464,10 +464,10 @@ func (f *ScmAdminForwarder) Prepare(req ScmPrepareRequest) (*ScmPrepareResponse,
 
 const (
 	// ScmFirmwareQueryMethod is the method name used when forwarding the request
-	// to query PMem firmware.
+	// to query SCM firmware.
 	ScmFirmwareQueryMethod = "ScmFirmwareQuery"
 	// ScmFirmwareUpdateMethod is the method name used when forwarding the request
-	// to update PMem firmware.
+	// to update SCM firmware.
 	ScmFirmwareUpdateMethod = "ScmFirmwareUpdate"
 )
 
@@ -491,7 +491,7 @@ func (f *ScmFwForwarder) checkSupport() error {
 		return nil
 	}
 
-	return errors.Errorf("PMem firmware operations are not supported on this system")
+	return errors.Errorf("SCM firmware operations are not supported on this system")
 }
 
 // Query forwards an SCM firmware query request.

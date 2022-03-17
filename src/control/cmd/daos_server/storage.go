@@ -149,12 +149,10 @@ func (cmd *storagePrepareCmd) prepScm(scanErrors *errs, prep scmPrepFn) error {
 		return scanErrors.add(errors.Errorf("unexpected state %q after prepare reset", state))
 	}
 
-	// Respond to resultant state on prepare setup.
+	// Respond to state reported by prepare setup.
 	switch state {
 	case storage.ScmStateNoRegions:
 		scanErrors.add(errors.New("failed to create regions"))
-	case storage.ScmStateNotInterleaved:
-		scanErrors.add(storage.FaultScmNotInterleaved)
 	case storage.ScmStateFreeCapacity:
 		scanErrors.add(errors.New("failed to create namespaces"))
 	case storage.ScmStateNoFreeCapacity:
@@ -162,12 +160,12 @@ func (cmd *storagePrepareCmd) prepScm(scanErrors *errs, prep scmPrepFn) error {
 			scanErrors.add(errors.New("failed to find namespaces"))
 			break
 		}
-		// Namespaces created successfully.
+		// Namespaces exist.
 		var bld strings.Builder
 		if err := pretty.PrintScmNamespaces(resp.Namespaces, &bld); err != nil {
 			return err
 		}
-		cmd.log.Infof("SCM namespaces:\n%s\n", bld.String())
+		cmd.log.Infof("%s\n", bld.String())
 	default:
 		scanErrors.add(errors.Errorf("unexpected state %q after prepare reset", state))
 	}

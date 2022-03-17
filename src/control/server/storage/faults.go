@@ -14,13 +14,13 @@ import (
 	"github.com/daos-stack/daos/src/control/fault/code"
 )
 
-// FaultScmPMemNotInterleaved represents an error where PMem regions exist in non-interleaved
+// FaultScmNotInterleaved represents an error where PMem regions exist in non-interleaved
 // mode, this is unsupported.
 var FaultScmNotInterleaved = storageFault(code.ScmNotInterleaved,
 	"PMem regions are in AppDirect non-interleaved mode",
 	"Rerun the command first with the reset option and then without to recreate the PMem regions in the recommended mode")
 
-// FaultScmNoPMemModules represents an error where no PMem modules exist.
+// FaultScmNoModules represents an error where no PMem modules exist.
 var FaultScmNoModules = storageFault(code.ScmNoModules,
 	"No PMem modules exist on storage server",
 	"Install PMem modules and retry command")

@@ -262,13 +262,32 @@ func TestDaosAdmin_ScmPrepHandler(t *testing.T) {
 			},
 			expErr: pbin.PrivilegedHelperRequestFailed("unexpected end of JSON input"),
 		},
-		"ScmPrepare success": {
+		"ScmPrepare success; no modules": {
 			req: &pbin.Request{
 				Method:  "ScmPrepare",
 				Payload: scmPrepareReqPayload,
 			},
 			expPayload: &storage.ScmPrepareResponse{
 				State:      storage.ScmStateNoModules,
+				Namespaces: storage.ScmNamespaces{},
+			},
+		},
+		"ScmPrepare success; with modules": {
+			req: &pbin.Request{
+				Method:  "ScmPrepare",
+				Payload: scmPrepareReqPayload,
+			},
+			smbc: &scm.MockBackendConfig{
+				GetModulesRes: []*storage.ScmModule{
+					storage.MockScmModule(0),
+				},
+				PrepRes: &storage.ScmPrepareResponse{
+					State:      storage.ScmStateFreeCapacity,
+					Namespaces: storage.ScmNamespaces{},
+				},
+			},
+			expPayload: &storage.ScmPrepareResponse{
+				State:      storage.ScmStateFreeCapacity,
 				Namespaces: storage.ScmNamespaces{},
 			},
 		},

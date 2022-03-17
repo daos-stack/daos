@@ -140,9 +140,6 @@ func getRegions(log logging.Logger, getNum getNumberOfRegionsFn, get getRegionsF
 	if err = Rc2err("get_regions", get(&pmemRegions[0], &count)); err != nil {
 		return
 	}
-	for idx, pmr := range pmemRegions {
-		log.Debugf("ipmctl pmem region %d: %+v", idx, pmr)
-	}
 
 	// Cast struct array to slice of go equivalent structs.
 	regions = (*[1 << 30]PMemRegion)(unsafe.Pointer(&pmemRegions[0]))[:count:count]
