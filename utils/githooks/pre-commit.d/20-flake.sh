@@ -15,9 +15,11 @@ then
 fi
 
 echo Checking uncommitted code with flake.
-if ! git diff -u | flake8 --diff
-then
-    exit ${PIPESTATUS[@]}
+git diff -u | flake8 --diff
+
+RC=$?
+if [ $RC -ne 0 ]
+   exit $RC
 fi
 
 BRANCH=$(git rev-parse --abbrev-ref HEAD > /dev/null 2>&1)
