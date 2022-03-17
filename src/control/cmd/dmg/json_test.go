@@ -70,35 +70,41 @@ func TestDmg_JsonOutput(t *testing.T) {
 				"manpage":
 				return
 			case "storage nvme-rebind":
-				testArgs = append(testArgs, "-l", "foo.com", "-a", common.MockPCIAddr())
+				testArgs = append(testArgs, "-l", "foo.com", "-a",
+					common.MockPCIAddr())
+			case "storage nvme-add-device":
+				testArgs = append(testArgs, "-l", "foo.com", "-a",
+					common.MockPCIAddr(), "-e", "0")
 			case "storage query target-health":
-				testArgs = append(testArgs, []string{"-r", "0", "-t", "0"}...)
+				testArgs = append(testArgs, "-r", "0", "-t", "0")
 			case "storage query device-health":
-				testArgs = append(testArgs, []string{"-u", common.MockUUID()}...)
+				testArgs = append(testArgs, "-u", common.MockUUID())
 			case "storage set nvme-faulty":
-				testArgs = append(testArgs, []string{"--force", "-u", common.MockUUID()}...)
+				testArgs = append(testArgs, "--force", "-u", common.MockUUID())
 			case "storage replace nvme":
-				testArgs = append(testArgs, []string{"--old-uuid", common.MockUUID(), "--new-uuid", common.MockUUID()}...)
+				testArgs = append(testArgs, "--old-uuid", common.MockUUID(),
+					"--new-uuid", common.MockUUID())
 			case "storage identify vmd":
-				testArgs = append(testArgs, []string{"--uuid", common.MockUUID()}...)
+				testArgs = append(testArgs, "--uuid", common.MockUUID())
 			case "pool create":
-				testArgs = append(testArgs, []string{"-s", "1TB"}...)
+				testArgs = append(testArgs, "-s", "1TB")
 			case "pool destroy", "pool evict", "pool query", "pool get-acl":
-				testArgs = append(testArgs, []string{common.MockUUID()}...)
+				testArgs = append(testArgs, common.MockUUID())
 			case "pool overwrite-acl", "pool update-acl":
-				testArgs = append(testArgs, []string{common.MockUUID(), "-a", aclPath}...)
+				testArgs = append(testArgs, common.MockUUID(), "-a", aclPath)
 			case "pool delete-acl":
-				testArgs = append(testArgs, []string{common.MockUUID(), "-p", "foo@"}...)
+				testArgs = append(testArgs, common.MockUUID(), "-p", "foo@")
 			case "pool set-prop":
-				testArgs = append(testArgs, []string{common.MockUUID(), "label:foo"}...)
+				testArgs = append(testArgs, common.MockUUID(), "label:foo")
 			case "pool get-prop":
-				testArgs = append(testArgs, []string{common.MockUUID(), "label"}...)
+				testArgs = append(testArgs, common.MockUUID(), "label")
 			case "pool extend":
-				testArgs = append(testArgs, []string{common.MockUUID(), "--ranks", "0"}...)
+				testArgs = append(testArgs, common.MockUUID(), "--ranks", "0")
 			case "pool exclude", "pool drain", "pool reintegrate":
-				testArgs = append(testArgs, []string{common.MockUUID(), "--rank", "0"}...)
+				testArgs = append(testArgs, common.MockUUID(), "--rank", "0")
 			case "container set-owner":
-				testArgs = append(testArgs, []string{"--user", "foo", "--pool", common.MockUUID(), "--cont", common.MockUUID()}...)
+				testArgs = append(testArgs, "--user", "foo", "--pool", common.MockUUID(),
+					"--cont", common.MockUUID())
 			case "telemetry metrics list", "telemetry metrics query":
 				return // These commands query via http directly
 			case "system cleanup":

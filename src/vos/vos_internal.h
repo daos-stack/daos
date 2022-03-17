@@ -820,7 +820,6 @@ struct vos_iterator {
 				 it_for_purge:1,
 				 it_for_discard:1,
 				 it_for_migration:1,
-				 it_cleanup_stale_dtx:1,
 				 it_show_uncommitted:1,
 				 it_ignore_uncommitted:1;
 };
@@ -1093,6 +1092,18 @@ vos_gc_pool_tight(daos_handle_t poh, int *credits);
 void
 gc_reserve_space(daos_size_t *rsrvd);
 
+/**
+ * If the object is fully punched, bypass normal aggregation and move it to container
+ * discard pool
+ *
+ * \param ih[IN]	Iterator handle
+ *
+ * \return		Zero on Success
+ *			Positive value if a reprobe is needed
+ *			Negative value otherwise
+ */
+int
+oi_iter_pre_aggregate(daos_handle_t ih);
 
 /**
  * Aggregate the creation/punch records in the current entry of the object
@@ -1108,6 +1119,19 @@ gc_reserve_space(daos_size_t *rsrvd);
  */
 int
 oi_iter_aggregate(daos_handle_t ih, bool range_discard);
+
+/**
+ * If the key is fully punched, bypass normal aggregation and move it to container
+ * discard pool
+ *
+ * \param ih[IN]	Iterator handle
+ *
+ * \return		Zero on Success
+ *			Positive value if a reprobe is needed
+ *			Negative value otherwise
+ */
+int
+vos_obj_iter_pre_aggregate(daos_handle_t ih);
 
 /**
  * Aggregate the creation/punch records in the current entry of the key

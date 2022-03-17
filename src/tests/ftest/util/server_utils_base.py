@@ -11,7 +11,8 @@ import re
 from ClusterShell.NodeSet import NodeSet
 
 from command_utils_base import FormattedParameter, CommandWithParameters
-from command_utils import YamlCommand, CommandWithSubCommand, CommandFailure
+from command_utils import YamlCommand, CommandWithSubCommand
+from exception_utils import CommandFailure
 from general_utils import get_display_size, human_to_bytes
 
 

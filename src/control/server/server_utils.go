@@ -258,18 +258,19 @@ func prepBdevStorage(srv *server, iommuEnabled bool) error {
 
 // scanBdevStorage performs discovery and validates existence of configured NVMe SSDs.
 func scanBdevStorage(srv *server) (*storage.BdevScanResponse, error) {
+	if srv.cfg.NrHugepages < 0 {
+		srv.log.Debugf("skip nvme scan as hugepages have been disabled in config")
+		return &storage.BdevScanResponse{}, nil
+	}
+
 	nvmeScanResp, err := srv.ctlSvc.NvmeScan(storage.BdevScanRequest{
 		DeviceList:  cfgGetBdevs(srv.cfg),
 		BypassCache: true, // init cache on first scan
 	})
 	if err != nil {
-		// Return error if fault code is for BdevNotFound.
-		if storage.FaultBdevNotFound().Equals(err) {
-			return nil, err
-		}
-		// Keep going for other scan related failures.
-		srv.log.Errorf("%s\n", errors.Wrap(err, "NVMe Scan Failed"))
-		return &storage.BdevScanResponse{}, nil
+		err = errors.Wrap(err, "NVMe Scan Failed")
+		srv.log.Errorf("%s", err)
+		return nil, err
 	}
 
 	return nvmeScanResp, nil
@@ -483,6 +484,7 @@ func getGrpcOpts(cfgTransport *security.TransportConfig) ([]grpc.ServerOption, e
 	unaryInterceptors := []grpc.UnaryServerInterceptor{
 		unaryErrorInterceptor,
 		unaryStatusInterceptor,
+		unaryVersionInterceptor,
 	}
 	streamInterceptors := []grpc.StreamServerInterceptor{
 		streamErrorInterceptor,

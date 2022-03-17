@@ -11,7 +11,7 @@ test_clients:
 extra_servers:
   test_servers:
     - server-C
-timeout: 1000
+timeout: 1200
 skip_add_log_msg: True
 server_config:
   name: daos_server

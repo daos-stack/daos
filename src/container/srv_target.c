@@ -82,7 +82,7 @@ ds_cont_get_props(struct cont_props *cont_props, uuid_t pool_uuid,
 	/* The provided prop entry types should cover the types used in
 	 * daos_props_2cont_props().
 	 */
-	props = daos_prop_alloc(10);
+	props = daos_prop_alloc(12);
 	if (props == NULL)
 		return -DER_NOMEM;
 
@@ -96,6 +96,8 @@ ds_cont_get_props(struct cont_props *cont_props, uuid_t pool_uuid,
 	props->dpp_entries[7].dpe_type = DAOS_PROP_CO_REDUN_FAC;
 	props->dpp_entries[8].dpe_type = DAOS_PROP_CO_ALLOCED_OID;
 	props->dpp_entries[9].dpe_type = DAOS_PROP_CO_EC_CELL_SZ;
+	props->dpp_entries[10].dpe_type = DAOS_PROP_CO_EC_PDA;
+	props->dpp_entries[11].dpe_type = DAOS_PROP_CO_RP_PDA;
 
 	rc = cont_iv_prop_fetch(pool_uuid, cont_uuid, props);
 	if (rc == DER_SUCCESS)
@@ -1290,6 +1292,7 @@ ds_cont_local_close(uuid_t cont_hdl_uuid)
 	if (hdl == NULL)
 		return 0;
 
+	hdl->sch_closed = 1;
 	cont_hdl_delete(&tls->dt_cont_hdl_hash, hdl);
 
 	ds_cont_hdl_put(hdl);
@@ -1409,6 +1412,7 @@ ds_cont_local_open(uuid_t pool_uuid, uuid_t cont_hdl_uuid, uuid_t cont_uuid,
 	uuid_copy(hdl->sch_uuid, cont_hdl_uuid);
 	hdl->sch_flags = flags;
 	hdl->sch_sec_capas = sec_capas;
+	hdl->sch_closed = 0;
 
 	rc = cont_hdl_add(&tls->dt_cont_hdl_hash, hdl);
 	if (rc != 0)
@@ -2611,3 +2615,10 @@ ds_cont_status_pm_ver_update(uuid_t pool_uuid, uuid_t cont_uuid,
 
 	return rc;
 }
+
+void
+ds_cont_ec_timestamp_update(struct ds_cont_child *cont)
+{
+	cont->sc_ec_update_timestamp = crt_hlc_get();
+}
+

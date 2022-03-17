@@ -189,7 +189,8 @@ vos_propagate_check(struct vos_object *obj, umem_off_t *known_key, daos_handle_t
 		read_flag = VOS_TS_READ_OBJ;
 		write_flag = VOS_TS_WRITE_OBJ;
 		tree_name = "DKEY";
-		break;
+		/** For now, don't propagate the punch to object layer */
+		return 0;
 	case VOS_ITER_AKEY:
 		read_flag = VOS_TS_READ_DKEY;
 		write_flag = VOS_TS_WRITE_DKEY;
@@ -1903,6 +1904,55 @@ exit:
 }
 
 int
+vos_obj_iter_pre_aggregate(daos_handle_t ih)
+{
+	struct vos_iterator	*iter = vos_hdl2iter(ih);
+	struct vos_obj_iter	*oiter = vos_iter2oiter(iter);
+	struct umem_instance	*umm;
+	struct vos_krec_df	*krec;
+	struct vos_object	*obj;
+	daos_key_t		 key;
+	struct vos_rec_bundle	 rbund;
+	int			 rc;
+
+	D_ASSERTF(iter->it_type == VOS_ITER_AKEY ||
+		  iter->it_type == VOS_ITER_DKEY,
+		  "Aggregation only supported on keys\n");
+
+	rc = key_iter_fetch_helper(oiter, &rbund, &key, NULL);
+	D_ASSERTF(rc != -DER_NONEXIST,
+		  "Iterator should probe before aggregation\n");
+	if (rc != 0)
+		return rc;
+
+	obj = oiter->it_obj;
+	krec = rbund.rb_krec;
+	umm = vos_obj2umm(oiter->it_obj);
+
+	if (!vos_ilog_is_punched(vos_cont2hdl(obj->obj_cont), &krec->kr_ilog, &oiter->it_epr,
+				 &oiter->it_punched, &oiter->it_ilog_info))
+		return 0;
+
+	/** Ok, ilog is fully punched, so we can move it to gc heap */
+	rc = umem_tx_begin(umm, NULL);
+	if (rc != 0)
+		goto exit;
+
+	/* Incarnation log is empty, delete the object */
+	D_DEBUG(DB_IO, "Moving %s to gc heap\n",
+		iter->it_type == VOS_ITER_DKEY ? "dkey" : "akey");
+
+	rc = dbtree_iter_delete(oiter->it_hdl, obj->obj_cont);
+	D_ASSERT(rc != -DER_NONEXIST);
+
+	rc = umem_tx_end(umm, rc);
+exit:
+	if (rc == 0)
+		return 1;
+
+	return rc;
+}
+int
 vos_obj_iter_aggregate(daos_handle_t ih, bool range_discard)
 {
 	struct vos_iterator	*iter = vos_hdl2iter(ih);
@@ -1910,7 +1960,6 @@ vos_obj_iter_aggregate(daos_handle_t ih, bool range_discard)
 	struct umem_instance	*umm;
 	struct vos_krec_df	*krec;
 	struct vos_object	*obj;
-	struct umem_attr	 uma;
 	daos_key_t		 key;
 	struct vos_rec_bundle	 rbund;
 	bool			 delete = false, invisible = false;
@@ -1943,22 +1992,11 @@ vos_obj_iter_aggregate(daos_handle_t ih, bool range_discard)
 		delete = true;
 		D_DEBUG(DB_IO, "Removing %s from tree\n",
 			iter->it_type == VOS_ITER_DKEY ? "dkey" : "akey");
-		/** Orphaned values indicate an incarnation log bug.  It happens
-		 *  when the key containing the subtree doesn't have a creation
-		 *  timestamp for updates in the subtree.
+
+		/* XXX: The value tree may be not empty because related prepared transaction can
+		 *	be aborted. Then it will be added and handled via GC when ktr_rec_free().
 		 */
-		if (krec->kr_bmap & KREC_BF_BTR) {
-			D_ASSERTF(dbtree_is_empty_inplace(&krec->kr_btr),
-				  "Orphaned %s detected\n",
-				  iter->it_type == VOS_ITER_DKEY ?
-				  "akey" : "single value");
-		} else if (krec->kr_bmap & KREC_BF_EVT) {
-			umem_attr_get(umm, &uma);
-			rc = evt_has_data(&krec->kr_evt, &uma);
-			if (rc < 0)
-				goto end;
-			D_ASSERTF(rc == 0, "Orphaned array value detected\n");
-		}
+
 		rc = dbtree_iter_delete(oiter->it_hdl, NULL);
 		D_ASSERT(rc != -DER_NONEXIST);
 	} else if (rc == -DER_NONEXIST) {
@@ -1967,7 +2005,6 @@ vos_obj_iter_aggregate(daos_handle_t ih, bool range_discard)
 		rc = 0;
 	}
 
-end:
 	rc = umem_tx_end(umm, rc);
 
 exit:
