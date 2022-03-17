@@ -1,12 +1,15 @@
 #!/bin/sh
 
 # Runs flake8 for the DAOS project.
-# Will first check uncomiited code, then either the entire tree if on master
-# or a diff against master if not.
 #
-# Picks up config files from .flake8
+# Will first check uncomiited code, then either the entire tree or against an entire
+# pull request if possible.
+#
+# To get the most out of this hook the 'gh' command should be installed and working.
+#
+# Picks up flake config settings from .flake8
 
-set -u
+set -ue
 
 if ! command -v flake8 > /dev/null 2>&1
 then
@@ -14,20 +17,14 @@ then
     exit 0
 fi
 
-echo Checking uncommitted code with flake.
+echo "Checking uncommitted code with flake."
 git diff -u | flake8 --diff
-
-RC=$?
-if [ $RC -ne 0 ]
-then
-   exit $RC
-fi
 
 BRANCH=$(git rev-parse --abbrev-ref HEAD > /dev/null 2>&1)
 
 if [ "$BRANCH" = "master" ]
 then
-    echo Checking tree
+    echo "Checking tree"
     flake8 --statistics
 else
 
@@ -46,6 +43,6 @@ else
 	TARGET=master
     fi
 
-    echo Checking against branch ${TARGET}
+    echo "Checking against branch ${TARGET}"
     git diff $TARGET... -u | flake8 --diff
 fi
