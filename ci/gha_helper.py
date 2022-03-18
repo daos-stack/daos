@@ -5,7 +5,7 @@
 import os
 import sys
 from os.path import join
-import subprocess #nosec
+import subprocess  # nosec
 
 BUILD_FILES = ['site_scons',
                'utils/build.config',
@@ -16,10 +16,12 @@ BUILD_FILES = ['site_scons',
 
 COMMIT_CMD = ['git', 'rev-parse', '--short', 'HEAD']
 
+
 def set_output(key, value):
     """ Set a key-value pair in github actions metadata"""
 
     print('::set-output name={}::{}'.format(key, value))
+
 
 def main():
     """Parse git histrory to load caches for GHA"""
