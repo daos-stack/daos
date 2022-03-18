@@ -170,8 +170,8 @@ func (c *ControlService) adjustNvmeSize(resp *ctlpb.ScanNvmeResp) {
 	for _, ctl := range resp.GetCtrlrs() {
 		for _, dev := range ctl.GetSmdDevices() {
 			if dev.GetDevState() != "NORMAL" {
-				c.log.Infof("WARNING: Adjusting available size of unusable SMD "+
-					"device %s (ctlr %s) to O Bytes: device state %q",
+				c.log.Debugf("Adjusting available size of unusable SMD device %s "+
+					"(ctlr %s) to O Bytes: device state %q",
 					dev.GetUuid(), ctl.GetPciAddr(), dev.GetDevState())
 				dev.AvailBytes = 0
 				continue
