@@ -60,10 +60,11 @@ type Server struct {
 	TelemetryPort       int                    `yaml:"telemetry_port,omitempty"`
 
 	// duplicated in engine.Config
-	SystemName string              `yaml:"name"`
-	SocketDir  string              `yaml:"socket_dir"`
-	Fabric     engine.FabricConfig `yaml:",inline"`
-	Modules    string              `yaml:"-"`
+	SystemName     string              `yaml:"name"`
+	SocketDir      string              `yaml:"socket_dir"`
+	Fabric         engine.FabricConfig `yaml:",inline"`
+	Modules        string              `yaml:"-"`
+	NrSecondaryCtx int                 `yaml:"nr_secondary_contexts,omitempty"`
 
 	AccessPoints []string `yaml:"access_points"`
 
@@ -135,6 +136,15 @@ func (cfg *Server) WithCrtTimeout(timeout uint32) *Server {
 	return cfg
 }
 
+// WithNrSecondaryCtx sets the number of CART contexts for each engine's secondary provider.
+func (cfg *Server) WithNrSecondaryCtx(nr int) *Server {
+	cfg.NrSecondaryCtx = nr
+	for _, engine := range cfg.Engines {
+		engine.WithNrSecondaryCtx(cfg.perEngineNrSecondaryCtx())
+	}
+	return cfg
+}
+
 // NB: In order to ease maintenance, the set of chained config functions
 // which modify nested engine configurations should be kept above this
 // one as a reference for which things should be set/updated in the next
@@ -154,7 +164,16 @@ func (cfg *Server) updateServerConfig(cfgPtr **engine.Config) {
 	engineCfg.SystemName = cfg.SystemName
 	engineCfg.SocketDir = cfg.SocketDir
 	engineCfg.Modules = cfg.Modules
+	engineCfg.NrSecondaryCtx = cfg.perEngineNrSecondaryCtx()
 	engineCfg.Storage.EnableHotplug = cfg.EnableHotplug
+}
+
+func (cfg *Server) perEngineNrSecondaryCtx() int {
+	numSecProviders := cfg.Fabric.GetNumProviders() - 1
+	if numSecProviders < 1 {
+		return 0
+	}
+	return numSecProviders * cfg.NrSecondaryCtx
 }
 
 // WithEngines sets the list of engine configurations.

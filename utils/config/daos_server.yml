@@ -193,6 +193,17 @@
 ##nr_hugepages: -1
 #
 #
+## Number of CART contexts per secondary provider per engine
+#
+## Specifies the number of secondary CART contexts each engine will create for
+## each additional fabric provider after the first. This only applies when
+## running in multi-provider mode.
+#
+## default: 0
+#
+#nr_secondary_contexts: 1
+#
+#
 ## Force specific debug mask for daos_server (control plane).
 ## By default, just use the default debug mask used by daos_server.
 ## Mask specifies minimum level of message significance to pass to logger.

@@ -796,6 +796,34 @@ func TestFabricConfig_GetProviders(t *testing.T) {
 	}
 }
 
+func TestFabricConfig_GetNumProviders(t *testing.T) {
+	for name, tc := range map[string]struct {
+		cfg    *FabricConfig
+		expNum int
+	}{
+		"nil": {},
+		"empty": {
+			cfg: &FabricConfig{},
+		},
+		"single": {
+			cfg: &FabricConfig{
+				Provider: "p1",
+			},
+			expNum: 1,
+		},
+		"multi": {
+			cfg: &FabricConfig{
+				Provider: "p1 p2 p3 p4",
+			},
+			expNum: 4,
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			common.AssertEqual(t, tc.expNum, tc.cfg.GetNumProviders(), "")
+		})
+	}
+}
+
 func TestFabricConfig_GetPrimaryProvider(t *testing.T) {
 	for name, tc := range map[string]struct {
 		cfg         *FabricConfig

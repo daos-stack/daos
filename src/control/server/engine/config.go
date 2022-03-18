@@ -75,6 +75,15 @@ func splitMultiProviderStr(str string) []string {
 	return result
 }
 
+// GetNumProviders gets the number of fabric providers configured.
+func (fc *FabricConfig) GetNumProviders() int {
+	providers, err := fc.GetProviders()
+	if err != nil {
+		return 0
+	}
+	return len(providers)
+}
+
 // GetPrimaryInterface parses the primary fabric interface from the Interface string.
 func (fc *FabricConfig) GetPrimaryInterface() (string, error) {
 	interfaces, err := fc.GetInterfaces()
@@ -264,6 +273,7 @@ type Config struct {
 	Index             uint32         `yaml:"-" cmdLongFlag:"--instance_idx" cmdShortFlag:"-I"`
 	MemSize           int            `yaml:"-" cmdLongFlag:"--mem_size" cmdShortFlag:"-r"`
 	HugePageSz        int            `yaml:"-" cmdLongFlag:"--hugepage_size" cmdShortFlag:"-H"`
+	NrSecondaryCtx    int            `yaml:"-" cmdLongFlag:"--nr_sec_ctx,nonzero" cmdShortFlag:"-S,nonzero"`
 }
 
 // NewConfig returns an I/O Engine config.
@@ -507,6 +517,12 @@ func (c *Config) WithCrtCtxShareAddr(addr uint32) *Config {
 // WithCrtTimeout defines the CRT_TIMEOUT for this instance
 func (c *Config) WithCrtTimeout(timeout uint32) *Config {
 	c.Fabric.CrtTimeout = timeout
+	return c
+}
+
+// WithNrSecondaryCtx sets the number of CART contexts for each secondary provider.
+func (c *Config) WithNrSecondaryCtx(nr int) *Config {
+	c.NrSecondaryCtx = nr
 	return c
 }
 
