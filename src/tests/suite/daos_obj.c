@@ -4553,11 +4553,18 @@ int_key_setting(void **state, int size)
 	int                     rc;
 
 	dkey_buf = malloc(size);
-	akey_buf = malloc(size);
-	if (!dkey_buf || !akey_buf) {
+	if (!dkey_buf) {
 		print_message("allocation memory failed\n");
 		return;
 	}
+
+	akey_buf = malloc(size);
+	if (!akey_buf) {
+		print_message("allocation memory failed\n");
+		free(dkey_buf);
+		return;
+	}
+
 	/*
 	 * Object with integer dkey / akey should fail IO with -DER_INVAL if
 	 * key size is not correct.

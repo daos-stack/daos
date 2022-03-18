@@ -904,3 +904,102 @@ func TestControl_StorageNvmeRebind(t *testing.T) {
 		})
 	}
 }
+
+func TestControl_StorageNvmeAddDevice(t *testing.T) {
+	for name, tc := range map[string]struct {
+		mic         *MockInvokerConfig
+		pciAddr     string
+		expResponse *NvmeAddDeviceResp
+		expErr      error
+	}{
+		"empty pci address": {
+			mic: &MockInvokerConfig{
+				UnaryResponseSet: []*UnaryResponse{
+					{},
+				},
+			},
+			expErr: errors.New("invalid pci address"),
+		},
+		"invalid pci address": {
+			mic: &MockInvokerConfig{
+				UnaryResponseSet: []*UnaryResponse{
+					{},
+				},
+			},
+			pciAddr: "ZZZZ:MM:NN.O",
+			expErr:  errors.New("invalid pci address"),
+		},
+		"empty response": {
+			mic: &MockInvokerConfig{
+				UnaryResponseSet: []*UnaryResponse{
+					{},
+				},
+			},
+			pciAddr:     common.MockPCIAddr(),
+			expResponse: new(NvmeAddDeviceResp),
+		},
+		"invoke fails": {
+			mic: &MockInvokerConfig{
+				UnaryError: errors.New("failed"),
+			},
+			pciAddr: common.MockPCIAddr(),
+			expErr:  errors.New("failed"),
+		},
+		"server error": {
+			mic: &MockInvokerConfig{
+				UnaryResponseSet: []*UnaryResponse{
+					{
+						Responses: []*HostResponse{
+							{
+								Addr:  "host1",
+								Error: errors.New("failed"),
+							},
+						},
+					},
+				},
+			},
+			pciAddr: common.MockPCIAddr(),
+			expResponse: &NvmeAddDeviceResp{
+				HostErrorsResp: MockHostErrorsResp(t, &MockHostError{"host1", "failed"}),
+			},
+		},
+		"success": {
+			mic: &MockInvokerConfig{
+				UnaryResponseSet: []*UnaryResponse{
+					{
+						Responses: []*HostResponse{
+							{
+								Addr:    "host1",
+								Message: &ctlpb.NvmeAddDeviceResp{},
+							},
+						},
+					},
+				},
+			},
+			pciAddr:     common.MockPCIAddr(),
+			expResponse: &NvmeAddDeviceResp{},
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(t.Name())
+			defer common.ShowBufferOnFailure(t, buf)
+
+			ctx := context.TODO()
+			mi := NewMockInvoker(log, tc.mic)
+
+			gotResponse, gotErr := StorageNvmeAddDevice(ctx, mi, &NvmeAddDeviceReq{
+				PCIAddr:          tc.pciAddr,
+				EngineIndex:      0,
+				StorageTierIndex: -1,
+			})
+			common.CmpErr(t, tc.expErr, gotErr)
+			if tc.expErr != nil {
+				return
+			}
+
+			if diff := cmp.Diff(tc.expResponse, gotResponse, defResCmpOpts()...); diff != "" {
+				t.Fatalf("unexpected response (-want, +got):\n%s\n", diff)
+			}
+		})
+	}
+}
