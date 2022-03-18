@@ -211,4 +211,5 @@ class PoolCreateAllVmTests(PoolCreateAllBaseTests):
 
         self.log.info("Checking size of available storage after the creation of the second pool")
         self.assertLessEqual(self.scm_avail_bytes, self.delta_bytes,
-                "Invalid SCM size: want=0, got={}, delta={}".format(self.scm_avail_bytes, self.delta_bytes))
+                "Invalid SCM size: want=0, got={}, delta={}".format(self.scm_avail_bytes,
+                    self.delta_bytes))
