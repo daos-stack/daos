@@ -196,16 +196,18 @@ func (c *ControlService) adjustNvmeSize(resp *ctlpb.ScanNvmeResp) {
 // return the size of the ram disk file used for managing SCM metadata
 func (c *ControlService) getMetadataCapacity(mountPoint string) (uint64, error) {
 	var engineCfg *engine.Config
-loop:
 	for index := range c.srvCfg.Engines {
+		if engineCfg != nil {
+			break
+		}
+
 		for _, tierCfg := range c.srvCfg.Engines[index].Storage.Tiers {
 			if !tierCfg.IsSCM() || tierCfg.Scm.MountPoint != mountPoint {
 				continue
 			}
 
 			engineCfg = c.srvCfg.Engines[index]
-			// We break the two nested loops thanks to the labeled break
-			break loop
+			break
 		}
 	}
 
