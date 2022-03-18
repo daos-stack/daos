@@ -2265,7 +2265,7 @@ func TestServer_adjustNvmeSize(t *testing.T) {
 					8 * humanize.GiByte,
 					0,
 				},
-				message: "WARNING: Adjusting available size of unusable SMD device",
+				message: "Adjusting available size of unusable SMD device",
 			},
 		},
 		"missing targets": {
