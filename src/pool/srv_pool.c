@@ -5814,7 +5814,9 @@ ds_pool_target_status_check(struct ds_pool *pool, uint32_t id, uint8_t matched_s
 	struct pool_target *target;
 	int		   rc;
 
+	ABT_rwlock_rdlock(pool->sp_lock);
 	rc = pool_map_find_target(pool->sp_map, id, &target);
+	ABT_rwlock_unlock(pool->sp_lock);
 	if (rc <= 0)
 		return rc == 0 ? -DER_NONEXIST : rc;
 
