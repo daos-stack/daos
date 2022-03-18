@@ -39,7 +39,8 @@ fi
 find src/control/ -name '*.go' -and -not -path '*vendor*' -exec gofmt -w -e -s {} +
 
 # Auto-format any python code that we have.
-autopep8 --exclude .git,src/rdb/raft -j -1 -r --max-line-length 100 -i SConstruct .
 autopep8 --exclude .git --exclude src/rdb/raft --exclude src/control/vendor  -j -1 -r --max-line-length 100 -i SConstruct .
+
+git diff
 
 exit $RC
