@@ -25,6 +25,8 @@ RUN dnf -y install dnf-plugins-core &&				\
     dnf -y module install avocado &&				\
     dnf clean all
 
+ENV PATH=/root/.local/bin:$PATH
+
 RUN python3 -m pip --no-cache-dir --disable-pip-version-check install --user autopep8
 
 ARG UID=1000
