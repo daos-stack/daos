@@ -5,8 +5,8 @@ using DAOS as backend storage. This small cluster is composed of the following t
 
 - `daos-server` - node running a DAOS server daemon that manages data storage devices such as SCM or
   NVMe disks.
-- `daos-admin` node allows managing the DAOS server thanks to the `dmg` command.
-- `daos-client` node uses the DAOS server to store data.
+- `daos-admin` - node allows managing the DAOS server thanks to the `dmg` command.
+- `daos-client` - node uses the DAOS server to store data.
 
 At this time, only emulated hardware storage is supported by this Docker platform:
 
@@ -14,8 +14,7 @@ At this time, only emulated hardware storage is supported by this Docker platfor
 - NVMe disks are emulated with a file device.
 
 !!! warning
-DAOS does not yet fully support virtual Docker networks such as: [bridge](https://docs.docker.com/network/bridge/) and the loopback interface
-> Loopback interface Workaround- Use one physical network interface of the host for use by the containers through the Docker [host](https://docs.docker.com/network/host/) network.
+  DAOS does not yet fully support virtual Docker networks such as: [bridge](https://docs.docker.com/network/bridge/) and the loopback interface. Docker Virtual Network Interface Workaround - Use one physical network interface of the host for use by the containers through the Docker [host](https://docs.docker.com/network/host/) network.
 
 ## Prerequisites
 
@@ -33,7 +32,7 @@ To build and deploy the Docker images, the following is required on the host:
 - OS enabled
   - Hugepages enabled (see below)
   - IOMMU support must also be enabled in the Linux kernel once VT-d is enabled in the BIOS
-    - Exact details depend on the Host OS distribution, for CentOS use the following example: (JEO- need to do something other than CentOS7)
+    - Exact details depend on the Host OS distribution, for distributions using GRUB, use the following:
 
       ```bash
       $ sudo vi /etc/default/grub # add the following line:
@@ -86,7 +85,8 @@ It is also possible to use the `sysctl` command to allocate HugePages at boot ti
 following command:
 
 ```command
-cat <<< "vm.nr_hugepages = 8192" > /etc/sysctl.d/50-hugepages.conf sysctl -p
+cat <<< "vm.nr_hugepages = 8192" > /etc/sysctl.d/50-hugepages.conf 
+sysctl -p
 ```
 
 ## Building Docker Images
@@ -96,7 +96,7 @@ cat <<< "vm.nr_hugepages = 8192" > /etc/sysctl.d/50-hugepages.conf sysctl -p
 The first image to create is the `daos-base` image, used to build the other three daos images. This first image is built directly from GitHub with the following command:
 
 ```bash
-$ docker build --tag daos-base:rocky8.4 \
+docker build --tag daos-base:rocky8.4 \
       https://github.com/daos-stack/daos.git#release/2.0:utils/docker/vcluster/daos-base/el8
 ```
 
@@ -104,10 +104,10 @@ $ docker build --tag daos-base:rocky8.4 \
 
 The three images `daos-server`, `daos-admin` and `daos-client` are built directly from GitHub
 
-The following command is used to build the three images directly from GitHub: (JEO, why are we doing a base image, if we are pulling from github?)
+The following command is used to build the three images directly from GitHub:
 
 ```bash
-$ for image in daos-server daos-admin daos-client ; do \
+for image in daos-server daos-admin daos-client ; do \
       docker build --tag "$image:rocky8.4" \
             "https://github.com/daos-stack/daos.git#release/2.0:utils/docker/vcluster/$image/el8"; \
 done
@@ -128,17 +128,17 @@ The Docker file of the `daos-server` image accept several arguments, but for thi
 Once the images are created, the containers can be directly started with the following commands:
 
 ```bash
-$ export DAOS_IFACE_IP=x.x.x.x
-$ docker run --detach --privileged --name=daos-server --hostname=daos-server \
+export DAOS_IFACE_IP=x.x.x.x
+docker run --detach --privileged --name=daos-server --hostname=daos-server \
       --add-host "daos-server:$DAOS_IFACE_IP" --add-host "daos-admin:$DAOS_IFACE_IP" \
       --add-host "daos-client:$DAOS_IFACE_IP" --volume=/sys/fs/cgroup:/sys/fs/cgroup:ro \
       --volume=/dev/hugepages:/dev/hugepages  --tmpfs=/run --network=host \
       daos-server:rocky8.4
-$ docker run --detach --privileged --name=daos-agent --hostname=daos-agent \
+docker run --detach --privileged --name=daos-agent --hostname=daos-agent \
       --add-host "daos-server:$DAOS_IFACE_IP" --add-host "daos-admin:$DAOS_IFACE_IP" \
       --add-host "daos-client:$DAOS_IFACE_IP" --volume=/sys/fs/cgroup:/sys/fs/cgroup:ro \
       --tmpfs=/run --network=host daos-agent:rocky8.4
-$ docker run --detach --privileged --name=daos-client --hostname=daos-client \
+docker run --detach --privileged --name=daos-client --hostname=daos-client \
       --add-host "daos-server:$DAOS_IFACE_IP" --add-host "daos-admin:$DAOS_IFACE_IP" \
       --add-host "daos-client:$DAOS_IFACE_IP" --volume=/sys/fs/cgroup:/sys/fs/cgroup:ro \
       --tmpfs=/run --network=host daos-client:rocky8.4
