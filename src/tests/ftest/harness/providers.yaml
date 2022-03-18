@@ -1,0 +1,21 @@
+hosts:
+  test_servers:
+    - server-A
+    - server-B
+timeout: 120
+server_config:
+  provider_mux: !mux
+    default:
+      provider: None
+    verbs:
+      provider: ofi+verbs
+    ucx:
+      provider: ofi+ucx
+    cxi:
+      provider: ofi+cxi
+    tcp:
+      provider: ofi+tcp
+    tcp_ofi_rxm:
+      provider: ofi+tcp;ofi_rxm
+    sockets:
+      provider: ofi+sockets

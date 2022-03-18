@@ -9,6 +9,7 @@ import ast
 
 from command_utils_base import \
     BasicParameter, LogParameter, YamlParameters, TransportCredentials
+from general_utils import check_provider
 
 
 class DaosServerTransportCredentials(TransportCredentials):
@@ -101,17 +102,16 @@ class DaosServerYamlParameters(YamlParameters):
         #       is set for the running process. If group look up fails or user
         #       is not member, use uid return from user lookup.
         #
-        default_provider = os.environ.get("CRT_PHY_ADDR_STR", "ofi+sockets")
 
         # All log files should be placed in the same directory on each host to
         # enable easy log file archiving by launch.py
         log_dir = os.environ.get("DAOS_TEST_LOG_DIR", "/tmp")
 
-        self.provider = BasicParameter(None, default_provider)
+        self.provider = BasicParameter(None)
         self.hyperthreads = BasicParameter(None, False)
         self.socket_dir = BasicParameter(None, "/var/run/daos_server")
         # Auto-calculate if unset or set to zero
-        self.nr_hugepages = BasicParameter(None, 0)
+        self.nr_hugepages = BasicParameter(None)
         self.control_log_mask = BasicParameter(None, "DEBUG")
         self.control_log_file = LogParameter(log_dir, None, "daos_control.log")
         self.helper_log_file = LogParameter(log_dir, None, "daos_admin.log")
@@ -147,6 +147,9 @@ class DaosServerYamlParameters(YamlParameters):
             test (Test): avocado Test object
         """
         super().get_params(test)
+
+        # Verify the requested provider is supported
+        self.provider.update(check_provider(self.provider.value), "provider")
 
         # Create the requested number of single server parameters
         if isinstance(self.engines_per_host.value, int):
@@ -334,7 +337,6 @@ class DaosServerYamlParameters(YamlParameters):
             "ofi+verbs": [
                 "FI_OFI_RXM_USE_SRX=1"],
             "ofi+cxi": [
-                "FI_OFI_RXM_USE_SRX=1",
                 "CRT_MRC_ENABLE=1"],
         }
 
@@ -344,6 +346,7 @@ class DaosServerYamlParameters(YamlParameters):
             Args:
                 index (int, optional): index number for the namespace path used
                     when specifying multiple servers per host. Defaults to None.
+                provider (str, optional): Defaults to None.
             """
             namespace = "/run/server_config/servers/*"
             if isinstance(index, int):

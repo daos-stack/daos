@@ -680,7 +680,7 @@ def stop_processes(hosts, pattern, verbose=True, timeout=60, added_filter=None,
         added_filter (str, optional): negative filter to better identify
             processes.
         dump_ult_stacks (bool, optional): whether SIGUSR2 should be sent before
-            any other sigs, to dump all ULTs stacks of servers.
+            any other signals, to dump all ULTs stacks of servers.
 
 
     Returns:
@@ -1299,3 +1299,60 @@ def percent_change(val1, val2):
     if val1 and val2:
         return (float(val2) - float(val1)) / float(val1)
     return 0.0
+
+
+def check_provider(test, provider=None):
+    """Check that the provider is supported or get the default provider.
+
+    Args:
+        test (Test): Test class.
+        provider (str, optional): the provider to verify, e.g. ofi+verbs. Defaults to None.
+
+    Returns:
+        str: the provider. If no provider is supported this will be the default provider
+
+    """
+    # Get the list of supported providers from the DAOS_TEST_PROVIDER_LIST environment variable
+    try:
+        provider_list = os.environ.get("DAOS_TEST_PROVIDER_LIST").split(",")
+    except AttributeError:
+        test.fail("Missing supported providers list (DAOS_TEST_PROVIDER_LIST)")
+
+    if provider is None:
+        # Use the first supported provider as the default
+        test.log.info("Default to using the {} provider.", provider_list[0])
+        provider = provider_list[0]
+    elif get_short_provider_name(provider) not in provider_list:
+        # Skip the test if the provider is not supported
+        test.log.info("The %s provider is not in the supported list: %s", provider, provider_list)
+        test.skip("Unsupported provider: {}".format(provider))
+
+    return provider
+
+
+def get_full_provider_name(provider):
+    """Get the provider full name including 'ofi_rxm'.
+
+    Args:
+        provider (str): shortened provider name
+
+    Returns:
+        str: full provider name
+
+    """
+    if provider in ["ofi_tcp", "ofi_verbs"]:
+        return ";".join(provider, "ofi_rxm")
+    return provider
+
+
+def get_short_provider_name(provider):
+    """Get the provider short name excluding 'ofi_rxm'.
+
+    Args:
+        provider (str): full provider name
+
+    Returns:
+        str: short provider name
+
+    """
+    return re.sub(r";ofi_rxm", "", provider)

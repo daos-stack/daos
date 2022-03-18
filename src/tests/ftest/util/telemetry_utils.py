@@ -7,6 +7,7 @@ SPDX-License-Identifier: BSD-2-Clause-Patent
 from logging import getLogger
 import re
 from ClusterShell.NodeSet import NodeSet
+from general_utils import get_full_provider_name
 
 
 class TelemetryUtils():
@@ -478,11 +479,9 @@ class TelemetryUtils():
 
         # Add engine network metrics for the configured provider
         try:
-            provider = re.sub("[+;]", "_", server.manager.job.get_config_value("provider"))
-            if provider == "ofi_tcp":
-                provider = "ofi_tcp_ofi_rxm"
-            elif provider == "ofi_verbs":
-                provider = "ofi_verbs_ofi_rxm"
+            provider = re.sub(
+                "[+;]", "_",
+                get_full_provider_name(server.manager.job.get_config_value("provider")))
         except TypeError:
             provider = "ofi_tcp_ofi_rxm"
         net_metrics = [name.replace("<provider>", provider) for name in self.ENGINE_NET_METRICS]
@@ -770,7 +769,7 @@ class TelemetryUtils():
         return data
 
     def verify_metric_value(self, metrics_data, min_value=None, max_value=None):
-        """ Verify telemetry metrics from metrics_data.
+        """Verify telemetry metrics from metrics_data.
 
         Args:
             metrics_data (dict): a dictionary of host keys linked to a list of metric names.
@@ -780,6 +779,7 @@ class TelemetryUtils():
             Returns:
                 bool: True if all metrics are verified, False if any metrics are out of the
                       allowable range or less than 0
+
         """
         self.log.info("Verify threshold of metrics")
         status = True
@@ -795,7 +795,7 @@ class TelemetryUtils():
                 for rank in sorted(metrics_data[name][host]):
                     value = metrics_data[name][host][rank]
                     invalid = "Metric value in range"
-                    #Verify metrics are within allowable threshold
+                    # Verify metrics are within allowable threshold
                     if min_value is not None and value < min_value:
                         status = False
                         invalid = "Metric value is smaller than {}: {}".format(min_value, value)

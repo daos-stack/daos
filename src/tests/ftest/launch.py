@@ -59,7 +59,13 @@ except ImportError:
             """Destroy a TemporaryDirectory object."""
             rmtree(self.name)
 
-DEFAULT_DAOS_TEST_LOG_DIR = "/var/tmp/daos_testing"
+# DAOS test environment variable defaults
+DAOS_TEST_LOG_DIR = "/var/tmp/daos_testing"
+DAOS_TEST_SHARED_DIR = os.path.expanduser("~/daos_test")
+DAOS_TEST_FABRIC_IFACE = None
+DAOS_TEST_PROVIDER_LIST = None
+
+# Mapping of test yaml key names to launch.py argument replacement values
 YAML_KEYS = OrderedDict(
     [
         ("test_servers", "test_servers"),
@@ -76,13 +82,7 @@ YAML_KEYS = OrderedDict(
         ("srv_timeout", "timeout_multiplier"),
     ]
 )
-PROVIDER_KEYS = OrderedDict(
-    [
-        ("cxi", "ofi+cxi"),
-        ("verbs", "ofi+verbs"),
-        ("tcp", "ofi+tcp"),
-    ]
-)
+SUPPORTED_PROVIDER_NAMES = ["verbs", "ucx", "cxi", "tcp"]
 
 
 def display(args, message, level=1):
@@ -144,8 +144,7 @@ def get_temporary_directory(args, base_dir=None):
     if base_dir is None:
         base_dir = get_build_environment(args)["PREFIX"]
     if base_dir == "/usr":
-        tmp_dir = os.getenv(
-            "DAOS_TEST_SHARED_DIR", os.path.expanduser("~/daos_test"))
+        tmp_dir = os.getenv("DAOS_TEST_SHARED_DIR", DAOS_TEST_SHARED_DIR)
     else:
         tmp_dir = os.path.join(base_dir, "tmp")
 
@@ -185,7 +184,7 @@ def set_test_environment(args):
         # Set the default location for daos log files written during testing
         # if not already defined.
         if "DAOS_TEST_LOG_DIR" not in os.environ:
-            os.environ["DAOS_TEST_LOG_DIR"] = DEFAULT_DAOS_TEST_LOG_DIR
+            os.environ["DAOS_TEST_LOG_DIR"] = DAOS_TEST_LOG_DIR
         os.environ["D_LOG_FILE"] = os.path.join(
             os.environ["DAOS_TEST_LOG_DIR"], "daos.log")
 
@@ -220,8 +219,7 @@ def set_interface_environment(args):
     # Get the default interface to use if OFI_INTERFACE is not set
     interface = os.environ.get("OFI_INTERFACE")
     if interface is None:
-        # Find all the /sys/class/net interfaces on the launch node
-        # (excluding lo)
+        # Find all the /sys/class/net interfaces on the each node (excluding lo)
         print("Detecting network devices - OFI_INTERFACE not set")
         available_interfaces = get_available_interfaces(args)
         try:
@@ -342,56 +340,80 @@ def set_provider_environment(interface, args):
 
     Args:
         interface (str): the current interface being used.
+        args (argparse.Namespace): command line arguments for this program
     """
-    # Use the detected provider if one is not set
-    provider = os.environ.get("CRT_PHY_ADDR_STR")
-    if provider is None:
-        print("Detecting provider for {} - CRT_PHY_ADDR_STR not set".format(interface))
+    providers = os.environ.get("DAOS_TEST_PROVIDER_LIST", DAOS_TEST_PROVIDER_LIST)
+    if providers is None:
+        # Find all the providers supported on the interface for all test server hosts
+        print("Detecting provider for {} - DAOS_TEST_PROVIDER_LIST not set".format(interface))
+        providers = get_available_providers(interface, args)
 
-        # Check for a Omni-Path interface
-        command = "sudo opainfo"
-        task = get_remote_output(list(args.test_servers), command)
-        if check_remote_output(task, command):
-            # Omni-Path adapter not found; remove verbs as it will not work with OPA devices.
-            print("  Excluding verbs provider for Omni-Path adapters")
-            PROVIDER_KEYS.pop("verbs")
+    # Update the definitions
+    os.environ["DAOS_TEST_PROVIDER_LIST"] = providers
+    print("Testing with DAOS_TEST_PROVIDER_LIST={}".format(os.environ["DAOS_TEST_PROVIDER_LIST"]))
 
-        # Detect all supported providers
-        command = "fi_info -d {} -l | grep -v 'version:'".format(interface)
-        task = get_remote_output(list(args.test_servers), command)
-        if check_remote_output(task, command):
-            # Verify each server host has the same interface driver
-            output_data = list(task.iter_buffers())
-            if len(output_data) > 1:
-                print("ERROR: Non-homogeneous drivers detected.")
-                sys.exit(1)
 
-            # Find all supported providers
-            keys_found = []
+def get_available_providers(interface, args):
+    """Get a list of available providers supported on every server host.
+
+    Args:
+        interface (str): the current interface being used.
+        args (argparse.Namespace): command line arguments for this program
+    """
+    provider_list = []
+    detected_providers = {}
+
+    # Do not support the verbs provider on Omni-Path interfaces
+    command = "sudo opainfo"
+    task = get_remote_output(list(args.test_servers), command)
+    if check_remote_output(task, command):
+        # Omni-Path adapter not found; remove verbs as it will not work with OPA devices.
+        print("  Excluding verbs provider for Omni-Path adapters")
+        SUPPORTED_PROVIDER_NAMES.pop("verbs")
+
+    # Detect all supported providers
+    command = "fi_info -d {} -l | grep -v 'version:'".format(interface)
+    task = get_remote_output(list(args.test_servers), command)
+    if check_remote_output(task, command):
+        # Verify each server host has the same interface driver
+        output_data_list = list(task.iter_buffers())
+        for output_data in output_data_list:
             for line in output_data[0][0]:
                 provider_name = line.decode("utf-8").replace(":", "")
-                if provider_name in PROVIDER_KEYS:
-                    keys_found.append(provider_name)
+                if provider_name in SUPPORTED_PROVIDER_NAMES:
+                    if provider_name in detected_providers:
+                        detected_providers[provider_name] += 1
+                    else:
+                        detected_providers[provider_name] = 1
 
-            # Select the preferred found provider based upon PROVIDER_KEYS order
-            print("Supported providers detected: {}".format(keys_found))
-            for key in PROVIDER_KEYS:
-                if key in keys_found:
-                    provider = PROVIDER_KEYS[key]
-                    break
+        # Populate the list of providers to use with tests with any provider supported by each
+        # server host in the order of supported preference
+        for name in SUPPORTED_PROVIDER_NAMES:
+            try:
+                if detected_providers[name] == len(list(args.test_servers)):
+                    provider_list.append("+".join("ofi", name))
+            except KeyError:
+                pass
 
-        # Report an error if a provider cannot be found
-        if not provider:
-            print(
-                "Error obtaining a supported provider for {} from: {}".format(
-                    interface, list(PROVIDER_KEYS)))
-            sys.exit(1)
+    if not provider_list:
+        print(
+            "Error obtaining a supported provider list for {} from: {}".format(
+                interface, SUPPORTED_PROVIDER_NAMES))
+        if detected_providers:
+            print("  Detected supported providers:")
+            for name in SUPPORTED_PROVIDER_NAMES:
+                try:
+                    print(
+                        "    - {} on {}/{} server hosts".format(
+                            name, detected_providers[name], len(list(args.test_servers))))
+                except KeyError:
+                    pass
+        sys.exit(1)
 
-        print("  Found {} provider for {}".format(provider, interface))
-
-    # Update env definitions
-    os.environ["CRT_PHY_ADDR_STR"] = provider
-    print("Testing with CRT_PHY_ADDR_STR={}".format(os.environ["CRT_PHY_ADDR_STR"]))
+    print(
+        "  Supported providers for {} found on {}: {}".format(
+            interface, args.test_servers, provider_list))
+    return provider_list
 
 
 def set_python_environment():
@@ -1275,8 +1297,7 @@ def run_tests(test_files, tag_filter, args):
             # and archive remote logs and report big log files, if any.
             if args.archive:
                 test_hosts = get_hosts_from_yaml(test_file["yaml"], args)
-                test_log_dir = os.environ.get(
-                    "DAOS_TEST_LOG_DIR", DEFAULT_DAOS_TEST_LOG_DIR)
+                test_log_dir = os.environ.get("DAOS_TEST_LOG_DIR", DAOS_TEST_LOG_DIR)
 
                 # Archive local config files
                 return_code |= archive_files(
@@ -1342,8 +1363,7 @@ def run_tests(test_files, tag_filter, args):
                 # Compress any log file that haven't been remotely compressed.
                 compress_log_files(avocado_logs_dir, args)
 
-                valgrind_logs_dir = os.environ.get("DAOS_TEST_SHARED_DIR",
-                                                   os.environ['HOME'])
+                valgrind_logs_dir = os.environ.get("DAOS_TEST_SHARED_DIR", DAOS_TEST_SHARED_DIR)
 
                 # Archive valgrind log files from shared dir
                 return_code |= archive_files(
@@ -1478,7 +1498,7 @@ def clean_logs(test_yaml, args):
         args (argparse.Namespace): command line arguments for this program
     """
     # Remove any log files from the DAOS_TEST_LOG_DIR directory
-    logs_dir = os.environ.get("DAOS_TEST_LOG_DIR", DEFAULT_DAOS_TEST_LOG_DIR)
+    logs_dir = os.environ.get("DAOS_TEST_LOG_DIR", DAOS_TEST_LOG_DIR)
     host_list = get_hosts_from_yaml(test_yaml, args)
     command = "sudo rm -fr {}".format(os.path.join(logs_dir, "*.log*"))
     # also remove any ABT infos/stacks dumps
