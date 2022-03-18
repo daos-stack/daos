@@ -14,7 +14,7 @@ from avocado.core.exceptions import TestFail
 from apricot import TestWithServers
 from ior_utils import IorCommand
 from exception_utils import CommandFailure
-from job_manager_utils import Orterun
+from job_manager_utils import get_job_manager
 from thread_manager import ThreadManager
 
 
@@ -389,7 +389,8 @@ class ObjectMetadata(TestWithServers):
                     "F", "/run/ior/ior{}flags/".format(operation))
 
                 # Define the job manager for the IOR command
-                self.ior_managers.append(Orterun(ior_cmd))
+                self.ior_managers.append(
+                    get_job_manager(self, "Orterun", ior_cmd, mpi_type="openmpi"))
                 env = ior_cmd.get_default_env(str(self.ior_managers[-1]))
                 self.ior_managers[-1].assign_hosts(self.hostlist_clients, self.workdir, None)
                 self.ior_managers[-1].assign_processes(processes)
