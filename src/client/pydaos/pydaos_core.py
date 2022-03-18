@@ -33,6 +33,7 @@ class DObjNotFound(Exception):
     def __str__(self):
         return "Failed to open '{}'".format(self.name)
 
+
 class DCont():
     """
     Class representing of DAOS python container
@@ -61,6 +62,7 @@ class DCont():
     array(name, kwargs):
         Create new DArray object.
     """
+
     def __init__(self, pool=None, cont=None, path=None):
         self._dc = DaosClient()
         self._hdl = None
@@ -145,6 +147,7 @@ class DCont():
     def __repr__(self):
         return 'daos://{}/{}'.format(self.pool, self.cont)
 
+
 class _DObj():
     # pylint: disable=no-member
 
@@ -174,6 +177,8 @@ class _DObj():
         return "[" + hex(self.hi) + ":" + hex(self.lo) + "]"
 
 # pylint: disable=too-few-public-methods
+
+
 class DDictIter():
 
     """ Iterator class for DDict """
@@ -217,6 +222,7 @@ class DDictIter():
             return self._entries.pop()
         raise StopIteration()
 # pylint: enable=too-few-public-methods
+
 
 class DDict(_DObj):
     """
@@ -376,6 +382,8 @@ class DDict(_DObj):
         return DDictIter(self)
 
 # pylint: disable=too-few-public-methods
+
+
 class DArray(_DObj):
     """
     Class representing of DAOS array leveraging the numpy's dispatch mechanism.

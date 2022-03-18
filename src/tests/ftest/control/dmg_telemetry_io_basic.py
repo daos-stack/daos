@@ -10,7 +10,8 @@ from ior_test_base import IorTestBase
 from telemetry_test_base import TestWithTelemetry
 from telemetry_utils import TelemetryUtils
 
-class TestWithTelemetryIOBasic(IorTestBase,TestWithTelemetry):
+
+class TestWithTelemetryIOBasic(IorTestBase, TestWithTelemetry):
     # pylint: disable=too-many-ancestors
     # pylint: disable=too-many-nested-blocks
     """Test telemetry engine io basic metrics.
@@ -98,8 +99,8 @@ class TestWithTelemetryIOBasic(IorTestBase,TestWithTelemetry):
         transfer_sizes = self.params.get("transfer_sizes", "/run/*")
         threshold = self.params.get("io_test_metrics_valid", "/run/*")
         test_metrics = TelemetryUtils.ENGINE_IO_DTX_COMMITTED_METRICS +\
-                       TelemetryUtils.ENGINE_IO_OPS_FETCH_ACTIVE_METRICS +\
-                       TelemetryUtils.ENGINE_IO_OPS_UPDATE_ACTIVE_METRICS
+            TelemetryUtils.ENGINE_IO_OPS_FETCH_ACTIVE_METRICS +\
+            TelemetryUtils.ENGINE_IO_OPS_UPDATE_ACTIVE_METRICS
         i = 0
         self.add_pool(connect=False)
         self.add_container(pool=self.pool)

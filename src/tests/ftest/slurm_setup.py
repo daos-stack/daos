@@ -63,7 +63,7 @@ def update_config_cmdlist(args):
         "sed -i -e 's/SlurmUser=slurm/SlurmUser={}/g' {}".format(
             args.user, SLURM_CONF),
         "sed -i -e 's/NodeName/#NodeName/g' {}".format(
-            SLURM_CONF),]
+            SLURM_CONF), ]
     if not args.sudo:
         sudo = ""
     else:

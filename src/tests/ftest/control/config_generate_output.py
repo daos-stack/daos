@@ -19,6 +19,7 @@ class ConfigGenerateOutput(TestWithServers):
 
     :avocado: recursive
     """
+
     def __init__(self, *args, **kwargs):
         """Initialize a ConfigGenerateOutput object."""
         super().__init__(*args, **kwargs)
