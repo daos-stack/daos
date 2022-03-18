@@ -19,6 +19,7 @@ wrap scons-3.""")
 SCons.Warnings.warningAsException()
 
 try:
+
     input = raw_input # pylint: disable=redefined-builtin
 except NameError:
     pass
