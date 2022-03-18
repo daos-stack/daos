@@ -565,7 +565,7 @@ int obj_ec_singv_encode_buf(daos_unit_oid_t oid, struct daos_oclass_attr *oca,
 int obj_ec_singv_split(daos_unit_oid_t oid, struct daos_oclass_attr *oca,
 		       daos_size_t iod_size, d_sg_list_t *sgl);
 int
-obj_singv_ec_rw_filter(daos_unit_oid_t oid, struct daos_oclass_attr *oca,
+obj_singv_ec_rw_filter(daos_unit_oid_t oid, uint64_t dkey_hash, struct daos_oclass_attr *oca,
 		       daos_iod_t *iods, uint64_t *offs, daos_epoch_t epoch,
 		       uint32_t flags, uint32_t start_shard,
 		       uint32_t nr, bool for_update, bool deg_fetch,
@@ -920,6 +920,9 @@ enum dc_tx_get_epoch_rc {
 	DC_TX_GE_CHOOSING,
 	DC_TX_GE_REINIT
 };
+
+int
+dc_obj_dkey2grpidx(daos_handle_t oh, uint64_t dkey_hash);
 
 int
 dc_tx_get_epoch(tse_task_t *task, daos_handle_t th, struct dtx_epoch *epoch);

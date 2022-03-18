@@ -630,13 +630,53 @@ obj_ec_tgt_in_err(uint32_t *err_list, uint32_t nerrs, uint16_t tgt_idx)
 	return false;
 }
 
-static inline bool
-obj_shard_is_ec_parity(daos_unit_oid_t oid, struct daos_oclass_attr *attr)
+/**
+ * Get the rotated shard of an EC obj shard. For EC obj, the shard order will be rotated on
+ * different dkeys for load balance.
+ */
+static inline uint32_t
+obj_ec_shard_orig2rotate(struct daos_oclass_attr *oca, uint64_t dkey_hash, uint32_t orig_shard)
 {
+	uint32_t	tgt_nr = obj_ec_tgt_nr(oca);
+	uint32_t	start_shard = rounddown(orig_shard, tgt_nr);
+	uint32_t	rotate_idx = dkey_hash % tgt_nr;
+	uint32_t	shard_idx = orig_shard - start_shard;
+	uint32_t	rotate_shard;
+
+	D_ASSERT(shard_idx >= 0 && shard_idx < tgt_nr);
+	rotate_shard = start_shard + (rotate_idx + shard_idx) % tgt_nr;
+
+	return rotate_shard;
+}
+
+/**
+ * Get the original shard of an rotated EC obj shard.
+ */
+static inline uint32_t
+obj_ec_shard_rotate2orig(struct daos_oclass_attr *oca, uint64_t dkey_hash, uint32_t rotate_shard)
+{
+	uint32_t	tgt_nr = obj_ec_tgt_nr(oca);
+	uint32_t	start_shard = rounddown(rotate_shard, tgt_nr);
+	uint32_t	rotate_idx = dkey_hash % tgt_nr;
+	uint32_t	shard_idx = rotate_shard - start_shard;
+	uint32_t	orig_shard;
+
+	D_ASSERT(shard_idx >= 0 && shard_idx < tgt_nr);
+	orig_shard = start_shard + (shard_idx + tgt_nr - rotate_idx) % tgt_nr;
+
+	return orig_shard;
+}
+
+static inline bool
+obj_ec_shard_is_parity(daos_unit_oid_t oid, uint64_t dkey_hash, struct daos_oclass_attr *attr)
+{
+	uint32_t	orig_shard;
+
 	if (!daos_oclass_is_ec(attr))
 		return false;
 
-	return is_ec_parity_shard(oid.id_shard, attr);
+	orig_shard = obj_ec_shard_rotate2orig(attr, dkey_hash, oid.id_shard);
+	return is_ec_parity_shard(orig_shard, attr);
 }
 
 /* obj_class.c */
@@ -716,11 +756,10 @@ int obj_ec_get_degrade(struct obj_reasb_req *reasb_req, uint16_t fail_tgt_idx,
 
 /* srv_ec.c */
 struct obj_rw_in;
-int obj_ec_rw_req_split(daos_unit_oid_t oid, struct obj_iod_array *iod_array,
-			uint32_t iod_nr, uint32_t start_shard,
-			uint32_t max_shard, uint32_t leader_id,
-			void *tgt_map, uint32_t map_size, struct daos_oclass_attr *oca,
-			uint32_t tgt_nr, struct daos_shard_tgt *tgts,
+int obj_ec_rw_req_split(daos_unit_oid_t oid, uint64_t dkey_hash, struct obj_iod_array *iod_array,
+			uint32_t iod_nr, uint32_t start_shard, uint32_t max_shard,
+			uint32_t leader_id, void *tgt_map, uint32_t map_size,
+			struct daos_oclass_attr *oca, uint32_t tgt_nr, struct daos_shard_tgt *tgts,
 			struct obj_ec_split_req **split_req);
 void obj_ec_split_req_fini(struct obj_ec_split_req *req);
 

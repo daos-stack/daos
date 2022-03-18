@@ -39,6 +39,7 @@
 
 struct migrate_one {
 	daos_key_t		 mo_dkey;
+	uint64_t		 mo_dkey_hash;
 	uuid_t			 mo_pool_uuid;
 	uuid_t			 mo_cont_uuid;
 	daos_unit_oid_t		 mo_oid;
@@ -679,7 +680,7 @@ migrate_fetch_update_inline(struct migrate_one *mrone, daos_handle_t oh,
 	tmp_csum_iov = *csums_iov;
 
 	if (daos_oclass_is_ec(&mrone->mo_oca) &&
-	    !obj_shard_is_ec_parity(mrone->mo_oid, &mrone->mo_oca))
+	    !obj_ec_shard_is_parity(mrone->mo_oid, mrone->mo_dkey_hash, &mrone->mo_oca))
 		mrone_recx_daos2_vos(mrone, mrone->mo_iods, mrone->mo_iod_num);
 
 	rc = daos_csummer_csum_init_with_packed(&csummer, csums_iov);
@@ -1091,7 +1092,7 @@ migrate_fetch_update_single(struct migrate_one *mrone, daos_handle_t oh,
 			continue;
 		}
 
-		if (obj_shard_is_ec_parity(mrone->mo_oid, &mrone->mo_oca)) {
+		if (obj_ec_shard_is_parity(mrone->mo_oid, mrone->mo_dkey_hash, &mrone->mo_oca)) {
 			rc = obj_ec_singv_encode_buf(mrone->mo_oid,
 						     &mrone->mo_oca,
 						     iod, &sgls[i],
@@ -1105,9 +1106,8 @@ migrate_fetch_update_single(struct migrate_one *mrone, daos_handle_t oh,
 				D_GOTO(out, rc);
 		}
 
-		obj_singv_ec_rw_filter(mrone->mo_oid, &mrone->mo_oca, iod,
-				       NULL, mrone->mo_epoch, ORF_EC,
-				       start_shard, 1,
+		obj_singv_ec_rw_filter(mrone->mo_oid, mrone->mo_dkey_hash, &mrone->mo_oca, iod,
+				       NULL, mrone->mo_epoch, ORF_EC, start_shard, 1,
 				       true, false, NULL);
 		los[i].cs_even_dist = 1;
 		los[i].cs_bytes = obj_ec_singv_cell_bytes(
@@ -1319,7 +1319,7 @@ migrate_fetch_update_bulk(struct migrate_one *mrone, daos_handle_t oh,
 {
 	int rc = 0;
 
-	if (obj_shard_is_ec_parity(mrone->mo_oid, &mrone->mo_oca))
+	if (obj_ec_shard_is_parity(mrone->mo_oid, mrone->mo_dkey_hash, &mrone->mo_oca))
 		return migrate_fetch_update_parity(mrone, oh, ds_cont);
 
 	if (!daos_oclass_is_ec(&mrone->mo_oca))
@@ -1532,7 +1532,7 @@ migrate_dkey(struct migrate_pool_tls *tls, struct migrate_one *mrone,
 
 	if (mrone->mo_iods[0].iod_type == DAOS_IOD_SINGLE)
 		rc = migrate_fetch_update_single(mrone, oh, cont);
-	else if (obj_shard_is_ec_parity(mrone->mo_oid, &mrone->mo_oca))
+	else if (obj_ec_shard_is_parity(mrone->mo_oid, mrone->mo_dkey_hash, &mrone->mo_oca))
 		rc = migrate_fetch_update_parity(mrone, oh, cont);
 	else if (data_size < MAX_BUF_SIZE || data_size == (daos_size_t)(-1))
 		rc = migrate_fetch_update_inline(mrone, oh, cont);
@@ -2093,6 +2093,7 @@ migrate_one_create(struct enum_unpack_arg *arg, struct dss_enum_unpack_io *io)
 	if (rc != 0)
 		D_GOTO(free, rc);
 
+	mrone->mo_dkey_hash = obj_dkey2hash(oid.id_pub, &mrone->mo_dkey);
 	mrone->mo_oid = oid;
 	mrone->mo_oid.id_shard = iter_arg->shard;
 	uuid_copy(mrone->mo_cont_uuid, iter_arg->cont_uuid);
@@ -2439,8 +2440,7 @@ retry:
 			 * shards, so buffer needs to time grp_size to make sure
 			 * retry buffer will be large enough.
 			 */
-			if (daos_oclass_is_ec(&unpack_arg.oc_attr) &&
-			    obj_shard_is_ec_parity(arg->oid, &unpack_arg.oc_attr))
+			if (daos_oclass_is_ec(&unpack_arg.oc_attr))
 				buf_len = roundup(kds[0].kd_key_len * 2 *
 						  daos_oclass_grp_size(&unpack_arg.oc_attr), 8);
 			else

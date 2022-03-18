@@ -85,7 +85,7 @@ ds_obj_remote_update(struct dtx_leader_handle *dlh, void *data, int idx,
 	struct obj_remote_cb_arg	*remote_arg = NULL;
 	struct obj_rw_in		*orw;
 	struct obj_rw_in		*orw_parent;
-	uint32_t			 tgt_idx;
+	uint32_t			 orig_shard;
 	int				 rc = 0;
 
 	D_ASSERT(idx < dlh->dlh_sub_cnt);
@@ -125,10 +125,10 @@ ds_obj_remote_update(struct dtx_leader_handle *dlh, void *data, int idx,
 	orw = crt_req_get(req);
 	*orw = *orw_parent;
 	if (split_req != NULL) {
-		tgt_idx = shard_tgt->st_shard;
-		tgt_oiod = obj_ec_tgt_oiod_get(split_req->osr_tgt_oiods,
-					       dlh->dlh_sub_cnt + 1,
-					       tgt_idx - obj_exec_arg->start);
+		orig_shard = obj_ec_shard_rotate2orig(&obj_exec_arg->ioc->ioc_oca,
+						      orw->orw_dkey_hash, shard_tgt->st_shard);
+		tgt_oiod = obj_ec_tgt_oiod_get(split_req->osr_tgt_oiods, dlh->dlh_sub_cnt + 1,
+					       orig_shard - obj_exec_arg->start);
 		D_ASSERT(tgt_oiod != NULL);
 		orw->orw_iod_array.oia_oiods = tgt_oiod->oto_oiods;
 		orw->orw_iod_array.oia_oiod_nr = orw->orw_iod_array.oia_iod_nr;

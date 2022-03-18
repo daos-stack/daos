@@ -947,7 +947,7 @@ obj_singv_ec_add_recov(uint32_t iod_nr, uint32_t iod_idx, uint64_t rec_size,
 
 /** Filter and prepare for the sing value EC update/fetch */
 int
-obj_singv_ec_rw_filter(daos_unit_oid_t oid, struct daos_oclass_attr *oca,
+obj_singv_ec_rw_filter(daos_unit_oid_t oid, uint64_t dkey_hash, struct daos_oclass_attr *oca,
 		       daos_iod_t *iods, uint64_t *offs, daos_epoch_t epoch,
 		       uint32_t flags, uint32_t start_shard,
 		       uint32_t nr, bool for_update, bool deg_fetch,
@@ -956,6 +956,7 @@ obj_singv_ec_rw_filter(daos_unit_oid_t oid, struct daos_oclass_attr *oca,
 	daos_iod_t			*iod;
 	struct obj_ec_singv_local	 loc;
 	uint32_t			 tgt_idx;
+	uint32_t			 orig_shard;
 	uint32_t			 i;
 	int				 rc = 0;
 	bool				 reentry = false;
@@ -963,7 +964,8 @@ obj_singv_ec_rw_filter(daos_unit_oid_t oid, struct daos_oclass_attr *oca,
 	if (!(flags & ORF_EC))
 		return rc;
 
-	tgt_idx = oid.id_shard - start_shard;
+	orig_shard = obj_ec_shard_rotate2orig(oca, dkey_hash, oid.id_shard);
+	tgt_idx = orig_shard - start_shard;
 	for (i = 0; i < nr; i++) {
 		uint64_t	gsize;
 
@@ -1295,9 +1297,8 @@ obj_local_rw_internal(crt_rpc_t *rpc, struct obj_io_context *ioc,
 
 	/* Prepare IO descriptor */
 	if (obj_rpc_is_update(rpc)) {
-		obj_singv_ec_rw_filter(orw->orw_oid, &ioc->ioc_oca, iods, offs,
-				       orw->orw_epoch, orw->orw_flags,
-				       orw->orw_start_shard,
+		obj_singv_ec_rw_filter(orw->orw_oid, orw->orw_dkey_hash, &ioc->ioc_oca, iods, offs,
+				       orw->orw_epoch, orw->orw_flags, orw->orw_start_shard,
 				       orw->orw_nr, true, false, NULL);
 		bulk_op = CRT_BULK_GET;
 
@@ -1329,6 +1330,7 @@ obj_local_rw_internal(crt_rpc_t *rpc, struct obj_io_context *ioc,
 		}
 	} else {
 		uint32_t			 fetch_flags = 0;
+		uint32_t			 orig_shard;
 		bool				 ec_deg_fetch;
 		bool				 ec_recov;
 		bool				 is_parity_shard;
@@ -1350,7 +1352,9 @@ obj_local_rw_internal(crt_rpc_t *rpc, struct obj_io_context *ioc,
 			  ec_recov, ec_deg_fetch);
 		if (ec_recov) {
 			D_ASSERT(obj_ec_tgt_nr(&ioc->ioc_oca) > 0);
-			is_parity_shard = (orw->orw_oid.id_shard % obj_ec_tgt_nr(&ioc->ioc_oca)) >=
+			orig_shard = obj_ec_shard_rotate2orig(&ioc->ioc_oca, orw->orw_dkey_hash,
+							      orw->orw_oid.id_shard);
+			is_parity_shard = (orig_shard % obj_ec_tgt_nr(&ioc->ioc_oca)) >=
 					  obj_ec_data_tgt_nr(&ioc->ioc_oca);
 			get_parity_list = ec_recov && is_parity_shard &&
 					  ((orw->orw_flags & ORF_EC_RECOV_SNAP) == 0);
@@ -1449,11 +1453,9 @@ obj_local_rw_internal(crt_rpc_t *rpc, struct obj_io_context *ioc,
 			D_ASSERT(!get_parity_list);
 			recov_lists = vos_ioh2recx_list(ioh);
 		}
-		rc = obj_singv_ec_rw_filter(orw->orw_oid, &ioc->ioc_oca,
-					    iods, offs, orw->orw_epoch,
-					    orw->orw_flags,
-					    orw->orw_start_shard,
-					    orw->orw_nr, false,
+		rc = obj_singv_ec_rw_filter(orw->orw_oid, orw->orw_dkey_hash, &ioc->ioc_oca, iods,
+					    offs, orw->orw_epoch, orw->orw_flags,
+					    orw->orw_start_shard, orw->orw_nr, false,
 					    ec_deg_fetch, &recov_lists);
 		if (rc != 0) {
 			D_ERROR(DF_UOID" obj_singv_ec_rw_filter failed: "
@@ -2560,7 +2562,7 @@ again1:
 
 again2:
 	if (orw->orw_iod_array.oia_oiods != NULL && split_req == NULL && tgt_cnt != 0) {
-		rc = obj_ec_rw_req_split(orw->orw_oid, &orw->orw_iod_array,
+		rc = obj_ec_rw_req_split(orw->orw_oid, orw->orw_dkey_hash, &orw->orw_iod_array,
 					 orw->orw_nr, orw->orw_start_shard,
 					 orw->orw_tgt_max, PO_COMP_ID_ALL,
 					 NULL, 0, &ioc.ioc_oca, tgt_cnt, tgts, &split_req);
@@ -3910,10 +3912,9 @@ ds_cpd_handle_one(crt_rpc_t *rpc, struct daos_cpd_sub_head *dcsh,
 			if (rc)
 				D_GOTO(out, rc);
 
-			obj_singv_ec_rw_filter(dcsr->dcsr_oid, &ioc->ioc_oca,
-					iods, offs, dcsh->dcsh_epoch.oe_value,
-					dcu->dcu_flags, dcu->dcu_start_shard,
-					dcsr->dcsr_nr, true, false, NULL);
+			obj_singv_ec_rw_filter(dcsr->dcsr_oid, dcsr->dcsr_dkey_hash, &ioc->ioc_oca,
+					iods, offs, dcsh->dcsh_epoch.oe_value, dcu->dcu_flags,
+					dcu->dcu_start_shard, dcsr->dcsr_nr, true, false, NULL);
 		} else {
 			iods = dcu->dcu_iod_array.oia_iods;
 			csums = dcu->dcu_iod_array.oia_iod_csums;
@@ -4365,15 +4366,13 @@ ds_obj_dtx_leader_prep_handle(struct daos_cpd_sub_head *dcsh,
 		if (dcu->dcu_iod_array.oia_oiods == NULL)
 			continue;
 
-		rc = obj_ec_rw_req_split(dcsr->dcsr_oid, &dcu->dcu_iod_array,
-					 dcsr->dcsr_nr, dcu->dcu_start_shard, 0,
-					 ddt->ddt_id,
+		rc = obj_ec_rw_req_split(dcsr->dcsr_oid, dcsr->dcsr_dkey_hash, &dcu->dcu_iod_array,
+					 dcsr->dcsr_nr, dcu->dcu_start_shard, 0, ddt->ddt_id,
 					 dcu->dcu_ec_tgts, dcsr->dcsr_ec_tgt_nr,
 					 NULL, tgt_cnt, tgts, &dcu->dcu_ec_split_req);
 		if (rc != 0) {
-			D_ERROR("obj_ec_rw_req_split failed for obj "
-				DF_UOID", DTX "DF_DTI": "DF_RC"\n",
-				DP_UOID(dcsr->dcsr_oid),
+			D_ERROR("obj_ec_rw_req_split failed for obj "DF_UOID", DTX "DF_DTI": "
+				DF_RC"\n", DP_UOID(dcsr->dcsr_oid),
 				DP_DTI(&dcsh->dcsh_xid), DP_RC(rc));
 			break;
 		}
