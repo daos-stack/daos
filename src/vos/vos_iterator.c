@@ -337,7 +337,7 @@ vos_iter_probe_ex(daos_handle_t ih, daos_anchor_t *anchor, uint32_t flags)
 int
 vos_iter_probe(daos_handle_t ih, daos_anchor_t *anchor)
 {
-	return vos_iter_probe_ex(ih, anchor, false);
+	return vos_iter_probe_ex(ih, anchor, 0);
 }
 
 static inline int

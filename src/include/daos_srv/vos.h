@@ -901,7 +901,7 @@ vos_iter_finish(daos_handle_t ih);
  * This function must be called before using vos_iter_next or vos_iter_fetch.
  *
  * \param ih	[IN]		Iterator handle.
- * \param pos	[IN,OUT]	Optional, position cursor to move to. May
+ * \param anchor[IN,OUT]	Optional, position cursor to move to. May
  *				be modified if entries are skipped during
  *				probe.
  *
@@ -918,7 +918,7 @@ vos_iter_probe(daos_handle_t ih, daos_anchor_t *anchor);
  * This function must be called before using vos_iter_next or vos_iter_fetch.
  *
  * \param ih	[IN]		Iterator handle.
- * \param pos	[IN,OUT]	Optional, position cursor to move to. May
+ * \param anchor[IN,OUT]	Optional, position cursor to move to. May
  *				be modified if entries are skipped during
  *				probe.
  * \param flags	[IN]		Probe flags (See VOS_ITER_PROBE*)
@@ -934,7 +934,7 @@ vos_iter_probe_ex(daos_handle_t ih, daos_anchor_t *anchor, uint32_t flags);
  * Move forward the iterator cursor.
  *
  * \param ih	[IN]	Iterator handle.
- * \param pos	[OUT]	Optional, current anchor. May be modified if entries
+ * \param anchor[OUT]	Optional, current anchor. May be modified if entries
  *			are skipped.
  *
  * \return		Zero if there is an available entry
