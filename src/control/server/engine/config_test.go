@@ -483,14 +483,14 @@ func TestConfig_FabricValidation(t *testing.T) {
 		"missing provider": {
 			cfg: FabricConfig{
 				Interface:     "bar",
-				InterfacePort: 42,
+				InterfacePort: "42",
 			},
 			expErr: errors.New("provider"),
 		},
 		"missing interface": {
 			cfg: FabricConfig{
 				Provider:      "foo",
-				InterfacePort: 42,
+				InterfacePort: "42",
 			},
 			expErr: errors.New("fabric_iface"),
 		},
@@ -505,9 +505,47 @@ func TestConfig_FabricValidation(t *testing.T) {
 			cfg: FabricConfig{
 				Provider:      "foo",
 				Interface:     "bar",
-				InterfacePort: -42,
+				InterfacePort: "-42",
 			},
 			expErr: errors.New("fabric_iface_port"),
+		},
+		"success": {
+			cfg: FabricConfig{
+				Provider:      "foo",
+				Interface:     "bar",
+				InterfacePort: "42",
+			},
+		},
+		"multi provider/interface/port ok": {
+			cfg: FabricConfig{
+				Provider:      "foo bar",
+				Interface:     "baz net",
+				InterfacePort: "42 128",
+			},
+		},
+		"mismatched num providers": {
+			cfg: FabricConfig{
+				Provider:      "foo",
+				Interface:     "bar baz",
+				InterfacePort: "42 128",
+			},
+			expErr: errors.New("same number"),
+		},
+		"mismatched num interfaces": {
+			cfg: FabricConfig{
+				Provider:      "foo bar",
+				Interface:     "baz",
+				InterfacePort: "42 128",
+			},
+			expErr: errors.New("same number"),
+		},
+		"mismatched num ports": {
+			cfg: FabricConfig{
+				Provider:      "foo bar",
+				Interface:     "baz net",
+				InterfacePort: "42",
+			},
+			expErr: errors.New("same number"),
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
@@ -711,6 +749,211 @@ func TestConfig_setAffinity(t *testing.T) {
 				"unexpected storage numa node id")
 			common.AssertEqual(t, tc.expNuma, tc.cfg.Fabric.NumaNodeIndex,
 				"unexpected fabric numa node id")
+		})
+	}
+}
+
+func TestFabricConfig_GetProviders(t *testing.T) {
+	for name, tc := range map[string]struct {
+		cfg          *FabricConfig
+		expProviders []string
+		expErr       error
+	}{
+		"nil": {
+			expErr: errors.New("nil"),
+		},
+		"empty": {
+			cfg:    &FabricConfig{},
+			expErr: errors.New("provider not set"),
+		},
+		"single": {
+			cfg: &FabricConfig{
+				Provider: "p1",
+			},
+			expProviders: []string{"p1"},
+		},
+		"multi": {
+			cfg: &FabricConfig{
+				Provider: "p1 p2 p3",
+			},
+			expProviders: []string{"p1", "p2", "p3"},
+		},
+		"excessive whitespace": {
+			cfg: &FabricConfig{
+				Provider: "  p1   p2  p3",
+			},
+			expProviders: []string{"p1", "p2", "p3"},
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			providers, err := tc.cfg.GetProviders()
+
+			common.CmpErr(t, tc.expErr, err)
+			if diff := cmp.Diff(tc.expProviders, providers); diff != "" {
+				t.Fatalf("(-want, +got):\n%s", diff)
+			}
+		})
+	}
+}
+
+func TestFabricConfig_GetPrimaryProvider(t *testing.T) {
+	for name, tc := range map[string]struct {
+		cfg         *FabricConfig
+		expProvider string
+		expErr      error
+	}{
+		"nil": {
+			expErr: errors.New("nil"),
+		},
+		"empty": {
+			cfg:    &FabricConfig{},
+			expErr: errors.New("provider not set"),
+		},
+		"single": {
+			cfg: &FabricConfig{
+				Provider: "p1",
+			},
+			expProvider: "p1",
+		},
+		"multi": {
+			cfg: &FabricConfig{
+				Provider: "p1 p2 p3",
+			},
+			expProvider: "p1",
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			provider, err := tc.cfg.GetPrimaryProvider()
+
+			common.CmpErr(t, tc.expErr, err)
+			common.AssertEqual(t, tc.expProvider, provider, "")
+		})
+	}
+}
+
+func TestFabricConfig_GetInterfaces(t *testing.T) {
+	for name, tc := range map[string]struct {
+		cfg           *FabricConfig
+		expInterfaces []string
+		expErr        error
+	}{
+		"nil": {
+			expErr: errors.New("nil"),
+		},
+		"empty": {
+			cfg:    &FabricConfig{},
+			expErr: errors.New("fabric_iface not set"),
+		},
+		"single": {
+			cfg: &FabricConfig{
+				Interface: "net1",
+			},
+			expInterfaces: []string{"net1"},
+		},
+		"multi": {
+			cfg: &FabricConfig{
+				Interface: "net1 net2 net3",
+			},
+			expInterfaces: []string{"net1", "net2", "net3"},
+		},
+		"excessive whitespace": {
+			cfg: &FabricConfig{
+				Interface: " net1   net2    net3 ",
+			},
+			expInterfaces: []string{"net1", "net2", "net3"},
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			interfaces, err := tc.cfg.GetInterfaces()
+
+			common.CmpErr(t, tc.expErr, err)
+			if diff := cmp.Diff(tc.expInterfaces, interfaces); diff != "" {
+				t.Fatalf("(-want, +got):\n%s", diff)
+			}
+		})
+	}
+}
+
+func TestFabricConfig_GetPrimaryInterface(t *testing.T) {
+	for name, tc := range map[string]struct {
+		cfg          *FabricConfig
+		expInterface string
+		expErr       error
+	}{
+		"nil": {
+			expErr: errors.New("nil"),
+		},
+		"empty": {
+			cfg:    &FabricConfig{},
+			expErr: errors.New("fabric_iface not set"),
+		},
+		"single": {
+			cfg: &FabricConfig{
+				Interface: "net1",
+			},
+			expInterface: "net1",
+		},
+		"multi": {
+			cfg: &FabricConfig{
+				Interface: "net0 net1 net3",
+			},
+			expInterface: "net0",
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			iface, err := tc.cfg.GetPrimaryInterface()
+
+			common.CmpErr(t, tc.expErr, err)
+			common.AssertEqual(t, tc.expInterface, iface, "")
+		})
+	}
+}
+
+func TestFabricConfig_GetInterfacePorts(t *testing.T) {
+	for name, tc := range map[string]struct {
+		cfg      *FabricConfig
+		expPorts []int
+		expErr   error
+	}{
+		"nil": {
+			expErr: errors.New("nil"),
+		},
+		"empty": {
+			cfg:    &FabricConfig{},
+			expErr: errors.New("fabric_iface_port not set"),
+		},
+		"single": {
+			cfg: &FabricConfig{
+				InterfacePort: "1234",
+			},
+			expPorts: []int{1234},
+		},
+		"multi": {
+			cfg: &FabricConfig{
+				InterfacePort: "1234 5678 9012",
+			},
+			expPorts: []int{1234, 5678, 9012},
+		},
+		"excessive whitespace": {
+			cfg: &FabricConfig{
+				InterfacePort: " 1234    5678    9012 ",
+			},
+			expPorts: []int{1234, 5678, 9012},
+		},
+		"non-integer port": {
+			cfg: &FabricConfig{
+				InterfacePort: "1234 a123",
+			},
+			expErr: errors.New("strconv.Atoi"),
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			ports, err := tc.cfg.GetInterfacePorts()
+
+			common.CmpErr(t, tc.expErr, err)
+			if diff := cmp.Diff(tc.expPorts, ports); diff != "" {
+				t.Fatalf("(-want, +got):\n%s", diff)
+			}
 		})
 	}
 }

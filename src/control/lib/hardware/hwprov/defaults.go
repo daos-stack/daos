@@ -7,6 +7,8 @@
 package hwprov
 
 import (
+	"github.com/pkg/errors"
+
 	"github.com/daos-stack/daos/src/control/lib/hardware"
 	"github.com/daos-stack/daos/src/control/lib/hardware/hwloc"
 	"github.com/daos-stack/daos/src/control/lib/hardware/libfabric"
@@ -26,6 +28,11 @@ func DefaultTopologyProvider(log logging.Logger) hardware.TopologyProvider {
 			Weight:   90,
 		},
 	)
+}
+
+// DefaultProcessNUMAProvider gets the default provider for process-related NUMA info.
+func DefaultProcessNUMAProvider(log logging.Logger) hardware.ProcessNUMAProvider {
+	return hwloc.NewProvider(log)
 }
 
 // DefaultFabricInterfaceProviders returns the default fabric interface providers.
@@ -58,4 +65,16 @@ func DefaultFabricScanner(log logging.Logger) *hardware.FabricScanner {
 	}
 
 	return fs
+}
+
+// Init loads up any dynamic libraries that need to be loaded at runtime.
+func Init(log logging.Logger) (func(), error) {
+	cleanupLibFabric, err := libfabric.Load()
+	if err != nil {
+		return nil, errors.Wrapf(err, "unable to load any fabric libraries")
+	}
+
+	return func() {
+		cleanupLibFabric()
+	}, nil
 }

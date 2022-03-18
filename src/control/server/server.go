@@ -12,6 +12,7 @@ import (
 	"os"
 	"os/signal"
 	"os/user"
+	"strings"
 	"sync"
 	"syscall"
 	"time"
@@ -79,10 +80,20 @@ func processConfig(log *logging.LeveledLogger, cfg *config.Server, fis *hardware
 	return faultDomain, nil
 }
 
-func processFabricProvider(cfg *config.Server) {
-	if shouldAppendRXM(cfg.Fabric.Provider) {
-		cfg.WithFabricProvider(cfg.Fabric.Provider + ";ofi_rxm")
+func processFabricProvider(cfg *config.Server) error {
+	providers, err := cfg.Fabric.GetProviders()
+	if err != nil {
+		return err
 	}
+
+	for i, p := range providers {
+		if shouldAppendRXM(p) {
+			providers[i] = p + ";ofi_rxm"
+		}
+	}
+
+	cfg.WithFabricProvider(strings.Join(providers, engine.MultiProviderSeparator))
+	return nil
 }
 
 func shouldAppendRXM(provider string) bool {
@@ -102,7 +113,7 @@ type server struct {
 	runningUser *user.User
 	faultDomain *system.FaultDomain
 	ctlAddr     *net.TCPAddr
-	netDevClass hardware.NetDevClass
+	netDevClass []hardware.NetDevClass
 	listener    net.Listener
 
 	harness      *EngineHarness
@@ -266,6 +277,10 @@ func (srv *server) addEngines(ctx context.Context) error {
 		return err
 	}
 
+	if len(srv.cfg.Engines) == 0 {
+		return nil
+	}
+
 	for i, c := range srv.cfg.Engines {
 		engine, err := srv.createEngine(ctx, i, c)
 		if err != nil {
@@ -315,13 +330,24 @@ func (srv *server) setupGrpc() error {
 	if err != nil {
 		return err
 	}
-	srv.mgmtSvc.clientNetworkHint = &mgmtpb.ClientNetHint{
-		Provider:        srv.cfg.Fabric.Provider,
-		CrtCtxShareAddr: srv.cfg.Fabric.CrtCtxShareAddr,
-		CrtTimeout:      srv.cfg.Fabric.CrtTimeout,
-		NetDevClass:     uint32(srv.netDevClass),
-		SrvSrxSet:       srxSetting,
+
+	providers, err := srv.cfg.Fabric.GetProviders()
+	if err != nil {
+		return err
 	}
+
+	clientNetHints := make([]*mgmtpb.ClientNetHint, 0, len(providers))
+	for i, p := range providers {
+		clientNetHints = append(clientNetHints, &mgmtpb.ClientNetHint{
+			Provider:        p,
+			CrtCtxShareAddr: srv.cfg.Fabric.CrtCtxShareAddr,
+			CrtTimeout:      srv.cfg.Fabric.CrtTimeout,
+			NetDevClass:     uint32(srv.netDevClass[i]),
+			SrvSrxSet:       srxSetting,
+		})
+	}
+	srv.mgmtSvc.clientNetworkHint = clientNetHints
+
 	mgmtpb.RegisterMgmtSvcServer(srv.grpcServer, srv.mgmtSvc)
 
 	tSec, err := security.DialOptionForTransportConfig(srv.cfg.TransportConfig)
@@ -422,6 +448,12 @@ func Start(log *logging.LeveledLogger, cfg *config.Server) error {
 	// that they can be shut down from one place.
 	ctx, shutdown := context.WithCancel(context.Background())
 	defer shutdown()
+
+	hwprovFini, err := hwprov.Init(log)
+	if err != nil {
+		return err
+	}
+	defer hwprovFini()
 
 	scanner := hwprov.DefaultFabricScanner(log)
 	fiSet, err := scanner.Scan(ctx)

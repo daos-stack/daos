@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2021 Intel Corporation.
+// (C) Copyright 2020-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -248,7 +248,7 @@ func TestSystem_Membership_HostRanks(t *testing.T) {
 		MockMember(t, 1, MemberStateJoined),
 		MockMember(t, 2, MemberStateStopped),
 		MockMember(t, 3, MemberStateExcluded),
-		NewMember(Rank(4), MockUUID(4), addr1.String(), addr1, MemberStateStopped), // second host rank
+		NewMember(Rank(4), MockUUID(4), []string{addr1.String()}, addr1, MemberStateStopped), // second host rank
 	}
 
 	for name, tc := range map[string]struct {
@@ -340,7 +340,7 @@ func TestSystem_Membership_CheckRanklist(t *testing.T) {
 		MockMember(t, 1, MemberStateJoined),
 		MockMember(t, 2, MemberStateStopped),
 		MockMember(t, 3, MemberStateExcluded),
-		NewMember(Rank(4), common.MockUUID(4), "", addr1, MemberStateStopped), // second host rank
+		NewMember(Rank(4), common.MockUUID(4), []string{}, addr1, MemberStateStopped), // second host rank
 	}
 
 	for name, tc := range map[string]struct {
@@ -430,7 +430,7 @@ func TestSystem_Membership_CheckHostlist(t *testing.T) {
 		MockMember(t, 3, MemberStateExcluded),
 		MockMember(t, 4, MemberStateJoined),
 		MockMember(t, 5, MemberStateJoined),
-		NewMember(Rank(6), common.MockUUID(6), "", addr1, MemberStateStopped), // second host rank
+		NewMember(Rank(6), common.MockUUID(6), []string{}, addr1, MemberStateStopped), // second host rank
 	}
 
 	for name, tc := range map[string]struct {
@@ -699,17 +699,18 @@ func TestSystem_Membership_Join(t *testing.T) {
 		"not leader": {
 			notLeader: true,
 			req: &JoinRequest{
-				FaultDomain: fd1,
+				PrimaryFabricURI: curMember.Addr.String(),
+				FaultDomain:      fd1,
 			},
 			expErr: errors.New("leader"),
 		},
 		"successful rejoin": {
 			req: &JoinRequest{
-				Rank:        curMember.Rank,
-				UUID:        curMember.UUID,
-				ControlAddr: curMember.Addr,
-				FabricURI:   curMember.Addr.String(),
-				FaultDomain: curMember.FaultDomain,
+				Rank:             curMember.Rank,
+				UUID:             curMember.UUID,
+				ControlAddr:      curMember.Addr,
+				PrimaryFabricURI: curMember.Addr.String(),
+				FaultDomain:      curMember.FaultDomain,
 			},
 			expResp: &JoinResponse{
 				Member:     curMember,
@@ -719,11 +720,11 @@ func TestSystem_Membership_Join(t *testing.T) {
 		},
 		"successful rejoin with different fault domain": {
 			req: &JoinRequest{
-				Rank:        curMember.Rank,
-				UUID:        curMember.UUID,
-				ControlAddr: curMember.Addr,
-				FabricURI:   curMember.Addr.String(),
-				FaultDomain: fd2,
+				Rank:             curMember.Rank,
+				UUID:             curMember.UUID,
+				ControlAddr:      curMember.Addr,
+				PrimaryFabricURI: curMember.Addr.String(),
+				FaultDomain:      fd2,
 			},
 			expResp: &JoinResponse{
 				Member:     MockMember(t, 0, MemberStateJoined).WithFaultDomain(fd2),
@@ -733,42 +734,42 @@ func TestSystem_Membership_Join(t *testing.T) {
 		},
 		"rejoin with existing UUID and unknown rank": {
 			req: &JoinRequest{
-				Rank:        Rank(42),
-				UUID:        curMember.UUID,
-				ControlAddr: curMember.Addr,
-				FabricURI:   curMember.Addr.String(),
-				FaultDomain: curMember.FaultDomain,
+				Rank:             Rank(42),
+				UUID:             curMember.UUID,
+				ControlAddr:      curMember.Addr,
+				PrimaryFabricURI: curMember.Addr.String(),
+				FaultDomain:      curMember.FaultDomain,
 			},
 			expErr: errUuidExists(curMember.UUID),
 		},
 		"rejoin with existing UUID and nil rank": {
 			req: &JoinRequest{
-				Rank:        NilRank,
-				UUID:        curMember.UUID,
-				ControlAddr: curMember.Addr,
-				FabricURI:   curMember.Addr.String(),
-				FaultDomain: curMember.FaultDomain,
+				Rank:             NilRank,
+				UUID:             curMember.UUID,
+				ControlAddr:      curMember.Addr,
+				PrimaryFabricURI: curMember.Addr.String(),
+				FaultDomain:      curMember.FaultDomain,
 			},
 			expErr: errRankChanged(NilRank, curMember.Rank, curMember.UUID),
 		},
 		"rejoin with different UUID and dupe rank": {
 			req: &JoinRequest{
-				Rank:        curMember.Rank,
-				UUID:        newUUID,
-				ControlAddr: curMember.Addr,
-				FabricURI:   curMember.Addr.String(),
-				FaultDomain: curMember.FaultDomain,
+				Rank:             curMember.Rank,
+				UUID:             newUUID,
+				ControlAddr:      curMember.Addr,
+				PrimaryFabricURI: curMember.Addr.String(),
+				FaultDomain:      curMember.FaultDomain,
 			},
 			expErr: errUuidChanged(newUUID, curMember.UUID, curMember.Rank),
 		},
 		"successful join": {
 			req: &JoinRequest{
-				Rank:           NilRank,
-				UUID:           newMember.UUID,
-				ControlAddr:    newMember.Addr,
-				FabricURI:      newMember.FabricURI,
-				FabricContexts: newMember.FabricContexts,
-				FaultDomain:    newMember.FaultDomain,
+				Rank:             NilRank,
+				UUID:             newMember.UUID,
+				ControlAddr:      newMember.Addr,
+				PrimaryFabricURI: newMember.Addr.String(),
+				FabricContexts:   newMember.FabricContexts,
+				FaultDomain:      newMember.FaultDomain,
 			},
 			expResp: &JoinResponse{
 				Created:    true,
@@ -779,23 +780,23 @@ func TestSystem_Membership_Join(t *testing.T) {
 		},
 		"new member with bad fault domain depth": {
 			req: &JoinRequest{
-				Rank:           NilRank,
-				UUID:           newMemberShallowFD.UUID,
-				ControlAddr:    newMemberShallowFD.Addr,
-				FabricURI:      newMemberShallowFD.FabricURI,
-				FabricContexts: newMemberShallowFD.FabricContexts,
-				FaultDomain:    newMemberShallowFD.FaultDomain,
+				Rank:             NilRank,
+				UUID:             newMemberShallowFD.UUID,
+				ControlAddr:      newMemberShallowFD.Addr,
+				PrimaryFabricURI: curMember.Addr.String(),
+				FabricContexts:   newMemberShallowFD.FabricContexts,
+				FaultDomain:      newMemberShallowFD.FaultDomain,
 			},
 			expErr: FaultBadFaultDomainDepth(newMemberShallowFD.FaultDomain, curMember.FaultDomain.NumLevels()),
 		},
 		"update existing member with bad fault domain depth": {
 			req: &JoinRequest{
-				Rank:           curMember.Rank,
-				UUID:           curMember.UUID,
-				ControlAddr:    curMember.Addr,
-				FabricURI:      curMember.FabricURI,
-				FabricContexts: curMember.FabricContexts,
-				FaultDomain:    shallowFD,
+				Rank:             curMember.Rank,
+				UUID:             curMember.UUID,
+				ControlAddr:      curMember.Addr,
+				PrimaryFabricURI: curMember.Addr.String(),
+				FabricContexts:   curMember.FabricContexts,
+				FaultDomain:      shallowFD,
 			},
 			expErr: FaultBadFaultDomainDepth(newMemberShallowFD.FaultDomain, curMember.FaultDomain.NumLevels()),
 		},
@@ -804,11 +805,11 @@ func TestSystem_Membership_Join(t *testing.T) {
 				curMember,
 			},
 			req: &JoinRequest{
-				Rank:        curMember.Rank,
-				UUID:        curMember.UUID,
-				ControlAddr: curMember.Addr,
-				FabricURI:   curMember.Addr.String(),
-				FaultDomain: shallowFD,
+				Rank:             curMember.Rank,
+				UUID:             curMember.UUID,
+				ControlAddr:      curMember.Addr,
+				PrimaryFabricURI: curMember.Addr.String(),
+				FaultDomain:      shallowFD,
 			},
 			expResp: &JoinResponse{
 				Member:     MockMember(t, 0, MemberStateJoined).WithFaultDomain(shallowFD),

@@ -103,12 +103,14 @@ func TestServer_MgmtSvc_GetAttachInfo(t *testing.T) {
 				},
 				RankUris: []*mgmtpb.GetAttachInfoResp_RankUri{
 					{
-						Rank: msReplica.Rank.Uint32(),
-						Uri:  msReplica.FabricURI,
+						Rank:     msReplica.Rank.Uint32(),
+						Uri:      msReplica.PrimaryFabricURI,
+						Provider: "ofi+verbs",
 					},
 					{
-						Rank: nonReplica.Rank.Uint32(),
-						Uri:  nonReplica.FabricURI,
+						Rank:     nonReplica.Rank.Uint32(),
+						Uri:      nonReplica.PrimaryFabricURI,
+						Provider: "ofi+verbs",
 					},
 				},
 				MsRanks: []uint32{0},
@@ -134,12 +136,14 @@ func TestServer_MgmtSvc_GetAttachInfo(t *testing.T) {
 				},
 				RankUris: []*mgmtpb.GetAttachInfoResp_RankUri{
 					{
-						Rank: msReplica.Rank.Uint32(),
-						Uri:  msReplica.FabricURI,
+						Rank:     msReplica.Rank.Uint32(),
+						Uri:      msReplica.PrimaryFabricURI,
+						Provider: "ofi+tcp",
 					},
 					{
-						Rank: nonReplica.Rank.Uint32(),
-						Uri:  nonReplica.FabricURI,
+						Rank:     nonReplica.Rank.Uint32(),
+						Uri:      nonReplica.PrimaryFabricURI,
+						Provider: "ofi+tcp",
 					},
 				},
 				MsRanks: []uint32{0},
@@ -165,8 +169,9 @@ func TestServer_MgmtSvc_GetAttachInfo(t *testing.T) {
 				},
 				RankUris: []*mgmtpb.GetAttachInfoResp_RankUri{
 					{
-						Rank: msReplica.Rank.Uint32(),
-						Uri:  msReplica.FabricURI,
+						Rank:     msReplica.Rank.Uint32(),
+						Uri:      msReplica.PrimaryFabricURI,
+						Provider: "ofi+tcp",
 					},
 				},
 				MsRanks: []uint32{0},
@@ -195,7 +200,7 @@ func TestServer_MgmtSvc_GetAttachInfo(t *testing.T) {
 			if _, err := tc.svc.membership.Add(nonReplica); err != nil {
 				t.Fatal(err)
 			}
-			tc.svc.clientNetworkHint = tc.clientNetworkHint
+			tc.svc.clientNetworkHint = []*mgmtpb.ClientNetHint{tc.clientNetworkHint}
 			gotResp, gotErr := tc.svc.GetAttachInfo(context.TODO(), tc.req)
 			if gotErr != nil {
 				t.Fatalf("unexpected error: %+v\n", gotErr)
@@ -439,7 +444,7 @@ func mockMember(t *testing.T, r, a int32, s string) *system.Member {
 		t.Fatalf("testcase specifies unknown member state %s", s)
 	}
 
-	return system.NewMember(system.Rank(r), common.MockUUID(r), "", common.MockHostAddr(a), state)
+	return system.NewMember(system.Rank(r), common.MockUUID(r), []string{}, common.MockHostAddr(a), state)
 }
 
 func checkMembers(t *testing.T, exp system.Members, ms *system.Membership) {

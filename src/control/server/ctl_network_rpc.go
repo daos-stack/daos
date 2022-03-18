@@ -20,7 +20,11 @@ import (
 func (c *ControlService) NetworkScan(ctx context.Context, req *ctlpb.NetworkScanReq) (*ctlpb.NetworkScanResp, error) {
 	c.log.Debugf("NetworkScanDevices() Received request: %s", req.GetProvider())
 
-	provider := c.srvCfg.Fabric.Provider
+	provider, err := c.srvCfg.Fabric.GetPrimaryProvider()
+	if err != nil {
+		return nil, err
+	}
+
 	switch {
 	case strings.EqualFold(req.GetProvider(), "all"):
 		provider = ""
