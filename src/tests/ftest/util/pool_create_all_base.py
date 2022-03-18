@@ -7,7 +7,7 @@ SPDX-License-Identifier: BSD-2-Clause-Patent
 from apricot import TestWithServers
 
 
-class PoolCreateAllBaseTests(TestWithServers):
+class PoolCreateAllTestBase(TestWithServers):
     """Base class for testing pool creation with percentage storage.
 
     :avocado: recursive

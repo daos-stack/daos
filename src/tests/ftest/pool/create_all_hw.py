@@ -6,11 +6,11 @@ SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 import sys
 
-from create_all_base import PoolCreateAllBaseTests
+from pool_create_all_base import PoolCreateAllTestBase
 from command_utils_base import CommandFailure
 
 
-class PoolCreateAllHwTests(PoolCreateAllBaseTests):
+class PoolCreateAllHwTests(PoolCreateAllTestBase):
     """Tests pool creation with percentage storage on HW platform.
 
     :avocado: recursive
