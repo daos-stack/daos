@@ -986,7 +986,7 @@ class PreReqComponent():
         """Create a command line variable for a path"""
         tmp = self.__env.get(var)
         if tmp:
-            def realpath(x): return os.path.realpath(os.path.join(self.__top_dir, x))
+            realpath = lambda x: os.path.realpath(os.path.join(self.__top_dir, x))
             if multiple:
                 value = os.pathsep.join(map(realpath, tmp.split(os.pathsep)))
             else:
