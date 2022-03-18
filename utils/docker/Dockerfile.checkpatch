@@ -25,17 +25,19 @@ RUN dnf -y install dnf-plugins-core &&				\
     dnf -y module install avocado &&				\
     dnf clean all
 
-ENV PATH=/root/.local/bin:$PATH
-
-RUN python3 -m pip --no-cache-dir --disable-pip-version-check install --user autopep8
-
 ARG UID=1000
 
 # Add DAOS users
 RUN useradd --uid $UID --user-group --create-home --home /home/daos daos
 
+USER daos:daos
+
+ENV PATH=/home/daos/.local/bin:$PATH
+RUN python3 -m pip --no-cache-dir --disable-pip-version-check install --user autopep8
+
 WORKDIR /home/daos
 
+USER root:root
 # Actual CACHEBUST.  Do this every time so the system is up to date.
 ARG CACHEBUST
 RUN dnf -y upgrade && dnf clean all
