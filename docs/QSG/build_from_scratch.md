@@ -37,10 +37,6 @@ building those tests.
 Scripts to install all the required packages are provided for each supported
 distribution.
 
-### CentOS
-
-Run the following command from the DAOS tree as root or via sudo.
-
 ### openSUSE
 
 For openSUSE, the following command should be executed as root or via sudo:
@@ -75,7 +71,7 @@ the above command line (e.g., PREFIX=/usr/local).
     COMPILER=icc on the scons command line. Please see `scons-3 --help` for
     all the possible options.
 
-## Environment setup
+## Environment Setup
 
 Once built, the environment may need to be modified to search for binaries
 and header files in the installation path. This step is not required if
