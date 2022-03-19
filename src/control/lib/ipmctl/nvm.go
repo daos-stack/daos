@@ -34,7 +34,10 @@ import (
 
 const useNfit = C.NVM_BOOL(0) // NVM API requires this to work
 
-var NVMMajorVersionsSupported = []int{2, 3}
+var (
+	NVMMajorVersionsSupported = []int{2, 3}
+	errNotInitialized         = errors.New("ipmctl api has not been initialized")
+)
 
 // Rc2err returns an failure if rc != NVM_SUCCESS.
 //
@@ -57,10 +60,14 @@ func logDuration(log logging.Logger, msg string, start time.Time) {
 type (
 	// IpmCtl is the interface that provides access to libipmctl.
 	IpmCtl interface {
+		// Init verifies the version of the library is compatible.
+		Init(logging.Logger) error
 		// GetModules discovers persistent memory modules.
 		GetModules(logging.Logger) ([]DeviceDiscovery, error)
 		// GetRegions discovers persistent memory regions.
 		GetRegions(logging.Logger) ([]PMemRegion, error)
+		// DeleteConfigGoals removes any pending but not yet applied PMem configuration goals.
+		DeleteConfigGoals(logging.Logger) error
 		// GetFirmwareInfo retrieves firmware information from persistent memory modules.
 		GetFirmwareInfo(uid DeviceUID) (DeviceFirmwareInfo, error)
 		// UpdateFirmware updates persistent memory module firmware.
@@ -69,15 +76,20 @@ type (
 
 	// NvmMgmt is an implementation of the IpmCtl interface which exercises
 	// libipmctl's NVM API.
-	NvmMgmt struct{}
+	NvmMgmt struct {
+		initialized bool
+	}
 
 	getNumberOfDevicesFn func(logging.Logger, *C.uint) C.int
 	getDevicesFn         func(logging.Logger, *C.struct_device_discovery, C.NVM_UINT8) C.int
 	getNumberOfRegionsFn func(logging.Logger, *C.NVM_UINT8) C.int
 	getRegionsFn         func(logging.Logger, *C.struct_region, *C.NVM_UINT8) C.int
+	deleteConfigGoalFn   func(logging.Logger) C.int
 )
 
-func checkVersion(log logging.Logger) error {
+// Init verifies library version is compatible with this application code.
+func (n *NvmMgmt) Init(log logging.Logger) error {
+	log.Debug("ipmctl bindings: Init")
 	verStr := make([]C.char, 32)
 
 	if err := Rc2err("get_version", C.nvm_get_version(&verStr[0], 32)); err != nil {
@@ -90,6 +102,7 @@ func checkVersion(log logging.Logger) error {
 
 	for _, v := range NVMMajorVersionsSupported {
 		if int(majorVer) == v {
+			n.initialized = true
 			return nil
 		}
 	}
@@ -135,11 +148,11 @@ func getModules(log logging.Logger, getNumDevs getNumberOfDevicesFn, getDevs get
 // GetModules queries number of PMem modules and retrieves device_discovery structs for each before
 // converting to Go DeviceDiscovery structs.
 func (n *NvmMgmt) GetModules(log logging.Logger) (devices []DeviceDiscovery, err error) {
-	log.Debug("ipmctl bindings: GetModules")
-	if err := checkVersion(log); err != nil {
-		return nil, err
+	if !n.initialized {
+		return nil, errNotInitialized
 	}
 
+	log.Debug("ipmctl bindings: GetModules")
 	return getModules(log, getNumberOfDevices, getDevices)
 }
 
@@ -180,12 +193,23 @@ func getRegions(log logging.Logger, getNum getNumberOfRegionsFn, get getRegionsF
 // GetRegions queries number of PMem regions and retrieves region structs for each before
 // converting to Go PMemRegion structs.
 func (n *NvmMgmt) GetRegions(log logging.Logger) (regions []PMemRegion, err error) {
-	log.Debug("ipmctl bindings: GetRegions")
-	if err := checkVersion(log); err != nil {
-		return nil, err
+	if !n.initialized {
+		return nil, errNotInitialized
 	}
 
+	log.Debug("ipmctl bindings: GetRegions")
 	return getRegions(log, getNumberOfPMemRegions, getPMemRegions)
+}
+
+// DeleteConfigGoals removes any pending but not yet applied PMem configuration goals.
+func (n *NvmMgmt) DeleteConfigGoals(log logging.Logger) error {
+	if !n.initialized {
+		return errNotInitialized
+	}
+
+	log.Debug("ipmctl bindings: DeleteConfigGoals")
+	defer logDuration(track(log, "time taken calling nvm_delete_config_goal"))
+	return Rc2err("delete_config_goal", C.nvm_delete_config_goal(nil, 0))
 }
 
 // GetFirmwareInfo fetches the firmware revision and other information from the device
