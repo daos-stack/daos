@@ -64,10 +64,12 @@ func MockModule(d *ipmctl.DeviceDiscovery) storage.ScmModule {
 
 type (
 	mockIpmctlCfg struct {
+		initErr           error
 		getModulesErr     error
 		modules           []ipmctl.DeviceDiscovery
 		getRegionsErr     error
 		regions           []ipmctl.PMemRegion
+		delGoalsErr       error
 		getFWInfoRet      error
 		fwInfo            ipmctl.DeviceFirmwareInfo
 		updateFirmwareRet error
@@ -78,12 +80,20 @@ type (
 	}
 )
 
+func (m *mockIpmctl) Init(_ logging.Logger) error {
+	return m.cfg.initErr
+}
+
 func (m *mockIpmctl) GetModules(_ logging.Logger) ([]ipmctl.DeviceDiscovery, error) {
 	return m.cfg.modules, m.cfg.getModulesErr
 }
 
 func (m *mockIpmctl) GetRegions(_ logging.Logger) ([]ipmctl.PMemRegion, error) {
 	return m.cfg.regions, m.cfg.getRegionsErr
+}
+
+func (m *mockIpmctl) DeleteConfigGoals(_ logging.Logger) error {
+	return m.cfg.delGoalsErr
 }
 
 func (m *mockIpmctl) GetFirmwareInfo(uid ipmctl.DeviceUID) (ipmctl.DeviceFirmwareInfo, error) {
@@ -138,7 +148,10 @@ func TestIpmctl_checkIpmctl(t *testing.T) {
 				return preTxt + tc.verOut, nil
 			}
 
-			cr := newCmdRunner(log, nil, mockRun, nil)
+			cr, err := newCmdRunner(log, nil, mockRun, nil)
+			if err != nil {
+				t.Fatal(err)
+			}
 			common.CmpErr(t, tc.expErr, cr.checkIpmctl(tc.badVers))
 		})
 	}
@@ -229,7 +242,10 @@ func TestIpmctl_getState(t *testing.T) {
 			}
 
 			mockBinding := newMockIpmctl(tc.ipmctlCfg)
-			cr := newCmdRunner(log, mockBinding, mockRun, mockLookPath)
+			cr, err := newCmdRunner(log, mockBinding, mockRun, mockLookPath)
+			if err != nil {
+				t.Fatal(err)
+			}
 
 			scmState, err := cr.getState()
 			common.CmpErr(t, tc.expErr, err)
@@ -264,6 +280,7 @@ func TestIpmctl_prep(t *testing.T) {
 		runErr      []error
 		regions     []ipmctl.PMemRegion
 		regionsErr  error
+		delGoalsErr error
 		expErr      error
 		expPrepResp *storage.ScmPrepareResponse
 		expCalls    []string
@@ -289,26 +306,18 @@ func TestIpmctl_prep(t *testing.T) {
 				RebootRequired: true,
 			},
 			expCalls: []string{
-				"ipmctl version", "ipmctl show -goal", "ipmctl delete -goal",
-				"ipmctl create -f -goal PersistentMemoryType=AppDirect",
+				"ipmctl version", "ipmctl create -f -goal PersistentMemoryType=AppDirect",
 			},
 		},
-		"state no regions; no preconfigured goals": {
+		"state no regions; delete goals fails": {
 			scanResp: &storage.ScmScanResponse{
 				State: storage.ScmStateNoRegions,
 			},
 			runOut: []string{
 				verStr,
-				"There are no goal configs defined in the system.\nPlease use 'show -region' to display currently valid persistent memory regions.\n",
 			},
-			expPrepResp: &storage.ScmPrepareResponse{
-				State:          storage.ScmStateNoRegions,
-				RebootRequired: true,
-			},
-			expCalls: []string{
-				"ipmctl version", "ipmctl show -goal",
-				"ipmctl create -f -goal PersistentMemoryType=AppDirect",
-			},
+			delGoalsErr: errors.New("fail"),
+			expErr:      errors.New("fail"),
 		},
 		"state no regions; create regions fails": {
 			scanResp: &storage.ScmScanResponse{
@@ -336,20 +345,15 @@ func TestIpmctl_prep(t *testing.T) {
 					},
 				},
 			},
-			expCalls: []string{
-				"ndctl create-namespace", "ipmctl version",
-				"ipmctl show -d PersistentMemoryType,FreeCapacity -region",
-			},
+			expCalls: []string{"ndctl create-namespace"},
 		},
 		"state free capacity; create namespaces fails": {
 			scanResp: &storage.ScmScanResponse{
 				State: storage.ScmStateFreeCapacity,
 			},
-			runErr: []error{errors.New("cmd failed")},
-			expErr: errors.New("cmd failed"),
-			expCalls: []string{
-				"ndctl create-namespace",
-			},
+			runErr:   []error{errors.New("cmd failed")},
+			expErr:   errors.New("cmd failed"),
+			expCalls: []string{"ndctl create-namespace"},
 		},
 		"state free capacity; get regions fails": {
 			scanResp: &storage.ScmScanResponse{
@@ -357,11 +361,8 @@ func TestIpmctl_prep(t *testing.T) {
 			},
 			runOut:     []string{ndctlNsStr},
 			regionsErr: errors.New("fail"),
-			expCalls: []string{
-				"ndctl create-namespace", "ipmctl version",
-				"ipmctl show -d PersistentMemoryType,FreeCapacity -region",
-			},
-			expErr: errors.New("discover PMem regions: fail"),
+			expCalls:   []string{"ndctl create-namespace"},
+			expErr:     errors.New("discover PMem regions: fail"),
 		},
 		"state no free capacity": {
 			scanResp: &storage.ScmScanResponse{
@@ -407,6 +408,7 @@ func TestIpmctl_prep(t *testing.T) {
 			mockBinding := newMockIpmctl(&mockIpmctlCfg{
 				regions:       tc.regions,
 				getRegionsErr: tc.regionsErr,
+				delGoalsErr:   tc.delGoalsErr,
 			})
 
 			mockRun := func(cmd string) (string, error) {
@@ -430,7 +432,10 @@ func TestIpmctl_prep(t *testing.T) {
 				return "", nil
 			}
 
-			cr := newCmdRunner(log, mockBinding, mockRun, mockLookPath)
+			cr, err := newCmdRunner(log, mockBinding, mockRun, mockLookPath)
+			if err != nil {
+				t.Fatal(err)
+			}
 
 			resp, err := cr.prep(tc.scanResp)
 			common.CmpErr(t, tc.expErr, err)
@@ -454,6 +459,7 @@ func TestIpmctl_prepReset(t *testing.T) {
 		runErr      error
 		regions     []ipmctl.PMemRegion
 		regionsErr  error
+		delGoalsErr error
 		expErr      error
 		expPrepResp *storage.ScmPrepareResponse
 		expCalls    []string
@@ -481,9 +487,15 @@ func TestIpmctl_prepReset(t *testing.T) {
 				RebootRequired: true,
 			},
 			expCalls: []string{
-				"ipmctl version", "ipmctl show -goal", "ipmctl delete -goal",
-				"ipmctl create -f -goal MemoryMode=100",
+				"ipmctl version", "ipmctl create -f -goal MemoryMode=100",
 			},
+		},
+		"state regions; delete goals fails": {
+			scanResp: &storage.ScmScanResponse{
+				State: storage.ScmStateFreeCapacity,
+			},
+			delGoalsErr: errors.New("fail"),
+			expErr:      errors.New("fail"),
 		},
 		"state regions; remove regions fails": {
 			scanResp: &storage.ScmScanResponse{
@@ -515,8 +527,7 @@ func TestIpmctl_prepReset(t *testing.T) {
 			expCalls: []string{
 				"ndctl disable-namespace namespace1.0",
 				"ndctl destroy-namespace namespace1.0",
-				"ipmctl version", "ipmctl show -goal", "ipmctl delete -goal",
-				"ipmctl create -f -goal MemoryMode=100",
+				"ipmctl version", "ipmctl create -f -goal MemoryMode=100",
 			},
 		},
 		"state no free capacity; remove namespace fails": {
@@ -532,11 +543,9 @@ func TestIpmctl_prepReset(t *testing.T) {
 					},
 				},
 			},
-			runErr: errors.New("cmd failed"),
-			expErr: errors.New("cmd failed"),
-			expCalls: []string{
-				"ndctl disable-namespace namespace1.0",
-			},
+			runErr:   errors.New("cmd failed"),
+			expErr:   errors.New("cmd failed"),
+			expCalls: []string{"ndctl disable-namespace namespace1.0"},
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
@@ -552,6 +561,7 @@ func TestIpmctl_prepReset(t *testing.T) {
 			mockBinding := newMockIpmctl(&mockIpmctlCfg{
 				regions:       tc.regions,
 				getRegionsErr: tc.regionsErr,
+				delGoalsErr:   tc.delGoalsErr,
 			})
 
 			mockRun := func(cmd string) (string, error) {
@@ -563,7 +573,10 @@ func TestIpmctl_prepReset(t *testing.T) {
 				return "", nil
 			}
 
-			cr := newCmdRunner(log, mockBinding, mockRun, mockLookPath)
+			cr, err := newCmdRunner(log, mockBinding, mockRun, mockLookPath)
+			if err != nil {
+				t.Fatal(err)
+			}
 
 			resp, err := cr.prepReset(tc.scanResp)
 			common.CmpErr(t, tc.expErr, err)
@@ -728,7 +741,10 @@ func TestIpmctl_getNamespaces(t *testing.T) {
 				getModulesErr: nil,
 				modules:       []ipmctl.DeviceDiscovery{MockDiscovery()},
 			})
-			cr := newCmdRunner(log, mockBinding, mockRun, mockLookPath)
+			cr, err := newCmdRunner(log, mockBinding, mockRun, mockLookPath)
+			if err != nil {
+				t.Fatal(err)
+			}
 
 			if _, err := cr.getModules(); err != nil {
 				t.Fatal(err)
@@ -789,7 +805,10 @@ func TestIpmctl_getModules(t *testing.T) {
 			defer common.ShowBufferOnFailure(t, buf)
 
 			mockBinding := newMockIpmctl(tc.cfg)
-			cr := newCmdRunner(log, mockBinding, nil, nil)
+			cr, err := newCmdRunner(log, mockBinding, nil, nil)
+			if err != nil {
+				t.Fatal(err)
+			}
 
 			result, err := cr.getModules()
 
@@ -899,7 +918,10 @@ func TestIpmctl_GetFirmwareStatus(t *testing.T) {
 			defer common.ShowBufferOnFailure(t, buf)
 
 			mockBinding := newMockIpmctl(tc.cfg)
-			cr := newCmdRunner(log, mockBinding, nil, nil)
+			cr, err := newCmdRunner(log, mockBinding, nil, nil)
+			if err != nil {
+				t.Fatal(err)
+			}
 
 			result, err := cr.GetFirmwareStatus(tc.inputUID)
 
@@ -939,10 +961,12 @@ func TestIpmctl_UpdateFirmware(t *testing.T) {
 			defer common.ShowBufferOnFailure(t, buf)
 
 			mockBinding := newMockIpmctl(tc.cfg)
-			cr := newCmdRunner(log, mockBinding, nil, nil)
+			cr, err := newCmdRunner(log, mockBinding, nil, nil)
+			if err != nil {
+				t.Fatal(err)
+			}
 
-			err := cr.UpdateFirmware(tc.inputUID, "/dont/care")
-
+			err = cr.UpdateFirmware(tc.inputUID, "/dont/care")
 			common.CmpErr(t, tc.expErr, err)
 		})
 	}

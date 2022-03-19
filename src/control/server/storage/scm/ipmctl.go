@@ -78,14 +78,8 @@ func run(cmd string) (string, error) {
 // Manage AppDirect/Interleaved memory allocation goals across all DCPMMs on a system.
 const (
 	cmdShowIpmctlVersion = "ipmctl version"
-	// command for showing regions only used for debug output
-	cmdShowRegions   = "ipmctl show -d PersistentMemoryType,FreeCapacity -region"
-	cmdCreateRegions = "ipmctl create -f -goal PersistentMemoryType=AppDirect"
-	cmdRemoveRegions = "ipmctl create -f -goal MemoryMode=100"
-	cmdShowGoal      = "ipmctl show -goal"
-	cmdDeleteGoal    = "ipmctl delete -goal"
-
-	msgNoGoals = "There are no goal configs defined in the system."
+	cmdCreateRegions     = "ipmctl create -f -goal PersistentMemoryType=AppDirect"
+	cmdRemoveRegions     = "ipmctl create -f -goal MemoryMode=100"
 )
 
 // constants for ndctl commandline calls
@@ -127,29 +121,9 @@ func (cr *cmdRunner) checkIpmctl(badList []semVer) error {
 	return nil
 }
 
-func (cr *cmdRunner) showRegions() {
-	if err := cr.checkIpmctl(badIpmctlVers); err != nil {
-		cr.log.Error(errors.WithMessage(err, "checkIpmctl").Error())
-		return
-	}
-
-	// Print ipmctl commandline output for show regions for debug purposes.
-	out, err := cr.runCmd(cmdShowRegions)
-	if err != nil {
-		cr.log.Error(errors.WithMessage(err, "show regions cmd").Error())
-		return
-	}
-
-	cr.log.Debugf("show region output: %s", out)
-}
-
 func (cr *cmdRunner) createRegions() error {
 	if err := cr.checkIpmctl(badIpmctlVers); err != nil {
 		return errors.WithMessage(err, "checkIpmctl")
-	}
-
-	if err := cr.deleteGoal(); err != nil {
-		return err
 	}
 
 	cr.log.Debug("set interleaved appdirect goal to create regions")
@@ -168,10 +142,6 @@ func (cr *cmdRunner) removeRegions() error {
 		return errors.WithMessage(err, "checkIpmctl")
 	}
 
-	if err := cr.deleteGoal(); err != nil {
-		return err
-	}
-
 	cr.log.Debug("set memory mode goal to remove regions")
 
 	out, err := cr.runCmd(cmdRemoveRegions)
@@ -183,26 +153,9 @@ func (cr *cmdRunner) removeRegions() error {
 	return nil
 }
 
-func (cr *cmdRunner) deleteGoal() error {
-	cr.log.Debug("delete any previous resource allocation goals")
-
-	out, err := cr.runCmd(cmdShowGoal)
-	if err != nil {
-		return errors.Wrapf(err, "cmd %q", cmdShowGoal)
-	}
-	cr.log.Debugf("%q cmd returned: %q", cmdShowGoal, out)
-
-	if strings.Contains(out, msgNoGoals) {
-		return nil
-	}
-
-	out, err = cr.runCmd(cmdDeleteGoal)
-	if err != nil {
-		return errors.Wrapf(err, "cmd %q", cmdDeleteGoal)
-	}
-	cr.log.Debugf("%q cmd returned: %q", cmdDeleteGoal, out)
-
-	return nil
+func (cr *cmdRunner) deleteGoals() error {
+	cr.log.Debug("delete any existing resource allocation goals")
+	return errors.Wrap(cr.binding.DeleteConfigGoals(cr.log), "failed to delete config goals")
 }
 
 func (cr *cmdRunner) createNamespace() (string, error) {
@@ -326,7 +279,6 @@ func (cr *cmdRunner) UpdateFirmware(deviceUID string, firmwarePath string) error
 func (cr *cmdRunner) getState() (storage.ScmState, error) {
 	regions, err := cr.binding.GetRegions(cr.log)
 	if err != nil {
-		cr.showRegions()
 		return storage.ScmStateUnknown, errors.Wrap(err, "failed to discover PMem regions")
 	}
 	cr.log.Debugf("discovered pmem regions: %+v", regions)
@@ -339,7 +291,6 @@ func (cr *cmdRunner) getState() (storage.ScmState, error) {
 	for _, region := range regions {
 		health := ipmctl.PMemRegionHealth(region.Health)
 		if health != ipmctl.RegionHealthNormal && health != ipmctl.RegionHealthPending {
-			cr.showRegions()
 			cr.log.Errorf("unexpected PMem region health %q, want %q",
 				health, ipmctl.RegionHealthNormal)
 		}
@@ -347,11 +298,9 @@ func (cr *cmdRunner) getState() (storage.ScmState, error) {
 		regionType := ipmctl.PMemRegionType(region.Type)
 		switch regionType {
 		case ipmctl.RegionTypeNotInterleaved:
-			cr.showRegions()
 			return storage.ScmStateNotInterleaved, nil
 		case ipmctl.RegionTypeAppDirect:
 		default:
-			cr.showRegions()
 			return storage.ScmStateUnknown, errors.Errorf(
 				"unexpected PMem region type %q, want %q", regionType,
 				ipmctl.RegionTypeAppDirect)
@@ -385,6 +334,10 @@ func (cr *cmdRunner) prep(scanRes *storage.ScmScanResponse) (resp *storage.ScmPr
 	resp = &storage.ScmPrepareResponse{State: state}
 
 	cr.log.Debugf("scm backend prep: state %q", state)
+
+	if err = cr.deleteGoals(); err != nil {
+		return nil, err
+	}
 
 	switch state {
 	case storage.ScmStateNotInterleaved:
@@ -425,6 +378,10 @@ func (cr *cmdRunner) prepReset(scanRes *storage.ScmScanResponse) (*storage.ScmPr
 	resp := &storage.ScmPrepareResponse{State: state}
 
 	cr.log.Debugf("scm backend prep reset: state %q", state)
+
+	if err := cr.deleteGoals(); err != nil {
+		return nil, err
+	}
 
 	switch state {
 	case storage.ScmStateNoRegions:
@@ -543,14 +500,26 @@ func parseNamespaces(jsonData string) (storage.ScmNamespaces, error) {
 }
 
 func defaultCmdRunner(log logging.Logger) *cmdRunner {
-	return newCmdRunner(log, &ipmctl.NvmMgmt{}, run, exec.LookPath)
+	cr, err := newCmdRunner(log, &ipmctl.NvmMgmt{}, run, exec.LookPath)
+	if err != nil {
+		panic(err)
+	}
+
+	return cr
 }
 
-func newCmdRunner(log logging.Logger, lib ipmctl.IpmCtl, runCmd runCmdFn, lookPath lookPathFn) *cmdRunner {
+func newCmdRunner(log logging.Logger, lib ipmctl.IpmCtl, runCmd runCmdFn, lookPath lookPathFn) (*cmdRunner, error) {
+	if lib == nil {
+		lib = &ipmctl.NvmMgmt{}
+	}
+	if err := lib.Init(log); err != nil {
+		return nil, err
+	}
+
 	return &cmdRunner{
 		log:      log,
 		binding:  lib,
 		runCmd:   runCmd,
 		lookPath: lookPath,
-	}
+	}, nil
 }
