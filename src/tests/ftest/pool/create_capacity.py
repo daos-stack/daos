@@ -1,6 +1,6 @@
 #!/usr/bin/python3
 """
-(C) Copyright 2021 Intel Corporation.
+(C) Copyright 2021-2022 Intel Corporation.
 
 SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -60,7 +60,12 @@ class PoolCreateTests(PoolTestBase):
         self.dmg.timeout = 360
 
         # Verify all the pools exists after the restart
+        pool_list_start = float(time.time())
         pool_uuids = self.get_dmg_command().get_pool_list_uuids(no_query=True)
+        pool_list_duration = float(time.time()) - pool_list_start
+        # Some customer reported that pool list takes a long time, so measure the time
+        # to list 200 pools as a reference.
+        self.log.info("dmg pool list duration: %.1f sec", pool_list_duration)
         detected_pools = [uuid.lower() for uuid in pool_uuids]
         missing_pools = []
         for pool in self.pool:
