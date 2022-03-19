@@ -163,6 +163,7 @@ func getNumberOfPMemRegions(log logging.Logger, out *C.NVM_UINT8) C.int {
 
 func getPMemRegions(log logging.Logger, regions *C.struct_region, count *C.NVM_UINT8) C.int {
 	defer logDuration(track(log, "time taken calling nvm_get_regions_ex"))
+	defer C.nvm_uninit() // Enables region Free_capacity to update after creating namespace.
 	return C.nvm_get_regions_ex(useNfit, regions, count)
 }
 
