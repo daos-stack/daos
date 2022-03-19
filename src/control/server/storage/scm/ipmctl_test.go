@@ -78,7 +78,7 @@ type (
 	}
 )
 
-func (m *mockIpmctl) GetModules() ([]ipmctl.DeviceDiscovery, error) {
+func (m *mockIpmctl) GetModules(_ logging.Logger) ([]ipmctl.DeviceDiscovery, error) {
 	return m.cfg.modules, m.cfg.getModulesErr
 }
 
@@ -260,8 +260,8 @@ func TestIpmctl_prep(t *testing.T) {
 
 	for name, tc := range map[string]struct {
 		scanResp    *storage.ScmScanResponse
-		runOut      string
-		runErr      error
+		runOut      []string
+		runErr      []error
 		regions     []ipmctl.PMemRegion
 		regionsErr  error
 		expErr      error
@@ -289,7 +289,24 @@ func TestIpmctl_prep(t *testing.T) {
 				RebootRequired: true,
 			},
 			expCalls: []string{
-				"ipmctl version", "ipmctl delete -goal",
+				"ipmctl version", "ipmctl show -goal", "ipmctl delete -goal",
+				"ipmctl create -f -goal PersistentMemoryType=AppDirect",
+			},
+		},
+		"state no regions; no preconfigured goals": {
+			scanResp: &storage.ScmScanResponse{
+				State: storage.ScmStateNoRegions,
+			},
+			runOut: []string{
+				verStr,
+				"There are no goal configs defined in the system.\nPlease use 'show -region' to display currently valid persistent memory regions.\n",
+			},
+			expPrepResp: &storage.ScmPrepareResponse{
+				State:          storage.ScmStateNoRegions,
+				RebootRequired: true,
+			},
+			expCalls: []string{
+				"ipmctl version", "ipmctl show -goal",
 				"ipmctl create -f -goal PersistentMemoryType=AppDirect",
 			},
 		},
@@ -297,17 +314,15 @@ func TestIpmctl_prep(t *testing.T) {
 			scanResp: &storage.ScmScanResponse{
 				State: storage.ScmStateNoRegions,
 			},
-			runErr: errors.New("cmd failed"),
-			expCalls: []string{
-				"ipmctl version",
-			},
-			expErr: errors.New("cmd failed"),
+			runErr:   []error{errors.New("cmd failed")},
+			expCalls: []string{"ipmctl version"},
+			expErr:   errors.New("cmd failed"),
 		},
 		"state free capacity": {
 			scanResp: &storage.ScmScanResponse{
 				State: storage.ScmStateFreeCapacity,
 			},
-			runOut:  ndctlNsStr,
+			runOut:  []string{ndctlNsStr},
 			regions: []ipmctl.PMemRegion{{Type: uint32(ipmctl.RegionTypeAppDirect)}},
 			expPrepResp: &storage.ScmPrepareResponse{
 				State: storage.ScmStateNoFreeCapacity,
@@ -330,7 +345,7 @@ func TestIpmctl_prep(t *testing.T) {
 			scanResp: &storage.ScmScanResponse{
 				State: storage.ScmStateFreeCapacity,
 			},
-			runErr: errors.New("cmd failed"),
+			runErr: []error{errors.New("cmd failed")},
 			expErr: errors.New("cmd failed"),
 			expCalls: []string{
 				"ndctl create-namespace",
@@ -340,7 +355,7 @@ func TestIpmctl_prep(t *testing.T) {
 			scanResp: &storage.ScmScanResponse{
 				State: storage.ScmStateFreeCapacity,
 			},
-			runOut:     ndctlNsStr,
+			runOut:     []string{ndctlNsStr},
 			regionsErr: errors.New("fail"),
 			expCalls: []string{
 				"ndctl create-namespace", "ipmctl version",
@@ -380,9 +395,13 @@ func TestIpmctl_prep(t *testing.T) {
 			defer common.ShowBufferOnFailure(t, buf)
 
 			var calls []string
+			var callIdx int
 
-			if tc.runOut == "" {
-				tc.runOut = verStr
+			if tc.runOut == nil {
+				tc.runOut = []string{verStr}
+			}
+			if tc.runErr == nil {
+				tc.runErr = []error{nil}
 			}
 
 			mockBinding := newMockIpmctl(&mockIpmctlCfg{
@@ -392,7 +411,19 @@ func TestIpmctl_prep(t *testing.T) {
 
 			mockRun := func(cmd string) (string, error) {
 				calls = append(calls, cmd)
-				return tc.runOut, tc.runErr
+
+				o := tc.runOut[0]
+				if callIdx < len(tc.runOut) {
+					o = tc.runOut[callIdx]
+				}
+
+				e := tc.runErr[0]
+				if callIdx < len(tc.runErr) {
+					e = tc.runErr[callIdx]
+				}
+
+				callIdx++
+				return o, e
 			}
 
 			mockLookPath := func(string) (string, error) {
@@ -450,7 +481,7 @@ func TestIpmctl_prepReset(t *testing.T) {
 				RebootRequired: true,
 			},
 			expCalls: []string{
-				"ipmctl version", "ipmctl delete -goal",
+				"ipmctl version", "ipmctl show -goal", "ipmctl delete -goal",
 				"ipmctl create -f -goal MemoryMode=100",
 			},
 		},
@@ -484,7 +515,7 @@ func TestIpmctl_prepReset(t *testing.T) {
 			expCalls: []string{
 				"ndctl disable-namespace namespace1.0",
 				"ndctl destroy-namespace namespace1.0",
-				"ipmctl version", "ipmctl delete -goal",
+				"ipmctl version", "ipmctl show -goal", "ipmctl delete -goal",
 				"ipmctl create -f -goal MemoryMode=100",
 			},
 		},

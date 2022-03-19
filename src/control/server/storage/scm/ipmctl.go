@@ -82,7 +82,10 @@ const (
 	cmdShowRegions   = "ipmctl show -d PersistentMemoryType,FreeCapacity -region"
 	cmdCreateRegions = "ipmctl create -f -goal PersistentMemoryType=AppDirect"
 	cmdRemoveRegions = "ipmctl create -f -goal MemoryMode=100"
+	cmdShowGoal      = "ipmctl show -goal"
 	cmdDeleteGoal    = "ipmctl delete -goal"
+
+	msgNoGoals = "There are no goal configs defined in the system."
 )
 
 // constants for ndctl commandline calls
@@ -183,7 +186,17 @@ func (cr *cmdRunner) removeRegions() error {
 func (cr *cmdRunner) deleteGoal() error {
 	cr.log.Debug("delete any previous resource allocation goals")
 
-	out, err := cr.runCmd(cmdDeleteGoal)
+	out, err := cr.runCmd(cmdShowGoal)
+	if err != nil {
+		return errors.Wrapf(err, "cmd %q", cmdShowGoal)
+	}
+	cr.log.Debugf("%q cmd returned: %q", cmdShowGoal, out)
+
+	if strings.Contains(out, msgNoGoals) {
+		return nil
+	}
+
+	out, err = cr.runCmd(cmdDeleteGoal)
 	if err != nil {
 		return errors.Wrapf(err, "cmd %q", cmdDeleteGoal)
 	}
@@ -220,7 +233,7 @@ func (cr *cmdRunner) checkNdctl() error {
 
 // getModules scans the storage host for PMem modules and returns a slice of them.
 func (cr *cmdRunner) getModules() (storage.ScmModules, error) {
-	discovery, err := cr.binding.GetModules()
+	discovery, err := cr.binding.GetModules(cr.log)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to discover pmem modules")
 	}

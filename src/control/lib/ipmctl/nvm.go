@@ -24,6 +24,7 @@ import "C"
 import (
 	"fmt"
 	"os"
+	"time"
 	"unsafe"
 
 	"github.com/pkg/errors"
@@ -31,10 +32,9 @@ import (
 	"github.com/daos-stack/daos/src/control/logging"
 )
 
-const (
-	NvmVersionMajor = 2
-	useNfit         = C.NVM_BOOL(0) // NVM API requires this to work
-)
+const useNfit = C.NVM_BOOL(0) // NVM API requires this to work
+
+var NVMMajorVersionsSupported = []int{2, 3}
 
 // Rc2err returns an failure if rc != NVM_SUCCESS.
 //
@@ -46,11 +46,19 @@ func Rc2err(label string, rc C.int) error {
 	return nil
 }
 
+func track(log logging.Logger, msg string) (logging.Logger, string, time.Time) {
+	return log, msg, time.Now()
+}
+
+func logDuration(log logging.Logger, msg string, start time.Time) {
+	log.Debugf("%v: %v\n", msg, time.Since(start))
+}
+
 type (
 	// IpmCtl is the interface that provides access to libipmctl.
 	IpmCtl interface {
 		// GetModules discovers persistent memory modules.
-		GetModules() ([]DeviceDiscovery, error)
+		GetModules(logging.Logger) ([]DeviceDiscovery, error)
 		// GetRegions discovers persistent memory regions.
 		GetRegions(logging.Logger) ([]PMemRegion, error)
 		// GetFirmwareInfo retrieves firmware information from persistent memory modules.
@@ -63,23 +71,46 @@ type (
 	// libipmctl's NVM API.
 	NvmMgmt struct{}
 
-	getNumberOfDevicesFn func(*C.uint) C.int
-	getDevicesFn         func(*C.struct_device_discovery, C.NVM_UINT8) C.int
-	getNumberOfRegionsFn func(*C.NVM_UINT8) C.int
-	getRegionsFn         func(*C.struct_region, *C.NVM_UINT8) C.int
+	getNumberOfDevicesFn func(logging.Logger, *C.uint) C.int
+	getDevicesFn         func(logging.Logger, *C.struct_device_discovery, C.NVM_UINT8) C.int
+	getNumberOfRegionsFn func(logging.Logger, *C.NVM_UINT8) C.int
+	getRegionsFn         func(logging.Logger, *C.struct_region, *C.NVM_UINT8) C.int
 )
 
-func getNumberOfDevices(out *C.uint) C.int {
+func checkVersion(log logging.Logger) error {
+	verStr := make([]C.char, 32)
+
+	if err := Rc2err("get_version", C.nvm_get_version(&verStr[0], 32)); err != nil {
+		return err
+	}
+
+	log.Infof("libipmctl provides NVM API version %s", C.GoString(&verStr[0]))
+
+	majorVer := C.nvm_get_major_version()
+
+	for _, v := range NVMMajorVersionsSupported {
+		if int(majorVer) == v {
+			return nil
+		}
+	}
+
+	return errors.Errorf("libipmctl version mismatch, want one of major version %v but got %d",
+		NVMMajorVersionsSupported, majorVer)
+}
+
+func getNumberOfDevices(log logging.Logger, out *C.uint) C.int {
+	defer logDuration(track(log, "time taken calling nvm_get_number_of_devices"))
 	return C.nvm_get_number_of_devices(out)
 }
 
-func getDevices(devs *C.struct_device_discovery, count C.NVM_UINT8) C.int {
+func getDevices(log logging.Logger, devs *C.struct_device_discovery, count C.NVM_UINT8) C.int {
+	defer logDuration(track(log, "time taken calling nvm_get_devices"))
 	return C.nvm_get_devices(devs, count)
 }
 
-func getModules(getNumDevs getNumberOfDevicesFn, getDevs getDevicesFn) (devices []DeviceDiscovery, err error) {
+func getModules(log logging.Logger, getNumDevs getNumberOfDevicesFn, getDevs getDevicesFn) (devices []DeviceDiscovery, err error) {
 	var count C.uint
-	if err = Rc2err("get_number_of_devices", getNumDevs(&count)); err != nil {
+	if err = Rc2err("get_number_of_devices", getNumDevs(log, &count)); err != nil {
 		return
 	}
 	if count == 0 {
@@ -88,7 +119,7 @@ func getModules(getNumDevs getNumberOfDevicesFn, getDevs getDevicesFn) (devices 
 
 	devs := make([]C.struct_device_discovery, int(count))
 
-	if err = Rc2err("get_devices", getDevs(&devs[0], C.NVM_UINT8(count))); err != nil {
+	if err = Rc2err("get_devices", getDevs(log, &devs[0], C.NVM_UINT8(count))); err != nil {
 		return
 	}
 
@@ -101,34 +132,30 @@ func getModules(getNumDevs getNumberOfDevicesFn, getDevs getDevicesFn) (devices 
 	return
 }
 
-func checkVersion() error {
-	gotVer := C.nvm_get_major_version()
-
-	if int(gotVer) != NvmVersionMajor {
-		return errors.Errorf("libipmctl version mismatch, want major version %d but got %d",
-			NvmVersionMajor, gotVer)
-	}
-
-	return nil
-}
-
 // GetModules queries number of PMem modules and retrieves device_discovery structs for each before
 // converting to Go DeviceDiscovery structs.
-func (n *NvmMgmt) GetModules() (devices []DeviceDiscovery, err error) {
-	return getModules(getNumberOfDevices, getDevices)
+func (n *NvmMgmt) GetModules(log logging.Logger) (devices []DeviceDiscovery, err error) {
+	log.Debug("ipmctl bindings: GetModules")
+	if err := checkVersion(log); err != nil {
+		return nil, err
+	}
+
+	return getModules(log, getNumberOfDevices, getDevices)
 }
 
-func getNumberOfPMemRegions(out *C.NVM_UINT8) C.int {
-	return C.nvm_get_number_of_regions(out)
+func getNumberOfPMemRegions(log logging.Logger, out *C.NVM_UINT8) C.int {
+	defer logDuration(track(log, "time taken calling nvm_get_number_of_regions_ex"))
+	return C.nvm_get_number_of_regions_ex(useNfit, out)
 }
 
-func getPMemRegions(regions *C.struct_region, count *C.NVM_UINT8) C.int {
+func getPMemRegions(log logging.Logger, regions *C.struct_region, count *C.NVM_UINT8) C.int {
+	defer logDuration(track(log, "time taken calling nvm_get_regions_ex"))
 	return C.nvm_get_regions_ex(useNfit, regions, count)
 }
 
 func getRegions(log logging.Logger, getNum getNumberOfRegionsFn, get getRegionsFn) (regions []PMemRegion, err error) {
 	var count C.NVM_UINT8
-	if err = Rc2err("get_number_of_regions", getNum(&count)); err != nil {
+	if err = Rc2err("get_number_of_regions", getNum(log, &count)); err != nil {
 		return
 	}
 	if count == 0 {
@@ -137,7 +164,7 @@ func getRegions(log logging.Logger, getNum getNumberOfRegionsFn, get getRegionsF
 
 	pmemRegions := make([]C.struct_region, int(count))
 
-	if err = Rc2err("get_regions", get(&pmemRegions[0], &count)); err != nil {
+	if err = Rc2err("get_regions", get(log, &pmemRegions[0], &count)); err != nil {
 		return
 	}
 
@@ -153,6 +180,11 @@ func getRegions(log logging.Logger, getNum getNumberOfRegionsFn, get getRegionsF
 // GetRegions queries number of PMem regions and retrieves region structs for each before
 // converting to Go PMemRegion structs.
 func (n *NvmMgmt) GetRegions(log logging.Logger) (regions []PMemRegion, err error) {
+	log.Debug("ipmctl bindings: GetRegions")
+	if err := checkVersion(log); err != nil {
+		return nil, err
+	}
+
 	return getRegions(log, getNumberOfPMemRegions, getPMemRegions)
 }
 

@@ -73,12 +73,15 @@ func testGetModules(t *testing.T) {
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
-			mockGetNum := func(out *C.uint) C.int {
+			log, buf := logging.NewTestLogger(name)
+			defer common.ShowBufferOnFailure(t, buf)
+
+			mockGetNum := func(_ logging.Logger, out *C.uint) C.int {
 				*out = tc.getNumRet
 				return tc.getNumRC
 			}
 
-			mockGet := func(devs *C.struct_device_discovery, count C.NVM_UINT8) C.int {
+			mockGet := func(_ logging.Logger, devs *C.struct_device_discovery, count C.NVM_UINT8) C.int {
 				if int(count) != int(tc.getNumRet) {
 					t.Fatal("device count does not match")
 				}
@@ -98,7 +101,7 @@ func testGetModules(t *testing.T) {
 				return 0
 			}
 
-			modules, err := getModules(mockGetNum, mockGet)
+			modules, err := getModules(log, mockGetNum, mockGet)
 			common.CmpErr(t, tc.expErr, err)
 			if tc.expErr != nil {
 				return
@@ -150,12 +153,12 @@ func testGetRegions(t *testing.T) {
 			log, buf := logging.NewTestLogger(name)
 			defer common.ShowBufferOnFailure(t, buf)
 
-			mockGetNum := func(out *C.NVM_UINT8) C.int {
+			mockGetNum := func(_ logging.Logger, out *C.NVM_UINT8) C.int {
 				*out = tc.getNumRet
 				return tc.getNumRC
 			}
 
-			mockGet := func(regions *C.struct_region, count *C.NVM_UINT8) C.int {
+			mockGet := func(_ logging.Logger, regions *C.struct_region, count *C.NVM_UINT8) C.int {
 				if int(*count) != int(tc.getNumRet) {
 					t.Fatal("device count does not match")
 				}
