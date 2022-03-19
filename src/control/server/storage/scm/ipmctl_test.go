@@ -78,7 +78,7 @@ type (
 	}
 )
 
-func (m *mockIpmctl) GetModules() ([]ipmctl.DeviceDiscovery, error) {
+func (m *mockIpmctl) GetModules(_ logging.Logger) ([]ipmctl.DeviceDiscovery, error) {
 	return m.cfg.modules, m.cfg.getModulesErr
 }
 
