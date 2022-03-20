@@ -12,6 +12,7 @@ import (
 	"os/exec"
 	"regexp"
 	"strings"
+	"sync"
 
 	"github.com/dustin/go-humanize"
 	"github.com/pkg/errors"
@@ -91,34 +92,37 @@ const (
 )
 
 type cmdRunner struct {
-	log      logging.Logger
-	binding  ipmctl.IpmCtl
-	runCmd   runCmdFn
-	lookPath lookPathFn
+	log       logging.Logger
+	binding   ipmctl.IpmCtl
+	runCmd    runCmdFn
+	lookPath  lookPathFn
+	checkOnce sync.Once
 }
 
 // checkIpmctl verifies ipmctl application version is acceptable.
-func (cr *cmdRunner) checkIpmctl(badList []semVer) error {
-	cmdOut, err := cr.runCmd(cmdShowIpmctlVersion)
-	if err != nil {
-		return errors.WithMessage(err, "show version cmd")
-	}
+func (cr *cmdRunner) checkIpmctl(badList []semVer) (errOut error) {
+	cr.checkOnce.Do(func() {
+		cmdOut, err := cr.runCmd(cmdShowIpmctlVersion)
+		if err != nil {
+			errOut = errors.WithMessage(err, "show version cmd")
+			return
+		}
 
-	re := regexp.MustCompile(`(\d{2}).(\d{2}).(\d{2}).(\d{4})`)
-	matched := re.FindStringSubmatch(cmdOut)
+		re := regexp.MustCompile(`(\d{2}).(\d{2}).(\d{2}).(\d{4})`)
+		matched := re.FindStringSubmatch(cmdOut)
 
-	if matched == nil {
-		return errors.Errorf("could not read ipmctl version (%s)", cmdOut)
-	}
+		if matched == nil {
+			errOut = errors.Errorf("could not read ipmctl version (%s)", cmdOut)
+			return
+		}
 
-	ipmctlBinVer := matched[1:]
-	cr.log.Debugf("ipmctl binary semver: %v", ipmctlBinVer)
+		ipmctlBinVer := matched[1:]
+		cr.log.Debugf("ipmctl binary semver: %v", ipmctlBinVer)
 
-	if err := validateSemVer(ipmctlBinVer, badList); err != nil {
-		return err
-	}
+		errOut = validateSemVer(ipmctlBinVer, badList)
+	})
 
-	return nil
+	return
 }
 
 func (cr *cmdRunner) createRegions() error {
@@ -175,13 +179,14 @@ func (cr *cmdRunner) destroyNamespace(name string) (string, error) {
 }
 
 // checkNdctl verifies ndctl application is installed.
-func (cr *cmdRunner) checkNdctl() error {
-	_, err := cr.lookPath("ndctl")
-	if err != nil {
-		return FaultMissingNdctl
-	}
+func (cr *cmdRunner) checkNdctl() (errOut error) {
+	cr.checkOnce.Do(func() {
+		if _, err := cr.lookPath("ndctl"); err != nil {
+			errOut = FaultMissingNdctl
+		}
+	})
 
-	return nil
+	return
 }
 
 // getModules scans the storage host for PMem modules and returns a slice of them.
@@ -432,36 +437,30 @@ func (cr *cmdRunner) createNamespaces() (storage.ScmNamespaces, error) {
 		return nil, err
 	}
 
-	devs := make(storage.ScmNamespaces, 0)
-
 	for {
 		cr.log.Debug("creating pmem namespace")
 
-		out, err := cr.createNamespace()
-		if err != nil {
+		if _, err := cr.createNamespace(); err != nil {
 			return nil, errors.WithMessage(err, "create namespace cmd")
 		}
-
-		newDevs, err := parseNamespaces(out)
-		if err != nil {
-			return nil, errors.WithMessage(err, "parsing pmem devs")
-		}
-		devs = append(devs, newDevs...)
 
 		state, err := cr.getState()
 		if err != nil {
 			return nil, errors.WithMessage(err, "getting state")
 		}
 
-		switch state {
-		case storage.ScmStateNoFreeCapacity:
-			return devs, nil
-		case storage.ScmStateFreeCapacity:
-		default:
-			return nil, errors.Errorf("unexpected state: want %s, got %s",
-				storage.ScmStateFreeCapacity.String(), state.String())
+		if state == storage.ScmStateNoFreeCapacity {
+			break
 		}
+		if state == storage.ScmStateFreeCapacity {
+			continue
+		}
+
+		return nil, errors.Errorf("unexpected state: want %s, got %s",
+			storage.ScmStateFreeCapacity.String(), state.String())
 	}
+
+	return cr.getNamespaces()
 }
 
 // getNamespaces calls ndctl to list pmem namespaces and returns converted
