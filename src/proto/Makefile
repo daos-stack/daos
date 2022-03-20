@@ -14,6 +14,7 @@ C_HEADER_FILES = include/daos/drpc.pb-c.h\
 		 mgmt/smd.pb-c.h\
 		 mgmt/server.pb-c.h\
 		 mgmt/svc.pb-c.h\
+		 chk/check.pb-c.h\
 		 security/auth.pb-c.h\
 		 tests/drpc/drpc_test.pb-c.h
 C_SOURCE_FILES = common/drpc.pb-c.c\
@@ -25,6 +26,7 @@ C_SOURCE_FILES = common/drpc.pb-c.c\
 		 mgmt/smd.pb-c.c\
 		 mgmt/server.pb-c.c\
 		 mgmt/svc.pb-c.c\
+		 chk/check.pb-c.c\
 		 security/auth.pb-c.c\
 		 tests/drpc/drpc_test.pb-c.c
 GO_CONTROL_FILES = common/proto/shared/ranks.pb.go\
