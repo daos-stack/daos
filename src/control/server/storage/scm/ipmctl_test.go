@@ -345,7 +345,7 @@ func TestIpmctl_prep(t *testing.T) {
 					},
 				},
 			},
-			expCalls: []string{"ndctl create-namespace"},
+			expCalls: []string{"ndctl create-namespace", "ndctl list -N -v"},
 		},
 		"state free capacity; create namespaces fails": {
 			scanResp: &storage.ScmScanResponse{
@@ -527,7 +527,7 @@ func TestIpmctl_prepReset(t *testing.T) {
 			expCalls: []string{
 				"ndctl disable-namespace namespace1.0",
 				"ndctl destroy-namespace namespace1.0",
-				"ipmctl version", "ipmctl create -f -goal MemoryMode=100",
+				"ipmctl create -f -goal MemoryMode=100",
 			},
 		},
 		"state no free capacity; remove namespace fails": {
