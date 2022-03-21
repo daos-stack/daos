@@ -237,9 +237,9 @@ func TestIpmctl_getRegionStateFromCLI(t *testing.T) {
 		"unexpected output": {
 			runOut: []string{
 				"Intel(R) Optane(TM) Persistent Memory Command Line Interface Version 02.00.00.3825",
-				"---ISetID=0x2aba7f4828ef2ccc---\n",
+				"---ISetID=0x2aba7f4828ef2ccc---\naga\n",
 			},
-			expErr: errors.New("expecting at least 4 lines, got 2"),
+			expErr: errors.New("expecting at least 3 lines, got 2"),
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
@@ -269,7 +269,7 @@ func TestIpmctl_getRegionStateFromCLI(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			scmState, err := cr.getRegionState()
+			_, scmState, err := cr.getRegionState()
 			common.CmpErr(t, tc.expErr, err)
 			if tc.expErr != nil {
 				return
@@ -607,7 +607,7 @@ func TestIpmctl_prep(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			resp, err := cr.prep(tc.scanResp)
+			resp, err := cr.prep(storage.ScmPrepareRequest{}, tc.scanResp)
 			log.Debugf("calls made %+v", calls)
 			common.CmpErr(t, tc.expErr, err)
 

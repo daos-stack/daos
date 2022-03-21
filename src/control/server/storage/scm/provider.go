@@ -46,9 +46,9 @@ type (
 	// Backend defines a set of methods to be implemented by a SCM backend.
 	Backend interface {
 		getModules() (storage.ScmModules, error)
-		getRegionState() (storage.ScmState, error)
+		getRegionState() ([]uint64, storage.ScmState, error)
 		getNamespaces() (storage.ScmNamespaces, error)
-		prep(*storage.ScmScanResponse) (*storage.ScmPrepareResponse, error)
+		prep(storage.ScmPrepareRequest, *storage.ScmScanResponse) (*storage.ScmPrepareResponse, error)
 		prepReset(*storage.ScmScanResponse) (*storage.ScmPrepareResponse, error)
 		GetFirmwareStatus(deviceUID string) (*storage.ScmFirmwareInfo, error)
 		UpdateFirmware(deviceUID string, firmwarePath string) error
@@ -289,7 +289,7 @@ func (p *Provider) Scan(req storage.ScmScanRequest) (*storage.ScmScanResponse, e
 	}
 	p.log.Debugf("scm backend: namespaces %+v", namespaces)
 
-	state, err := p.backend.getRegionState()
+	_, state, err := p.backend.getRegionState()
 	if err != nil {
 		return nil, err
 	}
@@ -348,7 +348,7 @@ func (p *Provider) prepare(req storage.ScmPrepareRequest, scan scanFn) (*storage
 	}
 
 	p.log.Debug("scm provider prepare: calling backend prep")
-	return p.backend.prep(scanResp)
+	return p.backend.prep(req, scanResp)
 }
 
 // Prepare attempts to fulfill a SCM Prepare request.

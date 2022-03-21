@@ -25,7 +25,9 @@ type StoragePrepareNvmeCmd struct {
 	TargetUser   string `short:"u" long:"target-user" description:"User that will own hugepage mountpoint directory and vfio groups."`
 }
 
-type StoragePrepareScmCmd struct{}
+type StoragePrepareScmCmd struct {
+	NrNamespacesPerNUMA uint `short:"S" long:"scm-namespaces-per-numa" description:"Number of SCM namespaces to create per NUMA node"`
+}
 
 type StoragePrepareCmd struct {
 	StoragePrepareNvmeCmd
