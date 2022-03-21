@@ -76,7 +76,7 @@ daos_pool_global2local(d_iov_t glob, daos_handle_t *poh)
 }
 
 int
-daos_pool_query(daos_handle_t poh, d_rank_list_t *tgts, daos_pool_info_t *info,
+daos_pool_query(daos_handle_t poh, d_rank_list_t **ranks, daos_pool_info_t *info,
 		daos_prop_t *pool_prop, daos_event_t *ev)
 {
 	daos_pool_query_t	*args;
@@ -96,7 +96,7 @@ daos_pool_query(daos_handle_t poh, d_rank_list_t *tgts, daos_pool_info_t *info,
 
 	args = dc_task_get_args(task);
 	args->poh	= poh;
-	args->tgts	= tgts;
+	args->ranks	= ranks;
 	args->info	= info;
 	args->prop	= pool_prop;
 

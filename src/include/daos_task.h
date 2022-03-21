@@ -189,12 +189,12 @@ struct daos_obj_register_class_t {
 typedef struct {
 	/** Pool open handle. */
 	daos_handle_t		poh;
-	/** Optional, returned storage targets in this pool. */
-	d_rank_list_t		*tgts;
+	/** Optional, returned storage ranks in this pool. */
+	d_rank_list_t	      **ranks;
 	/** Optional, returned pool information. */
-	daos_pool_info_t	*info;
+	daos_pool_info_t       *info;
 	/** Optional, returned pool properties. */
-	daos_prop_t		*prop;
+	daos_prop_t	       *prop;
 } daos_pool_query_t;
 
 /** pool target query args */

@@ -1878,7 +1878,8 @@ obj_rw_bulk_prep(struct dc_object *obj, daos_iod_t *iods, d_sg_list_t *sgls,
 	 * if need bulk transferring.
 	 */
 	sgls_size = daos_sgls_packed_size(sgls, nr, NULL);
-	if (sgls_size >= DAOS_BULK_LIMIT || obj_auxi->reasb_req.orr_tgt_nr > 1) {
+	if (sgls_size >= DAOS_BULK_LIMIT ||
+	    (obj_is_ec(obj) && !obj_auxi->reasb_req.orr_single_tgt)) {
 		bulk_perm = update ? CRT_BULK_RO : CRT_BULK_RW;
 		rc = obj_bulk_prep(sgls, nr, bulk_bind, bulk_perm, task,
 				   &obj_auxi->bulks);
@@ -4890,11 +4891,19 @@ dc_obj_update(tse_task_t *task, struct dtx_epoch *epoch, uint32_t map_ver,
 		goto out_task;
 	}
 
+	/* For update, based on re-assembled sgl for csum calculate (to match with iod).
+	 * Then if with single data target use original user sgl in IO request to avoid
+	 * pack the same data multiple times.
+	 */
+	if (obj_auxi->is_ec_obj && obj_auxi->req_reasbed)
+		args->sgls = obj_auxi->reasb_req.orr_sgls;
 	rc = obj_csum_update(obj, args, obj_auxi);
 	if (rc) {
 		D_ERROR("obj_csum_update error: "DF_RC"\n", DP_RC(rc));
 		goto out_task;
 	}
+	if (obj_auxi->is_ec_obj && obj_auxi->req_reasbed && obj_auxi->reasb_req.orr_single_tgt)
+		args->sgls = obj_auxi->reasb_req.orr_usgls;
 
 	if (DAOS_FAIL_CHECK(DAOS_DTX_COMMIT_SYNC))
 		obj_auxi->flags |= ORF_DTX_SYNC;

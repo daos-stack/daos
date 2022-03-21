@@ -2288,7 +2288,7 @@ ds_pool_connect_handler(crt_rpc_t *rpc)
 
 	/** update metric */
 	metrics = svc->ps_pool->sp_metrics[DAOS_POOL_MODULE];
-	d_tm_inc_gauge(metrics->open_hdl_gauge, 1);
+	d_tm_inc_counter(metrics->connect_total, 1);
 
 	if (in->pci_query_bits & DAOS_PO_QUERY_SPACE)
 		rc = pool_space_query_bcast(rpc->cr_ctx, svc, in->pci_op.pi_hdl,
@@ -2363,7 +2363,6 @@ pool_disconnect_hdls(struct rdb_tx *tx, struct pool_svc *svc, uuid_t *hdl_uuids,
 {
 	d_iov_t			 value;
 	uint32_t		 nhandles;
-	struct pool_metrics	*metrics;
 	int			 i;
 	int			 rc;
 
@@ -2385,10 +2384,6 @@ pool_disconnect_hdls(struct rdb_tx *tx, struct pool_svc *svc, uuid_t *hdl_uuids,
 	rc = pool_disconnect_bcast(ctx, svc, hdl_uuids, n_hdl_uuids);
 	if (rc != 0)
 		D_GOTO(out, rc);
-
-	/** update metric */
-	metrics = svc->ps_pool->sp_metrics[DAOS_POOL_MODULE];
-	d_tm_dec_gauge(metrics->open_hdl_gauge, n_hdl_uuids);
 
 	d_iov_set(&value, &nhandles, sizeof(nhandles));
 	rc = rdb_tx_lookup(tx, &svc->ps_root, &ds_pool_prop_nhandles, &value);
@@ -2459,6 +2454,15 @@ ds_pool_disconnect_handler(crt_rpc_t *rpc)
 
 	rc = rdb_tx_commit(&tx);
 	/* No need to set pdo->pdo_op.po_map_version. */
+
+	if (rc == 0) {
+		struct pool_metrics *metrics;
+
+		/** update metric */
+		metrics = svc->ps_pool->sp_metrics[DAOS_POOL_MODULE];
+		d_tm_inc_counter(metrics->disconnect_total, 1);
+	}
+
 out_lock:
 	ABT_rwlock_unlock(svc->ps_lock);
 	rdb_tx_end(&tx);
@@ -2807,6 +2811,7 @@ ds_pool_query_handler(crt_rpc_t *rpc)
 	struct pool_buf	       *map_buf;
 	uint32_t		map_version = 0;
 	struct pool_svc	       *svc;
+	struct pool_metrics    *metrics;
 	struct rdb_tx		tx;
 	d_iov_t			key;
 	d_iov_t			value;
@@ -2856,7 +2861,7 @@ ds_pool_query_handler(crt_rpc_t *rpc)
 		D_GOTO(out_lock, rc);
 	out->pqo_prop = prop;
 
-	if (DAOS_FAIL_CHECK(DAOS_FORCE_PROP_VERIFY) && prop != NULL) {
+	if (unlikely(DAOS_FAIL_CHECK(DAOS_FORCE_PROP_VERIFY) && prop != NULL)) {
 		daos_prop_t		*iv_prop = NULL;
 		struct daos_prop_entry	*entry, *iv_entry;
 		int			i;
@@ -2967,11 +2972,19 @@ out_lock:
 	if (rc != 0)
 		goto out_svc;
 
+	metrics = svc->ps_pool->sp_metrics[DAOS_POOL_MODULE];
+
 	/* See comment above, rebuild doesn't connect the pool */
 	if ((in->pqi_query_bits & DAOS_PO_QUERY_SPACE) &&
-	    !is_pool_from_srv(in->pqi_op.pi_uuid, in->pqi_op.pi_hdl))
+	    !is_pool_from_srv(in->pqi_op.pi_uuid, in->pqi_op.pi_hdl)) {
 		rc = pool_space_query_bcast(rpc->cr_ctx, svc, in->pqi_op.pi_hdl,
 					    &out->pqo_space);
+		if (unlikely(rc))
+			goto out_svc;
+
+		d_tm_inc_counter(metrics->query_space_total, 1);
+	}
+	d_tm_inc_counter(metrics->query_total, 1);
 
 out_svc:
 	if (map_version == 0)
@@ -5030,8 +5043,15 @@ ds_pool_evict_handler(crt_rpc_t *rpc)
 			/* Pool evict, or pool destroy with force=true */
 			rc = pool_disconnect_hdls(&tx, svc, hdl_uuids,
 						  n_hdl_uuids, rpc->cr_ctx);
-			if (rc != 0)
+			if (rc != 0) {
 				D_GOTO(out_free, rc);
+			} else {
+				struct pool_metrics *metrics;
+
+				/** update metric */
+				metrics = svc->ps_pool->sp_metrics[DAOS_POOL_MODULE];
+				d_tm_inc_counter(metrics->evict_total, n_hdl_uuids);
+			}
 		}
 	}
 
