@@ -233,12 +233,8 @@ vos_oi_find_alloc(struct vos_container *cont, daos_unit_oid_t oid,
 		DP_UOID(oid));
 
 	rc = vos_oi_find(cont, oid, &obj, ts_set);
-	if (rc == 0) {
-		/* upgrading case, set it to current epoch */
-		if (obj->vo_max_write == 0)
-			obj->vo_max_write = epoch;
+	if (rc == 0)
 		goto do_log;
-	}
 	if (rc != -DER_NONEXIST)
 		return rc;
 
@@ -627,7 +623,11 @@ oi_iter_fetch(struct vos_iterator *iter, vos_iter_entry_t *it_entry,
 	}
 	it_entry->ie_child_type = VOS_ITER_DKEY;
 
-	it_entry->ie_last_update = obj->vo_max_write;
+	/* Upgrading case, set it to current epoch */
+	if (obj->vo_max_write == 0)
+		it_entry->ie_last_update = epr.epr_hi;
+	else
+		it_entry->ie_last_update = obj->vo_max_write;
 
 	return 0;
 }
