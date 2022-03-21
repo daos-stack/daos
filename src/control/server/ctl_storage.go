@@ -30,9 +30,7 @@ type StorageControlService struct {
 
 // ScmPrepare preps locally attached modules.
 func (scs *StorageControlService) ScmPrepare(req storage.ScmPrepareRequest) (*storage.ScmPrepareResponse, error) {
-	resp, err := scs.storage.PrepareScm(req)
-	scs.log.Debugf("scs scm prep, req %+v, resp %+v", req, resp)
-	return resp, err
+	return scs.storage.PrepareScm(req)
 }
 
 // ScmScan scans locally attached modules and namespaces.

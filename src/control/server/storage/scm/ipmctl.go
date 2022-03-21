@@ -79,8 +79,10 @@ func run(cmd string) (string, error) {
 // Manage AppDirect/Interleaved memory allocation goals across all DCPMMs on a system.
 const (
 	cmdShowIpmctlVersion = "ipmctl version"
+	cmdShowRegions       = "ipmctl show -d PersistentMemoryType,FreeCapacity -region"
 	cmdCreateRegions     = "ipmctl create -f -goal PersistentMemoryType=AppDirect"
 	cmdRemoveRegions     = "ipmctl create -f -goal MemoryMode=100"
+	outScmNoRegions      = "no Regions defined"
 )
 
 // constants for ndctl commandline calls
@@ -123,6 +125,22 @@ func (cr *cmdRunner) checkIpmctl(badList []semVer) (errOut error) {
 	})
 
 	return
+}
+
+func (cr *cmdRunner) showRegions() (string, error) {
+	if err := cr.checkIpmctl(badIpmctlVers); err != nil {
+		return "", errors.WithMessage(err, "checkIpmctl")
+	}
+
+	cr.log.Debug("set interleaved appdirect goal to show regions")
+
+	out, err := cr.runCmd(cmdShowRegions)
+	if err != nil {
+		return "", errors.Wrapf(err, "cmd %q", cmdShowRegions)
+	}
+	cr.log.Debugf("%q cmd returned: %q", cmdShowRegions, out)
+
+	return out, nil
 }
 
 func (cr *cmdRunner) createRegions() error {
@@ -279,9 +297,90 @@ func (cr *cmdRunner) UpdateFirmware(deviceUID string, firmwarePath string) error
 	return nil
 }
 
-// getState establishes state of PMem by fetching region detail from ipmctl bindings and checking
+// parseShowRegionOutput takes output from ipmctl and returns free capacity.
+//
+// external tool commands return:
+// $ ipmctl show -d PersistentMemoryType,FreeCapacity -region
+//
+// ---ISetID=0x2aba7f4828ef2ccc---
+//    PersistentMemoryType=AppDirect
+//    FreeCapacity=3012.0 GiB
+// ---ISetID=0x81187f4881f02ccc---
+//    PersistentMemoryType=AppDirect
+//    FreeCapacity=3012.0 GiB
+//
+// FIXME DAOS-10173: When libipmctl nvm_get_region() is fixed so that it doesn't take
+//                   a minute to return, replace this with getRegionState() below to use
+//                   libipmctl directly through bindings.
+func parseShowRegionOutput(log logging.Logger, text string) (_ storage.ScmState, err error) {
+	defer func() {
+		err = errors.Wrap(err, "parse show regions cmd output")
+	}()
+
+	lines := strings.Split(text, "\n")
+	if len(lines) < 4 {
+		return storage.ScmStateUnknown, errors.Errorf("expecting at least 4 lines, got %d",
+			len(lines))
+	}
+
+	var appDirect bool
+	var totalFree uint64
+	for _, line := range lines {
+		entry := strings.TrimSpace(line)
+
+		kv := strings.Split(entry, "=")
+		if len(kv) != 2 {
+			continue
+		}
+
+		switch kv[0] {
+		case "PersistentMemoryType":
+			if kv[1] == "AppDirectNotInterleaved" {
+				return storage.ScmStateNotInterleaved, nil
+			}
+			if kv[1] == "AppDirect" {
+				appDirect = true
+				continue
+			}
+		case "FreeCapacity":
+			if !appDirect {
+				continue
+			}
+			c, err := humanize.ParseBytes(kv[1])
+			if err != nil {
+				return storage.ScmStateUnknown, err
+			}
+			totalFree += c
+		}
+		appDirect = false
+	}
+
+	if totalFree > 0 {
+		log.Debugf("PMem regions have %s free capacity", humanize.Bytes(totalFree))
+		return storage.ScmStateFreeCapacity, nil
+	}
+	log.Debug("PMem regions have no free capacity")
+	return storage.ScmStateNoFreeCapacity, nil
+}
+
+func (cr *cmdRunner) getRegionState() (storage.ScmState, error) {
+	out, err := cr.showRegions()
+	if err != nil {
+		return storage.ScmStateUnknown, errors.WithMessage(err, "show regions cmd")
+	}
+
+	cr.log.Debugf("show region output: %s\n", out)
+
+	if strings.Contains(out, outScmNoRegions) {
+		return storage.ScmStateNoRegions, nil
+	}
+
+	return parseShowRegionOutput(cr.log, out)
+}
+
+// getRegionStateFromBindings establishes state of PMem by fetching region detail from ipmctl bindings and checking
 // memory mode types and free capacity.
-func (cr *cmdRunner) getState() (storage.ScmState, error) {
+func (cr *cmdRunner) getRegionStateFromBindings() (storage.ScmState, error) {
 	regions, err := cr.binding.GetRegions(cr.log)
 	if err != nil {
 		return storage.ScmStateUnknown, errors.Wrap(err, "failed to discover PMem regions")
@@ -320,6 +419,7 @@ func (cr *cmdRunner) getState() (storage.ScmState, error) {
 		cr.log.Debugf("PMem regions have %s free capacity", humanize.Bytes(totalFree))
 		return storage.ScmStateFreeCapacity, nil
 	}
+	cr.log.Debug("PMem regions have no free capacity")
 	return storage.ScmStateNoFreeCapacity, nil
 }
 
@@ -444,7 +544,7 @@ func (cr *cmdRunner) createNamespaces() (storage.ScmNamespaces, error) {
 			return nil, errors.WithMessage(err, "create namespace cmd")
 		}
 
-		state, err := cr.getState()
+		state, err := cr.getRegionState()
 		if err != nil {
 			return nil, errors.WithMessage(err, "getting state")
 		}
