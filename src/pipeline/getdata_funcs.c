@@ -118,12 +118,10 @@ getdata_func_akey_(struct filter_part_run_t *args)
 
 		iod_str  = (char *) iod->iod_name.iov_buf;
 		iod_size = iod->iod_name.iov_len;
-
 		if (iod_size != akey_name_size)
 		{
 			continue;
 		}
-
 		akey = &args->akeys[i];
 		/** akey exists and has data */
 		if (!memcmp(akey_name_str, iod_str, iod_size) &&
@@ -142,21 +140,25 @@ getdata_func_akey_(struct filter_part_run_t *args)
 			for (j = 0; j < iom->iom_nr_out; j++)
 			{
 				recx = &iom->iom_recxs[j];
-				if (recx->rx_idx == target_offset)
+
+				if (target_offset < recx->rx_idx + recx->rx_nr
+					&&
+				    target_offset >= recx->rx_idx)
 				{ /** extend found */
 					buf = (char *) akey->sg_iovs->iov_buf;
 					buf = &buf[offset];
-					if (recx->rx_nr < len)
+					if (iod->iod_size * recx->rx_nr < len)
 					{
-						len = (size_t) recx->rx_nr;
+						len = (size_t)
+						    recx->rx_nr * iod->iod_size;
 					}
 					D_GOTO(exit, buf);
 				}
-				offset += (size_t) recx->rx_nr;
+				offset += (size_t) recx->rx_nr * iod->iod_size;
 			}
 			D_GOTO(exit, buf);
 			/** even if extent is not found we return, since there
-			 *  are not two akeys with the same name*/
+			 *  are not two akeys with the same name */
 		}
 	}
 exit:

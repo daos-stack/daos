@@ -440,6 +440,7 @@ compile_filter(daos_filter_t *filter, struct filter_compiled_t *comp_filter,
 			comp_part->data_len =
 					filter->parts[*part_idx]->data_len;
 			comp_part->filter_func = getd_func_ptrs[func_idx];;
+
 		}
 		D_GOTO(exit, rc = 0);
 	}
@@ -470,7 +471,6 @@ compile_filter(daos_filter_t *filter, struct filter_compiled_t *comp_filter,
 	}
 
 	comp_part->filter_func = filter_func_ptrs[func_idx];
-
 exit:
 	return rc;
 }

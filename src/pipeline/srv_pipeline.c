@@ -108,6 +108,9 @@ enum_pack_cb(daos_handle_t ih, vos_iter_entry_t *entry, vos_iter_type_t type,
 		void		*ptr;
 		size_t		total_data_size = 0;
 		daos_recx_t	*iod_recxs;
+		d_iov_t		iov_recxs;
+		char		*buf_recxs;
+		size_t		entry_size;
 
 		D_ASSERT(pipe_arg->copy_data_cb != NULL);
 
@@ -125,13 +128,15 @@ enum_pack_cb(daos_handle_t ih, vos_iter_entry_t *entry, vos_iter_type_t type,
 			break; /** akey is not in iods passed by client */
 		}
 
-		iods	= pipe_arg->iods;
-		sgls	= pipe_arg->sgl_recx;
-		iov	= sgls[pipe_arg->akey_idx].sg_iovs;
-		iom	= &pipe_arg->ioms[pipe_arg->akey_idx];
+		iods		= pipe_arg->iods;
+		sgls		= pipe_arg->sgl_recx;
+		iov		= sgls[pipe_arg->akey_idx].sg_iovs;
+		iom		= &pipe_arg->ioms[pipe_arg->akey_idx];
+		entry_size	= 0;
 
 		if (type == VOS_ITER_SINGLE)
 		{
+			entry_size      = entry->ie_gsize;
 			total_data_size = iov->iov_len + entry->ie_gsize;
 		}
 		else if (iom->iom_nr_out < iom->iom_nr) /** RECX */
@@ -146,6 +151,7 @@ enum_pack_cb(daos_handle_t ih, vos_iter_entry_t *entry, vos_iter_type_t type,
 				{
 					total_data_size  = entry->ie_rsize;
 					total_data_size *= entry->ie_recx.rx_nr;
+					entry_size       = total_data_size;
 					total_data_size += iov->iov_len;
 
 					iom->iom_recxs[iom->iom_nr_out] =
@@ -162,6 +168,13 @@ enum_pack_cb(daos_handle_t ih, vos_iter_entry_t *entry, vos_iter_type_t type,
 			break;
 		}
 
+		if (entry_size == 0)
+		{ /*
+		   * this could happen if user requests a extent that does not
+		   * exist in some records
+		   */
+			break;
+		}
 		if (total_data_size > iov->iov_buf_len)
 		{
 			D_REALLOC(ptr, iov->iov_buf, iov->iov_buf_len,
@@ -174,9 +187,16 @@ enum_pack_cb(daos_handle_t ih, vos_iter_entry_t *entry, vos_iter_type_t type,
 			iov->iov_buf_len = total_data_size;
 		}
 
-		rc = pipe_arg->copy_data_cb(ih, entry, iov);
+		buf_recxs		= (char *) iov->iov_buf;
+		buf_recxs		= &buf_recxs[iov->iov_len];
+		iov_recxs.iov_buf	= (void *) buf_recxs;
+		iov_recxs.iov_len	= 0;
+		iov_recxs.iov_buf_len	= entry_size;
+
+		rc = pipe_arg->copy_data_cb(ih, entry, &iov_recxs);
 		if (rc == 0)
 		{
+			iov->iov_len += iov_recxs.iov_len;
 			sgls[pipe_arg->akey_idx].sg_nr_out = 1;
 		}
 		break;
