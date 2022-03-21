@@ -181,7 +181,7 @@ struct obj_reasb_req {
 					 orr_size_fetch:1,
 	/* for iod_size fetched flag */
 					 orr_size_fetched:1,
-	/* only with single target flag */
+	/* only with single data target flag */
 					 orr_single_tgt:1,
 	/* only for single-value IO flag */
 					 orr_singv_only:1,
