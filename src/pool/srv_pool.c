@@ -3970,6 +3970,7 @@ ds_pool_upgrade_if_needed(uuid_t pool_uuid, struct rsvc_hint *po_hint,
 			}
 			/* try again as users requested. */
 			D_GOTO(out_upgrade, rc = 0);
+			break;
 		case DAOS_UPGRADE_STATUS_IN_PROGRESS:
 			if (global_version < DAOS_PO_GLOBAL_VERSION) {
 				D_ERROR("need finish last time upgraing\n");
