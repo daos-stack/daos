@@ -16,6 +16,9 @@ The DAOS 2.0.2 release contains the following updates on top of DAOS 2.0.1:
   in a new `daos_daemons` Linux group
   [DAOS-6344](https://daosio.atlassian.net/browse/DAOS-6344).
 
+- The sightings with SOAK testing in 2.0.1 have been resolved.
+  See [DAOS-9725](https://daosio.atlassian.net/browse/DAOS-9725).
+
 - Minor changes to the
   DFS API [DAOS-10009](https://daosio.atlassian.net/browse/DAOS-10009) and 
   DAOS Java API [DAOS-9379](https://daosio.atlassian.net/browse/DAOS-9379).
@@ -27,17 +30,17 @@ The DAOS 2.0.2 release contains the following updates on top of DAOS 2.0.1:
   [DAOS-10068](https://daosio.atlassian.net/browse/DAOS-10068).
 
 - `mercury` has been updated from 2.1.0~rc4-3 to 2.1.0~rc4-5.
-  This fixes [DAOS-9725](https://daosio.atlassian.net/browse/DAOS-9561) and
+  This fixes multiple issues with `dmg pool delete`, including
+  [DAOS-9725](https://daosio.atlassian.net/browse/DAOS-9561) and
   [DAOS-9006](https://daosio.atlassian.net/browse/DAOS-9006).
 
-- The sightings with SOAK testing in 2.0.1 have been resolved.
-
-- `spdk` has been updated from 21.07-11 to 21.07-13 (no content changes).
+- `spdk` version has been updated from 21.07-11 to 21.07-13 (no content changes).
 
 ## Known Issues and limitations
 
 - For some workloads, performance degradations have been observed with
-  libfabric 1.14 and the `tcp` provider. 
+  libfabric 1.14 and the `tcp` provider
+  [DAOS-9883](https://daosio.atlassian.net/browse/DAOS-9883).
 
 - `daos fs copy` does not support symlinks / [DAOS-9254](https://daosio.atlassian.net/browse/DAOS-9254)
 
