@@ -335,8 +335,7 @@ ds_pipeline_run(daos_handle_t vos_coh, daos_unit_oid_t oid,
 		daos_key_t *dkey, uint32_t *nr_iods, daos_iod_t *iods,
 		daos_anchor_t *anchor, uint32_t nr_kds, uint32_t *nr_kds_out,
 		daos_key_desc_t **kds, d_sg_list_t **sgl_keys,
-		uint32_t *nr_recx, d_sg_list_t **sgl_recx,
-		daos_iom_t **ioms, d_sg_list_t *sgl_agg)
+		uint32_t *nr_recx, d_sg_list_t **sgl_recx, d_sg_list_t *sgl_agg)
 {
 	int				rc;
 	uint32_t			nr_kds_pass;
@@ -351,9 +350,7 @@ ds_pipeline_run(daos_handle_t vos_coh, daos_unit_oid_t oid,
 	d_sg_list_t			*sgl_recx_iter		= NULL;
 	d_iov_t				*sgl_recx_iter_iovs	= NULL;
 	size_t				iov_alloc_size;
-	daos_iom_t			*ioms_			= NULL;
 	daos_iom_t			*ioms_iter		= NULL;
-	uint32_t			ioms_alloc		= 0;
 	uint32_t			i, k;
 	uint32_t			j			= 0;
 	uint32_t			l			= 0;
@@ -591,24 +588,12 @@ ds_pipeline_run(daos_handle_t vos_coh, daos_unit_oid_t oid,
 		sgl_recx_alloc += *nr_iods;
 		*sgl_recx = sgl_recx_;
 
-		/** i/o maps */
-		D_REALLOC_ARRAY(ioms_, *ioms, (nr_kds_pass - 1) * (*nr_iods),
-				nr_kds_pass * (*nr_iods));
-		if (ioms_ == NULL)
-		{
-			D_GOTO(exit, rc = -DER_NOMEM);
-		}
-		ioms_alloc += *nr_iods;
-		*ioms = ioms_;
-
 		/* init structs */
 		for (i = 0; i < *nr_iods; i++)
 		{
 			sgl_recx_[sr_idx + i].sg_nr     = 0;
 			sgl_recx_[sr_idx + i].sg_nr_out = 0;
 			sgl_recx_[sr_idx + i].sg_iovs   = NULL;
-			ioms_[sr_idx + i].iom_nr        = 0;
-			ioms_[sr_idx + i].iom_recxs     = NULL;
 		}
 
 		/** copying data */
@@ -645,28 +630,6 @@ ds_pipeline_run(daos_handle_t vos_coh, daos_unit_oid_t oid,
 					      sgl_recx_iter[i].sg_iovs->iov_len;
 			sgl_recx_[sr_idx].sg_nr     = 1;
 			sgl_recx_[sr_idx].sg_nr_out = 1;
-
-			/** copying ioms */
-			D_ALLOC_ARRAY(ioms_[sr_idx].iom_recxs,
-				      ioms_iter[i].iom_nr);
-			if (ioms_[sr_idx].iom_recxs == NULL)
-			{
-				D_GOTO(exit, rc = -DER_NOMEM);
-			}
-			if (ioms_iter[l].iom_type == DAOS_IOD_ARRAY)
-			{
-				memcpy(ioms_[sr_idx].iom_recxs,
-				       ioms_iter[i].iom_recxs,
-				       (ioms_iter[i].iom_nr) *
-				              sizeof(*ioms_iter[i].iom_recxs));
-			}
-			ioms_[sr_idx].iom_type    = ioms_iter[i].iom_type;
-			ioms_[sr_idx].iom_nr      = ioms_iter[i].iom_nr;
-			ioms_[sr_idx].iom_nr_out  = ioms_iter[i].iom_nr_out;
-			ioms_[sr_idx].iom_flags   = ioms_iter[i].iom_flags;
-			ioms_[sr_idx].iom_size    = ioms_iter[i].iom_size;
-			ioms_[sr_idx].iom_recx_lo = ioms_iter[i].iom_recx_lo;
-			ioms_[sr_idx].iom_recx_hi = ioms_iter[i].iom_recx_hi;
 
 			sr_idx++;
 		}
@@ -778,25 +741,6 @@ exit:
 			}
 			D_FREE(*sgl_recx);
 		}
-		if (ioms_alloc > 0)
-		{
-			if (sr_idx == ioms_alloc)
-			{
-				limit = sr_idx;
-			}
-			else
-			{
-				limit = sr_idx + 1;
-			}
-			for (i = 0; i < limit; i++)
-			{
-				if (ioms[0][i].iom_nr != 0)
-				{
-					D_FREE(ioms[0][i].iom_recxs);
-				}
-			}
-			D_FREE(*ioms);
-		}
 	}
 
 	return rc;
@@ -818,7 +762,6 @@ ds_pipeline_run_handler(crt_rpc_t *rpc)
 	uint32_t			nr_kds_out	= 0;
 	d_sg_list_t			*sgl_keys	= NULL;
 	d_sg_list_t			*sgl_recx	= NULL;
-	daos_iom_t			*ioms		= NULL;
 	uint32_t			nr_recx		= 0;
 	d_sg_list_t			*sgl_aggr	= NULL;
 
@@ -877,7 +820,7 @@ ds_pipeline_run_handler(crt_rpc_t *rpc)
 			     pri->pri_flags, &pri->pri_dkey, &nr_iods,
 			     pri->pri_iods.iods, &pri->pri_anchor, nr_kds,
 			     &nr_kds_out, &kds, &sgl_keys, &nr_recx, &sgl_recx,
-			     &ioms, sgl_aggr);
+			     sgl_aggr);
 
 exit:
 

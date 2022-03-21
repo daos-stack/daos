@@ -324,7 +324,7 @@ run_pipeline(daos_pipeline_t *pipeline)
 	d_iov_t			*iovs_recs;
 	char			*buf_recs;
 	daos_recx_t		recxs[NR_RECXS];
-	uint32_t		i;
+	uint32_t		i, j;
 	int			rc;
 
 	/* iod for akey's metadata */
@@ -381,15 +381,44 @@ run_pipeline(daos_pipeline_t *pipeline)
 
 		rc = daos_pipeline_run(coh, oh, *pipeline, DAOS_TX_NONE, 0,
 				       NULL, &nr_iods, &iod, &anchor, &nr_kds,
-				       kds, sgl_keys, sgl_recs ,NULL, NULL,
-				       NULL);
+				       kds, sgl_keys, sgl_recs ,NULL, NULL);
 		ASSERT(rc == 0, "Pipeline run failed with %d", rc);
 
 		/** processing nr_kds records */
 		for (i = 0; i < nr_kds; i++)
 		{
 			uint64_t dkey = *((uint64_t *) sgl_keys[i].sg_iovs->iov_buf);
-			printf("\tid(dkey)=%lu\n", dkey);
+			char     *akey_data;
+			size_t   offset;
+
+			printf("\tid(dkey)=%lu\t", dkey);
+			printf("%s(akey) -->> ", field);
+
+			offset = 0;
+			akey_data = (char *) sgl_recs[i].sg_iovs->iov_buf;
+
+			for (j = 0; j < NR_RECXS; j++)
+			{
+				char *data_j = &akey_data[offset];
+
+				printf("rx[%lu:%lu]=", recxs[j].rx_idx, recxs[j].rx_nr);
+				if (recxs[j].rx_nr == 8)
+				{
+					printf("%lu\t", *((uint64_t *)data_j));
+					offset += 8;
+				}
+				else if (recxs[j].rx_nr == 4)
+				{
+					printf("%u\t", *((uint32_t *)data_j));
+					offset += 4;
+				}
+				else
+				{
+					printf("%hu\t", *((uint16_t *)data_j));
+					offset += 2;
+				}
+			}
+			printf("\n");
 		}
 	}
 	printf("\n");

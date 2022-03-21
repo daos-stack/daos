@@ -738,8 +738,7 @@ run_pipeline(daos_pipeline_t *pipeline)
 
 		rc = daos_pipeline_run(coh, oh, *pipeline, DAOS_TX_NONE, 0,
 				       NULL, &nr_iods, iods, &anchor, &nr_kds,
-				       kds, sgl_keys, sgl_recx, NULL, sgl_aggr,
-				       NULL);
+				       kds, sgl_keys, sgl_recx, sgl_aggr, NULL);
 
 		ASSERT(rc == 0, "Pipeline run failed with %d", rc);
 		/** process nr_kds fetched records */
