@@ -193,7 +193,7 @@ func (mb *MockBackend) getNamespaces() (storage.ScmNamespaces, error) {
 	return mb.cfg.GetNamespacesRes, mb.cfg.GetNamespacesErr
 }
 
-func (mb *MockBackend) getState() (storage.ScmState, error) {
+func (mb *MockBackend) getRegionState() (storage.ScmState, error) {
 	return mb.cfg.GetStateRes, mb.cfg.GetStateErr
 }
 

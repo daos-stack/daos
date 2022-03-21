@@ -157,9 +157,134 @@ func TestIpmctl_checkIpmctl(t *testing.T) {
 	}
 }
 
-// TestIpmctl_getState tests the internals of GetState and verifies correct behavior based
+func TestIpmctl_getRegionStateFromCLI(t *testing.T) {
+	for name, tc := range map[string]struct {
+		runOut   []string
+		runErr   []error
+		expErr   error
+		expState storage.ScmState
+	}{
+		"show regions fails": {
+			runErr: []error{
+				errors.New("fail"),
+			},
+			expErr: errors.New("fail"),
+		},
+		"modules but no regions": {
+			runOut: []string{
+				"Intel(R) Optane(TM) Persistent Memory Command Line Interface Version 02.00.00.3825",
+				outScmNoRegions,
+			},
+			expState: storage.ScmStateNoRegions,
+		},
+		"single region with free capacity": {
+			runOut: []string{
+				"Intel(R) Optane(TM) Persistent Memory Command Line Interface Version 02.00.00.3825",
+				"---ISetID=0x2aba7f4828ef2ccc---\n" +
+					"   PersistentMemoryType=AppDirect\n" +
+					"   FreeCapacity=3012.0 GiB\n",
+			},
+			expState: storage.ScmStateFreeCapacity,
+		},
+		"regions only one with free capacity": {
+			runOut: []string{
+				"Intel(R) Optane(TM) Persistent Memory Command Line Interface Version 02.00.00.3825",
+				"---ISetID=0x2aba7f4828ef2ccc---\n" +
+					"   PersistentMemoryType=AppDirect\n" +
+					"   FreeCapacity=0.0 GiB\n" +
+					"---ISetID=0x81187f4881f02ccc---\n" +
+					"   PersistentMemoryType=AppDirect\n" +
+					"   FreeCapacity=3012.0 GiB\n",
+			},
+			expState: storage.ScmStateFreeCapacity,
+		},
+		"regions with free capacity": {
+			runOut: []string{
+				"Intel(R) Optane(TM) Persistent Memory Command Line Interface Version 02.00.00.3825",
+				"---ISetID=0x2aba7f4828ef2ccc---\n" +
+					"   PersistentMemoryType=AppDirect\n" +
+					"   FreeCapacity=3012.0 GiB\n" +
+					"---ISetID=0x81187f4881f02ccc---\n" +
+					"   PersistentMemoryType=AppDirect\n" +
+					"   FreeCapacity=3012.0 GiB\n",
+			},
+			expState: storage.ScmStateFreeCapacity,
+		},
+		"regions with no free capacity": {
+			runOut: []string{
+				"Intel(R) Optane(TM) Persistent Memory Command Line Interface Version 02.00.00.3825",
+				"---ISetID=0x2aba7f4828ef2ccc---\n" +
+					"   PersistentMemoryType=AppDirect\n" +
+					"   FreeCapacity=0.0 GiB\n" +
+					"---ISetID=0x81187f4881f02ccb---\n" +
+					"   PersistentMemoryType=AppDirect\n" +
+					"   FreeCapacity=0.0 GiB\n",
+			},
+			expState: storage.ScmStateNoFreeCapacity,
+		},
+		"v2 regions with no capacity": {
+			runOut: []string{
+				"Intel(R) Optane(TM) Persistent Memory Command Line Interface Version 02.00.00.3825",
+				"---ISetID=0x2aba7f4828ef2ccc---\n" +
+					"   PersistentMemoryType=AppDirect\n" +
+					"   FreeCapacity=0.000 GiB\n" +
+					"---ISetID=0x81187f4881f02ccb---\n" +
+					"   PersistentMemoryType=AppDirect\n" +
+					"   FreeCapacity=0.000 GiB\n",
+			},
+			expState: storage.ScmStateNoFreeCapacity,
+		},
+		"unexpected output": {
+			runOut: []string{
+				"Intel(R) Optane(TM) Persistent Memory Command Line Interface Version 02.00.00.3825",
+				"---ISetID=0x2aba7f4828ef2ccc---\n",
+			},
+			expErr: errors.New("expecting at least 4 lines, got 2"),
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(t.Name())
+			defer common.ShowBufferOnFailure(t, buf)
+
+			callIdx := 0
+
+			mockRun := func(in string) (string, error) {
+				out := ""
+				if len(tc.runOut) > callIdx {
+					out = tc.runOut[callIdx]
+				}
+
+				var err error = nil
+				if len(tc.runErr) > callIdx {
+					err = tc.runErr[callIdx]
+				}
+
+				callIdx++
+
+				return out, err
+			}
+
+			cr, err := newCmdRunner(log, nil, mockRun, nil)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			scmState, err := cr.getRegionState()
+			common.CmpErr(t, tc.expErr, err)
+			if tc.expErr != nil {
+				return
+			}
+
+			if diff := cmp.Diff(tc.expState, scmState); diff != "" {
+				t.Fatalf("unexpected scm state (-want, +got):\n%s\n", diff)
+			}
+		})
+	}
+}
+
+// TestIpmctl_getRegionState tests the internals of GetState and verifies correct behavior based
 // on different output from GetRegions() bindings call.
-func TestIpmctl_getState(t *testing.T) {
+func TestIpmctl_getRegionState(t *testing.T) {
 	for name, tc := range map[string]struct {
 		ipmctlCfg *mockIpmctlCfg
 		expErr    error
@@ -247,7 +372,7 @@ func TestIpmctl_getState(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			scmState, err := cr.getState()
+			scmState, err := cr.getRegionStateFromBindings()
 			common.CmpErr(t, tc.expErr, err)
 			if tc.expErr != nil {
 				return
@@ -272,6 +397,27 @@ func TestIpmctl_prep(t *testing.T) {
    "sector_size":512,
    "blockdev":"pmem1",
    "numa_node":1
+}]`
+	ndctl2NsStr := `[{
+   "dev":"namespace1.0",
+   "mode":"fsdax",
+   "map":"dev",
+   "size":3183575302144,
+   "uuid":"842fc847-28e0-4bb6-8dfc-d24afdba1528",
+   "raw_uuid":"dedb4b28-dc4b-4ccd-b7d1-9bd475c91264",
+   "sector_size":512,
+   "blockdev":"pmem1",
+   "numa_node":1
+},{
+   "dev":"namespace0.0",
+   "mode":"fsdax",
+   "map":"dev",
+   "size":3183575302144,
+   "uuid":"842fc847-28e0-4bb6-8dfc-d24afdba1529",
+   "raw_uuid":"dedb4b28-dc4b-4ccd-b7d1-9bd475c91265",
+   "sector_size":512,
+   "blockdev":"pmem0",
+   "numa_node":0
 }]`
 
 	for name, tc := range map[string]struct {
@@ -331,8 +477,25 @@ func TestIpmctl_prep(t *testing.T) {
 			scanResp: &storage.ScmScanResponse{
 				State: storage.ScmStateFreeCapacity,
 			},
-			runOut:  []string{ndctlNsStr},
-			regions: []ipmctl.PMemRegion{{Type: uint32(ipmctl.RegionTypeAppDirect)}},
+			runOut: []string{
+				ndctlNsStr,
+				"---ISetID=0x2aba7f4828ef2ccc---\n" +
+					"   PersistentMemoryType=AppDirect\n" +
+					"   FreeCapacity=0.0 GiB\n" +
+					"---ISetID=0x81187f4881f02ccc---\n" +
+					"   PersistentMemoryType=AppDirect\n" +
+					"   FreeCapacity=3012.0 GiB\n",
+				ndctl2NsStr,
+				"---ISetID=0x2aba7f4828ef2ccc---\n" +
+					"   PersistentMemoryType=AppDirect\n" +
+					"   FreeCapacity=0.0 GiB\n" +
+					"---ISetID=0x81187f4881f02ccc---\n" +
+					"   PersistentMemoryType=AppDirect\n" +
+					"   FreeCapacity=0.0 GiB\n",
+				ndctl2NsStr,
+			},
+			// TODO DAOS-10173: re-enable when bindings can be used instead of cli
+			//regions: []ipmctl.PMemRegion{{Type: uint32(ipmctl.RegionTypeAppDirect)}},
 			expPrepResp: &storage.ScmPrepareResponse{
 				State: storage.ScmStateNoFreeCapacity,
 				Namespaces: storage.ScmNamespaces{
@@ -343,9 +506,22 @@ func TestIpmctl_prep(t *testing.T) {
 						NumaNode:    1,
 						Size:        3183575302144,
 					},
+					{
+						UUID:        "842fc847-28e0-4bb6-8dfc-d24afdba1529",
+						BlockDevice: "pmem0",
+						Name:        "namespace0.0",
+						NumaNode:    0,
+						Size:        3183575302144,
+					},
 				},
 			},
-			expCalls: []string{"ndctl create-namespace", "ndctl list -N -v"},
+			expCalls: []string{
+				"ndctl create-namespace",
+				"ipmctl show -d PersistentMemoryType,FreeCapacity -region",
+				"ndctl create-namespace",
+				"ipmctl show -d PersistentMemoryType,FreeCapacity -region",
+				"ndctl list -N -v",
+			},
 		},
 		"state free capacity; create namespaces fails": {
 			scanResp: &storage.ScmScanResponse{
@@ -355,15 +531,16 @@ func TestIpmctl_prep(t *testing.T) {
 			expErr:   errors.New("cmd failed"),
 			expCalls: []string{"ndctl create-namespace"},
 		},
-		"state free capacity; get regions fails": {
-			scanResp: &storage.ScmScanResponse{
-				State: storage.ScmStateFreeCapacity,
-			},
-			runOut:     []string{ndctlNsStr},
-			regionsErr: errors.New("fail"),
-			expCalls:   []string{"ndctl create-namespace"},
-			expErr:     errors.New("discover PMem regions: fail"),
-		},
+		// TODO DAOS-10173: re-enable
+		//"state free capacity; get regions fails": {
+		//	scanResp: &storage.ScmScanResponse{
+		//		State: storage.ScmStateFreeCapacity,
+		//	},
+		//	runOut:     []string{ndctlNsStr},
+		//	regionsErr: errors.New("fail"),
+		//	expCalls:   []string{"ndctl create-namespace"},
+		//	expErr:     errors.New("discover PMem regions: fail"),
+		//},
 		"state no free capacity": {
 			scanResp: &storage.ScmScanResponse{
 				State: storage.ScmStateNoFreeCapacity,
@@ -398,13 +575,6 @@ func TestIpmctl_prep(t *testing.T) {
 			var calls []string
 			var callIdx int
 
-			if tc.runOut == nil {
-				tc.runOut = []string{verStr}
-			}
-			if tc.runErr == nil {
-				tc.runErr = []error{nil}
-			}
-
 			mockBinding := newMockIpmctl(&mockIpmctlCfg{
 				regions:       tc.regions,
 				getRegionsErr: tc.regionsErr,
@@ -414,16 +584,16 @@ func TestIpmctl_prep(t *testing.T) {
 			mockRun := func(cmd string) (string, error) {
 				calls = append(calls, cmd)
 
-				o := tc.runOut[0]
+				o := verStr
 				if callIdx < len(tc.runOut) {
 					o = tc.runOut[callIdx]
 				}
-
-				e := tc.runErr[0]
+				var e error = nil
 				if callIdx < len(tc.runErr) {
 					e = tc.runErr[callIdx]
 				}
 
+				log.Debugf("mockRun call %d: ret/err %v/%v", callIdx, o, e)
 				callIdx++
 				return o, e
 			}
@@ -438,6 +608,7 @@ func TestIpmctl_prep(t *testing.T) {
 			}
 
 			resp, err := cr.prep(tc.scanResp)
+			log.Debugf("calls made %+v", calls)
 			common.CmpErr(t, tc.expErr, err)
 
 			if diff := cmp.Diff(tc.expPrepResp, resp); diff != "" {
