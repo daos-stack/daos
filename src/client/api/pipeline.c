@@ -101,7 +101,7 @@ daos_pipeline_run(daos_handle_t coh, daos_handle_t oh, daos_pipeline_t pipeline,
 		  daos_handle_t th, uint64_t flags, daos_key_t *dkey,
 		  uint32_t *nr_iods, daos_iod_t *iods, daos_anchor_t *anchor,
 		  uint32_t *nr_kds, daos_key_desc_t *kds, d_sg_list_t *sgl_keys,
-		  d_sg_list_t *sgl_recx, d_sg_list_t *sgl_agg,
+		  d_sg_list_t *sgl_recx, daos_iom_t *ioms, d_sg_list_t *sgl_agg,
 		  daos_event_t *ev)
 {
 	tse_task_t	*task;

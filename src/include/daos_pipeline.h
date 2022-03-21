@@ -280,6 +280,19 @@ daos_pipeline_check(daos_pipeline_t *pipeline);
  *					matther the size of \nr_kds).
  *					[out]: All returned records.
  *
+ * \param[out]		ioms		[in]: Optional preallocated array for
+ *					the returned actual layout of the iods
+ *					used when fetching each of the records
+ *					stored in \sgl_recx. It gives
+ *					information for every iod on the
+ *					highest/lowest extent in that dkey, in
+ *					additional to the valid extents from the
+ *					ones fetched (if asked for). If the
+ *					extents don't fit in the io_map, the
+ *					number required is set on the fetch in
+ *					\a ioms[]::iom_nr for that particular
+ *					iod.
+ *
  * \param[out]		sgl_agg		[in]: Optional preallocated array for
  *					aggregated values (number of values has
  *					to match the number of aggregation
@@ -300,7 +313,7 @@ daos_pipeline_run(daos_handle_t coh, daos_handle_t oh, daos_pipeline_t pipeline,
 		  daos_handle_t th, uint64_t flags, daos_key_t *dkey,
 		  uint32_t *nr_iods, daos_iod_t *iods, daos_anchor_t *anchor,
 		  uint32_t *nr_kds, daos_key_desc_t *kds, d_sg_list_t *sgl_keys,
-		  d_sg_list_t *sgl_recx, d_sg_list_t *sgl_agg,
+		  d_sg_list_t *sgl_recx, daos_iom_t *ioms, d_sg_list_t *sgl_agg,
 		  daos_event_t *ev);
 
 #if defined(__cplusplus)
