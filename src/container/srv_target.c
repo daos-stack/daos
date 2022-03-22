@@ -2082,7 +2082,7 @@ ds_cont_iter(daos_handle_t ph, uuid_t co_uuid, cont_iter_cb_t callback,
 			break;
 		}
 
-		rc = vos_iter_next(iter_h);
+		rc = vos_iter_next(iter_h, NULL);
 		if (rc != 0) {
 			/* reach to the end of the container */
 			if (rc == -DER_NONEXIST)

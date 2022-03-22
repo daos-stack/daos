@@ -19,7 +19,11 @@
  * Global pool metrics
  */
 struct pool_metrics {
-	struct d_tm_node_t	*open_hdl_gauge;
+	struct d_tm_node_t	*connect_total;
+	struct d_tm_node_t	*disconnect_total;
+	struct d_tm_node_t	*query_total;
+	struct d_tm_node_t	*query_space_total;
+	struct d_tm_node_t	*evict_total;
 };
 
 /* Pool thread-local storage */
