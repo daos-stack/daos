@@ -623,9 +623,10 @@ oi_iter_fetch(struct vos_iterator *iter, vos_iter_entry_t *it_entry,
 	}
 	it_entry->ie_child_type = VOS_ITER_DKEY;
 
-	/* Upgrading case, set it to current epoch */
+	/* Upgrading case, set it to latest known epoch */
 	if (obj->vo_max_write == 0)
-		it_entry->ie_last_update = epr.epr_hi;
+		vos_ilog_last_update(&obj->vo_ilog, VOS_TS_TYPE_OBJ,
+				     &it_entry->ie_last_update);
 	else
 		it_entry->ie_last_update = obj->vo_max_write;
 
