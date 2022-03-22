@@ -187,7 +187,7 @@ cont_aggregate_runnable(struct ds_cont_child *cont, struct sched_request *req,
 			cont->sc_ec_agg_active = 0;
 		D_DEBUG(DB_EPC, DF_CONT": skip %s aggregation during reintegration %d.\n",
 			DP_CONT(cont->sc_pool->spc_uuid, cont->sc_uuid),
-			vos_agg ? "VOS":"EC", pool->sp_reintegrating);
+			vos_agg ? "VOS" : "EC", pool->sp_reintegrating);
 		return false;
 	}
 
@@ -332,7 +332,7 @@ cont_child_aggregate(struct ds_cont_child *cont, cont_aggregate_cb_t agg_cb,
 	 * be changed by new update very soon.
 	 */
 	if (epoch_min > epoch_max - interval &&
-			sched_req_space_check(req) == SCHED_SPACE_PRESS_NONE)
+	    sched_req_space_check(req) == SCHED_SPACE_PRESS_NONE)
 		return 0;
 
 	adjust_upper_bound(cont, param->ap_vos_agg, &epoch_max);
@@ -2084,7 +2084,7 @@ ds_cont_iter(daos_handle_t ph, uuid_t co_uuid, cont_iter_cb_t callback,
 			break;
 		}
 
-		rc = vos_iter_next(iter_h);
+		rc = vos_iter_next(iter_h, NULL);
 		if (rc != 0) {
 			/* reach to the end of the container */
 			if (rc == -DER_NONEXIST)
