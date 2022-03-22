@@ -1,0 +1,22 @@
+hosts:
+  test_servers:
+    - server-A
+timeout: 90
+pool:
+    name: daos_server
+    control_method: dmg
+    scm_size: 1G
+pool_1:
+    name: daos_server
+    control_method: dmg
+    scm_size: 1G
+    properties: ec_pda:2,rp_pda:4
+container:
+    type: POSIX
+    control_method: daos
+container_1:
+    type: POSIX
+    pda_properties:
+      - 3       # ec_pda
+      - 5       # rp_pda
+    control_method: daos

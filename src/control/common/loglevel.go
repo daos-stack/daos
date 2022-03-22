@@ -1,10 +1,10 @@
 //
-// (C) Copyright 2020-2021 Intel Corporation.
+// (C) Copyright 2020-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
 
-package config
+package common
 
 import "github.com/daos-stack/daos/src/control/logging"
 
@@ -17,6 +17,8 @@ const (
 	ControlLogLevelDebug = ControlLogLevel(logging.LogLevelDebug)
 	ControlLogLevelInfo  = ControlLogLevel(logging.LogLevelInfo)
 	ControlLogLevelError = ControlLogLevel(logging.LogLevelError)
+
+	DefaultControlLogLevel = ControlLogLevel(logging.DefaultLogLevel)
 )
 
 // UnmarshalYAML implements yaml.Unmarshaler on ControlLogMask struct
