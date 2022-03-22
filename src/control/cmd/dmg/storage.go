@@ -27,6 +27,7 @@ type storageCmd struct {
 	Set           setFaultyCmd       `command:"set" description:"Manually set the device state."`
 	Replace       storageReplaceCmd  `command:"replace" description:"Replace a storage device that has been hot-removed with a new device."`
 	Identify      storageIdentifyCmd `command:"identify" description:"Blink the status LED on a given VMD device for visual SSD identification."`
+	LedManage     ledManageCmd       `command:"led-manage" description:"Reset the status LED or get current LED states for VMD devices."`
 }
 
 // storageScanCmd is the struct representing the scan storage subcommand.
@@ -341,6 +342,46 @@ func (cmd *vmdIdentifyCmd) Execute(_ []string) error {
 	req := &control.SmdQueryReq{
 		UUID:     cmd.UUID,
 		Identify: true,
+	}
+	return cmd.makeRequest(context.Background(), req)
+}
+
+// ledManageCmd is the struct representing the led-manage storage subcommand.
+type ledManageCmd struct {
+	Reset    vmdResetCmd    `command:"reset" description:"Reset the status LED on a VMD NVMe SSD back to a normal OFF state. Useful for debug or mistakenly set LEDs only, not necessary in a typical use case."`
+	GetState vmdGetStateCmd `command:"get-state" description:"Display the current state of the status LED on a VMD device. Useful for remote debugging."`
+}
+
+// vmdResetCmd is the struct representing the led-manage reset storage subcommand.
+type vmdResetCmd struct {
+	smdQueryCmd
+	UUID string `long:"uuid" description:"Device UUID of the VMD SSD LED to reset to OFF" required:"1"`
+}
+
+// Execute is run when vmdResetCmd activates.
+//
+// Runs SPDK VMD API commands to reset the LED state on the VMD to "OFF"
+func (cmd *vmdResetCmd) Execute(_ []string) error {
+	req := &control.SmdQueryReq{
+		UUID:     cmd.UUID,
+		ResetLED: true,
+	}
+	return cmd.makeRequest(context.Background(), req)
+}
+
+// vmdGetStateCmd is the struct representing the led-manage get-state storage subcommand.
+type vmdGetStateCmd struct {
+	smdQueryCmd
+	UUID string `long:"uuid" description:"Device UUID of the VMD SSD LED to query" required:"1"`
+}
+
+// Execute is run when vmdGetStateCmd activates.
+//
+// Runs SPDK VMD API commands to query the LED state on VMD devices
+func (cmd *vmdGetStateCmd) Execute(_ []string) error {
+	req := &control.SmdQueryReq{
+		UUID:   cmd.UUID,
+		GetLED: true,
 	}
 	return cmd.makeRequest(context.Background(), req)
 }

@@ -782,6 +782,18 @@ int bio_set_led_state(struct bio_xs_context *xs, uuid_t devid,
 		      const char *led_state, bool reset);
 
 /*
+ * Query the LED state on a VMD device.
+ *
+ * \param xs            [IN]    xstream context
+ * \param devid		[IN]	UUID of the VMD device
+ * \param led_state	[OUT]	Current state of the LED
+ *				(ie identify, off, fault/on)
+ *
+ * \return                      Zero on success, negative value on error
+ */
+int bio_get_led_state(struct bio_xs_context *xs, uuid_t devid, int *led_state);
+
+/*
  * Allocate DMA buffer, the buffer could be from bulk cache if bulk context
  * if specified.
  *

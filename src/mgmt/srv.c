@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2021 Intel Corporation.
+ * (C) Copyright 2016-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -149,6 +149,12 @@ process_drpc_request(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 		break;
 	case DRPC_METHOD_MGMT_GROUP_UPDATE:
 		ds_mgmt_drpc_group_update(drpc_req, drpc_resp);
+		break;
+	case DRPC_METHOD_MGMT_LED_RESET:
+		ds_mgmt_drpc_dev_reset_led(drpc_req, drpc_resp);
+		break;
+	case DRPC_METHOD_MGMT_LED_GET:
+		ds_mgmt_drpc_dev_get_led_state(drpc_req, drpc_resp);
 		break;
 	default:
 		drpc_resp->status = DRPC__STATUS__UNKNOWN_METHOD;

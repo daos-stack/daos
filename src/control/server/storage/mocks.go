@@ -31,6 +31,11 @@ const (
 	MockNvmeStateNormal   NvmeDevState = MockNvmeStateNew | C.NVME_DEV_FL_INUSE
 	MockNvmeStateEvicted  NvmeDevState = MockNvmeStateNormal | C.NVME_DEV_FL_FAULTY
 	MockNvmeStateIdentify NvmeDevState = MockNvmeStateNormal | C.NVME_DEV_FL_IDENTIFY
+	MockVmdStateIdentify  VmdLedState  = C.VMD_LED_STATE_IDENTIFY
+	MockVmdStateNormal    VmdLedState  = C.VMD_LED_STATE_OFF
+	MockVmdStateFault     VmdLedState  = C.VMD_LED_STATE_FAULT
+	MockVmdStateInvalid   VmdLedState  = C.VMD_LED_STATE_INVALID
+	MockVmdStateNA        VmdLedState  = C.VMD_LED_STATE_NA
 )
 
 func concat(base string, idx int32, altSep ...string) string {
@@ -115,6 +120,7 @@ func MockSmdDevice(parentTrAddr string, varIdx ...int32) *SmdDevice {
 		UUID:      common.MockUUID(idx),
 		TargetIDs: []int32{startTgt, startTgt + 1, startTgt + 2, startTgt + 3},
 		NvmeState: MockNvmeStateIdentify,
+		VmdState:  MockVmdStateIdentify,
 		TrAddr:    parentTrAddr,
 	}
 }

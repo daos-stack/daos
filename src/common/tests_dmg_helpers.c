@@ -710,11 +710,31 @@ parse_device_info(struct json_object *smd_dev, device_list *devices,
 		snprintf(devices[*disks].state, sizeof(devices[*disks].state),
 			 "%s", json_object_to_json_string(tmp));
 
+		if (!json_object_object_get_ex(dev, "led_state", &tmp)) {
+			D_ERROR("unable to extract led state from JSON\n");
+			return -DER_INVAL;
+		}
+
+		snprintf(devices[*disks].led, sizeof(devices[*disks].led),
+			 "%s", json_object_to_json_string(tmp));
+
 		if (!json_object_object_get_ex(dev, "rank", &tmp)) {
 			D_ERROR("unable to extract rank from JSON\n");
 			return -DER_INVAL;
 		}
 		devices[*disks].rank = atoi(json_object_to_json_string(tmp));
+
+		if (!json_object_object_get_ex(dev, "tr_addr", &tmp)) {
+			D_ERROR("unable to extract traddr from JSON\n");
+			/* Return null string if traddr does not exist */
+			snprintf(devices[*disks].traddr,
+				 sizeof(devices[*disks].traddr), "%s", "");
+		} else {
+			snprintf(devices[*disks].traddr,
+				 sizeof(devices[*disks].traddr), "%s",
+				 json_object_to_json_string(tmp));
+		}
+
 		*disks = *disks + 1;
 	}
 
@@ -964,4 +984,183 @@ daos_target_state_enum_to_str(int state)
 	}
 
 	return "Undefined State";
+}
+
+int
+dmg_storage_replace_device(const char *dmg_config_file, char *host,
+			   const uuid_t old_uuid, const uuid_t new_uuid)
+{
+	char			uuid_old_str[DAOS_UUID_STR_SIZE];
+	char			uuid_new_str[DAOS_UUID_STR_SIZE];
+	int			argcount = 0;
+	char			**args = NULL;
+	struct json_object	*dmg_out = NULL;
+	int			rc = 0;
+
+	uuid_unparse_lower(old_uuid, uuid_old_str);
+	uuid_unparse_lower(new_uuid, uuid_new_str);
+	args = cmd_push_arg(args, &argcount, " --old-uuid=%s ", uuid_old_str);
+	if (args == NULL)
+		D_GOTO(out, rc = -DER_NOMEM);
+	args = cmd_push_arg(args, &argcount, " --new-uuid=%s ", uuid_new_str);
+	if (args == NULL)
+		D_GOTO(out, rc = -DER_NOMEM);
+
+	args = cmd_push_arg(args, &argcount, " --host-list=%s ", host);
+	if (args == NULL)
+		D_GOTO(out, rc = -DER_NOMEM);
+
+	rc = daos_dmg_json_pipe("storage replace nvme ", dmg_config_file,
+				args, argcount, &dmg_out);
+	if (rc != 0)
+		D_ERROR("dmg command failed");
+
+	if (dmg_out != NULL)
+		json_object_put(dmg_out);
+	cmd_free_args(args, argcount);
+out:
+	return rc;
+}
+
+int
+dmg_storage_identify_vmd(const char *dmg_config_file, char *host,
+			 const uuid_t uuid)
+{
+	char			uuid_str[DAOS_UUID_STR_SIZE];
+	int			argcount = 0;
+	char			**args = NULL;
+	struct json_object	*dmg_out = NULL;
+	int			rc = 0;
+
+	uuid_unparse_lower(uuid, uuid_str);
+	args = cmd_push_arg(args, &argcount, " --uuid=%s ", uuid_str);
+	if (args == NULL)
+		D_GOTO(out, rc = -DER_NOMEM);
+
+	args = cmd_push_arg(args, &argcount, " --host-list=%s ", host);
+	if (args == NULL)
+		D_GOTO(out, rc = -DER_NOMEM);
+
+	rc = daos_dmg_json_pipe("storage identify vmd ", dmg_config_file,
+				args, argcount, &dmg_out);
+	if (rc != 0) {
+		D_ERROR("dmg command failed");
+		goto out_json;
+	}
+
+out_json:
+	if (dmg_out != NULL)
+		json_object_put(dmg_out);
+	cmd_free_args(args, argcount);
+out:
+	return rc;
+}
+
+int
+dmg_storage_ledmanage_reset(const char *dmg_config_file, char *host,
+			    const uuid_t uuid)
+{
+	char			uuid_str[DAOS_UUID_STR_SIZE];
+	int			argcount = 0;
+	char			**args = NULL;
+	struct json_object	*dmg_out = NULL;
+	int			rc = 0;
+
+	uuid_unparse_lower(uuid, uuid_str);
+	args = cmd_push_arg(args, &argcount, " --uuid=%s ", uuid_str);
+	if (args == NULL)
+		D_GOTO(out, rc = -DER_NOMEM);
+
+	args = cmd_push_arg(args, &argcount, " --host-list=%s ", host);
+	if (args == NULL)
+		D_GOTO(out, rc = -DER_NOMEM);
+
+	rc = daos_dmg_json_pipe("storage led-manage reset ", dmg_config_file,
+				args, argcount, &dmg_out);
+	if (rc != 0) {
+		D_ERROR("dmg command failed");
+		goto out_json;
+	}
+
+out_json:
+	if (dmg_out != NULL)
+		json_object_put(dmg_out);
+	cmd_free_args(args, argcount);
+out:
+	return rc;
+}
+
+int
+dmg_storage_ledmanage_getstate(const char *dmg_config_file, char *host,
+			       const uuid_t uuid, char *state)
+{
+	char			uuid_str[DAOS_UUID_STR_SIZE];
+	int			argcount = 0;
+	char			**args = NULL;
+	struct json_object	*dmg_out = NULL;
+	struct json_object	*storage_map = NULL;
+	struct json_object	*smd_info = NULL;
+	struct json_object	*storage_info = NULL;
+	struct json_object	*led_state = NULL;
+	struct json_object	*devices = NULL;
+	struct json_object	*dev_info = NULL;
+	int			rc = 0;
+
+	uuid_unparse_lower(uuid, uuid_str);
+	args = cmd_push_arg(args, &argcount, " --uuid=%s ", uuid_str);
+	if (args == NULL)
+		D_GOTO(out, rc = -DER_NOMEM);
+
+	args = cmd_push_arg(args, &argcount, " --host-list=%s ", host);
+	if (args == NULL)
+		D_GOTO(out, rc = -DER_NOMEM);
+
+	rc = daos_dmg_json_pipe("storage led-manage get-state ",
+				dmg_config_file, args, argcount, &dmg_out);
+	if (rc != 0) {
+		D_ERROR("dmg command failed");
+		goto out_json;
+	}
+
+	if (!json_object_object_get_ex(dmg_out, "host_storage_map",
+				       &storage_map)) {
+		D_ERROR("unable to extract host_storage_map from JSON\n");
+		D_GOTO(out_json, rc = -DER_INVAL);
+	}
+
+	json_object_object_foreach(storage_map, key, val) {
+		D_DEBUG(DB_TEST, "key:\"%s\",val=%s\n", key,
+			json_object_to_json_string(val));
+
+		if (!json_object_object_get_ex(val, "storage", &storage_info)) {
+			D_ERROR("unable to extract storage info from JSON\n");
+			D_GOTO(out_json, rc = -DER_INVAL);
+		}
+		if (!json_object_object_get_ex(storage_info, "smd_info",
+					       &smd_info)) {
+			D_ERROR("unable to extract smd_info from JSON\n");
+			D_GOTO(out_json, rc = -DER_INVAL);
+		}
+		if (!json_object_object_get_ex(smd_info, "devices", &devices)) {
+			D_ERROR("unable to extract devices list from JSON\n");
+			D_GOTO(out_json, rc = -DER_INVAL);
+		}
+
+		dev_info = json_object_array_get_idx(devices, 0);
+		json_object_object_get_ex(dev_info, "led_state", &led_state);
+
+		if (!json_object_object_get_ex(dev_info, "led_state", &led_state)) {
+			D_ERROR("unable to extract led state from JSON\n");
+			D_GOTO(out_json, rc = -DER_INVAL);
+		}
+
+		snprintf(state, 16, "%s", json_object_to_json_string(led_state));
+	}
+
+out_json:
+	if (dmg_out != NULL)
+		json_object_put(dmg_out);
+	cmd_free_args(args, argcount);
+out:
+	return rc;
 }

@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2019-2021 Intel Corporation.
+ * (C) Copyright 2019-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -47,7 +47,30 @@ is_nvme_enabled(test_arg_t *arg)
 	return ps->ps_free_min[DAOS_MEDIA_NVME] != 0;
 }
 
-/* Online/Offline faulty reaction */
+/**
+ *  Compare the transport address to see if the device is a VMD device.
+ *  A regular NVMe SSD will have a domain starting with "0000:", while
+ *  a VMD device will have a traddr in BDF format (ex: "5d0505:01:00.0").
+ */
+static bool
+is_vmd_enabled(const char *device_traddr)
+	{
+	int	rc;
+
+	rc = strncmp(device_traddr, "\"0000:", 6);
+	if (rc != 0)
+		return true;
+
+	return false;
+}
+
+/**
+ * Online/Offline faulty reaction tests.
+ *
+ * Mode 0 = Offline
+ * Mode 1 = Online
+ * Mode 2 = Online and Offline
+ */
 static void
 nvme_fault_reaction(void **state, int mode)
 {
@@ -77,14 +100,14 @@ nvme_fault_reaction(void **state, int mode)
 	}
 
 	/**
-	* If test need multiple pool with both mode offline and online
-	* create the another pool which will be offline by default.
-	*/
+	 * Mixed offline and online mode. Requires additional pool (offline
+	 * by default).
+	 */
 	if (mode == 2) {
-		char	*env;
-		int	size_gb;
-		daos_size_t	scm_size = (daos_size_t)4 << 30/*Default 4G*/;
-		daos_size_t	nvme_size;
+		char	   *env;
+		int	    size_gb;
+		daos_size_t scm_size = (daos_size_t)4 << 30; /*Default 4G*/
+		daos_size_t nvme_size;
 
 		/* Use the SCM size if set with environment */
 		env = getenv("POOL_SCM_SIZE");
@@ -96,14 +119,12 @@ nvme_fault_reaction(void **state, int mode)
 
 		/* NVMe size is 4x of SCM size */
 		nvme_size = scm_size * 4;
-		print_message("Creating another offline pool mode, ");
-		print_message("Size: SCM = %" PRId64 " NVMe =%" PRId64 "\n",
+		/* Create additional offline pool */
+		print_message("Creating pool in offline mode\n");
+		print_message("\tSize: SCM=%" PRId64 ", NVMe=%" PRId64 "\n",
 			      scm_size, nvme_size);
 
-		/* create another offline pool*/
-		print_message("create another offline pool");
-		rc = dmg_pool_create(dmg_config_file,
-				     geteuid(), getegid(),
+		rc = dmg_pool_create(dmg_config_file, geteuid(), getegid(),
 				     arg->group, NULL /* tgts */,
 				     scm_size, nvme_size,
 				     NULL /* prop */,
@@ -112,15 +133,11 @@ nvme_fault_reaction(void **state, int mode)
 		assert_rc_equal(rc, 0);
 	}
 
-	/**
-	 * Get the Total number of NVMe devices from all the servers.
-	 */
+	/* Get the total number of NVMe devices from all the servers */
 	rc = dmg_storage_device_list(dmg_config_file, &ndisks, NULL);
 	assert_rc_equal(rc, 0);
 
-	/**
-	 * Get the Device info of all NVMe devices.
-	 */
+	/* Get the device info of all NVMe devices */
 	D_ALLOC_ARRAY(devices, ndisks);
 	rc = dmg_storage_device_list(dmg_config_file, NULL, devices);
 	assert_rc_equal(rc, 0);
@@ -130,9 +147,11 @@ nvme_fault_reaction(void **state, int mode)
 		else
 			faulty_disk_idx = i;
 
-		print_message("Rank=%d UUID=" DF_UUIDF " state=%s host=%s tgts=",
-			      devices[i].rank, DP_UUID(devices[i].device_id),
-			      devices[i].state, devices[i].host);
+		print_message("UUID="DF_UUIDF" Traddr=%s State=%s LED=%s Rank=%d Host=%s\n",
+			       DP_UUID(devices[i].device_id), devices[i].traddr,
+			       devices[i].state, devices[i].led, devices[i].rank,
+			       devices[i].host);
+		print_message("\tVOS tgts= ");
 		for (j = 0; j < devices[i].n_tgtidx; j++)
 			print_message("%d,", devices[i].tgtidx[j]);
 		print_message("\n");
@@ -159,7 +178,7 @@ nvme_fault_reaction(void **state, int mode)
 	}
 	ioreq_fini(&req);
 
-	/** Query test args to get total pool target count per node */
+	/* Query test args to get total pool target count per node */
 	assert_true(arg->srv_ntgts > arg->srv_nnodes);
 	per_node_tgt_cnt = arg->srv_ntgts/arg->srv_nnodes;
 
@@ -168,7 +187,7 @@ nvme_fault_reaction(void **state, int mode)
 	 * the pool target info.
 	 */
 	for (i = 0; i < per_node_tgt_cnt; i++) {
-		rc = daos_pool_query_target(arg->pool.poh, i/*tgt*/,
+		rc = daos_pool_query_target(arg->pool.poh, i /*tgt*/,
 					    rank, &tgt_info, NULL /*ev*/);
 		assert_rc_equal(rc, 0);
 		rc = strcmp(daos_target_state_enum_to_str(tgt_info.ta_state),
@@ -177,58 +196,55 @@ nvme_fault_reaction(void **state, int mode)
 	}
 	print_message("All targets are in UPIN\n");
 
+	/* Offline mode */
 	if (mode == 0) {
-		print_message("Disconnect the pool for offline failure\n");
+		print_message("Disconnecting the pool for offline failure\n");
 		rc = daos_cont_close(arg->coh, NULL);
 		assert_rc_equal(rc, 0);
 		rc = daos_pool_disconnect(arg->pool.poh, NULL);
 		assert_rc_equal(rc, 0);
 	}
 
-	/** Inject error on random target index */
+	/* Inject error on random target index to simulate faulty SSD*/
 	srand(time(NULL));
 	fail_loc_tgt = rand() % per_node_tgt_cnt;
-	print_message("Error injection on tgt %"PRIu64" to simulate device"
-		      " faulty.\n", fail_loc_tgt);
+	print_message("Inject error on target %"PRIu64"\n", fail_loc_tgt);
 	set_fail_loc(arg, rank, fail_loc_tgt,
 		     DAOS_NVME_FAULTY | DAOS_FAIL_ALWAYS);
 
 	if (mode == 0) {
 		/**
-		*  Continue to check blobstore until state is "OUT"
-		*  or max test retry count is hit (5 min).
-		*/
+		 *  Continue to check blobstore until state is "OUT"
+		 *  or max test retry count is hit (5 min).
+		 */
 		rc = wait_and_verify_blobstore_state(
 			devices[faulty_disk_idx].device_id,
 			/*expected state*/"out", arg->group);
 		assert_rc_equal(rc, 0);
 
-		/**
-		* Connect the pool for query check.
-		 */
-		print_message("Connect the pool to get the pool query\n");
+		/* Connect the pool for query check */
+		print_message("Connecting the pool to get the pool query\n");
 		rc = daos_pool_connect(arg->pool.pool_str, arg->group,
 				       DAOS_PC_RW, &arg->pool.poh,
 				       &arg->pool.pool_info, NULL /* ev */);
 		assert_rc_equal(rc, 0);
-		/* Set container handle as invalid so it does not close again*/
+		/* Set container handle as invalid so it does not close again */
 		arg->coh = DAOS_HDL_INVAL;
 	}
 
-	/* Verify that the DAOS_NVME_FAULTY reaction got triggered. Target should
-	 * be in the DOWN state to trigger rebuild (or DOWNOUT if rebuild already
+	/**
+	 * Verify that DAOS_NVME_FAULTY reaction got triggered. Target should be
+	 * in the DOWN state to trigger rebuild (or DOWNOUT if rebuild already
 	 * completed).
 	 */
-	print_message("Waiting for faulty reaction being triggered...\n");
+	print_message("Waiting for faulty reaction to trigger...\n");
 	rc = wait_and_verify_pool_tgt_state(arg->pool.poh, fail_loc_tgt,
 						    rank, "DOWN|DOWNOUT");
 	assert_rc_equal(rc, 0);
 	/* Need to reset lock when using DAOS_FAIL_ALWAYS flag */
 	reset_fail_loc(arg);
 
-	/**
-	 * Look up all targets currently mapped to the device that is now faulty.
-	 */
+	/* Look up all targets currently mapped to the faulty device */
 	for (i = 0; i < ndisks; i++) {
 		if (devices[i].rank != rank)
 			continue;
@@ -241,27 +257,23 @@ nvme_fault_reaction(void **state, int mode)
 		}
 	}
 
-	print_message("Waiting for rebuild done...\n");
+	print_message("Waiting for rebuild to finish...\n");
 	if (arg->myrank == 0)
 		test_rebuild_wait(&arg, 1);
 	MPI_Barrier(MPI_COMM_WORLD);
 
-	print_message("Waiting for faulty reaction done...\n");
-	/**
-	 * Verify all mapped device targets are in DOWNOUT state.
-	 */
+	/* Verify all mapped device targets are in DOWNOUT state */
+	print_message("Waiting for faulty reaction to complete...\n");
 	for (i = 0; i < n_tgtidx; i++) {
 		rc = wait_and_verify_pool_tgt_state(arg->pool.poh, tgtidx[i],
 						    rank, "DOWNOUT");
 		assert_rc_equal(rc, 0);
 	}
-	print_message("All mapped device targets are in DOWNOUT\n");
+	print_message("All targets are in DOWNOUT\n");
 
-	/**
-	 * Print the final pool target states.
-	 */
+	/* Print the final pool target states */
 	for (i = 0; i < per_node_tgt_cnt; i++) {
-		rc = daos_pool_query_target(arg->pool.poh, i/*tgt*/,
+		rc = daos_pool_query_target(arg->pool.poh, i /*tgt*/,
 					    rank, &tgt_info, NULL /*ev*/);
 		assert_rc_equal(rc, 0);
 		print_message("Pool target:%d, state:%s\n", i,
@@ -269,7 +281,6 @@ nvme_fault_reaction(void **state, int mode)
 	}
 
 	D_FREE(devices);
-	print_message("Done\n");
 }
 
 static void
@@ -290,9 +301,15 @@ offline_and_online_fault_recovery(void **state)
 	nvme_fault_reaction(state, 2 /* Offline and Online */);
 }
 
-/* Verify device states after NVMe set to faulty*/
+/**
+ * Verify device state (via dmg tool) and blobstore state (via server log)
+ * transitions after an NVMe SSD is manually evicted. Device remains evicted
+ * at the end of the test.
+ * If the evicted device is a VMD device, locate the evicted device by verifying
+ * the LED state is set to fault/on. Manually reset the LED to off at the end.
+ */
 static void
-nvme_test_verify_device_stats(void **state)
+nvme_verify_states_faulty(void **state)
 {
 	test_arg_t	*arg = *state;
 	device_list	*devices = NULL;
@@ -301,29 +318,27 @@ nvme_test_verify_device_stats(void **state)
 	char		*server_config_file;
 	char		*log_file;
 	int		rank_pos = 0;
+	char		led_state[16];
 
 	if (!is_nvme_enabled(arg)) {
 		print_message("NVMe isn't enabled.\n");
 		skip();
 	}
 
-	/**
-	*Get the Total number of NVMe devices from all the servers.
-	*/
+	/* Get the total number of NVMe devices from all the servers */
 	rc = dmg_storage_device_list(dmg_config_file, &ndisks, NULL);
 	assert_rc_equal(rc, 0);
-	print_message("Total Disks = %d\n", ndisks);
+	print_message("Device List: (total=%d)\n", ndisks);
 
-	/**
-	*Get the Device info of all NVMe devices.
-	*/
+	/* Get the device info of all NVMe devices */
 	D_ALLOC_ARRAY(devices, ndisks);
 	rc = dmg_storage_device_list(dmg_config_file, NULL, devices);
 	assert_rc_equal(rc, 0);
 	for (i = 0; i < ndisks; i++)
-		print_message("Rank=%d UUID=" DF_UUIDF " state=%s host=%s\n",
-			      devices[i].rank, DP_UUID(devices[i].device_id),
-			devices[i].state, devices[i].host);
+		print_message("UUID="DF_UUIDF" Traddr=%s State=%s LED=%s Rank=%d Host=%s\n",
+			       DP_UUID(devices[i].device_id), devices[i].traddr,
+			       devices[i].state, devices[i].led, devices[i].rank,
+			       devices[i].host);
 
 	if (ndisks <= 1) {
 		print_message("Need Minimum 2 disks for test\n");
@@ -331,15 +346,13 @@ nvme_test_verify_device_stats(void **state)
 		skip();
 	}
 
-	/*
-	 * Get the rank 0 position from array devices.
-	 */
+	/* Get the rank0 position from array devices */
 	for (i = 0; i < ndisks; i++) {
 		if (devices[i].rank == 0)
 			rank_pos = i;
 	}
 
-	/*
+	/**
 	 * Get the server config file from running process on server.
 	 * Verify log_mask in server.yaml file, It should be 'DEBUG' to verify
 	 * different state of NVMe drives. Skip the test if log_mask is not
@@ -350,14 +363,13 @@ nvme_test_verify_device_stats(void **state)
 	rc = get_server_config(devices[rank_pos].host,
 			       server_config_file);
 	assert_rc_equal(rc, 0);
-	print_message("server_config_file = %s\n", server_config_file);
 
 	get_log_file(devices[rank_pos].host, server_config_file,
 		     "control_log_file", log_file);
 	rc = verify_server_log_mask(devices[rank_pos].host,
 				    server_config_file, "DEBUG");
 	if (rc) {
-		print_message("Log Mask != DEBUG in %s.\n",
+		print_message("log mask != DEBUG in %s.\n",
 			      server_config_file);
 		D_FREE(server_config_file);
 		D_FREE(devices);
@@ -365,30 +377,24 @@ nvme_test_verify_device_stats(void **state)
 		skip();
 	}
 
-	print_message("LOG FILE = %s\n", log_file);
-
-	/**
-	*Set single device for rank0 to faulty.
-	*/
-	print_message("NVMe with UUID=" DF_UUIDF " on host=%s\" set to Faulty\n",
+	/* Set single device for rank0 to faulty */
+	print_message("Setting SSD to FAULTY (UUID="DF_UUIDF", host=%s)\n",
 		      DP_UUID(devices[rank_pos].device_id),
-		devices[rank_pos].host);
-	rc = dmg_storage_set_nvme_fault(dmg_config_file,
-					devices[rank_pos].host,
-		devices[rank_pos].device_id, 1);
+		      devices[rank_pos].host);
+	rc = dmg_storage_set_nvme_fault(dmg_config_file, devices[rank_pos].host,
+					devices[rank_pos].device_id, 1);
 	assert_rc_equal(rc, 0);
 	sleep(60);
 
 	/**
-	* Verify Rank0 device state change from NORMAL to FAULTY.
-	* Verify "FAULTY -> TEARDOWN" and "TEARDOWN -> OUT" device states found
-	* in server log.
-	*/
+	 * Verify rank0 device state change from NORMAL to FAULTY.
+	 * Verify "FAULTY -> TEARDOWN" and "TEARDOWN -> OUT" device states found
+	 * in server log.
+	 */
 	rc = dmg_storage_device_list(dmg_config_file, NULL, devices);
 	assert_rc_equal(rc, 0);
-	/*
-	 * Get the rank 0 position from array devices.
-	 */
+
+	/* Get the rank0 position from array devices */
 	for (i = 0; i < ndisks; i++) {
 		if (devices[i].rank == 0)
 			rank_pos = i;
@@ -419,23 +425,60 @@ nvme_test_verify_device_stats(void **state)
 		assert_rc_equal(rc, 0);
 	}
 
-	/*
-	 * FIXME: Add FAULTY disks back to the system, when feature available.
+	/**
+	 * If the SSD  evicted is a VMD device, verify LED state is set to
+	 * fault state (constant on) and then reset to off.
 	 */
+	if (!is_vmd_enabled(devices[rank_pos].traddr))
+		goto teardown;
+	print_message("Evicted a VMD device - verifying LED states\n");
 
+	rc = dmg_storage_ledmanage_getstate(dmg_config_file,
+					    devices[rank_pos].host,
+					    devices[rank_pos].device_id,
+					    led_state);
+	assert_rc_equal(rc, 0);
+	rc = strcasecmp(led_state, "\"ON\"");
+	if (rc != 0) {
+		print_message("LED not set to ON/FAULT state\n");
+		assert_rc_equal(rc, 0);
+	}
+	print_message("LED state is %s\n", led_state);
+
+	/* Reset the LED */
+	rc = dmg_storage_ledmanage_reset(dmg_config_file,
+					 devices[rank_pos].host,
+					 devices[rank_pos].device_id);
+	assert_rc_equal(rc, 0);
+	rc = dmg_storage_ledmanage_getstate(dmg_config_file,
+					    devices[rank_pos].host,
+					    devices[rank_pos].device_id,
+					    led_state);
+	assert_rc_equal(rc, 0);
+	rc = strcasecmp(led_state, "\"OFF\"");
+	if (rc != 0) {
+		print_message("LED not reset to OFF state\n");
+		assert_rc_equal(rc, 0);
+	}
+	print_message("LED successfully reset to %s\n", led_state);
+
+teardown:
 	/* Tear down */
 	D_FREE(server_config_file);
 	D_FREE(log_file);
 	D_FREE(devices);
 }
 
-/*
- * Verify blobstore state transitions from NORMAL->OUT after device is marked
- * as "FAULTY" by querying the internal blobstore device state by calling the
- * daos_mgmt_get_bs_state() C API.
+/**
+ * Verify device state (via dmg tool) and blobstore state (via
+ * daos_mgmt_get_bs_state() C API) transitions after an NVMe SSD is
+ * manually evicted.
+ * Add the evicted device back into use by replacing the device with
+ * itself (no target reintegration will occur). Verify device state
+ * after reintegration.
  */
 static void
-nvme_test_get_blobstore_state(void **state)
+nvme_verify_states_faulty_reint(void **state)
 {
 	test_arg_t	*arg = *state;
 	device_list	*devices = NULL;
@@ -449,6 +492,7 @@ nvme_test_get_blobstore_state(void **state)
 	int		 i, j;
 	int		 ndisks;
 	int		 faulty_disk_idx = 0;
+	char		 led_state[16];
 	int		 rc;
 
 	if (!is_nvme_enabled(arg)) {
@@ -456,31 +500,26 @@ nvme_test_get_blobstore_state(void **state)
 		skip();
 	}
 
-	/**
-	 * Get the total number of NVMe devices from all the servers.
-	 */
+	/* Get the total number of NVMe devices from all the servers */
 	rc = dmg_storage_device_list(dmg_config_file, &ndisks, NULL);
 	assert_rc_equal(rc, 0);
-	print_message("Total Disks = %d\n", ndisks);
+	print_message("Device List: (total=%d)\n", ndisks);
 
-	/**
-	 * Get the Device info of all NVMe devices.
-	 */
+	/* Get the device info of all NVMe devices */
 	D_ALLOC_ARRAY(devices, ndisks);
 	rc = dmg_storage_device_list(dmg_config_file, NULL, devices);
 	assert_rc_equal(rc, 0);
 	for (i = 0; i < ndisks; i++) {
-		print_message("Rank=%d UUID=" DF_UUIDF " state=%s host=%s\n",
-			      devices[i].rank, DP_UUID(devices[i].device_id),
-			      devices[i].state, devices[i].host);
+		print_message("UUID="DF_UUIDF" Traddr=%s State=%s LED=%s Rank=%d Host=%s\n",
+			       DP_UUID(devices[i].device_id), devices[i].traddr,
+			       devices[i].state, devices[i].led, devices[i].rank,
+			       devices[i].host);
 
 		if (devices[i].rank == 0)
 			faulty_disk_idx = i;
 	}
 
-	/**
-	 * Set the object class and generate data on objects.
-	 */
+	/* Set the object class and generate data on objects */
 	if (arg->pool.pool_info.pi_nnodes < 2)
 		obj_class = DAOS_OC_R1S_SPEC_RANK;
 	else
@@ -511,21 +550,19 @@ nvme_test_get_blobstore_state(void **state)
 				    &blobstore_state, NULL /*ev*/);
 	assert_rc_equal(rc, 0);
 
-	rc = verify_blobstore_state(blobstore_state, "normal");
+	rc = verify_blobstore_state(blobstore_state, "NORMAL");
 	assert_int_equal(rc, 0);
-	print_message("Blobstore is in NORMAL state\n");
 
 	/**
 	 * Manually set first device returned to faulty via
 	 * 'dmg storage set nvme-faulty'.
 	 */
-	print_message("NVMe with UUID=" DF_UUIDF " on host=%s\" set to Faulty\n",
+	print_message("Setting SSD to FAULTY (UUID="DF_UUIDF", host=%s)\n",
 		      DP_UUID(devices[faulty_disk_idx].device_id),
 		      devices[faulty_disk_idx].host);
 	rc = dmg_storage_set_nvme_fault(dmg_config_file,
 					devices[faulty_disk_idx].host,
-					devices[faulty_disk_idx].device_id,
-					1);
+					devices[faulty_disk_idx].device_id, 1);
 	assert_rc_equal(rc, 0);
 
 	/**
@@ -533,17 +570,99 @@ nvme_test_get_blobstore_state(void **state)
 	 *  or max test retry count is hit (5 min).
 	 */
 	rc = wait_and_verify_blobstore_state(devices[faulty_disk_idx].device_id,
-					     /*expected state*/"out",
+					     /*expected state*/"OUT",
 					     arg->group);
 	assert_rc_equal(rc, 0);
-
 	print_message("Blobstore is in OUT state\n");
+
+	rc = dmg_storage_device_list(dmg_config_file, NULL, devices);
+	assert_rc_equal(rc, 0);
+	print_message("UUID="DF_UUIDF" Traddr=%s State=%s LED=%s\n",
+		      DP_UUID(devices[faulty_disk_idx].device_id),
+		      devices[faulty_disk_idx].traddr,
+		      devices[faulty_disk_idx].state,
+		      devices[faulty_disk_idx].led);
+
+	/**
+	 * If the SSD evicted is a VMD device, verify LED state is set to
+	 * fault state.
+	 */
+	if (!is_vmd_enabled(devices[faulty_disk_idx].traddr))
+		goto replace;
+	print_message("Evicted a VMD device - verifying LED states\n");
+
+	rc = dmg_storage_ledmanage_getstate(dmg_config_file,
+					    devices[faulty_disk_idx].host,
+					    devices[faulty_disk_idx].device_id,
+					    led_state);
+	assert_rc_equal(rc, 0);
+	rc = strcmp(led_state, "\"ON\"");
+	if (rc != 0) {
+		print_message("LED not set to ON/FAULT state\n");
+		assert_rc_equal(rc, 0);
+	}
+	print_message("LED state is %s\n", led_state);
+
+replace:
+	/**
+	 * Add the evicted device back into use by replacing the device with
+	 * itself via 'dmg storage replace nvme'.
+	 */
+	print_message("Bringing SSD back online (UUID="DF_UUIDF", host=%s)\n",
+		      DP_UUID(devices[faulty_disk_idx].device_id),
+		      devices[faulty_disk_idx].host);
+	rc = dmg_storage_replace_device(dmg_config_file,
+					devices[faulty_disk_idx].host,
+					devices[faulty_disk_idx].device_id,
+					devices[faulty_disk_idx].device_id);
+	assert_rc_equal(rc, 0);
+
+	/**
+	 * Continue to check blobstore state until "NORMAL" state is resumed
+	 * or max test retry count is hit (5 min).
+	 */
+	rc = wait_and_verify_blobstore_state(devices[faulty_disk_idx].device_id,
+					     /*expected state*/"NORMAL",
+					     arg->group);
+	assert_rc_equal(rc, 0);
+	print_message("Blobstore is in NORMAL state\n");
+
+	rc = dmg_storage_device_list(dmg_config_file, NULL, devices);
+	assert_rc_equal(rc, 0);
+	print_message("UUID="DF_UUIDF" Traddr=%s State=%s LED=%s\n",
+		      DP_UUID(devices[faulty_disk_idx].device_id),
+		      devices[faulty_disk_idx].traddr,
+		      devices[faulty_disk_idx].state,
+		      devices[faulty_disk_idx].led);
+
+	/**
+	 * If the SSD evicted is a VMD device, verify LED state is reset to
+	 * off state after device replacement.
+	 */
+	if (!is_vmd_enabled(devices[faulty_disk_idx].traddr))
+		goto teardown;
+	print_message("Replaced a VMD device - verifying LED states\n");
+
+	rc = dmg_storage_ledmanage_getstate(dmg_config_file,
+					    devices[faulty_disk_idx].host,
+					    devices[faulty_disk_idx].device_id,
+					    led_state);
+	assert_rc_equal(rc, 0);
+	rc = strcasecmp(led_state, "\"OFF\"");
+	if (rc != 0) {
+		print_message("LED not reset to OFF state\n");
+		assert_rc_equal(rc, 0);
+	}
+	print_message("LED successfully reset to %s\n", led_state);
+
+teardown:
 	D_FREE(devices);
 }
 
-/* Simulate both an NVMe I/O read and write error.
- * Check error counters in BIO health stats to verify R/W error counts,
- * and also verify I/O error notification on the console output.
+/**
+ * Simulate both an NVMe I/O read and write error. Check error counters in BIO
+ * health stats to verify R/W error counts, and also verify I/O error
+ * notification on the console output.
  */
 static void
 nvme_test_simulate_IO_error(void **state)
@@ -573,52 +692,37 @@ nvme_test_simulate_IO_error(void **state)
 		skip();
 	}
 
-	/*
-	 * Allocate and set write buffer with data
-	 */
+	/* Allocate and set write buffer with data */
 	D_ALLOC(ow_buf, size);
 	assert_non_null(ow_buf);
 	dts_buf_render(ow_buf, size);
-	/*
-	 * Allocate and set fetch buffer
-	 */
+	/* Allocate and set fetch buffer */
 	D_ALLOC(fbuf, size);
 	assert_non_null(fbuf);
 	memset(fbuf, 0, size);
 
-	/*
-	 * Prepare records
-	 */
+	/* Prepare records */
 	oid = daos_test_oid_gen(arg->coh, DAOS_OC_R1S_SPEC_RANK, 0, 0,
 				arg->myrank);
 	oid = dts_oid_set_rank(oid, rank);
 	ioreq_init(&req, arg->coh, oid, DAOS_IOD_ARRAY, arg);
 
-	/*
-	 * Insert the initial 4K record which will go through NVMe
-	 */
-	print_message("Insert Initial record\n");
+	/* Insert the initial 4K record which will go through NVMe */
+	print_message("Insert single record\n");
 	rx_nr = size / OW_IOD_SIZE;
-	insert_single_with_rxnr(dkey, akey, /*idx*/0, ow_buf,
-				OW_IOD_SIZE, rx_nr, DAOS_TX_NONE, &req);
+	insert_single_with_rxnr(dkey, akey, 0 /*idx*/, ow_buf, OW_IOD_SIZE,
+				rx_nr, DAOS_TX_NONE, &req);
 
-	/*
-	 *  Get the Total number of NVMe devices from all the servers.
-	 */
+	/* Get the total number of NVMe devices from all the servers */
 	rc = dmg_storage_device_list(dmg_config_file, &ndisks, NULL);
 	assert_rc_equal(rc, 0);
-	print_message("Total Disks = %d\n", ndisks);
 
-	/*
-	 * Get the Device info of all NVMe devices
-	 */
+	/* Get the device info of all NVMe devices */
 	D_ALLOC_ARRAY(devices, ndisks);
 	rc = dmg_storage_device_list(dmg_config_file, NULL, devices);
 	assert_rc_equal(rc, 0);
 
-	/*
-	 * Get the rank 1 position from array devices
-	 */
+	/* Get the rank1 position from array devices */
 	for (i = 0; i < ndisks; i++) {
 		if (devices[i].rank == 1) {
 			rank_pos = i;
@@ -626,103 +730,85 @@ nvme_test_simulate_IO_error(void **state)
 		}
 	}
 
-	/*
-	 * Get DAOS server file
-	 */
+	/* Get the DAOS server file and control log file */
 	D_ALLOC(control_log_file, 1024);
 	D_ALLOC(server_config_file, DAOS_SERVER_CONF_LENGTH);
 	rc = get_server_config(devices[rank_pos].host, server_config_file);
 	assert_rc_equal(rc, 0);
-	print_message("server_config_file = %s\n", server_config_file);
-
-	/*
-	 * Get DAOS control log file
-	 */
 	get_log_file(devices[rank_pos].host, server_config_file,
 		     "control_log_file", control_log_file);
-	print_message("Control Log File = %s\n", control_log_file);
 	D_FREE(server_config_file);
 
-	/*
-	 * Get the Initial write error
-	 */
+	/* Get the initial write error */
 	write_errors = strdup("bio_write_errs");
 	rc = dmg_storage_query_device_health(dmg_config_file,
 					     devices[rank_pos].host,
 					     write_errors,
-		devices[rank_pos].device_id);
+					     devices[rank_pos].device_id);
 	assert_rc_equal(rc, 0);
-	print_message("Initial write_errors = %s\n", write_errors);
+	print_message("Initial write errors = %s\n", write_errors);
 
-	/*
-	 * Get the Initial read error
-	 */
+	/* Get the initial read error */
 	read_errors = strdup("bio_read_errs");
 	rc = dmg_storage_query_device_health(dmg_config_file,
 					     devices[rank_pos].host,
 					     read_errors,
-		devices[rank_pos].device_id);
+					     devices[rank_pos].device_id);
 	assert_rc_equal(rc, 0);
-	print_message("Initial read_errors = %s\n", read_errors);
+	print_message("Initial read errors = %s\n", read_errors);
 
-	/*
-	 * Inject BIO Read Errors on Rank1 device
-	 */
+	/* Inject BIO read errors on rank1 device */
 	print_message("----Inject BIO Read Error----\n");
 	set_fail_loc(arg, rank, 0, DAOS_NVME_READ_ERR | DAOS_FAIL_ONCE);
 
-	/*
-	 * Read the data which will induce the READ Error and expected to fail
-	 * with DER_IO Error.
+	/**
+	 * Read the data which will induce the read error. Expected to fail
+	 * with DER_IO error.
 	 */
 	arg->expect_result = -DER_IO;
-	lookup_single_with_rxnr(dkey, akey, /*idx*/0, fbuf,
-				OW_IOD_SIZE, size, DAOS_TX_NONE, &req);
+	lookup_single_with_rxnr(dkey, akey, 0/*idx*/, fbuf, OW_IOD_SIZE, size,
+				DAOS_TX_NONE, &req);
 
-	/*
-	 * Inject BIO Write Errors on Rank1 device
-	 */
+	/* Inject BIO write errors on rank1 device */
 	print_message("----Inject BIO Write Error----\n");
 	set_fail_loc(arg, rank, 0, DAOS_NVME_WRITE_ERR | DAOS_FAIL_ONCE);
 
-	/*
-	 * Insert the 4K record again which will induce WRITE Error and
-	 * expected to fail with DER_IO Error.
+	/**
+	 * Insert the 4K record again which will induce a write error. Expected
+	 * to fail with DER_IO error.
 	 */
 	rx_nr = size / OW_IOD_SIZE;
-	insert_single_with_rxnr(dkey, akey, /*idx*/0, ow_buf, OW_IOD_SIZE,
+	insert_single_with_rxnr(dkey, akey, 0/*idx*/, ow_buf, OW_IOD_SIZE,
 				rx_nr, DAOS_TX_NONE, &req);
 
-	/*
-	 * Get the write error count after Injecting BIO write error.
-	 * Verify the recent write err count is > the initial err count.
+	/**
+	 * Get the write error count after injecting BIO write error.
+	 * Verify the recent write err count is > the initial error count.
 	 */
 	arg->expect_result = 0;
 	check_errors = strdup("bio_write_errs");
 	rc = dmg_storage_query_device_health(dmg_config_file,
 					     devices[rank_pos].host,
 					     check_errors,
-		devices[rank_pos].device_id);
+					     devices[rank_pos].device_id);
 	assert_rc_equal(rc, 0);
-	print_message("Final write_error = %s\n", check_errors);
+	print_message("Final write errors = %s\n", check_errors);
 	assert_true(atoi(check_errors) == atoi(write_errors) + 1);
 
-	/*
-	 * Get the read error count after Injecting BIO read error
-	 * Verify the recent read err count is > the initial err count.
+	/**
+	 * Get the read error count after injecting BIO read error.
+	 * Verify the recent read err count is > the initial error count.
 	 */
 	strcpy(check_errors, "bio_read_errs");
 	rc = dmg_storage_query_device_health(dmg_config_file,
 					     devices[rank_pos].host,
 					     check_errors,
-		devices[rank_pos].device_id);
+					     devices[rank_pos].device_id);
 	assert_rc_equal(rc, 0);
-	print_message("Final read_errors = %s\n", check_errors);
+	print_message("Final read errors = %s\n", check_errors);
 	assert_true(atoi(check_errors) == atoi(read_errors) + 1);
 
-	/*
-	 * Verify writeErr=true and readErr:true available in control log
-	 */
+	/* Verify errors in control log */
 	char control_err[][50] = {
 		"detected blob I/O error! writeErr:true",
 		"detected blob I/O error! readErr:true"};
@@ -730,9 +816,8 @@ nvme_test_simulate_IO_error(void **state)
 		rc = verify_state_in_log(devices[rank_pos].host,
 					 control_log_file, control_err[i]);
 		if (rc != 0) {
-			print_message(
-				" %s not found in log %s\n", control_err[i],
-				control_log_file);
+			print_message("%s not found in log %s\n",
+				      control_err[i], control_log_file);
 			assert_rc_equal(rc, 0);
 		}
 	}
@@ -748,19 +833,105 @@ nvme_test_simulate_IO_error(void **state)
 	ioreq_fini(&req);
 }
 
+/**
+ * Identify all VMD devices used in the test by setting the status LED
+ * on the SSDs to an "identify" state (fast blink). Reset all LEDs back
+ * to off at the end of the test. Skip test if no VMD devices are present.
+ */
+static void
+vmd_identify_led(void **state)
+{
+	test_arg_t	*arg = *state;
+	device_list	*devices = NULL;
+	int		 ndisks;
+	char		 led_state[16];
+	int		 i;
+	int		 rc;
+
+	if (!is_nvme_enabled(arg)) {
+		print_message("NVMe isn't enabled.\n");
+		skip();
+	}
+
+	/* Get the total number of NVMe devices from all the servers */
+	rc = dmg_storage_device_list(dmg_config_file, &ndisks, NULL);
+	assert_rc_equal(rc, 0);
+	print_message("Device List: (total=%d)\n", ndisks);
+
+	/* Get the device info of all NVMe devices */
+	D_ALLOC_ARRAY(devices, ndisks);
+	rc = dmg_storage_device_list(dmg_config_file, NULL, devices);
+	assert_rc_equal(rc, 0);
+	for (i = 0; i < ndisks; i++) {
+		print_message("UUID="DF_UUIDF" Traddr=%s State=%s LED=%s Rank=%d Host=%s\n",
+			       DP_UUID(devices[i].device_id), devices[i].traddr,
+			       devices[i].state, devices[i].led, devices[i].rank,
+			       devices[i].host);
+	}
+
+	/* Identify all VMD devices. Skip if the NVMe SSD is not a VMD device */
+	for (i = 0; i < ndisks; i++) {
+		if (!is_vmd_enabled(devices[i].traddr))
+			continue;
+		/**
+		 * Manually set VMD LED to identify state via
+		 * 'dmg storage identify vmd'.
+		 */
+		print_message("Identifying VMD device %s\n", devices[i].traddr);
+		rc = dmg_storage_identify_vmd(dmg_config_file, devices[i].host,
+					      devices[i].device_id);
+		assert_rc_equal(rc, 0);
+		rc = dmg_storage_ledmanage_getstate(dmg_config_file,
+						    devices[i].host,
+						    devices[i].device_id,
+						    led_state);
+		assert_rc_equal(rc, 0);
+		rc = strcasecmp(led_state, "\"QUICK-BLINK\"");
+		if (rc != 0) {
+			print_message("LED not set to QUICK-BLINK state\n");
+			assert_rc_equal(rc, 0);
+		}
+		print_message("LED state is %s\n", led_state);
+	}
+
+	/* Default duration of LED event is 60 seconds before reset */
+	sleep(60);
+
+	/* Verify all LED are reset */
+	for (i = 0; i < ndisks; i++) {
+		if (!is_vmd_enabled(devices[i].traddr))
+			continue;
+		rc = dmg_storage_ledmanage_getstate(dmg_config_file,
+						    devices[i].host,
+						    devices[i].device_id,
+						    led_state);
+		assert_rc_equal(rc, 0);
+		rc = strcasecmp(led_state, "\"OFF\"");
+		if (rc != 0) {
+			print_message("LED not reset to OFF state\n");
+			assert_rc_equal(rc, 0);
+		}
+		print_message("LED successfully reset to %s\n", led_state);
+	}
+
+	D_FREE(devices);
+}
+
 static const struct CMUnitTest nvme_recov_tests[] = {
 	{"NVMe Recovery 1: Online faulty reaction",
 	 online_fault_recovery, NULL, test_case_teardown},
-	{"NVMe Recovery 2: Verify device states after NVMe set to Faulty",
-	 nvme_test_verify_device_stats, NULL, test_case_teardown},
-	{"NVMe Recovery 3: Verify blobstore state NORMAL->OUT transition",
-	 nvme_test_get_blobstore_state, NULL, test_case_teardown},
-	{"NVMe Recovery 4: Verify NVMe IO error and notification",
-	 nvme_test_simulate_IO_error, NULL, test_case_teardown},
-	{"NVMe Recovery 5: Offline faulty reaction",
+	{"NVMe Recovery 2: Offline faulty reaction",
 	 offline_fault_recovery, NULL, test_case_teardown},
-	{"NVMe Recovery 6: Mixed type pool faulty reaction",
+	{"NVMe Recovery 3: Mixed type pool faulty reaction",
 	 offline_and_online_fault_recovery, NULL, test_case_teardown},
+	{"NVMe Recovery 4: Verify device states via log after NVMe SSD eviction",
+	 nvme_verify_states_faulty, NULL, test_case_teardown},
+	{"NVMe Recovery 5: Verify device states after NVMe SSD eviction/reint",
+	 nvme_verify_states_faulty_reint, NULL, test_case_teardown},
+	{"NVMe Recovery 6: Verify NVMe IO error and notification",
+	 nvme_test_simulate_IO_error, NULL, test_case_teardown},
+	{"NVMe Recovery 7: Identify an SSD via LED (VMD only)",
+	 vmd_identify_led, NULL, test_case_teardown},
 };
 
 static int

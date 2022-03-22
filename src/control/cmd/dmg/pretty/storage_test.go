@@ -1400,6 +1400,7 @@ host1
 									TargetIDs: []int32{0, 1, 2},
 									Rank:      0,
 									NvmeState: storage.MockNvmeStateNormal,
+									VmdState:  storage.MockVmdStateNormal,
 								},
 								{
 									UUID:      common.MockUUID(1),
@@ -1407,6 +1408,7 @@ host1
 									TargetIDs: []int32{3, 4, 5},
 									Rank:      0,
 									NvmeState: storage.MockNvmeStateEvicted,
+									VmdState:  storage.MockVmdStateFault,
 								},
 								{
 									UUID:      common.MockUUID(2),
@@ -1414,6 +1416,7 @@ host1
 									TargetIDs: []int32{0, 1, 2},
 									Rank:      1,
 									NvmeState: storage.NvmeDevState(0),
+									VmdState:  storage.VmdLedState(0),
 								},
 								{
 									UUID:      common.MockUUID(3),
@@ -1421,6 +1424,7 @@ host1
 									TargetIDs: []int32{3, 4, 5},
 									Rank:      1,
 									NvmeState: storage.MockNvmeStateIdentify,
+									VmdState:  storage.MockVmdStateIdentify,
 								},
 							},
 						},
@@ -1433,13 +1437,13 @@ host1
 -----
   Devices
     UUID:00000000-0000-0000-0000-000000000000 [TrAddr:0000:8a:00.0]
-      Targets:[0 1 2] Rank:0 State:NORMAL
+      Targets:[0 1 2] Rank:0 State:NORMAL LED:OFF
     UUID:00000001-0001-0001-0001-000000000001 [TrAddr:0000:8b:00.0]
-      Targets:[3 4 5] Rank:0 State:EVICTED
+      Targets:[3 4 5] Rank:0 State:EVICTED LED:ON
     UUID:00000002-0002-0002-0002-000000000002 [TrAddr:0000:da:00.0]
-      Targets:[0 1 2] Rank:1 State:UNPLUGGED
+      Targets:[0 1 2] Rank:1 State:UNPLUGGED LED:NA
     UUID:00000003-0003-0003-0003-000000000003 [TrAddr:0000:db:00.0]
-      Targets:[3 4 5] Rank:1 State:NORMAL|IDENTIFY
+      Targets:[3 4 5] Rank:1 State:NORMAL|IDENTIFY LED:QUICK-BLINK
 `,
 		},
 		"list-devices (none found)": {
@@ -1476,6 +1480,7 @@ host1
 									TargetIDs: []int32{0, 1, 2},
 									Rank:      0,
 									NvmeState: storage.MockNvmeStateNormal,
+									VmdState:  storage.MockVmdStateNormal,
 									Health:    mockController.HealthStats,
 								},
 							},
@@ -1489,7 +1494,7 @@ host1
 -----
   Devices
     UUID:00000000-0000-0000-0000-000000000000 [TrAddr:]
-      Targets:[0 1 2] Rank:0 State:NORMAL
+      Targets:[0 1 2] Rank:0 State:NORMAL LED:OFF
       Health Stats:
         Temperature:%dK(%.02fC)
         Temperature Warning Duration:%dm0s

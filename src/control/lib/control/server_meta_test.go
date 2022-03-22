@@ -48,6 +48,8 @@ func mockSmdQueryMap(t *testing.T, mocks ...*mockSmdQueryResp) HostStorageMap {
 func TestControl_SmdQuery(t *testing.T) {
 	stateNormal := storage.MockNvmeStateNormal
 	stateFaulty := storage.MockNvmeStateEvicted
+	ledStateNormal := storage.MockVmdStateNormal
+	ledStateFault := storage.MockVmdStateFault
 
 	for name, tc := range map[string]struct {
 		mic     *MockInvokerConfig
@@ -173,6 +175,7 @@ func TestControl_SmdQuery(t *testing.T) {
 												Uuid:     common.MockUUID(0),
 												TgtIds:   []int32{0},
 												DevState: stateNormal.String(),
+												LedState: ledStateNormal.String(),
 											},
 										},
 									},
@@ -183,6 +186,7 @@ func TestControl_SmdQuery(t *testing.T) {
 												Uuid:     common.MockUUID(1),
 												TgtIds:   []int32{0},
 												DevState: stateFaulty.String(),
+												LedState: ledStateFault.String(),
 											},
 										},
 									},
@@ -203,12 +207,14 @@ func TestControl_SmdQuery(t *testing.T) {
 								Rank:      system.Rank(0),
 								TargetIDs: []int32{0},
 								NvmeState: stateNormal,
+								VmdState:  ledStateNormal,
 							},
 							{
 								UUID:      common.MockUUID(1),
 								Rank:      system.Rank(1),
 								TargetIDs: []int32{0},
 								NvmeState: stateFaulty,
+								VmdState:  ledStateFault,
 							},
 						},
 						Pools: make(map[string][]*SmdPool),
@@ -231,6 +237,7 @@ func TestControl_SmdQuery(t *testing.T) {
 												Uuid:     common.MockUUID(0),
 												TgtIds:   []int32{0},
 												DevState: "",
+												LedState: "",
 											},
 										},
 									},
@@ -251,6 +258,7 @@ func TestControl_SmdQuery(t *testing.T) {
 								Rank:      system.Rank(0),
 								TargetIDs: []int32{0},
 								NvmeState: storage.NvmeStateUnknown,
+								VmdState:  storage.VmdStateNA,
 							},
 						},
 						Pools: make(map[string][]*SmdPool),
@@ -287,6 +295,7 @@ func TestControl_SmdQuery(t *testing.T) {
 													VolatileMemWarn:    true,
 												},
 												DevState: stateNormal.String(),
+												LedState: ledStateNormal.String(),
 											},
 										},
 									},
@@ -320,6 +329,7 @@ func TestControl_SmdQuery(t *testing.T) {
 									VolatileWarn:    true,
 								},
 								NvmeState: stateNormal,
+								VmdState:  ledStateNormal,
 							},
 						},
 						Pools: make(map[string][]*SmdPool),

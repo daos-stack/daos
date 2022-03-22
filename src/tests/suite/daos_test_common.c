@@ -1085,12 +1085,10 @@ get_pid_of_process(char *host, char *dpid, char *proc)
 		 "ssh %s pgrep %s", host, proc);
 	FILE *fp1 = popen(command, "r");
 
-	print_message("Command= %s\n", command);
 	if (fp1 == NULL)
 		return -DER_INVAL;
 
 	while ((read = getline(&line, &len, fp1)) != -1) {
-		print_message("%s pid = %s", proc, line);
 		strcat(dpid, line);
 	}
 
@@ -1119,14 +1117,12 @@ get_server_config(char *host, char *server_config_file)
 		 "ssh %s ps ux -A | grep %s", host, dpid);
 	FILE *fp = popen(command, "r");
 
-	print_message("Command %s", command);
 	if (fp == NULL) {
 		D_FREE(dpid);
 		return -DER_INVAL;
 	}
 
 	while ((read = getline(&line, &len, fp)) != -1) {
-		print_message("line %s", line);
 		if (strstr(line, "--config") != NULL ||
 		    strstr(line, "-o") != NULL) {
 			conf = false;
