@@ -5871,6 +5871,13 @@ ds_pool_hdl_is_from_srv(struct ds_pool *pool, uuid_t hdl)
 	uuid_t	srv_hdl;
 	int	rc;
 
+	/*
+	 * Use the cached value if available. (Not sure if this cache could be
+	 * stale...)
+	 */
+	if (!uuid_is_null(pool->sp_srv_pool_hdl))
+		return uuid_compare(pool->sp_srv_pool_hdl, hdl) == 0;
+
 	rc = ds_pool_iv_srv_hdl_fetch(pool, &srv_hdl, NULL);
 	if (rc != 0)
 		return rc;
