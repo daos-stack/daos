@@ -21,7 +21,6 @@ import (
 
 	"github.com/daos-stack/daos/src/control/build"
 	"github.com/daos-stack/daos/src/control/common"
-	"github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	"github.com/daos-stack/daos/src/control/drpc"
 	"github.com/daos-stack/daos/src/control/events"
@@ -383,7 +382,7 @@ func TestServer_MgmtSvc_PoolCreate(t *testing.T) {
 		"svc replicas > max": {
 			targetCount: 1,
 			memberCount: MaxPoolServiceReps + 2,
-			req: &mgmt.PoolCreateReq{
+			req: &mgmtpb.PoolCreateReq{
 				Uuid:       common.MockUUID(0),
 				Totalbytes: 100 * humanize.GByte,
 				Tierratio:  []float64{0.06, 0.94},
@@ -395,7 +394,7 @@ func TestServer_MgmtSvc_PoolCreate(t *testing.T) {
 		"svc replicas > numRanks": {
 			targetCount: 1,
 			memberCount: MaxPoolServiceReps - 2,
-			req: &mgmt.PoolCreateReq{
+			req: &mgmtpb.PoolCreateReq{
 				Uuid:       common.MockUUID(0),
 				Totalbytes: 100 * humanize.GByte,
 				Tierratio:  []float64{0.06, 0.94},
@@ -1905,7 +1904,7 @@ func TestServer_MgmtSvc_PoolSetProp(t *testing.T) {
 		"garbage resp": {
 			req: &mgmtpb.PoolSetPropReq{
 				Id: mockUUID,
-				Properties: []*mgmt.PoolProperty{
+				Properties: []*mgmtpb.PoolProperty{
 					{
 						Number: drpc.PoolPropertyLabel,
 						Value:  &mgmtpb.PoolProperty_Strval{"0"},
@@ -1927,7 +1926,7 @@ func TestServer_MgmtSvc_PoolSetProp(t *testing.T) {
 		"label is not unique": {
 			req: &mgmtpb.PoolSetPropReq{
 				Id: common.MockUUID(3),
-				Properties: []*mgmt.PoolProperty{
+				Properties: []*mgmtpb.PoolProperty{
 					{
 						Number: drpc.PoolPropertyLabel,
 						Value:  &mgmtpb.PoolProperty_Strval{"0"},
@@ -1945,7 +1944,7 @@ func TestServer_MgmtSvc_PoolSetProp(t *testing.T) {
 		"label set is idempotent": {
 			req: &mgmtpb.PoolSetPropReq{
 				Id: mockUUID,
-				Properties: []*mgmt.PoolProperty{
+				Properties: []*mgmtpb.PoolProperty{
 					{
 						Number: drpc.PoolPropertyLabel,
 						Value:  &mgmtpb.PoolProperty_Strval{"0"},
@@ -1956,7 +1955,7 @@ func TestServer_MgmtSvc_PoolSetProp(t *testing.T) {
 				Sys:      build.DefaultSystemName,
 				SvcRanks: []uint32{0},
 				Id:       mockUUID,
-				Properties: []*mgmt.PoolProperty{
+				Properties: []*mgmtpb.PoolProperty{
 					{
 						Number: drpc.PoolPropertyLabel,
 						Value:  &mgmtpb.PoolProperty_Strval{"0"},
@@ -1967,7 +1966,7 @@ func TestServer_MgmtSvc_PoolSetProp(t *testing.T) {
 		"success": {
 			req: &mgmtpb.PoolSetPropReq{
 				Id: mockUUID,
-				Properties: []*mgmt.PoolProperty{
+				Properties: []*mgmtpb.PoolProperty{
 					{
 						Number: drpc.PoolPropertyLabel,
 						Value:  &mgmtpb.PoolProperty_Strval{"ok"},
@@ -1983,7 +1982,7 @@ func TestServer_MgmtSvc_PoolSetProp(t *testing.T) {
 				Sys:      build.DefaultSystemName,
 				SvcRanks: []uint32{0},
 				Id:       mockUUID,
-				Properties: []*mgmt.PoolProperty{
+				Properties: []*mgmtpb.PoolProperty{
 					{
 						Number: drpc.PoolPropertySpaceReclaim,
 						Value:  &mgmtpb.PoolProperty_Numval{drpc.PoolSpaceReclaimDisabled},
@@ -2043,7 +2042,7 @@ func TestServer_MgmtSvc_PoolGetProp(t *testing.T) {
 		"garbage resp": {
 			req: &mgmtpb.PoolGetPropReq{
 				Id: mockUUID,
-				Properties: []*mgmt.PoolProperty{
+				Properties: []*mgmtpb.PoolProperty{
 					{
 						Number: drpc.PoolPropertyLabel,
 					},
@@ -2064,7 +2063,7 @@ func TestServer_MgmtSvc_PoolGetProp(t *testing.T) {
 		"success": {
 			req: &mgmtpb.PoolGetPropReq{
 				Id: mockUUID,
-				Properties: []*mgmt.PoolProperty{
+				Properties: []*mgmtpb.PoolProperty{
 					{
 						Number: drpc.PoolPropertyLabel,
 					},
