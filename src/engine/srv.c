@@ -70,6 +70,9 @@
 
 /** Number of dRPC xstreams */
 #define DRPC_XS_NR	(1)
+
+/** Number of secondary cart context XS */
+unsigned int	dss_sec_xs_nr;
 /** Number of offload XS */
 unsigned int	dss_tgt_offload_xs_nr;
 /** Number of target (XS set) per engine */
@@ -102,7 +105,9 @@ dss_ctx_nr_get(void)
 
 #define DSS_SYS_XS_NAME_FMT	"daos_sys_%d"
 #define DSS_IO_XS_NAME_FMT	"daos_io_%d"
+#define DSS_IOFW_XS_NAME_FMT	"daos_iofw_%d"
 #define DSS_OFFLOAD_XS_NAME_FMT	"daos_off_%d"
+#define DSS_SEC_XS_NAME_FMT	"daos_sec_%d"
 
 struct dss_xstream_data {
 	/** Initializing step, it is for cleanup of global states */
@@ -334,6 +339,71 @@ wait_all_exited(struct dss_xstream *dx)
 	D_DEBUG(DB_TRACE, "XS(%d) drained ULTs.\n", dx->dx_xs_id);
 }
 
+/* Get xstream type from xstream ID */
+static unsigned int
+xs_id2type(unsigned int xs_id)
+{
+	unsigned int helper_per_tgt, xs_offset;
+
+	D_ASSERTF(xs_id >= 0 && xs_id < DSS_XS_NR_TOTAL,
+		  "invalid xs_id %d, dss_tgt_nr %d, dss_tgt_offload_xs_nr %d, dss_sec_xs_nr %d\n",
+		  xs_id, dss_tgt_nr, dss_tgt_offload_xs_nr, dss_sec_xs_nr);
+
+	if (xs_id == 0)
+		return DSS_XS_SYS;
+	else if (xs_id == 1)
+		return DSS_XS_SWIM;
+	else if (xs_id < dss_sys_xs_nr)
+		return DSS_XS_DRPC;
+	else if (xs_id >= dss_sys_xs_nr + dss_tgt_nr + dss_tgt_offload_xs_nr)
+		return DSS_XS_SEC;
+
+	if (dss_helper_pool) {
+		if (xs_id < (dss_sys_xs_nr + dss_tgt_nr))
+			return DSS_XS_VOS;
+		else if (xs_id < (dss_sys_xs_nr + 2 * dss_tgt_nr))
+			return DSS_XS_IOFW;
+		else
+			return DSS_XS_OFFLOAD;
+	}
+
+	helper_per_tgt = dss_tgt_offload_xs_nr / dss_tgt_nr;
+	D_ASSERT(helper_per_tgt == 0 || helper_per_tgt == 1 || helper_per_tgt == 2);
+
+	xs_offset = (xs_id - dss_sys_xs_nr) % (helper_per_tgt + 1);
+	if (xs_offset == 0)
+		return DSS_XS_VOS;
+	else if (xs_offset == 1)
+		return DSS_XS_IOFW;
+	else
+		return DSS_XS_OFFLOAD;
+}
+
+/* Get target ID from xstream ID */
+static inline int
+xs_id2tgt(int xs_id)
+{
+	unsigned int helper_per_tgt;
+	unsigned int xs_type = xs_id2type(xs_id);
+
+	if (xs_type != DSS_XS_VOS && xs_type != DSS_XS_IOFW)
+		return -1;
+
+	if (dss_helper_pool)
+		return xs_id - dss_sys_xs_nr;
+
+	helper_per_tgt = dss_tgt_offload_xs_nr / dss_tgt_nr;
+	D_ASSERT(helper_per_tgt == 0 || helper_per_tgt == 1 || helper_per_tgt == 2);
+
+	return (xs_id - dss_sys_xs_nr) / (helper_per_tgt + 1);
+}
+
+static inline bool
+has_crt_context(struct dss_xstream *dx)
+{
+	return dx->dx_comm || (xs_id2type(dx->dx_xs_id) == DSS_XS_SEC);
+}
+
 /*
  * The server handler ULT first sets CPU affinity, initialize the per-xstream
  * TLS, CRT(comm) context, NVMe context, creates the long-run ULTs (GC & NVMe
@@ -348,6 +418,7 @@ dss_srv_handler(void *arg)
 	struct dss_module_info		*dmi;
 	int				 rc;
 	bool				 signal_caller = true;
+	unsigned int			 xs_type;
 
 	rc = dss_xstream_set_affinity(dx);
 	if (rc)
@@ -371,7 +442,37 @@ dss_srv_handler(void *arg)
 
 	(void)pthread_setname_np(pthread_self(), dx->dx_name);
 
-	if (dx->dx_comm) {
+	xs_type = xs_id2type(dx->dx_xs_id);
+	if (xs_type == DSS_XS_SEC) {
+		/* TODO: Create secondary cart context and register secondary RPC handler */
+		D_ASSERTF(0, "Secondary cart context isn't supported\n");
+#if 0
+		rc = crt_context_create_seconary(&dmi->dmi_ctxt);
+		if (rc != 0) {
+			D_ERROR("Failed to create secondary crt ctxt: "DF_RC"\n", DP_RC(rc));
+			goto tls_fini;
+		}
+
+		rc = crt_context_register_rpc_task(dmi->dmi_ctx, secondary_rpc_hdlr, NULL, dx);
+		if (rc != 0) {
+			D_ERROR("Failed to register secondary process cb "DF_RC"\n", DP_RC(rc));
+			goto crt_destroy;
+		}
+
+		rc = crt_context_idx(dmi->dmi_ctx, &dmi->dmi_ctx_id);
+		if (rc != 0) {
+			D_ERROR("Failed to get secondary context ID: rc "DF_RC"\n", DP_RC(rc));
+			goto crt_destroy;
+		}
+		dx->dx_ctx_id = dmi->dmi_ctx_id;
+
+		if (dx->dx_ctx_id != 0) {
+			D_ERROR("Invalid secondary context ID: %d\n", dx->dx_ctx_id);
+			rc = -DER_INVAL;
+			goto crt_destroy;
+		}
+#endif
+	} else if (dx->dx_comm) {
 		/* create private transport context */
 		rc = crt_context_create(&dmi->dmi_ctx);
 		if (rc != 0) {
@@ -401,7 +502,6 @@ dss_srv_handler(void *arg)
 			/*
 			 * xs_id: 0 => SYS  XS: ctx_id: 0
 			 * xs_id: 1 => SWIM XS: ctx_id: 1
-			 * xs_id: 2 => DRPC XS: no ctx_id
 			 */
 			D_ASSERTF(dx->dx_ctx_id == dx->dx_xs_id,
 				  "incorrect ctx_id %d for xs_id %d\n",
@@ -487,17 +587,17 @@ dss_srv_handler(void *arg)
 	 * respond to incoming pings. It is out of the scope of
 	 * dss_{thread,task}_collective.
 	 */
-	if (dx->dx_xs_id != 1 /* DSS_XS_SWIM */)
+	if (xs_type != DSS_XS_SWIM)
 		ABT_cond_wait(xstream_data.xd_ult_barrier, xstream_data.xd_mutex);
 	ABT_mutex_unlock(xstream_data.xd_mutex);
 
-	if (dx->dx_comm)
+	if (has_crt_context(dx))
 		dx->dx_progress_started = true;
 
 	signal_caller = false;
 	/* main service progress loop */
 	for (;;) {
-		if (dx->dx_comm) {
+		if (has_crt_context(dx)) {
 			rc = crt_progress(dmi->dmi_ctx, dx->dx_timeout);
 			if (rc != 0 && rc != -DER_TIMEDOUT) {
 				D_ERROR("failed to progress CART context: %d\n",
@@ -514,7 +614,7 @@ dss_srv_handler(void *arg)
 		ABT_thread_yield();
 	}
 
-	if (dx->dx_comm)
+	if (has_crt_context(dx))
 		dx->dx_progress_started = false;
 
 	wait_all_exited(dx);
@@ -528,7 +628,7 @@ nvme_fini:
 tse_fini:
 	tse_sched_fini(&dx->dx_sched_dsc);
 crt_destroy:
-	if (dx->dx_comm)
+	if (has_crt_context(dx))
 		crt_context_destroy(dmi->dmi_ctx, true);
 tls_fini:
 	dss_tls_fini(dtc);
@@ -618,73 +718,40 @@ dss_start_one_xstream(hwloc_cpuset_t cpus, int xs_id)
 	struct dss_xstream	*dx;
 	ABT_thread_attr		attr = ABT_THREAD_ATTR_NULL;
 	int			rc = 0;
-	bool			comm; /* true to create cart ctx for RPC */
-	int			xs_offset = 0;
+	unsigned int		xs_type = xs_id2type(xs_id);
 
 	/** allocate & init xstream configuration data */
 	dx = dss_xstream_alloc(cpus);
 	if (dx == NULL)
 		return -DER_NOMEM;
 
-	/* Partial XS need the RPC communication ability - system XS, each
-	 * main XS and its first offload XS (for IO dispatch).
-	 * The 2nd offload XS(if exists) does not need RPC communication
-	 * as it is only for EC/checksum/compress offloading.
+	/*
+	 * SYS, SWIM, every main xstream (VOS) and its first offloading xstream
+	 * (IOFW for IO forwarding) requires primary cart context. The 2nd offloading
+	 * xstream (OFFLOAD for EC/csum/compress calculation) have no cart context.
 	 */
-	if (dss_helper_pool) {
-		comm =  (xs_id == 0) || /* DSS_XS_SYS */
-			(xs_id == 1) || /* DSS_XS_SWIM */
-			(xs_id >= dss_sys_xs_nr &&
-			 xs_id < (dss_sys_xs_nr + 2 * dss_tgt_nr));
-	} else {
-		int	helper_per_tgt;
-
-		helper_per_tgt = dss_tgt_offload_xs_nr / dss_tgt_nr;
-		D_ASSERT(helper_per_tgt == 0 ||
-			 helper_per_tgt == 1 ||
-			 helper_per_tgt == 2);
-
-		if ((xs_id >= dss_sys_xs_nr) &&
-		    (xs_id < (dss_sys_xs_nr + dss_tgt_nr + dss_tgt_offload_xs_nr)))
-			xs_offset = (xs_id - dss_sys_xs_nr) % (helper_per_tgt + 1);
-		else
-			xs_offset = -1;
-
-		comm =  (xs_id == 0) ||		/* DSS_XS_SYS */
-			(xs_id == 1) ||		/* DSS_XS_SWIM */
-			(xs_offset == 0) ||	/* main XS */
-			(xs_offset == 1);	/* first offload XS */
-	}
-
 	dx->dx_xs_id	= xs_id;
 	dx->dx_ctx_id	= -1;
-	dx->dx_comm	= comm;
-	if (dss_helper_pool) {
-		dx->dx_main_xs	= (xs_id >= dss_sys_xs_nr) &&
-				  (xs_id < (dss_sys_xs_nr + dss_tgt_nr));
-	} else {
-		dx->dx_main_xs	= (xs_id >= dss_sys_xs_nr) && (xs_offset == 0);
-	}
+	dx->dx_comm	= (xs_type == DSS_XS_SYS) || (xs_type == DSS_XS_SWIM) ||
+			  (xs_type == DSS_XS_VOS) || (xs_type == DSS_XS_IOFW);
+	dx->dx_main_xs	= (xs_type == DSS_XS_VOS);
 	dx->dx_dsc_started = false;
 
+	dx->dx_tgt_id	= xs_id2tgt(xs_id);
 	/**
 	 * Generate name for each xstreams so that they can be easily identified
 	 * and monitored independently (e.g. via ps(1))
 	 */
-	dx->dx_tgt_id	= dss_xs2tgt(xs_id);
-	if (xs_id < dss_sys_xs_nr) {
-		/** system xtreams are named daos_sys_$num */
-		snprintf(dx->dx_name, DSS_XS_NAME_LEN, DSS_SYS_XS_NAME_FMT,
-			 xs_id);
-	} else if (dx->dx_main_xs) {
-		/** primary I/O xstreams are named daos_io_$tgtid */
-		snprintf(dx->dx_name, DSS_XS_NAME_LEN, DSS_IO_XS_NAME_FMT,
-			 dx->dx_tgt_id);
-	} else {
-		/** offload xstreams are named daos_off_$num */
-		snprintf(dx->dx_name, DSS_XS_NAME_LEN, DSS_OFFLOAD_XS_NAME_FMT,
-			 xs_id);
-	}
+	if (xs_id < dss_sys_xs_nr)
+		snprintf(dx->dx_name, DSS_XS_NAME_LEN, DSS_SYS_XS_NAME_FMT, xs_id);
+	else if (xs_type == DSS_XS_VOS)
+		snprintf(dx->dx_name, DSS_XS_NAME_LEN, DSS_IO_XS_NAME_FMT, dx->dx_tgt_id);
+	else if (xs_type == DSS_XS_IOFW)
+		snprintf(dx->dx_name, DSS_XS_NAME_LEN, DSS_IOFW_XS_NAME_FMT, xs_id);
+	else if (xs_type == DSS_XS_OFFLOAD)
+		snprintf(dx->dx_name, DSS_XS_NAME_LEN, DSS_OFFLOAD_XS_NAME_FMT, xs_id);
+	else
+		snprintf(dx->dx_name, DSS_XS_NAME_LEN, DSS_SEC_XS_NAME_FMT, xs_id);
 
 	/** create ABT scheduler in charge of this xstream */
 	rc = dss_sched_init(dx);
@@ -843,31 +910,149 @@ dss_xstream_is_busy(void)
 	return cur_msec < (cntr->rc_active_time + 5000);
 }
 
+struct core_assignment {
+	int	*ca_assigned;			/* Assigned core idx array */
+	int	 ca_sub_off[DSS_XS_MAX];	/* Offset of ca_assigned for XS types */
+	int	 ca_sub_nr[DSS_XS_MAX];		/* Number of assigned for XS types */
+};
+
+static void
+ca_assign(struct core_assignment *ca, unsigned int xs_type, unsigned idx)
+{
+	int	sub_off, sub_nr;
+
+	D_ASSERT(xs_type < DSS_XS_MAX);
+
+	/* IOFW and OFFLOAD share the same sub-array */
+	if (xs_type == DSS_XS_OFFLOAD)
+		xs_type = DSS_XS_IOFW;
+	sub_off = ca->ca_sub_off[xs_type];
+	sub_nr = ca->ca_sub_nr[xs_type];
+
+	D_ASSERT(ca->ca_assigned[sub_off + sub_nr] == -1);
+	ca->ca_assigned[sub_off + sub_nr] = idx;
+	ca->ca_sub_nr[xs_type] += 1;
+}
+
+static void
+ca_free(struct core_assignment *ca)
+{
+	D_FREE(ca->ca_assigned);
+	D_FREE(ca);
+}
+
+static struct core_assignment *
+ca_alloc(unsigned int xs_nr)
+{
+	struct core_assignment	*ca;
+	int			 i, off = 0;
+
+	D_ALLOC_PTR(ca);
+	if (ca == NULL)
+		return NULL;
+
+	D_ALLOC_ARRAY(ca->ca_assigned, xs_nr);
+	if (ca->ca_assigned == NULL) {
+		D_FREE(ca);
+		return NULL;
+	}
+
+	for (i = 0; i < xs_nr; i++)
+		ca->ca_assigned[i] = -1;
+
+	ca->ca_sub_off[DSS_XS_SYS]	= off;
+	off += 1;
+
+	ca->ca_sub_off[DSS_XS_SWIM]	= off;
+	off += 1;
+
+	ca->ca_sub_off[DSS_XS_DRPC]	= off;
+	off += DRPC_XS_NR;
+
+	ca->ca_sub_off[DSS_XS_VOS]	= off;
+	off += dss_tgt_nr;
+
+	ca->ca_sub_off[DSS_XS_IOFW]	= off;
+	ca->ca_sub_off[DSS_XS_OFFLOAD]	= off;
+	off += dss_tgt_offload_xs_nr;
+
+	ca->ca_sub_off[DSS_XS_SEC]	= off;
+	off += dss_sec_xs_nr;
+	D_ASSERT(off == xs_nr);
+
+	return ca;
+}
+
+/* Reuse a core form the cores assigned to 'assigned_type' xstream */
+static unsigned
+ca_reuse_core(struct core_assignment *ca, unsigned int xs_id, unsigned int assigned_type)
+{
+	int sub_off, sub_nr, idx;
+
+	sub_off = ca->ca_sub_off[assigned_type];
+	sub_nr = ca->ca_sub_nr[assigned_type];
+
+	D_ASSERT(sub_nr > 0);
+	if (sub_nr > 1)
+		sub_off += (xs_id % sub_nr);
+
+	idx = ca->ca_assigned[sub_off];
+	D_ASSERT(idx != -1);
+
+	return idx;
+}
+
+/* There are not enough cores for DRPC and SEC xstreams */
+static inline bool
+insufficient_cores()
+{
+	if (numa_obj)
+		return (dss_num_cores_numa_node < DSS_XS_NR_TOTAL);
+	else
+		return (dss_core_nr < DSS_XS_NR_TOTAL);
+}
+
 static int
-dss_start_xs_id(int xs_id)
+dss_start_xs_id(int xs_id, struct core_assignment *ca)
 {
 	hwloc_obj_t	obj;
 	int		rc;
-	int		xs_core_offset;
 	unsigned	idx;
+	unsigned int	xs_type;
 	char		*cpuset;
 
+	/*
+	 * Rules for assigning cores to xstreams:
+	 *
+	 * - SYS always uses the first core;
+	 * - SWIM always uses dedicated core (see dss_tgt_nr_get());
+	 * - DRPC uses dedicated core when possible, otherwise, share the SYS core;
+	 * - VOS, IOFW and OFFLOAD xtreams always use dedicated cores;
+	 * - SEC xstreams use dedicated cores when possible, otherwise, share cores
+	 *   with IOFW and OFFLOAD.
+	 */
 	D_DEBUG(DB_TRACE, "start xs_id called for %d.  ", xs_id);
+
+	xs_type = xs_id2type(xs_id);
 	/* if we are NUMA aware, use the NUMA information */
 	if (numa_obj) {
-		idx = hwloc_bitmap_first(core_allocation_bitmap);
-		if (idx == -1) {
-			D_ERROR("No core available for XS: %d", xs_id);
-			return -DER_INVAL;
-		}
-		D_DEBUG(DB_TRACE,
-			"Choosing next available core index %d.", idx);
-		/*
-		 * All system XS will reuse the first XS' core, but
-		 * the SWIM and DRPC XS will use separate core if enough cores
-		 */
-		if (xs_id > 1 || (xs_id == 0 && dss_core_nr > dss_tgt_nr))
+		if (xs_type == DSS_XS_DRPC && insufficient_cores()) {
+			idx = ca_reuse_core(ca, xs_id, DSS_XS_SYS);
+		} else if (xs_type == DSS_XS_SEC && insufficient_cores()) {
+			if (dss_tgt_offload_xs_nr == 0) {
+				D_ERROR("No avail cores for secondary context\n");
+				return -DER_INVAL;
+			}
+			idx = ca_reuse_core(ca, xs_id, DSS_XS_IOFW);
+		} else {
+			idx = hwloc_bitmap_first(core_allocation_bitmap);
+			if (idx == -1) {
+				D_ERROR("No core available for XS: %d", xs_id);
+				return -DER_INVAL;
+			}
+			D_DEBUG(DB_TRACE, "Choosing next available core index %d.", idx);
 			hwloc_bitmap_clr(core_allocation_bitmap, idx);
+		}
 
 		obj = hwloc_get_obj_by_depth(dss_topo, dss_core_depth, idx);
 		if (obj == NULL) {
@@ -880,25 +1065,52 @@ dss_start_xs_id(int xs_id)
 		free(cpuset);
 	} else {
 		D_DEBUG(DB_TRACE, "Using non-NUMA aware core allocation\n");
-		/*
-		 * All system XS will use the first core, but
-		 * the SWIM XS will use separate core if enough cores
-		 */
-		if (xs_id > 2)
-			xs_core_offset = xs_id - ((dss_core_nr > dss_tgt_nr) ? 1 : 2);
-		else if (xs_id == 1)
-			xs_core_offset = (dss_core_nr > dss_tgt_nr) ? 1 : 0;
-		else
-			xs_core_offset = 0;
-		obj = hwloc_get_obj_by_depth(dss_topo, dss_core_depth,
-					     (xs_core_offset + dss_core_offset)
-					     % dss_core_nr);
+		/* MOD operation on 'dss_core_nr' to support oversubscribe, see dss_tgt_nr_get() */
+		switch (xs_type) {
+		case DSS_XS_SYS:
+			idx = dss_core_offset % dss_core_nr;
+			break;
+		case DSS_XS_SWIM:
+			idx = (dss_core_offset + 1) % dss_core_nr;
+			break;
+		case DSS_XS_DRPC:
+			if (insufficient_cores())
+				idx = dss_core_offset % dss_core_nr;
+			else
+				idx = (dss_core_offset + 2) % dss_core_nr;
+			break;
+		case DSS_XS_VOS:
+		case DSS_XS_IOFW:
+		case DSS_XS_OFFLOAD:
+			if (insufficient_cores())
+				idx = (dss_core_offset + xs_id - 1) % dss_core_nr;
+			else
+				idx = (dss_core_offset + xs_id) % dss_core_nr;
+			break;
+		case DSS_XS_SEC:
+			if (insufficient_cores()) {
+				if (dss_tgt_offload_xs_nr == 0) {
+					D_ERROR("No avail cores for secondary context\n");
+					return -DER_INVAL;
+				}
+				idx = ca_reuse_core(ca, xs_id, DSS_XS_IOFW);
+			} else {
+				idx = (dss_core_offset + xs_id) % dss_core_nr;
+			}
+			break;
+		default:
+			D_ASSERTF(0, "Invalid XS type: %u\n", xs_type);
+			return -DER_INVAL;
+		}
+
+		obj = hwloc_get_obj_by_depth(dss_topo, dss_core_depth, idx);
 		if (obj == NULL) {
 			D_ERROR("Null core returned by hwloc for XS %d\n",
 				xs_id);
 			return -DER_INVAL;
 		}
 	}
+	ca_assign(ca, xs_type, idx);
 
 	rc = dss_start_one_xstream(obj->cpuset, xs_id);
 	if (rc)
@@ -910,9 +1122,9 @@ dss_start_xs_id(int xs_id)
 static int
 dss_xstreams_init(void)
 {
-	char	*env;
-	int	rc = 0;
-	int	i, xs_id;
+	struct core_assignment	*ca;
+	char			*env;
+	int			 i, xs_id, rc = 0;
 
 	D_ASSERT(dss_tgt_nr >= 1);
 
@@ -957,10 +1169,16 @@ dss_xstreams_init(void)
 	}
 
 	xstream_data.xd_xs_nr = DSS_XS_NR_TOTAL;
+	ca = ca_alloc(DSS_XS_NR_TOTAL);
+	if (ca == NULL) {
+		D_ERROR("Failed to alloc core assignment data\n");
+		return -DER_NOMEM;
+	}
+
 	/* start system service XS */
 	for (i = 0; i < dss_sys_xs_nr; i++) {
 		xs_id = i;
-		rc = dss_start_xs_id(xs_id);
+		rc = dss_start_xs_id(xs_id, ca);
 		if (rc)
 			D_GOTO(out, rc);
 	}
@@ -968,7 +1186,7 @@ dss_xstreams_init(void)
 	/* start main IO service XS */
 	for (i = 0; i < dss_tgt_nr; i++) {
 		xs_id = DSS_MAIN_XS_ID(i);
-		rc = dss_start_xs_id(xs_id);
+		rc = dss_start_xs_id(xs_id, ca);
 		if (rc)
 			D_GOTO(out, rc);
 	}
@@ -978,7 +1196,7 @@ dss_xstreams_init(void)
 		if (dss_helper_pool) {
 			for (i = 0; i < dss_tgt_offload_xs_nr; i++) {
 				xs_id = dss_sys_xs_nr + dss_tgt_nr + i;
-				rc = dss_start_xs_id(xs_id);
+				rc = dss_start_xs_id(xs_id, ca);
 				if (rc)
 					D_GOTO(out, rc);
 			}
@@ -992,7 +1210,7 @@ dss_xstreams_init(void)
 				for (j = 0; j < dss_tgt_offload_xs_nr /
 						dss_tgt_nr; j++) {
 					xs_id = DSS_MAIN_XS_ID(i) + j + 1;
-					rc = dss_start_xs_id(xs_id);
+					rc = dss_start_xs_id(xs_id, ca);
 					if (rc)
 						D_GOTO(out, rc);
 				}
@@ -1000,9 +1218,18 @@ dss_xstreams_init(void)
 		}
 	}
 
+	/* Start secondary cart context XS if any */
+	for (i = 0; i < dss_sec_xs_nr; i++) {
+		xs_id = dss_sys_xs_nr + dss_tgt_nr + dss_tgt_offload_xs_nr + i;
+		rc = dss_start_xs_id(xs_id, ca);
+		if (rc)
+			D_GOTO(out, rc);
+	}
+
 	D_DEBUG(DB_TRACE, "%d execution streams successfully started "
 		"(first core %d)\n", dss_tgt_nr, dss_core_offset);
 out:
+	ca_free(ca);
 	return rc;
 }
 

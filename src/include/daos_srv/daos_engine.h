@@ -479,6 +479,9 @@ enum dss_xs_type {
 	DSS_XS_SWIM	= 4,
 	/** drpc listener */
 	DSS_XS_DRPC	= 5,
+	/** secondary cart context */
+	DSS_XS_SEC	= 6,
+	DSS_XS_MAX	= 7,
 };
 
 int dss_parameters_set(unsigned int key_id, uint64_t value);
