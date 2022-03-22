@@ -914,7 +914,6 @@ process_physical:
 	return rc;
 }
 
-#define NOSPC_ERROR_INTVL	60	/* seconds */
 static int
 reserve_segment(struct vos_object *obj, struct agg_io_context *io,
 		daos_size_t size, bio_addr_t *addr)
@@ -931,7 +930,7 @@ reserve_segment(struct vos_object *obj, struct agg_io_context *io,
 		off = vos_reserve_scm(obj->obj_cont, io->ic_rsrvd_scm, size);
 		if (UMOFF_IS_NULL(off)) {
 			now = daos_gettime_coarse();
-			if (now - obj->obj_cont->vc_agg_nospc_ts > NOSPC_ERROR_INTVL) {
+			if (now - obj->obj_cont->vc_agg_nospc_ts > VOS_NOSPC_ERROR_INTVL) {
 				D_ERROR("Reserve "DF_U64" from SCM failed.\n", size);
 				obj->obj_cont->vc_agg_nospc_ts = now;
 			}
@@ -946,7 +945,7 @@ reserve_segment(struct vos_object *obj, struct agg_io_context *io,
 				VOS_IOS_AGGREGATION, &off);
 	if (rc == -DER_NOSPACE) {
 		now = daos_gettime_coarse();
-		if (now - obj->obj_cont->vc_agg_nospc_ts > NOSPC_ERROR_INTVL) {
+		if (now - obj->obj_cont->vc_agg_nospc_ts > VOS_NOSPC_ERROR_INTVL) {
 			D_ERROR("Reserve "DF_U64" from NVMe failed. "DF_RC"\n",
 				size, DP_RC(rc));
 			obj->obj_cont->vc_agg_nospc_ts = now;
