@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2021 Intel Corporation.
+ * (C) Copyright 2016-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -92,6 +92,18 @@ daos_ec_cs_valid(uint32_t cell_sz)
 		return false;
 
 	return true;
+}
+
+static inline bool
+daos_ec_pda_valid(uint32_t ec_pda)
+{
+	return ec_pda > 0;
+}
+
+static inline bool
+daos_rp_pda_valid(uint32_t rp_pda)
+{
+	return rp_pda > 0;
 }
 
 enum daos_io_mode {
@@ -635,7 +647,7 @@ daos_recx_ep_lists_dup(struct daos_recx_ep_list *lists, unsigned int nr)
 
 /* merge adjacent recxs for same epoch */
 static inline void
-daos_recx_ep_lists_merge(struct daos_recx_ep_list *lists, unsigned int nr)
+daos_recx_ep_list_merge(struct daos_recx_ep_list *lists, unsigned int nr)
 {
 	struct daos_recx_ep_list	*list;
 	struct daos_recx_ep		*recx_ep, *next;

@@ -6,10 +6,13 @@ hosts:
     - server-B
   test_clients:
     - client-A
-timeout: 180
+timeout: 360
 server_config:
   engines_per_host: 2
   name: daos_server
+# reduce cart timeout to make IV update return timeout
+# quickly to ease test (DAOS-9626)
+  crt_timeout: 10
   servers:
     0:
       targets: 8
@@ -41,7 +44,7 @@ container:
 pool:
   mode: 511
   name: daos_server
-  scm_size: 6G
+  scm_size: 1G
   control_method: dmg
   pool_query_timeout: 30
   pool_query_interval: 1

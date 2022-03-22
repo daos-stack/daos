@@ -1,6 +1,6 @@
 #!/usr/bin/python3
 """
-  (C) Copyright 2020-2021 Intel Corporation.
+  (C) Copyright 2020-2022 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -35,15 +35,19 @@ class RbldContainerCreate(IorTestBase):
         cont_oclass = self.params.get("oclass", "/run/io/*")
         count = 0
         self.container = []
-        while not self.pool.rebuild_complete() and count < qty:
+        rebuild_done = False
+        self.log.info("..Create %s containers and write data during rebuild.",
+                      qty)
+        while not rebuild_done and count < qty:
             count += 1
             self.log.info(
                 "..Creating container %s/%s in pool %s during rebuild",
                 count, qty, self.pool.uuid)
             self.container.append(self.get_container(self.pool))
+            rebuild_done = self.pool.rebuild_complete()
+            self.log.info(
+                "..Rebuild status, rebuild_done= %s", rebuild_done)
 
-        self.log.info("..Create %s containers and write data during rebuild.",
-                      qty)
         self.container[index].object_qty.value = object_qty
         self.container[index].record_qty.value = record_qty
         self.container[index].data_size.value = data_size
@@ -80,7 +84,7 @@ class RbldContainerCreate(IorTestBase):
             Test steps:
             (1)Start IOR before rebuild.
             (2)Starting rebuild by killing rank.
-            (3)Wait for rebuild to start.
+            (3)Wait for rebuild to start for race condition.
             (4)Race condition, create containers, data write/read during
                rebuild.
             (5)Wait for rebuild to finish.
@@ -89,7 +93,7 @@ class RbldContainerCreate(IorTestBase):
             Basic rebuild of container objects of array values with sufficient
             numbers of rebuild targets and no available rebuild targets.
         :avocado: tags=all,full_regression
-        :avocado: tags=large
+        :avocado: tags=hw,large
         :avocado: tags=rebuild
         :avocado: tags=rebuild_cont_create
 
@@ -113,7 +117,7 @@ class RbldContainerCreate(IorTestBase):
         }
         rebuild_checks = {
             "rs_errno": 0,
-            "rs_done": 1,
+            "rs_state": 1,
             "rs_obj_nr": 0,
             "rs_rec_nr": 0
         }
@@ -136,7 +140,7 @@ class RbldContainerCreate(IorTestBase):
         self.server_managers[0].stop_ranks([rank], self.d_log, force=True)
 
         # Wait for rebuild to start.
-        self.log.info("..(3)Wait for rebuild to start")
+        self.log.info("..(3)Wait for rebuild to start for race condition")
         self.pool.wait_for_rebuild(True, interval=1)
 
         # Race condition, create containers write and read during rebuild.
@@ -158,6 +162,7 @@ class RbldContainerCreate(IorTestBase):
         info_checks["pi_ndisabled"] += targets
         rebuild_checks["rs_obj_nr"] = ">0"
         rebuild_checks["rs_rec_nr"] = ">0"
+        rebuild_checks["rs_state"] = "2"
         self.assertTrue(
             self.pool.check_pool_info(**info_checks),
             "Invalid pool information detected before rebuild")

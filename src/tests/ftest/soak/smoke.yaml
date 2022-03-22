@@ -11,6 +11,7 @@ hosts:
     # client_reservation: daos-test
 orterun:
     allow_run_as_root: True
+mpi_module: mpi/mpich-x86_64
 # This timeout must be longer than the test_timeout param (+15minutes)
 # 24 Min test
 timeout: 30M
@@ -20,7 +21,6 @@ setup:
 server_config:
     engines_per_host: 2
     name: daos_server
-    nr_hugepages: 8192
     control_log_mask: INFO
     control_log_file: daos_control0.log
     servers:
@@ -95,6 +95,8 @@ smoke:
         - fio_smoke
         - daos_racer
         - mdtest_smoke
+    # num of bytes to write to reserved container
+    resv_bytes: 500
 # Commandline parameters
 # Benchmark and application params
 # IOR params -a DFS and -a MPIIO
@@ -132,7 +134,7 @@ ior_smoke:
         mount_dir: "/tmp/daos_dfuse/ior/"
         disable_caching: True
 fio_smoke:
-    # maximum timeout for a single job in test in minutes
+    job_timeout: 10
     names:
         - global
         - test

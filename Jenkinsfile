@@ -1,5 +1,5 @@
 #!/usr/bin/groovy
-/* Copyright (C) 2019-2021 Intel Corporation
+/* Copyright 2019-2022 Intel Corporation
  * All rights reserved.
  *
  * This file is part of the DAOS Project. It is subject to the license terms
@@ -314,7 +314,7 @@ pipeline {
                         dockerfile {
                             filename 'Dockerfile.mockbuild'
                             dir 'utils/rpms/packaging'
-                            label 'docker_runner'
+                            label 'docker_ce_runner'
                             additionalBuildArgs dockerBuildArgs()
                             args  '--group-add mock --cap-add=SYS_ADMIN --privileged=true'
                         }
@@ -349,7 +349,7 @@ pipeline {
                         dockerfile {
                             filename 'Dockerfile.mockbuild'
                             dir 'utils/rpms/packaging'
-                            label 'docker_runner'
+                            label 'docker_ce_runner'
                             additionalBuildArgs dockerBuildArgs()
                             args  '--group-add mock --cap-add=SYS_ADMIN --privileged=true'
                         }
@@ -384,7 +384,7 @@ pipeline {
                         dockerfile {
                             filename 'Dockerfile.mockbuild'
                             dir 'utils/rpms/packaging'
-                            label 'docker_runner'
+                            label 'docker_ce_runner'
                             additionalBuildArgs dockerBuildArgs()
                             args  '--group-add mock --cap-add=SYS_ADMIN --privileged=true'
                         }
@@ -522,6 +522,7 @@ pipeline {
                             filename 'utils/docker/Dockerfile.leap.15'
                             label 'docker_runner'
                             additionalBuildArgs dockerBuildArgs(repo_type: 'stable',
+                                                                parallel_build: true,
                                                                 deps_build: true) +
                                                 " -t ${sanitized_JOB_NAME}-leap15" +
                                                 " --build-arg COMPILER=icc"
@@ -636,7 +637,7 @@ pipeline {
                         label params.CI_UNIT_VM1_LABEL
                     }
                     steps {
-                        unitTest timeout_time: 30,
+                        unitTest timeout_time: 35,
                                  ignore_failure: true,
                                  inst_repos: prRepos(),
                                  inst_rpms: unitPackages()
@@ -888,6 +889,7 @@ pipeline {
                             filename 'utils/docker/Dockerfile.centos.7'
                             label 'docker_runner'
                             additionalBuildArgs dockerBuildArgs(repo_type: 'stable',
+                                                                parallel_build: true,
                                                                 deps_build: true)
                             args '--tmpfs /mnt/daos_0'
                         }

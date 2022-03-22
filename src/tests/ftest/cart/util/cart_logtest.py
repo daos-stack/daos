@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 #
-# Copyright (C) 2018-2021 Intel Corporation
+# Copyright 2018-2022 Intel Corporation
 #
 # SPDX-License-Identifier: BSD-2-Clause-Patent
 
@@ -128,6 +128,7 @@ class RegionCounter():
                                                       bytes_str,
                                                       end_time - start_time,
                                                       data)
+
 
 # Use a global variable here so show_line can remember previously reported
 # error lines.
@@ -406,7 +407,7 @@ class LogTest():
                         show = False
                     elif show and server_shutdown and \
                          (line.get_msg().endswith(
-                             "DER_SHUTDOWN(-2017): 'Service should shut down'") or \
+                             "DER_SHUTDOWN(-2017): 'Service should shut down'") or
                           line.get_msg().endswith(
                               "DER_NOTLEADER(-2008): 'Not service leader'")):
                         show = False
@@ -689,7 +690,7 @@ class rpc_reporting():
                     row.append('')
             table.append(row)
             if counts['ALLOCATED'] != counts['DEALLOCATED']:
-                errors.append("ERROR: Opcode {}: Alloc'd Total = {}, Dealloc'd Total = {}". \
+                errors.append("ERROR: Opcode {}: Alloc'd Total = {}, Dealloc'd Total = {}".
                               format(op, counts['ALLOCATED'], counts['DEALLOCATED']))
 
         if HAVE_TABULATE:
@@ -734,6 +735,7 @@ def run():
             print('Memory leaks, ignoring')
     if log_iter.file_corrupt:
         sys.exit(1)
+
 
 if __name__ == '__main__':
     run()

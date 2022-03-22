@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2021 Intel Corporation.
+ * (C) Copyright 2016-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -291,6 +291,17 @@ crt_req_set_endpoint(crt_rpc_t *req, crt_endpoint_t *tgt_ep);
  */
 int
 crt_req_set_timeout(crt_rpc_t *req, uint32_t timeout_sec);
+
+/**
+ * Get the timeout value of an RPC request.
+ *
+ * \param[in] req              pointer to RPC request
+ * \param[out] timeout_sec     timeout value in seconds
+ *
+ * \return                     DER_SUCCESS on success, negative value if error
+ */
+int
+crt_req_get_timeout(crt_rpc_t *req, uint32_t *timeout_sec);
 
 /**
  * Add reference of the RPC request.

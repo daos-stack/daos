@@ -4,11 +4,12 @@
 import sys
 import os
 import daos_build
+import subprocess
 from os.path import join, isdir
 from os import urandom
 from binascii import b2a_hex
 
-Import('env', 'prereqs', 'daos_version', 'conf_dir', 'gurt_lib')
+Import('env', 'prereqs', 'daos_version', 'conf_dir', 'gurt_lib', 'cart_lib')
 
 GO_COMPILER = 'go'
 MIN_GO_VERSION = '1.12.0'
@@ -86,7 +87,7 @@ def install_go_bin(denv, gosrc, libs, name, install_name):
 
     if libs is None:
         libs = []
-    libs.extend(gurt_lib)
+    libs.extend([gurt_lib, cart_lib])
 
     def gen_build_id():
         """generate a unique build id per binary for use by RPM
@@ -128,7 +129,7 @@ def configure_go(denv):
         return
     def check_go_version(context):
         """Check GO Version"""
-        context.Display('Checking for Go compiler in $PATH... ')
+        context.Display('Checking for Go compiler... ')
         if GO_BIN:
             context.Display(GO_BIN + '\n')
         else:
@@ -136,7 +137,8 @@ def configure_go(denv):
             return 0
 
         context.Display('Checking %s version... ' % GO_BIN)
-        out = os.popen('%s version' % GO_BIN).read()
+        cmd_rc = subprocess.run([GO_BIN, 'version'], check=True, stdout=subprocess.PIPE)
+        out = cmd_rc.stdout.decode('utf-8')
         if len(out.split(' ')) < 3:
             context.Result('failed to get version from "%s"' % out)
             return 0

@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2018-2021 Intel Corporation.
+ * (C) Copyright 2018-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -27,6 +27,7 @@
 
 uint64_t	ts_flags;
 
+char		ts_pmem_path[PATH_MAX - 32];
 char		ts_pmem_file[PATH_MAX];
 bool		ts_zero_copy;	/* use zero-copy API for VOS */
 bool		ts_nest_iterator;
@@ -237,7 +238,7 @@ objects_query(struct pf_param *param)
 		rc = vos_obj_query_key(ts_ctx.tsc_coh, ts_uoids[i],
 				       DAOS_GET_MAX | DAOS_GET_DKEY |
 				       DAOS_GET_RECX, epoch, &dkey_iov,
-				       &akey_iov, &recx, 0, 0, NULL);
+				       &akey_iov, &recx, NULL, 0, 0, NULL);
 		if (rc != 0 && rc != -DER_NONEXIST)
 			break;
 		if (param->pa_verbose) {
@@ -469,7 +470,8 @@ pf_aggregate(struct pf_test *ts, struct pf_param *param)
 
 	TS_TIME_START(&param->pa_duration, start);
 
-	rc = vos_aggregate(ts_ctx.tsc_coh, &epr, NULL, NULL, true);
+	rc = vos_aggregate(ts_ctx.tsc_coh, &epr, NULL, NULL,
+			   VOS_AGG_FL_FORCE_SCAN | VOS_AGG_FL_FORCE_MERGE);
 
 	TS_TIME_END(&param->pa_duration, start);
 
@@ -491,6 +493,20 @@ pf_discard(struct pf_test *ts, struct pf_param *param)
 	TS_TIME_END(&param->pa_duration, start);
 
 	return rc;
+}
+
+static int
+pf_gc(struct pf_test *ts, struct pf_param *param)
+{
+	uint64_t		start = 0;
+
+	TS_TIME_START(&param->pa_duration, start);
+
+	gc_wait();
+
+	TS_TIME_END(&param->pa_duration, start);
+
+	return 0;
 }
 
 static int
@@ -654,6 +670,12 @@ struct pf_test pf_tests[] = {
 		.ts_func	= pf_discard,
 	},
 	{
+		.ts_code	= 'G',
+		.ts_name	= "GARBAGE COLLECTION",
+		.ts_parse	= pf_parse_aggregate,
+		.ts_func	= pf_gc,
+	},
+	{
 		.ts_code	= 0,
 	},
 };
@@ -665,8 +687,8 @@ ts_yes_or_no(bool value)
 }
 
 const char perf_vos_usage[] = "\n"
-"-f pathname\n"
-"	Full path name of the VOS file.\n\n"
+"-D pathname\n"
+"	Full path name of the directory where to store the VOS file(s).\n\n"
 "-z	Use zero copy API.\n\n"
 "-i	Use integer dkeys.  Required if running QUERY test.\n\n"
 "-I	Use constant akey.  Required for QUERY test.\n\n"
@@ -686,7 +708,7 @@ ts_print_usage(void)
 }
 
 const struct option perf_vos_opts[] = {
-	{ "file",	required_argument,	NULL,	'f' },
+	{ "dir",	required_argument,	NULL,	'D' },
 	{ "zcopy",	no_argument,		NULL,	'z' },
 	{ "int_dkey",	no_argument,		NULL,	'i' },
 	{ "const_akey",	no_argument,		NULL,	'I' },
@@ -694,7 +716,7 @@ const struct option perf_vos_opts[] = {
 	{ NULL,		0,			NULL,	0   },
 };
 
-const char perf_vos_optstr[] = "f:ziIx";
+const char perf_vos_optstr[] = "D:ziIx";
 
 int
 main(int argc, char **argv)
@@ -718,7 +740,6 @@ main(int argc, char **argv)
 	if (rc)
 		return rc;
 
-	memset(ts_pmem_file, 0, sizeof(ts_pmem_file));
 	while ((rc = getopt_long(argc, argv, ts_optstr, ts_opts, NULL)) != -1) {
 		switch (rc) {
 		default:
@@ -732,14 +753,15 @@ main(int argc, char **argv)
 				return ret;
 			}
 			break;
-		case 'f':
-			if (strnlen(optarg, PATH_MAX) >= (PATH_MAX - 5)) {
-				fprintf(stderr, "filename size must be < %d\n",
-					PATH_MAX - 5);
+		case 'D':
+			if (strnlen(optarg, PATH_MAX) >= sizeof(ts_pmem_path)) {
+				fprintf(stderr, "directory name size must be < %zu\n",
+					sizeof(ts_pmem_path));
 				perf_free_opts(ts_opts, ts_optstr);
 				return -1;
 			}
-			strncpy(ts_pmem_file, optarg, PATH_MAX - 5);
+			strncpy(ts_pmem_path, optarg, sizeof(ts_pmem_path));
+			ts_pmem_path[sizeof(ts_pmem_path) - 1] = 0;
 			break;
 		case 'z':
 			ts_zero_copy = true;
@@ -789,16 +811,11 @@ main(int argc, char **argv)
 	}
 
 	ts_ctx.tsc_cred_nr = -1; /* VOS can only support sync mode */
-	if (strlen(ts_pmem_file) == 0) {
-		snprintf(ts_pmem_file, sizeof(ts_pmem_file),
-			 "/mnt/daos/vos_perf%d.pmem", ts_ctx.tsc_mpi_rank);
-	} else {
-		char id[16];
-
-		snprintf(id, sizeof(id), "%d", ts_ctx.tsc_mpi_rank);
-		strncat(ts_pmem_file, id,
-			(sizeof(ts_pmem_file) - strlen(ts_pmem_file)));
-	}
+	if (ts_pmem_path[0] == '\0')
+		strcpy(ts_pmem_path, "/mnt/daos");
+	snprintf(ts_pmem_file, sizeof(ts_pmem_file), "%s/vos_perf%d.pmem", ts_pmem_path,
+		 ts_ctx.tsc_mpi_rank);
+	ts_ctx.tsc_pmem_path = ts_pmem_path;
 	ts_ctx.tsc_pmem_file = ts_pmem_file;
 
 	if (ts_in_ult) {
@@ -854,7 +871,7 @@ main(int argc, char **argv)
 			"\takey_per_dkey : %u%s\n"
 			"\trecx_per_akey : %u\n"
 			"\tvalue type    : %s\n"
-			"\tstride size   : %u\n"
+			"\tvalue size    : %u\n"
 			"\tzero copy     : %s\n"
 			"\tVOS file      : %s\n",
 			uuid_buf,

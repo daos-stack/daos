@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2021 Intel Corporation.
+// (C) Copyright 2021-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"io"
 	"sort"
+	"strconv"
 	"strings"
 	"unsafe"
 
@@ -417,6 +418,66 @@ var propHdlrs = propHdlrMap{
 		},
 		false,
 	},
+	C.DAOS_PROP_ENTRY_EC_PDA: {
+		C.DAOS_PROP_CO_EC_PDA,
+		"Performance domain affinity level of EC",
+		func(_ *propHdlr, e *C.struct_daos_prop_entry, v string) error {
+			value, err := strconv.ParseUint(v, 10, 32)
+			if err != nil {
+				return propError("invalid EC PDA %q", v)
+			}
+
+			if !C.daos_ec_pda_valid(C.uint32_t(value)) {
+				return errors.Errorf("invalid EC PDA %d", value)
+			}
+
+			C.set_dpe_val(e, C.uint64_t(value))
+			return nil
+		},
+		nil,
+		func(e *C.struct_daos_prop_entry, name string) string {
+			if e == nil {
+				return propNotFound(name)
+			}
+
+			value := C.get_dpe_val(e)
+			if !C.daos_ec_pda_valid(C.uint32_t(value)) {
+				return fmt.Sprintf("invalid ec pda %d", value)
+			}
+			return fmt.Sprintf("%d", value)
+		},
+		false,
+	},
+	C.DAOS_PROP_ENTRY_RP_PDA: {
+		C.DAOS_PROP_CO_RP_PDA,
+		"Performance domain affinity level of RP",
+		func(_ *propHdlr, e *C.struct_daos_prop_entry, v string) error {
+			value, err := strconv.ParseUint(v, 10, 32)
+			if err != nil {
+				return propError("invalid RP PDA %q", v)
+			}
+
+			if !C.daos_rp_pda_valid(C.uint32_t(value)) {
+				return errors.Errorf("invalid EC PDA %d", value)
+			}
+
+			C.set_dpe_val(e, C.uint64_t(value))
+			return nil
+		},
+		nil,
+		func(e *C.struct_daos_prop_entry, name string) string {
+			if e == nil {
+				return propNotFound(name)
+			}
+
+			value := C.get_dpe_val(e)
+			if !C.daos_ec_pda_valid(C.uint32_t(value)) {
+				return fmt.Sprintf("invalid ec pda %d", value)
+			}
+			return fmt.Sprintf("%d", value)
+		},
+		false,
+	},
 	// Read-only properties here for use by get-property.
 	C.DAOS_PROP_ENTRY_LAYOUT_TYPE: {
 		C.DAOS_PROP_CO_LAYOUT_TYPE,
@@ -674,7 +735,7 @@ func createPropSlice(props *C.daos_prop_t, numProps int) propSlice {
 func allocProps(numProps int) (props *C.daos_prop_t, entries propSlice, err error) {
 	props = C.daos_prop_alloc(C.uint(numProps))
 	if props == nil {
-		return nil, nil, errors.New("failed to allocate properties list")
+		return nil, nil, errors.Wrap(drpc.DaosNoMemory, "failed to allocate properties list")
 	}
 
 	props.dpp_nr = 0

@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2021 Intel Corporation.
+// (C) Copyright 2021-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -15,11 +15,66 @@ import (
 	"time"
 
 	"github.com/google/go-cmp/cmp"
+	"github.com/pkg/errors"
 
 	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/lib/hardware"
 	"github.com/daos-stack/daos/src/control/logging"
 )
+
+func TestHwloc_CacheContext(t *testing.T) {
+	log, buf := logging.NewTestLogger(t.Name())
+	defer common.ShowBufferOnFailure(t, buf)
+
+	ctx, err := CacheContext(context.Background(), log)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	topo, ok := ctx.Value(topoKey).(*topology)
+	if !ok {
+		t.Fatalf("key %q not added to context", topoKey)
+	}
+	if topo == nil {
+		t.Fatal("topology was nil")
+	}
+
+	cleanup, ok := ctx.Value(cleanupKey).(func())
+	if !ok {
+		t.Fatalf("key %q not added to context", cleanupKey)
+	}
+	if cleanup == nil {
+		t.Fatal("cleanup function was nil")
+	}
+	cleanup()
+}
+
+func TestHwloc_Cleanup(t *testing.T) {
+	cleanupCalled := 0
+	mockCleanup := func() {
+		cleanupCalled++
+	}
+
+	for name, tc := range map[string]struct {
+		ctx              context.Context
+		expCleanupCalled int
+	}{
+		"no cleanup cached": {
+			ctx: context.Background(),
+		},
+		"success": {
+			ctx:              context.WithValue(context.Background(), cleanupKey, mockCleanup),
+			expCleanupCalled: 1,
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			cleanupCalled = 0
+
+			Cleanup(tc.ctx)
+			common.AssertEqual(t, tc.expCleanupCalled, cleanupCalled, "")
+		})
+	}
+}
 
 func TestHwlocProvider_GetTopology_Samples(t *testing.T) {
 	_, filename, _, _ := runtime.Caller(0)
@@ -279,6 +334,126 @@ func TestHwlocProvider_GetTopology_Samples(t *testing.T) {
 			if diff := cmp.Diff(tc.expResult, result); diff != "" {
 				t.Errorf("(-want, +got)\n%s\n", diff)
 			}
+		})
+
+	}
+}
+
+func TestHwloc_Provider_GetNUMANodeForPID_Parallel(t *testing.T) {
+	log, buf := logging.NewTestLogger(t.Name())
+	defer common.ShowBufferOnFailure(t, buf)
+
+	runTest_GetNUMANodeForPID_Parallel(t, context.Background(), log)
+}
+
+func runTest_GetNUMANodeForPID_Parallel(t *testing.T, parent context.Context, log logging.Logger) {
+	t.Helper()
+
+	ctx, cancel := context.WithTimeout(parent, 10*time.Second)
+	defer cancel()
+
+	p := NewProvider(log)
+
+	doneCh := make(chan error)
+	total := 500
+
+	// If we aren't testing with a cached context, reduce the number
+	// of goroutines in order to avoid timing out on more complex
+	// topologies.
+	if _, err := topologyFromContext(ctx); err != nil {
+		total = 128
+	}
+
+	for i := 0; i < total; i++ {
+		go func() {
+			_, err := p.GetNUMANodeIDForPID(ctx, int32(os.Getpid()))
+			doneCh <- err
+		}()
+	}
+
+	for i := 0; i < total; i++ {
+		err := <-doneCh
+		if err != nil && err != hardware.ErrNoNUMANodes {
+			t.Fatal(err)
+		}
+	}
+}
+
+func TestHwloc_Provider_GetNUMANodeForPID_Parallel_CachedCtx(t *testing.T) {
+	log, buf := logging.NewTestLogger(t.Name())
+	defer common.ShowBufferOnFailure(t, buf)
+
+	cachedCtx, err := CacheContext(context.Background(), log)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer Cleanup(cachedCtx)
+
+	runTest_GetNUMANodeForPID_Parallel(t, cachedCtx, log)
+}
+
+func TestHwloc_Provider_findNUMANodeWithCPUSet(t *testing.T) {
+	_, filename, _, _ := runtime.Caller(0)
+	hwlocXMLFile := filepath.Join(filepath.Dir(filename), "testdata", "boro-84.xml")
+
+	_, err := os.Stat(hwlocXMLFile)
+	common.AssertEqual(t, err, nil, "unable to read hwloc XML file")
+	os.Setenv("HWLOC_XMLFILE", hwlocXMLFile)
+	defer os.Unsetenv("HWLOC_XMLFILE")
+
+	provider := NewProvider(nil)
+
+	ctx, cancelCtx := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancelCtx()
+	testTopo, cleanup, err := provider.getRawTopology(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer cleanup()
+
+	// Harvested from the NUMA nodes in our xml file
+	numaCPUSet := map[uint]string{
+		0: "0x000000ff,0xffff0000,0x00ffffff",
+		1: "0xffffff00,0x0000ffff,0xff000000",
+	}
+
+	for name, tc := range map[string]struct {
+		getCPUIn  func() (*cpuSet, func())
+		expResult uint
+		expErr    error
+	}{
+		"first NUMA": {
+			getCPUIn: func() (*cpuSet, func()) {
+				return mustCPUSetFromString(numaCPUSet[0], testTopo)
+			},
+			expResult: 0,
+		},
+		"second NUMA": {
+			getCPUIn: func() (*cpuSet, func()) {
+				return mustCPUSetFromString(numaCPUSet[1], testTopo)
+			},
+			expResult: 1,
+		},
+		"no match": {
+			getCPUIn: func() (*cpuSet, func()) {
+				return mustCPUSetFromString("0x00000000", testTopo)
+			},
+			expErr: errors.New("no NUMA node"),
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(name)
+			defer common.ShowBufferOnFailure(t, buf)
+
+			provider.log = log
+
+			cpuIn, cleanup := tc.getCPUIn()
+			defer cleanup()
+
+			result, err := provider.findNUMANodeWithCPUSet(testTopo, cpuIn)
+
+			common.CmpErr(t, tc.expErr, err)
+			common.AssertEqual(t, tc.expResult, result, "")
 		})
 
 	}
