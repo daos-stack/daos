@@ -93,7 +93,7 @@ dtx_iter_prep(vos_iter_type_t type, vos_iter_param_t *param,
 }
 
 static int
-dtx_iter_probe(struct vos_iterator *iter, daos_anchor_t *anchor)
+dtx_iter_probe(struct vos_iterator *iter, daos_anchor_t *anchor, uint32_t next /* Unimplemented */)
 {
 	struct vos_dtx_iter	*oiter = iter2oiter(iter);
 	struct vos_dtx_act_ent	*dae;
@@ -102,7 +102,7 @@ dtx_iter_probe(struct vos_iterator *iter, daos_anchor_t *anchor)
 
 	D_ASSERT(iter->it_type == VOS_ITER_DTX);
 
-	if (anchor == NULL) {
+	if (vos_anchor_is_zero(anchor)) {
 		oiter->oit_linear = true;
 		if (d_list_empty(&oiter->oit_cont->vc_dtx_act_list)) {
 			oiter->oit_cur = NULL;
@@ -164,7 +164,7 @@ out:
 }
 
 static int
-dtx_iter_next(struct vos_iterator *iter)
+dtx_iter_next(struct vos_iterator *iter, daos_anchor_t *anchor)
 {
 	struct vos_dtx_iter	*oiter = iter2oiter(iter);
 	struct vos_dtx_act_ent	*dae;
