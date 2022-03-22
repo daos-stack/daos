@@ -170,6 +170,7 @@ struct crt_context {
 	d_list_t		 cc_link;	/** link to gdata.cg_ctx_list */
 	int			 cc_idx;	/** context index */
 	struct crt_hg_context	 cc_hg_ctx;	/** HG context */
+	bool			 cc_primary;	/** primary provider flag */
 
 	/* callbacks */
 	void			*cc_rpc_cb_arg;

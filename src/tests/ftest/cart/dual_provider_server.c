@@ -174,7 +174,7 @@ int main(int argc, char **argv)
 			return -1;
 		}
 	}
-	
+
 	saved_provider = strdup(arg_provider);
 	saved_domain = strdup(arg_domain);
 	saved_iface = strdup(arg_interface);
@@ -252,7 +252,7 @@ int main(int argc, char **argv)
 	}
 
 	for (i = 0;  i< num_secondary_ctx; i++) {
-		rc = crt_context_create_on_provider(&secondary_ctx[i], provider1);
+		rc = crt_context_create_secondary(&secondary_ctx[i], 0);
 		if (rc != 0) {
 			D_ERROR("Context %d creation failed; rc=%d\n", i, rc);
 			error_exit();
@@ -339,6 +339,36 @@ int main(int argc, char **argv)
 		rc = crt_group_config_save(NULL, true);
 		if (rc)
 			error_exit();
+	}
+
+	{
+		FILE	*f;
+		char	*filename;
+		char	*pri_uri0;
+		char	*sec_uri0;
+
+		D_ASPRINTF(filename, "/tmp/%s_rank_%d_uris.cart", SERVER_GROUP_NAME, g_my_rank);
+		if (filename == NULL)
+			error_exit();
+
+		f = fopen(filename, "w");
+		if (f == NULL)
+			error_exit();
+
+
+		rc = crt_context_uri_get(primary_ctx[0], &pri_uri0);
+		if (rc)
+			error_exit();
+
+		rc = crt_context_uri_get(secondary_ctx[0], &sec_uri0);
+		if (rc)
+			error_exit();
+
+		fprintf(f, "%s\n", pri_uri0);
+		fprintf(f, "%s\n", sec_uri0);
+
+		fclose(f);
+		D_FREE(filename);
 	}
 
 	for (i = 0; i < num_primary_ctx; i++)

@@ -39,6 +39,18 @@ dump_envariables(void)
 	}
 }
 
+static void
+dump_opt(crt_init_options_t *opt)
+{
+	D_INFO("options:\n");
+	D_INFO("crt_timeout = %d\n", opt->cio_crt_timeout);
+	D_INFO("max_ctx_num = %d\n", opt->cio_ctx_max_num);
+	D_INFO("swim_idx = %d\n", opt->cio_swim_crt_idx);
+	D_INFO("provider = %s\n", opt->cio_provider);
+	D_INFO("interface = %s\n", opt->cio_interface);
+	D_INFO("domain = %s\n", opt->cio_domain);
+}
+
 static int
 crt_na_config_init(crt_provider_t provider, const char *interface,
 		   const char *domain, const char *port);
@@ -342,9 +354,14 @@ __split_arg(char *s_arg_to_split, char **first_arg, char **second_arg)
 	char	*save_ptr;
 	char	*arg_to_split;
 
-	D_ASSERT(s_arg_to_split != NULL);
 	D_ASSERT(first_arg != NULL);
 	D_ASSERT(second_arg != NULL);
+
+	if (s_arg_to_split == NULL) {
+		*first_arg = NULL;
+		*second_arg = NULL;
+		return;
+	}
 
 	D_STRNDUP(arg_to_split, s_arg_to_split, 255);
 	*first_arg = 0;
@@ -470,9 +487,9 @@ crt_init_opt(crt_group_id_t grpid, uint32_t flags, crt_init_options_t *opt)
 
 	D_INFO("libcart version %s initializing\n", CART_VERSION);
 
-	if (opt)
-	D_ERROR("START ALEXmOD: '%s' '%s' '%s'\n",
-		opt->cio_provider, opt->cio_interface, opt->cio_domain);
+	if (opt) {
+		dump_opt(opt);
+	}
 
 	/* d_fault_inject_init() is reference counted */
 	rc = d_fault_inject_init();
@@ -592,6 +609,10 @@ crt_init_opt(crt_group_id_t grpid, uint32_t flags, crt_init_options_t *opt)
 
 		if (secondary_provider != CRT_PROVIDER_UNKNOWN) {
 			num_secondaries = 1;
+
+			if (port1 == NULL || port1[0] == '\0') {
+				port1 = port0;
+			}
 
 			D_ALLOC_ARRAY(crt_gdata.cg_secondary_provs, num_secondaries);
 			if (crt_gdata.cg_secondary_provs == NULL)

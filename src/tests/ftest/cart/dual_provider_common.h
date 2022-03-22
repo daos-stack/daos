@@ -115,6 +115,7 @@ handler_ping(crt_rpc_t *rpc)
 {
 	struct RPC_PING_in	*input;
 	struct RPC_PING_out	*output;
+	crt_context_t		*ctx;
 	int			rc = 0;
 
 	input = crt_req_get(rpc);
@@ -123,7 +124,12 @@ handler_ping(crt_rpc_t *rpc)
 	output->rc = 0;
 	DBG_PRINT("Sizes: %d %d\n", input->size1, input->size2);
 
-	if (g_my_rank == 1) {
+	ctx = rpc->cr_ctx;
+
+	DBG_PRINT("RPC arived on a %s context\n",
+		crt_context_is_primary(ctx) ? "primary" : "secondary");
+#if 1
+	if (g_my_rank == 100002) {
 		struct crt_bulk_desc	bulk_desc;
 		crt_bulk_t		dst_bulk;
 		char			*dst;
@@ -161,6 +167,7 @@ handler_ping(crt_rpc_t *rpc)
 		}
 		
 	}
+#endif
 
 	rc = crt_reply_send(rpc);
 	if (rc)

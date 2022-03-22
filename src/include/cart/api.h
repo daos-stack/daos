@@ -83,9 +83,28 @@ crt_init(crt_group_id_t grpid, uint32_t flags)
 int
 crt_context_create(crt_context_t *crt_ctx);
 
-
+/**
+ * Create CRT transport context on one of secondary providers.
+ *
+ * \param[out] crt_ctx        created CRT transport context
+ * \param[in] idx             Currently unused. Specifies which
+ *                            of the secondary providers to use.
+ *
+ * \return                    DER_SUCCESS on success, negative value if error
+ */
 int
-crt_context_create_on_provider(crt_context_t *crt_ctx, const char *provider);
+crt_context_create_secondary(crt_context_t *crt_ctx, int idx);
+
+/**
+ * Check whether specified context is primary or secondary.
+ *
+ * \param[in] crt_ctx        CRT transport context
+ *
+ * \return                   true if primary, false otherwise
+ */
+bool
+crt_context_is_primary(crt_context_t crt_ctx);
+
 
 /**
  * Set the timeout value for all RPC requests created on the specified context.

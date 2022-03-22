@@ -173,10 +173,10 @@ out:
 }
 
 int
-crt_context_provider_create(crt_context_t *crt_ctx, crt_provider_t provider);
+crt_context_provider_create(crt_context_t *crt_ctx, crt_provider_t provider, bool primary);
 
 int
-crt_context_create_on_provider(crt_context_t *crt_ctx, const char *provider)
+crt_context_create_on_provider(crt_context_t *crt_ctx, const char *provider, bool primary)
 {
 	int	provider_idx = -1;
 
@@ -186,7 +186,7 @@ crt_context_create_on_provider(crt_context_t *crt_ctx, const char *provider)
 		return -DER_INVAL;
 	}
 
-	return crt_context_provider_create(crt_ctx, provider_idx);
+	return crt_context_provider_create(crt_ctx, provider_idx, primary);
 }
 
 int
@@ -206,7 +206,7 @@ crt_context_uri_get(crt_context_t crt_ctx, char **uri)
 }
 
 int
-crt_context_provider_create(crt_context_t *crt_ctx, crt_provider_t provider)
+crt_context_provider_create(crt_context_t *crt_ctx, crt_provider_t provider, bool primary)
 {
 	struct crt_context	*ctx = NULL;
 	int			rc = 0;
@@ -243,6 +243,7 @@ crt_context_provider_create(crt_context_t *crt_ctx, crt_provider_t provider)
 		D_GOTO(out, rc);
 	}
 
+	ctx->cc_primary = primary;
 	D_RWLOCK_WRLOCK(&crt_gdata.cg_rwlock);
 
 	rc = crt_hg_ctx_init(&ctx->cc_hg_ctx, provider, cur_ctx_num);
@@ -338,9 +339,39 @@ out:
 }
 
 int
+crt_context_is_primary(crt_context_t crt_ctx)
+{
+	struct crt_context *ctx;
+
+	ctx = crt_ctx;
+
+	return ctx->cc_primary;
+}
+
+int
 crt_context_create(crt_context_t *crt_ctx)
 {
-	return crt_context_provider_create(crt_ctx, crt_gdata.cg_primary_prov);
+	return crt_context_provider_create(crt_ctx, crt_gdata.cg_primary_prov, true);
+}
+
+int
+crt_context_create_secondary(crt_context_t *crt_ctx, int idx)
+{
+	crt_provider_t sec_prov;
+
+	if (crt_gdata.cg_secondary_provs == NULL) {
+		D_ERROR("Secondary provider not initialized\n");
+		return -DER_INVAL;
+	}
+
+	/* TODO: Use idx later to ref other providers */
+	sec_prov = crt_gdata.cg_secondary_provs[0];
+	if (sec_prov == CRT_PROVIDER_UNKNOWN) {
+		D_ERROR("Unknown secondary provider\n");
+		return -DER_INVAL;
+	}
+
+	return crt_context_provider_create(crt_ctx, sec_prov, false);
 }
 
 int

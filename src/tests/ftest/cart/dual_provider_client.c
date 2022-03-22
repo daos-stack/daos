@@ -61,10 +61,40 @@ int main(int argc, char **argv)
 	struct RPC_PING_in	*input;
 	crt_endpoint_t		server_ep;
 	int			i;
-	uint32_t		grp_size;
 	d_rank_list_t		*rank_list;
 	d_rank_t		rank;
 	int			tag;
+	uint32_t		grp_size;
+	char			c;
+	char			*arg_interface = NULL;
+	char			*arg_domain = NULL;
+	char			*arg_provider = NULL;
+	char			*arg_num_ctx = NULL;
+	int			num_remote_tags;
+	bool			use_primary = true;
+
+	while ((c = getopt(argc, argv, "i:p:d:s")) != -1) {
+		switch (c) {
+		case 'i':
+			arg_interface = optarg;
+			break;
+		case 'd':
+			arg_domain = optarg;
+			break;
+		case 'p':
+			arg_provider = optarg;
+			break;
+		case 'c':
+			arg_num_ctx = optarg;
+			break;
+		case 's':
+			use_primary = false;
+			break;
+		default:
+			printf("Error: unknown option %c\n", c);
+			return -1;
+		}
+	}
 
 	rc = d_log_init();
 	assert(rc == 0);
@@ -79,7 +109,23 @@ int main(int argc, char **argv)
 		assert(0);
 	}
 
-	rc = crt_init(NULL, 0);
+	num_remote_tags = 1;
+	if (arg_num_ctx != NULL)
+		num_remote_tags = atoi(arg_num_ctx);
+
+	DBG_PRINT("------------------------------------\n");
+	DBG_PRINT("Provider: '%s' Interface: '%s'  Domain: '%s'\n",
+		arg_provider, arg_interface, arg_domain);
+	DBG_PRINT("Number of remote tags: %d\n", num_remote_tags);
+	DBG_PRINT("Primary_provider: %d\n", use_primary);
+	DBG_PRINT("------------------------------------\n");
+	crt_init_options_t init_opts = {0};
+
+	init_opts.cio_provider = arg_provider;
+	init_opts.cio_interface = arg_interface;
+	init_opts.cio_domain = arg_domain;
+
+	rc = crt_init_opt(NULL, 0, &init_opts);
 	if (rc != 0) {
 		D_ERROR("crt_init() failed; rc=%d\n", rc);
 		assert(0);
@@ -107,9 +153,65 @@ int main(int argc, char **argv)
 				progress_function, &crt_ctx);
 	assert(rc == 0);
 
+#if 0
 
 	rc = crt_group_attach(SERVER_GROUP_NAME, &grp);
 	assert(rc == 0);
+
+#endif 
+
+
+	int num_servers;
+
+	rc = crt_group_view_create(SERVER_GROUP_NAME, &grp);
+	if (rc != 0) {
+		error_exit();
+	}
+
+	num_servers = 2;
+
+
+	// Parse /tmp/ files
+	//
+	{
+		FILE	*f;
+		char	*filename;
+		char	pri_uri0[255];
+		char	sec_uri0[255];
+		int	serv_rank;
+
+
+		for (serv_rank = 0; serv_rank < num_servers; serv_rank++) {
+			D_ASPRINTF(filename, "/tmp/%s_rank_%d_uris.cart",
+				   SERVER_GROUP_NAME, serv_rank);
+			if (filename == NULL)
+				error_exit();
+
+			f = fopen(filename, "r");
+			if (f == NULL) {
+				perror("failed: ");
+				error_exit();
+			}
+
+			rc = fscanf(f, "%254s", pri_uri0);
+			if (rc == EOF)
+				error_exit();
+
+			rc = fscanf(f, "%254s", sec_uri0);
+			if (rc == EOF)
+				error_exit();
+
+			printf("server_rank=%d\n", serv_rank);
+			printf("pri_uri=%s\n", pri_uri0);
+			printf("sec_uri=%s\n", sec_uri0);
+
+			printf("Using %s URIs for ranks\n", (use_primary) ? "primary" : "secondary");
+			rc = crt_group_primary_rank_add(crt_ctx, grp, serv_rank,
+					(use_primary) ? pri_uri0 : sec_uri0);
+			fclose(f);
+			D_FREE(filename);
+		}
+	}
 
 	// LOAD GROUP HERE
 	//
@@ -132,12 +234,13 @@ int main(int argc, char **argv)
 		assert(0);
 	}
 
+
 	/* Cycle through all ranks and 8 tags and send rpc to each */
 	for (i = 0; i < rank_list->rl_nr; i++) {
 
 		rank = rank_list->rl_ranks[i];
 
-		for (tag = 0; tag < NUM_PRIMARY_CTX_MAX; tag++) {
+		for (tag = 0; tag < num_remote_tags; tag++) {
 			DBG_PRINT("Sending ping to %d:%d\n", rank, tag);
 
 			server_ep.ep_rank = rank;
@@ -164,25 +267,30 @@ int main(int argc, char **argv)
 
 
 	/* Send shutdown RPC to each server */
-	for (i = 0; i < rank_list->rl_nr; i++) {
+	bool send_shutdown = false;
 
-		rank = rank_list->rl_ranks[i];
-		DBG_PRINT("Sending shutdown to rank=%d\n", rank);
 
-		server_ep.ep_rank = rank;
-		server_ep.ep_tag = 0;
-		server_ep.ep_grp = grp;
+	if (send_shutdown) {
+		for (i = 0; i < rank_list->rl_nr; i++) {
 
-		rc = crt_req_create(crt_ctx, &server_ep, RPC_SHUTDOWN,
-				&rpc);
-		if (rc != 0) {
-			D_ERROR("crt_req_create() failed; rc=%d\n", rc);
-			assert(0);
+			rank = rank_list->rl_ranks[i];
+			DBG_PRINT("Sending shutdown to rank=%d\n", rank);
+
+			server_ep.ep_rank = rank;
+			server_ep.ep_tag = 0;
+			server_ep.ep_grp = grp;
+
+			rc = crt_req_create(crt_ctx, &server_ep, RPC_SHUTDOWN,
+					&rpc);
+			if (rc != 0) {
+				D_ERROR("crt_req_create() failed; rc=%d\n", rc);
+				assert(0);
+			}
+
+			rc = crt_req_send(rpc, rpc_handle_reply, &sem);
+			crtu_sem_timedwait(&sem, 10, __LINE__);
+			DBG_PRINT("RPC response received from rank=%d\n", rank);
 		}
-
-		rc = crt_req_send(rpc, rpc_handle_reply, &sem);
-		crtu_sem_timedwait(&sem, 10, __LINE__);
-		DBG_PRINT("RPC response received from rank=%d\n", rank);
 	}
 
 	D_FREE(rank_list->rl_ranks);
