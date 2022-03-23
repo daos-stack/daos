@@ -2,17 +2,16 @@ access_points:
 - server00:10001
 control_log_file: /var/log/daos/daos_server.log
 control_log_mask: DEBUG
+disable_srx: false
 disable_vfio: false
 enable_hotplug: true
 enable_vmd: true
 engines:
-- env_vars:
-  - FI_OFI_RXM_USE_SRX=1
-  fabric_iface: ib0
+- fabric_iface: ib0
   fabric_iface_port: 31416
   first_core: 0
   log_file: /var/log/daos/daos_engine.0.log
-  nr_xs_helpers: 2
+  nr_xs_helpers: 4
   pinned_numa_node: 0
   provider: ofi+verbs;ofi_rxm
   storage:
@@ -24,14 +23,12 @@ engines:
     - 0000:4a:00.5
     - 0000:64:00.5
     class: nvme
-  targets: 24
-- env_vars:
-  - FI_OFI_RXM_USE_SRX=1
-  fabric_iface: ib1
+  targets: 16
+- fabric_iface: ib1
   fabric_iface_port: 32416
   first_core: 0
   log_file: /var/log/daos/daos_engine.1.log
-  nr_xs_helpers: 2
+  nr_xs_helpers: 4
   pinned_numa_node: 1
   provider: ofi+verbs;ofi_rxm
   storage:
@@ -43,7 +40,7 @@ engines:
     - 0000:97:00.5
     - 0000:e2:00.5
     class: nvme
-  targets: 24
+  targets: 16
 fault_cb: ''
 fault_path: /hostname
 firmware_helper_log_file: ''
