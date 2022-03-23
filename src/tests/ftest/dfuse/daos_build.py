@@ -94,10 +94,10 @@ class DaosBuild(DfuseTestBase):
         preload_cmd = ';'.join(envs)
 
         cmds = ['sudo yum -y install daos-debuginfo',
-                'ls {}'.format(build_dir),
-                'touch {}/new_file'.format(build_dir),
-                'cat {}/new_file'.format(build_dir),
-                'cp /bin/bash {}'.format(build_dir),
+                'ls {}'.format(mount_dir),
+                'touch {}/new_file'.format(mount_dir),
+                'cat {}/new_file'.format(mount_dir),
+                'cp /bin/bash {}'.format(mount_dir),
                 'valgrind git clone https://github.com/daos-stack/daos.git {}'.format(build_dir),
                 'git -C {} submodule init'.format(build_dir),
                 'git -C {} submodule update'.format(build_dir),
