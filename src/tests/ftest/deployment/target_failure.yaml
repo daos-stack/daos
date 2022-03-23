@@ -7,16 +7,25 @@ hosts:
 
 timeout: 10M
 
+# If there are more than around 5 NVMe disks, it takes longer than the default timeout for
+# the engine to start, so increase it to 60 sec.
+daos_server:
+  pattern_timeout: 60
 server_config:
   name: daos_server
   servers:
-      log_mask: INFO
-      bdev_class: nvme
-      bdev_list: ["0000:da:00.0","0000:90:00.0"]
-      scm_class: dcpm
-      scm_list: ["/dev/pmem0"]
+    log_mask: INFO
+    bdev_class: nvme
+    bdev_list: ["0000:00:00.0","0000:00:00.1","0000:00:00.2","0000:00:00.3",
+                "0000:00:00.4","0000:00:00.5","0000:00:00.6","0000:00:00.7",
+                "0000:00:00.8","0000:00:00.9"]
+    scm_class: dcpm
+    scm_list: ["/dev/pmem0"]
 
-pool:
+pool_size_ratio:
+  size: 50%
+  control_method: dmg
+pool_size_value:
   scm_size: 100G
   nvme_size: 500G
   control_method: dmg
