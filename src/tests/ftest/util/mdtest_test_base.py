@@ -81,10 +81,9 @@ class MdtestBase(DfuseTestBase):
         # pylint: disable=redefined-variable-type
         # Initialize MpioUtils if mdtest needs to be run using mpich
         if mpi_type == "MPICH":
-            manager = get_job_manager(
-                self, "Mpirun", self.mdtest_cmd, self.subprocess, mpi_type="mpich")
+            manager = get_job_manager(self, "Mpirun", self.mdtest_cmd, mpi_type="mpich")
         else:
-            manager = get_job_manager(self, "Orterun", self.mdtest_cmd, self.subprocess)
+            manager = get_job_manager(self, "Orterun", self.mdtest_cmd)
         return manager
 
     def run_mdtest(self, manager, processes, display_space=True, pool=None,
