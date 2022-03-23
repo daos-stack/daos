@@ -8,7 +8,6 @@ package engine
 
 import (
 	"flag"
-	"fmt"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -124,56 +123,6 @@ func TestConfig_HasEnvVar(t *testing.T) {
 			if diff := cmp.Diff(tc.expVars, cfg.EnvVars, defConfigCmpOpts...); diff != "" {
 				t.Fatalf("unexpected env vars:\n%s\n", diff)
 			}
-		})
-	}
-}
-
-func TestConfig_GetEnvVar(t *testing.T) {
-
-	for name, tc := range map[string]struct {
-		environment []string
-		key         string
-		expValue    string
-		expErr      error
-	}{
-		"present": {
-			environment: []string{"FOO=BAR"},
-			key:         "FOO",
-			expValue:    "BAR",
-		},
-		"invalid prefix": {
-			environment: []string{"FOO=BAR"},
-			key:         "FFOO",
-			expErr:      errors.New("Undefined environment variable"),
-		},
-		"invalid suffix": {
-			environment: []string{"FOO=BAR"},
-			key:         "FOOO",
-			expErr:      errors.New("Undefined environment variable"),
-		},
-		"empty env": {
-			key:    "FOO",
-			expErr: errors.New("Undefined environment variable"),
-		},
-	} {
-		t.Run(name, func(t *testing.T) {
-			cfg := MockConfig().WithEnvVars(tc.environment...)
-
-			value, err := cfg.GetEnvVar(tc.key)
-
-			if err != nil {
-				common.AssertTrue(t, tc.expErr != nil,
-					fmt.Sprintf("Unexpected error %q", err))
-				common.CmpErr(t, tc.expErr, err)
-				common.AssertEqual(t, value, "",
-					fmt.Sprintf("Unexpected value %q for key %q",
-						tc.key, value))
-				return
-			}
-
-			common.AssertTrue(t, tc.expErr == nil,
-				fmt.Sprintf("Expected error %q", tc.expErr))
-			common.AssertEqual(t, value, tc.expValue, "Invalid value returned")
 		})
 	}
 }

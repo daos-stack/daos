@@ -14,7 +14,6 @@
 #include <sys/stat.h>
 #include <daos_srv/daos_engine.h>
 #include <daos_srv/rsvc.h>
-#include <daos_srv/control.h>
 #include "rpc.h"
 
 static struct ds_rsvc_class *rsvc_classes[DS_RSVC_CLASS_COUNT];
@@ -1369,14 +1368,14 @@ static struct daos_rpc_handler rsvc_handlers[] = {
 size_t
 ds_rsvc_get_md_cap(void)
 {
-	const size_t	size_default = DEFAULT_DAOS_MD_CAP_SIZE;
+	const size_t	size_default = 1 << 27 /* 128 MB */;
 	char	       *v;
 	int		n;
 
-	v = getenv(DAOS_MD_CAP_ENV); /* in MB */
+	v = getenv("DAOS_MD_CAP"); /* in MB */
 	if (v == NULL)
 		return size_default;
-	n = atoi(v);    /* FIXME DAOS-9846 */
+	n = atoi(v);
 	if (n < size_default >> 20) {
 		D_ERROR("metadata capacity too low; using %zu MB\n",
 			size_default >> 20);

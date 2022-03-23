@@ -5,10 +5,8 @@
 //
 package drpc
 
-import (
-	"math"
-	"unsafe"
-)
+import "unsafe"
+import "math"
 
 /*
 #cgo LDFLAGS: -ldaos_common -lgurt -lcart
@@ -17,7 +15,6 @@ import (
 #include <daos/object.h>
 #include <daos/cont_props.h>
 #include <daos_srv/policy.h>
-#include <daos_srv/control.h>
 */
 import "C"
 
@@ -79,14 +76,6 @@ const (
 	MediaTypeScm = C.DAOS_MEDIA_SCM
 	// MediaTypeNvme is the media type for NVMe.
 	MediaTypeNvme = C.DAOS_MEDIA_NVME
-)
-
-const (
-	// DaosMdCapEnv is the name of the environment variable defining the size of a metadata pmem
-	// pool/file in MiBs.
-	DaosMdCapEnv = C.DAOS_MD_CAP_ENV
-	// DefaultDaosMdCapSize is the default size of a metadata pmem pool/file in MiBs.
-	DefaultDaosMdCapSize = C.DEFAULT_DAOS_MD_CAP_SIZE
 )
 
 // LabelIsValid checks a label to verify that it meets length/content

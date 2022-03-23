@@ -9,7 +9,6 @@ package control
 import (
 	"context"
 	"fmt"
-	"strings"
 	"testing"
 
 	"github.com/dustin/go-humanize"
@@ -21,7 +20,6 @@ import (
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	"github.com/daos-stack/daos/src/control/drpc"
 	"github.com/daos-stack/daos/src/control/logging"
-	"github.com/daos-stack/daos/src/control/server/storage"
 	"github.com/daos-stack/daos/src/control/system"
 )
 
@@ -1147,7 +1145,6 @@ func TestControl_GetMaxPoolSize(t *testing.T) {
 		ScmBytes  uint64
 		NvmeBytes uint64
 		Error     error
-		Debug     string
 	}
 
 	for name, tc := range map[string]struct {
@@ -1341,7 +1338,7 @@ func TestControl_GetMaxPoolSize(t *testing.T) {
 				Error: errors.New("Host without SCM storage"),
 			},
 		},
-		"Unusable NVMe device": {
+		"SCM storage too small": {
 			HostsConfigArray: []MockHostStorageConfig{
 				{
 					HostName: "foo",
@@ -1349,26 +1346,15 @@ func TestControl_GetMaxPoolSize(t *testing.T) {
 						{
 							MockStorageConfig: MockStorageConfig{
 								TotalBytes: uint64(100) * uint64(humanize.GByte),
-								AvailBytes: uint64(100) * uint64(humanize.GByte),
+								AvailBytes: PoolMetadataBytes / uint64(2),
 							},
 						},
 					},
-					NvmeConfig: []MockNvmeConfig{
-						{
-							MockStorageConfig: MockStorageConfig{
-								TotalBytes: uint64(1) * uint64(humanize.TByte),
-								AvailBytes: uint64(1) * uint64(humanize.TByte),
-								NvmeState:  new(storage.NvmeDevState),
-							},
-							Rank: 0,
-						},
-					},
+					NvmeConfig: []MockNvmeConfig{},
 				},
 			},
 			ExpectedOutput: ExpectedOutput{
-				ScmBytes:  uint64(100) * uint64(humanize.GByte),
-				NvmeBytes: 0,
-				Debug:     "not usable",
+				Error: errors.New("Not enough SCM storage available with the SCM namespace"),
 			},
 		},
 	} {
@@ -1399,31 +1385,26 @@ func TestControl_GetMaxPoolSize(t *testing.T) {
 			}
 			mockInvoker := NewMockInvoker(log, mockInvokerConfig)
 
-			scmBytes, nvmeBytes, err := GetMaxPoolSize(context.TODO(), log, mockInvoker)
+			scmBytes, nvmeBytes, err := GetMaxPoolSize(context.TODO(), mockInvoker)
 
 			if tc.ExpectedOutput.Error != nil {
 				common.AssertTrue(t, err != nil, "Expected error")
 				common.CmpErr(t, tc.ExpectedOutput.Error, err)
-				return
-			}
-
-			common.AssertTrue(t, err == nil, "Expected no error")
-			common.AssertEqual(t,
-				tc.ExpectedOutput.ScmBytes,
-				scmBytes,
-				fmt.Sprintf("Invalid SCM pool size: expected=%d got=%d",
+			} else {
+				common.AssertTrue(t, err == nil, "Expected no error")
+				common.AssertEqual(t,
 					tc.ExpectedOutput.ScmBytes,
-					scmBytes))
+					scmBytes,
+					fmt.Sprintf("Invalid SCM pool size: expected=%d got=%d",
+						tc.ExpectedOutput.ScmBytes,
+						scmBytes))
 
-			common.AssertEqual(t,
-				tc.ExpectedOutput.NvmeBytes,
-				nvmeBytes,
-				fmt.Sprintf("Invalid NVME pool size: expected=%d got=%d",
+				common.AssertEqual(t,
 					tc.ExpectedOutput.NvmeBytes,
-					nvmeBytes))
-			if tc.ExpectedOutput.Debug != "" {
-				common.AssertTrue(t, strings.Contains(buf.String(), tc.ExpectedOutput.Debug),
-					"Missing log message: "+tc.ExpectedOutput.Debug)
+					nvmeBytes,
+					fmt.Sprintf("Invalid NVME pool size: expected=%d got=%d",
+						tc.ExpectedOutput.NvmeBytes,
+						nvmeBytes))
 			}
 		})
 	}
