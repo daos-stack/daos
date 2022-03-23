@@ -229,12 +229,16 @@ func TestAgent_mgmtModule_getAttachInfo(t *testing.T) {
 							Name:        "fi0",
 							Domain:      "d0",
 							NetDevClass: hardware.Infiniband,
-							Providers:   []string{"ofi+verbs"},
+							hw: &hardware.FabricInterface{
+								Providers: common.NewStringSet("ofi+verbs"),
+							},
 						},
 						{
 							Name:        "fi1",
 							NetDevClass: hardware.Ether,
-							Providers:   []string{"ofi+tcp"},
+							hw: &hardware.FabricInterface{
+								Providers: common.NewStringSet("ofi+tcp"),
+							},
 						},
 					},
 				},
@@ -294,12 +298,24 @@ func TestAgent_mgmtModule_getAttachInfo_cacheResp(t *testing.T) {
 		},
 	}
 
-	testFI := &FabricInterface{
-		Name:        "test0",
-		Domain:      "test0",
-		NetDevClass: hardware.Ether,
-		Providers:   []string{"ofi+tcp"},
+	hostResps := func(resps []*mgmtpb.GetAttachInfoResp) []*control.HostResponse {
+		result := []*control.HostResponse{}
+
+		for _, r := range resps {
+			result = append(result, &control.HostResponse{
+				Message: r,
+			})
+		}
+
+		return result
 	}
+
+	testFI := fabricInterfaceFromHardware(&hardware.FabricInterface{
+		Name:         "test0",
+		NetInterface: "test0",
+		DeviceClass:  hardware.Ether,
+		Providers:    common.NewStringSet("ofi+tcp"),
+	})
 
 	hintResp := func(resp *mgmtpb.GetAttachInfoResp) *mgmtpb.GetAttachInfoResp {
 		withHint := new(mgmtpb.GetAttachInfoResp)
@@ -346,7 +362,7 @@ func TestAgent_mgmtModule_getAttachInfo_cacheResp(t *testing.T) {
 			for _, rpcResp := range tc.rpcResps {
 				mockInvokerCfg.UnaryResponseSet = append(mockInvokerCfg.UnaryResponseSet,
 					&control.UnaryResponse{
-						Responses: hostResps(rpcResp),
+						Responses: hostResps([]*mgmtpb.GetAttachInfoResp{rpcResp}),
 					},
 				)
 			}
@@ -393,12 +409,12 @@ func TestAgent_mgmtModule_getAttachInfo_Parallel(t *testing.T) {
 			log: log,
 			numaMap: map[int][]*FabricInterface{
 				0: {
-					&FabricInterface{
-						Name:        "test0",
-						Domain:      "test0",
-						NetDevClass: hardware.Ether,
-						Providers:   []string{"ofi+tcp"},
-					},
+					fabricInterfaceFromHardware(&hardware.FabricInterface{
+						Name:         "test0",
+						NetInterface: "test0",
+						DeviceClass:  hardware.Ether,
+						Providers:    common.NewStringSet("ofi+tcp"),
+					}),
 				},
 			},
 		}),

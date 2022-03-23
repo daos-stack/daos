@@ -139,7 +139,7 @@ func updateFabricEnvars(log logging.Logger, cfg *engine.Config, fis *hardware.Fa
 		domains := []string{}
 
 		for i, p := range providers {
-			fi, err := fis.GetInterfaceOnOSDevice(interfaces[i], p)
+			fi, err := fis.GetInterfaceOnNetDevice(interfaces[i], p)
 			if err != nil {
 				return errors.Wrapf(err, "unable to determine device domain for %s", interfaces[i])
 			}
