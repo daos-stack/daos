@@ -8,7 +8,7 @@ import re
 
 from apricot import TestWithServers
 from daos_perf_utils import DaosPerfCommand
-from command_utils_base import CommandFailure
+from exception_utils import CommandFailure
 
 
 class DaosPerfBase(TestWithServers):

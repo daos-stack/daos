@@ -14,7 +14,7 @@ from daos_utils import DaosCommand
 from mpio_utils import MpioUtils
 from job_manager_utils import Mpirun
 from ior_utils import IorCommand, IorMetrics
-from command_utils_base import CommandFailure
+from exception_utils import CommandFailure
 from general_utils import error_count
 import queue
 
