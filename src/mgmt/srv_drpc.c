@@ -20,6 +20,7 @@
 #include "pool.pb-c.h"
 #include "cont.pb-c.h"
 #include "server.pb-c.h"
+#include "check.pb-c.h"
 #include "srv_internal.h"
 #include "drpc_internal.h"
 
@@ -2337,4 +2338,29 @@ out:
 	}
 
 	mgmt__cont_set_owner_req__free_unpacked(req, &alloc.alloc);
+}
+
+void
+ds_mgmt_drpc_check_start(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
+{
+}
+
+void
+ds_mgmt_drpc_check_stop(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
+{
+}
+
+void
+ds_mgmt_drpc_check_query(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
+{
+}
+
+void
+ds_mgmt_drpc_check_prop(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
+{
+}
+
+void
+ds_mgmt_drpc_check_act(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
+{
 }

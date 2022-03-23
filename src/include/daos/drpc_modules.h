@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2019-2021 Intel Corporation.
+ * (C) Copyright 2019-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -71,6 +71,11 @@ enum drpc_mgmt_method {
 	DRPC_METHOD_MGMT_NOTIFY_POOL_DISCONNECT	= 236,
 	DRPC_METHOD_MGMT_POOL_GET_PROP		= 237,
 	DRPC_METHOD_MGMT_SET_LOG_MASKS		= 238,
+	DRPC_METHOD_MGMT_CHK_START		= 239,
+	DRPC_METHOD_MGMT_CHK_STOP		= 240,
+	DRPC_METHOD_MGMT_CHK_QUERY		= 241,
+	DRPC_METHOD_MGMT_CHK_PROP		= 242,
+	DRPC_METHOD_MGMT_CHK_ACT		= 243,
 
 	NUM_DRPC_MGMT_METHODS			/* Must be last */
 };
