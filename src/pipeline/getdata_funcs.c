@@ -96,7 +96,7 @@ getdata_func_akey_(struct filter_part_run_t *args)
 	size_t		akey_name_size;
 	daos_iod_t	*iod;
 	d_sg_list_t	*akey;
-	daos_iom_t	*iom;
+	/*daos_iom_t	*iom;*/
 	daos_recx_t	*recx;
 	char		*iod_str;
 	size_t		iod_size;
@@ -134,12 +134,14 @@ getdata_func_akey_(struct filter_part_run_t *args)
 				D_GOTO(exit, buf);
 			}
 			/** DAOS_IOD_ARRAY */
-			iom = &args->ioms[i];
+			/*iom = &args->ioms[i];*/
 
 			offset = 0;
-			for (j = 0; j < iom->iom_nr_out; j++)
+			/*for (j = 0; j < iom->iom_nr_out; j++)*/
+			for (j = 0; j < iod->iod_nr; j++)
 			{
-				recx = &iom->iom_recxs[j];
+				/*recx = &iom->iom_recxs[j];*/
+				recx = &iod->iod_recxs[j];
 
 				if (target_offset < recx->rx_idx + recx->rx_nr
 					&&

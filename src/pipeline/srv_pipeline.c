@@ -18,6 +18,7 @@
 #include "pipeline_internal.h"
 
 
+#if 0
 struct pipeline_enum_arg {
 	d_iov_t			dkey;
 	bool			dkey_set;
@@ -29,29 +30,6 @@ struct pipeline_enum_arg {
 	int			akey_idx;
 	iter_copy_data_cb_t	copy_data_cb;
 };
-
-
-#if 0
-static int
-pipeline_obj_fetch(daos_handle_t vos_coh, daos_unit_oid_t oid,
-		   daos_epoch_t epoch, daos_key_t *dkey, unsigned int nr,
-		   daos_iod_t *iods)
-{
-	int			rc;
-	daos_handle_t		ioh;
-	struct vos_io_context	*ioc;
-	daos_size_t		size;
-
-	rc = vos_fetch_begin(vos_coh, oid, epoch, dkey, nr, iods, 0, NULL,
-	
-	// TODO: fetch data pointer here
-
-			     &ioh, NULL);
-	rc = vos_fetch_end(ioh, &size, rc);
-
-	return rc;
-}
-#endif
 
 static int
 enum_pack_cb(daos_handle_t ih, vos_iter_entry_t *entry, vos_iter_type_t type,
@@ -208,7 +186,124 @@ enum_pack_cb(daos_handle_t ih, vos_iter_entry_t *entry, vos_iter_type_t type,
 
 	return rc;
 }
+#endif
 
+static int
+enum_pack_cb(daos_handle_t ih, vos_iter_entry_t *entry, vos_iter_type_t type,
+	     vos_iter_param_t *param, void *cb_arg, unsigned int *acts)
+{
+	d_iov_t *d_key = cb_arg;
+
+	switch(type)
+	{
+	case VOS_ITER_AKEY:
+		*acts |= VOS_ITER_CB_SKIP; /** fetching akeys someplace else */
+		return 0;
+	case VOS_ITER_DKEY:
+		if (d_key->iov_len != 0) /** one dkey at a time */
+		{
+			return 1;
+		}
+		if (entry->ie_key.iov_len > 0)
+		{
+			*d_key = entry->ie_key;
+		}
+		return 0;
+	default:
+		D_ASSERTF(false, "unknown/unsupported type %d\n", type);
+		return -DER_INVAL;
+	}
+}
+
+static int
+pipeline_fetch_record(daos_handle_t vos_coh, daos_unit_oid_t oid,
+		      struct vos_iter_anchors *anchors, daos_epoch_range_t epr,
+		      daos_iod_t *iods, uint32_t nr_iods, d_iov_t *d_key,
+		      d_sg_list_t *sgl_recx) /*, daos_iom_t *ioms)*/
+{
+	int			rc	= 0;
+	int			rc1	= 0;
+	int			type	= VOS_ITER_DKEY;
+	vos_iter_param_t	param	= { 0 };
+	daos_handle_t		ioh	= DAOS_HDL_INVAL;
+	struct bio_desc		*biod;
+	size_t			io_size;
+
+	param.ip_hdl		= vos_coh;
+	param.ip_oid		= oid;
+	param.ip_epr.epr_lo	= epr.epr_lo;
+	param.ip_epr.epr_hi	= epr.epr_hi;
+	/* items show epoch is <= epr_hi. For range, use VOS_IT_EPC_RE */
+	param.ip_epc_expr	= VOS_IT_EPC_LE;
+
+	/* TODO: Set enum_arg.csummer !  Figure out how checksum works */
+
+	d_key->iov_len = 0;
+
+	/** iterating over dkeys only */
+	rc = vos_iterate(&param, type, true, anchors, enum_pack_cb, NULL, d_key,
+			 NULL);
+	D_DEBUG(DB_IO, "enum type %d rc "DF_RC"\n", type, DP_RC(rc));
+	if (rc < 0)
+	{
+		return rc;
+	}
+	if (d_key->iov_len == 0) /** d_key not found */
+	{
+		return 1;
+	}
+
+	/** fetching record */
+	rc = vos_fetch_begin(vos_coh, oid, epr.epr_hi, d_key, nr_iods, iods, 0,
+			     NULL, &ioh, NULL);
+	if (rc)
+	{
+		D_CDEBUG(rc == -DER_INPROGRESS || rc == -DER_NONEXIST ||
+			 rc == -DER_TX_RESTART, DB_IO, DLOG_ERR,
+			 "Fetch begin for "DF_UOID" failed: "DF_RC"\n",
+			 DP_UOID(oid), DP_RC(rc));
+		D_GOTO(out, rc);
+	}
+	biod = vos_ioh2desc(ioh);
+	rc = bio_iod_prep(biod, BIO_CHK_TYPE_IO, NULL, CRT_BULK_RW);
+	if (rc)
+	{
+		D_ERROR(DF_UOID" bio_iod_prep failed: "DF_RC".\n",
+			DP_UOID(oid), DP_RC(rc));
+		D_GOTO(out, rc);
+	}
+	rc = bio_iod_copy(biod, sgl_recx, nr_iods);
+	if (rc)
+	{
+		if (rc == -DER_OVERFLOW)
+		{
+			rc = -DER_REC2BIG;
+		}
+		D_CDEBUG(rc == -DER_REC2BIG, DLOG_DBG, DLOG_ERR,
+			 DF_UOID" data transfer failed, rc "DF_RC"",
+			 DP_UOID(oid), DP_RC(rc));
+		/** D_GOTO(post, rc); */
+	}
+/**post:*/
+	rc = bio_iod_post(biod, rc);
+out:
+	rc1 = vos_fetch_end(ioh, &io_size, rc);
+	if (rc1 != 0)
+	{
+		D_CDEBUG(rc1 == -DER_REC2BIG || rc1 == -DER_INPROGRESS ||
+			 rc1 == -DER_TX_RESTART || rc1 == -DER_EXIST ||
+			 rc1 == -DER_NONEXIST || rc1 == -DER_ALREADY, DLOG_DBG,
+			 DLOG_ERR, DF_UOID " %s end failed: "DF_RC"\n",
+			 DP_UOID(oid), "Fetch", DP_RC(rc1));
+		if (rc == 0)
+		{
+			rc = rc1;
+		}
+	}
+	return rc;
+}
+
+#if 0
 static int
 pipeline_fetch_record(daos_handle_t vos_coh, daos_unit_oid_t oid,
 		      struct vos_iter_anchors *anchors, daos_epoch_range_t epr,
@@ -266,10 +361,11 @@ pipeline_fetch_record(daos_handle_t vos_coh, daos_unit_oid_t oid,
 
 	return 1;
 }
+#endif
 
 int pipeline_aggregations(struct pipeline_compiled_t *pipe,
 			  struct filter_part_run_t *args, d_iov_t *dkey,
-			  d_sg_list_t *akeys, daos_iom_t *ioms,
+			  d_sg_list_t *akeys, /*daos_iom_t *ioms,*/
 			  d_sg_list_t *sgl_agg)
 {
 	uint32_t 	i;
@@ -277,7 +373,7 @@ int pipeline_aggregations(struct pipeline_compiled_t *pipe,
 
 	args->dkey	= dkey;
 	args->akeys	= akeys;
-	args->ioms	= ioms;
+	/*args->ioms	= ioms;*/
 
 	for (i = 0; i < pipe->num_aggr_filters; i++)
 	{
@@ -298,14 +394,14 @@ exit:
 
 int pipeline_filters(struct pipeline_compiled_t *pipe,
 		     struct filter_part_run_t *args, d_iov_t *dkey,
-		     d_sg_list_t *akeys, daos_iom_t *ioms)
+		     d_sg_list_t *akeys) /*, daos_iom_t *ioms)*/
 {
 	uint32_t 	i;
 	int		rc = 0;
 
 	args->dkey	= dkey;
 	args->akeys	= akeys;
-	args->ioms	= ioms;
+	/*args->ioms	= ioms;*/
 
 	for (i = 0; i < pipe->num_filters; i++)
 	{
@@ -350,10 +446,9 @@ ds_pipeline_run(daos_handle_t vos_coh, daos_unit_oid_t oid,
 	d_sg_list_t			*sgl_recx_iter		= NULL;
 	d_iov_t				*sgl_recx_iter_iovs	= NULL;
 	size_t				iov_alloc_size;
-	daos_iom_t			*ioms_iter		= NULL;
+	/*daos_iom_t			*ioms_iter		= NULL;*/
 	uint32_t			i, k;
 	uint32_t			j			= 0;
-	uint32_t			l			= 0;
 	uint32_t			sr_idx			= 0;
 	struct vos_iter_anchors		anchors			= { 0 };
 	struct pipeline_compiled_t	pipeline_compiled	= { 0 };
@@ -436,7 +531,7 @@ ds_pipeline_run(daos_handle_t vos_coh, daos_unit_oid_t oid,
 	}
 
 	/** -- allocating space for ioms_iter */
-
+	/*
 	D_ALLOC_ARRAY(ioms_iter, *nr_iods);
 	if (ioms_iter == NULL)
 	{
@@ -459,7 +554,7 @@ ds_pipeline_run(daos_handle_t vos_coh, daos_unit_oid_t oid,
 				D_GOTO(exit, rc = -DER_NOMEM);
 			}
 		}
-	}
+	}*/
 
 	/**
 	 *  -- Iterating over dkeys and doing filtering and aggregation. The
@@ -482,7 +577,7 @@ ds_pipeline_run(daos_handle_t vos_coh, daos_unit_oid_t oid,
 
 		rc = pipeline_fetch_record(vos_coh, oid, &anchors, epr, iods,
 					   *nr_iods, &d_key_iter,
-					   sgl_recx_iter, ioms_iter);
+					   sgl_recx_iter);/*, ioms_iter);*/
 		if (rc < 0)
 		{
 			D_GOTO(exit, rc); /** error */
@@ -495,7 +590,7 @@ ds_pipeline_run(daos_handle_t vos_coh, daos_unit_oid_t oid,
 		/** -- doing filtering... */
 
 		rc = pipeline_filters(&pipeline_compiled, &pipe_run_args,
-				      &d_key_iter, sgl_recx_iter, ioms_iter);
+				      &d_key_iter, sgl_recx_iter);/*, ioms_iter);*/
 		if (rc < 0)
 		{
 			D_GOTO(exit, rc); /** error */
@@ -513,7 +608,7 @@ ds_pipeline_run(daos_handle_t vos_coh, daos_unit_oid_t oid,
 
 		rc = pipeline_aggregations(&pipeline_compiled, &pipe_run_args,
 					   &d_key_iter, sgl_recx_iter,
-					   ioms_iter, sgl_agg);
+					   /*ioms_iter,*/ sgl_agg);
 		if (rc < 0)
 		{
 			D_GOTO(exit, rc);
@@ -685,7 +780,7 @@ exit:
 	{
 		D_FREE(sgl_recx_iter);
 	}
-
+	/*
 	for (i = 0; i < l; i++)
 	{
 		D_FREE(ioms_iter[i].iom_recxs);
@@ -694,7 +789,7 @@ exit:
 	{
 		D_FREE(ioms_iter);
 	}
-
+	*/
 	if (rc != 0)
 	{
 		uint32_t limit;

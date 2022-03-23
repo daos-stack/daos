@@ -13,7 +13,7 @@ struct filter_part_run_t {
 	d_iov_t				*dkey;
 	uint32_t			nr_iods;
 	daos_iod_t			*iods;
-	daos_iom_t			*ioms;
+	/*daos_iom_t			*ioms;*/
 	d_sg_list_t			*akeys;
 	struct filter_part_compiled_t	*parts;
 	uint32_t			part_idx;
