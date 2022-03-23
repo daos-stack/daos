@@ -6,7 +6,6 @@
 '''
 import time
 import threading
-import queue
 
 from apricot import skipForTicket
 from nvme_utils import ServerFillUp
@@ -40,6 +39,7 @@ class NvmeEnospace(ServerFillUp):
         self.create_pool_max_size()
         self.der_nospace_count = 0
         self.other_errors_count = 0
+        self.test_result = []
 
     def verify_enspace_log(self, der_nospace_err_count):
         """
@@ -82,12 +82,10 @@ class NvmeEnospace(ServerFillUp):
             kwargs["force"] = True
             self.daos_cmd.container_destroy(**kwargs)
 
-    def ior_bg_thread(self, results):
+    def ior_bg_thread(self):
         """Start IOR Background thread, This will write small data set and
         keep reading it in loop until it fails or main program exit.
 
-        Args:
-            results (queue): queue for returning thread results
         """
         mpio_util = MpioUtils()
         if mpio_util.mpich_installed(self.hostlist_clients) is False:
@@ -116,7 +114,7 @@ class NvmeEnospace(ServerFillUp):
         try:
             job_manager.run()
         except (CommandFailure, TestFail) as _error:
-            results.put("FAIL")
+            self.test_result.append("FAIL")
             return
 
         # run IOR Read Command in loop
@@ -125,7 +123,6 @@ class NvmeEnospace(ServerFillUp):
             try:
                 job_manager.run()
             except (CommandFailure, TestFail) as _error:
-                results.put("FAIL")
                 break
 
     def run_enospace_foreground(self):
@@ -182,17 +179,15 @@ class NvmeEnospace(ServerFillUp):
 
         # Start the IOR Background thread which will write small data set and
         # read in loop, until storage space is full.
-        out_queue = queue.Queue()
-        job = threading.Thread(target=self.ior_bg_thread,
-                               kwargs={"results": out_queue})
+        job = threading.Thread(target=self.ior_bg_thread)
         job.daemon = True
         job.start()
 
         #Run IOR in Foreground
         self.run_enospace_foreground()
-        # Verify the background job queue and make sure no FAIL for any IOR run
-        while not self.out_queue.empty():
-            if self.out_queue.get() == "FAIL":
+        # Verify the background job result has no FAIL for any IOR run
+        for _result in self.test_result:
+            if "FAIL" in _result:
                 self.fail("One of the Background IOR job failed")
 
     def test_enospace_lazy_with_bg(self):

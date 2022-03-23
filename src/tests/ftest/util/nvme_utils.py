@@ -283,6 +283,7 @@ class ServerFillUp(IorTestBase):
             percent (int): % of storage to be filled
             create_cont (bool): To create the new container for IOR
         """
+        self.result.clear()
         self.capacity = percent
         # Fill up NVMe by default
         self.nvme_fill = 'NVMe' in storage
