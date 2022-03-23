@@ -524,6 +524,17 @@ retry:
 			range_set = isset_range(dom_occupied, start_dom, end_dom);
 			if (range_set) {
 				if (top == -1) {
+					if (curr_pd != root_pos) {
+						/* all domains within the PD occupied, ignore the
+						 * PD restrict and try again.
+						 */
+						D_INFO("PD[%d] all doms occupied, weak the PD "
+							"restrict\n",
+							(int)(curr_dom - root_pos));
+						curr_pd = root_pos;
+						curr_dom = curr_pd;
+						goto retry;
+					}
 					/* shard nr > target nr, no extra target for the shard */
 					*target = NULL;
 					return;
