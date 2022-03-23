@@ -1295,6 +1295,152 @@ dfs_test_chown(void **state)
 	assert_int_equal(rc, 0);
 }
 
+#define NUM_IOS 128
+#define IO_SIZE 8192
+
+struct dfs_test_async_arg {
+	int			thread_idx;
+	pthread_barrier_t	*barrier;
+	dfs_obj_t		*file;
+	d_sg_list_t		sgls[NUM_IOS];
+	d_iov_t			iovs[NUM_IOS];
+	daos_size_t		read_sizes[NUM_IOS];
+	struct daos_event	*events[NUM_IOS];
+	char			*bufs[NUM_IOS];
+	test_arg_t		*arg;
+};
+
+struct dfs_test_async_arg th_arg[DFS_TEST_MAX_THREAD_NR];
+
+static bool	stop_progress;
+static int	polled_events;
+pthread_mutex_t	eqh_mutex;
+
+static void *
+dfs_test_read_async(void *arg)
+{
+	struct dfs_test_async_arg	*targ = arg;
+	struct daos_event		*eps[NUM_IOS] = { 0 };
+	int				i, rc;
+
+	print_message("dfs_test_read_thread %d\n", targ->thread_idx);
+
+	for (i = 0; i < NUM_IOS; i++) {
+		daos_event_t *ev;
+		char *buf;
+
+		D_ALLOC_PTR_NZ(ev);
+		D_ASSERT(ev != NULL);
+
+		rc = daos_event_init(ev, targ->arg->eq, NULL);
+		assert_rc_equal(rc, 0);
+
+		D_ALLOC(buf, IO_SIZE);
+		D_ASSERT(buf != NULL);
+
+		targ->events[i] = ev;
+		targ->bufs[i] = buf;
+
+		d_iov_set(&targ->iovs[i], buf, IO_SIZE);
+		targ->sgls[i].sg_nr = 1;
+		targ->sgls[i].sg_nr_out = 1;
+		targ->sgls[i].sg_iovs = &targ->iovs[i];
+
+		rc = dfs_read(dfs_mt, targ->file, &targ->sgls[i], IO_SIZE * i,
+				      &targ->read_sizes[i], ev);
+		D_ASSERT(rc == 0);
+	}
+
+	pthread_barrier_wait(targ->barrier);
+
+	while (1) {
+		if (stop_progress)
+			pthread_exit(NULL);
+
+		rc = daos_eq_poll(targ->arg->eq, 0, DAOS_EQ_NOWAIT, NUM_IOS, eps);
+		if (rc < 0) {
+			print_error("EQ poll failed: %d\n", rc);
+			rc = -1;
+			pthread_exit(NULL);
+		}
+
+		if (rc) {
+			D_MUTEX_LOCK(&eqh_mutex);
+			polled_events += rc;
+			D_MUTEX_UNLOCK(&eqh_mutex);
+		}
+	}
+
+	print_message("dfs_test_read_thread %d succeed.\n", targ->thread_idx);
+	pthread_exit(NULL);
+}
+
+static void
+dfs_test_async_io_th(void **state)
+{
+	test_arg_t		*arg = *state;
+	pthread_barrier_t	barrier;
+	char			name[16];
+	dfs_obj_t		*obj;
+	int			i;
+	int			rc;
+
+	MPI_Barrier(MPI_COMM_WORLD);
+
+	rc = D_MUTEX_INIT(&eqh_mutex, NULL);
+	assert_int_equal(rc, 0);
+
+	sprintf(name, "file_async_mt_%d", arg->myrank);
+	rc = dfs_test_file_gen(name, 0, IO_SIZE * NUM_IOS);
+	assert_int_equal(rc, 0);
+
+	rc = dfs_open(dfs_mt, NULL, name, S_IFREG, O_RDONLY, 0, 0, NULL, &obj);
+	assert_int_equal(rc, 0);
+
+	stop_progress = false;
+	pthread_barrier_init(&barrier, NULL, dfs_test_thread_nr + 1);
+
+	for (i = 0; i < dfs_test_thread_nr; i++) {
+		th_arg[i].thread_idx	= i;
+		th_arg[i].file		= obj;
+		th_arg[i].arg		= arg;
+		th_arg[i].barrier	= &barrier;
+		rc = pthread_create(&dfs_test_tid[i], NULL, dfs_test_read_async, &th_arg[i]);
+		assert_int_equal(rc, 0);
+	}
+
+	pthread_barrier_wait(&barrier);
+
+	while (1) {
+		rc = daos_eq_query(arg->eq, DAOS_EQR_ALL, 0, NULL);
+		if (rc == 0) {
+			stop_progress = true;
+			break;
+		}
+	}
+
+	for (i = 0; i < dfs_test_thread_nr; i++) {
+		int j;
+
+		rc = pthread_join(dfs_test_tid[i], NULL);
+		assert_int_equal(rc, 0);
+
+		for (j = 0; j < NUM_IOS; j++) {
+			daos_event_fini(th_arg[i].events[j]);
+			D_FREE(th_arg[i].events[j]);
+			D_FREE(th_arg[i].bufs[j]);
+			D_ASSERT(th_arg[i].read_sizes[j] == IO_SIZE);
+		}
+	}
+
+	rc = dfs_release(obj);
+	assert_int_equal(rc, 0);
+
+	dfs_test_rm(name);
+	D_MUTEX_DESTROY(&eqh_mutex);
+	MPI_Barrier(MPI_COMM_WORLD);
+}
+
 static const struct CMUnitTest dfs_unit_tests[] = {
 	{ "DFS_UNIT_TEST1: DFS mount / umount",
 	  dfs_test_mount, async_disable, test_case_teardown},
@@ -1326,6 +1472,8 @@ static const struct CMUnitTest dfs_unit_tests[] = {
 	  dfs_test_mt_connect, async_disable, test_case_teardown},
 	{ "DFS_UNIT_TEST15: DFS chown",
 	  dfs_test_chown, async_disable, test_case_teardown},
+	{ "DFS_UNIT_TEST16: multi-threads async IO",
+	  dfs_test_async_io_th, async_disable, test_case_teardown},
 };
 
 static int
