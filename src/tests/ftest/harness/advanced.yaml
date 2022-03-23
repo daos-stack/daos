@@ -3,3 +3,6 @@ hosts:
     - server-A
     - server-B
 timeout: 120
+pool:
+  size: 2G
+  control_method: dmg

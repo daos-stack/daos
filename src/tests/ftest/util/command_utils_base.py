@@ -6,7 +6,6 @@
 """
 from logging import getLogger
 import os
-from webbrowser import get
 import yaml
 from exception_utils import CommandFailure
 
@@ -308,7 +307,7 @@ class ObjectWithParameters():
         for name, value in params.items():
             try:
                 getattr(self, name).update(value, name)
-            except AttributeError as error:
+            except AttributeError:
                 raise CommandFailure("Unknown parameter: {}".format(name))
 
 

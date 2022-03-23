@@ -39,7 +39,7 @@ def add_pool(test, namespace=None, create=True, connect=True, index=0, **params)
         crt_timeout=test.server_managers[index].get_config_value("crt_timeout"))
     pool.get_params(test)
     if params:
-        pool.update_params(params)
+        pool.update_params(**params)
     if create:
         pool.create()
     if create and connect:

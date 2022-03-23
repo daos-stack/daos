@@ -17,6 +17,8 @@ from getpass import getuser
 from importlib import import_module
 from socket import gethostname
 
+from avocado.core.settings import settings
+from avocado.core.version import MAJOR
 from avocado.utils import process
 from ClusterShell.Task import task_self
 from ClusterShell.NodeSet import NodeSet, NodeSetParseError
@@ -1299,3 +1301,35 @@ def percent_change(val1, val2):
     if val1 and val2:
         return (float(val2) - float(val1)) / float(val1)
     return 0.0
+
+
+def get_config_value(section, key):
+    """Get an avocado configuration value.
+
+    Args:
+        section (str): the configuration section, e.g. 'runner.timeout'
+        key (str): the configuration key, e.g. 'process_died'
+
+    Returns:
+        object: the value of the requested config key in the specified section
+
+    """
+    if int(MAJOR) >= 82:
+        config = settings.as_dict()
+        return config.get(".".join([section, key]))
+    else:
+        return settings.get_value(section, key)
+
+
+def set_config_value(section, key, value):
+    """Set an avocado configuration value.
+
+    Args:
+        section (str): the configuration section, e.g. 'runner.timeout'
+        key (str): the configuration key, e.g. 'process_died'
+        value (object): the value to set
+    """
+    if int(MAJOR) >= 82:
+        settings.update_option(".".join([section, key]), value)
+    else:
+        settings.config.set(".".join([section, key]), value)

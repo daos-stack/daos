@@ -14,7 +14,7 @@ import re
 from avocado import fail_on, skip, TestFail
 from avocado import Test as avocadoTest
 from avocado.core import exceptions
-from avocado.core.settings import settings, SettingsError
+
 from ClusterShell.NodeSet import NodeSet
 
 from agent_utils import DaosAgentManager, include_local_host
@@ -26,8 +26,8 @@ from distro_utils import detect
 from dmg_utils import get_dmg_command
 from fault_config_utils import FaultInjection
 from general_utils import \
-    get_partition_hosts, stop_processes, \
-    get_default_config_file, pcmd, get_file_listing, DaosTestError, run_command
+    get_partition_hosts, stop_processes, get_default_config_file, pcmd, get_file_listing, \
+    DaosTestError, run_command, get_config_value, set_config_value
 from logger_utils import TestLogger
 from pydaos.raw import DaosContext, DaosLog, DaosApiError
 from server_utils import DaosServerManager
@@ -412,21 +412,19 @@ class Test(avocadoTest):
         """
         namespace = "runner.timeout"
         for key in ("after_interrupted", "process_alive", "process_died"):
+            section = ".".join([namespace, key])
+
+            # Get the existing value
             try:
-                value = int(settings.get_value(namespace, key, default=60)) + increment
+                value = int(get_config_value(namespace, key))
+            except (TypeError, ValueError) as error:
+                self.log.debug("Unable to obtain the %s setting: %s", section, str(error))
+                continue
 
-            except (SettingsError, ValueError) as error:
-                self.log.debug("Unable to obtain the {}.{} setting: {}", namespace, key, str(error))
-                value = None
-
-            if value:
-                try:
-                    settings.update_option(namespace, value)
-
-                except AttributeError:
-                    self.log.debug(
-                        "Unable to update the {}.{} setting to {} - update Avocado to > 82.0",
-                        namespace, key, value)
+            # Update the setting with the incremented value
+            self.log.debug(
+                "Incrementing %s from %s to %s seconds", section, value, value + increment)
+            set_config_value(namespace, key, value + increment)
 
     def tearDown(self):
         """Tear down after each test case."""
@@ -579,6 +577,7 @@ class TestWithServers(TestWithoutServers):
         self.client_reservation = None
         self.hostfile_servers_slots = 1
         self.hostfile_clients_slots = 1
+        self.pool = None
         self.container = None
         self.agent_log = None
         self.server_log = None
