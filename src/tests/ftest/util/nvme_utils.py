@@ -7,7 +7,6 @@
 import threading
 import re
 import time
-import queue
 from command_utils_base import CommandFailure
 from avocado.core.exceptions import TestFail
 from ior_test_base import IorTestBase
@@ -72,6 +71,7 @@ class ServerFillUp(IorTestBase):
         self.fail_on_warning = False
         self.ior_matrix = None
         self.ior_local_cmd = None
+        self.result = []
 
     def setUp(self):
         """Set up each test case."""
@@ -90,13 +90,11 @@ class ServerFillUp(IorTestBase):
                                                  '/run/ior/transfersize_blocksize/*', '16777216')
         # Get the number of daos_engine
         self.engines = self.server_managers[0].manager.job.yaml.engine_params
-        self.out_queue = queue.Queue()
 
-    def start_ior_thread(self, results, create_cont, operation):
+    def start_ior_thread(self, create_cont, operation):
         """Start IOR write/read threads and wait until all threads are finished.
 
         Args:
-            results (queue): queue for returning thread results
             create_cont (Bool): To create the new container or not.
             operation (str):
                 Write/WriteRead: It will Write or Write/Read base on IOR parameter in yaml file.
@@ -139,10 +137,10 @@ class ServerFillUp(IorTestBase):
 
             for line in output.stdout_text.splitlines():
                 if 'WARNING' in line and self.fail_on_warning:
-                    results.put("FAIL-IOR command issued warnings.")
+                    self.result.append("FAIL-IOR command issued warnings.")
 
         except (CommandFailure, TestFail) as _error:
-            results.put("FAIL")
+            self.result.append("FAIL")
 
     def calculate_ior_block_size(self):
         """Calculate IOR Block size to fill up the Server.
@@ -291,8 +289,7 @@ class ServerFillUp(IorTestBase):
         self.scm_fill = 'SCM' in storage
 
         # Create the IOR threads
-        job = threading.Thread(target=self.start_ior_thread, kwargs={"results": self.out_queue,
-                                                                     "create_cont": create_cont,
+        job = threading.Thread(target=self.start_ior_thread, kwargs={"create_cont": create_cont,
                                                                      "operation": operation})
         # Launch the IOR thread
         job.start()
@@ -313,8 +310,7 @@ class ServerFillUp(IorTestBase):
         # Wait to finish the thread
         job.join()
 
-        # Verify the queue and make sure no FAIL for any IOR run
-        while not self.out_queue.empty():
-            queue_result = self.out_queue.get()
-            if "FAIL" in queue_result:
-                self.fail(queue_result)
+        # Verify if any test failed for any IOR run
+        for test_result in self.result:
+            if "FAIL" in test_result:
+                self.fail(test_result)
