@@ -1895,6 +1895,7 @@ ds_mgmt_drpc_bio_health_query(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	resp->volatile_mem_warn = stats.volatile_mem_warn;
 	resp->total_bytes = stats.total_bytes;
 	resp->avail_bytes = stats.avail_bytes;
+	resp->cluster_size = stats.cluster_size;
 	resp->program_fail_cnt_norm = stats.program_fail_cnt_norm;
 	resp->program_fail_cnt_raw = stats.program_fail_cnt_raw;
 	resp->erase_fail_cnt_norm = stats.erase_fail_cnt_norm;
