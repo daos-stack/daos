@@ -31,6 +31,11 @@
 
 #define MAX_MODULE_OPTIONS	64
 #define MODULE_LIST	"vos,rdb,rsvc,security,mgmt,dtx,pool,cont,obj,rebuild"
+#define MODS_CHK_BASE	"vos,rdb,rsvc,chk,mgmt"
+#define MODS_CHK_POOL	MODS_CHK_BASE",pool"
+#define MODS_CHK_CONT	MODS_CHK_POOL",cont"
+#define MODS_CHK_OBJ	MODS_CHK_CONT",dtx,obj"
+#define MODS_CHK_RBD	MODS_CHK_OBJ",rebuild"
 
 /** List of modules to load */
 static char		modules[MAX_MODULE_OPTIONS + 1];
@@ -87,6 +92,9 @@ unsigned int		dss_storage_tiers = 2;
 
 /** Flag to indicate Arbogots is initialized */
 static bool dss_abt_init;
+
+/** Start daos_engine under check mode. */
+static bool dss_check_mode;
 
 /* stream used to dump ABT infos and ULTs stacks */
 static FILE *abt_infos;
@@ -639,28 +647,20 @@ server_init(int argc, char *argv[])
 		D_GOTO(exit_mod_init, rc);
 	D_INFO("Network successfully initialized\n");
 
-	if (dss_mod_facs & DSS_FAC_LOAD_CLI) {
-		rc = daos_init();
-		if (rc) {
-			D_ERROR("daos_init (client) failed, rc: "DF_RC"\n",
-				DP_RC(rc));
-			D_GOTO(exit_crt, rc);
-		}
-		D_INFO("Client stack enabled\n");
-	} else {
-		rc = daos_hhash_init();
-		if (rc) {
-			D_ERROR("daos_hhash_init failed, rc: "DF_RC"\n",
-				DP_RC(rc));
-			D_GOTO(exit_crt, rc);
-		}
-		rc = pl_init();
-		if (rc != 0) {
-			daos_hhash_fini();
-			goto exit_crt;
-		}
-		D_INFO("handle hash table and placement initialized\n");
+	rc = daos_hhash_init();
+	if (rc != 0) {
+		D_ERROR("daos_hhash_init failed, rc: "DF_RC"\n",
+			DP_RC(rc));
+		D_GOTO(exit_crt, rc);
 	}
+
+	rc = pl_init();
+	if (rc != 0) {
+		daos_hhash_fini();
+		goto exit_crt;
+	}
+	D_INFO("handle hash table and placement initialized\n");
+
 	/* server-side uses D_HTYPE_PTR handle */
 	d_hhash_set_ptrtype(daos_ht.dht_hhash);
 
@@ -873,6 +873,8 @@ Options:\n\
       Passes the configured hugepage size(2MB or 1GB)\n\
   --storage_tiers=ntiers, -T ntiers\n\
       Number of storage tiers\n\
+  --check, -C\n\
+      Start engine with check mode, global consistency check\n\
   --help, -h\n\
       Print this description\n",
 		prog, prog, modules, daos_sysname, dss_storage_path,
@@ -912,22 +914,30 @@ parse(int argc, char **argv)
 		{ "instance_idx",	required_argument,	NULL,	'I' },
 		{ "bypass_health_chk",	no_argument,		NULL,	'b' },
 		{ "storage_tiers",	required_argument,	NULL,	'T' },
+		{ "check",		no_argument,		NULL,	'C' },
 		{ NULL,			0,			NULL,	0}
 	};
 	int	rc = 0;
 	int	c;
+	bool	spec_mod = false;
 
-	/* load all of modules by default */
-	sprintf(modules, "%s", MODULE_LIST);
-	while ((c = getopt_long(argc, argv, "c:d:f:g:hi:m:n:p:r:H:t:s:x:I:bT:",
+	dss_check_mode = false;
+
+	while ((c = getopt_long(argc, argv, "c:d:f:g:hi:m:n:p:r:H:t:s:x:I:bT:C",
 				opts, NULL)) != -1) {
 		switch (c) {
 		case 'm':
+			if (dss_check_mode) {
+				printf("'-c|--modules' option is ignored under check mode\n");
+				break;
+			}
+
 			if (strlen(optarg) > MAX_MODULE_OPTIONS) {
 				rc = -DER_INVAL;
 				usage(argv[0], stderr);
 				break;
 			}
+			spec_mod = true;
 			snprintf(modules, sizeof(modules), "%s", optarg);
 			break;
 		case 'c':
@@ -987,6 +997,14 @@ parse(int argc, char **argv)
 				printf("Requires 1 or 2 tiers\n");
 				rc = -DER_INVAL;
 			}
+			break;
+		case 'C':
+			dss_check_mode = true;
+			if (spec_mod) {
+				printf("'-c|--modules' option is ignored under check mode\n");
+				spec_mod = false;
+			}
+			snprintf(modules, sizeof(modules), "%s", MODS_CHK_BASE);
 			break;
 		default:
 			usage(argv[0], stderr);
