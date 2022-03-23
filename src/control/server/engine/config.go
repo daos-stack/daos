@@ -174,7 +174,7 @@ func NewConfig() *Config {
 func (c *Config) setAffinity(log logging.Logger, fis *hardware.FabricInterfaceSet) (err error) {
 	var fi *hardware.FabricInterface
 	if fis != nil {
-		fi, err = fis.GetInterfaceOnOSDevice(c.Fabric.Interface, c.Fabric.Provider)
+		fi, err = fis.GetInterfaceOnNetDevice(c.Fabric.Interface, c.Fabric.Provider)
 		if err != nil {
 			return
 		}
