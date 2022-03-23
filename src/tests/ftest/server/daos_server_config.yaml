@@ -6,6 +6,13 @@ hosts:
 timeout: 130
 server_config:
   name: daos_server
+  servers:
+    0:
+      env_vars:
+        - DAOS_TARGET_OVERSUBSCRIBE=0
+    1:
+      env_vars:
+        - DAOS_TARGET_OVERSUBSCRIBE=0
 # The 'config_val' list is composed of the following values:
 # - name of the config attribute, used to look for the attribute object
 # - test value that will be inserted into the server config for the attribute
@@ -167,4 +174,9 @@ server_config_val: !mux
     config_val:
       - "targets"
       - "ABDCD"
+      - "FAIL"
+  targets_too_large:
+    config_val:
+      - "targets"
+      - 2000
       - "FAIL"
