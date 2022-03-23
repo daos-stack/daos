@@ -326,7 +326,7 @@ daos_prop_valid(daos_prop_t *prop, bool pool, bool input)
 			break;
 		case DAOS_PROP_PO_GLOBAL_VERSION:
 			val = prop->dpp_entries[i].dpe_val;
-			if (val > DAOS_PO_GLOBAL_VERSION) {
+			if (val > DAOS_META_GLOBAL_VERSION) {
 				D_ERROR("invalid pool global version "DF_U64".\n",
 					val);
 				return false;

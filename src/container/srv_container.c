@@ -18,6 +18,7 @@
 
 #include <daos_api.h>	/* for daos_prop_alloc/_free() */
 #include <daos/rpc.h>
+#include <daos/pool.h>
 #include <daos_srv/pool.h>
 #include <daos_srv/rdb.h>
 #include <daos_srv/security.h>
@@ -912,6 +913,7 @@ cont_create(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
 	if (rc != 0) {
 		D_ERROR(DF_CONT" failed to create container snapshots KVS: "DF_RC"\n",
 			DP_CONT(pool_hdl->sph_pool->sp_uuid, in->cci_op.ci_uuid), DP_RC(rc));
+		D_GOTO(out_kvs, rc);
 	}
 
 	/* Create the user attribute KVS. */
@@ -923,6 +925,7 @@ cont_create(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
 			""DF_RC"\n",
 			DP_CONT(pool_hdl->sph_pool->sp_uuid,
 				in->cci_op.ci_uuid), DP_RC(rc));
+		D_GOTO(out_kvs, rc);
 	}
 
 	/* Create the handle index KVS. */
@@ -934,6 +937,15 @@ cont_create(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
 			""DF_RC"\n",
 			DP_CONT(pool_hdl->sph_pool->sp_uuid,
 				in->cci_op.ci_uuid), DP_RC(rc));
+		D_GOTO(out_kvs, rc);
+	}
+
+	d_iov_set(&value, &pool_hdl->sph_global_ver, sizeof(pool_hdl->sph_global_ver));
+	rc = rdb_tx_update(tx, &kvs, &ds_cont_prop_global_version, &value);
+	if (rc != 0) {
+		D_ERROR(DF_CONT": failed to update global version, "DF_RC"\n",
+			DP_CONT(pool_hdl->sph_pool->sp_uuid, in->cci_op.ci_uuid), DP_RC(rc));
+		D_GOTO(out_kvs, rc);
 	}
 
 out_kvs:
@@ -3488,6 +3500,7 @@ upgrade_cont_cb(daos_handle_t ih, d_iov_t *key, d_iov_t *val, void *varg)
 	uint64_t			 pda;
 	int				 rc;
 	bool				 upgraded = false;
+	uint32_t			 global_ver;
 	(void)val;
 
 	if (key->iov_len != sizeof(uuid_t)) {
@@ -3504,6 +3517,24 @@ upgrade_cont_cb(daos_handle_t ih, d_iov_t *key, d_iov_t *val, void *varg)
 		D_ERROR(DF_CONT": lookup cont failed, "DF_RC"\n",
 			DP_CONT(ap->pool_uuid, cont_uuid), DP_RC(rc));
 		return rc;
+	}
+
+	d_iov_set(&value, &global_ver, sizeof(global_ver));
+	rc = rdb_tx_lookup(ap->tx, &cont->c_prop,
+			   &ds_cont_prop_global_version, &value);
+	if (rc && rc != -DER_NONEXIST)
+		goto out;
+	/* latest container, nothing to update */
+	if (rc == 0 && global_ver >= DAOS_META_GLOBAL_VERSION)
+		goto out;
+
+	global_ver = DAOS_META_GLOBAL_VERSION;
+	rc = rdb_tx_update(ap->tx, &cont->c_prop,
+			   &ds_cont_prop_global_version, &value);
+	if (rc) {
+		D_ERROR("failed to upgrade container global version pool/cont: "DF_CONTF"\n",
+			DP_CONT(ap->pool_uuid, cont_uuid));
+		goto out;
 	}
 
 	d_iov_set(&value, &pda, sizeof(pda));

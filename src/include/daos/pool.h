@@ -56,7 +56,7 @@
 /*
  * Aggregation of pool/container/object/keys disk format change.
  */
-#define DAOS_PO_GLOBAL_VERSION	1
+#define DAOS_META_GLOBAL_VERSION	1
 
 
 int dc_pool_init(void);

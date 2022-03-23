@@ -407,7 +407,7 @@ pool_prop_write(struct rdb_tx *tx, const rdb_path_t *kvs, daos_prop_t *prop,
 					   &value);
 			break;
 		case DAOS_PROP_PO_GLOBAL_VERSION:
-			if (entry->dpe_val > DAOS_PO_GLOBAL_VERSION) {
+			if (entry->dpe_val > DAOS_META_GLOBAL_VERSION) {
 				rc = -DER_INVAL;
 				break;
 			}
@@ -1222,7 +1222,7 @@ check_map:
 	 * downgrading the DAOS software of an upgraded pool report
 	 * a proper RAS error.
 	 */
-	if (global_version > DAOS_PO_GLOBAL_VERSION) {
+	if (global_version > DAOS_META_GLOBAL_VERSION) {
 		ds_notify_ras_eventf(RAS_POOL_DF_INCOMPAT, RAS_TYPE_INFO,
 				     RAS_SEV_ERROR, NULL /* hwid */,
 				     NULL /* rank */, NULL /* inc */,
@@ -1232,7 +1232,7 @@ check_map:
 				     NULL /* data */,
 				     "incompatible layout version: %u larger than "
 				     "%u", global_version,
-				     DAOS_PO_GLOBAL_VERSION);
+				     DAOS_META_GLOBAL_VERSION);
 		rc = -DER_DF_INCOMPT;
 		goto out_lock;
 	}
@@ -3818,8 +3818,8 @@ int pool_upgrade_props(struct rdb_tx *tx, struct pool_svc *svc, uuid_t pool_uuid
 	rc = rdb_tx_lookup(tx, &svc->ps_root, &ds_pool_prop_global_version, &value);
 	if (rc && rc != -DER_NONEXIST) {
 		D_GOTO(out_free, rc);
-	} else if (rc == -DER_NONEXIST || val32 < DAOS_PO_GLOBAL_VERSION) {
-		val32 = DAOS_PO_GLOBAL_VERSION;
+	} else if (rc == -DER_NONEXIST || val32 < DAOS_META_GLOBAL_VERSION) {
+		val32 = DAOS_META_GLOBAL_VERSION;
 		rc = rdb_tx_update(tx, &svc->ps_root, &ds_pool_prop_global_version, &value);
 		if (rc) {
 			D_ERROR(DF_UUID": failed to upgrade global version "
@@ -3951,20 +3951,20 @@ ds_pool_upgrade_if_needed(uuid_t pool_uuid, struct rsvc_hint *po_hint,
 		if (rc)
 			D_GOTO(out_tx, rc);
 
-		if (global_version > DAOS_PO_GLOBAL_VERSION) {
+		if (global_version > DAOS_META_GLOBAL_VERSION) {
 			D_ERROR("downgrading pool is unsupported\n");
 			D_GOTO(out_tx, rc = -DER_INVAL);
 		}
 		switch (upgrade_status) {
 		case DAOS_UPGRADE_STATUS_NOT_STARTED:
 		case DAOS_UPGRADE_STATUS_COMPLETED:
-			if (global_version < DAOS_PO_GLOBAL_VERSION)
+			if (global_version < DAOS_META_GLOBAL_VERSION)
 				D_GOTO(out_upgrade, rc = 0);
 			else
 				D_GOTO(out_tx, rc = 0);
 			break;
 		case DAOS_UPGRADE_STATUS_FAILED:
-			if (global_version < DAOS_PO_GLOBAL_VERSION) {
+			if (global_version < DAOS_META_GLOBAL_VERSION) {
 				D_ERROR("upgrading failed upgraded pool again unsupported\n");
 				D_GOTO(out_tx, rc = -DER_INVAL);
 			}
@@ -3972,7 +3972,7 @@ ds_pool_upgrade_if_needed(uuid_t pool_uuid, struct rsvc_hint *po_hint,
 			D_GOTO(out_upgrade, rc = 0);
 			break;
 		case DAOS_UPGRADE_STATUS_IN_PROGRESS:
-			if (global_version < DAOS_PO_GLOBAL_VERSION) {
+			if (global_version < DAOS_META_GLOBAL_VERSION) {
 				D_ERROR("need finish last time upgraing\n");
 				D_GOTO(out_tx, rc = -DER_INVAL);
 			} else if (need_put_leader) { /* not from resume */

@@ -32,7 +32,7 @@
 #include <daos_types.h>
 
 /* Default layout version */
-#define DS_CONT_MD_VERSION 6
+#define DS_CONT_MD_VERSION 7
 
 /* Lowest compatible layout version */
 #define DS_CONT_MD_VERSION_LOW 4
@@ -48,6 +48,7 @@ extern d_iov_t ds_cont_prop_version;		/* uint32_t */
 extern d_iov_t ds_cont_prop_cuuids;		/* container UUIDs KVS */
 extern d_iov_t ds_cont_prop_conts;		/* container KVS */
 extern d_iov_t ds_cont_prop_cont_handles;	/* container handle KVS */
+extern d_iov_t ds_cont_prop_global_version;	/* uint32 */
 
 /*
  * Container UUIDs KVS (RDB_KVS_GENERIC)
