@@ -1325,7 +1325,7 @@ def check_provider(test, provider=None):
     elif get_short_provider_name(provider) not in provider_list:
         # Skip the test if the provider is not supported
         test.log.info("The %s provider is not in the supported list: %s", provider, provider_list)
-        test.skip("Unsupported provider: {}".format(provider))
+        test.cancel("Unsupported provider: {}".format(provider))
 
     return provider
 
@@ -1341,7 +1341,7 @@ def get_full_provider_name(provider):
 
     """
     if provider in ["ofi_tcp", "ofi_verbs"]:
-        return ";".join(provider, "ofi_rxm")
+        return ";".join([provider, "ofi_rxm"])
     return provider
 
 

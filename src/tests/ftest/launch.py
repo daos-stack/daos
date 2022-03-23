@@ -349,7 +349,7 @@ def set_provider_environment(interface, args):
         providers = get_available_providers(interface, args)
 
     # Update the definitions
-    os.environ["DAOS_TEST_PROVIDER_LIST"] = providers
+    os.environ["DAOS_TEST_PROVIDER_LIST"] = ",".join(providers)
     print("Testing with DAOS_TEST_PROVIDER_LIST={}".format(os.environ["DAOS_TEST_PROVIDER_LIST"]))
 
 
@@ -359,6 +359,10 @@ def get_available_providers(interface, args):
     Args:
         interface (str): the current interface being used.
         args (argparse.Namespace): command line arguments for this program
+
+    Returns:
+        list: list of supported providers
+
     """
     provider_list = []
     detected_providers = {}
@@ -377,21 +381,21 @@ def get_available_providers(interface, args):
     if check_remote_output(task, command):
         # Verify each server host has the same interface driver
         output_data_list = list(task.iter_buffers())
-        for output_data in output_data_list:
-            for line in output_data[0][0]:
+        for output_data, hosts in output_data_list:
+            for line in output_data:
                 provider_name = line.decode("utf-8").replace(":", "")
                 if provider_name in SUPPORTED_PROVIDER_NAMES:
                     if provider_name in detected_providers:
-                        detected_providers[provider_name] += 1
+                        detected_providers[provider_name] += len(hosts)
                     else:
-                        detected_providers[provider_name] = 1
+                        detected_providers[provider_name] = len(hosts)
 
         # Populate the list of providers to use with tests with any provider supported by each
         # server host in the order of supported preference
         for name in SUPPORTED_PROVIDER_NAMES:
             try:
                 if detected_providers[name] == len(list(args.test_servers)):
-                    provider_list.append("+".join("ofi", name))
+                    provider_list.append("+".join(["ofi", name]))
             except KeyError:
                 pass
 

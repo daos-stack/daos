@@ -8,7 +8,10 @@ from apricot import TestWithServers
 
 
 class HarnessProviderTest(TestWithServers):
-    """."""
+    """Provider test cases.
+
+    :avocado: recursive
+    """
 
     def test_provider(self):
         """Test to verify starting servers with different providers.
@@ -21,7 +24,7 @@ class HarnessProviderTest(TestWithServers):
         :avocado: tags=harness,harness_provider_test,provider
         :avocado: tags=test_provider
         """
-        pass
+        self.log.info("Test passed")
 
     def test_provider_hw(self):
         """Test to verify starting servers with different providers.

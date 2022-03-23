@@ -149,7 +149,7 @@ class DaosServerYamlParameters(YamlParameters):
         super().get_params(test)
 
         # Verify the requested provider is supported
-        self.provider.update(check_provider(self.provider.value), "provider")
+        self.provider.update(check_provider(test, self.provider.value), "provider")
 
         # Create the requested number of single server parameters
         if isinstance(self.engines_per_host.value, int):
