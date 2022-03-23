@@ -561,6 +561,24 @@ func TestPoolCommands(t *testing.T) {
 			errors.New("invalid value"),
 		},
 		{
+			"Set pool rf property is not allowed",
+			"pool set-prop 031bcaf8-f0f5-42ef-b3c5-ee048676dceb rf:1",
+			"",
+			errors.New("can't set redundancy factor on existing pool."),
+		},
+		{
+			"Set pool ec_pda property is not allowed",
+			"pool set-prop 031bcaf8-f0f5-42ef-b3c5-ee048676dceb ec_pda:1",
+			"",
+			errors.New("can't set EC performance domain affinity on existing pool."),
+		},
+		{
+			"Set pool rp_pda property is not allowed",
+			"pool set-prop 031bcaf8-f0f5-42ef-b3c5-ee048676dceb rp_pda:1",
+			"",
+			errors.New("can't set RP performance domain affinity on existing pool"),
+		},
+		{
 			"Get pool property",
 			"pool get-prop 031bcaf8-f0f5-42ef-b3c5-ee048676dceb label",
 			strings.Join([]string{
@@ -938,7 +956,7 @@ func TestDmg_PoolCreateAllCmd(t *testing.T) {
 				PoolConfig: control.MockPoolRespConfig{
 					HostName:  "foo",
 					Ranks:     "0",
-					ScmBytes:  uint64(100)*uint64(humanize.GByte) - control.PoolMetadataBytes,
+					ScmBytes:  uint64(100) * uint64(humanize.GByte),
 					NvmeBytes: uint64(1) * uint64(humanize.TByte),
 				},
 			},
@@ -971,7 +989,7 @@ func TestDmg_PoolCreateAllCmd(t *testing.T) {
 				PoolConfig: control.MockPoolRespConfig{
 					HostName:  "foo",
 					Ranks:     "0",
-					ScmBytes:  uint64(30)*uint64(humanize.GByte) - control.PoolMetadataBytes,
+					ScmBytes:  uint64(30) * uint64(humanize.GByte),
 					NvmeBytes: uint64(300) * uint64(humanize.GByte),
 				},
 			},
@@ -1063,7 +1081,7 @@ func TestDmg_PoolCreateAllCmd(t *testing.T) {
 				PoolConfig: control.MockPoolRespConfig{
 					HostName:  "foo",
 					Ranks:     "0,1,2,3",
-					ScmBytes:  uint64(50)*uint64(humanize.GByte) - control.PoolMetadataBytes,
+					ScmBytes:  uint64(50) * uint64(humanize.GByte),
 					NvmeBytes: uint64(700) * uint64(humanize.GByte),
 				},
 			},
@@ -1088,7 +1106,7 @@ func TestDmg_PoolCreateAllCmd(t *testing.T) {
 				PoolConfig: control.MockPoolRespConfig{
 					HostName:  "foo",
 					Ranks:     "0",
-					ScmBytes:  uint64(100)*uint64(humanize.GByte) - control.PoolMetadataBytes,
+					ScmBytes:  uint64(100) * uint64(humanize.GByte),
 					NvmeBytes: uint64(0),
 				},
 				WarningMsg: "Creating DAOS pool without NVME storage",
@@ -1122,7 +1140,7 @@ func TestDmg_PoolCreateAllCmd(t *testing.T) {
 				PoolConfig: control.MockPoolRespConfig{
 					HostName:  "foo",
 					Ranks:     "0",
-					ScmBytes:  uint64(100)*uint64(humanize.GByte) - control.PoolMetadataBytes,
+					ScmBytes:  uint64(100) * uint64(humanize.GByte),
 					NvmeBytes: uint64(100) * uint64(humanize.TByte),
 				},
 				WarningMsg: "SCM:NVMe ratio is less than",
@@ -1137,7 +1155,7 @@ func TestDmg_PoolCreateAllCmd(t *testing.T) {
 						{
 							MockStorageConfig: control.MockStorageConfig{
 								TotalBytes: uint64(100) * uint64(humanize.GByte),
-								AvailBytes: uint64(1) * uint64(humanize.GByte),
+								AvailBytes: uint64(1),
 							},
 						},
 					},
@@ -1153,7 +1171,7 @@ func TestDmg_PoolCreateAllCmd(t *testing.T) {
 				},
 			},
 			ExpectedOutput: ExpectedOutput{
-				Error: errors.New("Not enough SMC storage available with ratio 1%"),
+				Error: errors.New("Not enough SCM storage available with ratio 1%"),
 			},
 		},
 	} {
@@ -1200,6 +1218,7 @@ func TestDmg_PoolCreateAllCmd(t *testing.T) {
 			err := poolCreateCmd.Execute(nil)
 
 			if tc.ExpectedOutput.Error != nil {
+				common.AssertTrue(t, err != nil, "Expected an error")
 				testExpectedError(t, tc.ExpectedOutput.Error, err)
 			} else {
 				common.AssertTrue(t, err == nil, "Expected no error")

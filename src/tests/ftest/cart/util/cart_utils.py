@@ -18,6 +18,8 @@ import glob
 from apricot import TestWithoutServers
 from general_utils import stop_processes
 from write_host_file import write_host_file
+from job_manager_utils import Orterun
+
 
 class CartTest(TestWithoutServers):
     """Define a Cart test case."""
@@ -380,6 +382,7 @@ class CartTest(TestWithoutServers):
 
         tst_host = self.params.get("{}".format(host), "/run/hosts/*/")
         tst_ppn = self.params.get("{}_ppn".format(host), "/run/tests/*/")
+        tst_processes = len(tst_host)*int(tst_ppn)
         logparse = self.params.get("logparse", "/run/tests/*/")
 
         if tst_slt is not None:
@@ -390,16 +393,12 @@ class CartTest(TestWithoutServers):
             hostfile = write_host_file(tst_host,
                                        daos_test_shared_dir,
                                        tst_ppn)
-
-        mca_flags = "--mca btl self,tcp "
+        mca_flags = ["btl self,tcp"]
 
         if self.provider == "ofi+psm2":
-            mca_flags += "--mca pml ob1 "
+            mca_flags.append("pml ob1")
 
-        tst_cmd = "{} {} -N {} --hostfile {} ".format(
-            self.orterun, mca_flags, tst_ppn, hostfile)
-
-        tst_cmd += env
+        tst_cmd = env
 
         tst_cont = os.getenv("CRT_TEST_CONT", "0")
         if tst_cont is not None:
@@ -426,7 +425,12 @@ class CartTest(TestWithoutServers):
         if tst_arg is not None:
             tst_cmd += " " + tst_arg
 
-        return tst_cmd
+        job = Orterun(tst_cmd)
+        job.mca.update(mca_flags)
+        job.hostfile.update(hostfile)
+        job.pprnode.update(tst_ppn)
+        job.processes.update(tst_processes)
+        return str(job)
 
     def _rm_abs_src_path_from_xml_files(self):
         """Check valgrind memcheck log files for errors."""
