@@ -15,7 +15,7 @@ from ClusterShell.NodeSet import NodeSet
 
 from command_utils import ExecutableCommand, SystemctlCommand
 from command_utils_base import FormattedParameter, EnvironmentVariables
-from command_utils_base import CommandFailure
+from exception_utils import CommandFailure, MPILoadError
 from env_modules import load_mpi
 from general_utils import pcmd, stop_processes, run_pcmd
 from write_host_file import write_host_file
@@ -219,7 +219,7 @@ class Orterun(JobManager):
                 subprocess. Defaults to False.
         """
         if not load_mpi("openmpi"):
-            raise CommandFailure("Failed to load openmpi")
+            raise MPILoadError("openmpi")
 
         path = os.path.dirname(find_executable("orterun"))
         super().__init__("/run/orterun/*", "orterun", job, path, subprocess)

@@ -3,6 +3,64 @@
 We are pleased to announce the release of DAOS version 2.0.
 
 
+# DAOS Version 2.0.2 (2022-03-21)
+
+## Updates in this Release
+
+The DAOS 2.0.2 release contains the following updates on top of DAOS 2.0.1:
+
+- DAOS 2.0.2 includes fixes to the EC, VOS, MS, telemetry, dtx, object components,
+  raft, VMD, as well as the test and build infrastructure.
+
+- `mercury` has been updated from 2.1.0~rc4-3 to 2.1.0~rc4-5.
+  This fixes multiple issues with `dmg pool destroy`, including
+  [DAOS-9725](https://daosio.atlassian.net/browse/DAOS-9561) and
+  [DAOS-9006](https://daosio.atlassian.net/browse/DAOS-9006).
+
+- dfuse readahead caching has been disabled when write-through caching is enabled
+  [DAOS-9738](https://daosio.atlassian.net/browse/DAOS-9738).
+
+- An issue with EC aggregation has been fixed  where it was running too frequently
+  and consuming CPU cycles even when EC is not used
+  [DAOS-9926](https://daosio.atlassian.net/browse/DAOS-9926).
+
+- Minor changes to the
+  DFS API [DAOS-10009](https://daosio.atlassian.net/browse/DAOS-10009) and
+  DAOS Java API [DAOS-9379](https://daosio.atlassian.net/browse/DAOS-9379).
+
+- The sightings with SOAK testing in 2.0.1 have been resolved.
+  See [DAOS-9725](https://daosio.atlassian.net/browse/DAOS-9725).
+
+- The `daos_server` and `daos_agent` daemons now have a secondary group membership
+  in a new `daos_daemons` Linux group
+  [DAOS-6344](https://daosio.atlassian.net/browse/DAOS-6344).
+
+- Go dependency has been updated to >= 1.17
+  [DAOS-9908](https://daosio.atlassian.net/browse/DAOS-9908).
+
+- Hadoop dependency has been updated to 3.3.2
+  [DAOS-10068](https://daosio.atlassian.net/browse/DAOS-10068).
+
+- The `spdk` version has been updated from 21.07-11 to 21.07-13 (no content changes).
+
+## Known Issues and limitations
+
+- For some workloads, performance degradations have been observed with
+  libfabric 1.14 and the `tcp` provider
+  [DAOS-9883](https://daosio.atlassian.net/browse/DAOS-9883).
+
+- `daos fs copy` does not support symlinks /
+  [DAOS-9254](https://daosio.atlassian.net/browse/DAOS-9254)
+
+- No OPA/PSM2 support.
+  Please refer to the "Fabric Support" section of the
+  [Support Matrix](https://docs.daos.io/v2.0/release/support_matrix/) for details.
+
+- Premature ENOSPC error / [DAOS-8943](https://daosio.atlassian.net/browse/DAOS-8943)
+  Reclaiming free NVMe space is too slow and can cause early out-of-space errors
+  to be reported to applications.
+
+
 # DAOS Version 2.0.1 (2022-01-31)
 
 !!! note

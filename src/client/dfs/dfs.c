@@ -4142,8 +4142,8 @@ dfs_get_symlink_value(dfs_obj_t *obj, char *buf, daos_size_t *size)
 }
 
 static int
-xattr_copy(daos_handle_t src_oh, char *src_name, daos_handle_t dst_oh,
-	   char *dst_name, daos_handle_t th)
+xattr_copy(daos_handle_t src_oh, const char *src_name, daos_handle_t dst_oh, const char *dst_name,
+	   daos_handle_t th)
 {
 	daos_key_t	src_dkey, dst_dkey;
 	daos_anchor_t	anchor = {0};
@@ -4242,8 +4242,8 @@ out:
 
 /* Returns oids for both moved and clobbered files, but does not check either of them */
 int
-dfs_move_internal(dfs_t *dfs, dfs_obj_t *parent, char *name, dfs_obj_t *new_parent, char *new_name,
-		  daos_obj_id_t *moid, daos_obj_id_t *oid)
+dfs_move_internal(dfs_t *dfs, dfs_obj_t *parent, const char *name, dfs_obj_t *new_parent,
+		  const char *new_name, daos_obj_id_t *moid, daos_obj_id_t *oid)
 {
 	struct dfs_entry	entry = {0}, new_entry = {0};
 	daos_handle_t		th = DAOS_TX_NONE;
@@ -4428,15 +4428,15 @@ out:
 
 /* Wrapper function, only permit oid as a input parameter and return if it has data */
 int
-dfs_move(dfs_t *dfs, dfs_obj_t *parent, char *name, dfs_obj_t *new_parent,
-	 char *new_name, daos_obj_id_t *oid)
+dfs_move(dfs_t *dfs, dfs_obj_t *parent, const char *name, dfs_obj_t *new_parent,
+	 const char *new_name, daos_obj_id_t *oid)
 {
 	return dfs_move_internal(dfs, parent, name, new_parent, new_name, NULL, oid);
 }
 
 int
-dfs_exchange(dfs_t *dfs, dfs_obj_t *parent1, char *name1, dfs_obj_t *parent2,
-	     char *name2)
+dfs_exchange(dfs_t *dfs, dfs_obj_t *parent1, const char *name1, dfs_obj_t *parent2,
+	     const char *name2)
 {
 	struct dfs_entry	entry1 = {0}, entry2 = {0};
 	daos_handle_t		th = DAOS_TX_NONE;
