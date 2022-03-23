@@ -24,9 +24,8 @@ file-systems. These operations include :
   * WritableFiles
   * ReadOnlyMemoryRegion (which is left unimplemented in the case of the DFS plugin)
 
-The DFS Plugin translates each of these operations to their DAOS Filesystem equivalent,
-and utilizes features such as asynchronous reads with caching to ensure a high I/O bandwidth
-for its users
+The DFS Plugin translates the key operations offered by Tensorflow IO to their DAOS Filesystem equivalent, while utilizing 
+DAOS underlying functionalities and features to ensure a high I/O bandwidth for its users
 
 ## Setup
 In order to utilize the DFS Plugin for the meantime, the Tensorflow-IO library will need to be
