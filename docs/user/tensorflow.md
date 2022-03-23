@@ -28,9 +28,11 @@ The DFS Plugin translates each of these operations to their DAOS Filesystem equi
 and utilizes features such as asynchronous reads with caching to ensure a high I/O bandwidth
 for its users
 
-## Build Setup
+## Setup
 In order to utilize the DFS Plugin for the meantime, the Tensorflow-IO library will need to be
 built from [source](#https://github.com/daos-stack/tensorflow-io-daos/tree/devel)
+
+#### Prerequisites
 Assuming you are in a terminal in the repository root directory:
 
 * Install latest versions of the following dependencies by running
@@ -87,7 +89,7 @@ Assuming you are in a terminal in the repository root directory:
 
 * Build the project using bazel
   ```
-  bazel build --action_env=LIBRARY_PATH=$LIBRARY_PATH -s --verbose_failures --spawn_strategy=standalone //tensorflow_io/... //tensorflow_io_gcs_filesystem/...
+  bazel build --action_env=LIBRARY_PATH=$LIBRARY_PATH -s --verbose_failures //tensorflow_io/... //tensorflow_io_gcs_filesystem/...
   ```
   This should take a few minutes. Note that sandboxing may result in build failures when using Docker Containers for DAOS due to mounting issues, if that’s the case, add **--spawn_strategy=standalone** to the above build command to bypass sandboxing. (When disabling sandbox, an error may be thrown for an undefined type z_crc_t due to a conflict in header files. Please find the crypt.h file in the bazel cache in subdirectory /external/zlib/contrib/minizip/crypt.h and add the following line to the file **typedef unsigned long z_crc_t;** then re-build)
 
