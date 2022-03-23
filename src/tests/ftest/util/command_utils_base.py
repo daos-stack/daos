@@ -307,8 +307,8 @@ class ObjectWithParameters():
         for name, value in params.items():
             try:
                 getattr(self, name).update(value, name)
-            except AttributeError:
-                raise CommandFailure("Unknown parameter: {}".format(name))
+            except AttributeError as error:
+                raise CommandFailure("Unknown parameter: {}".format(name)) from error
 
 
 class CommandWithParameters(ObjectWithParameters):

@@ -1317,8 +1317,7 @@ def get_config_value(section, key):
     if int(MAJOR) >= 82:
         config = settings.as_dict()
         return config.get(".".join([section, key]))
-    else:
-        return settings.get_value(section, key)
+    return settings.get_value(section, key)     # pylint: disable=no-member
 
 
 def set_config_value(section, key, value):
