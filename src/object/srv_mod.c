@@ -98,7 +98,7 @@ obj_tls_init(int xs_id, int tgt_id)
 				     "io/ops/%s/active/tgt_%u",
 				     obj_opc_to_str(opc), tgt_id);
 		if (rc)
-			D_WARN("Failed to create active cnt sensor: "DF_RC"\n",
+			D_WARN("Failed to create active counter: "DF_RC"\n",
 			       DP_RC(rc));
 
 		if (opc == DAOS_OBJ_RPC_UPDATE ||
@@ -235,7 +235,7 @@ obj_metrics_alloc(const char *path, int tgt_id)
 				     "ops", "%s/ops/%s/tgt_%u", path,
 				     obj_opc_to_str(opc), tgt_id);
 		if (rc)
-			D_WARN("Failed to create total cnt sensor: "DF_RC"\n",
+			D_WARN("Failed to create total counter: "DF_RC"\n",
 			       DP_RC(rc));
 	}
 
@@ -244,7 +244,7 @@ obj_metrics_alloc(const char *path, int tgt_id)
 			     "total number of restarted update ops", "updates",
 			     "%s/restarted/tgt_%u", path, tgt_id);
 	if (rc)
-		D_WARN("Failed to create restarted cnt sensor: "DF_RC"\n",
+		D_WARN("Failed to create restarted counter: "DF_RC"\n",
 		       DP_RC(rc));
 
 	/** Total number of resent updates, of type counter */
@@ -252,7 +252,7 @@ obj_metrics_alloc(const char *path, int tgt_id)
 			     "total number of resent update RPCs", "updates",
 			     "%s/resent/tgt_%u", path, tgt_id);
 	if (rc)
-		D_WARN("Failed to create resent cnt sensor: "DF_RC"\n",
+		D_WARN("Failed to create resent counter: "DF_RC"\n",
 		       DP_RC(rc));
 
 	/** Total number of retry updates locally, of type counter */
@@ -267,7 +267,7 @@ obj_metrics_alloc(const char *path, int tgt_id)
 			     "total number of bytes fetched/read", "bytes",
 			     "%s/xferred/fetch/tgt_%u", path, tgt_id);
 	if (rc)
-		D_WARN("Failed to create bytes fetch sensor: "DF_RC"\n",
+		D_WARN("Failed to create bytes fetch counter: "DF_RC"\n",
 		       DP_RC(rc));
 
 	/** Total bytes written */
@@ -275,7 +275,7 @@ obj_metrics_alloc(const char *path, int tgt_id)
 			     "total number of bytes updated/written", "bytes",
 			     "%s/xferred/update/tgt_%u", path, tgt_id);
 	if (rc)
-		D_WARN("Failed to create bytes update sensor: "DF_RC"\n",
+		D_WARN("Failed to create bytes update counter: "DF_RC"\n",
 		       DP_RC(rc));
 
 	return metrics;
