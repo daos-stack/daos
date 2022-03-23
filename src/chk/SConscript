@@ -1,0 +1,24 @@
+"""Build chk library"""
+import daos_build
+
+def scons():
+    """Execute build"""
+    Import('env', 'prereqs')
+
+    env.AppendUnique(LIBPATH=[Dir('.')])
+
+    if not prereqs.server_requested():
+        return
+
+    denv = env.Clone()
+
+    prereqs.require(denv, 'argobots', 'protobufc')
+
+    # chk
+    chk = daos_build.library(denv, 'chk',
+                             ['check.pb-c.c', 'chk_srv.c', 'chk_common.c'],
+                             install_off="../..")
+    denv.Install('$PREFIX/lib64/daos_srv', chk)
+
+if __name__ == "SCons.Script":
+    scons()
