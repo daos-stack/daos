@@ -2665,7 +2665,7 @@ again2:
 	    DAOS_FAIL_CHECK(DAOS_DTX_LOST_RPC_REPLY))
 		ioc.ioc_lost_reply = 1;
 out:
-	if (rc != 0 && need_abort) {
+	if (unlikely(rc != 0 && need_abort)) {
 		struct dtx_entry	 dte;
 		int			 rc1;
 
