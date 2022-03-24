@@ -82,7 +82,7 @@ class DaosBuild(DfuseTestBase):
         remote_env = OrderedDict()
 
         remote_env['LD_PRELOAD'] = '/usr/lib64/libioil.so'
-        remote_env['D_LOG_FILE'] = '/tmp/daos.log'
+        remote_env['D_LOG_FILE'] = '/var/tmp/daos_testing/daos-il.log'
         remote_env['DD_MASK'] = 'all'
         remote_env['DD_SUBSYS'] = 'all'
         remote_env['D_IL_REPORT'] = '2'
@@ -100,6 +100,7 @@ class DaosBuild(DfuseTestBase):
                 'cat {}/new_file'.format(mount_dir),
                 'cp /bin/bash {}'.format(mount_dir),
                 'cp {}/bash {}/bash-copy'.format(mount_dir, mount_dir),
+                'df -h {}'.format(mount_dir),
                 'valgrind git clone https://github.com/daos-stack/daos.git {}'.format(build_dir),
                 'git -C {} submodule init'.format(build_dir),
                 'git -C {} submodule update'.format(build_dir),
