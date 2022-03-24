@@ -46,10 +46,6 @@ const (
 func engineCfgGetBdevs(engineCfg *engine.Config) *storage.BdevDeviceList {
 	bdevs := []string{}
 	for _, bc := range engineCfg.Storage.Tiers.BdevConfigs() {
-		if bc.Class != storage.ClassNvme {
-			// don't scan if any tier is using emulated NVMe
-			return new(storage.BdevDeviceList)
-		}
 		bdevs = append(bdevs, bc.Bdev.DeviceList.Devices()...)
 	}
 
@@ -126,13 +122,12 @@ func updateFabricEnvars(log logging.Logger, cfg *engine.Config, fis *hardware.Fa
 	// Mercury will now support the new OFI_DOMAIN environment variable so
 	// that we can specify the correct device for each.
 	if !cfg.HasEnvVar("OFI_DOMAIN") {
-		fi, err := fis.GetInterfaceOnOSDevice(cfg.Fabric.Interface, cfg.Fabric.Provider)
+		fi, err := fis.GetInterfaceOnNetDevice(cfg.Fabric.Interface, cfg.Fabric.Provider)
 		if err != nil {
 			return errors.Wrapf(err, "unable to determine device domain for %s", cfg.Fabric.Interface)
 		}
-		domain := fi.Name
-		log.Debugf("setting OFI_DOMAIN=%s for %s", domain, cfg.Fabric.Interface)
-		envVar := "OFI_DOMAIN=" + domain
+		log.Debugf("setting OFI_DOMAIN=%s for %s", fi.Name, cfg.Fabric.Interface)
+		envVar := "OFI_DOMAIN=" + fi.Name
 		cfg.WithEnvVars(envVar)
 	}
 
@@ -262,18 +257,19 @@ func prepBdevStorage(srv *server, iommuEnabled bool) error {
 
 // scanBdevStorage performs discovery and validates existence of configured NVMe SSDs.
 func scanBdevStorage(srv *server) (*storage.BdevScanResponse, error) {
+	if srv.cfg.NrHugepages < 0 {
+		srv.log.Debugf("skip nvme scan as hugepages have been disabled in config")
+		return &storage.BdevScanResponse{}, nil
+	}
+
 	nvmeScanResp, err := srv.ctlSvc.NvmeScan(storage.BdevScanRequest{
 		DeviceList:  cfgGetBdevs(srv.cfg),
 		BypassCache: true, // init cache on first scan
 	})
 	if err != nil {
-		// Return error if fault code is for BdevNotFound.
-		if storage.FaultBdevNotFound().Equals(err) {
-			return nil, err
-		}
-		// Keep going for other scan related failures.
-		srv.log.Errorf("%s\n", errors.Wrap(err, "NVMe Scan Failed"))
-		return &storage.BdevScanResponse{}, nil
+		err = errors.Wrap(err, "NVMe Scan Failed")
+		srv.log.Errorf("%s", err)
+		return nil, err
 	}
 
 	return nvmeScanResp, nil
@@ -487,6 +483,7 @@ func getGrpcOpts(cfgTransport *security.TransportConfig) ([]grpc.ServerOption, e
 	unaryInterceptors := []grpc.UnaryServerInterceptor{
 		unaryErrorInterceptor,
 		unaryStatusInterceptor,
+		unaryVersionInterceptor,
 	}
 	streamInterceptors := []grpc.StreamServerInterceptor{
 		streamErrorInterceptor,

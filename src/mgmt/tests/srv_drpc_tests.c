@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2019-2021 Intel Corporation.
+ * (C) Copyright 2019-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -1348,6 +1348,7 @@ test_drpc_pool_query_success(void **state)
 		return;
 	assert_int_equal(uuid_compare(exp_uuid, ds_mgmt_pool_query_uuid), 0);
 	assert_non_null(ds_mgmt_pool_query_info_ptr);
+	assert_non_null(ds_mgmt_pool_query_ranks_out);
 	assert_int_equal(ds_mgmt_pool_query_info_in.pi_bits, DPI_ALL);
 
 	expect_query_resp_with_info(&exp_info,
@@ -1392,7 +1393,7 @@ test_drpc_pool_query_success_rebuild_done(void **state)
 	init_test_pool_info(&exp_info);
 	init_test_rebuild_status(&exp_info.pi_rebuild_st);
 	exp_info.pi_rebuild_st.rs_version = 1;
-	exp_info.pi_rebuild_st.rs_done = 1;
+	exp_info.pi_rebuild_st.rs_state = DRS_COMPLETED;
 	ds_mgmt_pool_query_info_out = exp_info;
 
 	setup_pool_query_drpc_call(&call, TEST_UUID);
