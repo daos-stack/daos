@@ -793,17 +793,6 @@ enum vos_iter_state {
 	VOS_ITS_END,
 };
 
-/**
- * operation code for VOS iterator.
- */
-enum vos_iter_opc {
-	IT_OPC_NOOP,
-	IT_OPC_FIRST,
-	IT_OPC_LAST,
-	IT_OPC_PROBE,
-	IT_OPC_NEXT,
-};
-
 struct vos_iter_ops;
 
 /** the common part of vos iterators */
@@ -812,6 +801,8 @@ struct vos_iterator {
 	struct vos_iter_ops	*it_ops;
 	struct vos_iterator	*it_parent; /* parent iterator */
 	struct vos_ts_set	*it_ts_set;
+	vos_iter_filter_cb_t	 it_filter_cb;
+	void			*it_filter_arg;
 	daos_epoch_t		 it_bound;
 	vos_iter_type_t		 it_type;
 	enum vos_iter_state	 it_state;
@@ -820,7 +811,6 @@ struct vos_iterator {
 				 it_for_purge:1,
 				 it_for_discard:1,
 				 it_for_migration:1,
-				 it_cleanup_stale_dtx:1,
 				 it_show_uncommitted:1,
 				 it_ignore_uncommitted:1;
 };
@@ -851,6 +841,9 @@ struct vos_iter_info {
 	daos_epoch_range_t	 ii_epr;
 	/** highest epoch where parent obj/key was punched */
 	struct vos_punch_record	 ii_punched;
+	/** Filter callback */
+	vos_iter_filter_cb_t	 ii_filter_cb;
+	void			*ii_filter_arg;
 	/** epoch logic expression for the iterator. */
 	vos_it_epc_expr_t	 ii_epc_expr;
 	/** iterator flags */
@@ -883,9 +876,9 @@ struct vos_iter_ops {
 	int	(*iop_finish)(struct vos_iterator *iter);
 	/** Set the iterating cursor to the provided @anchor */
 	int	(*iop_probe)(struct vos_iterator *iter,
-			     daos_anchor_t *anchor);
+			     daos_anchor_t *anchor, uint32_t flags);
 	/** move forward the iterating cursor */
-	int	(*iop_next)(struct vos_iterator *iter);
+	int	(*iop_next)(struct vos_iterator *iter, daos_anchor_t *anchor);
 	/** fetch the record that the cursor points to */
 	int	(*iop_fetch)(struct vos_iterator *iter,
 			     vos_iter_entry_t *it_entry,
@@ -948,6 +941,15 @@ static inline struct vos_obj_iter *
 vos_hdl2oiter(daos_handle_t hdl)
 {
 	return vos_iter2oiter(vos_hdl2iter(hdl));
+}
+
+static inline daos_handle_t
+vos_iter2hdl(struct vos_iterator *iter)
+{
+	daos_handle_t	hdl;
+
+	hdl.cookie = (uint64_t)iter;
+	return hdl;
 }
 
 /**
@@ -1373,6 +1375,12 @@ recx_csum_len(daos_recx_t *recx, struct dcs_csum_info *csum,
 		return 0;
 	return (daos_size_t)csum->cs_len * csum_chunk_count(csum->cs_chunksize,
 			recx->rx_idx, recx->rx_idx + recx->rx_nr - 1, rsize);
+}
+
+static inline bool
+vos_anchor_is_zero(daos_anchor_t *anchor)
+{
+	return anchor == NULL || daos_anchor_is_zero(anchor);
 }
 
 #endif /* __VOS_INTERNAL_H__ */

@@ -38,10 +38,12 @@ daos_pool_connect(const char *pool, const char *sys, unsigned int flags,
 
 	return dc_task_schedule(task, true);
 }
+
+#undef daos_pool_connect
 int
-daos_pool_connect2(const char *pool, const char *sys, unsigned int flags,
-		 daos_handle_t *poh, daos_pool_info_t *info, daos_event_t *ev)
-		 __attribute__ ((weak, alias("daos_pool_connect")));
+daos_pool_connect(const char *pool, const char *sys, unsigned int flags,
+		  daos_handle_t *poh, daos_pool_info_t *info, daos_event_t *ev)
+		  __attribute__ ((weak, alias("daos_pool_connect2")));
 
 int
 daos_pool_disconnect(daos_handle_t poh, daos_event_t *ev)
@@ -74,7 +76,7 @@ daos_pool_global2local(d_iov_t glob, daos_handle_t *poh)
 }
 
 int
-daos_pool_query(daos_handle_t poh, d_rank_list_t *tgts, daos_pool_info_t *info,
+daos_pool_query(daos_handle_t poh, d_rank_list_t **ranks, daos_pool_info_t *info,
 		daos_prop_t *pool_prop, daos_event_t *ev)
 {
 	daos_pool_query_t	*args;
@@ -94,7 +96,7 @@ daos_pool_query(daos_handle_t poh, d_rank_list_t *tgts, daos_pool_info_t *info,
 
 	args = dc_task_get_args(task);
 	args->poh	= poh;
-	args->tgts	= tgts;
+	args->ranks	= ranks;
 	args->info	= info;
 	args->prop	= pool_prop;
 

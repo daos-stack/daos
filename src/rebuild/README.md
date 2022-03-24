@@ -197,9 +197,12 @@ struct daos_rebuild_status {
 	/** errno for rebuild failure */
 	int32_t			rs_errno;
 	/**
-	 * rebuild is done or not, it is valid only if @rs_version is non-zero
+	 * rebuild state, DRS_COMPLETED is valid only if @rs_version is non-zero
 	 */
-	int32_t			rs_done;
+	union {
+		int32_t			rs_state;
+		int32_t			rs_done;
+	};
 
 	/* padding of rebuild status */
 	int32_t			rs_padding32;
@@ -207,14 +210,15 @@ struct daos_rebuild_status {
 	/* Failure on which rank */
 	int32_t			rs_fail_rank;
 	/** # total to-be-rebuilt objects, it's non-zero and increase when
-	 * rebuilding in progress, when rs_done is 1 it will not change anymore
-	 * and should equal to rs_obj_nr. With both rs_toberb_obj_nr and
-	 * rs_obj_nr the user can know the progress of the rebuilding.
+	 * rebuilding in progress, when rs_state is DRS_COMPLETED it will
+	 * not change anymore and should equal to rs_obj_nr. With both
+	 * rs_toberb_obj_nr and rs_obj_nr the user can know the progress
+	 * of the rebuilding.
 	 */
 	uint64_t		rs_toberb_obj_nr;
-	/** # rebuilt objects, it's non-zero only if rs_done is 1 */
+	/** # rebuilt objects, it's non-zero only if rs_state is completed */
 	uint64_t		rs_obj_nr;
-	/** # rebuilt records, it's non-zero only if rs_done is 1 */
+	/** # rebuilt records, it's non-zero only if rs_state is completed */
 	uint64_t		rs_rec_nr;
 
 	/** rebuild space cost */

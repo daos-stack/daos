@@ -181,7 +181,7 @@ struct obj_reasb_req {
 					 orr_size_fetch:1,
 	/* for iod_size fetched flag */
 					 orr_size_fetched:1,
-	/* only with single target flag */
+	/* only with single data target flag */
 					 orr_single_tgt:1,
 	/* only for single-value IO flag */
 					 orr_singv_only:1,
@@ -557,6 +557,8 @@ int obj_pool_query_task(tse_sched_t *sched, struct dc_object *obj,
 bool obj_csum_dedup_candidate(struct cont_props *props, daos_iod_t *iods,
 			      uint32_t iod_nr);
 
+int obj_grp_leader_get(struct dc_object *obj, int grp_idx,
+		       unsigned int map_ver, uint8_t *bit_map);
 #define obj_shard_close(shard)	dc_obj_shard_close(shard)
 int obj_recx_ec_daos2shard(struct daos_oclass_attr *oca, int shard, daos_recx_t **recxs_p,
 			   daos_epoch_t **recx_ephs_p, unsigned int *iod_nr);
