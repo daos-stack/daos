@@ -190,7 +190,7 @@ def define_mercury(reqs):
     else:
         mercury_build.append('-DMERCURY_ENABLE_DEBUG=OFF')
 
-    if reqs.check_component('ucx'):
+    if reqs.get_env('UCX'):
         mercury_build.extend(['-DNA_USE_UCX=ON',
                               '-DUCX_INCLUDE_DIR=/usr/include',
                               '-DUCP_LIBRARY=/usr/lib64/libucp.so',

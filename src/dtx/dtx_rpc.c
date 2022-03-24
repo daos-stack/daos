@@ -883,7 +883,6 @@ dtx_refresh_internal(struct ds_cont_child *cont, int *check_count,
 		     d_list_t *abt_list, d_list_t *act_list, bool failout)
 {
 	struct ds_pool		*pool = cont->sc_pool->spc_pool;
-	struct pool_target	*target;
 	struct dtx_share_peer	*dsp;
 	struct dtx_share_peer	*tmp;
 	struct dtx_req_rec	*drr;
@@ -899,63 +898,26 @@ dtx_refresh_internal(struct ds_cont_child *cont, int *check_count,
 	crt_group_rank(NULL, &myrank);
 
 	d_list_for_each_entry_safe(dsp, tmp, check_list, dsp_link) {
-		int		leader_tgt = PO_COMP_ID_ALL;
-		int		tgt;
+		struct pool_target *target;
 		int		count = 0;
 		bool		drop = false;
-
-		if (!(dsp->dsp_mbs.dm_flags & DMF_CONTAIN_LEADER)) {
-
 again:
-			rc = ds_pool_elect_dtx_leader(pool, &dsp->dsp_oid, &dsp->dsp_mbs,
-						      pool->sp_map_version, &tgt);
-			if (rc < 0) {
-				/* Currently, for EC object, if parity node is
-				 * in rebuilding, we will get -DER_STALE, that
-				 * is not fatal, the caller or related request
-				 * sponsor can retry sometime later.
-				 */
-				D_CDEBUG(rc == -DER_STALE, DB_TRACE, DLOG_WARN,
-					 "Failed to find DTX leader for "
-					 DF_DTI", ver %d: "DF_RC"\n",
-					 DP_DTI(&dsp->dsp_xid),
-					 pool->sp_map_version, DP_RC(rc));
+		rc = dtx_leader_get(pool, &dsp->dsp_mbs, &target);
+		if (rc < 0) {
+			/**
+			 * Currently, for EC object, if parity node is
+			 * in rebuilding, we will get -DER_STALE, that
+			 * is not fatal, the caller or related request
+			 * sponsor can retry sometime later.
+			 */
+			D_WARN("Failed to find DTX leader for "DF_DTI", ver %d: "DF_RC"\n",
+			       DP_DTI(&dsp->dsp_xid), pool->sp_map_version, DP_RC(rc));
+			if (failout)
+				goto out;
 
-				if (failout)
-					goto out;
-
-				drop = true;
-				goto next;
-			}
-
-			/* Still get the same leader. That is abnormal. */
-			if (leader_tgt == tgt) {
-				D_ERROR("Get DTX leader on %d (rebuilding) for "
-					DF_DTI", that is abnormal, ver is %d\n",
-					rc, DP_DTI(&dsp->dsp_xid),
-					pool->sp_map_version);
-
-				if (failout)
-					D_GOTO(out, rc = -DER_IO);
-
-				drop = true;
-				goto next;
-			}
-
-			leader_tgt = tgt;
-		} else {
-			leader_tgt = dsp->dsp_mbs.dm_tgts[0].ddt_id;
+			drop = true;
+			goto next;
 		}
-
-		ABT_rwlock_rdlock(pool->sp_lock);
-		rc = pool_map_find_target(pool->sp_map, leader_tgt, &target);
-		if (rc != 1) {
-			D_WARN("Cannot find target %u, flags %x\n",
-			       leader_tgt, dsp->dsp_mbs.dm_flags);
-			ABT_rwlock_unlock(pool->sp_lock);
-			D_GOTO(out, rc = -DER_UNINIT);
-		}
-		ABT_rwlock_unlock(pool->sp_lock);
 
 		/* If current server is the leader, then two possible cases:
 		 *

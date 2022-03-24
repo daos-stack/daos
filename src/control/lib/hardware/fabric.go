@@ -17,15 +17,39 @@ import (
 	"github.com/pkg/errors"
 
 	"github.com/daos-stack/daos/src/control/common"
+	"github.com/daos-stack/daos/src/control/lib/dlopen"
 	"github.com/daos-stack/daos/src/control/logging"
 )
+
+// IsUnsupportedFabric returns true if the supplied error is
+// an instance of errUnsupportedFabric.
+func IsUnsupportedFabric(err error) bool {
+	_, ok := errors.Cause(err).(*errUnsupportedFabric)
+	return ok
+}
+
+type errUnsupportedFabric struct {
+	provider string
+}
+
+func (euf *errUnsupportedFabric) Error() string {
+	return fmt.Sprintf("fabric provider %q not supported", euf.provider)
+}
+
+// ErrUnsupportedFabric returns an error indicating that the denoted
+// fabric provider is not supported by this build/platform.
+func ErrUnsupportedFabric(provider string) error {
+	return &errUnsupportedFabric{provider: provider}
+}
 
 // FabricInterface represents basic information about a fabric interface.
 type FabricInterface struct {
 	// Name is the fabric device name.
 	Name string `json:"name"`
-	// OSDevice is the corresponding OS-level network interface device.
-	OSDevice string `json:"os_device"`
+	// OSName is the device name as reported by the operating system.
+	OSName string `json:"os_name"`
+	// NetInterface is the corresponding OS-level network interface device.
+	NetInterface string `json:"net_interface"`
 	// Providers is the set of supported providers.
 	Providers common.StringSet `json:"providers"`
 	// DeviceClass is the type of the network interface.
@@ -45,8 +69,13 @@ func (fi *FabricInterface) String() string {
 	}
 
 	var osName string
-	if fi.OSDevice != "" {
-		osName = fmt.Sprintf(" (interface: %s)", fi.OSDevice)
+	if fi.OSName != "" && fi.OSName != fi.Name {
+		osName = fmt.Sprintf(" (OS name: %s)", fi.OSName)
+	}
+
+	var netIF string
+	if fi.NetInterface != "" {
+		netIF = fmt.Sprintf(" (interface: %s)", fi.NetInterface)
 	}
 
 	providers := "none"
@@ -54,7 +83,49 @@ func (fi *FabricInterface) String() string {
 		providers = fi.Providers.String()
 	}
 
-	return fmt.Sprintf("%s%s (providers: %s)", name, osName, providers)
+	return fmt.Sprintf("%s%s%s (providers: %s)", name, osName, netIF, providers)
+}
+
+// SupportsProvider reports whether the FabricInterface supports the given provider string. If the
+// string contains multiple comma-separated providers, it verifies that all are supported.
+func (fi *FabricInterface) SupportsProvider(provider string) bool {
+	if fi == nil {
+		return false
+	}
+
+	// format: [lib+]prov[,prov2,...]
+	var prefix string
+	provPieces := strings.Split(provider, "+")
+	providers := provPieces[0]
+	if len(provPieces) > 1 {
+		prefix = provPieces[0] + "+"
+		providers = provPieces[1]
+	}
+
+	for _, prov := range strings.Split(providers, ",") {
+		prov = prefix + prov
+		if !fi.Providers.Has(prov) {
+			return false
+		}
+	}
+
+	return true
+}
+
+func (fi *FabricInterface) TopologyName() (string, error) {
+	if fi == nil {
+		return "", errors.New("FabricInterface is nil")
+	}
+
+	if fi.OSName != "" {
+		return fi.OSName, nil
+	}
+
+	if fi.Name == "" {
+		return "", errors.New("FabricInterface has no name")
+	}
+
+	return fi.Name, nil
 }
 
 type fabricInterfaceMap map[string]*FabricInterface
@@ -75,8 +146,8 @@ func (s fabricInterfaceMap) update(name string, fi *FabricInterface) {
 
 	if cur, found := s[name]; found {
 		// once these values are set to something nonzero, they are immutable
-		if cur.OSDevice == "" {
-			cur.OSDevice = fi.OSDevice
+		if cur.NetInterface == "" {
+			cur.NetInterface = fi.NetInterface
 		}
 		if cur.NUMANode == 0 {
 			cur.NUMANode = fi.NUMANode
@@ -98,9 +169,9 @@ func (s fabricInterfaceMap) update(name string, fi *FabricInterface) {
 	s[name] = fi
 }
 
-type osDevMap map[string]fabricInterfaceMap
+type netMap map[string]fabricInterfaceMap
 
-func (m osDevMap) keys() []string {
+func (m netMap) keys() []string {
 	keys := make([]string, 0, len(m))
 	for str := range m {
 		keys = append(keys, str)
@@ -109,7 +180,7 @@ func (m osDevMap) keys() []string {
 	return keys
 }
 
-func (m osDevMap) update(name string, fi *FabricInterface) {
+func (m netMap) update(name string, fi *FabricInterface) {
 	if fi == nil || name == "" {
 		return
 	}
@@ -120,15 +191,15 @@ func (m osDevMap) update(name string, fi *FabricInterface) {
 	m[name].update(fi.Name, fi)
 }
 
-func (m osDevMap) remove(fi *FabricInterface) {
-	if fi == nil || fi.OSDevice == "" {
+func (m netMap) remove(fi *FabricInterface) {
+	if fi == nil || fi.NetInterface == "" {
 		return
 	}
 
-	if devices, exists := m[fi.OSDevice]; exists {
+	if devices, exists := m[fi.NetInterface]; exists {
 		delete(devices, fi.Name)
 		if len(devices) == 0 {
-			delete(m, fi.OSDevice)
+			delete(m, fi.NetInterface)
 		}
 	}
 }
@@ -137,8 +208,8 @@ func (m osDevMap) remove(fi *FabricInterface) {
 // FabricInterfaces if provided.
 func NewFabricInterfaceSet(fis ...*FabricInterface) *FabricInterfaceSet {
 	result := &FabricInterfaceSet{
-		byName:  make(fabricInterfaceMap),
-		byOSDev: make(osDevMap),
+		byName:   make(fabricInterfaceMap),
+		byNetDev: make(netMap),
 	}
 
 	for _, fi := range fis {
@@ -150,8 +221,8 @@ func NewFabricInterfaceSet(fis ...*FabricInterface) *FabricInterfaceSet {
 
 // FabricInterfaceSet is a set of fabric interfaces.
 type FabricInterfaceSet struct {
-	byName  fabricInterfaceMap
-	byOSDev osDevMap
+	byName   fabricInterfaceMap
+	byNetDev netMap
 }
 
 func (s *FabricInterfaceSet) String() string {
@@ -183,20 +254,20 @@ func (s *FabricInterfaceSet) Names() []string {
 	return s.byName.keys()
 }
 
-// NumOSDevices is the number of unique OS-level network devices in the set.
-func (s *FabricInterfaceSet) NumOSDevices() int {
+// NumNetDevices is the number of unique OS-level network devices in the set.
+func (s *FabricInterfaceSet) NumNetDevices() int {
 	if s == nil {
 		return 0
 	}
-	return len(s.byOSDev)
+	return len(s.byNetDev)
 }
 
-// OSDevices provides a sorted list of the OS-level network devices.
-func (s *FabricInterfaceSet) OSDevices() []string {
+// NetDevices provides a sorted list of the OS-level network devices.
+func (s *FabricInterfaceSet) NetDevices() []string {
 	if s == nil {
 		return []string{}
 	}
-	return s.byOSDev.keys()
+	return s.byNetDev.keys()
 }
 
 // Update updates the details of the fabric interface if it's already in the set, or adds it to the
@@ -209,12 +280,12 @@ func (s *FabricInterfaceSet) Update(fi *FabricInterface) {
 	name := fi.Name
 	s.byName.update(name, fi)
 
-	osDev := fi.OSDevice
+	osDev := fi.NetInterface
 	if osDev == "" {
 		return
 	}
 
-	s.byOSDev.update(osDev, fi)
+	s.byNetDev.update(osDev, fi)
 }
 
 // Remove deletes a FabricInterface from the set.
@@ -225,7 +296,7 @@ func (s *FabricInterfaceSet) Remove(fiName string) {
 		return
 	}
 
-	s.byOSDev.remove(fi)
+	s.byNetDev.remove(fi)
 	delete(s.byName, fiName)
 }
 
@@ -247,33 +318,33 @@ func (s *FabricInterfaceSet) GetInterface(name string) (*FabricInterface, error)
 	return fi, nil
 }
 
-// GetInterfaceOnOSDevice searches for an interface with a given OS-level device name that
+// GetInterfaceOnNetDevice searches for an interface with a given OS network device name that
 // supports a given provider.
-func (s *FabricInterfaceSet) GetInterfaceOnOSDevice(osDev string, provider string) (*FabricInterface, error) {
+func (s *FabricInterfaceSet) GetInterfaceOnNetDevice(netDev string, provider string) (*FabricInterface, error) {
 	if s == nil {
 		return nil, errors.New("nil FabricInterfaceSet")
 	}
 
-	if osDev == "" {
-		return nil, errors.New("OS device name is required")
+	if netDev == "" {
+		return nil, errors.New("network device name is required")
 	}
 
 	if provider == "" {
 		return nil, errors.New("fabric provider is required")
 	}
 
-	fis, exists := s.byOSDev[osDev]
+	fis, exists := s.byNetDev[netDev]
 	if !exists {
-		return nil, errors.Errorf("OS device %q not found", osDev)
+		return nil, errors.Errorf("network device %q not found", netDev)
 	}
 
 	for _, fi := range fis {
-		if fi.Providers.Has(provider) {
+		if fi.SupportsProvider(provider) {
 			return fi, nil
 		}
 	}
 
-	return nil, errors.Errorf("fabric provider %q not supported on OS device %q", provider, osDev)
+	return nil, errors.Errorf("fabric provider %q not supported on network device %q", provider, netDev)
 }
 
 // NetDevClass represents the class of network device.
@@ -382,6 +453,13 @@ func (f *FabricInterfaceBuilder) BuildPart(ctx context.Context, fis *FabricInter
 	fiSets := make([]*FabricInterfaceSet, 0)
 	for _, fiProv := range f.fiProviders {
 		set, err := fiProv.GetFabricInterfaces(ctx)
+		if errors.Is(errors.Cause(err), dlopen.ErrSoNotFound) || IsUnsupportedFabric(err) {
+			// A runtime library wasn't installed. This is okay - we'll still detect
+			// what we can.
+			f.log.Debug(err.Error())
+			continue
+		}
+
 		if err != nil {
 			return err
 		}
@@ -410,17 +488,17 @@ func newFabricInterfaceBuilder(log logging.Logger, fiProviders ...FabricInterfac
 	}
 }
 
-// OSDeviceBuilder is a builder that updates FabricInterfaces with an OSDevice.
-type OSDeviceBuilder struct {
+// NetworkDeviceBuilder is a builder that updates FabricInterfaces with NetDevice.
+type NetworkDeviceBuilder struct {
 	log  logging.Logger
 	topo *Topology
 }
 
 // BuildPart updates existing FabricInterface structures in the FabricInterfaceSet to include an
-// OS-level device name, if available.
-func (o *OSDeviceBuilder) BuildPart(ctx context.Context, fis *FabricInterfaceSet) error {
+// OS-level network device name, if available.
+func (o *NetworkDeviceBuilder) BuildPart(ctx context.Context, fis *FabricInterfaceSet) error {
 	if o == nil {
-		return errors.New("OSDeviceBuilder is nil")
+		return errors.New("NetworkDeviceBuilder is nil")
 	}
 
 	if fis == nil {
@@ -428,7 +506,7 @@ func (o *OSDeviceBuilder) BuildPart(ctx context.Context, fis *FabricInterfaceSet
 	}
 
 	if o.topo == nil {
-		return errors.New("OSDeviceBuilder is uninitialized")
+		return errors.New("NetworkDeviceBuilder is uninitialized")
 	}
 
 	devsByName := o.topo.AllDevices()
@@ -442,20 +520,26 @@ func (o *OSDeviceBuilder) BuildPart(ctx context.Context, fis *FabricInterfaceSet
 
 		if fi.DeviceClass == Loopback || fi.Name == "lo" {
 			// Loopback is not a hardware device
-			fi.OSDevice = name
+			fi.NetInterface = name
 			fis.Update(fi)
 			continue
 		}
 
-		dev, exists := devsByName[name]
+		topoName, err := fi.TopologyName()
+		if err != nil {
+			o.log.Errorf("can't get topology name for %q: %s", name, err.Error())
+			continue
+		}
+
+		dev, exists := devsByName[topoName]
 		if !exists {
-			o.log.Debugf("ignoring fabric interface %q not found in topology", name)
+			o.log.Debugf("ignoring fabric interface %q (%s) not found in topology", name, topoName)
 			fis.Remove(name)
 			continue
 		}
 
 		if dev.Type == DeviceTypeNetInterface {
-			fi.OSDevice = name
+			fi.NetInterface = name
 			fis.Update(fi)
 			continue
 		}
@@ -463,22 +547,22 @@ func (o *OSDeviceBuilder) BuildPart(ctx context.Context, fis *FabricInterfaceSet
 		siblings := o.topo.NUMANodes[dev.NUMANode.ID].PCIDevices[dev.PCIAddr]
 		for _, sib := range siblings {
 			if sib.Type == DeviceTypeNetInterface {
-				fi.OSDevice = sib.Name
+				fi.NetInterface = sib.Name
 				fis.Update(fi)
 				break
 			}
 		}
 
-		if fi.OSDevice == "" {
-			o.log.Errorf("no OS device sibling found for fabric %q", name)
+		if fi.NetInterface == "" {
+			o.log.Errorf("no network device sibling found for fabric %q", name)
 		}
 	}
 
 	return nil
 }
 
-func newOSDeviceBuilder(log logging.Logger, topo *Topology) *OSDeviceBuilder {
-	return &OSDeviceBuilder{
+func newNetworkDeviceBuilder(log logging.Logger, topo *Topology) *NetworkDeviceBuilder {
+	return &NetworkDeviceBuilder{
 		log:  log,
 		topo: topo,
 	}
@@ -519,9 +603,15 @@ func (n *NUMAAffinityBuilder) BuildPart(ctx context.Context, fis *FabricInterfac
 			continue
 		}
 
-		dev, exists := devsByName[name]
+		topoName, err := fi.TopologyName()
+		if err != nil {
+			n.log.Errorf("can't get topology name for %q: %s", name, err.Error())
+			continue
+		}
+
+		dev, exists := devsByName[topoName]
 		if !exists {
-			n.log.Debugf("fabric interface %q not found in topology", name)
+			n.log.Debugf("fabric interface %q (%s) not found in topology", name, topoName)
 			continue
 		}
 
@@ -564,12 +654,12 @@ func (n *NetDevClassBuilder) BuildPart(ctx context.Context, fis *FabricInterface
 			return err
 		}
 
-		if fi.OSDevice == "" {
+		if fi.NetInterface == "" {
 			n.log.Debugf("fabric interface %q has no corresponding OS-level device", name)
 			continue
 		}
 
-		ndc, err := n.provider.GetNetDevClass(fi.OSDevice)
+		ndc, err := n.provider.GetNetDevClass(fi.NetInterface)
 		if err != nil {
 			n.log.Debugf("failed to get device class for %q: %s", name, err.Error())
 		}
@@ -596,7 +686,7 @@ type FabricInterfaceSetBuilderConfig struct {
 func defaultFabricInterfaceSetBuilders(log logging.Logger, config *FabricInterfaceSetBuilderConfig) []FabricInterfaceSetBuilder {
 	return []FabricInterfaceSetBuilder{
 		newFabricInterfaceBuilder(log, config.FabricInterfaceProviders...),
-		newOSDeviceBuilder(log, config.Topology),
+		newNetworkDeviceBuilder(log, config.Topology),
 		newNetDevClassBuilder(log, config.NetDevClassProvider),
 		newNUMAAffinityBuilder(log, config.Topology),
 	}

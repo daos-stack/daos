@@ -110,6 +110,7 @@ func (p *Provider) infoToFabricInterface(fi info) (*hardware.FabricInterface, er
 
 	newFI := &hardware.FabricInterface{
 		Name:      name,
+		OSName:    name,
 		Providers: common.NewStringSet(extProvider),
 	}
 	return newFI, nil
