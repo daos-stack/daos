@@ -787,7 +787,11 @@ cont_child_stop(struct ds_cont_child *cont_child)
 		cont_child->sc_stopping = 1;
 		d_list_del_init(&cont_child->sc_link);
 
-		dtx_cont_deregister(cont_child);
+		/* Deregister the container from DTX if nobody holds the open count; otherwise,
+		 * dtx_cont_deregister() will be called when the last open count to be dropped.
+		 */
+		if (likely(cont_child->sc_open == 0))
+			dtx_cont_deregister(cont_child);
 
 		/* cont_stop_agg() may yield */
 		cont_stop_agg(cont_child);
@@ -1465,6 +1469,9 @@ ds_cont_local_open(uuid_t pool_uuid, uuid_t cont_hdl_uuid, uuid_t cont_uuid,
 
 		rc = dtx_cont_open(hdl->sch_cont);
 		if (rc != 0) {
+			D_ASSERTF(hdl->sch_cont->sc_open == 1, "Unexpected open count %d\n",
+				  hdl->sch_cont->sc_open);
+
 			hdl->sch_cont->sc_open--;
 			D_GOTO(err_cont, rc);
 		}
@@ -1499,10 +1506,12 @@ opened:
 	return 0;
 
 err_dtx:
-	D_ASSERT(hdl->sch_cont->sc_open > 0);
+	D_ASSERTF(hdl->sch_cont->sc_open == 1, "Unexpected open count %d\n",
+		  hdl->sch_cont->sc_open);
+
 	hdl->sch_cont->sc_open--;
-	if (hdl->sch_cont->sc_open == 0)
-		dtx_cont_close(hdl->sch_cont);
+	dtx_cont_close(hdl->sch_cont);
+
 err_cont:
 	if (daos_handle_is_valid(poh)) {
 		int rc_tmp;

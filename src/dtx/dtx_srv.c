@@ -27,6 +27,9 @@ dtx_tls_init(int xs_id, int tgt_id)
 	if (tls == NULL)
 		return NULL;
 
+	tls->dt_agg_gen = 1;
+	tls->dt_registered_cont_cnt = 0;
+
 	/** Skip sensor setup on system xstreams */
 	if (tgt_id < 0)
 		return tls;
@@ -44,6 +47,11 @@ dtx_tls_init(int xs_id, int tgt_id)
 static void
 dtx_tls_fini(void *data)
 {
+	struct dtx_tls	*tls = data;
+
+	D_ASSERTF(tls->dt_registered_cont_cnt == 0, "Some containers are not deregistered %d\n",
+		  tls->dt_registered_cont_cnt);
+
 	D_FREE(data);
 }
 
@@ -431,8 +439,6 @@ static int
 dtx_setup(void)
 {
 	int	rc;
-
-	dtx_agg_gen = 1;
 
 	rc = dss_ult_create_all(dtx_batched_commit, NULL, true);
 	if (rc != 0) {

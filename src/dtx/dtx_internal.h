@@ -130,6 +130,8 @@ struct dtx_pool_metrics {
  */
 struct dtx_tls {
 	struct d_tm_node_t	*dt_committable;
+	uint64_t		 dt_agg_gen;
+	uint32_t		 dt_registered_cont_cnt;
 };
 
 extern struct dss_module_key dtx_module_key;
@@ -149,7 +151,6 @@ dtx_cont_opened(struct ds_cont_child *cont)
 extern struct crt_proto_format dtx_proto_fmt;
 extern btr_ops_t dbtree_dtx_cf_ops;
 extern btr_ops_t dtx_btr_cos_ops;
-extern uint64_t dtx_agg_gen;
 
 /* dtx_common.c */
 int dtx_handle_reinit(struct dtx_handle *dth);
