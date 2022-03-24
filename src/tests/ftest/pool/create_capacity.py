@@ -40,6 +40,13 @@ class PoolCreateTests(PoolTestBase):
         self.add_pool_qty(quantity, create=False)
         self.check_pool_creation(10)
 
+        # Some customer reported that pool list takes a long time, so measure the time
+        # to list 200 pools as a reference.`
+        pool_list_start = float(time.time())
+        self.get_dmg_command().pool_list()
+        pool_list_duration = float(time.time()) - pool_list_start
+        self.log.info("dmg pool list duration: %.1f sec", pool_list_duration)
+
         # Verify DAOS can be restarted in less than 2 minutes
         try:
             self.server_managers[0].system_stop()
@@ -60,12 +67,7 @@ class PoolCreateTests(PoolTestBase):
         self.dmg.timeout = 360
 
         # Verify all the pools exists after the restart
-        pool_list_start = float(time.time())
         pool_uuids = self.get_dmg_command().get_pool_list_uuids(no_query=True)
-        pool_list_duration = float(time.time()) - pool_list_start
-        # Some customer reported that pool list takes a long time, so measure the time
-        # to list 200 pools as a reference.
-        self.log.info("dmg pool list duration: %.1f sec", pool_list_duration)
         detected_pools = [uuid.lower() for uuid in pool_uuids]
         missing_pools = []
         for pool in self.pool:
