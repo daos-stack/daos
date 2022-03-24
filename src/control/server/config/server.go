@@ -296,9 +296,10 @@ func DefaultServer() *Server {
 		Hyperthreads:    false,
 		Path:            defaultConfigPath,
 		ControlLogMask:  common.ControlLogLevel(logging.LogLevelInfo),
-		EnableVMD:       false,      // disabled by default
-		EnableHotplug:   false,      // disabled by default
-		CoreDumpFilter:  0b00010011, // private, shared, ELF
+		EnableVMD:       false, // disabled by default
+		EnableHotplug:   false, // disabled by default
+		// https://man7.org/linux/man-pages/man5/core.5.html
+		CoreDumpFilter: 0b00010011, // private, shared, ELF
 	}
 }
 
