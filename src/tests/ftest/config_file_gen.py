@@ -49,6 +49,7 @@ def generate_server_config(args):
     config = DaosServerYamlParameters(args.server_file, common_cfg)
     # Update the configuration file access points
     config.other_params.access_points.value = args.node_list.split(",")
+    config.provider.value = args.provider
     return create_config(args, config)
 
 
@@ -156,6 +157,12 @@ def main():
         type=int,
         default=None,
         help="the access point port")
+    parser.add_argument(
+        "-pr", "--provider",
+        action="store",
+        type=str,
+        default="ofi+tcp",
+        help="the provider to use in the server config")
     parser.add_argument(
         "-s", "--server_file",
         action="store",
