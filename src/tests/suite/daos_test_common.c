@@ -450,7 +450,7 @@ pool_destroy_safe(test_arg_t *arg, struct test_pool *extpool)
 			return rc;
 		}
 
-		if (rstat->rs_done == 0) {
+		if (rstat->rs_state == DRS_IN_PROGRESS) {
 			print_message("waiting for rebuild\n");
 			sleep(1);
 			continue;
@@ -676,7 +676,7 @@ test_runable(test_arg_t *arg, unsigned int required_nodes)
 }
 
 int
-test_pool_get_info(test_arg_t *arg, daos_pool_info_t *pinfo)
+test_pool_get_info(test_arg_t *arg, daos_pool_info_t *pinfo, d_rank_list_t **engine_ranks)
 {
 	bool	   connect_pool = false;
 	int	   rc;
@@ -695,7 +695,7 @@ test_pool_get_info(test_arg_t *arg, daos_pool_info_t *pinfo)
 		connect_pool = true;
 	}
 
-	rc = daos_pool_query(arg->pool.poh, NULL, pinfo, NULL, NULL);
+	rc = daos_pool_query(arg->pool.poh, engine_ranks, pinfo, NULL, NULL);
 	if (rc != 0)
 		print_message("pool query failed %d\n", rc);
 
@@ -719,9 +719,9 @@ rebuild_pool_wait(test_arg_t *arg)
 	bool			   done = false;
 
 	pinfo.pi_bits = DPI_REBUILD_STATUS;
-	rc = test_pool_get_info(arg, &pinfo);
+	rc = test_pool_get_info(arg, &pinfo, NULL /* engine_ranks */);
 	rst = &pinfo.pi_rebuild_st;
-	if ((rst->rs_done || rc != 0) && rst->rs_version != 0 &&
+	if ((rst->rs_state == DRS_COMPLETED || rc != 0) && rst->rs_version != 0 &&
 	     rst->rs_version != arg->rebuild_pre_pool_ver) {
 		print_message("Rebuild "DF_UUIDF" (ver=%u orig_ver=%u) is done %d/%d, "
 			      "obj="DF_U64", rec="DF_U64".\n",
@@ -749,7 +749,7 @@ test_get_leader(test_arg_t *arg, d_rank_t *rank)
 	daos_pool_info_t	pinfo = {0};
 	int			rc;
 
-	rc = test_pool_get_info(arg, &pinfo);
+	rc = test_pool_get_info(arg, &pinfo, NULL /* engine_ranks */);
 	if (rc)
 		return rc;
 

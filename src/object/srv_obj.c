@@ -195,10 +195,7 @@ obj_rw_reply(crt_rpc_t *rpc, int status, uint64_t epoch,
 		}
 
 		if (orwo->orw_maps.ca_arrays != NULL) {
-			for (i = 0; i < orwo->orw_maps.ca_count; i++)
-				D_FREE(orwo->orw_maps.ca_arrays[i].iom_recxs);
-
-			D_FREE(orwo->orw_maps.ca_arrays);
+			ds_iom_free(&orwo->orw_maps.ca_arrays, orwo->orw_maps.ca_count);
 			orwo->orw_maps.ca_count = 0;
 		}
 
@@ -837,7 +834,7 @@ csum_add2iods(daos_handle_t ioh, daos_iod_t *iods, uint32_t iods_nr,
 	int	 i;
 
 	struct bio_desc *biod = vos_ioh2desc(ioh);
-	struct dcs_csum_info *csum_infos = vos_ioh2ci(ioh);
+	struct dcs_ci_list *csum_infos = vos_ioh2ci(ioh);
 	uint32_t csum_info_nr = vos_ioh2ci_nr(ioh);
 
 	for (i = 0; i < iods_nr; i++) {
@@ -846,11 +843,11 @@ csum_add2iods(daos_handle_t ioh, daos_iod_t *iods, uint32_t iods_nr,
 		D_DEBUG(DB_CSUM, DF_C_UOID_DKEY"Adding fetched to IOD: "
 				 DF_C_IOD", csum: "DF_CI"\n",
 			DP_C_UOID_DKEY(oid, dkey),
-			DP_C_IOD(&iods[i]), DP_CI(csum_infos[biov_csums_idx]));
+			DP_C_IOD(&iods[i]), DP_CI(*dcs_csum_info_get(csum_infos, biov_csums_idx)));
+		csum_infos->dcl_csum_offset += biov_csums_used;
 		rc = ds_csum_add2iod(
 			&iods[i], csummer,
-			bio_iod_sgl(biod, i),
-			&csum_infos[biov_csums_idx],
+			bio_iod_sgl(biod, i), csum_infos,
 			&biov_csums_used, get_iod_csum(iod_csums, i));
 
 		if (rc != 0) {
@@ -1039,14 +1036,10 @@ obj_log_csum_err(void)
 	bio_log_csum_err(bxc);
 }
 
-static void
-map_add_recx(daos_iom_t *map, const struct bio_iov *biov, uint64_t rec_idx)
-{
-	map->iom_recxs[map->iom_nr_out].rx_idx = rec_idx;
-	map->iom_recxs[map->iom_nr_out].rx_nr = bio_iov2req_len(biov)
-						/ map->iom_size;
-	map->iom_nr_out++;
-}
+/**
+ * Create maps for actually written to extents.
+ * Memory allocated here will be freed in obj_rw_reply.
+ */
 
 /** create maps for actually written to extents. */
 static int
@@ -1055,14 +1048,9 @@ obj_fetch_create_maps(crt_rpc_t *rpc, struct bio_desc *biod, daos_iod_t *iods)
 	struct obj_rw_in	*orw = crt_req_get(rpc);
 	struct obj_rw_out	*orwo = crt_reply_get(rpc);
 	daos_iom_t		*maps;
-	daos_iom_t		*map;
-	struct bio_sglist	*bsgl;
-	daos_iod_t		*iod;
-	struct bio_iov		*biov;
+	uint32_t		 flags = orw->orw_flags;
 	uint32_t		 iods_nr;
-	uint32_t		 i, r;
-	uint64_t		 rec_idx;
-	uint32_t		 bsgl_iov_idx;
+	int rc;
 
 	/**
 	 * Allocate memory for the maps. There will be 1 per iod
@@ -1076,64 +1064,9 @@ obj_fetch_create_maps(crt_rpc_t *rpc, struct bio_desc *biod, daos_iod_t *iods)
 		return 0;
 	}
 
-	D_ALLOC_ARRAY(maps, iods_nr);
-	if (maps == NULL)
-		return -DER_NOMEM;
-	for (i = 0; i <  iods_nr; i++) {
-		bsgl = bio_iod_sgl(biod, i); /** 1 bsgl per iod */
-		iod = &iods[i];
-		map = &maps[i];
-		map->iom_nr = bsgl->bs_nr_out - bio_sgl_holes(bsgl);
-
-		/** will be freed in obj_rw_reply */
-		D_ALLOC_ARRAY(map->iom_recxs, map->iom_nr);
-		if (map->iom_recxs == NULL) {
-			for (r = 0; r < i; r++)
-				D_FREE(maps[r].iom_recxs);
-			D_FREE(maps);
-			return -DER_NOMEM;
-		}
-
-		map->iom_size = iod->iod_size;
-		map->iom_type = iod->iod_type;
-
-		if (map->iom_type != DAOS_IOD_ARRAY ||
-			bsgl->bs_nr_out == 0)
-			continue;
-
-		/** start rec_idx at first record of iod.recxs */
-		bsgl_iov_idx = 0;
-		for (r = 0; r < iod->iod_nr; r++) {
-			daos_recx_t recx = iod->iod_recxs[r];
-
-			D_DEBUG(DB_CSUM, "processing recx[%d]: "DF_RECX"\n",
-				r, DP_RECX(recx));
-			rec_idx = recx.rx_idx;
-
-			while (rec_idx <= recx.rx_idx + recx.rx_nr - 1) {
-				biov = bio_sgl_iov(bsgl, bsgl_iov_idx);
-				if (biov == NULL) /** reached end of bsgl */
-					break;
-				if (!bio_addr_is_hole(&biov->bi_addr))
-					map_add_recx(map, biov, rec_idx);
-
-				rec_idx += (bio_iov2req_len(biov) /
-					    map->iom_size);
-				bsgl_iov_idx++;
-			}
-		}
-
-		daos_iom_sort(map);
-
-		/** allocated and used should be the same */
-		D_ASSERTF(map->iom_nr == map->iom_nr_out,
-			  "map->iom_nr(%d) == map->iom_nr_out(%d)",
-			  map->iom_nr, map->iom_nr_out);
-		map->iom_recx_lo = map->iom_recxs[0];
-		map->iom_recx_hi = map->iom_recxs[map->iom_nr - 1];
-		if (orw->orw_flags & ORF_CREATE_MAP_DETAIL)
-			map->iom_flags = DAOS_IOMF_DETAIL;
-	}
+	rc = ds_iom_create(biod, iods, iods_nr, flags, &maps);
+	if (rc != 0)
+		return rc;
 
 	orwo->orw_maps.ca_count = iods_nr;
 	orwo->orw_maps.ca_arrays = maps;
@@ -1840,7 +1773,7 @@ failed:
 }
 
 static void
-obj_ioc_fini(struct obj_io_context *ioc)
+obj_ioc_fini(struct obj_io_context *ioc, int err)
 {
 	if (ioc->ioc_coh != NULL) {
 		ds_cont_hdl_put(ioc->ioc_coh);
@@ -1848,6 +1781,9 @@ obj_ioc_fini(struct obj_io_context *ioc)
 	}
 
 	if (ioc->ioc_coc != NULL) {
+		if (obj_is_modification_opc(ioc->ioc_opc) && err == 0 &&
+		    daos_oclass_is_ec(&ioc->ioc_oca))
+			ds_cont_ec_timestamp_update(ioc->ioc_coc);
 		ds_cont_child_put(ioc->ioc_coc);
 		ioc->ioc_coc = NULL;
 	}
@@ -1998,7 +1934,7 @@ obj_ioc_end(struct obj_io_context *ioc, int err)
 		/** Update sensors */
 		obj_update_sensors(ioc, err);
 	}
-	obj_ioc_fini(ioc);
+	obj_ioc_fini(ioc, err);
 }
 
 static int
@@ -2729,7 +2665,7 @@ again2:
 	    DAOS_FAIL_CHECK(DAOS_DTX_LOST_RPC_REPLY))
 		ioc.ioc_lost_reply = 1;
 out:
-	if (rc != 0 && need_abort) {
+	if (unlikely(rc != 0 && need_abort)) {
 		struct dtx_entry	 dte;
 		int			 rc1;
 

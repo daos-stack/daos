@@ -172,7 +172,7 @@ func TestControl_SmdQuery(t *testing.T) {
 											{
 												Uuid:     common.MockUUID(0),
 												TgtIds:   []int32{0},
-												DevState: stateNormal.StatusString(),
+												DevState: stateNormal.String(),
 											},
 										},
 									},
@@ -182,7 +182,7 @@ func TestControl_SmdQuery(t *testing.T) {
 											{
 												Uuid:     common.MockUUID(1),
 												TgtIds:   []int32{0},
-												DevState: stateFaulty.StatusString(),
+												DevState: stateFaulty.String(),
 											},
 										},
 									},
@@ -209,6 +209,48 @@ func TestControl_SmdQuery(t *testing.T) {
 								Rank:      system.Rank(1),
 								TargetIDs: []int32{0},
 								NvmeState: stateFaulty,
+							},
+						},
+						Pools: make(map[string][]*SmdPool),
+					},
+				}),
+			},
+		},
+		"list devices; missing state": {
+			mic: &MockInvokerConfig{
+				UnaryResponse: &UnaryResponse{
+					Responses: []*HostResponse{
+						{
+							Addr: "host-0",
+							Message: &ctlpb.SmdQueryResp{
+								Ranks: []*ctlpb.SmdQueryResp_RankResp{
+									{
+										Rank: 0,
+										Devices: []*ctlpb.SmdQueryResp_Device{
+											{
+												Uuid:     common.MockUUID(0),
+												TgtIds:   []int32{0},
+												DevState: "",
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			req: &SmdQueryReq{},
+			expResp: &SmdQueryResp{
+				HostStorage: mockSmdQueryMap(t, &mockSmdQueryResp{
+					Hosts: "host-0",
+					SmdInfo: &SmdInfo{
+						Devices: []*storage.SmdDevice{
+							{
+								UUID:      common.MockUUID(0),
+								Rank:      system.Rank(0),
+								TargetIDs: []int32{0},
+								NvmeState: storage.NvmeStateUnknown,
 							},
 						},
 						Pools: make(map[string][]*SmdPool),
@@ -244,7 +286,7 @@ func TestControl_SmdQuery(t *testing.T) {
 													DevReliabilityWarn: true,
 													VolatileMemWarn:    true,
 												},
-												DevState: stateNormal.StatusString(),
+												DevState: stateNormal.String(),
 											},
 										},
 									},
@@ -305,6 +347,11 @@ func TestControl_SmdQuery(t *testing.T) {
 			}
 
 			if diff := cmp.Diff(tc.expResp, gotResp, defResCmpOpts()...); diff != "" {
+				for _, sqr := range gotResp.HostStorage {
+					for _, dev := range sqr.HostStorage.SmdInfo.Devices {
+						t.Logf("%+v", *dev)
+					}
+				}
 				t.Fatalf("unexpected resp (-want, +got):\n%s\n", diff)
 			}
 		})

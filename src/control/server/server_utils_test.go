@@ -668,13 +668,15 @@ func TestServer_prepBdevStorage(t *testing.T) {
 // also be covered.
 func TestServer_scanBdevStorage(t *testing.T) {
 	for name, tc := range map[string]struct {
-		bmbc   *bdev.MockBackendConfig
-		expErr error
+		nrHugepages int
+		bmbc        *bdev.MockBackendConfig
+		expErr      error
 	}{
 		"spdk fails init": {
 			bmbc: &bdev.MockBackendConfig{
 				ScanErr: errors.New("spdk failed"),
 			},
+			expErr: errors.New("spdk failed"),
 		},
 		"bdev in config not found by spdk": {
 			bmbc: &bdev.MockBackendConfig{
@@ -689,12 +691,19 @@ func TestServer_scanBdevStorage(t *testing.T) {
 				},
 			},
 		},
+		"hugepages disabled": {
+			nrHugepages: -1,
+			bmbc: &bdev.MockBackendConfig{
+				ScanErr: errors.New("spdk failed"),
+			},
+		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(name)
 			defer common.ShowBufferOnFailure(t, buf)
 
-			cfg := config.DefaultServer().WithFabricProvider("ofi+verbs")
+			cfg := config.DefaultServer().WithFabricProvider("ofi+verbs").
+				WithNrHugePages(tc.nrHugepages)
 
 			// test only with 2M hugepage size
 			if err := cfg.Validate(log, 2048, nil); err != nil {
@@ -786,30 +795,30 @@ func TestServer_getNetDevClass(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			fis := hardware.NewFabricInterfaceSet(
 				&hardware.FabricInterface{
-					Name:        "eth0",
-					OSDevice:    "eth0",
-					DeviceClass: hardware.Ether,
-					Providers:   common.NewStringSet("test"),
+					Name:         "eth0",
+					NetInterface: "eth0",
+					DeviceClass:  hardware.Ether,
+					Providers:    common.NewStringSet("test"),
 				},
 				&hardware.FabricInterface{
-					Name:        "eth1",
-					OSDevice:    "eth1",
-					DeviceClass: hardware.Ether,
-					NUMANode:    1,
-					Providers:   common.NewStringSet("test"),
+					Name:         "eth1",
+					NetInterface: "eth1",
+					DeviceClass:  hardware.Ether,
+					NUMANode:     1,
+					Providers:    common.NewStringSet("test"),
 				},
 				&hardware.FabricInterface{
-					Name:        "ib0",
-					OSDevice:    "ib0",
-					DeviceClass: hardware.Infiniband,
-					Providers:   common.NewStringSet("test"),
+					Name:         "ib0",
+					NetInterface: "ib0",
+					DeviceClass:  hardware.Infiniband,
+					Providers:    common.NewStringSet("test"),
 				},
 				&hardware.FabricInterface{
-					Name:        "ib1",
-					OSDevice:    "ib1",
-					DeviceClass: hardware.Infiniband,
-					NUMANode:    1,
-					Providers:   common.NewStringSet("test"),
+					Name:         "ib1",
+					NetInterface: "ib1",
+					DeviceClass:  hardware.Infiniband,
+					NUMANode:     1,
+					Providers:    common.NewStringSet("test"),
 				},
 			)
 
