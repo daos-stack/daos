@@ -9,12 +9,11 @@
 package ucx
 
 import (
-	"github.com/pkg/errors"
-
 	"github.com/daos-stack/daos/src/control/lib/dlopen"
+	"github.com/daos-stack/daos/src/control/lib/hardware"
 )
 
-var errNotSupported = errors.New("ucx is not supported in this build")
+var errNotSupported = hardware.ErrUnsupportedFabric("ucx")
 
 // Load reports that the library is not supported.
 func Load() (func(), error) {
@@ -22,7 +21,7 @@ func Load() (func(), error) {
 }
 
 func openUCT() (*dlopen.LibHandle, error) {
-	return nil, errors.Wrap(dlopen.ErrSoNotFound, errNotSupported.Error())
+	return nil, errNotSupported
 }
 
 type uctComponent struct {
