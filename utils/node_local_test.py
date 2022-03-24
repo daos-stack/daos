@@ -35,8 +35,10 @@ import xattr
 from collections import OrderedDict
 import yaml
 
+
 class NLTestFail(Exception):
     """Used to indicate test failure"""
+
 
 class NLTestNoFi(NLTestFail):
     """Used to indicate Fault injection didn't work"""
@@ -585,7 +587,7 @@ class DaosServer():
             self._add_test_case(op, duration=elapsed, failure=res)
             raise NLTestTimeout(res)
 
-    def _check_system_state(self, desired_states):
+    def _check_system_state(self,  desired_states):
         """Check the system state for against list
 
         Return true if all members are in a state specified by the
