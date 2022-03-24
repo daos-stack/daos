@@ -130,11 +130,17 @@ dss_xstream_set_affinity(struct dss_xstream *dxs)
 
 	/**
 	 * Set cpu affinity
+	 * Try to use strict CPU binding, if supported.
 	 */
-	rc = hwloc_set_cpubind(dss_topo, dxs->dx_cpuset, HWLOC_CPUBIND_THREAD);
+	rc = hwloc_set_cpubind(dss_topo, dxs->dx_cpuset,
+			       HWLOC_CPUBIND_THREAD | HWLOC_CPUBIND_STRICT);
 	if (rc) {
-		D_ERROR("failed to set cpu affinity: %d\n", errno);
-		return rc;
+		D_INFO("failed to set strict cpu affinity: %d\n", errno);
+		rc = hwloc_set_cpubind(dss_topo, dxs->dx_cpuset, HWLOC_CPUBIND_THREAD);
+		if (rc) {
+			D_ERROR("failed to set cpu affinity: %d\n", errno);
+			return rc;
+		}
 	}
 
 	/**
