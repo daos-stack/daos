@@ -1758,7 +1758,7 @@ dfuse___fxstat(int ver, int fd, struct stat *buf)
 	int		counter;
 	int		rc;
 
-	DFUSE_TRA_DEBUG(entry->fd_dfsoh, "dfs_ostat() called %d %d", ver, fd);
+	DFUSE_TRA_DEBUG(entry, "dfs_ostat() called %d %d", ver, fd);
 
 	rc = vector_get(&fd_table, fd, &entry);
 	if (rc != 0)
