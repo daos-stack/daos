@@ -1758,13 +1758,17 @@ dfuse___fxstat(int ver, int fd, struct stat *buf)
 	int		counter;
 	int		rc;
 
+	DFUSE_TRA_DEBUG(entry->fd_dfsoh, "dfs_ostat() called %d %d", ver, fd);
+
 	rc = vector_get(&fd_table, fd, &entry);
 	if (rc != 0)
 		goto do_real_fstat;
 
-	/* Turn off this feature if the kernel is doing metadata caching, in this case it's btter
+	/* Turn off this feature if the kernel is doing metadata caching, in this case it's better
 	 * to use the kernel cache and keep it up-to-date than query the severs each time.
 	 */
+
+	assert(entry);
 	if (!entry->fd_fstat) {
 		vector_decref(&fd_table, entry);
 		goto do_real_fstat;
