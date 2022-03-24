@@ -386,6 +386,38 @@ type (
 		UUID   string `json:"uuid"`
 		PoolInfo
 	}
+
+	// PoolQueryTargetReq contains parameters for a pool query target request
+	PoolQueryTargetReq struct {
+		poolRequest
+		ID string
+		Rank      system.Rank
+		Targetidx []uint32
+	}
+
+	// StorageTargetUsage represents DAOS target storage usage
+	StorageTargetUsage struct {
+		Total	uint64	`json:"total"`
+		Free	uint64	`json:"free"`
+	}
+
+	TargetPerf struct {
+		Foo	int32	`json:"foo"`
+	}
+
+	// PoolQueryTargetInfo contains information about a single target
+	PoolQueryTargetInfo struct {
+		Type	int32	`json:"target_type"`
+		State	int32	`json:"target_state"`
+		Perf	*TargetPerf
+		Space	[]*StorageTargetUsage
+	}
+
+	// PoolQueryTargetResp contains a pool query target response
+	PoolQueryTargetResp struct {
+		Status	int32  `json:"status"`
+		Infos	[]*PoolQueryTargetInfo
+	}
 )
 
 func (sus *StorageUsageStats) UnmarshalJSON(data []byte) error {
