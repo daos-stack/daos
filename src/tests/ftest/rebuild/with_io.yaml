@@ -13,6 +13,9 @@ server_config:
   name: daos_server
   servers:
     targets: 2
+    log_mask: DEBUG,MEM=ERR
+    env_vars:
+       - DD_MASK=mgmt,md,rebuild,io,trace
 pool:
   mode: 511
   name: daos_server
