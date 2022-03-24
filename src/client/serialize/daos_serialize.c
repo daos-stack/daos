@@ -396,7 +396,8 @@ simple_extend_write(hid_t file, char *dset_name, void *data, uint64_t data_len)
 
 	write_offset = oid_dims_old[0];
 	write_len = data_len;
-	status = H5Sselect_hyperslab(oid_dspace, H5S_SELECT_SET, &write_offset, NULL, &write_len, NULL);
+	status = H5Sselect_hyperslab(oid_dspace, H5S_SELECT_SET, &write_offset, NULL, &write_len,
+				     NULL);
 	if (status < 0) {
 		D_ERROR("Failed to select '%s' Dataset Hyperslab\n", dset_name);
 		D_GOTO(out, rc = -DER_MISC);
@@ -1891,8 +1892,8 @@ retry_list_akey:
 		}
 	}
 
-	
-	
+
+
 out:
 	if (rc && akey_data != NULL) {
 		for (i = 0; i < akey_data_len; i++) {
@@ -1907,7 +1908,7 @@ out:
 
 static int
 fetch_kv_rec(hvl_t *kv_val, daos_key_t dkey, daos_handle_t *oh,
-	   char *dkey_val, uint64_t *bytes_read)
+	     char *dkey_val, uint64_t *bytes_read)
 {
 	int		rc;
 	daos_size_t	size = 0;
@@ -2077,7 +2078,7 @@ create_oid_dataset(hid_t file)
 	hid_t			oid_plist = -1;
 	herr_t			err = 0;
 
-	/* inital size of 0, chunked to handle extension */
+	/* initial size of 0, chunked to handle extension */
 	oid_dims[0] = 0;
 	oid_max_dims[0] = H5S_UNLIMITED;
 	oid_chunk_dims[0] = 128;
@@ -2171,7 +2172,7 @@ create_dkey_dataset(hid_t file)
 	hid_t			dkey_vtype = -1;
 	herr_t			err = 0;
 
-	/* inital size of 0, chunked to handle extension */
+	/* initial size of 0, chunked to handle extension */
 	dkey_dims[0] = 0;
 	dkey_max_dims[0] = H5S_UNLIMITED;
 	dkey_chunk_dims[0] = 128;
@@ -2230,8 +2231,8 @@ create_dkey_dataset(hid_t file)
 		D_GOTO(out, rc = -DER_MISC);
 	}
 
-	status = H5Tinsert(dkey_memtype, "Record KV Value", HOFFSET(struct dsr_h5_dkey, rec_kv_val),
-			   dkey_vtype);
+	status = H5Tinsert(dkey_memtype, "Record KV Value",
+			   HOFFSET(struct dsr_h5_dkey, rec_kv_val), dkey_vtype);
 	if (status < 0) {
 		D_ERROR("Failed to insert Record KV Value\n");
 		D_GOTO(out, rc = -DER_MISC);
@@ -2239,7 +2240,7 @@ create_dkey_dataset(hid_t file)
 
 
 	dkey_dset = H5Dcreate(file, "Dkey Data", dkey_memtype, dkey_dspace, H5P_DEFAULT,
-			     dkey_plist, H5P_DEFAULT);
+			      dkey_plist, H5P_DEFAULT);
 	if (dkey_dset < 0) {
 		D_ERROR("Failed to create Dkey Data\n");
 		D_GOTO(out, rc = -DER_MISC);
@@ -2274,7 +2275,7 @@ create_akey_dataset(hid_t file)
 	hid_t			akey_vtype = -1;
 	herr_t			err = 0;
 
-	/* inital size of 0, chunked to handle extension */
+	/* initial size of 0, chunked to handle extension */
 	akey_dims[0] = 0;
 	akey_max_dims[0] = H5S_UNLIMITED;
 	akey_chunk_dims[0] = 128;
@@ -2337,7 +2338,7 @@ create_akey_dataset(hid_t file)
 	}
 
 	akey_dset = H5Dcreate(file, "Akey Data", akey_memtype, akey_dspace, H5P_DEFAULT,
-			     akey_plist, H5P_DEFAULT);
+			      akey_plist, H5P_DEFAULT);
 	if (akey_dset < 0) {
 		D_ERROR("Failed to create Akey Data\n");
 		D_GOTO(out, rc = -DER_MISC);
@@ -2813,8 +2814,8 @@ cont_deserialize_akeys(struct dsr_h5_args *args, daos_key_t diov, uint64_t *ak_o
 	hsize_t		rx_dims[1];
 
 	memset(&aiov, 0, sizeof(aiov));
-	akey_val = &(args->akey_data)[*ak_off + k].akey_val;
-	rec_single_val = &(args->akey_data)[*ak_off + k].rec_single_val;
+	akey_val = &args->akey_data[*ak_off + k].akey_val;
+	rec_single_val = &args->akey_data[*ak_off + k].rec_single_val;
 	d_iov_set(&aiov, (void *)akey_val->p, akey_val->len);
 
 	/* if the len of the single value is set to zero,
@@ -2857,9 +2858,9 @@ cont_deserialize_akeys(struct dsr_h5_args *args, daos_key_t diov, uint64_t *ak_o
 			D_ERROR("Failed to get num attrs\n");
 			D_GOTO(out, rc = -DER_MISC);
 		}
-		rc = cont_deserialize_recx(&args->akey_data[*ak_off + k].akey_val, oh, diov, num_attrs,
-					   &rx_dtype, &rx_dspace, &rx_dset, &rx_memspace,
-					   bytes_written);
+		rc = cont_deserialize_recx(&args->akey_data[*ak_off + k].akey_val, oh, diov,
+					   num_attrs, &rx_dtype, &rx_dspace, &rx_dset,
+					   &rx_memspace, bytes_written);
 		if (rc != 0) {
 			D_ERROR("Failed to deserialize recx "DF_RC"\n", DP_RC(rc));
 			D_GOTO(out, rc);
@@ -2933,8 +2934,8 @@ cont_deserialize_keys(struct dsr_h5_args *args, uint64_t *total_dkeys_this_oid, 
 
 	for (j = 0; j < *total_dkeys_this_oid; j++) {
 		memset(&diov, 0, sizeof(diov));
-		dkey_val = &(args->dkey_data)[*dk_off + j].dkey_val;
-		rec_kv_val = &(args->dkey_data)[*dk_off + j].rec_kv_val;
+		dkey_val = &args->dkey_data[*dk_off + j].dkey_val;
+		rec_kv_val = &args->dkey_data[*dk_off + j].rec_kv_val;
 		d_iov_set(&diov, (void *)dkey_val->p, dkey_val->len);
 		ak_off = args->dkey_data[*dk_off + j].akey_offset;
 		ak_next = 0;
@@ -2980,8 +2981,8 @@ out:
 }
 
 static int
-deserialize_oids(struct dsr_h5_args *args, int *total_oids, int *total_dkeys, int *total_akeys, uint64_t *bytes_written,
-		 daos_handle_t coh, char *filename)
+deserialize_oids(struct dsr_h5_args *args, int *total_oids, int *total_dkeys, int *total_akeys,
+		 uint64_t *bytes_written, daos_handle_t coh, char *filename)
 {
 	int			rc = 0;
 	int			i = 0;
@@ -3248,7 +3249,8 @@ daos_cont_deserialize(int *total_oids, int *total_dkeys, int *total_akeys, uint6
 	}
 
 	/* Deserialize objects */
-	rc = deserialize_oids(&args, total_oids, total_dkeys, total_akeys, bytes_written, coh, filename);
+	rc = deserialize_oids(&args, total_oids, total_dkeys, total_akeys, bytes_written, coh,
+			      filename);
 	if (rc) {
 		D_ERROR("Failed to deserialize OIDs: "DF_RC"\n", DP_RC(rc));
 		D_GOTO(out, rc);
@@ -3259,6 +3261,7 @@ out:
 		H5Fclose(args.file);
 	return rc;
 }
+
 #if defined(__cplusplus)
 }
 #endif
