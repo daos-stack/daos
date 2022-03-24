@@ -35,10 +35,8 @@ import xattr
 from collections import OrderedDict
 import yaml
 
-
 class NLTestFail(Exception):
     """Used to indicate test failure"""
-
 
 class NLTestNoFi(NLTestFail):
     """Used to indicate Fault injection didn't work"""
