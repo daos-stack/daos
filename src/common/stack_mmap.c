@@ -60,7 +60,7 @@ void free_stack(void *arg)
 		int rc;
 
 		D_DEBUG(DB_MEM,
-			"%p mmap()'ed stack of size %zd munmap()'ed, alloced="DF_U64", free="
+			"%p mmap()'ed stack of size %zd munmap()'ed, allocated="DF_U64", free="
 			DF_U64"\n", desc->stack, desc->stack_size,
 			shadow_alloced_stacks, shadow_free_stacks);
 		rc = munmap(desc->stack, desc->stack_size);
@@ -72,7 +72,7 @@ void free_stack(void *arg)
 				desc->stack, desc->stack_size, strerror(errno));
 	} else {
 		D_DEBUG(DB_MEM,
-			"%p mmap()'ed stack of size %zd on free list, alloced="DF_U64",free="
+			"%p mmap()'ed stack of size %zd on free list, allocated="DF_U64",free="
 			DF_U64"\n", desc->stack, desc->stack_size,
 			shadow_alloced_stacks, shadow_free_stacks);
 	}
@@ -159,7 +159,7 @@ int mmap_stack_thread_create(ABT_pool pool, void (*thread_func)(void *),
 		stack = mmap_stack_desc->stack;
 		stack_size = mmap_stack_desc->stack_size;
 		D_DEBUG(DB_MEM,
-			"%p mmap()'ed stack of size %zd from free list, alloced="DF_U64", free="
+			"%p mmap()'ed stack of size %zd from free list, allocated="DF_U64", free="
 			DF_U64"\n", stack, stack_size, shadow_alloced_stacks,
 			shadow_free_stacks);
 	} else {
@@ -171,7 +171,7 @@ mmap_alloc:
 			     MAP_PRIVATE | MAP_ANONYMOUS | MAP_STACK | MAP_GROWSDOWN,
 			     -1, 0);
 		if (stack == MAP_FAILED) {
-			D_ERROR("Failed mmap() stack of size %zd : %s, alloced="DF_U64", free="
+			D_ERROR("Failed mmap() stack of size %zd : %s, allocated="DF_U64", free="
 				DF_U64"\n", stack_size, strerror(errno),
 				shadow_alloced_stacks, shadow_free_stacks);
 			/* should be safe to decrease with no lock here */
@@ -189,7 +189,7 @@ mmap_alloc:
 		mmap_stack_desc->stack_size = stack_size;
 		D_INIT_LIST_HEAD(&mmap_stack_desc->stack_list);
 		D_DEBUG(DB_MEM,
-			"%p mmap()'ed stack of size %zd allocated, alloced="DF_U64", free="
+			"%p mmap()'ed stack of size %zd allocated, allocated="DF_U64", free="
 			DF_U64"\n", stack, stack_size, shadow_alloced_stacks,
 			shadow_free_stacks);
 	}
@@ -286,7 +286,7 @@ int mmap_stack_thread_create_on_xstream(ABT_xstream xstream,
 		stack = mmap_stack_desc->stack;
 		stack_size = mmap_stack_desc->stack_size;
 		D_DEBUG(DB_MEM,
-			"%p mmap()'ed stack of size %zd from free list, alloced="DF_U64", free="
+			"%p mmap()'ed stack of size %zd from free list, allocated="DF_U64", free="
 			DF_U64"\n", stack, stack_size, shadow_alloced_stacks,
 			shadow_free_stacks);
 	} else {
@@ -298,7 +298,7 @@ mmap_alloc:
 			     MAP_PRIVATE | MAP_ANONYMOUS | MAP_STACK | MAP_GROWSDOWN,
 			     -1, 0);
 		if (stack == MAP_FAILED) {
-			D_ERROR("Failed to mmap() stack of size %zd : %s, alloced="DF_U64", free="
+			D_ERROR("Failed to mmap() stack of size %zd : %s, allocated="DF_U64", free="
 				DF_U64"\n", stack_size, strerror(errno),
 				shadow_alloced_stacks, shadow_free_stacks);
 			/* should be safe to decrease with no lock here */
@@ -316,7 +316,7 @@ mmap_alloc:
 		mmap_stack_desc->stack_size = stack_size;
 		D_INIT_LIST_HEAD(&mmap_stack_desc->stack_list);
 		D_DEBUG(DB_MEM,
-			"%p mmap()'ed stack of size %zd has been allocated, alloced="DF_U64", free="
+			"%p mmap()'ed stack of size %zd has been allocated, allocated="DF_U64", free="
 			DF_U64"\n", stack, stack_size, shadow_alloced_stacks,
 			shadow_free_stacks);
 	}
