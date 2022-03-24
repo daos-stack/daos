@@ -712,6 +712,7 @@ class PreReqComponent():
                                    'Build in device firmware management.', 0))
         self.add_opts(BoolVariable('STACK_MMAP',
                                    'Allocate ABT ULTs stacks with mmap()', 0))
+        self.add_opts(BoolVariable('UCX', 'Build UCX support.', 0))
         self.add_opts(PathVariable('PREFIX', 'Installation path', install_dir,
                                    PathVariable.PathIsDirCreate),
                       PathVariable('GOPATH',
