@@ -432,7 +432,7 @@ class Mpirun(JobManager):
         Args:
             processes (int): number of processes per node
         """
-        self.processes.value = processes
+        self.processes.update(processes, "mpirun.np")
 
     def assign_environment(self, env_vars, append=False):
         """Assign or add environment variables to the command.
