@@ -1150,7 +1150,6 @@ def create_app_cmdline(self, job_spec, pool, ppn, nodesperjob):
 
     """
     commands = []
-    run_cmd = []
     sbatch_cmds = []
     app_params = os.path.join(os.sep, "run", job_spec, "*")
     app_cmd = self.params.get("cmdline", app_params, default=None)
@@ -1158,7 +1157,7 @@ def create_app_cmdline(self, job_spec, pool, ppn, nodesperjob):
     if app_cmd is None:
         self.log.info(
             "<<{} command line not specified in yaml; job will not be run>>".format(job_spec))
-        return
+        return commands
     oclass_list = self.params.get("oclass", app_params)
     for oclass in oclass_list:
         add_containers(self, pool, oclass)
@@ -1174,8 +1173,7 @@ def create_app_cmdline(self, job_spec, pool, ppn, nodesperjob):
         log_name = "{}_{}_{}_{}_{}".format(
             job_spec, oclass, nodesperjob * ppn, nodesperjob, ppn)
         dfuse, dfuse_start_cmdlist = start_dfuse(
-            self, pool, self.container[-1], nodesperjob, "SLURM", name=log_name,
-            job_spec=job_spec)
+            self, pool, self.container[-1], name=log_name, job_spec=job_spec)
         sbatch_cmds.extend(dfuse_start_cmdlist)
         mpi_cmd = Mpirun(app_cmd, False, "mpi/latest")
         mpi_cmd.assign_processes(nodesperjob * ppn)
@@ -1184,7 +1182,7 @@ def create_app_cmdline(self, job_spec, pool, ppn, nodesperjob):
         cmdline = "{}".format(str(mpi_cmd))
         sbatch_cmds.append(str(cmdline))
         sbatch_cmds.append("status=$?")
-        sbatch_cmds.extend(stop_dfuse(dfuse, nodesperjob, "SLURM"))
+        sbatch_cmds.extend(stop_dfuse(dfuse))
         commands.append([sbatch_cmds, log_name])
         self.log.info("<<{} cmdlines>>:".format(job_spec))
         for cmd in sbatch_cmds:
