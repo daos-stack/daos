@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2021 Intel Corporation.
+ * (C) Copyright 2016-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -42,7 +42,7 @@ dfuse_pool_lookup(fuse_req_t req, struct dfuse_inode_entry *parent,
 	if (uuid_parse(name, pool) < 0) {
 		struct fuse_entry_param entry = {.entry_timeout = 60};
 
-		DFUSE_TRA_INFO(parent, "Invalid pool uuid");
+		DFUSE_TRA_DEBUG(parent, "Invalid pool uuid '%s'", name);
 		DFUSE_REPLY_ENTRY(parent, req, entry);
 		return;
 	}

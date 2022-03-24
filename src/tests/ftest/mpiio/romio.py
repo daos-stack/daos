@@ -1,11 +1,12 @@
 #!/usr/bin/python3
 '''
-  (C) Copyright 2019-2021 Intel Corporation.
+  (C) Copyright 2019-2022 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
 
-from mpio_test_base import MpiioTests
+from mpiio_test_base import MpiioTests
+
 
 # pylint: disable=too-many-ancestors
 class Romio(MpiioTests):
@@ -20,7 +21,7 @@ class Romio(MpiioTests):
         Run Romio test provided in mpich package
         Testing various I/O functions provided in romio test suite
         :avocado: tags=all,pr,daily_regression
-        :avocado: tags=small
+        :avocado: tags=hw,small
         :avocado: tags=mpiio,mpich,romio
         """
         # setting romio parameters

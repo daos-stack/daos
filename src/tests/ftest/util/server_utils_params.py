@@ -1,6 +1,6 @@
 #!/usr/bin/python
 """
-  (C) Copyright 2020-2021 Intel Corporation.
+  (C) Copyright 2020-2022 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -79,7 +79,9 @@ class DaosServerYamlParameters(YamlParameters):
         #       base location to place the sockets in.
         #
         #   - nr_hugepages: <int>, e.g. 4096
-        #       Number of hugepages to allocate for use by NVMe SSDs
+        #       Number of hugepages to allocate for use with SPDK and NVMe SSDs.
+        #       This value is only used for optional override and will be
+        #       automatically calculated if unset.
         #
         #   - control_log_mask: <str>, e.g. DEBUG
         #       Force specific debug mask for daos_server (control plane).
@@ -108,7 +110,8 @@ class DaosServerYamlParameters(YamlParameters):
         self.provider = BasicParameter(None, default_provider)
         self.hyperthreads = BasicParameter(None, False)
         self.socket_dir = BasicParameter(None, "/var/run/daos_server")
-        self.nr_hugepages = BasicParameter(None, 4096)
+        # Auto-calculate if unset or set to zero
+        self.nr_hugepages = BasicParameter(None, 0)
         self.control_log_mask = BasicParameter(None, "DEBUG")
         self.control_log_file = LogParameter(log_dir, None, "daos_control.log")
         self.helper_log_file = LogParameter(log_dir, None, "daos_admin.log")
@@ -326,12 +329,13 @@ class DaosServerYamlParameters(YamlParameters):
             "common": [
                 "D_LOG_FILE_APPEND_PID=1",
                 "COVFILE=/tmp/test.cov"],
-            "ofi+sockets": [
-                "FI_SOCKETS_MAX_CONN_RETRY=5",
-                "FI_SOCKETS_CONN_TIMEOUT=2000",
+            "ofi+tcp": [
                 "CRT_SWIM_RPC_TIMEOUT=10"],
-            "ofi_rxm": [
+            "ofi+verbs": [
                 "FI_OFI_RXM_USE_SRX=1"],
+            "ofi+cxi": [
+                "FI_OFI_RXM_USE_SRX=1",
+                "CRT_MRC_ENABLE=1"],
         }
 
         def __init__(self, index=None, provider=None):
@@ -348,10 +352,10 @@ class DaosServerYamlParameters(YamlParameters):
             if provider is not None:
                 self._provider = provider
             else:
-                self._provider = os.environ.get("CRT_PHY_ADDR_STR", "ofi+sockets")
+                self._provider = os.environ.get("CRT_PHY_ADDR_STR", "ofi+tcp")
 
             # Use environment variables to get default parameters
-            default_interface = os.environ.get("OFI_INTERFACE", "eth0")
+            default_interface = os.environ.get("DAOS_TEST_FABRIC_IFACE", "eth0")
             default_port = int(os.environ.get("OFI_PORT", 31416))
             default_share_addr = int(os.environ.get("CRT_CTX_SHARE_ADDR", 0))
 

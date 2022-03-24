@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2021 Intel Corporation.
+ * (C) Copyright 2016-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -309,10 +309,12 @@ CRT_RPC_DECLARE(pool_exclude_out, DAOS_ISEQ_POOL_TGT_UPDATE,
 	((struct pool_op_in)	(pvi_op)			CRT_VAR) \
 	((uint32_t)		(pvi_pool_destroy)		CRT_VAR) \
 	((uint32_t)		(pvi_pool_destroy_force)	CRT_VAR) \
-	((uuid_t)		(pvi_hdls)			CRT_ARRAY)
+	((uuid_t)		(pvi_hdls)			CRT_ARRAY) \
+	((d_string_t)		(pvi_machine)			CRT_VAR)
 
 #define DAOS_OSEQ_POOL_EVICT	/* output fields */		 \
-	((struct pool_op_out)	(pvo_op)		CRT_VAR)
+	((struct pool_op_out)	(pvo_op)		CRT_VAR) \
+	((uint32_t)		(pvo_n_hdls_evicted)	CRT_VAR)
 
 CRT_RPC_DECLARE(pool_evict, DAOS_ISEQ_POOL_EVICT, DAOS_OSEQ_POOL_EVICT)
 

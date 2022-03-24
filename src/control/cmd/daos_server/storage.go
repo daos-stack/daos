@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2021 Intel Corporation.
+// (C) Copyright 2019-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -33,7 +33,6 @@ type storagePrepareCmd struct {
 	logCmd
 	commands.StoragePrepareCmd
 	HelperLogFile string `short:"l" long:"helper-log-file" description:"Log debug from daos_admin binary."`
-	EnableVMD     bool   `long:"enable-vmd" description:"Additionally try to prepare any discovered VMD NVMe devices."`
 }
 
 func (cmd *storagePrepareCmd) Execute(args []string) error {
@@ -81,7 +80,7 @@ func (cmd *storagePrepareCmd) Execute(args []string) error {
 			PCIAllowList:  cmd.PCIAllowList,
 			PCIBlockList:  cmd.PCIBlockList,
 			Reset_:        cmd.Reset,
-			EnableVMD:     cmd.EnableVMD,
+			EnableVMD:     true, // vmd will be prepared if available
 		}); err != nil {
 			scanErrors = append(scanErrors, err)
 		}
@@ -129,12 +128,25 @@ func (cmd *storagePrepareCmd) Execute(args []string) error {
 
 type storageScanCmd struct {
 	logCmd
+	HelperLogFile string `short:"l" long:"helper-log-file" description:"Log debug from daos_admin binary."`
+	DisableVMD    bool   `short:"d" long:"disable-vmd" description:"Disable VMD-aware scan."`
 }
 
 func (cmd *storageScanCmd) Execute(args []string) error {
-	svc := server.NewStorageControlService(cmd.log, config.DefaultServer().Engines)
+	if cmd.HelperLogFile != "" {
+		if err := os.Setenv(pbin.DaosAdminLogFileEnvVar, cmd.HelperLogFile); err != nil {
+			cmd.log.Errorf("unable to configure privileged helper logging: %s", err)
+		}
+	}
 
-	cmd.log.Info("Scanning locally-attached storage...")
+	svc := server.NewStorageControlService(cmd.log, config.DefaultServer().Engines)
+	if !cmd.DisableVMD {
+		svc.WithVMDEnabled()
+	}
+
+	msg := "Scanning locally-attached storage..."
+
+	cmd.log.Info(msg)
 
 	var bld strings.Builder
 	scanErrors := make([]error, 0, 2)

@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2021 Intel Corporation.
+ * (C) Copyright 2016-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -18,8 +18,6 @@ handle_il_ioctl(struct dfuse_obj_hdl *oh, fuse_req_t req)
 {
 	struct dfuse_il_reply	il_reply = {0};
 	int			rc;
-
-	DFUSE_TRA_INFO(oh, "Requested");
 
 	rc = dfs_obj2id(oh->doh_ie->ie_obj, &il_reply.fir_oid);
 	if (rc)
@@ -45,8 +43,6 @@ handle_size_ioctl(struct dfuse_obj_hdl *oh, fuse_req_t req)
 	struct dfuse_hs_reply	hs_reply = {0};
 	d_iov_t			iov = {};
 	int			rc;
-
-	DFUSE_TRA_INFO(oh, "Requested");
 
 	hs_reply.fsr_version = DFUSE_IOCTL_VERSION;
 
@@ -90,8 +86,7 @@ handle_poh_ioctl(struct dfuse_obj_hdl *oh, size_t size, fuse_req_t req)
 	if (iov.iov_buf == NULL)
 		D_GOTO(err, rc = ENOMEM);
 
-	rc = daos_pool_local2global(oh->doh_ie->ie_dfs->dfs_dfp->dfp_poh,
-				    &iov);
+	rc = daos_pool_local2global(oh->doh_ie->ie_dfs->dfs_dfp->dfp_poh, &iov);
 	if (rc)
 		D_GOTO(free, rc = daos_der2errno(rc));
 
@@ -123,8 +118,7 @@ handle_pfile_ioctl(struct dfuse_obj_hdl *oh, size_t size, fuse_req_t req)
 		D_GOTO(err, rc = ENOMEM);
 
 	/* Firstly sample the size */
-	rc = daos_pool_local2global(oh->doh_ie->ie_dfs->dfs_dfp->dfp_poh,
-				    &iov);
+	rc = daos_pool_local2global(oh->doh_ie->ie_dfs->dfs_dfp->dfp_poh, &iov);
 	if (rc)
 		D_GOTO(err, rc = daos_der2errno(rc));
 
@@ -132,8 +126,10 @@ handle_pfile_ioctl(struct dfuse_obj_hdl *oh, size_t size, fuse_req_t req)
 	if (iov.iov_buf == NULL)
 		D_GOTO(err, rc = ENOMEM);
 
-	rc = daos_pool_local2global(oh->doh_ie->ie_dfs->dfs_dfp->dfp_poh,
-				    &iov);
+	rc = daos_pool_local2global(oh->doh_ie->ie_dfs->dfs_dfp->dfp_poh, &iov);
+	if (rc)
+		D_GOTO(free, rc = daos_der2errno(rc));
+
 	errno = 0;
 	fd = mkstemp(fname);
 	if (fd == -1)
@@ -191,14 +187,12 @@ handle_dsize_ioctl(struct dfuse_obj_hdl *oh, fuse_req_t req)
 	d_iov_t			iov = {};
 	int			rc;
 
-	DFUSE_TRA_INFO(oh, "Requested");
-
+	/* Handle directory */
 	hsd_reply.fsr_version = DFUSE_IOCTL_VERSION;
 
-	rc = dfs_obj_local2global(oh->doh_ie->ie_dfs->dfs_ns, oh->doh_obj,
-				  &iov);
+	rc = dfs_obj_local2global(oh->doh_ie->ie_dfs->dfs_ns, oh->doh_obj, &iov);
 	if (rc)
-		D_GOTO(err, rc = daos_der2errno(rc));
+		D_GOTO(err, rc);
 
 	hsd_reply.fsr_dobj_size = iov.iov_buf_len;
 	if (hsd_reply.fsr_dobj_size > MAX_IOCTL_SIZE)
@@ -224,7 +218,7 @@ handle_doh_ioctl(struct dfuse_obj_hdl *oh, size_t size, fuse_req_t req)
 
 	rc = dfs_local2global(oh->doh_ie->ie_dfs->dfs_ns, &iov);
 	if (rc)
-		D_GOTO(err, rc = daos_der2errno(rc));
+		D_GOTO(err, rc);
 
 	if (iov.iov_len != iov.iov_buf_len)
 		D_GOTO(free, rc = EAGAIN);
@@ -250,10 +244,9 @@ handle_dooh_ioctl(struct dfuse_obj_hdl *oh, size_t size, fuse_req_t req)
 	if (iov.iov_buf == NULL)
 		D_GOTO(err, rc = ENOMEM);
 
-	rc = dfs_obj_local2global(oh->doh_ie->ie_dfs->dfs_ns, oh->doh_obj,
-				  &iov);
+	rc = dfs_obj_local2global(oh->doh_ie->ie_dfs->dfs_ns, oh->doh_obj, &iov);
 	if (rc)
-		D_GOTO(err, rc = daos_der2errno(rc));
+		D_GOTO(err, rc);
 
 	if (iov.iov_len != iov.iov_buf_len)
 		D_GOTO(free, rc = EAGAIN);
@@ -283,18 +276,23 @@ void dfuse_cb_ioctl(fuse_req_t req, fuse_ino_t ino, unsigned int cmd, void *arg,
 	uid_t			uid;
 	gid_t			gid;
 
-	DFUSE_TRA_INFO(oh, "ioctl cmd=%#x", cmd);
-
 	if (cmd == TCGETS) {
 		DFUSE_TRA_DEBUG(oh, "Ignoring TCGETS ioctl");
 		D_GOTO(out_err, rc = ENOTTY);
 	}
 
+	if (cmd == TIOCGPGRP) {
+		DFUSE_TRA_DEBUG(oh, "Ignoring TIOCGPGRP ioctl");
+		D_GOTO(out_err, rc = ENOTTY);
+	}
+
 	/* Check the IOCTl type is correct */
 	if (_IOC_TYPE(cmd) != DFUSE_IOCTL_TYPE) {
-		DFUSE_TRA_INFO(oh, "Real ioctl support is not implemented");
+		DFUSE_TRA_INFO(oh, "Real ioctl support is not implemented cmd=%#x", cmd);
 		D_GOTO(out_err, rc = ENOTSUP);
 	}
+
+	DFUSE_TRA_DEBUG(oh, "ioctl cmd=%#x", cmd);
 
 	if (cmd == DFUSE_IOCTL_IL) {
 		if (out_bufsz < sizeof(struct dfuse_il_reply))
@@ -308,6 +306,9 @@ void dfuse_cb_ioctl(fuse_req_t req, fuse_ino_t ino, unsigned int cmd, void *arg,
 	 * need the correct container handle to be able to use them.
 	 */
 	if (cmd == DFUSE_IOCTL_IL_DSIZE) {
+		if (S_ISDIR(oh->doh_ie->ie_stat.st_mode))
+			D_GOTO(out_err, rc = EISDIR);
+
 		if (out_bufsz < sizeof(struct dfuse_hsd_reply))
 			D_GOTO(out_err, rc = EIO);
 		handle_dsize_ioctl(oh, req);
@@ -334,7 +335,7 @@ void dfuse_cb_ioctl(fuse_req_t req, fuse_ino_t ino, unsigned int cmd, void *arg,
 	if (fc->uid != uid || fc->gid != gid)
 		D_GOTO(out_err, rc = EPERM);
 
-	DFUSE_TRA_INFO(oh, "trusted pid %d", fc->pid);
+	DFUSE_TRA_DEBUG(oh, "trusted pid %d", fc->pid);
 
 	if (cmd == DFUSE_IOCTL_IL_SIZE) {
 		if (out_bufsz < sizeof(struct dfuse_hs_reply))

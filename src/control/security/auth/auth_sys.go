@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2018-2021 Intel Corporation.
+// (C) Copyright 2018-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -12,6 +12,7 @@ import (
 	"os"
 	"os/user"
 	"strconv"
+	"strings"
 
 	"github.com/pkg/errors"
 	"google.golang.org/protobuf/proto"
@@ -176,6 +177,9 @@ func AuthSysRequestFromCreds(ext UserExt, creds *security.DomainInfo, signing cr
 		name = "unavailable"
 	}
 
+	// Strip the domain off of the Hostname
+	host := strings.Split(name, ".")[0]
+
 	var groupList = []string{}
 
 	// Convert groups to gids
@@ -191,7 +195,7 @@ func AuthSysRequestFromCreds(ext UserExt, creds *security.DomainInfo, signing cr
 	// Craft AuthToken
 	sys := Sys{
 		Stamp:       0,
-		Machinename: name,
+		Machinename: host,
 		User:        sysNameToPrincipalName(userInfo.Username()),
 		Group:       sysNameToPrincipalName(groupInfo.Name),
 		Groups:      groupList,

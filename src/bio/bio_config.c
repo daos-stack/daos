@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2021 Intel Corporation.
+ * (C) Copyright 2021-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -9,6 +9,7 @@
 #include <spdk/util.h>
 #include <spdk/json.h>
 #include <spdk/thread.h>
+#include <spdk/nvme.h>
 #include <spdk/nvmf_spec.h>
 #include "bio_internal.h"
 
@@ -87,6 +88,11 @@ subsystem_decoders[] = {
 	{"config", offsetof(struct json_config_ctx, config), cap_array_or_null}
 };
 
+static struct spdk_json_object_decoder
+daos_data_decoders[] = {
+	{"config", offsetof(struct json_config_ctx, config), cap_array_or_null}
+};
+
 struct
 config_entry {
 	char			*method;
@@ -94,9 +100,22 @@ config_entry {
 };
 
 static struct spdk_json_object_decoder
-jsonrpc_cmd_decoders[] = {
+config_entry_decoders[] = {
 	{"method", offsetof(struct config_entry, method), spdk_json_decode_string},
 	{"params", offsetof(struct config_entry, params), cap_object, true}
+};
+
+struct busid_range_info {
+	uint8_t	begin;
+	uint8_t	end;
+};
+/* PCI address bus-ID range to be used to filter hotplug events */
+struct busid_range_info hotplug_busid_range = {};
+
+static struct spdk_json_object_decoder
+busid_range_decoders[] = {
+	{"begin", offsetof(struct busid_range_info, begin), spdk_json_decode_uint8},
+	{"end", offsetof(struct busid_range_info, end), spdk_json_decode_uint8},
 };
 
 static int
@@ -276,7 +295,7 @@ read_config(const char *config_file, struct json_config_ctx *ctx)
 
 	json = read_file(config_file, &json_size);
 	if (!json) {
-		D_ERROR("Read JSON configuration file %s failed: '%s'\n",
+		D_ERROR("Read config file %s failed: '%s'\n",
 			config_file, strerror(errno));
 		return -DER_INVAL;
 	}
@@ -284,7 +303,7 @@ read_config(const char *config_file, struct json_config_ctx *ctx)
 	rc = spdk_json_parse(json, json_size, NULL, 0, &end,
 			     SPDK_JSON_PARSE_FLAG_ALLOW_COMMENTS);
 	if (rc < 0) {
-		D_ERROR("Parsing JSON configuration failed (%zd)\n", rc);
+		D_ERROR("Parsing config failed (%zd)\n", rc);
 		rc = -DER_INVAL;
 		goto err;
 	}
@@ -299,7 +318,7 @@ read_config(const char *config_file, struct json_config_ctx *ctx)
 	rc = spdk_json_parse(json, json_size, values, values_cnt, &end,
 			     SPDK_JSON_PARSE_FLAG_ALLOW_COMMENTS);
 	if (rc != values_cnt) {
-		D_ERROR("Parsing JSON configuration failed (%zd)\n", rc);
+		D_ERROR("Parsing config failed (%zd)\n", rc);
 		rc = -DER_INVAL;
 		goto err;
 	}
@@ -321,13 +340,15 @@ static int
 load_vmd_subsystem_config(struct json_config_ctx *ctx, bool *vmd_enabled)
 {
 	struct config_entry	 cfg = {};
+	int			 rc = 0;
 
 	D_ASSERT(ctx->config_it != NULL);
 	D_ASSERT(vmd_enabled != NULL);
 
-	if (spdk_json_decode_object(ctx->config_it, jsonrpc_cmd_decoders,
-				    SPDK_COUNTOF(jsonrpc_cmd_decoders), &cfg)) {
-		D_ERROR("Failed to decode config entry\n");
+	rc = spdk_json_decode_object(ctx->config_it, config_entry_decoders,
+				     SPDK_COUNTOF(config_entry_decoders), &cfg);
+	if (rc < 0) {
+		D_ERROR("Failed to decode config entry: %s\n", strerror(-rc));
 		return -DER_INVAL;
 	}
 
@@ -349,9 +370,10 @@ load_bdev_subsystem_config(struct json_config_ctx *ctx, bool vmd_enabled,
 
 	D_ASSERT(ctx->config_it != NULL);
 
-	if (spdk_json_decode_object(ctx->config_it, jsonrpc_cmd_decoders,
-				    SPDK_COUNTOF(jsonrpc_cmd_decoders), &cfg)) {
-		D_ERROR("Failed to decode config entry\n");
+	rc = spdk_json_decode_object(ctx->config_it, config_entry_decoders,
+				     SPDK_COUNTOF(config_entry_decoders), &cfg);
+	if (rc < 0) {
+		D_ERROR("Failed to decode config entry: %s\n", strerror(-rc));
 		return -DER_INVAL;
 	}
 
@@ -386,7 +408,7 @@ load_bdev_subsystem_config(struct json_config_ctx *ctx, bool vmd_enabled,
 					 * to pass VMD address as the whitelist param.
 					 */
 					rc = traddr_to_vmd(traddr, traddr);
-					if (rc != 0) {
+					if (rc < 0) {
 						D_ERROR("Invalid traddr: %s\n", traddr);
 						rc = -DER_INVAL;
 						goto out;
@@ -398,7 +420,7 @@ load_bdev_subsystem_config(struct json_config_ctx *ctx, bool vmd_enabled,
 			}
 
 			rc = opts_add_pci_addr(opts, traddr);
-			if (rc != 0) {
+			if (rc < 0) {
 				D_ERROR("spdk env add pci: %d\n", rc);
 				goto out;
 			}
@@ -423,14 +445,15 @@ add_bdevs_to_opts(struct json_config_ctx *ctx, struct spdk_json_val *bdev_ss, bo
 	D_ASSERT(opts != NULL);
 
 	/* Capture subsystem name and config array */
-	if (spdk_json_decode_object(bdev_ss, subsystem_decoders, SPDK_COUNTOF(subsystem_decoders),
-				    ctx)) {
-		D_ERROR("Failed to parse subsystem configuration\n");
+	rc = spdk_json_decode_object(bdev_ss, subsystem_decoders, SPDK_COUNTOF(subsystem_decoders),
+				     ctx);
+	if (rc < 0) {
+		D_ERROR("Failed to parse bdev subsystem: %s\n", strerror(-rc));
 		rc = -DER_INVAL;
 		goto out;
 	}
 
-	D_DEBUG(DB_MGMT, "subsystem '%.*s': found in JSON config", ctx->subsystem_name->len,
+	D_DEBUG(DB_MGMT, "subsystem '%.*s': found\n", ctx->subsystem_name->len,
 		(char *)ctx->subsystem_name->start);
 
 	/* Get 'config' array first configuration entry */
@@ -438,7 +461,7 @@ add_bdevs_to_opts(struct json_config_ctx *ctx, struct spdk_json_val *bdev_ss, bo
 
 	while (ctx->config_it != NULL) {
 		rc = load_bdev_subsystem_config(ctx, vmd_enabled, opts);
-		if (rc != 0)
+		if (rc < 0)
 			goto out;
 
 		/* Move on to next subsystem config*/
@@ -459,14 +482,15 @@ check_vmd_status(struct json_config_ctx *ctx, struct spdk_json_val *vmd_ss, bool
 	D_ASSERT(vmd_enabled != NULL);
 
 	/* Capture subsystem name and config array */
-	if (spdk_json_decode_object(vmd_ss, subsystem_decoders, SPDK_COUNTOF(subsystem_decoders),
-				    ctx)) {
-		D_ERROR("Failed to parse subsystem configuration\n");
+	rc = spdk_json_decode_object(vmd_ss, subsystem_decoders, SPDK_COUNTOF(subsystem_decoders),
+				     ctx);
+	if (rc < 0) {
+		D_ERROR("Failed to parse vmd subsystem: %s\n", strerror(-rc));
 		rc = -DER_INVAL;
 		goto out;
 	}
 
-	D_DEBUG(DB_MGMT, "subsystem '%.*s': found in JSON config", ctx->subsystem_name->len,
+	D_DEBUG(DB_MGMT, "subsystem '%.*s': found\n", ctx->subsystem_name->len,
 		(char *)ctx->subsystem_name->start);
 
 	/* Get 'config' array first configuration entry */
@@ -474,7 +498,7 @@ check_vmd_status(struct json_config_ctx *ctx, struct spdk_json_val *vmd_ss, bool
 
 	while (ctx->config_it != NULL) {
 		rc = load_vmd_subsystem_config(ctx, vmd_enabled);
-		if (rc != 0)
+		if (rc < 0)
 			goto out;
 
 		/* Move on to next subsystem config*/
@@ -485,7 +509,7 @@ out:
 }
 
 int
-bio_add_allowed_alloc(const char *json_config_file, struct spdk_env_opts *opts)
+bio_add_allowed_alloc(const char *nvme_conf, struct spdk_env_opts *opts)
 {
 	struct json_config_ctx	*ctx;
 	struct spdk_json_val	*bdev_ss = NULL;
@@ -493,21 +517,21 @@ bio_add_allowed_alloc(const char *json_config_file, struct spdk_env_opts *opts)
 	bool			 vmd_enabled = false;
 	int			 rc = 0;
 
-	D_ASSERT(json_config_file != NULL);
+	D_ASSERT(nvme_conf != NULL);
 	D_ASSERT(opts != NULL);
 
 	D_ALLOC_PTR(ctx);
 	if (ctx == NULL)
 		return -DER_NOMEM;
 
-	rc = read_config(json_config_file, ctx);
-	if (rc != 0)
+	rc = read_config(nvme_conf, ctx);
+	if (rc < 0)
 		goto out;
 
 	/* Capture subsystems array */
 	rc = spdk_json_find_array(ctx->values, "subsystems", NULL, &ctx->subsystems);
 	if (rc < 0) {
-		D_ERROR("No 'subsystems' key JSON configuration file.\n");
+		D_ERROR("Failed to find subsystems key: %s\n", strerror(-rc));
 		rc = -DER_INVAL;
 		goto out;
 	}
@@ -515,16 +539,17 @@ bio_add_allowed_alloc(const char *json_config_file, struct spdk_env_opts *opts)
 	/* Get first subsystem */
 	ctx->subsystems_it = spdk_json_array_first(ctx->subsystems);
 	if (ctx->subsystems_it == NULL) {
-		D_ERROR("Empty 'subsystems' section in JSON configuration file\n");
+		D_ERROR("Empty subsystems section\n");
 		rc = -DER_INVAL;
 		goto out;
 	}
 
 	while (ctx->subsystems_it != NULL) {
 		/* Capture subsystem name and config array */
-		if (spdk_json_decode_object(ctx->subsystems_it, subsystem_decoders,
-					    SPDK_COUNTOF(subsystem_decoders), ctx)) {
-			D_ERROR("Failed to parse subsystem configuration\n");
+		rc = spdk_json_decode_object(ctx->subsystems_it, subsystem_decoders,
+					     SPDK_COUNTOF(subsystem_decoders), ctx);
+		if (rc < 0) {
+			D_ERROR("Failed to parse subsystem configuration: %s\n", strerror(-rc));
 			rc = -DER_INVAL;
 			goto out;
 		}
@@ -540,13 +565,13 @@ bio_add_allowed_alloc(const char *json_config_file, struct spdk_env_opts *opts)
 	};
 
 	if (bdev_ss == NULL) {
-		D_ERROR("JSON config missing bdev subsystem\n");
+		D_ERROR("Config is missing bdev subsystem\n");
 		rc = -DER_INVAL;
 		goto out;
 	}
 
 	rc = check_vmd_status(ctx, vmd_ss, &vmd_enabled);
-	if (rc != 0)
+	if (rc < 0)
 		goto out;
 
 	rc = add_bdevs_to_opts(ctx, bdev_ss, vmd_enabled, opts);
@@ -554,5 +579,123 @@ out:
 	free(ctx->json_data);
 	free(ctx->values);
 	D_FREE(ctx);
+	return rc;
+}
+
+static int
+get_hotplug_busid_range(const char *nvme_conf)
+{
+	struct json_config_ctx	*ctx;
+	struct spdk_json_val	*daos_data;
+	struct config_entry	 cfg = {};
+	int			 rc = 0;
+
+	D_ASSERT(nvme_conf != NULL);
+
+	D_ALLOC_PTR(ctx);
+	if (ctx == NULL)
+		return -DER_NOMEM;
+
+	rc = read_config(nvme_conf, ctx);
+	if (rc < 0) {
+		D_ERROR("No config file\n");
+		goto out;
+	}
+
+	/* Capture daos object */
+	rc = spdk_json_find(ctx->values, "daos_data", NULL, &daos_data,
+			    SPDK_JSON_VAL_OBJECT_BEGIN);
+	if (rc < 0) {
+		D_ERROR("Failed to find 'daos_data' key: %s\n", strerror(-rc));
+		rc = -DER_INVAL;
+		goto out;
+	}
+
+	/* Capture config array in ctx */
+	rc = spdk_json_decode_object(daos_data, daos_data_decoders,
+				     SPDK_COUNTOF(daos_data_decoders), ctx);
+	if (rc < 0) {
+		D_ERROR("Failed to parse 'daos_data' entry: %s\n", strerror(-rc));
+		rc = -DER_INVAL;
+		goto out;
+	}
+
+	/* Get 'config' array first configuration entry */
+	ctx->config_it = spdk_json_array_first(ctx->config);
+	if (ctx->config_it == NULL) {
+		D_DEBUG(DB_MGMT, "Empty 'daos_data' section\n");
+		rc = 0;
+		goto out; /* non-fatal */
+	}
+
+	while (ctx->config_it != NULL) {
+		rc = spdk_json_decode_object(ctx->config_it, config_entry_decoders,
+					    SPDK_COUNTOF(config_entry_decoders), &cfg);
+		if (rc < 0) {
+			D_ERROR("Failed to decode 'config' entry: %s\n", strerror(-rc));
+			rc = -DER_INVAL;
+			goto out;
+		}
+
+		if (strcmp(cfg.method, "hotplug_busid_range") == 0)
+			break;
+
+		/* Move on to next subsystem config */
+		ctx->config_it = spdk_json_next(ctx->config_it);
+	}
+
+	if (ctx->config_it == NULL) {
+		D_DEBUG(DB_MGMT, "No 'hotplug_busid_range' entry\n");
+		rc = 0;
+		goto out; /* non-fatal */
+	}
+
+	rc = spdk_json_decode_object(cfg.params, busid_range_decoders,
+				     SPDK_COUNTOF(busid_range_decoders),
+				     &hotplug_busid_range);
+	if (rc < 0) {
+		D_ERROR("Failed to decode 'hotplug_busid_range' entry (rc: %d)\n", rc);
+		rc = -DER_INVAL;
+		goto out;
+	}
+
+	rc = 0;
+	D_INFO("Hotplug bus-ID range read from config: %X-%X\n",
+		hotplug_busid_range.begin, hotplug_busid_range.end);
+out:
+	free(ctx->json_data);
+	free(ctx->values);
+	D_FREE(ctx);
+	return rc;
+}
+
+static bool
+hotplug_filter_fn(const struct spdk_pci_addr *addr)
+{
+	if (hotplug_busid_range.end == 0 || hotplug_busid_range.begin > hotplug_busid_range.end) {
+		D_INFO("hotplug filter accept event on bus-id %X, invalid range\n", addr->bus);
+		return true; /* allow if no or invalid range specified */
+	}
+
+	if (addr->bus >= hotplug_busid_range.begin && addr->bus <= hotplug_busid_range.end) {
+		D_INFO("hotplug filter accept event on bus-id %X\n", addr->bus);
+		return true;
+	}
+
+	D_INFO("hotplug filter refuse event on bus-id %X\n", addr->bus);
+	return false;
+}
+
+int
+bio_set_hotplug_filter(const char *nvme_conf) {
+	int	rc = 0;
+
+	rc = get_hotplug_busid_range(nvme_conf);
+	if (rc < 0) {
+		return rc;
+	}
+
+	spdk_nvme_pcie_set_hotplug_filter(hotplug_filter_fn);
+
 	return rc;
 }

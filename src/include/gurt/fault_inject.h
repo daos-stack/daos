@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2018-2021 Intel Corporation.
+ * (C) Copyright 2018-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -40,6 +40,9 @@ extern struct d_fault_attr_t *d_fault_attr_mem;
 
 /* DFuse uses fault id 100 to force shutdown rather than mount after initialization
  * is complete.
+ *
+ * daos_init uses fault id 101 to disable memory faults for the duration of daos_init
+ * so that fault injection testing can avoid replicating coverage across multiple tests.
  *
  * Other fault ids used by daos_engine are defined in src/include/daos/common.h
  */

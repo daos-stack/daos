@@ -4,23 +4,51 @@ hosts:
   test_servers:
     - server-A
     - server-B
-    - server-C
-    - server-D
-    - server-E
-    - server-F
   test_clients:
-    - client-H
-timeout: 120
+    - client-A
+timeout: 360
 server_config:
+  engines_per_host: 2
   name: daos_server
+# reduce cart timeout to make IV update return timeout
+# quickly to ease test (DAOS-9626)
+  crt_timeout: 10
   servers:
-    targets: 8
+    0:
+      targets: 8
+      pinned_numa_node: 0
+      nr_xs_helpers: 1
+      fabric_iface: ib0
+      fabric_iface_port: 31317
+      log_file: daos_server0.log
+      bdev_class: nvme
+      bdev_list: ["0000:81:00.0"]
+      scm_class: dcpm
+      scm_list: ["/dev/pmem0"]
+      scm_mount: /mnt/daos0
+    1:
+      targets: 8
+      pinned_numa_node: 1
+      nr_xs_helpers: 1
+      fabric_iface: ib1
+      fabric_iface_port: 31417
+      log_file: daos_server1.log
+      bdev_class: nvme
+      bdev_list: ["0000:da:00.0"]
+      scm_class: dcpm
+      scm_list: ["/dev/pmem1"]
+      scm_mount: /mnt/daos1
+container:
+  control_method: daos
+  properties: "rf:1"
 pool:
   mode: 511
   name: daos_server
-  scm_size: 16777216
+  scm_size: 1G
   control_method: dmg
   pool_query_timeout: 30
-testparams:
-  ranks:
-    rank_to_kill: 0
+  pool_query_interval: 1
+  test_data_list: [1048576]
+  oclass: "OC_RP_2G1"
+rebuild:
+  rank_to_kill: 1

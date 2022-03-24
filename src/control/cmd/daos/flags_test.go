@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2021 Intel Corporation.
+// (C) Copyright 2021-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -322,7 +322,7 @@ func TestFlags_ObjClassFlag(t *testing.T) {
 			arg: "S2",
 			expFlag: &ObjClassFlag{
 				Set:   true,
-				Class: 201,
+				Class: 16777218,
 			},
 			expString: "S2",
 		},

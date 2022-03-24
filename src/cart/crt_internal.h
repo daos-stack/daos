@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2021 Intel Corporation.
+ * (C) Copyright 2016-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -50,6 +50,18 @@
 			(rpc)->crp_pub.cr_ep.ep_rank,			\
 			(rpc)->crp_pub.cr_ep.ep_tag,			\
 			## __VA_ARGS__);				\
+	} while (0)
+
+/**
+ * If \a cond is false, this is equivalent to an RPC_ERROR (i.e., \a mask is
+ * ignored). If \a cond is true, this is equivalent to an RPC_TRACE.
+ */
+#define RPC_CERROR(cond, mask, rpc, fmt, ...)				\
+	do {								\
+		if (cond)						\
+			RPC_TRACE(mask, rpc, fmt, ## __VA_ARGS__);	\
+		else							\
+			RPC_ERROR(rpc, fmt, ## __VA_ARGS__);		\
 	} while (0)
 
 #ifdef CRT_DEBUG_TRACE

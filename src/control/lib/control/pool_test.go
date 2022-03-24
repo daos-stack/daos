@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2021 Intel Corporation.
+// (C) Copyright 2020-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -8,6 +8,8 @@ package control
 
 import (
 	"context"
+	"fmt"
+	"strings"
 	"testing"
 
 	"github.com/dustin/go-humanize"
@@ -19,6 +21,7 @@ import (
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	"github.com/daos-stack/daos/src/control/drpc"
 	"github.com/daos-stack/daos/src/control/logging"
+	"github.com/daos-stack/daos/src/control/server/storage"
 	"github.com/daos-stack/daos/src/control/system"
 )
 
@@ -275,7 +278,7 @@ func TestControl_PoolCreate(t *testing.T) {
 			},
 			expResp: &PoolCreateResp{},
 		},
-		"-DER_GRPVER is retried": {
+		"create -DER_GRPVER is retried": {
 			req: &PoolCreateReq{TotalBytes: 10},
 			mic: &MockInvokerConfig{
 				UnaryResponseSet: []*UnaryResponse{
@@ -285,7 +288,7 @@ func TestControl_PoolCreate(t *testing.T) {
 			},
 			expResp: &PoolCreateResp{},
 		},
-		"-DER_AGAIN is retried": {
+		"create -DER_AGAIN is retried": {
 			req: &PoolCreateReq{TotalBytes: 10},
 			mic: &MockInvokerConfig{
 				UnaryResponseSet: []*UnaryResponse{
@@ -577,8 +580,9 @@ func TestPoolSetProp(t *testing.T) {
 
 func TestPoolGetProp(t *testing.T) {
 	defaultReq := &PoolGetPropReq{
-		ID:         common.MockUUID(),
-		Properties: []*PoolProperty{propWithVal("label", "")},
+		ID: common.MockUUID(),
+		Properties: []*PoolProperty{propWithVal("label", ""),
+			propWithVal("policy", "type=io_size")},
 	}
 
 	for name, tc := range map[string]struct {
@@ -691,7 +695,23 @@ func TestPoolGetProp(t *testing.T) {
 						},
 						{
 							Number: propWithVal("ec_cell_sz", "").Number,
-							Value:  &mgmtpb.PoolProperty_Numval{1024},
+							Value:  &mgmtpb.PoolProperty_Numval{4096},
+						},
+						{
+							Number: propWithVal("rf", "").Number,
+							Value:  &mgmtpb.PoolProperty_Numval{1},
+						},
+						{
+							Number: propWithVal("ec_pda", "").Number,
+							Value:  &mgmtpb.PoolProperty_Numval{1},
+						},
+						{
+							Number: propWithVal("rp_pda", "").Number,
+							Value:  &mgmtpb.PoolProperty_Numval{2},
+						},
+						{
+							Number: propWithVal("policy", "").Number,
+							Value:  &mgmtpb.PoolProperty_Strval{"type=io_size"},
 						},
 					},
 				}),
@@ -700,9 +720,13 @@ func TestPoolGetProp(t *testing.T) {
 				ID: common.MockUUID(),
 			},
 			expResp: []*PoolProperty{
-				propWithVal("ec_cell_sz", "1024"),
+				propWithVal("ec_cell_sz", "4096"),
+				propWithVal("ec_pda", "1"),
 				propWithVal("label", "foo"),
+				propWithVal("policy", "type=io_size"),
 				propWithVal("reclaim", "disabled"),
+				propWithVal("rf", "1"),
+				propWithVal("rp_pda", "2"),
 				propWithVal("self_heal", "exclude"),
 				propWithVal("space_rb", "42"),
 			},
@@ -1113,6 +1137,293 @@ func TestControl_ListPools(t *testing.T) {
 
 			if diff := cmp.Diff(tc.expResp, gotResp); diff != "" {
 				t.Fatalf("unexpected response (-want, +got):\n%s\n", diff)
+			}
+		})
+	}
+}
+
+func TestControl_GetMaxPoolSize(t *testing.T) {
+	type ExpectedOutput struct {
+		ScmBytes  uint64
+		NvmeBytes uint64
+		Error     error
+		Debug     string
+	}
+
+	for name, tc := range map[string]struct {
+		HostsConfigArray []MockHostStorageConfig
+		ExpectedOutput   ExpectedOutput
+	}{
+		"single server": {
+			HostsConfigArray: []MockHostStorageConfig{
+				{
+					HostName: "foo",
+					ScmConfig: []MockScmConfig{
+						{
+							MockStorageConfig: MockStorageConfig{
+								TotalBytes: uint64(100) * uint64(humanize.GByte),
+								AvailBytes: uint64(100) * uint64(humanize.GByte),
+							},
+						},
+					},
+					NvmeConfig: []MockNvmeConfig{
+						{
+							MockStorageConfig: MockStorageConfig{
+								TotalBytes: uint64(1) * uint64(humanize.TByte),
+								AvailBytes: uint64(1) * uint64(humanize.TByte),
+							},
+							Rank: 0,
+						},
+					},
+				},
+			},
+			ExpectedOutput: ExpectedOutput{
+				ScmBytes:  uint64(100) * uint64(humanize.GByte),
+				NvmeBytes: uint64(1) * uint64(humanize.TByte),
+			},
+		},
+		"double server": {
+			HostsConfigArray: []MockHostStorageConfig{
+				{
+					HostName: "foo",
+					ScmConfig: []MockScmConfig{
+						{
+							MockStorageConfig: MockStorageConfig{
+								TotalBytes: uint64(100) * uint64(humanize.GByte),
+								AvailBytes: uint64(100) * uint64(humanize.GByte),
+							},
+						},
+					},
+					NvmeConfig: []MockNvmeConfig{
+						{
+							MockStorageConfig: MockStorageConfig{
+								TotalBytes: uint64(1) * uint64(humanize.TByte),
+								AvailBytes: uint64(1) * uint64(humanize.TByte),
+							},
+							Rank: 0,
+						},
+					},
+				},
+				{
+					HostName: "bar[1,3]",
+					ScmConfig: []MockScmConfig{
+						{
+							MockStorageConfig: MockStorageConfig{
+								TotalBytes: uint64(1) * uint64(humanize.TByte),
+								AvailBytes: uint64(1) * uint64(humanize.TByte),
+							},
+						},
+						{ // Check if not mounted SCM is well managed
+							MockStorageConfig: MockStorageConfig{
+								TotalBytes: uint64(0),
+								AvailBytes: uint64(0),
+							},
+						},
+						{
+							MockStorageConfig: MockStorageConfig{
+								TotalBytes: uint64(100) * uint64(humanize.GByte),
+								AvailBytes: uint64(100) * uint64(humanize.GByte),
+							},
+						},
+						{
+							MockStorageConfig: MockStorageConfig{
+								TotalBytes: uint64(1) * uint64(humanize.TByte),
+								AvailBytes: uint64(50) * uint64(humanize.GByte),
+							},
+						},
+					},
+					NvmeConfig: []MockNvmeConfig{
+						{
+							MockStorageConfig: MockStorageConfig{
+								TotalBytes: uint64(1) * uint64(humanize.TByte),
+								AvailBytes: uint64(1) * uint64(humanize.TByte),
+							},
+							Rank: 1,
+						},
+						{
+							MockStorageConfig: MockStorageConfig{
+								TotalBytes: uint64(1) * uint64(humanize.TByte),
+								AvailBytes: uint64(400) * uint64(humanize.GByte),
+							},
+							Rank: 2,
+						},
+						{
+							MockStorageConfig: MockStorageConfig{
+								TotalBytes: uint64(1) * uint64(humanize.TByte),
+								AvailBytes: uint64(300) * uint64(humanize.GByte),
+							},
+							Rank: 2,
+						},
+						{
+							MockStorageConfig: MockStorageConfig{
+								TotalBytes: uint64(3) * uint64(humanize.TByte),
+								AvailBytes: uint64(2) * uint64(humanize.TByte),
+							},
+							Rank: 3,
+						},
+					},
+				},
+			},
+			ExpectedOutput: ExpectedOutput{
+				ScmBytes:  uint64(50) * uint64(humanize.GByte),
+				NvmeBytes: uint64(700) * uint64(humanize.GByte),
+			},
+		},
+		"No NVME": {
+			HostsConfigArray: []MockHostStorageConfig{
+				{
+					HostName: "foo",
+					ScmConfig: []MockScmConfig{
+						{
+							MockStorageConfig: MockStorageConfig{
+								TotalBytes: uint64(100) * uint64(humanize.GByte),
+								AvailBytes: uint64(100) * uint64(humanize.GByte),
+							},
+						},
+					},
+					NvmeConfig: []MockNvmeConfig{},
+				},
+			},
+			ExpectedOutput: ExpectedOutput{
+				ScmBytes:  uint64(100) * uint64(humanize.GByte),
+				NvmeBytes: uint64(0),
+			},
+		},
+		"SCM:NVME ratio": {
+			HostsConfigArray: []MockHostStorageConfig{
+				{
+					HostName: "foo",
+					ScmConfig: []MockScmConfig{
+						{
+							MockStorageConfig: MockStorageConfig{
+								TotalBytes: uint64(100) * uint64(humanize.GByte),
+								AvailBytes: uint64(100) * uint64(humanize.GByte),
+							},
+						},
+					},
+					NvmeConfig: []MockNvmeConfig{
+						{
+							MockStorageConfig: MockStorageConfig{
+								TotalBytes: uint64(100) * uint64(humanize.TByte),
+								AvailBytes: uint64(100) * uint64(humanize.TByte),
+							},
+							Rank: 1,
+						},
+					},
+				},
+			},
+			ExpectedOutput: ExpectedOutput{
+				ScmBytes:  uint64(100) * uint64(humanize.GByte),
+				NvmeBytes: uint64(100) * uint64(humanize.TByte),
+			},
+		},
+		"Invalid response message": {
+			HostsConfigArray: []MockHostStorageConfig{{}},
+			ExpectedOutput: ExpectedOutput{
+				Error: errors.New("unable to unpack message"),
+			},
+		},
+		"No DAOS server": {
+			HostsConfigArray: []MockHostStorageConfig{},
+			ExpectedOutput: ExpectedOutput{
+				Error: errors.New("No DAOS server available"),
+			},
+		},
+		"No SCM storage": {
+			HostsConfigArray: []MockHostStorageConfig{
+				{
+					HostName:   "foo",
+					ScmConfig:  []MockScmConfig{},
+					NvmeConfig: []MockNvmeConfig{},
+				},
+			},
+			ExpectedOutput: ExpectedOutput{
+				Error: errors.New("Host without SCM storage"),
+			},
+		},
+		"Unusable NVMe device": {
+			HostsConfigArray: []MockHostStorageConfig{
+				{
+					HostName: "foo",
+					ScmConfig: []MockScmConfig{
+						{
+							MockStorageConfig: MockStorageConfig{
+								TotalBytes: uint64(100) * uint64(humanize.GByte),
+								AvailBytes: uint64(100) * uint64(humanize.GByte),
+							},
+						},
+					},
+					NvmeConfig: []MockNvmeConfig{
+						{
+							MockStorageConfig: MockStorageConfig{
+								TotalBytes: uint64(1) * uint64(humanize.TByte),
+								AvailBytes: uint64(1) * uint64(humanize.TByte),
+								NvmeState:  new(storage.NvmeDevState),
+							},
+							Rank: 0,
+						},
+					},
+				},
+			},
+			ExpectedOutput: ExpectedOutput{
+				ScmBytes:  uint64(100) * uint64(humanize.GByte),
+				NvmeBytes: 0,
+				Debug:     "not usable",
+			},
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(t.Name())
+			defer common.ShowBufferOnFailure(t, buf)
+
+			mockInvokerConfig := &MockInvokerConfig{
+				UnaryResponse: &UnaryResponse{
+					Responses: []*HostResponse{},
+				},
+			}
+			for _, hostStorageConfig := range tc.HostsConfigArray {
+				var hostResponse *HostResponse
+				if hostStorageConfig.HostName == "" {
+					hostResponse = new(HostResponse)
+				} else {
+					storageScanResp := MockStorageScanResp(t,
+						hostStorageConfig.ScmConfig,
+						hostStorageConfig.NvmeConfig)
+					hostResponse = &HostResponse{
+						Addr:    hostStorageConfig.HostName,
+						Message: storageScanResp,
+					}
+				}
+				mockInvokerConfig.UnaryResponse.Responses = append(mockInvokerConfig.UnaryResponse.Responses,
+					hostResponse)
+			}
+			mockInvoker := NewMockInvoker(log, mockInvokerConfig)
+
+			scmBytes, nvmeBytes, err := GetMaxPoolSize(context.TODO(), log, mockInvoker)
+
+			if tc.ExpectedOutput.Error != nil {
+				common.AssertTrue(t, err != nil, "Expected error")
+				common.CmpErr(t, tc.ExpectedOutput.Error, err)
+				return
+			}
+
+			common.AssertTrue(t, err == nil, "Expected no error")
+			common.AssertEqual(t,
+				tc.ExpectedOutput.ScmBytes,
+				scmBytes,
+				fmt.Sprintf("Invalid SCM pool size: expected=%d got=%d",
+					tc.ExpectedOutput.ScmBytes,
+					scmBytes))
+
+			common.AssertEqual(t,
+				tc.ExpectedOutput.NvmeBytes,
+				nvmeBytes,
+				fmt.Sprintf("Invalid NVME pool size: expected=%d got=%d",
+					tc.ExpectedOutput.NvmeBytes,
+					nvmeBytes))
+			if tc.ExpectedOutput.Debug != "" {
+				common.AssertTrue(t, strings.Contains(buf.String(), tc.ExpectedOutput.Debug),
+					"Missing log message: "+tc.ExpectedOutput.Debug)
 			}
 		})
 	}

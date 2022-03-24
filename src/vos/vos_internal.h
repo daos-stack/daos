@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2021 Intel Corporation.
+ * (C) Copyright 2016-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -20,6 +20,7 @@
 #include <daos/lru.h>
 #include <daos_srv/daos_engine.h>
 #include <daos_srv/bio.h>
+#include <daos_srv/policy.h>
 #include "vos_tls.h"
 #include "vos_layout.h"
 #include "vos_ilog.h"
@@ -81,9 +82,9 @@ extern struct dss_module_key vos_module_key;
 #define VOS_BLK_SZ		(1UL << VOS_BLK_SHIFT) /* bytes */
 #define VOS_BLOB_HDR_BLKS	1	/* block */
 
-/** Up to 1 million lid entries split into 16 expansion slots */
+/** Up to 1 million lid entries split into 2048 expansion slots */
 #define DTX_ARRAY_LEN		(1 << 20) /* Total array slots for DTX lid */
-#define DTX_ARRAY_NR		(1 << 4)  /* Number of expansion arrays */
+#define DTX_ARRAY_NR		(1 << 11)  /* Number of expansion arrays */
 
 enum {
 	/** Used for marking an in-tree record committed */
@@ -100,8 +101,16 @@ enum {
  */
 #define VOS_MW_FLUSH_THRESH	(1UL << 23)	/* 8MB */
 
+/*
+ * Default size (in blocks) threshold for merging NVMe records, we choose
+ * 256 blocks as default value since the default DFS chunk size is 1MB.
+ */
+#define VOS_MW_NVME_THRESH	256		/* 256 * VOS_BLK_SZ = 1MB */
+
 /* Force aggregation/discard ULT yield on certain amount of tight loops */
 #define VOS_AGG_CREDITS_MAX	32
+
+extern unsigned int vos_agg_nvme_thresh;
 
 static inline uint32_t vos_byte2blkcnt(uint64_t bytes)
 {
@@ -126,8 +135,29 @@ agg_reserve_space(daos_size_t *rsrvd)
 	rsrvd[DAOS_MEDIA_NVME]	+= size;
 }
 
+enum {
+	AGG_OP_SCAN = 0,	/* scanned obj/dkey/akey */
+	AGG_OP_SKIP,		/* skipped obj/dkey/akey */
+	AGG_OP_DEL,		/* deleted obj/dkey/akey */
+	AGG_OP_MAX,
+};
+
+struct vos_agg_metrics {
+	struct d_tm_node_t	*vam_epr_dur;		/* EPR(Epoch Range) scan duration */
+	struct d_tm_node_t	*vam_obj[AGG_OP_MAX];
+	struct d_tm_node_t	*vam_dkey[AGG_OP_MAX];
+	struct d_tm_node_t	*vam_akey[AGG_OP_MAX];
+	struct d_tm_node_t	*vam_uncommitted;	/* Hit uncommitted entries */
+	struct d_tm_node_t	*vam_csum_errs;		/* Hit CSUM errors */
+	struct d_tm_node_t	*vam_del_sv;		/* Deleted SV records */
+	struct d_tm_node_t	*vam_del_ev;		/* Deleted EV records */
+	struct d_tm_node_t	*vam_merge_recs;	/* Total merged EV records */
+	struct d_tm_node_t	*vam_merge_size;	/* Total merged size */
+};
+
 struct vos_pool_metrics {
-	void	*vp_vea_metrics;
+	void			*vp_vea_metrics;
+	struct vos_agg_metrics	 vp_agg_metrics;
 	/* TODO: add more metrics for VOS */
 };
 
@@ -172,9 +202,11 @@ struct vos_pool {
 	daos_size_t		vp_space_held[DAOS_MEDIA_MAX];
 	/** Dedup hash */
 	struct d_hash_table	*vp_dedup_hash;
-	struct vos_metrics	*vp_metrics;
+	struct vos_pool_metrics	*vp_metrics;
 	/* The count of committed DTXs for the whole pool. */
 	uint32_t		 vp_dtx_committed_count;
+	/** Tiering policy */
+	struct policy_desc_t	vp_policy_desc;
 };
 
 /**
@@ -218,10 +250,12 @@ struct vos_container {
 	daos_epoch_range_t	vc_epr_aggregation;
 	/* Current ongoing discard EPR */
 	daos_epoch_range_t	vc_epr_discard;
+	/* Last timestamp when VOS aggregation reporting ENOSPACE */
+	uint64_t		vc_agg_nospc_ts;
 	/* Various flags */
 	unsigned int		vc_in_aggregation:1,
 				vc_in_discard:1,
-				vc_reindex_cmt_dtx:1;
+				vc_cmt_dtx_indexed:1;
 	unsigned int		vc_obj_discard_count;
 	unsigned int		vc_open_count;
 };
@@ -258,13 +292,14 @@ struct vos_dtx_act_ent {
 	daos_epoch_t			 dae_start_time;
 	/* Link into container::vc_dtx_act_list. */
 	d_list_t			 dae_link;
+	/* Back pointer to the DTX handle. */
+	struct dtx_handle		*dae_dth;
 
 	unsigned int			 dae_committable:1,
 					 dae_committed:1,
 					 dae_aborted:1,
 					 dae_maybe_shared:1,
-					 dae_prepared:1,
-					 dae_resent:1;
+					 dae_prepared:1;
 };
 
 #define DAE_XID(dae)		((dae)->dae_base.dae_xid)
@@ -290,8 +325,7 @@ struct vos_dtx_cmt_ent {
 
 	uint32_t			 dce_reindex:1,
 					 dce_exist:1,
-					 dce_invalid:1,
-					 dce_resent:1;
+					 dce_invalid:1;
 };
 
 #define DCE_XID(dce)		((dce)->dce_base.dce_xid)
@@ -390,6 +424,7 @@ vos_dtx_cleanup_internal(struct dtx_handle *dth);
  * \param epoch		[IN]	Epoch of update
  * \param intent	[IN]	The request intent.
  * \param type		[IN]	The record type, see vos_dtx_record_types.
+ * \param retry		[IN]	Whether need to retry if hit non-committed DTX entry.
  *
  * \return	positive value	If available to outside.
  *		zero		If unavailable to outside.
@@ -403,7 +438,7 @@ vos_dtx_cleanup_internal(struct dtx_handle *dth);
  */
 int
 vos_dtx_check_availability(daos_handle_t coh, uint32_t entry,
-			   daos_epoch_t epoch, uint32_t intent, uint32_t type);
+			   daos_epoch_t epoch, uint32_t intent, uint32_t type, bool retry);
 
 /**
  * Get local entry DTX state. Only used by VOS aggregation.
@@ -472,11 +507,10 @@ int
 vos_dtx_prepared(struct dtx_handle *dth, struct vos_dtx_cmt_ent **dce_p);
 
 int
-vos_dtx_commit_internal(struct vos_container *cont, struct dtx_id *dtis,
-			int count, daos_epoch_t epoch,
-			bool resent, bool *rm_cos,
-			struct vos_dtx_act_ent **daes,
-			struct vos_dtx_cmt_ent **dces);
+vos_dtx_commit_internal(struct vos_container *cont, struct dtx_id dtis[],
+			int count, daos_epoch_t epoch, bool rm_cos[],
+			struct vos_dtx_act_ent **daes, struct vos_dtx_cmt_ent **dces);
+
 void
 vos_dtx_post_handle(struct vos_container *cont,
 		    struct vos_dtx_act_ent **daes,
@@ -759,17 +793,6 @@ enum vos_iter_state {
 	VOS_ITS_END,
 };
 
-/**
- * operation code for VOS iterator.
- */
-enum vos_iter_opc {
-	IT_OPC_NOOP,
-	IT_OPC_FIRST,
-	IT_OPC_LAST,
-	IT_OPC_PROBE,
-	IT_OPC_NEXT,
-};
-
 struct vos_iter_ops;
 
 /** the common part of vos iterators */
@@ -778,6 +801,8 @@ struct vos_iterator {
 	struct vos_iter_ops	*it_ops;
 	struct vos_iterator	*it_parent; /* parent iterator */
 	struct vos_ts_set	*it_ts_set;
+	vos_iter_filter_cb_t	 it_filter_cb;
+	void			*it_filter_arg;
 	daos_epoch_t		 it_bound;
 	vos_iter_type_t		 it_type;
 	enum vos_iter_state	 it_state;
@@ -786,7 +811,7 @@ struct vos_iterator {
 				 it_for_purge:1,
 				 it_for_discard:1,
 				 it_for_migration:1,
-				 it_cleanup_stale_dtx:1,
+				 it_show_uncommitted:1,
 				 it_ignore_uncommitted:1;
 };
 
@@ -816,6 +841,9 @@ struct vos_iter_info {
 	daos_epoch_range_t	 ii_epr;
 	/** highest epoch where parent obj/key was punched */
 	struct vos_punch_record	 ii_punched;
+	/** Filter callback */
+	vos_iter_filter_cb_t	 ii_filter_cb;
+	void			*ii_filter_arg;
 	/** epoch logic expression for the iterator. */
 	vos_it_epc_expr_t	 ii_epc_expr;
 	/** iterator flags */
@@ -848,9 +876,9 @@ struct vos_iter_ops {
 	int	(*iop_finish)(struct vos_iterator *iter);
 	/** Set the iterating cursor to the provided @anchor */
 	int	(*iop_probe)(struct vos_iterator *iter,
-			     daos_anchor_t *anchor);
+			     daos_anchor_t *anchor, uint32_t flags);
 	/** move forward the iterating cursor */
-	int	(*iop_next)(struct vos_iterator *iter);
+	int	(*iop_next)(struct vos_iterator *iter, daos_anchor_t *anchor);
 	/** fetch the record that the cursor points to */
 	int	(*iop_fetch)(struct vos_iterator *iter,
 			     vos_iter_entry_t *it_entry,
@@ -913,6 +941,15 @@ static inline struct vos_obj_iter *
 vos_hdl2oiter(daos_handle_t hdl)
 {
 	return vos_iter2oiter(vos_hdl2iter(hdl));
+}
+
+static inline daos_handle_t
+vos_iter2hdl(struct vos_iterator *iter)
+{
+	daos_handle_t	hdl;
+
+	hdl.cookie = (uint64_t)iter;
+	return hdl;
 }
 
 /**
@@ -980,7 +1017,7 @@ key_tree_release(daos_handle_t toh, bool is_array);
 int
 key_tree_punch(struct vos_object *obj, daos_handle_t toh, daos_epoch_t epoch,
 	       daos_epoch_t bound, d_iov_t *key_iov, d_iov_t *val_iov,
-	       uint64_t flags, struct vos_ts_set *ts_set,
+	       uint64_t flags, struct vos_ts_set *ts_set, umem_off_t *known_key,
 	       struct vos_ilog_info *parent, struct vos_ilog_info *info);
 int
 key_tree_delete(struct vos_object *obj, daos_handle_t toh, d_iov_t *key_iov);
@@ -988,19 +1025,6 @@ key_tree_delete(struct vos_object *obj, daos_handle_t toh, d_iov_t *key_iov);
 /* vos_io.c */
 daos_size_t
 vos_recx2irec_size(daos_size_t rsize, struct dcs_csum_info *csum);
-
-/*
- * A simple media selection policy embedded in VOS, which select media by
- * akey type and record size.
- */
-static inline uint16_t
-vos_media_select(struct vos_pool *pool, daos_iod_type_t type, daos_size_t size)
-{
-	if (pool->vp_vea_info == NULL)
-		return DAOS_MEDIA_SCM;
-
-	return (size >= VOS_BLK_SZ) ? DAOS_MEDIA_NVME : DAOS_MEDIA_SCM;
-}
 
 int
 vos_dedup_init(struct vos_pool *pool);
@@ -1071,6 +1095,18 @@ vos_gc_pool_tight(daos_handle_t poh, int *credits);
 void
 gc_reserve_space(daos_size_t *rsrvd);
 
+/**
+ * If the object is fully punched, bypass normal aggregation and move it to container
+ * discard pool
+ *
+ * \param ih[IN]	Iterator handle
+ *
+ * \return		Zero on Success
+ *			Positive value if a reprobe is needed
+ *			Negative value otherwise
+ */
+int
+oi_iter_pre_aggregate(daos_handle_t ih);
 
 /**
  * Aggregate the creation/punch records in the current entry of the object
@@ -1080,12 +1116,25 @@ gc_reserve_space(daos_size_t *rsrvd);
  * \param range_discard[IN]	Discard only uncommitted ilog entries (for reintegration)
  *
  * \return		Zero on Success
- *			1 if a reprobe is needed (entry is removed or not
- *			visible)
- *			negative value otherwise
+ *			Positive value if a reprobe is needed
+ *			(1: entry is removed; 2: entry is invisible)
+ *			Negative value otherwise
  */
 int
 oi_iter_aggregate(daos_handle_t ih, bool range_discard);
+
+/**
+ * If the key is fully punched, bypass normal aggregation and move it to container
+ * discard pool
+ *
+ * \param ih[IN]	Iterator handle
+ *
+ * \return		Zero on Success
+ *			Positive value if a reprobe is needed
+ *			Negative value otherwise
+ */
+int
+vos_obj_iter_pre_aggregate(daos_handle_t ih);
 
 /**
  * Aggregate the creation/punch records in the current entry of the key
@@ -1095,9 +1144,9 @@ oi_iter_aggregate(daos_handle_t ih, bool range_discard);
  * \param range_discard[IN]	Discard only uncommitted ilog entries (for reintegration)
  *
  * \return		Zero on Success
- *			1 if a reprobe is needed (entry is removed or not
- *			visible)
- *			negative value otherwise
+ *			Positive value if a reprobe is needed
+ *			(1: entry is removed; 2: entry is invisible)
+ *			Negative value otherwise
  */
 int
 vos_obj_iter_aggregate(daos_handle_t ih, bool range_discard);
@@ -1116,15 +1165,16 @@ D_CASSERT((VOS_IT_KEY_TREE & VOS_IT_MASK) == 0);
  *  \param toh[IN]			Open key tree handle
  *  \param type[IN]			Iterator type (VOS_ITER_AKEY/DKEY only)
  *  \param epr[IN]			Valid epoch range for iteration
- *  \param ignore_inprogress[IN]	Fail if there are uncommitted entries
+ *  \param show_uncommitted[IN]		Return uncommitted entries marked as instead of failing
  *  \param cb[IN]			Callback for key
  *  \param arg[IN]			argument to pass to callback
  *  \param dth[IN]			dtx handle
+ *  \param anchor[IN]			Option anchor from where to start iterator
  */
 int
 vos_iterate_key(struct vos_object *obj, daos_handle_t toh, vos_iter_type_t type,
-		const daos_epoch_range_t *epr, bool ignore_inprogress,
-		vos_iter_cb_t cb, void *arg, struct dtx_handle *dth);
+		const daos_epoch_range_t *epr, bool show_uncommitted,
+		vos_iter_cb_t cb, void *arg, struct dtx_handle *dth, daos_anchor_t *anchor);
 
 /** Start epoch of vos */
 extern daos_epoch_t	vos_start_epoch;
@@ -1245,5 +1295,92 @@ vos_ts_add_missing(struct vos_ts_set *ts_set, daos_key_t *dkey, int akey_nr,
 
 int
 vos_pool_settings_init(void);
+
+/** Raise a RAS event on incompatible durable format
+ *
+ * \param[in] type		Type of object with layout format
+ *				incompatibility (e.g. VOS pool)
+ * \param[in] version		Version of the object
+ * \param[in] min_version	Minimum supported version
+ * \param[in] max_version	Maximum supported version
+ * \param[in] pool		(Optional) associated pool uuid
+ */
+void
+vos_report_layout_incompat(const char *type, int version, int min_version,
+			   int max_version, uuid_t *uuid);
+
+#define VOS_NOTIFY_RAS_EVENTF(...)			\
+	do {						\
+		if (ds_notify_ras_eventf == NULL)	\
+			break;				\
+		ds_notify_ras_eventf(__VA_ARGS__);	\
+	} while (0)					\
+
+static inline int
+vos_offload_exec(int (*func)(void *), void *arg)
+{
+	if (dss_offload_exec != NULL)
+		return dss_offload_exec(func, arg);
+	else
+		return func(arg);
+}
+
+static inline bool
+umoff_is_null(umem_off_t umoff)
+{
+	return umoff == UMOFF_NULL;
+}
+
+/* vos_csum_recalc.c */
+
+struct csum_recalc {
+	struct evt_extent	 cr_log_ext;
+	struct evt_extent	*cr_phy_ext;
+	struct dcs_csum_info	*cr_phy_csum;
+	daos_off_t		 cr_phy_off;
+};
+
+struct csum_recalc_args {
+	struct bio_sglist	*cra_bsgl;	/* read sgl */
+	struct evt_entry_in	*cra_ent_in;    /* coalesced entry */
+	struct csum_recalc	*cra_recalcs;   /* recalc info */
+	unsigned int		 cra_seg_cnt;   /* # of read segments */
+	int			 cra_rc;	/* return code */
+};
+
+int vos_csum_recalc_fn(void *recalc_args);
+
+static inline struct dcs_csum_info *
+vos_csum_at(struct dcs_iod_csums *iod_csums, unsigned int idx)
+{
+	/** is enabled and has csums (might not for punch) */
+	if (iod_csums != NULL && iod_csums[idx].ic_nr > 0)
+		return iod_csums[idx].ic_data;
+	return NULL;
+}
+
+static inline struct dcs_csum_info *
+recx_csum_at(struct dcs_csum_info *csums, unsigned int idx, daos_iod_t *iod)
+{
+	if (csums != NULL && csum_iod_is_supported(iod))
+		return &csums[idx];
+	return NULL;
+}
+
+static inline daos_size_t
+recx_csum_len(daos_recx_t *recx, struct dcs_csum_info *csum,
+	      daos_size_t rsize)
+{
+	if (!ci_is_valid(csum) || rsize == 0)
+		return 0;
+	return (daos_size_t)csum->cs_len * csum_chunk_count(csum->cs_chunksize,
+			recx->rx_idx, recx->rx_idx + recx->rx_nr - 1, rsize);
+}
+
+static inline bool
+vos_anchor_is_zero(daos_anchor_t *anchor)
+{
+	return anchor == NULL || daos_anchor_is_zero(anchor);
+}
 
 #endif /* __VOS_INTERNAL_H__ */

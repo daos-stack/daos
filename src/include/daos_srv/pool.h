@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2021 Intel Corporation.
+ * (C) Copyright 2016-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -22,6 +22,7 @@
 #include <daos_pool.h>
 #include <daos_security.h>
 #include <gurt/telemetry_common.h>
+#include <daos_srv/policy.h>
 
 /*
  * Pool object
@@ -32,15 +33,21 @@ struct ds_pool {
 	struct daos_llink	sp_entry;
 	uuid_t			sp_uuid;	/* pool UUID */
 	ABT_rwlock		sp_lock;
-	struct pool_map	       *sp_map;
+	struct pool_map		*sp_map;
 	uint32_t		sp_map_version;	/* temporary */
 	uint32_t		sp_ec_cell_sz;
 	uint64_t		sp_reclaim;
+	uint32_t		sp_redun_fac;
+	/* Performance Domain Affinity Level of EC object. */
+	uint32_t		sp_ec_pda;
+	/* Performance Domain Affinity Level of replicated object */
+	uint32_t		sp_rp_pda;
 	crt_group_t	       *sp_group;
+	struct policy_desc_t	sp_policy_desc;	/* tiering policy descriptor */
 	ABT_mutex		sp_mutex;
 	ABT_cond		sp_fetch_hdls_cond;
 	ABT_cond		sp_fetch_hdls_done_cond;
-	struct ds_iv_ns	       *sp_iv_ns;
+	struct ds_iv_ns		*sp_iv_ns;
 
 	/* structure related to EC aggregate epoch query */
 	d_list_t		sp_ec_ephs_list;
@@ -211,11 +218,6 @@ int ds_pool_iv_srv_hdl_fetch(struct ds_pool *pool, uuid_t *pool_hdl_uuid,
 
 int ds_pool_svc_term_get(uuid_t uuid, uint64_t *term);
 
-int ds_pool_elect_dtx_leader(struct ds_pool *pool, daos_unit_oid_t *oid,
-			     uint32_t version, int *tgt_id);
-int ds_pool_check_dtx_leader(struct ds_pool *pool, daos_unit_oid_t *oid,
-			     uint32_t version, bool check_shard);
-
 int
 ds_pool_child_map_refresh_sync(struct ds_pool_child *dpc);
 int
@@ -244,8 +246,11 @@ int ds_pool_svc_list_cont(uuid_t uuid, d_rank_list_t *ranks,
 
 int ds_pool_svc_check_evict(uuid_t pool_uuid, d_rank_list_t *ranks,
 			    uuid_t *handles, size_t n_handles,
-			    uint32_t destroy, uint32_t force);
+			    uint32_t destroy, uint32_t force,
+			    char *machine, uint32_t *count);
 
+int ds_pool_target_status_check(struct ds_pool *pool, uint32_t id,
+				uint8_t matched_status, struct pool_target **p_tgt);
 void ds_pool_disable_exclude(void);
 void ds_pool_enable_exclude(void);
 

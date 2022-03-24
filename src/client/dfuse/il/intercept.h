@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2017-2021 Intel Corporation.
+ * (C) Copyright 2017-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -30,6 +30,7 @@
 	ACTION(FILE *,  fopen,     (const char *, const char *))              \
 	ACTION(FILE *,  freopen,   (const char *, const char *, FILE *))      \
 	ACTION(int,     open,      (const char *, int, ...))                  \
+	ACTION(int,     openat,    (int, const char *, int, ...))             \
 	ACTION(ssize_t, pread,     (int, void *, size_t, off_t))              \
 	ACTION(ssize_t, pwrite,    (int, const void *, size_t, off_t))        \
 	ACTION(off_t,   lseek,     (int, off_t, int))                         \

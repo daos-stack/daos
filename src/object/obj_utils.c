@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2018-2021 Intel Corporation.
+ * (C) Copyright 2018-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -115,7 +115,7 @@ recx_key_cmp(struct btr_instance *tins, struct btr_record *rec, d_iov_t *key)
 
 static int
 recx_rec_alloc(struct btr_instance *tins, d_iov_t *key, d_iov_t *val,
-	     struct btr_record *rec)
+	     struct btr_record *rec, d_iov_t *val_out)
 {
 	struct recx_rec	*r;
 	umem_off_t	roff;
@@ -144,7 +144,7 @@ recx_rec_free(struct btr_instance *tins, struct btr_record *rec, void *args)
 
 static int
 recx_rec_update(struct btr_instance *tins, struct btr_record *rec,
-		d_iov_t *key, d_iov_t *val)
+		d_iov_t *key, d_iov_t *val, d_iov_t *val_out)
 {
 	D_ASSERTF(0, "recx_rec_update should never be called.\n");
 	return 0;

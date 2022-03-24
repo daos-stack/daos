@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2021 Intel Corporation.
+// (C) Copyright 2021-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -179,4 +179,49 @@ func PrintSystemStartResponse(out, outErr io.Writer, resp *control.SystemStartRe
 // supplied SystemStopResp struct and writes it to the supplied io.Writer.
 func PrintSystemStopResponse(out, outErr io.Writer, resp *control.SystemStopResp) error {
 	return printSystemResults(out, outErr, resp.Results, &resp.AbsentHosts, &resp.AbsentRanks)
+}
+
+func printSystemCleanupRespVerbose(out io.Writer, resp *control.SystemCleanupResp) error {
+	if len(resp.Results) == 0 {
+		fmt.Fprintln(out, "no handles cleaned up")
+		return nil
+	}
+
+	titles := []string{"Pool", "Handles Revoked"}
+	formatter := txtfmt.NewTableFormatter(titles...)
+
+	var table []txtfmt.TableRow
+	for _, r := range resp.Results {
+		row := txtfmt.TableRow{
+			"Pool":            r.PoolID,
+			"Handles Revoked": fmt.Sprintf("%d", r.Count),
+		}
+		table = append(table, row)
+	}
+
+	fmt.Fprintln(out, formatter.Format(table))
+
+	return nil
+}
+
+// PrintSystemCleanupResponse generates a human-readable representation of the
+// supplied SystemCleanupResp struct and writes it to the supplied io.Writer.
+func PrintSystemCleanupResponse(out, outErr io.Writer, resp *control.SystemCleanupResp, verbose bool) error {
+	err := resp.Errors()
+
+	if err != nil {
+		fmt.Fprintln(outErr, err.Error())
+	}
+
+	if len(resp.Results) == 0 {
+		fmt.Fprintln(out, "No handles cleaned up")
+		return nil
+	}
+
+	if verbose {
+		return printSystemCleanupRespVerbose(out, resp)
+	}
+
+	fmt.Fprintln(out, "System Cleanup Success")
+	return nil
 }

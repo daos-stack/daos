@@ -9,17 +9,16 @@ hosts:
     # server_partition: daos_server
     client_partition: normal
     client_reservation: daos-test
-orterun:
-    allow_run_as_root: True
+mpi_module: mpich/gnu-sockets
 # This timeout must be longer than the test_timeout param (+15minutes)
 # 2 hour test
-timeout: 1H15M
+timeout: 2H15M
 setup:
     start_servers: False
     start_agents: False
 server_config:
     name: daos_server
-    provider: ofi+sockets
+    provider: ofi+tcp
     control_log_mask: INFO
     control_log_file: daos_control0.log
     servers:
@@ -83,6 +82,8 @@ soak_stress:
     joblist:
         - ior_stress
         - mdtest_stress
+        - vpic_stress
+        - lammps_stress
 # Commandline parameters
 # Benchmark and application params
 # IOR params -a DFS and -a MPIIO
@@ -135,9 +136,33 @@ mdtest_stress:
         - 3901
     depth:
         - 5
-    dfs_oclass: 'SX'
-    dfs_dir_oclass: 'S1'
+    dfs_oclass:
+        - 'S1'
     dfs_destroy: False
     dfuse:
         mount_dir: "/tmp/daos_dfuse/mdtest/"
         disable_caching: True
+vpic_stress:
+    job_timeout: 20
+    nodesperjob:
+        - 4
+    taskspernode:
+        - 16
+    cmdline: "/home/mjean/vpic-install/bin/harris.Linux"
+    workdir: "/tmp/daos_dfuse/vpic/"
+    dfuse:
+        mount_dir: "/tmp/daos_dfuse/vpic/"
+    oclass:
+        - "SX"
+lammps_stress:
+    job_timeout: 30
+    nodesperjob:
+        - 4
+    taskspernode:
+        - 16
+    cmdline: "/home/mjean/lammps-install/bin/lmp -i /home/mjean/lammps/bench/in.lj.smoke"
+    workdir: "/tmp/daos_dfuse/lammps/"
+    dfuse:
+        mount_dir: "/tmp/daos_dfuse/lammps/"
+    oclass:
+        - "SX"

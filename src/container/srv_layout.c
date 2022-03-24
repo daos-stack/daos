@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2017-2021 Intel Corporation.
+ * (C) Copyright 2017-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -47,6 +47,8 @@ RDB_STRING_KEY(ds_cont_attr_, user);
 RDB_STRING_KEY(ds_cont_prop_, handles);
 RDB_STRING_KEY(ds_cont_prop_, roots);
 RDB_STRING_KEY(ds_cont_prop_, ec_cell_sz);
+RDB_STRING_KEY(ds_cont_prop_, ec_pda);
+RDB_STRING_KEY(ds_cont_prop_, rp_pda);
 
 /* dummy value for container roots, avoid malloc on demand */
 static struct daos_prop_co_roots dummy_roots;
@@ -113,6 +115,12 @@ struct daos_prop_entry cont_prop_entries_default[CONT_PROP_NUM] = {
 		.dpe_val	= 0,
 	}, {
 		.dpe_type	= DAOS_PROP_CO_EC_CELL_SZ,
+		.dpe_val	= 0, /* inherit from pool by default */
+	}, {
+		.dpe_type	= DAOS_PROP_CO_EC_PDA,
+		.dpe_val	= 0, /* inherit from pool by default */
+	}, {
+		.dpe_type	= DAOS_PROP_CO_RP_PDA,
 		.dpe_val	= 0, /* inherit from pool by default */
 	}
 };

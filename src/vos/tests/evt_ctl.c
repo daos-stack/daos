@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2017-2021 Intel Corporation.
+ * (C) Copyright 2017-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -1216,6 +1216,9 @@ test_evt_iter_delete(void **state)
 	assert_rc_equal(rc, 0);
 	rc = utest_sync_mem_status(arg->ta_utx);
 	assert_int_equal(rc, 0);
+
+	rc = evt_has_data(arg->ta_root, arg->ta_uma);
+	assert_rc_equal(rc, 0);
 	/* Insert a bunch of entries */
 	for (epoch = 1; epoch <= NUM_EPOCHS; epoch++) {
 		for (offset = epoch; offset < NUM_EXTENTS + epoch; offset++) {
@@ -1239,6 +1242,8 @@ test_evt_iter_delete(void **state)
 			assert_int_equal(rc, 0);
 		}
 	}
+	rc = evt_has_data(arg->ta_root, arg->ta_uma);
+	assert_rc_equal(rc, 1);
 
 	rc = evt_iter_prepare(toh, EVT_ITER_VISIBLE, NULL, &ih);
 	assert_rc_equal(rc, 0);

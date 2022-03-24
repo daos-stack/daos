@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2015-2021 Intel Corporation.
+ * (C) Copyright 2015-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -43,7 +43,11 @@ extern "C" {
 #endif
 
 /**
- * Create an Event Queue.
+ * Create an Event Queue. An event queue is used to hold and pool multiple events. Each event queue
+ * created will create a network (cart) context to be associated with the event queue. The network
+ * context creation is an expensive operation, and the number of network context can be limited on
+ * some systems. Thus, it is advisable to not create a lot of event queues in a user application or
+ * middleware.
  *
  * \param eq [OUT]	Returned EQ handle
  *

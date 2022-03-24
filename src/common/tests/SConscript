@@ -18,8 +18,6 @@ def scons():
     """Execute build"""
     Import('tenv')
 
-    common_test_utils = tenv.SharedObject(['test_mocks.c', 'test_utils.c'])
-    Export('common_test_utils')
     tenv.Append(CPPDEFINES=['-DDAOS_PMEM_BUILD'])
 
     utest_utils = tenv.SharedObject('utest_common.c')
@@ -50,37 +48,52 @@ def scons():
                     LIBS=['daos_common', 'gurt', 'cmocka'])
     daos_build.test(tenv, 'fault_domain_tests', 'fault_domain_tests.c',
                     LIBS=['daos_common', 'gurt', 'cmocka'])
+    daos_build.test(tenv, 'policy_tests', 'policy_tests.c',
+                    LIBS=['daos_common', 'gurt', 'cmocka'])
     define_checksum_timing(daos_build, tenv)
     define_compress_timing(daos_build, tenv)
 
     tenv.Install('$PREFIX/bin/', [common_test])
 
     unit_env = tenv.Clone()
-    # Some syscalls are aliased when fortification is enabled, which makes
-    # mocking in unit tests into a headache.
-    # The compiler decides this on its own, but let's force the issue.
-    compiler_setup.remove_fortify(unit_env)
+    unit_env.AppendUnique(OBJPREFIX='utest_')
+
+    common_mock_ld_script = "%s/common-mock-ld-opts" % Dir('.').srcnode()
+    unit_env.AppendUnique(LINKFLAGS=['-Wl,@%s' % common_mock_ld_script])
+
+    mock_test_utils = unit_env.SharedObject(['test_mocks.c', 'test_utils.c'])
+    drpc_test_utils = unit_env.SharedObject(['../drpc.c']) + mock_test_utils
+    Export('drpc_test_utils')
 
     acl_api = unit_env.Object('../acl_api.c')
 
-    daos_build.test(unit_env, 'drpc_tests',
-                    ['drpc_tests.c', '../drpc.c', '../drpc.pb-c.c',
-                     common_test_utils],
-                    LIBS=['protobuf-c', 'daos_common', 'gurt', 'cmocka'])
+    Depends('acl_api_tests', common_mock_ld_script)
     daos_build.test(unit_env, 'acl_api_tests',
-                    source=['acl_api_tests.c', acl_api,
-                            common_test_utils],
+                    source=['acl_api_tests.c', acl_api, mock_test_utils],
                     LIBS=['protobuf-c', 'daos_common', 'gurt', 'cmocka'])
+
+    Depends('acl_valid_tests', common_mock_ld_script)
     daos_build.test(unit_env, 'acl_valid_tests',
-                    source=['acl_valid_tests.c', acl_api,
-                            common_test_utils],
+                    source=['acl_valid_tests.c', acl_api, mock_test_utils],
                     LIBS=['protobuf-c', 'daos_common', 'gurt', 'cmocka'])
+
+    Depends('acl_util_tests', common_mock_ld_script)
     daos_build.test(unit_env, 'acl_util_tests',
-                    source=['acl_util_tests.c', '../acl_util.c'],
+                    source=['acl_util_tests.c', '../acl_util.c', mock_test_utils],
                     LIBS=['protobuf-c', 'daos_common', 'gurt', 'cmocka'])
+
+    Depends('acl_principal_tests', common_mock_ld_script)
     daos_build.test(unit_env, 'acl_principal_tests',
-                    source=['acl_principal_tests.c', '../acl_principal.c'],
+                    source=['acl_principal_tests.c', '../acl_principal.c', mock_test_utils],
                     LIBS=['protobuf-c', 'daos_common', 'gurt', 'cmocka'])
+
+    Depends('drpc_tests', common_mock_ld_script)
+    daos_build.test(unit_env, 'drpc_tests',
+                    ['drpc_tests.c', '../drpc.c', '../drpc.pb-c.c', mock_test_utils],
+                    LIBS=['protobuf-c', 'daos_common', 'gurt', 'cmocka'])
+
+
+
 
 if __name__ == "SCons.Script":
     scons()

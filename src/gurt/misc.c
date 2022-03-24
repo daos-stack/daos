@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2021 Intel Corporation.
+ * (C) Copyright 2016-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -12,6 +12,24 @@
 #include <stdarg.h>
 #include <math.h>
 #include <gurt/common.h>
+
+/* state buffer for DAOS rand and srand calls, NOT thread safe */
+static struct drand48_data randBuffer = {0};
+
+void
+d_srand(long int seedval)
+{
+	srand48_r(seedval, &randBuffer);
+}
+
+long int
+d_rand()
+{
+	long int result;
+
+	lrand48_r(&randBuffer, &result);
+	return result;
+}
 
 void
 d_free(void *ptr)
@@ -308,6 +326,23 @@ d_rank_list_sort(d_rank_list_t *rank_list)
 	      sizeof(d_rank_t), rank_compare);
 }
 
+void
+d_rank_list_shuffle(d_rank_list_t *rank_list)
+{
+	uint32_t	i, j;
+	d_rank_t	tmp;
+
+	if (rank_list == NULL)
+		return;
+
+	for (i = 0; i < rank_list->rl_nr; i++) {
+		j = rand() % rank_list->rl_nr;
+		tmp = rank_list->rl_ranks[i];
+		rank_list->rl_ranks[i] = rank_list->rl_ranks[j];
+		rank_list->rl_ranks[j] = tmp;
+	}
+}
+
 /**
  * Must be previously sorted or not modified at all in order to guarantee
  * consistent indexes.
@@ -526,6 +561,107 @@ rank_list_to_uint32_array(d_rank_list_t *rl, uint32_t **ints, size_t *len)
 		(*ints)[i] = (uint32_t)rl->rl_ranks[i];
 
 	return 0;
+}
+
+d_rank_range_list_t *
+d_rank_range_list_alloc(uint32_t size)
+{
+	d_rank_range_list_t    *range_list;
+
+	D_ALLOC_PTR(range_list);
+	if (range_list == NULL)
+		return NULL;
+
+	if (size == 0) {
+		range_list->rrl_nr = 0;
+		range_list->rrl_ranges = NULL;
+		return range_list;
+	}
+
+	D_ALLOC_ARRAY(range_list->rrl_ranges, size);
+	if (range_list->rrl_ranges == NULL) {
+		D_FREE(range_list);
+		return NULL;
+	}
+	range_list->rrl_nr = size;
+
+	return range_list;
+}
+
+d_rank_range_list_t *
+d_rank_range_list_realloc(d_rank_range_list_t *range_list, uint32_t size)
+{
+	d_rank_range_t		*new_ranges;
+
+	if (range_list == NULL)
+		return d_rank_range_list_alloc(size);
+	if (size == 0) {
+		d_rank_range_list_free(range_list);
+		return NULL;
+	}
+	D_REALLOC_ARRAY(new_ranges, range_list->rrl_ranges, range_list->rrl_nr, size);
+	if (new_ranges != NULL) {
+		range_list->rrl_ranges = new_ranges;
+		range_list->rrl_nr = size;
+	} else {
+		range_list = NULL;
+	}
+
+	return range_list;
+}
+
+d_rank_range_list_t *
+d_rank_range_list_create_from_ranks(d_rank_list_t *rank_list)
+{
+	d_rank_range_list_t	       *range_list;
+	uint32_t			alloc_size;
+	uint32_t			nranges;
+	unsigned int			i;		/* rank index */
+	unsigned int			j;		/* rank range index */
+
+	d_rank_list_sort(rank_list);
+	if ((rank_list == NULL) || (rank_list->rl_ranks == NULL) || (rank_list->rl_nr == 0))
+		return d_rank_range_list_alloc(0);
+
+	alloc_size = nranges = 1;
+	range_list = d_rank_range_list_alloc(alloc_size);
+	if (range_list == NULL)
+		return NULL;
+
+	range_list->rrl_ranges[0].lo = rank_list->rl_ranks[0];
+	range_list->rrl_ranges[0].hi = rank_list->rl_ranks[0];
+	for (i = 1, j = 0; i < rank_list->rl_nr; i++) {
+		if (rank_list->rl_ranks[i] == (rank_list->rl_ranks[i-1] + 1)) {
+			/* rank range j continues */
+			range_list->rrl_ranges[j].hi = rank_list->rl_ranks[i];
+		} else {
+			/* New rank range found at position i in rank_list. */
+			j++;
+			nranges++;	/* j + 1 */
+			if (nranges > alloc_size) {
+				alloc_size *= 2;
+				range_list = d_rank_range_list_realloc(range_list, alloc_size);
+				if (range_list == NULL) {
+					d_rank_range_list_free(range_list);
+					return NULL;
+				}
+			}
+			range_list->rrl_ranges[j].lo = rank_list->rl_ranks[i];
+			range_list->rrl_ranges[j].hi = rank_list->rl_ranks[i];
+			range_list->rrl_nr = nranges;
+		}
+	}
+
+	return range_list;
+}
+
+void
+d_rank_range_list_free(d_rank_range_list_t *range_list)
+{
+	if (range_list == NULL)
+		return;
+	D_FREE(range_list->rrl_ranges);
+	D_FREE(range_list);
 }
 
 static inline bool
@@ -819,7 +955,7 @@ d_backoff_seq_next(struct d_backoff_seq *seq)
 	}
 
 	/* Return a random backoff in [0, next]. */
-	return (next * ((double)rand() / RAND_MAX));
+	return (next * ((double)d_rand() / D_RAND_MAX));
 }
 
 double

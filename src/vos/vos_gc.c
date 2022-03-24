@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2019-2021 Intel Corporation.
+ * (C) Copyright 2019-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -1088,18 +1088,17 @@ vos_gc_pool(daos_handle_t poh, int credits, bool (*yield_func)(void *arg),
 {
 	struct vos_pool	*pool = vos_hdl2pool(poh);
 	struct vos_tls	*tls  = vos_tls_get();
-	int		 rc, total = 0;
+	int		 rc = 0, total = 0;
 
 	D_ASSERT(daos_handle_is_valid(poh));
-	if (!gc_have_pool(pool))
-		return 0; /* nothing to reclaim for this pool */
+
+	if (!gc_have_pool(pool)) {
+		if (pool->vp_vea_info != NULL)
+			rc = vea_flush(pool->vp_vea_info, true);
+		return rc;
+	}
 
 	tls->vtl_gc_running++;
-	/*
-	 * Pause flushing free extents in VEA aging buffer, otherwise,
-	 * there'll be way more fragments to be processed.
-	 */
-	vos_pool_ctl(poh, VOS_PO_CTL_VEA_PLUG);
 
 	while (1) {
 		int	creds = GC_CREDS_PRIV;
@@ -1122,13 +1121,12 @@ vos_gc_pool(daos_handle_t poh, int credits, bool (*yield_func)(void *arg),
 
 		if (vos_gc_yield(yield_func, yield_arg)) {
 			D_DEBUG(DB_TRACE, "GC pool run aborted\n");
-			rc = 1;
 			break;
 		}
 	}
 
-	/* Unplug and make the freed extents available immediately. */
-	vos_pool_ctl(poh, VOS_PO_CTL_VEA_UNPLUG);
+	if (pool->vp_vea_info != NULL)
+		rc = vea_flush(pool->vp_vea_info, false);
 
 	if (total != 0) /* did something */
 		D_DEBUG(DB_TRACE, "GC consumed %d credits\n", total);
@@ -1148,6 +1146,6 @@ vos_gc_pool_idle(daos_handle_t poh)
 inline void
 gc_reserve_space(daos_size_t *rsrvd)
 {
-	rsrvd[DAOS_MEDIA_SCM]	+= gc_bag_size * GC_CREDS_MAX;
+	rsrvd[DAOS_MEDIA_SCM]	+= gc_bag_size * (daos_size_t)GC_CREDS_MAX;
 	rsrvd[DAOS_MEDIA_NVME]	+= 0;
 }

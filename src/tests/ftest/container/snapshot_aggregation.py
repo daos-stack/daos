@@ -1,6 +1,6 @@
 #!/usr/bin/python
 """
-  (C) Copyright 2020-2021 Intel Corporation.
+  (C) Copyright 2020-2022 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -47,7 +47,7 @@ class SnapshotAggregation(IorTestBase):
 
         :avocado: tags=all,pr,daily_regression
         :avocado: tags=hw,large
-        :avocado: tags=container,snapshot,snap
+        :avocado: tags=container,snap
         :avocado: tags=snapshot_aggregation
         """
         self.dmg = self.get_dmg_command()

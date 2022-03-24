@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2021 Intel Corporation.
+ * (C) Copyright 2016-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -985,10 +985,11 @@ rebuild_io_post_cb(void *arg)
 static void
 rebuild_master_failure(void **state)
 {
-	test_arg_t		*arg = *state;
+	test_arg_t	       *arg = *state;
 	daos_obj_id_t		oids[10 * OBJ_NR];
 	daos_pool_info_t	pinfo = {0};
 	daos_pool_info_t	pinfo_new = {0};
+	d_rank_list_t	       *affected_engines = NULL;
 	int			i;
 	int			rc;
 
@@ -1015,25 +1016,27 @@ rebuild_master_failure(void **state)
 
 	/* Verify the POOL_QUERY get same rebuild status after leader change */
 	pinfo.pi_bits = DPI_REBUILD_STATUS;
-	rc = test_pool_get_info(arg, &pinfo);
+	rc = test_pool_get_info(arg, &pinfo, &affected_engines);
 	assert_rc_equal(rc, 0);
-	assert_int_equal(pinfo.pi_rebuild_st.rs_done, 1);
+	assert_int_equal(pinfo.pi_rebuild_st.rs_state, 2);
+	assert_true(pinfo.pi_ndisabled > 0);
+	assert_true(d_rank_list_find(affected_engines, ranks_to_kill[0], NULL));
 	rc = rebuild_change_leader_cb(arg);
 	assert_int_equal(rc, 0);
 	pinfo_new.pi_bits = DPI_REBUILD_STATUS;
-	rc = test_pool_get_info(arg, &pinfo_new);
+	rc = test_pool_get_info(arg, &pinfo_new, NULL /* engine_ranks */);
 	assert_rc_equal(rc, 0);
-	assert_int_equal(pinfo_new.pi_rebuild_st.rs_done, 1);
+	assert_int_equal(pinfo_new.pi_rebuild_st.rs_state, 2);
 	rc = memcmp(&pinfo.pi_rebuild_st, &pinfo_new.pi_rebuild_st,
 		    sizeof(pinfo.pi_rebuild_st));
 	if (rc != 0) {
-		print_message("old ver %u seconds %u err %d done %d fail %d"
+		print_message("old ver %u seconds %u err %d state %d fail %d"
 			      " tobeobj "DF_U64" obj "DF_U64" rec "DF_U64
 			      " sz "DF_U64"\n",
 			      pinfo.pi_rebuild_st.rs_version,
 			      pinfo.pi_rebuild_st.rs_seconds,
 			      pinfo.pi_rebuild_st.rs_errno,
-			      pinfo.pi_rebuild_st.rs_done,
+			      pinfo.pi_rebuild_st.rs_state,
 			      pinfo.pi_rebuild_st.rs_fail_rank,
 			      pinfo.pi_rebuild_st.rs_toberb_obj_nr,
 			      pinfo.pi_rebuild_st.rs_obj_nr,
@@ -1045,7 +1048,7 @@ rebuild_master_failure(void **state)
 			      pinfo_new.pi_rebuild_st.rs_version,
 			      pinfo_new.pi_rebuild_st.rs_seconds,
 			      pinfo_new.pi_rebuild_st.rs_errno,
-			      pinfo_new.pi_rebuild_st.rs_done,
+			      pinfo_new.pi_rebuild_st.rs_state,
 			      pinfo_new.pi_rebuild_st.rs_fail_rank,
 			      pinfo_new.pi_rebuild_st.rs_toberb_obj_nr,
 			      pinfo_new.pi_rebuild_st.rs_obj_nr,
@@ -1295,6 +1298,40 @@ rebuild_kill_rank_during_rebuild(void **state)
 			 arg->pool.alive_svc, ranks_to_kill[0]);
 }
 
+static void
+rebuild_kill_PS_leader_during_rebuild(void **state)
+{
+	test_arg_t	*arg = *state;
+	daos_obj_id_t	oids[OBJ_NR];
+	d_rank_t	leader;
+	int		i;
+
+	if (!test_runable(arg, 7) || arg->pool.alive_svc->rl_nr < 5) {
+		print_message("need at least 5 svcs, -s5\n");
+		return;
+	}
+
+	test_get_leader(arg, &leader);
+	for (i = 0; i < OBJ_NR; i++) {
+		oids[i] = daos_test_oid_gen(arg->coh, DAOS_OC_R3S_SPEC_RANK, 0,
+					    0, arg->myrank);
+		oids[i] = dts_oid_set_rank(oids[i], 6);
+	}
+	rebuild_io(arg, oids, OBJ_NR);
+
+	daos_kill_server(arg, arg->pool.pool_uuid, arg->group,
+			 arg->pool.alive_svc, 6);
+	/* hang the rebuild */
+	if (arg->myrank == 0) {
+		daos_debug_set_params(arg->group, -1, DMG_KEY_FAIL_LOC,
+				      DAOS_REBUILD_TGT_SCAN_HANG, 0, NULL);
+		daos_debug_set_params(arg->group, -1, DMG_KEY_FAIL_VALUE, 5,
+				      0, NULL);
+	}
+	sleep(2);
+	rebuild_single_pool_rank(arg, leader, true);
+}
+
 /** create a new pool/container for each test */
 static const struct CMUnitTest rebuild_tests[] = {
 	{"REBUILD0: drop rebuild scan reply",
@@ -1367,6 +1404,9 @@ static const struct CMUnitTest rebuild_tests[] = {
 	 rebuild_fail_all_replicas, rebuild_sub_setup, rebuild_sub_teardown},
 	{"REBUILD28: rebuild kill rank during rebuild",
 	 rebuild_kill_rank_during_rebuild, rebuild_sub_setup,
+	 rebuild_sub_teardown},
+	{"REBUILD29: rebuild kill PS leader during rebuild",
+	 rebuild_kill_PS_leader_during_rebuild, rebuild_sub_setup,
 	 rebuild_sub_teardown},
 };
 

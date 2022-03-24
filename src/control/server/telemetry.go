@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2018-2021 Intel Corporation.
+// (C) Copyright 2018-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -65,7 +65,9 @@ func regPromEngineSources(ctx context.Context, log logging.Logger, engines []Eng
 		}
 
 		addEngineSrc := addFn(uint32(i), er)
-		addEngineSrc(ctx)
+		if err := addEngineSrc(ctx); err != nil {
+			return err
+		}
 
 		// Set up engine to add/remove source on exit/restart
 		engines[i].OnReady(addEngineSrc)

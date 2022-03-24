@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2021 Intel Corporation.
+ * (C) Copyright 2016-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -117,13 +117,13 @@ void pl_map_print(struct pl_map *map)
  */
 int
 pl_obj_place(struct pl_map *map, struct daos_obj_md *md,
-	     struct daos_obj_shard_md *shard_md,
+	     unsigned int mode, struct daos_obj_shard_md *shard_md,
 	     struct pl_obj_layout **layout_pp)
 {
 	D_ASSERT(map->pl_ops != NULL);
 	D_ASSERT(map->pl_ops->o_obj_place != NULL);
 
-	return map->pl_ops->o_obj_place(map, md, shard_md, layout_pp);
+	return map->pl_ops->o_obj_place(map, md, mode, shard_md, layout_pp);
 }
 
 /**
@@ -282,12 +282,14 @@ obj_layout_dump(daos_obj_id_t oid, struct pl_obj_layout *layout)
 		DP_OID(oid), layout->ol_ver);
 
 	for (i = 0; i < layout->ol_nr; i++)
-		D_DEBUG(DB_PL, "%d: shard_id %d, tgt_id %d, f_seq %d, %s\n",
+		D_DEBUG(DB_PL, "%d: shard_id %d, tgt_id %d, f_seq %d, %s %s\n",
 			i, layout->ol_shards[i].po_shard,
 			layout->ol_shards[i].po_target,
 			layout->ol_shards[i].po_fseq,
 			layout->ol_shards[i].po_rebuilding ?
-			"rebuilding" : "healthy");
+			"rebuilding" : "healthy",
+			layout->ol_shards[i].po_reintegrating ?
+			"reintegrating" : "healthy");
 }
 
 /**
@@ -590,153 +592,6 @@ pl_map_query(uuid_t po_uuid, struct pl_map_attr *attr)
 
 	pl_map_decref(map); /* hash table has held the refcount */
 	return rc;
-}
-
-/**
- * Select leader replica for the given object's shard.
- *
- * \param [IN]  oid             The object identifier.
- * \param [IN]  grp_idx         The group index.
- * \param [IN]  grp_size        Group size of obj layout.
- * \param [OUT] tgt_id          If non-NULL, Require leader target id.
- * \param [IN]  pl_get_shard    The callback function to parse out pl_obj_shard
- *                              from the given @data.
- * \param [IN]  data            The parameter used by the @pl_get_shard.
- *
- * \return                      The selected leader shard on success
- *                              Negative value if error.
- */
-int
-pl_select_leader(daos_obj_id_t oid, uint32_t grp_idx, uint32_t grp_size,
-		 int *tgt_id, pl_get_shard_t pl_get_shard, void *data)
-{
-	struct pl_obj_shard             *shard;
-	struct daos_oclass_attr         *oc_attr;
-	uint32_t                         replicas;
-	int                              start;
-	int                              pos;
-	int                              replica_idx;
-	int                              i;
-
-	oc_attr = daos_oclass_attr_find(oid, NULL);
-	if (oc_attr->ca_resil != DAOS_RES_REPL) {
-		int tgt_nr = oc_attr->u.ec.e_k + oc_attr->u.ec.e_p;
-		int fail_cnt = 0;
-		int idx = grp_idx * grp_size + tgt_nr - 1;
-		bool parity_rebuilding = false;
-		int leader_shard_idx;
-
-		/* For EC object, elect last shard in the group (must to be
-		 * a parity node) as leader.
-		 */
-		shard = pl_get_shard(data, idx);
-		while (shard->po_rebuilding || shard->po_shard == -1 ||
-		       shard->po_target == -1) {
-			idx--;
-			if (shard->po_rebuilding)
-				parity_rebuilding = true;
-
-			fail_cnt++;
-			if (fail_cnt > oc_attr->u.ec.e_p) {
-				D_ERROR(DF_OID" fail_cnt %d, exceed e_p %d, "DF_RC"\n",
-					DP_OID(oid), fail_cnt, oc_attr->u.ec.e_p, DP_RC(-DER_IO));
-				return -DER_IO;
-			}
-
-			shard = pl_get_shard(data, idx);
-		}
-
-		if (fail_cnt == oc_attr->u.ec.e_p) {
-			/* If parity is rebuilding, let's return DER_STALE,
-			 * so object I/O might refresh the pool map and layout
-			 * until parity rebuilt finish.
-			 */
-			if (parity_rebuilding)
-				return -DER_STALE;
-			else
-				return -DER_IO;
-		}
-
-		D_ASSERT(shard->po_target != -1);
-		D_ASSERT(shard->po_shard != -1);
-		D_ASSERT(!shard->po_rebuilding);
-
-		if (tgt_id != NULL)
-			*tgt_id = shard->po_target;
-
-		leader_shard_idx = (shard->po_shard / tgt_nr) * grp_size +
-				    shard->po_shard % tgt_nr;
-		return leader_shard_idx;
-	}
-
-	replicas = oc_attr->u.rp.r_num;
-	if (replicas == DAOS_OBJ_REPL_MAX) {
-		D_ASSERT(grp_idx == 0);
-
-		replicas = grp_size;
-	}
-
-	if (replicas < 1 || replicas > grp_size)
-		return -DER_INVAL;
-
-	if (replicas == 1) {
-		pos = grp_idx * grp_size;
-		shard = pl_get_shard(data, pos);
-		if (shard->po_target == -1)
-			return -DER_IO;
-
-		/*
-		 * Note that even though there's only one replica here, this
-		 * object can still be rebuilt during addition or drain as
-		 * it moves between ranks
-		 */
-
-		if (tgt_id != NULL)
-			*tgt_id = shard->po_target;
-
-		/* return pos rather than shard->po_shard for pool extending */
-		return pos;
-	}
-
-	/* XXX: The shards within [start, start + replicas) will search from
-	 *      the same @preferred position, then they will have the same
-	 *      leader. The shards (belonging to the same object) in
-	 *      other redundancy group may get different leader node.
-	 *
-	 *      The one with the lowest f_seq will be elected as the leader
-	 *      to avoid leader switch.
-	 */
-	start = grp_idx * grp_size;
-	replica_idx = (oid.lo + grp_idx) % replicas;
-	for (i = 0, pos = -1; i < replicas;
-	     i++, replica_idx = (replica_idx + 1) % replicas) {
-		int off = start + replica_idx;
-
-		shard = pl_get_shard(data, off);
-		/*
-		 * Cannot select in-rebuilding shard as leader (including the
-		 * case that during reintegration we may have an extended
-		 * layout that with in-adding shards with po_rebuilding set).
-		 */
-		if (shard->po_target == -1 || shard->po_rebuilding)
-			continue;
-		if (pos == -1 ||
-		    pl_get_shard(data, pos)->po_fseq > shard->po_fseq)
-			pos = off;
-	}
-	if (pos != -1) {
-		if (tgt_id != NULL)
-			*tgt_id = pl_get_shard(data, pos)->po_target;
-
-		/*
-		 * Here should not return "pl_get_shard(data, pos)->po_shard",
-		 * because it possibly not equal to "pos" in pool extending.
-		 */
-		return pos;
-	}
-
-	/* If all the replicas are failed or in-rebuilding, then EIO. */
-	return -DER_IO;
 }
 
 #define PL_HTABLE_BITS 7

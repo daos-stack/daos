@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2021 Intel Corporation.
+ * (C) Copyright 2016-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -676,7 +676,6 @@ struct dfuse_inode_ops dfuse_dfs_ops = {
 
 struct dfuse_inode_ops dfuse_cont_ops = {
 	.lookup		= dfuse_cont_lookup,
-	.mknod		= dfuse_cont_mknod,
 	.statfs		= dfuse_cb_statfs,
 };
 

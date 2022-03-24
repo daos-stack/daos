@@ -1,6 +1,6 @@
 #!/usr/bin/python
 """
-  (C) Copyright 2020-2021 Intel Corporation.
+  (C) Copyright 2020-2022 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -15,10 +15,62 @@ from ClusterShell.NodeSet import NodeSet
 
 from command_utils import ExecutableCommand, SystemctlCommand
 from command_utils_base import FormattedParameter, EnvironmentVariables
-from command_utils_base import CommandFailure
+from exception_utils import CommandFailure, MPILoadError
 from env_modules import load_mpi
-from general_utils import pcmd, stop_processes, run_pcmd
+from general_utils import pcmd, stop_processes, run_pcmd, get_job_manager_class
 from write_host_file import write_host_file
+
+
+def get_job_manager(test, class_name=None, job=None, subprocess=None, mpi_type=None, timeout=None,
+                    namespace="/run/job_manager/*", class_name_default="Mpirun"):
+    """Get a JobManager object.
+
+    Create a JobManager class using either:
+        - the provided arguments
+        - the test yaml arguments (if no arguments are provided)
+        - default values (if no arguments are provided and there are no test yaml entries)
+
+    Args:
+        test (Test): avocado Test object
+        class_name (str, optional): JobManager class name. Defaults to None.
+        job (ExecutableCommand, optional): command object to manage. Defaults to None.
+        subprocess (bool, optional): whether the command is run as a subprocess. Defaults to False.
+        mpi_type (str, optional): MPI type to use with the Mpirun class only. Defaults to "openmpi".
+        timeout (int, optional): job manager timeout. Defaults to None.
+        namespace (str, optional): location of yaml parameters used to define unset inputs. Defaults
+            to "/run/job_manager/*".
+        class_name_default (str, optional): default class_name to use when. Defaults to "Mpirun".
+
+    Returns:
+        JobManager: a JobManager class, e.g. Orterun, Mpirun, Srun, etc.
+
+    """
+    job_manager = None
+    if class_name is None:
+        class_name = test.params.get("class_name", namespace, default=class_name_default)
+    if subprocess is None:
+        subprocess = test.params.get("subprocess", namespace, default=False)
+    if mpi_type is None:
+        mpi_type_default = "mpich" if class_name == "Mpirun" else "openmpi"
+        mpi_type = test.params.get("mpi_type", namespace, default=mpi_type_default)
+    if timeout is None:
+        timeout = test.params.get(
+            test.get_test_name(), namespace.replace("*", "manager_timeout/*"), None)
+        if timeout is None:
+            timeout = test.params.get("timeout", namespace, None)
+
+    # Setup a job manager command for running the test command
+    if class_name is not None:
+        job_manager = get_job_manager_class(class_name, job, subprocess, mpi_type)
+        job_manager.timeout = timeout
+        if mpi_type == "openmpi":
+            job_manager.tmpdir_base.update(test.test_dir, "tmpdir_base")
+        if isinstance(test.job_manager, list):
+            test.job_manager.append(job_manager)
+        else:
+            test.job_manager = job_manager
+
+    return job_manager
 
 
 class JobManager(ExecutableCommand):
@@ -184,6 +236,16 @@ class JobManager(ExecutableCommand):
         # processes running by returning a "R" state.
         return "R" if 1 not in results or len(results) > 1 else None
 
+    def stop(self):
+        """Stop the subprocess command and kill any job processes running on hosts.
+
+        Raises:
+            CommandFailure: if unable to stop
+
+        """
+        super().stop()
+        self.kill()
+
     def kill(self):
         """Forcibly terminate any job processes running on hosts."""
         regex = self.job.command_regex
@@ -200,7 +262,7 @@ class JobManager(ExecutableCommand):
 class Orterun(JobManager):
     """A class for the orterun job manager command."""
 
-    def __init__(self, job, subprocess=False):
+    def __init__(self, job, subprocess=False, mpi_type="openmpi"):
         """Create a Orterun object.
 
         Args:
@@ -208,8 +270,8 @@ class Orterun(JobManager):
             subprocess (bool, optional): whether the command is run as a
                 subprocess. Defaults to False.
         """
-        if not load_mpi("openmpi"):
-            raise CommandFailure("Failed to load openmpi")
+        if not load_mpi(mpi_type):
+            raise MPILoadError(mpi_type)
 
         path = os.path.dirname(find_executable("orterun"))
         super().__init__("/run/orterun/*", "orterun", job, path, subprocess)
@@ -236,6 +298,8 @@ class Orterun(JobManager):
         self.tag_output = FormattedParameter("--tag-output", True)
         self.ompi_server = FormattedParameter("--ompi-server {}", None)
         self.working_dir = FormattedParameter("-wdir {}", None)
+        self.tmpdir_base = FormattedParameter("--mca orte_tmpdir_base {}", None)
+        self.mpi_type = mpi_type
 
     def assign_hosts(self, hosts, path=None, slots=None):
         """Assign the hosts to use with the command (--hostfile).
@@ -300,8 +364,8 @@ class Orterun(JobManager):
             CommandFailure: if there is an error running the command
 
         """
-        if not load_mpi("openmpi"):
-            raise CommandFailure("Failed to load openmpi")
+        if not load_mpi(self.mpi_type):
+            raise MPILoadError(self.mpi_type)
 
         return super().run()
 
@@ -309,7 +373,7 @@ class Orterun(JobManager):
 class Mpirun(JobManager):
     """A class for the mpirun job manager command."""
 
-    def __init__(self, job, subprocess=False, mpitype="openmpi"):
+    def __init__(self, job, subprocess=False, mpi_type="openmpi"):
         """Create a Mpirun object.
 
         Args:
@@ -317,14 +381,14 @@ class Mpirun(JobManager):
             subprocess (bool, optional): whether the command is run as a
                 subprocess. Defaults to False.
         """
-        if not load_mpi(mpitype):
-            raise CommandFailure("Failed to load {}".format(mpitype))
+        if not load_mpi(mpi_type):
+            raise MPILoadError(mpi_type)
 
         path = os.path.dirname(find_executable("mpirun"))
         super().__init__("/run/mpirun", "mpirun", job, path, subprocess)
 
         mca_default = None
-        if mpitype == "openmpi":
+        if mpi_type == "openmpi":
             # Default mca values to avoid queue pair errors w/ OpenMPI
             mca_default = {
                 "btl_openib_warn_default_gid_prefix": "0",
@@ -338,9 +402,14 @@ class Mpirun(JobManager):
         self.processes = FormattedParameter("-np {}", 1)
         self.ppn = FormattedParameter("-ppn {}", None)
         self.envlist = FormattedParameter("-envlist {}", None)
+        if mpi_type == "openmpi":
+            self.genv = FormattedParameter("-x {}", None)
+        else:
+            self.genv = FormattedParameter("-genv {}", None)
         self.mca = FormattedParameter("--mca {}", mca_default)
         self.working_dir = FormattedParameter("-wdir {}", None)
-        self.mpitype = mpitype
+        self.tmpdir_base = FormattedParameter("--mca orte_tmpdir_base {}", None)
+        self.mpi_type = mpi_type
 
     def assign_hosts(self, hosts, path=None, slots=None):
         """Assign the hosts to use with the command (-f).
@@ -377,10 +446,10 @@ class Mpirun(JobManager):
         # Pass the environment variables via the process.run method env argument
         if append and self.env is not None:
             # Update the existing dictionary with the new values
-            self.env.update(env_vars)
+            self.genv.update(env_vars.get_list())
         else:
             # Overwrite/create the dictionary of environment variables
-            self.env = EnvironmentVariables(env_vars)
+            self.genv.update((EnvironmentVariables(env_vars)).get_list())
 
     def assign_environment_default(self, env_vars):
         """Assign the default environment variables for the command.
@@ -389,7 +458,7 @@ class Mpirun(JobManager):
             env_vars (EnvironmentVariables): the environment variables to
                 assign as the default
         """
-        self.envlist.update_default(env_vars.get_list())
+        self.genv.update_default(env_vars.get_list())
 
     def run(self):
         """Run the mpirun command.
@@ -398,8 +467,8 @@ class Mpirun(JobManager):
             CommandFailure: if there is an error running the command
 
         """
-        if not load_mpi(self.mpitype):
-            raise CommandFailure("Failed to load {}".format(self.mpitype))
+        if not load_mpi(self.mpi_type):
+            raise MPILoadError(self.mpi_type)
 
         return super().run()
 
@@ -492,7 +561,7 @@ class Srun(JobManager):
 
 
 class Systemctl(JobManager):
-    # pylint: disable=too-many-public-methods,too-many-public-methods
+    # pylint: disable=too-many-public-methods
     """A class for the systemctl job manager command."""
 
     def __init__(self, job):
@@ -808,6 +877,28 @@ class Systemctl(JobManager):
             self._systemctl.service.value, ", ".join(data))
         return status
 
+    def get_journalctl_command(self, since, until=None):
+        """Get the journalctl command to capture all unit activity from since to until.
+
+        Args:
+            since (str): show log entries from this date.
+            until (str, optional): show log entries up to this date. Defaults
+                to None, in which case it is not utilized.
+
+        Returns:
+            str: journalctl command to capture all unit activity
+
+        """
+        command = [
+            "sudo",
+            "journalctl",
+            "--unit={}".format(self._systemctl.service.value),
+            "--since=\"{}\"".format(since),
+        ]
+        if until:
+            command.append("--until=\"{}\"".format(until))
+        return " ".join(command)
+
     def get_log_data(self, hosts, since, until=None, timeout=60):
         """Gather log output for the command running on each host.
 
@@ -840,19 +931,11 @@ class Systemctl(JobManager):
         # Setup the journalctl command to capture all unit activity from the
         # specified start date to now or a specified end date
         #   --output=json?
-        command = [
-            "sudo",
-            "journalctl",
-            "--unit={}".format(self._systemctl.service.value),
-            "--since=\"{}\"".format(since),
-        ]
-        if until:
-            command.append("--until=\"{}\"".format(until))
-        self.log.info(
-            "Gathering log data on %s: %s", str(hosts), " ".join(command))
+        command = self.get_journalctl_command(since, until)
+        self.log.info("Gathering log data on %s: %s", str(hosts), command)
 
         # Gather the log information per host
-        results = run_pcmd(hosts, " ".join(command), False, timeout, None)
+        results = run_pcmd(hosts, command, False, timeout, None)
 
         # Determine if the command completed successfully without a timeout
         status = True
@@ -927,6 +1010,74 @@ class Systemctl(JobManager):
                 data.append("    {}".format(line))
         return "\n".join(data)
 
+    def search_logs(self, pattern, since, until, quantity=1, timeout=60, verbose=False):
+        """Search the command logs on each host for a specified string.
+
+        Args:
+            pattern (str): regular expression to search for in the logs
+            since (str): search log entries from this date.
+            until (str, optional): search log entries up to this date. Defaults
+                to None, in which case it is not utilized.
+            quantity (int, optional): number of times to expect the search
+                pattern per host. Defaults to 1.
+            timeout (int, optional): maximum number of seconds to wait to detect
+                the specified pattern. Defaults to 60.
+            verbose (bool, optional): whether or not to display the log data upon successful pattern
+                detection. Defaults to False.
+
+        Returns:
+            tuple:
+                (bool) - if the pattern was found quantity number of times
+                (str)  - string indicating the number of patterns found in what duration
+
+        """
+        self.log.info(
+            "Searching for '%s' in '%s' output on %s",
+            pattern, self.get_journalctl_command(since, until), self._hosts)
+
+        log_data = None
+        detected = 0
+        complete = False
+        timed_out = False
+        start = time.time()
+        duration = 0
+
+        # Search for patterns in the subprocess output until:
+        #   - the expected number of pattern matches are detected (success)
+        #   - the time out is reached (failure)
+        #   - the service is no longer running (failure)
+        while not complete and not timed_out and self.service_running():
+            detected = 0
+            log_data = self.get_log_data(self._hosts, since, until, timeout)
+            for entry in log_data:
+                match = re.findall(pattern, "\n".join(entry["data"]))
+                detected += len(match) if match else 0
+
+            complete = detected == quantity
+            duration = time.time() - start
+            if timeout is not None:
+                timed_out = duration > timeout
+
+            if verbose:
+                self.display_log_data(log_data)
+
+        # Summarize results
+        msg = "{}/{} '{}' messages detected in".format(detected, quantity, pattern)
+        runtime = "{}/{} seconds".format(duration, timeout)
+
+        if not complete:
+            # Report the error / timeout
+            reason = "ERROR detected"
+            details = ""
+            if timed_out:
+                reason = "TIMEOUT detected, exceeded {} seconds".format(timeout)
+                runtime = "{} seconds".format(duration)
+            if log_data:
+                details = ":\n{}".format(self.str_log_data(log_data))
+            self.log.info("%s - %s %s%s", reason, msg, runtime, details)
+
+        return complete, " ".join([msg, runtime])
+
     def check_logs(self, pattern, since, until, quantity=1, timeout=60):
         """Check the command logs on each host for a specified string.
 
@@ -945,64 +1096,14 @@ class Systemctl(JobManager):
                 host
 
         """
-        self.log.info(
-            "Searching for '%s' in '%s' output on %s",
-            pattern, self._systemctl, self._hosts)
-
-        log_data = None
-        detected = 0
-        complete = False
-        timed_out = False
-        start = time.time()
-
-        # Search for patterns in the subprocess output until:
-        #   - the expected number of pattern matches are detected (success)
-        #   - the time out is reached (failure)
-        #   - the service is no longer running (failure)
-        while not complete and not timed_out and self.service_running():
-            detected = 0
-            log_data = self.get_log_data(self._hosts, since, until, timeout)
-            for entry in log_data:
-                match = re.findall(pattern, "\n".join(entry["data"]))
-                detected += len(match) if match else 0
-
-            complete = detected == quantity
-            timed_out = time.time() - start > timeout
-
-            if complete:
-                self.timestamps["running"] = datetime.now().strftime(
-                    "%Y-%m-%d %H:%M:%S")
-
-        # Summarize results
-        msg = "{}/{} '{}' messages detected in".format(
-            detected, quantity, pattern)
-        runtime = "{}/{} seconds".format(time.time() - start, timeout)
-
-        if not complete:
-            # Report the error / timeout
-            reason = "ERROR detected"
-            details = ""
-            if timed_out:
-                reason = "TIMEOUT detected, exceeded {} seconds".format(timeout)
-                runtime = "{} seconds".format(time.time() - start)
-            if log_data:
-                details = ":\n{}".format(self.str_log_data(log_data))
-            self.log.info("%s - %s %s%s", reason, msg, runtime, details)
-            if timed_out:
-                self.log.debug(
-                    "If needed the %s second timeout can be adjusted via "
-                    "the 'pattern_timeout' test yaml parameter under %s",
-                    timeout, self.namespace)
-        else:
+        # Find the pattern in the logs
+        complete, message = self.search_logs(pattern, since, until, quantity, timeout, False)
+        if complete:
             # Report the successful start
-            # self.display_log_data(log_data)
-            self.log.info(
-                "%s subprocess startup detected - %s %s",
-                self._command, msg, runtime)
-
+            self.log.info("%s subprocess startup detected - %s", self._command, message)
         return complete
 
-    def dump_logs(self, hosts=None):
+    def dump_logs(self, hosts=None, timestamp=None):
         """Display the journalctl log data since detecting server start.
 
         Args:
@@ -1010,10 +1111,9 @@ class Systemctl(JobManager):
                 journalctl log data. Defaults to None which will log the
                 journalctl log data from all of the hosts.
         """
-        timestamp = None
-        if self.timestamps["running"]:
+        if timestamp is None and self.timestamps["running"]:
             timestamp = self.timestamps["running"]
-        elif self.timestamps["verified"]:
+        elif timestamp is None and self.timestamps["verified"]:
             timestamp = self.timestamps["verified"]
         if timestamp:
             if hosts is None:

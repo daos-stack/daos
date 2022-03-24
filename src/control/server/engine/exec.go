@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2021 Intel Corporation.
+// (C) Copyright 2019-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -44,7 +44,7 @@ func (r *Runner) run(ctx context.Context, args, env []string, errOut chan<- erro
 		return errors.Wrapf(err, "can't start %s", engineBin)
 	}
 
-	cmd := exec.CommandContext(ctx, binPath, args...)
+	cmd := exec.Command(binPath, args...)
 	cmd.Stdout = &cmdLogger{
 		logFn:  r.log.Info,
 		prefix: fmt.Sprintf("%s:%d", engineBin, r.Config.Index),
@@ -76,11 +76,25 @@ func (r *Runner) run(ctx context.Context, args, env []string, errOut chan<- erro
 	}
 	r.cmd = cmd
 
+	waitDone := make(chan struct{})
 	go func() {
 		r.running.SetTrue()
 		defer r.running.SetFalse()
 
 		errOut <- errors.Wrapf(common.GetExitStatus(cmd.Wait()), "%s exited", binPath)
+
+		close(waitDone)
+	}()
+
+	go func() {
+		select {
+		case <-ctx.Done():
+			r.log.Infof("%s:%d context canceled; shutting down", engineBin, r.Config.Index)
+			if err := r.cmd.Process.Signal(syscall.SIGTERM); err != nil {
+				r.log.Errorf("%s:%d failed to kill process: %s", engineBin, r.Config.Index, err)
+			}
+		case <-waitDone:
+		}
 	}()
 
 	return nil

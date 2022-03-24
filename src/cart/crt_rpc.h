@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2021 Intel Corporation.
+ * (C) Copyright 2016-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -646,20 +646,15 @@ crt_req_timedout(struct crt_rpc_priv *rpc_priv)
 	       !rpc_priv->crp_in_binheap;
 }
 
-static inline uint64_t
+static inline void
 crt_set_timeout(struct crt_rpc_priv *rpc_priv)
 {
-	uint64_t	sec_diff;
-
 	D_ASSERT(rpc_priv != NULL);
 
 	if (rpc_priv->crp_timeout_sec == 0)
 		rpc_priv->crp_timeout_sec = crt_gdata.cg_timeout;
 
-	sec_diff = d_timeus_secdiff(rpc_priv->crp_timeout_sec);
-	rpc_priv->crp_timeout_ts = sec_diff;
-
-	return sec_diff;
+	rpc_priv->crp_timeout_ts = d_timeus_secdiff(rpc_priv->crp_timeout_sec);
 }
 
 /* Convert opcode to string. Only returns string for internal RPCs */

@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2017-2021 Intel Corporation.
+ * (C) Copyright 2017-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -553,7 +553,7 @@ rebuild_obj_scan_cb(daos_handle_t ch, vos_iter_entry_t *ent,
 		 * still includes the current rank. If not, the object can be
 		 * deleted/reclaimed because it is no longer reachable
 		 */
-		rc = pl_obj_place(map, &md, NULL, &layout);
+		rc = pl_obj_place(map, &md, DAOS_OO_RO, NULL, &layout);
 		if (rc != 0)
 			D_GOTO(out, rc);
 
@@ -795,7 +795,7 @@ out:
 	if (tls->rebuild_pool_status == 0 && rc != 0)
 		tls->rebuild_pool_status = rc;
 
-	D_DEBUG(DB_TRACE, DF_UUID" iterate pool done: "DF_RC"\n",
+	D_DEBUG(DB_REBUILD, DF_UUID" iterate pool done: "DF_RC"\n",
 		DP_UUID(rpt->rt_pool_uuid), DP_RC(rc));
 	return rc;
 }
@@ -863,6 +863,21 @@ rebuild_tgt_scan_handler(crt_rpc_t *rpc)
 	D_DEBUG(DB_REBUILD, "%d scan rebuild for "DF_UUID" ver %d\n",
 		dss_get_module_info()->dmi_tgt_id, DP_UUID(rsi->rsi_pool_uuid),
 		rsi->rsi_rebuild_ver);
+
+	/* If PS leader has been changed, and rebuild version is also increased
+	 * due to adding new failure targets for rebuild, let's abort previous
+	 * rebuild.
+	 */
+	d_list_for_each_entry(rpt, &rebuild_gst.rg_tgt_tracker_list, rt_list) {
+		if (uuid_compare(rpt->rt_pool_uuid, rsi->rsi_pool_uuid) == 0 &&
+		    rpt->rt_rebuild_ver < rsi->rsi_rebuild_ver) {
+			D_INFO(DF_UUID" rebuild %u/"DF_U64" < incoming rebuild %u/"DF_U64"\n",
+			       DP_UUID(rpt->rt_pool_uuid), rpt->rt_rebuild_ver,
+			       rpt->rt_leader_term, rsi->rsi_rebuild_ver,
+			       rsi->rsi_leader_term);
+			rpt->rt_abort = 1;
+		}
+	}
 
 	/* check if the rebuild is already started */
 	rpt = rpt_lookup(rsi->rsi_pool_uuid, rsi->rsi_rebuild_ver);

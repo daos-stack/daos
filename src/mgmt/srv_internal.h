@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2021 Intel Corporation.
+ * (C) Copyright 2016-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -72,7 +72,7 @@ int ds_mgmt_destroy_pool(uuid_t pool_uuid, d_rank_list_t *svc_ranks,
 			 const char *group, uint32_t force);
 int ds_mgmt_evict_pool(uuid_t pool_uuid, d_rank_list_t *svc_ranks, uuid_t *handles,
 		       size_t n_handles, uint32_t destroy, uint32_t force_destroy,
-		       const char *group);
+		       char *machine, const char *group, uint32_t *count);
 int ds_mgmt_pool_target_update_state(uuid_t pool_uuid, d_rank_list_t *svc_ranks,
 				     struct pool_target_addr_list *tgt_addr,
 				     pool_comp_state_t new_state);

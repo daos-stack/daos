@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2019-2021 Intel Corporation.
+ * (C) Copyright 2019-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -269,7 +269,7 @@ generate_view(struct io_test_args *arg, daos_unit_oid_t oid, char *dkey,
 	epr_a = &ds->td_agg_epr;
 	view_len = get_view_len(ds, &recx);
 
-	VERBOSE_MSG("Generate logcial view: OID:"DF_UOID", DKEY:%s, AKEY:%s, "
+	VERBOSE_MSG("Generate logical view: OID:"DF_UOID", DKEY:%s, AKEY:%s, "
 		    "U_ERP:["DF_U64", "DF_U64"], A_EPR["DF_U64", "DF_U64"], "
 		    "discard:%d, expected_nr:%d\n", DP_UOID(oid), dkey, akey,
 		    epr_u->epr_lo, epr_u->epr_hi, epr_a->epr_lo, epr_a->epr_hi,
@@ -359,7 +359,7 @@ generate_akeys(struct io_test_args *arg, daos_unit_oid_t oid, int nr)
 
 static void
 aggregate_basic_lb(struct io_test_args *arg, struct agg_tst_dataset *ds, int punch_nr,
-		   daos_epoch_t punch_epoch[], daos_epoch_t punch_bound[])
+		   daos_epoch_t punch_epoch[], daos_epoch_t punch_bound[], unsigned int agg_flags)
 {
 	daos_unit_oid_t		 oid;
 	char			 dkey[UPDATE_DKEY_SIZE] = { 0 };
@@ -369,14 +369,14 @@ aggregate_basic_lb(struct io_test_args *arg, struct agg_tst_dataset *ds, int pun
 	char			*buf_u;
 	daos_recx_t		 recx = { 0 }, *recx_p;
 	daos_size_t		 view_len;
-	int			 punch_idx = 0, recx_idx = 0, rc;
+	int			 punch_idx = 0, recx_idx = 0, rc = 0;
 	int			 punch_or_delete = TF_PUNCH;
 
 	if (ds->td_delete)
 		punch_or_delete = TF_DELETE;
 
 	if (daos_unit_oid_is_null(ds->td_oid))
-		oid = dts_unit_oid_gen(0, 0, 0);
+		oid = dts_unit_oid_gen(0, 0);
 	else
 		oid = ds->td_oid;
 	dts_key_gen(dkey, UPDATE_DKEY_SIZE, UPDATE_DKEY);
@@ -423,8 +423,7 @@ aggregate_basic_lb(struct io_test_args *arg, struct agg_tst_dataset *ds, int pun
 	if (ds->td_discard)
 		rc = vos_discard(arg->ctx.tc_co_hdl, NULL /* objp */, epr_a, NULL, NULL);
 	else
-		rc = vos_aggregate(arg->ctx.tc_co_hdl, epr_a,
-				   ds_csum_agg_recalc, NULL, NULL, false);
+		rc = vos_aggregate(arg->ctx.tc_co_hdl, epr_a, NULL, NULL, agg_flags);
 	if (rc != -DER_CSUM) {
 		/* Skip delete verification for now */
 		assert_rc_equal(rc, 0);
@@ -442,7 +441,7 @@ static void
 aggregate_basic(struct io_test_args *arg, struct agg_tst_dataset *ds,
 		int punch_nr, daos_epoch_t punch_epoch[])
 {
-	aggregate_basic_lb(arg, ds, punch_nr, punch_epoch, NULL);
+	aggregate_basic_lb(arg, ds, punch_nr, punch_epoch, NULL, VOS_AGG_FL_FORCE_MERGE);
 }
 
 static inline int
@@ -523,7 +522,7 @@ aggregate_multi(struct io_test_args *arg, struct agg_tst_dataset *ds_sample)
 	epr_a = &ds_sample->td_agg_epr;
 
 	for (i = 0; i < AT_OBJ_KEY_NR; i++) {
-		oids[i] = dts_unit_oid_gen(0, 0, 0);
+		oids[i] = dts_unit_oid_gen(0, 0);
 		dts_key_gen(dkeys[i], UPDATE_DKEY_SIZE, UPDATE_DKEY);
 		dts_key_gen(akeys[i], UPDATE_AKEY_SIZE, UPDATE_AKEY);
 	}
@@ -609,8 +608,7 @@ aggregate_multi(struct io_test_args *arg, struct agg_tst_dataset *ds_sample)
 	if (ds_sample->td_discard)
 		rc = vos_discard(arg->ctx.tc_co_hdl, NULL /* objp */, epr_a, NULL, NULL);
 	else
-		rc = vos_aggregate(arg->ctx.tc_co_hdl, epr_a, NULL, NULL, NULL,
-				   false);
+		rc = vos_aggregate(arg->ctx.tc_co_hdl, epr_a, NULL, NULL, 0);
 	assert_rc_equal(rc, 0);
 
 	multi_view(arg, oids, dkeys, akeys, AT_OBJ_KEY_NR, ds_arr, true);
@@ -1030,7 +1028,7 @@ discard_13(void **state)
 	daos_recx_t		 recx_tot;
 	int			 i;
 
-	ds.td_oid = dts_unit_oid_gen(0, 0, 0);
+	ds.td_oid = dts_unit_oid_gen(0, 0);
 	/*
 	 * Generate enough amount of akeys to ensure vos_iterate()
 	 * trigger re-probe on dkey
@@ -1119,7 +1117,7 @@ agg_punches_test_helper(void **state, int record_type, int type, bool discard,
 	int			 old_flags = arg->ta_flags;
 	daos_recx_t		 recx = {0, 1};
 
-	oid = dts_unit_oid_gen(0, 0, 0);
+	oid = dts_unit_oid_gen(0, 0);
 
 	arg->ta_flags = TF_USE_VAL;
 
@@ -1161,8 +1159,7 @@ agg_punches_test_helper(void **state, int record_type, int type, bool discard,
 		if (discard)
 			rc = vos_discard(arg->ctx.tc_co_hdl, NULL /* objp */, &epr, NULL, NULL);
 		else
-			rc = vos_aggregate(arg->ctx.tc_co_hdl, &epr, NULL,
-					   NULL, NULL, false);
+			rc = vos_aggregate(arg->ctx.tc_co_hdl, &epr, NULL, NULL, 0);
 
 		assert_rc_equal(rc, 0);
 
@@ -1247,6 +1244,11 @@ agg_punches_test(void **state, int record_type, bool discard)
 			}
 		}
 	}
+	/** cleanup() sets the flag to assert if there are items in container garbage collection
+	 *  heap which will always be the case for these punch tests.  So let's run garbage
+	 *  collection before cleanup in this case.
+	 */
+	gc_wait();
 }
 static void
 discard_14(void **state)
@@ -1280,7 +1282,7 @@ discard_obj_test(void **state, bool empty)
 	int			 old_flags = arg->ta_flags;
 	daos_recx_t		 recx = {0, 1};
 
-	oid = dts_unit_oid_gen(0, 0, 0);
+	oid = dts_unit_oid_gen(0, 0);
 
 	arg->ta_flags = TF_USE_VAL;
 
@@ -1926,7 +1928,7 @@ aggregate_14(void **state)
 	}
 	fill_size = fill_size / 3;
 
-	oid = dts_unit_oid_gen(0, 0, 0);
+	oid = dts_unit_oid_gen(0, 0);
 	dts_key_gen(dkey, UPDATE_DKEY_SIZE, UPDATE_DKEY);
 	dts_key_gen(akey, UPDATE_AKEY_SIZE, UPDATE_AKEY);
 
@@ -1947,10 +1949,10 @@ aggregate_14(void **state)
 
 		VERBOSE_MSG("Aggregate round: %d\n", i);
 		epr.epr_hi = epc_hi;
-		rc = vos_aggregate(arg->ctx.tc_co_hdl, &epr, NULL, NULL, NULL,
-				   false);
+		rc = vos_aggregate(arg->ctx.tc_co_hdl, &epr, NULL, NULL, 0);
 		if (rc) {
-			print_error("aggregate %d failed:%d\n", i, rc);
+			print_error("aggregate %d failed: "DF_RC"\n", i,
+				    DP_RC(rc));
 			break;
 		}
 
@@ -2093,7 +2095,7 @@ aggregate_22(void **state)
 	char			 buf_u[16];
 	int			 rc;
 
-	oid = dts_unit_oid_gen(0, 0, 0);
+	oid = dts_unit_oid_gen(0, 0);
 
 	dts_key_gen(dkey, UPDATE_DKEY_SIZE, UPDATE_DKEY);
 	dts_key_gen(akey, UPDATE_AKEY_SIZE, UPDATE_AKEY);
@@ -2138,7 +2140,7 @@ aggregate_22(void **state)
 
 	epr.epr_hi = epoch++;
 
-	rc = vos_aggregate(arg->ctx.tc_co_hdl, &epr, NULL, NULL, NULL, false);
+	rc = vos_aggregate(arg->ctx.tc_co_hdl, &epr, NULL, NULL, 0);
 	assert_rc_equal(rc, 0);
 
 	fetch_value(arg, oid, epoch++,
@@ -2533,7 +2535,7 @@ removal_stress_case(struct io_test_args *arg, int recx_nr, daos_recx_t *recx_arr
 	ds.td_delete = true;
 
 	VERBOSE_MSG("Stress test recx_nr=%d, remove_nr=%d\n", recx_nr, remove_nr);
-	aggregate_basic_lb(arg, &ds, remove_nr, &remove_epochs[0], &remove_bounds[0]);
+	aggregate_basic_lb(arg, &ds, remove_nr, &remove_epochs[0], &remove_bounds[0], 0);
 }
 
 static void
@@ -2712,6 +2714,59 @@ aggregate_33(void **state)
 	cleanup();
 }
 
+/*
+ * Aggregate on single akey-EV, with or w/o 'force_merge' flag
+ */
+static void
+aggregate_34(void **state)
+{
+	struct io_test_args	*arg = *state;
+	vos_pool_info_t		 pool_info;
+	struct vos_pool_space	*vps = &pool_info.pif_space;
+	struct agg_tst_dataset	 ds = { 0 };
+	daos_recx_t		*recx_arr;
+	int			 rc, i, rec_cnt = vos_agg_nvme_thresh - 1;
+
+	rc = vos_pool_query(arg->ctx.tc_po_hdl, &pool_info);
+	assert_rc_equal(rc, 0);
+
+	/* NVMe isn't enabled */
+	if (NVME_TOTAL(vps) == 0) {
+		print_message("NVMe isn't enabled, skip test\n");
+		skip();
+	}
+
+	D_ASSERT(rec_cnt > 0);
+	D_ALLOC_ARRAY(recx_arr, rec_cnt);
+	D_ASSERT(recx_arr != NULL);
+
+	for (i = 0; i < rec_cnt; i++) {
+		recx_arr[i].rx_idx = i * VOS_BLK_SZ;
+		recx_arr[i].rx_nr = VOS_BLK_SZ;
+	}
+
+	ds.td_type = DAOS_IOD_ARRAY;
+	ds.td_iod_size = 1;
+	ds.td_recx_nr = rec_cnt;
+	ds.td_recx = recx_arr;
+	ds.td_expected_recs = rec_cnt;
+	ds.td_upd_epr.epr_lo = 1;
+	ds.td_upd_epr.epr_hi = rec_cnt;
+	ds.td_agg_epr.epr_lo = 0;
+	ds.td_agg_epr.epr_hi = rec_cnt + 1;
+	ds.td_discard = false;
+
+	VERBOSE_MSG("Aggregate NVMe records w/o 'force_merge' flag\n");
+	aggregate_basic_lb(arg, &ds, 0, NULL, NULL, 0);
+
+	VERBOSE_MSG("Aggregate NVMe records with 'force_merge' flag\n");
+	ds.td_expected_recs = 1;
+	aggregate_basic_lb(arg, &ds, 0, NULL, NULL, VOS_AGG_FL_FORCE_MERGE);
+
+	D_FREE(recx_arr);
+	cleanup();
+}
+
 static int
 agg_tst_teardown(void **state)
 {
@@ -2778,6 +2833,8 @@ static const struct CMUnitTest aggregate_tests[] = {
 	  aggregate_32, NULL, agg_tst_teardown },
 	{ "VOS433: Many small removals",
 	  aggregate_33, NULL, agg_tst_teardown },
+	{ "VOS434: Selectively merging NVMe records",
+	  aggregate_34, NULL, agg_tst_teardown },
 	{ "VOS401: Aggregate SV with confined epr",
 	  aggregate_1, NULL, agg_tst_teardown },
 	{ "VOS402: Aggregate SV with punch records",

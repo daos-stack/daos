@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2021 Intel Corporation.
+ * (C) Copyright 2016-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -45,53 +45,6 @@ typedef struct {
 } daos_array_iod_t;
 
 /**
- * Deprecated - use daos_array_generate_oid()
- * Convenience function to generate a DAOS object ID by encoding the private
- * DAOS bits of the object address space.
- *
- * \param[in,out]
- *		oid	[in]: Object ID with low 96 bits set and unique inside
- *			the container. [out]: Fully populated DAOS object
- *			identifier with the the low 96 bits untouched and the
- *			DAOS private bits (the high 32 bits) encoded.
- * \param[in]	cid	Class Identifier
- * \param[in]	add_attr
- *			Indicate whether the user would maintain the array
- *			cell and chunk size (false), or the metadata should
- *			be stored in the obj (true).
- * \param[in]	args	Reserved.
- */
-static inline int  __attribute__ ((deprecated))
-daos_array_generate_id(daos_obj_id_t *oid, daos_oclass_id_t cid, bool add_attr, uint32_t args)
-{
-	static daos_ofeat_t	feat;
-	uint64_t		hdr;
-
-	feat = DAOS_OF_DKEY_UINT64 | DAOS_OF_KV_FLAT;
-
-	if (add_attr)
-		feat = feat | DAOS_OF_ARRAY;
-
-	/* TODO: add check at here, it should return error if user specified
-	 * bits reserved by DAOS
-	 */
-	oid->hi &= (1ULL << OID_FMT_INTR_BITS) - 1;
-	/**
-	 * | Upper bits contain
-	 * | OID_FMT_VER_BITS (version)		 |
-	 * | OID_FMT_FEAT_BITS (object features) |
-	 * | OID_FMT_CLASS_BITS (object class)	 |
-	 * | 96-bit for upper layer ...		 |
-	 */
-	hdr  = ((uint64_t)OID_FMT_VER << OID_FMT_VER_SHIFT);
-	hdr |= ((uint64_t)feat << OID_FMT_FEAT_SHIFT);
-	hdr |= ((uint64_t)cid << OID_FMT_CLASS_SHIFT);
-	oid->hi |= hdr;
-
-	return 0;
-}
-
-/**
  * Convenience function to generate a DAOS Array object ID by encoding the private DAOS bits of the
  * object address space.
  *
@@ -117,14 +70,14 @@ static inline int
 daos_array_generate_oid(daos_handle_t coh, daos_obj_id_t *oid, bool add_attr, daos_oclass_id_t cid,
 			daos_oclass_hints_t hints, uint32_t args)
 {
-	static daos_ofeat_t	feat;
+	enum daos_otype_t type;
 
-	feat = DAOS_OF_DKEY_UINT64 | DAOS_OF_KV_FLAT;
+	type = DAOS_OT_ARRAY_ATTR;
 
 	if (add_attr)
-		feat = feat | DAOS_OF_ARRAY;
+		type = DAOS_OT_ARRAY;
 
-	return daos_obj_generate_oid(coh, oid, feat, cid, hints, args);
+	return daos_obj_generate_oid(coh, oid, type, cid, hints, args);
 }
 
 /**
@@ -134,16 +87,15 @@ daos_array_generate_oid(daos_handle_t coh, daos_obj_id_t *oid, bool add_attr, da
  *
  * The metadata of the array is stored under a special AKEY in DKEY 0. This means that this is a
  * generic array object with it's metadata tracked in the DAOS object. The feat bits in the oid must
- * set DAOS_OF_DKEY_UINT64 | DAOS_OF_KV_FLAT | DAOS_OF_ARRAY.  If the feat bits does not set
+ * set DAOS_OT_ARRAY,DAOS_OT_ARRAY_ATTR or DAOS_OT_ARRAY_BYTE. If the feat bits does not set
  * DAOS_OF_ARRAY, the user would be responsible for remembering the array metadata since DAOS will
  * not store those, and should not call this API since nothing will be written to the array
  * object. daos_array_open_with_attrs() can be used to get an array OH in that case to access with
  * the Array APIs.
  *
  * \param[in]	coh	Container open handle.
- * \param[in]	oid	Object ID. It is required that the feat for dkey type
- *			be set to DAOS_OF_KV_FLAT | DAOS_OF_DKEY_UINT64 |
- *			DAOS_OF_ARRAY.
+ * \param[in]	oid	Object ID. It is required that the object type
+ *			be set to DAOS_OT_ARRAY.
  * \param[in]	th	Transaction handle.
  * \param[in]	cell_size
  *			Record size of the array.
@@ -208,8 +160,8 @@ daos_array_open(daos_handle_t coh, daos_obj_id_t oid, daos_handle_t th,
  * it again will introduce corruption in the array data.
  *
  * \param[in]	coh	Container open handle.
- * \param[in]	oid	Object ID. It is required that the feat for dkey type
- *			be set to DAOS_OF_DKEY_UINT64 | DAOS_OF_KV_FLAT.
+ * \param[in]	oid	Object ID. It is required that the object type to be
+ *			be set to DAOS_OT_ARRAY_ATTR or DAOS_OT_ARRAY_BYTE.
  * \param[in]	th	Transaction handle.
  * \param[in]	mode	Open mode: DAOS_OO_RO/RW
  * \param[in]	cell_size

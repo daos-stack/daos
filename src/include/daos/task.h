@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2015-2021 Intel Corporation.
+ * (C) Copyright 2015-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -64,7 +64,7 @@ struct daos_task_args {
 		daos_tx_restart_t	tx_restart;
 
 		/** Object */
-		daos_obj_register_class_t obj_reg_class;
+		struct daos_obj_register_class_t obj_reg_class;
 		daos_obj_query_class_t	obj_query_class;
 		daos_obj_list_class_t	obj_list_class;
 		daos_obj_open_t		obj_open;

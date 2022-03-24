@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2017-2021 Intel Corporation.
+ * (C) Copyright 2017-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -80,8 +80,7 @@ typedef enum {
 	DAOS_OPC_TX_RESTART,
 
 	/** Object APIs */
-	DAOS_OPC_OBJ_REGISTER_CLASS = 43,
-	DAOS_OPC_OBJ_QUERY_CLASS,
+	DAOS_OPC_OBJ_QUERY_CLASS = 44,
 	DAOS_OPC_OBJ_LIST_CLASS,
 	DAOS_OPC_OBJ_OPEN,
 	DAOS_OPC_OBJ_CLOSE,
@@ -172,16 +171,26 @@ typedef struct {
 	struct d_tgt_list	*tgts;
 } daos_pool_update_t;
 
+/** Object class register args */
+struct daos_obj_register_class_t {
+	/** Container open handle. */
+	daos_handle_t		coh;
+	/** Object class ID. */
+	daos_oclass_id_t	cid;
+	/** Object class attributes. */
+	struct daos_oclass_attr	*cattr;
+};
+
 /** pool query args */
 typedef struct {
 	/** Pool open handle. */
 	daos_handle_t		poh;
-	/** Optional, returned storage targets in this pool. */
-	d_rank_list_t		*tgts;
+	/** Optional, returned storage ranks in this pool. */
+	d_rank_list_t	      **ranks;
 	/** Optional, returned pool information. */
-	daos_pool_info_t	*info;
+	daos_pool_info_t       *info;
 	/** Optional, returned pool properties. */
-	daos_prop_t		*prop;
+	daos_prop_t	       *prop;
 } daos_pool_query_t;
 
 /** pool target query args */
@@ -268,8 +277,11 @@ typedef struct {
 
 /** Blobstore state query args */
 typedef struct {
+	/** daos system name (server group) */
 	const char		*grp;
+	/** blobstore UUID */
 	uuid_t			uuid;
+	/** pointer to user-provided blobstore state */
 	int			*state;
 } daos_mgmt_get_bs_state_t;
 
@@ -390,7 +402,7 @@ typedef struct {
 typedef struct {
 	/** Container open handle. */
 	daos_handle_t		coh;
-	/*
+	/**
 	 * [in]: epoch of snapshot to wait for.
 	 * [out]: epoch of persistent snapshot taken.
 	 */
@@ -459,7 +471,7 @@ typedef struct {
 typedef struct {
 	/** Container open handle. */
 	daos_handle_t		coh;
-	/*
+	/**
 	 * [in]: Number of snapshots in epochs and names.
 	 * [out]: Actual number of snapshots returned
 	 */
@@ -538,16 +550,6 @@ typedef struct {
 	daos_handle_t		th;
 } daos_tx_restart_t;
 
-/** Object class register args */
-typedef struct {
-	/** Container open handle. */
-	daos_handle_t		coh;
-	/** Object class ID. */
-	daos_oclass_id_t	cid;
-	/** Object class attributes. */
-	struct daos_oclass_attr	*cattr;
-} daos_obj_register_class_t;
-
 /** Object class query args */
 typedef struct {
 	/** Container open handle. */
@@ -586,11 +588,11 @@ typedef struct {
 	daos_handle_t		oh;
 } daos_obj_close_t;
 
-/*
+/**
  * Object & Object Key Punch args.
  * NB:
- * - If @dkey is NULL, it is parameter for object punch.
- * - If @akeys is NULL, it is parameter for dkey punch.
+ * - If #dkey is NULL, it is parameter for object punch.
+ * - If #akeys is NULL, it is parameter for dkey punch.
  * - API allows user to punch multiple dkeys, in this case, client module needs
  *   to allocate multiple instances of this data structure.
  */
@@ -627,12 +629,12 @@ typedef struct {
 	daos_handle_t		oh;
 	/** Transaction open handle. */
 	daos_handle_t		th;
-	/*
+	/**
 	 * [in]: allocated integer dkey.
 	 * [out]: max or min dkey (if flag includes dkey query).
 	 */
 	daos_key_t		*dkey;
-	/*
+	/**
 	 * [in]: allocated integer akey.
 	 * [out]: max or min akey (if flag includes akey query).
 	 */
@@ -712,7 +714,8 @@ typedef struct {
 	daos_recx_t		*recxs;
 	/** epoch ranges */
 	daos_epoch_range_t	*eprs;
-	/* anchors for obj list -
+	/** anchor for list_recx.
+	 *  anchors for obj list -
 	 * list_dkey uses dkey_anchor,
 	 * list_akey uses akey_anchor,
 	 * list_recx uses anchor,
@@ -951,7 +954,7 @@ typedef struct {
 	daos_handle_t		oh;
 	/** Transaction open handle. */
 	daos_handle_t		th;
-	/*
+	/**
 	 * [in]: number of key descriptors in \a kds.
 	 * [out]: number of returned key descriptors.
 	 */

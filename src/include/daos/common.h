@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2015-2021 Intel Corporation.
+ * (C) Copyright 2015-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -153,10 +153,10 @@ char *DP_UUID(const void *uuid);
 #define DP_KEY(key)		(int)((key)->iov_len)
 #else
 char *daos_key2str(daos_key_t *key);
+#define DF_KEY_STR_SIZE		64
 
-#define DF_KEY			"[%d] '%.*s'"
+#define DF_KEY			"[%d] '%s'"
 #define DP_KEY(key)		(int)(key)->iov_len,	\
-				(int)(key)->iov_len,	\
 				daos_key2str(key)
 #endif
 
@@ -278,16 +278,13 @@ daos_getutime(void)
 	return d_time2us(tv);
 }
 
-static inline int daos_gettime_coarse(uint64_t *time)
+static inline uint64_t
+daos_gettime_coarse(void)
 {
-	struct timespec	now;
-	int		rc;
+	struct timespec	tv;
 
-	rc = clock_gettime(CLOCK_MONOTONIC_COARSE, &now);
-	if (rc == 0)
-		*time = now.tv_sec;
-
-	return rc;
+	clock_gettime(CLOCK_MONOTONIC_COARSE, &tv);
+	return tv.tv_sec;
 }
 
 /** Function table for combsort and binary search */
@@ -342,7 +339,7 @@ daos_sgl_buf_extend(d_sg_list_t *sgl, int idx, size_t new_size);
 	} while (0)
 /** Get the leftover space in an iov of sgl */
 #define daos_iov_left(sgl, iov_idx, iov_off)				\
-	((sgl)->sg_iovs[iov_idx].iov_len - (iov_off))
+	((sgl)->sg_iovs[iov_idx].iov_buf_len - (iov_off))
 /** get remaining space in an iov, assuming that iov_len is used and
  * iov_buf_len is total in buf
  */
@@ -608,11 +605,19 @@ daos_crt_network_error(int err)
 	       err == -DER_NOREPLY || err == -DER_OOG;
 }
 
+/** See crt_quiet_error. */
+static inline bool
+daos_quiet_error(int err)
+{
+	return crt_quiet_error(err);
+}
+
 #define daos_rank_list_dup		d_rank_list_dup
 #define daos_rank_list_dup_sort_uniq	d_rank_list_dup_sort_uniq
 #define daos_rank_list_filter		d_rank_list_filter
 #define daos_rank_list_alloc		d_rank_list_alloc
 #define daos_rank_list_copy		d_rank_list_copy
+#define daos_rank_list_shuffle		d_rank_list_shuffle
 #define daos_rank_list_sort		d_rank_list_sort
 #define daos_rank_list_find		d_rank_list_find
 #define daos_rank_list_identical	d_rank_list_identical
@@ -727,10 +732,10 @@ enum {
 /** This fault simulates corruption on disk. Must be set on server side. */
 #define DAOS_CSUM_CORRUPT_DISK		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x26)
 /**
- * This fault simulates shard fetch failure. Can be used to test EC degraded
- * fetch.
+ * This fault simulates shard open failure. Can be used to test EC degraded
+ * update/fetch.
  */
-#define DAOS_FAIL_SHARD_FETCH		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x27)
+#define DAOS_FAIL_SHARD_OPEN		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x27)
 /**
  * This fault simulates the EC aggregation boundary (agg_eph_boundry) moved
  * ahead, in that case need to redo the degraded fetch.
@@ -873,8 +878,8 @@ daos_recx_merge(daos_recx_t *src, daos_recx_t *dst)
 }
 
 /* NVMe shared constants */
-#define DAOS_NVME_SHMID_NONE	-1
-#define DAOS_NVME_MEM_PRIMARY	0
+#define DAOS_NVME_NUMANODE_NONE		-1
+#define DAOS_NVME_MEM_PRIMARY		0
 
 /** Size of (un)expected Mercury buffers */
 #define DAOS_RPC_SIZE  (20480) /* 20KiB */

@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2021 Intel Corporation.
+ * (C) Copyright 2016-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -30,11 +30,11 @@ extern "C" {
 
 /**
  * Open a KV object. This is a local operation (no RPC involved).
- * The feat bits in the oid must set DAOS_OF_KV_FLAT.
+ * The type bits in the oid must set DAOS_OT_KV_*.
  *
  * \param[in]	coh	Container open handle.
- * \param[in]	oid	Object ID. It is required that the feat for dkey type
- *			be set to DAOS_OF_KV_FLAT.
+ * \param[in]	oid	Object ID. It is required that the object type
+ *			be set to DAOS_OT_KV_*.
  * \param[in]	mode	Open mode: DAOS_OO_RO/RW
  * \param[out]	oh	Returned kv object open handle.
  * \param[in]	ev	Completion event, it is optional and can be NULL.

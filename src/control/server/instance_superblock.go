@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2021 Intel Corporation.
+// (C) Copyright 2019-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -75,7 +75,19 @@ func (ei *EngineInstance) setSuperblock(sb *Superblock) {
 func (ei *EngineInstance) getSuperblock() *Superblock {
 	ei.RLock()
 	defer ei.RUnlock()
-	return ei._superblock
+
+	if ei._superblock == nil {
+		return nil
+	}
+
+	// Make a read-only copy to avoid race warnings.
+	// NB: There is not currently any logic that relies
+	// on the returned Superblock being "live", i.e. the
+	// actual in-memory struct. If that changes, then the
+	// Superblock struct will probably need some locking to
+	// provide thread-safe access to its fields.
+	sbCopy := *ei._superblock
+	return &sbCopy
 }
 
 func (ei *EngineInstance) hasSuperblock() bool {

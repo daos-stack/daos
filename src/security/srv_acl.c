@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2019-2021 Intel Corporation.
+ * (C) Copyright 2019-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -506,6 +506,77 @@ get_sec_capas_for_token(Auth__Token *token, struct ownership *ownership,
 	return rc;
 }
 
+static int
+get_sec_origin_for_token(Auth__Token *token, char **machine)
+{
+	struct drpc_alloc	alloc = PROTO_ALLOCATOR_INIT(alloc);
+	int			machine_size = 0;
+	int			rc = 0;
+	char			*mtmp;
+	Auth__Sys		*authsys;
+
+
+	if (token == NULL || machine == NULL) {
+		D_ERROR("NULL input\n");
+		return -DER_INVAL;
+	}
+
+	rc = get_auth_sys_payload(token, &authsys);
+	if (rc != 0)
+		return rc;
+
+	if (authsys->machinename == protobuf_c_empty_string) {
+		D_ERROR("Malformed AuthSys token missing machinename");
+		rc = -DER_INVAL;
+		goto out;
+	}
+
+	/* This should allow us to catch if we're truncating the string */
+	machine_size = strnlen(authsys->machinename, MAXHOSTNAMELEN+1);
+
+	if (machine_size > MAXHOSTNAMELEN) {
+		D_ERROR("hostname provided by the agent is too large");
+		rc = -DER_INVAL;
+		goto out;
+	}
+
+	D_STRNDUP(mtmp, authsys->machinename, machine_size);
+
+	if (mtmp) {
+		*machine = mtmp;
+		rc = 0;
+	} else {
+		rc = -DER_NOMEM;
+	}
+
+out:
+	auth__sys__free_unpacked(authsys, &alloc.alloc);
+	return rc;
+}
+
+int
+ds_sec_cred_get_origin(d_iov_t *cred, char **machine)
+{
+	struct drpc_alloc	alloc = PROTO_ALLOCATOR_INIT(alloc);
+	int		rc;
+	Auth__Token	*token;
+
+	if (cred == NULL || machine == NULL) {
+		D_ERROR("NULL input\n");
+		return -DER_INVAL;
+	}
+
+	rc = ds_sec_validate_credentials(cred, &token);
+	if (rc != 0) {
+		D_ERROR("Failed to validate credentials, rc="DF_RC"\n",
+			DP_RC(rc));
+		return rc;
+	}
+	rc = get_sec_origin_for_token(token, machine);
+
+	auth__token__free_unpacked(token, &alloc.alloc);
+	return rc;
+}
 int
 ds_sec_pool_get_capabilities(uint64_t flags, d_iov_t *cred,
 			     struct ownership *ownership,
@@ -515,7 +586,8 @@ ds_sec_pool_get_capabilities(uint64_t flags, d_iov_t *cred,
 	int		rc;
 	Auth__Token	*token;
 
-	if (cred == NULL || ownership == NULL || acl == NULL || capas == NULL) {
+	if (cred == NULL || ownership == NULL || acl == NULL ||
+	    capas == NULL) {
 		D_ERROR("NULL input\n");
 		return -DER_INVAL;
 	}

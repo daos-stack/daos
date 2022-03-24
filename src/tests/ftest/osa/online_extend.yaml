@@ -12,9 +12,11 @@ extra_servers:
   test_servers:
     - server-C
 timeout: 1000
-job_manager_timeout: 330
+job_manager:
+  manager_timeout: 330
 setup:
   start_servers_once: False
+skip_add_log_msg: True
 server_config:
   name: daos_server
   engines_per_host: 2

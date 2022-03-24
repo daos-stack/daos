@@ -1,10 +1,9 @@
 #!/usr/bin/python
 """
-  (C) Copyright 2020-2021 Intel Corporation.
+  (C) Copyright 2020-2022 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
-
 from socket import gethostname
 
 from command_utils_base import \
@@ -86,6 +85,8 @@ class DmgCommandBase(YamlCommand):
             self.sub_command_class = self.ConfigSubCommand()
         elif self.sub_command.value == "telemetry":
             self.sub_command_class = self.TelemetrySubCommand()
+        elif self.sub_command.value == "version":
+            self.sub_command_class = self.VersionSubCommand()
         else:
             self.sub_command_class = None
 
@@ -506,6 +507,8 @@ class DmgCommandBase(YamlCommand):
                 self.sub_command_class = self.StopSubCommand()
             elif self.sub_command.value == "erase":
                 self.sub_command_class = self.EraseSubCommand()
+            elif self.sub_command.value == "cleanup":
+                self.sub_command_class = self.CleanupSubCommand()
             else:
                 self.sub_command_class = None
 
@@ -531,6 +534,15 @@ class DmgCommandBase(YamlCommand):
                 """Create a dmg system query command object."""
                 super().__init__("/run/dmg/system/query/*", "query")
                 self.ranks = FormattedParameter("--ranks={}")
+                self.verbose = FormattedParameter("--verbose", False)
+
+        class CleanupSubCommand(CommandWithParameters):
+            """Defines an object for the dmg system cleanup command."""
+
+            def __init__(self):
+                """Create a dmg system cleanup command object."""
+                super().__init__("/run/dmg/system/cleanup/*", "cleanup")
+                self.machinename = FormattedParameter("{}", None)
                 self.verbose = FormattedParameter("--verbose", False)
 
         class StartSubCommand(CommandWithParameters):
@@ -611,3 +623,11 @@ class DmgCommandBase(YamlCommand):
                     self.host = FormattedParameter("--host-list={}", None)
                     self.port = FormattedParameter("--port={}", None)
                     self.metrics = FormattedParameter("--metrics={}", None)
+
+    class VersionSubCommand(CommandWithSubCommand):
+        """Defines an object for the dmg version sub command."""
+
+        def __init__(self):
+            """Create a dmg version subcommand object."""
+            super(DmgCommandBase.VersionSubCommand, self).__init__(
+                "/run/dmg/version/*", "version")
