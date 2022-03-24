@@ -101,7 +101,6 @@ class DaosBuild(DfuseTestBase):
                 'cp /bin/bash {}'.format(mount_dir),
                 'cp {}/bash {}/bash-copy'.format(mount_dir, mount_dir),
                 'df -h {}'.format(mount_dir),
-                'sleep 7200',
                 'valgrind git clone https://github.com/daos-stack/daos.git {}'.format(build_dir),
                 'git -C {} submodule init'.format(build_dir),
                 'git -C {} submodule update'.format(build_dir),
