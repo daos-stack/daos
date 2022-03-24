@@ -1,13 +1,13 @@
 # DAOS Tensorflow-IO
 
-Tensorflow-IO is an open-source Python sub-library of the Tensorflow framework in 
+Tensorflow-IO is an open-source Python sub-library of the Tensorflow framework 
 which offers a wide range of file systems and formats (e.g HDFS, HTTP) otherwise unavailable 
 in Tensorflow's built-in support.
 
 For a more complete look on the functionalities of the Tensorflow-IO library,
-visit the official [Tensorflow Documentation](#https://www.tensorflow.org/api_docs/python/tf/io/gfile)
+visit the official [Tensorflow Documentation](https://www.tensorflow.org/api_docs/python/tf/io/gfile).
 
-[The DFS Plugin](#https://github.com/daos-stack/tensorflow-io-daos/tree/devel/tensorflow_io/core/filesystems/dfs) supports 
+[The DFS Plugin](https://github.com/daos-stack/tensorflow-io-daos/tree/devel/tensorflow_io/core/filesystems/dfs) supports 
 many of Tensorflow-IO API functionalities and adds support to the DAOS FileSystem.
 
 This constitutes several operations including reading and writing datasets 
@@ -25,13 +25,13 @@ file-systems. These operations include :
   * ReadOnlyMemoryRegion (which is left unimplemented in the case of the DFS plugin)
 
 The DFS Plugin translates the key operations offered by Tensorflow IO to their DAOS Filesystem equivalent, while utilizing 
-DAOS underlying functionalities and features to ensure a high I/O bandwidth for its users
+DAOS underlying functionalities and features to ensure a high I/O bandwidth for its users.
 
 ## Setup
 In order to utilize the DFS Plugin for the meantime, the Tensorflow-IO library will need to be
-built from [source](#https://github.com/daos-stack/tensorflow-io-daos/tree/devel)
+built from [source](https://github.com/daos-stack/tensorflow-io-daos/tree/devel).
 
-#### Prerequisites
+### Prerequisites
 Assuming you are in a terminal in the repository root directory:
 
 * Install latest versions of the following dependencies by running
@@ -86,11 +86,20 @@ Assuming you are in a terminal in the repository root directory:
       export C_INCLUDE_PATH=$CPLUS_INCLUDE_PATH:$C_INCLUDE_PATH
       ```
 
-* Build the project using bazel
-  ```
-  bazel build --action_env=LIBRARY_PATH=$LIBRARY_PATH -s --verbose_failures //tensorflow_io/... //tensorflow_io_gcs_filesystem/...
-  ```
-  This should take a few minutes. Note that sandboxing may result in build failures when using Docker Containers for DAOS due to mounting issues, if that’s the case, add **--spawn_strategy=standalone** to the above build command to bypass sandboxing. (When disabling sandbox, an error may be thrown for an undefined type z_crc_t due to a conflict in header files. Please find the crypt.h file in the bazel cache in subdirectory /external/zlib/contrib/minizip/crypt.h and add the following line to the file **typedef unsigned long z_crc_t;** then re-build)
+      * Build the project using bazel
+        ```
+        bazel build --action_env=LIBRARY_PATH=$LIBRARY_PATH -s --verbose_failures //tensorflow_io/... //tensorflow_io_gcs_filesystem/...
+        ```
+        This should take a few minutes. 
+
+        Note that sandboxing may result in build failures when using 
+        Docker Containers for DAOS due to mounting issues, if that’s the case, 
+        add **--spawn_strategy=standalone** to the above build command to 
+        bypass sandboxing. (When disabling sandbox, an error may be thrown for 
+        an undefined type z_crc_t due to a conflict in header files. 
+        In that case, find the crypt.h file in the bazel cache in subdirectory 
+        /external/zlib/contrib/minizip/crypt.h and add the following line to the
+        file **typedef unsigned long z_crc_t;** then re-build).
 
 
 
@@ -133,7 +142,7 @@ filename = "dfs://POOL_LABEL/CONT_LABEL/FILE_NAME.ext"
 ```
 
 A range of operations can be performed on files and directories stored in a specific
-container
+container.
 
 ```python
 with tf.io.gfile.GFile(filename, "w") as new_file:
@@ -145,4 +154,4 @@ with tf.io.gfile.Gfile(filename, "r") as read_file:
 ```
 
 An example of using Tensorflow-IO's DFS Plugin to load and train a model on the MNIST Dataset
-can be found [here](#https://github.com/daos-stack/tensorflow-io-daos/blob/devel/docs/tutorials/daos.ipynb)
+can be found [here](https://github.com/daos-stack/tensorflow-io-daos/blob/devel/docs/tutorials/daos.ipynb).
