@@ -763,6 +763,7 @@ dss_xstreams_fini(bool force)
 	bool			 started = false;
 
 	D_DEBUG(DB_TRACE, "Stopping execution streams\n");
+	D_INFO("Stopping execution streams\n");
 	dss_xstreams_open_barrier();
 	rc = bio_nvme_ctl(BIO_CTL_NOTIFY_STARTED, &started);
 	D_ASSERT(rc == 0);
@@ -774,6 +775,7 @@ dss_xstreams_fini(bool force)
 			continue;
 		ABT_future_set(dx->dx_stopping, dx);
 	}
+	D_INFO("Notifying all xstream done\n");
 
 	/** Stop & free progress ULTs */
 	for (i = 0; i < xstream_data.xd_xs_nr; i++) {
@@ -782,6 +784,7 @@ dss_xstreams_fini(bool force)
 			continue;
 		ABT_future_set(dx->dx_shutdown, dx);
 	}
+
 	for (i = 0; i < xstream_data.xd_xs_nr; i++) {
 		dx = xstream_data.xd_xs_ptrs[i];
 		if (dx == NULL)
@@ -791,6 +794,7 @@ dss_xstreams_fini(bool force)
 		ABT_future_free(&dx->dx_shutdown);
 		ABT_future_free(&dx->dx_stopping);
 	}
+	D_INFO("Stop and free progress done\n");
 
 	/** Wait for each execution stream to complete */
 	for (i = 0; i < xstream_data.xd_xs_nr; i++) {
@@ -810,11 +814,13 @@ dss_xstreams_fini(bool force)
 		dss_xstream_free(dx);
 		xstream_data.xd_xs_ptrs[i] = NULL;
 	}
+	D_INFO("Stop each execution stream done\n");
 
 	/* All other xstreams have terminated. */
 	xstream_data.xd_xs_nr = 0;
 	dss_tgt_nr = 0;
 
+	D_INFO("Execution streams stopped\n");
 	D_DEBUG(DB_TRACE, "Execution streams stopped\n");
 }
 
@@ -1162,24 +1168,30 @@ dss_srv_fini(bool force)
 		D_ASSERT(0);
 	case XD_INIT_DRPC:
 		drpc_listener_fini();
+		D_INFO("drpc_listedner_finish\n");
 		/* fall through */
 	case XD_INIT_XSTREAMS:
 		dss_xstreams_fini(force);
 		/* fall through */
 	case XD_INIT_NVME:
 		bio_nvme_fini();
+		D_INFO("bio_nvme_fini\n");
 		/* fall through */
 	case XD_INIT_SYS_DB:
 		vos_db_fini();
+		D_INFO("vos_db_fini\n");
 		/* fall through */
 	case XD_INIT_TLS_INIT:
 		dss_tls_fini(xstream_data.xd_dtc);
+		D_INFO("dss_tls_fini\n");
 		/* fall through */
 	case XD_INIT_TLS_REG:
 		pthread_key_delete(dss_tls_key);
+		D_INFO("pthread_key_delete\n");
 		/* fall through */
 	case XD_INIT_ULT_BARRIER:
 		ABT_cond_free(&xstream_data.xd_ult_barrier);
+		D_INFO("xd_ult_barrier cond_free\n");
 		/* fall through */
 	case XD_INIT_ULT_INIT:
 		ABT_cond_free(&xstream_data.xd_ult_init);
