@@ -10,9 +10,6 @@ server_config:
     0:
       env_vars:
         - DAOS_TARGET_OVERSUBSCRIBE=0
-    1:
-      env_vars:
-        - DAOS_TARGET_OVERSUBSCRIBE=0
 # The 'config_val' list is composed of the following values:
 # - name of the config attribute, used to look for the attribute object
 # - test value that will be inserted into the server config for the attribute
