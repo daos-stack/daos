@@ -139,10 +139,17 @@ struct  _Ctl__BioHealthResp
   uint64_t pll_lock_loss_cnt;
   uint64_t nand_bytes_written;
   uint64_t host_bytes_written;
+  /*
+   * Engine configs properties
+   */
+  /*
+   * blobstore cluster size in bytes
+   */
+  uint64_t cluster_size;
 };
 #define CTL__BIO_HEALTH_RESP__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&ctl__bio_health_resp__descriptor) \
-    , 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, (char *)protobuf_c_empty_string, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 }
+    , 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, (char *)protobuf_c_empty_string, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 }
 
 
 struct  _Ctl__SmdDevReq
