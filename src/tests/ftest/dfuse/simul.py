@@ -111,7 +111,6 @@ class PosixSimul(DfuseTestBase):
 
         return result
 
-
     def test_posix_simul(self):
         """Test simul.
         :avocado: tags=all,full_regression
@@ -119,7 +118,6 @@ class PosixSimul(DfuseTestBase):
         :avocado: tags=posix,simul,dfuse
         """
         self.run_simul(exclude="9,18,30,39,40")
-
 
     def test_posix_expected_failures(self):
         """Test simul, expected failures
