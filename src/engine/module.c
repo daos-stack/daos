@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2021 Intel Corporation.
+ * (C) Copyright 2016-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -140,6 +140,7 @@ static int
 dss_module_init_one(struct loaded_mod *lmod, uint64_t *mod_facs)
 {
 	struct dss_module	*smod;
+	int			i;
 	int			rc = 0;
 
 	smod = lmod->lm_dss_mod;
@@ -155,12 +156,14 @@ dss_module_init_one(struct loaded_mod *lmod, uint64_t *mod_facs)
 		dss_register_key(smod->sm_key);
 
 	/* register RPC handlers */
-	rc = daos_rpc_register(smod->sm_proto_fmt, smod->sm_cli_count,
-			       smod->sm_handlers, smod->sm_mod_id);
-	if (rc) {
-		D_ERROR("failed to register RPC for %s: "DF_RC"\n",
-			smod->sm_name, DP_RC(rc));
-		D_GOTO(err_mod_init, rc);
+	for (i = 0; i < smod->sm_proto_count; i++) {
+		rc = daos_rpc_register(smod->sm_proto_fmt[i], smod->sm_cli_count[i],
+				       smod->sm_handlers[i], smod->sm_mod_id);
+		if (rc) {
+			D_ERROR("failed to register RPC for %s: "DF_RC"\n",
+				smod->sm_name, DP_RC(rc));
+			D_GOTO(err_mod_init, rc);
+		}
 	}
 
 	/* register dRPC handlers */
@@ -179,7 +182,8 @@ dss_module_init_one(struct loaded_mod *lmod, uint64_t *mod_facs)
 	return 0;
 
 err_rpc:
-	daos_rpc_unregister(smod->sm_proto_fmt);
+	for (i = 0; i < smod->sm_proto_count; i++)
+		daos_rpc_unregister(smod->sm_proto_fmt[i]);
 err_mod_init:
 	dss_unregister_key(smod->sm_key);
 	smod->sm_fini();
@@ -194,15 +198,19 @@ static int
 dss_module_unload_internal(struct loaded_mod *lmod)
 {
 	struct dss_module	*smod = lmod->lm_dss_mod;
-	int			 rc = 0;
+	int			i;
+	int			rc = 0;
 
 	if (lmod->lm_init == false)
 		goto close_mod;
+
 	/* unregister RPC handlers */
-	rc = daos_rpc_unregister(smod->sm_proto_fmt);
-	if (rc) {
-		D_ERROR("failed to unregister RPC "DF_RC"\n", DP_RC(rc));
-		return rc;
+	for (i = 0; i < smod->sm_proto_count; i++) {
+		rc = daos_rpc_unregister(smod->sm_proto_fmt[i]);
+		if (rc) {
+			D_ERROR("failed to unregister RPC "DF_RC"\n", DP_RC(rc));
+			return rc;
+		}
 	}
 
 	rc = drpc_hdlr_unregister_all(smod->sm_drpc_handlers);
