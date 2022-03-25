@@ -150,8 +150,6 @@ struct vos_agg_param {
 	uint32_t		ap_credits;	/* # of tight loops */
 	daos_handle_t		ap_coh;		/* container handle */
 	daos_unit_oid_t		ap_oid;		/* current object ID */
-	daos_key_t		ap_dkey;	/* current dkey */
-	daos_key_t		ap_akey;	/* current akey */
 	uint32_t		ap_flags;
 	unsigned int		ap_discard:1,
 				ap_csum_err:1,
@@ -216,32 +214,6 @@ agg_del_sv(daos_handle_t ih, struct vos_agg_param *agg_param,
 	return rc;
 }
 
-static inline bool
-need_aggregate(struct vos_agg_param *agg_param, vos_iter_entry_t *entry)
-{
-	struct vos_container	*cont = vos_hdl2cont(agg_param->ap_coh);
-
-	/** Skip this check for discard */
-	if (agg_param->ap_discard_obj || agg_param->ap_discard)
-		return true;
-
-	D_DEBUG(DB_EPC, "flags:%u, hae:"DF_U64", last_update:"DF_U64", "
-		"flags:%u\n", agg_param->ap_flags,
-		cont->vc_cont_df->cd_hae, entry->ie_last_update,
-		entry->ie_vis_flags);
-
-	/* Don't skip aggregation for full scan */
-	if (agg_param->ap_flags & VOS_AGG_FL_FORCE_SCAN)
-		return true;
-
-	/* Don't skip aggregation when the obj/dkey/akey is punched */
-	if (entry->ie_vis_flags & VOS_VIS_FLAG_COVERED)
-		return true;
-
-	D_ASSERT(entry->ie_last_update != 0);
-	return entry->ie_last_update >= cont->vc_cont_df->cd_hae;
-}
-
 static void
 inc_agg_counter(struct vos_container *cont, vos_iter_type_t type, unsigned int agg_op)
 {
@@ -271,42 +243,105 @@ inc_agg_counter(struct vos_container *cont, vos_iter_type_t type, unsigned int a
 		d_tm_inc_counter(counter, 1);
 }
 
+static inline bool
+need_aggregate(daos_handle_t ih, struct vos_agg_param *agg_param, vos_iter_desc_t *desc)
+{
+	bool			 agg_needed;
+	struct vos_container	*cont = vos_hdl2cont(agg_param->ap_coh);
+
+	/** Skip this check for discard */
+	if (agg_param->ap_discard_obj || agg_param->ap_discard)
+		return true;
+
+	if (desc->id_type == VOS_ITER_OBJ)
+		agg_needed = oi_iter_start_agg(ih, agg_param->ap_flags & VOS_AGG_FL_FORCE_SCAN);
+	else
+		agg_needed = vos_obj_iter_start_agg(ih,
+						    agg_param->ap_flags & VOS_AGG_FL_FORCE_SCAN);
+
+	D_DEBUG(DB_EPC, "flags:%u, hae:"DF_U64" agg_needed=%s\n", agg_param->ap_flags,
+		cont->vc_cont_df->cd_hae, agg_needed ? "yes" : "no");
+
+	return agg_needed;
+}
+
+static inline bool
+vos_aggregate_yield(struct vos_agg_param *agg_param)
+{
+	if (agg_param->ap_yield_func != NULL)
+		return agg_param->ap_yield_func(agg_param->ap_yield_arg);
+
+	bio_yield();
+	return false;
+}
+
+static int
+vos_agg_filter(daos_handle_t ih, vos_iter_desc_t *desc, void *cb_arg, unsigned int *acts)
+{
+	struct vos_agg_param	*agg_param = cb_arg;
+	struct vos_container	*cont = vos_hdl2cont(agg_param->ap_coh);
+	int			 rc = 0;
+
+	rc = need_aggregate(ih, agg_param, desc);
+	if (rc == 0) {
+		if (desc->id_type == VOS_ITER_OBJ) {
+			D_DEBUG(DB_EPC, "Skip untouched oid:"DF_UOID"\n",
+				DP_UOID(desc->id_oid));
+		} else {
+			D_DEBUG(DB_EPC, "Skip untouched %s:"DF_KEY"\n",
+				desc->id_type == VOS_ITER_DKEY ? "dkey" : "akey",
+				DP_KEY(&desc->id_key));
+		}
+		*acts |= VOS_ITER_CB_SKIP;
+		inc_agg_counter(cont, desc->id_type, AGG_OP_SKIP);
+
+		agg_param->ap_credits++;
+		D_GOTO(out, rc = 0);
+	}
+
+	if (rc < 0) { /** Ignore the filter error, let iterator handle it on actual probe */
+		agg_param->ap_credits++;
+		D_GOTO(out, rc = 0);
+	}
+
+	agg_param->ap_credits++;
+	if (desc->id_type == VOS_ITER_OBJ)
+		rc = oi_iter_check_punch(ih);
+	else
+		rc = vos_obj_iter_check_punch(ih);
+	if (rc < 0)
+		goto out;
+	if (rc == 1) {
+		*acts |= VOS_ITER_CB_DELETE;
+		inc_agg_counter(cont, desc->id_type, AGG_OP_DEL);
+		agg_param->ap_credits += 10;
+		D_GOTO(out, rc = 0);
+	}
+out:
+
+	if (agg_param->ap_credits > agg_param->ap_credits_max ||
+	    (DAOS_FAIL_CHECK(DAOS_VOS_AGG_RANDOM_YIELD) && (rand() % 2))) {
+		D_DEBUG(DB_EPC, "Credits exhausted, type:%u, acts:%u\n",
+			desc->id_type, *acts);
+
+		agg_param->ap_credits = 0;
+
+		if (vos_aggregate_yield(agg_param)) {
+			D_DEBUG(DB_EPC, "VOS discard/aggregation aborted\n");
+			*acts |= VOS_ITER_CB_EXIT;
+		}
+	}
+
+	return rc;
+}
+
 static int
 vos_agg_obj(daos_handle_t ih, vos_iter_entry_t *entry,
 	    struct vos_agg_param *agg_param, unsigned int *acts)
 {
 	struct vos_container	*cont = vos_hdl2cont(agg_param->ap_coh);
-	bool			 full_scan;
-	int			 rc;
 
-	if (need_aggregate(agg_param, entry)) {
-		D_DEBUG(DB_EPC, "oid:"DF_UOID" vos agg starting\n",
-			DP_UOID(entry->ie_oid));
-		agg_param->ap_oid = entry->ie_oid;
-		full_scan = agg_param->ap_flags & VOS_AGG_FL_FORCE_SCAN;
-		rc = oi_iter_pre_aggregate(ih, full_scan);
-		if (rc < 0)
-			return rc;
-		if (rc == 1) {
-			/** We removed the key so let's reprobe */
-			*acts |= VOS_ITER_CB_DELETE;
-			inc_agg_counter(cont, VOS_ITER_OBJ, AGG_OP_DEL);
-			return 0;
-		} else if (rc == 2) {
-			/** Entry is skipped removed the key so let's reprobe */
-			D_DEBUG(DB_EPC, "Skipping aggregation for object "DF_UOID
-				", nothing to do\n", DP_UOID(entry->ie_oid));
-			*acts |= VOS_ITER_CB_SKIP;
-			inc_agg_counter(cont, VOS_ITER_OBJ, AGG_OP_SKIP);
-			return 0;
-		}
-		inc_agg_counter(cont, VOS_ITER_OBJ, AGG_OP_SCAN);
-	} else {
-		D_DEBUG(DB_EPC, "Skip untouched oid:"DF_UOID"\n",
-			DP_UOID(agg_param->ap_oid));
-		*acts |= VOS_ITER_CB_SKIP;
-		inc_agg_counter(cont, VOS_ITER_OBJ, AGG_OP_SKIP);
-	}
+	inc_agg_counter(cont, VOS_ITER_OBJ, AGG_OP_SCAN);
 
 	return 0;
 }
@@ -316,35 +351,7 @@ vos_agg_dkey(daos_handle_t ih, vos_iter_entry_t *entry,
 	     struct vos_agg_param *agg_param, unsigned int *acts)
 {
 	struct vos_container	*cont = vos_hdl2cont(agg_param->ap_coh);
-	bool			 full_scan;
-	int			 rc;
-
-	if (need_aggregate(agg_param, entry)) {
-		agg_param->ap_dkey = entry->ie_key;
-		full_scan = agg_param->ap_flags & VOS_AGG_FL_FORCE_SCAN;
-		rc = vos_obj_iter_pre_aggregate(ih, full_scan);
-		if (rc < 0)
-			return rc;
-		if (rc == 1) {
-			/** We removed the key so let's reprobe */
-			*acts |= VOS_ITER_CB_DELETE;
-			inc_agg_counter(cont, VOS_ITER_DKEY, AGG_OP_DEL);
-			return 0;
-		} else if (rc == 2) {
-			/** Entry is skipped removed the key so let's reprobe */
-			D_DEBUG(DB_EPC, "Skipping aggregation for dkey "DF_KEY
-				", nothing to do\n", DP_KEY(&entry->ie_key));
-			*acts |= VOS_ITER_CB_SKIP;
-			inc_agg_counter(cont, VOS_ITER_DKEY, AGG_OP_SKIP);
-			return 0;
-		}
-		inc_agg_counter(cont, VOS_ITER_DKEY, AGG_OP_SCAN);
-	} else {
-		D_DEBUG(DB_EPC, "Skip untouched dkey: "DF_KEY"\n",
-			DP_KEY(&entry->ie_key));
-		*acts |= VOS_ITER_CB_SKIP;
-		inc_agg_counter(cont, VOS_ITER_DKEY, AGG_OP_SKIP);
-	}
+	inc_agg_counter(cont, VOS_ITER_DKEY, AGG_OP_SCAN);
 
 	return 0;
 }
@@ -417,35 +424,8 @@ vos_agg_akey(daos_handle_t ih, vos_iter_entry_t *entry,
 	     struct vos_agg_param *agg_param, unsigned int *acts)
 {
 	struct vos_container	*cont = vos_hdl2cont(agg_param->ap_coh);
-	bool			 full_scan;
-	int			 rc;
 
-	if (need_aggregate(agg_param, entry)) {
-		agg_param->ap_akey = entry->ie_key;
-		full_scan = agg_param->ap_flags & VOS_AGG_FL_FORCE_SCAN;
-		rc = vos_obj_iter_pre_aggregate(ih, full_scan);
-		if (rc < 0)
-			return rc;
-		if (rc == 1) {
-			/** We removed the key so let's reprobe */
-			*acts |= VOS_ITER_CB_DELETE;
-			inc_agg_counter(cont, VOS_ITER_AKEY, AGG_OP_DEL);
-			return 0;
-		} else if (rc == 2) {
-			/** Entry is skipped removed the key so let's reprobe */
-			D_DEBUG(DB_EPC, "Skipping aggregation for akey "DF_KEY
-				", nothing to do\n", DP_KEY(&entry->ie_key));
-			*acts |= VOS_ITER_CB_SKIP;
-			inc_agg_counter(cont, VOS_ITER_AKEY, AGG_OP_SKIP);
-			return 0;
-		}
-		inc_agg_counter(cont, VOS_ITER_AKEY, AGG_OP_SCAN);
-	} else {
-		D_DEBUG(DB_EPC, "Skip untouched akey: "DF_KEY"\n",
-			DP_KEY(&entry->ie_key));
-		*acts |= VOS_ITER_CB_SKIP;
-		inc_agg_counter(cont, VOS_ITER_AKEY, AGG_OP_SKIP);
-	}
+	inc_agg_counter(cont, VOS_ITER_AKEY, AGG_OP_SCAN);
 
 	if (agg_param->ap_discard) {
 		/* No merge window for discard path so bypass checks below. */
@@ -2176,16 +2156,6 @@ out:
 	return rc;
 }
 
-static inline bool
-vos_aggregate_yield(struct vos_agg_param *agg_param)
-{
-	if (agg_param->ap_yield_func != NULL)
-		return agg_param->ap_yield_func(agg_param->ap_yield_arg);
-
-	bio_yield();
-	return false;
-}
-
 static int
 vos_aggregate_pre_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 		     vos_iter_type_t type, vos_iter_param_t *param,
@@ -2203,12 +2173,15 @@ vos_aggregate_pre_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 	switch (type) {
 	case VOS_ITER_OBJ:
 		rc = vos_agg_obj(ih, entry, agg_param, acts);
+		agg_param->ap_credits += 10;
 		break;
 	case VOS_ITER_DKEY:
 		rc = vos_agg_dkey(ih, entry, agg_param, acts);
+		agg_param->ap_credits += 20;
 		break;
 	case VOS_ITER_AKEY:
 		rc = vos_agg_akey(ih, entry, agg_param, acts);
+		agg_param->ap_credits += 30;
 		break;
 	case VOS_ITER_RECX:
 		rc = vos_agg_ev(ih, entry, agg_param, acts);
@@ -2220,6 +2193,7 @@ vos_aggregate_pre_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 		}
 		/* fall through to check for abort */
 	case VOS_ITER_SINGLE:
+		agg_param->ap_credits += 50;
 		if (type == VOS_ITER_SINGLE)
 			rc = vos_agg_sv(ih, entry, agg_param, acts);
 		if (rc == -DER_CSUM || rc == -DER_TX_BUSY || rc == -DER_NOSPACE) {
@@ -2260,8 +2234,6 @@ vos_aggregate_pre_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 		D_ERROR("VOS aggregation failed: "DF_RC"\n", DP_RC(rc));
 		return rc;
 	}
-
-	agg_param->ap_credits++;
 
 	if (agg_param->ap_credits > agg_param->ap_credits_max ||
 	    (DAOS_FAIL_CHECK(DAOS_VOS_AGG_RANDOM_YIELD) && (rand() % 2))) {
@@ -2571,6 +2543,8 @@ vos_aggregate(daos_handle_t coh, daos_epoch_range_t *epr,
 	ad->ad_iter_param.ip_epc_expr = VOS_IT_EPC_RR;
 	/* EV tree iterator returns all sorted logical rectangles */
 	ad->ad_iter_param.ip_flags = VOS_IT_PUNCHED | VOS_IT_RECX_COVERED;
+	ad->ad_iter_param.ip_filter_cb = vos_agg_filter;
+	ad->ad_iter_param.ip_filter_arg = &ad->ad_agg_param;
 
 	/* Set aggregation parameters */
 	ad->ad_agg_param.ap_umm = &cont->vc_pool->vp_umm;

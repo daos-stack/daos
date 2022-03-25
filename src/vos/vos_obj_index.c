@@ -608,13 +608,38 @@ oi_iter_next(struct vos_iterator *iter, daos_anchor_t *anchor)
 }
 
 static int
+oi_iter_fill(struct vos_obj_df *obj, struct vos_oi_iter *oiter, bool check_existence,
+	     vos_iter_entry_t *ent)
+{
+	daos_epoch_range_t	epr = {0, DAOS_EPOCH_MAX};
+	int			rc;
+
+	rc = oi_iter_ilog_check(obj, oiter, &epr, check_existence);
+	if (rc != 0)
+		return rc;
+
+	ent->ie_oid = obj->vo_id;
+	ent->ie_punch = oiter->oit_ilog_info.ii_next_punch;
+	ent->ie_obj_punch = ent->ie_punch;
+	ent->ie_epoch = epr.epr_hi;
+	ent->ie_vis_flags = VOS_VIS_FLAG_VISIBLE;
+	if (oiter->oit_ilog_info.ii_create == 0) {
+		/** Object isn't visible so mark covered */
+		ent->ie_vis_flags = VOS_VIS_FLAG_COVERED;
+	}
+	ent->ie_child_type = VOS_ITER_DKEY;
+
+	ent->ie_last_update = obj->vo_max_write;
+
+	return 0;
+}
+
+static int
 oi_iter_fetch(struct vos_iterator *iter, vos_iter_entry_t *it_entry,
 	      daos_anchor_t *anchor)
 {
 	struct vos_oi_iter	*oiter = iter2oiter(iter);
-	struct vos_obj_df	*obj;
-	daos_epoch_range_t	 epr;
-	d_iov_t		 rec_iov;
+	d_iov_t			 rec_iov;
 	int			 rc;
 
 	D_ASSERT(iter->it_type == VOS_ITER_OBJ);
@@ -632,26 +657,8 @@ oi_iter_fetch(struct vos_iterator *iter, vos_iter_entry_t *it_entry,
 	}
 
 	D_ASSERT(rec_iov.iov_len == sizeof(struct vos_obj_df));
-	obj = (struct vos_obj_df *)rec_iov.iov_buf;
 
-	rc = oi_iter_ilog_check(obj, oiter, &epr, false);
-	if (rc != 0)
-		return rc;
-
-	it_entry->ie_oid = obj->vo_id;
-	it_entry->ie_punch = oiter->oit_ilog_info.ii_next_punch;
-	it_entry->ie_obj_punch = it_entry->ie_punch;
-	it_entry->ie_epoch = epr.epr_hi;
-	it_entry->ie_vis_flags = VOS_VIS_FLAG_VISIBLE;
-	if (oiter->oit_ilog_info.ii_create == 0) {
-		/** Object isn't visible so mark covered */
-		it_entry->ie_vis_flags = VOS_VIS_FLAG_COVERED;
-	}
-	it_entry->ie_child_type = VOS_ITER_DKEY;
-
-	it_entry->ie_last_update = obj->vo_max_write;
-
-	return 0;
+	return oi_iter_fill(rec_iov.iov_buf, oiter, false, it_entry);
 }
 
 static int
@@ -677,7 +684,63 @@ exit:
 }
 
 int
-oi_iter_pre_aggregate(daos_handle_t ih, bool full_scan)
+oi_iter_start_agg(daos_handle_t ih, bool full_scan)
+{
+	struct vos_iterator	*iter = vos_hdl2iter(ih);
+	struct vos_oi_iter	*oiter = iter2oiter(iter);
+	struct vos_obj_df	*obj;
+	vos_iter_entry_t	 ent;
+	d_iov_t			 rec_iov;
+	int			 rc;
+	uint64_t		 feats;
+
+	D_ASSERT(iter->it_type == VOS_ITER_OBJ);
+	D_ASSERT(iter->it_for_purge);
+
+	d_iov_set(&rec_iov, NULL, 0);
+	rc = dbtree_iter_fetch(oiter->oit_hdl, NULL, &rec_iov, NULL);
+	D_ASSERTF(rc != -DER_NONEXIST,
+		  "Probe should be done before aggregation\n");
+	if (rc != 0)
+		return rc;
+
+	D_ASSERT(rec_iov.iov_len == sizeof(struct vos_obj_df));
+	obj = (struct vos_obj_df *)rec_iov.iov_buf;
+	feats = dbtree_feats_get(&obj->vo_tree);
+	if (feats & VOS_TREE_AGG_OPT) {
+		if (full_scan) {
+			/** Go ahead and set both flags in this case because we are scanning */
+			feats |= VOS_TREE_AGG_FLAG | VOS_TREE_AGG_NEEDED;
+			goto set_feats;
+		} else if ((feats & VOS_TREE_AGG_NEEDED) == 0) {
+			return 0;
+		}
+		feats |= VOS_TREE_AGG_FLAG;
+		/** Fall through to check other filters */
+	}
+
+	rc = oi_iter_fill(rec_iov.iov_buf, oiter, true, &ent);
+	if (rc == -DER_NONEXIST)
+		return 0; /** No match for iterator range so let's skip it */
+	if (rc != 0)
+		return rc; /**  Likely the entry isn't in the range or we hit some other error.
+			      * Let the iterator sort this out later.
+			      */
+	if (ent.ie_vis_flags & VOS_VIS_FLAG_COVERED)
+		goto set_feats;
+
+	D_ASSERT(ent.ie_last_update != 0);
+	if (ent.ie_last_update < oiter->oit_cont->vc_cont_df->cd_hae)
+		return 0;
+
+set_feats:
+	rc = dbtree_feats_set(&obj->vo_tree, vos_cont2umm(oiter->oit_cont), feats);
+	D_ASSERT(rc == 0);
+	return 1;
+}
+
+int
+oi_iter_check_punch(daos_handle_t ih)
 {
 	struct vos_iterator	*iter = vos_hdl2iter(ih);
 	struct vos_oi_iter	*oiter = iter2oiter(iter);
@@ -685,7 +748,6 @@ oi_iter_pre_aggregate(daos_handle_t ih, bool full_scan)
 	daos_unit_oid_t		 oid;
 	d_iov_t			 rec_iov;
 	int			 rc;
-	uint64_t		 feats;
 
 	D_ASSERT(iter->it_type == VOS_ITER_OBJ);
 
@@ -700,28 +762,8 @@ oi_iter_pre_aggregate(daos_handle_t ih, bool full_scan)
 	oid = obj->vo_id;
 
 	if (!vos_ilog_is_punched(vos_cont2hdl(oiter->oit_cont), &obj->vo_ilog, &oiter->oit_epr,
-				 NULL, &oiter->oit_ilog_info)) {
-		if (!iter->it_for_purge)
-			return 0;
-		feats = dbtree_feats_get(&obj->vo_tree);
-		if (feats & VOS_TREE_AGG_OPT) {
-			if ((feats & VOS_TREE_AGG_NEEDED) == 0) {
-				/** We can skip aggregation here unless one of these conditions is
-				 *  true
-				 *  1. We are doing a full scan (or snapshot deletion)
-				 *  2. If the whole tree is punched, we'll just fall through and
-				 *     move it to GC.
-				 */
-				if (!full_scan)
-					return 2;
-			} else {
-				feats |= VOS_TREE_AGG_FLAG;
-				rc = dbtree_feats_set(&obj->vo_tree, vos_cont2umm(oiter->oit_cont),
-						      feats);
-			}
-		}
+				 NULL, &oiter->oit_ilog_info))
 		return 0;
-	}
 
 	/** Ok, ilog is fully punched, so we can move it to gc heap */
 	rc = umem_tx_begin(vos_cont2umm(oiter->oit_cont), NULL);

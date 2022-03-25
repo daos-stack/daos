@@ -108,7 +108,7 @@ enum {
 #define VOS_MW_NVME_THRESH	256		/* 256 * VOS_BLK_SZ = 1MB */
 
 /* Force aggregation/discard ULT yield on certain amount of tight loops */
-#define VOS_AGG_CREDITS_MAX	32
+#define VOS_AGG_CREDITS_MAX	3200
 
 extern unsigned int vos_agg_nvme_thresh;
 
@@ -1106,19 +1106,30 @@ void
 gc_reserve_space(daos_size_t *rsrvd);
 
 /**
- * If the object is fully punched, bypass normal aggregation and move it to container
- * discard pool.  If aggregation optimization is enabled, it will mark the object
- * as being aggregated.
+ * Start aggregation of an object.  Mark object for aggregation for aggregation, if applicable
  *
  * \param ih[IN]	Iterator handle
- * \param full_scan[IN]	Full scan flag is set
+ * \param full_scan[IN]	Full scan is needed regardless so just mark aggregation start
+ *
+ * \return		1 if aggregation is needed
+ *			0 if aggregation can be skipped
+ *			< 0 on error
+ */
+int
+oi_iter_start_agg(daos_handle_t ih, bool full_scan);
+
+/**
+ * If the object is fully punched, bypass normal aggregation and move it to container
+ * discard pool.
+ *
+ * \param ih[IN]	Iterator handle
  *
  * \return		Zero on Success
- *			(1: entry is removed; 2: entry can be skipped)
+ *			1: entry is removed
  *			Negative value otherwise
  */
 int
-oi_iter_pre_aggregate(daos_handle_t ih, bool full_scan);
+oi_iter_check_punch(daos_handle_t ih);
 
 /**
  * Aggregate the creation/punch records in the current entry of the object
@@ -1139,19 +1150,31 @@ int
 oi_iter_aggregate(daos_handle_t ih, bool range_discard, uint64_t *skipped);
 
 /**
- * If the key is fully punched, bypass normal aggregation and move it to container
- * discard pool. If aggregation optimization is enabled, it will mark the key
- * as being aggregated.
+ * Start aggregation of a key.  Mark key for aggregation for aggregation, if applicable
  *
  * \param ih[IN]	Iterator handle
- * \param full_scan[IN]	Full scan flag is set
+ * \param full_scan[IN]	Full scan is needed regardless so just mark aggregation start
+ *
+ * \return		1 if aggregation is needed
+ *			0 if aggregation can be skipped
+ *			< 0 on error
+ */
+
+int
+vos_obj_iter_start_agg(daos_handle_t ih, bool full_scan);
+
+/**
+ * If the key is fully punched, bypass normal aggregation and move it to container
+ * discard pool.
+ *
+ * \param ih[IN]	Iterator handle
  *
  * \return		Zero on Success
- *			(1: entry is removed; 2: entry can be skipped)
+ *			1: entry is removed
  *			Negative value otherwise
  */
 int
-vos_obj_iter_pre_aggregate(daos_handle_t ih, bool full_scan);
+vos_obj_iter_check_punch(daos_handle_t ih);
 
 /**
  * Aggregate the creation/punch records in the current entry of the key
