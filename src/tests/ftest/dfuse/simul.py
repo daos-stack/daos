@@ -4,7 +4,10 @@
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 
+import os
 import distro
+from avocado import fail_on
+from exception_utils import MPILoadError
 from dfuse_test_base import DfuseTestBase
 from env_modules import load_mpi
 from general_utils import DaosTestError, run_command
@@ -64,17 +67,6 @@ class PosixSimul(DfuseTestBase):
     :avocado: recursive
     """
 
-    def run_simul(self, include=None, exclude=None):
-        """ Run simul
-        include str:  comma-separated list of tests to include
-        exclude str:  comma-separated list of tests to exclude
-        If include value is set, exclude value is ignored and vice versa.
-        """
-        # Assuming all vms use the same OS
-        host_os = distro.linux_distribution()[0].lower()
-        version_os = distro.linux_distribution()[1]
-        dfuse_hosts = self.agent_managers[0].hosts
-
     @fail_on(DaosTestError)
     def run_simul(self, include=None, exclude=None, raise_exception=True):
         """ Run simul
@@ -121,30 +113,30 @@ class PosixSimul(DfuseTestBase):
         return result
 
 
-        def test_posix_simul(self):
-            """Test simul.
-            :avocado: tags=all,full_regression
-            :avocado: tags=hw,small
-            :avocado: tags=posix,simul,dfuse
-            """
-            self.run_simul(exclude="9,18,30,39,40")
+    def test_posix_simul(self):
+        """Test simul.
+        :avocado: tags=all,full_regression
+        :avocado: tags=hw,small
+        :avocado: tags=posix,simul,dfuse
+        """
+        self.run_simul(exclude="9,18,30,39,40")
 
 
-        def test_posix_expected_failures(self):
-            """Test simul, expected failures
-            :avocado: tags=all,full_regression
-            :avocado: tags=hw,small
-            :avocado: tags=posix,simul_failure,dfuse
-            """
-            expected_failures = {"9": None, "18": None, "30": None, "39": None, "40": None}
-            for test in sorted(expected_failures):
-                expected_failures[test] = self.run_simul(include=test, raise_exception=False)
-            failed = []
-            for test in sorted(expected_failures):
-                if "FAILED in simul" in expected_failures[test].stdout_text:
-                    self.log.info("Test %s failed as expected", test)
-                else:
-                    self.log.info("Test %s was expected to fail, but passed", test)
-                    failed.append(test)
-            if failed:
-                self.fail("Simul tests {} expected to failed, but passed".format(", ".join(failed)))
+    def test_posix_expected_failures(self):
+        """Test simul, expected failures
+        :avocado: tags=all,full_regression
+        :avocado: tags=hw,small
+        :avocado: tags=posix,simul_failure,dfuse
+        """
+        expected_failures = {"9": None, "18": None, "30": None, "39": None, "40": None}
+        for test in sorted(expected_failures):
+            expected_failures[test] = self.run_simul(include=test, raise_exception=False)
+        failed = []
+        for test in sorted(expected_failures):
+            if "FAILED in simul" in expected_failures[test].stdout_text:
+                self.log.info("Test %s failed as expected", test)
+            else:
+                self.log.info("Test %s was expected to fail, but passed", test)
+                failed.append(test)
+        if failed:
+            self.fail("Simul tests {} expected to failed, but passed".format(", ".join(failed)))
