@@ -16,7 +16,8 @@ tool_description = '''DAOS estimation tool
 This CLI is able to estimate the SCM/NVMe ratios
 '''
 
-vos_path_default='/mnt/daos'
+vos_path_default = '/mnt/daos'
+
 
 class CreateExample(Common):
     def __init__(self, args):

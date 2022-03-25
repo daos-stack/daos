@@ -9,4 +9,4 @@ setup(name='apricot',
       packages=['apricot'],
       include_package_data=True,
       install_requires=['avocado-framework']
-     )
+      )
