@@ -10,6 +10,7 @@ from ast import literal_eval
 import os
 import json
 import re
+import time
 
 from avocado import fail_on, skip, TestFail
 from avocado import Test as avocadoTest
@@ -322,6 +323,24 @@ class Test(avocadoTest):
 
         """
         return self.get_test_info()["method"]
+
+    def get_elapsed_time(self):
+        """Get the elapsed test time.
+
+        Returns:
+            float: number of seconds since the start of the test
+
+        """
+        return time.time() - self.time_start
+
+    def get_remaining_time(self):
+        """Get the remaining time before the test timeout will expire.
+
+        Returns:
+            float: number of seconds remaining before the test will timeout
+
+        """
+        return self.timeout - self.get_elapsed_time()
 
     def report_timeout(self):
         """Report whether or not this test case was timed out."""

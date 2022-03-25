@@ -583,6 +583,11 @@ rebuild_leader_status_check(struct ds_pool *pool, uint32_t map_ver, uint32_t op,
 			iv.riv_leader_term = rgt->rgt_leader_term;
 			iv.riv_sync = 1;
 
+			D_DEBUG(DB_REBUILD, "rebuild IV update "DF_UUID"/%u:"
+				" gsd/gd %d/%d stable eph "DF_U64"\n",
+				DP_UUID(iv.riv_pool_uuid), rgt->rgt_rebuild_ver,
+				iv.riv_global_scan_done, iv.riv_global_done,
+				iv.riv_stable_epoch);
 			/* Notify others the global scan is done, then
 			 * each target can reliablly report its pull status
 			 */
@@ -1251,6 +1256,9 @@ iv_stop:
 		iv.riv_seconds          = rgt->rgt_status.rs_seconds;
 		iv.riv_stable_epoch	= rgt->rgt_stable_epoch;
 
+		D_DEBUG(DB_REBUILD, "rebuild IV %u final "DF_UUID"/%u : %d\n",
+			task->dst_rebuild_op, DP_UUID(task->dst_pool_uuid),
+			rgt->rgt_rebuild_ver, rgt->rgt_status.rs_errno);
 		if (!is_rebuild_global_done(rgt) || rgt->rgt_status.rs_errno != 0 ||
 		    task->dst_rebuild_op == RB_OP_REINT || task->dst_rebuild_op == RB_OP_EXTEND) {
 			rc = rebuild_iv_update(pool->sp_iv_ns, &iv, CRT_IV_SHORTCUT_NONE,
