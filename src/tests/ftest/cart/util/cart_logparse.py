@@ -101,8 +101,6 @@ class LogLine():
     the message only, and != which will match the entire line.
     """
 
-    # pylint: disable=too-many-public-methods
-
     # Match an address range, a region in memory.
     re_region = re.compile(r"(0|0x[0-9a-f]{1,16})-(0x[0-9a-f]{1,16})")
     # Match a pointer, with optional ) . or , suffix.

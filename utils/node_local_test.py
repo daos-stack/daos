@@ -548,7 +548,6 @@ class DaosServer():
         self.fuse_procs.remove(fuse)
 
     def __del__(self):
-        print('Stopping DAOS server object')
         if self._agent:
             self._stop_agent()
         try:
@@ -559,9 +558,7 @@ class DaosServer():
         server_file = join(self.agent_dir, '.daos_server.active.yml')
         if os.path.exists(server_file):
             os.unlink(server_file)
-        print(self.server_logs)
         for log in self.server_logs:
-            print('log is {}'.format(log.name))
             if os.path.exists(log.name):
                 log_test(self.conf, log.name)
         try:
@@ -632,24 +629,18 @@ class DaosServer():
                              '--xml-file=dnt_server.%p.memcheck.xml',
                              '--num-callers=20',
                              '--leak-check=full']
-            suppression_file = os.path.join('src',
-                                            'cart',
-                                            'utils',
-                                            'memcheck-cart.supp')
+            suppression_file = join('src', 'cart', 'utils', 'memcheck-cart.supp')
             if not os.path.exists(suppression_file):
-                suppression_file = os.path.join(self.conf['PREFIX'],
-                                                'etc',
-                                                'memcheck-cart.supp')
+                suppression_file = join(self.conf['PREFIX'], 'etc', 'memcheck-cart.supp')
 
             valgrind_args.append('--suppressions={}'.format(
                 os.path.realpath(suppression_file)))
 
             self._io_server_dir = tempfile.TemporaryDirectory(prefix='dnt_io_')
 
-            with open(os.path.join(self._io_server_dir.name, 'daos_engine'), 'w') as fd:
+            with open(join(self._io_server_dir.name, 'daos_engine'), 'w') as fd:
                 fd.write('#!/bin/sh\n')
-                fd.write('export PATH={}:$PATH\n'.format(
-                    os.path.join(self.conf['PREFIX'], 'bin')))
+                fd.write('export PATH={}:$PATH\n'.format(join(self.conf['PREFIX'], 'bin')))
                 fd.write('exec valgrind {} daos_engine "$@"\n'.format(' '.join(valgrind_args)))
 
             os.chmod(join(self._io_server_dir.name, 'daos_engine'),
@@ -877,7 +868,6 @@ class DaosServer():
         self.conf.compress_file(self.agent_log.name)
         self.conf.compress_file(self.control_log.name)
 
-        print(self.server_logs)
         for log in self.server_logs:
             log_test(self.conf, log.name, leak_wf=wf)
             self.server_logs.remove(log)
@@ -3408,8 +3398,8 @@ def run_in_fg(server, conf):
     t_dir = join(dfuse.dir, container)
 
     print('Running at {}'.format(t_dir))
-    print('export PATH={}:$PATH'.format(os.path.join(conf['PREFIX'], 'bin')))
-    print('export LD_PRELOAD={}'.format(os.path.join(conf['PREFIX'], 'lib64', 'libioil.so')))
+    print('export PATH={}:$PATH'.format(join(conf['PREFIX'], 'bin')))
+    print('export LD_PRELOAD={}'.format(join(conf['PREFIX'], 'lib64', 'libioil.so')))
     print('export DAOS_AGENT_DRPC_DIR={}'.format(conf.agent_dir))
     print('export D_IL_REPORT=-1')
     print('daos container create --type POSIX --path {}/uns-link'.format(t_dir))

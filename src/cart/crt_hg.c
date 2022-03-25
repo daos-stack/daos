@@ -1620,8 +1620,7 @@ crt_hg_bulk_transfer_cb(const struct hg_cb_info *hg_cbinfo)
 			D_DEBUG(DB_NET, "bulk transferring canceled.\n");
 			rc = -DER_CANCELED;
 		} else {
-			D_ERROR("hg_cbinfo->ret: %d.\n",
-				hg_cbinfo->ret);
+			D_ERROR("hg_cbinfo->ret: %d.\n", hg_cbinfo->ret);
 			hg_ret = hg_cbinfo->ret;
 			rc = -DER_HG;
 		}
