@@ -141,7 +141,7 @@ class PosixSimul(DfuseTestBase):
                 expected_failures[test] = self.run_simul(include=test, raise_exception=False)
             failed = []
             for test in sorted(expected_failures):
-                if "FAILED in simul" in in expected_failures[test].stdout_text:
+                if "FAILED in simul" in expected_failures[test].stdout_text:
                     self.log.info("Test %s failed as expected", test)
                 else:
                     self.log.info("Test %s was expected to fail, but passed", test)
