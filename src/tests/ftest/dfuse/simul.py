@@ -5,7 +5,6 @@
 """
 
 import os
-import distro
 from avocado import fail_on
 from exception_utils import MPILoadError
 from dfuse_test_base import DfuseTestBase
