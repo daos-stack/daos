@@ -151,7 +151,8 @@ struct dss_module_info {
 	int			dmi_tgt_id;
 	/* the cart context id */
 	int			dmi_ctx_id;
-	uint32_t		dmi_dtx_batched_started:1;
+	uint32_t		dmi_dtx_batched_started:1,
+				dmi_srv_shutting_down:1;
 	d_list_t		dmi_dtx_batched_cont_open_list;
 	d_list_t		dmi_dtx_batched_cont_close_list;
 	d_list_t		dmi_dtx_batched_pool_list;
@@ -179,6 +180,18 @@ static inline struct dss_xstream *
 dss_current_xstream(void)
 {
 	return dss_get_module_info()->dmi_xstream;
+}
+
+/**
+ * Is the engine shutting down? If this function returns false, then before the
+ * current xstream enters the scheduler (e.g., by yielding), the engine won't
+ * finish entering shutdown mode (i.e., any dss_srv_set_shutting_down call
+ * won't return).
+ */
+static inline bool
+dss_srv_shutting_down(void)
+{
+	return dss_get_module_info()->dmi_srv_shutting_down;
 }
 
 /**
