@@ -485,11 +485,11 @@ class TelemetryUtils():
 
         # Add engine network metrics for the configured provider
         try:
-            provider = re.sub(
-                "[+;]", "_",
-                get_full_provider_name(server.manager.job.get_config_value("provider")))
+            full_name = get_full_provider_name(server.manager.job.get_config_value("provider"))
+            provider = re.sub("[+;]", "_", full_name)
         except TypeError:
             provider = "ofi_tcp_ofi_rxm"
+        self.log.debug("Updating telemetry network metrics with the %s provider name", provider)
         net_metrics = [name.replace("<provider>", provider) for name in self.ENGINE_NET_METRICS]
         all_metrics_names.extend(net_metrics)
 

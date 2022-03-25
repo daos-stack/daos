@@ -1340,8 +1340,8 @@ def get_full_provider_name(provider):
         str: full provider name
 
     """
-    if provider in ["ofi_tcp", "ofi_verbs"]:
-        return ";".join([provider, "ofi_rxm"])
+    if provider in ["ofi+tcp", "ofi+verbs"]:
+        return ";".join([provider, "ofi+rxm"])
     return provider
 
 
@@ -1355,4 +1355,4 @@ def get_short_provider_name(provider):
         str: short provider name
 
     """
-    return re.sub(r";ofi_rxm", "", provider)
+    return re.sub(r";ofi+rxm", "", provider)
