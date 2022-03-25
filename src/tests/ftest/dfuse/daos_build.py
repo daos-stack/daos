@@ -60,17 +60,16 @@ class DaosBuild(DfuseTestBase):
         self.add_container(self.pool)
 
         daos_cmd = self.get_daos_command()
-        daos_cmd.container_set_attr(pool=self.pool.uuid, cont=self.container.uuid,
-                                    attr='dfuse-data-cache', val='off')
 
-        daos_cmd.container_set_attr(pool=self.pool.uuid, cont=self.container.uuid,
-                                    attr='dfuse-attr-time', val='60s')
+        cont_attrs = OrderedDict()
+        cont_attrs['dfuse-data-cache'] = 'off'
+        cont_attrs['dfuse-attr-time'] = '60s'
+        cont_attrs['dfuse-dentry-time'] = '60s'
+        cont_attrs['dfuse-ndentry-time'] = '60s'
 
-        daos_cmd.container_set_attr(pool=self.pool.uuid, cont=self.container.uuid,
-                                    attr='dfuse-dentry-time', val='60s')
-
-        daos_cmd.container_set_attr(pool=self.pool.uuid, cont=self.container.uuid,
-                                    attr='dfuse-ndentry-time', val='60s')
+        for key, value in cont_attrs.items():
+            daos_cmd.container_set_attr(pool=self.pool.uuid, cont=self.container.uuid,
+                                        attr=key, val=value)
 
         self.start_dfuse(self.hostlist_clients, self.pool, self.container)
 
@@ -80,12 +79,11 @@ class DaosBuild(DfuseTestBase):
         # This will apply to SCons, but not sub-commands.
 
         remote_env = OrderedDict()
-
         remote_env['LD_PRELOAD'] = '/usr/lib64/libioil.so'
         remote_env['D_LOG_FILE'] = '/var/tmp/daos_testing/daos-il.log'
         remote_env['DD_MASK'] = 'all'
         remote_env['DD_SUBSYS'] = 'all'
-        remote_env['D_IL_REPORT'] = '2'
+#        remote_env['D_IL_REPORT'] = '2'
         remote_env['D_LOG_MASK'] = 'debug'
 
         envs = []
@@ -94,14 +92,7 @@ class DaosBuild(DfuseTestBase):
 
         preload_cmd = ';'.join(envs)
 
-        cmds = ['sudo yum -y install daos-debuginfo',
-                'ls {}'.format(mount_dir),
-                'touch {}/new_file'.format(mount_dir),
-                'cat {}/new_file'.format(mount_dir),
-                'cp /bin/bash {}'.format(mount_dir),
-                'cp {}/bash {}/bash-copy'.format(mount_dir, mount_dir),
-                'df -h {}'.format(mount_dir),
-                'valgrind git clone https://github.com/daos-stack/daos.git {}'.format(build_dir),
+        cmds = ['git clone https://github.com/daos-stack/daos.git {}'.format(build_dir),
                 'git -C {} submodule init'.format(build_dir),
                 'git -C {} submodule update'.format(build_dir),
                 '{} -C {} --jobs 50 build --build-deps=yes'.format(scons, build_dir)]
