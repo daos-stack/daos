@@ -1568,6 +1568,45 @@ pool_query_free_tier_stats(Mgmt__PoolQueryResp *resp)
 	resp->n_tier_stats = 0;
 }
 
+static char *
+rank_ranges_str(d_rank_range_list_t *list, bool *truncated)
+{
+	const size_t	MAXBYTES = 512;
+	char	       *line;
+	char	       *linepos;
+	int		ret;
+	unsigned int	written = 0;
+	unsigned int	remaining = MAXBYTES;
+	int		i;
+
+	*truncated = false;
+	D_ALLOC(line, MAXBYTES);
+	if (line == NULL)
+		return NULL;
+	linepos = line;
+
+	for (i = 0; i < list->rrl_nr; i++) {
+		uint32_t	lo = list->rrl_ranges[i].lo;
+		uint32_t	hi = list->rrl_ranges[i].hi;
+		bool		lastrange = (i == (list->rrl_nr - 1));
+
+		if (lo == hi)
+			ret = snprintf(linepos, remaining, "%u%s", lo, lastrange ? "" : ",");
+		else
+			ret = snprintf(linepos, remaining, "%u-%u%s", lo, hi, lastrange ? "" : ",");
+		if ((ret < 0) || (ret >= remaining))
+			goto err;
+		written += ret;
+		remaining -= ret;
+		linepos += ret;
+	}
+	return line;
+err:
+	if (written > 0)
+		*truncated = true;
+	return line;
+}
+
 void
 ds_mgmt_drpc_pool_query(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 {
@@ -1582,6 +1621,9 @@ ds_mgmt_drpc_pool_query(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	daos_pool_info_t	pool_info = {0};
 	d_rank_list_t		*svc_ranks;
 	d_rank_list_t		*ranks;
+	d_rank_range_list_t	*range_list;
+	char			*range_list_str;
+	bool			truncated;
 	size_t			len;
 	uint8_t			*body;
 
@@ -1612,8 +1654,19 @@ ds_mgmt_drpc_pool_query(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 		goto out_svc_ranks;
 	}
 
+	/* Calculate and stringify rank ranges to return to control plane for display */
+	range_list = d_rank_range_list_create_from_ranks(ranks);
+	if (range_list == NULL)
+		D_GOTO(out_ranks, rc = -DER_NOMEM);
+	range_list_str = rank_ranges_str(range_list, &truncated);
+	if (range_list_str == NULL)
+		D_GOTO(out_ranges, rc = -DER_NOMEM);
+	D_DEBUG(DF_DSMS, DF_UUID": %s ranks: %s%s\n", DP_UUID(uuid),
+		pool_info.pi_bits & DPI_ENGINES_ENABLED ? "ENABLED" : "DISABLED", range_list_str,
+		truncated ? " ...(TRUNCATED)" : "");
+
 	/* Populate the response */
-	/* TODO: return ranks in the response. */
+	/* TODO: return range_list_str in the response. */
 	resp.uuid = req->id;
 	resp.total_targets = pool_info.pi_ntargets;
 	resp.disabled_targets = pool_info.pi_ndisabled;
@@ -1625,7 +1678,7 @@ ds_mgmt_drpc_pool_query(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	D_ALLOC_ARRAY(resp.tier_stats, DAOS_MEDIA_MAX);
 	if (resp.tier_stats == NULL) {
 		D_ERROR("Failed to allocate tier_stats for resp\n");
-		D_GOTO(out_ranks, rc = -DER_NOMEM);
+		D_GOTO(out_ranges_str, rc = -DER_NOMEM);
 	}
 
 	storage_usage_stats_from_pool_space(&scm, &pool_info.pi_space,
@@ -1641,6 +1694,10 @@ ds_mgmt_drpc_pool_query(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	pool_rebuild_status_from_info(&rebuild, &pool_info.pi_rebuild_st);
 	resp.rebuild = &rebuild;
 
+out_ranges_str:
+	D_FREE(range_list_str);
+out_ranges:
+	d_rank_range_list_free(range_list);
 out_ranks:
 	d_rank_list_free(ranks);
 out_svc_ranks:
