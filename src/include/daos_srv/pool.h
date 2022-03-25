@@ -25,6 +25,11 @@
 #include <daos_srv/policy.h>
 
 /*
+ * Aggregation of pool/container/object/keys disk format change.
+ */
+#define DS_POOL_GLOBAL_VERSION		1
+
+/*
  * Pool object
  *
  * Caches per-pool information, such as the pool map.

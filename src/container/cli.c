@@ -838,7 +838,8 @@ dc_cont_open_internal(tse_task_t *task, const char *label, struct dc_pool *pool)
 				  DAOS_CO_QUERY_PROP_REDUN_FAC |
 				  DAOS_CO_QUERY_PROP_EC_CELL_SZ |
 				  DAOS_CO_QUERY_PROP_EC_PDA |
-				  DAOS_CO_QUERY_PROP_RP_PDA;
+				  DAOS_CO_QUERY_PROP_RP_PDA |
+				  DAOS_CO_QUERY_PROP_GLOBAL_VERSION;
 
 	/* open bylabel RPC input */
 	if (label) {
@@ -1254,6 +1255,9 @@ cont_query_bits(daos_prop_t *prop)
 			break;
 		case DAOS_PROP_CO_RP_PDA:
 			bits |= DAOS_CO_QUERY_PROP_RP_PDA;
+			break;
+		case DAOS_PROP_CO_GLOBAL_VERSION:
+			bits |= DAOS_CO_QUERY_PROP_GLOBAL_VERSION;
 			break;
 		default:
 			D_ERROR("ignore bad dpt_type %d.\n", entry->dpe_type);
@@ -1932,6 +1936,7 @@ struct dc_cont_glob {
 	uint32_t	dcg_ec_cell_sz;
 	uint32_t	dcg_ec_pda;
 	uint32_t	dcg_rp_pda;
+	uint32_t	dcg_global_version;
 	/** minimal required pool map version, as a fence to make sure after
 	 * cont_open/g2l client-side pm_ver >= pm_ver@cont_create.
 	 */
@@ -2015,6 +2020,7 @@ dc_cont_l2g(daos_handle_t coh, d_iov_t *glob)
 	cont_glob->dcg_ec_pda		= cont->dc_props.dcp_ec_pda;
 	cont_glob->dcg_rp_pda		= cont->dc_props.dcp_rp_pda;
 	cont_glob->dcg_min_ver		= cont->dc_min_ver;
+	cont_glob->dcg_global_version	= cont->dc_props.dcp_global_version;
 
 	dc_pool_put(pool);
 out_cont:
@@ -2103,6 +2109,7 @@ dc_cont_g2l(daos_handle_t poh, struct dc_cont_glob *cont_glob,
 	cont->dc_props.dcp_ec_pda	 = cont_glob->dcg_ec_pda;
 	cont->dc_props.dcp_rp_pda	 = cont_glob->dcg_rp_pda;
 	cont->dc_min_ver		 = cont_glob->dcg_min_ver;
+	cont->dc_props.dcp_global_version = cont_glob->dcg_global_version;
 	rc = dc_cont_props_init(cont);
 	if (rc != 0)
 		D_GOTO(out_cont, rc);

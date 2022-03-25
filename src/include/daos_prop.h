@@ -263,6 +263,8 @@ enum daos_cont_props {
 	DAOS_PROP_CO_EC_PDA,
 	/**  performance domain affinity level of RP object */
 	DAOS_PROP_CO_RP_PDA,
+	/** immutable container global version */
+	DAOS_PROP_CO_GLOBAL_VERSION,
 	DAOS_PROP_CO_MAX,
 };
 

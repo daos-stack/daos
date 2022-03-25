@@ -1007,9 +1007,6 @@ ds_mgmt_drpc_pool_upgrade(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	if (svc_ranks == NULL)
 		D_GOTO(out, rc = -DER_NOMEM);
 
-	/*
-	 * Todo add real logic here..
-	 */
 	rc = ds_mgmt_pool_upgrade(uuid, svc_ranks);
 
 	d_rank_list_free(svc_ranks);

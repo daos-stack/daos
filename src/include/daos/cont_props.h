@@ -47,6 +47,7 @@ struct cont_props {
 	uint32_t	 dcp_ec_cell_sz;
 	uint32_t	 dcp_ec_pda;
 	uint32_t	 dcp_rp_pda;
+	uint32_t	 dcp_global_version;
 	uint32_t	 dcp_csum_enabled:1,
 			 dcp_srv_verify:1,
 			 dcp_dedup_enabled:1,
@@ -137,5 +138,11 @@ daos_cont_prop2ec_pda(daos_prop_t *prop);
 
 uint32_t
 daos_cont_prop2rp_pda(daos_prop_t *prop);
+
+/**
+ * Global version properties
+ */
+uint32_t
+daos_cont_prop2global_version(daos_prop_t *prop);
 
 #endif /** __DAOS_CONT_PROPS_H__ */

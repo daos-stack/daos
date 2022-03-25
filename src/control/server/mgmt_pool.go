@@ -758,7 +758,7 @@ func (svc *mgmtSvc) PoolQuery(ctx context.Context, req *mgmtpb.PoolQueryReq) (*m
 
 // PoolUpgrade forwards a pool upgrade request to the I/O Engine.
 func (svc *mgmtSvc) PoolUpgrade(ctx context.Context, req *mgmtpb.PoolUpgradeReq) (*mgmtpb.PoolUpgradeResp, error) {
-	if err := svc.checkReplicaRequest(req); err != nil {
+	if err := svc.checkLeaderRequest(req); err != nil {
 		return nil, err
 	}
 	svc.log.Debugf("MgmtSvc.PoolUpgrade dispatch, req:%+v\n", req)

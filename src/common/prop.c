@@ -323,14 +323,7 @@ daos_prop_valid(daos_prop_t *prop, bool pool, bool input)
 		case DAOS_PROP_PO_EC_CELL_SZ:
 		case DAOS_PROP_PO_EC_PDA:
 		case DAOS_PROP_PO_RP_PDA:
-			break;
 		case DAOS_PROP_PO_GLOBAL_VERSION:
-			val = prop->dpp_entries[i].dpe_val;
-			if (val > DAOS_META_GLOBAL_VERSION) {
-				D_ERROR("invalid pool global version "DF_U64".\n",
-					val);
-				return false;
-			}
 			break;
 		case DAOS_PROP_PO_UPGRADE_STATUS:
 			val = prop->dpp_entries[i].dpe_val;
@@ -489,6 +482,7 @@ daos_prop_valid(daos_prop_t *prop, bool pool, bool input)
 		case DAOS_PROP_CO_EC_CELL_SZ:
 		case DAOS_PROP_CO_EC_PDA:
 		case DAOS_PROP_CO_RP_PDA:
+		case DAOS_PROP_CO_GLOBAL_VERSION:
 			break;
 		default:
 			D_ERROR("invalid dpe_type %d.\n", type);
@@ -837,6 +831,13 @@ daos_prop_copy(daos_prop_t *prop_req, daos_prop_t *prop_reply)
 		}
 	}
 
+	/* mark left requested props as negative */
+	while (i < prop_req->dpp_nr) {
+		entry_req = &prop_req->dpp_entries[i];
+		entry_req->dpe_flags |= DAOS_PROP_ENTRY_NEGATIVE;
+		i++;
+	}
+
 out:
 	if (rc) {
 		if (label_alloc) {
@@ -1045,7 +1046,8 @@ parse_entry(char *str, struct daos_prop_entry *entry)
 		   strcmp(name, DAOS_PROP_ENTRY_ALLOCED_OID) == 0 ||
 		   strcmp(name, DAOS_PROP_ENTRY_STATUS) == 0 ||
 		   strcmp(name, DAOS_PROP_ENTRY_OWNER) == 0 ||
-		   strcmp(name, DAOS_PROP_ENTRY_GROUP) == 0) {
+		   strcmp(name, DAOS_PROP_ENTRY_GROUP) == 0 ||
+		   strcmp(name, DAOS_PROP_ENTRY_GLOBAL_VERSION) == 0) {
 		D_ERROR("Property %s is read only\n", name);
 		rc = -DER_INVAL;
 	} else {

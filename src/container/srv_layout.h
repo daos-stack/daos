@@ -48,7 +48,6 @@ extern d_iov_t ds_cont_prop_version;		/* uint32_t */
 extern d_iov_t ds_cont_prop_cuuids;		/* container UUIDs KVS */
 extern d_iov_t ds_cont_prop_conts;		/* container KVS */
 extern d_iov_t ds_cont_prop_cont_handles;	/* container handle KVS */
-extern d_iov_t ds_cont_prop_global_version;	/* uint32 */
 
 /*
  * Container UUIDs KVS (RDB_KVS_GENERIC)
@@ -95,6 +94,7 @@ extern d_iov_t ds_cont_prop_roots;		/* container first citizens */
 extern d_iov_t ds_cont_prop_ec_cell_sz;		/* cell size of EC */
 extern d_iov_t ds_cont_prop_ec_pda;		/* uint32 */
 extern d_iov_t ds_cont_prop_rp_pda;		/* uint32 */
+extern d_iov_t ds_cont_prop_cont_global_version;/* uint32 */
 
 /*
  * Snapshot KVS (RDB_KVS_INTEGER)

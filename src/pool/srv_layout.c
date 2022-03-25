@@ -29,6 +29,7 @@ RDB_STRING_KEY(ds_pool_prop_, connectable);
 RDB_STRING_KEY(ds_pool_prop_, nhandles);
 RDB_STRING_KEY(ds_pool_prop_, policy);
 RDB_STRING_KEY(ds_pool_prop_, global_version);
+RDB_STRING_KEY(ds_pool_prop_, upgrade_global_version);
 RDB_STRING_KEY(ds_pool_prop_, upgrade_status);
 
 /** pool handle KVS */
@@ -84,7 +85,7 @@ struct daos_prop_entry pool_prop_entries_default[DAOS_PROP_PO_NUM] = {
 		.dpe_str	= DAOS_PROP_POLICYSTR_DEFAULT,
 	}, {
 		.dpe_type	= DAOS_PROP_PO_GLOBAL_VERSION,
-		.dpe_val	= DAOS_META_GLOBAL_VERSION,
+		.dpe_val	= DS_POOL_GLOBAL_VERSION,
 	}, {
 		.dpe_type	= DAOS_PROP_PO_UPGRADE_STATUS,
 		.dpe_val	= DAOS_UPGRADE_STATUS_NOT_STARTED,

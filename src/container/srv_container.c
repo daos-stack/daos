@@ -506,6 +506,9 @@ cont_create_prop_prepare(struct ds_pool_hdl *pool_hdl,
 					return rc;
 			}
 			break;
+		case DAOS_PROP_CO_GLOBAL_VERSION:
+			D_ERROR("container global version could be not set\n");
+			return -DER_INVAL;
 		default:
 			D_ASSERTF(0, "bad dpt_type %d.\n", entry->dpe_type);
 			break;
@@ -544,6 +547,11 @@ cont_create_prop_prepare(struct ds_pool_hdl *pool_hdl,
 		D_ASSERT(pool_hdl->sph_pool->sp_rp_pda != 0);
 		entry_def->dpe_val = pool_hdl->sph_pool->sp_rp_pda;
 	}
+
+	/* inherit global version from pool*/
+	entry_def = daos_prop_entry_get(prop_def, DAOS_PROP_CO_GLOBAL_VERSION);
+	if (entry_def)
+		entry_def->dpe_val = pool_hdl->sph_global_ver;
 
 	/* for new container set HEALTHY status with current pm ver */
 	entry_def = daos_prop_entry_get(prop_def, DAOS_PROP_CO_STATUS);
@@ -686,6 +694,13 @@ cont_prop_write(struct rdb_tx *tx, const rdb_path_t *kvs, daos_prop_t *prop,
 			d_iov_set(&value, &entry->dpe_val,
 				  sizeof(entry->dpe_val));
 			rc = rdb_tx_update(tx, kvs, &ds_cont_prop_rp_pda,
+					   &value);
+			break;
+		case DAOS_PROP_CO_GLOBAL_VERSION:
+			d_iov_set(&value, &entry->dpe_val,
+				  sizeof(entry->dpe_val));
+			rc = rdb_tx_update(tx, kvs,
+					   &ds_cont_prop_cont_global_version,
 					   &value);
 			break;
 		case DAOS_PROP_CO_OWNER:
@@ -937,14 +952,6 @@ cont_create(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
 			""DF_RC"\n",
 			DP_CONT(pool_hdl->sph_pool->sp_uuid,
 				in->cci_op.ci_uuid), DP_RC(rc));
-		D_GOTO(out_kvs, rc);
-	}
-
-	d_iov_set(&value, &pool_hdl->sph_global_ver, sizeof(pool_hdl->sph_global_ver));
-	rc = rdb_tx_update(tx, &kvs, &ds_cont_prop_global_version, &value);
-	if (rc != 0) {
-		D_ERROR(DF_CONT": failed to update global version, "DF_RC"\n",
-			DP_CONT(pool_hdl->sph_pool->sp_uuid, in->cci_op.ci_uuid), DP_RC(rc));
 		D_GOTO(out_kvs, rc);
 	}
 
@@ -2462,6 +2469,24 @@ cont_prop_read(struct rdb_tx *tx, struct cont *cont, uint64_t bits,
 		}
 		idx++;
 	}
+	if (bits & DAOS_CO_QUERY_PROP_GLOBAL_VERSION) {
+		d_iov_set(&value, &val, sizeof(val));
+		rc = rdb_tx_lookup(tx, &cont->c_prop, &ds_cont_prop_cont_global_version,
+				   &value);
+		if (rc == -DER_NONEXIST)
+			val = 0;
+		else  if (rc != 0)
+			D_GOTO(out, rc);
+		D_ASSERT(idx < nr);
+		prop->dpp_entries[idx].dpe_type = DAOS_PROP_CO_GLOBAL_VERSION;
+		prop->dpp_entries[idx].dpe_val = val;
+		if (rc == -DER_NONEXIST) {
+			prop->dpp_entries[idx].dpe_flags |= DAOS_PROP_ENTRY_NEGATIVE;
+			negative_nr++;
+			rc = 0;
+		}
+		idx++;
+	}
 out:
 	if (rc == 0) {
 		if (negative_nr == nr) {
@@ -2687,6 +2712,7 @@ cont_query(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl, struct cont *cont,
 			case DAOS_PROP_CO_ALLOCED_OID:
 			case DAOS_PROP_CO_EC_PDA:
 			case DAOS_PROP_CO_RP_PDA:
+			case DAOS_PROP_CO_GLOBAL_VERSION:
 				if (entry->dpe_val != iv_entry->dpe_val) {
 					D_ERROR("type %d mismatch "DF_U64" - "
 						DF_U64".\n", entry->dpe_type,
@@ -2930,6 +2956,13 @@ set_prop(struct rdb_tx *tx, struct ds_pool *pool,
 	daos_prop_t		*prop_old = NULL;
 	daos_prop_t		*prop_iv = NULL;
 	bool			 clear_stat;
+	struct daos_prop_entry	*entry;
+
+	entry = daos_prop_entry_get(prop_in, DAOS_PROP_CO_GLOBAL_VERSION);
+	if (entry) {
+		D_ERROR("container global version could be not set\n");
+		D_GOTO(out, rc = -DER_INVAL);
+	}
 
 	if (!daos_prop_valid(prop_in, false, true))
 		D_GOTO(out, rc = -DER_INVAL);
@@ -3521,19 +3554,17 @@ upgrade_cont_cb(daos_handle_t ih, d_iov_t *key, d_iov_t *val, void *varg)
 
 	d_iov_set(&value, &global_ver, sizeof(global_ver));
 	rc = rdb_tx_lookup(ap->tx, &cont->c_prop,
-			   &ds_cont_prop_global_version, &value);
+			   &ds_cont_prop_cont_global_version, &value);
 	if (rc && rc != -DER_NONEXIST)
 		goto out;
 	/* latest container, nothing to update */
-	if (rc == 0 && global_ver >= DAOS_META_GLOBAL_VERSION)
+	if (rc == 0 && global_ver == DS_POOL_GLOBAL_VERSION)
 		goto out;
 
-	global_ver = DAOS_META_GLOBAL_VERSION;
-	rc = rdb_tx_update(ap->tx, &cont->c_prop,
-			   &ds_cont_prop_global_version, &value);
-	if (rc) {
-		D_ERROR("failed to upgrade container global version pool/cont: "DF_CONTF"\n",
+	if (global_ver > DS_POOL_GLOBAL_VERSION) {
+		D_ERROR("Downgrading pool/cont: "DF_CONTF" not supported\n",
 			DP_CONT(ap->pool_uuid, cont_uuid));
+		rc = -DER_INVAL;
 		goto out;
 	}
 
