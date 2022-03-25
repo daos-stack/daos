@@ -140,8 +140,7 @@ func (cmd *PoolCreateCmd) Execute(args []string) error {
 
 		// TODO (DAOS-9556) Update the protocol with a new message allowing to perform the
 		// queries of storage request and the pool creation from the management server
-		scmBytes, nvmeBytes, err := control.GetMaxPoolSize(context.Background(),
-			cmd.ctlInvoker)
+		scmBytes, nvmeBytes, err := control.GetMaxPoolSize(context.Background(), cmd.log, cmd.ctlInvoker)
 		if err != nil {
 			return err
 		}
@@ -151,17 +150,11 @@ func (cmd *PoolCreateCmd) Execute(args []string) error {
 			nvmeBytes = uint64(storageRatio) * nvmeBytes / uint64(100)
 		}
 
-		// Extra storage space needed for metadata such as the VOS file
-		if scmBytes < control.PoolMetadataBytes {
-			missingBytes := control.PoolMetadataBytes - scmBytes
-			msg := "Not enough SMC storage available with ratio %s%%:"
-			msg += " at least %s of SCM storage (%s missing) is needed"
-			return errors.Errorf(msg,
-				cmd.Size,
-				humanize.Bytes(control.PoolMetadataBytes),
-				humanize.Bytes(missingBytes))
+		if scmBytes == 0 {
+			return errors.Errorf("Not enough SCM storage available with ratio %d%%: "+
+				"SCM storage capacity or ratio should be increased",
+				storageRatio)
 		}
-		scmBytes -= control.PoolMetadataBytes
 
 		cmd.updateRequest(req, scmBytes, nvmeBytes)
 

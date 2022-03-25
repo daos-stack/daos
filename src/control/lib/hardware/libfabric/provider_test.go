@@ -20,6 +20,12 @@ import (
 )
 
 func TestLibfabric_Provider_GetFabricInterfaces_Integrated(t *testing.T) {
+	cleanup, err := Load()
+	if err != nil {
+		t.Skipf("libfabric not installed (%s)", err.Error())
+	}
+	defer cleanup()
+
 	// Can't mock the underlying libfabric calls, but we can make sure it doesn't crash or
 	// error on the normal happy path.
 
@@ -80,6 +86,7 @@ func TestLibfabric_Provider_fiInfoToFabricInterfaceSet(t *testing.T) {
 			},
 			expResult: &hardware.FabricInterface{
 				Name:      "fi0_domain",
+				OSName:    "fi0_domain",
 				Providers: common.NewStringSet("provider_x"),
 			},
 		},

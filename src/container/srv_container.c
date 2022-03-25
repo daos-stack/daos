@@ -3645,9 +3645,17 @@ static int
 cont_op_with_hdl(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
 		 struct cont *cont, struct container_hdl *hdl, crt_rpc_t *rpc)
 {
+	struct cont_pool_metrics *metrics;
+	int			  rc;
+
 	switch (opc_get(rpc->cr_opc)) {
 	case CONT_QUERY:
-		return cont_query(tx, pool_hdl, cont, hdl, rpc);
+		rc = cont_query(tx, pool_hdl, cont, hdl, rpc);
+		if (likely(rc == 0)) {
+			metrics = pool_hdl->sph_pool->sp_metrics[DAOS_CONT_MODULE];
+			d_tm_inc_counter(metrics->query_total, 1);
+		}
+		return rc;
 	case CONT_ATTR_LIST:
 		return cont_attr_list(tx, pool_hdl, cont, hdl, rpc);
 	case CONT_ATTR_GET:
@@ -3697,19 +3705,20 @@ cont_op_with_cont(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
 	switch (opc_get(rpc->cr_opc)) {
 	case CONT_OPEN:
 	case CONT_OPEN_BYLABEL:
-		d_tm_inc_counter(metrics->cpm_open_count, 1);
-		d_tm_inc_gauge(metrics->cpm_open_cont_gauge, 1);
 		rc = cont_open(tx, pool_hdl, cont, rpc);
+		if (likely(rc == 0))
+			d_tm_inc_counter(metrics->open_total, 1);
 		break;
 	case CONT_CLOSE:
-		d_tm_inc_counter(metrics->cpm_close_count, 1);
-		d_tm_dec_gauge(metrics->cpm_open_cont_gauge, 1);
 		rc = cont_close(tx, pool_hdl, cont, rpc);
+		if (likely(rc == 0))
+			d_tm_inc_counter(metrics->close_total, 1);
 		break;
 	case CONT_DESTROY:
 	case CONT_DESTROY_BYLABEL:
-		d_tm_inc_counter(metrics->cpm_destroy_count, 1);
 		rc = cont_destroy(tx, pool_hdl, cont, rpc);
+		if (likely(rc == 0))
+			d_tm_inc_counter(metrics->destroy_total, 1);
 		break;
 	default:
 		/* Look up the container handle. */
@@ -3754,6 +3763,7 @@ cont_op_with_svc(struct ds_pool_hdl *pool_hdl, struct cont_svc *svc,
 	struct rdb_tx			 tx;
 	crt_opcode_t			 opc = opc_get(rpc->cr_opc);
 	struct cont			*cont = NULL;
+	struct cont_pool_metrics	*metrics;
 	int				 rc;
 
 	rc = rdb_tx_begin(svc->cs_rsvc->s_db, svc->cs_rsvc->s_term, &tx);
@@ -3770,6 +3780,10 @@ cont_op_with_svc(struct ds_pool_hdl *pool_hdl, struct cont_svc *svc,
 	switch (opc) {
 	case CONT_CREATE:
 		rc = cont_create(&tx, pool_hdl, svc, rpc);
+		if (likely(rc == 0)) {
+			metrics = pool_hdl->sph_pool->sp_metrics[DAOS_CONT_MODULE];
+			d_tm_inc_counter(metrics->create_total, 1);
+		}
 		break;
 	case CONT_OPEN_BYLABEL:
 		olbl_in = crt_req_get(rpc);

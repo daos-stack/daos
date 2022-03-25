@@ -5,8 +5,10 @@
 //
 package drpc
 
-import "unsafe"
-import "math"
+import (
+	"math"
+	"unsafe"
+)
 
 /*
 #cgo LDFLAGS: -ldaos_common -lgurt -lcart
@@ -15,6 +17,7 @@ import "math"
 #include <daos/object.h>
 #include <daos/cont_props.h>
 #include <daos_srv/policy.h>
+#include <daos_srv/control.h>
 */
 import "C"
 
@@ -91,6 +94,14 @@ const (
 	PoolUpgradeStatusCompleted = C.DAOS_UPGRADE_STATUS_COMPLETED
 	//PoolUpgradeStatusFailed defines pool upgrading operation failed.
 	PoolUpgradeStatusFailed = C.DAOS_UPGRADE_STATUS_FAILED
+)
+
+const (
+	// DaosMdCapEnv is the name of the environment variable defining the size of a metadata pmem
+	// pool/file in MiBs.
+	DaosMdCapEnv = C.DAOS_MD_CAP_ENV
+	// DefaultDaosMdCapSize is the default size of a metadata pmem pool/file in MiBs.
+	DefaultDaosMdCapSize = C.DEFAULT_DAOS_MD_CAP_SIZE
 )
 
 // LabelIsValid checks a label to verify that it meets length/content

@@ -1650,6 +1650,7 @@ ds_mgmt_drpc_pool_query(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	uuid_t			uuid;
 	daos_pool_info_t	pool_info = {0};
 	d_rank_list_t		*svc_ranks;
+	d_rank_list_t		*ranks;
 	size_t			len;
 	uint8_t			*body;
 
@@ -1672,14 +1673,16 @@ ds_mgmt_drpc_pool_query(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	if (svc_ranks == NULL)
 		D_GOTO(out, rc = -DER_NOMEM);
 
+	/* TODO: dmg client choose what to query, especially DPI_ENGINES_ENABLED bit set or not. */
 	pool_info.pi_bits = DPI_ALL;
-	rc = ds_mgmt_pool_query(uuid, svc_ranks, &pool_info);
+	rc = ds_mgmt_pool_query(uuid, svc_ranks, &ranks, &pool_info);
 	if (rc != 0) {
 		D_ERROR("Failed to query the pool, rc=%d\n", rc);
-		D_GOTO(out_ranks, rc);
+		goto out_svc_ranks;
 	}
 
 	/* Populate the response */
+	/* TODO: return ranks in the response. */
 	resp.uuid = req->id;
 	resp.total_targets = pool_info.pi_ntargets;
 	resp.disabled_targets = pool_info.pi_ndisabled;
@@ -1691,7 +1694,7 @@ ds_mgmt_drpc_pool_query(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	D_ALLOC_ARRAY(resp.tier_stats, DAOS_MEDIA_MAX);
 	if (resp.tier_stats == NULL) {
 		D_ERROR("Failed to allocate tier_stats for resp\n");
-		D_GOTO(out_tiers, rc = -DER_NOMEM);
+		D_GOTO(out_ranks, rc = -DER_NOMEM);
 	}
 
 	storage_usage_stats_from_pool_space(&scm, &pool_info.pi_space,
@@ -1707,8 +1710,9 @@ ds_mgmt_drpc_pool_query(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	pool_rebuild_status_from_info(&rebuild, &pool_info.pi_rebuild_st);
 	resp.rebuild = &rebuild;
 
-out_tiers:
 out_ranks:
+	d_rank_list_free(ranks);
+out_svc_ranks:
 	d_rank_list_free(svc_ranks);
 out:
 	resp.status = rc;
@@ -1964,6 +1968,7 @@ ds_mgmt_drpc_bio_health_query(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	resp->volatile_mem_warn = stats.volatile_mem_warn;
 	resp->total_bytes = stats.total_bytes;
 	resp->avail_bytes = stats.avail_bytes;
+	resp->cluster_size = stats.cluster_size;
 	resp->program_fail_cnt_norm = stats.program_fail_cnt_norm;
 	resp->program_fail_cnt_raw = stats.program_fail_cnt_raw;
 	resp->erase_fail_cnt_norm = stats.erase_fail_cnt_norm;
