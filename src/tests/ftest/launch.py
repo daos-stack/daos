@@ -373,7 +373,7 @@ def get_available_providers(interface, args):
     if check_remote_output(task, command):
         # Omni-Path adapter not found; remove verbs as it will not work with OPA devices.
         print("  Excluding verbs provider for Omni-Path adapters")
-        SUPPORTED_PROVIDER_NAMES.pop("verbs")
+        SUPPORTED_PROVIDER_NAMES.remove("verbs")
 
     # Detect all supported providers
     command = "fi_info -d {} -l | grep -v 'version:'".format(interface)
