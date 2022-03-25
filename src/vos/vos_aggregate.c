@@ -9,7 +9,6 @@
 #define D_LOGFAC	DD_FAC(vos)
 
 #include <daos_srv/vos.h>
-#include <daos/object.h>	/* for daos_unit_oid_compare() */
 #include <daos/checksum.h>
 #include <daos_srv/srv_csum.h>
 #include "vos_internal.h"
@@ -217,24 +216,6 @@ agg_del_sv(daos_handle_t ih, struct vos_agg_param *agg_param,
 	return rc;
 }
 
-static inline void
-reset_agg_pos(vos_iter_type_t type, struct vos_agg_param *agg_param)
-{
-	switch (type) {
-	case VOS_ITER_OBJ:
-		memset(&agg_param->ap_oid, 0, sizeof(agg_param->ap_oid));
-		break;
-	case VOS_ITER_DKEY:
-		memset(&agg_param->ap_dkey, 0, sizeof(agg_param->ap_dkey));
-		break;
-	case VOS_ITER_AKEY:
-		memset(&agg_param->ap_akey, 0, sizeof(agg_param->ap_akey));
-		break;
-	default:
-		break;
-	}
-}
-
 static inline bool
 need_aggregate(struct vos_agg_param *agg_param, vos_iter_entry_t *entry)
 {
@@ -298,60 +279,36 @@ vos_agg_obj(daos_handle_t ih, vos_iter_entry_t *entry,
 	bool			 full_scan;
 	int			 rc;
 
-	if (daos_unit_oid_compare(agg_param->ap_oid, entry->ie_oid)) {
-		if (need_aggregate(agg_param, entry)) {
-			D_DEBUG(DB_EPC, "oid:"DF_UOID" vos agg starting\n",
-				DP_UOID(entry->ie_oid));
-			agg_param->ap_oid = entry->ie_oid;
-			reset_agg_pos(VOS_ITER_DKEY, agg_param);
-			reset_agg_pos(VOS_ITER_AKEY, agg_param);
-			full_scan = agg_param->ap_flags & VOS_AGG_FL_FORCE_SCAN;
-			rc = oi_iter_pre_aggregate(ih, full_scan);
-			if (rc < 0)
-				return rc;
-			if (rc == 1) {
-				/** We removed the key so let's reprobe */
-				*acts |= VOS_ITER_CB_DELETE;
-				inc_agg_counter(cont, VOS_ITER_OBJ, AGG_OP_DEL);
-				return 0;
-			} else if (rc == 2) {
-				/** Entry is skipped removed the key so let's reprobe */
-				D_DEBUG(DB_EPC, "Skipping aggregation for object "DF_UOID
-					", nothing to do\n", DP_UOID(entry->ie_oid));
-				*acts |= VOS_ITER_CB_SKIP;
-				inc_agg_counter(cont, VOS_ITER_OBJ, AGG_OP_SKIP);
-				return 0;
-			}
-			inc_agg_counter(cont, VOS_ITER_OBJ, AGG_OP_SCAN);
-		} else {
-			D_DEBUG(DB_EPC, "Skip untouched oid:"DF_UOID"\n",
-				DP_UOID(agg_param->ap_oid));
+	if (need_aggregate(agg_param, entry)) {
+		D_DEBUG(DB_EPC, "oid:"DF_UOID" vos agg starting\n",
+			DP_UOID(entry->ie_oid));
+		agg_param->ap_oid = entry->ie_oid;
+		full_scan = agg_param->ap_flags & VOS_AGG_FL_FORCE_SCAN;
+		rc = oi_iter_pre_aggregate(ih, full_scan);
+		if (rc < 0)
+			return rc;
+		if (rc == 1) {
+			/** We removed the key so let's reprobe */
+			*acts |= VOS_ITER_CB_DELETE;
+			inc_agg_counter(cont, VOS_ITER_OBJ, AGG_OP_DEL);
+			return 0;
+		} else if (rc == 2) {
+			/** Entry is skipped removed the key so let's reprobe */
+			D_DEBUG(DB_EPC, "Skipping aggregation for object "DF_UOID
+				", nothing to do\n", DP_UOID(entry->ie_oid));
 			*acts |= VOS_ITER_CB_SKIP;
 			inc_agg_counter(cont, VOS_ITER_OBJ, AGG_OP_SKIP);
+			return 0;
 		}
+		inc_agg_counter(cont, VOS_ITER_OBJ, AGG_OP_SCAN);
 	} else {
-		/*
-		 * When recursive vos_iterate() yield in sub tree, re-probe
-		 * is required when it returns back to upper level tree, if
-		 * the just processed object is found on re-probe, we need
-		 * to notify vos_iterate() to not iterate into to sub tree
-		 * again.
-		 */
-		D_DEBUG(DB_EPC, "Skip oid:"DF_UOID" aggregation on re-probe\n",
+		D_DEBUG(DB_EPC, "Skip untouched oid:"DF_UOID"\n",
 			DP_UOID(agg_param->ap_oid));
 		*acts |= VOS_ITER_CB_SKIP;
+		inc_agg_counter(cont, VOS_ITER_OBJ, AGG_OP_SKIP);
 	}
 
 	return 0;
-}
-
-static inline int
-vos_agg_key_compare(daos_key_t key1, daos_key_t key2)
-{
-	if (key1.iov_len != key2.iov_len)
-		return 1;
-
-	return memcmp(key1.iov_buf, key2.iov_buf, key1.iov_len);
 }
 
 static int
@@ -362,38 +319,31 @@ vos_agg_dkey(daos_handle_t ih, vos_iter_entry_t *entry,
 	bool			 full_scan;
 	int			 rc;
 
-	if (vos_agg_key_compare(agg_param->ap_dkey, entry->ie_key)) {
-		if (need_aggregate(agg_param, entry)) {
-			agg_param->ap_dkey = entry->ie_key;
-			reset_agg_pos(VOS_ITER_AKEY, agg_param);
-			full_scan = agg_param->ap_flags & VOS_AGG_FL_FORCE_SCAN;
-			rc = vos_obj_iter_pre_aggregate(ih, full_scan);
-			if (rc < 0)
-				return rc;
-			if (rc == 1) {
-				/** We removed the key so let's reprobe */
-				*acts |= VOS_ITER_CB_DELETE;
-				inc_agg_counter(cont, VOS_ITER_DKEY, AGG_OP_DEL);
-				return 0;
-			} else if (rc == 2) {
-				/** Entry is skipped removed the key so let's reprobe */
-				D_DEBUG(DB_EPC, "Skipping aggregation for dkey "DF_KEY
-					", nothing to do\n", DP_KEY(&entry->ie_key));
-				*acts |= VOS_ITER_CB_SKIP;
-				inc_agg_counter(cont, VOS_ITER_DKEY, AGG_OP_SKIP);
-				return 0;
-			}
-			inc_agg_counter(cont, VOS_ITER_DKEY, AGG_OP_SCAN);
-		} else {
-			D_DEBUG(DB_EPC, "Skip untouched dkey: "DF_KEY"\n",
-				DP_KEY(&entry->ie_key));
+	if (need_aggregate(agg_param, entry)) {
+		agg_param->ap_dkey = entry->ie_key;
+		full_scan = agg_param->ap_flags & VOS_AGG_FL_FORCE_SCAN;
+		rc = vos_obj_iter_pre_aggregate(ih, full_scan);
+		if (rc < 0)
+			return rc;
+		if (rc == 1) {
+			/** We removed the key so let's reprobe */
+			*acts |= VOS_ITER_CB_DELETE;
+			inc_agg_counter(cont, VOS_ITER_DKEY, AGG_OP_DEL);
+			return 0;
+		} else if (rc == 2) {
+			/** Entry is skipped removed the key so let's reprobe */
+			D_DEBUG(DB_EPC, "Skipping aggregation for dkey "DF_KEY
+				", nothing to do\n", DP_KEY(&entry->ie_key));
 			*acts |= VOS_ITER_CB_SKIP;
 			inc_agg_counter(cont, VOS_ITER_DKEY, AGG_OP_SKIP);
+			return 0;
 		}
+		inc_agg_counter(cont, VOS_ITER_DKEY, AGG_OP_SCAN);
 	} else {
-		D_DEBUG(DB_EPC, "Skip dkey: "DF_KEY" aggregation on re-probe\n",
+		D_DEBUG(DB_EPC, "Skip untouched dkey: "DF_KEY"\n",
 			DP_KEY(&entry->ie_key));
 		*acts |= VOS_ITER_CB_SKIP;
+		inc_agg_counter(cont, VOS_ITER_DKEY, AGG_OP_SKIP);
 	}
 
 	return 0;
@@ -470,37 +420,31 @@ vos_agg_akey(daos_handle_t ih, vos_iter_entry_t *entry,
 	bool			 full_scan;
 	int			 rc;
 
-	if (vos_agg_key_compare(agg_param->ap_akey, entry->ie_key)) {
-		if (need_aggregate(agg_param, entry)) {
-			agg_param->ap_akey = entry->ie_key;
-			full_scan = agg_param->ap_flags & VOS_AGG_FL_FORCE_SCAN;
-			rc = vos_obj_iter_pre_aggregate(ih, full_scan);
-			if (rc < 0)
-				return rc;
-			if (rc == 1) {
-				/** We removed the key so let's reprobe */
-				*acts |= VOS_ITER_CB_DELETE;
-				inc_agg_counter(cont, VOS_ITER_AKEY, AGG_OP_DEL);
-				return 0;
-			} else if (rc == 2) {
-				/** Entry is skipped removed the key so let's reprobe */
-				D_DEBUG(DB_EPC, "Skipping aggregation for akey "DF_KEY
-					", nothing to do\n", DP_KEY(&entry->ie_key));
-				*acts |= VOS_ITER_CB_SKIP;
-				inc_agg_counter(cont, VOS_ITER_AKEY, AGG_OP_SKIP);
-				return 0;
-			}
-			inc_agg_counter(cont, VOS_ITER_AKEY, AGG_OP_SCAN);
-		} else {
-			D_DEBUG(DB_EPC, "Skip untouched akey: "DF_KEY"\n",
-				DP_KEY(&entry->ie_key));
+	if (need_aggregate(agg_param, entry)) {
+		agg_param->ap_akey = entry->ie_key;
+		full_scan = agg_param->ap_flags & VOS_AGG_FL_FORCE_SCAN;
+		rc = vos_obj_iter_pre_aggregate(ih, full_scan);
+		if (rc < 0)
+			return rc;
+		if (rc == 1) {
+			/** We removed the key so let's reprobe */
+			*acts |= VOS_ITER_CB_DELETE;
+			inc_agg_counter(cont, VOS_ITER_AKEY, AGG_OP_DEL);
+			return 0;
+		} else if (rc == 2) {
+			/** Entry is skipped removed the key so let's reprobe */
+			D_DEBUG(DB_EPC, "Skipping aggregation for akey "DF_KEY
+				", nothing to do\n", DP_KEY(&entry->ie_key));
 			*acts |= VOS_ITER_CB_SKIP;
 			inc_agg_counter(cont, VOS_ITER_AKEY, AGG_OP_SKIP);
+			return 0;
 		}
+		inc_agg_counter(cont, VOS_ITER_AKEY, AGG_OP_SCAN);
 	} else {
-		D_DEBUG(DB_EPC, "Skip akey: "DF_KEY" aggregation on re-probe\n",
+		D_DEBUG(DB_EPC, "Skip untouched akey: "DF_KEY"\n",
 			DP_KEY(&entry->ie_key));
 		*acts |= VOS_ITER_CB_SKIP;
+		inc_agg_counter(cont, VOS_ITER_AKEY, AGG_OP_SKIP);
 	}
 
 	if (agg_param->ap_discard) {
@@ -2326,21 +2270,9 @@ vos_aggregate_pre_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 
 		agg_param->ap_credits = 0;
 
-		/*
-		 * Reset position if we yield while iterating in object, dkey
-		 * or akey level, so that subtree won't be skipped mistakenly,
-		 * see the comment in vos_agg_obj().
-		 *
-		 * If current object/dkey/akey has been marked as processed,
-		 * don't reset the position, otherwise, iterator will reprobe
-		 * the same item and process it again.
-		 */
-		if (!(*acts & VOS_ITER_CB_SKIP))
-			reset_agg_pos(type, agg_param);
-
 		if (vos_aggregate_yield(agg_param)) {
 			D_DEBUG(DB_EPC, "VOS discard/aggregation aborted\n");
-			return 1;
+			*acts |= VOS_ITER_CB_EXIT;
 		}
 	}
 

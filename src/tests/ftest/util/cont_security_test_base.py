@@ -1,6 +1,6 @@
 #!/usr/bin/python3
 """
-  (C) Copyright 2020-2021 Intel Corporation.
+  (C) Copyright 2020-2022 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -13,7 +13,7 @@ from apricot import TestWithServers
 from avocado import fail_on
 from avocado.core.exceptions import TestFail
 from daos_utils import DaosCommand
-from command_utils import CommandFailure
+from exception_utils import CommandFailure
 import general_utils
 from general_utils import DaosTestError
 import security_test_base as secTestBase

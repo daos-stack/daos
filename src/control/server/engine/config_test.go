@@ -8,6 +8,7 @@ package engine
 
 import (
 	"flag"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -123,6 +124,56 @@ func TestConfig_HasEnvVar(t *testing.T) {
 			if diff := cmp.Diff(tc.expVars, cfg.EnvVars, defConfigCmpOpts...); diff != "" {
 				t.Fatalf("unexpected env vars:\n%s\n", diff)
 			}
+		})
+	}
+}
+
+func TestConfig_GetEnvVar(t *testing.T) {
+
+	for name, tc := range map[string]struct {
+		environment []string
+		key         string
+		expValue    string
+		expErr      error
+	}{
+		"present": {
+			environment: []string{"FOO=BAR"},
+			key:         "FOO",
+			expValue:    "BAR",
+		},
+		"invalid prefix": {
+			environment: []string{"FOO=BAR"},
+			key:         "FFOO",
+			expErr:      errors.New("Undefined environment variable"),
+		},
+		"invalid suffix": {
+			environment: []string{"FOO=BAR"},
+			key:         "FOOO",
+			expErr:      errors.New("Undefined environment variable"),
+		},
+		"empty env": {
+			key:    "FOO",
+			expErr: errors.New("Undefined environment variable"),
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			cfg := MockConfig().WithEnvVars(tc.environment...)
+
+			value, err := cfg.GetEnvVar(tc.key)
+
+			if err != nil {
+				common.AssertTrue(t, tc.expErr != nil,
+					fmt.Sprintf("Unexpected error %q", err))
+				common.CmpErr(t, tc.expErr, err)
+				common.AssertEqual(t, value, "",
+					fmt.Sprintf("Unexpected value %q for key %q",
+						tc.key, value))
+				return
+			}
+
+			common.AssertTrue(t, tc.expErr == nil,
+				fmt.Sprintf("Expected error %q", tc.expErr))
+			common.AssertEqual(t, value, tc.expValue, "Invalid value returned")
 		})
 	}
 }
@@ -623,10 +674,10 @@ func TestConfig_setAffinity(t *testing.T) {
 				WithFabricInterface("ib1").
 				WithFabricProvider("ofi+verbs"),
 			fi: &hardware.FabricInterface{
-				Name:      "ib1",
-				OSDevice:  "ib1",
-				NUMANode:  1,
-				Providers: common.NewStringSet("ofi+verbs"),
+				Name:         "ib1",
+				NetInterface: "ib1",
+				NUMANode:     1,
+				Providers:    common.NewStringSet("ofi+verbs"),
 			},
 			expNuma: 1,
 		},
@@ -638,10 +689,10 @@ func TestConfig_setAffinity(t *testing.T) {
 				WithFabricInterface("ib2").
 				WithFabricProvider("ofi+verbs"),
 			fi: &hardware.FabricInterface{
-				Name:      "ib2",
-				OSDevice:  "ib2",
-				NUMANode:  2,
-				Providers: common.NewStringSet("ofi+verbs"),
+				Name:         "ib2",
+				NetInterface: "ib2",
+				NUMANode:     2,
+				Providers:    common.NewStringSet("ofi+verbs"),
 			},
 			expNuma: 1,
 		},
@@ -650,10 +701,10 @@ func TestConfig_setAffinity(t *testing.T) {
 				WithFabricInterface("ib1").
 				WithFabricProvider("ofi+verbs"),
 			fi: &hardware.FabricInterface{
-				Name:      "ib1",
-				OSDevice:  "ib1",
-				NUMANode:  1,
-				Providers: common.NewStringSet("ofi+verbs"),
+				Name:         "ib1",
+				NetInterface: "ib1",
+				NUMANode:     1,
+				Providers:    common.NewStringSet("ofi+verbs"),
 			},
 			expNuma: 1,
 		},
@@ -663,9 +714,9 @@ func TestConfig_setAffinity(t *testing.T) {
 				WithFabricProvider("test").
 				WithPinnedNumaNode(1),
 			fi: &hardware.FabricInterface{
-				Name:      "net1",
-				OSDevice:  "net1",
-				Providers: common.NewStringSet("test"),
+				Name:         "net1",
+				NetInterface: "net1",
+				Providers:    common.NewStringSet("test"),
 			},
 			expNuma: 1,
 		},
@@ -675,9 +726,9 @@ func TestConfig_setAffinity(t *testing.T) {
 				WithFabricProvider("test").
 				WithPinnedNumaNode(1),
 			fi: &hardware.FabricInterface{
-				Name:      "net1",
-				OSDevice:  "net1",
-				Providers: common.NewStringSet("test2"),
+				Name:         "net1",
+				NetInterface: "net1",
+				Providers:    common.NewStringSet("test2"),
 			},
 			expErr: errors.New("not supported"),
 		},
