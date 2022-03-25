@@ -795,17 +795,26 @@ cont_child_stop(struct ds_cont_child *cont_child)
 	}
 }
 
+static int ds_cont_child_close_all(uuid_t po_uuid);
+
 void
 ds_cont_child_stop_all(struct ds_pool_child *pool_child)
 {
 	d_list_t		*cont_list;
 	struct ds_cont_child	*cont_child;
+	int			 rc;
 
 	D_DEBUG(DF_DSMS, DF_UUID"[%d]: Stopping all containers\n",
 		DP_UUID(pool_child->spc_uuid),
 		dss_get_module_info()->dmi_tgt_id);
 
 	D_ASSERT(d_list_empty(&pool_child->spc_list));
+
+	/* Close potential leaked container open handlers by force. */
+	rc = ds_cont_child_close_all(pool_child->spc_uuid);
+	if (unlikely(rc < 0))
+		D_WARN("Fail to force close some container(s) for "DF_UUID" before stopping all: "
+		       DF_RC"\n", DP_UUID(pool_child->spc_uuid), DP_RC(rc));
 
 	cont_list = &pool_child->spc_cont_list;
 	while (!d_list_empty(cont_list)) {
@@ -1665,6 +1674,32 @@ ds_cont_tgt_close(uuid_t hdl_uuid)
 
 	uuid_copy(arg.uuid, hdl_uuid);
 	return dss_thread_collective(cont_close_one_hdl, &arg, 0);
+}
+
+static int
+cont_force_close_cb(d_list_t *rlink, void *arg)
+{
+	struct coll_close_arg	*cca = arg;
+	struct ds_cont_hdl	*hdl = cont_hdl_obj(rlink);
+
+	if (hdl->sch_cont == NULL || uuid_compare(hdl->sch_cont->sc_pool_uuid, cca->uuid) != 0)
+		return 0;
+
+	D_DEBUG(DF_DSMS, "Force closing "DF_UUID"/"DF_UUID"/"DF_UUID"\n",
+		DP_UUID(cca->uuid), DP_UUID(hdl->sch_cont->sc_uuid), DP_UUID(hdl->sch_uuid));
+
+	return cont_close_hdl(hdl->sch_uuid);
+}
+
+/* Force close all containers for the given pool. */
+static int
+ds_cont_child_close_all(uuid_t po_uuid)
+{
+	struct dsm_tls		*tls = dsm_tls_get();
+	struct coll_close_arg	 cca;
+
+	uuid_copy(cca.uuid, po_uuid);
+	return d_hash_table_traverse(&tls->dt_cont_hdl_hash, cont_force_close_cb, &cca);
 }
 
 struct xstream_cont_query {
