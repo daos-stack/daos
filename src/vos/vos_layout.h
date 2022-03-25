@@ -88,7 +88,7 @@ enum vos_gc_type {
 #define POOL_DF_MAGIC				0x5ca1ab1e
 
 /** Lowest supported durable format version */
-#define POOL_DF_VER_1				23
+#define POOL_DF_VER_1				24
 /** Current durable format version */
 #define POOL_DF_VERSION				POOL_DF_VER_1
 
@@ -147,8 +147,6 @@ struct vos_dtx_cmt_ent_df {
 	struct dtx_id			dce_xid;
 	/** The epoch# for the DTX. */
 	daos_epoch_t			dce_epoch;
-	/** The time of the DTX being handled on the server. */
-	daos_epoch_t			dce_handle_time;
 };
 
 /** Active DTX entry on-disk layout in both SCM and DRAM. */
@@ -201,6 +199,10 @@ struct vos_dtx_blob_df {
 	int					dbd_count;
 	/** The next available slot for active DTX entry in the blob. */
 	int					dbd_index;
+	/** The epoch of the first committed DTX entry in this blob. */
+	daos_epoch_t				dbd_oldest;
+	/** The epoch of the last committed DTX entry in this blob. */
+	daos_epoch_t				dbd_newest;
 	/** Prev dtx_scm_blob. */
 	umem_off_t				dbd_prev;
 	/** Next dtx_scm_blob. */

@@ -330,7 +330,6 @@ struct vos_dtx_cmt_ent {
 
 #define DCE_XID(dce)		((dce)->dce_base.dce_xid)
 #define DCE_EPOCH(dce)		((dce)->dce_base.dce_epoch)
-#define DCE_HANDLE_TIME(dce)	((dce)->dce_base.dce_handle_time)
 
 extern int vos_evt_feats;
 
