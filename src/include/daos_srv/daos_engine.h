@@ -456,12 +456,14 @@ struct dss_module {
 	int				(*sm_setup)(void);
 	/* Cleanup function, invoked before stopping progressing */
 	int				(*sm_cleanup)(void);
-	/* Whole list of RPC definition for request sent by nodes */
-	struct crt_proto_format		*sm_proto_fmt;
-	/* The count of RPCs which are dedicated for client nodes only */
-	uint32_t			sm_cli_count;
-	/* RPC handler of these RPC, last entry of the array must be empty */
-	struct daos_rpc_handler		*sm_handlers;
+	/* Number of RPC protocols this module supports - max 2 */
+	int				sm_proto_count;
+	/* Array of whole list of RPC definition for request sent by nodes */
+	struct crt_proto_format		*sm_proto_fmt[2];
+	/* Array of the count of RPCs which are dedicated for client nodes only */
+	uint32_t			sm_cli_count[2];
+	/* Array of RPC handler of these RPC, last entry of the array must be empty */
+	struct daos_rpc_handler		*sm_handlers[2];
 	/* dRPC handlers, for unix socket comm, last entry must be empty */
 	struct dss_drpc_handler		*sm_drpc_handlers;
 
