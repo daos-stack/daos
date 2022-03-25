@@ -2521,6 +2521,8 @@ vos_aggregate(daos_handle_t coh, daos_epoch_range_t *epr,
 				rc = 0;
 				goto update_hae;
 			}
+			/** Go ahead and set both flags if we are scanning the container */
+			feats |= VOS_TREE_AGG_FLAG | VOS_TREE_AGG_NEEDED;
 		} else {
 			feats |= VOS_TREE_AGG_FLAG;
 		}
