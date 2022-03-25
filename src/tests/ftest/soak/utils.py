@@ -517,7 +517,7 @@ def launch_exclude_reintegrate(self, pool, name, results, args):
         exclude_servers = (
             len(self.hostlist_servers) * int(engine_count)) - 1
         # Exclude one rank.
-        rank = random.randint(0, exclude_servers) #nosec
+        rank = random.randint(0, exclude_servers)  # nosec
 
         if targets >= 8:
             tgt_idx = None
@@ -595,7 +595,7 @@ def launch_server_stop_start(self, pools, name, results, args):
         exclude_servers = (
             len(self.hostlist_servers) * int(engine_count)) - 1
         # Exclude one rank.
-        rank = random.randint(0, exclude_servers) #nosec
+        rank = random.randint(0, exclude_servers)  # nosec
         # init the status dictionary
         params = {"name": name,
                   "status": status,
@@ -909,17 +909,15 @@ def create_ior_cmdline(self, job_spec, pool, ppn, nodesperjob):
                         sbatch_cmds.extend(dfuse_start_cmdlist)
                         ior_cmd.test_file.update(
                             os.path.join(dfuse.mount_dir.value, "testfile"))
+                    mpirun_cmd = Mpirun(ior_cmd, mpi_type=self.mpi_module)
                     # add envs if api is HDF5-VOL
                     if api == "HDF5-VOL":
                         vol = True
                         env["HDF5_VOL_CONNECTOR"] = "daos"
                         env["HDF5_PLUGIN_PATH"] = "{}".format(plugin_path)
                         # env["H5_DAOS_BYPASS_DUNS"] = 1
-                    mpirun_cmd = Mpirun(ior_cmd, mpitype="mpich")
                     mpirun_cmd.assign_processes(nodesperjob * ppn)
                     mpirun_cmd.assign_environment(env, True)
-                    env_list = mpirun_cmd.env.get_list()
-                    mpirun_cmd.genv.update(env_list)
                     mpirun_cmd.ppn.update(ppn)
                     sbatch_cmds.append(str(mpirun_cmd))
                     sbatch_cmds.append("status=$?")
@@ -1012,11 +1010,9 @@ def create_mdtest_cmdline(self, job_spec, pool, ppn, nodesperjob):
                             sbatch_cmds.extend(dfuse_start_cmdlist)
                             mdtest_cmd.test_dir.update(
                                 dfuse.mount_dir.value)
-                        mpirun_cmd = Mpirun(mdtest_cmd, mpitype="mpich")
+                        mpirun_cmd = Mpirun(mdtest_cmd, mpi_type=self.mpi_module)
                         mpirun_cmd.assign_processes(nodesperjob * ppn)
                         mpirun_cmd.assign_environment(env, True)
-                        env_list = mpirun_cmd.env.get_list()
-                        mpirun_cmd.genv.update(env_list)
                         mpirun_cmd.ppn.update(ppn)
                         sbatch_cmds.append(str(mpirun_cmd))
                         sbatch_cmds.append("status=$?")
@@ -1154,17 +1150,13 @@ def build_job_script(self, commands, job, nodesperjob):
     self.log.info("<<Build Script>> at %s", time.ctime())
     script_list = []
     # if additional cmds are needed in the batch script
-    prepend_cmds = [
-        "set -e",
-        "echo Job_Start_Time `date \\+\"%Y-%m-%d %T\"`",
-        "daos pool query {} ".format(self.pool[1].uuid),
-        "daos pool query {} ".format(self.pool[0].uuid)
-        ]
-    append_cmds = [
-        "daos pool query {} ".format(self.pool[1].uuid),
-        "daos pool query {} ".format(self.pool[0].uuid),
-        "echo Job_End_Time `date \\+\"%Y-%m-%d %T\"`"
-        ]
+    prepend_cmds = ["set -e",
+                    "echo Job_Start_Time `date \\+\"%Y-%m-%d %T\"`",
+                    "daos pool query {} ".format(self.pool[1].uuid),
+                    "daos pool query {} ".format(self.pool[0].uuid)]
+    append_cmds = ["daos pool query {} ".format(self.pool[1].uuid),
+                   "daos pool query {} ".format(self.pool[0].uuid),
+                   "echo Job_End_Time `date \\+\"%Y-%m-%d %T\"`"]
     exit_cmd = ["exit $status"]
     # Create the sbatch script for each list of cmdlines
     for cmd, log_name in commands:

@@ -55,6 +55,12 @@ func (cmd *startCmd) Execute(_ []string) error {
 		cmd.log.Debugf("Local fabric interface caching has been disabled\n")
 	}
 
+	hwprovFini, err := hwprov.Init(cmd.log)
+	if err != nil {
+		return err
+	}
+	defer hwprovFini()
+
 	procmon := NewProcMon(cmd.log, cmd.ctlInvoker, cmd.cfg.SystemName)
 	procmon.startMonitoring(ctx)
 

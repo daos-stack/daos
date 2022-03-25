@@ -14,7 +14,8 @@ import random
 
 from avocado import fail_on
 
-from command_utils_base import CommandFailure, CommonConfig
+from command_utils_base import CommonConfig
+from exception_utils import CommandFailure
 from command_utils import SubprocessManager
 from general_utils import pcmd, get_log_file, human_to_bytes, bytes_to_human, \
     convert_list, get_default_config_file, distribute_files, DaosTestError, \
@@ -203,8 +204,6 @@ class DaosServerManager(SubprocessManager):
         if storage:
             # Prepare server storage
             if self.manager.job.using_nvme or self.manager.job.using_dcpm:
-                self.log.info("Preparing storage in <format> mode")
-                self.prepare_storage("root")
                 if hasattr(self.manager, "mca"):
                     self.manager.mca.update({"plm_rsh_args": "-l root"}, "orterun.mca", True)
 

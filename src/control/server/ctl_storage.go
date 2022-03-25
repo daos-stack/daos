@@ -136,12 +136,12 @@ func (cs *ControlService) getScmUsage(ssr *storage.ScmScanResponse) (*storage.Sc
 			continue // skip if not running
 		}
 
-		cfg, err := ei.GetScmConfig()
+		cfg, err := ei.GetStorage().GetScmConfig()
 		if err != nil {
 			return nil, err
 		}
 
-		mount, err := ei.GetScmUsage()
+		mount, err := ei.GetStorage().GetScmUsage()
 		if err != nil {
 			return nil, err
 		}
@@ -200,7 +200,7 @@ func (cs *ControlService) scanAssignedBdevs(ctx context.Context, statsReq bool) 
 	ctrlrs := storage.NvmeControllers{}
 
 	for _, ei := range instances {
-		if !ei.HasBlockDevices() {
+		if !ei.GetStorage().HasBlockDevices() {
 			continue
 		}
 

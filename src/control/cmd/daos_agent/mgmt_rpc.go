@@ -109,6 +109,7 @@ func (mod *mgmtModule) handleGetAttachInfo(ctx context.Context, reqb []byte, pid
 
 	numaNode, err := mod.getNUMANode(ctx, pid)
 	if err != nil {
+		mod.log.Errorf("unable to get NUMA node: %s", err.Error())
 		return nil, err
 	}
 
