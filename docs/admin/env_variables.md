@@ -45,6 +45,7 @@ Environment variables in this section only apply to the server side.
 |DAOS\_SCHED\_PRIO\_DISABLED|Disable server ULT prioritizing. BOOL. Default to 0.|
 |DAOS\_SCHED\_RELAX\_MODE|The mode of CPU relaxing on idle. "disabled":disable relaxing; "net":wait on network request for INTVL; "sleep":sleep for INTVL. STRING. Default to "net"|
 |DAOS\_SCHED\_RELAX\_INTVL|CPU relax interval in milliseconds. INTEGER. Default to 1 ms.|
+|DAOS\_STRICT\_SHUTDOWN|Use the strict mode when shutting down engines. BOOL. Default to 0. In the strict mode, when certain resource leaks are detected, for instance, the engine will raise an assertion failure.|
 
 ## Server and Client environment variables
 
