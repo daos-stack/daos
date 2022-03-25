@@ -18,13 +18,16 @@ from general_utils import check_pool_files, DaosTestError
 from server_utils_base import ServerFailed, AutosizeCancel
 from dmg_utils import DmgCommand
 
+DEFAULT_NAMESPACE = "/run/pool/*"
 
-def add_pool(test, namespace=None, create=True, connect=True, index=0, **params):
+
+def add_pool(test, namespace=DEFAULT_NAMESPACE, create=True, connect=True, index=0, **params):
     """Add a new TestPool object to the test.
 
     Args:
         test (Test): the test to which the pool will be added
-        namespace (str, optional): TestPool parameters path in the test yaml file. Defaults to None.
+        namespace (str, optional): TestPool parameters path in the test yaml file. Defaults to
+            DEFAULT_NAMESPACE.
         create (bool, optional): should the pool be created. Defaults to True.
         connect (bool, optional): should the pool be connected. Defaults to True.
         index (int, optional): Server index for dmg command. Defaults to 0.
@@ -101,7 +104,7 @@ class TestPool(TestDaosApiBase):
     """A class for functional testing of DaosPools objects."""
 
     def __init__(self, context, dmg_command, cb_handler=None,
-                 label_generator=None, crt_timeout=None, namespace=None):
+                 label_generator=None, crt_timeout=None, namespace=DEFAULT_NAMESPACE):
         # pylint: disable=unused-argument
         """Initialize a TestPool object.
 
@@ -121,10 +124,8 @@ class TestPool(TestDaosApiBase):
                 provided in order to call create(). Defaults to None.
             crt_timeout (str, optional): value to use for the CRT_TIMEOUT when running pydaos
                 commands. Defaults to None.
-            namespace (str, optional): path to test yaml parameters. Defaults to None.
+            namespace (str, optional): path to test yaml parameters. Defaults to DEFAULT_NAMESPACE.
         """
-        if namespace is None:
-            namespace = "/run/pool/*"
         super().__init__(namespace, cb_handler, crt_timeout)
         self.context = context
         self.uid = os.geteuid()
@@ -229,7 +230,10 @@ class TestPool(TestDaosApiBase):
         """
         uuid = None
         if self.pool and self.pool.uuid:
-            uuid = self.pool.get_uuid_str()
+            try:
+                uuid = self.pool.get_uuid_str()
+            except IndexError:
+                uuid = self.pool.uuid
         return uuid
 
     @uuid.setter

@@ -383,8 +383,15 @@ class Test(avocadoTest):
         """
         errors = []
         while self._cleanup_methods:
-            cleanup = self._cleanup_methods.pop()
-            errors.append(cleanup["method"](**cleanup["kwargs"]))
+            try:
+                cleanup = self._cleanup_methods.pop()
+                errors.append(cleanup["method"](**cleanup["kwargs"]))
+            except Exception as error:      # pylint: disable=broad-except
+                kwargs_str = ", ".join(
+                    ["=".join([str(key), str(value)]) for key, value in cleanup["kwargs"].items()])
+                errors.append(
+                    "Unhandled exception when calling {}({}): {}".format(
+                        str(cleanup["method"]), kwargs_str, str(error)))
         return errors
 
     def register_cleanup(self, method, **kwargs):
@@ -394,11 +401,7 @@ class Test(avocadoTest):
             method (str): method to call with the kwargs
         """
         self._cleanup_methods.append({"method": method, "kwargs": kwargs})
-        if kwargs:
-            kwargs_str = ", ".join(
-                ["=".join([str(key), str(value)]) for key, value in kwargs.items()])
-        else:
-            kwargs_str = ""
+        kwargs_str = ", ".join(["=".join([str(key), str(value)]) for key, value in kwargs.items()])
         self.log.debug("Register: Adding calling %s(%s) during tearDown()", method, kwargs_str)
 
     def increment_timeout(self, increment):
@@ -408,7 +411,7 @@ class Test(avocadoTest):
         time to perform all of its steps.
 
         Args:
-            increment (int): number of additional seconds with which to increase the timeout.
+            increment (int): number of additional seconds by which to increase the timeout.
         """
         namespace = "runner.timeout"
         for key in ("after_interrupted", "process_alive", "process_died"):
@@ -1268,7 +1271,7 @@ class TestWithServers(TestWithoutServers):
         self._teardown_errors.extend(self.destroy_containers(self.container))
 
         # Destroy any pools next - eventually this call will encompass all teardown steps
-        self._cleanup()
+        self._teardown_errors.extend(self._cleanup())
 
         # Stop the agents
         self._teardown_errors.extend(self.stop_agents())

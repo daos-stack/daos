@@ -111,3 +111,16 @@ class HarnessAdvancedTest(TestWithServers):
                 "Incorrect {}.{} value detected after adding 3 pools".format(namespace, key))
 
         self.log.info("Test passed")
+
+    def test_pool_timeout_hw(self):
+        """Test to verify tearDown() timeout setting for timed out tests.
+
+        Adding a pool should increase the runner.timeout.after_interrupted,
+        runner.timeout.process_alive, and runner.timeout.process_died timeouts by 200 seconds each.
+
+        :avocado: tags=all
+        :avocado: tags=hw,small,medium,ib2,large
+        :avocado: tags=harness,harness_advanced_test,pool_timeout
+        :avocado: tags=test_pool_timeout_hw
+        """
+        self.test_pool_timeout()
