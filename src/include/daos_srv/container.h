@@ -57,6 +57,7 @@ struct ds_cont_child {
 	uuid_t			 sc_pool_uuid;	/* pool UUID */
 	struct ds_pool_child	*sc_pool;
 	d_list_t		 sc_link;	/* link to spc_cont_list */
+	d_list_t		 sc_open_hdls;	/* the list of ds_cont_hdl. */
 	struct daos_csummer	*sc_csummer;
 	struct cont_props	 sc_props;
 
@@ -161,6 +162,8 @@ int agg_rate_ctl(void *arg);
  */
 struct ds_cont_hdl {
 	d_list_t		sch_entry;
+	/* link to ds_cont_child::sc_open_hdls if sch_cont is not NULL. */
+	d_list_t		sch_link;
 	uuid_t			sch_uuid;	/* of the container handle */
 	uint64_t		sch_flags;	/* user-supplied flags */
 	uint64_t		sch_sec_capas;	/* access control capas */
