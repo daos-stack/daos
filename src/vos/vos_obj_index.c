@@ -717,7 +717,7 @@ oi_iter_pre_aggregate(daos_handle_t ih, bool full_scan)
 			} else {
 				feats |= VOS_TREE_AGG_FLAG;
 				rc = dbtree_feats_set(&obj->vo_tree, vos_cont2umm(oiter->oit_cont),
-						      feats, false);
+						      feats);
 			}
 		}
 		return 0;
@@ -813,7 +813,7 @@ oi_iter_aggregate(daos_handle_t ih, bool range_discard, uint64_t *skipped)
 					feats = feats & ~VOS_TREE_AGG_NEEDED;
 				/** Set safe to false when clearing flags */
 				rc = dbtree_feats_set(&obj->vo_tree, vos_cont2umm(oiter->oit_cont),
-						      feats, true);
+						      feats);
 			}
 		}
 	}

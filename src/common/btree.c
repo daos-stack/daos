@@ -2190,12 +2190,11 @@ dbtree_update(daos_handle_t toh, d_iov_t *key, d_iov_t *val)
  * \param root[in]	Tree root
  * \param umm[in]	umem instance
  * \param feats[in]	feats to set
- * \param in_tx[in]	in transaction already
  *
  * \return 0 on success
  */
 int
-dbtree_feats_set(struct btr_root *root, struct umem_instance *umm, uint64_t feats, bool in_tx)
+dbtree_feats_set(struct btr_root *root, struct umem_instance *umm, uint64_t feats)
 {
 	int			 rc = 0;
 
@@ -2209,11 +2208,9 @@ dbtree_feats_set(struct btr_root *root, struct umem_instance *umm, uint64_t feat
 
 #ifdef DAOS_PMEM_BUILD
 	if (DAOS_ON_VALGRIND) {
-		if (!in_tx) {
-			rc = umem_tx_begin(umm, NULL);
-			if (rc != 0)
-				return rc;
-		}
+		rc = umem_tx_begin(umm, NULL);
+		if (rc != 0)
+			return rc;
 		rc = umem_tx_xadd_ptr(umm, &root->tr_feats, sizeof(root->tr_feats),
 				      POBJ_XADD_NO_SNAPSHOT);
 	}
@@ -2223,7 +2220,7 @@ dbtree_feats_set(struct btr_root *root, struct umem_instance *umm, uint64_t feat
 		root->tr_feats = feats;
 
 #ifdef DAOS_PMEM_BUILD
-	if (DAOS_ON_VALGRIND && !in_tx)
+	if (DAOS_ON_VALGRIND)
 		rc = umem_tx_end(umm, rc);
 #endif
 

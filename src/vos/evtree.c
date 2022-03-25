@@ -2518,8 +2518,10 @@ evt_ent_array_fill(struct evt_context *tcx, enum evt_find_opc find_opc,
 			rc = evt_desc_log_status(tcx, rtmp.rc_epc, desc,
 						 intent);
 			/* Skip the unavailable record. */
-			if (rc == ALB_UNAVAILABLE)
+			if (rc == ALB_UNAVAILABLE) {
+				tcx->tc_iter.it_skipped = 1;
 				continue;
+			}
 
 			/* early check */
 			switch (find_opc) {
@@ -2574,6 +2576,7 @@ evt_ent_array_fill(struct evt_context *tcx, enum evt_find_opc find_opc,
 					if (evt_data_loss_add(&data_loss_list,
 							      &rtmp) == NULL)
 						D_GOTO(out, rc = -DER_NOMEM);
+					tcx->tc_iter.it_skipped = 1;
 					continue;
 				}
 
@@ -3862,7 +3865,7 @@ out:
 }
 
 int
-evt_feats_set(struct evt_root *root, struct umem_instance *umm, uint64_t feats, bool in_tx)
+evt_feats_set(struct evt_root *root, struct umem_instance *umm, uint64_t feats)
 
 {
 	int			 rc = 0;
@@ -3876,11 +3879,9 @@ evt_feats_set(struct evt_root *root, struct umem_instance *umm, uint64_t feats, 
 	}
 
 	if (DAOS_ON_VALGRIND) {
-		if (!in_tx) {
-			rc = umem_tx_begin(umm, NULL);
-			if (rc != 0)
-				return rc;
-		}
+		rc = umem_tx_begin(umm, NULL);
+		if (rc != 0)
+			return rc;
 		rc = umem_tx_xadd_ptr(umm, &root->tr_feats, sizeof(root->tr_feats),
 				      POBJ_XADD_NO_SNAPSHOT);
 	}
@@ -3888,7 +3889,7 @@ evt_feats_set(struct evt_root *root, struct umem_instance *umm, uint64_t feats, 
 	if (rc == 0)
 		root->tr_feats = feats;
 
-	if (DAOS_ON_VALGRIND && !in_tx)
+	if (DAOS_ON_VALGRIND)
 		rc = umem_tx_end(umm, rc);
 
 	return rc;

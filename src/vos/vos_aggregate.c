@@ -2552,8 +2552,7 @@ vos_aggregate(daos_handle_t coh, daos_epoch_range_t *epr,
 		} else {
 			feats |= VOS_TREE_AGG_FLAG;
 		}
-		rc = dbtree_feats_set(&cont->vc_cont_df->cd_obj_root, vos_cont2umm(cont), feats,
-				      false);
+		rc = dbtree_feats_set(&cont->vc_cont_df->cd_obj_root, vos_cont2umm(cont), feats);
 		if (rc != 0) {
 			D_DEBUG(DB_EPC, "Failed to set feats for container, rc="DF_RC"\n",
 				DP_RC(rc));
@@ -2612,8 +2611,7 @@ exit:
 		feats = feats & ~VOS_TREE_AGG_FLAG;
 		if (!ad->ad_agg_param.ap_skipped)
 			feats = feats & ~VOS_TREE_AGG_NEEDED;
-		rc = dbtree_feats_set(&cont->vc_cont_df->cd_obj_root, vos_cont2umm(cont), feats,
-				      false);
+		rc = dbtree_feats_set(&cont->vc_cont_df->cd_obj_root, vos_cont2umm(cont), feats);
 	}
 	aggregate_exit(cont, AGG_MODE_AGGREGATE);
 

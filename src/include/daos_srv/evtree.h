@@ -811,10 +811,9 @@ evt_feats_get(struct evt_root *root)
  * \param root[in]	Tree root
  * \param umm[in]	umem instance
  * \param feats[in]	feats to set
- * \param in_tx[in]	in transaction already
  *
  * \return 0 on success
  */
-int  evt_feats_set(struct evt_root *root, struct umem_instance *umm, uint64_t feats, bool in_tx);
+int  evt_feats_set(struct evt_root *root, struct umem_instance *umm, uint64_t feats);
 
 #endif /* __DAOS_EV_TREE_H__ */

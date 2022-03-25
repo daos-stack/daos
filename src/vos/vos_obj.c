@@ -2007,9 +2007,9 @@ vos_obj_iter_pre_aggregate(daos_handle_t ih, bool full_scan)
 			} else {
 				feats |= VOS_TREE_AGG_FLAG;
 				if (krec->kr_bmap & KREC_BF_BTR)
-					rc = dbtree_feats_set(&krec->kr_btr, umm, feats, false);
+					rc = dbtree_feats_set(&krec->kr_btr, umm, feats);
 				else
-					rc = evt_feats_set(&krec->kr_evt, umm, feats, false);
+					rc = evt_feats_set(&krec->kr_evt, umm, feats);
 			}
 		}
 		return 0;
@@ -2104,9 +2104,9 @@ vos_obj_iter_aggregate(daos_handle_t ih, bool range_discard)
 			 *  goes wrong here.
 			 */
 			if (krec->kr_bmap & KREC_BF_BTR)
-				rc = dbtree_feats_set(&krec->kr_btr, umm, feats, true);
+				rc = dbtree_feats_set(&krec->kr_btr, umm, feats);
 			else
-				rc = evt_feats_set(&krec->kr_evt, umm, feats, true);
+				rc = evt_feats_set(&krec->kr_evt, umm, feats);
 		}
 	}
 
