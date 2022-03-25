@@ -341,6 +341,7 @@ vos_agg_obj(daos_handle_t ih, vos_iter_entry_t *entry,
 {
 	struct vos_container	*cont = vos_hdl2cont(agg_param->ap_coh);
 
+	agg_param->ap_oid = entry->ie_oid;
 	inc_agg_counter(cont, VOS_ITER_OBJ, AGG_OP_SCAN);
 
 	return 0;
