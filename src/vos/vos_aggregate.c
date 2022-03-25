@@ -352,6 +352,7 @@ vos_agg_dkey(daos_handle_t ih, vos_iter_entry_t *entry,
 	     struct vos_agg_param *agg_param, unsigned int *acts)
 {
 	struct vos_container	*cont = vos_hdl2cont(agg_param->ap_coh);
+
 	inc_agg_counter(cont, VOS_ITER_DKEY, AGG_OP_SCAN);
 
 	return 0;
