@@ -972,6 +972,62 @@ out:
 }
 
 void
+ds_mgmt_drpc_pool_upgrade(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
+{
+	struct drpc_alloc	alloc = PROTO_ALLOCATOR_INIT(alloc);
+	Mgmt__PoolUpgradeReq	*req = NULL;
+	Mgmt__PoolUpgradeResp	 resp = MGMT__POOL_UPGRADE_RESP__INIT;
+	uuid_t			 uuid;
+	d_rank_list_t		*svc_ranks = NULL;
+	uint8_t			*body;
+	size_t			 len;
+	int			 rc;
+
+	/* Unpack the inner request from the drpc call body */
+	req = mgmt__pool_upgrade_req__unpack(&alloc.alloc,
+					     drpc_req->body.len,
+					     drpc_req->body.data);
+
+	if (alloc.oom || req == NULL) {
+		drpc_resp->status = DRPC__STATUS__FAILED_UNMARSHAL_PAYLOAD;
+		D_ERROR("Failed to unpack req (upgrade pool)\n");
+		return;
+	}
+
+	D_INFO("Received request to upgrade pool %s\n", req->id);
+
+	rc = uuid_parse(req->id, uuid);
+	if (rc != 0) {
+		D_ERROR("Unable to parse pool UUID %s: "DF_RC"\n", req->id,
+			DP_RC(rc));
+		D_GOTO(out, rc = -DER_INVAL);
+	}
+
+	svc_ranks = uint32_array_to_rank_list(req->svc_ranks, req->n_svc_ranks);
+	if (svc_ranks == NULL)
+		D_GOTO(out, rc = -DER_NOMEM);
+
+	rc = ds_mgmt_pool_upgrade(uuid, svc_ranks);
+
+	d_rank_list_free(svc_ranks);
+
+out:
+	resp.status = rc;
+	len = mgmt__pool_upgrade_resp__get_packed_size(&resp);
+	D_ALLOC(body, len);
+	if (body == NULL) {
+		drpc_resp->status = DRPC__STATUS__FAILED_MARSHAL;
+		D_ERROR("Failed to allocate drpc response body\n");
+	} else {
+		mgmt__pool_upgrade_resp__pack(&resp, body);
+		drpc_resp->body.len = len;
+		drpc_resp->body.data = body;
+	}
+
+	mgmt__pool_upgrade_req__free_unpacked(req, &alloc.alloc);
+}
+
+void
 free_response_props(Mgmt__PoolProperty **props, size_t n_props)
 {
 	int i;
@@ -991,24 +1047,36 @@ add_props_to_resp(daos_prop_t *prop, Mgmt__PoolGetPropResp *resp)
 	Mgmt__PoolProperty	**resp_props;
 	struct daos_prop_entry	*entry;
 	int			 i, rc = 0;
+	int			 valid_prop_nr = 0;
+	int			 j = 0;
 
 	if (prop == NULL || prop->dpp_nr == 0)
 		return 0;
 
-	D_ALLOC_ARRAY(resp_props, prop->dpp_nr);
+	for (i = 0; i < prop->dpp_nr; i++) {
+		entry = &prop->dpp_entries[i];
+		if (daos_prop_is_set(entry))
+			valid_prop_nr++;
+	}
+
+	if (valid_prop_nr == 0)
+		return 0;
+
+	D_ALLOC_ARRAY(resp_props, valid_prop_nr);
 	if (resp_props == NULL) {
 		return -DER_NOMEM;
 	}
 
 	for (i = 0; i < prop->dpp_nr; i++) {
-		D_ALLOC(resp_props[i], sizeof(Mgmt__PoolProperty));
-		if (resp_props[i] == NULL) {
-			D_GOTO(out, rc = -DER_NOMEM);
-		}
-		mgmt__pool_property__init(resp_props[i]);
-
 		entry = &prop->dpp_entries[i];
-		resp_props[i]->number = entry->dpe_type;
+		if (!daos_prop_is_set(entry))
+			continue;
+		D_ALLOC(resp_props[j], sizeof(Mgmt__PoolProperty));
+		if (resp_props[j] == NULL)
+			D_GOTO(out, rc = -DER_NOMEM);
+		mgmt__pool_property__init(resp_props[j]);
+
+		resp_props[j]->number = entry->dpe_type;
 
 		if (daos_prop_has_str(entry)) {
 			if (entry->dpe_str == NULL) {
@@ -1016,29 +1084,29 @@ add_props_to_resp(daos_prop_t *prop, Mgmt__PoolGetPropResp *resp)
 				D_GOTO(out, rc = -DER_INVAL);
 			}
 
-			resp_props[i]->value_case =
+			resp_props[j]->value_case =
 				MGMT__POOL_PROPERTY__VALUE_STRVAL;
-			D_STRNDUP(resp_props[i]->strval, entry->dpe_str,
+			D_STRNDUP(resp_props[j]->strval, entry->dpe_str,
 				  DAOS_PROP_LABEL_MAX_LEN);
-			if (resp_props[i]->strval == NULL) {
+			if (resp_props[j]->strval == NULL)
 				D_GOTO(out, rc = -DER_NOMEM);
-			}
 		} else if (daos_prop_has_ptr(entry)) {
 			D_ERROR("pointer-value props not supported\n");
 			D_GOTO(out, rc = -DER_INVAL);
 		} else {
-			resp_props[i]->numval = entry->dpe_val;
-			resp_props[i]->value_case =
+			resp_props[j]->numval = entry->dpe_val;
+			resp_props[j]->value_case =
 				MGMT__POOL_PROPERTY__VALUE_NUMVAL;
 		}
+		j++;
 	}
 
 	resp->properties = resp_props;
-	resp->n_properties = prop->dpp_nr;
+	resp->n_properties = valid_prop_nr;
 
 out:
 	if (rc != 0)
-		free_response_props(resp_props, prop->dpp_nr);
+		free_response_props(resp_props, valid_prop_nr);
 
 	return rc;
 }
