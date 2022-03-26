@@ -707,17 +707,21 @@ oi_iter_start_agg(daos_handle_t ih, bool full_scan)
 	D_ASSERT(rec_iov.iov_len == sizeof(struct vos_obj_df));
 	obj = (struct vos_obj_df *)rec_iov.iov_buf;
 	feats = dbtree_feats_get(&obj->vo_tree);
-	if (feats & VOS_TREE_AGG_OPT) {
-		if (full_scan) {
-			/** Go ahead and set both flags in this case because we are scanning */
-			feats |= VOS_TREE_AGG_FLAG | VOS_TREE_AGG_NEEDED;
-			goto set_feats;
-		} else if ((feats & VOS_TREE_AGG_NEEDED) == 0) {
-			return 0;
-		}
-		feats |= VOS_TREE_AGG_FLAG;
-		/** Fall through to check other filters */
+	if ((feats & VOS_TREE_AGG_OPT) == 0) {
+		/** Go ahead and upgrade so we can optimize in the future */
+		feats |= VOS_TREE_AGG_OPT | VOS_TREE_AGG_NEEDED;
+		rc = dbtree_feats_set(&obj->vo_tree, vos_cont2umm(oiter->oit_cont), feats);
+		D_ASSERT(rc == 0);
 	}
+	if (full_scan) {
+		/** Go ahead and set both flags in this case because we are scanning */
+		feats |= VOS_TREE_AGG_FLAG | VOS_TREE_AGG_NEEDED;
+		goto set_feats;
+	} else if ((feats & VOS_TREE_AGG_NEEDED) == 0) {
+		return 0;
+	}
+	feats |= VOS_TREE_AGG_FLAG;
+	/** Fall through to check other filters */
 
 	rc = oi_iter_fill(rec_iov.iov_buf, oiter, true, &ent);
 	if (rc == -DER_NONEXIST)

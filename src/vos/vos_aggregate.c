@@ -2514,27 +2514,27 @@ vos_aggregate(daos_handle_t coh, daos_epoch_range_t *epr,
 		goto free_agg_data;
 
 	feats = dbtree_feats_get(&cont->vc_cont_df->cd_obj_root);
-	if (feats & VOS_TREE_AGG_OPT) {
-		if ((feats & VOS_TREE_AGG_NEEDED) == 0) {
-			if ((flags & VOS_AGG_FL_FORCE_SCAN) == 0) {
-				D_DEBUG(DB_EPC, "Skipping aggregation for container "DF_CONT
-					", nothing to do\n",
-					DP_CONT(cont->vc_pool->vp_id, cont->vc_id));
-				rc = 0;
-				goto update_hae;
-			}
-			/** Go ahead and set both flags if we are scanning the container */
-			feats |= VOS_TREE_AGG_FLAG | VOS_TREE_AGG_NEEDED;
-		} else {
-			feats |= VOS_TREE_AGG_FLAG;
-		}
+	if ((feats & VOS_TREE_AGG_OPT) == 0) {
+		/** Go ahead and upgrade so we can optimize in the future */
+		feats |= VOS_TREE_AGG_OPT | VOS_TREE_AGG_NEEDED;
 		rc = dbtree_feats_set(&cont->vc_cont_df->cd_obj_root, vos_cont2umm(cont), feats);
-		if (rc != 0) {
-			D_DEBUG(DB_EPC, "Failed to set feats for container, rc="DF_RC"\n",
-				DP_RC(rc));
-			goto  exit;
-		}
+		D_ASSERT(rc == 0);
 	}
+	if ((feats & VOS_TREE_AGG_NEEDED) == 0) {
+		if ((flags & VOS_AGG_FL_FORCE_SCAN) == 0) {
+			D_DEBUG(DB_EPC, "Skipping aggregation for container "DF_CONT
+				", nothing to do\n",
+				DP_CONT(cont->vc_pool->vp_id, cont->vc_id));
+			rc = 0;
+			goto update_hae;
+		}
+		/** Go ahead and set both flags if we are scanning the container */
+		feats |= VOS_TREE_AGG_FLAG | VOS_TREE_AGG_NEEDED;
+	} else {
+		feats |= VOS_TREE_AGG_FLAG;
+	}
+	rc = dbtree_feats_set(&cont->vc_cont_df->cd_obj_root, vos_cont2umm(cont), feats);
+	D_ASSERT(rc == 0);
 
 	/* Set iteration parameters */
 	ad->ad_iter_param.ip_hdl = coh;

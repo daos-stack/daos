@@ -1993,25 +1993,32 @@ vos_obj_iter_start_agg(daos_handle_t ih, bool full_scan)
 		feats = dbtree_feats_get(&krec->kr_btr);
 	else
 		feats = evt_feats_get(&krec->kr_evt);
-	if (feats & VOS_TREE_AGG_OPT) {
-		if (full_scan) {
-			/** Go ahead and set both flags in this case */
-			feats |= VOS_TREE_AGG_FLAG | VOS_TREE_AGG_NEEDED;
-			goto set_feats;
-		} else if ((feats & VOS_TREE_AGG_NEEDED) == 0) {
-			/** If there in this layer, the AGG_NEEDED flag should be set.  But if the
-			 *  punch is at a higher level, we assume aggregation is needed for the
-			 *  subtree
-			 */
-			if (oiter->it_punched.pr_epc == 0)
-				return 0; /** Definitely nothing to do */
-			/** Go ahead and set both flags in this case */
-			feats |= VOS_TREE_AGG_FLAG | VOS_TREE_AGG_NEEDED;
-			goto set_feats;
-		}
-		feats |= VOS_TREE_AGG_FLAG;
-		/** Fall through to checking other filters */
+	if ((feats & VOS_TREE_AGG_OPT) == 0) {
+		/** Go ahead and upgrade so we can optimize in the future */
+		feats |= VOS_TREE_AGG_OPT | VOS_TREE_AGG_NEEDED;
+		if (krec->kr_bmap & KREC_BF_BTR)
+			rc = dbtree_feats_set(&krec->kr_btr, umm, feats);
+		else
+			rc = evt_feats_set(&krec->kr_evt, umm, feats);
+		D_ASSERT(rc == 0);
 	}
+	if (full_scan) {
+		/** Go ahead and set both flags in this case */
+		feats |= VOS_TREE_AGG_FLAG | VOS_TREE_AGG_NEEDED;
+		goto set_feats;
+	} else if ((feats & VOS_TREE_AGG_NEEDED) == 0) {
+		/** If there in this layer, the AGG_NEEDED flag should be set.  But if the
+		 *  punch is at a higher level, we assume aggregation is needed for the
+		 *  subtree
+		 */
+		if (oiter->it_punched.pr_epc == 0)
+			return 0; /** Definitely nothing to do */
+		/** Go ahead and set both flags in this case */
+		feats |= VOS_TREE_AGG_FLAG | VOS_TREE_AGG_NEEDED;
+		goto set_feats;
+	}
+	feats |= VOS_TREE_AGG_FLAG;
+	/** Fall through to checking other filters */
 
 	/** Fall through to check other filters */
 	rc = key_iter_fill(krec, oiter, true, &ent);
