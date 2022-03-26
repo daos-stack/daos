@@ -152,7 +152,8 @@ class DmvrPosixSubsets(DataMoverTestBase):
             Tests copying POSIX container subsets with dcp.
             DAOS-5512: Verify ability to copy container subsets
         :avocado: tags=all,full_regression
-        :avocado: tags=datamover,dcp,dfuse
+        :avocado: tags=vm
+        :avocado: tags=datamover,mfu,mfu_dcp,dfuse,dfs,ior
         :avocado: tags=dm_posix_subsets,dm_posix_subsets_dcp
         """
         self.run_dm_posix_subsets("DCP")
@@ -163,7 +164,8 @@ class DmvrPosixSubsets(DataMoverTestBase):
         Tests copying POSIX container subsets with fs copy.
             DAOS-6752: daos fs copy improvements
         :avocado: tags=all,daily_regression
-        :avocado: tags=datamover,fs_copy,dfuse
+        :avocado: tags=vm
+        :avocado: tags=datamover,daos_fs_copy,dfuse,dfs,ior
         :avocado: tags=dm_posix_subsets,dm_posix_subsets_fs_copy
         """
         self.run_dm_posix_subsets("FS_COPY")
