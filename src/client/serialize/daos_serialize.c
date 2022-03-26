@@ -1036,16 +1036,6 @@ deserialize_props(daos_handle_t poh, hid_t file_id, daos_prop_t **_prop, uint64_
 			D_GOTO(out, rc);
 		prop_num++;
 	}
-	if (H5Aexists(file_id, "DAOS_PROP_CO_GLOBAL_VERSION") > 0) {
-		type = DAOS_PROP_CO_GLOBAL_VERSION;
-		prop->dpp_entries[prop_num].dpe_type = type;
-		entry = &prop->dpp_entries[prop_num];
-		rc = deserialize_uint(file_id, &entry->dpe_val,
-				      "DAOS_PROP_CO_GLOBAL_VERSION");
-		if (rc != 0)
-			D_GOTO(out, rc);
-		prop_num++;
-	}
 	/* deserialize_label stays false if property doesn't exist above */
 	if (deserialize_label) {
 		prop->dpp_entries[prop_num].dpe_type = DAOS_PROP_CO_LABEL;

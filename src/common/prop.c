@@ -761,13 +761,17 @@ daos_prop_copy(daos_prop_t *prop_req, daos_prop_t *prop_reply)
 		entries_alloc = true;
 	}
 
-	for (i = 0; i < prop_req->dpp_nr && i < prop_reply->dpp_nr; i++) {
+	for (i = 0; i < prop_req->dpp_nr; i++) {
 		entry_req = &prop_req->dpp_entries[i];
 		type = entry_req->dpe_type;
 		if (type == 0) {
 			/* req doesn't have any entry type populated yet */
-			type = prop_reply->dpp_entries[i].dpe_type;
-			entry_req->dpe_type = type;
+			if (i < prop_reply->dpp_nr) {
+				type = prop_reply->dpp_entries[i].dpe_type;
+				entry_req->dpe_type = type;
+			} else {
+				return 0;
+			}
 		}
 		/* this is possible now */
 		entry_reply = daos_prop_entry_get(prop_reply, type);
@@ -829,13 +833,6 @@ daos_prop_copy(daos_prop_t *prop_req, daos_prop_t *prop_reply)
 		} else {
 			entry_req->dpe_val = entry_reply->dpe_val;
 		}
-	}
-
-	/* mark left requested props as negative */
-	while (i < prop_req->dpp_nr) {
-		entry_req = &prop_req->dpp_entries[i];
-		entry_req->dpe_flags |= DAOS_PROP_ENTRY_NEGATIVE;
-		i++;
 	}
 
 out:

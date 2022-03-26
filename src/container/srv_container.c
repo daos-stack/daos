@@ -444,6 +444,9 @@ cont_create_prop_prepare(struct ds_pool_hdl *pool_hdl,
 
 	for (i = 0; i < prop->dpp_nr; i++) {
 		entry = &prop->dpp_entries[i];
+		/* skip negative property entry */
+		if (entry->dpe_flags & DAOS_PROP_ENTRY_NEGATIVE)
+			continue;
 		entry_def = daos_prop_entry_get(prop_def, entry->dpe_type);
 		if (entry_def == NULL) {
 			D_ERROR("type: %d not supported in default prop.\n",
