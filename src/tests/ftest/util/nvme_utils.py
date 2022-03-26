@@ -12,7 +12,7 @@ from avocado.core.exceptions import TestFail
 from ior_test_base import IorTestBase
 from server_utils import ServerFailed
 from ior_utils import IorCommand
-from job_manager_utils import Mpirun
+from job_manager_utils import get_job_manager
 
 
 def get_device_ids(dmg, servers):
@@ -124,7 +124,7 @@ class ServerFillUp(IorTestBase):
             self.ior_local_cmd.dfs_cont.update(self.container.uuid)
 
         # Define the job manager for the IOR command
-        job_manager_main = Mpirun(self.ior_local_cmd, mpitype="mpich")
+        job_manager_main = get_job_manager(self, "Mpirun", self.ior_local_cmd, mpi_type="mpich")
         env = self.ior_local_cmd.get_default_env(str(job_manager_main))
         job_manager_main.assign_hosts(self.hostlist_clients, self.workdir, None)
         job_manager_main.assign_environment(env, True)
