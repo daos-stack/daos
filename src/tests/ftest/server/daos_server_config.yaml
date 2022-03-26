@@ -8,6 +8,7 @@ server_config:
   name: daos_server
   servers:
     0:
+      targets: 2
       env_vars:
         - DAOS_TARGET_OVERSUBSCRIBE=0
 # The 'config_val' list is composed of the following values:
