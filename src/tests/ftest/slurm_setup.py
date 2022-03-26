@@ -63,8 +63,7 @@ def update_config_cmdlist(args):
         "sed -i -e 's/SlurmUser=slurm/SlurmUser={}/g' {}".format(
             args.user, SLURM_CONF),
         "sed -i -e 's/NodeName/#NodeName/g' {}".format(
-            SLURM_CONF),
-        ]
+            SLURM_CONF), ]
     if not args.sudo:
         sudo = ""
     else:
@@ -217,18 +216,16 @@ def start_slurm(args):
     """
     # Setting up slurm on all nodes
     all_nodes = NodeSet("{},{}".format(str(args.control), str(args.nodes)))
-    cmd_list = [
-        "mkdir -p /var/log/slurm",
-        "chown {}. {}".format(args.user, "/var/log/slurm"),
-        "mkdir -p /var/spool/slurmd",
-        "mkdir -p /var/spool/slurmctld",
-        "mkdir -p /var/spool/slurm/d",
-        "mkdir -p /var/spool/slurm/ctld",
-        "chown {}. {}/ctld".format(args.user, "/var/spool/slurm"),
-        "chown {}. {}".format(args.user, "/var/spool/slurmctld"),
-        "chmod 775 {}".format("/var/spool/slurmctld"),
-        "rm -f /var/spool/slurmctld/clustername"
-        ]
+    cmd_list = ["mkdir -p /var/log/slurm",
+                "chown {}. {}".format(args.user, "/var/log/slurm"),
+                "mkdir -p /var/spool/slurmd",
+                "mkdir -p /var/spool/slurmctld",
+                "mkdir -p /var/spool/slurm/d",
+                "mkdir -p /var/spool/slurm/ctld",
+                "chown {}. {}/ctld".format(args.user, "/var/spool/slurm"),
+                "chown {}. {}".format(args.user, "/var/spool/slurmctld"),
+                "chmod 775 {}".format("/var/spool/slurmctld"),
+                "rm -f /var/spool/slurmctld/clustername"]
 
     if execute_cluster_cmds(all_nodes, cmd_list, args.sudo) > 0:
         return 1
