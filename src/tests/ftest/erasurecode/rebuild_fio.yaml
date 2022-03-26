@@ -77,7 +77,7 @@ fio:
     verify_pattern: '0xabcdabcd'
     do_verify: 1
     iodepth: 10
-    size: 333MB
+    size: 33MB
     read_write: !mux
       write_read:
         rw: 'write'

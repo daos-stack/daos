@@ -2559,7 +2559,7 @@ again1:
 	}
 
 again2:
-	if (orw->orw_iod_array.oia_oiods != NULL && split_req == NULL && tgt_cnt != 0) {
+	if (orw->orw_iod_array.oia_oiods != NULL && split_req == NULL) {
 		rc = obj_ec_rw_req_split(orw->orw_oid, &orw->orw_iod_array,
 					 orw->orw_nr, orw->orw_start_shard,
 					 orw->orw_tgt_max, PO_COMP_ID_ALL,
