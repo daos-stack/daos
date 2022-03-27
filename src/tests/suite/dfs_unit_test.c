@@ -387,13 +387,15 @@ dfs_test_syml(void **state)
 	if (arg->myrank != 0)
 		goto syml_stat;
 
-	rc = dfs_open(dfs_mt, NULL, filename, S_IFLNK | S_IWUSR | S_IRUSR,
-		      O_RDWR | O_CREAT | O_EXCL, 0, 0, val, &sym);
+	rc = dfs_open_stat(dfs_mt, NULL, filename, S_IFLNK | S_IWUSR | S_IRUSR,
+			   O_RDWR | O_CREAT | O_EXCL, 0, 0, val, &sym, &stbuf);
 	assert_int_equal(rc, 0);
 
+	/* symlink_value uses size plus space for the terminator, so it does not match stbuf */
 	rc = dfs_get_symlink_value(sym, NULL, &size);
 	assert_int_equal(rc, 0);
 	assert_int_equal(size, strlen(val) + 1);
+	assert_int_equal(size, stbuf.st_size + 1);
 
 	rc = dfs_get_symlink_value(sym, tmp_buf, &size);
 	assert_int_equal(rc, 0);
@@ -576,7 +578,7 @@ dfs_test_file_gen(const char *name, daos_size_t chunk_size,
 	assert_int_equal(stbuf.st_size, 10);
 
 	/** test for overflow */
-	rc = dfs_punch(dfs_mt, obj, 9, DFS_MAX_FSIZE-1);
+	rc = dfs_punch(dfs_mt, obj, 9, DFS_MAX_FSIZE - 1);
 	assert_int_equal(rc, 0);
 	rc = dfs_ostat(dfs_mt, obj, &stbuf);
 	assert_int_equal(rc, 0);
@@ -677,7 +679,6 @@ dfs_test_read_thread(void *arg)
 	print_message("dfs_test_read_thread %d succeed.\n", targ->thread_idx);
 	pthread_exit(NULL);
 }
-
 
 static void
 dfs_test_read_shared_file(void **state)
