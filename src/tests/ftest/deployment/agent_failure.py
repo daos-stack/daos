@@ -12,7 +12,6 @@ import threading
 from ior_test_base import IorTestBase
 from ior_utils import IorCommand
 from general_utils import report_errors, get_host_data
-from telemetry_utils import TelemetryUtils
 from command_utils_base import CommandFailure
 
 
@@ -82,19 +81,13 @@ class AgentFailure(IorTestBase):
         IOR, the file write completes successfully, but the pool disconnect at the end
         fails, so we get the error message that includes -1005. This step is more like a
         verification of the test itself rather than the product.
-        5. Verify daos_server doesn’t have the pool handle opened. Call:
-        dmg telemetry metrics query --metrics=engine_pool_pool_handles
-        that shows the number of open pool handle. Verify that it's 0 after the agent is
-        stopped and IOR is finished. This step verifies the isolation of the failure. In
-        this case, daos_agent was stopped, but daos_server can detect it and close the
-        pool handle.
-        6. Verify journalctl shows the log that the agent is stopped. Call:
+        5. Verify journalctl shows the log that the agent is stopped. Call:
         journalctl --system -t daos_agent --since <before> --until <after>
         This step verifies that DAOS, or daos_agent process in this case, prints useful
         logs for the user to troubleshoot the issue, which in this case the application
         can’t be used.
-        7. Restart daos_agent.
-        8. Run IOR again. It should succeed this time without any error. This step
+        6. Restart daos_agent.
+        7. Run IOR again. It should succeed this time without any error. This step
         verifies that DAOS can recover from the fault with minimal human intervention.
 
         :avocado: tags=all,full_regression
@@ -142,19 +135,7 @@ class AgentFailure(IorTestBase):
         if "-1005" not in ior_error:
             errors.append("-1005 is not in IOR error! {}".format(ior_error))
 
-        # 5. Verify daos_server doesn’t have the pool handle opened.
-        # This metric returns the number of open pool handles.
-        metrics = "engine_pool_pool_handles"
-        telemetry = TelemetryUtils(self.get_dmg_command(), self.server_managers[0].hosts)
-        telemetry = TelemetryUtils(
-            self.get_dmg_command(), self.server_managers[0].hosts)
-        info = telemetry.get_metrics(name=metrics)
-        open_count = info[self.server_managers[0].hosts[0]][metrics]["metrics"][0][
-            "value"]
-        if open_count != 0:
-            errors.append("Unexpected number of open pool handle! {}".format(open_count))
-
-        # 6. Verify journalctl shows the log that the agent is stopped.
+        # 5. Verify journalctl shows the log that the agent is stopped.
         results = self.get_journalctl(
             hosts=self.hostlist_servers, since=since, until=until,
             journalctl_type="daos_agent")
@@ -164,11 +145,11 @@ class AgentFailure(IorTestBase):
                 results)
             errors.append(msg)
 
-        # 7. Restart agent.
+        # 6. Restart agent.
         self.log.info("Restart agent")
         self.start_agent_managers()
 
-        # 8. Run IOR again.
+        # 7. Run IOR again.
         self.log.info("Start IOR 2")
         self.run_ior_collect_error(
             job_num=job_num, results=ior_results, file_name="test_file_2")
