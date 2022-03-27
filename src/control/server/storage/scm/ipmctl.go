@@ -318,15 +318,14 @@ func (cr *cmdRunner) UpdateFirmware(deviceUID string, firmwarePath string) error
 // FIXME DAOS-10173: When libipmctl nvm_get_region() is fixed so that it doesn't take
 //                   a minute to return, replace this with getRegionState() below to use
 //                   libipmctl directly through bindings.
-func parseShowRegionOutput(log logging.Logger, text string) (_ []uint64, _ storage.ScmState, err error) {
+func parseShowRegionOutput(log logging.Logger, text string) (_ []uint64, err error) {
 	defer func() {
 		err = errors.Wrap(err, "parse show regions cmd output")
 	}()
 
 	lines := strings.Split(strings.TrimSpace(text), "\n")
 	if len(lines) < 3 {
-		return nil, storage.ScmStateUnknown, errors.Errorf("expecting at least 3 lines, got %d",
-			len(lines))
+		return nil, errors.Errorf("expecting at least 3 lines, got %d", len(lines))
 	}
 
 	var appDirect bool
@@ -342,7 +341,7 @@ func parseShowRegionOutput(log logging.Logger, text string) (_ []uint64, _ stora
 		switch kv[0] {
 		case "PersistentMemoryType":
 			if kv[1] == "AppDirectNotInterleaved" {
-				return nil, storage.ScmStateNotInterleaved, nil
+				return nil, storage.FaultScmNotInterleaved
 			}
 			if kv[1] == "AppDirect" {
 				appDirect = true
@@ -354,39 +353,47 @@ func parseShowRegionOutput(log logging.Logger, text string) (_ []uint64, _ stora
 			}
 			fc, err := humanize.ParseBytes(kv[1])
 			if err != nil {
-				return nil, storage.ScmStateUnknown, err
+				return nil, err
 			}
 			regionFreeBytes = append(regionFreeBytes, fc)
 		}
 		appDirect = false
 	}
 
-	if len(regionFreeBytes) == 0 {
-		return nil, storage.ScmStateUnknown, errors.New("no AppDirect PMem regions parsed")
-	}
-	for _, freeBytes := range regionFreeBytes {
-		if freeBytes > 0 {
-			log.Debugf("PMem regions have %v free bytes", regionFreeBytes)
-			return regionFreeBytes, storage.ScmStateFreeCapacity, nil
-		}
-	}
-	log.Debug("PMem regions have no free capacity")
-	return regionFreeBytes, storage.ScmStateNoFreeCapacity, nil
+	return regionFreeBytes, nil
 }
 
-func (cr *cmdRunner) getRegionState() ([]uint64, storage.ScmState, error) {
+func (cr *cmdRunner) getRegionState() (storage.ScmState, error) {
 	out, err := cr.showRegions()
 	if err != nil {
-		return nil, storage.ScmStateUnknown, errors.WithMessage(err, "show regions cmd")
+		return storage.ScmStateUnknown, errors.WithMessage(err, "show regions cmd")
 	}
 
 	cr.log.Debugf("show region output: %s\n", out)
 
 	if strings.Contains(out, outScmNoRegions) {
-		return nil, storage.ScmStateNoRegions, nil
+		return storage.ScmStateNoRegions, nil
 	}
 
-	return parseShowRegionOutput(cr.log, out)
+	regionFreeBytes, err := parseShowRegionOutput(cr.log, out)
+	if err != nil {
+		if err == storage.FaultScmNotInterleaved {
+			return storage.ScmStateNotInterleaved, nil // state handled in callen
+		}
+		return storage.ScmStateUnknown, err
+	}
+	if len(regionFreeBytes) == 0 {
+		return storage.ScmStateUnknown, errors.New("no AppDirect PMem regions parsed")
+	}
+	for _, freeBytes := range regionFreeBytes {
+		if freeBytes > 0 {
+			cr.log.Debugf("PMem regions have %v free bytes", regionFreeBytes)
+			return storage.ScmStateFreeCapacity, nil
+		}
+	}
+
+	cr.log.Debug("PMem regions have no free capacity")
+	return storage.ScmStateNoFreeCapacity, nil
 }
 
 // getRegionStateFromBindings establishes state of PMem by fetching region detail from ipmctl bindings and checking
@@ -550,7 +557,7 @@ func (cr *cmdRunner) createSingleNamespacePerNUMA() (storage.ScmNamespaces, erro
 			return nil, errors.WithMessage(err, "create namespace cmd")
 		}
 
-		_, state, err := cr.getRegionState()
+		state, err := cr.getRegionState()
 		if err != nil {
 			return nil, errors.WithMessage(err, "getting state")
 		}
@@ -573,15 +580,22 @@ func (cr *cmdRunner) createDualNamespacesPerNUMA() (storage.ScmNamespaces, error
 	// For each region, create two namespaces each with half the total free capacity.
 	// Sanity check alignment.
 
-	regionFreeBytes, state, err := cr.getRegionState()
+	out, err := cr.showRegions()
 	if err != nil {
-		return nil, errors.WithMessage(err, "getting state")
+		return nil, errors.WithMessage(err, "show regions cmd")
 	}
-	if state == storage.ScmStateNoFreeCapacity {
-		return nil, errors.New("attempting to create namespaces but no free capacity")
+	if strings.Contains(out, outScmNoRegions) {
+		return nil, errors.New("no regions found")
+	}
+	regionFreeBytes, err := parseShowRegionOutput(cr.log, out)
+	if err != nil {
+		return nil, err
 	}
 
 	for idx, freeBytes := range regionFreeBytes {
+		if freeBytes == 0 {
+			return nil, errors.Errorf("region %d has no free space", idx)
+		}
 		pmemBytes := freeBytes / 2
 		// Check value is 2MiB aligned and (TODO) multiples of interleave width.
 		if pmemBytes%(humanize.MiByte*2) != 0 {
@@ -595,7 +609,7 @@ func (cr *cmdRunner) createDualNamespacesPerNUMA() (storage.ScmNamespaces, error
 		}
 	}
 
-	_, state, err = cr.getRegionState()
+	state, err := cr.getRegionState()
 	if err != nil {
 		return nil, errors.WithMessage(err, "getting state")
 	}

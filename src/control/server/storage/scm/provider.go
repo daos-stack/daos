@@ -46,7 +46,7 @@ type (
 	// Backend defines a set of methods to be implemented by a SCM backend.
 	Backend interface {
 		getModules() (storage.ScmModules, error)
-		getRegionState() ([]uint64, storage.ScmState, error)
+		getRegionState() (storage.ScmState, error)
 		getNamespaces() (storage.ScmNamespaces, error)
 		prep(storage.ScmPrepareRequest, *storage.ScmScanResponse) (*storage.ScmPrepareResponse, error)
 		prepReset(*storage.ScmScanResponse) (*storage.ScmPrepareResponse, error)
@@ -289,7 +289,7 @@ func (p *Provider) Scan(req storage.ScmScanRequest) (*storage.ScmScanResponse, e
 	}
 	p.log.Debugf("scm backend: namespaces %+v", namespaces)
 
-	_, state, err := p.backend.getRegionState()
+	state, err := p.backend.getRegionState()
 	if err != nil {
 		return nil, err
 	}
