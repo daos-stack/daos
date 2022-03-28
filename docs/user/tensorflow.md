@@ -137,6 +137,10 @@ files/directories in the form of a DFS URI:
 
 dfs://<Pool-Label-or-UUID>/<Cont-Label-Or-UUID>/<Path>
 
+OR
+
+dfs://Path where Path includes the path to the DAOS container
+
 ```python
 filename = "dfs://POOL_LABEL/CONT_LABEL/FILE_NAME.ext"
 ```
