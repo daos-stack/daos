@@ -21,7 +21,6 @@ import (
 	"github.com/daos-stack/daos/src/control/server"
 	"github.com/daos-stack/daos/src/control/server/config"
 	"github.com/daos-stack/daos/src/control/server/storage"
-	"github.com/daos-stack/daos/src/control/server/storage/bdev"
 )
 
 type storageCmd struct {
@@ -212,6 +211,7 @@ func (cmd *storagePrepareCmd) Execute(args []string) error {
 type storageScanCmd struct {
 	logCmd
 	HelperLogFile string `short:"l" long:"helper-log-file" description:"Log debug from daos_admin binary."`
+	DisableVMD    bool   `short:"d" long:"disable-vmd" description:"Disable VMD-aware scan."`
 }
 
 func (cmd *storageScanCmd) Execute(args []string) error {
@@ -222,20 +222,11 @@ func (cmd *storageScanCmd) Execute(args []string) error {
 	}
 
 	svc := server.NewStorageControlService(cmd.log, config.DefaultServer().Engines)
-
-	msg := "Scanning locally-attached storage..."
-
-	// because we are running in stand-alone mode, manually detect vmd availability and set
-	// storage provider flag appropriately, in daemon/service mode this is automatic
-	vmdAddrs, err := bdev.DetectVMD()
-	if err != nil {
-		return errors.Wrap(err, "attempting to detect vmd")
-	}
-	cmd.log.Debugf("volume management devices detected: %v", vmdAddrs)
-	if !vmdAddrs.IsEmpty() {
-		msg += " (VMD enabled)"
+	if !cmd.DisableVMD {
 		svc.WithVMDEnabled()
 	}
+
+	msg := "Scanning locally-attached storage..."
 
 	cmd.log.Info(msg)
 
