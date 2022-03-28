@@ -22,6 +22,9 @@
 #include "rdb_internal.h"
 #include "rdb_layout.h"
 
+/* Flags for rdb_tx.dt_flags */
+#define RDB_TX_LOCAL	(1U << 0)	/* local and query-only */
+
 /* Check leadership locally. Caller must hold d_raft_mutex lock. */
 static inline int
 rdb_tx_leader_check(struct rdb_tx *tx)
@@ -42,7 +45,7 @@ rdb_tx_leader_check(struct rdb_tx *tx)
  * TXs in that term, so that each TX gets consistent results from cache and DB
  * queries.
  *
- * \param[in]	db	database
+ * \param[in]	db	started database
  * \param[in]	term	if not RDB_NIL_TERM, term to begin in
  * \param[out]	tx	transaction
  *
@@ -78,6 +81,27 @@ rdb_tx_begin(struct rdb *db, uint64_t term, struct rdb_tx *tx)
 	rdb_get(db);
 	t.dt_db = db;
 	t.dt_term = term;
+	*tx = t;
+	return 0;
+}
+
+/**
+ * Initialize and begin \a tx in the local, query-only mode. The resulting \a
+ * tx sees the latest data that may be uncommitted. This is mainly intended for
+ * special scenarios such as catastrophic recovery and testing. If \a db is
+ * started, the caller must not yield between the queries of \a tx.
+ *
+ * \param[in]	db	started or stopped database
+ * \param[out]	tx	transaction
+ */
+int
+rdb_tx_begin_local(struct rdb *db, struct rdb_tx *tx)
+{
+	struct rdb_tx t = {};
+
+	rdb_get(db);
+	t.dt_db = db;
+	t.dt_flags = RDB_TX_LOCAL;
 	*tx = t;
 	return 0;
 }
@@ -135,8 +159,8 @@ rdb_tx_opc_str(enum rdb_tx_opc opc)
 struct rdb_tx_op {
 	enum rdb_tx_opc		dto_opc;
 	rdb_path_t		dto_kvs;
-	d_iov_t		dto_key;
-	d_iov_t		dto_value;
+	d_iov_t			dto_key;
+	d_iov_t			dto_value;
 	struct rdb_kvs_attr    *dto_attr;
 };
 
@@ -293,6 +317,7 @@ rdb_tx_append(struct rdb_tx *tx, struct rdb_tx_op *op)
 	const size_t		RDB_TX_CRITICAL_OPS_LIMIT = 8;
 	int			rc;
 
+	D_ASSERT(!(tx->dt_flags & RDB_TX_LOCAL));
 	D_ASSERTF((tx->dt_entry == NULL && tx->dt_entry_cap == 0 &&
 		   tx->dt_entry_len == 0) ||
 		  (tx->dt_entry != NULL && tx->dt_entry_cap > 0 &&
@@ -379,7 +404,7 @@ rdb_tx_commit(struct rdb_tx *tx)
 	int		rc;
 
 	/* Don't fail query-only TXs for leader checks. */
-	if (tx->dt_entry == NULL)
+	if ((tx->dt_flags & RDB_TX_LOCAL) || tx->dt_entry == NULL)
 		return 0;
 
 	ABT_mutex_lock(tx->dt_db->d_raft_mutex);
@@ -937,19 +962,31 @@ err_checks:
 /* Called at the beginning of every query. */
 static int
 rdb_tx_query_pre(struct rdb_tx *tx, const rdb_path_t *path,
-		 struct rdb_kvs **kvs)
+		 struct rdb_kvs **kvs, uint64_t *index)
 {
-	int rc;
+	uint64_t	i;
+	int		rc;
 
-	ABT_mutex_lock(tx->dt_db->d_raft_mutex);
-	rc = rdb_tx_leader_check(tx);
-	ABT_mutex_unlock(tx->dt_db->d_raft_mutex);
-	if (rc != 0)
-		return rc;
+	if (tx->dt_flags & RDB_TX_LOCAL) {
+		i = tx->dt_db->d_lc_record.dlr_tail - 1;
+	} else {
+		ABT_mutex_lock(tx->dt_db->d_raft_mutex);
+		i = tx->dt_db->d_applied;
+		rc = rdb_tx_leader_check(tx);
+		ABT_mutex_unlock(tx->dt_db->d_raft_mutex);
+		if (rc != 0)
+			return rc;
+	}
+
 	if (path == NULL)
 		return 0;
-	return rdb_kvs_lookup(tx->dt_db, path, tx->dt_db->d_applied,
-			      true /* alloc */, kvs);
+
+	rc = rdb_kvs_lookup(tx->dt_db, path, i, true /* alloc */, kvs);
+	if (rc != 0)
+		return rc;
+
+	*index = i;
+	return 0;
 }
 
 /* Called at the end of every query. */
@@ -979,13 +1016,13 @@ rdb_tx_lookup(struct rdb_tx *tx, const rdb_path_t *kvs, const d_iov_t *key,
 {
 	struct rdb     *db = tx->dt_db;
 	struct rdb_kvs *s;
+	uint64_t	i;
 	int		rc;
 
-	rc = rdb_tx_query_pre(tx, kvs, &s);
+	rc = rdb_tx_query_pre(tx, kvs, &s, &i);
 	if (rc != 0)
 		return rc;
-	rc = rdb_lc_lookup(db->d_lc, db->d_applied, s->de_object,
-			   (d_iov_t *)key, value);
+	rc = rdb_lc_lookup(db->d_lc, i, s->de_object, (d_iov_t *)key, value);
 	rdb_tx_query_post(tx, s);
 	return rc;
 }
@@ -1012,13 +1049,13 @@ rdb_tx_fetch(struct rdb_tx *tx, const rdb_path_t *kvs, enum rdb_probe_opc opc,
 {
 	struct rdb     *db = tx->dt_db;
 	struct rdb_kvs *s;
+	uint64_t	i;
 	int		rc;
 
-	rc = rdb_tx_query_pre(tx, kvs, &s);
+	rc = rdb_tx_query_pre(tx, kvs, &s, &i);
 	if (rc != 0)
 		return rc;
-	rc = rdb_lc_iter_fetch(db->d_lc, db->d_applied, s->de_object, opc,
-			       (d_iov_t *)key_in, key_out, value);
+	rc = rdb_lc_iter_fetch(db->d_lc, i, s->de_object, opc, (d_iov_t *)key_in, key_out, value);
 	rdb_tx_query_post(tx, s);
 	return rc;
 }
@@ -1036,15 +1073,16 @@ rdb_tx_query_key_max(struct rdb_tx *tx, const rdb_path_t *kvs, d_iov_t *key_out)
 {
 	struct rdb     *db = tx->dt_db;
 	struct rdb_kvs *s;
+	uint64_t	i;
 	int		rc;
 
-	rc = rdb_tx_query_pre(tx, kvs, &s);
+	rc = rdb_tx_query_pre(tx, kvs, &s, &i);
 	if (rc != 0)
 		return rc;
-	rc = rdb_lc_query_key_max(db->d_lc, db->d_applied, s->de_object, key_out);
+	rc = rdb_lc_query_key_max(db->d_lc, i, s->de_object, key_out);
 	if (rc != 0) {
-		D_ERROR(DF_DB": rdb_lc_query_key_max d_applied="DF_U64", rdb_oid="DF_U64"\n",
-			DP_DB(db), db->d_applied, s->de_object);
+		D_ERROR(DF_DB": rdb_lc_query_key_max index="DF_U64", rdb_oid="DF_U64"\n",
+			DP_DB(db), i, s->de_object);
 	}
 	rdb_tx_query_post(tx, s);
 	return rc;
@@ -1070,12 +1108,13 @@ rdb_tx_iterate(struct rdb_tx *tx, const rdb_path_t *kvs, bool backward, rdb_iter
 {
 	struct rdb     *db = tx->dt_db;
 	struct rdb_kvs *s;
+	uint64_t	i;
 	int		rc;
 
-	rc = rdb_tx_query_pre(tx, kvs, &s);
+	rc = rdb_tx_query_pre(tx, kvs, &s, &i);
 	if (rc != 0)
 		return rc;
-	rc = rdb_lc_iterate(db->d_lc, db->d_applied, s->de_object, backward, cb, arg);
+	rc = rdb_lc_iterate(db->d_lc, i, s->de_object, backward, cb, arg);
 	rdb_tx_query_post(tx, s);
 	return rc;
 }
@@ -1096,5 +1135,6 @@ rdb_tx_iterate(struct rdb_tx *tx, const rdb_path_t *kvs, bool backward, rdb_iter
 int
 rdb_tx_revalidate(struct rdb_tx *tx)
 {
-	return rdb_tx_query_pre(tx, NULL /* path */, NULL /* kvs */);
+	D_ASSERT(!(tx->dt_flags & RDB_TX_LOCAL));
+	return rdb_tx_query_pre(tx, NULL /* path */, NULL /* kvs */, NULL /* index */);
 }

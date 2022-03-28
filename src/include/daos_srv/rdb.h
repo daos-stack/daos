@@ -51,12 +51,11 @@
  *   - paths
  *   - transactions
  *
- * And a few distributed helper methods, rdb_dist_*, makes certain distributed
- * tasks easier.
- *
- * All access to the KVSs in a database employ transactions (TX). Ending a TX
- * without committing it discards all its updates. Ending a query-only TX
- * without committing is fine at the moment.
+ * All access to the KVSs in a database employ transactions (TX). (A special
+ * class of TXs, introduced for catastrophic recovery and testing purposes,
+ * have theirs own rules documented separately in the API comment of
+ * rdb_tx_begin_local.) Ending a TX without committing it discards all its
+ * updates. Ending a query-only TX without committing is fine at the moment.
  *
  * A query sees all (conflicting) updates committed (successfully) before its
  * rdb_tx_begin(). It may or may not see updates committed after its
@@ -139,9 +138,11 @@ struct rdb_cbs {
 int rdb_create(const char *path, const uuid_t uuid, size_t size,
 	       const d_rank_list_t *replicas, struct rdb_cbs *cbs, void *arg,
 	       struct rdb **dbp);
-int rdb_start(const char *path, const uuid_t uuid, struct rdb_cbs *cbs,
-	      void *arg, struct rdb **dbp);
+int rdb_open(const char *path, const uuid_t uuid, struct rdb_cbs *cbs, void *arg, struct rdb **dbp);
+int rdb_start(struct rdb *db);
+bool rdb_started(struct rdb *db);
 void rdb_stop(struct rdb *db);
+void rdb_close(struct rdb *db);
 int rdb_destroy(const char *path, const uuid_t uuid);
 void rdb_resign(struct rdb *db, uint64_t term);
 int rdb_campaign(struct rdb *db);
@@ -209,7 +210,8 @@ struct rdb_tx {
 	void	       *dt_entry;	/* raft entry buffer */
 	size_t		dt_entry_cap;	/* buffer capacity */
 	size_t		dt_entry_len;	/* data length */
-	size_t		dt_num_ops;	/* number of individual operations */
+	int		dt_num_ops;	/* number of individual operations */
+	unsigned int	dt_flags;
 };
 
 /** Nil term */
@@ -217,6 +219,7 @@ struct rdb_tx {
 
 /** TX methods */
 int rdb_tx_begin(struct rdb *db, uint64_t term, struct rdb_tx *tx);
+int rdb_tx_begin_local(struct rdb *db, struct rdb_tx *tx);
 int rdb_tx_commit(struct rdb_tx *tx);
 void rdb_tx_end(struct rdb_tx *tx);
 

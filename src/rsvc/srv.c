@@ -167,7 +167,11 @@ ds_rsvc_put(struct ds_rsvc *svc)
 	D_ASSERTF(svc->s_ref > 0, "%d\n", svc->s_ref);
 	svc->s_ref--;
 	if (svc->s_ref == 0) {
-		rdb_stop(svc->s_db);
+		if (svc->s_db != NULL) { /* "nodb" */
+			if (rdb_started(svc->s_db))
+				rdb_stop(svc->s_db);
+			rdb_close(svc->s_db);
+		}
 		fini_free(svc);
 	}
 }
@@ -214,7 +218,11 @@ rsvc_rec_free(struct d_hash_table *htable, d_list_t *rlink)
 {
 	struct ds_rsvc *svc = rsvc_obj(rlink);
 
-	rdb_stop(svc->s_db);
+	if (svc->s_db != NULL) { /* "nodb" */
+		if (rdb_started(svc->s_db))
+			rdb_stop(svc->s_db);
+		rdb_close(svc->s_db);
+	}
 	fini_free(svc);
 }
 
@@ -695,13 +703,16 @@ start(enum ds_rsvc_class_id class, d_iov_t *id, uuid_t db_uuid, bool create,
 	svc->s_ref++;
 
 	if (create)
-		rc = rdb_create(svc->s_db_path, svc->s_db_uuid, size, replicas,
-				&rsvc_rdb_cbs, svc, &svc->s_db);
+		rc = rdb_create(svc->s_db_path, svc->s_db_uuid, size, replicas, &rsvc_rdb_cbs, svc,
+				&svc->s_db);
 	else
-		rc = rdb_start(svc->s_db_path, svc->s_db_uuid, &rsvc_rdb_cbs,
-			       svc, &svc->s_db);
+		rc = rdb_open(svc->s_db_path, svc->s_db_uuid, &rsvc_rdb_cbs, svc, &svc->s_db);
 	if (rc != 0)
 		goto err_svc;
+
+	rc = rdb_start(svc->s_db);
+	if (rc != 0)
+		goto err_db;
 
 	/*
 	 * If creating a replica with an initial membership, we are
@@ -714,21 +725,23 @@ start(enum ds_rsvc_class_id class, d_iov_t *id, uuid_t db_uuid, bool create,
 		dss_sleep(1 /* ms */);
 		rc = rdb_campaign(svc->s_db);
 		if (rc != 0)
-			goto err_db;
+			goto err_db_started;
 	}
 
 	if (create && self_only(replicas) &&
 	    rsvc_class(class)->sc_bootstrap != NULL) {
 		rc = bootstrap_self(svc, arg);
 		if (rc != 0)
-			goto err_db;
+			goto err_db_started;
 	}
 
 	*svcp = svc;
 	return 0;
 
-err_db:
+err_db_started:
 	rdb_stop(svc->s_db);
+err_db:
+	rdb_close(svc->s_db);
 	if (create)
 		rdb_destroy(svc->s_db_path, svc->s_db_uuid);
 err_svc:
