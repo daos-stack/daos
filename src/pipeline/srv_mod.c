@@ -44,6 +44,7 @@ struct dss_module pipeline_module = {
 	.sm_proto_fmt	= &pipeline_proto_fmt,
 	.sm_cli_count	= PIPELINE_PROTO_CLI_COUNT,
 	.sm_handlers	= pipeline_handlers,
+	.sm_proto_count	= 1,
 	//.sm_key		= ,
 	//.sm_mod_ops	= ,
 	//.sm_metrics	= ,
