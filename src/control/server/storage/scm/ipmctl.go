@@ -541,6 +541,11 @@ func (cr *cmdRunner) prepReset(scanRes *storage.ScmScanResponse) (*storage.ScmPr
 		return nil, err
 	}
 
+	// Handle specified NrNamespacesPerNUMA in request.
+	if req.NrNamespacesPerNUMA != 0 {
+		cr.log.Debug("number of namespaces per-numa option ignored for scm prepare reset")
+	}
+
 	switch state {
 	case storage.ScmStateNoRegions:
 		return resp, nil
