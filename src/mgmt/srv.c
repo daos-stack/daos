@@ -451,6 +451,7 @@ struct dss_module mgmt_module = {
 	.sm_name		= "mgmt",
 	.sm_mod_id		= DAOS_MGMT_MODULE,
 	.sm_ver			= DAOS_MGMT_VERSION,
+	.sm_proto_count		= 1,
 	.sm_init		= ds_mgmt_init,
 	.sm_fini		= ds_mgmt_fini,
 	.sm_setup		= ds_mgmt_setup,

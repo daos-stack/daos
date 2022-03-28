@@ -43,14 +43,12 @@ class DaosCommandBase(CommandWithSubCommand):
 
         def __init__(self):
             """Create a daos pool subcommand object."""
-            super().__init__(
-                "/run/daos/pool/*", "pool")
+            super().__init__("/run/daos/pool/*", "pool")
 
         def get_sub_command_class(self):
             # pylint: disable=redefined-variable-type
             """Get the dmg network sub command object."""
-            if ((self.sub_command.value == "list-containers") or
-                (self.sub_command.value == "list")):
+            if self.sub_command.value in ("list-containers", "list"):
                 self.sub_command_class = self.ListContainersSubCommand()
             elif self.sub_command.value == "query":
                 self.sub_command_class = self.QuerySubCommand()
@@ -83,8 +81,7 @@ class DaosCommandBase(CommandWithSubCommand):
                 Args:
                     sub_command (str): sub-command name
                 """
-                super().__init__(
-                    "/run/daos/pool/{}/*".format(sub_command), sub_command)
+                super().__init__("/run/daos/pool/{}/*".format(sub_command), sub_command)
                 self.pool = PositionalParameter(1)
                 self.sys_name = FormattedParameter("--sys-name={}")
                 self.sys = FormattedParameter("--sys={}")
@@ -213,9 +210,7 @@ class DaosCommandBase(CommandWithSubCommand):
                 Args:
                     sub_command (str): sub-command name
                 """
-                super().__init__(
-                        "/run/daos/container/{}/*".format(sub_command),
-                        sub_command)
+                super().__init__("/run/daos/container/{}/*".format(sub_command), sub_command)
                 self.pool = PositionalParameter(1)
                 self.cont = PositionalParameter(2)
                 self.sys_name = FormattedParameter("--sys-name={}")
@@ -226,9 +221,7 @@ class DaosCommandBase(CommandWithSubCommand):
 
             def __init__(self):
                 """Create a daos container check command object."""
-                super(
-                    DaosCommandBase.ContainerSubCommand.CheckSubCommand,
-                    self).__init__("check")
+                super(DaosCommandBase.ContainerSubCommand.CheckSubCommand, self).__init__("check")
                 self.src = FormattedParameter("--epc={}")
 
         class CloneSubCommand(CommandWithParameters):
@@ -483,9 +476,7 @@ class DaosCommandBase(CommandWithSubCommand):
                 Args:
                     sub_command (str): sub-command name
                 """
-                super().__init__(
-                        "/run/daos/object/{}/*".format(sub_command),
-                        sub_command)
+                super().__init__("/run/daos/object/{}/*".format(sub_command), sub_command)
                 self.pool = FormattedParameter("--pool={}")
                 self.sys_name = FormattedParameter("--sys-name={}")
                 self.cont = FormattedParameter("--cont={}")
@@ -536,9 +527,7 @@ class DaosCommandBase(CommandWithSubCommand):
                 Args:
                     sub_command (str): sub-command name
                 """
-                super().__init__(
-                    "/run/daos/filesystem/{}/*".format(
-                        sub_command), sub_command)
+                super().__init__("/run/daos/filesystem/{}/*".format(sub_command), sub_command)
 
         class CopySubCommand(CommonFilesystemSubCommand):
             """Defines an object for the daos filesystem copy command."""
