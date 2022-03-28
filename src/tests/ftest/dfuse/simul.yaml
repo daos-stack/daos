@@ -8,7 +8,7 @@ server_config:
   name: daos_server
 pool:
   name: daos_server
-  scm_size: 8G
+  scm_size: 2G
   control_method: dmg
 dfuse:
   mount_dir: "/tmp/daos_dfuse"
