@@ -541,11 +541,6 @@ func (cr *cmdRunner) prepReset(scanRes *storage.ScmScanResponse) (*storage.ScmPr
 		return nil, err
 	}
 
-	// Handle specified NrNamespacesPerNUMA in request.
-	if req.NrNamespacesPerNUMA != 0 {
-		cr.log.Debug("number of namespaces per-numa option ignored for scm prepare reset")
-	}
-
 	switch state {
 	case storage.ScmStateNoRegions:
 		return resp, nil
@@ -620,14 +615,7 @@ func (cr *cmdRunner) createDualNamespacesPerNUMA() (storage.ScmNamespaces, error
 	// For each region, create two namespaces each with half the total free capacity.
 	// Sanity check alignment.
 
-	out, err := cr.showRegions()
-	if err != nil {
-		return nil, errors.WithMessage(err, "show regions cmd")
-	}
-	if strings.Contains(out, outScmNoRegions) {
-		return nil, errors.New("no regions found")
-	}
-	regionFreeBytes, err := parseShowRegionOutput(cr.log, out)
+	regionFreeBytes, err := cr.getRegionFreeSpace()
 	if err != nil {
 		return nil, err
 	}
