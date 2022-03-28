@@ -794,17 +794,7 @@ pool_hdl_rec_free(struct d_hash_table *htable, d_list_t *rlink)
 	D_ASSERT(d_hash_rec_unlinked(&hdl->sph_entry));
 	D_ASSERTF(hdl->sph_ref == 0, "%d\n", hdl->sph_ref);
 	daos_iov_free(&hdl->sph_cred);
-
-	/*
-	 * FIXME: We currently don't guarantee all caches are cleared before
-	 * TLS fini on server shutdown, so we have to avoid calling into
-	 * ds_pool_put() (where asserting on xtream ID) if it's from cache
-	 * destroy on pool module fini.
-	 */
-	if (dss_tls_get() == NULL)
-		daos_lru_ref_release(pool_cache, &hdl->sph_pool->sp_entry);
-	else
-		ds_pool_put(hdl->sph_pool);
+	ds_pool_put(hdl->sph_pool);
 	D_FREE(hdl);
 }
 
@@ -827,13 +817,52 @@ ds_pool_hdl_hash_init(void)
 void
 ds_pool_hdl_hash_fini(void)
 {
-	/* Currently, we use "force" to purge all ds_pool_hdl objects. */
 	d_hash_table_destroy(pool_hdl_hash, true /* force */);
+}
+
+static int
+pool_hdl_delete_all_cb(d_list_t *link, void *arg)
+{
+	uuid_copy(arg, pool_hdl_obj(link)->sph_uuid);
+	return 1;
+}
+
+void
+ds_pool_hdl_delete_all(void)
+{
+	D_DEBUG(DB_MD, "deleting all pool handles\n");
+	D_ASSERT(dss_srv_shutting_down());
+
+	/*
+	 * The d_hash_table_traverse locking makes it impossible to delete or
+	 * even addref in the callback. Hence we traverse and delete one by one.
+	 */
+	for (;;) {
+		uuid_t	arg;
+		int	rc;
+
+		uuid_clear(arg);
+
+		rc = d_hash_table_traverse(pool_hdl_hash, pool_hdl_delete_all_cb, arg);
+		D_ASSERTF(rc == 0 || rc == 1, DF_RC"\n", DP_RC(rc));
+
+		if (uuid_is_null(arg))
+			break;
+
+		/*
+		 * Ignore the return code because it's OK for the handle to
+		 * have been deleted by someone else.
+		 */
+		d_hash_rec_delete(pool_hdl_hash, arg, sizeof(uuid_t));
+	}
 }
 
 static int
 pool_hdl_add(struct ds_pool_hdl *hdl)
 {
+	if (dss_srv_shutting_down())
+		return -DER_CANCELED;
+
 	return d_hash_rec_insert(pool_hdl_hash, hdl->sph_uuid,
 				 sizeof(uuid_t), &hdl->sph_entry,
 				 true /* exclusive */);
@@ -1385,9 +1414,14 @@ update_vos_prop_on_targets(void *in)
 int
 ds_pool_tgt_prop_update(struct ds_pool *pool, struct pool_iv_prop *iv_prop)
 {
+	int ret;
+
 	D_ASSERT(dss_get_module_info()->dmi_xs_id == 0);
 	pool->sp_ec_cell_sz = iv_prop->pip_ec_cell_sz;
 	pool->sp_reclaim = iv_prop->pip_reclaim;
+	pool->sp_redun_fac = iv_prop->pip_redun_fac;
+	pool->sp_ec_pda = iv_prop->pip_ec_pda;
+	pool->sp_rp_pda = iv_prop->pip_rp_pda;
 
 	if (!daos_policy_try_parse(iv_prop->pip_policy_str,
 				   &pool->sp_policy_desc)) {
@@ -1395,7 +1429,7 @@ ds_pool_tgt_prop_update(struct ds_pool *pool, struct pool_iv_prop *iv_prop)
 			iv_prop->pip_policy_str);
 		return -DER_MISMATCH;
 	}
-	int ret = dss_thread_collective(update_vos_prop_on_targets, pool, 0);
+	ret = dss_thread_collective(update_vos_prop_on_targets, pool, 0);
 
 	return ret;
 }

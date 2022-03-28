@@ -24,11 +24,11 @@ import (
 )
 
 func TestServer_CtlSvc_SmdQuery(t *testing.T) {
-	stateUnplugged := storage.NvmeDevState(0).StatusString()
-	stateNew := storage.MockNvmeStateNew.StatusString()
-	stateNormal := storage.MockNvmeStateNormal.StatusString()
-	stateFaulty := storage.MockNvmeStateEvicted.StatusString()
-	stateIdentify := storage.MockNvmeStateIdentify.StatusString()
+	stateUnplugged := storage.NvmeDevState(0).String()
+	stateNew := storage.MockNvmeStateNew.String()
+	stateNormal := storage.MockNvmeStateNormal.String()
+	stateFaulty := storage.MockNvmeStateEvicted.String()
+	stateIdentify := storage.MockNvmeStateIdentify.String()
 
 	pbNormDev := &ctlpb.SmdDevResp_Device{
 		Uuid:     common.MockUUID(),
@@ -380,18 +380,25 @@ func TestServer_CtlSvc_SmdQuery(t *testing.T) {
 									TrAddr: "0000:8a:00.0",
 									TgtIds: []int32{0, 1, 2},
 								},
-								{
-									Uuid:     common.MockUUID(1),
-									TrAddr:   "0000:80:00.0",
-									TgtIds:   []int32{3, 4, 5},
-									DevState: stateFaulty,
-								},
 							},
 						},
 					},
 				},
 			},
-			expErr: errors.New("invalid nvme dev status"),
+			expResp: &ctlpb.SmdQueryResp{
+				Ranks: []*ctlpb.SmdQueryResp_RankResp{
+					{
+						Devices: []*ctlpb.SmdQueryResp_Device{
+							{
+								Uuid:   common.MockUUID(0),
+								TrAddr: "0000:8a:00.0",
+								TgtIds: []int32{0, 1, 2},
+							},
+						},
+						Rank: uint32(0),
+					},
+				},
+			},
 		},
 		"list-devices; show only faulty": {
 			req: &ctlpb.SmdQueryReq{
@@ -672,7 +679,7 @@ func TestServer_CtlSvc_SmdQuery(t *testing.T) {
 						Devices: []*ctlpb.SmdQueryResp_Device{
 							{
 								Uuid:     common.MockUUID(1),
-								DevState: storage.MockNvmeStateNew.StatusString(),
+								DevState: storage.MockNvmeStateNew.String(),
 							},
 						},
 					},
