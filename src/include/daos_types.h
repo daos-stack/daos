@@ -71,6 +71,7 @@ typedef struct {
 
 /** Generic handle for various DAOS components like container, object, etc. */
 typedef struct {
+	/** generic handle value */
 	uint64_t	cookie;
 } daos_handle_t;
 
@@ -112,6 +113,9 @@ daos_handle_is_valid(daos_handle_t hdl)
  */
 typedef uint64_t	daos_epoch_t;
 
+/**
+ * Epoch range
+ */
 typedef struct {
 	/** Low bound of the epoch range */
 	daos_epoch_t	epr_lo;
@@ -129,6 +133,7 @@ typedef d_iov_t daos_key_t;
  */
 
 typedef struct daos_event {
+	/** return code of non-blocking operation */
 	int			ev_error;
 	/** Internal use, please do not modify */
 	struct {
@@ -200,7 +205,9 @@ enum {
  * It is put here because it's almost used by everyone.
  */
 typedef struct {
+	/** least significant (low) bits of object ID */
 	uint64_t	lo;
+	/** most significant (high) bits of object ID */
 	uint64_t	hi;
 } daos_obj_id_t;
 
