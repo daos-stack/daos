@@ -1,6 +1,6 @@
 #!/usr/bin/python
 """
-  (C) Copyright 2020-2021 Intel Corporation.
+  (C) Copyright 2020-2022 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -18,15 +18,14 @@ from ClusterShell.NodeSet import NodeSet
 
 from agent_utils import DaosAgentManager, include_local_host
 from cart_ctl_utils import CartCtl
-from command_utils_base import CommandFailure, EnvironmentVariables
+from command_utils_base import EnvironmentVariables
+from exception_utils import CommandFailure
 from daos_utils import DaosCommand
 from distro_utils import detect
-from distutils.spawn import find_executable
 from dmg_utils import get_dmg_command
-from env_modules import load_mpi
 from fault_config_utils import FaultInjection
 from general_utils import \
-    get_partition_hosts, stop_processes, get_job_manager_class, \
+    get_partition_hosts, stop_processes, \
     get_default_config_file, pcmd, get_file_listing, DaosTestError, run_command
 from logger_utils import TestLogger
 from pydaos.raw import DaosContext, DaosLog, DaosApiError
@@ -34,6 +33,7 @@ from server_utils import DaosServerManager
 from test_utils_container import TestContainer
 from test_utils_pool import TestPool, LabelGenerator
 from write_host_file import write_host_file
+from job_manager_utils import get_job_manager
 
 
 def skipForTicket(ticket):  # pylint: disable=invalid-name
@@ -397,8 +397,6 @@ class TestWithoutServers(Test):
         super().__init__(*args, **kwargs)
 
         self.client_mca = None
-        self.orterun = None
-        self.ompi_prefix = None
         self.bin = None
         self.daos_test = None
         self.cart_prefix = None
@@ -416,19 +414,6 @@ class TestWithoutServers(Test):
     def setUp(self):
         """Set up run before each test."""
         super().setUp()
-        if not load_mpi("openmpi"):
-            self.fail("Failed to load openmpi")
-
-        self.orterun = find_executable('orterun')
-        if self.orterun is None:
-            self.fail("Could not find orterun")
-
-        # hardware tests segfault in MPI_Init without this option
-        self.client_mca = "--mca btl_openib_warn_default_gid_prefix 0"
-        self.client_mca += " --mca pml ob1"
-        self.client_mca += " --mca btl tcp,self"
-        self.client_mca += " --mca oob tcp"
-        self.ompi_prefix = os.path.dirname(os.path.dirname(self.orterun))
         self.bin = os.path.join(self.prefix, 'bin')
         self.daos_test = os.path.join(self.prefix, 'bin', 'daos_test')
 
@@ -705,17 +690,7 @@ class TestWithServers(TestWithoutServers):
                     "removed from continually running servers.")
 
         # Setup a job manager command for running the test command
-        manager_class_name = self.params.get(
-            "job_manager_class_name", default=None)
-        manager_subprocess = self.params.get(
-            "job_manager_subprocess", default=False)
-        manager_mpi_type = self.params.get(
-            "job_manager_mpi_type", default="mpich")
-        if manager_class_name is not None:
-            self.job_manager = get_job_manager_class(
-                manager_class_name, None, manager_subprocess, manager_mpi_type)
-            self.set_job_manager_timeout()
-            self.job_manager.tmpdir_base.update(self.test_dir, "tmpdir_base")
+        get_job_manager(self, class_name_default=None)
 
         # Mark the end of setup
         self.log.info("=" * 100)
@@ -747,27 +722,6 @@ class TestWithServers(TestWithoutServers):
                 "Unable to write message to the server log: %d servers groups "
                 "running / %d agent groups running",
                 len(self.server_managers), len(self.agent_managers))
-
-    def set_job_manager_timeout(self):
-        """Set the timeout for the job manager.
-
-        Use the following priority when setting the job_manager timeout:
-            1) use the test method specific timeout from the test yaml, e.g.
-                job_manager_timeout:
-                    test_one: 30
-                    test_two: 60
-            2) use the common job_manager timeout from the test yaml, e.g.
-                job_manager_timeout: 45
-            3) use the avocado test timeout minus 30 seconds
-        """
-        if self.job_manager:
-            self.job_manager.timeout = self.params.get(
-                self.get_test_name(), "/run/job_manager_timeout/*", None)
-            if self.job_manager.timeout is None:
-                self.job_manager.timeout = self.params.get(
-                    "job_manager_timeout", default=None)
-                if self.job_manager.timeout is None:
-                    self.job_manager.timeout = self.timeout - 30
 
     def start_agents(self, agent_groups=None, force=False):
         """Start the daos_agent processes.
@@ -1283,8 +1237,10 @@ class TestWithServers(TestWithoutServers):
         error_list = []
         if self.job_manager:
             self.test_log.info("Stopping test job manager")
-            error_list = self._stop_managers(
-                [self.job_manager], "test job manager")
+            if isinstance(self.job_manager, list):
+                error_list = self._stop_managers(self.job_manager, "test job manager")
+            else:
+                error_list = self._stop_managers([self.job_manager], "test job manager")
         return error_list
 
     def destroy_containers(self, containers):

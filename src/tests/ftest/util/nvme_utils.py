@@ -8,7 +8,7 @@ import threading
 import re
 import time
 import queue
-from command_utils_base import CommandFailure
+from exception_utils import CommandFailure
 from avocado.core.exceptions import TestFail
 from ior_test_base import IorTestBase
 from ior_utils import IorCommand

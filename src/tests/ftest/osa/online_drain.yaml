@@ -8,7 +8,8 @@ hosts:
   test_clients:
     - client-D
 timeout: 1000
-job_manager_timeout: 300
+job_manager:
+  manager_timeout: 300
 setup:
   start_servers_once: False
 server_config:

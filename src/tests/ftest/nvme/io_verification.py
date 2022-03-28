@@ -1,7 +1,6 @@
 #!/usr/bin/python3
 """
-  (C) Copyright 2020-2022 Intel Corporation.
-
+  (C) Copyright 2020-2021 Intel Corporation.
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 import avocado
@@ -14,22 +13,18 @@ from dmg_utils import check_system_query_status
 class NvmeIoVerification(IorTestBase):
     # pylint: disable=too-many-ancestors
     """Test class for NVMe with IO tests.
-
     Test Class Description:
         Test IO on nvme with different pool sizes and different data size.
-
     :avocado: recursive
     """
 
     @avocado.fail_on(DaosApiError)
     def test_nvme_io_verification(self):
         """Jira ID: DAOS-2649.
-
         Test Description:
             Test will run IOR with non standard transfer sizes for different
             set of pool sizes. Purpose is to verify io transaction to scm and
             nvme for different pool sizes under different situations.
-
         Use Cases:
             (1) Running IOR with different set of transfer size where first
             transfer size is < 4096 and then > 4096. Verify that data goes to
@@ -42,28 +37,20 @@ class NvmeIoVerification(IorTestBase):
             as transfer size is > 4096.
             (4) Repeat the case(3) with maximum nvme pool size that can be
             created.
-
         :avocado: tags=all,full_regression
         :avocado: tags=hw,large
         :avocado: tags=daosio,nvme_io_verification
         """
         # Test params
-        tests = self.params.get("ior_sequence", '/run/ior/*')
         processes = self.params.get("np", '/run/ior/*')
         transfer_size = self.params.get("tsize", '/run/ior/transfersize/*/')
         block_size = self.ior_cmd.block_size.value
+        ior_seq_pool_qty = self.params.get("ior_sequence_pool_qty", '/run/pool/*')
 
-        # Loop for every IOR object type
-        for ior_param in tests:
-            # Create and connect to a pool
-            self.add_pool(create=False)
-
-            # update pool sizes
-            self.pool.scm_size.update(ior_param[0])
-            self.pool.nvme_size.update(ior_param[1])
-
-            # Create a pool
-            self.pool.create()
+        # Loop for every pool size
+        for index in range(ior_seq_pool_qty):
+            # Create and connect to a pool with namespace
+            self.add_pool(namespace="/run/pool/pool_{}/*".format(index))
 
             # get pool info
             self.pool.get_info()
@@ -92,13 +79,11 @@ class NvmeIoVerification(IorTestBase):
     @avocado.fail_on(DaosApiError)
     def test_nvme_server_restart(self):
         """Jira ID: DAOS-2650.
-
         Test Description:
             Test will run IOR with non standard transfer sizes for different
             set of pool sizes. Purpose is to verify io transaction to scm and
             nvme for different pool sizes when servers are restarted after
             write.
-
         Use Cases:
             (1) Running IOR with different set of transfer size where first
             transfer size is < 4096 and then > 4096. Verify the data after
@@ -113,24 +98,17 @@ class NvmeIoVerification(IorTestBase):
         :avocado: tags=all,full_regression,hw,large,daosio,nvme_server_restart
         """
         # Test params
-        tests = self.params.get("ior_sequence", '/run/ior/*')
         processes = self.params.get("np", '/run/ior/*')
         transfer_size = self.params.get("tsize", '/run/ior/transfersize/*/')
         flag_write = self.params.get("write", '/run/ior/*/')
         flag_read = self.params.get("read", '/run/ior/*/')
         block_size = self.ior_cmd.block_size.value
+        ior_seq_pool_qty = self.params.get("ior_sequence_pool_qty", '/run/pool/*')
 
-        # Loop for every IOR object type
-        for ior_param in tests:
-            # Create and connect to a pool
-            self.add_pool(create=False)
-
-            # update pool sizes
-            self.pool.scm_size.update(ior_param[0])
-            self.pool.nvme_size.update(ior_param[1])
-
-            # Create a pool
-            self.pool.create()
+        # Loop for every pool size
+        for index in range(ior_seq_pool_qty):
+            # Create and connect to a pool with namespace
+            self.add_pool(namespace="/run/pool/pool_{}/*".format(index))
 
             # get pool info
             self.pool.get_info()

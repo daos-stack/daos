@@ -1780,11 +1780,11 @@ dtx_leader_exec_ops_ult(void *arg)
 	struct dtx_leader_handle	*dlh = ult_arg->dlh;
 	struct dtx_sub_status		*sub;
 	ABT_future			 future = dlh->dlh_future;
-	uint32_t			 i;
+	uint32_t			 i, j;
 	int				 rc = 0;
 
 	D_ASSERT(future != ABT_FUTURE_NULL);
-	for (i = 0; i < dlh->dlh_sub_cnt; i++) {
+	for (i = 0, j = 0; i < dlh->dlh_sub_cnt; i++, j++) {
 		sub = &dlh->dlh_subs[i];
 		sub->dss_result = 0;
 		sub->dss_comp = 0;
@@ -1793,7 +1793,7 @@ dtx_leader_exec_ops_ult(void *arg)
 		    (i == daos_fail_value_get() &&
 		     DAOS_FAIL_CHECK(DAOS_DTX_SKIP_PREPARE))) {
 			dtx_sub_comp_cb(dlh, i, 0);
-			continue;
+			goto next;
 		}
 
 		rc = ult_arg->func(dlh, ult_arg->func_arg, i, dtx_sub_comp_cb);
@@ -1803,14 +1803,22 @@ dtx_leader_exec_ops_ult(void *arg)
 			break;
 		}
 
+next:
 		/* Yield to avoid holding CPU for too long time. */
-		if (i >= DTX_RPC_YIELD_THD)
+		if (j >= DTX_RPC_YIELD_THD) {
 			ABT_thread_yield();
+			j = 0;
+		}
 	}
 
 	if (rc != 0) {
-		for (i++; i < dlh->dlh_sub_cnt; i++)
+		for (i++, j++; i < dlh->dlh_sub_cnt; i++, j++) {
 			dtx_sub_comp_cb(dlh, i, 0);
+			if (j >= DTX_RPC_YIELD_THD) {
+				ABT_thread_yield();
+				j = 0;
+			}
+		}
 	}
 
 	/* To indicate that the IO forward ULT itself has done. */

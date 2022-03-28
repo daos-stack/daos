@@ -8,7 +8,7 @@ import os
 import yaml
 
 from apricot import TestWithServers
-from command_utils import CommandFailure
+from exception_utils import CommandFailure
 from server_utils import ServerFailed
 from server_utils_params import DaosServerYamlParameters
 

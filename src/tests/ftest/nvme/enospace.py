@@ -11,10 +11,9 @@ from apricot import skipForTicket
 from nvme_utils import ServerFillUp
 from avocado.core.exceptions import TestFail
 from daos_utils import DaosCommand
-from mpio_utils import MpioUtils
-from job_manager_utils import Mpirun
+from job_manager_utils import get_job_manager
 from ior_utils import IorCommand, IorMetrics
-from command_utils_base import CommandFailure
+from exception_utils import CommandFailure
 from general_utils import error_count
 import queue
 
@@ -88,9 +87,6 @@ class NvmeEnospace(ServerFillUp):
         Args:
             results (queue): queue for returning thread results
         """
-        mpio_util = MpioUtils()
-        if mpio_util.mpich_installed(self.hostlist_clients) is False:
-            self.fail("Exiting Test: Mpich not installed")
 
         # Define the IOR Command and use the parameter from yaml file.
         ior_bg_cmd = IorCommand()
@@ -104,17 +100,17 @@ class NvmeEnospace(ServerFillUp):
         ior_bg_cmd.test_file.update('/testfile_background')
 
         # Define the job manager for the IOR command
-        self.job_manager = Mpirun(ior_bg_cmd, mpitype="mpich")
+        job_manager = get_job_manager(self, "Mpirun", ior_bg_cmd, mpi_type="mpich")
         self.create_cont()
-        self.job_manager.job.dfs_cont.update(self.container.uuid)
-        env = ior_bg_cmd.get_default_env(str(self.job_manager))
-        self.job_manager.assign_hosts(self.hostlist_clients, self.workdir, None)
-        self.job_manager.assign_processes(1)
-        self.job_manager.assign_environment(env, True)
+        job_manager.job.dfs_cont.update(self.container.uuid)
+        env = ior_bg_cmd.get_default_env(str(job_manager))
+        job_manager.assign_hosts(self.hostlist_clients, self.workdir, None)
+        job_manager.assign_processes(1)
+        job_manager.assign_environment(env, True)
         print('----Run IOR in Background-------')
         # run IOR Write Command
         try:
-            self.job_manager.run()
+            job_manager.run()
         except (CommandFailure, TestFail) as _error:
             results.put("FAIL")
             return
@@ -123,7 +119,7 @@ class NvmeEnospace(ServerFillUp):
         ior_bg_cmd.flags.update(self.ior_read_flags)
         while True:
             try:
-                self.job_manager.run()
+                job_manager.run()
             except (CommandFailure, TestFail) as _error:
                 results.put("FAIL")
                 break
