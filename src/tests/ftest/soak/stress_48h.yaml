@@ -191,6 +191,7 @@ vpic_stress:
         - 32
     cmdline: "/home/mjean/vpic-install/bin/harris.Linux"
     workdir: "/tmp/daos_dfuse/vpic/"
+    module: "mpi/latest"
     dfuse:
         mount_dir: "/tmp/daos_dfuse/vpic/"
     oclass:
@@ -203,6 +204,7 @@ lammps_stress:
         - 32
     cmdline: "/home/mjean/lammps-install/bin/lmp -i /home/mjean/lammps/bench/in.lj.smoke"
     workdir: "/tmp/daos_dfuse/lammps/"
+    module: "mpi/latest"
     dfuse:
         mount_dir: "/tmp/daos_dfuse/lammps/"
     oclass:

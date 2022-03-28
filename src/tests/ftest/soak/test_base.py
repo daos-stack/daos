@@ -319,9 +319,9 @@ class SoakTestBase(TestWithServers):
                     elif "daos_racer" in job:
                         commands = create_racer_cmdline(self, job)
                     elif "vpic" in job:
-                        commands = create_app_cmdline(self, job, pool, ppn, npj)
+                        commands = create_app_cmdline(self, job, pool, ppn, npj, POSIX=True)
                     elif "lammps" in job:
-                        commands = create_app_cmdline(self, job, pool, ppn, npj)
+                        commands = create_app_cmdline(self, job, pool, ppn, npj, POSIX=True)
                     else:
                         raise SoakTestError(
                             "<<FAILED: Job {} is not supported. ".format(job))

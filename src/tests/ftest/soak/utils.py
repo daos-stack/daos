@@ -19,8 +19,8 @@ from data_mover_utils import FsCopy
 from dfuse_utils import Dfuse
 from job_manager_utils import Srun, Mpirun
 from general_utils import get_host_data, get_random_string, \
-    run_command, DaosTestError, pcmd, get_random_bytes, \
-    run_pcmd
+    run_command, DaosTestError, pcmd, get_random_bytes, run_pcmd
+from command_utils_base import EnvironmentVariables
 import slurm_utils
 from daos_utils import DaosCommand
 from test_utils_container import TestContainer
@@ -747,6 +747,7 @@ def start_dfuse(self, pool, container, name=None, job_spec=None):
     # Get Dfuse params
     dfuse = Dfuse(self.hostlist_clients, self.tmp)
     dfuse.namespace = os.path.join(os.sep, "run", job_spec, "dfuse", "*")
+
     dfuse.get_params(self)
     # update dfuse params; mountpoint for each container
     unique = get_random_string(5, self.used)
@@ -915,7 +916,6 @@ def create_ior_cmdline(self, job_spec, pool, ppn, nodesperjob):
                         vol = True
                         env["HDF5_VOL_CONNECTOR"] = "daos"
                         env["HDF5_PLUGIN_PATH"] = "{}".format(plugin_path)
-                        # env["H5_DAOS_BYPASS_DUNS"] = 1
                     mpirun_cmd.assign_processes(nodesperjob * ppn)
                     mpirun_cmd.assign_environment(env, True)
                     mpirun_cmd.ppn.update(ppn)
@@ -1134,7 +1134,7 @@ def create_fio_cmdline(self, job_spec, pool):
     return commands
 
 
-def create_app_cmdline(self, job_spec, pool, ppn, nodesperjob):
+def create_app_cmdline(self, job_spec, pool, ppn, nodesperjob, POSIX=False):
     """Create the srun cmdline to run app.
 
     This method will use a cmdline specified in the yaml file to
@@ -1153,6 +1153,7 @@ def create_app_cmdline(self, job_spec, pool, ppn, nodesperjob):
     sbatch_cmds = []
     app_params = os.path.join(os.sep, "run", job_spec, "*")
     app_cmd = self.params.get("cmdline", app_params, default=None)
+    mpi_module = self.params.get("module", app_params, self.mpi_module)
 
     if app_cmd is None:
         self.log.info(
@@ -1161,32 +1162,40 @@ def create_app_cmdline(self, job_spec, pool, ppn, nodesperjob):
     oclass_list = self.params.get("oclass", app_params)
     for oclass in oclass_list:
         add_containers(self, pool, oclass)
-        # sbatch_cmds = ["module purge", "module load {}".format(mpi_module)]
-        sbatch_cmds = ["export LD_LIBRARY_PATH=/opt/intel/oneapi/mpi/latest/lib",
-                       "export PATH=/opt/intel/oneapi/mpi/latest/bin",
-                       "/usr/bin/ls -la /opt/intel/oneapi/",
-                       "/opt/intel/oneapi/setvars.sh",
-                       "/opt/intel/oneapi/modulefiles-setup.sh --force",
-                       "echo $MODULEPATH",
-                       "module avail"]
-        # include dfuse cmdlines
+        sbatch_cmds = ["module purge", "module load {}".format(self.mpi_module)]
         log_name = "{}_{}_{}_{}_{}".format(
             job_spec, oclass, nodesperjob * ppn, nodesperjob, ppn)
-        dfuse, dfuse_start_cmdlist = start_dfuse(
-            self, pool, self.container[-1], name=log_name, job_spec=job_spec)
-        sbatch_cmds.extend(dfuse_start_cmdlist)
-        mpi_cmd = Mpirun(app_cmd, False, "mpi/latest")
-        mpi_cmd.assign_processes(nodesperjob * ppn)
-        mpi_cmd.ppn.update(ppn)
-        mpi_cmd.working_dir.update(dfuse.mount_dir.value)
-        cmdline = "{}".format(str(mpi_cmd))
+        # include dfuse cmdlines
+        if POSIX:
+            dfuse, dfuse_start_cmdlist = start_dfuse(
+                self, pool, self.container[-1], name=log_name, job_spec=job_spec)
+            sbatch_cmds.extend(dfuse_start_cmdlist)
+        # allow apps that use an mpi other than default (self.mpi_module)
+        if mpi_module != self.mpi_module:
+            sbatch_cmds.append("module load {}".format(mpi_module))
+        mpirun_cmd = Mpirun(app_cmd, False, mpi_module)
+        if "mpich" in mpi_module:
+            # Pass pool and container information to the commands
+            env = EnvironmentVariables()
+            env["DAOS_UNS_PREFIX"] = "daos://{}/{}/".format(self.pool.uuid, self.container.uuid)
+            mpirun_cmd.assign_environment(env, True)
+        mpirun_cmd.assign_processes(nodesperjob * ppn)
+        mpirun_cmd.ppn.update(ppn)
+        if POSIX:
+            mpirun_cmd.working_dir.update(dfuse.mount_dir.value)
+        cmdline = "{}".format(str(mpirun_cmd))
         sbatch_cmds.append(str(cmdline))
         sbatch_cmds.append("status=$?")
-        sbatch_cmds.extend(stop_dfuse(dfuse))
+        if POSIX:
+            if mpi_module != self.mpi_module:
+                sbatch_cmds.extend(["module purge", "module load {}".format(self.mpi_module)])
+                sbatch_cmds.extend(stop_dfuse(dfuse))
         commands.append([sbatch_cmds, log_name])
-        self.log.info("<<{} cmdlines>>:".format(job_spec))
+        self.log.info("<<{} cmdlines>>:".format(job_spec.upper()))
         for cmd in sbatch_cmds:
             self.log.info("%s", cmd)
+        if mpi_module != self.mpi_module:
+            mpirun_cmd = Mpirun(app_cmd, False, self.mpi_module)
     return commands
 
 
