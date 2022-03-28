@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2021 Intel Corporation.
+// (C) Copyright 2019-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -491,12 +491,12 @@ func (cr *cmdRunner) GetPmemNamespaces() (storage.ScmNamespaces, error) {
 		return nil, err
 	}
 
-	out, err := cr.listNamespaces()
+	outTxt, err := cr.listNamespaces()
 	if err != nil {
 		return nil, errors.WithMessage(err, "list namespaces cmd")
 	}
 
-	nss, err := parseNamespaces(out)
+	nss, err := parseNamespaces(outTxt)
 	if err != nil {
 		return nil, err
 	}
