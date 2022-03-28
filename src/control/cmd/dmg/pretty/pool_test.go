@@ -22,15 +22,6 @@ import (
 )
 
 func TestPretty_PrintPoolQueryResp(t *testing.T) {
-	mockUUID := func(u string) uuid.UUID {
-		t.Helper()
-		o, err := uuid.Parse(u)
-		if err != nil {
-			t.Fatal(err)
-		}
-		return o
-	}
-
 	for name, tc := range map[string]struct {
 		pqr         *control.PoolQueryResp
 		expPrintStr string
@@ -47,7 +38,7 @@ Pool space info:
 			pqr: &control.PoolQueryResp{
 				Pools: []*control.PoolInfo{
 					{
-						UUID:            mockUUID(common.MockUUID()),
+						UUID:            uuid.MustParse(common.MockUUID()),
 						TotalTargets:    2,
 						DisabledTargets: 1,
 						ActiveTargets:   1,
@@ -88,7 +79,7 @@ Rebuild busy, 42 objs, 21 recs
 			pqr: &control.PoolQueryResp{
 				Pools: []*control.PoolInfo{
 					{
-						UUID:            mockUUID(common.MockUUID()),
+						UUID:            uuid.MustParse(common.MockUUID()),
 						TotalTargets:    2,
 						DisabledTargets: 1,
 						ActiveTargets:   1,
@@ -129,7 +120,7 @@ Rebuild failed, rc=0, status=2
 	} {
 		t.Run(name, func(t *testing.T) {
 			var bld strings.Builder
-			if err := PrintPoolInfo(tc.pqr, &bld); err != nil {
+			if err := PrintPoolQueryResponse(tc.pqr, &bld); err != nil {
 				t.Fatal(err)
 			}
 
@@ -215,39 +206,39 @@ Pool created with 100.00%% storage tier ratio
 	}
 }
 
-func TestPretty_PrintListPoolsResponse(t *testing.T) {
-	exampleUsage := []*control.PoolTierUsage{
+func TestPretty_PrintPoolList(t *testing.T) {
+	exampleUsage := []*control.StorageUsageStats{
 		{
-			TierName:  "SCM",
-			Size:      100 * humanize.GByte,
+			MediaType: "scm",
+			Total:     100 * humanize.GByte,
 			Free:      20 * humanize.GByte,
 			Imbalance: 12,
 		},
 		{
-			TierName:  "NVME",
-			Size:      6 * humanize.TByte,
+			MediaType: "NVME",
+			Total:     6 * humanize.TByte,
 			Free:      1 * humanize.TByte,
 			Imbalance: 1,
 		},
 	}
 
 	for name, tc := range map[string]struct {
-		resp        *control.ListPoolsResp
+		resp        *control.PoolQueryResp
 		verbose     bool
 		expErr      error
 		expPrintStr string
 	}{
 		"empty response": {
-			resp: &control.ListPoolsResp{},
+			resp: &control.PoolQueryResp{},
 			expPrintStr: `
 no pools in system
 `,
 		},
 		"one pool; no usage": {
-			resp: &control.ListPoolsResp{
-				Pools: []*control.Pool{
+			resp: &control.PoolQueryResp{
+				Pools: []*control.PoolInfo{
 					{
-						UUID:            common.MockUUID(1),
+						UUID:            uuid.MustParse(common.MockUUID(1)),
 						ServiceReplicas: []system.Rank{0, 1, 2},
 					},
 				},
@@ -260,55 +251,55 @@ Pool     Size Used Imbalance Disabled
 `,
 		},
 		"one pool; no uuid": {
-			resp: &control.ListPoolsResp{
-				Pools: []*control.Pool{
+			resp: &control.PoolQueryResp{
+				Pools: []*control.PoolInfo{
 					{
 						ServiceReplicas: []system.Rank{0, 1, 2},
-						Usage:           exampleUsage,
+						TierStats:       exampleUsage,
 					},
 				},
 			},
-			expErr: errors.New("no uuid"),
+			expErr: errors.New("zero value uuid"),
 		},
 		"two pools; diff num tiers": {
-			resp: &control.ListPoolsResp{
-				Pools: []*control.Pool{
+			resp: &control.PoolQueryResp{
+				Pools: []*control.PoolInfo{
 					{
-						UUID:            common.MockUUID(1),
+						UUID:            uuid.MustParse(common.MockUUID(1)),
 						ServiceReplicas: []system.Rank{0, 1, 2},
-						Usage:           exampleUsage,
-						TargetsTotal:    16,
-						TargetsDisabled: 0,
+						TierStats:       exampleUsage,
+						TotalTargets:    16,
+						DisabledTargets: 0,
 					},
 					{
-						UUID:            common.MockUUID(2),
+						UUID:            uuid.MustParse(common.MockUUID(2)),
 						Label:           "one",
 						ServiceReplicas: []system.Rank{3, 4, 5},
-						Usage:           exampleUsage[1:],
-						TargetsTotal:    64,
-						TargetsDisabled: 8,
+						TierStats:       exampleUsage[1:],
+						TotalTargets:    64,
+						DisabledTargets: 8,
 					},
 				},
 			},
 			expErr: errors.New("has 1 storage tiers, want 2"),
 		},
 		"two pools; only one labeled": {
-			resp: &control.ListPoolsResp{
-				Pools: []*control.Pool{
+			resp: &control.PoolQueryResp{
+				Pools: []*control.PoolInfo{
 					{
-						UUID:            common.MockUUID(1),
+						UUID:            uuid.MustParse(common.MockUUID(1)),
 						ServiceReplicas: []system.Rank{0, 1, 2},
-						Usage:           exampleUsage,
-						TargetsTotal:    16,
-						TargetsDisabled: 0,
+						TierStats:       exampleUsage,
+						TotalTargets:    16,
+						DisabledTargets: 0,
 					},
 					{
 						Label:           "two",
-						UUID:            common.MockUUID(2),
+						UUID:            uuid.MustParse(common.MockUUID(2)),
 						ServiceReplicas: []system.Rank{3, 4, 5},
-						Usage:           exampleUsage,
-						TargetsTotal:    64,
-						TargetsDisabled: 8,
+						TierStats:       exampleUsage,
+						TotalTargets:    64,
+						DisabledTargets: 8,
 					},
 				},
 			},
@@ -321,26 +312,26 @@ two      6.0 TB 83%  12%       8/64
 `,
 		},
 		"two pools; one SCM only": {
-			resp: &control.ListPoolsResp{
-				Pools: []*control.Pool{
+			resp: &control.PoolQueryResp{
+				Pools: []*control.PoolInfo{
 					{
 						Label:           "one",
-						UUID:            common.MockUUID(1),
+						UUID:            uuid.MustParse(common.MockUUID(1)),
 						ServiceReplicas: []system.Rank{0, 1, 2},
-						Usage:           exampleUsage,
-						TargetsTotal:    16,
-						TargetsDisabled: 0,
+						TierStats:       exampleUsage,
+						TotalTargets:    16,
+						DisabledTargets: 0,
 					},
 					{
 						Label:           "two",
-						UUID:            common.MockUUID(2),
+						UUID:            uuid.MustParse(common.MockUUID(2)),
 						ServiceReplicas: []system.Rank{3, 4, 5},
-						Usage: []*control.PoolTierUsage{
+						TierStats: []*control.StorageUsageStats{
 							exampleUsage[0],
-							{TierName: "NVME"},
+							{MediaType: "nvme"},
 						},
-						TargetsTotal:    64,
-						TargetsDisabled: 8,
+						TotalTargets:    64,
+						DisabledTargets: 8,
 					},
 				},
 			},
@@ -353,26 +344,26 @@ two  100 GB 80%  12%       8/64
 `,
 		},
 		"two pools; one failed query": {
-			resp: &control.ListPoolsResp{
-				Pools: []*control.Pool{
+			resp: &control.PoolQueryResp{
+				Pools: []*control.PoolInfo{
 					{
 						Label:           "one",
-						UUID:            common.MockUUID(1),
+						UUID:            uuid.MustParse(common.MockUUID(1)),
 						ServiceReplicas: []system.Rank{0, 1, 2},
-						Usage:           exampleUsage,
-						TargetsTotal:    16,
-						TargetsDisabled: 0,
+						TierStats:       exampleUsage,
+						TotalTargets:    16,
+						DisabledTargets: 0,
 					},
 					{
 						Label:           "two",
-						UUID:            common.MockUUID(2),
+						UUID:            uuid.MustParse(common.MockUUID(2)),
 						ServiceReplicas: []system.Rank{3, 4, 5},
-						QueryErrorMsg:   "stats unavailable",
+						Status:          -1015,
 					},
 				},
 			},
 			expPrintStr: `
-Query on pool "two" unsuccessful, error: "stats unavailable"
+query on pool "two" failed: DER_UNINIT(-1015): Device or resource not initialized
 
 Pool Size   Used Imbalance Disabled 
 ---- ----   ---- --------- -------- 
@@ -380,33 +371,57 @@ one  6.0 TB 83%  12%       0/16
 
 `,
 		},
-		"three pools; one failed query; one query bad status": {
-			resp: &control.ListPoolsResp{
-				Pools: []*control.Pool{
+		"two pools; two failed queries": {
+			resp: &control.PoolQueryResp{
+				Pools: []*control.PoolInfo{
 					{
 						Label:           "one",
-						UUID:            common.MockUUID(1),
+						UUID:            uuid.MustParse(common.MockUUID(1)),
 						ServiceReplicas: []system.Rank{0, 1, 2},
-						Usage:           exampleUsage,
-						TargetsTotal:    16,
-						TargetsDisabled: 0,
+						Status:          -1015,
 					},
 					{
-						UUID:            common.MockUUID(2),
+						Label:           "two",
+						UUID:            uuid.MustParse(common.MockUUID(2)),
 						ServiceReplicas: []system.Rank{3, 4, 5},
-						QueryErrorMsg:   "stats unavailable",
-					},
-					{
-						Label:           "three",
-						UUID:            common.MockUUID(3),
-						ServiceReplicas: []system.Rank{3, 4, 5},
-						QueryStatusMsg:  "DER_UNINIT",
+						Status:          -1015,
 					},
 				},
 			},
 			expPrintStr: `
-Query on pool "00000002" unsuccessful, error: "stats unavailable"
-Query on pool "three" unsuccessful, status: "DER_UNINIT"
+query on pool "one" failed: DER_UNINIT(-1015): Device or resource not initialized
+query on pool "two" failed: DER_UNINIT(-1015): Device or resource not initialized
+
+no pool data to display
+`,
+		},
+		"three pools; one failed query; one query bad status": {
+			resp: &control.PoolQueryResp{
+				Pools: []*control.PoolInfo{
+					{
+						Label:           "one",
+						UUID:            uuid.MustParse(common.MockUUID(1)),
+						ServiceReplicas: []system.Rank{0, 1, 2},
+						TierStats:       exampleUsage,
+						TotalTargets:    16,
+						DisabledTargets: 0,
+					},
+					{
+						UUID:            uuid.MustParse(common.MockUUID(2)),
+						ServiceReplicas: []system.Rank{3, 4, 5},
+						Status:          -1015,
+					},
+					{
+						Label:           "three",
+						UUID:            uuid.MustParse(common.MockUUID(3)),
+						ServiceReplicas: []system.Rank{3, 4, 5},
+						Status:          -1015,
+					},
+				},
+			},
+			expPrintStr: `
+query on pool "00000002" failed: DER_UNINIT(-1015): Device or resource not initialized
+query on pool "three" failed: DER_UNINIT(-1015): Device or resource not initialized
 
 Pool Size   Used Imbalance Disabled 
 ---- ----   ---- --------- -------- 
@@ -415,20 +430,20 @@ one  6.0 TB 83%  12%       0/16
 `,
 		},
 		"verbose, empty response": {
-			resp:    &control.ListPoolsResp{},
+			resp:    &control.PoolQueryResp{},
 			verbose: true,
 			expPrintStr: `
 no pools in system
 `,
 		},
 		"verbose; zero svc replicas": {
-			resp: &control.ListPoolsResp{
-				Pools: []*control.Pool{
+			resp: &control.PoolQueryResp{
+				Pools: []*control.PoolInfo{
 					{
-						UUID:            common.MockUUID(1),
-						Usage:           exampleUsage,
-						TargetsTotal:    16,
-						TargetsDisabled: 0,
+						UUID:            uuid.MustParse(common.MockUUID(1)),
+						TierStats:       exampleUsage,
+						TotalTargets:    16,
+						DisabledTargets: 0,
 					},
 				},
 			},
@@ -441,23 +456,23 @@ Label UUID                                 SvcReps SCM Size SCM Used SCM Imbalan
 `,
 		},
 		"verbose; two pools": {
-			resp: &control.ListPoolsResp{
-				Pools: []*control.Pool{
+			resp: &control.PoolQueryResp{
+				Pools: []*control.PoolInfo{
 					{
 						Label:           "one",
-						UUID:            common.MockUUID(1),
+						UUID:            uuid.MustParse(common.MockUUID(1)),
 						ServiceReplicas: []system.Rank{0, 1, 2},
-						Usage:           exampleUsage,
-						TargetsTotal:    16,
-						TargetsDisabled: 0,
+						TierStats:       exampleUsage,
+						TotalTargets:    16,
+						DisabledTargets: 0,
 					},
 					{
 						Label:           "two",
-						UUID:            common.MockUUID(2),
+						UUID:            uuid.MustParse(common.MockUUID(2)),
 						ServiceReplicas: []system.Rank{3, 4, 5},
-						Usage:           exampleUsage,
-						TargetsTotal:    64,
-						TargetsDisabled: 8,
+						TierStats:       exampleUsage,
+						TotalTargets:    64,
+						DisabledTargets: 8,
 					},
 				},
 			},
@@ -476,7 +491,7 @@ two   00000002-0002-0002-0002-000000000002 [3-5]   100 GB   80 GB    12%        
 
 			// pass the same io writer to standard and error stream
 			// parameters to mimic combined output seen on terminal
-			err := PrintListPoolsResponse(&bld, &bld, tc.resp, tc.verbose)
+			err := PrintPoolList(&bld, &bld, tc.resp, tc.verbose)
 			common.CmpErr(t, tc.expErr, err)
 			if tc.expErr != nil {
 				return

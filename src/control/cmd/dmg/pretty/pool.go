@@ -12,24 +12,57 @@ import (
 	"strings"
 
 	"github.com/dustin/go-humanize"
+	"github.com/google/uuid"
 	"github.com/pkg/errors"
 
+	"github.com/daos-stack/daos/src/control/drpc"
 	"github.com/daos-stack/daos/src/control/lib/control"
 	"github.com/daos-stack/daos/src/control/lib/txtfmt"
 	"github.com/daos-stack/daos/src/control/system"
 )
 
-// PrintPoolInfo generates a human-readable representation of the supplied
-// PoolQueryResp struct and writes it to the supplied io.Writer.
-func PrintPoolInfo(pi *control.PoolInfo, out io.Writer, opts ...PrintConfigOption) error {
+func validatePoolQueryResp(pqr *control.PoolQueryResp) error {
+	var numTiers int
+	var zeroUUID uuid.UUID
+
+	for i, p := range pqr.Pools {
+		if p.UUID == zeroUUID {
+			return errors.Errorf("pool with index %d has invalid zero value uuid", i)
+		}
+		if len(p.TierStats) == 0 {
+			numTiers = -1
+			continue // no usage stats in response
+		}
+		if numTiers != 0 && len(p.TierStats) != numTiers {
+			if numTiers == -1 {
+				numTiers = 0
+			}
+			return errors.Errorf("pool %s has %d storage tiers, want %d",
+				p.UUID, len(p.TierStats), numTiers)
+		}
+		numTiers = len(p.TierStats)
+	}
+
+	return nil
+}
+
+// PrintPoolInfo generates a human-readable representation of a PoolInfo struct and writes it to
+// the supplied io.Writer.
+func PrintPoolInfo(pi *control.PoolInfo, out io.Writer) error {
 	if pi == nil {
 		return errors.Errorf("nil %T", pi)
 	}
 	w := txtfmt.NewErrWriter(out)
 
+	var zeroUUID uuid.UUID
+	uuid := pi.UUID.String()
+	if uuid == zeroUUID.String() {
+		uuid = ""
+	}
+
 	// Maintain output compatibility with the `daos pool query` output.
 	fmt.Fprintf(w, "Pool %s, ntarget=%d, disabled=%d, leader=%d, version=%d\n",
-		pi.UUID, pi.TotalTargets, pi.DisabledTargets, pi.Leader, pi.Version)
+		uuid, pi.TotalTargets, pi.DisabledTargets, pi.Leader, pi.Version)
 	fmt.Fprintln(w, "Pool space info:")
 	fmt.Fprintf(w, "- Target(VOS) count:%d\n", pi.ActiveTargets)
 	if pi.TierStats != nil {
@@ -57,6 +90,20 @@ func PrintPoolInfo(pi *control.PoolInfo, out io.Writer, opts ...PrintConfigOptio
 	}
 
 	return w.Err
+}
+
+// PrintPoolQueryResponse generates a human-readable representation of the pool query response
+// and prints it to the supplied io.Writer.
+func PrintPoolQueryResponse(pqr *control.PoolQueryResp, out io.Writer) error {
+	if pqr == nil {
+		return errors.New("nil response")
+	}
+
+	if len(pqr.Pools) == 0 {
+		return PrintPoolInfo(&control.PoolInfo{}, out)
+	}
+
+	return PrintPoolInfo(pqr.Pools[0], out)
 }
 
 // PrintPoolCreateResponse generates a human-readable representation of the pool create
@@ -151,26 +198,44 @@ func createPoolListRow(pool *control.PoolInfo) txtfmt.TableRow {
 	return row
 }
 
-func printPoolList(out io.Writer, pqr *control.PoolQueryResp) error {
-	if len(pqr.Pools) == 0 {
-		fmt.Fprintln(out, "no pools in system")
-		return nil
-	}
+type createRowFn func(*control.PoolInfo) txtfmt.TableRow
 
-	formatter := txtfmt.NewTableFormatter("Pool", "Size", "Used", "Imbalance", "Disabled")
+func printPoolListCommon(out, outErr io.Writer, pqr *control.PoolQueryResp, titles []string, rowCreator createRowFn) error {
+	formatter := txtfmt.NewTableFormatter(titles...)
 
 	var table []txtfmt.TableRow
 	for _, pool := range pqr.Pools {
-		table = append(table, createPoolListRow(pool))
+		if pool.Status == 0 {
+			table = append(table, rowCreator(pool))
+			continue
+		}
+		fmt.Fprintf(outErr, "query on pool %q failed: %s\n", pool,
+			drpc.DaosStatus(pool.Status))
 	}
 
-	fmt.Fprintln(out, formatter.Format(table))
+	if len(table) != len(pqr.Pools) {
+		fmt.Fprintln(out, "") // Add separator if errors printed.
+	}
+
+	if len(table) > 0 {
+		fmt.Fprintln(out, formatter.Format(table))
+	} else {
+		fmt.Fprintln(out, "no pool data to display")
+	}
 
 	return nil
 }
 
+func printPoolList(out, outErr io.Writer, pqr *control.PoolQueryResp) error {
+	titles := []string{"Pool", "Size", "Used", "Imbalance", "Disabled"}
+	return printPoolListCommon(out, outErr, pqr, titles, createPoolListRow)
+}
+
 func getStorageStatsTitles(tu *control.StorageUsageStats, idx int) (string, string, string) {
-	name := fmt.Sprintf("%s-%d", strings.ToUpper(tu.MediaType), idx)
+	// NOTE: When multiple tiers of the same type are common, label tiers with an integer
+	//       but for the moment just use the media type as the column title prefix.
+	//name := fmt.Sprintf("%s-%d", strings.ToUpper(tu.MediaType), idx)
+	name := strings.ToUpper(tu.MediaType)
 	return name + " Size", name + " Used", name + " Imbalance"
 }
 
@@ -203,39 +268,38 @@ func createPoolListRowVerbose(pi *control.PoolInfo) txtfmt.TableRow {
 	return row
 }
 
-func printPoolListVerbose(out io.Writer, pqr *control.PoolQueryResp) error {
-	if len(pqr.Pools) == 0 {
-		fmt.Fprintln(out, "no pools in system")
-		return nil
-	}
-
+func printPoolListVerbose(out, outErr io.Writer, pqr *control.PoolQueryResp) error {
 	titles := []string{"Label", "UUID", "SvcReps"}
-	for idx, ts := range pqr.Pools[0].TierStats {
-		size, used, imbalance := getStorageStatsTitles(ts, idx)
-		titles = append(titles, size, used, imbalance)
+
+	if pqr.Pools[0].TierStats != nil {
+		for idx, ts := range pqr.Pools[0].TierStats {
+			size, used, imbalance := getStorageStatsTitles(ts, idx)
+			titles = append(titles, size, used, imbalance)
+		}
 	}
 	titles = append(titles, "Disabled")
-	formatter := txtfmt.NewTableFormatter(titles...)
 
-	var table []txtfmt.TableRow
-	for _, pi := range pqr.Pools {
-		table = append(table, createPoolListRowVerbose(pi))
-	}
-
-	fmt.Fprintln(out, formatter.Format(table))
-
-	return nil
+	return printPoolListCommon(out, outErr, pqr, titles, createPoolListRowVerbose)
 }
 
 // PrintPoolList generates a human-readable representation of the supplied PoolQueryResp struct and
 // writes it to the supplied io.Writer. Additional columns for pool UUID and service replicas are
 // displayed if verbose is set.
 func PrintPoolList(out, outErr io.Writer, pqr *control.PoolQueryResp, verbose bool) error {
-	if verbose {
-		return printPoolListVerbose(out, pqr)
+	if len(pqr.Pools) == 0 {
+		fmt.Fprintln(out, "no pools in system")
+		return nil
 	}
 
-	return printPoolList(out, pqr)
+	if err := validatePoolQueryResp(pqr); err != nil {
+		return err
+	}
+
+	if verbose {
+		return printPoolListVerbose(out, outErr, pqr)
+	}
+
+	return printPoolList(out, outErr, pqr)
 }
 
 // PrintPoolProperties displays a two-column table of pool property names and values.

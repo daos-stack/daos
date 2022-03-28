@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2021 Intel Corporation.
+// (C) Copyright 2019-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -197,7 +197,7 @@ func TestDmg_SystemCommands(t *testing.T) {
 			"system list-pools with default config",
 			"system list-pools",
 			strings.Join([]string{
-				printRequest(t, &control.ListPoolsReq{}),
+				printRequest(t, &control.PoolQueryReq{}),
 			}, " "),
 			nil,
 		},

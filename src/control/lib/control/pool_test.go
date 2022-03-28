@@ -553,7 +553,7 @@ func TestControl_PoolQuery(t *testing.T) {
 			req := tc.req
 			if req == nil {
 				req = &PoolQueryReq{
-					UUIDs: []uuid.UUID{mockUUID(0)},
+					ID: mockUUID(0).String(),
 				}
 			}
 			mic := tc.mic

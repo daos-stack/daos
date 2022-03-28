@@ -279,17 +279,13 @@ type PoolListCmd struct {
 
 // Execute is run when PoolListCmd activates
 func (cmd *PoolListCmd) Execute(_ []string) (errOut error) {
-	defer func() {
-		errOut = errors.Wrap(errOut, "list pools failed")
-	}()
-
 	if cmd.config == nil {
 		return errors.New("no configuration loaded")
 	}
 
 	// PoolQueryReq with empty UUID list will retrieve all pools.
 	req := &control.PoolQueryReq{
-		NoQuery: cmd.NoQuery,
+		NoDrpc: cmd.NoQuery,
 	}
 
 	resp, err := control.PoolQuery(context.Background(), cmd.ctlInvoker, req)
@@ -298,11 +294,11 @@ func (cmd *PoolListCmd) Execute(_ []string) (errOut error) {
 	}
 
 	if cmd.jsonOutputEnabled() {
-		return cmd.outputJSON(resp, nil)
+		return cmd.outputJSON(resp, resp.Errors())
 	}
 
 	var out, outErr strings.Builder
-	if err := pretty.PrintListPoolsResponse(&out, &outErr, resp, cmd.Verbose); err != nil {
+	if err := pretty.PrintPoolList(&out, &outErr, resp, cmd.Verbose); err != nil {
 		return err
 	}
 	if outErr.String() != "" {
@@ -505,25 +501,33 @@ func (cmd *PoolQueryCmd) Execute(args []string) error {
 		ID: cmd.PoolID().String(),
 	}
 
-	resp, err := control.PoolQuery(context.Background(), cmd.ctlInvoker, req)
-
-	if cmd.jsonOutputEnabled() {
-		return cmd.outputJSON(resp, err)
+	if req.ID == "" {
+		return errors.New("empty id in pool query request")
 	}
 
+	resp, err := control.PoolQuery(context.Background(), cmd.ctlInvoker, req)
 	if err != nil {
-		return errors.Wrap(err, "pool query failed")
+		return errors.Wrap(err, "pool query failed") // API failed, discard response
+	}
+
+	if cmd.jsonOutputEnabled() {
+		return cmd.outputJSON(resp, resp.Errors())
+	}
+
+	if resp.Pools == nil {
+		return errors.New("nil pool list in response")
 	}
 	if len(resp.Pools) != 1 {
 		return errors.Errorf("expected 1 pool in response, got %d", len(resp.Pools))
 	}
 
 	var bld strings.Builder
-	if err := pretty.PrintPoolInfo(resp.Pools[0], &bld); err != nil {
+	if err := pretty.PrintPoolQueryResponse(resp, &bld); err != nil {
 		return err
 	}
 	cmd.log.Info(bld.String())
-	return nil
+
+	return resp.Errors()
 }
 
 // PoolSetPropCmd represents the command to set a property on a pool.

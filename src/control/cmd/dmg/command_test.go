@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2021 Intel Corporation.
+// (C) Copyright 2019-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -140,12 +140,14 @@ func (bci *bridgeConnInvoker) InvokeUnaryRPC(ctx context.Context, uReq control.U
 		resp = control.MockMSResponse("", nil, &mgmtpb.SystemCleanupResp{})
 	case *control.LeaderQueryReq:
 		resp = control.MockMSResponse("", nil, &mgmtpb.LeaderQueryResp{})
-	case *control.ListPoolsReq:
-		resp = control.MockMSResponse("", nil, &mgmtpb.ListPoolsResp{})
 	case *control.ContSetOwnerReq:
 		resp = control.MockMSResponse("", nil, &mgmtpb.ContSetOwnerResp{})
 	case *control.PoolQueryReq:
-		resp = control.MockMSResponse("", nil, &mgmtpb.PoolQueryResp{})
+		resp = control.MockMSResponse("", nil, &mgmtpb.PoolQueryResp{
+			Pools: []*mgmtpb.PoolQueryResp_Pool{
+				{Uuid: common.MockUUID(1)},
+			},
+		})
 	case *control.PoolGetACLReq, *control.PoolOverwriteACLReq,
 		*control.PoolUpdateACLReq, *control.PoolDeleteACLReq:
 		resp = control.MockMSResponse("", nil, &mgmtpb.ACLResp{})

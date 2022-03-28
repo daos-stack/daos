@@ -342,50 +342,51 @@ func PoolEvict(ctx context.Context, rpcClient UnaryInvoker, req *PoolEvictReq) e
 // PoolQueryReq contains the parameters for a pool query request.
 type PoolQueryReq struct {
 	poolRequest
-	UUIDs []uuid.UUID `json:"-"`
+	NoDrpc bool // Request that query is not forwarded over dRPC to engine.
+	ID     string
 }
 
-// MarshalJSON packs PoolQueryReq struct into a JSON message.
-func (pqr *PoolQueryReq) MarshalJSON() ([]byte, error) {
-	strs := make([]string, len(pqr.UUIDs))
-	for i, u := range pqr.UUIDs {
-		strs[i] = u.String()
-	}
-
-	type toJSON PoolQueryReq
-	return json.Marshal(&struct {
-		UUIDStrs []string `json:"uuids"`
-		*toJSON
-	}{
-		UUIDStrs: strs,
-		toJSON:   (*toJSON)(pqr),
-	})
-}
-
-// UnmarshalJSON unpacks JSON message into PoolQueryReq struct.
-func (pqr *PoolQueryReq) UnmarshalJSON(data []byte) error {
-	type Alias PoolQueryReq
-	aux := &struct {
-		UUIDStrs []string `json:"uuids"`
-		*Alias
-	}{
-		Alias: (*Alias)(pqr),
-	}
-	if err := json.Unmarshal(data, &aux); err != nil {
-		return err
-	}
-
-	pqr.UUIDs = make([]uuid.UUID, len(aux.UUIDStrs))
-	for i, us := range aux.UUIDStrs {
-		uu, err := uuid.Parse(us)
-		if err != nil {
-			return errors.Wrapf(err, "invalid uuid %q", us)
-		}
-		pqr.UUIDs[i] = uu
-	}
-
-	return nil
-}
+//// MarshalJSON packs PoolQueryReq struct into a JSON message.
+//func (pqr *PoolQueryReq) MarshalJSON() ([]byte, error) {
+//	strs := make([]string, len(pqr.UUIDs))
+//	for i, u := range pqr.UUIDs {
+//		strs[i] = u.String()
+//	}
+//
+//	type toJSON PoolQueryReq
+//	return json.Marshal(&struct {
+//		UUIDStrs []string `json:"uuids"`
+//		*toJSON
+//	}{
+//		UUIDStrs: strs,
+//		toJSON:   (*toJSON)(pqr),
+//	})
+//}
+//
+//// UnmarshalJSON unpacks JSON message into PoolQueryReq struct.
+//func (pqr *PoolQueryReq) UnmarshalJSON(data []byte) error {
+//	type Alias PoolQueryReq
+//	aux := &struct {
+//		UUIDStrs []string `json:"uuids"`
+//		*Alias
+//	}{
+//		Alias: (*Alias)(pqr),
+//	}
+//	if err := json.Unmarshal(data, &aux); err != nil {
+//		return err
+//	}
+//
+//	pqr.UUIDs = make([]uuid.UUID, len(aux.UUIDStrs))
+//	for i, us := range aux.UUIDStrs {
+//		uu, err := uuid.Parse(us)
+//		if err != nil {
+//			return errors.Wrapf(err, "invalid uuid %q", us)
+//		}
+//		pqr.UUIDs[i] = uu
+//	}
+//
+//	return nil
+//}
 
 // StorageUsageStats represents DAOS storage usage statistics.
 type StorageUsageStats struct {
@@ -502,6 +503,13 @@ func (pi *PoolInfo) GetName() string {
 	return name
 }
 
+func (pi *PoolInfo) String() string {
+	if pi == nil {
+		return "<nil>"
+	}
+	return pi.GetName()
+}
+
 // MarshalJSON packs PoolInfo struct into a JSON message.
 func (pi *PoolInfo) MarshalJSON() ([]byte, error) {
 	type toJSON PoolInfo
@@ -550,17 +558,47 @@ type PoolQueryResp struct {
 	Pools []*PoolInfo `json:"pools"`
 }
 
+// Errors attempts to summarize pool failures within a query response.
+func (pqr *PoolQueryResp) Errors() error {
+	if pqr == nil {
+		return errors.New("nil PoolQueryResp")
+	}
+
+	var fPools []*PoolInfo
+	for _, pool := range pqr.Pools {
+		if pool.Status != 0 {
+			fPools = append(fPools, pool)
+		}
+	}
+
+	switch len(fPools) {
+	case 0:
+		return nil
+	case 1:
+		return errors.Wrapf(drpc.DaosStatus(fPools[0].Status), "query on pool %q failed", fPools[0])
+	default:
+		return errors.Errorf("query on pools %q failed", fPools)
+	}
+}
+
 // PoolQuery performs a pool query operation for the specified pool ID on a
 // DAOS Management Server instance.
 func PoolQuery(ctx context.Context, rpcClient UnaryInvoker, req *PoolQueryReq) (*PoolQueryResp, error) {
-	pbReq := new(mgmtpb.PoolQueryReq)
-	if err := convert.Types(req, pbReq); err != nil {
-		return nil, errors.Wrap(err, "failed to convert PoolQuery request")
+	if req == nil {
+		errors.New("nil request")
 	}
-	pbReq.Sys = req.getSystem(rpcClient)
+
+	// To list pools, empty ID will be passed, to query a pool, ID will be set.
+	reqPools := []*mgmtpb.PoolQueryReq_Pool{}
+	if req.ID != "" {
+		reqPools = append(reqPools, &mgmtpb.PoolQueryReq_Pool{Id: req.ID})
+	}
 
 	req.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
-		return mgmtpb.NewMgmtSvcClient(conn).PoolQuery(ctx, pbReq)
+		return mgmtpb.NewMgmtSvcClient(conn).PoolQuery(ctx, &mgmtpb.PoolQueryReq{
+			Sys:   req.getSystem(rpcClient),
+			Pools: reqPools,
+		})
 	})
 
 	rpcClient.Debugf("Query DAOS pool request: %v\n", req)
@@ -569,7 +607,7 @@ func PoolQuery(ctx context.Context, rpcClient UnaryInvoker, req *PoolQueryReq) (
 		return nil, err
 	}
 
-	pqr := new(PoolQueryResp)
+	pqr := &PoolQueryResp{}
 	return pqr, convertMSResponse(ur, pqr)
 }
 
