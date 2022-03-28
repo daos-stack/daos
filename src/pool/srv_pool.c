@@ -6050,8 +6050,7 @@ ds_pool_evict_handler(crt_rpc_t *rpc)
 		d_iov_t		value;
 
 		d_iov_set(&value, &connectable, sizeof(connectable));
-		rc = rdb_tx_update(&tx, &svc->ps_root,
-				   &ds_pool_prop_connectable, &value);
+		rc = rdb_tx_update_critical(&tx, &svc->ps_root, &ds_pool_prop_connectable, &value);
 		if (rc != 0)
 			D_GOTO(out_free, rc);
 

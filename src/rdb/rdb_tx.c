@@ -308,12 +308,11 @@ rdb_tx_op_decode(const void *buf, size_t len, struct rdb_tx_op *op)
 
 /* Append an update operation to tx->dt_entry. */
 static int
-rdb_tx_append(struct rdb_tx *tx, struct rdb_tx_op *op)
+rdb_tx_append(struct rdb_tx *tx, struct rdb_tx_op *op, bool is_critical)
 {
 	struct rdb_tx_hdr	hdr;
 	size_t			op_len;
 	size_t			len;
-	bool			opc_is_critical;
 	const size_t		RDB_TX_CRITICAL_OPS_LIMIT = 8;
 	int			rc;
 
@@ -369,18 +368,21 @@ rdb_tx_append(struct rdb_tx *tx, struct rdb_tx_op *op)
 
 	/* TX is critical if it is reasonably-sized, and any op is critical */
 	tx->dt_num_ops++;
-	opc_is_critical = ((op->dto_opc == RDB_TX_DESTROY_ROOT) ||
-			   (op->dto_opc == RDB_TX_DESTROY) ||
-			   (op->dto_opc == RDB_TX_DELETE));
 	if (tx->dt_entry_len == 0) {
-		hdr.critical = opc_is_critical ? 1 : 0;
+		hdr.critical = is_critical ? 1 : 0;
 		tx->dt_entry_len += rdb_tx_hdr_encode(&hdr, tx->dt_entry);
+		D_DEBUG(DB_MD, DF_DB": marking tx critical due to first opcode %d\n",
+			DP_DB(tx->dt_db), op->dto_opc);
 	} else if (tx->dt_num_ops > RDB_TX_CRITICAL_OPS_LIMIT) {
 		hdr.critical = 0;
 		rdb_tx_hdr_encode(&hdr, tx->dt_entry);
-	} else if (opc_is_critical) {
+		D_DEBUG(DB_MD, DF_DB": marking tx NOT critical, num_ops(%d) > limit(%zu)\n",
+			DP_DB(tx->dt_db), tx->dt_num_ops, RDB_TX_CRITICAL_OPS_LIMIT);
+	} else if (is_critical) {
 		hdr.critical = 1;
 		rdb_tx_hdr_encode(&hdr, tx->dt_entry);
+		D_DEBUG(DB_MD, DF_DB": marking tx critical, opcode %d\n",
+			DP_DB(tx->dt_db), op->dto_opc);
 	}
 
 	/* Now do the actual encoding. */
@@ -466,7 +468,7 @@ rdb_tx_create_root(struct rdb_tx *tx, const struct rdb_kvs_attr *attr)
 		.dto_attr	= (struct rdb_kvs_attr *)attr
 	};
 
-	return rdb_tx_append(tx, &op);
+	return rdb_tx_append(tx, &op, false /* is_critical */);
 }
 
 /**
@@ -487,7 +489,7 @@ rdb_tx_destroy_root(struct rdb_tx *tx)
 		.dto_attr	= NULL
 	};
 
-	return rdb_tx_append(tx, &op);
+	return rdb_tx_append(tx, &op, true /* is_critical */);
 }
 
 /**
@@ -512,7 +514,7 @@ rdb_tx_create_kvs(struct rdb_tx *tx, const rdb_path_t *parent,
 		.dto_attr	= (struct rdb_kvs_attr *)attr
 	};
 
-	return rdb_tx_append(tx, &op);
+	return rdb_tx_append(tx, &op, false /* is_critical */);
 }
 
 /**
@@ -537,7 +539,7 @@ rdb_tx_destroy_kvs(struct rdb_tx *tx, const rdb_path_t *parent,
 		.dto_attr	= NULL
 	};
 
-	return rdb_tx_append(tx, &op);
+	return rdb_tx_append(tx, &op, true /* is_critical */);
 }
 
 /**
@@ -562,7 +564,33 @@ rdb_tx_update(struct rdb_tx *tx, const rdb_path_t *kvs, const d_iov_t *key,
 		.dto_attr	= NULL
 	};
 
-	return rdb_tx_append(tx, &op);
+	return rdb_tx_append(tx, &op, false /* is_critical */);
+}
+
+/**
+ * Update the value of \a key in \a kvs to \a value.
+ * Mark the TX as critical (to not fail the TX due to SCM free space checks).
+ *
+ * \param[in]	tx	transaction
+ * \param[in]	kvs	path to KVS
+ * \param[in]	key	key in KVS
+ * \param[in]	value	new value
+ *
+ * \retval -DER_NOTLEADER	not current leader
+ */
+int
+rdb_tx_update_critical(struct rdb_tx *tx, const rdb_path_t *kvs, const d_iov_t *key,
+	      const d_iov_t *value)
+{
+	struct rdb_tx_op op = {
+		.dto_opc	= RDB_TX_UPDATE,
+		.dto_kvs	= *kvs,
+		.dto_key	= *key,
+		.dto_value	= *value,
+		.dto_attr	= NULL
+	};
+
+	return rdb_tx_append(tx, &op, true /* is_critical */);
 }
 
 /**
@@ -585,7 +613,7 @@ rdb_tx_delete(struct rdb_tx *tx, const rdb_path_t *kvs, const d_iov_t *key)
 		.dto_attr	= NULL
 	};
 
-	return rdb_tx_append(tx, &op);
+	return rdb_tx_append(tx, &op, true /* is_critical */);
 }
 
 static inline int

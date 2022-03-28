@@ -280,6 +280,11 @@ class ObjectMetadata(TestWithServers):
             "Phase 3: passed (created %d / %d containers)", len(self.container), loop)
         self.log.info("Test passed")
 
+        # instruct tearDown to skip containers destroy
+        # (we want to invoke pool destroy with a full metadata rdb)
+        self.log.info("Setting self.skip_destroy_containers = True")
+        self.skip_destroy_containers = True
+
     def test_metadata_addremove(self):
         """JIRA ID: DAOS-1512.
 
