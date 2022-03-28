@@ -3,6 +3,8 @@
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
+// +mocks
+// go:build mocks
 
 package bdev
 
