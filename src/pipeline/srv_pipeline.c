@@ -886,7 +886,7 @@ ds_pipeline_run_handler(crt_rpc_t *rpc)
 		D_ALLOC_ARRAY(sgl_aggr, pri->pri_pipe.num_aggr_filters);
 		if (sgl_aggr == NULL)
 		{
-			D_GOTO(exit, rc = -DER_NOMEM);
+			D_GOTO(exit0, rc = -DER_NOMEM);
 		}
 		for (i = 0; i < pri->pri_pipe.num_aggr_filters; i++)
 		{
@@ -894,7 +894,7 @@ ds_pipeline_run_handler(crt_rpc_t *rpc)
 				sizeof(*sgl_aggr[i].sg_iovs));
 			if (sgl_aggr[i].sg_iovs == NULL)
 			{
-				D_GOTO(exit, rc = -DER_NOMEM);
+				D_GOTO(exit0, rc = -DER_NOMEM);
 			}
 			sgl_aggr[i].sg_nr     = 1;
 			sgl_aggr[i].sg_nr_out = 1;
@@ -902,7 +902,7 @@ ds_pipeline_run_handler(crt_rpc_t *rpc)
 			D_ALLOC(sgl_aggr[i].sg_iovs->iov_buf, sizeof(double));
 			if (sgl_aggr[i].sg_iovs->iov_buf == NULL)
 			{
-				D_GOTO(exit, rc = -DER_NOMEM);
+				D_GOTO(exit0, rc = -DER_NOMEM);
 			}
 			sgl_aggr[i].sg_iovs->iov_len     = sizeof(double);
 			sgl_aggr[i].sg_iovs->iov_buf_len = sizeof(double);
@@ -917,6 +917,8 @@ ds_pipeline_run_handler(crt_rpc_t *rpc)
 			     &nr_kds_out, &kds, &sgl_keys, &nr_recx, &sgl_recx,
 			     sgl_aggr);
 
+exit0:
+	ds_cont_hdl_put(coh);
 exit:
 
 	/** set output data */
