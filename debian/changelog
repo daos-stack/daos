@@ -3,7 +3,7 @@ daos (2.1.100-24) unstable; urgency=medium
   * Extract MPI from many binaries create dpar and dpar_mpi providing a
     similar interface to abstract away the direct MPI dependence
 
- -- Jeff Olivier <jeffrey.v.olivier@intel.com>  Tue, 08 Mar 2022 10:30:01 -0100
+ -- Jeff Olivier <jeffrey.v.olivier@intel.com>  Mon, 28 Mar 2022 10:30:01 -0100
 
 daos (2.1.100-22) unstable; urgency=medium
   [ Alexander Oganezov ]

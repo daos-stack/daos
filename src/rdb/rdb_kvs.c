@@ -7,8 +7,8 @@
  * rdb: KVSs
  *
  * This file implements an LRU cache of rdb_kvs objects, each of which maps a
- * KVS path to the matching VOS object. The cache provides better KVS path
- * lookup performance.
+ * KVS path to the matching VOS object in the LC at the last index. The cache
+ * provides better KVS path lookup performance.
  */
 
 #define D_LOGFAC	DD_FAC(rdb)

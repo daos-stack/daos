@@ -11,7 +11,7 @@ import general_utils
 
 from avocado import skip
 from dfuse_test_base import DfuseTestBase
-from command_utils import CommandFailure
+from exception_utils import CommandFailure
 
 def skip_on_centos7():
     """Decorator to allow selective skipping of test"""

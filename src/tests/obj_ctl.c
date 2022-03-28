@@ -164,7 +164,7 @@ ctl_vos_list(struct io_credit *cred)
 			D_GOTO(out, rc = -1);
 		}
 
-		rc = vos_iter_next(ih);
+		rc = vos_iter_next(ih, NULL);
 		opstr = "next";
 	}
 out:
