@@ -76,6 +76,7 @@ const (
 	ScmNoDevicesMatchFilter
 	ScmNotInterleaved
 	ScmNoModules
+	ScmNamespacesNrMismatch
 )
 
 // Bdev fault codes

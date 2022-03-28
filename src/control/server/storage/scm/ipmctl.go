@@ -363,28 +363,42 @@ func parseShowRegionOutput(log logging.Logger, text string) (_ []uint64, err err
 	return regionFreeBytes, nil
 }
 
-func (cr *cmdRunner) getRegionState() (storage.ScmState, error) {
+func (cr *cmdRunner) getRegionFreeSpace() ([]uint64, error) {
 	out, err := cr.showRegions()
 	if err != nil {
-		return storage.ScmStateUnknown, errors.WithMessage(err, "show regions cmd")
+		return nil, errors.WithMessage(err, "show regions cmd")
 	}
 
 	cr.log.Debugf("show region output: %s\n", out)
 
 	if strings.Contains(out, outScmNoRegions) {
-		return storage.ScmStateNoRegions, nil
+		return []uint64{}, nil
 	}
 
 	regionFreeBytes, err := parseShowRegionOutput(cr.log, out)
+	if err != nil {
+		return nil, errors.Wrap(err, "parse show region cmd output")
+	}
+	if len(regionFreeBytes) == 0 {
+		return nil, errors.New("no AppDirect PMem regions parsed")
+	}
+
+	return regionFreeBytes, nil
+}
+
+func (cr *cmdRunner) getRegionState() (storage.ScmState, error) {
+	regionFreeBytes, err := cr.getRegionFreeSpace()
 	if err != nil {
 		if err == storage.FaultScmNotInterleaved {
 			return storage.ScmStateNotInterleaved, nil // state handled in callen
 		}
 		return storage.ScmStateUnknown, err
 	}
+
 	if len(regionFreeBytes) == 0 {
-		return storage.ScmStateUnknown, errors.New("no AppDirect PMem regions parsed")
+		return storage.ScmStateNoRegions, nil
 	}
+
 	for _, freeBytes := range regionFreeBytes {
 		if freeBytes > 0 {
 			cr.log.Debugf("PMem regions have %v free bytes", regionFreeBytes)
@@ -462,6 +476,11 @@ func (cr *cmdRunner) prep(req storage.ScmPrepareRequest, scanRes *storage.ScmSca
 		return nil, err
 	}
 
+	// Handle unspecified NrNamespacesPerNUMA in request.
+	if req.NrNamespacesPerNUMA == 0 {
+		req.NrNamespacesPerNUMA = 1
+	}
+
 	switch state {
 	case storage.ScmStateNotInterleaved:
 		// Non-interleaved AppDirect memory mode is unsupported.
@@ -480,7 +499,23 @@ func (cr *cmdRunner) prep(req storage.ScmPrepareRequest, scanRes *storage.ScmSca
 		}
 		resp.State = storage.ScmStateNoFreeCapacity
 	case storage.ScmStateNoFreeCapacity:
-		// Regions and namespaces extant, return namespaces.
+		// Regions and namespaces exist so sanity check number of namespaces matches the
+		// number requested before returning details.
+		var regionFreeBytes []uint64
+		regionFreeBytes, err = cr.getRegionFreeSpace()
+		if err != nil {
+			break
+		}
+
+		nrRegions := uint(len(regionFreeBytes))
+		nrNamespaces := uint(len(scanRes.Namespaces))
+
+		// Assume 1:1 mapping between region and NUMA node.
+		if (nrRegions * req.NrNamespacesPerNUMA) != nrNamespaces {
+			err = storage.FaultScmNamespacesNrMismatch(req.NrNamespacesPerNUMA,
+				nrRegions, nrNamespaces)
+			break
+		}
 		resp.Namespaces = scanRes.Namespaces
 	default:
 		err = errors.Errorf("unhandled scm state %q", state)
@@ -594,13 +629,25 @@ func (cr *cmdRunner) createDualNamespacesPerNUMA() (storage.ScmNamespaces, error
 
 	for idx, freeBytes := range regionFreeBytes {
 		if freeBytes == 0 {
-			return nil, errors.Errorf("region %d has no free space", idx)
+			// Catch edge case where trying to create multiple namespaces per NUMA node
+			// but a region already has a single namespace taking full capacity.
+			cr.log.Errorf("createDualNamespacesPerNUMA: region %d has no free space", idx)
+
+			nss, err := cr.getNamespaces()
+			if err != nil {
+				return nil, err
+			}
+
+			return nil, storage.FaultScmNamespacesNrMismatch(2,
+				uint(len(regionFreeBytes)), uint(len(nss)))
 		}
-		pmemBytes := freeBytes / 2
+
 		// Check value is 2MiB aligned and (TODO) multiples of interleave width.
+		pmemBytes := freeBytes / 2
 		if pmemBytes%(humanize.MiByte*2) != 0 {
 			return nil, errors.New("free region size is not 2MiB aligned")
 		}
+
 		if _, err := cr.createNamespace(idx, pmemBytes); err != nil {
 			return nil, errors.WithMessage(err, "create namespace cmd")
 		}
@@ -628,7 +675,7 @@ func (cr *cmdRunner) createNamespaces(nrNamespacesPerNUMA uint) (storage.ScmName
 	}
 
 	switch nrNamespacesPerNUMA {
-	case 0, 1:
+	case 1:
 		cr.log.Debug("creating one pmem namespace per numa node")
 		return cr.createSingleNamespacePerNUMA()
 	case 2:

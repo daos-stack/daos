@@ -421,6 +421,7 @@ func TestIpmctl_prep(t *testing.T) {
 }]`
 
 	for name, tc := range map[string]struct {
+		prepReq     *storage.ScmPrepareRequest
 		scanResp    *storage.ScmScanResponse
 		runOut      []string
 		runErr      []error
@@ -541,7 +542,7 @@ func TestIpmctl_prep(t *testing.T) {
 		//	expCalls:   []string{"ndctl create-namespace"},
 		//	expErr:     errors.New("discover PMem regions: fail"),
 		//},
-		"state no free capacity": {
+		"state no free capacity; missing namespace": {
 			scanResp: &storage.ScmScanResponse{
 				State: storage.ScmStateNoFreeCapacity,
 				Namespaces: storage.ScmNamespaces{
@@ -554,6 +555,88 @@ func TestIpmctl_prep(t *testing.T) {
 					},
 				},
 			},
+			runOut: []string{
+				verStr,
+				"---ISetID=0x2aba7f4828ef2ccc---\n" +
+					"   PersistentMemoryType=AppDirect\n" +
+					"   FreeCapacity=0.0 GiB\n" +
+					"---ISetID=0x81187f4881f02ccc---\n" +
+					"   PersistentMemoryType=AppDirect\n" +
+					"   FreeCapacity=0.0 GiB\n",
+			},
+			expErr: errors.New("want 2 PMem namespaces but got 1"),
+			expCalls: []string{
+				"ipmctl version",
+				"ipmctl show -d PersistentMemoryType,FreeCapacity -region",
+			},
+		},
+		"state no free capacity; requested number of namespaces does not match": {
+			prepReq: &storage.ScmPrepareRequest{
+				NrNamespacesPerNUMA: 2,
+			},
+			scanResp: &storage.ScmScanResponse{
+				State: storage.ScmStateNoFreeCapacity,
+				Namespaces: storage.ScmNamespaces{
+					{
+						UUID:        "842fc847-28e0-4bb6-8dfc-d24afdba1528",
+						BlockDevice: "pmem1",
+						Name:        "namespace1.0",
+						NumaNode:    1,
+						Size:        3183575302144,
+					},
+					{
+						UUID:        "842fc847-28e0-4bb6-8dfc-d24afdba1529",
+						BlockDevice: "pmem0",
+						Name:        "namespace0.0",
+						NumaNode:    0,
+						Size:        3183575302144,
+					},
+				},
+			},
+			runOut: []string{
+				verStr,
+				"---ISetID=0x2aba7f4828ef2ccc---\n" +
+					"   PersistentMemoryType=AppDirect\n" +
+					"   FreeCapacity=0.0 GiB\n" +
+					"---ISetID=0x81187f4881f02ccc---\n" +
+					"   PersistentMemoryType=AppDirect\n" +
+					"   FreeCapacity=0.0 GiB\n",
+			},
+			expErr: errors.New("want 4 PMem namespaces but got 2"),
+			expCalls: []string{
+				"ipmctl version",
+				"ipmctl show -d PersistentMemoryType,FreeCapacity -region",
+			},
+		},
+		"state no free capacity": {
+			scanResp: &storage.ScmScanResponse{
+				State: storage.ScmStateNoFreeCapacity,
+				Namespaces: storage.ScmNamespaces{
+					{
+						UUID:        "842fc847-28e0-4bb6-8dfc-d24afdba1528",
+						BlockDevice: "pmem1",
+						Name:        "namespace1.0",
+						NumaNode:    1,
+						Size:        3183575302144,
+					},
+					{
+						UUID:        "842fc847-28e0-4bb6-8dfc-d24afdba1529",
+						BlockDevice: "pmem0",
+						Name:        "namespace0.0",
+						NumaNode:    0,
+						Size:        3183575302144,
+					},
+				},
+			},
+			runOut: []string{
+				verStr,
+				"---ISetID=0x2aba7f4828ef2ccc---\n" +
+					"   PersistentMemoryType=AppDirect\n" +
+					"   FreeCapacity=0.0 GiB\n" +
+					"---ISetID=0x81187f4881f02ccc---\n" +
+					"   PersistentMemoryType=AppDirect\n" +
+					"   FreeCapacity=0.0 GiB\n",
+			},
 			expPrepResp: &storage.ScmPrepareResponse{
 				State: storage.ScmStateNoFreeCapacity,
 				Namespaces: storage.ScmNamespaces{
@@ -564,7 +647,185 @@ func TestIpmctl_prep(t *testing.T) {
 						NumaNode:    1,
 						Size:        3183575302144,
 					},
+					{
+						UUID:        "842fc847-28e0-4bb6-8dfc-d24afdba1529",
+						BlockDevice: "pmem0",
+						Name:        "namespace0.0",
+						NumaNode:    0,
+						Size:        3183575302144,
+					},
 				},
+			},
+			expCalls: []string{
+				"ipmctl version",
+				"ipmctl show -d PersistentMemoryType,FreeCapacity -region",
+			},
+		},
+		"state no free capacity; multiple namespaces per numa; requested number does not match": {
+			prepReq: &storage.ScmPrepareRequest{
+				NrNamespacesPerNUMA: 1,
+			},
+			scanResp: &storage.ScmScanResponse{
+				State: storage.ScmStateNoFreeCapacity,
+				Namespaces: storage.ScmNamespaces{
+					{
+						UUID:        "842fc847-28e0-4bb6-8dfc-d24afdba1528",
+						BlockDevice: "pmem1",
+						Name:        "namespace1.0",
+						NumaNode:    1,
+						Size:        3183575302144,
+					},
+					{
+						UUID:        "842fc847-28e0-4bb6-8dfc-d24afdba1520",
+						BlockDevice: "pmem1.1",
+						Name:        "namespace1.1",
+						NumaNode:    1,
+						Size:        3183575302144,
+					},
+					{
+						UUID:        "842fc847-28e0-4bb6-8dfc-d24afdba1527",
+						BlockDevice: "pmem0",
+						Name:        "namespace0.0",
+						NumaNode:    0,
+						Size:        3183575302144,
+					},
+					{
+						UUID:        "842fc847-28e0-4bb6-8dfc-d24afdba1529",
+						BlockDevice: "pmem0.1",
+						Name:        "namespace0.1",
+						NumaNode:    0,
+						Size:        3183575302144,
+					},
+				},
+			},
+			runOut: []string{
+				verStr,
+				"---ISetID=0x2aba7f4828ef2ccc---\n" +
+					"   PersistentMemoryType=AppDirect\n" +
+					"   FreeCapacity=0.0 GiB\n" +
+					"---ISetID=0x81187f4881f02ccc---\n" +
+					"   PersistentMemoryType=AppDirect\n" +
+					"   FreeCapacity=0.0 GiB\n",
+			},
+			expErr: errors.New("want 2 PMem namespaces but got 4"),
+			expCalls: []string{
+				"ipmctl version",
+				"ipmctl show -d PersistentMemoryType,FreeCapacity -region",
+			},
+		},
+		"state no free capacity; multiple namespaces per numa; one region has no capacity": {
+			prepReq: &storage.ScmPrepareRequest{
+				NrNamespacesPerNUMA: 2,
+			},
+			scanResp: &storage.ScmScanResponse{
+				State: storage.ScmStateNoFreeCapacity,
+				Namespaces: storage.ScmNamespaces{
+					{
+						UUID:        "842fc847-28e0-4bb6-8dfc-d24afdba1527",
+						BlockDevice: "pmem0",
+						Name:        "namespace0.0",
+						NumaNode:    0,
+						Size:        3183575302144,
+					},
+				},
+			},
+			runOut: []string{
+				verStr,
+				"---ISetID=0x2aba7f4828ef2ccc---\n" +
+					"   PersistentMemoryType=AppDirect\n" +
+					"   FreeCapacity=0.0 GiB\n" +
+					"---ISetID=0x81187f4881f02ccc---\n" +
+					"   PersistentMemoryType=AppDirect\n" +
+					"   FreeCapacity=3012.0 GiB\n",
+			},
+			expErr: errors.New("want 4 PMem namespaces but got 1"),
+			expCalls: []string{
+				"ipmctl version",
+				"ipmctl show -d PersistentMemoryType,FreeCapacity -region",
+			},
+		},
+		"state no free capacity; multiple namespaces per numa": {
+			prepReq: &storage.ScmPrepareRequest{
+				NrNamespacesPerNUMA: 2,
+			},
+			scanResp: &storage.ScmScanResponse{
+				State: storage.ScmStateNoFreeCapacity,
+				Namespaces: storage.ScmNamespaces{
+					{
+						UUID:        "842fc847-28e0-4bb6-8dfc-d24afdba1528",
+						BlockDevice: "pmem1",
+						Name:        "namespace1.0",
+						NumaNode:    1,
+						Size:        3183575302144,
+					},
+					{
+						UUID:        "842fc847-28e0-4bb6-8dfc-d24afdba1520",
+						BlockDevice: "pmem1.1",
+						Name:        "namespace1.1",
+						NumaNode:    1,
+						Size:        3183575302144,
+					},
+					{
+						UUID:        "842fc847-28e0-4bb6-8dfc-d24afdba1527",
+						BlockDevice: "pmem0",
+						Name:        "namespace0.0",
+						NumaNode:    0,
+						Size:        3183575302144,
+					},
+					{
+						UUID:        "842fc847-28e0-4bb6-8dfc-d24afdba1529",
+						BlockDevice: "pmem0.1",
+						Name:        "namespace0.1",
+						NumaNode:    0,
+						Size:        3183575302144,
+					},
+				},
+			},
+			runOut: []string{
+				verStr,
+				"---ISetID=0x2aba7f4828ef2ccc---\n" +
+					"   PersistentMemoryType=AppDirect\n" +
+					"   FreeCapacity=0.0 GiB\n" +
+					"---ISetID=0x81187f4881f02ccc---\n" +
+					"   PersistentMemoryType=AppDirect\n" +
+					"   FreeCapacity=0.0 GiB\n",
+			},
+			expPrepResp: &storage.ScmPrepareResponse{
+				State: storage.ScmStateNoFreeCapacity,
+				Namespaces: storage.ScmNamespaces{
+					{
+						UUID:        "842fc847-28e0-4bb6-8dfc-d24afdba1528",
+						BlockDevice: "pmem1",
+						Name:        "namespace1.0",
+						NumaNode:    1,
+						Size:        3183575302144,
+					},
+					{
+						UUID:        "842fc847-28e0-4bb6-8dfc-d24afdba1520",
+						BlockDevice: "pmem1.1",
+						Name:        "namespace1.1",
+						NumaNode:    1,
+						Size:        3183575302144,
+					},
+					{
+						UUID:        "842fc847-28e0-4bb6-8dfc-d24afdba1527",
+						BlockDevice: "pmem0",
+						Name:        "namespace0.0",
+						NumaNode:    0,
+						Size:        3183575302144,
+					},
+					{
+						UUID:        "842fc847-28e0-4bb6-8dfc-d24afdba1529",
+						BlockDevice: "pmem0.1",
+						Name:        "namespace0.1",
+						NumaNode:    0,
+						Size:        3183575302144,
+					},
+				},
+			},
+			expCalls: []string{
+				"ipmctl version",
+				"ipmctl show -d PersistentMemoryType,FreeCapacity -region",
 			},
 		},
 	} {
@@ -607,7 +868,11 @@ func TestIpmctl_prep(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			resp, err := cr.prep(storage.ScmPrepareRequest{}, tc.scanResp)
+			if tc.prepReq == nil {
+				tc.prepReq = &storage.ScmPrepareRequest{}
+			}
+
+			resp, err := cr.prep(*tc.prepReq, tc.scanResp)
 			log.Debugf("calls made %+v", calls)
 			common.CmpErr(t, tc.expErr, err)
 
@@ -717,6 +982,56 @@ func TestIpmctl_prepReset(t *testing.T) {
 			runErr:   errors.New("cmd failed"),
 			expErr:   errors.New("cmd failed"),
 			expCalls: []string{"ndctl disable-namespace namespace1.0"},
+		},
+		"state no free capacity; multiple namespaces per numa": {
+			scanResp: &storage.ScmScanResponse{
+				State: storage.ScmStateNoFreeCapacity,
+				Namespaces: storage.ScmNamespaces{
+					{
+						UUID:        "842fc847-28e0-4bb6-8dfc-d24afdba1528",
+						BlockDevice: "pmem1",
+						Name:        "namespace1.0",
+						NumaNode:    1,
+						Size:        3183575302144,
+					},
+					{
+						UUID:        "842fc847-28e0-4bb6-8dfc-d24afdba1520",
+						BlockDevice: "pmem1.1",
+						Name:        "namespace1.1",
+						NumaNode:    1,
+						Size:        3183575302144,
+					},
+					{
+						UUID:        "842fc847-28e0-4bb6-8dfc-d24afdba1527",
+						BlockDevice: "pmem0",
+						Name:        "namespace0.0",
+						NumaNode:    0,
+						Size:        3183575302144,
+					},
+					{
+						UUID:        "842fc847-28e0-4bb6-8dfc-d24afdba1529",
+						BlockDevice: "pmem0.1",
+						Name:        "namespace0.1",
+						NumaNode:    0,
+						Size:        3183575302144,
+					},
+				},
+			},
+			expPrepResp: &storage.ScmPrepareResponse{
+				State:          storage.ScmStateNoFreeCapacity,
+				RebootRequired: true,
+			},
+			expCalls: []string{
+				"ndctl disable-namespace namespace1.0",
+				"ndctl destroy-namespace namespace1.0",
+				"ndctl disable-namespace namespace1.1",
+				"ndctl destroy-namespace namespace1.1",
+				"ndctl disable-namespace namespace0.0",
+				"ndctl destroy-namespace namespace0.0",
+				"ndctl disable-namespace namespace0.1",
+				"ndctl destroy-namespace namespace0.1",
+				"ipmctl create -f -goal MemoryMode=100",
+			},
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
