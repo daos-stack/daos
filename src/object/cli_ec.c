@@ -2442,7 +2442,7 @@ obj_ec_recov_prep(struct obj_reasb_req *reasb_req, daos_obj_id_t oid,
 	/* when new target failed in recovery, the efi_stripe_lists and
 	 * efi_recov_tasks already initialized.
 	 */
-	if (fail_info->efi_stripe_lists == NULL) {
+	if (fail_info->efi_stripe_sgls == NULL) {
 		rc = obj_ec_stripe_list_init(reasb_req);
 		if (rc)
 			goto out;
@@ -2567,7 +2567,10 @@ again:
 			rec_nr += recov_recx.rx_idx - iod_recx.rx_idx;
 			break;
 		}
-		D_ASSERT(overlapped);
+
+		if (!overlapped)
+			continue;
+
 		iod_off = rec_nr * iod_size;
 
 		/* break the to-be-recovered recx per stripe, can copy
