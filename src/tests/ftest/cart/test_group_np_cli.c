@@ -243,7 +243,6 @@ clean_up:
 int main(int argc, char **argv)
 {
 	int		 rc;
-	char		*env;
 
 	rc = test_parse_args(argc, argv);
 	if (rc != 0) {
@@ -251,8 +250,7 @@ int main(int argc, char **argv)
 		return rc;
 	}
 
-	env = getenv("WITH_VALGRIND");
-	if (env != NULL) {
+	if (D_ON_VALGRIND) {
 		test_g.t_hold_time *= 4;
 		test_g.t_wait_ranks_time *= 4;
 	}
