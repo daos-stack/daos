@@ -31,6 +31,7 @@ typedef int filter_func_t(struct filter_part_run_t *args);
 
 struct filter_part_compiled_t {
 	uint32_t	num_operands;
+	uint32_t	idx_end_subtree;
 	d_iov_t		*iov;
 	size_t		data_offset;
 	size_t		data_len;

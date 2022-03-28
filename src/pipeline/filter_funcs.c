@@ -20,7 +20,7 @@ static int filter_func_getdata_##type(struct filter_part_run_t *args,\
 	rc = args->parts[args->part_idx].filter_func(args);\
 	if (unlikely(rc != 0))\
 	{\
-		return rc;\
+		return rc > 0 ? 0 : rc;\
 	}\
 	if (args->data_out == NULL)\
 	{\
@@ -44,7 +44,7 @@ static int filter_func_getdata_st(struct filter_part_run_t *args,
 	rc = args->parts[args->part_idx].filter_func(args);
 	if (unlikely(rc != 0))
 	{
-		return rc;
+		return rc > 0 ? 0 : rc;
 	}
 	if (args->data_out == NULL)
 	{
@@ -121,35 +121,37 @@ int filter_func_##op##_##type(struct filter_part_run_t *args)\
 {\
 	_##ctype left;\
 	_##ctype right;\
+	uint32_t idx_end_subtree;\
 	uint32_t comparisons;\
-	uint32_t i = 0;\
-	int    rc;\
+	uint32_t i;\
+	int      rc = 0;\
 \
-	comparisons = args->parts[args->part_idx].num_operands - 1;\
+	comparisons     = args->parts[args->part_idx].num_operands - 1;\
+	idx_end_subtree = args->parts[args->part_idx].idx_end_subtree;\
 \
 	rc = filter_func_getdata_##type(args, &left);\
 	if (unlikely(rc != 0))\
 	{\
 		D_GOTO(exit, rc);\
 	}\
-	for (; i < comparisons; i++)\
+	for (i = 0; i < comparisons; i++)\
 	{\
 		rc = filter_func_getdata_##type(args, &right);\
 		if (unlikely(rc != 0))\
 		{\
-			return rc;\
+			D_GOTO(exit, rc);\
 		}\
 		if ((args->log_out = logfunc_##op##_##type(left, right)))\
 		{\
-			i++;\
 			D_GOTO(exit, rc = 0);\
 		}\
 	}\
 exit:\
-	args->part_idx += comparisons - i;\
-	if (rc < 0)\
+	args->part_idx = idx_end_subtree;\
+	if (unlikely(rc != 0))\
 	{\
 		args->log_out = false;\
+		return rc > 0 ? 0 : rc;\
 	}\
 	return 0;\
 }
@@ -228,41 +230,43 @@ static bool logfunc_gt_st(char *l, size_t ll, char *r, size_t rl)
 #define filter_func_log_st(op)\
 int filter_func_##op##_st(struct filter_part_run_t *args)\
 {\
-	char   *left;\
-	size_t left_size;\
-	char   *right;\
-	size_t right_size;\
+	char     *left;\
+	size_t   left_size;\
+	char     *right;\
+	size_t   right_size;\
+	uint32_t idx_end_subtree;\
 	uint32_t comparisons;\
-	uint32_t i = 0;\
-	int    rc;\
+	uint32_t i;\
+	int      rc = 0;\
 \
-	comparisons = args->parts[args->part_idx].num_operands - 1;\
+	comparisons     = args->parts[args->part_idx].num_operands - 1;\
+	idx_end_subtree = args->parts[args->part_idx].idx_end_subtree;\
 \
 	rc = filter_func_getdata_st(args, &left, &left_size);\
 	if (unlikely(rc != 0))\
 	{\
 		D_GOTO(exit, rc);\
 	}\
-	for (; i < comparisons; i++)\
+	for (i = 0; i < comparisons; i++)\
 	{\
 		rc = filter_func_getdata_st(args, &right, &right_size);\
 		if (unlikely(rc != 0))\
 		{\
-			return rc;\
+			D_GOTO(exit, rc);\
 		}\
 \
 		if ((args->log_out = logfunc_##op##_st(left, left_size,\
 						       right, right_size)))\
 		{\
-			i++;\
 			D_GOTO(exit, rc = 0);\
 		}\
 	}\
 exit:\
-	args->part_idx += comparisons - i;\
-	if (rc < 0)\
+	args->part_idx = idx_end_subtree;\
+	if (unlikely(rc != 0))\
 	{\
 		args->log_out = false;\
+		return rc > 0 ? 0: rc;\
 	}\
 	return 0;\
 }
@@ -342,11 +346,7 @@ int filter_func_##op##_##type(struct filter_part_run_t *args) \
 \
 	rc = arithfunc_##op##_##type(left, right, &args->value_##type##_out);\
 exit:\
-	if (rc < 0)\
-	{\
-		return rc;\
-	}\
-	return 0;\
+	return rc;\
 }
 
 filter_func_arith(add, u, uint64_t)
@@ -382,11 +382,7 @@ int filter_func_bitand_##type(struct filter_part_run_t *args)\
 \
 	args->value_##type##_out = left & right;\
 exit:\
-	if (rc < 0)\
-	{\
-		return rc;\
-	}\
-	return 0;\
+	return rc;\
 }
 
 filter_func_bitand(u, uint64_t)
@@ -409,13 +405,11 @@ filter_func_like(struct filter_part_run_t *args)
 	rc = filter_func_getdata_st(args, &left_str, &left_size);
 	if (unlikely(rc != 0))
 	{
-		args->log_out = false;
 		D_GOTO(exit, rc);
 	}
 	rc = filter_func_getdata_st(args, &right_str, &right_size);
 	if (unlikely(rc != 0))
 	{
-		args->log_out = false;
 		D_GOTO(exit, rc);
 	}
 
@@ -433,7 +427,6 @@ filter_func_like(struct filter_part_run_t *args)
 			if (right_pos == right_size)
 			{
 				/** We should never reach this. */
-				args->log_out = false;
 				D_GOTO(exit, rc = -DER_INVAL);
 			}
 		}
@@ -479,51 +472,57 @@ filter_func_like(struct filter_part_run_t *args)
 	}
 
 exit:
-	return rc;
+	if (unlikely(rc != 0))
+	{
+		args->log_out = false;
+		return rc > 0 ? 0 : rc;
+	}
+	return 0;
 }
 
 int
 filter_func_isnull(struct filter_part_run_t *args)
 {
-	int    rc;
+	int rc;
 
 	args->part_idx += 1;
 	rc = args->parts[args->part_idx].filter_func(args);
 	if (unlikely(rc != 0))
 	{
-		return rc;
+		args->log_out = false;
+		return rc > 0 ? 0 : rc;
 	}
 	args->log_out = (args->data_out == NULL);
-
 	return 0;
 }
 
 int
 filter_func_isnotnull(struct filter_part_run_t *args)
 {
-	int    rc;
+	int rc;
 
 	args->part_idx += 1;
 	rc = args->parts[args->part_idx].filter_func(args);
 	if (unlikely(rc != 0))
 	{
-		return rc;
+		args->log_out = false;
+		return rc > 0 ? 0 : rc;
 	}
 	args->log_out = (args->data_out != NULL);
-
 	return 0;
 }
 
 int
 filter_func_not(struct filter_part_run_t *args)
 {
-	int    rc;
+	int rc;
 
 	args->part_idx += 1;
 	rc = args->parts[args->part_idx].filter_func(args);
 	if (unlikely(rc != 0))
 	{
-		return rc;
+		args->log_out = false;
+		return rc > 0 ? 0 : rc;
 	}
 	args->log_out = (! args->log_out);
 
@@ -533,49 +532,92 @@ filter_func_not(struct filter_part_run_t *args)
 int
 filter_func_and(struct filter_part_run_t *args)
 {
-	int    rc;
-	bool   left;
+	int      rc = 0;
+	bool     res = false;
+	uint32_t idx_end_subtree;
+	uint32_t comparisons;
+	uint32_t i;
+
+	comparisons     = args->parts[args->part_idx].num_operands - 1;
+	idx_end_subtree = args->parts[args->part_idx].idx_end_subtree;
 
 	args->part_idx += 1;
 	rc = args->parts[args->part_idx].filter_func(args);
 	if (unlikely(rc != 0))
 	{
-		return rc;
+		D_GOTO(exit, rc);
 	}
-	left = args->log_out;
-
-	args->part_idx += 1;
-	rc = args->parts[args->part_idx].filter_func(args);
-	if (unlikely(rc != 0))
+	if (args->log_out == false)
 	{
-		return rc;
+		D_GOTO(exit, rc = 0);
 	}
-	args->log_out = (left && args->log_out);
-
-	return 0;
+	for (i = 0; i < comparisons; i++)
+	{
+		args->part_idx += 1;
+		rc = args->parts[args->part_idx].filter_func(args);
+		if (unlikely(rc != 0))
+		{
+			D_GOTO(exit, rc);
+		}
+		if (args->log_out == false)
+		{
+			D_GOTO(exit, rc = 0);
+		}
+	}
+	res = true;
+exit:
+	args->part_idx = idx_end_subtree;
+	args->log_out  = res;
+	if (unlikely(rc > 0))
+	{
+		return 0;
+	}
+	return rc;
 }
 
 int
 filter_func_or(struct filter_part_run_t *args)
 {
-	int    rc;
-	bool   left;
+	int      rc = 0;
+	bool     res = true;
+	uint32_t idx_end_subtree;
+	uint32_t comparisons;
+	uint32_t i;
+
+	comparisons     = args->parts[args->part_idx].num_operands - 1;
+	idx_end_subtree = args->parts[args->part_idx].idx_end_subtree;
 
 	args->part_idx += 1;
 	rc = args->parts[args->part_idx].filter_func(args);
 	if (unlikely(rc != 0))
 	{
-		return rc;
+		D_GOTO(exit, rc);
 	}
-	left = args->log_out;
-
-	args->part_idx += 1;
-	rc = args->parts[args->part_idx].filter_func(args);
+	if (args->log_out == true)
+	{
+		D_GOTO(exit, rc = 0);
+	}
+	for (i = 0; i < comparisons; i++)
+	{
+		args->part_idx += 1;
+		rc = args->parts[args->part_idx].filter_func(args);
+		if (unlikely(rc != 0))
+		{
+			D_GOTO(exit, rc);
+		}
+		if (args->log_out == true)
+		{
+			D_GOTO(exit, rc = 0);
+		}
+	}
+	res = false;
+exit:
+	args->part_idx = idx_end_subtree;
 	if (unlikely(rc != 0))
 	{
-		return rc;
+		res = false;
+		return rc > 0 ? 0 : rc;
 	}
-	args->log_out = (left || args->log_out);
-
+	args->log_out  = res;
 	return 0;
 }

@@ -314,21 +314,13 @@ calc_num_operands(daos_filter_part_t **parts, uint32_t idx)
 	daos_filter_part_t	*child_part;
 	char			*part_type;
 	size_t			part_type_s;
-	uint32_t		nops = 0;
+	uint32_t		nops;
 
 	part_type   = (char *) parts[idx]->part_type.iov_buf;
 	part_type_s = parts[idx]->part_type.iov_len;
+	nops        = parts[idx]->num_operands;
 
-	if (!strncmp(part_type, "DAOS_FILTER_FUNC_AND", part_type_s) ||
-	    !strncmp(part_type, "DAOS_FILTER_FUNC_OR", part_type_s)  ||
-	    !strncmp(part_type, "DAOS_FILTER_FUNC_ADD", part_type_s) ||
-	    !strncmp(part_type, "DAOS_FILTER_FUNC_SUB", part_type_s) ||
-	    !strncmp(part_type, "DAOS_FILTER_FUNC_MUL", part_type_s) ||
-	    !strncmp(part_type, "DAOS_FILTER_FUNC_DIV", part_type_s))
-	{
-		nops = 2;
-	}
-	else if (!strncmp(part_type, "DAOS_FILTER_FUNC_EQ", part_type_s)  ||
+	if (!strncmp(part_type, "DAOS_FILTER_FUNC_EQ", part_type_s)  ||
 		 !strncmp(part_type, "DAOS_FILTER_FUNC_IN", part_type_s)  ||
 		 !strncmp(part_type, "DAOS_FILTER_FUNC_NE", part_type_s)  ||
 		 !strncmp(part_type, "DAOS_FILTER_FUNC_LT", part_type_s)  ||
@@ -337,7 +329,6 @@ calc_num_operands(daos_filter_part_t **parts, uint32_t idx)
 		 !strncmp(part_type, "DAOS_FILTER_FUNC_GT", part_type_s)  ||
 		 !strncmp(part_type, "DAOS_FILTER_FUNC_LIKE", part_type_s))
 	{
-		nops = 2;
 		child_part = parts[idx + 2];
 
 		if (!strncmp((char *) child_part->part_type.iov_buf,
@@ -346,16 +337,6 @@ calc_num_operands(daos_filter_part_t **parts, uint32_t idx)
 		{
 			nops += child_part->num_constants - 1;
 		}
-	}
-	else if (!strncmp(part_type, "DAOS_FILTER_FUNC_ISNULL", part_type_s)    ||
-		 !strncmp(part_type, "DAOS_FILTER_FUNC_ISNOTNULL", part_type_s) ||
-		 !strncmp(part_type, "DAOS_FILTER_FUNC_NOT", part_type_s)       ||
-		 !strncmp(part_type, "DAOS_FILTER_FUNC_SUM", part_type_s)       ||
-		 !strncmp(part_type, "DAOS_FILTER_FUNC_MIN", part_type_s)       ||
-		 !strncmp(part_type, "DAOS_FILTER_FUNC_MAX", part_type_s)       ||
-		 !strncmp(part_type, "DAOS_FILTER_FUNC_AVG", part_type_s))
-	{
-		nops = 1;
 	}
 
 	return nops;
@@ -469,8 +450,8 @@ compile_filter(daos_filter_t *filter, struct filter_compiled_t *comp_filter,
 	{
 		func_idx += type_idx;
 	}
-
-	comp_part->filter_func = filter_func_ptrs[func_idx];
+	comp_part->filter_func     = filter_func_ptrs[func_idx];
+	comp_part->idx_end_subtree = *comp_part_idx;
 exit:
 	return rc;
 }

@@ -52,23 +52,26 @@ pipeline_part_chk_type(const char *part_type, size_t part_type_s, bool is_aggr)
 	return false;
 }
 
-static uint32_t
+static int
 pipeline_part_nops(const char *part_type, size_t part_type_s)
 {
-	if (!strncmp(part_type, "DAOS_FILTER_FUNC_EQ", part_type_s)  ||
-	    !strncmp(part_type, "DAOS_FILTER_FUNC_IN", part_type_s)  ||
-	    !strncmp(part_type, "DAOS_FILTER_FUNC_NE", part_type_s)  ||
-	    !strncmp(part_type, "DAOS_FILTER_FUNC_LT", part_type_s)  ||
-	    !strncmp(part_type, "DAOS_FILTER_FUNC_LE", part_type_s)  ||
-	    !strncmp(part_type, "DAOS_FILTER_FUNC_GE", part_type_s)  ||
-	    !strncmp(part_type, "DAOS_FILTER_FUNC_GT", part_type_s)  ||
-	    !strncmp(part_type, "DAOS_FILTER_FUNC_AND", part_type_s) ||
-	    !strncmp(part_type, "DAOS_FILTER_FUNC_OR", part_type_s)  ||
-	    !strncmp(part_type, "DAOS_FILTER_FUNC_ADD", part_type_s) ||
-	    !strncmp(part_type, "DAOS_FILTER_FUNC_SUB", part_type_s) ||
-	    !strncmp(part_type, "DAOS_FILTER_FUNC_MUL", part_type_s) ||
-	    !strncmp(part_type, "DAOS_FILTER_FUNC_DIV", part_type_s) ||
-	    !strncmp(part_type, "DAOS_FILTER_FUNC_BITAND", part_type_s))
+	if (!strncmp(part_type, "DAOS_FILTER_FUNC_AND", part_type_s) ||
+	    !strncmp(part_type, "DAOS_FILTER_FUNC_OR", part_type_s))
+	{
+		return -1;
+	}
+	else if (!strncmp(part_type, "DAOS_FILTER_FUNC_EQ", part_type_s)  ||
+		 !strncmp(part_type, "DAOS_FILTER_FUNC_IN", part_type_s)  ||
+		 !strncmp(part_type, "DAOS_FILTER_FUNC_NE", part_type_s)  ||
+		 !strncmp(part_type, "DAOS_FILTER_FUNC_LT", part_type_s)  ||
+		 !strncmp(part_type, "DAOS_FILTER_FUNC_LE", part_type_s)  ||
+		 !strncmp(part_type, "DAOS_FILTER_FUNC_GE", part_type_s)  ||
+		 !strncmp(part_type, "DAOS_FILTER_FUNC_GT", part_type_s)  ||
+		 !strncmp(part_type, "DAOS_FILTER_FUNC_ADD", part_type_s) ||
+		 !strncmp(part_type, "DAOS_FILTER_FUNC_SUB", part_type_s) ||
+		 !strncmp(part_type, "DAOS_FILTER_FUNC_MUL", part_type_s) ||
+		 !strncmp(part_type, "DAOS_FILTER_FUNC_DIV", part_type_s) ||
+		 !strncmp(part_type, "DAOS_FILTER_FUNC_BITAND", part_type_s))
 	{
 		return 2;
 	}
@@ -100,7 +103,10 @@ pipeline_part_checkop(const char *part_type, size_t part_type_s,
 		       !strncmp(operand_type, "DAOS_FILTER_FUNC_LT", operand_type_s) ||
 		       !strncmp(operand_type, "DAOS_FILTER_FUNC_LE", operand_type_s) ||
 		       !strncmp(operand_type, "DAOS_FILTER_FUNC_GE", operand_type_s) ||
-		       !strncmp(operand_type, "DAOS_FILTER_FUNC_GT", operand_type_s);
+		       !strncmp(operand_type, "DAOS_FILTER_FUNC_GT", operand_type_s) ||
+		       !strncmp(operand_type, "DAOS_FILTER_FUNC_NOT", operand_type_s) ||
+		       !strncmp(operand_type, "DAOS_FILTER_FUNC_AND", operand_type_s) ||
+		       !strncmp(operand_type, "DAOS_FILTER_FUNC_OR", operand_type_s);
 	}
 	else if (!strncmp(part_type, "DAOS_FILTER_FUNC_LIKE", part_type_s) ||
 		 !strncmp(part_type, "DAOS_FILTER_FUNC_ISNULL", part_type_s) ||
@@ -110,7 +116,7 @@ pipeline_part_checkop(const char *part_type, size_t part_type_s,
 			       strlen("DAOS_FILTER_FUN"));
 	}
 	else
-	{ /* no functions, arithmetic functions or keys and constants */
+	{ /* arithmetic functions or keys and constants (no functions) */
 		return strncmp(operand_type, "DAOS_FILTER_FUN",
 			       strlen("DAOS_FILTER_FUN")) ||
 			!strncmp(operand_type, "DAOS_FILTER_FUNC_BITAND", operand_type_s) ||
@@ -160,6 +166,7 @@ int d_pipeline_check(daos_pipeline_t *pipeline)
 	size_t i;
 
 	// TODO: Check that functions' operands always have the right type
+	// TODO: Check that constants that are arrays are always on the right
 	// TODO: Check that arithmetic functions only support number types
 	// TODO: Check that isnull and isnotnull operands are always akeys
 	// TODO: Check that offsets and sizes are correct (i.e, offset <= size)
@@ -202,12 +209,12 @@ int d_pipeline_check(daos_pipeline_t *pipeline)
 	     i < pipeline->num_filters + pipeline->num_aggr_filters;
 	     i++)
 	{
-		daos_filter_t *ftr;
-		size_t p;
-		uint32_t num_parts = 0;
-		uint32_t num_operands;
-		bool res;
-		bool is_aggr;
+		daos_filter_t	*ftr;
+		size_t		p;
+		uint32_t	num_parts = 0;
+		int		num_operands;
+		bool		res;
+		bool		is_aggr;
 
 		if (i < pipeline->num_filters)
 		{
@@ -253,8 +260,14 @@ int d_pipeline_check(daos_pipeline_t *pipeline)
 
 			num_operands = pipeline_part_nops((char *) part->part_type.iov_buf,
 							  part->part_type.iov_len);
-
-			if (num_operands != part->num_operands)
+			if (num_operands < 0)
+			{ /** special cases for AND and OR */
+				if (part->num_operands < 2)
+				{
+					return -DER_INVAL;
+				}
+			}
+			else if (((uint32_t)num_operands) != part->num_operands)
 			{
 				return -DER_INVAL;
 			}

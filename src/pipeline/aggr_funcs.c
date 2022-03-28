@@ -20,7 +20,7 @@ int aggr_func_sum_##type(struct filter_part_run_t *args)\
 	rc = args->parts[args->part_idx].filter_func(args);\
 	if (unlikely(rc != 0))\
 	{\
-		return rc;\
+		return rc > 0 ? 0 : rc;\
 	}\
 	if (args->data_out == NULL)\
 	{\
@@ -48,7 +48,7 @@ int aggr_func_max_##type(struct filter_part_run_t *args)\
 	rc = args->parts[args->part_idx].filter_func(args);\
 	if (unlikely(rc != 0))\
 	{\
-		return rc;\
+		return rc > 0 ? 0 : rc;\
 	}\
 	if (args->data_out == NULL)\
 	{\
@@ -81,7 +81,7 @@ int aggr_func_min_##type(struct filter_part_run_t *args)\
 	rc = args->parts[args->part_idx].filter_func(args);\
 	if (unlikely(rc != 0))\
 	{\
-		return rc;\
+		return rc > 0 ? 0 : rc;\
 	}\
 	if (args->data_out == NULL)\
 	{\
