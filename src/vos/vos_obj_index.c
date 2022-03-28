@@ -629,7 +629,12 @@ oi_iter_fill(struct vos_obj_df *obj, struct vos_oi_iter *oiter, bool check_exist
 	}
 	ent->ie_child_type = VOS_ITER_DKEY;
 
-	ent->ie_last_update = obj->vo_max_write;
+	/* Upgrading case, set it to latest known epoch */
+	if (obj->vo_max_write == 0)
+		vos_ilog_last_update(&obj->vo_ilog, VOS_TS_TYPE_OBJ,
+				     &ent->ie_last_update);
+	else
+		ent->ie_last_update = obj->vo_max_write;
 
 	return 0;
 }
