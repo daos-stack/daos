@@ -108,7 +108,7 @@ enum {
 #define VOS_MW_NVME_THRESH	256		/* 256 * VOS_BLK_SZ = 1MB */
 
 /* Force aggregation/discard ULT yield on certain amount of tight loops */
-#define VOS_AGG_CREDITS_MAX	3200
+#define VOS_AGG_CREDITS_MAX	64
 
 extern unsigned int vos_agg_nvme_thresh;
 

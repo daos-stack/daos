@@ -314,7 +314,7 @@ vos_agg_filter(daos_handle_t ih, vos_iter_desc_t *desc, void *cb_arg, unsigned i
 	if (rc == 1) {
 		*acts |= VOS_ITER_CB_DELETE;
 		inc_agg_counter(cont, desc->id_type, AGG_OP_DEL);
-		agg_param->ap_credits += 10;
+		agg_param->ap_credits += 2;
 		D_GOTO(out, rc = 0);
 	}
 out:
@@ -2175,15 +2175,15 @@ vos_aggregate_pre_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 	switch (type) {
 	case VOS_ITER_OBJ:
 		rc = vos_agg_obj(ih, entry, agg_param, acts);
-		agg_param->ap_credits += 10;
+		agg_param->ap_credits += 2;
 		break;
 	case VOS_ITER_DKEY:
 		rc = vos_agg_dkey(ih, entry, agg_param, acts);
-		agg_param->ap_credits += 20;
+		agg_param->ap_credits += 2;
 		break;
 	case VOS_ITER_AKEY:
 		rc = vos_agg_akey(ih, entry, agg_param, acts);
-		agg_param->ap_credits += 30;
+		agg_param->ap_credits += 2;
 		break;
 	case VOS_ITER_RECX:
 		rc = vos_agg_ev(ih, entry, agg_param, acts);
@@ -2195,7 +2195,7 @@ vos_aggregate_pre_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 		}
 		/* fall through to check for abort */
 	case VOS_ITER_SINGLE:
-		agg_param->ap_credits += 50;
+		agg_param->ap_credits += 2;
 		if (type == VOS_ITER_SINGLE)
 			rc = vos_agg_sv(ih, entry, agg_param, acts);
 		if (rc == -DER_CSUM || rc == -DER_TX_BUSY || rc == -DER_NOSPACE) {
