@@ -1609,6 +1609,12 @@ pool_stop_all(void *arg)
 {
 	int	rc;
 
+	rc = ds_rsvc_stop_all(DS_RSVC_CLASS_POOL);
+	if (rc != 0)
+		D_ERROR("failed to stop all pool svcs: "DF_RC"\n", DP_RC(rc));
+
+	ds_pool_hdl_delete_all();
+
 	rc = ds_mgmt_tgt_pool_iterate(stop_one, NULL /* arg */);
 	if (rc != 0)
 		D_ERROR("failed to stop all pools: "DF_RC"\n", DP_RC(rc));
@@ -1624,10 +1630,6 @@ ds_pool_stop_all(void)
 	ABT_thread	thread;
 	int		rc;
 
-	rc = ds_rsvc_stop_all(DS_RSVC_CLASS_POOL);
-	if (rc)
-		D_ERROR("failed to stop all pool svcs: "DF_RC"\n", DP_RC(rc));
-
 	/* Create a ULT to stop pools, since it requires TLS */
 	rc = dss_ult_create(pool_stop_all, NULL /* arg */, DSS_XS_SYS,
 			    0 /* tgt_idx */, 0 /* stack_size */, &thread);
@@ -1636,7 +1638,6 @@ ds_pool_stop_all(void)
 			DP_RC(rc));
 		return rc;
 	}
-	ABT_thread_join(thread);
 	ABT_thread_free(&thread);
 
 	return 0;
