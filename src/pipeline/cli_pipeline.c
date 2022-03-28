@@ -648,6 +648,56 @@ pipeline_create_auxi(tse_task_t *api_task, uint32_t map_ver,
 	*pipeline_auxi = p_auxi;
 }
 
+/** this function follows implementation in obj_replica_leader_select() */
+static int
+pipeline_select_leader(struct daos_oclass_attr *oca, uint32_t grp_size,
+		       unsigned int grp_idx, struct pl_obj_layout *layout,
+		       daos_obj_id_t omd_id)
+{
+	int			pos;
+	struct pl_obj_shard	*shard;
+	int			start;
+	int			replica_idx;
+	int			i;
+
+	D_ASSERT(oca != NULL);
+	if (grp_size == 1)
+	{
+		pos	= grp_idx * grp_size;
+		shard	= pl_obj_get_shard(layout, pos);
+		if (shard->po_target == -1)
+		{
+			return -DER_IO;
+		}
+		return pos;
+	}
+
+	start = grp_idx * grp_size;
+	replica_idx = (omd_id.lo + grp_idx) % grp_size;
+	for (i = 0, pos = -1; i < grp_size;
+	     i++, replica_idx = (replica_idx + 1) % grp_size)
+	{
+		int off		= start + replica_idx;
+		shard		= pl_obj_get_shard(layout, off);
+
+		if (shard->po_target == -1 || shard->po_shard == -1 ||
+		    shard->po_rebuilding)
+		{
+			continue;
+		}
+		if (pos == -1 ||
+		    pl_obj_get_shard(layout, pos)->po_fseq > shard->po_fseq)
+		{
+			pos = off;
+		}
+	}
+	if (pos != -1)
+	{
+		return pos;
+	}
+	return -DER_IO;
+}
+
 int
 dc_pipeline_run(tse_task_t *api_task)
 {
@@ -800,11 +850,12 @@ dc_pipeline_run(tse_task_t *api_task)
 		{
 			int leader;
 
-			leader	= pl_select_leader(obj_md.omd_id, i,
+			/*leader	= pl_select_leader(obj_md.omd_id, i,
 						   layout->ol_grp_size, NIL_BITMAP,
 						   NULL, NULL, pl_obj_get_shard,
-						   layout);
-
+						   layout);*/
+			leader = pipeline_select_leader(oca, layout->ol_grp_size,
+							i, layout, obj_md.omd_id);
 			if (leader >= 0)
 			{
 				oid.id_pub	= obj_md.omd_id;
@@ -838,6 +889,9 @@ dc_pipeline_run(tse_task_t *api_task)
 		D_DEBUG(DB_IO, DF_OID" try non-leader shards for group %d.\n",
 			DP_OID(obj_md.omd_id), i);
 		for (j = start_shard; j < start_shard + oca->u.ec.e_k; j++) {
+			oid.id_pub	= obj_md.omd_id;
+			oid.id_shard	= j;
+			oid.id_pad_32	= 0;
 			rc = queue_shard_pipeline_run_task(api_task, layout, pipeline_auxi,
 							   j, total_shards,
 							   map_ver, oid, coh_uuid,
