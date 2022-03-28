@@ -17,8 +17,8 @@ import (
 
 	"github.com/daos-stack/daos/src/control/build"
 	"github.com/daos-stack/daos/src/control/common"
-	"github.com/daos-stack/daos/src/control/common/cmdutil"
 	"github.com/daos-stack/daos/src/control/fault"
+	"github.com/daos-stack/daos/src/control/lib/hardware/hwprov"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/pbin"
 )
@@ -38,11 +38,11 @@ type mainOpts struct {
 	Syslog  bool `long:"syslog" description:"Enable logging to syslog"`
 
 	// Define subcommands
-	Storage  storageCmd              `command:"storage" description:"Perform tasks related to locally-attached storage"`
-	Start    startCmd                `command:"start" description:"Start daos_server"`
-	Network  networkCmd              `command:"network" description:"Perform network device scan based on fabric provider"`
-	Version  versionCmd              `command:"version" description:"Print daos_server version"`
-	DumpTopo cmdutil.DumpTopologyCmd `command:"dump-topology" description:"Dump system topology"`
+	Storage  storageCmd             `command:"storage" description:"Perform tasks related to locally-attached storage"`
+	Start    startCmd               `command:"start" description:"Start daos_server"`
+	Network  networkCmd             `command:"network" description:"Perform network device scan based on fabric provider"`
+	Version  versionCmd             `command:"version" description:"Print daos_server version"`
+	DumpTopo hwprov.DumpTopologyCmd `command:"dump-topology" description:"Dump system topology"`
 }
 
 type versionCmd struct{}

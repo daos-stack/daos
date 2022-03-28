@@ -328,6 +328,14 @@ rdb_raft_load_snapshot(struct rdb *db)
 		goto out;
 	}
 
+	/*
+	 * Since loading a snapshot is logically equivalent to an AE request
+	 * that first pops all log entries and then offers those represented by
+	 * the snapshot, we empty the KVS cache for any KVS create operations
+	 * reverted by the popping.
+	 */
+	rdb_kvs_cache_evict(db->d_kvss);
+
 	rc = raft_begin_load_snapshot(db->d_raft, db->d_lc_record.dlr_base_term,
 				      db->d_lc_record.dlr_base);
 	if (rc != 0) {
@@ -1090,6 +1098,10 @@ rdb_raft_update_node(struct rdb *db, uint64_t index, raft_entry_t *entry)
 	if (rc != 0)
 		goto out_replicas;
 
+	/*
+	 * Since this is one VOS operation, we don't need to call
+	 * rdb_lc_discard upon an error.
+	 */
 	rc = rdb_raft_store_replicas(db->d_lc, index, replicas);
 
 out_replicas:
@@ -1131,13 +1143,16 @@ rdb_raft_log_offer_single(struct rdb *db, raft_entry_t *entry, uint64_t index)
 		if (rc != 0) {
 			D_ERROR(DF_DB": failed to apply entry "DF_U64": %d\n",
 				DP_DB(db), index, rc);
-			goto err_discard;
+			goto err;
 		}
 	} else if (raft_entry_is_cfg_change(entry)) {
 		crit = true;
 		rc = rdb_raft_update_node(db, index, entry);
-		if (rc != 0)
-			goto err_discard;
+		if (rc != 0) {
+			D_ERROR(DF_DB": failed to update replicas "DF_U64": %d\n",
+				DP_DB(db), index, rc);
+			goto err;
+		}
 	} else {
 		D_ASSERTF(0, "Unknown entry type %d\n", entry->type);
 	}
@@ -1202,6 +1217,7 @@ err_discard:
 	if (rc_tmp != 0)
 		D_ERROR(DF_DB": failed to discard entry "DF_U64": %d\n",
 			DP_DB(db), index, rc_tmp);
+err:
 	return rc;
 }
 
@@ -1292,6 +1308,12 @@ rdb_raft_cb_log_pop(raft_server_t *raft, void *arg, raft_entry_t *entry,
 		db->d_lc_record.dlr_tail = tail;
 		return rc;
 	}
+
+	/*
+	 * Since there may be KVS create operations being reverted by the
+	 * rdb_lc_discard call below, empty the KVS cache.
+	 */
+	rdb_kvs_cache_evict(db->d_kvss);
 
 	/* Ignore *n_entries; discard everything starting from index. */
 	rc = rdb_lc_discard(db->d_lc, i, RDB_LC_INDEX_MAX);

@@ -617,16 +617,157 @@ obj_shard_find_replica(struct dc_object *obj, unsigned int target,
 }
 
 static int
-obj_grp_leader_get(struct dc_object *obj, int idx, unsigned int map_ver, uint8_t *bit_map)
+obj_ec_leader_select(struct dc_object *obj, int grp_idx, uint8_t *bit_map)
+{
+	struct daos_oclass_attr *oca;
+	struct pl_obj_shard	*pl_shard;
+	int			tgt_idx;
+	int			grp_size;
+	int			grp_start;
+	int			i;
+	int			shard;
+
+	oca = daos_oclass_attr_find(obj->cob_md.omd_id, NULL);
+	grp_size = obj_ec_tgt_nr(oca);
+	grp_start = grp_idx * grp_size;
+
+	/* 1. Find one from parity, and start from the last parity. */
+	tgt_idx = grp_size - 1;
+	for (i = 0; i < obj_ec_parity_tgt_nr(oca);
+	     i++, tgt_idx = (tgt_idx - 1 + grp_size) % grp_size) {
+
+		shard = grp_start + tgt_idx;
+		pl_shard = obj_get_shard(obj, shard);
+		if (pl_shard->po_target == -1 || pl_shard->po_shard == -1 ||
+		    pl_shard->po_rebuilding) {
+			/* Then try former one */
+			continue;
+		}
+		goto found;
+	}
+
+	shard = -1;
+	tgt_idx = 0;
+	/* Choose one from data shards within bit_map, and also make sure there are
+	 * no further data shards failed.
+	 **/
+	for (i = 0; i < obj_ec_data_tgt_nr(oca); i++, tgt_idx = (tgt_idx + 1) % grp_size) {
+		int shard_idx;
+
+		if (bit_map != NIL_BITMAP && isclr(bit_map, tgt_idx))
+			continue;
+
+		shard_idx = grp_start + tgt_idx;
+		pl_shard = obj_get_shard(obj, shard_idx);
+		if (pl_shard->po_target == -1 || pl_shard->po_shard == -1 ||
+		    pl_shard->po_rebuilding) {
+			D_ERROR(DF_OID" unhealthy targets exceed the max redundancy, e_p %d\n",
+				DP_OID(obj->cob_md.omd_id), obj_ec_parity_tgt_nr(oca));
+			return -DER_IO;
+		}
+		/* Use the 1st health shard in bitmap as the leader */
+		if (shard == -1)
+			shard = shard_idx;
+	}
+
+	if (shard == -1) {
+		D_WARN(DF_OID" no shards %d are in bitmaps, retry later.\n",
+		       DP_OID(obj->cob_md.omd_id), obj_ec_parity_tgt_nr(oca));
+		return -DER_STALE;
+	}
+
+found:
+	D_DEBUG(DB_TRACE, DF_OID" choose shard %d as leader for group%d.\n",
+		DP_OID(obj->cob_md.omd_id), shard, grp_idx);
+
+	return shard;
+}
+
+static int
+obj_replica_leader_select(struct dc_object *obj, unsigned int grp_idx)
+{
+	struct pl_obj_shard	*shard;
+	struct daos_oclass_attr	*oca;
+	uint32_t		grp_size;
+	int			start;
+	int			pos;
+	int			replica_idx;
+	int			i;
+
+	oca = daos_oclass_attr_find(obj->cob_md.omd_id, NULL);
+	D_ASSERT(oca != NULL);
+	grp_size = obj_get_grp_size(obj);
+	if (grp_size == 1) {
+		pos = grp_idx * obj_get_grp_size(obj);
+		shard = obj_get_shard(obj, pos);
+		if (shard->po_target == -1)
+			return -DER_IO;
+
+		/*
+		 * Note that even though there's only one replica here, this
+		 * object can still be rebuilt during addition or drain as
+		 * it moves between ranks
+		 */
+		/* return pos rather than shard->po_shard for pool extending */
+		return pos;
+	}
+
+	/* XXX: The shards within [start, start + replicas) will search from
+	 *      the same @preferred position, then they will have the same
+	 *      leader. The shards (belonging to the same object) in
+	 *      other redundancy group may get different leader node.
+	 *
+	 *      The one with the lowest f_seq will be elected as the leader
+	 *      to avoid leader switch.
+	 */
+	start = grp_idx * obj_get_grp_size(obj);
+	replica_idx = (obj->cob_md.omd_id.lo + grp_idx) % grp_size;
+	for (i = 0, pos = -1; i < grp_size;
+	     i++, replica_idx = (replica_idx + 1) % obj_get_grp_size(obj)) {
+		int off = start + replica_idx;
+
+		shard = obj_get_shard(obj, off);
+		/*
+		 * Cannot select in-rebuilding shard as leader (including the
+		 * case that during reintegration we may have an extended
+		 * layout that with in-adding shards with po_rebuilding set).
+		 */
+		if (shard->po_target == -1 || shard->po_shard == -1 || shard->po_rebuilding)
+			continue;
+
+		if (pos == -1 || obj_get_shard(obj, pos)->po_fseq > shard->po_fseq)
+			pos = off;
+	}
+
+	if (pos != -1) {
+		/*
+		 * Here should not return "pl_get_shard(data, pos)->po_shard",
+		 * because it possibly not equal to "pos" in pool extending.
+		 */
+		return pos;
+	}
+
+	/* If all the replicas are failed or in-rebuilding, then EIO. */
+	return -DER_IO;
+}
+
+int
+obj_grp_leader_get(struct dc_object *obj, int grp_idx, unsigned int map_ver,
+		   uint8_t *bit_map)
 {
 	int	rc = -DER_STALE;
 
 	D_RWLOCK_RDLOCK(&obj->cob_lock);
-	if (obj->cob_version == map_ver)
-		rc = pl_select_leader(obj->cob_md.omd_id, idx / obj->cob_grp_size,
-				      obj->cob_grp_size, bit_map, NULL, NULL, obj_get_shard, obj);
-	D_RWLOCK_UNLOCK(&obj->cob_lock);
+	if (obj->cob_version != map_ver)
+		D_GOTO(unlock, rc);
 
+	if (obj_is_ec(obj))
+		rc = obj_ec_leader_select(obj, grp_idx, bit_map);
+	else
+		rc = obj_replica_leader_select(obj, grp_idx);
+
+unlock:
+	D_RWLOCK_UNLOCK(&obj->cob_lock);
 	return rc;
 }
 
@@ -708,16 +849,11 @@ static int
 obj_dkey2shard(struct dc_object *obj, uint64_t hash, unsigned int map_ver,
 	       bool to_leader, struct obj_auxi_tgt_list *failed_tgt_list)
 {
-	int		grp_idx;
-	int		grp_size;
-	int		idx;
+	int	grp_idx;
 
 	grp_idx = obj_dkey2grpidx(obj, hash, map_ver);
 	if (grp_idx < 0)
 		return grp_idx;
-
-	grp_size = obj_get_grp_size(obj);
-	idx = hash % grp_size + grp_idx * grp_size;
 
 	if (!to_leader && obj->cob_time_fetch_leader != NULL &&
 	    obj->cob_time_fetch_leader[grp_idx] != 0 &&
@@ -729,7 +865,7 @@ obj_dkey2shard(struct dc_object *obj, uint64_t hash, unsigned int map_ver,
 	 * not has the expected data. Let's directly (or still) read from related data shard.
 	 */
 	if (to_leader && !obj_is_ec(obj))
-		return obj_grp_leader_get(obj, idx, map_ver, NIL_BITMAP);
+		return obj_grp_leader_get(obj, grp_idx, map_ver, NIL_BITMAP);
 
 	return obj_grp_valid_shard_get(obj, grp_idx, map_ver, failed_tgt_list);
 }
@@ -1149,7 +1285,7 @@ obj_shards_2_fwtgts(struct dc_object *obj, uint32_t map_ver, uint8_t *bit_map,
 		shard_idx = start_shard + i * grp_size;
 		head = tgt = req_tgts->ort_shard_tgts + i * grp_size;
 		if (req_tgts->ort_srv_disp) {
-			rc = obj_grp_leader_get(obj, shard_idx, map_ver, bit_map);
+			rc = obj_grp_leader_get(obj, shard_idx / grp_size, map_ver, bit_map);
 			if (rc < 0) {
 				D_ERROR(DF_OID" no valid shard %u, grp size %u "
 					"grp nr %u, shards %u, reps %u, is %s: "
@@ -5379,7 +5515,7 @@ obj_list_get_shard(struct obj_auxi_args *obj_auxi, unsigned int map_ver,
 		shard = obj_ec_list_get_shard(obj_auxi, map_ver, grp_idx, args);
 	} else {
 		if (obj_auxi->to_leader) {
-			shard = obj_grp_leader_get(obj, grp_idx * obj->cob_grp_size,
+			shard = obj_grp_leader_get(obj, grp_idx,
 						   map_ver, NIL_BITMAP);
 		} else {
 			shard = obj_grp_valid_shard_get(obj, grp_idx, map_ver,
@@ -5762,7 +5898,7 @@ shard_query_key_task(tse_task_t *task)
 	api_args = args->kqa_api_args;
 	rc = dc_obj_shard_query_key(obj_shard, epoch, api_args->flags, obj,
 				    api_args->dkey, api_args->akey,
-				    api_args->recx, args->kqa_coh_uuid,
+				    api_args->recx, api_args->max_epoch, args->kqa_coh_uuid,
 				    args->kqa_cont_uuid, &args->kqa_dti,
 				    &args->kqa_auxi.obj_auxi->map_ver_reply,
 				    args->kqa_auxi.obj_auxi->map_ver_req,
@@ -5842,8 +5978,7 @@ dc_obj_query_key(tse_task_t *api_task)
 	D_ASSERTF(api_args != NULL,
 		  "Task Argument OPC does not match DC OPC\n");
 
-	rc = obj_req_valid(api_task, api_args, DAOS_OBJ_RPC_QUERY_KEY, &epoch,
-			   &map_ver, &obj);
+	rc = obj_req_valid(api_task, api_args, DAOS_OBJ_RPC_QUERY_KEY, &epoch, &map_ver, &obj);
 	if (rc)
 		D_GOTO(out_task, rc);
 
@@ -5858,8 +5993,7 @@ dc_obj_query_key(tse_task_t *api_task)
 		daos_dti_gen(&dti, true /* zero */);
 	}
 
-	rc = obj_task_init(api_task, DAOS_OBJ_RPC_QUERY_KEY, map_ver,
-			   api_args->th, &obj_auxi, obj);
+	rc = obj_task_init(api_task, DAOS_OBJ_RPC_QUERY_KEY, map_ver, api_args->th, &obj_auxi, obj);
 	if (rc != 0) {
 		obj_decref(obj);
 		D_GOTO(out_task, rc);
@@ -5931,7 +6065,7 @@ dc_obj_query_key(tse_task_t *api_task)
 		if (!obj_is_ec(obj) || likely(!DAOS_FAIL_CHECK(DAOS_OBJ_SKIP_PARITY))) {
 			int leader;
 
-			leader = obj_grp_leader_get(obj, start_shard, map_ver, NIL_BITMAP);
+			leader = obj_grp_leader_get(obj, i, map_ver, NIL_BITMAP);
 			if (leader >= 0) {
 				rc = queue_shard_query_key_task(api_task, obj_auxi, &epoch, leader,
 								map_ver, obj, dkey_hash, &dti,
