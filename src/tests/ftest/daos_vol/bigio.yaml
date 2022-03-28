@@ -12,7 +12,6 @@ server_config:
         scm_class: dcpm
         scm_list: ["/dev/pmem0"]
         env_vars:
-            - CRT_SWIM_RPC_TIMEOUT=20
             - SWIM_PING_TIMEOUT=1800
             - SWIM_SUSPECT_TIMEOUT=16000
 pool:
