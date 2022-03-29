@@ -404,17 +404,6 @@ ent_array_reset(struct evt_context *tcx, struct evt_entry_array *ent_array)
 	ent_array->ea_inob = tcx->tc_inob;
 }
 
-bool
-evt_iter_skipped(daos_handle_t ih)
-{
-	struct evt_context	*tcx;
-
-	tcx = evt_hdl2tcx(ih);
-	D_ASSERT(tcx != NULL);
-
-	return tcx->tc_iter.it_skipped == 1;
-}
-
 int
 evt_iter_probe(daos_handle_t ih, enum evt_iter_opc opc,
 	       const struct evt_rect *rect, const daos_anchor_t *anchor)

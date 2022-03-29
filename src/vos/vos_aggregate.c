@@ -2496,6 +2496,8 @@ vos_aggregate(daos_handle_t coh, daos_epoch_range_t *epr,
 	struct vos_container	*cont = vos_hdl2cont(coh);
 	struct agg_data		*ad;
 	uint64_t		 feats;
+	daos_epoch_t		 agg_write;
+	bool			 has_agg_write;
 	int			 rc;
 	bool			 run_agg = false;
 
@@ -2514,27 +2516,9 @@ vos_aggregate(daos_handle_t coh, daos_epoch_range_t *epr,
 		goto free_agg_data;
 
 	feats = dbtree_feats_get(&cont->vc_cont_df->cd_obj_root);
-	if ((feats & VOS_TREE_AGG_OPT) == 0) {
-		/** Go ahead and upgrade so we can optimize in the future */
-		feats |= VOS_TREE_AGG_OPT | VOS_TREE_AGG_NEEDED;
-		rc = dbtree_feats_set(&cont->vc_cont_df->cd_obj_root, vos_cont2umm(cont), feats);
-		D_ASSERT(rc == 0);
-	}
-	if ((feats & VOS_TREE_AGG_NEEDED) == 0) {
-		if ((flags & VOS_AGG_FL_FORCE_SCAN) == 0) {
-			D_DEBUG(DB_EPC, "Skipping aggregation for container "DF_CONT
-				", nothing to do\n",
-				DP_CONT(cont->vc_pool->vp_id, cont->vc_id));
-			rc = 0;
-			goto update_hae;
-		}
-		/** Go ahead and set both flags if we are scanning the container */
-		feats |= VOS_TREE_AGG_FLAG | VOS_TREE_AGG_NEEDED;
-	} else {
-		feats |= VOS_TREE_AGG_FLAG;
-	}
-	rc = dbtree_feats_set(&cont->vc_cont_df->cd_obj_root, vos_cont2umm(cont), feats);
-	D_ASSERT(rc == 0);
+	has_agg_write = vos_feats_agg_time_get(feats, &agg_write);
+	if (has_agg_write && agg_write < cont->vc_cont_df->cd_hae)
+		goto update_hae;
 
 	/* Set iteration parameters */
 	ad->ad_iter_param.ip_hdl = coh;
@@ -2584,13 +2568,6 @@ update_hae:
 	if (cont->vc_cont_df->cd_hae < epr->epr_hi)
 		cont->vc_cont_df->cd_hae = epr->epr_hi;
 exit:
-	feats = dbtree_feats_get(&cont->vc_cont_df->cd_obj_root);
-	if (feats & VOS_TREE_AGG_FLAG) {
-		feats = feats & ~VOS_TREE_AGG_FLAG;
-		if (!ad->ad_agg_param.ap_skipped)
-			feats = feats & ~VOS_TREE_AGG_NEEDED;
-		rc = dbtree_feats_set(&cont->vc_cont_df->cd_obj_root, vos_cont2umm(cont), feats);
-	}
 	aggregate_exit(cont, AGG_MODE_AGGREGATE);
 
 	if (run_agg && merge_window_status(&ad->ad_agg_param.ap_window) != MW_CLOSED)

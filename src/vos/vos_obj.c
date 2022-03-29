@@ -315,7 +315,7 @@ key_punch(struct vos_object *obj, daos_epoch_t epoch, daos_epoch_t bound,
 	if (rc != 1) {
 		/** key_tree_punch will handle dkey flags if punch is propagated */
 		if (rc == 0)
-			rc = vos_key_mark_agg(vos_cont2umm(obj->obj_cont), krec);
+			rc = vos_key_mark_agg(vos_cont2umm(obj->obj_cont), krec, epoch);
 		goto out;
 	}
 	/** else propagate the punch */
@@ -506,7 +506,7 @@ vos_obj_punch(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 
 			if (rc == 0)
 				rc = vos_mark_agg(vos_cont2umm(cont), &obj->obj_df->vo_tree,
-						  &cont->vc_cont_df->cd_obj_root);
+						  &cont->vc_cont_df->cd_obj_root, epoch);
 
 			vos_obj_release(vos_obj_cache_current(), obj, rc != 0);
 		}
@@ -685,8 +685,6 @@ key_iter_ilog_check(struct vos_krec_df *krec, struct vos_obj_iter *oiter,
 out:
 	D_ASSERTF(check_existence || rc != -DER_NONEXIST,
 		  "Probe is required before fetch\n");
-	if (check_existence && !oiter->it_ilog_info.ii_full_scan)
-		oiter->it_iter.it_skipped = 1;
 	return rc;
 }
 
@@ -1178,12 +1176,10 @@ singv_iter_probe_epr(struct vos_obj_iter *oiter, vos_iter_entry_t *entry)
 
 		case VOS_IT_EPC_RR:
 			if (entry->ie_epoch < epr->epr_lo) {
-				oiter->it_iter.it_skipped = 1;
 				return -DER_NONEXIST; /* end of story */
 			}
 
 			if (entry->ie_epoch > epr->epr_hi) {
-				oiter->it_iter.it_skipped = 1;
 				entry->ie_epoch = epr->epr_hi;
 				opc = BTR_PROBE_LE;
 				break;
@@ -1228,10 +1224,6 @@ singv_iter_probe(struct vos_obj_iter *oiter, daos_anchor_t *anchor, uint32_t fla
 		next_opc = (flags & VOS_ITER_PROBE_NEXT) ? BTR_PROBE_GT : BTR_PROBE_GE;
 		opc = vos_anchor_is_zero(anchor) ? BTR_PROBE_FIRST : next_opc;
 	}
-
-	/** If we are reprobing, assume we've skipped something */
-	if (anchor)
-		oiter->it_iter.it_skipped = 1;
 
 	rc = dbtree_iter_probe(oiter->it_hdl, opc,
 			       vos_iter_intent(&oiter->it_iter), NULL, anchor);
@@ -1507,8 +1499,6 @@ recx_iter_next(struct vos_obj_iter *oiter)
 static int
 recx_iter_fini(struct vos_obj_iter *oiter)
 {
-	if (oiter->it_iter.it_parent != NULL && evt_iter_skipped(oiter->it_hdl))
-		oiter->it_iter.it_parent->it_skipped = 1;
 	return evt_iter_finish(oiter->it_hdl);
 }
 
@@ -1545,7 +1535,6 @@ vos_obj_iter_prep(vos_iter_type_t type, vos_iter_param_t *param,
 
 	oiter->it_flags = param->ip_flags;
 	oiter->it_recx = param->ip_recx;
-	oiter->it_iter.it_skipped = 0;
 	if (param->ip_flags & VOS_IT_FOR_PURGE)
 		oiter->it_iter.it_for_purge = 1;
 	if (param->ip_flags & VOS_IT_FOR_DISCARD)
@@ -1740,7 +1729,6 @@ vos_obj_iter_nested_prep(vos_iter_type_t type, struct vos_iter_info *info,
 	oiter->it_punched = info->ii_punched;
 	oiter->it_epc_expr = info->ii_epc_expr;
 	oiter->it_flags = info->ii_flags;
-	oiter->it_iter.it_skipped = 0;
 	if (type != VOS_ITER_DKEY)
 		oiter->it_obj = obj;
 	if (info->ii_flags & VOS_IT_FOR_PURGE)
@@ -1829,8 +1817,6 @@ vos_obj_iter_fini(struct vos_iterator *iter)
 	case VOS_ITER_DKEY:
 	case VOS_ITER_AKEY:
 	case VOS_ITER_SINGLE:
-		if (oiter->it_iter.it_parent != NULL && oiter->it_iter.it_skipped)
-			oiter->it_iter.it_parent->it_skipped = 1;
 		rc = dbtree_iter_finish(oiter->it_hdl);
 		break;
 	case VOS_ITER_RECX:
@@ -1967,12 +1953,13 @@ vos_obj_iter_start_agg(daos_handle_t ih, bool full_scan)
 	struct vos_iterator	*iter = vos_hdl2iter(ih);
 	struct vos_obj_iter	*oiter = vos_iter2oiter(iter);
 	struct vos_container	*cont = oiter->it_obj->obj_cont;
-	struct umem_instance	*umm;
 	struct vos_krec_df	*krec;
 	daos_key_t		 key;
 	struct vos_rec_bundle	 rbund;
 	int			 rc;
 	uint64_t		 feats;
+	daos_epoch_t		 agg_write;
+	bool			 agg_has_write;
 
 	D_ASSERTF(oiter->it_iter.it_for_purge,
 		  "Function should only be called by aggregation\n");
@@ -1987,38 +1974,20 @@ vos_obj_iter_start_agg(daos_handle_t ih, bool full_scan)
 		return rc;
 
 	krec = rbund.rb_krec;
-	umm = vos_obj2umm(oiter->it_obj);
 
+	if (full_scan)
+		return 1;
 	if (krec->kr_bmap & KREC_BF_BTR)
 		feats = dbtree_feats_get(&krec->kr_btr);
 	else
 		feats = evt_feats_get(&krec->kr_evt);
-	if ((feats & VOS_TREE_AGG_OPT) == 0) {
-		/** Go ahead and upgrade so we can optimize in the future */
-		feats |= VOS_TREE_AGG_OPT | VOS_TREE_AGG_NEEDED;
-		if (krec->kr_bmap & KREC_BF_BTR)
-			rc = dbtree_feats_set(&krec->kr_btr, umm, feats);
-		else
-			rc = evt_feats_set(&krec->kr_evt, umm, feats);
-		D_ASSERT(rc == 0);
+
+	agg_has_write = vos_feats_agg_time_get(feats, &agg_write);
+	if (agg_has_write) {
+		if (agg_write < oiter->it_obj->obj_cont->vc_cont_df->cd_hae)
+			return 0;
+		return 1;
 	}
-	if (full_scan) {
-		/** Go ahead and set both flags in this case */
-		feats |= VOS_TREE_AGG_FLAG | VOS_TREE_AGG_NEEDED;
-		goto set_feats;
-	} else if ((feats & VOS_TREE_AGG_NEEDED) == 0) {
-		/** If there in this layer, the AGG_NEEDED flag should be set.  But if the
-		 *  punch is at a higher level, we assume aggregation is needed for the
-		 *  subtree
-		 */
-		if (oiter->it_punched.pr_epc == 0)
-			return 0; /** Definitely nothing to do */
-		/** Go ahead and set both flags in this case */
-		feats |= VOS_TREE_AGG_FLAG | VOS_TREE_AGG_NEEDED;
-		goto set_feats;
-	}
-	feats |= VOS_TREE_AGG_FLAG;
-	/** Fall through to checking other filters */
 
 	/** Fall through to check other filters */
 	rc = key_iter_fill(krec, oiter, true, &ent);
@@ -2028,20 +1997,13 @@ vos_obj_iter_start_agg(daos_handle_t ih, bool full_scan)
 		return rc; /** Likely the entry isn't in the range or we hit some other error.
 			    *  Let the iterator sort this out later.
 			    */
-
 	if (ent.ie_vis_flags & VOS_VIS_FLAG_COVERED)
-		goto set_feats; /* Punched entries can likely be aggregated */
+		return 1; /* Punched entries can likely be aggregated */
 
 	D_ASSERT(ent.ie_last_update != 0);
 	if (ent.ie_last_update < cont->vc_cont_df->cd_hae)
 		return 0; /* No new updates since last time we ran */
 
-set_feats:
-	if (krec->kr_bmap & KREC_BF_BTR)
-		rc = dbtree_feats_set(&krec->kr_btr, umm, feats);
-	else
-		rc = evt_feats_set(&krec->kr_evt, umm, feats);
-	D_ASSERT(rc == 0);
 	return 1;
 }
 
@@ -2104,7 +2066,6 @@ vos_obj_iter_aggregate(daos_handle_t ih, bool range_discard)
 	struct vos_object	*obj;
 	daos_key_t		 key;
 	struct vos_rec_bundle	 rbund;
-	uint64_t		 feats;
 	bool			 delete = false, invisible = false;
 	int			 rc;
 
@@ -2147,26 +2108,6 @@ vos_obj_iter_aggregate(daos_handle_t ih, bool range_discard)
 			/* Key no longer exists at epoch but isn't empty */
 			invisible = true;
 			rc = 0;
-		}
-		if (krec->kr_bmap & KREC_BF_BTR)
-			feats = dbtree_feats_get(&krec->kr_btr);
-		else
-			feats = evt_feats_get(&krec->kr_evt);
-		if (oiter->it_iter.it_for_purge && feats & VOS_TREE_AGG_FLAG) {
-			/** We got through aggregation without anyone clearing the flag,
-			 *  so we can clear the needed flag if we scanned the whole subtree.
-			 *  Either way, we can clear the aggregation flag.
-			 */
-			feats = feats & ~VOS_TREE_AGG_FLAG;
-			if (!oiter->it_iter.it_skipped)
-				feats = feats & ~VOS_TREE_AGG_NEEDED;
-			/** Set the safe flag to false so we don't clear the flag if something
-			 *  goes wrong here.
-			 */
-			if (krec->kr_bmap & KREC_BF_BTR)
-				rc = dbtree_feats_set(&krec->kr_btr, umm, feats);
-			else
-				rc = evt_feats_set(&krec->kr_evt, umm, feats);
 		}
 	}
 

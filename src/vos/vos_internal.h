@@ -336,14 +336,36 @@ extern uint64_t vos_evt_feats;
 
 #define VOS_KEY_CMP_LEXICAL	(1ULL << 63)
 #define VOS_TREE_AGG_OPT	EVT_FEAT_AGG_OPT
-#define VOS_TREE_AGG_NEEDED	EVT_FEAT_AGG_NEEDED
-#define VOS_TREE_AGG_FLAG	EVT_FEAT_AGG_FLAG
+#define VOS_TREE_AGG_TIME_MASK	EVT_FEAT_AGG_TIME_MASK
+
 #define CHECK_VOS_TREE_FLAG(flag)	\
 	D_CASSERT(((flag) & (EVT_FEATS_SUPPORTED | BTR_FEAT_MASK)) == 0)
 CHECK_VOS_TREE_FLAG(VOS_KEY_CMP_LEXICAL);
 CHECK_VOS_TREE_FLAG(VOS_TREE_AGG_OPT);
-CHECK_VOS_TREE_FLAG(VOS_TREE_AGG_NEEDED);
-CHECK_VOS_TREE_FLAG(VOS_TREE_AGG_FLAG);
+CHECK_VOS_TREE_FLAG(VOS_TREE_AGG_TIME_MASK);
+
+/** Update the aggregatable write timestamp within 1/4 second granularity */
+static inline void
+vos_feats_agg_time_update(daos_epoch_t epoch, uint64_t *feats)
+{
+	/** Assume aggregation only happens at most once every quarter second */
+	epoch &= 0xffffffff00000000ULL;
+	epoch = epoch >> 2;
+
+	*feats &= ~VOS_TREE_AGG_TIME_MASK;
+	*feats |= epoch | VOS_TREE_AGG_OPT;
+}
+
+/** Get the aggregatable write timestamp within 1/4 second granularity */
+static inline bool
+vos_feats_agg_time_get(uint64_t feats, daos_epoch_t *epoch)
+{
+	if ((feats & VOS_TREE_AGG_OPT) == 0)
+		return false;
+
+	*epoch = ((feats & VOS_TREE_AGG_TIME_MASK) << 2) + 0xffffffffULL;
+	return true;
+}
 
 #define VOS_KEY_CMP_UINT64_SET	(BTR_FEAT_UINT_KEY)
 #define VOS_KEY_CMP_LEXICAL_SET	(VOS_KEY_CMP_LEXICAL | BTR_FEAT_DIRECT_KEY)
@@ -817,7 +839,6 @@ struct vos_iterator {
 	enum vos_iter_state	 it_state;
 	uint32_t		 it_ref_cnt;
 	uint32_t		 it_from_parent:1,
-				 it_skipped:1,
 				 it_for_purge:1,
 				 it_for_discard:1,
 				 it_for_migration:1,
@@ -1418,26 +1439,29 @@ recx_csum_len(daos_recx_t *recx, struct dcs_csum_info *csum,
 			recx->rx_idx, recx->rx_idx + recx->rx_nr - 1, rsize);
 }
 
-/** Mark that the object and container need aggregation. Caller must be in PMDK transaction
+/** Mark that the object and container need aggregation.
  *
  * \param[in] umm	umem instance
  * \param[in] dkey_root	Root of dkey tree (marked for object)
  * \param[in] obj_root	Root of object tree (marked for container)
+ * \param[in] epoch	Epoch of aggregatable update
  *
  * \return 0 on success, error otherwise
  */
 int
-vos_mark_agg(struct umem_instance *umm, struct btr_root *dkey_root, struct btr_root *obj_root);
+vos_mark_agg(struct umem_instance *umm, struct btr_root *dkey_root, struct btr_root *obj_root,
+	     daos_epoch_t epoch);
 
-/** Mark that the key needs aggregation. Caller must be in PMDK transaction
+/** Mark that the key needs aggregation.
  *
  * \param[in] umm	umem instance
  * \param[in] krec	The key's record
+ * \param[in] epoch	Epoch of aggregatable update
  *
  * \return 0 on success, error otherwise
  */
 int
-vos_key_mark_agg(struct umem_instance *umm, struct vos_krec_df *krec);
+vos_key_mark_agg(struct umem_instance *umm, struct vos_krec_df *krec, daos_epoch_t epoch);
 
 static inline bool
 vos_anchor_is_zero(daos_anchor_t *anchor)

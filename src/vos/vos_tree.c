@@ -1121,7 +1121,7 @@ key_tree_punch(struct vos_object *obj, daos_handle_t toh, daos_epoch_t epoch,
 		*known_key |= 0x1;
 	}
 
-	rc = vos_key_mark_agg(vos_obj2umm(obj), krec);
+	rc = vos_key_mark_agg(vos_obj2umm(obj), krec, epoch);
 done:
 	VOS_TX_LOG_FAIL(rc, "Failed to punch key: "DF_RC"\n", DP_RC(rc));
 

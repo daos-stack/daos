@@ -292,11 +292,12 @@ enum evt_feats {
 	 */
 	/** Aggregation optimization is supported */
 	EVT_FEAT_AGG_OPT		= (1ULL << 62),
-	/** Aggregation is needed */
-	EVT_FEAT_AGG_NEEDED		= (1ULL << 61),
-	/** Aggregation is running */
-	EVT_FEAT_AGG_FLAG		= (1ULL << 60),
+	/** Timestamp mask for last aggregatable write */
+	EVT_FEAT_AGG_TIME_MASK		= (0xffffffffULL << 30),
 };
+D_CASSERT((EVT_FEAT_AGG_OPT & EVT_FEAT_AGG_TIME_MASK) == 0);
+D_CASSERT(((EVT_FEAT_AGG_OPT | EVT_FEAT_AGG_TIME_MASK) & EVT_FEATS_SUPPORTED) == 0);
+D_CASSERT(EVT_FEAT_AGG_TIME_MASK & (1ULL << 61));
 
 /** These are "internal" flags meant to match the btree ones */
 
@@ -710,11 +711,6 @@ int evt_iter_prepare(daos_handle_t toh, unsigned int options,
  * Finalize iterator.
  */
 int evt_iter_finish(daos_handle_t ih);
-
-/**
- * Returns true if iterator skipped anything (sorted only)
- */
-bool evt_iter_skipped(daos_handle_t ih);
 
 enum evt_iter_opc {
 	EVT_ITER_FIRST,

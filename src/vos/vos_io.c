@@ -1623,56 +1623,47 @@ akey_update_recx(daos_handle_t toh, uint32_t pm_ver, daos_recx_t *recx,
 }
 
 static int
-vos_evt_mark_agg(struct umem_instance *umm, struct evt_root *root)
+vos_evt_mark_agg(struct umem_instance *umm, struct evt_root *root, daos_epoch_t epoch)
 {
 	uint64_t	feats;
 
 	feats = evt_feats_get(root);
-	if ((feats & EVT_FEAT_AGG_OPT) == 0)
-		return 0;
 
-	if ((feats & EVT_FEAT_AGG_NEEDED) == 0)
-		feats |= EVT_FEAT_AGG_NEEDED;
-	else if (feats & EVT_FEAT_AGG_FLAG)
-		feats &= ~EVT_FEAT_AGG_FLAG;
+	vos_feats_agg_time_update(epoch, &feats);
 
 	return evt_feats_set(root, umm, feats);
 }
 
 static int
-vos_btr_mark_agg(struct umem_instance *umm, struct btr_root *root)
+vos_btr_mark_agg(struct umem_instance *umm, struct btr_root *root, daos_epoch_t epoch)
 {
 	uint64_t	feats;
 
 	feats = dbtree_feats_get(root);
-	if ((feats & VOS_TREE_AGG_OPT) == 0)
-		return 0;
 
-	if ((feats & VOS_TREE_AGG_NEEDED) == 0)
-		feats |= VOS_TREE_AGG_NEEDED;
-	else if (feats & VOS_TREE_AGG_FLAG)
-		feats &= ~VOS_TREE_AGG_FLAG;
+	vos_feats_agg_time_update(epoch, &feats);
 
 	return dbtree_feats_set(root, umm, feats);
 }
 
 int
-vos_key_mark_agg(struct umem_instance *umm, struct vos_krec_df *krec)
+vos_key_mark_agg(struct umem_instance *umm, struct vos_krec_df *krec, daos_epoch_t epoch)
 {
 	if (krec->kr_bmap & KREC_BF_BTR)
-		return vos_btr_mark_agg(umm, &krec->kr_btr);
+		return vos_btr_mark_agg(umm, &krec->kr_btr, epoch);
 
-	return vos_evt_mark_agg(umm, &krec->kr_evt);
+	return vos_evt_mark_agg(umm, &krec->kr_evt, epoch);
 }
 
 int
-vos_mark_agg(struct umem_instance *umm, struct btr_root *dkey_root, struct btr_root *obj_root)
+vos_mark_agg(struct umem_instance *umm, struct btr_root *dkey_root, struct btr_root *obj_root,
+	     daos_epoch_t epoch)
 {
 	int	rc;
 
-	rc = vos_btr_mark_agg(umm, dkey_root);
+	rc = vos_btr_mark_agg(umm, dkey_root, epoch);
 	if (rc == 0)
-		rc = vos_btr_mark_agg(umm, obj_root);
+		rc = vos_btr_mark_agg(umm, obj_root, epoch);
 
 	return rc;
 }
@@ -1684,7 +1675,7 @@ vos_ioc_mark_agg(struct vos_io_context *ioc)
 		return 0;
 
 	return vos_mark_agg(vos_ioc2umm(ioc), &ioc->ic_obj->obj_df->vo_tree,
-			    &ioc->ic_cont->vc_cont_df->cd_obj_root);
+			    &ioc->ic_cont->vc_cont_df->cd_obj_root, ioc->ic_epr.epr_hi);
 }
 
 static int
@@ -1805,7 +1796,7 @@ out:
 		key_tree_release(toh, is_array);
 
 	if (rc == 0 && ioc->ic_agg_needed)
-		rc = vos_key_mark_agg(vos_ioc2umm(ioc), krec);
+		rc = vos_key_mark_agg(vos_ioc2umm(ioc), krec, ioc->ic_epr.epr_hi);
 
 	return rc;
 }
@@ -1877,7 +1868,7 @@ release:
 	key_tree_release(ak_toh, false);
 
 	if (rc == 0 && ioc->ic_agg_needed)
-		rc = vos_key_mark_agg(vos_ioc2umm(ioc), krec);
+		rc = vos_key_mark_agg(vos_ioc2umm(ioc), krec, ioc->ic_epr.epr_hi);
 
 	return rc;
 }

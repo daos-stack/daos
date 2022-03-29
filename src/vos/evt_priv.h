@@ -36,8 +36,7 @@ struct evt_iterator {
 	/** options for iterator */
 	unsigned int			it_options;
 	unsigned int			it_forward:1,
-					it_skip_move:1,
-					it_skipped:1;
+					it_skip_move:1;
 	/** index */
 	int				it_index;
 	/** For sorted iterators */
