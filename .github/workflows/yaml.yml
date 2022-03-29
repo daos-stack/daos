@@ -9,7 +9,7 @@ on:  # yamllint disable-line rule:truthy
     paths:
       - '**/*.yaml'
       - '**/*.yml'
-      - '.yamllint'
+      - .yamllint
       - .github/workflows/yaml.yml
 
 jobs:
