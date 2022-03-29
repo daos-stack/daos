@@ -22,6 +22,15 @@ import (
 	"github.com/daos-stack/daos/src/control/server/storage"
 )
 
+const (
+	minNrNssPerNUMA = 1
+	maxNrNssPerNUMA = 8
+
+	createNsAnyRegion = -1
+
+	alignmentBoundaryBytes = humanize.MiByte * 2
+)
+
 var badIpmctlVers = []semVer{
 	// https://github.com/intel/ipmctl/commit/9e3898cb15fa9eed3ef3e9de4488be1681d53ff4
 	{"02", "00", "00", "3809"},
@@ -180,7 +189,7 @@ func (cr *cmdRunner) deleteGoals() error {
 
 func (cr *cmdRunner) createNamespace(regionIdx int, sizeBytes uint64) (string, error) {
 	cmd := cmdCreateNamespace
-	if regionIdx > -1 && regionIdx < 2 {
+	if regionIdx > createNsAnyRegion {
 		cmd = fmt.Sprintf("%s --region %d", cmd, regionIdx)
 	}
 	if sizeBytes > 0 {
@@ -318,7 +327,7 @@ func (cr *cmdRunner) UpdateFirmware(deviceUID string, firmwarePath string) error
 // FIXME DAOS-10173: When libipmctl nvm_get_region() is fixed so that it doesn't take
 //                   a minute to return, replace this with getRegionState() below to use
 //                   libipmctl directly through bindings.
-func parseShowRegionOutput(log logging.Logger, text string) (_ []uint64, err error) {
+func parseShowRegionOutput(log logging.Logger, text string) (regionFreeBytes []uint64, err error) {
 	defer func() {
 		err = errors.Wrap(err, "parse show regions cmd output")
 	}()
@@ -329,7 +338,6 @@ func parseShowRegionOutput(log logging.Logger, text string) (_ []uint64, err err
 	}
 
 	var appDirect bool
-	var regionFreeBytes []uint64
 	for _, line := range lines {
 		entry := strings.TrimSpace(line)
 
@@ -372,7 +380,7 @@ func (cr *cmdRunner) getRegionFreeSpace() ([]uint64, error) {
 	cr.log.Debugf("show region output: %s\n", out)
 
 	if strings.Contains(out, outScmNoRegions) {
-		return []uint64{}, nil
+		return nil, nil
 	}
 
 	regionFreeBytes, err := parseShowRegionOutput(cr.log, out)
@@ -478,7 +486,7 @@ func (cr *cmdRunner) prep(req storage.ScmPrepareRequest, scanRes *storage.ScmSca
 
 	// Handle unspecified NrNamespacesPerNUMA in request.
 	if req.NrNamespacesPerNUMA == 0 {
-		req.NrNamespacesPerNUMA = 1
+		req.NrNamespacesPerNUMA = minNrNssPerNUMA
 	}
 
 	switch state {
@@ -584,11 +592,11 @@ func (cr *cmdRunner) removeNamespace(devName string) error {
 	return nil
 }
 
-func (cr *cmdRunner) createSingleNamespacePerNUMA() (storage.ScmNamespaces, error) {
+func (cr *cmdRunner) createSingleNsPerNUMA() (storage.ScmNamespaces, error) {
 	for {
 		cr.log.Debug("creating pmem namespace")
 
-		if _, err := cr.createNamespace(-1, 0); err != nil {
+		if _, err := cr.createNamespace(createNsAnyRegion, 0); err != nil {
 			return nil, errors.WithMessage(err, "create namespace cmd")
 		}
 
@@ -611,41 +619,47 @@ func (cr *cmdRunner) createSingleNamespacePerNUMA() (storage.ScmNamespaces, erro
 	return cr.getNamespaces()
 }
 
-func (cr *cmdRunner) createDualNamespacesPerNUMA() (storage.ScmNamespaces, error) {
+func (cr *cmdRunner) createMultiNsPerNUMA(nrNsPerNUMA uint) (storage.ScmNamespaces, error) {
 	// For each region, create two namespaces each with half the total free capacity.
 	// Sanity check alignment.
+
+	if nrNsPerNUMA < minNrNssPerNUMA || nrNsPerNUMA > maxNrNssPerNUMA {
+		return nil, errors.Errorf("unexpected number of namespaces per numa: want [%d-%d], got %d",
+			minNrNssPerNUMA, maxNrNssPerNUMA, nrNsPerNUMA)
+	}
 
 	regionFreeBytes, err := cr.getRegionFreeSpace()
 	if err != nil {
 		return nil, err
 	}
 
-	for idx, freeBytes := range regionFreeBytes {
+	for regionIndex, freeBytes := range regionFreeBytes {
 		if freeBytes == 0 {
 			// Catch edge case where trying to create multiple namespaces per NUMA node
 			// but a region already has a single namespace taking full capacity.
-			cr.log.Errorf("createDualNamespacesPerNUMA: region %d has no free space", idx)
+			cr.log.Errorf("createMultiNsPerNUMA: region %d has no free space", regionIndex)
 
 			nss, err := cr.getNamespaces()
 			if err != nil {
 				return nil, err
 			}
 
-			return nil, storage.FaultScmNamespacesNrMismatch(2,
+			return nil, storage.FaultScmNamespacesNrMismatch(nrNsPerNUMA,
 				uint(len(regionFreeBytes)), uint(len(nss)))
 		}
 
 		// Check value is 2MiB aligned and (TODO) multiples of interleave width.
-		pmemBytes := freeBytes / 2
-		if pmemBytes%(humanize.MiByte*2) != 0 {
+		pmemBytes := freeBytes / uint64(nrNsPerNUMA)
+
+		if pmemBytes%alignmentBoundaryBytes != 0 {
 			return nil, errors.New("free region size is not 2MiB aligned")
 		}
 
-		if _, err := cr.createNamespace(idx, pmemBytes); err != nil {
-			return nil, errors.WithMessage(err, "create namespace cmd")
-		}
-		if _, err := cr.createNamespace(idx, pmemBytes); err != nil {
-			return nil, errors.WithMessage(err, "create namespace cmd")
+		// Create specified number of namespaces on a single region (NUMA node).
+		for j := uint(0); j < nrNsPerNUMA; j++ {
+			if _, err := cr.createNamespace(regionIndex, pmemBytes); err != nil {
+				return nil, errors.WithMessage(err, "create namespace cmd")
+			}
 		}
 	}
 
@@ -662,21 +676,20 @@ func (cr *cmdRunner) createDualNamespacesPerNUMA() (storage.ScmNamespaces, error
 }
 
 // createNamespaces repeatedly creates namespaces until no free capacity.
-func (cr *cmdRunner) createNamespaces(nrNamespacesPerNUMA uint) (storage.ScmNamespaces, error) {
+func (cr *cmdRunner) createNamespaces(nrNssPerNUMA uint) (storage.ScmNamespaces, error) {
 	if err := cr.checkNdctl(); err != nil {
 		return nil, err
 	}
 
-	switch nrNamespacesPerNUMA {
+	switch nrNssPerNUMA {
+	case 0:
+		return nil, errors.New("number of namespaces per numa can not be 0")
 	case 1:
 		cr.log.Debug("creating one pmem namespace per numa node")
-		return cr.createSingleNamespacePerNUMA()
-	case 2:
-		cr.log.Debug("creating two pmem namespaces per numa node")
-		return cr.createDualNamespacesPerNUMA()
+		return cr.createSingleNsPerNUMA()
 	default:
-		return nil, errors.Errorf("unexpected number of namespaces per numa: want %s, got %d",
-			"[1,2]", nrNamespacesPerNUMA)
+		cr.log.Debug("creating multiple pmem namespaces per numa node")
+		return cr.createMultiNsPerNUMA(nrNssPerNUMA)
 	}
 }
 
