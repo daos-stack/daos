@@ -4,7 +4,6 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
-from apricot import TestWithServers
 from ior_test_base import IorTestBase
 
 
@@ -17,9 +16,9 @@ class TargetFailure(IorTestBase):
     def test_target_failure_wo_rf(self):
         """Jira ID: DAOS-xxxx.
 
-        :avocado: tags=all,full_regression,
-        :avocado: tags=vm
-        :avocado: tags=deployment
+        :avocado: tags=all,full_regression
+        :avocado: tags=hw,small
+        :avocado: tags=deployment,target_failure
         :avocado: tags=target_failure_wo_rf
         """
         self.add_pool()
