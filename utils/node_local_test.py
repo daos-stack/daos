@@ -2277,7 +2277,7 @@ class posix_tests():
         assert rc.returncode == 0, rc
         print('File contents:')
         git_config_file = join(self.dfuse.dir, '.git', 'config')
-        with open(git_config_file, 'r') as fd:
+        with open(git_config_file, 'r', encoding='utf-8') as fd:
             for line in fd.readlines():
                 print(line.strip('\n'))
         config = configparser.ConfigParser()
