@@ -7,6 +7,7 @@
 package engine
 
 import (
+	"os"
 	"strings"
 
 	"github.com/pkg/errors"
@@ -173,7 +174,7 @@ func NewConfig() *Config {
 func (c *Config) setAffinity(log logging.Logger, fis *hardware.FabricInterfaceSet) (err error) {
 	var fi *hardware.FabricInterface
 	if fis != nil {
-		fi, err = fis.GetInterfaceOnOSDevice(c.Fabric.Interface, c.Fabric.Provider)
+		fi, err = fis.GetInterfaceOnNetDevice(c.Fabric.Interface, c.Fabric.Provider)
 		if err != nil {
 			return
 		}
@@ -266,6 +267,26 @@ func (c *Config) HasEnvVar(name string) bool {
 		}
 	}
 	return false
+}
+
+// GetEnvVar returns the value of the given environment variable to be supplied when starting an I/O
+// engine instance.
+func (c *Config) GetEnvVar(name string) (string, error) {
+	env, err := c.CmdLineEnv()
+	if err != nil {
+		return "", err
+	}
+
+	env = mergeEnvVars(cleanEnvVars(os.Environ(), c.EnvPassThrough), env)
+
+	for _, keyPair := range c.EnvVars {
+		keyValue := strings.SplitN(keyPair, "=", 2)
+		if keyValue[0] == name {
+			return keyValue[1], nil
+		}
+	}
+
+	return "", errors.Errorf("Undefined environment variable %q", name)
 }
 
 // WithEnvVars applies the supplied list of environment

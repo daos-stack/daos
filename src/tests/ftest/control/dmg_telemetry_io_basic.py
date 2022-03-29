@@ -10,7 +10,8 @@ from ior_test_base import IorTestBase
 from telemetry_test_base import TestWithTelemetry
 from telemetry_utils import TelemetryUtils
 
-class TestWithTelemetryIOBasic(IorTestBase,TestWithTelemetry):
+
+class TestWithTelemetryIOBasic(IorTestBase, TestWithTelemetry):
     # pylint: disable=too-many-ancestors
     # pylint: disable=too-many-nested-blocks
     """Test telemetry engine io basic metrics.
@@ -43,26 +44,22 @@ class TestWithTelemetryIOBasic(IorTestBase,TestWithTelemetry):
                 for host in sorted(m_data[name]):
                     for rank in sorted(m_data[name][host]):
                         for target in sorted(m_data[name][host][rank]):
-                            for size in sorted(
-                                m_data[name][host][rank][target]):
+                            for size in sorted(m_data[name][host][rank][target]):
                                 value = m_data[name][host][rank][target][size]
                                 invalid = ""
-                                #Verify value within range
-                                if (value < threshold[0]
-                                    or value >= threshold[1]):
+                                # Verify value within range
+                                if (value < threshold[0] or value >= threshold[1]):
                                     status = False
                                     invalid = "*out of valid range"
-                                #Verify if min < max
+                                # Verify if min < max
                                 if "_min" in name:
                                     name2 = name.replace("_min", "_max")
-                                    if value > m_data\
-                                        [name2][host][rank][target][size]:
+                                    if value > m_data[name2][host][rank][target][size]:
                                         status = False
                                         invalid += " *_min > _max"
-                                #Verify if value decremental
+                                # Verify if value decremental
                                 if ("_min" in name or "_max" in name) and key > 0:
-                                    if value < metrics_data[key-1]\
-                                        [name][host][rank][target][size]:
+                                    if value < metrics_data[key-1][name][host][rank][target][size]:
                                         status = False
                                         invalid += " *value decreased"
                                 self.log.info(
@@ -102,8 +99,8 @@ class TestWithTelemetryIOBasic(IorTestBase,TestWithTelemetry):
         transfer_sizes = self.params.get("transfer_sizes", "/run/*")
         threshold = self.params.get("io_test_metrics_valid", "/run/*")
         test_metrics = TelemetryUtils.ENGINE_IO_DTX_COMMITTED_METRICS +\
-                       TelemetryUtils.ENGINE_IO_OPS_FETCH_ACTIVE_METRICS +\
-                       TelemetryUtils.ENGINE_IO_OPS_UPDATE_ACTIVE_METRICS
+            TelemetryUtils.ENGINE_IO_OPS_FETCH_ACTIVE_METRICS +\
+            TelemetryUtils.ENGINE_IO_OPS_UPDATE_ACTIVE_METRICS
         i = 0
         self.add_pool(connect=False)
         self.add_container(pool=self.pool)

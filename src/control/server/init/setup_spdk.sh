@@ -1,9 +1,8 @@
 #!/usr/bin/env bash
 
-## Wrap spdk setup script so we can isolate commands that require elevated
-## privileges including changing directory permissions (which enables spdk
-## to be run by an unprivileged user).
-## These sudo commands can be granted using visudo by a system administrator.
+## Wrap spdk setup script. This script will be called by daos_admin process which will be
+## running with elevated privileges. Activities include changing directory permissions (which
+## enables spdk to be run by an unprivileged user).
 
 set +e
 
@@ -14,7 +13,7 @@ set_vfio_permissions()
 {
 	# make sure regular users can read /dev/vfio
 	echo "RUN: chmod /dev/vfio"
-	if ! sudo chmod a+x /dev/vfio; then
+	if ! chmod a+x /dev/vfio; then
 		echo "FAIL"
 		return
 	fi
@@ -22,7 +21,7 @@ set_vfio_permissions()
 
 	# make sure regular user can access everything inside /dev/vfio
 	echo "RUN: chmod /dev/vfio/*"
-	if ! sudo chmod 0666 /dev/vfio/*; then
+	if ! chmod 0666 /dev/vfio/*; then
 		echo "FAIL"
 		return
 	fi
