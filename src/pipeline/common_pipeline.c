@@ -67,6 +67,7 @@ pipeline_part_nops(const char *part_type, size_t part_type_s)
 		 !strncmp(part_type, "DAOS_FILTER_FUNC_LE", part_type_s)  ||
 		 !strncmp(part_type, "DAOS_FILTER_FUNC_GE", part_type_s)  ||
 		 !strncmp(part_type, "DAOS_FILTER_FUNC_GT", part_type_s)  ||
+		 !strncmp(part_type, "DAOS_FILTER_FUNC_LIKE", part_type_s)||
 		 !strncmp(part_type, "DAOS_FILTER_FUNC_ADD", part_type_s) ||
 		 !strncmp(part_type, "DAOS_FILTER_FUNC_SUB", part_type_s) ||
 		 !strncmp(part_type, "DAOS_FILTER_FUNC_MUL", part_type_s) ||
@@ -75,8 +76,7 @@ pipeline_part_nops(const char *part_type, size_t part_type_s)
 	{
 		return 2;
 	}
-	else if (!strncmp(part_type, "DAOS_FILTER_FUNC_LIKE", part_type_s)      ||
-		 !strncmp(part_type, "DAOS_FILTER_FUNC_ISNULL", part_type_s)    ||
+	else if (!strncmp(part_type, "DAOS_FILTER_FUNC_ISNULL", part_type_s)    ||
 		 !strncmp(part_type, "DAOS_FILTER_FUNC_ISNOTNULL", part_type_s) ||
 		 !strncmp(part_type, "DAOS_FILTER_FUNC_NOT", part_type_s)       ||
 		 !strncmp(part_type, "DAOS_FILTER_FUNC_SUM", part_type_s)       ||
@@ -97,15 +97,16 @@ pipeline_part_checkop(const char *part_type, size_t part_type_s,
 	    !strncmp(part_type, "DAOS_FILTER_FUNC_AND", part_type_s) ||
 	    !strncmp(part_type, "DAOS_FILTER_FUNC_OR", part_type_s))
 	{ /* only logical funcs */
-		return !strncmp(operand_type, "DAOS_FILTER_FUNC_EQ", operand_type_s) ||
-		       !strncmp(operand_type, "DAOS_FILTER_FUNC_IN", operand_type_s) ||
-		       !strncmp(operand_type, "DAOS_FILTER_FUNC_NE", operand_type_s) ||
-		       !strncmp(operand_type, "DAOS_FILTER_FUNC_LT", operand_type_s) ||
-		       !strncmp(operand_type, "DAOS_FILTER_FUNC_LE", operand_type_s) ||
-		       !strncmp(operand_type, "DAOS_FILTER_FUNC_GE", operand_type_s) ||
-		       !strncmp(operand_type, "DAOS_FILTER_FUNC_GT", operand_type_s) ||
-		       !strncmp(operand_type, "DAOS_FILTER_FUNC_NOT", operand_type_s) ||
-		       !strncmp(operand_type, "DAOS_FILTER_FUNC_AND", operand_type_s) ||
+		return !strncmp(operand_type, "DAOS_FILTER_FUNC_EQ", operand_type_s)   ||
+		       !strncmp(operand_type, "DAOS_FILTER_FUNC_IN", operand_type_s)   ||
+		       !strncmp(operand_type, "DAOS_FILTER_FUNC_NE", operand_type_s)   ||
+		       !strncmp(operand_type, "DAOS_FILTER_FUNC_LT", operand_type_s)   ||
+		       !strncmp(operand_type, "DAOS_FILTER_FUNC_LE", operand_type_s)   ||
+		       !strncmp(operand_type, "DAOS_FILTER_FUNC_GE", operand_type_s)   ||
+		       !strncmp(operand_type, "DAOS_FILTER_FUNC_GT", operand_type_s)   ||
+		       !strncmp(operand_type, "DAOS_FILTER_FUNC_LIKE", operand_type_s) ||
+		       !strncmp(operand_type, "DAOS_FILTER_FUNC_NOT", operand_type_s)  ||
+		       !strncmp(operand_type, "DAOS_FILTER_FUNC_AND", operand_type_s)  ||
 		       !strncmp(operand_type, "DAOS_FILTER_FUNC_OR", operand_type_s);
 	}
 	else if (!strncmp(part_type, "DAOS_FILTER_FUNC_LIKE", part_type_s) ||
@@ -260,6 +261,7 @@ int d_pipeline_check(daos_pipeline_t *pipeline)
 
 			num_operands = pipeline_part_nops((char *) part->part_type.iov_buf,
 							  part->part_type.iov_len);
+
 			if (num_operands < 0)
 			{ /** special cases for AND and OR */
 				if (part->num_operands < 2)
