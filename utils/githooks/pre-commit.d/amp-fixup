@@ -38,14 +38,4 @@ then
     done
 fi
 
-# In a per-commit hook.
-mfiles=$(git diff-index --cached --name-only HEAD)
-for file in $mfiles
-do
-#    git reset $file
-    codespell -w --ignore-words-list coo,dedup,nd,uint,ths,ba,creat,te,cas,mapp,pres,crashers,dout,tre,reord,mimick,cloneable,keypair,bject,tread,cancelled,controllerd --builtin clear,rare,informal,names,en-GB_to_en-US --skip *.png,*.PNG,*.pyc,src/rdb/raft/*,src/control/vendor/*,RSA.golden,utils/rpms/* $file
-    git add $file
-done
-
-
 exit 0
