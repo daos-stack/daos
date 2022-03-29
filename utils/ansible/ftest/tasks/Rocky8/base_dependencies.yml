@@ -1,0 +1,28 @@
+---
+# Install base dependencies of a developmene node
+
+- name: Install dnf builddep plugin
+  remote_user: root
+  dnf:
+    state: latest
+    update_cache: true
+    name: dnf-plugins-core
+
+- name: Install DAOS building dependencies
+  remote_user: root
+  command:
+    dnf builddep -y "{{ playbook_dir }}/file/daos.spec"
+  args:
+    warn: false
+  register: dnf_result
+  become: true
+  changed_when: '"Nothing to do" not in dnf_result.stdout'
+
+- name: Install common debug tools
+  remote_user: root
+  dnf:
+    state: latest
+    update_cache: true
+    name:
+      - tree
+      - gdb

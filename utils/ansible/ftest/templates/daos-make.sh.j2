@@ -1,0 +1,188 @@
+#!/bin/bash
+
+set -o pipefail
+
+VERSION=0.1
+CWD="$(realpath $(dirname $0))"
+
+DAOS_INSTALL_DIR="{{ daos_runtime_dir }}/install"
+DAOS_SOURCE_DIR="{{ daos_source_dir }}"
+SERVERS_LIST="{{ groups["daos_servers"] | join(',') }}"
+{% if "daos_clients" in groups and groups["daos_clients"] | length > 0 %}
+CLIENTS_LIST="{{ groups["daos_clients"] | join(',') }}"
+{% endif %}
+
+JOBS_NB=1
+SCONS_EXE=scons-3
+CLUSH_EXE=clush
+
+ANSI_COLOR_BLACK=30
+ANSI_COLOR_RED=31
+ANSI_COLOR_GREEN=32
+ANSI_COLOR_YELLOW=33
+ANSI_COLOR_BLUE=34
+ANSI_COLOR_MAGENTA=35
+ANSI_COLOR_CYAN=36
+ANSI_COLOR_WHITE=37
+ANSI_COLOR_BRIGHT_BLACK=90
+ANSI_COLOR_BRIGHT_RED=91
+ANSI_COLOR_BRIGHT_GREEN=92
+ANSI_COLOR_BRIGHT_YELLOW=93
+ANSI_COLOR_BRIGHT_BLUE=94
+ANSI_COLOR_BRIGHT_MAGENTA=95
+ANSI_COLOR_BRIGHT_CYAN=96
+ANSI_COLOR_BRIGHT_WHITE=97
+
+TRACE_LEVEL_QUIET=-1
+TRACE_LEVEL_STANDARD=0
+TRACE_LEVEL_VERBOSE=1
+TRACE_LEVEL_DEBUG=2
+TRACE_LEVEL=$TRACE_LEVEL_STANDARD
+
+function debug
+{
+	if [[ $TRACE_LEVEL -ge $TRACE_LEVEL_DEBUG ]]
+	then
+		echo -e "[\e[${ANSI_COLOR_GREEN}mDEBUG  \e[00m] $@"
+	fi
+}
+
+
+function info
+{
+	if [[ $TRACE_LEVEL -ge $TRACE_LEVEL_VERBOSE ]]
+	then
+		echo -e "[\e[${ANSI_COLOR_CYAN}mINFO   \e[00m] $@"
+	fi
+}
+
+function warning
+{
+	if [[ $TRACE_LEVEL -ge $TRACE_LEVEL_STANDARD ]]
+	then
+		echo -e "[\e[${ANSI_COLOR_YELLOW}mWARNING\e[00m] $@" 1>&2
+	fi
+}
+
+function error
+{
+	if [[ $TRACE_LEVEL -ge $TRACE_LEVEL_STANDARD ]]
+	then
+		echo -e "[\e[${ANSI_COLOR_BRIGHT_RED}mERROR  \e[00m] $@" 1>&2
+	fi
+}
+
+function fatal
+{
+	if [[ $TRACE_LEVEL -ge $TRACE_LEVEL_STANDARD ]]
+	then
+		echo -e "[\e[${ANSI_COLOR_RED}mFATAL  \e[00m] $@" 1>&2
+	fi
+	exit 1
+}
+
+function check_cmds
+{
+	for cmd in $@
+	do
+		{ hash $cmd > "/dev/null" 2>&1 ; } || { fatal "$cmd command not installed" ; }
+	done
+}
+
+function usage
+{
+	cat <<- EOF
+		usage: daos-make.sh [OPTIONS] CMD
+
+		Build and install DAOS for running avocado functional tests
+
+		Options:
+		   -j, --jobs <job>         Allow N jobs at once; one job with no arg
+		   -f, --force              Overwrite the current install of DAOS
+		   -h, --help               show this help message and exit
+		   -V, --version            show version number
+		   -q, --quiet              quiet mode
+		   -v, --verbose            verbose mode
+		   -D, --debug              debug mode
+
+		Commands:
+		   install                  Build and install DAOS
+		   update                   Update current install of DAOS
+	EOF
+}
+
+function run
+{
+	if [[ $TRACE_LEVEL -ge $TRACE_LEVEL_STANDARD ]]
+	then
+		"$@"
+	else
+		"$@" &> /dev/null
+	fi
+}
+
+OPTIONS=$(getopt -o "j:fhVvDq" --long "jobs:,force,help,version,verbose,debug,quiet" -- "$@") || exit 1
+eval set -- "$OPTIONS"
+while true
+do
+	case "$1" in
+		-j|--jobs) JOBS_NB="$2" ; shift 2 ;;
+		-f|--force) FORCE_INSTALL=true ; shift 1;;
+		-h|--help) usage ; exit 0;;
+		-V|--version) echo "daos-make.sh version=$VERSION" ; exit 0 ;;
+		-v|--verbose) TRACE_LEVEL=$TRACE_LEVEL_VERBOSE ; shift 1 ;;
+		-D|--debug) TRACE_LEVEL=$TRACE_LEVEL_DEBUG ; set -x ; shift 1 ;;
+		-q|--quiet) TRACE_LEVEL=$TRACE_LEVEL_QUIET ; shift 1 ;;
+		--) shift ; break ;;
+		*) fatal "unrecognized command line option" ;;
+	esac
+done
+
+[[ $1 ]] || fatal "Command not defined: install, update"
+CMD="$1"
+
+check_cmds $SCONS_EXE
+
+set -e
+
+if [[ -d "$DAOS_INSTALL_DIR" && "$CMD" == install ]]; then
+	[[ -n "$FORCE_INSTALL" ]] || fatal "DAOS already installed: use install --force or update."
+	info "Removing old DAOS install at $DAOS_INSTALL_DIR"
+	if ! run /bin/rm -fr "$DAOS_INSTALL_DIR" ; then
+		fatal "Old install t $DAOS_INSTALL_DIR could not be removed"
+	fi
+fi
+
+if [[ ! -d "$DAOS_INSTALL_DIR" ]] ; then
+	info "Creatin DAOS install directory $DAOS_INSTALL_DIR"
+	if ! run mkdir -p "$DAOS_INSTALL_DIR" ; then
+		fatal "DAOS install directory $DAOS_INSTALL_DIR could not be created"
+	fi
+fi
+
+cd "$DAOS_SOURCE_DIR"
+SCONS_OPTS="-j $JOBS_NB"
+case $CMD in
+	install) SCONS_OPTS="$SCONS_OPTS --build-deps=yes --config=force" ;;
+	update) SCONS_OPTS="$SCONS_OPTS --build-deps=no" ;;
+	*) fatal "Unexpected case" ;;
+esac
+info "Building and installing DAOS from source tree $PWD to $DAOS_INSTALL_DIR"
+if ! run env MPI_PKG=any "$SCONS_EXE" BUILD_TYPE=debug PREFIX="$DAOS_INSTALL_DIR" install $SCONS_OPTS ; then
+	fatal "DAOS could not be properly build and/or installed"
+fi
+
+info "Finalizing spdk install"
+for item in $(find "$DAOS_INSTALL_DIR/share/daos" -type f)
+do
+        dest="/usr/${item#$DAOS_INSTALL_DIR/}"
+        $CLUSH_EXE -l root -w $SERVERS_LIST install -v -D -o root -g root -m 755 "$item" "$dest"
+done
+
+
+info "Finalizing daos-admin install"
+chmod 0446 "$DAOS_INSTALL_DIR/bin/daos_admin"
+$CLUSH_EXE -l root -w $SERVERS_LIST cp -f "$DAOS_INSTALL_DIR/bin/daos_admin" /usr/bin
+$CLUSH_EXE -l root -w $SERVERS_LIST chown root:daos_server /usr/bin/daos_admin
+$CLUSH_EXE -l root -w $SERVERS_LIST chmod 4755 /usr/bin/daos_admin
+$CLUSH_EXE -w $SERVERS_LIST chmod a-x  "$DAOS_INSTALL_DIR/bin/daos_admin"

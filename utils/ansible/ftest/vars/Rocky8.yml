@@ -1,0 +1,4 @@
+---
+# Set of variables for Rocky 8
+
+daos_openmpi_module_path: /usr/share/modulefiles/mpi/openmpi-x86_64

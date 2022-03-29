@@ -1,0 +1,13 @@
+---
+# Install dependencies of a server node
+
+- name: Install base dpendencies packages
+  import_tasks: base_dependencies.yml
+
+- name: Install rpms missing spdk dependencies
+  remote_user: root
+  dnf:
+    state: latest
+    update_cache: true
+    name:
+      - spdk-tools

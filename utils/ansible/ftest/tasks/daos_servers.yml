@@ -1,0 +1,87 @@
+---
+# Ansible scripts for deploying a DAOS development node
+
+- name: Checking required variables
+  fail:
+    msg: "Variable '{{ item }}' is not defined"
+  when: item not in vars
+  loop:
+    - daos_runtime_dir
+
+- name: Base DAOS configuration
+  import_tasks: daos_base.yml
+
+- name: Install dependency packages
+  include_tasks: "{{ item }}"
+  with_first_found:
+    - "{{ ansible_distribution }}{{ ansible_distribution_major_version}}/servers_dependencies.yml"
+
+- name: Check Huge Pages
+  remote_user: root
+  daos_hugepages:
+    size: "{{ daos_hugepages_nb | default(4096) }}"
+
+- name: Add DAOS server groups
+  remote_user: root
+  group:
+    name: "{{ item }}"
+    state: present
+    system: true
+  loop:
+    - daos_metrics
+    - daos_server
+    - daos_daemons
+
+- name: Add DAOS server user
+  remote_user: root
+  user:
+    name: daos_server
+    state: present
+    system: true
+    shell: /sbin/nologin
+    create_home: false
+    group: daos_server
+    groups:
+      - daos_metrics
+      - daos_daemons
+
+- name: Update systemd service for daos-server
+  remote_user: root
+  template:
+    src: daos_server.service.j2
+    dest: /usr/lib/systemd/system/daos_server.service
+    owner: root
+    group: root
+    mode: '0644'
+    backup: true
+
+- name: Create base daos-server configuration file tree
+  remote_user: root
+  file:
+    path: "{{ item }}"
+    state: directory
+    owner: root
+    group: root
+    mode: 0755
+  loop:
+    - /etc/daos
+    - /etc/daos/certs
+
+- name: Create client certificate daos-server configuration file tree
+  remote_user: root
+  file:
+    path: /etc/daos/certs/clients
+    state: directory
+    owner: daos_server
+    group: daos_server
+    mode: 0700
+
+- name: Create DAOS SCM mount points
+  remote_user: root
+  file:
+    path: "/mnt/daos{{ item }}"
+    state: directory
+    owner: root
+    group: root
+    mode: 0755
+  loop: "[''] + {{ range(0, 4, 1) | list }}"

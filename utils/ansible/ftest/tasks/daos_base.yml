@@ -1,0 +1,48 @@
+---
+# Ansible scripts for configuring a DAOS node with ftest
+
+- name: Gather distribution specific variables
+  include_vars: "{{ item }}"
+  with_first_found:
+    - "{{ playbook_dir }}/vars/{{ ansible_distribution }}{{ ansible_distribution_major_version }}.yml"
+
+- name: Set includedir in sudoers
+  remote_user: root
+  lineinfile:
+    state: present
+    create: false
+    dest: /etc/sudoers
+    line: "#includedir /etc/sudoers.d"
+    validate: /usr/sbin/visudo -cf %s
+
+- name: "Add user {{ ansible_user_id }} to sudo"
+  remote_user: root
+  lineinfile:
+    state: present
+    create: true
+    owner: root
+    group: root
+    path: "/etc/sudoers.d/{{ ansible_user_id }}"
+    line: "{{ ansible_user_id }} ALL=(ALL) NOPASSWD: ALL"
+    mode: 0440
+    validate: /usr/sbin/visudo -cf %s
+
+- name: Create MPI module directory
+  remote_user: root
+  file:
+    path: /etc/modulefiles/mpi
+    state: directory
+    owner: root
+    group: root
+    mode: '0755'
+    recurse: true
+
+- name: Create MPI module configuration file
+  remote_user: root
+  file:
+    src: "{{ daos_openmpi_module_path }}"
+    path: /etc/modulefiles/mpi/mlnx_openmpi-x86_64
+    state: link
+    owner: root
+    group: root
+    mode: '0755'

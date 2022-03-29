@@ -1,0 +1,42 @@
+---
+# Ansible scripts for deploying a DAOS development node
+
+# Needed by ftest
+- name: Setup DAOS server node
+  import_tasks: daos_servers.yml
+
+# Needed by ftest
+- name: Setup DAOS client node
+  import_tasks: daos_clients.yml
+
+- name: Checking required variables
+  fail:
+    msg: "Variable '{{ item }}' is not defined"
+  when: item not in vars
+  loop:
+    - daos_runtime_dir
+    - daos_source_dir
+
+- name: Install dependencies packages
+  include_tasks: "{{ item }}"
+  with_first_found:
+    - "{{ ansible_distribution }}{{ ansible_distribution_major_version}}/devs_dependencies.yml"
+
+- name: Create DAOS runtime directory
+  file:
+    path: "{{ daos_runtime_dir }}"
+    state: directory
+    mode: '0755'
+    recurse: true
+
+- name: Install DAOS make helper script
+  template:
+    src: daos-make.sh.j2
+    mode: '0755'
+    dest: "{{ daos_runtime_dir }}/daos-make.sh"
+
+- name: Install DAOS launch helper script
+  template:
+    src: daos-launch.sh.j2
+    mode: '0755'
+    dest: "{{ daos_runtime_dir }}/daos-launch.sh"

@@ -1,0 +1,61 @@
+---
+# Ansible scripts for deploying a DAOS client node
+
+- name: Checking required variables
+  fail:
+    msg: "Variable '{{ item }}' is not defined"
+  when: item not in vars
+  loop:
+    - daos_runtime_dir
+
+- name: Base DAOS configuration
+  import_tasks: daos_base.yml
+
+- name: Install DAOS client dependency packages
+  include_tasks: "{{ item }}"
+  with_first_found:
+    - "{{ ansible_distribution }}{{ ansible_distribution_major_version}}/clients_dependencies.yml"
+
+- name: Add DAOS agent groups
+  remote_user: root
+  group:
+    name: "{{ item }}"
+    state: present
+    system: true
+  loop:
+    - daos_agent
+    - daos_daemons
+
+- name: Add DAOS agent user
+  remote_user: root
+  user:
+    name: daos_agent
+    state: present
+    system: true
+    shell: /sbin/nologin
+    create_home: false
+    group: daos_agent
+    groups:
+      - daos_daemons
+
+- name: Update systemd service for DAOS agent
+  remote_user: root
+  template:
+    src: daos_agent.service.j2
+    dest: /usr/lib/systemd/system/daos_agent.service
+    owner: root
+    group: root
+    mode: '0644'
+    backup: true
+
+- name: Create base DAOS agent configuration file tree
+  remote_user: root
+  file:
+    path: "{{ item }}"
+    state: directory
+    owner: root
+    group: root
+    mode: 0755
+  loop:
+    - /etc/daos
+    - /etc/daos/certs

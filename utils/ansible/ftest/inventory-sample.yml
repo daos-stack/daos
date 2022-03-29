@@ -1,0 +1,22 @@
+---
+# Sample inventory of a DAOS functional platform running on the wolf cluster
+
+all:
+  vars:
+    daos_runtime_dir: /home/foo/daos
+  children:
+    daos_devs:
+      vars:
+        daos_source_dir: /home/foo/work/daos
+        daos_ofi_interface: eth0
+      hosts:
+        wolf-666:
+    daos_servers:
+      vars:
+        daos_hugepages_nb: 8182
+      hosts:
+        wolf-666:
+        wolf-999:
+    daos_clients:
+      hosts:
+        wolf-999:

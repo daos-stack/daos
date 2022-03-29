@@ -1,0 +1,5 @@
+---
+# Install dependencies of an admin/client node
+
+- name: Install base dpendencies packages
+  import_tasks: base_dependencies.yml
