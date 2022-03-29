@@ -35,6 +35,7 @@ GO_CONTROL_FILES = common/proto/shared/ranks.pb.go\
 		   common/proto/shared/event.pb.go\
 		   common/proto/mgmt/acl.pb.go\
 		   common/proto/mgmt/cont.pb.go\
+		   common/proto/mgmt/check.pb.go\
 		   common/proto/mgmt/mgmt.pb.go\
 		   common/proto/mgmt/pool.pb.go\
 		   common/proto/mgmt/svc.pb.go\
@@ -49,6 +50,7 @@ GO_CONTROL_FILES = common/proto/shared/ranks.pb.go\
 		   common/proto/ctl/network.pb.go\
 		   common/proto/ctl/firmware.pb.go\
 		   common/proto/ctl/ranks.pb.go\
+		   common/proto/chk/check.pb.go\
 		   common/proto/srv/srv.pb.go\
 		   drpc/drpc.pb.go\
 		   security/auth/auth.pb.go\

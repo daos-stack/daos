@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2021 Intel Corporation.
+// (C) Copyright 2019-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -45,6 +45,8 @@ const (
 	MemberStateUnresponsive MemberState = 0x0100
 	// MemberStateAdminExcluded indicates that the rank has been administratively excluded.
 	MemberStateAdminExcluded MemberState = 0x0200
+	// MemberStateCheckerStarted indicates that the rank is running in checker mode.
+	MemberStateCheckerStarted MemberState = 0x0400
 
 	// ExcludedMemberFilter defines the state(s) to be used when determining
 	// whether or not a member should be excluded from CaRT group map updates.
@@ -78,6 +80,8 @@ func (ms MemberState) String() string {
 		return "Errored"
 	case MemberStateUnresponsive:
 		return "Unresponsive"
+	case MemberStateCheckerStarted:
+		return "CheckerStarted"
 	default:
 		return "Unknown"
 	}
@@ -105,6 +109,8 @@ func memberStateFromString(in string) MemberState {
 		return MemberStateErrored
 	case "unresponsive":
 		return MemberStateUnresponsive
+	case "checkerstarted":
+		return MemberStateCheckerStarted
 	default:
 		return MemberStateUnknown
 	}
@@ -152,6 +158,10 @@ func (ms MemberState) isTransitionIllegal(to MemberState) bool {
 			MemberStateReady:    true,
 			MemberStateJoined:   true,
 			MemberStateStopping: true,
+		},
+		MemberStateCheckerStarted: {
+			MemberStateReady:  true,
+			MemberStateJoined: true,
 		},
 	}[ms][to]
 }

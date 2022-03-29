@@ -196,6 +196,7 @@ func (ei *EngineInstance) determineRank(ctx context.Context, ready *srvpb.Notify
 		FaultDomain: ei.hostFaultDomain,
 		InstanceIdx: ei.Index(),
 		Incarnation: ready.GetIncarnation(),
+		CheckMode:   ready.GetCheckMode(),
 	})
 	if err != nil {
 		ei.log.Errorf("join failed: %s", err)

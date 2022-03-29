@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2021 Intel Corporation.
+// (C) Copyright 2020-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -697,13 +697,13 @@ func TestControl_SystemQueryRespErrors(t *testing.T) {
 func TestControl_SystemStart(t *testing.T) {
 	testHS := hostlist.MustCreateSet("foo-[1-23]")
 	testReqHS := new(SystemStartReq)
-	testReqHS.Hosts.ReplaceSet(testHS)
+	testReqHS.Hosts = testHS.String()
 	testRespHS := new(SystemStartResp)
 	testRespHS.AbsentHosts.ReplaceSet(testHS)
 
 	testRS := system.MustCreateRankSet("1-23")
 	testReqRS := new(SystemStartReq)
-	testReqRS.Ranks.ReplaceSet(testRS)
+	testReqRS.Ranks = testRS.String()
 	testRespRS := new(SystemStartResp)
 	testRespRS.AbsentRanks.ReplaceSet(testRS)
 

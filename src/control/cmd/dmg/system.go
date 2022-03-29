@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2021 Intel Corporation.
+// (C) Copyright 2019-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -204,6 +204,8 @@ type systemStartCmd struct {
 	ctlInvokerCmd
 	jsonOutputCmd
 	rankListCmd
+
+	Checker bool `short:"c" long:"checker" description:"Start DAOS system in checker mode"`
 }
 
 // Execute is run when systemStartCmd activates.
@@ -216,9 +218,15 @@ func (cmd *systemStartCmd) Execute(_ []string) (errOut error) {
 	if err != nil {
 		return err
 	}
+
+	if cmd.Checker && (hostSet.Count() > 0 || rankSet.Count() > 0) {
+		return errors.New("--check option cannot be used with --ranks or --rank-hosts options")
+	}
+
 	req := new(control.SystemStartReq)
-	req.Hosts.ReplaceSet(hostSet)
-	req.Ranks.ReplaceSet(rankSet)
+	req.Checker = cmd.Checker
+	req.Hosts = hostSet.String()
+	req.Ranks = rankSet.String()
 
 	resp, err := control.SystemStart(context.Background(), cmd.ctlInvoker, req)
 	if err != nil {

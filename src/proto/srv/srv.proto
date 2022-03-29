@@ -18,6 +18,7 @@ message NotifyReadyReq {
 	uint32 instanceIdx = 4; // I/O Engine instance index
 	uint32 ntgts = 5; // number of VOS targets allocated in I/O Engine
 	uint64 incarnation = 6; // HLC incarnation number
+	bool   check_mode = 7; // True if engine started in checker mode
 }
 
 // NotifyReadyResp is nil.

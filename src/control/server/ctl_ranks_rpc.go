@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2021 Intel Corporation.
+// (C) Copyright 2020-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -9,6 +9,7 @@ package server
 import (
 	"context"
 	"fmt"
+	"os"
 	"strings"
 	"syscall"
 	"time"
@@ -362,6 +363,14 @@ func (svc *ControlService) StartRanks(ctx context.Context, req *ctlpb.RanksReq) 
 		return nil, errors.New("no ranks specified in request")
 	}
 	svc.log.Debugf("CtlSvc.StartRanks dispatch, req:%+v\n", req)
+
+	// FIXME: Quick hack to convey desired checker status to
+	// launched instances.
+	if req.Checker {
+		os.Setenv("DAOS_ENGINE_CHECKER", "1")
+	} else {
+		os.Unsetenv("DAOS_ENGINE_CHECKER")
+	}
 
 	instances, err := svc.harness.FilterInstancesByRankSet(req.GetRanks())
 	if err != nil {

@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2021 Intel Corporation.
+// (C) Copyright 2019-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -53,6 +53,7 @@ message SystemStartReq {
 	string sys = 1; // DAOS system name
 	string ranks = 2; // rankset to query
 	string hosts = 3; // hostset to query
+	bool checker = 4; // start ranks in check mode
 }
 
 // SystemStartResp returns status of restart attempt and results

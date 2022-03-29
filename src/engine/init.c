@@ -708,7 +708,7 @@ server_init(int argc, char *argv[])
 		goto exit_srv_init;
 	}
 
-	rc = drpc_notify_ready();
+	rc = drpc_notify_ready(dss_check_mode);
 	if (rc != 0) {
 		D_ERROR("Failed to notify daos_server: "DF_RC"\n", DP_RC(rc));
 		goto exit_init_state;
@@ -923,6 +923,8 @@ parse(int argc, char **argv)
 
 	dss_check_mode = false;
 
+	/* load all of modules by default */
+	sprintf(modules, "%s", MODULE_LIST);
 	while ((c = getopt_long(argc, argv, "c:d:f:g:hi:m:n:p:r:H:t:s:x:I:bT:C",
 				opts, NULL)) != -1) {
 		switch (c) {

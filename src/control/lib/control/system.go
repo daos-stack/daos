@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2021 Intel Corporation.
+// (C) Copyright 2020-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -99,6 +99,7 @@ type SystemJoinReq struct {
 	FaultDomain *system.FaultDomain `json:"SrvFaultDomain"`
 	InstanceIdx uint32              `json:"Idx"`
 	Incarnation uint64              `json:"Incarnation"`
+	CheckMode   bool                `json:"check_mode"`
 }
 
 // MarshalJSON packs SystemJoinResp struct into a JSON message.
@@ -270,7 +271,8 @@ func concatSysErrs(errSys, errRes error) error {
 type SystemStartReq struct {
 	unaryRequest
 	msRequest
-	sysRequest
+
+	mgmtpb.SystemStartReq
 }
 
 // SystemStartResp contains the request response.
@@ -316,13 +318,13 @@ func SystemStart(ctx context.Context, rpcClient UnaryInvoker, req *SystemStartRe
 		return nil, errors.Errorf("nil %T request", req)
 	}
 
-	pbReq := new(mgmtpb.SystemStartReq)
-	pbReq.Hosts = req.Hosts.String()
-	pbReq.Ranks = req.Ranks.String()
-	pbReq.Sys = req.getSystem(rpcClient)
+	if req.Checker && (req.Hosts != "" || req.Ranks != "") {
+		return nil, errors.New("cannot specify hosts or ranks with checker")
+	}
 
 	req.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
-		return mgmtpb.NewMgmtSvcClient(conn).SystemStart(ctx, pbReq)
+		req.SystemStartReq.Sys = req.getSystem(rpcClient)
+		return mgmtpb.NewMgmtSvcClient(conn).SystemStart(ctx, &req.SystemStartReq)
 	})
 	rpcClient.Debugf("DAOS system start request: %+v", req)
 
@@ -585,8 +587,9 @@ func LeaderQuery(ctx context.Context, rpcClient UnaryInvoker, req *LeaderQueryRe
 // RanksReq contains the parameters for a system ranks request.
 type RanksReq struct {
 	unaryRequest
-	Ranks string
-	Force bool
+	Ranks   string
+	Force   bool
+	Checker bool
 }
 
 // RanksResp contains the response from a system ranks request.

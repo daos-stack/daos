@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2021 Intel Corporation.
+// (C) Copyright 2020-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -88,6 +88,7 @@ type JoinRequest struct {
 	FabricContexts uint32
 	FaultDomain    *FaultDomain
 	Incarnation    uint64
+	CheckMode      bool
 }
 
 // JoinResponse contains information returned from join membership update.
@@ -140,7 +141,11 @@ func (m *Membership) Join(req *JoinRequest) (resp *JoinResponse, err error) {
 		}
 
 		resp.PrevState = curMember.state
-		curMember.state = MemberStateJoined
+		if req.CheckMode {
+			curMember.state = MemberStateCheckerStarted
+		} else {
+			curMember.state = MemberStateJoined
+		}
 		curMember.Info = ""
 		curMember.Addr = req.ControlAddr
 		curMember.FabricURI = req.FabricURI

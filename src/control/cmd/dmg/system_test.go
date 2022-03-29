@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2021 Intel Corporation.
+// (C) Copyright 2019-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -153,7 +153,7 @@ func TestDmg_SystemCommands(t *testing.T) {
 			"system start with single rank",
 			"system start --ranks 0",
 			strings.Join([]string{
-				`*control.SystemStartReq-{"Sys":"","HostList":null,"Ranks":"0","Hosts":""}`,
+				`*control.SystemStartReq-{"Sys":"","HostList":null,"ranks":"0"}`,
 			}, " "),
 			nil,
 		},
@@ -161,7 +161,7 @@ func TestDmg_SystemCommands(t *testing.T) {
 			"system start with multiple ranks",
 			"system start --ranks 0,1,4",
 			strings.Join([]string{
-				`*control.SystemStartReq-{"Sys":"","HostList":null,"Ranks":"[0-1,4]","Hosts":""}`,
+				`*control.SystemStartReq-{"Sys":"","HostList":null,"ranks":"0-1,4"}`,
 			}, " "),
 			nil,
 		},
@@ -169,7 +169,7 @@ func TestDmg_SystemCommands(t *testing.T) {
 			"system start with multiple hosts",
 			"system start --rank-hosts bar9,foo-[0-100]",
 			strings.Join([]string{
-				`*control.SystemStartReq-{"Sys":"","HostList":null,"Ranks":"","Hosts":"bar9,foo-[0-100]"}`,
+				`*control.SystemStartReq-{"Sys":"","HostList":null,"hosts":"bar9,foo-[0-100]"}`,
 			}, " "),
 			nil,
 		},

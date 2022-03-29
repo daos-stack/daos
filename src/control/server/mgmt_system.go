@@ -266,6 +266,7 @@ func (svc *mgmtSvc) join(ctx context.Context, req *batchJoinRequest) *batchJoinR
 		FabricContexts: req.GetNctxs(),
 		FaultDomain:    fd,
 		Incarnation:    req.GetIncarnation(),
+		CheckMode:      req.GetCheckMode(),
 	})
 	if err != nil {
 		return &batchJoinResponse{joinErr: err}
@@ -445,6 +446,7 @@ type (
 		Ranks      *system.RankSet
 		Force      bool
 		FullSystem bool
+		Checker    bool
 	}
 
 	fanoutResponse struct {
@@ -518,7 +520,7 @@ func (svc *mgmtSvc) rpcFanout(ctx context.Context, req *fanoutRequest, resp *fan
 	}
 
 	ranksReq := &control.RanksReq{
-		Ranks: req.Ranks.String(), Force: req.Force,
+		Ranks: req.Ranks.String(), Force: req.Force, Checker: req.Checker,
 	}
 
 	// Not strictly necessary but helps with debugging.
@@ -648,6 +650,14 @@ func (svc *mgmtSvc) getFanout(req systemReq) (*fanoutRequest, *fanoutResponse, e
 		return nil, nil, errors.New("nil system request")
 	}
 
+	checker := false
+	if checkerReq, ok := req.(interface{ GetChecker() bool }); ok {
+		checker = checkerReq.GetChecker()
+	}
+	if checker && (req.GetHosts() != "" || req.GetRanks() != "") {
+		return nil, nil, errors.New("cannot specify hosts or ranks in checker mode")
+	}
+
 	// populate missing hosts/ranks in outer response and resolve active ranks
 	hitRanks, missRanks, missHosts, err := svc.resolveRanks(req.GetHosts(), req.GetRanks())
 	if err != nil {
@@ -665,6 +675,7 @@ func (svc *mgmtSvc) getFanout(req systemReq) (*fanoutRequest, *fanoutResponse, e
 	return &fanoutRequest{
 			Ranks:      hitRanks,
 			Force:      force,
+			Checker:    checker,
 			FullSystem: len(system.CheckRankMembership(hitRanks.Ranks(), allRanks)) == 0,
 		}, &fanoutResponse{
 			AbsentRanks: missRanks,
@@ -750,6 +761,35 @@ func processStartResp(fr *fanoutResponse, publisher events.Publisher) (*mgmtpb.S
 	return sr, nil
 }
 
+func (svc *mgmtSvc) checkMemberStates(requiredStates ...system.MemberState) error {
+	var stateMask system.MemberState
+	for _, state := range requiredStates {
+		stateMask |= state
+	}
+
+	allMembers, err := svc.sysdb.AllMembers()
+	if err != nil {
+		return err
+	}
+	invalidMembers := &system.RankSet{}
+
+	for _, m := range allMembers {
+		if m.State()&stateMask == 0 {
+			invalidMembers.Add(m.Rank)
+		}
+	}
+
+	if invalidMembers.Count() > 0 {
+		states := make([]string, len(requiredStates))
+		for i, state := range requiredStates {
+			states[i] = state.String()
+		}
+		return errors.Errorf("members not in (%s): %s", strings.Join(states, "|"), invalidMembers.String())
+	}
+
+	return nil
+}
+
 // SystemStart implements the method defined for the Management Service.
 //
 // Initiate controlled start of DAOS system instances (system members)
@@ -767,6 +807,15 @@ func (svc *mgmtSvc) SystemStart(ctx context.Context, req *mgmtpb.SystemStartReq)
 	fReq, fResp, err := svc.getFanout(req)
 	if err != nil {
 		return nil, err
+	}
+
+	if fReq.Checker {
+		if err := svc.checkMemberStates(
+			system.MemberStateAdminExcluded,
+			system.MemberStateStopped,
+		); err != nil {
+			return nil, err
+		}
 	}
 
 	fReq.Method = control.StartRanks
