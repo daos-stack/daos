@@ -708,7 +708,6 @@ crt_hg_class_init(int provider, int idx, hg_class_t **ret_hg_class)
 		init_info.na_init_info.max_unexpected_size = prov_data->cpg_max_unexp_size;
 
 	init_info.request_post_incr = 0;
-	D_INFO("HG_INIT info_string: %s\n", info_string);
 	hg_class = HG_Init_opt(info_string, crt_is_service(), &init_info);
 	if (hg_class == NULL) {
 		D_ERROR("Could not initialize HG class.\n");
