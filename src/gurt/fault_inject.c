@@ -29,7 +29,6 @@ struct d_fault_attr_t		*d_fault_attr_mem;
 
 #if FAULT_INJECTION
 
-
 static struct d_fault_attr *
 fa_link2ptr(d_list_t *rlink)
 {
