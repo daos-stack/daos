@@ -39,6 +39,9 @@ def scons():
     daos_build.program(denv, 'simple_pipeline_arrays',
                        ['simple_pipeline_arrays.c', simple_pipeline_common],
                        LIBS=libs_client)
+    daos_build.program(denv, 'simple_pipeline_str_arrays',
+                       ['simple_pipeline_str_arrays.c', simple_pipeline_common],
+                       LIBS=libs_client)
     libs_client += ['pthread', 'dts']
     libs_server += ['pthread', 'dts']
 
