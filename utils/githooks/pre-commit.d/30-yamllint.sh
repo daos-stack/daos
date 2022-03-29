@@ -18,4 +18,4 @@ then
 fi
 
 echo "Checking yaml formatting"
-yamllint .
+yamllint --strict .

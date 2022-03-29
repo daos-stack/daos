@@ -26,5 +26,5 @@ jobs:
         with:
           python-version: "3"
       - name: Run check
-        run: yamllint -f github .
+        run: yamllint --format github .
 ...
