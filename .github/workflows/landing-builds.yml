@@ -6,11 +6,11 @@ on:  # yamllint disable-line rule:truthy
   push:
     branches:
       - master
-      - release/*
+      - 'release/*'
   pull_request:
     paths:
       - .github/workflows/landing-builds.yml
-      - utils/docker/Dockerfile.*
+      - 'utils/docker/Dockerfile.*'
 
 jobs:
 

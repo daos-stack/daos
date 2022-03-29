@@ -4,7 +4,7 @@ name: Doxygen
 on:  # yamllint disable-line rule:truthy
   pull_request:
     paths:
-      - 'Doxyfile'
+      - Doxyfile
       - 'src/include/*.h'
 
 jobs:
