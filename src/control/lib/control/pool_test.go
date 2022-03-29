@@ -966,6 +966,7 @@ func TestControl_ListPools(t *testing.T) {
 							{
 								Uuid:    common.MockUUID(1),
 								SvcReps: []uint32{1, 3, 5, 8},
+								State:   system.PoolServiceStateReady.String(),
 							},
 						},
 					}),
@@ -980,6 +981,7 @@ func TestControl_ListPools(t *testing.T) {
 						TargetsTotal:    42,
 						TargetsDisabled: 17,
 						Usage:           expUsage,
+						State:           system.PoolServiceStateReady.String(),
 					},
 				},
 			},
@@ -992,6 +994,7 @@ func TestControl_ListPools(t *testing.T) {
 							{
 								Uuid:    common.MockUUID(1),
 								SvcReps: []uint32{1, 3, 5, 8},
+								State:   system.PoolServiceStateReady.String(),
 							},
 						},
 					}),
@@ -1008,10 +1011,12 @@ func TestControl_ListPools(t *testing.T) {
 							{
 								Uuid:    common.MockUUID(1),
 								SvcReps: []uint32{1, 3, 5, 8},
+								State:   system.PoolServiceStateReady.String(),
 							},
 							{
 								Uuid:    common.MockUUID(2),
 								SvcReps: []uint32{1, 2, 3},
+								State:   system.PoolServiceStateReady.String(),
 							},
 						},
 					}),
@@ -1027,6 +1032,7 @@ func TestControl_ListPools(t *testing.T) {
 						TargetsTotal:    42,
 						TargetsDisabled: 17,
 						Usage:           expUsage,
+						State:           system.PoolServiceStateReady.String(),
 					},
 					{
 						UUID:            common.MockUUID(2),
@@ -1034,6 +1040,7 @@ func TestControl_ListPools(t *testing.T) {
 						TargetsTotal:    42,
 						TargetsDisabled: 17,
 						Usage:           expUsage,
+						State:           system.PoolServiceStateReady.String(),
 					},
 				},
 			},
@@ -1046,10 +1053,12 @@ func TestControl_ListPools(t *testing.T) {
 							{
 								Uuid:    common.MockUUID(1),
 								SvcReps: []uint32{1, 3, 5, 8},
+								State:   system.PoolServiceStateReady.String(),
 							},
 							{
 								Uuid:    common.MockUUID(2),
 								SvcReps: []uint32{1, 2, 3},
+								State:   system.PoolServiceStateReady.String(),
 							},
 						},
 					}),
@@ -1063,6 +1072,7 @@ func TestControl_ListPools(t *testing.T) {
 						UUID:            common.MockUUID(1),
 						ServiceReplicas: []system.Rank{1, 3, 5, 8},
 						QueryErrorMsg:   "remote failed",
+						State:           system.PoolServiceStateReady.String(),
 					},
 					{
 						UUID:            common.MockUUID(2),
@@ -1070,6 +1080,7 @@ func TestControl_ListPools(t *testing.T) {
 						TargetsTotal:    42,
 						TargetsDisabled: 17,
 						Usage:           expUsage,
+						State:           system.PoolServiceStateReady.String(),
 					},
 				},
 			},
@@ -1082,10 +1093,12 @@ func TestControl_ListPools(t *testing.T) {
 							{
 								Uuid:    common.MockUUID(1),
 								SvcReps: []uint32{1, 3, 5, 8},
+								State:   system.PoolServiceStateReady.String(),
 							},
 							{
 								Uuid:    common.MockUUID(2),
 								SvcReps: []uint32{1, 2, 3},
+								State:   system.PoolServiceStateReady.String(),
 							},
 						},
 					}),
@@ -1101,6 +1114,7 @@ func TestControl_ListPools(t *testing.T) {
 						UUID:            common.MockUUID(1),
 						ServiceReplicas: []system.Rank{1, 3, 5, 8},
 						QueryStatusMsg:  "DER_UNINIT(-1015): Device or resource not initialized",
+						State:           system.PoolServiceStateReady.String(),
 					},
 					{
 						UUID:            common.MockUUID(2),
@@ -1108,6 +1122,46 @@ func TestControl_ListPools(t *testing.T) {
 						TargetsTotal:    42,
 						TargetsDisabled: 17,
 						Usage:           expUsage,
+						State:           system.PoolServiceStateReady.String(),
+					},
+				},
+			},
+		},
+		"two pools; one in destroying state": {
+			mic: &MockInvokerConfig{
+				UnaryResponseSet: []*UnaryResponse{
+					MockMSResponse("host1", nil, &mgmtpb.ListPoolsResp{
+						Pools: []*mgmtpb.ListPoolsResp_Pool{
+							{
+								Uuid:    common.MockUUID(1),
+								SvcReps: []uint32{1, 3, 5, 8},
+								State:   system.PoolServiceStateReady.String(),
+							},
+							{
+								Uuid:    common.MockUUID(2),
+								SvcReps: []uint32{1, 2, 3},
+								State:   system.PoolServiceStateDestroying.String(),
+							},
+						},
+					}),
+					MockMSResponse("host1", nil, queryResp(1)),
+					MockMSResponse("host1", nil, queryResp(2)),
+				},
+			},
+			expResp: &ListPoolsResp{
+				Pools: []*Pool{
+					{
+						UUID:            common.MockUUID(1),
+						ServiceReplicas: []system.Rank{1, 3, 5, 8},
+						TargetsTotal:    42,
+						TargetsDisabled: 17,
+						Usage:           expUsage,
+						State:           system.PoolServiceStateReady.String(),
+					},
+					{
+						UUID:            common.MockUUID(2),
+						ServiceReplicas: []system.Rank{1, 2, 3},
+						State:           system.PoolServiceStateDestroying.String(),
 					},
 				},
 			},
