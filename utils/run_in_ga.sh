@@ -62,7 +62,6 @@ echo ::endgroup::
 
 echo ::group::Install pydaos
 cd src/client
-python3 -m pip install setuptools
 python3 setup.py install
 cd -
 echo ::endgroup::
