@@ -84,7 +84,7 @@ insert_example_records(void)
 }
 
 /**
- * Build pipeline filtering by "Array[0:8] < 50"
+ *
  */
 static void
 build_pipeline_one(daos_pipeline_t *pipeline)
@@ -128,7 +128,6 @@ build_pipeline_one(daos_pipeline_t *pipeline)
 	dkey_ft = (daos_filter_part_t *) calloc(1, sizeof(daos_filter_part_t));
 	d_iov_set(&dkey_ft->part_type, dkey_ftype, dkey_ftype_s);
 	d_iov_set(&dkey_ft->data_type, str_type1, str_type_s);
-	dkey_ft->data_offset = 0;
 	dkey_ft->data_len = FSIZE;
 
 	daos_filter_part_t      *const0_ft;
@@ -136,8 +135,6 @@ build_pipeline_one(daos_pipeline_t *pipeline)
 	const0_ft = (daos_filter_part_t *) calloc(1, sizeof(daos_filter_part_t));
 	d_iov_set(&const0_ft->part_type, const0_ftype, const_ftype_s);
 	d_iov_set(&const0_ft->data_type, str_type2, str_type_s);
-	const0_ft->data_offset = 0;
-	const0_ft->data_len = const_dkey_s;
 	const0_ft->num_constants = 1;
 	const0_ft->constant = malloc(sizeof(d_iov_t));
 	d_iov_set(const0_ft->constant, const_dkey, const_dkey_s);
@@ -186,7 +183,6 @@ build_pipeline_one(daos_pipeline_t *pipeline)
 	d_iov_set(&akey_ft->part_type, akey_ftype, akey_ftype_s);
 	d_iov_set(&akey_ft->data_type, int_type0, int_type_s);
 	d_iov_set(&akey_ft->akey, akey, akey_s);
-	akey_ft->data_offset = 0;
 	akey_ft->data_len    = 4;
 
 	char			*const1_ftype;
@@ -209,17 +205,13 @@ build_pipeline_one(daos_pipeline_t *pipeline)
 	d_iov_set(&const1_ft->data_type, int_type1, int_type_s);
 	const1_ft->num_constants = 1;
 	const1_ft->constant = (d_iov_t *) malloc(sizeof(d_iov_t));
-	d_iov_set(const1_ft->constant, &constant1, sizeof(mode_t));
-	const1_ft->data_offset = 0;
-	const1_ft->data_len    = 4;
+	d_iov_set(const1_ft->constant, constant1, sizeof(mode_t));
 
 	d_iov_set(&const2_ft->part_type, const2_ftype, const_ftype_s);
 	d_iov_set(&const2_ft->data_type, int_type2, int_type_s);
 	const2_ft->num_constants = 1;
 	const2_ft->constant = (d_iov_t *) malloc(sizeof(d_iov_t));
-	d_iov_set(const2_ft->constant, &constant2, sizeof(mode_t));
-	const2_ft->data_offset = 0;
-	const2_ft->data_len    = 4;
+	d_iov_set(const2_ft->constant, constant2, sizeof(mode_t));
 
 	daos_size_t		ba_func_s;
 	char			*ba_func;
@@ -362,9 +354,10 @@ run_pipeline(daos_pipeline_t *pipeline)
 
 		/** processing nr_kds records */
 		for (i = 0; i < nr_kds; i++) {
-			uint64_t dkey = *((uint64_t *) sgl_keys[i].sg_iovs->iov_buf);
+			char *dkey = (char *) sgl_keys[i].sg_iovs->iov_buf;
+			daos_size_t dkeylen = kds[i].kd_key_len;
 
-			printf("\tid(dkey)=%lu\t", dkey);
+			printf("\t(dkey)=%.*s\t", (int) dkeylen, dkey);
 			printf("%s(akey) -->> ", field);
 
 			char *ptr = &buf_recs[i * sizeof(mode_t)];
@@ -430,8 +423,16 @@ main(int argc, char **argv)
 	rc = daos_pipeline_check(&pipeline1);
 	ASSERT(rc == 0, "Pipeline check failed with %d", rc);
 	/** Running pipeline */
+
+	printf("run_pipeline\n");
+	fflush(stdout);
+
 	run_pipeline(&pipeline1);
 	/** Freeing used memory */
+
+	printf("free_pipeline\n");
+	fflush(stdout);
+
 	free_pipeline(&pipeline1);
 
 	rc = daos_obj_close(oh, NULL);
