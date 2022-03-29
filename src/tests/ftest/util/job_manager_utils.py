@@ -745,8 +745,8 @@ class Systemctl(JobManager):
         if 255 in result:
             raise CommandFailure(
                 "Timeout detected running '{}' with a {}s timeout on {}".format(
-                    self.__str__(), self.timeout, NodeSet.fromlist(result[255]))
-                )
+                    self.__str__(), self.timeout, NodeSet.fromlist(result[255])))
+
         if 0 not in result or len(result) > 1:
             failed = []
             for item, value in list(result.items()):

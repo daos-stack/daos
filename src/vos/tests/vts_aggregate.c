@@ -1033,7 +1033,7 @@ discard_13(void **state)
 	 * Generate enough amount of akeys to ensure vos_iterate()
 	 * trigger re-probe on dkey
 	 */
-	generate_akeys(arg, ds.td_oid, VOS_AGG_CREDITS_MAX + 10);
+	generate_akeys(arg, ds.td_oid, AGG_CREDS_SCAN_TIGHT + 10);
 
 	recx_tot.rx_idx = 0;
 	recx_tot.rx_nr = 20;
