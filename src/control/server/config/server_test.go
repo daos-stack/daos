@@ -944,7 +944,7 @@ func TestServerConfig_Parsing(t *testing.T) {
 		},
 		"legacy storage; no bdev_list": {
 			legacyStorage: true,
-			inTxt:         "  bdev_list: []",
+			inTxt:         "    bdev_list: []",
 			outTxt:        "",
 			expCheck: func(c *Server) error {
 				nr := len(c.Engines[0].Storage.Tiers)
@@ -956,7 +956,7 @@ func TestServerConfig_Parsing(t *testing.T) {
 		},
 		"legacy storage; no bdev_class": {
 			legacyStorage: true,
-			inTxt:         "  bdev_class: nvme",
+			inTxt:         "    bdev_class: nvme",
 			outTxt:        "",
 			expCheck: func(c *Server) error {
 				nr := len(c.Engines[0].Storage.Tiers)
