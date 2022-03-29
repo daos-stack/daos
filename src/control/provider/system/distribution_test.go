@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2021 Intel Corporation.
+// (C) Copyright 2021-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -55,6 +55,19 @@ func TestSystem_getDistribution(t *testing.T) {
 				Kernel: KernelVersion{
 					Major: 4,
 					Minor: 18,
+				},
+			},
+		},
+		"rocky-8.5": {
+			fileMap: map[string]string{
+				"/etc/os-release": "distros/rocky8.5-os-rel",
+			},
+			expDist: Distribution{
+				ID:   "rocky",
+				Name: "Rocky Linux",
+				Version: DistributionVersion{
+					Major: 8,
+					Minor: 5,
 				},
 			},
 		},

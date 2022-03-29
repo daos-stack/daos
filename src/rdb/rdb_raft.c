@@ -328,6 +328,14 @@ rdb_raft_load_snapshot(struct rdb *db)
 		goto out;
 	}
 
+	/*
+	 * Since loading a snapshot is logically equivalent to an AE request
+	 * that first pops all log entries and then offers those represented by
+	 * the snapshot, we empty the KVS cache for any KVS create operations
+	 * reverted by the popping.
+	 */
+	rdb_kvs_cache_evict(db->d_kvss);
+
 	rc = raft_begin_load_snapshot(db->d_raft, db->d_lc_record.dlr_base_term,
 				      db->d_lc_record.dlr_base);
 	if (rc != 0) {
@@ -1090,6 +1098,10 @@ rdb_raft_update_node(struct rdb *db, uint64_t index, raft_entry_t *entry)
 	if (rc != 0)
 		goto out_replicas;
 
+	/*
+	 * Since this is one VOS operation, we don't need to call
+	 * rdb_lc_discard upon an error.
+	 */
 	rc = rdb_raft_store_replicas(db->d_lc, index, replicas);
 
 out_replicas:
@@ -1131,13 +1143,16 @@ rdb_raft_log_offer_single(struct rdb *db, raft_entry_t *entry, uint64_t index)
 		if (rc != 0) {
 			D_ERROR(DF_DB": failed to apply entry "DF_U64": %d\n",
 				DP_DB(db), index, rc);
-			goto err_discard;
+			goto err;
 		}
 	} else if (raft_entry_is_cfg_change(entry)) {
 		crit = true;
 		rc = rdb_raft_update_node(db, index, entry);
-		if (rc != 0)
-			goto err_discard;
+		if (rc != 0) {
+			D_ERROR(DF_DB": failed to update replicas "DF_U64": %d\n",
+				DP_DB(db), index, rc);
+			goto err;
+		}
 	} else {
 		D_ASSERTF(0, "Unknown entry type %d\n", entry->type);
 	}
@@ -1202,6 +1217,7 @@ err_discard:
 	if (rc_tmp != 0)
 		D_ERROR(DF_DB": failed to discard entry "DF_U64": %d\n",
 			DP_DB(db), index, rc_tmp);
+err:
 	return rc;
 }
 
@@ -1292,6 +1308,12 @@ rdb_raft_cb_log_pop(raft_server_t *raft, void *arg, raft_entry_t *entry,
 		db->d_lc_record.dlr_tail = tail;
 		return rc;
 	}
+
+	/*
+	 * Since there may be KVS create operations being reverted by the
+	 * rdb_lc_discard call below, empty the KVS cache.
+	 */
+	rdb_kvs_cache_evict(db->d_kvss);
 
 	/* Ignore *n_entries; discard everything starting from index. */
 	rc = rdb_lc_discard(db->d_lc, i, RDB_LC_INDEX_MAX);
@@ -2660,26 +2682,36 @@ rdb_raft_resign(struct rdb *db, uint64_t term)
 	D_ASSERTF(rc == 0, DF_RC"\n", DP_RC(rc));
 }
 
-/* Call new election (campaign to be leader) by a follower */
+/* Call a new election (campaign to be leader) by a voting follower. */
 int
 rdb_raft_campaign(struct rdb *db)
 {
+	raft_node_t	       *node;
 	struct rdb_raft_state	state;
 	int			rc;
 
 	ABT_mutex_lock(db->d_raft_mutex);
+
 	if (!raft_is_follower(db->d_raft)) {
-		ABT_mutex_unlock(db->d_raft_mutex);
-		D_DEBUG(DB_MD, DF_DB": no election called, must be follower\n",
-			DP_DB(db));
-		return 0;
+		D_DEBUG(DB_MD, DF_DB": already candidate or leader\n", DP_DB(db));
+		rc = 0;
+		goto out_mutex;
 	}
 
+	node = raft_get_my_node(db->d_raft);
+	if (node == NULL || !raft_node_is_voting(node)) {
+		D_DEBUG(DB_MD, DF_DB": must be voting node\n", DP_DB(db));
+		rc = -DER_INVAL;
+		goto out_mutex;
+	}
+
+	D_DEBUG(DB_MD, DF_DB": calling election from current term %ld\n", DP_DB(db),
+		raft_get_current_term(db->d_raft));
 	rdb_raft_save_state(db, &state);
-	D_DEBUG(DB_MD, DF_DB": calling election from current term %ld\n",
-		DP_DB(db), raft_get_current_term(db->d_raft));
 	rc = raft_election_start(db->d_raft);
 	rc = rdb_raft_check_state(db, &state, rc);
+
+out_mutex:
 	ABT_mutex_unlock(db->d_raft_mutex);
 	return rc;
 }
@@ -2930,13 +2962,14 @@ rdb_raft_process_reply(struct rdb *db, crt_rpc_t *rpc)
 		return;
 	}
 
+	ABT_mutex_lock(db->d_raft_mutex);
+
 	node = raft_get_node(db->d_raft, rank);
 	if (node == NULL) {
-		D_WARN(DF_DB": Rank %d no longer exists\n", DP_DB(db), rank);
-		return;
+		D_DEBUG(DB_MD, DF_DB": rank %u not in current membership\n", DP_DB(db), rank);
+		goto out_mutex;
 	}
 
-	ABT_mutex_lock(db->d_raft_mutex);
 	rdb_raft_save_state(db, &state);
 	switch (opc) {
 	case RDB_REQUESTVOTE:
@@ -2958,10 +2991,12 @@ rdb_raft_process_reply(struct rdb *db, crt_rpc_t *rpc)
 		D_ASSERTF(0, DF_DB": unexpected opc: %u\n", DP_DB(db), opc);
 	}
 	rc = rdb_raft_check_state(db, &state, rc);
-	ABT_mutex_unlock(db->d_raft_mutex);
 	if (rc != 0 && rc != -DER_NOTLEADER)
 		D_ERROR(DF_DB": failed to process opc %u response: %d\n",
 			DP_DB(db), opc, rc);
+
+out_mutex:
+	ABT_mutex_unlock(db->d_raft_mutex);
 }
 
 /* The buffer belonging to bulk must a single d_iov_t. */
