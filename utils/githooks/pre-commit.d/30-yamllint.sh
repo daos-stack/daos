@@ -9,6 +9,7 @@ set -ue
 if ! command -v yamllint > /dev/null 2>&1
 then
     echo "No yaml checking, install yamllint command to improve pre-commit checks"
+    echo "python3 -m pip install yamllint"
     exit 0
 fi
 
