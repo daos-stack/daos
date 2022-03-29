@@ -107,8 +107,26 @@ enum {
  */
 #define VOS_MW_NVME_THRESH	256		/* 256 * VOS_BLK_SZ = 1MB */
 
-/* Force aggregation/discard ULT yield on certain amount of tight loops */
-#define VOS_AGG_CREDITS_MAX	64
+/*
+ * Aggregation/Discard ULT yield when certain amount of credits consumed.
+ *
+ * More credits are used in tight mode to reduce re-probe on iterating;
+ * Fewer credits are used in slack mode to avoid io performance fluctuation;
+ */
+enum {
+	/* Maximum scans for tight mode */
+	AGG_CREDS_SCAN_TIGHT	= 64,
+	/* Maximum scans for slack mode */
+	AGG_CREDS_SCAN_SLACK	= 32,
+	/* Maximum obj/key/rec deletions for tight mode */
+	AGG_CREDS_DEL_TIGHT	= 16,
+	/* Maximum obj/key/rec deletions for slack mode */
+	AGG_CREDS_DEL_SLACK	= 4,
+	/* Maximum # of mw flush for tight mode */
+	AGG_CREDS_MERGE_TIGHT	= 8,
+	/* Maximum # of mw flush for slack mode */
+	AGG_CREDS_MERGE_SLACK	= 2,
+};
 
 extern unsigned int vos_agg_nvme_thresh;
 
@@ -139,14 +157,16 @@ enum {
 	AGG_OP_SCAN = 0,	/* scanned obj/dkey/akey */
 	AGG_OP_SKIP,		/* skipped obj/dkey/akey */
 	AGG_OP_DEL,		/* deleted obj/dkey/akey */
+	/* Not used in metrics, must be the last item */
+	AGG_OP_MERGE,		/* records merge operation */
 	AGG_OP_MAX,
 };
 
 struct vos_agg_metrics {
 	struct d_tm_node_t	*vam_epr_dur;		/* EPR(Epoch Range) scan duration */
-	struct d_tm_node_t	*vam_obj[AGG_OP_MAX];
-	struct d_tm_node_t	*vam_dkey[AGG_OP_MAX];
-	struct d_tm_node_t	*vam_akey[AGG_OP_MAX];
+	struct d_tm_node_t	*vam_obj[AGG_OP_MERGE];
+	struct d_tm_node_t	*vam_dkey[AGG_OP_MERGE];
+	struct d_tm_node_t	*vam_akey[AGG_OP_MERGE];
 	struct d_tm_node_t	*vam_uncommitted;	/* Hit uncommitted entries */
 	struct d_tm_node_t	*vam_csum_errs;		/* Hit CSUM errors */
 	struct d_tm_node_t	*vam_del_sv;		/* Deleted SV records */

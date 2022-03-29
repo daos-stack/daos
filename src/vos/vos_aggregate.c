@@ -145,9 +145,14 @@ struct agg_merge_window {
 	uint16_t			 mw_csum_type;
 };
 
+struct vos_agg_credits {
+	uint32_t	vac_creds_scan;		/* # of tight loops */
+	uint32_t	vac_creds_del;		/* # of obj/key/rec deletions */
+	uint32_t	vac_creds_merge;	/* # of merging operations */
+};
+
 struct vos_agg_param {
-	uint32_t		ap_credits_max; /* # of tight loops to yield */
-	uint32_t		ap_credits;	/* # of tight loops */
+	struct vos_agg_credits	ap_credits;
 	daos_handle_t		ap_coh;		/* container handle */
 	daos_unit_oid_t		ap_oid;		/* current object ID */
 	uint32_t		ap_flags;
@@ -156,7 +161,7 @@ struct vos_agg_param {
 				ap_nospc_err:1,
 				ap_discard_obj:1;
 	struct umem_instance	*ap_umm;
-	bool			(*ap_yield_func)(void *arg);
+	int			(*ap_yield_func)(void *arg);
 	void			*ap_yield_arg;
 	/* SV tree: Max epoch in specified iterate epoch range */
 	daos_epoch_t		 ap_max_epoch;
@@ -166,6 +171,43 @@ struct vos_agg_param {
 	bool			 ap_skip_dkey;
 	bool			 ap_skip_obj;
 };
+
+static inline void
+credits_set(struct vos_agg_credits *vac, bool tight)
+{
+	vac->vac_creds_scan = tight ? AGG_CREDS_SCAN_TIGHT : AGG_CREDS_SCAN_SLACK;
+	vac->vac_creds_del = tight ? AGG_CREDS_DEL_TIGHT : AGG_CREDS_SCAN_SLACK;
+	vac->vac_creds_merge = tight ? AGG_CREDS_MERGE_TIGHT : AGG_CREDS_MERGE_SLACK;
+}
+
+static inline void
+credits_consume(struct vos_agg_credits *vac, unsigned int agg_op)
+{
+	switch (agg_op) {
+	case AGG_OP_SCAN:
+	case AGG_OP_SKIP:
+		if (vac->vac_creds_scan)
+			vac->vac_creds_scan--;
+		break;
+	case AGG_OP_DEL:
+		if (vac->vac_creds_del)
+			vac->vac_creds_del--;
+		break;
+	case AGG_OP_MERGE:
+		if (vac->vac_creds_merge)
+			vac->vac_creds_merge--;
+		break;
+	default:
+		D_ASSERTF(0, "Invalid agg opcode %u\n", agg_op);
+		break;
+	}
+}
+
+static inline bool
+credits_exhausted(struct vos_agg_credits *vac)
+{
+	return !vac->vac_creds_scan || !vac->vac_creds_del || !vac->vac_creds_merge;
+}
 
 static inline struct vos_agg_metrics *
 agg_cont2metrics(struct vos_container *cont)
@@ -209,20 +251,24 @@ agg_del_sv(daos_handle_t ih, struct vos_agg_param *agg_param,
 	*acts |= VOS_ITER_CB_DELETE;
 	if (vam && vam->vam_del_sv && !agg_param->ap_discard)
 		d_tm_inc_counter(vam->vam_del_sv, 1);
+	credits_consume(&agg_param->ap_credits, AGG_OP_DEL);
 
 	return rc;
 }
 
 static void
-inc_agg_counter(struct vos_container *cont, vos_iter_type_t type, unsigned int agg_op)
+inc_agg_counter(struct vos_agg_param *agg_param, vos_iter_type_t type, unsigned int agg_op)
 {
+	struct vos_container	*cont = vos_hdl2cont(agg_param->ap_coh);
 	struct vos_agg_metrics	*vam = agg_cont2metrics(cont);
 	struct d_tm_node_t	*counter = NULL;
+
+	credits_consume(&agg_param->ap_credits, agg_op);
 
 	if (vam == NULL)
 		return;
 
-	D_ASSERT(agg_op < AGG_OP_MAX);
+	D_ASSERT(agg_op < AGG_OP_MERGE);
 	switch (type) {
 	case VOS_ITER_OBJ:
 		counter = vam->vam_obj[agg_op];
@@ -267,10 +313,22 @@ need_aggregate(daos_handle_t ih, struct vos_agg_param *agg_param, vos_iter_desc_
 static inline bool
 vos_aggregate_yield(struct vos_agg_param *agg_param)
 {
-	if (agg_param->ap_yield_func != NULL)
-		return agg_param->ap_yield_func(agg_param->ap_yield_arg);
+	int	rc;
 
-	bio_yield();
+	if (agg_param->ap_yield_func == NULL) {
+		bio_yield();
+		credits_set(&agg_param->ap_credits, true);
+		return false;
+	}
+
+	rc = agg_param->ap_yield_func(agg_param->ap_yield_arg);
+	/* Abort */
+	if (rc < 0)
+		return true;
+
+	/* rc == 0: tight mode; rc == 1: slack mode */
+	credits_set(&agg_param->ap_credits, rc == 0);
+
 	return false;
 }
 
@@ -278,7 +336,6 @@ static int
 vos_agg_filter(daos_handle_t ih, vos_iter_desc_t *desc, void *cb_arg, unsigned int *acts)
 {
 	struct vos_agg_param	*agg_param = cb_arg;
-	struct vos_container	*cont = vos_hdl2cont(agg_param->ap_coh);
 	int			 rc = 0;
 
 	rc = need_aggregate(ih, agg_param, desc);
@@ -292,18 +349,14 @@ vos_agg_filter(daos_handle_t ih, vos_iter_desc_t *desc, void *cb_arg, unsigned i
 				DP_KEY(&desc->id_key));
 		}
 		*acts |= VOS_ITER_CB_SKIP;
-		inc_agg_counter(cont, desc->id_type, AGG_OP_SKIP);
+		inc_agg_counter(agg_param, desc->id_type, AGG_OP_SKIP);
 
-		agg_param->ap_credits++;
 		D_GOTO(out, rc = 0);
 	}
 
-	if (rc < 0) { /** Ignore the filter error, let iterator handle it on actual probe */
-		agg_param->ap_credits++;
+	if (rc < 0) /** Ignore the filter error, let iterator handle it on actual probe */
 		D_GOTO(out, rc = 0);
-	}
 
-	agg_param->ap_credits++;
 	if (desc->id_type == VOS_ITER_OBJ)
 		rc = oi_iter_check_punch(ih);
 	else
@@ -312,18 +365,14 @@ vos_agg_filter(daos_handle_t ih, vos_iter_desc_t *desc, void *cb_arg, unsigned i
 		goto out;
 	if (rc == 1) {
 		*acts |= VOS_ITER_CB_DELETE;
-		inc_agg_counter(cont, desc->id_type, AGG_OP_DEL);
-		agg_param->ap_credits += 2;
+		inc_agg_counter(agg_param, desc->id_type, AGG_OP_DEL);
 		D_GOTO(out, rc = 0);
 	}
 out:
 
-	if (agg_param->ap_credits > agg_param->ap_credits_max ||
+	if (credits_exhausted(&agg_param->ap_credits) ||
 	    (DAOS_FAIL_CHECK(DAOS_VOS_AGG_RANDOM_YIELD) && (rand() % 2))) {
-		D_DEBUG(DB_EPC, "Credits exhausted, type:%u, acts:%u\n",
-			desc->id_type, *acts);
-
-		agg_param->ap_credits = 0;
+		D_DEBUG(DB_EPC, "Credits exhausted, type:%u, acts:%u\n", desc->id_type, *acts);
 
 		if (vos_aggregate_yield(agg_param)) {
 			D_DEBUG(DB_EPC, "VOS discard/aggregation aborted\n");
@@ -338,10 +387,8 @@ static int
 vos_agg_obj(daos_handle_t ih, vos_iter_entry_t *entry,
 	    struct vos_agg_param *agg_param, unsigned int *acts)
 {
-	struct vos_container	*cont = vos_hdl2cont(agg_param->ap_coh);
-
 	agg_param->ap_oid = entry->ie_oid;
-	inc_agg_counter(cont, VOS_ITER_OBJ, AGG_OP_SCAN);
+	inc_agg_counter(agg_param, VOS_ITER_OBJ, AGG_OP_SCAN);
 
 	return 0;
 }
@@ -350,9 +397,7 @@ static int
 vos_agg_dkey(daos_handle_t ih, vos_iter_entry_t *entry,
 	     struct vos_agg_param *agg_param, unsigned int *acts)
 {
-	struct vos_container	*cont = vos_hdl2cont(agg_param->ap_coh);
-
-	inc_agg_counter(cont, VOS_ITER_DKEY, AGG_OP_SCAN);
+	inc_agg_counter(agg_param, VOS_ITER_DKEY, AGG_OP_SCAN);
 
 	return 0;
 }
@@ -424,9 +469,7 @@ static int
 vos_agg_akey(daos_handle_t ih, vos_iter_entry_t *entry,
 	     struct vos_agg_param *agg_param, unsigned int *acts)
 {
-	struct vos_container	*cont = vos_hdl2cont(agg_param->ap_coh);
-
-	inc_agg_counter(cont, VOS_ITER_AKEY, AGG_OP_SCAN);
+	inc_agg_counter(agg_param, VOS_ITER_AKEY, AGG_OP_SCAN);
 
 	if (agg_param->ap_discard) {
 		/* No merge window for discard path so bypass checks below. */
@@ -450,6 +493,8 @@ vos_agg_sv(daos_handle_t ih, vos_iter_entry_t *entry,
 
 	D_ASSERT(agg_param != NULL);
 	D_ASSERT(entry->ie_epoch != 0);
+
+	credits_consume(&agg_param->ap_credits, AGG_OP_SCAN);
 
 	/* Discard */
 	if (agg_param->ap_discard)
@@ -615,6 +660,7 @@ delete_evt_entry(struct vos_agg_param *agg_param, struct vos_obj_iter *oiter,
 
 	if (vam && vam->vam_del_ev && !agg_param->ap_discard)
 		d_tm_inc_counter(vam->vam_del_ev, 1);
+	credits_consume(&agg_param->ap_credits, AGG_OP_DEL);
 
 	return rc;
 }
@@ -1683,6 +1729,7 @@ flush_merge_window(daos_handle_t ih, struct vos_agg_param *agg_param,
 			DP_EXT(&mw->mw_ext), DP_RC(rc));
 		goto out;
 	}
+	credits_consume(&agg_param->ap_credits, AGG_OP_MERGE);
 out:
 	cleanup_segments(ih, mw, rc);
 	return rc;
@@ -2108,6 +2155,8 @@ vos_agg_ev(daos_handle_t ih, vos_iter_entry_t *entry,
 	recx2ext(&entry->ie_recx, &lgc_ext);
 	recx2ext(&entry->ie_orig_recx, &phy_ext);
 
+	credits_consume(&agg_param->ap_credits, AGG_OP_SCAN);
+
 	/* Discard */
 	if (agg_param->ap_discard) {
 		struct vos_obj_iter	*oiter = vos_hdl2oiter(ih);
@@ -2174,15 +2223,12 @@ vos_aggregate_pre_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 	switch (type) {
 	case VOS_ITER_OBJ:
 		rc = vos_agg_obj(ih, entry, agg_param, acts);
-		agg_param->ap_credits += 2;
 		break;
 	case VOS_ITER_DKEY:
 		rc = vos_agg_dkey(ih, entry, agg_param, acts);
-		agg_param->ap_credits += 2;
 		break;
 	case VOS_ITER_AKEY:
 		rc = vos_agg_akey(ih, entry, agg_param, acts);
-		agg_param->ap_credits += 2;
 		break;
 	case VOS_ITER_RECX:
 		rc = vos_agg_ev(ih, entry, agg_param, acts);
@@ -2194,7 +2240,6 @@ vos_aggregate_pre_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 		}
 		/* fall through to check for abort */
 	case VOS_ITER_SINGLE:
-		agg_param->ap_credits += 2;
 		if (type == VOS_ITER_SINGLE)
 			rc = vos_agg_sv(ih, entry, agg_param, acts);
 		if (rc == -DER_CSUM || rc == -DER_TX_BUSY || rc == -DER_NOSPACE) {
@@ -2236,12 +2281,9 @@ vos_aggregate_pre_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 		return rc;
 	}
 
-	if (agg_param->ap_credits > agg_param->ap_credits_max ||
+	if (credits_exhausted(&agg_param->ap_credits) ||
 	    (DAOS_FAIL_CHECK(DAOS_VOS_AGG_RANDOM_YIELD) && (rand() % 2))) {
-		D_DEBUG(DB_EPC, "Credits exhausted, type:%u, acts:%u\n",
-			type, *acts);
-
-		agg_param->ap_credits = 0;
+		D_DEBUG(DB_EPC, "Credits exhausted, type:%u, acts:%u\n", type, *acts);
 
 		if (vos_aggregate_yield(agg_param)) {
 			D_DEBUG(DB_EPC, "VOS discard/aggregation aborted\n");
@@ -2297,10 +2339,13 @@ vos_aggregate_post_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 
 	if (rc > 0) {
 		/* Reprobe flag is set */
-		if (rc == 1) {
+		if (rc == 1)
 			*acts |= VOS_ITER_CB_DELETE;
-			inc_agg_counter(cont, type, AGG_OP_DEL);
-		} /** If it's 2, we don't need a reprobe. The key still exists at other epoch */
+		/** If it's 2, we don't need a reprobe. The key still exists at other epoch.
+		 *  Treat it as a delete regardless for accounting purposes the key is no longer
+		 *  visible at this epoch.
+		 */
+		inc_agg_counter(agg_param, type, AGG_OP_DEL);
 		rc = 0;
 	} else if (rc != 0) {
 		D_ERROR("VOS aggregation failed: %d\n", rc);
@@ -2488,7 +2533,7 @@ struct agg_data {
 
 int
 vos_aggregate(daos_handle_t coh, daos_epoch_range_t *epr,
-	      bool (*yield_func)(void *arg), void *yield_arg, uint32_t flags)
+	      int (*yield_func)(void *arg), void *yield_arg, uint32_t flags)
 {
 	struct vos_container	*cont = vos_hdl2cont(coh);
 	struct agg_data		*ad;
@@ -2536,8 +2581,7 @@ vos_aggregate(daos_handle_t coh, daos_epoch_range_t *epr,
 	/* Set aggregation parameters */
 	ad->ad_agg_param.ap_umm = &cont->vc_pool->vp_umm;
 	ad->ad_agg_param.ap_coh = coh;
-	ad->ad_agg_param.ap_credits_max = VOS_AGG_CREDITS_MAX;
-	ad->ad_agg_param.ap_credits = 0;
+	credits_set(&ad->ad_agg_param.ap_credits, true);
 	ad->ad_agg_param.ap_discard = 0;
 	ad->ad_agg_param.ap_yield_func = yield_func;
 	ad->ad_agg_param.ap_yield_arg = yield_arg;
@@ -2579,7 +2623,7 @@ free_agg_data:
 
 int
 vos_discard(daos_handle_t coh, daos_unit_oid_t *oidp, daos_epoch_range_t *epr,
-	    bool (*yield_func)(void *arg), void *yield_arg)
+	    int (*yield_func)(void *arg), void *yield_arg)
 {
 	struct vos_container	*cont = vos_hdl2cont(coh);
 	struct vos_object	*obj;
@@ -2640,9 +2684,8 @@ vos_discard(daos_handle_t coh, daos_unit_oid_t *oidp, daos_epoch_range_t *epr,
 	/* Set aggregation parameters */
 	ad->ad_agg_param.ap_umm = &cont->vc_pool->vp_umm;
 	ad->ad_agg_param.ap_coh = coh;
-	ad->ad_agg_param.ap_credits_max = VOS_AGG_CREDITS_MAX;
+	credits_set(&ad->ad_agg_param.ap_credits, true);
 	ad->ad_agg_param.ap_discard = 1;
-	ad->ad_agg_param.ap_credits = 0;
 	ad->ad_agg_param.ap_yield_func = yield_func;
 	ad->ad_agg_param.ap_yield_arg = yield_arg;
 
