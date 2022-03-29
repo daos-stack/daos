@@ -7,7 +7,8 @@
 
 import time
 
-from command_utils_base import CommandFailure, FormattedParameter
+from command_utils_base import FormattedParameter
+from exception_utils import CommandFailure
 from command_utils import ExecutableCommand
 from ClusterShell.NodeSet import NodeSet
 from general_utils import check_file_exists, pcmd
@@ -265,6 +266,9 @@ class Dfuse(DfuseCommand):
         if "D_LOG_FILE" not in self.env:
             raise CommandFailure(
                 "Dfuse missing environment variables for D_LOG_FILE")
+
+        if 'D_LOG_MASK' not in self.env:
+            self.env['D_LOG_MASK'] = 'INFO'
 
         # create dfuse dir if does not exist
         self.create_mount_point()

@@ -1,0 +1,24 @@
+hosts:
+  test_servers:
+    - server-A
+    - server-B
+    - server-C
+    - server-D
+    - server-E
+timeout: 90
+pool:
+    name: daos_server
+    control_method: dmg
+    scm_size: 1G
+    rf: !mux
+      rf1:
+        properties: rf:4
+container:
+    type: POSIX
+    control_method: daos
+    cont_rf:
+      - 0
+      - 1
+      - 2
+      - 3
+      - 4

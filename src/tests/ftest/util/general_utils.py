@@ -262,7 +262,7 @@ def run_command(command, timeout=60, verbose=True, raise_exception=True,
         # Block until the command is complete or times out
         return process.run(**kwargs)
 
-    except TypeError as error:
+    except (TypeError, FileNotFoundError) as error:
         # Can occur if using env with a non-string dictionary values
         msg = "Error running '{}': {}".format(command, error)
         if env is not None:
@@ -434,6 +434,7 @@ def colate_results(command, results):
             res += "    %s\n" % line
 
     return res
+
 
 def get_host_data(hosts, command, text, error, timeout=None):
     """Get the data requested for each host using the specified command.
@@ -989,8 +990,8 @@ def get_job_manager_class(name, job=None, subprocess=False, mpi="openmpi"):
 
     """
     manager_class = get_module_class(name, "job_manager_utils")
-    if name == "Mpirun":
-        manager = manager_class(job, subprocess=subprocess, mpitype=mpi)
+    if name in ["Mpirun", "Orterun"]:
+        manager = manager_class(job, subprocess=subprocess, mpi_type=mpi)
     elif name == "Systemctl":
         manager = manager_class(job)
     else:

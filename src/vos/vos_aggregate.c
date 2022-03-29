@@ -9,7 +9,6 @@
 #define D_LOGFAC	DD_FAC(vos)
 
 #include <daos_srv/vos.h>
-#include <daos/object.h>	/* for daos_unit_oid_compare() */
 #include <daos/checksum.h>
 #include <daos_srv/srv_csum.h>
 #include "vos_internal.h"
@@ -59,8 +58,10 @@ struct agg_phy_ent {
 	uint32_t		pe_ref;
 	/* Need to truncate on window flush */
 	bool			pe_trunc_head;
-	/** Mark the entry as removed */
+	/* Mark the entry as removed */
 	bool			pe_remove;
+	/* Need to free the csum buffer when the physical entry is freed */
+	bool			pe_csum_free;
 };
 
 /* Removal record */
@@ -214,24 +215,6 @@ agg_del_sv(daos_handle_t ih, struct vos_agg_param *agg_param,
 	return rc;
 }
 
-static inline void
-reset_agg_pos(vos_iter_type_t type, struct vos_agg_param *agg_param)
-{
-	switch (type) {
-	case VOS_ITER_OBJ:
-		memset(&agg_param->ap_oid, 0, sizeof(agg_param->ap_oid));
-		break;
-	case VOS_ITER_DKEY:
-		memset(&agg_param->ap_dkey, 0, sizeof(agg_param->ap_dkey));
-		break;
-	case VOS_ITER_AKEY:
-		memset(&agg_param->ap_akey, 0, sizeof(agg_param->ap_akey));
-		break;
-	default:
-		break;
-	}
-}
-
 static inline bool
 need_aggregate(struct vos_agg_param *agg_param, vos_iter_entry_t *entry)
 {
@@ -292,44 +275,30 @@ vos_agg_obj(daos_handle_t ih, vos_iter_entry_t *entry,
 	    struct vos_agg_param *agg_param, unsigned int *acts)
 {
 	struct vos_container	*cont = vos_hdl2cont(agg_param->ap_coh);
+	int			 rc;
 
-	if (daos_unit_oid_compare(agg_param->ap_oid, entry->ie_oid)) {
-		if (need_aggregate(agg_param, entry)) {
-			D_DEBUG(DB_EPC, "oid:"DF_UOID" vos agg starting\n",
-				DP_UOID(entry->ie_oid));
-			agg_param->ap_oid = entry->ie_oid;
-			reset_agg_pos(VOS_ITER_DKEY, agg_param);
-			reset_agg_pos(VOS_ITER_AKEY, agg_param);
-			inc_agg_counter(cont, VOS_ITER_OBJ, AGG_OP_SCAN);
-		} else {
-			D_DEBUG(DB_EPC, "Skip untouched oid:"DF_UOID"\n",
-				DP_UOID(agg_param->ap_oid));
-			*acts |= VOS_ITER_CB_SKIP;
-			inc_agg_counter(cont, VOS_ITER_OBJ, AGG_OP_SKIP);
+	if (need_aggregate(agg_param, entry)) {
+		D_DEBUG(DB_EPC, "oid:"DF_UOID" vos agg starting\n",
+			DP_UOID(entry->ie_oid));
+		agg_param->ap_oid = entry->ie_oid;
+		rc = oi_iter_pre_aggregate(ih);
+		if (rc < 0)
+			return rc;
+		if (rc != 0) {
+			/** We removed the key so let's reprobe */
+			*acts |= VOS_ITER_CB_DELETE;
+			inc_agg_counter(cont, VOS_ITER_OBJ, AGG_OP_DEL);
+			return 0;
 		}
+		inc_agg_counter(cont, VOS_ITER_OBJ, AGG_OP_SCAN);
 	} else {
-		/*
-		 * When recursive vos_iterate() yield in sub tree, re-probe
-		 * is required when it returns back to upper level tree, if
-		 * the just processed object is found on re-probe, we need
-		 * to notify vos_iterate() to not iterate into to sub tree
-		 * again.
-		 */
-		D_DEBUG(DB_EPC, "Skip oid:"DF_UOID" aggregation on re-probe\n",
+		D_DEBUG(DB_EPC, "Skip untouched oid:"DF_UOID"\n",
 			DP_UOID(agg_param->ap_oid));
 		*acts |= VOS_ITER_CB_SKIP;
+		inc_agg_counter(cont, VOS_ITER_OBJ, AGG_OP_SKIP);
 	}
 
 	return 0;
-}
-
-static inline int
-vos_agg_key_compare(daos_key_t key1, daos_key_t key2)
-{
-	if (key1.iov_len != key2.iov_len)
-		return 1;
-
-	return memcmp(key1.iov_buf, key2.iov_buf, key1.iov_len);
 }
 
 static int
@@ -337,22 +306,25 @@ vos_agg_dkey(daos_handle_t ih, vos_iter_entry_t *entry,
 	     struct vos_agg_param *agg_param, unsigned int *acts)
 {
 	struct vos_container	*cont = vos_hdl2cont(agg_param->ap_coh);
+	int			 rc;
 
-	if (vos_agg_key_compare(agg_param->ap_dkey, entry->ie_key)) {
-		if (need_aggregate(agg_param, entry)) {
-			agg_param->ap_dkey = entry->ie_key;
-			reset_agg_pos(VOS_ITER_AKEY, agg_param);
-			inc_agg_counter(cont, VOS_ITER_DKEY, AGG_OP_SCAN);
-		} else {
-			D_DEBUG(DB_EPC, "Skip untouched dkey: "DF_KEY"\n",
-				DP_KEY(&entry->ie_key));
-			*acts |= VOS_ITER_CB_SKIP;
-			inc_agg_counter(cont, VOS_ITER_DKEY, AGG_OP_SKIP);
+	if (need_aggregate(agg_param, entry)) {
+		agg_param->ap_dkey = entry->ie_key;
+		rc = vos_obj_iter_pre_aggregate(ih);
+		if (rc < 0)
+			return rc;
+		if (rc != 0) {
+			/** We removed the key so let's reprobe */
+			*acts |= VOS_ITER_CB_DELETE;
+			inc_agg_counter(cont, VOS_ITER_DKEY, AGG_OP_DEL);
+			return 0;
 		}
+		inc_agg_counter(cont, VOS_ITER_DKEY, AGG_OP_SCAN);
 	} else {
-		D_DEBUG(DB_EPC, "Skip dkey: "DF_KEY" aggregation on re-probe\n",
+		D_DEBUG(DB_EPC, "Skip untouched dkey: "DF_KEY"\n",
 			DP_KEY(&entry->ie_key));
 		*acts |= VOS_ITER_CB_SKIP;
+		inc_agg_counter(cont, VOS_ITER_DKEY, AGG_OP_SKIP);
 	}
 
 	return 0;
@@ -426,21 +398,25 @@ vos_agg_akey(daos_handle_t ih, vos_iter_entry_t *entry,
 	     struct vos_agg_param *agg_param, unsigned int *acts)
 {
 	struct vos_container	*cont = vos_hdl2cont(agg_param->ap_coh);
+	int			 rc;
 
-	if (vos_agg_key_compare(agg_param->ap_akey, entry->ie_key)) {
-		if (need_aggregate(agg_param, entry)) {
-			agg_param->ap_akey = entry->ie_key;
-			inc_agg_counter(cont, VOS_ITER_AKEY, AGG_OP_SCAN);
-		} else {
-			D_DEBUG(DB_EPC, "Skip untouched akey: "DF_KEY"\n",
-				DP_KEY(&entry->ie_key));
-			*acts |= VOS_ITER_CB_SKIP;
-			inc_agg_counter(cont, VOS_ITER_AKEY, AGG_OP_SKIP);
+	if (need_aggregate(agg_param, entry)) {
+		agg_param->ap_akey = entry->ie_key;
+		rc = vos_obj_iter_pre_aggregate(ih);
+		if (rc < 0)
+			return rc;
+		if (rc != 0) {
+			/** We removed the key so let's reprobe */
+			*acts |= VOS_ITER_CB_DELETE;
+			inc_agg_counter(cont, VOS_ITER_AKEY, AGG_OP_DEL);
+			return 0;
 		}
+		inc_agg_counter(cont, VOS_ITER_AKEY, AGG_OP_SCAN);
 	} else {
-		D_DEBUG(DB_EPC, "Skip akey: "DF_KEY" aggregation on re-probe\n",
+		D_DEBUG(DB_EPC, "Skip untouched akey: "DF_KEY"\n",
 			DP_KEY(&entry->ie_key));
 		*acts |= VOS_ITER_CB_SKIP;
+		inc_agg_counter(cont, VOS_ITER_AKEY, AGG_OP_SKIP);
 	}
 
 	if (agg_param->ap_discard) {
@@ -747,6 +723,14 @@ phy_ent_is_removed(struct agg_merge_window *mw, const struct evt_extent *phy_ext
 	}
 
 	return false;
+}
+
+static inline void
+free_phy_ent(struct agg_phy_ent	*phy_ent)
+{
+	if (phy_ent->pe_csum_free)
+		D_FREE(phy_ent->pe_csum_info.cs_csum);
+	D_FREE(phy_ent);
 }
 
 static int
@@ -1364,11 +1348,23 @@ insert_segments(daos_handle_t ih, struct agg_merge_window *mw,
 		phy_ent = lgc_seg->ls_phy_ent;
 
 		if (phy_ent != NULL && !bio_addr_is_hole(&ent_in->ei_addr)) {
+			/*
+			 * the csum free flag indicates that memory has been allocated and should
+			 * only be allocated once for the phy_ent.
+			 */
+			if (phy_ent->pe_csum_free)
+				D_FREE(phy_ent->pe_csum_info.cs_csum);
 			phy_ent->pe_addr = ent_in->ei_addr;
 			/* Checksum from ent_in is assigned to truncated
 			 * physical entry, in addition to re-assigning address.
 			 */
 			phy_ent->pe_csum_info = ent_in->ei_csum;
+			D_ALLOC(phy_ent->pe_csum_info.cs_csum, phy_ent->pe_csum_info.cs_buf_len);
+			if (phy_ent->pe_csum_info.cs_csum == NULL)
+				return -DER_NOMEM;
+			phy_ent->pe_csum_free = true;
+			memcpy(phy_ent->pe_csum_info.cs_csum, ent_in->ei_csum.cs_csum,
+			       phy_ent->pe_csum_info.cs_buf_len);
 		}
 	}
 
@@ -1409,7 +1405,7 @@ insert_segments(daos_handle_t ih, struct agg_merge_window *mw,
 		    phy_ent->pe_remove) {
 			d_list_del(&phy_ent->pe_link);
 			unmark_removals(mw, phy_ent);
-			D_FREE(phy_ent);
+			free_phy_ent(phy_ent);
 			D_ASSERT(mw->mw_phy_cnt > 0);
 			mw->mw_phy_cnt--;
 			continue;
@@ -1496,7 +1492,7 @@ clear_merge_window(struct agg_merge_window *mw)
 	d_list_for_each_entry_safe(phy_ent, tmp, &mw->mw_phy_ents, pe_link) {
 		d_list_del(&phy_ent->pe_link);
 		unmark_removals(mw, phy_ent);
-		D_FREE(phy_ent);
+		free_phy_ent(phy_ent);
 	}
 	mw->mw_phy_cnt = 0;
 }
@@ -1652,6 +1648,8 @@ flush_merge_window(daos_handle_t ih, struct vos_agg_param *agg_param,
 	if (!need_flush(ih, agg_param, last))
 		return 0;
 
+	D_DEBUG(DB_TRACE, "Flush to merge to window "DF_EXT"\n", DP_EXT(&mw->mw_ext));
+
 	/* Prepare the new segments to be inserted */
 	rc = prepare_segments(mw);
 	if (rc) {
@@ -1723,6 +1721,7 @@ enqueue_phy_ent(struct agg_merge_window *mw, struct evt_extent *phy_ext,
 	phy_ent->pe_rect.rc_minor_epc = entry->ie_minor_epc;
 	phy_ent->pe_addr = *addr;
 	phy_ent->pe_csum_info = *csum_info;
+	phy_ent->pe_csum_free = false;
 	phy_ent->pe_off = 0;
 	phy_ent->pe_ver = ver;
 	phy_ent->pe_ref = 0;
@@ -2005,7 +2004,7 @@ join_merge_window(daos_handle_t ih, struct vos_agg_param *agg_param,
 			return rc;
 		}
 	} else {
-		/* Can't be the first logcial entry */
+		/* Can't be the first logical entry */
 		D_ASSERT(phy_ext.ex_lo != lgc_ext.ex_lo);
 	}
 
@@ -2243,21 +2242,9 @@ vos_aggregate_pre_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 
 		agg_param->ap_credits = 0;
 
-		/*
-		 * Reset position if we yield while iterating in object, dkey
-		 * or akey level, so that subtree won't be skipped mistakenly,
-		 * see the comment in vos_agg_obj().
-		 *
-		 * If current object/dkey/akey has been marked as processed,
-		 * don't reset the position, otherwise, iterator will reprobe
-		 * the same item and process it again.
-		 */
-		if (!(*acts & VOS_ITER_CB_SKIP))
-			reset_agg_pos(type, agg_param);
-
 		if (vos_aggregate_yield(agg_param)) {
 			D_DEBUG(DB_EPC, "VOS discard/aggregation aborted\n");
-			return 1;
+			*acts |= VOS_ITER_CB_EXIT;
 		}
 	}
 
@@ -2505,6 +2492,7 @@ vos_aggregate(daos_handle_t coh, daos_epoch_range_t *epr,
 	struct agg_data		*ad;
 	int			 rc;
 
+	D_DEBUG(DB_TRACE, "epr: %lu -> %lu\n", epr->epr_lo, epr->epr_hi);
 	D_ASSERT(epr != NULL);
 	D_ASSERTF(epr->epr_lo < epr->epr_hi && epr->epr_hi != DAOS_EPOCH_MAX,
 		  "epr_lo:"DF_U64", epr_hi:"DF_U64"\n",

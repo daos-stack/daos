@@ -181,7 +181,7 @@ struct obj_reasb_req {
 					 orr_size_fetch:1,
 	/* for iod_size fetched flag */
 					 orr_size_fetched:1,
-	/* only with single target flag */
+	/* only with single data target flag */
 					 orr_single_tgt:1,
 	/* only for single-value IO flag */
 					 orr_singv_only:1,
@@ -371,6 +371,28 @@ struct shard_punch_args {
 	uint32_t		 pa_opc;
 };
 
+struct shard_sub_anchor {
+	daos_anchor_t	ssa_anchor;
+	/* These two extra anchors are for migration enumeration */
+	daos_anchor_t	*ssa_akey_anchor;
+	daos_anchor_t	*ssa_recx_anchor;
+	d_sg_list_t	ssa_sgl;
+	daos_key_desc_t	*ssa_kds;
+	daos_recx_t	*ssa_recxs;
+};
+
+/**
+ * This structure is attached to daos_anchor_t->da_sub_anchor for
+ * tracking multiple shards enumeration, for example degraded EC
+ * enumeration or EC parity rotate enumeration.
+ */
+struct shard_anchors {
+	d_list_t		sa_merged_list;
+	int			sa_nr;
+	int			sa_anchors_nr;
+	struct shard_sub_anchor	sa_anchors[0];
+};
+
 struct shard_list_args {
 	struct shard_auxi_args	 la_auxi;
 	daos_obj_list_t		*la_api_args;
@@ -392,6 +414,7 @@ struct obj_auxi_list_recx {
 
 struct obj_auxi_list_key {
 	d_iov_t		key;
+	struct ktr_hkey	hkey;
 	d_list_t	key_list;
 };
 
@@ -534,6 +557,8 @@ int obj_pool_query_task(tse_sched_t *sched, struct dc_object *obj,
 bool obj_csum_dedup_candidate(struct cont_props *props, daos_iod_t *iods,
 			      uint32_t iod_nr);
 
+int obj_grp_leader_get(struct dc_object *obj, int grp_idx,
+		       unsigned int map_ver, uint8_t *bit_map);
 #define obj_shard_close(shard)	dc_obj_shard_close(shard)
 int obj_recx_ec_daos2shard(struct daos_oclass_attr *oca, int shard, daos_recx_t **recxs_p,
 			   daos_epoch_t **recx_ephs_p, unsigned int *iod_nr);

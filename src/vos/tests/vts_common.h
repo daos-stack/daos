@@ -46,6 +46,8 @@
 #define STORAGE_PATH_LEN 96
 extern char	vos_path[STORAGE_PATH_LEN+1];
 extern int	gc;
+extern bool	g_force_checksum;
+extern bool	g_force_no_zero_copy;
 
 enum vts_ops_type {
 	CREAT,
