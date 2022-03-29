@@ -286,21 +286,7 @@ enum evt_feats {
 	EVT_FEATS_END,
 	/** Calculated mask for all supported feats */
 	EVT_FEATS_SUPPORTED		= ((EVT_FEATS_END - 1) << 1) - 1,
-
-	/** Flags for internal use - Bit 63 can be used for another purpose so as to
-	 *  match corresponding internal flags for btree
-	 */
-	/** Aggregation optimization is supported */
-	EVT_FEAT_AGG_OPT		= (1ULL << 62),
-	/** Indicate timestamp is HLC */
-	EVT_FEAT_AGG_HLC		= (1ULL << 61),
-	/** Timestamp mask for last aggregatable write */
-	EVT_FEAT_AGG_TIME_MASK		= (0xffffffffULL << 29),
 };
-
-D_CASSERT((EVT_FEAT_AGG_HLC & EVT_FEAT_AGG_TIME_MASK) == 0);
-D_CASSERT(((EVT_FEAT_AGG_OPT | EVT_FEAT_AGG_TIME_MASK) & EVT_FEATS_SUPPORTED) == 0);
-D_CASSERT(EVT_FEAT_AGG_TIME_MASK & (1ULL << 60));
 
 /** These are "internal" flags meant to match the btree ones */
 

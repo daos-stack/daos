@@ -356,7 +356,7 @@ vos_pool_create(const char *path, uuid_t uuid, daos_size_t scm_sz,
 		goto end;
 
 	memset(pool_df, 0, sizeof(*pool_df));
-	rc = dbtree_create_inplace(VOS_BTR_CONT_TABLE, VOS_TREE_AGG_OPT, VOS_CONT_ORDER,
+	rc = dbtree_create_inplace(VOS_BTR_CONT_TABLE, 0, VOS_CONT_ORDER,
 				   &uma, &pool_df->pd_cont_root, &hdl);
 	if (rc != 0)
 		goto end;

@@ -2769,7 +2769,7 @@ aggregate_34(void **state)
 
 #define INIT_FEATS 0x8000000010f93f43ULL
 
-D_CASSERT((INIT_FEATS & VOS_TREE_AGG_TIME_MASK) == 0);
+D_CASSERT((INIT_FEATS & VOS_TF_AGG_TIME_MASK) == 0);
 
 static void
 aggregate_35(void **state)
@@ -2781,7 +2781,7 @@ aggregate_35(void **state)
 	result = vos_feats_agg_time_get(feats, &epoch);
 	assert_false(result);
 
-	feats |= VOS_TREE_AGG_OPT;
+	feats |= VOS_TF_AGG_OPT;
 	result = vos_feats_agg_time_get(feats, &epoch);
 	assert_true(result);
 	assert_int_equal(epoch, 0);

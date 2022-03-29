@@ -16,7 +16,7 @@
 #include <daos_srv/vos.h>
 #include "vos_internal.h"
 
-uint64_t vos_evt_feats = EVT_FEAT_SORT_DIST | EVT_FEAT_AGG_OPT;
+uint64_t vos_evt_feats = EVT_FEAT_SORT_DIST | VOS_TF_AGG_OPT;
 
 /**
  * VOS Btree attributes, for tree registration and tree creation.
@@ -869,7 +869,7 @@ tree_open_create(struct vos_object *obj, enum vos_tree_class tclass, int flags,
 		}
 	} else {
 		struct vos_btr_attr	*ta;
-		uint64_t		 tree_feats = VOS_TREE_AGG_OPT;
+		uint64_t		 tree_feats = VOS_TF_AGG_OPT;
 
 		/* Step-1: find the btree attributes and create btree */
 		if (tclass == VOS_BTR_DKEY) {
@@ -1147,7 +1147,7 @@ obj_tree_init(struct vos_object *obj)
 
 	D_ASSERT(obj->obj_df);
 	if (obj->obj_df->vo_tree.tr_class == 0) {
-		uint64_t tree_feats = VOS_TREE_AGG_OPT;
+		uint64_t tree_feats = VOS_TF_AGG_OPT;
 		enum daos_otype_t type;
 
 		D_DEBUG(DB_DF, "Create btree for object\n");

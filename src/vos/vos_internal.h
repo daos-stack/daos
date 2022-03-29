@@ -354,16 +354,33 @@ struct vos_dtx_cmt_ent {
 
 extern uint64_t vos_evt_feats;
 
+/** Flags for internal use - Bit 63 can be used for another purpose so as to
+ *  match corresponding internal flags for btree
+ */
 #define VOS_KEY_CMP_LEXICAL	(1ULL << 63)
-#define VOS_TREE_AGG_OPT	EVT_FEAT_AGG_OPT
-#define VOS_TREE_AGG_HLC	EVT_FEAT_AGG_HLC
-#define VOS_TREE_AGG_TIME_MASK	EVT_FEAT_AGG_TIME_MASK
+/** Indicates that a tree has aggregation optimization enabled */
+#define VOS_TF_AGG_OPT	(1ULL << 62)
+/** Indicates that the stored 32 bits from a timestamp are from an HLC */
+#define VOS_TF_AGG_HLC	(1ULL << 61)
+/** Start bit of stored timestamp */
+#define VOS_TF_AGG_BIT	60
+/** Right shift for 32-bits of epoch */
+#define VOS_TF_AGG_RSHIFT	(63 - VOS_TF_AGG_BIT)
+/** Left shift for 32-bits of epoch */
+#define VOS_TF_AGG_LSHIFT	(32 - VOS_TF_AGG_RSHIFT)
+/** In-place mask to get epoch from feature bits */
+#define VOS_TF_AGG_TIME_MASK	(0xffffffffULL << VOS_TF_AGG_LSHIFT)
+
+D_CASSERT((VOS_TF_AGG_HLC & VOS_TF_AGG_TIME_MASK) == 0);
+D_CASSERT(VOS_TF_AGG_TIME_MASK & (1ULL << VOS_TF_AGG_BIT));
+D_CASSERT((VOS_TF_AGG_TIME_MASK & (1ULL << (VOS_TF_AGG_BIT + 1))) == 0);
+D_CASSERT((VOS_TF_AGG_TIME_MASK & (1ULL << (VOS_TF_AGG_BIT - 32))) == 0);
 
 #define CHECK_VOS_TREE_FLAG(flag)	\
 	D_CASSERT(((flag) & (EVT_FEATS_SUPPORTED | BTR_FEAT_MASK)) == 0)
 CHECK_VOS_TREE_FLAG(VOS_KEY_CMP_LEXICAL);
-CHECK_VOS_TREE_FLAG(VOS_TREE_AGG_OPT);
-CHECK_VOS_TREE_FLAG(VOS_TREE_AGG_TIME_MASK);
+CHECK_VOS_TREE_FLAG(VOS_TF_AGG_OPT);
+CHECK_VOS_TREE_FLAG(VOS_TF_AGG_TIME_MASK);
 
 /** Update the aggregatable write timestamp within 1/4 second granularity */
 static inline void
@@ -375,29 +392,29 @@ vos_feats_agg_time_update(daos_epoch_t epoch, uint64_t *feats)
 		/** Assume aggregation only happens at most once every quarter second */
 		epoch &= 0xffffffff00000000ULL;
 		/** Ensure the resulting epoch is not zero regardless, mostly for standalone */
-		epoch = (epoch >> 3);
-		extra_flag = VOS_TREE_AGG_HLC;
+		epoch = (epoch >> VOS_TF_AGG_RSHIFT);
+		extra_flag = VOS_TF_AGG_HLC;
 	} else {
 		epoch &= 0x0ffffffffULL;
-		epoch = (epoch << 29);
+		epoch = (epoch << VOS_TF_AGG_LSHIFT);
 	}
 
-	*feats &= ~VOS_TREE_AGG_TIME_MASK;
-	*feats |= epoch | VOS_TREE_AGG_OPT | extra_flag;
+	*feats &= ~VOS_TF_AGG_TIME_MASK;
+	*feats |= epoch | VOS_TF_AGG_OPT | extra_flag;
 }
 
 /** Get the aggregatable write timestamp within 1/4 second granularity */
 static inline bool
 vos_feats_agg_time_get(uint64_t feats, daos_epoch_t *epoch)
 {
-	if ((feats & VOS_TREE_AGG_OPT) == 0)
+	if ((feats & VOS_TF_AGG_OPT) == 0)
 		return false;
 
-	if (feats & VOS_TREE_AGG_HLC) {
-		*epoch = ((feats & VOS_TREE_AGG_TIME_MASK) << 3);
+	if (feats & VOS_TF_AGG_HLC) {
+		*epoch = ((feats & VOS_TF_AGG_TIME_MASK) << VOS_TF_AGG_RSHIFT);
 		*epoch += 0xffffffffULL;
 	} else {
-		*epoch = ((feats & VOS_TREE_AGG_TIME_MASK) >> 29);
+		*epoch = ((feats & VOS_TF_AGG_TIME_MASK) >> VOS_TF_AGG_LSHIFT);
 	}
 
 	return true;
