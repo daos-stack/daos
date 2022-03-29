@@ -363,7 +363,11 @@ vos_feats_agg_time_get(uint64_t feats, daos_epoch_t *epoch)
 	if ((feats & VOS_TREE_AGG_OPT) == 0)
 		return false;
 
-	*epoch = ((feats & VOS_TREE_AGG_TIME_MASK) << 2) + 0xffffffffULL;
+	*epoch = ((feats & VOS_TREE_AGG_TIME_MASK) << 2);
+
+	if (*epoch != 0)
+		*epoch += 0xffffffffULL;
+
 	return true;
 }
 
