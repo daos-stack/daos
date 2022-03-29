@@ -13,7 +13,7 @@ telemetry_port: 9191
 
 ## Transport Credentials Specifying certificates to secure communications
 ##
-# transport_config:
+#transport_config:
 #  # Specify to bypass loading certificates and use insecure communications channels
 #  allow_insecure: false
 #  # Location where daos_server will look for Client certificates

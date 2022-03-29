@@ -76,4 +76,3 @@ c1: &cont_example
 
 # List of containers
 containers: [*cont_example]
-...
