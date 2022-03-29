@@ -811,13 +811,19 @@ rebuild_scan_leader(void *data)
 	struct rebuild_pool_tls	  *tls;
 	int			   rc;
 
-	D_DEBUG(DB_REBUILD, DF_UUID "check resync %u < %u\n",
+	D_DEBUG(DB_REBUILD, DF_UUID "check resync %u/%u < %u\n",
 		DP_UUID(rpt->rt_pool_uuid), rpt->rt_pool->sp_dtx_resync_version,
-		rpt->rt_rebuild_ver);
+		rpt->rt_global_dtx_resync_version, rpt->rt_rebuild_ver);
 
 	/* Wait for dtx resync to finish */
-	while (rpt->rt_pool->sp_dtx_resync_version < rpt->rt_rebuild_ver)
-		ABT_thread_yield();
+	while (rpt->rt_global_dtx_resync_version < rpt->rt_rebuild_ver) {
+		if (rpt->rt_abort || rpt->rt_finishing) {
+			D_INFO("shutdown rebuild "DF_UUID": "DF_RC"\n",
+			       DP_UUID(rpt->rt_pool_uuid), DP_RC(-DER_SHUTDOWN));
+			D_GOTO(out, rc = -DER_SHUTDOWN);
+		}
+		dss_sleep(2 * 1000);
+	}
 
 	rc = dss_thread_collective(rebuild_scanner, rpt, DSS_ULT_DEEP_STACK);
 	if (rc)
