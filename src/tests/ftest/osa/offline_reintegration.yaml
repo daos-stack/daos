@@ -122,4 +122,3 @@ pool_capacity:
   pool_fillup: 50
   pool_test_oclass: RP_3GX
   pool_test_repetitions: 1
-

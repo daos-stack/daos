@@ -69,7 +69,7 @@ dfs_sb_metadata: &dfs_sb_metadata
   type: hashed
   size: 15
   overhead: meta
-  akeys: [ *dfs_magic, *dfs_sb_version, *dfs_layout_version, *dfs_chunk_size, *dfs_obj_class ]
+  akeys: [*dfs_magic, *dfs_sb_version, *dfs_layout_version, *dfs_chunk_size, *dfs_obj_class]
 
 # Dir A-Key
 dfs_inode: &dfs_inode
@@ -150,7 +150,7 @@ my_file_akey: &my_file_akey
   size: 9
   overhead: meta
   value_type: array
-  values: [{"count": 1, "size": 64, "aligned": "Yes"},{"count": 1, "size": 34, "aligned": "Yes"}]
+  values: [{"count": 1, "size": 64, "aligned": "Yes"}, {"count": 1, "size": 34, "aligned": "Yes"}]
 
 # data/deploy/my_file -> ../../specs/very_importan_file.txt D-Key
 my_file_dkey: &my_file_dkey
@@ -160,7 +160,7 @@ my_file_dkey: &my_file_dkey
   overhead: user
   akeys: [*my_file_akey]
 
- # data/deploy Object
+# data/deploy Object
 deploy_obj: &deploy_obj
   count: 1
   dkeys: [*driver_dkey, *my_file_dkey]
@@ -394,3 +394,4 @@ posix_key: &posix
   objects: [*superblock_obj, *rootdir_obj, *data_obj, *deploy_obj, *specs_obj, *secret_plan_obj, *driver_obj, *readme_obj, *very_important_obj]
 
 containers: [*posix]
+...

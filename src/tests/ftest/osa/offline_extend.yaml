@@ -108,4 +108,4 @@ checksum:
 snapshot:
   test_with_snapshot: True
 test_ranks:
-  rank_list: ["4","5",["6","7"]]
+  rank_list: ["4", "5", ["6", "7"]]

@@ -74,4 +74,3 @@ daos_tests:
     test_daos_nvme_recovery_4: -u subtests="3"
     test_daos_nvme_recovery_5: -u subtests="4"
     test_daos_nvme_recovery_6: -u subtests="5"
-

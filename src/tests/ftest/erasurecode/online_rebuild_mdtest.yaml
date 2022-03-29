@@ -85,4 +85,3 @@ mdtest:
     - ["EC_2P2GX", 6]
     - ["EC_4P2GX", 8]
     - ["EC_8P2GX", 12]
-
