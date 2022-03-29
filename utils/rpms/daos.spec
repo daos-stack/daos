@@ -22,6 +22,17 @@ License:       BSD-2-Clause-Patent
 URL:           https//github.com/daos-stack/daos
 Source0:       %{name}-%{version}.tar.gz
 Source1:       bz-1955184_find-requires
+%if 0%{?rhel} > 0
+%if 0%{?rhel} > 7
+# only RHEL 8+ has a new enough ucx-devel
+%global ucx 1
+%else
+%global ucx 0
+%endif
+%else
+# but assume that anything else does also
+%global ucx 1
+%endif
 %if (0%{?rhel} >= 7)
 %if (0%{?rhel} >= 8)
 BuildRequires: python3-scons >= 2.4
@@ -276,7 +287,17 @@ This is the package needed to manage server storage firmware on DAOS servers.
 %package serialize
 Summary: DAOS serialization library that uses HDF5
 BuildRequires: hdf5-devel
+
 Requires: hdf5
+%if 0%{ucx} > 0
+%if (0%{?suse_version} > 0)
+BuildRequires: libucp-devel
+BuildRequires: libucs-devel
+BuildRequires: libuct-devel
+%else
+BuildRequires: ucx-devel
+%endif
+%endif
 
 %description serialize
 This is the package needed to use the DAOS serialization and deserialization
