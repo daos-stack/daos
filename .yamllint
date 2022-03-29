@@ -13,7 +13,7 @@ rules:
   commas:
     ignore: src/tests/ftest
   truthy:
-    ignore: src/tests/ftest
+    ignore: src/tests/ftestx
   document-start:
     ignore: src/tests/ftest
   comments:
