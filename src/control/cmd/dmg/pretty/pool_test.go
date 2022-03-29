@@ -281,7 +281,7 @@ Pool     Size Used Imbalance Disabled
 					},
 				},
 			},
-			expErr: errors.New("has 1 storage tiers, want 2"),
+			expErr: errors.New("has 1 storage tiers, previous had 2"),
 		},
 		"two pools; only one labeled": {
 			resp: &control.PoolQueryResp{

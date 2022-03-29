@@ -22,23 +22,19 @@ import (
 )
 
 func validatePoolQueryResp(pqr *control.PoolQueryResp) error {
-	var numTiers int
 	var zeroUUID uuid.UUID
+	numTiers := -1
 
 	for i, p := range pqr.Pools {
 		if p.UUID == zeroUUID {
 			return errors.Errorf("pool with index %d has invalid zero value uuid", i)
 		}
-		if len(p.TierStats) == 0 {
-			numTiers = -1
-			continue // no usage stats in response
+		if p.Status != 0 {
+			continue // Ignore entries for failed queries.
 		}
-		if numTiers != 0 && len(p.TierStats) != numTiers {
-			if numTiers == -1 {
-				numTiers = 0
-			}
-			return errors.Errorf("pool %s has %d storage tiers, want %d",
-				p.UUID, len(p.TierStats), numTiers)
+		if numTiers != -1 && len(p.TierStats) != numTiers {
+			return errors.Errorf("pool %s has %d storage tiers, previous had %d",
+				p.GetName(), len(p.TierStats), numTiers)
 		}
 		numTiers = len(p.TierStats)
 	}
