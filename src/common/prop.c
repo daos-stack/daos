@@ -588,7 +588,7 @@ daos_prop_dup(daos_prop_t *prop, bool pool, bool input)
 
 	for (i = 0; i < prop->dpp_nr; i++) {
 		entry = &prop->dpp_entries[i];
-		if (!(entry->dpe_flags & DAOS_PROP_ENTRY_NEGATIVE))
+		if (daos_prop_is_set(entry))
 			valid_nr++;
 	}
 	if (valid_nr == 0)
@@ -600,7 +600,7 @@ daos_prop_dup(daos_prop_t *prop, bool pool, bool input)
 	j = 0;
 	for (i = 0; i < prop->dpp_nr; i++) {
 		entry = &prop->dpp_entries[i];
-		if (entry->dpe_flags & DAOS_PROP_ENTRY_NEGATIVE)
+		if (!daos_prop_is_set(entry))
 			continue;
 		entry_dup = &prop_dup->dpp_entries[j++];
 		rc = daos_prop_entry_copy(entry, entry_dup);
@@ -776,7 +776,7 @@ daos_prop_copy(daos_prop_t *prop_req, daos_prop_t *prop_reply)
 		/* this is possible now */
 		entry_reply = daos_prop_entry_get(prop_reply, type);
 		if (entry_reply == NULL) {
-			entry_req->dpe_flags |= DAOS_PROP_ENTRY_NEGATIVE;
+			entry_req->dpe_flags |= DAOS_PROP_ENTRY_NOT_SET;
 			continue;
 		}
 		entry_req->dpe_flags = entry_reply->dpe_flags;

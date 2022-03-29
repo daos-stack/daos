@@ -80,7 +80,7 @@ dpe_is_negative(struct daos_prop_entry *dpe)
 	if (dpe == NULL)
 		return 0;
 
-	return dpe->dpe_flags & DAOS_PROP_ENTRY_NEGATIVE;
+	return dpe->dpe_flags & DAOS_PROP_ENTRY_NOT_SET;
 }
 
 static inline void

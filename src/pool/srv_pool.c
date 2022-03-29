@@ -262,10 +262,10 @@ pool_prop_default_copy(daos_prop_t *prop_def, daos_prop_t *prop)
 			break;
 		case DAOS_PROP_PO_GLOBAL_VERSION:
 			D_ERROR("pool global version property could be not set\n");
-			return -DER_NO_PERM;
+			return -DER_INVAL;
 		case DAOS_PROP_PO_UPGRADE_STATUS:
 			D_ERROR("pool upgrade status property could be not set\n");
-			return -DER_NO_PERM;
+			return -DER_INVAL;
 		default:
 			D_ERROR("ignore bad dpt_type %d.\n", entry->dpe_type);
 			break;
@@ -1942,7 +1942,7 @@ pool_prop_read(struct rdb_tx *tx, const struct pool_svc *svc, uint64_t bits,
 		prop->dpp_entries[idx].dpe_val = val;
 		if (rc == -DER_NONEXIST) {
 			rc = 0;
-			prop->dpp_entries[idx].dpe_flags |= DAOS_PROP_ENTRY_NEGATIVE;
+			prop->dpp_entries[idx].dpe_flags |= DAOS_PROP_ENTRY_NOT_SET;
 		}
 		idx++;
 	}
@@ -1959,7 +1959,7 @@ pool_prop_read(struct rdb_tx *tx, const struct pool_svc *svc, uint64_t bits,
 		prop->dpp_entries[idx].dpe_val = val;
 		if (rc == -DER_NONEXIST) {
 			rc = 0;
-			prop->dpp_entries[idx].dpe_flags |= DAOS_PROP_ENTRY_NEGATIVE;
+			prop->dpp_entries[idx].dpe_flags |= DAOS_PROP_ENTRY_NOT_SET;
 		}
 		idx++;
 	}
@@ -1987,7 +1987,7 @@ pool_prop_read(struct rdb_tx *tx, const struct pool_svc *svc, uint64_t bits,
 			return -DER_NOMEM;
 		if (rc == -DER_NONEXIST) {
 			rc = 0;
-			prop->dpp_entries[idx].dpe_flags |= DAOS_PROP_ENTRY_NEGATIVE;
+			prop->dpp_entries[idx].dpe_flags |= DAOS_PROP_ENTRY_NOT_SET;
 		}
 		idx++;
 	}
@@ -1995,7 +1995,7 @@ pool_prop_read(struct rdb_tx *tx, const struct pool_svc *svc, uint64_t bits,
 	if (bits & DAOS_PO_QUERY_PROP_GLOBAL_VERSION) {
 		D_ASSERT(idx < nr);
 		if (global_ver < 1)
-			prop->dpp_entries[idx].dpe_flags |= DAOS_PROP_ENTRY_NEGATIVE;
+			prop->dpp_entries[idx].dpe_flags |= DAOS_PROP_ENTRY_NOT_SET;
 		prop->dpp_entries[idx].dpe_type = DAOS_PROP_PO_GLOBAL_VERSION;
 		prop->dpp_entries[idx].dpe_val = global_ver;
 		idx++;
@@ -2015,7 +2015,7 @@ pool_prop_read(struct rdb_tx *tx, const struct pool_svc *svc, uint64_t bits,
 		prop->dpp_entries[idx].dpe_val = val32;
 		if (rc == -DER_NONEXIST) {
 			rc = 0;
-			prop->dpp_entries[idx].dpe_flags |= DAOS_PROP_ENTRY_NEGATIVE;
+			prop->dpp_entries[idx].dpe_flags |= DAOS_PROP_ENTRY_NOT_SET;
 		}
 		idx++;
 	}
@@ -3776,6 +3776,7 @@ static int pool_upgrade_props(struct rdb_tx *tx, struct pool_svc *svc,
 	uuid_t		       *hdl_uuids = NULL;
 	size_t			hdl_uuids_size;
 	int			n_hdl_uuids = 0;
+	uint32_t		connectable;
 
 	if (rpc) {
 		rc = find_hdls_to_evict(tx, svc, &hdl_uuids, &hdl_uuids_size,
@@ -3790,6 +3791,28 @@ static int pool_upgrade_props(struct rdb_tx *tx, struct pool_svc *svc,
 					  rpc->cr_ctx);
 		if (rc != 0)
 			D_GOTO(out_free, rc);
+		need_commit = true;
+	}
+
+	d_iov_set(&value, &connectable, sizeof(connectable));
+	rc = rdb_tx_lookup(tx, &svc->ps_root, &ds_pool_prop_connectable,
+			   &value);
+	if (rc)
+		D_GOTO(out_free, rc);
+
+	/*
+	 * Write connectable property to 0 to reject any new connections
+	 * while upgrading in progress.
+	 */
+	if (connectable > 0) {
+		connectable = 0;
+		rc = rdb_tx_update(tx, &svc->ps_root, &ds_pool_prop_connectable,
+				   &value);
+		if (rc) {
+			D_ERROR(DF_UUID": failed to set connectable of pool "
+				"%d.\n", DP_UUID(pool_uuid), rc);
+			D_GOTO(out_free, rc);
+		}
 		need_commit = true;
 	}
 
@@ -3909,44 +3932,56 @@ static int ds_pool_mark_upgrade_completed(uuid_t pool_uuid,
 {
 	struct rdb_tx			tx;
 	d_iov_t				value;
-	uint32_t			val;
+	uint32_t			upgrade_status;
+	uint32_t			global_version;
+	uint32_t			connectable;
 	int				rc1;
-	bool				need_put_leader = false;
 	daos_prop_t			*prop = NULL;
-
-	if (!svc) {
-		rc1 = pool_svc_lookup_leader(pool_uuid, &svc, NULL);
-		if (rc1 != 0)
-			return rc1;
-	}
 
 	rc1 = rdb_tx_begin(svc->ps_rsvc.s_db, svc->ps_rsvc.s_term, &tx);
 	if (rc1 != 0)
-		D_GOTO(out_svc, rc1);
+		D_GOTO(out, rc1);
 
 	ABT_rwlock_wrlock(svc->ps_lock);
 	if (rc == 0)
-		val = DAOS_UPGRADE_STATUS_COMPLETED;
+		upgrade_status = DAOS_UPGRADE_STATUS_COMPLETED;
 	else
-		val = DAOS_UPGRADE_STATUS_FAILED;
+		upgrade_status = DAOS_UPGRADE_STATUS_FAILED;
 
-	d_iov_set(&value, &val, sizeof(val));
+	d_iov_set(&value, &upgrade_status, sizeof(upgrade_status));
 	rc1 = rdb_tx_update(&tx, &svc->ps_root, &ds_pool_prop_upgrade_status,
 			   &value);
 	if (rc1)
 		D_GOTO(out_tx, rc1);
 
-	/* only bump global version if upgrade succeed. */
+	/*
+	 * only bump global version and connectable properties
+	 * if upgrade succeed.
+	 */
 	if (rc == 0) {
-		val = DS_POOL_GLOBAL_VERSION;
+		global_version = DS_POOL_GLOBAL_VERSION;
+		d_iov_set(&value, &global_version, sizeof(global_version));
 		rc1 = rdb_tx_update(&tx, &svc->ps_root,
 				    &ds_pool_prop_global_version, &value);
-		if (rc) {
+		if (rc1) {
 			D_ERROR(DF_UUID": failed to upgrade global version "
 				"of pool, %d.\n", DP_UUID(pool_uuid), rc1);
 			D_GOTO(out_tx, rc1);
 		}
+		connectable = 1;
+		d_iov_set(&value, &connectable, sizeof(connectable));
+		rc1 = rdb_tx_update(&tx, &svc->ps_root, &ds_pool_prop_connectable,
+				    &value);
+		if (rc1) {
+			D_ERROR(DF_UUID": failed to set connectable of pool "
+				"%d.\n", DP_UUID(pool_uuid), rc1);
+			D_GOTO(out_tx, rc1);
+		}
 	}
+
+	rc1 = rdb_tx_commit(&tx);
+	if (rc1)
+		D_GOTO(out_tx, rc1);
 
 	rc1 = pool_prop_read(&tx, svc, DAOS_PO_QUERY_PROP_ALL, &prop);
 	if (rc1)
@@ -3956,14 +3991,10 @@ static int ds_pool_mark_upgrade_completed(uuid_t pool_uuid,
 	if (rc1)
 		D_GOTO(out_tx, rc1);
 
-	rc1 = rdb_tx_commit(&tx);
 out_tx:
 	ABT_rwlock_unlock(svc->ps_lock);
 	rdb_tx_end(&tx);
-out_svc:
-	if (need_put_leader)
-		pool_svc_put_leader(svc);
-
+out:
 	return rc1;
 }
 
@@ -4031,7 +4062,9 @@ ds_pool_upgrade_if_needed(uuid_t pool_uuid, struct rsvc_hint *po_hint,
 			D_GOTO(out_tx, rc);
 
 		if (upgrade_global_ver > DS_POOL_GLOBAL_VERSION) {
-			D_ERROR("downgrading pool is unsupported\n");
+			D_ERROR(DF_UUID": downgrading pool is unsupported: %u -> %u\n",
+				DP_UUID(svc->ps_uuid), upgrade_global_ver,
+				DS_POOL_GLOBAL_VERSION);
 			D_GOTO(out_tx, rc = -DER_INVAL);
 		}
 		switch (upgrade_status) {
@@ -4045,8 +4078,11 @@ ds_pool_upgrade_if_needed(uuid_t pool_uuid, struct rsvc_hint *po_hint,
 			break;
 		case DAOS_UPGRADE_STATUS_FAILED:
 			if (upgrade_global_ver < DS_POOL_GLOBAL_VERSION) {
-				D_ERROR("upgrading failed upgraded pool again unsupported\n");
-				D_GOTO(out_tx, rc = -DER_INVAL);
+				D_ERROR(DF_UUID": upgrading pool %u -> %u\n is unsupported"
+					" because pool upgraded to %u last time failed\n",
+					DP_UUID(svc->ps_uuid), upgrade_global_ver,
+					DS_POOL_GLOBAL_VERSION, upgrade_global_ver);
+				D_GOTO(out_tx, rc = -DER_NOTSUPPORTED);
 			}
 			/* try again as users requested. */
 			if (need_put_leader)
@@ -4056,8 +4092,11 @@ ds_pool_upgrade_if_needed(uuid_t pool_uuid, struct rsvc_hint *po_hint,
 			break;
 		case DAOS_UPGRADE_STATUS_IN_PROGRESS:
 			if (upgrade_global_ver < DS_POOL_GLOBAL_VERSION) {
-				D_ERROR("need finish last time upgraing firstly\n");
-				D_GOTO(out_tx, rc = -DER_INVAL);
+				D_ERROR(DF_UUID": upgrading pool %u -> %u\n is unsupported"
+					" because pool upgraded to %u not finished yet\n",
+					DP_UUID(svc->ps_uuid), upgrade_global_ver,
+					DS_POOL_GLOBAL_VERSION, upgrade_global_ver);
+				D_GOTO(out_tx, rc = -DER_NOTSUPPORTED);
 			} else if (need_put_leader) { /* not from resume */
 				D_GOTO(out_tx, rc = -DER_INPROGRESS);
 			} else {
@@ -4075,15 +4114,15 @@ out_upgrade:
 	 * Todo: make sure no rebuild/reint/expand are in progress
 	 */
 	rc = pool_upgrade_props(&tx, svc, pool_uuid, rpc);
-	if (rc == 0)
-		upgraded = true;
+	upgraded = true;
 out_tx:
 	ABT_rwlock_unlock(svc->ps_lock);
 	rdb_tx_end(&tx);
 out_svc:
 	if (upgraded) {
-		rc1 = ds_cont_upgrade(pool_uuid, svc->ps_cont_svc);
-		rc = ds_pool_mark_upgrade_completed(pool_uuid, svc, rc1);
+		if (rc == 0)
+			rc = ds_cont_upgrade(pool_uuid, svc->ps_cont_svc);
+		rc1 = ds_pool_mark_upgrade_completed(pool_uuid, svc, rc);
 		if (rc == 0 && rc1)
 			rc = rc1;
 	}
@@ -4822,185 +4861,6 @@ struct redist_open_hdls_arg {
 	/** Total used space in hdls buffer, in bytes */
 	size_t hdls_used;
 };
-
-static int
-get_open_handles_cb(daos_handle_t ih, d_iov_t *key, d_iov_t *val, void *varg)
-{
-	struct redist_open_hdls_arg	*arg = varg;
-	uuid_t				*uuid = key->iov_buf;
-	struct pool_hdl			*hdl = val->iov_buf;
-	struct ds_pool_hdl		*lookup_hdl;
-	size_t				size_needed;
-	int				rc = DER_SUCCESS;
-
-	if (key->iov_len != sizeof(uuid_t) ||
-	    val->iov_len != sizeof(struct pool_hdl)) {
-		D_ERROR("invalid key/value size: key="DF_U64" value="DF_U64"\n",
-			key->iov_len, val->iov_len);
-		return -DER_IO;
-	}
-
-	/* Look up the handle in the local pool to obtain the creds, which are
-	 * not stored in RDB
-	 */
-	lookup_hdl = ds_pool_hdl_lookup(*uuid);
-	if (lookup_hdl == NULL) {
-		D_ERROR("Pool open handle "DF_UUID" is in RDB but not the pool",
-			DP_UUID(*uuid));
-		return -DER_NONEXIST;
-	}
-
-	/* Check if there's enough room is the preallocated array, and expand
-	 * if not
-	 */
-	size_needed = arg->hdls_used + lookup_hdl->sph_cred.iov_buf_len +
-		sizeof(struct pool_iv_conn);
-	if (size_needed > arg->hdls_size) {
-		void *newbuf = NULL;
-
-		D_REALLOC(newbuf, *arg->hdls, arg->hdls_size, size_needed);
-		if (newbuf == NULL)
-			D_GOTO(out_hdl, rc = -DER_NOMEM);
-
-		/* Since this probably changed the hdls pointer, adjust the
-		 * next pointer correspondingly
-		 */
-		*(arg->hdls) = newbuf;
-		arg->next = (struct pool_iv_conn *)
-			(((char *)*arg->hdls) + arg->hdls_used);
-		arg->hdls_size = size_needed;
-	}
-
-	/* Copy the data */
-	uuid_copy(arg->next->pic_hdl, *uuid);
-	arg->next->pic_flags = hdl->ph_flags;
-	arg->next->pic_cred_size = lookup_hdl->sph_cred.iov_buf_len;
-	arg->next->pic_global_ver = lookup_hdl->sph_global_ver;
-	memcpy(arg->next->pic_creds, lookup_hdl->sph_cred.iov_buf,
-	       lookup_hdl->sph_cred.iov_buf_len);
-
-	/* Adjust the pointers for the next iteration */
-	arg->hdls_used = size_needed;
-	arg->next = (struct pool_iv_conn *)
-		(((char *)*arg->hdls) + arg->hdls_used);
-
-out_hdl:
-	ds_pool_hdl_put(lookup_hdl);
-
-	return DER_SUCCESS;
-}
-
-/**
- * Retrieves a flat buffer containing all currently open handles
- *
- * \param pool_uuid [IN]  The pool to get handles for
- * \param hdls      [OUT] A flat-packed buffer of all open handles
- *                        (struct pool_iv_conn). Caller must free hdls->iov_buf.
- *                        Note that these are variable size, and can not be
- *                        indexed like an array
- * \param out_size  [OUT] The size of the buffer pointed to by hdls
- *
- * \return If no handles are currently open this will return DER_SUCCESS with
- *         hdls = NULL and out_size = 0.
- *         Otherwise returns DER_SUCCESS or an -error code
- */
-int
-ds_pool_get_open_handles(uuid_t pool_uuid, d_iov_t *hdls)
-{
-	struct pool_svc			*svc;
-	struct redist_open_hdls_arg	 arg;
-	uint32_t			 connectable;
-	uint32_t			 upgrade_status;
-	struct rdb_tx			 tx;
-	d_iov_t				 value;
-	uint32_t			 nhandles;
-	int				 rc;
-
-	d_iov_set(hdls, NULL, 0);
-
-	rc = pool_svc_lookup_leader(pool_uuid, &svc, NULL /* hint */);
-	if (rc != 0)
-		return rc;
-
-	rc = rdb_tx_begin(svc->ps_rsvc.s_db, svc->ps_rsvc.s_term, &tx);
-	if (rc != 0)
-		D_GOTO(out_svc, rc);
-
-	ABT_rwlock_rdlock(svc->ps_lock);
-
-	/* Check if pool is being upgraded and not accepting connections */
-	d_iov_set(&value, &upgrade_status, sizeof(upgrade_status));
-	rc = rdb_tx_lookup(&tx, &svc->ps_root,
-			   &ds_pool_prop_upgrade_status, &value);
-	if (rc == 0 && upgrade_status == DAOS_UPGRADE_STATUS_IN_PROGRESS) {
-		D_ERROR(DF_UUID": being upgraded, not accepting connections\n",
-			DP_UUID(pool_uuid));
-		D_GOTO(out_lock, rc = -DER_BUSY);
-	} else if (rc && rc != -DER_NONEXIST) {
-		D_GOTO(out_lock, rc);
-	}
-
-	/* Check if pool is being destroyed and not accepting connections */
-	d_iov_set(&value, &connectable, sizeof(connectable));
-	rc = rdb_tx_lookup(&tx, &svc->ps_root,
-			   &ds_pool_prop_connectable, &value);
-	if (rc != 0)
-		D_GOTO(out_lock, rc);
-	if (!connectable) {
-		D_ERROR(DF_UUID": being destroyed, not accepting connections\n",
-			DP_UUID(pool_uuid));
-		D_GOTO(out_lock, rc = -DER_BUSY);
-	}
-
-	/* Check how many handles are currently open */
-	d_iov_set(&value, &nhandles, sizeof(nhandles));
-	rc = rdb_tx_lookup(&tx, &svc->ps_root, &ds_pool_prop_nhandles, &value);
-	if (rc != 0)
-		D_GOTO(out_lock, rc);
-
-	/* Abort early if there are no open handles */
-	if (nhandles == 0)
-		D_GOTO(out_lock, rc);
-
-	/* Preallocate an approximate amount of space for the handles and the
-	 * variable-size creds field which is not accounted for in the size of
-	 * the base structure. The goal here isn't to be exactly right - can't
-	 * know at this point how much space is actually needed. Ballparking
-	 * close enough just reduces the number of reallocations needed during
-	 * iteration
-	 */
-	D_ALLOC(hdls->iov_buf, nhandles * (sizeof(struct pool_iv_conn) + 160));
-	if (hdls->iov_buf == NULL)
-		D_GOTO(out_lock, rc = -DER_NOMEM);
-
-	/* Pass in the preallocated array and handles as pointers
-	 * This allows the iterator to reallocate the array if an element
-	 * was added between when we retrieved the size and iteration completes
-	 */
-	arg.hdls = (struct pool_iv_conn **)&hdls->iov_buf;
-	arg.next = *arg.hdls;
-	arg.hdls_size = nhandles * (sizeof(struct pool_iv_conn) + 128);
-	arg.hdls_used = 0;
-
-	/* Iterate the open handles and accumulate their UUIDs */
-	rc = rdb_tx_iterate(&tx, &svc->ps_handles, false /* backward */,
-			    get_open_handles_cb, &arg);
-	if (rc != 0)
-		D_GOTO(out_lock, rc);
-
-	hdls->iov_buf_len = hdls->iov_len = arg.hdls_used;
-
-	D_DEBUG(DF_DSMS, DF_UUID": packed %u handles into %zu bytes\n",
-		DP_UUID(pool_uuid), nhandles, arg.hdls_used);
-
-out_lock:
-	ABT_rwlock_unlock(svc->ps_lock);
-	rdb_tx_end(&tx);
-
-out_svc:
-	pool_svc_put_leader(svc);
-	return rc;
-}
 
 /* See pool_svc_update_map_internal documentation. */
 static int

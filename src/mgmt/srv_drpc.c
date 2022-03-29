@@ -1046,14 +1046,16 @@ add_props_to_resp(daos_prop_t *prop, Mgmt__PoolGetPropResp *resp)
 {
 	Mgmt__PoolProperty	**resp_props;
 	struct daos_prop_entry	*entry;
-	int			 i, rc = 0, valid_prop_nr = 0, j = 0;
+	int			 i, rc = 0;
+	int			 valid_prop_nr = 0;
+	int			 j = 0;
 
 	if (prop == NULL || prop->dpp_nr == 0)
 		return 0;
 
 	for (i = 0; i < prop->dpp_nr; i++) {
 		entry = &prop->dpp_entries[i];
-		if (!(entry->dpe_flags & DAOS_PROP_ENTRY_NEGATIVE))
+		if (daos_prop_is_set(entry))
 			valid_prop_nr++;
 	}
 
@@ -1067,7 +1069,7 @@ add_props_to_resp(daos_prop_t *prop, Mgmt__PoolGetPropResp *resp)
 
 	for (i = 0; i < prop->dpp_nr; i++) {
 		entry = &prop->dpp_entries[i];
-		if (entry->dpe_flags & DAOS_PROP_ENTRY_NEGATIVE)
+		if (!daos_prop_is_set(entry))
 			continue;
 		D_ALLOC(resp_props[j], sizeof(Mgmt__PoolProperty));
 		if (resp_props[j] == NULL)

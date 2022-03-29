@@ -444,8 +444,8 @@ cont_create_prop_prepare(struct ds_pool_hdl *pool_hdl,
 
 	for (i = 0; i < prop->dpp_nr; i++) {
 		entry = &prop->dpp_entries[i];
-		/* skip negative property entry */
-		if (entry->dpe_flags & DAOS_PROP_ENTRY_NEGATIVE)
+		/* skip not set property entry */
+		if (!daos_prop_is_set(entry))
 			continue;
 		entry_def = daos_prop_entry_get(prop_def, entry->dpe_type);
 		if (entry_def == NULL) {
@@ -2448,7 +2448,7 @@ cont_prop_read(struct rdb_tx *tx, struct cont *cont, uint64_t bits,
 		prop->dpp_entries[idx].dpe_type = DAOS_PROP_CO_EC_PDA;
 		prop->dpp_entries[idx].dpe_val = val;
 		if (rc == -DER_NONEXIST) {
-			prop->dpp_entries[idx].dpe_flags |= DAOS_PROP_ENTRY_NEGATIVE;
+			prop->dpp_entries[idx].dpe_flags |= DAOS_PROP_ENTRY_NOT_SET;
 			negative_nr++;
 			rc = 0;
 		}
@@ -2466,7 +2466,7 @@ cont_prop_read(struct rdb_tx *tx, struct cont *cont, uint64_t bits,
 		prop->dpp_entries[idx].dpe_type = DAOS_PROP_CO_RP_PDA;
 		prop->dpp_entries[idx].dpe_val = val;
 		if (rc == -DER_NONEXIST) {
-			prop->dpp_entries[idx].dpe_flags |= DAOS_PROP_ENTRY_NEGATIVE;
+			prop->dpp_entries[idx].dpe_flags |= DAOS_PROP_ENTRY_NOT_SET;
 			negative_nr++;
 			rc = 0;
 		}
@@ -2484,7 +2484,7 @@ cont_prop_read(struct rdb_tx *tx, struct cont *cont, uint64_t bits,
 		prop->dpp_entries[idx].dpe_type = DAOS_PROP_CO_GLOBAL_VERSION;
 		prop->dpp_entries[idx].dpe_val = val;
 		if (rc == -DER_NONEXIST) {
-			prop->dpp_entries[idx].dpe_flags |= DAOS_PROP_ENTRY_NEGATIVE;
+			prop->dpp_entries[idx].dpe_flags |= DAOS_PROP_ENTRY_NOT_SET;
 			negative_nr++;
 			rc = 0;
 		}
@@ -3567,7 +3567,7 @@ upgrade_cont_cb(daos_handle_t ih, d_iov_t *key, d_iov_t *val, void *varg)
 	if (global_ver > DS_POOL_GLOBAL_VERSION) {
 		D_ERROR("Downgrading pool/cont: "DF_CONTF" not supported\n",
 			DP_CONT(ap->pool_uuid, cont_uuid));
-		rc = -DER_INVAL;
+		rc = -DER_NOTSUPPORTED;
 		goto out;
 	}
 
@@ -3609,6 +3609,13 @@ out:
 		ap->cont_nrs++;
 		if (upgraded) {
 			daos_prop_t *prop = NULL;
+			/*
+			 * RDB TX can't read its own uncommitted writes, so
+			 * commit firstly before cont_prop_read() is called.
+			 */
+			rc = rdb_tx_commit(ap->tx);
+			if (rc)
+				goto out_put_cont;
 
 			ap->cont_upgraded_nrs++;
 			rc = cont_prop_read(ap->tx, cont, DAOS_CO_QUERY_PROP_ALL, &prop);
@@ -3661,10 +3668,6 @@ ds_cont_upgrade(uuid_t pool_uuid, struct cont_svc *svc)
 
 	rc = rdb_tx_iterate(&tx, &svc->cs_conts, false /* !backward */,
 			    upgrade_cont_cb, &args);
-
-	if (rc == 0 && args.cont_upgraded_nrs > 0)
-		rc = rdb_tx_commit(&tx);
-
 	ABT_rwlock_unlock(svc->cs_lock);
 	rdb_tx_end(&tx);
 

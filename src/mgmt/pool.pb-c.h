@@ -837,7 +837,8 @@ struct  Mgmt__PoolGetPropResp
 
 
 /*
- * PoolUpgradeReq represents a pool query request.
+ * PoolUpgradeReq upgrades the disk format of an existing pool to the
+ * latest version.
  */
 struct  Mgmt__PoolUpgradeReq
 {

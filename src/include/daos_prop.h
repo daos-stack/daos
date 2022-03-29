@@ -409,7 +409,7 @@ daos_prop_val_2_co_status(uint64_t val, struct daos_co_status *co_status)
 }
 
 enum {
-	DAOS_PROP_ENTRY_NEGATIVE = (1 << 0),
+	DAOS_PROP_ENTRY_NOT_SET = (1 << 0),
 };
 
 /** daos property entry */
@@ -701,6 +701,23 @@ daos_prop_has_str(struct daos_prop_entry *entry);
  */
 bool
 daos_prop_has_ptr(struct daos_prop_entry *entry);
+
+/**
+ * Check if a DAOS prop entry is set or not.
+ *
+ * \param[in]		entry		Entry to be checked.
+ *
+ * \return		true		Entry is set
+ *			false		Entry is not set.
+ */
+static inline bool
+daos_prop_is_set(struct daos_prop_entry *entry)
+{
+	if (entry->dpe_flags & DAOS_PROP_ENTRY_NOT_SET)
+		return false;
+
+	return true;
+}
 
 #if defined(__cplusplus)
 }
