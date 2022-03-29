@@ -110,16 +110,15 @@ func (c *logCmd) setLog(log *logging.LeveledLogger) {
 }
 
 type cliOptions struct {
-	Debug      bool                    `long:"debug" description:"enable debug output"`
-	Verbose    bool                    `long:"verbose" description:"enable verbose output (when applicable)"`
-	JSON       bool                    `long:"json" short:"j" description:"enable JSON output"`
-	Container  containerCmd            `command:"container" alias:"cont" description:"perform tasks related to DAOS containers"`
-	Pool       poolCmd                 `command:"pool" description:"perform tasks related to DAOS pools"`
-	Filesystem fsCmd                   `command:"filesystem" alias:"fs" description:"POSIX filesystem operations"`
-	Object     objectCmd               `command:"object" alias:"obj" description:"DAOS object operations"`
-	Version    versionCmd              `command:"version" description:"print daos version"`
-	DumpTopo   cmdutil.DumpTopologyCmd `command:"dump-topology" description:"Dump system topology"`
-	ManPage    cmdutil.ManCmd          `command:"manpage" hidden:"true"`
+	Debug      bool           `long:"debug" description:"enable debug output"`
+	Verbose    bool           `long:"verbose" description:"enable verbose output (when applicable)"`
+	JSON       bool           `long:"json" short:"j" description:"enable JSON output"`
+	Container  containerCmd   `command:"container" alias:"cont" description:"perform tasks related to DAOS containers"`
+	Pool       poolCmd        `command:"pool" description:"perform tasks related to DAOS pools"`
+	Filesystem fsCmd          `command:"filesystem" alias:"fs" description:"POSIX filesystem operations"`
+	Object     objectCmd      `command:"object" alias:"obj" description:"DAOS object operations"`
+	Version    versionCmd     `command:"version" description:"print daos version"`
+	ManPage    cmdutil.ManCmd `command:"manpage" hidden:"true"`
 }
 
 type versionCmd struct{}

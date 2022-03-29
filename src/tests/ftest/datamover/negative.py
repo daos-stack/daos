@@ -48,7 +48,8 @@ class DmvrNegativeTest(DataMoverTestBase):
             (2) Bad parameter: source is destination.
             (3) Bad parameter: UUID, UNS, or POSIX path is invalid.
         :avocado: tags=all,full_regression
-        :avocado: tags=datamover,dcp,dfuse
+        :avocado: tags=vm
+        :avocado: tags=datamover,mfu,mfu_dcp,dfuse,dfs,ior
         :avocado: tags=dm_negative,dm_bad_params_dcp
         """
         self.set_tool("DCP")
@@ -194,6 +195,7 @@ class DmvrNegativeTest(DataMoverTestBase):
             Tests the following cases:
                 destination filename is invalid.
         :avocado: tags=all,full_regression
+        :avocado: tags=vm
         :avocado: tags=datamover,dcp
         :avocado: tags=dm_negative,dm_negative_error_check_dcp
         """
