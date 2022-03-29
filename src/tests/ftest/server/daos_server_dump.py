@@ -54,9 +54,7 @@ class DaosServerDumpTest(TestWithServers):
 
         Test Description: Test engine ULT stacks dump (basic).
 
-        :avocado: tags=all,daily_regression
-        :avocado: tags=vm
-        :avocado: tags=control,server_start,basic
+        :avocado: tags=all
         :avocado: tags=daos_server_dump_tests,test_daos_server_dump_basic
         """
 
@@ -80,9 +78,7 @@ class DaosServerDumpTest(TestWithServers):
 
         Test Description: Test engine ULT stacks dump (error case).
 
-        :avocado: tags=all,daily_regression
-        :avocado: tags=vm
-        :avocado: tags=control,server_start,basic
+        :avocado: tags=all
         :avocado: tags=daos_server_dump_tests,test_daos_server_dump_on_error
         """
 
@@ -94,9 +90,7 @@ class DaosServerDumpTest(TestWithServers):
 
         Test Description: Test engine ULT stacks dump (failure case).
 
-        :avocado: tags=all,daily_regression
-        :avocado: tags=vm
-        :avocado: tags=control,server_start,basic
+        :avocado: tags=all
         :avocado: tags=daos_server_dump_tests,test_daos_server_dump_on_fail
         """
 
@@ -108,9 +102,7 @@ class DaosServerDumpTest(TestWithServers):
 
         Test Description: Test engine ULT stacks dump (timeout case).
 
-        :avocado: tags=all,daily_regression
-        :avocado: tags=vm
-        :avocado: tags=control,server_start,basic
+        :avocado: tags=all
         :avocado: tags=daos_server_dump_tests,test_daos_server_dump_on_timeout
         """
 
@@ -122,9 +114,7 @@ class DaosServerDumpTest(TestWithServers):
 
         Test Description: Test engine ULT stacks dump (unexpected engine status case).
 
-        :avocado: tags=all,daily_regression
-        :avocado: tags=vm
-        :avocado: tags=control,server_start,basic
+        :avocado: tags=all
         :avocado: tags=daos_server_dump_tests,test_daos_server_dump_on_unexpected_engine_status
         """
 
