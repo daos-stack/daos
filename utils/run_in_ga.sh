@@ -60,12 +60,12 @@ utils/check.sh /opt/daos/bin/vos_tests
 utils/check.sh /opt/daos/bin/dmg
 echo ::endgroup::
 
-echo ::group::Install pydaod
+echo ::group::Install pydaos
 cd src/client
+python3 -m pip install setuptools
 python3 setup.py install
 cd -
 echo ::endgroup::
-
 
 echo ::group::Setting up daos_admin
 . utils/sl/setup_local.sh
