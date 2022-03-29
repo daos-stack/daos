@@ -408,7 +408,6 @@ dfuse_dfs_release(struct dfuse_projection_info *fs_handle, dfs_obj_t *obj, void 
 	rc = dfs_release(obj);
 	if (rc == 0) {
 		D_FREE(_ptr);
-
 		return;
 	}
 	DFUSE_TRA_ERROR(_ptr, "dfs_release() failed: %d (%s)", rc, strerror(rc));

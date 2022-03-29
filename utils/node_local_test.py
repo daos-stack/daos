@@ -1815,9 +1815,9 @@ class posix_tests():
         self.readdir_test(25, test_all=True)
 
     # Works, but is very slow so needs to be run without debugging.
-    #@needs_dfuse
-    #def test_readdir_300(self):
-    #    self.readdir_test(300, test_all=False)
+    # @needs_dfuse
+    # def test_readdir_300(self):
+    #     self.readdir_test(300, test_all=False)
 
     @needs_dfuse_with_opt(fault_inject=True, caching=False)
     def test_many_files(self):
@@ -1835,17 +1835,17 @@ class posix_tests():
         error_count = 0
         while fc < count:
             if fc % 100 == 0:
-                print('Iteration {}'.format(fc))
+                print(f'Iteration {fc}')
             try:
-                fname = os.path.join(self.dfuse.dir, 'test_file.{}'.format(fc))
-                with open(fname, 'w+') as fd:
+                fname = os.path.join(self.dfuse.dir, f'test_file.{fc}')
+                with open(fname, 'w+', encoding='utf-8') as fd:
                     fd.write('hello')
                     fd.seek(0)
                     fd.read(100)
                 os.unlink(fname)
-                #print('created file {}'.format(fc))
+                # print('created file {}'.format(fc))
             except OSError as e:
-                #print('Error creating file {} {}'.format(fc, e.errno))
+                # print('Error creating file {} {}'.format(fc, e.errno))
                 error_count += 1
                 if e.errno != 12:
                     raise
@@ -1853,7 +1853,8 @@ class posix_tests():
             if self.dfuse.valgrind.get_file_size() != pre_size:
                 print('Probable valgrind errors')
                 break
-        print('Created {} files {:.2f}'.format(fc, error_count/fc))
+        res = error_count / fc
+        print(f'Created {fc} files {res:.2f}')
 
     def readdir_test(self, count, test_all=False):
         """Run a rudimentary readdir test"""
