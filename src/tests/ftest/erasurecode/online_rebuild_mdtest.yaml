@@ -41,6 +41,9 @@ server_config:
       scm_class: dcpm
       scm_list: ["/dev/pmem0"]
       scm_mount: /mnt/daos0
+      log_mask: DEBUG
+      env_vars:
+        - DD_MASK:mgmt,md,rebuild,epc,io,trace
     1:
       pinned_numa_node: 1
       nr_xs_helpers: 1
@@ -52,6 +55,9 @@ server_config:
       scm_class: dcpm
       scm_list: ["/dev/pmem1"]
       scm_mount: /mnt/daos1
+      log_mask: DEBUG
+      env_vars:
+        - DD_MASK:mgmt,md,rebuild,epc,io,trace
 pool:
     name: daos_server
     control_method: dmg
