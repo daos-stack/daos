@@ -177,19 +177,14 @@ build_pipeline_one(daos_pipeline_t *pipeline)
 	/** akey for filter */
 	d_iov_set(&akey_ft->part_type, akey_ftype, akey_ftype_s);
 	d_iov_set(&akey_ft->data_type, int_type1, int_type_s);
-	akey_ft->num_operands = 0;
 	d_iov_set(&akey_ft->akey, akey, akey_s);
-	akey_ft->data_offset = 0;
 	akey_ft->data_len    = 8;
 
 	/** constant for filter */
 	d_iov_set(&const_ft->part_type, const_ftype, const_ftype_s);
 	d_iov_set(&const_ft->data_type, int_type2, int_type_s);
-	const_ft->num_operands = 0;
 	const_ft->num_constants = 1;
 	d_iov_set(const_ft->constant, (void *) constant, 8);
-	const_ft->data_offset = 0;
-	const_ft->data_len    = 8;
 
 	/** function for filter */
 	d_iov_set(&ltfunc_ft->part_type, ltfunc_ftype, ltfunc_ftype_s);
@@ -272,7 +267,6 @@ build_pipeline_two(daos_pipeline_t *pipeline)
 	/** akey for filter */
 	d_iov_set(&akey_ft->part_type, akey_ftype, akey_ftype_s);
 	d_iov_set(&akey_ft->data_type, int_type1, int_type_s);
-	akey_ft->num_operands = 0;
 	d_iov_set(&akey_ft->akey, akey, akey_s);
 	akey_ft->data_offset = 10;
 	akey_ft->data_len    = 4;
@@ -280,11 +274,8 @@ build_pipeline_two(daos_pipeline_t *pipeline)
 	/** constant for filter */
 	d_iov_set(&const_ft->part_type, const_ftype, const_ftype_s);
 	d_iov_set(&const_ft->data_type, int_type2, int_type_s);
-	const_ft->num_operands = 0;
 	const_ft->num_constants = 1;
 	d_iov_set(const_ft->constant, (void *) constant, 4);
-	const_ft->data_offset = 0;
-	const_ft->data_len    = 4;
 
 	/** function for filter */
 	d_iov_set(&gtfunc_ft->part_type, gtfunc_ftype, gtfunc_ftype_s);

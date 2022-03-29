@@ -45,6 +45,10 @@ int getdata_func_dkey_raw(struct filter_part_run_t *args)
 	offset			= args->parts[args->part_idx].data_offset;
 	args->data_out		= &buf[offset];
 	args->data_len_out	= args->parts[args->part_idx].data_len;
+	if (args->dkey->iov_len < offset + args->data_len_out)
+	{
+		args->data_len_out = args->dkey->iov_len - offset;
+	}
 	return 0;
 }
 
@@ -58,9 +62,9 @@ int getdata_func_dkey_st(struct filter_part_run_t *args)
 	offset = args->parts[args->part_idx].data_offset;
 	len    = *((size_t *) &buf[offset]);
 
-	if (len > args->parts[args->part_idx].data_len)
+	if (offset + sizeof(size_t) + len > args->dkey->iov_len)
 	{
-		return 1;
+		len = args->dkey->iov_len - offset - sizeof(size_t);
 	}
 	args->data_out		= &buf[offset + sizeof(size_t)];
 	args->data_len_out	= len;
@@ -79,9 +83,9 @@ int getdata_func_dkey_cst(struct filter_part_run_t *args)
 	buf    = &buf[offset];
 	len    = strlen(buf);
 
-	if (len > args->parts[args->part_idx].data_len)
+	if (offset + len > args->dkey->iov_len)
 	{
-		return 1;
+		len = args->dkey->iov_len - offset;
 	}
 	args->data_out		= buf;
 	args->data_len_out	= len;
@@ -131,6 +135,10 @@ getdata_func_akey_(struct filter_part_run_t *args)
 			{
 				buf = (char *) akey->sg_iovs->iov_buf;
 				buf = &buf[target_offset];
+				if (target_offset + len > akey->sg_iovs->iov_len)
+				{
+					len = akey->sg_iovs->iov_len - target_offset;
+				}
 				D_GOTO(exit, buf);
 			}
 			/** DAOS_IOD_ARRAY */
@@ -212,9 +220,9 @@ int getdata_func_akey_st(struct filter_part_run_t *args)
 		buf    = (char *) args->data_out;
 		len    = *((size_t *) buf);
 
-		if (len > args->data_len_out)
+		if (len + sizeof(size_t) > args->data_len_out)
 		{
-			return 1;
+			len = args->data_len_out - sizeof(size_t);
 		}
 		args->data_out		= &buf[sizeof(size_t)];
 		args->data_len_out	= len;
@@ -233,11 +241,10 @@ int getdata_func_akey_cst(struct filter_part_run_t *args)
 		buf    = (char *) args->data_out;
 		len    = strlen(buf);
 
-		if (len > args->data_len_out)
+		if (len < args->data_len_out)
 		{
-			return 1;
+			args->data_len_out = len;
 		}
-		args->data_len_out	= len;
 	}
 	return 0;
 }
@@ -265,13 +272,10 @@ getdata_func_const(r, 8, double, d, double);
 int getdata_func_const_raw(struct filter_part_run_t *args)
 {
 	char   *buf;
-	size_t offset;
 
 	buf	= (char *) args->parts[args->part_idx].iov->iov_buf;
-	offset	= args->parts[args->part_idx].data_offset;
-
-	args->data_len_out	= args->parts[args->part_idx].data_len;
-	args->data_out		= &buf[offset];
+	args->data_len_out	= args->parts[args->part_idx].iov->iov_len;
+	args->data_out		= buf;
 
 	return 0;
 }
@@ -279,18 +283,16 @@ int getdata_func_const_raw(struct filter_part_run_t *args)
 int getdata_func_const_st(struct filter_part_run_t *args)
 {
 	char   *buf;
-	size_t offset;
 	size_t len;
 
-	buf           = (char *) args->parts[args->part_idx].iov->iov_buf;
-	offset        = args->parts[args->part_idx].data_offset;
-	len           = *((size_t *) &buf[offset]);
+	buf	= (char *) args->parts[args->part_idx].iov->iov_buf;
+	len	= *((size_t *) buf);
 
-	if (len > args->parts[args->part_idx].data_len)
+	if (len + sizeof(size_t) > args->parts[args->part_idx].iov->iov_len)
 	{
-		return 1;
+		len = args->parts[args->part_idx].iov->iov_len - sizeof(size_t);
 	}
-	args->data_out		= &buf[offset + sizeof(size_t)];
+	args->data_out		= &buf[sizeof(size_t)];
 	args->data_len_out	= len;
 
 	return 0;
@@ -299,17 +301,14 @@ int getdata_func_const_st(struct filter_part_run_t *args)
 int getdata_func_const_cst(struct filter_part_run_t *args)
 {
 	char   *buf;
-	size_t offset;
 	size_t len;
 
-	buf           = (char *) args->parts[args->part_idx].iov->iov_buf;
-	offset        = args->parts[args->part_idx].data_offset;
-	buf           = &buf[offset];
-	len           = strlen(buf);
+	buf	= (char *) args->parts[args->part_idx].iov->iov_buf;
+	len	= strlen(buf);
 
-	if (len > args->parts[args->part_idx].data_len)
+	if (len > args->parts[args->part_idx].iov->iov_len)
 	{
-		return 1;
+		len = args->parts[args->part_idx].iov->iov_len;
 	}
 	args->data_out		= buf;
 	args->data_len_out	= len;

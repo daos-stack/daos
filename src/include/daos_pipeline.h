@@ -44,7 +44,7 @@ typedef struct {
 	 *          DAOS_FILTER_FUNC_MUL:		*
 	 *          DAOS_FILTER_FUNC_DIV:		/
 	 *          DAOS_FILTER_FUNC_BITAND:		&
-	 *      - aggeration functions:
+	 *      - aggregation functions:
 	 *          DAOS_FILTER_FUNC_SUM:		SUM(a1, a2, ..., an)
 	 *          DAOS_FILTER_FUNC_MIN:		MIN(a1, a2, ..., an)
 	 *          DAOS_FILTER_FUNC_MAX:		MAX(a1, a2, ..., an)
@@ -104,7 +104,8 @@ typedef struct {
 	 * Size of the data to be filtered. Only relevant for keys part type
 	 * objects. If key is akey, and the akey is an array, data_len
 	 * corresponds to the number of contiguous records in the extent (same
-	 * as rx_nr in daos_recx_t).
+	 * as rx_nr in daos_recx_t). If 0, the stored length inside DAOS will be
+	 * used instead.
 	 */
 	size_t		data_len;
 } daos_filter_part_t;
@@ -126,7 +127,7 @@ typedef struct {
 	 *             (condition) --> (aggregation)
 	 *             (aggregation) --> (aggregation)*
 	 *
-	 *       *chained aggragations are actually done in parallel. For
+	 *       *chained aggregations are actually done in parallel. For
 	 *        example, the following pipeline:
 	 *            (condition) --> (aggregation1) --> (aggregation2)
 	 *        is actually exectuted as:

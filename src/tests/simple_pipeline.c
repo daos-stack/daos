@@ -185,19 +185,14 @@ build_pipeline_one(daos_pipeline_t *pipeline)
 	/** akey for filter */
 	d_iov_set(&akey_ft->part_type, akey_ftype, akey_ftype_s);
 	d_iov_set(&akey_ft->data_type, str_type1, str_type_s);
-	akey_ft->num_operands = 0;
 	d_iov_set(&(akey_ft->akey), akey, akey_s);
-	akey_ft->data_offset  = 0;
 	akey_ft->data_len     = STRING_MAX_LEN;
 
 	/** constant for filter */
 	d_iov_set(&const_ft->part_type, const_ftype, const_ftype_s);
 	d_iov_set(&const_ft->data_type, str_type2, str_type_s);
-	const_ft->num_operands    = 0;
 	const_ft->num_constants   = 1;
 	d_iov_set(const_ft->constant, constant, strlen(constant) + 1);
-	const_ft->data_offset     = 0;
-	const_ft->data_len        = strlen(constant) + 1;
 
 	/** function for filter */
 	d_iov_set(&eqfunc_ft->part_type, eqfunc_ftype, eqfunc_ftype_s);
@@ -294,67 +289,50 @@ build_pipeline_two(daos_pipeline_t *pipeline)
 	pipe_cond_type   = (char *) malloc(pipe_cond_type_s);
 	strncpy(pipe_cond_type, "DAOS_FILTER_CONDITION", pipe_cond_type_s);
 
-
 	/** akey1 for filter */
 	akey1_ft = (daos_filter_part_t *) calloc(1, sizeof(daos_filter_part_t));
 	d_iov_set(&akey1_ft->part_type, akey1_ftype, akey_ftype_s);
 	d_iov_set(&akey1_ft->data_type, str_type1, str_type_s);
-	akey1_ft->num_operands = 0;
 	d_iov_set(&(akey1_ft->akey), akey1, akey1_s);
-	akey1_ft->data_offset  = 0;
 	akey1_ft->data_len     = STRING_MAX_LEN;
 
 	/** akey2 for filter */
 	akey2_ft = (daos_filter_part_t *) calloc(1, sizeof(daos_filter_part_t));
 	d_iov_set(&akey2_ft->part_type, akey2_ftype, akey_ftype_s);
 	d_iov_set(&akey2_ft->data_type, str_type2, str_type_s);
-	akey2_ft->num_operands = 0;
 	d_iov_set(&(akey2_ft->akey), akey2, akey2_s);
-	akey2_ft->data_offset  = 0;
 	akey2_ft->data_len     = STRING_MAX_LEN;
 
 	/** constant1 for filter */
 	const1_ft = (daos_filter_part_t *) calloc(1, sizeof(daos_filter_part_t));
 	d_iov_set(&const1_ft->part_type, const1_ftype, const_ftype_s);
 	d_iov_set(&const1_ft->data_type, str_type3, str_type_s);
-	const1_ft->num_operands    = 0;
 	const1_ft->num_constants   = 1;
 	const1_ft->constant        = (d_iov_t *) malloc(sizeof(d_iov_t));
 	d_iov_set(const1_ft->constant, constant1, strlen(constant1) + 1);
-	const1_ft->data_offset     = 0;
-	const1_ft->data_len        = strlen(constant1) + 1;
 
 	/** constant2 for filter */
 	const2_ft = (daos_filter_part_t *) calloc(1, sizeof(daos_filter_part_t));
 	d_iov_set(&const2_ft->part_type, const2_ftype, const_ftype_s);
 	d_iov_set(&const2_ft->data_type, str_type4, str_type_s);
-	const2_ft->num_operands    = 0;
 	const2_ft->num_constants   = 1;
 	const2_ft->constant        = (d_iov_t *) malloc(sizeof(d_iov_t));
 	d_iov_set(const2_ft->constant, constant2, strlen(constant2) + 1);
-	const2_ft->data_offset     = 0;
-	const2_ft->data_len        = strlen(constant2) + 1;
 
 	/** function1 for filter (==) */
 	eqfunc1_ft = (daos_filter_part_t *) calloc(1, sizeof(daos_filter_part_t));
 	d_iov_set(&eqfunc1_ft->part_type, eqfunc1_ftype, eqfunc_ftype_s);
 	eqfunc1_ft->num_operands  = 2;
-	eqfunc1_ft->data_offset   = 0;
-	eqfunc1_ft->data_len      = 0;
 
 	/** function2 for filter (==) */
 	eqfunc2_ft = (daos_filter_part_t *) calloc(1, sizeof(daos_filter_part_t));
 	d_iov_set(&eqfunc2_ft->part_type, eqfunc2_ftype, eqfunc_ftype_s);
 	eqfunc2_ft->num_operands  = 2;
-	eqfunc2_ft->data_offset   = 0;
-	eqfunc2_ft->data_len      = 0;
 
 	/** function3 for filter (and) */
 	andfunc_ft = (daos_filter_part_t *) calloc(1, sizeof(daos_filter_part_t));
 	d_iov_set(&andfunc_ft->part_type, andfunc_ftype, andfunc_ftype_s);
 	andfunc_ft->num_operands  = 2;
-	andfunc_ft->data_offset   = 0;
-	andfunc_ft->data_len      = 0;
 
 	/** building a pipeline condition filter:
 	 *    the order of operands is prefix:
@@ -459,44 +437,33 @@ build_pipeline_three(daos_pipeline_t *pipeline)
 	akey1_ft = (daos_filter_part_t *) calloc(1, sizeof(daos_filter_part_t));
 	d_iov_set(&akey1_ft->part_type, akey1_ftype, akey_ftype_s);
 	d_iov_set(&akey1_ft->data_type, str_type1, str_type_s);
-	akey1_ft->num_operands = 0;
 	d_iov_set(&(akey1_ft->akey), akey1, akey1_s);
-	akey1_ft->data_offset  = 0;
 	akey1_ft->data_len     = STRING_MAX_LEN;
 
 	/** akey2 for filter */
 	akey2_ft = (daos_filter_part_t *) calloc(1, sizeof(daos_filter_part_t));
 	d_iov_set(&akey2_ft->part_type, akey2_ftype, akey_ftype_s);
 	d_iov_set(&akey2_ft->data_type, uint_type1, uint_type_s);
-	akey2_ft->num_operands = 0;
 	d_iov_set(&(akey2_ft->akey), akey2, akey2_s);
-	akey2_ft->data_offset  = 0;
 	akey2_ft->data_len     = sizeof(uint64_t);
 
 	/** constant for filter */
 	const_ft = (daos_filter_part_t *) calloc(1, sizeof(daos_filter_part_t));
 	d_iov_set(&const_ft->part_type, const_ftype, const_ftype_s);
 	d_iov_set(&const_ft->data_type, str_type2, str_type_s);
-	const_ft->num_operands    = 0;
 	const_ft->num_constants   = 1;
 	const_ft->constant        = (d_iov_t *) malloc(sizeof(d_iov_t));
 	d_iov_set(const_ft->constant, constant, strlen(constant) + 1);
-	const_ft->data_offset     = 0;
-	const_ft->data_len        = strlen(constant) + 1;
 
 	/** function1 for filter (==) */
 	eqfunc_ft = (daos_filter_part_t *) calloc(1, sizeof(daos_filter_part_t));
 	d_iov_set(&eqfunc_ft->part_type, eqfunc_ftype, eqfunc_ftype_s);
 	eqfunc_ft->num_operands  = 2;
-	eqfunc_ft->data_offset   = 0;
-	eqfunc_ft->data_len      = 0;
 
 	/** function2 for filter (SUM()) */
 	sumfunc_ft = (daos_filter_part_t *) calloc(1, sizeof(daos_filter_part_t));
 	d_iov_set(&sumfunc_ft->part_type, sumfunc_ftype, sumfunc_ftype_s);
 	sumfunc_ft->num_operands  = 1;
-	sumfunc_ft->data_offset   = 0;
-	sumfunc_ft->data_len      = 0;
 
 	/** building a pipeline with a condition filter and an aggregation filter:
 	 *    the order of operands is prefix:
@@ -595,32 +562,24 @@ build_pipeline_four(daos_pipeline_t *pipeline)
 	akey_ft = (daos_filter_part_t *) calloc(1, sizeof(daos_filter_part_t));
 	d_iov_set(&akey_ft->part_type, akey_ftype, akey_ftype_s);
 	d_iov_set(&akey_ft->data_type, uint_type1, uint_type_s);
-	akey_ft->num_operands = 0;
 	d_iov_set(&(akey_ft->akey), akey, akey_s);
-	akey_ft->data_offset  = 0;
 	akey_ft->data_len     = sizeof(uint64_t);
 
 	/** constant1 for filter */
 	const1_ft = (daos_filter_part_t *) calloc(1, sizeof(daos_filter_part_t));
 	d_iov_set(&const1_ft->part_type, const1_ftype, const_ftype_s);
 	d_iov_set(&const1_ft->data_type, uint_type2, uint_type_s);
-	const1_ft->num_operands    = 0;
 	const1_ft->num_constants   = 1;
 	const1_ft->constant        = (d_iov_t *) malloc(sizeof(d_iov_t));
 	d_iov_set(const1_ft->constant, (void *) constant1, sizeof(uint64_t));
-	const1_ft->data_offset     = 0;
-	const1_ft->data_len        = sizeof(uint64_t);
 
 	/** constant2 for filter */
 	const2_ft = (daos_filter_part_t *) calloc(1, sizeof(daos_filter_part_t));
 	d_iov_set(&const2_ft->part_type, const2_ftype, const_ftype_s);
 	d_iov_set(&const2_ft->data_type, uint_type3, uint_type_s);
-	const2_ft->num_operands    = 0;
 	const2_ft->num_constants   = 1;
 	const2_ft->constant        = (d_iov_t *) malloc(sizeof(d_iov_t));
 	d_iov_set(const2_ft->constant, (void *) constant2, sizeof(uint64_t));
-	const2_ft->data_offset     = 0;
-	const2_ft->data_len        = sizeof(uint64_t);
 
 	/** bitand function for filter */
 	bitandfunc_ft = (daos_filter_part_t *) calloc(1, sizeof(daos_filter_part_t));
