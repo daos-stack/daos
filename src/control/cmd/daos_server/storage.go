@@ -90,6 +90,10 @@ func (cmd *storagePrepareCmd) prepScm(scanErrors *errs, prep scmPrepFn) error {
 		return err
 	}
 
+	if cmd.NrNamespacesPerNUMA == 0 {
+		return errors.New("(-S|--scm-ns-per-numa) should be set to at least 1")
+	}
+
 	op := "Prepare"
 	if cmd.Reset {
 		op = "Reset"
