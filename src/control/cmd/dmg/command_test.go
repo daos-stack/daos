@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2021 Intel Corporation.
+// (C) Copyright 2019-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -157,6 +157,14 @@ func (bci *bridgeConnInvoker) InvokeUnaryRPC(ctx context.Context, uReq control.U
 		resp = control.MockMSResponse("", nil, &mgmtpb.PoolExtendResp{})
 	case *control.PoolReintegrateReq:
 		resp = control.MockMSResponse("", nil, &mgmtpb.PoolReintegrateResp{})
+	case *control.SystemCheckStartReq:
+		resp = control.MockMSResponse("", nil, &mgmtpb.CheckStartResp{})
+	case *control.SystemCheckStopReq:
+		resp = control.MockMSResponse("", nil, &mgmtpb.CheckStopResp{})
+	case *control.SystemCheckQueryReq:
+		resp = control.MockMSResponse("", nil, &mgmtpb.CheckQueryResp{})
+	case *control.SystemCheckPropReq:
+		resp = control.MockMSResponse("", nil, &mgmtpb.CheckPropResp{})
 	}
 
 	return resp, nil

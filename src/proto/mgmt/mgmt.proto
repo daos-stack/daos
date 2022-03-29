@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2021 Intel Corporation.
+// (C) Copyright 2019-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -11,6 +11,7 @@ option go_package = "github.com/daos-stack/daos/src/control/common/proto/mgmt";
 
 import "shared/event.proto";
 import "mgmt/pool.proto";
+import "mgmt/check.proto";
 import "mgmt/cont.proto";
 import "mgmt/svc.proto";
 import "mgmt/acl.proto"; // ACL-related requests
@@ -76,4 +77,12 @@ service MgmtSvc {
 	rpc SystemErase(SystemEraseReq) returns(SystemEraseResp) {}
 	// Clean up leaked resources for a given node
 	rpc SystemCleanup(SystemCleanupReq) returns(SystemCleanupResp){}
+	// Initiate a system check
+	rpc SystemCheckStart(CheckStartReq) returns(CheckStartResp){}
+	// Stop a system check
+	rpc SystemCheckStop(CheckStopReq) returns(CheckStopResp){}
+	// Query a system check
+	rpc SystemCheckQuery(CheckQueryReq) returns(CheckQueryResp){}
+	// Query system check properties
+	rpc SystemCheckProp(CheckPropReq) returns(CheckPropResp){}
 }

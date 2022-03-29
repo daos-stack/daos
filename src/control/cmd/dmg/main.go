@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2018-2021 Intel Corporation.
+// (C) Copyright 2018-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -170,6 +170,7 @@ type cliOptions struct {
 	Cont           ContCmd        `command:"container" alias:"cont" description:"Perform tasks related to DAOS containers"`
 	Version        versionCmd     `command:"version" description:"Print dmg version"`
 	Telemetry      telemCmd       `command:"telemetry" alias:"telem" description:"Perform telemetry operations"`
+	Check          checkCmdRoot   `command:"check" description:"Check system health"`
 	firmwareOption                // build with tag "firmware" to enable
 	ManPage        cmdutil.ManCmd `command:"manpage" hidden:"true"`
 }
