@@ -426,7 +426,7 @@ enum {
  */
 int
 vos_aggregate(daos_handle_t coh, daos_epoch_range_t *epr,
-	      bool (*yield_func)(void *arg), void *yield_arg, uint32_t flags);
+	      int (*yield_func)(void *arg), void *yield_arg, uint32_t flags);
 
 /**
  * Discards changes in all epochs with the epoch range \a epr
@@ -457,7 +457,7 @@ vos_aggregate(daos_handle_t coh, daos_epoch_range_t *epr,
  */
 int
 vos_discard(daos_handle_t coh, daos_unit_oid_t *oidp, daos_epoch_range_t *epr,
-	    bool (*yield_func)(void *arg), void *yield_arg);
+	    int (*yield_func)(void *arg), void *yield_arg);
 
 /**
  * VOS object API
@@ -1137,7 +1137,7 @@ int
 vos_pool_ctl(daos_handle_t poh, enum vos_pool_opc opc, void *param);
 
 int
-vos_gc_pool(daos_handle_t poh, int credits, bool (*yield_func)(void *arg),
+vos_gc_pool(daos_handle_t poh, int credits, int (*yield_func)(void *arg),
 	    void *yield_arg);
 bool
 vos_gc_pool_idle(daos_handle_t poh);
