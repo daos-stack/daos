@@ -154,8 +154,7 @@ struct vos_agg_param {
 	unsigned int		ap_discard:1,
 				ap_csum_err:1,
 				ap_nospc_err:1,
-				ap_discard_obj:1,
-				ap_skipped:1;
+				ap_discard_obj:1;
 	struct umem_instance	*ap_umm;
 	bool			(*ap_yield_func)(void *arg);
 	void			*ap_yield_arg;
@@ -2261,7 +2260,6 @@ vos_aggregate_post_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 	struct vos_agg_param	*agg_param = cb_arg;
 	struct vos_container	*cont;
 	int			 rc = 0;
-	uint64_t		 skipped = 0;
 
 	cont = vos_hdl2cont(param->ip_hdl);
 	D_DEBUG(DB_EPC, DF_CONT": Aggregate post, type:%d, is_discard:%d\n",
@@ -2274,9 +2272,7 @@ vos_aggregate_post_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 			agg_param->ap_skip_obj = false;
 			break;
 		}
-		rc = oi_iter_aggregate(ih, agg_param->ap_discard_obj, &skipped);
-		if (skipped)
-			agg_param->ap_skipped = 1;
+		rc = oi_iter_aggregate(ih, agg_param->ap_discard_obj);
 		break;
 	case VOS_ITER_DKEY:
 		if (agg_param->ap_skip_dkey) {
@@ -2301,9 +2297,10 @@ vos_aggregate_post_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 
 	if (rc > 0) {
 		/* Reprobe flag is set */
-		*acts |= VOS_ITER_CB_DELETE;
-		if (rc == 1)
+		if (rc == 1) {
+			*acts |= VOS_ITER_CB_DELETE;
 			inc_agg_counter(cont, type, AGG_OP_DEL);
+		} /** If it's 2, we don't need a reprobe. The key still exists at other epoch */
 		rc = 0;
 	} else if (rc != 0) {
 		D_ERROR("VOS aggregation failed: %d\n", rc);
@@ -2515,10 +2512,12 @@ vos_aggregate(daos_handle_t coh, daos_epoch_range_t *epr,
 	if (rc)
 		goto free_agg_data;
 
-	feats = dbtree_feats_get(&cont->vc_cont_df->cd_obj_root);
-	has_agg_write = vos_feats_agg_time_get(feats, &agg_write);
-	if (has_agg_write && agg_write <= cont->vc_cont_df->cd_hae)
-		goto update_hae;
+	if ((flags & VOS_AGG_FL_FORCE_SCAN) == 0) {
+		feats = dbtree_feats_get(&cont->vc_cont_df->cd_obj_root);
+		has_agg_write = vos_feats_agg_time_get(feats, &agg_write);
+		if (has_agg_write && agg_write <= cont->vc_cont_df->cd_hae)
+			goto update_hae;
+	}
 
 	/* Set iteration parameters */
 	ad->ad_iter_param.ip_hdl = coh;
@@ -2540,7 +2539,6 @@ vos_aggregate(daos_handle_t coh, daos_epoch_range_t *epr,
 	ad->ad_agg_param.ap_credits_max = VOS_AGG_CREDITS_MAX;
 	ad->ad_agg_param.ap_credits = 0;
 	ad->ad_agg_param.ap_discard = 0;
-	ad->ad_agg_param.ap_skipped = 0;
 	ad->ad_agg_param.ap_yield_func = yield_func;
 	ad->ad_agg_param.ap_yield_arg = yield_arg;
 	run_agg = true;
@@ -2643,7 +2641,6 @@ vos_discard(daos_handle_t coh, daos_unit_oid_t *oidp, daos_epoch_range_t *epr,
 	ad->ad_agg_param.ap_umm = &cont->vc_pool->vp_umm;
 	ad->ad_agg_param.ap_coh = coh;
 	ad->ad_agg_param.ap_credits_max = VOS_AGG_CREDITS_MAX;
-	ad->ad_agg_param.ap_skipped = 0;
 	ad->ad_agg_param.ap_discard = 1;
 	ad->ad_agg_param.ap_credits = 0;
 	ad->ad_agg_param.ap_yield_func = yield_func;

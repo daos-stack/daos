@@ -1170,13 +1170,10 @@ oi_iter_check_punch(daos_handle_t ih);
 
 /**
  * Aggregate the creation/punch records in the current entry of the object
- * iterator. If aggregation optimization is supported, it will clear the
- * aggregation flag and set the needed flag, accordingly.
-
+ * iterator.
  *
  * \param ih[IN]		Iterator handle
  * \param range_discard[IN]	Discard only uncommitted ilog entries (for reintegration)
- * \param skipped[OUT]		Return 1 if any item was skipped in scan
  *
  * \return		Zero on Success
  *			Positive value if a reprobe is needed
@@ -1184,7 +1181,7 @@ oi_iter_check_punch(daos_handle_t ih);
  *			Negative value otherwise
  */
 int
-oi_iter_aggregate(daos_handle_t ih, bool range_discard, uint64_t *skipped);
+oi_iter_aggregate(daos_handle_t ih, bool range_discard);
 
 /**
  * Start aggregation of a key.  Mark key for aggregation for aggregation, if applicable

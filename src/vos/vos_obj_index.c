@@ -792,7 +792,7 @@ exit:
 }
 
 int
-oi_iter_aggregate(daos_handle_t ih, bool range_discard, uint64_t *skipped)
+oi_iter_aggregate(daos_handle_t ih, bool range_discard)
 {
 	struct vos_iterator	*iter = vos_hdl2iter(ih);
 	struct vos_oi_iter	*oiter = iter2oiter(iter);
@@ -802,7 +802,6 @@ oi_iter_aggregate(daos_handle_t ih, bool range_discard, uint64_t *skipped)
 	bool			 delete = false, invisible = false;
 	int			 rc;
 
-	*skipped = 0;
 	D_ASSERT(iter->it_type == VOS_ITER_OBJ);
 
 	d_iov_set(&rec_iov, NULL, 0);
@@ -840,12 +839,10 @@ oi_iter_aggregate(daos_handle_t ih, bool range_discard, uint64_t *skipped)
 				DP_UOID(oid), DP_RC(rc));
 		rc = dbtree_iter_delete(oiter->oit_hdl, NULL);
 		D_ASSERT(rc != -DER_NONEXIST);
-	} else {
-		if (rc == -DER_NONEXIST) {
-			/** ilog isn't visible in range but still has some enrtries */
-			invisible = true;
-			rc = 0;
-		}
+	} else if (rc == -DER_NONEXIST) {
+		/** ilog isn't visible in range but still has some enrtries */
+		invisible = true;
+		rc = 0;
 	}
 
 	rc = umem_tx_end(vos_cont2umm(oiter->oit_cont), rc);

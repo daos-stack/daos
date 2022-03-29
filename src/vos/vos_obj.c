@@ -2106,12 +2106,10 @@ vos_obj_iter_aggregate(daos_handle_t ih, bool range_discard)
 
 		rc = dbtree_iter_delete(oiter->it_hdl, NULL);
 		D_ASSERT(rc != -DER_NONEXIST);
-	} else {
-		if (rc == -DER_NONEXIST) {
-			/* Key no longer exists at epoch but isn't empty */
-			invisible = true;
-			rc = 0;
-		}
+	} else if (rc == -DER_NONEXIST) {
+		/* Key no longer exists at epoch but isn't empty */
+		invisible = true;
+		rc = 0;
 	}
 
 	rc = umem_tx_end(umm, rc);

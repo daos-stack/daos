@@ -2767,6 +2767,46 @@ aggregate_34(void **state)
 	cleanup();
 }
 
+#define INIT_FEATS 0x8000000010f93f43ULL
+
+D_CASSERT((INIT_FEATS & VOS_TREE_AGG_TIME_MASK) == 0);
+
+static void
+aggregate_35(void **state)
+{
+	uint64_t	feats = INIT_FEATS;
+	daos_epoch_t	epoch;
+	bool		result;
+
+	result = vos_feats_agg_time_get(feats, &epoch);
+	assert_false(result);
+
+	feats |= VOS_TREE_AGG_OPT;
+	result = vos_feats_agg_time_get(feats, &epoch);
+	assert_true(result);
+	assert_int_equal(epoch, 0);
+
+	vos_feats_agg_time_update(252, &feats);
+	result = vos_feats_agg_time_get(feats, &epoch);
+	assert_true(result);
+	assert_int_equal(epoch, 252);
+	assert_int_equal(feats & INIT_FEATS, INIT_FEATS);
+
+	vos_feats_agg_time_update(252, &feats);
+	result = vos_feats_agg_time_get(feats, &epoch);
+	assert_true(result);
+	assert_int_equal(epoch, 252);
+	assert_int_equal(feats & INIT_FEATS, INIT_FEATS);
+
+	/** If upper 32-bits is set, we assume HLC */
+	vos_feats_agg_time_update(0x53abcdef00ULL, &feats);
+	result = vos_feats_agg_time_get(feats, &epoch);
+	assert_true(result);
+	/** Since the lower 32 are masked, we always set them to ffffffff */
+	assert_int_equal(epoch, 0x53ffffffffULL);
+	assert_int_equal(feats & INIT_FEATS, INIT_FEATS);
+}
+
 static int
 agg_tst_teardown(void **state)
 {
@@ -2881,6 +2921,8 @@ static const struct CMUnitTest aggregate_tests[] = {
 	  aggregate_33, NULL, agg_tst_teardown },
 	{ "VOS434: Selectively merging NVMe records",
 	  aggregate_34, NULL, agg_tst_teardown },
+	{ "VOS435: Test aggregation timestamp functions",
+	  aggregate_35, NULL, NULL },
 };
 
 int
