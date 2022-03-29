@@ -346,48 +346,6 @@ type PoolQueryReq struct {
 	ID     string
 }
 
-//// MarshalJSON packs PoolQueryReq struct into a JSON message.
-//func (pqr *PoolQueryReq) MarshalJSON() ([]byte, error) {
-//	strs := make([]string, len(pqr.UUIDs))
-//	for i, u := range pqr.UUIDs {
-//		strs[i] = u.String()
-//	}
-//
-//	type toJSON PoolQueryReq
-//	return json.Marshal(&struct {
-//		UUIDStrs []string `json:"uuids"`
-//		*toJSON
-//	}{
-//		UUIDStrs: strs,
-//		toJSON:   (*toJSON)(pqr),
-//	})
-//}
-//
-//// UnmarshalJSON unpacks JSON message into PoolQueryReq struct.
-//func (pqr *PoolQueryReq) UnmarshalJSON(data []byte) error {
-//	type Alias PoolQueryReq
-//	aux := &struct {
-//		UUIDStrs []string `json:"uuids"`
-//		*Alias
-//	}{
-//		Alias: (*Alias)(pqr),
-//	}
-//	if err := json.Unmarshal(data, &aux); err != nil {
-//		return err
-//	}
-//
-//	pqr.UUIDs = make([]uuid.UUID, len(aux.UUIDStrs))
-//	for i, us := range aux.UUIDStrs {
-//		uu, err := uuid.Parse(us)
-//		if err != nil {
-//			return errors.Wrapf(err, "invalid uuid %q", us)
-//		}
-//		pqr.UUIDs[i] = uu
-//	}
-//
-//	return nil
-//}
-
 // StorageUsageStats represents DAOS storage usage statistics.
 type StorageUsageStats struct {
 	Total     uint64 `json:"total"`
