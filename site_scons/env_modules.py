@@ -168,9 +168,9 @@ class _env_module(): # pylint: disable=invalid-name
             print("Could not invoke module avail")
         return output
 
-    def get_map(self):
+    def get_map(self, key):
         """return the mpi map"""
-        return self._mpi_map
+        return self._mpi_map[key]
 
 def load_mpi(mpi):
     """global function to load MPI into os.environ"""
@@ -210,4 +210,4 @@ def get_module_list(key):
     """ global function to show the modules that map to a key"""
     if _env_module.env_module_init is None:
         _env_module.env_module_init = _env_module()
-    return _env_module.get_map(key)
+    return _env_module.env_module_init.get_map(key)
