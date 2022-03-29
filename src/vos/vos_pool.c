@@ -789,36 +789,39 @@ vos_pool_open_metrics(const char *path, uuid_t uuid, unsigned int flags, void *m
 	struct d_uuid		 ukey;
 	PMEMobjpool		*ph;
 	int			 rc, enabled = 1;
+	bool			 skip_uuid_check = flags & VOS_POF_SKIP_UUID_CHECK;
 
 	if (path == NULL || poh == NULL) {
 		D_ERROR("Invalid parameters.\n");
 		return -DER_INVAL;
 	}
 
-	uuid_copy(ukey.uuid, uuid);
 	D_DEBUG(DB_MGMT, "Pool Path: %s, UUID: "DF_UUID"\n", path,
 		DP_UUID(uuid));
 
 	if (flags & VOS_POF_SMALL)
 		flags |= VOS_POF_EXCL;
 
-	rc = pool_lookup(&ukey, &pool);
-	if (rc == 0) {
-		D_ASSERT(pool != NULL);
-		D_DEBUG(DB_MGMT, "Found already opened(%d) pool : %p\n",
-			pool->vp_opened, pool);
-		if (pool->vp_dying) {
-			D_ERROR("Found dying pool : %p\n", pool);
-			vos_pool_decref(pool);
-			return -DER_BUSY;
+	if (!skip_uuid_check) {
+		uuid_copy(ukey.uuid, uuid);
+		rc = pool_lookup(&ukey, &pool);
+		if (rc == 0) {
+			D_ASSERT(pool != NULL);
+			D_DEBUG(DB_MGMT, "Found already opened(%d) pool : %p\n",
+				pool->vp_opened, pool);
+			if (pool->vp_dying) {
+				D_ERROR("Found dying pool : %p\n", pool);
+				vos_pool_decref(pool);
+				return -DER_BUSY;
+			}
+			if ((flags & VOS_POF_EXCL) || pool->vp_excl) {
+				vos_pool_decref(pool);
+				return -DER_BUSY;
+			}
+			pool->vp_opened++;
+			*poh = vos_pool2hdl(pool);
+			return 0;
 		}
-		if ((flags & VOS_POF_EXCL) || pool->vp_excl) {
-			vos_pool_decref(pool);
-			return -DER_BUSY;
-		}
-		pool->vp_opened++;
-		*poh = vos_pool2hdl(pool);
-		return 0;
 	}
 
 	ph = vos_pmemobj_open(path, POBJ_LAYOUT_NAME(vos_pool_layout));
@@ -854,7 +857,7 @@ vos_pool_open_metrics(const char *path, uuid_t uuid, unsigned int flags, void *m
 		goto out;
 	}
 
-	if (uuid_compare(uuid, pool_df->pd_id)) {
+	if (!skip_uuid_check && uuid_compare(uuid, pool_df->pd_id)) {
 		D_ERROR("Mismatch uuid, user="DF_UUIDF", pool="DF_UUIDF"\n",
 			DP_UUID(uuid), DP_UUID(pool_df->pd_id));
 		rc = -DER_ID_MISMATCH;
