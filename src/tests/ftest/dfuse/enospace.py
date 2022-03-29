@@ -1,6 +1,6 @@
 #!/usr/bin/python
 """
-  (C) Copyright 2020-2021 Intel Corporation.
+  (C) Copyright 2020-2022 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -46,7 +46,7 @@ class Enospace(DfuseTestBase):
 
         with open(target_file, 'wb', buffering=0) as fd:
 
-            # Use a write size of 128.  On CentOS 8 this could be 1MiB, however older kernels
+            # Use a write size of 128.  On EL 8 this could be 1MiB, however older kernels
             # use 128k, and using a bigger size here than the kernel can support will lead to
             # the kernel splitting writes, and the size check atfer ENOSPC failing due to writes
             # having partially succeeded.
