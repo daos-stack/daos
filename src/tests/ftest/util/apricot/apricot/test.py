@@ -695,8 +695,7 @@ class TestWithServers(TestWithoutServers):
         self.skip_add_log_msg = self.params.get("skip_add_log_msg", "/run/*", False)
 
         # If there's no server started, then there's no server log to write to.
-        if (self.setup_start_servers and self.setup_start_agents and
-                not self.skip_add_log_msg):
+        if (self.setup_start_servers and self.setup_start_agents and not self.skip_add_log_msg):
             # Write an ID string to the log file for cross-referencing logs
             # with test ID
             id_str = '"Test.name: ' + str(self) + '"'

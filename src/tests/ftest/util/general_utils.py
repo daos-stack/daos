@@ -1019,14 +1019,14 @@ def convert_string(item, separator=","):
     return item
 
 
-def create_directory(hosts, directory, timeout=10, verbose=True,
+def create_directory(hosts, directory, timeout=15, verbose=True,
                      raise_exception=True, sudo=False):
     """Create the specified directory on the specified hosts.
 
     Args:
         hosts (list): hosts on which to create the directory
         directory (str): the directory to create
-        timeout (int, optional): command timeout. Defaults to 10 seconds.
+        timeout (int, optional): command timeout. Defaults to 15 seconds.
         verbose (bool, optional): whether to log the command run and
             stdout/stderr. Defaults to True.
         raise_exception (bool, optional): whether to raise an exception if the
@@ -1056,7 +1056,7 @@ def create_directory(hosts, directory, timeout=10, verbose=True,
         timeout=timeout, verbose=verbose, raise_exception=raise_exception)
 
 
-def change_file_owner(hosts, filename, owner, group, timeout=10, verbose=True,
+def change_file_owner(hosts, filename, owner, group, timeout=15, verbose=True,
                       raise_exception=True, sudo=False):
     """Create the specified directory on the specified hosts.
 
@@ -1065,7 +1065,7 @@ def change_file_owner(hosts, filename, owner, group, timeout=10, verbose=True,
         filename (str): the file for which to change ownership
         owner (str): new owner of the file
         group (str): new group owner of the file
-        timeout (int, optional): command timeout. Defaults to 10 seconds.
+        timeout (int, optional): command timeout. Defaults to 15 seconds.
         verbose (bool, optional): whether to log the command run and
             stdout/stderr. Defaults to True.
         raise_exception (bool, optional): whether to raise an exception if the
