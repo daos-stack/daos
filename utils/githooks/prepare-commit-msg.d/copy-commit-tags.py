@@ -1,4 +1,4 @@
-#!/usr/bin/python3
+#!/usr/bin/env python3
 
 """Git hook to copy forward commit message metadata to new commits."""
 
@@ -54,7 +54,7 @@ def main():
 
         tags[key] = value.strip()
 
-    with open(sys.argv[1], 'r+') as fd:
+    with open(sys.argv[1], 'r+', encoding='utf-8') as fd:
 
         file_lines = []
         # Check for existing tags.
