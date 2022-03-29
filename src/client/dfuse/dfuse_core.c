@@ -481,7 +481,7 @@ dfuse_release_check_all(struct dfuse_projection_info *fs_handle)
 	D_MUTEX_LOCK(&fs_handle->dpi_free_mutex);
 
 	while ((ddl = d_list_pop_entry(&fs_handle->dpi_free_ino, struct dfuse_dfs_list,
-						ddl_list))) {
+				       ddl_list))) {
 		count++;
 
 		rc2 = dfs_release(ddl->ddl_obj);
