@@ -2558,6 +2558,7 @@ rdb_raft_start(struct rdb *db)
 	int	rc;
 
 	D_ASSERT(db->d_raft == NULL);
+	D_ASSERT(db->d_stop == false);
 
 	db->d_raft = raft_new();
 	if (db->d_raft == NULL) {
@@ -2615,10 +2616,12 @@ err_recvd:
 	ABT_cond_broadcast(db->d_replies_cv);
 	rc = ABT_thread_free(&db->d_recvd);
 	D_ASSERTF(rc == 0, "free rdb_recvd: "DF_RC"\n", DP_RC(rc));
+	db->d_stop = false;
 err_raft_state:
 	rdb_raft_unload_lc(db);
 err_raft:
 	raft_free(db->d_raft);
+	db->d_raft = NULL;
 err:
 	return rc;
 }
@@ -2669,8 +2672,12 @@ rdb_raft_stop(struct rdb *db)
 	D_ASSERTF(rc == 0, "free rdb_recvd: "DF_RC"\n", DP_RC(rc));
 
 	rdb_raft_unload_lc(db);
+	db->d_raft_loaded = false;
 	raft_free(db->d_raft);
 	db->d_raft = NULL;
+
+	/* Restore this flag as we've finished stopping the DB. */
+	db->d_stop = false;
 }
 
 /* Resign the leadership in term. */

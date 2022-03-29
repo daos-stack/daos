@@ -22,8 +22,7 @@ static int rdb_open_internal(daos_handle_t pool, daos_handle_t mc, const uuid_t 
 
 /**
  * Create an RDB replica at \a path with \a uuid, \a size, and \a replicas, and
- * open it with \a cbs and \a arg. The resulting \a dbp can only be passed to a
- * limited set of rdb interfaces that accept stopped databases.
+ * open it with \a cbs and \a arg.
  *
  * \param[in]	path		replica path
  * \param[in]	uuid		database UUID
@@ -31,17 +30,17 @@ static int rdb_open_internal(daos_handle_t pool, daos_handle_t mc, const uuid_t 
  * \param[in]	replicas	list of replica ranks
  * \param[in]	cbs		callbacks (not copied)
  * \param[in]	arg		argument for cbs
- * \param[out]	dbp		stopped database
+ * \param[out]	storagep	database storage
  */
 int
-rdb_create(const char *path, const uuid_t uuid, size_t size,
-	   const d_rank_list_t *replicas, struct rdb_cbs *cbs, void *arg,
-	   struct rdb **dbp)
+rdb_create(const char *path, const uuid_t uuid, size_t size, const d_rank_list_t *replicas,
+	   struct rdb_cbs *cbs, void *arg, struct rdb_storage **storagep)
 {
 	daos_handle_t	pool;
 	daos_handle_t	mc;
 	d_iov_t		value;
 	uint32_t	version = RDB_LAYOUT_VERSION;
+	struct rdb     *db;
 	int		rc;
 
 	D_DEBUG(DB_MD, DF_UUID": creating db %s with %u replicas\n",
@@ -87,8 +86,11 @@ rdb_create(const char *path, const uuid_t uuid, size_t size,
 	if (rc != 0)
 		goto out_mc_hdl;
 
-	rc = rdb_open_internal(pool, mc, uuid, cbs, arg, dbp);
+	rc = rdb_open_internal(pool, mc, uuid, cbs, arg, &db);
+	if (rc != 0)
+		goto out_mc_hdl;
 
+	*storagep = rdb_to_storage(db);
 out_mc_hdl:
 	if (rc != 0)
 		vos_cont_close(mc);
@@ -329,23 +331,24 @@ err:
 }
 
 /**
- * Open an RDB replica at \a path. The resulting \a dbp can only be passed to a
- * limited set of rdb interfaces that accept stopped databases.
+ * Open an RDB replica at \a path.
  *
- * \param[in]	path	replica path
- * \param[in]	uuid	database UUID
- * \param[in]	cbs	callbacks (not copied)
- * \param[in]	arg	argument for cbs
- * \param[out]	dbp	stopped database
+ * \param[in]	path		replica path
+ * \param[in]	uuid		database UUID
+ * \param[in]	cbs		callbacks (not copied)
+ * \param[in]	arg		argument for cbs
+ * \param[out]	storagep	database storage
  */
 int
-rdb_open(const char *path, const uuid_t uuid, struct rdb_cbs *cbs, void *arg, struct rdb **dbp)
+rdb_open(const char *path, const uuid_t uuid, struct rdb_cbs *cbs, void *arg,
+	 struct rdb_storage **storagep)
 {
 	daos_handle_t	pool;
 	daos_handle_t	mc;
 	d_iov_t		value;
 	uuid_t		uuid_persist;
 	uint32_t	version;
+	struct rdb     *db;
 	int		rc;
 
 	D_DEBUG(DB_MD, DF_UUID": opening db %s\n", DP_UUID(uuid), path);
@@ -419,11 +422,12 @@ rdb_open(const char *path, const uuid_t uuid, struct rdb_cbs *cbs, void *arg, st
 		goto err_mc;
 	}
 
-	rc = rdb_open_internal(pool, mc, uuid, cbs, arg, dbp);
+	rc = rdb_open_internal(pool, mc, uuid, cbs, arg, &db);
 	if (rc != 0)
 		goto err_mc;
 
-	D_DEBUG(DB_MD, DF_DB": opened db %s %p\n", DP_DB(*dbp), path, *dbp);
+	D_DEBUG(DB_MD, DF_DB": opened db %s %p\n", DP_DB(db), path, db);
+	*storagep = rdb_to_storage(db);
 	return 0;
 
 err_mc:
@@ -435,15 +439,39 @@ err:
 }
 
 /**
- * Start \a db, which must have been stopped. There must be no concurrent
- * rdb_start, rdb_started, rdb_stop, or rdb_close calls with the same \a db.
+ * Close \a storage.
  *
- * \param[in]	db	stopped database
+ * \param[in]	storage	database storage
+ */
+void
+rdb_close(struct rdb_storage *storage)
+{
+	struct rdb *db = rdb_from_storage(storage);
+
+	D_ASSERTF(db->d_ref == 1, "d_ref %d == 1\n", db->d_ref);
+	vos_cont_close(db->d_mc);
+	vos_pool_close(db->d_pool);
+	rdb_kvs_cache_destroy(db->d_kvss);
+	ABT_cond_free(&db->d_ref_cv);
+	ABT_mutex_free(&db->d_raft_mutex);
+	ABT_mutex_free(&db->d_mutex);
+	D_DEBUG(DB_MD, DF_DB": closed db %p\n", DP_DB(db), db);
+	D_FREE(db);
+}
+
+/**
+ * Start \a storage, converting \a storage into \a dbp. If this is successful,
+ * the caller must stop using \a storage; otherwise, the caller remains
+ * responsible for closing \a storage.
+ *
+ * \param[in]	storage	database storage
+ * \param[out]	dbp	database
  */
 int
-rdb_start(struct rdb *db)
+rdb_start(struct rdb_storage *storage, struct rdb **dbp)
 {
-	int rc;
+	struct rdb     *db = rdb_from_storage(storage);
+	int		rc;
 
 	rc = rdb_raft_start(db);
 	if (rc != 0)
@@ -461,30 +489,19 @@ rdb_start(struct rdb *db)
 	}
 
 	D_DEBUG(DB_MD, DF_DB": started db %p\n", DP_DB(db), db);
+	*dbp = db;
 	return 0;
 }
 
 /**
- * Is \a db started? There must be no concurrent rdb_start, rdb_started,
- * rdb_stop, or rdb_close calls with the same \a db.
+ * Stop \a db, converting \a db into \a storagep. All TXs in \a db must be
+ * either ended already or blocking only in rdb.
  *
- * \param[in]	db	started or stopped database
- */
-bool
-rdb_started(struct rdb *db)
-{
-	return db->d_raft != NULL;
-}
-
-/**
- * Stop \a db, which must have been started. There must be no concurrent
- * rdb_start, rdb_started, rdb_stop, or rdb_close calls with the same \a db.
- * All TXs in \a db must be either ended already or blocking only in rdb.
- *
- * \param[in]	db	started database
+ * \param[in]	db		database
+ * \param[out]	storagep	database storage
  */
 void
-rdb_stop(struct rdb *db)
+rdb_stop(struct rdb *db, struct rdb_storage **storagep)
 {
 	bool deleted;
 
@@ -498,32 +515,28 @@ rdb_stop(struct rdb *db)
 	rdb_raft_stop(db);
 
 	D_DEBUG(DB_MD, DF_DB": stopped db %p\n", DP_DB(db), db);
+	*storagep = rdb_to_storage(db);
 }
 
 /**
- * Close \a db, which must have been stopped. There must be no concurrent
- * rdb_start, rdb_stop, or rdb_close calls with the same \a db.
+ * Stop and close \a db. All TXs in \a db must be either ended already or
+ * blocking only in rdb.
  *
- * \param[in]	db	stopped database
+ * \param[in]	db	database
  */
 void
-rdb_close(struct rdb *db)
+rdb_stop_and_close(struct rdb *db)
 {
-	D_ASSERTF(db->d_ref == 1, "d_ref %d == 1\n", db->d_ref);
-	vos_cont_close(db->d_mc);
-	vos_pool_close(db->d_pool);
-	rdb_kvs_cache_destroy(db->d_kvss);
-	ABT_cond_free(&db->d_ref_cv);
-	ABT_mutex_free(&db->d_raft_mutex);
-	ABT_mutex_free(&db->d_mutex);
-	D_DEBUG(DB_MD, DF_DB": closed db %p\n", DP_DB(db), db);
-	D_FREE(db);
+	struct rdb_storage *storage;
+
+	rdb_stop(db, &storage);
+	rdb_close(storage);
 }
 
 /**
  * Add \a replicas.
  *
- * \param[in]	db		started database
+ * \param[in]	db		database
  * \param[in,out]
  *		replicas	[in] list of replica ranks;
  *				[out] list of replica ranks that could not be added
@@ -568,7 +581,7 @@ rdb_add_replicas(struct rdb *db, d_rank_list_t *replicas)
 /**
  * Remove \a replicas.
  *
- * \param[in]	db		started database
+ * \param[in]	db		database
  * \param[in,out]
  *		replicas	[in] list of replica ranks;
  *				[out] list of replica ranks that could not be removed
@@ -616,7 +629,7 @@ rdb_remove_replicas(struct rdb *db, d_rank_list_t *replicas)
  * term will eventually abort, and the dc_step_down callback will eventually be
  * called with \a term.
  *
- * \param[in]	db	started database
+ * \param[in]	db	database
  * \param[in]	term	term of leadership to resign
  */
 void
@@ -628,7 +641,7 @@ rdb_resign(struct rdb *db, uint64_t term)
 /**
  * Call a new election (campaign to become leader). Must be a voting replica.
  *
- * \param[in]	db	started database
+ * \param[in]	db	database
  *
  * \retval -DER_INVAL	not a voting replica
  */
@@ -642,7 +655,7 @@ rdb_campaign(struct rdb *db)
  * Is this replica in the leader state? True does not guarantee a _current_
  * leadership.
  *
- * \param[in]	db	started database
+ * \param[in]	db	database
  * \param[out]	term	latest term heard of
  */
 bool
@@ -661,7 +674,7 @@ rdb_is_leader(struct rdb *db, uint64_t *term)
 /**
  * Get a hint of the current leader, if available.
  *
- * \param[in]	db	started database
+ * \param[in]	db	database
  * \param[out]	term	term of current leader
  * \param[out]	rank	rank of current leader
  *
@@ -692,7 +705,7 @@ rdb_get_leader(struct rdb *db, uint64_t *term, d_rank_t *rank)
  * Get the list of replica ranks. Callers are responsible for
  * d_rank_list_free(*ranksp).
  *
- * \param[in]	db	started database
+ * \param[in]	db	database
  * \param[out]	ranksp	list of replica ranks
  */
 int

@@ -823,6 +823,7 @@ testm_update_lookup_all(crt_group_t *grp, uint32_t nranks, uint32_t nreplicas,
 			return -1;
 		}
 
+#if 0
 		/* Make test_rank become leader, call election, expect to win */
 		rc = rdbt_start_election(grp, test_rank);
 		if (rc != 0) {
@@ -845,10 +846,11 @@ testm_update_lookup_all(crt_group_t *grp, uint32_t nranks, uint32_t nreplicas,
 		}
 		ldr_rank = test_rank;
 		printf("INFO: replica rank %u is now leader\n", test_rank);
+#endif
 
 		/* Verify data on the rank now that it is leader */
 		val_out = 0;
-		rc = rdbt_test_rank(grp, ldr_rank, NO_UPDATE,
+		rc = rdbt_test_rank(grp, test_rank, NO_UPDATE,
 				    RDBT_MEMBER_NOOP, key, val, &val_out, &h);
 		if (rc != 0) {
 			fprintf(stderr, "FAIL: lookup RDB failed via RPC to "

@@ -45,7 +45,7 @@ rdb_tx_leader_check(struct rdb_tx *tx)
  * TXs in that term, so that each TX gets consistent results from cache and DB
  * queries.
  *
- * \param[in]	db	started database
+ * \param[in]	db	database
  * \param[in]	term	if not RDB_NIL_TERM, term to begin in
  * \param[out]	tx	transaction
  *
@@ -88,16 +88,16 @@ rdb_tx_begin(struct rdb *db, uint64_t term, struct rdb_tx *tx)
 /**
  * Initialize and begin \a tx in the local, query-only mode. The resulting \a
  * tx sees the latest data that may be uncommitted. This is mainly intended for
- * special scenarios such as catastrophic recovery and testing. If \a db is
- * started, the caller must not yield between the queries of \a tx.
+ * special scenarios such as catastrophic recovery and testing.
  *
- * \param[in]	db	started or stopped database
+ * \param[in]	storage	database storage
  * \param[out]	tx	transaction
  */
 int
-rdb_tx_begin_local(struct rdb *db, struct rdb_tx *tx)
+rdb_tx_begin_local(struct rdb_storage *storage, struct rdb_tx *tx)
 {
-	struct rdb_tx t = {};
+	struct rdb     *db = rdb_from_storage(storage);
+	struct rdb_tx	t = {};
 
 	rdb_get(db);
 	t.dt_db = db;

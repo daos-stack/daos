@@ -414,6 +414,8 @@ rdbt_test_tx(bool update, enum rdbt_membership_op memb_op, uint64_t user_key,
 {
 	struct ds_rsvc	       *rsvc;
 	struct rdbt_svc	       *svc;
+	struct rdb_storage     *storage;
+	bool			follower = false;
 	d_iov_t			key;
 	d_iov_t			value;
 	char			value_written[] = "value";
@@ -430,6 +432,11 @@ rdbt_test_tx(bool update, enum rdbt_membership_op memb_op, uint64_t user_key,
 				   &rsvc, hintp);
 	if (rc != 0) {
 		if (rc == -DER_NOTLEADER) {
+			if (!update) {
+				MUST(ds_rsvc_lookup(DS_RSVC_CLASS_TEST, &test_svc_id, &rsvc));
+				follower = true;
+				goto proceed;
+			}
 			if (hintp->sh_flags & RSVC_HINT_VALID)
 				D_WARN("not leader; try rank %u\n",
 				       hintp->sh_rank);
@@ -443,18 +450,19 @@ rdbt_test_tx(bool update, enum rdbt_membership_op memb_op, uint64_t user_key,
 		return rc;
 	}
 
+proceed:
 	D_WARN("leader, hint is %s valid, rank=%u, term="DF_U64"\n",
 	       ((hintp->sh_flags & RSVC_HINT_VALID) ? "" : "NOT"),
 	       hintp->sh_rank, hintp->sh_term);
 
 	svc = rdbt_svc_obj(rsvc);
 
-	D_WARN("commit empty tx\n");
-	MUST(rdb_tx_begin(svc->rt_rsvc.s_db, RDB_NIL_TERM, &tx));
-	MUST(rdb_tx_commit(&tx));
-	rdb_tx_end(&tx);
-
 	if (update) {
+		D_WARN("commit empty tx\n");
+		MUST(rdb_tx_begin(svc->rt_rsvc.s_db, RDB_NIL_TERM, &tx));
+		MUST(rdb_tx_commit(&tx));
+		rdb_tx_end(&tx);
+
 		D_WARN("update: user record: (K=0x%"PRIx64", V="DF_U64")\n",
 		       user_key, user_val_in);
 		MUST(rdb_tx_begin(svc->rt_rsvc.s_db, RDB_NIL_TERM, &tx));
@@ -501,8 +509,14 @@ rdbt_test_tx(bool update, enum rdbt_membership_op memb_op, uint64_t user_key,
 		}
 	}
 
+	if (follower)
+		rdb_stop(rsvc->s_db, &storage);
+
 	D_WARN("query regular keys\n");
-	MUST(rdb_tx_begin(svc->rt_rsvc.s_db, RDB_NIL_TERM, &tx));
+	if (follower)
+		MUST(rdb_tx_begin_local(storage, &tx));
+	else
+		MUST(rdb_tx_begin(svc->rt_rsvc.s_db, RDB_NIL_TERM, &tx));
 	/* Look up keys[0]. */
 	d_iov_set(&key, &keys[0], sizeof(keys[0]));
 	d_iov_set(&value, buf, sizeof(buf));
@@ -540,7 +554,12 @@ rdbt_test_tx(bool update, enum rdbt_membership_op memb_op, uint64_t user_key,
 	       user_key, *user_val_outp);
 	rdb_tx_end(&tx);
 
-	ds_rsvc_put_leader(rsvc);
+	if (follower) {
+		MUST(rdb_start(storage, &rsvc->s_db));
+		ds_rsvc_put(rsvc);
+	} else {
+		ds_rsvc_put_leader(rsvc);
+	}
 	return 0;
 }
 
@@ -554,8 +573,11 @@ get_all_ranks(d_rank_list_t **list)
 	group = crt_group_lookup(NULL /* grp_id */);
 	D_ASSERT(group != NULL);
 	MUST(crt_group_ranks_get(group, list));
-	if (*list != NULL)
+	if (*list != NULL) {
+		/* The rank list from crt is not guaranteed to be sorted. */
+		d_rank_list_sort(*list);
 		return;
+	}
 	D_ALLOC_PTR(ranks);
 	D_ASSERT(ranks != NULL);
 	MUST(crt_group_size(group, &ranks->rl_nr));
