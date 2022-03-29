@@ -336,6 +336,7 @@ extern uint64_t vos_evt_feats;
 
 #define VOS_KEY_CMP_LEXICAL	(1ULL << 63)
 #define VOS_TREE_AGG_OPT	EVT_FEAT_AGG_OPT
+#define VOS_TREE_AGG_HLC	EVT_FEAT_AGG_HLC
 #define VOS_TREE_AGG_TIME_MASK	EVT_FEAT_AGG_TIME_MASK
 
 #define CHECK_VOS_TREE_FLAG(flag)	\
@@ -348,12 +349,21 @@ CHECK_VOS_TREE_FLAG(VOS_TREE_AGG_TIME_MASK);
 static inline void
 vos_feats_agg_time_update(daos_epoch_t epoch, uint64_t *feats)
 {
-	/** Assume aggregation only happens at most once every quarter second */
-	epoch &= 0xffffffff00000000ULL;
-	epoch = epoch >> 2;
+	uint64_t extra_flag = 0;
+
+	if (epoch & 0xffffffff00000000ULL) {
+		/** Assume aggregation only happens at most once every quarter second */
+		epoch &= 0xffffffff00000000ULL;
+		/** Ensure the resulting epoch is not zero regardless, mostly for standalone */
+		epoch = (epoch >> 3);
+		extra_flag = VOS_TREE_AGG_HLC;
+	} else {
+		epoch &= 0x0ffffffffULL;
+		epoch = (epoch << 29);
+	}
 
 	*feats &= ~VOS_TREE_AGG_TIME_MASK;
-	*feats |= epoch | VOS_TREE_AGG_OPT;
+	*feats |= epoch | VOS_TREE_AGG_OPT | extra_flag;
 }
 
 /** Get the aggregatable write timestamp within 1/4 second granularity */
@@ -363,10 +373,12 @@ vos_feats_agg_time_get(uint64_t feats, daos_epoch_t *epoch)
 	if ((feats & VOS_TREE_AGG_OPT) == 0)
 		return false;
 
-	*epoch = ((feats & VOS_TREE_AGG_TIME_MASK) << 2);
-
-	if (*epoch != 0)
+	if (feats & VOS_TREE_AGG_HLC) {
+		*epoch = ((feats & VOS_TREE_AGG_TIME_MASK) << 3);
 		*epoch += 0xffffffffULL;
+	} else {
+		*epoch = ((feats & VOS_TREE_AGG_TIME_MASK) >> 29);
+	}
 
 	return true;
 }

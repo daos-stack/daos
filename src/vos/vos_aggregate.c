@@ -2517,7 +2517,7 @@ vos_aggregate(daos_handle_t coh, daos_epoch_range_t *epr,
 
 	feats = dbtree_feats_get(&cont->vc_cont_df->cd_obj_root);
 	has_agg_write = vos_feats_agg_time_get(feats, &agg_write);
-	if (has_agg_write && agg_write < cont->vc_cont_df->cd_hae)
+	if (has_agg_write && agg_write <= cont->vc_cont_df->cd_hae)
 		goto update_hae;
 
 	/* Set iteration parameters */

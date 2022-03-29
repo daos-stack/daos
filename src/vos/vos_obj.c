@@ -1959,6 +1959,7 @@ vos_obj_iter_start_agg(daos_handle_t ih, bool full_scan)
 	int			 rc;
 	uint64_t		 feats;
 	daos_epoch_t		 agg_write;
+	daos_epoch_t		 hae;
 	bool			 agg_has_write;
 
 	D_ASSERTF(oiter->it_iter.it_for_purge,
@@ -1966,6 +1967,9 @@ vos_obj_iter_start_agg(daos_handle_t ih, bool full_scan)
 	D_ASSERTF(iter->it_type == VOS_ITER_AKEY ||
 		  iter->it_type == VOS_ITER_DKEY,
 		  "Aggregation only supported on keys\n");
+
+	if (full_scan)
+		return 1;
 
 	rc = key_iter_fetch_helper(oiter, &rbund, &key, NULL);
 	D_ASSERTF(rc != -DER_NONEXIST,
@@ -1975,21 +1979,20 @@ vos_obj_iter_start_agg(daos_handle_t ih, bool full_scan)
 
 	krec = rbund.rb_krec;
 
-	if (full_scan)
-		return 1;
 	if (krec->kr_bmap & KREC_BF_BTR)
 		feats = dbtree_feats_get(&krec->kr_btr);
 	else
 		feats = evt_feats_get(&krec->kr_evt);
 
 	agg_has_write = vos_feats_agg_time_get(feats, &agg_write);
+	hae = cont->vc_cont_df->cd_hae;
 	if (agg_has_write) {
-		if (agg_write < oiter->it_obj->obj_cont->vc_cont_df->cd_hae)
+		if (agg_write <= hae && oiter->it_punched.pr_epc <= hae)
 			return 0;
 		return 1;
 	}
 
-	/** Fall through to check other filters */
+	/** Fall through to check other filters for legacy case */
 	rc = key_iter_fill(krec, oiter, true, &ent);
 	if (rc == VOS_ITER_CB_SKIP)
 		return 0;
@@ -2001,7 +2004,7 @@ vos_obj_iter_start_agg(daos_handle_t ih, bool full_scan)
 		return 1; /* Punched entries can likely be aggregated */
 
 	D_ASSERT(ent.ie_last_update != 0);
-	if (ent.ie_last_update < cont->vc_cont_df->cd_hae)
+	if (ent.ie_last_update <= hae)
 		return 0; /* No new updates since last time we ran */
 
 	return 1;

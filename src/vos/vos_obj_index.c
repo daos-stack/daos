@@ -700,6 +700,8 @@ oi_iter_start_agg(daos_handle_t ih, bool full_scan)
 
 	D_ASSERT(iter->it_type == VOS_ITER_OBJ);
 	D_ASSERT(iter->it_for_purge);
+	if (full_scan)
+		return 1;
 
 	d_iov_set(&rec_iov, NULL, 0);
 	rc = dbtree_iter_fetch(oiter->oit_hdl, NULL, &rec_iov, NULL);
@@ -708,16 +710,13 @@ oi_iter_start_agg(daos_handle_t ih, bool full_scan)
 	if (rc != 0)
 		return rc;
 
-	if (full_scan)
-		return 1;
-
 	D_ASSERT(rec_iov.iov_len == sizeof(struct vos_obj_df));
 	obj = (struct vos_obj_df *)rec_iov.iov_buf;
 	feats = dbtree_feats_get(&obj->vo_tree);
 
 	has_agg_write = vos_feats_agg_time_get(feats, &agg_write);
 	if (has_agg_write) {
-		if (agg_write < oiter->oit_cont->vc_cont_df->cd_hae)
+		if (agg_write <= oiter->oit_cont->vc_cont_df->cd_hae)
 			return 0;
 		return 1;
 	}
@@ -735,7 +734,7 @@ oi_iter_start_agg(daos_handle_t ih, bool full_scan)
 		return 1;
 
 	D_ASSERT(ent.ie_last_update != 0);
-	if (ent.ie_last_update < oiter->oit_cont->vc_cont_df->cd_hae)
+	if (ent.ie_last_update <= oiter->oit_cont->vc_cont_df->cd_hae)
 		return 0;
 
 	return 1;

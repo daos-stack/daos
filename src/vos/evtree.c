@@ -2815,7 +2815,7 @@ evt_close(daos_handle_t toh)
 	return 0;
 }
 
-#define EVT_AGG_MASK (EVT_FEAT_AGG_TIME_MASK | EVT_FEAT_AGG_OPT)
+#define EVT_AGG_MASK (EVT_FEAT_AGG_HLC | EVT_FEAT_AGG_TIME_MASK | EVT_FEAT_AGG_OPT)
 /**
  * Create a new tree inplace of \a root, return the open handle.
  * Please check API comment in evtree.h for the details.
