@@ -86,7 +86,7 @@ ds_mgmt_drpc_ping_rank(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 		D_ERROR("Failed to unpack req (ping rank)\n");
 		return;
 	}
-
+#
 	D_INFO("Received request to ping rank %u\n", req->rank);
 
 	/* TODO: verify engine components are functioning as expected */
@@ -1559,31 +1559,62 @@ pool_rebuild_status_from_info(Mgmt__PoolRebuildStatus *rebuild,
 }
 
 static void
-pool_query_free_tier_stats(Mgmt__PoolQueryResp *resp)
+pool_query_free_tier_stats(Mgmt__PoolQueryResp__Pool *resp_pool)
 {
-	if (resp->tier_stats != NULL) {
-		D_FREE(resp->tier_stats);
-		resp->tier_stats = NULL;
+	if (resp_pool->tier_stats != NULL) {
+		D_FREE(resp_pool->tier_stats);
+		resp_pool->tier_stats = NULL;
 	}
-	resp->n_tier_stats = 0;
+	resp_pool->n_tier_stats = 0;
+}
+
+static void
+pool_query_populate_info(Mgmt__PoolQueryResp__Pool *resp_pool, daos_pool_info_t *pool_info)
+{
+		/* TODO: return ranks in the response. */
+		resp_pool->total_targets = pool_info->pi_ntargets;
+		resp_pool->disabled_targets = pool_info->pi_ndisabled;
+		resp_pool->active_targets = pool_info->pi_space.ps_ntargets;
+		resp_pool->total_nodes = pool_info->pi_nnodes;
+		resp_pool->leader = pool_info->pi_leader;
+		resp_pool->version = pool_info->pi_map_ver;
+}
+
+static void
+pool_query_populate_tier_stats(Mgmt__PoolQueryResp__Pool *resp_pool, daos_pool_info_t *pool_info)
+{
+	Mgmt__StorageUsageStats	scm = MGMT__STORAGE_USAGE_STATS__INIT;
+	Mgmt__StorageUsageStats	nvme = MGMT__STORAGE_USAGE_STATS__INIT;
+	Mgmt__PoolRebuildStatus	rebuild = MGMT__POOL_REBUILD_STATUS__INIT;
+
+	storage_usage_stats_from_pool_space(&scm, &pool_info->pi_space, DAOS_MEDIA_SCM);
+	resp_pool->tier_stats[DAOS_MEDIA_SCM] = &scm;
+	resp_pool->n_tier_stats++;
+
+	storage_usage_stats_from_pool_space(&nvme, &pool_info->pi_space, DAOS_MEDIA_NVME);
+	resp_pool->tier_stats[DAOS_MEDIA_NVME] = &nvme;
+	resp_pool->n_tier_stats++;
+
+	pool_rebuild_status_from_info(&rebuild, &pool_info->pi_rebuild_st);
+	resp_pool->rebuild = &rebuild;
 }
 
 void
 ds_mgmt_drpc_pool_query(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 {
-	struct drpc_alloc	alloc = PROTO_ALLOCATOR_INIT(alloc);
-	int			rc = 0;
-	Mgmt__PoolQueryReq	*req;
-	Mgmt__PoolQueryResp	resp = MGMT__POOL_QUERY_RESP__INIT;
-	Mgmt__StorageUsageStats	scm = MGMT__STORAGE_USAGE_STATS__INIT;
-	Mgmt__StorageUsageStats	nvme = MGMT__STORAGE_USAGE_STATS__INIT;
-	Mgmt__PoolRebuildStatus	rebuild = MGMT__POOL_REBUILD_STATUS__INIT;
-	uuid_t			uuid;
-	daos_pool_info_t	pool_info = {0};
-	d_rank_list_t		*svc_ranks;
-	d_rank_list_t		*ranks;
-	size_t			len;
-	uint8_t			*body;
+	struct drpc_alloc		 alloc = PROTO_ALLOCATOR_INIT(alloc);
+	Mgmt__PoolQueryReq		*req;
+	Mgmt__PoolQueryResp		 resp = MGMT__POOL_QUERY_RESP__INIT;
+	Mgmt__PoolQueryReq__Pool	*req_pool;
+	Mgmt__PoolQueryResp__Pool	*resp_pool;
+	uuid_t				 uuid;
+	daos_pool_info_t		 pool_info = {0};
+	d_rank_list_t			*svc_reps;
+	d_rank_list_t			*ranks;
+	size_t				 len;
+	uint8_t				*body;
+	int				 rc = 0;
+	int				 i;
 
 	req = mgmt__pool_query_req__unpack(&alloc.alloc, drpc_req->body.len,
 					   drpc_req->body.data);
@@ -1593,58 +1624,69 @@ ds_mgmt_drpc_pool_query(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 		return;
 	}
 
-	D_INFO("Received request to query DAOS pool %s\n", req->id);
-
-	if (uuid_parse(req->id, uuid) != 0) {
-		D_ERROR("Failed to parse pool uuid %s\n", req->id);
+	if (req->n_pools == 0) {
+		resp.n_pools = 0;
+		D_ERROR("No pools in query req\n");
 		D_GOTO(out, rc = -DER_INVAL);
 	}
 
-	svc_ranks = uint32_array_to_rank_list(req->svc_ranks, req->n_svc_ranks);
-	if (svc_ranks == NULL)
+	D_ALLOC_ARRAY(resp.pools, req->n_pools);
+	if (resp.pools == NULL)
 		D_GOTO(out, rc = -DER_NOMEM);
+	resp.n_pools = req->n_pools;
 
-	/* TODO: dmg client choose what to query, especially DPI_ENGINES_ENABLED bit set or not. */
-	pool_info.pi_bits = DPI_ALL;
-	rc = ds_mgmt_pool_query(uuid, svc_ranks, &ranks, &pool_info);
-	if (rc != 0) {
-		D_ERROR("Failed to query the pool, rc=%d\n", rc);
-		goto out_svc_ranks;
+	for (i = 0; i < req->n_pools; i++) {
+		req_pool = req->pools[i];
+
+		D_ALLOC_PTR(resp.pools[i]);
+		if (resp.pools[i] == NULL)
+			D_GOTO(out, rc = -DER_NOMEM);
+
+		resp_pool = resp.pools[i];
+
+		mgmt__pool_query_resp__pool__init(resp_pool);
+
+		if (uuid_parse(req_pool->id, uuid) != 0) {
+			D_ERROR("Failed to parse pool uuid %s\n", req_pool->id);
+			D_GOTO(out, rc = -DER_INVAL);
+		}
+		resp_pool->uuid = req_pool->id;
+
+		svc_reps = uint32_array_to_rank_list(req_pool->svc_reps, req_pool->n_svc_reps);
+		if (svc_reps == NULL)
+			D_GOTO(out, rc = -DER_NOMEM);
+
+		/* TODO: dmg client choose what to query, especially DPI_ENGINES_ENABLED bit set or not. */
+		pool_info.pi_bits = DPI_ALL;
+
+		D_INFO("Query pool "DF_UUID"\n", DP_UUID(uuid));
+
+		rc = ds_mgmt_pool_query(uuid, svc_reps, &ranks, &pool_info);
+		if (rc != 0) {
+			D_ERROR("Failed to query the pool, rc=%d\n", rc);
+			d_rank_list_free(svc_reps);
+			resp_pool->status = rc;
+			continue; /* Record query failure and move on to next */
+		}
+
+		D_INFO("pool "DF_UUID" query successful\n", DP_UUID(uuid));
+
+		d_rank_list_free(svc_reps);
+		d_rank_list_free(ranks);
+
+		/* Populate the response */
+
+		pool_query_populate_info(resp_pool, &pool_info);
+
+		D_ALLOC_ARRAY(resp_pool->tier_stats, DAOS_MEDIA_MAX);
+		if (resp_pool->tier_stats == NULL) {
+			D_ERROR("Failed to allocate tier_stats for resp\n");
+			D_GOTO(out, rc = -DER_NOMEM);
+		}
+
+		pool_query_populate_tier_stats(resp_pool, &pool_info);
 	}
 
-	/* Populate the response */
-	/* TODO: return ranks in the response. */
-	resp.uuid = req->id;
-	resp.total_targets = pool_info.pi_ntargets;
-	resp.disabled_targets = pool_info.pi_ndisabled;
-	resp.active_targets = pool_info.pi_space.ps_ntargets;
-	resp.total_nodes = pool_info.pi_nnodes;
-	resp.leader = pool_info.pi_leader;
-	resp.version = pool_info.pi_map_ver;
-
-	D_ALLOC_ARRAY(resp.tier_stats, DAOS_MEDIA_MAX);
-	if (resp.tier_stats == NULL) {
-		D_ERROR("Failed to allocate tier_stats for resp\n");
-		D_GOTO(out_ranks, rc = -DER_NOMEM);
-	}
-
-	storage_usage_stats_from_pool_space(&scm, &pool_info.pi_space,
-					    DAOS_MEDIA_SCM);
-	resp.tier_stats[DAOS_MEDIA_SCM] = &scm;
-	resp.n_tier_stats++;
-
-	storage_usage_stats_from_pool_space(&nvme, &pool_info.pi_space,
-					    DAOS_MEDIA_NVME);
-	resp.tier_stats[DAOS_MEDIA_NVME] = &nvme;
-	resp.n_tier_stats++;
-
-	pool_rebuild_status_from_info(&rebuild, &pool_info.pi_rebuild_st);
-	resp.rebuild = &rebuild;
-
-out_ranks:
-	d_rank_list_free(ranks);
-out_svc_ranks:
-	d_rank_list_free(svc_ranks);
 out:
 	resp.status = rc;
 
@@ -1660,7 +1702,15 @@ out:
 
 	mgmt__pool_query_req__free_unpacked(req, &alloc.alloc);
 
-	pool_query_free_tier_stats(&resp);
+	if (resp.pools) {
+		for (i = 0; i < resp.n_pools; i++) {
+			if (resp.pools[i] != NULL) {
+				pool_query_free_tier_stats(resp.pools[i]);
+				D_FREE(resp.pools[i]);
+			}
+		}
+		D_FREE(resp.pools);
+	}
 }
 
 void

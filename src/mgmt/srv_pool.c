@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2021 Intel Corporation.
+ * (C) Copyright 2016-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -438,7 +438,7 @@ ds_mgmt_pool_query(uuid_t pool_uuid, d_rank_list_t *svc_ranks, d_rank_list_t **r
 		return -DER_INVAL;
 	}
 
-	D_DEBUG(DB_MGMT, "Querying pool "DF_UUID"\n", DP_UUID(pool_uuid));
+	D_INFO("Querying pool "DF_UUID"\n", DP_UUID(pool_uuid));
 
 	return ds_pool_svc_query(pool_uuid, svc_ranks, ranks, pool_info);
 }

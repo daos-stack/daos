@@ -3212,7 +3212,7 @@ ds_pool_svc_query(uuid_t pool_uuid, d_rank_list_t *ps_ranks, d_rank_list_t **ran
 	if (ranks == NULL || pool_info == NULL)
 		D_GOTO(out, rc = -DER_INVAL);
 
-	D_DEBUG(DB_MGMT, DF_UUID": Querying pool\n", DP_UUID(pool_uuid));
+	D_INFO(DF_UUID": Querying pool\n", DP_UUID(pool_uuid));
 
 	rc = rsvc_client_init(&client, ps_ranks);
 	if (rc != 0)
@@ -3235,41 +3235,47 @@ realloc:
 		goto out_client;
 	}
 
+	D_INFO(DF_UUID": Querying pool (pre crt_req_get)\n", DP_UUID(pool_uuid));
 	in = crt_req_get(rpc);
 	uuid_copy(in->pqi_op.pi_uuid, pool_uuid);
 	uuid_clear(in->pqi_op.pi_hdl);
 	in->pqi_query_bits = pool_query_bits(pool_info, NULL);
 
+	D_INFO(DF_UUID": Querying pool (pre map_bulk_create)\n", DP_UUID(pool_uuid));
 	rc = map_bulk_create(info->dmi_ctx, &in->pqi_map_bulk, &map_buf,
 			     map_size);
 	if (rc != 0)
 		goto out_rpc;
 
+	D_INFO(DF_UUID": Querying pool (pre dss_rpc_send)\n", DP_UUID(pool_uuid));
 	rc = dss_rpc_send(rpc);
+	D_INFO(DF_UUID": Querying pool (pre crt_reply_get)\n", DP_UUID(pool_uuid));
 	out = crt_reply_get(rpc);
 	D_ASSERT(out != NULL);
 
+	D_INFO(DF_UUID": Querying pool (pool_rsvc_client_complete_rpc)\n", DP_UUID(pool_uuid));
 	rc = pool_rsvc_client_complete_rpc(&client, &ep, rc, &out->pqo_op);
 	if (rc == RSVC_CLIENT_RECHOOSE) {
 		map_bulk_destroy(in->pqi_map_bulk, map_buf);
 		crt_req_decref(rpc);
-		dss_sleep(1000 /* ms */);
+		dss_sleep(200 /* ms */);
 		goto rechoose;
 	}
 
+	D_INFO(DF_UUID": Querying pool (pqo_op.po_rc)\n", DP_UUID(pool_uuid));
 	rc = out->pqo_op.po_rc;
 	if (rc == -DER_TRUNC) {
 		map_size = out->pqo_map_buf_size;
 		map_bulk_destroy(in->pqi_map_bulk, map_buf);
 		crt_req_decref(rpc);
-		dss_sleep(1000 /* ms */);
+		dss_sleep(200 /* ms */);
 		goto realloc;
 	} else if (rc != 0) {
 		D_ERROR(DF_UUID": failed to query pool, "DF_RC"\n", DP_UUID(pool_uuid), DP_RC(rc));
 		goto out_bulk;
 	}
 
-	D_DEBUG(DB_MGMT, DF_UUID": Successfully queried pool\n", DP_UUID(pool_uuid));
+	D_INFO(DF_UUID": Successfully queried pool\n", DP_UUID(pool_uuid));
 
 	rc = process_query_result(ranks, pool_info, pool_uuid,
 				  out->pqo_op.po_map_version, out->pqo_op.po_hint.sh_rank,
