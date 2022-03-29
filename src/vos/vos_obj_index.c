@@ -646,7 +646,12 @@ oi_iter_fetch(struct vos_iterator *iter, vos_iter_entry_t *it_entry,
 	}
 	it_entry->ie_child_type = VOS_ITER_DKEY;
 
-	it_entry->ie_last_update = obj->vo_max_write;
+	/* Upgrading case, set it to latest known epoch */
+	if (obj->vo_max_write == 0)
+		vos_ilog_last_update(&obj->vo_ilog, VOS_TS_TYPE_OBJ,
+				     &it_entry->ie_last_update);
+	else
+		it_entry->ie_last_update = obj->vo_max_write;
 
 	return 0;
 }
