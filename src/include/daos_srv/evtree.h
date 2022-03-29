@@ -297,6 +297,7 @@ enum evt_feats {
 	/** Timestamp mask for last aggregatable write */
 	EVT_FEAT_AGG_TIME_MASK		= (0xffffffffULL << 29),
 };
+
 D_CASSERT((EVT_FEAT_AGG_HLC & EVT_FEAT_AGG_TIME_MASK) == 0);
 D_CASSERT(((EVT_FEAT_AGG_OPT | EVT_FEAT_AGG_TIME_MASK) & EVT_FEATS_SUPPORTED) == 0);
 D_CASSERT(EVT_FEAT_AGG_TIME_MASK & (1ULL << 60));
