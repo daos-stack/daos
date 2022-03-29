@@ -377,7 +377,8 @@ class WarningsFactory():
         self._flush()
         self._fd.close()
         self._fd = None
-        print('Closed JSON file {} with {} errors'.format(self.filename, len(self.issues)))
+        print('Closed JSON file {} with {} errors'.format(self.filename,
+                                                          len(self.issues)))
         if self.ts:
             # This is a controlled shutdown, so wipe the error saying forced
             # exit.

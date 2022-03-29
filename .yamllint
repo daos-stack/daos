@@ -16,12 +16,12 @@ rules:
     ignore: src/tests/ftest/
   document-start:
     ignore: src/tests/ftest/
+  comments-indentation:
+    ignore: src/tests/ftest/
   comments:
     ignore: |
       src/tests/ftest/
       utils/config/
-  comments-indentation:
-    ignore: src/tests/ftest/
 
 ignore: |
   src/control/vendor/

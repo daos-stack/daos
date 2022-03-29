@@ -1,8 +1,8 @@
 ---
 name: Yamllint
 
-# Run yamllint on PRs.  This ignores many pre-existing errors however should catch
-# regressions and allows us to remove ignores and results issues iteratively.
+# Run yamllint on PRs.  This ignores many pre-existing errors in the src/tests/ftests directory
+# however those are silenced via the .yamllint file.
 
 on:  # yamllint disable-line rule:truthy
   pull_request:
@@ -24,7 +24,7 @@ jobs:
       - name: Set up Python environment
         uses: actions/setup-python@v3
         with:
-          python-version: "3"
+          python-version: '3'
       - name: Run check
         run: yamllint --format github .
 ...
