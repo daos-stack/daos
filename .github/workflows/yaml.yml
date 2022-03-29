@@ -4,6 +4,9 @@ name: Yamllint
 # Run yamllint on PRs.  This ignores many pre-existing errors in the src/tests/ftests directory
 # however those are silenced via the .yamllint file.
 
+# Checks out a merge of the PR onto master so should test the code as landed, not as it is in
+# the PR.
+
 on:  # yamllint disable-line rule:truthy
   pull_request:
     paths:
@@ -19,8 +22,6 @@ jobs:
     steps:
       - name: Check out source repository
         uses: actions/checkout@v2
-        with:
-          ref: ${{ github.event.pull_request.head.sha }}
       - name: Set up Python environment
         uses: actions/setup-python@v3
         with:
