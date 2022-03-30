@@ -338,7 +338,9 @@ def scons(): # pylint: disable=too-many-locals
 
         Exit(0)
 
-    env = Environment(TOOLS=['extra', 'default', 'textfile'])
+    env = Environment(TOOLS=['extra', 'default', 'textfile', 'compilation_db'], COMPILATIONDB_USE_ABSPATH=True)
+    cdb = env.CompilationDatabase()
+    Alias('cdb', cdb)
 
     opts_file = os.path.join(Dir('#').abspath, 'daos.conf')
     opts = Variables(opts_file)
