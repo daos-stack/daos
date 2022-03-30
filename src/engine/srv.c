@@ -135,11 +135,17 @@ dss_xstream_set_affinity(struct dss_xstream *dxs)
 
 	/**
 	 * Set cpu affinity
+	 * Try to use strict CPU binding, if supported.
 	 */
-	rc = hwloc_set_cpubind(dss_topo, dxs->dx_cpuset, HWLOC_CPUBIND_THREAD);
+	rc = hwloc_set_cpubind(dss_topo, dxs->dx_cpuset,
+			       HWLOC_CPUBIND_THREAD | HWLOC_CPUBIND_STRICT);
 	if (rc) {
-		D_ERROR("failed to set cpu affinity: %d\n", errno);
-		return rc;
+		D_INFO("failed to set strict cpu affinity: %d\n", errno);
+		rc = hwloc_set_cpubind(dss_topo, dxs->dx_cpuset, HWLOC_CPUBIND_THREAD);
+		if (rc) {
+			D_ERROR("failed to set cpu affinity: %d\n", errno);
+			return rc;
+		}
 	}
 
 	/**
@@ -1505,6 +1511,39 @@ dss_srv_init(void)
 failed:
 	dss_srv_fini(true);
 	return rc;
+}
+
+static void
+set_draining(void *arg)
+{
+	dss_get_module_info()->dmi_srv_shutting_down = 1;
+}
+
+/*
+ * Set the dss_module_info.dmi_srv_shutting_down flag for all xstreams, so that
+ * after this function returns, any dss_srv_shutting_down call (on any xstream)
+ * returns true. See also server_fini.
+ */
+void
+dss_srv_set_shutting_down(void)
+{
+	int	n = dss_xstream_cnt();
+	int	i;
+	int	rc;
+
+	/* Could be parallel... */
+	for (i = 0; i < n; i++) {
+		struct dss_xstream     *dx = dss_get_xstream(i);
+		ABT_task		task;
+
+		rc = ABT_task_create(dx->dx_pools[DSS_POOL_GENERIC], set_draining, NULL /* arg */,
+				     &task);
+		D_ASSERTF(rc == ABT_SUCCESS, "create task: %d\n", rc);
+		rc = ABT_task_free(&task);
+		D_ASSERTF(rc == ABT_SUCCESS, "join task: %d\n", rc);
+	}
+
+	dss_get_module_info()->dmi_srv_shutting_down = 1;
 }
 
 void

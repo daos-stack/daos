@@ -467,8 +467,7 @@ func (db *Database) monitorLeadershipState(parent context.Context) {
 					cancelGainedCtx()
 				}
 				runOnLeadershipLost()
-
-				return
+				break
 			}
 
 			db.log.Debugf("node %s gained MS leader state", db.replicaAddr)
