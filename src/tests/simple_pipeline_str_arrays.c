@@ -62,9 +62,9 @@ insert_example_records(void)
 		atime = mtime = ctime = time(NULL);
 
 		if (i == 50) {
-			sleep(2);
+			sleep(1);
 			ts = time(NULL);
-			sleep(2);
+			sleep(1);
 		}
 
 		d_iov_set(&sg_iovs[j++], &mode, sizeof(mode_t));
@@ -331,7 +331,7 @@ build_pipeline_one(daos_pipeline_t *pipeline)
 	pipef = (daos_filter_t *) calloc(1, sizeof(daos_filter_t));
 	daos_filter_init(pipef);
 	d_iov_set(&pipef->filter_type, pipe_cond, pipe_cond_s);
-#if 0
+
 	rc = daos_filter_add(pipef, or_ft);
 	ASSERT(rc == 0, "Pipeline add failed with %d", rc);
 
@@ -355,7 +355,7 @@ build_pipeline_one(daos_pipeline_t *pipeline)
 	ASSERT(rc == 0, "Pipeline add failed with %d", rc);
 	rc = daos_filter_add(pipef, const0_ft);
 	ASSERT(rc == 0, "Pipeline add failed with %d", rc);
-#endif
+
 	rc = daos_filter_add(pipef, gt_ft);
 	ASSERT(rc == 0, "Pipeline add failed with %d", rc);
 	rc = daos_filter_add(pipef, akey2_ft);
@@ -380,16 +380,18 @@ run_pipeline(daos_pipeline_t *pipeline)
 	d_sg_list_t		*sgl_recs;
 	d_iov_t			*iovs_recs;
 	char			*buf_recs;
-	daos_recx_t		recx;
+	daos_recx_t		recxs[2];
 	uint32_t		i;
 	int			rc;
 
 	/* iod for akey's metadata */
-	iod.iod_nr	= 1;
+	iod.iod_nr	= 2;
 	iod.iod_size	= 1;
-	recx.rx_idx	= 0;
-	recx.rx_nr	= sizeof(mode_t);
-	iod.iod_recxs	= &recx;
+	recxs[0].rx_idx	= 0;
+	recxs[0].rx_nr	= sizeof(mode_t);
+	recxs[1].rx_idx	= 12;
+	recxs[1].rx_nr	= sizeof(time_t);
+	iod.iod_recxs	= recxs;
 	iod.iod_type	= DAOS_IOD_ARRAY;
 	d_iov_set(&iod.iod_name, (char *) field, strlen(field));
 	nr_iods		= 1;
@@ -406,7 +408,7 @@ run_pipeline(daos_pipeline_t *pipeline)
 	/* to store retrieved data */
 	sgl_recs	= malloc(sizeof(d_sg_list_t) * nr_kds);
 	iovs_recs	= malloc(sizeof(d_iov_t) * nr_kds);
-	buf_recs	= malloc(sizeof(mode_t) * nr_kds);
+	buf_recs	= malloc((sizeof(mode_t) + sizeof(time_t)) * nr_kds);
 
 	for (i = 0; i < nr_kds; i++) {
 		sgl_keys[i].sg_nr	= 1;
@@ -417,7 +419,8 @@ run_pipeline(daos_pipeline_t *pipeline)
 		sgl_recs[i].sg_nr	= 1;
 		sgl_recs[i].sg_nr_out	= 0;
 		sgl_recs[i].sg_iovs	= &iovs_recs[i];
-		d_iov_set(&iovs_recs[i], &buf_recs[i * sizeof(mode_t)], sizeof(mode_t));
+		d_iov_set(&iovs_recs[i], &buf_recs[i * (sizeof(mode_t) + sizeof(time_t))],
+						   sizeof(mode_t) + sizeof(time_t));
 	}
 
 	/** reset anchor */
@@ -440,7 +443,7 @@ run_pipeline(daos_pipeline_t *pipeline)
 			printf("\t(dkey)=%.*s\t", (int) dkeylen, dkey);
 			printf("%s(akey) -->> ", field);
 
-			char *ptr = &buf_recs[i * sizeof(mode_t)];
+			char *ptr = &buf_recs[i * (sizeof(mode_t) + sizeof(time_t))];
 			mode_t cur_mode = *((mode_t *) ptr);
 
 			if (S_ISDIR(cur_mode))
