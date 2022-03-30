@@ -173,6 +173,7 @@ ds_iv_ns_get(struct ds_iv_ns *ns)
 void
 ds_iv_ns_put(struct ds_iv_ns *ns)
 {
+	D_ASSERT(ns->iv_refcount > 0);
 	ns->iv_refcount--;
 	D_DEBUG(DB_TRACE, DF_UUID" ns ref %u\n",
 		DP_UUID(ns->iv_pool_uuid), ns->iv_refcount);
