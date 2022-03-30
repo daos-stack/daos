@@ -854,6 +854,8 @@ vos_pool_open_metrics(const char *path, uuid_t uuid, unsigned int flags, void *m
 		goto out;
 	}
 
+	/* [todo-ryon]: Revert these changes after PR 8563 has landed and merged */
+#if 0
 	if (uuid_compare(uuid, pool_df->pd_id)) {
 		D_ERROR("Mismatch uuid, user="DF_UUIDF", pool="DF_UUIDF"\n",
 			DP_UUID(uuid), DP_UUID(pool_df->pd_id));
@@ -862,6 +864,9 @@ vos_pool_open_metrics(const char *path, uuid_t uuid, unsigned int flags, void *m
 	}
 
 	rc = pool_open(ph, pool_df, uuid, flags, metrics, poh);
+#else
+	rc = pool_open(ph, pool_df, pool_df->pd_id, flags, metrics, poh);
+#endif
 	ph = NULL;
 
 out:
