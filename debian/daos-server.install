@@ -8,6 +8,7 @@ usr/bin/daos_admin
 usr/bin/daos_server
 usr/bin/daos_engine
 usr/bin/daos_metrics
+usr/bin/ddb
 usr/lib64/daos_srv/libchk.so
 usr/lib64/daos_srv/libcont.so
 usr/lib64/daos_srv/libdtx.so

@@ -7,4 +7,5 @@ usr/bin/smd_ut
 usr/bin/vea_ut
 usr/bin/srv_checksum_tests
 usr/bin/vos_tests
+usr/bin/ddb_tests
 usr/bin/vea_stress
