@@ -18,8 +18,9 @@ from avocado.utils import process
 from ClusterShell.NodeSet import NodeSet
 
 from command_utils_base import \
-    CommandFailure, BasicParameter, CommandWithParameters, \
+    BasicParameter, CommandWithParameters, \
     EnvironmentVariables, LogParameter
+from exception_utils import CommandFailure
 from general_utils import check_file_exists, get_log_file, \
     run_command, DaosTestError, get_job_manager_class, create_directory, \
     distribute_files, change_file_owner, get_file_listing, run_pcmd, \
@@ -154,7 +155,7 @@ class ExecutableCommand(CommandWithParameters):
 
         except DaosTestError as error:
             # Command failed or possibly timed out
-            raise CommandFailure from error
+            raise CommandFailure(str(error))    # pylint: disable=raise-missing-from
 
         if self.exit_status_exception and not self.check_results():
             # Command failed if its output contains bad keywords
@@ -1245,8 +1246,8 @@ class SubprocessManager():
         if set_expected:
             # Assign the expected states to the current job process states
             self.log.info(
-                "<%s> Assigning expected %s states.",
-                self._id.upper(), self._id)
+                "<%s> Assigning expected %s states: %s",
+                self._id.upper(), self._id, current_states)
             self._expected_states = current_states.copy()
 
         # Verify the expected states match the current states
@@ -1254,7 +1255,7 @@ class SubprocessManager():
             "<%s> Verifying %s states: group=%s, hosts=%s",
             self._id.upper(), self._id, self.get_config_value("name"),
             NodeSet.fromlist(self._hosts))
-        if current_states:
+        if current_states and self._expected_states:
             log_format = "  %-4s  %-15s  %-36s  %-22s  %-14s  %s"
             self.log.info(
                 log_format,

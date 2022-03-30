@@ -1,6 +1,6 @@
 #!/usr/bin/python
 """
-  (C) Copyright 2020-2021 Intel Corporation.
+  (C) Copyright 2020-2022 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -125,7 +125,7 @@ class MfuCommandBase(ExecutableCommand):
         self.log.info('Starting %s', str(self.command).lower())
 
         # Get job manager cmd
-        job_manager = Mpirun(self, mpitype="mpich")
+        job_manager = Mpirun(self, mpi_type="mpich")
         job_manager.assign_hosts(self.hosts, self.tmp)
         job_manager.assign_processes(processes)
         job_manager.exit_status_exception = self.exit_status_exception
@@ -150,8 +150,6 @@ class DcpCommand(MfuCommandBase):
         self.bufsize = FormattedParameter("--bufsize {}")
         # work size per task in bytes (default 64MB)
         self.chunksize = FormattedParameter("--chunksize {}")
-        # DAOS prefix for unified namespace path
-        self.daos_prefix = FormattedParameter("--daos-prefix {}")
         # DAOS API in {DFS, DAOS} (default uses DFS for POSIX containers)
         self.daos_api = FormattedParameter("--daos-api {}")
         # read source list from file
@@ -197,8 +195,6 @@ class DsyncCommand(MfuCommandBase):
         self.bufsize = FormattedParameter("--blocksize {}")
         # work size per task in bytes (default 4MB)
         self.chunksize = FormattedParameter("--chunksize {}")
-        # DAOS prefix for unified namespace path
-        self.daos_prefix = FormattedParameter("--daos-prefix {}")
         # DAOS API in {DFS, DAOS} (default uses DFS for POSIX containers)
         self.daos_api = FormattedParameter("--daos-api {}")
         # read and compare file contents rather than compare size and mtime
@@ -324,7 +320,7 @@ class FsCopy():
         self.log.info("Starting daos filesystem copy")
 
         return self.daos_cmd.filesystem_copy(src=self.src, dst=self.dst,
-	    preserve_props=self.preserve_props)
+                                             preserve_props=self.preserve_props)
 
 class ContClone():
     """Class defining an object of type ContClone.

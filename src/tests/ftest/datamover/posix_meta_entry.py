@@ -1,6 +1,6 @@
 #!/usr/bin/python
 '''
-  (C) Copyright 2020-2021 Intel Corporation.
+  (C) Copyright 2020-2022 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
@@ -23,7 +23,8 @@ class DmvrPosixMetaEntry(DataMoverTestBase):
         Test Description:
             Verifies that POSIX metadata is preserved for dcp.
         :avocado: tags=all,full_regression
-        :avocado: tags=datamover,dcp,dfuse
+        :avocado: tags=vm
+        :avocado: tags=datamover,mfu,mfu_dcp,dfuse
         :avocado: tags=dm_posix_meta_entry,dm_posix_meta_entry_dcp
         """
         self.run_dm_posix_meta_entry("DCP")
@@ -52,8 +53,7 @@ class DmvrPosixMetaEntry(DataMoverTestBase):
         self.set_tool(tool)
 
         # Get preserve level
-        preserve_on = self.params.get(
-            "preserve", "/run/{}/*".format(self.tool.lower()))
+        preserve_on = self.params.get("preserve", "/run/{}/*".format(self.tool.lower()))
 
         test_desc = self.test_id + " (preserve={})".format(str(preserve_on))
 

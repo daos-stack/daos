@@ -134,12 +134,15 @@ struct dfuse_inode_ops {
 };
 
 struct dfuse_event {
-	fuse_req_t	de_req;
-	daos_event_t	de_ev;
-	void		(*de_complete_cb)(struct dfuse_event *ev);
-	size_t		de_len;
-	d_iov_t		de_iov;
-	d_sg_list_t	de_sgl;
+	fuse_req_t                   de_req; /**< The fuse request handle */
+	daos_event_t                 de_ev;
+	size_t                       de_len;          /**< The size returned by daos */
+	size_t                       de_req_len;      /**< The size requested by fuse */
+	off_t                        de_req_position; /**< The file position requested by fuse */
+	d_iov_t                      de_iov;
+	d_sg_list_t                  de_sgl;
+	struct dfuse_obj_hdl *de_oh;
+	void (*de_complete_cb)(struct dfuse_event *ev);
 };
 
 extern struct dfuse_inode_ops dfuse_dfs_ops;
@@ -271,7 +274,7 @@ struct fuse_lowlevel_ops dfuse_ops;
 /* Helper macros for open() and creat() to log file access modes */
 #define LOG_MODE(HANDLE, FLAGS, MODE) do {			\
 		if ((FLAGS) & (MODE))				\
-			DFUSE_TRA_DEBUG(HANDLE, #MODE);	\
+			DFUSE_TRA_DEBUG(HANDLE, #MODE);		\
 		FLAGS &= ~MODE;					\
 	} while (0)
 
@@ -338,7 +341,7 @@ struct fuse_lowlevel_ops dfuse_ops;
 					"Invalid call to fuse_reply_err: 0"); \
 			__err = EIO;					\
 		}							\
-		if (__err == EIO || __err == EINVAL) \
+		if (__err == EIO || __err == EINVAL)			\
 			DFUSE_TRA_WARNING(desc, "Returning %d '%s'",	\
 					  __err, strerror(__err));	\
 		else							\
@@ -366,9 +369,10 @@ struct fuse_lowlevel_ops dfuse_ops;
 	do {								\
 		int __rc;						\
 		DFUSE_TRA_DEBUG(ie,					\
-				"Returning attr inode %#lx mode %#o",	\
+				"Returning attr inode %#lx mode %#o size %zi",	\
 				(attr)->st_ino,				\
-				(attr)->st_mode);			\
+				(attr)->st_mode,			\
+				(attr)->st_size);			\
 		__rc = fuse_reply_attr(req, attr,			\
 				(ie)->ie_dfs->dfc_attr_timeout);	\
 		if (__rc != 0)						\
@@ -403,7 +407,7 @@ struct fuse_lowlevel_ops dfuse_ops;
 #define DFUSE_REPLY_WRITE(desc, req, bytes)				\
 	do {								\
 		int __rc;						\
-		DFUSE_TRA_DEBUG(desc, "Returning write(%#zx)", bytes); \
+		DFUSE_TRA_DEBUG(desc, "Returning write(%#zx)", bytes);	\
 		__rc = fuse_reply_write(req, bytes);			\
 		if (__rc != 0)						\
 			DFUSE_TRA_ERROR(desc,				\
@@ -440,9 +444,10 @@ struct fuse_lowlevel_ops dfuse_ops;
 	do {								\
 		int __rc;						\
 		DFUSE_TRA_DEBUG(desc,					\
-				"Returning entry inode %#lx mode %#o",	\
+				"Returning entry inode %#lx mode %#o size %zi",	\
 				(entry).attr.st_ino,			\
-				(entry).attr.st_mode);			\
+				(entry).attr.st_mode,			\
+				(entry).attr.st_size);			\
 		__rc = fuse_reply_entry(req, &entry);			\
 		if (__rc != 0)						\
 			DFUSE_TRA_ERROR(desc,				\

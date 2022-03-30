@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2019-2021 Intel Corporation.
+ * (C) Copyright 2019-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -145,7 +145,7 @@ void fake_update_saw(char *file, int line, char *buf, size_t len)
 struct vos_fetch_test_context {
 	size_t			 nr; /** Num of bsgl.bio_iov/biov_csums pairs */
 	struct bio_sglist	 bsgl;
-	struct dcs_csum_info	*biov_csums;
+	struct dcs_ci_list	 biov_csums;
 	daos_iod_t		 iod;
 	struct daos_csummer	*csummer;
 	struct dcs_iod_csums	*iod_csum;
@@ -178,7 +178,6 @@ array_test_case_create(struct vos_fetch_test_context *ctx,
 	uint32_t	 cs;
 	size_t		 i = 0;
 	size_t		 j;
-	size_t		 c;
 	size_t		 nr;
 	uint8_t		*dummy_csums;
 
@@ -198,15 +197,14 @@ array_test_case_create(struct vos_fetch_test_context *ctx,
 	ctx->nr = nr;
 	bio_sgl_init(&ctx->bsgl, nr);
 	ctx->bsgl.bs_nr_out = nr;
-	D_ALLOC_ARRAY(ctx->biov_csums, nr);
-	assert_non_null(ctx->biov_csums);
+	assert_success(dcs_csum_info_list_init(&ctx->biov_csums, 10));
 
-	c = 0;
 	for (i = 0; i < nr; i++) {
 		struct extent_info	*l;
 		char			*data;
 		struct bio_iov		*biov;
-		struct dcs_csum_info	*info;
+		struct dcs_csum_info	 info;
+		uint8_t			 csum_buf[128];
 		size_t			 data_len;
 		size_t			 num_of_csum;
 		bio_addr_t		 addr = {0};
@@ -234,14 +232,15 @@ array_test_case_create(struct vos_fetch_test_context *ctx,
 			/** Just a rough count */
 			num_of_csum = data_len / cs + 1;
 
-			info = &ctx->biov_csums[c++];
-			D_ALLOC(info->cs_csum, csum_len * num_of_csum);
-			info->cs_buf_len = csum_len * num_of_csum;
-			info->cs_nr = num_of_csum;
-			info->cs_len = csum_len;
-			info->cs_chunksize = cs;
+			assert_true(csum_len * num_of_csum <= ARRAY_SIZE(csum_buf));
+			info.cs_csum = csum_buf;
+			info.cs_buf_len = csum_len * num_of_csum;
+			info.cs_nr = num_of_csum;
+			info.cs_len = csum_len;
+			info.cs_chunksize = cs;
 			for (j = 0; j < num_of_csum; j++)
-				ci_insert(info, j, dummy_csums, csum_len);
+				ci_insert(&info, j, dummy_csums, csum_len);
+			dcs_csum_info_save(&ctx->biov_csums, &info);
 		}
 	}
 
@@ -268,10 +267,8 @@ test_case_destroy(struct vos_fetch_test_context *ctx)
 
 		if (bio_buf)
 			D_FREE(bio_buf);
-
-		if (ctx->biov_csums[i].cs_csum)
-			D_FREE(ctx->biov_csums[i].cs_csum);
 	}
+	dcs_csum_info_list_fini(&ctx->biov_csums);
 
 	if (ctx->iod.iod_recxs)
 		D_FREE(ctx->iod.iod_recxs);
@@ -284,7 +281,7 @@ static int
 fetch_csum_verify_bsgl_with_args(struct vos_fetch_test_context *ctx)
 {
 	return ds_csum_add2iod(
-		&ctx->iod, ctx->csummer, &ctx->bsgl, ctx->biov_csums, NULL,
+		&ctx->iod, ctx->csummer, &ctx->bsgl, &ctx->biov_csums, NULL,
 		ctx->iod_csum);
 }
 
@@ -1127,8 +1124,15 @@ fetch_with_hole3(void **state)
 }
 
 /**
+ *
  * 2 holes, first spans a whole chunk, second starts in middle of a chunk and
  * ends in middle of next chunk
+ *
+ * Should look like this:
+ * Fetch extent:	_  _  _  _  _  _  _  _ | A  B  C  D  E  F  _  _ | _  _  G  H  I  J  K  L
+ * epoch 2 extent:	                       |                        |       G  H  I  J  K  L
+ * epoch 1 extent:	                       | A  B  C  D  E  F       |
+ * index:		0  1  2  3  4  5  6  7 | 8  9 10 11 12 13 14 15 |16 17 18 19 20 21 22 23
  */
 static void
 fetch_with_hole4(void **state)
@@ -1146,7 +1150,7 @@ fetch_with_hole4(void **state)
 			{.data = "ABCDEF", .sel = {8, 13}, .ful = {8, 13} },
 			{.data = "", .sel = {14, 17}, .ful = {14, 17},
 				.is_hole = true},
-			{.data = "GHIJKL", .sel = {18, 23}, .ful = {8, 23} },
+			{.data = "GHIJKL", .sel = {18, 23}, .ful = {18, 23} },
 			{.data = NULL}
 		}
 	});
@@ -1242,6 +1246,45 @@ fetch_with_hole6(void **state)
 	FAKE_UPDATE_SAW(">A|>ABCD|");
 	ASSERT_CSUM_EMPTY(ctx, 0);
 	ASSERT_CSUM_IDX(ctx, "NNNN", 1);
+
+	/** clean up */
+	test_case_destroy(&ctx);
+}
+
+
+/**
+ * Hole within a single chunk
+ *
+ * Should look like this:
+ * Fetch extent:	   A | B  _ | _  _ |      | H  I |  J  K |  L  M
+ * epoch 3 punch:            |    _ | _  _ | _  _ |
+ * epoch 1 extent:	   A | B  C | D  E | F  G | H  I |  J  K |  L  M
+ * index:		0  1 | 2  3 | 4  5 | 6  7 | 8  9 | 10 11 | 12 13
+ */
+static void
+fetch_with_hole7(void **state)
+{
+	struct vos_fetch_test_context ctx;
+
+	ARRAY_TEST_CASE_CREATE(&ctx, {
+		.request_idx = 1,
+		.request_len = 13,
+		.chunksize = 2,
+		.rec_size = 1,
+		.layout = {
+			{.data = "ABCDEFGHIJKLM", .sel = {1, 2}, .ful = {1, 13} },
+			{.data = "", .sel = {3, 7}, .ful = {3, 7}, .is_hole = true},
+			{.data = "HIJKLM", .sel = {8, 13}, .ful = {1, 13} },
+			{.data = NULL}
+		}
+	});
+
+	/** Act */
+	assert_success(fetch_csum_verify_bsgl_with_args(&ctx));
+
+	/** Verify */
+	FAKE_UPDATE_SAW(">B|>BC|");
+	ASSERT_CSUM(ctx, "SSSS");
 
 	/** clean up */
 	test_case_destroy(&ctx);
@@ -1418,19 +1461,17 @@ static const struct CMUnitTest array_tests[] = {
 	TA("SRV_CSUM_ARRAY15: Full and partial chunks",
 	   fetch_multiple_unaligned_extents),
 	TA("SRV_CSUM_ARRAY16: Many sequential extents", many_extents),
-	TA("SRV_CSUM_ARRAY17: Begins with hole",
-	   request_that_begins_before_extent),
+	TA("SRV_CSUM_ARRAY17: Begins with hole", request_that_begins_before_extent),
 	TA("SRV_CSUM_ARRAY18: Hole in middle", fetch_with_hole),
 	TA("SRV_CSUM_ARRAY19: Hole in middle", fetch_with_hole2),
 	TA("SRV_CSUM_ARRAY20: Many holes in middle", fetch_with_hole3),
 	TA("SRV_CSUM_ARRAY21: First chunk is hole", fetch_with_hole4),
-	TA("SRV_CSUM_ARRAY22: Handle holes while creating csums",
-	   fetch_with_hole5),
+	TA("SRV_CSUM_ARRAY22: Handle holes while creating csums", fetch_with_hole5),
 	TA("SRV_CSUM_ARRAY22: Hole spans past first chunk", fetch_with_hole6),
-	TA("SRV_CSUM_ARRAY23: First recx request of multiple",
-	   request_is_only_part_of_biovs),
-	TA("SRV_CSUM_ARRAY24: Fetch with larger records1", larger_records),
-	TA("SRV_CSUM_ARRAY25: Fetch with larger records2", larger_records2),
+	TA("SRV_CSUM_ARRAY13: Hole in middle spans multiple chunks", fetch_with_hole7),
+	TA("SRV_CSUM_ARRAY24: First recx request of multiple", request_is_only_part_of_biovs),
+	TA("SRV_CSUM_ARRAY25: Fetch with larger records1", larger_records),
+	TA("SRV_CSUM_ARRAY26: Fetch with larger records2", larger_records2),
 };
 
 /**
@@ -1448,6 +1489,7 @@ update_fetch_sv(void **state)
 	 * biov 'extent'
 	 */
 	struct dcs_csum_info	 from_vos_begin = {0};
+	struct dcs_ci_list	 from_vos_begin_list = {0};
 	struct dcs_csum_info	 csum_info = {0};
 	struct dcs_iod_csums	 iod_csums = {0};
 
@@ -1475,8 +1517,10 @@ update_fetch_sv(void **state)
 
 	ci_set(&from_vos_begin, &csum, sizeof(uint32_t), sizeof(uint32_t), 1,
 	       CSUM_NO_CHUNK, 1);
+	dcs_csum_info_list_init(&from_vos_begin_list, 1);
+	dcs_csum_info_save(&from_vos_begin_list, &from_vos_begin);
 
-	ds_csum_add2iod(&iod, csummer, &bsgl, &from_vos_begin, NULL,
+	ds_csum_add2iod(&iod, csummer, &bsgl, &from_vos_begin_list, NULL,
 			&iod_csums);
 
 	assert_memory_equal(csum_info.cs_csum, from_vos_begin.cs_csum,

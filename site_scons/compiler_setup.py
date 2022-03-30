@@ -21,6 +21,7 @@ DESIRED_FLAGS.extend(['-fstack-protector-strong', '-fstack-clash-protection'])
 PP_ONLY_FLAGS = ['-Wno-parentheses-equality', '-Wno-builtin-requires-header',
                  '-Wno-unused-function']
 
+
 def base_setup(env, prereqs=None):
     """Setup the scons environment for the compiler
 
@@ -63,12 +64,12 @@ def base_setup(env, prereqs=None):
             env.AppendUnique(CPPDEFINES='DAOS_BUILD_RELEASE')
 
         env.AppendUnique(CCFLAGS=['-O2'])
-        env.AppendUnique(CPPDEFINES={'_FORTIFY_SOURCE':'2'})
+        env.AppendUnique(CPPDEFINES={'_FORTIFY_SOURCE': '2'})
 
     if build_type != 'release':
-        env.AppendUnique(CPPDEFINES={'FAULT_INJECTION':'1'})
+        env.AppendUnique(CPPDEFINES={'FAULT_INJECTION': '1'})
 
-    env.AppendUnique(CPPDEFINES={'CMOCKA_FILTER_SUPPORTED':'0'})
+    env.AppendUnique(CPPDEFINES={'CMOCKA_FILTER_SUPPORTED': '0'})
 
     env.AppendUnique(CPPDEFINES='_GNU_SOURCE')
 
@@ -77,7 +78,7 @@ def base_setup(env, prereqs=None):
     config = Configure(cenv)
     if config.CheckHeader('stdatomic.h'):
         config.Finish()
-        env.AppendUnique(CPPDEFINES={'HAVE_STDATOMIC':'1'})
+        env.AppendUnique(CPPDEFINES={'HAVE_STDATOMIC': '1'})
     elif prereqs:
         config.Finish()
         prereqs.require(env, 'openpa', headers_only=True)
@@ -96,7 +97,9 @@ def base_setup(env, prereqs=None):
 
     env['BSETUP'] = compiler
 
-_TO_STRIP=['_FORTIFY_SOURCE']
+
+_TO_STRIP = ['_FORTIFY_SOURCE']
+
 
 def remove_fortify(env):
     """Remove the _FORTIFY_SOURCE option"""

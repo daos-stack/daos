@@ -103,10 +103,8 @@ mdtest:
   depth: 0
 test_obj_class:
   oclass:
-    - RP_2G8
     - RP_4G1
-    - S1
-    - EC_2P1G1
+    - EC_2P2G1
 loop_test:
   iterations: 3
 aggregation:
@@ -123,6 +121,6 @@ snapshot:
   test_with_snapshot: True
 pool_capacity:
   pool_fillup: 50
-  pool_test_oclass: RP_2GX
+  pool_test_oclass: RP_3GX
   pool_test_repetitions: 1
 

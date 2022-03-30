@@ -160,18 +160,18 @@ class TestDaosApiBase(ObjectWithParameters):
             # Determine which comparison to utilize for this check
             compare = ("==", lambda x, y: x == y, "does not match")
             if isinstance(expect, str):
-                comparisons = {
-                    "<": (lambda x, y: x < y, "is too large"),
-                    ">": (lambda x, y: x > y, "is too small"),
-                    "<=": (
-                        lambda x, y: x <= y, "is too large or does not match"),
-                    ">=": (
-                        lambda x, y: x >= y, "is too small or does not match"),
-                }
-                for key, val in list(comparisons.items()):
+                comparisons = [
+                    ["<=", (lambda x, y: x <= y, "is too large or does not match")],
+                    ["<", (lambda x, y: x < y, "is too large")],
+                    [">=", (lambda x, y: x >= y, "is too small or does not match")],
+                    [">", (lambda x, y: x > y, "is too small")],
+                ]
+                for comparison in comparisons:
                     # If the expected value is preceded by one of the known
                     # comparison keys, use the comparison and remove the key
                     # from the expected value
+                    key = comparison[0]
+                    val = comparison[1]
                     if expect[:len(key)] == key:
                         compare = (key, val[0], val[1])
                         expect = expect[len(key):]
@@ -191,3 +191,32 @@ class TestDaosApiBase(ObjectWithParameters):
                 self.log.error(msg)
                 check_status = False
         return check_status
+
+
+class LabelGenerator():
+    # pylint: disable=too-few-public-methods
+    """Generates label used for pools and containers."""
+
+    def __init__(self, value=1):
+        """Constructor.
+
+        Args:
+            value (int): Number that's attached after the base_label.
+        """
+        self.value = value
+
+    def get_label(self, base_label):
+        """Create a label by adding number after the given base_label.
+
+        Args:
+            base_label (str): Label prefix. Don't include space.
+
+        Returns:
+            str: Created label.
+
+        """
+        label = base_label
+        if label is not None:
+            label = "_".join([base_label, str(self.value)])
+            self.value += 1
+        return label

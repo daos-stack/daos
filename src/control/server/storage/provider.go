@@ -206,6 +206,11 @@ func (p *Provider) FormatScm(force bool) error {
 	return nil
 }
 
+// GetBdevConfig returns the Bdev tier configs.
+func (p *Provider) GetBdevConfigs() []*TierConfig {
+	return p.engineStorage.Tiers.BdevConfigs()
+}
+
 // PrepareBdevs attempts to configure NVMe devices to be usable by DAOS.
 func (p *Provider) PrepareBdevs(req BdevPrepareRequest) (*BdevPrepareResponse, error) {
 	resp, err := p.bdev.Prepare(req)
@@ -213,7 +218,7 @@ func (p *Provider) PrepareBdevs(req BdevPrepareRequest) (*BdevPrepareResponse, e
 	p.Lock()
 	defer p.Unlock()
 
-	if err == nil && resp != nil {
+	if err == nil && resp != nil && !req.CleanHugePagesOnly {
 		p.vmdEnabled = resp.VMDPrepared
 	}
 	return resp, err
@@ -355,8 +360,9 @@ func BdevWriteConfigRequestFromConfig(ctx context.Context, log logging.Logger, c
 		// devices.
 
 		var begin, end uint8
-		if tier.Bdev.BusidRange != nil {
-			log.Debugf("received user-specified hotplug bus-id range %q", tier.Bdev.BusidRange)
+		if tier.Bdev.BusidRange != nil && !tier.Bdev.BusidRange.IsZero() {
+			log.Debugf("received user-specified hotplug bus-id range %q",
+				tier.Bdev.BusidRange)
 			begin = tier.Bdev.BusidRange.LowAddress.Bus
 			end = tier.Bdev.BusidRange.HighAddress.Bus
 		} else {

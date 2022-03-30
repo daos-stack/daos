@@ -9,6 +9,7 @@ package control
 import (
 	"context"
 	"fmt"
+	"strings"
 	"testing"
 
 	"github.com/dustin/go-humanize"
@@ -20,6 +21,7 @@ import (
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	"github.com/daos-stack/daos/src/control/drpc"
 	"github.com/daos-stack/daos/src/control/logging"
+	"github.com/daos-stack/daos/src/control/server/storage"
 	"github.com/daos-stack/daos/src/control/system"
 )
 
@@ -693,7 +695,19 @@ func TestPoolGetProp(t *testing.T) {
 						},
 						{
 							Number: propWithVal("ec_cell_sz", "").Number,
-							Value:  &mgmtpb.PoolProperty_Numval{1024},
+							Value:  &mgmtpb.PoolProperty_Numval{4096},
+						},
+						{
+							Number: propWithVal("rf", "").Number,
+							Value:  &mgmtpb.PoolProperty_Numval{1},
+						},
+						{
+							Number: propWithVal("ec_pda", "").Number,
+							Value:  &mgmtpb.PoolProperty_Numval{1},
+						},
+						{
+							Number: propWithVal("rp_pda", "").Number,
+							Value:  &mgmtpb.PoolProperty_Numval{2},
 						},
 						{
 							Number: propWithVal("policy", "").Number,
@@ -722,10 +736,13 @@ func TestPoolGetProp(t *testing.T) {
 				ID: common.MockUUID(),
 			},
 			expResp: []*PoolProperty{
-				propWithVal("ec_cell_sz", "1024"),
+				propWithVal("ec_cell_sz", "4096"),
+				propWithVal("ec_pda", "1"),
 				propWithVal("label", "foo"),
 				propWithVal("policy", "type=io_size"),
 				propWithVal("reclaim", "disabled"),
+				propWithVal("rf", "1"),
+				propWithVal("rp_pda", "2"),
 				propWithVal("scrub", "continuous"),
 				propWithVal("scrub-cred", "1"),
 				propWithVal("scrub-freq", "1024"),
@@ -1150,6 +1167,7 @@ func TestControl_GetMaxPoolSize(t *testing.T) {
 		ScmBytes  uint64
 		NvmeBytes uint64
 		Error     error
+		Debug     string
 	}
 
 	for name, tc := range map[string]struct {
@@ -1343,7 +1361,7 @@ func TestControl_GetMaxPoolSize(t *testing.T) {
 				Error: errors.New("Host without SCM storage"),
 			},
 		},
-		"SCM storage too small": {
+		"Unusable NVMe device": {
 			HostsConfigArray: []MockHostStorageConfig{
 				{
 					HostName: "foo",
@@ -1351,15 +1369,26 @@ func TestControl_GetMaxPoolSize(t *testing.T) {
 						{
 							MockStorageConfig: MockStorageConfig{
 								TotalBytes: uint64(100) * uint64(humanize.GByte),
-								AvailBytes: PoolMetadataBytes / uint64(2),
+								AvailBytes: uint64(100) * uint64(humanize.GByte),
 							},
 						},
 					},
-					NvmeConfig: []MockNvmeConfig{},
+					NvmeConfig: []MockNvmeConfig{
+						{
+							MockStorageConfig: MockStorageConfig{
+								TotalBytes: uint64(1) * uint64(humanize.TByte),
+								AvailBytes: uint64(1) * uint64(humanize.TByte),
+								NvmeState:  new(storage.NvmeDevState),
+							},
+							Rank: 0,
+						},
+					},
 				},
 			},
 			ExpectedOutput: ExpectedOutput{
-				Error: errors.New("Not enough SCM storage available with the SCM namespace"),
+				ScmBytes:  uint64(100) * uint64(humanize.GByte),
+				NvmeBytes: 0,
+				Debug:     "not usable",
 			},
 		},
 	} {
@@ -1390,26 +1419,31 @@ func TestControl_GetMaxPoolSize(t *testing.T) {
 			}
 			mockInvoker := NewMockInvoker(log, mockInvokerConfig)
 
-			scmBytes, nvmeBytes, err := GetMaxPoolSize(context.TODO(), mockInvoker)
+			scmBytes, nvmeBytes, err := GetMaxPoolSize(context.TODO(), log, mockInvoker)
 
 			if tc.ExpectedOutput.Error != nil {
 				common.AssertTrue(t, err != nil, "Expected error")
 				common.CmpErr(t, tc.ExpectedOutput.Error, err)
-			} else {
-				common.AssertTrue(t, err == nil, "Expected no error")
-				common.AssertEqual(t,
-					tc.ExpectedOutput.ScmBytes,
-					scmBytes,
-					fmt.Sprintf("Invalid SCM pool size: expected=%d got=%d",
-						tc.ExpectedOutput.ScmBytes,
-						scmBytes))
+				return
+			}
 
-				common.AssertEqual(t,
+			common.AssertTrue(t, err == nil, "Expected no error")
+			common.AssertEqual(t,
+				tc.ExpectedOutput.ScmBytes,
+				scmBytes,
+				fmt.Sprintf("Invalid SCM pool size: expected=%d got=%d",
+					tc.ExpectedOutput.ScmBytes,
+					scmBytes))
+
+			common.AssertEqual(t,
+				tc.ExpectedOutput.NvmeBytes,
+				nvmeBytes,
+				fmt.Sprintf("Invalid NVME pool size: expected=%d got=%d",
 					tc.ExpectedOutput.NvmeBytes,
-					nvmeBytes,
-					fmt.Sprintf("Invalid NVME pool size: expected=%d got=%d",
-						tc.ExpectedOutput.NvmeBytes,
-						nvmeBytes))
+					nvmeBytes))
+			if tc.ExpectedOutput.Debug != "" {
+				common.AssertTrue(t, strings.Contains(buf.String(), tc.ExpectedOutput.Debug),
+					"Missing log message: "+tc.ExpectedOutput.Debug)
 			}
 		})
 	}

@@ -68,6 +68,8 @@ message BioHealthResp {
 	uint64 pll_lock_loss_cnt = 43;
 	uint64 nand_bytes_written = 44;
 	uint64 host_bytes_written = 45;
+	// Engine configs properties
+	uint64 cluster_size = 46; // blobstore cluster size in bytes
 }
 
 message SmdDevReq {
@@ -120,7 +122,7 @@ message DevReplaceResp {
 	reserved 3;
 	int32 status = 1; // DAOS error code
 	string new_dev_uuid = 2; // UUID of new (hot-plugged) blobstore/device
-	string ev_state = 4; // NVMe device state
+	string dev_state = 4; // NVMe device state
 }
 
 message DevIdentifyReq {

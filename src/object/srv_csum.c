@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2019-2021 Intel Corporation.
+ * (C) Copyright 2019-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -13,7 +13,7 @@
 #include <daos_srv/bio.h>
 
 #define C_TRACE(...) D_DEBUG(DB_CSUM, __VA_ARGS__)
-#define CHUNK_IDX(ctx, idx) (((idx) + 1) / (ctx)->cc_rec_chunksize)
+#define YES_NO(b) b ? "YES" : "NO"
 
 /** Holds information about checksum and data to verify when a
  * new checksum for an extent chunk is needed
@@ -59,7 +59,7 @@ struct csum_context {
 	/** checksums for the bsgl. There should be 1
 	 * csum info for each iov in bsgl (that's not a hole)
 	 */
-	struct dcs_csum_info	*cc_biov_csums;
+	struct dcs_ci_list	*cc_biov_csums;
 	uint64_t		 cc_biov_csums_idx;
 	/** while processing, keep an index of csum within csum info  */
 	uint64_t		 cc_biov_csum_idx;
@@ -77,9 +77,8 @@ struct csum_context {
 };
 
 static void
-cc_init(struct csum_context *ctx, struct daos_csummer *csummer,
-	struct bio_sglist *bsgl, struct dcs_csum_info *biov_csums,
-	daos_size_t size)
+cc_init(struct csum_context *ctx, struct daos_csummer *csummer, struct bio_sglist *bsgl,
+	struct dcs_ci_list *biov_csums, daos_size_t size)
 {
 	ctx->cc_csummer = csummer;
 	ctx->cc_rec_len = size;
@@ -293,8 +292,10 @@ cc_iodcsum_incr(struct csum_context *ctx, uint32_t nr)
 static uint8_t *
 cc2biovcsum(const struct csum_context *ctx)
 {
-	return ci_idx2csum(&ctx->cc_biov_csums[ctx->cc_biov_csums_idx],
-			   ctx->cc_biov_csum_idx);
+	struct dcs_csum_info *ci = dcs_csum_info_get(ctx->cc_biov_csums, ctx->cc_biov_csums_idx);
+
+	D_ASSERT(ci);
+	return ci_idx2csum(ci, ctx->cc_biov_csum_idx);
 }
 
 static void
@@ -310,30 +311,48 @@ cc_biovcsum_incr(struct csum_context *ctx, uint32_t nr)
  * means that a new checksum needs to be calculated for that chunk.
  */
 static bool
-cc_need_new_csum(struct csum_context *ctx, daos_off_t idx)
+cc_need_new_csum(struct csum_context *ctx, daos_off_t recx_idx)
 {
 	struct biov_ranges	*br = &ctx->cc_biov_ranges;
+	uint64_t		 chunk_idx = recx_idx  / ctx->cc_rec_chunksize;
+
+	bool result = false;
 
 	/**
-	 * biov has a prefix and currently in the same chunk as the
-	 * beginning of the biov
+	 * - biov has a prefix
+	 * - current recx idx is in same chunk as beginning of request
+	 * - at least part of the prefix is in the current
 	 */
 	if (br->br_has_prefix &&
-	    cc_in_same_chunk(ctx, idx, br->br_raw.dcr_lo))
-		return true;
+	    chunk_idx == br->br_req.dcr_lo / ctx->cc_rec_chunksize &&
+	    chunk_idx == ((br->br_req.dcr_lo - 1) / ctx->cc_rec_chunksize))
+		result = true;
 	/**
-	 * biov has a suffix and currently in the same chunk as the
-	 * end of the biov
+	 * - biov has a suffix
+	 * - current recx idx in the same chunk as the end of the request
+	 * - at least part of the suffix is in the current chunk
 	 */
-	if (br->br_has_suffix &&
-	    cc_in_same_chunk(ctx, idx, br->br_raw.dcr_hi))
-		return true;
+	else if (br->br_has_suffix &&
+	    chunk_idx == (br->br_req.dcr_hi / ctx->cc_rec_chunksize) &&
+	    chunk_idx == ((br->br_req.dcr_hi + 1) / ctx->cc_rec_chunksize))
+		result = true;
 
-	/** another extent in the same chunk */
-	if (cc_next_non_hole_extent_in_chunk(ctx, idx))
-		return true;
+	/**
+	 * has no prefix or suffix portion in the current extent, but
+	 * there's another extent in the same chunk
+	 */
+	else if (cc_next_non_hole_extent_in_chunk(ctx, recx_idx))
+		result = true;
 
-	return false;
+	C_TRACE("br_has_prefix: %s, br_has_suffix: %s, recx_idx: %lu, chunk_idx: %lu, br_req: "
+			DF_RANGE", br_raw: "DF_RANGE", result: %s\n",
+		YES_NO(br->br_has_prefix), YES_NO(br->br_has_suffix), recx_idx, chunk_idx,
+		DP_RANGE(br->br_req),
+		DP_RANGE(br->br_raw),
+		YES_NO(result)
+		);
+
+	return result;
 }
 
 /** copy the number of csums and then increment csum indexes */
@@ -408,7 +427,6 @@ cc_biov_move_next(struct csum_context *ctx, bool biov_csum_used)
 	/** move to the next biov */
 	ctx->cc_bsgl_idx.iov_idx++;
 	ctx->cc_bsgl_idx.iov_offset = 0;
-	C_TRACE("Moving to biov %d", ctx->cc_bsgl_idx.iov_idx);
 
 	/** Need to know if biov csum was used. For holes there is no csum, but
 	 * still need to move to next biov
@@ -417,6 +435,9 @@ cc_biov_move_next(struct csum_context *ctx, bool biov_csum_used)
 		ctx->cc_biov_csum_idx = 0;
 		ctx->cc_biov_csums_idx++;
 	}
+
+	C_TRACE("Moving to biov %d, biov_csum_used: %s, csums_idx: %lu\n", ctx->cc_bsgl_idx.iov_idx,
+		biov_csum_used ? "YES" : "NO", ctx->cc_biov_csums_idx);
 
 	set_biov_ranges(ctx, ctx->cc_cur_recx_idx);
 }
@@ -433,20 +454,31 @@ cc_move_forward(struct csum_context *ctx, uint64_t nr, bool biov_csum_used)
 		cc_biov_move_next(ctx, biov_csum_used);
 }
 
-void cc_skip_hole(struct csum_context *ctx)
+/* Count the number of checksums to copy or skip for a hole */
+#define num_csums_to_biov_end(ctx) \
+	((ctx->cc_biov_ranges.br_req.dcr_hi / ctx->cc_rec_chunksize) - \
+	(ctx->cc_cur_recx_idx / ctx->cc_rec_chunksize) + 1)
+
+#define nr_to_biov_end(ctx) (ctx->cc_biov_ranges.br_req.dcr_hi - ctx->cc_cur_recx_idx + 1)
+#define cur_chunk_idx(ctx) (ctx->cc_cur_recx_idx / ctx->cc_rec_chunksize)
+#define first_chunk_idx(ctx) (ctx->cc_cur_recx->rx_idx / ctx->cc_rec_chunksize)
+
+static void
+cc_skip_hole(struct csum_context *ctx)
 {
-	daos_size_t csum_nr;
-	daos_size_t nr;
-	daos_size_t hi = ctx->cc_biov_ranges.br_req.dcr_hi;
+	daos_size_t csum_nr = num_csums_to_biov_end(ctx);
+	daos_size_t nr = nr_to_biov_end(ctx);
 
-	csum_nr = (CHUNK_IDX(ctx, hi) -
-		   CHUNK_IDX(ctx, ctx->cc_cur_recx->rx_idx)) - ctx->cc_csum_idx;
+	if (ctx->cc_csum_idx >  cur_chunk_idx(ctx) - first_chunk_idx(ctx))
+		csum_nr--; /* Already passed the current chunk */
 
-	nr = hi - ctx->cc_cur_recx_idx + 1;
+	if (cc_need_new_csum(ctx, ctx->cc_biov_ranges.br_req.dcr_hi))
+		csum_nr--;
 
-	C_TRACE("Skipping hole [%lu-%lu]. %lu csums and %lu records\n",
+	C_TRACE("Skipping hole ["DF_X64"-"DF_X64"]. %lu csums and %lu records, csum_idx %lu->%lu\n",
 		ctx->cc_biov_ranges.br_req.dcr_lo,
-		ctx->cc_biov_ranges.br_req.dcr_hi, csum_nr, nr);
+		ctx->cc_biov_ranges.br_req.dcr_hi, csum_nr, nr,
+		ctx->cc_csum_idx, ctx->cc_csum_idx + csum_nr);
 	cc_iodcsum_incr(ctx, csum_nr);
 	cc_move_forward(ctx, nr, false);
 }
@@ -467,10 +499,11 @@ cc_create(struct csum_context *ctx)
 
 	csum = cc2iodcsum(ctx);
 	D_ASSERT(csum != NULL);
+	C_TRACE("Creating new checksum for csum_idx: %lu\n", ctx->cc_csum_idx);
 	cc_iodcsum_incr(ctx, 1);
 
-	C_TRACE("(CALC) Starting new checksum for recx idx: %lu\n",
-		ctx->cc_cur_recx_idx);
+	C_TRACE("(CALC) Starting new checksum for recx idx: "DF_X64", recx: "DF_RECX"\n",
+		ctx->cc_cur_recx_idx, DP_RECX(*ctx->cc_cur_recx));
 	/** Setup csum to start updating */
 	memset(csum, 0, ctx->cc_csum_len);
 	daos_csummer_set_buffer(ctx->cc_csummer, csum, ctx->cc_csum_len);
@@ -511,30 +544,22 @@ cc_create(struct csum_context *ctx)
 static int
 cc_copy(struct csum_context *ctx)
 {
-	/** trust that if checksums needed to be created for earlier chunks
-	 * has already been handled any new csums
-	 */
-	daos_size_t csum_nr = ctx->cc_biov_ranges.br_req.dcr_hi /
-			      ctx->cc_rec_chunksize -
-			      ctx->cc_cur_recx_idx / ctx->cc_rec_chunksize + 1;
-	daos_size_t nr = ctx->cc_biov_ranges.br_req.dcr_hi -
-			 ctx->cc_cur_recx_idx + 1;
+	daos_size_t csum_nr = num_csums_to_biov_end(ctx);
+	daos_size_t nr = nr_to_biov_end(ctx);
 
 	/**
-	 * If the last chunk the biov is in needs a new csum then remove it. It
+	 * If the last chunk in the biov is in need of a new csum then remove it. It
 	 * will be created on the next pass of the \cc_add_csums_for_recx
-	 *
 	 */
 	if (cc_need_new_csum(ctx, ctx->cc_biov_ranges.br_req.dcr_hi)) {
 		csum_nr--;
-		nr -= (ctx->cc_biov_ranges.br_req.dcr_hi + 1) %
-		      ctx->cc_rec_chunksize;
+		nr -= (ctx->cc_biov_ranges.br_req.dcr_hi + 1) % ctx->cc_rec_chunksize;
 	}
 
 	if (csum_nr == 0)
 		return 0;
 
-	C_TRACE("Copying %lu csums for %lu records [%lu-%lu]\n", csum_nr, nr,
+	C_TRACE("Copying %lu csums for %lu records ["DF_X64"-"DF_X64"]\n", csum_nr, nr,
 		ctx->cc_cur_recx_idx, ctx->cc_cur_recx_idx + nr - 1);
 	cc_copy_csum(ctx, csum_nr);
 	cc_move_forward(ctx, nr, true);
@@ -557,6 +582,7 @@ cc_add_csums_for_recx(struct csum_context *ctx, daos_recx_t *recx,
 	ctx->cc_cur_recx = recx;
 	ctx->cc_csum_idx = 0;
 	set_biov_ranges(ctx, recx->rx_idx);
+	C_TRACE("recx: "DF_RECX"\n", DP_RECX(*recx));
 
 	while (cc_has_biov(ctx) && !cc_end_of_recx(ctx)) {
 		if (bio_addr_is_hole(&cc2biov(ctx)->bi_addr))
@@ -570,13 +596,13 @@ cc_add_csums_for_recx(struct csum_context *ctx, daos_recx_t *recx,
 			return rc;
 	}
 
+	C_TRACE("rc: "DF_RC"\n", DP_RC(rc));
 	return rc;
 }
 
 static int
-ds_csum_add2iod_array(daos_iod_t *iod, struct daos_csummer *csummer,
-		      struct bio_sglist *bsgl,
-		      struct dcs_csum_info *biov_csums, size_t *biov_csums_used,
+ds_csum_add2iod_array(daos_iod_t *iod, struct daos_csummer *csummer, struct bio_sglist *bsgl,
+		      struct dcs_ci_list *biov_csums, size_t *biov_csums_used,
 		      struct dcs_iod_csums *iod_csums)
 {
 	struct csum_context	ctx = {0};
@@ -591,10 +617,11 @@ ds_csum_add2iod_array(daos_iod_t *iod, struct daos_csummer *csummer,
 	 */
 	for (i = 0, j = 0; i < bsgl->bs_nr_out; i++) {
 		if (bio_addr_is_hole(&(bio_sgl_iov(bsgl, i)->bi_addr))) {
-			D_DEBUG(DB_CSUM, "biov is a hole. skipping\n");
+			C_TRACE("biov is a hole. skipping "DF_U64" bytes\n",
+				bio_sgl_iov(bsgl, i)->bi_data_len);
 			continue;
 		}
-		if (!ci_is_valid(&biov_csums[j++])) {
+		if (!ci_is_valid(dcs_csum_info_get(biov_csums, j++))) {
 			D_ERROR("Invalid csum for biov %d.\n", i);
 			return -DER_CSUM;
 		}
@@ -611,11 +638,10 @@ ds_csum_add2iod_array(daos_iod_t *iod, struct daos_csummer *csummer,
 		struct dcs_csum_info	*info = &iod_csums->ic_data[i];
 
 		if (ctx.cc_rec_len > 0 && ci_is_valid(info)) {
-			D_DEBUG(DB_CSUM, "Adding csums for recx %d\n", i);
+			C_TRACE("Adding csums for recx %d: "DF_RECX"\n", i, DP_RECX(*recx));
 			rc = cc_add_csums_for_recx(&ctx, recx, info);
 			if (rc != 0)
-				D_ERROR("Failed to add csum for "
-						"recx"DF_RECX": %d\n",
+				D_ERROR("Failed to add csum for recx"DF_RECX": %d\n",
 					DP_RECX(*recx), rc);
 		}
 	}
@@ -633,9 +659,9 @@ ds_csum_add2iod_array(daos_iod_t *iod, struct daos_csummer *csummer,
 }
 
 int
-ds_csum_add2iod(daos_iod_t *iod, struct daos_csummer *csummer,
-		struct bio_sglist *bsgl, struct dcs_csum_info *biov_csums,
-		size_t *biov_csums_used, struct dcs_iod_csums *iod_csums)
+ds_csum_add2iod(daos_iod_t *iod, struct daos_csummer *csummer, struct bio_sglist *bsgl,
+		struct dcs_ci_list *biov_csums, size_t *biov_csums_used,
+		struct dcs_iod_csums *iod_csums)
 {
 	if (biov_csums_used != NULL)
 		*biov_csums_used = 0;
@@ -647,10 +673,11 @@ ds_csum_add2iod(daos_iod_t *iod, struct daos_csummer *csummer,
 		return 0;
 
 	if (iod->iod_type == DAOS_IOD_SINGLE) {
-	D_DEBUG(DB_CSUM, "Adding fetched to IOD: "DF_C_IOD", csum: "DF_CI"\n",
-		DP_C_IOD(iod), DP_CI(biov_csums[0]));
-		ci_insert(&iod_csums->ic_data[0], 0,
-			  biov_csums[0].cs_csum, biov_csums[0].cs_len);
+		struct dcs_csum_info *ci = dcs_csum_info_get(biov_csums, 0);
+
+		C_TRACE("Adding fetched to IOD: "DF_C_IOD", csum: "DF_CI"\n",
+			DP_C_IOD(iod), DP_CI(*ci));
+		ci_insert(&iod_csums->ic_data[0], 0, ci->cs_csum, ci->cs_len);
 		if (biov_csums_used != NULL)
 			(*biov_csums_used) = 1;
 		return 0;

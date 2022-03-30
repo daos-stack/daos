@@ -5,14 +5,19 @@
 //
 package drpc
 
-import "unsafe"
+import (
+	"math"
+	"unsafe"
+)
 
 /*
 #cgo LDFLAGS: -ldaos_common -lgurt -lcart
 #include <daos_prop.h>
 #include <daos_pool.h>
-#include <daos_prop.h>
+#include <daos/object.h>
+#include <daos/cont_props.h>
 #include <daos_srv/policy.h>
+#include <daos_srv/control.h>
 */
 import "C"
 
@@ -39,6 +44,12 @@ const (
 	PoolPropertyOwnerGroup = C.DAOS_PROP_PO_OWNER_GROUP
 	// PoolPropertyECCellSize is the EC Cell size.
 	PoolPropertyECCellSize = C.DAOS_PROP_PO_EC_CELL_SZ
+	// PoolPropertyRedunFac defines redundancy factor of the pool.
+	PoolPropertyRedunFac = C.DAOS_PROP_PO_REDUN_FAC
+	// PoolPropertyECPda is performance domain affinity level of EC object.
+	PoolPropertyECPda = C.DAOS_PROP_PO_EC_PDA
+	// PoolPropertyRPPda is performance domain affinity level of replicated object.
+	PoolPropertyRPPda = C.DAOS_PROP_PO_RP_PDA
 	// PoolPropertyPolicy is the tiering policy set for a pool
 	PoolPropertyPolicy = C.DAOS_PROP_PO_POLICY
 	// PoolPropertyScrubSched Checksum scrubbing schedule
@@ -78,6 +89,14 @@ const (
 	MediaTypeNvme = C.DAOS_MEDIA_NVME
 )
 
+const (
+	// DaosMdCapEnv is the name of the environment variable defining the size of a metadata pmem
+	// pool/file in MiBs.
+	DaosMdCapEnv = C.DAOS_MD_CAP_ENV
+	// DefaultDaosMdCapSize is the default size of a metadata pmem pool/file in MiBs.
+	DefaultDaosMdCapSize = C.DEFAULT_DAOS_MD_CAP_SIZE
+)
+
 // LabelIsValid checks a label to verify that it meets length/content
 // requirements.
 func LabelIsValid(label string) bool {
@@ -85,6 +104,33 @@ func LabelIsValid(label string) bool {
 	defer C.free(unsafe.Pointer(cLabel))
 
 	return bool(C.daos_label_is_valid(cLabel))
+}
+
+// EcCellSizeIsValid checks EC cell Size to verify that it meets size
+// requirements.
+func EcCellSizeIsValid(sz uint64) bool {
+	if sz > math.MaxUint32 {
+		return false
+	}
+	return bool(C.daos_ec_cs_valid(C.uint32_t(sz)))
+}
+
+// EcPdaIsValid checks EC performance domain affinity level that it
+// doesn't exceed max unsigned int 32 bits.
+func EcPdaIsValid(pda uint64) bool {
+	if pda > math.MaxUint32 {
+		return false
+	}
+	return bool(C.daos_ec_pda_valid(C.uint32_t(pda)))
+}
+
+// RpPdaIsValid checks RP performance domain affinity level that it
+// doesn't exceed max unsigned int 32 bits.
+func RpPdaIsValid(pda uint64) bool {
+	if pda > math.MaxUint32 {
+		return false
+	}
+	return bool(C.daos_rp_pda_valid(C.uint32_t(pda)))
 }
 
 // PoolPolicy defines a type to be used to represent DAOS pool policies.

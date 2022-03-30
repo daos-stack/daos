@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2021 Intel Corporation.
+ * (C) Copyright 2016-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -84,7 +84,7 @@ pool_connect(void **state)
 		print_message("rank 0 querying pool info... ");
 		memset(&info, 'D', sizeof(info));
 		info.pi_bits = DPI_ALL;
-		rc = daos_pool_query(poh, NULL /* tgts */, &info, NULL,
+		rc = daos_pool_query(poh, NULL /* ranks */, &info, NULL,
 				     arg->async ? &ev : NULL /* ev */);
 		assert_rc_equal(rc, 0);
 		WAIT_ON_ASYNC(arg, ev);
@@ -208,6 +208,7 @@ pool_exclude(void **state)
 	}
 	rank = info.pi_nnodes - 1;
 	print_message("rank 0 excluding rank %u... ", rank);
+	/* TODO: remove the loop, call daos_exclude_target passing in the rank just calculated? */
 	for (idx = 0; idx < arg->pool.svc->rl_nr; idx++) {
 		daos_exclude_target(arg->pool.pool_uuid, arg->group,
 				    arg->dmg_config,
@@ -216,12 +217,16 @@ pool_exclude(void **state)
 	WAIT_ON_ASYNC(arg, ev);
 	print_message("success\n");
 
+	/* TODO: pass a d_rank_list_t ** into pool query for list of affected engines,
+	 * verify rank is in the list.
+	 */
 	print_message("rank 0 querying pool info... ");
 	memset(&info, 'D', sizeof(info));
-	rc = daos_pool_query(poh, NULL /* tgts */, &info, NULL,
+	rc = daos_pool_query(poh, NULL /* ranks */, &info, NULL,
 			     arg->async ? &ev : NULL /* ev */);
 	assert_rc_equal(rc, 0);
 	WAIT_ON_ASYNC(arg, ev);
+	/* TODO: is it expected pi_ndisabled will equal # of targets per engine (not 1)? */
 	assert_int_equal(info.pi_ndisabled, 1);
 	print_message("success\n");
 
@@ -645,6 +650,7 @@ pool_op_retry(void **state)
 	test_arg_t	*arg = *state;
 	daos_handle_t	 poh;
 	daos_pool_info_t info = {0};
+	d_rank_list_t	*engine_ranks = NULL;
 	int		 rc;
 
 	MPI_Barrier(MPI_COMM_WORLD);
@@ -678,10 +684,13 @@ pool_op_retry(void **state)
 	print_message("querying pool info... ");
 	memset(&info, 'D', sizeof(info));
 	info.pi_bits = DPI_ALL;
-	rc = daos_pool_query(poh, NULL /* tgts */, &info, NULL, NULL /* ev */);
+	rc = daos_pool_query(poh, &engine_ranks, &info, NULL, NULL /* ev */);
 	assert_rc_equal(rc, 0);
 	assert_int_equal(info.pi_ndisabled, 0);
-	print_message("success\n");
+	assert_ptr_not_equal(engine_ranks, NULL);
+	assert_int_not_equal(engine_ranks->rl_nr, 0);
+	print_message("no disabled targets and %u pool storage engine ranks... success\n",
+		      engine_ranks->rl_nr);
 
 	print_message("setting on leader %u DAOS_POOL_DISCONNECT_FAIL_CORPC ... ", info.pi_leader);
 	rc = daos_debug_set_params(arg->group, info.pi_leader, DMG_KEY_FAIL_LOC,

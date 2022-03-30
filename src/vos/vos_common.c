@@ -561,7 +561,7 @@ vos_metrics_alloc(const char *path, int tgt_id)
 		D_WARN("Failed to create 'epr_duration' telemetry: "DF_RC"\n", DP_RC(rc));
 
 	/* VOS aggregation scanned/skipped/deleted objs/dkeys/akeys */
-	for (i = 0; i < AGG_OP_MAX; i++) {
+	for (i = 0; i < AGG_OP_MERGE; i++) {
 		snprintf(desc, sizeof(desc), "%s objs", agg_op2str(i));
 		rc = d_tm_add_metric(&vam->vam_obj[i], D_TM_COUNTER, desc, NULL,
 				     "%s/%s/obj_%s/tgt_%u", path, VOS_AGG_DIR,
@@ -637,6 +637,7 @@ struct dss_module vos_srv_module =  {
 	.sm_name	= "vos_srv",
 	.sm_mod_id	= DAOS_VOS_MODULE,
 	.sm_ver		= 1,
+	.sm_proto_count	= 1,
 	.sm_init	= vos_mod_init,
 	.sm_fini	= vos_mod_fini,
 	.sm_key		= &vos_module_key,
@@ -656,10 +657,9 @@ vos_self_nvme_fini(void)
 	}
 }
 
-/* Storage path, NVMe config & shm_id used by standalone VOS */
-#define VOS_STORAGE_PATH	"/mnt/daos"
+/* Storage path, NVMe config & numa node used by standalone VOS */
 #define VOS_NVME_CONF		"/etc/daos_nvme.conf"
-#define VOS_NVME_SHM_ID		DAOS_NVME_SHMID_NONE
+#define VOS_NVME_NUMA_NODE	DAOS_NVME_NUMANODE_NONE
 #define VOS_NVME_MEM_SIZE	1024
 #define VOS_NVME_HUGEPAGE_SIZE	2	/* 2MB */
 #define VOS_NVME_NR_TARGET	1
@@ -680,10 +680,10 @@ vos_self_nvme_init()
 	/* Only use hugepages if NVME SSD configuration existed. */
 	fd = open(VOS_NVME_CONF, O_RDONLY, 0600);
 	if (fd < 0) {
-		rc = bio_nvme_init(NULL, VOS_NVME_SHM_ID, 0, 0,
+		rc = bio_nvme_init(NULL, VOS_NVME_NUMA_NODE, 0, 0,
 				   VOS_NVME_NR_TARGET, vos_db_get(), true);
 	} else {
-		rc = bio_nvme_init(VOS_NVME_CONF, VOS_NVME_SHM_ID,
+		rc = bio_nvme_init(VOS_NVME_CONF, VOS_NVME_NUMA_NODE,
 				   VOS_NVME_MEM_SIZE, VOS_NVME_HUGEPAGE_SIZE,
 				   VOS_NVME_NR_TARGET, vos_db_get(), true);
 		close(fd);

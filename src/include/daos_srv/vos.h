@@ -200,11 +200,12 @@ vos_dtx_cleanup(struct dtx_handle *dth);
  * Reset DTX related cached information in VOS.
  *
  * \param coh	[IN]	Container open handle.
+ * \param force	[IN]	Reset all DTX tables by force.
  *
  * \return	Zero on success, negative value if error.
  */
 int
-vos_dtx_cache_reset(daos_handle_t coh);
+vos_dtx_cache_reset(daos_handle_t coh, bool force);
 
 /**
  * Initialize the environment for a VOS instance
@@ -425,7 +426,7 @@ enum {
  */
 int
 vos_aggregate(daos_handle_t coh, daos_epoch_range_t *epr,
-	      bool (*yield_func)(void *arg), void *yield_arg, uint32_t flags);
+	      int (*yield_func)(void *arg), void *yield_arg, uint32_t flags);
 
 /**
  * Discards changes in all epochs with the epoch range \a epr
@@ -456,7 +457,7 @@ vos_aggregate(daos_handle_t coh, daos_epoch_range_t *epr,
  */
 int
 vos_discard(daos_handle_t coh, daos_unit_oid_t *oidp, daos_epoch_range_t *epr,
-	    bool (*yield_func)(void *arg), void *yield_arg);
+	    int (*yield_func)(void *arg), void *yield_arg);
 
 /**
  * VOS object API
@@ -794,7 +795,7 @@ vos_ioh2recx_list(daos_handle_t ioh);
 struct bio_desc *
 vos_ioh2desc(daos_handle_t ioh);
 
-struct dcs_csum_info *
+struct dcs_ci_list *
 vos_ioh2ci(daos_handle_t ioh);
 
 uint32_t
@@ -899,8 +900,10 @@ vos_iter_finish(daos_handle_t ih);
  * not NULL, otherwise move the cursor to the begin of the iterator.
  * This function must be called before using vos_iter_next or vos_iter_fetch.
  *
- * \param ih	[IN]	Iterator handle.
- * \param pos	[IN]	Optional, position cursor to move to.
+ * \param ih	[IN]		Iterator handle.
+ * \param anchor[IN,OUT]	Optional, position cursor to move to. May
+ *				be modified if entries are skipped during
+ *				probe.
  *
  * \return		zero if there is an entry at/after @anchor
  *			-DER_NONEXIST if no more entry
@@ -910,16 +913,36 @@ int
 vos_iter_probe(daos_handle_t ih, daos_anchor_t *anchor);
 
 /**
+ * Set the iterator cursor to the specified position \a anchor if it is
+ * not NULL, otherwise move the cursor to the begin of the iterator.
+ * This function must be called before using vos_iter_next or vos_iter_fetch.
+ *
+ * \param ih	[IN]		Iterator handle.
+ * \param anchor[IN,OUT]	Optional, position cursor to move to. May
+ *				be modified if entries are skipped during
+ *				probe.
+ * \param flags	[IN]		Probe flags (See VOS_ITER_PROBE*)
+ *
+ * \return		zero if there is an entry at/after @anchor
+ *			-DER_NONEXIST if no more entry
+ *			negative value if error
+ */
+int
+vos_iter_probe_ex(daos_handle_t ih, daos_anchor_t *anchor, uint32_t flags);
+
+/**
  * Move forward the iterator cursor.
  *
  * \param ih	[IN]	Iterator handle.
+ * \param anchor[OUT]	Optional, current anchor. May be modified if entries
+ *			are skipped.
  *
  * \return		Zero if there is an available entry
  *			-DER_NONEXIST if no more entry
  *			negative value if error
  */
 int
-vos_iter_next(daos_handle_t ih);
+vos_iter_next(daos_handle_t ih, daos_anchor_t *anchor);
 
 /**
  * Return the current data entry of the iterator.
@@ -1114,7 +1137,7 @@ int
 vos_pool_ctl(daos_handle_t poh, enum vos_pool_opc opc, void *param);
 
 int
-vos_gc_pool(daos_handle_t poh, int credits, bool (*yield_func)(void *arg),
+vos_gc_pool(daos_handle_t poh, int credits, int (*yield_func)(void *arg),
 	    void *yield_arg);
 bool
 vos_gc_pool_idle(daos_handle_t poh);

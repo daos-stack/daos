@@ -211,4 +211,7 @@ perf_alloc_keys(void);
 void
 perf_setup_keys(void);
 
+/** Add extern for vos internal function */
+void gc_wait(void);
+
 #endif /* __PERF_INTERNAL_H__ */

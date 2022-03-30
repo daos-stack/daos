@@ -1,6 +1,6 @@
 #!/usr/bin/python
 '''
-  (C) Copyright 2020-2021 Intel Corporation.
+  (C) Copyright 2020-2022 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
@@ -53,11 +53,11 @@ class DmvrPosixSubsets(DataMoverTestBase):
         # Create 1 pool
         pool1 = self.create_pool()
 
-	# create dfuse containers to test copying to dfuse subdirectories
+        # create dfuse containers to test copying to dfuse subdirectories
         dfuse_cont1 = self.create_cont(pool1)
         dfuse_cont2 = self.create_cont(pool1)
         dfuse_cont1_dir = join(self.dfuse.mount_dir.value, pool1.uuid, dfuse_cont1.uuid)
-	# destination directory should be created by program
+        # destination directory should be created by program
         dfuse_cont2_dir = self.new_posix_test_path(create=False,
             parent=join(self.dfuse.mount_dir.value, pool1.uuid, dfuse_cont2.uuid))
         # Create a special container to hold UNS entries
@@ -152,7 +152,8 @@ class DmvrPosixSubsets(DataMoverTestBase):
             Tests copying POSIX container subsets with dcp.
             DAOS-5512: Verify ability to copy container subsets
         :avocado: tags=all,full_regression
-        :avocado: tags=datamover,dcp,dfuse
+        :avocado: tags=vm
+        :avocado: tags=datamover,mfu,mfu_dcp,dfuse,dfs,ior
         :avocado: tags=dm_posix_subsets,dm_posix_subsets_dcp
         """
         self.run_dm_posix_subsets("DCP")
@@ -163,7 +164,8 @@ class DmvrPosixSubsets(DataMoverTestBase):
         Tests copying POSIX container subsets with fs copy.
             DAOS-6752: daos fs copy improvements
         :avocado: tags=all,daily_regression
-        :avocado: tags=datamover,fs_copy,dfuse
+        :avocado: tags=vm
+        :avocado: tags=datamover,daos_fs_copy,dfuse,dfs,ior
         :avocado: tags=dm_posix_subsets,dm_posix_subsets_fs_copy
         """
         self.run_dm_posix_subsets("FS_COPY")

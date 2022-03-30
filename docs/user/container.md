@@ -166,7 +166,7 @@ Access Control List   A::OWNER@:rwdtTaAo, A:G:GROUP@:rwtT
 Additionally, a container's properties may be retrieved using the
 libdaos API `daos_cont_query()` function. Refer to the file
 src/include/daos\_cont.h Doxygen comments and the online documentation
-available [here](https://daos-stack.github.io/html/).
+available [here](https://docs.daos.io/v2.2/doxygen/html/).
 
 ### Changing Properties
 
@@ -545,7 +545,7 @@ Attributes for container mycont:
 ## Access Control Lists
 
 Client user and group access for containers is controlled by
-[Access Control Lists (ACLs)](https://daos-stack.github.io/overview/security/#access-control-lists).
+[Access Control Lists (ACLs)](https://docs.daos.io/v2.2/overview/security/#access-control-lists).
 
 Access-controlled container accesses include:
 
@@ -569,7 +569,7 @@ Access-controlled container accesses include:
 
 
 This is reflected in the set of supported
-[container permissions](https://daos-stack.github.io/overview/security/#permissions).
+[container permissions](https://docs.daos.io/v2.2/overview/security/#permissions).
 
 ### Pool vs. Container Permissions
 
@@ -601,7 +601,7 @@ $ daos cont create $DAOS_POOL --label $DAOS_CONT --acl-file=<path>
 ```
 
 The ACL file format is detailed in the
-[security overview](https://daos-stack.github.io/overview/security/#acl-file).
+[security overview](https://docs.daos.io/v2.2/overview/security/#acl-file).
 
 ### Displaying ACL
 
@@ -654,7 +654,7 @@ $ daos cont delete-acl $DAOS_POOL $DAOS_CONT --principal=<principal>
 ```
 
 The `principal` argument refers to the
-[principal](https://daos-stack.github.io/overview/security/#principal), or
+[principal](https://docs.daos.io/v2.2/overview/security/#principal), or
 identity, of the entry to be removed.
 
 For the delete operation, the `principal` argument must be formatted as follows:
@@ -690,7 +690,7 @@ The owner-user will always have the following implicit capabilities:
 
 Because the owner's special permissions are implicit, they do not need to be
 specified in the `OWNER@` entry. After
-[determining](https://daos-stack.github.io/overview/security/#enforcement)
+[determining](https://docs.daos.io/v2.2/overview/security/#enforcement)
 the user's privileges from the container ACL, DAOS checks whether the user
 requesting access is the owner-user. If so, DAOS grants the owner's
 implicit permissions to that user, in addition to any permissions granted by
@@ -710,7 +710,7 @@ $ daos cont create $DAOS_POOL --label $DAOS_CONT --user=<owner-user> --group=<ow
 ```
 
 The user and group names are case sensitive and must be formatted as
-[DAOS ACL user/group principals](https://daos-stack.github.io/overview/security/#principal).
+[DAOS ACL user/group principals](https://docs.daos.io/v2.2/overview/security/#principal).
 
 #### Changing Ownership
 
@@ -727,4 +727,4 @@ $ daos cont set-owner $DAOS_POOL $DAOS_CONT --group=<owner-group>
 ```
 
 The user and group names are case sensitive and must be formatted as
-[DAOS ACL user/group principals](https://daos-stack.github.io/overview/security/#principal).
+[DAOS ACL user/group principals](https://docs.daos.io/v2.2/overview/security/#principal).

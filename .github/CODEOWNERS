@@ -2,16 +2,31 @@
 # a component sha1 to ensure that corresponding package build is done
 #utils/build.config @daos-stack/release-engineering
 # or updates packaging in any way
-#utils/rpms @daos-stack/release-engineering
+utils/rpms @daos-stack/build-and-release-watchers
 
 # any PR that touches Go files should get a review from go-owners
-#*.go @daos-stack/go-owners
+*.go @daos-stack/go-watchers
 
-# any PR that touches VOS files should get a review from VOS
-#src/vos/ @daos-stack/vos
-
-# any PR that touches btree files should get a review from VOS
-#src/common/btree*.* @daos-stack/vos
+# Notify vos-watcher of files touched affecting VOS
+src/vos/ @daos-stack/vos-watchers
+src/common/btree*.* @daos-stack/vos-watchers
+src/include/daos/btree*.* @daos-stack/vos-watchers
+src/include/daos_srv/vos*.* @daos-stack/vos-watchers
+src/include/daos_srv/evtree.h @daos-stack/vos-watchers
 
 # Jenkinsfile changes should be reviewed by Release Engineering
-#Jenkinsfile @daos-stack/release-engineering
+Jenkinsfile @daos-stack/build-and-release-watchers
+
+# any PR that touches client API or high level client code
+src/client @daos-stack/client-api-watchers
+src/include/daos_*.* @daos-stack/client-api-watchers
+
+# doc-watchers: files affecting documentation (docs, doxygen, etc.)
+mkdocs.yml @daos-stack/doc-watchers
+Doxyfile @daos-stack/doc-watchers
+docs/ @daos-stack/doc-watchers
+#src/include/*.h @daos-stack/doc-watchers
+*.md @daos-stack/doc-watchers
+
+# ftest-watchers: files affecting functional tests
+src/tests/ftest @daos-stack/ftest-watchers

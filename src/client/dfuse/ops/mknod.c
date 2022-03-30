@@ -14,7 +14,7 @@ dfuse_cb_mknod(fuse_req_t req, struct dfuse_inode_entry *parent, const char *nam
 	struct dfuse_inode_entry	*ie;
 	int				rc;
 
-	DFUSE_TRA_INFO(parent, "Parent:%lu '%s'", parent->ie_stat.st_ino, name);
+	DFUSE_TRA_DEBUG(parent, "Parent:%lu '%s'", parent->ie_stat.st_ino, name);
 
 	D_ALLOC_PTR(ie);
 	if (!ie)

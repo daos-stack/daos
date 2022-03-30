@@ -1,6 +1,6 @@
 # Software Installation
 
-Please check the [support matrix](https://daos-stack.github.io/release/support_matrix)
+Please check the [support matrix](https://docs.daos.io/v2.2/release/support_matrix)
 to select the appropriate software combination.
 
 ## Distribution Packages
@@ -10,7 +10,7 @@ half of 2022).
 
 ## DAOS from Scratch
 
-The following instructions have been verified with CentOS. Installations on other
+The following instructions have been verified with CentOS7 and EL8. Installations on other
 Linux distributions might be similar with some variations.
 Developers of DAOS may want to review the additional sections below before beginning,
 for suggestions related specifically to development. Contact us in our
@@ -24,9 +24,10 @@ packages usually available on all the Linux distributions. Moreover, a Go
 version of at least 1.10 is required.
 
 An exhaustive list of packages for each supported Linux distribution is
-maintained in the Docker files (please click on the link):
+maintained in the Docker files and/or their helpers (please click on the link):
 
 -    [CentOS 7](https://github.com/daos-stack/daos/blob/master/utils/docker/Dockerfile.centos.7#L19-L79)
+-    [EL 8](https://github.com/daos-stack/daos/blob/master/utils/scripts/install-el8.sh#L12-L69)
 -    [openSUSE Leap 15](https://github.com/daos-stack/daos/blob/master/utils/docker/Dockerfile.leap.15#L36-L85)
 -    [Ubuntu 20.04](https://github.com/daos-stack/daos/blob/master/1.2/utils/docker/Dockerfile.ubuntu.20.04#L14-L22)
 
@@ -62,7 +63,7 @@ $ scons-3 --config=force install
 ```
 
 If you are a developer of DAOS, we recommend following the instructions in the
-[DAOS for Development](https://daos-stack.github.io/dev/development/#building-daos-for-development)
+[DAOS for Development](https://docs.daos.io/v2.2/dev/development/#building-daos-for-development)
 section.
 
 Otherwise, the missing dependencies can be built automatically by invoking scons
