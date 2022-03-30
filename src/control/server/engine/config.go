@@ -567,8 +567,8 @@ func (c *Config) WithCrtTimeout(timeout uint32) *Config {
 	return c
 }
 
-// WithCrtNumSecondaryCtx sets the number of CART contexts for each secondary provider.
-func (c *Config) WithCrtNumSecondaryCtx(nr []int) *Config {
+// WithNumSecondaryEndpoints sets the number of network endpoints for each secondary provider.
+func (c *Config) WithNumSecondaryEndpoints(nr []int) *Config {
 	c.Fabric.NumSecondaryEndpoints = nr
 	return c
 }

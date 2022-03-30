@@ -241,7 +241,7 @@ func TestServerConfig_Constructed(t *testing.T) {
 			WithFabricProvider("ofi+verbs").
 			WithCrtCtxShareAddr(0).
 			WithCrtTimeout(30).
-			WithCrtNumSecondaryCtx([]int{2}).
+			WithNumSecondaryEndpoints([]int{2}).
 			WithPinnedNumaNode(0).
 			WithBypassHealthChk(&bypass).
 			WithEnvVars("CRT_TIMEOUT=30").
@@ -271,7 +271,7 @@ func TestServerConfig_Constructed(t *testing.T) {
 			WithFabricProvider("ofi+verbs").
 			WithCrtCtxShareAddr(0).
 			WithCrtTimeout(30).
-			WithCrtNumSecondaryCtx([]int{2}).
+			WithNumSecondaryEndpoints([]int{2}).
 			WithPinnedNumaNode(1).
 			WithBypassHealthChk(&bypass).
 			WithEnvVars("CRT_TIMEOUT=100").
