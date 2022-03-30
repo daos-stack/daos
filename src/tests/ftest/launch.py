@@ -79,7 +79,7 @@ YAML_KEYS = OrderedDict(
 PROVIDER_KEYS = OrderedDict(
     [
         ("cxi", "ofi+cxi"),
-        ("verbs", "ofi+verbs"),
+        ("verbs", "ofi+verbs;ofi_rxm"),
         ("sockets", "ofi+sockets"),
     ]
 )
