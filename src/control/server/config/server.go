@@ -135,9 +135,10 @@ func (cfg *Server) WithCrtTimeout(timeout uint32) *Server {
 	return cfg
 }
 
-// WithCrtNumSecondaryCtx sets the number of CART contexts for each engine's secondary provider.
-func (cfg *Server) WithCrtNumSecondaryCtx(nr []int) *Server {
-	cfg.Fabric.CrtNumSecondaryCtx = nr
+// WithNumSecondaryEndpoints sets the number of network endpoints for each engine's secondary
+// provider.
+func (cfg *Server) WithNumSecondaryEndpoints(nr []int) *Server {
+	cfg.Fabric.NumSecondaryEndpoints = nr
 	for _, engine := range cfg.Engines {
 		engine.Fabric.Update(cfg.Fabric)
 	}

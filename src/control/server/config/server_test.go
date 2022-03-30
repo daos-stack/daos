@@ -211,7 +211,7 @@ func TestServerConfig_Constructed(t *testing.T) {
 		WithFabricProvider("ofi+verbs").
 		WithCrtCtxShareAddr(0).
 		WithCrtTimeout(30).
-		WithCrtNumSecondaryCtx([]int{2}).
+		WithNumSecondaryEndpoints([]int{2}).
 		WithAccessPoints("hostname1").
 		WithFaultCb("./.daos/fd_callback").
 		WithFaultPath("/vcdu0/rack1/hostname").
@@ -311,10 +311,10 @@ func TestServerConfig_updateServerConfig(t *testing.T) {
 				Modules:       "modules",
 				EnableHotplug: true,
 				Fabric: engine.FabricConfig{
-					Provider:           "provider",
-					Interface:          "iface",
-					InterfacePort:      "1111",
-					CrtNumSecondaryCtx: []int{2, 3, 4},
+					Provider:              "provider",
+					Interface:             "iface",
+					InterfacePort:         "1111",
+					NumSecondaryEndpoints: []int{2, 3, 4},
 				},
 			},
 			expEngCfg: &engine.Config{
@@ -325,10 +325,10 @@ func TestServerConfig_updateServerConfig(t *testing.T) {
 					EnableHotplug: true,
 				},
 				Fabric: engine.FabricConfig{
-					Provider:           "provider",
-					Interface:          "iface",
-					InterfacePort:      "1111",
-					CrtNumSecondaryCtx: []int{2, 3, 4},
+					Provider:              "provider",
+					Interface:             "iface",
+					InterfacePort:         "1111",
+					NumSecondaryEndpoints: []int{2, 3, 4},
 				},
 			},
 		},
@@ -336,15 +336,15 @@ func TestServerConfig_updateServerConfig(t *testing.T) {
 			cfg: &Server{
 				SystemName: "name",
 				Fabric: engine.FabricConfig{
-					Provider:           "p1 p2 p3",
-					CrtNumSecondaryCtx: []int{2, 3, 4},
+					Provider:              "p1 p2 p3",
+					NumSecondaryEndpoints: []int{2, 3, 4},
 				},
 			},
 			expEngCfg: &engine.Config{
 				SystemName: "name",
 				Fabric: engine.FabricConfig{
-					Provider:           "p1 p2 p3",
-					CrtNumSecondaryCtx: []int{2, 3, 4},
+					Provider:              "p1 p2 p3",
+					NumSecondaryEndpoints: []int{2, 3, 4},
 				},
 			},
 		},

@@ -21,7 +21,9 @@ import (
 )
 
 const (
-	maxHelperStreamCount = 2
+	maxHelperStreamCount         = 2
+	numPrimaryProviders          = 1
+	defaultNumSecondaryEndpoints = 1
 
 	// MultiProviderSeparator delineates between providers in a multi-provider config.
 	MultiProviderSeparator = " "
@@ -29,15 +31,15 @@ const (
 
 // FabricConfig encapsulates networking fabric configuration.
 type FabricConfig struct {
-	Provider           string `yaml:"provider,omitempty" cmdEnv:"CRT_PHY_ADDR_STR"`
-	Interface          string `yaml:"fabric_iface,omitempty" cmdEnv:"OFI_INTERFACE"`
-	InterfacePort      string `yaml:"fabric_iface_port,omitempty" cmdEnv:"OFI_PORT"`
-	NumaNodeIndex      uint   `yaml:"-"`
-	BypassHealthChk    *bool  `yaml:"bypass_health_chk,omitempty" cmdLongFlag:"--bypass_health_chk" cmdShortFlag:"-b"`
-	CrtCtxShareAddr    uint32 `yaml:"crt_ctx_share_addr,omitempty" cmdEnv:"CRT_CTX_SHARE_ADDR"`
-	CrtTimeout         uint32 `yaml:"crt_timeout,omitempty" cmdEnv:"CRT_TIMEOUT"`
-	CrtNumSecondaryCtx []int  `yaml:"nr_secondary_contexts,omitempty" cmdLongFlag:"--nr_sec_ctx,nonzero" cmdShortFlag:"-S,nonzero"`
-	DisableSRX         bool   `yaml:"disable_srx,omitempty" cmdEnv:"FI_OFI_RXM_USE_SRX,invertBool,intBool"`
+	Provider              string `yaml:"provider,omitempty" cmdEnv:"CRT_PHY_ADDR_STR"`
+	Interface             string `yaml:"fabric_iface,omitempty" cmdEnv:"OFI_INTERFACE"`
+	InterfacePort         string `yaml:"fabric_iface_port,omitempty" cmdEnv:"OFI_PORT"`
+	NumaNodeIndex         uint   `yaml:"-"`
+	BypassHealthChk       *bool  `yaml:"bypass_health_chk,omitempty" cmdLongFlag:"--bypass_health_chk" cmdShortFlag:"-b"`
+	CrtCtxShareAddr       uint32 `yaml:"crt_ctx_share_addr,omitempty" cmdEnv:"CRT_CTX_SHARE_ADDR"`
+	CrtTimeout            uint32 `yaml:"crt_timeout,omitempty" cmdEnv:"CRT_TIMEOUT"`
+	NumSecondaryEndpoints []int  `yaml:"secondary_provider_endpoints,omitempty" cmdLongFlag:"--nr_sec_ctx,nonzero" cmdShortFlag:"-S,nonzero"`
+	DisableSRX            bool   `yaml:"disable_srx,omitempty" cmdEnv:"FI_OFI_RXM_USE_SRX,invertBool,intBool"`
 }
 
 // GetPrimaryProvider parses the primary provider from the Provider string.
@@ -149,20 +151,20 @@ func (fc *FabricConfig) Update(other FabricConfig) {
 	if fc.CrtTimeout == 0 {
 		fc.CrtTimeout = other.CrtTimeout
 	}
-	if len(fc.CrtNumSecondaryCtx) == 0 {
-		fc.setCrtNumSecondaryCtx(other.CrtNumSecondaryCtx)
+	if len(fc.NumSecondaryEndpoints) == 0 {
+		fc.setNumSecondaryEndpoints(other.NumSecondaryEndpoints)
 	}
 }
 
-func (fc *FabricConfig) setCrtNumSecondaryCtx(other []int) {
+func (fc *FabricConfig) setNumSecondaryEndpoints(other []int) {
 	if len(other) == 0 {
 		// Set defaults
-		numSecProv := fc.GetNumProviders() - 1
+		numSecProv := fc.GetNumProviders() - numPrimaryProviders
 		for i := 0; i < numSecProv; i++ {
-			other = append(other, 1)
+			other = append(other, defaultNumSecondaryEndpoints)
 		}
 	}
-	fc.CrtNumSecondaryCtx = other
+	fc.NumSecondaryEndpoints = other
 }
 
 // Validate ensures that the configuration meets minimum standards.
@@ -189,15 +191,15 @@ func (fc *FabricConfig) Validate() error {
 		return errors.Errorf("provider, fabric_iface and fabric_iface_port must include the same number of items delimited by %q", MultiProviderSeparator)
 	}
 
-	numSecProv := numProv - 1
+	numSecProv := numProv - numPrimaryProviders
 	if numSecProv > 0 {
-		if len(fc.CrtNumSecondaryCtx) != 0 && len(fc.CrtNumSecondaryCtx) != numSecProv {
-			return errors.New("nr_secondary_contexts must have one value for each secondary provider")
+		if len(fc.NumSecondaryEndpoints) != 0 && len(fc.NumSecondaryEndpoints) != numSecProv {
+			return errors.New("secondary_provider_endpoints must have one value for each secondary provider")
 		}
 
-		for _, nrCtx := range fc.CrtNumSecondaryCtx {
+		for _, nrCtx := range fc.NumSecondaryEndpoints {
 			if nrCtx < 1 {
-				return errors.Errorf("all values in nr_secondary_contexts must be > 0")
+				return errors.Errorf("all values in secondary_provider_endpoints must be > 0")
 			}
 		}
 	}
@@ -567,7 +569,7 @@ func (c *Config) WithCrtTimeout(timeout uint32) *Config {
 
 // WithCrtNumSecondaryCtx sets the number of CART contexts for each secondary provider.
 func (c *Config) WithCrtNumSecondaryCtx(nr []int) *Config {
-	c.Fabric.CrtNumSecondaryCtx = nr
+	c.Fabric.NumSecondaryEndpoints = nr
 	return c
 }
 

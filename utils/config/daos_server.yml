@@ -193,15 +193,15 @@
 ##nr_hugepages: -1
 #
 #
-## Number of CART contexts per secondary provider per engine
+## Number of network endpoints per secondary provider
 #
-## Specifies the number of secondary CART contexts each engine will create for
-## each additional fabric provider after the first. This only applies when
+## Specifies the number of secondary network endpoints each engine will create
+## for each additional fabric provider after the first. This only applies when
 ## running in multi-provider mode.
 #
 ## default: 1
 #
-#nr_secondary_contexts: [2]
+#secondary_provider_endpoints: [2]
 #
 #
 ## Force specific debug mask for daos_server (control plane).
