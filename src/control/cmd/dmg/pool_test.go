@@ -752,7 +752,19 @@ func TestPoolCommands(t *testing.T) {
 			"pool query 12345678-1234-1234-1234-1234567890ab",
 			strings.Join([]string{
 				printRequest(t, &control.PoolQueryReq{
-					ID: "12345678-1234-1234-1234-1234567890ab",
+					ID:      "12345678-1234-1234-1234-1234567890ab",
+					InfoBit: -1,
+				}),
+			}, " "),
+			nil,
+		},
+		{
+			"Query pool with UUID and disabled ranks",
+			"pool query --show-disabled-ranks 12345678-1234-1234-1234-1234567890ab",
+			strings.Join([]string{
+				printRequest(t, &control.PoolQueryReq{
+					ID:      "12345678-1234-1234-1234-1234567890ab",
+					InfoBit: -5,
 				}),
 			}, " "),
 			nil,
@@ -762,7 +774,8 @@ func TestPoolCommands(t *testing.T) {
 			"pool query test_label",
 			strings.Join([]string{
 				printRequest(t, &control.PoolQueryReq{
-					ID: "test_label",
+					ID:      "test_label",
+					InfoBit: -1,
 				}),
 			}, " "),
 			nil,

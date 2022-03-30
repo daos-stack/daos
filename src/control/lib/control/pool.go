@@ -140,7 +140,6 @@ func (pcr *PoolCreateReq) MarshalJSON() ([]byte, error) {
 	})
 }
 
-// genPoolCreateRequest takes a *PoolCreateRequest and generates a valid protobuf
 // request, filling in any missing fields with reasonable defaults.
 func genPoolCreateRequest(in *PoolCreateReq) (out *mgmtpb.PoolCreateReq, err error) {
 	// ensure pool ownership is set up correctly
@@ -344,7 +343,8 @@ type (
 	// PoolQueryReq contains the parameters for a pool query request.
 	PoolQueryReq struct {
 		poolRequest
-		ID string
+		ID      string
+		InfoBit int32
 	}
 
 	// StorageUsageStats represents DAOS storage usage statistics.
@@ -378,6 +378,8 @@ type (
 		Leader          uint32               `json:"leader"`
 		Rebuild         *PoolRebuildStatus   `json:"rebuild"`
 		TierStats       []*StorageUsageStats `json:"tier_stats"`
+		InfoBit         int32                `json:"info_bit"`
+		RankSet         string               `json:"rank_set"`
 	}
 
 	// PoolQueryResp contains the pool query response.
@@ -460,8 +462,9 @@ func (prs *PoolRebuildState) UnmarshalJSON(data []byte) error {
 func PoolQuery(ctx context.Context, rpcClient UnaryInvoker, req *PoolQueryReq) (*PoolQueryResp, error) {
 	req.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
 		return mgmtpb.NewMgmtSvcClient(conn).PoolQuery(ctx, &mgmtpb.PoolQueryReq{
-			Sys: req.getSystem(rpcClient),
-			Id:  req.ID,
+			Sys:     req.getSystem(rpcClient),
+			Id:      req.ID,
+			InfoBit: req.InfoBit,
 		})
 	})
 

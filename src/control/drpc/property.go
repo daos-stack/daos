@@ -89,6 +89,18 @@ const (
 	DefaultDaosMdCapSize = C.DEFAULT_DAOS_MD_CAP_SIZE
 )
 
+const (
+	// true to query pool space usage false to not query space usage.
+	DpiSpace = C.DPI_SPACE
+	// true to query pool rebuild status. false to not query rebuild status.
+	DpiRebuildStatus = C.DPI_REBUILD_STATUS
+	// true to return (in \a ranks) engines with all targets enabled (up or draining).
+	// false to return (in \a ranks) the engines with some or all targets disabled (down).
+	DpiEnginesEnabled = C.DPI_ENGINES_ENABLED
+	// query all above optional info
+	DpiAll = C.DPI_ALL
+)
+
 // LabelIsValid checks a label to verify that it meets length/content
 // requirements.
 func LabelIsValid(label string) bool {
