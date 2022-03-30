@@ -220,6 +220,25 @@ func stateString(s system.MemberState) string {
 
 func TestServer_MgmtSvc_LeaderQuery(t *testing.T) {
 	localhost := common.LocalhostCtrlAddr()
+	log, buf := logging.NewTestLogger(t.Name())
+
+	db, cleanup := system.TestDatabase(t, log)
+	defer cleanup()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	if err := db.Start(ctx); err != nil {
+		t.Fatal(err)
+	}
+
+	// wait for the bootstrap to finish
+	for {
+		if leader, _, _ := db.LeaderQuery(); leader != "" {
+			break
+		}
+		time.Sleep(250 * time.Millisecond)
+	}
 
 	for name, tc := range map[string]struct {
 		req     *mgmtpb.LeaderQueryReq
@@ -244,27 +263,11 @@ func TestServer_MgmtSvc_LeaderQuery(t *testing.T) {
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
-			log, buf := logging.NewTestLogger(t.Name())
+			buf.Reset()
 			defer common.ShowBufferOnFailure(t, buf)
 
 			svc := newTestMgmtSvc(t, log)
-			db, cleanup := system.TestDatabase(t, log)
-			defer cleanup()
 			svc.sysdb = db
-
-			ctx, cancel := context.WithCancel(context.Background())
-			defer cancel()
-			if err := db.Start(ctx); err != nil {
-				t.Fatal(err)
-			}
-
-			// wait for the bootstrap to finish
-			for {
-				if leader, _, _ := db.LeaderQuery(); leader != "" {
-					break
-				}
-				time.Sleep(250 * time.Millisecond)
-			}
 
 			gotResp, gotErr := svc.LeaderQuery(context.TODO(), tc.req)
 			common.CmpErr(t, tc.expErr, gotErr)
