@@ -25,7 +25,7 @@ static daos_handle_t	poh; /** pool */
 static daos_handle_t	coh; /** container */
 static daos_handle_t	oh;  /** object */
 static char		field[]	= "Array";
-
+static time_t		ts;
 static void
 insert_example_records(void)
 {
@@ -48,7 +48,7 @@ insert_example_records(void)
 		else 
 			sprintf(fname, "file.%d", i);
 
-		printf("insert DKEY = %s\n", fname);
+		//printf("insert DKEY = %s\n", fname);
 
 		/** set dkey for record */
 		d_iov_set(&dkey, &fname, strlen(fname));
@@ -60,6 +60,12 @@ insert_example_records(void)
 			mode |= S_IFREG;
 
 		atime = mtime = ctime = time(NULL);
+
+		if (i == 50) {
+			sleep(2);
+			ts = time(NULL);
+			sleep(2);
+		}
 
 		d_iov_set(&sg_iovs[j++], &mode, sizeof(mode_t));
 		d_iov_set(&sg_iovs[j++], &atime, sizeof(time_t));
@@ -92,7 +98,7 @@ build_pipeline_one(daos_pipeline_t *pipeline)
 {
 	int			rc;
 
-	/** build condition for dkey containing ".0" */
+	/** build condition for dkey containing ".9" */
 
 	daos_size_t		str_type_s;
 	char			*str_type1, *str_type2;
@@ -120,9 +126,9 @@ build_pipeline_one(daos_pipeline_t *pipeline)
 	daos_size_t		const_dkey_s;
 	char			*const_dkey;
 
-	const_dkey_s = strlen("%.0%");
+	const_dkey_s = strlen("%.9%");
 	const_dkey   = (char *) malloc(const_dkey_s);
-	strncpy(const_dkey, "%.0%", const_dkey_s);
+	strncpy(const_dkey, "%.9%", const_dkey_s);
 
 	daos_filter_part_t	*dkey_ft;
 
@@ -153,18 +159,18 @@ build_pipeline_one(daos_pipeline_t *pipeline)
 
 	/** build condition for uint32_t integer in array bytes 0-4 & S_IFMT == S_IFDIR */
 
-	daos_size_t		int_type_s;
-	char			*int_type0;
-	char			*int_type1;
-	char			*int_type2;
+	daos_size_t		int4_type_s;
+	char			*int4_type0;
+	char			*int4_type1;
+	char			*int4_type2;
 
-	int_type_s = strlen("DAOS_FILTER_TYPE_UINTEGER4");
-	int_type0  = (char *) malloc(int_type_s);
-	int_type1  = (char *) malloc(int_type_s);
-	int_type2  = (char *) malloc(int_type_s);
-	strncpy(int_type0, "DAOS_FILTER_TYPE_UINTEGER4", int_type_s);
-	strncpy(int_type1, "DAOS_FILTER_TYPE_UINTEGER4", int_type_s);
-	strncpy(int_type2, "DAOS_FILTER_TYPE_UINTEGER4", int_type_s);
+	int4_type_s = strlen("DAOS_FILTER_TYPE_UINTEGER4");
+	int4_type0  = (char *) malloc(int4_type_s);
+	int4_type1  = (char *) malloc(int4_type_s);
+	int4_type2  = (char *) malloc(int4_type_s);
+	strncpy(int4_type0, "DAOS_FILTER_TYPE_UINTEGER4", int4_type_s);
+	strncpy(int4_type1, "DAOS_FILTER_TYPE_UINTEGER4", int4_type_s);
+	strncpy(int4_type2, "DAOS_FILTER_TYPE_UINTEGER4", int4_type_s);
 
 	daos_size_t		akey_ftype_s;
 	char			*akey_ftype;
@@ -182,7 +188,7 @@ build_pipeline_one(daos_pipeline_t *pipeline)
 	strncpy(akey, field, akey_s);
 	akey_ft = (daos_filter_part_t *) calloc(1, sizeof(daos_filter_part_t));
 	d_iov_set(&akey_ft->part_type, akey_ftype, akey_ftype_s);
-	d_iov_set(&akey_ft->data_type, int_type0, int_type_s);
+	d_iov_set(&akey_ft->data_type, int4_type0, int4_type_s);
 	d_iov_set(&akey_ft->akey, akey, akey_s);
 	akey_ft->data_len    = 4;
 
@@ -203,13 +209,13 @@ build_pipeline_one(daos_pipeline_t *pipeline)
 	const2_ft = (daos_filter_part_t *) calloc(1, sizeof(daos_filter_part_t));
 
 	d_iov_set(&const1_ft->part_type, const1_ftype, const_ftype_s);
-	d_iov_set(&const1_ft->data_type, int_type1, int_type_s);
+	d_iov_set(&const1_ft->data_type, int4_type1, int4_type_s);
 	const1_ft->num_constants = 1;
 	const1_ft->constant = (d_iov_t *) malloc(sizeof(d_iov_t));
 	d_iov_set(const1_ft->constant, constant1, sizeof(mode_t));
 
 	d_iov_set(&const2_ft->part_type, const2_ftype, const_ftype_s);
-	d_iov_set(&const2_ft->data_type, int_type2, int_type_s);
+	d_iov_set(&const2_ft->data_type, int4_type2, int4_type_s);
 	const2_ft->num_constants = 1;
 	const2_ft->constant = (d_iov_t *) malloc(sizeof(d_iov_t));
 	d_iov_set(const2_ft->constant, constant2, sizeof(mode_t));
@@ -236,8 +242,73 @@ build_pipeline_one(daos_pipeline_t *pipeline)
 	d_iov_set(&eq_ft->part_type, eq_func, eq_func_s);
 	eq_ft->num_operands = 2;
 
+	/** build condition for ts integer in array bytes 12-20 > ts */
 
-	/** build final condition where result should be the dkey condition || the array condition */
+	daos_size_t		int8_type_s;
+	char			*int8_type0;
+	char			*int8_type1;
+
+	int8_type_s = strlen("DAOS_FILTER_TYPE_UINTEGER8");
+	int8_type0  = (char *) malloc(int8_type_s);
+	int8_type1  = (char *) malloc(int8_type_s);
+	strncpy(int8_type0, "DAOS_FILTER_TYPE_UINTEGER8", int8_type_s);
+	strncpy(int8_type1, "DAOS_FILTER_TYPE_UINTEGER8", int8_type_s);
+
+	char			*akey2;
+	daos_filter_part_t	*akey2_ft;
+	char			*akey2_ftype;
+
+	akey2_ftype   = (char *) malloc(akey_ftype_s);
+	strncpy(akey2_ftype, "DAOS_FILTER_AKEY", akey_ftype_s);
+	akey2   = (char *) malloc(akey_s);
+	strncpy(akey2, field, akey_s);
+	akey2_ft = (daos_filter_part_t *) calloc(1, sizeof(daos_filter_part_t));
+	d_iov_set(&akey2_ft->part_type, akey2_ftype, akey_ftype_s);
+	d_iov_set(&akey2_ft->data_type, int8_type0, int8_type_s);
+	d_iov_set(&akey2_ft->akey, akey2, akey_s);
+	akey2_ft->data_offset = 12;
+	akey2_ft->data_len    = 8;
+
+	char			*const3_ftype;
+	time_t			*constant3;
+	daos_filter_part_t	*const3_ft;
+
+	const3_ftype   = (char *) malloc(const_ftype_s);
+	strncpy(const3_ftype, "DAOS_FILTER_CONST", const_ftype_s);
+	constant3 = (time_t *) malloc(sizeof(time_t));
+	*constant3 = ts;
+
+	const3_ft = (daos_filter_part_t *) calloc(1, sizeof(daos_filter_part_t));
+	d_iov_set(&const3_ft->part_type, const3_ftype, const_ftype_s);
+	d_iov_set(&const3_ft->data_type, int8_type1, int8_type_s);
+	const3_ft->num_constants = 1;
+	const3_ft->constant = (d_iov_t *) malloc(sizeof(d_iov_t));
+	d_iov_set(const3_ft->constant, constant3, sizeof(time_t));
+
+	daos_size_t		gt_func_s;
+	char			*gt_func;
+	daos_filter_part_t	*gt_ft;
+
+	gt_func_s = strlen("DAOS_FILTER_FUNC_GT");
+	gt_func = (char *) malloc(gt_func_s);
+	strncpy(gt_func, "DAOS_FILTER_FUNC_GT", gt_func_s);
+	gt_ft = (daos_filter_part_t *) calloc(1, sizeof(daos_filter_part_t));
+	d_iov_set(&gt_ft->part_type, gt_func, gt_func_s);
+	gt_ft->num_operands = 2;
+
+	/** build final condition where result should be the:
+	    bitwise array cond || (dkey condition && mtime array) */
+
+	daos_size_t		and_func_s;
+	char			*and_func;
+	daos_filter_part_t	*and_ft;
+
+	and_func_s = strlen("DAOS_FILTER_FUNC_AND");
+	and_func   = (char *) malloc(and_func_s);
+	strncpy(and_func, "DAOS_FILTER_FUNC_AND", and_func_s);
+	and_ft = (daos_filter_part_t *) calloc(1, sizeof(daos_filter_part_t));
+	d_iov_set(&and_ft->part_type, and_func, and_func_s);
+	and_ft->num_operands = 2;
 
 	daos_size_t		or_func_s;
 	char			*or_func;
@@ -260,17 +331,8 @@ build_pipeline_one(daos_pipeline_t *pipeline)
 	pipef = (daos_filter_t *) calloc(1, sizeof(daos_filter_t));
 	daos_filter_init(pipef);
 	d_iov_set(&pipef->filter_type, pipe_cond, pipe_cond_s);
-
-	/** OR -> LIKE -> DKEY -> CONST DKEY -> EQ -> BIT AND -> AKEY -> CONST1 -> CONST2 */
-
+#if 0
 	rc = daos_filter_add(pipef, or_ft);
-	ASSERT(rc == 0, "Pipeline add failed with %d", rc);
-
-	rc = daos_filter_add(pipef, like_ft);
-	ASSERT(rc == 0, "Pipeline add failed with %d", rc);
-	rc = daos_filter_add(pipef, dkey_ft);
-	ASSERT(rc == 0, "Pipeline add failed with %d", rc);
-	rc = daos_filter_add(pipef, const0_ft);
 	ASSERT(rc == 0, "Pipeline add failed with %d", rc);
 
 	rc = daos_filter_add(pipef, eq_ft);
@@ -282,6 +344,23 @@ build_pipeline_one(daos_pipeline_t *pipeline)
 	rc = daos_filter_add(pipef, const1_ft);
 	ASSERT(rc == 0, "Pipeline add failed with %d", rc);
 	rc = daos_filter_add(pipef, const2_ft);
+	ASSERT(rc == 0, "Pipeline add failed with %d", rc);
+
+	rc = daos_filter_add(pipef, and_ft);
+	ASSERT(rc == 0, "Pipeline add failed with %d", rc);
+
+	rc = daos_filter_add(pipef, like_ft);
+	ASSERT(rc == 0, "Pipeline add failed with %d", rc);
+	rc = daos_filter_add(pipef, dkey_ft);
+	ASSERT(rc == 0, "Pipeline add failed with %d", rc);
+	rc = daos_filter_add(pipef, const0_ft);
+	ASSERT(rc == 0, "Pipeline add failed with %d", rc);
+#endif
+	rc = daos_filter_add(pipef, gt_ft);
+	ASSERT(rc == 0, "Pipeline add failed with %d", rc);
+	rc = daos_filter_add(pipef, akey2_ft);
+	ASSERT(rc == 0, "Pipeline add failed with %d", rc);
+	rc = daos_filter_add(pipef, const3_ft);
 	ASSERT(rc == 0, "Pipeline add failed with %d", rc);
 
 	rc = daos_pipeline_add(pipeline, pipef);
