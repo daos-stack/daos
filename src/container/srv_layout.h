@@ -75,7 +75,6 @@ extern d_iov_t ds_cont_prop_layout_ver;		/* uint64_t */
 extern d_iov_t ds_cont_prop_csum;		/* uint64_t */
 extern d_iov_t ds_cont_prop_csum_chunk_size;	/* uint64_t */
 extern d_iov_t ds_cont_prop_csum_server_verify;	/* uint64_t */
-extern d_iov_t ds_cont_prop_scrubber_disabled;	/* uint64_t */
 extern d_iov_t ds_cont_prop_dedup;		/* uint64_t */
 extern d_iov_t ds_cont_prop_dedup_threshold;	/* uint64_t */
 extern d_iov_t ds_cont_prop_redun_fac;		/* uint64_t */
@@ -96,6 +95,7 @@ extern d_iov_t ds_cont_prop_ec_cell_sz;		/* cell size of EC */
 extern d_iov_t ds_cont_prop_ec_pda;		/* uint32 */
 extern d_iov_t ds_cont_prop_rp_pda;		/* uint32 */
 extern d_iov_t ds_cont_prop_cont_global_version;/* uint32 */
+extern d_iov_t ds_cont_prop_scrubber_disabled;	/* uint64_t */
 
 /*
  * Snapshot KVS (RDB_KVS_INTEGER)

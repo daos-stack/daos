@@ -391,11 +391,6 @@ co_properties(void **state)
 		print_message("csum server verify verification failed.\n");
 		assert_int_equal(rc, 1); /* fail the test */
 	}
-	entry = daos_prop_entry_get(prop_query, DAOS_PROP_CO_SCRUBBER_DISABLED);
-	if (entry == NULL || entry->dpe_val == true) {
-		print_message("scrubber disabled failed.\n");
-		assert_int_equal(rc, 1); /* fail the test */
-	}
 	entry = daos_prop_entry_get(prop_query, DAOS_PROP_CO_ENCRYPT);
 	if (entry == NULL || entry->dpe_val != DAOS_PROP_CO_ENCRYPT_OFF) {
 		print_message("encrypt verification failed.\n");
@@ -432,6 +427,12 @@ co_properties(void **state)
 		assert_int_equal(rc, 1); /* fail the test */
 	}
 	D_FREE(exp_owner_grp);
+
+	entry = daos_prop_entry_get(prop_query, DAOS_PROP_CO_SCRUBBER_DISABLED);
+	if (entry == NULL || entry->dpe_val == true) {
+		print_message("scrubber disabled failed.\n");
+		assert_int_equal(rc, 1); /* fail the test */
+	}
 
 	if (arg->myrank == 0) {
 		daos_debug_set_params(arg->group, -1, DMG_KEY_FAIL_LOC, 0,

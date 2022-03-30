@@ -289,9 +289,6 @@ cont_iv_prop_l2g(daos_prop_t *prop, struct cont_iv_prop *iv_prop)
 			iv_prop->cip_csum_server_verify = prop_entry->dpe_val;
 			bits |= DAOS_CO_QUERY_PROP_CSUM_SERVER;
 			break;
-		case DAOS_PROP_CO_SCRUBBER_DISABLED:
-			iv_prop->cip_scrubbing_disabled = prop_entry->dpe_val;
-			break;
 		case DAOS_PROP_CO_DEDUP:
 			iv_prop->cip_dedup = prop_entry->dpe_val;
 			bits |= DAOS_CO_QUERY_PROP_DEDUP;
@@ -371,6 +368,9 @@ cont_iv_prop_l2g(daos_prop_t *prop, struct cont_iv_prop *iv_prop)
 			daos_prop_val_2_co_status(prop_entry->dpe_val,
 						  &iv_prop->cip_co_status);
 			bits |= DAOS_CO_QUERY_PROP_CO_STATUS;
+			break;
+		case DAOS_PROP_CO_SCRUBBER_DISABLED:
+			iv_prop->cip_scrubbing_disabled = prop_entry->dpe_val;
 			break;
 		default:
 			D_ASSERTF(0, "bad dpe_type %d\n", prop_entry->dpe_type);
@@ -1172,11 +1172,6 @@ cont_iv_prop_g2l(struct cont_iv_prop *iv_prop, daos_prop_t **prop_out)
 		prop_entry->dpe_val = iv_prop->cip_csum_server_verify;
 		prop_entry->dpe_type = DAOS_PROP_CO_CSUM_SERVER_VERIFY;
 	}
-	if (bits & DAOS_CO_QUERY_PROP_SCRUB_DIS) {
-		prop_entry = &prop->dpp_entries[i++];
-		prop_entry->dpe_val = iv_prop->cip_scrubbing_disabled;
-		prop_entry->dpe_type = DAOS_PROP_CO_SCRUBBER_DISABLED;
-	}
 	if (bits & DAOS_CO_QUERY_PROP_DEDUP) {
 		prop_entry = &prop->dpp_entries[i++];
 		prop_entry->dpe_val = iv_prop->cip_dedup;
@@ -1285,6 +1280,11 @@ cont_iv_prop_g2l(struct cont_iv_prop *iv_prop, daos_prop_t **prop_out)
 		prop_entry->dpe_val = daos_prop_co_status_2_val(
 					&iv_prop->cip_co_status);
 		prop_entry->dpe_type = DAOS_PROP_CO_STATUS;
+	}
+	if (bits & DAOS_CO_QUERY_PROP_SCRUB_DIS) {
+		prop_entry = &prop->dpp_entries[i++];
+		prop_entry->dpe_val = iv_prop->cip_scrubbing_disabled;
+		prop_entry->dpe_type = DAOS_PROP_CO_SCRUBBER_DISABLED;
 	}
 out:
 	if (rc)

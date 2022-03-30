@@ -93,7 +93,6 @@ struct daos_prop_entry pool_prop_entries_default[DAOS_PROP_PO_NUM] = {
 	}, {
 		.dpe_type	= DAOS_PROP_PO_UPGRADE_STATUS,
 		.dpe_val	= DAOS_UPGRADE_STATUS_NOT_STARTED,
-		.dpe_str	= "type=io_size",
 	}, {
 		.dpe_type	= DAOS_PROP_PO_SCRUB_SCHED,
 		.dpe_val	= DAOS_SCRUB_SCHED_OFF,
