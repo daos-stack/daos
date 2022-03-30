@@ -260,6 +260,8 @@ cont_iv_prop_l2g(daos_prop_t *prop, struct cont_iv_prop *iv_prop)
 	D_ASSERT(prop->dpp_nr <= CONT_PROP_NUM);
 	for (i = 0; i < prop->dpp_nr; i++) {
 		prop_entry = &prop->dpp_entries[i];
+		if (!daos_prop_is_set(prop_entry))
+			continue;
 		switch (prop_entry->dpe_type) {
 		case DAOS_PROP_CO_LABEL:
 			D_ASSERT(strlen(prop_entry->dpe_str) <=
