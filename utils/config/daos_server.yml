@@ -199,9 +199,9 @@
 ## each additional fabric provider after the first. This only applies when
 ## running in multi-provider mode.
 #
-## default: 0
+## default: 1
 #
-#nr_secondary_contexts: 1
+#nr_secondary_contexts: [2]
 #
 #
 ## Force specific debug mask for daos_server (control plane).

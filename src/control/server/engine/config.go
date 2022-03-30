@@ -29,14 +29,15 @@ const (
 
 // FabricConfig encapsulates networking fabric configuration.
 type FabricConfig struct {
-	Provider        string `yaml:"provider,omitempty" cmdEnv:"CRT_PHY_ADDR_STR"`
-	Interface       string `yaml:"fabric_iface,omitempty" cmdEnv:"OFI_INTERFACE"`
-	InterfacePort   string `yaml:"fabric_iface_port,omitempty" cmdEnv:"OFI_PORT"`
-	NumaNodeIndex   uint   `yaml:"-"`
-	BypassHealthChk *bool  `yaml:"bypass_health_chk,omitempty" cmdLongFlag:"--bypass_health_chk" cmdShortFlag:"-b"`
-	CrtCtxShareAddr uint32 `yaml:"crt_ctx_share_addr,omitempty" cmdEnv:"CRT_CTX_SHARE_ADDR"`
-	CrtTimeout      uint32 `yaml:"crt_timeout,omitempty" cmdEnv:"CRT_TIMEOUT"`
-	DisableSRX      bool   `yaml:"disable_srx,omitempty" cmdEnv:"FI_OFI_RXM_USE_SRX,invertBool,intBool"`
+	Provider           string `yaml:"provider,omitempty" cmdEnv:"CRT_PHY_ADDR_STR"`
+	Interface          string `yaml:"fabric_iface,omitempty" cmdEnv:"OFI_INTERFACE"`
+	InterfacePort      string `yaml:"fabric_iface_port,omitempty" cmdEnv:"OFI_PORT"`
+	NumaNodeIndex      uint   `yaml:"-"`
+	BypassHealthChk    *bool  `yaml:"bypass_health_chk,omitempty" cmdLongFlag:"--bypass_health_chk" cmdShortFlag:"-b"`
+	CrtCtxShareAddr    uint32 `yaml:"crt_ctx_share_addr,omitempty" cmdEnv:"CRT_CTX_SHARE_ADDR"`
+	CrtTimeout         uint32 `yaml:"crt_timeout,omitempty" cmdEnv:"CRT_TIMEOUT"`
+	CrtNumSecondaryCtx []int  `yaml:"nr_secondary_contexts,omitempty" cmdLongFlag:"--nr_sec_ctx,nonzero" cmdShortFlag:"-S,nonzero"`
+	DisableSRX         bool   `yaml:"disable_srx,omitempty" cmdEnv:"FI_OFI_RXM_USE_SRX,invertBool,intBool"`
 }
 
 // GetPrimaryProvider parses the primary provider from the Provider string.
@@ -148,14 +149,14 @@ func (fc *FabricConfig) Update(other FabricConfig) {
 	if fc.CrtTimeout == 0 {
 		fc.CrtTimeout = other.CrtTimeout
 	}
+	if len(fc.CrtNumSecondaryCtx) == 0 {
+		fc.CrtNumSecondaryCtx = other.CrtNumSecondaryCtx
+	}
 }
 
 // Validate ensures that the configuration meets minimum standards.
 func (fc *FabricConfig) Validate() error {
-	prov, err := fc.GetProviders()
-	if err != nil {
-		return err
-	}
+	numProv := fc.GetNumProviders()
 
 	interfaces, err := fc.GetInterfaces()
 	if err != nil {
@@ -173,8 +174,21 @@ func (fc *FabricConfig) Validate() error {
 		}
 	}
 
-	if len(prov) != len(interfaces) || len(prov) != len(ports) {
+	if len(interfaces) != numProv || len(ports) != numProv {
 		return errors.Errorf("provider, fabric_iface and fabric_iface_port must include the same number of items delimited by %q", MultiProviderSeparator)
+	}
+
+	numSecProv := numProv - 1
+	if numSecProv > 0 {
+		if len(fc.CrtNumSecondaryCtx) != 0 && len(fc.CrtNumSecondaryCtx) != numSecProv {
+			return errors.New("nr_secondary_contexts must have one value for each secondary provider")
+		}
+
+		for _, nrCtx := range fc.CrtNumSecondaryCtx {
+			if nrCtx < 1 {
+				return errors.Errorf("all values in nr_secondary_contexts must be > 0")
+			}
+		}
 	}
 
 	return nil
@@ -274,7 +288,6 @@ type Config struct {
 	Index             uint32         `yaml:"-" cmdLongFlag:"--instance_idx" cmdShortFlag:"-I"`
 	MemSize           int            `yaml:"-" cmdLongFlag:"--mem_size" cmdShortFlag:"-r"`
 	HugePageSz        int            `yaml:"-" cmdLongFlag:"--hugepage_size" cmdShortFlag:"-H"`
-	NrSecondaryCtx    int            `yaml:"-" cmdLongFlag:"--nr_sec_ctx,nonzero" cmdShortFlag:"-S,nonzero"`
 }
 
 // NewConfig returns an I/O Engine config.
@@ -541,9 +554,9 @@ func (c *Config) WithCrtTimeout(timeout uint32) *Config {
 	return c
 }
 
-// WithNrSecondaryCtx sets the number of CART contexts for each secondary provider.
-func (c *Config) WithNrSecondaryCtx(nr int) *Config {
-	c.NrSecondaryCtx = nr
+// WithCrtNumSecondaryCtx sets the number of CART contexts for each secondary provider.
+func (c *Config) WithCrtNumSecondaryCtx(nr []int) *Config {
+	c.Fabric.CrtNumSecondaryCtx = nr
 	return c
 }
 

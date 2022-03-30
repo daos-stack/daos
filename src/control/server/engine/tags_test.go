@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2021 Intel Corporation.
+// (C) Copyright 2019-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -17,22 +17,23 @@ type subConfig struct {
 }
 
 type testConfig struct {
-	NonzeroIntOpt    int    `cmdShortFlag:"-z,nonzero" cmdLongFlag:"--zero,nonzero"`
-	IntOpt           int    `cmdShortFlag:"-i" cmdLongFlag:"--int"`
-	UintOpt          uint32 `cmdShortFlag:"-t" cmdLongFlag:"--uint"`
-	StringOpt        string `cmdShortFlag:"-s" cmdLongFlag:"--string"`
-	SetBoolOpt       bool   `cmdShortFlag:"-b" cmdLongFlag:"--set_bool"`
-	UnsetBoolOpt     bool   `cmdShortFlag:"-u" cmdLongFlag:"--unset_bool"`
-	IntEnv           int    `cmdEnv:"INT_ENV"`
-	StringEnv        string `cmdEnv:"STRING_ENV"`
-	SetBoolEnv       bool   `cmdEnv:"SET_BOOL_ENV"`
-	UnsetBoolEnv     bool   `cmdEnv:"UNSET_BOOL_ENV"`
-	InvertBoolIntEnv bool   `cmdEnv:"INVERT_BOOL_INT_ENV,invertBool,intBool"`
-	BoolIntEnv       bool   `cmdEnv:"BOOL_INT_ENV,intBool"`
-	IntPtrOpt        *int   `cmdShortFlag:"-p" cmdLongFlag:"--int_ptr"`
-	UnsetIntPtrOpt   *int   `cmdShortFlag:"-r" cmdLongFlag:"--unset_int_ptr"`
-	SliceOpt         []int  `cmdShortFlag:"-S,nonzero" cmdLongFlag:"--slice_length,nonzero"`
-	SliceOptEmpty    []int  `cmdShortFlag:"-E,nonzero" cmdLongFlag:"--slice_length_empty,nonzero"`
+	NonzeroIntOpt    int       `cmdShortFlag:"-z,nonzero" cmdLongFlag:"--zero,nonzero"`
+	IntOpt           int       `cmdShortFlag:"-i" cmdLongFlag:"--int"`
+	UintOpt          uint32    `cmdShortFlag:"-t" cmdLongFlag:"--uint"`
+	StringOpt        string    `cmdShortFlag:"-s" cmdLongFlag:"--string"`
+	SetBoolOpt       bool      `cmdShortFlag:"-b" cmdLongFlag:"--set_bool"`
+	UnsetBoolOpt     bool      `cmdShortFlag:"-u" cmdLongFlag:"--unset_bool"`
+	IntEnv           int       `cmdEnv:"INT_ENV"`
+	StringEnv        string    `cmdEnv:"STRING_ENV"`
+	SetBoolEnv       bool      `cmdEnv:"SET_BOOL_ENV"`
+	UnsetBoolEnv     bool      `cmdEnv:"UNSET_BOOL_ENV"`
+	InvertBoolIntEnv bool      `cmdEnv:"INVERT_BOOL_INT_ENV,invertBool,intBool"`
+	BoolIntEnv       bool      `cmdEnv:"BOOL_INT_ENV,intBool"`
+	IntPtrOpt        *int      `cmdShortFlag:"-p" cmdLongFlag:"--int_ptr"`
+	UnsetIntPtrOpt   *int      `cmdShortFlag:"-r" cmdLongFlag:"--unset_int_ptr"`
+	SliceOpt         []float32 `cmdShortFlag:"-S,nonzero" cmdLongFlag:"--slice,nonzero"`
+	IntSliceOpt      []int     `cmdShortFlag:"-I,nonzero" cmdLongFlag:"--intslice,nonzero"`
+	SliceOptEmpty    []int     `cmdShortFlag:"-E,nonzero" cmdLongFlag:"--slice_empty,nonzero"`
 	Nested           subConfig
 	NestedPointer    *subConfig
 	NilNestedPointer *subConfig
@@ -44,15 +45,16 @@ func intRef(in int) *int {
 }
 
 var testStruct = &testConfig{
-	IntOpt:     -1,
-	UintOpt:    1,
-	StringOpt:  "stringOpt",
-	SetBoolOpt: true,
-	IntEnv:     -1,
-	StringEnv:  "stringEnv",
-	SetBoolEnv: true,
-	IntPtrOpt:  intRef(4),
-	SliceOpt:   []int{0, 1, 2},
+	IntOpt:      -1,
+	UintOpt:     1,
+	StringOpt:   "stringOpt",
+	SetBoolOpt:  true,
+	IntEnv:      -1,
+	StringEnv:   "stringEnv",
+	SetBoolEnv:  true,
+	IntPtrOpt:   intRef(4),
+	SliceOpt:    []float32{0, 1, 2},
+	IntSliceOpt: []int{0, 1, 2, 3},
 	Nested: subConfig{
 		NestedIntOpt: 2,
 	},
@@ -73,7 +75,8 @@ func TestParseLongFlags(t *testing.T) {
 		"--string=stringOpt",
 		"--set_bool",
 		"--int_ptr=4",
-		"--slice_length=3",
+		"--slice=3",
+		"--intslice=0,1,2,3",
 		"--nested_int=2",
 		"--nested_int=3",
 	}
@@ -95,6 +98,7 @@ func TestParseShortFlags(t *testing.T) {
 		"-b",
 		"-p", "4",
 		"-S", "3",
+		"-I", "0,1,2,3",
 		"-n", "2",
 		"-n", "3",
 	}
@@ -136,6 +140,7 @@ func TestCircularRef(t *testing.T) {
 		"-b",
 		"-p", "4",
 		"-S", "3",
+		"-I", "0,1,2,3",
 		"-n", "2",
 		"-n", "3",
 	}

@@ -598,6 +598,41 @@ func TestConfig_FabricValidation(t *testing.T) {
 			},
 			expErr: errors.New("same number"),
 		},
+		"nr secondary ctxs less than 1": {
+			cfg: FabricConfig{
+				Provider:           "foo bar",
+				Interface:          "baz net",
+				InterfacePort:      "42 128",
+				CrtNumSecondaryCtx: []int{0},
+			},
+			expErr: errors.New("must be > 0"),
+		},
+		"nr secondary ctxs okay": {
+			cfg: FabricConfig{
+				Provider:           "foo bar baz",
+				Interface:          "net0 net1 net2",
+				InterfacePort:      "42 128 256",
+				CrtNumSecondaryCtx: []int{1, 2},
+			},
+		},
+		"too many nr secondary ctxs": {
+			cfg: FabricConfig{
+				Provider:           "foo bar baz",
+				Interface:          "net0 net1 net2",
+				InterfacePort:      "42 128 256",
+				CrtNumSecondaryCtx: []int{1, 2, 3},
+			},
+			expErr: errors.New("must have one value for each"),
+		},
+		"too few nr secondary ctxs": {
+			cfg: FabricConfig{
+				Provider:           "foo bar baz",
+				Interface:          "net0 net1 net2",
+				InterfacePort:      "42 128 256",
+				CrtNumSecondaryCtx: []int{1},
+			},
+			expErr: errors.New("must have one value for each"),
+		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			gotErr := tc.cfg.Validate()

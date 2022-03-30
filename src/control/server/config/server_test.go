@@ -211,7 +211,7 @@ func TestServerConfig_Constructed(t *testing.T) {
 		WithFabricProvider("ofi+verbs").
 		WithCrtCtxShareAddr(0).
 		WithCrtTimeout(30).
-		WithNrSecondaryCtx(1).
+		WithCrtNumSecondaryCtx([]int{2}).
 		WithAccessPoints("hostname1").
 		WithFaultCb("./.daos/fd_callback").
 		WithFaultPath("/vcdu0/rack1/hostname").
@@ -241,6 +241,7 @@ func TestServerConfig_Constructed(t *testing.T) {
 			WithFabricProvider("ofi+verbs").
 			WithCrtCtxShareAddr(0).
 			WithCrtTimeout(30).
+			WithCrtNumSecondaryCtx([]int{2}).
 			WithPinnedNumaNode(0).
 			WithBypassHealthChk(&bypass).
 			WithEnvVars("CRT_TIMEOUT=30").
@@ -270,6 +271,7 @@ func TestServerConfig_Constructed(t *testing.T) {
 			WithFabricProvider("ofi+verbs").
 			WithCrtCtxShareAddr(0).
 			WithCrtTimeout(30).
+			WithCrtNumSecondaryCtx([]int{2}).
 			WithPinnedNumaNode(1).
 			WithBypassHealthChk(&bypass).
 			WithEnvVars("CRT_TIMEOUT=100").
@@ -304,45 +306,45 @@ func TestServerConfig_updateServerConfig(t *testing.T) {
 		},
 		"basic": {
 			cfg: &Server{
-				SystemName:     "name",
-				SocketDir:      "socketdir",
-				Modules:        "modules",
-				NrSecondaryCtx: 2,
-				EnableHotplug:  true,
+				SystemName:    "name",
+				SocketDir:     "socketdir",
+				Modules:       "modules",
+				EnableHotplug: true,
 				Fabric: engine.FabricConfig{
-					Provider:      "provider",
-					Interface:     "iface",
-					InterfacePort: "1111",
+					Provider:           "provider",
+					Interface:          "iface",
+					InterfacePort:      "1111",
+					CrtNumSecondaryCtx: []int{2, 3, 4},
 				},
 			},
 			expEngCfg: &engine.Config{
-				SystemName:     "name",
-				SocketDir:      "socketdir",
-				Modules:        "modules",
-				NrSecondaryCtx: 0, // no secondary providers => no secondary ctx
+				SystemName: "name",
+				SocketDir:  "socketdir",
+				Modules:    "modules",
 				Storage: storage.Config{
 					EnableHotplug: true,
 				},
 				Fabric: engine.FabricConfig{
-					Provider:      "provider",
-					Interface:     "iface",
-					InterfacePort: "1111",
+					Provider:           "provider",
+					Interface:          "iface",
+					InterfacePort:      "1111",
+					CrtNumSecondaryCtx: []int{2, 3, 4},
 				},
 			},
 		},
 		"multiprovider": {
 			cfg: &Server{
-				SystemName:     "name",
-				NrSecondaryCtx: 2,
+				SystemName: "name",
 				Fabric: engine.FabricConfig{
-					Provider: "p1 p2 p3",
+					Provider:           "p1 p2 p3",
+					CrtNumSecondaryCtx: []int{2, 3, 4},
 				},
 			},
 			expEngCfg: &engine.Config{
-				SystemName:     "name",
-				NrSecondaryCtx: 4,
+				SystemName: "name",
 				Fabric: engine.FabricConfig{
-					Provider: "p1 p2 p3",
+					Provider:           "p1 p2 p3",
+					CrtNumSecondaryCtx: []int{2, 3, 4},
 				},
 			},
 		},
