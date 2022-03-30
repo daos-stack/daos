@@ -390,6 +390,26 @@ type (
 	}
 )
 
+func (pi *PoolInfo) MarshalJSON() ([]byte, error) {
+	if pi == nil {
+		return []byte("null"), nil
+	}
+
+	rs, err := system.CreateRankSet(pi.RankSet)
+	if err != nil {
+		return nil, err
+	}
+
+	type Alias PoolInfo
+	return json.Marshal(&struct {
+		RankSet []system.Rank `json:"rank_set"`
+		*Alias
+	}{
+		RankSet: rs.Ranks(),
+		Alias:   (*Alias)(pi),
+	})
+}
+
 func (sus *StorageUsageStats) UnmarshalJSON(data []byte) error {
 	type fromJSON StorageUsageStats
 	from := &struct {
