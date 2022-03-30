@@ -194,12 +194,8 @@ enum_pack_cb(daos_handle_t ih, vos_iter_entry_t *entry, vos_iter_type_t type,
 {
 	d_iov_t *d_key = cb_arg;
 
-	switch(type)
+	if (type == VOS_ITER_DKEY)
 	{
-	case VOS_ITER_AKEY:
-		*acts |= VOS_ITER_CB_SKIP; /** fetching akeys someplace else */
-		return 0;
-	case VOS_ITER_DKEY:
 		if (d_key->iov_len != 0) /** one dkey at a time */
 		{
 			return 1;
@@ -209,10 +205,9 @@ enum_pack_cb(daos_handle_t ih, vos_iter_entry_t *entry, vos_iter_type_t type,
 			*d_key = entry->ie_key;
 		}
 		return 0;
-	default:
-		D_ASSERTF(false, "unknown/unsupported type %d\n", type);
-		return -DER_INVAL;
 	}
+	D_ASSERTF(false, "unknown/unsupported type %d\n", type);
+	return -DER_INVAL;
 }
 
 static int
@@ -241,7 +236,7 @@ pipeline_fetch_record(daos_handle_t vos_coh, daos_unit_oid_t oid,
 	d_key->iov_len = 0;
 
 	/** iterating over dkeys only */
-	rc = vos_iterate(&param, type, true, anchors, enum_pack_cb, NULL, d_key,
+	rc = vos_iterate(&param, type, false, anchors, enum_pack_cb, NULL, d_key,
 			 NULL);
 	D_DEBUG(DB_IO, "enum type %d rc "DF_RC"\n", type, DP_RC(rc));
 	if (rc < 0)
