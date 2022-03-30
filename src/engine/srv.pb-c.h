@@ -26,7 +26,7 @@ typedef struct _Srv__CheckListPoolResp Srv__CheckListPoolResp;
 typedef struct _Srv__CheckListPoolResp__OnePool Srv__CheckListPoolResp__OnePool;
 typedef struct _Srv__CheckRegPoolReq Srv__CheckRegPoolReq;
 typedef struct _Srv__CheckRegPoolResp Srv__CheckRegPoolResp;
-typedef struct _Srv__CheckDeregPoolRep Srv__CheckDeregPoolRep;
+typedef struct _Srv__CheckDeregPoolReq Srv__CheckDeregPoolReq;
 typedef struct _Srv__CheckDeregPoolResp Srv__CheckDeregPoolResp;
 typedef struct _Srv__CheckReportReq Srv__CheckReportReq;
 typedef struct _Srv__CheckReportResp Srv__CheckReportResp;
@@ -274,7 +274,7 @@ struct  _Srv__CheckRegPoolResp
 /*
  * Deregister pool from MS.
  */
-struct  _Srv__CheckDeregPoolRep
+struct  _Srv__CheckDeregPoolReq
 {
   ProtobufCMessage base;
   /*
@@ -286,8 +286,8 @@ struct  _Srv__CheckDeregPoolRep
    */
   char *uuid;
 };
-#define SRV__CHECK_DEREG_POOL_REP__INIT \
- { PROTOBUF_C_MESSAGE_INIT (&srv__check_dereg_pool_rep__descriptor) \
+#define SRV__CHECK_DEREG_POOL_REQ__INIT \
+ { PROTOBUF_C_MESSAGE_INIT (&srv__check_dereg_pool_req__descriptor) \
     , 0, (char *)protobuf_c_empty_string }
 
 
@@ -368,7 +368,7 @@ struct  _Srv__CheckReportReq
    */
   char *msg;
   /*
-   * Options list for interation mode.
+   * Options list for interaction mode.
    */
   size_t n_options;
   char **options;
@@ -584,24 +584,24 @@ Srv__CheckRegPoolResp *
 void   srv__check_reg_pool_resp__free_unpacked
                      (Srv__CheckRegPoolResp *message,
                       ProtobufCAllocator *allocator);
-/* Srv__CheckDeregPoolRep methods */
-void   srv__check_dereg_pool_rep__init
-                     (Srv__CheckDeregPoolRep         *message);
-size_t srv__check_dereg_pool_rep__get_packed_size
-                     (const Srv__CheckDeregPoolRep   *message);
-size_t srv__check_dereg_pool_rep__pack
-                     (const Srv__CheckDeregPoolRep   *message,
+/* Srv__CheckDeregPoolReq methods */
+void   srv__check_dereg_pool_req__init
+                     (Srv__CheckDeregPoolReq         *message);
+size_t srv__check_dereg_pool_req__get_packed_size
+                     (const Srv__CheckDeregPoolReq   *message);
+size_t srv__check_dereg_pool_req__pack
+                     (const Srv__CheckDeregPoolReq   *message,
                       uint8_t             *out);
-size_t srv__check_dereg_pool_rep__pack_to_buffer
-                     (const Srv__CheckDeregPoolRep   *message,
+size_t srv__check_dereg_pool_req__pack_to_buffer
+                     (const Srv__CheckDeregPoolReq   *message,
                       ProtobufCBuffer     *buffer);
-Srv__CheckDeregPoolRep *
-       srv__check_dereg_pool_rep__unpack
+Srv__CheckDeregPoolReq *
+       srv__check_dereg_pool_req__unpack
                      (ProtobufCAllocator  *allocator,
                       size_t               len,
                       const uint8_t       *data);
-void   srv__check_dereg_pool_rep__free_unpacked
-                     (Srv__CheckDeregPoolRep *message,
+void   srv__check_dereg_pool_req__free_unpacked
+                     (Srv__CheckDeregPoolReq *message,
                       ProtobufCAllocator *allocator);
 /* Srv__CheckDeregPoolResp methods */
 void   srv__check_dereg_pool_resp__init
@@ -695,8 +695,8 @@ typedef void (*Srv__CheckRegPoolReq_Closure)
 typedef void (*Srv__CheckRegPoolResp_Closure)
                  (const Srv__CheckRegPoolResp *message,
                   void *closure_data);
-typedef void (*Srv__CheckDeregPoolRep_Closure)
-                 (const Srv__CheckDeregPoolRep *message,
+typedef void (*Srv__CheckDeregPoolReq_Closure)
+                 (const Srv__CheckDeregPoolReq *message,
                   void *closure_data);
 typedef void (*Srv__CheckDeregPoolResp_Closure)
                  (const Srv__CheckDeregPoolResp *message,
@@ -724,7 +724,7 @@ extern const ProtobufCMessageDescriptor srv__check_list_pool_resp__descriptor;
 extern const ProtobufCMessageDescriptor srv__check_list_pool_resp__one_pool__descriptor;
 extern const ProtobufCMessageDescriptor srv__check_reg_pool_req__descriptor;
 extern const ProtobufCMessageDescriptor srv__check_reg_pool_resp__descriptor;
-extern const ProtobufCMessageDescriptor srv__check_dereg_pool_rep__descriptor;
+extern const ProtobufCMessageDescriptor srv__check_dereg_pool_req__descriptor;
 extern const ProtobufCMessageDescriptor srv__check_dereg_pool_resp__descriptor;
 extern const ProtobufCMessageDescriptor srv__check_report_req__descriptor;
 extern const ProtobufCMessageDescriptor srv__check_report_resp__descriptor;

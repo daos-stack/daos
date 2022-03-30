@@ -81,7 +81,7 @@ message CheckRegPoolResp {
 }
 
 // Deregister pool from MS.
-message CheckDeregPoolRep {
+message CheckDeregPoolReq {
 	uint64 seq = 1; // DAOS Check event sequence, unique for the instance.
 	string uuid = 2; // The pool to be deregistered.
 }
@@ -111,7 +111,7 @@ message CheckReportReq {
 	string akey = 11; // The consistency is in which akey if applicable.
 	string timestamp = 12; // The time of report (and repair) the inconsistency.
 	string msg = 13; // Information to describe the inconsistency in detail.
-	repeated string options = 14; // Options list for interation mode.
+	repeated string options = 14; // Options list for interaction mode.
 }
 
 message CheckReportResp {
