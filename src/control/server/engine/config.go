@@ -150,8 +150,19 @@ func (fc *FabricConfig) Update(other FabricConfig) {
 		fc.CrtTimeout = other.CrtTimeout
 	}
 	if len(fc.CrtNumSecondaryCtx) == 0 {
-		fc.CrtNumSecondaryCtx = other.CrtNumSecondaryCtx
+		fc.setCrtNumSecondaryCtx(other.CrtNumSecondaryCtx)
 	}
+}
+
+func (fc *FabricConfig) setCrtNumSecondaryCtx(other []int) {
+	if len(other) == 0 {
+		// Set defaults
+		numSecProv := fc.GetNumProviders() - 1
+		for i := 0; i < numSecProv; i++ {
+			other = append(other, 1)
+		}
+	}
+	fc.CrtNumSecondaryCtx = other
 }
 
 // Validate ensures that the configuration meets minimum standards.

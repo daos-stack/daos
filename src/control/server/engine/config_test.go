@@ -1071,3 +1071,84 @@ func TestFabricConfig_GetInterfacePorts(t *testing.T) {
 		})
 	}
 }
+
+func TestFabricConfig_Update(t *testing.T) {
+	for name, tc := range map[string]struct {
+		fc        *FabricConfig
+		other     FabricConfig
+		expResult *FabricConfig
+	}{
+		"set all": {
+			fc: &FabricConfig{},
+			other: FabricConfig{
+				Provider:           "p",
+				Interface:          "i",
+				InterfacePort:      "1234",
+				CrtCtxShareAddr:    2,
+				CrtTimeout:         3,
+				CrtNumSecondaryCtx: []int{1},
+			},
+			expResult: &FabricConfig{
+				Provider:           "p",
+				Interface:          "i",
+				InterfacePort:      "1234",
+				CrtCtxShareAddr:    2,
+				CrtTimeout:         3,
+				CrtNumSecondaryCtx: []int{1},
+			},
+		},
+		"already set": {
+			fc: &FabricConfig{
+				Provider:           "p",
+				Interface:          "i",
+				InterfacePort:      "1234",
+				CrtCtxShareAddr:    2,
+				CrtTimeout:         3,
+				CrtNumSecondaryCtx: []int{1},
+			},
+			other: FabricConfig{
+				Provider:           "q",
+				Interface:          "h",
+				InterfacePort:      "5678",
+				CrtCtxShareAddr:    3,
+				CrtTimeout:         4,
+				CrtNumSecondaryCtx: []int{5},
+			},
+			expResult: &FabricConfig{
+				Provider:           "p",
+				Interface:          "i",
+				InterfacePort:      "1234",
+				CrtCtxShareAddr:    2,
+				CrtTimeout:         3,
+				CrtNumSecondaryCtx: []int{1},
+			},
+		},
+		"default secondary ctx": {
+			fc: &FabricConfig{},
+			other: FabricConfig{
+				Provider: "one two three",
+			},
+			expResult: &FabricConfig{
+				Provider:           "one two three",
+				CrtNumSecondaryCtx: []int{1, 1},
+			},
+		},
+		"no secondary ctx": {
+			fc: &FabricConfig{},
+			other: FabricConfig{
+				Provider: "one",
+			},
+			expResult: &FabricConfig{
+				Provider: "one",
+			},
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			tc.fc.Update(tc.other)
+
+			if diff := cmp.Diff(tc.expResult, tc.fc); diff != "" {
+				t.Fatalf("(-want, +got):\n%s", diff)
+			}
+		})
+	}
+}
