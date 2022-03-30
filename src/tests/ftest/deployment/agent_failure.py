@@ -137,7 +137,7 @@ class AgentFailure(IorTestBase):
 
         # 5. Verify journalctl shows the log that the agent is stopped.
         results = self.get_journalctl(
-            hosts=self.hostlist_servers, since=since, until=until,
+            hosts=self.hostlist_clients, since=since, until=until,
             journalctl_type="daos_agent")
         self.log.info("journalctl results = %s", results)
         if "shutting down" not in results[0]["data"]:
