@@ -470,6 +470,7 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %{_bindir}/daos_agent
 %{_bindir}/dfuse
 %{_bindir}/daos
+%{_bindir}/ddb
 %{_libdir}/libdaos_cmd_hdlrs.so
 %{_libdir}/libdfs.so
 %{_libdir}/%{name}/API_VERSION
@@ -534,6 +535,7 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %{_bindir}/vea_ut
 %{_bindir}/vos_tests
 %{_bindir}/vea_stress
+%{_bindir}/ddb_tests
 
 %files server-tests-openmpi
 %{_bindir}/daos_gen_io_conf
@@ -562,6 +564,8 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 # No files in a shim package
 
 %changelog
+* Wed April 07 2022 Ryon Jensen <ryon.jensen@intel.com> 2.3.100-2
+- New ddb tool and tests
 * Wed Apr  6 2022 Johann Lombardi <johann.lombardi@intel.com> 2.3.100-1
 - Switch version to 2.3.100 for 2.4 test builds
 

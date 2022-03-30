@@ -132,6 +132,9 @@ if [ -d "/mnt/daos" ]; then
     run_test "${SL_PREFIX}/bin/vos_tests" -A 500
     run_test "${SL_PREFIX}/bin/vos_tests" -n -A 500
 
+    COMP="UTEST_ddb"
+    run_test "${SL_PREFIX}/bin/ddb_tests"
+
     COMP="UTEST_vea"
     run_test "${SL_PREFIX}/bin/vea_ut"
     run_test "${SL_PREFIX}/bin/vea_stress -d 60"
