@@ -1116,6 +1116,7 @@ rebuild_task_ult(void *arg)
 	struct ds_pool				*pool;
 	struct rebuild_global_pool_tracker	*rgt = NULL;
 	struct rebuild_iv                       iv = { 0 };
+	d_rank_t				myrank;
 	uint64_t				cur_ts = 0;
 	int					rc;
 
@@ -1133,6 +1134,8 @@ rebuild_task_ult(void *arg)
 		D_GOTO(out_task, rc = -DER_NONEXIST);
 	}
 
+	rc = crt_group_rank(pool->sp_group, &myrank);
+	D_ASSERT(rc == 0);
 	rc = rebuild_notify_ras_start(&task->dst_pool_uuid, task->dst_map_ver,
 				      RB_OP_STR(task->dst_rebuild_op));
 	if (rc)
@@ -1146,14 +1149,17 @@ rebuild_task_ult(void *arg)
 	rc = rebuild_leader_start(pool, task->dst_map_ver, &task->dst_tgts,
 				  task->dst_rebuild_op, &rgt);
 	if (rc != 0) {
-		if (rc == -DER_CANCELED || rc == -DER_NOTLEADER) {
+		if (rc == -DER_CANCELED ||
+		    (rc == -DER_NOTLEADER &&
+		     pool->sp_iv_ns->iv_master_rank != (d_rank_t)(-1) &&
+		     pool->sp_iv_ns->iv_master_rank != myrank)) {
 			/* If it is not leader, the new leader will step up
 			 * restart rebuild anyway, so do not need reschedule
 			 * rebuild on this node anymore.
 			 */
-			D_DEBUG(DB_REBUILD, "pool "DF_UUID" ver %u rebuild is"
+			D_DEBUG(DB_REBUILD, "pool "DF_UUID" ver/master %u/%u rebuild is"
 				" canceled.\n", DP_UUID(task->dst_pool_uuid),
-				task->dst_map_ver);
+				task->dst_map_ver, pool->sp_iv_ns->iv_master_rank);
 			rc = 0;
 			D_PRINT("%s [canceled] (pool "DF_UUID" ver=%u"
 				" status="DF_RC")\n",
@@ -1228,11 +1234,6 @@ iv_stop:
 	 * rebuild.
 	 */
 	if (rgt->rgt_init_scan) {
-		d_rank_t	myrank;
-		int		ret;
-
-		ret = crt_group_rank(pool->sp_group, &myrank);
-		D_ASSERT(ret == 0);
 		if (myrank != pool->sp_iv_ns->iv_master_rank) {
 			/* If master has been changed, then let's skip
 			 * iv sync, and the new leader will take over
