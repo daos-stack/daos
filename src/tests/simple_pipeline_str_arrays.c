@@ -38,7 +38,7 @@ insert_example_records(void)
 	uint32_t	i;
 	char		fname[FSIZE];
 	time_t		atime, ctime, mtime;
-	mode_t		mode = S_IWUSR | S_IRUSR;
+	mode_t		mode;
 
 	for (i = 0; i < 100; i++) {
 		int j = 0;
@@ -53,6 +53,7 @@ insert_example_records(void)
 		/** set dkey for record */
 		d_iov_set(&dkey, &fname, strlen(fname));
 
+		mode = S_IWUSR | S_IRUSR;
 		if (i % 10 == 0)
 			mode |= S_IFDIR;
 		else
@@ -62,7 +63,7 @@ insert_example_records(void)
 
 		d_iov_set(&sg_iovs[j++], &mode, sizeof(mode_t));
 		d_iov_set(&sg_iovs[j++], &atime, sizeof(time_t));
-		d_iov_set(&sg_iovs[j++], &mtime, sizeof(time_t));          
+		d_iov_set(&sg_iovs[j++], &mtime, sizeof(time_t));
 		d_iov_set(&sg_iovs[j++], &ctime, sizeof(time_t));
 
 		sgl.sg_nr	= NR_RECXS;
@@ -119,9 +120,9 @@ build_pipeline_one(daos_pipeline_t *pipeline)
 	daos_size_t		const_dkey_s;
 	char			*const_dkey;
 
-	const_dkey_s = strlen("*.0*");
+	const_dkey_s = strlen("%.0%");
 	const_dkey   = (char *) malloc(const_dkey_s);
-	strncpy(const_dkey, "*.0*", const_dkey_s);
+	strncpy(const_dkey, "%.0%", const_dkey_s);
 
 	daos_filter_part_t	*dkey_ft;
 
@@ -424,14 +425,8 @@ main(int argc, char **argv)
 	ASSERT(rc == 0, "Pipeline check failed with %d", rc);
 	/** Running pipeline */
 
-	printf("run_pipeline\n");
-	fflush(stdout);
-
 	run_pipeline(&pipeline1);
 	/** Freeing used memory */
-
-	printf("free_pipeline\n");
-	fflush(stdout);
 
 	free_pipeline(&pipeline1);
 
