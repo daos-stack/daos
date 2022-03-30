@@ -8,6 +8,7 @@ package control
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"strings"
 	"testing"
@@ -358,6 +359,48 @@ func TestControl_PoolCreate(t *testing.T) {
 
 			cmpOpt := cmpopts.IgnoreFields(PoolCreateResp{}, "UUID")
 			if diff := cmp.Diff(tc.expResp, gotResp, cmpOpt); diff != "" {
+				t.Fatalf("Unexpected response (-want, +got):\n%s\n", diff)
+			}
+		})
+	}
+}
+
+func TestControl_PoolInfo_MarshalJSON(t *testing.T) {
+	for name, tc := range map[string]struct {
+		pi     *PoolInfo
+		exp    string
+		expErr error
+	}{
+		"nil": {
+			exp: "null",
+		},
+		"valid rankset": {
+			pi: &PoolInfo{
+				TotalTargets:    1,
+				ActiveTargets:   2,
+				TotalNodes:      3,
+				DisabledTargets: 4,
+				Version:         5,
+				Leader:          6,
+				RankSet:         "0-3",
+			},
+			exp: `{"rank_set":[0,1,2,3],"total_targets":1,"active_targets":2,"total_nodes":3,"disabled_targets":4,"version":5,"leader":6,"rebuild":null,"tier_stats":null,"info_bit":0}`,
+		},
+		"invalid rankset": {
+			pi: &PoolInfo{
+				RankSet: "a cow goes quack",
+			},
+			expErr: errors.New("json: error"),
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			got, err := json.Marshal(tc.pi)
+			common.CmpErr(t, tc.expErr, err)
+			if tc.expErr != nil {
+				return
+			}
+
+			if diff := cmp.Diff(tc.exp, string(got)); diff != "" {
 				t.Fatalf("Unexpected response (-want, +got):\n%s\n", diff)
 			}
 		})
