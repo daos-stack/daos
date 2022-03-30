@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2021 Intel Corporation.
+// (C) Copyright 2019-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -168,6 +168,7 @@ message PoolQueryReq {
 	string sys = 1; // DAOS system identifier
 	string id = 2;
 	repeated uint32 svc_ranks = 3; // List of pool service ranks
+	int32 info_bit = 4; // Pool query bit set
 }
 
 // StorageUsageStats represents usage statistics for a storage subsystem.
@@ -206,6 +207,8 @@ message PoolQueryResp {
 	uint32 total_nodes = 9; // total nodes in pool
 	uint32 version = 10; // latest pool map version
 	uint32 leader = 11; // current raft leader
+	int32 info_bit = 12; // Pool query bit set
+	string rank_set = 13; // Set of ranks enabled or disabled
 }
 
 message PoolProperty {

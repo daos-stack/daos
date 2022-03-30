@@ -1604,8 +1604,10 @@ ds_mgmt_drpc_pool_query(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	if (svc_ranks == NULL)
 		D_GOTO(out, rc = -DER_NOMEM);
 
-	/* TODO: dmg client choose what to query, especially DPI_ENGINES_ENABLED bit set or not. */
-	pool_info.pi_bits = DPI_ALL;
+	// DAOS-10072: Workaround to preserve compatibility with daos cli
+	if (req->info_bit == 0)
+		req->info_bit = DPI_ALL;
+	pool_info.pi_bits = req->info_bit;
 	rc = ds_mgmt_pool_query(uuid, svc_ranks, &ranks, &pool_info);
 	if (rc != 0) {
 		D_ERROR("Failed to query the pool, rc=%d\n", rc);
@@ -1621,6 +1623,8 @@ ds_mgmt_drpc_pool_query(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	resp.total_nodes = pool_info.pi_nnodes;
 	resp.leader = pool_info.pi_leader;
 	resp.version = pool_info.pi_map_ver;
+	resp.info_bit = req->info_bit;
+	resp.rank_set = strdup("TODO");
 
 	D_ALLOC_ARRAY(resp.tier_stats, DAOS_MEDIA_MAX);
 	if (resp.tier_stats == NULL) {
