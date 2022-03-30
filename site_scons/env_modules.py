@@ -33,8 +33,7 @@ class _env_module(): # pylint: disable=invalid-name
     env_module_init = None
     _mpi_map = {"mpich":['mpi/mpich-x86_64', 'gnu-mpich'],
                 "openmpi":['mpi/mlnx_openmpi-x86_64', 'mpi/openmpi3-x86_64',
-                           'gnu-openmpi', 'mpi/openmpi-x86_64'],
-                "intelmpi":['mpi/latest']}
+                           'gnu-openmpi', 'mpi/openmpi-x86_64']}
 
     def __init__(self):
         """Load Modules for initializing envirables"""
@@ -42,9 +41,7 @@ class _env_module(): # pylint: disable=invalid-name
         # in it's MODULEPATH, for some unknown reason
         os.environ["MODULEPATH"] = ":".join([os.path.join(os.sep, "usr", "share", "modules"),
                                              os.path.join(os.sep, "usr", "share", "modulefiles"),
-                                             os.path.join(os.sep, "etc", "modulefiles"),
-                                             os.path.join(
-                                                 os.sep, "opt", "intel", "oneapi", "modulefiles")] +
+                                             os.path.join(os.sep, "etc", "modulefiles")] +
                                             os.environ.get("MODULEPATH", "").split(":"))
         self._module_load = self._init_mpi_module()
 
