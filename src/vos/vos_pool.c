@@ -266,7 +266,7 @@ vos_blob_unmap_cb(uint64_t off, uint64_t cnt, void *data)
 	return rc;
 }
 
-static int pool_open(PMEMobjpool *ph, struct vos_pool_df *pool_df, uuid_t uuid,
+static int pool_open(PMEMobjpool *ph, struct vos_pool_df *pool_df,
 		     unsigned int flags, void *metrics, daos_handle_t *poh);
 
 int
@@ -426,7 +426,7 @@ open:
 		goto close;
 
 	/* Create a VOS pool handle using ph. */
-	rc = pool_open(ph, pool_df, uuid, flags, NULL, poh);
+	rc = pool_open(ph, pool_df, flags, NULL, poh);
 	ph = NULL;
 
 close:
@@ -676,8 +676,8 @@ lock_pool_memory(struct vos_pool *pool)
  * So the caller shall not close ph in any case.
  */
 static int
-pool_open(PMEMobjpool *ph, struct vos_pool_df *pool_df, uuid_t uuid,
-	  unsigned int flags, void *metrics, daos_handle_t *poh)
+pool_open(PMEMobjpool *ph, struct vos_pool_df *pool_df, unsigned int flags, void *metrics,
+	  daos_handle_t *poh)
 {
 	struct bio_xs_context	*xs_ctxt;
 	struct vos_pool		*pool = NULL;
@@ -686,7 +686,7 @@ pool_open(PMEMobjpool *ph, struct vos_pool_df *pool_df, uuid_t uuid,
 	int			 rc;
 
 	/* Create a new handle during open */
-	rc = pool_alloc(uuid, &pool); /* returned with refcount=1 */
+	rc = pool_alloc(pool_df->pd_id, &pool); /* returned with refcount=1 */
 	if (rc != 0) {
 		D_ERROR("Error allocating pool handle\n");
 		vos_pmemobj_close(ph);
@@ -721,12 +721,12 @@ pool_open(PMEMobjpool *ph, struct vos_pool_df *pool_df, uuid_t uuid,
 	xs_ctxt = vos_xsctxt_get();
 
 	D_DEBUG(DB_MGMT, "Opening VOS I/O context for xs:%p pool:"DF_UUID"\n",
-		xs_ctxt, DP_UUID(uuid));
-	rc = bio_ioctxt_open(&pool->vp_io_ctxt, xs_ctxt, &pool->vp_umm, uuid,
+		xs_ctxt, DP_UUID(pool_df->pd_id));
+	rc = bio_ioctxt_open(&pool->vp_io_ctxt, xs_ctxt, &pool->vp_umm, pool_df->pd_id,
 			     pool_df->pd_nvme_sz == 0);
 	if (rc) {
 		D_ERROR("Failed to open VOS I/O context for xs:%p "
-			"pool:"DF_UUID" rc="DF_RC"\n", xs_ctxt, DP_UUID(uuid),
+			"pool:"DF_UUID" rc="DF_RC"\n", xs_ctxt, DP_UUID(pool_df->pd_id),
 			DP_RC(rc));
 		goto failed;
 	}
@@ -756,7 +756,7 @@ pool_open(PMEMobjpool *ph, struct vos_pool_df *pool_df, uuid_t uuid,
 		goto failed;
 
 	/* Insert the opened pool to the uuid hash table */
-	uuid_copy(ukey.uuid, uuid);
+	uuid_copy(ukey.uuid, pool_df->pd_id);
 	rc = pool_link(pool, &ukey, poh);
 	if (rc) {
 		D_ERROR("Error inserting into vos DRAM hash\n");
@@ -864,7 +864,7 @@ vos_pool_open_metrics(const char *path, uuid_t uuid, unsigned int flags, void *m
 		goto out;
 	}
 
-	rc = pool_open(ph, pool_df, uuid, flags, metrics, poh);
+	rc = pool_open(ph, pool_df, flags, metrics, poh);
 	ph = NULL;
 
 out:
