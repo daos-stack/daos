@@ -79,3 +79,61 @@ To run [pre-commit](https://pre-commit.com/) on all files prior to staging them
 ```shell
 pre-commit run --all-files
 ```
+
+## Updating Cloud Shell urls in documentation
+
+Several of the README.md files in this repository contain links that open tutorials in Cloud Shell.
+
+In order for these links to work properly during development the URLs must be changed to point to the correct branch.
+
+Currently Cloud Shell tutorials do not have an automatic way to detect a branch.  Therefore, the branch parameter in the URL must be updated manually.
+
+The `tools/autodoc/cloudshell_urls.sh` script should be used to update the branch parameter in all Cloud Shell URLs that are present in *.md files in this repo.
+
+### Update Cloud Shell URLs when submitting a PR
+
+If your PR changes README.md files that contain Cloud Shell URLs, then prior to requesting a review you should run the following command and push any changes to your dev branch.
+
+```bash
+tools/autodoc/cloudshell_urls.sh --repo-url <your_forked_repo_url> --branch <your_dev_branch_name>
+```
+
+This will allow the reviewers to run Cloud Shell tutorials from your PR branch.
+
+### Update Cloud Shell URLs before merging to a branch
+
+If you are merging changes to `*.md` files with Cloud Shell URLs in them you need to ensure that the URLs are updated with the name of the target branch before you merge.
+
+This is not ideal but it's the only way we can think of doing things for now.
+
+Let's say that you have a PR that has been approved and you want to merge it to the `develop` branch.
+
+Prior to merging you need to run
+
+```bash
+tools/autodoc/cloudshell_urls.sh --repo-url <your_forked_repo_url> --branch develop
+```
+
+And then commit the changes in your dev branch.
+
+Once that is done you can then merge to the `develop` branch.
+
+Now let's say that you want to merge the `develop` branch into the `main` branch.
+
+You will need to check out the https://github.com/daos-stack/google-cloud-daos `develop` branch and run
+
+```bash
+tools/autodoc/cloudshell_urls.sh --repo-url https://github.com/daos-stack/google-cloud-daos --branch main
+```
+
+Commit the changes and push them to the develop branch. After doing this you can merge the `develop` branch to `main`.
+
+Now you will need to set the URLs back to the develop branch.
+
+```bash
+tools/autodoc/cloudshell_urls.sh --repo-url https://github.com/daos-stack/google-cloud-daos --branch develop
+```
+
+Commit the changes and push them to the develop branch.
+
+This is very tedious. We will continue to seek out a better solution for maintaining the Cloud Shell URLs.

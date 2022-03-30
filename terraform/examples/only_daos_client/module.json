@@ -3,73 +3,94 @@
   "footer": "",
   "inputs": [
     {
-      "name": "instance_base_name",
-      "type": "string",
-      "description": "MIG instance base names to use",
-      "default": "daos-client",
+      "name": "client_access_points",
+      "type": "list(string)",
+      "description": "List of servers to add to client .yml files",
+      "default": null,
       "required": false
     },
     {
-      "name": "labels",
+      "name": "client_instance_base_name",
+      "type": "string",
+      "description": "MIG instance base names to use",
+      "default": null,
+      "required": false
+    },
+    {
+      "name": "client_labels",
       "type": "any",
       "description": "Set of key/value label pairs to assign to daos-client instances",
       "default": {},
       "required": false
     },
     {
-      "name": "machine_type",
+      "name": "client_machine_type",
       "type": "string",
-      "description": "GCP machine type. ie. e2-medium",
-      "default": "n2-highmem-16",
+      "description": "GCP machine type. e.g. e2-medium",
+      "default": null,
       "required": false
     },
     {
-      "name": "mig_name",
+      "name": "client_mig_name",
       "type": "string",
       "description": "MIG name ",
-      "default": "daos-client",
-      "required": false
-    },
-    {
-      "name": "network",
-      "type": "string",
-      "description": "GCP network to use",
       "default": null,
-      "required": true
-    },
-    {
-      "name": "number_of_instances",
-      "type": "number",
-      "description": "Number of daos clients to bring up",
-      "default": 2,
       "required": false
     },
     {
-      "name": "os_disk_size_gb",
+      "name": "client_number_of_instances",
+      "type": "number",
+      "description": "Number of daos servers to bring up",
+      "default": null,
+      "required": false
+    },
+    {
+      "name": "client_os_disk_size_gb",
       "type": "number",
       "description": "OS disk size in GB",
       "default": 20,
       "required": false
     },
     {
-      "name": "os_disk_type",
+      "name": "client_os_disk_type",
       "type": "string",
-      "description": "OS disk type ie. pd-ssd, pd-standard",
+      "description": "OS disk type e.g. pd-ssd, pd-standard",
       "default": "pd-ssd",
       "required": false
     },
     {
-      "name": "os_family",
+      "name": "client_os_family",
       "type": "string",
       "description": "OS GCP image family",
       "default": null,
       "required": false
     },
     {
-      "name": "os_project",
+      "name": "client_os_project",
       "type": "string",
       "description": "OS GCP image project name",
       "default": null,
+      "required": false
+    },
+    {
+      "name": "client_preemptible",
+      "type": "string",
+      "description": "If preemptible client instances",
+      "default": true,
+      "required": false
+    },
+    {
+      "name": "client_template_name",
+      "type": "string",
+      "description": "MIG template name",
+      "default": null,
+      "required": false
+    },
+    {
+      "name": "network",
+      "type": "string",
+      "description": "GCP network to use",
+      "default": "default",
       "required": false
     },
     {
@@ -77,34 +98,27 @@
       "type": "string",
       "description": "The GCP project to use ",
       "default": null,
-      "required": true
+      "required": false
     },
     {
       "name": "region",
       "type": "string",
       "description": "The GCP region to create and test resources in",
       "default": null,
-      "required": true
+      "required": false
     },
     {
       "name": "subnetwork",
       "type": "string",
       "description": "GCP sub-network to use",
-      "default": null,
-      "required": true
+      "default": "default",
+      "required": false
     },
     {
       "name": "subnetwork_project",
       "type": "string",
       "description": "The GCP project where the subnetwork is defined",
       "default": null,
-      "required": true
-    },
-    {
-      "name": "template_name",
-      "type": "string",
-      "description": "MIG template name",
-      "default": "daos-client",
       "required": false
     },
     {
@@ -112,7 +126,7 @@
       "type": "string",
       "description": "The GCP zone to create and test resources in",
       "default": null,
-      "required": true
+      "required": false
     }
   ],
   "modules": [

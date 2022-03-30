@@ -66,6 +66,13 @@
       "required": false
     },
     {
+      "name": "client_preemptible",
+      "type": "string",
+      "description": "If preemptible client instances",
+      "default": true,
+      "required": false
+    },
+    {
       "name": "client_template_name",
       "type": "string",
       "description": "MIG template name",
@@ -76,14 +83,7 @@
       "name": "network",
       "type": "string",
       "description": "GCP network to use",
-      "default": null,
-      "required": false
-    },
-    {
-      "name": "preemptible",
-      "type": "string",
-      "description": "If preemptible instances",
-      "default": true,
+      "default": "default",
       "required": false
     },
     {
@@ -101,9 +101,23 @@
       "required": false
     },
     {
+      "name": "server_daos_crt_timeout",
+      "type": "number",
+      "description": "crt_timeout",
+      "default": null,
+      "required": false
+    },
+    {
       "name": "server_daos_disk_count",
       "type": "number",
       "description": "Number of local ssd's to use",
+      "default": null,
+      "required": false
+    },
+    {
+      "name": "server_daos_scm_size",
+      "type": "number",
+      "description": "scm_size",
       "default": null,
       "required": false
     },
@@ -171,6 +185,13 @@
       "required": false
     },
     {
+      "name": "server_preemptible",
+      "type": "string",
+      "description": "If preemptible server instances",
+      "default": true,
+      "required": false
+    },
+    {
       "name": "server_template_name",
       "type": "string",
       "description": "MIG template name",
@@ -181,7 +202,7 @@
       "name": "subnetwork",
       "type": "string",
       "description": "GCP sub-network to use",
-      "default": null,
+      "default": "default",
       "required": false
     },
     {
