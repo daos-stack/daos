@@ -572,7 +572,7 @@ func TestIpmctl_prep(t *testing.T) {
 		},
 		"state no free capacity; requested number of namespaces does not match": {
 			prepReq: &storage.ScmPrepareRequest{
-				NrNamespacesPerNUMA: 2,
+				NrNamespacesPerSocket: 2,
 			},
 			scanResp: &storage.ScmScanResponse{
 				State: storage.ScmStateNoFreeCapacity,
@@ -661,9 +661,9 @@ func TestIpmctl_prep(t *testing.T) {
 				"ipmctl show -d PersistentMemoryType,FreeCapacity -region",
 			},
 		},
-		"state no free capacity; multiple namespaces per numa; requested number does not match": {
+		"state no free capacity; multiple namespaces per socket; requested number does not match": {
 			prepReq: &storage.ScmPrepareRequest{
-				NrNamespacesPerNUMA: 1,
+				NrNamespacesPerSocket: 1,
 			},
 			scanResp: &storage.ScmScanResponse{
 				State: storage.ScmStateNoFreeCapacity,
@@ -713,9 +713,9 @@ func TestIpmctl_prep(t *testing.T) {
 				"ipmctl show -d PersistentMemoryType,FreeCapacity -region",
 			},
 		},
-		"state no free capacity; multiple namespaces per numa; one region has no capacity": {
+		"state no free capacity; multiple namespaces per socket; one region has no capacity": {
 			prepReq: &storage.ScmPrepareRequest{
-				NrNamespacesPerNUMA: 2,
+				NrNamespacesPerSocket: 2,
 			},
 			scanResp: &storage.ScmScanResponse{
 				State: storage.ScmStateNoFreeCapacity,
@@ -744,9 +744,9 @@ func TestIpmctl_prep(t *testing.T) {
 				"ipmctl show -d PersistentMemoryType,FreeCapacity -region",
 			},
 		},
-		"state no free capacity; multiple namespaces per numa": {
+		"state no free capacity; multiple namespaces per socket": {
 			prepReq: &storage.ScmPrepareRequest{
-				NrNamespacesPerNUMA: 2,
+				NrNamespacesPerSocket: 2,
 			},
 			scanResp: &storage.ScmScanResponse{
 				State: storage.ScmStateNoFreeCapacity,
@@ -983,7 +983,7 @@ func TestIpmctl_prepReset(t *testing.T) {
 			expErr:   errors.New("cmd failed"),
 			expCalls: []string{"ndctl disable-namespace namespace1.0"},
 		},
-		"state no free capacity; multiple namespaces per numa": {
+		"state no free capacity; multiple namespaces per socket": {
 			scanResp: &storage.ScmScanResponse{
 				State: storage.ScmStateNoFreeCapacity,
 				Namespaces: storage.ScmNamespaces{

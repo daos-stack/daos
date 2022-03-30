@@ -398,9 +398,8 @@ read by BIOS.
 PMem preparation can be performed with `daos_server storage prepare --scm-only`.
 
 The first time the command is run, the SCM interleaved regions will be created
-as resource allocations on any available PMem modules (one region per NUMA
-node/socket). The regions are activated after BIOS reads the new resource
-allocations.
+as resource allocations on any available PMem modules (one region per socket).
+The regions are activated after BIOS reads the new resource allocations.
 Upon completion, the storage prepare command will prompt the admin to reboot
 the storage node(s) in order for the BIOS to activate the new storage
 allocations.
@@ -439,7 +438,7 @@ block devices are mounted when running reset (as per the printed warning).
 A subsequent reboot is required for BIOS to read the new resource
 allocations.
 
-#### Multiple PMem namespaces per NUMA node (Experimental)
+#### Multiple PMem namespaces per socket (Experimental)
 
 By default the `daos_server storage prepare --scm-only` command will create one PMem namespace on
 each PMem region. A single PMem AppDirect region will be created for each NUMA node (typically one
@@ -447,9 +446,9 @@ NUMA node per CPU socket) in interleaved mode (which indicates that all PMem mod
 to a particular socket will be used in a single set/region). Therefore by default on a dual-socket
 platform, two regions and two namespaces will be created.
 
-Multiple PMem namespaces can be created on a single region (one per NUMA node) by specifying a
-value of 1-8 in `(-S|--scm-ns-per-numa)` commandline option for
-`daos_server storage prepare --scm-only` subcommand.
+Multiple PMem namespaces can be created on a single region (one per socket) by specifying a value
+of 1-8 in `(-S|--scm-ns-per-socket)` commandline option for `daos_server storage prepare --scm-only`
+subcommand.
 
 Example usage:
 

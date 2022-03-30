@@ -26,7 +26,7 @@ type StoragePrepareNvmeCmd struct {
 }
 
 type StoragePrepareScmCmd struct {
-	NrNamespacesPerNUMA uint `short:"S" long:"scm-ns-per-numa" description:"Number of SCM namespaces to create per NUMA node" default:"1"`
+	NrNamespacesPerSocket uint `short:"S" long:"scm-ns-per-socket" description:"Number of SCM namespaces to create per socket" default:"1"`
 }
 
 type StoragePrepareCmd struct {

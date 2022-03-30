@@ -23,8 +23,8 @@ import (
 )
 
 const (
-	minNrNssPerNUMA = 1
-	maxNrNssPerNUMA = 8
+	minNrNssPerSocket = 1
+	maxNrNssPerSocket = 8
 
 	createNsAnyRegion = -1
 
@@ -484,9 +484,9 @@ func (cr *cmdRunner) prep(req storage.ScmPrepareRequest, scanRes *storage.ScmSca
 		return nil, err
 	}
 
-	// Handle unspecified NrNamespacesPerNUMA in request.
-	if req.NrNamespacesPerNUMA == 0 {
-		req.NrNamespacesPerNUMA = minNrNssPerNUMA
+	// Handle unspecified NrNamespacesPerSocket in request.
+	if req.NrNamespacesPerSocket == 0 {
+		req.NrNamespacesPerSocket = minNrNssPerSocket
 	}
 
 	switch state {
@@ -501,7 +501,7 @@ func (cr *cmdRunner) prep(req storage.ScmPrepareRequest, scanRes *storage.ScmSca
 		resp.RebootRequired = true
 	case storage.ScmStateFreeCapacity:
 		// Regions exist but no namespaces, create block devices on PMem regions.
-		resp.Namespaces, err = cr.createNamespaces(req.NrNamespacesPerNUMA)
+		resp.Namespaces, err = cr.createNamespaces(req.NrNamespacesPerSocket)
 		if err != nil {
 			break
 		}
@@ -519,8 +519,8 @@ func (cr *cmdRunner) prep(req storage.ScmPrepareRequest, scanRes *storage.ScmSca
 		nrNamespaces := uint(len(scanRes.Namespaces))
 
 		// Assume 1:1 mapping between region and NUMA node.
-		if (nrRegions * req.NrNamespacesPerNUMA) != nrNamespaces {
-			err = storage.FaultScmNamespacesNrMismatch(req.NrNamespacesPerNUMA,
+		if (nrRegions * req.NrNamespacesPerSocket) != nrNamespaces {
+			err = storage.FaultScmNamespacesNrMismatch(req.NrNamespacesPerSocket,
 				nrRegions, nrNamespaces)
 			break
 		}
@@ -592,7 +592,7 @@ func (cr *cmdRunner) removeNamespace(devName string) error {
 	return nil
 }
 
-func (cr *cmdRunner) createSingleNsPerNUMA() (storage.ScmNamespaces, error) {
+func (cr *cmdRunner) createSingleNsPerSocket() (storage.ScmNamespaces, error) {
 	for {
 		cr.log.Debug("creating pmem namespace")
 
@@ -619,13 +619,13 @@ func (cr *cmdRunner) createSingleNsPerNUMA() (storage.ScmNamespaces, error) {
 	return cr.getNamespaces()
 }
 
-func (cr *cmdRunner) createMultiNsPerNUMA(nrNsPerNUMA uint) (storage.ScmNamespaces, error) {
+func (cr *cmdRunner) createMultiNsPerSocket(nrNsPerSocket uint) (storage.ScmNamespaces, error) {
 	// For each region, create two namespaces each with half the total free capacity.
 	// Sanity check alignment.
 
-	if nrNsPerNUMA < minNrNssPerNUMA || nrNsPerNUMA > maxNrNssPerNUMA {
-		return nil, errors.Errorf("unexpected number of namespaces per numa: want [%d-%d], got %d",
-			minNrNssPerNUMA, maxNrNssPerNUMA, nrNsPerNUMA)
+	if nrNsPerSocket < minNrNssPerSocket || nrNsPerSocket > maxNrNssPerSocket {
+		return nil, errors.Errorf("unexpected number of namespaces per socket: want [%d-%d], got %d",
+			minNrNssPerSocket, maxNrNssPerSocket, nrNsPerSocket)
 	}
 
 	regionFreeBytes, err := cr.getRegionFreeSpace()
@@ -635,28 +635,28 @@ func (cr *cmdRunner) createMultiNsPerNUMA(nrNsPerNUMA uint) (storage.ScmNamespac
 
 	for regionIndex, freeBytes := range regionFreeBytes {
 		if freeBytes == 0 {
-			// Catch edge case where trying to create multiple namespaces per NUMA node
+			// Catch edge case where trying to create multiple namespaces per socket
 			// but a region already has a single namespace taking full capacity.
-			cr.log.Errorf("createMultiNsPerNUMA: region %d has no free space", regionIndex)
+			cr.log.Errorf("createMultiNsPerSocket: region %d has no free space", regionIndex)
 
 			nss, err := cr.getNamespaces()
 			if err != nil {
 				return nil, err
 			}
 
-			return nil, storage.FaultScmNamespacesNrMismatch(nrNsPerNUMA,
+			return nil, storage.FaultScmNamespacesNrMismatch(nrNsPerSocket,
 				uint(len(regionFreeBytes)), uint(len(nss)))
 		}
 
 		// Check value is 2MiB aligned and (TODO) multiples of interleave width.
-		pmemBytes := freeBytes / uint64(nrNsPerNUMA)
+		pmemBytes := freeBytes / uint64(nrNsPerSocket)
 
 		if pmemBytes%alignmentBoundaryBytes != 0 {
 			return nil, errors.New("free region size is not 2MiB aligned")
 		}
 
 		// Create specified number of namespaces on a single region (NUMA node).
-		for j := uint(0); j < nrNsPerNUMA; j++ {
+		for j := uint(0); j < nrNsPerSocket; j++ {
 			if _, err := cr.createNamespace(regionIndex, pmemBytes); err != nil {
 				return nil, errors.WithMessage(err, "create namespace cmd")
 			}
@@ -676,20 +676,20 @@ func (cr *cmdRunner) createMultiNsPerNUMA(nrNsPerNUMA uint) (storage.ScmNamespac
 }
 
 // createNamespaces repeatedly creates namespaces until no free capacity.
-func (cr *cmdRunner) createNamespaces(nrNssPerNUMA uint) (storage.ScmNamespaces, error) {
+func (cr *cmdRunner) createNamespaces(nrNssPerSocket uint) (storage.ScmNamespaces, error) {
 	if err := cr.checkNdctl(); err != nil {
 		return nil, err
 	}
 
-	switch nrNssPerNUMA {
+	switch nrNssPerSocket {
 	case 0:
-		return nil, errors.New("number of namespaces per numa can not be 0")
+		return nil, errors.New("number of namespaces per socket can not be 0")
 	case 1:
-		cr.log.Debug("creating one pmem namespace per numa node")
-		return cr.createSingleNsPerNUMA()
+		cr.log.Debug("creating one pmem namespace per socket")
+		return cr.createSingleNsPerSocket()
 	default:
-		cr.log.Debug("creating multiple pmem namespaces per numa node")
-		return cr.createMultiNsPerNUMA(nrNssPerNUMA)
+		cr.log.Debug("creating multiple pmem namespaces per socket")
+		return cr.createMultiNsPerSocket(nrNssPerSocket)
 	}
 }
 

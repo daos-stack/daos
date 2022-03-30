@@ -78,7 +78,7 @@ func TestDaosServer_StoragePrepare_SCM(t *testing.T) {
 			},
 			expScanErr: errors.New("unexpected state"),
 		},
-		"invalid number of namespaces per numa": {
+		"invalid number of namespaces per socket": {
 			zeroNrNs: true,
 			expErr:   errors.New("at least 1"),
 		},
@@ -157,7 +157,7 @@ func TestDaosServer_StoragePrepare_SCM(t *testing.T) {
 			if tc.zeroNrNs {
 				nrNs = 0
 			}
-			spc.NrNamespacesPerNUMA = nrNs
+			spc.NrNamespacesPerSocket = nrNs
 
 			cmd := &storagePrepareCmd{
 				StoragePrepareCmd: spc,
@@ -314,7 +314,7 @@ func TestDaosServer_StoragePrepare_NVMe(t *testing.T) {
 			mbb := bdev.NewMockBackend(tc.bmbc)
 			mbp := bdev.NewProvider(log, mbb)
 
-			tc.prepCmd.NrNamespacesPerNUMA = 1 // default applied by goflags
+			tc.prepCmd.NrNamespacesPerSocket = 1 // default applied by goflags
 
 			cmd := &storagePrepareCmd{
 				StoragePrepareCmd: tc.prepCmd,
