@@ -72,7 +72,8 @@ class DaosServerManager(SubprocessManager):
 
     def __init__(self, group, bin_dir,
                  svr_cert_dir, svr_config_file, dmg_cert_dir, dmg_config_file,
-                 svr_config_temp=None, dmg_config_temp=None, manager="Orterun"):
+                 svr_config_temp=None, dmg_config_temp=None, manager="Orterun",
+                 prepare_timeout=None, format_timeout=None):
         """Initialize a DaosServerManager object.
 
         Args:
@@ -91,6 +92,10 @@ class DaosServerManager(SubprocessManager):
             manager (str, optional): the name of the JobManager class used to
                 manage the YamlCommand defined through the "job" attribute.
                 Defaults to "Orterun".
+            prepare_timeout (str, optional): timeout for storage prepare
+                Defaults to 40 sec
+            format_timeout (str, optional): timeout for storage format
+                Defaults to 40 sec
         """
         self.group = group
         server_command = get_server_command(
@@ -293,7 +298,8 @@ class DaosServerManager(SubprocessManager):
             cmd.sub_command_class.sub_command_class.nvme_only.value = True
 
         self.log.info("Preparing DAOS server storage: %s", str(cmd))
-        results = run_pcmd(self._hosts, str(cmd), timeout=self.prepare_timeout)
+        results = run_pcmd(
+            self._hosts, str(cmd), timeout=int(prepare_timeout) if prepare_timeout else 40)
 
         # gratuitously lifted from pcmd() and get_current_state()
         result = {}
@@ -511,7 +517,7 @@ class DaosServerManager(SubprocessManager):
         self.log.info("<SERVER> Formatting hosts: <%s>", self.dmg.hostlist)
         # Temporarily increasing timeout to avoid CI errors until DAOS-5764 can
         # be further investigated.
-        self.dmg.storage_format(timeout=self.format_timeout)
+        self.dmg.storage_format(timeout=int(format_timeout) if format_timeout else 40)
 
         # Wait for all the engines to start
         self.detect_engine_start()
