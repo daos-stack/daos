@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2021 Intel Corporation.
+// (C) Copyright 2020-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -73,6 +73,18 @@ func (ro raftOp) String() string {
 		"updatePoolService",
 		"removePoolService",
 	}[ro]
+}
+
+// IsRaftLeadershipError returns true if the given error is a known
+// leadership error returned by the raft library.
+func IsRaftLeadershipError(err error) bool {
+	switch errors.Cause(err) {
+	case raft.ErrLeadershipLost, raft.ErrLeadershipTransferInProgress,
+		raft.ErrNotLeader:
+		return true
+	default:
+		return false
+	}
 }
 
 // ResignLeadership causes this instance to give up its raft
@@ -299,7 +311,17 @@ func (db *Database) submitPoolUpdate(op raftOp, ps *PoolService) error {
 // submitRaftUpdate submits the serialized operation to the raft service.
 func (db *Database) submitRaftUpdate(data []byte) error {
 	return db.raft.withReadLock(func(svc raftService) error {
-		return svc.Apply(data, 0).Error()
+		err := svc.Apply(data, 0).Error()
+
+		// In the case that leadership is lost while trying to
+		// apply an update, return a sentinel error that may
+		// signal some callers to retry the operation on the
+		// new leader.
+		if IsRaftLeadershipError(err) {
+			return ErrRaftUnavail
+		}
+
+		return err
 	})
 }
 
