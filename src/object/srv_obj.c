@@ -1784,7 +1784,7 @@ obj_ioc_fini(struct obj_io_context *ioc, int err)
 		if (obj_is_modification_opc(ioc->ioc_opc) && err == 0 &&
 		    daos_oclass_is_ec(&ioc->ioc_oca))
 			ds_cont_ec_timestamp_update(ioc->ioc_coc);
-		ds_cont_child_put(ioc->ioc_coc);
+		//ds_cont_child_put(ioc->ioc_coc);
 		ioc->ioc_coc = NULL;
 	}
 }
