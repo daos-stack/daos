@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2019-2021 Intel Corporation.
+ * (C) Copyright 2019-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -28,7 +28,7 @@ extern "C" {
 #define	DAOS_ACL_VERSION		(1)
 
 /**
- * Maximum length of the user\@domain principal string, not including null
+ * Maximum length of the `user@domain` principal string, not including null
  * terminator.
  */
 #define DAOS_ACL_MAX_PRINCIPAL_LEN	(255)
@@ -49,7 +49,7 @@ extern "C" {
 
 /**
  * Maximum length of an ACE provided in colon-separated string format with four components:
- *	\a access:flags:principal:perms
+ *	`<access>:<flags>:<principal>:<perms>`
  */
 #define DAOS_ACL_MAX_ACE_STR_LEN	(DAOS_ACL_MAX_PRINCIPAL_LEN + 64)
 
