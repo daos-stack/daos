@@ -543,18 +543,22 @@ func (svc *mgmtSvc) PoolDestroy(ctx context.Context, req *mgmtpb.PoolDestroyReq)
 		ds := drpc.DaosStatus(evresp.Status)
 		svc.log.Debugf("MgmtSvc.PoolDestroy drpc.MethodPoolEvict, evresp:%+v\n", evresp)
 
-		// Transition pool state (unless evict returned busy, and not force destroying).
-		if !(ds == drpc.DaosBusy && !req.Force) {
-			ps.State = system.PoolServiceStateDestroying
-			if err := svc.sysdb.UpdatePoolService(ps); err != nil {
-				return nil, errors.Wrapf(err, "failed to update pool %s", uuid)
-			}
-		}
-
 		// If the destroy request is being forced, we should additionally zap the label
 		// so the entry doesn't prevent a new pool with the same label from being created.
 		if req.Force {
 			ps.PoolLabel = ""
+		}
+
+		// Transition pool state (unless evict returned busy, and not force destroying).
+		if req.Force || ds != drpc.DaosBusy {
+			ps.State = system.PoolServiceStateDestroying
+		}
+
+		// Ensure that the label and/or state updates are persisted as appropriate.
+		if req.Force || ds != drpc.DaosBusy {
+			if err := svc.sysdb.UpdatePoolService(ps); err != nil {
+				return nil, errors.Wrapf(err, "failed to update pool %s", uuid)
+			}
 		}
 
 		if ds != drpc.DaosSuccess {
