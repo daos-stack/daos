@@ -349,6 +349,12 @@ def scons(): # pylint: disable=too-many-locals
 
     platform_arm = is_platform_arm()
 
+    if 'VIRTUAL_ENV' in os.environ:
+        env.PrependENVPath('PATH', f"{os.environ['VIRTUAL_ENV']}/bin")
+        env['ENV']['VIRTUAL_ENV'] = os.environ['VIRTUAL_ENV']
+
+    print(env['ENV'])
+
     prereqs = PreReqComponent(env, opts, commits_file)
     if not GetOption('help') and not GetOption('clean'):
         daos_build.load_mpi_path(env)
