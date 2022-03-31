@@ -13,12 +13,24 @@ RuntimeDirectoryMode=0755
 ExecStart=/usr/bin/daos_server start
 StandardOutput=journal
 StandardError=journal
+StartLimitBurst=5
 Restart=on-failure
 RestartSec=10
+
+# bump limits
 LimitMEMLOCK=infinity
 LimitCORE=infinity
 LimitNOFILE=infinity
-StartLimitBurst=5
+
+# dump pmem content by default
+CoredumpFilter=default private-dax
+# reduce OOM killer score
+OOMScoreAdjust=-900
+# increase priority
+Nice=-10
+# bind the daos_server to the first CPU
+# the engine affinity is controlled via the yaml file
+CPUAffinity=0
 
 [Install]
 WantedBy = multi-user.target
