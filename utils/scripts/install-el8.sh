@@ -54,6 +54,7 @@ dnf --nodocs install \
     openssl-devel \
     patch \
     patchelf \
+    python3-devel \
     python3-pip \
     sg3_utils \
     valgrind-devel \
