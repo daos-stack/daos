@@ -197,7 +197,7 @@ func (mb *MockBackend) getRegionState() (storage.ScmState, error) {
 	return mb.cfg.GetStateRes, mb.cfg.GetStateErr
 }
 
-func (mb *MockBackend) prep(*storage.ScmScanResponse) (*storage.ScmPrepareResponse, error) {
+func (mb *MockBackend) prep(storage.ScmPrepareRequest, *storage.ScmScanResponse) (*storage.ScmPrepareResponse, error) {
 	return mb.cfg.PrepRes, mb.cfg.PrepErr
 }
 

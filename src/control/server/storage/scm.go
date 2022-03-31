@@ -253,8 +253,8 @@ type (
 	// ScmPrepareRequest defines the parameters for a Prepare operation.
 	ScmPrepareRequest struct {
 		pbin.ForwardableRequest
-		// Reset indicates that the operation should reset (clear) PMem namespaces.
-		Reset bool
+		Reset               bool // Clear PMem namespaces and regions.
+		NrNamespacesPerNUMA uint // Request this many PMem namespaces per NUMA node.
 	}
 
 	// ScmPrepareResponse contains the results of a successful Prepare operation.

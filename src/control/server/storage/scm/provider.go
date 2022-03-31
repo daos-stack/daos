@@ -48,7 +48,7 @@ type (
 		getModules() (storage.ScmModules, error)
 		getRegionState() (storage.ScmState, error)
 		getNamespaces() (storage.ScmNamespaces, error)
-		prep(*storage.ScmScanResponse) (*storage.ScmPrepareResponse, error)
+		prep(storage.ScmPrepareRequest, *storage.ScmScanResponse) (*storage.ScmPrepareResponse, error)
 		prepReset(*storage.ScmScanResponse) (*storage.ScmPrepareResponse, error)
 		GetFirmwareStatus(deviceUID string) (*storage.ScmFirmwareInfo, error)
 		UpdateFirmware(deviceUID string, firmwarePath string) error
@@ -348,7 +348,7 @@ func (p *Provider) prepare(req storage.ScmPrepareRequest, scan scanFn) (*storage
 	}
 
 	p.log.Debug("scm provider prepare: calling backend prep")
-	return p.backend.prep(scanResp)
+	return p.backend.prep(req, scanResp)
 }
 
 // Prepare attempts to fulfill a SCM Prepare request.

@@ -103,7 +103,8 @@ func (cmd *storagePrepareCmd) prepScm(scanErrors *errs, prep scmPrepFn) error {
 
 	// Prepare SCM modules to be presented as pmem device files.
 	resp, err := prep(storage.ScmPrepareRequest{
-		Reset: cmd.Reset,
+		Reset:               cmd.Reset,
+		NrNamespacesPerNUMA: cmd.NrNamespacesPerNUMA,
 	})
 	if err != nil {
 		return scanErrors.add(err)
