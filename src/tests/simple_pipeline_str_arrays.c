@@ -329,7 +329,8 @@ run_pipeline(daos_pipeline_t *pipeline)
 			char *dkey = (char *) sgl_keys[i].sg_iovs->iov_buf;
 			daos_size_t dkeylen = kds[i].kd_key_len;
 
-			printf("\t(dkey)=%s, len = %zu\t", dkey, dkeylen);
+			printf("\t(dkey)=%.*s, len = %zu\t", (int)dkeylen,
+							     dkey, dkeylen);
 
 			char *ptr = &buf_recs[i * (sizeof(mode_t) + sizeof(time_t))];
 			mode_t cur_mode = *((mode_t *) ptr);
