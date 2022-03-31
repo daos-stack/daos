@@ -11,6 +11,7 @@ import (
 
 	"github.com/pkg/errors"
 
+	chkpb "github.com/daos-stack/daos/src/control/common/proto/chk"
 	"github.com/daos-stack/daos/src/control/lib/atm"
 	"github.com/daos-stack/daos/src/control/logging"
 )
@@ -22,16 +23,10 @@ type (
 		FindingStore
 		ResetCheckerData() error
 		GetCheckerState() (State, error)
-		AdvanceCheckerPass() (Pass, error)
-	}
-
-	SystemDataSource interface {
-		PoolDataSource
-		MemberDataSource
+		//AdvanceCheckerPass() (chkpb.CheckScanPhase, error)
 	}
 
 	SystemSourceStore interface {
-		SystemDataSource
 		StateStore
 	}
 
@@ -54,10 +49,7 @@ func NewCoordinator(log logging.Logger, store SystemSourceStore, checkers ...Che
 }
 
 func DefaultCoordinator(log logging.Logger, store SystemSourceStore, engine EngineChecker) *Coordinator {
-	return NewCoordinator(log, store,
-		NewMemberChecker(log, store),
-		NewPoolChecker(log, store, store, engine),
-	)
+	return NewCoordinator(log, store)
 }
 
 func (cc *Coordinator) runLoop(ctx context.Context) {
@@ -101,7 +93,7 @@ func (cc *Coordinator) runCheckers(ctx context.Context) error {
 			return ErrPassFindings
 		}
 
-		pass, err := cc.db.AdvanceCheckerPass()
+		/*pass, err := cc.db.AdvanceCheckerPass()
 		if err != nil {
 			if errors.Is(err, ErrNoMorePasses) {
 				cc.log.Debug("no more passes to run")
@@ -116,7 +108,7 @@ func (cc *Coordinator) runCheckers(ctx context.Context) error {
 			if err := checker.RunPassChecks(ctx, pass, cc.db); err != nil {
 				return err
 			}
-		}
+		}*/
 	}
 
 	return nil
@@ -143,11 +135,11 @@ func (cc *Coordinator) Start(ctx context.Context) error {
 	}
 	cc.running.SetTrue()
 
-	go cc.runLoop(ctx)
+	//go cc.runLoop(ctx)
 
 	// Restart the process if was already running before it
 	// started on this node.
-	if state.CurrentPass > PassInactive {
+	if state.CurrentPass > chkpb.CheckScanPhase_CSP_PREPARE {
 		cc.log.Infof("restarting checker coordinator from pass %d", state.CurrentPass)
 		return cc.RunCheckers()
 	}

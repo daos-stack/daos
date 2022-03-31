@@ -7,189 +7,132 @@
 package checker
 
 import (
-	"encoding/json"
 	"fmt"
 
-	"github.com/pkg/errors"
-)
-
-const (
-	FindingStatusOpen     FindingStatus = ""
-	FindingStatusResolved FindingStatus = "Resolved"
-	FindingStatusIgnored  FindingStatus = "Ignored"
-)
-
-// TODO: Define stuff on the engine side so that we can use
-// values in both places.
-const (
-	FindingClassUnknown FindingClass = iota
-	FindingClassMember
-	FindingClassPool
-
-	FindingCodeUnknown FindingCode = iota
-	FindingCodeScannedPoolMissing
-	FindingCodePoolLabelMismatch
-	FindingCodeMsPoolMissing
+	chkpb "github.com/daos-stack/daos/src/control/common/proto/chk"
 )
 
 type (
-	FindingClass int
-
-	FindingCode int
-
-	FindingStatus string
-
-	FindingResolution struct {
-		ID          uint32 `json:"id"`
-		Description string `json:"description"`
-	}
-
 	Finding struct {
-		ID          string               `json:"id"`
-		Class       FindingClass         `json:"class"`
-		Code        FindingCode          `json:"code"`
-		Status      FindingStatus        `json:"status"`
-		Ignorable   bool                 `json:"ignorable"`
-		Description string               `json:"description"`
-		Details     []string             `json:"details"`
-		Resolution  *FindingResolution   `json:"resolution"`
-		Resolutions []*FindingResolution `json:"resolutions"`
+		chkpb.CheckReport
 	}
+
+	reportObject uint
 )
 
+const (
+	poolObj reportObject = iota
+	contObj
+	targObj
+)
+
+func (ro reportObject) String() string {
+	return map[reportObject]string{
+		poolObj: "pool",
+		contObj: "container",
+		targObj: "target",
+	}[ro]
+}
+
+func NewFinding(report *chkpb.CheckReport) *Finding {
+	if report == nil {
+		return nil
+	}
+
+	return &Finding{*report}
+}
+
+func descAction(action chkpb.CheckInconsistAction, ro reportObject, details ...string) string {
+	// Create a map of details. If a detail is not found by
+	// the expected index, then the default is an empty string.
+	detMap := make(map[int]string)
+	for i, det := range details {
+		detMap[i] = det
+	}
+
+	switch action {
+	case chkpb.CheckInconsistAction_CIA_IGNORE:
+		return fmt.Sprintf("Ignore the %s finding", ro)
+	case chkpb.CheckInconsistAction_CIA_DISCARD:
+		return fmt.Sprintf("Discard the %q %s", detMap[0], ro)
+	case chkpb.CheckInconsistAction_CIA_READD:
+		return fmt.Sprintf("Re-add the %q %s", detMap[0], ro)
+	case chkpb.CheckInconsistAction_CIA_TRUST_MS:
+		return fmt.Sprintf("Trust the MS %s entry (%s) for %s", ro, detMap[1], detMap[0])
+	case chkpb.CheckInconsistAction_CIA_TRUST_PS:
+		return fmt.Sprintf("Trust the PS %s entry (%s) for %s", ro, detMap[1], detMap[0])
+	case chkpb.CheckInconsistAction_CIA_TRUST_TARGET:
+		return fmt.Sprintf("Trust the %s result (%s) for %s", ro, detMap[1], detMap[0])
+	case chkpb.CheckInconsistAction_CIA_TRUST_MAJORITY:
+		return fmt.Sprintf("Trust the majority of the %s results (%s) for %s", ro, detMap[1], detMap[0])
+	case chkpb.CheckInconsistAction_CIA_TRUST_LATEST:
+		return fmt.Sprintf("Trust the latest %s result (%s) for %s", ro, detMap[1], detMap[0])
+	case chkpb.CheckInconsistAction_CIA_TRUST_OLDEST:
+		return fmt.Sprintf("Trust the oldest %s result (%s) for %s", ro, detMap[1], detMap[0])
+	case chkpb.CheckInconsistAction_CIA_TRUST_EC_PARITY:
+		return fmt.Sprintf("Trust the parity of the %s results (%s) for %s", ro, detMap[1], detMap[0])
+	case chkpb.CheckInconsistAction_CIA_TRUST_EC_DATA:
+		return fmt.Sprintf("Trust the data of the %s results (%s) for %s", ro, detMap[1], detMap[0])
+	default:
+		return fmt.Sprintf("%s: %s (details: %+v)", ro, action, details)
+	}
+}
+
 func AnnotateFinding(f *Finding) *Finding {
-	switch f.Code {
-	case FindingCodeScannedPoolMissing:
-		if f.Description == "" && len(f.Details) == 2 {
-			f.Description = fmt.Sprintf("Scanned pool service %s (%q) missing from MS", f.Details[0], f.Details[1])
-		}
-		if len(f.Resolutions) == 0 {
-			f.AddResolutions("Ignore", "Attempt to reconstruct MS entry from engine scan", "Remove the pool components from storage targets")
-		}
-	case FindingCodePoolLabelMismatch:
-		if f.Description == "" && len(f.Details) == 3 {
-			f.Description = fmt.Sprintf("Pool %s label mismatch; MS: %q, Svc: %q", f.Details[0], f.Details[1], f.Details[2])
-		}
-		if len(f.Resolutions) == 0 {
-			f.AddResolutions("Ignore", "Use the pool label stored in the MS", "Use the pool label in the pool service")
-		}
-	case FindingCodeMsPoolMissing:
-		if f.Description == "" && len(f.Details) == 2 {
-			f.Description = fmt.Sprintf("MS pool %s (%q) not found in engine scan", f.Details[0], f.Details[1])
-		}
-		if len(f.Resolutions) == 0 {
-			f.AddResolutions("Ignore", "Remove the MS entry")
+	if f == nil {
+		return nil
+	}
+
+	// Pad out the list of details as necessary to match
+	// the length of the action list.
+	if len(f.Details) != len(f.Actions) {
+		for i := len(f.Details); i < len(f.Actions); i++ {
+			f.Details = append(f.Details, "")
 		}
 	}
 
-	// Last resort...
-	if f.Description == "" {
-		f.Description = fmt.Sprintf("%s %d", f.Class, f.Code)
+	switch f.Class {
+	case chkpb.CheckInconsistClass_CIC_POOL_NONEXIST_ON_MS:
+		if f.Msg == "" {
+			f.Msg = fmt.Sprintf("Scanned pool service %s missing from MS", f.PoolUuid)
+		}
+		for i, act := range f.Actions {
+			f.Details[i] = descAction(act, poolObj, f.PoolUuid)
+		}
+	case chkpb.CheckInconsistClass_CIC_POOL_NONEXIST_ON_ENGINE:
+		if f.Msg == "" {
+			f.Msg = fmt.Sprintf("MS pool service %s missing on engines", f.PoolUuid)
+		}
+		for i, act := range f.Actions {
+			f.Details[i] = descAction(act, poolObj, f.PoolUuid)
+		}
+	case chkpb.CheckInconsistClass_CIC_POOL_BAD_LABEL:
+		if f.Msg == "" {
+			f.Msg = fmt.Sprintf("The pool label for %s does not match MS", f.PoolUuid)
+		}
+		for i, act := range f.Actions {
+			f.Details[i] = descAction(act, poolObj, f.PoolUuid, f.Details[i])
+		}
+	default:
+		if f.Msg == "" {
+			f.Msg = fmt.Sprintf("Inconsistency found: %s (details: %+v)", f.Class, f.Details)
+		}
 	}
 
 	return f
 }
 
-func (fs FindingStatus) String() string {
-	if fs == FindingStatusOpen {
-		return "Open"
-	}
-	return string(fs)
-}
-
-func (fc FindingClass) String() string {
-	switch fc {
-	case FindingClassMember:
-		return "Member"
-	case FindingClassPool:
-		return "Pool"
-	default:
-		return "Unknown"
-	}
-}
-
-func (fc *FindingClass) FromString(s string) error {
-	switch s {
-	case "Member":
-		*fc = FindingClassMember
-	case "Pool":
-		*fc = FindingClassPool
-	default:
-		return errors.Errorf("unknown finding class %q", s)
-	}
-	return nil
-}
-
-func (fc FindingClass) MarshalJSON() ([]byte, error) {
-	return []byte(`"` + fc.String() + `"`), nil
-}
-
-func (fc *FindingClass) UnmarshalJSON(b []byte) error {
-	var s string
-	if err := json.Unmarshal(b, &s); err != nil {
-		return err
-	}
-	return fc.FromString(s)
-}
-
-func (f *Finding) SetStatus(status FindingStatus) error {
-	if status == FindingStatusIgnored && !f.Ignorable {
-		return errors.Errorf("finding %s is not ignorable", f.ID)
-	}
-
-	f.Status = status
-	return nil
-}
-
-func (f *Finding) SetResolution(res *FindingResolution) error {
+/*func (f *Finding) SetResolution(res *FindingResolution) error {
 	if res == nil {
 		return errors.New("resolution is nil")
 	}
 
 	for _, r := range f.Resolutions {
-		if r.ID == res.ID {
+		if r.Action == res.Action {
 			f.Resolution = res
-			f.Status = FindingStatusResolved
 			return nil
 		}
 	}
 
-	return errors.Errorf("resolution %d not found", res.ID)
-}
-
-func (f *Finding) AddResolutions(desc ...string) {
-	start := len(f.Resolutions)
-	for i := start; i < start+len(desc); i++ {
-		f.Resolutions = append(f.Resolutions, &FindingResolution{
-			ID:          uint32(i),
-			Description: desc[i],
-		})
-	}
-}
-
-func (f *Finding) SetIgnorable() *Finding {
-	f.Ignorable = true
-	return f
-}
-
-func (f *Finding) WithResolutions(resolutions ...string) *Finding {
-	f.Resolutions = nil
-	f.AddResolutions(resolutions...)
-	return f
-}
-
-func NewPoolFinding(code FindingCode, details ...string) *Finding {
-	return AnnotateFinding(&Finding{
-		Code:    code,
-		Class:   FindingClassPool,
-		Details: details,
-	})
-}
-
-func NewMemberFinding(code FindingCode, details ...string) *Finding {
-	return AnnotateFinding(&Finding{
-		Code:    code,
-		Class:   FindingClassMember,
-		Details: details,
-	})
-}
+	return errors.Errorf("resolution %d not found", res.Action)
+}*/

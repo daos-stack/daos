@@ -19,6 +19,7 @@ import (
 	"github.com/daos-stack/daos/src/control/events"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/system"
+	"github.com/daos-stack/daos/src/control/system/checker"
 )
 
 // mgmtModule represents the daos_server mgmt dRPC module. It sends dRPCs to
@@ -54,20 +55,22 @@ type poolDatabase interface {
 // srvModule represents the daos_server dRPC module. It handles dRPCs sent by
 // the daos_engine (src/engine).
 type srvModule struct {
-	log     logging.Logger
-	poolDB  poolDatabase
-	engines []Engine
-	events  *events.PubSub
+	log       logging.Logger
+	poolDB    poolDatabase
+	checkerDB checker.FindingStore
+	engines   []Engine
+	events    *events.PubSub
 }
 
 // newSrvModule creates a new srv module references to the system database,
 // resident EngineInstances and event publish subscribe reference.
-func newSrvModule(log logging.Logger, sysdb poolDatabase, engines []Engine, events *events.PubSub) *srvModule {
+func newSrvModule(log logging.Logger, pdb poolDatabase, cdb checker.FindingStore, engines []Engine, events *events.PubSub) *srvModule {
 	return &srvModule{
-		log:     log,
-		poolDB:  sysdb,
-		engines: engines,
-		events:  events,
+		log:       log,
+		poolDB:    pdb,
+		checkerDB: cdb,
+		engines:   engines,
+		events:    events,
 	}
 }
 
@@ -90,6 +93,8 @@ func (mod *srvModule) HandleCall(ctx context.Context, session *drpc.Session, met
 		return mod.handleCheckerRegisterPool(ctx, req)
 	case drpc.MethodCheckerDeregisterPool:
 		return mod.handleCheckerDeregisterPool(ctx, req)
+	case drpc.MethodCheckerReport:
+		return mod.handleCheckerReport(ctx, req)
 	default:
 		return nil, drpc.UnknownMethodFailure()
 	}

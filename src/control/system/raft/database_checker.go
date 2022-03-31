@@ -9,9 +9,6 @@ package raft
 import (
 	"sync"
 
-	"github.com/google/uuid"
-	"github.com/pkg/errors"
-
 	"github.com/daos-stack/daos/src/control/system/checker"
 )
 
@@ -40,9 +37,9 @@ func (mdb *InMemCheckerDatabase) AddCheckerFinding(finding *checker.Finding) err
 	mdb.Lock()
 	defer mdb.Unlock()
 
-	if finding.ID == uuid.Nil.String() {
+	/*if finding.ID == uuid.Nil.String() {
 		finding.ID = uuid.New().String()
-	}
+	}*/
 
 	mdb.Findings = append(mdb.Findings, finding)
 
@@ -56,7 +53,7 @@ func (mdb *InMemCheckerDatabase) GetCheckerFindings() ([]*checker.Finding, error
 	return mdb.Findings, nil
 }
 
-func (mdb *InMemCheckerDatabase) UpdateCheckerFinding(id string, status checker.FindingStatus) error {
+/*func (mdb *InMemCheckerDatabase) UpdateCheckerFinding(id string, status checker.FindingStatus) error {
 	mdb.Lock()
 	defer mdb.Unlock()
 
@@ -67,13 +64,13 @@ func (mdb *InMemCheckerDatabase) UpdateCheckerFinding(id string, status checker.
 	}
 
 	return errors.Errorf("finding %s not found", id)
-}
+}*/
 
 func (mdb *InMemCheckerDatabase) ResetCheckerData() error {
 	mdb.Lock()
 	defer mdb.Unlock()
 
-	mdb.State.CurrentPass = checker.PassInactive
+	mdb.State.CurrentPass = 0
 	mdb.Findings = nil
 	mdb.Logs = nil
 	mdb.Tasks = nil
@@ -88,7 +85,7 @@ func (mdb *InMemCheckerDatabase) GetCheckerState() (checker.State, error) {
 	return mdb.State, nil
 }
 
-func (mdb *InMemCheckerDatabase) AdvanceCheckerPass() (checker.Pass, error) {
+/*func (mdb *InMemCheckerDatabase) AdvanceCheckerPass() (checker.Pass, error) {
 	mdb.Lock()
 	defer mdb.Unlock()
 
@@ -99,4 +96,4 @@ func (mdb *InMemCheckerDatabase) AdvanceCheckerPass() (checker.Pass, error) {
 		err = checker.ErrNoMorePasses
 	}
 	return mdb.State.CurrentPass, err
-}
+}*/

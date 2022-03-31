@@ -123,7 +123,7 @@ func (cmd *checkCmdBase) printQueryResp(resp *control.SystemCheckQueryResp) {
 	iw := txtfmt.NewIndentWriter(&buf)
 	cmd.log.Info("Inconsistency Reports:")
 	for _, report := range resp.Reports {
-		fmt.Fprintf(iw, "%s: %s\n", report.Class, report.Msg)
+		fmt.Fprintf(iw, "0x%x %s: %s\n", report.Seq, report.Class, report.Msg)
 		if len(report.Actions) == 0 {
 			continue
 		}
