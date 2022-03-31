@@ -293,7 +293,7 @@ class DaosServerManager(SubprocessManager):
             cmd.sub_command_class.sub_command_class.nvme_only.value = True
 
         self.log.info("Preparing DAOS server storage: %s", str(cmd))
-        results = run_pcmd(self._hosts, str(cmd), timeout=40)
+        results = run_pcmd(self._hosts, str(cmd), timeout=self.prepare_timeout)
 
         # gratuitously lifted from pcmd() and get_current_state()
         result = {}
@@ -511,7 +511,7 @@ class DaosServerManager(SubprocessManager):
         self.log.info("<SERVER> Formatting hosts: <%s>", self.dmg.hostlist)
         # Temporarily increasing timeout to avoid CI errors until DAOS-5764 can
         # be further investigated.
-        self.dmg.storage_format(timeout=40)
+        self.dmg.storage_format(timeout=self.format_timeout)
 
         # Wait for all the engines to start
         self.detect_engine_start()
