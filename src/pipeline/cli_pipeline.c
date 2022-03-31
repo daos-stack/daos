@@ -432,7 +432,7 @@ shard_pipeline_run_task(tse_task_t *task)
 			shard_nr_kds = nr_kds % shard_nr_kds;
 		}
 	}
-	if (shard_nr_kds == 0)
+	if (shard_nr_kds == 0 && nr_kds > 0)
 	{
 		shard_nr_kds = 1;
 	}
