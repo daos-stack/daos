@@ -334,6 +334,9 @@ unlock:
 	D_RWLOCK_UNLOCK(cb_args->rwlock);
 out:
 	crt_req_decref(rpc);
+	tse_task_list_del(task);
+	tse_task_decref(task);
+
 	if (ret == 0) // see -->> obj_retry_error(int err)
 	{
 		ret = rc;
@@ -916,6 +919,7 @@ dc_pipeline_run(tse_task_t *api_task)
 	{
 		tse_task_complete(api_task, 0);
 	}
+	pl_obj_layout_free(layout);
 
 	return rc;
 out:
@@ -923,7 +927,10 @@ out:
 	{
 		tse_task_list_traverse(shard_task_head, shard_pipeline_task_abort, &rc);
 	}
-	
+	if (layout != NULL)
+	{
+		pl_obj_layout_free(layout);
+	}
 	tse_task_complete(api_task, rc);
 
 	return rc;
