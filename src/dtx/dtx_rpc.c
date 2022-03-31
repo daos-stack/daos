@@ -939,8 +939,7 @@ again:
 		 * then pool map may be refreshed during that. Let's retry
 		 * to find out the new leader.
 		 */
-		if (target->ta_comp.co_status != PO_COMP_ST_UP &&
-		    target->ta_comp.co_status != PO_COMP_ST_UPIN) {
+		if (target->ta_comp.co_status != PO_COMP_ST_UPIN) {
 			if (unlikely(++count % 10 == 3))
 				D_WARN("Get stale DTX leader %u/%u (st: %x) for "DF_DTI
 				       " %d times, maybe dead loop\n",
