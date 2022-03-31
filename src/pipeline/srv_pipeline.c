@@ -194,20 +194,20 @@ enum_pack_cb(daos_handle_t ih, vos_iter_entry_t *entry, vos_iter_type_t type,
 {
 	d_iov_t *d_key = cb_arg;
 
-	if (type == VOS_ITER_DKEY)
+	if (unlikely(type != VOS_ITER_DKEY))
 	{
-		if (d_key->iov_len != 0) /** one dkey at a time */
-		{
-			return 1;
-		}
-		if (entry->ie_key.iov_len > 0)
-		{
-			*d_key = entry->ie_key;
-		}
-		return 0;
+		D_ASSERTF(false, "unknown/unsupported type %d\n", type);
+		return -DER_INVAL;
 	}
-	D_ASSERTF(false, "unknown/unsupported type %d\n", type);
-	return -DER_INVAL;
+	if (d_key->iov_len != 0) /** one dkey at a time */
+	{
+		return 1;
+	}
+	if (entry->ie_key.iov_len > 0)
+	{
+		*d_key = entry->ie_key;
+	}
+	return 0;
 }
 
 static int
@@ -448,6 +448,9 @@ ds_pipeline_run(daos_handle_t vos_coh, daos_unit_oid_t oid,
 	struct vos_iter_anchors		anchors			= { 0 };
 	struct pipeline_compiled_t	pipeline_compiled	= { 0 };
 	struct filter_part_run_t	pipe_run_args		= { 0 };
+
+	*nr_kds_out	= 0;
+	*nr_recx	= 0;
 
 	rc = d_pipeline_check(&pipeline);
 	if (rc != 0)
