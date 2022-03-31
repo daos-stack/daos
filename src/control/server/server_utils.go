@@ -219,13 +219,6 @@ func prepBdevStorage(srv *server, iommuEnabled bool) error {
 		PCIBlockList: strings.Join(srv.cfg.BdevExclude, storage.BdevPciAddrSep),
 		DisableVFIO:  srv.cfg.DisableVFIO,
 		EnableVMD:    srv.cfg.EnableVMD && !srv.cfg.DisableVFIO && iommuEnabled,
-		Reset_:       true, // Run prepare with reset first to release resources.
-	}
-
-	// Perform prepare reset based on the values in the config file.
-	// Note that prepare reset will not allocate hugepages.
-	if _, err := srv.ctlSvc.NvmePrepare(prepReq); err != nil {
-		srv.log.Errorf("automatic NVMe prepare reset failed: %s", err)
 	}
 
 	if hasBdevs {
@@ -265,7 +258,6 @@ func prepBdevStorage(srv *server, iommuEnabled bool) error {
 	//
 	// TODO: should be passing root context into prepare request to
 	//       facilitate cancellation.
-	prepReq.Reset_ = false
 	if _, err := srv.ctlSvc.NvmePrepare(prepReq); err != nil {
 		srv.log.Errorf("automatic NVMe prepare failed: %s", err)
 	}

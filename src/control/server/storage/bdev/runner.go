@@ -28,6 +28,7 @@ const (
 	pciBlockListEnv    = "_PCI_BLOCKED"
 	driverOverrideEnv  = "_DRIVER_OVERRIDE"
 	vfioDisabledDriver = "uio_pci_generic"
+	noDriver           = "none"
 )
 
 type runCmdFn func(logging.Logger, []string, string, ...string) (string, error)
@@ -63,16 +64,17 @@ func run(log logging.Logger, env []string, cmdStr string, args ...string) (strin
 		}
 	}
 
-	log.Debugf("running script: %s", cmdPath)
 	cmd := exec.Command(cmdPath, args...)
 	cmd.Env = env
 	out, err := cmd.CombinedOutput()
 	if err != nil {
+		log.Errorf("run script %q failed, env: %v", cmdPath, env)
 		return "", &runCmdError{
 			wrapped: err,
 			stdout:  string(out),
 		}
 	}
+	log.Debugf("run script %q, env: %v, out:\n%q\n", cmdPath, env, out)
 
 	return string(out), nil
 }
@@ -80,6 +82,7 @@ func run(log logging.Logger, env []string, cmdStr string, args ...string) (strin
 type spdkSetupScript struct {
 	log        logging.Logger
 	scriptPath string
+	env        map[string]string
 	runCmd     runCmdFn
 }
 
@@ -87,8 +90,22 @@ func defaultScriptRunner(log logging.Logger) *spdkSetupScript {
 	return &spdkSetupScript{
 		log:        log,
 		scriptPath: spdkSetupPath,
+		env:        make(map[string]string),
 		runCmd:     run,
 	}
+}
+
+func (s *spdkSetupScript) run(args ...string) error {
+	envStrs := make([]string, 0, len(s.env))
+	for k, v := range s.env {
+		if k == "" || v == "" {
+			continue
+		}
+		envStrs = append(envStrs, fmt.Sprintf("%s=%s", k, v))
+	}
+	out, err := s.runCmd(s.log, envStrs, s.scriptPath, args...)
+
+	return errors.Wrapf(err, "spdk setup failed (%s)", out)
 }
 
 // Prepare executes setup script to allocate hugepages and rebind PCI devices
@@ -99,36 +116,39 @@ func defaultScriptRunner(log logging.Logger) *spdkSetupScript {
 //
 // NOTE: will make the controller disappear from /dev until reset() called.
 func (s *spdkSetupScript) Prepare(req *storage.BdevPrepareRequest) error {
+	s.env = map[string]string{
+		"PATH":          os.Getenv("PATH"),
+		pciBlockListEnv: req.PCIBlockList,
+	}
+
+	if req.DisableVFIO {
+		s.env[driverOverrideEnv] = vfioDisabledDriver
+	} else if req.EnableVMD {
+		// Run setup with DRIVER_OVERRIDE=none to speed up VMD re-binding as per
+		// https://github.com/spdk/spdk/commit/b0aba3fcd5aceceea530a702922153bc75664978.
+		s.env[driverOverrideEnv] = noDriver
+
+		// Apply block list to cater for situation where VMD is configured for use with
+		// DAOS but other NVMe drives should be reserved for other use (bdev_exclude).
+		if err := s.run(); err != nil {
+			return errors.Wrap(err, "vmd driver reset")
+		}
+
+		delete(s.env, driverOverrideEnv)
+	}
+
+	s.env[targetUserEnv] = req.TargetUser
+	s.env[pciAllowListEnv] = req.PCIAllowList
+
+	// Always use min number of hugepages otherwise devices cannot be accessed.
 	nrHugepages := req.HugePageCount
-	// Always supply non-zero number of hugepages in request otherwise devices cannot be
-	// accessed.
 	if nrHugepages <= 0 {
 		nrHugepages = defaultNrHugepages
 	}
+	s.env[nrHugepagesEnv] = fmt.Sprintf("%d", nrHugepages)
+	s.env[hugeNodeEnv] = req.HugeNodes
 
-	env := []string{
-		fmt.Sprintf("PATH=%s", os.Getenv("PATH")),
-		fmt.Sprintf("%s=%d", nrHugepagesEnv, nrHugepages),
-		fmt.Sprintf("%s=%s", targetUserEnv, req.TargetUser),
-	}
-	if req.HugeNodes != "" {
-		env = append(env, fmt.Sprintf("%s=%s", hugeNodeEnv, req.HugeNodes))
-	}
-	if req.PCIAllowList != "" {
-		env = append(env, fmt.Sprintf("%s=%s", pciAllowListEnv, req.PCIAllowList))
-	}
-	if req.PCIBlockList != "" {
-		env = append(env, fmt.Sprintf("%s=%s", pciBlockListEnv, req.PCIBlockList))
-	}
-	if req.DisableVFIO {
-		env = append(env, fmt.Sprintf("%s=%s", driverOverrideEnv, vfioDisabledDriver))
-	}
-
-	s.log.Debugf("spdk setup env: %v", env)
-	out, err := s.runCmd(s.log, env, s.scriptPath)
-	s.log.Debugf("spdk setup stdout:\n%s\n", out)
-
-	return errors.Wrapf(err, "spdk setup failed (%s)", out)
+	return s.run()
 }
 
 // Reset executes setup script to reset hugepage allocations and rebind PCI devices
@@ -139,19 +159,11 @@ func (s *spdkSetupScript) Prepare(req *storage.BdevPrepareRequest) error {
 //
 // NOTE: will make the controller reappear in /dev.
 func (s *spdkSetupScript) Reset(req *storage.BdevPrepareRequest) error {
-	env := []string{
-		fmt.Sprintf("PATH=%s", os.Getenv("PATH")),
-	}
-	if req.PCIAllowList != "" {
-		env = append(env, fmt.Sprintf("%s=%s", pciAllowListEnv, req.PCIAllowList))
-	}
-	if req.PCIBlockList != "" {
-		env = append(env, fmt.Sprintf("%s=%s", pciBlockListEnv, req.PCIBlockList))
+	s.env = map[string]string{
+		"PATH":          os.Getenv("PATH"),
+		pciAllowListEnv: req.PCIAllowList,
+		pciBlockListEnv: req.PCIBlockList,
 	}
 
-	s.log.Debugf("spdk reset env: %v", env)
-	out, err := s.runCmd(s.log, env, s.scriptPath, "reset")
-	s.log.Debugf("spdk reset stdout:\n%s\n", out)
-
-	return errors.Wrapf(err, "spdk reset failed (%s)", out)
+	return errors.Wrap(s.run("reset"), "reset")
 }
