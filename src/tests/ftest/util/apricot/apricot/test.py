@@ -637,9 +637,9 @@ class TestWithServers(TestWithoutServers):
             "access_points", "/run/setup/*", self.hostlist_servers[:1])
 
         # Server prepare timeout
-        prepare_timeout = self.params.get("prepare_timeout", "/run/setup/*")
+        self.prepare_timeout = self.params.get("prepare_timeout", "/run/setup/*")
         # Server format timeout
-        format_timeout = self.params.get("format_timeout", "/run/setup/*")
+        self.format_timeout = self.params.get("format_timeout", "/run/setup/*")
 
         # Display host information
         self.log.info("-" * 100)
@@ -1036,7 +1036,7 @@ class TestWithServers(TestWithoutServers):
             DaosServerManager(
                 group, self.bin, svr_cert_dir, svr_config_file, dmg_cert_dir,
                 dmg_config_file, svr_config_temp, dmg_config_temp,
-                self.server_manager_class, prepare_timeout, format_timeout)
+                self.server_manager_class, self.prepare_timeout, self.format_timeout)
         )
 
     def configure_manager(self, name, manager, hosts, slots,

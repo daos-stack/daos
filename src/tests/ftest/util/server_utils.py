@@ -112,6 +112,9 @@ class DaosServerManager(SubprocessManager):
             self.manager.job.certificate_owner = "daos_server"
             self.dmg.certificate_owner = getuser()
 
+        self.prepare_timeout = prepare_timeout
+        self.format_timeout = format_timeout
+
         # Server states
         self._states = {
             "all": [
@@ -299,7 +302,8 @@ class DaosServerManager(SubprocessManager):
 
         self.log.info("Preparing DAOS server storage: %s", str(cmd))
         results = run_pcmd(
-            self._hosts, str(cmd), timeout=int(prepare_timeout) if prepare_timeout else 40)
+            self._hosts, str(cmd),
+            timeout=int(self.prepare_timeout) if self.prepare_timeout else 40)
 
         # gratuitously lifted from pcmd() and get_current_state()
         result = {}
@@ -517,7 +521,7 @@ class DaosServerManager(SubprocessManager):
         self.log.info("<SERVER> Formatting hosts: <%s>", self.dmg.hostlist)
         # Temporarily increasing timeout to avoid CI errors until DAOS-5764 can
         # be further investigated.
-        self.dmg.storage_format(timeout=int(format_timeout) if format_timeout else 40)
+        self.dmg.storage_format(timeout=int(self.format_timeout) if self.format_timeout else 40)
 
         # Wait for all the engines to start
         self.detect_engine_start()
