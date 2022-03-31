@@ -57,8 +57,8 @@ else
 fi
 
 # Disable CRT_PHY_ADDR_STR to allow launch.py to set it
-export CRT_PHY_ADDR_STR=ucx+rc_x,ud_x
-export OFI_DOMAIN=mlx5_1:1,mlx5_0:1
+# export CRT_PHY_ADDR_STR=ucx+rc_x,ud_x
+# export OFI_DOMAIN=mlx5_1:1,mlx5_0:1
 
 # Disable OFI_INTERFACE to allow launch.py to pick the fastest interface
 unset OFI_INTERFACE
