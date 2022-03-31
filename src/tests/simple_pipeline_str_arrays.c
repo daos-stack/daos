@@ -90,280 +90,169 @@ insert_example_records(void)
 	return;
 }
 
+#define BINARY_F	"DAOS_FILTER_TYPE_BINARY"
+#define DKEY_F		"DAOS_FILTER_DKEY"
+#define AKEY_F		"DAOS_FILTER_AKEY"
+#define CONST_F		"DAOS_FILTER_CONST"
+#define INT8_F		"DAOS_FILTER_TYPE_UINTEGER8"
+#define INT4_F		"DAOS_FILTER_TYPE_UINTEGER4"
+#define LIKE_F		"DAOS_FILTER_FUNC_LIKE"
+#define GT_F		"DAOS_FILTER_FUNC_GT"
+#define EQ_F		"DAOS_FILTER_FUNC_EQ"
+#define BA_F		"DAOS_FILTER_FUNC_BITAND"
+#define AND_F		"DAOS_FILTER_FUNC_AND"
+#define OR_F		"DAOS_FILTER_FUNC_OR"
+#define COND_F		"DAOS_FILTER_CONDITION"
+#define NAME_F		"%.9%"
+
+static mode_t constant1 = S_IFMT;
+static mode_t constant2 = S_IFDIR;
+
+static d_iov_t dkey_iov;
+static d_iov_t const1_iov;
+static d_iov_t const2_iov;
+static d_iov_t const3_iov;
+
+daos_filter_part_t	dkey_ft;
+daos_filter_part_t	akey1_ft;
+daos_filter_part_t	akey2_ft;
+daos_filter_part_t	const0_ft;
+daos_filter_part_t	const1_ft;
+daos_filter_part_t	const2_ft;
+daos_filter_part_t	const3_ft;
+daos_filter_part_t	like_ft;
+daos_filter_part_t	ba_ft;
+daos_filter_part_t	eq_ft;
+daos_filter_part_t	gt_ft;
+daos_filter_part_t	and_ft;
+daos_filter_part_t	or_ft;
+
+daos_filter_t		pipef;
+
 /**
  *
  */
 static void
 build_pipeline_one(daos_pipeline_t *pipeline)
 {
-	int			rc;
+	daos_size_t	bin_flen = strlen(BINARY_F);
+	daos_size_t	dkey_flen = strlen(DKEY_F);
+	daos_size_t	akey_flen = strlen(AKEY_F);
+	daos_size_t	const_flen = strlen(CONST_F);
+	daos_size_t	int8_flen = strlen(INT8_F);
+	daos_size_t	int4_flen = strlen(INT4_F);
+	daos_size_t	like_flen = strlen(LIKE_F);
+	daos_size_t	gt_flen = strlen(GT_F);
+	daos_size_t	eq_flen = strlen(EQ_F);
+	daos_size_t	ba_flen = strlen(BA_F);
+	daos_size_t	and_flen = strlen(AND_F);
+	daos_size_t	or_flen = strlen(OR_F);
+	daos_size_t	cond_flen = strlen(COND_F);
+	daos_size_t	name_len = strlen(NAME_F);
+	daos_size_t	akey_len = strlen(field);
+	int		rc;
 
 	/** build condition for dkey containing ".9" */
 
-	daos_size_t		str_type_s;
-	char			*str_type1, *str_type2;
+	d_iov_set(&dkey_ft.part_type, DKEY_F, dkey_flen);
+	d_iov_set(&dkey_ft.data_type, BINARY_F, bin_flen);
+	dkey_ft.data_len = FSIZE;
 
-	str_type_s   = strlen("DAOS_FILTER_TYPE_BINARY");
-	str_type1     = (char *) malloc(str_type_s);
-	strncpy(str_type1, "DAOS_FILTER_TYPE_BINARY", str_type_s);
-	str_type2     = (char *) malloc(str_type_s);
-	strncpy(str_type2, "DAOS_FILTER_TYPE_BINARY", str_type_s);
+	d_iov_set(&const0_ft.part_type, CONST_F, const_flen);
+	d_iov_set(&const0_ft.data_type, BINARY_F, bin_flen);
+	const0_ft.num_constants = 1;
+	const0_ft.constant = &dkey_iov;
+	d_iov_set(const0_ft.constant, NAME_F, name_len);
 
-	daos_size_t		dkey_ftype_s;
-	char			*dkey_ftype;
-
-	dkey_ftype_s = strlen("DAOS_FILTER_DKEY");
-	dkey_ftype   = (char *) malloc(dkey_ftype_s);
-	strncpy(dkey_ftype, "DAOS_FILTER_DKEY", dkey_ftype_s);
-
-	daos_size_t		const_ftype_s;
-	char			*const0_ftype;
-
-	const_ftype_s = strlen("DAOS_FILTER_CONST");
-	const0_ftype   = (char *) malloc(const_ftype_s);
-	strncpy(const0_ftype, "DAOS_FILTER_CONST", const_ftype_s);
-
-	daos_size_t		const_dkey_s;
-	char			*const_dkey;
-
-	const_dkey_s = strlen("%.9%");
-	const_dkey   = (char *) malloc(const_dkey_s);
-	strncpy(const_dkey, "%.9%", const_dkey_s);
-
-	daos_filter_part_t	*dkey_ft;
-
-	dkey_ft = (daos_filter_part_t *) calloc(1, sizeof(daos_filter_part_t));
-	d_iov_set(&dkey_ft->part_type, dkey_ftype, dkey_ftype_s);
-	d_iov_set(&dkey_ft->data_type, str_type1, str_type_s);
-	dkey_ft->data_len = FSIZE;
-
-	daos_filter_part_t      *const0_ft;
-
-	const0_ft = (daos_filter_part_t *) calloc(1, sizeof(daos_filter_part_t));
-	d_iov_set(&const0_ft->part_type, const0_ftype, const_ftype_s);
-	d_iov_set(&const0_ft->data_type, str_type2, str_type_s);
-	const0_ft->num_constants = 1;
-	const0_ft->constant = malloc(sizeof(d_iov_t));
-	d_iov_set(const0_ft->constant, const_dkey, const_dkey_s);
-
-	daos_size_t		like_func_s;
-	char			*like_func;
-	daos_filter_part_t	*like_ft;
-
-	like_func_s = strlen("DAOS_FILTER_FUNC_LIKE");
-	like_func   = (char *) malloc(like_func_s);
-	strncpy(like_func, "DAOS_FILTER_FUNC_LIKE", like_func_s);
-	like_ft = (daos_filter_part_t *) calloc(1, sizeof(daos_filter_part_t));
-	d_iov_set(&like_ft->part_type, like_func, like_func_s);
-	like_ft->num_operands = 2;
+	d_iov_set(&like_ft.part_type, LIKE_F, like_flen);
+	like_ft.num_operands = 2;
 
 	/** build condition for uint32_t integer in array bytes 0-4 & S_IFMT == S_IFDIR */
 
-	daos_size_t		int4_type_s;
-	char			*int4_type0;
-	char			*int4_type1;
-	char			*int4_type2;
+	d_iov_set(&akey1_ft.part_type, AKEY_F, akey_flen);
+	d_iov_set(&akey1_ft.data_type, INT4_F, int4_flen);
+	d_iov_set(&akey1_ft.akey, field, akey_len);
+	akey1_ft.data_len    = 4;
 
-	int4_type_s = strlen("DAOS_FILTER_TYPE_UINTEGER4");
-	int4_type0  = (char *) malloc(int4_type_s);
-	int4_type1  = (char *) malloc(int4_type_s);
-	int4_type2  = (char *) malloc(int4_type_s);
-	strncpy(int4_type0, "DAOS_FILTER_TYPE_UINTEGER4", int4_type_s);
-	strncpy(int4_type1, "DAOS_FILTER_TYPE_UINTEGER4", int4_type_s);
-	strncpy(int4_type2, "DAOS_FILTER_TYPE_UINTEGER4", int4_type_s);
+	d_iov_set(&const1_ft.part_type, CONST_F, const_flen);
+	d_iov_set(&const1_ft.data_type, INT4_F, int4_flen);
+	const1_ft.num_constants = 1;
+	const1_ft.constant = &const1_iov;
+	d_iov_set(const1_ft.constant, &constant1, sizeof(mode_t));
 
-	daos_size_t		akey_ftype_s;
-	char			*akey_ftype;
+	d_iov_set(&const2_ft.part_type, CONST_F, const_flen);
+	d_iov_set(&const2_ft.data_type, INT4_F, int4_flen);
+	const2_ft.num_constants = 1;
+	const2_ft.constant = &const2_iov;
+	d_iov_set(const2_ft.constant, &constant2, sizeof(mode_t));
 
-	akey_ftype_s = strlen("DAOS_FILTER_AKEY");
-	akey_ftype   = (char *) malloc(akey_ftype_s);
-	strncpy(akey_ftype, "DAOS_FILTER_AKEY", akey_ftype_s);
+	d_iov_set(&ba_ft.part_type, BA_F, ba_flen);
+	ba_ft.num_operands = 2;
 
-	daos_size_t		akey_s;
-	char			*akey;
-	daos_filter_part_t	*akey_ft;
-
-	akey_s = strlen(field);
-	akey   = (char *) malloc(akey_s);
-	strncpy(akey, field, akey_s);
-	akey_ft = (daos_filter_part_t *) calloc(1, sizeof(daos_filter_part_t));
-	d_iov_set(&akey_ft->part_type, akey_ftype, akey_ftype_s);
-	d_iov_set(&akey_ft->data_type, int4_type0, int4_type_s);
-	d_iov_set(&akey_ft->akey, akey, akey_s);
-	akey_ft->data_len    = 4;
-
-	char			*const1_ftype;
-	char			*const2_ftype;
-	mode_t			*constant1, *constant2;
-	daos_filter_part_t	*const1_ft, *const2_ft;
-
-	const1_ftype   = (char *) malloc(const_ftype_s);
-	strncpy(const1_ftype, "DAOS_FILTER_CONST", const_ftype_s);
-	constant1 = (mode_t *) malloc(sizeof(mode_t));
-	*constant1 = S_IFMT;
-	const2_ftype   = (char *) malloc(const_ftype_s);
-	strncpy(const2_ftype, "DAOS_FILTER_CONST", const_ftype_s);
-	constant2 = (mode_t *) malloc(sizeof(mode_t));
-	*constant2 = S_IFDIR;
-	const1_ft = (daos_filter_part_t *) calloc(1, sizeof(daos_filter_part_t));
-	const2_ft = (daos_filter_part_t *) calloc(1, sizeof(daos_filter_part_t));
-
-	d_iov_set(&const1_ft->part_type, const1_ftype, const_ftype_s);
-	d_iov_set(&const1_ft->data_type, int4_type1, int4_type_s);
-	const1_ft->num_constants = 1;
-	const1_ft->constant = (d_iov_t *) malloc(sizeof(d_iov_t));
-	d_iov_set(const1_ft->constant, constant1, sizeof(mode_t));
-
-	d_iov_set(&const2_ft->part_type, const2_ftype, const_ftype_s);
-	d_iov_set(&const2_ft->data_type, int4_type2, int4_type_s);
-	const2_ft->num_constants = 1;
-	const2_ft->constant = (d_iov_t *) malloc(sizeof(d_iov_t));
-	d_iov_set(const2_ft->constant, constant2, sizeof(mode_t));
-
-	daos_size_t		ba_func_s;
-	char			*ba_func;
-	daos_filter_part_t	*ba_ft;
-
-	ba_func_s = strlen("DAOS_FILTER_FUNC_BITAND");
-	ba_func   = (char *) malloc(ba_func_s);
-	strncpy(ba_func, "DAOS_FILTER_FUNC_BITAND", ba_func_s);
-	ba_ft = (daos_filter_part_t *) calloc(1, sizeof(daos_filter_part_t));
-	d_iov_set(&ba_ft->part_type, ba_func, ba_func_s);
-	ba_ft->num_operands = 2;
-
-	daos_size_t		eq_func_s;
-	char			*eq_func;
-	daos_filter_part_t	*eq_ft;
-
-	eq_func_s = strlen("DAOS_FILTER_FUNC_EQ");
-	eq_func   = (char *) malloc(eq_func_s);
-	strncpy(eq_func, "DAOS_FILTER_FUNC_EQ", eq_func_s);
-	eq_ft = (daos_filter_part_t *) calloc(1, sizeof(daos_filter_part_t));
-	d_iov_set(&eq_ft->part_type, eq_func, eq_func_s);
-	eq_ft->num_operands = 2;
+	d_iov_set(&eq_ft.part_type, EQ_F, eq_flen);
+	eq_ft.num_operands = 2;
 
 	/** build condition for ts integer in array bytes 12-20 > ts */
 
-	daos_size_t		int8_type_s;
-	char			*int8_type0;
-	char			*int8_type1;
+	d_iov_set(&akey2_ft.part_type, AKEY_F, akey_flen);
+	d_iov_set(&akey2_ft.data_type, INT8_F, int8_flen);
+	d_iov_set(&akey2_ft.akey, field, akey_len);
+	akey2_ft.data_offset = 12;
+	akey2_ft.data_len    = 8;
 
-	int8_type_s = strlen("DAOS_FILTER_TYPE_UINTEGER8");
-	int8_type0  = (char *) malloc(int8_type_s);
-	int8_type1  = (char *) malloc(int8_type_s);
-	strncpy(int8_type0, "DAOS_FILTER_TYPE_UINTEGER8", int8_type_s);
-	strncpy(int8_type1, "DAOS_FILTER_TYPE_UINTEGER8", int8_type_s);
+	d_iov_set(&const3_ft.part_type, CONST_F, const_flen);
+	d_iov_set(&const3_ft.data_type, INT8_F, int8_flen);
+	const3_ft.num_constants = 1;
+	const3_ft.constant = &const3_iov;
+	d_iov_set(const3_ft.constant, &ts, sizeof(time_t));
 
-	char			*akey2;
-	daos_filter_part_t	*akey2_ft;
-	char			*akey2_ftype;
-
-	akey2_ftype   = (char *) malloc(akey_ftype_s);
-	strncpy(akey2_ftype, "DAOS_FILTER_AKEY", akey_ftype_s);
-	akey2   = (char *) malloc(akey_s);
-	strncpy(akey2, field, akey_s);
-	akey2_ft = (daos_filter_part_t *) calloc(1, sizeof(daos_filter_part_t));
-	d_iov_set(&akey2_ft->part_type, akey2_ftype, akey_ftype_s);
-	d_iov_set(&akey2_ft->data_type, int8_type0, int8_type_s);
-	d_iov_set(&akey2_ft->akey, akey2, akey_s);
-	akey2_ft->data_offset = 12;
-	akey2_ft->data_len    = 8;
-
-	char			*const3_ftype;
-	time_t			*constant3;
-	daos_filter_part_t	*const3_ft;
-
-	const3_ftype   = (char *) malloc(const_ftype_s);
-	strncpy(const3_ftype, "DAOS_FILTER_CONST", const_ftype_s);
-	constant3 = (time_t *) malloc(sizeof(time_t));
-	*constant3 = ts;
-
-	const3_ft = (daos_filter_part_t *) calloc(1, sizeof(daos_filter_part_t));
-	d_iov_set(&const3_ft->part_type, const3_ftype, const_ftype_s);
-	d_iov_set(&const3_ft->data_type, int8_type1, int8_type_s);
-	const3_ft->num_constants = 1;
-	const3_ft->constant = (d_iov_t *) malloc(sizeof(d_iov_t));
-	d_iov_set(const3_ft->constant, constant3, sizeof(time_t));
-
-	daos_size_t		gt_func_s;
-	char			*gt_func;
-	daos_filter_part_t	*gt_ft;
-
-	gt_func_s = strlen("DAOS_FILTER_FUNC_GT");
-	gt_func = (char *) malloc(gt_func_s);
-	strncpy(gt_func, "DAOS_FILTER_FUNC_GT", gt_func_s);
-	gt_ft = (daos_filter_part_t *) calloc(1, sizeof(daos_filter_part_t));
-	d_iov_set(&gt_ft->part_type, gt_func, gt_func_s);
-	gt_ft->num_operands = 2;
+	d_iov_set(&gt_ft.part_type, GT_F, gt_flen);
+	gt_ft.num_operands = 2;
 
 	/** build final condition where result should be the:
 	    bitwise array cond || (dkey condition && mtime array) */
 
-	daos_size_t		and_func_s;
-	char			*and_func;
-	daos_filter_part_t	*and_ft;
+	d_iov_set(&and_ft.part_type, AND_F, and_flen);
+	and_ft.num_operands = 2;
 
-	and_func_s = strlen("DAOS_FILTER_FUNC_AND");
-	and_func   = (char *) malloc(and_func_s);
-	strncpy(and_func, "DAOS_FILTER_FUNC_AND", and_func_s);
-	and_ft = (daos_filter_part_t *) calloc(1, sizeof(daos_filter_part_t));
-	d_iov_set(&and_ft->part_type, and_func, and_func_s);
-	and_ft->num_operands = 2;
+	d_iov_set(&or_ft.part_type, OR_F, or_flen);
+	or_ft.num_operands = 2;
 
-	daos_size_t		or_func_s;
-	char			*or_func;
-	daos_filter_part_t	*or_ft;
+	daos_filter_init(&pipef);
+	d_iov_set(&pipef.filter_type, COND_F, cond_flen);
 
-	or_func_s = strlen("DAOS_FILTER_FUNC_OR");
-	or_func   = (char *) malloc(or_func_s);
-	strncpy(or_func, "DAOS_FILTER_FUNC_OR", or_func_s);
-	or_ft = (daos_filter_part_t *) calloc(1, sizeof(daos_filter_part_t));
-	d_iov_set(&or_ft->part_type, or_func, or_func_s);
-	or_ft->num_operands = 2;
-
-	daos_size_t		pipe_cond_s;
-	char			*pipe_cond;
-	daos_filter_t		*pipef;
-
-	pipe_cond_s = strlen("DAOS_FILTER_CONDITION");
-	pipe_cond   = (char *) malloc(pipe_cond_s);
-	strncpy(pipe_cond, "DAOS_FILTER_CONDITION", pipe_cond_s);
-	pipef = (daos_filter_t *) calloc(1, sizeof(daos_filter_t));
-	daos_filter_init(pipef);
-	d_iov_set(&pipef->filter_type, pipe_cond, pipe_cond_s);
-
-	rc = daos_filter_add(pipef, or_ft);
+	rc = daos_filter_add(&pipef, &or_ft);
 	ASSERT(rc == 0, "Pipeline add failed with %d", rc);
 
-	rc = daos_filter_add(pipef, eq_ft);
+	rc = daos_filter_add(&pipef, &eq_ft);
 	ASSERT(rc == 0, "Pipeline add failed with %d", rc);
-	rc = daos_filter_add(pipef, ba_ft);
+	rc = daos_filter_add(&pipef, &ba_ft);
 	ASSERT(rc == 0, "Pipeline add failed with %d", rc);
-	rc = daos_filter_add(pipef, akey_ft);
+	rc = daos_filter_add(&pipef, &akey1_ft);
 	ASSERT(rc == 0, "Pipeline add failed with %d", rc);
-	rc = daos_filter_add(pipef, const1_ft);
+	rc = daos_filter_add(&pipef, &const1_ft);
 	ASSERT(rc == 0, "Pipeline add failed with %d", rc);
-	rc = daos_filter_add(pipef, const2_ft);
-	ASSERT(rc == 0, "Pipeline add failed with %d", rc);
-
-	rc = daos_filter_add(pipef, and_ft);
+	rc = daos_filter_add(&pipef, &const2_ft);
 	ASSERT(rc == 0, "Pipeline add failed with %d", rc);
 
-	rc = daos_filter_add(pipef, like_ft);
-	ASSERT(rc == 0, "Pipeline add failed with %d", rc);
-	rc = daos_filter_add(pipef, dkey_ft);
-	ASSERT(rc == 0, "Pipeline add failed with %d", rc);
-	rc = daos_filter_add(pipef, const0_ft);
+	rc = daos_filter_add(&pipef, &and_ft);
 	ASSERT(rc == 0, "Pipeline add failed with %d", rc);
 
-	rc = daos_filter_add(pipef, gt_ft);
+	rc = daos_filter_add(&pipef, &like_ft);
 	ASSERT(rc == 0, "Pipeline add failed with %d", rc);
-	rc = daos_filter_add(pipef, akey2_ft);
+	rc = daos_filter_add(&pipef, &dkey_ft);
 	ASSERT(rc == 0, "Pipeline add failed with %d", rc);
-	rc = daos_filter_add(pipef, const3_ft);
+	rc = daos_filter_add(&pipef, &const0_ft);
 	ASSERT(rc == 0, "Pipeline add failed with %d", rc);
 
-	rc = daos_pipeline_add(pipeline, pipef);
+	rc = daos_filter_add(&pipef, &gt_ft);
+	ASSERT(rc == 0, "Pipeline add failed with %d", rc);
+	rc = daos_filter_add(&pipef, &akey2_ft);
+	ASSERT(rc == 0, "Pipeline add failed with %d", rc);
+	rc = daos_filter_add(&pipef, &const3_ft);
+	ASSERT(rc == 0, "Pipeline add failed with %d", rc);
+
+	rc = daos_pipeline_add(pipeline, &pipef);
 	ASSERT(rc == 0, "Pipeline add failed with %d", rc);
 }
 
@@ -440,8 +329,7 @@ run_pipeline(daos_pipeline_t *pipeline)
 			char *dkey = (char *) sgl_keys[i].sg_iovs->iov_buf;
 			daos_size_t dkeylen = kds[i].kd_key_len;
 
-			printf("\t(dkey)=%.*s\t", (int) dkeylen, dkey);
-			printf("%s(akey) -->> ", field);
+			printf("\t(dkey)=%s, len = %zu\t", dkey, dkeylen);
 
 			char *ptr = &buf_recs[i * (sizeof(mode_t) + sizeof(time_t))];
 			mode_t cur_mode = *((mode_t *) ptr);
@@ -461,6 +349,7 @@ run_pipeline(daos_pipeline_t *pipeline)
 	free(sgl_recs);
 	free(iovs_recs);
 	free(buf_recs);
+	free(buf_keys);
 }
 
 int
@@ -505,12 +394,11 @@ main(int argc, char **argv)
 	build_pipeline_one(&pipeline1);
 	rc = daos_pipeline_check(&pipeline1);
 	ASSERT(rc == 0, "Pipeline check failed with %d", rc);
-	/** Running pipeline */
 
 	run_pipeline(&pipeline1);
-	/** Freeing used memory */
 
-	free_pipeline(&pipeline1);
+	/** TODO - should have API to free internally allocated filters. */
+	free(pipeline1.filters);
 
 	rc = daos_obj_close(oh, NULL);
 	ASSERT(rc == 0, "Obj close failed with %d", rc);
