@@ -561,7 +561,7 @@ vos_metrics_alloc(const char *path, int tgt_id)
 		D_WARN("Failed to create 'epr_duration' telemetry: "DF_RC"\n", DP_RC(rc));
 
 	/* VOS aggregation scanned/skipped/deleted objs/dkeys/akeys */
-	for (i = 0; i < AGG_OP_MAX; i++) {
+	for (i = 0; i < AGG_OP_MERGE; i++) {
 		snprintf(desc, sizeof(desc), "%s objs", agg_op2str(i));
 		rc = d_tm_add_metric(&vam->vam_obj[i], D_TM_COUNTER, desc, NULL,
 				     "%s/%s/obj_%s/tgt_%u", path, VOS_AGG_DIR,
