@@ -1,13 +1,13 @@
 #!/usr/bin/python
 '''
-  (C) Copyright 2020-2021 Intel Corporation.
+  (C) Copyright 2020-2022 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
 from itertools import product
 
 from ior_test_base import IorTestBase
-from general_utils import human_to_bytes
+
 
 class EcodCellSizeProperty(IorTestBase):
     # pylint: disable=too-many-ancestors
@@ -27,14 +27,14 @@ class EcodCellSizeProperty(IorTestBase):
             expected_size (int): expected container cell size
         """
         daos_cmd = self.get_daos_command()
-        cont_prop = daos_cmd.container_get_prop(self.pool.uuid,
-                                                self.container.uuid)
-        cont_prop_stdout = cont_prop.stdout_text
-        prop_list = cont_prop_stdout.split('\n')[1:]
-        cont_index = [i for i, word in enumerate(prop_list)
-                      if word.startswith('EC Cell Size')][0]
-        cell_size = (prop_list[cont_index].split('EC Cell Size')[1].strip())
-        cont_cell_size = (human_to_bytes(cell_size.replace(" ", "")))
+        cont_prop = daos_cmd.container_get_prop(self.pool.uuid, self.container.uuid)
+
+        cont_cell_size = None
+        for prop in cont_prop["response"]:
+            if prop["name"] == "ec_cell":
+                cont_cell_size = prop["value"]
+                break
+
         self.assertEqual(expected_size, cont_cell_size)
 
     def test_ec_pool_property(self):

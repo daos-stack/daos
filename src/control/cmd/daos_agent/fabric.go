@@ -29,7 +29,11 @@ type FabricInterface struct {
 	Name        string
 	Domain      string
 	NetDevClass hardware.NetDevClass
-	Providers   []string
+	hw          *hardware.FabricInterface
+}
+
+func (f *FabricInterface) Providers() []string {
+	return f.hw.Providers.ToSlice()
 }
 
 func (f *FabricInterface) String() string {
@@ -40,28 +44,9 @@ func (f *FabricInterface) String() string {
 	return fmt.Sprintf("%s%s (%s)", f.Name, dom, f.NetDevClass)
 }
 
-// AddProvider adds a provider to the FabricInterface.
-func (f *FabricInterface) AddProvider(provider string) {
-	if f == nil || provider == "" {
-		return
-	}
-
-	// Avoid adding duplicates
-	if f.HasProvider(provider) {
-		return
-	}
-
-	f.Providers = append(f.Providers, provider)
-}
-
 // HasProvider determines if the FabricInterface supports a given provider.
 func (f *FabricInterface) HasProvider(provider string) bool {
-	for _, p := range f.Providers {
-		if p == provider {
-			return true
-		}
-	}
-	return false
+	return f.hw.SupportsProvider(provider)
 }
 
 // FabricDevClassManual is a wildcard netDevClass that indicates the device was
@@ -187,16 +172,19 @@ func (n *NUMAFabric) getDeviceFromNUMA(numaNode int, netDevClass hardware.NetDev
 	for checked := 0; checked < n.getNumDevices(numaNode); checked++ {
 		fabricIF := n.getNextDevice(numaNode)
 
-		if fabricIF.NetDevClass != netDevClass && fabricIF.NetDevClass != FabricDevClassManual {
-			n.log.Debugf("Excluding device: %s, network device class: %s. Does not match requested network device class: %s",
-				fabricIF.Name, fabricIF.NetDevClass, netDevClass)
-			continue
-		}
+		// Manually-provided interfaces can be assumed to support what's needed by the system.
+		if fabricIF.NetDevClass != FabricDevClassManual {
+			if fabricIF.NetDevClass != netDevClass {
+				n.log.Debugf("Excluding device: %s, network device class: %s. Does not match requested network device class: %s",
+					fabricIF.Name, fabricIF.NetDevClass, netDevClass)
+				continue
+			}
 
-		if !fabricIF.HasProvider(provider) {
-			n.log.Debugf("Excluding device: %s, network device class: %s. Doesn't support provider",
-				fabricIF.Name, fabricIF.NetDevClass)
-			continue
+			if !fabricIF.HasProvider(provider) {
+				n.log.Debugf("Excluding device: %s, network device class: %s. Doesn't support provider",
+					fabricIF.Name, fabricIF.NetDevClass)
+				continue
+			}
 		}
 
 		if err := n.validateDevice(fabricIF); err != nil {
@@ -301,14 +289,10 @@ func NUMAFabricFromScan(ctx context.Context, log logging.Logger, scan *hardware.
 		fi, err := scan.GetInterface(name)
 		if err != nil {
 			log.Errorf("unexpected failure getting FI %q from scan: %s", name, err.Error())
+			continue
 		}
 
-		newIF := &FabricInterface{
-			Name:        fi.OSDevice,
-			Domain:      fi.Name,
-			NetDevClass: fi.DeviceClass,
-			Providers:   fi.Providers.ToSlice(),
-		}
+		newIF := fabricInterfaceFromHardware(fi)
 
 		numa := int(fi.NUMANode)
 		fabric.Add(numa, newIF)
@@ -320,10 +304,24 @@ func NUMAFabricFromScan(ctx context.Context, log logging.Logger, scan *hardware.
 	fabric.setDefaultNUMANode()
 
 	if fabric.NumNUMANodes() == 0 {
-		log.Info("No network devices detected in fabric scan\n")
+		log.Info("No network devices detected in fabric scan")
 	}
 
 	return fabric
+}
+
+func fabricInterfaceFromHardware(fi *hardware.FabricInterface) *FabricInterface {
+	newFI := &FabricInterface{
+		Name:        fi.NetInterface,
+		NetDevClass: fi.DeviceClass,
+		hw:          fi,
+	}
+
+	if fi.Name != fi.NetInterface {
+		newFI.Domain = fi.Name
+	}
+
+	return newFI
 }
 
 // NUMAFabricFromConfig generates a NUMAFabric layout based on a config.

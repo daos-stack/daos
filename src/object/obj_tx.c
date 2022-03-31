@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2020-2021 Intel Corporation.
+ * (C) Copyright 2020-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -1188,8 +1188,8 @@ dc_tx_classify_common(struct dc_tx *tx, struct daos_cpd_sub_req *dcsr,
 							oca->u.ec.e_p)
 					skipped_parity++;
 
-				if (skipped_parity == oca->u.ec.e_p) {
-					D_ERROR("Two many (%d) shards in the "
+				if (skipped_parity > oca->u.ec.e_p) {
+					D_ERROR("Too many (%d) shards in the "
 						"redundancy group for opc %u "
 						"against the obj "DF_OID
 						" for DTX "DF_DTI" are lost\n",
@@ -1623,8 +1623,7 @@ dc_tx_commit_prepare(struct dc_tx *tx, tse_task_t *task)
 		else
 			bit_map = NIL_BITMAP;
 
-		i = pl_select_leader(obj->cob_md.omd_id, grp_idx, obj->cob_grp_size, bit_map, NULL,
-				     NULL, obj_get_shard, obj);
+		i = obj_grp_leader_get(obj, grp_idx, tx->tx_pm_ver, bit_map);
 		if (i < 0)
 			D_GOTO(out, rc = i);
 

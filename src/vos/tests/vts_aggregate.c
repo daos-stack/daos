@@ -269,7 +269,7 @@ generate_view(struct io_test_args *arg, daos_unit_oid_t oid, char *dkey,
 	epr_a = &ds->td_agg_epr;
 	view_len = get_view_len(ds, &recx);
 
-	VERBOSE_MSG("Generate logcial view: OID:"DF_UOID", DKEY:%s, AKEY:%s, "
+	VERBOSE_MSG("Generate logical view: OID:"DF_UOID", DKEY:%s, AKEY:%s, "
 		    "U_ERP:["DF_U64", "DF_U64"], A_EPR["DF_U64", "DF_U64"], "
 		    "discard:%d, expected_nr:%d\n", DP_UOID(oid), dkey, akey,
 		    epr_u->epr_lo, epr_u->epr_hi, epr_a->epr_lo, epr_a->epr_hi,
@@ -369,7 +369,7 @@ aggregate_basic_lb(struct io_test_args *arg, struct agg_tst_dataset *ds, int pun
 	char			*buf_u;
 	daos_recx_t		 recx = { 0 }, *recx_p;
 	daos_size_t		 view_len;
-	int			 punch_idx = 0, recx_idx = 0, rc;
+	int			 punch_idx = 0, recx_idx = 0, rc = 0;
 	int			 punch_or_delete = TF_PUNCH;
 
 	if (ds->td_delete)
@@ -1033,7 +1033,7 @@ discard_13(void **state)
 	 * Generate enough amount of akeys to ensure vos_iterate()
 	 * trigger re-probe on dkey
 	 */
-	generate_akeys(arg, ds.td_oid, VOS_AGG_CREDITS_MAX + 10);
+	generate_akeys(arg, ds.td_oid, AGG_CREDS_SCAN_TIGHT + 10);
 
 	recx_tot.rx_idx = 0;
 	recx_tot.rx_nr = 20;
@@ -1244,6 +1244,11 @@ agg_punches_test(void **state, int record_type, bool discard)
 			}
 		}
 	}
+	/** cleanup() sets the flag to assert if there are items in container garbage collection
+	 *  heap which will always be the case for these punch tests.  So let's run garbage
+	 *  collection before cleanup in this case.
+	 */
+	gc_wait();
 }
 static void
 discard_14(void **state)
@@ -1946,7 +1951,8 @@ aggregate_14(void **state)
 		epr.epr_hi = epc_hi;
 		rc = vos_aggregate(arg->ctx.tc_co_hdl, &epr, NULL, NULL, 0);
 		if (rc) {
-			print_error("aggregate %d failed:%d\n", i, rc);
+			print_error("aggregate %d failed: "DF_RC"\n", i,
+				    DP_RC(rc));
 			break;
 		}
 

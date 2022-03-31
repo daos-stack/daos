@@ -1192,7 +1192,7 @@ evt_tcx_create(struct evt_root *root, uint64_t feats, unsigned int order,
 int
 evt_tcx_clone(struct evt_context *tcx, struct evt_context **tcx_pp)
 {
-	struct umem_attr uma;
+	struct umem_attr uma = {0};
 	int		 rc;
 
 	umem_attr_get(&tcx->tc_umm, &uma);

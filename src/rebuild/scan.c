@@ -553,7 +553,7 @@ rebuild_obj_scan_cb(daos_handle_t ch, vos_iter_entry_t *ent,
 		 * still includes the current rank. If not, the object can be
 		 * deleted/reclaimed because it is no longer reachable
 		 */
-		rc = pl_obj_place(map, &md, NULL, &layout);
+		rc = pl_obj_place(map, &md, DAOS_OO_RO, NULL, &layout);
 		if (rc != 0)
 			D_GOTO(out, rc);
 
@@ -691,6 +691,7 @@ rebuild_container_scan_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 				 &snapshot_cnt);
 	if (rc) {
 		D_ERROR("ds_cont_fetch_snaps failed: "DF_RC"\n", DP_RC(rc));
+		vos_cont_close(coh);
 		return rc;
 	}
 

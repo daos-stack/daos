@@ -59,9 +59,9 @@ type PoolCreateCmd struct {
 	TierRatio     string           `short:"t" long:"tier-ratio" default:"6,94" description:"Percentage of storage tiers for pool storage (auto)"`
 	NumRanks      uint32           `short:"k" long:"nranks" description:"Number of ranks to use (auto)"`
 	NumSvcReps    uint32           `short:"v" long:"nsvc" description:"Number of pool service replicas"`
-	ScmSize       string           `short:"s" long:"scm-size" description:"Per-server SCM allocation for DAOS pool (manual)"`
-	NVMeSize      string           `short:"n" long:"nvme-size" description:"Per-server NVMe allocation for DAOS pool (manual)"`
-	RankList      string           `short:"r" long:"ranks" description:"Storage server unique identifiers (ranks) for DAOS pool"`
+	ScmSize       string           `short:"s" long:"scm-size" description:"Per-engine SCM allocation for DAOS pool (manual)"`
+	NVMeSize      string           `short:"n" long:"nvme-size" description:"Per-engine NVMe allocation for DAOS pool (manual)"`
+	RankList      string           `short:"r" long:"ranks" description:"Storage engine unique identifiers (ranks) for DAOS pool"`
 
 	Args struct {
 		PoolLabel string `positional-arg-name:"<pool label>"`
@@ -139,8 +139,7 @@ func (cmd *PoolCreateCmd) Execute(args []string) error {
 
 		// TODO (DAOS-9556) Update the protocol with a new message allowing to perform the
 		// queries of storage request and the pool creation from the management server
-		scmBytes, nvmeBytes, err := control.GetMaxPoolSize(context.Background(),
-			cmd.ctlInvoker)
+		scmBytes, nvmeBytes, err := control.GetMaxPoolSize(context.Background(), cmd.log, cmd.ctlInvoker)
 		if err != nil {
 			return err
 		}
@@ -150,17 +149,11 @@ func (cmd *PoolCreateCmd) Execute(args []string) error {
 			nvmeBytes = uint64(storageRatio) * nvmeBytes / uint64(100)
 		}
 
-		// Extra storage space needed for metadata such as the VOS file
-		if scmBytes < control.PoolMetadataBytes {
-			missingBytes := control.PoolMetadataBytes - scmBytes
-			msg := "Not enough SMC storage available with ratio %s%%:"
-			msg += " at least %s of SCM storage (%s missing) is needed"
-			return errors.Errorf(msg,
-				cmd.Size,
-				humanize.Bytes(control.PoolMetadataBytes),
-				humanize.Bytes(missingBytes))
+		if scmBytes == 0 {
+			return errors.Errorf("Not enough SCM storage available with ratio %d%%: "+
+				"SCM storage capacity or ratio should be increased",
+				storageRatio)
 		}
-		scmBytes -= control.PoolMetadataBytes
 
 		cmd.updateRequest(req, scmBytes, nvmeBytes)
 
@@ -387,7 +380,7 @@ func (cmd *PoolEvictCmd) Execute(args []string) error {
 // PoolExcludeCmd is the struct representing the command to exclude a DAOS target.
 type PoolExcludeCmd struct {
 	poolCmd
-	Rank      uint32 `long:"rank" required:"1" description:"Rank of the targets to be excluded"`
+	Rank      uint32 `long:"rank" required:"1" description:"Engine rank of the targets to be excluded"`
 	Targetidx string `long:"target-idx" description:"Comma-separated list of target idx(s) to be excluded from the rank"`
 }
 
@@ -415,7 +408,7 @@ func (cmd *PoolExcludeCmd) Execute(args []string) error {
 // PoolDrainCmd is the struct representing the command to Drain a DAOS target.
 type PoolDrainCmd struct {
 	poolCmd
-	Rank      uint32 `long:"rank" required:"1" description:"Rank of the targets to be drained"`
+	Rank      uint32 `long:"rank" required:"1" description:"Engine rank of the targets to be drained"`
 	Targetidx string `long:"target-idx" description:"Comma-separated list of target idx(s) to be drained on the rank"`
 }
 
@@ -474,7 +467,7 @@ func (cmd *PoolExtendCmd) Execute(args []string) error {
 // PoolReintegrateCmd is the struct representing the command to Add a DAOS target.
 type PoolReintegrateCmd struct {
 	poolCmd
-	Rank      uint32 `long:"rank" required:"1" description:"Rank of the targets to be reintegrated"`
+	Rank      uint32 `long:"rank" required:"1" description:"Engine rank of the targets to be reintegrated"`
 	Targetidx string `long:"target-idx" description:"Comma-separated list of target idx(s) to be reintegrated into the rank"`
 }
 
@@ -560,6 +553,18 @@ func (cmd *PoolSetPropCmd) Execute(_ []string) error {
 			return err
 		}
 		cmd.Args.Props.ToSet = []*control.PoolProperty{p}
+	}
+
+	for _, prop := range cmd.Args.Props.ToSet {
+		if prop.Name == "rf" {
+			return errors.New("can't set redundancy factor on existing pool.")
+		}
+		if prop.Name == "ec_pda" {
+			return errors.New("can't set EC performance domain affinity on existing pool.")
+		}
+		if prop.Name == "rp_pda" {
+			return errors.New("can't set RP performance domain affinity on existing pool.")
+		}
 	}
 
 	req := &control.PoolSetPropReq{

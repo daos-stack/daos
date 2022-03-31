@@ -1551,7 +1551,7 @@ pool_rebuild_status_from_info(Mgmt__PoolRebuildStatus *rebuild,
 
 		if (info->rs_version == 0)
 			rebuild->state = MGMT__POOL_REBUILD_STATUS__STATE__IDLE;
-		else if (info->rs_done)
+		else if (info->rs_state == DRS_COMPLETED)
 			rebuild->state = MGMT__POOL_REBUILD_STATUS__STATE__DONE;
 		else
 			rebuild->state = MGMT__POOL_REBUILD_STATUS__STATE__BUSY;
@@ -1581,6 +1581,10 @@ ds_mgmt_drpc_pool_query(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	uuid_t			uuid;
 	daos_pool_info_t	pool_info = {0};
 	d_rank_list_t		*svc_ranks;
+	d_rank_list_t		*ranks;
+	d_rank_range_list_t	*range_list;
+	char			*range_list_str;
+	bool			truncated;
 	size_t			len;
 	uint8_t			*body;
 
@@ -1603,14 +1607,27 @@ ds_mgmt_drpc_pool_query(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	if (svc_ranks == NULL)
 		D_GOTO(out, rc = -DER_NOMEM);
 
+	/* TODO: dmg client choose what to query, especially DPI_ENGINES_ENABLED bit set or not. */
 	pool_info.pi_bits = DPI_ALL;
-	rc = ds_mgmt_pool_query(uuid, svc_ranks, &pool_info);
+	rc = ds_mgmt_pool_query(uuid, svc_ranks, &ranks, &pool_info);
 	if (rc != 0) {
 		D_ERROR("Failed to query the pool, rc=%d\n", rc);
-		D_GOTO(out_ranks, rc);
+		goto out_svc_ranks;
 	}
 
+	/* Calculate and stringify rank ranges to return to control plane for display */
+	range_list = d_rank_range_list_create_from_ranks(ranks);
+	if (range_list == NULL)
+		D_GOTO(out_ranks, rc = -DER_NOMEM);
+	range_list_str = d_rank_range_list_str(range_list, &truncated);
+	if (range_list_str == NULL)
+		D_GOTO(out_ranges, rc = -DER_NOMEM);
+	D_DEBUG(DF_DSMS, DF_UUID": %s ranks: %s%s\n", DP_UUID(uuid),
+		pool_info.pi_bits & DPI_ENGINES_ENABLED ? "ENABLED" : "DISABLED", range_list_str,
+		truncated ? " ...(TRUNCATED)" : "");
+
 	/* Populate the response */
+	/* TODO: return range_list_str in the response. */
 	resp.uuid = req->id;
 	resp.total_targets = pool_info.pi_ntargets;
 	resp.disabled_targets = pool_info.pi_ndisabled;
@@ -1622,7 +1639,7 @@ ds_mgmt_drpc_pool_query(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	D_ALLOC_ARRAY(resp.tier_stats, DAOS_MEDIA_MAX);
 	if (resp.tier_stats == NULL) {
 		D_ERROR("Failed to allocate tier_stats for resp\n");
-		D_GOTO(out_tiers, rc = -DER_NOMEM);
+		D_GOTO(out_ranges_str, rc = -DER_NOMEM);
 	}
 
 	storage_usage_stats_from_pool_space(&scm, &pool_info.pi_space,
@@ -1638,8 +1655,13 @@ ds_mgmt_drpc_pool_query(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	pool_rebuild_status_from_info(&rebuild, &pool_info.pi_rebuild_st);
 	resp.rebuild = &rebuild;
 
-out_tiers:
+out_ranges_str:
+	D_FREE(range_list_str);
+out_ranges:
+	d_rank_range_list_free(range_list);
 out_ranks:
+	d_rank_list_free(ranks);
+out_svc_ranks:
 	d_rank_list_free(svc_ranks);
 out:
 	resp.status = rc;
@@ -1895,6 +1917,7 @@ ds_mgmt_drpc_bio_health_query(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	resp->volatile_mem_warn = stats.volatile_mem_warn;
 	resp->total_bytes = stats.total_bytes;
 	resp->avail_bytes = stats.avail_bytes;
+	resp->cluster_size = stats.cluster_size;
 	resp->program_fail_cnt_norm = stats.program_fail_cnt_norm;
 	resp->program_fail_cnt_raw = stats.program_fail_cnt_raw;
 	resp->erase_fail_cnt_norm = stats.erase_fail_cnt_norm;
