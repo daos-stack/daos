@@ -92,9 +92,9 @@ class DaosServerManager(SubprocessManager):
             manager (str, optional): the name of the JobManager class used to
                 manage the YamlCommand defined through the "job" attribute.
                 Defaults to "Orterun".
-            prepare_timeout (str, optional): timeout for storage prepare
+            prepare_timeout (int, optional): timeout for storage prepare
                 Defaults to 40 sec
-            format_timeout (str, optional): timeout for storage format
+            format_timeout (int, optional): timeout for storage format
                 Defaults to 40 sec
         """
         self.group = group

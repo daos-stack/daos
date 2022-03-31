@@ -637,9 +637,9 @@ class TestWithServers(TestWithoutServers):
             "access_points", "/run/setup/*", self.hostlist_servers[:1])
 
         # Server prepare timeout
-        self.prepare_timeout = self.params.get("prepare_timeout", "/run/setup/*")
+        self.prepare_timeout = self.params.get("prepare_timeout", "/run/setup/*", 40)
         # Server format timeout
-        self.format_timeout = self.params.get("format_timeout", "/run/setup/*")
+        self.format_timeout = self.params.get("format_timeout", "/run/setup/*", 40)
 
         # Display host information
         self.log.info("-" * 100)
