@@ -122,7 +122,7 @@ class TargetFailure(IorTestBase):
         9. Verify that there's no error this time.
 
         :avocado: tags=all,full_regression
-        :avocado: tags=hw,small
+        :avocado: tags=hw,medium,ib2
         :avocado: tags=deployment,target_failure
         :avocado: tags=target_failure_wo_rf
         """
