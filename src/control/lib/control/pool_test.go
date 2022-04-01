@@ -103,6 +103,84 @@ func TestControl_PoolDestroy(t *testing.T) {
 	}
 }
 
+func TestControl_PoolUpgrade(t *testing.T) {
+	for name, tc := range map[string]struct {
+		mic    *MockInvokerConfig
+		req    *PoolUpgradeReq
+		expErr error
+	}{
+		"local failure": {
+			req: &PoolUpgradeReq{
+				ID: common.MockUUID(),
+			},
+			mic: &MockInvokerConfig{
+				UnaryError: errors.New("local failed"),
+			},
+			expErr: errors.New("local failed"),
+		},
+		"remote failure": {
+			req: &PoolUpgradeReq{
+				ID: common.MockUUID(),
+			},
+			mic: &MockInvokerConfig{
+				UnaryResponse: MockMSResponse("host1", errors.New("remote failed"), nil),
+			},
+			expErr: errors.New("remote failed"),
+		},
+		"-DER_GRPVER is retried": {
+			req: &PoolUpgradeReq{
+				ID: common.MockUUID(),
+			},
+			mic: &MockInvokerConfig{
+				UnaryResponseSet: []*UnaryResponse{
+					MockMSResponse("host1", drpc.DaosGroupVersionMismatch, nil),
+					MockMSResponse("host1", nil, &mgmtpb.PoolUpgradeResp{}),
+				},
+			},
+		},
+		"-DER_AGAIN is retried": {
+			req: &PoolUpgradeReq{
+				ID: common.MockUUID(),
+			},
+			mic: &MockInvokerConfig{
+				UnaryResponseSet: []*UnaryResponse{
+					MockMSResponse("host1", drpc.DaosTryAgain, nil),
+					MockMSResponse("host1", nil, &mgmtpb.PoolUpgradeResp{}),
+				},
+			},
+		},
+		"success": {
+			req: &PoolUpgradeReq{
+				ID: common.MockUUID(),
+			},
+			mic: &MockInvokerConfig{
+				UnaryResponse: MockMSResponse("host1", nil,
+					&mgmtpb.PoolUpgradeResp{},
+				),
+			},
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(t.Name())
+			defer common.ShowBufferOnFailure(t, buf)
+
+			mic := tc.mic
+			if mic == nil {
+				mic = DefaultMockInvokerConfig()
+			}
+
+			ctx := context.TODO()
+			mi := NewMockInvoker(log, mic)
+
+			gotErr := PoolUpgrade(ctx, mi, tc.req)
+			common.CmpErr(t, tc.expErr, gotErr)
+			if tc.expErr != nil {
+				return
+			}
+		})
+	}
+}
+
 func TestControl_PoolDrain(t *testing.T) {
 	for name, tc := range map[string]struct {
 		mic    *MockInvokerConfig
@@ -634,26 +712,6 @@ func TestPoolGetProp(t *testing.T) {
 			},
 			expErr: errors.New("got > 1"),
 		},
-		"missing prop in response": {
-			mic: &MockInvokerConfig{
-				UnaryResponse: MockMSResponse("host1", nil, &mgmtpb.PoolGetPropResp{
-					Properties: []*mgmtpb.PoolProperty{
-						{
-							Number: propWithVal("label", "").Number,
-							Value:  &mgmtpb.PoolProperty_Strval{"foo"},
-						},
-					},
-				}),
-			},
-			req: &PoolGetPropReq{
-				ID: common.MockUUID(),
-				Properties: []*PoolProperty{
-					propWithVal("label", ""),
-					propWithVal("space_rb", ""),
-				},
-			},
-			expErr: errors.New("unable to find prop"),
-		},
 		"nil prop value in response": {
 			mic: &MockInvokerConfig{
 				UnaryResponse: MockMSResponse("host1", nil, &mgmtpb.PoolGetPropResp{
@@ -686,6 +744,10 @@ func TestPoolGetProp(t *testing.T) {
 							Value:  &mgmtpb.PoolProperty_Numval{42},
 						},
 						{
+							Number: propWithVal("upgrade_status", "").Number,
+							Value:  &mgmtpb.PoolProperty_Numval{1},
+						},
+						{
 							Number: propWithVal("reclaim", "").Number,
 							Value:  &mgmtpb.PoolProperty_Numval{drpc.PoolSpaceReclaimDisabled},
 						},
@@ -706,6 +768,10 @@ func TestPoolGetProp(t *testing.T) {
 							Value:  &mgmtpb.PoolProperty_Numval{1},
 						},
 						{
+							Number: propWithVal("global_version", "").Number,
+							Value:  &mgmtpb.PoolProperty_Numval{1},
+						},
+						{
 							Number: propWithVal("rp_pda", "").Number,
 							Value:  &mgmtpb.PoolProperty_Numval{2},
 						},
@@ -722,6 +788,7 @@ func TestPoolGetProp(t *testing.T) {
 			expResp: []*PoolProperty{
 				propWithVal("ec_cell_sz", "4096"),
 				propWithVal("ec_pda", "1"),
+				propWithVal("global_version", "1"),
 				propWithVal("label", "foo"),
 				propWithVal("policy", "type=io_size"),
 				propWithVal("reclaim", "disabled"),
@@ -729,6 +796,7 @@ func TestPoolGetProp(t *testing.T) {
 				propWithVal("rp_pda", "2"),
 				propWithVal("self_heal", "exclude"),
 				propWithVal("space_rb", "42"),
+				propWithVal("upgrade_status", "in progress"),
 			},
 		},
 		"specific props requested": {
