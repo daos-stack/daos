@@ -51,6 +51,12 @@ struct pf_param {
 			/* dkey flag */
 			bool	dkey_flag;
 		} pa_rw;
+		struct {
+			/* full scan */
+			bool	full_scan;
+			/* Force merge */
+			bool	force_merge;
+		} pa_agg;
 	};
 };
 
