@@ -75,6 +75,7 @@ struct vos_io_context {
 				 ic_check_existence:1,
 				 ic_remove:1,
 				 ic_skip_fetch:1,
+				 ic_agg_needed:1,
 				 ic_ec:1; /**< see VOS_OF_EC */
 	/**
 	 * Input shadow recx lists, one for each iod. Now only used for degraded
@@ -635,6 +636,7 @@ vos_ioc_create(daos_handle_t coh, daos_unit_oid_t oid, bool read_only,
 	ioc->ic_dedup = ((vos_flags & VOS_OF_DEDUP) != 0);
 	ioc->ic_dedup_verify = ((vos_flags & VOS_OF_DEDUP_VERIFY) != 0);
 	ioc->ic_skip_fetch = ((vos_flags & VOS_OF_SKIP_FETCH) != 0);
+	ioc->ic_agg_needed = 0; /** Will be set if we detect a need for aggregation */
 	ioc->ic_dedup_th = dedup_th;
 	if (vos_flags & VOS_OF_FETCH_CHECK_EXISTENCE)
 		ioc->ic_read_ts_only = ioc->ic_check_existence = 1;
@@ -1621,6 +1623,62 @@ akey_update_recx(daos_handle_t toh, uint32_t pm_ver, daos_recx_t *recx,
 }
 
 static int
+vos_evt_mark_agg(struct umem_instance *umm, struct evt_root *root, daos_epoch_t epoch)
+{
+	uint64_t	feats;
+
+	feats = evt_feats_get(root);
+
+	vos_feats_agg_time_update(epoch, &feats);
+
+	return evt_feats_set(root, umm, feats);
+}
+
+static int
+vos_btr_mark_agg(struct umem_instance *umm, struct btr_root *root, daos_epoch_t epoch)
+{
+	uint64_t	feats;
+
+	feats = dbtree_feats_get(root);
+
+	vos_feats_agg_time_update(epoch, &feats);
+
+	return dbtree_feats_set(root, umm, feats);
+}
+
+int
+vos_key_mark_agg(struct umem_instance *umm, struct vos_krec_df *krec, daos_epoch_t epoch)
+{
+	if (krec->kr_bmap & KREC_BF_BTR)
+		return vos_btr_mark_agg(umm, &krec->kr_btr, epoch);
+
+	return vos_evt_mark_agg(umm, &krec->kr_evt, epoch);
+}
+
+int
+vos_mark_agg(struct umem_instance *umm, struct btr_root *dkey_root, struct btr_root *obj_root,
+	     daos_epoch_t epoch)
+{
+	int	rc;
+
+	rc = vos_btr_mark_agg(umm, dkey_root, epoch);
+	if (rc == 0)
+		rc = vos_btr_mark_agg(umm, obj_root, epoch);
+
+	return rc;
+}
+
+static int
+vos_ioc_mark_agg(struct vos_io_context *ioc)
+{
+	if (!ioc->ic_agg_needed)
+		return 0;
+
+	return vos_mark_agg(vos_ioc2umm(ioc), &ioc->ic_obj->obj_df->vo_tree,
+			    &ioc->ic_cont->vc_cont_df->cd_obj_root, ioc->ic_epr.epr_hi);
+}
+
+static int
 akey_update(struct vos_io_context *ioc, uint32_t pm_ver, daos_handle_t ak_toh,
 	    uint16_t minor_epc)
 {
@@ -1646,10 +1704,15 @@ akey_update(struct vos_io_context *ioc, uint32_t pm_ver, daos_handle_t ak_toh,
 	rc = key_tree_prepare(obj, ak_toh, VOS_BTR_AKEY,
 			      &iod->iod_name, flags, DAOS_INTENT_UPDATE,
 			      &krec, &toh, ioc->ic_ts_set);
-	if (rc != 0) {
+	if (rc < 0) {
 		D_ERROR("akey "DF_KEY" update, key_tree_prepare failed, "DF_RC"\n",
 			DP_KEY(&iod->iod_name), DP_RC(rc));
 		return rc;
+	}
+
+	if (rc == 1) {
+		rc = 0;
+		ioc->ic_agg_needed = 1;
 	}
 
 	if (ioc->ic_ts_set) {
@@ -1732,6 +1795,9 @@ out:
 	if (daos_handle_is_valid(toh))
 		key_tree_release(toh, is_array);
 
+	if (rc == 0 && ioc->ic_agg_needed)
+		rc = vos_key_mark_agg(vos_ioc2umm(ioc), krec, ioc->ic_epr.epr_hi);
+
 	return rc;
 }
 
@@ -1800,6 +1866,9 @@ out:
 
 release:
 	key_tree_release(ak_toh, false);
+
+	if (rc == 0 && ioc->ic_agg_needed)
+		rc = vos_key_mark_agg(vos_ioc2umm(ioc), krec, ioc->ic_epr.epr_hi);
 
 	return rc;
 }
@@ -2272,6 +2341,9 @@ abort:
 		if (err == 0)
 			ioc->ic_obj->obj_df->vo_max_write = ioc->ic_epr.epr_hi;
 	}
+
+	if (err == 0)
+		err = vos_ioc_mark_agg(ioc);
 
 	err = vos_tx_end(ioc->ic_cont, dth, &ioc->ic_rsrvd_scm,
 			 &ioc->ic_blk_exts, tx_started, err);

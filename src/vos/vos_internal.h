@@ -357,9 +357,73 @@ struct vos_dtx_cmt_ent {
 #define DCE_EPOCH(dce)		((dce)->dce_base.dce_epoch)
 #define DCE_HANDLE_TIME(dce)	((dce)->dce_base.dce_handle_time)
 
-extern int vos_evt_feats;
+extern uint64_t vos_evt_feats;
 
+/** Flags for internal use - Bit 63 can be used for another purpose so as to
+ *  match corresponding internal flags for btree
+ */
 #define VOS_KEY_CMP_LEXICAL	(1ULL << 63)
+/** Indicates that a tree has aggregation optimization enabled */
+#define VOS_TF_AGG_OPT	(1ULL << 62)
+/** Indicates that the stored 32 bits from a timestamp are from an HLC */
+#define VOS_TF_AGG_HLC	(1ULL << 61)
+/** Start bit of stored timestamp */
+#define VOS_TF_AGG_BIT	60
+/** Right shift for 32-bits of epoch */
+#define VOS_TF_AGG_RSHIFT	(63 - VOS_TF_AGG_BIT)
+/** Left shift for 32-bits of epoch */
+#define VOS_TF_AGG_LSHIFT	(32 - VOS_TF_AGG_RSHIFT)
+/** In-place mask to get epoch from feature bits */
+#define VOS_TF_AGG_TIME_MASK	(0xffffffffULL << VOS_TF_AGG_LSHIFT)
+
+D_CASSERT((VOS_TF_AGG_HLC & VOS_TF_AGG_TIME_MASK) == 0);
+D_CASSERT(VOS_TF_AGG_TIME_MASK & (1ULL << VOS_TF_AGG_BIT));
+D_CASSERT((VOS_TF_AGG_TIME_MASK & (1ULL << (VOS_TF_AGG_BIT + 1))) == 0);
+D_CASSERT((VOS_TF_AGG_TIME_MASK & (1ULL << (VOS_TF_AGG_BIT - 32))) == 0);
+
+#define CHECK_VOS_TREE_FLAG(flag)	\
+	D_CASSERT(((flag) & (EVT_FEATS_SUPPORTED | BTR_FEAT_MASK)) == 0)
+CHECK_VOS_TREE_FLAG(VOS_KEY_CMP_LEXICAL);
+CHECK_VOS_TREE_FLAG(VOS_TF_AGG_OPT);
+CHECK_VOS_TREE_FLAG(VOS_TF_AGG_TIME_MASK);
+
+/** Update the aggregatable write timestamp within 1/4 second granularity */
+static inline void
+vos_feats_agg_time_update(daos_epoch_t epoch, uint64_t *feats)
+{
+	uint64_t extra_flag = 0;
+
+	if (epoch & 0xffffffff00000000ULL) {
+		/** Assume aggregation only happens at most once every quarter second */
+		epoch &= 0xffffffff00000000ULL;
+		/** Ensure the resulting epoch is not zero regardless, mostly for standalone */
+		epoch = (epoch >> VOS_TF_AGG_RSHIFT);
+		extra_flag = VOS_TF_AGG_HLC;
+	} else {
+		epoch &= 0x0ffffffffULL;
+		epoch = (epoch << VOS_TF_AGG_LSHIFT);
+	}
+
+	*feats &= ~VOS_TF_AGG_TIME_MASK;
+	*feats |= epoch | VOS_TF_AGG_OPT | extra_flag;
+}
+
+/** Get the aggregatable write timestamp within 1/4 second granularity */
+static inline bool
+vos_feats_agg_time_get(uint64_t feats, daos_epoch_t *epoch)
+{
+	if ((feats & VOS_TF_AGG_OPT) == 0)
+		return false;
+
+	if (feats & VOS_TF_AGG_HLC) {
+		*epoch = ((feats & VOS_TF_AGG_TIME_MASK) << VOS_TF_AGG_RSHIFT);
+		*epoch += 0xffffffffULL;
+	} else {
+		*epoch = ((feats & VOS_TF_AGG_TIME_MASK) >> VOS_TF_AGG_LSHIFT);
+	}
+
+	return true;
+}
 
 #define VOS_KEY_CMP_UINT64_SET	(BTR_FEAT_UINT_KEY)
 #define VOS_KEY_CMP_LEXICAL_SET	(VOS_KEY_CMP_LEXICAL | BTR_FEAT_DIRECT_KEY)
@@ -1121,21 +1185,34 @@ void
 gc_reserve_space(daos_size_t *rsrvd);
 
 /**
+ * Start aggregation of an object.  Mark object for aggregation for aggregation, if applicable
+ *
+ * \param ih[IN]	Iterator handle
+ * \param full_scan[IN]	Full scan is needed regardless so just mark aggregation start
+ *
+ * \return		1 if aggregation is needed
+ *			0 if aggregation can be skipped
+ *			< 0 on error
+ */
+int
+oi_iter_start_agg(daos_handle_t ih, bool full_scan);
+
+/**
  * If the object is fully punched, bypass normal aggregation and move it to container
- * discard pool
+ * discard pool.
  *
  * \param ih[IN]	Iterator handle
  *
  * \return		Zero on Success
- *			Positive value if a reprobe is needed
+ *			1: entry is removed
  *			Negative value otherwise
  */
 int
-oi_iter_pre_aggregate(daos_handle_t ih);
+oi_iter_check_punch(daos_handle_t ih);
 
 /**
  * Aggregate the creation/punch records in the current entry of the object
- * iterator
+ * iterator.
  *
  * \param ih[IN]		Iterator handle
  * \param range_discard[IN]	Discard only uncommitted ilog entries (for reintegration)
@@ -1149,21 +1226,36 @@ int
 oi_iter_aggregate(daos_handle_t ih, bool range_discard);
 
 /**
+ * Start aggregation of a key.  Mark key for aggregation for aggregation, if applicable
+ *
+ * \param ih[IN]	Iterator handle
+ * \param full_scan[IN]	Full scan is needed regardless so just mark aggregation start
+ *
+ * \return		1 if aggregation is needed
+ *			0 if aggregation can be skipped
+ *			< 0 on error
+ */
+
+int
+vos_obj_iter_start_agg(daos_handle_t ih, bool full_scan);
+
+/**
  * If the key is fully punched, bypass normal aggregation and move it to container
- * discard pool
+ * discard pool.
  *
  * \param ih[IN]	Iterator handle
  *
  * \return		Zero on Success
- *			Positive value if a reprobe is needed
+ *			1: entry is removed
  *			Negative value otherwise
  */
 int
-vos_obj_iter_pre_aggregate(daos_handle_t ih);
+vos_obj_iter_check_punch(daos_handle_t ih);
 
 /**
  * Aggregate the creation/punch records in the current entry of the key
- * iterator
+ * iterator.  If aggregation optimization is supported, it will clear the
+ * aggregation flag and set the needed flag, accordingly.
  *
  * \param ih[IN]		Iterator handle
  * \param range_discard[IN]	Discard only uncommitted ilog entries (for reintegration)
@@ -1401,6 +1493,30 @@ recx_csum_len(daos_recx_t *recx, struct dcs_csum_info *csum,
 	return (daos_size_t)csum->cs_len * csum_chunk_count(csum->cs_chunksize,
 			recx->rx_idx, recx->rx_idx + recx->rx_nr - 1, rsize);
 }
+
+/** Mark that the object and container need aggregation.
+ *
+ * \param[in] umm	umem instance
+ * \param[in] dkey_root	Root of dkey tree (marked for object)
+ * \param[in] obj_root	Root of object tree (marked for container)
+ * \param[in] epoch	Epoch of aggregatable update
+ *
+ * \return 0 on success, error otherwise
+ */
+int
+vos_mark_agg(struct umem_instance *umm, struct btr_root *dkey_root, struct btr_root *obj_root,
+	     daos_epoch_t epoch);
+
+/** Mark that the key needs aggregation.
+ *
+ * \param[in] umm	umem instance
+ * \param[in] krec	The key's record
+ * \param[in] epoch	Epoch of aggregatable update
+ *
+ * \return 0 on success, error otherwise
+ */
+int
+vos_key_mark_agg(struct umem_instance *umm, struct vos_krec_df *krec, daos_epoch_t epoch);
 
 static inline bool
 vos_anchor_is_zero(daos_anchor_t *anchor)
