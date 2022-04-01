@@ -805,8 +805,6 @@ ds_cont_child_stop_all(struct ds_pool_child *pool_child)
 		DP_UUID(pool_child->spc_uuid),
 		dss_get_module_info()->dmi_tgt_id);
 
-	D_ASSERT(d_list_empty(&pool_child->spc_list));
-
 	cont_list = &pool_child->spc_cont_list;
 	while (!d_list_empty(cont_list)) {
 		cont_child = d_list_entry(cont_list->next,
