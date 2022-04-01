@@ -1964,3 +1964,96 @@ func TestServer_MgmtSvc_PoolGetProp(t *testing.T) {
 		})
 	}
 }
+
+func TestServer_MgmtSvc_PoolUpgrade(t *testing.T) {
+	testLog, _ := logging.NewTestLogger(t.Name())
+	missingSB := newTestMgmtSvc(t, testLog)
+	missingSB.harness.instances[0].(*EngineInstance)._superblock = nil
+	notAP := newTestMgmtSvc(t, testLog)
+	testPoolService := &system.PoolService{
+		PoolUUID: uuid.MustParse(mockUUID),
+		State:    system.PoolServiceStateReady,
+		Replicas: []system.Rank{0},
+	}
+
+	for name, tc := range map[string]struct {
+		mgmtSvc       *mgmtSvc
+		setupMockDrpc func(_ *mgmtSvc, _ error)
+		req           *mgmtpb.PoolUpgradeReq
+		expResp       *mgmtpb.PoolUpgradeResp
+		expErr        error
+	}{
+		"nil request": {
+			expErr: errors.New("nil request"),
+		},
+		"wrong system": {
+			req:    &mgmtpb.PoolUpgradeReq{Id: mockUUID, Sys: "bad"},
+			expErr: FaultWrongSystem("bad", build.DefaultSystemName),
+		},
+		"missing superblock": {
+			mgmtSvc: missingSB,
+			req:     &mgmtpb.PoolUpgradeReq{Id: mockUUID},
+			expErr:  errors.New("not an access point"),
+		},
+		"not access point": {
+			mgmtSvc: notAP,
+			req:     &mgmtpb.PoolUpgradeReq{Id: mockUUID},
+			expErr:  errors.New("not an access point"),
+		},
+		"dRPC send fails": {
+			req:    &mgmtpb.PoolUpgradeReq{Id: mockUUID},
+			expErr: errors.New("send failure"),
+		},
+		"garbage resp": {
+			req: &mgmtpb.PoolUpgradeReq{Id: mockUUID},
+			setupMockDrpc: func(svc *mgmtSvc, err error) {
+				// dRPC call returns junk in the message body
+				badBytes := makeBadBytes(42)
+
+				setupMockDrpcClientBytes(svc, badBytes, err)
+			},
+			expErr: errors.New("unmarshal"),
+		},
+		"missing uuid": {
+			req:    &mgmtpb.PoolUpgradeReq{},
+			expErr: errors.New("empty pool id"),
+		},
+		"successful upgraded": {
+			req:     &mgmtpb.PoolUpgradeReq{Id: mockUUID},
+			expResp: &mgmtpb.PoolUpgradeResp{},
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(t.Name())
+			defer common.ShowBufferOnFailure(t, buf)
+
+			if tc.mgmtSvc == nil {
+				tc.mgmtSvc = newTestMgmtSvc(t, log)
+			}
+			tc.mgmtSvc.log = log
+			addTestPoolService(t, tc.mgmtSvc.sysdb, testPoolService)
+
+			if tc.setupMockDrpc == nil {
+				tc.setupMockDrpc = func(svc *mgmtSvc, err error) {
+					setupMockDrpcClient(tc.mgmtSvc, tc.expResp, tc.expErr)
+				}
+			}
+			tc.setupMockDrpc(tc.mgmtSvc, tc.expErr)
+
+			if tc.req != nil && tc.req.Sys == "" {
+				tc.req.Sys = build.DefaultSystemName
+			}
+
+			gotResp, gotErr := tc.mgmtSvc.PoolUpgrade(context.TODO(), tc.req)
+			common.CmpErr(t, tc.expErr, gotErr)
+			if tc.expErr != nil {
+				return
+			}
+
+			cmpOpts := common.DefaultCmpOpts()
+			if diff := cmp.Diff(tc.expResp, gotResp, cmpOpts...); diff != "" {
+				t.Fatalf("unexpected response (-want, +got)\n%s\n", diff)
+			}
+		})
+	}
+}

@@ -1138,6 +1138,7 @@ ds_pool_tgt_connect(struct ds_pool *pool, struct pool_iv_conn *pic)
 	uuid_copy(hdl->sph_uuid, pic->pic_hdl);
 	hdl->sph_flags = pic->pic_flags;
 	hdl->sph_sec_capas = pic->pic_capas;
+	hdl->sph_global_ver = pic->pic_global_ver;
 	ds_pool_get(pool);
 	hdl->sph_pool = pool;
 
