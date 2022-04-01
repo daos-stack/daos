@@ -991,6 +991,34 @@ func TestBackend_Prepare(t *testing.T) {
 				},
 			},
 		},
+		"prepare reset; vmd enabled": {
+			reset: true,
+			req: storage.BdevPrepareRequest{
+				HugePageCount: testNrHugepages,
+				TargetUser:    username,
+				PCIAllowList:  mockAddrListStr(1, 2, 3),
+				PCIBlockList:  mockAddrListStr(4, 3),
+				EnableVMD:     true,
+			},
+			vmdDetectRet: mockAddrList(1, 2),
+			expScriptCalls: []scriptCall{
+				{
+					Env: []string{
+						fmt.Sprintf("PATH=%s", os.Getenv("PATH")),
+						fmt.Sprintf("%s=%s", pciAllowListEnv, mockAddrList(1, 2)),
+						fmt.Sprintf("%s=%s", pciBlockListEnv, mockAddrList(4, 3)),
+					},
+					Args: []string{"reset"},
+				},
+				{
+					Env: []string{
+						fmt.Sprintf("PATH=%s", os.Getenv("PATH")),
+						fmt.Sprintf("%s=%s", pciBlockListEnv, mockAddrList(4, 3)),
+					},
+					Args: []string{"reset"},
+				},
+			},
+		},
 		"prepare setup; defaults": {
 			req: storage.BdevPrepareRequest{
 				TargetUser: username,
@@ -1300,45 +1328,34 @@ func TestBackend_Prepare(t *testing.T) {
 			},
 			expHpCleanCall: defaultHpCleanCall,
 		},
-		//		"prepare setup; huge page clean only": {
-		//			req: storage.BdevPrepareRequest{
-		//				HugePageCount:      testNrHugepages,
-		//				CleanHugePagesOnly: true,
-		//				CleanHugePagesPID:  654321,
-		//				TargetUser:         username,
-		//				PCIAllowList:       mockAddrListStr(1,2,3),
-		//				PCIBlockList:       mockAddrListStr(4,3),
-		//			},
-		//			hpRemCount:     555,
-		//			expScriptCalls: &[]scriptCall{},
-		//			expResp: &storage.BdevPrepareResponse{
-		//				NrHugePagesRemoved: 555,
-		//			},
-		//			expHpCleanCall: strings.Join([]string{
-		//				hugePageDir, fmt.Sprintf("%s_pid%dmap", hugePagePrefix, 654321), usr.Uid,
-		//			}, ","),
-		//		},
-		//		"prepare setup; huge page clean fail": {
-		//			req: storage.BdevPrepareRequest{
-		//				HugePageCount: testNrHugePages,
-		//				TargetUser:    username,
-		//				PCIAllowList:  mockAddrListStr(1,2,3),
-		//				PCIBlockList:  mockAddrListStr(4,3),
-		//			},
-		//			hpCleanErr: errors.New("clean failed"),
-		//			expScriptCalls: &[]scriptCall{
-		//				{
-		//					Env: []string{
-		//						fmt.Sprintf("PATH=%s", os.Getenv("PATH")),
-		//						fmt.Sprintf("%s=%d", nrHugepagesEnv, testNrHugePages),
-		//						fmt.Sprintf("%s=%s", targetUserEnv, username),
-		//						fmt.Sprintf("%s=%s", pciAllowListEnv, mockAddrList(1,2,3)),
-		//						fmt.Sprintf("%s=%s", pciBlockListEnv, mockAddrList(4,3)),
-		//					},
-		//				},
-		//			},
-		//			expErr: errors.New("clean failed"),
-		//		},
+		"prepare setup; huge page clean only": {
+			req: storage.BdevPrepareRequest{
+				HugePageCount:      testNrHugepages,
+				CleanHugePagesOnly: true,
+				CleanHugePagesPID:  654321,
+				TargetUser:         username,
+				PCIAllowList:       mockAddrListStr(1, 2, 3),
+				PCIBlockList:       mockAddrListStr(4, 3),
+			},
+			hpRemCount: 555,
+			expResp: &storage.BdevPrepareResponse{
+				NrHugePagesRemoved: 555,
+			},
+			expHpCleanCall: strings.Join([]string{
+				hugePageDir, fmt.Sprintf("%s_pid%dmap", hugePagePrefix, 654321), usr.Uid,
+			}, ","),
+		},
+		"prepare setup; huge page clean fail": {
+			req: storage.BdevPrepareRequest{
+				HugePageCount: testNrHugepages,
+				TargetUser:    username,
+				PCIAllowList:  mockAddrListStr(1, 2, 3),
+				PCIBlockList:  mockAddrListStr(4, 3),
+			},
+			hpCleanErr:     errors.New("clean failed"),
+			expErr:         errors.New("clean failed"),
+			expHpCleanCall: defaultHpCleanCall,
+		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(name)
