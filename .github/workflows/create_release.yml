@@ -4,7 +4,7 @@ name: Create Release
 on:  # yamllint disable-line rule:truthy
   push:
     paths:
-      - 'TAG'
+      - TAG
     branches:
       - master
       - 'release/**'

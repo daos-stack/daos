@@ -26,7 +26,7 @@
 #include <daos_types.h>
 
 /* Default layout version */
-#define DS_POOL_MD_VERSION 6
+#define DS_POOL_MD_VERSION 7
 
 /* Lowest compatible layout version */
 #define DS_POOL_MD_VERSION_LOW 4
@@ -60,6 +60,10 @@ extern d_iov_t ds_pool_prop_ec_pda;		/* uint32_t */
 extern d_iov_t ds_pool_prop_rp_pda;		/* uint32_t */
 extern d_iov_t ds_pool_attr_user;		/* pool user attributes KVS */
 extern d_iov_t ds_pool_prop_policy;		/* tiering policy uint32_t */
+extern d_iov_t ds_pool_prop_global_version;	/* global pool status */
+extern d_iov_t ds_pool_prop_upgrade_status;	/* upgrade status */
+/* Target upgrade global version */
+extern d_iov_t ds_pool_prop_upgrade_global_version;
 
 /*
  * Pool handle KVS (RDB_KVS_GENERIC)
