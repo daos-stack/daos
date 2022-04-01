@@ -257,8 +257,8 @@ func updatePrepareRequest(log logging.Logger, req *storage.BdevPrepareRequest, v
 		return errors.Wrap(err, "vmd address filtering")
 	}
 
-	// No VMD domains left after filtering, log explanation and disable VMD in request.
 	if allowList.IsEmpty() {
+		// No VMD domains left after filtering, log explanation and disable VMD in request.
 		log.Debugf("vmd not prepared: %q domains all filtered out: allowed %q, blocked %q",
 			vmdPCIAddrs, req.PCIAllowList, req.PCIBlockList)
 		req.EnableVMD = false
