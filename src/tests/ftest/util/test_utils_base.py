@@ -175,12 +175,16 @@ class TestDaosApiBase(ObjectWithParameters):
                     if expect[:len(key)] == key:
                         compare = (key, val[0], val[1])
                         expect = expect[len(key):]
-                        try:
-                            expect = int(expect)
-                        except ValueError:
-                            # Allow strings to be strings
-                            pass
                         break
+            # Avoid failed comparisons due to object type
+            try:
+                actual = int(actual)
+            except ValueError:
+                pass
+            try:
+                expect = int(expect)
+            except ValueError:
+                pass
             self.log.info(
                 "Verifying the %s %s: %s %s %s",
                 self.__class__.__name__.replace("Test", "").lower(),
