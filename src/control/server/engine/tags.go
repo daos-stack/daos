@@ -23,6 +23,7 @@ const (
 	nonZero    = "nonzero"    // only set if non-zero value
 	invertBool = "invertBool" // invert the value before setting
 	intBool    = "intBool"    // convert the bool to an int
+	sliceCount = "count"      // use the length of a slice rather than its contents
 )
 
 type (
@@ -156,7 +157,12 @@ func parseCmdTags(in interface{}, tagFilter string, joiner joinFn, seenRefs refM
 					continue
 				}
 
-				strVal := getSliceStr(fVal)
+				var strVal string
+				if opts.hasOpt(sliceCount) {
+					strVal = fmt.Sprintf("%d", fVal.Len())
+				} else {
+					strVal = getSliceStr(fVal)
+				}
 
 				out = append(out, joiner(tag, strVal)...)
 			case reflect.Uintptr, reflect.Ptr:

@@ -569,7 +569,7 @@ func parsePCIBusRange(numRange string, bitSize int) (uint8, uint8, error) {
 }
 
 type Config struct {
-	Tiers            TierConfigs `yaml:"storage" cmdLongFlag:"--storage_tiers,nonzero" cmdShortFlag:"-T,nonzero"`
+	Tiers            TierConfigs `yaml:"storage" cmdLongFlag:"--storage_tiers,nonzero,count" cmdShortFlag:"-T,nonzero,count"`
 	ConfigOutputPath string      `yaml:"-" cmdLongFlag:"--nvme" cmdShortFlag:"-n"`
 	VosEnv           string      `yaml:"-" cmdEnv:"VOS_BDEV_CLASS"`
 	EnableHotplug    bool        `yaml:"-"`
