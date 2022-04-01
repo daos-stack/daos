@@ -25,4 +25,8 @@ distro_custom() {
     python3 -m pip install "avocado-framework-plugin-result-html<70.0"
     python3 -m pip install "avocado-framework-plugin-varianter-yaml-to-mux<70.0"
 
+    rpm -qa | grep libuc.0
+    dnf upgrade libucm0 libucp0 libucs0 libuct0 || true
+    rpm -qa | grep libuc.0
+
 }
