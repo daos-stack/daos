@@ -20,6 +20,7 @@ from ClusterShell.NodeSet import NodeSet
 from command_utils_base import \
     BasicParameter, CommandWithParameters, \
     EnvironmentVariables, LogParameter
+from daos.src.tests.ftest.util.command_utils_base import ObjectWithParameters
 from exception_utils import CommandFailure
 from general_utils import check_file_exists, get_log_file, \
     run_command, DaosTestError, get_job_manager_class, create_directory, \
@@ -984,10 +985,10 @@ class YamlCommand(SubProcessCommand):
         return self.get_config_value("socket_dir")
 
 
-class SubprocessManager():
+class SubprocessManager(ObjectWithParameters):
     """Defines an object that manages a sub process launched with orterun."""
 
-    def __init__(self, command, manager="Orterun"):
+    def __init__(self, command, manager="Orterun", namespace=None):
         """Create a SubprocessManager object.
 
         Args:
@@ -995,7 +996,9 @@ class SubprocessManager():
             manager (str, optional): the name of the JobManager class used to
                 manage the YamlCommand defined through the "job" attribute.
                 Defaults to "OpenMpi"
+            namespace (str): yaml namespace (path to parameters)
         """
+        super().__init__(namespace)
         self.log = getLogger(__name__)
 
         # Define the JobManager class used to manage the command as a subprocess
