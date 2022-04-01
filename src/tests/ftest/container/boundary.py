@@ -60,7 +60,7 @@ class BoundaryTest(TestWithServers):
             self.log.info("===(4.%d.%d)create_container_and_test, container closed.",
                 pool_num, cont_num)
         except (DaosTestError, TestFail) as err:
-            msg  = "#(4.{}.{}) container close fail, err: {}".format(pool_num, cont_num, err)
+            msg = "#(4.{}.{}) container close fail, err: {}".format(pool_num, cont_num, err)
             self.fail(msg)
 
     def create_containers(self, pool=None, pool_num=10, num_containers=100, with_io=False):
