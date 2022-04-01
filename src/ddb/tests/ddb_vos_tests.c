@@ -26,6 +26,7 @@ int fake_cont_handler(struct ddb_cont *cont, void *args)
 
 	return 0;
 }
+
 static int fake_obj_handler_call_count;
 static struct ddb_obj fake_obj_handler_objs[128];
 int fake_obj_handler(struct ddb_obj *obj, void *args)
@@ -36,6 +37,7 @@ int fake_obj_handler(struct ddb_obj *obj, void *args)
 
 	return 0;
 }
+
 static int fake_dkey_handler_call_count;
 static struct ddb_key fake_dkey_handler_dkeys[1024];
 int fake_dkey_handler(struct ddb_key *key, void *args)
@@ -46,6 +48,7 @@ int fake_dkey_handler(struct ddb_key *key, void *args)
 
 	return 0;
 }
+
 static int fake_akey_handler_call_count;
 static struct ddb_key fake_akey_handler_akeys[2048 * 10];
 int fake_akey_handler(struct ddb_key *key, void *args)

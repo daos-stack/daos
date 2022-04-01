@@ -62,10 +62,9 @@ int dv_get_cont_uuid(daos_handle_t poh, uint32_t idx, uuid_t uuid);
 int dv_get_object_oid(daos_handle_t coh, uint32_t idx, daos_unit_oid_t *uoid);
 int dv_get_dkey(daos_handle_t coh, daos_unit_oid_t uoid, uint32_t idx, daos_key_t *dkey);
 int dv_get_akey(daos_handle_t coh, daos_unit_oid_t uoid, daos_key_t *dkey, uint32_t idx,
-	    daos_key_t *akey);
+		daos_key_t *akey);
 int dv_get_recx(daos_handle_t coh, daos_unit_oid_t uoid, daos_key_t *dkey, daos_key_t *akey,
-	    uint32_t idx, daos_recx_t *recx);
-
+		uint32_t idx, daos_recx_t *recx);
 int dv_path_update_from_indexes(struct ddb_ctx *ctx, struct dv_tree_path_builder *vt_path);
 
 #endif /* DAOS_DDB_VOS_H */

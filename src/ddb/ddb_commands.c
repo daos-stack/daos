@@ -109,11 +109,11 @@ ls_obj_handler(struct ddb_obj *obj, void *args)
 
 	print_indent(ctx->ctx, ctx->has_cont);
 	ddb_printf(ctx->ctx, DF_IDX" class: %s, type: %s, groups: %d ("DF_OID")\n",
-	       DP_IDX(obj->ddbo_idx),
-	       obj_class_name,
-	       otype_str,
-	       nr_grps,
-	       DP_OID(obj->ddbo_oid));
+		   DP_IDX(obj->ddbo_idx),
+		   obj_class_name,
+		   otype_str,
+		   nr_grps,
+		   DP_OID(obj->ddbo_oid));
 
 	return 0;
 }

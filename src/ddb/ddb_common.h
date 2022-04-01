@@ -96,6 +96,7 @@ dv_has_dkey(struct dv_tree_path *vtp)
 {
 	return vtp->vtp_dkey.iov_len > 0;
 }
+
 static inline bool
 dv_has_akey(struct dv_tree_path *vtp)
 {
