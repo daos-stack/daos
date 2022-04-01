@@ -1078,6 +1078,8 @@ class SubprocessManager(ObjectWithParameters):
         Args:
             test (Test): avocado Test object
         """
+        super().get_params(test)
+
         # Get the parameters for the JobManager command parameters
         self.manager.get_params(test)
 
