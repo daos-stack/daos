@@ -1721,18 +1721,6 @@ ds_rebuild_regenerate_task(struct ds_pool *pool, daos_prop_t *prop)
 	return DER_SUCCESS;
 }
 
-/* Hang rebuild ULT on the current xstream */
-void
-rebuild_hang(void)
-{
-	int	rc;
-
-	D_DEBUG(DB_REBUILD, "Hang current rebuild process.\n");
-	rc = dss_parameters_set(DMG_KEY_REBUILD_THROTTLING, 0);
-	if (rc)
-		D_ERROR("Set parameter failed: "DF_RC"\n", DP_RC(rc));
-}
-
 static int
 rebuild_fini_one(void *arg)
 {
@@ -2252,6 +2240,7 @@ struct dss_module rebuild_module = {
 	.sm_name	= "rebuild",
 	.sm_mod_id	= DAOS_REBUILD_MODULE,
 	.sm_ver		= DAOS_REBUILD_VERSION,
+	.sm_proto_count	= 1,
 	.sm_init	= init,
 	.sm_fini	= fini,
 	.sm_cleanup	= rebuild_cleanup,

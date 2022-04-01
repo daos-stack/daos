@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2021 Intel Corporation.
+ * (C) Copyright 2016-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -128,6 +128,10 @@
 	X(POOL_RANKS_GET,						\
 		0, &CQF_pool_ranks_get,					\
 		ds_pool_ranks_get_handler,				\
+		NULL),							\
+	X(POOL_UPGRADE,							\
+		0, &CQF_pool_upgrade,					\
+		ds_pool_upgrade_handler,				\
 		NULL)
 
 /* Define for RPC enum population below */
@@ -419,6 +423,14 @@ CRT_RPC_DECLARE(pool_list_cont, DAOS_ISEQ_POOL_LIST_CONT,
 
 CRT_RPC_DECLARE(pool_ranks_get, DAOS_ISEQ_POOL_RANKS_GET,
 		DAOS_OSEQ_POOL_RANKS_GET)
+
+#define DAOS_ISEQ_POOL_UPGRADE	/* input fields */		 \
+	((struct pool_op_in)	(poi_op)		CRT_VAR)
+
+#define DAOS_OSEQ_POOL_UPGRADE	/* output fields */		 \
+	((struct pool_op_out)	(poo_op)		CRT_VAR)
+
+CRT_RPC_DECLARE(pool_upgrade, DAOS_ISEQ_POOL_UPGRADE, DAOS_OSEQ_POOL_UPGRADE)
 
 #define DAOS_ISEQ_POOL_TGT_QUERY_MAP	/* input fields */	 \
 	((struct pool_op_in)	(tmi_op)		CRT_VAR) \

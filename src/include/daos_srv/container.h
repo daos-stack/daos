@@ -38,6 +38,7 @@ int ds_cont_svc_set_prop(uuid_t pool_uuid, uuid_t cont_uuid,
 
 int ds_cont_list(uuid_t pool_uuid, struct daos_pool_cont_info **conts,
 		 uint64_t *ncont);
+int ds_cont_upgrade(uuid_t pool_uuid, struct cont_svc *svc);
 
 int ds_cont_tgt_close(uuid_t hdl_uuid);
 int ds_cont_tgt_open(uuid_t pool_uuid, uuid_t cont_hdl_uuid,
@@ -128,24 +129,31 @@ struct ds_cont_child {
 	uint32_t		 sc_rw_disabled:1;
 };
 
-typedef uint64_t (*agg_param_get_eph_t)(struct ds_cont_child *cont);
 struct agg_param {
 	void			*ap_data;
 	struct ds_cont_child	*ap_cont;
 	daos_epoch_t		ap_full_scan_hlc;
-	struct sched_request	*ap_req;
-	agg_param_get_eph_t	ap_max_eph_get;
-	agg_param_get_eph_t	ap_start_eph_get;
-	uint32_t		ap_vos_agg:1;
+	bool			ap_vos_agg;
 };
 
 typedef int (*cont_aggregate_cb_t)(struct ds_cont_child *cont,
 				   daos_epoch_range_t *epr, uint32_t flags,
-				   struct agg_param *param, uint64_t *msecs);
+				   struct agg_param *param);
 void
 cont_aggregate_interval(struct ds_cont_child *cont, cont_aggregate_cb_t cb,
 			struct agg_param *param);
-bool agg_rate_ctl(void *arg);
+
+/*
+ * Yield function regularly called by EC and VOS aggregation ULTs.
+ *
+ * \param[in] arg	Aggregation parameter
+ *
+ * \retval		-1:	Inform aggregation to abort current round;
+ *			 0:	Inform aggregation to run in tight mode; (less yield)
+ *			 1:	Inform aggregation to run in slack mode; (yield more often)
+ */
+int agg_rate_ctl(void *arg);
+
 /*
  * Per-thread container handle (memory) object
  *
