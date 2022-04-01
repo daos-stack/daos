@@ -1838,23 +1838,6 @@ vos_reserve_scm(struct vos_container *cont, struct vos_rsrvd_scm *rsrvd_scm,
 		umoff = umem_alloc(vos_cont2umm(cont), size);
 	}
 
-	if (UMOFF_IS_NULL(umoff)) {
-		daos_size_t scm_used, scm_active;
-		int rc;
-
-		rc = pmemobj_ctl_get(vos_cont2pool(cont)->vp_umm.umm_pool,
-				     "stats.heap.run_allocated", &scm_used);
-		if (rc)
-			goto out;
-		rc = pmemobj_ctl_get(vos_cont2pool(cont)->vp_umm.umm_pool,
-				     "stats.heap.run_active", &scm_active);
-		if (rc)
-			goto out;
-		D_ERROR("Reserve "DF_U64" from SCM failed, run_allocated: "
-			""DF_U64", run_active: "DF_U64"\n",
-			size, scm_used, scm_active);
-	}
-out:
 	return umoff;
 }
 
@@ -1893,7 +1876,8 @@ static int
 reserve_space(struct vos_io_context *ioc, uint16_t media, daos_size_t size,
 	      uint64_t *off)
 {
-	int	rc;
+	uint64_t	now;
+	int		rc;
 
 	if (media == DAOS_MEDIA_SCM) {
 		umem_off_t	umoff;
@@ -1905,16 +1889,35 @@ reserve_space(struct vos_io_context *ioc, uint16_t media, daos_size_t size,
 			*off = umoff;
 			return 0;
 		}
-		D_ERROR("Reserve "DF_U64" from SCM failed.\n", size);
+
+		now = daos_gettime_coarse();
+		if (now - ioc->ic_cont->vc_io_nospc_ts > VOS_NOSPC_ERROR_INTVL) {
+			daos_size_t	scm_used = 0, scm_active = 0;
+
+			rc = pmemobj_ctl_get(vos_cont2pool(ioc->ic_cont)->vp_umm.umm_pool,
+					     "stats.heap.run_allocated", &scm_used);
+
+			rc = pmemobj_ctl_get(vos_cont2pool(ioc->ic_cont)->vp_umm.umm_pool,
+					     "stats.heap.run_active", &scm_active);
+
+			D_ERROR("Reserve "DF_U64" from SCM failed, run_allocated: "
+				""DF_U64", run_active: "DF_U64"\n", size, scm_used, scm_active);
+			ioc->ic_cont->vc_io_nospc_ts = now;
+		}
 		return -DER_NOSPACE;
 	}
 
 	D_ASSERT(media == DAOS_MEDIA_NVME);
-	rc = vos_reserve_blocks(ioc->ic_cont, &ioc->ic_blk_exts, size,
-				VOS_IOS_GENERIC, off);
-	if (rc)
-		D_ERROR("Reserve "DF_U64" from NVMe failed. "DF_RC"\n",
-			size, DP_RC(rc));
+	rc = vos_reserve_blocks(ioc->ic_cont, &ioc->ic_blk_exts, size, VOS_IOS_GENERIC, off);
+	if (rc == -DER_NOSPACE) {
+		now = daos_gettime_coarse();
+		if (now - ioc->ic_cont->vc_io_nospc_ts > VOS_NOSPC_ERROR_INTVL) {
+			D_ERROR("Reserve "DF_U64" from NVMe failed. "DF_RC"\n", size, DP_RC(rc));
+			ioc->ic_cont->vc_io_nospc_ts = now;
+		}
+	} else if (rc) {
+		D_ERROR("Reserve "DF_U64" from NVMe failed. "DF_RC"\n", size, DP_RC(rc));
+	}
 	return rc;
 }
 

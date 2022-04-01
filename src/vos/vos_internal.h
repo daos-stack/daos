@@ -128,6 +128,9 @@ enum {
 	AGG_CREDS_MERGE_SLACK	= 2,
 };
 
+/* Throttle ENOSPACE error message */
+#define VOS_NOSPC_ERROR_INTVL	60	/* seconds */
+
 extern unsigned int vos_agg_nvme_thresh;
 
 static inline uint32_t vos_byte2blkcnt(uint64_t bytes)
@@ -272,6 +275,8 @@ struct vos_container {
 	daos_epoch_range_t	vc_epr_discard;
 	/* Last timestamp when VOS aggregation reporting ENOSPACE */
 	uint64_t		vc_agg_nospc_ts;
+	/* Last timestamp when IO reporting ENOSPACE */
+	uint64_t		vc_io_nospc_ts;
 	/* Various flags */
 	unsigned int		vc_in_aggregation:1,
 				vc_in_discard:1,
