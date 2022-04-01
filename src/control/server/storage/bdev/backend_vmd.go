@@ -250,7 +250,7 @@ func updatePrepareRequest(log logging.Logger, req *storage.BdevPrepareRequest, v
 		req.EnableVMD = false
 		return nil
 	}
-	log.Debugf("volume management devices found: %q", vmdPCIAddrs)
+	log.Debugf("volume management devices found: %v", vmdPCIAddrs)
 
 	allowList, blockList, err := vmdFilterAddresses(req, vmdPCIAddrs)
 	if err != nil {
@@ -259,11 +259,11 @@ func updatePrepareRequest(log logging.Logger, req *storage.BdevPrepareRequest, v
 
 	if allowList.IsEmpty() {
 		// No VMD domains left after filtering, log explanation and disable VMD in request.
-		log.Debugf("vmd not prepared: %q domains all filtered out: allowed %q, blocked %q",
+		log.Debugf("vmd not prepared: %v domains all filtered out: allowed %v, blocked %v",
 			vmdPCIAddrs, req.PCIAllowList, req.PCIBlockList)
 		req.EnableVMD = false
 	} else {
-		log.Debugf("volume management devices selected: %q", allowList)
+		log.Debugf("volume management devices selected: %v", allowList)
 		req.PCIAllowList = allowList.String()
 		// Retain block list in request to cater for the case where NVMe SSDs are being
 		// protected against unbinding so they can continue to be used via kernel driver.

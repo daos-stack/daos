@@ -74,7 +74,7 @@ func run(log logging.Logger, env []string, cmdStr string, args ...string) (strin
 			stdout:  string(out),
 		}
 	}
-	log.Debugf("run script %q, env: %v, out:\n%q\n", cmdPath, env, out)
+	log.Debugf("run script %q, env: %v, out:\n%s\n", cmdPath, env, out)
 
 	return string(out), nil
 }
