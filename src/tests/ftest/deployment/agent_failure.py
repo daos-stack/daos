@@ -91,7 +91,7 @@ class AgentFailure(IorTestBase):
         verifies that DAOS can recover from the fault with minimal human intervention.
 
         :avocado: tags=all,full_regression
-        :avocado: tags=hw,small
+        :avocado: tags=hw,large
         :avocado: tags=deployment
         :avocado: tags=agent_failure
         """
