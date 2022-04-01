@@ -230,8 +230,7 @@ ulimit -n 4096
 launch_args="-jcrisa"
 # processing cores is broken on EL7 currently
 id="$(lsb_release -si)"
-if { [ "$id" = "CentOS" ]                 &&
-     [[ $(lsb_release -s -r) != 7.* ]]; } ||
+if { [ "$id" = "CentOS" ]                 ||
    [ "$id" = "AlmaLinux" ]                ||
    [ "$id" = "Rocky" ]                    ||
    [ "$id" = "RedHatEnterpriseServer" ]   ||
