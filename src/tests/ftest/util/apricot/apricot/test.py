@@ -32,7 +32,7 @@ from logger_utils import TestLogger
 from pydaos.raw import DaosContext, DaosLog, DaosApiError
 from server_utils import DaosServerManager
 from test_utils_container import TestContainer
-from test_utils_pool import LabelGenerator, add_pool
+from test_utils_pool import LabelGenerator, add_pool, POOL_NAMESPACE
 from write_host_file import write_host_file
 from job_manager_utils import get_job_manager
 
@@ -1587,16 +1587,16 @@ class TestWithServers(TestWithoutServers):
 
         This sequence is common for a lot of the container tests.
         """
-        self.add_pool(None, True, True, 0)
+        self.add_pool(POOL_NAMESPACE, True, True, 0)
 
-    def get_pool(self, namespace=None, create=True, connect=True, index=0, **params):
+    def get_pool(self, namespace=POOL_NAMESPACE, create=True, connect=True, index=0, **params):
         """Get a test pool object.
 
         This method defines the common test pool creation sequence.
 
         Args:
             namespace (str, optional): namespace for TestPool parameters in the
-                test yaml file. Defaults to None.
+                test yaml file. Defaults to POOL_NAMESPACE.
             create (bool, optional): should the pool be created. Defaults to
                 True.
             connect (bool, optional): should the pool be connected. Defaults to
@@ -1609,14 +1609,14 @@ class TestWithServers(TestWithoutServers):
         """
         return add_pool(self, namespace, create, connect, index, **params)
 
-    def add_pool(self, namespace=None, create=True, connect=True, index=0, **params):
+    def add_pool(self, namespace=POOL_NAMESPACE, create=True, connect=True, index=0, **params):
         """Add a pool to the test case.
 
         This method defines the common test pool creation sequence.
 
         Args:
             namespace (str, optional): namespace for TestPool parameters in the
-                test yaml file. Defaults to None.
+                test yaml file. Defaults to POOL_NAMESPACE.
             create (bool, optional): should the pool be created. Defaults to
                 True.
             connect (bool, optional): should the pool be connected. Defaults to
@@ -1625,7 +1625,7 @@ class TestWithServers(TestWithoutServers):
         """
         self.pool = self.get_pool(namespace, create, connect, index, **params)
 
-    def add_pool_qty(self, quantity, namespace=None, create=True, connect=True,
+    def add_pool_qty(self, quantity, namespace=POOL_NAMESPACE, create=True, connect=True,
                      index=0):
         """Add multiple pools to the test case.
 
@@ -1635,7 +1635,7 @@ class TestWithServers(TestWithoutServers):
         Args:
             quantity (int): number of pools to create
             namespace (str, optional): namespace for TestPool parameters in the
-                test yaml file. Defaults to None.
+                test yaml file. Defaults to POOL_NAMESPACE.
             create (bool, optional): should the pool be created. Defaults to
                 True.
             connect (bool, optional): should the pool be connected. Defaults to
