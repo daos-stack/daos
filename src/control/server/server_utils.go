@@ -194,6 +194,8 @@ func getEngineNUMANodes(log logging.Logger, engineCfgs []*engine.Config) []strin
 }
 
 func prepBdevStorage(srv *server, iommuEnabled bool) error {
+	defer srv.logDuration(track("time to prepare bdev storage"))
+
 	hasBdevs := cfgHasBdevs(srv.cfg)
 
 	if hasBdevs {
@@ -267,6 +269,8 @@ func prepBdevStorage(srv *server, iommuEnabled bool) error {
 
 // scanBdevStorage performs discovery and validates existence of configured NVMe SSDs.
 func scanBdevStorage(srv *server) (*storage.BdevScanResponse, error) {
+	defer srv.logDuration(track("time to scan bdev storage"))
+
 	if srv.cfg.NrHugepages < 0 {
 		srv.log.Debugf("skip nvme scan as hugepages have been disabled in config")
 		return &storage.BdevScanResponse{}, nil
