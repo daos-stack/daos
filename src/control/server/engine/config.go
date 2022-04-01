@@ -26,7 +26,7 @@ const (
 	defaultNumSecondaryEndpoints = 1
 
 	// MultiProviderSeparator delineates between providers in a multi-provider config.
-	MultiProviderSeparator = " "
+	MultiProviderSeparator = ","
 )
 
 // FabricConfig encapsulates networking fabric configuration.
