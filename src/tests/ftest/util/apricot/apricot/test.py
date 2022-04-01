@@ -385,7 +385,7 @@ class Test(avocadoTest):
         while self._cleanup_methods:
             try:
                 cleanup = self._cleanup_methods.pop()
-                errors.append(cleanup["method"](**cleanup["kwargs"]))
+                errors.extend(cleanup["method"](**cleanup["kwargs"]))
             except Exception as error:      # pylint: disable=broad-except
                 kwargs_str = ", ".join(
                     ["=".join([str(key), str(value)]) for key, value in cleanup["kwargs"].items()])
