@@ -127,8 +127,8 @@ class DaosServerManager(SubprocessManager):
         self.detect_start_via_dmg = False
 
         # Parameters to set storage prepare and format timeout
-        self.storage_prepare_timeout = BasicParameter(40)
-        self.storage_format_timeout = BasicParameter(40)
+        self.storage_prepare_timeout = BasicParameter(None, 40)
+        self.storage_format_timeout = BasicParameter(None, 40)
 
     def get_params(self, test):
         """Get values for all of the command params from the yaml file.
@@ -299,7 +299,7 @@ class DaosServerManager(SubprocessManager):
             cmd.sub_command_class.sub_command_class.nvme_only.value = True
 
         self.log.info("Preparing DAOS server storage: %s", str(cmd))
-        results = run_pcmd(self._hosts, str(cmd), timeout=self.storage_prepare_timeout)
+        results = run_pcmd(self._hosts, str(cmd), timeout=self.storage_prepare_timeout.value)
 
         # gratuitously lifted from pcmd() and get_current_state()
         result = {}
@@ -518,7 +518,7 @@ class DaosServerManager(SubprocessManager):
         self.log.info("<SERVER> Formatting hosts: <%s>", self.dmg.hostlist)
         # Temporarily increasing timeout to avoid CI errors until DAOS-5764 can
         # be further investigated.
-        self.dmg.storage_format(timeout=self.storage_format_timeout)
+        self.dmg.storage_format(timeout=self.storage_format_timeout.value)
 
         # Wait for all the engines to start
         self.detect_engine_start()
