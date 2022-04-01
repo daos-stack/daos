@@ -203,6 +203,14 @@ func (sb *spdkBackend) reset(req storage.BdevPrepareRequest, vmdDetect vmdDetect
 		return errors.Wrapf(err, "update prepare request")
 	}
 
+	if req.EnableVMD {
+		// First run with VMD addresses in allow list and then without to reset backing SSDs.
+		if err := sb.script.Reset(&req); err != nil {
+			return errors.Wrap(err, "unbinding vmd endpoints from userspace drivers")
+		}
+		req.PCIAllowList = ""
+	}
+
 	return errors.Wrap(sb.script.Reset(&req), "unbinding ssds from userspace drivers")
 }
 
