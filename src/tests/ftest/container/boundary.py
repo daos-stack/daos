@@ -34,11 +34,10 @@ class BoundaryTest(TestWithServers):
         try:
             container = self.get_container(pool)
         except (DaosTestError, TestFail) as err:
-            self.fail("#(3.{0}.{1}) container create failed. err={2}".format(
-                pool_num, cont_num, err))
+            self.fail("#(3.%d.%d) container create failed. err=%s", pool_num, cont_num, err)
 
-        self.log.info("===(3.{0}.{1})create_container_and_test, container {2} created..".format(
-            pool_num, cont_num, container))
+        self.log.info("===(3.%d.%d)create_container_and_test, container %s created..",
+            pool_num, cont_num, container)
         if with_io:
             io_run_time = self.params.get("run_time", '/run/container/execute_io/*')
             rank = self.params.get("rank", '/run/container/execute_io/*')
@@ -46,22 +45,20 @@ class BoundaryTest(TestWithServers):
             try:
                 data_bytes = container.execute_io(io_run_time, rank, obj_classs)
                 self.log.info(
-                    "===(3.{0}.{1})Wrote {2} bytes to container {3}".format(pool_num, cont_num,
-                    data_bytes, container))
+                    "===(3.%d.%d)Wrote %d bytes to container %s", pool_num, cont_num,
+                    data_bytes, container)
             except (DaosTestError, TestFail) as err:
-                self.fail("#(3.{0}.{1}) container IO failed, err: {2}".format(
-                    pool_num, cont_num, err))
+                self.fail("#(3.%d.%d) container IO failed, err: %s", pool_num, cont_num, err)
         time.sleep(2)  #to syncup containers before close
 
         try:
-            self.log.info("===(4.{0}.{1})create_container_and_test, container closing.".format(
-                pool_num, cont_num))
+            self.log.info("===(4.%d.%d)create_container_and_test, container closing.",
+                pool_num, cont_num)
             container.close()
-            self.log.info("===(4.{0}.{1})create_container_and_test, container closed.".format(
-                pool_num, cont_num))
+            self.log.info("===(4.%d.%d)create_container_and_test, container closed.",
+                pool_num, cont_num)
         except (DaosTestError, TestFail) as err:
-            self.fail("#(4.{0}.{1}) container close fail, err: {2}".format(
-                pool_num, cont_num, err))
+            self.fail("#(4.%d.%d) container close fail, err: %s", pool_num, cont_num, err)
 
     def create_containers(self, pool=None, pool_num=10, num_containers=100, with_io=False):
         """To create number of containers parallelly on pool.
@@ -72,19 +69,19 @@ class BoundaryTest(TestWithServers):
             with_io (bool): enable container test with execute_io.
         """
 
-        self.log.info("==(2.{0})create_containers start.".format(pool_num))
+        self.log.info("==(2.%d)create_containers start.", pool_num)
         thread_manager = ThreadManager(self.create_container_and_test, self.timeout - 30)
 
         for cont_num in range(num_containers):
             thread_manager.add(
                 pool=pool, pool_num=pool_num, cont_num=cont_num, with_io=with_io)
-        self.log.info("==(2.{0}) {1} containers created.".format(pool_num, num_containers))
+        self.log.info("==(2.%d) %d containers created.", pool_num, num_containers)
 
         # Launch the create_container_and_test threads
         self.log.info("==Launching %d create_container_and_test threads", thread_manager.qty)
         failed_thread_count = thread_manager.check_run()
         if failed_thread_count > 0:
-            msg = "#(2.{0}) FAILED create_container_and_test Threads".format(failed_thread_count)
+            msg = "#(2.{}) FAILED create_container_and_test Threads".format(failed_thread_count)
             self.d_log.error(msg)
             self.fail(msg)
 
@@ -103,13 +100,13 @@ class BoundaryTest(TestWithServers):
             pool = self.get_pool()
             thread_manager.add(
                 pool=pool, pool_num=pool_number, num_containers=num_containers, with_io=with_io)
-            self.log.info("=(1.{0}) pool created, {1}.".format(pool_number, pool))
+            self.log.info("=(1.%d) pool created, %d.", pool_number, pool)
 
         # Launch the create_containers threads
         self.log.info("=Launching %d create_containers threads", thread_manager.qty)
         failed_thread_count = thread_manager.check_run()
         if failed_thread_count > 0:
-            msg = "#(1.{0}) FAILED create_containers Threads".format(failed_thread_count)
+            msg = "#(1.{}) FAILED create_containers Threads".format(failed_thread_count)
             self.d_log.error(msg)
             self.fail(msg)
 
