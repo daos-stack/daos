@@ -605,35 +605,35 @@ func TestConfig_FabricValidation(t *testing.T) {
 		},
 		"nr secondary ctxs less than 1": {
 			cfg: FabricConfig{
-				Provider:              "foo bar",
-				Interface:             "baz net",
-				InterfacePort:         "42 128",
+				Provider:              multiProviderString("foo", "bar"),
+				Interface:             multiProviderString("baz", "net"),
+				InterfacePort:         multiProviderString("42", "128"),
 				NumSecondaryEndpoints: []int{0},
 			},
 			expErr: errors.New("must be > 0"),
 		},
 		"nr secondary ctxs okay": {
 			cfg: FabricConfig{
-				Provider:              "foo bar baz",
-				Interface:             "net0 net1 net2",
-				InterfacePort:         "42 128 256",
+				Provider:              multiProviderString("foo", "bar", "baz"),
+				Interface:             multiProviderString("net0", "net1", "net2"),
+				InterfacePort:         multiProviderString("42", "128", "256"),
 				NumSecondaryEndpoints: []int{1, 2},
 			},
 		},
 		"too many nr secondary ctxs": {
 			cfg: FabricConfig{
-				Provider:              "foo bar baz",
-				Interface:             "net0 net1 net2",
-				InterfacePort:         "42 128 256",
+				Provider:              multiProviderString("foo", "bar", "baz"),
+				Interface:             multiProviderString("net0", "net1", "net2"),
+				InterfacePort:         multiProviderString("42", "128", "256"),
 				NumSecondaryEndpoints: []int{1, 2, 3},
 			},
 			expErr: errors.New("must have one value for each"),
 		},
 		"too few nr secondary ctxs": {
 			cfg: FabricConfig{
-				Provider:              "foo bar baz",
-				Interface:             "net0 net1 net2",
-				InterfacePort:         "42 128 256",
+				Provider:              multiProviderString("foo", "bar", "baz"),
+				Interface:             multiProviderString("net0", "net1", "net2"),
+				InterfacePort:         multiProviderString("42", "128", "256"),
 				NumSecondaryEndpoints: []int{1},
 			},
 			expErr: errors.New("must have one value for each"),
@@ -904,7 +904,7 @@ func TestFabricConfig_GetNumProviders(t *testing.T) {
 		},
 		"multi": {
 			cfg: &FabricConfig{
-				Provider: "p1 p2 p3 p4",
+				Provider: multiProviderString("p1", "p2", "p3", "p4"),
 			},
 			expNum: 4,
 		},
@@ -1131,10 +1131,10 @@ func TestFabricConfig_Update(t *testing.T) {
 		"default secondary ctx": {
 			fc: &FabricConfig{},
 			other: FabricConfig{
-				Provider: "one two three",
+				Provider: multiProviderString("one", "two", "three"),
 			},
 			expResult: &FabricConfig{
-				Provider:              "one two three",
+				Provider:              multiProviderString("one", "two", "three"),
 				NumSecondaryEndpoints: []int{1, 1},
 			},
 		},
