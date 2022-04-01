@@ -14,10 +14,9 @@ import random
 
 from avocado import fail_on
 
-from command_utils_base import CommonConfig
+from command_utils_base import CommonConfig, BasicParameter
 from exception_utils import CommandFailure
 from command_utils import SubprocessManager
-from command_utils_base import BasicParameter
 from general_utils import pcmd, get_log_file, human_to_bytes, bytes_to_human, \
     convert_list, get_default_config_file, distribute_files, DaosTestError, \
     stop_processes, get_display_size, run_pcmd

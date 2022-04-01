@@ -18,9 +18,7 @@ from avocado.utils import process
 from ClusterShell.NodeSet import NodeSet
 
 from command_utils_base import \
-    BasicParameter, CommandWithParameters, \
-    EnvironmentVariables, LogParameter
-from daos.src.tests.ftest.util.command_utils_base import ObjectWithParameters
+    BasicParameter, CommandWithParameters, EnvironmentVariables, LogParameter, ObjectWithParameters
 from exception_utils import CommandFailure
 from general_utils import check_file_exists, get_log_file, \
     run_command, DaosTestError, get_job_manager_class, create_directory, \
