@@ -12,6 +12,7 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
@@ -526,6 +527,10 @@ func TestConfig_Validation(t *testing.T) {
 	}
 }
 
+func multiProviderString(comp ...string) string {
+	return strings.Join(comp, MultiProviderSeparator)
+}
+
 func TestConfig_FabricValidation(t *testing.T) {
 	for name, tc := range map[string]struct {
 		cfg    FabricConfig
@@ -569,31 +574,31 @@ func TestConfig_FabricValidation(t *testing.T) {
 		},
 		"multi provider/interface/port ok": {
 			cfg: FabricConfig{
-				Provider:      "foo bar",
-				Interface:     "baz net",
-				InterfacePort: "42 128",
+				Provider:      multiProviderString("foo", "bar"),
+				Interface:     multiProviderString("baz", "net"),
+				InterfacePort: multiProviderString("42", "128"),
 			},
 		},
 		"mismatched num providers": {
 			cfg: FabricConfig{
 				Provider:      "foo",
-				Interface:     "bar baz",
-				InterfacePort: "42 128",
+				Interface:     multiProviderString("baz", "net"),
+				InterfacePort: multiProviderString("42", "128"),
 			},
 			expErr: errors.New("same number"),
 		},
 		"mismatched num interfaces": {
 			cfg: FabricConfig{
-				Provider:      "foo bar",
+				Provider:      multiProviderString("foo", "bar"),
 				Interface:     "baz",
-				InterfacePort: "42 128",
+				InterfacePort: multiProviderString("42", "128"),
 			},
 			expErr: errors.New("same number"),
 		},
 		"mismatched num ports": {
 			cfg: FabricConfig{
-				Provider:      "foo bar",
-				Interface:     "baz net",
+				Provider:      multiProviderString("foo", "bar"),
+				Interface:     multiProviderString("baz", "net"),
 				InterfacePort: "42",
 			},
 			expErr: errors.New("same number"),
@@ -825,13 +830,13 @@ func TestFabricConfig_GetProviders(t *testing.T) {
 		},
 		"multi": {
 			cfg: &FabricConfig{
-				Provider: "p1 p2 p3",
+				Provider: multiProviderString("p1", "p2", "p3"),
 			},
 			expProviders: []string{"p1", "p2", "p3"},
 		},
 		"excessive whitespace": {
 			cfg: &FabricConfig{
-				Provider: "  p1   p2  p3",
+				Provider: multiProviderString(" ", " p1 ", "  p2 ", "p3"),
 			},
 			expProviders: []string{"p1", "p2", "p3"},
 		},
@@ -868,7 +873,7 @@ func TestFabricConfig_GetPrimaryProvider(t *testing.T) {
 		},
 		"multi": {
 			cfg: &FabricConfig{
-				Provider: "p1 p2 p3",
+				Provider: multiProviderString("p1", "p2", "p3"),
 			},
 			expProvider: "p1",
 		},
@@ -903,13 +908,13 @@ func TestFabricConfig_GetInterfaces(t *testing.T) {
 		},
 		"multi": {
 			cfg: &FabricConfig{
-				Interface: "net1 net2 net3",
+				Interface: multiProviderString("net1", "net2", "net3"),
 			},
 			expInterfaces: []string{"net1", "net2", "net3"},
 		},
 		"excessive whitespace": {
 			cfg: &FabricConfig{
-				Interface: " net1   net2    net3 ",
+				Interface: multiProviderString(" net1  ", "", "    net2", "net3", ""),
 			},
 			expInterfaces: []string{"net1", "net2", "net3"},
 		},
@@ -946,7 +951,7 @@ func TestFabricConfig_GetPrimaryInterface(t *testing.T) {
 		},
 		"multi": {
 			cfg: &FabricConfig{
-				Interface: "net0 net1 net3",
+				Interface: multiProviderString("net0", "net1", "net2", "net3"),
 			},
 			expInterface: "net0",
 		},
@@ -981,19 +986,19 @@ func TestFabricConfig_GetInterfacePorts(t *testing.T) {
 		},
 		"multi": {
 			cfg: &FabricConfig{
-				InterfacePort: "1234 5678 9012",
+				InterfacePort: multiProviderString("1234", "5678", "9012"),
 			},
 			expPorts: []int{1234, 5678, 9012},
 		},
 		"excessive whitespace": {
 			cfg: &FabricConfig{
-				InterfacePort: " 1234    5678    9012 ",
+				InterfacePort: multiProviderString("1234   ", "  5678  ", "", " 9012"),
 			},
 			expPorts: []int{1234, 5678, 9012},
 		},
 		"non-integer port": {
 			cfg: &FabricConfig{
-				InterfacePort: "1234 a123",
+				InterfacePort: multiProviderString("1234", "a123"),
 			},
 			expErr: errors.New("strconv.Atoi"),
 		},

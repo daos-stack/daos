@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"net"
 	"os/user"
+	"strings"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
@@ -779,9 +780,9 @@ func TestServer_getNetDevClass(t *testing.T) {
 		},
 		"multi interface": {
 			configA: configA().
-				WithFabricInterface("eth0 ib0"),
+				WithFabricInterface(strings.Join([]string{"eth0", "ib0"}, engine.MultiProviderSeparator)),
 			configB: configB().
-				WithFabricInterface("eth1 ib1"),
+				WithFabricInterface(strings.Join([]string{"eth1", "ib1"}, engine.MultiProviderSeparator)),
 			expNetDevCls: []hardware.NetDevClass{hardware.Ether, hardware.Infiniband},
 		},
 		"mismatching net dev class with primary server as ib0 / Infiniband": {
