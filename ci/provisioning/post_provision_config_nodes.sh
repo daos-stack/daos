@@ -107,6 +107,10 @@ rm -f  /etc/yum/vars/releasever
 # and catted to the remote node along with this script
 post_provision_config_nodes
 
+rpm -qa | grep libuc.0 || true
+dnf upgrade libucm0 libucp0 libucs0 libuct0 || true
+rpm -qa | grep libuc.0 || true
+
 systemctl enable nfs-server.service
 systemctl start nfs-server.service
 sync
