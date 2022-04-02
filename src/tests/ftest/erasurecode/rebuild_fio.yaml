@@ -80,9 +80,9 @@ fio:
     iodepth: 10
     size: 133MB
     read_write: !mux
-      write_read:
-        rw: 'write'
-        rw_read: 'read'
+#      write_read:
+#        rw: 'write'
+#        rw_read: 'read'
       randrw:
         rw: 'randrw'
         rw_read: 'randrw'
