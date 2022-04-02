@@ -128,6 +128,7 @@ class BoundaryTest(TestWithServers):
             4. Close container.
         :avocado: tags=all,full_regression
         :avocado: tags=container, pool
+        :avocado: tags=hw,medium,ib2
         :avocado: tags=boundary_test
         """
 
