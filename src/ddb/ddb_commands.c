@@ -88,11 +88,13 @@ get_object_type(enum daos_otype_t type, char *type_str)
 static int
 ls_obj_handler(struct ddb_obj *obj, void *args)
 {
-	struct ls_ctx	*ctx = args;
-	char		 obj_class_name[32];
-	daos_oclass_id_t oclass;
-	char		 otype_str[32] = {0};
-	enum daos_otype_t otype;
+	struct ls_ctx		*ctx = args;
+	char		 	 obj_class_name[32];
+	daos_oclass_id_t 	 oclass;
+	char		 	 otype_str[32] = {0};
+	enum daos_otype_t	 otype;
+	daos_obj_id_t	 	 oid;
+	uint32_t		 nr_grps;
 
 	ctx->has_obj = true;
 
@@ -100,20 +102,19 @@ ls_obj_handler(struct ddb_obj *obj, void *args)
 	otype = daos_obj_id2type(obj->ddbo_oid);
 	daos_oclass_id2name(oclass, obj_class_name);
 
-	daos_obj_id_t oid = obj->ddbo_oid;
-	uint32_t nr_grps;
+	oid = obj->ddbo_oid;
 
 	nr_grps = (oid.hi & OID_FMT_META_MASK) >> OID_FMT_META_SHIFT;
 
 	get_object_type(otype, otype_str);
 
 	print_indent(ctx->ctx, ctx->has_cont);
-	ddb_printf(ctx->ctx, DF_IDX" class: %s, type: %s, groups: %d ("DF_OID")\n",
+	ddb_printf(ctx->ctx, DF_IDX" '"DF_OID"' (class: %s, type: %s, groups: %d) \n",
 		   DP_IDX(obj->ddbo_idx),
+		   DP_OID(obj->ddbo_oid),
 		   obj_class_name,
 		   otype_str,
-		   nr_grps,
-		   DP_OID(obj->ddbo_oid));
+		   nr_grps);
 
 	return 0;
 }
@@ -123,11 +124,11 @@ print_key(struct ddb_ctx *ctx, struct ddb_key *key)
 {
 	uint32_t	 str_len = min(100, key->ddbk_key.iov_len);
 
-	ddb_printf(ctx, DF_IDX" (%lu) %*.s\n",
+	ddb_printf(ctx, DF_IDX" '%.*s' (%lu)\n",
 		   DP_IDX(key->ddbk_idx),
-		   key->ddbk_key.iov_len,
 		   str_len,
-		   (char *)key->ddbk_key.iov_buf);
+		   (char *)key->ddbk_key.iov_buf,
+		   key->ddbk_key.iov_len);
 }
 
 static int
