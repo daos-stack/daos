@@ -3,7 +3,7 @@
 %define agent_svc_name daos_agent.service
 %define sysctl_script_name 10-daos_server.conf
 
-%global mercury_version 2.1.0~rc4-6%{?dist}
+%global mercury_version 2.1.0~rc4-7%{?dist}
 %global libfabric_version 1.14.0-1
 %global __python %{__python3}
 
@@ -539,6 +539,9 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 # No files in a shim package
 
 %changelog
+* Sat Apr  2 03:56:35 UTC 2022 Joseph Moore <joseph.moore@intel.com> 2.1.100-25
+- Update to mercury 2.0.1.rc4-7 to include UCX provider patch
+
 * Fri Mar 11 2022 Alexander Oganezov <alexander.a.oganezov@intel.com> 2.1.100-24
 - Update to mercury 2.0.1.rc4-6 to include CXI provider patch
 
