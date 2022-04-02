@@ -9,12 +9,30 @@ timeout: 10M
 
 server_config:
   name: daos_server
+  engines_per_host: 2
   servers:
-    log_mask: INFO
-    bdev_class: nvme
-    bdev_list: ["0000:00:00.0","0000:00:00.1"]
-    scm_class: dcpm
-    scm_list: ["/dev/pmem0"]
+    0:
+      pinned_numa_node: 0
+      nr_xs_helpers: 1
+      fabric_iface: ib0
+      fabric_iface_port: 31317
+      log_file: daos_server0.log
+      bdev_class: nvme
+      bdev_list: ["0000:00:00.0"]
+      scm_class: dcpm
+      scm_list: ["/dev/pmem0"]
+      scm_mount: /mnt/daos0
+    1:
+      pinned_numa_node: 1
+      nr_xs_helpers: 1
+      fabric_iface: ib1
+      fabric_iface_port: 31417
+      log_file: daos_server1.log
+      bdev_class: nvme
+      bdev_list: ["0000:00:00.1"]
+      scm_class: dcpm
+      scm_list: ["/dev/pmem1"]
+      scm_mount: /mnt/daos1
 
 pool_size_ratio:
   size: 50%
@@ -34,7 +52,7 @@ container_with_rf:
 
 ior:
   client_processes:
-    np: 1
+    np: 4
   iorflags:
     flags: "-k -D 10 -v -w -W"
     api: DFS
