@@ -27,16 +27,12 @@ struct pipeline_auxi_args {
 	uint32_t		map_ver_req;         // FOR IO RETRY
 	daos_obj_id_t		omd_id;              // I AM SETTING BUT NOT REALLY USING THIS YET
 	tse_task_t		*api_task;           // FOR IO RETRY
-	pthread_rwlock_t	*cb_rwlock;
-	bool			*cb_first;
-	uint32_t		*total_aggr_shards;
 	d_list_t		shard_task_head;
 };
 
 struct shard_pipeline_run_args {
 	uint32_t			pra_map_ver;// I AM SETTING BUT NOT REALLY USING THIS YET
 	uint32_t			pra_shard;
-	uint32_t			pra_shards;
 	uint32_t			pra_target;
 
 	daos_pipeline_run_t		*pra_api_args;
@@ -55,19 +51,13 @@ struct pipeline_run_cb_args {
 	daos_pipeline_run_t	*api_args;
 	uint32_t		nr_iods;
 	uint32_t		nr_kds;
-	uint32_t		shard_nr_kds;
-	bool			*first;
-	pthread_rwlock_t	*rwlock;
-	uint32_t		*total_aggr_shards;
 };
 
 struct pipeline_comp_cb_args {
-	bool				*shard_cb_first;
-	pthread_rwlock_t		*rwlock;
 	daos_pipeline_run_t		*api_args;
 	struct daos_oclass_attr		*oca;
 	uint32_t			total_shards;
-	uint32_t			*total_aggr_shards;
+	uint32_t			total_replicas;
 };
 
 int dc_pipeline_check(daos_pipeline_t *pipeline)
@@ -77,32 +67,25 @@ int dc_pipeline_check(daos_pipeline_t *pipeline)
 
 static void
 anchor_check_eof(daos_anchor_t *anchor, struct daos_oclass_attr *oca,
-		 uint32_t total_shards)
+		 uint32_t total_shards, uint32_t total_replicas)
 {
-	int i;
+	uint32_t shard;
 
-	if (anchor->da_sub_anchors == 0)
+	if (!daos_anchor_is_eof(anchor) /** anchor is not EOF */
+	    || daos_anchor_get_flags(anchor) & DIOF_TO_SPEC_SHARD) /** user used
+								     * split
+								     * anchors
+								     */
 	{
 		return;
 	}
 
-	for (i = 0; i < total_shards; i++)
+	shard  = dc_obj_anchor2shard(anchor);
+	if (shard + total_replicas < total_shards) /** there are shards left */
 	{
-		daos_anchor_t *sub_anchor =
-			&((daos_anchor_t *) anchor->da_sub_anchors)[i];
-		if (!daos_anchor_is_eof(sub_anchor))
-		{
-			break;
-		}
-	}
-
-	if (i == total_shards) /** all sub_anchors are eof */
-	{
-		void *ptr = (void *) anchor->da_sub_anchors;
-
-		daos_anchor_set_eof(anchor);
-		D_FREE(ptr);
-		anchor->da_sub_anchors = 0;
+		shard += total_replicas;
+		daos_anchor_set_zero(anchor);
+		dc_obj_shard2anchor(anchor, shard);
 	}
 }
 
@@ -119,21 +102,8 @@ pipeline_comp_cb(tse_task_t *task, void *data)
 		D_DEBUG(DB_IO, "pipeline_comp_db task=%p result=%d\n",
 			task, task->dt_result);
 	}
-
-	anchor_check_eof(api_args->anchor, cb_args->oca, cb_args->total_shards);
-
-	if (*cb_args->total_aggr_shards > 0)
-	{
-		pipeline_aggregations_fixavgs(
-					   &api_args->pipeline,
-					   (double) *cb_args->total_aggr_shards,
-					   api_args->sgl_agg);
-	}
-
-	D_RWLOCK_DESTROY(cb_args->rwlock);
-	D_FREE(cb_args->rwlock);
-	D_FREE(cb_args->shard_cb_first);
-	D_FREE(cb_args->total_aggr_shards);
+	anchor_check_eof(api_args->anchor, cb_args->oca, cb_args->total_shards,
+			 cb_args->total_replicas);
 
 	return 0;
 }
@@ -143,30 +113,24 @@ pipeline_shard_run_cb(tse_task_t *task, void *data)
 {
 	struct pipeline_run_cb_args	*cb_args;
 	daos_pipeline_run_t		*api_args;
-	struct pipeline_run_in		*pri;
 	struct pipeline_run_out		*pro;
 	int				opc;
 	int				ret = task->dt_result;
 	int				rc = 0;
 	crt_rpc_t			*rpc;
 	uint32_t			nr_iods;
-	uint32_t			shard_nr_kds;
-	uint32_t			shard_nr_recx;
+	uint32_t			nr_kds;
+	uint32_t			nr_recx;
 	uint32_t			nr_agg;
 	uint32_t			i;
 	daos_key_desc_t			*kds_ptr;
 	d_sg_list_t			*sgl_keys_ptr;
 	d_sg_list_t			*sgl_recx_ptr;
-	uint32_t			out_nr_recx;
-	daos_anchor_t			*sub_anchors;
-
 
 	cb_args		= (struct pipeline_run_cb_args *) data;
 	api_args	= cb_args->api_args;
 	rpc		= cb_args->rpc;
-	pri		= crt_req_get(rpc);
-	D_ASSERT(pri != NULL);
-	opc = opc_get(rpc->cr_opc);
+	opc		= opc_get(rpc->cr_opc);
 
 	if (ret != 0)
 	{
@@ -178,12 +142,12 @@ pipeline_shard_run_cb(tse_task_t *task, void *data)
 	rc		= pro->pro_ret; // get status
 
 	nr_iods 	= cb_args->nr_iods;
-	shard_nr_kds	= cb_args->shard_nr_kds;
-	shard_nr_recx	= nr_iods*shard_nr_kds;
+	nr_kds		= cb_args->nr_kds;
+	nr_recx		= nr_iods * nr_kds;
 	nr_agg		= api_args->pipeline.num_aggr_filters;
 
-	D_ASSERT(pro->pro_kds.ca_count <= shard_nr_kds);
-	D_ASSERT(pro->pro_sgl_recx.ca_count <= shard_nr_recx);
+	D_ASSERT(pro->pro_kds.ca_count <= nr_kds);
+	D_ASSERT(pro->pro_sgl_recx.ca_count <= nr_recx);
 	D_ASSERT(pro->pro_sgl_agg.ca_count == nr_agg);
 
 	if (rc != 0)
@@ -204,117 +168,81 @@ pipeline_shard_run_cb(tse_task_t *task, void *data)
 		D_GOTO(out, rc);
 	}
 
-	D_RWLOCK_WRLOCK(cb_args->rwlock);
-
-	if (*cb_args->first == true)
-	{
-		*api_args->nr_kds = 0;
-	}
-
 	if (pro->pro_kds.ca_count > 0)
 	{
-		if (nr_agg == 0)
-		{
-			kds_ptr		= &api_args->kds[*api_args->nr_kds];
-			sgl_keys_ptr	= &api_args->sgl_keys[*api_args->nr_kds];
-		}
-		else
-		{
-			kds_ptr		= api_args->kds;
-			sgl_keys_ptr	= api_args->sgl_keys; /** only one record */
-		}
+		kds_ptr		= api_args->kds;
+		sgl_keys_ptr	= api_args->sgl_keys;
 
 		memcpy((void *) kds_ptr, (void *) pro->pro_kds.ca_arrays,
 		       sizeof(*kds_ptr) * (pro->pro_kds.ca_count));
 
-		rc = daos_sgls_copy_data_out(sgl_keys_ptr,
-					     shard_nr_kds,
+		rc = daos_sgls_copy_data_out(sgl_keys_ptr, nr_kds,
 					     pro->pro_sgl_keys.ca_arrays,
 					     pro->pro_kds.ca_count);
 		if (rc != 0)
 		{
-			D_GOTO(unlock, rc);
+			D_GOTO(out, rc);
 		}
 	}
 
 	if (pro->pro_sgl_recx.ca_count > 0)
 	{
-		if (nr_agg == 0)
-		{
-			out_nr_recx	= (*api_args->nr_kds) * nr_iods;
-			sgl_recx_ptr	= &api_args->sgl_recx[out_nr_recx];
-		}
-		else
-		{
-			sgl_recx_ptr	= api_args->sgl_recx; /** only one record */
-		}
+		sgl_recx_ptr	= api_args->sgl_recx;
 
-		rc = daos_sgls_copy_data_out(sgl_recx_ptr,
-					     shard_nr_recx,
+		rc = daos_sgls_copy_data_out(sgl_recx_ptr, nr_recx,
 					     pro->pro_sgl_recx.ca_arrays,
 					     pro->pro_sgl_recx.ca_count);
 		if (rc != 0)
 		{
-			D_GOTO(unlock, rc);
+			D_GOTO(out, rc);
 		}
 	}
 
 	for (i = 0; i < nr_agg; i++)
 	{
-		daos_filter_t *aggr_filter = api_args->pipeline.aggr_filters[i];
-		daos_filter_part_t *part   = aggr_filter->parts[0];
-		double *src, *dst;
-		size_t length_part_type;
+		double			*src, *dst;
+		char			*part_type;
+		size_t			length_part_type;
 
 		dst = (double *) api_args->sgl_agg[i].sg_iovs->iov_buf;
 		src = (double *) pro->pro_sgl_agg.ca_arrays[i].sg_iovs->iov_buf;
 
-		if (*cb_args->first == true)
+		if (daos_anchor_is_zero(api_args->anchor) &&
+			cb_args->shard == 0)
 		{
+			/** This is the first time ever that this callback
+			 *  is executed for this particular pipeline run */
+
 			*dst = *src;
 			continue;
 		}
 
-		// TODO: right now, all functions' names are same length.
-		//       change this in the future if the length changes
-		length_part_type = 20;
+		part_type = (char *) api_args->pipeline.aggr_filters[i]->parts[0]->part_type.iov_buf;
 
-		if (!strncmp(part->part_type.iov_buf, "DAOS_FILTER_FUNC_SUM",
-			     length_part_type))
+		length_part_type = 20; /** we can do this because all function
+					 * names are the same length. */
+
+		if (!strncmp(part_type, "DAOS_FILTER_FUNC_SUM", length_part_type) ||
+		    !strncmp(part_type, "DAOS_FILTER_FUNC_AVG", length_part_type))
 		{
 			*dst += *src;
 		}
-		else if (!strncmp(part->part_type.iov_buf, "DAOS_FILTER_FUNC_MIN",
-				  length_part_type))
+		else if (!strncmp(part_type, "DAOS_FILTER_FUNC_MIN", length_part_type))
 		{
 			if (*src < *dst)
 			{
 				*dst = *src;
 			}
 		}
-		else if (!strncmp(part->part_type.iov_buf, "DAOS_FILTER_FUNC_MAX",
-				  length_part_type))
+		else if (!strncmp(part_type, "DAOS_FILTER_FUNC_MAX", length_part_type))
 		{
 			if (*src > *dst)
 			{
 				*dst = *src;
 			}
 		}
-		else if (!strncmp(part->part_type.iov_buf, "DAOS_FILTER_FUNC_AVG",
-				  length_part_type))
-		{
-			*dst += *src;
-		}
 	}
-	if (nr_agg == 0)
-	{
-		*api_args->nr_kds += pro->pro_kds.ca_count;
-	}
-	else if (pro->pro_kds.ca_count == 1)
-	{
-		*api_args->nr_kds = 1;
-		*cb_args->total_aggr_shards += 1;
-	}
+	*api_args->nr_kds = pro->pro_kds.ca_count;
 
 	/**
 	 * TODO: nr_iods and iods are left as they are for now. Once pipeline
@@ -326,12 +254,8 @@ pipeline_shard_run_cb(tse_task_t *task, void *data)
 	 *       api_args->iods =
 	 */
 
-	sub_anchors = (daos_anchor_t *) api_args->anchor->da_sub_anchors;
-	sub_anchors[cb_args->shard] = pro->pro_anchor;
+	*api_args->anchor = pro->pro_anchor;
 
-unlock:
-	*cb_args->first = false;
-	D_RWLOCK_UNLOCK(cb_args->rwlock);
 out:
 	crt_req_decref(rpc);
 	tse_task_list_del(task);
@@ -342,29 +266,6 @@ out:
 		ret = rc;
 	}
 	return ret;
-}
-
-static int
-shard_prepare_anchors(daos_pipeline_run_t *api_args, int nr)
-{
-
-	daos_anchor_t	*sub_anchors;
-	int		i;
-
-	D_ASSERT(api_args->anchor->da_sub_anchors == 0);
-	D_ALLOC_ARRAY(sub_anchors, nr);
-	if (sub_anchors == NULL)
-	{
-		return -DER_NOMEM;
-	}
-
-	for (i = 0; i < nr; i++)
-	{
-		sub_anchors[i] = *api_args->anchor;
-	}
-
-	api_args->anchor->da_sub_anchors = (uint64_t) sub_anchors;
-	return 0;
 }
 
 static int
@@ -383,10 +284,7 @@ shard_pipeline_run_task(tse_task_t *task)
 	struct pipeline_run_in		*pri;
 	uint32_t			nr_kds;
 	uint32_t			nr_iods;
-	uint32_t			shard_nr_kds;
 	int				rc;
-	daos_anchor_t			*da_sub_anchors;
-
 
 	args = tse_task_buf_embedded(task, sizeof(*args));
 	crt_ctx	= daos_task2ctx(task);
@@ -418,27 +316,10 @@ shard_pipeline_run_task(tse_task_t *task)
 		D_GOTO(out, rc);
 	}
 
-	/** -- calculating nr_iods, nr_kds for this shard */
-
-	D_ASSERT(args->pra_shards > 0 && args->pra_shard >= 0);
-	D_ASSERT(args->pra_shard < args->pra_shards);
+	/** -- nr_iods, nr_kds for this shard */
 
 	nr_iods		= *(args->pra_api_args->nr_iods);
 	nr_kds		= *(args->pra_api_args->nr_kds);
-
-	shard_nr_kds	= nr_kds / args->pra_shards;
-	if (shard_nr_kds * args->pra_shards < nr_kds)
-	{
-		shard_nr_kds++;
-		if (args->pra_shard == args->pra_shards - 1)
-		{
-			shard_nr_kds = nr_kds % shard_nr_kds;
-		}
-	}
-	if (shard_nr_kds == 0 && nr_kds > 0)
-	{
-		shard_nr_kds = 1;
-	}
 
 	/** -- register call back function for this particular shard task */
 
@@ -449,10 +330,6 @@ shard_pipeline_run_task(tse_task_t *task)
 	cb_args.api_args          = args->pra_api_args;
 	cb_args.nr_iods           = nr_iods;
 	cb_args.nr_kds            = nr_kds;
-	cb_args.shard_nr_kds      = shard_nr_kds;
-	cb_args.rwlock            = args->pipeline_auxi->cb_rwlock;
-	cb_args.first             = args->pipeline_auxi->cb_first;
-	cb_args.total_aggr_shards = args->pipeline_auxi->total_aggr_shards;
 
 	rc = tse_task_register_comp_cb(task, pipeline_shard_run_cb, &cb_args,
 				       sizeof(cb_args));
@@ -487,11 +364,9 @@ shard_pipeline_run_task(tse_task_t *task)
 	}
 	pri->pri_iods.nr	= nr_iods;
 	pri->pri_iods.iods	= args->pra_api_args->iods;
-	pri->pri_nr_kds		= shard_nr_kds;
-	da_sub_anchors		= (daos_anchor_t *)
-				     args->pra_api_args->anchor->da_sub_anchors;
-	pri->pri_anchor		= da_sub_anchors[args->pra_shard];
+	pri->pri_anchor		= *args->pra_api_args->anchor;
 	pri->pri_flags		= args->pra_api_args->flags;
+	pri->pri_nr_kds		= nr_kds;
 	uuid_copy(pri->pri_pool_uuid, pool->dp_pool);
 	uuid_copy(pri->pri_co_hdl, args->pra_coh_uuid);
 	uuid_copy(pri->pri_co_uuid, args->pra_cont_uuid);
@@ -529,7 +404,7 @@ shard_pipeline_task_abort(tse_task_t *task, void *arg)
 static int
 queue_shard_pipeline_run_task(tse_task_t *api_task, struct pl_obj_layout *layout,
 			      struct pipeline_auxi_args *pipeline_auxi,
-			      int shard, int shards, unsigned int map_ver,
+			      int shard, unsigned int map_ver,
 			      daos_unit_oid_t oid, uuid_t coh_uuid,
 			      uuid_t cont_uuid)
 {
@@ -552,7 +427,6 @@ queue_shard_pipeline_run_task(tse_task_t *api_task, struct pl_obj_layout *layout
 	args->pra_api_args	= api_args;
 	args->pra_map_ver	= map_ver;
 	args->pra_shard		= shard;
-	args->pra_shards	= shards;
 	args->pra_oid		= oid;
 	args->pipeline_auxi	= pipeline_auxi;
 	args->pra_target	= layout->ol_shards[shard].po_target;
@@ -575,7 +449,7 @@ out_task:
 }
 
 struct shard_task_sched_args {
-	bool			tsa_scheded;
+	bool tsa_scheded;
 };
 
 static int
@@ -634,8 +508,7 @@ out:
 
 static void
 pipeline_create_auxi(tse_task_t *api_task, uint32_t map_ver,
-		     struct daos_obj_md *obj_md, pthread_rwlock_t *cb_rwlock,
-		     bool *shard_cb_first, uint32_t *total_aggr_shards,
+		     struct daos_obj_md *obj_md,
 		     struct pipeline_auxi_args **pipeline_auxi)
 {
 	struct pipeline_auxi_args	*p_auxi;
@@ -646,63 +519,10 @@ pipeline_create_auxi(tse_task_t *api_task, uint32_t map_ver,
 	p_auxi->map_ver_req		= map_ver;
 	p_auxi->omd_id			= obj_md->omd_id;
 	p_auxi->api_task		= api_task;
-	p_auxi->cb_rwlock		= cb_rwlock;
-	p_auxi->cb_first		= shard_cb_first;
-	p_auxi->total_aggr_shards	= total_aggr_shards;
 	head = &p_auxi->shard_task_head;
 	D_INIT_LIST_HEAD(head);
 
 	*pipeline_auxi = p_auxi;
-}
-
-/** this function follows implementation in obj_replica_leader_select() */
-static int
-pipeline_select_leader(struct daos_oclass_attr *oca, uint32_t grp_size,
-		       unsigned int grp_idx, struct pl_obj_layout *layout,
-		       daos_obj_id_t omd_id)
-{
-	int			pos;
-	struct pl_obj_shard	*shard;
-	int			start;
-	int			replica_idx;
-	int			i;
-
-	D_ASSERT(oca != NULL);
-	if (grp_size == 1)
-	{
-		pos	= grp_idx * grp_size;
-		shard	= pl_obj_get_shard(layout, pos);
-		if (shard->po_target == -1)
-		{
-			return -DER_IO;
-		}
-		return pos;
-	}
-
-	start = grp_idx * grp_size;
-	replica_idx = (omd_id.lo + grp_idx) % grp_size;
-	for (i = 0, pos = -1; i < grp_size;
-	     i++, replica_idx = (replica_idx + 1) % grp_size)
-	{
-		int off		= start + replica_idx;
-		shard		= pl_obj_get_shard(layout, off);
-
-		if (shard->po_target == -1 || shard->po_shard == -1 ||
-		    shard->po_rebuilding)
-		{
-			continue;
-		}
-		if (pos == -1 ||
-		    pl_obj_get_shard(layout, pos)->po_fseq > shard->po_fseq)
-		{
-			pos = off;
-		}
-	}
-	if (pos != -1)
-	{
-		return pos;
-	}
-	return -DER_IO;
 }
 
 int
@@ -716,7 +536,6 @@ dc_pipeline_run(tse_task_t *api_task)
 	struct dc_pool			*pool;
 	struct daos_oclass_attr		*oca;
 	int				rc;
-	uint32_t			i;
 	d_list_t			*shard_task_head = NULL;
 	daos_unit_oid_t			oid;
 	uint32_t			map_ver = 0;
@@ -726,6 +545,8 @@ dc_pipeline_run(tse_task_t *api_task)
 	uint32_t			nr_grps;
 	struct shard_task_sched_args	sched_arg;
 	int				total_shards;
+	int				total_replicas;
+	int				shard;
 	struct pipeline_comp_cb_args	comp_cb_args;
 
 
@@ -759,7 +580,7 @@ dc_pipeline_run(tse_task_t *api_task)
 		D_GOTO(out, rc);
 	}
 
-	/** object class and number of replicas */
+	/** object class */
 
 	oca = daos_oclass_attr_find(obj_md.omd_id, &nr_grps);
 	if (oca == NULL)
@@ -767,17 +588,16 @@ dc_pipeline_run(tse_task_t *api_task)
 		D_DEBUG(DB_PL, "Failed to find oclass attr\n");
 		D_GOTO(out, rc = -DER_INVAL);
 	}
+	if (daos_oclass_is_ec(oca))
+	{
+		D_DEBUG(DB_PL, "EC objects not supported for pipelines\n");
+		D_GOTO(out, rc = -DER_INVAL);
+	}
 
-	if (!daos_oclass_is_ec(oca) ||
-			likely(!DAOS_FAIL_CHECK(DAOS_OBJ_SKIP_PARITY)))
-	{
-		total_shards = layout->ol_grp_nr; /* one replica per group */
-	}
-	else
-	{
-		/* groups x data_cells_in_each_group */
-		total_shards = layout->ol_grp_nr * oca->u.ec.e_k;
-	}
+	/** Not supporting EC objects yet, so #groups x #replicas = #shards */
+
+	total_replicas	= layout->ol_grp_size;
+	total_shards	= layout->ol_grp_nr * total_replicas;
 
 	/** Pipelines are read only for now, no transactions needed.
 	  * Ignoring api_args->th for now... */
@@ -787,32 +607,14 @@ dc_pipeline_run(tse_task_t *api_task)
 		map_ver = layout->ol_ver;
 	}
 
-	D_ALLOC(comp_cb_args.rwlock, sizeof(*comp_cb_args.rwlock));
-	D_ALLOC(comp_cb_args.shard_cb_first,
-		sizeof(*comp_cb_args.shard_cb_first));
-	D_ALLOC(comp_cb_args.total_aggr_shards,
-		sizeof(*comp_cb_args.total_aggr_shards));
-	if (comp_cb_args.rwlock == NULL || comp_cb_args.shard_cb_first == NULL
-		|| comp_cb_args.total_aggr_shards == NULL)
-	{
-		D_GOTO(out, rc = -DER_NOMEM);
-	}
-	rc = D_RWLOCK_INIT(comp_cb_args.rwlock, NULL);
-	if (rc != 0)
-	{
-		D_GOTO(out, rc);
-	}
-	*comp_cb_args.shard_cb_first	= true;
+	/** -- Register completion call back function for full operation */
+
 	comp_cb_args.api_args		= api_args;
 	comp_cb_args.oca		= oca;
 	comp_cb_args.total_shards	= total_shards;
-	*comp_cb_args.total_aggr_shards = 0;
+	comp_cb_args.total_replicas	= total_replicas;
 
-	pipeline_create_auxi(api_task, map_ver, &obj_md, comp_cb_args.rwlock,
-			     comp_cb_args.shard_cb_first,
-			     comp_cb_args.total_aggr_shards, &pipeline_auxi);
-
-	/** -- Register completion call back function for full operation */
+	pipeline_create_auxi(api_task, map_ver, &obj_md, &pipeline_auxi);
 
 	rc = tse_task_register_comp_cb(api_task, pipeline_comp_cb,
 				       &comp_cb_args,
@@ -824,93 +626,30 @@ dc_pipeline_run(tse_task_t *api_task)
 		D_GOTO(out, rc);
 	}
 
-	/** -- Allocate sub anchors if needed */
+	/** current shard */
 
+	shard = dc_obj_anchor2shard(api_args->anchor);
 
-	if (api_args->anchor->da_sub_anchors == 0)
-	{
-		rc = shard_prepare_anchors(api_args, total_shards);
-		if (rc != 0)
-		{
-			D_ERROR("task %p failed to allocate sub_anchors "DF_RC"\n",
-								api_task, DP_RC(rc));
-			tse_task_stack_pop(api_task, sizeof(struct pipeline_auxi_args));
-			D_GOTO(out, rc);
-		}
-	}
+	/** object id */
 
-	/** -- Iterate over shards */
+	oid.id_pub	= obj_md.omd_id;
+	oid.id_shard	= shard;
+	oid.id_pad_32	= 0;
+
+	/** queue shard task */
 
 	shard_task_head = &pipeline_auxi->shard_task_head;
 	D_ASSERT(d_list_empty(shard_task_head));
 
-	for (i = 0; i < layout->ol_grp_nr; i++)
+	rc = queue_shard_pipeline_run_task(api_task, layout, pipeline_auxi,
+					   shard, map_ver, oid, coh_uuid,
+					   cont_uuid);
+	if (rc)
 	{
-		int start_shard;
-		int j;
-
-		/** Try leader for current group */
-		start_shard	= i * layout->ol_grp_size;
-
-		if (!daos_oclass_is_ec(oca) ||
-				likely(!DAOS_FAIL_CHECK(DAOS_OBJ_SKIP_PARITY)))
-		{
-			int leader;
-
-			/*leader	= pl_select_leader(obj_md.omd_id, i,
-						   layout->ol_grp_size, NIL_BITMAP,
-						   NULL, NULL, pl_obj_get_shard,
-						   layout);*/
-			leader = pipeline_select_leader(oca, layout->ol_grp_size,
-							i, layout, obj_md.omd_id);
-			if (leader >= 0)
-			{
-				oid.id_pub	= obj_md.omd_id;
-				oid.id_shard	= leader;
-				oid.id_pad_32	= 0;
-
-				rc = queue_shard_pipeline_run_task(
-								api_task, layout,
-								pipeline_auxi,
-								leader,
-								total_shards,
-								map_ver, oid,
-								coh_uuid, cont_uuid
-								);
-				if (rc)
-				{
-					D_GOTO(out, rc);
-				}
-				continue;
-			}
-			if (!daos_oclass_is_ec(oca))
-			{
-				/* There has to be a leader for non-EC object */
-				D_ERROR(DF_OID" no valid shard, rc " DF_RC"\n",
-					DP_OID(obj_md.omd_id), DP_RC(leader));
-				D_GOTO(out, rc = leader);
-			}
-		}
-
-		/** Then try non-leader shards */
-		D_DEBUG(DB_IO, DF_OID" try non-leader shards for group %d.\n",
-			DP_OID(obj_md.omd_id), i);
-		for (j = start_shard; j < start_shard + oca->u.ec.e_k; j++) {
-			oid.id_pub	= obj_md.omd_id;
-			oid.id_shard	= j;
-			oid.id_pad_32	= 0;
-			rc = queue_shard_pipeline_run_task(api_task, layout, pipeline_auxi,
-							   j, total_shards,
-							   map_ver, oid, coh_uuid,
-							   cont_uuid);
-			if (rc)
-			{
-				D_GOTO(out, rc);
-			}
-		}
+		D_GOTO(out, rc);
 	}
 
-	/* -- schedule all the queued shard tasks */
+	/* -- schedule queued shard task */
 
 	D_ASSERT(!d_list_empty(shard_task_head));
 	sched_arg.tsa_scheded	= false;
@@ -919,8 +658,8 @@ dc_pipeline_run(tse_task_t *api_task)
 	{
 		tse_task_complete(api_task, 0);
 	}
-	pl_obj_layout_free(layout);
 
+	pl_obj_layout_free(layout);
 	return rc;
 out:
 	if (shard_task_head != NULL && !d_list_empty(shard_task_head))
