@@ -90,6 +90,10 @@ func (cmd *storagePrepareCmd) prepScm(scanErrors *errs, prep scmPrepFn) error {
 		return err
 	}
 
+	if cmd.NrNamespacesPerSocket == 0 {
+		return errors.New("(-S|--scm-ns-per-socket) should be set to at least 1")
+	}
+
 	op := "Prepare"
 	if cmd.Reset {
 		op = "Reset"
@@ -103,8 +107,8 @@ func (cmd *storagePrepareCmd) prepScm(scanErrors *errs, prep scmPrepFn) error {
 
 	// Prepare SCM modules to be presented as pmem device files.
 	resp, err := prep(storage.ScmPrepareRequest{
-		Reset:               cmd.Reset,
-		NrNamespacesPerNUMA: cmd.NrNamespacesPerNUMA,
+		Reset:                 cmd.Reset,
+		NrNamespacesPerSocket: cmd.NrNamespacesPerSocket,
 	})
 	if err != nil {
 		return scanErrors.add(err)

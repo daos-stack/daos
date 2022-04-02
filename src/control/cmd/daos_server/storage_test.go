@@ -34,9 +34,11 @@ func TestDaosServer_StoragePrepare_SCM(t *testing.T) {
 
 	for name, tc := range map[string]struct {
 		noForce    bool
+		zeroNrNs   bool
 		reset      bool
 		prepResp   *storage.ScmPrepareResponse
 		prepErr    error
+		expErr     error
 		expScanErr error
 		expLogMsg  string
 	}{
@@ -75,6 +77,10 @@ func TestDaosServer_StoragePrepare_SCM(t *testing.T) {
 				State: storage.ScmStateNotInterleaved,
 			},
 			expScanErr: errors.New("unexpected state"),
+		},
+		"invalid number of namespaces per socket": {
+			zeroNrNs: true,
+			expErr:   errors.New("at least 1"),
 		},
 		"create namespaces; no state change": {
 			prepResp: &storage.ScmPrepareResponse{
@@ -142,12 +148,19 @@ func TestDaosServer_StoragePrepare_SCM(t *testing.T) {
 			log, buf := logging.NewTestLogger(name)
 			defer common.ShowBufferOnFailure(t, buf)
 
+			spc := commands.StoragePrepareCmd{
+				ScmOnly: true,
+				Force:   !tc.noForce,
+				Reset:   tc.reset,
+			}
+			nrNs := uint(1)
+			if tc.zeroNrNs {
+				nrNs = 0
+			}
+			spc.NrNamespacesPerSocket = nrNs
+
 			cmd := &storagePrepareCmd{
-				StoragePrepareCmd: commands.StoragePrepareCmd{
-					ScmOnly: true,
-					Force:   !tc.noForce,
-					Reset:   tc.reset,
-				},
+				StoragePrepareCmd: spc,
 				logCmd: logCmd{
 					log: log,
 				},
@@ -157,8 +170,10 @@ func TestDaosServer_StoragePrepare_SCM(t *testing.T) {
 				return tc.prepResp, tc.prepErr
 			}
 
-			if err := cmd.prepScm(&scanErrors, mockScmPrep); err != nil {
-				t.Fatal(err)
+			err := cmd.prepScm(&scanErrors, mockScmPrep)
+			common.CmpErr(t, tc.expErr, err)
+			if tc.expErr != nil {
+				return
 			}
 
 			var se error
@@ -298,6 +313,8 @@ func TestDaosServer_StoragePrepare_NVMe(t *testing.T) {
 
 			mbb := bdev.NewMockBackend(tc.bmbc)
 			mbp := bdev.NewProvider(log, mbb)
+
+			tc.prepCmd.NrNamespacesPerSocket = 1 // default applied by goflags
 
 			cmd := &storagePrepareCmd{
 				StoragePrepareCmd: tc.prepCmd,
