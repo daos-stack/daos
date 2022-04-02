@@ -36,12 +36,18 @@ struct ddb_array {
 	uint32_t	ddba_idx;
 };
 
+/* Open and close a pool for a ddb_ctx */
 int ddb_vos_pool_open(struct ddb_ctx *ctx, char *path);
 int ddb_vos_pool_close(struct ddb_ctx *ctx);
 
+/* Open and close a cont for a ddb_ctx */
 int dv_cont_open(struct ddb_ctx *ctx, uuid_t uuid);
 int dv_cont_close(struct ddb_ctx *ctx);
 
+/*
+ * Table of functions for handling parts of a vos tree. Is used with vos_iterate and well defined
+ * structures for each tree branch.
+ */
 struct vos_tree_handlers {
 	int (*ddb_cont_handler)(struct ddb_cont *cont, void *args);
 	int (*ddb_obj_handler)(struct ddb_obj *obj, void *args);
@@ -51,13 +57,24 @@ struct vos_tree_handlers {
 	int (*ddb_array_handler)(struct ddb_array *key, void *args);
 };
 
-int dv_iterate(daos_handle_t poh, uuid_t *cont_uuid, daos_unit_oid_t *oid, daos_key_t *dkey,
-	       daos_key_t *akey, _Bool recursive, struct vos_tree_handlers *handlers,
-	       void *handler_args);
+/*
+ * Traverse over a vos tree. The starting point is indicated by the path passed.
+ */
+/**
+ *
+ * @param poh		Open pool handle
+ * @param path		Starting point for traversing the tree
+ * @param recursive	Whether to traverse the tree from the starting path recursively, or
+ *			just the immediate children
+ * @param handlers	Function table providing the callbacks for handling the vos tree parts
+ * @param handler_args	arguments to the handlers
+ * @return		0 if success, else error
+ */
+int dv_iterate(daos_handle_t poh, struct dv_tree_path *path, bool recursive,
+	       struct vos_tree_handlers *handlers, void *handler_args);
 
-int dv_iterate_path(daos_handle_t poh, struct dv_tree_path *path, bool recursive,
-		    struct vos_tree_handlers *handlers, void *handler_args);
 
+/* The following functions lookup a vos path part given a starting point and the index desired */
 int dv_get_cont_uuid(daos_handle_t poh, uint32_t idx, uuid_t uuid);
 int dv_get_object_oid(daos_handle_t coh, uint32_t idx, daos_unit_oid_t *uoid);
 int dv_get_dkey(daos_handle_t coh, daos_unit_oid_t uoid, uint32_t idx, daos_key_t *dkey);
@@ -65,6 +82,13 @@ int dv_get_akey(daos_handle_t coh, daos_unit_oid_t uoid, daos_key_t *dkey, uint3
 		daos_key_t *akey);
 int dv_get_recx(daos_handle_t coh, daos_unit_oid_t uoid, daos_key_t *dkey, daos_key_t *akey,
 		uint32_t idx, daos_recx_t *recx);
+
+/**
+ * Update the tree path within the builder with any indexes that the builder was set with.
+ * @param ctx		application context
+ * @param vt_path	The path builder structure.
+ * @return		0 if successful, else error.
+ */
 int dv_path_update_from_indexes(struct ddb_ctx *ctx, struct dv_tree_path_builder *vt_path);
 
 #endif /* DAOS_DDB_VOS_H */

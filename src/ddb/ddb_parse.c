@@ -102,7 +102,7 @@ is_idx(char *str, uint32_t *idx)
 }
 
 int
-ddb_parse_vos_tree_path(const char *path, struct dv_tree_path_builder *vt_path)
+ddb_vtp_init(const char *path, struct dv_tree_path_builder *vt_path)
 {
 	char		*path_copy;
 	char		*path_idx;
@@ -120,18 +120,23 @@ ddb_parse_vos_tree_path(const char *path, struct dv_tree_path_builder *vt_path)
 	if (path == NULL)
 		return 0;
 
-	path_len = strlen(path);
+	path_len = strlen(path) + 1; /* +1 for '\0' */
 	if (path_len == 0)
 		return 0;
 
-	D_ALLOC(path_copy, strlen(path));
-	path_idx = path_copy;
+	D_ALLOC(path_copy, path_len);
+	if(path_copy == NULL)
+		return -DER_NOMEM;
+
 	strcpy(path_copy, path);
+	path_idx = path_copy;
 
 	/* Look for container */
 	tok = strtok(path_idx, "/");
-	if (tok == NULL)
+	if (tok == NULL) {
+		D_FREE(path_copy);
 		return 0;
+	}
 
 	if (!is_idx(tok, &vt_path->vtp_cont_idx)) {
 		rc = uuid_parse(tok, vt_path->vtp_path.vtp_cont);
@@ -150,34 +155,34 @@ ddb_parse_vos_tree_path(const char *path, struct dv_tree_path_builder *vt_path)
 	/* look for dkey */
 	tok = strtok(NULL, "/");
 	if (tok != NULL && !is_idx(tok, &vt_path->vtp_dkey_idx)) {
-		vt_path->vtp_path.vtp_dkey.iov_buf = tok;
-		vt_path->vtp_path.vtp_dkey.iov_len = strlen(tok);
-		vt_path->vtp_path.vtp_dkey.iov_buf_len = strlen(tok);
+		D_ALLOC(vt_path->vtp_dkey_buf, strlen(tok));
+		if (vt_path->vtp_dkey_buf == NULL)
+			D_GOTO(error, rc = -DER_NOMEM);
+		memcpy(vt_path->vtp_dkey_buf, tok, strlen(tok));
+		d_iov_set(&vt_path->vtp_path.vtp_dkey, vt_path->vtp_dkey_buf, strlen(tok));
 	}
 
 	/* look for akey */
 	tok = strtok(NULL, "/");
 	if (tok != NULL && !is_idx(tok, &vt_path->vtp_akey_idx)) {
-		vt_path->vtp_path.vtp_akey.iov_buf = tok;
-		vt_path->vtp_path.vtp_akey.iov_len = strlen(tok);
-		vt_path->vtp_path.vtp_akey.iov_buf_len = strlen(tok);
+		D_ALLOC(vt_path->vtp_akey_buf, strlen(tok));
+		if (vt_path->vtp_akey_buf == NULL)
+			D_GOTO(error, rc = -DER_NOMEM);
+		memcpy(vt_path->vtp_akey_buf, tok, strlen(tok));
+		d_iov_set(&vt_path->vtp_path.vtp_akey, vt_path->vtp_akey_buf, strlen(tok));
 	}
 
-	/* look for akey */
+	/* look for recx */
 	tok = strtok(NULL, "/");
 	if (tok != NULL)
 		recx_str = tok;
 
 	/* parse oid */
 	if (oid_str != NULL && strlen(oid_str) > 0 && !is_idx(oid_str, &vt_path->vtp_oid_idx)) {
-
-
 		hi = strtok(oid_str, ".");
 		lo = strtok(NULL, ".");
-		if (hi == NULL || lo == NULL) {
-			D_FREE(path_copy);
-			return -DER_INVAL;
-		}
+		if (hi == NULL || lo == NULL)
+			D_GOTO(error, rc = -DER_INVAL);
 		vt_path->vtp_path.vtp_oid.id_pub.hi = atoll(hi);
 		vt_path->vtp_path.vtp_oid.id_pub.lo = atoll(lo);
 	}
@@ -206,5 +211,18 @@ ddb_parse_vos_tree_path(const char *path, struct dv_tree_path_builder *vt_path)
 	}
 
 	D_FREE(path_copy);
+	return 0;
+
+error:
+	D_FREE(path_copy);
+	D_FREE(vt_path->vtp_dkey_buf);
+	D_FREE(vt_path->vtp_akey_buf);
 	return rc;
+}
+
+void
+ddb_vtp_fini(struct dv_tree_path_builder *vt_path)
+{
+	D_FREE(vt_path->vtp_dkey_buf);
+	D_FREE(vt_path->vtp_akey_buf);
 }

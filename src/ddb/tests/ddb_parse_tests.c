@@ -15,7 +15,7 @@
 static void
 __assert_parsed_words2(const char *str, int count, char **expected_words)
 {
-	struct argv_parsed	parse_args;
+	struct argv_parsed	parse_args = {0};
 	int			i;
 
 	assert_success(ddb_str2argv_create(str, &parse_args));
@@ -30,10 +30,12 @@ __assert_parsed_words2(const char *str, int count, char **expected_words)
 static void
 assert_parsed_fail(const char *str)
 {
-	struct argv_parsed parse_args;
+	struct argv_parsed	parse_args = {0};
+	int			rc;
 
-	assert_rc_equal(-DER_INVAL, ddb_str2argv_create(str, &parse_args));
+	rc = ddb_str2argv_create(str, &parse_args);
 	ddb_str2argv_free(&parse_args);
+	assert_rc_equal(-DER_INVAL, rc);
 }
 
 /*
@@ -122,23 +124,26 @@ do { \
 	assert_int_equal(a.vtp_path.vtp_oid.id_pub.lo, b.vtp_path.vtp_oid.id_pub.lo); \
 	assert_int_equal(a.vtp_path.vtp_dkey.iov_len, b.vtp_path.vtp_dkey.iov_len); \
 	if (a.vtp_path.vtp_dkey.iov_len > 0) \
-		assert_string_equal(a.vtp_path.vtp_dkey.iov_buf, b.vtp_path.vtp_dkey.iov_buf); \
+		assert_memory_equal(a.vtp_path.vtp_dkey.iov_buf, b.vtp_path.vtp_dkey.iov_buf, \
+					a.vtp_path.vtp_dkey.iov_len); \
 	assert_int_equal(a.vtp_path.vtp_akey.iov_len, b.vtp_path.vtp_akey.iov_len); \
 	if (a.vtp_path.vtp_akey.iov_len > 0) \
-		assert_string_equal(a.vtp_path.vtp_akey.iov_buf, b.vtp_path.vtp_akey.iov_buf); \
-} while (0)
+		assert_memory_equal(a.vtp_path.vtp_akey.iov_buf, b.vtp_path.vtp_akey.iov_buf,\
+		                			a.vtp_path.vtp_akey.iov_len); \
+	} while (0)
 
 #define assert_invalid_path(path) \
 do { \
 	struct dv_tree_path_builder __vt = {0}; \
-	assert_rc_equal(-DER_INVAL, ddb_parse_vos_tree_path(path, &__vt)); \
+	assert_rc_equal(-DER_INVAL, ddb_vtp_init(path, &__vt)); \
 } while (0)
 
 #define assert_path(path, expected) \
 do { \
 	struct dv_tree_path_builder __vt = {0}; \
-	assert_success(ddb_parse_vos_tree_path(path, &__vt)); \
+	assert_success(ddb_vtp_init(path, &__vt)); \
 	assert_vtp_eq(expected, __vt); \
+	ddb_vtp_fini(&__vt); \
 } while (0)
 
 
@@ -147,6 +152,7 @@ static void
 iov_alloc(d_iov_t *iov, size_t len)
 {
 	D_ALLOC(iov->iov_buf, len);
+	assert_non_null(iov->iov_buf);
 	iov->iov_buf_len = iov->iov_len = len;
 }
 
@@ -154,7 +160,7 @@ static void
 iov_alloc_str(d_iov_t *iov, const char *str)
 {
 	iov_alloc(iov, strlen(str));
-	strcpy(iov->iov_buf, str);
+	memcpy(iov->iov_buf, str, strlen(str));
 }
 
 static void
@@ -201,6 +207,9 @@ test_vos_path_parse(void **state)
 	expected_vt.vtp_path.vtp_recx.rx_idx = 1;
 	expected_vt.vtp_path.vtp_recx.rx_nr = 5;
 	assert_path("/12345678-1234-1234-1234-123456789012/4321.1234/dkey/akey/{1-6}", expected_vt);
+
+	daos_iov_free(&expected_vt.vtp_path.vtp_dkey);
+	daos_iov_free(&expected_vt.vtp_path.vtp_akey);
 }
 
 static void

@@ -123,10 +123,22 @@ __assert_ddb_iterate(daos_handle_t poh, uuid_t *cont_uuid, daos_unit_oid_t *oid,
 		     uint32_t expected_obj, uint32_t expected_dkey, uint32_t expected_akey,
 		     uint32_t expected_sv, uint32_t expected_array)
 {
-	int i;
-	int rc = 0;
+	int			i;
+	int			rc = 0;
+	struct dv_tree_path	path = {0};
 
-	assert_success(dv_iterate(poh, cont_uuid, oid, dkey, akey, recursive, &fake_handlers,
+
+	if (cont_uuid)
+		uuid_copy(path.vtp_cont, *cont_uuid);
+	if (oid)
+		path.vtp_oid = *oid;
+	if (dkey)
+		path.vtp_dkey = *dkey;
+	if (akey)
+		path.vtp_akey = *akey;
+
+
+	assert_success(dv_iterate(poh, &path, recursive, &fake_handlers,
 				  NULL));
 
 	expect_int_equal(expected_cont, fake_cont_handler_call_count, rc);

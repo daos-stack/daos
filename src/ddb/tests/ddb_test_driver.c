@@ -233,7 +233,7 @@ dvt_iov_alloc(d_iov_t *iov, size_t len)
 void
 dvt_iov_alloc_str(d_iov_t *iov, const char *str)
 {
-	dvt_iov_alloc(iov, strlen(str));
+	dvt_iov_alloc(iov, strlen(str) + 1);
 	strcpy(iov->iov_buf, str);
 }
 
@@ -305,8 +305,8 @@ int main(int argc, char *argv[])
 		return -rc;
 	}
 
-	rc += ddb_cmd_options_tests_run();
 	rc += ddb_parse_tests_run();
+	rc += ddb_cmd_options_tests_run();
 	rc += dv_tests_run();
 	rc += dvc_tests_run();
 	rc += ddb_main_tests();

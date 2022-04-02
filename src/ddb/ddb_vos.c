@@ -466,8 +466,8 @@ iter_cont_recurse(vos_iter_param_t *param, struct ddb_iter_ctx *ctx)
 }
 
 int
-dv_iterate_path(daos_handle_t poh, struct dv_tree_path *path, bool recursive,
-		struct vos_tree_handlers *handlers, void *handler_args)
+dv_iterate(daos_handle_t poh, struct dv_tree_path *path, bool recursive,
+	   struct vos_tree_handlers *handlers, void *handler_args)
 {
 	vos_iter_param_t	param = {0};
 	struct vos_iter_anchors	anchors = {0};
@@ -536,24 +536,4 @@ dv_iterate_path(daos_handle_t poh, struct dv_tree_path *path, bool recursive,
 		vos_cont_close(coh);
 
 	return rc;
-}
-
-int
-dv_iterate(daos_handle_t poh, uuid_t *cont_uuid, daos_unit_oid_t *oid, daos_key_t *dkey,
-	   daos_key_t *akey, bool recursive, struct vos_tree_handlers *handlers,
-	   void *handler_args)
-{
-
-	struct dv_tree_path path = {0};
-
-	if (cont_uuid)
-		uuid_copy(path.vtp_cont, *cont_uuid);
-	if (oid)
-		path.vtp_oid = *oid;
-	if (dkey)
-		path.vtp_dkey = *dkey;
-	if (akey)
-		path.vtp_akey = *akey;
-
-	return dv_iterate_path(poh, &path, recursive, handlers, handler_args);
 }

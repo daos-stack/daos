@@ -193,7 +193,7 @@ ddb_run_ls(struct ddb_ctx *ctx, struct ls_options *opt)
 	struct dv_tree_path_builder vt_path = {0};
 	struct ls_ctx lsctx = {0};
 
-	rc = ddb_parse_vos_tree_path(opt->path, &vt_path);
+	rc = ddb_vtp_init(opt->path, &vt_path);
 	if (!SUCCESS(rc))
 		return rc;
 
@@ -203,7 +203,9 @@ ddb_run_ls(struct ddb_ctx *ctx, struct ls_options *opt)
 
 	vtp_print(ctx, &vt_path.vtp_path);
 	lsctx.ctx = ctx;
-	rc = dv_iterate_path(ctx->dc_poh, &vt_path.vtp_path, opt->recursive, &handlers, &lsctx);
+	rc = dv_iterate(ctx->dc_poh, &vt_path.vtp_path, opt->recursive, &handlers, &lsctx);
+
+	ddb_vtp_fini(&vt_path);
 
 	return rc;
 

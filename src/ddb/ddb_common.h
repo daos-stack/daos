@@ -65,17 +65,28 @@ struct dv_tree_path {
 	daos_recx_t	vtp_recx;
 };
 
+/* Is used while parsing user input for building the vos tree path. The builder can use branch
+ * indexes that will be converted to the appropriate vos part (i.e. cont uuid, object id, etc).
+ */
 struct dv_tree_path_builder {
-	struct dv_tree_path	vtp_path;
+	struct dv_tree_path	 vtp_path;
 
-	/* A user can pass an index of the path part. These indexes will be used to complete
+	/*
+	 * If a key value is passed instead of an index, then need a buffer to copy the key value
+	 * into.
+	 */
+	uint8_t			*vtp_dkey_buf;
+	uint8_t			*vtp_akey_buf;
+
+	/*
+	 * A user can pass an index of the path part. These indexes will be used to complete
 	 * the path parts.
 	 */
-	uint32_t		vtp_cont_idx;
-	uint32_t		vtp_oid_idx;
-	uint32_t		vtp_dkey_idx;
-	uint32_t		vtp_akey_idx;
-	uint32_t		vtp_recx_idx;
+	uint32_t		 vtp_cont_idx;
+	uint32_t		 vtp_oid_idx;
+	uint32_t		 vtp_dkey_idx;
+	uint32_t		 vtp_akey_idx;
+	uint32_t		 vtp_recx_idx;
 };
 
 static inline bool
