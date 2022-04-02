@@ -259,19 +259,20 @@ build_pipeline_one(daos_pipeline_t *pipeline)
 static void
 run_pipeline(daos_pipeline_t *pipeline)
 {
-	daos_iod_t		iod;
-	daos_anchor_t		anchor;
-	uint32_t		nr_iods, nr_kds;
-	daos_key_desc_t		*kds;
-	d_sg_list_t		*sgl_keys;
-	d_iov_t			*iovs_keys;
-	char			*buf_keys;
-	d_sg_list_t		*sgl_recs;
-	d_iov_t			*iovs_recs;
-	char			*buf_recs;
-	daos_recx_t		recxs[2];
-	uint32_t		i;
-	int			rc;
+	daos_iod_t			iod;
+	daos_anchor_t			anchor;
+	uint32_t			nr_iods, nr_kds;
+	daos_key_desc_t			*kds;
+	d_sg_list_t			*sgl_keys;
+	d_iov_t				*iovs_keys;
+	char				*buf_keys;
+	d_sg_list_t			*sgl_recs;
+	d_iov_t				*iovs_recs;
+	char				*buf_recs;
+	daos_recx_t			recxs[2];
+	daos_pipeline_scanned_t		scanned = { 0 };
+	uint32_t			i;
+	int				rc;
 
 	/* iod for akey's metadata */
 	iod.iod_nr	= 2;
@@ -319,9 +320,10 @@ run_pipeline(daos_pipeline_t *pipeline)
 	while (!daos_anchor_is_eof(&anchor)) {
 		nr_kds = 16; /** trying to read 16 in each iteration */
 
-		rc = daos_pipeline_run(coh, oh, *pipeline, DAOS_TX_NONE, 0,
+		rc = daos_pipeline_run(coh, oh, pipeline, DAOS_TX_NONE, 0,
 				       NULL, &nr_iods, &iod, &anchor, &nr_kds,
-				       kds, sgl_keys, sgl_recs ,NULL, NULL);
+				       kds, sgl_keys, sgl_recs ,NULL, &scanned,
+				       NULL);
 		ASSERT(rc == 0, "Pipeline run failed with %d", rc);
 
 		/** processing nr_kds records */
@@ -343,6 +345,7 @@ run_pipeline(daos_pipeline_t *pipeline)
 				ASSERT(0, "ERROR: invalid mode_t retrieved\n");
 		}
 	}
+	printf("\t(scanned %lu dkeys)\n\n", scanned.dkeys);
 
 	free(kds);
 	free(sgl_keys);

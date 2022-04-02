@@ -144,7 +144,7 @@ pipeline_shard_run_cb(tse_task_t *task, void *data)
 	nr_iods 	= cb_args->nr_iods;
 	nr_kds		= cb_args->nr_kds;
 	nr_recx		= nr_iods * nr_kds;
-	nr_agg		= api_args->pipeline.num_aggr_filters;
+	nr_agg		= api_args->pipeline->num_aggr_filters;
 
 	D_ASSERT(pro->pro_kds.ca_count <= nr_kds);
 	D_ASSERT(pro->pro_sgl_recx.ca_count <= nr_recx);
@@ -201,6 +201,7 @@ pipeline_shard_run_cb(tse_task_t *task, void *data)
 	for (i = 0; i < nr_agg; i++)
 	{
 		double			*src, *dst;
+		daos_filter_part_t	*part;
 		char			*part_type;
 		size_t			length_part_type;
 
@@ -217,7 +218,8 @@ pipeline_shard_run_cb(tse_task_t *task, void *data)
 			continue;
 		}
 
-		part_type = (char *) api_args->pipeline.aggr_filters[i]->parts[0]->part_type.iov_buf;
+		part      = api_args->pipeline->aggr_filters[i]->parts[0];
+		part_type = (char *) part->part_type.iov_buf;
 
 		length_part_type = 20; /** we can do this because all function
 					 * names are the same length. */
@@ -254,6 +256,22 @@ pipeline_shard_run_cb(tse_task_t *task, void *data)
 	 *       api_args->iods =
 	 */
 
+	if (api_args->scanned != NULL)
+	{
+		if (daos_anchor_is_zero(api_args->anchor)
+							&& cb_args->shard == 0)
+		{ /** first time ever */
+			*api_args->scanned = pro->scanned;
+		}
+		else
+		{
+			api_args->scanned->objs  += pro->scanned.objs;
+			api_args->scanned->dkeys += pro->scanned.dkeys;
+			api_args->scanned->akeys += pro->scanned.akeys;
+		}
+	}
+
+	/** anchor should always be updated at the end */
 	*api_args->anchor = pro->pro_anchor;
 
 out:
@@ -307,6 +325,7 @@ shard_pipeline_run_task(tse_task_t *task)
 	}
 
 	tgt_ep.ep_grp	= pool->dp_sys->sy_group;
+	//tgt_ep.ep_tag	= map_tgt->ta_comp.co_index;
 	tgt_ep.ep_tag	= daos_rpc_tag(DAOS_REQ_IO, map_tgt->ta_comp.co_index);
 	tgt_ep.ep_rank	= map_tgt->ta_comp.co_rank;
 
@@ -342,7 +361,7 @@ shard_pipeline_run_task(tse_task_t *task)
 
 	pri = crt_req_get(req);
 	D_ASSERT(pri != NULL);
-	pri->pri_pipe		= args->pra_api_args->pipeline;
+	pri->pri_pipe		= *args->pra_api_args->pipeline;
 	pri->pri_oid		= args->pra_oid;
 	/**
 	  * No EPR for now. Using pri_epr to pass epoch values

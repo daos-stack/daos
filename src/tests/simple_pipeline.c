@@ -619,22 +619,23 @@ build_pipeline_four(daos_pipeline_t *pipeline)
 void
 run_pipeline(daos_pipeline_t *pipeline)
 {
-	daos_iod_t	iods[NR_IODS];
-	daos_anchor_t	anchor;
-	uint32_t	nr_iods;
-	uint32_t	nr_kds;
-	daos_key_desc_t	*kds;
-	d_sg_list_t	*sgl_keys;
-	d_iov_t		*iovs_keys;
-	char		*buf_keys;
-	d_sg_list_t	*sgl_recx;
-	d_sg_list_t	*sgl_aggr;
-	d_iov_t		*iovs_recx;
-	d_iov_t		*iovs_aggr;
-	char		*buf_recx;
-	char		*buf_aggr;
-	uint32_t	i, j, l;
-	int		rc;
+	daos_iod_t			iods[NR_IODS];
+	daos_anchor_t			anchor;
+	uint32_t			nr_iods;
+	uint32_t			nr_kds;
+	daos_key_desc_t			*kds;
+	d_sg_list_t			*sgl_keys;
+	d_iov_t				*iovs_keys;
+	char				*buf_keys;
+	d_sg_list_t			*sgl_recx;
+	d_sg_list_t			*sgl_aggr;
+	d_iov_t				*iovs_recx;
+	d_iov_t				*iovs_aggr;
+	char				*buf_recx;
+	char				*buf_aggr;
+	daos_pipeline_scanned_t		scanned = { 0 };
+	uint32_t			i, j, l;
+	int				rc;
 
 	/** iods: information about what akeys to retrieve */
 	for (i = 0; i < NR_IODS; i++) {
@@ -695,9 +696,10 @@ run_pipeline(daos_pipeline_t *pipeline)
 	while (!daos_anchor_is_eof(&anchor)) {
 		nr_kds = 64; /** trying to read 64 at a time */
 
-		rc = daos_pipeline_run(coh, oh, *pipeline, DAOS_TX_NONE, 0,
+		rc = daos_pipeline_run(coh, oh, pipeline, DAOS_TX_NONE, 0,
 				       NULL, &nr_iods, iods, &anchor, &nr_kds,
-				       kds, sgl_keys, sgl_recx, sgl_aggr, NULL);
+				       kds, sgl_keys, sgl_recx, sgl_aggr,
+				       &scanned, NULL);
 
 		ASSERT(rc == 0, "Pipeline run failed with %d", rc);
 		/** process nr_kds fetched records */
@@ -727,11 +729,10 @@ run_pipeline(daos_pipeline_t *pipeline)
 				 *akey);
 		}
 	}
-	
-	printf("\n");
+	printf("\t(scanned %lu dkeys)\n", scanned.dkeys);
 	for (i = 0; i < nr_aggr; i++) {
 		double *res = (double *) sgl_aggr[i].sg_iovs->iov_buf;
-		printf("  ---result[%u]=%f---\n",i,*res);
+		printf("  ---agg result[%u]=%f---\n",i,*res);
 	}
 	printf("\n");
 
