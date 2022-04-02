@@ -287,9 +287,9 @@ daos_pipeline_check(daos_pipeline_t *pipeline);
  *					filters defined in the pipeline object).
  *					All aggregated values are returned as
  *					doubles, no matter the numeric type of
- *					the being aggregated. This means that
- *					each buffer here should be at least 8
- *					bytes.
+ *					the akey being aggregated. This means
+ *					that each buffer here should be at least
+ *					8 bytes.
  *					[out]: All returned aggregated values.
  *
  * \param[in]		ev		Completion event. It is optional.
