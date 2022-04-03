@@ -175,8 +175,8 @@ def start_munge(args):
     # copy key to all nodes FROM slurmctl node;
     # change the protections/ownership on the munge dir on all nodes
     cmd_list = [
-        "{} chmod -R 777 /etc/munge; {} chown {}. /etc/munge".format(
-            sudo, sudo, args.user)]
+        "{0} chmod -R 777 /etc/munge; {0} chown {1}. /etc/munge".format(
+            sudo, args.user)]
     if execute_cluster_cmds(all_nodes, cmd_list) > 0:
         return 1
 
