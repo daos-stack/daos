@@ -427,7 +427,7 @@ ds_pipeline_run(daos_handle_t vos_coh, daos_unit_oid_t oid,
 		daos_anchor_t *anchor, uint32_t nr_kds, uint32_t *nr_kds_out,
 		daos_key_desc_t **kds, d_sg_list_t **sgl_keys,
 		uint32_t *nr_recx, d_sg_list_t **sgl_recx, d_sg_list_t *sgl_agg,
-		daos_pipeline_scanned_t *scanned)
+		daos_pipeline_stats_t *stats)
 {
 	int				rc;
 	uint32_t			nr_kds_pass;
@@ -585,7 +585,7 @@ ds_pipeline_run(daos_handle_t vos_coh, daos_unit_oid_t oid,
 		{
 			continue; /** nothing returned; no more records? */
 		}
-		scanned->dkeys += 1; /** new record considered for filtering */
+		stats->nr_dkeys += 1; /** new record considered for filtering */
 
 		/** -- doing filtering... */
 
@@ -859,7 +859,7 @@ ds_pipeline_run_handler(crt_rpc_t *rpc)
 	d_sg_list_t			*sgl_recx	= NULL;
 	uint32_t			nr_recx		= 0;
 	d_sg_list_t			*sgl_aggr	= NULL;
-	daos_pipeline_scanned_t		scanned		= { 0 };
+	daos_pipeline_stats_t		stats		= { 0 };
 
 	pri	= crt_req_get(rpc);
 	D_ASSERT(pri != NULL);
@@ -916,7 +916,7 @@ ds_pipeline_run_handler(crt_rpc_t *rpc)
 			     pri->pri_flags, &pri->pri_dkey, &nr_iods,
 			     pri->pri_iods.iods, &pri->pri_anchor, nr_kds,
 			     &nr_kds_out, &kds, &sgl_keys, &nr_recx, &sgl_recx,
-			     sgl_aggr, &scanned);
+			     sgl_aggr, &stats);
 
 exit0:
 	ds_cont_hdl_put(coh);
@@ -952,7 +952,7 @@ exit:
 		}
 		pro->pro_sgl_agg.ca_count	= pri->pri_pipe.num_aggr_filters;
 		pro->pro_sgl_agg.ca_arrays	= sgl_aggr;
-		pro->scanned			= scanned;
+		pro->stats			= stats;
 		//pro->pro_epoch // TODO
 	}
 	pro->pro_ret = rc;

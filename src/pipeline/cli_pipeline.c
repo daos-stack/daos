@@ -256,18 +256,18 @@ pipeline_shard_run_cb(tse_task_t *task, void *data)
 	 *       api_args->iods =
 	 */
 
-	if (api_args->scanned != NULL)
+	if (api_args->stats != NULL)
 	{
 		if (daos_anchor_is_zero(api_args->anchor)
 							&& cb_args->shard == 0)
 		{ /** first time ever */
-			*api_args->scanned = pro->scanned;
+			*api_args->stats = pro->stats;
 		}
 		else
 		{
-			api_args->scanned->objs  += pro->scanned.objs;
-			api_args->scanned->dkeys += pro->scanned.dkeys;
-			api_args->scanned->akeys += pro->scanned.akeys;
+			api_args->stats->nr_objs  += pro->stats.nr_objs;
+			api_args->stats->nr_dkeys += pro->stats.nr_dkeys;
+			api_args->stats->nr_akeys += pro->stats.nr_akeys;
 		}
 	}
 

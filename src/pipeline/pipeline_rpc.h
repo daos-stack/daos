@@ -63,7 +63,7 @@ obj_opc_to_str(crt_opcode_t opc)
 	((d_sg_list_t)			(pro_sgl_keys)	CRT_ARRAY)	\
 	((d_sg_list_t)			(pro_sgl_recx)	CRT_ARRAY)	\
 	((d_sg_list_t)			(pro_sgl_agg)	CRT_ARRAY)	\
-	((daos_pipeline_scanned_t)	(scanned)	CRT_VAR)	\
+	((daos_pipeline_stats_t)	(stats)		CRT_VAR)	\
 	((uint64_t)			(pro_epoch)	CRT_VAR)	\
 	((int32_t)			(pro_ret)	CRT_VAR)	\
 	((uint32_t)			(pro_pad32)	CRT_VAR)

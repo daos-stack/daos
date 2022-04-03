@@ -481,24 +481,24 @@ exit:
 }
 
 static int
-crt_proc_daos_pipeline_scanned_t(crt_proc_t proc, crt_proc_op_t proc_op,
-				 daos_pipeline_scanned_t *scanned)
+crt_proc_daos_pipeline_stats_t(crt_proc_t proc, crt_proc_op_t proc_op,
+			       daos_pipeline_stats_t *stats)
 {
 	int rc;
 
-	rc = crt_proc_daos_size_t(proc, proc_op, &scanned->objs);
+	rc = crt_proc_daos_size_t(proc, proc_op, &stats->nr_objs);
 	if (unlikely(rc))
 	{
 		return rc;
 	}
 
-	rc = crt_proc_daos_size_t(proc, proc_op, &scanned->dkeys);
+	rc = crt_proc_daos_size_t(proc, proc_op, &stats->nr_dkeys);
 	if (unlikely(rc))
 	{
 		return rc;
 	}
 
-	rc = crt_proc_daos_size_t(proc, proc_op, &scanned->akeys);
+	rc = crt_proc_daos_size_t(proc, proc_op, &stats->nr_akeys);
 	if (unlikely(rc))
 	{
 		return rc;
