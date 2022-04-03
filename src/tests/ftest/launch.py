@@ -74,6 +74,8 @@ YAML_KEYS = OrderedDict(
         ("pool_query_timeout", "timeout_multiplier"),
         ("rebuild_timeout", "timeout_multiplier"),
         ("srv_timeout", "timeout_multiplier"),
+        ("storage_prepare_timeout", "timeout_multiplier"),
+        ("storage_format_timeout", "timeout_multiplier"),
     ]
 )
 PROVIDER_KEYS = OrderedDict(
