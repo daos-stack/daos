@@ -330,7 +330,7 @@ def run_monitor_check(self):
     hosts = self.hostlist_servers
     if monitor_cmds:
         for cmd in monitor_cmds:
-            command = "sudo {}".format(cmd)
+            command = "{}".format(cmd)
             pcmd(hosts, command, timeout=30)
 
 
@@ -802,7 +802,7 @@ def cleanup_dfuse(self):
     """
     cmd = [
         "/usr/bin/bash -c 'for pid in $(pgrep dfuse)",
-        "do sudo kill $pid",
+        "do kill $pid",
         "done'"]
     cmd2 = [
         "/usr/bin/bash -c 'for dir in $(find /tmp/daos_dfuse/)",

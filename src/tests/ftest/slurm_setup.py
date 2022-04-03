@@ -163,6 +163,10 @@ def start_munge(args):
         args (Namespace): Commandline arguments
 
     """
+    if not args.sudo:
+        sudo = ""
+    else:
+        sudo = "sudo"
     all_nodes = NodeSet("{},{}".format(str(args.control), str(args.nodes)))
     # exclude the control node
     nodes = NodeSet(str(args.nodes))
@@ -171,8 +175,8 @@ def start_munge(args):
     # copy key to all nodes FROM slurmctl node;
     # change the protections/ownership on the munge dir on all nodes
     cmd_list = [
-        "sudo chmod -R 777 /etc/munge; sudo chown {}. /etc/munge".format(
-            args.user)]
+        "{} chmod -R 777 /etc/munge; {} chown {}. /etc/munge".format(
+            sudo, sudo, args.user)]
     if execute_cluster_cmds(all_nodes, cmd_list) > 0:
         return 1
 
@@ -181,25 +185,25 @@ def start_munge(args):
     cmd_list = ["set -Eeu",
                 "rc=0",
                 "if [ ! -f /etc/munge/munge.key ]",
-                "then sudo create-munge-key",
+                "then {} create-munge-key".format(sudo),
                 "fi",
-                "sudo chmod 777 /etc/munge/munge.key",
-                "sudo chown {}. /etc/munge/munge.key".format(args.user)]
+                "{} chmod 777 /etc/munge/munge.key".format(sudo),
+                "{} chown {}. /etc/munge/munge.key".format(sudo, args.user)]
 
     if execute_cluster_cmds(args.control, ["; ".join(cmd_list)]) > 0:
         return 1
     # remove any existing key from other nodes
-    cmd_list = ["sudo rm -f /etc/munge/munge.key",
+    cmd_list = ["{} rm -f /etc/munge/munge.key".format(sudo),
                 "scp -p {}:/etc/munge/munge.key /etc/munge/munge.key".format(
                     args.control)]
     if execute_cluster_cmds(nodes, ["; ".join(cmd_list)]) > 0:
         return 1
     # set the protection back to defaults
     cmd_list = [
-        "sudo chmod 400 /etc/munge/munge.key",
-        "sudo chown munge. /etc/munge/munge.key",
-        "sudo chmod 700 /etc/munge",
-        "sudo chown munge. /etc/munge"]
+        "{} chmod 400 /etc/munge/munge.key".format(sudo),
+        "{} chown munge. /etc/munge/munge.key".format(sudo),
+        "{} chmod 700 /etc/munge".format(sudo),
+        "{} chown munge. /etc/munge".format(sudo)]
     if execute_cluster_cmds(all_nodes, ["; ".join(cmd_list)]) > 0:
         return 1
 
