@@ -256,10 +256,10 @@ class DaosCommandBase(CommandWithSubCommand):
                 #               RP_3G1_SR, RP_2G1_SR, S1_SR, EC_2P1G1, EC_2P2G1,
                 #               EC_8P2G1
                 self.oclass = FormattedParameter("--oclass={}")
-                #   --chunk_size=BYTES
+                #   --chunk-size=BYTES
                 #           chunk size of files created. Supports suffixes:
                 #               K (KB), M (MB), G (GB), T (TB), P (PB), E (EB)
-                self.chunk_size = FormattedParameter("--chunk_size={}")
+                self.chunk_size = FormattedParameter("--chunk-size={}")
                 #   --properties=<name>:<value>[,<name>:<value>,...]
                 #           - supported names:
                 #               label, cksum, cksum_size, srv_cksum, rf

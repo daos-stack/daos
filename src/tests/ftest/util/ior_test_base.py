@@ -35,6 +35,8 @@ class IorTestBase(DfuseTestBase):
         self.processes = None
         self.hostfile_clients_slots = None
         self.container = None
+        self.ior_timeout = None
+        self.ppn = None
 
     def setUp(self):
         """Set up each test case."""
@@ -47,15 +49,21 @@ class IorTestBase(DfuseTestBase):
         self.ior_cmd = IorCommand()
         self.ior_cmd.get_params(self)
         self.processes = self.params.get("np", '/run/ior/client_processes/*')
+        self.ppn = self.params.get("ppn", '/run/ior/client_processes/*')
         self.subprocess = self.params.get("subprocess", '/run/ior/*', False)
+        self.ior_timeout = self.params.get("ior_timeout", '/run/ior/*', None)
 
     def create_pool(self):
         """Create a TestPool object to use with ior."""
         # Get the pool params and create a pool
         self.add_pool(connect=False)
 
-    def create_cont(self):
+    def create_cont(self, chunk_size=None, properties=None):
         """Create a TestContainer object to be used to create container.
+
+        Args:
+            chunk_size (str, optional): container chunk size. Defaults to None.
+            properties (str, optional): additional properties to append. Defaults to None.
 
         """
         # Get container params
@@ -66,6 +74,19 @@ class IorTestBase(DfuseTestBase):
         # update container oclass
         if self.ior_cmd.dfs_oclass:
             self.container.oclass.update(self.ior_cmd.dfs_oclass.value)
+
+        # update container chunk size
+        if chunk_size:
+            self.container.chunk_size.update(chunk_size)
+
+        # append container properties
+        if properties:
+            current_properties = self.container.properties.value
+            if current_properties:
+                new_properties = current_properties + "," + properties
+            else:
+                new_properties = properties
+            self.container.properties.update(new_properties)
 
         # create container
         self.container.create()
@@ -87,8 +108,8 @@ class IorTestBase(DfuseTestBase):
         if pool.dmg:
             pool.set_query_data()
 
-    def run_ior_with_pool(self, intercept=None, test_file_suffix="",
-                          test_file="daos:testFile", create_pool=True,
+    def run_ior_with_pool(self, intercept=None, display_space=True, test_file_suffix="",
+                          test_file="daos:/testFile", create_pool=True,
                           create_cont=True, stop_dfuse=True, plugin_path=None,
                           timeout=None, fail_on_warning=False,
                           mount_dir=None, out_queue=None, env=None):
@@ -100,7 +121,9 @@ class IorTestBase(DfuseTestBase):
 
         Args:
             intercept (str, optional): path to the interception library. Shall
-                    be used only for POSIX through DFUSE. Defaults to None.
+                be used only for POSIX through DFUSE. Defaults to None.
+            display_space (bool, optional): Whether to display the pool
+                space. Defaults to True.
             test_file_suffix (str, optional): suffix to add to the end of the
                 test file name. Defaults to "".
             test_file (str, optional): ior test file name. Defaults to
@@ -152,7 +175,8 @@ class IorTestBase(DfuseTestBase):
         job_manager.timeout = timeout
         try:
             out = self.run_ior(job_manager, self.processes,
-                               intercept, plugin_path=plugin_path,
+                               intercept=intercept,
+                               display_space=display_space, plugin_path=plugin_path,
                                fail_on_warning=fail_on_warning,
                                out_queue=out_queue, env=env)
         finally:
@@ -231,8 +255,9 @@ class IorTestBase(DfuseTestBase):
             env = self.ior_cmd.get_default_env(str(manager), self.client_log)
         if intercept:
             env['LD_PRELOAD'] = intercept
-            env['D_LOG_MASK'] = 'INFO'
-            if env.get('D_IL_REPORT', None) is None:
+            if 'D_LOG_MASK' not in env:
+                env['D_LOG_MASK'] = 'INFO'
+            if 'D_IL_REPORT' not in env:
                 env['D_IL_REPORT'] = '1'
 
             #env['D_LOG_MASK'] = 'INFO,IL=DEBUG'
@@ -244,7 +269,12 @@ class IorTestBase(DfuseTestBase):
             manager.working_dir.value = self.dfuse.mount_dir.value
         manager.assign_hosts(
             self.hostlist_clients, self.workdir, self.hostfile_clients_slots)
-        manager.assign_processes(processes)
+        if self.ppn is None:
+            manager.assign_processes(processes)
+        else:
+            manager.ppn.update(self.ppn, 'mpirun.ppn')
+            manager.processes.update(None, 'mpirun.np')
+
         manager.assign_environment(env)
 
         if not pool:
@@ -279,6 +309,8 @@ class IorTestBase(DfuseTestBase):
         finally:
             if not self.subprocess and display_space:
                 self.display_pool_space(pool)
+
+        return None
 
     def stop_ior(self):
         """Stop IOR process.
@@ -421,6 +453,52 @@ class IorTestBase(DfuseTestBase):
             self.display_pool_space()
 
         self.log.info("--- IOR Thread %d: End ---", job_num)
+
+    def run_ior_multiple_variants(self, obj_class, apis, transfer_block_size,
+                                  flags, mount_dir):
+        """Run multiple ior commands with various different combination
+           of ior input params.
+
+        Args:
+            obj_class(list): List of different object classes
+            apis(list): list of different apis
+            transfer_block_size(list): list of different transfer sizes
+                                       and block sizes. eg: [1M, 32M]
+                                       1M is transfer size and 32M is
+                                       block size in the above example.
+            flags(list): list of ior flags
+            mount_dir(str): dfuse mount directory
+        """
+        results = []
+
+        for oclass in obj_class:
+            self.ior_cmd.dfs_oclass.update(oclass)
+            for api in apis:
+                if api == "HDF5-VOL":
+                    self.ior_cmd.api.update("HDF5")
+                    hdf5_plugin_path = self.params.get(
+                        "plugin_path", '/run/hdf5_vol/*')
+                    flags_w_k = " ".join([flags[0]] + ["-k"])
+                    self.ior_cmd.flags.update(flags_w_k, "ior.flags")
+                else:
+                    # run tests for different variants
+                    self.ior_cmd.flags.update(flags[0], "ior.flags")
+                    hdf5_plugin_path = None
+                    self.ior_cmd.api.update(api)
+                for test in transfer_block_size:
+                    # update transfer and block size
+                    self.ior_cmd.transfer_size.update(test[0])
+                    self.ior_cmd.block_size.update(test[1])
+                    # run ior
+                    try:
+                        self.run_ior_with_pool(
+                            plugin_path=hdf5_plugin_path, timeout=self.ior_timeout,
+                            mount_dir=mount_dir)
+                        results.append(["PASS", str(self.ior_cmd)])
+                    except CommandFailure:
+                        results.append(["FAIL", str(self.ior_cmd)])
+        return results
+
 
     def verify_pool_size(self, original_pool_info, processes):
         """Validate the pool size.

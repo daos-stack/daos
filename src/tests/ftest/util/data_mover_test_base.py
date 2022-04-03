@@ -4,6 +4,8 @@
 
 SPDX-License-Identifier: BSD-2-Clause-Patent
 """
+import os
+
 from exception_utils import CommandFailure
 from test_utils_container import TestContainer
 from pydaos.raw import str_to_c_uuid, DaosContainer, DaosObj, IORequest
@@ -265,7 +267,7 @@ class DataMoverTestBase(IorTestBase, MdtestBase):
             self.execute_cmd(cmd)
 
         # mount small tmpfs filesystem on posix path, using size required sudo
-        # add mount_dir to mounted list for use when umounting 
+        # add mount_dir to mounted list for use when umounting
         if mount_dir:
             self.mounted_posix_test_paths.append(path)
             self.execute_cmd("sudo mount -t tmpfs none '{}' -o size=128M".format(path))
@@ -339,7 +341,7 @@ class DataMoverTestBase(IorTestBase, MdtestBase):
 
     def create_cont(self, pool, use_dfuse_uns=False,
                     dfuse_uns_pool=None, dfuse_uns_cont=None,
-                    cont_type=None):
+                    cont_type=None, oclass=None):
         # pylint: disable=arguments-differ
         """Create a TestContainer object.
 
@@ -380,6 +382,8 @@ class DataMoverTestBase(IorTestBase, MdtestBase):
 
         if cont_type:
             container.type.update(cont_type)
+        if oclass:
+            container.oclass.update(oclass)
 
         # Create container
         container.create()
@@ -1155,7 +1159,7 @@ class DataMoverTestBase(IorTestBase, MdtestBase):
                 # If we expect an rc other than 0, don't fail
                 self.dsync_cmd.exit_status_exception = (expected_rc == 0)
                 result = self.dsync_cmd.run(processes, self.job_manager)
-            elif self.tool== "DSERIAL":
+            elif self.tool == "DSERIAL":
                 if processes:
                     processes1 = processes2 = processes
                 else:
@@ -1189,3 +1193,101 @@ class DataMoverTestBase(IorTestBase, MdtestBase):
                 self.fail("stderr expected {}: {}".format(s, test_desc))
 
         return result
+
+    def run_dm_activities_with_ior(self, tool, create_dataset=False, pool=None,
+                                   cont=None):
+        """Generic method to perform varios datamover activities
+           using ior
+        Args:
+            tool(str): specify the tool name to be used
+            create_dataset(bool): boolean to create initial set of
+                                  data using ior. Defaults to False.
+            pool(TestPool): Pool object. Defaults to None
+            cont(TestContainer): Container object. Defaults to None
+        """
+        # Set the tool to use
+        self.set_tool(tool)
+
+
+        if create_dataset:
+            # create initial datasets
+            if not pool:
+                pool = self.create_pool()
+            cont = self.create_cont(pool, oclass=self.ior_cmd.dfs_oclass.value)
+
+            # update and run ior on container 1
+            self.run_ior_with_params(
+                "DAOS", self.ior_cmd.test_file.value,
+                pool, cont)
+        else:
+            if not pool:
+                pool = self.pool[0]
+            if not cont:
+                cont = self.container[-1]
+
+        # create cont2
+        cont2 = self.create_cont(pool, oclass=self.ior_cmd.dfs_oclass.value)
+
+        # perform various datamover activities
+        if tool == 'CONT_CLONE':
+            read_back_cont = self.gen_uuid()
+            self.run_datamover(
+                self.test_id + " (cont to cont2)",
+                "DAOS", None, pool, cont,
+                "DAOS", None, pool, read_back_cont)
+            read_back_pool = pool
+        elif tool == 'DSERIAL':
+            # Create pool2
+            pool2 = self.get_pool()
+            # Use dfuse as a shared intermediate for serialize + deserialize
+            dfuse_cont = self.create_cont(pool, oclass=self.ior_cmd.dfs_oclass.value)
+            self.start_dfuse(self.dfuse_hosts, pool, dfuse_cont)
+            self.serial_tmp_dir = self.dfuse.mount_dir.value
+
+            # Serialize/Deserialize container 1 to a new cont2 in pool2
+            result = self.run_datamover(
+                self.test_id + " (cont->HDF5->cont2)",
+                "DAOS_UUID", None, pool, cont,
+                "DAOS_UUID", None, pool2, None)
+
+            # Get the destination cont2 uuid
+            read_back_cont = self.parse_create_cont_uuid(result.stdout_text)
+            read_back_pool = pool2
+        elif tool in ['FS_COPY', 'DCP']:
+            # copy from daos cont to cont2
+            self.run_datamover(
+                self.test_id + " (cont to cont2)",
+                "DAOS", "/", pool, cont,
+                "DAOS", "/", pool, cont2)
+        else:
+            self.fail("Invalid tool: {}".format(tool))
+
+
+        # move data from daos to posix FS and vice versa
+        if tool in ['FS_COPY', 'DCP']:
+            posix_path = self.new_posix_test_path(shared=True)
+            # copy from daos cont2 to posix file system
+            self.run_datamover(
+                self.test_id + " (cont2 to posix)",
+                "DAOS", "/", pool, cont2,
+                "POSIX", posix_path)
+
+            # create cont3
+            cont3 = self.create_cont(pool, oclass=self.ior_cmd.dfs_oclass.value)
+
+            # copy from posix file system to daos cont3
+            self.run_datamover(
+                self.test_id + " (posix to cont3)",
+                "POSIX", posix_path, None, None,
+                "DAOS", "/", pool, cont3)
+            read_back_cont = cont3
+            read_back_pool = pool
+        # the result is that a NEW directory is created in the destination
+        if tool == 'FS_COPY':
+            daos_path = "/" + os.path.basename(posix_path) + self.ior_cmd.test_file.value
+        else:
+            daos_path = self.ior_cmd.test_file.value
+        # update ior params, read back and verify data from cont3
+        self.run_ior_with_params(
+            "DAOS", daos_path, read_back_pool, read_back_cont,
+            flags="-r -R -F -k")
