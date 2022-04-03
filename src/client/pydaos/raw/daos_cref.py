@@ -110,7 +110,8 @@ class PoolInfo(ctypes.Structure):
 class DaosPropertyEntry(ctypes.Structure):
     """Represents struct: daos_prop_entry """
     _fields_ = [("dpe_type", ctypes.c_uint32),
-                ("dpe_reserv", ctypes.c_uint32),
+                ("dpe_flags", ctypes.c_uint16),
+                ("dpe_reserv", ctypes.c_uint16),
                 ("dpe_val", ctypes.c_uint64)]
 
 
@@ -129,7 +130,8 @@ class DaosProperty(ctypes.Structure):
         self.dpp_reserv = 0
         for num in range(0, num_structs):
             self.dpp_entries[num].dpe_type = ctypes.c_uint32(0)
-            self.dpp_entries[num].dpe_reserv = ctypes.c_uint32(0)
+            self.dpp_entries[num].dpe_flags = ctypes.c_uint16(0)
+            self.dpp_entries[num].dpe_reserv = ctypes.c_uint16(0)
             self.dpp_entries[num].dpe_val = ctypes.c_uint64(0)
 
 

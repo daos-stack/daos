@@ -273,7 +273,7 @@ dkey_update_or_fetch(enum ts_op_type op_type, daos_key_t *dkey, daos_epoch_t *ep
 
 	for (i = 0; i < param->pa_akey_nr; i++) {
 		akey_idx = i;
-		if (!ts_const_akey)
+		if (ts_const_akey)
 			akey_idx = 0;
 		for (j = 0; j < param->pa_recx_nr; j++) {
 			for (k = 0; k < param->pa_obj_nr; k++) {
