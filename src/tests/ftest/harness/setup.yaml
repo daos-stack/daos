@@ -7,7 +7,6 @@ hosts:
     - server-E
     - server-F
     - server-G
-    - server-H
   test_clients:
     - client-B
 timeout: 120
