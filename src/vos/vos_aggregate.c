@@ -291,19 +291,22 @@ inc_agg_counter(struct vos_agg_param *agg_param, vos_iter_type_t type, unsigned 
 static inline bool
 need_aggregate(daos_handle_t ih, struct vos_agg_param *agg_param, vos_iter_desc_t *desc)
 {
-	bool			 agg_needed;
+	bool			 agg_needed = true;
 	struct vos_container	*cont = vos_hdl2cont(agg_param->ap_coh);
+	daos_epoch_t		 hae;
 
 	/** Skip this check for discard */
 	if (agg_param->ap_discard_obj || agg_param->ap_discard)
 		return true;
 
-	if (desc->id_type == VOS_ITER_OBJ)
-		agg_needed = oi_iter_start_agg(ih, agg_param->ap_flags & VOS_AGG_FL_FORCE_SCAN);
-	else
-		agg_needed = vos_obj_iter_start_agg(ih,
-						    agg_param->ap_flags & VOS_AGG_FL_FORCE_SCAN);
+	if (agg_param->ap_flags & VOS_AGG_FL_FORCE_SCAN)
+		goto out;
 
+	hae = cont->vc_cont_df->cd_hae;
+	if (desc->id_agg_write <= hae && desc->id_parent_punch <= hae)
+		agg_needed = false;
+
+out:
 	D_DEBUG(DB_EPC, "flags:%u, hae:"DF_U64" agg_needed=%s\n", agg_param->ap_flags,
 		cont->vc_cont_df->cd_hae, agg_needed ? "yes" : "no");
 
