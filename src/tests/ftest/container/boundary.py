@@ -78,11 +78,12 @@ class BoundaryTest(TestWithServers):
         for cont_num in range(num_containers):
             thread_manager.add(
                 pool=pool, pool_num=pool_num, cont_num=cont_num, with_io=with_io)
-        self.log.info("==(2.%d) %d containers created.", pool_num, num_containers)
 
         # Launch the create_container_and_test threads
         self.log.info("==Launching %d create_container_and_test threads", thread_manager.qty)
         failed_thread_count = thread_manager.check_run()
+        self.log.info(
+            "==(2.%d) after thread_manager_run, %d containers created.", pool_num, num_containers)
         if failed_thread_count > 0:
             msg = "#(2.{}) FAILED create_container_and_test Threads".format(failed_thread_count)
             self.d_log.error(msg)
@@ -122,8 +123,8 @@ class BoundaryTest(TestWithServers):
             log.info: (a.b.c) a: test-step,  b: pool_number,  c: container_number
         Use case:
             0. Bring up DAOS server.
-            1. Create pools by ThreadManager.
-            2. Create containers under each pool by sub ThreadManager.
+            1. Create pools and create containers_test by ThreadManager.
+            2. Create containers and test under each pool by sub ThreadManager.
             3. Launch io and syncup each container.
             4. Close container.
         :avocado: tags=all,full_regression
@@ -140,5 +141,4 @@ class BoundaryTest(TestWithServers):
             "num_containers": num_containers,
             "with_io": io
         }
-        self.create_pools(**pool_cont_args)
         self.log.info("===>Boundary test passed.")

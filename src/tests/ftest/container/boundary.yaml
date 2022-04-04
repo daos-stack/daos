@@ -4,7 +4,7 @@ hosts:
     - server-B
     - server-C
     - server-D
-timeout: 3500
+timeout: 2200
 server_config:
   name: daos_server
   servers:
@@ -12,7 +12,7 @@ server_config:
     targets: 1
 pool:
   name: daos_server
-  scm_size: 150M
+  scm_size: 1G
   control_method: dmg
 container:
   akey_size: 5
