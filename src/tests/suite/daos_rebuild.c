@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2021 Intel Corporation.
+ * (C) Copyright 2016-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -840,12 +840,6 @@ rebuild_nospace_cb(void *data)
 				     0, 0, NULL);
 
 	print_message("re-enable recovery\n");
-	if (arg->myrank == 0)
-		/* Resume the rebuild. FIXME: fix this once we have better
-		 * way to resume rebuild through mgmt cmd.
-		 */
-		daos_debug_set_params(arg->group, -1,
-				     DMG_KEY_REBUILD_THROTTLING, 30, 0, NULL);
 
 	MPI_Barrier(MPI_COMM_WORLD);
 
@@ -985,10 +979,11 @@ rebuild_io_post_cb(void *arg)
 static void
 rebuild_master_failure(void **state)
 {
-	test_arg_t		*arg = *state;
+	test_arg_t	       *arg = *state;
 	daos_obj_id_t		oids[10 * OBJ_NR];
 	daos_pool_info_t	pinfo = {0};
 	daos_pool_info_t	pinfo_new = {0};
+	d_rank_list_t	       *affected_engines = NULL;
 	int			i;
 	int			rc;
 
@@ -1015,25 +1010,27 @@ rebuild_master_failure(void **state)
 
 	/* Verify the POOL_QUERY get same rebuild status after leader change */
 	pinfo.pi_bits = DPI_REBUILD_STATUS;
-	rc = test_pool_get_info(arg, &pinfo);
+	rc = test_pool_get_info(arg, &pinfo, &affected_engines);
 	assert_rc_equal(rc, 0);
-	assert_int_equal(pinfo.pi_rebuild_st.rs_done, 1);
+	assert_int_equal(pinfo.pi_rebuild_st.rs_state, 2);
+	assert_true(pinfo.pi_ndisabled > 0);
+	assert_true(d_rank_list_find(affected_engines, ranks_to_kill[0], NULL));
 	rc = rebuild_change_leader_cb(arg);
 	assert_int_equal(rc, 0);
 	pinfo_new.pi_bits = DPI_REBUILD_STATUS;
-	rc = test_pool_get_info(arg, &pinfo_new);
+	rc = test_pool_get_info(arg, &pinfo_new, NULL /* engine_ranks */);
 	assert_rc_equal(rc, 0);
-	assert_int_equal(pinfo_new.pi_rebuild_st.rs_done, 1);
+	assert_int_equal(pinfo_new.pi_rebuild_st.rs_state, 2);
 	rc = memcmp(&pinfo.pi_rebuild_st, &pinfo_new.pi_rebuild_st,
 		    sizeof(pinfo.pi_rebuild_st));
 	if (rc != 0) {
-		print_message("old ver %u seconds %u err %d done %d fail %d"
+		print_message("old ver %u seconds %u err %d state %d fail %d"
 			      " tobeobj "DF_U64" obj "DF_U64" rec "DF_U64
 			      " sz "DF_U64"\n",
 			      pinfo.pi_rebuild_st.rs_version,
 			      pinfo.pi_rebuild_st.rs_seconds,
 			      pinfo.pi_rebuild_st.rs_errno,
-			      pinfo.pi_rebuild_st.rs_done,
+			      pinfo.pi_rebuild_st.rs_state,
 			      pinfo.pi_rebuild_st.rs_fail_rank,
 			      pinfo.pi_rebuild_st.rs_toberb_obj_nr,
 			      pinfo.pi_rebuild_st.rs_obj_nr,
@@ -1045,7 +1042,7 @@ rebuild_master_failure(void **state)
 			      pinfo_new.pi_rebuild_st.rs_version,
 			      pinfo_new.pi_rebuild_st.rs_seconds,
 			      pinfo_new.pi_rebuild_st.rs_errno,
-			      pinfo_new.pi_rebuild_st.rs_done,
+			      pinfo_new.pi_rebuild_st.rs_state,
 			      pinfo_new.pi_rebuild_st.rs_fail_rank,
 			      pinfo_new.pi_rebuild_st.rs_toberb_obj_nr,
 			      pinfo_new.pi_rebuild_st.rs_obj_nr,

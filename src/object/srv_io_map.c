@@ -29,6 +29,8 @@ ds_iom_create(struct bio_desc *biod, daos_iod_t *iods, uint32_t iods_nr, uint32_
 	uint32_t		 bsgl_iov_idx;
 	struct bio_sglist	*bsgl;
 
+	D_ASSERT(p_maps);
+
 	D_ALLOC_ARRAY(maps, iods_nr);
 	if (maps == NULL)
 		return -DER_NOMEM;
@@ -86,8 +88,7 @@ ds_iom_create(struct bio_desc *biod, daos_iod_t *iods, uint32_t iods_nr, uint32_
 		if (flags & ORF_CREATE_MAP_DETAIL)
 			map->iom_flags = DAOS_IOMF_DETAIL;
 	}
-	if (p_maps != NULL)
-		*p_maps = maps;
+	*p_maps = maps;
 
 	return 0;
 }

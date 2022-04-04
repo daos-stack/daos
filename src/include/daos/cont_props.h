@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2020-2021 Intel Corporation.
+ * (C) Copyright 2020-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -28,6 +28,9 @@
 #define DAOS_PROP_ENTRY_ALLOCED_OID	"alloc_oid"
 #define DAOS_PROP_ENTRY_OWNER		"owner"
 #define DAOS_PROP_ENTRY_GROUP		"group"
+#define DAOS_PROP_ENTRY_EC_PDA		"ec_pda"
+#define DAOS_PROP_ENTRY_RP_PDA		"rp_pda"
+#define DAOS_PROP_ENTRY_GLOBAL_VERSION	"global_version"
 
 struct cont_props {
 	uint32_t	 dcp_chunksize;
@@ -42,6 +45,9 @@ struct cont_props {
 	uint16_t	 dcp_encrypt_type;
 	uint32_t	 dcp_redun_fac;
 	uint32_t	 dcp_ec_cell_sz;
+	uint32_t	 dcp_ec_pda;
+	uint32_t	 dcp_rp_pda;
+	uint32_t	 dcp_global_version;
 	uint32_t	 dcp_csum_enabled:1,
 			 dcp_srv_verify:1,
 			 dcp_dedup_enabled:1,
@@ -123,5 +129,20 @@ daos_cont_prop2ec_cell_sz(daos_prop_t *props);
  */
 uint64_t
 daos_cont_prop2allocedoid(daos_prop_t *props);
+
+/**
+ * Performance Domain Affinity level properties
+ */
+uint32_t
+daos_cont_prop2ec_pda(daos_prop_t *prop);
+
+uint32_t
+daos_cont_prop2rp_pda(daos_prop_t *prop);
+
+/**
+ * Global version properties
+ */
+uint32_t
+daos_cont_prop2global_version(daos_prop_t *prop);
 
 #endif /** __DAOS_CONT_PROPS_H__ */

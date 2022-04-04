@@ -42,6 +42,7 @@ type PoolCmd struct {
 	DeleteACL    PoolDeleteACLCmd    `command:"delete-acl" description:"Delete an entry from a DAOS pool's Access Control List"`
 	SetProp      PoolSetPropCmd      `command:"set-prop" description:"Set pool property"`
 	GetProp      PoolGetPropCmd      `command:"get-prop" description:"Get pool properties"`
+	Upgrade      PoolUpgradeCmd      `command:"upgrade" description:"Upgrade pool to latest format"`
 }
 
 // PoolCreateCmd is the struct representing the command to create a DAOS pool.
@@ -139,8 +140,7 @@ func (cmd *PoolCreateCmd) Execute(args []string) error {
 
 		// TODO (DAOS-9556) Update the protocol with a new message allowing to perform the
 		// queries of storage request and the pool creation from the management server
-		scmBytes, nvmeBytes, err := control.GetMaxPoolSize(context.Background(),
-			cmd.ctlInvoker)
+		scmBytes, nvmeBytes, err := control.GetMaxPoolSize(context.Background(), cmd.log, cmd.ctlInvoker)
 		if err != nil {
 			return err
 		}
@@ -150,17 +150,11 @@ func (cmd *PoolCreateCmd) Execute(args []string) error {
 			nvmeBytes = uint64(storageRatio) * nvmeBytes / uint64(100)
 		}
 
-		// Extra storage space needed for metadata such as the VOS file
-		if scmBytes < control.PoolMetadataBytes {
-			missingBytes := control.PoolMetadataBytes - scmBytes
-			msg := "Not enough SMC storage available with ratio %s%%:"
-			msg += " at least %s of SCM storage (%s missing) is needed"
-			return errors.Errorf(msg,
-				cmd.Size,
-				humanize.Bytes(control.PoolMetadataBytes),
-				humanize.Bytes(missingBytes))
+		if scmBytes == 0 {
+			return errors.Errorf("Not enough SCM storage available with ratio %d%%: "+
+				"SCM storage capacity or ratio should be increased",
+				storageRatio)
 		}
-		scmBytes -= control.PoolMetadataBytes
 
 		cmd.updateRequest(req, scmBytes, nvmeBytes)
 
@@ -529,6 +523,26 @@ func (cmd *PoolQueryCmd) Execute(args []string) error {
 	return nil
 }
 
+// PoolUpgradeCmd is the struct representing the command to update a DAOS pool.
+type PoolUpgradeCmd struct {
+	poolCmd
+}
+
+// Execute is run when PoolUpgradeCmd subcommand is activated
+func (cmd *PoolUpgradeCmd) Execute(args []string) error {
+	req := &control.PoolUpgradeReq{
+		ID: cmd.PoolID().String(),
+	}
+
+	err := control.PoolUpgrade(context.Background(), cmd.ctlInvoker, req)
+	if err != nil {
+		return errors.Wrap(err, "pool upgrade failed")
+	}
+
+	cmd.log.Infof("Pool-upgrade command succeed\n")
+	return nil
+}
+
 // PoolSetPropCmd represents the command to set a property on a pool.
 type PoolSetPropCmd struct {
 	poolCmd
@@ -560,6 +574,18 @@ func (cmd *PoolSetPropCmd) Execute(_ []string) error {
 			return err
 		}
 		cmd.Args.Props.ToSet = []*control.PoolProperty{p}
+	}
+
+	for _, prop := range cmd.Args.Props.ToSet {
+		if prop.Name == "rf" {
+			return errors.New("can't set redundancy factor on existing pool.")
+		}
+		if prop.Name == "ec_pda" {
+			return errors.New("can't set EC performance domain affinity on existing pool.")
+		}
+		if prop.Name == "rp_pda" {
+			return errors.New("can't set RP performance domain affinity on existing pool.")
+		}
 	}
 
 	req := &control.PoolSetPropReq{
