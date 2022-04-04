@@ -14,7 +14,7 @@
 static int filter_func_getdata_##type(struct filter_part_run_t *args,\
 				      _##ctype *data)\
 {\
-	int     rc;\
+	int rc;\
 \
 	args->part_idx += 1;\
 	rc = args->parts[args->part_idx].filter_func(args);\
@@ -119,12 +119,12 @@ logfunc_gt(d, double)
 #define filter_func_log(op, type, ctype)\
 int filter_func_##op##_##type(struct filter_part_run_t *args)\
 {\
-	_##ctype left;\
-	_##ctype right;\
-	uint32_t idx_end_subtree;\
-	uint32_t comparisons;\
-	uint32_t i;\
-	int      rc = 0;\
+	_##ctype	left		= (_##ctype) 0;\
+	_##ctype	right		= (_##ctype) 0;\
+	uint32_t	idx_end_subtree;\
+	uint32_t	comparisons;\
+	uint32_t	i;\
+	int		rc		= 0;\
 \
 	comparisons     = args->parts[args->part_idx].num_operands - 1;\
 	idx_end_subtree = args->parts[args->part_idx].idx_end_subtree;\
@@ -230,14 +230,14 @@ static bool logfunc_gt_st(char *l, size_t ll, char *r, size_t rl)
 #define filter_func_log_st(op)\
 int filter_func_##op##_st(struct filter_part_run_t *args)\
 {\
-	char     *left;\
-	size_t   left_size;\
-	char     *right;\
-	size_t   right_size;\
-	uint32_t idx_end_subtree;\
-	uint32_t comparisons;\
-	uint32_t i;\
-	int      rc = 0;\
+	char		*left		= NULL;\
+	size_t		left_size	= 0;\
+	char		*right		= NULL;\
+	size_t		right_size	= 0;;\
+	uint32_t	idx_end_subtree;\
+	uint32_t	comparisons;\
+	uint32_t	i;\
+	int		rc		= 0;\
 \
 	comparisons     = args->parts[args->part_idx].num_operands - 1;\
 	idx_end_subtree = args->parts[args->part_idx].idx_end_subtree;\
@@ -329,9 +329,9 @@ arithfunc_div(d, double)
 #define filter_func_arith(op, type, ctype) \
 int filter_func_##op##_##type(struct filter_part_run_t *args) \
 {\
-	_##ctype left;\
-	_##ctype right;\
-	int      rc = 0;\
+	_##ctype	left	= (_##ctype) 0;\
+	_##ctype	right	= (_##ctype) 0;\
+	int		rc	= 0;\
 \
 	rc = filter_func_getdata_##type(args, &left);\
 	if (unlikely(rc != 0))\
@@ -365,9 +365,9 @@ filter_func_arith(div, d, double)
 #define filter_func_bitand(type, ctype)\
 int filter_func_bitand_##type(struct filter_part_run_t *args)\
 {\
-	_##ctype left;\
-	_##ctype right;\
-	int      rc = 0;\
+	_##ctype	left	= 0;\
+	_##ctype	right	= 0;\
+	int		rc	= 0;\
 \
 	rc = filter_func_getdata_##type(args, &left);\
 	if (unlikely(rc != 0))\
@@ -391,16 +391,16 @@ filter_func_bitand(i, int64_t);
 int
 filter_func_like(struct filter_part_run_t *args)
 {
-	char		*left_str;
-	char		*right_str;
-	size_t		left_size;
+	char		*left_str	= NULL;
+	char		*right_str	= NULL;
+	size_t		left_size	= 0;
 	size_t		left_pos;
-	size_t		right_size;
+	size_t		right_size	= 0;
 	size_t		right_pos;
 	size_t		right_anchor;
 	bool		right_anchor_set;
 	bool		scaping;
-	int		rc = 0;
+	int		rc		= 0;
 
 	rc = filter_func_getdata_st(args, &left_str, &left_size);
 	if (unlikely(rc != 0))
@@ -532,11 +532,11 @@ filter_func_not(struct filter_part_run_t *args)
 int
 filter_func_and(struct filter_part_run_t *args)
 {
-	int      rc = 0;
-	bool     res = false;
-	uint32_t idx_end_subtree;
-	uint32_t comparisons;
-	uint32_t i;
+	int		rc  = 0;
+	bool		res = false;
+	uint32_t	idx_end_subtree;
+	uint32_t	comparisons;
+	uint32_t	i;
 
 	comparisons     = args->parts[args->part_idx].num_operands - 1;
 	idx_end_subtree = args->parts[args->part_idx].idx_end_subtree;
@@ -578,11 +578,11 @@ exit:
 int
 filter_func_or(struct filter_part_run_t *args)
 {
-	int      rc = 0;
-	bool     res = true;
-	uint32_t idx_end_subtree;
-	uint32_t comparisons;
-	uint32_t i;
+	int		rc  = 0;
+	bool		res = true;
+	uint32_t	idx_end_subtree;
+	uint32_t	comparisons;
+	uint32_t	i;
 
 	comparisons     = args->parts[args->part_idx].num_operands - 1;
 	idx_end_subtree = args->parts[args->part_idx].idx_end_subtree;
