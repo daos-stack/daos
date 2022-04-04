@@ -67,16 +67,72 @@ enum daos_pool_props {
 	 * The pool svc rank list.
 	 */
 	DAOS_PROP_PO_SVC_LIST,
+	/**
+	 * Pool cell size.
+	 */
 	DAOS_PROP_PO_EC_CELL_SZ,
 	/**
 	 * Media selection policy
 	 */
 	DAOS_PROP_PO_POLICY,
+	/**
+	 * Pool redundancy factor.
+	 */
+	DAOS_PROP_PO_REDUN_FAC,
+	/**
+	 * The pool performance domain affinity level of EC object.
+	 */
+	DAOS_PROP_PO_EC_PDA,
+	/**
+	 * The pool performance domain affinity level
+	 * of replicated object.
+	 */
+	DAOS_PROP_PO_RP_PDA,
+
+	/**
+	 * Aggregation of pool/container/object/key disk format
+	 * version.
+	 */
+	DAOS_PROP_PO_GLOBAL_VERSION,
+	/**
+	 * Pool upgrade status.
+	 */
+	DAOS_PROP_PO_UPGRADE_STATUS,
 	DAOS_PROP_PO_MAX,
 };
 
 #define DAOS_PROP_PO_EC_CELL_SZ_MIN	(1UL << 10)
 #define DAOS_PROP_PO_EC_CELL_SZ_MAX	(1UL << 30)
+
+#define DAOS_PROP_PO_REDUN_FAC_MAX	4
+#define DAOS_RPOP_PO_REDUN_FAC_DEFAULT	0
+
+static inline bool
+daos_rf_is_valid(unsigned long long rf)
+{
+	return rf <= DAOS_PROP_PO_REDUN_FAC_MAX;
+}
+
+/**
+ * the placement algorithm should place two-way and three-way
+ * replication object within a PD; for those object classes with
+ * more than 3 replicas, DAOS will place three replicas within a PD
+ * and switch to another PD.
+ */
+#define DAOS_PROP_PO_RP_PDA_DEFAULT	3
+/**
+ * the placement algorithm always tries to scatter shards of EC
+ * object to different PDs.
+ */
+#define DAOS_PROP_PO_EC_PDA_DEFAULT	1
+
+/** DAOS pool upgrade status */
+enum {
+	DAOS_UPGRADE_STATUS_NOT_STARTED = 0,
+	DAOS_UPGRADE_STATUS_IN_PROGRESS = 1,
+	DAOS_UPGRADE_STATUS_COMPLETED = 2,
+	DAOS_UPGRADE_STATUS_FAILED = 3,
+};
 
 /**
  * Number of pool property types
@@ -203,11 +259,18 @@ enum daos_cont_props {
 	DAOS_PROP_CO_ALLOCED_OID,
 	/** EC cell size, it can overwrite DAOS_PROP_CO_EC_CELL_SZ of pool */
 	DAOS_PROP_CO_EC_CELL_SZ,
+	/** Performance domain affinity level of EC object */
+	DAOS_PROP_CO_EC_PDA,
+	/**  performance domain affinity level of RP object */
+	DAOS_PROP_CO_RP_PDA,
+	/** immutable container global version */
+	DAOS_PROP_CO_GLOBAL_VERSION,
 	DAOS_PROP_CO_MAX,
 };
 
 /** first citizen objects of a container, stored as container property */
 struct daos_prop_co_roots {
+	/** array that stores root, SB OIDs */
 	daos_obj_id_t	cr_oids[4];
 };
 
@@ -314,6 +377,7 @@ enum {
 
 /** clear the UNCLEAN status */
 #define DAOS_PROP_CO_CLEAR	(0x1)
+/** daos container status */
 struct daos_co_status {
 	/** DAOS_PROP_CO_HEALTHY/DAOS_PROP_CO_UNCLEAN */
 	uint16_t	dcs_status;
@@ -344,11 +408,18 @@ daos_prop_val_2_co_status(uint64_t val, struct daos_co_status *co_status)
 	co_status->dcs_pm_ver = (uint32_t)(val & 0xFFFFFFFF);
 }
 
+enum {
+	DAOS_PROP_ENTRY_NOT_SET = (1 << 0),
+};
+
+/** daos property entry */
 struct daos_prop_entry {
 	/** property type, see enum daos_pool_props/daos_cont_props */
 	uint32_t		 dpe_type;
+	/** property flags, eg negative entry*/
+	uint16_t		 dpe_flags;
 	/** reserved for future usage (for 64 bits alignment now) */
-	uint32_t		 dpe_reserv;
+	uint16_t		 dpe_reserv;
 	/**
 	 * value can be either a uint64_t, or a string, or any other type
 	 * data such as the struct daos_acl pointer.
@@ -438,6 +509,9 @@ daos_label_is_valid(const char *label)
 
 /** max length of the policy string */
 #define DAOS_PROP_POLICYSTR_MAX_LEN	(127)
+
+/* default policy string */
+#define DAOS_PROP_POLICYSTR_DEFAULT	"type=io_size"
 
 /** daos properties, for pool or container */
 typedef struct {
@@ -627,6 +701,23 @@ daos_prop_has_str(struct daos_prop_entry *entry);
  */
 bool
 daos_prop_has_ptr(struct daos_prop_entry *entry);
+
+/**
+ * Check if a DAOS prop entry is set or not.
+ *
+ * \param[in]		entry		Entry to be checked.
+ *
+ * \return		true		Entry is set
+ *			false		Entry is not set.
+ */
+static inline bool
+daos_prop_is_set(struct daos_prop_entry *entry)
+{
+	if (entry->dpe_flags & DAOS_PROP_ENTRY_NOT_SET)
+		return false;
+
+	return true;
+}
 
 #if defined(__cplusplus)
 }

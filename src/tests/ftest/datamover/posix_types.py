@@ -228,7 +228,8 @@ class DmvrPosixTypesTest(DataMoverTestBase):
             DAOS-5508: Verify copy between POSIX, UUIDs, and UNS paths.
             Daos-5511: Verify copy across pools.
         :avocado: tags=all,full_regression
-        :avocado: tags=datamover,dcp,dfuse
+        :avocado: tags=vm
+        :avocado: tags=datamover,mfu,mfu_dcp,dfuse,dfs,ior
         :avocado: tags=dm_posix_types,dm_posix_types_dcp
         """
         self.run_dm_posix_types("DCP")
@@ -239,7 +240,8 @@ class DmvrPosixTypesTest(DataMoverTestBase):
             Tests POSIX copies with dsync using different src and dst types.
             DAOS-6389: add basic tests for dsync posix
         :avocado: tags=all,full_regression
-        :avocado: tags=datamover,dsync,dfuse
+        :avocado: tags=vm
+        :avocado: tags=datamover,mfu,mfu_dsync,dfuse,dfs,ior
         :avocado: tags=dm_posix_types,dm_posix_types_dsync
         """
         self.run_dm_posix_types("DSYNC")
@@ -251,7 +253,8 @@ class DmvrPosixTypesTest(DataMoverTestBase):
             src and dst types.
             DAOS-6233: add tests for daos filesystem copy
         :avocado: tags=all,daily_regression
-        :avocado: tags=datamover,fs_copy,dfuse
+        :avocado: tags=vm
+        :avocado: tags=datamover,daos_fs_copy,dfuse,dfs,ior
         :avocado: tags=dm_posix_types,dm_posix_types_fs_copy
         """
         self.run_dm_posix_types("FS_COPY")

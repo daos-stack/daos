@@ -17,8 +17,6 @@
 #include <gurt/telemetry_consumer.h>
 #include "dtx_internal.h"
 
-#define DTX_YIELD_CYCLE		(DTX_THRESHOLD_COUNT >> 3)
-
 static void *
 dtx_tls_init(int xs_id, int tgt_id)
 {
@@ -466,6 +464,7 @@ struct dss_module dtx_module =  {
 	.sm_name	= "dtx",
 	.sm_mod_id	= DAOS_DTX_MODULE,
 	.sm_ver		= DAOS_DTX_VERSION,
+	.sm_proto_count	= 1,
 	.sm_init	= dtx_init,
 	.sm_fini	= dtx_fini,
 	.sm_setup	= dtx_setup,
