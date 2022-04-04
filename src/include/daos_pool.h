@@ -9,6 +9,8 @@
 #ifndef __DAOS_POOL_H__
 #define __DAOS_POOL_H__
 
+#define daos_pool_connect daos_pool_connect2
+
 #if defined(__cplusplus)
 extern "C" {
 #endif
@@ -93,6 +95,12 @@ struct daos_pool_space {
 	uint32_t		ps_padding;
 };
 
+enum daos_rebuild_state_t {
+	DRS_IN_PROGRESS		= 0,
+	DRS_NOT_STARTED		= 1,
+	DRS_COMPLETED		= 2,
+};
+
 /** Pool rebuild status */
 struct daos_rebuild_status {
 	/** pool map version in rebuilding or last completed rebuild */
@@ -102,24 +110,27 @@ struct daos_rebuild_status {
 	/** errno for rebuild failure */
 	int32_t			rs_errno;
 	/**
-	 * rebuild is done or not, it is valid only if #rs_version is non-zero
+	 * rebuild state, DRS_COMPLETED is valid only if #rs_version is non-zero
 	 */
-	int32_t			rs_done;
-
+	union {
+		int32_t		rs_state;
+		int32_t		rs_done;
+	};
 	/** padding of rebuild status */
 	int32_t			rs_padding32;
 
 	/** Failure on which rank */
 	int32_t			rs_fail_rank;
-	/** # total to-be-rebuilt objects, it's non-zero and increase when
-	 * rebuilding in progress, when rs_done is 1 it will not change anymore
-	 * and should equal to rs_obj_nr. With both rs_toberb_obj_nr and
-	 * rs_obj_nr the user can know the progress of the rebuilding.
+	/** total number of objects to be rebuilt. Non-zero and increases when
+	 * rebuilding is in progress. When rs_state is DRS_COMPLETED it will
+	 * not change anymore and should be equal to rs_obj_nr. With both
+	 * rs_toberb_obj_nr and rs_obj_nr the user can know the progress
+	 * of rebuilding.
 	 */
 	uint64_t		rs_toberb_obj_nr;
-	/** # rebuilt objects, it's non-zero only if rs_done is 1 */
+	/** number of rebuilt objects. Non-zero only if rs_state is completed. */
 	uint64_t		rs_obj_nr;
-	/** # rebuilt records, it's non-zero only if rs_done is 1 */
+	/** number of rebuilt records. Non-zero only if rs_state is completed. */
 	uint64_t		rs_rec_nr;
 
 	/** rebuild space cost */
@@ -128,17 +139,26 @@ struct daos_rebuild_status {
 
 /**
  * Pool info query bits.
- * The basic pool info like fields from pi_uuid to pi_leader will always be
- * queried for each daos_pool_query() calling. But the pi_space and
- * pi_rebuild_st are optional based on pi_mask's value.
+ * The basic pool info fields from \a pi_uuid to \a pi_leader will always be queried for each
+ * daos_pool_query() call and are unaffected by these bits.
+ *
+ * \a pi_space and \a pi_rebuild_st are optionally returned, based on the value of \a pi_bits.
+ *
+ * The daos_pool_query() ranks argument is populated by default with ranks of those pool
+ * storage engines with _some (or all)_ targets disabled. Optionally, based on \a pi_bits,
+ * the ranks of pool storage engines with _all_ targets enabled are returned.
  */
 enum daos_pool_info_bit {
-	/** true to query pool space usage */
-	DPI_SPACE		= 1ULL << 0,
-	/** true to query rebuild status */
-	DPI_REBUILD_STATUS	= 1ULL << 1,
+	/** true to query pool space usage false to not query space usage. */
+	DPI_SPACE			= 1ULL << 0,
+	/** true to query pool rebuild status. false to not query rebuild status. */
+	DPI_REBUILD_STATUS		= 1ULL << 1,
+	/** true to return (in \a ranks) engines with all targets enabled (up or draining).
+	 *  false to return (in \a ranks) the engines with some or all targets disabled (down).
+	 */
+	DPI_ENGINES_ENABLED		= 1ULL << 2,
 	/** query all above optional info */
-	DPI_ALL			= -1,
+	DPI_ALL				= -1,
 };
 
 /**
@@ -264,10 +284,15 @@ daos_pool_global2local(d_iov_t glob, daos_handle_t *poh);
 
 /**
  * Query pool information. User should provide at least one of \a info and
- * \a tgts as output buffer.
+ * \a ranks as output buffer.
  *
  * \param[in]	poh	Pool connection handle.
- * \param[out]	tgts	Optional, returned storage targets in this pool.
+ * \param[out]	ranks	Optional, returned pool storage engine ranks.
+ *			If #info is not passed, a list of engines with any targets disabled.
+ *			If #info is passed, a list of enabled or disabled engines according to the
+ *			#pi_bits flag specified by the caller (DPI_ENGINES_ENABLED bit).
+ *			Note: ranks may be empty (i.e., *ranks->rl_nr may be 0) in some situations.
+ *			The caller is responsible for freeing the list with d_rank_list_free().
  * \param[in,out]
  *		info	Optional, returned pool information,
  *			see daos_pool_info_bit.
@@ -296,7 +321,7 @@ daos_pool_global2local(d_iov_t glob, daos_handle_t *poh);
  *			-DER_NO_HDL	Invalid pool handle
  */
 int
-daos_pool_query(daos_handle_t poh, d_rank_list_t *tgts, daos_pool_info_t *info,
+daos_pool_query(daos_handle_t poh, d_rank_list_t **ranks, daos_pool_info_t *info,
 		daos_prop_t *pool_prop, daos_event_t *ev);
 
 /**

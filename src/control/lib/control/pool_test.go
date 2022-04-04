@@ -9,6 +9,7 @@ package control
 import (
 	"context"
 	"fmt"
+	"strings"
 	"testing"
 
 	"github.com/dustin/go-humanize"
@@ -20,6 +21,7 @@ import (
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	"github.com/daos-stack/daos/src/control/drpc"
 	"github.com/daos-stack/daos/src/control/logging"
+	"github.com/daos-stack/daos/src/control/server/storage"
 	"github.com/daos-stack/daos/src/control/system"
 )
 
@@ -93,6 +95,84 @@ func TestControl_PoolDestroy(t *testing.T) {
 			mi := NewMockInvoker(log, mic)
 
 			gotErr := PoolDestroy(ctx, mi, tc.req)
+			common.CmpErr(t, tc.expErr, gotErr)
+			if tc.expErr != nil {
+				return
+			}
+		})
+	}
+}
+
+func TestControl_PoolUpgrade(t *testing.T) {
+	for name, tc := range map[string]struct {
+		mic    *MockInvokerConfig
+		req    *PoolUpgradeReq
+		expErr error
+	}{
+		"local failure": {
+			req: &PoolUpgradeReq{
+				ID: common.MockUUID(),
+			},
+			mic: &MockInvokerConfig{
+				UnaryError: errors.New("local failed"),
+			},
+			expErr: errors.New("local failed"),
+		},
+		"remote failure": {
+			req: &PoolUpgradeReq{
+				ID: common.MockUUID(),
+			},
+			mic: &MockInvokerConfig{
+				UnaryResponse: MockMSResponse("host1", errors.New("remote failed"), nil),
+			},
+			expErr: errors.New("remote failed"),
+		},
+		"-DER_GRPVER is retried": {
+			req: &PoolUpgradeReq{
+				ID: common.MockUUID(),
+			},
+			mic: &MockInvokerConfig{
+				UnaryResponseSet: []*UnaryResponse{
+					MockMSResponse("host1", drpc.DaosGroupVersionMismatch, nil),
+					MockMSResponse("host1", nil, &mgmtpb.PoolUpgradeResp{}),
+				},
+			},
+		},
+		"-DER_AGAIN is retried": {
+			req: &PoolUpgradeReq{
+				ID: common.MockUUID(),
+			},
+			mic: &MockInvokerConfig{
+				UnaryResponseSet: []*UnaryResponse{
+					MockMSResponse("host1", drpc.DaosTryAgain, nil),
+					MockMSResponse("host1", nil, &mgmtpb.PoolUpgradeResp{}),
+				},
+			},
+		},
+		"success": {
+			req: &PoolUpgradeReq{
+				ID: common.MockUUID(),
+			},
+			mic: &MockInvokerConfig{
+				UnaryResponse: MockMSResponse("host1", nil,
+					&mgmtpb.PoolUpgradeResp{},
+				),
+			},
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(t.Name())
+			defer common.ShowBufferOnFailure(t, buf)
+
+			mic := tc.mic
+			if mic == nil {
+				mic = DefaultMockInvokerConfig()
+			}
+
+			ctx := context.TODO()
+			mi := NewMockInvoker(log, mic)
+
+			gotErr := PoolUpgrade(ctx, mi, tc.req)
 			common.CmpErr(t, tc.expErr, gotErr)
 			if tc.expErr != nil {
 				return
@@ -632,26 +712,6 @@ func TestPoolGetProp(t *testing.T) {
 			},
 			expErr: errors.New("got > 1"),
 		},
-		"missing prop in response": {
-			mic: &MockInvokerConfig{
-				UnaryResponse: MockMSResponse("host1", nil, &mgmtpb.PoolGetPropResp{
-					Properties: []*mgmtpb.PoolProperty{
-						{
-							Number: propWithVal("label", "").Number,
-							Value:  &mgmtpb.PoolProperty_Strval{"foo"},
-						},
-					},
-				}),
-			},
-			req: &PoolGetPropReq{
-				ID: common.MockUUID(),
-				Properties: []*PoolProperty{
-					propWithVal("label", ""),
-					propWithVal("space_rb", ""),
-				},
-			},
-			expErr: errors.New("unable to find prop"),
-		},
 		"nil prop value in response": {
 			mic: &MockInvokerConfig{
 				UnaryResponse: MockMSResponse("host1", nil, &mgmtpb.PoolGetPropResp{
@@ -684,6 +744,10 @@ func TestPoolGetProp(t *testing.T) {
 							Value:  &mgmtpb.PoolProperty_Numval{42},
 						},
 						{
+							Number: propWithVal("upgrade_status", "").Number,
+							Value:  &mgmtpb.PoolProperty_Numval{1},
+						},
+						{
 							Number: propWithVal("reclaim", "").Number,
 							Value:  &mgmtpb.PoolProperty_Numval{drpc.PoolSpaceReclaimDisabled},
 						},
@@ -693,7 +757,23 @@ func TestPoolGetProp(t *testing.T) {
 						},
 						{
 							Number: propWithVal("ec_cell_sz", "").Number,
-							Value:  &mgmtpb.PoolProperty_Numval{1024},
+							Value:  &mgmtpb.PoolProperty_Numval{4096},
+						},
+						{
+							Number: propWithVal("rf", "").Number,
+							Value:  &mgmtpb.PoolProperty_Numval{1},
+						},
+						{
+							Number: propWithVal("ec_pda", "").Number,
+							Value:  &mgmtpb.PoolProperty_Numval{1},
+						},
+						{
+							Number: propWithVal("global_version", "").Number,
+							Value:  &mgmtpb.PoolProperty_Numval{1},
+						},
+						{
+							Number: propWithVal("rp_pda", "").Number,
+							Value:  &mgmtpb.PoolProperty_Numval{2},
 						},
 						{
 							Number: propWithVal("policy", "").Number,
@@ -706,12 +786,17 @@ func TestPoolGetProp(t *testing.T) {
 				ID: common.MockUUID(),
 			},
 			expResp: []*PoolProperty{
-				propWithVal("ec_cell_sz", "1024"),
+				propWithVal("ec_cell_sz", "4096"),
+				propWithVal("ec_pda", "1"),
+				propWithVal("global_version", "1"),
 				propWithVal("label", "foo"),
 				propWithVal("policy", "type=io_size"),
 				propWithVal("reclaim", "disabled"),
+				propWithVal("rf", "1"),
+				propWithVal("rp_pda", "2"),
 				propWithVal("self_heal", "exclude"),
 				propWithVal("space_rb", "42"),
+				propWithVal("upgrade_status", "in progress"),
 			},
 		},
 		"specific props requested": {
@@ -1130,6 +1215,7 @@ func TestControl_GetMaxPoolSize(t *testing.T) {
 		ScmBytes  uint64
 		NvmeBytes uint64
 		Error     error
+		Debug     string
 	}
 
 	for name, tc := range map[string]struct {
@@ -1323,7 +1409,7 @@ func TestControl_GetMaxPoolSize(t *testing.T) {
 				Error: errors.New("Host without SCM storage"),
 			},
 		},
-		"SCM storage too small": {
+		"Unusable NVMe device": {
 			HostsConfigArray: []MockHostStorageConfig{
 				{
 					HostName: "foo",
@@ -1331,15 +1417,26 @@ func TestControl_GetMaxPoolSize(t *testing.T) {
 						{
 							MockStorageConfig: MockStorageConfig{
 								TotalBytes: uint64(100) * uint64(humanize.GByte),
-								AvailBytes: PoolMetadataBytes / uint64(2),
+								AvailBytes: uint64(100) * uint64(humanize.GByte),
 							},
 						},
 					},
-					NvmeConfig: []MockNvmeConfig{},
+					NvmeConfig: []MockNvmeConfig{
+						{
+							MockStorageConfig: MockStorageConfig{
+								TotalBytes: uint64(1) * uint64(humanize.TByte),
+								AvailBytes: uint64(1) * uint64(humanize.TByte),
+								NvmeState:  new(storage.NvmeDevState),
+							},
+							Rank: 0,
+						},
+					},
 				},
 			},
 			ExpectedOutput: ExpectedOutput{
-				Error: errors.New("Not enough SCM storage available with the SCM namespace"),
+				ScmBytes:  uint64(100) * uint64(humanize.GByte),
+				NvmeBytes: 0,
+				Debug:     "not usable",
 			},
 		},
 	} {
@@ -1370,26 +1467,31 @@ func TestControl_GetMaxPoolSize(t *testing.T) {
 			}
 			mockInvoker := NewMockInvoker(log, mockInvokerConfig)
 
-			scmBytes, nvmeBytes, err := GetMaxPoolSize(context.TODO(), mockInvoker)
+			scmBytes, nvmeBytes, err := GetMaxPoolSize(context.TODO(), log, mockInvoker)
 
 			if tc.ExpectedOutput.Error != nil {
 				common.AssertTrue(t, err != nil, "Expected error")
 				common.CmpErr(t, tc.ExpectedOutput.Error, err)
-			} else {
-				common.AssertTrue(t, err == nil, "Expected no error")
-				common.AssertEqual(t,
-					tc.ExpectedOutput.ScmBytes,
-					scmBytes,
-					fmt.Sprintf("Invalid SCM pool size: expected=%d got=%d",
-						tc.ExpectedOutput.ScmBytes,
-						scmBytes))
+				return
+			}
 
-				common.AssertEqual(t,
+			common.AssertTrue(t, err == nil, "Expected no error")
+			common.AssertEqual(t,
+				tc.ExpectedOutput.ScmBytes,
+				scmBytes,
+				fmt.Sprintf("Invalid SCM pool size: expected=%d got=%d",
+					tc.ExpectedOutput.ScmBytes,
+					scmBytes))
+
+			common.AssertEqual(t,
+				tc.ExpectedOutput.NvmeBytes,
+				nvmeBytes,
+				fmt.Sprintf("Invalid NVME pool size: expected=%d got=%d",
 					tc.ExpectedOutput.NvmeBytes,
-					nvmeBytes,
-					fmt.Sprintf("Invalid NVME pool size: expected=%d got=%d",
-						tc.ExpectedOutput.NvmeBytes,
-						nvmeBytes))
+					nvmeBytes))
+			if tc.ExpectedOutput.Debug != "" {
+				common.AssertTrue(t, strings.Contains(buf.String(), tc.ExpectedOutput.Debug),
+					"Missing log message: "+tc.ExpectedOutput.Debug)
 			}
 		})
 	}

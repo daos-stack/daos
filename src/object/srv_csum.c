@@ -59,7 +59,7 @@ struct csum_context {
 	/** checksums for the bsgl. There should be 1
 	 * csum info for each iov in bsgl (that's not a hole)
 	 */
-	struct dcs_csum_info	*cc_biov_csums;
+	struct dcs_ci_list	*cc_biov_csums;
 	uint64_t		 cc_biov_csums_idx;
 	/** while processing, keep an index of csum within csum info  */
 	uint64_t		 cc_biov_csum_idx;
@@ -77,9 +77,8 @@ struct csum_context {
 };
 
 static void
-cc_init(struct csum_context *ctx, struct daos_csummer *csummer,
-	struct bio_sglist *bsgl, struct dcs_csum_info *biov_csums,
-	daos_size_t size)
+cc_init(struct csum_context *ctx, struct daos_csummer *csummer, struct bio_sglist *bsgl,
+	struct dcs_ci_list *biov_csums, daos_size_t size)
 {
 	ctx->cc_csummer = csummer;
 	ctx->cc_rec_len = size;
@@ -293,8 +292,10 @@ cc_iodcsum_incr(struct csum_context *ctx, uint32_t nr)
 static uint8_t *
 cc2biovcsum(const struct csum_context *ctx)
 {
-	return ci_idx2csum(&ctx->cc_biov_csums[ctx->cc_biov_csums_idx],
-			   ctx->cc_biov_csum_idx);
+	struct dcs_csum_info *ci = dcs_csum_info_get(ctx->cc_biov_csums, ctx->cc_biov_csums_idx);
+
+	D_ASSERT(ci);
+	return ci_idx2csum(ci, ctx->cc_biov_csum_idx);
 }
 
 static void
@@ -426,7 +427,6 @@ cc_biov_move_next(struct csum_context *ctx, bool biov_csum_used)
 	/** move to the next biov */
 	ctx->cc_bsgl_idx.iov_idx++;
 	ctx->cc_bsgl_idx.iov_offset = 0;
-	C_TRACE("Moving to biov %d\n", ctx->cc_bsgl_idx.iov_idx);
 
 	/** Need to know if biov csum was used. For holes there is no csum, but
 	 * still need to move to next biov
@@ -435,6 +435,9 @@ cc_biov_move_next(struct csum_context *ctx, bool biov_csum_used)
 		ctx->cc_biov_csum_idx = 0;
 		ctx->cc_biov_csums_idx++;
 	}
+
+	C_TRACE("Moving to biov %d, biov_csum_used: %s, csums_idx: %lu\n", ctx->cc_bsgl_idx.iov_idx,
+		biov_csum_used ? "YES" : "NO", ctx->cc_biov_csums_idx);
 
 	set_biov_ranges(ctx, ctx->cc_cur_recx_idx);
 }
@@ -598,9 +601,8 @@ cc_add_csums_for_recx(struct csum_context *ctx, daos_recx_t *recx,
 }
 
 static int
-ds_csum_add2iod_array(daos_iod_t *iod, struct daos_csummer *csummer,
-		      struct bio_sglist *bsgl,
-		      struct dcs_csum_info *biov_csums, size_t *biov_csums_used,
+ds_csum_add2iod_array(daos_iod_t *iod, struct daos_csummer *csummer, struct bio_sglist *bsgl,
+		      struct dcs_ci_list *biov_csums, size_t *biov_csums_used,
 		      struct dcs_iod_csums *iod_csums)
 {
 	struct csum_context	ctx = {0};
@@ -619,7 +621,7 @@ ds_csum_add2iod_array(daos_iod_t *iod, struct daos_csummer *csummer,
 				bio_sgl_iov(bsgl, i)->bi_data_len);
 			continue;
 		}
-		if (!ci_is_valid(&biov_csums[j++])) {
+		if (!ci_is_valid(dcs_csum_info_get(biov_csums, j++))) {
 			D_ERROR("Invalid csum for biov %d.\n", i);
 			return -DER_CSUM;
 		}
@@ -657,9 +659,9 @@ ds_csum_add2iod_array(daos_iod_t *iod, struct daos_csummer *csummer,
 }
 
 int
-ds_csum_add2iod(daos_iod_t *iod, struct daos_csummer *csummer,
-		struct bio_sglist *bsgl, struct dcs_csum_info *biov_csums,
-		size_t *biov_csums_used, struct dcs_iod_csums *iod_csums)
+ds_csum_add2iod(daos_iod_t *iod, struct daos_csummer *csummer, struct bio_sglist *bsgl,
+		struct dcs_ci_list *biov_csums, size_t *biov_csums_used,
+		struct dcs_iod_csums *iod_csums)
 {
 	if (biov_csums_used != NULL)
 		*biov_csums_used = 0;
@@ -671,10 +673,11 @@ ds_csum_add2iod(daos_iod_t *iod, struct daos_csummer *csummer,
 		return 0;
 
 	if (iod->iod_type == DAOS_IOD_SINGLE) {
-	C_TRACE("Adding fetched to IOD: "DF_C_IOD", csum: "DF_CI"\n",
-		DP_C_IOD(iod), DP_CI(biov_csums[0]));
-		ci_insert(&iod_csums->ic_data[0], 0,
-			  biov_csums[0].cs_csum, biov_csums[0].cs_len);
+		struct dcs_csum_info *ci = dcs_csum_info_get(biov_csums, 0);
+
+		C_TRACE("Adding fetched to IOD: "DF_C_IOD", csum: "DF_CI"\n",
+			DP_C_IOD(iod), DP_CI(*ci));
+		ci_insert(&iod_csums->ic_data[0], 0, ci->cs_csum, ci->cs_len);
 		if (biov_csums_used != NULL)
 			(*biov_csums_used) = 1;
 		return 0;
