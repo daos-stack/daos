@@ -1013,11 +1013,6 @@ def create_mdtest_cmdline(self, job_spec, pool, ppn, nodesperjob):
                         mpirun_cmd = Mpirun(mdtest_cmd, mpi_type=self.mpi_module)
                         mpirun_cmd.assign_processes(nodesperjob * ppn)
                         mpirun_cmd.assign_environment(env, True)
-<<<<<<< HEAD
-                        env_list = mpirun_cmd.env.to_lst()
-                        mpirun_cmd.genv.update(env_list)
-=======
->>>>>>> master
                         mpirun_cmd.ppn.update(ppn)
                         sbatch_cmds.append(str(mpirun_cmd))
                         sbatch_cmds.append("status=$?")
