@@ -40,35 +40,39 @@ func (mod *mgmtModule) ID() drpc.ModuleID {
 	return drpc.ModuleMgmt
 }
 
-// poolResolver defines an interface to be implemented by
-// something that can resolve a pool ID into a PoolService.
-type poolResolver interface {
+// poolDatabase defines an interface to be implemented by
+// a system pool database.
+type poolDatabase interface {
 	FindPoolServiceByLabel(string) (*system.PoolService, error)
 	FindPoolServiceByUUID(uuid.UUID) (*system.PoolService, error)
+	PoolServiceList(all bool) ([]*system.PoolService, error)
+	AddPoolService(ps *system.PoolService) error
+	RemovePoolService(uuid.UUID) error
+	UpdatePoolService(ps *system.PoolService) error
 }
 
 // srvModule represents the daos_server dRPC module. It handles dRPCs sent by
 // the daos_engine (src/engine).
 type srvModule struct {
 	log     logging.Logger
-	sysdb   poolResolver
+	poolDB  poolDatabase
 	engines []Engine
 	events  *events.PubSub
 }
 
 // newSrvModule creates a new srv module references to the system database,
 // resident EngineInstances and event publish subscribe reference.
-func newSrvModule(log logging.Logger, sysdb poolResolver, engines []Engine, events *events.PubSub) *srvModule {
+func newSrvModule(log logging.Logger, sysdb poolDatabase, engines []Engine, events *events.PubSub) *srvModule {
 	return &srvModule{
 		log:     log,
-		sysdb:   sysdb,
+		poolDB:  sysdb,
 		engines: engines,
 		events:  events,
 	}
 }
 
 // HandleCall is the handler for calls to the srvModule.
-func (mod *srvModule) HandleCall(_ context.Context, session *drpc.Session, method drpc.Method, req []byte) ([]byte, error) {
+func (mod *srvModule) HandleCall(ctx context.Context, session *drpc.Session, method drpc.Method, req []byte) ([]byte, error) {
 	switch method {
 	case drpc.MethodNotifyReady:
 		return nil, mod.handleNotifyReady(req)
@@ -80,6 +84,12 @@ func (mod *srvModule) HandleCall(_ context.Context, session *drpc.Session, metho
 		return mod.handlePoolFindByLabel(req)
 	case drpc.MethodClusterEvent:
 		return mod.handleClusterEvent(req)
+	case drpc.MethodCheckerListPools:
+		return mod.handleCheckerListPools(ctx, req)
+	case drpc.MethodCheckerRegisterPool:
+		return mod.handleCheckerRegisterPool(ctx, req)
+	case drpc.MethodCheckerDeregisterPool:
+		return mod.handleCheckerDeregisterPool(ctx, req)
 	default:
 		return nil, drpc.UnknownMethodFailure()
 	}
@@ -105,7 +115,7 @@ func (mod *srvModule) handleGetPoolServiceRanks(reqb []byte) ([]byte, error) {
 
 	resp := new(srvpb.GetPoolSvcResp)
 
-	ps, err := mod.sysdb.FindPoolServiceByUUID(uuid)
+	ps, err := mod.poolDB.FindPoolServiceByUUID(uuid)
 	if err != nil {
 		resp.Status = int32(drpc.DaosNonexistant)
 		mod.log.Debugf("GetPoolSvcResp: %+v", resp)
@@ -129,7 +139,7 @@ func (mod *srvModule) handlePoolFindByLabel(reqb []byte) ([]byte, error) {
 
 	resp := new(srvpb.PoolFindByLabelResp)
 
-	ps, err := mod.sysdb.FindPoolServiceByLabel(req.GetLabel())
+	ps, err := mod.poolDB.FindPoolServiceByLabel(req.GetLabel())
 	if err != nil {
 		resp.Status = int32(drpc.DaosNonexistant)
 		mod.log.Debugf("PoolFindByLabelResp: %+v", resp)

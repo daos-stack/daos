@@ -463,49 +463,49 @@ void   srv__check_reg_pool_resp__free_unpacked
   assert(message->base.descriptor == &srv__check_reg_pool_resp__descriptor);
   protobuf_c_message_free_unpacked ((ProtobufCMessage*)message, allocator);
 }
-void   srv__check_dereg_pool_rep__init
-                     (Srv__CheckDeregPoolRep         *message)
+void   srv__check_dereg_pool_req__init
+                     (Srv__CheckDeregPoolReq         *message)
 {
-  static const Srv__CheckDeregPoolRep init_value = SRV__CHECK_DEREG_POOL_REP__INIT;
+  static const Srv__CheckDeregPoolReq init_value = SRV__CHECK_DEREG_POOL_REQ__INIT;
   *message = init_value;
 }
-size_t srv__check_dereg_pool_rep__get_packed_size
-                     (const Srv__CheckDeregPoolRep *message)
+size_t srv__check_dereg_pool_req__get_packed_size
+                     (const Srv__CheckDeregPoolReq *message)
 {
-  assert(message->base.descriptor == &srv__check_dereg_pool_rep__descriptor);
+  assert(message->base.descriptor == &srv__check_dereg_pool_req__descriptor);
   return protobuf_c_message_get_packed_size ((const ProtobufCMessage*)(message));
 }
-size_t srv__check_dereg_pool_rep__pack
-                     (const Srv__CheckDeregPoolRep *message,
+size_t srv__check_dereg_pool_req__pack
+                     (const Srv__CheckDeregPoolReq *message,
                       uint8_t       *out)
 {
-  assert(message->base.descriptor == &srv__check_dereg_pool_rep__descriptor);
+  assert(message->base.descriptor == &srv__check_dereg_pool_req__descriptor);
   return protobuf_c_message_pack ((const ProtobufCMessage*)message, out);
 }
-size_t srv__check_dereg_pool_rep__pack_to_buffer
-                     (const Srv__CheckDeregPoolRep *message,
+size_t srv__check_dereg_pool_req__pack_to_buffer
+                     (const Srv__CheckDeregPoolReq *message,
                       ProtobufCBuffer *buffer)
 {
-  assert(message->base.descriptor == &srv__check_dereg_pool_rep__descriptor);
+  assert(message->base.descriptor == &srv__check_dereg_pool_req__descriptor);
   return protobuf_c_message_pack_to_buffer ((const ProtobufCMessage*)message, buffer);
 }
-Srv__CheckDeregPoolRep *
-       srv__check_dereg_pool_rep__unpack
+Srv__CheckDeregPoolReq *
+       srv__check_dereg_pool_req__unpack
                      (ProtobufCAllocator  *allocator,
                       size_t               len,
                       const uint8_t       *data)
 {
-  return (Srv__CheckDeregPoolRep *)
-     protobuf_c_message_unpack (&srv__check_dereg_pool_rep__descriptor,
+  return (Srv__CheckDeregPoolReq *)
+     protobuf_c_message_unpack (&srv__check_dereg_pool_req__descriptor,
                                 allocator, len, data);
 }
-void   srv__check_dereg_pool_rep__free_unpacked
-                     (Srv__CheckDeregPoolRep *message,
+void   srv__check_dereg_pool_req__free_unpacked
+                     (Srv__CheckDeregPoolReq *message,
                       ProtobufCAllocator *allocator)
 {
   if(!message)
     return;
-  assert(message->base.descriptor == &srv__check_dereg_pool_rep__descriptor);
+  assert(message->base.descriptor == &srv__check_dereg_pool_req__descriptor);
   protobuf_c_message_free_unpacked ((ProtobufCMessage*)message, allocator);
 }
 void   srv__check_dereg_pool_resp__init
@@ -1314,7 +1314,7 @@ const ProtobufCMessageDescriptor srv__check_reg_pool_resp__descriptor =
   (ProtobufCMessageInit) srv__check_reg_pool_resp__init,
   NULL,NULL,NULL    /* reserved[123] */
 };
-static const ProtobufCFieldDescriptor srv__check_dereg_pool_rep__field_descriptors[2] =
+static const ProtobufCFieldDescriptor srv__check_dereg_pool_req__field_descriptors[2] =
 {
   {
     "seq",
@@ -1322,7 +1322,7 @@ static const ProtobufCFieldDescriptor srv__check_dereg_pool_rep__field_descripto
     PROTOBUF_C_LABEL_NONE,
     PROTOBUF_C_TYPE_UINT64,
     0,   /* quantifier_offset */
-    offsetof(Srv__CheckDeregPoolRep, seq),
+    offsetof(Srv__CheckDeregPoolReq, seq),
     NULL,
     NULL,
     0,             /* flags */
@@ -1334,35 +1334,35 @@ static const ProtobufCFieldDescriptor srv__check_dereg_pool_rep__field_descripto
     PROTOBUF_C_LABEL_NONE,
     PROTOBUF_C_TYPE_STRING,
     0,   /* quantifier_offset */
-    offsetof(Srv__CheckDeregPoolRep, uuid),
+    offsetof(Srv__CheckDeregPoolReq, uuid),
     NULL,
     &protobuf_c_empty_string,
     0,             /* flags */
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
 };
-static const unsigned srv__check_dereg_pool_rep__field_indices_by_name[] = {
+static const unsigned srv__check_dereg_pool_req__field_indices_by_name[] = {
   0,   /* field[0] = seq */
   1,   /* field[1] = uuid */
 };
-static const ProtobufCIntRange srv__check_dereg_pool_rep__number_ranges[1 + 1] =
+static const ProtobufCIntRange srv__check_dereg_pool_req__number_ranges[1 + 1] =
 {
   { 1, 0 },
   { 0, 2 }
 };
-const ProtobufCMessageDescriptor srv__check_dereg_pool_rep__descriptor =
+const ProtobufCMessageDescriptor srv__check_dereg_pool_req__descriptor =
 {
   PROTOBUF_C__MESSAGE_DESCRIPTOR_MAGIC,
-  "srv.CheckDeregPoolRep",
-  "CheckDeregPoolRep",
-  "Srv__CheckDeregPoolRep",
+  "srv.CheckDeregPoolReq",
+  "CheckDeregPoolReq",
+  "Srv__CheckDeregPoolReq",
   "srv",
-  sizeof(Srv__CheckDeregPoolRep),
+  sizeof(Srv__CheckDeregPoolReq),
   2,
-  srv__check_dereg_pool_rep__field_descriptors,
-  srv__check_dereg_pool_rep__field_indices_by_name,
-  1,  srv__check_dereg_pool_rep__number_ranges,
-  (ProtobufCMessageInit) srv__check_dereg_pool_rep__init,
+  srv__check_dereg_pool_req__field_descriptors,
+  srv__check_dereg_pool_req__field_indices_by_name,
+  1,  srv__check_dereg_pool_req__number_ranges,
+  (ProtobufCMessageInit) srv__check_dereg_pool_req__init,
   NULL,NULL,NULL    /* reserved[123] */
 };
 static const ProtobufCFieldDescriptor srv__check_dereg_pool_resp__field_descriptors[1] =
