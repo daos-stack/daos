@@ -182,7 +182,7 @@ func (svc *mgmtSvc) calculateCreateStorage(req *mgmtpb.PoolCreateReq) error {
 	}
 
 	switch {
-	case !instances[0].HasBlockDevices():
+	case !instances[0].GetStorage().HasBlockDevices():
 		svc.log.Info("config has 0 bdevs; excluding NVMe from pool create request")
 		for tierIdx := range req.Tierbytes {
 			if tierIdx > 0 {
@@ -752,6 +752,28 @@ func (svc *mgmtSvc) PoolQuery(ctx context.Context, req *mgmtpb.PoolQueryReq) (*m
 	}
 
 	svc.log.Debugf("MgmtSvc.PoolQuery dispatch, resp:%+v\n", resp)
+
+	return resp, nil
+}
+
+// PoolUpgrade forwards a pool upgrade request to the I/O Engine.
+func (svc *mgmtSvc) PoolUpgrade(ctx context.Context, req *mgmtpb.PoolUpgradeReq) (*mgmtpb.PoolUpgradeResp, error) {
+	if err := svc.checkLeaderRequest(req); err != nil {
+		return nil, err
+	}
+	svc.log.Debugf("MgmtSvc.PoolUpgrade dispatch, req:%+v\n", req)
+
+	dresp, err := svc.makePoolServiceCall(ctx, drpc.MethodPoolUpgrade, req)
+	if err != nil {
+		return nil, err
+	}
+
+	resp := &mgmtpb.PoolUpgradeResp{}
+	if err = proto.Unmarshal(dresp.Body, resp); err != nil {
+		return nil, errors.Wrap(err, "unmarshal PoolUpgrade response")
+	}
+
+	svc.log.Debugf("MgmtSvc.PoolUpgrade dispatch, resp:%+v\n", resp)
 
 	return resp, nil
 }

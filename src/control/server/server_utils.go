@@ -122,13 +122,12 @@ func updateFabricEnvars(log logging.Logger, cfg *engine.Config, fis *hardware.Fa
 	// Mercury will now support the new OFI_DOMAIN environment variable so
 	// that we can specify the correct device for each.
 	if !cfg.HasEnvVar("OFI_DOMAIN") {
-		fi, err := fis.GetInterfaceOnOSDevice(cfg.Fabric.Interface, cfg.Fabric.Provider)
+		fi, err := fis.GetInterfaceOnNetDevice(cfg.Fabric.Interface, cfg.Fabric.Provider)
 		if err != nil {
 			return errors.Wrapf(err, "unable to determine device domain for %s", cfg.Fabric.Interface)
 		}
-		domain := fi.Name
-		log.Debugf("setting OFI_DOMAIN=%s for %s", domain, cfg.Fabric.Interface)
-		envVar := "OFI_DOMAIN=" + domain
+		log.Debugf("setting OFI_DOMAIN=%s for %s", fi.Name, cfg.Fabric.Interface)
+		envVar := "OFI_DOMAIN=" + fi.Name
 		cfg.WithEnvVars(envVar)
 	}
 
@@ -484,6 +483,7 @@ func getGrpcOpts(cfgTransport *security.TransportConfig) ([]grpc.ServerOption, e
 	unaryInterceptors := []grpc.UnaryServerInterceptor{
 		unaryErrorInterceptor,
 		unaryStatusInterceptor,
+		unaryVersionInterceptor,
 	}
 	streamInterceptors := []grpc.StreamServerInterceptor{
 		streamErrorInterceptor,
