@@ -18,7 +18,7 @@ dc_pipeline_run_task_create(daos_handle_t coh, daos_handle_t oh,
 			    uint32_t *nr_kds, daos_key_desc_t *kds,
 			    d_sg_list_t *sgl_keys, d_sg_list_t *sgl_recx,
 			    d_sg_list_t *sgl_agg,
-			    daos_pipeline_scanned_t *scanned, daos_event_t *ev,
+			    daos_pipeline_stats_t *stats, daos_event_t *ev,
 			    tse_sched_t *tse, tse_task_t **task)
 {
 	daos_pipeline_run_t	*args;
@@ -45,7 +45,7 @@ dc_pipeline_run_task_create(daos_handle_t coh, daos_handle_t oh,
 	args->sgl_keys		= sgl_keys;
 	args->sgl_recx		= sgl_recx;
 	args->sgl_agg		= sgl_agg;
-	args->scanned		= scanned;
+	args->stats		= stats;
 
 	return 0;
 }

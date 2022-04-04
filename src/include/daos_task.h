@@ -1012,8 +1012,8 @@ typedef struct {
 	d_sg_list_t			*sgl_recx;
 	/** returned aggregations */
 	d_sg_list_t			*sgl_agg;
-	/** returned total scanned items (filtered and not filtered) */
-	daos_pipeline_scanned_t		*scanned;
+	/** returned pipeline stats  */
+	daos_pipeline_stats_t		*stats;
 } daos_pipeline_run_t;
 
 /**

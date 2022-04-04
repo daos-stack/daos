@@ -172,39 +172,30 @@ typedef struct {
 	daos_filter_t	**aggr_filters;
 } daos_pipeline_t;
 
-/**
- * Used to keep track of the total number of items scanned by
- * daos_pipeline_run().
- *
- * For example, in a particular context, a filter may just return 10 dkeys out
- * of 1 million. Although we are interested in the dkeys that pass the filter,
- * it may also be useful to know how many dkeys did not pass the filter.
- *
- * The different variables are used as follows:
- *
- *   -- objs:  If filtering by object ids, \a objs will register the number of
- *             objects considered. Otherwise (i.e., if an object handle is
- *             passed), objs will always be zero (not one).
- *
- *   -- dkeys: If filtering by dkey or akeys (or a combination of both),
- *             \a dkeys will register the number of dkeys considered. Realize
- *             that a record may not pass a filter due to a condition in an akey,
- *             not the dkey. \a dkeys only tells you the records that have been
- *             considered, no matter if the filter was done by dkey or akey or
- *             both. If a dkey is provided to daos_pipeline_run(), \a dkeys will
- *             always be zero (not one).
- *
- *   -- akeys: This variable will only be non-zero when a dkey is provided to
- *             daos_pipeline_run(). In that case, what is being filtered is
- *             what akeys from a particular dkey are returned. In that case,
- *             the number of akeys considered has meaning. Otherwise, \a akeys
- *             will always be zero.
+/*
+ * Gather some statistics of daos_pipeline_run(); like the number of items that have been scanned.
  */
 typedef struct {
-	daos_size_t	objs;
-	daos_size_t	dkeys;
-	daos_size_t	akeys;
-} daos_pipeline_scanned_t;
+	/*
+	 * If filtering by object ids, \a nr_objs will register the number of objects
+	 * considered. Otherwise (i.e., if an object handle is passed), objs will always be zero
+	 * (not one).
+	 */
+	uint64_t	nr_objs;
+	/*
+	 * If filtering by dkey or akeys (or a combination of both), \a nr_dkeys will register the
+	 * total number of dkeys scanned. If a record may not pass a filter due to a condition in an
+	 * akey, not the dkey, \a nr_dkeys only returns the records that have been scanned, no
+	 * matter if the filter was done by dkey or akey or both. If a dkey is provided to
+	 * daos_pipeline_run(), \a nr_dkeys will always be zero (not one).
+	 */
+	uint64_t	nr_dkeys;
+	/*
+	 * This variable will only be non-zero when a dkey is provided to daos_pipeline_run(), where
+	 * akeys are being filtered from a particular dkey.
+	 */
+	uint64_t	nr_akeys;
+} daos_pipeline_stats_t;
 
 /**
  * Initializes a new pipeline object.
@@ -325,7 +316,7 @@ daos_pipeline_check(daos_pipeline_t *pipeline);
  *					8 bytes.
  *					[out]: All returned aggregated values.
  *
- * \param[out]		scanned		[in]: Optional preallocated object.
+ * \param[out]		stats		[in]: Optional preallocated object.
  *					[out]: The total number of items
  *					(objects, dkeys, and akeys) scanned
  *					while filtering and/or aggregating.
@@ -340,7 +331,7 @@ daos_pipeline_run(daos_handle_t coh, daos_handle_t oh, daos_pipeline_t *pipeline
 		  uint32_t *nr_iods, daos_iod_t *iods, daos_anchor_t *anchor,
 		  uint32_t *nr_kds, daos_key_desc_t *kds, d_sg_list_t *sgl_keys,
 		  d_sg_list_t *sgl_recx, d_sg_list_t *sgl_agg,
-		  daos_pipeline_scanned_t *scanned, daos_event_t *ev);
+		  daos_pipeline_stats_t *stats, daos_event_t *ev);
 
 #if defined(__cplusplus)
 }

@@ -633,7 +633,7 @@ run_pipeline(daos_pipeline_t *pipeline)
 	d_iov_t				*iovs_aggr;
 	char				*buf_recx;
 	char				*buf_aggr;
-	daos_pipeline_scanned_t		scanned = { 0 };
+	daos_pipeline_stats_t		stats = { 0 };
 	uint32_t			i, j, l;
 	int				rc;
 
@@ -699,7 +699,7 @@ run_pipeline(daos_pipeline_t *pipeline)
 		rc = daos_pipeline_run(coh, oh, pipeline, DAOS_TX_NONE, 0,
 				       NULL, &nr_iods, iods, &anchor, &nr_kds,
 				       kds, sgl_keys, sgl_recx, sgl_aggr,
-				       &scanned, NULL);
+				       &stats, NULL);
 
 		ASSERT(rc == 0, "Pipeline run failed with %d", rc);
 		/** process nr_kds fetched records */
@@ -729,7 +729,7 @@ run_pipeline(daos_pipeline_t *pipeline)
 				 *akey);
 		}
 	}
-	printf("\t(scanned %lu dkeys)\n", scanned.dkeys);
+	printf("\t(scanned %lu dkeys)\n", stats.nr_dkeys);
 	for (i = 0; i < nr_aggr; i++) {
 		double *res = (double *) sgl_aggr[i].sg_iovs->iov_buf;
 		printf("  ---agg result[%u]=%f---\n",i,*res);

@@ -20,6 +20,7 @@
 
 #define NR_RECXS	4
 #define FSIZE		15
+#define NUM_DKEYS	1024
 
 static daos_handle_t	poh; /** pool */
 static daos_handle_t	coh; /** container */
@@ -40,15 +41,13 @@ insert_example_records(void)
 	time_t		atime, ctime, mtime;
 	mode_t		mode;
 
-	for (i = 0; i < 100; i++) {
+	for (i = 0; i < NUM_DKEYS; i++) {
 		int j = 0;
 
 		if (i < 10)
 			sprintf(fname, "file.0%d", i);
-		else 
+		else
 			sprintf(fname, "file.%d", i);
-
-		//printf("insert DKEY = %s\n", fname);
 
 		/** set dkey for record */
 		d_iov_set(&dkey, &fname, strlen(fname));
@@ -87,7 +86,6 @@ insert_example_records(void)
 		rc = daos_obj_update(oh, DAOS_TX_NONE, 0, &dkey, 1, &iod, &sgl, NULL);
 		ASSERT(rc == 0, "Obj update failed with %d", rc);
 	}
-	return;
 }
 
 #define BINARY_F	"DAOS_FILTER_TYPE_BINARY"
@@ -209,8 +207,10 @@ build_pipeline_one(daos_pipeline_t *pipeline)
 	d_iov_set(&gt_ft.part_type, GT_F, gt_flen);
 	gt_ft.num_operands = 2;
 
-	/** build final condition where result should be the:
-	    bitwise array cond || (dkey condition && mtime array) */
+	/*
+	 * build final condition where result should be the:
+	 * bitwise array cond || (dkey condition && mtime array)
+	*/
 
 	d_iov_set(&and_ft.part_type, AND_F, and_flen);
 	and_ft.num_operands = 2;
@@ -270,7 +270,7 @@ run_pipeline(daos_pipeline_t *pipeline)
 	d_iov_t				*iovs_recs;
 	char				*buf_recs;
 	daos_recx_t			recxs[2];
-	daos_pipeline_scanned_t		scanned = { 0 };
+	daos_pipeline_stats_t		stats = { 0 };
 	uint32_t			i;
 	int				rc;
 
@@ -320,9 +320,8 @@ run_pipeline(daos_pipeline_t *pipeline)
 	while (!daos_anchor_is_eof(&anchor)) {
 		nr_kds = 16; /** trying to read 16 in each iteration */
 
-		rc = daos_pipeline_run(coh, oh, pipeline, DAOS_TX_NONE, 0,
-				       NULL, &nr_iods, &iod, &anchor, &nr_kds,
-				       kds, sgl_keys, sgl_recs ,NULL, &scanned,
+		rc = daos_pipeline_run(coh, oh, pipeline, DAOS_TX_NONE, 0, NULL, &nr_iods, &iod,
+				       &anchor, &nr_kds, kds, sgl_keys, sgl_recs, NULL, &stats,
 				       NULL);
 		ASSERT(rc == 0, "Pipeline run failed with %d", rc);
 
@@ -345,7 +344,8 @@ run_pipeline(daos_pipeline_t *pipeline)
 				ASSERT(0, "ERROR: invalid mode_t retrieved\n");
 		}
 	}
-	printf("\t(scanned %lu dkeys)\n\n", scanned.dkeys);
+	printf("\tNumber of dkeys scanned: %zu\n\n", stats.nr_dkeys);
+	ASSERT(stats.nr_dkeys == NUM_DKEYS, "Number of dkeys scanned != inserted number\n");
 
 	free(kds);
 	free(sgl_keys);

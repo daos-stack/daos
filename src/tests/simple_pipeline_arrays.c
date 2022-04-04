@@ -315,7 +315,7 @@ run_pipeline(daos_pipeline_t *pipeline)
 	d_iov_t				*iovs_recs;
 	char				*buf_recs;
 	daos_recx_t			recxs[NR_RECXS];
-	daos_pipeline_scanned_t		scanned = { 0 };
+	daos_pipeline_stats_t		stats = { 0 };
 	uint32_t			i, j;
 	int				rc;
 
@@ -373,7 +373,7 @@ run_pipeline(daos_pipeline_t *pipeline)
 
 		rc = daos_pipeline_run(coh, oh, pipeline, DAOS_TX_NONE, 0,
 				       NULL, &nr_iods, &iod, &anchor, &nr_kds,
-				       kds, sgl_keys, sgl_recs ,NULL, &scanned,
+				       kds, sgl_keys, sgl_recs, NULL, &stats,
 				       NULL);
 		ASSERT(rc == 0, "Pipeline run failed with %d", rc);
 
@@ -414,7 +414,7 @@ run_pipeline(daos_pipeline_t *pipeline)
 			printf("\n");
 		}
 	}
-	printf("\t(scanned %lu dkeys)\n\n", scanned.dkeys);
+	printf("\t(scanned %lu dkeys)\n\n", stats.nr_dkeys);
 
 	free(kds);
 	free(sgl_keys);
