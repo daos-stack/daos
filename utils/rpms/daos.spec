@@ -540,10 +540,10 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 
 %changelog
 * Sat Apr  2 2022 Joseph Moore <joseph.moore@intel.com> 2.1.100-25
-- Update to mercury 2.0.1.rc4-8 to include UCX provider patch
+- Update to mercury 2.1.0.rc4-8 to include UCX provider patch
 
 * Fri Mar 11 2022 Alexander Oganezov <alexander.a.oganezov@intel.com> 2.1.100-24
-- Update to mercury 2.0.1.rc4-6 to include CXI provider patch
+- Update to mercury 2.1.0.rc4-6 to include CXI provider patch
 
 * Wed Mar 02 2022 Michael Hennecke <michael.hennecke@intel.com> 2.1.100-23
 - DAOS-6344: Create secondary group daos_daemons for daos_server and daos_agent
