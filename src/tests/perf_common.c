@@ -273,7 +273,7 @@ dkey_update_or_fetch(enum ts_op_type op_type, daos_key_t *dkey, daos_epoch_t *ep
 
 	for (i = 0; i < ts_akey_p_dkey; i++) {
 		akey_idx = i;
-		if (!ts_const_akey)
+		if (ts_const_akey)
 			akey_idx = 0;
 		for (j = 0; j < ts_recx_p_akey; j++) {
 			for (k = 0; k < ts_obj_p_cont; k++) {
@@ -680,7 +680,8 @@ show_result(struct pf_param *param, uint64_t start, uint64_t end,
 			total = ts_ctx.tsc_mpi_size * param->pa_iteration *
 				ts_obj_p_cont;
 		} else if (strcmp(test_name, "AGGREGATE") == 0 ||
-			   strcmp(test_name, "DISCARD") == 0) {
+			   strcmp(test_name, "DISCARD") == 0 ||
+			   strcmp(test_name, "GARBAGE COLLECTION") == 0) {
 			total = ts_ctx.tsc_mpi_size * param->pa_iteration;
 		} else if (strcmp(test_name, "PUNCH") == 0) {
 			total = ts_ctx.tsc_mpi_size * param->pa_iteration * ts_obj_p_cont;

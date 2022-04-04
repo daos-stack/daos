@@ -691,6 +691,7 @@ rebuild_container_scan_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 				 &snapshot_cnt);
 	if (rc) {
 		D_ERROR("ds_cont_fetch_snaps failed: "DF_RC"\n", DP_RC(rc));
+		vos_cont_close(coh);
 		return rc;
 	}
 

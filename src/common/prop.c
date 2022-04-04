@@ -17,6 +17,7 @@
 #include <daos_security.h>
 #include <daos/cont_props.h>
 #include <daos_srv/policy.h>
+#include <daos/pool.h>
 
 daos_prop_t *
 daos_prop_alloc(uint32_t entries_nr)
@@ -311,8 +312,26 @@ daos_prop_valid(daos_prop_t *prop, bool pool, bool input)
 				return false;
 			}
 			break;
+		case DAOS_PROP_PO_REDUN_FAC:
+			val = prop->dpp_entries[i].dpe_val;
+			if (!daos_rf_is_valid(val)) {
+				D_ERROR("invalid rf "DF_U64"\n", val);
+				return false;
+			}
+			break;
 		case DAOS_PROP_PO_SELF_HEAL:
 		case DAOS_PROP_PO_EC_CELL_SZ:
+		case DAOS_PROP_PO_EC_PDA:
+		case DAOS_PROP_PO_RP_PDA:
+		case DAOS_PROP_PO_GLOBAL_VERSION:
+			break;
+		case DAOS_PROP_PO_UPGRADE_STATUS:
+			val = prop->dpp_entries[i].dpe_val;
+			if (val > DAOS_UPGRADE_STATUS_COMPLETED) {
+				D_ERROR("invalid pool upgrade status "DF_U64".\n",
+					val);
+				return false;
+			}
 			break;
 		case DAOS_PROP_PO_RECLAIM:
 			val = prop->dpp_entries[i].dpe_val;
@@ -461,6 +480,9 @@ daos_prop_valid(daos_prop_t *prop, bool pool, bool input)
 		case DAOS_PROP_CO_SNAPSHOT_MAX:
 		case DAOS_PROP_CO_ROOTS:
 		case DAOS_PROP_CO_EC_CELL_SZ:
+		case DAOS_PROP_CO_EC_PDA:
+		case DAOS_PROP_CO_RP_PDA:
+		case DAOS_PROP_CO_GLOBAL_VERSION:
 			break;
 		default:
 			D_ERROR("invalid dpe_type %d.\n", type);
@@ -486,6 +508,7 @@ daos_prop_entry_copy(struct daos_prop_entry *entry,
 	daos_prop_entry_free_value(entry_dup);
 
 	entry_dup->dpe_type = entry->dpe_type;
+	entry_dup->dpe_flags = entry->dpe_flags;
 	switch (entry->dpe_type) {
 	case DAOS_PROP_PO_LABEL:
 	case DAOS_PROP_CO_LABEL:
@@ -556,19 +579,30 @@ daos_prop_dup(daos_prop_t *prop, bool pool, bool input)
 {
 	daos_prop_t		*prop_dup;
 	struct daos_prop_entry	*entry, *entry_dup;
-	int			 i;
+	int			 i, j;
 	int			 rc;
+	int			 valid_nr = 0;
 
 	if (!daos_prop_valid(prop, pool, input))
 		return NULL;
 
-	prop_dup = daos_prop_alloc(prop->dpp_nr);
+	for (i = 0; i < prop->dpp_nr; i++) {
+		entry = &prop->dpp_entries[i];
+		if (daos_prop_is_set(entry))
+			valid_nr++;
+	}
+	if (valid_nr == 0)
+		return NULL;
+	prop_dup = daos_prop_alloc(valid_nr);
 	if (prop_dup == NULL)
 		return NULL;
 
+	j = 0;
 	for (i = 0; i < prop->dpp_nr; i++) {
 		entry = &prop->dpp_entries[i];
-		entry_dup = &prop_dup->dpp_entries[i];
+		if (!daos_prop_is_set(entry))
+			continue;
+		entry_dup = &prop_dup->dpp_entries[j++];
 		rc = daos_prop_entry_copy(entry, entry_dup);
 		if (rc != 0) {
 			daos_prop_free(prop_dup);
@@ -727,19 +761,25 @@ daos_prop_copy(daos_prop_t *prop_req, daos_prop_t *prop_reply)
 		entries_alloc = true;
 	}
 
-	for (i = 0; i < prop_req->dpp_nr && i < prop_reply->dpp_nr; i++) {
+	for (i = 0; i < prop_req->dpp_nr; i++) {
 		entry_req = &prop_req->dpp_entries[i];
 		type = entry_req->dpe_type;
 		if (type == 0) {
 			/* req doesn't have any entry type populated yet */
-			type = prop_reply->dpp_entries[i].dpe_type;
-			entry_req->dpe_type = type;
+			if (i < prop_reply->dpp_nr) {
+				type = prop_reply->dpp_entries[i].dpe_type;
+				entry_req->dpe_type = type;
+			} else {
+				return 0;
+			}
 		}
+		/* this is possible now */
 		entry_reply = daos_prop_entry_get(prop_reply, type);
 		if (entry_reply == NULL) {
-			D_ERROR("cannot find prop entry for type %d.\n", type);
-			D_GOTO(out, rc = -DER_PROTO);
+			entry_req->dpe_flags |= DAOS_PROP_ENTRY_NOT_SET;
+			continue;
 		}
+		entry_req->dpe_flags = entry_reply->dpe_flags;
 		if (type == DAOS_PROP_PO_LABEL || type == DAOS_PROP_CO_LABEL) {
 			D_STRNDUP(entry_req->dpe_str, entry_reply->dpe_str,
 				  DAOS_PROP_LABEL_MAX_LEN);
@@ -990,6 +1030,12 @@ parse_entry(char *str, struct daos_prop_entry *entry)
 	} else if (strcmp(name, DAOS_PROP_ENTRY_EC_CELL_SZ) == 0) {
 		entry->dpe_type = DAOS_PROP_CO_EC_CELL_SZ;
 		entry->dpe_val = strtoull(val, NULL, 0);
+	} else if (strcmp(name, DAOS_PROP_ENTRY_EC_PDA) == 0) {
+		entry->dpe_type = DAOS_PROP_CO_EC_PDA;
+		entry->dpe_val = strtoull(val, NULL, 0);
+	} else if (strcmp(name, DAOS_PROP_ENTRY_RP_PDA) == 0) {
+		entry->dpe_type = DAOS_PROP_CO_RP_PDA;
+		entry->dpe_val = strtoull(val, NULL, 0);
 	} else if (strcmp(name, DAOS_PROP_ENTRY_LAYOUT_TYPE) == 0 ||
 		   strcmp(name, DAOS_PROP_ENTRY_LAYOUT_VER) == 0 ||
 		   strcmp(name, DAOS_PROP_ENTRY_REDUN_LVL) == 0 ||
@@ -997,7 +1043,8 @@ parse_entry(char *str, struct daos_prop_entry *entry)
 		   strcmp(name, DAOS_PROP_ENTRY_ALLOCED_OID) == 0 ||
 		   strcmp(name, DAOS_PROP_ENTRY_STATUS) == 0 ||
 		   strcmp(name, DAOS_PROP_ENTRY_OWNER) == 0 ||
-		   strcmp(name, DAOS_PROP_ENTRY_GROUP) == 0) {
+		   strcmp(name, DAOS_PROP_ENTRY_GROUP) == 0 ||
+		   strcmp(name, DAOS_PROP_ENTRY_GLOBAL_VERSION) == 0) {
 		D_ERROR("Property %s is read only\n", name);
 		rc = -DER_INVAL;
 	} else {

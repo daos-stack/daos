@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2021 Intel Corporation.
+ * (C) Copyright 2021-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -51,6 +51,12 @@ struct pf_param {
 			/* dkey flag */
 			bool	dkey_flag;
 		} pa_rw;
+		struct {
+			/* full scan */
+			bool	full_scan;
+			/* Force merge */
+			bool	force_merge;
+		} pa_agg;
 	};
 };
 
@@ -210,5 +216,8 @@ int
 perf_alloc_keys(void);
 void
 perf_setup_keys(void);
+
+/** Add extern for vos internal function */
+void gc_wait(void);
 
 #endif /* __PERF_INTERNAL_H__ */
