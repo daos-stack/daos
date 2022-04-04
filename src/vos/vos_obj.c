@@ -312,8 +312,12 @@ key_punch(struct vos_object *obj, daos_epoch_t epoch, daos_epoch_t bound,
 					 VOS_ITER_AKEY);
 	}
 
-	if (rc != 1)
+	if (rc != 1) {
+		/** key_tree_punch will handle dkey flags if punch is propagated */
+		if (rc == 0)
+			rc = vos_key_mark_agg(vos_cont2umm(obj->obj_cont), krec, epoch);
 		goto out;
+	}
 	/** else propagate the punch */
 
 punch_dkey:
@@ -500,6 +504,10 @@ vos_obj_punch(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 					obj->obj_df->vo_max_write = epr.epr_hi;
 			}
 
+			if (rc == 0)
+				rc = vos_mark_agg(vos_cont2umm(cont), &obj->obj_df->vo_tree,
+						  &cont->vc_cont_df->cd_obj_root, epoch);
+
 			vos_obj_release(vos_obj_cache_current(), obj, rc != 0);
 		}
 	}
@@ -674,7 +682,6 @@ key_iter_ilog_check(struct vos_krec_df *krec, struct vos_obj_iter *oiter,
 
 	rc = vos_ilog_check(&oiter->it_ilog_info, &oiter->it_epr, epr,
 			    (oiter->it_flags & VOS_IT_PUNCHED) == 0);
-
 out:
 	D_ASSERTF(check_existence || rc != -DER_NONEXIST,
 		  "Probe is required before fetch\n");
@@ -729,16 +736,60 @@ fail:
  */
 
 static int
+key_iter_fill(struct vos_krec_df *krec, struct vos_obj_iter *oiter, bool check_existence,
+	      vos_iter_entry_t *ent)
+{
+	daos_epoch_range_t	epr = {0, DAOS_EPOCH_MAX};
+	uint32_t		ts_type;
+	int			rc;
+
+	if (oiter->it_iter.it_type == VOS_ITER_AKEY) {
+		if (krec->kr_bmap & KREC_BF_EVT) {
+			ent->ie_child_type = VOS_ITER_RECX;
+		} else if (krec->kr_bmap & KREC_BF_BTR) {
+			ent->ie_child_type = VOS_ITER_SINGLE;
+		} else {
+			ent->ie_child_type = VOS_ITER_NONE;
+		}
+		ts_type = VOS_TS_TYPE_AKEY;
+	} else {
+		ent->ie_child_type = VOS_ITER_AKEY;
+		ts_type = VOS_TS_TYPE_DKEY;
+	}
+
+	rc = key_iter_ilog_check(krec, oiter, oiter->it_iter.it_type, &epr,
+				 check_existence, NULL);
+	if (rc == -DER_NONEXIST)
+		return VOS_ITER_CB_SKIP;
+	if (rc != 0) {
+		if (!oiter->it_iter.it_show_uncommitted || rc != -DER_INPROGRESS)
+			return rc;
+		/** Mark the entry as uncommitted but return it to the iterator */
+		ent->ie_vis_flags = VOS_IT_UNCOMMITTED;
+	} else {
+		ent->ie_vis_flags = VOS_VIS_FLAG_VISIBLE;
+		if (oiter->it_ilog_info.ii_create == 0) {
+			/* The key has no visible subtrees so mark it covered */
+			ent->ie_vis_flags = VOS_VIS_FLAG_COVERED;
+		}
+	}
+
+	ent->ie_epoch = epr.epr_hi;
+	ent->ie_punch = oiter->it_ilog_info.ii_next_punch;
+	ent->ie_obj_punch = oiter->it_obj->obj_ilog_info.ii_next_punch;
+	vos_ilog_last_update(&krec->kr_ilog, ts_type, &ent->ie_last_update);
+
+	return 0;
+}
+
+static int
 key_iter_fetch(struct vos_obj_iter *oiter, vos_iter_entry_t *ent,
 	       daos_anchor_t *anchor, bool check_existence, uint32_t flags)
 {
 
 	uint64_t		 start_seq;
 	vos_iter_desc_t		 desc;
-	struct vos_krec_df	*krec;
 	struct vos_rec_bundle	 rbund;
-	daos_epoch_range_t	 epr = {0, DAOS_EPOCH_MAX};
-	uint32_t		 ts_type;
 	unsigned int		 acts;
 	int			 rc;
 
@@ -769,45 +820,7 @@ key_iter_fetch(struct vos_obj_iter *oiter, vos_iter_entry_t *ent,
 	}
 
 	D_ASSERT(rbund.rb_krec);
-	if (oiter->it_iter.it_type == VOS_ITER_AKEY) {
-		if (rbund.rb_krec->kr_bmap & KREC_BF_EVT) {
-			ent->ie_child_type = VOS_ITER_RECX;
-		} else if (rbund.rb_krec->kr_bmap & KREC_BF_BTR) {
-			ent->ie_child_type = VOS_ITER_SINGLE;
-		} else {
-			ent->ie_child_type = VOS_ITER_NONE;
-		}
-		ts_type = VOS_TS_TYPE_AKEY;
-	} else {
-		ent->ie_child_type = VOS_ITER_AKEY;
-		ts_type = VOS_TS_TYPE_DKEY;
-	}
-
-	krec = rbund.rb_krec;
-
-	rc = key_iter_ilog_check(krec, oiter, oiter->it_iter.it_type, &epr,
-				 check_existence, NULL);
-	if (rc == -DER_NONEXIST)
-		return VOS_ITER_CB_SKIP;
-	if (rc != 0) {
-		if (!oiter->it_iter.it_show_uncommitted || rc != -DER_INPROGRESS)
-			return rc;
-		/** Mark the entry as uncommitted but return it to the iterator */
-		ent->ie_vis_flags = VOS_IT_UNCOMMITTED;
-	} else {
-		ent->ie_vis_flags = VOS_VIS_FLAG_VISIBLE;
-		if (oiter->it_ilog_info.ii_create == 0) {
-			/* The key has no visible subtrees so mark it covered */
-			ent->ie_vis_flags = VOS_VIS_FLAG_COVERED;
-		}
-	}
-
-	ent->ie_epoch = epr.epr_hi;
-	ent->ie_punch = oiter->it_ilog_info.ii_next_punch;
-	ent->ie_obj_punch = oiter->it_obj->obj_ilog_info.ii_next_punch;
-	vos_ilog_last_update(&krec->kr_ilog, ts_type, &ent->ie_last_update);
-
-	return 0;
+	return key_iter_fill(rbund.rb_krec, oiter, check_existence, ent);
 }
 
 static int
@@ -1162,8 +1175,9 @@ singv_iter_probe_epr(struct vos_obj_iter *oiter, vos_iter_entry_t *entry)
 			return 0;
 
 		case VOS_IT_EPC_RR:
-			if (entry->ie_epoch < epr->epr_lo)
+			if (entry->ie_epoch < epr->epr_lo) {
 				return -DER_NONEXIST; /* end of story */
+			}
 
 			if (entry->ie_epoch > epr->epr_hi) {
 				entry->ie_epoch = epr->epr_hi;
@@ -1805,7 +1819,6 @@ vos_obj_iter_fini(struct vos_iterator *iter)
 	case VOS_ITER_SINGLE:
 		rc = dbtree_iter_finish(oiter->it_hdl);
 		break;
-
 	case VOS_ITER_RECX:
 		rc = recx_iter_fini(oiter);
 		break;
@@ -1988,7 +2001,71 @@ sv_iter_corrupt(struct vos_obj_iter *oiter)
 }
 
 int
-vos_obj_iter_pre_aggregate(daos_handle_t ih)
+vos_obj_iter_start_agg(daos_handle_t ih, bool full_scan)
+{
+	vos_iter_entry_t	 ent;
+	struct vos_iterator	*iter = vos_hdl2iter(ih);
+	struct vos_obj_iter	*oiter = vos_iter2oiter(iter);
+	struct vos_container	*cont = oiter->it_obj->obj_cont;
+	struct vos_krec_df	*krec;
+	daos_key_t		 key;
+	struct vos_rec_bundle	 rbund;
+	int			 rc;
+	uint64_t		 feats;
+	daos_epoch_t		 agg_write;
+	daos_epoch_t		 hae;
+	bool			 agg_has_write;
+
+	D_ASSERTF(oiter->it_iter.it_for_purge,
+		  "Function should only be called by aggregation\n");
+	D_ASSERTF(iter->it_type == VOS_ITER_AKEY ||
+		  iter->it_type == VOS_ITER_DKEY,
+		  "Aggregation only supported on keys\n");
+
+	if (full_scan)
+		return 1;
+
+	rc = key_iter_fetch_helper(oiter, &rbund, &key, NULL);
+	D_ASSERTF(rc != -DER_NONEXIST,
+		  "Iterator should probe before aggregation\n");
+	if (rc != 0)
+		return rc;
+
+	krec = rbund.rb_krec;
+
+	if (krec->kr_bmap & KREC_BF_BTR)
+		feats = dbtree_feats_get(&krec->kr_btr);
+	else
+		feats = evt_feats_get(&krec->kr_evt);
+
+	agg_has_write = vos_feats_agg_time_get(feats, &agg_write);
+	hae = cont->vc_cont_df->cd_hae;
+	if (agg_has_write) {
+		if (agg_write <= hae && oiter->it_punched.pr_epc <= hae)
+			return 0;
+		return 1;
+	}
+
+	/** Fall through to check other filters for legacy case */
+	rc = key_iter_fill(krec, oiter, true, &ent);
+	if (rc == VOS_ITER_CB_SKIP)
+		return 0;
+	if (rc < 0)
+		return rc; /** Likely the entry isn't in the range or we hit some other error.
+			    *  Let the iterator sort this out later.
+			    */
+	if (ent.ie_vis_flags & VOS_VIS_FLAG_COVERED)
+		return 1; /* Punched entries can likely be aggregated */
+
+	D_ASSERT(ent.ie_last_update != 0);
+	if (ent.ie_last_update <= hae)
+		return 0; /* No new updates since last time we ran */
+
+	return 1;
+}
+
+int
+vos_obj_iter_check_punch(daos_handle_t ih)
 {
 	struct vos_iterator	*iter = vos_hdl2iter(ih);
 	struct vos_obj_iter	*oiter = vos_iter2oiter(iter);
@@ -2001,7 +2078,7 @@ vos_obj_iter_pre_aggregate(daos_handle_t ih)
 
 	D_ASSERTF(iter->it_type == VOS_ITER_AKEY ||
 		  iter->it_type == VOS_ITER_DKEY,
-		  "Aggregation only supported on keys\n");
+		  "Punch check support only for keys, not values\n");
 
 	rc = key_iter_fetch_helper(oiter, &rbund, &key, NULL);
 	D_ASSERTF(rc != -DER_NONEXIST,

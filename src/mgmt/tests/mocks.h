@@ -136,5 +136,12 @@ extern char	*ds_mgmt_cont_set_owner_group;
 void mock_ds_mgmt_cont_set_owner_setup(void);
 void mock_ds_mgmt_cont_set_owner_teardown(void);
 
+/*
+ * Mock ds_mgmt_upgrade
+ */
+extern int		ds_mgmt_pool_upgrade_return;
+extern uuid_t		ds_mgmt_pool_upgrade_uuid;
+void mock_ds_mgmt_pool_upgrade_setup(void);
+
 
 #endif /* __MGMT_TESTS_MOCKS_H__ */

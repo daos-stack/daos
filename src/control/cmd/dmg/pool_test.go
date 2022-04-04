@@ -792,6 +792,16 @@ func TestPoolCommands(t *testing.T) {
 			fmt.Errorf("invalid label"),
 		},
 		{
+			"Upgrade pool with pool ID",
+			"pool upgrade 031bcaf8-f0f5-42ef-b3c5-ee048676dceb",
+			strings.Join([]string{
+				printRequest(t, &control.PoolUpgradeReq{
+					ID: "031bcaf8-f0f5-42ef-b3c5-ee048676dceb",
+				}),
+			}, " "),
+			nil,
+		},
+		{
 			"Nonexistent subcommand",
 			"pool quack",
 			"",

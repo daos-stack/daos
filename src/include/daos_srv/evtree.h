@@ -282,11 +282,15 @@ enum evt_feats {
 	 *  evenly
 	 */
 	EVT_FEAT_SORT_DIST_EVEN		= (1 << 2),
+	/** Place new feats above this line */
+	EVT_FEATS_END,
+	/** Calculated mask for all supported feats */
+	EVT_FEATS_SUPPORTED		= ((EVT_FEATS_END - 1) << 1) - 1,
 };
 
+/** These are "internal" flags meant to match the btree ones */
+
 #define EVT_FEAT_DEFAULT EVT_FEAT_SORT_DIST
-#define EVT_FEATS_SUPPORTED	\
-	(EVT_FEAT_SORT_SOFF | EVT_FEAT_SORT_DIST | EVT_FEAT_SORT_DIST_EVEN)
 
 /* Information about record to insert */
 struct evt_entry_in {
@@ -780,5 +784,28 @@ int evt_iter_fetch(daos_handle_t ih, unsigned int *inob,
  */
 int evt_overhead_get(int alloc_overhead, int tree_order,
 		     struct daos_tree_overhead *ovhd);
+
+/** Get the tree feats
+ *
+ * \param[in]	root	evtree root
+ *
+ * return	Tree feats
+ */
+static inline uint64_t
+evt_feats_get(struct evt_root *root)
+{
+	return root->tr_feats;
+}
+
+/**
+ * Set the tree feats.
+ *
+ * \param root[in]	Tree root
+ * \param umm[in]	umem instance
+ * \param feats[in]	feats to set
+ *
+ * \return 0 on success
+ */
+int  evt_feats_set(struct evt_root *root, struct umem_instance *umm, uint64_t feats);
 
 #endif /* __DAOS_EV_TREE_H__ */

@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2015-2021 Intel Corporation.
+ * (C) Copyright 2015-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -405,6 +405,7 @@ struct daos_oclass_attr {
 	unsigned int			 ca_resil_degree;
 	/** Initial # redundancy group, unnecessary for some schemas */
 	unsigned int			 ca_grp_nr;
+	/** replication or erasure coding attributes based on #ca_resil */
 	union {
 		/** Replication attributes */
 		struct daos_rp_attr {

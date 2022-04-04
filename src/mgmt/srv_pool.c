@@ -584,6 +584,14 @@ out:
 	return rc;
 }
 
+int ds_mgmt_pool_upgrade(uuid_t pool_uuid, d_rank_list_t *svc_ranks)
+{
+	D_DEBUG(DB_MGMT, "Upgrading pool "DF_UUID"\n",
+		DP_UUID(pool_uuid));
+
+	return ds_pool_svc_upgrade(pool_uuid, svc_ranks);
+}
+
 int
 ds_mgmt_pool_get_prop(uuid_t pool_uuid, d_rank_list_t *svc_ranks,
 		      daos_prop_t *prop)
