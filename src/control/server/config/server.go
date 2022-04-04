@@ -135,6 +135,16 @@ func (cfg *Server) WithCrtTimeout(timeout uint32) *Server {
 	return cfg
 }
 
+// WithNumSecondaryEndpoints sets the number of network endpoints for each engine's secondary
+// provider.
+func (cfg *Server) WithNumSecondaryEndpoints(nr []int) *Server {
+	cfg.Fabric.NumSecondaryEndpoints = nr
+	for _, engine := range cfg.Engines {
+		engine.Fabric.Update(cfg.Fabric)
+	}
+	return cfg
+}
+
 // NB: In order to ease maintenance, the set of chained config functions
 // which modify nested engine configurations should be kept above this
 // one as a reference for which things should be set/updated in the next

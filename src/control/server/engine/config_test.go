@@ -603,6 +603,41 @@ func TestConfig_FabricValidation(t *testing.T) {
 			},
 			expErr: errors.New("same number"),
 		},
+		"nr secondary ctxs less than 1": {
+			cfg: FabricConfig{
+				Provider:              multiProviderString("foo", "bar"),
+				Interface:             multiProviderString("baz", "net"),
+				InterfacePort:         multiProviderString("42", "128"),
+				NumSecondaryEndpoints: []int{0},
+			},
+			expErr: errors.New("must be > 0"),
+		},
+		"nr secondary ctxs okay": {
+			cfg: FabricConfig{
+				Provider:              multiProviderString("foo", "bar", "baz"),
+				Interface:             multiProviderString("net0", "net1", "net2"),
+				InterfacePort:         multiProviderString("42", "128", "256"),
+				NumSecondaryEndpoints: []int{1, 2},
+			},
+		},
+		"too many nr secondary ctxs": {
+			cfg: FabricConfig{
+				Provider:              multiProviderString("foo", "bar", "baz"),
+				Interface:             multiProviderString("net0", "net1", "net2"),
+				InterfacePort:         multiProviderString("42", "128", "256"),
+				NumSecondaryEndpoints: []int{1, 2, 3},
+			},
+			expErr: errors.New("must have one value for each"),
+		},
+		"too few nr secondary ctxs": {
+			cfg: FabricConfig{
+				Provider:              multiProviderString("foo", "bar", "baz"),
+				Interface:             multiProviderString("net0", "net1", "net2"),
+				InterfacePort:         multiProviderString("42", "128", "256"),
+				NumSecondaryEndpoints: []int{1},
+			},
+			expErr: errors.New("must have one value for each"),
+		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			gotErr := tc.cfg.Validate()
@@ -852,6 +887,34 @@ func TestFabricConfig_GetProviders(t *testing.T) {
 	}
 }
 
+func TestFabricConfig_GetNumProviders(t *testing.T) {
+	for name, tc := range map[string]struct {
+		cfg    *FabricConfig
+		expNum int
+	}{
+		"nil": {},
+		"empty": {
+			cfg: &FabricConfig{},
+		},
+		"single": {
+			cfg: &FabricConfig{
+				Provider: "p1",
+			},
+			expNum: 1,
+		},
+		"multi": {
+			cfg: &FabricConfig{
+				Provider: multiProviderString("p1", "p2", "p3", "p4"),
+			},
+			expNum: 4,
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			common.AssertEqual(t, tc.expNum, tc.cfg.GetNumProviders(), "")
+		})
+	}
+}
+
 func TestFabricConfig_GetPrimaryProvider(t *testing.T) {
 	for name, tc := range map[string]struct {
 		cfg         *FabricConfig
@@ -1008,6 +1071,87 @@ func TestFabricConfig_GetInterfacePorts(t *testing.T) {
 
 			common.CmpErr(t, tc.expErr, err)
 			if diff := cmp.Diff(tc.expPorts, ports); diff != "" {
+				t.Fatalf("(-want, +got):\n%s", diff)
+			}
+		})
+	}
+}
+
+func TestFabricConfig_Update(t *testing.T) {
+	for name, tc := range map[string]struct {
+		fc        *FabricConfig
+		other     FabricConfig
+		expResult *FabricConfig
+	}{
+		"set all": {
+			fc: &FabricConfig{},
+			other: FabricConfig{
+				Provider:              "p",
+				Interface:             "i",
+				InterfacePort:         "1234",
+				CrtCtxShareAddr:       2,
+				CrtTimeout:            3,
+				NumSecondaryEndpoints: []int{1},
+			},
+			expResult: &FabricConfig{
+				Provider:              "p",
+				Interface:             "i",
+				InterfacePort:         "1234",
+				CrtCtxShareAddr:       2,
+				CrtTimeout:            3,
+				NumSecondaryEndpoints: []int{1},
+			},
+		},
+		"already set": {
+			fc: &FabricConfig{
+				Provider:              "p",
+				Interface:             "i",
+				InterfacePort:         "1234",
+				CrtCtxShareAddr:       2,
+				CrtTimeout:            3,
+				NumSecondaryEndpoints: []int{1},
+			},
+			other: FabricConfig{
+				Provider:              "q",
+				Interface:             "h",
+				InterfacePort:         "5678",
+				CrtCtxShareAddr:       3,
+				CrtTimeout:            4,
+				NumSecondaryEndpoints: []int{5},
+			},
+			expResult: &FabricConfig{
+				Provider:              "p",
+				Interface:             "i",
+				InterfacePort:         "1234",
+				CrtCtxShareAddr:       2,
+				CrtTimeout:            3,
+				NumSecondaryEndpoints: []int{1},
+			},
+		},
+		"default secondary ctx": {
+			fc: &FabricConfig{},
+			other: FabricConfig{
+				Provider: multiProviderString("one", "two", "three"),
+			},
+			expResult: &FabricConfig{
+				Provider:              multiProviderString("one", "two", "three"),
+				NumSecondaryEndpoints: []int{1, 1},
+			},
+		},
+		"no secondary ctx": {
+			fc: &FabricConfig{},
+			other: FabricConfig{
+				Provider: "one",
+			},
+			expResult: &FabricConfig{
+				Provider: "one",
+			},
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			tc.fc.Update(tc.other)
+
+			if diff := cmp.Diff(tc.expResult, tc.fc); diff != "" {
 				t.Fatalf("(-want, +got):\n%s", diff)
 			}
 		})

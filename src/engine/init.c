@@ -912,6 +912,7 @@ parse(int argc, char **argv)
 		{ "instance_idx",	required_argument,	NULL,	'I' },
 		{ "bypass_health_chk",	no_argument,		NULL,	'b' },
 		{ "storage_tiers",	required_argument,	NULL,	'T' },
+		{ "nr_sec_ctx",		required_argument,	NULL,	'S' },
 		{ NULL,			0,			NULL,	0}
 	};
 	int	rc = 0;
@@ -919,7 +920,7 @@ parse(int argc, char **argv)
 
 	/* load all of modules by default */
 	sprintf(modules, "%s", MODULE_LIST);
-	while ((c = getopt_long(argc, argv, "c:d:f:g:hi:m:n:p:r:H:t:s:x:I:bT:",
+	while ((c = getopt_long(argc, argv, "c:d:f:g:hi:m:n:p:r:H:t:s:x:I:bT:S:",
 				opts, NULL)) != -1) {
 		switch (c) {
 		case 'm':
@@ -987,6 +988,9 @@ parse(int argc, char **argv)
 				printf("Requires 1 or 2 tiers\n");
 				rc = -DER_INVAL;
 			}
+			break;
+		case 'S':
+			rc = arg_strtoul(optarg, &dss_sec_xs_nr, "\"-S\"");
 			break;
 		default:
 			usage(argv[0], stderr);
