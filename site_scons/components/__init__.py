@@ -136,6 +136,7 @@ def define_mercury(reqs):
     ofi_build = ['./configure',
                  '--prefix=$OFI_PREFIX',
                  '--disable-efa',
+                 '--disable-psm3',
                  '--without-gdrcopy']
     if reqs.target_type == 'debug':
         ofi_build.append('--enable-debug')
@@ -150,7 +151,6 @@ def define_mercury(reqs):
                                     'LDFLAGS=-Wl,--enable-new-dtags -Wl,-rpath=$PSM2_PREFIX/lib64'],
                                    ['--enable-psm2']),
                              ['--disable-psm2']))
-    ofi_build.append(include(reqs, 'psm3', '--enable-psm3', '--disable-psm3'))
 
     reqs.define('ofi',
                 retriever=GitRepoRetriever('https://github.com/ofiwg/libfabric'),
