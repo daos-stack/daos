@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2021 Intel Corporation.
+ * (C) Copyright 2016-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -653,6 +653,45 @@ d_rank_range_list_create_from_ranks(d_rank_list_t *rank_list)
 	}
 
 	return range_list;
+}
+
+char *
+d_rank_range_list_str(d_rank_range_list_t *list, bool *truncated)
+{
+	const size_t	MAXBYTES = 512;
+	char	       *line;
+	char	       *linepos;
+	int		ret;
+	unsigned int	written = 0;
+	unsigned int	remaining = MAXBYTES;
+	int		i;
+
+	*truncated = false;
+	D_ALLOC(line, MAXBYTES);
+	if (line == NULL)
+		return NULL;
+	linepos = line;
+
+	for (i = 0; i < list->rrl_nr; i++) {
+		uint32_t	lo = list->rrl_ranges[i].lo;
+		uint32_t	hi = list->rrl_ranges[i].hi;
+		bool		lastrange = (i == (list->rrl_nr - 1));
+
+		if (lo == hi)
+			ret = snprintf(linepos, remaining, "%u%s", lo, lastrange ? "" : ",");
+		else
+			ret = snprintf(linepos, remaining, "%u-%u%s", lo, hi, lastrange ? "" : ",");
+		if ((ret < 0) || (ret >= remaining))
+			goto err;
+		written += ret;
+		remaining -= ret;
+		linepos += ret;
+	}
+	return line;
+err:
+	if (written > 0)
+		*truncated = true;
+	return line;
 }
 
 void
