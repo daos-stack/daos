@@ -30,18 +30,16 @@ daos_filter_init(daos_filter_t *filter)
 int
 daos_pipeline_add(daos_pipeline_t *pipeline, daos_filter_t *filter)
 {
-	if (!strncmp((char *) filter->filter_type.iov_buf,
-		     "DAOS_FILTER_CONDITION",
-		     filter->filter_type.iov_len))
+	daos_filter_t **ptr;
+
+	if (!strncmp((char *) filter->filter_type.iov_buf, "DAOS_FILTER_CONDITION",
+	    filter->filter_type.iov_len))
 	{
-		pipeline->filters = (daos_filter_t **)
-			realloc
-			(
-			   (void *) pipeline->filters,
-			   (pipeline->num_filters+1)*sizeof(daos_filter_t *)
-			);
-		if (pipeline->filters == NULL)
+		D_REALLOC_ARRAY(ptr, pipeline->filters, pipeline->num_filters,
+				pipeline->num_filters + 1);
+		if (ptr == NULL)
 			return -DER_NOMEM;
+		pipeline->filters = ptr;
 
 		pipeline->filters[pipeline->num_filters] = filter;
 		pipeline->num_filters                   += 1;
@@ -50,14 +48,11 @@ daos_pipeline_add(daos_pipeline_t *pipeline, daos_filter_t *filter)
 			  "DAOS_FILTER_AGGREGATION",
 			  filter->filter_type.iov_len))
 	{
-		pipeline->aggr_filters = (daos_filter_t **)
-			realloc
-			(
-			  (void *) pipeline->aggr_filters,
-			  (pipeline->num_aggr_filters+1)*sizeof(daos_filter_t *)
-			);
-		if (pipeline->aggr_filters == NULL)
+		D_REALLOC_ARRAY(ptr, pipeline->aggr_filters, pipeline->num_aggr_filters,
+				pipeline->num_aggr_filters + 1);
+		if (ptr == NULL)
 			return -DER_NOMEM;
+		pipeline->aggr_filters = ptr;
 
 		pipeline->aggr_filters[pipeline->num_aggr_filters] = filter;
 		pipeline->num_aggr_filters                        += 1;
@@ -73,16 +68,14 @@ daos_pipeline_add(daos_pipeline_t *pipeline, daos_filter_t *filter)
 int
 daos_filter_add(daos_filter_t *filter, daos_filter_part_t *part)
 {
-	filter->parts = (daos_filter_part_t **)
-			realloc
-			(
-			   (void *) filter->parts,
-			   (filter->num_parts + 1) * sizeof(daos_filter_part_t)
-			);
-	if (filter->parts == NULL)
+	daos_filter_part_t **ptr;
+
+	D_REALLOC_ARRAY(ptr, filter->parts, filter->num_parts, filter->num_parts + 1);
+	if (ptr == NULL)
 	{
 		return -DER_NOMEM;
 	}
+	filter->parts = ptr;
 
 	filter->parts[filter->num_parts] = part;
 	filter->num_parts += 1;
