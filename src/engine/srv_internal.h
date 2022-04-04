@@ -198,7 +198,6 @@ extern bool sched_watchdog_all;
 
 void dss_sched_fini(struct dss_xstream *dx);
 int dss_sched_init(struct dss_xstream *dx);
-int sched_set_throttle(unsigned int type, unsigned int percent);
 int sched_req_enqueue(struct dss_xstream *dx, struct sched_req_attr *attr,
 		      void (*func)(void *), void *arg);
 void sched_stop(struct dss_xstream *dx);
