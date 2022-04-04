@@ -1910,7 +1910,7 @@ def install_debuginfos():
             cmds.append(["sudo", "dnf", "-y", "install"] + dnf_args)
         rpm_version = get_output(["rpm", "-q", "--qf", "%{evr}", "daos"], check=False)
         cmds.append(
-            ["sudo", "dnf", "debuginfo-install", "-y"] + dnf_args +
+            ["dnf", "debuginfo-install", "-y"] + dnf_args +
             ["daos-client-" + rpm_version,
              "daos-server-" + rpm_version,
              "daos-tests-" + rpm_version])
@@ -2188,7 +2188,7 @@ def stop_service(hosts, service):
                 else:
                     # Issue the appropriate systemctl command to remedy the
                     # detected state, e.g. 'stop' for 'active'.
-                    command = "sudo systemctl {} {}".format(key, service)
+                    command = "systemctl {} {}".format(key, service)
                     get_remote_output(str(result[key]), command)
 
                     # Run the status check again on this group of hosts

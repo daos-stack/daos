@@ -351,6 +351,9 @@ def run_pcmd(hosts, command, verbose=True, timeout=None, expect_rc=0):
     log = getLogger()
     results = []
 
+    command = command.replace("sudo", "", 1)
+    command = command.replace(" -n ", "", 1)
+
     # Run the command on each host in parallel
     task = run_task(hosts, command, timeout)
 
@@ -712,7 +715,7 @@ def stop_processes(hosts, pattern, verbose=True, timeout=60, added_filter=None,
                 "rc=0",
                 "if " + ps_cmd,
                 "then rc=1",
-                "sudo pkill --signal USR2 {}".format(pattern),
+                "pkill --signal USR2 {}".format(pattern),
                 # leave time for ABT info/stacks dump vs xstream/pool/ULT number
 		"sleep 20",
                 "fi",
@@ -726,13 +729,13 @@ def stop_processes(hosts, pattern, verbose=True, timeout=60, added_filter=None,
             "rc=0",
             "if " + ps_cmd,
             "then rc=1",
-            "sudo /usr/bin/pkill {}".format(pattern),
+            "/usr/bin/pkill {}".format(pattern),
             "sleep 5",
             "if " + ps_cmd,
-            "then sudo /usr/bin/pkill --signal ABRT {}".format(pattern),
+            "then /usr/bin/pkill --signal ABRT {}".format(pattern),
             "sleep 1",
             "if " + ps_cmd,
-            "then sudo /usr/bin/pkill --signal KILL {}".format(pattern),
+            "then /usr/bin/pkill --signal KILL {}".format(pattern),
             "fi",
             "fi",
             "fi",
@@ -1169,9 +1172,10 @@ def get_clush_command(hosts, args=None, sudo=False):
     if args:
         command.insert(1, args)
     if sudo:
+        pass
         # If ever needed, this is how to disable host key checking:
         # command.extend(["-o", "-oStrictHostKeyChecking=no", "sudo"])
-        command.append("sudo")
+#        command.append("sudo")
     return " ".join(command)
 
 
