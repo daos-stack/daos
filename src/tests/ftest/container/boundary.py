@@ -131,6 +131,7 @@ class BoundaryTest(TestWithServers):
         :avocado: tags=container, pool
         :avocado: tags=hw,medium,ib2
         :avocado: tags=boundary_test
+        :avocado: tags=container_boundary,pool_boundary
         """
 
         num_pools = self.params.get("num_pools", '/run/boundary_test/*')
