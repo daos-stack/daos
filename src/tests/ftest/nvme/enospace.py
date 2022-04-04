@@ -15,7 +15,6 @@ from job_manager_utils import get_job_manager
 from ior_utils import IorCommand, IorMetrics
 from exception_utils import CommandFailure
 from general_utils import error_count
-import queue
 
 
 class NvmeEnospace(ServerFillUp):
@@ -31,6 +30,7 @@ class NvmeEnospace(ServerFillUp):
         self.daos_cmd = None
 
     def setUp(self):
+        """Initial setup"""
         super().setUp()
 
         # initialize daos command
@@ -38,6 +38,7 @@ class NvmeEnospace(ServerFillUp):
         self.create_pool_max_size()
         self.der_nospace_count = 0
         self.other_errors_count = 0
+        self.test_result = []
 
     def verify_enspace_log(self, der_nospace_err_count):
         """
@@ -80,12 +81,10 @@ class NvmeEnospace(ServerFillUp):
             kwargs["force"] = True
             self.daos_cmd.container_destroy(**kwargs)
 
-    def ior_bg_thread(self, results):
+    def ior_bg_thread(self):
         """Start IOR Background thread, This will write small data set and
         keep reading it in loop until it fails or main program exit.
 
-        Args:
-            results (queue): queue for returning thread results
         """
 
         # Define the IOR Command and use the parameter from yaml file.
@@ -112,7 +111,7 @@ class NvmeEnospace(ServerFillUp):
         try:
             job_manager.run()
         except (CommandFailure, TestFail) as _error:
-            results.put("FAIL")
+            self.test_result.append("FAIL")
             return
 
         # run IOR Read Command in loop
@@ -121,7 +120,6 @@ class NvmeEnospace(ServerFillUp):
             try:
                 job_manager.run()
             except (CommandFailure, TestFail) as _error:
-                results.put("FAIL")
                 break
 
     def run_enospace_foreground(self):
@@ -178,20 +176,17 @@ class NvmeEnospace(ServerFillUp):
 
         # Start the IOR Background thread which will write small data set and
         # read in loop, until storage space is full.
-        out_queue = queue.Queue()
-        job = threading.Thread(target=self.ior_bg_thread,
-                               kwargs={"results": out_queue})
+        job = threading.Thread(target=self.ior_bg_thread)
         job.daemon = True
         job.start()
 
         #Run IOR in Foreground
         self.run_enospace_foreground()
-        # Verify the background job queue and make sure no FAIL for any IOR run
-        while not self.out_queue.empty():
-            if self.out_queue.get() == "FAIL":
+        # Verify the background job result has no FAIL for any IOR run
+        for _result in self.test_result:
+            if "FAIL" in _result:
                 self.fail("One of the Background IOR job failed")
 
-    @skipForTicket("DAOS-7378")
     def test_enospace_lazy_with_bg(self):
         """Jira ID: DAOS-4756.
 
@@ -215,7 +210,6 @@ class NvmeEnospace(ServerFillUp):
         #Run IOR to fill the pool.
         self.run_enospace_with_bg_job()
 
-    @skipForTicket("DAOS-7378")
     def test_enospace_lazy_with_fg(self):
         """Jira ID: DAOS-4756.
 
@@ -250,7 +244,6 @@ class NvmeEnospace(ServerFillUp):
         #Run last IO
         self.start_ior_load(storage='SCM', operation="Auto_Write", percent=1)
 
-    @skipForTicket("DAOS-7378")
     def test_enospace_time_with_bg(self):
         """Jira ID: DAOS-4756.
 
@@ -278,7 +271,6 @@ class NvmeEnospace(ServerFillUp):
         #Run IOR to fill the pool.
         self.run_enospace_with_bg_job()
 
-    @skipForTicket("DAOS-7378")
     def test_enospace_time_with_fg(self):
         """Jira ID: DAOS-4756.
 
@@ -312,12 +304,12 @@ class NvmeEnospace(ServerFillUp):
             #Delete all the containers
             self.delete_all_containers()
             #Delete container will take some time to release the space
-            time.sleep(120)
+            time.sleep(60)
 
         #Run last IO
         self.start_ior_load(storage='SCM', operation="Auto_Write", percent=1)
 
-    @skipForTicket("DAOS-7378")
+    @skipForTicket("DAOS-8896")
     def test_performance_storage_full(self):
         """Jira ID: DAOS-4756.
 
@@ -359,7 +351,6 @@ class NvmeEnospace(ServerFillUp):
                       ' Baseline Read MiB = {} and latest IOR Read MiB = {}'
                       .format(max_mib_baseline, max_mib_latest))
 
-    @skipForTicket("DAOS-7378")
     def test_enospace_no_aggregation(self):
         """Jira ID: DAOS-4756.
 
