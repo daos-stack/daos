@@ -640,6 +640,7 @@ cont_child_alloc_ref(void *co_uuid, unsigned int ksize, void *po_uuid,
 	cont->sc_snapshots = NULL;
 	cont->sc_dtx_cos_hdl = DAOS_HDL_INVAL;
 	D_INIT_LIST_HEAD(&cont->sc_link);
+	D_INIT_LIST_HEAD(&cont->sc_open_hdls);
 
 	*link = &cont->sc_list;
 	return 0;
@@ -662,6 +663,7 @@ cont_child_free_ref(struct daos_llink *llink)
 
 	D_ASSERT(cont->sc_pool != NULL);
 	D_ASSERT(daos_handle_is_valid(cont->sc_hdl));
+	D_ASSERT(d_list_empty(&cont->sc_open_hdls));
 
 	D_DEBUG(DF_DSMS, DF_CONT": freeing\n",
 		DP_CONT(cont->sc_pool->spc_uuid, cont->sc_uuid));
@@ -772,9 +774,21 @@ cont_child_started(struct ds_cont_child *cont_child)
 	return !d_list_empty(&cont_child->sc_link);
 }
 
+static int cont_close_hdl(uuid_t cont_hdl_uuid);
+
 static void
 cont_child_stop(struct ds_cont_child *cont_child)
 {
+	struct ds_cont_hdl	*hdl;
+
+	while ((hdl = d_list_pop_entry(&cont_child->sc_open_hdls,
+				       struct ds_cont_hdl, sch_link)) != NULL) {
+		D_DEBUG(DF_DSMS, "Force closing container open handle "DF_UUID"/"DF_UUID"\n",
+			DP_UUID(cont_child->sc_uuid), DP_UUID(hdl->sch_uuid));
+
+		cont_close_hdl(hdl->sch_uuid);
+	}
+
 	/* Some ds_cont_child will only created by ds_cont_child_lookup().
 	 * never be started at all
 	 */
@@ -940,6 +954,7 @@ cont_hdl_rec_free(struct d_hash_table *htable, d_list_t *rlink)
 
 	D_ASSERT(d_hash_rec_unlinked(&hdl->sch_entry));
 	D_ASSERTF(hdl->sch_ref == 0, "%d\n", hdl->sch_ref);
+	D_ASSERT(d_list_empty(&hdl->sch_link));
 	D_DEBUG(DF_DSMS, "freeing "DF_UUID"\n", DP_UUID(hdl->sch_uuid));
 	/* The sch_cont is NULL for global rebuild cont handle */
 	if (hdl->sch_cont != NULL) {
@@ -976,8 +991,14 @@ ds_cont_hdl_hash_destroy(struct d_hash_table *hash)
 static int
 cont_hdl_add(struct d_hash_table *hash, struct ds_cont_hdl *hdl)
 {
-	return d_hash_rec_insert(hash, hdl->sch_uuid, sizeof(uuid_t),
-				 &hdl->sch_entry, true /* exclusive */);
+	int	rc;
+
+	rc = d_hash_rec_insert(hash, hdl->sch_uuid, sizeof(uuid_t),
+			       &hdl->sch_entry, true /* exclusive */);
+	if (rc == 0 && hdl->sch_cont != NULL)
+		d_list_add_tail(&hdl->sch_link, &hdl->sch_cont->sc_open_hdls);
+
+	return rc;
 }
 
 static void
@@ -985,6 +1006,7 @@ cont_hdl_delete(struct d_hash_table *hash, struct ds_cont_hdl *hdl)
 {
 	bool deleted;
 
+	d_list_del_init(&hdl->sch_link);
 	deleted = d_hash_rec_delete(hash, hdl->sch_uuid, sizeof(uuid_t));
 	D_ASSERT(deleted == true);
 }
@@ -1395,6 +1417,7 @@ ds_cont_local_open(uuid_t pool_uuid, uuid_t cont_hdl_uuid, uuid_t cont_uuid,
 	if (hdl == NULL)
 		return -DER_NOMEM;
 
+	D_INIT_LIST_HEAD(&hdl->sch_link);
 	D_ASSERT(pool_uuid != NULL);
 
 	/* cont_uuid is NULL when open rebuild global cont handle */
@@ -1463,6 +1486,9 @@ ds_cont_local_open(uuid_t pool_uuid, uuid_t cont_hdl_uuid, uuid_t cont_uuid,
 
 		rc = dtx_cont_open(hdl->sch_cont);
 		if (rc != 0) {
+			D_ASSERTF(hdl->sch_cont->sc_open == 1, "Unexpected open count for cont "
+				  DF_UUID": %d\n", DP_UUID(cont_uuid), hdl->sch_cont->sc_open);
+
 			hdl->sch_cont->sc_open--;
 			D_GOTO(err_cont, rc);
 		}
@@ -1497,10 +1523,12 @@ opened:
 	return 0;
 
 err_dtx:
-	D_ASSERT(hdl->sch_cont->sc_open > 0);
+	D_ASSERTF(hdl->sch_cont->sc_open == 1, "Unexpected open count for cont "
+		  DF_UUID": %d\n", DP_UUID(cont_uuid), hdl->sch_cont->sc_open);
+
 	hdl->sch_cont->sc_open--;
-	if (hdl->sch_cont->sc_open == 0)
-		dtx_cont_close(hdl->sch_cont);
+	dtx_cont_close(hdl->sch_cont);
+
 err_cont:
 	if (daos_handle_is_valid(poh)) {
 		int rc_tmp;
