@@ -56,8 +56,15 @@ func processConfig(log *logging.LeveledLogger, cfg *config.Server, fis *hardware
 		return iface, nil
 	}
 	for _, ec := range cfg.Engines {
-		if err := checkFabricInterface(ec.Fabric.Interface, lookupNetIF); err != nil {
+		fabricIFs, err := ec.Fabric.GetInterfaces()
+		if err != nil {
 			return nil, err
+		}
+
+		for _, iface := range fabricIFs {
+			if err := checkFabricInterface(iface, lookupNetIF); err != nil {
+				return nil, err
+			}
 		}
 
 		if err := updateFabricEnvars(log, ec, fis); err != nil {
