@@ -52,6 +52,10 @@ const (
 	PoolPropertyRPPda = C.DAOS_PROP_PO_RP_PDA
 	// PoolPropertyPolicy is the tiering policy set for a pool
 	PoolPropertyPolicy = C.DAOS_PROP_PO_POLICY
+	//PoolPropertyGlobalVersion is aggregation of pool/container/object/keys version.
+	PoolPropertyGlobalVersion = C.DAOS_PROP_PO_GLOBAL_VERSION
+	//PoolPropertyUpgradeStatus is pool upgrade status
+	PoolPropertyUpgradeStatus = C.DAOS_PROP_PO_UPGRADE_STATUS
 )
 
 const (
@@ -79,6 +83,17 @@ const (
 	MediaTypeScm = C.DAOS_MEDIA_SCM
 	// MediaTypeNvme is the media type for NVMe.
 	MediaTypeNvme = C.DAOS_MEDIA_NVME
+)
+
+const (
+	// PoolUpgradeStatusNotStarted indicates pool upgrading not started yet.
+	PoolUpgradeStatusNotStarted = C.DAOS_UPGRADE_STATUS_NOT_STARTED
+	// PoolUpgradeStatusInProgress defines pool upgrading is in progress.
+	PoolUpgradeStatusInProgress = C.DAOS_UPGRADE_STATUS_IN_PROGRESS
+	//PoolUpgradeStatusCompleted defines pool upgrading completed last time.
+	PoolUpgradeStatusCompleted = C.DAOS_UPGRADE_STATUS_COMPLETED
+	//PoolUpgradeStatusFailed defines pool upgrading operation failed.
+	PoolUpgradeStatusFailed = C.DAOS_UPGRADE_STATUS_FAILED
 )
 
 const (

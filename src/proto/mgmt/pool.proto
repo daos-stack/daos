@@ -246,3 +246,15 @@ message PoolGetPropResp {
 	repeated PoolProperty properties = 2;
 }
 
+// PoolUpgradeReq upgrades the disk format of an existing pool to the
+// latest version.
+message PoolUpgradeReq {
+	string sys = 1; // DAOS system identifier
+	string id = 2;
+	repeated uint32 svc_ranks = 3; // List of pool service ranks
+}
+
+// PoolUpgradeResp returns resultant state of upgrade operation.
+message PoolUpgradeResp {
+	int32 status = 1; // DAOS error code
+}

@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2019-2021 Intel Corporation.
+ * (C) Copyright 2019-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -120,7 +120,7 @@ struct duns_attr_t {
 #define DUNS_XATTR_NAME		"user.daos"
 /** Length of the extended attribute */
 #define DUNS_MAX_XATTR_LEN	170
-
+/** Format of daos attributes in the extended attribute */
 #define DUNS_XATTR_FMT		"DAOS.%s://%36s/%36s"
 /**
  * Lustre specific foreign LOV/LMV format (container type will be encoded in
