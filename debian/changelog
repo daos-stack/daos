@@ -1,3 +1,9 @@
+daos (2.1.100-25) unstable; urgency=medium
+  [ Joseph Moore ]
+  * Update mercury to UCX provider patch
+
+ -- Joseph Moore <joseph.moore@intel.com>  Sat, 2 Apr 2022 11:56:35 +0800
+
 daos (2.1.100-24) unstable; urgency=medium
   [ Alexander Oganezov ]
   * Update mercury to CXI provider patch

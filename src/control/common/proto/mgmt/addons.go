@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2021 Intel Corporation.
+// (C) Copyright 2019-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -61,6 +61,16 @@ func (p *PoolProperty) SetValueNumber(numVal uint64) {
 // SetUUID sets the request's ID to a UUID.
 func (r *PoolDestroyReq) SetUUID(id uuid.UUID) {
 	r.Id = id.String()
+}
+
+// SetUUID sets the request's ID to a UUID.
+func (r *PoolUpgradeReq) SetUUID(id uuid.UUID) {
+	r.Id = id.String()
+}
+
+// SetSvcRanks sets the request's Pool Service Ranks.
+func (r *PoolUpgradeReq) SetSvcRanks(rl []uint32) {
+	r.SvcRanks = rl
 }
 
 // SetSvcRanks sets the request's Pool Service Ranks.
