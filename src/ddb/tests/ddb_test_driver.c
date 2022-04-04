@@ -301,7 +301,7 @@ int main(int argc, char *argv[])
 	rc = vos_self_init("/mnt/daos");
 	if (rc != 0) {
 		fprintf(stderr, "Unable to initialize VOS: "DF_RC"\n", DP_RC(rc));
-		daos_debug_fini();
+		ddb_fini();
 		return -rc;
 	}
 
@@ -312,6 +312,6 @@ int main(int argc, char *argv[])
 	rc += ddb_main_tests();
 
 	vos_self_fini();
-	daos_debug_fini();
+	ddb_fini();
 	return rc;
 }
