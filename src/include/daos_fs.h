@@ -39,6 +39,8 @@ extern "C" {
 typedef struct dfs_obj dfs_obj_t;
 /** DFS mount handle struct */
 typedef struct dfs dfs_t;
+/** DFS pipeline object */
+typedef struct dfs_pipeline dfs_pipeline_t;
 
 /*
  * Consistency modes of the DFS container. A container created with balanced
@@ -96,6 +98,19 @@ typedef struct {
 	/** chunk size */
 	daos_size_t		doi_chunk_size;
 } dfs_obj_info_t;
+
+enum {
+	DFS_FILTER_NAME		= (1 << 1),
+	DFS_FILTER_NEWER	= (1 << 2),
+	DFS_FILTER_INCLUDE_DIRS	= (1 << 3),
+};
+
+/** Predicate conditions for filter */
+typedef struct {
+	char	dp_name[DFS_MAX_NAME]; /** name condition for entry - regex */
+	time_t	dp_newer; /** timestamp for newer condition */
+	size_t	dp_size; /** size of files - not supported for now */
+} dfs_predicate_t;
 
 /**
  * Initialize the DAOS and DFS library. Typically this is called at the beginning of a user program
@@ -1100,6 +1115,55 @@ dfs_removexattr(dfs_t *dfs, dfs_obj_t *obj, const char *name);
  */
 int
 dfs_listxattr(dfs_t *dfs, dfs_obj_t *obj, char *list, daos_size_t *size);
+
+/**
+ * Create a pipeline object to be used during readdir with filter. Should be destroyed with
+ * dfs_pipeline_destroy().
+ *
+ * \param[in]	dfs	Pointer to the mounted file system.
+ * \param[in]	pred	Predicate condition values (name/regex, newer timestamp, etc.).
+ * \param[in]	flags	Pipeline flags (conditions to apply).
+ * \param[out]	dpipe	Pipeline object created.
+ *
+ * \return		0 on success, errno code on failure.
+ */
+int
+dfs_pipeline_create(dfs_t *dfs, dfs_predicate_t pred, uint64_t flags, dfs_pipeline_t **dpipe);
+
+/**
+ * Destroy pipeline object.
+ *
+ * \param[in]	dpipe	Pipeline object.
+ *
+ * \return		0 on success, errno code on failure.
+ */
+int
+dfs_pipeline_destroy(dfs_pipeline_t *dpipe);
+
+/**
+ * Same as dfs_readdir() but this additionally applies a filter created with dfs_pipeline_create()
+ * on the entries that are enumerated.
+ * 
+ * \param[in]	dfs	Pointer to the mounted file system.
+ * \param[in]	obj	Opened directory object.
+ * \param[in]	dpipe	DFS pipeline filter.
+ * \param[in,out]
+ *		anchor	Hash anchor for the next call, it should be set to
+ *			zeroes for the first call, it should not be changed
+ *			by caller between calls.
+ * \param[in,out]
+ *		nr	[in]: number of dirents allocated in \a dirs.
+ *			[out]: number of returned dirents.
+ * \param[in,out]
+ *		dirs	[in] preallocated array of dirents.
+ *			[out]: dirents returned with d_name filled only.
+ * \param[out]		Total number of entries scanned by readdir before returning.
+ *
+ * \return		0 on success, errno code on failure.
+ */
+int
+dfs_readdir_with_filter(dfs_t *dfs, dfs_obj_t *obj, dfs_pipeline_t *dpipe, daos_anchor_t *anchor,
+			uint32_t *nr, struct dirent *dirs, uint64_t *nr_scanned);
 
 #if defined(__cplusplus)
 }

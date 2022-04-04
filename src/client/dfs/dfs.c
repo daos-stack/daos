@@ -6288,3 +6288,360 @@ dfs_obj_anchor_set(dfs_obj_t *obj, uint32_t index, daos_anchor_t *anchor)
 
 	return daos_obj_anchor_set(obj->oh, index, anchor);
 }
+
+struct dfs_pipeline {
+	daos_pipeline_t		pipeline;
+	dfs_predicate_t		pred;
+
+	mode_t			constant1;
+	mode_t			constant2;
+
+	d_iov_t			dkey_iov;
+	d_iov_t			const1_iov;
+	d_iov_t			const2_iov;
+	d_iov_t			const3_iov;
+
+	daos_filter_part_t	dkey_ft;
+	daos_filter_part_t	akey1_ft;
+	daos_filter_part_t	akey2_ft;
+	daos_filter_part_t	const0_ft;
+	daos_filter_part_t	const1_ft;
+	daos_filter_part_t	const2_ft;
+	daos_filter_part_t	const3_ft;
+	daos_filter_part_t	like_ft;
+	daos_filter_part_t	ba_ft;
+	daos_filter_part_t	eq_ft;
+	daos_filter_part_t	gt_ft;
+	daos_filter_part_t	and_ft;
+	daos_filter_part_t	or_ft;
+
+	daos_filter_t		pipef;
+};
+
+#define DKEY_F		"DAOS_FILTER_DKEY"
+#define AKEY_F		"DAOS_FILTER_AKEY"
+#define CONST_F		"DAOS_FILTER_CONST"
+#define BINARY_F	"DAOS_FILTER_TYPE_BINARY"
+#define INT8_F		"DAOS_FILTER_TYPE_UINTEGER8"
+#define INT4_F		"DAOS_FILTER_TYPE_UINTEGER4"
+#define LIKE_F		"DAOS_FILTER_FUNC_LIKE"
+#define GT_F		"DAOS_FILTER_FUNC_GT"
+#define EQ_F		"DAOS_FILTER_FUNC_EQ"
+#define BA_F		"DAOS_FILTER_FUNC_BITAND"
+#define AND_F		"DAOS_FILTER_FUNC_AND"
+#define OR_F		"DAOS_FILTER_FUNC_OR"
+#define COND_F		"DAOS_FILTER_CONDITION"
+
+int
+dfs_pipeline_create(dfs_t *dfs, dfs_predicate_t pred, uint64_t flags, dfs_pipeline_t **_dpipe)
+{
+	daos_size_t	bin_flen = strlen(BINARY_F);
+	daos_size_t	dkey_flen = strlen(DKEY_F);
+	daos_size_t	akey_flen = strlen(AKEY_F);
+	daos_size_t	const_flen = strlen(CONST_F);
+	daos_size_t	int8_flen = strlen(INT8_F);
+	daos_size_t	int4_flen = strlen(INT4_F);
+	daos_size_t	like_flen = strlen(LIKE_F);
+	daos_size_t	gt_flen = strlen(GT_F);
+	daos_size_t	eq_flen = strlen(EQ_F);
+	daos_size_t	ba_flen = strlen(BA_F);
+	daos_size_t	and_flen = strlen(AND_F);
+	daos_size_t	or_flen = strlen(OR_F);
+	daos_size_t	cond_flen = strlen(COND_F);
+	dfs_pipeline_t	*dpipe;
+	int		rc;
+
+	D_ALLOC_PTR(dpipe);
+	if (dpipe == NULL)
+		return ENOMEM;
+
+	/** copy the user predicate conditions */
+	memcpy(&dpipe->pred, &pred, sizeof(dfs_predicate_t));
+
+	daos_pipeline_init(&dpipe->pipeline);
+
+	/** build condition for entry name */
+	if (flags & DFS_FILTER_NAME) {
+		daos_size_t	name_len;
+
+		name_len = strnlen(dpipe->pred.dp_name, DFS_MAX_NAME);
+
+		d_iov_set(&dpipe->dkey_ft.part_type, DKEY_F, dkey_flen);
+		d_iov_set(&dpipe->dkey_ft.data_type, BINARY_F, bin_flen);
+		dpipe->dkey_ft.data_len = DFS_MAX_NAME;
+
+		d_iov_set(&dpipe->const0_ft.part_type, CONST_F, const_flen);
+		d_iov_set(&dpipe->const0_ft.data_type, BINARY_F, bin_flen);
+		dpipe->const0_ft.num_constants = 1;
+		dpipe->const0_ft.constant = &dpipe->dkey_iov;
+		d_iov_set(dpipe->const0_ft.constant, dpipe->pred.dp_name, name_len);
+
+		d_iov_set(&dpipe->like_ft.part_type, LIKE_F, like_flen);
+		dpipe->like_ft.num_operands = 2;
+	}
+
+	/** build condition for newer than ctime */
+	if (flags & DFS_FILTER_NEWER) {
+		d_iov_set(&dpipe->akey2_ft.part_type, AKEY_F, akey_flen);
+		d_iov_set(&dpipe->akey2_ft.data_type, INT8_F, int8_flen);
+		d_iov_set(&dpipe->akey2_ft.akey, INODE_AKEY_NAME, sizeof(INODE_AKEY_NAME) - 1);
+		dpipe->akey2_ft.data_offset = CTIME_IDX;
+		dpipe->akey2_ft.data_len = sizeof(time_t);
+
+		d_iov_set(&dpipe->const3_ft.part_type, CONST_F, const_flen);
+		d_iov_set(&dpipe->const3_ft.data_type, INT8_F, int8_flen);
+		dpipe->const3_ft.num_constants = 1;
+		dpipe->const3_ft.constant = &dpipe->const3_iov;
+		d_iov_set(dpipe->const3_ft.constant, &dpipe->pred.dp_newer, sizeof(time_t));
+
+		d_iov_set(&dpipe->gt_ft.part_type, GT_F, gt_flen);
+		dpipe->gt_ft.num_operands = 2;
+	}
+
+	/** If filter on dirs is not requested, return all dirs so they can be traversed */
+	if (!(flags & DFS_FILTER_INCLUDE_DIRS)) {
+		d_iov_set(&dpipe->akey1_ft.part_type, AKEY_F, akey_flen);
+		d_iov_set(&dpipe->akey1_ft.data_type, INT4_F, int4_flen);
+		d_iov_set(&dpipe->akey1_ft.akey, INODE_AKEY_NAME, sizeof(INODE_AKEY_NAME) - 1);
+		dpipe->akey1_ft.data_offset = MODE_IDX;
+		dpipe->akey1_ft.data_len = sizeof(mode_t);
+
+		dpipe->constant1 = S_IFMT;
+		d_iov_set(&dpipe->const1_ft.part_type, CONST_F, const_flen);
+		d_iov_set(&dpipe->const1_ft.data_type, INT4_F, int4_flen);
+		dpipe->const1_ft.num_constants = 1;
+		dpipe->const1_ft.constant = &dpipe->const1_iov;
+		d_iov_set(dpipe->const1_ft.constant, &dpipe->constant1, sizeof(mode_t));
+
+		dpipe->constant2 = S_IFDIR;
+		d_iov_set(&dpipe->const2_ft.part_type, CONST_F, const_flen);
+		d_iov_set(&dpipe->const2_ft.data_type, INT4_F, int4_flen);
+		dpipe->const2_ft.num_constants = 1;
+		dpipe->const2_ft.constant = &dpipe->const2_iov;
+		d_iov_set(dpipe->const2_ft.constant, &dpipe->constant2, sizeof(mode_t));
+
+		d_iov_set(&dpipe->ba_ft.part_type, BA_F, ba_flen);
+		dpipe->ba_ft.num_operands = 2;
+
+		d_iov_set(&dpipe->eq_ft.part_type, EQ_F, eq_flen);
+		dpipe->eq_ft.num_operands = 2;
+	}
+
+	/** build final condition: IS_DIR || (entry name match && newer match) */
+
+	d_iov_set(&dpipe->and_ft.part_type, AND_F, and_flen);
+	dpipe->and_ft.num_operands = 2;
+
+	d_iov_set(&dpipe->or_ft.part_type, OR_F, or_flen);
+	dpipe->or_ft.num_operands = 2;
+
+	/** initialize and add all the parts to the pipeline */
+	daos_filter_init(&dpipe->pipef);
+	d_iov_set(&dpipe->pipef.filter_type, COND_F, cond_flen);
+
+	if (!(flags & DFS_FILTER_INCLUDE_DIRS)) {
+		rc = daos_filter_add(&dpipe->pipef, &dpipe->or_ft);
+		if (rc)
+			D_GOTO(err, rc = daos_der2errno(rc));
+
+		rc = daos_filter_add(&dpipe->pipef, &dpipe->eq_ft);
+		if (rc)
+			D_GOTO(err, rc = daos_der2errno(rc));
+		rc = daos_filter_add(&dpipe->pipef, &dpipe->ba_ft);
+		if (rc)
+			D_GOTO(err, rc = daos_der2errno(rc));
+		rc = daos_filter_add(&dpipe->pipef, &dpipe->akey1_ft);
+		if (rc)
+			D_GOTO(err, rc = daos_der2errno(rc));
+		rc = daos_filter_add(&dpipe->pipef, &dpipe->const1_ft);
+		if (rc)
+			D_GOTO(err, rc = daos_der2errno(rc));
+		rc = daos_filter_add(&dpipe->pipef, &dpipe->const2_ft);
+		if (rc)
+			D_GOTO(err, rc = daos_der2errno(rc));
+	}
+
+	if (flags & DFS_FILTER_NEWER && flags & DFS_FILTER_NAME) {
+		rc = daos_filter_add(&dpipe->pipef, &dpipe->and_ft);
+		if (rc)
+			D_GOTO(err, rc = daos_der2errno(rc));
+	}
+
+	if (flags & DFS_FILTER_NAME) {
+		rc = daos_filter_add(&dpipe->pipef, &dpipe->like_ft);
+		if (rc)
+			D_GOTO(err, rc = daos_der2errno(rc));
+		rc = daos_filter_add(&dpipe->pipef, &dpipe->dkey_ft);
+		if (rc)
+			D_GOTO(err, rc = daos_der2errno(rc));
+		rc = daos_filter_add(&dpipe->pipef, &dpipe->const0_ft);
+		if (rc)
+			D_GOTO(err, rc = daos_der2errno(rc));
+	}
+
+	if (flags & DFS_FILTER_NEWER) {
+		rc = daos_filter_add(&dpipe->pipef, &dpipe->gt_ft);
+		if (rc)
+			D_GOTO(err, rc = daos_der2errno(rc));
+		rc = daos_filter_add(&dpipe->pipef, &dpipe->akey2_ft);
+		if (rc)
+			D_GOTO(err, rc = daos_der2errno(rc));
+		rc = daos_filter_add(&dpipe->pipef, &dpipe->const3_ft);
+		if (rc)
+			D_GOTO(err, rc = daos_der2errno(rc));
+	}
+
+	rc = daos_pipeline_add(&dpipe->pipeline, &dpipe->pipef);
+	if (rc)
+		D_GOTO(err, rc = daos_der2errno(rc));
+
+	*_dpipe = dpipe;
+	return 0;
+err:
+	printf("failed to create pipeline. rc = %d\n", rc);
+	D_FREE(dpipe);
+	return rc;
+}
+
+int
+dfs_pipeline_destroy(dfs_pipeline_t *dpipe)
+{
+	if (dpipe->pipeline.num_filters < 0)
+		D_FREE(dpipe->pipeline.filters);
+	D_FREE(dpipe);
+	return 0;
+}
+
+int
+dfs_readdir_with_filter(dfs_t *dfs, dfs_obj_t *obj, dfs_pipeline_t *dpipe, daos_anchor_t *anchor,
+			uint32_t *nr, struct dirent *dirs, uint64_t *nr_scanned)
+{
+	daos_iod_t	iod;
+	daos_key_desc_t	*kds;
+	d_sg_list_t	*sgl_keys = NULL, *sgl_recs = NULL;
+	d_iov_t		*iovs_keys = NULL, *iovs_recs = NULL;
+	char		*buf_keys = NULL, *buf_recs = NULL;
+	daos_recx_t	recxs[2];
+	uint32_t	nr_iods, nr_kds, key_nr, i;
+	daos_size_t	record_len;
+	int		rc = 0;
+
+	if (dfs == NULL || !dfs->mounted)
+		return EINVAL;
+	if (obj == NULL || !S_ISDIR(obj->mode))
+		return ENOTDIR;
+	if (*nr == 0)
+		return 0;
+	if (dpipe == NULL || dirs == NULL || anchor == NULL)
+		return EINVAL;
+
+	/* IOD to retrieve the mode_t and the ctime */
+	iod.iod_nr	= 2;
+	iod.iod_size	= 1;
+	recxs[0].rx_idx	= MODE_IDX;
+	recxs[0].rx_nr	= sizeof(mode_t);
+	recxs[1].rx_idx	= CTIME_IDX;
+	recxs[1].rx_nr	= sizeof(time_t);
+	iod.iod_recxs	= recxs;
+	iod.iod_type	= DAOS_IOD_ARRAY;
+	d_iov_set(&iod.iod_name, INODE_AKEY_NAME, sizeof(INODE_AKEY_NAME) - 1);
+
+	nr_kds = *nr;
+	nr_iods = 1;
+	record_len = sizeof(mode_t) + sizeof(time_t);
+
+	D_ALLOC_ARRAY(kds, nr_kds);
+	if (kds == NULL)
+		return ENOMEM;
+
+	/** alloc buffers to store dkeys enumerated */
+	D_ALLOC_ARRAY(sgl_keys, nr_kds);
+	if (sgl_keys == NULL)
+		D_GOTO(out, rc = ENOMEM);
+	D_ALLOC_ARRAY(iovs_keys, nr_kds);
+	if (iovs_keys == NULL)
+		D_GOTO(out, rc = ENOMEM);
+	D_ALLOC_ARRAY(buf_keys, nr_kds * DFS_MAX_NAME);
+	if (buf_keys == NULL)
+		D_GOTO(out, rc = ENOMEM);
+
+	/** alloc buffers to store records enumerated */
+	D_ALLOC_ARRAY(sgl_recs, nr_kds);
+	if (sgl_recs == NULL)
+		D_GOTO(out, rc = ENOMEM);
+	D_ALLOC_ARRAY(iovs_recs, nr_kds);
+	if (iovs_recs == NULL)
+		D_GOTO(out, rc = ENOMEM);
+	D_ALLOC_ARRAY(buf_recs, nr_kds * DFS_MAX_NAME);
+	if (buf_recs == NULL)
+		D_GOTO(out, rc = ENOMEM);
+
+	for (i = 0; i < nr_kds; i++) {
+		sgl_keys[i].sg_nr	= 1;
+		sgl_keys[i].sg_nr_out	= 0;
+		sgl_keys[i].sg_iovs	= &iovs_keys[i];
+		d_iov_set(&iovs_keys[i], &buf_keys[i * DFS_MAX_NAME], DFS_MAX_NAME);
+
+		sgl_recs[i].sg_nr	= 1;
+		sgl_recs[i].sg_nr_out	= 0;
+		sgl_recs[i].sg_iovs	= &iovs_recs[i];
+		d_iov_set(&iovs_recs[i], &buf_recs[i * record_len], record_len);
+	}
+
+	key_nr = 0;
+	*nr_scanned = 0;
+	while (!daos_anchor_is_eof(anchor)) {
+		daos_pipeline_stats_t	stats = {0};
+
+		memset(buf_keys, 0, *nr * DFS_MAX_NAME);
+
+		rc = daos_pipeline_run(dfs->coh, obj->oh, &dpipe->pipeline, DAOS_TX_NONE, 0, NULL,
+				       &nr_iods, &iod, anchor, &nr_kds, kds, sgl_keys, sgl_recs,
+				       NULL, &stats, NULL);
+		if (rc)
+			D_GOTO(out, rc = daos_der2errno(rc));
+
+		for (i = 0; i < nr_kds; i++) {
+			char	*ptr2;
+			mode_t	mode;
+			char	*dkey = (char *) sgl_keys[i].sg_iovs->iov_buf;
+
+			/** set the dentry name */
+			memcpy(dirs[key_nr].d_name, dkey, kds[i].kd_key_len);
+			dirs[key_nr].d_name[kds[i].kd_key_len] = '\0';
+
+			/** set the dentry type */
+			ptr2 = &buf_recs[i * (sizeof(mode_t) + sizeof(time_t))];
+			mode = *((mode_t *) ptr2);
+
+			if (S_ISDIR(mode)) {
+				dirs[key_nr].d_type = DT_DIR;
+			} else if (S_ISREG(mode)) {
+				dirs[key_nr].d_type = DT_REG;
+			} else if (S_ISLNK(mode)) {
+				dirs[key_nr].d_type = DT_LNK;
+			} else {
+				D_ERROR("Invalid DFS entry type found, possible data corruption\n");
+				D_GOTO(out, rc = EINVAL);
+			}
+
+			key_nr++;
+		}
+
+		*nr_scanned += stats.nr_dkeys;
+		nr_kds = *nr - key_nr;
+		if (nr_kds == 0)
+			break;
+	}
+	*nr = key_nr;
+
+out:
+	D_FREE(kds);
+	D_FREE(sgl_keys);
+	D_FREE(iovs_keys);
+	D_FREE(sgl_recs);
+	D_FREE(iovs_recs);
+	D_FREE(buf_recs);
+	D_FREE(buf_keys);
+	return rc;
+}
