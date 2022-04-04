@@ -1362,7 +1362,8 @@ def run_tests(test_files, tag_filter, args):
             # Optionally process core files
             if args.process_cores:
                 try:
-                    if not process_the_cores(avocado_logs_dir, test_file["yaml"], args):
+                    if not process_the_cores(
+                            avocado_logs_dir, test_file["yaml"], test_file["py"], args):
                         return_code |= 256
                 except Exception as error:  # pylint: disable=broad-except
                     print("Detected unhandled exception processing core files: {}".format(error))

@@ -42,6 +42,7 @@ DEBUGINFO_NAMES = [
 
 
 class PackageInfo():
+    # pylint: disable=too-few-public-methods
     """Collection of information for a RPM package."""
 
     def __init__(self, name, version=None, release=None):
@@ -138,6 +139,7 @@ def get_available_blocks(args):
     try:
         stdout = run_command(command).splitlines()[-1]
     except (RuntimeError, AttributeError, ValueError) as error:
+        # pylint: disable=raise-missing-from
         raise RuntimeError(
             "Error obtaining available 1k blocks for {}: {}".format(args.destination, error))
 
@@ -182,7 +184,7 @@ def is_el(distro):
     return [name for name in EL_DISTRO_NAMES if name in distro.name.lower()]
 
 
-def install_packages(package_list, args):
+def install_debuginfo_packages(package_list, args):
     """Install any packages required to generate a stacktrace.
 
     Args:
@@ -201,33 +203,26 @@ def install_packages(package_list, args):
     if os.path.islink(path):
         command_list.append(["sudo", "rm", "-f", path])
 
-    # Add installing any required packages
-    distro_info = detect()
-    install_packages = PACKAGE_NAMES.copy()
-    install_options = ["--exclude", "ompi-debuginfo"]
+    # Populate the list of debuginfo packages to install
+    packages = []
+    options = ["--exclude", "ompi"]
     if os.getenv("TEST_RPMS", 'false') == 'true':
+        distro_info = detect()
         if "suse" in distro_info.name.lower():
-            install_packages.extend(["libpmemobj1", "python3", "openmpi3"])
+            packages.extend(["libpmemobj1", "python3", "openmpi3"])
         elif "centos" in distro_info.name.lower() and distro_info.version == "7":
-            install_options.extend(["--enablerepo=*-debuginfo", "--exclude", "nvml-debuginfo"])
-            install_packages.extend(["libpmemobj", "python36", "openmpi3", "gcc"])
+            options.extend(["--exclude", "nvml"])
+            packages.extend(["libpmemobj", "python36", "openmpi3", "gcc"])
         elif is_el(distro_info) and distro_info.version == "8":
-            install_options.append("--enablerepo=*-debuginfo")
-            install_packages.extend(["libpmemobj", "python3", "openmpi", "gcc"])
+            packages.extend(["libpmemobj", "python3", "openmpi", "gcc"])
         else:
             raise RuntimeError("Error unsupported distro: {}".format(distro_info))
-    command_list.append(["sudo", "dnf", "-y", "install"] + install_options + install_packages)
-
-    # Add installing any debuginfo packages
-    debuginfo_packages = []
-    if is_el(distro_info):
-        debuginfo_packages.append(PackageInfo("python3"))
     for name in package_list:
         info = get_package_info(name, args)
         if info is not None:
-            debuginfo_packages.append(str(info))
-    if debuginfo_packages:
-        command_list.append(["sudo", "dnf", "-y", "debuginfo-install"] + debuginfo_packages)
+            packages.append(str(info))
+    if packages:
+        command_list.append(["sudo", "dnf", "-y", "debuginfo-install"] + options + packages)
 
     retry = 0
     while retry < 2:
@@ -244,8 +239,6 @@ def install_packages(package_list, args):
             # Re-run the lists of commands with a dnf clean and makecache
             display(args, "Going to refresh caches and try again", 0)
             command_prefix = ["sudo", "dnf"]
-            if is_el(distro_info) or "suse" in distro_info.name.lower():
-                command_prefix.append("--enablerepo=*debug*")
             command_list.insert(0, command_prefix + ["clean", "all"])
             command_list.insert(1, command_prefix + ["makecache"])
 
@@ -272,7 +265,7 @@ def process_core_files(required_1k_blocks, core_file_data, args):
     this_host = socket.gethostname().split(".")[0]
 
     if args.install:
-        install_packages(DEBUGINFO_NAMES, args)
+        install_debuginfo_packages(DEBUGINFO_NAMES, args)
 
     # Copy all the core files in parallel if there is enough disk space
     available_1k_blocks = get_available_blocks(args)
@@ -378,8 +371,10 @@ def generate_stacktrace(core_file, args):
             with open(stack_trace_file, "w") as stack_trace:
                 stack_trace.writelines(get_output(cmd, check=False))
         except IOError as error:
+            # pylint: disable=raise-missing-from
             raise RuntimeError("Error writing {}: {}".format(stack_trace_file, error))
         except RuntimeError as error:
+            # pylint: disable=raise-missing-from
             raise RuntimeError("Error creating {}: {}".format(stack_trace_file, error))
     else:
         raise RuntimeError(
