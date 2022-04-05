@@ -4,7 +4,7 @@ hosts:
     - server-B
     - server-C
     - server-D
-timeout: 2200
+timeout: 3600
 server_config:
   name: daos_server
   servers:
