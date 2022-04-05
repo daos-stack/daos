@@ -93,6 +93,6 @@ static const struct CMUnitTest tests[] = {
 int
 ddb_cmd_options_tests_run()
 {
-	return cmocka_run_group_tests_name("DDB commands tests", tests,
+	return cmocka_run_group_tests_name("DDB commands option parsing tests", tests,
 					   ddb_suit_setup, ddb_suit_teardown);
 }
