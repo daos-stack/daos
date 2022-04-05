@@ -2764,6 +2764,27 @@ class posix_tests():
         assert rc.returncode == 0
         destroy_container(self.conf, self.pool.id(), container)
 
+    def test_dfuse_bin(self):
+        """Call the dfuse_test binary"""
+
+        dfuse = DFuse(self.server,
+                      self.conf,
+                      pool=self.pool.id(),
+                      container=self.container,
+                      caching=False)
+        dfuse.start(v_hint='rename_other')
+
+        dcmd = os.path.join(dfuse.conf['PREFIX'], 'bin', 'dfuse_test')
+
+        cmd = [dcmd, '--test-dir', dfuse.dir, '--open-at']
+
+        ret = il_cmd(dfuse, cmd)
+        assert ret.returncode == 0, ret
+
+        if dfuse.stop():
+            self.fatal_errors = True
+
+
 class nlt_stdout_wrapper():
     """Class for capturing stdout from threads"""
 

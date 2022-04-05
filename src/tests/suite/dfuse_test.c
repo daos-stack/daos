@@ -26,19 +26,18 @@ do_openat(char *test_dir)
 	printf("Hello\n");
 }
 
-typedef void (dfuse_test)(char *);
+typedef void(dfuse_test)(char *);
 
-int main(int argc, char **argv)
+int
+main(int argc, char **argv)
 {
-	int index = 0;
-	int opt;
-	char *test_dir = NULL;
-	dfuse_test *test = NULL;
-	struct option long_options[] = {
-		{"test-dir",	required_argument,	NULL,	'M'},
-		{"open-at",	no_argument,		NULL,	'o'},
-		{NULL,		0,			NULL,	0}
-	};
+	int           index = 0;
+	int           opt;
+	char         *test_dir       = NULL;
+	dfuse_test   *test           = NULL;
+	struct option long_options[] = {{"test-dir", required_argument, NULL, 'M'},
+					{"open-at", no_argument, NULL, 'o'},
+					{NULL, 0, NULL, 0} };
 
 	while ((opt = getopt_long(argc, argv, "M:o", long_options, &index)) != -1) {
 		switch (opt) {

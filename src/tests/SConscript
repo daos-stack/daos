@@ -14,7 +14,7 @@ def scons():
 
     denv = base_env.Clone()
 
-    have_mpi = False
+    have_mpi = False  # pylint: disable=unused-variable
 
     if not GetOption('help') and not GetOption('clean'):
         mpi = daos_build.configure_mpi(denv, libs_client)

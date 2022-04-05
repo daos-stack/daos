@@ -1,3 +1,4 @@
+---
 hosts:
   test_servers:
     - server-A
@@ -18,8 +19,9 @@ daos_tests:
   test_name:
     test_daos_dfuse_openat: DAOS_DFUSE_Openat
   daos_test:
-    test_daos_dfuse_openat: o
+    test_daos_dfuse_openat: false
   num_client:
-    test_data_dfuse_openat: 1
+    test_data_dfuse_openat: true
 dfuse:
   mount_dir: "/tmp/daos_dfuse/"
+...
