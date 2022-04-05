@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2015-2021 Intel Corporation.
+ * (C) Copyright 2015-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -81,7 +81,6 @@ DAOS_FOREACH_LOG_FAC(D_LOG_DECLARE_FAC, DAOS_FOREACH_DB);
 #define DB_NULL		0
 /** XXX Temporary things, should be replaced by debug bits above */
 #define DF_DSMC		DB_ANY
-#define DF_DSMS		DB_DSMS
 #define DF_MISC		DB_ANY
 
 /** initialize the debug system */
