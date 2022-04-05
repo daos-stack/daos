@@ -127,25 +127,38 @@ func (n *NUMAFabric) getNumNUMANodes() int {
 	return len(n.numaMap)
 }
 
+// FabricIfaceParams is a set of parameters associated with a fabric interface.
+type FabricIfaceParams struct {
+	Interface string
+	Domain    string
+	Provider  string
+	DevClass  hardware.NetDevClass
+	NUMANode  int
+}
+
 // GetDevice selects the next available interface device on the requested NUMA node.
-func (n *NUMAFabric) GetDevice(numaNode int, netDevClass hardware.NetDevClass, provider string) (*FabricInterface, error) {
+func (n *NUMAFabric) GetDevice(params *FabricIfaceParams) (*FabricInterface, error) {
 	if n == nil {
 		return nil, errors.New("nil NUMAFabric")
 	}
 
-	if provider == "" {
+	if params == nil {
+		return nil, errors.New("nil FabricIfaceParams")
+	}
+
+	if params.Provider == "" {
 		return nil, errors.New("provider is required")
 	}
 
 	n.mutex.Lock()
 	defer n.mutex.Unlock()
 
-	fi, err := n.getDeviceFromNUMA(numaNode, netDevClass, provider)
+	fi, err := n.getDeviceFromNUMA(params.NUMANode, params.DevClass, params.Provider)
 	if err == nil {
 		return copyFI(fi), nil
 	}
 
-	fi, err = n.findOnAnyNUMA(netDevClass, provider)
+	fi, err = n.findOnAnyNUMA(params.DevClass, params.Provider)
 	if err != nil {
 		return nil, err
 	}
@@ -289,25 +302,29 @@ func (n *NUMAFabric) Find(name string) ([]*FabricInterface, error) {
 // FindDevice looks up a fabric device with a given name, domain, and provider.
 // NB: The domain and provider are optional. All other parameters are required. If there is more
 // than one match, all of them are returned.
-func (n *NUMAFabric) FindDevice(name, domain, provider string) ([]*FabricInterface, error) {
-	fiList, err := n.Find(name)
+func (n *NUMAFabric) FindDevice(params *FabricIfaceParams) ([]*FabricInterface, error) {
+	if params == nil {
+		return nil, errors.New("nil FabricIfaceParams")
+	}
+
+	fiList, err := n.Find(params.Interface)
 	if err != nil {
 		return nil, err
 	}
 
-	if domain != "" {
-		fiList = filterDomain(domain, fiList)
+	if params.Domain != "" {
+		fiList = filterDomain(params.Domain, fiList)
 		if len(fiList) == 0 {
 			return nil, errors.Errorf("fabric interface %q doesn't have requested domain %q",
-				name, domain)
+				params.Interface, params.Domain)
 		}
 	}
 
-	if provider != "" {
-		fiList = filterProvider(provider, fiList)
+	if params.Provider != "" {
+		fiList = filterProvider(params.Provider, fiList)
 		if len(fiList) == 0 {
 			return nil, errors.Errorf("fabric interface %q doesn't support provider %q",
-				name, provider)
+				params.Interface, params.Provider)
 		}
 	}
 

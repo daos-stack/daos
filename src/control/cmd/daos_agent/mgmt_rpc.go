@@ -158,12 +158,12 @@ func (mod *mgmtModule) getAttachInfo(ctx context.Context, numaNode int, req *mgm
 		return nil, err
 	}
 
-	fabricIF, err := mod.getFabricInterface(ctx, &fiParams{
-		numaNode:        numaNode,
-		netDevClass:     hardware.NetDevClass(resp.ClientNetHint.NetDevClass),
-		provider:        resp.ClientNetHint.Provider,
-		interfaceName:   req.Interface,
-		interfaceDomain: req.Domain,
+	fabricIF, err := mod.getFabricInterface(ctx, &FabricIfaceParams{
+		NUMANode:  numaNode,
+		DevClass:  hardware.NetDevClass(resp.ClientNetHint.NetDevClass),
+		Provider:  resp.ClientNetHint.Provider,
+		Interface: req.Interface,
+		Domain:    req.Domain,
 	})
 	if err != nil {
 		mod.log.Errorf("failed to fetch fabric interface of type %s: %s",
@@ -195,7 +195,10 @@ func (mod *mgmtModule) getInterfaceProviders(iface, domain string) common.String
 		return nil
 	}
 
-	fis, err := mod.fabricInfo.localNUMAFabric.FindDevice(iface, domain, "")
+	fis, err := mod.fabricInfo.localNUMAFabric.FindDevice(&FabricIfaceParams{
+		Interface: iface,
+		Domain:    domain,
+	})
 	if err != nil {
 		return nil
 	}
@@ -271,15 +274,7 @@ func (mod *mgmtModule) getAttachInfoRemote(ctx context.Context, numaNode int, sy
 	return pbResp, nil
 }
 
-type fiParams struct {
-	numaNode        int
-	netDevClass     hardware.NetDevClass
-	provider        string
-	interfaceName   string
-	interfaceDomain string
-}
-
-func (mod *mgmtModule) getFabricInterface(ctx context.Context, params *fiParams) (*FabricInterface, error) {
+func (mod *mgmtModule) getFabricInterface(ctx context.Context, params *FabricIfaceParams) (*FabricInterface, error) {
 	if mod.fabricInfo.IsCached() {
 		return mod.getCachedInterface(ctx, params)
 	}
@@ -296,16 +291,15 @@ func (mod *mgmtModule) getFabricInterface(ctx context.Context, params *fiParams)
 	return mod.getCachedInterface(ctx, params)
 }
 
-func (mod *mgmtModule) getCachedInterface(ctx context.Context, params *fiParams) (*FabricInterface, error) {
-	if params.interfaceName != "" {
-		fi, err := mod.fabricInfo.localNUMAFabric.FindDevice(params.interfaceName,
-			params.interfaceDomain, params.provider)
+func (mod *mgmtModule) getCachedInterface(ctx context.Context, params *FabricIfaceParams) (*FabricInterface, error) {
+	if params.Interface != "" {
+		fi, err := mod.fabricInfo.localNUMAFabric.FindDevice(params)
 		if err != nil {
 			return nil, err
 		}
 		return fi[0], nil
 	}
-	return mod.fabricInfo.GetDevice(params.numaNode, params.netDevClass, params.provider)
+	return mod.fabricInfo.GetDevice(params)
 }
 
 func (mod *mgmtModule) handleNotifyPoolConnect(ctx context.Context, reqb []byte, pid int32) error {

@@ -452,25 +452,30 @@ func TestAgent_localFabricCache_GetDevice(t *testing.T) {
 	}
 
 	for name, tc := range map[string]struct {
-		lfc         *localFabricCache
-		numaNode    int
-		netDevClass hardware.NetDevClass
-		provider    string
-		expDevice   *FabricInterface
-		expErr      error
+		lfc       *localFabricCache
+		params    *FabricIfaceParams
+		expDevice *FabricInterface
+		expErr    error
 	}{
 		"nil cache": {
 			expErr: NotCachedErr,
 		},
+		"nil params": {
+			lfc:    newTestFabricCache(t, nil, populatedCache),
+			expErr: errors.New("nil"),
+		},
 		"nothing cached": {
 			lfc:    &localFabricCache{},
+			params: &FabricIfaceParams{},
 			expErr: NotCachedErr,
 		},
 		"request verbs": {
-			lfc:         newTestFabricCache(t, nil, populatedCache),
-			numaNode:    2,
-			provider:    "ofi+verbs",
-			netDevClass: hardware.Ether,
+			lfc: newTestFabricCache(t, nil, populatedCache),
+			params: &FabricIfaceParams{
+				NUMANode: 2,
+				Provider: "ofi+verbs",
+				DevClass: hardware.Ether,
+			},
 			expDevice: &FabricInterface{
 				Name:        "test7",
 				NetDevClass: hardware.Ether,
@@ -478,10 +483,12 @@ func TestAgent_localFabricCache_GetDevice(t *testing.T) {
 			},
 		},
 		"request sockets": {
-			lfc:         newTestFabricCache(t, nil, populatedCache),
-			numaNode:    0,
-			provider:    "ofi+sockets",
-			netDevClass: hardware.Ether,
+			lfc: newTestFabricCache(t, nil, populatedCache),
+			params: &FabricIfaceParams{
+				NUMANode: 0,
+				Provider: "ofi+sockets",
+				DevClass: hardware.Ether,
+			},
 			expDevice: &FabricInterface{
 				Name:        "test2",
 				NetDevClass: hardware.Ether,
@@ -500,11 +507,7 @@ func TestAgent_localFabricCache_GetDevice(t *testing.T) {
 				}
 			}
 
-			if tc.provider == "" {
-				tc.provider = "ofi+tcp"
-			}
-
-			dev, err := tc.lfc.GetDevice(tc.numaNode, tc.netDevClass, tc.provider)
+			dev, err := tc.lfc.GetDevice(tc.params)
 
 			common.CmpErr(t, tc.expErr, err)
 			if diff := cmp.Diff(tc.expDevice, dev, cmpopts.IgnoreUnexported(FabricInterface{})); diff != "" {
