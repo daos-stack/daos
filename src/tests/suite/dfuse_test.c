@@ -9,8 +9,17 @@
  * tests/suite/dfuse_test
  */
 
+/* TODO: Why isn't this set on the command line. */
+#define _GNU_SOURCE
+
+#ifndef O_PATH
+#define O_PATH 0
+#endif
+
 #include <stdio.h>
 #include <getopt.h>
+#include <fcntl.h>
+#include <unistd.h>
 
 static void
 print_usage()
@@ -20,19 +29,38 @@ print_usage()
 	printf("dfute_test --open-at\n");
 }
 
-void
+int
 do_openat(char *test_dir)
 {
+	int fd;
+	int root;
+	int rc;
+
+	root = open(test_dir, O_PATH | O_DIRECTORY);
+	if (root < 0)
+		return root;
+
+	fd = openat(root, "my_file", O_CREAT);
 	printf("Hello\n");
+
+	rc = close(fd);
+	if (rc != 0)
+		return rc;
+
+	rc = close(root);
+	if (rc != 0)
+		return rc;
+	return 0;
 }
 
-typedef void(dfuse_test)(char *);
+typedef int(dfuse_test)(char *);
 
 int
 main(int argc, char **argv)
 {
 	int           index = 0;
 	int           opt;
+	int           rc;
 	char         *test_dir       = NULL;
 	dfuse_test   *test           = NULL;
 	struct option long_options[] = {{"test-dir", required_argument, NULL, 'M'},
@@ -65,6 +93,7 @@ main(int argc, char **argv)
 		printf("No test specified\n");
 		return 1;
 	}
-	test(test_dir);
-	return 0;
+
+	rc = test(test_dir);
+	return rc;
 }

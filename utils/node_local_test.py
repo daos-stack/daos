@@ -2778,7 +2778,7 @@ class posix_tests():
 
         cmd = [dcmd, '--test-dir', dfuse.dir, '--open-at']
 
-        ret = il_cmd(dfuse, cmd)
+        ret = il_cmd(dfuse, cmd, check_read=False, check_write=False, check_fstat=False)
         assert ret.returncode == 0, ret
 
         if dfuse.stop():
