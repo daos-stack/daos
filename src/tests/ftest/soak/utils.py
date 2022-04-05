@@ -1134,7 +1134,7 @@ def create_fio_cmdline(self, job_spec, pool):
     return commands
 
 
-def create_app_cmdline(self, job_spec, pool, ppn, nodesperjob, POSIX=False):
+def create_app_cmdline(self, job_spec, pool, ppn, nodesperjob):
     """Create the srun cmdline to run app.
 
     This method will use a cmdline specified in the yaml file to
