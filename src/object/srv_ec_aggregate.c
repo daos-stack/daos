@@ -57,7 +57,7 @@
 #include "obj_ec.h"
 #include "obj_internal.h"
 
-#define EC_AGG_ITERATION_MAX	4096
+#define EC_AGG_ITERATION_MAX	2048
 
 /* Pool/container info. Shared handle UUIDs, and service list are initialized
  * in system Xstream.
@@ -121,7 +121,7 @@ struct ec_agg_param {
 	daos_epoch_range_t	 ap_epr;	 /* hi/lo extent threshold    */
 	struct dtx_handle	*ap_dth;	 /* handle for DTX refresh    */
 	daos_handle_t		 ap_cont_handle; /* VOS container handle */
-	bool			(*ap_yield_func)(void *arg); /* yield function*/
+	int			(*ap_yield_func)(void *arg); /* yield function*/
 	void			*ap_yield_arg;   /* yield argument            */
 	uint32_t		 ap_credits_max; /* # of tight loops to yield */
 	uint32_t		 ap_credits;     /* # of tight loops          */
@@ -298,7 +298,6 @@ agg_clear_extents(struct ec_agg_entry *entry)
 				   ae_link) {
 		/* Check for carry-over extent. */
 		tail = agg_carry_over(entry, extent);
-		D_ASSERT(tail == 0);
 		if (extent->ae_hole && tail)
 			carry_is_hole = true;
 
@@ -2059,9 +2058,18 @@ agg_akey(daos_handle_t ih, vos_iter_entry_t *entry,
 static inline bool
 ec_aggregate_yield(struct ec_agg_param *agg_param)
 {
-	D_ASSERT(agg_param->ap_yield_func != NULL);
+	int	rc;
 
-	return agg_param->ap_yield_func(agg_param->ap_yield_arg);
+	D_ASSERT(agg_param->ap_yield_func != NULL);
+	rc = agg_param->ap_yield_func(agg_param->ap_yield_arg);
+	if (rc < 0) /* Abort */
+		return true;
+
+	/*
+	 * FIXME: Implement fine credits for various operations and adjust
+	 *	  the credits according to the 'rc'.
+	 */
+	return false;
 }
 
 /* Post iteration call back for outer iterator
@@ -2392,7 +2400,6 @@ ec_agg_param_fini(struct ds_cont_child *cont, struct ec_agg_param *agg_param)
 
 	D_ASSERT(agg_entry->ae_sgl.sg_nr == AGG_IOV_CNT || agg_entry->ae_sgl.sg_nr == 0);
 	d_sgl_fini(&agg_entry->ae_sgl, true);
-	agg_clear_extents(agg_entry);
 	if (daos_handle_is_valid(agg_param->ap_pool_info.api_pool_hdl))
 		dsc_pool_close(agg_param->ap_pool_info.api_pool_hdl);
 
@@ -2464,7 +2471,7 @@ out:
  */
 static int
 cont_ec_aggregate_cb(struct ds_cont_child *cont, daos_epoch_range_t *epr,
-		     uint32_t flags, struct agg_param *agg_param, uint64_t *msec)
+		     uint32_t flags, struct agg_param *agg_param)
 {
 	struct ec_agg_param	 *ec_agg_param = agg_param->ap_data;
 	struct dtx_handle	 *dth = NULL;
@@ -2523,6 +2530,9 @@ cont_ec_aggregate_cb(struct ds_cont_child *cont, daos_epoch_range_t *epr,
 again:
 	rc = vos_iterate(&iter_param, VOS_ITER_OBJ, true, &anchors,
 			 agg_iterate_pre_cb, agg_iterate_post_cb, ec_agg_param, dth);
+
+	/* Post_cb may not being executed in some cases */
+	agg_clear_extents(&ec_agg_param->ap_agg_entry);
 	if (obj_dtx_need_refresh(dth, rc)) {
 		rc = dtx_refresh(dth, cont);
 		if (rc == -DER_AGAIN) {
@@ -2543,13 +2553,13 @@ again:
 		ec_agg_param->ap_agg_entry.ae_obj_hdl = DAOS_HDL_INVAL;
 	}
 
-	if (ec_agg_param->ap_obj_skipped) {
+	if (ec_agg_param->ap_obj_skipped && !cont->sc_stopping) {
 		D_DEBUG(DB_EPC, "with skipped obj during aggregation.\n");
-		/* There is rebuild going no, and we can proceed EC aggregate boundary,
+		/* There is rebuild going on, and we can't proceed EC aggregate boundary,
 		 * Let's wait for 5 seconds for another EC aggregation.
 		 */
-		if (msec)
-			*msec = 5 * 1000;
+		D_ASSERT(cont->sc_ec_agg_req != NULL);
+		sched_req_sleep(cont->sc_ec_agg_req, 5 * 1000);
 	}
 
 update_hae:
@@ -2560,12 +2570,6 @@ update_hae:
 	}
 
 	return rc;
-}
-
-static uint64_t
-cont_ec_agg_start_eph_get(struct ds_cont_child *cont)
-{
-	return cont->sc_ec_agg_eph;
 }
 
 void
@@ -2579,9 +2583,7 @@ ds_obj_ec_aggregate(void *arg)
 	D_DEBUG(DB_EPC, "start EC aggregation "DF_UUID"\n",
 		DP_UUID(cont->sc_uuid));
 	param.ap_data = &agg_param;
-	param.ap_start_eph_get = cont_ec_agg_start_eph_get;
 	param.ap_cont = cont;
-	param.ap_req = cont->sc_ec_agg_req;
 	rc = ec_agg_param_init(cont, &param);
 	if (rc) {
 		/* To make sure the EC aggregation can be run on this xstream,

@@ -122,11 +122,11 @@ class ErasureCodeIor(ServerFillUp):
             oclass(list): list of the obj class to use with IOR
             sizes(list): Update Transfer, Chunk and Block sizes
         """
-        self.ior_cmd.dfs_chunk.update(sizes[0])
-        self.ior_cmd.block_size.update(sizes[1])
-        self.ior_cmd.transfer_size.update(sizes[2])
-        self.ior_cmd.dfs_oclass.update(oclass[0])
-        self.ior_cmd.dfs_dir_oclass.update(oclass[0])
+        self.ior_local_cmd.dfs_chunk.update(sizes[0])
+        self.ior_local_cmd.block_size.update(sizes[1])
+        self.ior_local_cmd.transfer_size.update(sizes[2])
+        self.ior_local_cmd.dfs_oclass.update(oclass[0])
+        self.ior_local_cmd.dfs_dir_oclass.update(oclass[0])
 
     def ior_write_single_dataset(self, oclass, sizes, storage='NVMe', operation="WriteRead",
                                  percent=1):
@@ -158,7 +158,7 @@ class ErasureCodeIor(ServerFillUp):
         self.start_ior_load(storage, operation, percent, create_cont=False)
 
         # Store the container UUID for future reading
-        self.cont_uuid.append(self.ior_cmd.dfs_cont.value)
+        self.cont_uuid.append(self.ior_local_cmd.dfs_cont.value)
 
     def ior_write_dataset(self, storage='NVMe', operation="WriteRead", percent=1):
         """Write IOR data set with different EC object and different sizes.
