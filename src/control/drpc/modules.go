@@ -160,6 +160,7 @@ func (m MgmtMethod) String() string {
 		MethodNotifyExit:           "NotifyExit",
 		MethodIdentifyStorage:      "IdentifyStorage",
 		MethodPoolGetProp:          "PoolGetProp",
+		MethodPoolUpgrade:          "PoolUpgrade",
 	}[m]; ok {
 		return s
 	}
@@ -253,6 +254,8 @@ const (
 	MethodIdentifyStorage MgmtMethod = C.DRPC_METHOD_MGMT_DEV_IDENTIFY
 	// MethodPoolGetProp defines a method for getting pool properties
 	MethodPoolGetProp MgmtMethod = C.DRPC_METHOD_MGMT_POOL_GET_PROP
+	// MethodPoolUpgrade defines a method for upgrade pool
+	MethodPoolUpgrade MgmtMethod = C.DRPC_METHOD_MGMT_POOL_UPGRADE
 )
 
 type srvMethod int32

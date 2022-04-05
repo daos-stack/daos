@@ -76,4 +76,6 @@ service MgmtSvc {
 	rpc SystemErase(SystemEraseReq) returns(SystemEraseResp) {}
 	// Clean up leaked resources for a given node
 	rpc SystemCleanup(SystemCleanupReq) returns(SystemCleanupResp){}
+	// PoolUpgrade queries a DAOS pool.
+	rpc PoolUpgrade(PoolUpgradeReq) returns (PoolUpgradeResp) {}
 }
