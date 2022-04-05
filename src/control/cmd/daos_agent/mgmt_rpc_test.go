@@ -234,12 +234,12 @@ func TestAgent_mgmtModule_getAttachInfo(t *testing.T) {
 			},
 			expResp: secResp("fi1", "fi1"),
 		},
-		"client req iface": {
+		"client req iface only": {
 			reqIface: "fi1",
 			rpcResp: &control.HostResponse{
 				Message: testSrvResp(),
 			},
-			expResp: priResp("fi1", "d1"),
+			expResp: secResp("fi1", "fi1"),
 		},
 		"client req domain-only ignored": {
 			reqDomain: "d2",
@@ -249,31 +249,31 @@ func TestAgent_mgmtModule_getAttachInfo(t *testing.T) {
 			},
 			expResp: priResp("fi0", "d0"),
 		},
-		"client req provider mismatch": {
+		"client req provider mismatch ignored": {
 			reqIface:  "fi1",
 			reqDomain: "d1",
 			provider:  "ofi+tcp",
 			rpcResp: &control.HostResponse{
 				Message: testSrvResp(),
 			},
-			expErr: errors.New("doesn't support provider"),
+			expResp: secResp("fi1", "d1"),
 		},
-		"client req iface/domain mismatch": {
+		"client req iface/domain mismatch ignored": {
 			reqIface:  "fi0",
 			reqDomain: "d2",
 			provider:  "ofi+verbs",
 			rpcResp: &control.HostResponse{
 				Message: testSrvResp(),
 			},
-			expErr: errors.New("doesn't have requested domain"),
+			expResp: priResp("fi0", "d2"),
 		},
-		"client req iface not found": {
+		"client req iface not found ignored": {
 			reqIface: "notreal",
 			provider: "ofi+verbs",
 			rpcResp: &control.HostResponse{
 				Message: testSrvResp(),
 			},
-			expErr: errors.New("not found"),
+			expResp: priResp("notreal", "notreal"),
 		},
 		"config provider not found": {
 			provider: "notreal",

@@ -158,23 +158,31 @@ func (mod *mgmtModule) getAttachInfo(ctx context.Context, numaNode int, req *mgm
 		return nil, err
 	}
 
-	fabricIF, err := mod.getFabricInterface(ctx, &FabricIfaceParams{
-		NUMANode:  numaNode,
-		DevClass:  hardware.NetDevClass(resp.ClientNetHint.NetDevClass),
-		Provider:  resp.ClientNetHint.Provider,
-		Interface: req.Interface,
-		Domain:    req.Domain,
-	})
-	if err != nil {
-		mod.log.Errorf("failed to fetch fabric interface of type %s: %s",
-			hardware.NetDevClass(resp.ClientNetHint.NetDevClass), err.Error())
-		return nil, err
+	// Requested fabric interface/domain behave as a simple override. If we weren't able to
+	// validate them, we return them to the user with the understanding that perhaps the user
+	// knows what they're doing.
+	iface := req.Interface
+	domain := req.Domain
+	if req.Interface == "" {
+		fabricIF, err := mod.getFabricInterface(ctx, &FabricIfaceParams{
+			NUMANode: numaNode,
+			DevClass: hardware.NetDevClass(resp.ClientNetHint.NetDevClass),
+			Provider: resp.ClientNetHint.Provider,
+		})
+		if err != nil {
+			mod.log.Errorf("failed to fetch fabric interface of type %s: %s",
+				hardware.NetDevClass(resp.ClientNetHint.NetDevClass), err.Error())
+			return nil, err
+		}
+
+		iface = fabricIF.Name
+		domain = fabricIF.Domain
 	}
 
-	resp.ClientNetHint.Interface = fabricIF.Name
-	resp.ClientNetHint.Domain = fabricIF.Name
-	if fabricIF.Domain != "" {
-		resp.ClientNetHint.Domain = fabricIF.Domain
+	resp.ClientNetHint.Interface = iface
+	resp.ClientNetHint.Domain = iface
+	if domain != "" {
+		resp.ClientNetHint.Domain = domain
 		mod.log.Debugf("OFI_DOMAIN for %s has been detected as: %s",
 			resp.ClientNetHint.Interface, resp.ClientNetHint.Domain)
 	}
@@ -187,12 +195,12 @@ func (mod *mgmtModule) getAttachInfoResp(ctx context.Context, numaNode int, sys 
 }
 
 func (mod *mgmtModule) getInterfaceProviders(iface, domain string) common.StringSet {
-	if mod.provider != "" {
-		return common.NewStringSet(mod.provider)
-	}
-
 	if iface == "" {
 		return nil
+	}
+
+	if domain == "" {
+		domain = iface
 	}
 
 	fis, err := mod.fabricInfo.localNUMAFabric.FindDevice(&FabricIfaceParams{
@@ -200,6 +208,8 @@ func (mod *mgmtModule) getInterfaceProviders(iface, domain string) common.String
 		Domain:    domain,
 	})
 	if err != nil {
+		mod.log.Errorf("client-requested fabric interface/domain not detected: %s", err.Error())
+		mod.log.Error("communications on this interface may fail")
 		return nil
 	}
 
@@ -210,7 +220,16 @@ func (mod *mgmtModule) getInterfaceProviders(iface, domain string) common.String
 	return providers
 }
 
-func (mod *mgmtModule) selectAttachInfo(srvResp *mgmtpb.GetAttachInfoResp, providers common.StringSet) (*mgmtpb.GetAttachInfoResp, error) {
+func (mod *mgmtModule) selectAttachInfo(srvResp *mgmtpb.GetAttachInfoResp, reqProviders common.StringSet) (*mgmtpb.GetAttachInfoResp, error) {
+	providers := reqProviders
+	if mod.provider != "" {
+		if len(reqProviders) > 0 && !reqProviders.Has(mod.provider) {
+			mod.log.Errorf("configured provider %q not included in requested interface's detected providers: %s", reqProviders)
+			mod.log.Error("communications on this interface may fail")
+		}
+		providers = common.NewStringSet(mod.provider)
+	}
+
 	if len(providers) == 0 {
 		return srvResp, nil
 	}
