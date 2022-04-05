@@ -321,6 +321,9 @@ vos_aggregate_yield(struct vos_agg_param *agg_param)
 {
 	int	rc;
 
+	/* Current DTX handle must be NULL, since aggregation runs under non-DTX mode. */
+	D_ASSERT(vos_dth_get() == NULL);
+
 	if (agg_param->ap_yield_func == NULL) {
 		bio_yield();
 		credits_set(&agg_param->ap_credits, true);
@@ -2183,6 +2186,9 @@ vos_agg_ev(daos_handle_t ih, vos_iter_entry_t *entry,
 		}
 		return rc;
 	}
+
+	/* Current DTX handle must be NULL, since aggregation runs under non-DTX mode. */
+	D_ASSERT(vos_dth_get() == NULL);
 
 	/* Aggregation Yield for testing purpose */
 	while (DAOS_FAIL_CHECK(DAOS_VOS_AGG_BLOCKED))
