@@ -15,10 +15,11 @@ common facilities which are defined in GURT, as well as other facilities that
 can be defined on a per-project basis (such as those for CaRT and DAOS).
 `DD_SUBSYS` can be used to set which subsystems to enable logging for. By
 default all subsystems are enabled (`DD_SUBSYS=all`).
-- DAOS Facilities: [common, tree, vos, client, server, rdb, pool, container,
-		    object, placement, rebuild, tier, mgmt, eio, tests]
-- Common Facilities (GURT): [MISC, MEM]
-- CaRT Facilities: [RPC, BULK, CORPC, GRP, LM, HG, ST, IV]
+- DAOS Facilities: [array, kv, common, tree, vos, client, server, rdb, rsvc,
+		    pool, container, object, placement, rebuild, mgmt, bio, tests, dfs,
+		    duns, drpc, security, dtx, dfuse, il, csum]
+- Common Facilities (GURT): [MISC, MEM, SWIM, TELEM]
+- CaRT Facilities: [RPC, BULK, CORPC, GRP, HG, ST, IV, CTL]
 
 ## Priority Logging
 
