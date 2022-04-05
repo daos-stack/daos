@@ -41,7 +41,12 @@ do_openat(char *test_dir)
 		return root;
 
 	fd = openat(root, "my_file", O_CREAT);
+
 	printf("Hello\n");
+
+	rc = write(fd, "hello", 5);
+	if (rc != 0)
+		return rc;
 
 	rc = close(fd);
 	if (rc != 0)
@@ -65,7 +70,7 @@ main(int argc, char **argv)
 	dfuse_test   *test           = NULL;
 	struct option long_options[] = {{"test-dir", required_argument, NULL, 'M'},
 					{"open-at", no_argument, NULL, 'o'},
-					{NULL, 0, NULL, 0} };
+					{NULL, 0, NULL, 0}};
 
 	while ((opt = getopt_long(argc, argv, "M:o", long_options, &index)) != -1) {
 		switch (opt) {
