@@ -1,13 +1,13 @@
 """Build test suite"""
 import sys
-
 import subprocess
-#hack to handle old subprocess version
+
+# hack to handle old subprocess version
 try:
     from subprocess import DEVNULL
 except ImportError:
     import os
-    DEVNULL = open(os.devnull, "wb")
+    DEVNULL = open(os.devnull, "wb")  # pylint: disable=consider-using-with
 
 import daos_build
 
