@@ -80,7 +80,6 @@ DAOS_FOREACH_LOG_FAC(D_LOG_DECLARE_FAC, DAOS_FOREACH_DB);
 #define DB_DEFAULT	DLOG_DBG
 #define DB_NULL		0
 /** XXX Temporary things, should be replaced by debug bits above */
-#define DF_DSMC		DB_ANY
 #define DF_MISC		DB_ANY
 
 /** initialize the debug system */
