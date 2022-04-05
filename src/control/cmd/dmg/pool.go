@@ -507,7 +507,7 @@ func (cmd *PoolQueryCmd) Execute(args []string) error {
 		ID: cmd.PoolID().String(),
 	}
 
-	// DAOS-10072 FIXME Create a ticket to add the possibilitiy to have the two options
+	// TODO: The two options should not be incompatible (i.e. engine limitation)
 	if cmd.ShowEnabledRanks && cmd.ShowDisabledRanks {
 		return errIncompatFlags("show-enabled-ranks", "show-disabled-ranks")
 	}

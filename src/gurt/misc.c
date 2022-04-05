@@ -672,7 +672,7 @@ d_rank_range_list_str(d_rank_range_list_t *list, bool *truncated)
 	if (line == NULL)
 		return NULL;
 
-	*line='[';
+	*line = '[';
 	linepos = line + 1;
 	for (i = 0; i < list->rrl_nr; i++) {
 		uint32_t	lo = list->rrl_ranges[i].lo;
