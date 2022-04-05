@@ -299,8 +299,11 @@ need_aggregate(daos_handle_t ih, struct vos_agg_param *agg_param, vos_iter_desc_
 	if (agg_param->ap_discard_obj || agg_param->ap_discard)
 		return true;
 
-	if (agg_param->ap_flags & VOS_AGG_FL_FORCE_SCAN)
+	if (agg_param->ap_flags & VOS_AGG_FL_FORCE_SCAN) {
+		if (desc->id_agg_write == 0 && desc->id_parent_punch == 0)
+			agg_needed = false; /** Nothing to aggregate, even on snapshot */
 		goto out;
+	}
 
 	hae = cont->vc_cont_df->cd_hae;
 	if (desc->id_agg_write <= hae && desc->id_parent_punch <= hae)
