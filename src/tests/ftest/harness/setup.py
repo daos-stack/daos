@@ -24,6 +24,6 @@ class HarnessSetupTest(TestWithServers):
         """
         self.assertEqual(self.server_managers[0].storage_prepare_timeout.value, 60,
                          "FAILED: storage prepare was not set correctly from the yaml")
-        self.assertEqual(self.server_managers[0].prepare_format_timeout.value, 60,
+        self.assertEqual(self.server_managers[0].storage_format_timeout.value, 60,
                          "FAILED: storage format was not set correctly from the yaml")
         self.log.info("Test passed!")
