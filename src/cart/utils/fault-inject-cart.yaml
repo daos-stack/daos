@@ -1,4 +1,3 @@
----
 # fault injection configuration file
 seed: 123
 
@@ -57,4 +56,3 @@ fault_config:
     # will be delayed. It can be useful to complete an initialization and
     # creation of pool/container need for testing.
     argument: "rank=1,delay=10"
-...

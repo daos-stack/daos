@@ -1,4 +1,3 @@
----
 # Project Information
 site_name: DAOS v2.2 - dev
 site_description: Distributed Asynchronous Object Storage
@@ -113,4 +112,3 @@ nav:
           - 'DAOS Internals': 'https://github.com/daos-stack/daos/blob/master/src/README.md'
           - 'DAOS API Documentation': 'https://docs.daos.io/v2.2/doxygen/html/index.html'
           # Attention: Don't change that doxygen path to a relative path, or mkdocs will stumble...
-...

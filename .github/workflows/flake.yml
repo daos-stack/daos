@@ -1,4 +1,3 @@
----
 name: Flake
 
 # Run flake on all PRs.  This ignores many pre-existing errors however should catch
@@ -38,4 +37,3 @@ jobs:
           # Max line length is 100, and pylint will warn about lines longer than this, but some
           # existing lines are longer so allow them here.
           max-line-length: '133'
-...

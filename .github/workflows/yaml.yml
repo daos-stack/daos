@@ -1,4 +1,3 @@
----
 name: Yamllint
 
 # Run yamllint on PRs.  This ignores many pre-existing errors in the src/tests/ftests directory
@@ -28,4 +27,3 @@ jobs:
           python-version: '3'
       - name: Run check
         run: yamllint --format github .
-...

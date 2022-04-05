@@ -1,4 +1,3 @@
----
 name: Doxygen
 
 on:  # yamllint disable-line rule:truthy

@@ -51,14 +51,14 @@ container:
   control_method: daos
   oclass: RP_2GX
 ior:
-    client_processes:
-        np_8:
-            np: 8
-    repetitions: 1
-    api: DFS
-    dfs_oclass: "RP_2GX"
-    flags: "-w -W -k -G 1"
-    transfersize_blocksize:
-      1M:
-        transfer_size: '1M'
-        block_size: '1G'
+  client_processes:
+    np_8:
+      np: 8
+  repetitions: 1
+  api: DFS
+  dfs_oclass: "RP_2GX"
+  flags: "-w -W -k -G 1"
+  transfersize_blocksize:
+    1M:
+      transfer_size: '1M'
+      block_size: '1G'

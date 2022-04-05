@@ -1,4 +1,3 @@
----
 hosts:
   test_servers:
     - server-A

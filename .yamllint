@@ -1,4 +1,3 @@
----
 extends: default
 
 rules:
@@ -15,7 +14,9 @@ rules:
   truthy:
     ignore: src/tests/ftest/
   document-start:
-    ignore: src/tests/ftest/
+    present: false
+  document-end:
+    present: false
   comments-indentation:
     ignore: src/tests/ftest/
   comments:
@@ -27,4 +28,3 @@ ignore: |
   src/control/vendor/
   .git/
   src/rdb/raft/
-...

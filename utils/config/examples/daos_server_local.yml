@@ -1,4 +1,3 @@
----
 # For a single-server system
 
 name: daos_server
@@ -37,4 +36,3 @@ engines:
     bdev_class: file
     bdev_size: 16
     bdev_list: [/tmp/daos-bdev]
-...

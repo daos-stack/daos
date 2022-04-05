@@ -1,4 +1,3 @@
----
 hosts:
   test_servers:
     - server-A
@@ -37,4 +36,3 @@ daos_perf:
   dkeys: 256
   akeys: 128
   object_class: EC2P1
-...

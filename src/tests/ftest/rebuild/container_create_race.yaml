@@ -1,4 +1,3 @@
----
 # change host names to your reserved nodes, the
 # required quantity is indicated by the placeholders
 hosts:
@@ -48,4 +47,3 @@ ior:
     1M:
       transfer_size: '1M'
       block_size: '128M'
-...

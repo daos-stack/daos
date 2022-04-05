@@ -1,4 +1,3 @@
----
 name: daos_server
 port: 10001
 provider: ofi+tcp;ofi_rxm
@@ -21,4 +20,3 @@ engines:
         class: ram
         scm_mount: /mnt/daos
         scm_size: 32
-...

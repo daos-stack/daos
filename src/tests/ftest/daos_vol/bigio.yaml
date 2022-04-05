@@ -25,7 +25,7 @@ container:
     type: POSIX
     control_method: daos
 dfuse:
-  mount_dir: "/tmp/daos_dfuse"
+    mount_dir: "/tmp/daos_dfuse"
 daos_vol_tests:
     testname: h5_partest_t_bigio
     client_processes: 6

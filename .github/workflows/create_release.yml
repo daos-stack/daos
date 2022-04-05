@@ -1,4 +1,3 @@
----
 name: Create Release
 # This workflow is triggered on pushes to the master branch of the repository.
 on:  # yamllint disable-line rule:truthy
@@ -19,4 +18,3 @@ jobs:
         id: make_release
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-...

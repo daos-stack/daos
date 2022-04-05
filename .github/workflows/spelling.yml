@@ -1,4 +1,3 @@
----
 name: Codespell
 
 on:  # yamllint disable-line rule:truthy
@@ -17,4 +16,3 @@ jobs:
           skip: ./src/control/vendor,./.git
           ignore_words_file: ci/codespell.ignores
           builtin: clear,rare,informal,names,en-GB_to_en-US
-...
