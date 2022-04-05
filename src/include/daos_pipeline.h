@@ -93,18 +93,15 @@ typedef struct {
 	 */
 	d_iov_t		*constant;
 	/**
-	 * If filter should only be applied starting at an offset of the data.
-	 * Only relevant for keys part type objects.
-	 * If object is an akey, and the akey is an array, data_offset
-	 * corresponds to the first record in the extent (same as rx_idx in
-	 * daos_recx_t).
+	 * If filter should only be applied starting at an offset of the data. Only relevant for
+	 * keys part type objects. If object is an akey, and the akey is an array, data_offset
+	 * corresponds to the first record in the extent (same as rx_idx in daos_recx_t).
 	 */
 	size_t		data_offset;
 	/**
-	 * Size of the data to be filtered. Only relevant for keys part type
-	 * objects. If key is akey, and the akey is an array, data_len
-	 * corresponds to the number of contiguous records in the extent (same
-	 * as rx_nr in daos_recx_t). If 0, the stored length inside DAOS will be
+	 * Size of the data to be filtered. Only relevant for keys part type objects. If key is
+	 * akey, and the akey is an array, data_len corresponds to the number of contiguous records
+	 * in the extent (same as rx_nr in daos_recx_t). If 0, the stored length inside DAOS will be
 	 * used instead.
 	 */
 	size_t		data_len;
@@ -119,8 +116,7 @@ typedef struct {
 	 *   -- DAOS_FILTER_CONDITION:
 	 *          Records in, and records (meeting condition) out
 	 *   -- DAOS_FILTER_AGGREGATION:
-	 *          Records in, a single value out (see aggregation functions
-	 *          above)
+	 *          Records in, a single value out (see aggregation functions above)
 	 *
 	 * NOTE: Pipeline nodes can only be chained the following way:
 	 *             (condition) --> (condition)
@@ -178,16 +174,14 @@ typedef struct {
 typedef struct {
 	/*
 	 * If filtering by object ids, \a nr_objs will register the number of objects
-	 * considered. Otherwise (i.e., if an object handle is passed), objs will always be zero
-	 * (not one).
+	 * considered. Otherwise (i.e., if an object handle is passed), \a nr_objs will always be
+	 * zero (not one).
 	 */
 	uint64_t	nr_objs;
 	/*
 	 * If filtering by dkey or akeys (or a combination of both), \a nr_dkeys will register the
-	 * total number of dkeys scanned. If a record may not pass a filter due to a condition in an
-	 * akey, not the dkey, \a nr_dkeys only returns the records that have been scanned, no
-	 * matter if the filter was done by dkey or akey or both. If a dkey is provided to
-	 * daos_pipeline_run(), \a nr_dkeys will always be zero (not one).
+	 * total number of dkeys scanned. If a dkey is provided to daos_pipeline_run(), \a nr_dkeys
+	 * will always be zero (not one).
 	 */
 	uint64_t	nr_dkeys;
 	/*
@@ -214,9 +208,8 @@ void
 daos_filter_init(daos_filter_t *filter);
 
 /**
- * Adds a new filter object to the pipeline \a pipeline object. The effect of
- * this function is equivalent to "pushing back" the new filter at the end of
- * the pipeline.
+ * Adds a new filter object to the pipeline \a pipeline object. The effect of this function is
+ * equivalent to "pushing back" the new filter at the end of the pipeline.
  *
  * \param[in,out]	pipeline	Pipeline object.
  *
@@ -226,9 +219,8 @@ int
 daos_pipeline_add(daos_pipeline_t *pipeline, daos_filter_t *filter);
 
 /**
- * Adds a new filter part object to the filter object \a filter. The effect of
- * this function is equivalent to "pushing back" the new filter part at the end
- * of the filter stack.
+ * Adds a new filter part object to the filter object \a filter. The effect of this function is
+ * equivalent to "pushing back" the new filter part at the end of the filter stack.
  *
  * \param[in,out]	filter	Filter object.
  *
@@ -238,8 +230,8 @@ int
 daos_filter_add(daos_filter_t *filter, daos_filter_part_t *part);
 
 /**
- * Checks that a pipeline object is well built. If the pipeline object is well
- * built, the function will return 0 (no error).
+ * Checks that a pipeline object is well built. If the pipeline object is well built, the function
+ * will return 0 (no error).
  *
  * \param[in]		pipeline	Pipeline object.
  */
@@ -255,82 +247,64 @@ daos_pipeline_check(daos_pipeline_t *pipeline);
  *
  * \param[in]		pipeline	Pipeline object.
  *
- * \param[in]		th		Optional transaction handle. Use
- *					DAOS_TX_NONE for an independent
- *					transaction.
+ * \param[in]		th		Optional transaction handle. Use DAOS_TX_NONE for an
+ *					independent transaction.
  *
  * \param[in]		flags		Conditional operations.
  *
- * \param[in]		dkey		Optional dkey. When passed, no iteration
- *					is done and processing is only performed
- *					on this specific dkey.
+ * \param[in]		dkey		Optional dkey. When passed, no iteration is done and
+ *					processing is only performed on this specific dkey.
  *
- * \param[in,out]	nr_iods		[in]: Number of I/O descriptors in the
- *					iods table.
- *					[out]: Number of returned I/O
- *					descriptors in the iods table.
+ * \param[in,out]	nr_iods		[in]: Number of I/O descriptors in the iods table.
+ *					[out]: Number of returned I/O descriptors in the iods table.
  *
- * \param[in,out]	iods		[in/out]: Array of I/O descriptors. Each
- *					descriptor is associated with a given
- *					akey and describes the list of
+ * \param[in,out]	iods		[in/out]: Array of I/O descriptors. Each descriptor is
+ *					associated with a given akey and describes the list of
  *					record extents to fetch from the array.
  *
- * \param[in,out]	anchor		Hash anchor for the next call, it should
- *					be set to zeroes for the first call, it
- *					should not be changed by caller
+ * \param[in,out]	anchor		Hash anchor for the next call, it should be set to zeroes
+ *					for the first call, it should not be changed by caller
  *					between calls.
  *
- * \param[in,out]	nr_kds		[in]: Number of key descriptors in
- *					\a kds.
- *					[out]: Number of returned key
- *					descriptors.
+ * \param[in,out]	nr_kds		[in]: Number of key descriptors in \a kds.
+ *					[out]: Number of returned key descriptors.
  *
- * \param[in,out]	kds		[in]: Preallocated array of \nr_kds key
- *					descriptors. Optional if \dkey passed.
- *					[out]: Size of each individual key along
- *					with checksum type and size stored just
- *					after the key in \a sgl_keys.
+ * \param[in,out]	kds		[in]: Preallocated array of \nr_kds key descriptors.
+ *					Optional if \dkey passed.
+ *					[out]: Size of each individual key along with checksum type
+ *					and size stored just after the key in \a sgl_keys.
  *
- * \param[out]		sgl_keys	[in]: Preallocated array of \nr_kds
- *					sgls storing all the dkeys to be
- *					returned. Optional when \dkey passed.
+ * \param[out]		sgl_keys	[in]: Preallocated array of \nr_kds sgls storing all the
+ *					dkeys to be returned. Optional when \dkey passed.
  *					[out]: All returned dkeys.
  *
- * \param[out]		sgl_recx	[in]: Preallocated array of
- *					(\nr_kds * \nr_iods) sgls storing all
- *					the records to be returned. When doing
- *					aggregations, or when \dkey is passed,
- *					only one record (output size will be
- *					1 x \nr_iods) at most is returned (no
+ * \param[out]		sgl_recx	[in]: Preallocated array of (\nr_kds * \nr_iods) sgls
+ *					storing all the records to be returned. When doing
+ *					aggregations, or when \dkey is passed, only one record
+ *					(output size will be 1 x \nr_iods) at most is returned (no
  *					matther the size of \nr_kds).
  *					[out]: All returned records.
  *
- * \param[out]		sgl_agg		[in]: Optional preallocated array for
- *					aggregated values (number of values has
- *					to match the number of aggregation
- *					filters defined in the pipeline object).
- *					All aggregated values are returned as
- *					doubles, no matter the numeric type of
- *					the akey being aggregated. This means
- *					that each buffer here should be at least
- *					8 bytes.
+ * \param[out]		sgl_agg		[in]: Optional preallocated array for aggregated values
+ *					(number of values has to match the number of aggregation
+ *					filters defined in the pipeline object). All aggregated
+ *					values are returned as doubles, no matter the numeric type
+ *					of the akey being aggregated. This means that each buffer
+ *					here should be at least 8 bytes.
  *					[out]: All returned aggregated values.
  *
  * \param[out]		stats		[in]: Optional preallocated object.
- *					[out]: The total number of items
- *					(objects, dkeys, and akeys) scanned
- *					while filtering and/or aggregating.
+ *					[out]: The total number of items (objects, dkeys, and akeys)
+ *					scanned while filtering and/or aggregating.
  *
- * \param[in]		ev		Completion event. It is optional.
- *					Function will run in blocking mode if
- *					\a ev is NULL.
+ * \param[in]		ev		Completion event. It is optional. Function will run in
+ *					blocking mode if \a ev is NULL.
  */
 int
-daos_pipeline_run(daos_handle_t coh, daos_handle_t oh, daos_pipeline_t *pipeline,
-		  daos_handle_t th, uint64_t flags, daos_key_t *dkey,
-		  uint32_t *nr_iods, daos_iod_t *iods, daos_anchor_t *anchor,
-		  uint32_t *nr_kds, daos_key_desc_t *kds, d_sg_list_t *sgl_keys,
-		  d_sg_list_t *sgl_recx, d_sg_list_t *sgl_agg,
+daos_pipeline_run(daos_handle_t coh, daos_handle_t oh, daos_pipeline_t *pipeline, daos_handle_t th,
+		  uint64_t flags, daos_key_t *dkey, uint32_t *nr_iods, daos_iod_t *iods,
+		  daos_anchor_t *anchor, uint32_t *nr_kds, daos_key_desc_t *kds,
+		  d_sg_list_t *sgl_keys, d_sg_list_t *sgl_recx, d_sg_list_t *sgl_agg,
 		  daos_pipeline_stats_t *stats, daos_event_t *ev);
 
 #if defined(__cplusplus)

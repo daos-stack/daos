@@ -20,11 +20,15 @@ crt_proc_daos_key_desc_t(crt_proc_t proc, crt_proc_op_t proc_op,
 
 	rc = crt_proc_uint64_t(proc, proc_op, &key->kd_key_len);
 	if (unlikely(rc))
+	{
 		return rc;
+	}
 
 	rc = crt_proc_uint32_t(proc, proc_op, &key->kd_val_type);
 	if (unlikely(rc))
+	{
 		return rc;
+	}
 
 	return 0;
 }
@@ -32,10 +36,11 @@ crt_proc_daos_key_desc_t(crt_proc_t proc, crt_proc_op_t proc_op,
 static int
 crt_proc_d_sg_list_t(crt_proc_t proc, crt_proc_op_t proc_op, d_sg_list_t *p)
 {
-	int		i;
-	int		rc;
+	int	i;
+	int	rc;
 
-	if (FREEING(proc_op)) {
+	if (FREEING(proc_op))
+	{
 		/* NB: don't need free in crt_proc_d_iov_t() */
 		D_FREE(p->sg_iovs);
 		return 0;
@@ -43,27 +48,40 @@ crt_proc_d_sg_list_t(crt_proc_t proc, crt_proc_op_t proc_op, d_sg_list_t *p)
 
 	rc = crt_proc_uint32_t(proc, proc_op, &p->sg_nr);
 	if (unlikely(rc))
+	{
 		return rc;
+	}
 
 	rc = crt_proc_uint32_t(proc, proc_op, &p->sg_nr_out);
 	if (unlikely(rc))
+	{
 		return rc;
+	}
 
 	if (p->sg_nr == 0)
+	{
 		return 0;
+	}
 
-	switch (proc_op) {
+	switch (proc_op)
+	{
 	case CRT_PROC_DECODE:
 		D_ALLOC_ARRAY(p->sg_iovs, p->sg_nr);
 		if (p->sg_iovs == NULL)
+		{
 			return -DER_NOMEM;
+		}
 		/* fall through to fill sg_iovs */
 	case CRT_PROC_ENCODE:
-		for (i = 0; i < p->sg_nr; i++) {
+		for (i = 0; i < p->sg_nr; i++)
+		{
 			rc = crt_proc_d_iov_t(proc, proc_op, &p->sg_iovs[i]);
-			if (unlikely(rc)) {
+			if (unlikely(rc))
+			{
 				if (DECODING(proc_op))
+				{
 					D_FREE(p->sg_iovs);
+				}
 				return rc;
 			}
 		}
@@ -76,34 +94,35 @@ crt_proc_d_sg_list_t(crt_proc_t proc, crt_proc_op_t proc_op, d_sg_list_t *p)
 }
 
 static int
-crt_proc_daos_unit_oid_t(crt_proc_t proc, crt_proc_op_t proc_op,
-			 daos_unit_oid_t *p)
+crt_proc_daos_unit_oid_t(crt_proc_t proc, crt_proc_op_t proc_op, daos_unit_oid_t *p)
 {
 	return crt_proc_memcpy(proc, proc_op, p, sizeof(*p));
 }
 
-
 static int
-crt_proc_daos_epoch_range_t(crt_proc_t proc, crt_proc_op_t proc_op,
-			    daos_epoch_range_t *erange)
+crt_proc_daos_epoch_range_t(crt_proc_t proc, crt_proc_op_t proc_op, daos_epoch_range_t *erange)
 {
 	int rc;
 
 	rc = crt_proc_uint64_t(proc, proc_op, &erange->epr_lo);
 	if (unlikely(rc))
+	{
 		return rc;
+	}
 
 	rc = crt_proc_uint64_t(proc, proc_op, &erange->epr_hi);
 	if (unlikely(rc))
+	{
 		return rc;
+	}
 
 	return 0;
 }
 
 
 static int
-pipeline_t_proc_consts(crt_proc_t proc, crt_proc_op_t proc_op,
-		       size_t num_constants, d_iov_t **constants)
+pipeline_t_proc_consts(crt_proc_t proc, crt_proc_op_t proc_op, size_t num_constants,
+		       d_iov_t **constants)
 {
 	int		rc = 0;
 	size_t		i;
@@ -142,8 +161,8 @@ exit:
 }
 
 static int
-pipeline_t_proc_parts(crt_proc_t proc, crt_proc_op_t proc_op,
-		      uint32_t num_parts, daos_filter_part_t ***parts)
+pipeline_t_proc_parts(crt_proc_t proc, crt_proc_op_t proc_op, uint32_t num_parts,
+		      daos_filter_part_t ***parts)
 {
 	int			rc = 0;
 	uint32_t		i = 0;
@@ -259,8 +278,8 @@ exit:
 }
 
 static int
-pipeline_t_proc_filters(crt_proc_t proc, crt_proc_op_t proc_op,
-			uint32_t num_filters, daos_filter_t ***filters)
+pipeline_t_proc_filters(crt_proc_t proc, crt_proc_op_t proc_op, uint32_t num_filters,
+			daos_filter_t ***filters)
 {
 	int		rc = 0;
 	uint32_t	i = 0;
@@ -438,22 +457,18 @@ crt_proc_daos_pipeline_iods_t(crt_proc_t proc, crt_proc_op_t proc_op,
 			}
 			D_GOTO(exit, rc);
 		}
-		if (iods->iods[i].iod_type == DAOS_IOD_ARRAY &&
-			iods->iods[i].iod_nr > 0)
+		if (iods->iods[i].iod_type == DAOS_IOD_ARRAY && iods->iods[i].iod_nr > 0)
 		{
 			if (DECODING(proc_op))
 			{
-				D_ALLOC_ARRAY(iods->iods[i].iod_recxs,
-					      iods->iods[i].iod_nr);
+				D_ALLOC_ARRAY(iods->iods[i].iod_recxs, iods->iods[i].iod_nr);
 				if (iods->iods[i].iod_recxs == NULL)
 				{
 					D_GOTO(exit_free, rc = -DER_NOMEM);
 				}
 			}
-			rc = crt_proc_memcpy(proc, proc_op,
-					     iods->iods[i].iod_recxs,
-					     iods->iods[i].iod_nr *
-					     sizeof(*iods->iods[i].iod_recxs));
+			rc = crt_proc_memcpy(proc, proc_op, iods->iods[i].iod_recxs,
+					   iods->iods[i].iod_nr * sizeof(*iods->iods[i].iod_recxs));
 			if (unlikely(rc))
 			{
 				if (DECODING(proc_op))
@@ -481,24 +496,23 @@ exit:
 }
 
 static int
-crt_proc_daos_pipeline_stats_t(crt_proc_t proc, crt_proc_op_t proc_op,
-			       daos_pipeline_stats_t *stats)
+crt_proc_daos_pipeline_stats_t(crt_proc_t proc, crt_proc_op_t proc_op, daos_pipeline_stats_t *stats)
 {
 	int rc;
 
-	rc = crt_proc_daos_size_t(proc, proc_op, &stats->nr_objs);
+	rc = crt_proc_uint64_t(proc, proc_op, &stats->nr_objs);
 	if (unlikely(rc))
 	{
 		return rc;
 	}
 
-	rc = crt_proc_daos_size_t(proc, proc_op, &stats->nr_dkeys);
+	rc = crt_proc_uint64_t(proc, proc_op, &stats->nr_dkeys);
 	if (unlikely(rc))
 	{
 		return rc;
 	}
 
-	rc = crt_proc_daos_size_t(proc, proc_op, &stats->nr_akeys);
+	rc = crt_proc_uint64_t(proc, proc_op, &stats->nr_akeys);
 	if (unlikely(rc))
 	{
 		return rc;

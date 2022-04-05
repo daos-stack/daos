@@ -343,9 +343,8 @@ calc_num_operands(daos_filter_part_t **parts, uint32_t idx)
 }
 
 static int
-compile_filter(daos_filter_t *filter, struct filter_compiled_t *comp_filter,
-	       uint32_t *part_idx, uint32_t *comp_part_idx, char **type,
-	       size_t *type_len)
+compile_filter(daos_filter_t *filter, struct filter_compiled_t *comp_filter, uint32_t *part_idx,
+	       uint32_t *comp_part_idx, char **type, size_t *type_len)
 {
 	uint32_t			nops;
 	uint32_t			func_idx;
@@ -382,83 +381,72 @@ compile_filter(daos_filter_t *filter, struct filter_compiled_t *comp_filter,
 
 		if (!strncmp(part_type, "DAOS_FILTER_AKEY", part_type_s))
 		{
-			func_idx += NTYPES;
-			comp_part->data_offset =
-					filter->parts[*part_idx]->data_offset;
-			comp_part->data_len =
-					filter->parts[*part_idx]->data_len;
-
-			comp_part->iov = &filter->parts[*part_idx]->akey;
-			comp_part->filter_func = getd_func_ptrs[func_idx];
+			func_idx		+= NTYPES;
+			comp_part->data_offset	= filter->parts[*part_idx]->data_offset;
+			comp_part->data_len	= filter->parts[*part_idx]->data_len;
+			comp_part->iov		= &filter->parts[*part_idx]->akey;
+			comp_part->filter_func	= getd_func_ptrs[func_idx];
 		}
 		else if (!strncmp(part_type, "DAOS_FILTER_CONST", part_type_s))
 		{
-			func_idx += NTYPES*2;
-			comp_part->data_offset = 0;
-			comp_part->iov = &filter->parts[*part_idx]->constant[0];
-			comp_part->data_len = comp_part->iov->iov_len;
-			comp_part->filter_func = getd_func_ptrs[func_idx];
+			func_idx		+= NTYPES*2;
+			comp_part->data_offset	= 0;
+			comp_part->iov		= &filter->parts[*part_idx]->constant[0];
+			comp_part->data_len	= comp_part->iov->iov_len;
+			comp_part->filter_func	= getd_func_ptrs[func_idx];
 
-			for (j = 1;
-			     j < filter->parts[*part_idx]->num_constants;
-			     j++)
+			for (j = 1; j < filter->parts[*part_idx]->num_constants; j++)
 			{
-				*comp_part_idx += 1;
-				comp_part = &comp_filter->parts[*comp_part_idx];
-				*comp_part =
-					(struct filter_part_compiled_t) { 0 };
-				comp_part->data_offset = 0;
-				comp_part->iov =
-					&filter->parts[*part_idx]->constant[j];
-				comp_part->data_len = comp_part->iov->iov_len;
-				comp_part->filter_func = getd_func_ptrs[func_idx];
+				*comp_part_idx	+= 1;
+				comp_part	= &comp_filter->parts[*comp_part_idx];
+				*comp_part	= (struct filter_part_compiled_t) { 0 };
+
+				comp_part->data_offset	= 0;
+				comp_part->iov		= &filter->parts[*part_idx]->constant[j];
+				comp_part->data_len	= comp_part->iov->iov_len;
+				comp_part->filter_func	= getd_func_ptrs[func_idx];
 			}
 		}
 		else if (!strncmp(part_type, "DAOS_FILTER_DKEY", part_type_s))
 		{
-			comp_part->data_offset =
-					filter->parts[*part_idx]->data_offset;
-			comp_part->data_len =
-					filter->parts[*part_idx]->data_len;
-			comp_part->filter_func = getd_func_ptrs[func_idx];;
-
+			comp_part->data_offset	= filter->parts[*part_idx]->data_offset;
+			comp_part->data_len	= filter->parts[*part_idx]->data_len;
+			comp_part->filter_func	= getd_func_ptrs[func_idx];
 		}
 		D_GOTO(exit, rc = 0);
 	}
 
-	nops = calc_num_operands(filter->parts, *part_idx);
-	comp_part->num_operands = nops;
+	nops				= calc_num_operands(filter->parts, *part_idx);
+	comp_part->num_operands		= nops;
 
 	/** recursive calls for function parameters */
-	idx	= *part_idx;
+	idx = *part_idx;
 	for (i = 0; i < filter->parts[idx]->num_operands; i++)
 	{
 		*comp_part_idx	+= 1;
 		*part_idx	+= 1;
-		rc = compile_filter(filter, comp_filter, part_idx,
-				    comp_part_idx, type, type_len);
+		rc = compile_filter(filter, comp_filter, part_idx, comp_part_idx, type, type_len);
 		if (rc != 0)
 		{
 			D_GOTO(exit, rc);
 		}
 	}
 
-	func_idx  = calc_filterfunc_idx(filter->parts, idx);
-	type_idx  = calc_type_nosize_idx(calc_type_idx(*type, *type_len));
+	func_idx = calc_filterfunc_idx(filter->parts, idx);
+	type_idx = calc_type_nosize_idx(calc_type_idx(*type, *type_len));
 
 	if (func_idx < 47)
 	{
 		func_idx += type_idx;
 	}
-	comp_part->filter_func     = filter_func_ptrs[func_idx];
-	comp_part->idx_end_subtree = *comp_part_idx;
+	comp_part->filter_func		= filter_func_ptrs[func_idx];
+	comp_part->idx_end_subtree	= *comp_part_idx;
 exit:
 	return rc;
 }
 
 static int
-compile_filters(daos_filter_t **ftrs, uint32_t nftrs,
-		struct filter_compiled_t *c_ftrs)
+compile_filters(daos_filter_t **ftrs, uint32_t nftrs, struct filter_compiled_t *c_ftrs)
 {
 	uint32_t		part_idx;
 	uint32_t		comp_part_idx;
@@ -477,8 +465,7 @@ compile_filters(daos_filter_t **ftrs, uint32_t nftrs,
 		{
 			part = ftrs[i]->parts[j];
 
-			if (!strncmp((char *) part->part_type.iov_buf,
-				     "DAOS_FILTER_CONST",
+			if (!strncmp((char *) part->part_type.iov_buf, "DAOS_FILTER_CONST",
 				     part->part_type.iov_len))
 			{
 				comp_num_parts += part->num_constants - 1;
@@ -496,15 +483,14 @@ compile_filters(daos_filter_t **ftrs, uint32_t nftrs,
 		comp_part_idx	= 0;
 		type		= NULL;
 		type_len	= 0;
-		rc = compile_filter(ftrs[i], &c_ftrs[i], &part_idx,
-				    &comp_part_idx, &type, &type_len);
+		rc = compile_filter(ftrs[i], &c_ftrs[i], &part_idx, &comp_part_idx, &type,
+				    &type_len);
 		if (rc != 0)
 		{
 			D_GOTO(exit, rc);
 		}
 	}
 exit:
-
 	return rc;
 }
 
@@ -527,8 +513,7 @@ pipeline_compile(daos_pipeline_t *pipe, struct pipeline_compiled_t *comp_pipe)
 		}
 		comp_pipe->num_filters = pipe->num_filters;
 
-		rc = compile_filters(pipe->filters, pipe->num_filters,
-				     comp_pipe->filters);
+		rc = compile_filters(pipe->filters, pipe->num_filters, comp_pipe->filters);
 		if (rc != 0)
 		{
 			D_GOTO(exit, rc);

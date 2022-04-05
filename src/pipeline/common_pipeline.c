@@ -147,8 +147,8 @@ pipeline_filter_checkops(daos_filter_t *ftr, size_t *p)
 		*p		+= 1;
 		child_part_type	= (char *) ftr->parts[*p]->part_type.iov_buf;
 		child_part_type_s = ftr->parts[*p]->part_type.iov_len;
-		res = pipeline_part_checkop(part_type, part_type_s,
-					    child_part_type, child_part_type_s);
+		res = pipeline_part_checkop(part_type, part_type_s, child_part_type,
+					    child_part_type_s);
 		if (res == false)
 		{
 			return res;
@@ -206,9 +206,7 @@ int d_pipeline_check(daos_pipeline_t *pipeline)
 
 	/** -- Rest of the checks are done for each filter */
 
-	for (i = 0;
-	     i < pipeline->num_filters + pipeline->num_aggr_filters;
-	     i++)
+	for (i = 0; i < pipeline->num_filters + pipeline->num_aggr_filters; i++)
 	{
 		daos_filter_t	*ftr;
 		size_t		p;
@@ -235,12 +233,10 @@ int d_pipeline_check(daos_pipeline_t *pipeline)
 		/** -- Checks 2 and 3 */
 
 		/**
-		 * -- Check 2: Check that all parts have a correct
-		 *             type.
+		 * -- Check 2: Check that all parts have a correct type.
 		 *
-		 * -- Check 3: Check that all parts have a correct
-		 *             number of operands and also that the
-		 *             number of total parts is correct.
+		 * -- Check 3: Check that all parts have a correct number of operands and also that
+		 *             the number of total parts is correct.
 		 */
 
 		for (p = 0; p < ftr->num_parts; p++)
@@ -250,8 +246,7 @@ int d_pipeline_check(daos_pipeline_t *pipeline)
 			/** 2 */
 
 			res = pipeline_part_chk_type((char *) part->part_type.iov_buf,
-						     part->part_type.iov_len,
-						     is_aggr);
+						     part->part_type.iov_len, is_aggr);
 			if (res == false)
 			{
 				return -DER_NOSYS;
@@ -283,8 +278,7 @@ int d_pipeline_check(daos_pipeline_t *pipeline)
 		}
 
 		/**
-		 * -- Check 4: Check that all parts have the right
-		 *             type of operands.
+		 * -- Check 4: Check that all parts have the right type of operands.
 		 */
 
 		p = 0;
@@ -302,10 +296,10 @@ void
 pipeline_aggregations_fixavgs(daos_pipeline_t *pipeline, double total,
 			      d_sg_list_t *sgl_agg)
 {
-	uint32_t		i;
-	double			*buf;
-	char			*part_type;
-	size_t			part_type_s;
+	uint32_t	i;
+	double		*buf;
+	char		*part_type;
+	size_t		part_type_s;
 
 	D_ASSERT(total > 0.0);
 

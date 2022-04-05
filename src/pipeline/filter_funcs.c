@@ -255,8 +255,7 @@ int filter_func_##op##_st(struct filter_part_run_t *args)\
 			D_GOTO(exit, rc);\
 		}\
 \
-		if ((args->log_out = logfunc_##op##_st(left, left_size,\
-						       right, right_size)))\
+		if ((args->log_out = logfunc_##op##_st(left, left_size, right, right_size)))\
 		{\
 			D_GOTO(exit, rc = 0);\
 		}\
