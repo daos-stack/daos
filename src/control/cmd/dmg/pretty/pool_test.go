@@ -16,17 +16,11 @@ import (
 	"github.com/google/go-cmp/cmp"
 
 	"github.com/daos-stack/daos/src/control/common"
-	"github.com/daos-stack/daos/src/control/drpc"
 	"github.com/daos-stack/daos/src/control/lib/control"
 	"github.com/daos-stack/daos/src/control/system"
 )
 
 func TestPretty_PrintPoolQueryResp(t *testing.T) {
-	var (
-		allInfo       = int32(drpc.DpiAll)
-		disabledRanks = int32(drpc.DpiAll &^ drpc.DpiEnginesEnabled)
-	)
-
 	for name, tc := range map[string]struct {
 		pqr         *control.PoolQueryResp
 		expPrintStr string
@@ -39,7 +33,7 @@ Pool space info:
 - Target(VOS) count:0
 `,
 		},
-		"normal response; enabled ranks": {
+		"normal response": {
 			pqr: &control.PoolQueryResp{
 				UUID: common.MockUUID(),
 				PoolInfo: control.PoolInfo{
@@ -48,8 +42,6 @@ Pool space info:
 					ActiveTargets:   1,
 					Leader:          42,
 					Version:         100,
-					InfoBit:         allInfo,
-					RankSet:         "0-1",
 					Rebuild: &control.PoolRebuildStatus{
 						State:   control.PoolRebuildStateBusy,
 						Objects: 42,
@@ -70,7 +62,47 @@ Pool space info:
 			expPrintStr: fmt.Sprintf(`
 Pool %s, ntarget=2, disabled=1, leader=42, version=100
 Pool space info:
-- Enabled targets: 0-1
+- Target(VOS) count:1
+- Storage tier 0 (SCM):
+  Total size: 2 B
+  Free: 1 B, min:0 B, max:0 B, mean:0 B
+- Storage tier 1 (NVMe):
+  Total size: 2 B
+  Free: 1 B, min:0 B, max:0 B, mean:0 B
+Rebuild busy, 42 objs, 21 recs
+`, common.MockUUID()),
+		},
+		"normal response; enabled ranks": {
+			pqr: &control.PoolQueryResp{
+				UUID: common.MockUUID(),
+				PoolInfo: control.PoolInfo{
+					TotalTargets:    2,
+					DisabledTargets: 1,
+					ActiveTargets:   1,
+					Leader:          42,
+					Version:         100,
+					EnabledRanks:    system.MustCreateRankSet("[0,1,2]"),
+					Rebuild: &control.PoolRebuildStatus{
+						State:   control.PoolRebuildStateBusy,
+						Objects: 42,
+						Records: 21,
+					},
+					TierStats: []*control.StorageUsageStats{
+						{
+							Total: 2,
+							Free:  1,
+						},
+						{
+							Total: 2,
+							Free:  1,
+						},
+					},
+				},
+			},
+			expPrintStr: fmt.Sprintf(`
+Pool %s, ntarget=2, disabled=1, leader=42, version=100
+Pool space info:
+- Enabled targets: 0-2
 - Target(VOS) count:1
 - Storage tier 0 (SCM):
   Total size: 2 B
@@ -90,8 +122,7 @@ Rebuild busy, 42 objs, 21 recs
 					ActiveTargets:   1,
 					Leader:          42,
 					Version:         100,
-					InfoBit:         disabledRanks,
-					RankSet:         "2",
+					DisabledRanks:   system.MustCreateRankSet("[0,1,3]"),
 					Rebuild: &control.PoolRebuildStatus{
 						State:   control.PoolRebuildStateBusy,
 						Objects: 42,
@@ -112,7 +143,7 @@ Rebuild busy, 42 objs, 21 recs
 			expPrintStr: fmt.Sprintf(`
 Pool %s, ntarget=2, disabled=1, leader=42, version=100
 Pool space info:
-- Disabled targets: 2
+- Disabled targets: 0-1,3
 - Target(VOS) count:1
 - Storage tier 0 (SCM):
   Total size: 2 B

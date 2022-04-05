@@ -19,7 +19,6 @@ import (
 
 	"github.com/daos-stack/daos/src/control/cmd/dmg/pretty"
 	"github.com/daos-stack/daos/src/control/common"
-	"github.com/daos-stack/daos/src/control/drpc"
 	"github.com/daos-stack/daos/src/control/lib/control"
 	"github.com/daos-stack/daos/src/control/lib/ui"
 	"github.com/daos-stack/daos/src/control/server/storage"
@@ -498,19 +497,22 @@ func (cmd *PoolReintegrateCmd) Execute(args []string) error {
 // PoolQueryCmd is the struct representing the command to query a DAOS pool.
 type PoolQueryCmd struct {
 	poolCmd
+	ShowEnabledRanks  bool `long:"show-enabled-ranks" description:"Show engine unique identifiers (ranks) which are enabled"`
 	ShowDisabledRanks bool `long:"show-disabled-ranks" description:"Show engine unique identifiers (ranks) which are disabled"`
 }
 
 // Execute is run when PoolQueryCmd subcommand is activated
 func (cmd *PoolQueryCmd) Execute(args []string) error {
 	req := &control.PoolQueryReq{
-		ID:      cmd.PoolID().String(),
-		InfoBit: drpc.DpiAll,
+		ID: cmd.PoolID().String(),
 	}
 
-	if cmd.ShowDisabledRanks {
-		req.InfoBit &^= drpc.DpiEnginesEnabled
+	// DAOS-10072 FIXME Create a ticket to add the possibilitiy to have the two options
+	if cmd.ShowEnabledRanks && cmd.ShowDisabledRanks {
+		return errIncompatFlags("show-enabled-ranks", "show-disabled-ranks")
 	}
+	req.IncludeEnabledRanks = cmd.ShowEnabledRanks
+	req.IncludeDisabledRanks = cmd.ShowDisabledRanks
 
 	resp, err := control.PoolQuery(context.Background(), cmd.ctlInvoker, req)
 

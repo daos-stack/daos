@@ -373,8 +373,9 @@ type (
 	// PoolQueryReq contains the parameters for a pool query request.
 	PoolQueryReq struct {
 		poolRequest
-		ID      string
-		InfoBit int32
+		ID                   string
+		IncludeEnabledRanks  bool
+		IncludeDisabledRanks bool
 	}
 
 	// StorageUsageStats represents DAOS storage usage statistics.
@@ -408,8 +409,8 @@ type (
 		Leader          uint32               `json:"leader"`
 		Rebuild         *PoolRebuildStatus   `json:"rebuild"`
 		TierStats       []*StorageUsageStats `json:"tier_stats"`
-		InfoBit         int32                `json:"info_bit"`
-		RankSet         string               `json:"rank_set"`
+		EnabledRanks    *system.RankSet      `json:"-"`
+		DisabledRanks   *system.RankSet      `json:"-"`
 	}
 
 	// PoolQueryResp contains the pool query response.
@@ -420,24 +421,71 @@ type (
 	}
 )
 
-func (pi *PoolInfo) MarshalJSON() ([]byte, error) {
-	if pi == nil {
+func (pqr *PoolQueryResp) MarshalJSON() ([]byte, error) {
+	if pqr == nil {
 		return []byte("null"), nil
 	}
 
-	rs, err := system.CreateRankSet(pi.RankSet)
-	if err != nil {
-		return nil, err
-	}
-
-	type Alias PoolInfo
-	return json.Marshal(&struct {
-		RankSet []system.Rank `json:"rank_set"`
+	type Alias PoolQueryResp
+	aux := &struct {
+		EnabledRanks  *[]system.Rank `json:"enabled_ranks"`
+		DisabledRanks *[]system.Rank `json:"disabled_ranks"`
 		*Alias
 	}{
-		RankSet: rs.Ranks(),
-		Alias:   (*Alias)(pi),
-	})
+		Alias: (*Alias)(pqr),
+	}
+
+	if pqr.EnabledRanks != nil {
+		ranks := pqr.EnabledRanks.Ranks()
+		aux.EnabledRanks = &ranks
+	}
+
+	if pqr.DisabledRanks != nil {
+		ranks := pqr.DisabledRanks.Ranks()
+		aux.DisabledRanks = &ranks
+	}
+
+	return json.Marshal(&aux)
+}
+
+func unmarshallRankSet(ranks string) (*system.RankSet, error) {
+	switch ranks {
+	case "":
+		return nil, nil
+	case "[]":
+		return &system.RankSet{}, nil
+	default:
+		return system.CreateRankSet(ranks)
+	}
+}
+
+func (pqr *PoolQueryResp) UnmarshalJSON(data []byte) error {
+	type Alias PoolQueryResp
+	aux := &struct {
+		EnabledRanks  string `json:"enabled_ranks"`
+		DisabledRanks string `json:"disabled_ranks"`
+		*Alias
+	}{
+		Alias: (*Alias)(pqr),
+	}
+
+	if err := json.Unmarshal(data, &aux); err != nil {
+		return err
+	}
+
+	if rankSet, err := unmarshallRankSet(aux.EnabledRanks); err != nil {
+		return err
+	} else {
+		pqr.EnabledRanks = rankSet
+	}
+
+	if rankSet, err := unmarshallRankSet(aux.DisabledRanks); err != nil {
+		return err
+	} else {
+		pqr.DisabledRanks = rankSet
+	}
+
+	return nil
 }
 
 func (sus *StorageUsageStats) UnmarshalJSON(data []byte) error {
@@ -512,9 +560,10 @@ func (prs *PoolRebuildState) UnmarshalJSON(data []byte) error {
 func PoolQuery(ctx context.Context, rpcClient UnaryInvoker, req *PoolQueryReq) (*PoolQueryResp, error) {
 	req.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
 		return mgmtpb.NewMgmtSvcClient(conn).PoolQuery(ctx, &mgmtpb.PoolQueryReq{
-			Sys:     req.getSystem(rpcClient),
-			Id:      req.ID,
-			InfoBit: req.InfoBit,
+			Sys:                  req.getSystem(rpcClient),
+			Id:                   req.ID,
+			IncludeEnabledRanks:  req.IncludeEnabledRanks,
+			IncludeDisabledRanks: req.IncludeDisabledRanks,
 		})
 	})
 

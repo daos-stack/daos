@@ -168,7 +168,8 @@ message PoolQueryReq {
 	string sys = 1; // DAOS system identifier
 	string id = 2;
 	repeated uint32 svc_ranks = 3; // List of pool service ranks
-	int32 info_bit = 4; // Pool query bit set
+	bool include_enabled_ranks = 4; // True if the list of enabled ranks shall be returned
+	bool include_disabled_ranks = 5; // True if the list of disabled ranks shall be returned
 }
 
 // StorageUsageStats represents usage statistics for a storage subsystem.
@@ -207,8 +208,8 @@ message PoolQueryResp {
 	uint32 total_nodes = 9; // total nodes in pool
 	uint32 version = 10; // latest pool map version
 	uint32 leader = 11; // current raft leader
-	int32 info_bit = 12; // Pool query bit set
-	string rank_set = 13; // Set of ranks enabled or disabled
+	string enabled_ranks = 12; // Optional set of ranks enabled
+	string disabled_ranks = 13; // Optional set of ranks disabled
 }
 
 message PoolProperty {

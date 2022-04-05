@@ -752,8 +752,18 @@ func TestPoolCommands(t *testing.T) {
 			"pool query 12345678-1234-1234-1234-1234567890ab",
 			strings.Join([]string{
 				printRequest(t, &control.PoolQueryReq{
-					ID:      "12345678-1234-1234-1234-1234567890ab",
-					InfoBit: -1,
+					ID: "12345678-1234-1234-1234-1234567890ab",
+				}),
+			}, " "),
+			nil,
+		},
+		{
+			"Query pool with UUID and enabled ranks",
+			"pool query --show-enabled-ranks 12345678-1234-1234-1234-1234567890ab",
+			strings.Join([]string{
+				printRequest(t, &control.PoolQueryReq{
+					ID:                  "12345678-1234-1234-1234-1234567890ab",
+					IncludeEnabledRanks: true,
 				}),
 			}, " "),
 			nil,
@@ -763,8 +773,8 @@ func TestPoolCommands(t *testing.T) {
 			"pool query --show-disabled-ranks 12345678-1234-1234-1234-1234567890ab",
 			strings.Join([]string{
 				printRequest(t, &control.PoolQueryReq{
-					ID:      "12345678-1234-1234-1234-1234567890ab",
-					InfoBit: -5,
+					ID:                   "12345678-1234-1234-1234-1234567890ab",
+					IncludeDisabledRanks: true,
 				}),
 			}, " "),
 			nil,
@@ -774,8 +784,7 @@ func TestPoolCommands(t *testing.T) {
 			"pool query test_label",
 			strings.Join([]string{
 				printRequest(t, &control.PoolQueryReq{
-					ID:      "test_label",
-					InfoBit: -1,
+					ID: "test_label",
 				}),
 			}, " "),
 			nil,
@@ -801,6 +810,12 @@ func TestPoolCommands(t *testing.T) {
 			"pool quack",
 			"",
 			fmt.Errorf("Unknown command"),
+		},
+		{
+			"Query pool with incompatible arguments",
+			"pool query --show-disabled-ranks --show-enabled-ranks 12345678-1234-1234-1234-1234567890ab",
+			"",
+			errors.New("may not be mixed"),
 		},
 	})
 }
