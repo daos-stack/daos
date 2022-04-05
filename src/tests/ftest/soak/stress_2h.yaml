@@ -148,7 +148,9 @@ vpic_stress:
         - 4
     taskspernode:
         - 16
-    cmdline: "/home/mjean/vpic-install/bin/harris.Linux"
+    cmdline: "/var/hit/daos/builds/vpic-install/bin/harris.Linux"
+    module: mpi/latest
+    posix: true
     workdir: "/tmp/daos_dfuse/vpic/"
     dfuse:
         mount_dir: "/tmp/daos_dfuse/vpic/"
@@ -160,7 +162,8 @@ lammps_stress:
         - 4
     taskspernode:
         - 16
-    cmdline: "/home/mjean/lammps-install/bin/lmp -i /home/mjean/lammps/bench/in.lj.smoke"
+    cmdline: "/var/hit/daos/builds/lammps/src/lmp_mpi -i /var/hit/daos/builds/lammps/bench/in.lj"
+    posix: True
     workdir: "/tmp/daos_dfuse/lammps/"
     dfuse:
         mount_dir: "/tmp/daos_dfuse/lammps/"

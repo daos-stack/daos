@@ -1154,7 +1154,7 @@ def create_app_cmdline(self, job_spec, pool, ppn, nodesperjob, POSIX=False):
     app_params = os.path.join(os.sep, "run", job_spec, "*")
     app_cmd = self.params.get("cmdline", app_params, default=None)
     mpi_module = self.params.get("module", app_params, self.mpi_module)
-
+    posix = self.params.get("posix", app_params, default=False)
     if app_cmd is None:
         self.log.info(
             "<<{} command line not specified in yaml; job will not be run>>".format(job_spec))
@@ -1166,7 +1166,7 @@ def create_app_cmdline(self, job_spec, pool, ppn, nodesperjob, POSIX=False):
         log_name = "{}_{}_{}_{}_{}".format(
             job_spec, oclass, nodesperjob * ppn, nodesperjob, ppn)
         # include dfuse cmdlines
-        if POSIX:
+        if posix:
             dfuse, dfuse_start_cmdlist = start_dfuse(
                 self, pool, self.container[-1], name=log_name, job_spec=job_spec)
             sbatch_cmds.extend(dfuse_start_cmdlist)
@@ -1177,16 +1177,16 @@ def create_app_cmdline(self, job_spec, pool, ppn, nodesperjob, POSIX=False):
         if "mpich" in mpi_module:
             # Pass pool and container information to the commands
             env = EnvironmentVariables()
-            env["DAOS_UNS_PREFIX"] = "daos://{}/{}/".format(self.pool.uuid, self.container.uuid)
+            env["DAOS_UNS_PREFIX"] = "daos://{}/{}/".format(pool.uuid, self.container[-1].uuid)
             mpirun_cmd.assign_environment(env, True)
         mpirun_cmd.assign_processes(nodesperjob * ppn)
         mpirun_cmd.ppn.update(ppn)
-        if POSIX:
+        if posix:
             mpirun_cmd.working_dir.update(dfuse.mount_dir.value)
         cmdline = "{}".format(str(mpirun_cmd))
         sbatch_cmds.append(str(cmdline))
         sbatch_cmds.append("status=$?")
-        if POSIX:
+        if posix:
             if mpi_module != self.mpi_module:
                 sbatch_cmds.extend(["module purge", "module load {}".format(self.mpi_module)])
                 sbatch_cmds.extend(stop_dfuse(dfuse))
