@@ -436,7 +436,7 @@ filter_func_like(struct filter_part_run_t *args)
 			right_anchor = ++right_pos;
 			if (right_pos == right_size)
 			{
-				/** '%' is at the end. Pass. */
+				/** '%' is at the end of pattern. Pass. */
 				args->log_out = true;
 				D_GOTO(exit, rc = 0);
 			}
@@ -459,6 +459,13 @@ filter_func_like(struct filter_part_run_t *args)
 			left_pos++;
 		}
 		scaping = false;
+		if ((left_pos == left_size) && (right_pos == right_size - 1)
+			&& right_str[right_pos] == '%')
+		{
+			/** At the end of string and only thing left is '%'. Pass. */
+			args->log_out = true;
+			D_GOTO(exit, rc = 0);
+		}
 	}
 	if (left_pos == left_size && right_pos == right_size)
 	{
