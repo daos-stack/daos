@@ -1479,7 +1479,7 @@ def clean_logs(test_yaml, args):
     # Remove any log files from the DAOS_TEST_LOG_DIR directory
     logs_dir = os.environ.get("DAOS_TEST_LOG_DIR", DEFAULT_DAOS_TEST_LOG_DIR)
     host_list = get_hosts_from_yaml(test_yaml, args)
-    command = "sudo rm -fr {}".format(os.path.join(logs_dir, "*.log*"))
+    command = "rm -fr {}".format(os.path.join(logs_dir, "*.log*"))
     # also remove any ABT infos/stacks dumps
     command += " /tmp/daos_dump*.txt*"
     print("-" * 80)
@@ -1910,7 +1910,7 @@ def install_debuginfos():
             cmds.append(["sudo", "dnf", "-y", "install"] + dnf_args)
         rpm_version = get_output(["rpm", "-q", "--qf", "%{evr}", "daos"], check=False)
         cmds.append(
-            ["dnf", "debuginfo-install", "-y"] + dnf_args +
+            ["sudo", "dnf", "debuginfo-install", "-y"] + dnf_args +
             ["daos-client-" + rpm_version,
              "daos-server-" + rpm_version,
              "daos-tests-" + rpm_version])

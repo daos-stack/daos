@@ -890,7 +890,6 @@ class Systemctl(JobManager):
 
         """
         command = [
-            "sudo",
             "journalctl",
             "--unit={}".format(self._systemctl.service.value),
             "--since=\"{}\"".format(since),
