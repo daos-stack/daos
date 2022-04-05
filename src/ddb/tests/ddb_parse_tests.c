@@ -277,6 +277,6 @@ static const struct CMUnitTest tests[] = {
 int
 ddb_parse_tests_run()
 {
-	return cmocka_run_group_tests_name("DAOS Checksum Tests", tests,
+	return cmocka_run_group_tests_name("DDB helper parsing function tests", tests,
 					   ddb_suit_setup, ddb_suit_teardown);
 }

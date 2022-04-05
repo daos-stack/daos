@@ -119,5 +119,6 @@ static const struct CMUnitTest tests[] = {
 int
 dvc_tests_run()
 {
-	return cmocka_run_group_tests_name("ddb tests", tests, dcv_suit_setup, dcv_suit_teardown);
+	return cmocka_run_group_tests_name("DDB commands tests", tests,
+					   dcv_suit_setup, dcv_suit_teardown);
 }

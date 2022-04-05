@@ -130,5 +130,5 @@ static const struct CMUnitTest tests[] = {
 int
 ddb_main_tests()
 {
-	return cmocka_run_group_tests_name("ddb cli tests", tests, NULL, NULL);
+	return cmocka_run_group_tests_name("DDB CLI tests", tests, NULL, NULL);
 }
