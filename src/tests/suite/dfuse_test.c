@@ -20,6 +20,7 @@
 #include <getopt.h>
 #include <fcntl.h>
 #include <unistd.h>
+#include <errno.h>
 
 static void
 print_usage()
@@ -40,21 +41,27 @@ do_openat(char *test_dir)
 	if (root < 0)
 		return root;
 
-	fd = openat(root, "my_file", O_CREAT);
-
+	fd = openat(root, "my_file", O_RDWR | O_CREAT);
 	printf("Hello\n");
 
 	rc = write(fd, "hello", 5);
-	if (rc != 0)
+	if (rc < 0) {
+		printf("Write failed %d %d\n", rc, errno);
 		return rc;
+	}
 
 	rc = close(fd);
-	if (rc != 0)
+	if (rc != 0) {
+		printf("close fd failed %d %d\n", rc, errno);
 		return rc;
+	}
 
 	rc = close(root);
-	if (rc != 0)
+	if (rc != 0) {
+		printf("close root failed %d %d\n", rc, errno);
 		return rc;
+	}
+
 	return 0;
 }
 
