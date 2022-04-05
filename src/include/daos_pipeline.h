@@ -15,7 +15,6 @@ extern "C" {
 #include <daos_types.h>
 #include <daos_obj.h>
 
-
 /**
  * A filter part object, used to build a filter object for a pipeline.
  *
@@ -56,7 +55,7 @@ typedef struct {
 	 *   -- constant:
 	 *          DAOS_FILTER_CONST:	Filter part object is a constant
 	 */
-	d_iov_t		part_type;
+	d_iov_t    part_type;
 	/**
 	 * Type of data. Only relevant for keys and constant filter part type
 	 * objects:
@@ -74,37 +73,37 @@ typedef struct {
 	 *          DAOS_FILTER_TYPE_REAL4	Floating point numbers
 	 *          DAOS_FILTER_TYPE_REAL8
 	 */
-	d_iov_t		data_type;
+	d_iov_t    data_type;
 	/**
 	 * Number of operands for this filter part object. For example, for '=='
 	 * we have 2 operands.
 	 */
-	uint32_t	num_operands;
+	uint32_t   num_operands;
 	/**
 	 * If filtering by akey, this tells us which one.
 	 */
-	daos_key_t	akey;
+	daos_key_t akey;
 	/**
 	 * How many constants we have in \a constant
 	 */
-	size_t		num_constants;
+	size_t     num_constants;
 	/**
 	 * This object holds the value of the constants
 	 */
-	d_iov_t		*constant;
+	d_iov_t   *constant;
 	/**
 	 * If filter should only be applied starting at an offset of the data. Only relevant for
 	 * keys part type objects. If object is an akey, and the akey is an array, data_offset
 	 * corresponds to the first record in the extent (same as rx_idx in daos_recx_t).
 	 */
-	size_t		data_offset;
+	size_t     data_offset;
 	/**
 	 * Size of the data to be filtered. Only relevant for keys part type objects. If key is
 	 * akey, and the akey is an array, data_len corresponds to the number of contiguous records
 	 * in the extent (same as rx_nr in daos_recx_t). If 0, the stored length inside DAOS will be
 	 * used instead.
 	 */
-	size_t		data_len;
+	size_t     data_len;
 } daos_filter_part_t;
 
 /**
@@ -131,15 +130,15 @@ typedef struct {
 	 *            (condition) -|
 	 *                          -> (aggregation2)
 	 */
-	d_iov_t			filter_type;
+	d_iov_t              filter_type;
 	/**
 	 * Number of filter parts inside this pipeline filter
 	 */
-	uint32_t		num_parts;
+	uint32_t             num_parts;
 	/**
 	 * Array of filter parts for this filter object
 	 */
-	daos_filter_part_t	**parts;
+	daos_filter_part_t **parts;
 } daos_filter_t;
 
 /**
@@ -149,23 +148,23 @@ typedef struct {
 	/**
 	 * Version number of the data structure.
 	 */
-	uint64_t	version;
+	uint64_t        version;
 	/**
 	 * Number of total filters chained in this pipeline.
 	 */
-	uint32_t	num_filters;
+	uint32_t        num_filters;
 	/**
 	 * Array of filters for this pipeline.
 	 */
-	daos_filter_t	**filters;
+	daos_filter_t **filters;
 	/**
 	 * Number of aggregation filters chained in this pipeline.
 	 */
-	uint32_t	num_aggr_filters;
+	uint32_t        num_aggr_filters;
 	/**
 	 * Pointer to the first aggregation filter in the array of filters.
 	 */
-	daos_filter_t	**aggr_filters;
+	daos_filter_t **aggr_filters;
 } daos_pipeline_t;
 
 /*
@@ -177,18 +176,18 @@ typedef struct {
 	 * considered. Otherwise (i.e., if an object handle is passed), \a nr_objs will always be
 	 * zero (not one).
 	 */
-	uint64_t	nr_objs;
+	uint64_t nr_objs;
 	/*
 	 * If filtering by dkey or akeys (or a combination of both), \a nr_dkeys will register the
 	 * total number of dkeys scanned. If a dkey is provided to daos_pipeline_run(), \a nr_dkeys
 	 * will always be zero (not one).
 	 */
-	uint64_t	nr_dkeys;
+	uint64_t nr_dkeys;
 	/*
 	 * This variable will only be non-zero when a dkey is provided to daos_pipeline_run(), where
 	 * akeys are being filtered from a particular dkey.
 	 */
-	uint64_t	nr_akeys;
+	uint64_t nr_akeys;
 } daos_pipeline_stats_t;
 
 /**
@@ -214,7 +213,7 @@ daos_filter_init(daos_filter_t *filter);
  * \param[in,out]	pipeline	Pipeline object.
  *
  * \param[in]		filter		Filter object to be added to the pipeline.
-*/
+ */
 int
 daos_pipeline_add(daos_pipeline_t *pipeline, daos_filter_t *filter);
 
