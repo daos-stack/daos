@@ -50,7 +50,7 @@ API_VERSION = "{}.{}.{}".format(API_VERSION_MAJOR, API_VERSION_MINOR,
 
 def update_rpm_version(version, tag):
     """ Update the version (and release) in the RPM specfile """
-    spec = open("utils/rpms/daos.spec", "r").readlines()
+    spec = open("utils/rpms/daos.spec", "r").readlines()  # pylint: disable=consider-using-with
     current_version = 0
     release = 0
     for line_num, line in enumerate(spec):
@@ -74,7 +74,8 @@ def update_rpm_version(version, tag):
         if line == "%changelog\n":
             cmd = 'rpmdev-packager'
             try:
-                pkg_st = subprocess.Popen(cmd, stdout=subprocess.PIPE) # nosec
+                # pylint: disable=consider-using-with
+                pkg_st = subprocess.Popen(cmd, stdout=subprocess.PIPE)  # nosec
                 packager = pkg_st.communicate()[0].strip().decode('UTF-8')
             except OSError:
                 print("You need to have the rpmdev-packager tool (from the "
@@ -94,7 +95,7 @@ def update_rpm_version(version, tag):
                                                     version,
                                                     release))
             break
-    open("utils/rpms/daos.spec", "w").writelines(spec)
+    open("utils/rpms/daos.spec", "w").writelines(spec)  # pylint: disable=consider-using-with
 
     return True
 
@@ -145,7 +146,7 @@ def build_misc():
     except SCons.Warnings.MissingSConscriptWarning as _warn:
         print("Missing doc/man/SConscript...")
 
-def scons(): # pylint: disable=too-many-locals
+def scons(): # pylint: disable=too-many-locals,too-many-branches
     """Execute build"""
     if COMMAND_LINE_TARGETS == ['release']:
         try:
@@ -196,6 +197,7 @@ def scons(): # pylint: disable=too-many-locals
             version = tag
 
         try:
+            # pylint: disable=consider-using-with
             token = yaml.safe_load(open(os.path.join(os.path.expanduser("~"),
                                                      ".config", "hub"), 'r')
                                   )['github.com'][0]['oauth_token']
@@ -353,7 +355,7 @@ def scons(): # pylint: disable=too-many-locals
     if not GetOption('help') and not GetOption('clean'):
         mpicc = WhereIs('mpicc')
         if mpicc:
-          env.PrependENVPath('PATH', os.path.dirname(mpicc))
+            env.PrependENVPath('PATH', os.path.dirname(mpicc))
 
     build_prefix = prereqs.get_src_build_dir()
     prereqs.init_build_targets(build_prefix)

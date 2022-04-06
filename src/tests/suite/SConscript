@@ -2,13 +2,6 @@
 import sys
 
 import subprocess
-#hack to handle old subprocess version
-try:
-    from subprocess import DEVNULL
-except ImportError:
-    import os
-    DEVNULL = open(os.devnull, "wb")
-
 import daos_build
 
 test_cmocka_skip = """
@@ -45,9 +38,9 @@ def CheckCmockaSkip(context):
         return rc
     prog = context.lastTarget
     pname = prog.get_abspath()
-    rc = subprocess.call(pname, env={"CMOCKA_TEST_ABORT": "1"}, stdout=DEVNULL,
-                         stderr=DEVNULL)
-    #in case of abort rc is -6 instead of 134 (128+6) with shell ...
+    rc = subprocess.call(pname, env={"CMOCKA_TEST_ABORT": "1"},
+                         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    # in case of abort rc is -6 instead of 134 (128+6) with shell ...
     if rc == -6:
         sys.stdout.write(" (Bug reproduced) ")
     else:

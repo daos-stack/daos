@@ -57,17 +57,9 @@ from SCons.Errors import UserError
 # pylint: enable=import-error
 from prereq_tools import mocked_tests
 import subprocess  # nosec
-try:
-    from subprocess import DEVNULL  # nosec
-except ImportError:
-    DEVNULL = open(os.devnull, "wb")
 import tarfile
 import copy
-if sys.version_info < (3, 0):
-    # pylint: disable=import-error
-    import ConfigParser
-else:
-    import configparser as ConfigParser
+import configparser
 
 
 class DownloadFailure(Exception):
@@ -309,8 +301,9 @@ def default_libpath():
         print('No dpkg-architecture found in path.')
         return []
     try:
+        # pylint: disable=consider-using-with
         pipe = subprocess.Popen([dpkgarchitecture, '-qDEB_HOST_MULTIARCH'],
-                                stdout=subprocess.PIPE, stderr=DEVNULL)
+                                stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
         (stdo, _) = pipe.communicate()
         if pipe.returncode == 0:
             archpath = stdo.decode().strip()
@@ -740,7 +733,7 @@ class PreReqComponent():
 
         self.config_file = config_file
         if config_file is not None:
-            self.configs = ConfigParser.ConfigParser()
+            self.configs = configparser.ConfigParser()
             self.configs.read(config_file)
 
         self.installed = env.subst("$USE_INSTALLED").split(",")
