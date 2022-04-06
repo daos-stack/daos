@@ -4,7 +4,7 @@
 
 SPDX-License-Identifier: BSD-2-Clause-Patent
 """
-from command_utils_base import CommandFailure
+from exception_utils import CommandFailure
 from test_utils_container import TestContainer
 from pydaos.raw import str_to_c_uuid, DaosContainer, DaosObj, IORequest
 from ior_test_base import IorTestBase

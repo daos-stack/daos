@@ -1,6 +1,6 @@
 #!/usr/bin/python
 """
-(C) Copyright 2018-2021 Intel Corporation.
+(C) Copyright 2018-2022 Intel Corporation.
 
 SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -11,11 +11,10 @@ from ClusterShell.NodeSet import NodeSet
 
 from dfuse_test_base import DfuseTestBase
 from ior_utils import IorCommand
-from command_utils_base import CommandFailure
-from job_manager_utils import Mpirun
+from exception_utils import CommandFailure
+from job_manager_utils import get_job_manager
 from general_utils import pcmd, get_random_string
 from daos_utils import DaosCommand
-from mpio_utils import MpioUtils
 from test_utils_container import TestContainer
 
 
@@ -115,8 +114,9 @@ class IorTestBase(DfuseTestBase):
                 This will enable dfuse (xattr) working directory which is
                 needed to run vol connector for DAOS. Default is None.
             timeout (int, optional): command timeout. Defaults to None.
-            fail_on_warning (bool, optional): Controls whether the test
-                should fail if a 'WARNING' is found. Default is False.
+            fail_on_warning (bool/callable, optional): Controls test behavior when a 'WARNING' is
+                found. If True, call self.fail. If False, call self.log.warn. If callable, call it.
+                Default is False.
             mount_dir (str, optional): Create specific mount point
             out_queue (queue, optional): Pass the exception to the queue.
                 Defaults to None
@@ -180,31 +180,14 @@ class IorTestBase(DfuseTestBase):
         self.ior_cmd.set_daos_params(self.server_group, self.pool,
                                      self.container.uuid)
 
-    def get_ior_job_manager_command(self, custom_ior_cmd=None):
+    def get_ior_job_manager_command(self):
         """Get the MPI job manager command for IOR.
 
-        Args:
-            custom_ior_cmd (IorCommand): Custom IorCommand instance to create
-            job_manager with.
-
         Returns:
-            str: the path for the mpi job manager command
+            JobManager: the mpi job manager object
 
         """
-        # Initialize MpioUtils if IOR is running in MPIIO or DFS mode
-        if self.ior_cmd.api.value in ["MPIIO", "POSIX", "DFS", "HDF5"]:
-            mpio_util = MpioUtils()
-            if mpio_util.mpich_installed(self.hostlist_clients) is False:
-                self.fail("Exiting Test: Mpich not installed")
-        else:
-            self.fail("Unsupported IOR API")
-
-        if custom_ior_cmd:
-            self.job_manager = Mpirun(custom_ior_cmd, self.subprocess, "mpich")
-        else:
-            self.job_manager = Mpirun(self.ior_cmd, self.subprocess, "mpich")
-
-        return self.job_manager
+        return get_job_manager(self, "Mpirun", self.ior_cmd, self.subprocess, "mpich")
 
     def check_subprocess_status(self, operation="write"):
         """Check subprocess status."""
@@ -234,8 +217,9 @@ class IorTestBase(DfuseTestBase):
             plugin_path (str, optional): HDF5 vol connector library path.
                 This will enable dfuse (xattr) working directory which is
                 needed to run vol connector for DAOS. Default is None.
-            fail_on_warning (bool, optional): Controls whether the test
-                should fail if a 'WARNING' is found. Default is False.
+            fail_on_warning (bool/callable, optional): Controls test behavior when a 'WARNING' is
+                found. If True, call self.fail. If False, call self.log.warn. If callable, call it.
+                Defaults is False.
             pool (TestPool, optional): The pool for which to display space.
                 Default is self.pool.
             out_queue (queue, optional): Pass the exception to the queue.
@@ -274,7 +258,9 @@ class IorTestBase(DfuseTestBase):
             if self.subprocess:
                 return out
 
-            if fail_on_warning:
+            if callable(fail_on_warning):
+                report_warning = fail_on_warning
+            elif fail_on_warning:
                 report_warning = self.fail
             else:
                 report_warning = self.log.warning
@@ -412,7 +398,7 @@ class IorTestBase(DfuseTestBase):
         ior_command.test_file.update(testfile)
 
         # Get the custom job manager that's associated with this thread.
-        manager = self.get_ior_job_manager_command(custom_ior_cmd=ior_command)
+        manager = get_job_manager(self, "Mpirun", ior_command, self.subprocess, "mpich")
 
         procs = (self.processes // len(self.hostlist_clients)) * len(clients)
         env = ior_command.get_default_env(str(manager), self.client_log)

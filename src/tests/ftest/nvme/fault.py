@@ -7,7 +7,7 @@
 import os
 from nvme_utils import ServerFillUp
 from dmg_utils import DmgCommand
-from command_utils_base import CommandFailure
+from exception_utils import CommandFailure
 
 class NvmeFault(ServerFillUp):
     # pylint: disable=too-many-ancestors

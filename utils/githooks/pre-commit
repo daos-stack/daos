@@ -9,8 +9,8 @@ regex='(^[[:blank:]]*[\*/]*.*)((Copyright[[:blank:]]*)([0-9]{4})(-([0-9]{4}))?)(
 year=$(date +%Y)
 errors=0
 
-files=$(git diff --diff-filter=AM --name-only --cached -- \
-       '*.c' '*.h' '*.go' 'Makefile' '*.py' '*.proto' '*.java')
+files=${files:-$(git diff --diff-filter=AM --name-only --cached -- \
+       '*.c' '*.h' '*.go' 'Makefile' '*.py' '*.proto' '*.java')}
 for file in $files; do
     if [[ "$file" == *vendor* ]] || [[ "$file" == *pb.go ]] || \
        [[ "$file" == *_string.go ]] || [[ "$file" == *pb-c* ]]; then
