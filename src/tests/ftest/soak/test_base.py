@@ -66,6 +66,7 @@ class SoakTestBase(TestWithServers):
         self.initial_resv_file = None
         self.resv_cont = None
         self.mpi_module = None
+        self.sudo_cmd = None
 
     def setUp(self):
         """Define test setup to be done."""
@@ -526,6 +527,7 @@ class SoakTestBase(TestWithServers):
         self.check_errors = []
         self.used = []
         self.mpi_module = self.params.get("mpi_module", "/run/*", default="mpi/mpich-x86_64")
+        enable_sudo = self.params.get("enable_sudo", "/run/*", default=True)
         test_to = self.params.get("test_timeout", test_param + "*")
         self.test_name = self.params.get("name", test_param + "*")
         single_test_pool = self.params.get(
@@ -534,6 +536,10 @@ class SoakTestBase(TestWithServers):
         job_list = self.params.get("joblist", test_param + "*")
         resv_bytes = self.params.get("resv_bytes", test_param + "*", 500000000)
         ignore_soak_errors = self.params.get("ignore_soak_errors", test_param + "*", False)
+        if enable_sudo:
+            self.sudo_cmd = "sudo"
+        else:
+            self.sudo_cmd = ""
         if harassers:
             run_harasser = True
             self.log.info("<< Initial harasser list = %s>>", harassers)

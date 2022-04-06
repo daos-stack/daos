@@ -279,8 +279,8 @@ def get_journalctl(self, hosts, since, until, journalctl_type, logging=False):
             "data":  data requested for the group of hosts
 
     """
-    command = "sudo /usr/bin/journalctl --system -t {} --since=\"{}\" --until=\"{}\"".format(
-        journalctl_type, since, until)
+    command = "{} /usr/bin/journalctl --system -t {} --since=\"{}\" --until=\"{}\"".format(
+        self.sudo_cmd, journalctl_type, since, until)
     err = "Error gathering system log events"
     results = get_host_data(hosts, command, "journalctl", err)
     name = "journalctl_{}.log".format(journalctl_type)
@@ -342,7 +342,7 @@ def run_metrics_check(self, logging=True, prefix=None):
             if prefix:
                 name = prefix + "_metrics_{}.csv".format(engine)
             destination = self.outputsoak_dir
-            daos_metrics = "sudo daos_metrics -S {} --csv".format(engine)
+            daos_metrics = "{} daos_metrics -S {} --csv".format(self.sudo_cmd, engine)
             self.log.info("Running %s", daos_metrics)
             results = run_pcmd(hosts=self.hostlist_servers,
                                command=daos_metrics,
