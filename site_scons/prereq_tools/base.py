@@ -33,7 +33,6 @@ import os
 import traceback
 import hashlib
 import time
-import sys
 import errno
 import shutil
 from build_info import BuildInfo
