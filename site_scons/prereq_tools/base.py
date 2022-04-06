@@ -720,7 +720,7 @@ class PreReqComponent():
                         'Comma separated list of preinstalled dependencies',
                         'none')
         self.add_opts(ListVariable('INCLUDE', "Optional components to build",
-                                   'none', ['psm2', 'psm3']))
+                                   'none', ['psm2']))
         self.add_opts(('MPI_PKG',
                        'Specifies name of pkg-config to load for MPI', None))
         self.add_opts(BoolVariable('FIRMWARE_MGMT',

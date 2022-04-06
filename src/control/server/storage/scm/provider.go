@@ -245,6 +245,7 @@ func (dsp *defaultSystemProvider) Stat(path string) (os.FileInfo, error) {
 func parseFsType(input string) string {
 	// /dev/pmem0: Linux rev 1.0 ext4 filesystem data, UUID=09619a0d-0c9e-46b4-add5-faf575dd293d
 	// /dev/pmem1: data
+	// /dev/pmem1: COM executable for DOS
 	fields := strings.Fields(input)
 	switch {
 	case len(fields) == 2 && fields[1] == parseFsUnformatted:

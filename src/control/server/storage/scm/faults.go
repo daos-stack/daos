@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2021 Intel Corporation.
+// (C) Copyright 2019-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -59,7 +59,7 @@ var (
 	// on SCM storage that was already formatted.
 	FaultFormatNoReformat = scmFault(
 		code.StorageAlreadyFormatted,
-		"format request for already-formatted storage",
+		"format request for device with an existing filesystem signature",
 		"retry the operation with force option to overwrite existing data",
 	)
 

@@ -61,7 +61,9 @@ class PoolCreateAllVmTests(PoolCreateAllTestBase):
         """
         self.log.info("Test  basic pool creation with full storage")
 
-        self.create_one_pool()
+        create_time = self.create_one_pool()
+        self.log.debug("Created one pool with 100% of the available storage "
+                "in {} seconds".format(create_time))
 
         self.log.info("Checking size of the pool")
         self.pool[0].get_info()
@@ -94,7 +96,9 @@ class PoolCreateAllVmTests(PoolCreateAllTestBase):
 
         for index in range(10):
             self.log.info("Creating pool %d", index)
-            self.create_one_pool()
+            create_time = self.create_one_pool()
+            self.log.debug("Created one pool with 100% of the available storage "
+                    "in {} seconds".format(create_time))
 
             self.log.info("Checking size of pool %d", index)
             self.pool[0].get_info()
@@ -171,7 +175,9 @@ class PoolCreateAllVmTests(PoolCreateAllTestBase):
         """
         self.log.info("Test pool creation of two pools with 50% and 100% of the available storage")
 
-        self.create_first_of_two_pools()
+        create_time = self.create_first_of_two_pools()
+        self.log.debug("Created a first pool with 50% of the available storage "
+                "in {} seconds".format(create_time))
 
         self.log.info("Checking size of the first pool")
         self.pool[0].get_info()
@@ -187,7 +193,9 @@ class PoolCreateAllVmTests(PoolCreateAllTestBase):
 
         self.scm_avail_bytes = self.get_pool_available_bytes()
 
-        self.create_second_of_two_pools()
+        create_time = self.create_second_of_two_pools()
+        self.log.debug("Created a second pool with 100% of the remaining storage "
+                "in {} seconds".format(create_time))
 
         self.pool[1].get_info()
         tier_bytes.append(self.pool[1].info.pi_space.ps_space.s_total)
