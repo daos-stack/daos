@@ -908,6 +908,7 @@ func TestDmg_PoolListCmd_Errors(t *testing.T) {
 					{
 						Uuid:    common.MockUUID(1),
 						SvcReps: []uint32{1, 3, 5, 8},
+						State:   system.PoolServiceStateReady.String(),
 					},
 				},
 			},
