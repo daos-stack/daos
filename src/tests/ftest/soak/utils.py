@@ -6,7 +6,6 @@ SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 # pylint: disable=too-many-lines
 
-from email.policy import default
 import os
 import time
 import random
