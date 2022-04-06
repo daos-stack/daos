@@ -611,6 +611,7 @@ d_rank_range_list_realloc(d_rank_range_list_t *range_list, uint32_t size)
 	return range_list;
 }
 
+/* TODO (DAOS-10253) Add unit tests for this function */
 d_rank_range_list_t *
 d_rank_range_list_create_from_ranks(d_rank_list_t *rank_list)
 {
@@ -656,6 +657,7 @@ d_rank_range_list_create_from_ranks(d_rank_list_t *rank_list)
 	return range_list;
 }
 
+/* TODO (DAOS-10253) Add unit tests for this function */
 char *
 d_rank_range_list_str(d_rank_range_list_t *list, bool *truncated)
 {
