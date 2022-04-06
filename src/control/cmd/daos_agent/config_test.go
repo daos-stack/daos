@@ -41,7 +41,7 @@ port: 4242
 runtime_dir: /tmp/runtime
 log_file: /home/frodo/logfile
 control_log_mask: debug
-disable_cache: true
+disable_caching: true
 transport_config:
   allow_insecure: true
 fabric_ifaces:

@@ -50,7 +50,7 @@ func (cmd *startCmd) Execute(_ []string) error {
 		cmd.log.Debugf("GetAttachInfo agent caching has been disabled")
 	}
 
-	ficEnabled := (os.Getenv("DAOS_AGENT_DISABLE_OFI_CACHE") != "true")
+	ficEnabled := !cmd.fabricCacheDisabled()
 	if !ficEnabled {
 		cmd.log.Debugf("Local fabric interface caching has been disabled")
 	}
@@ -130,4 +130,8 @@ func (cmd *startCmd) Execute(_ []string) error {
 
 func (cmd *startCmd) attachInfoCacheDisabled() bool {
 	return cmd.cfg.DisableCache || os.Getenv("DAOS_AGENT_DISABLE_CACHE") == "true"
+}
+
+func (cmd *startCmd) fabricCacheDisabled() bool {
+	return cmd.cfg.DisableCache || os.Getenv("DAOS_AGENT_DISABLE_OFI_CACHE") == "true"
 }
