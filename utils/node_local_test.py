@@ -2337,10 +2337,10 @@ class posix_tests():
         fd = os.open(testfile, os.O_RDONLY)
         # previous code was using stream/file methods and it appears that
         # file.read() (no size) is doing a fstat() and reads size + 1
-        stat = os.fstat(fd)
-        bytes = os.read(fd, stat.st_size + 1)
-        assert bytes == b'read-only-data'
-        data = bytes.decode('utf-8', 'ignore')
+        fstat_fd = os.fstat(fd)
+        raw_bytes = os.read(fd, fstat_fd.st_size + 1)
+        assert raw_bytes == b'read-only-data'
+        data = raw_bytes.decode('utf-8', 'ignore')
         assert data == 'read-only-data'
         print(data)
         os.close(fd)
