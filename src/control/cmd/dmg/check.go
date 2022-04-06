@@ -7,19 +7,25 @@
 package main
 
 import (
+	"bytes"
 	"context"
+	"fmt"
+	"strconv"
+	"strings"
 
 	"github.com/pkg/errors"
 
 	"github.com/daos-stack/daos/src/control/common/cmdutil"
 	"github.com/daos-stack/daos/src/control/lib/control"
+	"github.com/daos-stack/daos/src/control/lib/txtfmt"
 )
 
 type checkCmdRoot struct {
-	Start checkStartCmd `command:"start" description:"Start a system check"`
-	Stop  checkStopCmd  `command:"stop" description:"Stop a system check"`
-	Query checkQueryCmd `command:"query" description:"Query a system check"`
-	Prop  checkPropCmd  `command:"prop" description:"Get system check properties"`
+	Start  checkStartCmd  `command:"start" description:"Start a system check"`
+	Stop   checkStopCmd   `command:"stop" description:"Stop a system check"`
+	Query  checkQueryCmd  `command:"query" description:"Query a system check"`
+	Prop   checkPropCmd   `command:"prop" description:"Get system check properties"`
+	Repair checkRepairCmd `command:"repair" description:"Repair a reported system check problem"`
 }
 
 type poolIDSet []PoolID
@@ -109,6 +115,36 @@ type checkQueryCmd struct {
 	checkCmdBase
 }
 
+func (cmd *checkCmdBase) printQueryResp(resp *control.SystemCheckQueryResp) {
+	cmd.Infof("Current phase: %s", resp.InsPhase)
+
+	if len(resp.Reports) == 0 {
+		cmd.Infof("No reports to display")
+		return
+	}
+
+	var buf bytes.Buffer
+	iw := txtfmt.NewIndentWriter(&buf)
+	cmd.Info("Inconsistency Reports:")
+	for _, report := range resp.Reports {
+		fmt.Fprintf(iw, "0x%x %s: %s\n", report.Seq, report.Class, report.Msg)
+		if len(report.Actions) > 0 {
+			fmt.Fprintf(iw, "Potential resolution actions:\n")
+			iw2 := txtfmt.NewIndentWriter(iw)
+			for i, action := range report.Actions {
+				fmt.Fprintf(iw2, "%d: %s\n", action, report.Details[i])
+			}
+			fmt.Fprintln(&buf)
+		} else if len(report.Details) == 1 {
+			fmt.Fprintf(iw, "Resolution: %s (%s)\n", report.Action, report.Details[0])
+		} else {
+			fmt.Fprintln(iw, "No resolutions available")
+			continue
+		}
+	}
+	cmd.Info(buf.String())
+}
+
 func (cmd *checkQueryCmd) Execute(_ []string) error {
 	ctx := context.Background()
 
@@ -123,7 +159,7 @@ func (cmd *checkQueryCmd) Execute(_ []string) error {
 		return err
 	}
 
-	cmd.Infof("System check status: %s\n", resp.Status())
+	cmd.printQueryResp(resp)
 
 	return nil
 }
@@ -145,6 +181,63 @@ func (cmd *checkPropCmd) Execute(_ []string) error {
 	}
 
 	cmd.Infof("System check properties: %s\n", "TODO")
+
+	return nil
+}
+
+type repairSeqNum uint64
+
+func (r repairSeqNum) String() string {
+	return fmt.Sprintf("0x%x", uint64(r))
+}
+
+func (r *repairSeqNum) UnmarshalFlag(value string) error {
+	var val uint64
+	var err error
+	if strings.HasPrefix(value, "0x") {
+		cleaned := strings.Replace(value, "0x", "", -1)
+		val, err = strconv.ParseUint(cleaned, 16, 64)
+	} else {
+		val, err = strconv.ParseUint(value, 10, 64)
+	}
+
+	if err != nil {
+		return err
+	}
+
+	*r = repairSeqNum(val)
+	return nil
+}
+
+type checkRepairCmd struct {
+	cmdutil.LogCmd
+	cfgCmd
+	ctlInvokerCmd
+	jsonOutputCmd
+
+	ForAll bool `short:"f" long:"for-all" description:"Take the same action for all inconsistencies with the same class."`
+
+	Args struct {
+		SeqNum repairSeqNum `positional-arg-name:"[seq-num]" required:"1"`
+		Action int32        `positional-arg-name:"[action]" required:"1"`
+	} `positional-args:"yes"`
+}
+
+func (cmd *checkRepairCmd) Execute(_ []string) error {
+	ctx := context.Background()
+
+	req := new(control.SystemCheckRepairReq)
+	req.Seq = uint64(cmd.Args.SeqNum)
+	req.ForAll = cmd.ForAll
+	if err := req.SetAction(cmd.Args.Action); err != nil {
+		return err
+	}
+
+	if err := control.SystemCheckRepair(ctx, cmd.ctlInvoker, req); err != nil {
+		return err
+	}
+
+	cmd.Info("Repair request sent")
 
 	return nil
 }

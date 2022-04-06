@@ -94,6 +94,7 @@ func TestSecurity_ComponentHasAccess(t *testing.T) {
 		"/mgmt.MgmtSvc/SystemCheckStop":        {ComponentAdmin},
 		"/mgmt.MgmtSvc/SystemCheckQuery":       {ComponentAdmin},
 		"/mgmt.MgmtSvc/SystemCheckProp":        {ComponentAdmin},
+		"/mgmt.MgmtSvc/SystemCheckRepair":      {ComponentAdmin},
 		"/mgmt.MgmtSvc/PoolUpgrade":            {ComponentAdmin},
 		"/RaftTransport/AppendEntries":         {ComponentServer},
 		"/RaftTransport/AppendEntriesPipeline": {ComponentServer},

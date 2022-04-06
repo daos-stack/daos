@@ -30,6 +30,7 @@ import (
 	"github.com/daos-stack/daos/src/control/lib/control"
 	"github.com/daos-stack/daos/src/control/lib/hostlist"
 	"github.com/daos-stack/daos/src/control/system"
+	"github.com/daos-stack/daos/src/control/system/checker"
 )
 
 // GetAttachInfo handles a request to retrieve a map of ranks to fabric URIs, in addition
@@ -784,7 +785,7 @@ func (svc *mgmtSvc) checkMemberStates(requiredStates ...system.MemberState) erro
 		for i, state := range requiredStates {
 			states[i] = state.String()
 		}
-		return errors.Errorf("members not in (%s): %s", strings.Join(states, "|"), invalidMembers.String())
+		return checker.FaultIncorrectMemberStates(invalidMembers.String(), strings.Join(states, "|"))
 	}
 
 	return nil

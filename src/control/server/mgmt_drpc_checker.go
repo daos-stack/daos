@@ -15,6 +15,7 @@ import (
 	srvpb "github.com/daos-stack/daos/src/control/common/proto/srv"
 	"github.com/daos-stack/daos/src/control/drpc"
 	"github.com/daos-stack/daos/src/control/system"
+	"github.com/daos-stack/daos/src/control/system/checker"
 )
 
 func (mod *srvModule) handleCheckerListPools(_ context.Context, reqb []byte) (out []byte, outErr error) {
@@ -138,6 +139,29 @@ func (mod *srvModule) handleCheckerDeregisterPool(_ context.Context, reqb []byte
 
 	if err := mod.poolDB.RemovePoolService(uuid); err != nil {
 		mod.log.Errorf("failed to remove pool: %s", err)
+		resp.Status = int32(drpc.DaosMiscError)
+		return
+	}
+
+	return
+}
+
+func (mod *srvModule) handleCheckerReport(_ context.Context, reqb []byte) (out []byte, outErr error) {
+	req := new(srvpb.CheckReportReq)
+	if err := proto.Unmarshal(reqb, req); err != nil {
+		return nil, drpc.UnmarshalingPayloadFailure()
+	}
+	mod.log.Debugf("handling CheckerReport: %+v", req)
+
+	resp := new(srvpb.CheckReportResp)
+	defer func() {
+		mod.log.Debugf("CheckerReport resp: %+v", resp)
+		out, outErr = proto.Marshal(resp)
+	}()
+
+	finding := checker.AnnotateFinding(checker.NewFinding(req.Report))
+	if err := mod.checkerDB.AddCheckerFinding(finding); err != nil {
+		mod.log.Errorf("failed to add checker finding %+v: %s", finding, err)
 		resp.Status = int32(drpc.DaosMiscError)
 		return
 	}

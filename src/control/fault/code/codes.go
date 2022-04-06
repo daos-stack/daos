@@ -178,3 +178,9 @@ const (
 	SecurityMissingCertFile
 	SecurityUnreadableCertFile
 )
+
+// System Checker codes
+const (
+	SystemCheckerUnknown Code = iota + 1000
+	SystemCheckerInvalidMemberStates
+)

@@ -80,6 +80,8 @@ type MgmtSvcClient interface {
 	SystemCheckQuery(ctx context.Context, in *CheckQueryReq, opts ...grpc.CallOption) (*CheckQueryResp, error)
 	// Query system check properties
 	SystemCheckProp(ctx context.Context, in *CheckPropReq, opts ...grpc.CallOption) (*CheckPropResp, error)
+	// Send the desired action to repair an inconsistency.
+	SystemCheckRepair(ctx context.Context, in *CheckActReq, opts ...grpc.CallOption) (*CheckActResp, error)
 	// PoolUpgrade queries a DAOS pool.
 	PoolUpgrade(ctx context.Context, in *PoolUpgradeReq, opts ...grpc.CallOption) (*PoolUpgradeResp, error)
 }
@@ -362,6 +364,15 @@ func (c *mgmtSvcClient) SystemCheckProp(ctx context.Context, in *CheckPropReq, o
 	return out, nil
 }
 
+func (c *mgmtSvcClient) SystemCheckRepair(ctx context.Context, in *CheckActReq, opts ...grpc.CallOption) (*CheckActResp, error) {
+	out := new(CheckActResp)
+	err := c.cc.Invoke(ctx, "/mgmt.MgmtSvc/SystemCheckRepair", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *mgmtSvcClient) PoolUpgrade(ctx context.Context, in *PoolUpgradeReq, opts ...grpc.CallOption) (*PoolUpgradeResp, error) {
 	out := new(PoolUpgradeResp)
 	err := c.cc.Invoke(ctx, "/mgmt.MgmtSvc/PoolUpgrade", in, out, opts...)
@@ -436,6 +447,8 @@ type MgmtSvcServer interface {
 	SystemCheckQuery(context.Context, *CheckQueryReq) (*CheckQueryResp, error)
 	// Query system check properties
 	SystemCheckProp(context.Context, *CheckPropReq) (*CheckPropResp, error)
+	// Send the desired action to repair an inconsistency.
+	SystemCheckRepair(context.Context, *CheckActReq) (*CheckActResp, error)
 	// PoolUpgrade queries a DAOS pool.
 	PoolUpgrade(context.Context, *PoolUpgradeReq) (*PoolUpgradeResp, error)
 	mustEmbedUnimplementedMgmtSvcServer()
@@ -534,6 +547,9 @@ func (UnimplementedMgmtSvcServer) SystemCheckQuery(context.Context, *CheckQueryR
 }
 func (UnimplementedMgmtSvcServer) SystemCheckProp(context.Context, *CheckPropReq) (*CheckPropResp, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method SystemCheckProp not implemented")
+}
+func (UnimplementedMgmtSvcServer) SystemCheckRepair(context.Context, *CheckActReq) (*CheckActResp, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method SystemCheckRepair not implemented")
 }
 func (UnimplementedMgmtSvcServer) PoolUpgrade(context.Context, *PoolUpgradeReq) (*PoolUpgradeResp, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method PoolUpgrade not implemented")
@@ -1091,6 +1107,24 @@ func _MgmtSvc_SystemCheckProp_Handler(srv interface{}, ctx context.Context, dec 
 	return interceptor(ctx, in, info, handler)
 }
 
+func _MgmtSvc_SystemCheckRepair_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(CheckActReq)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(MgmtSvcServer).SystemCheckRepair(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/mgmt.MgmtSvc/SystemCheckRepair",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(MgmtSvcServer).SystemCheckRepair(ctx, req.(*CheckActReq))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _MgmtSvc_PoolUpgrade_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(PoolUpgradeReq)
 	if err := dec(in); err != nil {
@@ -1235,6 +1269,10 @@ var MgmtSvc_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "SystemCheckProp",
 			Handler:    _MgmtSvc_SystemCheckProp_Handler,
+		},
+		{
+			MethodName: "SystemCheckRepair",
+			Handler:    _MgmtSvc_SystemCheckRepair_Handler,
 		},
 		{
 			MethodName: "PoolUpgrade",
