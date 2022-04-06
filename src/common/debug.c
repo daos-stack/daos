@@ -193,7 +193,7 @@ daos_debug_init(char *logfile)
 	rc = d_log_dbg_grp_alloc(DB_GRP_MD, DB_GRP_MD_NAME, 0);
 	if (rc < 0) {
 		D_PRINT_ERR("Error allocating debug group '%s': "DF_RC"\n",
-			DB_GRP_MD_NAME, DP_RC(rc));
+			    DB_GRP_MD_NAME, DP_RC(rc));
 		rc = -DER_UNINIT;
 		goto failed_unlock;
 	}
@@ -201,7 +201,7 @@ daos_debug_init(char *logfile)
 	rc = d_log_dbg_grp_alloc(DB_GRP_MD_ONLY, DB_GRP_MD_ONLY_NAME, 0);
 	if (rc < 0) {
 		D_PRINT_ERR("Error allocating debug group '%s': "DF_RC"\n",
-			DB_GRP_MD_ONLY_NAME, DP_RC(rc));
+			    DB_GRP_MD_ONLY_NAME, DP_RC(rc));
 		rc = -DER_UNINIT;
 		goto failed_unlock;
 	}
