@@ -100,7 +100,7 @@ index f793dfe..d4cb7e8 100755
 @@ -8,7 +8,7 @@ echo It will output OK at the end if builds succeed
  echo
 
- IOR_HASH=14deedfec48ce295dff683d15c1b194652bd6d08
+ IOR_HASH=d3574d536643475269d37211e283b49ebd6732d7
 -PFIND_HASH=62c3a7e31
 +PFIND_HASH=mfu_integration
 
