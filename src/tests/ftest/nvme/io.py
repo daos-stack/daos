@@ -40,16 +40,12 @@ class NvmeIo(IorTestBase):
         # Loop for every IOR object type
         for obj_type in object_type:
             for ior_param in tests:
-                # There is an issue with 8 bytes transfer size Hence, skip
-                # tests case with 8 bytes Transfer size.
-                if ior_param[2] == 8:
-                    self.log.warning("Skip test because of DAOS-7021")
-                    continue
-
                 # Create and connect to a pool
                 self.add_pool(create=False)
-                self.pool.scm_size.update(ior_param[0])
-                self.pool.nvme_size.update(ior_param[1])
+                params = self.server_managers[0].autosize_pool_params(
+                    None, None, scm_size=ior_param[0], nvme_size=ior_param[1])
+                self.pool.scm_size.update(params['scm_size'])
+                self.pool.nvme_size.update(params['nvme_size'])
                 self.pool.create()
 
                 # Disable aggregation
