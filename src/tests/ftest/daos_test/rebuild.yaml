@@ -6,9 +6,9 @@ hosts:
     - server-B
     - server-C
     - server-D
-timeout: 600
+timeout: 800
 timeouts:
-    test_rebuild_0to10: 1500
+    test_rebuild_0to10: 2000
     test_rebuild_12to15: 1500
     test_rebuild_27: 1500
 pool:

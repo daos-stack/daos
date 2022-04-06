@@ -143,6 +143,8 @@ struct cont_iv_prop {
 	uint64_t	cip_ec_cell_sz;
 	uint32_t	cip_ec_pda;
 	uint32_t	cip_rp_pda;
+	uint32_t	cip_global_version;
+	uint64_t	cip_valid_bits;
 	struct daos_prop_co_roots	cip_roots;
 	struct daos_co_status		cip_co_status;
 	/* MUST be the last member */
