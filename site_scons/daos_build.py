@@ -96,51 +96,26 @@ def install(env, subdir, files):
     path = "$PREFIX/%s" % subdir
     denv.Install(path, files)
 
-def load_mpi_path(env):
-    """Load location of mpicc into path if MPI_PKG is set"""
-    mpicc = WhereIs('mpicc')
-    if mpicc:
-        env.PrependENVPath("PATH", os.path.dirname(mpicc))
-
-def _clear_icc_env(env):
-    """Remove icc specific options from environment"""
-    if env.subst("$COMPILER") == "icc":
-        linkflags = str(env.get("LINKFLAGS")).split()
-        if '-static-intel' in linkflags:
-            linkflags.remove('-static-intel')
-        for flag_type in ['CCFLAGS', 'CXXFLAGS', 'CFLAGS']:
-            oldflags = str(env.get(flag_type)).split()
-            newflags = []
-            for flag in oldflags:
-                if 'diag-disable' in flag:
-                    continue
-                if flag == '-Werror-all':
-                    newflags.append('-Werror')
-                    continue
-                newflags.append(flag)
-            env.Replace(**{flag_type : newflags})
-        env.Replace(LINKFLAGS=linkflags)
 
 def _find_mpicc(env):
     """find mpicc"""
+
     mpicc = WhereIs('mpicc')
-    if mpicc:
-        env.Replace(CC="mpicc")
-        env.Replace(LINK="mpicc")
-        env.AppendUnique(CPPDEFINES=["-DDAOS_MPI_PATH=\"%s\"" % mpicc])
-        _clear_icc_env(env)
-        load_mpi_path(env)
-        compiler_setup.base_setup(env)
+    if not mpicc:
+        return False
 
-        return True
-    return False
+    env.Replace(CC="mpicc")
+    env.Replace(LINK="mpicc")
+    env.PrependENVPath('PATH', os.path.dirname(mpicc))
+    compiler_setup.base_setup(env)
 
-def _configure_mpi_pkg(env, libs):
+    return True
+
+
+def _configure_mpi_pkg(env):
     """Configure MPI using pkg-config"""
-    if GetOption('help'):
-        return "mpi"
     if _find_mpicc(env):
-        return env.subst("$MPI_PKG")
+        return True
     try:
         env.ParseConfig("pkg-config --cflags --libs $MPI_PKG")
     except OSError as e:
@@ -150,31 +125,26 @@ def _configure_mpi_pkg(env, libs):
         print("**********************************")
         raise e
 
-    # assume mpi is needed in the fallback case
-    libs.append('mpi')
-    return env.subst("$MPI_PKG")
+    return True
 
-def configure_mpi(env, libs, required=None):
+
+def configure_mpi(env):
     """Check if mpi exists and configure environment"""
+
+    if GetOption('help'):
+        return True
+
+    env['CXX'] = None
+
     if env.subst("$MPI_PKG") != "":
-        return _configure_mpi_pkg(env, libs)
+        return _configure_mpi_pkg(env)
 
-    mpis = ['openmpi', 'mpich']
-    if required is not None:
-        if isinstance(required, str):
-            mpis = [required]
-        else:
-            mpis = required
-
-    for mpi in mpis:
+    for mpi in ['openmpi', 'mpich']:
         if not load_mpi(mpi):
             continue
-        comp = mpi
-        if mpi == "openmpi":
-            comp = "ompi"
         if _find_mpicc(env):
             print("%s is installed" % mpi)
-            return comp
+            return True
         print("No %s installed and/or loaded" % mpi)
     print("No MPI installed")
-    return None
+    return False

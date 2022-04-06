@@ -1,10 +1,12 @@
 """Build tests"""
 import daos_build
-import os
 
 def scons():
     """Execute build"""
-    Import('base_env', 'prereqs')
+    Import('base_env_mpi', 'prereqs')
+
+    if base_env_mpi is None:
+        return
 
     if not prereqs.test_requested():
         return
@@ -12,20 +14,20 @@ def scons():
     libs_client = ['daos', 'daos_common', 'gurt', 'm', 'cart', 'uuid', 'cmocka', 'daos_tests']
     libs_server = ['daos', 'daos_common_pmem', 'gurt', 'm', 'cart', 'uuid', 'cmocka', 'daos_tests']
 
-    denv = base_env.Clone()
-
-    if not GetOption('help') and not GetOption('clean'):
-        mpi = daos_build.configure_mpi(denv, libs_client)
-        if mpi is None:
-            print("\nSkipping compilation for tests that need MPI")
-            print("Install and load mpich or openmpi\n")
-            return
+    denv = base_env_mpi.Clone()
 
     # Add runtime paths for daos libraries
     denv.AppendUnique(RPATH_FULL=['$PREFIX/lib64/daos_srv'])
 
-    denv.Append(CPPPATH=[Dir('suite').srcnode()])
+    denv.AppendUnique(CPPPATH=[Dir('suite').srcnode()])
     denv.AppendUnique(CPPPATH=[Dir('../mgmt').srcnode()])
+    denv.AppendUnique(LIBPATH=[Dir('../vos')])
+    denv.AppendUnique(LIBPATH=[Dir('../bio')])
+    denv.AppendUnique(LIBPATH=[Dir('../gurt')])
+    denv.AppendUnique(LIBPATH=[Dir('../cart')])
+    denv.AppendUnique(LIBPATH=[Dir('../common')])
+    denv.AppendUnique(LIBPATH=[Dir('../client/api')])
+
     prereqs.require(denv, 'argobots', 'hwloc', 'protobufc', 'pmdk', 'isal')
 
     daos_build.program(denv, 'simple_array', 'simple_array.c', LIBS=libs_client)

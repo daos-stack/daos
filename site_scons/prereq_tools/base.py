@@ -501,8 +501,7 @@ class WebRetriever():
 def check_flag_helper(context, compiler, ext, flag):
     """Helper function to allow checking for compiler flags"""
     if compiler in ["icc", "icpc"]:
-        flags = ["-diag-error=10006", "-diag-error=10148",
-                 "-Werror-all", flag]
+        flags = ["-diag-error=10006", "-diag-error=10148", "-Werror-all", flag]
         # bug in older scons, need CFLAGS to exist, -O2 is default.
         context.env.Replace(CFLAGS=['-O2'])
     elif compiler in ["gcc", "g++"]:
@@ -537,17 +536,18 @@ def check_flags(env, config, key, value):
     if GetOption('help') or GetOption('clean'):
         return
     checked = []
+    cxx = env.get('CXX')
     for flag in value:
         if flag in checked:
             continue
         insert = False
         if key == "CCFLAGS":
-            if config.CheckFlag(flag) and config.CheckFlagCC(flag):
+            if config.CheckFlag(flag) and cxx is not None and config.CheckFlagCC(flag):
                 insert = True
         elif key == "CFLAGS":
             if config.CheckFlag(flag):
                 insert = True
-        elif config.CheckFlagCC(flag):
+        elif config.CheckFlagCC(flag) and cxx is not None:
             insert = True
         if insert:
             env.AppendUnique(**{key: [flag]})

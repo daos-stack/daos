@@ -12,7 +12,7 @@ def scons():
 
     prereqs.require(tenv, 'argobots')
 
-    tenv.AppendUnique(LIBPATH=['..'])
+    tenv.AppendUnique(LIBPATH=[Dir('..')])
     smd_ut = daos_build.test(tenv, 'smd_ut', 'smd_ut.c', LIBS=libraries)
     tenv.Install('$PREFIX/bin/', smd_ut)
 

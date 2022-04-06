@@ -37,31 +37,25 @@ def build_dts_library(env):
 
     prereqs.require(denv, 'argobots', 'protobufc')
 
-    if not GetOption('help') and not GetOption('clean'):
-        mpi = daos_build.configure_mpi(denv, [])
-        if mpi is None:
-            print("\nSkipping compilation for tests that need MPI")
-            print("Install and load mpich or openmpi\n")
-            return
-
     libraries = ['cmocka', 'daos', 'daos_tests']
 
     # Add runtime paths for daos libraries
-    denv.AppendUnique(LIBPATH=["../client/api"])
-    denv.AppendUnique(CPPPATH=["../tests/suite"])
-    denv.AppendUnique(CPPPATH=["../mgmt"])
+    denv.AppendUnique(LIBPATH=[Dir('../client/api').srcnode()])
+    denv.AppendUnique(LIBPATH=[Dir('../common').srcnode()])
+    denv.AppendUnique(CPPPATH=[Dir('../tests/suite').srcnode()])
+    denv.AppendUnique(CPPPATH=[Dir('../mgmt').srcnode()])
+    denv.AppendUnique(CPPPATH=[Dir('../include').srcnode()])
 
     denv.Replace(SHOBJPREFIX='mpi_')
     mpi_cmd_parser = denv.SharedObject(['cmd_parser.c'])
     Export('mpi_cmd_parser')
 
-    dts_lib = daos_build.library(denv, 'libdts', ['credit.c', 'dts.c'],
-                                 LIBS=libraries)
+    dts_lib = daos_build.library(denv, 'libdts', ['credit.c', 'dts.c'], LIBS=libraries)
     denv.Install('$PREFIX/lib64/', dts_lib)
 
 def scons():
     """Execute build"""
-    Import('env', 'base_env', 'prereqs')
+    Import('env', 'base_env', 'base_env_mpi', 'prereqs')
 
     env.AppendUnique(LIBPATH=[Dir('.')])
     base_env.AppendUnique(LIBPATH=[Dir('.')])
@@ -108,7 +102,8 @@ def scons():
     prereqs.require(tenv, 'pmdk')
     SConscript('tests/SConscript', exports='tenv')
 
-    build_dts_library(base_env)
+    if base_env_mpi:
+        build_dts_library(base_env_mpi)
 
 if __name__ == "SCons.Script":
     scons()

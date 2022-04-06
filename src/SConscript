@@ -33,7 +33,7 @@ def generate_daos_version_header(env):
 def scons():
     """Execute build"""
 
-    Import('env', 'base_env', 'prereqs')
+    Import('env', 'base_env', 'base_env_mpi', 'prereqs')
 
     # For Common library (tse.h)
     env.AppendUnique(CPPPATH=[Dir('include/daos').srcnode()])
@@ -45,11 +45,14 @@ def scons():
         env.Append(CCFLAGS=['-DNEED_EXPLICIT_BZERO'])
     conf.Finish()
 
-    # Generic DAOS includes
+    # Generic DAOS includes.
     env.AppendUnique(CPPPATH=[Dir('include').srcnode()])
     env.AppendUnique(CPPPATH=[Dir('include')])
     base_env.AppendUnique(CPPPATH=[Dir('include').srcnode()])
     base_env.AppendUnique(CPPPATH=[Dir('include')])
+    if base_env_mpi:
+        base_env_mpi.AppendUnique(CPPPATH=[Dir('include').srcnode()])
+        base_env_mpi.AppendUnique(CPPPATH=[Dir('include')])
     generate_daos_version_header(env)
     for header in HEADERS:
         env.Install(os.path.join('$PREFIX', 'include'), 'include/%s' % header)
@@ -58,11 +61,9 @@ def scons():
             env.Install(os.path.join('$PREFIX', 'include', 'daos_srv'),
                         'include/daos_srv/%s' % header)
     for header in HEADERS_GURT:
-        env.Install(os.path.join('$PREFIX', 'include', 'gurt'),
-                    'include/gurt/%s' % header)
+        env.Install(os.path.join('$PREFIX', 'include', 'gurt'), 'include/gurt/%s' % header)
 
     env.Append(CCFLAGS=['-DCART_VERSION=\\"' + CART_VERSION + '\\"'])
-    env.AppendUnique(CPPPATH=[Dir('cart/test/utest').srcnode()])
     Export('env', 'CART_VERSION')
 
     SConscript('gurt/SConscript')

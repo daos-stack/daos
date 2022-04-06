@@ -79,10 +79,9 @@ def scons():
     """Execute build"""
     Import('denv')
 
-    libraries = ['daos', 'dfs', 'daos_tests', 'gurt', 'cart']
-    libraries += ['uuid', 'cmocka', 'pthread', 'isal']
+    libraries = ['daos', 'dfs', 'daos_tests', 'cart', 'gurt', 'uuid', 'cmocka', 'pthread', 'isal']
 
-    denv.AppendUnique(CPPPATH=["#/src/client/dfs"])
+    denv.AppendUnique(CPPPATH=[Dir('../../client/dfs').srcnode()])
     denv.AppendUnique(CPPPATH=[Dir('../../mgmt').srcnode()])
 
     daos_test_tgt = denv.SharedObject(['daos_test_common.c'])
@@ -107,13 +106,13 @@ def scons():
                     daos_aggregate_ec.c daos_degrade_ec.c
                     daos_extend_simple.c daos_obj_ec.c""")
 
-    newenv.AppendUnique(LIBPATH=["$BUILD_DIR/src/client/dfs"])
+    newenv.AppendUnique(LIBPATH=[Dir('../../client/dfs')])
     daostest = daos_build.program(newenv, 'daos_test', c_files + daos_test_tgt,
                                   LIBS=['daos_common'] + libraries)
 
     c_files = Split("""dfs_unit_test.c dfs_par_test.c dfs_test.c """
                     """dfs_sys_unit_test.c""")
-    newenv.AppendUnique(CPPPATH=["#/src/client/dfs"])
+    newenv.AppendUnique(CPPPATH=[Dir('../../client/dfs').srcnode()])
     dfstest = daos_build.program(newenv, 'dfs_test', c_files + daos_test_tgt,
                                  LIBS=['daos_common'] + libraries)
 

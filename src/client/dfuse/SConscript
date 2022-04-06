@@ -56,15 +56,15 @@ def build_client_libs_shared(env, prereqs):
     ilenv = env.Clone()
     ilenv.AppendUnique(CFLAGS=['-fPIC'])
     ilenv.AppendUnique(CPPDEFINES=['IOIL_PRELOAD'])
-    ilenv.AppendUnique(LIBPATH=["../dfs"])
+    ilenv.AppendUnique(LIBPATH=[Dir('../dfs')])
+    ilenv.AppendUnique(LIBPATH=[Dir('../api')])
     ilenv.AppendUnique(LIBS=['dfs'])
     penv = ilenv.Clone()
     penv.AppendUnique(CPPDEFINES=['_FILE_OFFSET_BITS=64'])
 
     il_obj = []
     for src in IOIL_SRC:
-        il_obj += ilenv.SharedObject(os.path.join('il', src),
-                                     SHOBJPREFIX='s_')
+        il_obj += ilenv.SharedObject(os.path.join('il', src), SHOBJPREFIX='s_')
     common = build_common(penv, COMMON_SRC, True)
 
     # Now build the interception library
@@ -72,8 +72,7 @@ def build_client_libs_shared(env, prereqs):
     env.InstallVersionedLib(os.path.join("$PREFIX", 'lib64'), il_lib)
     dfuse_lib = daos_build.library(ilenv, 'common/libdfuse', common)
 
-    gen_script = daos_build.program(ilenv, 'il/gen_script', ['il/gen_script.c'],
-                                    LIBS=[])
+    gen_script = daos_build.program(ilenv, 'il/gen_script', ['il/gen_script.c'], LIBS=[])
     if prereqs.test_requested():
         script = ilenv.Command('il/check_ioil_syms', gen_script,
                                "$SOURCE -s $TARGET")
@@ -89,6 +88,8 @@ def build_client_libs_static(env, common):
     """build the static interception library"""
 
     ilenv = env.Clone()
+
+
     il_obj = []
     for src in IOIL_SRC:
         il_obj += ilenv.Object(os.path.join('il', src))
@@ -174,16 +175,17 @@ def scons():
         Import('base_env')
         il_env = base_env.Clone()
         il_env['CC'] = 'gcc'
+        il_env['CXX'] = None
         compiler_setup.base_setup(il_env)
 
     # Set options which are used throughout the src.
     dfuse_env = env.Clone(LIBS=[])
-    dfuse_env.AppendUnique(CPPPATH=['.'])
+    dfuse_env.AppendUnique(CPPPATH=[Dir('.').srcnode()])
     dfuse_env.AppendUnique(CFLAGS=['-pthread'])
     dfuse_env.AppendUnique(LIBS=['pthread', 'daos', 'daos_common', 'uuid'])
 
     gcc_env = il_env.Clone(LIBS=[])
-    gcc_env.AppendUnique(CPPPATH=['.'])
+    gcc_env.AppendUnique(CPPPATH=[Dir('.').srcnode()])
     gcc_env.AppendUnique(CFLAGS=['-pthread', '-fvisibility=hidden'])
     gcc_env.AppendUnique(LIBS=['pthread', 'daos', 'daos_common'])
 
@@ -196,8 +198,8 @@ def scons():
     libs += build_client_libs_static(static_env, common)
 
     cenv = dfuse_env.Clone()
-    cenv.AppendUnique(LIBPATH=["../dfs"])
-    cenv.AppendUnique(CPPPATH=["../dfs"])
+    cenv.AppendUnique(LIBPATH=[Dir('../dfs')])
+    cenv.AppendUnique(CPPPATH=[Dir('../dfs').srcnode()])
 
     cenv.AppendUnique(LIBS=['dfs', 'duns'])
 
