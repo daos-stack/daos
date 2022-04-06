@@ -16,12 +16,10 @@
 		int rc;                                                                            \
 		args->part_idx += 1;                                                               \
 		rc = args->parts[args->part_idx].filter_func(args);                                \
-		if (unlikely(rc != 0)) {                                                           \
+		if (unlikely(rc != 0))                                                             \
 			return rc > 0 ? 0 : rc;                                                    \
-		}                                                                                  \
-		if (args->data_out == NULL) {                                                      \
+		if (args->data_out == NULL)                                                        \
 			return 1;                                                                  \
-		}                                                                                  \
 		*data = args->value_##type##_out;                                                  \
 		return 0;                                                                          \
 	}
@@ -34,15 +32,12 @@ filter_func_getdata(u, uint64_t) filter_func_getdata(i, int64_t) filter_func_get
 
 	args->part_idx += 1;
 	rc = args->parts[args->part_idx].filter_func(args);
-	if (unlikely(rc != 0)) {
+	if (unlikely(rc != 0))
 		return rc > 0 ? 0 : rc;
-	}
-	if (args->data_out == NULL) {
+	if (args->data_out == NULL)
 		return 1;
-	}
 	*st     = args->data_out;
 	*st_len = args->data_len_out;
-
 	return 0;
 }
 
@@ -100,18 +95,15 @@ logfunc_gt(d, double);
 		comparisons     = args->parts[args->part_idx].num_operands - 1;                    \
 		idx_end_subtree = args->parts[args->part_idx].idx_end_subtree;                     \
 		rc              = filter_func_getdata_##type(args, &left);                         \
-		if (unlikely(rc != 0)) {                                                           \
+		if (unlikely(rc != 0))                                                             \
 			D_GOTO(exit, rc);                                                          \
-		}                                                                                  \
 		for (i = 0; i < comparisons; i++) {                                                \
 			rc = filter_func_getdata_##type(args, &right);                             \
-			if (unlikely(rc != 0)) {                                                   \
+			if (unlikely(rc != 0))                                                     \
 				D_GOTO(exit, rc);                                                  \
-			}                                                                          \
 			args->log_out = logfunc_##op##_##type(left, right);                        \
-			if (args->log_out == true) {                                               \
+			if (args->log_out)                                                         \
 				D_GOTO(exit, rc = 0);                                              \
-			}                                                                          \
 		}                                                                                  \
 exit:                                                                                              \
 		args->part_idx = idx_end_subtree;                                                  \
@@ -145,18 +137,16 @@ filter_func_log(gt, d, double);
 
 static bool logfunc_eq_st(char *l, size_t ll, char *r, size_t rl)
 {
-	if (ll != rl) {
+	if (ll != rl)
 		return false;
-	}
 	return (memcmp(l, r, rl) == 0);
 }
 
 static bool
 logfunc_ne_st(char *l, size_t ll, char *r, size_t rl)
 {
-	if (ll != rl) {
+	if (ll != rl)
 		return true;
-	}
 	return (memcmp(l, r, rl) != 0);
 }
 
@@ -208,18 +198,15 @@ logfunc_gt_st(char *l, size_t ll, char *r, size_t rl)
 		comparisons     = args->parts[args->part_idx].num_operands - 1;                    \
 		idx_end_subtree = args->parts[args->part_idx].idx_end_subtree;                     \
 		rc              = filter_func_getdata_st(args, &left, &left_size);                 \
-		if (unlikely(rc != 0)) {                                                           \
+		if (unlikely(rc != 0))                                                             \
 			D_GOTO(exit, rc);                                                          \
-		}                                                                                  \
 		for (i = 0; i < comparisons; i++) {                                                \
 			rc = filter_func_getdata_st(args, &right, &right_size);                    \
-			if (unlikely(rc != 0)) {                                                   \
+			if (unlikely(rc != 0))                                                     \
 				D_GOTO(exit, rc);                                                  \
-			}                                                                          \
 			args->log_out = logfunc_##op##_st(left, left_size, right, right_size);     \
-			if (args->log_out == true) {                                               \
+			if (args->log_out)                                                         \
 				D_GOTO(exit, rc = 0);                                              \
-			}                                                                          \
 		}                                                                                  \
 exit:                                                                                              \
 		args->part_idx = idx_end_subtree;                                                  \
@@ -273,9 +260,8 @@ arithfunc_mul(d, double);
 #define arithfunc_div(type, ctype)                                                                 \
 	static int arithfunc_div_##type(_##ctype left, _##ctype right, _##ctype *res)              \
 	{                                                                                          \
-		if (right == (_##ctype)0) {                                                        \
+		if (right == (_##ctype)0)                                                          \
 			return -DER_DIV_BY_ZERO;                                                   \
-		}                                                                                  \
 		*res = left / right;                                                               \
 		return 0;                                                                          \
 	}
@@ -291,13 +277,11 @@ arithfunc_div(d, double);
 		_##ctype right = (_##ctype)0;                                                      \
 		int      rc    = 0;                                                                \
 		rc = filter_func_getdata_##type(args, &left);                                      \
-		if (unlikely(rc != 0)) {                                                           \
+		if (unlikely(rc != 0))                                                             \
 			D_GOTO(exit, rc);                                                          \
-		}                                                                                  \
 		rc = filter_func_getdata_##type(args, &right);                                     \
-		if (unlikely(rc != 0)) {                                                           \
+		if (unlikely(rc != 0))                                                             \
 			D_GOTO(exit, rc);                                                          \
-		}                                                                                  \
 		rc = arithfunc_##op##_##type(left, right, &args->value_##type##_out);              \
 exit:                                                                                              \
 		return rc;                                                                         \
@@ -323,13 +307,11 @@ filter_func_arith(div, d, double);
 		_##ctype right = 0;                                                                \
 		int      rc    = 0;                                                                \
 		rc = filter_func_getdata_##type(args, &left);                                      \
-		if (unlikely(rc != 0)) {                                                           \
+		if (unlikely(rc != 0))                                                             \
 			D_GOTO(exit, rc);                                                          \
-		}                                                                                  \
 		rc = filter_func_getdata_##type(args, &right);                                     \
-		if (unlikely(rc != 0)) {                                                           \
+		if (unlikely(rc != 0))                                                             \
 			D_GOTO(exit, rc);                                                          \
-		}                                                                                  \
 		args->value_##type##_out = left & right;                                           \
 exit:                                                                                              \
 		return rc;                                                                         \
@@ -353,13 +335,11 @@ filter_func_like(struct filter_part_run_t *args)
 	int    rc = 0;
 
 	rc = filter_func_getdata_st(args, &left_str, &left_size);
-	if (unlikely(rc != 0)) {
+	if (unlikely(rc != 0))
 		D_GOTO(exit, rc);
-	}
 	rc = filter_func_getdata_st(args, &right_str, &right_size);
-	if (unlikely(rc != 0)) {
+	if (unlikely(rc != 0))
 		D_GOTO(exit, rc);
-	}
 
 	left_pos         = 0;
 	right_pos        = 0;
@@ -371,12 +351,10 @@ filter_func_like(struct filter_part_run_t *args)
 		if (right_str[right_pos] == '\\') {
 			scaping = true;
 			right_pos++;
-			if (right_pos == right_size) {
-				/** We should never reach this. */
-				D_GOTO(exit, rc = -DER_INVAL);
-			}
+			if (right_pos == right_size)
+				D_GOTO(exit, rc = -DER_INVAL); /** We should never reach this. */
 		}
-		if (right_str[right_pos] == '%' && scaping == false) {
+		if (right_str[right_pos] == '%' && !scaping) {
 			right_anchor_set = true;
 			right_anchor     = ++right_pos;
 			if (right_pos == right_size) {
@@ -385,11 +363,11 @@ filter_func_like(struct filter_part_run_t *args)
 				D_GOTO(exit, rc = 0);
 			}
 		}
-		if ((right_str[right_pos] == '_' && scaping == false) ||
+		if ((right_str[right_pos] == '_' && !scaping) ||
 		    left_str[left_pos] == right_str[right_pos]) {
 			left_pos++;
 			right_pos++;
-		} else if (right_anchor_set == false) {
+		} else if (!right_anchor_set) {
 			/** Mismatch and no wildcard. No pass. */
 			args->log_out = false;
 			D_GOTO(exit, rc = 0);
@@ -481,29 +459,24 @@ filter_func_and(struct filter_part_run_t *args)
 
 	args->part_idx += 1;
 	rc = args->parts[args->part_idx].filter_func(args);
-	if (unlikely(rc != 0)) {
+	if (unlikely(rc != 0))
 		D_GOTO(exit, rc);
-	}
-	if (args->log_out == false) {
+	if (!args->log_out)
 		D_GOTO(exit, rc = 0);
-	}
 	for (i = 0; i < comparisons; i++) {
 		args->part_idx += 1;
 		rc = args->parts[args->part_idx].filter_func(args);
-		if (unlikely(rc != 0)) {
+		if (unlikely(rc != 0))
 			D_GOTO(exit, rc);
-		}
-		if (args->log_out == false) {
+		if (!args->log_out)
 			D_GOTO(exit, rc = 0);
-		}
 	}
 	res = true;
 exit:
 	args->part_idx = idx_end_subtree;
 	args->log_out  = res;
-	if (unlikely(rc > 0)) {
+	if (unlikely(rc > 0))
 		return 0;
-	}
 	return rc;
 }
 
@@ -521,21 +494,17 @@ filter_func_or(struct filter_part_run_t *args)
 
 	args->part_idx += 1;
 	rc = args->parts[args->part_idx].filter_func(args);
-	if (unlikely(rc != 0)) {
+	if (unlikely(rc != 0))
 		D_GOTO(exit, rc);
-	}
-	if (args->log_out == true) {
+	if (args->log_out)
 		D_GOTO(exit, rc = 0);
-	}
 	for (i = 0; i < comparisons; i++) {
 		args->part_idx += 1;
 		rc = args->parts[args->part_idx].filter_func(args);
-		if (unlikely(rc != 0)) {
+		if (unlikely(rc != 0))
 			D_GOTO(exit, rc);
-		}
-		if (args->log_out == true) {
+		if (args->log_out)
 			D_GOTO(exit, rc = 0);
-		}
 	}
 	res = false;
 exit:

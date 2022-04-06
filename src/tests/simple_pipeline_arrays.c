@@ -36,6 +36,7 @@ insert_example_records(void)
 	d_iov_t     iov;
 	char        record_data[18];
 	daos_iod_t  iod;
+	void       *data[NR_RECXS];
 	daos_recx_t recxs[NR_RECXS];
 	uint32_t    i, j;
 
@@ -45,7 +46,6 @@ insert_example_records(void)
 	uint32_t    DATA_RX_IDX_14[] = {10, 9, 8, 7, 6, 5, 4, 3};
 	uint16_t    DATA_RX_IDX_31[] = {2, 4, 6, 8, 16, 32, 64, 128};
 
-	void       *data[NR_RECXS];
 	data[0]         = (void *)DATA_RX_IDX_0;
 	data[1]         = (void *)DATA_RX_IDX_10;
 	data[2]         = (void *)DATA_RX_IDX_14;
@@ -65,8 +65,7 @@ insert_example_records(void)
 	recxs[3].rx_nr  = 2; /** 2 bytes long unsigned integer */
 
 	printf("records:\n");
-	for (i = 0; i < 8; i++) /** records */
-	{
+	for (i = 0; i < 8; i++) {
 		size_t offset;
 
 		printf("\tid(dkey)=%lu\t", ID[i]);
@@ -197,8 +196,7 @@ build_pipeline_one(daos_pipeline_t *pipeline)
 	rc = daos_filter_add(comp_lt, const_ft);
 	ASSERT(rc == 0, "Filter add failed with %d", rc);
 
-	/** adding the filter to the pipeline. This pipeline has only one
-	 * filter */
+	/** adding the filter to the pipeline. This pipeline has only one filter */
 	rc = daos_pipeline_add(pipeline, comp_lt);
 	ASSERT(rc == 0, "Pipeline add failed with %d", rc);
 }
@@ -288,8 +286,7 @@ build_pipeline_two(daos_pipeline_t *pipeline)
 	rc = daos_filter_add(comp_gt, const_ft);
 	ASSERT(rc == 0, "Filter add failed with %d", rc);
 
-	/** adding the filter to the pipeline. This pipeline has only one
-	 * filter */
+	/** adding the filter to the pipeline. This pipeline has only one filter */
 	rc = daos_pipeline_add(pipeline, comp_gt);
 	ASSERT(rc == 0, "Pipeline add failed with %d", rc);
 }

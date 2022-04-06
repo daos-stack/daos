@@ -58,7 +58,9 @@ insert_example_records(void)
 		else
 			mode |= S_IFREG;
 
-		atime = mtime = ctime = time(NULL);
+		ctime = time(NULL);
+		mtime = ctime;
+		atime = ctime;
 
 		if (i == 50) {
 			sleep(1);
