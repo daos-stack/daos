@@ -4724,7 +4724,7 @@ io_tx_convert(void **state)
 	struct ioreq	req;
 
 	oid = daos_test_oid_gen(arg->coh, dts_obj_class, 0, 0, arg->myrank);
-	MPI_Barrier(MPI_COMM_WORLD);
+	par_barrier();
 
 	arg->fail_loc = DAOS_FAIL_TX_CONVERT | DAOS_FAIL_ALWAYS;
 	ioreq_init(&req, arg->coh, oid, DAOS_IOD_ARRAY, arg);

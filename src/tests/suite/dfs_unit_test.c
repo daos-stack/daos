@@ -1462,7 +1462,7 @@ dfs_test_async_io_th(void **state)
 	int			i;
 	int			rc;
 
-	MPI_Barrier(MPI_COMM_WORLD);
+	par_barrier();
 
 	rc = D_MUTEX_INIT(&eqh_mutex, NULL);
 	assert_int_equal(rc, 0);
@@ -1515,7 +1515,7 @@ dfs_test_async_io_th(void **state)
 
 	dfs_test_rm(name);
 	D_MUTEX_DESTROY(&eqh_mutex);
-	MPI_Barrier(MPI_COMM_WORLD);
+	par_barrier();
 }
 
 static const struct CMUnitTest dfs_unit_tests[] = {
