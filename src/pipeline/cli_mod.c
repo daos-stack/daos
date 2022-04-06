@@ -15,8 +15,8 @@ dc_pipeline_init(void)
 {
 	int rc;
 
-	rc = daos_rpc_register(&pipeline_proto_fmt, PIPELINE_PROTO_CLI_COUNT,
-			       NULL, DAOS_PIPELINE_MODULE);
+	rc = daos_rpc_register(&pipeline_proto_fmt, PIPELINE_PROTO_CLI_COUNT, NULL,
+			       DAOS_PIPELINE_MODULE);
 	if (rc != 0)
 	{
 		D_ERROR("failed to register daos pipeline RPCs: "DF_RC"\n",

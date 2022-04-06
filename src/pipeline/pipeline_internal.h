@@ -67,11 +67,9 @@ int d_pipeline_check(daos_pipeline_t *pipeline);
 void pipeline_aggregations_init(daos_pipeline_t *pipeline,
 				d_sg_list_t *sgl_agg);
 
-void pipeline_aggregations_fixavgs(daos_pipeline_t *pipeline, double total,
-				   d_sg_list_t *sgl_agg);
+void pipeline_aggregations_fixavgs(daos_pipeline_t *pipeline, double total, d_sg_list_t *sgl_agg);
 
-int pipeline_compile(daos_pipeline_t *pipe,
-		     struct pipeline_compiled_t *comp_pipe);
+int pipeline_compile(daos_pipeline_t *pipe, struct pipeline_compiled_t *comp_pipe);
 
 void pipeline_compile_free(struct pipeline_compiled_t *comp_pipe);
 
