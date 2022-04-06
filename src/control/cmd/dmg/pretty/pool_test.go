@@ -72,6 +72,89 @@ Pool space info:
 Rebuild busy, 42 objs, 21 recs
 `, common.MockUUID()),
 		},
+		"normal response; enabled ranks": {
+			pqr: &control.PoolQueryResp{
+				UUID: common.MockUUID(),
+				PoolInfo: control.PoolInfo{
+					TotalTargets:    2,
+					DisabledTargets: 1,
+					ActiveTargets:   1,
+					Leader:          42,
+					Version:         100,
+					EnabledRanks:    system.MustCreateRankSet("[0,1,2]"),
+					Rebuild: &control.PoolRebuildStatus{
+						State:   control.PoolRebuildStateBusy,
+						Objects: 42,
+						Records: 21,
+					},
+					TierStats: []*control.StorageUsageStats{
+						{
+							Total: 2,
+							Free:  1,
+						},
+						{
+							Total: 2,
+							Free:  1,
+						},
+					},
+				},
+			},
+			expPrintStr: fmt.Sprintf(`
+Pool %s, ntarget=2, disabled=1, leader=42, version=100
+Pool space info:
+- Enabled targets: 0-2
+- Target(VOS) count:1
+- Storage tier 0 (SCM):
+  Total size: 2 B
+  Free: 1 B, min:0 B, max:0 B, mean:0 B
+- Storage tier 1 (NVMe):
+  Total size: 2 B
+  Free: 1 B, min:0 B, max:0 B, mean:0 B
+Rebuild busy, 42 objs, 21 recs
+`, common.MockUUID()),
+		},
+		"normal response; disabled ranks": {
+			pqr: &control.PoolQueryResp{
+				UUID: common.MockUUID(),
+				PoolInfo: control.PoolInfo{
+					TotalTargets:    2,
+					DisabledTargets: 1,
+					ActiveTargets:   1,
+					Leader:          42,
+					Version:         100,
+					DisabledRanks:   system.MustCreateRankSet("[0,1,3]"),
+					Rebuild: &control.PoolRebuildStatus{
+						State:   control.PoolRebuildStateBusy,
+						Objects: 42,
+						Records: 21,
+					},
+					TierStats: []*control.StorageUsageStats{
+						{
+							Total: 2,
+							Free:  1,
+						},
+						{
+							Total: 2,
+							Free:  1,
+						},
+					},
+				},
+			},
+			expPrintStr: fmt.Sprintf(`
+Pool %s, ntarget=2, disabled=1, leader=42, version=100
+Pool space info:
+- Disabled targets: 0-1,3
+- Target(VOS) count:1
+- Storage tier 0 (SCM):
+  Total size: 2 B
+  Free: 1 B, min:0 B, max:0 B, mean:0 B
+- Storage tier 1 (NVMe):
+  Total size: 2 B
+  Free: 1 B, min:0 B, max:0 B, mean:0 B
+Rebuild busy, 42 objs, 21 recs
+`, common.MockUUID()),
+		},
+
 		"rebuild failed": {
 			pqr: &control.PoolQueryResp{
 				UUID: common.MockUUID(),

@@ -621,10 +621,18 @@ struct  _Mgmt__PoolQueryReq
    */
   size_t n_svc_ranks;
   uint32_t *svc_ranks;
+  /*
+   * True if the list of enabled ranks shall be returned
+   */
+  protobuf_c_boolean include_enabled_ranks;
+  /*
+   * True if the list of disabled ranks shall be returned
+   */
+  protobuf_c_boolean include_disabled_ranks;
 };
 #define MGMT__POOL_QUERY_REQ__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&mgmt__pool_query_req__descriptor) \
-    , (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, 0,NULL }
+    , (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, 0,NULL, 0, 0 }
 
 
 /*
@@ -715,10 +723,18 @@ struct  _Mgmt__PoolQueryResp
    * current raft leader
    */
   uint32_t leader;
+  /*
+   * Optional set of ranks enabled
+   */
+  char *enabled_ranks;
+  /*
+   * Optional set of ranks disabled
+   */
+  char *disabled_ranks;
 };
 #define MGMT__POOL_QUERY_RESP__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&mgmt__pool_query_resp__descriptor) \
-    , 0, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, 0, 0, 0, NULL, 0,NULL, 0, 0, 0 }
+    , 0, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, 0, 0, 0, NULL, 0,NULL, 0, 0, 0, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string }
 
 
 typedef enum {
