@@ -40,8 +40,8 @@ def build_dts_library(env):
     libraries = ['cmocka', 'daos', 'daos_tests']
 
     # Add runtime paths for daos libraries
-    denv.AppendUnique(LIBPATH=[Dir('../client/api').srcnode()])
-    denv.AppendUnique(LIBPATH=[Dir('../common').srcnode()])
+    denv.AppendUnique(LIBPATH=[Dir('../client/api')])
+    denv.AppendUnique(LIBPATH=[Dir('../common')])
     denv.AppendUnique(CPPPATH=[Dir('../tests/suite').srcnode()])
     denv.AppendUnique(CPPPATH=[Dir('../mgmt').srcnode()])
     denv.AppendUnique(CPPPATH=[Dir('../include').srcnode()])
