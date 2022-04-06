@@ -316,58 +316,6 @@ err:
 	D_ERROR(DF_UUID": snprintf failed, %d\n", DP_UUID(pool->dp_pool), ret);
 }
 
-/* Return a list of engine ranks from the pool map.
- * get_enabled == true: ranks of engines whose targets are all up or draining (i.e., not disabled).
- * get_enabled != true: ranks of engines having one or more targets disabled (i.e., down).
- */
-static int
-pool_map_get_ranks(struct dc_pool *pool, struct pool_map *map, bool get_enabled,
-		   d_rank_list_t **ranks)
-{
-	int			 rc;
-	int			 i;
-	int			 j;
-	unsigned int		 nnodes_tot;
-	unsigned int		 nnodes_alloc;
-	unsigned int		 nnodes_enabled = 0;	/* nodes with all targets enabled */
-	unsigned int		 nnodes_disabled = 0;	/* nodes with some, all targets disabled */
-	const unsigned int	 ENABLED = (PO_COMP_ST_UP | PO_COMP_ST_UPIN | PO_COMP_ST_DRAIN);
-	struct pool_domain	*domains = NULL;
-	d_rank_list_t		*ranklist = NULL;
-
-	nnodes_tot = pool_map_find_nodes(map, PO_COMP_ID_ALL, &domains);
-	for (i = 0; i < nnodes_tot; i++) {
-		if (pool_map_node_status_match(&domains[i], ENABLED))
-			nnodes_enabled++;
-		else
-			nnodes_disabled++;
-	}
-	D_DEBUG(DF_DSMC, DF_UUID": nnodes=%u, nnodes_enabled=%u, nnodes_disabled=%u\n",
-		DP_UUID(pool->dp_pool), nnodes_tot, nnodes_enabled, nnodes_disabled);
-
-	nnodes_alloc = get_enabled ? nnodes_enabled : nnodes_disabled;
-	ranklist = d_rank_list_alloc(nnodes_alloc);
-	if (!ranklist)
-		D_GOTO(err, rc = -DER_NOMEM);
-
-	for (i = 0, j = 0; i < nnodes_tot; i++) {
-		struct	pool_domain *d = &domains[i];
-
-		if ((get_enabled && pool_map_node_status_match(d, ENABLED)) ||
-		    (!get_enabled && !pool_map_node_status_match(d, ENABLED))) {
-			D_ASSERT(j < ranklist->rl_nr);
-			ranklist->rl_ranks[j++] = domains[i].do_comp.co_rank;
-		}
-	}
-	D_ASSERT(j == ranklist->rl_nr);
-
-	*ranks = ranklist;
-	return 0;
-err:
-	return rc;
-
-}
-
 /*
  * Using "map_buf", "map_version", and "mode", update "pool->dp_map" and fill
  * "ranks" and/or "info", "prop" if not NULL.
@@ -412,7 +360,7 @@ process_query_reply(struct dc_pool *pool, struct pool_buf *map_buf,
 		d_rank_range_list_t	*range_list;
 		bool	get_enabled = (info ? ((info->pi_bits & DPI_ENGINES_ENABLED) != 0) : false);
 
-		rc = pool_map_get_ranks(pool, map, get_enabled, ranks);
+		rc = pool_map_get_ranks(pool->dp_pool, map, get_enabled, ranks);
 		if (rc != 0)
 			goto out_unlock;
 
@@ -1392,7 +1340,7 @@ pool_query_cb(tse_task_t *task, void *data)
 	struct pool_buf		       *map_buf = arg->dqa_map_buf;
 	struct pool_query_in	       *in = crt_req_get(arg->rpc);
 	struct pool_query_out	       *out = crt_reply_get(arg->rpc);
-	d_rank_list_t		       *ranks;
+	d_rank_list_t		       *ranks = NULL;
 	d_rank_list_t		      **ranks_arg;
 	int				rc = task->dt_result;
 

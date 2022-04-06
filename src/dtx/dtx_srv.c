@@ -464,6 +464,7 @@ struct dss_module dtx_module =  {
 	.sm_name	= "dtx",
 	.sm_mod_id	= DAOS_DTX_MODULE,
 	.sm_ver		= DAOS_DTX_VERSION,
+	.sm_proto_count	= 1,
 	.sm_init	= dtx_init,
 	.sm_fini	= dtx_fini,
 	.sm_setup	= dtx_setup,

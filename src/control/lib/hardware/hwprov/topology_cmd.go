@@ -4,7 +4,7 @@
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
 
-package cmdutil
+package hwprov
 
 import (
 	"context"
@@ -14,7 +14,6 @@ import (
 	"github.com/pkg/errors"
 
 	"github.com/daos-stack/daos/src/control/lib/hardware"
-	"github.com/daos-stack/daos/src/control/lib/hardware/hwprov"
 	"github.com/daos-stack/daos/src/control/logging"
 )
 
@@ -37,7 +36,7 @@ func (cmd *DumpTopologyCmd) Execute(_ []string) error {
 	}
 
 	log := logging.NewCommandLineLogger()
-	hwProv := hwprov.DefaultTopologyProvider(log)
+	hwProv := DefaultTopologyProvider(log)
 	topo, err := hwProv.GetTopology(context.Background())
 	if err != nil {
 		return err
