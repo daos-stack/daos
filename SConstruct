@@ -379,9 +379,9 @@ def scons(): # pylint: disable=too-many-locals
 
     set_defaults(env, daos_version)
 
-    compiler_setup.base_setup(env, prereqs=prereqs)
-
     base_env = env.Clone()
+
+    compiler_setup.base_setup(env, prereqs=prereqs)
 
     args = GetOption('analyze_stack')
     if args is not None:
