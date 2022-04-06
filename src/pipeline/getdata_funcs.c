@@ -15,7 +15,6 @@
 	{                                                                                          \
 		char  *buf;                                                                        \
 		size_t offset;                                                                     \
-                                                                                                   \
 		buf                             = (char *)args->dkey->iov_buf;                     \
 		offset                          = args->parts[args->part_idx].data_offset;         \
 		buf                             = &buf[offset];                                    \
@@ -45,9 +44,9 @@ getdata_func_dkey_raw(struct filter_part_run_t *args)
 	offset             = args->parts[args->part_idx].data_offset;
 	args->data_out     = &buf[offset];
 	args->data_len_out = args->parts[args->part_idx].data_len;
-	if (args->dkey->iov_len < offset + args->data_len_out) {
+	if (args->dkey->iov_len < offset + args->data_len_out)
 		args->data_len_out = args->dkey->iov_len - offset;
-	}
+
 	return 0;
 }
 
@@ -62,9 +61,9 @@ getdata_func_dkey_st(struct filter_part_run_t *args)
 	offset = args->parts[args->part_idx].data_offset;
 	len    = *((size_t *)&buf[offset]);
 
-	if (offset + sizeof(size_t) + len > args->dkey->iov_len) {
+	if (offset + sizeof(size_t) + len > args->dkey->iov_len)
 		len = args->dkey->iov_len - offset - sizeof(size_t);
-	}
+
 	args->data_out     = &buf[offset + sizeof(size_t)];
 	args->data_len_out = len;
 
@@ -83,9 +82,9 @@ getdata_func_dkey_cst(struct filter_part_run_t *args)
 	buf    = &buf[offset];
 	len    = strlen(buf);
 
-	if (offset + len > args->dkey->iov_len) {
+	if (offset + len > args->dkey->iov_len)
 		len = args->dkey->iov_len - offset;
-	}
+
 	args->data_out     = buf;
 	args->data_len_out = len;
 
@@ -119,18 +118,18 @@ getdata_func_akey_(struct filter_part_run_t *args)
 		iod      = &args->iods[i];
 		iod_str  = (char *)iod->iod_name.iov_buf;
 		iod_size = iod->iod_name.iov_len;
-		if (iod_size != akey_name_size) {
+		if (iod_size != akey_name_size)
 			continue;
-		}
+
 		akey = &args->akeys[i];
 		/** akey exists and has data */
 		if (!memcmp(akey_name_str, iod_str, iod_size) && akey->sg_iovs->iov_len > 0) {
 			if (iod->iod_type == DAOS_IOD_SINGLE) {
 				buf = (char *)akey->sg_iovs->iov_buf;
 				buf = &buf[target_offset];
-				if (target_offset + len > akey->sg_iovs->iov_len) {
+				if (target_offset + len > akey->sg_iovs->iov_len)
 					len = akey->sg_iovs->iov_len - target_offset;
-				}
+
 				D_GOTO(exit, buf);
 			}
 			/** DAOS_IOD_ARRAY */
@@ -146,9 +145,9 @@ getdata_func_akey_(struct filter_part_run_t *args)
 				    target_offset >= recx->rx_idx) { /** extend found */
 					buf = (char *)akey->sg_iovs->iov_buf;
 					buf = &buf[offset];
-					if (iod->iod_size * recx->rx_nr < len) {
+					if (iod->iod_size * recx->rx_nr < len)
 						len = (size_t)recx->rx_nr * iod->iod_size;
-					}
+
 					D_GOTO(exit, buf);
 				}
 				offset += (size_t)recx->rx_nr * iod->iod_size;
@@ -169,7 +168,6 @@ exit:
 	int getdata_func_akey_##typename##size(struct filter_part_run_t *args)                     \
 	{                                                                                          \
 		char *buf;                                                                         \
-                                                                                                   \
 		getdata_func_akey_(args);                                                          \
 		if (args->data_out != NULL && args->data_len_out >= sizeof(_##typec)) {            \
 			buf                             = args->data_out;                          \
@@ -209,9 +207,9 @@ getdata_func_akey_st(struct filter_part_run_t *args)
 		buf = (char *)args->data_out;
 		len = *((size_t *)buf);
 
-		if (len + sizeof(size_t) > args->data_len_out) {
+		if (len + sizeof(size_t) > args->data_len_out)
 			len = args->data_len_out - sizeof(size_t);
-		}
+
 		args->data_out     = &buf[sizeof(size_t)];
 		args->data_len_out = len;
 	}
@@ -229,19 +227,19 @@ getdata_func_akey_cst(struct filter_part_run_t *args)
 		buf = (char *)args->data_out;
 		len = strlen(buf);
 
-		if (len < args->data_len_out) {
+		if (len < args->data_len_out)
 			args->data_len_out = len;
-		}
+
 	}
 	return 0;
 }
 
-#define getdata_func_const(typename, size, typec, outtypename, outtypec)                            \
-	int getdata_func_const_##typename##size(struct filter_part_run_t *args)                     \
-	{                                                                                           \
-		args->data_out                  = (char *)args->parts[args->part_idx].iov->iov_buf; \
-		args->value_##outtypename##_out = (_##outtypec) * ((_##typec *)args->data_out);     \
-		return 0;                                                                           \
+#define getdata_func_const(typename, size, typec, outtypename, outtypec)                           \
+	int getdata_func_const_##typename##size(struct filter_part_run_t *args)                    \
+	{                                                                                          \
+		args->data_out = (char *)args->parts[args->part_idx].iov->iov_buf;                 \
+		args->value_##outtypename##_out = (_##outtypec) * ((_##typec *)args->data_out);    \
+		return 0;                                                                          \
 	}
 
 getdata_func_const(u, 1, uint8_t, u, uint64_t);
@@ -275,9 +273,9 @@ getdata_func_const_st(struct filter_part_run_t *args)
 	buf = (char *)args->parts[args->part_idx].iov->iov_buf;
 	len = *((size_t *)buf);
 
-	if (len + sizeof(size_t) > args->parts[args->part_idx].iov->iov_len) {
+	if (len + sizeof(size_t) > args->parts[args->part_idx].iov->iov_len)
 		len = args->parts[args->part_idx].iov->iov_len - sizeof(size_t);
-	}
+
 	args->data_out     = &buf[sizeof(size_t)];
 	args->data_len_out = len;
 	return 0;
@@ -292,9 +290,9 @@ getdata_func_const_cst(struct filter_part_run_t *args)
 	buf = (char *)args->parts[args->part_idx].iov->iov_buf;
 	len = strlen(buf);
 
-	if (len > args->parts[args->part_idx].iov->iov_len) {
+	if (len > args->parts[args->part_idx].iov->iov_len)
 		len = args->parts[args->part_idx].iov->iov_len;
-	}
+
 	args->data_out     = buf;
 	args->data_len_out = len;
 	return 0;

@@ -28,12 +28,10 @@ enum_pack_cb(daos_handle_t ih, vos_iter_entry_t *entry, vos_iter_type_t type,
 		return -DER_INVAL;
 	}
 	if (d_key->iov_len != 0) /** one dkey at a time */
-	{
 		return 1;
-	}
-	if (entry->ie_key.iov_len > 0) {
+	if (entry->ie_key.iov_len > 0)
 		*d_key = entry->ie_key;
-	}
+
 	return 0;
 }
 
@@ -63,13 +61,10 @@ pipeline_fetch_record(daos_handle_t vos_coh, daos_unit_oid_t oid, struct vos_ite
 	/** iterating over dkeys only */
 	rc = vos_iterate(&param, type, false, anchors, enum_pack_cb, NULL, d_key, NULL);
 	D_DEBUG(DB_IO, "enum type %d rc " DF_RC "\n", type, DP_RC(rc));
-	if (rc < 0) {
+	if (rc < 0)
 		return rc;
-	}
 	if (d_key->iov_len == 0) /** d_key not found */
-	{
 		return 1;
-	}
 
 	/** fetching record */
 	rc = vos_fetch_begin(vos_coh, oid, epr.epr_hi, d_key, nr_iods, iods, 0, NULL, &ioh, NULL);
@@ -87,9 +82,8 @@ pipeline_fetch_record(daos_handle_t vos_coh, daos_unit_oid_t oid, struct vos_ite
 	}
 	rc = bio_iod_copy(biod, sgl_recx, nr_iods);
 	if (rc) {
-		if (rc == -DER_OVERFLOW) {
+		if (rc == -DER_OVERFLOW)
 			rc = -DER_REC2BIG;
-		}
 		D_CDEBUG(rc == -DER_REC2BIG, DLOG_DBG, DLOG_ERR,
 			 DF_UOID " data transfer failed, rc " DF_RC "", DP_UOID(oid), DP_RC(rc));
 		/** D_GOTO(post, rc); */
@@ -100,12 +94,11 @@ out:
 	rc1 = vos_fetch_end(ioh, &io_size, rc);
 	if (rc1 != 0) {
 		D_CDEBUG(rc1 == -DER_REC2BIG || rc1 == -DER_INPROGRESS || rc1 == -DER_TX_RESTART ||
-			     rc1 == -DER_EXIST || rc1 == -DER_NONEXIST || rc1 == -DER_ALREADY,
+			 rc1 == -DER_EXIST || rc1 == -DER_NONEXIST || rc1 == -DER_ALREADY,
 			 DLOG_DBG, DLOG_ERR, DF_UOID " %s end failed: " DF_RC "\n", DP_UOID(oid),
 			 "Fetch", DP_RC(rc1));
-		if (rc == 0) {
+		if (rc == 0)
 			rc = rc1;
-		}
 	}
 	return rc;
 }
@@ -125,9 +118,8 @@ pipeline_aggregations(struct pipeline_compiled_t *pipe, struct filter_part_run_t
 		args->iov_aggr = sgl_agg[i].sg_iovs;
 
 		rc             = args->parts[0].filter_func(args);
-		if (rc != 0) {
+		if (rc != 0)
 			D_GOTO(exit, rc);
-		}
 	}
 exit:
 	return rc;
@@ -147,19 +139,16 @@ pipeline_filters(struct pipeline_compiled_t *pipe, struct filter_part_run_t *arg
 		args->parts    = pipe->filters[i].parts;
 
 		rc             = args->parts[0].filter_func(args);
-		if (rc != 0) {
+		if (rc != 0)
 			D_GOTO(exit, rc);
-		}
-		if (args->log_out == false) {
+		if (args->log_out == false)
 			D_GOTO(exit, rc = 1);
-		}
 	}
 exit:
 	return rc;
 }
 
-// TODO: This code still assumes dkey==NULL. The code for dkey!=NULL has to be
-// written
+/** TODO: This code still assumes dkey==NULL. The code for dkey!=NULL has to be written */
 static int
 ds_pipeline_run(daos_handle_t vos_coh, daos_unit_oid_t oid, daos_pipeline_t pipeline,
 		daos_epoch_range_t epr, uint64_t flags, daos_key_t *dkey, uint32_t *nr_iods,
@@ -187,25 +176,19 @@ ds_pipeline_run(daos_handle_t vos_coh, daos_unit_oid_t oid, daos_pipeline_t pipe
 	struct pipeline_compiled_t pipeline_compiled = {0};
 	struct filter_part_run_t   pipe_run_args     = {0};
 
-	*nr_kds_out                                  = 0;
-	*nr_recx                                     = 0;
-
-	rc                                           = d_pipeline_check(&pipeline);
-	if (rc != 0) {
+	*nr_kds_out = 0;
+	*nr_recx    = 0;
+	rc          = d_pipeline_check(&pipeline);
+	if (rc != 0)
 		D_GOTO(exit, rc); /** bad pipeline */
-	}
-	if (pipeline.version != 1) {
+	if (pipeline.version != 1)
 		D_GOTO(exit, rc = -DER_MISMATCH); /** wrong version */
-	}
-	if (daos_anchor_is_eof(anchor)) {
+	if (daos_anchor_is_eof(anchor))
 		D_GOTO(exit, rc = 0); /** no more rows */
-	}
-	if (*nr_iods == 0) {
+	if (*nr_iods == 0)
 		D_GOTO(exit, rc = 0); /** nothing to return */
-	}
-	if (nr_kds == 0 && pipeline.num_aggr_filters == 0) {
+	if (nr_kds == 0 && pipeline.num_aggr_filters == 0)
 		D_GOTO(exit, rc = 0); /** nothing to return */
-	}
 
 	/** -- init all aggregation counters */
 
@@ -219,32 +202,30 @@ ds_pipeline_run(daos_handle_t vos_coh, daos_unit_oid_t oid, daos_pipeline_t pipe
 	/** -- "compile" pipeline */
 
 	rc                    = pipeline_compile(&pipeline, &pipeline_compiled);
-	if (rc != 0) {
+	if (rc != 0)
 		D_GOTO(exit, rc); /** compilation failed. Bad pipeline? */
-	}
 
 	/** -- allocating space for sgl_recx_iter */
 
 	D_ALLOC_ARRAY(sgl_recx_iter, *nr_iods);
 	D_ALLOC_ARRAY(sgl_recx_iter_iovs, *nr_iods);
-	if (sgl_recx_iter == NULL || sgl_recx_iter_iovs == NULL) {
+	if (sgl_recx_iter == NULL || sgl_recx_iter_iovs == NULL)
 		D_GOTO(exit, rc = -DER_NOMEM);
-	}
+
 	for (; j < *nr_iods; j++) {
 		if (iods[j].iod_type == DAOS_IOD_ARRAY) {
 			iov_alloc_size = 0;
-			for (k = 0; k < iods[j].iod_nr; k++) {
+			for (k = 0; k < iods[j].iod_nr; k++)
 				iov_alloc_size += iods[j].iod_recxs[k].rx_nr;
-			}
 			iov_alloc_size *= iods[j].iod_size;
 		} else {
 			iov_alloc_size = iods[j].iod_size;
 		}
 
 		D_ALLOC(sgl_recx_iter_iovs[j].iov_buf, iov_alloc_size);
-		if (sgl_recx_iter_iovs[j].iov_buf == NULL) {
+		if (sgl_recx_iter_iovs[j].iov_buf == NULL)
 			D_GOTO(exit, rc = -DER_NOMEM);
-		}
+
 		sgl_recx_iter_iovs[j].iov_len     = 0;
 		sgl_recx_iter_iovs[j].iov_buf_len = iov_alloc_size;
 		sgl_recx_iter[j].sg_iovs          = &sgl_recx_iter_iovs[j];
@@ -261,32 +242,28 @@ ds_pipeline_run(daos_handle_t vos_coh, daos_unit_oid_t oid, daos_pipeline_t pipe
 	anchors.ia_dkey = *anchor;
 
 	while (!daos_anchor_is_eof(&anchors.ia_dkey)) {
-		if (pipeline.num_aggr_filters == 0 && nr_kds_pass == nr_kds) {
+		if (pipeline.num_aggr_filters == 0 && nr_kds_pass == nr_kds)
 			break; /** all records read */
-		}
 
 		/** -- fetching record */
 
 		rc = pipeline_fetch_record(vos_coh, oid, &anchors, epr, iods, *nr_iods, &d_key_iter,
 					   sgl_recx_iter);
-		if (rc < 0) {
+		if (rc < 0)
 			D_GOTO(exit, rc); /** error */
-		}
-		if (rc == 1) {
+		if (rc == 1)
 			continue; /** nothing returned; no more records? */
-		}
+
 		stats->nr_dkeys += 1; /** new record considered for filtering */
 
 		/** -- doing filtering... */
 
 		rc = pipeline_filters(&pipeline_compiled, &pipe_run_args, &d_key_iter,
 				      sgl_recx_iter);
-		if (rc < 0) {
+		if (rc < 0)
 			D_GOTO(exit, rc); /** error */
-		}
-		if (rc == 1) {
+		if (rc == 1)
 			continue; /** record does not pass filters */
-		}
 
 		/** -- dkey+akey pass filters */
 
@@ -296,19 +273,16 @@ ds_pipeline_run(daos_handle_t vos_coh, daos_unit_oid_t oid, daos_pipeline_t pipe
 
 		rc = pipeline_aggregations(&pipeline_compiled, &pipe_run_args, &d_key_iter,
 					   sgl_recx_iter, sgl_agg);
-		if (rc < 0) {
+		if (rc < 0)
 			D_GOTO(exit, rc);
-		}
 
 		/**
 		 * -- Returning matching records. We don't need to return all matching records if
 		 *    aggregation is being performed: at most one is returned.
 		 */
 
-		if (nr_kds == 0 ||
-		    (nr_kds > 0 && pipeline.num_aggr_filters > 0 && nr_kds_pass > 1)) {
+		if (nr_kds == 0 || (nr_kds > 0 && pipeline.num_aggr_filters > 0 && nr_kds_pass > 1))
 			continue;
-		}
 
 		/**
 		 * saving record info
@@ -318,30 +292,25 @@ ds_pipeline_run(daos_handle_t vos_coh, daos_unit_oid_t oid, daos_pipeline_t pipe
 		 * dkey
 		 */
 		D_REALLOC_ARRAY(kds_, *kds, nr_kds_pass - 1, nr_kds_pass);
-		if (kds_ == NULL) {
+		if (kds_ == NULL)
 			D_GOTO(exit, rc = -DER_NOMEM);
-		}
 		kds_alloc++;
 		*kds = kds_;
 
 		D_REALLOC_ARRAY(sgl_keys_, *sgl_keys, nr_kds_pass - 1, nr_kds_pass);
-		if (sgl_keys_ == NULL) {
+		if (sgl_keys_ == NULL)
 			D_GOTO(exit, rc = -DER_NOMEM);
-		}
 		sgl_keys_alloc++;
 		*sgl_keys = sgl_keys_;
 
 		D_ALLOC(d_key_ptr, sizeof(*d_key_ptr));
 		sgl_keys_[nr_kds_pass - 1].sg_iovs = d_key_ptr;
-		if (d_key_ptr == NULL) {
+		if (d_key_ptr == NULL)
 			D_GOTO(exit, rc = -DER_NOMEM);
-		}
-
 		d_key_ptr->iov_buf = NULL;
 		D_ALLOC(d_key_ptr->iov_buf, d_key_iter.iov_buf_len);
-		if (d_key_ptr->iov_buf == NULL) {
+		if (d_key_ptr->iov_buf == NULL)
 			D_GOTO(exit, rc = -DER_NOMEM);
-		}
 		memcpy(d_key_ptr->iov_buf, d_key_iter.iov_buf, d_key_iter.iov_len);
 		d_key_ptr->iov_len                   = d_key_iter.iov_len;
 		d_key_ptr->iov_buf_len               = d_key_iter.iov_buf_len;
@@ -355,9 +324,9 @@ ds_pipeline_run(daos_handle_t vos_coh, daos_unit_oid_t oid, daos_pipeline_t pipe
 		 */
 		D_REALLOC_ARRAY(sgl_recx_, *sgl_recx, (nr_kds_pass - 1) * (*nr_iods),
 				nr_kds_pass * (*nr_iods));
-		if (sgl_recx_ == NULL) {
+		if (sgl_recx_ == NULL)
 			D_GOTO(exit, rc = -DER_NOMEM);
-		}
+
 		sgl_recx_alloc += *nr_iods;
 		*sgl_recx = sgl_recx_;
 
@@ -370,22 +339,19 @@ ds_pipeline_run(daos_handle_t vos_coh, daos_unit_oid_t oid, daos_pipeline_t pipe
 
 		/** copying data */
 		for (i = 0; i < *nr_iods; i++) {
-			if (sgl_recx_iter[i].sg_nr_out == 0) {
+			if (sgl_recx_iter[i].sg_nr_out == 0)
 				continue;
-			}
 
 			/** copying sgl_recx */
 			D_ALLOC(sgl_recx_[sr_idx].sg_iovs, sizeof(*sgl_recx_[sr_idx].sg_iovs));
-			if (sgl_recx_[sr_idx].sg_iovs == NULL) {
+			if (sgl_recx_[sr_idx].sg_iovs == NULL)
 				D_GOTO(exit, rc = -DER_NOMEM);
-			}
 
 			sgl_recx_[sr_idx].sg_iovs->iov_buf = NULL;
 			D_ALLOC(sgl_recx_[sr_idx].sg_iovs->iov_buf,
 				sgl_recx_iter[i].sg_iovs->iov_buf_len);
-			if (sgl_recx_[sr_idx].sg_iovs->iov_buf == NULL) {
+			if (sgl_recx_[sr_idx].sg_iovs->iov_buf == NULL)
 				D_GOTO(exit, rc = -DER_NOMEM);
-			}
 
 			memcpy(sgl_recx_[sr_idx].sg_iovs->iov_buf,
 			       sgl_recx_iter[i].sg_iovs->iov_buf,
@@ -406,9 +372,8 @@ ds_pipeline_run(daos_handle_t vos_coh, daos_unit_oid_t oid, daos_pipeline_t pipe
 	 *    filters
 	 */
 
-	if (nr_kds_pass > 0) {
+	if (nr_kds_pass > 0)
 		pipeline_aggregations_fixavgs(&pipeline, (double)nr_kds_pass, sgl_agg);
-	}
 
 	/** -- backing up anchor */
 
@@ -431,43 +396,39 @@ ds_pipeline_run(daos_handle_t vos_coh, daos_unit_oid_t oid, daos_pipeline_t pipe
 exit:
 	pipeline_compile_free(&pipeline_compiled);
 
-	for (i = 0; i < j; i++) {
+	for (i = 0; i < j; i++)
 		D_FREE(sgl_recx_iter_iovs[i].iov_buf);
-	}
-	if (sgl_recx_iter_iovs != NULL) {
+	if (sgl_recx_iter_iovs != NULL)
 		D_FREE(sgl_recx_iter_iovs);
-	}
-	if (sgl_recx_iter != NULL) {
+	if (sgl_recx_iter != NULL)
 		D_FREE(sgl_recx_iter);
-	}
+
 	if (rc != 0) {
 		uint32_t limit;
 
-		if (kds_alloc > 0) {
+		if (kds_alloc > 0)
 			D_FREE(*kds);
-		}
+
 		if (sgl_keys_alloc > 0) {
 			for (i = 0; i < sgl_keys_alloc; i++) {
 				if (sgl_keys[0][i].sg_iovs != NULL) {
-					if (sgl_keys[0][i].sg_iovs->iov_buf != NULL) {
+					if (sgl_keys[0][i].sg_iovs->iov_buf != NULL)
 						D_FREE(sgl_keys[0][i].sg_iovs->iov_buf);
-					}
 					D_FREE(sgl_keys[0][i].sg_iovs);
 				}
 			}
 			D_FREE(*sgl_keys);
 		}
 		if (sgl_recx_alloc > 0) {
-			if (sr_idx == sgl_recx_alloc) {
+			if (sr_idx == sgl_recx_alloc)
 				limit = sr_idx;
-			} else {
+			else
 				limit = sr_idx + 1;
-			}
+
 			for (i = 0; i < limit; i++) {
 				if (sgl_recx[0][i].sg_iovs != NULL) {
-					if (sgl_recx[0][i].sg_iovs->iov_buf != NULL) {
+					if (sgl_recx[0][i].sg_iovs->iov_buf != NULL)
 						D_FREE(sgl_recx[0][i].sg_iovs->iov_buf);
-					}
 					D_FREE(sgl_recx[0][i].sg_iovs);
 				}
 			}
@@ -507,9 +468,9 @@ ds_pipeline_run_handler(crt_rpc_t *rpc)
 	/** -- get vos container handle */
 
 	rc = ds_cont_find_hdl(pri->pri_pool_uuid, pri->pri_co_hdl, &coh);
-	if (rc != 0) {
+	if (rc != 0)
 		D_GOTO(exit, rc);
-	}
+
 	coc     = coh->sch_cont;
 	vos_coh = coc->sc_hdl;
 
@@ -520,21 +481,21 @@ ds_pipeline_run_handler(crt_rpc_t *rpc)
 
 	if (pri->pri_pipe.num_aggr_filters > 0) {
 		D_ALLOC_ARRAY(sgl_aggr, pri->pri_pipe.num_aggr_filters);
-		if (sgl_aggr == NULL) {
+		if (sgl_aggr == NULL)
 			D_GOTO(exit0, rc = -DER_NOMEM);
-		}
+
 		for (i = 0; i < pri->pri_pipe.num_aggr_filters; i++) {
 			D_ALLOC(sgl_aggr[i].sg_iovs, sizeof(*sgl_aggr[i].sg_iovs));
-			if (sgl_aggr[i].sg_iovs == NULL) {
+			if (sgl_aggr[i].sg_iovs == NULL)
 				D_GOTO(exit0, rc = -DER_NOMEM);
-			}
+
 			sgl_aggr[i].sg_nr     = 1;
 			sgl_aggr[i].sg_nr_out = 1;
 
 			D_ALLOC(sgl_aggr[i].sg_iovs->iov_buf, sizeof(double));
-			if (sgl_aggr[i].sg_iovs->iov_buf == NULL) {
+			if (sgl_aggr[i].sg_iovs->iov_buf == NULL)
 				D_GOTO(exit0, rc = -DER_NOMEM);
-			}
+
 			sgl_aggr[i].sg_iovs->iov_len     = sizeof(double);
 			sgl_aggr[i].sg_iovs->iov_buf_len = sizeof(double);
 		}
@@ -566,24 +527,22 @@ exit:
 			pro->pro_sgl_keys.ca_arrays = sgl_keys;
 		}
 		pro->pro_sgl_recx.ca_count = nr_recx;
-		if (nr_recx == 0) {
+		if (nr_recx == 0)
 			pro->pro_sgl_recx.ca_arrays = NULL;
-		} else {
+		else
 			pro->pro_sgl_recx.ca_arrays = sgl_recx;
-		}
 		pro->pro_sgl_agg.ca_count  = pri->pri_pipe.num_aggr_filters;
 		pro->pro_sgl_agg.ca_arrays = sgl_aggr;
 		pro->stats                 = stats;
-		// pro->pro_epoch // TODO
+		/** pro->pro_epoch (TODO) */
 	}
 	pro->pro_ret = rc;
 
 	/** send RPC back */
 
 	rc           = crt_reply_send(rpc);
-	if (rc != 0) {
+	if (rc != 0)
 		D_ERROR("send reply failed: " DF_RC "\n", DP_RC(rc));
-	}
 
 	/** free memory */
 
@@ -598,9 +557,8 @@ exit:
 	if (nr_recx > 0) {
 		for (i = 0; i < nr_recx; i++) {
 			if (sgl_recx[i].sg_iovs != NULL) {
-				if (sgl_recx[i].sg_iovs->iov_buf != NULL) {
+				if (sgl_recx[i].sg_iovs->iov_buf != NULL)
 					D_FREE(sgl_recx[i].sg_iovs->iov_buf);
-				}
 				D_FREE(sgl_recx[i].sg_iovs);
 			}
 		}

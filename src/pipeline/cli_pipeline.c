@@ -38,7 +38,7 @@ struct shard_pipeline_run_args {
 	daos_unit_oid_t            pra_oid;
 	uuid_t                     pra_coh_uuid;
 	uuid_t                     pra_cont_uuid;
-	/*uint64_t			pra_dkey_hash; // ??*/
+	/*uint64_t			pra_dkey_hash; ??*/
 
 	struct pipeline_auxi_args *pipeline_auxi;
 };
@@ -134,7 +134,7 @@ pipeline_shard_run_cb(tse_task_t *task, void *data)
 	}
 
 	pro     = (struct pipeline_run_out *)crt_reply_get(rpc);
-	rc      = pro->pro_ret; // get status
+	rc      = pro->pro_ret; /** get status */
 
 	nr_iods = cb_args->nr_iods;
 	nr_kds  = cb_args->nr_kds;
@@ -295,7 +295,7 @@ shard_pipeline_run_task(tse_task_t *task)
 	}
 
 	tgt_ep.ep_grp  = pool->dp_sys->sy_group;
-	// tgt_ep.ep_tag	= map_tgt->ta_comp.co_index;
+	/* tgt_ep.ep_tag	= map_tgt->ta_comp.co_index; */
 	tgt_ep.ep_tag  = daos_rpc_tag(DAOS_REQ_IO, map_tgt->ta_comp.co_index);
 	tgt_ep.ep_rank = map_tgt->ta_comp.co_rank;
 
@@ -429,19 +429,8 @@ shard_task_sched(tse_task_t *task, void *arg)
 {
 	struct shard_task_sched_args *sched_arg = arg;
 	int                           rc        = 0;
-	// struct shard_pipeline_run_args		*shard_args;
-	// struct pipeline_auxi_args		*pipeline_auxi;
-	// tse_task_t				*api_task;
-	// uint32_t				target;
-	// uint32_t				map_ver;
-
-	// shard_args    = tse_task_buf_embedded(task, sizeof(*shard_args));
-	// pipeline_auxi = shard_args->pipeline_auxi;
-	// map_ver       = pipeline_auxi->map_ver_req;
-	// api_task      = pipeline_auxi->api_task;
 
 	/** TODO: Retry I/O */
-	/**/
 
 	tse_task_schedule(task, true);
 	sched_arg->tsa_scheded = true;

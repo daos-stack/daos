@@ -14,7 +14,6 @@
 	static int filter_func_getdata_##type(struct filter_part_run_t *args, _##ctype *data)      \
 	{                                                                                          \
 		int rc;                                                                            \
-                                                                                                   \
 		args->part_idx += 1;                                                               \
 		rc = args->parts[args->part_idx].filter_func(args);                                \
 		if (unlikely(rc != 0)) {                                                           \
@@ -24,7 +23,6 @@
 			return 1;                                                                  \
 		}                                                                                  \
 		*data = args->value_##type##_out;                                                  \
-                                                                                                   \
 		return 0;                                                                          \
 	}
 
@@ -99,10 +97,8 @@ logfunc_gt(d, double);
 		uint32_t comparisons;                                                              \
 		uint32_t i;                                                                        \
 		int      rc     = 0;                                                               \
-                                                                                                   \
 		comparisons     = args->parts[args->part_idx].num_operands - 1;                    \
 		idx_end_subtree = args->parts[args->part_idx].idx_end_subtree;                     \
-                                                                                                   \
 		rc              = filter_func_getdata_##type(args, &left);                         \
 		if (unlikely(rc != 0)) {                                                           \
 			D_GOTO(exit, rc);                                                          \
@@ -205,15 +201,12 @@ logfunc_gt_st(char *l, size_t ll, char *r, size_t rl)
 		size_t left_size  = 0;                                                             \
 		char  *right      = NULL;                                                          \
 		size_t right_size = 0;                                                             \
-                                                                                                   \
 		uint32_t idx_end_subtree;                                                          \
 		uint32_t comparisons;                                                              \
 		uint32_t i;                                                                        \
 		int      rc     = 0;                                                               \
-                                                                                                   \
 		comparisons     = args->parts[args->part_idx].num_operands - 1;                    \
 		idx_end_subtree = args->parts[args->part_idx].idx_end_subtree;                     \
-                                                                                                   \
 		rc              = filter_func_getdata_st(args, &left, &left_size);                 \
 		if (unlikely(rc != 0)) {                                                           \
 			D_GOTO(exit, rc);                                                          \
@@ -297,7 +290,6 @@ arithfunc_div(d, double);
 		_##ctype left  = (_##ctype)0;                                                      \
 		_##ctype right = (_##ctype)0;                                                      \
 		int      rc    = 0;                                                                \
-                                                                                                   \
 		rc = filter_func_getdata_##type(args, &left);                                      \
 		if (unlikely(rc != 0)) {                                                           \
 			D_GOTO(exit, rc);                                                          \
@@ -306,7 +298,6 @@ arithfunc_div(d, double);
 		if (unlikely(rc != 0)) {                                                           \
 			D_GOTO(exit, rc);                                                          \
 		}                                                                                  \
-                                                                                                   \
 		rc = arithfunc_##op##_##type(left, right, &args->value_##type##_out);              \
 exit:                                                                                              \
 		return rc;                                                                         \
@@ -331,7 +322,6 @@ filter_func_arith(div, d, double);
 		_##ctype left  = 0;                                                                \
 		_##ctype right = 0;                                                                \
 		int      rc    = 0;                                                                \
-                                                                                                   \
 		rc = filter_func_getdata_##type(args, &left);                                      \
 		if (unlikely(rc != 0)) {                                                           \
 			D_GOTO(exit, rc);                                                          \
@@ -340,7 +330,6 @@ filter_func_arith(div, d, double);
 		if (unlikely(rc != 0)) {                                                           \
 			D_GOTO(exit, rc);                                                          \
 		}                                                                                  \
-                                                                                                   \
 		args->value_##type##_out = left & right;                                           \
 exit:                                                                                              \
 		return rc;                                                                         \
