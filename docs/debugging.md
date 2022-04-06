@@ -71,7 +71,7 @@ basis (CaRT and DAOS). All debug streams are enabled by default (`DD_MASK=all`).
 ## Common Use Cases
 
 Please note: where in these examples the export command is shown setting an environment variable,
-this is intended to convey either that the variable is actualy set (for the client environment), or
+this is intended to convey either that the variable is actually set (for the client environment), or
 configured for the engines in the `daos_server.yml` file (`log_mask` per engine, and env_vars
 values per engine for the `DD_SUBSYS` and `DD_MASK` variable assignments).
 
