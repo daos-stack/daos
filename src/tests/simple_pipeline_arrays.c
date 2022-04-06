@@ -139,33 +139,33 @@ build_pipeline_one(daos_pipeline_t *pipeline)
 
 	/** mem allocation */
 	int_type_s = strlen("DAOS_FILTER_TYPE_UINTEGER8");
-	int_type1  = (char *) malloc(int_type_s);
-	int_type2  = (char *) malloc(int_type_s);
-	strncpy(int_type1, "DAOS_FILTER_TYPE_UINTEGER8", int_type_s);
-	strncpy(int_type2, "DAOS_FILTER_TYPE_UINTEGER8", int_type_s);
+	int_type1  = (char *) malloc(int_type_s + 1);
+	int_type2  = (char *) malloc(int_type_s + 1);
+	strcpy(int_type1, "DAOS_FILTER_TYPE_UINTEGER8");
+	strcpy(int_type2, "DAOS_FILTER_TYPE_UINTEGER8");
 
 	akey_ftype_s = strlen("DAOS_FILTER_AKEY");
-	akey_ftype   = (char *) malloc(akey_ftype_s);
-	strncpy(akey_ftype, "DAOS_FILTER_AKEY", akey_ftype_s);
+	akey_ftype   = (char *) malloc(akey_ftype_s + 1);
+	strcpy(akey_ftype, "DAOS_FILTER_AKEY");
 
 	akey_s = strlen("Array");
-	akey   = (char *) malloc(akey_s);
-	strncpy(akey, "Array", akey_s);
+	akey   = (char *) malloc(akey_s + 1);
+	strcpy(akey, "Array");
 
 	const_ftype_s = strlen("DAOS_FILTER_CONST");
-	const_ftype   = (char *) malloc(const_ftype_s);
-	strncpy(const_ftype, "DAOS_FILTER_CONST", const_ftype_s);
+	const_ftype   = (char *) malloc(const_ftype_s + 1);
+	strcpy(const_ftype, "DAOS_FILTER_CONST");
 
 	constant = (uint64_t *) malloc(sizeof(uint64_t));
 	*constant = 50;
 
 	ltfunc_ftype_s = strlen("DAOS_FILTER_FUNC_LT");
-	ltfunc_ftype   = (char *) malloc(ltfunc_ftype_s);
-	strncpy(ltfunc_ftype, "DAOS_FILTER_FUNC_LT", ltfunc_ftype_s);
+	ltfunc_ftype   = (char *) malloc(ltfunc_ftype_s + 1);
+	strcpy(ltfunc_ftype, "DAOS_FILTER_FUNC_LT");
 
 	pipe_cond_type_s = strlen("DAOS_FILTER_CONDITION");
-	pipe_cond_type   = (char *) malloc(pipe_cond_type_s);
-	strncpy(pipe_cond_type, "DAOS_FILTER_CONDITION", pipe_cond_type_s);
+	pipe_cond_type   = (char *) malloc(pipe_cond_type_s + 1);
+	strcpy(pipe_cond_type, "DAOS_FILTER_CONDITION");
 
 	akey_ft = (daos_filter_part_t *) calloc(1, sizeof(daos_filter_part_t));
 	const_ft = (daos_filter_part_t *) calloc(1, sizeof(daos_filter_part_t));
@@ -229,33 +229,33 @@ build_pipeline_two(daos_pipeline_t *pipeline)
 
 	/** mem allocation */
 	int_type_s = strlen("DAOS_FILTER_TYPE_UINTEGER4");
-	int_type1  = (char *) malloc(int_type_s);
-	int_type2  = (char *) malloc(int_type_s);
-	strncpy(int_type1, "DAOS_FILTER_TYPE_UINTEGER4", int_type_s);
-	strncpy(int_type2, "DAOS_FILTER_TYPE_UINTEGER4", int_type_s);
+	int_type1  = (char *) malloc(int_type_s + 1);
+	int_type2  = (char *) malloc(int_type_s + 1);
+	strcpy(int_type1, "DAOS_FILTER_TYPE_UINTEGER4");
+	strcpy(int_type2, "DAOS_FILTER_TYPE_UINTEGER4");
 
 	akey_ftype_s = strlen("DAOS_FILTER_AKEY");
-	akey_ftype   = (char *) malloc(akey_ftype_s);
-	strncpy(akey_ftype, "DAOS_FILTER_AKEY", akey_ftype_s);
+	akey_ftype   = (char *) malloc(akey_ftype_s + 1);
+	strcpy(akey_ftype, "DAOS_FILTER_AKEY");
 
 	akey_s = strlen("Array");
-	akey   = (char *) malloc(akey_s);
-	strncpy(akey, "Array", akey_s);
+	akey   = (char *) malloc(akey_s + 1);
+	strcpy(akey, "Array");
 
 	const_ftype_s = strlen("DAOS_FILTER_CONST");
-	const_ftype   = (char *) malloc(const_ftype_s);
-	strncpy(const_ftype, "DAOS_FILTER_CONST", const_ftype_s);
+	const_ftype   = (char *) malloc(const_ftype_s + 1);
+	strcpy(const_ftype, "DAOS_FILTER_CONST");
 
 	constant = (uint32_t *) malloc(sizeof(uint32_t));
 	*constant = 500;
 
 	gtfunc_ftype_s = strlen("DAOS_FILTER_FUNC_GT");
-	gtfunc_ftype   = (char *) malloc(gtfunc_ftype_s);
-	strncpy(gtfunc_ftype, "DAOS_FILTER_FUNC_GT", gtfunc_ftype_s);
+	gtfunc_ftype   = (char *) malloc(gtfunc_ftype_s + 1);
+	strcpy(gtfunc_ftype, "DAOS_FILTER_FUNC_GT");
 
 	pipe_cond_type_s = strlen("DAOS_FILTER_CONDITION");
-	pipe_cond_type   = (char *) malloc(pipe_cond_type_s);
-	strncpy(pipe_cond_type, "DAOS_FILTER_CONDITION", pipe_cond_type_s);
+	pipe_cond_type   = (char *) malloc(pipe_cond_type_s + 1);
+	strcpy(pipe_cond_type, "DAOS_FILTER_CONDITION");
 
 	akey_ft = (daos_filter_part_t *) calloc(1, sizeof(daos_filter_part_t));
 	const_ft = (daos_filter_part_t *) calloc(1, sizeof(daos_filter_part_t));
