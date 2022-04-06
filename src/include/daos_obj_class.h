@@ -405,6 +405,7 @@ struct daos_oclass_attr {
 	unsigned int			 ca_resil_degree;
 	/** Initial # redundancy group, unnecessary for some schemas */
 	unsigned int			 ca_grp_nr;
+	/** replication or erasure coding attributes based on #ca_resil */
 	union {
 		/** Replication attributes */
 		struct daos_rp_attr {

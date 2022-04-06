@@ -48,9 +48,13 @@ typedef struct dfs dfs_t;
  * Reserve bit 3 in the access flags for dfs_mount() - bits 1 and 2 are used
  * for read / write access (O_RDONLY, O_RDRW).
  */
-#define DFS_BALANCED	4 /** DFS operations using a DTX */
-#define DFS_RELAXED	0 /** DFS operations do not use a DTX (default mode). */
+/** DFS container balanced consistency mode. DFS operations using a DTX */
+#define DFS_BALANCED	4
+/** DFS container relaxed consistency mode. DFS operations do not use a DTX (default mode) */
+#define DFS_RELAXED	0
+/** read-only access */
 #define DFS_RDONLY	O_RDONLY
+/** read/write access */
 #define DFS_RDWR	O_RDWR
 
 /** struct holding attributes for a DFS container */
@@ -63,7 +67,7 @@ typedef struct {
 	daos_oclass_id_t	da_oclass_id;
 	/** DAOS properties on the DFS container */
 	daos_prop_t		*da_props;
-	/*
+	/**
 	 * Consistency mode for the DFS container: DFS_RELAXED, DFS_BALANCED.
 	 * If set to 0 or more generally not set to balanced explicitly, relaxed
 	 * mode will be used. In the future, Balanced mode will be the default.
@@ -79,6 +83,7 @@ typedef struct {
 	daos_range_t	       *iod_rgs;
 } dfs_iod_t;
 
+/** DFS object information */
 typedef struct {
 	/** object class */
 	daos_oclass_id_t	doi_oclass_id;
@@ -1005,9 +1010,17 @@ dfs_removexattr(dfs_t *dfs, dfs_obj_t *obj, const char *name);
 int
 dfs_listxattr(dfs_t *dfs, dfs_obj_t *obj, char *list, daos_size_t *size);
 
+/**
+ * Backward compatibility code.
+ * Please don't use directly
+ */
 int
 dfs_cont_create2(daos_handle_t poh, uuid_t *cuuid, dfs_attr_t *attr, daos_handle_t *coh,
 		 dfs_t **dfs);
+/**
+ * Backward compatibility code.
+ * Please don't use directly
+ */
 int
 dfs_cont_create1(daos_handle_t poh, const uuid_t cuuid, dfs_attr_t *attr, daos_handle_t *coh,
 		 dfs_t **dfs);
@@ -1031,7 +1044,7 @@ dfs_cont_create_cpp(daos_handle_t poh, const uuid_t cuuid, dfs_attr_t *attr, dao
 };
 #else
 /**
- * for backward compatility, support old api where a const uuid_t was required to be passed in for
+ * for backward compatibility, support old api where a const uuid_t was required to be passed in for
  * the container to be created.
  */
 #define dfs_cont_create(poh, co, ...)					\

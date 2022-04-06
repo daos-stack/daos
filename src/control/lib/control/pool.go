@@ -24,6 +24,7 @@ import (
 	"github.com/daos-stack/daos/src/control/common/proto/convert"
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	"github.com/daos-stack/daos/src/control/drpc"
+	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/security/auth"
 	"github.com/daos-stack/daos/src/control/system"
 )
@@ -303,6 +304,36 @@ func PoolDestroy(ctx context.Context, rpcClient UnaryInvoker, req *PoolDestroyRe
 		return errors.Wrap(err, "pool destroy failed")
 	}
 	rpcClient.Debugf("Destroy DAOS pool response: %s\n", msResp)
+
+	return nil
+}
+
+// PoolUpgradeReq contains the parameters for a pool upgrade request.
+type PoolUpgradeReq struct {
+	poolRequest
+	ID string
+}
+
+// PoolUpgrade performs a pool upgrade operation on a DAOS Management Server instance.
+func PoolUpgrade(ctx context.Context, rpcClient UnaryInvoker, req *PoolUpgradeReq) error {
+	req.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
+		return mgmtpb.NewMgmtSvcClient(conn).PoolUpgrade(ctx, &mgmtpb.PoolUpgradeReq{
+			Sys: req.getSystem(rpcClient),
+			Id:  req.ID,
+		})
+	})
+
+	rpcClient.Debugf("Upgrade DAOS pool request: %v\n", req)
+	ur, err := rpcClient.InvokeUnaryRPC(ctx, req)
+	if err != nil {
+		return err
+	}
+
+	msResp, err := ur.getMSResponse()
+	if err != nil {
+		return errors.Wrap(err, "pool upgrade failed")
+	}
+	rpcClient.Debugf("Upgrade DAOS pool response: %s\n", msResp)
 
 	return nil
 }
@@ -588,7 +619,7 @@ func PoolGetProp(ctx context.Context, rpcClient UnaryInvoker, req *PoolGetPropRe
 	for _, prop := range resp {
 		pbProp, found := pbMap[prop.Number]
 		if !found {
-			return nil, errors.Errorf("unable to find prop %d (%s) in resp", prop.Number, prop.Name)
+			continue
 		}
 		switch v := pbProp.GetValue().(type) {
 		case *mgmtpb.PoolProperty_Strval:
@@ -962,17 +993,10 @@ func ListPools(ctx context.Context, rpcClient UnaryInvoker, req *ListPoolsReq) (
 	return resp, nil
 }
 
-// PoolMetadataBytes defines the amount of storage reserved for pool metadata.
-//
-// Some extra bytes are needed for the metadata of the pool: at least 135 MB are needed.  The
-// extraByes is a little bigger than this limit, because the size of the metadata will eventually
-// grow along the life of the pool.
-const PoolMetadataBytes uint64 = uint64(200) * uint64(humanize.MiByte)
-
 // Return the maximal SCM and NVMe size of a pool which could be created with all the storage nodes.
 //
 // TODO (DAOS-9557) This function should takes an extra parameter to filter the engine ranks to use.
-func GetMaxPoolSize(ctx context.Context, rpcClient UnaryInvoker) (uint64, uint64, error) {
+func GetMaxPoolSize(ctx context.Context, log logging.Logger, rpcClient UnaryInvoker) (uint64, uint64, error) {
 	storageScanReq := &StorageScanReq{Usage: true}
 	resp, err := StorageScan(ctx, rpcClient, storageScanReq)
 	if err != nil {
@@ -1006,18 +1030,6 @@ func GetMaxPoolSize(ctx context.Context, rpcClient UnaryInvoker) (uint64, uint64
 			}
 			scmNamespaceFreeBytes := scmNamespace.Mount.AvailBytes
 
-			if scmNamespaceFreeBytes < PoolMetadataBytes {
-				missingBytes := PoolMetadataBytes - scmNamespaceFreeBytes
-				msg := "Not enough SCM storage available with the SCM namespace"
-				msg += " \"%s\" of the the host %s:"
-				msg += " at least %s of SCM storage (%s missing) is needed"
-				return 0, 0, errors.Errorf(msg,
-					scmNamespace.Mount.Path,
-					hostStorageSet.HostSet.String(),
-					humanize.Bytes(PoolMetadataBytes),
-					humanize.Bytes(missingBytes))
-			}
-
 			if scmBytes > scmNamespaceFreeBytes {
 				scmBytes = scmNamespaceFreeBytes
 			}
@@ -1026,6 +1038,14 @@ func GetMaxPoolSize(ctx context.Context, rpcClient UnaryInvoker) (uint64, uint64
 		nvmeRanksBytes := make(map[system.Rank]uint64, 0)
 		for _, nvmeController := range hostStorage.NvmeDevices {
 			for _, smdDevice := range nvmeController.SmdDevices {
+				if !smdDevice.NvmeState.IsNormal() {
+					log.Infof("WARNING: SMD device %s (instance %d, ctrlr %s) "+
+						"not usable (device state %q)",
+						smdDevice.UUID, smdDevice.Rank, smdDevice.TrAddr,
+						smdDevice.NvmeState.String())
+					continue
+				}
+
 				nvmeRanksBytes[smdDevice.Rank] += smdDevice.AvailBytes
 			}
 		}
@@ -1042,6 +1062,9 @@ func GetMaxPoolSize(ctx context.Context, rpcClient UnaryInvoker) (uint64, uint64
 
 	// TODO (DAOS-9557) Check if there is no ranks (i.e. rank with SCM available) with some NVMe
 	// storage and other without
+
+	rpcClient.Debugf("Maximal size of a pool: scmBytes=%s (%d B) nvmeBytes=%s (%d B)",
+		humanize.Bytes(scmBytes), scmBytes, humanize.Bytes(nvmeBytes), nvmeBytes)
 
 	return scmBytes, nvmeBytes, nil
 }

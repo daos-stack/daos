@@ -1,4 +1,4 @@
-# (C) Copyright 2019-2021 Intel Corporation.
+# (C) Copyright 2019-2022 Intel Corporation.
 #
 # SPDX-License-Identifier: BSD-2-Clause-Patent
 #
@@ -33,6 +33,7 @@ class DObjNotFound(Exception):
     def __str__(self):
         return "Failed to open '{}'".format(self.name)
 
+
 class DCont():
     """
     Class representing of DAOS python container
@@ -61,19 +62,20 @@ class DCont():
     array(name, kwargs):
         Create new DArray object.
     """
+
     def __init__(self, pool=None, cont=None, path=None):
-        self._dc   = DaosClient()
-        self._hdl  = None
+        self._dc = DaosClient()
+        self._hdl = None
         if path is None and (pool is None or cont is None):
             raise PyDError("invalid pool or container UUID",
                            -pydaos_shim.DER_INVAL)
         if path is not None:
-            self.pool  = None
+            self.pool = None
             self.cont = None
             (ret, hdl) = pydaos_shim.cont_open_by_path(DAOS_MAGIC, path, 0)
         else:
-            self.pool  = pool
-            self.cont  = cont
+            self.pool = pool
+            self.cont = cont
             (ret, hdl) = pydaos_shim.cont_open(DAOS_MAGIC, pool, cont, 0)
         if ret != pydaos_shim.DER_SUCCESS:
             raise PyDError("failed to access container", ret)
@@ -145,6 +147,7 @@ class DCont():
     def __repr__(self):
         return 'daos://{}/{}'.format(self.pool, self.cont)
 
+
 class _DObj():
     # pylint: disable=no-member
 
@@ -174,6 +177,8 @@ class _DObj():
         return "[" + hex(self.hi) + ":" + hex(self.lo) + "]"
 
 # pylint: disable=too-few-public-methods
+
+
 class DDictIter():
 
     """ Iterator class for DDict """
@@ -217,6 +222,7 @@ class DDictIter():
             return self._entries.pop()
         raise StopIteration()
 # pylint: enable=too-few-public-methods
+
 
 class DDict(_DObj):
     """
@@ -376,6 +382,8 @@ class DDict(_DObj):
         return DDictIter(self)
 
 # pylint: disable=too-few-public-methods
+
+
 class DArray(_DObj):
     """
     Class representing of DAOS array leveraging the numpy's dispatch mechanism.
