@@ -601,7 +601,7 @@ dc_pipeline_run(tse_task_t *api_task)
 	D_ASSERT(!d_list_empty(shard_task_head));
 	sched_arg.tsa_scheded = false;
 	tse_task_list_traverse(shard_task_head, shard_task_sched, &sched_arg);
-	if (sched_arg.tsa_scheded == false) {
+	if (!sched_arg.tsa_scheded) {
 		tse_task_complete(api_task, 0);
 	}
 

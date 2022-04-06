@@ -141,7 +141,7 @@ pipeline_filters(struct pipeline_compiled_t *pipe, struct filter_part_run_t *arg
 		rc             = args->parts[0].filter_func(args);
 		if (rc != 0)
 			D_GOTO(exit, rc);
-		if (args->log_out == false)
+		if (!args->log_out)
 			D_GOTO(exit, rc = 1);
 	}
 exit:

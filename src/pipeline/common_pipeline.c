@@ -24,7 +24,7 @@ pipeline_part_chk_type(const char *part_type, size_t part_type_s, bool is_aggr)
 	{
 		return true;
 	}
-	if (is_aggr == true &&
+	if (is_aggr &&
 		(!strncmp(part_type, "DAOS_FILTER_FUNC_SUM", part_type_s) ||
 		 !strncmp(part_type, "DAOS_FILTER_FUNC_MIN", part_type_s) ||
 		 !strncmp(part_type, "DAOS_FILTER_FUNC_MAX", part_type_s) ||
@@ -32,7 +32,7 @@ pipeline_part_chk_type(const char *part_type, size_t part_type_s, bool is_aggr)
 	{
 		return true;
 	}
-	if (is_aggr == false &&
+	if (!is_aggr &&
 		(!strncmp(part_type, "DAOS_FILTER_FUNC_EQ", part_type_s)  ||
 		 !strncmp(part_type, "DAOS_FILTER_FUNC_IN", part_type_s)  ||
 		 !strncmp(part_type, "DAOS_FILTER_FUNC_NE", part_type_s)  ||
@@ -149,12 +149,12 @@ pipeline_filter_checkops(daos_filter_t *ftr, size_t *p)
 		child_part_type_s = ftr->parts[*p]->part_type.iov_len;
 		res = pipeline_part_checkop(part_type, part_type_s, child_part_type,
 					    child_part_type_s);
-		if (res == false)
+		if (!res)
 		{
 			return res;
 		}
 		res = pipeline_filter_checkops(ftr, p);
-		if (res == false)
+		if (!res)
 		{
 			return res;
 		}
@@ -247,7 +247,7 @@ int d_pipeline_check(daos_pipeline_t *pipeline)
 
 			res = pipeline_part_chk_type((char *) part->part_type.iov_buf,
 						     part->part_type.iov_len, is_aggr);
-			if (res == false)
+			if (!res)
 			{
 				return -DER_NOSYS;
 			}
@@ -283,7 +283,7 @@ int d_pipeline_check(daos_pipeline_t *pipeline)
 
 		p = 0;
 		res = pipeline_filter_checkops(ftr, &p);
-		if (res == false)
+		if (!res)
 		{
 			return -DER_INVAL;
 		}
