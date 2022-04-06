@@ -28,10 +28,10 @@ static d_log_id_cb_t	log_id_cb;
 #define DB_GRP1 (DB_IO | DB_MD | DB_PL | DB_REBUILD | DB_SEC | DB_CSUM)
 #define DB_GRP1_NAME "group_default"
 /* metadata debug group (default plus metadata-specific) */
-#define DB_GRP_MD (DB_GRP1 | DB_MGMT | DB_DSMS)
+#define DB_GRP_MD (DB_GRP1 | DB_MGMT)
 #define DB_GRP_MD_NAME "group_metadata"
 /* metadata-only debug group */
-#define DB_GRP_MD_ONLY (DB_MD | DB_MGMT | DB_DSMS)
+#define DB_GRP_MD_ONLY (DB_MD | DB_MGMT)
 #define DB_GRP_MD_ONLY_NAME "group_metadata_only"
 
 

@@ -58,8 +58,8 @@ basis (CaRT and DAOS). All debug streams are enabled by default (`DD_MASK=all`).
 	- df = durable format
 	- rebuild = rebuild process
 	- group_default = (group mask) io, md, pl, and rebuild operations
-	- group_metadata = (group mask) group_default and mgmt, dsms operations
-	- group_metadata_only = (group mask) mgmt, md, dsms operations
+	- group_metadata = (group mask) group_default and mgmt operations
+	- group_metadata_only = (group mask) mgmt and md operations
 - Common Debug Masks (GURT):
 	- any = generic messages, no classification
 	- trace = function trace, tree/hash/lru operations
@@ -69,6 +69,11 @@ basis (CaRT and DAOS). All debug streams are enabled by default (`DD_MASK=all`).
 	- test = test programs
 
 ## Common Use Cases
+
+Please note: where in these examples the export command is shown setting an environment variable,
+this is intended to convey either that the variable is actualy set (for the client environment), or
+configured for the engines in the `daos_server.yml` file (`log_mask` per engine, and env_vars
+values per engine for the `DD_SUBSYS` and `DD_MASK` variable assignments).
 
 - Generic setup for all messages (default settings)
 ```bash
@@ -83,17 +88,17 @@ basis (CaRT and DAOS). All debug streams are enabled by default (`DD_MASK=all`).
   $ export D_LOG_MASK=FATAL # -> will only log system fatal messages
 ```
 
-- Gather daos metadata logs if a pool/container resource problem is observed, using the provided group mask
-```bash
-  $ export D_LOG_MASK=DEBUG       # log at DEBUG level from all facilities
-  $ export DD_MASK=group_metadata # limit logging to include only streams (mgmt, dsms, plus defaults from group_default)
-```
-
 - Disable a noisy debug logging subsystem
 ```bash
   $ export D_LOG_MASK=DEBUG,MEM=ERR # -> disables MEM facility by restricting all logs
                                     # from that facility to ERROR or higher priority only
   $ export D_LOG_MASK=DEBUG,SWIM=ERR,RPC=ERR,HG=ERR # -> disables SWIM and RPC/HG facilities
+```
+
+- Gather daos metadata logs if a pool/container resource problem is observed, using the provided group mask
+```bash
+  $ export D_LOG_MASK=DEBUG,MEM=ERR # log at DEBUG level from all facilities except MEM
+  $ export DD_MASK=group_metadata   # limit logging to include only streams (mgmt, plus defaults from group_default)
 ```
 
 - Enable a subset of facilities of interest

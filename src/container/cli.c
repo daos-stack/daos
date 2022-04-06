@@ -1803,7 +1803,7 @@ cont_oid_alloc_complete(tse_task_t *task, void *data)
 		D_GOTO(out, rc);
 	}
 
-	D_DEBUG(DB_ANY, DF_CONT": OID ALLOC: using hdl="DF_UUID"\n",
+	D_DEBUG(DB_MD, DF_CONT": OID ALLOC: using hdl="DF_UUID"\n",
 		 DP_CONT(pool->dp_pool, cont->dc_uuid),
 		 DP_UUID(cont->dc_cont_hdl));
 
@@ -1863,7 +1863,7 @@ dc_cont_alloc_oids(tse_task_t *task)
 	pool = dc_hdl2pool(cont->dc_pool_hdl);
 	D_ASSERT(pool != NULL);
 
-	D_DEBUG(DB_ANY, DF_CONT": oid allocate: hdl="DF_UUID"\n",
+	D_DEBUG(DB_MD, DF_CONT": oid allocate: hdl="DF_UUID"\n",
 		DP_CONT(pool->dp_pool_hdl, cont->dc_uuid),
 		DP_UUID(cont->dc_cont_hdl));
 
@@ -1909,7 +1909,7 @@ err_cont:
 	dc_pool_put(pool);
 err:
 	tse_task_complete(task, rc);
-	D_DEBUG(DB_ANY, "Failed to allocate OIDs: "DF_RC"\n", DP_RC(rc));
+	D_DEBUG(DB_MD, "Failed to allocate OIDs: "DF_RC"\n", DP_RC(rc));
 	return rc;
 }
 

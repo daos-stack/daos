@@ -173,9 +173,9 @@ composition of multiple individual bits.
 
     -   group_default = (group mask) io, md, pl, and rebuild operations
 
-    -   group_metadata_only = (group mask) mgmt, md, dsms operations
+    -   group_metadata_only = (group mask) mgmt, md operations
 
-    -   group_metadata = (group mask) group_default plus mgmt, dsms operations
+    -   group_metadata = (group mask) group_default plus mgmt operations
 
 -   Common Debug Masks (GURT):
 
@@ -191,6 +191,11 @@ composition of multiple individual bits.
 
 ### Common Use Cases
 
+Please note: where in these examples the export command is shown setting an environment variable,
+this is intended to convey either that the variable is actualy set (for the client environment), or
+configured for the engines in the `daos_server.yml` file (`log_mask` per engine, and env_vars
+values per engine for the `DD_SUBSYS` and `DD_MASK` variable assignments).
+
 -   Generic setup for all messages (default settings)
 
         D_LOG_MASK=DEBUG
@@ -205,7 +210,7 @@ composition of multiple individual bits.
 -   Gather daos metadata logs if a pool/container resource problem is observed, using the provided group mask
 
         D_LOG_MASK=DEBUG -> log at DEBUG level from all facilities
-        DD_MASK=group_metadata_only -> limit logging to include only these streams (mgmt, md, dsms). Or specify DD_MASK=group_metadata to log default streams and metadata-specific ones.
+        DD_MASK=group_metadata -> limit logging to include deault and metadata-specific streams. Or, specify DD_MASK=group_metadata_only for just metadata-specific log entries.
 
 -   Disable a noisy debug logging subsystem
 
