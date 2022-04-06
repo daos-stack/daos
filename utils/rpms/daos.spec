@@ -565,7 +565,7 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 * Wed Apr  6 2022 Johann Lombardi <johann.lombardi@intel.com> 2.3.100-1
 - Switch version to 2.3.100 for 2.4 test builds
 
-* Wed Apr  6 2022 Joseph Moore <joseph.moore@intel.com> 2.1.100-22
+* Wed Apr  6 2022 Joseph Moore <joseph.moore@intel.com> 2.1.100-26
 - Add build depends entries for UCX libraries.
 
 * Sat Apr  2 2022 Joseph Moore <joseph.moore@intel.com> 2.1.100-25
