@@ -2562,6 +2562,10 @@ vos_aggregate(daos_handle_t coh, daos_epoch_range_t *epr,
 	if (rc)
 		goto free_agg_data;
 
+	/** Use the lower end of the epoch range as the barrier when we are aggregating a
+	 *  deleted snapshot.  If there is no write above that range for a given key,
+	 *  the scan would be a noop anyway.
+	 */
 	if (flags & VOS_AGG_FL_FORCE_SCAN)
 		ad->ad_agg_param.ap_filter_epoch = epr->epr_lo;
 	else
