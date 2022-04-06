@@ -26,7 +26,7 @@ static daos_handle_t oh;  /** object */
 #define STRING_MAX_LEN 10
 
 static char *fields[NR_IODS] = {"Owner", "Species", "Sex", "Age"};
-int          nr_aggr         = 0;
+int          nr_aggr;
 
 void
 insert_example_records(void)
@@ -753,6 +753,7 @@ main(int argc, char **argv)
 	ASSERT(rc == 0, "Pipeline check failed with %d", rc);
 	printf("filtering by (Owner=Benny):\n");
 	/** Running pipeline */
+	nr_aggr = 0;
 	run_pipeline(&pipeline1);
 
 	/** init pipeline2 object */
