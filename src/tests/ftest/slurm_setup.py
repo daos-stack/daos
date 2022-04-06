@@ -65,10 +65,10 @@ def update_config_cmdlist(args):
         "sed -i -e 's/NodeName/#NodeName/g' {}".format(
             SLURM_CONF),
         ]
-    if not args.sudo:
-        sudo = ""
-    else:
+    if args.sudo:
         sudo = "sudo"
+    else:
+        sudo = ""
     # Copy the slurm*example.conf files to /etc/slurm/
     if execute_cluster_cmds(all_nodes, COPY_LIST, args.sudo) > 0:
         sys.exit(1)
@@ -163,10 +163,10 @@ def start_munge(args):
         args (Namespace): Commandline arguments
 
     """
-    if not args.sudo:
-        sudo = ""
-    else:
+    if args.sudo:
         sudo = "sudo"
+    else:
+        sudo = ""
     all_nodes = NodeSet("{},{}".format(str(args.control), str(args.nodes)))
     # exclude the control node
     nodes = NodeSet(str(args.nodes))
