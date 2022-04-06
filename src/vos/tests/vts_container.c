@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2021 Intel Corporation.
+ * (C) Copyright 2016-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -266,7 +266,7 @@ co_uuid_iter_test(struct vc_test_args *arg)
 		}
 
 
-		rc = vos_iter_next(ih);
+		rc = vos_iter_next(ih, NULL);
 		if (rc == -DER_NONEXIST)
 			break;
 
