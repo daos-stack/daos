@@ -25,7 +25,7 @@ static daos_handle_t oh;  /** object */
 #define NR_RECXS 4
 
 static char field[] = "Array";
-int         nr_aggr = 0;
+int         nr_aggr;
 
 void
 insert_example_records(void)
