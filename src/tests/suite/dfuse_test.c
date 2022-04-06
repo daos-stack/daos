@@ -50,7 +50,7 @@ do_openat(void **state)
 
 	assert_return_code(root, errno);
 
-	fd = openat(root, "my_file", O_RDWR | O_CREAT);
+	fd = openat(root, "my_file", O_RDWR | O_CREAT, S_IWUSR | S_IRUSR);
 
 	/* This will write two bytes, including a \0 terminator */
 	rc = write(fd, input_buf, sizeof(input_buf));
