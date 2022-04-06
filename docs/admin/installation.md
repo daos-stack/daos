@@ -26,14 +26,14 @@ version of at least 1.10 is required.
 An exhaustive list of packages for each supported Linux distribution is
 maintained in the Docker files and/or their helpers (please click on the link):
 
--    [CentOS 7](https://github.com/daos-stack/daos/blob/master/utils/docker/Dockerfile.centos.7#L19-L79)
--    [EL 8](https://github.com/daos-stack/daos/blob/master/utils/scripts/install-el8.sh#L12-L69)
--    [openSUSE Leap 15](https://github.com/daos-stack/daos/blob/master/utils/docker/Dockerfile.leap.15#L36-L85)
--    [Ubuntu 20.04](https://github.com/daos-stack/daos/blob/master/1.2/utils/docker/Dockerfile.ubuntu.20.04#L14-L22)
+-    [CentOS 7](https://github.com/daos-stack/daos/blob/release/2.2/utils/docker/Dockerfile.centos.7#L19-L79)
+-    [EL 8](https://github.com/daos-stack/daos/blob/release/2.2/utils/scripts/install-el8.sh#L12-L69)
+-    [openSUSE Leap 15](https://github.com/daos-stack/daos/blob/release/2.2/utils/docker/Dockerfile.leap.15#L36-L85)
+-    [Ubuntu 20.04](https://github.com/daos-stack/daos/blob/release/2.2/1.2/utils/docker/Dockerfile.ubuntu.20.04#L14-L22)
 
 The command lines to install the required packages can be extracted from
 the Docker files by removing the "RUN" command, which is specific to Docker.
-Check the [utils/docker](https://github.com/daos-stack/daos/blob/master/utils/docker)
+Check the [utils/docker](https://github.com/daos-stack/daos/blob/release/2.2/utils/docker)
 directory for different Linux distribution versions.
 
 Some DAOS tests use MPI. The DAOS build process uses the environment modules
@@ -112,7 +112,7 @@ On Mac, please make sure that the Docker settings under
 To build the Docker image directly from GitHub, run the following command:
 
 ```bash
-$ docker build https://github.com/daos-stack/daos.git#master \
+$ docker build https://github.com/daos-stack/daos.git#release/2.2 \
         -f utils/docker/Dockerfile.centos.7 -t daos
 ```
 

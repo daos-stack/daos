@@ -30,7 +30,7 @@ $ sudo reboot
 
 !!! note
     To force SPDK to use UIO rather than VFIO at daos_server runtime, set
-    'disable_vfio' in the [server config file](https://github.com/daos-stack/daos/blob/master/utils/config/daos_server.yml#L109),
+    'disable_vfio' in the [server config file](https://github.com/daos-stack/daos/blob/release/2.2/utils/config/daos_server.yml#L109),
     but note that this will require running daos_server as root.
 
 !!! warning
@@ -140,7 +140,7 @@ All those parameters can be made persistent in /etc/sysctl.conf by adding a new
 sysctl file under /usr/lib/sysctl.d (e.g. /usr/lib/sysctl.d/95-daos-net.conf)
 with all the relevant settings.
 
-For more information, please refer to the [librdmacm documentation](https://github.com/linux-rdma/rdma-core/blob/master/Documentation/librdmacm.md)
+For more information, please refer to the [librdmacm documentation](https://github.com/linux-rdma/rdma-core/blob/release/2.2/Documentation/librdmacm.md)
 
 ## Install from Source
 
@@ -278,7 +278,7 @@ running as a systemd service. Default ulimit settings vary between OSes.
 
 For RPM installations, the service will typically be launched by systemd and
 the limit is pre-set to unlimited in the `daos_server.service`
-[unit file](https://github.com/daos-stack/daos/blob/master/utils/systemd/daos_server.service)
+[unit file](https://github.com/daos-stack/daos/blob/release/2.2/utils/systemd/daos_server.service)
 
 Note that values set in `/etc/security/limits.conf` are ignored by services
 launched by systemd.

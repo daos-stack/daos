@@ -29,7 +29,7 @@ These tools have MPI support and are implemented in the external
   `daos-serialize`.
 
 More documentation and uses cases for these tools can be found
-[here](https://github.com/hpc/mpifileutils/blob/master/DAOS-Support.md).
+[here](https://github.com/hpc/mpifileutils/blob/release/2.2/DAOS-Support.md).
 
 Build instructions for these tools can be found
 [here](https://mpifileutils.readthedocs.io/en/latest/build.html#build-everything-directly-with-daos-support).

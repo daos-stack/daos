@@ -273,7 +273,7 @@ pool component values specified in
 are per rank.
 If multiple ranks (I/O processes) have been configured per host in the server
 configuration file
-[`daos_server.yml`](https://github.com/daos-stack/daos/blob/master/utils/config/daos_server.yml)
+[`daos_server.yml`](https://github.com/daos-stack/daos/blob/release/2.2/utils/config/daos_server.yml)
 then the values supplied to `dmg pool create` should be
 a maximum of the SCM/NVMe free space divided by the number of ranks per host.
 
@@ -657,12 +657,12 @@ removed and storage wiped.
 System commands will be handled by a DAOS Server acting as access point and
 listening on the address specified in the DMG config file "hostlist" parameter.
 See
-[`daos_control.yml`](https://github.com/daos-stack/daos/blob/master/utils/config/daos_control.yml)
+[`daos_control.yml`](https://github.com/daos-stack/daos/blob/release/2.2/utils/config/daos_control.yml)
 for details.
 
 At least one of the addresses in the hostlist parameters should match one of the
 "access point" addresses specified in the server config file
-[`daos_server.yml`](https://github.com/daos-stack/daos/blob/master/utils/config/daos_server.yml)
+[`daos_server.yml`](https://github.com/daos-stack/daos/blob/release/2.2/utils/config/daos_server.yml)
 that is supplied when starting `daos_server` instances.
 
 - Commands used to manage a DAOS System:

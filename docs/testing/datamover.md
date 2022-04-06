@@ -304,7 +304,7 @@ drwxr-xr-x 1 standan standan 64 Apr 30 01:26 daos_dfuse
 
 
 * *For more details on datamover reference:
-<https://github.com/hpc/mpifileutils/blob/master/DAOS-Support.md>
+<https://github.com/hpc/mpifileutils/blob/release/2.2/DAOS-Support.md>
 
 
 ## Clean Up
