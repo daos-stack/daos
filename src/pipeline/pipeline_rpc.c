@@ -21,11 +21,9 @@ crt_proc_daos_key_desc_t(crt_proc_t proc, crt_proc_op_t proc_op, daos_key_desc_t
 	if (unlikely(rc))
 		return rc;
 
-
 	rc = crt_proc_uint32_t(proc, proc_op, &key->kd_val_type);
 	if (unlikely(rc))
 		return rc;
-
 
 	return 0;
 }

@@ -13,15 +13,16 @@ extern "C" {
 
 #include <daos_pipeline.h>
 
-#define	ASSERT(cond, ...)			\
-do {						\
-	if (!(cond)) {				\
-		fprintf(stderr, __VA_ARGS__);	\
-		exit(1);			\
-	}					\
-} while (0)
+#define ASSERT(cond, ...)                                                                          \
+	do {                                                                                       \
+		if (!(cond)) {                                                                     \
+			fprintf(stderr, __VA_ARGS__);                                              \
+			exit(1);                                                                   \
+		}                                                                                  \
+	} while (0)
 
-void free_pipeline(daos_pipeline_t *pipe);
+void
+free_pipeline(daos_pipeline_t *pipe);
 
 #if defined(__cplusplus)
 }

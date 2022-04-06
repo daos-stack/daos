@@ -18,28 +18,28 @@
 #include <daos.h>
 #include "pipeline_common.h"
 
-#define NR_RECXS	4
-#define FSIZE		15
-#define NUM_DKEYS	1024
+#define NR_RECXS  4
+#define FSIZE     15
+#define NUM_DKEYS 1024
 
-static daos_handle_t	poh; /** pool */
-static daos_handle_t	coh; /** container */
-static daos_handle_t	oh;  /** object */
-static char		field[]	= "Array";
-static time_t		ts;
+static daos_handle_t poh; /** pool */
+static daos_handle_t coh; /** container */
+static daos_handle_t oh;  /** object */
+static char          field[] = "Array";
+static time_t        ts;
 static void
 insert_example_records(void)
 {
-	int		rc;
-	d_iov_t		dkey;
-	d_sg_list_t	sgl;
-	d_iov_t         sg_iovs[NR_RECXS];
-	daos_iod_t	iod;
-	daos_recx_t	recx;
-	uint32_t	i;
-	char		fname[FSIZE];
-	time_t		atime, ctime, mtime;
-	mode_t		mode;
+	int         rc;
+	d_iov_t     dkey;
+	d_sg_list_t sgl;
+	d_iov_t     sg_iovs[NR_RECXS];
+	daos_iod_t  iod;
+	daos_recx_t recx;
+	uint32_t    i;
+	char        fname[FSIZE];
+	time_t      atime, ctime, mtime;
+	mode_t      mode;
 
 	for (i = 0; i < NUM_DKEYS; i++) {
 		int j = 0;
@@ -71,61 +71,61 @@ insert_example_records(void)
 		d_iov_set(&sg_iovs[j++], &mtime, sizeof(time_t));
 		d_iov_set(&sg_iovs[j++], &ctime, sizeof(time_t));
 
-		sgl.sg_nr	= NR_RECXS;
-		sgl.sg_nr_out	= 0;
-		sgl.sg_iovs	= sg_iovs;
+		sgl.sg_nr     = NR_RECXS;
+		sgl.sg_nr_out = 0;
+		sgl.sg_iovs   = sg_iovs;
 
 		d_iov_set(&iod.iod_name, (void *)field, strlen(field));
-		iod.iod_nr	= 1;
-		iod.iod_size	= 1;
-		recx.rx_idx	= 0;
-		recx.rx_nr	= sizeof(time_t) * 3 + sizeof(mode_t);
-		iod.iod_recxs	= &recx;
-		iod.iod_type	= DAOS_IOD_ARRAY;
+		iod.iod_nr    = 1;
+		iod.iod_size  = 1;
+		recx.rx_idx   = 0;
+		recx.rx_nr    = sizeof(time_t) * 3 + sizeof(mode_t);
+		iod.iod_recxs = &recx;
+		iod.iod_type  = DAOS_IOD_ARRAY;
 
-		rc = daos_obj_update(oh, DAOS_TX_NONE, 0, &dkey, 1, &iod, &sgl, NULL);
+		rc            = daos_obj_update(oh, DAOS_TX_NONE, 0, &dkey, 1, &iod, &sgl, NULL);
 		ASSERT(rc == 0, "Obj update failed with %d", rc);
 	}
 }
 
-#define BINARY_F	"DAOS_FILTER_TYPE_BINARY"
-#define DKEY_F		"DAOS_FILTER_DKEY"
-#define AKEY_F		"DAOS_FILTER_AKEY"
-#define CONST_F		"DAOS_FILTER_CONST"
-#define INT8_F		"DAOS_FILTER_TYPE_UINTEGER8"
-#define INT4_F		"DAOS_FILTER_TYPE_UINTEGER4"
-#define LIKE_F		"DAOS_FILTER_FUNC_LIKE"
-#define GT_F		"DAOS_FILTER_FUNC_GT"
-#define EQ_F		"DAOS_FILTER_FUNC_EQ"
-#define BA_F		"DAOS_FILTER_FUNC_BITAND"
-#define AND_F		"DAOS_FILTER_FUNC_AND"
-#define OR_F		"DAOS_FILTER_FUNC_OR"
-#define COND_F		"DAOS_FILTER_CONDITION"
-#define NAME_F		"%.9%"
+#define BINARY_F "DAOS_FILTER_TYPE_BINARY"
+#define DKEY_F   "DAOS_FILTER_DKEY"
+#define AKEY_F   "DAOS_FILTER_AKEY"
+#define CONST_F  "DAOS_FILTER_CONST"
+#define INT8_F   "DAOS_FILTER_TYPE_UINTEGER8"
+#define INT4_F   "DAOS_FILTER_TYPE_UINTEGER4"
+#define LIKE_F   "DAOS_FILTER_FUNC_LIKE"
+#define GT_F     "DAOS_FILTER_FUNC_GT"
+#define EQ_F     "DAOS_FILTER_FUNC_EQ"
+#define BA_F     "DAOS_FILTER_FUNC_BITAND"
+#define AND_F    "DAOS_FILTER_FUNC_AND"
+#define OR_F     "DAOS_FILTER_FUNC_OR"
+#define COND_F   "DAOS_FILTER_CONDITION"
+#define NAME_F   "%.9%"
 
-static mode_t constant1 = S_IFMT;
-static mode_t constant2 = S_IFDIR;
+static mode_t      constant1 = S_IFMT;
+static mode_t      constant2 = S_IFDIR;
 
-static d_iov_t dkey_iov;
-static d_iov_t const1_iov;
-static d_iov_t const2_iov;
-static d_iov_t const3_iov;
+static d_iov_t     dkey_iov;
+static d_iov_t     const1_iov;
+static d_iov_t     const2_iov;
+static d_iov_t     const3_iov;
 
-daos_filter_part_t	dkey_ft;
-daos_filter_part_t	akey1_ft;
-daos_filter_part_t	akey2_ft;
-daos_filter_part_t	const0_ft;
-daos_filter_part_t	const1_ft;
-daos_filter_part_t	const2_ft;
-daos_filter_part_t	const3_ft;
-daos_filter_part_t	like_ft;
-daos_filter_part_t	ba_ft;
-daos_filter_part_t	eq_ft;
-daos_filter_part_t	gt_ft;
-daos_filter_part_t	and_ft;
-daos_filter_part_t	or_ft;
+daos_filter_part_t dkey_ft;
+daos_filter_part_t akey1_ft;
+daos_filter_part_t akey2_ft;
+daos_filter_part_t const0_ft;
+daos_filter_part_t const1_ft;
+daos_filter_part_t const2_ft;
+daos_filter_part_t const3_ft;
+daos_filter_part_t like_ft;
+daos_filter_part_t ba_ft;
+daos_filter_part_t eq_ft;
+daos_filter_part_t gt_ft;
+daos_filter_part_t and_ft;
+daos_filter_part_t or_ft;
 
-daos_filter_t		pipef;
+daos_filter_t      pipef;
 
 /**
  *
@@ -133,22 +133,22 @@ daos_filter_t		pipef;
 static void
 build_pipeline_one(daos_pipeline_t *pipeline)
 {
-	daos_size_t	bin_flen = strlen(BINARY_F);
-	daos_size_t	dkey_flen = strlen(DKEY_F);
-	daos_size_t	akey_flen = strlen(AKEY_F);
-	daos_size_t	const_flen = strlen(CONST_F);
-	daos_size_t	int8_flen = strlen(INT8_F);
-	daos_size_t	int4_flen = strlen(INT4_F);
-	daos_size_t	like_flen = strlen(LIKE_F);
-	daos_size_t	gt_flen = strlen(GT_F);
-	daos_size_t	eq_flen = strlen(EQ_F);
-	daos_size_t	ba_flen = strlen(BA_F);
-	daos_size_t	and_flen = strlen(AND_F);
-	daos_size_t	or_flen = strlen(OR_F);
-	daos_size_t	cond_flen = strlen(COND_F);
-	daos_size_t	name_len = strlen(NAME_F);
-	daos_size_t	akey_len = strlen(field);
-	int		rc;
+	daos_size_t bin_flen   = strlen(BINARY_F);
+	daos_size_t dkey_flen  = strlen(DKEY_F);
+	daos_size_t akey_flen  = strlen(AKEY_F);
+	daos_size_t const_flen = strlen(CONST_F);
+	daos_size_t int8_flen  = strlen(INT8_F);
+	daos_size_t int4_flen  = strlen(INT4_F);
+	daos_size_t like_flen  = strlen(LIKE_F);
+	daos_size_t gt_flen    = strlen(GT_F);
+	daos_size_t eq_flen    = strlen(EQ_F);
+	daos_size_t ba_flen    = strlen(BA_F);
+	daos_size_t and_flen   = strlen(AND_F);
+	daos_size_t or_flen    = strlen(OR_F);
+	daos_size_t cond_flen  = strlen(COND_F);
+	daos_size_t name_len   = strlen(NAME_F);
+	daos_size_t akey_len   = strlen(field);
+	int         rc;
 
 	/** build condition for dkey containing ".9" */
 
@@ -159,7 +159,7 @@ build_pipeline_one(daos_pipeline_t *pipeline)
 	d_iov_set(&const0_ft.part_type, CONST_F, const_flen);
 	d_iov_set(&const0_ft.data_type, BINARY_F, bin_flen);
 	const0_ft.num_constants = 1;
-	const0_ft.constant = &dkey_iov;
+	const0_ft.constant      = &dkey_iov;
 	d_iov_set(const0_ft.constant, NAME_F, name_len);
 
 	d_iov_set(&like_ft.part_type, LIKE_F, like_flen);
@@ -170,18 +170,18 @@ build_pipeline_one(daos_pipeline_t *pipeline)
 	d_iov_set(&akey1_ft.part_type, AKEY_F, akey_flen);
 	d_iov_set(&akey1_ft.data_type, INT4_F, int4_flen);
 	d_iov_set(&akey1_ft.akey, field, akey_len);
-	akey1_ft.data_len    = 4;
+	akey1_ft.data_len = 4;
 
 	d_iov_set(&const1_ft.part_type, CONST_F, const_flen);
 	d_iov_set(&const1_ft.data_type, INT4_F, int4_flen);
 	const1_ft.num_constants = 1;
-	const1_ft.constant = &const1_iov;
+	const1_ft.constant      = &const1_iov;
 	d_iov_set(const1_ft.constant, &constant1, sizeof(mode_t));
 
 	d_iov_set(&const2_ft.part_type, CONST_F, const_flen);
 	d_iov_set(&const2_ft.data_type, INT4_F, int4_flen);
 	const2_ft.num_constants = 1;
-	const2_ft.constant = &const2_iov;
+	const2_ft.constant      = &const2_iov;
 	d_iov_set(const2_ft.constant, &constant2, sizeof(mode_t));
 
 	d_iov_set(&ba_ft.part_type, BA_F, ba_flen);
@@ -201,7 +201,7 @@ build_pipeline_one(daos_pipeline_t *pipeline)
 	d_iov_set(&const3_ft.part_type, CONST_F, const_flen);
 	d_iov_set(&const3_ft.data_type, INT8_F, int8_flen);
 	const3_ft.num_constants = 1;
-	const3_ft.constant = &const3_iov;
+	const3_ft.constant      = &const3_iov;
 	d_iov_set(const3_ft.constant, &ts, sizeof(time_t));
 
 	d_iov_set(&gt_ft.part_type, GT_F, gt_flen);
@@ -210,7 +210,7 @@ build_pipeline_one(daos_pipeline_t *pipeline)
 	/*
 	 * build final condition where result should be the:
 	 * bitwise array cond || (dkey condition && mtime array)
-	*/
+	 */
 
 	d_iov_set(&and_ft.part_type, AND_F, and_flen);
 	and_ft.num_operands = 2;
@@ -259,58 +259,58 @@ build_pipeline_one(daos_pipeline_t *pipeline)
 static void
 run_pipeline(daos_pipeline_t *pipeline)
 {
-	daos_iod_t			iod;
-	daos_anchor_t			anchor;
-	uint32_t			nr_iods, nr_kds;
-	daos_key_desc_t			*kds;
-	d_sg_list_t			*sgl_keys;
-	d_iov_t				*iovs_keys;
-	char				*buf_keys;
-	d_sg_list_t			*sgl_recs;
-	d_iov_t				*iovs_recs;
-	char				*buf_recs;
-	daos_recx_t			recxs[2];
-	daos_pipeline_stats_t		stats = { 0 };
-	uint32_t			i;
-	int				rc;
+	daos_iod_t            iod;
+	daos_anchor_t         anchor;
+	uint32_t              nr_iods, nr_kds;
+	daos_key_desc_t      *kds;
+	d_sg_list_t          *sgl_keys;
+	d_iov_t              *iovs_keys;
+	char		 *buf_keys;
+	d_sg_list_t          *sgl_recs;
+	d_iov_t              *iovs_recs;
+	char		 *buf_recs;
+	daos_recx_t           recxs[2];
+	daos_pipeline_stats_t stats = {0};
+	uint32_t              i;
+	int                   rc;
 
 	/* iod for akey's metadata */
-	iod.iod_nr	= 2;
-	iod.iod_size	= 1;
-	recxs[0].rx_idx	= 0;
-	recxs[0].rx_nr	= sizeof(mode_t);
-	recxs[1].rx_idx	= 12;
-	recxs[1].rx_nr	= sizeof(time_t);
-	iod.iod_recxs	= recxs;
-	iod.iod_type	= DAOS_IOD_ARRAY;
-	d_iov_set(&iod.iod_name, (char *) field, strlen(field));
-	nr_iods		= 1;
+	iod.iod_nr      = 2;
+	iod.iod_size    = 1;
+	recxs[0].rx_idx = 0;
+	recxs[0].rx_nr  = sizeof(mode_t);
+	recxs[1].rx_idx = 12;
+	recxs[1].rx_nr  = sizeof(time_t);
+	iod.iod_recxs   = recxs;
+	iod.iod_type    = DAOS_IOD_ARRAY;
+	d_iov_set(&iod.iod_name, (char *)field, strlen(field));
+	nr_iods   = 1;
 
 	/* reading chunks of 16 keys (at most) at a time */
-	nr_kds = 16;
+	nr_kds    = 16;
 
 	/* to store retrieved dkeys */
-	kds		= malloc(sizeof(daos_key_desc_t) * nr_kds);
-	sgl_keys	= malloc(sizeof(d_sg_list_t) * nr_kds);
-	iovs_keys	= malloc(sizeof(d_iov_t) * nr_kds);
-	buf_keys	= malloc(FSIZE * nr_kds);
+	kds       = malloc(sizeof(daos_key_desc_t) * nr_kds);
+	sgl_keys  = malloc(sizeof(d_sg_list_t) * nr_kds);
+	iovs_keys = malloc(sizeof(d_iov_t) * nr_kds);
+	buf_keys  = malloc(FSIZE * nr_kds);
 
 	/* to store retrieved data */
-	sgl_recs	= malloc(sizeof(d_sg_list_t) * nr_kds);
-	iovs_recs	= malloc(sizeof(d_iov_t) * nr_kds);
-	buf_recs	= malloc((sizeof(mode_t) + sizeof(time_t)) * nr_kds);
+	sgl_recs  = malloc(sizeof(d_sg_list_t) * nr_kds);
+	iovs_recs = malloc(sizeof(d_iov_t) * nr_kds);
+	buf_recs  = malloc((sizeof(mode_t) + sizeof(time_t)) * nr_kds);
 
 	for (i = 0; i < nr_kds; i++) {
-		sgl_keys[i].sg_nr	= 1;
-		sgl_keys[i].sg_nr_out	= 0;
-		sgl_keys[i].sg_iovs	= &iovs_keys[i];
+		sgl_keys[i].sg_nr     = 1;
+		sgl_keys[i].sg_nr_out = 0;
+		sgl_keys[i].sg_iovs   = &iovs_keys[i];
 		d_iov_set(&iovs_keys[i], &buf_keys[i * FSIZE], FSIZE);
 
-		sgl_recs[i].sg_nr	= 1;
-		sgl_recs[i].sg_nr_out	= 0;
-		sgl_recs[i].sg_iovs	= &iovs_recs[i];
+		sgl_recs[i].sg_nr     = 1;
+		sgl_recs[i].sg_nr_out = 0;
+		sgl_recs[i].sg_iovs   = &iovs_recs[i];
 		d_iov_set(&iovs_recs[i], &buf_recs[i * (sizeof(mode_t) + sizeof(time_t))],
-						   sizeof(mode_t) + sizeof(time_t));
+			  sizeof(mode_t) + sizeof(time_t));
 	}
 
 	/** reset anchor */
@@ -320,21 +320,20 @@ run_pipeline(daos_pipeline_t *pipeline)
 	while (!daos_anchor_is_eof(&anchor)) {
 		nr_kds = 16; /** trying to read 16 in each iteration */
 
-		rc = daos_pipeline_run(coh, oh, pipeline, DAOS_TX_NONE, 0, NULL, &nr_iods, &iod,
-				       &anchor, &nr_kds, kds, sgl_keys, sgl_recs, NULL, &stats,
-				       NULL);
+		rc     = daos_pipeline_run(coh, oh, pipeline, DAOS_TX_NONE, 0, NULL, &nr_iods, &iod,
+					   &anchor, &nr_kds, kds, sgl_keys, sgl_recs, NULL, &stats,
+					   NULL);
 		ASSERT(rc == 0, "Pipeline run failed with %d", rc);
 
 		/** processing nr_kds records */
 		for (i = 0; i < nr_kds; i++) {
-			char *dkey = (char *) sgl_keys[i].sg_iovs->iov_buf;
+			char       *dkey    = (char *)sgl_keys[i].sg_iovs->iov_buf;
 			daos_size_t dkeylen = kds[i].kd_key_len;
 
-			printf("\t(dkey)=%.*s, len = %zu\t", (int)dkeylen,
-							     dkey, dkeylen);
+			printf("\t(dkey)=%.*s, len = %zu\t", (int)dkeylen, dkey, dkeylen);
 
-			char *ptr = &buf_recs[i * (sizeof(mode_t) + sizeof(time_t))];
-			mode_t cur_mode = *((mode_t *) ptr);
+			char  *ptr      = &buf_recs[i * (sizeof(mode_t) + sizeof(time_t))];
+			mode_t cur_mode = *((mode_t *)ptr);
 
 			if (S_ISDIR(cur_mode))
 				printf("MODE type = S_IFDIR\n");
@@ -359,9 +358,9 @@ run_pipeline(daos_pipeline_t *pipeline)
 int
 main(int argc, char **argv)
 {
-	daos_obj_id_t		oid;
-	int			rc;
-	daos_pipeline_t		pipeline1;
+	daos_obj_id_t   oid;
+	int             rc;
+	daos_pipeline_t pipeline1;
 
 	if (argc != 3) {
 		fprintf(stderr, "args: pool cont\n");
