@@ -759,7 +759,18 @@ func TestPoolCommands(t *testing.T) {
 		},
 		{
 			"Query pool with UUID and enabled ranks",
-			"pool query --show-enabled-ranks 12345678-1234-1234-1234-1234567890ab",
+			"pool query --show-enabled 12345678-1234-1234-1234-1234567890ab",
+			strings.Join([]string{
+				printRequest(t, &control.PoolQueryReq{
+					ID:                  "12345678-1234-1234-1234-1234567890ab",
+					IncludeEnabledRanks: true,
+				}),
+			}, " "),
+			nil,
+		},
+		{
+			"Query pool with UUID and enabled ranks",
+			"pool query -e 12345678-1234-1234-1234-1234567890ab",
 			strings.Join([]string{
 				printRequest(t, &control.PoolQueryReq{
 					ID:                  "12345678-1234-1234-1234-1234567890ab",
@@ -770,7 +781,18 @@ func TestPoolCommands(t *testing.T) {
 		},
 		{
 			"Query pool with UUID and disabled ranks",
-			"pool query --show-disabled-ranks 12345678-1234-1234-1234-1234567890ab",
+			"pool query --show-disabled 12345678-1234-1234-1234-1234567890ab",
+			strings.Join([]string{
+				printRequest(t, &control.PoolQueryReq{
+					ID:                   "12345678-1234-1234-1234-1234567890ab",
+					IncludeDisabledRanks: true,
+				}),
+			}, " "),
+			nil,
+		},
+		{
+			"Query pool with UUID and disabled ranks",
+			"pool query -b 12345678-1234-1234-1234-1234567890ab",
 			strings.Join([]string{
 				printRequest(t, &control.PoolQueryReq{
 					ID:                   "12345678-1234-1234-1234-1234567890ab",
@@ -813,7 +835,7 @@ func TestPoolCommands(t *testing.T) {
 		},
 		{
 			"Query pool with incompatible arguments",
-			"pool query --show-disabled-ranks --show-enabled-ranks 12345678-1234-1234-1234-1234567890ab",
+			"pool query --show-disabled --show-enabled 12345678-1234-1234-1234-1234567890ab",
 			"",
 			errors.New("may not be mixed"),
 		},
