@@ -2,10 +2,11 @@ hosts:
   test_servers:
     - server-A
     - server-B
+    - server-C
   test_clients:
     - client-A
 
-timeout: 10M
+timeout: 600
 
 server_config:
   name: daos_server
@@ -52,7 +53,7 @@ container_with_rf:
 
 ior:
   client_processes:
-    np: 4
+    ppn: 4
   iorflags:
     flags: "-k -D 10 -v -w -W"
     api: DFS
@@ -62,9 +63,7 @@ ior:
     # takes about 42 sec in the Shared Cluster. Adjust the value based on the system so
     # that it takes longer than the -D value.
     transfer_size: '512K'
-    block_size: '30G'
-    write_x: 4
-    read_x: 2
+    block_size: '150G'
 object_class:
   wo_rf:
     oclass: "SX"

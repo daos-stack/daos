@@ -112,7 +112,7 @@ class TargetFailure(IorTestBase):
         to the usable state.
 
         1. Create a pool and a container.
-        2. Run IOR with oclass S1.
+        2. Run IOR with oclass SX.
         3. Exclude one target while IOR is running.
         4. Verify the IOR failed.
         5. Verify that the container's Health property is UNCLEAN.
