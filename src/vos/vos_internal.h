@@ -17,6 +17,7 @@
 #include <gurt/hash.h>
 #include <daos/btree.h>
 #include <daos/common.h>
+#include <daos/mem.h>
 #include <daos/lru.h>
 #include <daos_srv/daos_engine.h>
 #include <daos_srv/bio.h>
@@ -1281,6 +1282,8 @@ enum {
 	VOS_SLAB_MAX		= 7
 };
 D_CASSERT(VOS_SLAB_MAX <= UMM_SLABS_CNT);
+
+#include <daos/mem.h>
 
 static inline umem_off_t
 vos_slab_alloc(struct umem_instance *umm, int size, int slab_id)

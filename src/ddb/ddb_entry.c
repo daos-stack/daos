@@ -7,6 +7,7 @@
 #include <stdio.h>
 #include <daos_types.h>
 #include <stdarg.h>
+#include <sys/stat.h>
 #include "ddb_main.h"
 
 static char *
@@ -28,6 +29,66 @@ print_error(const char *fmt, ...)
 	return rc;
 }
 
+static int
+write_file(const char *dst_path, d_iov_t *contents)
+{
+	FILE *f;
+	int rc;
+
+	f = fopen(dst_path, "w");
+	if (f == NULL) {
+		rc = daos_errno2der(errno);
+		print_error("Unable to open path '%s': "DF_RC"\n", dst_path, DP_RC(rc));
+		return rc;
+	}
+
+	fwrite(contents->iov_buf, 1, contents->iov_len, f);
+
+	fclose(f);
+
+	return 0;
+}
+
+static size_t
+get_file_size(const char *path)
+{
+	struct stat st;
+
+	if (stat(path, &st) == 0)
+		return st.st_size;
+
+	return -DER_INVAL;
+}
+
+static size_t
+read_file(const char *path, d_iov_t *contents)
+{
+	FILE	*f;
+	int	 rc;
+	size_t	 result;
+
+	f = fopen(path, "r");
+	if (f == NULL) {
+		rc = daos_errno2der(errno);
+		print_error("Unable to open path '%s': "DF_RC"\n", path, DP_RC(rc));
+		return rc;
+	}
+
+	result = fread(contents->iov_buf, 1, contents->iov_buf_len, f);
+
+	fclose(f);
+
+	contents->iov_len = result;
+
+	return result;
+}
+
+static bool
+file_exists(const char *path)
+{
+	return access(path, F_OK) == 0;
+}
+
 int main(int argc, char *argv[])
 {
 	int rc;
@@ -35,6 +96,10 @@ int main(int argc, char *argv[])
 		.ddb_print_message = printf,
 		.ddb_print_error = print_error,
 		.ddb_get_input = get_input,
+		.ddb_write_file = write_file,
+		.ddb_read_file = read_file,
+		.ddb_get_file_size = get_file_size,
+		.ddb_get_file_exists = file_exists
 	};
 
 	rc = ddb_init();

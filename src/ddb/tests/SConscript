@@ -4,9 +4,9 @@ import os
 
 def scons():
     """Execute build"""
-    Import('base_env', 'prereqs', 'ddblib')
+    Import('env', 'prereqs', 'ddblib')
 
-    denv = base_env.Clone()
+    denv = env.Clone()
 
     # Add runtime paths for daos libraries
     denv.AppendUnique(RPATH_FULL=['$PREFIX/lib64/daos_srv'])
@@ -17,6 +17,10 @@ def scons():
     # for ddb includes
     denv.AppendUnique(CPPPATH=[Dir('../').srcnode()])
     denv.AppendUnique(LIBPATH=[Dir('../')])
+
+    # Add include directory for vos internal headers
+    denv.AppendUnique(CPPPATH=[Dir('../../vos/').srcnode()])
+    denv.AppendUnique(CPPPATH=[Dir('../../vos/')])
     denv.AppendUnique(CPPDEFINES='_GNU_SOURCE') # for fallocate
 
     libs = ['vos', 'daos_common_pmem', 'abt', 'gurt', 'uuid', 'bio',
@@ -26,7 +30,8 @@ def scons():
            'ddb_main_tests.c',
            'ddb_parse_tests.c',
            'ddb_test_driver.c',
-           'ddb_vos_tests.c']
+           'ddb_vos_tests.c',
+           'ddb_commands_print_tests.c']
     ddb_tests = daos_build.program(denv, 'ddb_tests',
                                    [ddblib, src],
                                    LIBS=libs)

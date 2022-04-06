@@ -7,6 +7,7 @@
 #include <fcntl.h>
 #include <libgen.h>
 #include <daos/tests_lib.h>
+#include <daos_srv/dtx_srv.h>
 #include <daos_srv/vos.h>
 #include <gurt/debug.h>
 #include <ddb_common.h>
@@ -14,6 +15,7 @@
 #include <sys/stat.h>
 #include "ddb_cmocka.h"
 #include "ddb_test_driver.h"
+
 
 #define DEFINE_IOV(str) {.iov_buf = str, .iov_buf_len = strlen(str), .iov_len = strlen(str)}
 
@@ -31,6 +33,9 @@ const char *g_uuids_str[] = {
 	"12345678-1234-1234-1234-123456789009",
 	"12345678-1234-1234-1234-123456789010",
 };
+
+const char *g_invalid_uuid_str = "99999999-9999-9999-9999-999999999999";
+daos_unit_oid_t g_invalid_oid = {.id_pub = {.lo = 99999, .hi = 9999} };
 
 char *g_dkeys_str[] = {
 	"dkey-1",
@@ -57,58 +62,49 @@ char *g_akeys_str[] = {
 	"akey-9",
 	"akey-10",
 };
+char	*g_invalid_key_str = "invalid key";
 
 daos_unit_oid_t	g_oids[10];
 uuid_t		g_uuids[10];
 daos_key_t	g_dkeys[10];
 daos_key_t	g_akeys[10];
+daos_recx_t	g_recxs[10];
+daos_key_t	g_invalid_key;
+daos_recx_t	g_invalid_recx = {.rx_nr = 9999, .rx_idx = 9999};
 
-daos_obj_id_t
-oid_gen(uint32_t lo)
-{
-	daos_obj_id_t	oid;
-	uint64_t	hdr;
-
-	hdr = 100;
-	hdr <<= 32;
-
-	/* generate a unique and not scary long object ID */
-	oid.lo	= lo;
-	oid.lo	|= hdr;
-	oid.hi	= 100;
-
-	return oid;
-}
 
 daos_unit_oid_t
-gen_uoid(uint32_t lo)
+dvt_gen_uoid(uint32_t i)
 {
-	daos_unit_oid_t	uoid;
+	daos_unit_oid_t	uoid = {0};
+	daos_obj_id_t	oid;
 
-	uoid.id_pub	= oid_gen(lo);
-	daos_obj_set_oid(&uoid.id_pub, daos_obj_feat2type(0), OC_SX, 1, 0);
+	oid.lo	= (1L << 32) + i;
+	oid.hi = (1 << 16) + i;
+	daos_obj_set_oid(&oid, DAOS_OT_MULTI_HASHED, OR_RP_1, 1, 0);
+
 	uoid.id_shard	= 0;
 	uoid.id_pad_32	= 0;
+	uoid.id_pub = oid;
 
 	return uoid;
 }
 
 void
 dvt_vos_insert_recx(daos_handle_t coh, daos_unit_oid_t uoid, char *dkey_str, char *akey_str,
-		    int recx_idx, char *data_str, daos_epoch_t epoch)
+		    daos_recx_t *recx, daos_epoch_t epoch)
 {
 	daos_key_t dkey = DEFINE_IOV(dkey_str);
 
-	d_iov_t iov = DEFINE_IOV(data_str);
+	d_iov_t iov = DEFINE_IOV("This is a recx value");
 	d_sg_list_t sgl = {.sg_iovs = &iov, .sg_nr = 1, .sg_nr_out = 1};
 
-	daos_recx_t recx = {.rx_nr = daos_sgl_buf_size(&sgl), .rx_idx = recx_idx};
 	daos_iod_t iod = {
 		.iod_name = DEFINE_IOV(akey_str),
 		.iod_type = DAOS_IOD_ARRAY,
 		.iod_nr = 1,
 		.iod_size = 1,
-		.iod_recxs = &recx
+		.iod_recxs = recx
 	};
 
 	assert_success(vos_obj_update(coh, uoid, epoch, 0, 0, &dkey, 1, &iod, NULL, &sgl));
@@ -131,6 +127,57 @@ dvt_vos_insert_single(daos_handle_t coh, daos_unit_oid_t uoid, char *dkey_str, c
 	};
 
 	assert_success(vos_obj_update(coh, uoid, epoch, 0, 0, &dkey, 1, &iod, NULL, &sgl));
+}
+
+
+
+/*
+ * These tests look at and verify how the ddb types are printed.
+ */
+int
+dvt_fake_print(const char *fmt, ...)
+{
+	va_list args;
+	uint32_t buffer_offset = strlen(dvt_fake_print_buffer);
+	uint32_t buffer_left;
+
+	buffer_left = ARRAY_SIZE(dvt_fake_print_buffer) - buffer_offset;
+	dvt_fake_print_called++;
+	va_start(args, fmt);
+	vsnprintf(dvt_fake_print_buffer + buffer_offset, buffer_left, fmt, args);
+	va_end(args);
+	if (g_verbose)
+		printf("%s", dvt_fake_print_buffer);
+
+	return 0;
+}
+
+void dvt_fake_print_reset(void)
+{
+	memset(dvt_fake_print_buffer, 0, ARRAY_SIZE(dvt_fake_print_buffer));
+}
+
+size_t
+dvt_fake_get_file_size(const char *path)
+{
+	return dvt_fake_get_file_size_result;
+}
+
+bool
+dvt_fake_get_file_exists(const char *path)
+{
+	return dvt_fake_get_file_exists_result;
+}
+
+size_t
+dvt_fake_read_file(const char *src_path, d_iov_t *contents)
+{
+	size_t to_copy = min(contents->iov_buf_len, ARRAY_SIZE(dvt_fake_read_file_buf));
+
+	memcpy(contents->iov_buf, dvt_fake_read_file_buf, to_copy);
+	contents->iov_len = to_copy;
+
+	return dvt_fake_read_file_result;
 }
 
 /*
@@ -193,7 +240,7 @@ setup_global_arrays()
 	int i;
 
 	for (i = 0; i < ARRAY_SIZE(g_oids); i++)
-		g_oids[i] = gen_uoid(i);
+		g_oids[i] = dvt_gen_uoid(i);
 
 	for (i = 0; i < ARRAY_SIZE(g_uuids_str); i++)
 		uuid_parse(g_uuids_str[i], g_uuids[i]);
@@ -203,6 +250,14 @@ setup_global_arrays()
 
 	for (i = 0; i < ARRAY_SIZE(g_akeys); i++)
 		d_iov_set(&g_akeys[i], g_akeys_str[i], strlen(g_akeys_str[i]));
+
+	d_iov_set(&g_invalid_key, g_invalid_key_str, strlen(g_invalid_key_str));
+
+	for (i = 0; i < ARRAY_SIZE(g_recxs); i++) {
+		g_recxs[0].rx_idx = i;
+		g_recxs[0].rx_nr = 10;
+	}
+
 	return 0;
 }
 
@@ -253,6 +308,32 @@ dvt_iov_alloc_str(d_iov_t *iov, const char *str)
 	strcpy(iov->iov_buf, str);
 }
 
+static void
+create_object_data(daos_handle_t *coh, uint32_t obj_to_create, uint32_t dkeys_to_create,
+			uint32_t akeys_to_create, uint32_t recx_to_create)
+{
+	int o, d, a, r; /* loop indexes */
+
+	for (o = 0; o < obj_to_create; o++) {
+		for (d = 0; d < dkeys_to_create; d++) {
+			for (a = 0; a < akeys_to_create; a++) {
+				if (a % 2 == 0) {
+					for (r = 0; r < recx_to_create; r++)
+						dvt_vos_insert_recx((*coh), g_oids[o],
+								    g_dkeys_str[d],
+								    g_akeys_str[a],
+								    &g_recxs[r], 1);
+				} else {
+					dvt_vos_insert_single((*coh), g_oids[o],
+							      g_dkeys_str[d],
+							      g_akeys_str[a],
+							      "This is a single value", 1);
+				}
+			}
+		}
+	}
+}
+
 void
 dvt_insert_data(daos_handle_t poh, uint32_t conts, uint32_t objs, uint32_t dkeys, uint32_t akeys)
 {
@@ -261,7 +342,8 @@ dvt_insert_data(daos_handle_t poh, uint32_t conts, uint32_t objs, uint32_t dkeys
 	uint32_t		obj_to_create = ARRAY_SIZE(g_oids);
 	uint32_t		dkeys_to_create = ARRAY_SIZE(g_dkeys);
 	uint32_t		akeys_to_create = ARRAY_SIZE(g_akeys);
-	int			c, o, d, a; /* loop indexes */
+	uint32_t		recx_to_create = ARRAY_SIZE(g_recxs);
+	int			c;
 
 	if (conts > 0)
 		cont_to_create = conts;
@@ -276,39 +358,106 @@ dvt_insert_data(daos_handle_t poh, uint32_t conts, uint32_t objs, uint32_t dkeys
 	for (c = 0; c < cont_to_create; c++) {
 		assert_success(vos_cont_create(poh, g_uuids[c]));
 		assert_success(vos_cont_open(poh, g_uuids[c], &coh));
-		for (o = 0; o < obj_to_create; o++) {
-			for (d = 0; d < dkeys_to_create; d++) {
-				for (a = 0; a < akeys_to_create; a++) {
-					if (a % 2 == 0) {
-						dvt_vos_insert_recx(coh, g_oids[o],
-								    g_dkeys_str[d],
-								    g_akeys_str[a], 1,
-								    "This is an array value", 1);
-					} else {
-						dvt_vos_insert_single(coh, g_oids[o],
-								      g_dkeys_str[d],
-								      g_akeys_str[a],
-								      "This is a single value", 1);
-					}
-				}
-			}
-		}
+
+		create_object_data(&coh, obj_to_create, dkeys_to_create, akeys_to_create,
+				   recx_to_create);
 		vos_cont_close(coh);
 	}
 }
 
-void
-dvt_delete_all_containers(daos_handle_t poh)
-{
-	int	c;
-	uuid_t	uuid;
 
-	for (c = 0; c < ARRAY_SIZE(g_uuids_str); c++) {
-		uuid_parse(g_uuids_str[c], uuid);
-		assert_success(vos_cont_destroy(poh, uuid));
-	}
+static void
+dvt_dtx_begin_helper(daos_handle_t coh, const daos_unit_oid_t *oid, daos_epoch_t epoch,
+		     uint64_t dkey_hash, struct dtx_handle **dthp)
+{
+	struct dtx_handle	*dth;
+	struct dtx_memberships	*mbs;
+	size_t			 size;
+
+	D_ALLOC_PTR(dth);
+	assert_non_null(dth);
+
+	memset(dth, 0, sizeof(*dth));
+
+	size = sizeof(struct dtx_memberships) + sizeof(struct dtx_daos_target);
+
+	D_ALLOC(mbs, size);
+	assert_non_null(mbs);
+
+	mbs->dm_tgt_cnt = 1;
+	mbs->dm_grp_cnt = 1;
+	mbs->dm_data_size = sizeof(struct dtx_daos_target);
+	mbs->dm_tgts[0].ddt_id = 1;
+
+	/** Use unique API so new UUID is generated even on same thread */
+	daos_dti_gen_unique(&(&dth->dth_dte)->dte_xid);
+	dth->dth_dte.dte_ver = 1;
+	dth->dth_dte.dte_refs = 1;
+	dth->dth_dte.dte_mbs = mbs;
+
+	dth->dth_coh = coh;
+	dth->dth_epoch = epoch;
+	dth->dth_leader_oid = *oid;
+
+	dth->dth_flags = DTE_LEADER;
+	dth->dth_modification_cnt = 1;
+
+	dth->dth_op_seq = 1;
+	dth->dth_dkey_hash = dkey_hash;
+
+	D_INIT_LIST_HEAD(&dth->dth_share_cmt_list);
+	D_INIT_LIST_HEAD(&dth->dth_share_abt_list);
+	D_INIT_LIST_HEAD(&dth->dth_share_act_list);
+	D_INIT_LIST_HEAD(&dth->dth_share_tbd_list);
+	dth->dth_shares_inited = 1;
+
+	vos_dtx_rsrvd_init(dth);
+
+	*dthp = dth;
 }
 
+static void
+dvt_dtx_end(struct dtx_handle *dth)
+{
+	D_FREE(dth->dth_dte.dte_mbs);
+	D_FREE_PTR(dth);
+}
+
+void
+dvt_vos_insert_2_records_with_dtx(daos_handle_t coh)
+{
+	struct dtx_handle	*dth1;
+	struct dtx_handle	*dth2;
+	const uint32_t		 recxs_nr = 1;
+	const uint32_t		 rec_size = 1;
+	daos_recx_t		 recxs[recxs_nr];
+	daos_iod_t		 iod = {0};
+	d_sg_list_t		 sgl = {0};
+	daos_epoch_t		 epoch = 1;
+
+	d_sgl_init(&sgl, 1);
+
+	recxs[0].rx_idx = 0;
+	recxs[0].rx_nr = daos_sgl_buf_size(&sgl);
+
+	iod.iod_recxs = recxs;
+	iod.iod_nr = recxs_nr;
+	iod.iod_size = rec_size;
+	iod.iod_type = DAOS_IOD_ARRAY;
+	dvt_iov_alloc_str(&iod.iod_name, "akey");
+
+	dvt_dtx_begin_helper(coh, &g_oids[0], epoch++, 0x123, &dth1);
+	dvt_dtx_begin_helper(coh, &g_oids[0], epoch++, 0x124, &dth2);
+	assert_success(vos_obj_update_ex(coh, g_oids[0], epoch, 0, 0, &g_dkeys[0], 1, &iod,
+					 NULL, &sgl, dth1));
+	assert_success(vos_obj_update_ex(coh, g_oids[1], epoch, 0, 0, &g_dkeys[1], 1, &iod,
+					 NULL, &sgl, dth2));
+	/* Only commit 1 of the  transactions */
+	assert_int_equal(1, vos_dtx_commit(coh, &dth1->dth_xid, 1, NULL));
+
+	dvt_dtx_end(dth1);
+	dvt_dtx_end(dth2);
+}
 
 struct ddb_test_driver_arguments {
 	bool	 dtda_create_vos_file;
@@ -375,6 +524,21 @@ create_test_vos_file()
 	return 0;
 }
 
+static bool
+char_in_tests(char a, char *str, uint32_t str_len)
+{
+	int i;
+
+	if (strlen(str) == 0) /* if there is no filter, always return true */
+		return true;
+	for (i = 0; i < str_len; i++) {
+		if (a == str[i])
+			return true;
+	}
+
+	return false;
+}
+
 /*
  * -----------------------------------------------
  * Execute
@@ -402,11 +566,20 @@ int main(int argc, char *argv[])
 	if (args.dtda_create_vos_file) {
 		create_test_vos_file();
 	} else {
-		rc += ddb_parse_tests_run();
-		rc += ddb_cmd_options_tests_run();
-		rc += dv_tests_run();
-		rc += dvc_tests_run();
-		rc += ddb_main_tests();
+#define RUN_TEST_SUIT(c, func)\
+	do {if (char_in_tests(c, test_suites, ARRAY_SIZE(test_suites))) \
+		rc += func(); } while (0)
+
+		/* filtering suites and tests */
+		char test_suites[] = "";
+
+		cmocka_set_test_filter("**");
+		RUN_TEST_SUIT('a', ddb_parse_tests_run);
+		RUN_TEST_SUIT('b', ddb_cmd_options_tests_run);
+		RUN_TEST_SUIT('c', dv_tests_run);
+		RUN_TEST_SUIT('d', dvc_tests_run);
+		RUN_TEST_SUIT('e', ddb_main_tests);
+		RUN_TEST_SUIT('f', ddb_commands_print_tests_run);
 	}
 
 	vos_self_fini();

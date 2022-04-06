@@ -43,6 +43,24 @@ run_cmd(struct ddb_ctx *ctx, struct argv_parsed *parse_args)
 	case DDB_CMD_LS:
 		rc = ddb_run_ls(ctx, &info.dci_cmd_option.dci_ls);
 		break;
+	case DDB_CMD_DUMP_SUPERBLOCK:
+		rc = ddb_run_dump_superblock(ctx);
+		break;
+	case DDB_CMD_DUMP_ILOG:
+		rc = ddb_run_dump_ilog(ctx, &info.dci_cmd_option.dci_dump_ilog);
+		break;
+	case DDB_CMD_DUMP_VALUE:
+		rc = ddb_run_dump_value(ctx, &info.dci_cmd_option.dci_dump_value);
+		break;
+	case DDB_CMD_RM:
+		rc = ddb_run_rm(ctx, &info.dci_cmd_option.dci_rm);
+		break;
+	case DDB_CMD_DUMP_DTX:
+		rc = ddb_run_dump_dtx(ctx, &info.dci_cmd_option.dci_dump_dtx);
+		break;
+	case DDB_CMD_LOAD:
+		rc = ddb_run_load(ctx, &info.dci_cmd_option.dci_load);
+		break;
 	}
 
 	if (!SUCCESS(rc))
@@ -70,7 +88,7 @@ ddb_main(struct ddb_io_ft *io_ft, int argc, char *argv[])
 	D_ASSERT(io_ft);
 	ctx.dc_io_ft = *io_ft;
 
-	rc = ddb_parse_program_args(argc, argv, &pa);
+	rc = ddb_parse_program_args(&ctx, argc, argv, &pa);
 	if (!SUCCESS(rc))
 		return rc;
 
@@ -125,6 +143,5 @@ ddb_main(struct ddb_io_ft *io_ft, int argc, char *argv[])
 		ddb_str2argv_free(&parse_args);
 	}
 
-	ddb_fini();
 	return 0;
 }

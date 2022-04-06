@@ -41,7 +41,7 @@ ddb_str2argv_free(struct argv_parsed *parse_args)
 }
 
 int
-ddb_parse_program_args(uint32_t argc, char **argv, struct program_args *pa)
+ddb_parse_program_args(struct ddb_ctx *ctx, uint32_t argc, char **argv, struct program_args *pa)
 {
 	struct option	program_options[] = {
 		{ "write_mode", no_argument, NULL,	'w' },
@@ -69,7 +69,7 @@ ddb_parse_program_args(uint32_t argc, char **argv, struct program_args *pa)
 			pa->pa_pool_uuid = optarg;
 			break;
 		case '?':
-			printf("'%c' is unknown\n", optopt);
+			ddb_errorf(ctx, "'%c' is unknown\n", optopt);
 			return -DER_INVAL;
 		default:
 			return -DER_INVAL;
@@ -77,7 +77,7 @@ ddb_parse_program_args(uint32_t argc, char **argv, struct program_args *pa)
 	}
 
 	if (argc - optind > 1) {
-		printf("Too many commands\n");
+		ddb_error(ctx, "Too many commands\n");
 		return -DER_INVAL;
 	}
 	if (argc - optind == 1)
@@ -105,8 +105,25 @@ is_idx(char *str, uint32_t *idx)
 	return false;
 }
 
+static int
+process_key(const char *tok, uint8_t **key_buf, daos_key_t *key)
+{
+	if (tok[0] != '\'' || tok[strlen(tok) - 1] != '\'') {
+		D_ERROR("Keys must be surrounded by '\n");
+		return -DER_INVAL;
+	}
+
+	D_ALLOC(*key_buf, strlen(tok) - 2);
+	if (*key_buf == NULL)
+		return -DER_NOMEM;
+	memcpy(*key_buf, tok + 1, strlen(tok) - 1);
+	d_iov_set(key, *key_buf, strlen(tok) - 2);
+
+	return 0;
+}
+
 int
-ddb_vtp_init(const char *path, struct dv_tree_path_builder *vt_path)
+ddb_vtp_init(daos_handle_t poh, const char *path, struct dv_tree_path_builder *vt_path)
 {
 	char		*path_copy;
 	char		*path_idx;
@@ -116,11 +133,16 @@ ddb_vtp_init(const char *path, struct dv_tree_path_builder *vt_path)
 	char		*hi;
 	char		*lo;
 	uint32_t	 path_len;
-	int		 rc = 0;
+	int		 rc;
 	uint32_t	 recx_str_len;
 
+	/* Setup vt_path */
+	D_ASSERT(vt_path);
+	memset(vt_path, 0, sizeof(*vt_path));
+	vt_path->vtp_poh = poh;
 	ddb_vos_tree_path_setup(vt_path);
 
+	/* If there is no path, leave it empty */
 	if (path == NULL)
 		return 0;
 
@@ -159,21 +181,17 @@ ddb_vtp_init(const char *path, struct dv_tree_path_builder *vt_path)
 	/* look for dkey */
 	tok = strtok(NULL, "/");
 	if (tok != NULL && !is_idx(tok, &vt_path->vtp_dkey_idx)) {
-		D_ALLOC(vt_path->vtp_dkey_buf, strlen(tok));
-		if (vt_path->vtp_dkey_buf == NULL)
-			D_GOTO(error, rc = -DER_NOMEM);
-		memcpy(vt_path->vtp_dkey_buf, tok, strlen(tok));
-		d_iov_set(&vt_path->vtp_path.vtp_dkey, vt_path->vtp_dkey_buf, strlen(tok));
+		rc = process_key(tok, &vt_path->vtp_dkey_buf, &vt_path->vtp_path.vtp_dkey);
+		if (!SUCCESS(rc))
+			D_GOTO(error, rc);
 	}
 
 	/* look for akey */
 	tok = strtok(NULL, "/");
 	if (tok != NULL && !is_idx(tok, &vt_path->vtp_akey_idx)) {
-		D_ALLOC(vt_path->vtp_akey_buf, strlen(tok));
-		if (vt_path->vtp_akey_buf == NULL)
-			D_GOTO(error, rc = -DER_NOMEM);
-		memcpy(vt_path->vtp_akey_buf, tok, strlen(tok));
-		d_iov_set(&vt_path->vtp_path.vtp_akey, vt_path->vtp_akey_buf, strlen(tok));
+		rc = process_key(tok, &vt_path->vtp_akey_buf, &vt_path->vtp_path.vtp_akey);
+		if (!SUCCESS(rc))
+			D_GOTO(error, rc);
 	}
 
 	/* look for recx */
@@ -219,8 +237,7 @@ ddb_vtp_init(const char *path, struct dv_tree_path_builder *vt_path)
 
 error:
 	D_FREE(path_copy);
-	D_FREE(vt_path->vtp_dkey_buf);
-	D_FREE(vt_path->vtp_akey_buf);
+	ddb_vtp_fini(vt_path);
 	return rc;
 }
 
