@@ -170,6 +170,7 @@ control_log_file: /tmp/daos_server.log
 helper_log_file: ""
 firmware_helper_log_file: ""
 fault_path: ""
+core_dump_filter: 19
 name: daos_server
 socket_dir: /var/run/daos_server
 provider: ofi+verbs

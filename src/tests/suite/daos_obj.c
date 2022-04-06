@@ -4716,6 +4716,26 @@ enum_recxs_with_aggregation(void **state)
 	enum_recxs_with_aggregation_internal(state, false);
 }
 
+static void
+io_tx_convert(void **state)
+{
+	test_arg_t	*arg = *state;
+	daos_obj_id_t	oid;
+	struct ioreq	req;
+
+	oid = daos_test_oid_gen(arg->coh, dts_obj_class, 0, 0, arg->myrank);
+	MPI_Barrier(MPI_COMM_WORLD);
+
+	arg->fail_loc = DAOS_FAIL_TX_CONVERT | DAOS_FAIL_ALWAYS;
+	ioreq_init(&req, arg->coh, oid, DAOS_IOD_ARRAY, arg);
+	/** Insert */
+	insert_single("dkey", "akey", 0, "data",
+		      strlen("data") + 1, DAOS_TX_NONE, &req);
+
+	punch_obj(DAOS_TX_NONE, &req);
+	ioreq_fini(&req);
+}
+
 static const struct CMUnitTest io_tests[] = {
 	{ "IO1: simple update/fetch/verify",
 	  io_simple, async_disable, test_case_teardown},
@@ -4809,6 +4829,8 @@ static const struct CMUnitTest io_tests[] = {
 	  invalid_int_key_setting, async_disable, test_case_teardown},
 	{ "IO45: enum recxs with aggregation",
 	  enum_recxs_with_aggregation, async_disable, test_case_teardown},
+	{ "IO46: tx convert",
+	  io_tx_convert, async_disable, test_case_teardown},
 };
 
 int

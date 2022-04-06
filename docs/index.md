@@ -16,5 +16,5 @@ and may also describe features that are currently under development for the
 next DAOS release.
 
 !!! warning
-    DAOS v2.2 is under active development. Use at your own risk. Please consider
+    DAOS v2.4 is under active development. Use at your own risk. Please consider
     a stable DAOS release (i.e., 2.0.x) for production deployments.
