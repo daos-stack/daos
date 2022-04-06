@@ -43,7 +43,7 @@ def base_setup(env, prereqs=None):
         if prev_compiler != compiler:
             print('Env is already setup for a different compiler')
         print('Env already setup')
-        Exit(2)
+        return
 
     # Turn on -Wall first, then DESIRED_FLAGS may disable some of the options
     # that this brings in.

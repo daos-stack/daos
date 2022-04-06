@@ -83,7 +83,7 @@ def scons():
     libraries += ['uuid', 'cmocka', 'pthread', 'isal']
 
     dfuse_env = base_env.Clone()
-    dfusetest = daos_build.program(dfuse_env, File("dfuse_test.c"))
+    dfusetest = daos_build.program(dfuse_env, File("dfuse_test.c"), LIBS='cmocka')
     denv.Install('$PREFIX/bin/', dfusetest)
 
     if not have_mpi:
