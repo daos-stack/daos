@@ -472,7 +472,7 @@ restarted to gain visibility to these changes. For additional information,
 please refer to the [System Deployment: Agent Startup][6] documentation
 section.
 
-[1]: <https://github.com/daos-stack/daos/blob/master/src/cart#readme> (Collective and RPC Transport)
+[1]: <https://github.com/daos-stack/daos/blob/release/2.2/src/cart#readme> (Collective and RPC Transport)
 [2]: <installation.md#distribution-packages> (DAOS distribution packages)
 [3]: <installation.md#building-daos--dependencies> (DAOS build documentation)
 [4]: <deployment.md#server-startup> (DAOS server startup documentation)

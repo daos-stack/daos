@@ -1,6 +1,6 @@
 # PyDAOS
 
-A python module called [PyDAOS](https://github.com/daos-stack/daos/blob/master/src/client/pydaos)
+A python module called [PyDAOS](https://github.com/daos-stack/daos/blob/release/2.2/src/client/pydaos)
 provides the DAOS API to python users. It aims at providing a pythonic interface
 to the DAOS objects by exposing them via native python data structures.
 This section focuses on the main PyDAOS interface that comes with its own

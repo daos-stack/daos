@@ -267,7 +267,7 @@ for more information.
 
 In this section the `daos_server`, `daos_agent`, and dmg command
 configuration files will be defined. Examples are available at
-<https://github.com/daos-stack/daos/tree/master/utils/config/examples>
+<https://github.com/daos-stack/daos/tree/release/2.2/utils/config/examples>
 
 1. Determine the addresses for the NVMe devices on the server nodes:
 

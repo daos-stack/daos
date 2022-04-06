@@ -272,7 +272,7 @@ $ java -Dpath="your path" -Dattr=user.daos.hadoop -Dvalue="fs.daos.server.group=
 
 For the "value" property, you need to follow pattern, key1=value1:key2=value2..
 .. And key\* should be from
-[daos-site-example.xml](https://github.com/daos-stack/daos/blob/release/master/src/client/java/hadoop-daos/src/main/resources/daos-site-example.xml).
+[daos-site-example.xml](https://github.com/daos-stack/daos/blob/release/release/2.2/src/client/java/hadoop-daos/src/main/resources/daos-site-example.xml).
 If value\* contains characters of '=' or ':', you need to escape the value with
 below command.
 

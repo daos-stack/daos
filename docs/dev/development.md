@@ -151,7 +151,7 @@ INCLUDE: Optional components to build
 ```
 
 The version of the components can be changed by editing the
-[utils/build.config](https://github.com/daos-stack/daos/blob/master/utils/build.config)
+[utils/build.config](https://github.com/daos-stack/daos/blob/release/2.2/utils/build.config)
 file.
 
 
@@ -251,9 +251,9 @@ work, but are not guaranteed.  You may encounter installation errors when
 building from source relating to insufficient permissions.  If that occurs,
 you may try relocating the repo to `/var/tmp/` in order to build and install from there.
 
-- [Protocol Buffers](https://github.com/protocolbuffers/protobuf) v3.11.4. [Installation instructions](https://github.com/protocolbuffers/protobuf/blob/master/src/README.md).
-- [Protobuf-C](https://github.com/protobuf-c/protobuf-c) v1.3.3. [Installation instructions](https://github.com/protobuf-c/protobuf-c/blob/master/README.md).
-- gRPC plugin: [protoc-gen-go](https://github.com/golang/protobuf) is the version specified in [go.mod](https://github.com/daos-stack/daos/blob/master/src/control/go.mod). This plugin is automatically installed by the Makefile in $DAOSREPO/src/proto.
+- [Protocol Buffers](https://github.com/protocolbuffers/protobuf) v3.11.4. [Installation instructions](https://github.com/protocolbuffers/protobuf/blob/release/2.2/src/README.md).
+- [Protobuf-C](https://github.com/protobuf-c/protobuf-c) v1.3.3. [Installation instructions](https://github.com/protobuf-c/protobuf-c/blob/release/2.2/README.md).
+- gRPC plugin: [protoc-gen-go](https://github.com/golang/protobuf) is the version specified in [go.mod](https://github.com/daos-stack/daos/blob/release/2.2/src/control/go.mod). This plugin is automatically installed by the Makefile in $DAOSREPO/src/proto.
 
 ### Compiling Protobuf Files
 
@@ -295,7 +295,7 @@ On Mac, please make sure that the Docker settings under
 To build the Docker image directly from GitHub, run the following command:
 
 ```bash
-$ docker build https://github.com/daos-stack/daos.git#master \
+$ docker build https://github.com/daos-stack/daos.git#release/2.2 \
         -f utils/docker/Dockerfile.centos.7 -t daos
 ```
 
