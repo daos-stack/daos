@@ -476,7 +476,7 @@ class DaosServerManager(SubprocessManager):
 
             self.log.info("Changing ownership to %s for: %s", user, scm_mount)
             cmd_list.add(
-                "sudo chown -R {0}:{0} {1}".format(user, " ".join(scm_mount)))
+                "chown -R {0}:{0} {1}".format(user, " ".join(scm_mount)))
 
         if cmd_list:
             pcmd(self._hosts, "; ".join(cmd_list), verbose)
