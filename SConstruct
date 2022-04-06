@@ -90,10 +90,10 @@ def update_rpm_version(version, tag):
             spec.insert(line_num + 1,
                         "- Version bump up to {}\n".format(tag))
             spec.insert(line_num + 1,
-                        u'* {} {} - {}-{}\n'.format(date_str,
-                                                    packager,
-                                                    version,
-                                                    release))
+                        '* {} {} - {}-{}\n'.format(date_str,
+                                                   packager,
+                                                   version,
+                                                   release))
             break
     open("utils/rpms/daos.spec", "w").writelines(spec)  # pylint: disable=consider-using-with
 

@@ -1,6 +1,5 @@
 """Build daos common tests"""
 import daos_build
-import compiler_setup
 
 def define_checksum_timing(build, env):
     """Define the Checksum Timing build"""
