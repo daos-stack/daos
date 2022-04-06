@@ -335,9 +335,8 @@ def run_metrics_check(self, logging=True, prefix=None):
         prefix (str): add prefix to name; ie initial or final
     """
     enable_telemetry = self.params.get("enable_telemetry", "/run/*")
+    engine_count = self.params.get("engines_per_host", "/run/server_config/*", default=1)
     if enable_telemetry:
-        engine_count = self.server_managers[0].get_config_value(
-            "engines_per_host")
         for engine in range(engine_count):
             name = "pass" + str(self.loop) + "_metrics_{}.csv".format(engine)
             if prefix:
@@ -504,8 +503,7 @@ def launch_exclude_reintegrate(self, pool, name, results, args):
     tgt_idx = None
     if name == "EXCLUDE":
         targets = self.params.get("targets_exclude", "/run/soak_harassers/*", 8)
-        engine_count = self.server_managers[0].get_config_value(
-            "engines_per_host")
+        engine_count = self.params.get("engines_per_host", "/run/server_config/*", default=1)
         exclude_servers = (
             len(self.hostlist_servers) * int(engine_count)) - 1
         # Exclude one rank.
@@ -581,9 +579,8 @@ def launch_server_stop_start(self, pools, name, results, args):
     params = {}
     rank = None
     drain = self.params.get("enable_drain", "/run/soak_harassers/*", False)
+    engine_count = self.params.get("engines_per_host", "/run/server_config/*", default=1)
     if name == "SVR_STOP":
-        engine_count = self.server_managers[0].get_config_value(
-            "engines_per_host")
         exclude_servers = (
             len(self.hostlist_servers) * int(engine_count)) - 1
         # Exclude one rank.
