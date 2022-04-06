@@ -83,7 +83,7 @@ from GitHub with the following command:
 
 ```bash
 $ docker build --tag daos-base:rocky8.4 \
-	https://github.com/daos-stack/daos.git#releaes/2.2:utils/docker/vcluster/daos-base/el8
+	https://github.com/daos-stack/daos.git#release/2.2:utils/docker/vcluster/daos-base/el8
 ```
 
 This Docker file accept the following arguments:
