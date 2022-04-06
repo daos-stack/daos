@@ -55,7 +55,7 @@ source "$(readlink ${ACTIVE_CONFIG})"
 
 log_section "Destroying DAOS Servers & Clients"
 
-pushd "${SCRIPT_DIR}/../full_cluster_setup"
+pushd "${SCRIPT_DIR}/../daos_cluster"
 terraform destroy -auto-approve
 popd
 

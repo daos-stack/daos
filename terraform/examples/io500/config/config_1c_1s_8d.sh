@@ -55,8 +55,8 @@ export TF_VAR_subnetwork="default"
 export TF_VAR_subnetwork_project="${TF_VAR_project_id}"
 export TF_VAR_region="us-central1"
 export TF_VAR_zone="us-central1-f"
-export TF_VAR_preemptible="${PREEMPTIBLE_INSTANCES}"
 # Servers
+export TF_VAR_server_preemptible=${PREEMPTIBLE_INSTANCES}
 export TF_VAR_server_number_of_instances=${DAOS_SERVER_INSTANCE_COUNT}
 export TF_VAR_server_daos_disk_count=${DAOS_SERVER_DISK_COUNT}
 export TF_VAR_server_daos_crt_timeout=${DAOS_SERVER_CRT_TIMEOUT}
@@ -70,6 +70,7 @@ export TF_VAR_server_machine_type="${DAOS_SERVER_MACHINE_TYPE}"
 export TF_VAR_server_os_project="${TF_VAR_project_id}"
 export TF_VAR_server_os_family="daos-server-io500-centos-7"
 # Clients
+export TF_VAR_client_preemptible=${PREEMPTIBLE_INSTANCES}
 export TF_VAR_client_number_of_instances=${DAOS_CLIENT_INSTANCE_COUNT}
 export TF_VAR_client_instance_base_name="${DAOS_CLIENT_BASE_NAME}"
 export TF_VAR_client_os_disk_size_gb=20

@@ -276,7 +276,7 @@ build_disk_images() {
 
 run_terraform() {
   log_section "Deploying DAOS Servers and Clients using Terraform"
-  pushd ../full_cluster_setup
+  pushd ../daos_cluster
   terraform init -input=false
   terraform plan -out=tfplan -input=false
   terraform apply -input=false tfplan

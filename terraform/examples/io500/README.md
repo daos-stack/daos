@@ -1,6 +1,6 @@
 # IO500 Example
 
-This example leverages another example [full_cluster_setup](../full_cluster_setup)
+This example leverages another example [daos_cluster](../daos_cluster)
 to provision a DAOS cluster and configure the clients so that an IO500 benchmark
 may be run.
 
