@@ -139,7 +139,7 @@ calc_filterfunc_idx(daos_filter_part_t **parts, uint32_t idx)
 	else if (!strncmp(part_type, "DAOS_FILTER_FUNC_DIV", part_type_s))
 		return 33;
 	else if (!strncmp(part_type, "DAOS_FILTER_FUNC_SUM", part_type_s) ||
-		   !strncmp(part_type, "DAOS_FILTER_FUNC_AVG", part_type_s))
+		 !strncmp(part_type, "DAOS_FILTER_FUNC_AVG", part_type_s))
 		return 36;
 	else if (!strncmp(part_type, "DAOS_FILTER_FUNC_MAX", part_type_s))
 		return 39;

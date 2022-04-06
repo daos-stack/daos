@@ -306,8 +306,8 @@ shard_pipeline_run_task(tse_task_t *task)
 
 	/** -- nr_iods, nr_kds for this shard */
 
-	nr_iods = *(args->pra_api_args->nr_iods);
-	nr_kds  = *(args->pra_api_args->nr_kds);
+	nr_iods = *args->pra_api_args->nr_iods;
+	nr_kds  = *args->pra_api_args->nr_kds;
 
 	/** -- register call back function for this particular shard task */
 

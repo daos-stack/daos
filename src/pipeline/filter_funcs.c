@@ -11,7 +11,7 @@
 #include "pipeline_internal.h"
 
 #define filter_func_getdata(type, ctype)                                                           \
-	static int filter_func_getdata_##type(struct filter_part_run_t *args, _##ctype *data)      \
+	static int filter_func_getdata_##type(struct filter_part_run_t *args, _##ctype * data)     \
 	{                                                                                          \
 		int rc;                                                                            \
 		args->part_idx += 1;                                                               \
@@ -225,7 +225,7 @@ filter_func_log_st(ge);
 filter_func_log_st(gt);
 
 #define arithfunc_add(type, ctype)                                                                 \
-	static int arithfunc_add_##type(_##ctype left, _##ctype right, _##ctype *res)              \
+	static int arithfunc_add_##type(_##ctype left, _##ctype right, _##ctype * res)             \
 	{                                                                                          \
 		*res = left + right;                                                               \
 		return 0;                                                                          \
@@ -236,7 +236,7 @@ arithfunc_add(i, int64_t);
 arithfunc_add(d, double);
 
 #define arithfunc_sub(type, ctype)                                                                 \
-	static int arithfunc_sub_##type(_##ctype left, _##ctype right, _##ctype *res)              \
+	static int arithfunc_sub_##type(_##ctype left, _##ctype right, _##ctype * res)             \
 	{                                                                                          \
 		*res = left - right;                                                               \
 		return 0;                                                                          \
@@ -247,7 +247,7 @@ arithfunc_sub(i, int64_t);
 arithfunc_sub(d, double);
 
 #define arithfunc_mul(type, ctype)                                                                 \
-	static int arithfunc_mul_##type(_##ctype left, _##ctype right, _##ctype *res)              \
+	static int arithfunc_mul_##type(_##ctype left, _##ctype right, _##ctype * res)             \
 	{                                                                                          \
 		*res = left * right;                                                               \
 		return 0;                                                                          \
@@ -258,7 +258,7 @@ arithfunc_mul(i, int64_t);
 arithfunc_mul(d, double);
 
 #define arithfunc_div(type, ctype)                                                                 \
-	static int arithfunc_div_##type(_##ctype left, _##ctype right, _##ctype *res)              \
+	static int arithfunc_div_##type(_##ctype left, _##ctype right, _##ctype * res)             \
 	{                                                                                          \
 		if (right == (_##ctype)0)                                                          \
 			return -DER_DIV_BY_ZERO;                                                   \
