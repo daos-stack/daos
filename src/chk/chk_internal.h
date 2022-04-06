@@ -14,7 +14,7 @@
 #include <daos/rpc.h>
 #include <daos_srv/daos_chk.h>
 
-#include "check.pb-c.h"
+#include "chk.pb-c.h"
 
 /*
  * RPC operation codes

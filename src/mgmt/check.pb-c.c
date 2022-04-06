@@ -688,10 +688,10 @@ static const ProtobufCFieldDescriptor mgmt__check_inconsist_policy__field_descri
     "inconsist_cas",
     1,
     PROTOBUF_C_LABEL_NONE,
-    PROTOBUF_C_TYPE_UINT32,
+    PROTOBUF_C_TYPE_ENUM,
     0,   /* quantifier_offset */
     offsetof(Mgmt__CheckInconsistPolicy, inconsist_cas),
-    NULL,
+    &chk__check_inconsist_class__descriptor,
     NULL,
     0,             /* flags */
     0,NULL,NULL    /* reserved1,reserved2, etc */
@@ -700,10 +700,10 @@ static const ProtobufCFieldDescriptor mgmt__check_inconsist_policy__field_descri
     "inconsist_act",
     2,
     PROTOBUF_C_LABEL_NONE,
-    PROTOBUF_C_TYPE_UINT32,
+    PROTOBUF_C_TYPE_ENUM,
     0,   /* quantifier_offset */
     offsetof(Mgmt__CheckInconsistPolicy, inconsist_act),
-    NULL,
+    &chk__check_inconsist_action__descriptor,
     NULL,
     0,             /* flags */
     0,NULL,NULL    /* reserved1,reserved2, etc */
@@ -1159,10 +1159,10 @@ static const ProtobufCFieldDescriptor mgmt__check_query_target__field_descriptor
     "status",
     3,
     PROTOBUF_C_LABEL_NONE,
-    PROTOBUF_C_TYPE_UINT32,
+    PROTOBUF_C_TYPE_ENUM,
     0,   /* quantifier_offset */
     offsetof(Mgmt__CheckQueryTarget, status),
-    NULL,
+    &chk__check_inst_status__descriptor,
     NULL,
     0,             /* flags */
     0,NULL,NULL    /* reserved1,reserved2, etc */
@@ -1237,10 +1237,10 @@ static const ProtobufCFieldDescriptor mgmt__check_query_pool__field_descriptors[
     "status",
     2,
     PROTOBUF_C_LABEL_NONE,
-    PROTOBUF_C_TYPE_UINT32,
+    PROTOBUF_C_TYPE_ENUM,
     0,   /* quantifier_offset */
     offsetof(Mgmt__CheckQueryPool, status),
-    NULL,
+    &chk__check_pool_status__descriptor,
     NULL,
     0,             /* flags */
     0,NULL,NULL    /* reserved1,reserved2, etc */
@@ -1249,10 +1249,10 @@ static const ProtobufCFieldDescriptor mgmt__check_query_pool__field_descriptors[
     "phase",
     3,
     PROTOBUF_C_LABEL_NONE,
-    PROTOBUF_C_TYPE_UINT32,
+    PROTOBUF_C_TYPE_ENUM,
     0,   /* quantifier_offset */
     offsetof(Mgmt__CheckQueryPool, phase),
-    NULL,
+    &chk__check_scan_phase__descriptor,
     NULL,
     0,             /* flags */
     0,NULL,NULL    /* reserved1,reserved2, etc */
@@ -1322,7 +1322,7 @@ const ProtobufCMessageDescriptor mgmt__check_query_pool__descriptor =
   (ProtobufCMessageInit) mgmt__check_query_pool__init,
   NULL,NULL,NULL    /* reserved[123] */
 };
-static const ProtobufCFieldDescriptor mgmt__check_query_resp__field_descriptors[6] =
+static const ProtobufCFieldDescriptor mgmt__check_query_resp__field_descriptors[7] =
 {
   {
     "req_status",
@@ -1340,10 +1340,10 @@ static const ProtobufCFieldDescriptor mgmt__check_query_resp__field_descriptors[
     "ins_status",
     2,
     PROTOBUF_C_LABEL_NONE,
-    PROTOBUF_C_TYPE_UINT32,
+    PROTOBUF_C_TYPE_ENUM,
     0,   /* quantifier_offset */
     offsetof(Mgmt__CheckQueryResp, ins_status),
-    NULL,
+    &chk__check_inst_status__descriptor,
     NULL,
     0,             /* flags */
     0,NULL,NULL    /* reserved1,reserved2, etc */
@@ -1352,10 +1352,10 @@ static const ProtobufCFieldDescriptor mgmt__check_query_resp__field_descriptors[
     "ins_phase",
     3,
     PROTOBUF_C_LABEL_NONE,
-    PROTOBUF_C_TYPE_UINT32,
+    PROTOBUF_C_TYPE_ENUM,
     0,   /* quantifier_offset */
     offsetof(Mgmt__CheckQueryResp, ins_phase),
-    NULL,
+    &chk__check_scan_phase__descriptor,
     NULL,
     0,             /* flags */
     0,NULL,NULL    /* reserved1,reserved2, etc */
@@ -1396,19 +1396,32 @@ static const ProtobufCFieldDescriptor mgmt__check_query_resp__field_descriptors[
     0,             /* flags */
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
+  {
+    "reports",
+    7,
+    PROTOBUF_C_LABEL_REPEATED,
+    PROTOBUF_C_TYPE_MESSAGE,
+    offsetof(Mgmt__CheckQueryResp, n_reports),
+    offsetof(Mgmt__CheckQueryResp, reports),
+    &chk__check_report__descriptor,
+    NULL,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
 };
 static const unsigned mgmt__check_query_resp__field_indices_by_name[] = {
   3,   /* field[3] = inconsistency */
   2,   /* field[2] = ins_phase */
   1,   /* field[1] = ins_status */
   5,   /* field[5] = pools */
+  6,   /* field[6] = reports */
   0,   /* field[0] = req_status */
   4,   /* field[4] = time */
 };
 static const ProtobufCIntRange mgmt__check_query_resp__number_ranges[1 + 1] =
 {
   { 1, 0 },
-  { 0, 6 }
+  { 0, 7 }
 };
 const ProtobufCMessageDescriptor mgmt__check_query_resp__descriptor =
 {
@@ -1418,7 +1431,7 @@ const ProtobufCMessageDescriptor mgmt__check_query_resp__descriptor =
   "Mgmt__CheckQueryResp",
   "mgmt",
   sizeof(Mgmt__CheckQueryResp),
-  6,
+  7,
   mgmt__check_query_resp__field_descriptors,
   mgmt__check_query_resp__field_indices_by_name,
   1,  mgmt__check_query_resp__number_ranges,
@@ -1557,10 +1570,10 @@ static const ProtobufCFieldDescriptor mgmt__check_act_req__field_descriptors[4] 
     "act",
     3,
     PROTOBUF_C_LABEL_NONE,
-    PROTOBUF_C_TYPE_UINT32,
+    PROTOBUF_C_TYPE_ENUM,
     0,   /* quantifier_offset */
     offsetof(Mgmt__CheckActReq, act),
-    NULL,
+    &chk__check_inconsist_action__descriptor,
     NULL,
     0,             /* flags */
     0,NULL,NULL    /* reserved1,reserved2, etc */

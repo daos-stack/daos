@@ -15,10 +15,13 @@ def scons():
     prereqs.require(denv, 'argobots', 'protobufc')
 
     # chk
+    chk_pb = denv.SharedObject(['chk.pb-c.c'])
     chk = daos_build.library(denv, 'chk',
-                             ['check.pb-c.c', 'chk_srv.c', 'chk_common.c'],
+                             [chk_pb, 'chk_srv.c', 'chk_common.c'],
                              install_off="../..")
     denv.Install('$PREFIX/lib64/daos_srv', chk)
+
+    Export('chk_pb')
 
 if __name__ == "SCons.Script":
     scons()

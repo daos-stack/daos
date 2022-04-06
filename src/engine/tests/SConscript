@@ -34,7 +34,7 @@ def scons():
     daos_build.test(unit_env, 'drpc_client_tests',
                     ['drpc_client_tests.c', drpc_test_utils,
                      '../drpc_client.c', '../drpc_ras.c', '../srv.pb-c.c',
-                     '../event.pb-c.c'],
+                     '../event.pb-c.c', '../../chk/chk.pb-c.c'],
                     LIBS=['daos_common', 'protobuf-c', 'gurt', 'cmocka',
                           'uuid', 'pthread', 'abt', 'cart'])
 
