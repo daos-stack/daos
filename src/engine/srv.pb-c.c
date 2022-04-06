@@ -1403,197 +1403,28 @@ const ProtobufCMessageDescriptor srv__check_dereg_pool_resp__descriptor =
   (ProtobufCMessageInit) srv__check_dereg_pool_resp__init,
   NULL,NULL,NULL    /* reserved[123] */
 };
-static const ProtobufCFieldDescriptor srv__check_report_req__field_descriptors[14] =
+static const ProtobufCFieldDescriptor srv__check_report_req__field_descriptors[1] =
 {
   {
-    "seq",
+    "report",
     1,
     PROTOBUF_C_LABEL_NONE,
-    PROTOBUF_C_TYPE_UINT64,
+    PROTOBUF_C_TYPE_MESSAGE,
     0,   /* quantifier_offset */
-    offsetof(Srv__CheckReportReq, seq),
+    offsetof(Srv__CheckReportReq, report),
+    &chk__check_report__descriptor,
     NULL,
-    NULL,
-    0,             /* flags */
-    0,NULL,NULL    /* reserved1,reserved2, etc */
-  },
-  {
-    "class",
-    2,
-    PROTOBUF_C_LABEL_NONE,
-    PROTOBUF_C_TYPE_UINT64,
-    0,   /* quantifier_offset */
-    offsetof(Srv__CheckReportReq, class_),
-    NULL,
-    NULL,
-    0,             /* flags */
-    0,NULL,NULL    /* reserved1,reserved2, etc */
-  },
-  {
-    "action",
-    3,
-    PROTOBUF_C_LABEL_NONE,
-    PROTOBUF_C_TYPE_UINT32,
-    0,   /* quantifier_offset */
-    offsetof(Srv__CheckReportReq, action),
-    NULL,
-    NULL,
-    0,             /* flags */
-    0,NULL,NULL    /* reserved1,reserved2, etc */
-  },
-  {
-    "repaired",
-    4,
-    PROTOBUF_C_LABEL_NONE,
-    PROTOBUF_C_TYPE_BOOL,
-    0,   /* quantifier_offset */
-    offsetof(Srv__CheckReportReq, repaired),
-    NULL,
-    NULL,
-    0,             /* flags */
-    0,NULL,NULL    /* reserved1,reserved2, etc */
-  },
-  {
-    "rank",
-    5,
-    PROTOBUF_C_LABEL_NONE,
-    PROTOBUF_C_TYPE_UINT32,
-    0,   /* quantifier_offset */
-    offsetof(Srv__CheckReportReq, rank),
-    NULL,
-    NULL,
-    0,             /* flags */
-    0,NULL,NULL    /* reserved1,reserved2, etc */
-  },
-  {
-    "target",
-    6,
-    PROTOBUF_C_LABEL_NONE,
-    PROTOBUF_C_TYPE_UINT32,
-    0,   /* quantifier_offset */
-    offsetof(Srv__CheckReportReq, target),
-    NULL,
-    NULL,
-    0,             /* flags */
-    0,NULL,NULL    /* reserved1,reserved2, etc */
-  },
-  {
-    "pool_uuid",
-    7,
-    PROTOBUF_C_LABEL_NONE,
-    PROTOBUF_C_TYPE_STRING,
-    0,   /* quantifier_offset */
-    offsetof(Srv__CheckReportReq, pool_uuid),
-    NULL,
-    &protobuf_c_empty_string,
-    0,             /* flags */
-    0,NULL,NULL    /* reserved1,reserved2, etc */
-  },
-  {
-    "cont_uuid",
-    8,
-    PROTOBUF_C_LABEL_NONE,
-    PROTOBUF_C_TYPE_STRING,
-    0,   /* quantifier_offset */
-    offsetof(Srv__CheckReportReq, cont_uuid),
-    NULL,
-    &protobuf_c_empty_string,
-    0,             /* flags */
-    0,NULL,NULL    /* reserved1,reserved2, etc */
-  },
-  {
-    "objid",
-    9,
-    PROTOBUF_C_LABEL_NONE,
-    PROTOBUF_C_TYPE_STRING,
-    0,   /* quantifier_offset */
-    offsetof(Srv__CheckReportReq, objid),
-    NULL,
-    &protobuf_c_empty_string,
-    0,             /* flags */
-    0,NULL,NULL    /* reserved1,reserved2, etc */
-  },
-  {
-    "dkey",
-    10,
-    PROTOBUF_C_LABEL_NONE,
-    PROTOBUF_C_TYPE_STRING,
-    0,   /* quantifier_offset */
-    offsetof(Srv__CheckReportReq, dkey),
-    NULL,
-    &protobuf_c_empty_string,
-    0,             /* flags */
-    0,NULL,NULL    /* reserved1,reserved2, etc */
-  },
-  {
-    "akey",
-    11,
-    PROTOBUF_C_LABEL_NONE,
-    PROTOBUF_C_TYPE_STRING,
-    0,   /* quantifier_offset */
-    offsetof(Srv__CheckReportReq, akey),
-    NULL,
-    &protobuf_c_empty_string,
-    0,             /* flags */
-    0,NULL,NULL    /* reserved1,reserved2, etc */
-  },
-  {
-    "timestamp",
-    12,
-    PROTOBUF_C_LABEL_NONE,
-    PROTOBUF_C_TYPE_STRING,
-    0,   /* quantifier_offset */
-    offsetof(Srv__CheckReportReq, timestamp),
-    NULL,
-    &protobuf_c_empty_string,
-    0,             /* flags */
-    0,NULL,NULL    /* reserved1,reserved2, etc */
-  },
-  {
-    "msg",
-    13,
-    PROTOBUF_C_LABEL_NONE,
-    PROTOBUF_C_TYPE_STRING,
-    0,   /* quantifier_offset */
-    offsetof(Srv__CheckReportReq, msg),
-    NULL,
-    &protobuf_c_empty_string,
-    0,             /* flags */
-    0,NULL,NULL    /* reserved1,reserved2, etc */
-  },
-  {
-    "options",
-    14,
-    PROTOBUF_C_LABEL_REPEATED,
-    PROTOBUF_C_TYPE_STRING,
-    offsetof(Srv__CheckReportReq, n_options),
-    offsetof(Srv__CheckReportReq, options),
-    NULL,
-    &protobuf_c_empty_string,
     0,             /* flags */
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
 };
 static const unsigned srv__check_report_req__field_indices_by_name[] = {
-  2,   /* field[2] = action */
-  10,   /* field[10] = akey */
-  1,   /* field[1] = class */
-  7,   /* field[7] = cont_uuid */
-  9,   /* field[9] = dkey */
-  12,   /* field[12] = msg */
-  8,   /* field[8] = objid */
-  13,   /* field[13] = options */
-  6,   /* field[6] = pool_uuid */
-  4,   /* field[4] = rank */
-  3,   /* field[3] = repaired */
-  0,   /* field[0] = seq */
-  5,   /* field[5] = target */
-  11,   /* field[11] = timestamp */
+  0,   /* field[0] = report */
 };
 static const ProtobufCIntRange srv__check_report_req__number_ranges[1 + 1] =
 {
   { 1, 0 },
-  { 0, 14 }
+  { 0, 1 }
 };
 const ProtobufCMessageDescriptor srv__check_report_req__descriptor =
 {
@@ -1603,7 +1434,7 @@ const ProtobufCMessageDescriptor srv__check_report_req__descriptor =
   "Srv__CheckReportReq",
   "srv",
   sizeof(Srv__CheckReportReq),
-  14,
+  1,
   srv__check_report_req__field_descriptors,
   srv__check_report_req__field_indices_by_name,
   1,  srv__check_report_req__number_ranges,

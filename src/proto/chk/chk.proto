@@ -181,3 +181,28 @@ enum CheckScanPhase {
 
 	DSP_DONE = 10; // All done.
 }
+
+// DAOS check engine reports the found inconsistency and repair result to control plane.
+// If the repair action is CIA_INTERACT, then the control plane will reply current dRPC
+// firstly, and then interact with the admin for the repair decision in another section
+// and tell DAOS check engine via another DRPC_METHOD_MGMT_CHK_ACT dRPC call.
+//
+// If the CheckReport::msg is not enough to help admin to make the decision, then we
+// may have to leverage DAOS debug tools to dump more information from related target.
+message CheckReport {
+        uint64 seq = 1; // DAOS Check event sequence, unique for the instance.
+        CheckInconsistClass class = 2; // Inconsistency class
+        CheckInconsistAction action = 3; // The action taken to repair the inconsistency
+        bool repaired = 4; // Repaired or not, meaningless if the action is CIA_INTERACT.
+        uint32 rank = 5; // Inconsistency happened on which rank if applicable.
+        uint32 target = 6; // Inconsistency happened on which target in the rank if applicable.
+        string pool_uuid = 7; // The consistency is in which pool if applicable.
+        string cont_uuid = 8; // The consistency is in which container if applicable.
+        string objid = 9; // The consistency is in which object if applicable.
+        string dkey = 10; // The consistency is in which dkey if applicable.
+        string akey = 11; // The consistency is in which akey if applicable.
+        string timestamp = 12; // The time of report (and repair) the inconsistency.
+        string msg = 13; // Information to describe the inconsistency in detail.
+        repeated CheckInconsistAction actions = 14; // Potential actions to be made in interaction mode.
+        repeated string details = 15; // Details for each potential action (length should match actions)
+}

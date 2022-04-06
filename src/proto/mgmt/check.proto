@@ -9,6 +9,8 @@ package mgmt;
 
 option go_package = "github.com/daos-stack/daos/src/control/common/proto/mgmt";
 
+import "chk/chk.proto";
+
 // Check Protobuf Definitions related to interactions between
 // DAOS control server and DAOS check via dRPC.
 
@@ -18,8 +20,8 @@ option go_package = "github.com/daos-stack/daos/src/control/common/proto/mgmt";
 // to DAOS engine when start check and cannot changed during check scanning, but can be list
 // via 'dmg check prop' - see CheckPropResp.
 message CheckInconsistPolicy {
-	uint32 inconsist_cas = 1; // See CheckInconsistClass.
-	uint32 inconsist_act = 2; // See CheckInconsistAction.
+	chk.CheckInconsistClass inconsist_cas = 1; // See CheckInconsistClass.
+	chk.CheckInconsistAction inconsist_act = 2; // See CheckInconsistAction.
 }
 
 // For 'dmg check start'.
@@ -86,7 +88,7 @@ message CheckQueryInconsist {
 message CheckQueryTarget {
 	uint32 rank = 1; // Rank ID.
 	uint32 target = 2; // Target index in the rank.
-	uint32 status = 3; // Check instance status on this target - see CheckInstStatus.
+	chk.CheckInstStatus status = 3; // Check instance status on this target - see CheckInstStatus.
 	// Inconsistency statistics during the phases range
 	// [CSP_DTX_RESYNC, OSP_AGGREGATION] for the pool shard on the target.
 	CheckQueryInconsist inconsistency = 4;
@@ -97,8 +99,8 @@ message CheckQueryTarget {
 // Check query result for the pool.
 message CheckQueryPool {
 	string uuid = 1; // Pool UUID.
-	uint32 status = 2; // Pool status - see CheckPoolStatus.
-	uint32 phase = 3; // Scan phase - see CheckScanPhase.
+	chk.CheckPoolStatus status = 2; // Pool status - see CheckPoolStatus.
+	chk.CheckScanPhase phase = 3; // Scan phase - see CheckScanPhase.
 	// Inconsistency statistics during the phases range
 	// [CSP_POOL_MBS, CSP_CONT_CLEANUP] for the pool.
 	CheckQueryInconsist inconsistency = 4;
@@ -117,12 +119,12 @@ message CheckQueryResp {
 	// As long as one target is in CIS_RUNNING, then the instance is CIS_RUNNING.
 	// Otherwise, in turn with the status of CIS_FAILED, CIS_CRASHED, CIS_PAUSED,
 	// CIS_STOPPED, CIS_COMPLETED.
-	uint32 ins_status = 2;
+	chk.CheckInstStatus ins_status = 2;
 	// Scan phase - see CheckScanPhase. Before moving to CSP_POOL_MBS, the check
 	// instance status is maintained on the check leader. And then multiple pools
 	// can be processed in parallel, so the instance phase for different pools may
 	// be different, see CheckQueryPool::phase.
-	uint32 ins_phase = 3;
+	chk.CheckScanPhase ins_phase = 3;
 	// Inconsistency statistics during the phases range
 	// [CSP_PREPARE, CSP_POOL_LIST] for the whole system.
 	CheckQueryInconsist inconsistency = 4;
@@ -130,6 +132,8 @@ message CheckQueryResp {
 	CheckQueryTime time = 5;
 	// Per pool based query result for the phases since CSP_POOL_MBS.
 	repeated CheckQueryPool pools = 6;
+	// Inconsistency reports to be displayed
+	repeated chk.CheckReport reports = 7;
 }
 
 // For 'dmg check prop'
@@ -150,7 +154,7 @@ message CheckActReq {
 	// DAOS RAS event sequence - see RASEvent::extended_info::check_info::chk_inconsist_seq.
 	uint64 seq = 2;
 	// The decision from RASEvent::extended_info::check_info::chk_opts.
-	uint32 act = 3;
+	chk.CheckInconsistAction act = 3;
 	bool for_all = 4; // The same action is applicable to the same type of inconsistency.
 }
 

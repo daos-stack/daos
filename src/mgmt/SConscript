@@ -3,20 +3,20 @@ import daos_build
 
 def scons():
     """Execute build"""
-    Import('env', 'prereqs')
+    Import('env', 'prereqs', 'chk_pb')
 
     env.AppendUnique(LIBPATH=[Dir('.')])
 
     denv = env.Clone()
 
-    denv.AppendUnique(CPPPATH=[Dir('.').srcnode()])
+    denv.AppendUnique(CPPPATH=[Dir('.').srcnode(), Dir('..').srcnode()])
 
     prereqs.require(denv, 'protobufc', 'hwloc')
 
     #pylint: disable=invalid-name
     pb = denv.SharedObject(['acl.pb-c.c', 'pool.pb-c.c', 'svc.pb-c.c',
                             'smd.pb-c.c', 'cont.pb-c.c', 'server.pb-c.c',
-                            'check.pb-c.c'])
+                            'check.pb-c.c']) + chk_pb
     #pylint: enable=invalid-name
     common = denv.SharedObject(['rpc.c']) + pb
 
