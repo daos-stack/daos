@@ -1,18 +1,17 @@
 #!/bin/bash
 
+set -ue
+
 if [ -e .git/MERGE_HEAD ]
 then
     echo Merge commit
     exit 0
 fi
 
-#set -x
-set -e
-
 def_ignore="SPLIT_STRING,SSCANF_TO_KSTRTO,PREFER_KERNEL_TYPES"
 def_ignore+=",USE_NEGATIVE_ERRNO,CAMELCASE,STATIC_CONST_CHAR_ARRAY"
 def_ignore+=",COMPARISON_TO_NULL,COMPLEX_MACRO,BIT_MACRO"
-def_ignore+=",CONCATENATED_STRING,PARENTHESIS_ALIGNMENT"
+def_ignore+=",CONCATENATED_STRING,PARENTHESIS_ALIGNMENT,SPACING"
 
 CP=../code_review/checkpatch.pl
 if [ ! -x $CP ]
@@ -36,6 +35,9 @@ then
 	echo Adding file $FILE
 	git add $FILE
     done
+else
+        echo "code_review not checked out, skipping checkpatch"
+        echo "git -C ../ clone https://github.com/daos-stack/code_review.git"
 fi
 
 exit 0

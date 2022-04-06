@@ -80,7 +80,7 @@ def main():
                     idx -= 1
 
                 for (key, value) in tags.items():
-                    output.insert(idx, '{}: {}\n'.format(key, value))
+                    output.insert(idx, f'{key}: {value}')
 
                 output.append(add_text())
             output.append(line.strip('\n'))
