@@ -21,6 +21,8 @@
 #include <fcntl.h>
 #include <unistd.h>
 #include <errno.h>
+#include <sys/types.h>
+#include <sys/stat.h>
 
 static void
 print_usage()
@@ -33,6 +35,7 @@ print_usage()
 int
 do_openat(char *test_dir)
 {
+	struct stat stbuf;
 	int fd;
 	int root;
 	int rc;
@@ -48,6 +51,17 @@ do_openat(char *test_dir)
 	if (rc < 0) {
 		printf("Write failed %d %d\n", rc, errno);
 		return rc;
+	}
+
+	rc = fstat(fd, &stbuf);
+	if (rc < 0) {
+		printf("fstat failed %d %d\n", rc, errno);
+		return rc;
+	}
+
+	if (stbuf.st_size != 5) {
+		printf("File size is wrong %i %i", (int)stbuf.st_size, 5);
+		return -1;
 	}
 
 	rc = close(fd);
