@@ -417,8 +417,7 @@ vos_feats_agg_time_get(uint64_t feats, daos_epoch_t *epoch)
 
 	if (feats & VOS_TF_AGG_HLC) {
 		*epoch = ((feats & VOS_TF_AGG_TIME_MASK) << VOS_TF_AGG_RSHIFT);
-		if (*epoch != 0)
-			*epoch += 0xffffffffULL;
+		*epoch += 0xffffffffULL;
 	} else {
 		*epoch = ((feats & VOS_TF_AGG_TIME_MASK) >> VOS_TF_AGG_LSHIFT);
 	}
