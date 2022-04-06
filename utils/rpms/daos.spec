@@ -27,7 +27,7 @@
 
 Name:          daos
 Version:       2.1.100
-Release:       25%{?relval}%{?dist}
+Release:       26%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       BSD-2-Clause-Patent
@@ -562,6 +562,9 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 # No files in a shim package
 
 %changelog
+* Wed Apr  6 2022 Joseph Moore <joseph.moore@intel.com> 2.1.100-22
+- ADD build depends entries for UCX libraries.
+
 * Sat Apr  2 2022 Joseph Moore <joseph.moore@intel.com> 2.1.100-25
 - Update to mercury 2.1.0.rc4-8 to include UCX provider patch
 

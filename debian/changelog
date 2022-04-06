@@ -1,3 +1,9 @@
+daos (2.1.100-26) unstable; urgency=medium
+  [ Joseph Moore ]
+  * Add build depends entries for UCX libraries
+
+ -- Joseph Moore <joseph.moore@intel.com>  Wed, 6 Apr 2022 10:44:21 +0800
+
 daos (2.1.100-25) unstable; urgency=medium
   [ Joseph Moore ]
   * Update mercury to UCX provider patch
