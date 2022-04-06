@@ -60,6 +60,12 @@
 ## default: INFO
 #control_log_mask: DEBUG
 
+## Disable the agent's internal cache. If set to true, the agent will query the
+## access point directly every time a client requests server rank URIs.
+#
+## default: false
+#disable_cache: true
+
 # Manually define the fabric interfaces and domains to be used by the agent,
 # organized by NUMA node.
 # If not defined, the agent will automatically detect all fabric interfaces and
