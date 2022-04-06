@@ -355,7 +355,7 @@ compile_filter(daos_filter_t *filter, struct filter_compiled_t *comp_filter, uin
 	size_t				part_type_s;
 	size_t				comp_size;
 	struct filter_part_compiled_t	*comp_part;
-	int				rc;
+	int				rc = 0;
 	uint32_t			idx;
 
 	part_type   = (char *) filter->parts[*part_idx]->part_type.iov_buf;
