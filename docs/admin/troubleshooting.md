@@ -153,7 +153,9 @@ argument passed in D_DEBUG(mask, ...). To accomplish this, DD_MASK can
 be set to enable different debug streams. Similar to facilities, there
 are common debug streams defined in GURT, as well as other streams that
 can be defined on a per-project basis (CaRT and DAOS). All debug streams
-are enabled by default ("DD_MASK=all").
+are enabled by default ("DD_MASK=all"). Convenience "group mask" values
+are defined for common use cases and convenience, and consist of a
+composition of multiple individual bits.
 
 -   DAOS Debug Masks:
 
@@ -169,7 +171,11 @@ are enabled by default ("DD_MASK=all").
 
     -   rebuild = rebuild process
 
-    -   daos_default = (group mask) io, md, pl, and rebuild operations
+    -   group_default = (group mask) io, md, pl, and rebuild operations
+
+    -   group_metadata_only = (group mask) mgmt, md, dsms operations
+
+    -   group_metadata = (group mask) group_default plus mgmt, dsms operations
 
 -   Common Debug Masks (GURT):
 
@@ -196,10 +202,16 @@ are enabled by default ("DD_MASK=all").
         D_LOG_MASK=ERR -> will only log error messages from all facilities
         D_LOG_MASK=FATAL -> will only log system fatal messages
 
+-   Gather daos metadata logs if a pool/container resource problem is observed, using the provided group mask
+
+        D_LOG_MASK=DEBUG -> log at DEBUG level from all facilities
+        DD_MASK=group_metadata_only -> limit logging to include only these streams (mgmt, md, dsms). Or specify DD_MASK=group_metadata to log default streams and metadata-specific ones.
+
 -   Disable a noisy debug logging subsystem
 
         D_LOG_MASK=DEBUG,MEM=ERR -> disables MEM facility by
         restricting all logs from that facility to ERROR or higher priority only
+        D_LOG_MASK=DEBUG,SWIM=ERR,RPC=ERR,HG=ERR -> disables SWIM and RPC/HG facilities
 
 -   Enable a subset of facilities of interest
 
