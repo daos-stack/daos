@@ -774,7 +774,7 @@ func (svc *mgmtSvc) checkMemberStates(requiredStates ...system.MemberState) erro
 	invalidMembers := &system.RankSet{}
 
 	for _, m := range allMembers {
-		if m.State()&stateMask == 0 {
+		if m.State&stateMask == 0 {
 			invalidMembers.Add(m.Rank)
 		}
 	}

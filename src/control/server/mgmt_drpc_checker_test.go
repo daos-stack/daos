@@ -20,12 +20,13 @@ import (
 	"github.com/daos-stack/daos/src/control/drpc"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/system"
+	"github.com/daos-stack/daos/src/control/system/raft"
 )
 
 func mockSrvModule(t *testing.T, log logging.Logger, ec int) *srvModule {
 	srv := &srvModule{
 		log:    log,
-		poolDB: system.MockDatabase(t, log),
+		poolDB: raft.MockDatabase(t, log),
 	}
 	addEngineInstances(srv, ec, log)
 
@@ -71,7 +72,7 @@ func TestSrvModule_HandleCheckerListPools(t *testing.T) {
 
 			mod := mockSrvModule(t, log, 1)
 			if tc.notReplica {
-				mod.poolDB = system.MockDatabaseWithCfg(t, log, &system.DatabaseConfig{})
+				mod.poolDB = raft.MockDatabaseWithCfg(t, log, &raft.DatabaseConfig{})
 			} else {
 				if err := mod.poolDB.AddPoolService(testPool); err != nil {
 					t.Fatal(err)
@@ -166,7 +167,7 @@ func TestSrvModule_HandleCheckerRegisterPool(t *testing.T) {
 
 			mod := mockSrvModule(t, log, 1)
 			if tc.notReplica {
-				mod.poolDB = system.MockDatabaseWithCfg(t, log, &system.DatabaseConfig{})
+				mod.poolDB = raft.MockDatabaseWithCfg(t, log, &raft.DatabaseConfig{})
 			} else {
 				if err := mod.poolDB.AddPoolService(existingPool); err != nil {
 					t.Fatal(err)
@@ -243,7 +244,7 @@ func TestSrvModule_HandleCheckerDeregisterPool(t *testing.T) {
 
 			mod := mockSrvModule(t, log, 1)
 			if tc.notReplica {
-				mod.poolDB = system.MockDatabaseWithCfg(t, log, &system.DatabaseConfig{})
+				mod.poolDB = raft.MockDatabaseWithCfg(t, log, &raft.DatabaseConfig{})
 			} else {
 				if err := mod.poolDB.AddPoolService(existingPool); err != nil {
 					t.Fatal(err)
