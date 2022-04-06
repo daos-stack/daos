@@ -68,7 +68,6 @@ class SoakTestBase(TestWithServers):
         self.mpi_module = None
         self.sudo_cmd = None
 
-
     def setUp(self):
         """Define test setup to be done."""
         self.log.info("<<setUp Started>> at %s", time.ctime())
