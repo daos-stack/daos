@@ -14,7 +14,6 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/protobuf/proto"
 
-	"github.com/daos-stack/daos/src/control/common/proto/chk"
 	chkpb "github.com/daos-stack/daos/src/control/common/proto/chk"
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 )
@@ -98,16 +97,16 @@ type SystemCheckQueryReq struct {
 }
 
 type SystemCheckQueryResp struct {
-	pb *mgmtpb.CheckQueryResp
+	mgmtpb.CheckQueryResp
 }
 
-func (r *SystemCheckQueryResp) MarshalJSON() ([]byte, error) {
+/*func (r *SystemCheckQueryResp) MarshalJSON() ([]byte, error) {
 	return json.Marshal(r.pb)
 }
 
 func (r *SystemCheckQueryResp) Status() string {
 	return chk.CheckInstStatus_name[int32(r.pb.InsStatus)]
-}
+}*/
 
 // SystemCheckQuery queries the system checker status.
 func SystemCheckQuery(ctx context.Context, rpcClient UnaryInvoker, req *SystemCheckQueryReq) (*SystemCheckQueryResp, error) {
@@ -133,7 +132,7 @@ func SystemCheckQuery(ctx context.Context, rpcClient UnaryInvoker, req *SystemCh
 
 	resp := new(SystemCheckQueryResp)
 	if pbResp, ok := ms.(*mgmtpb.CheckQueryResp); ok {
-		resp.pb = pbResp
+		resp.CheckQueryResp = *pbResp
 	} else {
 		return nil, errors.Errorf("unexpected response type %T", ms)
 	}

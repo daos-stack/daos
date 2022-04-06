@@ -24,6 +24,7 @@ import (
 	"github.com/daos-stack/daos/src/control/server/config"
 	"github.com/daos-stack/daos/src/control/server/storage"
 	"github.com/daos-stack/daos/src/control/system"
+	"github.com/daos-stack/daos/src/control/system/checker"
 )
 
 const (
@@ -161,6 +162,12 @@ func (h *EngineHarness) OnDrpcFailure(fns ...func(ctx context.Context, err error
 	defer h.Unlock()
 
 	h.onDrpcFailure = append(h.onDrpcFailure, fns...)
+}
+
+func (h *EngineHarness) CallEngineChecker(ctx context.Context, req *checker.EngineCheckerReq) (*checker.EngineCheckerResp, error) {
+	// Convert the request to a drpc.Method and message, invoke the method, then convert the response.
+
+	return &checker.EngineCheckerResp{}, nil
 }
 
 // CallDrpc calls the supplied dRPC method on a managed I/O Engine instance.

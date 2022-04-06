@@ -19,6 +19,7 @@ import (
 	"github.com/daos-stack/daos/src/control/lib/control"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/system"
+	"github.com/daos-stack/daos/src/control/system/checker"
 	"github.com/daos-stack/daos/src/control/system/raft"
 )
 
@@ -30,6 +31,7 @@ type mgmtSvc struct {
 	harness           *EngineHarness
 	membership        *system.Membership // if MS leader, system membership list
 	sysdb             *raft.Database
+	sysChecker        *checker.Coordinator
 	rpcClient         control.UnaryInvoker
 	events            *events.PubSub
 	clientNetworkHint *mgmtpb.ClientNetHint
@@ -44,6 +46,7 @@ func newMgmtSvc(h *EngineHarness, m *system.Membership, s *raft.Database, c cont
 		harness:           h,
 		membership:        m,
 		sysdb:             s,
+		sysChecker:        checker.DefaultCoordinator(h.log, s, h),
 		rpcClient:         c,
 		events:            p,
 		clientNetworkHint: new(mgmtpb.ClientNetHint),

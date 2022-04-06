@@ -7,11 +7,14 @@
 package main
 
 import (
+	"bytes"
 	"context"
+	"fmt"
 
 	"github.com/pkg/errors"
 
 	"github.com/daos-stack/daos/src/control/lib/control"
+	"github.com/daos-stack/daos/src/control/lib/txtfmt"
 )
 
 type checkCmdRoot struct {
@@ -108,6 +111,32 @@ type checkQueryCmd struct {
 	checkCmdBase
 }
 
+func (cmd *checkCmdBase) printQueryResp(resp *control.SystemCheckQueryResp) {
+	cmd.log.Infof("Current phase: %s", resp.InsPhase)
+
+	if len(resp.Reports) == 0 {
+		cmd.log.Infof("No reports to display")
+		return
+	}
+
+	var buf bytes.Buffer
+	iw := txtfmt.NewIndentWriter(&buf)
+	cmd.log.Info("Inconsistency Reports:")
+	for _, report := range resp.Reports {
+		fmt.Fprintf(iw, "%s: %s\n", report.Class, report.Msg)
+		if len(report.Actions) == 0 {
+			continue
+		}
+		fmt.Fprintf(iw, "Potential resolution actions:\n")
+		iw2 := txtfmt.NewIndentWriter(iw)
+		for i, action := range report.Actions {
+			fmt.Fprintf(iw2, "%d: %s\n", action, report.Details[i])
+		}
+		fmt.Fprintln(&buf)
+	}
+	cmd.log.Info(buf.String())
+}
+
 func (cmd *checkQueryCmd) Execute(_ []string) error {
 	ctx := context.Background()
 
@@ -122,7 +151,7 @@ func (cmd *checkQueryCmd) Execute(_ []string) error {
 		return err
 	}
 
-	cmd.log.Infof("System check status: %s\n", resp.Status())
+	cmd.printQueryResp(resp)
 
 	return nil
 }

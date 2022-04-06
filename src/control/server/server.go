@@ -386,6 +386,7 @@ func (srv *server) registerEvents() {
 		func(ctx context.Context) error {
 			return srv.mgmtSvc.checkPools(ctx)
 		},
+		srv.mgmtSvc.sysChecker.Start,
 	)
 	srv.sysdb.OnLeadershipLost(func() error {
 		srv.log.Infof("MS leader no longer running on %s", srv.hostname)

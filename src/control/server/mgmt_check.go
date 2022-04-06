@@ -124,6 +124,15 @@ func (svc *mgmtSvc) SystemCheckQuery(ctx context.Context, req *mgmtpb.CheckQuery
 		return nil, errors.Wrap(err, "unmarshal CheckQuery response")
 	}
 
+	cfList, err := svc.sysdb.GetCheckerFindings()
+	if err != nil {
+		return nil, err
+	}
+
+	for _, f := range cfList {
+		resp.Reports = append(resp.Reports, &f.CheckReport)
+	}
+
 	return resp, nil
 }
 
