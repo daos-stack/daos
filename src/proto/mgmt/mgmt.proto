@@ -85,4 +85,6 @@ service MgmtSvc {
 	rpc SystemCheckQuery(CheckQueryReq) returns(CheckQueryResp){}
 	// Query system check properties
 	rpc SystemCheckProp(CheckPropReq) returns(CheckPropResp){}
+	// PoolUpgrade queries a DAOS pool.
+	rpc PoolUpgrade(PoolUpgradeReq) returns (PoolUpgradeResp) {}
 }

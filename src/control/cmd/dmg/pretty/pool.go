@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2021 Intel Corporation.
+// (C) Copyright 2020-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -30,6 +30,12 @@ func PrintPoolQueryResponse(pqr *control.PoolQueryResp, out io.Writer, opts ...P
 	fmt.Fprintf(w, "Pool %s, ntarget=%d, disabled=%d, leader=%d, version=%d\n",
 		pqr.UUID, pqr.TotalTargets, pqr.DisabledTargets, pqr.Leader, pqr.Version)
 	fmt.Fprintln(w, "Pool space info:")
+	if pqr.EnabledRanks != nil {
+		fmt.Fprintf(w, "- Enabled targets: %s\n", pqr.EnabledRanks)
+	}
+	if pqr.DisabledRanks != nil {
+		fmt.Fprintf(w, "- Disabled targets: %s\n", pqr.DisabledRanks)
+	}
 	fmt.Fprintf(w, "- Target(VOS) count:%d\n", pqr.ActiveTargets)
 	if pqr.TierStats != nil {
 		for tierIdx, tierStats := range pqr.TierStats {

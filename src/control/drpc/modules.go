@@ -160,6 +160,7 @@ func (m MgmtMethod) String() string {
 		MethodNotifyExit:           "NotifyExit",
 		MethodIdentifyStorage:      "IdentifyStorage",
 		MethodPoolGetProp:          "PoolGetProp",
+		MethodPoolUpgrade:          "PoolUpgrade",
 	}[m]; ok {
 		return s
 	}
@@ -263,6 +264,8 @@ const (
 	MethodCheckerProp MgmtMethod = C.DRPC_METHOD_MGMT_CHK_PROP
 	// MethodCheckerAction defines a method for specifying a checker action
 	MethodCheckerAction MgmtMethod = C.DRPC_METHOD_MGMT_CHK_ACT
+	// MethodPoolUpgrade defines a method for upgrade pool
+	MethodPoolUpgrade MgmtMethod = C.DRPC_METHOD_MGMT_POOL_UPGRADE
 )
 
 type srvMethod int32

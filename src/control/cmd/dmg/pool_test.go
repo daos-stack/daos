@@ -758,6 +758,28 @@ func TestPoolCommands(t *testing.T) {
 			nil,
 		},
 		{
+			"Query pool with UUID and enabled ranks",
+			"pool query --show-enabled-ranks 12345678-1234-1234-1234-1234567890ab",
+			strings.Join([]string{
+				printRequest(t, &control.PoolQueryReq{
+					ID:                  "12345678-1234-1234-1234-1234567890ab",
+					IncludeEnabledRanks: true,
+				}),
+			}, " "),
+			nil,
+		},
+		{
+			"Query pool with UUID and disabled ranks",
+			"pool query --show-disabled-ranks 12345678-1234-1234-1234-1234567890ab",
+			strings.Join([]string{
+				printRequest(t, &control.PoolQueryReq{
+					ID:                   "12345678-1234-1234-1234-1234567890ab",
+					IncludeDisabledRanks: true,
+				}),
+			}, " "),
+			nil,
+		},
+		{
 			"Query pool with Label",
 			"pool query test_label",
 			strings.Join([]string{
@@ -774,10 +796,26 @@ func TestPoolCommands(t *testing.T) {
 			fmt.Errorf("invalid label"),
 		},
 		{
+			"Upgrade pool with pool ID",
+			"pool upgrade 031bcaf8-f0f5-42ef-b3c5-ee048676dceb",
+			strings.Join([]string{
+				printRequest(t, &control.PoolUpgradeReq{
+					ID: "031bcaf8-f0f5-42ef-b3c5-ee048676dceb",
+				}),
+			}, " "),
+			nil,
+		},
+		{
 			"Nonexistent subcommand",
 			"pool quack",
 			"",
 			fmt.Errorf("Unknown command"),
+		},
+		{
+			"Query pool with incompatible arguments",
+			"pool query --show-disabled-ranks --show-enabled-ranks 12345678-1234-1234-1234-1234567890ab",
+			"",
+			errors.New("may not be mixed"),
 		},
 	})
 }

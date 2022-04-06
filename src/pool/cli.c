@@ -1340,7 +1340,7 @@ pool_query_cb(tse_task_t *task, void *data)
 	struct pool_buf		       *map_buf = arg->dqa_map_buf;
 	struct pool_query_in	       *in = crt_req_get(arg->rpc);
 	struct pool_query_out	       *out = crt_reply_get(arg->rpc);
-	d_rank_list_t		       *ranks;
+	d_rank_list_t		       *ranks = NULL;
 	d_rank_list_t		      **ranks_arg;
 	int				rc = task->dt_result;
 
