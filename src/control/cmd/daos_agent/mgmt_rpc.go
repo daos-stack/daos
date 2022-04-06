@@ -14,6 +14,7 @@ import (
 	"golang.org/x/sys/unix"
 	"google.golang.org/protobuf/proto"
 
+	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/common/proto/convert"
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	"github.com/daos-stack/daos/src/control/drpc"
@@ -116,7 +117,7 @@ func (mod *mgmtModule) handleGetAttachInfo(ctx context.Context, reqb []byte, pid
 
 	mod.log.Debugf("client process NUMA node %d", numaNode)
 
-	resp, err := mod.getAttachInfo(ctx, int(numaNode), pbReq.Sys)
+	resp, err := mod.getAttachInfo(ctx, int(numaNode), pbReq)
 	if err != nil {
 		return nil, err
 	}
@@ -143,30 +144,45 @@ func (mod *mgmtModule) getNUMANode(ctx context.Context, pid int32) (uint, error)
 	return numaNode, nil
 }
 
-func (mod *mgmtModule) getAttachInfo(ctx context.Context, numaNode int, sys string) (*mgmtpb.GetAttachInfoResp, error) {
-	rawResp, err := mod.getAttachInfoResp(ctx, numaNode, sys)
+func (mod *mgmtModule) getAttachInfo(ctx context.Context, numaNode int, req *mgmtpb.GetAttachInfoReq) (*mgmtpb.GetAttachInfoResp, error) {
+	rawResp, err := mod.getAttachInfoResp(ctx, numaNode, req.Sys)
 	if err != nil {
 		mod.log.Errorf("failed to fetch remote AttachInfo: %s", err.Error())
 		return nil, err
 	}
 
-	resp, err := mod.getProviderAttachInfo(rawResp)
+	reqProviders := mod.getInterfaceProviders(req.Interface, req.Domain)
+
+	resp, err := mod.selectAttachInfo(rawResp, reqProviders)
 	if err != nil {
 		return nil, err
 	}
 
-	fabricIF, err := mod.getFabricInterface(ctx, numaNode, hardware.NetDevClass(resp.ClientNetHint.NetDevClass),
-		resp.ClientNetHint.Provider)
-	if err != nil {
-		mod.log.Errorf("failed to fetch fabric interface of type %s: %s",
-			hardware.NetDevClass(resp.ClientNetHint.NetDevClass), err.Error())
-		return nil, err
+	// Requested fabric interface/domain behave as a simple override. If we weren't able to
+	// validate them, we return them to the user with the understanding that perhaps the user
+	// knows what they're doing.
+	iface := req.Interface
+	domain := req.Domain
+	if req.Interface == "" {
+		fabricIF, err := mod.getFabricInterface(ctx, &FabricIfaceParams{
+			NUMANode: numaNode,
+			DevClass: hardware.NetDevClass(resp.ClientNetHint.NetDevClass),
+			Provider: resp.ClientNetHint.Provider,
+		})
+		if err != nil {
+			mod.log.Errorf("failed to fetch fabric interface of type %s: %s",
+				hardware.NetDevClass(resp.ClientNetHint.NetDevClass), err.Error())
+			return nil, err
+		}
+
+		iface = fabricIF.Name
+		domain = fabricIF.Domain
 	}
 
-	resp.ClientNetHint.Interface = fabricIF.Name
-	resp.ClientNetHint.Domain = fabricIF.Name
-	if fabricIF.Domain != "" {
-		resp.ClientNetHint.Domain = fabricIF.Domain
+	resp.ClientNetHint.Interface = iface
+	resp.ClientNetHint.Domain = iface
+	if domain != "" {
+		resp.ClientNetHint.Domain = domain
 		mod.log.Debugf("OFI_DOMAIN for %s has been detected as: %s",
 			resp.ClientNetHint.Interface, resp.ClientNetHint.Domain)
 	}
@@ -178,35 +194,80 @@ func (mod *mgmtModule) getAttachInfoResp(ctx context.Context, numaNode int, sys 
 	return mod.attachInfo.Get(ctx, numaNode, sys, mod.getAttachInfoRemote)
 }
 
-func (mod *mgmtModule) getProviderAttachInfo(srvResp *mgmtpb.GetAttachInfoResp) (*mgmtpb.GetAttachInfoResp, error) {
-	if mod.provider == "" || mod.provider == srvResp.ClientNetHint.Provider {
+func (mod *mgmtModule) getInterfaceProviders(iface, domain string) common.StringSet {
+	if iface == "" {
+		return nil
+	}
+
+	if domain == "" {
+		domain = iface
+	}
+
+	fis, err := mod.fabricInfo.localNUMAFabric.FindDevice(&FabricIfaceParams{
+		Interface: iface,
+		Domain:    domain,
+	})
+	if err != nil {
+		mod.log.Errorf("client-requested fabric interface/domain not detected: %s", err.Error())
+		mod.log.Error("communications on this interface may fail")
+		return nil
+	}
+
+	providers := common.NewStringSet()
+	for _, fi := range fis {
+		providers.AddUnique(fi.Providers()...)
+	}
+	return providers
+}
+
+func (mod *mgmtModule) selectAttachInfo(srvResp *mgmtpb.GetAttachInfoResp, reqProviders common.StringSet) (*mgmtpb.GetAttachInfoResp, error) {
+	providers := reqProviders
+	if mod.provider != "" {
+		if len(reqProviders) > 0 && !reqProviders.Has(mod.provider) {
+			mod.log.Errorf("configured provider %q not included in requested interface's detected providers: %s", reqProviders)
+			mod.log.Error("communications on this interface may fail")
+		}
+		providers = common.NewStringSet(mod.provider)
+	}
+
+	if len(providers) == 0 {
 		return srvResp, nil
 	}
 
+	if providers.Has(srvResp.ClientNetHint.Provider) {
+		return srvResp, nil
+	}
+
+	for _, hint := range srvResp.SecondaryClientNetHints {
+		if providers.Has(hint.Provider) {
+			uris, err := mod.getProviderURIs(srvResp, hint.Provider)
+			if err == nil {
+				return &mgmtpb.GetAttachInfoResp{
+					Status:        srvResp.Status,
+					RankUris:      uris,
+					MsRanks:       srvResp.MsRanks,
+					ClientNetHint: hint,
+				}, nil
+			}
+		}
+	}
+
+	return nil, errors.Errorf("no valid connection information for providers: %s", providers)
+}
+
+func (mod *mgmtModule) getProviderURIs(srvResp *mgmtpb.GetAttachInfoResp, provider string) ([]*mgmtpb.GetAttachInfoResp_RankUri, error) {
 	uris := []*mgmtpb.GetAttachInfoResp_RankUri{}
 	for _, uri := range srvResp.SecondaryRankUris {
-		if uri.Provider == mod.provider {
+		if uri.Provider == provider {
 			uris = append(uris, uri)
 		}
 	}
 
 	if len(uris) == 0 {
-		return nil, errors.Errorf("no rank URIs for provider %q", mod.provider)
+		return nil, errors.Errorf("no rank URIs for provider %q", provider)
 	}
 
-	for _, hint := range srvResp.SecondaryClientNetHints {
-		if hint.Provider == mod.provider {
-
-			return &mgmtpb.GetAttachInfoResp{
-				Status:        srvResp.Status,
-				RankUris:      uris,
-				MsRanks:       srvResp.MsRanks,
-				ClientNetHint: hint,
-			}, nil
-		}
-	}
-
-	return nil, errors.Errorf("no ClientNetHint for provider %q", mod.provider)
+	return uris, nil
 }
 
 func (mod *mgmtModule) getAttachInfoRemote(ctx context.Context, numaNode int, sys string) (*mgmtpb.GetAttachInfoResp, error) {
@@ -232,9 +293,9 @@ func (mod *mgmtModule) getAttachInfoRemote(ctx context.Context, numaNode int, sy
 	return pbResp, nil
 }
 
-func (mod *mgmtModule) getFabricInterface(ctx context.Context, numaNode int, netDevClass hardware.NetDevClass, provider string) (*FabricInterface, error) {
+func (mod *mgmtModule) getFabricInterface(ctx context.Context, params *FabricIfaceParams) (*FabricInterface, error) {
 	if mod.fabricInfo.IsCached() {
-		return mod.fabricInfo.GetDevice(numaNode, netDevClass, provider)
+		return mod.getCachedInterface(ctx, params)
 	}
 
 	scanner := hwprov.DefaultFabricScanner(mod.log)
@@ -246,7 +307,18 @@ func (mod *mgmtModule) getFabricInterface(ctx context.Context, numaNode int, net
 
 	mod.fabricInfo.CacheScan(ctx, result)
 
-	return mod.fabricInfo.GetDevice(numaNode, netDevClass, provider)
+	return mod.getCachedInterface(ctx, params)
+}
+
+func (mod *mgmtModule) getCachedInterface(ctx context.Context, params *FabricIfaceParams) (*FabricInterface, error) {
+	if params.Interface != "" {
+		fi, err := mod.fabricInfo.localNUMAFabric.FindDevice(params)
+		if err != nil {
+			return nil, err
+		}
+		return fi[0], nil
+	}
+	return mod.fabricInfo.GetDevice(params)
 }
 
 func (mod *mgmtModule) handleNotifyPoolConnect(ctx context.Context, reqb []byte, pid int32) error {

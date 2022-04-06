@@ -92,13 +92,13 @@ func TestAgent_mgmtModule_getAttachInfo(t *testing.T) {
 			SecondaryClientNetHints: []*mgmtpb.ClientNetHint{
 				{
 					Provider:    "ofi+tcp",
-					NetDevClass: uint32(hardware.Ether),
+					NetDevClass: uint32(hardware.Infiniband),
 				},
 			},
 		}
 	}
 
-	hintResp := func(fi, domain string) *mgmtpb.GetAttachInfoResp {
+	priResp := func(fi, domain string) *mgmtpb.GetAttachInfoResp {
 		withHint := testSrvResp()
 		withHint.ClientNetHint.Interface = fi
 		withHint.ClientNetHint.Domain = domain
@@ -106,12 +106,43 @@ func TestAgent_mgmtModule_getAttachInfo(t *testing.T) {
 		return withHint
 	}
 
+	secResp := func(fi, domain string) *mgmtpb.GetAttachInfoResp {
+		return &mgmtpb.GetAttachInfoResp{
+			RankUris: []*mgmtpb.GetAttachInfoResp_RankUri{
+				{
+					Rank:     0,
+					Uri:      "uri0-sec",
+					Provider: "ofi+tcp",
+				},
+				{
+					Rank:     1,
+					Uri:      "uri1-sec",
+					Provider: "ofi+tcp",
+				},
+				{
+					Rank:     3,
+					Uri:      "uri3-sec",
+					Provider: "ofi+tcp",
+				},
+			},
+			MsRanks: []uint32{0, 1, 3},
+			ClientNetHint: &mgmtpb.ClientNetHint{
+				Provider:    "ofi+tcp",
+				NetDevClass: uint32(hardware.Infiniband),
+				Interface:   fi,
+				Domain:      domain,
+			},
+		}
+	}
+
 	for name, tc := range map[string]struct {
-		provider string
-		numaNode int
-		rpcResp  *control.HostResponse
-		expResp  *mgmtpb.GetAttachInfoResp
-		expErr   error
+		reqIface  string
+		reqDomain string
+		provider  string
+		numaNode  int
+		rpcResp   *control.HostResponse
+		expResp   *mgmtpb.GetAttachInfoResp
+		expErr    error
 	}{
 		"RPC error": {
 			rpcResp: &control.HostResponse{
@@ -161,60 +192,102 @@ func TestAgent_mgmtModule_getAttachInfo(t *testing.T) {
 			rpcResp: &control.HostResponse{
 				Message: testSrvResp(),
 			},
-			expResp: hintResp("fi0", "d0"),
+			expResp: priResp("fi0", "d0"),
 		},
 		"primary provider": {
 			provider: "ofi+verbs",
 			rpcResp: &control.HostResponse{
 				Message: testSrvResp(),
 			},
-			expResp: hintResp("fi0", "d0"),
+			expResp: priResp("fi0", "d0"),
 		},
 		"secondary provider": {
 			provider: "ofi+tcp",
 			rpcResp: &control.HostResponse{
 				Message: testSrvResp(),
 			},
-			expResp: &mgmtpb.GetAttachInfoResp{
-				RankUris: []*mgmtpb.GetAttachInfoResp_RankUri{
-					{
-						Rank:     0,
-						Uri:      "uri0-sec",
-						Provider: "ofi+tcp",
-					},
-					{
-						Rank:     1,
-						Uri:      "uri1-sec",
-						Provider: "ofi+tcp",
-					},
-					{
-						Rank:     3,
-						Uri:      "uri3-sec",
-						Provider: "ofi+tcp",
-					},
-				},
-				MsRanks: []uint32{0, 1, 3},
-				ClientNetHint: &mgmtpb.ClientNetHint{
-					Provider:    "ofi+tcp",
-					NetDevClass: uint32(hardware.Ether),
-					Interface:   "fi1",
-					Domain:      "fi1",
-				},
+			expResp: secResp("fi0", "fi0"),
+		},
+		"client req iface and domain": {
+			reqIface:  "fi1",
+			reqDomain: "d1",
+			provider:  "ofi+verbs",
+			rpcResp: &control.HostResponse{
+				Message: testSrvResp(),
 			},
+			expResp: priResp("fi1", "d1"),
+		},
+		"client req secondary provider": {
+			reqIface:  "fi1",
+			reqDomain: "fi1",
+			provider:  "ofi+tcp",
+			rpcResp: &control.HostResponse{
+				Message: testSrvResp(),
+			},
+			expResp: secResp("fi1", "fi1"),
+		},
+		"client req iface for secondary provider": {
+			reqIface:  "fi1",
+			reqDomain: "fi1",
+			rpcResp: &control.HostResponse{
+				Message: testSrvResp(),
+			},
+			expResp: secResp("fi1", "fi1"),
+		},
+		"client req iface only": {
+			reqIface: "fi1",
+			rpcResp: &control.HostResponse{
+				Message: testSrvResp(),
+			},
+			expResp: secResp("fi1", "fi1"),
+		},
+		"client req domain-only ignored": {
+			reqDomain: "d2",
+			provider:  "ofi+verbs",
+			rpcResp: &control.HostResponse{
+				Message: testSrvResp(),
+			},
+			expResp: priResp("fi0", "d0"),
+		},
+		"client req provider mismatch ignored": {
+			reqIface:  "fi1",
+			reqDomain: "d1",
+			provider:  "ofi+tcp",
+			rpcResp: &control.HostResponse{
+				Message: testSrvResp(),
+			},
+			expResp: secResp("fi1", "d1"),
+		},
+		"client req iface/domain mismatch ignored": {
+			reqIface:  "fi0",
+			reqDomain: "d2",
+			provider:  "ofi+verbs",
+			rpcResp: &control.HostResponse{
+				Message: testSrvResp(),
+			},
+			expResp: priResp("fi0", "d2"),
+		},
+		"client req iface not found ignored": {
+			reqIface: "notreal",
+			provider: "ofi+verbs",
+			rpcResp: &control.HostResponse{
+				Message: testSrvResp(),
+			},
+			expResp: priResp("notreal", "notreal"),
 		},
 		"config provider not found": {
 			provider: "notreal",
 			rpcResp: &control.HostResponse{
 				Message: testSrvResp(),
 			},
-			expErr: errors.New("no rank URIs for provider"),
+			expErr: errors.New("no valid connection information"),
 		},
 		"config provider hint missing": {
 			provider: "ofi+sockets",
 			rpcResp: &control.HostResponse{
 				Message: testSrvResp(),
 			},
-			expErr: errors.New("no ClientNetHint for provider"),
+			expErr: errors.New("no valid connection information"),
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
@@ -234,8 +307,25 @@ func TestAgent_mgmtModule_getAttachInfo(t *testing.T) {
 							},
 						},
 						{
+							Name:        "fi0",
+							NetDevClass: hardware.Infiniband,
+							hw: &hardware.FabricInterface{
+								Providers: common.NewStringSet("ofi+tcp"),
+							},
+						},
+					},
+					1: {
+						{
 							Name:        "fi1",
-							NetDevClass: hardware.Ether,
+							Domain:      "d1",
+							NetDevClass: hardware.Infiniband,
+							hw: &hardware.FabricInterface{
+								Providers: common.NewStringSet("ofi+verbs"),
+							},
+						},
+						{
+							Name:        "fi1",
+							NetDevClass: hardware.Infiniband,
 							hw: &hardware.FabricInterface{
 								Providers: common.NewStringSet("ofi+tcp"),
 							},
@@ -259,7 +349,12 @@ func TestAgent_mgmtModule_getAttachInfo(t *testing.T) {
 				provider: tc.provider,
 			}
 
-			resp, err := mod.getAttachInfo(context.Background(), tc.numaNode, sysName)
+			resp, err := mod.getAttachInfo(context.Background(), tc.numaNode,
+				&mgmtpb.GetAttachInfoReq{
+					Sys:       sysName,
+					Interface: tc.reqIface,
+					Domain:    tc.reqDomain,
+				})
 
 			common.CmpErr(t, tc.expErr, err)
 			if diff := cmp.Diff(tc.expResp, resp, cmpopts.IgnoreUnexported(
@@ -383,7 +478,10 @@ func TestAgent_mgmtModule_getAttachInfo_cacheResp(t *testing.T) {
 			}
 
 			for _, expResp := range tc.expResps {
-				resp, err := mod.getAttachInfo(context.Background(), 0, sysName)
+				resp, err := mod.getAttachInfo(context.Background(), 0,
+					&mgmtpb.GetAttachInfoReq{
+						Sys: sysName,
+					})
 
 				common.CmpErr(t, nil, err)
 
@@ -445,7 +543,10 @@ func TestAgent_mgmtModule_getAttachInfo_Parallel(t *testing.T) {
 		go func(n int) {
 			defer wg.Done()
 
-			_, err := mod.getAttachInfo(context.Background(), 0, sysName)
+			_, err := mod.getAttachInfo(context.Background(), 0,
+				&mgmtpb.GetAttachInfoReq{
+					Sys: sysName,
+				})
 			if err != nil {
 				panic(errors.Wrapf(err, "thread %d", n))
 			}
