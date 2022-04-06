@@ -235,6 +235,10 @@ class DefaultEnvironment():
         """Fake GetOption"""
         return []
 
+    def PrependENVPath(self, key, value):
+        """Fake PrependENVPath"""
+        return
+
 
 class Variables():
     """Fake variables"""
