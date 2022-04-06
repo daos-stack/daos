@@ -476,7 +476,7 @@ class DaosServerManager(SubprocessManager):
 
             self.log.info("Changing ownership to %s for: %s", user, scm_mount)
             cmd_list.add(
-                "chown -R {0}:{0} {1}".format(user, " ".join(scm_mount)))
+                "sudo chown -R {0}:{0} {1}".format(user, " ".join(scm_mount)))
 
         if cmd_list:
             pcmd(self._hosts, "; ".join(cmd_list), verbose)
@@ -819,7 +819,7 @@ class DaosServerManager(SubprocessManager):
         try:
             distribute_files(
                 dst_hosts, temp_file_path, default_server_config,
-                verbose=False, sudo=False)
+                verbose=False, sudo=True)
         except DaosTestError as error:
             raise CommandFailure(
                 "ERROR: Copying yaml configuration file to {}: "
