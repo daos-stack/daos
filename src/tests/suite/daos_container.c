@@ -1997,7 +1997,7 @@ expect_co_set_attr_access(test_arg_t *arg, uint64_t perms, int exp_result)
 	const char	*name = "AttrName";
 	const char	 value_buf[] = "This is the value";
 	const char	*value = value_buf;
-	const size_t	 size = sizeof(value) - 1;
+	const size_t	 size = sizeof(value_buf) - 1;
 
 	cont_prop = get_daos_prop_with_owner_acl_perms(perms,
 						       DAOS_PROP_CO_ACL);
