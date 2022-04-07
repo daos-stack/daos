@@ -843,7 +843,7 @@ csum_add2iods(daos_handle_t ioh, daos_iod_t *iods, uint32_t iods_nr,
 		D_DEBUG(DB_CSUM, DF_C_UOID_DKEY"Adding fetched to IOD: "
 				 DF_C_IOD", csum: "DF_CI"\n",
 			DP_C_UOID_DKEY(oid, dkey),
-			DP_C_IOD(&iods[i]), DP_CI(*dcs_csum_info_get(csum_infos, biov_csums_idx)));
+			DP_C_IOD(&iods[i]), DP_CI(*dcs_csum_info_get(csum_infos, 0)));
 		csum_infos->dcl_csum_offset += biov_csums_used;
 		rc = ds_csum_add2iod(
 			&iods[i], csummer,
