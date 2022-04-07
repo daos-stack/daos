@@ -1,12 +1,13 @@
 # Requirements which are not versioned.
-scons        # Works around a bug in scons on EL 8.
 defusedxml
 distro
 junit_xml
+ninja
 pyelftools
 pyxattr
-tabulate
 pyyaml
+scons        # Works around a bug in scons on EL 8.
+tabulate
 wheel
 
 # EL8 distribution version of meson will pick up the wrong python so upgrade meson, however latest
