@@ -95,9 +95,9 @@ pipeline_comp_cb(tse_task_t *task, void *data)
 
 	cb_args  = (struct pipeline_comp_cb_args *)data;
 	api_args = cb_args->api_args;
-	if (task->dt_result != 0) {
+	if (task->dt_result != 0)
 		D_DEBUG(DB_IO, "pipeline_comp_db task=%p result=%d\n", task, task->dt_result);
-	}
+
 	anchor_check_eof(api_args->anchor, cb_args->oca, cb_args->total_shards,
 			 cb_args->total_replicas);
 
@@ -146,14 +146,12 @@ pipeline_shard_run_cb(tse_task_t *task, void *data)
 	D_ASSERT(pro->pro_sgl_agg.ca_count == nr_agg);
 
 	if (rc != 0) {
-		if (rc == -DER_NONEXIST) {
+		if (rc == -DER_NONEXIST)
 			D_GOTO(out, rc = 0);
-		}
-		if (rc == -DER_INPROGRESS || rc == -DER_TX_BUSY) {
+		if (rc == -DER_INPROGRESS || rc == -DER_TX_BUSY)
 			D_DEBUG(DB_TRACE, "rpc %p RPC %d may need retry: %d\n", rpc, opc, rc);
-		} else {
+		else
 			D_ERROR("rpc %p RPC %d failed: %d\n", rpc, opc, rc);
-		}
 		D_GOTO(out, rc);
 	}
 
@@ -167,9 +165,8 @@ pipeline_shard_run_cb(tse_task_t *task, void *data)
 
 		rc = daos_sgls_copy_data_out(sgl_keys_ptr, nr_kds, pro->pro_sgl_keys.ca_arrays,
 					     pro->pro_kds.ca_count);
-		if (rc != 0) {
+		if (rc != 0)
 			D_GOTO(out, rc);
-		}
 	}
 
 	if (pro->pro_sgl_recx.ca_count > 0) {
@@ -178,9 +175,8 @@ pipeline_shard_run_cb(tse_task_t *task, void *data)
 
 		rc = daos_sgls_copy_data_out(sgl_recx_ptr, nr_recx, pro->pro_sgl_recx.ca_arrays,
 					     pro->pro_sgl_recx.ca_count);
-		if (rc != 0) {
+		if (rc != 0)
 			D_GOTO(out, rc);
-		}
 	}
 
 	for (i = 0; i < nr_agg; i++) {
@@ -211,16 +207,14 @@ pipeline_shard_run_cb(tse_task_t *task, void *data)
 					*/
 
 		if (!strncmp(part_type, "DAOS_FILTER_FUNC_SUM", length_part_type) ||
-		    !strncmp(part_type, "DAOS_FILTER_FUNC_AVG", length_part_type)) {
+		    !strncmp(part_type, "DAOS_FILTER_FUNC_AVG", length_part_type))
 			*dst += *src;
-		} else if (!strncmp(part_type, "DAOS_FILTER_FUNC_MIN", length_part_type)) {
-			if (*src < *dst) {
+		else if (!strncmp(part_type, "DAOS_FILTER_FUNC_MIN", length_part_type)) {
+			if (*src < *dst)
 				*dst = *src;
-			}
 		} else if (!strncmp(part_type, "DAOS_FILTER_FUNC_MAX", length_part_type)) {
-			if (*src > *dst) {
+			if (*src > *dst)
 				*dst = *src;
-			}
 		}
 	}
 	*api_args->nr_kds = pro->pro_kds.ca_count;
@@ -236,9 +230,9 @@ pipeline_shard_run_cb(tse_task_t *task, void *data)
 
 	if (api_args->stats != NULL) {
 		/** user wants stats */
-		if (daos_anchor_is_zero(api_args->anchor) && cb_args->shard == 0) {
+		if (daos_anchor_is_zero(api_args->anchor) && cb_args->shard == 0)
 			*api_args->stats = pro->stats;
-		} else {
+		else {
 			api_args->stats->nr_objs += pro->stats.nr_objs;
 			api_args->stats->nr_dkeys += pro->stats.nr_dkeys;
 			api_args->stats->nr_akeys += pro->stats.nr_akeys;
@@ -254,9 +248,7 @@ out:
 	tse_task_decref(task);
 
 	if (ret == 0) /** XXX: see obj_retry_error(int err) when retry I/O is implemented */
-	{
 		ret = rc;
-	}
 	return ret;
 }
 
@@ -290,9 +282,8 @@ shard_pipeline_run_task(tse_task_t *task)
 		D_GOTO(out, rc = -DER_NO_HDL);
 	}
 	rc = dc_cont_tgt_idx2ptr(coh, args->pra_target, &map_tgt);
-	if (rc != 0) {
+	if (rc != 0)
 		D_GOTO(out, rc);
-	}
 
 	tgt_ep.ep_grp  = pool->dp_sys->sy_group;
 	/* tgt_ep.ep_tag	= map_tgt->ta_comp.co_index; */
@@ -300,9 +291,8 @@ shard_pipeline_run_task(tse_task_t *task)
 	tgt_ep.ep_rank = map_tgt->ta_comp.co_rank;
 
 	rc             = crt_req_create(crt_ctx, &tgt_ep, opcode, &req);
-	if (rc != 0) {
+	if (rc != 0)
 		D_GOTO(out, rc);
-	}
 
 	/** -- nr_iods, nr_kds for this shard */
 
@@ -320,9 +310,8 @@ shard_pipeline_run_task(tse_task_t *task)
 	cb_args.nr_kds   = nr_kds;
 
 	rc = tse_task_register_comp_cb(task, pipeline_shard_run_cb, &cb_args, sizeof(cb_args));
-	if (rc != 0) {
+	if (rc != 0)
 		D_GOTO(out_req, rc);
-	}
 
 	/** -- sending the RPC */
 
@@ -335,11 +324,11 @@ shard_pipeline_run_task(tse_task_t *task)
 	 * -> lo for oe_first, and hi for oe_value
 	 */
 	pri->pri_epr  = (daos_epoch_range_t){.epr_lo = 0, .epr_hi = DAOS_EPOCH_MAX};
-	if (args->pra_api_args->dkey != NULL) {
+	if (args->pra_api_args->dkey != NULL)
 		pri->pri_dkey = *args->pra_api_args->dkey;
-	} else {
+	else
 		pri->pri_dkey = (daos_key_t){.iov_buf = NULL, .iov_buf_len = 0, .iov_len = 0};
-	}
+
 	pri->pri_iods.nr   = nr_iods;
 	pri->pri_iods.iods = args->pra_api_args->iods;
 	pri->pri_anchor    = *args->pra_api_args->anchor;
@@ -359,9 +348,8 @@ out_req:
 	crt_req_decref(req);
 	crt_req_decref(req);
 out:
-	if (pool) {
+	if (pool)
 		dc_pool_put(pool);
-	}
 	tse_task_complete(task, rc);
 	return rc;
 }
@@ -393,9 +381,8 @@ queue_shard_pipeline_run_task(tse_task_t *api_task, struct pl_obj_layout *layout
 	api_args = dc_task_get_args(api_task);
 	sched    = tse_task2sched(api_task);
 	rc       = tse_task_create(shard_pipeline_run_task, sched, NULL, &task);
-	if (rc != 0) {
+	if (rc != 0) 
 		D_GOTO(out_task, rc);
-	}
 
 	args                = tse_task_buf_embedded(task, sizeof(*args));
 	args->pra_api_args  = api_args;
@@ -407,16 +394,15 @@ queue_shard_pipeline_run_task(tse_task_t *api_task, struct pl_obj_layout *layout
 	uuid_copy(args->pra_coh_uuid, coh_uuid);
 	uuid_copy(args->pra_cont_uuid, cont_uuid);
 	rc = tse_task_register_deps(api_task, 1, &task);
-	if (rc != 0) {
+	if (rc != 0)
 		D_GOTO(out_task, rc);
-	}
+
 	tse_task_addref(task);
 	tse_task_list_add(task, &pipeline_auxi->shard_task_head);
 
 out_task:
-	if (rc) {
+	if (rc)
 		tse_task_complete(task, rc);
-	}
 	return rc;
 }
 
@@ -508,9 +494,9 @@ dc_pipeline_run(tse_task_t *api_task)
 
 	coh = dc_obj_hdl2cont_hdl(api_args->oh);
 	rc  = dc_obj_hdl2obj_md(api_args->oh, &obj_md);
-	if (rc != 0) {
+	if (rc != 0)
 		D_GOTO(out, rc);
-	}
+
 	poh  = dc_cont_hdl2pool_hdl(coh);
 	pool = dc_hdl2pool(poh);
 	if (pool == NULL) {
@@ -523,14 +509,12 @@ dc_pipeline_run(tse_task_t *api_task)
 
 	rc             = pipeline_create_layout(coh, pool, &obj_md, &layout);
 	dc_pool_put(pool);
-	if (rc != 0) {
+	if (rc != 0)
 		D_GOTO(out, rc);
-	}
 
 	rc = dc_cont_hdl2uuid(coh, &coh_uuid, &cont_uuid);
-	if (rc != 0) {
+	if (rc != 0)
 		D_GOTO(out, rc);
-	}
 
 	/** object class */
 
@@ -554,9 +538,8 @@ dc_pipeline_run(tse_task_t *api_task)
 	 * Ignoring api_args->th for now...
 	 */
 
-	if (map_ver == 0) {
+	if (map_ver == 0)
 		map_ver = layout->ol_ver;
-	}
 
 	/** -- Register completion call back function for full operation */
 
@@ -592,28 +575,24 @@ dc_pipeline_run(tse_task_t *api_task)
 
 	rc = queue_shard_pipeline_run_task(api_task, layout, pipeline_auxi, shard, map_ver, oid,
 					   coh_uuid, cont_uuid);
-	if (rc) {
+	if (rc)
 		D_GOTO(out, rc);
-	}
 
 	/* -- schedule queued shard task */
 
 	D_ASSERT(!d_list_empty(shard_task_head));
 	sched_arg.tsa_scheded = false;
 	tse_task_list_traverse(shard_task_head, shard_task_sched, &sched_arg);
-	if (!sched_arg.tsa_scheded) {
+	if (!sched_arg.tsa_scheded)
 		tse_task_complete(api_task, 0);
-	}
 
 	pl_obj_layout_free(layout);
 	return rc;
 out:
-	if (shard_task_head != NULL && !d_list_empty(shard_task_head)) {
+	if (shard_task_head != NULL && !d_list_empty(shard_task_head))
 		tse_task_list_traverse(shard_task_head, shard_pipeline_task_abort, &rc);
-	}
-	if (layout != NULL) {
+	if (layout != NULL)
 		pl_obj_layout_free(layout);
-	}
 	tse_task_complete(api_task, rc);
 
 	return rc;

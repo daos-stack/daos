@@ -217,8 +217,7 @@ compile_filter(daos_filter_t *filter, struct filter_compiled_t *comp_filter, uin
 	else
 		comp_size = strlen("DAOS_FILTER_FUNC");
 
-	if (strncmp(part_type, "DAOS_FILTER_FUNC", comp_size)) /** != FUNC */
-	{
+	if (strncmp(part_type, "DAOS_FILTER_FUNC", comp_size)) { /** != FUNC */
 		*type     = (char *)filter->parts[*part_idx]->data_type.iov_buf;
 		*type_len = filter->parts[*part_idx]->data_type.iov_len;
 		func_idx  = calc_type_idx(*type, *type_len);

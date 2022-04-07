@@ -154,6 +154,7 @@ static bool
 logfunc_lt_st(char *l, size_t ll, char *r, size_t rl)
 {
 	size_t len = ll <= rl ? ll : rl;
+
 	return (memcmp(l, r, len) < 0);
 }
 
@@ -162,6 +163,7 @@ logfunc_le_st(char *l, size_t ll, char *r, size_t rl)
 {
 	if (ll != rl) {
 		size_t len = ll <= rl ? ll : rl;
+
 		return (memcmp(l, r, len) < 0);
 	}
 	return (memcmp(l, r, rl) <= 0);
@@ -172,6 +174,7 @@ logfunc_ge_st(char *l, size_t ll, char *r, size_t rl)
 {
 	if (ll != rl) {
 		size_t len = ll <= rl ? ll : rl;
+
 		return (memcmp(l, r, len) > 0);
 	}
 	return (memcmp(l, r, rl) >= 0);
@@ -181,6 +184,7 @@ static bool
 logfunc_gt_st(char *l, size_t ll, char *r, size_t rl)
 {
 	size_t len = ll <= rl ? ll : rl;
+
 	return (memcmp(l, r, len) > 0);
 }
 
