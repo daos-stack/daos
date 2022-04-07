@@ -9,6 +9,7 @@ exclude =
     src/rdb/raft,
     src/control/vendor,
     src/client/pydaos/raw,
+    venv,
     build,
     install
 max-line-length: 100
