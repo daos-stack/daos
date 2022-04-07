@@ -611,8 +611,17 @@ ctl_init()
 	 * 150 - total timeout
 	 */
 	if (!ctl_gdata.cg_no_wait_for_ranks) {
+		int wait_time = 60;
+		int total_wait = 150;
+
+
+		if (D_ON_VALGRIND) {
+			wait_time *= 3;
+			total_wait *= 3;
+		}
+
 		rc = crtu_wait_for_ranks(ctl_gdata.cg_crt_ctx, grp, rank_list,
-					 0, 1, 5, 150);
+					 0, 1, wait_time, total_wait);
 		if (rc != 0) {
 			D_ERROR("wait_for_ranks() failed; rc=%d\n", rc);
 			D_GOTO(out, rc);
