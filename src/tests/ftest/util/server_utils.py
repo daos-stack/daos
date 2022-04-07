@@ -14,7 +14,8 @@ import random
 
 from avocado import fail_on
 
-from command_utils_base import CommandFailure, CommonConfig
+from command_utils_base import CommonConfig
+from exception_utils import CommandFailure
 from command_utils import SubprocessManager
 from general_utils import pcmd, get_log_file, human_to_bytes, bytes_to_human, \
     convert_list, get_default_config_file, distribute_files, DaosTestError, \
@@ -794,7 +795,7 @@ class DaosServerManager(SubprocessManager):
         """Forcibly terminate any server process running on hosts."""
         regex = self.manager.job.command_regex
         # Try to dump all server's ULTs stacks before kill.
-        result = stop_processes(self._hosts, regex, dump_ult_stacks=True)
+        result = stop_processes(self._hosts, regex)
         if 0 in result and len(result) == 1:
             print("No remote {} server processes killed (none found), done.".format(regex))
         else:

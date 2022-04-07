@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2021 Intel Corporation.
+ * (C) Copyright 2021-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -74,6 +74,15 @@ get_dpe_val_ptr(struct daos_prop_entry *dpe)
 	return dpe->dpe_val_ptr;
 }
 
+static inline bool
+dpe_is_negative(struct daos_prop_entry *dpe)
+{
+	if (dpe == NULL)
+		return 0;
+
+	return dpe->dpe_flags & DAOS_PROP_ENTRY_NOT_SET;
+}
+
 static inline void
 set_dpe_str(struct daos_prop_entry *dpe, d_string_t str)
 {
@@ -100,5 +109,15 @@ set_dpe_val_ptr(struct daos_prop_entry *dpe, void *val_ptr)
 
 	dpe->dpe_val_ptr = val_ptr;
 }
+
+static inline uint32_t
+get_rebuild_state(struct daos_rebuild_status *drs)
+{
+	if (drs == NULL)
+		return 0;
+
+	return drs->rs_state;
+}
+
 
 #endif /* __CMD_DAOS_UTIL_H__ */
