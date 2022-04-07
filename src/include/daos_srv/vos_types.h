@@ -339,6 +339,11 @@ typedef struct {
 		/** The key for the entry */
 		d_iov_t		 id_key;
 	};
+	/** Conservative approximation of last aggregatable write for object or key. */
+	daos_epoch_t		 id_agg_write;
+	/** Timestamp of latest parent punch, if applicable.  Zero if there is no punch */
+	daos_epoch_t		 id_parent_punch;
+	/** Type of entry */
 	vos_iter_type_t		 id_type;
 } vos_iter_desc_t;
 
