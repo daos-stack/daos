@@ -380,7 +380,8 @@ filter_func_like(struct filter_part_run_t *args)
 			D_GOTO(exit, rc = 0);
 		} else {
 			right_pos = right_anchor;
-			left_pos++;
+			if (left_str[left_pos] != right_str[right_pos])
+				left_pos++; /** only advance if left is not equal to the anchor */
 		}
 		scaping = false;
 		if ((left_pos == left_size) && (right_pos == right_size - 1) &&
