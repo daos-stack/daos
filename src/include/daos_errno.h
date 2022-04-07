@@ -264,7 +264,7 @@ extern "C" {
 	       TX status is uncertaion)					\
 	/** Communicatin issue with agent. */				\
 	ACTION(DER_AGENT_COMM,		(DER_ERR_DAOS_BASE + 34),	\
-	       Agent communication error)				\
+		Agent communication error)				\
 	/** ID mismatch */						\
 	ACTION(DER_ID_MISMATCH,		(DER_ERR_DAOS_BASE + 35),	\
 	       ID mismatch)						\
@@ -273,6 +273,9 @@ extern "C" {
 		Retry with other target)				\
 	ACTION(DER_NOTSUPPORTED,	(DER_ERR_DAOS_BASE + 37),	\
 	       Operation not supported)					\
+	/** Division by zero. */					\
+	ACTION(DER_DIV_BY_ZERO,		(DER_ERR_DAOS_BASE + 38),	\
+	       Division by zero)					\
 
 /** Defines the gurt error codes */
 #define D_FOREACH_ERR_RANGE(ACTION)	\

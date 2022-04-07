@@ -287,21 +287,6 @@ obj_hdl_unlink(struct dc_object *obj)
 	daos_hhash_link_delete(&obj->cob_hlink);
 }
 
-daos_handle_t
-dc_obj_hdl2cont_hdl(daos_handle_t oh)
-{
-	struct dc_object *obj;
-	daos_handle_t hdl;
-
-	obj = obj_hdl2ptr(oh);
-	if (obj == NULL)
-		return DAOS_HDL_INVAL;
-
-	hdl = obj->cob_coh;
-	obj_decref(obj);
-	return hdl;
-}
-
 static int
 obj_layout_create(struct dc_object *obj, unsigned int mode, bool refresh)
 {
@@ -6470,3 +6455,34 @@ daos_obj_get_oclass(daos_handle_t coh, daos_ofeat_t ofeats,
 
 	return (ord << OC_REDUN_SHIFT) | nr_grp;
 }
+
+daos_handle_t
+dc_obj_hdl2cont_hdl(daos_handle_t oh)
+{
+	struct dc_object *obj;
+	daos_handle_t hdl;
+
+	obj = obj_hdl2ptr(oh);
+	if (obj == NULL)
+		return DAOS_HDL_INVAL;
+
+	hdl = obj->cob_coh;
+	obj_decref(obj);
+	return hdl;
+}
+
+int
+dc_obj_hdl2obj_md(daos_handle_t oh, struct daos_obj_md *md)
+{
+	struct dc_object 	*obj;
+	
+	obj = obj_hdl2ptr(oh);
+	if (obj == NULL)
+	{
+		return -DER_NO_HDL;
+	}
+	*md = obj->cob_md;
+	obj_decref(obj);
+	return 0;
+}
+
