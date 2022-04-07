@@ -458,7 +458,6 @@ int dc_obj_layout_get(daos_handle_t oh, struct daos_obj_layout **p_layout);
 int dc_obj_layout_refresh(daos_handle_t oh);
 int dc_obj_verify(daos_handle_t oh, daos_epoch_t *epochs, unsigned int nr);
 daos_handle_t dc_obj_hdl2cont_hdl(daos_handle_t oh);
-int dc_obj_hdl2obj_md(daos_handle_t oh, struct daos_obj_md *md);
 int dc_obj_get_grp_size(daos_handle_t oh, int *grp_size);
 
 int dc_tx_open(tse_task_t *task);
@@ -471,9 +470,6 @@ int dc_tx_local_open(daos_handle_t coh, daos_epoch_t epoch,
 		     uint32_t flags, daos_handle_t *th);
 int dc_tx_local_close(daos_handle_t th);
 int dc_tx_hdl2epoch(daos_handle_t th, daos_epoch_t *epoch);
-int dc_tx_hdl2dti(daos_handle_t th, struct dtx_id *dti);
-int dc_tx_hdl2epoch_pmv(daos_handle_t th, struct dtx_epoch *epoch, uint32_t *pm_ver);
-void dc_io_set_epoch(struct dtx_epoch *epoch);
 
 /** Decode shard number from enumeration anchor */
 static inline uint32_t
