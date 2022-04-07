@@ -14,6 +14,105 @@
 #include <gurt/telemetry_producer.h>
 #include "srv_internal.h"
 
+/*
+ * CPU weights for each type of ULTs, the ULT consuming more CPU in a schedule
+ * cycle has larger weights.
+ */
+static unsigned int req_weights[SCHED_REQ_MAX] = {
+	2,	/* SCHED_REQ_UPDATE */
+	1,	/* SCHED_REQ_FETCH */
+	4,	/* SCHED_REQ_GC */
+	3,	/* SCHED_REQ_SCRUB */
+	2,	/* SCHED_REQ_MIGRATE */
+};
+
+struct stats_cycle {
+	/* Kicked off weights in a schedule cycle */
+	uint64_t	sc_kicked_wts[SCHED_REQ_MAX];
+};
+
+#define SW_CYCLE_MAX	5000
+
+struct stats_window {
+	/* All schedule cycles in the stats window */
+	struct stats_cycle	sw_cycles[SW_CYCLE_MAX];
+	/* Last schedule cycle */
+	struct stats_cycle	sw_last_cycle;
+	/* Per type kicked off weights in the stats window */
+	uint64_t		sw_kicked_wts[SCHED_REQ_MAX];
+	/* Total kicked off weights in the stats window */
+	uint64_t		sw_kicked_wts_tot;
+	/* To be updated array index of 'sw_cycles' */
+	unsigned int		sw_cursor;
+	/* Array size of 'sw_cycles' */
+	unsigned int		sw_count;
+	/* Generation used on making kicking off decision */
+	uint8_t			sw_gen;
+};
+
+/*
+ * Assume the CPU is under utilized (not enough workload generated for certain DAOS
+ * pool) when the total kicked weights are less than the SW_MIN_WEIGHTS within a
+ * stats window.
+ */
+#define SW_MIN_WEIGHTS	2500 /* req_weights[SCHED_REQ_FETCH] * SW_CYCLE_MAX / 2 */
+
+static inline void
+sw_cycle_update(struct stats_window *sw, unsigned int req_type)
+{
+	struct stats_cycle	*cur = &sw->sw_last_cycle;
+
+	D_ASSERT(req_type < SCHED_REQ_MAX);
+	cur->sc_kicked_wts[req_type] += req_weights[req_type];
+}
+
+static inline void
+increase_kicked_wts(struct stats_window *sw, struct stats_cycle *sc,
+		    struct stats_cycle *last_cycle, unsigned int req_type)
+{
+	sc->sc_kicked_wts[req_type]	= last_cycle->sc_kicked_wts[req_type];
+	sw->sw_kicked_wts[req_type]	+= last_cycle->sc_kicked_wts[req_type];
+	sw->sw_kicked_wts_tot		+= last_cycle->sc_kicked_wts[req_type];
+
+	last_cycle->sc_kicked_wts[req_type] = 0;
+}
+
+static void
+sw_window_update(struct stats_window *sw)
+{
+	struct stats_cycle	*last_cycle = &sw->sw_last_cycle;
+	struct stats_cycle	*sc = &sw->sw_cycles[sw->sw_cursor];
+	int			 i;
+
+	if (likely(sw->sw_count == SW_CYCLE_MAX)) {
+		for (i = SCHED_REQ_UPDATE; i < SCHED_REQ_MAX; i++) {
+			/* Replace the weights in the entry to be updated */
+			D_ASSERT(sw->sw_kicked_wts[i] >= sc->sc_kicked_wts[i]);
+			D_ASSERT(sw->sw_kicked_wts_tot >= sw->sw_kicked_wts[i]);
+			sw->sw_kicked_wts[i]	-= sc->sc_kicked_wts[i];
+			sw->sw_kicked_wts_tot	-= sc->sc_kicked_wts[i];
+
+			increase_kicked_wts(sw, sc, last_cycle, i);
+		}
+		goto done;
+	}
+
+	for (i = SCHED_REQ_UPDATE; i < SCHED_REQ_MAX; i++)
+		increase_kicked_wts(sw, sc, last_cycle, i);
+
+	sw->sw_count++;
+done:
+	if (sw->sw_cursor == (SW_CYCLE_MAX - 1))
+		sw->sw_cursor = 0;
+	else
+		sw->sw_cursor++;
+
+	if (sw->sw_gen == UINT8_MAX)
+		sw->sw_gen = 0;
+	else
+		sw->sw_gen++;
+}
+
 struct sched_req_info {
 	d_list_t		sri_req_list;
 	/* Total request count in 'sri_req_list' */
@@ -38,6 +137,7 @@ struct sched_pool_info {
 	int			spi_gc_sleeping;
 	int			spi_ref;
 	uint32_t		spi_req_cnt;
+	struct stats_window	spi_stats_window;
 };
 
 struct sched_request {
@@ -96,14 +196,16 @@ static int	sched_policy;
  */
 #define SCHED_DELAY_THRESH	40000	/* msecs */
 
+/* Maximum milli-seconds a ULT can be delayed */
 static unsigned int max_delay_msecs[SCHED_REQ_MAX] = {
-	20000,	/* SCHED_REQ_UPDATE */
-	1000,	/* SCHED_REQ_FETCH */
-	500,	/* SCHED_REQ_GC */
+	12000,	/* SCHED_REQ_UPDATE */
+	2000,	/* SCHED_REQ_FETCH */
+	20000,	/* SCHED_REQ_GC */
 	20000,	/* SCHED_REQ_SCRUB */
-	20000,	/* SCHED_REQ_MIGRATE */
+	12000,	/* SCHED_REQ_MIGRATE */
 };
 
+/* Maximum QD for different type of ULTs */
 static unsigned int max_qds[SCHED_REQ_MAX] = {
 	64000,	/* SCHED_REQ_UPDATE */
 	32000,	/* SCHED_REQ_FETCH */
@@ -112,43 +214,9 @@ static unsigned int max_qds[SCHED_REQ_MAX] = {
 	64000,	/* SCHED_REQ_MIGRATE */
 };
 
-static unsigned int req_throttle[SCHED_REQ_MAX] = {
-	0,	/* SCHED_REQ_UPDATE */
-	0,	/* SCHED_REQ_FETCH */
-	30,	/* SCHED_REQ_GC */
-	30,	/* SCHED_REQ_SCRUB */
-	30,	/* SCHED_REQ_REBUILD */
-};
-
-/*
- * Throttle certain type of requests to N percent of IO requests
- * in a cycle. IO requests can't be throttled.
- */
-int
-sched_set_throttle(unsigned int type, unsigned int percent)
-{
-	if (percent >= 100) {
-		D_ERROR("Invalid throttle number: %d\n", percent);
-		return -DER_INVAL;
-	}
-
-	if (type >= SCHED_REQ_MAX) {
-		D_ERROR("Invalid request type: %d\n", type);
-		return -DER_INVAL;
-	}
-
-	if (type == SCHED_REQ_UPDATE || type == SCHED_REQ_FETCH) {
-		D_ERROR("Can't throttle IO requests");
-		return -DER_INVAL;
-	}
-
-	req_throttle[type] = percent;
-	return 0;
-}
-
 struct pressure_ratio {
 	unsigned int	pr_free;	/* free space ratio */
-	unsigned int	pr_throttle;	/* update throttle ratio */
+	unsigned int	pr_gc_ratio;	/* CPU percentage for GC & Aggregation */
 	unsigned int	pr_delay;	/* update being delayed in msec */
 	unsigned int	pr_pressure;	/* index in pressure_gauge */
 };
@@ -156,38 +224,38 @@ struct pressure_ratio {
 static struct pressure_ratio pressure_gauge[] = {
 	{	/* free space > 40%, no space pressure */
 		.pr_free	= 40,
-		.pr_throttle	= 100,
+		.pr_gc_ratio	= 10,
 		.pr_delay	= 0,
 		.pr_pressure	= SCHED_SPACE_PRESS_NONE,
 	},
 	{	/* free space > 30% */
 		.pr_free	= 30,
-		.pr_throttle	= 70,
-		.pr_delay	= 2000, /* msecs */
+		.pr_gc_ratio	= 20,
+		.pr_delay	= 4000, /* msecs */
 		.pr_pressure	= 1,
 	},
 	{	/* free space > 20% */
 		.pr_free	= 20,
-		.pr_throttle	= 40,
-		.pr_delay	= 4000, /* msecs */
+		.pr_gc_ratio	= 30,
+		.pr_delay	= 6000, /* msecs */
 		.pr_pressure	= 2,
 	},
 	{	/* free space > 10% */
 		.pr_free	= 10,
-		.pr_throttle	= 20,
+		.pr_gc_ratio	= 40,
 		.pr_delay	= 8000, /* msecs */
 		.pr_pressure	= 3,
 	},
 	{	/* free space > 5% */
 		.pr_free	= 5,
-		.pr_throttle	= 10,
-		.pr_delay	= 12000, /* msecs */
+		.pr_gc_ratio	= 50,
+		.pr_delay	= 10000, /* msecs */
 		.pr_pressure	= 4,
 	},
 	{	/* free space <= 5% */
 		.pr_free	= 0,
-		.pr_throttle	= 5,
-		.pr_delay	= 20000, /* msecs */
+		.pr_gc_ratio	= 60,
+		.pr_delay	= 12000, /* msecs */
 		.pr_pressure	= 5,
 	},
 };
@@ -593,7 +661,7 @@ req_kickoff_internal(struct dss_xstream *dx, struct sched_req_attr *attr,
 		     void (*func)(void *), void *arg)
 {
 	D_ASSERT(attr && func && arg);
-	D_ASSERT(attr->sra_type < SCHED_REQ_MAX);
+	D_ASSERT(attr->sra_type < SCHED_REQ_TYPE_MAX);
 
 	return sched_create_thread(dx, func, arg, ABT_THREAD_ATTR_NULL, NULL,
 				   attr->sra_flags & SCHED_REQ_FL_PERIODIC ?
@@ -626,6 +694,7 @@ req_kickoff(struct dss_xstream *dx, struct sched_request *req)
 	spi->spi_req_cnt--;
 	D_ASSERT(info->si_req_cnt > 0);
 	info->si_req_cnt--;
+	sw_cycle_update(&spi->spi_stats_window, req->sr_attr.sra_type);
 
 	d_list_del_init(&req->sr_link);
 	req_put(dx, req);
@@ -794,21 +863,181 @@ is_pressure_recent(struct sched_info *info, struct sched_pool_info *spi)
 	return (info->si_cur_ts - spi->spi_pressure_ts) < SCHED_DELAY_THRESH;
 }
 
-static inline unsigned int
-throttle_update(unsigned int u_max, struct pressure_ratio *pr)
+static inline uint64_t
+apportion_wts(uint64_t avail_wts, uint32_t *kick, unsigned int req_type)
 {
-	if (u_max == 0)
+	uint64_t	pending_wts, kick_cnt;
+
+	if (kick[req_type] == 0)
+		return avail_wts;
+
+	if (avail_wts == 0) {
+		kick[req_type] = 0;
+		return 0;
+	}
+
+	pending_wts = kick[req_type] * req_weights[req_type];
+	if (avail_wts <= pending_wts) {
+		kick_cnt = avail_wts / req_weights[req_type];
+		if (kick_cnt < kick[req_type])
+			kick[req_type] = kick_cnt;
+		return 0;
+	}
+
+	return avail_wts - pending_wts;
+}
+
+/*
+ * The goal is to subtract 'delta' weights from 'cur_wts' to make it satisfy:
+ * (cur_wts - delta) = (tot_wts - delta) * ratio
+ *
+ * That concludes: delta = (cur_wts - tot_wts * ratio) / (1 - ratio)
+ */
+static inline uint64_t
+calc_avail_wts(uint64_t cur_wts, uint64_t goal_wts, uint64_t kicked_wts, unsigned int ratio)
+{
+	uint64_t	avail_wts;
+
+	D_ASSERT(cur_wts > goal_wts);
+	avail_wts = (cur_wts - goal_wts) * 100 / (100 - ratio);
+
+	if (cur_wts <= avail_wts)
 		return 0;
 
-	/* Severe space pressure */
-	if (pr->pr_free == 0)
-		return u_max * pr->pr_throttle / 100;
+	avail_wts = cur_wts - avail_wts;
+	return (avail_wts <= kicked_wts) ? 0 : avail_wts - kicked_wts;
+}
 
-	/* Keep IO flow moving when there are only few inflight updates */
-	if ((u_max * pr->pr_throttle / 100) == 0)
-		return 1;
+/*
+ * When the pool is under space pressure, GC ULTs could be throttled if it
+ * exceeded the ratio defined for current pressure level, otherwise, other
+ * ULTs could be throttled.
+ */
+static void
+throttle_io(struct sched_info *info, struct sched_pool_info *spi, uint32_t *kick,
+	    struct pressure_ratio *pr)
+{
+	struct stats_window	*sw = &spi->spi_stats_window;
+	uint64_t		*kicked_wts, tot_wts, gc_wts, gc_wts_max, avail_wts;
+	unsigned int		 req_type;
 
-	return u_max * pr->pr_throttle / 100;
+	kicked_wts = &sw->sw_kicked_wts[0];
+
+	/* No onging I/O and rebuild, full-speed GC without any throttling */
+	if (kicked_wts[SCHED_REQ_UPDATE] == 0 && kicked_wts[SCHED_REQ_FETCH] == 0 &&
+	    kicked_wts[SCHED_REQ_MIGRATE] == 0 && kick[SCHED_REQ_UPDATE] == 0 &&
+	    kick[SCHED_REQ_FETCH] == 0 && kick[SCHED_REQ_MIGRATE] == 0)
+		return;
+
+	gc_wts = kicked_wts[SCHED_REQ_GC];
+	gc_wts += kick[SCHED_REQ_GC] * req_weights[SCHED_REQ_GC];
+
+	tot_wts = sw->sw_kicked_wts_tot;
+	for (req_type = SCHED_REQ_UPDATE; req_type < SCHED_REQ_MAX; req_type++)
+		tot_wts += kick[req_type] * req_weights[req_type];
+
+	/* CPU is under utilized, no throttling on any ULTs */
+	if (tot_wts < SW_MIN_WEIGHTS)
+		return;
+
+	gc_wts_max = tot_wts * pr->pr_gc_ratio / 100;
+	avail_wts = kick[SCHED_REQ_SCRUB] * req_weights[SCHED_REQ_SCRUB];
+	if (gc_wts > gc_wts_max) {
+		if (kick[SCHED_REQ_GC] == 0)
+			goto done;
+
+		gc_wts = calc_avail_wts(gc_wts, gc_wts_max, kicked_wts[SCHED_REQ_GC],
+					pr->pr_gc_ratio);
+		apportion_wts(gc_wts, kick, SCHED_REQ_GC);
+	} else if (gc_wts < gc_wts_max) {
+		avail_wts = 0;
+		/*
+		 * If space pressure isn't at highest level (pr->pr_free != 0), throttling
+		 * will be skipped when all GC/Aggregation ULTs are in sleep.
+		 */
+		if (pr->pr_free != 0 && !is_gc_pending(spi))
+			goto done;
+		/*
+		 * If space pressure stays in same level for a while, we just assume that
+		 * no available space can be reclaimed, so throttling will be skipped and
+		 * ENOSPACE could be returned to client sooner.
+		 */
+		if (!is_pressure_recent(info, spi))
+			goto done;
+
+		D_ASSERT(sw->sw_kicked_wts_tot >= kicked_wts[SCHED_REQ_GC]);
+		avail_wts = calc_avail_wts(tot_wts - gc_wts, tot_wts - gc_wts_max,
+					   sw->sw_kicked_wts_tot - kicked_wts[SCHED_REQ_GC],
+					   100 - pr->pr_gc_ratio);
+
+		/* Satisfy rebuild/reintegration ULTs first when 'sw_gen' is odd */
+		if (sw->sw_gen & 0x1) {
+			avail_wts = apportion_wts(avail_wts, kick, SCHED_REQ_MIGRATE);
+			avail_wts = apportion_wts(avail_wts, kick, SCHED_REQ_UPDATE);
+		} else {
+			avail_wts = apportion_wts(avail_wts, kick, SCHED_REQ_UPDATE);
+			avail_wts = apportion_wts(avail_wts, kick, SCHED_REQ_MIGRATE);
+		}
+	}
+done:
+	/* Schedule SCRUB ULT when there are available weights or on every 256 cycles */
+	if (sw->sw_gen != 0)
+		apportion_wts(avail_wts, kick, SCHED_REQ_SCRUB);
+}
+
+/* Rebuild/Reintegration takes 30% CPU when there is no space pressure */
+#define REBUILD_RATIO	30
+
+/*
+ * When there is no space pressure, all IO requests will be kicked off immediately,
+ * internal sys ULTs will be throttled.
+ */
+static void
+throttle_sys(struct stats_window *sw, uint32_t *kick, struct pressure_ratio *pr)
+{
+	uint64_t	*kicked_wts, io_wts, tot_wts, avail_wts;
+	unsigned int	 io_ratio;
+
+	kicked_wts = &sw->sw_kicked_wts[0];
+
+	io_wts = kicked_wts[SCHED_REQ_UPDATE] + kicked_wts[SCHED_REQ_FETCH];
+	io_wts += kick[SCHED_REQ_UPDATE] * req_weights[SCHED_REQ_UPDATE];
+	io_wts += kick[SCHED_REQ_FETCH] * req_weights[SCHED_REQ_FETCH];
+
+	/* No recent IO and pending IO, no throttling on sys ULTs */
+	if (io_wts == 0)
+		return;
+
+	if (kicked_wts[SCHED_REQ_MIGRATE] != 0 || kick[SCHED_REQ_MIGRATE] != 0)
+		io_ratio = 100 - REBUILD_RATIO;
+	else
+		io_ratio = 100 - pr->pr_gc_ratio;
+
+	/* Calculate the target total weights based on IO weights and IO ratio */
+	tot_wts = io_wts * 100 / io_ratio;
+	if (tot_wts < SW_MIN_WEIGHTS)
+		tot_wts = SW_MIN_WEIGHTS;
+
+	if (tot_wts <= sw->sw_kicked_wts_tot) {
+		kick[SCHED_REQ_GC] = 0;
+		kick[SCHED_REQ_MIGRATE] = 0;
+		kick[SCHED_REQ_SCRUB] = 0;
+		return;
+	}
+
+	avail_wts = tot_wts - sw->sw_kicked_wts_tot;
+	/* Satisfy rebuild/reintegration ULTs first when 'sw_gen' is odd */
+	if (sw->sw_gen & 0x1) {
+		avail_wts = apportion_wts(avail_wts, kick, SCHED_REQ_MIGRATE);
+		avail_wts = apportion_wts(avail_wts, kick, SCHED_REQ_GC);
+	} else {
+		avail_wts = apportion_wts(avail_wts, kick, SCHED_REQ_GC);
+		avail_wts = apportion_wts(avail_wts, kick, SCHED_REQ_MIGRATE);
+	}
+
+	/* Schedule SCRUB ULT when there are available weights or on every 256 cycles */
+	if (sw->sw_gen != 0)
+		apportion_wts(avail_wts, kick, SCHED_REQ_SCRUB);
 }
 
 static int
@@ -817,74 +1046,30 @@ process_pool_cb(d_list_t *rlink, void *arg)
 	struct dss_xstream	*dx = (struct dss_xstream *)arg;
 	struct sched_info	*info = &dx->dx_sched_info;
 	struct sched_pool_info	*spi;
-	unsigned int		 u_max, f_max, io_max, gc_max, scrub_max,
-				 mig_max;
-	unsigned int		 gc_thr, mig_thr;
+	uint32_t		 kick[SCHED_REQ_MAX];
 	struct pressure_ratio	*pr;
-	int			 press;
+	int			 press, i;
 
 	spi = sched_rlink2spi(rlink);
 
-	gc_thr	= req_throttle[SCHED_REQ_GC];
-	mig_thr	= req_throttle[SCHED_REQ_MIGRATE];
-	D_ASSERT(gc_thr < 100 && mig_thr < 100);
+	/* Update stats window no matter if any pending ULT or not */
+	sw_window_update(&spi->spi_stats_window);
+	if (spi->spi_req_cnt == 0)
+		return 0;
 
-	u_max	= pool2req_cnt(spi, SCHED_REQ_UPDATE);
-	f_max	= pool2req_cnt(spi, SCHED_REQ_FETCH);
-	io_max	= u_max + f_max;
-
-	gc_max	= pool2req_cnt(spi, SCHED_REQ_GC);
-	scrub_max = pool2req_cnt(spi, SCHED_REQ_SCRUB);
-	mig_max	= pool2req_cnt(spi, SCHED_REQ_MIGRATE);
+	for (i = SCHED_REQ_UPDATE; i < SCHED_REQ_MAX; i++)
+		kick[i] = pool2req_cnt(spi, i);
 
 	press = check_space_pressure(dx, spi);
-
-	if (press == SCHED_SPACE_PRESS_NONE) {
-		/* Throttle GC & aggregation */
-		if (io_max && gc_max && gc_thr)
-			gc_max = min(gc_max, io_max * gc_thr / 100);
-		goto out;
-	}
-
 	pr = &pressure_gauge[press];
-	D_ASSERT(pr->pr_throttle < 100);
 
-	if (pr->pr_free != 0) {	/* Light space pressure */
-		/* Throttle updates when there is space to be reclaimed */
-		if (is_gc_pending(spi)) {
-			u_max	= throttle_update(u_max, pr);
-			io_max	= u_max + f_max;
-		}
-	} else {		/* Severe space pressure */
-		/*
-		 * If space pressure stays in highest level for a while, we
-		 * can assume that no available space could be reclaimed, so
-		 * throttling can be stopped and ENOSPACE could be returned
-		 * to client sooner.
-		 */
-		if (is_pressure_recent(info, spi)) {
-			u_max	= throttle_update(u_max, pr);
-			/*
-			 * Delay all rebuild and reintegration requests for
-			 * this moment, since we can't tell if they are for
-			 * update or fetch.
-			 */
-			mig_max	= 0;
-		}
-	}
+	if (press == SCHED_SPACE_PRESS_NONE)
+		throttle_sys(&spi->spi_stats_window, &kick[SCHED_REQ_UPDATE], pr);
+	else
+		throttle_io(info, spi, &kick[SCHED_REQ_UPDATE], pr);
 
-out:
-	/* Throttle rebuild and reintegration */
-	if (mig_max && io_max && mig_thr) {
-		mig_thr = max(1, io_max * mig_thr / 100);
-		mig_max = min(mig_max, mig_thr);
-	}
-
-	set_req_limit(dx, spi, SCHED_REQ_UPDATE, u_max);
-	set_req_limit(dx, spi, SCHED_REQ_FETCH, f_max);
-	set_req_limit(dx, spi, SCHED_REQ_GC, gc_max);
-	set_req_limit(dx, spi, SCHED_REQ_SCRUB, scrub_max);
-	set_req_limit(dx, spi, SCHED_REQ_MIGRATE, mig_max);
+	for (i = SCHED_REQ_UPDATE; i < SCHED_REQ_MAX; i++)
+		set_req_limit(dx, spi, i, kick[i]);
 
 	process_req_list(dx, pool2req_list(spi, SCHED_REQ_GC), true);
 	process_req_list(dx, pool2req_list(spi, SCHED_REQ_SCRUB), true);
@@ -937,11 +1122,6 @@ process_all(struct dss_xstream *dx)
 	struct sched_info	*info = &dx->dx_sched_info;
 	int			 rc;
 
-	if (info->si_req_cnt == 0) {
-		D_ASSERT(d_list_empty(&info->si_fifo_list));
-		return;
-	}
-
 	prune_purge_list(dx);
 	rc = d_hash_table_traverse(info->si_pool_hash, process_pool_cb, dx);
 	if (rc)
@@ -959,7 +1139,7 @@ should_enqueue_req(struct dss_xstream *dx, struct sched_req_attr *attr)
 	if (sched_prio_disabled || info->si_stop)
 		return false;
 
-	D_ASSERT(attr->sra_type < SCHED_REQ_MAX);
+	D_ASSERT(attr->sra_type < SCHED_REQ_TYPE_MAX);
 	if (attr->sra_type == SCHED_REQ_ANONYM)
 		return false;
 
@@ -1002,6 +1182,17 @@ sched_req_enqueue(struct dss_xstream *dx, struct sched_req_attr *attr,
 	if (!should_enqueue_req(dx, attr))
 		return req_kickoff_internal(dx, attr, func, arg);
 
+	/*
+	 * TODO: A RPC flow control mechanism could be introduced to avoid RPC timeout when the
+	 * server is congested:
+	 *
+	 * Estimate how long it would take to process the incoming request based on the server
+	 * resource availability (request queue length, space pressure, DMA buffer usage, etc)
+	 * and the average per request processing time, then compare the estimated time with the
+	 * RPC timeout to see if the request should be early replied with hint data for retry.
+	 *
+	 * That requires wire format and client changes.
+	 */
 	D_ASSERT(attr->sra_type < SCHED_REQ_MAX);
 	req = req_get(dx, attr, func, arg, ABT_THREAD_NULL, false);
 	if (req == NULL) {
@@ -1175,7 +1366,7 @@ sched_req_get(struct sched_req_attr *attr, ABT_thread ult)
 	struct sched_request	*req;
 	int			 rc;
 
-	D_ASSERT(attr->sra_type < SCHED_REQ_MAX);
+	D_ASSERT(attr->sra_type < SCHED_REQ_TYPE_MAX);
 
 	if (ult == ABT_THREAD_NULL) {
 		ABT_thread	self;

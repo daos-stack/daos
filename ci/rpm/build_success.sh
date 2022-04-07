@@ -50,4 +50,4 @@ createrepo "$artdir"
 rpm --qf "%{version}-%{release}.%{arch}" \
     -qp "$artdir"/daos-server-[0-9]*.x86_64.rpm > "${TARGET}-rpm-version"
 rpm -qRp "$artdir"/daos-server-*.x86_64.rpm |
-  sed -ne '/mercury/s/.* = //p' > "${TARGET}-required-mercury-rpm-version"
+  sed -ne '/mercury/s/.* >= //p' > "${TARGET}-required-mercury-rpm-version"

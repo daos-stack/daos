@@ -466,7 +466,7 @@ class IorTestBase(DfuseTestBase):
                                        and block sizes. eg: [1M, 32M]
                                        1M is transfer size and 32M is
                                        block size in the above example.
-            flags(list): list of ior flags
+            flags(list): list of ior flags. Only the first index is used
             mount_dir(str): dfuse mount directory
         """
         results = []
@@ -474,17 +474,18 @@ class IorTestBase(DfuseTestBase):
         for oclass in obj_class:
             self.ior_cmd.dfs_oclass.update(oclass)
             for api in apis:
+                hdf5_plugin_path = None
+                intercept = None
+                flags_w = flags[0]
                 if api == "HDF5-VOL":
-                    self.ior_cmd.api.update("HDF5")
-                    hdf5_plugin_path = self.params.get(
-                        "plugin_path", '/run/hdf5_vol/*')
-                    flags_w_k = " ".join([flags[0]] + ["-k"])
-                    self.ior_cmd.flags.update(flags_w_k, "ior.flags")
-                else:
-                    # run tests for different variants
-                    self.ior_cmd.flags.update(flags[0], "ior.flags")
-                    hdf5_plugin_path = None
-                    self.ior_cmd.api.update(api)
+                    api = "HDF5"
+                    hdf5_plugin_path = self.params.get("plugin_path", '/run/hdf5_vol/*')
+                    flags_w += " -k"
+                elif api == "POSIX+IL":
+                    api = "POSIX"
+                    intercept = os.path.join(self.prefix, 'lib64', 'libioil.so')
+                self.ior_cmd.flags.update(flags_w, "ior.flags")
+                self.ior_cmd.api.update(api)
                 for test in transfer_block_size:
                     # update transfer and block size
                     self.ior_cmd.transfer_size.update(test[0])
@@ -492,8 +493,8 @@ class IorTestBase(DfuseTestBase):
                     # run ior
                     try:
                         self.run_ior_with_pool(
-                            plugin_path=hdf5_plugin_path, timeout=self.ior_timeout,
-                            mount_dir=mount_dir)
+                            intercept=intercept, plugin_path=hdf5_plugin_path,
+                            timeout=self.ior_timeout, mount_dir=mount_dir)
                         results.append(["PASS", str(self.ior_cmd)])
                     except CommandFailure:
                         results.append(["FAIL", str(self.ior_cmd)])

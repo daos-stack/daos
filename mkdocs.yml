@@ -1,5 +1,5 @@
 # Project Information
-site_name: DAOS v2.2 - dev
+site_name: DAOS v2.4 - dev
 site_description: Distributed Asynchronous Object Storage
 site_author: DAOS Project
 
@@ -100,6 +100,7 @@ nav:
         - 'Python Support': 'user/python.md'
         - 'Spark and Hadoop': 'user/spark.md'
         - 'Data Mover': 'user/datamover.md'
+        - 'Tensorflow-IO Support': 'user/tensorflow.md'
         - 'Native Programming Interface': 'user/interface.md'
     - Releases:
         - 'Release Notes v2.2': 'release/release_notes.md'
