@@ -498,6 +498,10 @@ def check_flag_helper(context, compiler, ext, flag):
         context.env.Replace(CFLAGS=['-O2'])
     elif compiler in ["gcc", "g++"]:
         # remove -no- for test
+        # There is a issue here when mpicc is a wrapper around gcc, in that we can pass -Wno-
+        # options to the compiler even if it doesn't understand them but.  This would be tricky
+        # to fix gcc only complains about unknown -Wno- warning options if the compile Fails
+        # for other reasons anyway.
         test_flag = flag.replace("-Wno-", "-W")
         flags = ["-Werror", test_flag]
     else:
@@ -534,12 +538,12 @@ def check_flags(env, config, key, value):
             continue
         insert = False
         if key == "CCFLAGS":
-            if config.CheckFlag(flag) and cxx is not None and config.CheckFlagCC(flag):
+            if config.CheckFlag(flag) and (cxx is None or config.CheckFlagCC(flag)):
                 insert = True
         elif key == "CFLAGS":
             if config.CheckFlag(flag):
                 insert = True
-        elif config.CheckFlagCC(flag) and cxx is not None:
+        elif cxx is not None and config.CheckFlagCC(flag):
             insert = True
         if insert:
             env.AppendUnique(**{key: [flag]})

@@ -30,6 +30,7 @@ bool		dt_csum_server_verify;
 unsigned int	dt_cell_size;
 int		dt_obj_class;
 
+
 /* Create or import a single pool with option to store info in arg->pool
  * or an alternate caller-specified test_pool structure.
  * ipool (optional): import pool: store info for an existing pool to arg->pool.
@@ -153,7 +154,7 @@ test_setup_pool_connect(void **state, struct test_pool *pool)
 	}
 
 	if (arg->myrank == 0) {
-		daos_pool_info_t	info = {{0}};
+		daos_pool_info_t	info = {0};
 		uint64_t		flags = arg->pool.pool_connect_flags;
 
 		if (arg->pool_label) {
@@ -247,6 +248,7 @@ test_setup_cont_create(void **state, daos_prop_t *co_prop)
 	return rc;
 }
 
+
 static int
 test_setup_cont_open(void **state)
 {
@@ -317,7 +319,7 @@ test_setup(void **state, unsigned int step, bool multi_rank,
 	unsigned int		 seed;
 	int			 rc = 0;
 	daos_prop_t		 co_props = {0};
-	struct daos_prop_entry	 dpp_entry[4] = {{0}};
+	struct daos_prop_entry	 dpp_entry[4] = {0};
 	struct daos_prop_entry	*entry;
 
 	/* feed a seed for pseudo-random number generator */
@@ -418,7 +420,7 @@ test_setup(void **state, unsigned int step, bool multi_rank,
 int
 pool_destroy_safe(test_arg_t *arg, struct test_pool *extpool)
 {
-	daos_pool_info_t	 pinfo = {{0}};
+	daos_pool_info_t	 pinfo = {0};
 	struct test_pool	*pool;
 	daos_handle_t		 poh;
 	int			 rc;
@@ -711,7 +713,7 @@ test_pool_get_info(test_arg_t *arg, daos_pool_info_t *pinfo, d_rank_list_t **eng
 static bool
 rebuild_pool_wait(test_arg_t *arg)
 {
-	daos_pool_info_t	   pinfo = {{0}};
+	daos_pool_info_t	   pinfo = {0};
 	struct daos_rebuild_status *rst;
 	int			   rc;
 	bool			   done = false;
@@ -744,7 +746,7 @@ rebuild_pool_wait(test_arg_t *arg)
 int
 test_get_leader(test_arg_t *arg, d_rank_t *rank)
 {
-	daos_pool_info_t	pinfo = {{0}};
+	daos_pool_info_t	pinfo = {0};
 	int			rc;
 
 	rc = test_pool_get_info(arg, &pinfo, NULL /* engine_ranks */);
@@ -914,6 +916,7 @@ void
 daos_drain_target(const uuid_t pool_uuid, const char *grp,
 		  const char *dmg_config, d_rank_t rank, int tgt_idx)
 {
+
 	daos_dmg_pool_target("drain", pool_uuid, grp, dmg_config,
 			     rank, tgt_idx, 0);
 }
