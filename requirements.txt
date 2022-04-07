@@ -1,0 +1,14 @@
+# requirements which are not versioned.
+scons        # Works around a bug in scons on EL 8.
+defusedxml
+distro
+junit_xml
+pyelftools
+pyxattr
+tabulate
+pyyaml
+wheel
+
+# Custom version of meson to have spdk work with python venv, however newer versions do not work
+# with dpdk.
+meson==0.59.4

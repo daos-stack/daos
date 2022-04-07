@@ -160,10 +160,10 @@ ENV VIRTUAL_ENV=/home/daos/venv/
 # Distribution version of meson will pick up the wrong python so upgrade meson, however latest
 #  release of meson will not build spdk to bind it to a previous version.
 #  https://github.com/DPDK/dpdk/commit/c78471cd061a0f64db006c538be34536bc66c12a
+COPY requirements.txt .
 RUN python3 -m pip --no-cache-dir install --upgrade pip && \
     python3 -m pip --no-cache-dir install wheel && \
-    python3 -m pip --no-cache-dir install \
-        scons defusedxml distro junit_xml pyelftools pyxattr tabulate pyyaml meson==0.59.4
+    python3 -m pip --no-cache-dir install -r requirements.txt
 
 WORKDIR /home/daos/pre
 COPY --chown=daos_server:daos_server SConstruct .
