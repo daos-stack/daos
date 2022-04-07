@@ -894,6 +894,8 @@ type (
 		// ServiceReplicas is the list of ranks on which this pool's
 		// service replicas are running.
 		ServiceReplicas []system.Rank `json:"svc_reps"`
+		// State is the current state of the pool.
+		State string `json:"state"`
 
 		// TargetsTotal is the total number of targets in pool.
 		TargetsTotal uint32 `json:"targets_total"`
@@ -1032,6 +1034,10 @@ func ListPools(ctx context.Context, rpcClient UnaryInvoker, req *ListPoolsReq) (
 
 	// issue query request and populate usage statistics for each pool
 	for _, p := range resp.Pools {
+		if p.State != system.PoolServiceStateReady.String() {
+			rpcClient.Debugf("Skipping query of pool in state: %s", p.State)
+			continue
+		}
 		rpcClient.Debugf("Fetching details for discovered pool: %v", p)
 
 		resp, err := PoolQuery(ctx, rpcClient, &PoolQueryReq{ID: p.UUID})
