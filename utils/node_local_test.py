@@ -950,7 +950,7 @@ class DaosServer():
 
         return self.test_pool.id()
 
-def il_cmd(dfuse, cmd, check_read=True, check_write=True, check_fstat=True):
+def il_cmd(dfuse, cmd, stdout=False, check_read=True, check_write=True, check_fstat=True):
     """Run a command under the interception library
 
     Do not run valgrind here, not because it's not useful
@@ -968,7 +968,15 @@ def il_cmd(dfuse, cmd, check_read=True, check_write=True, check_fstat=True):
     # pylint: disable=protected-access
     my_env['DAOS_AGENT_DRPC_DIR'] = dfuse._daos.agent_dir
     my_env['D_IL_REPORT'] = '2'
-    ret = subprocess.run(cmd, env=my_env, check=False)
+    if stdout:
+        stdout = subprocess.PIPE
+    else:
+        stdout = None
+    ret = subprocess.run(cmd, stdout=stdout, env=my_env, check=False)
+    if stdout is not None:
+        for line in ret.stdout.decode('utf-8').splitlines():
+            print(line)
+
     print('Logged il to {}'.format(log_name))
     print(ret)
 
@@ -2778,8 +2786,7 @@ class posix_tests():
 
         cmd = [dcmd, '--test-dir', dfuse.dir]
 
-        ret = il_cmd(dfuse, cmd, check_read=False, check_write=False, check_fstat=False)
-        assert ret.returncode == 0, ret
+        il_cmd(dfuse, cmd, stdout=True, check_read=False, check_write=False, check_fstat=False)
 
         if dfuse.stop():
             self.fatal_errors = True

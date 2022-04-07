@@ -32,10 +32,10 @@ struct fd_entry {
 	struct ioil_cont	*fd_cont;
 	dfs_obj_t		*fd_dfsoh;
 	off_t			fd_pos;
+	ino_t			fd_ino;
+	dev_t			fd_dev;
 	int			fd_flags;
 	int			fd_status;
-	int			fd_ino;
-	int			fd_dev;
 	bool			fd_fstat;
 };
 
