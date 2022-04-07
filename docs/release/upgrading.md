@@ -19,7 +19,7 @@ The recommended procedure for the upgrade is:
 - Start the `daos_server` daemons.
 - Validate that all engines have started successfully,
   for example using `dmg system query -v`.
-- Start the `daos_engine` daemons.
+- Start the `daos_agent` daemons.
 
 DAOS fix levels include all previous fix levels. So it is possible to updating
 from Version 2.0.0 to Version 2.0.2 without updating to Version 2.0.1 first.
