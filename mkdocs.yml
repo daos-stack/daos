@@ -59,6 +59,11 @@ nav:
         - 'Community Roadmap': 'http://wiki.daos.io/spaces/DC/pages/4836661105/Roadmap'
         - 'Community Mailing list': 'https://daos.groups.io/g/daos'
         - 'Issue tracker': 'http://jira.daos.io/'
+    - Release Infos:
+        - 'Release Notes v2.0': 'release/release_notes.md'
+        - 'Support Matrix v2.0': 'release/support_matrix.md'
+        - 'Upgrading to v2.0': 'release/upgrading.md'
+        - 'Roadmap': 'http://wiki.daos.io/spaces/DC/pages/4836661105/Roadmap'
     - Overview:
         - 'Architecture': 'overview/architecture.md'
         - 'Storage Model': 'overview/storage.md'
@@ -101,11 +106,6 @@ nav:
         - 'Spark and Hadoop': 'user/spark.md'
         - 'Data Mover': 'user/datamover.md'
         - 'Native Programming Interface': 'user/interface.md'
-    - Releases:
-        - 'Release Notes v2.0': 'release/release_notes.md'
-        - 'Support Matrix v2.0': 'release/support_matrix.md'
-        - 'Upgrading to v2.0': 'release/upgrading_to_v2_0.md'
-        - 'Roadmap': 'http://wiki.daos.io/spaces/DC/pages/4836661105/Roadmap'
     - Developer Zone:
         - 'Dev Environment': 'dev/development.md'
         - 'Contributing': 'dev/contributing.md'
