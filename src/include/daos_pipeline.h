@@ -238,6 +238,16 @@ int
 daos_pipeline_check(daos_pipeline_t *pipeline);
 
 /**
+ * Frees all memory allocated by DAOS for the pipeline during construction. More specifically, it
+ * frees memory for filter and filter_part objects created during calls to \a daos_filter_add() and
+ * \a daos_pipeline_add().
+ *
+ * \param[in,out]	pipeline	Pipeline object.
+ */
+void
+daos_pipeline_free(daos_pipeline_t *pipeline);
+
+/**
  * Runs a pipeline on DAOS, returning objects and/or aggregated results.
  *
  * \params[in]		coh		Container open handle.
