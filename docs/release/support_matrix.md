@@ -1,7 +1,7 @@
-# DAOS Version 2.2 Support
+# DAOS Version 2.4 Support
 
-DAOS 2.2 is under active development and has not been released yet.
-The release is planned for the first half of 2022.
+DAOS 2.4 is under active development and has not been released yet.
+The release is planned for late 2022.
 In the meantime, please refer to the support document for the
-[latest](https://docs.daos.io/latest/release/support_matrix/) DAOS release.
-
+[latest](https://docs.daos.io/latest/release/support_matrix/)
+stable DAOS release.

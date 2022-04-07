@@ -2334,9 +2334,16 @@ class posix_tests():
         os.close(fd)
         print(ps)
 
-        with open(join(dfuse.dir, 'rw_dir', 'new_file'), 'r') as fd:
-            data = fd.read()
-            print(data)
+        fd = os.open(testfile, os.O_RDONLY)
+        # previous code was using stream/file methods and it appears that
+        # file.read() (no size) is doing a fstat() and reads size + 1
+        fstat_fd = os.fstat(fd)
+        raw_bytes = os.read(fd, fstat_fd.st_size + 1)
+        assert raw_bytes == b'read-only-data'
+        data = raw_bytes.decode('utf-8', 'ignore')
+        assert data == 'read-only-data'
+        print(data)
+        os.close(fd)
 
         if dfuse.stop():
             self.fatal_errors = True
