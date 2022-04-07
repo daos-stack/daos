@@ -4,6 +4,7 @@ package mgmt
 
 import (
 	context "context"
+	chk "github.com/daos-stack/daos/src/control/common/proto/chk"
 	shared "github.com/daos-stack/daos/src/control/common/proto/shared"
 	grpc "google.golang.org/grpc"
 	codes "google.golang.org/grpc/codes"
@@ -82,6 +83,8 @@ type MgmtSvcClient interface {
 	SystemCheckProp(ctx context.Context, in *CheckPropReq, opts ...grpc.CallOption) (*CheckPropResp, error)
 	// PoolUpgrade queries a DAOS pool.
 	PoolUpgrade(ctx context.Context, in *PoolUpgradeReq, opts ...grpc.CallOption) (*PoolUpgradeResp, error)
+	// FaultInjectReport injects a checker report.
+	FaultInjectReport(ctx context.Context, in *chk.CheckReport, opts ...grpc.CallOption) (*DaosResp, error)
 }
 
 type mgmtSvcClient struct {
@@ -371,6 +374,15 @@ func (c *mgmtSvcClient) PoolUpgrade(ctx context.Context, in *PoolUpgradeReq, opt
 	return out, nil
 }
 
+func (c *mgmtSvcClient) FaultInjectReport(ctx context.Context, in *chk.CheckReport, opts ...grpc.CallOption) (*DaosResp, error) {
+	out := new(DaosResp)
+	err := c.cc.Invoke(ctx, "/mgmt.MgmtSvc/FaultInjectReport", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // MgmtSvcServer is the server API for MgmtSvc service.
 // All implementations must embed UnimplementedMgmtSvcServer
 // for forward compatibility
@@ -438,6 +450,8 @@ type MgmtSvcServer interface {
 	SystemCheckProp(context.Context, *CheckPropReq) (*CheckPropResp, error)
 	// PoolUpgrade queries a DAOS pool.
 	PoolUpgrade(context.Context, *PoolUpgradeReq) (*PoolUpgradeResp, error)
+	// FaultInjectReport injects a checker report.
+	FaultInjectReport(context.Context, *chk.CheckReport) (*DaosResp, error)
 	mustEmbedUnimplementedMgmtSvcServer()
 }
 
@@ -537,6 +551,9 @@ func (UnimplementedMgmtSvcServer) SystemCheckProp(context.Context, *CheckPropReq
 }
 func (UnimplementedMgmtSvcServer) PoolUpgrade(context.Context, *PoolUpgradeReq) (*PoolUpgradeResp, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method PoolUpgrade not implemented")
+}
+func (UnimplementedMgmtSvcServer) FaultInjectReport(context.Context, *chk.CheckReport) (*DaosResp, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method FaultInjectReport not implemented")
 }
 func (UnimplementedMgmtSvcServer) mustEmbedUnimplementedMgmtSvcServer() {}
 
@@ -1109,6 +1126,24 @@ func _MgmtSvc_PoolUpgrade_Handler(srv interface{}, ctx context.Context, dec func
 	return interceptor(ctx, in, info, handler)
 }
 
+func _MgmtSvc_FaultInjectReport_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(chk.CheckReport)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(MgmtSvcServer).FaultInjectReport(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/mgmt.MgmtSvc/FaultInjectReport",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(MgmtSvcServer).FaultInjectReport(ctx, req.(*chk.CheckReport))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // MgmtSvc_ServiceDesc is the grpc.ServiceDesc for MgmtSvc service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -1239,6 +1274,10 @@ var MgmtSvc_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "PoolUpgrade",
 			Handler:    _MgmtSvc_PoolUpgrade_Handler,
+		},
+		{
+			MethodName: "FaultInjectReport",
+			Handler:    _MgmtSvc_FaultInjectReport_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

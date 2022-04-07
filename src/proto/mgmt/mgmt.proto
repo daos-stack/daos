@@ -16,6 +16,7 @@ import "mgmt/cont.proto";
 import "mgmt/svc.proto";
 import "mgmt/acl.proto"; // ACL-related requests
 import "mgmt/system.proto";
+import "chk/chk.proto";
 
 // Management Service is replicated on a small number of servers in the system,
 // these requests will be processed on a host that is a member of the management
@@ -87,4 +88,6 @@ service MgmtSvc {
 	rpc SystemCheckProp(CheckPropReq) returns(CheckPropResp){}
 	// PoolUpgrade queries a DAOS pool.
 	rpc PoolUpgrade(PoolUpgradeReq) returns (PoolUpgradeResp) {}
+	// FaultInjectReport injects a checker report.
+	rpc FaultInjectReport(chk.CheckReport) returns (DaosResp) {}
 }
