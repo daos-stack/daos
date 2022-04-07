@@ -381,7 +381,7 @@ queue_shard_pipeline_run_task(tse_task_t *api_task, struct pl_obj_layout *layout
 	api_args = dc_task_get_args(api_task);
 	sched    = tse_task2sched(api_task);
 	rc       = tse_task_create(shard_pipeline_run_task, sched, NULL, &task);
-	if (rc != 0) 
+	if (rc != 0)
 		D_GOTO(out_task, rc);
 
 	args                = tse_task_buf_embedded(task, sizeof(*args));

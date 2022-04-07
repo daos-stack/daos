@@ -26,9 +26,9 @@
 		return 0;                                                                          \
 	}
 
-aggr_func_sum(u);
-aggr_func_sum(i);
-aggr_func_sum(d);
+aggr_func_sum(u)
+aggr_func_sum(i)
+aggr_func_sum(d)
 
 #define aggr_func_max(type)                                                                        \
 	int aggr_func_max_##type(struct filter_part_run_t *args)                                   \
@@ -49,9 +49,9 @@ aggr_func_sum(d);
 		return 0;                                                                          \
 	}
 
-aggr_func_max(u);
-aggr_func_max(i);
-aggr_func_max(d);
+aggr_func_max(u)
+aggr_func_max(i)
+aggr_func_max(d)
 
 #define aggr_func_min(type)                                                                        \
 	int aggr_func_min_##type(struct filter_part_run_t *args)                                   \
@@ -72,6 +72,6 @@ aggr_func_max(d);
 		return 0;                                                                          \
 	}
 
-aggr_func_min(u);
-aggr_func_min(i);
-aggr_func_min(d);
+aggr_func_min(u)
+aggr_func_min(i)
+aggr_func_min(d)

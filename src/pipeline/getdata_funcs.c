@@ -23,16 +23,16 @@
 		return 0;                                                                          \
 	}
 
-getdata_func_dkey(u, 1, uint8_t, u, uint64_t);
-getdata_func_dkey(u, 2, uint16_t, u, uint64_t);
-getdata_func_dkey(u, 4, uint32_t, u, uint64_t);
-getdata_func_dkey(u, 8, uint64_t, u, uint64_t);
-getdata_func_dkey(i, 1, int8_t, i, int64_t);
-getdata_func_dkey(i, 2, int16_t, i, int64_t);
-getdata_func_dkey(i, 4, int32_t, i, int64_t);
-getdata_func_dkey(i, 8, int64_t, i, int64_t);
-getdata_func_dkey(r, 4, float, d, double);
-getdata_func_dkey(r, 8, double, d, double);
+getdata_func_dkey(u, 1, uint8_t, u, uint64_t)
+getdata_func_dkey(u, 2, uint16_t, u, uint64_t)
+getdata_func_dkey(u, 4, uint32_t, u, uint64_t)
+getdata_func_dkey(u, 8, uint64_t, u, uint64_t)
+getdata_func_dkey(i, 1, int8_t, i, int64_t)
+getdata_func_dkey(i, 2, int16_t, i, int64_t)
+getdata_func_dkey(i, 4, int32_t, i, int64_t)
+getdata_func_dkey(i, 8, int64_t, i, int64_t)
+getdata_func_dkey(r, 4, float, d, double)
+getdata_func_dkey(r, 8, double, d, double)
 
 int
 getdata_func_dkey_raw(struct filter_part_run_t *args)
@@ -176,18 +176,18 @@ exit:
 		return 0;                                                                          \
 	}
 
-getdata_func_akey(u, 1, uint8_t, u, uint64_t);
-getdata_func_akey(u, 2, uint16_t, u, uint64_t);
-;
-getdata_func_akey(u, 4, uint32_t, u, uint64_t);
-getdata_func_akey(u, 8, uint64_t, u, uint64_t);
-getdata_func_akey(i, 1, int8_t, i, int64_t);
-getdata_func_akey(i, 2, int16_t, i, int64_t);
-;
-getdata_func_akey(i, 4, int32_t, i, int64_t);
-getdata_func_akey(i, 8, int64_t, i, int64_t);
-getdata_func_akey(r, 4, float, d, double);
-getdata_func_akey(r, 8, double, d, double);
+getdata_func_akey(u, 1, uint8_t, u, uint64_t)
+getdata_func_akey(u, 2, uint16_t, u, uint64_t)
+
+getdata_func_akey(u, 4, uint32_t, u, uint64_t)
+getdata_func_akey(u, 8, uint64_t, u, uint64_t)
+getdata_func_akey(i, 1, int8_t, i, int64_t)
+getdata_func_akey(i, 2, int16_t, i, int64_t)
+
+getdata_func_akey(i, 4, int32_t, i, int64_t)
+getdata_func_akey(i, 8, int64_t, i, int64_t)
+getdata_func_akey(r, 4, float, d, double)
+getdata_func_akey(r, 8, double, d, double)
 
 int
 getdata_func_akey_raw(struct filter_part_run_t *args)
@@ -242,16 +242,16 @@ getdata_func_akey_cst(struct filter_part_run_t *args)
 		return 0;                                                                          \
 	}
 
-getdata_func_const(u, 1, uint8_t, u, uint64_t);
-getdata_func_const(u, 2, uint16_t, u, uint64_t);
-getdata_func_const(u, 4, uint32_t, u, uint64_t);
-getdata_func_const(u, 8, uint64_t, u, uint64_t);
-getdata_func_const(i, 1, int8_t, i, int64_t);
-getdata_func_const(i, 2, int16_t, i, int64_t);
-getdata_func_const(i, 4, int32_t, i, int64_t);
-getdata_func_const(i, 8, int64_t, i, int64_t);
-getdata_func_const(r, 4, float, d, double);
-getdata_func_const(r, 8, double, d, double);
+getdata_func_const(u, 1, uint8_t, u, uint64_t)
+getdata_func_const(u, 2, uint16_t, u, uint64_t)
+getdata_func_const(u, 4, uint32_t, u, uint64_t)
+getdata_func_const(u, 8, uint64_t, u, uint64_t)
+getdata_func_const(i, 1, int8_t, i, int64_t)
+getdata_func_const(i, 2, int16_t, i, int64_t)
+getdata_func_const(i, 4, int32_t, i, int64_t)
+getdata_func_const(i, 8, int64_t, i, int64_t)
+getdata_func_const(r, 4, float, d, double)
+getdata_func_const(r, 8, double, d, double)
 
 int
 getdata_func_const_raw(struct filter_part_run_t *args)
