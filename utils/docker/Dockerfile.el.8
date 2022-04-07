@@ -154,10 +154,12 @@ RUN python3 -m venv /home/daos/venv
 ENV PATH=/home/daos/venv/bin:$PATH
 ENV VIRTUAL_ENV=/home/daos/venv/
 
-# Install latest versions of python tools including scons from pip to avoid dependency cycle bug.
+# Install latest versions of python tools.
+# scons from pip to avoid dependency cycle bug.
 # wheel is needed first to be needed to avoid a warning when install pyyaml.
-# Distro version of meson will pick up the wrong python so upgrade meson, however latest release
-# of meson will not build spdk to bind it to a previous version.
+# Distribution version of meson will pick up the wrong python so upgrade meson, however latest
+#  release of meson will not build spdk to bind it to a previous version.
+#  https://github.com/DPDK/dpdk/commit/c78471cd061a0f64db006c538be34536bc66c12a
 RUN python3 -m pip --no-cache-dir install --upgrade pip && \
     python3 -m pip --no-cache-dir install wheel && \
     python3 -m pip --no-cache-dir install \
