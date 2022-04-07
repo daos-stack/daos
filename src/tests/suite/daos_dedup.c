@@ -352,6 +352,6 @@ run_daos_dedup_test(int rank, int size, int *sub_tests, int sub_tests_size)
 		}
 	}
 
-	par_barrier();
+	par_barrier(PAR_COMM_WORLD);
 	return rc;
 }

@@ -96,9 +96,9 @@ main(int argc, char **argv)
 
 	par_init(&argc, &argv);
 
-	par_rank(&rank);
-	par_size(&size);
-	par_barrier();
+	par_rank(PAR_COMM_WORLD, &rank);
+	par_size(PAR_COMM_WORLD, &size);
+	par_barrier(PAR_COMM_WORLD);
 
 	static struct option long_options[] = {
 		{"all",		no_argument,		NULL,	'a'},
@@ -169,7 +169,7 @@ main(int argc, char **argv)
 	nr_failed = run_specified_tests(tests, rank, size, NULL, 0);
 
 exit:
-	par_allreduce(&nr_failed, &nr_total_failed, 1, PAR_INT, PAR_SUM);
+	par_allreduce(PAR_COMM_WORLD, &nr_failed, &nr_total_failed, 1, PAR_INT, PAR_SUM);
 
 	rc = daos_fini();
 	if (rc)

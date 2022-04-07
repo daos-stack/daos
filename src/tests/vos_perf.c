@@ -767,8 +767,8 @@ main(int argc, char **argv)
 	ts_flags = 0;
 
 	par_init(&argc, &argv);
-	par_rank(&ts_ctx.tsc_mpi_rank);
-	par_size(&ts_ctx.tsc_mpi_size);
+	par_rank(PAR_COMM_WORLD, &ts_ctx.tsc_mpi_rank);
+	par_size(PAR_COMM_WORLD, &ts_ctx.tsc_mpi_size);
 
 	rc = perf_alloc_opts(perf_vos_opts, ARRAY_SIZE(perf_vos_opts),
 			     perf_vos_optstr, &ts_opts, &ts_optstr);
@@ -937,7 +937,7 @@ main(int argc, char **argv)
 		return -1;
 	}
 
-	par_barrier();
+	par_barrier(PAR_COMM_WORLD);
 
 	rc = run_commands(cmds, pf_tests);
 

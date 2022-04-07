@@ -11,18 +11,21 @@ struct par_stubs {
 	uint32_t	(*ps_getversion)(void);
 	int		(*ps_init)(int *argc, char ***argv);
 	int		(*ps_fini)(void);
-	int		(*ps_barrier)(void);
-	int		(*ps_rank)(int *rank);
-	int		(*ps_size)(int *size);
-	int		(*ps_reduce)(const void *sendbuf, void *recvbuf, int count,
+	int		(*ps_barrier)(uint32_t);
+	int		(*ps_rank)(uint32_t comm, int *rank);
+	int		(*ps_size)(uint32_t comm, int *size);
+	int		(*ps_reduce)(uint32_t comm, const void *sendbuf, void *recvbuf, int count,
 				     enum par_type type, enum par_op op, int root);
-	int		(*ps_gather)(const void *sendbuf, void *recvbuf, int count,
+	int		(*ps_gather)(uint32_t comm, const void *sendbuf, void *recvbuf, int count,
 				     enum par_type type, int root);
-	int		(*ps_allreduce)(const void *sendbuf, void *recvbuf, int count,
-					enum par_type type, enum par_op op);
-	int		(*ps_allgather)(const void *sendbuf, void *recvbuf, int count,
-					enum par_type type);
-	int		(*ps_bcast)(void *buffer, int count, enum par_type type, int root);
+	int		(*ps_allreduce)(uint32_t comm, const void *sendbuf, void *recvbuf,
+					int count, enum par_type type, enum par_op op);
+	int		(*ps_allgather)(uint32_t comm, const void *sendbuf, void *recvbuf,
+					int count, enum par_type type);
+	int		(*ps_bcast)(uint32_t comm, void *buffer, int count, enum par_type type,
+				    int root);
+	int		(*ps_comm_split)(uint32_t comm, int color, int key, uint32_t *new_comm);
+	int		(*ps_comm_free)(uint32_t comm);
 };
 
 static struct par_stubs	 stubs;
@@ -39,7 +42,9 @@ static void		*stubs_handle;
 	ACTION(gather, arg)		\
 	ACTION(allreduce, arg)		\
 	ACTION(allgather, arg)		\
-	ACTION(bcast, arg)
+	ACTION(bcast, arg)		\
+	ACTION(comm_split, arg)		\
+	ACTION(comm_free, arg)
 
 #define LOAD_SYM(name, fail)							\
 	do {									\
@@ -145,19 +150,19 @@ par_fini(void)
 }
 
 int
-par_barrier(void)
+par_barrier(uint32_t comm)
 {
 	if (stubs.ps_barrier)
-		return stubs.ps_barrier();
+		return stubs.ps_barrier(comm);
 
 	return 0;
 }
 
 int
-par_rank(int *rank)
+par_rank(uint32_t comm, int *rank)
 {
 	if (stubs.ps_rank)
-		return stubs.ps_rank(rank);
+		return stubs.ps_rank(comm, rank);
 
 	*rank = 0;
 
@@ -165,10 +170,10 @@ par_rank(int *rank)
 }
 
 int
-par_size(int *size)
+par_size(uint32_t comm, int *size)
 {
 	if (stubs.ps_size)
-		return stubs.ps_size(size);
+		return stubs.ps_size(comm, size);
 
 	*size = 1;
 
@@ -195,13 +200,13 @@ type2size(enum par_type type)
 }
 
 int
-par_reduce(const void *sendbuf, void *recvbuf, int count, enum par_type type, enum par_op op,
-	   int root)
+par_reduce(uint32_t comm, const void *sendbuf, void *recvbuf, int count, enum par_type type,
+	   enum par_op op, int root)
 {
 	ssize_t	size;
 
 	if (stubs.ps_reduce)
-		return stubs.ps_reduce(sendbuf, recvbuf, count, type, op, root);
+		return stubs.ps_reduce(comm, sendbuf, recvbuf, count, type, op, root);
 
 	size = type2size(type);
 
@@ -217,13 +222,13 @@ par_reduce(const void *sendbuf, void *recvbuf, int count, enum par_type type, en
 
 /** Gather from all ranks */
 int
-par_gather(const void *sendbuf, void *recvbuf, int count, enum par_type type,
+par_gather(uint32_t comm, const void *sendbuf, void *recvbuf, int count, enum par_type type,
 	   int root)
 {
 	ssize_t	size;
 
 	if (stubs.ps_gather)
-		return stubs.ps_gather(sendbuf, recvbuf, count, type, root);
+		return stubs.ps_gather(comm, sendbuf, recvbuf, count, type, root);
 
 	size = type2size(type);
 
@@ -239,12 +244,13 @@ par_gather(const void *sendbuf, void *recvbuf, int count, enum par_type type,
 
 /** All reduce from all ranks */
 int
-par_allreduce(const void *sendbuf, void *recvbuf, int count, enum par_type type, enum par_op op)
+par_allreduce(uint32_t comm, const void *sendbuf, void *recvbuf, int count, enum par_type type,
+	      enum par_op op)
 {
 	ssize_t	size;
 
 	if (stubs.ps_allreduce)
-		return stubs.ps_allreduce(sendbuf, recvbuf, count, type, op);
+		return stubs.ps_allreduce(comm, sendbuf, recvbuf, count, type, op);
 
 	size = type2size(type);
 
@@ -260,12 +266,12 @@ par_allreduce(const void *sendbuf, void *recvbuf, int count, enum par_type type,
 
 /** All gather from all ranks */
 int
-par_allgather(const void *sendbuf, void *recvbuf, int count, enum par_type type)
+par_allgather(uint32_t comm, const void *sendbuf, void *recvbuf, int count, enum par_type type)
 {
 	ssize_t	size;
 
 	if (stubs.ps_allgather)
-		return stubs.ps_allgather(sendbuf, recvbuf, count, type);
+		return stubs.ps_allgather(comm, sendbuf, recvbuf, count, type);
 
 	size = type2size(type);
 
@@ -281,10 +287,32 @@ par_allgather(const void *sendbuf, void *recvbuf, int count, enum par_type type)
 
 /** Broadcast to all ranks */
 int
-par_bcast(void *buffer, int count, enum par_type type, int root)
+par_bcast(uint32_t comm, void *buffer, int count, enum par_type type, int root)
 {
 	if (stubs.ps_bcast)
-		return stubs.ps_bcast(buffer, count, type, root);
+		return stubs.ps_bcast(comm, buffer, count, type, root);
+
+	return 0;
+}
+
+/** Split a communicator to create a new one */
+int
+par_comm_split(uint32_t comm, int color, int key, uint32_t *new_comm)
+{
+	if (stubs.ps_comm_split)
+		return stubs.ps_comm_split(comm, color, key, new_comm);
+
+	*new_comm = comm;
+
+	return 0;
+}
+
+/** Free a communicator */
+int
+par_comm_free(uint32_t comm)
+{
+	if (stubs.ps_comm_split)
+		return stubs.ps_comm_free(comm);
 
 	return 0;
 }

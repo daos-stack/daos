@@ -69,7 +69,7 @@ bcast:
 	if (tsc->tsc_mpi_size <= 1)
 		return rc; /* don't need to share handle */
 
-	par_bcast(&rc, 1, PAR_INT, 0);
+	par_bcast(PAR_COMM_WORLD, &rc, 1, PAR_INT, 0);
 	if (rc)
 		return rc; /* open failed */
 
@@ -85,7 +85,7 @@ engine_pool_fini(struct credit_context *tsc)
 
 	rc = daos_pool_disconnect(tsc->tsc_poh, NULL);
 	D_ASSERTF(rc == 0 || rc == -DER_NO_HDL, "rc="DF_RC"\n", DP_RC(rc));
-	par_barrier();
+	par_barrier(PAR_COMM_WORLD);
 
 	if (tsc->tsc_mpi_rank == 0 && tsc_create_pool(tsc)) {
 		rc = dmg_pool_destroy(dmg_config_file, tsc->tsc_pool_uuid,
@@ -121,7 +121,7 @@ bcast:
 	if (tsc->tsc_mpi_size <= 1)
 		return rc; /* don't need to share handle */
 
-	par_bcast(&rc, 1, PAR_INT, 0);
+	par_bcast(PAR_COMM_WORLD, &rc, 1, PAR_INT, 0);
 	if (rc)
 		return rc; /* open failed */
 

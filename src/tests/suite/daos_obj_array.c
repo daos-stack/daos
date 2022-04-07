@@ -1457,6 +1457,6 @@ run_daos_obj_array_test(int rank, int size)
 		rc = cmocka_run_group_tests_name("DAOS_Obj_Array",
 						 array_tests, obj_array_setup,
 						 test_teardown);
-	par_barrier();
+	par_barrier(PAR_COMM_WORLD);
 	return rc;
 }

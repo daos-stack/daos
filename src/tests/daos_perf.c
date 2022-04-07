@@ -329,8 +329,8 @@ main(int argc, char **argv)
 	ts_dkey_prefix = PF_DKEY_PREF;
 
 	par_init(&argc, &argv);
-	par_rank(&ts_ctx.tsc_mpi_rank);
-	par_size(&ts_ctx.tsc_mpi_size);
+	par_rank(PAR_COMM_WORLD, &ts_ctx.tsc_mpi_rank);
+	par_size(PAR_COMM_WORLD, &ts_ctx.tsc_mpi_size);
 
 	rc = perf_alloc_opts(perf_daos_opts, ARRAY_SIZE(perf_daos_opts),
 			     perf_daos_optstr, &ts_opts, &ts_optstr);
@@ -497,7 +497,7 @@ main(int argc, char **argv)
 		return -1;
 	}
 
-	par_barrier();
+	par_barrier(PAR_COMM_WORLD);
 
 	rc = run_commands(cmds, pf_tests);
 

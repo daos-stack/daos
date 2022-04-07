@@ -1,6 +1,30 @@
 #include <stdio.h>
 #include <mpi.h>
 #include <daos/dpar.h>
+#include <gurt/atomic.h>
+
+static ATOMIC uint64_t	comm_free_bits = 0xfffffffffffffffe;
+static MPI_Comm		comm_table[64];
+
+static int
+pcom2comm(uint32_t pcom, MPI_Comm *comm)
+{
+	uint64_t idx_bit;
+
+	if (pcom >= 64) {
+		fprintf(stderr, "Invalid dpar communicator %d\n", pcom);
+		return -1;
+	}
+
+	idx_bit = 1ULL << pcom;
+	if (idx_bit & comm_free_bits) {
+		fprintf(stderr, "Invalid dpar communicator %d\n", pcom);
+		return -1;
+	}
+
+	*comm = comm_table[pcom];
+	return 0;
+}
 
 uint32_t
 par_getversion(void)
@@ -12,6 +36,8 @@ int
 par_init(int *argc, char ***argv)
 {
 	int rc = MPI_Init(argc, argv);
+
+	comm_table[0] = MPI_COMM_WORLD;
 
 	if (rc == MPI_SUCCESS)
 		return 0;
@@ -33,9 +59,15 @@ par_fini(void)
 }
 
 int
-par_barrier(void)
+par_barrier(uint32_t pcom)
 {
-	int rc = MPI_Barrier(MPI_COMM_WORLD);
+	MPI_Comm	comm = {0};
+	int		rc = pcom2comm(pcom, &comm);
+
+	if (rc != 0)
+		return rc;
+
+	 rc = MPI_Barrier(comm);
 
 	if (rc == MPI_SUCCESS)
 		return 0;
@@ -45,9 +77,15 @@ par_barrier(void)
 }
 
 int
-par_rank(int *rank)
+par_rank(uint32_t pcom, int *rank)
 {
-	int rc = MPI_Comm_rank(MPI_COMM_WORLD, rank);
+	MPI_Comm	comm = {0};
+	int		rc = pcom2comm(pcom, &comm);
+
+	if (rc != 0)
+		return rc;
+
+	rc = MPI_Comm_rank(comm, rank);
 
 	if (rc == MPI_SUCCESS)
 		return 0;
@@ -57,9 +95,15 @@ par_rank(int *rank)
 }
 
 int
-par_size(int *size)
+par_size(uint32_t pcom, int *size)
 {
-	int rc = MPI_Comm_size(MPI_COMM_WORLD, size);
+	MPI_Comm	comm = {0};
+	int		rc = pcom2comm(pcom, &comm);
+
+	if (rc != 0)
+		return rc;
+
+	rc = MPI_Comm_size(comm, size);
 
 	if (rc == MPI_SUCCESS)
 		return 0;
@@ -107,19 +151,23 @@ op_par2mpi(enum par_op op)
 }
 
 int
-par_reduce(const void *sendbuf, void *recvbuf, int count, enum par_type type, enum par_op op,
-	   int root)
+par_reduce(uint32_t pcom, const void *sendbuf, void *recvbuf, int count, enum par_type type,
+	   enum par_op op, int root)
 {
+	MPI_Comm	comm = {0};
+	int		rc = pcom2comm(pcom, &comm);
 	MPI_Datatype	mtype = type_par2mpi(type);
 	MPI_Op		mop = op_par2mpi(op);
-	int		rc;
+
+	if (rc != 0)
+		return rc;
 
 	if (mtype == MPI_DATATYPE_NULL)
 		return -1;
 	if (mop == MPI_OP_NULL)
 		return -1;
 
-	rc = MPI_Reduce(sendbuf, recvbuf, count, mtype, mop, root, MPI_COMM_WORLD);
+	rc = MPI_Reduce(sendbuf, recvbuf, count, mtype, mop, root, comm);
 
 	if (rc == MPI_SUCCESS)
 		return 0;
@@ -130,16 +178,20 @@ par_reduce(const void *sendbuf, void *recvbuf, int count, enum par_type type, en
 
 /** Gather from all ranks */
 int
-par_gather(const void *sendbuf, void *recvbuf, int count, enum par_type type,
+par_gather(uint32_t pcom, const void *sendbuf, void *recvbuf, int count, enum par_type type,
 	   int root)
 {
+	MPI_Comm	comm = {0};
 	MPI_Datatype	mtype = type_par2mpi(type);
-	int		rc;
+	int		rc = pcom2comm(pcom, &comm);
+
+	if (rc != 0)
+		return rc;
 
 	if (mtype == MPI_DATATYPE_NULL)
 		return -1;
 
-	rc = MPI_Gather(sendbuf, count, mtype, recvbuf, count, mtype, root, MPI_COMM_WORLD);
+	rc = MPI_Gather(sendbuf, count, mtype, recvbuf, count, mtype, root, comm);
 
 	if (rc == MPI_SUCCESS)
 		return 0;
@@ -150,18 +202,23 @@ par_gather(const void *sendbuf, void *recvbuf, int count, enum par_type type,
 
 /** All reduce from all ranks */
 int
-par_allreduce(const void *sendbuf, void *recvbuf, int count, enum par_type type, enum par_op op)
+par_allreduce(uint32_t pcom, const void *sendbuf, void *recvbuf, int count, enum par_type type,
+	      enum par_op op)
 {
+	MPI_Comm	comm = {0};
 	MPI_Datatype	mtype = type_par2mpi(type);
 	MPI_Op		mop = op_par2mpi(op);
-	int		rc;
+	int		rc = pcom2comm(pcom, &comm);
+
+	if (rc != 0)
+		return rc;
 
 	if (mtype == MPI_DATATYPE_NULL)
 		return -1;
 	if (mop == MPI_OP_NULL)
 		return -1;
 
-	rc = MPI_Allreduce(sendbuf, recvbuf, count, mtype, mop, MPI_COMM_WORLD);
+	rc = MPI_Allreduce(sendbuf, recvbuf, count, mtype, mop, comm);
 
 
 	if (rc == MPI_SUCCESS)
@@ -173,15 +230,19 @@ par_allreduce(const void *sendbuf, void *recvbuf, int count, enum par_type type,
 
 /** All gather from all ranks */
 int
-par_allgather(const void *sendbuf, void *recvbuf, int count, enum par_type type)
+par_allgather(uint32_t pcom, const void *sendbuf, void *recvbuf, int count, enum par_type type)
 {
+	MPI_Comm	comm = {0};
 	MPI_Datatype	mtype = type_par2mpi(type);
-	int		rc;
+	int		rc = pcom2comm(pcom, &comm);
+
+	if (rc != 0)
+		return rc;
 
 	if (mtype == MPI_DATATYPE_NULL)
 		return -1;
 
-	rc = MPI_Allgather(sendbuf, count, mtype, recvbuf, count, mtype, MPI_COMM_WORLD);
+	rc = MPI_Allgather(sendbuf, count, mtype, recvbuf, count, mtype, comm);
 
 	if (rc == MPI_SUCCESS)
 		return 0;
@@ -192,19 +253,98 @@ par_allgather(const void *sendbuf, void *recvbuf, int count, enum par_type type)
 
 /** Broadcast to all ranks */
 int
-par_bcast(void *buffer, int count, enum par_type type, int root)
+par_bcast(uint32_t pcom, void *buffer, int count, enum par_type type, int root)
 {
 	MPI_Datatype	mtype = type_par2mpi(type);
-	int		rc;
+	MPI_Comm	comm = {0};
+	int		rc = pcom2comm(pcom, &comm);
+
+	if (rc != 0)
+		return rc;
 
 	if (mtype == MPI_DATATYPE_NULL)
 		return -1;
 
-	rc = MPI_Bcast(buffer, count, mtype, root, MPI_COMM_WORLD);
+	rc = MPI_Bcast(buffer, count, mtype, root, comm);
 
 	if (rc == MPI_SUCCESS)
 		return 0;
 
 	fprintf(stderr, "MPI_Bcast failed with %d\n", rc);
 	return -1;
+}
+
+static int
+alloc_pcom(uint32_t *pcom)
+{
+	int		idx = 0;
+	uint64_t	old_value;
+	uint64_t	new_value;
+
+	do {
+		if (comm_free_bits == 0) {
+			fprintf(stderr, "No more available communicators\n");
+			return -1;
+		}
+
+		old_value = comm_free_bits;
+
+		idx = __builtin_ffs(old_value); /* idx of least significant 1 bit */
+		new_value = old_value ^ (1ULL << idx);
+	} while (!atomic_compare_exchange(&comm_free_bits, old_value, new_value));
+
+	*pcom = idx;
+	return 0;
+}
+
+static void
+free_pcom(uint32_t pcom)
+{
+	uint64_t	old_value;
+	uint64_t	new_value;
+
+	do {
+		old_value = comm_free_bits;
+		new_value = old_value | (1ULL << pcom);
+	} while (!atomic_compare_exchange(&comm_free_bits, old_value, new_value));
+}
+
+int
+par_comm_split(uint32_t pcom, int color, int key, uint32_t *new_pcom)
+{
+	MPI_Comm	comm = {0};
+	int		rc = pcom2comm(pcom, &comm);
+
+	if (rc != 0)
+		return rc;
+
+	rc = alloc_pcom(new_pcom);
+	if (rc != 0)
+		return -1;
+
+	rc = MPI_Comm_split(comm, color, key, &comm_table[*new_pcom]);
+	if (rc != MPI_SUCCESS) {
+		free_pcom(*new_pcom);
+		return -1;
+	}
+
+	return 0;
+}
+
+int
+par_comm_free(uint32_t pcom)
+{
+	MPI_Comm	comm = {0};
+	int		rc = pcom2comm(pcom, &comm);
+
+	if (rc != 0)
+		return rc;
+
+	rc = MPI_Comm_free(&comm);
+	if (rc != MPI_SUCCESS)
+		return -1;
+
+	free_pcom(pcom);
+
+	return 0;
 }

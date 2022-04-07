@@ -297,7 +297,7 @@ io_invalid_poh(void **state)
 		assert_rc_equal(rc, 0);
 	}
 
-	par_barrier();
+	par_barrier(PAR_COMM_WORLD);
 
 	if (arg->myrank != 1) {
 		rc = daos_pool_disconnect(poh, NULL);
@@ -305,7 +305,7 @@ io_invalid_poh(void **state)
 		print_message("invalidating pool handle\n");
 	}
 
-	par_barrier();
+	par_barrier(PAR_COMM_WORLD);
 
 	if (arg->myrank == 1) {
 		/** open object */
@@ -356,7 +356,7 @@ io_invalid_poh(void **state)
 		print_message("all is fine\n");
 	}
 
-	par_barrier();
+	par_barrier(PAR_COMM_WORLD);
 }
 
 /** update/fetch with invalid container handle */
@@ -393,7 +393,7 @@ io_invalid_coh(void **state)
 		print_message("closing container handle\n");
 	}
 
-	par_barrier();
+	par_barrier(PAR_COMM_WORLD);
 
 	if (arg->myrank == 1) {
 		/** open object */
@@ -441,7 +441,7 @@ io_invalid_coh(void **state)
 		print_message("all is fine\n");
 	}
 
-	par_barrier();
+	par_barrier(PAR_COMM_WORLD);
 }
 
 /** update with read-only container handle */
@@ -506,7 +506,7 @@ update_ro(void **state)
 	assert_rc_equal(rc, 0);
 	print_message("all is fine\n");
 
-	par_barrier();
+	par_barrier(PAR_COMM_WORLD);
 }
 
 
@@ -541,6 +541,6 @@ run_daos_capa_test(int rank, int size)
 
 	rc = cmocka_run_group_tests_name("DAOS_Capability", capa_tests,
 					 setup, test_teardown);
-	par_barrier();
+	par_barrier(PAR_COMM_WORLD);
 	return rc;
 }

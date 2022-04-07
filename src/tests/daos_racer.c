@@ -474,8 +474,8 @@ main(int argc, char **argv)
 	int		rc;
 
 	par_init(&argc, &argv);
-	par_rank(&ts_ctx.tsc_mpi_rank);
-	par_size(&ts_ctx.tsc_mpi_size);
+	par_rank(PAR_COMM_WORLD, &ts_ctx.tsc_mpi_rank);
+	par_size(PAR_COMM_WORLD, &ts_ctx.tsc_mpi_size);
 	while ((rc = getopt_long(argc, argv,
 				 "n:p:c:t:",
 				 ts_ops, NULL)) != -1) {
@@ -559,13 +559,13 @@ main(int argc, char **argv)
 	expire = dts_time_now() + duration;
 
 	idx = racer_test_idx(sub_tests);
-	par_barrier();
+	par_barrier(PAR_COMM_WORLD);
 	while (1) {
 		sub_tests[idx].sub_test();
 		if (dts_time_now() > expire)
 			break;
 	}
-	par_barrier();
+	par_barrier(PAR_COMM_WORLD);
 
 	if (ts_ctx.tsc_mpi_rank == 0) {
 		daos_pool_info_t	pinfo = { 0 };

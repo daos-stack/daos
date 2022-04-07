@@ -65,7 +65,7 @@ co_create(void **state)
 	print_message("container closed\n");
 
 	if (arg->hdl_share)
-		par_barrier();
+		par_barrier(PAR_COMM_WORLD);
 
 	/** destroy container */
 	if (arg->myrank == 0) {
@@ -356,7 +356,7 @@ co_properties(void **state)
 			DMG_KEY_FAIL_LOC, DAOS_FORCE_PROP_VERIFY, 0, NULL);
 		assert_rc_equal(rc, 0);
 	}
-	par_barrier();
+	par_barrier(PAR_COMM_WORLD);
 
 	prop_query = get_query_prop_all();
 	rc = daos_cont_query(arg->coh, NULL, prop_query, NULL);
@@ -508,7 +508,7 @@ co_properties(void **state)
 		print_message("destroyed container C3: %s : "
 			      "UUID:"DF_UUIDF"\n", label2_v2, DP_UUID(cuuid3));
 	}
-	par_barrier();
+	par_barrier(PAR_COMM_WORLD);
 
 	daos_prop_free(prop);
 	daos_prop_free(prop_query);
@@ -723,7 +723,7 @@ co_acl(void **state)
 			DMG_KEY_FAIL_LOC, DAOS_FORCE_PROP_VERIFY, 0, NULL);
 		assert_rc_equal(rc, 0);
 	}
-	par_barrier();
+	par_barrier(PAR_COMM_WORLD);
 
 	co_acl_get(arg, exp_acl, exp_owner, exp_owner_grp);
 
@@ -825,7 +825,7 @@ co_acl(void **state)
 	if (arg->myrank == 0)
 		daos_debug_set_params(arg->group, -1, DMG_KEY_FAIL_LOC, 0,
 				     0, NULL);
-	par_barrier();
+	par_barrier(PAR_COMM_WORLD);
 
 	daos_prop_free(prop_in);
 	daos_acl_free(exp_acl);
@@ -855,7 +855,7 @@ co_set_prop(void **state)
 		rc = test_setup_next_step((void **)&arg, NULL, NULL, NULL);
 	assert_int_equal(rc, 0);
 
-	par_barrier();
+	par_barrier(PAR_COMM_WORLD);
 
 	/*
 	 * Set some props
@@ -898,7 +898,7 @@ co_set_prop(void **state)
 		assert_int_equal(rc, 1); /* fail the test */
 	}
 
-	par_barrier();
+	par_barrier(PAR_COMM_WORLD);
 
 	daos_prop_free(prop_in);
 	daos_prop_free(prop_out);
@@ -2234,7 +2234,7 @@ co_rf_simple(void **state)
 		assert_rc_equal(rc, 0);
 		assert_int_equal(info.ci_redun_fac, DAOS_PROP_CO_REDUN_RF2);
 	}
-	par_barrier();
+	par_barrier(PAR_COMM_WORLD);
 
 	print_message("verify cont rf and obj open ...\n");
 	oid = daos_test_oid_gen(arg->coh, OC_RP_2G1, 0, 0, arg->myrank);
@@ -2275,7 +2275,7 @@ co_rf_simple(void **state)
 		daos_exclude_server(arg->pool.pool_uuid, arg->group,
 				    arg->dmg_config, 4);
 	}
-	par_barrier();
+	par_barrier(PAR_COMM_WORLD);
 	rc = daos_cont_query(arg->coh, NULL, prop, NULL);
 	assert_rc_equal(rc, 0);
 	entry = daos_prop_entry_get(prop, DAOS_PROP_CO_STATUS);
@@ -2313,7 +2313,7 @@ co_rf_simple(void **state)
 	if (arg->myrank == 0)
 		daos_exclude_server(arg->pool.pool_uuid, arg->group,
 				    arg->dmg_config, 3);
-	par_barrier();
+	par_barrier(PAR_COMM_WORLD);
 	rc = daos_cont_query(arg->coh, NULL, prop, NULL);
 	assert_rc_equal(rc, 0);
 	entry = daos_prop_entry_get(prop, DAOS_PROP_CO_STATUS);
@@ -2342,7 +2342,7 @@ co_rf_simple(void **state)
 				  arg->dmg_config, 5);
 		test_rebuild_wait(&arg, 1);
 	}
-	par_barrier();
+	par_barrier(PAR_COMM_WORLD);
 
 	print_message("obj update should success after re-integrate\n");
 	rc = daos_obj_update(io_oh, DAOS_TX_NONE, 0, &dkey, 1, &iod, &sgl,
@@ -2582,7 +2582,7 @@ run_daos_cont_test(int rank, int size, int *sub_tests, int sub_tests_size)
 {
 	int rc = 0;
 
-	par_barrier();
+	par_barrier(PAR_COMM_WORLD);
 	if (sub_tests_size == 0) {
 		sub_tests_size = ARRAY_SIZE(co_tests);
 		sub_tests = NULL;
@@ -2592,6 +2592,6 @@ run_daos_cont_test(int rank, int size, int *sub_tests, int sub_tests_size)
 				ARRAY_SIZE(co_tests), sub_tests, sub_tests_size,
 				setup, test_teardown);
 
-	par_barrier();
+	par_barrier(PAR_COMM_WORLD);
 	return rc;
 }

@@ -2683,7 +2683,7 @@ run_daos_checksum_test(int rank, int size, int *sub_tests, int sub_tests_size)
 	int i;
 
 	if (rank != 0) {
-		par_barrier();
+		par_barrier(PAR_COMM_WORLD);
 		return 0;
 	}
 
@@ -2709,6 +2709,6 @@ run_daos_checksum_test(int rank, int size, int *sub_tests, int sub_tests_size)
 					test_teardown);
 	}
 
-	par_barrier();
+	par_barrier(PAR_COMM_WORLD);
 	return rc;
 }

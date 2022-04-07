@@ -533,7 +533,7 @@ handle_share(daos_handle_t *hdl, int type, int rank, daos_handle_t poh,
 	}
 
 	/** broadcast size of global handle to all peers */
-	rc = par_bcast(&ghdl.iov_buf_len, 1, PAR_UINT64, 0);
+	rc = par_bcast(PAR_COMM_WORLD, &ghdl.iov_buf_len, 1, PAR_UINT64, 0);
 	assert_int_equal(rc, 0);
 
 	/** allocate buffer for global pool handle */
@@ -559,7 +559,7 @@ handle_share(daos_handle_t *hdl, int type, int rank, daos_handle_t poh,
 	if (rank == 0 && verbose == 1)
 		print_message("rank 0 broadcast global %s handle ...",
 			      (type == HANDLE_POOL) ? "pool" : "container");
-	rc = par_bcast(ghdl.iov_buf, ghdl.iov_len, PAR_BYTE, 0);
+	rc = par_bcast(PAR_COMM_WORLD, ghdl.iov_buf, ghdl.iov_len, PAR_BYTE, 0);
 	assert_int_equal(rc, 0);
 	if (rank == 0 && verbose == 1)
 		print_message("success\n");
@@ -584,7 +584,7 @@ handle_share(daos_handle_t *hdl, int type, int rank, daos_handle_t poh,
 
 	D_FREE(ghdl.iov_buf);
 
-	par_barrier();
+	par_barrier(PAR_COMM_WORLD);
 }
 
 #define MAX_KILLS	3

@@ -20,6 +20,8 @@ extern "C" {
 #define DPAR_VERSION_MASK	(((uint32_t)1 << 16) - 1)
 #define DPAR_VERSION (((uint32_t)DPAR_MAJOR << 16) | DPAR_MINOR)
 
+#define PAR_COMM_WORLD	0
+
 static inline bool
 par_version_compatible(uint32_t version)
 {
@@ -63,37 +65,47 @@ par_fini(void);
 
 /** Barrier on all ranks */
 int
-par_barrier(void);
+par_barrier(uint32_t comm);
 
 /** Get the global rank */
 int
-par_rank(int *rank);
+par_rank(uint32_t comm, int *rank);
 
 /** Get the global size */
 int
-par_size(int *size);
+par_size(uint32_t comm, int *size);
 
 /** Reduce from all ranks */
 int
-par_reduce(const void *sendbuf, void *recvbuf, int count, enum par_type type, enum par_op op,
-	   int root);
+par_reduce(uint32_t comm, const void *sendbuf, void *recvbuf, int count, enum par_type type,
+	   enum par_op op, int root);
 
 /** Gather from all ranks */
 int
-par_gather(const void *sendbuf, void *recvbuf, int count, enum par_type type,
+par_gather(uint32_t comm, const void *sendbuf, void *recvbuf, int count, enum par_type type,
 	   int root);
 
 /** All reduce from all ranks */
 int
-par_allreduce(const void *sendbuf, void *recvbuf, int count, enum par_type type, enum par_op op);
+par_allreduce(uint32_t comm, const void *sendbuf, void *recvbuf, int count, enum par_type type,
+	      enum par_op op);
 
 /** All gather from all ranks */
 int
-par_allgather(const void *sendbuf, void *recvbuf, int count, enum par_type type);
+par_allgather(uint32_t comm, const void *sendbuf, void *recvbuf, int count, enum par_type type);
 
 /** Broadcast to all ranks */
 int
-par_bcast(void *buffer, int count, enum par_type datatype, int root);
+par_bcast(uint32_t comm, void *buffer, int count, enum par_type datatype, int root);
+
+/** Split a communicator to create a new one */
+int
+par_comm_split(uint32_t comm, int color, int key, uint32_t *new_comm);
+
+/** Free a communicator */
+int
+par_comm_free(uint32_t comm);
+
 
 #ifdef __cplusplus
 }

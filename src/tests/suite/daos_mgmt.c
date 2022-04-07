@@ -132,7 +132,7 @@ teardown_pools(void **state)
 			if (arg->myrank == 0)
 				rc = pool_destroy_safe(arg, &lparg->tpools[i]);
 			if (arg->multi_rank)
-				par_bcast(&rc, 1, PAR_INT, 0);
+				par_bcast(PAR_COMM_WORLD, &rc, 1, PAR_INT, 0);
 			if (rc != 0)
 				return rc;
 		}
@@ -434,6 +434,6 @@ run_daos_mgmt_test(int rank, int size, int *sub_tests, int sub_tests_size)
 		}
 	}
 
-	par_bcast(&rc, 1, PAR_INT, 0);
+	par_bcast(PAR_COMM_WORLD, &rc, 1, PAR_INT, 0);
 	return rc;
 }

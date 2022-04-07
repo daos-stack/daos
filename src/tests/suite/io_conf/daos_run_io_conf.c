@@ -84,7 +84,7 @@ main(int argc, char **argv)
 	}
 	arg->eio_args.op_no_verify = 1;	/* No verification for now */
 
-	par_barrier();
+	par_barrier(PAR_COMM_WORLD);
 
 	rc = io_conf_run(arg, fname);
 	if (rc)
@@ -92,7 +92,7 @@ main(int argc, char **argv)
 
 	test_teardown(&state);
 
-	par_barrier();
+	par_barrier(PAR_COMM_WORLD);
 	fprintf(stdout, "daos_run_io_conf completed successfully\n");
 out_fini:
 	daos_fini();

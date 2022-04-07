@@ -33,7 +33,7 @@ dfs_test_share(daos_handle_t poh, daos_handle_t coh, int rank, dfs_t **dfs)
 	}
 
 	/** broadcast size of global handle to all peers */
-	rc = par_bcast(&ghdl.iov_buf_len, 1, PAR_UINT64, 0);
+	rc = par_bcast(PAR_COMM_WORLD, &ghdl.iov_buf_len, 1, PAR_UINT64, 0);
 	assert_int_equal(rc, 0);
 
 	/** allocate buffer for global pool handle */
@@ -47,7 +47,7 @@ dfs_test_share(daos_handle_t poh, daos_handle_t coh, int rank, dfs_t **dfs)
 	}
 
 	/** broadcast global handle to all peers */
-	rc = par_bcast(ghdl.iov_buf, ghdl.iov_len, PAR_BYTE, 0);
+	rc = par_bcast(PAR_COMM_WORLD, ghdl.iov_buf, ghdl.iov_len, PAR_BYTE, 0);
 	assert_int_equal(rc, 0);
 
 	if (rank != 0) {
@@ -58,7 +58,7 @@ dfs_test_share(daos_handle_t poh, daos_handle_t coh, int rank, dfs_t **dfs)
 
 	D_FREE(ghdl.iov_buf);
 
-	par_barrier();
+	par_barrier(PAR_COMM_WORLD);
 }
 
 static inline void
@@ -75,7 +75,7 @@ dfs_sys_test_share(daos_handle_t poh, daos_handle_t coh, int rank, int sflags,
 	}
 
 	/** broadcast size of global handle to all peers */
-	rc = par_bcast(&ghdl.iov_buf_len, 1, PAR_UINT64, 0);
+	rc = par_bcast(PAR_COMM_WORLD, &ghdl.iov_buf_len, 1, PAR_UINT64, 0);
 	assert_int_equal(rc, 0);
 
 	/** allocate buffer for global pool handle */
@@ -89,7 +89,7 @@ dfs_sys_test_share(daos_handle_t poh, daos_handle_t coh, int rank, int sflags,
 	}
 
 	/** broadcast global handle to all peers */
-	rc = par_bcast(ghdl.iov_buf, ghdl.iov_len, PAR_BYTE, 0);
+	rc = par_bcast(PAR_COMM_WORLD, ghdl.iov_buf, ghdl.iov_len, PAR_BYTE, 0);
 	assert_int_equal(rc, 0);
 
 	if (rank != 0) {
@@ -100,7 +100,7 @@ dfs_sys_test_share(daos_handle_t poh, daos_handle_t coh, int rank, int sflags,
 
 	D_FREE(ghdl.iov_buf);
 
-	par_barrier();
+	par_barrier(PAR_COMM_WORLD);
 }
 
 static inline void
@@ -116,7 +116,7 @@ dfs_test_obj_share(dfs_t *dfs, int flags, int rank, dfs_obj_t **obj)
 	}
 
 	/** broadcast size of global handle to all peers */
-	rc = par_bcast(&ghdl.iov_buf_len, 1, PAR_UINT64, 0);
+	rc = par_bcast(PAR_COMM_WORLD, &ghdl.iov_buf_len, 1, PAR_UINT64, 0);
 	assert_int_equal(rc, 0);
 
 	/** allocate buffer for global pool handle */
@@ -130,7 +130,7 @@ dfs_test_obj_share(dfs_t *dfs, int flags, int rank, dfs_obj_t **obj)
 	}
 
 	/** broadcast global handle to all peers */
-	rc = par_bcast(ghdl.iov_buf, ghdl.iov_len, PAR_BYTE, 0);
+	rc = par_bcast(PAR_COMM_WORLD, ghdl.iov_buf, ghdl.iov_len, PAR_BYTE, 0);
 	assert_int_equal(rc, 0);
 
 	if (rank != 0) {
@@ -140,7 +140,7 @@ dfs_test_obj_share(dfs_t *dfs, int flags, int rank, dfs_obj_t **obj)
 	}
 
 	D_FREE(ghdl.iov_buf);
-	par_barrier();
+	par_barrier(PAR_COMM_WORLD);
 }
 
 #endif

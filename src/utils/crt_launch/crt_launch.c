@@ -275,8 +275,8 @@ int main(int argc, char **argv)
 	 */
 	par_init(&argc, &argv);
 
-	par_rank(&my_rank);
-	par_size(&world_size);
+	par_rank(PAR_COMM_WORLD, &my_rank);
+	par_size(PAR_COMM_WORLD, &world_size);
 
 	hostbuf = calloc(sizeof(*hostbuf), 1);
 	if (!hostbuf) {
@@ -298,7 +298,7 @@ int main(int argc, char **argv)
 		D_GOTO(exit, rc);
 	}
 
-	par_allgather(hostbuf, recv_buf, sizeof(struct host), PAR_CHAR);
+	par_allgather(PAR_COMM_WORLD, hostbuf, recv_buf, sizeof(struct host), PAR_CHAR);
 
 	/* Generate group configuration file */
 	rc = generate_group_file(world_size, recv_buf);
@@ -307,7 +307,7 @@ int main(int argc, char **argv)
 		D_GOTO(exit, rc);
 	}
 
-	par_barrier();
+	par_barrier(PAR_COMM_WORLD);
 
 	sprintf(str_rank, "%d", hostbuf->my_rank);
 	sprintf(str_port, "%d", hostbuf->ofi_port);
