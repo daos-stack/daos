@@ -3368,7 +3368,7 @@ def run_in_fg(server, conf):
     if not container:
         container = create_cont(conf, pool.uuid, label=label, ctype="POSIX")
 
-    dfuse = DFuse(server, conf, pool=pool.uuid, caching=True, wbcache=True)
+    dfuse = DFuse(server, conf, pool=pool.uuid, caching=False, wbcache=False)
     dfuse.start()
 
     cont_attrs = OrderedDict()
