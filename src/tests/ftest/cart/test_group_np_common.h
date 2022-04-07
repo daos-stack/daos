@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2021 Intel Corporation.
+ * (C) Copyright 2016-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -47,6 +47,7 @@ struct test_t {
 	int			 t_disable_swim;
 	char			*t_cfg_path;
 	uint32_t		 t_hold_time;
+	uint32_t		 t_wait_ranks_time;
 	unsigned int		 t_srv_ctx_num;
 	int			 t_write_completion_file;
 	crt_context_t		 t_crt_ctx[TEST_CTX_MAX_NUM];
@@ -64,6 +65,7 @@ struct test_t {
 };
 
 struct test_t test_g = { .t_hold_time = 0,
+			 .t_wait_ranks_time = 150,
 			 .t_srv_ctx_num = 1,
 			 .t_roomno = 1082 };
 

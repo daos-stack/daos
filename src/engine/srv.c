@@ -1126,15 +1126,6 @@ dss_parameters_set(unsigned int key_id, uint64_t value)
 	case DMG_KEY_FAIL_NUM:
 		daos_fail_num_set(value);
 		break;
-	case DMG_KEY_REBUILD_THROTTLING:
-		if (value >= 100) {
-			D_ERROR("invalid value "DF_U64"\n", value);
-			rc = -DER_INVAL;
-			break;
-		}
-		D_WARN("set rebuild percentage to "DF_U64"\n", value);
-		rc = sched_set_throttle(SCHED_REQ_MIGRATE, value);
-		break;
 	default:
 		D_ERROR("invalid key_id %d\n", key_id);
 		rc = -DER_INVAL;

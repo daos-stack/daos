@@ -6,7 +6,8 @@ timeout: 120
 server_config:
   provider_mux: !mux
     default:
-      provider: None
+      # Use the yaml 'null' to set a python 'None'
+      provider: null
     verbs:
       provider: ofi+verbs
     ucx:
