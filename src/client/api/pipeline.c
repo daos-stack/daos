@@ -81,6 +81,51 @@ daos_pipeline_check(daos_pipeline_t *pipeline)
 	return dc_pipeline_check(pipeline);
 }
 
+static void
+free_parts(daos_filter_part_t **parts, uint32_t nparts)
+{
+	uint32_t i;
+
+	for (i = 0; i < nparts; i++) {
+		D_ASSERT(parts[i] != NULL);
+		D_FREE(parts[i]);
+	}
+}
+
+static void
+free_filters(daos_filter_t **filters, uint32_t nfilters)
+{
+	uint32_t i;
+
+	for (i = 0; i < nfilters; i++) {
+		D_ASSERT(filters[i] != NULL);
+		if (filters[i]->num_parts > 0)
+			D_ASSERT(filters[i]->parts != NULL);
+
+		free_parts(filters[i]->parts, filters[i]->num_parts);
+		D_FREE(filters[i]->parts);
+		D_FREE(filters[i]);
+	}
+}
+
+void
+daos_pipeline_free(daos_pipeline_t *pipeline)
+{
+	D_ASSERT(pipeline != NULL);
+	if (pipeline->num_filters > 0)
+		D_ASSERT(pipeline->filters != NULL);
+	if (pipeline->num_aggr_filters > 0)
+		D_ASSERT(pipeline->aggr_filters != NULL);
+
+	free_filters(pipeline->filters, pipeline->num_filters);
+	D_FREE(pipeline->filters);
+
+	free_filters(pipeline->aggr_filters, pipeline->num_aggr_filters);
+	D_FREE(pipeline->aggr_filters);
+
+	daos_pipeline_init(pipeline);
+}
+
 int
 daos_pipeline_run(daos_handle_t coh, daos_handle_t oh, daos_pipeline_t *pipeline, daos_handle_t th,
 		  uint64_t flags, daos_key_t *dkey, uint32_t *nr_iods, daos_iod_t *iods,
