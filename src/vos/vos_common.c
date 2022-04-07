@@ -561,7 +561,7 @@ vos_metrics_alloc(const char *path, int tgt_id)
 		D_WARN("Failed to create 'epr_duration' telemetry: "DF_RC"\n", DP_RC(rc));
 
 	/* VOS aggregation scanned/skipped/deleted objs/dkeys/akeys */
-	for (i = 0; i < AGG_OP_MAX; i++) {
+	for (i = 0; i < AGG_OP_MERGE; i++) {
 		snprintf(desc, sizeof(desc), "%s objs", agg_op2str(i));
 		rc = d_tm_add_metric(&vam->vam_obj[i], D_TM_COUNTER, desc, NULL,
 				     "%s/%s/obj_%s/tgt_%u", path, VOS_AGG_DIR,
@@ -637,6 +637,7 @@ struct dss_module vos_srv_module =  {
 	.sm_name	= "vos_srv",
 	.sm_mod_id	= DAOS_VOS_MODULE,
 	.sm_ver		= 1,
+	.sm_proto_count	= 1,
 	.sm_init	= vos_mod_init,
 	.sm_fini	= vos_mod_fini,
 	.sm_key		= &vos_module_key,
@@ -769,12 +770,15 @@ vos_self_init(const char *db_path)
 
 	evt_mode = getenv("DAOS_EVTREE_MODE");
 	if (evt_mode) {
-		if (strcasecmp("soff", evt_mode) == 0)
-			vos_evt_feats = EVT_FEAT_SORT_SOFF;
-		else if (strcasecmp("dist_even", evt_mode) == 0)
-			vos_evt_feats = EVT_FEAT_SORT_DIST_EVEN;
+		if (strcasecmp("soff", evt_mode) == 0) {
+			vos_evt_feats &= ~EVT_FEATS_SUPPORTED;
+			vos_evt_feats |= EVT_FEAT_SORT_SOFF;
+		} else if (strcasecmp("dist_even", evt_mode) == 0) {
+			vos_evt_feats &= ~EVT_FEATS_SUPPORTED;
+			vos_evt_feats |= EVT_FEAT_SORT_DIST_EVEN;
+		}
 	}
-	switch (vos_evt_feats) {
+	switch (vos_evt_feats & EVT_FEATS_SUPPORTED) {
 	case EVT_FEAT_SORT_SOFF:
 		D_INFO("Using start offset sort for evtree\n");
 		break;

@@ -10,6 +10,7 @@ from ast import literal_eval
 import os
 import json
 import re
+import time
 
 from avocado import fail_on, skip, TestFail
 from avocado import Test as avocadoTest
@@ -26,7 +27,8 @@ from dmg_utils import get_dmg_command
 from fault_config_utils import FaultInjection
 from general_utils import \
     get_partition_hosts, stop_processes, \
-    get_default_config_file, pcmd, get_file_listing, DaosTestError, run_command
+    get_default_config_file, pcmd, get_file_listing, DaosTestError, run_command, \
+    dump_engines_stacks
 from logger_utils import TestLogger
 from pydaos.raw import DaosContext, DaosLog, DaosApiError
 from server_utils import DaosServerManager
@@ -323,6 +325,24 @@ class Test(avocadoTest):
         """
         return self.get_test_info()["method"]
 
+    def get_elapsed_time(self):
+        """Get the elapsed test time.
+
+        Returns:
+            float: number of seconds since the start of the test
+
+        """
+        return time.time() - self.time_start
+
+    def get_remaining_time(self):
+        """Get the remaining time before the test timeout will expire.
+
+        Returns:
+            float: number of seconds remaining before the test will timeout
+
+        """
+        return self.timeout - self.get_elapsed_time()
+
     def report_timeout(self):
         """Report whether or not this test case was timed out."""
         if not self._timeout_reported:
@@ -533,6 +553,8 @@ class TestWithServers(TestWithoutServers):
         # self.debug = False
         # self.config = None
         self.job_manager = None
+        # whether engines ULT stacks have been already dumped
+        self.dumped_engines_stacks = False
         self.label_generator = LabelGenerator()
 
     def setUp(self):
@@ -673,8 +695,7 @@ class TestWithServers(TestWithoutServers):
         self.skip_add_log_msg = self.params.get("skip_add_log_msg", "/run/*", False)
 
         # If there's no server started, then there's no server log to write to.
-        if (self.setup_start_servers and self.setup_start_agents and
-                not self.skip_add_log_msg):
+        if (self.setup_start_servers and self.setup_start_agents and not self.skip_add_log_msg):
             # Write an ID string to the log file for cross-referencing logs
             # with test ID
             id_str = '"Test.name: ' + str(self) + '"'
@@ -1196,8 +1217,46 @@ class TestWithServers(TestWithoutServers):
             errors.append("Error removing temporary test files")
         return errors
 
+    def dump_engines_stacks(self, message):
+        """Dump the engines ULT stacks.
+
+        Args:
+            message (str): reason for dumping the ULT stacks. Defaults to None.
+        """
+        if self.dumped_engines_stacks is False:
+            self.dumped_engines_stacks = True
+            self.log.info("%s, dumping ULT stacks", message)
+            dump_engines_stacks(self.hostlist_servers)
+
+    def report_timeout(self):
+        """Dump ULTs stacks if this test case was timed out."""
+        super().report_timeout()
+        if self.timeout is not None and self.time_elapsed > self.timeout:
+            # dump engines ULT stacks upon test timeout
+            self.dump_engines_stacks("Test has timed-out")
+
+    def fail(self, message=None):
+        """Dump engines ULT stacks upon test failure."""
+        self.dump_engines_stacks("Test has failed")
+        super().fail(message)
+
+    def error(self, message=None):
+        """Dump engines ULT stacks upon test error."""
+        self.dump_engines_stacks("Test has errored")
+        super().error(message)
+
     def tearDown(self):
         """Tear down after each test case."""
+
+        # dump engines ULT stacks upon test failure
+        # check of Avocado test status during teardown is presently useless
+        # and about same behavior has been implemented by adding both fail()
+        # error() method above, to overload the methods of Avocado base Test
+        # class (see DAOS-1452/DAOS-9941 and Avocado issue #5217 with
+        # associated PR-5224)
+        if self.status is not None and self.status != 'PASS' and self.status != 'SKIP':
+            self.dump_engines_stacks("Test status is {}".format(self.status))
+
         # Report whether or not the timeout has expired
         self.report_timeout()
 
@@ -1420,6 +1479,8 @@ class TestWithServers(TestWithoutServers):
                 errors.append(
                     "ERROR: At least one multi-variant server was not found in "
                     "its expected state; stopping all servers")
+                # dump engines stacks if not already done
+                self.dump_engines_stacks("Some engine not in expected state")
             self.test_log.info(
                 "Stopping %s group(s) of servers", len(self.server_managers))
             errors.extend(self._stop_managers(self.server_managers, "servers"))

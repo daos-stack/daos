@@ -1059,6 +1059,10 @@ func TestParseFsType(t *testing.T) {
 			input:     "/dev/pmem0: Linux rev 1.0 ext2 filesystem data, UUID=0ce47201-6f25-4569-9e82-34c9d91173bb (large files)\n",
 			expFsType: "ext2",
 		},
+		"garbage in header": {
+			input:     "/dev/pmem1: COM executable for DOS",
+			expFsType: "DOS",
+		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			if diff := cmp.Diff(tc.expFsType, parseFsType(tc.input)); diff != "" {

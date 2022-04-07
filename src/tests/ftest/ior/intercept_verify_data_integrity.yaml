@@ -15,43 +15,34 @@ server_config:
     servers:
         log_mask: INFO
         bdev_class: nvme
-        bdev_list: ["0000:5e:00.0","0000:5f:00.0"]
+        bdev_list: ["aaaa:aa:aa.a","bbbb:bb:bb.b"]
         #scm_size needed for tmpfs
         #scm_size: 35
         scm_class: dcpm
         scm_list: ["/dev/pmem0"]
 pool:
-    createmode:
-        mode_RW:
-             mode: 146
-    createset:
-        group: daos_server
-    createsize:
-        scm_size: 30000000000
-        nvme_size: 200000000000
-    createsvc:
-        svcn: 1
+    group: daos_server
+    scm_size: 30000000000
+    nvme_size: 200000000000
+    svcn: 1
     control_method: dmg
 container:
     type: POSIX
     control_method: daos
 ior:
-    client_processes:
-        np_24:
-            np: 24
+    np: 24
     test_file: testFile
     repetitions: 1
 # Remove the below line once DAOS-3143 is resolved
     dfs_destroy: False
-    iorflags:
-        api: POSIX
-        transfer_size: '4K'
-        block_size: '512M'
-        dfs_oclass: "SX"
-        file_options: !mux
-          ssf:
+    api: POSIX
+    transfer_size: '4K'
+    block_size: '512M'
+    dfs_oclass: "SX"
+    file_options: !mux
+        ssf:
             flags: "-k -e -D 600 -v -w -W -r -R"
-          fpp:
+        fpp:
             flags: "-F -k -e -D 600 -v -w -W -r -R"
 dfuse:
     mount_dir: "/tmp/daos_dfuse/"
