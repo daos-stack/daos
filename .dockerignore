@@ -2,7 +2,7 @@
 
 # Firstly deny everything and then allow only directories and files that we're
 # interested in.  Other files will not be required for the build and they
-# just generate noise and extra work for the docker daemon.
+# just generate noise and extra work for docker.
 *
 !src
 !utils
@@ -31,6 +31,7 @@ config.log
 .daos_server.active.yml
 autodocs
 utils/rpms/_topdir
+venv
 
 # Doc isn't required for building.
 doc
