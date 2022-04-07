@@ -50,6 +50,8 @@ struct pool_svc_event {
 #define DF_PS_EVENT	"rank=%u inc="DF_U64" src=%d type=%d"
 #define DP_PS_EVENT(e)	e->psv_rank, e->psv_incarnation, e->psv_src, e->psv_type
 
+#define RECHOOSE_SLEEP_MS 250
+
 /* Pool service crt-event-handling state */
 struct pool_svc_events {
 	ABT_mutex		pse_mutex;
@@ -2810,7 +2812,7 @@ realloc_resp:
 		list_cont_bulk_destroy(in->plci_cont_bulk);
 		D_FREE(resp_cont);
 		crt_req_decref(rpc);
-		dss_sleep(1000 /* ms */);
+		dss_sleep(RECHOOSE_SLEEP_MS);
 		D_GOTO(rechoose, rc);
 	}
 
@@ -2821,7 +2823,6 @@ realloc_resp:
 		list_cont_bulk_destroy(in->plci_cont_bulk);
 		D_FREE(resp_cont);
 		crt_req_decref(rpc);
-		dss_sleep(1000 /* ms */);
 		D_GOTO(realloc_resp, rc);
 	} else if (rc != 0) {
 		D_ERROR(DF_UUID": failed to get container list for pool: %d\n",
@@ -3390,7 +3391,7 @@ realloc:
 	if (rc == RSVC_CLIENT_RECHOOSE) {
 		map_bulk_destroy(in->pqi_map_bulk, map_buf);
 		crt_req_decref(rpc);
-		dss_sleep(1000 /* ms */);
+		dss_sleep(RECHOOSE_SLEEP_MS);
 		goto rechoose;
 	}
 
@@ -3399,7 +3400,6 @@ realloc:
 		map_size = out->pqo_map_buf_size;
 		map_bulk_destroy(in->pqi_map_bulk, map_buf);
 		crt_req_decref(rpc);
-		dss_sleep(1000 /* ms */);
 		goto realloc;
 	} else if (rc != 0) {
 		D_ERROR(DF_UUID": failed to query pool, "DF_RC"\n", DP_UUID(pool_uuid), DP_RC(rc));
@@ -3528,7 +3528,7 @@ rechoose:
 	rc = pool_rsvc_client_complete_rpc(&client, &ep, rc, &out->pgo_op);
 	if (rc == RSVC_CLIENT_RECHOOSE) {
 		crt_req_decref(rpc);
-		dss_sleep(1000 /* ms */);
+		dss_sleep(RECHOOSE_SLEEP_MS);
 		D_GOTO(rechoose, rc);
 	}
 
@@ -3592,7 +3592,7 @@ rechoose:
 	rc = pool_rsvc_client_complete_rpc(&client, &ep, rc, &out->peo_op);
 	if (rc == RSVC_CLIENT_RECHOOSE) {
 		crt_req_decref(rpc);
-		dss_sleep(1000 /* ms */);
+		dss_sleep(RECHOOSE_SLEEP_MS);
 		D_GOTO(rechoose, rc);
 	}
 
@@ -3667,7 +3667,7 @@ rechoose:
 	rc = pool_rsvc_client_complete_rpc(&client, &ep, rc, &out->pto_op);
 	if (rc == RSVC_CLIENT_RECHOOSE) {
 		crt_req_decref(rpc);
-		dss_sleep(1000 /* ms */);
+		dss_sleep(RECHOOSE_SLEEP_MS);
 		D_GOTO(rechoose, rc);
 	}
 
@@ -4236,7 +4236,7 @@ rechoose:
 	rc = pool_rsvc_client_complete_rpc(&client, &ep, rc, &out->pso_op);
 	if (rc == RSVC_CLIENT_RECHOOSE) {
 		crt_req_decref(rpc);
-		dss_sleep(1000 /* ms */);
+		dss_sleep(RECHOOSE_SLEEP_MS);
 		D_GOTO(rechoose, rc);
 	}
 
@@ -4408,7 +4408,7 @@ rechoose:
 	rc = pool_rsvc_client_complete_rpc(&client, &ep, rc, &out->puo_op);
 	if (rc == RSVC_CLIENT_RECHOOSE) {
 		crt_req_decref(rpc);
-		dss_sleep(1000 /* ms */);
+		dss_sleep(RECHOOSE_SLEEP_MS);
 		D_GOTO(rechoose, rc);
 	}
 
@@ -4572,7 +4572,7 @@ rechoose:
 	rc = pool_rsvc_client_complete_rpc(&client, &ep, rc, &out->pdo_op);
 	if (rc == RSVC_CLIENT_RECHOOSE) {
 		crt_req_decref(rpc);
-		dss_sleep(1000 /* ms */);
+		dss_sleep(RECHOOSE_SLEEP_MS);
 		D_GOTO(rechoose, rc);
 	}
 
@@ -5551,7 +5551,7 @@ rechoose:
 	rc = pool_rsvc_client_complete_rpc(&client, &ep, rc, &out->pvo_op);
 	if (rc == RSVC_CLIENT_RECHOOSE) {
 		crt_req_decref(rpc);
-		dss_sleep(1000 /* ms */);
+		dss_sleep(RECHOOSE_SLEEP_MS);
 		D_GOTO(rechoose, rc);
 	}
 
@@ -5742,7 +5742,7 @@ realloc_resp:
 		ranks_get_bulk_destroy(in->prgi_ranks_bulk);
 		d_rank_list_free(out_ranks);
 		crt_req_decref(rpc);
-		dss_sleep(1000 /* ms */);
+		dss_sleep(RECHOOSE_SLEEP_MS);
 		D_GOTO(rechoose, rc);
 	}
 
@@ -5753,7 +5753,6 @@ realloc_resp:
 		ranks_get_bulk_destroy(in->prgi_ranks_bulk);
 		d_rank_list_free(out_ranks);
 		crt_req_decref(rpc);
-		dss_sleep(1000 /* ms */);
 		D_GOTO(realloc_resp, rc);
 	} else if (rc != 0) {
 		D_ERROR(DF_UUID ": failed to get ranks, " DF_RC "\n",
@@ -6256,7 +6255,7 @@ rechoose:
 	rc = pool_rsvc_client_complete_rpc(&client, &ep, rc, &out->poo_op);
 	if (rc == RSVC_CLIENT_RECHOOSE) {
 		crt_req_decref(rpc);
-		dss_sleep(1000 /* ms */);
+		dss_sleep(RECHOOSE_SLEEP_MS);
 		D_GOTO(rechoose, rc);
 	}
 

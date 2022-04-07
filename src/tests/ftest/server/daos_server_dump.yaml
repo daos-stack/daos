@@ -9,6 +9,8 @@ hosts:
     - server-E
     - server-F
 timeout: 140
+timeouts:
+  test_daos_server_dump_on_timeout: 30
 server_config:
   name: daos_server
   servers:

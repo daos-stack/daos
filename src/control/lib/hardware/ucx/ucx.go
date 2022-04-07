@@ -158,7 +158,7 @@ func (p *Provider) getProviderSet(transport string) common.StringSet {
 }
 
 func shouldAddGeneric(transport string) bool {
-	genericTransportAliases := []string{"rc", "ud"}
+	genericTransportAliases := []string{"rc", "ud", "dc"}
 	for _, alias := range genericTransportAliases {
 		if strings.HasPrefix(transport, alias+"_") {
 			return true
@@ -178,9 +178,6 @@ func transportToDAOSProvider(transport string) string {
 	// UCX transport aliases:
 	// https://openucx.readthedocs.io/en/master/faq.html#list-of-main-transports-and-aliases
 	switch {
-	case transportPieces[0] == "dc":
-		// trim suffix from dc
-		transportPieces = transportPieces[:1]
 	case transportPieces[1] == "verbs":
 		transportPieces[1] = "v"
 	case strings.HasPrefix(transportPieces[1], "mlx"):
