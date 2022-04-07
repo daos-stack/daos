@@ -45,11 +45,17 @@ The DAOS 2.0.2 release contains the following updates on top of DAOS 2.0.1:
 
 ## Known Issues and limitations
 
+- For Replication and Erasure Coding (EC), in DAOS 2.0 the redundancy level (`rf_lvl`)
+  is set to `1 (rank=engine)`. On servers with more than one engine per server,
+  setting the redundancy level to `2 (server)` would be more appropriate
+  but the `daos cont create` command currently does not support this
+  [DAOS-10215](https://daosio.atlassian.net/browse/DAOS-10215).
+
 - For some workloads, performance degradations have been observed with
   libfabric 1.14 and the `tcp` provider
   [DAOS-9883](https://daosio.atlassian.net/browse/DAOS-9883).
 
-- `daos fs copy` does not support symlinks /
+- DFS POSIX containers and the `daos fs copy` do not support symlinks /
   [DAOS-9254](https://daosio.atlassian.net/browse/DAOS-9254)
 
 - No OPA/PSM2 support.
