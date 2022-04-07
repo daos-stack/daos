@@ -564,8 +564,6 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 # No files in a shim package
 
 %changelog
-* Wed April 07 2022 Ryon Jensen <ryon.jensen@intel.com> 2.3.100-2
-- New ddb tool and tests
 * Wed Apr  6 2022 Johann Lombardi <johann.lombardi@intel.com> 2.3.100-1
 - Switch version to 2.3.100 for 2.4 test builds
 
