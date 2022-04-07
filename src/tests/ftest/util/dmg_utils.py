@@ -238,22 +238,19 @@ class DmgCommand(DmgCommandBase):
         # }
         return self._get_json_result(("storage", "scan"), verbose=verbose)
 
-    def storage_format(self, reformat=False, timeout=30, verbose=False,
-                       force=False):
+    def storage_format(self, force=False, timeout=30, verbose=False):
         """Get the result of the dmg storage format command.
 
         Args:
-            reformat (bool): always reformat storage, could be destructive.
+            force (bool): force storage format on a host, stopping any
+                running engines (CAUTION: destructive operation).
                 This will create control-plane related metadata i.e. superblock
                 file and reformat if the storage media is available and
-                formattable.
+                formattable.  Defaults to False
             timeout: seconds after which the format is considered a failure and
                 times out.
             verbose (bool): show results of each SCM & NVMe device format
                 operation.
-            force (bool, optional): force storage format on a host, stopping any
-                running engines (CAUTION: destructive operation). Defaults to
-                False.
 
         Returns:
             CmdResult: an avocado CmdResult object containing the dmg command
@@ -266,8 +263,7 @@ class DmgCommand(DmgCommandBase):
         saved_timeout = self.timeout
         self.timeout = timeout
         self._get_result(
-            ("storage", "format"), reformat=reformat, verbose=verbose,
-            force=force)
+            ("storage", "format"), force=force, verbose=verbose)
         self.timeout = saved_timeout
         return self.result
 

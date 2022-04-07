@@ -742,16 +742,6 @@ func TestSystem_Membership_Join(t *testing.T) {
 			},
 			expErr: errUuidExists(curMember.UUID),
 		},
-		"rejoin with existing UUID and nil rank": {
-			req: &JoinRequest{
-				Rank:             NilRank,
-				UUID:             curMember.UUID,
-				ControlAddr:      curMember.Addr,
-				PrimaryFabricURI: curMember.Addr.String(),
-				FaultDomain:      curMember.FaultDomain,
-			},
-			expErr: errRankChanged(NilRank, curMember.Rank, curMember.UUID),
-		},
 		"rejoin with different UUID and dupe rank": {
 			req: &JoinRequest{
 				Rank:             curMember.Rank,
@@ -775,6 +765,21 @@ func TestSystem_Membership_Join(t *testing.T) {
 				Created:    true,
 				Member:     newMember,
 				PrevState:  MemberStateUnknown,
+				MapVersion: expMapVer,
+			},
+		},
+		"rejoin with existing UUID and nil rank": {
+			req: &JoinRequest{
+				Rank:             NilRank,
+				UUID:             curMember.UUID,
+				ControlAddr:      curMember.Addr,
+				PrimaryFabricURI: curMember.Addr.String(),
+				FaultDomain:      curMember.FaultDomain,
+			},
+			expResp: &JoinResponse{
+				Created:    false,
+				Member:     curMember,
+				PrevState:  curMember.state,
 				MapVersion: expMapVer,
 			},
 		},

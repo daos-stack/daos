@@ -233,6 +233,21 @@ func (srv *server) shutdown() {
 	}
 }
 
+func (srv *server) setCoreDumpFilter() error {
+	if srv.cfg.CoreDumpFilter == 0 {
+		return nil
+	}
+
+	srv.log.Debugf("setting core dump filter to 0x%x", srv.cfg.CoreDumpFilter)
+
+	// Set core dump filter.
+	if err := writeCoreDumpFilter(srv.log, "/proc/self/coredump_filter", srv.cfg.CoreDumpFilter); err != nil {
+		return errors.Wrap(err, "failed to set core dump filter")
+	}
+
+	return nil
+}
+
 // initNetwork resolves local address and starts TCP listener.
 func (srv *server) initNetwork() error {
 	defer srv.logDuration(track("time to init network"))
@@ -478,6 +493,10 @@ func Start(log *logging.LeveledLogger, cfg *config.Server) error {
 		return err
 	}
 	defer srv.shutdown()
+
+	if err := srv.setCoreDumpFilter(); err != nil {
+		return err
+	}
 
 	if srv.netDevClass, err = getFabricNetDevClass(cfg, fiSet); err != nil {
 		return err
