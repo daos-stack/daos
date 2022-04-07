@@ -97,7 +97,7 @@ class DmgPoolQueryTest(ControlTestBase, IorTestBase):
                     "records", path="/run/exp_vals/rebuild/*")
             },
             "enabled_ranks": None,
-            "disabled_ranks": None,
+            "disabled_ranks": None
         }
 
         self.assertDictEqual(
