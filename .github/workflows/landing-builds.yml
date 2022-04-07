@@ -12,6 +12,7 @@ on:
       - utils/docker/Dockerfile.*
       - 'utils/scripts/install-*.sh'
       - utils/run_in_ga.sh
+      - requirements.txt
 
 jobs:
 

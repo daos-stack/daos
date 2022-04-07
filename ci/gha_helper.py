@@ -5,16 +5,18 @@
 import os
 import sys
 from os.path import join
-import subprocess #nosec
+import subprocess  # nosec
 
 BUILD_FILES = ['site_scons',
                'utils/build.config',
                'SConstruct',
                '.github/workflows/landing-builds.yml',
                '.dockerignore',
+               'requirements.txt'
                'ci/gha_helper.py']
 
 COMMIT_CMD = ['git', 'rev-parse', '--short', 'HEAD']
+
 
 def set_output(key, value):
     """ Set a key-value pair in github actions metadata"""
