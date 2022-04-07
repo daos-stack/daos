@@ -67,6 +67,7 @@ var methodAuthorizations = map[string][]Component{
 	"/mgmt.MgmtSvc/SystemCheckQuery":       {ComponentAdmin},
 	"/mgmt.MgmtSvc/SystemCheckProp":        {ComponentAdmin},
 	"/mgmt.MgmtSvc/SystemCheckRepair":      {ComponentAdmin},
+	"/mgmt.MgmtSvc/FaultInjectReport":      {ComponentAdmin},
 	"/mgmt.MgmtSvc/PoolUpgrade":            {ComponentAdmin},
 	"/RaftTransport/AppendEntries":         {ComponentServer},
 	"/RaftTransport/AppendEntriesPipeline": {ComponentServer},

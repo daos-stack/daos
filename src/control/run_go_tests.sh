@@ -133,7 +133,7 @@ function check_formatting()
 
 function get_test_runner()
 {
-	test_args="-mod vendor -race -cover -v ./... -tags firmware"
+	test_args="-mod vendor -race -cover -v ./... -tags firmware,fault_injection"
 	test_runner="go test"
 
 	if which gotestsum >/dev/null; then
