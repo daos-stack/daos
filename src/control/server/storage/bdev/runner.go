@@ -108,54 +108,53 @@ func (s *spdkSetupScript) run(args ...string) error {
 	return errors.Wrapf(err, "spdk setup failed (%s)", out)
 }
 
-// Prepare executes setup script to allocate hugepages and rebind PCI devices
-// (that don't have active mountpoints) from generic kernel driver to be
-// used with SPDK. Either all PCI devices will be unbound by default if allow list
-// parameter is not set, otherwise PCI devices can be specified by passing in a
-// allow list of PCI addresses.
+// Prepare executes setup script to allocate hugepages and rebind PCI devices (that don't have
+// active mountpoints) from generic kernel driver to be used with SPDK. Either all PCI devices will
+// be unbound by default if allow list parameter is not set, otherwise PCI devices can be specified
+// by passing in an allow list of PCI addresses.
 //
 // NOTE: will make the controller disappear from /dev until reset() called.
 func (s *spdkSetupScript) Prepare(req *storage.BdevPrepareRequest) error {
-	s.env = map[string]string{
-		"PATH":          os.Getenv("PATH"),
-		pciBlockListEnv: req.PCIBlockList,
-	}
-
-	if req.DisableVFIO {
-		s.env[driverOverrideEnv] = vfioDisabledDriver
-	} else if req.EnableVMD {
-		// Run setup with DRIVER_OVERRIDE=none to speed up VMD re-binding as per
-		// https://github.com/spdk/spdk/commit/b0aba3fcd5aceceea530a702922153bc75664978.
-		s.env[driverOverrideEnv] = noDriver
-
-		// Apply block list to cater for situation where VMD is configured for use with
-		// DAOS but other NVMe drives should be reserved for other use (bdev_exclude).
-		if err := s.run(); err != nil {
-			return errors.Wrap(err, "vmd driver reset")
-		}
-
-		delete(s.env, driverOverrideEnv)
-	}
-
-	s.env[targetUserEnv] = req.TargetUser
-	s.env[pciAllowListEnv] = req.PCIAllowList
-
 	// Always use min number of hugepages otherwise devices cannot be accessed.
 	nrHugepages := req.HugePageCount
 	if nrHugepages <= 0 {
 		nrHugepages = defaultNrHugepages
 	}
-	s.env[nrHugepagesEnv] = fmt.Sprintf("%d", nrHugepages)
-	s.env[hugeNodeEnv] = req.HugeNodes
+
+	s.env = map[string]string{
+		"PATH":          os.Getenv("PATH"),
+		pciBlockListEnv: req.PCIBlockList,
+		targetUserEnv:   req.TargetUser,
+		pciAllowListEnv: req.PCIAllowList,
+		nrHugepagesEnv:  fmt.Sprintf("%d", nrHugepages),
+		hugeNodeEnv:     req.HugeNodes,
+	}
+
+	if req.DisableVFIO {
+		s.env[driverOverrideEnv] = vfioDisabledDriver
+	}
 
 	return s.run()
 }
 
-// Reset executes setup script to reset hugepage allocations and rebind PCI devices
-// (that don't have active mountpoints) from SPDK compatible driver e.g. VFIO and
-// bind back to the kernel bdev driver to be used by the OS. Either all PCI devices
-// will be unbound by default if allow list parameter is not set, otherwise PCI
-// devices can be specified by passing in a allow list of PCI addresses.
+// Unbind executes setup script with DRIVERRIDE=none remove all driver bindings.
+//
+// Apply block list to cater for situation where some devices should be excluded from unbind, e.g.
+// for use from the OS.
+func (s *spdkSetupScript) Unbind(req *storage.BdevPrepareRequest) error {
+	s.env = map[string]string{
+		"PATH":            os.Getenv("PATH"),
+		pciBlockListEnv:   req.PCIBlockList,
+		driverOverrideEnv: noDriver,
+	}
+
+	return errors.Wrap(s.run(), "unbind devices")
+}
+
+// Reset executes setup script to reset hugepage allocations and rebind PCI devices (that don't have
+// active mountpoints) from SPDK compatible driver e.g. VFIO and bind back to the kernel bdev driver
+// to be used by the OS. Either all PCI devices will be unbound by default if allow list parameter
+// is not set, otherwise PCI devices can be specified by passing in a allow list of PCI addresses.
 //
 // NOTE: will make the controller reappear in /dev.
 func (s *spdkSetupScript) Reset(req *storage.BdevPrepareRequest) error {

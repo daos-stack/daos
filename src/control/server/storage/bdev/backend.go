@@ -185,15 +185,23 @@ func (sb *spdkBackend) prepare(req storage.BdevPrepareRequest, userLookup userLo
 	}
 	resp.VMDPrepared = req.EnableVMD
 
-	if !req.EnableVMD {
-		// Before preparing, reset bindings of NVMe devices. If VMD is enabled, this is
-		// performed within the script prepare method.
+	// Before preparing, reset device bindings.
+	if req.EnableVMD {
+		// Unbind devices to speed up VMD re-binding as per
+		// https://github.com/spdk/spdk/commit/b0aba3fcd5aceceea530a702922153bc75664978.
+		//
+		// Applies block (not allow) list if VMD is configured so specific NVMe devices can
+		// be reserved for other use (bdev_exclude).
+		if err := sb.script.Unbind(&req); err != nil {
+			return resp, errors.Wrap(err, "un-binding devices")
+		}
+	} else {
 		if err := sb.script.Reset(&req); err != nil {
-			return resp, errors.Wrap(err, "un-binding ssds")
+			return resp, errors.Wrap(err, "resetting device bindings")
 		}
 	}
 
-	return resp, errors.Wrap(sb.script.Prepare(&req), "binding ssds to userspace drivers")
+	return resp, errors.Wrap(sb.script.Prepare(&req), "binding devices to userspace drivers")
 }
 
 // reset receives function pointers for external interfaces.

@@ -927,9 +927,6 @@ func TestBackend_Prepare(t *testing.T) {
 		username              = "bob"
 	)
 
-	//mockAddrList(t, 1,2,3).String() := mockAddrList(t, 1, 2, 3).String()
-	//testPCIBlockList := mockAddrList(t, 4, 3).String()
-
 	usr, _ := user.Current()
 
 	defaultHpCleanCall := strings.Join([]string{hugePageDir, hugePagePrefix, usr.Uid}, ",")
