@@ -35,12 +35,149 @@ type storagePrepareCmd struct {
 	HelperLogFile string `short:"l" long:"helper-log-file" description:"Log debug from daos_admin binary."`
 }
 
-func (cmd *storagePrepareCmd) Execute(args []string) error {
-	prepNvme, prepScm, err := cmd.Validate()
-	if err != nil {
+type errs []error
+
+func (es *errs) add(err error) error {
+	if es == nil {
+		return errors.New("nil errs")
+	}
+	*es = append(*es, err)
+
+	return nil
+}
+
+type nvmePrepFn func(storage.BdevPrepareRequest) (*storage.BdevPrepareResponse, error)
+
+func (cmd *storagePrepareCmd) prepNvme(scanErrors *errs, prep nvmePrepFn) error {
+	if doPrep, _, err := cmd.Validate(); err != nil || !doPrep {
 		return err
 	}
 
+	op := "Prepare"
+	if cmd.Reset {
+		op = "Reset"
+	}
+
+	cmd.log.Info(op + " locally-attached NVMe storage...")
+
+	if cmd.TargetUser == "" {
+		runningUser, err := user.Current()
+		if err != nil {
+			return errors.Wrap(err, "couldn't lookup running user")
+		}
+		cmd.TargetUser = runningUser.Username
+	}
+
+	// Prepare NVMe access through SPDK
+	if _, err := prep(storage.BdevPrepareRequest{
+		HugePageCount: cmd.NrHugepages,
+		TargetUser:    cmd.TargetUser,
+		PCIAllowList:  cmd.PCIAllowList,
+		PCIBlockList:  cmd.PCIBlockList,
+		Reset_:        cmd.Reset,
+		EnableVMD:     true, // vmd will be prepared if available
+	}); err != nil {
+		return scanErrors.add(err)
+	}
+
+	return nil
+}
+
+type scmPrepFn func(storage.ScmPrepareRequest) (*storage.ScmPrepareResponse, error)
+
+func (cmd *storagePrepareCmd) prepScm(scanErrors *errs, prep scmPrepFn) error {
+	if _, doPrep, err := cmd.Validate(); err != nil || !doPrep {
+		return err
+	}
+
+	if cmd.NrNamespacesPerSocket == 0 {
+		return errors.New("(-S|--scm-ns-per-socket) should be set to at least 1")
+	}
+
+	op := "Prepare"
+	if cmd.Reset {
+		op = "Reset"
+	}
+
+	cmd.log.Info(op + " locally-attached SCM...")
+
+	if err := cmd.Warn(cmd.log); err != nil {
+		return scanErrors.add(err)
+	}
+
+	// Prepare SCM modules to be presented as pmem device files.
+	resp, err := prep(storage.ScmPrepareRequest{
+		Reset:                 cmd.Reset,
+		NrNamespacesPerSocket: cmd.NrNamespacesPerSocket,
+	})
+	if err != nil {
+		return scanErrors.add(err)
+	}
+	cmd.log.Debugf("%s scm resp: %+v", op, resp)
+
+	state := resp.State
+
+	// PMem resource allocations have been updated, prompt the user for reboot.
+	// State reported indicates state before reboot.
+	if resp.RebootRequired {
+		msg := ""
+		switch state {
+		case storage.ScmStateNoRegions:
+			msg = "PMem AppDirect interleaved regions will be created. "
+		case storage.ScmStateNotInterleaved:
+			msg = "PMem AppDirect non-interleaved regions will be removed. "
+		case storage.ScmStateFreeCapacity:
+			msg = "PMem AppDirect interleaved regions will be removed. "
+		case storage.ScmStateNoFreeCapacity:
+			msg = "PMem namespaces removed and AppDirect interleaved regions will be removed. "
+		}
+		cmd.log.Info(msg + storage.ScmMsgRebootRequired)
+
+		return nil
+	}
+
+	if state == storage.ScmStateUnknown {
+		return scanErrors.add(errors.New("failed to report state"))
+	}
+	if state == storage.ScmStateNoModules {
+		return scanErrors.add(storage.FaultScmNoModules)
+	}
+
+	if cmd.Reset {
+		// Respond to resultant state on prepare reset.
+		if state == storage.ScmStateNoRegions {
+			cmd.log.Info("SCM reset successfully!")
+			return nil
+		}
+
+		return scanErrors.add(errors.Errorf("unexpected state %q after prepare reset", state))
+	}
+
+	// Respond to state reported by prepare setup.
+	switch state {
+	case storage.ScmStateNoRegions:
+		scanErrors.add(errors.New("failed to create regions"))
+	case storage.ScmStateFreeCapacity:
+		scanErrors.add(errors.New("failed to create namespaces"))
+	case storage.ScmStateNoFreeCapacity:
+		if len(resp.Namespaces) == 0 {
+			scanErrors.add(errors.New("failed to find namespaces"))
+			break
+		}
+		// Namespaces exist.
+		var bld strings.Builder
+		if err := pretty.PrintScmNamespaces(resp.Namespaces, &bld); err != nil {
+			return err
+		}
+		cmd.log.Infof("%s\n", bld.String())
+	default:
+		scanErrors.add(errors.Errorf("unexpected state %q after prepare reset", state))
+	}
+
+	return nil
+}
+
+func (cmd *storagePrepareCmd) Execute(args []string) error {
 	if cmd.HelperLogFile != "" {
 		if err := os.Setenv(pbin.DaosAdminLogFileEnvVar, cmd.HelperLogFile); err != nil {
 			cmd.log.Errorf("unable to configure privileged helper logging: %s", err)
@@ -55,75 +192,25 @@ func (cmd *storagePrepareCmd) Execute(args []string) error {
 		cmd.scs = server.NewStorageControlService(cmd.log, config.DefaultServer().Engines)
 	}
 
-	op := "Preparing"
-	if cmd.Reset {
-		op = "Resetting"
+	scanErrors := make(errs, 0, 2)
+
+	if err := cmd.prepNvme(&scanErrors, cmd.scs.NvmePrepare); err != nil {
+		return err
 	}
 
-	scanErrors := make([]error, 0, 2)
-
-	if prepNvme {
-		cmd.log.Info(op + " locally-attached NVMe storage...")
-
-		if cmd.TargetUser == "" {
-			runningUser, err := user.Current()
-			if err != nil {
-				return errors.Wrap(err, "couldn't lookup running user")
-			}
-			cmd.TargetUser = runningUser.Username
-		}
-
-		// Prepare NVMe access through SPDK
-		if _, err := cmd.scs.NvmePrepare(storage.BdevPrepareRequest{
-			HugePageCount: cmd.NrHugepages,
-			TargetUser:    cmd.TargetUser,
-			PCIAllowList:  cmd.PCIAllowList,
-			PCIBlockList:  cmd.PCIBlockList,
-			Reset_:        cmd.Reset,
-			EnableVMD:     true, // vmd will be prepared if available
-		}); err != nil {
-			scanErrors = append(scanErrors, err)
-		}
+	if err := cmd.prepScm(&scanErrors, cmd.scs.ScmPrepare); err != nil {
+		return err
 	}
 
-	scmScan, err := cmd.scs.ScmScan(storage.ScmScanRequest{})
-	if err != nil {
-		return common.ConcatErrors(scanErrors, err)
-	}
-
-	if prepScm && len(scmScan.Modules) > 0 {
-		cmd.log.Info(op + " locally-attached SCM...")
-
-		if err := cmd.CheckWarn(cmd.log, scmScan.State); err != nil {
-			return common.ConcatErrors(scanErrors, err)
-		}
-
-		// Prepare SCM modules to be presented as pmem device files.
-		// Pass evaluated state to avoid running GetScmState() twice.
-		resp, err := cmd.scs.ScmPrepare(storage.ScmPrepareRequest{Reset: cmd.Reset})
-		if err != nil {
-			return common.ConcatErrors(scanErrors, err)
-		}
-		if resp.RebootRequired {
-			cmd.log.Info(storage.ScmMsgRebootRequired)
-		} else if len(resp.Namespaces) > 0 {
-			var bld strings.Builder
-			if err := pretty.PrintScmNamespaces(resp.Namespaces, &bld); err != nil {
-				return err
-			}
-			cmd.log.Infof("SCM namespaces:\n%s\n", bld.String())
-		} else {
-			cmd.log.Info("no SCM namespaces")
-		}
-	} else if prepScm {
-		cmd.log.Info("No SCM modules detected; skipping operation")
-	}
-
-	if len(scanErrors) > 0 {
+	switch len(scanErrors) {
+	case 0:
+		return nil
+	case 1:
+		return scanErrors[0]
+	default:
+		// When calling ConcatErrors the Fault resolution is lost.
 		return common.ConcatErrors(scanErrors, nil)
 	}
-
-	return nil
 }
 
 type storageScanCmd struct {
