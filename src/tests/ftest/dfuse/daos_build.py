@@ -76,7 +76,7 @@ class DaosBuild(DfuseTestBase):
         mount_dir = self.dfuse.mount_dir.value
         build_dir = os.path.join(mount_dir, 'daos')
 
-        # This will apply to SCons, but not sub-commands.
+        # This will apply to SCons, but not sub-commands as scons strips the environment.
 
         remote_env = OrderedDict()
         remote_env['LD_PRELOAD'] = '/usr/lib64/libioil.so'
@@ -84,7 +84,7 @@ class DaosBuild(DfuseTestBase):
         remote_env['DD_MASK'] = 'all'
         remote_env['DD_SUBSYS'] = 'all'
 #        remote_env['D_IL_REPORT'] = '2'
-        remote_env['D_LOG_MASK'] = 'debug'
+        remote_env['D_LOG_MASK'] = 'INFO,IL=DEBUG'
 
         envs = []
         for env, value in remote_env.items():
@@ -98,9 +98,8 @@ class DaosBuild(DfuseTestBase):
                 '{} -C {} --jobs 50 build --build-deps=yes'.format(scons, build_dir)]
         for cmd in cmds:
             try:
-                # Set a timeout of 1500 seconds, the whole test will timeout after 1800
                 command = '{};{}'.format(preload_cmd, cmd)
-                ret_code = general_utils.pcmd(self.hostlist_clients, command, timeout=1500)
+                ret_code = general_utils.pcmd(self.hostlist_clients, command, timeout=60 * 60)
                 if 0 in ret_code:
                     continue
                 self.log.info(ret_code)
