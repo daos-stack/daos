@@ -2225,8 +2225,13 @@ rdb_raft_open_lc(struct rdb *db)
 		return rc;
 	}
 
-	/* Recover the LC by discarding any partially appended entries. */
+	/*
+	 * Recover the LC by discarding any partially appended entries. Yield
+	 * after the call just in case we have occupied the xstream for a while
+	 * since the last yield inside the call.
+	 */
 	rc = rdb_lc_discard(db->d_lc, db->d_lc_record.dlr_tail, RDB_LC_INDEX_MAX);
+	ABT_thread_yield();
 	if (rc != 0) {
 		D_ERROR(DF_DB": failed to recover LC "DF_U64": "DF_RC"\n", DP_DB(db),
 			db->d_lc_record.dlr_base, DP_RC(rc));
@@ -2339,8 +2344,8 @@ load_snapshot:
 	/* Load the log entries. */
 	for (i = db->d_lc_record.dlr_base + 1; i < db->d_lc_record.dlr_tail; i++) {
 		/*
-		 * Yield before loading the first entry (for the rdb_lc_discard
-		 * call above) and every a few entries.
+		 * Yield before loading the first entry and every a few
+		 * entries.
 		 */
 		if ((i - db->d_lc_record.dlr_base - 1) % 64 == 0)
 			ABT_thread_yield();

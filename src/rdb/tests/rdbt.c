@@ -848,7 +848,7 @@ testm_update_lookup_all(crt_group_t *grp, uint32_t nranks, uint32_t nreplicas,
 		printf("INFO: replica rank %u is now leader\n", test_rank);
 #endif
 
-		/* Verify data on the rank now that it is leader */
+		/* Verify data on the test_rank */
 		val_out = 0;
 		rc = rdbt_test_rank(grp, test_rank, NO_UPDATE,
 				    RDBT_MEMBER_NOOP, key, val, &val_out, &h);

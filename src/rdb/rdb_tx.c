@@ -966,16 +966,18 @@ rdb_tx_query_pre(struct rdb_tx *tx, const rdb_path_t *path,
 	uint64_t	i;
 	int		rc;
 
+	ABT_mutex_lock(tx->dt_db->d_raft_mutex);
 	if (tx->dt_flags & RDB_TX_LOCAL) {
 		i = tx->dt_db->d_lc_record.dlr_tail - 1;
 	} else {
-		ABT_mutex_lock(tx->dt_db->d_raft_mutex);
 		i = tx->dt_db->d_applied;
 		rc = rdb_tx_leader_check(tx);
-		ABT_mutex_unlock(tx->dt_db->d_raft_mutex);
-		if (rc != 0)
+		if (rc != 0) {
+			ABT_mutex_unlock(tx->dt_db->d_raft_mutex);
 			return rc;
+		}
 	}
+	ABT_mutex_unlock(tx->dt_db->d_raft_mutex);
 
 	if (path == NULL)
 		return 0;
@@ -1080,8 +1082,8 @@ rdb_tx_query_key_max(struct rdb_tx *tx, const rdb_path_t *kvs, d_iov_t *key_out)
 		return rc;
 	rc = rdb_lc_query_key_max(db->d_lc, i, s->de_object, key_out);
 	if (rc != 0) {
-		D_ERROR(DF_DB": rdb_lc_query_key_max index="DF_U64", rdb_oid="DF_U64"\n",
-			DP_DB(db), i, s->de_object);
+		D_ERROR(DF_DB": rdb_lc_query_key_max index="DF_U64", d_applied="DF_U64", rdb_oid="
+			DF_U64"\n", DP_DB(db), i, db->d_applied, s->de_object);
 	}
 	rdb_tx_query_post(tx, s);
 	return rc;

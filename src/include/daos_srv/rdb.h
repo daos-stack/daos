@@ -54,10 +54,9 @@
  *
  * All access to the KVSs in a database employ transactions (TX). (A special
  * class of "local" TXs, introduced for catastrophic recovery and testing
- * purposes, have theirs own rules described separately in the API
- * documentation of rdb_tx_begin_local.) Ending a TX without committing it
- * discards all its updates. Ending a query-only TX without committing is fine
- * at the moment.
+ * purposes, have their own rules described separately in the API documentation
+ * of rdb_tx_begin_local.) Ending a TX without committing it discards all its
+ * updates. Ending a query-only TX without committing is fine at the moment.
  *
  * A query sees all (conflicting) updates committed (successfully) before its
  * rdb_tx_begin(). It may or may not see updates committed after its
