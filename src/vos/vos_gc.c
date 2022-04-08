@@ -1084,6 +1084,9 @@ vos_gc_yield(void *arg)
 	struct vos_gc_param	*param = arg;
 	int			 rc;
 
+	/* Current DTX handle must be NULL, since GC runs under non-DTX mode. */
+	D_ASSERT(vos_dth_get() == NULL);
+
 	if (param->vgc_yield_func == NULL) {
 		param->vgc_credits = GC_CREDS_TIGHT;
 		bio_yield();

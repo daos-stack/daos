@@ -1185,19 +1185,6 @@ void
 gc_reserve_space(daos_size_t *rsrvd);
 
 /**
- * Start aggregation of an object.  Mark object for aggregation for aggregation, if applicable
- *
- * \param ih[IN]	Iterator handle
- * \param full_scan[IN]	Full scan is needed regardless so just mark aggregation start
- *
- * \return		1 if aggregation is needed
- *			0 if aggregation can be skipped
- *			< 0 on error
- */
-int
-oi_iter_start_agg(daos_handle_t ih, bool full_scan);
-
-/**
  * If the object is fully punched, bypass normal aggregation and move it to container
  * discard pool.
  *
@@ -1224,20 +1211,6 @@ oi_iter_check_punch(daos_handle_t ih);
  */
 int
 oi_iter_aggregate(daos_handle_t ih, bool range_discard);
-
-/**
- * Start aggregation of a key.  Mark key for aggregation for aggregation, if applicable
- *
- * \param ih[IN]	Iterator handle
- * \param full_scan[IN]	Full scan is needed regardless so just mark aggregation start
- *
- * \return		1 if aggregation is needed
- *			0 if aggregation can be skipped
- *			< 0 on error
- */
-
-int
-vos_obj_iter_start_agg(daos_handle_t ih, bool full_scan);
 
 /**
  * If the key is fully punched, bypass normal aggregation and move it to container
