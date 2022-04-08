@@ -51,7 +51,7 @@ container_with_rf:
   control_method: daos
   properties: rf:1
 
-ior:
+ior: &ior_base 
   client_processes:
     ppn: 4
   iorflags:
@@ -64,8 +64,15 @@ ior:
     # that it takes longer than the -D value.
     transfer_size: '512K'
     block_size: '150G'
-object_class:
-  wo_rf:
-    oclass: "SX"
-  with_rf:
-    oclass: "RP_2G1"
+ior_wo_rf: 
+  <<: *ior_base 
+  dfs_oclass: "SX"
+  dfs_dir_oclass: "SX"
+ior_with_rp:
+  <<: *ior_base 
+  dfs_oclass: "RP_2G1"
+  dfs_dir_oclass: "RP_2G1"
+ior_with_ec:
+  <<: *ior_base 
+  dfs_oclass: "EC_2P1G1"
+  dfs_dir_oclass: "EC_2P1G1"
