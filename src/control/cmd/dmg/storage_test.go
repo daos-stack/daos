@@ -42,6 +42,12 @@ func TestStorageCommands(t *testing.T) {
 		{
 			"Format with reformat",
 			"storage format --reformat",
+			"",
+			errors.New("unknown flag"),
+		},
+		{
+			"Format with force",
+			"storage format --force",
 			strings.Join([]string{
 				printRequest(t, systemQueryReq),
 				printRequest(t, &control.StorageFormatReq{Reformat: true}),

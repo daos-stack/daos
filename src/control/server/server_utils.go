@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net"
+	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -30,6 +31,7 @@ import (
 	"github.com/daos-stack/daos/src/control/server/engine"
 	"github.com/daos-stack/daos/src/control/server/storage"
 	"github.com/daos-stack/daos/src/control/system"
+	"github.com/daos-stack/daos/src/control/system/raft"
 )
 
 // netListenerFn is a type alias for the net.Listener function signature.
@@ -89,6 +91,23 @@ func cfgGetRaftDir(cfg *config.Server) string {
 	return filepath.Join(cfg.Engines[0].Storage.Tiers.ScmConfigs()[0].Scm.MountPoint, "control_raft")
 }
 
+func writeCoreDumpFilter(log logging.Logger, path string, filter uint8) error {
+	f, err := os.OpenFile(path, os.O_WRONLY, 0644)
+	if err != nil {
+		// Work around a testing oddity that seems to be related to launching
+		// the server via SSH, with the result that the /proc file is unwritable.
+		if os.IsPermission(err) {
+			log.Debugf("Unable to write core dump filter to %s: %s", path, err)
+			return nil
+		}
+		return errors.Wrapf(err, "unable to open core dump filter file %s", path)
+	}
+	defer f.Close()
+
+	_, err = f.WriteString(fmt.Sprintf("0x%x\n", filter))
+	return err
+}
+
 func iommuDetected() bool {
 	// Simple test for now -- if the path exists and contains
 	// DMAR entries, we assume that's good enough.
@@ -122,13 +141,12 @@ func updateFabricEnvars(log logging.Logger, cfg *engine.Config, fis *hardware.Fa
 	// Mercury will now support the new OFI_DOMAIN environment variable so
 	// that we can specify the correct device for each.
 	if !cfg.HasEnvVar("OFI_DOMAIN") {
-		fi, err := fis.GetInterfaceOnOSDevice(cfg.Fabric.Interface, cfg.Fabric.Provider)
+		fi, err := fis.GetInterfaceOnNetDevice(cfg.Fabric.Interface, cfg.Fabric.Provider)
 		if err != nil {
 			return errors.Wrapf(err, "unable to determine device domain for %s", cfg.Fabric.Interface)
 		}
-		domain := fi.Name
-		log.Debugf("setting OFI_DOMAIN=%s for %s", domain, cfg.Fabric.Interface)
-		envVar := "OFI_DOMAIN=" + domain
+		log.Debugf("setting OFI_DOMAIN=%s for %s", fi.Name, cfg.Fabric.Interface)
+		envVar := "OFI_DOMAIN=" + fi.Name
 		cfg.WithEnvVars(envVar)
 	}
 
@@ -386,7 +404,7 @@ func registerEngineEventCallbacks(srv *server, engine *EngineInstance, allStarte
 	})
 }
 
-func configureFirstEngine(ctx context.Context, engine *EngineInstance, sysdb *system.Database, joinFn systemJoinFn) {
+func configureFirstEngine(ctx context.Context, engine *EngineInstance, sysdb *raft.Database, joinFn systemJoinFn) {
 	if !sysdb.IsReplica() {
 		return
 	}
@@ -484,6 +502,7 @@ func getGrpcOpts(cfgTransport *security.TransportConfig) ([]grpc.ServerOption, e
 	unaryInterceptors := []grpc.UnaryServerInterceptor{
 		unaryErrorInterceptor,
 		unaryStatusInterceptor,
+		unaryVersionInterceptor,
 	}
 	streamInterceptors := []grpc.StreamServerInterceptor{
 		streamErrorInterceptor,

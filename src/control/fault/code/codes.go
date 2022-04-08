@@ -74,6 +74,9 @@ const (
 	ScmDiscoveryFailed
 	ScmDuplicatesInDeviceList
 	ScmNoDevicesMatchFilter
+	ScmNotInterleaved
+	ScmNoModules
+	ScmNamespacesNrMismatch
 )
 
 // Bdev fault codes
@@ -126,6 +129,7 @@ const (
 	ServerConfigInvalidNetDevClass
 	ServerVfioDisabled
 	ServerPoolNoLabel
+	ServerIncompatibleComponents
 )
 
 // server config fault codes

@@ -199,6 +199,40 @@ func PoolProperties() PoolPropertyMap {
 				},
 			},
 		},
+		"global_version": {
+			Property: PoolProperty{
+				Number:      drpc.PoolPropertyGlobalVersion,
+				Description: "Global Version",
+				valueHandler: func(s string) (*PoolPropertyValue, error) {
+					gvErr := errors.Errorf("invalid global version %q", s)
+					gvvl, err := strconv.ParseUint(s, 10, 32)
+					if err != nil {
+						return nil, gvErr
+					}
+					return &PoolPropertyValue{gvvl}, nil
+				},
+				valueStringer: func(v *PoolPropertyValue) string {
+					n, err := v.GetNumber()
+					if err != nil {
+						return "not set"
+					}
+					return fmt.Sprintf("%d", n)
+				},
+				jsonNumeric: true,
+			},
+		},
+		"upgrade_status": {
+			Property: PoolProperty{
+				Number:      drpc.PoolPropertyUpgradeStatus,
+				Description: "Upgrade Status",
+			},
+			values: map[string]uint64{
+				"not started": drpc.PoolUpgradeStatusNotStarted,
+				"in progress": drpc.PoolUpgradeStatusInProgress,
+				"completed":   drpc.PoolUpgradeStatusCompleted,
+				"failed":      drpc.PoolUpgradeStatusFailed,
+			},
+		},
 	}
 }
 

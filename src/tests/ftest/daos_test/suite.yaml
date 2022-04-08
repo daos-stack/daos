@@ -26,7 +26,7 @@ timeouts:
     test_daos_capability: 104
     test_daos_epoch_recovery: 104
     test_daos_md_replication: 104
-    test_daos_rebuild_simple: 900
+    test_daos_rebuild_simple: 1500
     test_daos_drain_simple: 500
     test_daos_extend_simple: 500
     test_daos_oid_allocator: 640
