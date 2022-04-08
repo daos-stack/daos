@@ -36,8 +36,9 @@ class DmvrPosixLargeFile(DataMoverTestBase):
         self.set_tool(tool)
 
         # Get the number of ior processes
-        self.ior_processes = self.params.get(self.tool.lower(), "/run/ior/client_processes/*")
-        if not self.ior_processes:
+        self.ior_np = self.params.get(self.tool.lower(), "/run/ior/client_processes/*")
+        self.ior_ppn = self.params.get(self.tool.lower(), "/run/ior/client_ppn/*")
+        if self.ior_np is None and self.ior_ppn is None:
             self.fail("Failed to get ior processes for {}".format(self.tool))
 
         # create pool and cont
@@ -56,7 +57,7 @@ class DmvrPosixLargeFile(DataMoverTestBase):
             "DAOS", "/", pool, cont1,
             "DAOS", "/", pool, cont2)
 
-        posix_path = self.new_posix_test_path(parent=self.workdir)
+        posix_path = self.new_posix_test_path()
 
         # copy from daos cont2 to posix file system
         self.run_datamover(
@@ -87,7 +88,7 @@ class DmvrPosixLargeFile(DataMoverTestBase):
             Copy a very large file between daos POSIX containers and
             an external POSIX file system using dcp.
         :avocado: tags=all,full_regression
-        :avocado: tags=hw,large
+        :avocado: tags=hw,medium,ib2
         :avocado: tags=datamover,mfu,mfu_dcp,dfs,ior
         :avocado: tags=dm_large_file,dm_large_file_dcp
         """
@@ -99,7 +100,7 @@ class DmvrPosixLargeFile(DataMoverTestBase):
             Copy a very large file between daos POSIX containers and
             an external POSIX file system using daos filesystem copy.
         :avocado: tags=all,full_regression
-        :avocado: tags=hw,large
+        :avocado: tags=hw,medium,ib2
         :avocado: tags=datamover,daos_fs_copy,dfs,ior
         :avocado: tags=dm_large_file,dm_large_file_fs_copy
         """

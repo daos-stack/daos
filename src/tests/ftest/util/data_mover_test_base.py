@@ -20,6 +20,7 @@ import uuid
 import re
 import ctypes
 from general_utils import create_string_buffer
+from command_utils_base import KeywordParameter
 
 
 class DataMoverTestBase(IorTestBase, MdtestBase):
@@ -28,7 +29,9 @@ class DataMoverTestBase(IorTestBase, MdtestBase):
 
     Optional yaml config values:
         datamover/posix_root (str): path to POSIX filesystem.
-        datamover/tool (list): list of env vars to set for IOR/MDTest.
+        datamover/tool (list): default datamover tool to use.
+        datamover/np (int): default processes for all tools.
+        datamover/ppn (int): default processes-per-client for all tools.
 
     Sample Use Case:
         # Create test file
@@ -40,8 +43,8 @@ class DataMoverTestBase(IorTestBase, MdtestBase):
         # Copy from DAOS to POSIX
         run_datamover(
             "some test description",
-            "DAOS", "/testFile", pool1, cont1,
-            "POSIX", "/some/posix/path/testFile")
+            src_path="daos://pool1/cont1/testFile",
+            dst_path="/some/posix/path/testFile")
 
         # Verify destination file
         run_ior_with_params("POSIX", "/some/posix/path/testFile", flags="-r -R")
@@ -73,19 +76,31 @@ class DataMoverTestBase(IorTestBase, MdtestBase):
         self.ddeserialize_cmd = None
         self.fs_copy_cmd = None
         self.cont_clone_cmd = None
-        self.ior_processes = None
-        self.mdtest_processes = None
-        self.dcp_processes = None
-        self.dsync_processes = None
-        self.dserialize_processes = None
-        self.ddeserialize_processes = None
         self.pool = []
         self.container = []
         self.uuids = []
         self.dfuse_hosts = None
         self.num_run_datamover = 0  # Number of times run_datamover was called
         self.job_manager = None
-        self.posix_root = None
+
+        # Override processes and np from IorTestBase and MdtestBase to use "datamover" namespace.
+        # Define processes and np for each datamover tool, which defaults to the "datamover" one.
+        self.processes = None
+        self.ppn = None
+        self.ior_np = None
+        self.ior_ppn = None
+        self.mdtest_np = None
+        self.mdtest_ppn = None
+        self.dcp_np = None
+        self.dsync_np = None
+        self.dserialize_np = None
+        self.ddeserialize_np = None
+
+        # Root directory for POSIX paths
+        self.posix_root = KeywordParameter(None, mapping={
+            'self.workdir': self.workdir,
+            'self.tmp': self.tmp
+        })
 
         # Temp directory for serialize/deserialize
         self.serial_tmp_dir = self.tmp
@@ -114,23 +129,23 @@ class DataMoverTestBase(IorTestBase, MdtestBase):
         # initialize daos_cmd
         self.daos_cmd = self.get_daos_command()
 
-        # Get the processes for each explicitly
-        # This is needed because both IorTestBase and MdtestBase
-        # define self.processes
-        self.ior_processes = self.params.get(
-            "np", '/run/ior/client_processes/*')
-        self.mdtest_processes = self.params.get(
-            "np", '/run/mdtest/client_processes/*')
-        self.dcp_processes = self.params.get(
-            "np", "/run/dcp/client_processes/*", 1)
-        self.dsync_processes = self.params.get(
-            "np", "/run/dsync/client_processes/*", 1)
-        self.dserialize_processes = self.params.get(
-            "np", "/run/dserialize/client_processes/*", 1)
-        self.ddeserialize_processes = self.params.get(
-            "np", "/run/ddeserialize/client_processes/*", 1)
+        # Get the processes and np for all datamover tools, as well as for individual tools.
+        self.processes = self.params.get("np", '/run/datamover/*', 1)
+        self.ppn = self.params.get("ppn", '/run/datamover/*', 1)
+        self.ior_np = self.params.get("np", '/run/ior/client_processes/*', 1)
+        self.ior_ppn = self.params.get("ppn", '/run/ior/client_processes/*', None)
+        self.mdtest_np = self.params.get("np", '/run/mdtest/client_processes/*', 1)
+        self.mdtest_ppn = self.params.get("ppn", '/run/mdtest/client_processes/*', None)
+        self.dcp_np = self.params.get("np", "/run/dcp/*", self.processes)
+        self.dcp_ppn = self.params.get("ppn", "/run/dcp/*", self.ppn)
+        self.dsync_np = self.params.get("np", "/run/dsync/*", self.processes)
+        self.dsync_ppn = self.params.get("ppn", "/run/dsync/*", self.ppn)
+        self.dserialize_np = self.params.get("np", "/run/dserialize/*", self.processes)
+        self.dserialize_ppn = self.params.get("ppn", "/run/dserialize/*", self.ppn)
+        self.ddeserialize_np = self.params.get("np", "/run/ddeserialize/*", self.processes)
+        self.ddeserialize_ppn = self.params.get("ppn", "/run/ddeserialize/*", self.ppn)
 
-        self.posix_root = self.params.get("posix_root", "/run/datamover/*", self.tmp)
+        self.posix_root.update(self.params.get("posix_root", "/run/datamover/*", self.tmp))
 
         tool = self.params.get("tool", "/run/datamover/*")
         if tool:
@@ -254,9 +269,7 @@ class DataMoverTestBase(IorTestBase, MdtestBase):
         method = self.get_test_info()["method"]
         dir_name = "{}{}".format(method, len(self.posix_local_test_paths))
 
-        if parent is None:
-            parent = self.posix_root
-        path = join(parent, dir_name)
+        path = join(parent or self.posix_root.value, dir_name)
 
         # Add to the list of posix paths
         if shared:
@@ -864,10 +877,11 @@ class DataMoverTestBase(IorTestBase, MdtestBase):
                 Defaults to False.
 
         """
+        self.ppn = self.ior_ppn
+        self.processes = self.ior_np
         self.set_ior_params(param_type, path, pool, cont, path_suffix, flags, display)
-        self.run_ior(self.get_ior_job_manager_command(), self.ior_processes,
-                     display_space=(display_space and bool(pool)),
-                     pool=pool)
+        self.run_ior(self.get_ior_job_manager_command(), self.processes, pool=pool,
+                     display_space=(display_space and bool(pool)))
 
     def set_mdtest_params(self, param_type, path, pool=None, cont=None, flags=None, display=True):
         """Set the mdtest params.
@@ -923,9 +937,10 @@ class DataMoverTestBase(IorTestBase, MdtestBase):
             display (bool, optional): print updated params. Defaults to True.
 
         """
+        self.ppn = self.mdtest_ppn
+        self.processes = self.mdtest_np
         self.set_mdtest_params(param_type, path, pool, cont, flags, display)
-        self.run_mdtest(self.get_mdtest_job_manager_command(self.manager),
-                        self.mdtest_processes,
+        self.run_mdtest(self.get_mdtest_job_manager_command(self.manager), self.processes,
                         display_space=(bool(pool)), pool=pool)
 
     def run_diff(self, src, dst, deref=False):
@@ -968,7 +983,7 @@ class DataMoverTestBase(IorTestBase, MdtestBase):
             expected_output (list, optional): substrings expected in stdout
             expected_err (list, optional): substrings expected in stderr
             processes (int, optional): number of mpi processes.
-                defaults to self.dcp_processes
+                Defaults to np for corresponding tool.
 
         Returns:
             The result "run" object
@@ -1001,27 +1016,33 @@ class DataMoverTestBase(IorTestBase, MdtestBase):
         if test_desc is not None:
             self.log.info("Running %s: %s", self.tool, test_desc)
 
+        ppn = None
         try:
             if self.tool == "DCP":
                 if not processes:
-                    processes = self.dcp_processes
+                    processes = self.dcp_np
+                    ppn = self.dcp_ppn
                 # If we expect an rc other than 0, don't fail
                 self.dcp_cmd.exit_status_exception = (expected_rc == 0)
-                result = self.dcp_cmd.run(processes, self.job_manager)
+                result = self.dcp_cmd.run(processes, self.job_manager, ppn)
             elif self.tool == "DSYNC":
                 if not processes:
-                    processes = self.dsync_processes
+                    processes = self.dsync_np
+                    ppn = self.dsync_ppn
                 # If we expect an rc other than 0, don't fail
                 self.dsync_cmd.exit_status_exception = (expected_rc == 0)
-                result = self.dsync_cmd.run(processes, self.job_manager)
+                result = self.dsync_cmd.run(processes, self.job_manager, ppn)
             elif self.tool == "DSERIAL":
                 if processes:
                     processes1 = processes2 = processes
+                    ppn1 = ppn2 = None
                 else:
-                    processes1 = self.dserialize_processes
-                    processes2 = self.ddeserialize_processes
-                result = self.dserialize_cmd.run(processes1, self.job_manager)
-                result = self.ddeserialize_cmd.run(processes2, self.job_manager)
+                    processes1 = self.dserialize_np
+                    ppn1 = self.dserialize_ppn
+                    processes2 = self.ddeserialize_np
+                    ppn2 = self.ddeserialize_ppn
+                result = self.dserialize_cmd.run(processes1, self.job_manager, ppn1)
+                result = self.ddeserialize_cmd.run(processes2, self.job_manager, ppn2)
             elif self.tool == "FS_COPY":
                 result = self.fs_copy_cmd.run()
             elif self.tool == "CONT_CLONE":

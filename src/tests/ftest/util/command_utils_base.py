@@ -46,6 +46,15 @@ class BasicParameter():
         """
         return str(self.value) if self.value is not None else ""
 
+    def __repr__(self):
+        """Convert this BasicParameter into a string representation.
+
+        Returns:
+            str: raw string representation of the parameter's value
+
+        """
+        return str(self._value) if self._value is not None else ""
+
     @property
     def value(self):
         """Get the value of this setting.
@@ -243,6 +252,39 @@ class LogParameter(FormattedParameter):
         super().update(value, name, append)
         self._add_directory()
         self.log.debug("  Added the directory: %s => %s", name, self.value)
+
+
+class KeywordParameter(BasicParameter):
+    """A class for parameters whose values are read from a yaml file."""
+
+    def __init__(self, value, default=None, yaml_key=None, mapping=None):
+        """Create a KeywordParameter object.
+
+        In addition to BasicParameter usage, a mapping can be supplied to replace
+        values from the yaml. This is useful, for example, when the value is a python reference.
+
+        Args:
+            value (object): initial value for the parameter
+            default (object, optional): default value. Defaults to None.
+            yaml_key (str, optional): the yaml key name to use when finding the
+                value to assign from the test yaml file. Default is None which
+                will use the object's variable name as the yaml key.
+            mapping (dict, optional): dict of values to replace. Default is None,
+                which replaces nothing.
+        """
+        super().__init__(value, default, yaml_key)
+        self._mapping = mapping or {}
+
+    @BasicParameter.value.getter
+    def value(self):
+        # pylint: disable=invalid-overridden-method
+        """Get the value of this parameter.
+
+        Returns:
+            object: mapped value currently assigned to the parameter
+
+        """
+        return self._mapping.get(self._value, super().value)
 
 
 class ObjectWithParameters():

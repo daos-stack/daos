@@ -37,9 +37,9 @@ class DmvrLargeDir(DataMoverTestBase):
         self.set_tool(tool)
 
         # Get the number of mdtest processes
-        self.mdtest_processes = self.params.get(
-            self.tool.lower(), "/run/mdtest/client_processes/*")
-        if not self.mdtest_processes:
+        self.mdtest_np = self.params.get(self.tool.lower(), "/run/mdtest/client_processes/*")
+        self.mdtest_ppn = self.params.get(self.tool.lower(), "/run/mdtest/client_ppn/*")
+        if self.mdtest_np is None and self.mdtest_ppn is None:
             self.fail("Failed to get mdtest processes for {}".format(tool))
 
         # test params
@@ -65,7 +65,7 @@ class DmvrLargeDir(DataMoverTestBase):
             "DAOS", "/", pool, cont1,
             "DAOS", "/", pool, cont2)
 
-        posix_path = self.new_posix_test_path(parent=self.workdir)
+        posix_path = self.new_posix_test_path()
 
         # copy from daos cont2 to posix file system
         self.run_datamover(
@@ -97,7 +97,7 @@ class DmvrLargeDir(DataMoverTestBase):
             Copy a very large directory between daos POSIX containers and
             an external POSIX file system using dcp.
         :avocado: tags=all,full_regression
-        :avocado: tags=hw,large
+        :avocado: tags=hw,medium,ib2
         :avocado: tags=datamover,mfu,mfu_dcp,dfs,mdtest
         :avocado: tags=dm_large_dir,dm_large_dir_dcp
         """
