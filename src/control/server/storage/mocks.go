@@ -226,7 +226,7 @@ func MockScmNamespace(varIdx ...int32) *ScmNamespace {
 func MockProvider(log logging.Logger, idx int, engineStorage *Config, sys SystemProvider, scm ScmProvider, bdev BdevProvider) *Provider {
 	p := DefaultProvider(log, idx, engineStorage)
 	p.Sys = sys
-	p.Scm = scm
+	p.scm = scm
 	p.bdev = bdev
 	return p
 }

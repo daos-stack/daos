@@ -25,6 +25,11 @@
 #include <daos_srv/policy.h>
 
 /*
+ * Aggregation of pool/container/object/keys disk format change.
+ */
+#define DS_POOL_GLOBAL_VERSION		1
+
+/*
  * Pool object
  *
  * Caches per-pool information, such as the pool map.
@@ -92,6 +97,7 @@ struct ds_pool_hdl {
 	uuid_t			sph_uuid;	/* of the pool handle */
 	uint64_t		sph_flags;	/* user-provided flags */
 	uint64_t		sph_sec_capas;	/* access capabilities */
+	uint32_t		sph_global_ver; /* pool global version */
 	struct ds_pool	       *sph_pool;
 	int			sph_ref;
 	d_iov_t			sph_cred;
@@ -149,7 +155,6 @@ int ds_pool_bcast_create(crt_context_t ctx, struct ds_pool *pool,
 			 d_rank_list_t *excluded_list);
 
 int ds_pool_map_buf_get(uuid_t uuid, d_iov_t *iov, uint32_t *map_ver);
-int ds_pool_get_open_handles(uuid_t pool_uuid, d_iov_t *hdls);
 
 int ds_pool_tgt_exclude_out(uuid_t pool_uuid, struct pool_target_id_list *list);
 int ds_pool_tgt_exclude(uuid_t pool_uuid, struct pool_target_id_list *list);
@@ -186,6 +191,7 @@ int ds_pool_svc_query(uuid_t pool_uuid, d_rank_list_t *ps_ranks, d_rank_list_t *
 
 int ds_pool_prop_fetch(struct ds_pool *pool, unsigned int bit,
 		       daos_prop_t **prop_out);
+int ds_pool_svc_upgrade(uuid_t pool_uuid, d_rank_list_t *ranks);
 /*
  * Called by dmg on the pool service leader to list all pool handles of a pool.
  * Upon successful completion, "buf" returns an array of handle UUIDs if its
@@ -237,7 +243,6 @@ map_ranks_fini(d_rank_list_t *ranks);
 
 int ds_pool_get_ranks(const uuid_t pool_uuid, int status,
 		      d_rank_list_t *ranks);
-
 int ds_pool_get_failed_tgt_idx(const uuid_t pool_uuid, int **failed_tgts,
 			       unsigned int *failed_tgts_cnt);
 int ds_pool_svc_list_cont(uuid_t uuid, d_rank_list_t *ranks,

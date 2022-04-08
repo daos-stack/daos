@@ -74,6 +74,15 @@ get_dpe_val_ptr(struct daos_prop_entry *dpe)
 	return dpe->dpe_val_ptr;
 }
 
+static inline bool
+dpe_is_negative(struct daos_prop_entry *dpe)
+{
+	if (dpe == NULL)
+		return 0;
+
+	return dpe->dpe_flags & DAOS_PROP_ENTRY_NOT_SET;
+}
+
 static inline void
 set_dpe_str(struct daos_prop_entry *dpe, d_string_t str)
 {
