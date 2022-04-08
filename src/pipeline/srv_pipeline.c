@@ -17,6 +17,16 @@
 #include "pipeline_rpc.h"
 #include "pipeline_internal.h"
 
+#define PIPELINE_ITERATION_MAX	1024
+
+/**
+ * Used keep track of the credit system for yielding.
+ */
+struct enum_credits {
+	uint32_t used;
+	uint32_t max;
+};
+
 static int
 enum_pack_cb(daos_handle_t ih, vos_iter_entry_t *entry, vos_iter_type_t type,
 	     vos_iter_param_t *param, void *cb_arg, unsigned int *acts)
@@ -40,13 +50,13 @@ pipeline_fetch_record(daos_handle_t vos_coh, daos_unit_oid_t oid, struct vos_ite
 		      daos_epoch_range_t epr, daos_iod_t *iods, uint32_t nr_iods, d_iov_t *d_key,
 		      d_sg_list_t *sgl_recx)
 {
-	int              rc    = 0;
-	int              rc1   = 0;
-	int              type  = VOS_ITER_DKEY;
-	vos_iter_param_t param = {0};
-	daos_handle_t    ioh   = DAOS_HDL_INVAL;
-	struct bio_desc *biod;
-	size_t           io_size;
+	int			rc    = 0;
+	int			rc1   = 0;
+	int			type  = VOS_ITER_DKEY;
+	vos_iter_param_t	param = {0};
+	daos_handle_t		ioh   = DAOS_HDL_INVAL;
+	struct bio_desc		*biod;
+	size_t			io_size;
 
 	param.ip_hdl        = vos_coh;
 	param.ip_oid        = oid;
@@ -57,8 +67,8 @@ pipeline_fetch_record(daos_handle_t vos_coh, daos_unit_oid_t oid, struct vos_ite
 
 	/* TODO: Set enum_arg.csummer !  Figure out how checksum works */
 
-	d_key->iov_len      = 0;
 	/** iterating over dkeys only */
+	d_key->iov_len      = 0;
 	rc = vos_iterate(&param, type, false, anchors, enum_pack_cb, NULL, d_key, NULL);
 	D_DEBUG(DB_IO, "enum type %d rc " DF_RC "\n", type, DP_RC(rc));
 	if (rc < 0)
@@ -160,21 +170,22 @@ ds_pipeline_run(daos_handle_t vos_coh, daos_unit_oid_t oid, daos_pipeline_t pipe
 	uint32_t                   nr_kds_pass;
 	d_iov_t                    d_key_iter;
 	daos_key_desc_t           *kds_;
-	uint32_t                   kds_alloc      = 0;
-	d_sg_list_t               *sgl_keys_      = NULL;
-	uint32_t                   sgl_keys_alloc = 0;
-	d_sg_list_t               *sgl_recx_      = NULL;
-	uint32_t                   sgl_recx_alloc = 0;
-	d_iov_t		   *d_key_ptr;
+	uint32_t                   kds_alloc          = 0;
+	d_sg_list_t               *sgl_keys_          = NULL;
+	uint32_t                   sgl_keys_alloc     = 0;
+	d_sg_list_t               *sgl_recx_          = NULL;
+	uint32_t                   sgl_recx_alloc     = 0;
+	d_iov_t                   *d_key_ptr;
 	d_sg_list_t               *sgl_recx_iter      = NULL;
-	d_iov_t		   *sgl_recx_iter_iovs = NULL;
+	d_iov_t                   *sgl_recx_iter_iovs = NULL;
 	size_t                     iov_alloc_size;
 	uint32_t                   i, k;
-	uint32_t                   j                 = 0;
-	uint32_t                   sr_idx            = 0;
-	struct vos_iter_anchors    anchors           = {0};
-	struct pipeline_compiled_t pipeline_compiled = {0};
-	struct filter_part_run_t   pipe_run_args     = {0};
+	uint32_t                   j                  = 0;
+	struct enum_credits        credits            = {0};
+	uint32_t                   sr_idx             = 0;
+	struct vos_iter_anchors    anchors            = {0};
+	struct pipeline_compiled_t pipeline_compiled  = {0};
+	struct filter_part_run_t   pipe_run_args      = {0};
 
 	*nr_kds_out = 0;
 	*nr_recx    = 0;
@@ -240,6 +251,7 @@ ds_pipeline_run(daos_handle_t vos_coh, daos_unit_oid_t oid, daos_pipeline_t pipe
 
 	nr_kds_pass     = 0;
 	anchors.ia_dkey = *anchor;
+	credits.max     = PIPELINE_ITERATION_MAX;
 
 	while (!daos_anchor_is_eof(&anchors.ia_dkey)) {
 		if (pipeline.num_aggr_filters == 0 && nr_kds_pass == nr_kds)
@@ -255,6 +267,13 @@ ds_pipeline_run(daos_handle_t vos_coh, daos_unit_oid_t oid, daos_pipeline_t pipe
 			continue; /** nothing returned; no more records? */
 
 		stats->nr_dkeys += 1; /** new record considered for filtering */
+
+		credits.used++;
+		if (credits.used > credits.max) {
+			/** we have used all the credit. Yielding... */
+			credits.used = 0;
+			dss_sleep(0); /** 0 msec will not sleep, just yield */
+		}
 
 		/** -- doing filtering... */
 
