@@ -1,19 +1,52 @@
 project_id                 = "<project_id>"
 region                     = "us-central1"
 zone                       = "us-central1-f"
-network                    = "default"
-subnetwork_project         = "<project_id>"
-subnetwork                 = "default"
-client_number_of_instances = 16
+
+# network_name               = "default"
+# subnetwork_project         = "<project_id>"
+# subnetwork_name            = "default"
+
+# client_number_of_instances = 4
 client_labels              = {
   example = "only_daos_client"
 }
-client_preemptible         = "false"
-client_mig_name            = "daos-client"
-client_template_name       = "daos-client"
-client_instance_base_name  = "daos-client"
-client_machine_type        = "c2-standard-16"
-client_os_family           = "daos-client-hpc-centos-7"
-client_os_project          = "<project_id>"
-client_os_disk_type        = "pd-ssd"
-client_os_disk_size_gb     = 20
+
+# client_preemptible         = "false"
+# client_mig_name            = "daos-client"
+# client_template_name       = "daos-client"
+# client_instance_base_name  = "daos-client"
+# client_machine_type        = "c2-standard-16"
+# client_os_family           = "daos-client-hpc-centos-7"
+# client_os_project          = "<project_id>"
+# client_os_disk_type        = "pd-ssd"
+# client_os_disk_size_gb     = 20
+
+
+#
+# DAOS client yaml files
+#
+
+client_daos_agent_yml = <<EOT
+#
+# DAOS agent configuration file
+#
+
+# Management server access points
+access_points: ["daos-server-0001", "daos-server-0002", "daos-server-0003"]
+
+transport_config:
+  allow_insecure: true
+
+EOT
+
+client_daos_control_yml = <<EOT
+#
+# DAOS manager (dmg) configuration file
+#
+
+# hostlist must contain the list of all DAOS servers
+hostlist: ["daos-server-[0001-0004]"]
+transport_config:
+  allow_insecure: true
+
+EOT

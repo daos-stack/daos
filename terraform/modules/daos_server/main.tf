@@ -15,27 +15,30 @@
  */
 
 locals {
-  max_aps = var.number_of_instances > 5 ? 5 : (var.number_of_instances % 2) == 1 ? var.number_of_instances : var.number_of_instances - 1
-  access_points = formatlist("%s-%04s", var.instance_base_name, range(1, local.max_aps+1))
-  scm_size = var.daos_scm_size
+  os_project         = var.os_project != null ? var.os_project : var.project_id
+  subnetwork_project = var.subnetwork_project != null ? var.subnetwork_project : var.project_id
+  servers            = format("%s-[%04s-%04s]", var.instance_base_name, 1, var.number_of_instances)
+  max_aps            = var.number_of_instances > 5 ? 5 : (var.number_of_instances % 2) == 1 ? var.number_of_instances : var.number_of_instances - 1
+  access_points      = formatlist("%s-%04s", var.instance_base_name, range(1, local.max_aps + 1))
+  scm_size           = var.daos_scm_size
   # To get nr_hugepages value: (targets * 1Gib) / hugepagesize
-  huge_pages = (var.daos_disk_count * 1048576) / 2048
-  targets = var.daos_disk_count
+  huge_pages  = (var.daos_disk_count * 1048576) / 2048
+  targets     = var.daos_disk_count
   crt_timeout = var.daos_crt_timeout
   daos_server_yaml_content = templatefile(
     "${path.module}/templates/daos_server.yml.tftpl",
     {
       access_points = local.access_points
-      nr_hugepages = local.huge_pages
-      targets    = local.targets
-      scm_size   = local.scm_size
-      crt_timeout = local.crt_timeout
+      nr_hugepages  = local.huge_pages
+      targets       = local.targets
+      scm_size      = local.scm_size
+      crt_timeout   = local.crt_timeout
     }
   )
   daos_control_yaml_content = templatefile(
     "${path.module}/templates/daos_control.yml.tftpl",
     {
-      access_points = local.access_points
+      servers = [local.servers]
     }
   )
   daos_agent_yaml_content = templatefile(
@@ -45,12 +48,20 @@ locals {
     }
   )
   server_startup_script = file(
-    "${path.module}/templates/daos_startup_script.tftpl")
+  "${path.module}/templates/daos_startup_script.tftpl")
+
+  configure_daos_content = templatefile(
+    "${path.module}/templates/configure_daos.tftpl",
+    {
+      servers = local.servers
+      pools   = var.pools
+    }
+  )
 }
 
 data "google_compute_image" "os_image" {
   family  = var.os_family
-  project = var.os_project
+  project = local.os_project
 }
 
 resource "google_compute_instance_template" "daos_sig_template" {
@@ -82,13 +93,17 @@ resource "google_compute_instance_template" "daos_sig_template" {
   }
 
   network_interface {
-    network            = var.network
-    subnetwork         = var.subnetwork
-    subnetwork_project = var.subnetwork_project
+    network            = var.network_name
+    subnetwork         = var.subnetwork_name
+    subnetwork_project = local.subnetwork_project
   }
 
-  service_account {
-    scopes = var.daos_service_account_scopes
+  dynamic "service_account" {
+    for_each = var.service_account == null ? [] : [var.service_account]
+    content {
+      email  = lookup(service_account.value, "email", null)
+      scopes = lookup(service_account.value, "scopes", null)
+    }
   }
 
   scheduling {

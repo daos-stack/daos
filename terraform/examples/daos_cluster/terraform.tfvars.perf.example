@@ -1,39 +1,47 @@
-project_id         = "<project_id>"
-region             = "us-central1"
-zone               = "us-central1-f"
-network            = "default"
-subnetwork_project = "<project_id>"
-subnetwork         = "default"
+project_id                 = "<project_id>"
+region                     = "us-central1"
+zone                       = "us-central1-f"
 
-# Server
-server_number_of_instances = 4
-server_labels              = {
-  example = "daos_cluster"
-}
-server_preemptible         = "false"
-server_mig_name            = "daos-server"
-server_template_name       = "daos-server"
-server_instance_base_name  = "daos-server"
 server_machine_type        = "n2-standard-16"
-server_os_family           = "daos-server-centos-7"
-server_os_project          = "<project_id>"
-server_os_disk_type        = "pd-ssd"
 server_os_disk_size_gb     = 20
 server_daos_disk_count     = 4
 server_daos_crt_timeout    = 300
 server_daos_scm_size       = 45
 
-# Client
-client_number_of_instances = 16
-client_labels              = {
-  example = "daos_cluster"
-}
-client_preemptible         = "false"
-client_mig_name            = "daos-client"
-client_template_name       = "daos-client"
-client_instance_base_name  = "daos-client"
-client_machine_type        = "c2-standard-16"
-client_os_family           = "daos-client-hpc-centos-7"
-client_os_project          = "<project_id>"
-client_os_disk_type        = "pd-ssd"
-client_os_disk_size_gb     = 20
+# network_name               = "default"
+# subnetwork_name            = "default"
+# subnetwork_project         = "<project_id>"
+# server_number_of_instances = 4
+# server_labels              = {
+#   example = "only_daos_server"
+# }
+# server_preemptible         = "false"
+# server_mig_name            = "daos-server"
+# server_template_name       = "daos-server"
+# server_instance_base_name  = "daos-server"
+
+# server_os_family           = "daos-server-centos-7"
+# server_os_project          = "<project_id>"
+# server_os_disk_type        = "pd-ssd"
+
+# pools = [
+#  {
+#    pool_name = "test_pool"
+#    pool_size = "1TB"
+#    containers = [ "test_container1", "test_container2" ]
+#  }
+# ]
+
+# client_number_of_instances = 16
+# client_labels              = {
+#  example = "only_daos_client"
+# }
+# client_preemptible         = "false"
+# client_mig_name            = "daos-client"
+# client_template_name       = "daos-client"
+# client_instance_base_name  = "daos-client"
+# client_machine_type        = "c2-standard-16"
+# client_os_family           = "daos-client-hpc-centos-7"
+# client_os_project          = "<project_id>"
+# client_os_disk_type        = "pd-ssd"
+# client_os_disk_size_gb     = 20

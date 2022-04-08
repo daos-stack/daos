@@ -15,25 +15,15 @@
  */
 
 locals {
-  daos_agent_yaml_content = templatefile(
-    "${path.module}/templates/daos_agent.yml.tftpl",
-    {
-      access_points = var.access_points
-    }
-  )
- daos_control_yaml_content = templatefile(
-    "${path.module}/templates/daos_control.yml.tftpl",
-    {
-      access_points = var.access_points
-    }
-  )
+  os_project         = var.os_project != null ? var.os_project : var.project_id
+  subnetwork_project = var.subnetwork_project != null ? var.subnetwork_project : var.project_id
   client_startup_script = file(
-    "${path.module}/templates/daos_startup_script.tftpl")
+  "${path.module}/templates/daos_startup_script.tftpl")
 }
 
 data "google_compute_image" "os_image" {
   family  = var.os_family
-  project = var.os_project
+  project = local.os_project
 }
 
 resource "google_compute_instance_template" "daos_sig_template" {
@@ -54,13 +44,17 @@ resource "google_compute_instance_template" "daos_sig_template" {
   }
 
   network_interface {
-    network            = var.network
-    subnetwork         = var.subnetwork
-    subnetwork_project = var.subnetwork_project
+    network            = var.network_name
+    subnetwork         = var.subnetwork_name
+    subnetwork_project = local.subnetwork_project
   }
 
-  service_account {
-    scopes = var.daos_service_account_scopes
+  dynamic "service_account" {
+    for_each = var.service_account == null ? [] : [var.service_account]
+    content {
+      email  = lookup(service_account.value, "email", null)
+      scopes = lookup(service_account.value, "scopes", null)
+    }
   }
 
   scheduling {
@@ -93,8 +87,8 @@ resource "google_compute_per_instance_config" "named_instances" {
     metadata = {
       inst_type                 = "daos-client"
       enable-oslogin            = "true"
-      daos_control_yaml_content = local.daos_control_yaml_content
-      daos_agent_yaml_content   = local.daos_agent_yaml_content
+      daos_control_yaml_content = var.daos_control_yml
+      daos_agent_yaml_content   = var.daos_agent_yml
       startup-script            = local.client_startup_script
       # Adding a reference to the instance template used causes the stateful instance to update
       # if the instance template changes. Otherwise there is no explicit dependency and template

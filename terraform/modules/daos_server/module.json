@@ -3,10 +3,17 @@
   "footer": "",
   "inputs": [
     {
+      "name": "daos_crt_timeout",
+      "type": "number",
+      "description": "crt_timeout",
+      "default": 300,
+      "required": false
+    },
+    {
       "name": "daos_disk_count",
       "type": "number",
       "description": "Number of local ssd's to use",
-      "default": null,
+      "default": 16,
       "required": false
     },
     {
@@ -17,21 +24,17 @@
       "required": false
     },
     {
-      "name": "daos_service_account_scopes",
-      "type": "list(string)",
-      "description": "Scopes for the DAOS server service account",
-      "default": [
-        "userinfo-email",
-        "compute-ro",
-        "storage-ro"
-      ],
+      "name": "daos_scm_size",
+      "type": "number",
+      "description": "scm_size",
+      "default": 200,
       "required": false
     },
     {
       "name": "instance_base_name",
       "type": "string",
       "description": "MIG instance base names to use",
-      "default": null,
+      "default": "daos-server",
       "required": false
     },
     {
@@ -45,28 +48,28 @@
       "name": "machine_type",
       "type": "string",
       "description": "GCP machine type. ie. e2-medium",
-      "default": null,
+      "default": "n2-custom-36-215040",
       "required": false
     },
     {
       "name": "mig_name",
       "type": "string",
       "description": "MIG name ",
-      "default": null,
+      "default": "daos-server",
       "required": false
     },
     {
-      "name": "network",
+      "name": "network_name",
       "type": "string",
-      "description": "GCP network to use",
-      "default": null,
+      "description": "Name of the GCP network to use",
+      "default": "default",
       "required": false
     },
     {
       "name": "number_of_instances",
       "type": "number",
       "description": "Number of daos servers to bring up",
-      "default": null,
+      "default": 4,
       "required": false
     },
     {
@@ -87,14 +90,21 @@
       "name": "os_family",
       "type": "string",
       "description": "OS GCP image family",
-      "default": null,
+      "default": "daos-server-centos-7",
       "required": false
     },
     {
       "name": "os_project",
       "type": "string",
-      "description": "OS GCP image project name",
+      "description": "OS GCP image project name. Defaults to project_id if null.",
       "default": null,
+      "required": false
+    },
+    {
+      "name": "pools",
+      "type": "list(object({\n    pool_name  = string\n    pool_size  = string\n    containers = list(string)\n    })\n  )",
+      "description": "If provided, this module will generate a script to create a list of pools. pool attributes have to be specified in a format acceptable by [dmg](https://docs.daos.io/v2.0/admin/pool_operations/) and daos.",
+      "default": [],
       "required": false
     },
     {
@@ -109,20 +119,37 @@
       "type": "string",
       "description": "The GCP project to use ",
       "default": null,
-      "required": false
+      "required": true
     },
     {
       "name": "region",
       "type": "string",
       "description": "The GCP region to create and test resources in",
       "default": null,
+      "required": true
+    },
+    {
+      "name": "service_account",
+      "type": "object({\n    email  = string,\n    scopes = set(string)\n  })",
+      "description": "Service account to attach to the instance. See https://www.terraform.io/docs/providers/google/r/compute_instance_template.html#service_account.",
+      "default": {
+        "email": null,
+        "scopes": [
+          "https://www.googleapis.com/auth/devstorage.read_only",
+          "https://www.googleapis.com/auth/logging.write",
+          "https://www.googleapis.com/auth/monitoring.write",
+          "https://www.googleapis.com/auth/servicecontrol",
+          "https://www.googleapis.com/auth/service.management.readonly",
+          "https://www.googleapis.com/auth/trace.append"
+        ]
+      },
       "required": false
     },
     {
-      "name": "subnetwork",
+      "name": "subnetwork_name",
       "type": "string",
-      "description": "GCP sub-network to use",
-      "default": null,
+      "description": "Name of the GCP sub-network to use",
+      "default": "default",
       "required": false
     },
     {
@@ -136,7 +163,7 @@
       "name": "template_name",
       "type": "string",
       "description": "MIG template name",
-      "default": null,
+      "default": "daos-server",
       "required": false
     },
     {
@@ -144,11 +171,28 @@
       "type": "string",
       "description": "The GCP zone to create and test resources in",
       "default": null,
-      "required": false
+      "required": true
     }
   ],
   "modules": [],
-  "outputs": [],
+  "outputs": [
+    {
+      "name": "access_points",
+      "description": "List of DAOS servers to use as access points"
+    },
+    {
+      "name": "daos_agent_yml",
+      "description": "YAML to configure the daos agent. This is typically saved in /etc/daos/daos_agent.yml"
+    },
+    {
+      "name": "daos_config_script",
+      "description": "Script to configure the DAOS system. This will format the sytem with dmg -l and optionally create the specified pools."
+    },
+    {
+      "name": "daos_control_yml",
+      "description": "YAML configuring DAOS control. This is typically saved in /etc/daos/daos_control.yml"
+    }
+  ],
   "providers": [
     {
       "name": "google",

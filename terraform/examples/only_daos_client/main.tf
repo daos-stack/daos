@@ -7,9 +7,9 @@ module "daos_client" {
   project_id          = var.project_id
   region              = var.region
   zone                = var.zone
-  network             = var.network
+  network_name        = var.network_name
   subnetwork_project  = var.subnetwork_project
-  subnetwork          = var.subnetwork
+  subnetwork_name     = var.subnetwork_name
   number_of_instances = var.client_number_of_instances
   labels              = var.client_labels
   preemptible         = var.client_preemptible
@@ -21,5 +21,7 @@ module "daos_client" {
   os_project          = var.client_os_project
   os_disk_type        = var.client_os_disk_type
   os_disk_size_gb     = var.client_os_disk_size_gb
-  access_points       = var.client_access_points
+  service_account     = var.client_service_account
+  daos_agent_yml      = var.client_daos_agent_yml
+  daos_control_yml    = var.client_daos_control_yml
 }

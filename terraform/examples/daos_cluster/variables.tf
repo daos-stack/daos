@@ -1,21 +1,26 @@
 variable "project_id" {
   description = "The GCP project to use "
   type        = string
-  default     = null
 }
+
 variable "region" {
   description = "The GCP region to create and test resources in"
   type        = string
-  default     = null
 }
+
 variable "zone" {
   description = "The GCP zone to create and test resources in"
   type        = string
-  default     = null
 }
 
-variable "network" {
-  description = "GCP network to use"
+variable "network_name" {
+  description = "Name of the GCP network to use"
+  default     = "default"
+  type        = string
+}
+
+variable "subnetwork_name" {
+  description = "Name of the GCP sub-network to use"
   default     = "default"
   type        = string
 }
@@ -26,69 +31,21 @@ variable "subnetwork_project" {
   default     = null
 }
 
-variable "subnetwork" {
-  description = "GCP sub-network to use"
-  default     = "default"
-  type        = string
-}
-
-variable "server_number_of_instances" {
-  description = "Number of daos servers to bring up"
-  default     = null
-  type        = number
-}
-
 variable "server_labels" {
   description = "Set of key/value label pairs to assign to daos-server instances"
   type        = any
   default     = {}
 }
 
-variable "server_preemptible" {
-  description = "If preemptible server instances"
-  default     = true
-  type        = string
-}
-
-variable "server_mig_name" {
-  description = "MIG name "
-  default     = null
-  type        = string
-}
-
-variable "server_template_name" {
-  description = "MIG template name"
-  default     = null
-  type        = string
-}
-
-variable "server_instance_base_name" {
-  description = "MIG instance base names to use"
-  default     = null
-  type        = string
-}
-
-variable "server_machine_type" {
-  description = "GCP machine type. e.g. e2-medium"
-  default     = null
-  type        = string
-}
-
 variable "server_os_family" {
   description = "OS GCP image family"
-  default     = null
   type        = string
+  default     = "daos-server-centos-7"
 }
 
 variable "server_os_project" {
-  description = "OS GCP image project name"
+  description = "OS GCP image project name. Defaults to project_id if null."
   default     = null
-  type        = string
-}
-
-variable "server_os_disk_type" {
-  description = "OS disk type e.g. pd-ssd, pd-standard"
-  default     = "pd-ssd"
   type        = string
 }
 
@@ -98,27 +55,99 @@ variable "server_os_disk_size_gb" {
   type        = number
 }
 
+variable "server_os_disk_type" {
+  description = "OS disk type ie. pd-ssd, pd-standard"
+  default     = "pd-ssd"
+  type        = string
+}
+
+variable "server_template_name" {
+  description = "MIG template name"
+  default     = "daos-server"
+  type        = string
+}
+
+variable "server_mig_name" {
+  description = "MIG name "
+  default     = "daos-server"
+  type        = string
+}
+
+variable "server_machine_type" {
+  description = "GCP machine type. ie. e2-medium"
+  default     = "n2-custom-36-215040"
+  type        = string
+}
+
+variable "server_instance_base_name" {
+  description = "MIG instance base names to use"
+  default     = "daos-server"
+  type        = string
+}
+
+variable "server_number_of_instances" {
+  description = "Number of daos servers to bring up"
+  default     = 4
+  type        = number
+}
+
+variable "server_daos_disk_type" {
+  #TODO: At some point we will support more than local-ssd with NVME
+  # interface.  This variable will be useful then. For now its just this.
+  description = "Daos disk type to use. For now only suported one is local-ssd"
+  default     = "local-ssd"
+  type        = string
+}
+
 variable "server_daos_disk_count" {
   description = "Number of local ssd's to use"
-  default     = null
+  default     = 16
+  type        = number
+}
+
+variable "server_service_account" {
+  description = "Service account to attach to the instance. See https://www.terraform.io/docs/providers/google/r/compute_instance_template.html#service_account."
+  type = object({
+    email  = string,
+    scopes = set(string)
+  })
+  default = {
+    email = null
+    scopes = ["https://www.googleapis.com/auth/devstorage.read_only",
+      "https://www.googleapis.com/auth/logging.write",
+      "https://www.googleapis.com/auth/monitoring.write",
+      "https://www.googleapis.com/auth/servicecontrol",
+      "https://www.googleapis.com/auth/service.management.readonly",
+    "https://www.googleapis.com/auth/trace.append"]
+  }
+}
+
+variable "server_preemptible" {
+  description = "If preemptible instances"
+  default     = false
+  type        = string
+}
+
+variable "server_pools" {
+  description = "If provided, this module will generate a script to create a list of pools. pool attributes have to be specified in a format acceptable by [dmg](https://docs.daos.io/v2.0/admin/pool_operations/) and daos."
+  default     = []
+  type = list(object({
+    pool_name  = string
+    pool_size  = string
+    containers = list(string)
+    })
+  )
+}
+
+variable "server_daos_scm_size" {
+  description = "scm_size"
+  default     = 200
   type        = number
 }
 
 variable "server_daos_crt_timeout" {
   description = "crt_timeout"
-  default     = null
-  type        = number
-}
-
-variable "server_daos_scm_size" {
-  description = "scm_size"
-  default     = null
-  type        = number
-}
-
-variable "client_number_of_instances" {
-  description = "Number of daos servers to bring up"
-  default     = null
+  default     = 300
   type        = number
 }
 
@@ -128,51 +157,15 @@ variable "client_labels" {
   default     = {}
 }
 
-variable "client_preemptible" {
-  description = "If preemptible client instances"
-  default     = true
-  type        = string
-}
-
-variable "client_mig_name" {
-  description = "MIG name "
-  default     = null
-  type        = string
-}
-
-variable "client_template_name" {
-  description = "MIG template name"
-  default     = null
-  type        = string
-}
-
-variable "client_instance_base_name" {
-  description = "MIG instance base names to use"
-  default     = null
-  type        = string
-}
-
-variable "client_machine_type" {
-  description = "GCP machine type. e.g. e2-medium"
-  default     = null
-  type        = string
-}
-
 variable "client_os_family" {
   description = "OS GCP image family"
-  default     = null
+  default     = "daos-client-hpc-centos-7"
   type        = string
 }
 
 variable "client_os_project" {
-  description = "OS GCP image project name"
+  description = "OS GCP image project name. Defaults to project_id if null."
   default     = null
-  type        = string
-}
-
-variable "client_os_disk_type" {
-  description = "OS disk type e.g. pd-ssd, pd-standard"
-  default     = "pd-ssd"
   type        = string
 }
 
@@ -181,3 +174,63 @@ variable "client_os_disk_size_gb" {
   default     = 20
   type        = number
 }
+
+variable "client_os_disk_type" {
+  description = "OS disk type ie. pd-ssd, pd-standard"
+  default     = "pd-ssd"
+  type        = string
+}
+
+variable "client_template_name" {
+  description = "MIG template name"
+  default     = "daos-client"
+  type        = string
+}
+
+variable "client_mig_name" {
+  description = "MIG name "
+  default     = "daos-client"
+  type        = string
+}
+
+variable "client_machine_type" {
+  description = "GCP machine type. ie. c2-standard-16"
+  default     = "c2-standard-16"
+  type        = string
+}
+
+variable "client_instance_base_name" {
+  description = "MIG instance base names to use"
+  default     = "daos-client"
+  type        = string
+}
+
+variable "client_number_of_instances" {
+  description = "Number of daos clients to bring up"
+  default     = 4
+  type        = number
+}
+
+variable "client_service_account" {
+  description = "Service account to attach to the instance. See https://www.terraform.io/docs/providers/google/r/compute_instance_template.html#service_account."
+  type = object({
+    email  = string,
+    scopes = set(string)
+  })
+  default = {
+    email = null
+    scopes = ["https://www.googleapis.com/auth/devstorage.read_only",
+      "https://www.googleapis.com/auth/logging.write",
+      "https://www.googleapis.com/auth/monitoring.write",
+      "https://www.googleapis.com/auth/servicecontrol",
+      "https://www.googleapis.com/auth/service.management.readonly",
+    "https://www.googleapis.com/auth/trace.append"]
+  }
+}
+
+variable "client_preemptible" {
+  description = "If preemptible instances"
+  default     = false
+  type        = string
+}
+

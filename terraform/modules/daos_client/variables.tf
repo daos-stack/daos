@@ -16,17 +16,14 @@
 variable "project_id" {
   description = "The GCP project to use "
   type        = string
-  default     = null
 }
 variable "region" {
   description = "The GCP region to create and test resources in"
   type        = string
-  default     = null
 }
 variable "zone" {
   description = "The GCP zone to create and test resources in"
   type        = string
-  default     = null
 }
 
 variable "labels" {
@@ -37,12 +34,12 @@ variable "labels" {
 
 variable "os_family" {
   description = "OS GCP image family"
-  default     = null
+  default     = "daos-client-centos-7"
   type        = string
 }
 
 variable "os_project" {
-  description = "OS GCP image project name"
+  description = "OS GCP image project name. Defaults to project_id if null."
   default     = null
   type        = string
 }
@@ -61,31 +58,31 @@ variable "os_disk_type" {
 
 variable "template_name" {
   description = "MIG template name"
-  default     = null
+  default     = "daos-client"
   type        = string
 }
 
 variable "mig_name" {
   description = "MIG name "
-  default     = null
+  default     = "daos-client"
   type        = string
 }
 
 variable "machine_type" {
-  description = "GCP machine type. ie. e2-medium"
-  default     = null
+  description = "GCP machine type. ie. c2-standard-16"
+  default     = "c2-standard-16"
   type        = string
 }
 
-variable "network" {
-  description = "GCP network to use"
-  default     = null
+variable "network_name" {
+  description = "Name of the GCP network to use"
+  default     = "default"
   type        = string
 }
 
-variable "subnetwork" {
-  description = "GCP sub-network to use"
-  default     = null
+variable "subnetwork_name" {
+  description = "Name of the GCP sub-network to use"
+  default     = "default"
   type        = string
 }
 
@@ -97,24 +94,31 @@ variable "subnetwork_project" {
 
 variable "instance_base_name" {
   description = "MIG instance base names to use"
-  default     = null
+  default     = "daos-client"
   type        = string
 }
 
 variable "number_of_instances" {
   description = "Number of daos clients to bring up"
-  default     = null
+  default     = 4
   type        = number
 }
 
-variable "daos_service_account_scopes" {
-  description = "Scopes for the DAOS client service account"
-  default = [
-    "userinfo-email",
-    "compute-ro",
-    "storage-ro"
-  ]
-  type = list(string)
+variable "service_account" {
+  description = "Service account to attach to the instance. See https://www.terraform.io/docs/providers/google/r/compute_instance_template.html#service_account."
+  type = object({
+    email  = string,
+    scopes = set(string)
+  })
+  default = {
+    email = null
+    scopes = ["https://www.googleapis.com/auth/devstorage.read_only",
+      "https://www.googleapis.com/auth/logging.write",
+      "https://www.googleapis.com/auth/monitoring.write",
+      "https://www.googleapis.com/auth/servicecontrol",
+      "https://www.googleapis.com/auth/service.management.readonly",
+    "https://www.googleapis.com/auth/trace.append"]
+  }
 }
 
 variable "preemptible" {
@@ -123,8 +127,13 @@ variable "preemptible" {
   type        = string
 }
 
-variable "access_points" {
-  description = "List of servers to add to client .yml files"
-  default     = null
-  type        = list(string)
+variable "daos_agent_yml" {
+  description = "YAML to configure the daos agent."
+  type        = string
 }
+
+variable "daos_control_yml" {
+  description = "YAML configuring DAOS control."
+  type        = string
+}
+
