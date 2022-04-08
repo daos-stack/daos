@@ -41,6 +41,7 @@ port: 4242
 runtime_dir: /tmp/runtime
 log_file: /home/frodo/logfile
 control_log_mask: debug
+disable_caching: true
 transport_config:
   allow_insecure: true
 fabric_ifaces:
@@ -123,6 +124,7 @@ transport_config:
 				RuntimeDir:   "/tmp/runtime",
 				LogFile:      "/home/frodo/logfile",
 				LogLevel:     common.ControlLogLevelDebug,
+				DisableCache: true,
 				TransportConfig: &security.TransportConfig{
 					AllowInsecure:     true,
 					CertificateConfig: DefaultConfig().TransportConfig.CertificateConfig,
