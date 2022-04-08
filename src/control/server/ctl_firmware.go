@@ -23,7 +23,7 @@ import (
 // caller's request parameters. It can fetch firmware information for NVMe, SCM,
 // or both.
 func (svc *ControlService) FirmwareQuery(parent context.Context, pbReq *ctlpb.FirmwareQueryReq) (*ctlpb.FirmwareQueryResp, error) {
-	svc.log.Debug("received FirmwareQuery RPC")
+	svc.log.Debug("received a FirmwareQuery RPC")
 
 	pbResp := new(ctlpb.FirmwareQueryResp)
 
