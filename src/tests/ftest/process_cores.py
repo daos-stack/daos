@@ -73,13 +73,13 @@ class PackageInfo():
 
 
 def get_core_files(args):
-    """Get the names of the core files on the remote hosts and their total 1k block size.
+    """Get the names of the core files on the remote nodes and their total 1k block size.
 
     Args:
         args (argparse.Namespace): command line arguments for this program
 
     Raises:
-        RuntimeError: if there is a problem listing core.* files on the remote hosts
+        RuntimeError: if there is a problem listing core.* files on the remote nodes
 
     Returns:
         tuple: the total 1k block size required for all of the core files, a list of lists of core
@@ -91,11 +91,11 @@ def get_core_files(args):
 
     # Get a list of any core files and their size in 1k blocks
     command = ["ls", "-1sk", os.path.join(args.source, "core.*")]
-    task = get_remote_output(list(args.hosts), " ".join(command))
+    task = get_remote_output(list(args.nodes), " ".join(command))
     if not check_remote_output(task, command):
-        raise RuntimeError("Error detecting core files on {}".format(args.hosts))
+        raise RuntimeError("Error detecting core files on {}".format(args.nodes))
 
-    # Populate a dictionary of active interfaces with a NodSet of hosts on which it was found
+    # Populate a dictionary of active interfaces with a NodSet of nodes on which it was found
     for output, nodelist in task.iter_buffers():
         # nodeset = NodeSet.fromlist(nodelist)
         core_files.append([NodeSet.fromlist(nodelist)])
@@ -249,7 +249,7 @@ def install_debuginfo_packages(package_list, args):
 def process_core_files(required_1k_blocks, core_file_data, args):
     """Process the core files.
 
-    Copy the remote core files to this host and generate a stack trace from the core file.  Finally
+    Copy the remote core files to this node and generate a stack trace from the core file.  Finally
     remove the local copy and the remote core file.
 
     Args:
@@ -270,31 +270,31 @@ def process_core_files(required_1k_blocks, core_file_data, args):
     # Copy all the core files in parallel if there is enough disk space
     available_1k_blocks = get_available_blocks(args)
     if required_1k_blocks < available_1k_blocks:
-        display(args, "Copying all core files from {}".format(args.hosts), 0)
+        display(args, "Copying all core files from {}".format(args.nodes), 0)
         commands = [
             "for file in {}/core.*".format(args.source),
             "do scp $file {}:{}/${{file##*/}}-$(hostname -s)".format(this_host, args.destination),
             "done",
         ]
-        if not spawn_commands(list(args.hosts), "; ".join(commands), timeout=1800):
+        if not spawn_commands(list(args.nodes), "; ".join(commands), timeout=1800):
             display(args, "  Not all core files copied in parallel", 0)
 
     # Process each core file
-    for hosts, core_file_names in core_file_data:
-        for host in list(hosts):
-            display(args, "Processing core files from {}".format(host), 0)
+    for nodes, core_file_names in core_file_data:
+        for node in list(nodes):
+            display(args, "Processing core files from {}".format(node), 0)
             display(args, "  core_file_names: {}".format(core_file_names), 1)
             for core_file_name in core_file_names:
-                local_core_file = os.path.join(args.destination, "-".join([core_file_name, host]))
+                local_core_file = os.path.join(args.destination, "-".join([core_file_name, node]))
                 display(args, "  local_core_file: {}".format(local_core_file), 1)
 
-                # Copy the core file from the remote host if not already copied
+                # Copy the core file from the remote node if not already copied
                 if not os.path.exists(local_core_file):
                     remote_core_file = os.path.join(args.source, core_file_name)
-                    display(args, "  Copying {} from {}".format(remote_core_file, host), 0)
+                    display(args, "  Copying {} from {}".format(remote_core_file, node), 0)
                     commands = ["scp {} {}:{}".format(remote_core_file, this_host, local_core_file)]
-                    if not spawn_commands(list(hosts), "; ".join(commands), timeout=1800):
-                        display(args, "    Error copying core file from {}".format(host), 0)
+                    if not spawn_commands([node], "; ".join(commands), timeout=1800):
+                        display(args, "    Error copying core file from {}".format(node), 0)
                         status = False
                         continue
 
@@ -313,15 +313,15 @@ def process_core_files(required_1k_blocks, core_file_data, args):
                     display(args, error, 0)
                     status = False
 
-    # Remove any core files from the remote hosts
+    # Remove any core files from the remote nodes
     if args.remove:
-        display(args, "Removing core files from {}".format(args.hosts), 0)
+        display(args, "Removing core files from {}".format(args.nodes), 0)
         commands = [
             "for file in {}/core.*".format(args.source),
             "do rm $file",
             "done",
         ]
-        if not spawn_commands(list(args.hosts), "; ".join(commands), timeout=1800):
+        if not spawn_commands(list(args.nodes), "; ".join(commands), timeout=1800):
             display(args, "  Errors removing core files", 0)
             status = False
 
@@ -390,10 +390,10 @@ def main():
     description = [
         "DAOS functional test core file processing.",
         "",
-        "Collect any core.* files from the specified source path on each provided remote host,",
-        "use them to generate a stacktrace in the specified destination directory on this host,",
-        "and remove the core.* files from the remote hosts.  As part of this process any required",
-        "debuginfo packages will be installed on this host in order to generate the stacktraces."
+        "Collect any core.* files from the specified source path on each provided remote node,",
+        "use them to generate a stacktrace in the specified destination directory on this node,",
+        "and remove the core.* files from the remote nodes.  As part of this process any required",
+        "debuginfo packages will be installed on this node in order to generate the stacktraces."
     ]
     parser = ArgumentParser(
         prog="launcher.py",
@@ -406,9 +406,9 @@ def main():
         type=str,
         help="number of times to repeat test execution")
     parser.add_argument(
-        "-h", "--hosts",
+        "-n", "--nodes",
         action="store",
-        help="comma-separated list of hosts from which to collect and remove core files")
+        help="comma-separated list of nodes from which to collect and remove core files")
     parser.add_argument(
         "-i", "--install",
         action="store_true",
@@ -427,10 +427,10 @@ def main():
     args = parser.parse_args()
     display(args, "Arguments: {}".format(args), 1)
 
-    # Convert host specification into a NodeSet
-    args.test_servers = NodeSet(args.test_servers)
+    # Convert node specification into a NodeSet
+    args.nodes = NodeSet(args.nodes)
 
-    # Find any core.* files found on the remote hosts
+    # Find any core.* files found on the remote nodes
     try:
         required_1k_blocks, core_files = get_core_files(args)
     except RuntimeError as error:
