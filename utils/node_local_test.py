@@ -27,10 +27,10 @@ import tabulate
 import threading
 import functools
 import traceback
-import subprocess #nosec
+import subprocess  # nosec
 import junit_xml
 import tempfile
-import pickle #nosec
+import pickle  # nosec
 import xattr
 from collections import OrderedDict
 import yaml
@@ -519,7 +519,7 @@ class DaosServer():
 
         # Detect the number of cores for dfuse and do something sensible, if there are
         # more than 32 on the node then use 12, otherwise use the whole node.
-        num_cores = len(os.sched_getaffinity(0))
+        num_cores = len(os.sched_getaffinity(0))  # pylint: disable=no-member
         if num_cores > 32:
             self.dfuse_cores = 12
         else:
@@ -1769,11 +1769,6 @@ class posix_tests():
         """Test reading a directory with 25 entries"""
         self.readdir_test(25, test_all=True)
 
-    # Works, but is very slow so needs to be run without debugging.
-    #@needs_dfuse
-    #def test_readdir_300(self):
-    #    self.readdir_test(300, test_all=False)
-
     def readdir_test(self, count, test_all=False):
         """Run a rudimentary readdir test"""
 
@@ -2787,7 +2782,7 @@ class posix_tests():
                       pool=self.pool.id(),
                       container=self.container,
                       caching=False)
-        dfuse.start(v_hint='rename_other')
+        dfuse.start(v_hint='dfuse_bin')
 
         dcmd = os.path.join(dfuse.conf['PREFIX'], 'bin', 'dfuse_test')
 
@@ -3010,7 +3005,7 @@ def run_tests(dfuse):
 
     fname = join(path, 'test_file3')
 
-    rc = subprocess.run(['dd', 'if=/dev/zero', 'bs=16k', 'count=64', # nosec
+    rc = subprocess.run(['dd', 'if=/dev/zero', 'bs=16k', 'count=64',  # nosec
                          'of={}'.format(join(path, 'dd_file'))],
                         check=True)
     print(rc)
@@ -3255,7 +3250,7 @@ def set_server_fi(server):
     vh.convert_xml()
     log_test(server.conf, log_file.name)
     assert rc.returncode == 0
-    return False # fatal_errors
+    return False  # fatal_errors
 
 def create_and_read_via_il(dfuse, path):
     """Create file in dir, write to and read
@@ -3329,8 +3324,8 @@ def run_dfuse(server, conf):
         raise
     dfuse.start(v_hint='no_pool')
     print(os.statvfs(dfuse.dir))
-    subprocess.run(['df', '-h'], check=True) # nosec
-    subprocess.run(['df', '-i', dfuse.dir], check=True) # nosec
+    subprocess.run(['df', '-h'], check=True)  # nosec
+    subprocess.run(['df', '-i', dfuse.dir], check=True)  # nosec
     print('Running dfuse with nothing')
     stat_and_check(dfuse, pre_stat)
     check_no_file(dfuse)
@@ -3340,7 +3335,7 @@ def run_dfuse(server, conf):
     print(pool_stat)
     container = create_cont(server.conf, pool, ctype="POSIX")
     cdir = join(dfuse.dir, pool, container)
-    #create_and_read_via_il(dfuse, cdir)
+    # create_and_read_via_il(dfuse, cdir)
     fatal_errors.add_result(dfuse.stop())
 
     dfuse = DFuse(server, conf, pool=pool, caching=False)
@@ -3952,7 +3947,7 @@ class AllocFailTest():
         print('Expected stdout is')
         print(self.expected_stdout)
 
-        num_cores = len(os.sched_getaffinity(0))
+        num_cores = len(os.sched_getaffinity(0))  # pylint: disable=no-member
 
         if num_cores < 20:
             max_child = 1

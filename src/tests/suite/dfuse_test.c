@@ -31,7 +31,6 @@ print_usage()
 {
 	printf("DFuse tests\n");
 	printf("dfuse_test -m <path to test>\n");
-	printf("dfute_test --open-at\n");
 }
 
 char *test_dir;
@@ -95,6 +94,10 @@ do_openat(void **state)
 	rc = fstat(fd, &stbuf);
 	assert_return_code(rc, errno);
 	assert_int_equal(stbuf.st_size, 4);
+
+	rc = fstatat(root, "my_file", &stbuf0, AT_SYMLINK_NOFOLLOW);
+	assert_return_code(rc, errno);
+	assert_int_equal(stbuf.st_size, stbuf0.st_size);
 
 	rc = close(fd);
 	assert_return_code(rc, errno);
