@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2018-2021 Intel Corporation.
+// (C) Copyright 2018-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -24,58 +24,20 @@ import "C"
 import (
 	"fmt"
 	"os"
+	"time"
 	"unsafe"
 
 	"github.com/pkg/errors"
+
+	"github.com/daos-stack/daos/src/control/logging"
 )
 
-// IpmCtl is the interface that provides access to libipmctl.
-type IpmCtl interface {
-	// Discover persistent memory modules
-	Discover() ([]DeviceDiscovery, error)
-	// Get firmware information from persistent memory modules
-	GetFirmwareInfo(uid DeviceUID) (DeviceFirmwareInfo, error)
-	// Update persistent memory module firmware
-	UpdateFirmware(uid DeviceUID, fwPath string, force bool) error
-}
+const useNfit = C.NVM_BOOL(0) // NVM API requires this to work
 
-// NvmMgmt is an implementation of the IpmCtl interface which exercises
-// libipmctl's NVM API.
-type NvmMgmt struct{}
-
-// Discover queries number of SCM modules and retrieves device_discovery structs
-// for each.
-func (n *NvmMgmt) Discover() (devices []DeviceDiscovery, err error) {
-	var count C.uint
-	if err = Rc2err(
-		"get_number_of_devices",
-		C.nvm_get_number_of_devices(&count)); err != nil {
-		return
-	}
-	if count == 0 {
-		return
-	}
-
-	devs := make([]C.struct_device_discovery, int(count))
-	// println(len(devs))
-
-	// don't need to defer free on devs as we allocated in go
-	if err = Rc2err(
-		"get_devices",
-		C.nvm_get_devices(&devs[0], C.NVM_UINT8(count))); err != nil {
-		return
-	}
-	// defer C.free(unsafe.Pointer(&devs))
-
-	// cast struct array to slice of go equivalent struct
-	// (get equivalent go struct def from cgo -godefs)
-	devices = (*[1 << 30]DeviceDiscovery)(unsafe.Pointer(&devs[0]))[:count:count]
-	if len(devices) != int(count) {
-		err = fmt.Errorf("expected %d devices but got %d", len(devices), int(count))
-	}
-
-	return
-}
+var (
+	NVMMajorVersionsSupported = []int{2, 3}
+	errNotInitialized         = errors.New("ipmctl api has not been initialized")
+)
 
 // Rc2err returns an failure if rc != NVM_SUCCESS.
 //
@@ -85,6 +47,170 @@ func Rc2err(label string, rc C.int) error {
 		return fmt.Errorf("%s: rc=%d", label, int(rc))
 	}
 	return nil
+}
+
+func track(log logging.Logger, msg string) (logging.Logger, string, time.Time) {
+	return log, msg, time.Now()
+}
+
+func logDuration(log logging.Logger, msg string, start time.Time) {
+	log.Debugf("%v: %v\n", msg, time.Since(start))
+}
+
+type (
+	// IpmCtl is the interface that provides access to libipmctl.
+	IpmCtl interface {
+		// Init verifies the version of the library is compatible.
+		Init(logging.Logger) error
+		// GetModules discovers persistent memory modules.
+		GetModules(logging.Logger) ([]DeviceDiscovery, error)
+		// GetRegions discovers persistent memory regions.
+		GetRegions(logging.Logger) ([]PMemRegion, error)
+		// DeleteConfigGoals removes any pending but not yet applied PMem configuration goals.
+		DeleteConfigGoals(logging.Logger) error
+		// GetFirmwareInfo retrieves firmware information from persistent memory modules.
+		GetFirmwareInfo(uid DeviceUID) (DeviceFirmwareInfo, error)
+		// UpdateFirmware updates persistent memory module firmware.
+		UpdateFirmware(uid DeviceUID, fwPath string, force bool) error
+	}
+
+	// NvmMgmt is an implementation of the IpmCtl interface which exercises
+	// libipmctl's NVM API.
+	NvmMgmt struct {
+		initialized bool
+	}
+
+	getNumberOfDevicesFn func(logging.Logger, *C.uint) C.int
+	getDevicesFn         func(logging.Logger, *C.struct_device_discovery, C.NVM_UINT8) C.int
+	getNumberOfRegionsFn func(logging.Logger, *C.NVM_UINT8) C.int
+	getRegionsFn         func(logging.Logger, *C.struct_region, *C.NVM_UINT8) C.int
+	deleteConfigGoalFn   func(logging.Logger) C.int
+)
+
+// Init verifies library version is compatible with this application code.
+func (n *NvmMgmt) Init(log logging.Logger) error {
+	log.Debug("ipmctl bindings: Init")
+	verStr := make([]C.char, 32)
+
+	if err := Rc2err("get_version", C.nvm_get_version(&verStr[0], 32)); err != nil {
+		return err
+	}
+
+	log.Infof("libipmctl provides NVM API version %s", C.GoString(&verStr[0]))
+
+	majorVer := C.nvm_get_major_version()
+
+	for _, v := range NVMMajorVersionsSupported {
+		if int(majorVer) == v {
+			n.initialized = true
+			return nil
+		}
+	}
+
+	return errors.Errorf("libipmctl version mismatch, want one of major version %v but got %d",
+		NVMMajorVersionsSupported, majorVer)
+}
+
+func getNumberOfDevices(log logging.Logger, out *C.uint) C.int {
+	defer logDuration(track(log, "time taken calling nvm_get_number_of_devices"))
+	return C.nvm_get_number_of_devices(out)
+}
+
+func getDevices(log logging.Logger, devs *C.struct_device_discovery, count C.NVM_UINT8) C.int {
+	defer logDuration(track(log, "time taken calling nvm_get_devices"))
+	return C.nvm_get_devices(devs, count)
+}
+
+func getModules(log logging.Logger, getNumDevs getNumberOfDevicesFn, getDevs getDevicesFn) (devices []DeviceDiscovery, err error) {
+	var count C.uint
+	if err = Rc2err("get_number_of_devices", getNumDevs(log, &count)); err != nil {
+		return
+	}
+	if count == 0 {
+		return
+	}
+
+	devs := make([]C.struct_device_discovery, int(count))
+
+	if err = Rc2err("get_devices", getDevs(log, &devs[0], C.NVM_UINT8(count))); err != nil {
+		return
+	}
+
+	// Cast struct array to slice of go equivalent structs.
+	devices = (*[1 << 30]DeviceDiscovery)(unsafe.Pointer(&devs[0]))[:count:count]
+	if len(devices) != int(count) {
+		err = fmt.Errorf("expected %d devices but got %d", int(count), len(devices))
+	}
+
+	return
+}
+
+// GetModules queries number of PMem modules and retrieves device_discovery structs for each before
+// converting to Go DeviceDiscovery structs.
+func (n *NvmMgmt) GetModules(log logging.Logger) (devices []DeviceDiscovery, err error) {
+	if !n.initialized {
+		return nil, errNotInitialized
+	}
+
+	log.Debug("ipmctl bindings: GetModules")
+	return getModules(log, getNumberOfDevices, getDevices)
+}
+
+func getNumberOfPMemRegions(log logging.Logger, out *C.NVM_UINT8) C.int {
+	defer logDuration(track(log, "time taken calling nvm_get_number_of_regions_ex"))
+	return C.nvm_get_number_of_regions_ex(useNfit, out)
+}
+
+func getPMemRegions(log logging.Logger, regions *C.struct_region, count *C.NVM_UINT8) C.int {
+	defer logDuration(track(log, "time taken calling nvm_get_regions_ex"))
+	defer C.nvm_uninit() // Enables region Free_capacity to update after creating namespace.
+	return C.nvm_get_regions_ex(useNfit, regions, count)
+}
+
+func getRegions(log logging.Logger, getNum getNumberOfRegionsFn, get getRegionsFn) (regions []PMemRegion, err error) {
+	var count C.NVM_UINT8
+	if err = Rc2err("get_number_of_regions", getNum(log, &count)); err != nil {
+		return
+	}
+	if count == 0 {
+		return
+	}
+
+	pmemRegions := make([]C.struct_region, int(count))
+
+	if err = Rc2err("get_regions", get(log, &pmemRegions[0], &count)); err != nil {
+		return
+	}
+
+	// Cast struct array to slice of go equivalent structs.
+	regions = (*[1 << 30]PMemRegion)(unsafe.Pointer(&pmemRegions[0]))[:count:count]
+	if len(regions) != int(count) {
+		err = fmt.Errorf("expected %d regions but got %d", int(count), len(regions))
+	}
+
+	return
+}
+
+// GetRegions queries number of PMem regions and retrieves region structs for each before
+// converting to Go PMemRegion structs.
+func (n *NvmMgmt) GetRegions(log logging.Logger) (regions []PMemRegion, err error) {
+	if !n.initialized {
+		return nil, errNotInitialized
+	}
+
+	log.Debug("ipmctl bindings: GetRegions")
+	return getRegions(log, getNumberOfPMemRegions, getPMemRegions)
+}
+
+// DeleteConfigGoals removes any pending but not yet applied PMem configuration goals.
+func (n *NvmMgmt) DeleteConfigGoals(log logging.Logger) error {
+	if !n.initialized {
+		return errNotInitialized
+	}
+
+	log.Debug("ipmctl bindings: DeleteConfigGoals")
+	defer logDuration(track(log, "time taken calling nvm_delete_config_goal"))
+	return Rc2err("delete_config_goal", C.nvm_delete_config_goal(nil, 0))
 }
 
 // GetFirmwareInfo fetches the firmware revision and other information from the device

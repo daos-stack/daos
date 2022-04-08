@@ -57,6 +57,8 @@ class DaosAdminPrivTest(TestWithServers):
         user = getpass.getuser()
 
         # Prep server for format, run command under non-root user
+        # Note: This will just report the presence of PMem namespaces if the NVDIMMs are already
+        #       configured in AppDirect interleaved mode and namespaces have been created.
         self.log.info("Performing SCM storage prepare")
         try:
             self.server_managers[0].prepare_storage(user, True, False)
