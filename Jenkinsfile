@@ -1,5 +1,5 @@
 #!/usr/bin/groovy
-/* Copyright (C) 2019-2021 Intel Corporation
+/* Copyright (C) 2019-2022 Intel Corporation
  * All rights reserved.
  *
  * This file is part of the DAOS Project. It is subject to the license terms
@@ -15,9 +15,9 @@
 //@Library(value="pipeline-lib@your_branch") _
 
 // Should try to figure this out automatically
-String base_branch = "release/2.0"
+String base_branch = "release/2.2"
 // For master, this is just some wildly high number
-next_version = "2.1.0"
+next_version = "2.3.0"
 
 // Don't define this as a type or it loses it's global scope
 target_branch = env.CHANGE_TARGET ? env.CHANGE_TARGET : env.BRANCH_NAME
@@ -36,9 +36,7 @@ pipeline {
     agent { label 'lightweight' }
 
     triggers {
-        cron(env.BRANCH_NAME == 'master' ? 'TZ=America/Toronto\n0 0 * * *\n' : '' +
-             env.BRANCH_NAME == 'release/2.0' ? 'TZ=America/Toronto\n0 12 * * *\n' : '' +
-             env.BRANCH_NAME.startsWith('weekly-testing') ? 'H 0 * * 6' : '')
+        cron(env.BRANCH_NAME.startsWith('weekly-testing') ? 'H 0 * * 6' : '')
     }
 
     environment {
@@ -123,7 +121,7 @@ pipeline {
                         }
                     }
                 } // stage('Functional on CentOS 7')
-                stage('Functional on CentOS 8') {
+                stage('Functional on EL 8') {
                     when {
                         beforeAgent true
                         expression { ! skipStage() }
@@ -146,7 +144,7 @@ pipeline {
                             functionalTestPostV2()
                         }
                     }
-                } // stage('Functional on CentOS 8')
+                } // stage('Functional on EL 8')
                 stage('Functional on Leap 15') {
                     when {
                         beforeAgent true
