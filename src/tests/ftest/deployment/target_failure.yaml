@@ -35,12 +35,14 @@ server_config:
       scm_list: ["/dev/pmem1"]
       scm_mount: /mnt/daos1
 
-pool_size_ratio:
+pool_size_ratio_50:
   size: 50%
   control_method: dmg
-pool_size_value:
-  scm_size: 100G
-  nvme_size: 300G
+pool_size_ratio_40:
+  size: 40%
+  control_method: dmg
+pool_size_ratio_66:
+  size: 66%
   control_method: dmg
 
 container_wo_rf:

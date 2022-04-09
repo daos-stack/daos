@@ -106,7 +106,7 @@ class TargetFailure(IorTestBase):
                 IOR.
         """
         # 1. Create a pool and a container.
-        self.add_pool(namespace="/run/pool_size_ratio/*")
+        self.add_pool(namespace="/run/pool_size_ratio_50/*")
         self.add_container(pool=self.pool, namespace="/run/container_with_rf/*")
 
         # 2. Run IOR with oclass RP_2G1 or EC_2P1G1.
@@ -221,7 +221,7 @@ class TargetFailure(IorTestBase):
         :avocado: tags=target_failure_wo_rf
         """
         # 1. Create a pool and a container.
-        self.add_pool(namespace="/run/pool_size_ratio/*")
+        self.add_pool(namespace="/run/pool_size_ratio_50/*")
         self.add_container(pool=self.pool, namespace="/run/container_wo_rf/*")
 
         # 2. Run IOR with oclass SX so that excluding one target will result in a failure.
@@ -340,15 +340,14 @@ class TargetFailure(IorTestBase):
         :avocado: tags=deployment,target_failure
         :avocado: tags=target_failure_parallel
         """
-        pool_qty = 2
+        self.pool = []
         self.container = []
 
-        # 1. Create 2 pools and a container in each pool. Use the actual size value
-        # rather than percentage because percentage doesn't work well with multiple
-        # pools. Also, this test focuses on the isolation rather than creating the largest
-        # pools possible.
-        self.add_pool_qty(quantity=pool_qty, namespace="/run/pool_size_value/*")
-        for i in range(pool_qty):
+        # 1. Create 2 pools and a container in each pool. Each pool uses about 40% of the
+        # available storage.
+        self.pool.append(self.get_pool(namespace="/run/pool_size_ratio_40/*"))
+        self.pool.append(self.get_pool(namespace="/run/pool_size_ratio_66/*"))
+        for i in range(2):
             self.container.append(
                 self.get_container(pool=self.pool[i], namespace="/run/container_wo_rf/*"))
 
@@ -357,7 +356,7 @@ class TargetFailure(IorTestBase):
         ior_namespace = "/run/ior_wo_rf/*"
         threads = []
 
-        for pool_num in range(pool_qty):
+        for pool_num in range(2):
             threads.append(
                 threading.Thread(
                     target=self.run_ior_report_error,
