@@ -667,8 +667,57 @@ def convert_list(value, separator=","):
     return separator.join([str(item) for item in value])
 
 
-def stop_processes(hosts, pattern, verbose=True, timeout=60, added_filter=None,
-                   dump_ult_stacks=False):
+def dump_engines_stacks(hosts, verbose=True, timeout=60, added_filter=None):
+    """Signal the engines on each hosts to generate their ULT stacks dump.
+
+    Args:
+        hosts (list): hosts on which to signal the engines
+        verbose (bool, optional): display command output. Defaults to True.
+        timeout (int, optional): command timeout in seconds. Defaults to 60
+            seconds.
+        added_filter (str, optional): negative filter to better identify
+            engines.
+
+
+    Returns:
+        dict: a dictionary of return codes keys and accompanying NodeSet
+            values indicating which hosts yielded the return code.
+            Return code keys:
+                0   No engine matched the criteria / No engine signaled.
+                1   One or more engine matched the criteria and a signal was
+                    sent.
+
+    """
+    result = {}
+    log = getLogger()
+    log.info("Dumping ULT stacks of engines on %s", hosts)
+
+    if added_filter:
+        ps_cmd = "/usr/bin/ps xa | grep daos_engine | grep -vE {}".format(
+            added_filter)
+    else:
+        ps_cmd = "/usr/bin/pgrep --list-full daos_engine"
+
+    if hosts is not None:
+        commands = [
+            "rc=0",
+            "if " + ps_cmd,
+            "then rc=1",
+            "sudo pkill --signal USR2 daos_engine",
+            # leave some time for ABT info/stacks dump to complete.
+            # at this time there is no way to know when Argobots ULTs stacks
+            # has completed, see DAOS-1452/DAOS-9942.
+            "sleep 30",
+            "fi",
+            "exit $rc",
+        ]
+        result = pcmd(hosts, "; ".join(commands), verbose, timeout,
+                      None)
+
+    return result
+
+
+def stop_processes(hosts, pattern, verbose=True, timeout=60, added_filter=None):
     """Stop the processes on each hosts that match the pattern.
 
     Args:
@@ -679,8 +728,6 @@ def stop_processes(hosts, pattern, verbose=True, timeout=60, added_filter=None,
             seconds.
         added_filter (str, optional): negative filter to better identify
             processes.
-        dump_ult_stacks (bool, optional): whether SIGUSR2 should be sent before
-            any other sigs, to dump all ULTs stacks of servers.
 
 
     Returns:
@@ -694,11 +741,7 @@ def stop_processes(hosts, pattern, verbose=True, timeout=60, added_filter=None,
     """
     result = {}
     log = getLogger()
-    if dump_ult_stacks is True:
-        log.info("First dumping ULT stacks, then Killing any processes on %s "
-                 "that match: %s", hosts, pattern)
-    else:
-        log.info("Killing any processes on %s that match: %s", hosts, pattern)
+    log.info("Killing any processes on %s that match: %s", hosts, pattern)
 
     if added_filter:
         ps_cmd = "/usr/bin/ps xa | grep -E {} | grep -vE {}".format(
@@ -707,22 +750,7 @@ def stop_processes(hosts, pattern, verbose=True, timeout=60, added_filter=None,
         ps_cmd = "/usr/bin/pgrep --list-full {}".format(pattern)
 
     if hosts is not None:
-        if dump_ult_stacks is True and "daos_engine" in pattern:
-            commands_part1 = [
-                "rc=0",
-                "if " + ps_cmd,
-                "then rc=1",
-                "sudo pkill --signal USR2 {}".format(pattern),
-                # leave time for ABT info/stacks dump vs xstream/pool/ULT number
-                "sleep 20",
-                "fi",
-                "exit $rc",
-            ]
-            result = pcmd(hosts, "; ".join(commands_part1), verbose, timeout,
-                          None)
-
-        # in case dump of ULT stacks is still running it may be interrupted
-        commands_part2 = [
+        commands = [
             "rc=0",
             "if " + ps_cmd,
             "then rc=1",
@@ -738,7 +766,7 @@ def stop_processes(hosts, pattern, verbose=True, timeout=60, added_filter=None,
             "fi",
             "exit $rc",
         ]
-        result = pcmd(hosts, "; ".join(commands_part2), verbose, timeout, None)
+        result = pcmd(hosts, "; ".join(commands), verbose, timeout, None)
     return result
 
 
@@ -991,14 +1019,14 @@ def convert_string(item, separator=","):
     return item
 
 
-def create_directory(hosts, directory, timeout=10, verbose=True,
+def create_directory(hosts, directory, timeout=15, verbose=True,
                      raise_exception=True, sudo=False):
     """Create the specified directory on the specified hosts.
 
     Args:
         hosts (list): hosts on which to create the directory
         directory (str): the directory to create
-        timeout (int, optional): command timeout. Defaults to 10 seconds.
+        timeout (int, optional): command timeout. Defaults to 15 seconds.
         verbose (bool, optional): whether to log the command run and
             stdout/stderr. Defaults to True.
         raise_exception (bool, optional): whether to raise an exception if the
@@ -1028,7 +1056,7 @@ def create_directory(hosts, directory, timeout=10, verbose=True,
         timeout=timeout, verbose=verbose, raise_exception=raise_exception)
 
 
-def change_file_owner(hosts, filename, owner, group, timeout=10, verbose=True,
+def change_file_owner(hosts, filename, owner, group, timeout=15, verbose=True,
                       raise_exception=True, sudo=False):
     """Create the specified directory on the specified hosts.
 
@@ -1037,7 +1065,7 @@ def change_file_owner(hosts, filename, owner, group, timeout=10, verbose=True,
         filename (str): the file for which to change ownership
         owner (str): new owner of the file
         group (str): new group owner of the file
-        timeout (int, optional): command timeout. Defaults to 10 seconds.
+        timeout (int, optional): command timeout. Defaults to 15 seconds.
         verbose (bool, optional): whether to log the command run and
             stdout/stderr. Defaults to True.
         raise_exception (bool, optional): whether to raise an exception if the

@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2021 Intel Corporation.
+// (C) Copyright 2020-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -111,11 +111,11 @@ func (err *ErrMemberExists) Error() string {
 	}
 }
 
-func errRankExists(r Rank) *ErrMemberExists {
+func ErrRankExists(r Rank) *ErrMemberExists {
 	return &ErrMemberExists{Rank: &r}
 }
 
-func errUuidExists(u uuid.UUID) *ErrMemberExists {
+func ErrUuidExists(u uuid.UUID) *ErrMemberExists {
 	return &ErrMemberExists{UUID: &u}
 }
 
@@ -151,7 +151,7 @@ func (err *ErrJoinFailure) Error() string {
 	}
 }
 
-func errRankChanged(new, cur Rank, uuid uuid.UUID) *ErrJoinFailure {
+func ErrRankChanged(new, cur Rank, uuid uuid.UUID) *ErrJoinFailure {
 	return &ErrJoinFailure{
 		rankChanged: true,
 		curUUID:     &uuid,
@@ -160,7 +160,7 @@ func errRankChanged(new, cur Rank, uuid uuid.UUID) *ErrJoinFailure {
 	}
 }
 
-func errUuidChanged(new, cur uuid.UUID, rank Rank) *ErrJoinFailure {
+func ErrUuidChanged(new, cur uuid.UUID, rank Rank) *ErrJoinFailure {
 	return &ErrJoinFailure{
 		uuidChanged: true,
 		newUUID:     &new,
@@ -169,7 +169,7 @@ func errUuidChanged(new, cur uuid.UUID, rank Rank) *ErrJoinFailure {
 	}
 }
 
-func errAdminExcluded(uuid uuid.UUID, rank Rank) *ErrJoinFailure {
+func ErrAdminExcluded(uuid uuid.UUID, rank Rank) *ErrJoinFailure {
 	return &ErrJoinFailure{
 		isExcluded: true,
 		curUUID:    &uuid,
@@ -212,6 +212,18 @@ func IsMemberNotFound(err error) bool {
 	return ok
 }
 
+func ErrMemberRankNotFound(r Rank) *ErrMemberNotFound {
+	return &ErrMemberNotFound{byRank: &r}
+}
+
+func ErrMemberUUIDNotFound(u uuid.UUID) *ErrMemberNotFound {
+	return &ErrMemberNotFound{byUUID: &u}
+}
+
+func ErrMemberAddrNotFound(a *net.TCPAddr) *ErrMemberNotFound {
+	return &ErrMemberNotFound{byAddr: a}
+}
+
 // ErrPoolNotFound indicates a failure to find a pool service with the
 // given search criterion.
 type ErrPoolNotFound struct {
@@ -238,4 +250,16 @@ func (err *ErrPoolNotFound) Error() string {
 func IsPoolNotFound(err error) bool {
 	_, ok := errors.Cause(err).(*ErrPoolNotFound)
 	return ok
+}
+
+func ErrPoolRankNotFound(r Rank) *ErrPoolNotFound {
+	return &ErrPoolNotFound{byRank: &r}
+}
+
+func ErrPoolUUIDNotFound(u uuid.UUID) *ErrPoolNotFound {
+	return &ErrPoolNotFound{byUUID: &u}
+}
+
+func ErrPoolLabelNotFound(l string) *ErrPoolNotFound {
+	return &ErrPoolNotFound{byLabel: &l}
 }

@@ -840,12 +840,6 @@ rebuild_nospace_cb(void *data)
 				     0, 0, NULL);
 
 	print_message("re-enable recovery\n");
-	if (arg->myrank == 0)
-		/* Resume the rebuild. FIXME: fix this once we have better
-		 * way to resume rebuild through mgmt cmd.
-		 */
-		daos_debug_set_params(arg->group, -1,
-				     DMG_KEY_REBUILD_THROTTLING, 30, 0, NULL);
 
 	MPI_Barrier(MPI_COMM_WORLD);
 

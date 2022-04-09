@@ -74,7 +74,7 @@ class Label(TestWithServers):
             result_stdout = str(self.pool[-1].dmg.result.stdout)
             exit_status = self.pool[-1].dmg.result.exit_status
 
-            if  exit_status == 0 and failure_expected:
+            if exit_status == 0 and failure_expected:
                 error_message = "dmg pool create is expected to fail, " +\
                     "but worked! {}".format(label)
                 errors.append(error_message)

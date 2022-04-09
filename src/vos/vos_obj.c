@@ -312,8 +312,12 @@ key_punch(struct vos_object *obj, daos_epoch_t epoch, daos_epoch_t bound,
 					 VOS_ITER_AKEY);
 	}
 
-	if (rc != 1)
+	if (rc != 1) {
+		/** key_tree_punch will handle dkey flags if punch is propagated */
+		if (rc == 0)
+			rc = vos_key_mark_agg(vos_cont2umm(obj->obj_cont), krec, epoch);
 		goto out;
+	}
 	/** else propagate the punch */
 
 punch_dkey:
@@ -500,6 +504,10 @@ vos_obj_punch(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 					obj->obj_df->vo_max_write = epr.epr_hi;
 			}
 
+			if (rc == 0)
+				rc = vos_mark_agg(vos_cont2umm(cont), &obj->obj_df->vo_tree,
+						  &cont->vc_cont_df->cd_obj_root, epoch);
+
 			vos_obj_release(vos_obj_cache_current(), obj, rc != 0);
 		}
 	}
@@ -674,7 +682,6 @@ key_iter_ilog_check(struct vos_krec_df *krec, struct vos_obj_iter *oiter,
 
 	rc = vos_ilog_check(&oiter->it_ilog_info, &oiter->it_epr, epr,
 			    (oiter->it_flags & VOS_IT_PUNCHED) == 0);
-
 out:
 	D_ASSERTF(check_existence || rc != -DER_NONEXIST,
 		  "Probe is required before fetch\n");
@@ -729,50 +736,17 @@ fail:
  */
 
 static int
-key_iter_fetch(struct vos_obj_iter *oiter, vos_iter_entry_t *ent,
-	       daos_anchor_t *anchor, bool check_existence, uint32_t flags)
+key_iter_fill(struct vos_krec_df *krec, struct vos_obj_iter *oiter, bool check_existence,
+	      vos_iter_entry_t *ent)
 {
+	daos_epoch_range_t	epr = {0, DAOS_EPOCH_MAX};
+	uint32_t		ts_type;
+	int			rc;
 
-	uint64_t		 start_seq;
-	vos_iter_desc_t		 desc;
-	struct vos_krec_df	*krec;
-	struct vos_rec_bundle	 rbund;
-	daos_epoch_range_t	 epr = {0, DAOS_EPOCH_MAX};
-	uint32_t		 ts_type;
-	unsigned int		 acts;
-	int			 rc;
-
-	rc = key_iter_fetch_helper(oiter, &rbund, &ent->ie_key, anchor);
-	D_ASSERTF(check_existence || rc != -DER_NONEXIST,
-		  "Iterator should probe before fetch\n");
-	if (rc != 0)
-		return rc;
-
-	if (check_existence && oiter->it_iter.it_filter_cb != NULL &&
-	    (flags & VOS_ITER_PROBE_AGAIN) == 0) {
-		desc.id_type = oiter->it_iter.it_type;
-		desc.id_key = ent->ie_key;
-		acts = 0;
-		start_seq = vos_sched_seq();
-		rc = oiter->it_iter.it_filter_cb(vos_iter2hdl(&oiter->it_iter), &desc,
-						 oiter->it_iter.it_filter_arg,
-						 &acts);
-		if (rc != 0)
-			return rc;
-		if (start_seq != vos_sched_seq())
-			acts |= VOS_ITER_CB_YIELD;
-		if (acts & (VOS_ITER_CB_EXIT | VOS_ITER_CB_ABORT | VOS_ITER_CB_RESTART |
-			    VOS_ITER_CB_DELETE | VOS_ITER_CB_YIELD))
-			return acts;
-		if (acts & VOS_ITER_CB_SKIP)
-			return VOS_ITER_CB_SKIP;
-	}
-
-	D_ASSERT(rbund.rb_krec);
 	if (oiter->it_iter.it_type == VOS_ITER_AKEY) {
-		if (rbund.rb_krec->kr_bmap & KREC_BF_EVT) {
+		if (krec->kr_bmap & KREC_BF_EVT) {
 			ent->ie_child_type = VOS_ITER_RECX;
-		} else if (rbund.rb_krec->kr_bmap & KREC_BF_BTR) {
+		} else if (krec->kr_bmap & KREC_BF_BTR) {
 			ent->ie_child_type = VOS_ITER_SINGLE;
 		} else {
 			ent->ie_child_type = VOS_ITER_NONE;
@@ -782,8 +756,6 @@ key_iter_fetch(struct vos_obj_iter *oiter, vos_iter_entry_t *ent,
 		ent->ie_child_type = VOS_ITER_AKEY;
 		ts_type = VOS_TS_TYPE_DKEY;
 	}
-
-	krec = rbund.rb_krec;
 
 	rc = key_iter_ilog_check(krec, oiter, oiter->it_iter.it_type, &epr,
 				 check_existence, NULL);
@@ -808,6 +780,65 @@ key_iter_fetch(struct vos_obj_iter *oiter, vos_iter_entry_t *ent,
 	vos_ilog_last_update(&krec->kr_ilog, ts_type, &ent->ie_last_update);
 
 	return 0;
+}
+
+static int
+key_iter_fetch(struct vos_obj_iter *oiter, vos_iter_entry_t *ent,
+	       daos_anchor_t *anchor, bool check_existence, uint32_t flags)
+{
+
+	uint64_t		 start_seq;
+	vos_iter_desc_t		 desc;
+	struct vos_rec_bundle	 rbund;
+	struct vos_krec_df	*krec;
+	uint64_t		 feats;
+	uint32_t		 ts_type;
+	unsigned int		 acts;
+	int			 rc;
+
+	rc = key_iter_fetch_helper(oiter, &rbund, &ent->ie_key, anchor);
+	D_ASSERTF(check_existence || rc != -DER_NONEXIST,
+		  "Iterator should probe before fetch\n");
+	if (rc != 0)
+		return rc;
+
+	D_ASSERT(rbund.rb_krec);
+	krec = rbund.rb_krec;
+
+	if (check_existence && oiter->it_iter.it_filter_cb != NULL &&
+	    (flags & VOS_ITER_PROBE_AGAIN) == 0) {
+		desc.id_type = oiter->it_iter.it_type;
+		desc.id_key = ent->ie_key;
+		desc.id_parent_punch = oiter->it_punched.pr_epc;
+		if (krec->kr_bmap & KREC_BF_BTR)
+			feats = dbtree_feats_get(&krec->kr_btr);
+		else
+			feats = evt_feats_get(&krec->kr_evt);
+		if (!vos_feats_agg_time_get(feats, &desc.id_agg_write)) {
+			if (desc.id_type == VOS_ITER_DKEY)
+				ts_type = VOS_TS_TYPE_DKEY;
+			else
+				ts_type = VOS_TS_TYPE_AKEY;
+			vos_ilog_last_update(&krec->kr_ilog, ts_type, &desc.id_agg_write);
+		}
+
+		acts = 0;
+		start_seq = vos_sched_seq();
+		rc = oiter->it_iter.it_filter_cb(vos_iter2hdl(&oiter->it_iter), &desc,
+						 oiter->it_iter.it_filter_arg,
+						 &acts);
+		if (rc != 0)
+			return rc;
+		if (start_seq != vos_sched_seq())
+			acts |= VOS_ITER_CB_YIELD;
+		if (acts & (VOS_ITER_CB_EXIT | VOS_ITER_CB_ABORT | VOS_ITER_CB_RESTART |
+			    VOS_ITER_CB_DELETE | VOS_ITER_CB_YIELD))
+			return acts;
+		if (acts & VOS_ITER_CB_SKIP)
+			return VOS_ITER_CB_SKIP;
+	}
+
+	return key_iter_fill(krec, oiter, check_existence, ent);
 }
 
 static int
@@ -1162,8 +1193,9 @@ singv_iter_probe_epr(struct vos_obj_iter *oiter, vos_iter_entry_t *entry)
 			return 0;
 
 		case VOS_IT_EPC_RR:
-			if (entry->ie_epoch < epr->epr_lo)
+			if (entry->ie_epoch < epr->epr_lo) {
 				return -DER_NONEXIST; /* end of story */
+			}
 
 			if (entry->ie_epoch > epr->epr_hi) {
 				entry->ie_epoch = epr->epr_hi;
@@ -1805,7 +1837,6 @@ vos_obj_iter_fini(struct vos_iterator *iter)
 	case VOS_ITER_SINGLE:
 		rc = dbtree_iter_finish(oiter->it_hdl);
 		break;
-
 	case VOS_ITER_RECX:
 		rc = recx_iter_fini(oiter);
 		break;
@@ -1934,7 +1965,7 @@ exit:
 }
 
 int
-vos_obj_iter_pre_aggregate(daos_handle_t ih)
+vos_obj_iter_check_punch(daos_handle_t ih)
 {
 	struct vos_iterator	*iter = vos_hdl2iter(ih);
 	struct vos_obj_iter	*oiter = vos_iter2oiter(iter);
@@ -1947,7 +1978,7 @@ vos_obj_iter_pre_aggregate(daos_handle_t ih)
 
 	D_ASSERTF(iter->it_type == VOS_ITER_AKEY ||
 		  iter->it_type == VOS_ITER_DKEY,
-		  "Aggregation only supported on keys\n");
+		  "Punch check support only for keys, not values\n");
 
 	rc = key_iter_fetch_helper(oiter, &rbund, &key, NULL);
 	D_ASSERTF(rc != -DER_NONEXIST,

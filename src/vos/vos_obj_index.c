@@ -504,6 +504,7 @@ oi_iter_match_probe(struct vos_iterator *iter, daos_anchor_t *anchor, uint32_t f
 	struct vos_oi_iter	*oiter	= iter2oiter(iter);
 	char			*str	= NULL;
 	vos_iter_desc_t		 desc;
+	uint64_t		 feats;
 	unsigned int		 acts;
 	int			 rc;
 
@@ -523,6 +524,18 @@ oi_iter_match_probe(struct vos_iterator *iter, daos_anchor_t *anchor, uint32_t f
 		if (iter->it_filter_cb != NULL && (flags & VOS_ITER_PROBE_AGAIN) == 0) {
 			desc.id_type = VOS_ITER_OBJ;
 			desc.id_oid = obj->vo_id;
+			desc.id_parent_punch = 0;
+
+			feats = dbtree_feats_get(&obj->vo_tree);
+
+			if (!vos_feats_agg_time_get(feats, &desc.id_agg_write)) {
+				/* Upgrading case, set it to latest known epoch */
+				if (obj->vo_max_write == 0)
+					vos_ilog_last_update(&obj->vo_ilog, VOS_TS_TYPE_OBJ,
+							     &desc.id_agg_write);
+				else
+					desc.id_agg_write = obj->vo_max_write;
+			}
 			acts = 0;
 			start_seq = vos_sched_seq();
 			rc = iter->it_filter_cb(vos_iter2hdl(iter), &desc, iter->it_filter_arg,
@@ -605,13 +618,43 @@ oi_iter_next(struct vos_iterator *iter, daos_anchor_t *anchor)
 }
 
 static int
+oi_iter_fill(struct vos_obj_df *obj, struct vos_oi_iter *oiter, bool check_existence,
+	     vos_iter_entry_t *ent)
+{
+	daos_epoch_range_t	epr = {0, DAOS_EPOCH_MAX};
+	int			rc;
+
+	rc = oi_iter_ilog_check(obj, oiter, &epr, check_existence);
+	if (rc != 0)
+		return rc;
+
+	ent->ie_oid = obj->vo_id;
+	ent->ie_punch = oiter->oit_ilog_info.ii_next_punch;
+	ent->ie_obj_punch = ent->ie_punch;
+	ent->ie_epoch = epr.epr_hi;
+	ent->ie_vis_flags = VOS_VIS_FLAG_VISIBLE;
+	if (oiter->oit_ilog_info.ii_create == 0) {
+		/** Object isn't visible so mark covered */
+		ent->ie_vis_flags = VOS_VIS_FLAG_COVERED;
+	}
+	ent->ie_child_type = VOS_ITER_DKEY;
+
+	/* Upgrading case, set it to latest known epoch */
+	if (obj->vo_max_write == 0)
+		vos_ilog_last_update(&obj->vo_ilog, VOS_TS_TYPE_OBJ,
+				     &ent->ie_last_update);
+	else
+		ent->ie_last_update = obj->vo_max_write;
+
+	return 0;
+}
+
+static int
 oi_iter_fetch(struct vos_iterator *iter, vos_iter_entry_t *it_entry,
 	      daos_anchor_t *anchor)
 {
 	struct vos_oi_iter	*oiter = iter2oiter(iter);
-	struct vos_obj_df	*obj;
-	daos_epoch_range_t	 epr;
-	d_iov_t		 rec_iov;
+	d_iov_t			 rec_iov;
 	int			 rc;
 
 	D_ASSERT(iter->it_type == VOS_ITER_OBJ);
@@ -629,26 +672,8 @@ oi_iter_fetch(struct vos_iterator *iter, vos_iter_entry_t *it_entry,
 	}
 
 	D_ASSERT(rec_iov.iov_len == sizeof(struct vos_obj_df));
-	obj = (struct vos_obj_df *)rec_iov.iov_buf;
 
-	rc = oi_iter_ilog_check(obj, oiter, &epr, false);
-	if (rc != 0)
-		return rc;
-
-	it_entry->ie_oid = obj->vo_id;
-	it_entry->ie_punch = oiter->oit_ilog_info.ii_next_punch;
-	it_entry->ie_obj_punch = it_entry->ie_punch;
-	it_entry->ie_epoch = epr.epr_hi;
-	it_entry->ie_vis_flags = VOS_VIS_FLAG_VISIBLE;
-	if (oiter->oit_ilog_info.ii_create == 0) {
-		/** Object isn't visible so mark covered */
-		it_entry->ie_vis_flags = VOS_VIS_FLAG_COVERED;
-	}
-	it_entry->ie_child_type = VOS_ITER_DKEY;
-
-	it_entry->ie_last_update = obj->vo_max_write;
-
-	return 0;
+	return oi_iter_fill(rec_iov.iov_buf, oiter, false, it_entry);
 }
 
 static int
@@ -674,7 +699,7 @@ exit:
 }
 
 int
-oi_iter_pre_aggregate(daos_handle_t ih)
+oi_iter_check_punch(daos_handle_t ih)
 {
 	struct vos_iterator	*iter = vos_hdl2iter(ih);
 	struct vos_oi_iter	*oiter = iter2oiter(iter);

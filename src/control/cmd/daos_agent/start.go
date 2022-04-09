@@ -46,14 +46,14 @@ func (cmd *startCmd) Execute(_ []string) error {
 		return err
 	}
 
-	aicEnabled := (os.Getenv("DAOS_AGENT_DISABLE_CACHE") != "true")
+	aicEnabled := !cmd.attachInfoCacheDisabled()
 	if !aicEnabled {
-		cmd.Debugf("GetAttachInfo agent caching has been disabled\n")
+		cmd.Debug("GetAttachInfo agent caching has been disabled")
 	}
 
-	ficEnabled := (os.Getenv("DAOS_AGENT_DISABLE_OFI_CACHE") != "true")
+	ficEnabled := !cmd.fabricCacheDisabled()
 	if !ficEnabled {
-		cmd.Debugf("Local fabric interface caching has been disabled\n")
+		cmd.Debug("Local fabric interface caching has been disabled")
 	}
 
 	hwprovFini, err := hwprov.Init(cmd.Logger)
@@ -127,4 +127,12 @@ func (cmd *startCmd) Execute(_ []string) error {
 
 	cmd.Debugf("shutdown complete in %s", time.Since(shutdownRcvd))
 	return nil
+}
+
+func (cmd *startCmd) attachInfoCacheDisabled() bool {
+	return cmd.cfg.DisableCache || os.Getenv("DAOS_AGENT_DISABLE_CACHE") == "true"
+}
+
+func (cmd *startCmd) fabricCacheDisabled() bool {
+	return cmd.cfg.DisableCache || os.Getenv("DAOS_AGENT_DISABLE_OFI_CACHE") == "true"
 }
