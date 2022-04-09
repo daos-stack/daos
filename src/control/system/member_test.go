@@ -1,10 +1,10 @@
 //
-// (C) Copyright 2020-2021 Intel Corporation.
+// (C) Copyright 2020-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
 
-package system
+package system_test
 
 import (
 	"testing"
@@ -15,6 +15,7 @@ import (
 	"github.com/daos-stack/daos/src/control/common"
 	. "github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/common/proto/convert"
+	. "github.com/daos-stack/daos/src/control/system"
 )
 
 func TestSystem_Member_Stringify(t *testing.T) {
