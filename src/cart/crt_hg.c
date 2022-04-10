@@ -101,7 +101,7 @@ struct crt_na_dict crt_na_dict[] = {
 		.nad_port_bind	= true,
 	}, {
 		.nad_type	= CRT_NA_UCX_DC_X,
-		.nad_str	= "ucx+dc_x",
+		.nad_str	= "ucx+dc",
 		.nad_contig_eps	= true,
 		.nad_port_bind	= true,
 	}, {

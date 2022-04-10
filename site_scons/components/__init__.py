@@ -197,10 +197,11 @@ def define_mercury(reqs):
 
     if reqs.get_env('UCX'):
         mercury_build.extend(['-DNA_USE_UCX=ON',
-                              '-DUCX_INCLUDE_DIR=/usr/include',
-                              '-DUCP_LIBRARY=/usr/lib64/libucp.so',
-                              '-DUCS_LIBRARY=/usr/lib64/libucs.so',
-                              '-DUCT_LIBRARY=/usr/lib64/libuct.so'])
+                              '-DNA_UCX_HAS_THREAD_MODE_NAMES=1',
+                              '-DUCX_INCLUDE_DIR=/home/josephmo/localul/include',
+                              '-DUCP_LIBRARY=/home/josephmo/localul/lib/libucp.so',
+                              '-DUCS_LIBRARY=/home/josephmo/localul/lib/libucs.so',
+                              '-DUCT_LIBRARY=/home/josephmo/localul/lib/libuct.so'])
         libs.append('ucx')
 
     mercury_build.append(check(reqs,
