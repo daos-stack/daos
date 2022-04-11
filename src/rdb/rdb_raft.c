@@ -241,7 +241,7 @@ rdb_raft_store_replicas(daos_handle_t lc, uint64_t index, const d_rank_list_t *r
 			     2 /* n */, keys, vals);
 }
 
-static int
+int
 rdb_raft_load_replicas(daos_handle_t lc, uint64_t index, d_rank_list_t **replicas)
 {
 	d_iov_t		value;

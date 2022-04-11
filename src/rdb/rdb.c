@@ -232,7 +232,7 @@ rdb_open_internal(daos_handle_t pool, daos_handle_t mc, const uuid_t uuid, struc
 	struct vos_pool_space	vps;
 	uint64_t		rdb_extra_sys[DAOS_MEDIA_MAX];
 
-	D_ASSERT(cbs->dc_stop != NULL);
+	D_ASSERT(cbs == NULL || cbs->dc_stop != NULL);
 
 	D_ALLOC_PTR(db);
 	if (db == NULL) {
@@ -458,6 +458,93 @@ rdb_close(struct rdb_storage *storage)
 	ABT_mutex_free(&db->d_mutex);
 	D_DEBUG(DB_MD, DF_DB": closed db %p\n", DP_DB(db), db);
 	D_FREE(db);
+}
+
+/**
+ * Glance at \a storage and return \a clue. Callers are responsible for freeing
+ * \a clue->bcl_replicas with d_rank_list_free.
+ *
+ * \param[in]	storage	database storage
+ * \parma[out]	clue	database clue
+ */
+int
+rdb_glance(struct rdb_storage *storage, struct rdb_clue *clue)
+{
+	struct rdb	       *db = rdb_from_storage(storage);
+	d_iov_t			value;
+	uint64_t		term;
+	int			vote;
+	uint64_t		last_index = db->d_lc_record.dlr_tail - 1;
+	uint64_t		last_term;
+	d_rank_list_t	       *replicas;
+	uint64_t		oid_next;
+	int			rc;
+
+	d_iov_set(&value, &term, sizeof(term));
+	rc = rdb_mc_lookup(db->d_mc, RDB_MC_ATTRS, &rdb_mc_term, &value);
+	if (rc == -DER_NONEXIST) {
+		term = 0;
+	} else if (rc != 0) {
+		D_ERROR(DF_DB": failed to look up term: "DF_RC"\n", DP_DB(db), DP_RC(rc));
+		goto err;
+	}
+
+	d_iov_set(&value, &vote, sizeof(vote));
+	rc = rdb_mc_lookup(db->d_mc, RDB_MC_ATTRS, &rdb_mc_vote, &value);
+	if (rc == -DER_NONEXIST) {
+		vote = -1;
+	} else if (rc != 0) {
+		D_ERROR(DF_DB": failed to look up vote: "DF_RC"\n", DP_DB(db), DP_RC(rc));
+		goto err;
+	}
+
+	if (last_index == db->d_lc_record.dlr_base) {
+		last_term = db->d_lc_record.dlr_base_term;
+	} else {
+		struct rdb_entry header;
+
+		d_iov_set(&value, &header, sizeof(header));
+		rc = rdb_lc_lookup(db->d_lc, last_index, RDB_LC_ATTRS, &rdb_lc_entry_header,
+				   &value);
+		if (rc != 0) {
+			D_ERROR(DF_DB": failed to look up entry "DF_U64" header: %d\n", DP_DB(db),
+				last_index, rc);
+			goto err;
+		}
+		last_term = header.dre_term;
+	}
+
+	rc = rdb_raft_load_replicas(db->d_lc, last_index, &replicas);
+	if (rc != 0) {
+		D_ERROR(DF_DB": failed to load replicas at "DF_U64": "DF_RC"\n", DP_DB(db),
+			last_index, DP_RC(rc));
+		goto err;
+	}
+
+	d_iov_set(&value, &oid_next, sizeof(oid_next));
+	rc = rdb_lc_lookup(db->d_lc, last_index, RDB_LC_ATTRS, &rdb_lc_oid_next, &value);
+	if (rc == -DER_NONEXIST) {
+		oid_next = RDB_LC_OID_NEXT_INIT;
+	} else if (rc != 0) {
+		D_ERROR(DF_DB": failed to look up next object number: %d\n", DP_DB(db), rc);
+		goto err_replicas;
+	}
+
+	clue->bcl_term = term;
+	clue->bcl_vote = vote;
+	clue->bcl_self = dss_self_rank(); /* should be stored persistently in the future */
+	clue->bcl_last_index = last_index;
+	clue->bcl_last_term = last_term;
+	clue->bcl_base_index = db->d_lc_record.dlr_base;
+	clue->bcl_base_term = db->d_lc_record.dlr_base_term;
+	clue->bcl_replicas = replicas;
+	clue->bcl_oid_next = oid_next;
+	return 0;
+
+err_replicas:
+	d_rank_list_free(replicas);
+err:
+	return rc;
 }
 
 /**

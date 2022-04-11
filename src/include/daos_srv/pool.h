@@ -23,6 +23,7 @@
 #include <daos_security.h>
 #include <gurt/telemetry_common.h>
 #include <daos_srv/policy.h>
+#include <daos_srv/rdb.h>
 
 /*
  * Aggregation of pool/container/object/keys disk format change.
@@ -298,5 +299,57 @@ ds_pool_get_version(struct ds_pool *pool)
 
 	return ver;
 }
+
+/**
+ * Pool service replica clue
+ *
+ * Pool service replica info gathered when glancing at a pool.
+ */
+struct ds_pool_svc_clue {
+	struct rdb_clue	psc_db_clue;
+	uint32_t	psc_map_version;	/**< if 0, empty DB replica */
+};
+
+/** Pool parent directory */
+enum ds_pool_dir {
+	DS_POOL_DIR_NORMAL,
+	DS_POOL_DIR_NEWBORN,
+	DS_POOL_DIR_ZOMBIE
+};
+
+/**
+ * Pool clue
+ *
+ * Pool shard and service replica (if applicable) info gathered when glancing
+ * at a pool. The pc_uuid, pc_dir, and pc_rc fields are always valid; the
+ * pc_svc_clue field is valid only if pc_rc is zero.
+ */
+struct ds_pool_clue {
+	uuid_t				pc_uuid;
+	d_rank_t			pc_rank;
+	enum ds_pool_dir		pc_dir;
+	int				pc_rc;
+	struct ds_pool_svc_clue	       *pc_svc_clue;
+};
+
+void ds_pool_glance(uuid_t uuid, enum ds_pool_dir dir, struct ds_pool_clue *clue);
+void ds_pool_clue_fini(struct ds_pool_clue *clue);
+
+/** Array of ds_pool_clue objects */
+struct ds_pool_clues {
+	struct ds_pool_clue    *pcs_array;
+	int			pcs_len;
+	int			pcs_cap;
+};
+
+/**
+ * If this callback returns 0, the pool with \a uuid will be glanced at;
+ * otherwise, the pool with \a uuid will be skipped.
+ */
+typedef int (*ds_pool_scan_filter_t)(uuid_t uuid, void *arg);
+
+int ds_pool_scan(ds_pool_scan_filter_t filter, void *filter_arg, struct ds_pool_clues *clues_out);
+void ds_pool_clues_fini(struct ds_pool_clues *clues);
+void ds_pool_clues_print(struct ds_pool_clues *clues);
 
 #endif /* __DAOS_SRV_POOL_H__ */
