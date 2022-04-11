@@ -105,3 +105,14 @@ class DmvrSerialSmall(DataMoverTestBase):
         :avocado: tags=dm_serial_small,dm_serial_small_dserialize
         """
         self.run_dm_serial_small("DSERIAL")
+
+    @avocado.fail_on(DaosApiError)
+    def test_dm_serial_small_cont_serialize(self):
+        """
+        Test Description:
+            DAOS-6875: Verify serializing a small container.
+        :avocado: tags=all,daily_regression
+        :avocado: tags=datamover,cont_serialize
+        :avocado: tags=dm_serial_small,dm_serial_small_cont_serialize
+        """
+        self.run_dm_serial_small("CONT_SERIALIZE")

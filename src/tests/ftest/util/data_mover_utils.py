@@ -322,6 +322,111 @@ class FsCopy():
         return self.daos_cmd.filesystem_copy(src=self.src, dst=self.dst,
                                              preserve_props=self.preserve_props)
 
+class ContSerialize():
+    """Class defining an object of type ContSerialize.
+       Allows interfacing with daos cont serialize.
+
+    """
+
+    def __init__(self, daos_cmd, log):
+        """Create a ContSerialize object.
+
+        Args:
+            daos_cmd (DaosCommand): daos command to issue the daos
+                cont serialize command.
+            log (TestLogger): logger to log messages
+
+        """
+        self.src = None
+        self.output_path = None
+        self.daos_cmd = daos_cmd
+        self.log = log
+
+    def set_cont_serialize_params(self, src=None, output_path=None):
+        """Set the daos cont serialize params.
+
+        Args:
+            src (str, optional): The source path formatted as
+                daos://<pool>/<cont>/<path> or <path>
+            output_path (str, optional): The directory to write HDF5 file
+
+        """
+        if src:
+            self.src = src
+        if output_path:
+            self.output_path = output_path
+
+    def run(self):
+        # pylint: disable=arguments-differ
+        """Run the daos cont serialize command.
+
+        Returns:
+            CmdResult: Object that contains exit status, stdout, and other
+                information.
+
+        Raises:
+            CommandFailure: In case daos cont serialize run command fails
+
+        """
+        self.log.info("Starting daos cont serialize")
+
+        return self.daos_cmd.container_serialize(src=self.src, output_path=self.output_path)
+
+class ContDeserialize():
+    """Class defining an object of type ContDeserialize.
+       Allows interfacing with daos cont deserialize.
+
+    """
+
+    def __init__(self, daos_cmd, log):
+        """Create a ContDeserialize object.
+
+        Args:
+            daos_cmd (DaosCommand): daos command to issue the daos
+                cont serialize command.
+            log (TestLogger): logger to log messages
+
+        """
+        self.deser_pool = None
+        self.file_path = None
+        self.cont_label = None
+        self.daos_cmd = daos_cmd
+        self.log = log
+
+    def set_cont_deserialize_params(self, deser_pool=None, file_path=None, cont_label=None):
+        """Set the daos cont deserialize params.
+
+        Args:
+            pool (str): The pool formatted as daos://<pool>
+            file_path (str): The path to the HDF5 file
+            cont_label (str, optional): The label for the created container
+
+        """
+        if deser_pool:
+            self.deser_pool = deser_pool
+        if file_path:
+            self.file_path = file_path
+        if cont_label:
+            self.cont_label = cont_label
+
+    def run(self):
+        # pylint: disable=arguments-differ
+        """Run the daos cont deserialize command.
+
+        Returns:
+            CmdResult: Object that contains exit status, stdout, and other
+                information.
+
+        Raises:
+            CommandFailure: In case daos cont serialize run command fails
+
+        """
+        self.log.info("Starting daos cont deserialize")
+
+        return self.daos_cmd.container_deserialize(deser_pool=self.deser_pool,
+                                                   file_path=self.file_path,
+                                                   cont_label=self.cont_label)
+
 class ContClone():
     """Class defining an object of type ContClone.
        Allows interfacing with daos container copy in a similar

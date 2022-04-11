@@ -146,7 +146,7 @@ func parseOpts(args []string, opts *cliOptions, log *logging.LeveledLogger) erro
 	p.LongDescription = `daos is a tool that can be used to manage/query pool content,
 create/query/manage/destroy a container inside a pool, copy data
 between a POSIX container and a POSIX filesystem, clone a DAOS container,
-or query/manage an object inside a container.`
+serialize and deserialize a DAOS container, or query/manage an object inside a container.`
 	p.Options ^= flags.PrintErrors // Don't allow the library to print errors
 	p.CommandHandler = func(cmd flags.Commander, args []string) error {
 		if cmd == nil {

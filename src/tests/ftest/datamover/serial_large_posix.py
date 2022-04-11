@@ -1,6 +1,6 @@
 #!/usr/bin/python
 '''
-  (C) Copyright 2020-2021 Intel Corporation.
+  (C) Copyright 2020-2022 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
@@ -39,6 +39,9 @@ class DmvrSerialLargePosix(DataMoverTestBase):
 
         # Get the mdtest params
         mdtest_flags = self.params.get("mdtest_flags", "/run/mdtest/*")
+        self.mdtest_processes = self.params.get(self.tool.lower(), "/run/mdtest/client_processes/*")
+        if not self.mdtest_processes:
+            self.fail("Failed to get mdtest processes for {}".format(tool))
         file_size = self.params.get("bytes", "/run/mdtest/*")
 
         # Create pool1 and cont1
@@ -84,3 +87,14 @@ class DmvrSerialLargePosix(DataMoverTestBase):
         :avocado: tags=dm_serial_large_posix,dm_serial_large_posix_dserialize
         """
         self.run_dm_serial_large_posix("DSERIAL")
+
+    def test_dm_serial_large_posix_cont_serialize(self):
+        """
+        Test Description:
+            DAOS-7432: Verify serializing a large POSIX container.
+        :avocado: tags=all,full_regression
+        :avocado: tags=hw,large
+        :avocado: tags=datamover,cont_serialize,dfuse
+        :avocado: tags=dm_serial_large_posix,dm_serial_large_posix_cont_serialize
+        """
+        self.run_dm_serial_large_posix("CONT_SERIALIZE")

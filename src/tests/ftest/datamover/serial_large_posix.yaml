@@ -30,7 +30,8 @@ container:
   control_method: daos
 mdtest:
   client_processes:
-    np: 30
+    cont_serialize: 10
+    dserial: 30
   api: DFS
   test_dir: "/"
   iteration: 1

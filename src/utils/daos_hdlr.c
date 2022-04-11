@@ -39,48 +39,9 @@
 #include "daos_fs_sys.h"
 
 #include "daos_hdlr.h"
+#include "daos_datamover.h"
 
 #define OID_ARR_SIZE 8
-
-struct file_dfs {
-	enum {POSIX, DAOS} type;
-	int fd;
-	daos_off_t offset;
-	dfs_obj_t *obj;
-	dfs_sys_t *dfs_sys;
-};
-
-struct dm_args {
-	char		*src;
-	char		*dst;
-	char		src_pool[DAOS_PROP_LABEL_MAX_LEN + 1];
-	char		src_cont[DAOS_PROP_LABEL_MAX_LEN + 1];
-	char		dst_pool[DAOS_PROP_LABEL_MAX_LEN + 1];
-	char		dst_cont[DAOS_PROP_LABEL_MAX_LEN + 1];
-	daos_handle_t	src_poh;
-	daos_handle_t	src_coh;
-	daos_handle_t	dst_poh;
-	daos_handle_t	dst_coh;
-	uint32_t	cont_prop_oid;
-	uint32_t	cont_prop_layout;
-	uint64_t	cont_layout;
-	uint64_t	cont_oid;
-
-};
-
-struct fs_copy_stats {
-	uint64_t		num_dirs;
-	uint64_t		num_files;
-	uint64_t		num_links;
-};
-
-/* Report an error with a system error number using a standard output format */
-#define DH_PERROR_SYS(AP, RC, STR, ...)					\
-	fprintf((AP)->errstream, STR ": %s (%d)\n", ## __VA_ARGS__, strerror(RC), (RC))
-
-/* Report an error with a daos error number using a standard output format */
-#define DH_PERROR_DER(AP, RC, STR, ...)					\
-	fprintf((AP)->errstream, STR ": %s (%d)\n", ## __VA_ARGS__, d_errdesc(RC), (RC))
 
 static int
 parse_acl_file(struct cmd_args_s *ap, const char *path, struct daos_acl **acl);
@@ -1698,7 +1659,7 @@ dm_serialize_cont_md(struct cmd_args_s *ap, struct dm_args *ca, daos_prop_t *pro
 	char	**names = NULL;
 	void	**buffers = NULL;
 	size_t	*sizes = NULL;
-	void	*handle;
+	void	*handle = NULL;
 	int (*daos_cont_serialize_md)(char *, daos_prop_t *props, int, char **, char **, size_t *);
 
 	/* Get all user attributes if any exist */
@@ -1716,7 +1677,7 @@ dm_serialize_cont_md(struct cmd_args_s *ap, struct dm_args *ca, daos_prop_t *pro
 	daos_cont_serialize_md = dlsym(handle, "daos_cont_serialize_md");
 	if (daos_cont_serialize_md == NULL)  {
 		rc = -DER_INVAL;
-		DH_PERROR_DER(ap, rc, "Failed to lookup daos_cont_serialize_md");
+		DH_PERROR_DER(ap, rc, "dlsym failed to lookup daos_cont_serialize_md");
 		D_GOTO(out, rc);
 	}
 	(*daos_cont_serialize_md)(preserve_props, props, num_attrs, names, (char **)buffers, sizes);
@@ -1724,15 +1685,17 @@ out:
 	if (num_attrs > 0) {
 		dm_cont_free_usr_attrs(num_attrs, &names, &buffers, &sizes);
 	}
+	if (handle != NULL)
+		dlclose(handle);
 	return rc;
 }
 
-static int
+int
 dm_deserialize_cont_md(struct cmd_args_s *ap, struct dm_args *ca, char *preserve_props,
 		       daos_prop_t **props)
 {
 	int		rc = 0;
-	void		*handle;
+	void		*handle = NULL;
 	int (*daos_cont_deserialize_props)(daos_handle_t, char *, daos_prop_t **props, uint64_t *);
 
 	handle = dlopen(LIBSERIALIZE, RTLD_NOW);
@@ -1744,15 +1707,17 @@ dm_deserialize_cont_md(struct cmd_args_s *ap, struct dm_args *ca, char *preserve
 	daos_cont_deserialize_props = dlsym(handle, "daos_cont_deserialize_props");
 	if (daos_cont_deserialize_props == NULL)  {
 		rc = -DER_INVAL;
-		DH_PERROR_DER(ap, rc, "Failed to lookup daos_cont_deserialize_props");
+		DH_PERROR_DER(ap, rc, "dlsym failed to lookup daos_cont_deserialize_props");
 		D_GOTO(out, rc);
 	}
 	(*daos_cont_deserialize_props)(ca->dst_poh, preserve_props, props, &ca->cont_layout);
 out:
+	if (handle != NULL)
+		dlclose(handle);
 	return rc;
 }
 
-static int
+int
 dm_deserialize_cont_attrs(struct cmd_args_s *ap, struct dm_args *ca, char *preserve_props)
 {
 	int		rc = 0;
@@ -1760,7 +1725,7 @@ dm_deserialize_cont_attrs(struct cmd_args_s *ap, struct dm_args *ca, char *prese
 	char		**names = NULL;
 	void		**buffers = NULL;
 	size_t		*sizes = NULL;
-	void		*handle;
+	void		*handle = NULL;
 	int (*daos_cont_deserialize_attrs)(char *, uint64_t *, char ***, void ***, size_t **);
 
 	handle = dlopen(LIBSERIALIZE, RTLD_NOW);
@@ -1772,7 +1737,7 @@ dm_deserialize_cont_attrs(struct cmd_args_s *ap, struct dm_args *ca, char *prese
 	daos_cont_deserialize_attrs = dlsym(handle, "daos_cont_deserialize_attrs");
 	if (daos_cont_deserialize_attrs == NULL)  {
 		rc = -DER_INVAL;
-		DH_PERROR_DER(ap, rc, "Failed to lookup daos_cont_deserialize_attrs");
+		DH_PERROR_DER(ap, rc, "dlsym failed to lookup daos_cont_deserialize_attrs");
 		D_GOTO(out, rc);
 	}
 	(*daos_cont_deserialize_attrs)(preserve_props, &num_attrs, &names, &buffers, &sizes);
@@ -1786,6 +1751,8 @@ dm_deserialize_cont_attrs(struct cmd_args_s *ap, struct dm_args *ca, char *prese
 		dm_cont_free_usr_attrs(num_attrs, &names, &buffers, &sizes);
 	}
 out:
+	if (handle != NULL)
+		dlclose(handle);
 	return rc;
 }
 
@@ -2143,7 +2110,7 @@ dm_disconnect(struct cmd_args_s *ap,
 * Modifies "path" to be the relative container path, defaulting to "/".
 * Returns 0 if a daos path was successfully parsed, a error number if not.
 */
-static int
+int
 dm_parse_path(struct file_dfs *file, char *path, size_t path_len, char (*pool_str)[],
 	      char (*cont_str)[])
 {
