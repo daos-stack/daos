@@ -169,6 +169,7 @@ def scons():
     # Sets CGO_LDFLAGS for rpath
     aenv.d_add_rpaths(None, True, True)
     install_go_bin(aenv, 'daos_server_helper', libs=['nvme_control'])
+    install_go_bin(aenv, 'daos_ssd', libs=['nvme_control'])
 
     if is_firmware_mgmt_build(aenv):
         print("(EXPERIMENTAL) Building DAOS firmware tools")
