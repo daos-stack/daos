@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2017-2021 Intel Corporation.
+ * (C) Copyright 2017-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -29,14 +29,12 @@ mdr_stop_pool_svc(void **argv)
 				     NULL, 128 * 1024 * 1024, 0,
 				     NULL, arg->pool.svc, uuid);
 	}
-	MPI_Bcast(&rc, 1, MPI_INT, 0, MPI_COMM_WORLD);
+	par_bcast(PAR_COMM_WORLD, &rc, 1, PAR_INT, 0);
 	assert_rc_equal(rc, 0);
-	MPI_Bcast(uuid, 16, MPI_CHAR, 0, MPI_COMM_WORLD);
-	MPI_Bcast(&arg->pool.svc->rl_nr, sizeof(arg->pool.svc->rl_nr), MPI_CHAR,
-		  0, MPI_COMM_WORLD);
-	MPI_Bcast(arg->pool.ranks,
-		  sizeof(arg->pool.ranks[0]) * arg->pool.svc->rl_nr,
-		  MPI_CHAR, 0, MPI_COMM_WORLD);
+	par_bcast(PAR_COMM_WORLD, uuid, 16, PAR_CHAR, 0);
+	par_bcast(PAR_COMM_WORLD, &arg->pool.svc->rl_nr, sizeof(arg->pool.svc->rl_nr), PAR_CHAR, 0);
+	par_bcast(PAR_COMM_WORLD, arg->pool.ranks,
+		  sizeof(arg->pool.ranks[0]) * arg->pool.svc->rl_nr, PAR_CHAR, 0);
 
 	/* Check the number of pool service replicas. */
 	if (arg->pool.svc->rl_nr < 3) {
@@ -56,7 +54,7 @@ mdr_stop_pool_svc(void **argv)
 				       DAOS_PC_RW, &poh, NULL /* info */,
 				       NULL /* ev */);
 	}
-	MPI_Bcast(&rc, 1, MPI_INT, 0, MPI_COMM_WORLD);
+	par_bcast(PAR_COMM_WORLD, &rc, 1, PAR_INT, 0);
 	assert_rc_equal(rc, 0);
 	handle_share(&poh, HANDLE_POOL, arg->myrank, DAOS_HDL_INVAL, 0);
 
@@ -91,7 +89,7 @@ mdr_stop_pool_svc(void **argv)
 		print_message("repeating %d queries: end\n", n);
 	}
 
-	MPI_Barrier(MPI_COMM_WORLD);
+	par_barrier(PAR_COMM_WORLD);
 
 	print_message("disconnecting from pool\n");
 	rc = daos_pool_disconnect(poh, NULL /* ev */);
@@ -197,6 +195,6 @@ run_daos_md_replication_test(int rank, int size)
 
 	rc = cmocka_run_group_tests_name("DAOS_MD_Replication", mdr_tests,
 					 setup, test_teardown);
-	MPI_Barrier(MPI_COMM_WORLD);
+	par_barrier(PAR_COMM_WORLD);
 	return rc;
 }
