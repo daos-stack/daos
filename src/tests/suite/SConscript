@@ -70,18 +70,15 @@ def configure_cmocka(nenv):
 #
 def scons():
     """Execute build"""
-    Import('denv', 'base_env', 'have_mpi')
+    Import('denv', 'base_env')
 
     libraries = ['daos', 'dfs', 'daos_tests', 'gurt', 'cart']
-    libraries += ['uuid', 'cmocka', 'pthread', 'isal']
+    libraries += ['uuid', 'cmocka', 'pthread', 'isal', 'dpar']
 
     dfuse_env = base_env.Clone()
     compiler_setup.base_setup(dfuse_env)
     dfusetest = daos_build.program(dfuse_env, File("dfuse_test.c"), LIBS='cmocka')
     denv.Install('$PREFIX/bin/', dfusetest)
-
-    if not have_mpi:
-        return
 
     denv.AppendUnique(CPPPATH=["#/src/client/dfs"])
     denv.AppendUnique(CPPPATH=[Dir('../../mgmt').srcnode()])

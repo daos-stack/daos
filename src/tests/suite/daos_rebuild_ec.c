@@ -1123,7 +1123,7 @@ run_daos_rebuild_simple_ec_test(int rank, int size, int *sub_tests,
 {
 	int rc = 0;
 
-	MPI_Barrier(MPI_COMM_WORLD);
+	par_barrier(PAR_COMM_WORLD);
 	if (sub_tests_size == 0) {
 		sub_tests_size = ARRAY_SIZE(rebuild_tests);
 		sub_tests = NULL;
@@ -1133,7 +1133,7 @@ run_daos_rebuild_simple_ec_test(int rank, int size, int *sub_tests,
 				ARRAY_SIZE(rebuild_tests), sub_tests,
 				sub_tests_size);
 
-	MPI_Barrier(MPI_COMM_WORLD);
+	par_barrier(PAR_COMM_WORLD);
 
 	return rc;
 }

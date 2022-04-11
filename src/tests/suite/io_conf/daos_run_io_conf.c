@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2018-2021 Intel Corporation.
+ * (C) Copyright 2018-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -31,7 +31,7 @@ main(int argc, char **argv)
 	void			*state = NULL;
 	int			rc;
 
-	MPI_Init(&argc, &argv);
+	par_init(&argc, &argv);
 	rc = daos_init();
 	if (rc) {
 		fprintf(stderr, "daos init failed: rc %d\n", rc);
@@ -84,7 +84,7 @@ main(int argc, char **argv)
 	}
 	arg->eio_args.op_no_verify = 1;	/* No verification for now */
 
-	MPI_Barrier(MPI_COMM_WORLD);
+	par_barrier(PAR_COMM_WORLD);
 
 	rc = io_conf_run(arg, fname);
 	if (rc)
@@ -92,11 +92,11 @@ main(int argc, char **argv)
 
 	test_teardown(&state);
 
-	MPI_Barrier(MPI_COMM_WORLD);
+	par_barrier(PAR_COMM_WORLD);
 	fprintf(stdout, "daos_run_io_conf completed successfully\n");
 out_fini:
 	daos_fini();
 out_mpi:
-	MPI_Finalize();
+	par_fini();
 	return rc;
 }

@@ -360,6 +360,6 @@ run_daos_kv_test(int rank, int size)
 
 	rc = cmocka_run_group_tests_name("DAOS_KV_API", kv_tests,
 					 kv_setup, test_teardown);
-	MPI_Barrier(MPI_COMM_WORLD);
+	par_barrier(PAR_COMM_WORLD);
 	return rc;
 }
