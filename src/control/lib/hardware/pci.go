@@ -294,6 +294,10 @@ func (pas *PCIAddressSet) Strings() []string {
 
 // Strings returns PCI addresses as string of joined space separated strings.
 func (pas *PCIAddressSet) String() string {
+	if pas == nil {
+		return ""
+	}
+
 	return strings.Join(pas.Strings(), bdevPciAddrSep)
 }
 
