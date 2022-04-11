@@ -29,15 +29,28 @@ def build_daos_common(env, client, prereqs):
     common = daos_build.library(denv, libname, COMMON_FILES, LIBS=common_libs)
     denv.Install('$PREFIX/lib64/', common)
 
-def build_dts_library(env):
+def build_dpar(env, mpi_env):
     """Build libdts library"""
-    Import('prereqs')
+
+    serial_lib = daos_build.library(env, 'libdpar', ['dpar_stub.c'], LIBS=['pthread', 'dl'])
+    env.Install('$PREFIX/lib64/', serial_lib)
+
+    if mpi_env is None:
+        return
+
+    denv = mpi_env.Clone()
+
+    mpi_lib = daos_build.library(denv, 'libdpar_mpi', ['dpar_mpi.c'])
+    denv.Install('$PREFIX/lib64/', mpi_lib)
+
+def build_dts_library(env, prereqs):
+    """Build libdts library"""
 
     denv = env.Clone()
 
     prereqs.require(denv, 'argobots', 'protobufc')
 
-    libraries = ['cmocka', 'daos', 'daos_tests']
+    libraries = ['cmocka', 'daos', 'daos_tests', 'dpar']
 
     # Add runtime paths for daos libraries
     denv.AppendUnique(LIBPATH=[Dir('../client/api')])
@@ -102,8 +115,8 @@ def scons():
     prereqs.require(tenv, 'pmdk')
     SConscript('tests/SConscript', exports='tenv')
 
-    if base_env_mpi:
-        build_dts_library(base_env_mpi)
+    build_dpar(base_env, base_env_mpi)
+    build_dts_library(base_env, prereqs)
 
 if __name__ == "SCons.Script":
     scons()

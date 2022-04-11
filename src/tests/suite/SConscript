@@ -72,7 +72,8 @@ def scons():
     """Execute build"""
     Import('denv')
 
-    libraries = ['daos', 'dfs', 'daos_tests', 'cart', 'gurt', 'uuid', 'cmocka', 'pthread', 'isal']
+    libraries = ['daos', 'dfs', 'daos_tests', 'gurt', 'cart']
+    libraries += ['uuid', 'cmocka', 'pthread', 'isal', 'dpar']
 
     denv.AppendUnique(CPPPATH=[Dir('../../client/dfs').srcnode()])
     denv.AppendUnique(CPPPATH=[Dir('../../mgmt').srcnode()])

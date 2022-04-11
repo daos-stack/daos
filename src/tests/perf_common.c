@@ -556,7 +556,7 @@ pause_test(char *name)
 			break;
 	}
 	if (ts_ctx.tsc_mpi_size > 1)
-		MPI_Barrier(MPI_COMM_WORLD);
+		par_barrier(PAR_COMM_WORLD);
 }
 
 static int
@@ -599,7 +599,7 @@ run_one(struct pf_test *ts, struct pf_param *param)
 	if (ts_ctx.tsc_mpi_size > 1) {
 		int	rc_g = 0;
 
-		MPI_Allreduce(&rc, &rc_g, 1, MPI_INT, MPI_MIN, MPI_COMM_WORLD);
+		par_allreduce(PAR_COMM_WORLD, &rc, &rc_g, 1, PAR_INT, PAR_MIN);
 		rc = rc_g;
 	}
 
@@ -692,10 +692,8 @@ show_result(struct pf_param *param, uint64_t start, uint64_t end,
 	double		duration_sum;
 
 	if (ts_ctx.tsc_mpi_size > 1) {
-		MPI_Reduce(&start, &first_start, 1, MPI_UINT64_T,
-			   MPI_MIN, 0, MPI_COMM_WORLD);
-		MPI_Reduce(&end, &last_end, 1, MPI_UINT64_T,
-			   MPI_MAX, 0, MPI_COMM_WORLD);
+		par_reduce(PAR_COMM_WORLD, &start, &first_start, 1, PAR_UINT64, PAR_MIN, 0);
+		par_reduce(PAR_COMM_WORLD, &end, &last_end, 1, PAR_UINT64, PAR_MAX, 0);
 		agg_duration = (last_end - first_start) /
 			       (1000.0 * 1000 * 1000);
 	} else {
@@ -705,12 +703,12 @@ show_result(struct pf_param *param, uint64_t start, uint64_t end,
 	/* nano sec to sec */
 
 	if (ts_ctx.tsc_mpi_size > 1) {
-		MPI_Reduce(&param->pa_duration, &duration_max, 1, MPI_DOUBLE,
-			   MPI_MAX, 0, MPI_COMM_WORLD);
-		MPI_Reduce(&param->pa_duration, &duration_min, 1, MPI_DOUBLE,
-			   MPI_MIN, 0, MPI_COMM_WORLD);
-		MPI_Reduce(&param->pa_duration, &duration_sum, 1, MPI_DOUBLE,
-			   MPI_SUM, 0, MPI_COMM_WORLD);
+		par_reduce(PAR_COMM_WORLD, &param->pa_duration, &duration_max, 1, PAR_DOUBLE,
+			   PAR_MAX, 0);
+		par_reduce(PAR_COMM_WORLD, &param->pa_duration, &duration_min, 1, PAR_DOUBLE,
+			   PAR_MIN, 0);
+		par_reduce(PAR_COMM_WORLD, &param->pa_duration, &duration_sum, 1, PAR_DOUBLE,
+			   PAR_SUM, 0);
 	} else {
 		duration_max = duration_min =
 		duration_sum = param->pa_duration;
