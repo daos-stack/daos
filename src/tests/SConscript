@@ -1,6 +1,5 @@
 """Build tests"""
 import daos_build
-import os
 import compiler_setup
 
 def build_tests(prereqs, env, client_libs):
@@ -84,6 +83,11 @@ def scons():
     if not base_env_mpi:
         return
     denv = base_env_mpi.Clone()
+
+    denv.AppendUnique(LIBPATH=[Dir('../gurt')])
+    denv.AppendUnique(LIBPATH=[Dir('../common')])
+    denv.AppendUnique(LIBPATH=[Dir('../client/api')])
+    denv.AppendUnique(LIBPATH=[Dir('../cart')])
 
     daos_build.program(denv, 'simple_array', 'simple_array.c', LIBS=libs_client)
     daos_build.program(denv, 'simple_obj', 'simple_obj.c', LIBS=libs_client)
