@@ -195,6 +195,8 @@ func getEngineNUMANodes(log logging.Logger, engineCfgs []*engine.Config) []strin
 }
 
 func prepBdevStorage(srv *server, iommuEnabled bool) error {
+	defer srv.logDuration(track("time to prepare bdev storage"))
+
 	hasBdevs := cfgHasBdevs(srv.cfg)
 
 	if hasBdevs {
@@ -220,13 +222,6 @@ func prepBdevStorage(srv *server, iommuEnabled bool) error {
 		PCIBlockList: strings.Join(srv.cfg.BdevExclude, storage.BdevPciAddrSep),
 		DisableVFIO:  srv.cfg.DisableVFIO,
 		EnableVMD:    srv.cfg.EnableVMD && !srv.cfg.DisableVFIO && iommuEnabled,
-		Reset_:       true, // Run prepare with reset first to release resources.
-	}
-
-	// Perform prepare reset based on the values in the config file.
-	// Note that prepare reset will not allocate hugepages.
-	if _, err := srv.ctlSvc.NvmePrepare(prepReq); err != nil {
-		srv.log.Errorf("automatic NVMe prepare reset failed: %s", err)
 	}
 
 	if hasBdevs {
@@ -266,7 +261,6 @@ func prepBdevStorage(srv *server, iommuEnabled bool) error {
 	//
 	// TODO: should be passing root context into prepare request to
 	//       facilitate cancellation.
-	prepReq.Reset_ = false
 	if _, err := srv.ctlSvc.NvmePrepare(prepReq); err != nil {
 		srv.log.Errorf("automatic NVMe prepare failed: %s", err)
 	}
@@ -276,6 +270,8 @@ func prepBdevStorage(srv *server, iommuEnabled bool) error {
 
 // scanBdevStorage performs discovery and validates existence of configured NVMe SSDs.
 func scanBdevStorage(srv *server) (*storage.BdevScanResponse, error) {
+	defer srv.logDuration(track("time to scan bdev storage"))
+
 	if srv.cfg.NrHugepages < 0 {
 		srv.log.Debugf("skip nvme scan as hugepages have been disabled in config")
 		return &storage.BdevScanResponse{}, nil

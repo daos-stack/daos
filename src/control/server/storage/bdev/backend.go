@@ -179,41 +179,47 @@ func (sb *spdkBackend) prepare(req storage.BdevPrepareRequest, userLookup userLo
 		return resp, nil
 	}
 
-	// If VMD has been explicitly enabled and there are VMD enabled NVMe devices on the host,
-	// attempt to prepare them first.
-	vmdReq, err := getVMDPrepReq(sb.log, &req, vmdDetect)
-	if err != nil {
-		return resp, errors.Wrapf(err, "create vmd request")
+	// Update request if VMD has been explicitly enabled and there are VMD endpoints configured.
+	if err := updatePrepareRequest(sb.log, &req, vmdDetect); err != nil {
+		return resp, errors.Wrapf(err, "update prepare request")
 	}
-	if vmdReq != nil {
-		if err := sb.script.Prepare(vmdReq); err != nil {
-			return resp, errors.Wrap(err, "re-binding vmd ssds to attach with spdk")
+	resp.VMDPrepared = req.EnableVMD
+
+	// Before preparing, reset device bindings.
+	if req.EnableVMD {
+		// Unbind devices to speed up VMD re-binding as per
+		// https://github.com/spdk/spdk/commit/b0aba3fcd5aceceea530a702922153bc75664978.
+		//
+		// Applies block (not allow) list if VMD is configured so specific NVMe devices can
+		// be reserved for other use (bdev_exclude).
+		if err := sb.script.Unbind(&req); err != nil {
+			return resp, errors.Wrap(err, "un-binding devices")
 		}
-		resp.VMDPrepared = true
+	} else {
+		if err := sb.script.Reset(&req); err != nil {
+			return resp, errors.Wrap(err, "resetting device bindings")
+		}
 	}
 
-	// Prepare non-VMD devices.
-	req.EnableVMD = false
-	return resp, errors.Wrap(sb.script.Prepare(&req), "re-binding ssds to attach with spdk")
+	return resp, errors.Wrap(sb.script.Prepare(&req), "binding devices to userspace drivers")
 }
 
 // reset receives function pointers for external interfaces.
 func (sb *spdkBackend) reset(req storage.BdevPrepareRequest, vmdDetect vmdDetectFn) error {
-	// If VMD has been explicitly enabled and there are VMD enabled
-	// NVMe devices on the host, attempt to prepare them first.
-	vmdReq, err := getVMDPrepReq(sb.log, &req, vmdDetect)
-	if err != nil {
-		return err
-	}
-	if vmdReq != nil {
-		if err := sb.script.Reset(vmdReq); err != nil {
-			return errors.Wrap(err, "un-binding vmd ssds")
-		}
+	// Update request if VMD has been explicitly enabled and there are VMD endpoints configured.
+	if err := updatePrepareRequest(sb.log, &req, vmdDetect); err != nil {
+		return errors.Wrapf(err, "update prepare request")
 	}
 
-	// Reset non-VMD devices.
-	req.EnableVMD = false
-	return errors.Wrap(sb.script.Reset(&req), "un-binding vmd ssds")
+	if req.EnableVMD {
+		// First run with VMD addresses in allow list and then without to reset backing SSDs.
+		if err := sb.script.Reset(&req); err != nil {
+			return errors.Wrap(err, "unbinding vmd endpoints from userspace drivers")
+		}
+		req.PCIAllowList = ""
+	}
+
+	return errors.Wrap(sb.script.Reset(&req), "unbinding ssds from userspace drivers")
 }
 
 // Reset will perform a lookup on the requested target user to validate existence
