@@ -20,6 +20,8 @@
 #include <daos_types.h>
 #include <daos_pool.h>
 
+#define DAOS_POOL_SUPPORT_REINT_ONLINE	0
+
 /** pool query request bits */
 #define DAOS_PO_QUERY_SPACE		(1ULL << 0)
 #define DAOS_PO_QUERY_REBUILD_STATUS	(1ULL << 1)
