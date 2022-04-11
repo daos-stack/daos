@@ -1,0 +1,30 @@
+extends: default
+
+rules:
+  line-length:
+    max: 100
+    level: warning
+    ignore: |
+      src/tests/ftest/
+      src/vos/storage_estimator/
+  indentation:
+    ignore: src/tests/ftest/
+  commas:
+    ignore: src/tests/ftest/
+  truthy:
+    ignore: src/tests/ftest/
+  document-start:
+    present: false
+  document-end:
+    present: false
+  comments-indentation:
+    ignore: src/tests/ftest/
+  comments:
+    ignore: |
+      src/tests/ftest/
+      utils/config/
+
+ignore: |
+  src/control/vendor/
+  .git/
+  src/rdb/raft/

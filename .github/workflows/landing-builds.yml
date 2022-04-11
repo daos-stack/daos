@@ -1,15 +1,15 @@
 name: Landings
 
 # Run on landings, or when this action itself is changed.
-on:
+on:  # yamllint disable-line rule:truthy
   push:
     branches:
       - master
-      - release/*
+      - 'release/*'
   pull_request:
     paths:
       - .github/workflows/landing-builds.yml
-      - utils/docker/Dockerfile.*
+      - 'utils/docker/Dockerfile.*'
       - 'utils/scripts/install-*.sh'
       - utils/run_in_ga.sh
       - requirements.txt
@@ -53,31 +53,31 @@ jobs:
       BASE_DISTRO: ${{ matrix.with }}
       DOCKER_BASE: ${{ matrix.base }}
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v2
-      with:
-        fetch-depth: 500
-    - name: Setup git hash
-      run: ./ci/gha_helper.py --single
-      id: commit-hash
-    - name: Setup docker cache
-      uses: satackey/action-docker-layer-caching@v0.0.11
-      with:
-        key: ${{ steps.commit-hash.outputs.key }}
-        restore-keys: ${{ steps.commit-hash.outputs.restore }}
-        concurrency: 1
-    - name: Prepare base image in Docker
-      run: docker build . --file utils/docker/Dockerfile.${{ matrix.base }}
-                          --build-arg DAOS_DEPS_BUILD=no
-                          --build-arg DEPS_JOBS
-                          --build-arg BASE_DISTRO
-    - name: Build dependencies in Docker
-      run: docker build . --file utils/docker/Dockerfile.${{ matrix.base }}
-                          --build-arg DAOS_BUILD=no
-                          --build-arg DEPS_JOBS
-                          --build-arg BASE_DISTRO
-    - name: Prune images not required for build.
-      run: docker images --all --filter label=DAOS=true --quiet | xargs docker rmi --no-prune
+      - name: Checkout code
+        uses: actions/checkout@v2
+        with:
+          fetch-depth: 500
+      - name: Setup git hash
+        run: ./ci/gha_helper.py --single
+        id: commit-hash
+      - name: Setup docker cache
+        uses: satackey/action-docker-layer-caching@v0.0.11
+        with:
+          key: ${{ steps.commit-hash.outputs.key }}
+          restore-keys: ${{ steps.commit-hash.outputs.restore }}
+          concurrency: 1
+      - name: Prepare base image in Docker
+        run: docker build . --file utils/docker/Dockerfile.${{ matrix.base }}
+                            --build-arg DAOS_DEPS_BUILD=no
+                            --build-arg DEPS_JOBS
+                            --build-arg BASE_DISTRO
+      - name: Build dependencies in Docker
+        run: docker build . --file utils/docker/Dockerfile.${{ matrix.base }}
+                            --build-arg DAOS_BUILD=no
+                            --build-arg DEPS_JOBS
+                            --build-arg BASE_DISTRO
+      - name: Prune images not required for build.
+        run: docker images --all --filter label=DAOS=true --quiet | xargs docker rmi --no-prune
 
   Build-and-test:
     name: Run DAOS/NLT tests
@@ -91,42 +91,42 @@ jobs:
       BASE_DISTRO: ${{ matrix.distro }}
       COMPILER: clang
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v2
-      with:
-        submodules: true
-        fetch-depth: 500
-    - name: Setup git hash
-      run: ./ci/gha_helper.py --single
-      id: commit-hash
-    - uses: satackey/action-docker-layer-caching@v0.0.11
-      continue-on-error: true
-      with:
-        key: ${{ steps.commit-hash.outputs.key }}
-        restore-keys: |
-          ${{ steps.commit-hash.outputs.restore }}
-          ${{ steps.commit-hash.outputs.restore_prev }}
-        skip-save: true
-    - name: Update dependencies in image.
-      run: docker build . --file utils/docker/Dockerfile.${{ matrix.distro }}
-                          --build-arg DAOS_BUILD=no
-                          --build-arg DEPS_JOBS
-                          --build-arg DAOS_KEEP_SRC=yes
-                          --tag build-image
-    - name: Build and Test
-      run: docker run --name build-post --mount type=tmpfs,destination=/mnt/daos_0,tmpfs-mode=1777
-            --env COMPILER --env DEPS_JOBS --user root:root build-image ./daos/utils/run_in_ga.sh
-    - name: Fetch results
-      if: always()
-      run: docker cp build-post:/home/daos/daos/nlt-junit.xml ./
-    - name: Publish NLT test results
-      if: always()
-      uses: EnricoMi/publish-unit-test-result-action@v1.17
-      with:
-        github_token: ${{ secrets.GITHUB_TOKEN }}
-        files: nlt-junit.xml
-        comment_mode: off
-        fail_on: nothing
+      - name: Checkout code
+        uses: actions/checkout@v2
+        with:
+          submodules: true
+          fetch-depth: 500
+      - name: Setup git hash
+        run: ./ci/gha_helper.py --single
+        id: commit-hash
+      - uses: satackey/action-docker-layer-caching@v0.0.11
+        continue-on-error: true
+        with:
+          key: ${{ steps.commit-hash.outputs.key }}
+          restore-keys: |
+            ${{ steps.commit-hash.outputs.restore }}
+            ${{ steps.commit-hash.outputs.restore_prev }}
+          skip-save: true
+      - name: Update dependencies in image.
+        run: docker build . --file utils/docker/Dockerfile.${{ matrix.distro }}
+                            --build-arg DAOS_BUILD=no
+                            --build-arg DEPS_JOBS
+                            --build-arg DAOS_KEEP_SRC=yes
+                            --tag build-image
+      - name: Build and Test
+        run: docker run --name build-post --mount type=tmpfs,destination=/mnt/daos_0,tmpfs-mode=1777
+              --env COMPILER --env DEPS_JOBS --user root:root build-image ./daos/utils/run_in_ga.sh
+      - name: Fetch results
+        if: always()
+        run: docker cp build-post:/home/daos/daos/nlt-junit.xml ./
+      - name: Publish NLT test results
+        if: always()
+        uses: EnricoMi/publish-unit-test-result-action@v1.17
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          files: nlt-junit.xml
+          comment_mode: off  # yamllint disable-line rule:truthy
+          fail_on: nothing
 
   Build:
     name: Build DAOS in image
@@ -157,54 +157,55 @@ jobs:
       DOCKER_BASE: ${{ matrix.base }}
       COMPILER: ${{ matrix.compiler }}
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v2
-      with:
-        submodules: true
-        fetch-depth: 500
-    - name: Setup git hash
-      run: ./ci/gha_helper.py --single
-      id: commit-hash
-    - uses: satackey/action-docker-layer-caching@v0.0.11
-      continue-on-error: true
-      with:
-        key: ${{ steps.commit-hash.outputs.key }}
-        restore-keys: |
-          ${{ steps.commit-hash.outputs.restore }}
-          ${{ steps.commit-hash.outputs.restore_prev }}
-        skip-save: true
-    - name: Build in docker.
-      run: docker build . --file utils/docker/Dockerfile.${{ matrix.base }}
-                          --build-arg DEPS_JOBS
-                          --build-arg BASE_DISTRO
-                          --build-arg DAOS_JAVA_BUILD=no
-                          --build-arg COMPILER
-                          --build-arg DAOS_KEEP_SRC=yes
-                          --tag build-image
-    - name: Build Java in docker.
-      run: docker build . --file utils/docker/Dockerfile.${{ matrix.base }}
-                          --build-arg DEPS_JOBS
-                          --build-arg BASE_DISTRO
-                          --build-arg DAOS_JAVA_BUILD=yes
-                          --build-arg COMPILER
-    - name: Build debug in docker.
-      run: docker build . --file utils/docker/Dockerfile.${{ matrix.base }}
-                          --build-arg DEPS_JOBS
-                          --build-arg BASE_DISTRO
-                          --build-arg DAOS_JAVA_BUILD=no
-                          --build-arg DAOS_BUILD_TYPE=debug
-                          --build-arg COMPILER
-    - name: Build devel in docker.
-      run: docker build . --file utils/docker/Dockerfile.${{ matrix.base }}
-                          --build-arg DEPS_JOBS
-                          --build-arg BASE_DISTRO
-                          --build-arg DAOS_JAVA_BUILD=no
-                          --build-arg DAOS_BUILD_TYPE=dev
-                          --build-arg COMPILER
-# Fails with Ubuntu still for the spdk issue.
-#    - name: Run NLT
-#      run: docker run --mount type=tmpfs,destination=/mnt/daos_0,tmpfs-mode=1777 --user root:root
-#               build-image ./daos/utils/node_local_test.py --no-root --memcheck no --test cont_copy
+      - name: Checkout code
+        uses: actions/checkout@v2
+        with:
+          submodules: true
+          fetch-depth: 500
+      - name: Setup git hash
+        run: ./ci/gha_helper.py --single
+        id: commit-hash
+      - uses: satackey/action-docker-layer-caching@v0.0.11
+        continue-on-error: true
+        with:
+          key: ${{ steps.commit-hash.outputs.key }}
+          restore-keys: |
+            ${{ steps.commit-hash.outputs.restore }}
+            ${{ steps.commit-hash.outputs.restore_prev }}
+          skip-save: true
+      - name: Build in docker.
+        run: docker build . --file utils/docker/Dockerfile.${{ matrix.base }}
+                            --build-arg DEPS_JOBS
+                            --build-arg BASE_DISTRO
+                            --build-arg DAOS_JAVA_BUILD=no
+                            --build-arg COMPILER
+                            --build-arg DAOS_KEEP_SRC=yes
+                            --tag build-image
+      - name: Build Java in docker.
+        run: docker build . --file utils/docker/Dockerfile.${{ matrix.base }}
+                            --build-arg DEPS_JOBS
+                            --build-arg BASE_DISTRO
+                            --build-arg DAOS_JAVA_BUILD=yes
+                            --build-arg COMPILER
+      - name: Build debug in docker.
+        run: docker build . --file utils/docker/Dockerfile.${{ matrix.base }}
+                            --build-arg DEPS_JOBS
+                            --build-arg BASE_DISTRO
+                            --build-arg DAOS_JAVA_BUILD=no
+                            --build-arg DAOS_BUILD_TYPE=debug
+                            --build-arg COMPILER
+      - name: Build devel in docker.
+        run: docker build . --file utils/docker/Dockerfile.${{ matrix.base }}
+                            --build-arg DEPS_JOBS
+                            --build-arg BASE_DISTRO
+                            --build-arg DAOS_JAVA_BUILD=no
+                            --build-arg DAOS_BUILD_TYPE=dev
+                            --build-arg COMPILER
+        # Fails with Ubuntu still for the spdk issue.
+        # - name: Run NLT
+        # run: docker run --mount type=tmpfs,destination=/mnt/daos_0,tmpfs-mode=1777
+        #        --user root:root build-image ./daos/utils/node_local_test.py --no-root
+        #        --memcheck no --test cont_copy
 
   Build-branch:
     name: Build DAOS
@@ -224,63 +225,64 @@ jobs:
       DEPS_JOBS: 10
       BASE_DISTRO: ${{ matrix.with }}
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v2
-      with:
-        submodules: true
-    - name: Build dependencies in image.
-      run: docker build . --file utils/docker/Dockerfile.${{ matrix.base }}
-                          --build-arg DEPS_JOBS
-                          --build-arg BASE_DISTRO
-                          --build-arg DAOS_BUILD=no
-    - name: Build in docker with clang
-      run: docker build . --file utils/docker/Dockerfile.${{ matrix.base }}
-                          --build-arg DEPS_JOBS
-                          --build-arg BASE_DISTRO
-                          --build-arg DAOS_JAVA_BUILD=no
-                          --build-arg COMPILER=clang
-                          --build-arg DAOS_KEEP_SRC=yes
-                          --tag build-image
-    - name: Build Java in docker.
-      run: docker build . --file utils/docker/Dockerfile.${{ matrix.base }}
-                          --build-arg DEPS_JOBS
-                          --build-arg BASE_DISTRO
-                          --build-arg DAOS_JAVA_BUILD=yes
-                          --build-arg COMPILER=clang
-    - name: Build debug in docker with clang.
-      run: docker build . --file utils/docker/Dockerfile.${{ matrix.base }}
-                          --build-arg DEPS_JOBS
-                          --build-arg BASE_DISTRO
-                          --build-arg DAOS_JAVA_BUILD=no
-                          --build-arg DAOS_BUILD_TYPE=debug
-                          --build-arg COMPILER=clang
-    - name: Build devel in docker with clang
-      run: docker build . --file utils/docker/Dockerfile.${{ matrix.base }}
-                          --build-arg DEPS_JOBS
-                          --build-arg BASE_DISTRO
-                          --build-arg DAOS_JAVA_BUILD=no
-                          --build-arg DAOS_BUILD_TYPE=dev
-                          --build-arg COMPILER=clang
-    - name: Build in docker with gcc
-      run: docker build . --file utils/docker/Dockerfile.${{ matrix.base }}
-                          --build-arg DEPS_JOBS
-                          --build-arg BASE_DISTRO
-                          --build-arg DAOS_JAVA_BUILD=no
-                          --build-arg COMPILER=gcc
-    - name: Build debug in docker with gcc
-      run: docker build . --file utils/docker/Dockerfile.${{ matrix.base }}
-                          --build-arg DEPS_JOBS
-                          --build-arg BASE_DISTRO
-                          --build-arg DAOS_JAVA_BUILD=no
-                          --build-arg DAOS_BUILD_TYPE=debug
-                          --build-arg COMPILER=gcc
-    - name: Build devel in docker with gcc
-      run: docker build . --file utils/docker/Dockerfile.${{ matrix.base }}
-                          --build-arg DEPS_JOBS
-                          --build-arg BASE_DISTRO
-                          --build-arg DAOS_JAVA_BUILD=no
-                          --build-arg DAOS_BUILD_TYPE=dev
-                          --build-arg COMPILER=gcc
-    - name: Run NLT
-      run: docker run --mount type=tmpfs,destination=/mnt/daos_0,tmpfs-mode=1777 --user root:root
-               build-image ./daos/utils/node_local_test.py --no-root --memcheck no --test cont_copy
+      - name: Checkout code
+        uses: actions/checkout@v2
+        with:
+          submodules: true
+      - name: Build dependencies in image.
+        run: docker build . --file utils/docker/Dockerfile.${{ matrix.base }}
+                            --build-arg DEPS_JOBS
+                            --build-arg BASE_DISTRO
+                            --build-arg DAOS_BUILD=no
+      - name: Build in docker with clang
+        run: docker build . --file utils/docker/Dockerfile.${{ matrix.base }}
+                            --build-arg DEPS_JOBS
+                            --build-arg BASE_DISTRO
+                            --build-arg DAOS_JAVA_BUILD=no
+                            --build-arg COMPILER=clang
+                            --build-arg DAOS_KEEP_SRC=yes
+                            --tag build-image
+      - name: Build Java in docker.
+        run: docker build . --file utils/docker/Dockerfile.${{ matrix.base }}
+                            --build-arg DEPS_JOBS
+                            --build-arg BASE_DISTRO
+                            --build-arg DAOS_JAVA_BUILD=yes
+                            --build-arg COMPILER=clang
+      - name: Build debug in docker with clang.
+        run: docker build . --file utils/docker/Dockerfile.${{ matrix.base }}
+                            --build-arg DEPS_JOBS
+                            --build-arg BASE_DISTRO
+                            --build-arg DAOS_JAVA_BUILD=no
+                            --build-arg DAOS_BUILD_TYPE=debug
+                            --build-arg COMPILER=clang
+      - name: Build devel in docker with clang
+        run: docker build . --file utils/docker/Dockerfile.${{ matrix.base }}
+                            --build-arg DEPS_JOBS
+                            --build-arg BASE_DISTRO
+                            --build-arg DAOS_JAVA_BUILD=no
+                            --build-arg DAOS_BUILD_TYPE=dev
+                            --build-arg COMPILER=clang
+      - name: Build in docker with gcc
+        run: docker build . --file utils/docker/Dockerfile.${{ matrix.base }}
+                            --build-arg DEPS_JOBS
+                            --build-arg BASE_DISTRO
+                            --build-arg DAOS_JAVA_BUILD=no
+                            --build-arg COMPILER=gcc
+      - name: Build debug in docker with gcc
+        run: docker build . --file utils/docker/Dockerfile.${{ matrix.base }}
+                            --build-arg DEPS_JOBS
+                            --build-arg BASE_DISTRO
+                            --build-arg DAOS_JAVA_BUILD=no
+                            --build-arg DAOS_BUILD_TYPE=debug
+                            --build-arg COMPILER=gcc
+      - name: Build devel in docker with gcc
+        run: docker build . --file utils/docker/Dockerfile.${{ matrix.base }}
+                            --build-arg DEPS_JOBS
+                            --build-arg BASE_DISTRO
+                            --build-arg DAOS_JAVA_BUILD=no
+                            --build-arg DAOS_BUILD_TYPE=dev
+                            --build-arg COMPILER=gcc
+      - name: Run NLT
+        run: docker run --mount type=tmpfs,destination=/mnt/daos_0,tmpfs-mode=1777 --user root:root
+                 build-image ./daos/utils/node_local_test.py --no-root
+                 --memcheck no --test cont_copy
