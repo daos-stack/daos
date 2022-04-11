@@ -74,6 +74,8 @@ YAML_KEYS = OrderedDict(
         ("pool_query_timeout", "timeout_multiplier"),
         ("rebuild_timeout", "timeout_multiplier"),
         ("srv_timeout", "timeout_multiplier"),
+        ("storage_prepare_timeout", "timeout_multiplier"),
+        ("storage_format_timeout", "timeout_multiplier"),
     ]
 )
 PROVIDER_KEYS = OrderedDict(
@@ -1848,7 +1850,7 @@ def resolve_debuginfo(pkg):
 
 
 def is_el(distro):
-    """Return True if a distro is an EL"""
+    """Return True if a distro is an EL."""
     return [d for d in ["almalinux", "rocky", "centos", "rhel"] if d in distro.name.lower()]
 
 
