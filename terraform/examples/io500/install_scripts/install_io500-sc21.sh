@@ -94,14 +94,16 @@ cp prepare.sh "prepare.sh.$(date "+%Y-%m-%d_%H%M%S")"
 git checkout prepare.sh
 cat > io500_prepare.patch <<'EOF'
 diff --git a/prepare.sh b/prepare.sh
-index f793dfe..d4cb7e8 100755
+index f793dfe..03e41bb 100755
 --- a/prepare.sh
 +++ b/prepare.sh
-@@ -8,7 +8,7 @@ echo It will output OK at the end if builds succeed
+@@ -7,8 +7,8 @@ echo It will also attempt to build the benchmarks
+ echo It will output OK at the end if builds succeed
  echo
 
- IOR_HASH=d3574d536643475269d37211e283b49ebd6732d7
+-IOR_HASH=14deedfec48ce295dff683d15c1b194652bd6d08
 -PFIND_HASH=62c3a7e31
++IOR_HASH=d3574d536643475269d37211e283b49ebd6732d7
 +PFIND_HASH=mfu_integration
 
  INSTALL_DIR=$PWD
