@@ -227,7 +227,6 @@ This is the package needed to run a DAOS client
 %package tests
 Summary: The entire DAOS test suite
 Requires: %{name}-client-tests-openmpi%{?_isa} = %{version}-%{release}
-Requires: %{name}-server-tests-openmpi%{?_isa} = %{version}-%{release}
 
 %description tests
 This is the package is a metapackage to install all of the test packages
@@ -273,13 +272,6 @@ Requires: %{name}-server%{?_isa} = %{version}-%{release}
 
 %description server-tests
 This is the package needed to run the DAOS server test suite (server tests)
-
-%package server-tests-openmpi
-Summary: The DAOS server test suite - tools which need openmpi
-Requires: %{name}-server-tests%{?_isa} = %{version}-%{release}
-
-%description server-tests-openmpi
-This is the package needed to run the DAOS server test suite openmpi tools
 
 %package devel
 Summary: The DAOS development libraries and headers
@@ -510,18 +502,20 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %{_bindir}/security_test
 %{conf_dir}/fault-inject-cart.yaml
 %{_bindir}/fault_status
+%{_bindir}/crt_launch
 # For avocado tests
 %{daoshome}/.build_vars.json
 %{daoshome}/.build_vars.sh
-
-%files client-tests-openmpi
-%{_bindir}/crt_launch
 %{_bindir}/daos_perf
 %{_bindir}/daos_racer
 %{_bindir}/daos_test
 %{_bindir}/dfs_test
 %{_bindir}/jobtest
 %{_libdir}/libdts.so
+%{_libdir}/libdpar.so
+
+%files client-tests-openmpi
+%{_libdir}/libdpar_mpi.so
 
 %files server-tests
 %{_bindir}/evt_ctl
@@ -534,8 +528,6 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %{_bindir}/vea_ut
 %{_bindir}/vos_tests
 %{_bindir}/vea_stress
-
-%files server-tests-openmpi
 %{_bindir}/daos_gen_io_conf
 %{_bindir}/daos_run_io_conf
 %{_bindir}/obj_ctl
@@ -564,6 +556,9 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %changelog
 * Fri Apr  8 2022 Dmitry Eremin <dmitry.eremin@intel.com> 2.3.100-2
 - Update to libfabric to v1.14.0-2 to include critical performance patches
+
+* Wed Apr 6 2022 Jeff Olivier <jeffrey.v.olivier@intel.com> 2.3.100-2
+- Remove direct MPI dependency from most of tests
 
 * Wed Apr  6 2022 Johann Lombardi <johann.lombardi@intel.com> 2.3.100-1
 - Switch version to 2.3.100 for 2.4 test builds
