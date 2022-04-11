@@ -49,9 +49,10 @@ do_openat(void **state)
 
 	assert_return_code(root, errno);
 
-	fd = openat(root, "my_file", O_RDWR | O_CREAT, S_IWUSR | S_IRUSR);
+	fd = openat(root, "my_file", O_RDWR | O_CREAT | O_EXCL, S_IWUSR | S_IRUSR);
+	assert_return_code(fd, errno);
 
-	/* This will write two bytes, including a \0 terminator */
+	/* This will write six bytes, including a \0 terminator */
 	rc = write(fd, input_buf, sizeof(input_buf));
 	assert_return_code(rc, errno);
 
@@ -102,6 +103,9 @@ do_openat(void **state)
 	rc = close(fd);
 	assert_return_code(rc, errno);
 
+	rc = unlinkat(root, "my_file", 0);
+	assert_return_code(rc, errno);
+
 	rc = close(root);
 	assert_return_code(rc, errno);
 }
@@ -114,7 +118,7 @@ main(int argc, char **argv)
 	int                     index = 0;
 	int                     opt;
 	struct option           long_options[] = {{"test-dir", required_argument, NULL, 'M'},
-						  {NULL, 0, NULL, 0}};
+						  {NULL, 0, NULL, 0} };
 
 	const struct CMUnitTest tests[]        = {
 		   cmocka_unit_test(do_openat),

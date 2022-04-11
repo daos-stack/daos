@@ -2793,7 +2793,11 @@ class posix_tests():
             run_test(tmp)
 
         tests = {'uncached': {'Caching': False,
-                              'WB_Cache': False}}
+                              'WB_Cache': False},
+                 'write-through': {'Caching': True,
+                                   'WB_Cache': False},
+                 'write-back': {'Caching': True,
+                                'WB_Cache': True}}
 
         for (test, data) in tests.items():
             print(test)
