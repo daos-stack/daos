@@ -408,11 +408,16 @@ ds_obj_cpd_dispatch(struct dtx_leader_handle *dlh, void *arg, int idx,
 	struct daos_cpd_sg		*head_dcs = NULL;
 	struct daos_cpd_sg		*dcsr_dcs = NULL;
 	struct daos_cpd_sg		*dcde_dcs = NULL;
+	uint64_t			 time1 = 0;
+	uint64_t			 time2 = 0;
+	uint32_t			 diff;
 	int				 total;
 	int				 count;
 	int				 rc = 0;
 
 	D_ASSERT(idx < dlh->dlh_sub_cnt);
+
+	sched_exec_time(&time1, NULL);
 
 	sub = &dlh->dlh_subs[idx];
 	shard_tgt = &sub->dss_tgt;
@@ -432,6 +437,12 @@ ds_obj_cpd_dispatch(struct dtx_leader_handle *dlh, void *arg, int idx,
 	D_ALLOC_PTR(remote_arg);
 	if (remote_arg == NULL)
 		D_GOTO(out, rc = -DER_NOMEM);
+
+	sched_exec_time(&time2, NULL);
+	diff = time2 - time1;
+	if (unlikely(diff >= 2))
+		D_WARN("Alloc DRAM is too slow: %u msecs, sub_cnt %u, idx %u\n",
+		       diff, dlh->dlh_sub_cnt, idx);
 
 	remote_arg->dlh = dlh;
 	remote_arg->comp_cb = comp_cb;
@@ -454,6 +465,12 @@ ds_obj_cpd_dispatch(struct dtx_leader_handle *dlh, void *arg, int idx,
 			idx, DP_RC(rc));
 		D_GOTO(out, rc);
 	}
+
+	sched_exec_time(&time1, NULL);
+	diff = time1 - time2;
+	if (unlikely(diff >= 2))
+		D_WARN("Create RPC is too slow: %u msecs, sub_cnt %u, idx %u\n",
+		       diff, dlh->dlh_sub_cnt, idx);
 
 	oci_parent = crt_req_get(parent_req);
 	oci = crt_req_get(req);
@@ -509,6 +526,12 @@ ds_obj_cpd_dispatch(struct dtx_leader_handle *dlh, void *arg, int idx,
 	oci->oci_disp_ents.ca_arrays = dcde_dcs;
 	oci->oci_disp_ents.ca_count = 1;
 
+	sched_exec_time(&time2, NULL);
+	diff = time2 - time1;
+	if (unlikely(diff >= 2))
+		D_WARN("Prepare RPC is too slow: %u msecs, sub_cnt %u, idx %u\n",
+		       diff, dlh->dlh_sub_cnt, idx);
+
 	D_DEBUG(DB_TRACE, "Forwarding CPD RPC to rank:%d tag:%d idx %u for DXT "
 		DF_DTI"\n",
 		tgt_ep.ep_rank, tgt_ep.ep_tag, idx, DP_DTI(&dcsh->dcsh_xid));
@@ -518,6 +541,12 @@ ds_obj_cpd_dispatch(struct dtx_leader_handle *dlh, void *arg, int idx,
 		D_ASSERT(sub->dss_comp == 1);
 		D_ERROR("crt_req_send failed, rc "DF_RC"\n", DP_RC(rc));
 	}
+
+	sched_exec_time(&time1, NULL);
+	diff = time1 - time2;
+	if (unlikely(diff >= 2))
+		D_WARN("Network is is too slow: %u msecs, sub_cnt %u, idx %u, rank %u, tgt %u\n",
+		       diff, dlh->dlh_sub_cnt, idx, shard_tgt->st_rank, shard_tgt->st_tgt_idx);
 
 	D_CDEBUG(rc != 0, DLOG_ERR, DB_TRACE,
 		 "Forwarded CPD RPC to rank:%d tag:%d idx %u for DXT "
