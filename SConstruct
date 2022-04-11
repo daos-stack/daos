@@ -351,6 +351,11 @@ def scons(): # pylint: disable=too-many-locals,too-many-branches
 
     platform_arm = is_platform_arm()
 
+    if 'VIRTUAL_ENV' in os.environ:
+        env.PrependENVPath('PATH', os.path.join(os.environ['VIRTUAL_ENV'], 'bin'))
+        # pylint: disable=invalid-sequence-index
+        env['ENV']['VIRTUAL_ENV'] = os.environ['VIRTUAL_ENV']
+
     prereqs = PreReqComponent(env, opts, commits_file)
     if not GetOption('help') and not GetOption('clean'):
         mpicc = WhereIs('mpicc')
