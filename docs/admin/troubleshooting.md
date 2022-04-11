@@ -432,6 +432,61 @@ Verify if you're using Infiniband for `fabric_iface`: in the server config. The 
 		$ dmg pool destroy --pool=$DAOS_POOL --force
 		Pool-destroy command succeeded
 
+### pmempool
+
+The pmempool is a management tool for Persistent Memory pool files created by PMDK libraries.
+DAOS uses the PMDK library to manage persistence inside ext4 files.
+[pmempool](https://pmem.io/pmdk/manpages/linux/v1.9/pmempool/pmempool-check.1/) can check consistency of a given pool file.
+It can be run with -r (repair) option which can fix some of the issues with pool file. DAOS will have more number of such pool file (vos-*), based
+on number of targets mention per daos engine. User may need to check each vos pool file for corruption on faulty pool.
+
+#### Unclean shutdown
+
+Example of the system which is not shutdown properly and that set the mode as dirty on the VOS pool file.
+
+*  -v: More verbose.
+```
+# pmempool check /mnt/daos0/0d977cd9-2571-49e8-902d-953f6adc6120/vos-0  -v
+checking shutdown state
+shutdown state is dirty
+/mnt/daos0/0d977cd9-2571-49e8-902d-953f6adc6120/vos-0: not consistent
+# echo $?
+1
+```
+
+#### Repair command
+
+Example of check repair command ran on the system to fix the unclean shutdown.
+
+*  -v: More verbose.
+*  -r: repair the pool.
+*  -y: Answer yes to all question.
+```
+# pmempool check /mnt/daos0/894b94ee-cdb2-4241-943c-08769542d327/vos-0 -vry
+checking shutdown state
+shutdown state is dirty
+resetting pool_hdr.sds
+checking pool header
+pool header correct
+/mnt/daos0/894b94ee-cdb2-4241-943c-08769542d327/vos-0: repaired
+# echo $?
+0
+```
+
+#### Check consistency.
+
+Check the consistency of the VOS pool file after repair.
+```
+# pmempool check /mnt/daos0/894b94ee-cdb2-4241-943c-08769542d327/vos-0 -v
+checking shutdown state
+shutdown state correct
+checking pool header
+pool header correct
+/mnt/daos0/894b94ee-cdb2-4241-943c-08769542d327/vos-0: consistent
+# echo $?
+0
+```
+
 ## Bug Report
 
 Bugs should be reported through our issue tracker[^1] with a test case
