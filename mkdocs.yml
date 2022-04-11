@@ -1,5 +1,5 @@
 # Project Information
-site_name: DAOS v2.2 - dev
+site_name: DAOS v2.3 - master
 site_description: Distributed Asynchronous Object Storage
 site_author: DAOS Project
 
@@ -103,12 +103,12 @@ nav:
         - 'Tensorflow-IO Support': 'user/tensorflow.md'
         - 'Native Programming Interface': 'user/interface.md'
     - Releases:
-        - 'Release Notes v2.2': 'release/release_notes.md'
+        - 'Release Notes v2.4': 'release/release_notes.md'
         - 'Support Matrix': 'release/support_matrix.md'
         - 'Roadmap': 'http://wiki.daos.io/spaces/DC/pages/4836661105/Roadmap'
     - Developer Zone:
         - 'Dev Environment': 'dev/development.md'
         - 'Contributing': 'dev/contributing.md'
         - 'DAOS Internals': 'https://github.com/daos-stack/daos/blob/master/src/README.md'
-        - 'DAOS API Documentation': 'https://docs.daos.io/v2.2/doxygen/html/index.html'
+        - 'DAOS API Documentation': 'https://docs.daos.io/v2.3/doxygen/html/index.html'
         # Attention: Don't change that doxygen path to a relative path, or mkdocs will stumble...

@@ -1651,7 +1651,7 @@ ds_mgmt_drpc_pool_query(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	d_rank_list_t		*svc_ranks;
 	d_rank_list_t		*ranks;
 	d_rank_range_list_t	*range_list;
-	char			*range_list_str;
+	char			*range_list_str = NULL;
 	bool			truncated;
 	size_t			len;
 	uint8_t			*body;
@@ -1675,8 +1675,8 @@ ds_mgmt_drpc_pool_query(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	if (svc_ranks == NULL)
 		D_GOTO(out, rc = -DER_NOMEM);
 
-	/* TODO: dmg client choose what to query, especially DPI_ENGINES_ENABLED bit set or not. */
-	pool_info.pi_bits = DPI_ALL;
+	/* TODO: Enabled and disabled engines should be retrieve both if needed */
+	pool_info.pi_bits = req->include_enabled_ranks ? DPI_ALL : (DPI_ALL & ~DPI_ENGINES_ENABLED);
 	rc = ds_mgmt_pool_query(uuid, svc_ranks, &ranks, &pool_info);
 	if (rc != 0) {
 		D_ERROR("Failed to query the pool, rc=%d\n", rc);
@@ -1690,12 +1690,11 @@ ds_mgmt_drpc_pool_query(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	range_list_str = d_rank_range_list_str(range_list, &truncated);
 	if (range_list_str == NULL)
 		D_GOTO(out_ranges, rc = -DER_NOMEM);
-	D_DEBUG(DF_DSMS, DF_UUID": %s ranks: %s%s\n", DP_UUID(uuid),
+	D_DEBUG(DB_MGMT, DF_UUID": %s ranks: %s%s\n", DP_UUID(uuid),
 		pool_info.pi_bits & DPI_ENGINES_ENABLED ? "ENABLED" : "DISABLED", range_list_str,
 		truncated ? " ...(TRUNCATED)" : "");
 
 	/* Populate the response */
-	/* TODO: return range_list_str in the response. */
 	resp.uuid = req->id;
 	resp.total_targets = pool_info.pi_ntargets;
 	resp.disabled_targets = pool_info.pi_ndisabled;
@@ -1703,11 +1702,13 @@ ds_mgmt_drpc_pool_query(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	resp.total_nodes = pool_info.pi_nnodes;
 	resp.leader = pool_info.pi_leader;
 	resp.version = pool_info.pi_map_ver;
+	resp.enabled_ranks = (req->include_enabled_ranks) ? range_list_str : "";
+	resp.disabled_ranks = (req->include_disabled_ranks) ? range_list_str : "";
 
 	D_ALLOC_ARRAY(resp.tier_stats, DAOS_MEDIA_MAX);
 	if (resp.tier_stats == NULL) {
 		D_ERROR("Failed to allocate tier_stats for resp\n");
-		D_GOTO(out_ranges_str, rc = -DER_NOMEM);
+		D_GOTO(out_ranges, rc = -DER_NOMEM);
 	}
 
 	storage_usage_stats_from_pool_space(&scm, &pool_info.pi_space,
@@ -1723,8 +1724,6 @@ ds_mgmt_drpc_pool_query(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	pool_rebuild_status_from_info(&rebuild, &pool_info.pi_rebuild_st);
 	resp.rebuild = &rebuild;
 
-out_ranges_str:
-	D_FREE(range_list_str);
 out_ranges:
 	d_rank_range_list_free(range_list);
 out_ranks:
@@ -1743,6 +1742,8 @@ out:
 		drpc_resp->body.len = len;
 		drpc_resp->body.data = body;
 	}
+
+	D_FREE(range_list_str);
 
 	mgmt__pool_query_req__free_unpacked(req, &alloc.alloc);
 

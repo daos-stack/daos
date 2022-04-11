@@ -11,6 +11,7 @@
 
 #include <stdarg.h>
 #include <math.h>
+#include <string.h>
 #include <gurt/common.h>
 
 /* state buffer for DAOS rand and srand calls, NOT thread safe */
@@ -661,17 +662,18 @@ d_rank_range_list_str(d_rank_range_list_t *list, bool *truncated)
 	const size_t	MAXBYTES = 512;
 	char	       *line;
 	char	       *linepos;
-	int		ret;
-	unsigned int	written = 0;
-	unsigned int	remaining = MAXBYTES;
+	int		ret = 0;
+	size_t		remaining = MAXBYTES - 2u;
 	int		i;
+	int		err = 0;
 
 	*truncated = false;
 	D_ALLOC(line, MAXBYTES);
 	if (line == NULL)
 		return NULL;
-	linepos = line;
 
+	*line = '[';
+	linepos = line + 1;
 	for (i = 0; i < list->rrl_nr; i++) {
 		uint32_t	lo = list->rrl_ranges[i].lo;
 		uint32_t	hi = list->rrl_ranges[i].hi;
@@ -681,16 +683,27 @@ d_rank_range_list_str(d_rank_range_list_t *list, bool *truncated)
 			ret = snprintf(linepos, remaining, "%u%s", lo, lastrange ? "" : ",");
 		else
 			ret = snprintf(linepos, remaining, "%u-%u%s", lo, hi, lastrange ? "" : ",");
-		if ((ret < 0) || (ret >= remaining))
-			goto err;
-		written += ret;
+
+		if (ret < 0) {
+			err = errno;
+			D_ERROR("rank set could not be serialized: %s (%d)\n", strerror(err), err);
+			break;
+		}
+
+		if (ret >= remaining) {
+			err = EOVERFLOW;
+			D_WARN("rank set has been partially serialized\n");
+			break;
+		}
+
 		remaining -= ret;
 		linepos += ret;
 	}
-	return line;
-err:
-	if (written > 0)
+	memcpy(linepos, "]", 2u);
+
+	if (err != 0)
 		*truncated = true;
+
 	return line;
 }
 

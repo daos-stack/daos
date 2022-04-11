@@ -460,17 +460,13 @@ into the configuration problem.
 
 The default configuration enables the Agent GetAttachInfo cache.  If it is
 desired, the cache may be disabled prior to DAOS Agent startup by setting the
-Agent's environment variable `DAOS_AGENT_DISABLE_CACHE=true`.  The cache is
-loaded only at Agent startup. The following debug message will be found in the
-Agent's log:
-```
-GetAttachInfo agent caching has been disabled
-```
+Agent's environment variable `DAOS_AGENT_DISABLE_CACHE=true` or updating the
+Agent configuration file with `disable_caching: true`.
 
-If the network configuration changes while the Agent is running, it must be
-restarted to gain visibility to these changes. For additional information,
-please refer to the [System Deployment: Agent Startup][6] documentation
-section.
+If the network configuration changes while the Agent is running, and the cache
+is enabled, the Agent must be restarted to gain visibility to these changes.
+For additional information, please refer to the
+[System Deployment: Agent Startup][6] documentation section.
 
 [1]: <https://github.com/daos-stack/daos/blob/master/src/cart#readme> (Collective and RPC Transport)
 [2]: <installation.md#distribution-packages> (DAOS distribution packages)

@@ -119,7 +119,6 @@ struct ec_agg_param {
 	struct ec_agg_pool_info	 ap_pool_info;	 /* pool/cont info            */
 	struct ec_agg_entry	 ap_agg_entry;	 /* entry used for each OID   */
 	daos_epoch_range_t	 ap_epr;	 /* hi/lo extent threshold    */
-	struct dtx_handle	*ap_dth;	 /* handle for DTX refresh    */
 	daos_handle_t		 ap_cont_handle; /* VOS container handle */
 	int			(*ap_yield_func)(void *arg); /* yield function*/
 	void			*ap_yield_arg;   /* yield argument            */
@@ -1785,7 +1784,6 @@ out:
 static int
 agg_process_stripe(struct ec_agg_param *agg_param, struct ec_agg_entry *entry)
 {
-	struct dtx_handle	*dth = agg_param->ap_dth;
 	vos_iter_param_t	iter_param = { 0 };
 	struct vos_iter_anchors	anchors = { 0 };
 	bool			update_vos = true;
@@ -1813,7 +1811,7 @@ agg_process_stripe(struct ec_agg_param *agg_param, struct ec_agg_entry *entry)
 					   iter_param.ip_recx.rx_nr);
 	ec_age_set_no_parity(entry);
 	rc = vos_iterate(&iter_param, VOS_ITER_RECX, false, &anchors,
-			 agg_recx_iter_pre_cb, NULL, entry, dth);
+			 agg_recx_iter_pre_cb, NULL, entry, NULL);
 	D_DEBUG(DB_EPC, "Querying parity for stripe: %lu, offset: "DF_X64
 		", "DF_RC"\n", entry->ae_cur_stripe.as_stripenum,
 		iter_param.ip_recx.rx_idx, DP_RC(rc));
@@ -2474,12 +2472,8 @@ cont_ec_aggregate_cb(struct ds_cont_child *cont, daos_epoch_range_t *epr,
 		     uint32_t flags, struct agg_param *agg_param)
 {
 	struct ec_agg_param	 *ec_agg_param = agg_param->ap_data;
-	struct dtx_handle	 *dth = NULL;
 	vos_iter_param_t	 iter_param = { 0 };
 	struct vos_iter_anchors  anchors = { 0 };
-	struct dtx_id		 dti = { 0 };
-	struct dtx_epoch	 epoch = { 0 };
-	daos_unit_oid_t		 oid = { 0 };
 	int			 rc = 0;
 
 	/*
@@ -2516,37 +2510,12 @@ cont_ec_aggregate_cb(struct ds_cont_child *cont, daos_epoch_range_t *epr,
 
 	agg_reset_entry(&ec_agg_param->ap_agg_entry, NULL, NULL);
 
-	rc = dtx_begin(cont->sc_hdl, &dti, &epoch, 0, 0, &oid,
-		       NULL, 0, 0, NULL, &dth);
-	if (rc != 0) {
-		D_ERROR("Fail to start DTX for EC aggregation: "DF_RC"\n",
-			DP_RC(rc));
-		return rc;
-	}
-
-	ec_agg_param->ap_dth = dth;
 	ec_agg_param->ap_obj_skipped = 0;
-
-again:
 	rc = vos_iterate(&iter_param, VOS_ITER_OBJ, true, &anchors,
-			 agg_iterate_pre_cb, agg_iterate_post_cb, ec_agg_param, dth);
+			 agg_iterate_pre_cb, agg_iterate_post_cb, ec_agg_param, NULL);
 
 	/* Post_cb may not being executed in some cases */
 	agg_clear_extents(&ec_agg_param->ap_agg_entry);
-	if (obj_dtx_need_refresh(dth, rc)) {
-		rc = dtx_refresh(dth, cont);
-		if (rc == -DER_AGAIN) {
-			anchors.ia_reprobe_co = 0;
-			anchors.ia_reprobe_obj = 0;
-			anchors.ia_reprobe_dkey = 0;
-			anchors.ia_reprobe_akey = 0;
-			anchors.ia_reprobe_sv = 0;
-			anchors.ia_reprobe_ev = 0;
-			goto again;
-		}
-	}
-
-	dtx_end(dth, cont, rc);
 
 	if (daos_handle_is_valid(ec_agg_param->ap_agg_entry.ae_obj_hdl)) {
 		dsc_obj_close(ec_agg_param->ap_agg_entry.ae_obj_hdl);

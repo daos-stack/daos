@@ -497,6 +497,8 @@ func (cmd *PoolReintegrateCmd) Execute(args []string) error {
 // PoolQueryCmd is the struct representing the command to query a DAOS pool.
 type PoolQueryCmd struct {
 	poolCmd
+	ShowEnabledRanks  bool `long:"show-enabled-ranks" description:"Show engine unique identifiers (ranks) which are enabled"`
+	ShowDisabledRanks bool `long:"show-disabled-ranks" description:"Show engine unique identifiers (ranks) which are disabled"`
 }
 
 // Execute is run when PoolQueryCmd subcommand is activated
@@ -504,6 +506,13 @@ func (cmd *PoolQueryCmd) Execute(args []string) error {
 	req := &control.PoolQueryReq{
 		ID: cmd.PoolID().String(),
 	}
+
+	// TODO: The two options should not be incompatible (i.e. engine limitation)
+	if cmd.ShowEnabledRanks && cmd.ShowDisabledRanks {
+		return errIncompatFlags("show-enabled-ranks", "show-disabled-ranks")
+	}
+	req.IncludeEnabledRanks = cmd.ShowEnabledRanks
+	req.IncludeDisabledRanks = cmd.ShowDisabledRanks
 
 	resp, err := control.PoolQuery(context.Background(), cmd.ctlInvoker, req)
 

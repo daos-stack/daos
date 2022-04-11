@@ -53,6 +53,7 @@ apt-get install \
     python3-junit.xml \
     python3-pyelftools \
     python3-pyxattr \
+    python3-setuptools \
     python3-tabulate \
     python3-yaml \
     scons \

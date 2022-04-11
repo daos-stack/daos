@@ -33,8 +33,8 @@ import (
 	"github.com/daos-stack/daos/src/control/server/storage"
 	"github.com/daos-stack/daos/src/control/server/storage/bdev"
 	"github.com/daos-stack/daos/src/control/server/storage/scm"
-
 	"github.com/daos-stack/daos/src/control/system"
+	"github.com/daos-stack/daos/src/control/system/raft"
 )
 
 const (
@@ -289,7 +289,8 @@ func TestServer_Harness_Start(t *testing.T) {
 
 			// start harness async and signal completion
 			var gotErr error
-			membership, sysdb := system.MockMembership(t, log, mockTCPResolver)
+			sysdb := raft.MockDatabase(t, log)
+			membership := system.MockMembership(t, log, sysdb, mockTCPResolver)
 			done := make(chan struct{})
 			go func(ctxIn context.Context) {
 				gotErr = harness.Start(ctxIn, sysdb, config)

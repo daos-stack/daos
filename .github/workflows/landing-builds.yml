@@ -10,6 +10,9 @@ on:
     paths:
       - .github/workflows/landing-builds.yml
       - utils/docker/Dockerfile.*
+      - 'utils/scripts/install-*.sh'
+      - utils/run_in_ga.sh
+      - requirements.txt
 
 jobs:
 
