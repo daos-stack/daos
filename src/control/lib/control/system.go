@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2021 Intel Corporation.
+// (C) Copyright 2020-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -475,7 +475,7 @@ func checkSystemErase(ctx context.Context, rpcClient UnaryInvoker) error {
 		return err
 	}
 	for _, member := range resp.Members {
-		if member.State()&system.AvailableMemberFilter != 0 {
+		if member.State&system.AvailableMemberFilter != 0 {
 			aliveRanks.Add(member.Rank)
 		}
 	}

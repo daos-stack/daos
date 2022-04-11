@@ -20,7 +20,7 @@ import (
 	"github.com/daos-stack/daos/src/control/events"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/security"
-	"github.com/daos-stack/daos/src/control/system"
+	"github.com/daos-stack/daos/src/control/system/raft"
 )
 
 const (
@@ -103,7 +103,7 @@ type drpcServerSetupReq struct {
 	sockDir string
 	engines []Engine
 	tc      *security.TransportConfig
-	sysdb   *system.Database
+	sysdb   *raft.Database
 	events  *events.PubSub
 }
 
