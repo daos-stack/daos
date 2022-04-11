@@ -99,7 +99,7 @@ class DaosBuild(DfuseTestBase):
         for cmd in cmds:
             try:
                 command = '{};{}'.format(preload_cmd, cmd)
-                ret_code = general_utils.pcmd(self.hostlist_clients, command, timeout=60 * 60 * 2)
+                ret_code = general_utils.pcmd(self.hostlist_clients, command, timeout=60 * 60 * 4)
                 if 0 in ret_code:
                     continue
                 self.log.info(ret_code)
