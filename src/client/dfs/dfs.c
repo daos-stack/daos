@@ -2080,7 +2080,7 @@ dfs_local2global(dfs_t *dfs, d_iov_t *glob)
 		return daos_der2errno(rc);
 
 	if (glob->iov_buf_len < glob_buf_size) {
-		D_DEBUG(DF_DSMC, "Larger glob buffer needed ("DF_U64" bytes "
+		D_DEBUG(DB_ANY, "Larger glob buffer needed ("DF_U64" bytes "
 			"provided, "DF_U64" required).\n", glob->iov_buf_len,
 			glob_buf_size);
 		glob->iov_buf_len = glob_buf_size;
@@ -3729,7 +3729,7 @@ dfs_obj_local2global(dfs_t *dfs, dfs_obj_t *obj, d_iov_t *glob)
 		return daos_der2errno(rc);
 
 	if (glob->iov_buf_len < glob_buf_size) {
-		D_DEBUG(DF_DSMC, "Larger glob buffer needed ("DF_U64" bytes "
+		D_DEBUG(DB_ANY, "Larger glob buffer needed ("DF_U64" bytes "
 			"provided, "DF_U64" required).\n", glob->iov_buf_len,
 			glob_buf_size);
 		glob->iov_buf_len = glob_buf_size;
