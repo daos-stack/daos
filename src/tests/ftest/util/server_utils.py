@@ -19,7 +19,7 @@ from exception_utils import CommandFailure
 from command_utils import SubprocessManager
 from general_utils import pcmd, get_log_file, human_to_bytes, bytes_to_human, \
     convert_list, get_default_config_file, distribute_files, DaosTestError, \
-    stop_processes, get_display_size, run_pcmd
+    stop_processes, get_display_size, run_pcmd, get_primary_group
 from dmg_utils import get_dmg_command
 from server_utils_base import \
     ServerFailed, DaosServerCommand, DaosServerInformation, AutosizeCancel
@@ -464,7 +464,8 @@ class DaosServerManager(SubprocessManager):
                 scm_mount = [scm_mount]
 
             self.log.info("Changing ownership to %s for: %s", user, scm_mount)
-            cmd_list.add("sudo chown -R {0}:{0} {1}".format(user, " ".join(scm_mount)))
+            cmd_list.add(
+                "sudo chown -R {}:{} {}".format(user, get_primary_group(user), " ".join(scm_mount)))
 
         if cmd_list:
             pcmd(self._hosts, "; ".join(cmd_list), verbose)
