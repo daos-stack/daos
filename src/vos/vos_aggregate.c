@@ -178,7 +178,7 @@ static inline void
 credits_set(struct vos_agg_credits *vac, bool tight)
 {
 	vac->vac_creds_scan = tight ? AGG_CREDS_SCAN_TIGHT : AGG_CREDS_SCAN_SLACK;
-	vac->vac_creds_del = tight ? AGG_CREDS_DEL_TIGHT : AGG_CREDS_SCAN_SLACK;
+	vac->vac_creds_del = tight ? AGG_CREDS_DEL_TIGHT : AGG_CREDS_DEL_SLACK;
 	vac->vac_creds_merge = tight ? AGG_CREDS_MERGE_TIGHT : AGG_CREDS_MERGE_SLACK;
 }
 

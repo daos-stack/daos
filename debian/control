@@ -92,8 +92,7 @@ Description: The Distributed Asynchronous Object Storage (DAOS) is an open-sourc
 Package: daos-tests
 Architecture: any
 Multi-Arch: same
-Depends: daos-client-tests-openmpi (= ${binary:Version}),
-         daos-server-tests-openmpi (= ${binary:Version})
+Depends: daos-client-tests-openmpi (= ${binary:Version})
 Description: This is the package is a metapackage to install all of the test packages
  .
  This package contains tests
@@ -131,15 +130,6 @@ Multi-Arch: same
 Depends: ${shlibs:Depends}, ${misc:Depends},
          daos-server (= ${binary:Version})
 Description: This is the package needed to run the DAOS test suite (server tests)
- .
- This package contains tests
-
-Package: daos-server-tests-openmpi
-Architecture: any
-Multi-Arch: same
-Depends: ${shlibs:Depends}, ${misc:Depends},
-         daos-server-tests (= ${binary:Version})
-Description: This is the package needed to run the DAOS test suite openmpi tools
  .
  This package contains tests
 

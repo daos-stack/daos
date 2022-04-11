@@ -1,4 +1,3 @@
----
 # Sample conflig file DFS files and directories
 #
 # Chunk size  = 1MiB
@@ -62,7 +61,7 @@ dfs_sb_metadata: &dfs_sb_metadata
   type: hashed
   size: 15
   overhead: meta
-  akeys: [ *dfs_magic, *dfs_sb_version, *dfs_layout_version, *dfs_chunk_size, *dfs_obj_class ]
+  akeys: [*dfs_magic, *dfs_sb_version, *dfs_layout_version, *dfs_chunk_size, *dfs_obj_class]
 
 # Dir A-Key
 dfs_inode: &dfs_inode
@@ -93,11 +92,11 @@ symlinks_akey: &symlinks_akey
   size: 9
   overhead: meta
   value_type: array
-  values: [{"count": 1, "size": 64, "aligned": "Yes"},{"count": 1, "size": 40, "aligned": "Yes"}]
+  values: [{"count": 1, "size": 64, "aligned": "Yes"}, {"count": 1, "size": 40, "aligned": "Yes"}]
 
 # symlinks D-Key
 symlinks_dkey: &symlinks_dkey
-  count: 1 # ceiling(symlinks per dir)
+  count: 1  # ceiling(symlinks per dir)
   type: hashed
   size: 32
   overhead: user
@@ -113,7 +112,7 @@ sub_dir_dkey: &sub_dir_dkey
 
 # files D-Key
 files_dkey: &files_dkey
-  count: 4 # ceiling(files per dir)
+  count: 4  # ceiling(files per dir)
   type: hashed
   size: 32
   overhead: user
@@ -173,7 +172,7 @@ file_akey: &file_akey
   type: integer
   overhead: user
   value_type: array
-  values: [{"count": 1, "size": 131072, "aligned": "Yes"},{"count": 1, "size": 94371, "aligned": "Yes"}]
+  values: [{"count": 1, "size": 131072, "aligned": "Yes"}, {"count": 1, "size": 94371, "aligned": "Yes"}]
 
 # 256k remainder D-Key
 256k_remainder_dkey: &256k_remainder_dkey
@@ -200,7 +199,7 @@ file_akey: &file_akey
   type: integer
   overhead: user
   value_type: array
-  values: [{"count": 6, "size": 131072, "aligned": "Yes"},{"count": 1, "size": 52428, "aligned": "Yes"}]
+  values: [{"count": 6, "size": 131072, "aligned": "Yes"}, {"count": 1, "size": 52428, "aligned": "Yes"}]
 
 # 8m remainder D-Key
 8m_remainder_dkey: &8m_remainder_dkey
@@ -216,7 +215,7 @@ file_akey: &file_akey
 
 # 500g file D-Key
 500g_dkey: &500g_dkey
-  count: 128797 # 114485 + 7156 x 2
+  count: 128797  # 114485 + 7156 x 2
   type: integer
   overhead: user
   akeys: [*file_akey]
@@ -227,7 +226,7 @@ file_akey: &file_akey
   type: integer
   overhead: user
   value_type: array
-  values: [{"count": 4, "size": 131072, "aligned": "Yes"},{"count": 1, "size": 47508, "aligned": "Yes"}]
+  values: [{"count": 4, "size": 131072, "aligned": "Yes"}, {"count": 1, "size": 47508, "aligned": "Yes"}]
 
 # 500g remainder D-Key
 500g_remainder_dkey: &500g_remainder_dkey
@@ -243,7 +242,7 @@ file_akey: &file_akey
 
 # 10t file D-Key
 10t_dkey: &10t_dkey
-  count: 2670316 # 2373614 + 148351 x 2
+  count: 2670316  # 2373614 + 148351 x 2
   type: integer
   overhead: user
   akeys: [*file_akey]
@@ -254,7 +253,7 @@ file_akey: &file_akey
   type: integer
   overhead: user
   value_type: array
-  values: [{"count": 3, "size": 131072, "aligned": "Yes"},{"count": 1, "size": 95402, "aligned": "Yes"}]
+  values: [{"count": 3, "size": 131072, "aligned": "Yes"}, {"count": 1, "size": 95402, "aligned": "Yes"}]
 
 # 10t remainder D-Key
 10t_remainder_dkey: &10t_remainder_dkey

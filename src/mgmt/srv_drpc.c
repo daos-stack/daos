@@ -1691,7 +1691,7 @@ ds_mgmt_drpc_pool_query(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	range_list_str = d_rank_range_list_str(range_list, &truncated);
 	if (range_list_str == NULL)
 		D_GOTO(out_ranges, rc = -DER_NOMEM);
-	D_DEBUG(DF_DSMS, DF_UUID": %s ranks: %s%s\n", DP_UUID(uuid),
+	D_DEBUG(DB_MGMT, DF_UUID": %s ranks: %s%s\n", DP_UUID(uuid),
 		pool_info.pi_bits & DPI_ENGINES_ENABLED ? "ENABLED" : "DISABLED", range_list_str,
 		truncated ? " ...(TRUNCATED)" : "");
 
