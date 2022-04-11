@@ -1,6 +1,6 @@
 #!/usr/bin/python
 """
-  (C) Copyright 2020-2021 Intel Corporation.
+  (C) Copyright 2020-2022 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -16,7 +16,7 @@ from apricot import TestWithServers
 from mdtest_test_base import MdtestBase
 from fio_test_base import FioBase
 from pydaos.raw import DaosApiError
-from command_utils_base import CommandFailure
+from exception_utils import CommandFailure
 from general_utils import DaosTestError, run_pcmd
 
 
@@ -122,11 +122,11 @@ class ErasureCodeIor(ServerFillUp):
             oclass(list): list of the obj class to use with IOR
             sizes(list): Update Transfer, Chunk and Block sizes
         """
-        self.ior_cmd.dfs_chunk.update(sizes[0])
-        self.ior_cmd.block_size.update(sizes[1])
-        self.ior_cmd.transfer_size.update(sizes[2])
-        self.ior_cmd.dfs_oclass.update(oclass[0])
-        self.ior_cmd.dfs_dir_oclass.update(oclass[0])
+        self.ior_local_cmd.dfs_chunk.update(sizes[0])
+        self.ior_local_cmd.block_size.update(sizes[1])
+        self.ior_local_cmd.transfer_size.update(sizes[2])
+        self.ior_local_cmd.dfs_oclass.update(oclass[0])
+        self.ior_local_cmd.dfs_dir_oclass.update(oclass[0])
 
     def ior_write_single_dataset(self, oclass, sizes, storage='NVMe', operation="WriteRead",
                                  percent=1):
@@ -158,7 +158,7 @@ class ErasureCodeIor(ServerFillUp):
         self.start_ior_load(storage, operation, percent, create_cont=False)
 
         # Store the container UUID for future reading
-        self.cont_uuid.append(self.ior_cmd.dfs_cont.value)
+        self.cont_uuid.append(self.ior_local_cmd.dfs_cont.value)
 
     def ior_write_dataset(self, storage='NVMe', operation="WriteRead", percent=1):
         """Write IOR data set with different EC object and different sizes.
@@ -311,7 +311,7 @@ class ErasureCodeSingle(TestWithServers):
                     cont_count += 1
                     if results is not None:
                         results.put("PASS")
-                except (CommandFailure, DaosApiError, DaosTestError) as _error:
+                except (CommandFailure, DaosApiError, DaosTestError):
                     if results is not None:
                         results.put("FAIL")
                     raise
@@ -352,7 +352,7 @@ class ErasureCodeSingle(TestWithServers):
                     cont_count += 1
                     if results is not None:
                         results.put("PASS")
-                except (CommandFailure, DaosApiError, DaosTestError) as _error:
+                except (CommandFailure, DaosApiError, DaosTestError):
                     if results is not None:
                         results.put("FAIL")
                     raise
@@ -501,7 +501,7 @@ class ErasureCodeFio(FioBase):
             self.execute_fio(stop_dfuse=False)
             if results is not None:
                 results.put("PASS")
-        except (CommandFailure, DaosApiError, DaosTestError) as _error:
+        except (CommandFailure, DaosApiError, DaosTestError):
             if results is not None:
                 results.put("FAIL")
                 raise

@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2020-2021 Intel Corporation.
+ * (C) Copyright 2020-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -28,7 +28,10 @@ daos_props_2cont_props(daos_prop_t *props, struct cont_props *cont_prop)
 	    daos_prop_entry_get(props, DAOS_PROP_CO_ENCRYPT) == NULL	     ||
 	    daos_prop_entry_get(props, DAOS_PROP_CO_REDUN_FAC) == NULL	     ||
 	    daos_prop_entry_get(props, DAOS_PROP_CO_ALLOCED_OID) == NULL     ||
-	    daos_prop_entry_get(props, DAOS_PROP_CO_EC_CELL_SZ) == NULL)
+	    daos_prop_entry_get(props, DAOS_PROP_CO_EC_CELL_SZ) == NULL	     ||
+	    daos_prop_entry_get(props, DAOS_PROP_CO_EC_PDA) == NULL	     ||
+	    daos_prop_entry_get(props, DAOS_PROP_CO_GLOBAL_VERSION) == NULL  ||
+	    daos_prop_entry_get(props, DAOS_PROP_CO_RP_PDA) == NULL)
 		D_DEBUG(DB_TRACE, "some prop entry type not found, "
 			"use default value.\n");
 
@@ -61,6 +64,13 @@ daos_props_2cont_props(daos_prop_t *props, struct cont_props *cont_prop)
 
 	/** alloc'ed oid */
 	cont_prop->dcp_alloced_oid	= daos_cont_prop2allocedoid(props);
+
+	/** performance domain affinity level */
+	cont_prop->dcp_ec_pda		= daos_cont_prop2ec_pda(props);
+	cont_prop->dcp_rp_pda		= daos_cont_prop2rp_pda(props);
+
+	/** global version */
+	cont_prop->dcp_global_version   = daos_cont_prop2global_version(props);
 }
 
 uint16_t
@@ -221,6 +231,37 @@ daos_cont_prop2ec_cell_sz(daos_prop_t *props)
 {
 	struct daos_prop_entry *prop =
 		daos_prop_entry_get(props, DAOS_PROP_CO_EC_CELL_SZ);
+
+	return prop == NULL ? 0 : (uint32_t)prop->dpe_val;
+}
+
+/** Get ec pda from a container properties */
+uint32_t
+daos_cont_prop2ec_pda(daos_prop_t *props)
+{
+	struct daos_prop_entry *prop =
+		daos_prop_entry_get(props, DAOS_PROP_CO_EC_PDA);
+
+	return prop == NULL ? DAOS_PROP_PO_EC_PDA_DEFAULT :
+			      (uint32_t)prop->dpe_val;
+}
+
+/** Get rp pda from a container properties */
+uint32_t
+daos_cont_prop2rp_pda(daos_prop_t *props)
+{
+	struct daos_prop_entry *prop =
+		daos_prop_entry_get(props, DAOS_PROP_CO_RP_PDA);
+
+	return prop == NULL ? DAOS_PROP_PO_RP_PDA_DEFAULT :
+			      (uint32_t)prop->dpe_val;
+}
+
+uint32_t
+daos_cont_prop2global_version(daos_prop_t *props)
+{
+	struct daos_prop_entry *prop =
+		daos_prop_entry_get(props, DAOS_PROP_CO_GLOBAL_VERSION);
 
 	return prop == NULL ? 0 : (uint32_t)prop->dpe_val;
 }

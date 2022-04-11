@@ -1,9 +1,10 @@
 //
-// (C) Copyright 2020-2021 Intel Corporation.
+// (C) Copyright 2020-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
 
+//go:build firmware
 // +build firmware
 
 package main
@@ -78,7 +79,7 @@ func TestDaosFirmware_ScmQueryHandler(t *testing.T) {
 				Payload: scmQueryReqPayload,
 			},
 			smbc: &scm.MockBackendConfig{
-				DiscoverRes:          testModules,
+				GetModulesRes:        testModules,
 				GetFirmwareStatusRes: testFWInfo,
 			},
 			expPayload: &storage.ScmFirmwareQueryResponse{
@@ -100,7 +101,7 @@ func TestDaosFirmware_ScmQueryHandler(t *testing.T) {
 				Payload: scmQueryReqPayload,
 			},
 			smbc: &scm.MockBackendConfig{
-				DiscoverRes:          testModules,
+				GetModulesRes:        testModules,
 				GetFirmwareStatusErr: errors.New("mock failure"),
 			},
 			expPayload: &storage.ScmFirmwareQueryResponse{
@@ -169,7 +170,7 @@ func TestDaosFirmware_ScmUpdateHandler(t *testing.T) {
 				Payload: scmUpdateReqPayload,
 			},
 			smbc: &scm.MockBackendConfig{
-				DiscoverRes: testModules,
+				GetModulesRes: testModules,
 			},
 			expPayload: &storage.ScmFirmwareUpdateResponse{
 				Results: []storage.ScmFirmwareUpdateResult{
@@ -185,7 +186,7 @@ func TestDaosFirmware_ScmUpdateHandler(t *testing.T) {
 				Payload: scmUpdateReqPayload,
 			},
 			smbc: &scm.MockBackendConfig{
-				DiscoverRes:       testModules,
+				GetModulesRes:     testModules,
 				UpdateFirmwareErr: errors.New("mock failure"),
 			},
 			expPayload: &storage.ScmFirmwareUpdateResponse{

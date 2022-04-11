@@ -561,6 +561,24 @@ func TestPoolCommands(t *testing.T) {
 			errors.New("invalid value"),
 		},
 		{
+			"Set pool rf property is not allowed",
+			"pool set-prop 031bcaf8-f0f5-42ef-b3c5-ee048676dceb rf:1",
+			"",
+			errors.New("can't set redundancy factor on existing pool."),
+		},
+		{
+			"Set pool ec_pda property is not allowed",
+			"pool set-prop 031bcaf8-f0f5-42ef-b3c5-ee048676dceb ec_pda:1",
+			"",
+			errors.New("can't set EC performance domain affinity on existing pool."),
+		},
+		{
+			"Set pool rp_pda property is not allowed",
+			"pool set-prop 031bcaf8-f0f5-42ef-b3c5-ee048676dceb rp_pda:1",
+			"",
+			errors.New("can't set RP performance domain affinity on existing pool"),
+		},
+		{
 			"Get pool property",
 			"pool get-prop 031bcaf8-f0f5-42ef-b3c5-ee048676dceb label",
 			strings.Join([]string{
@@ -740,6 +758,28 @@ func TestPoolCommands(t *testing.T) {
 			nil,
 		},
 		{
+			"Query pool with UUID and enabled ranks",
+			"pool query --show-enabled-ranks 12345678-1234-1234-1234-1234567890ab",
+			strings.Join([]string{
+				printRequest(t, &control.PoolQueryReq{
+					ID:                  "12345678-1234-1234-1234-1234567890ab",
+					IncludeEnabledRanks: true,
+				}),
+			}, " "),
+			nil,
+		},
+		{
+			"Query pool with UUID and disabled ranks",
+			"pool query --show-disabled-ranks 12345678-1234-1234-1234-1234567890ab",
+			strings.Join([]string{
+				printRequest(t, &control.PoolQueryReq{
+					ID:                   "12345678-1234-1234-1234-1234567890ab",
+					IncludeDisabledRanks: true,
+				}),
+			}, " "),
+			nil,
+		},
+		{
 			"Query pool with Label",
 			"pool query test_label",
 			strings.Join([]string{
@@ -756,10 +796,26 @@ func TestPoolCommands(t *testing.T) {
 			fmt.Errorf("invalid label"),
 		},
 		{
+			"Upgrade pool with pool ID",
+			"pool upgrade 031bcaf8-f0f5-42ef-b3c5-ee048676dceb",
+			strings.Join([]string{
+				printRequest(t, &control.PoolUpgradeReq{
+					ID: "031bcaf8-f0f5-42ef-b3c5-ee048676dceb",
+				}),
+			}, " "),
+			nil,
+		},
+		{
 			"Nonexistent subcommand",
 			"pool quack",
 			"",
 			fmt.Errorf("Unknown command"),
+		},
+		{
+			"Query pool with incompatible arguments",
+			"pool query --show-disabled-ranks --show-enabled-ranks 12345678-1234-1234-1234-1234567890ab",
+			"",
+			errors.New("may not be mixed"),
 		},
 	})
 }
@@ -852,6 +908,7 @@ func TestDmg_PoolListCmd_Errors(t *testing.T) {
 					{
 						Uuid:    common.MockUUID(1),
 						SvcReps: []uint32{1, 3, 5, 8},
+						State:   system.PoolServiceStateReady.String(),
 					},
 				},
 			},
@@ -938,7 +995,7 @@ func TestDmg_PoolCreateAllCmd(t *testing.T) {
 				PoolConfig: control.MockPoolRespConfig{
 					HostName:  "foo",
 					Ranks:     "0",
-					ScmBytes:  uint64(100)*uint64(humanize.GByte) - control.PoolMetadataBytes,
+					ScmBytes:  uint64(100) * uint64(humanize.GByte),
 					NvmeBytes: uint64(1) * uint64(humanize.TByte),
 				},
 			},
@@ -971,7 +1028,7 @@ func TestDmg_PoolCreateAllCmd(t *testing.T) {
 				PoolConfig: control.MockPoolRespConfig{
 					HostName:  "foo",
 					Ranks:     "0",
-					ScmBytes:  uint64(30)*uint64(humanize.GByte) - control.PoolMetadataBytes,
+					ScmBytes:  uint64(30) * uint64(humanize.GByte),
 					NvmeBytes: uint64(300) * uint64(humanize.GByte),
 				},
 			},
@@ -1063,7 +1120,7 @@ func TestDmg_PoolCreateAllCmd(t *testing.T) {
 				PoolConfig: control.MockPoolRespConfig{
 					HostName:  "foo",
 					Ranks:     "0,1,2,3",
-					ScmBytes:  uint64(50)*uint64(humanize.GByte) - control.PoolMetadataBytes,
+					ScmBytes:  uint64(50) * uint64(humanize.GByte),
 					NvmeBytes: uint64(700) * uint64(humanize.GByte),
 				},
 			},
@@ -1088,7 +1145,7 @@ func TestDmg_PoolCreateAllCmd(t *testing.T) {
 				PoolConfig: control.MockPoolRespConfig{
 					HostName:  "foo",
 					Ranks:     "0",
-					ScmBytes:  uint64(100)*uint64(humanize.GByte) - control.PoolMetadataBytes,
+					ScmBytes:  uint64(100) * uint64(humanize.GByte),
 					NvmeBytes: uint64(0),
 				},
 				WarningMsg: "Creating DAOS pool without NVME storage",
@@ -1122,7 +1179,7 @@ func TestDmg_PoolCreateAllCmd(t *testing.T) {
 				PoolConfig: control.MockPoolRespConfig{
 					HostName:  "foo",
 					Ranks:     "0",
-					ScmBytes:  uint64(100)*uint64(humanize.GByte) - control.PoolMetadataBytes,
+					ScmBytes:  uint64(100) * uint64(humanize.GByte),
 					NvmeBytes: uint64(100) * uint64(humanize.TByte),
 				},
 				WarningMsg: "SCM:NVMe ratio is less than",
@@ -1137,7 +1194,7 @@ func TestDmg_PoolCreateAllCmd(t *testing.T) {
 						{
 							MockStorageConfig: control.MockStorageConfig{
 								TotalBytes: uint64(100) * uint64(humanize.GByte),
-								AvailBytes: uint64(1) * uint64(humanize.GByte),
+								AvailBytes: uint64(1),
 							},
 						},
 					},
@@ -1153,7 +1210,7 @@ func TestDmg_PoolCreateAllCmd(t *testing.T) {
 				},
 			},
 			ExpectedOutput: ExpectedOutput{
-				Error: errors.New("Not enough SMC storage available with ratio 1%"),
+				Error: errors.New("Not enough SCM storage available with ratio 1%"),
 			},
 		},
 	} {
@@ -1200,6 +1257,7 @@ func TestDmg_PoolCreateAllCmd(t *testing.T) {
 			err := poolCreateCmd.Execute(nil)
 
 			if tc.ExpectedOutput.Error != nil {
+				common.AssertTrue(t, err != nil, "Expected an error")
 				testExpectedError(t, tc.ExpectedOutput.Error, err)
 			} else {
 				common.AssertTrue(t, err == nil, "Expected no error")

@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2019-2021 Intel Corporation.
+ * (C) Copyright 2019-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -17,7 +17,8 @@
 
 enum {
 	GC_CREDS_MIN	= 1,	/**< minimum credits for vos_gc_run/pool() */
-	GC_CREDS_PRIV	= 32,	/**< credits for internal usage */
+	GC_CREDS_SLACK	= 8,	/**< credits for slack mode */
+	GC_CREDS_TIGHT	= 32,	/**< credits for tight mode */
 	GC_CREDS_MAX	= 4096,	/**< maximum credits for vos_gc_run/pool() */
 };
 
@@ -624,7 +625,7 @@ gc_add_item(struct vos_pool *pool, daos_handle_t coh,
 	item.it_addr = item_off;
 	item.it_args = args;
 	while (1) {
-		int	  creds = GC_CREDS_PRIV;
+		int	  creds = GC_CREDS_TIGHT;
 		int	  rc;
 		bool	  empty;
 
@@ -664,7 +665,7 @@ gc_add_item(struct vos_pool *pool, daos_handle_t coh,
 			return rc;
 		}
 
-		if (creds == GC_CREDS_PRIV) { /* recliamed nothing? */
+		if (creds == GC_CREDS_TIGHT) { /* recliamed nothing? */
 			D_CRIT("Failed to recliam space for pool="DF_UUID"\n",
 			       DP_UUID(pool->vp_id));
 			return -DER_NOSPACE;
@@ -1013,7 +1014,7 @@ gc_wait(void)
 	int total = 0;
 
 	while (1) {
-		int creds = GC_CREDS_PRIV;
+		int creds = GC_CREDS_TIGHT;
 		int rc;
 
 		total += creds;
@@ -1071,26 +1072,52 @@ vos_gc_pool_tight(daos_handle_t poh, int *credits)
 	return 0;
 }
 
-static inline bool
-vos_gc_yield(bool (*yield_func)(void *arg), void *yield_arg)
-{
-	if (yield_func != NULL)
-		return yield_func(yield_arg);
+struct vos_gc_param {
+	int		(*vgc_yield_func)(void *arg);
+	void		*vgc_yield_arg;
+	uint32_t	 vgc_credits;
+};
 
-	bio_yield();
+static inline bool
+vos_gc_yield(void *arg)
+{
+	struct vos_gc_param	*param = arg;
+	int			 rc;
+
+	/* Current DTX handle must be NULL, since GC runs under non-DTX mode. */
+	D_ASSERT(vos_dth_get() == NULL);
+
+	if (param->vgc_yield_func == NULL) {
+		param->vgc_credits = GC_CREDS_TIGHT;
+		bio_yield();
+		return false;
+	}
+
+	rc = param->vgc_yield_func(param->vgc_yield_arg);
+	if (rc < 0)	/* Abort */
+		return true;
+
+	/* rc == 0: tight mode; rc == 1: slack mode */
+	param->vgc_credits = (rc == 0) ? GC_CREDS_TIGHT : GC_CREDS_SLACK;
+
 	return false;
 }
 
 /** public API to reclaim space for a opened pool */
 int
-vos_gc_pool(daos_handle_t poh, int credits, bool (*yield_func)(void *arg),
+vos_gc_pool(daos_handle_t poh, int credits, int (*yield_func)(void *arg),
 	    void *yield_arg)
 {
-	struct vos_pool	*pool = vos_hdl2pool(poh);
-	struct vos_tls	*tls  = vos_tls_get();
-	int		 rc = 0, total = 0;
+	struct vos_pool		*pool = vos_hdl2pool(poh);
+	struct vos_tls		*tls  = vos_tls_get();
+	struct vos_gc_param	 param;
+	int			 rc = 0, total = 0;
 
 	D_ASSERT(daos_handle_is_valid(poh));
+
+	param.vgc_yield_func	= yield_func;
+	param.vgc_yield_arg	= yield_arg;
+	param.vgc_credits	= GC_CREDS_TIGHT;
 
 	if (!gc_have_pool(pool)) {
 		if (pool->vp_vea_info != NULL)
@@ -1101,7 +1128,7 @@ vos_gc_pool(daos_handle_t poh, int credits, bool (*yield_func)(void *arg),
 	tls->vtl_gc_running++;
 
 	while (1) {
-		int	creds = GC_CREDS_PRIV;
+		int	creds = param.vgc_credits;
 
 		if (credits > 0 && (credits - total) < creds)
 			creds = credits - total;
@@ -1119,7 +1146,7 @@ vos_gc_pool(daos_handle_t poh, int credits, bool (*yield_func)(void *arg),
 		if (credits > 0 && total >= credits)
 			break; /* consumed all credits */
 
-		if (vos_gc_yield(yield_func, yield_arg)) {
+		if (vos_gc_yield(&param)) {
 			D_DEBUG(DB_TRACE, "GC pool run aborted\n");
 			break;
 		}
@@ -1146,6 +1173,6 @@ vos_gc_pool_idle(daos_handle_t poh)
 inline void
 gc_reserve_space(daos_size_t *rsrvd)
 {
-	rsrvd[DAOS_MEDIA_SCM]	+= gc_bag_size * GC_CREDS_MAX;
+	rsrvd[DAOS_MEDIA_SCM]	+= gc_bag_size * (daos_size_t)GC_CREDS_MAX;
 	rsrvd[DAOS_MEDIA_NVME]	+= 0;
 }

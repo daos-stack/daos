@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2021 Intel Corporation.
+ * (C) Copyright 2016-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -234,8 +234,11 @@ CRT_RPC_DECLARE(cont_close, DAOS_ISEQ_CONT_CLOSE, DAOS_OSEQ_CONT_CLOSE)
 #define DAOS_CO_QUERY_PROP_CO_STATUS		(1ULL << 17)
 #define DAOS_CO_QUERY_PROP_ALLOCED_OID		(1ULL << 18)
 #define DAOS_CO_QUERY_PROP_EC_CELL_SZ		(1ULL << 19)
+#define DAOS_CO_QUERY_PROP_EC_PDA		(1ULL << 20)
+#define DAOS_CO_QUERY_PROP_RP_PDA		(1ULL << 21)
+#define DAOS_CO_QUERY_PROP_GLOBAL_VERSION	(1ULL << 22)
 
-#define DAOS_CO_QUERY_PROP_BITS_NR		(20)
+#define DAOS_CO_QUERY_PROP_BITS_NR		(23)
 #define DAOS_CO_QUERY_PROP_ALL					\
 	((1ULL << DAOS_CO_QUERY_PROP_BITS_NR) - 1)
 

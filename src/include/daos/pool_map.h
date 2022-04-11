@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2021 Intel Corporation.
+ * (C) Copyright 2016-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -279,6 +279,9 @@ int pool_map_find_by_rank_status(struct pool_map *map,
 				 struct pool_target ***tgt_ppp,
 				 unsigned int *tgt_cnt, unsigned int status,
 				 d_rank_t rank);
+
+int pool_map_get_ranks(uuid_t pool_uuid, struct pool_map *map, bool get_enabled,
+		       d_rank_list_t **ranks);
 
 static inline struct pool_target *
 pool_map_targets(struct pool_map *map)

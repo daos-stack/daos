@@ -145,13 +145,15 @@ scons: Reading SConscript files ...
 
 INCLUDE: Optional components to build
     (all|none|comma-separated list of names)
-    allowed names: psm2 psm3
+    allowed names: psm2
     default: none
     actual:
 ```
 
 The version of the components can be changed by editing the
-[utils/build.config][1] file.
+[utils/build.config](https://github.com/daos-stack/daos/blob/master/utils/build.config)
+file.
+
 
 >**_NOTE_**
 >
@@ -355,4 +357,3 @@ can be created using the daos admin tool (see next section).
 
 For more advanced configurations involving SCM, SSD or a real fabric, please
 refer to the next section.
-[1]: <../../utils/build.config> (build.config)

@@ -718,7 +718,7 @@ const ProtobufCMessageDescriptor ctl__bio_health_req__descriptor =
   (ProtobufCMessageInit) ctl__bio_health_req__init,
   NULL,NULL,NULL    /* reserved[123] */
 };
-static const ProtobufCFieldDescriptor ctl__bio_health_resp__field_descriptors[42] =
+static const ProtobufCFieldDescriptor ctl__bio_health_resp__field_descriptors[43] =
 {
   {
     "timestamp",
@@ -1224,6 +1224,18 @@ static const ProtobufCFieldDescriptor ctl__bio_health_resp__field_descriptors[42
     0,             /* flags */
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
+  {
+    "cluster_size",
+    46,
+    PROTOBUF_C_LABEL_NONE,
+    PROTOBUF_C_TYPE_UINT64,
+    0,   /* quantifier_offset */
+    offsetof(Ctl__BioHealthResp, cluster_size),
+    NULL,
+    NULL,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
 };
 static const unsigned ctl__bio_health_resp__field_indices_by_name[] = {
   22,   /* field[22] = avail_bytes */
@@ -1232,6 +1244,7 @@ static const unsigned ctl__bio_health_resp__field_indices_by_name[] = {
   11,   /* field[11] = bio_unmap_errs */
   10,   /* field[10] = bio_write_errs */
   12,   /* field[12] = checksum_errs */
+  42,   /* field[42] = cluster_size */
   32,   /* field[32] = crc_err_cnt_raw */
   2,   /* field[2] = crit_temp_time */
   3,   /* field[3] = ctrl_busy_time */
@@ -1273,7 +1286,7 @@ static const ProtobufCIntRange ctl__bio_health_resp__number_ranges[2 + 1] =
 {
   { 3, 0 },
   { 5, 1 },
-  { 0, 42 }
+  { 0, 43 }
 };
 const ProtobufCMessageDescriptor ctl__bio_health_resp__descriptor =
 {
@@ -1283,7 +1296,7 @@ const ProtobufCMessageDescriptor ctl__bio_health_resp__descriptor =
   "Ctl__BioHealthResp",
   "ctl",
   sizeof(Ctl__BioHealthResp),
-  42,
+  43,
   ctl__bio_health_resp__field_descriptors,
   ctl__bio_health_resp__field_indices_by_name,
   2,  ctl__bio_health_resp__number_ranges,

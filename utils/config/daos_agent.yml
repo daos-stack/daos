@@ -53,6 +53,20 @@
 # default: /tmp/daos_agent.log
 #log_file: /tmp/daos_agent.log
 
+## Force specific debug mask for daos_agent (control plane).
+## Mask specifies minimum level of message significance to pass to logger.
+## Currently supported values are DEBUG, INFO and ERROR.
+#
+## default: INFO
+#control_log_mask: DEBUG
+
+## Disable the agent's internal caches. If set to true, the agent will query the
+## server access point and local hardware data every time a client requests
+## rank connection information.
+#
+## default: false
+#disable_caching: true
+
 # Manually define the fabric interfaces and domains to be used by the agent,
 # organized by NUMA node.
 # If not defined, the agent will automatically detect all fabric interfaces and

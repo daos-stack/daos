@@ -7,7 +7,7 @@
 package engine
 
 import (
-	"context"
+	"os"
 	"strings"
 
 	"github.com/pkg/errors"
@@ -170,42 +170,43 @@ func NewConfig() *Config {
 	}
 }
 
-// ValidateFabric validates the fabric configuration against actual fabric devices and NUMA config.
-func (c *Config) ValidateFabric(ctx context.Context, log logging.Logger, fis *hardware.FabricInterfaceSet) error {
-	fi, err := fis.GetInterfaceOnOSDevice(c.Fabric.Interface, c.Fabric.Provider)
-	if err != nil {
-		return err
+// setAffinity ensures engine NUMA locality is assigned and valid.
+func (c *Config) setAffinity(log logging.Logger, fis *hardware.FabricInterfaceSet) (err error) {
+	var fi *hardware.FabricInterface
+	if fis != nil {
+		fi, err = fis.GetInterfaceOnNetDevice(c.Fabric.Interface, c.Fabric.Provider)
+		if err != nil {
+			return
+		}
 	}
 
-	return errors.Wrap(c.setAffinity(ctx, log, fi), "setting numa affinity for engine")
-}
-
-// setAffinity ensures engine NUMA locality is assigned and valid.
-func (c *Config) setAffinity(ctx context.Context, log logging.Logger, fi *hardware.FabricInterface) error {
-	ifaceNumaNode := fi.NUMANode
-
 	if c.PinnedNumaNode != nil {
-		// validate that numa node is correct for the given device
-		if ifaceNumaNode != *c.PinnedNumaNode {
-			log.Errorf("misconfiguration: network interface %s is on NUMA "+
-				"node %d but engine is pinned to NUMA node %d", c.Fabric.Interface,
-				ifaceNumaNode, *c.PinnedNumaNode)
-		}
 		c.Fabric.NumaNodeIndex = *c.PinnedNumaNode
 		c.Storage.NumaNodeIndex = *c.PinnedNumaNode
 
-		return nil
+		// validate that numa node is correct for the given device
+		if fi != nil && fi.NUMANode != *c.PinnedNumaNode {
+			log.Errorf("misconfiguration: network interface %s is on NUMA "+
+				"node %d but engine is pinned to NUMA node %d", c.Fabric.Interface,
+				fi.NUMANode, *c.PinnedNumaNode)
+		}
+
+		return
+	}
+
+	if fi == nil {
+		return errors.New("pinned_numa_node unset in config and fabric info not provided")
 	}
 
 	// set engine numa node index to that of selected fabric interface
-	c.Fabric.NumaNodeIndex = ifaceNumaNode
-	c.Storage.NumaNodeIndex = ifaceNumaNode
+	c.Fabric.NumaNodeIndex = fi.NUMANode
+	c.Storage.NumaNodeIndex = fi.NUMANode
 
-	return nil
+	return
 }
 
 // Validate ensures that the configuration meets minimum standards.
-func (c *Config) Validate(ctx context.Context, log logging.Logger) error {
+func (c *Config) Validate(log logging.Logger, fis *hardware.FabricInterfaceSet) error {
 	if err := c.Fabric.Validate(); err != nil {
 		return errors.Wrap(err, "fabric config validation failed")
 	}
@@ -218,7 +219,7 @@ func (c *Config) Validate(ctx context.Context, log logging.Logger) error {
 		return errors.Wrap(err, "validate engine log masks")
 	}
 
-	return nil
+	return errors.Wrap(c.setAffinity(log, fis), "setting numa affinity for engine")
 }
 
 // CmdLineArgs returns a slice of command line arguments to be
@@ -266,6 +267,26 @@ func (c *Config) HasEnvVar(name string) bool {
 		}
 	}
 	return false
+}
+
+// GetEnvVar returns the value of the given environment variable to be supplied when starting an I/O
+// engine instance.
+func (c *Config) GetEnvVar(name string) (string, error) {
+	env, err := c.CmdLineEnv()
+	if err != nil {
+		return "", err
+	}
+
+	env = mergeEnvVars(cleanEnvVars(os.Environ(), c.EnvPassThrough), env)
+
+	for _, keyPair := range c.EnvVars {
+		keyValue := strings.SplitN(keyPair, "=", 2)
+		if keyValue[0] == name {
+			return keyValue[1], nil
+		}
+	}
+
+	return "", errors.Errorf("Undefined environment variable %q", name)
 }
 
 // WithEnvVars applies the supplied list of environment

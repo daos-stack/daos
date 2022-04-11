@@ -92,10 +92,17 @@
 #
 #
 ## CART: Disable SRX
-## parameters shared with client.
+## parameters shared with client. set it to true if network card
+## does not support shared receive context, eg intel E810-C.
 #
 #disable_srx: false
 #
+## Core Dump Filter
+## Optional filter to control which mappings are written to the core
+## dump in the event of a crash. See the following URL for more detail:
+## https://man7.org/linux/man-pages/man5/core.5.html
+#
+#core_dump_filter: 0x13
 #
 ## NVMe SSD inclusion list
 ## Immutable after running "dmg storage format".
@@ -175,17 +182,21 @@
 #
 ## Number of hugepages to allocate for DMA buffer memory
 #
-## Specifies the number (not size) of hugepages to allocate for use by DMA
-## buffer memory, this is mandatory with NVME SSD configured and optional
-## without SSDs configured. This indicates the number to be used for each
-## spawned I/O Engines, so the total will be this number * number of I/O Engines.
-## Default system hugepage size will be used. For the best performance,
-## It requires at least 1GiB memory size per target, so for one engine with
-## 8 targets, 4096 is minimum. When NVMe isn't configured, daos will just
-## allocate normal memory as DMA buffer if nr_hugepages is 0.
+## Specifies the number (not size) of hugepages to allocate for use by NVMe
+## through SPDK. Note that each target requires 1 GiB of hugepage space.
+## In DAOS version 2.2 and newer, nr_hugepages specifies the total across all
+## engines on a host. It needs to represent the total amount of hugepages memory
+## required for all targets across all engines on a host, divided by the system
+## hugepage size. If not set here, it will be automatically calculated based on
+## the number of targets (using the default system hugepage size).
 #
-## default: 4096
-#nr_hugepages: 4096
+## Example: (2 engines * (16 targets/engine * 1GiB)) / 2MiB hugepage size = 16834
+#
+## Hugepages are mandatory with NVME SSDs configured and optional without.
+## To disabled the use of hugepages when no NVMe SSDs are configured, set
+## nr_hugepages to -1.
+#
+##nr_hugepages: -1
 #
 #
 ## Force specific debug mask for daos_server (control plane).
@@ -213,6 +224,13 @@
 #
 ## default: disabled (errors only to control plane log)
 #firmware_helper_log_file: /tmp/daos_firmware.log
+#
+#
+## Enable HTTP endpoint for remote telemetry collection.
+#
+## default endpoint state: disabled
+## default endpoint port: 9191
+#telemetry_port: 9191
 #
 #
 ## When per-engine definitions exist, auto-allocation of resources is not

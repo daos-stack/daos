@@ -1,6 +1,6 @@
 #!/usr/bin/python
 '''
-  (C) Copyright 2020-2021 Intel Corporation.
+  (C) Copyright 2020-2022 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
@@ -99,8 +99,9 @@ class DmvrSerialSmall(DataMoverTestBase):
         """
         Test Description:
             DAOS-6875: Verify serializing a small container.
-        :avocado: tags=all,daily_regression
-        :avocado: tags=datamover,dserialize
+        :avocado: tags=all,pr
+        :avocado: tags=vm
+        :avocado: tags=datamover,mfu,mfu_serialize,mfu_deserialize,hdf5
         :avocado: tags=dm_serial_small,dm_serial_small_dserialize
         """
         self.run_dm_serial_small("DSERIAL")

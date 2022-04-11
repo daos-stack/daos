@@ -813,6 +813,7 @@ enum {
 #define DAOS_FORCE_EC_AGG		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x98)
 #define DAOS_FORCE_EC_AGG_FAIL		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x99)
 #define DAOS_FORCE_EC_AGG_PEER_FAIL	(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x9a)
+#define DAOS_FAIL_TX_CONVERT		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x9b)
 
 #define DAOS_DTX_SKIP_PREPARE		DAOS_DTX_SPEC_LEADER
 
@@ -878,8 +879,8 @@ daos_recx_merge(daos_recx_t *src, daos_recx_t *dst)
 }
 
 /* NVMe shared constants */
-#define DAOS_NVME_SHMID_NONE	-1
-#define DAOS_NVME_MEM_PRIMARY	0
+#define DAOS_NVME_NUMANODE_NONE		-1
+#define DAOS_NVME_MEM_PRIMARY		0
 
 /** Size of (un)expected Mercury buffers */
 #define DAOS_RPC_SIZE  (20480) /* 20KiB */

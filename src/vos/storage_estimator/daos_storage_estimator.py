@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 '''
-  (C) Copyright 2019-2021 Intel Corporation.
+  (C) Copyright 2019-2022 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
@@ -15,6 +15,8 @@ from storage_estimator.util import Common, ProcessBase
 tool_description = '''DAOS estimation tool
 This CLI is able to estimate the SCM/NVMe ratios
 '''
+
+vos_path_default = '/mnt/daos'
 
 
 class CreateExample(Common):
@@ -138,6 +140,13 @@ example.add_argument(
     '--verbose',
     action='store_true',
     help='Explain what is being done')
+example.add_argument(
+    '-S',
+    '--storage',
+    dest='vospath',
+    type=str,
+    help='DAOS storage path',
+    default=vos_path_default)
 example.set_defaults(func=create_dfs_example)
 
 
@@ -217,6 +226,13 @@ explore.add_argument(
     type=str,
     help='Output file name',
     default='')
+explore.add_argument(
+    '-S',
+    '--storage',
+    dest='vospath',
+    type=str,
+    help='DAOS storage path',
+    default=vos_path_default)
 
 explore.set_defaults(func=process_fs)
 
@@ -244,6 +260,13 @@ yaml_file.add_argument(
     metavar='META',
     help='[optional] Input metadata file',
     default='')
+yaml_file.add_argument(
+    '-S',
+    '--storage',
+    dest='vospath',
+    type=str,
+    help='DAOS storage path',
+    default=vos_path_default)
 yaml_file.set_defaults(func=process_yaml)
 
 # parse a csv file
@@ -322,6 +345,13 @@ csv_file.add_argument(
     type=str,
     help='Output file name',
     default='')
+csv_file.add_argument(
+    '-S',
+    '--storage',
+    dest='vospath',
+    type=str,
+    help='DAOS storage path',
+    default=vos_path_default)
 csv_file.set_defaults(func=process_csv)
 
 # parse the args and call whatever function was selected

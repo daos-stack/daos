@@ -13,7 +13,7 @@ the Linux kernel. Exact details depend on the distribution, but the following
 example should be illustrative:
 
 ```bash
-# Enable IOMMU on CentOS 7
+# Enable IOMMU on CentOS 7 and EL 8
 # All commands must be run as root/sudo!
 
 $ sudo vi /etc/default/grub # add the following line:
@@ -53,12 +53,38 @@ The DAOS transaction model relies on timestamps and requires time to be
 synchronized across all the storage nodes. This can be done using NTP or
 any other equivalent protocol.
 
-## User/Group Synchronization
+## User and Group Management
 
-DAOS ACLs store the actual user and group names (instead of numeric IDs), and
-therefore the servers do not need access to a synchronized user/group database.
-The DAOS Agent (running on the client nodes) is responsible for resolving
-UID/GID to user/group names which are added to a signed credential and sent to
+### DAOS User/Groups on the Servers
+
+The `daos_server` and `daos_engine` processes run under a non-privileged userid `daos_server`.
+If that user does not exist at the time the `daos-server` RPM is installed, the user will be
+created as part of the RPM installation. A group `daos-server` will also be created as its
+primary group, as well as two additional groups `daos_metrics` and `daos_daemons` to which
+the `daos_server` user will be added.
+
+If there are site-specific rules for the creation of users and groups, it is advisable to
+create these users and groups following the site-specific conventions _before_ installing the
+`daos-server` RPM.
+
+### DAOS User/Groups on the Clients
+
+The `daos_agent` process runs under a non-privileged userid `daos_agent`.
+If that user does not exist at the time the `daos-client` RPM is installed, the user will be
+created as part of the RPM installation. A group `daos-agent` will also be created as its
+primary group, as well as an additional group `daos_daemons` to which the `daos_agent` user
+will be added.
+
+If there are site-specific rules for the creation of users and groups, it is advisable to
+create these users and groups following the site-specific conventions _before_ installing the
+`daos-client` RPM.
+
+### User/Group Synchronization for End Users
+
+DAOS ACLs for pools and containers store the actual user and group names (instead of numeric
+IDs). Therefore the servers do not need access to a synchronized user/group database.
+The DAOS Agent (running on the client nodes) is responsible for resolving a user's
+UID/GID to user/group names, which are then added to a signed credential and sent to
 the DAOS storage nodes.
 
 ## Multi-rail/NIC Setup
@@ -103,7 +129,7 @@ $ sysctl -w net.ipv4.conf.all.arp_ignore=1
 ```
 
 Finally, the rp_filter is set to 1 by default on several distributions (e.g. on
-CentOS 7) and should be set to either 0 or 2, with 2 being more secure. This is
+CentOS 7 and EL 8) and should be set to either 0 or 2, with 2 being more secure. This is
 true even if the configuration uses a single logical subnet.
 
 ```

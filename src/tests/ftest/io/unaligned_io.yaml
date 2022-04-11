@@ -22,7 +22,7 @@ server_config:
     - ABT_ENV_MAX_NUM_XSTREAMS=100
     - ABT_MAX_NUM_XSTREAMS=100
     - DAOS_MD_CAP=1024
-    - DD_MASK=mgmt,md,dsms,any
+    - DD_MASK=mgmt,md,any
     - D_LOG_FILE_APPEND_PID=1
     - COVFILE=/tmp/test.cov
 pool:

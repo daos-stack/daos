@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2018-2021 Intel Corporation.
+// (C) Copyright 2018-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -19,6 +19,7 @@ import (
 	"github.com/daos-stack/daos/src/control/events"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/system"
+	"github.com/daos-stack/daos/src/control/system/raft"
 )
 
 const (
@@ -44,7 +45,8 @@ func TestListCont_NoMS(t *testing.T) {
 	log, buf := logging.NewTestLogger(t.Name())
 	defer common.ShowBufferOnFailure(t, buf)
 
-	ms, db := system.MockMembership(t, log, mockTCPResolver)
+	db := raft.MockDatabase(t, log)
+	ms := system.MockMembership(t, log, db, mockTCPResolver)
 	svc := newMgmtSvc(NewEngineHarness(log), ms, db, nil,
 		events.NewPubSub(context.Background(), log))
 
@@ -154,7 +156,8 @@ func TestContSetOwner_NoMS(t *testing.T) {
 	log, buf := logging.NewTestLogger(t.Name())
 	defer common.ShowBufferOnFailure(t, buf)
 
-	ms, db := system.MockMembership(t, log, mockTCPResolver)
+	db := raft.MockDatabase(t, log)
+	ms := system.MockMembership(t, log, db, mockTCPResolver)
 	svc := newMgmtSvc(NewEngineHarness(log), ms, db, nil,
 		events.NewPubSub(context.Background(), log))
 

@@ -77,7 +77,7 @@ func (cmd *poolBaseCmd) connectPool(flags C.uint) error {
 		defer freeString(cLabel)
 
 		cmd.log.Debugf("connecting to pool: %s", cmd.PoolID().Label)
-		rc = C.daos_pool_connect2(cLabel, cSysName, flags,
+		rc = C.daos_pool_connect(cLabel, cSysName, flags,
 			&cmd.cPoolHandle, &poolInfo, nil)
 		if rc == 0 {
 			var err error
@@ -92,7 +92,7 @@ func (cmd *poolBaseCmd) connectPool(flags C.uint) error {
 		cmd.log.Debugf("connecting to pool: %s", cmd.poolUUID)
 		cUUIDstr := C.CString(cmd.poolUUID.String())
 		defer freeString(cUUIDstr)
-		rc = C.daos_pool_connect2(cUUIDstr, cSysName, flags,
+		rc = C.daos_pool_connect(cUUIDstr, cSysName, flags,
 			&cmd.cPoolHandle, nil, nil)
 	default:
 		return errors.New("no pool UUID or label supplied")
@@ -194,7 +194,7 @@ func convertPoolRebuildStatus(in *C.struct_daos_rebuild_status) *mgmtpb.PoolRebu
 		switch {
 		case in.rs_version == 0:
 			out.State = mgmtpb.PoolRebuildStatus_IDLE
-		case in.rs_done == 1:
+		case C.get_rebuild_state(in) == C.DRS_COMPLETED:
 			out.State = mgmtpb.PoolRebuildStatus_DONE
 		default:
 			out.State = mgmtpb.PoolRebuildStatus_BUSY

@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2021 Intel Corporation.
+ * (C) Copyright 2016-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -101,7 +101,7 @@ ds_cont_epoch_aggregate(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
 	daos_epoch_t		 epoch = in->cei_epoch;
 	int			 rc = 0;
 
-	D_DEBUG(DF_DSMS, DF_CONT": processing rpc %p: epoch="DF_U64"\n",
+	D_DEBUG(DB_MD, DF_CONT": processing rpc %p: epoch="DF_U64"\n",
 		DP_CONT(pool_hdl->sph_pool->sp_uuid, in->cei_op.ci_uuid), rpc,
 		in->cei_epoch);
 
@@ -121,9 +121,8 @@ ds_cont_epoch_aggregate(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
 	}
 
 out:
-	D_DEBUG(DF_DSMS, DF_CONT": replying rpc %p: epoch="DF_U64", %d\n",
-		DP_CONT(pool_hdl->sph_pool->sp_uuid, in->cei_op.ci_uuid), rpc,
-		epoch, rc);
+	D_DEBUG(DB_MD, DF_CONT": replying rpc %p: epoch="DF_U64", "DF_RC"\n",
+		DP_CONT(pool_hdl->sph_pool->sp_uuid, in->cei_op.ci_uuid), rpc, epoch, DP_RC(rc));
 	return rc;
 }
 
@@ -190,7 +189,7 @@ snap_create_bcast(struct rdb_tx *tx, struct cont *cont, uuid_t coh_uuid,
 		goto out_rpc;
 	}
 
-	D_DEBUG(DF_DSMS, DF_CONT": created snapshot "DF_U64"\n",
+	D_DEBUG(DB_MD, DF_CONT": created snapshot "DF_U64"\n",
 		DP_CONT(cont->c_svc->cs_pool_uuid, cont->c_uuid), *epoch);
 out_rpc:
 	crt_req_decref(rpc);
@@ -208,7 +207,7 @@ ds_cont_snap_create(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
 	daos_epoch_t			snap_eph;
 	int				rc;
 
-	D_DEBUG(DF_DSMS, DF_CONT": processing rpc %p\n",
+	D_DEBUG(DB_MD, DF_CONT": processing rpc %p\n",
 		DP_CONT(pool_hdl->sph_pool->sp_uuid, in->cei_op.ci_uuid), rpc);
 
 	/* Verify handle has write access */
@@ -224,9 +223,8 @@ ds_cont_snap_create(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
 	if (rc == 0)
 		out->ceo_epoch = snap_eph;
 out:
-	D_DEBUG(DF_DSMS, DF_CONT": replying rpc %p: %d\n",
-		DP_CONT(pool_hdl->sph_pool->sp_uuid, in->cei_op.ci_uuid), rpc,
-		rc);
+	D_DEBUG(DB_MD, DF_CONT": replying rpc %p: "DF_RC"\n",
+		DP_CONT(pool_hdl->sph_pool->sp_uuid, in->cei_op.ci_uuid), rpc, DP_RC(rc));
 	return rc;
 }
 
@@ -241,7 +239,7 @@ ds_cont_snap_destroy(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
 	uint32_t			 nsnapshots;
 	int				 rc;
 
-	D_DEBUG(DF_DSMS, DF_CONT": processing rpc %p: epoch="DF_U64"\n",
+	D_DEBUG(DB_MD, DF_CONT": processing rpc %p: epoch="DF_U64"\n",
 		DP_CONT(pool_hdl->sph_pool->sp_uuid, in->cei_op.ci_uuid),
 		rpc, in->cei_epoch);
 
@@ -287,10 +285,12 @@ ds_cont_snap_destroy(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
 		goto out;
 	}
 
-	D_DEBUG(DF_DSMS, DF_CONT": deleted snapshot [%lu]\n",
+	D_DEBUG(DB_MD, DF_CONT": deleted snapshot [%lu]\n",
 		DP_CONT(pool_hdl->sph_pool->sp_uuid, in->cei_op.ci_uuid),
 		in->cei_epoch);
 out:
+	D_DEBUG(DB_MD, DF_CONT": replying rpc %p: "DF_RC"\n",
+		DP_CONT(pool_hdl->sph_pool->sp_uuid, in->cei_op.ci_uuid), rpc, DP_RC(rc));
 	return rc;
 }
 
@@ -322,7 +322,7 @@ xfer_snap_list(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl, struct cont *con
 		rc = crt_bulk_get_len(bulk, &bulk_size);
 		if (rc != 0)
 			goto out;
-		D_DEBUG(DF_DSMS, DF_CONT": bulk_size=%lu\n",
+		D_DEBUG(DB_MD, DF_CONT": bulk_size=%lu\n",
 			DP_CONT(pool_hdl->sph_pool->sp_uuid, cont->c_uuid), bulk_size);
 
 		snap_count = (int)(bulk_size / sizeof(daos_epoch_t));
@@ -337,7 +337,7 @@ xfer_snap_list(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl, struct cont *con
 	xfer_size = snap_count * sizeof(daos_epoch_t);
 	xfer_size = MIN(xfer_size, bulk_size);
 
-	D_DEBUG(DF_DSMS, DF_CONT": snap_count=%d, bulk_size=%zu, xfer_size=%d\n",
+	D_DEBUG(DB_MD, DF_CONT": snap_count=%d, bulk_size=%zu, xfer_size=%d\n",
 		DP_CONT(pool_hdl->sph_pool->sp_uuid, cont->c_uuid), snap_count, bulk_size,
 		xfer_size);
 	if (xfer_size > 0) {
@@ -379,7 +379,7 @@ xfer_snap_list(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl, struct cont *con
 			rc = dss_abterr2der(rc);
 		else
 			rc = *status;
-		D_DEBUG(DF_DSMS, DF_CONT": done bulk transfer xfer_size=%d, rc=%d\n",
+		D_DEBUG(DB_MD, DF_CONT": done bulk transfer xfer_size=%d, rc=%d\n",
 			DP_CONT(pool_hdl->sph_pool->sp_uuid, cont->c_uuid), xfer_size, rc);
 
 out_bulk:
@@ -406,7 +406,7 @@ ds_cont_snap_list(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
 	int				 snap_count;
 	int				 rc;
 
-	D_DEBUG(DF_DSMS, DF_CONT": processing rpc %p: hdl="DF_UUID"\n",
+	D_DEBUG(DB_MD, DF_CONT": processing rpc %p: hdl="DF_UUID"\n",
 		DP_CONT(pool_hdl->sph_pool->sp_uuid, in->sli_op.ci_uuid),
 		rpc, DP_UUID(in->sli_op.ci_hdl));
 
@@ -424,6 +424,8 @@ ds_cont_snap_list(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
 	out->slo_count = snap_count;
 
 out:
+	D_DEBUG(DB_MD, DF_CONT": replying rpc %p: "DF_RC"\n",
+		DP_CONT(pool_hdl->sph_pool->sp_uuid, in->sli_op.ci_uuid), rpc, DP_RC(rc));
 	return rc;
 }
 

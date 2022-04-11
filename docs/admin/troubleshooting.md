@@ -70,7 +70,7 @@ server operations:
 |-|-|-|
 |Control Plane|control_log_file|/tmp/daos_server.log|
 |Data Plane|log_file|/tmp/daos_engine.\*.log|
-|[Privileged Helper](https://daos-stack.github.io/admin/deployment/#elevated-privileges)|helper_log_file|/tmp/daos_admin.log|
+|[Privileged Helper](https://docs.daos.io/v2.2/admin/deployment/#elevated-privileges)|helper_log_file|/tmp/daos_admin.log|
 |agent|log_file|/tmp/daos_agent.log|
 
 ### Control Plane Log
@@ -122,14 +122,15 @@ CaRT and DAOS). DD_SUBSYS can be used to set which subsystems to enable
 logging. By default all subsystems are enabled ("DD_SUBSYS=all").
 
 -   DAOS Facilities:
-    common, tree, vos, client, server, rdb, pool, container, object,
-    placement, rebuild, tier, mgmt, bio, tests
+    array, kv, common, tree, vos, client, server, rdb, rsvc, pool, container,
+    object, placement, rebuild, tier, mgmt, bio, tests, dfs, duns, drpc,
+    security, dtx, dfuse, il, csum
 
 -   Common Facilities (GURT):
-    MISC, MEM
+    MISC, MEM, SWIM, TELEM
 
 -   CaRT Facilities:
-    RPC, BULK, CORPC, GRP, LM, HG, ST, IV
+    RPC, BULK, CORPC, GRP, HG, ST, IV, CTL
 
 ### Priority Logging
 
@@ -152,7 +153,9 @@ argument passed in D_DEBUG(mask, ...). To accomplish this, DD_MASK can
 be set to enable different debug streams. Similar to facilities, there
 are common debug streams defined in GURT, as well as other streams that
 can be defined on a per-project basis (CaRT and DAOS). All debug streams
-are enabled by default ("DD_MASK=all").
+are enabled by default ("DD_MASK=all"). Convenience "group mask" values
+are defined for common use cases and convenience, and consist of a
+composition of multiple individual bits.
 
 -   DAOS Debug Masks:
 
@@ -168,7 +171,11 @@ are enabled by default ("DD_MASK=all").
 
     -   rebuild = rebuild process
 
-    -   daos_default = (group mask) io, md, pl, and rebuild operations
+    -   group_default = (group mask) io, md, pl, and rebuild operations
+
+    -   group_metadata_only = (group mask) mgmt, md operations
+
+    -   group_metadata = (group mask) group_default plus mgmt operations
 
 -   Common Debug Masks (GURT):
 
@@ -184,6 +191,11 @@ are enabled by default ("DD_MASK=all").
 
 ### Common Use Cases
 
+Please note: where in these examples the export command is shown setting an environment variable,
+this is intended to convey either that the variable is actually set (for the client environment), or
+configured for the engines in the `daos_server.yml` file (`log_mask` per engine, and env_vars
+values per engine for the `DD_SUBSYS` and `DD_MASK` variable assignments).
+
 -   Generic setup for all messages (default settings)
 
         D_LOG_MASK=DEBUG
@@ -195,10 +207,16 @@ are enabled by default ("DD_MASK=all").
         D_LOG_MASK=ERR -> will only log error messages from all facilities
         D_LOG_MASK=FATAL -> will only log system fatal messages
 
+-   Gather daos metadata logs if a pool/container resource problem is observed, using the provided group mask
+
+        D_LOG_MASK=DEBUG -> log at DEBUG level from all facilities
+        DD_MASK=group_metadata -> limit logging to include deault and metadata-specific streams. Or, specify DD_MASK=group_metadata_only for just metadata-specific log entries.
+
 -   Disable a noisy debug logging subsystem
 
         D_LOG_MASK=DEBUG,MEM=ERR -> disables MEM facility by
         restricting all logs from that facility to ERROR or higher priority only
+        D_LOG_MASK=DEBUG,SWIM=ERR,RPC=ERR,HG=ERR -> disables SWIM and RPC/HG facilities
 
 -   Enable a subset of facilities of interest
 
@@ -422,7 +440,10 @@ IPMCTL utility is used for Intel® Optane™ persistent memory for managing, dia
 DAOS user can use the [diagnostic](https://docs.pmem.io/ipmctl-user-guide/debug/run-diagnostic) and
 [show error log](https://docs.pmem.io/ipmctl-user-guide/debug/show-error-log) functionality to debug the PMem related issues.
 
-#### ipmctl show command to get the DIMM ID connected to specific CPU. Example shows Eight PMem DIMMs are connected to both CPU0 and CPU1.
+#### ipmctl show command to get the DIMM ID connected to specific CPU.
+
+Example shows Eight PMem DIMMs are connected to both CPU0 and CPU1.
+
 ```
 # ipmctl show -topology
  DimmID | MemoryType                  | Capacity    | PhysicalID| DeviceLocator
@@ -446,12 +467,15 @@ DAOS user can use the [diagnostic](https://docs.pmem.io/ipmctl-user-guide/debug/
 ```
 
 #### Run a quick diagnostic test on clean system
+
 This test will verify the PMem health parameters are under acceptable values. It will return the single State indication
 ('OK', 'Warning', 'Failed', 'Aborted') based on health information from all the PMem modules.
 ```
 #ipmctl start -diagnostic
 ```
+
 #### Run quick diagnostic test on specific dimm from socket. By default it will run diagnostic test for all dimms.
+
 * -dimm : DIMM ID from the ipmctl command above
 ```
 #ipmctl start -diagnostic quick -dimm 0x0001
@@ -465,7 +489,9 @@ This test will verify the PMem health parameters are under acceptable values. It
    --SubTest = Health
           State = Ok
 ```
+
 #### Run quick diagnostic test on system which has health warning.
+
 ```
 #ipmctl start -diagnostic quick
 --Test = Quick
@@ -479,7 +505,9 @@ This test will verify the PMem health parameters are under acceptable values. It
           Message.1 = The quick health check detected that PMem module 0x0001 is reporting a bad health state Noncritical failure (Package Sparing occurred).
           Message.2 = The quick health check detected that PMem module 0x0001 is reporting that it has no package spares available.
 ```
-#### Run quick diagnostic test on system where PMem life remaining percentage is below threshold
+
+#### Run quick diagnostic test on system where PMem life remaining percentage is below threshold.
+
 ```
 #ipmctl start -diagnostic quick
 --Test = Quick
@@ -492,7 +520,9 @@ This test will verify the PMem health parameters are under acceptable values. It
           State = Warning
           Message.1 = The quick health check detected that PMem module 0x0001 is reporting percentage remaining at 10% which is less than the alarm threshold 50%
 ```
+
 #### Run showerror Thermal and Media log on clean system.
+
 ```
 #ipmctl show -error Thermal
 No errors found on PMem module 0x0001
@@ -524,7 +554,9 @@ No errors found on PMem module 0x1111
 No errors found on PMem module 0x1121
 Show Error executed successfully
 ```
+
 #### Run showerror command for Thermal and Media log on non clean system.
+
 ```
 #ipmctl show -error Thermal  Level=Low
  DimmID | System Timestamp    | Temperature | Reported
@@ -564,11 +596,13 @@ It can detect the media errors and scrub it to avoid accesses that could lead to
 This utility can be used after ipmctl where name space is already created by ipmctl.
 
 #### Read bad blocks data from sys filesystem on clean system.
+
 ```
 # cat /sys/block/pmem*/badblocks
 #
 ```
 #### ndctl list command on clean system.
+
 Please refer the [ndctl-list](https://docs.pmem.io/ndctl-user-guide/ndctl-man-pages/ndctl-list) command guide for more details about the command options.
 
 Total Sixteen PMem connected to single system. Eight PMem DIMMs are connected to single socket (reference "ipmctl show -topology" section under ipmctl). 
@@ -600,7 +634,9 @@ The SCM modules are typically configured in AppDirect interleaved mode. They are
   }
 ]
 ```
+
 #### ndctl start-scrub command ran on system which has bad blocks.
+
 Please refer the [ndctl start-scrub](https://docs.pmem.io/ndctl-user-guide/ndctl-man-pages/ndctl-start-scrub) command guide for more information about the command options.
 
 * Address Range Scrub is a device-specific method defined in the ACPI specification. Privileged software can call such as ARS at runtime to retrieve or scan for the locations of uncorrectable memory errors for all persistent memory in the platform.
@@ -624,7 +660,9 @@ This can lead to an application getting stuck in an infinite loop on IO operatio
   }
 ]
 ```    
+
 #### ndctl wait-scrub command ran on system which has bad blocks.
+
 Please refer the [ndctl wait-scrub](https://docs.pmem.io/ndctl-user-guide/ndctl-man-pages/untitled-2) command guide for more information about the command options.
 ```
 # ndctl wait-scrub
@@ -639,12 +677,16 @@ Please refer the [ndctl wait-scrub](https://docs.pmem.io/ndctl-user-guide/ndctl-
   }
 ]
 ```
+
 #### Read bad blocks data from sys filesystem after scrubbing is finished.
+
 ```
 # cat /sys/block/pmem*/badblocks
 42 8
 ```
+
 #### command execution on system where bad blocks are scrubbed.
+
 Please refer the [ndctl list](https://docs.pmem.io/ndctl-user-guide/ndctl-man-pages/ndctl-list) user guide for more information about the command options.
 
 * -M : Include Media Error
@@ -685,6 +727,61 @@ Please refer the [ndctl list](https://docs.pmem.io/ndctl-user-guide/ndctl-man-pa
   }
 ]
 ```
+### pmempool
+
+The pmempool is a management tool for Persistent Memory pool files created by PMDK libraries.
+DAOS uses the PMDK library to manage persistence inside ext4 files.
+[pmempool](https://pmem.io/pmdk/manpages/linux/v1.9/pmempool/pmempool-check.1/) can check consistency of a given pool file.
+It can be run with -r (repair) option which can fix some of the issues with pool file. DAOS will have more number of such pool file (vos-*), based
+on number of targets mention per daos engine. User may need to check each vos pool file for corruption on faulty pool.
+
+#### Unclean shutdown
+
+Example of the system which is not shutdown properly and that set the mode as dirty on the VOS pool file.
+
+*  -v: More verbose.
+```
+# pmempool check /mnt/daos0/0d977cd9-2571-49e8-902d-953f6adc6120/vos-0  -v
+checking shutdown state
+shutdown state is dirty
+/mnt/daos0/0d977cd9-2571-49e8-902d-953f6adc6120/vos-0: not consistent
+# echo $?
+1
+```
+
+#### Repair command
+
+Example of check repair command ran on the system to fix the unclean shutdown.
+
+*  -v: More verbose.
+*  -r: repair the pool.
+*  -y: Answer yes to all question.
+```
+# pmempool check /mnt/daos0/894b94ee-cdb2-4241-943c-08769542d327/vos-0 -vry
+checking shutdown state
+shutdown state is dirty
+resetting pool_hdr.sds
+checking pool header
+pool header correct
+/mnt/daos0/894b94ee-cdb2-4241-943c-08769542d327/vos-0: repaired
+# echo $?
+0
+```
+
+#### Check consistency.
+
+Check the consistency of the VOS pool file after repair.
+```
+# pmempool check /mnt/daos0/894b94ee-cdb2-4241-943c-08769542d327/vos-0 -v
+checking shutdown state
+shutdown state correct
+checking pool header
+pool header correct
+/mnt/daos0/894b94ee-cdb2-4241-943c-08769542d327/vos-0: consistent
+# echo $?
+0
+```
+
 ## Bug Report
 
 Bugs should be reported through our issue tracker[^1] with a test case

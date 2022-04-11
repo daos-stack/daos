@@ -1,5 +1,5 @@
 #!/usr/bin/python
-# Copyright (c) 2016-2020 Intel Corporation
+# Copyright 2016-2022 Intel Corporation
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -56,19 +56,19 @@ from SCons.Errors import UserError
 # pylint: enable=no-name-in-module
 # pylint: enable=import-error
 from prereq_tools import mocked_tests
-import subprocess #nosec
+import subprocess  # nosec
 try:
-    from subprocess import DEVNULL #nosec
+    from subprocess import DEVNULL  # nosec
 except ImportError:
     DEVNULL = open(os.devnull, "wb")
 import tarfile
 import copy
 if sys.version_info < (3, 0):
-# pylint: disable=import-error
+    # pylint: disable=import-error
     import ConfigParser
-# pylint: enable=import-error
 else:
     import configparser as ConfigParser
+
 
 class DownloadFailure(Exception):
     """Exception raised when source can't be downloaded
@@ -261,6 +261,7 @@ class BuildRequired(Exception):
 
 class Runner():
     """Runs commands in a specified environment"""
+
     def __init__(self):
         self.env = None
         self.__dry_run = False
@@ -275,31 +276,29 @@ class Runner():
         if not self.env:
             raise Exception("PreReqComponent not initialized")
         retval = True
-        old = os.getcwd()
-        if subdir:
-            if self.__dry_run:
-                print('Would change dir to %s' % subdir)
-            else:
-                os.chdir(subdir)
 
-        print('Running commands in %s' % os.getcwd())
+        if subdir:
+            print('Running commands in {}'.format(subdir))
         for command in commands:
-            command = self.env.subst(command)
+            cmd = []
+            for part in command:
+                if part == 'make':
+                    cmd.extend(['make', '-j', str(GetOption('num_jobs'))])
+                else:
+                    cmd.append(self.env.subst(part))
             if self.__dry_run:
-                print('Would RUN: %s' % command)
+                print('Would RUN: %s' % ' '.join(cmd))
                 retval = True
             else:
-                print('RUN: %s' % command)
-                if subprocess.call(command, shell=True,   # nosec
-                                   env=self.env['ENV']) != 0:
+                print('RUN: %s' % ' '.join(cmd))
+                if subprocess.call(cmd, shell=False, cwd=subdir, env=self.env['ENV']) != 0:
                     retval = False
                     break
-        if subdir:
-            os.chdir(old)
         return retval
 
 
 RUNNER = Runner()
+
 
 def default_libpath():
     """On debian systems, the default library path can be queried"""
@@ -320,6 +319,7 @@ def default_libpath():
         print('default_libpath, Exception: subprocess.Popen dpkg-architecture')
     return []
 
+
 class GitRepoRetriever():
     """Identify a git repository from which to download sources"""
 
@@ -333,7 +333,7 @@ class GitRepoRetriever():
     def checkout_commit(self, subdir):
         """ checkout a certain commit SHA or branch """
         if self.commit_sha is not None:
-            commands = ['git checkout %s' % (self.commit_sha)]
+            commands = [['git', 'checkout', self.commit_sha]]
             if not RUNNER.run_commands(commands, subdir=subdir):
                 raise DownloadFailure(self.url, subdir)
 
@@ -342,14 +342,14 @@ class GitRepoRetriever():
         if patches is not None:
             for patch in patches:
                 print("Applying patch %s" % (patch))
-                commands = ['git apply %s' % (patch)]
+                commands = [['git', 'apply', patch]]
                 if not RUNNER.run_commands(commands, subdir=subdir):
                     raise DownloadFailure(self.url, subdir)
 
     def update_submodules(self, subdir):
         """ update the git submodules """
         if self.has_submodules:
-            commands = ['git submodule init', 'git submodule update']
+            commands = [['git', 'submodule', 'init'], ['git', 'submodule', 'update']]
             if not RUNNER.run_commands(commands, subdir=subdir):
                 raise DownloadFailure(self.url, subdir)
 
@@ -369,7 +369,7 @@ build with random upstream changes.
             raise DownloadFailure(self.url, subdir)
 
         if not os.path.exists(subdir):
-            commands = ['git clone %s %s' % (self.url, subdir)]
+            commands = [['git', 'clone', self.url, subdir]]
             if not RUNNER.run_commands(commands):
                 raise DownloadFailure(self.url, subdir)
         self.get_specific(subdir, **kw)
@@ -383,10 +383,10 @@ build with random upstream changes.
             branch = self.branch
         self.branch = branch
         if self.branch:
-            command = ['cd %s && git checkout %s' % (subdir, branch)]
-            if not RUNNER.run_commands(command):
-                command = ['cd %s && git fetch -t -a' % (subdir)]
-                if not RUNNER.run_commands(command):
+            command = [['git', 'checkout', branch]]
+            if not RUNNER.run_commands(command, subdir=subdir):
+                command = [['git', 'fetch', '-t', '-a']]
+                if not RUNNER.run_commands(command, subdir=subdir):
                     raise DownloadFailure(self.url, subdir)
             self.commit_sha = self.branch
             self.checkout_commit(subdir)
@@ -394,21 +394,22 @@ build with random upstream changes.
         # Now checkout the commit_sha if specified
         passed_commit_sha = kw.get("commit_sha", None)
         if passed_commit_sha is not None:
-            command = ['cd %s && git checkout %s' % (subdir, passed_commit_sha)]
-            if not RUNNER.run_commands(command):
-                command = ['cd %s && git fetch -t -a' % (subdir)]
-                if not RUNNER.run_commands(command):
+            command = [['git', 'checkout', passed_commit_sha]]
+            if not RUNNER.run_commands(command, subdir=subdir):
+                command = [['git', 'fetch', '-t', '-a']]
+                if not RUNNER.run_commands(command, subdir=subdir):
                     raise DownloadFailure(self.url, subdir)
             self.commit_sha = passed_commit_sha
             self.checkout_commit(subdir)
 
-	# reset patched diff
-        command = ['cd %s && git reset --hard HEAD' % (subdir)]
-        if not RUNNER.run_commands(command):
+        # reset patched diff
+        command = [['git', 'reset', '--hard', 'HEAD']]
+        if not RUNNER.run_commands(command, subdir=subdir):
             raise DownloadFailure(self.url, subdir)
         # Now apply any patches specified
         self.apply_patches(subdir, kw.get("patches", None))
         self.update_submodules(subdir)
+
 
 class WebRetriever():
     """Identify a location from where to download a source package"""
@@ -428,7 +429,7 @@ class WebRetriever():
             return False
 
         with open(filename, "rb") as src:
-            hexdigest = hashlib.md5(src.read()).hexdigest() #nosec
+            hexdigest = hashlib.md5(src.read()).hexdigest()  # nosec
 
         if hexdigest != self.md5:
             print("Removing existing file %s: md5 %s != %s" % (filename,
@@ -446,7 +447,11 @@ class WebRetriever():
         retries = 3
         # Retry download a few times if it fails
         for i in range(0, retries + 1):
-            command = ['curl -L -O %s' % self.url]
+            command = ['curl',
+                       '-sSf',
+                       '--location',
+                       '--remote-name',
+                       self.url]
 
             failure_reason = "Download command failed"
             if RUNNER.run_commands(command):
@@ -456,8 +461,7 @@ class WebRetriever():
 
                 failure_reason = "md5 mismatch"
 
-            print("Try #%d to get %s failed: %s" % (i + 1, self.url,
-                                                    failure_reason))
+            print("Try #%d to get %s failed: %s" % (i + 1, self.url, failure_reason))
 
             if i != retries:
                 time.sleep(initial_sleep)
@@ -465,7 +469,7 @@ class WebRetriever():
 
         return False
 
-    def get(self, subdir, **kw): #pylint: disable=unused-argument
+    def get(self, subdir, **kw):  # pylint: disable=unused-argument
         """Downloads and extracts sources from a url into subdir"""
 
         basename = os.path.basename(self.url)
@@ -482,17 +486,17 @@ class WebRetriever():
                 print('Would unpack gzipped tar file: %s' % basename)
                 return
             try:
-                tfile = tarfile.open(basename, 'r:gz')
-                members = tfile.getnames()
-                prefix = os.path.commonprefix(members)
-                tfile.extractall()
-                if not RUNNER.run_commands(['mv %s %s' % (prefix, subdir)]):
-                    raise ExtractionError(subdir)
+                with tarfile.open(basename, 'r:gz') as tfile:
+                    members = tfile.getnames()
+                    prefix = os.path.commonprefix(members)
+                    tfile.extractall()
+                os.rename(prefix, subdir)
             except (IOError, tarfile.TarError) as io_error:
                 print(traceback.format_exc())
                 raise ExtractionError(subdir) from io_error
         else:
             raise UnsupportedCompression(subdir)
+
 
 def check_flag_helper(context, compiler, ext, flag):
     """Helper function to allow checking for compiler flags"""
@@ -502,7 +506,7 @@ def check_flag_helper(context, compiler, ext, flag):
         # bug in older scons, need CFLAGS to exist, -O2 is default.
         context.env.Replace(CFLAGS=['-O2'])
     elif compiler in ["gcc", "g++"]:
-        #remove -no- for test
+        # remove -no- for test
         test_flag = flag.replace("-Wno-", "-W")
         flags = ["-Werror", test_flag]
     else:
@@ -517,13 +521,16 @@ int main() {
     context.Result(ret)
     return ret
 
+
 def check_flag(context, flag):
     """Check C specific compiler flags"""
     return check_flag_helper(context, context.env.get("CC"), ".c", flag)
 
+
 def check_flag_cc(context, flag):
     """Check C++ specific compiler flags"""
     return check_flag_helper(context, context.env.get("CXX"), ".cpp", flag)
+
 
 def check_flags(env, config, key, value):
     """Check and append all supported flags"""
@@ -543,24 +550,27 @@ def check_flags(env, config, key, value):
         elif config.CheckFlagCC(flag):
             insert = True
         if insert:
-            env.AppendUnique(**{key : [flag]})
+            env.AppendUnique(**{key: [flag]})
         checked.append(flag)
+
 
 def append_if_supported(env, **kwargs):
     """Check and append flags for construction variables"""
     cenv = env.Clone()
-    config = Configure(cenv, custom_tests={'CheckFlag' : check_flag,
-                                           'CheckFlagCC' : check_flag_cc})
+    config = Configure(cenv, custom_tests={'CheckFlag': check_flag,
+                                           'CheckFlagCC': check_flag_cc})
     for key, value in kwargs.items():
         if key not in ["CFLAGS", "CXXFLAGS", "CCFLAGS"]:
-            env.AppendUnique(**{key : value})
+            env.AppendUnique(**{key: value})
             continue
         check_flags(env, config, key, value)
 
     config.Finish()
 
+
 class ProgramBinary():
     """Define possible names for a required executable"""
+
     def __init__(self, name, possible_names):
         """ Define a binary allowing for unique names on various platforms """
         self.name = name
@@ -574,6 +584,7 @@ class ProgramBinary():
                 prereqs.replace_env(**args)
                 return True
         return False
+
 
 def ensure_dir_exists(dirname, dry_run):
     """Ensure a directory exists"""
@@ -591,6 +602,8 @@ def ensure_dir_exists(dirname, dry_run):
         raise IOError(errno.ENOTDIR, 'Not a directory', dirname)
 
 # pylint: disable=too-many-public-methods
+
+
 class PreReqComponent():
     """A class for defining and managing external components required
        by a project.
@@ -707,11 +720,12 @@ class PreReqComponent():
                         'Comma separated list of preinstalled dependencies',
                         'none')
         self.add_opts(ListVariable('INCLUDE', "Optional components to build",
-                                   'none', ['psm2', 'psm3']))
+                                   'none', ['psm2']))
         self.add_opts(('MPI_PKG',
                        'Specifies name of pkg-config to load for MPI', None))
         self.add_opts(BoolVariable('FIRMWARE_MGMT',
                                    'Build in device firmware management.', 0))
+        self.add_opts(BoolVariable('UCX', 'Build UCX support.', 0))
         self.add_opts(PathVariable('PREFIX', 'Installation path', install_dir,
                                    PathVariable.PathIsDirCreate),
                       PathVariable('GOPATH',
@@ -722,7 +736,7 @@ class PreReqComponent():
         self.setup_path_var('GOPATH')
         self.__build_info.update("PREFIX", self.__env.subst("$PREFIX"))
         self.prereq_prefix = self.__env.subst("$PREFIX/prereq/$TTYPE_REAL")
-        self.setup_parallel_build()
+        self._setup_parallel_build()
 
         self.config_file = config_file
         if config_file is not None:
@@ -753,7 +767,7 @@ class PreReqComponent():
     def has_source(self, env, *comps, **kw):
         """Check if source exists for a component"""
         new_env = env.Clone()
-        #first require the binary of the component.
+        # first require the binary of the component.
         self.require(new_env, *comps, **kw)
 
         for comp in comps:
@@ -761,7 +775,7 @@ class PreReqComponent():
                 path = self.get_src_path(comp)
                 if not os.path.exists(path):
                     return False
-            except MissingPath as _error:
+            except MissingPath:
                 print("%s source not found" % comp)
                 return False
 
@@ -795,7 +809,7 @@ class PreReqComponent():
         try:
             env = self.__env.Clone(tools=['doneapi'])
             self.has_icx = True
-        except InternalError as _err:
+        except InternalError:
             print("No oneapi compiler, trying legacy")
             env = self.__env.Clone(tools=['intelc'])
         self.__env["ENV"]["PATH"] = env["ENV"]["PATH"]
@@ -815,17 +829,16 @@ class PreReqComponent():
                                              "-diag-disable:188",
                                              "-diag-disable:2405",
                                              "-diag-disable:1338"])
-        return {'CC' : env.get("CC"), "CXX" : env.get("CXX")}
+        return {'CC': env.get("CC"), "CXX": env.get("CXX")}
 
     def _setup_compiler(self, warning_level):
         """Setup the compiler to use"""
-        compiler_map = {'gcc': {'CC' : 'gcc', 'CXX' : 'g++'},
-                        'covc' : {'CC' : '/opt/BullseyeCoverage/bin/gcc',
-                                  'CXX' : '/opt/BullseyeCoverage/bin/g++',
-                                  'CVS' : '/opt/BullseyeCoverage/bin/covselect',
-                                  'COV01' : '/opt/BullseyeCoverage/bin/cov01'},
-                        'clang' : {'CC' : 'clang', 'CXX' : 'clang++'},
-                       }
+        compiler_map = {'gcc': {'CC': 'gcc', 'CXX': 'g++'},
+                        'covc': {'CC': '/opt/BullseyeCoverage/bin/gcc',
+                                 'CXX': '/opt/BullseyeCoverage/bin/g++',
+                                 'CVS': '/opt/BullseyeCoverage/bin/covselect',
+                                 'COV01': '/opt/BullseyeCoverage/bin/cov01'},
+                        'clang': {'CC': 'clang', 'CXX': 'clang++'}}
         self.add_opts(EnumVariable('COMPILER', "Set the compiler family to use",
                                    'gcc', ['gcc', 'covc', 'clang', 'icc'],
                                    ignorecase=1))
@@ -853,36 +866,35 @@ class PreReqComponent():
 
         for name, prog in compiler_map[compiler].items():
             if not config.CheckProg(prog):
-                print("%s must be installed when COMPILER=%s" %
-                      (prog, compiler))
+                print("%s must be installed when COMPILER=%s" % (prog, compiler))
                 if self.__check_only:
                     continue
                 config.Finish()
                 raise MissingSystemLibs(prog)
-            args = {name : prog}
+            args = {name: prog}
             self.__env.Replace(**args)
 
         if compiler == 'covc':
-            covfile = self.__top_dir + "/test.cov"
+            covfile = os.path.join(self.__top_dir, 'test.cov')
             if os.path.isfile(covfile):
                 os.remove(covfile)
-            commands = ['$COV01 -1',
-                        '$COV01 -s',
-                        '$CVS --add \'!**/src/cart/test/utest/\'',
-                        '$CVS --add \'!**/src/common/tests/\'',
-                        '$CVS --add \'!**/src/gurt/tests/\'',
-                        '$CVS --add \'!**/src/iosrv/tests/\'',
-                        '$CVS --add \'!**/src/mgmt/tests/\'',
-                        '$CVS --add \'!**/src/object/tests/\'',
-                        '$CVS --add \'!**/src/placement/tests/\'',
-                        '$CVS --add \'!**/src/rdb/tests/\'',
-                        '$CVS --add \'!**/src/security/tests/\'',
-                        '$CVS --add \'!**/src/utils/self_test/\'',
-                        '$CVS --add \'!**/src/utils/ctl/\'',
-                        '$CVS --add \'!**/src/vea/tests/\'',
-                        '$CVS --add \'!**/src/vos/tests/\'',
-                        '$CVS --add \'!**/src/engine/tests/\'',
-                        '$CVS --add \'!**/src/tests/\'']
+            commands = [['$COV01', '-1'],
+                        ['$COV01', '-s'],
+                        ['$CVS', '--add', '!**/src/cart/test/utest/'],
+                        ['$CVS', '--add', '!**/src/common/tests/'],
+                        ['$CVS', '--add', '!**/src/gurt/tests/'],
+                        ['$CVS', '--add', '!**/src/iosrv/tests/'],
+                        ['$CVS', '--add', '!**/src/mgmt/tests/'],
+                        ['$CVS', '--add', '!**/src/object/tests/'],
+                        ['$CVS', '--add', '!**/src/placement/tests/'],
+                        ['$CVS', '--add', '!**/src/rdb/tests/'],
+                        ['$CVS', '--add', '!**/src/security/tests/'],
+                        ['$CVS', '--add', '!**/src/utils/self_test/'],
+                        ['$CVS', '--add', '!**/src/utils/ctl/'],
+                        ['$CVS', '--add', '!**/src/vea/tests/'],
+                        ['$CVS', '--add', '!**/src/vos/tests/'],
+                        ['$CVS', '--add', '!**/src/engine/tests/'],
+                        ['$CVS', '--add', '!**/src/tests/']]
             if not RUNNER.run_commands(commands):
                 raise BuildFailure("cov01")
 
@@ -891,14 +903,11 @@ class PreReqComponent():
             # Restore the dry run state
             env.SetOption('no_exec', True)
 
-    def setup_parallel_build(self):
-        """Set the JOBS_OPT variable for builds"""
-        jobs_opt = GetOption('num_jobs')
-        self.__env["JOBS_OPT"] = "-j %d" % jobs_opt
-        #Multiple go jobs can be running at once via the -j option so limit each
-        #to 1 proc.   This allows for compilation to continue on systems with
-        #limited processor resources where the number of go procs will be
-        #multiplied by jobs_opt.
+    def _setup_parallel_build(self):
+        """Set the parallel options for builds"""
+        # Multiple go jobs can be running at once via the -j option so limit each to 1 proc.
+        # This allows for compilation to continue on systems with limited processor resources where
+        # the number of go procs will be multiplied by jobs_opt.
         self.__env["ENV"]["GOMAXPROCS"] = "1"
 
     def get_build_info(self):
@@ -927,8 +936,7 @@ class PreReqComponent():
                   type='choice',
                   choices=['yes', 'no', 'build-only'],
                   default='no',
-                  help="Automatically download and build sources.  " \
-                       "(yes|no|build-only) [no]")
+                  help="Automatically download and build sources.  (yes|no|build-only) [no]")
 
         # We want to be able to check what dependencies are needed with out
         # doing a build, similar to --dry-run.  We can not use --dry-run
@@ -979,8 +987,7 @@ class PreReqComponent():
         """Create a command line variable for a path"""
         tmp = self.__env.get(var)
         if tmp:
-            realpath = lambda x: os.path.realpath(os.path.join(self.__top_dir,
-                                                               x))
+            realpath = lambda x: os.path.realpath(os.path.join(self.__top_dir, x))
             if multiple:
                 value = os.pathsep.join(map(realpath, tmp.split(os.pathsep)))
             else:
@@ -1041,9 +1048,9 @@ class PreReqComponent():
         """
 
         try:
-            #pylint: disable=import-outside-toplevel
+            # pylint: disable=import-outside-toplevel
             from components import define_components
-            #pylint: enable=import-outside-toplevel
+            # pylint: enable=import-outside-toplevel
             define_components(self)
         except Exception as old:
             raise BadScript("components", traceback.format_exc()) from old
@@ -1057,7 +1064,7 @@ class PreReqComponent():
 
     def load_defaults(self, is_arm):
         """Setup default build parameters"""
-        #argobots is not really needed by client but it's difficult to separate
+        # argobots is not really needed by client but it's difficult to separate
         common_reqs = ['argobots', 'ofi', 'hwloc', 'mercury', 'boost', 'uuid',
                        'crypto', 'protobufc', 'lz4']
         client_reqs = ['fuse', 'json-c']
@@ -1091,7 +1098,7 @@ class PreReqComponent():
         """return True if test build is requested"""
         return "test" in self._build_targets
 
-    def modify_prefix(self, comp_def, env): #pylint: disable=unused-argument
+    def modify_prefix(self, comp_def, env):  # pylint: disable=unused-argument
         """Overwrite the prefix in cases where we may be using the default"""
         if comp_def.package:
             return
@@ -1249,8 +1256,7 @@ class PreReqComponent():
         self.__build_info.update(var, value)
 
     def get_prefixes(self, name, prebuilt_path):
-        """Get the location of the scons prefix as well as the external
-           component prefix."""
+        """Get the location of the scons prefix as well as the external component prefix."""
         prefix = self.__env.get('PREFIX')
         comp_prefix = '%s_PREFIX' % name.upper()
         if prebuilt_path:
@@ -1297,6 +1303,7 @@ class PreReqComponent():
         self.configs.read(full_path)
 
 # pylint: enable=too-many-public-methods
+
 
 class _Component():
     """A class to define attributes of an external component
@@ -1390,8 +1397,8 @@ class _Component():
             patches.append(patch_path)
             if os.path.exists(patch_path):
                 continue
-            command = ['curl -sSfL --retry 10 --retry-max-time 60 -o %s %s'
-                       % (patch_path, raw)]
+            command = [['curl', '-sSfL', '--retry', '10', '--retry-max-time', '60',
+                        '-o', patch_path, raw]]
             if not RUNNER.run_commands(command):
                 raise BuildFailure(raw)
         return patches
@@ -1469,7 +1476,7 @@ class _Component():
             return False
 
         path = os.environ.get("PKG_CONFIG_PATH", None)
-        if not path is None:
+        if path is not None:
             env["ENV"]["PKG_CONFIG_PATH"] = path
         if self.component_prefix:
             for path in ["lib", "lib64"]:
@@ -1572,32 +1579,28 @@ class _Component():
         else:
             self.prebuilt_path = self.prereqs.get_prebuilt_path(self, self.name)
 
-        (self.component_prefix, self.prefix) = \
-            self.prereqs.get_prefixes(self.name, self.prebuilt_path)
+        (self.component_prefix, self.prefix) = self.prereqs.get_prefixes(self.name,
+                                                                         self.prebuilt_path)
         self.src_path = None
         if self.retriever:
             self.src_path = self.prereqs.get_src_path(self.name)
         self.build_path = self.src_path
         if self.out_of_src_build:
-            self.build_path = \
-                os.path.join(self.prereqs.get_build_dir(), '%s.build'
-                             % self.name)
+            self.build_path = os.path.join(self.prereqs.get_build_dir(),
+                                           '{}.build'.format(self.name))
 
             ensure_dir_exists(self.build_path, self.__dry_run)
 
     def set_environment(self, env, needed_libs):
-        """Modify the specified construction environment to build with
-           the external component"""
+        """Modify the specified construction environment to build with the external component"""
         lib_paths = []
 
         # Make sure CheckProg() looks in the component's bin/ dir
         if not self.use_installed and not self.component_prefix == "/usr":
-            env.AppendENVPath('PATH', os.path.join(self.component_prefix,
-                                                   'bin'))
+            env.AppendENVPath('PATH', os.path.join(self.component_prefix, 'bin'))
 
             for path in self.include_path:
-                env.AppendUnique(CPPPATH=[os.path.join(self.component_prefix,
-                                                       path)])
+                env.AppendUnique(CPPPATH=[os.path.join(self.component_prefix, path)])
 
             # The same rules that apply to headers apply to RPATH.   If a build
             # uses a component, that build needs the RPATH of the dependencies.
@@ -1615,7 +1618,7 @@ class _Component():
             # and this allows LD_LIBRARY_PATH to override RPATH
             env.AppendUnique(LINKFLAGS=["-Wl,--enable-new-dtags"])
         if self.component_prefix == "/usr" and self.package is None:
-            #hack until we have everything installed in lib64
+            # hack until we have everything installed in lib64
             env.AppendUnique(RPATH=["/usr/lib"])
             env.AppendUnique(LINKFLAGS=["-Wl,--enable-new-dtags"])
 
@@ -1732,8 +1735,7 @@ class _Component():
                 if not lib.endswith(".so"):
                     continue
                 full_lib = os.path.join(path, lib)
-                cmd = "patchelf --set-rpath '%s' %s" % (":".join(rpath),
-                                                        full_lib)
+                cmd = ['patchelf', '--set-rpath', ':'.join(rpath), full_lib]
                 if not RUNNER.run_commands([cmd]):
                     print("Skipped patching %s" % full_lib)
 
@@ -1780,8 +1782,7 @@ class _Component():
             changes = True
             if self.out_of_src_build:
                 self._rm_old_dir(self.build_path)
-            if not RUNNER.run_commands(self.build_commands,
-                                       subdir=self.build_path):
+            if not RUNNER.run_commands(self.build_commands, subdir=self.build_path):
                 raise BuildFailure(self.name)
 
         # set environment one more time as new directories may be present
@@ -1793,6 +1794,7 @@ class _Component():
         if self.has_missing_targets(envcopy) and not self.__dry_run:
             raise MissingTargets(self.name, None)
         return changes
+
 
 __all__ = ["GitRepoRetriever", "WebRetriever",
            "DownloadFailure", "ExtractionError",
