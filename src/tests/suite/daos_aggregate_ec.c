@@ -103,7 +103,7 @@ iov_update_fill(d_iov_t *iov, unsigned int cells, unsigned int len,
 	for (j = 0; j < cells; j++)
 		for (k = 0; k < len; k++)
 			if (overwrite)
-				dest[i++] = 128;
+				dest[i++] = (char)128;
 			else
 				dest[i++] = j;
 }
@@ -1009,7 +1009,7 @@ int run_daos_aggregation_ec_test(int rank, int size, int *sub_tests,
 {
 	int rc = 0;
 
-	MPI_Barrier(MPI_COMM_WORLD);
+	par_barrier(PAR_COMM_WORLD);
 	if (sub_tests_size == 0) {
 		sub_tests_size = ARRAY_SIZE(ec_agg_tests);
 		sub_tests = NULL;
@@ -1021,6 +1021,6 @@ int run_daos_aggregation_ec_test(int rank, int size, int *sub_tests,
 				 sub_tests_size, ec_setup, test_teardown);
 
 out:
-	MPI_Barrier(MPI_COMM_WORLD);
+	par_barrier(PAR_COMM_WORLD);
 	return rc;
 }
