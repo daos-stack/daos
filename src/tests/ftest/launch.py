@@ -1712,7 +1712,7 @@ def process_the_cores(avocado_logs_dir, test_yaml, test_name, args):
     path = os.path.join(avocado_logs_dir, "latest", "stacktraces")
     command = [
         "./process_cores.py",
-        "--hosts={}".format(str(hosts)),
+        "--nodes={}".format(str(hosts)),
         "--source=/var/tmp/",
         "--destination={}".format(path),
         "--install",
