@@ -181,7 +181,7 @@ def get_remote_dir(self, source_dir, dest_dir, host_list, shared_dir=None,
                     "<<FAILED: Soak remote logfiles not copied from clients>>: {}".format(
                         host)) from error
             command = "/usr/bin/cp -R -p {0}/ \'{1}\'".format(shared_dir_tmp, dest_dir)
-            run_command(command, timeout=30, raise_exception=False)
+            run_command(command, timeout=30)
 
     else:
         # copy the remote dir on all client nodes to a shared directory
@@ -196,7 +196,7 @@ def get_remote_dir(self, source_dir, dest_dir, host_list, shared_dir=None,
         # copy the local logs and the logs in the shared dir to avocado dir
         for directory in [source_dir, shared_dir]:
             command = "/usr/bin/cp -R -p {0}/ \'{1}\'".format(directory, dest_dir)
-            run_command(command, timeout=30, raise_exception=False)
+            run_command(command, timeout=30)
 
     if rm_remote:
         # remove the remote soak logs for this pass
@@ -205,7 +205,7 @@ def get_remote_dir(self, source_dir, dest_dir, host_list, shared_dir=None,
         # remove the local log for this pass
         for directory in [source_dir, shared_dir]:
             command = "/usr/bin/rm -rf {0}".format(directory)
-            run_command(command, raise_exception=False)
+            run_command(command)
 
 
 def write_logfile(data, name, destination):
@@ -308,7 +308,7 @@ def get_daos_server_logs(self):
             commands = ["scp {}:/var/tmp/daos_testing/daos*.log.* {}".format(host, daos_dir),
                         "scp {}:/var/tmp/daos_testing/daos*.log {}".format(host, daos_dir)]
             for command in commands:
-                run_command(command, timeout=120, raise_exception=False)
+                run_command(command, timeout=120)
 
 
 def run_monitor_check(self):
@@ -322,8 +322,7 @@ def run_monitor_check(self):
     hosts = self.hostlist_servers
     if monitor_cmds:
         for cmd in monitor_cmds:
-            command = "{}".format(cmd)
-            pcmd(hosts, command, timeout=30)
+            pcmd(hosts, cmd, timeout=30)
 
 
 def run_metrics_check(self, logging=True, prefix=None):
