@@ -1,5 +1,5 @@
 # Project Information
-site_name: DAOS v2.0
+site_name: DAOS v2.0 - latest
 site_description: Distributed Asynchronous Object Storage
 site_author: DAOS Project
 
@@ -59,7 +59,7 @@ nav:
         - 'Community Roadmap': 'http://wiki.daos.io/spaces/DC/pages/4836661105/Roadmap'
         - 'Community Mailing list': 'https://daos.groups.io/g/daos'
         - 'Issue tracker': 'http://jira.daos.io/'
-    - Release Infos:
+    - Release Information:
         - 'Release Notes v2.0': 'release/release_notes.md'
         - 'Support Matrix v2.0': 'release/support_matrix.md'
         - 'Upgrading to v2.0': 'release/upgrading.md'
