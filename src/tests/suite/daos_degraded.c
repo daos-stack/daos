@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2021 Intel Corporation.
+ * (C) Copyright 2016-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -60,8 +60,8 @@ insert_lookup_enum_with_ops(test_arg_t *arg, int op_kill)
 	daos_pool_info_t	info = {0};
 	int			enumed = 1;
 
-	MPI_Comm_rank(MPI_COMM_WORLD, &rank);
-	MPI_Comm_size(MPI_COMM_WORLD, &size);
+	par_rank(PAR_COMM_WORLD, &rank);
+	par_size(PAR_COMM_WORLD, &size);
 
 	oid = daos_test_oid_gen(arg->coh, OC_RP_XSF, 0, 0, rank);
 
@@ -72,7 +72,7 @@ insert_lookup_enum_with_ops(test_arg_t *arg, int op_kill)
 		print_message("Inserting %d keys ...\n", g_dkeys * size);
 	}
 
-	MPI_Barrier(MPI_COMM_WORLD);
+	par_barrier(PAR_COMM_WORLD);
 	rc = daos_pool_query(arg->pool.poh, NULL, &info, NULL, NULL);
 	assert_rc_equal(rc, 0);
 	if (info.pi_ntargets - info.pi_ndisabled < 2) {
@@ -82,7 +82,7 @@ insert_lookup_enum_with_ops(test_arg_t *arg, int op_kill)
 				      info.pi_ndisabled);
 		skip();
 	}
-	MPI_Barrier(MPI_COMM_WORLD);
+	par_barrier(PAR_COMM_WORLD);
 
 	for (i = 0; i < g_dkeys; i++) {
 		D_ALLOC(dkey[i], strlen(dkey_fmt) + g_dkeys_strlen + 1);
@@ -105,7 +105,7 @@ insert_lookup_enum_with_ops(test_arg_t *arg, int op_kill)
 			      rec_size[i], DAOS_TX_NONE, &req);
 
 		if ((i + 1) % (g_dkeys/10) == 0) {
-			MPI_Barrier(MPI_COMM_WORLD);
+			par_barrier(PAR_COMM_WORLD);
 			if (rank == 0)
 				print_message("\t%d keys inserted\n",
 					      (i + 1) * size);
@@ -118,7 +118,7 @@ insert_lookup_enum_with_ops(test_arg_t *arg, int op_kill)
 					 arg->group, arg->pool.svc, -1);
 	}
 
-	MPI_Barrier(MPI_COMM_WORLD);
+	par_barrier(PAR_COMM_WORLD);
 
 	if (arg->myrank == 0)
 		print_message("insertion done\nNow looking up %d keys ...\n",
@@ -134,7 +134,7 @@ insert_lookup_enum_with_ops(test_arg_t *arg, int op_kill)
 		assert_memory_equal(val[i], rec_verify, req.iod[0].iod_size);
 
 		if ((i + 1) % (g_dkeys/10) == 0) {
-			MPI_Barrier(MPI_COMM_WORLD);
+			par_barrier(PAR_COMM_WORLD);
 			if (rank == 0)
 				print_message("\t%d keys looked up\n",
 					      (i + 1) * size);
@@ -148,7 +148,7 @@ insert_lookup_enum_with_ops(test_arg_t *arg, int op_kill)
 	}
 	D_FREE(rec_verify);
 
-	MPI_Barrier(MPI_COMM_WORLD);
+	par_barrier(PAR_COMM_WORLD);
 
 	if (arg->myrank == 0)
 		print_message("lookup done\nNow enumerating %d keys ...\n",
@@ -180,7 +180,7 @@ insert_lookup_enum_with_ops(test_arg_t *arg, int op_kill)
 		key_nr += number;
 
 		if (key_nr >= enumed * (g_dkeys/10)) {
-			MPI_Barrier(MPI_COMM_WORLD);
+			par_barrier(PAR_COMM_WORLD);
 			if (rank == 0)
 				print_message("\t%d keys enumerated\n",
 					      key_nr * size);
@@ -198,7 +198,7 @@ insert_lookup_enum_with_ops(test_arg_t *arg, int op_kill)
 	}
 	assert_int_equal(key_nr, g_dkeys);
 
-	MPI_Barrier(MPI_COMM_WORLD);
+	par_barrier(PAR_COMM_WORLD);
 
 	if (arg->myrank == 0)
 		print_message("enumeration done\n");
@@ -265,10 +265,10 @@ run_daos_degraded_test(int rank, int size)
 {
 	int rc = 0;
 
-	MPI_Barrier(MPI_COMM_WORLD);
+	par_barrier(PAR_COMM_WORLD);
 	rc = cmocka_run_group_tests_name("DAOS_Degraded-mode",
 					 degraded_tests, degraded_setup,
 					 degraded_teardown);
-	MPI_Barrier(MPI_COMM_WORLD);
+	par_barrier(PAR_COMM_WORLD);
 	return rc;
 }
