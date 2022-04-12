@@ -1462,7 +1462,7 @@ dtx_reindex_ult(void *arg)
 	uint64_t			 hint	= 0;
 	int				 rc;
 
-	D_DEBUG(DF_DSMS, DF_CONT": starting DTX reindex ULT on xstream %d\n",
+	D_DEBUG(DB_ANY, DF_CONT": starting DTX reindex ULT on xstream %d\n",
 		DP_CONT(NULL, cont->sc_uuid), dmi->dmi_tgt_id);
 
 	while (!cont->sc_dtx_reindex_abort && !dss_xstream_exiting(dmi->dmi_xstream)) {
@@ -1474,7 +1474,7 @@ dtx_reindex_ult(void *arg)
 		}
 
 		if (rc > 0) {
-			D_DEBUG(DF_DSMS, DF_CONT": DTX reindex done\n",
+			D_DEBUG(DB_ANY, DF_CONT": DTX reindex done\n",
 				DP_CONT(NULL, cont->sc_uuid));
 			goto out;
 		}
@@ -1482,7 +1482,7 @@ dtx_reindex_ult(void *arg)
 		ABT_thread_yield();
 	}
 
-	D_DEBUG(DF_DSMS, DF_CONT": stopping DTX reindex ULT on stream %d\n",
+	D_DEBUG(DB_ANY, DF_CONT": stopping DTX reindex ULT on stream %d\n",
 		DP_CONT(NULL, cont->sc_uuid), dmi->dmi_tgt_id);
 
 out:
