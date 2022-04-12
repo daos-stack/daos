@@ -137,7 +137,7 @@ DAOS Version 2.2 supports RHEL 8.5 and RHEL 8.6.
 
 !!! note
     Most validation of DAOS 2.2 has been done on RHEL 8.5,
-    which is expected to be superceded by RHEL 8.6 by the end of May 2022.
+    which is expected to be superseded by RHEL 8.6 by the end of May 2022.
     DAOS 2.2 support of RHEL 8.6 may therefore not be available with
     the initial DAOS 2.2.0 release: If validation issues are discovered that
     require a fix, those fixes may only be provided in a DAOS 2.2.x bugfix release.
@@ -156,7 +156,7 @@ DAOS Version 2.2 supports Rocky Linux 8.5 and 8.6.
 
 !!! note
     Most validation of DAOS 2.2 has been done on the Rocky Linux 8.5 release,
-    which is expected to be superceded by Rocky Linux 8.6 by the end of May 2022.
+    which is expected to be superseded by Rocky Linux 8.6 by the end of May 2022.
     DAOS 2.2 support of Rocky Linux 8.6 may therefore not be available with
     the initial DAOS 2.2.0 release: If validation issues are discovered that
     require a fix, those fixes may only be provided in a DAOS 2.2.x bugfix release.
