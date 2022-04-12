@@ -22,7 +22,8 @@ class DmvrPosixSymlinks(DataMoverTestBase):
         Test Description:
             Tests copying POSIX symlinks with dcp.
         :avocado: tags=all,full_regression
-        :avocado: tags=datamover,dcp,dfuse
+        :avocado: tags=vm
+        :avocado: tags=datamover,mfu,mfu_dcp,dfuse,dfs
         :avocado: tags=dm_posix_symlinks,dm_posix_symlinks_dcp
         """
         self.run_dm_posix_symlinks("DCP")

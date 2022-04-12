@@ -68,7 +68,7 @@ func fabricInterfaceSetToHostFabric(fis *hardware.FabricInterfaceSet, filterProv
 			continue
 		}
 
-		name := fi.OSDevice
+		name := fi.NetInterface
 		if name == "" {
 			name = fi.Name
 		}

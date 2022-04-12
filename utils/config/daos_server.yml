@@ -97,6 +97,12 @@
 #
 #disable_srx: false
 #
+## Core Dump Filter
+## Optional filter to control which mappings are written to the core
+## dump in the event of a crash. See the following URL for more detail:
+## https://man7.org/linux/man-pages/man5/core.5.html
+#
+#core_dump_filter: 0x13
 #
 ## NVMe SSD inclusion list
 ## Immutable after running "dmg storage format".

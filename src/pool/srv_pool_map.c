@@ -42,7 +42,7 @@ update_one_tgt(struct pool_map *map, struct pool_target *target,
 		case PO_COMP_ST_UP:
 		case PO_COMP_ST_UPIN:
 		case PO_COMP_ST_DRAIN:
-			D_DEBUG(DF_DSMS, "change "DF_TARGET" to DOWN %p\n",
+			D_DEBUG(DB_MD, "change "DF_TARGET" to DOWN %p\n",
 				DP_TARGET(target), map);
 			target->ta_comp.co_status = PO_COMP_ST_DOWN;
 			target->ta_comp.co_fseq = ++(*version);
@@ -83,7 +83,7 @@ update_one_tgt(struct pool_map *map, struct pool_target *target,
 				DP_TARGET(target));
 			return -DER_BUSY;
 		case PO_COMP_ST_UPIN:
-			D_DEBUG(DF_DSMS, "change "DF_TARGET" to DRAIN %p\n",
+			D_DEBUG(DB_MD, "change "DF_TARGET" to DRAIN %p\n",
 				DP_TARGET(target), map);
 			target->ta_comp.co_status = PO_COMP_ST_DRAIN;
 			target->ta_comp.co_fseq = ++(*version);
@@ -116,7 +116,7 @@ update_one_tgt(struct pool_map *map, struct pool_target *target,
 				DP_TARGET(target));
 			return -DER_BUSY;
 		case PO_COMP_ST_DOWNOUT:
-			D_DEBUG(DF_DSMS, "change "DF_TARGET" to UP %p\n",
+			D_DEBUG(DB_MD, "change "DF_TARGET" to UP %p\n",
 				DP_TARGET(target), map);
 			target->ta_comp.co_status = PO_COMP_ST_UP;
 			target->ta_comp.co_in_ver = ++(*version);
@@ -126,7 +126,7 @@ update_one_tgt(struct pool_map *map, struct pool_target *target,
 			else
 				D_INFO(DF_TARGET " start reintegration.\n",
 				       DP_TARGET(target));
-			D_DEBUG(DF_DSMS, "change rank %u to UP\n",
+			D_DEBUG(DB_MD, "change rank %u to UP\n",
 				dom->do_comp.co_rank);
 			dom->do_comp.co_status = PO_COMP_ST_UP;
 			dom->do_comp.co_flags = 0;
@@ -149,7 +149,7 @@ update_one_tgt(struct pool_map *map, struct pool_target *target,
 			return -DER_INVAL;
 		case PO_COMP_ST_UP:
 		case PO_COMP_ST_NEW:
-			D_DEBUG(DF_DSMS, "change "DF_TARGET" to UPIN %p\n",
+			D_DEBUG(DB_MD, "change "DF_TARGET" to UPIN %p\n",
 				DP_TARGET(target), map);
 			/*
 			 * Need to update this target AND all of its parents
@@ -185,7 +185,7 @@ update_one_tgt(struct pool_map *map, struct pool_target *target,
 			return -DER_INVAL;
 		case PO_COMP_ST_DOWN:
 		case PO_COMP_ST_DRAIN:
-			D_DEBUG(DF_DSMS, "change "DF_TARGET" to DOWNOUT %p\n",
+			D_DEBUG(DB_MD, "change "DF_TARGET" to DOWNOUT %p\n",
 				DP_TARGET(target), map);
 			if (target->ta_comp.co_status == PO_COMP_ST_DOWN)
 				target->ta_comp.co_flags = PO_COMPF_DOWN2OUT;
@@ -271,7 +271,7 @@ ds_pool_map_tgts_update(struct pool_map *map, struct pool_target_id_list *tgts,
 					target->ta_comp.co_out_ver;
 			} else
 				D_ASSERTF(false, "evict rank by %d\n", opc);
-			D_DEBUG(DF_DSMS, "change rank %u to DOWN\n",
+			D_DEBUG(DB_MD, "change rank %u to DOWN\n",
 				dom->do_comp.co_rank);
 			version++;
 		}
@@ -285,7 +285,7 @@ ds_pool_map_tgts_update(struct pool_map *map, struct pool_target_id_list *tgts,
 
 	/* Set the version only if actual changes have been made. */
 	if (version > pool_map_get_version(map)) {
-		D_DEBUG(DF_DSMS, "generating map %p version %u:\n",
+		D_DEBUG(DB_MD, "generating map %p version %u:\n",
 			map, version);
 		rc = pool_map_set_version(map, version);
 		D_ASSERTF(rc == 0, ""DF_RC"\n", DP_RC(rc));

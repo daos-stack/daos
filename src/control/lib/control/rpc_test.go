@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2021 Intel Corporation.
+// (C) Copyright 2020-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -20,6 +20,8 @@ import (
 	"github.com/pkg/errors"
 	"golang.org/x/sys/unix"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/proto"
 
 	"github.com/daos-stack/daos/src/control/common"
@@ -269,6 +271,7 @@ func TestControl_InvokeUnaryRPC(t *testing.T) {
 	errNotReplica := &system.ErrNotReplica{
 		Replicas: replicaHosts,
 	}
+	errUnimplemented := status.Newf(codes.Unimplemented, "unimplemented").Err()
 
 	genRpcFn := func(inner func(*int) (proto.Message, error)) func(_ context.Context, _ *grpc.ClientConn) (proto.Message, error) {
 		callCount := 0
@@ -309,6 +312,38 @@ func TestControl_InvokeUnaryRPC(t *testing.T) {
 				},
 			},
 			expErr: context.Canceled,
+		},
+		"ctrl RPC handler unimplemented on one host": {
+			req: &testRequest{
+				HostList: []string{"127.0.0.1:1", "127.0.0.1:2"},
+				rpcFn: func(_ context.Context, cc *grpc.ClientConn) (proto.Message, error) {
+					if cc.Target() == "127.0.0.1:2" {
+						return nil, errUnimplemented
+					}
+					return defaultMessage, nil
+				},
+			},
+			expResp: &UnaryResponse{
+				Responses: []*HostResponse{
+					{
+						Addr:    "127.0.0.1:1",
+						Message: defaultMessage,
+					},
+					{
+						Addr:  "127.0.0.1:2",
+						Error: errUnimplemented,
+					},
+				},
+			},
+		},
+		"mgmt RPC handler unimplemented": {
+			req: &testRequest{
+				toMS: true,
+				rpcFn: func(_ context.Context, _ *grpc.ClientConn) (proto.Message, error) {
+					return nil, errUnimplemented
+				},
+			},
+			expErr: errors.New("unimplemented"),
 		},
 		"multiple hosts in request": {
 			req: &testRequest{

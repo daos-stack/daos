@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2021 Intel Corporation.
+ * (C) Copyright 2016-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -11,6 +11,7 @@
 
 #include <stdarg.h>
 #include <math.h>
+#include <string.h>
 #include <gurt/common.h>
 
 /* state buffer for DAOS rand and srand calls, NOT thread safe */
@@ -653,6 +654,57 @@ d_rank_range_list_create_from_ranks(d_rank_list_t *rank_list)
 	}
 
 	return range_list;
+}
+
+char *
+d_rank_range_list_str(d_rank_range_list_t *list, bool *truncated)
+{
+	const size_t	MAXBYTES = 512;
+	char	       *line;
+	char	       *linepos;
+	int		ret = 0;
+	size_t		remaining = MAXBYTES - 2u;
+	int		i;
+	int		err = 0;
+
+	*truncated = false;
+	D_ALLOC(line, MAXBYTES);
+	if (line == NULL)
+		return NULL;
+
+	*line = '[';
+	linepos = line + 1;
+	for (i = 0; i < list->rrl_nr; i++) {
+		uint32_t	lo = list->rrl_ranges[i].lo;
+		uint32_t	hi = list->rrl_ranges[i].hi;
+		bool		lastrange = (i == (list->rrl_nr - 1));
+
+		if (lo == hi)
+			ret = snprintf(linepos, remaining, "%u%s", lo, lastrange ? "" : ",");
+		else
+			ret = snprintf(linepos, remaining, "%u-%u%s", lo, hi, lastrange ? "" : ",");
+
+		if (ret < 0) {
+			err = errno;
+			D_ERROR("rank set could not be serialized: %s (%d)\n", strerror(err), err);
+			break;
+		}
+
+		if (ret >= remaining) {
+			err = EOVERFLOW;
+			D_WARN("rank set has been partially serialized\n");
+			break;
+		}
+
+		remaining -= ret;
+		linepos += ret;
+	}
+	memcpy(linepos, "]", 2u);
+
+	if (err != 0)
+		*truncated = true;
+
+	return line;
 }
 
 void

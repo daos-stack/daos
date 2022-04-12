@@ -290,6 +290,8 @@ prop_to_str(uint32_t type)
 		return "DAOS_PROP_CO_EC_PDA";
 	case DAOS_PROP_CO_RP_PDA:
 		return "DAOS_PROP_CO_RP_PDA";
+	case DAOS_PROP_CO_GLOBAL_VERSION:
+		return "DAOS_PROP_CO_GLOBAL_VERSION";
 	case DAOS_PROP_CO_ROOTS:
 		return "DAOS_PROP_CO_ROOTS";
 	default:
@@ -353,6 +355,7 @@ daos_cont_serialize_props(hid_t file_id, daos_prop_t *prop_query)
 			   type == DAOS_PROP_CO_EC_CELL_SZ ||
 			   type == DAOS_PROP_CO_EC_PDA ||
 			   type == DAOS_PROP_CO_RP_PDA ||
+			   type == DAOS_PROP_CO_GLOBAL_VERSION ||
 			   type == DAOS_PROP_CO_ALLOCED_OID) {
 			entry = &prop_query->dpp_entries[i];
 			rc = serialize_uint(file_id, entry->dpe_val,

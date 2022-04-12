@@ -55,7 +55,7 @@ func (c *ControlService) NetworkScan(ctx context.Context, req *ctlpb.NetworkScan
 
 func (c *ControlService) fabricInterfaceSetToNetworkScanResp(fis *hardware.FabricInterfaceSet, provider string) *ctlpb.NetworkScanResp {
 	resp := new(ctlpb.NetworkScanResp)
-	resp.Interfaces = make([]*ctlpb.FabricInterface, 0, fis.NumOSDevices())
+	resp.Interfaces = make([]*ctlpb.FabricInterface, 0, fis.NumNetDevices())
 	for _, name := range fis.Names() {
 		fi, err := fis.GetInterface(name)
 		if err != nil {
@@ -71,7 +71,7 @@ func (c *ControlService) fabricInterfaceSetToNetworkScanResp(fis *hardware.Fabri
 			if provider == "" || provider == prov {
 				resp.Interfaces = append(resp.Interfaces, &ctlpb.FabricInterface{
 					Provider:    prov,
-					Device:      fi.OSDevice,
+					Device:      fi.NetInterface,
 					Numanode:    uint32(fi.NUMANode),
 					Netdevclass: uint32(fi.DeviceClass),
 				})

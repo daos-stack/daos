@@ -33,7 +33,7 @@ name=created from ${MY_REPO}\n\
 baseurl=${MY_REPO}\n\
 enabled=1\n\
 repo_gpgcheck=0\n\
-gpgcheck=1\n" >> /etc/yum.repos.d/local-centos-group.repo;      \
+gpgcheck=1\n" >> /etc/yum.repos.d/local-el-group.repo;          \
       dnf -y install --disablerepo extras --disablerepo baseos  \
           epel-release-8-8.el8 dnf-plugins-core dnf-utils;      \
       rpm --import /etc/pki/rpm-gpg/RPM-GPG-KEY-EPEL-8;         \
@@ -63,7 +63,7 @@ name=created from ${MY_REPO}\n\
 baseurl=${MY_REPO}\n\
 enabled=1\n\
 repo_gpgcheck=1\n\
-gpgcheck=1\n" >> /etc/yum.repos.d/local-centos-appstream.repo;  \
+gpgcheck=1\n" >> /etc/yum.repos.d/local-el-appstream.repo;      \
       dnf config-manager --quiet --disable appstream;           \
     fi
 
@@ -97,7 +97,7 @@ RUN for repo in $REPOS; do                                                \
         fi;                                                               \
         echo -e "[$repo:$branch:$build_number]\n\
 name=$repo:$branch:$build_number\n\
-baseurl=${JENKINS_URL}job/daos-stack/job/$repo/job/$branch/$build_number/artifact/artifacts/centos7/\n\
+baseurl=${JENKINS_URL}job/daos-stack/job/$repo/job/$branch/$build_number/artifact/artifacts/el8/\n\
 enabled=1\n\
 gpgcheck=False\n" >> /etc/yum.repos.d/$repo:$branch:$build_number.repo;   \
         cat /etc/yum.repos.d/$repo:$branch:$build_number.repo; \
@@ -106,7 +106,7 @@ gpgcheck=False\n" >> /etc/yum.repos.d/$repo:$branch:$build_number.repo;   \
     done
 
 # Install OS updates and package.  Include basic tools and daos dependencies
-COPY ./utils/scripts/install-centos8.sh /tmp/install.sh
+COPY ./utils/scripts/install-el8.sh /tmp/install.sh
 RUN chmod +x /tmp/install.sh && dnf upgrade && /tmp/install.sh && dnf clean all && \
     rm -f /tmp/install.sh
 
@@ -123,8 +123,6 @@ RUN echo "daos_agent:daos_agent" | chpasswd
 RUN mkdir -p /opt/daos /mnt/daos /var/run/daos_server /var/run/daos_agent /home/daos/pre /home/daos/daos &&   \
     chown -R daos_server.daos_server /opt/daos /mnt/daos /var/run/daos_server /home/daos &&  \
     chown daos_agent.daos_agent /var/run/daos_agent
-
-ENV PATH=/home/daos/.local/bin:$PATH
 
 ARG QUICKBUILD=false
 ARG QUICKBUILD_DEPS
@@ -151,8 +149,17 @@ RUN if [ "x$BULLSEYE" != "x" ]; then \
 
 USER daos_server:daos_server
 
-# Install scons from pip to avoid dependency cycle bug.
-RUN python3 -m pip --no-cache-dir --disable-pip-version-check install --user scons
+# Setup a python venv so that python packages can be installed locally.
+RUN python3 -m venv /home/daos/venv
+ENV PATH=/home/daos/venv/bin:$PATH
+ENV VIRTUAL_ENV=/home/daos/venv/
+
+# Install latest versions of python tools.
+# wheel is needed first to avoid a warning when installing pyyaml.
+COPY requirements.txt .
+RUN python3 -m pip --no-cache-dir install --upgrade pip && \
+    python3 -m pip --no-cache-dir install wheel && \
+    python3 -m pip --no-cache-dir install -r requirements.txt
 
 WORKDIR /home/daos/pre
 COPY --chown=daos_server:daos_server SConstruct .

@@ -182,6 +182,12 @@ pool_iv_prop_l2g(daos_prop_t *prop, struct pool_iv_prop *iv_prop)
 				 DAOS_PROP_POLICYSTR_MAX_LEN);
 			strcpy(iv_prop->pip_policy_str, prop_entry->dpe_str);
 			break;
+		case DAOS_PROP_PO_GLOBAL_VERSION:
+			iv_prop->pip_global_version = prop_entry->dpe_val;
+			break;
+		case DAOS_PROP_PO_UPGRADE_STATUS:
+			iv_prop->pip_upgrade_status = prop_entry->dpe_val;
+			break;
 		default:
 			D_ASSERTF(0, "bad dpe_type %d\n", prop_entry->dpe_type);
 			break;
@@ -294,6 +300,12 @@ pool_iv_prop_g2l(struct pool_iv_prop *iv_prop, daos_prop_t *prop)
 				policy_str_alloc = prop_entry->dpe_str;
 			else
 				D_GOTO(out, rc = -DER_NOMEM);
+			break;
+		case DAOS_PROP_PO_GLOBAL_VERSION:
+			prop_entry->dpe_val = iv_prop->pip_global_version;
+			break;
+		case DAOS_PROP_PO_UPGRADE_STATUS:
+			prop_entry->dpe_val = iv_prop->pip_upgrade_status;
 			break;
 		default:
 			D_ASSERTF(0, "bad dpe_type %d\n", prop_entry->dpe_type);
@@ -1105,7 +1117,7 @@ ds_pool_iv_map_update(struct ds_pool *pool, struct pool_buf *buf,
 int
 ds_pool_iv_conn_hdl_update(struct ds_pool *pool, uuid_t hdl_uuid,
 			   uint64_t flags, uint64_t sec_capas,
-			   d_iov_t *cred)
+			   d_iov_t *cred, uint32_t global_ver)
 {
 	struct pool_iv_entry	*iv_entry;
 	daos_size_t		iv_entry_size;
@@ -1124,6 +1136,7 @@ ds_pool_iv_conn_hdl_update(struct ds_pool *pool, uuid_t hdl_uuid,
 	pic->pic_flags = flags;
 	pic->pic_capas = sec_capas;
 	pic->pic_cred_size = cred->iov_len;
+	pic->pic_global_ver = global_ver;
 	memcpy(&pic->pic_creds[0], cred->iov_buf, cred->iov_len);
 
 	rc = pool_iv_update(pool->sp_iv_ns, IV_POOL_CONN, hdl_uuid,

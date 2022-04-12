@@ -18,13 +18,12 @@ from avocado.utils import process
 from ClusterShell.NodeSet import NodeSet
 
 from command_utils_base import \
-    BasicParameter, CommandWithParameters, \
-    EnvironmentVariables, LogParameter
+    BasicParameter, CommandWithParameters, EnvironmentVariables, LogParameter, ObjectWithParameters
 from exception_utils import CommandFailure
 from general_utils import check_file_exists, get_log_file, \
     run_command, DaosTestError, get_job_manager_class, create_directory, \
     distribute_files, change_file_owner, get_file_listing, run_pcmd, \
-    get_subprocess_stdout
+    get_subprocess_stdout, get_primary_group
 
 
 class ExecutableCommand(CommandWithParameters):
@@ -155,7 +154,7 @@ class ExecutableCommand(CommandWithParameters):
 
         except DaosTestError as error:
             # Command failed or possibly timed out
-            raise CommandFailure from error
+            raise CommandFailure(str(error))    # pylint: disable=raise-missing-from
 
         if self.exit_status_exception and not self.check_results():
             # Command failed if its output contains bad keywords
@@ -966,7 +965,7 @@ class YamlCommand(SubProcessCommand):
                     self.command, directory, user, nodes)
                 try:
                     create_directory(nodes, directory, sudo=True)
-                    change_file_owner(nodes, directory, user, user, sudo=True)
+                    change_file_owner(nodes, directory, user, get_primary_group(user), sudo=True)
                 except DaosTestError as error:
                     raise CommandFailure(
                         "{}: error setting up missing socket directory {} for "
@@ -984,10 +983,10 @@ class YamlCommand(SubProcessCommand):
         return self.get_config_value("socket_dir")
 
 
-class SubprocessManager():
+class SubprocessManager(ObjectWithParameters):
     """Defines an object that manages a sub process launched with orterun."""
 
-    def __init__(self, command, manager="Orterun"):
+    def __init__(self, command, manager="Orterun", namespace=None):
         """Create a SubprocessManager object.
 
         Args:
@@ -995,7 +994,9 @@ class SubprocessManager():
             manager (str, optional): the name of the JobManager class used to
                 manage the YamlCommand defined through the "job" attribute.
                 Defaults to "OpenMpi"
+            namespace (str): yaml namespace (path to parameters)
         """
+        super().__init__(namespace)
         self.log = getLogger(__name__)
 
         # Define the JobManager class used to manage the command as a subprocess
@@ -1077,6 +1078,8 @@ class SubprocessManager():
         Args:
             test (Test): avocado Test object
         """
+        super().get_params(test)
+
         # Get the parameters for the JobManager command parameters
         self.manager.get_params(test)
 

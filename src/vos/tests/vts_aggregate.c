@@ -1033,7 +1033,7 @@ discard_13(void **state)
 	 * Generate enough amount of akeys to ensure vos_iterate()
 	 * trigger re-probe on dkey
 	 */
-	generate_akeys(arg, ds.td_oid, VOS_AGG_CREDITS_MAX + 10);
+	generate_akeys(arg, ds.td_oid, AGG_CREDS_SCAN_TIGHT + 10);
 
 	recx_tot.rx_idx = 0;
 	recx_tot.rx_nr = 20;
@@ -2767,6 +2767,46 @@ aggregate_34(void **state)
 	cleanup();
 }
 
+#define INIT_FEATS 0x8000000010f93f43ULL
+
+D_CASSERT((INIT_FEATS & VOS_TF_AGG_TIME_MASK) == 0);
+
+static void
+aggregate_35(void **state)
+{
+	uint64_t	feats = INIT_FEATS;
+	daos_epoch_t	epoch;
+	bool		result;
+
+	result = vos_feats_agg_time_get(feats, &epoch);
+	assert_false(result);
+
+	feats |= VOS_TF_AGG_OPT;
+	result = vos_feats_agg_time_get(feats, &epoch);
+	assert_true(result);
+	assert_int_equal(epoch, 0);
+
+	vos_feats_agg_time_update(252, &feats);
+	result = vos_feats_agg_time_get(feats, &epoch);
+	assert_true(result);
+	assert_int_equal(epoch, 252);
+	assert_int_equal(feats & INIT_FEATS, INIT_FEATS);
+
+	vos_feats_agg_time_update(252, &feats);
+	result = vos_feats_agg_time_get(feats, &epoch);
+	assert_true(result);
+	assert_int_equal(epoch, 252);
+	assert_int_equal(feats & INIT_FEATS, INIT_FEATS);
+
+	/** If upper 32-bits is set, we assume HLC */
+	vos_feats_agg_time_update(0x53abcdef00ULL, &feats);
+	result = vos_feats_agg_time_get(feats, &epoch);
+	assert_true(result);
+	/** Since the lower 32 are masked, we always set them to ffffffff */
+	assert_int_equal(epoch, 0x53ffffffffULL);
+	assert_int_equal(feats & INIT_FEATS, INIT_FEATS);
+}
+
 static int
 agg_tst_teardown(void **state)
 {
@@ -2813,28 +2853,6 @@ static const struct CMUnitTest discard_tests[] = {
 };
 
 static const struct CMUnitTest aggregate_tests[] = {
-	{ "VOS424: Aggregate extents not fully covered by delete record",
-	  aggregate_24, NULL, agg_tst_teardown },
-	{ "VOS425: Aggregate delete of end of merge window",
-	  aggregate_25, NULL, agg_tst_teardown },
-	{ "VOS426: Consecutive removed extents",
-	  aggregate_26, NULL, agg_tst_teardown },
-	{ "VOS427: Consecutive removed extents, no logical extents",
-	  aggregate_27, NULL, agg_tst_teardown },
-	{ "VOS428: Logical extent followed by consecutive removed extents",
-	  aggregate_28, NULL, agg_tst_teardown },
-	{ "VOS429: Logical extent followed by disjoint removed extents",
-	  aggregate_29, NULL, agg_tst_teardown },
-	{ "VOS430: Removal stress test",
-	  aggregate_30, NULL, agg_tst_teardown },
-	{ "VOS431: Removal spans windows, flush with no physical records",
-	  aggregate_31, NULL, agg_tst_teardown },
-	{ "VOS432: Overlapping removals",
-	  aggregate_32, NULL, agg_tst_teardown },
-	{ "VOS433: Many small removals",
-	  aggregate_33, NULL, agg_tst_teardown },
-	{ "VOS434: Selectively merging NVMe records",
-	  aggregate_34, NULL, agg_tst_teardown },
 	{ "VOS401: Aggregate SV with confined epr",
 	  aggregate_1, NULL, agg_tst_teardown },
 	{ "VOS402: Aggregate SV with punch records",
@@ -2881,6 +2899,30 @@ static const struct CMUnitTest aggregate_tests[] = {
 	  aggregate_22, NULL, agg_tst_teardown },
 	{ "VOS423: Aggregate deleted records spanning window end",
 	  aggregate_23, NULL, agg_tst_teardown },
+	{ "VOS424: Aggregate extents not fully covered by delete record",
+	  aggregate_24, NULL, agg_tst_teardown },
+	{ "VOS425: Aggregate delete of end of merge window",
+	  aggregate_25, NULL, agg_tst_teardown },
+	{ "VOS426: Consecutive removed extents",
+	  aggregate_26, NULL, agg_tst_teardown },
+	{ "VOS427: Consecutive removed extents, no logical extents",
+	  aggregate_27, NULL, agg_tst_teardown },
+	{ "VOS428: Logical extent followed by consecutive removed extents",
+	  aggregate_28, NULL, agg_tst_teardown },
+	{ "VOS429: Logical extent followed by disjoint removed extents",
+	  aggregate_29, NULL, agg_tst_teardown },
+	{ "VOS430: Removal stress test",
+	  aggregate_30, NULL, agg_tst_teardown },
+	{ "VOS431: Removal spans windows, flush with no physical records",
+	  aggregate_31, NULL, agg_tst_teardown },
+	{ "VOS432: Overlapping removals",
+	  aggregate_32, NULL, agg_tst_teardown },
+	{ "VOS433: Many small removals",
+	  aggregate_33, NULL, agg_tst_teardown },
+	{ "VOS434: Selectively merging NVMe records",
+	  aggregate_34, NULL, agg_tst_teardown },
+	{ "VOS435: Test aggregation timestamp functions",
+	  aggregate_35, NULL, NULL },
 };
 
 int

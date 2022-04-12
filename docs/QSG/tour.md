@@ -36,7 +36,7 @@ Set environment variables for list of servers, client and admin node.
 
 ## Set-Up
 
-Refer to the [DAOS CentOS Setup](setup_centos.md) or the [DAOS openSUSE Setup](setup_suse.md) for RPM installation, daos
+Refer to the [DAOS CentOS7/EL8 Setup](setup_centos7_and_el8.md) or the [DAOS openSUSE Setup](setup_suse.md) for RPM installation, daos
 server/agent/admin configuration yml files, certificate generation, and
 bring-up DAOS servers and clients.
 
