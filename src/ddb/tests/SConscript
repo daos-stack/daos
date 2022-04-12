@@ -19,7 +19,7 @@ def scons():
     denv.AppendUnique(LIBPATH=[Dir('../')])
     denv.AppendUnique(CPPDEFINES='_GNU_SOURCE') # for fallocate
 
-    libs = ['vos', 'daos_common_pmem', 'abt', 'gurt', 'daos', 'uuid', 'bio',
+    libs = ['vos', 'daos_common_pmem', 'abt', 'gurt', 'uuid', 'bio',
             'cmocka']
     src = ['ddb_cmd_options_tests.c',
            'ddb_commands_tests.c',

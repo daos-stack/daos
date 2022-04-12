@@ -6,7 +6,7 @@ def scons():
     Import('base_env', 'prereqs')
     denv = base_env.Clone()
 
-    libs = ['vos', 'daos_common_pmem', 'abt', 'gurt', 'daos', 'uuid', 'bio']
+    libs = ['vos', 'daos_common_pmem', 'abt', 'gurt', 'uuid', 'bio']
     src = ['ddb_cmd_options.c',
            'ddb_commands.c',
            'ddb_main.c',

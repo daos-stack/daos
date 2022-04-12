@@ -17,18 +17,12 @@ ddb_init()
 {
 	int rc = daos_debug_init(DAOS_LOG_DEFAULT);
 
-	if (!SUCCESS(rc))
-		return rc;
-
-	rc = obj_class_init();
-
 	return rc;
 }
 
 void
 ddb_fini()
 {
-	obj_class_fini();
 	daos_debug_fini();
 }
 

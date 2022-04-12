@@ -89,8 +89,6 @@ static int
 ls_obj_handler(struct ddb_obj *obj, void *args)
 {
 	struct ls_ctx		*ctx = args;
-	char			 obj_class_name[32];
-	daos_oclass_id_t	 oclass;
 	char			 otype_str[32] = {0};
 	enum daos_otype_t	 otype;
 	daos_obj_id_t		 oid;
@@ -98,10 +96,21 @@ ls_obj_handler(struct ddb_obj *obj, void *args)
 
 	ctx->has_obj = true;
 
-	oclass = daos_obj_id2class(obj->ddbo_oid);
 	otype = daos_obj_id2type(obj->ddbo_oid);
-	daos_oclass_id2name(oclass, obj_class_name);
 
+	/*
+	 * It would be nice to get the object class name, but currently that is client
+	 * functionality and this tool is being installed as a server binary. If that changes, the
+	 * following code might be used ...
+	 * char			 obj_class_name[32];
+	 * int rc = obj_class_init();
+	 * daos_oclass_id_t	 oclass;
+	 * oclass = daos_obj_id2class(obj->ddbo_oid);
+	 * if (!SUCCESS(rc))
+	 * 	return rc;
+	 * daos_oclass_id2name(oclass, obj_class_name);
+	 * obj_class_fini();
+	*/
 	oid = obj->ddbo_oid;
 
 	nr_grps = (oid.hi & OID_FMT_META_MASK) >> OID_FMT_META_SHIFT;
@@ -109,10 +118,9 @@ ls_obj_handler(struct ddb_obj *obj, void *args)
 	get_object_type(otype, otype_str);
 
 	print_indent(ctx->ctx, ctx->has_cont);
-	ddb_printf(ctx->ctx, DF_IDX" '"DF_OID"' (class: %s, type: %s, groups: %d)\n",
+	ddb_printf(ctx->ctx, DF_IDX" '"DF_OID"' (type: %s, groups: %d)\n",
 		   DP_IDX(obj->ddbo_idx),
 		   DP_OID(obj->ddbo_oid),
-		   obj_class_name,
 		   otype_str,
 		   nr_grps);
 
