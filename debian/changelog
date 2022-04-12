@@ -1,8 +1,15 @@
-daos (2.3.100-2) unstable; urgency=medium
+daos (2.3.100-3) unstable; urgency=medium
   [ Li Wei ]
   * Update raft to 0.9.1-1401.gc18bcb8 to fix uninitialized node IDs
 
- -- Li Wei <wei.g.li@intel.com>  Thu, 07 Apr 2022 12:00:00 +0800
+ -- Li Wei <wei.g.li@intel.com>  Tue, 12 Apr 2022 08:33:00 +0800
+
+daos (2.3.100-2) unstable; urgency=medium
+  [ Jeff Olivier ]
+  * Extract MPI from many binaries create dpar and dpar_mpi providing a
+    similar interface to abstract away the direct MPI dependence
+
+ -- Jeff Olivier <jeffrey.v.olivier@intel.com>  Wed, 6 Apr 2022 14:30:01 -0100
 
 daos (2.3.100-1) unstable; urgency=medium
   [ Johann Lombardi ]
