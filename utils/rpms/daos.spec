@@ -79,6 +79,7 @@ BuildRequires: fuse3-devel >= 3
 BuildRequires: fuse3-devel >= 3.4.2
 %endif
 %if (0%{?suse_version} >= 1500)
+#blorp
 BuildRequires: go-race
 BuildRequires: libprotobuf-c-devel
 BuildRequires: liblz4-devel
