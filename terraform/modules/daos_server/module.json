@@ -31,6 +31,13 @@
       "required": false
     },
     {
+      "name": "gvnic",
+      "type": "bool",
+      "description": "Use Google Virtual NIC (gVNIC) network interface",
+      "default": false,
+      "required": false
+    },
+    {
       "name": "instance_base_name",
       "type": "string",
       "description": "MIG instance base names to use",
@@ -198,6 +205,11 @@
       "name": "google",
       "alias": null,
       "version": "\u003e= 3.54.0"
+    },
+    {
+      "name": "google-beta",
+      "alias": null,
+      "version": "\u003e= 4.16.0"
     }
   ],
   "requirements": [
@@ -208,21 +220,25 @@
     {
       "name": "google",
       "version": "\u003e= 3.54.0"
+    },
+    {
+      "name": "google-beta",
+      "version": "\u003e= 4.16.0"
     }
   ],
   "resources": [
     {
-      "type": "compute_instance_group_manager",
-      "name": "daos_sig",
-      "provider": "google",
-      "source": "hashicorp/google",
+      "type": "google_compute_instance_template",
+      "name": "daos_sig_template",
+      "provider": "google-beta",
+      "source": "hashicorp/google-beta",
       "mode": "managed",
       "version": "latest",
       "description": null
     },
     {
-      "type": "compute_instance_template",
-      "name": "daos_sig_template",
+      "type": "compute_instance_group_manager",
+      "name": "daos_sig",
       "provider": "google",
       "source": "hashicorp/google",
       "mode": "managed",

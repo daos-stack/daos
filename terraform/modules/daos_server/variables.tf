@@ -163,3 +163,9 @@ variable "daos_crt_timeout" {
   default     = 300
   type        = number
 }
+
+variable "gvnic" {
+  description = "Use Google Virtual NIC (gVNIC) network interface"
+  default     = false
+  type        = bool
+}

@@ -14,14 +14,14 @@
 
 steps:
 - name: 'gcr.io/$PROJECT_ID/packer'
+  entrypoint: '/bin/bash'
   args:
-  - build
-  - -var
-  - project_id=${_PROJECT_ID}
-  - -var
-  - zone=${_ZONE}
-  - -var
-  - daos_version=${_DAOS_VERSION}
-  - -var
-  - daos_repo_base_url=${_DAOS_REPO_BASE_URL}
-  - daos-client-image.json
+  - '-c'
+  - |
+    /usr/bin/packer init daos-client-image.pkr.hcl && \
+    /usr/bin/packer build \
+      -var daos_repo_base_url=${_DAOS_REPO_BASE_URL} \
+      -var daos_version=${_DAOS_VERSION} \
+      -var project_id=${_PROJECT_ID} \
+      -var zone=${_ZONE} \
+      daos-client-image.pkr.hcl

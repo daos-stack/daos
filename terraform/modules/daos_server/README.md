@@ -29,12 +29,14 @@ limitations under the License.
 |------|---------|
 | <a name="requirement_terraform"></a> [terraform](#requirement\_terraform) | >= 0.14.5 |
 | <a name="requirement_google"></a> [google](#requirement\_google) | >= 3.54.0 |
+| <a name="requirement_google-beta"></a> [google-beta](#requirement\_google-beta) | >= 4.16.0 |
 
 ## Providers
 
 | Name | Version |
 |------|---------|
 | <a name="provider_google"></a> [google](#provider\_google) | >= 3.54.0 |
+| <a name="provider_google-beta"></a> [google-beta](#provider\_google-beta) | >= 4.16.0 |
 
 ## Modules
 
@@ -44,8 +46,8 @@ No modules.
 
 | Name | Type |
 |------|------|
+| [google-beta_google_compute_instance_template.daos_sig_template](https://registry.terraform.io/providers/hashicorp/google-beta/latest/docs/resources/google_compute_instance_template) | resource |
 | [google_compute_instance_group_manager.daos_sig](https://registry.terraform.io/providers/hashicorp/google/latest/docs/resources/compute_instance_group_manager) | resource |
-| [google_compute_instance_template.daos_sig_template](https://registry.terraform.io/providers/hashicorp/google/latest/docs/resources/compute_instance_template) | resource |
 | [google_compute_per_instance_config.named_instances](https://registry.terraform.io/providers/hashicorp/google/latest/docs/resources/compute_per_instance_config) | resource |
 | [google_compute_image.os_image](https://registry.terraform.io/providers/hashicorp/google/latest/docs/data-sources/compute_image) | data source |
 
@@ -57,6 +59,7 @@ No modules.
 | <a name="input_daos_disk_count"></a> [daos\_disk\_count](#input\_daos\_disk\_count) | Number of local ssd's to use | `number` | `16` | no |
 | <a name="input_daos_disk_type"></a> [daos\_disk\_type](#input\_daos\_disk\_type) | Daos disk type to use. For now only suported one is local-ssd | `string` | `"local-ssd"` | no |
 | <a name="input_daos_scm_size"></a> [daos\_scm\_size](#input\_daos\_scm\_size) | scm\_size | `number` | `200` | no |
+| <a name="input_gvnic"></a> [gvnic](#input\_gvnic) | Use Google Virtual NIC (gVNIC) network interface | `bool` | `false` | no |
 | <a name="input_instance_base_name"></a> [instance\_base\_name](#input\_instance\_base\_name) | MIG instance base names to use | `string` | `"daos-server"` | no |
 | <a name="input_labels"></a> [labels](#input\_labels) | Set of key/value label pairs to assign to daos-server instances | `any` | `{}` | no |
 | <a name="input_machine_type"></a> [machine\_type](#input\_machine\_type) | GCP machine type. ie. e2-medium | `string` | `"n2-custom-36-215040"` | no |

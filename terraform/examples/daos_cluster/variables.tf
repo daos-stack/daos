@@ -148,7 +148,12 @@ variable "server_daos_scm_size" {
 variable "server_daos_crt_timeout" {
   description = "crt_timeout"
   default     = 300
-  type        = number
+}
+
+variable "server_gvnic" {
+  description = "Use Google Virtual NIC (gVNIC) network interface on DAOS servers"
+  default     = false
+  type        = bool
 }
 
 variable "client_labels" {
@@ -234,3 +239,8 @@ variable "client_preemptible" {
   type        = string
 }
 
+variable "client_gvnic" {
+  description = "Use Google Virtual NIC (gVNIC) network interface on DAOS clients"
+  default     = false
+  type        = bool
+}

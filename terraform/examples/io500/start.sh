@@ -467,6 +467,16 @@ show_instances() {
     --filter="name~'^${DAOS_FILTER}'"
 }
 
+check_gvnic() {
+  DAOS_SERVER_NETWORK_TYPE=$(ssh -q -F "${SSH_CONFIG_FILE}" ${FIRST_CLIENT_IP} "ssh ${DAOS_FIRST_SERVER} 'sudo lshw -class network'" | sed -n "s/^.*product: \(.*\$\)/\1/p")
+  DAOS_CLIENT_NETWORK_TYPE=$(ssh -q -F "${SSH_CONFIG_FILE}" ${FIRST_CLIENT_IP} "sudo lshw -class network" | sed -n "s/^.*product: \(.*\$\)/\1/p")
+
+  log_section "Network adapters type:"
+  printf '%s\n%s\n' \
+    "DAOS_SERVER_NETWORK_TYPE = ${DAOS_SERVER_NETWORK_TYPE}" \
+    "DAOS_CLIENT_NETWORK_TYPE = ${DAOS_CLIENT_NETWORK_TYPE}"
+}
+
 show_run_steps() {
 
  log_section "DAOS Server and Client instances are ready for IO500 run"
@@ -497,6 +507,7 @@ main() {
   copy_files_to_first_client
   propagate_ssh_keys_to_all_nodes
   show_instances
+  check_gvnic
   show_run_steps
 }
 

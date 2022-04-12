@@ -25,9 +25,9 @@ module "daos_server" {
   daos_disk_type      = var.server_daos_disk_type
   daos_crt_timeout    = var.server_daos_crt_timeout
   daos_scm_size       = var.server_daos_scm_size
-
-  service_account = var.server_service_account
-  pools           = var.server_pools
+  service_account     = var.server_service_account
+  pools               = var.server_pools
+  gvnic               = var.server_gvnic
 }
 
 module "daos_client" {
@@ -52,4 +52,5 @@ module "daos_client" {
   service_account     = var.client_service_account
   daos_agent_yml      = module.daos_server.daos_agent_yml
   daos_control_yml    = module.daos_server.daos_control_yml
+  gvnic               = var.client_gvnic
 }

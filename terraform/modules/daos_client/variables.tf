@@ -137,3 +137,8 @@ variable "daos_control_yml" {
   type        = string
 }
 
+variable "gvnic" {
+  description = "Use Google Virtual NIC (gVNIC) network interface"
+  default     = false
+  type        = bool
+}

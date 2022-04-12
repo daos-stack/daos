@@ -168,8 +168,8 @@ create_tmp_dir() {
   cp -r "${IMAGES_DIR}" "${TMP_DIR}/"
   TMP_IMAGES_DIR="${TMP_DIR}/$(basename "${IMAGES_DIR}")"
   TMP_SCRIPTS_DIR="${TMP_IMAGES_DIR}/scripts"
-  TMP_CLIENT_PACKER_FILE="${TMP_IMAGES_DIR}/daos-client-image.json"
-  TMP_SERVER_PACKER_FILE="${TMP_IMAGES_DIR}/daos-server-image.json"
+  TMP_CLIENT_PACKER_FILE="${TMP_IMAGES_DIR}/daos-client-image.pkr.hcl"
+  TMP_SERVER_PACKER_FILE="${TMP_IMAGES_DIR}/daos-server-image.pkr.hcl"
 }
 
 cleanup() {
@@ -184,7 +184,7 @@ add_script() {
   script_name="$1"
   comma="$2"
   if ! grep -q "${script_name}" "${TMP_CLIENT_PACKER_FILE}"; then
-    sed -i "\|\"./scripts/install_daos.sh\",$|a \\        \"./scripts/${script_name}\"${comma}" "${TMP_CLIENT_PACKER_FILE}"
+    sed -i "\|\"./scripts/install_daos.sh\",$|a \\      \"./scripts/${script_name}\"${comma}" "${TMP_CLIENT_PACKER_FILE}"
   fi
 }
 

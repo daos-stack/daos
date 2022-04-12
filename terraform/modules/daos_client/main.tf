@@ -19,6 +19,9 @@ locals {
   subnetwork_project = var.subnetwork_project != null ? var.subnetwork_project : var.project_id
   client_startup_script = file(
   "${path.module}/templates/daos_startup_script.tftpl")
+  # Google Virtual NIC (gVNIC) network interface
+  nic_type                    = var.gvnic ? "GVNIC" : "VIRTIO_NET"
+  total_egress_bandwidth_tier = var.gvnic ? "TIER_1" : "DEFAULT"
 }
 
 data "google_compute_image" "os_image" {
@@ -27,6 +30,7 @@ data "google_compute_image" "os_image" {
 }
 
 resource "google_compute_instance_template" "daos_sig_template" {
+  provider       = google-beta
   name           = var.template_name
   machine_type   = var.machine_type
   can_ip_forward = false
@@ -47,6 +51,11 @@ resource "google_compute_instance_template" "daos_sig_template" {
     network            = var.network_name
     subnetwork         = var.subnetwork_name
     subnetwork_project = local.subnetwork_project
+    nic_type           = local.nic_type
+  }
+
+  network_performance_config {
+    total_egress_bandwidth_tier = local.total_egress_bandwidth_tier
   }
 
   dynamic "service_account" {
