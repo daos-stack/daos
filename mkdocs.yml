@@ -6,6 +6,7 @@ site_author: DAOS Project
 # Repository
 repo_name: daos-stack/daos
 repo_url: https://github.com/daos-stack/daos
+edit_uri: blob/release/2.0/docs/
 copyright: Copyright &copy; 2016 - 2022 Intel Corporation
 
 # Theme
