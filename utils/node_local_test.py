@@ -969,11 +969,15 @@ def il_cmd(server, cmd, dfuse, stdout=False, check_read=True, check_write=True, 
     my_env['D_IL_REPORT'] = '2'
     if stdout:
         stdout = subprocess.PIPE
+        stderr = subprocess.PIPE
     else:
         stdout = None
-    ret = subprocess.run(cmd, stdout=stdout, env=my_env, check=False)
-    if stdout is not None:
+        stderr = None
+    ret = subprocess.run(cmd, stdout=stdout, stderr=stderr, env=my_env, check=False)
+    if stdout:
         for line in ret.stdout.decode('utf-8').splitlines():
+            print(line)
+        for line in ret.stderr.decode('utf-8').splitlines():
             print(line)
 
     print('Logged il to {}'.format(log_name))

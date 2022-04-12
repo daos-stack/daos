@@ -58,11 +58,15 @@ do_openat(void **state)
 
 	rc = fstat(fd, &stbuf0);
 	assert_return_code(rc, errno);
-	assert_int_equal(stbuf0.st_size, sizeof(input_buf));
+
+	/* If metadata caching is on then the kernel will report the wrong size */
+	if (stbuf0.st_size != 0)
+		assert_int_equal(stbuf0.st_size, sizeof(input_buf));
 
 	rc = fstat(fd, &stbuf);
 	assert_return_code(rc, errno);
-	assert_int_equal(stbuf.st_size, sizeof(input_buf));
+	if (stbuf0.st_size != 0)
+		assert_int_equal(stbuf.st_size, sizeof(input_buf));
 	assert_int_equal(stbuf0.st_dev, stbuf.st_dev);
 	assert_int_equal(stbuf0.st_ino, stbuf.st_ino);
 

@@ -1,4 +1,3 @@
----
 hosts:
   test_servers:
     - server-A
@@ -24,4 +23,3 @@ daos_tests:
     test_data_dfuse_openat: true
 dfuse:
   mount_dir: "/tmp/daos_dfuse/"
-...
