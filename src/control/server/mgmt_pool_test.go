@@ -1265,6 +1265,7 @@ func TestListPools_Success(t *testing.T) {
 			Uuid:    ps.PoolUUID.String(),
 			Label:   ps.PoolLabel,
 			SvcReps: []uint32{0, 1, 2},
+			State:   system.PoolServiceStateReady.String(),
 		})
 	}
 

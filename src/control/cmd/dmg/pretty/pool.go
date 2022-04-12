@@ -148,6 +148,7 @@ func poolListCreateRow(pool *control.Pool) txtfmt.TableRow {
 	row := txtfmt.TableRow{
 		"Pool":      pool.GetName(),
 		"Size":      fmt.Sprintf("%s", humanize.Bytes(size)),
+		"State":     pool.State,
 		"Used":      fmt.Sprintf("%d%%", used),
 		"Imbalance": fmt.Sprintf("%d%%", imbalance),
 		"Disabled":  fmt.Sprintf("%d/%d", pool.TargetsDisabled, pool.TargetsTotal),
@@ -162,7 +163,7 @@ func printListPoolsResp(out io.Writer, resp *control.ListPoolsResp) error {
 		return nil
 	}
 
-	formatter := txtfmt.NewTableFormatter("Pool", "Size", "Used", "Imbalance", "Disabled")
+	formatter := txtfmt.NewTableFormatter("Pool", "Size", "State", "Used", "Imbalance", "Disabled")
 
 	var table []txtfmt.TableRow
 	for _, pool := range resp.Pools {
@@ -200,6 +201,7 @@ func poolListCreateRowVerbose(pool *control.Pool) txtfmt.TableRow {
 	row := txtfmt.TableRow{
 		"Label":    label,
 		"UUID":     pool.UUID,
+		"State":    pool.State,
 		"SvcReps":  svcReps,
 		"Disabled": fmt.Sprintf("%d/%d", pool.TargetsDisabled, pool.TargetsTotal),
 	}
@@ -217,7 +219,7 @@ func printListPoolsRespVerbose(out io.Writer, resp *control.ListPoolsResp) error
 		return nil
 	}
 
-	titles := []string{"Label", "UUID", "SvcReps"}
+	titles := []string{"Label", "UUID", "State", "SvcReps"}
 	for _, t := range resp.Pools[0].Usage {
 		titles = append(titles,
 			t.TierName+" Size",

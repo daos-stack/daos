@@ -2453,7 +2453,7 @@ const ProtobufCMessageDescriptor mgmt__list_pools_req__descriptor =
   (ProtobufCMessageInit) mgmt__list_pools_req__init,
   NULL,NULL,NULL    /* reserved[123] */
 };
-static const ProtobufCFieldDescriptor mgmt__list_pools_resp__pool__field_descriptors[3] =
+static const ProtobufCFieldDescriptor mgmt__list_pools_resp__pool__field_descriptors[4] =
 {
   {
     "uuid",
@@ -2491,16 +2491,29 @@ static const ProtobufCFieldDescriptor mgmt__list_pools_resp__pool__field_descrip
     0,             /* flags */
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
+  {
+    "state",
+    4,
+    PROTOBUF_C_LABEL_NONE,
+    PROTOBUF_C_TYPE_STRING,
+    0,   /* quantifier_offset */
+    offsetof(Mgmt__ListPoolsResp__Pool, state),
+    NULL,
+    &protobuf_c_empty_string,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
 };
 static const unsigned mgmt__list_pools_resp__pool__field_indices_by_name[] = {
   1,   /* field[1] = label */
+  3,   /* field[3] = state */
   2,   /* field[2] = svc_reps */
   0,   /* field[0] = uuid */
 };
 static const ProtobufCIntRange mgmt__list_pools_resp__pool__number_ranges[1 + 1] =
 {
   { 1, 0 },
-  { 0, 3 }
+  { 0, 4 }
 };
 const ProtobufCMessageDescriptor mgmt__list_pools_resp__pool__descriptor =
 {
@@ -2510,7 +2523,7 @@ const ProtobufCMessageDescriptor mgmt__list_pools_resp__pool__descriptor =
   "Mgmt__ListPoolsResp__Pool",
   "mgmt",
   sizeof(Mgmt__ListPoolsResp__Pool),
-  3,
+  4,
   mgmt__list_pools_resp__pool__field_descriptors,
   mgmt__list_pools_resp__pool__field_indices_by_name,
   1,  mgmt__list_pools_resp__pool__number_ranges,

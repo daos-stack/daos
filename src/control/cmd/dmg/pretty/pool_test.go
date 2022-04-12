@@ -318,13 +318,14 @@ no pools in system
 					{
 						UUID:            common.MockUUID(1),
 						ServiceReplicas: []system.Rank{0, 1, 2},
+						State:           system.PoolServiceStateReady.String(),
 					},
 				},
 			},
 			expPrintStr: `
-Pool     Size Used Imbalance Disabled 
-----     ---- ---- --------- -------- 
-00000001 0 B  0%   0%        0/0      
+Pool     Size State Used Imbalance Disabled 
+----     ---- ----- ---- --------- -------- 
+00000001 0 B  Ready 0%   0%        0/0      
 
 `,
 		},
@@ -370,6 +371,7 @@ Pool     Size Used Imbalance Disabled
 						Usage:           exampleUsage,
 						TargetsTotal:    16,
 						TargetsDisabled: 0,
+						State:           system.PoolServiceStateReady.String(),
 					},
 					{
 						Label:           "two",
@@ -378,14 +380,15 @@ Pool     Size Used Imbalance Disabled
 						Usage:           exampleUsage,
 						TargetsTotal:    64,
 						TargetsDisabled: 8,
+						State:           system.PoolServiceStateReady.String(),
 					},
 				},
 			},
 			expPrintStr: `
-Pool     Size   Used Imbalance Disabled 
-----     ----   ---- --------- -------- 
-00000001 6.0 TB 83%  12%       0/16     
-two      6.0 TB 83%  12%       8/64     
+Pool     Size   State Used Imbalance Disabled 
+----     ----   ----- ---- --------- -------- 
+00000001 6.0 TB Ready 83%  12%       0/16     
+two      6.0 TB Ready 83%  12%       8/64     
 
 `,
 		},
@@ -399,6 +402,7 @@ two      6.0 TB 83%  12%       8/64
 						Usage:           exampleUsage,
 						TargetsTotal:    16,
 						TargetsDisabled: 0,
+						State:           system.PoolServiceStateReady.String(),
 					},
 					{
 						Label:           "two",
@@ -410,14 +414,15 @@ two      6.0 TB 83%  12%       8/64
 						},
 						TargetsTotal:    64,
 						TargetsDisabled: 8,
+						State:           system.PoolServiceStateReady.String(),
 					},
 				},
 			},
 			expPrintStr: `
-Pool Size   Used Imbalance Disabled 
----- ----   ---- --------- -------- 
-one  6.0 TB 83%  12%       0/16     
-two  100 GB 80%  12%       8/64     
+Pool Size   State Used Imbalance Disabled 
+---- ----   ----- ---- --------- -------- 
+one  6.0 TB Ready 83%  12%       0/16     
+two  100 GB Ready 80%  12%       8/64     
 
 `,
 		},
@@ -431,6 +436,7 @@ two  100 GB 80%  12%       8/64
 						Usage:           exampleUsage,
 						TargetsTotal:    16,
 						TargetsDisabled: 0,
+						State:           system.PoolServiceStateReady.String(),
 					},
 					{
 						Label:           "two",
@@ -443,9 +449,9 @@ two  100 GB 80%  12%       8/64
 			expPrintStr: `
 Query on pool "two" unsuccessful, error: "stats unavailable"
 
-Pool Size   Used Imbalance Disabled 
----- ----   ---- --------- -------- 
-one  6.0 TB 83%  12%       0/16     
+Pool Size   State Used Imbalance Disabled 
+---- ----   ----- ---- --------- -------- 
+one  6.0 TB Ready 83%  12%       0/16     
 
 `,
 		},
@@ -459,6 +465,7 @@ one  6.0 TB 83%  12%       0/16
 						Usage:           exampleUsage,
 						TargetsTotal:    16,
 						TargetsDisabled: 0,
+						State:           system.PoolServiceStateReady.String(),
 					},
 					{
 						UUID:            common.MockUUID(2),
@@ -477,9 +484,9 @@ one  6.0 TB 83%  12%       0/16
 Query on pool "00000002" unsuccessful, error: "stats unavailable"
 Query on pool "three" unsuccessful, status: "DER_UNINIT"
 
-Pool Size   Used Imbalance Disabled 
----- ----   ---- --------- -------- 
-one  6.0 TB 83%  12%       0/16     
+Pool Size   State Used Imbalance Disabled 
+---- ----   ----- ---- --------- -------- 
+one  6.0 TB Ready 83%  12%       0/16     
 
 `,
 		},
@@ -498,18 +505,19 @@ no pools in system
 						Usage:           exampleUsage,
 						TargetsTotal:    16,
 						TargetsDisabled: 0,
+						State:           system.PoolServiceStateReady.String(),
 					},
 				},
 			},
 			verbose: true,
 			expPrintStr: `
-Label UUID                                 SvcReps SCM Size SCM Used SCM Imbalance NVME Size NVME Used NVME Imbalance Disabled 
------ ----                                 ------- -------- -------- ------------- --------- --------- -------------- -------- 
--     00000001-0001-0001-0001-000000000001 N/A     100 GB   80 GB    12%           6.0 TB    5.0 TB    1%             0/16     
+Label UUID                                 State SvcReps SCM Size SCM Used SCM Imbalance NVME Size NVME Used NVME Imbalance Disabled 
+----- ----                                 ----- ------- -------- -------- ------------- --------- --------- -------------- -------- 
+-     00000001-0001-0001-0001-000000000001 Ready N/A     100 GB   80 GB    12%           6.0 TB    5.0 TB    1%             0/16     
 
 `,
 		},
-		"verbose; two pools": {
+		"verbose; two pools; one destroying": {
 			resp: &control.ListPoolsResp{
 				Pools: []*control.Pool{
 					{
@@ -519,6 +527,7 @@ Label UUID                                 SvcReps SCM Size SCM Used SCM Imbalan
 						Usage:           exampleUsage,
 						TargetsTotal:    16,
 						TargetsDisabled: 0,
+						State:           system.PoolServiceStateReady.String(),
 					},
 					{
 						Label:           "two",
@@ -527,15 +536,16 @@ Label UUID                                 SvcReps SCM Size SCM Used SCM Imbalan
 						Usage:           exampleUsage,
 						TargetsTotal:    64,
 						TargetsDisabled: 8,
+						State:           system.PoolServiceStateDestroying.String(),
 					},
 				},
 			},
 			verbose: true,
 			expPrintStr: `
-Label UUID                                 SvcReps SCM Size SCM Used SCM Imbalance NVME Size NVME Used NVME Imbalance Disabled 
------ ----                                 ------- -------- -------- ------------- --------- --------- -------------- -------- 
-one   00000001-0001-0001-0001-000000000001 [0-2]   100 GB   80 GB    12%           6.0 TB    5.0 TB    1%             0/16     
-two   00000002-0002-0002-0002-000000000002 [3-5]   100 GB   80 GB    12%           6.0 TB    5.0 TB    1%             8/64     
+Label UUID                                 State      SvcReps SCM Size SCM Used SCM Imbalance NVME Size NVME Used NVME Imbalance Disabled 
+----- ----                                 -----      ------- -------- -------- ------------- --------- --------- -------------- -------- 
+one   00000001-0001-0001-0001-000000000001 Ready      [0-2]   100 GB   80 GB    12%           6.0 TB    5.0 TB    1%             0/16     
+two   00000002-0002-0002-0002-000000000002 Destroying [3-5]   100 GB   80 GB    12%           6.0 TB    5.0 TB    1%             8/64     
 
 `,
 		},
