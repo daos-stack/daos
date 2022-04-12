@@ -1,37 +1,18 @@
 """Build tests"""
 import daos_build
 import os
+import compiler_setup
 
-def scons():
-    """Execute build"""
-    Import('base_env', 'prereqs')
+def build_tests(prereqs, env, client_libs):
+    """build the tests"""
+    denv = env.Clone()
+    compiler_setup.base_setup(denv)
 
-    if not prereqs.test_requested():
-        return
+    libs_server = ['daos', 'daos_common_pmem', 'gurt', 'm', 'cart', 'uuid', 'cmocka', 'daos_tests',
+                   'pthread', 'dts', 'dpar']
+    libs_client = client_libs + ['pthread', 'dts', 'dpar']
 
-    libs_client = ['daos', 'daos_common', 'gurt', 'm', 'cart', 'uuid', 'cmocka', 'daos_tests']
-    libs_server = ['daos', 'daos_common_pmem', 'gurt', 'm', 'cart', 'uuid', 'cmocka', 'daos_tests']
-
-    denv = base_env.Clone()
-
-    if not GetOption('help') and not GetOption('clean'):
-        mpi = daos_build.configure_mpi(denv, libs_client)
-        if mpi is None:
-            print("\nSkipping compilation for tests that need MPI")
-            print("Install and load mpich or openmpi\n")
-            return
-
-    # Add runtime paths for daos libraries
-    denv.AppendUnique(RPATH_FULL=['$PREFIX/lib64/daos_srv'])
-
-    denv.Append(CPPPATH=[Dir('suite').srcnode()])
-    denv.AppendUnique(CPPPATH=[Dir('../mgmt').srcnode()])
     prereqs.require(denv, 'argobots', 'hwloc', 'protobufc', 'pmdk', 'isal')
-
-    daos_build.program(denv, 'simple_array', 'simple_array.c', LIBS=libs_client)
-    daos_build.program(denv, 'simple_obj', 'simple_obj.c', LIBS=libs_client)
-    libs_client += ['pthread', 'dts']
-    libs_server += ['pthread', 'dts']
 
     daos_racer = daos_build.program(denv, 'daos_racer',
                                     ['daos_racer.c'],
@@ -73,6 +54,34 @@ def scons():
 
     # ftest
     SConscript('ftest/SConscript')
+
+
+def scons():
+    """Execute build"""
+    Import('base_env', 'prereqs')
+
+    if not prereqs.test_requested():
+        return
+
+    libs_client = ['daos', 'daos_common', 'gurt', 'm', 'cart', 'uuid', 'cmocka', 'daos_tests']
+
+    denv = base_env.Clone()
+    # Add runtime paths for daos libraries
+    denv.AppendUnique(RPATH_FULL=['$PREFIX/lib64/daos_srv'])
+    denv.Append(CPPPATH=[Dir('suite').srcnode()])
+    denv.AppendUnique(CPPPATH=[Dir('../mgmt').srcnode()])
+    build_tests(prereqs, denv, libs_client)
+
+    if not GetOption('help') and not GetOption('clean'):
+        mpi = daos_build.configure_mpi(denv, libs_client)
+        if mpi is None:
+            print("\nSkipping compilation for tests that need MPI")
+            print("Install and load mpich or openmpi\n")
+            return
+
+
+    daos_build.program(denv, 'simple_array', 'simple_array.c', LIBS=libs_client)
+    daos_build.program(denv, 'simple_obj', 'simple_obj.c', LIBS=libs_client)
 
 if __name__ == "SCons.Script":
     scons()
