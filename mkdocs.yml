@@ -7,7 +7,8 @@ site_url: https://docs.daos.io/
 # Repository
 repo_name: daos-stack/daos
 repo_url: https://github.com/daos-stack/daos
-copyright: Copyright &copy; 2016 - 2021 Intel Corporation
+edit_uri: blob/release/1.2/docs/
+copyright: Copyright &copy; 2016 - 2022 Intel Corporation
 
 # Theme
 theme:
@@ -47,10 +48,13 @@ markdown_extensions:
 nav:
     - Intro:
         - 'Home': 'index.md'
-        - 'Community Wiki': 'http://wiki.daos.io'
+        - 'Community Wiki': 'http://wiki.daos.io/'
         - 'Community Roadmap': 'http://wiki.daos.io/spaces/DC/pages/4836661105/Roadmap'
         - 'Community Mailing list': 'https://daos.groups.io/g/daos'
-        - 'Issue tracker': 'http://jira.daos.io'
+        - 'Issue tracker': 'http://jira.daos.io/'
+    - Release Information:
+        - 'Release Notes v1.2': 'release/release_notes.md'
+        - 'Support Matrix v1.2': 'release/support_matrix.md'
     - Overview:
         - 'Terminology': 'overview/terminology.md'
         - 'Architecture': 'overview/architecture.md'
@@ -90,9 +94,6 @@ nav:
         - 'Run mdtest': 'QSG/mdtest.md'
         - 'Run dbench': 'QSG/dbench.md'
         - 'Datamover test': 'QSG/datamover.md'
-    - Releases:
-        - 'Release Notes v1.2': 'release/release_notes.md'
-        - 'Support Matrix v1.2': 'release/support_matrix.md'
     - Developer Zone:
         - 'Dev Environment': 'dev/development.md'
         - 'Contributing': 'dev/contributing.md'
