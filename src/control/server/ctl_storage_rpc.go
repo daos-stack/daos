@@ -154,9 +154,7 @@ func (c *ControlService) scanScm(ctx context.Context, req *ctlpb.ScanScmReq) (*c
 		return nil, errors.New("nil scm request")
 	}
 
-	// scan SCM, rescan scm storage details by default
-	scmReq := storage.ScmScanRequest{Rescan: true}
-	ssr, scanErr := c.ScmScan(scmReq)
+	ssr, scanErr := c.ScmScan(storage.ScmScanRequest{})
 
 	if scanErr != nil || !req.GetUsage() {
 		return newScanScmResp(ssr, scanErr)
