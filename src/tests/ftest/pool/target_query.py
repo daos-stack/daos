@@ -31,14 +31,14 @@ class PoolTargetQueryTest(IorTestBase):
         self.pool.connect()
 
         # Collect the space information for all the ranks and targets
-        for _rank in range(0, self.server_count):
-            for _target in range(0, self.server_managers[0].get_config_value("targets")):
+        for _rank in range(self.server_count):
+            for _target in range(self.server_managers[0].get_config_value("targets")):
                 result = self.pool.pool.target_query(_target, _rank)
                 nvme_rank_space.append(result.ta_space.s_free[1])
 
         return nvme_rank_space
 
-    def test_pool_target_space_query(self):
+    def test_pool_target_query(self):
         """Jira ID: DAOS-4661.
 
         Test Description: Test Pool Target space is used based on object type.
@@ -48,9 +48,9 @@ class PoolTargetQueryTest(IorTestBase):
                   on object type.
 
         :avocado: tags=all,full_regression
-        :avocado: tags=hw,large,ib2
+        :avocado: tags=hw,large
         :avocado: tags=pool
-        :avocado: tags=pool_query_target
+        :avocado: tags=pool_target_query
         """
         self.update_ior_cmd_with_pool()
         # Check the initial size of all targets
@@ -67,8 +67,8 @@ class PoolTargetQueryTest(IorTestBase):
         # Verify the target sizes is only increasing based on object layout
         # specified in yaml file
         target_count = 0
-        for count, _ in enumerate(initial_nvme_size):
-            if latest_nvme_size[count] != initial_nvme_size[count]:
+        for count, initial_size in enumerate(initial_nvme_size):
+            if latest_nvme_size[count] != initial_size:
                 target_count += 1
         if target_count != self.target_usage_count:
             self.fail("Expected to change the free space capacity for {} targets,"

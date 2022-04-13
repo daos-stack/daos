@@ -8,9 +8,6 @@ hosts:
   test_clients:
     - client-A
 timeout: 800
-setup:
-  start_agents_once: False
-  start_servers_once: False
 server_config:
   engines_per_host: 2
   name: daos_server
@@ -52,12 +49,11 @@ container:
 ior:
   api: "DFS"
   client_processes:
-   np: 1
+    np: 1
   dfs_destroy: False
   iorflags:
-   flags: "-w -F -k -G 1 -vv"
+    flags: "-w -F -k -G 1 -vv"
   test_file: /testFile
-  repetitions: 1
   transfer_size: 1M
   block_size: 1G
   objectclass: !mux
