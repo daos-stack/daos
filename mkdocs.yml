@@ -1,11 +1,12 @@
 # Project Information
-site_name: DAOS v2.2 - dev
+site_name: DAOS v2.1 - dev
 site_description: Distributed Asynchronous Object Storage
 site_author: DAOS Project
 
 # Repository
 repo_name: daos-stack/daos
 repo_url: https://github.com/daos-stack/daos
+edit_uri: blob/release/2.2/docs/
 copyright: Copyright 2016-2022 Intel Corporation
 
 # Theme
@@ -55,11 +56,11 @@ markdown_extensions:
 nav:
     - Intro:
         - 'index.md'
-        - 'Community Wiki': 'http://wiki.daos.io'
+        - 'Community Wiki': 'http://wiki.daos.io/'
         - 'Community Roadmap': 'http://wiki.daos.io/spaces/DC/pages/4836661105/Roadmap'
         - 'Community Mailing list': 'https://daos.groups.io/g/daos'
-        - 'Issue tracker': 'http://jira.daos.io'
-    - Release Infos:
+        - 'Issue tracker': 'http://jira.daos.io/'
+    - Release Information:
         - 'Release Notes v2.2': 'release/release_notes.md'
         - 'Support Matrix v2.2': 'release/support_matrix.md'
         - 'Upgrading to v2.2': 'release/upgrading.md'
@@ -74,7 +75,7 @@ nav:
         - 'Use Cases': 'overview/use_cases.md'
         - 'Terminology': 'overview/terminology.md'
     - Installation and Setup:
-        - 'CentOS': 'QSG/setup_centos.md'
+        - 'CentOS7/EL8': 'QSG/setup_centos7_and_el8.md'
         - 'openSUSE': 'QSG/setup_suse.md'
         - 'DAOS in Docker': 'QSG/docker.md'
         - 'Build from Scratch': 'QSG/build_from_scratch.md'
