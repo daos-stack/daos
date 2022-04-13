@@ -1705,6 +1705,8 @@ akey_update(struct vos_io_context *ioc, uint32_t pm_ver, daos_handle_t ak_toh,
 			      &iod->iod_name, flags, DAOS_INTENT_UPDATE,
 			      &krec, &toh, ioc->ic_ts_set);
 	if (rc < 0) {
+		D_ASSERT(rc != -DER_NONEXIST);
+
 		D_ERROR("akey "DF_KEY" update, key_tree_prepare failed, "DF_RC"\n",
 			DP_KEY(&iod->iod_name), DP_RC(rc));
 		return rc;
@@ -1738,18 +1740,31 @@ akey_update(struct vos_io_context *ioc, uint32_t pm_ver, daos_handle_t ak_toh,
 	rc = vos_ilog_update(ioc->ic_cont, &krec->kr_ilog, &ioc->ic_epr,
 			     ioc->ic_bound, &ioc->ic_dkey_info,
 			     &ioc->ic_akey_info, update_cond, ioc->ic_ts_set);
-	if (update_cond == VOS_ILOG_COND_UPDATE && rc == -DER_NONEXIST) {
-		D_DEBUG(DB_IO, "Conditional update on non-existent akey\n");
-		goto out;
-	}
-	if (update_cond == VOS_ILOG_COND_INSERT && rc == -DER_EXIST) {
-		D_DEBUG(DB_IO, "Conditional insert on existent akey\n");
-		goto out;
-	}
-
 	if (rc != 0) {
-		VOS_TX_LOG_FAIL(rc, "Failed to update akey ilog: "DF_RC"\n",
-				DP_RC(rc));
+		if (update_cond == VOS_ILOG_COND_UPDATE) {
+			D_ASSERT(rc != -DER_EXIST);
+
+			if (rc == -DER_NONEXIST)
+				D_DEBUG(DB_IO, "Conditional update on non-existent akey\n");
+			else
+				VOS_TX_LOG_FAIL(rc, "Failed to cond update akey ilog: "DF_RC"\n",
+						DP_RC(rc));
+			goto out;
+		}
+
+		if (update_cond == VOS_ILOG_COND_INSERT) {
+			D_ASSERT(rc != -DER_NONEXIST);
+
+			if (rc == -DER_EXIST)
+				D_DEBUG(DB_IO, "Conditional insert on existent akey\n");
+			else
+				VOS_TX_LOG_FAIL(rc, "Failed to cond insert akey ilog: "DF_RC"\n",
+						DP_RC(rc));
+			goto out;
+		}
+
+		VOS_TX_LOG_FAIL(rc, "Failed to update akey ilog with cond %d: "DF_RC"\n",
+				update_cond, DP_RC(rc));
 		goto out;
 	}
 
@@ -1785,6 +1800,9 @@ akey_update(struct vos_io_context *ioc, uint32_t pm_ver, daos_handle_t ak_toh,
 				      recx_csum, iod->iod_size, ioc,
 				      minor_epc);
 		if (rc != 0) {
+			if (update_cond == VOS_ILOG_COND_INSERT)
+				D_ASSERT(rc != -DER_NONEXIST);
+
 			VOS_TX_LOG_FAIL(rc, "akey "DF_KEY" update, akey_update_recx failed, "
 					DF_RC"\n", DP_KEY(&iod->iod_name), DP_RC(rc));
 			goto out;
@@ -1820,6 +1838,8 @@ dkey_update(struct vos_io_context *ioc, uint32_t pm_ver, daos_key_t *dkey,
 			      SUBTR_CREATE, DAOS_INTENT_UPDATE, &krec, &ak_toh,
 			      ioc->ic_ts_set);
 	if (rc != 0) {
+		D_ASSERT(rc != -DER_NONEXIST);
+
 		D_ERROR("Error preparing dkey tree: rc="DF_RC"\n", DP_RC(rc));
 		goto out;
 	}
@@ -1835,17 +1855,31 @@ dkey_update(struct vos_io_context *ioc, uint32_t pm_ver, daos_key_t *dkey,
 	rc = vos_ilog_update(ioc->ic_cont, &krec->kr_ilog, &ioc->ic_epr,
 			     ioc->ic_bound, &obj->obj_ilog_info,
 			     &ioc->ic_dkey_info, update_cond, ioc->ic_ts_set);
-	if (update_cond == VOS_ILOG_COND_UPDATE && rc == -DER_NONEXIST) {
-		D_DEBUG(DB_IO, "Conditional update on non-existent akey\n");
-		goto out;
-	}
-	if (update_cond == VOS_ILOG_COND_INSERT && rc == -DER_EXIST) {
-		D_DEBUG(DB_IO, "Conditional insert on existent akey\n");
-		goto out;
-	}
 	if (rc != 0) {
-		VOS_TX_LOG_FAIL(rc, "Failed to update dkey ilog: "DF_RC"\n",
-				DP_RC(rc));
+		if (update_cond == VOS_ILOG_COND_UPDATE) {
+			D_ASSERT(rc != -DER_EXIST);
+
+			if (rc == -DER_NONEXIST)
+				D_DEBUG(DB_IO, "Conditional update on non-existent dkey\n");
+			else
+				VOS_TX_LOG_FAIL(rc, "Failed to cond update dkey ilog: "DF_RC"\n",
+						DP_RC(rc));
+			goto out;
+		}
+
+		if (update_cond == VOS_ILOG_COND_INSERT) {
+			D_ASSERT(rc != -DER_NONEXIST);
+
+			if (rc == -DER_EXIST)
+				D_DEBUG(DB_IO, "Conditional insert on existent dkey\n");
+			else
+				VOS_TX_LOG_FAIL(rc, "Failed to cond insert dkey ilog: "DF_RC"\n",
+						DP_RC(rc));
+			goto out;
+		}
+
+		VOS_TX_LOG_FAIL(rc, "Failed to update dkey ilog with cond %d: "DF_RC"\n",
+				update_cond, DP_RC(rc));
 		goto out;
 	}
 
@@ -2304,8 +2338,10 @@ vos_update_end(daos_handle_t ioh, uint32_t pm_ver, daos_key_t *dkey, int err,
 			   &ioc->ic_epr, ioc->ic_bound,
 			   VOS_OBJ_CREATE | VOS_OBJ_VISIBLE, DAOS_INTENT_UPDATE,
 			   &ioc->ic_obj, ioc->ic_ts_set);
-	if (err != 0)
+	if (err != 0) {
+		D_ASSERT(err != -DER_NONEXIST);
 		goto abort;
+	}
 
 	/* Update tree index */
 	err = dkey_update(ioc, pm_ver, dkey, dtx_is_valid_handle(dth) ?

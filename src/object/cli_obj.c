@@ -591,8 +591,11 @@ obj_grp_valid_shard_get(struct dc_object *obj, int grp_idx,
 
 	D_RWLOCK_UNLOCK(&obj->cob_lock);
 
-	if (i == grp_size)
+	if (i == grp_size) {
+		D_ERROR(DF_OID" obj_grp_valid_shard_get failed, grp_size %u, grp_idx %d: -1005\n",
+			DP_OID(obj->cob_md.omd_id), grp_size, grp_idx);
 		return -DER_NONEXIST;
+	}
 
 	return idx;
 }
@@ -609,8 +612,11 @@ obj_shard_find_replica(struct dc_object *obj, unsigned int target,
 			break;
 	}
 
-	if (idx == obj->cob_shards_nr)
+	if (idx == obj->cob_shards_nr) {
+		D_ERROR(DF_OID" no more replicas for target %u, shards_nr %u: -1005\n",
+			DP_OID(obj->cob_md.omd_id), target, obj->cob_shards_nr);
 		return -DER_NONEXIST;
+	}
 
 	grp_idx = idx / obj_get_replicas(obj);
 	return obj_grp_valid_shard_get(obj, grp_idx, obj->cob_version,
@@ -899,6 +905,8 @@ obj_shard2tgtid(struct dc_object *obj, uint32_t shard, uint32_t map_ver,
 			  "map_ver %d\n", shard, obj->cob_shards_nr, map_ver);
 	if (shard >= obj->cob_shards_nr) {
 		D_RWLOCK_UNLOCK(&obj->cob_lock);
+		D_ERROR(DF_OID" bad shard %u, shards_nr %u: -1005\n",
+			DP_OID(obj->cob_md.omd_id), shard, obj->cob_shards_nr);
 		return -DER_NONEXIST;
 	}
 
@@ -1303,8 +1311,12 @@ obj_shards_2_fwtgts(struct dc_object *obj, uint32_t map_ver, uint8_t *bit_map,
 			leader_shard = rc;
 			rc = obj_shard_tgts_query(obj, map_ver, leader_shard,
 						  0, tgt++, obj_auxi);
-			if (rc != 0)
+			if (rc != 0) {
+				if (unlikely(rc == -DER_NONEXIST))
+					D_ERROR(DF_OID" leader shard %u does not exist: -1005\n",
+						DP_OID(obj->cob_md.omd_id), leader_shard);
 				return rc;
+			}
 
 			if (flags & OBJ_TGT_FLAG_LEADER_ONLY)
 				continue;
@@ -1330,8 +1342,12 @@ obj_shards_2_fwtgts(struct dc_object *obj, uint32_t map_ver, uint8_t *bit_map,
 						obj_ec_parity_tgt_nr(oca), DP_RC(rc));
 					return rc;
 				}
-			} else if (rc != 0)
+			} else if (rc != 0) {
+				if (unlikely(rc == -DER_NONEXIST))
+					D_ERROR(DF_OID" query nonexist shard %u: -1005\n",
+						DP_OID(obj->cob_md.omd_id), shard_idx);
 				return rc;
+			}
 
 			if (req_tgts->ort_srv_disp) {
 				struct daos_shard_tgt	*tmp, *last;
