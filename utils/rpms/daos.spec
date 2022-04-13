@@ -27,7 +27,7 @@
 
 Name:          daos
 Version:       2.3.100
-Release:       2%{?relval}%{?dist}
+Release:       3%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       BSD-2-Clause-Patent
@@ -554,8 +554,11 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 # No files in a shim package
 
 %changelog
-* Fri Apr  8 2022 Dmitry Eremin <dmitry.eremin@intel.com> 2.3.100-3
+* Fri Apr 13 2022 Dmitry Eremin <dmitry.eremin@intel.com> 2.3.100-4
 - Update to libfabric to v1.14.0-2 to include critical performance patches
+
+* Tue Apr 12 2022 Li Wei <wei.g.li@intel.com> 2.3.100-3
+- Update raft to 0.9.1-1401.gc18bcb8 to fix uninitialized node IDs
 
 * Wed Apr 6 2022 Jeff Olivier <jeffrey.v.olivier@intel.com> 2.3.100-2
 - Remove direct MPI dependency from most of tests
