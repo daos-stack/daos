@@ -56,22 +56,33 @@ do_openat(void **state)
 	rc = write(fd, input_buf, sizeof(input_buf));
 	assert_return_code(rc, errno);
 
+	/* First fstat.  IL will forward this to the kernel so it can save ino for future calls */
 	rc = fstat(fd, &stbuf0);
 	assert_return_code(rc, errno);
+	assert_int_equal(stbuf0.st_size, sizeof(input_buf));
 
-	/* If metadata caching is on then the kernel will report the wrong size */
-	if (stbuf0.st_size != 0)
-		assert_int_equal(stbuf0.st_size, sizeof(input_buf));
-
+	/* Second fstat.  IL will bypass the kernel for this one */
 	rc = fstat(fd, &stbuf);
 	assert_return_code(rc, errno);
-	if (stbuf0.st_size != 0)
-		assert_int_equal(stbuf.st_size, sizeof(input_buf));
+	assert_int_equal(stbuf.st_size, sizeof(input_buf));
 	assert_int_equal(stbuf0.st_dev, stbuf.st_dev);
 	assert_int_equal(stbuf0.st_ino, stbuf.st_ino);
 
-	/* Go back two places */
-	offset = lseek(fd, -2, SEEK_CUR);
+	/* This will write six bytes, including a \0 terminator */
+	rc = write(fd, input_buf, sizeof(input_buf));
+	assert_return_code(rc, errno);
+
+	/* fstat to check the file size is updated */
+	rc = fstat(fd, &stbuf0);
+	assert_return_code(rc, errno);
+	assert_int_equal(stbuf0.st_size, sizeof(input_buf) * 2);
+
+	/* stat through kernel to ensure it has observed write */
+	rc = fstatat(root, "my_file", &stbuf, AT_SYMLINK_NOFOLLOW);
+	assert_return_code(rc, errno);
+	assert_int_equal(stbuf.st_size, stbuf0.st_size);
+
+	offset = lseek(fd, -8, SEEK_CUR);
 	assert_return_code(offset, errno);
 	assert_int_equal(offset, sizeof(input_buf) - 2);
 
@@ -80,8 +91,24 @@ do_openat(void **state)
 	assert_int_equal(rc, 2);
 	assert_memory_equal(&input_buf[offset], &output_buf, rc);
 
+	rc = fstat(fd, &stbuf);
+	assert_return_code(rc, errno);
+	assert_int_equal(stbuf.st_size, 12);
+
 	rc = ftruncate(fd, offset);
 	assert_return_code(rc, errno);
+
+	rc = fstatat(root, "my_file", &stbuf, AT_SYMLINK_NOFOLLOW);
+	assert_return_code(rc, errno);
+	assert_int_equal(stbuf.st_size, offset);
+
+	rc = fstat(fd, &stbuf);
+	assert_return_code(rc, errno);
+	assert_int_equal(stbuf.st_size, offset);
+
+	/* Write to change the size */
+
+	/* stat/fstatat */
 
 	rc = read(fd, &output_buf, 2);
 	assert_return_code(rc, errno);

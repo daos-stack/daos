@@ -374,7 +374,7 @@ struct fuse_lowlevel_ops dfuse_ops;
 				(attr)->st_mode,			\
 				(attr)->st_size);			\
 		__rc = fuse_reply_attr(req, attr,			\
-				(ie)->ie_dfs->dfc_attr_timeout);	\
+				       (ie)->ie_il_active ? 0 : (ie)->ie_dfs->dfc_attr_timeout); \
 		if (__rc != 0)						\
 			DFUSE_TRA_ERROR(ie,				\
 					"fuse_reply_attr returned %d:%s", \
@@ -542,6 +542,8 @@ struct dfuse_inode_entry {
 
 	/** File has been unlinked from daos */
 	bool			ie_unlinked;
+
+	bool			ie_il_active;
 };
 
 /* Generate the inode to use for this dfs object.  This is generating a single

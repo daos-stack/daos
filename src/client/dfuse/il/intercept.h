@@ -36,7 +36,8 @@
 	ACTION(off_t,   lseek,     (int, off_t, int))                         \
 	ACTION(ssize_t, preadv,    (int, const struct iovec *, int, off_t))   \
 	ACTION(ssize_t, pwritev,   (int, const struct iovec *, int, off_t))   \
-	ACTION(void *,  mmap,      (void *, size_t, int, int, int, off_t))
+	ACTION(void *,  mmap,      (void *, size_t, int, int, int, off_t))    \
+	ACTION(int,     ftruncate, (int, off_t))
 
 #define FOREACH_SINGLE_INTERCEPT(ACTION)                                      \
 	ACTION(int,     fclose,    (FILE *))                                  \

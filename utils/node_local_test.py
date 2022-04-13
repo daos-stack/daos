@@ -967,6 +967,10 @@ def il_cmd(server, cmd, dfuse, stdout=False, check_read=True, check_write=True, 
     my_env['LD_PRELOAD'] = join(server.conf['PREFIX'], 'lib64', 'libioil.so')
     my_env['DAOS_AGENT_DRPC_DIR'] = server.agent_dir
     my_env['D_IL_REPORT'] = '2'
+
+    if server.conf.args.dfuse_debug:
+        my_env['D_LOG_MASK'] = server.conf.args.dfuse_debug
+
     if stdout:
         stdout = subprocess.PIPE
         stderr = subprocess.PIPE
@@ -2799,9 +2803,9 @@ class posix_tests():
         tests = {'uncached': {'Caching': False,
                               'WB_Cache': False},
                  'write-through': {'Caching': True,
-                                   'WB_Cache': False},
-                 'write-back': {'Caching': True,
-                                'WB_Cache': True}}
+                                   'WB_Cache': False}}
+#                 'write-back': {'Caching': True,
+#                                'WB_Cache': True}}
 
         for (test, data) in tests.items():
             print(test)
