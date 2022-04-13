@@ -339,7 +339,7 @@ ERROR: dmg: Unable to load Certificate Data: could not load cert: stat /etc/daos
 		# port: <port_num>
 		# transport\config:
 			# allow_insecure: <true/false>
-			# ca\cert: /etc/daos/certs/daosCA.crt
+			# ca_cert: /etc/daos/certs/daosCA.crt
 			# cert: /etc/daos/certs/admin.crt
 			# key: /etc/daos/certs/admin.key
 
@@ -357,6 +357,7 @@ failed to initialize daos: Miscellaneous error (-1025)
 	#check for /etc/daos/certs/daosCA.crt, agent.crt and agent.key
 	$ sudo systemctl enable daos_agent.service
 	$ sudo systemctl start daos_agent.service
+	$ sudo systemctl status daos_agent.service
 ```
 ### use daos command with invalid or wrong parameters
 ```
@@ -424,7 +425,7 @@ ERROR: dmg: pool create failed: DER_NOSPACE(-1007): No space on storage target
 	-----  --------- -------- -------- ---------- --------- ---------
 	boro-8 17 GB     2.9 GB   83 %     0 B        0 B       N/A
 ```
-### dmg pool destroy timeout
+### dmg pool destroy force
 ```
 # dmg pool destroy Timeout or failed due to pool has active container(s)
 # Workaround pool destroy --force option
