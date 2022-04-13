@@ -1072,31 +1072,3 @@ class DaosServerManager(SubprocessManager):
             self.log.info("-" * 100)
 
         return params
-<<<<<<< HEAD
-=======
-
-    def get_daos_metrics(self, verbose=False, timeout=60):
-        """Get daos_metrics for the server.
-
-        Args:
-            verbose (bool, optional): pass verbose to run_pcmd. Defaults to False.
-            timeout (int, optional): pass timeout to each execution ofrun_pcmd. Defaults to 60.
-
-        Returns:
-            list: list of pcmd results for each host. See general_utils.run_pcmd for details.
-                [
-                    general_utils.run_pcmd(), # engine 0
-                    general_utils.run_pcmd()  # engine 1
-                ]
-
-        """
-        engines_per_host = self.get_config_value("engines_per_host") or 1
-        engines = []
-        daos_metrics_exe = os.path.join(self.manager.job.command_path, "daos_metrics")
-        for engine in range(engines_per_host):
-            results = run_pcmd(
-                hosts=self._hosts, verbose=verbose, timeout=timeout,
-                command="sudo {} -S {} --csv".format(daos_metrics_exe, engine))
-            engines.append(results)
-        return engines
->>>>>>> 3c4a4732d (DAOS-10155 test: Allow timeouts for server startup (#8594))
