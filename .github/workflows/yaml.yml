@@ -11,8 +11,6 @@ on:  # yamllint disable-line rule:truthy
     paths:
       - '**/*.yaml'
       - '**/*.yml'
-      - .yamllint
-      - .github/workflows/yaml.yml
 
 jobs:
   yaml-lint:

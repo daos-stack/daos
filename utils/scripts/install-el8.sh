@@ -8,7 +8,21 @@
 # dnf --assumeyes install dnf-plugins-core
 # dnf config-manager --save --setopt=assumeyes=True
 
+# For fedora, java-11 is installed along with maven if we install maven from
+# repo. But we need java-8 (1.8). The 'devel' package also needs to be
+# installed specifically.
+
+# Fedora is already on python 3.10 but Rocky has several versions available and defaults to the
+# oldest so tell it to install the latest which is 3.9
+
+if [ -e /etc/fedora-release ]; then
+        PACKAGES="java-1.8.0-openjdk-devel maven-openjdk8"
+else
+        PACKAGES="maven python39-devel"
+fi
+
 dnf --nodocs install \
+    $PACKAGES \
     boost-python3-devel \
     bzip2 \
     clang \
@@ -52,18 +66,7 @@ dnf --nodocs install \
     openssl-devel \
     patch \
     patchelf \
-    python39-devel \
     sg3_utils \
     valgrind-devel \
     which \
     yasm
-
-# For fedora, java-11 is installed along with maven if we install maven from
-# repo. But we need java-8 (1.8). The 'devel' package also needs to be
-# installed specifically.
-
-if [ -e /etc/fedora-release ]; then
-        dnf install java-1.8.0-openjdk-devel maven-openjdk8
-else
-        dnf install maven
-fi
