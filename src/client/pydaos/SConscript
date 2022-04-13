@@ -9,18 +9,15 @@ def build_shim_module():
     if GetOption('help'):
         return
 
-    Import('base_env')
-
-    new_env = base_env.Clone()
     version = "{}.{}".format(sys.version_info.major, sys.version_info.minor)
 
     if sys.version_info.major != 3:
         raise Exception(f'Unsupported python version {version}')
 
-    try:
-        new_env.ParseConfig(f'pkg-config --cflags --libs python-{version}')
-    except OSError:
-        new_env.ParseConfig('pkg-config --cflags --libs python3')
+    Import('base_env')
+
+    new_env = base_env.Clone()
+    new_env.ParseConfig(f'pkg-config --cflags --libs python-{version}')
 
     new_env.Replace(LIBS=['daos', 'duns'])
     new_env.AppendUnique(LIBPATH=["../dfs"])
