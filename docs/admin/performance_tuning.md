@@ -267,7 +267,7 @@ section.
 
 [1]: <https://github.com/daos-stack/daos/blob/release/1.2/src/cart> (Collective and RPC Transport)
 [2]: <https://github.com/daos-stack/daos/blob/release/1.2/docs/admin/installation.md#distribution-packages> (DAOS distribution packages)
-[3]: <https://github.com/daos-stack/daos/blob/release/1.2/docs/admin/installation.md#building-daos--dependencies> (DAOS build documentation)
+[3]: <https://github.com/daos-stack/daos/blob/release/1.2/docs/admin/installation.md#building-daos-and-dependencies> (DAOS build documentation)
 [4]: <https://github.com/daos-stack/daos/blob/release/1.2/docs/admin/deployment.md#server-startup> (DAOS server startup documentation)
 [5]: <https://www.open-mpi.org/faq/?category=running#mpirun-hostfile> (mpirun hostfile)
 [6]: <https://github.com/daos-stack/daos/blob/release/1.2/docs/admin/deployment.md#disable-agent-cache-optional> (System Deployment Agent Startup)

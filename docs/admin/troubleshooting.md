@@ -68,10 +68,10 @@ server operations:
 
 |Component|Config Parameter|Example Config Value|
 |-|-|-|
-|Control Plane|control_log_file|/tmp/daos_server.log|
-|Data Plane|log_file|/tmp/daos_engine.*.log|
-|[Privileged Helper](https://docs.daos.io/v1.2/admin/deployment/#elevated-privileges)|helper_log_file|/tmp/daos_admin.log|
-|agent|log_file|/tmp/daos_agent.log|
+|Control Plane|control\_log\_file|/tmp/daos\_server.log|
+|Data Plane|log\_file|/tmp/daos\_engine.\*.log|
+|Privileged Helper|helper\_log\_file|/tmp/daos\_admin.log|
+|agent|log\_file|/tmp/daos\_agent.log|
 
 ### Control Plane Log
 
@@ -249,8 +249,8 @@ reference time, using services like NTP.
 
 ## Bug Report
 
-Bugs should be reported through our issue tracker[^1] with a test case
-to reproduce the issue (when applicable) and debug logs.
+Bugs should be reported through our [issue tracker](http://jira.daos.io/)
+with a test case to reproduce the issue (when applicable) and debug logs.
 
 After creating a ticket, logs should be gathered from the locations
 described in the [Log Files](#log-files) section of this document and
@@ -258,5 +258,3 @@ attached to the ticket.
 
 To avoid problems with attaching large files, please attach the logs
 in a compressed container format, such as .zip or .tar.bz2.
-
-[^1]: http://jira.daos.io/

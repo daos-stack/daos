@@ -74,13 +74,13 @@ version of at least 1.10 is required.
 An exhaustive list of packages for each supported Linux distribution is
 maintained in the Docker files (please click on the link):
 
--    [CentOS 7](https://github.com/daos-stack/daos/blob/release/1.2/utils/docker/Dockerfile.centos.7#L19-L79)
--    [openSUSE Leap 15](https://github.com/daos-stack/daos/blob/release/1.2/utils/docker/Dockerfile.leap.15#L36-L85)
--    [Ubuntu 20.04](https://github.com/daos-stack/daos/blob/release/1.2/utils/docker/Dockerfile.ubuntu.20.04#L14-L22)
+-    [CentOS 7](https://github.com/daos-stack/daos/blob/release/1.2/utils/docker/Dockerfile.centos.7)
+-    [openSUSE Leap 15](https://github.com/daos-stack/daos/blob/release/1.2/utils/docker/Dockerfile.leap.15)
+-    [Ubuntu 20.04](https://github.com/daos-stack/daos/blob/release/1.2/utils/docker/Dockerfile.ubuntu.20.04)
 
 The command lines to install the required packages can be extracted from
 the Docker files by removing the "RUN" command, which is specific to Docker.
-Check the [utils/docker](https://github.com/daos-stack/daos/blob/release/1.2/utils/docker)
+Check the [utils/docker](https://github.com/daos-stack/daos/blob/release/1.2/utils/docker/)
 directory for different Linux distribution versions.
 
 Some DAOS tests use MPI. The DAOS build process uses the environment modules
@@ -89,7 +89,7 @@ building those tests.
 
 ### DAOS Source Code
 
-The DAOS repository is hosted on [GitHub](https://github.com/daos-stack/daos).
+The DAOS repository is hosted on [GitHub](https://github.com/daos-stack/daos/).
 
 To checkout the latest 1.2 version, simply run:
 
@@ -100,7 +100,7 @@ $ git clone --recurse-submodules -b release/1.2 https://github.com/daos-stack/da
 This command clones the DAOS git repository (path referred as ${daospath}
 below) and initializes all the submodules automatically.
 
-### Building DAOS & Dependencies
+### Building DAOS and Dependencies
 
 If all the software dependencies listed previously are already satisfied, then
 type the following command in the top source directory to build the DAOS stack:
