@@ -4,6 +4,10 @@ import daos_build
 def scons():
     """Execute build"""
     Import('base_env', 'prereqs')
+
+    if not prereqs.server_requested():
+        return
+
     denv = base_env.Clone()
 
     libs = ['vos', 'daos_common_pmem', 'abt', 'gurt', 'uuid', 'bio']
