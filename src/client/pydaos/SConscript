@@ -10,13 +10,15 @@ def build_shim_module(env, lib_prefix):
         return
 
     new_env = env.Clone()
-    version = "{}.{}".format(
-        sys.version_info.major, sys.version_info.minor)
-    if sys.version_info.major == 3:
-        tgt_name = 'pydaos_shim'
-        new_env.ParseConfig("pkg-config --cflags --libs python3")
-    else:
-        raise Exception("Unsupported python version %s" % version)
+    version = "{}.{}".format(sys.version_info.major, sys.version_info.minor)
+
+    if sys.version_info.major != 3:
+        raise Exception(f'Unsupported python version {version}')
+
+    try:
+        new_env.ParseConfig('pkg-config --cflags --libs python3')
+    except OSError:
+        new_env.ParseConfig(f'pkg-config --cflags --libs python-{version}')
 
     new_env.Replace(LIBS=['daos', 'duns'])
     new_env.AppendUnique(LIBPATH=["../dfs"])
@@ -26,10 +28,10 @@ def build_shim_module(env, lib_prefix):
 
     compiler_setup.base_setup(new_env)
 
-    obj = new_env.SharedObject(tgt_name, 'pydaos_shim.c',
+    obj = new_env.SharedObject('pydaos_shim', 'pydaos_shim.c',
                                SHLINKFLAGS=[],
                                SHLIBPREFIX="")
-    base = daos_build.library(new_env, target=tgt_name, source=[obj],
+    base = daos_build.library(new_env, target='pydaos_shim', source=[obj],
                               install_off="../../../..",
                               SHLINK='gcc -pthread -shared',
                               SHLINKFLAGS=[],
