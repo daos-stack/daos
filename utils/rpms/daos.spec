@@ -554,7 +554,7 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 # No files in a shim package
 
 %changelog
-* Fri Apr  8 2022 Dmitry Eremin <dmitry.eremin@intel.com> 2.3.100-2
+* Fri Apr  8 2022 Dmitry Eremin <dmitry.eremin@intel.com> 2.3.100-3
 - Update to libfabric to v1.14.0-2 to include critical performance patches
 
 * Wed Apr 6 2022 Jeff Olivier <jeffrey.v.olivier@intel.com> 2.3.100-2
