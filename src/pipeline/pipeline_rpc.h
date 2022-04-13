@@ -52,6 +52,10 @@ obj_opc_to_str(crt_opcode_t opc)
 	((daos_pipeline_iods_t)	(pri_iods)		CRT_VAR)	\
 	((daos_anchor_t)	(pri_anchor)		CRT_RAW)	\
 	((daos_epoch_range_t)	(pri_epr)		CRT_VAR)	\
+	((crt_bulk_t)		(pri_kds_bulk)		CRT_VAR)	\
+	((crt_bulk_t)		(pri_sgl_keys_bulk)	CRT_VAR)	\
+	((crt_bulk_t)		(pri_sgl_recx_bulk)	CRT_VAR)	\
+	((crt_bulk_t)		(pri_sgl_agg_bulk)	CRT_VAR)	\
 	((uint64_t)		(pri_flags)		CRT_VAR)	\
 	((uint32_t)		(pri_nr_kds)		CRT_VAR)	\
 	((uint32_t)		(pri_pad32)		CRT_VAR)
@@ -60,9 +64,9 @@ obj_opc_to_str(crt_opcode_t opc)
 	((daos_pipeline_iods_t)		(pro_iods)	CRT_VAR)	\
 	((daos_anchor_t)		(pro_anchor)	CRT_RAW)	\
 	((daos_key_desc_t)		(pro_kds)	CRT_ARRAY)	\
-	((d_sg_list_t)			(pro_sgl_keys)	CRT_ARRAY)	\
-	((d_sg_list_t)			(pro_sgl_recx)	CRT_ARRAY)	\
-	((d_sg_list_t)			(pro_sgl_agg)	CRT_ARRAY)	\
+	((d_sg_list_t)			(pro_sgl_keys)	CRT_VAR)	\
+	((d_sg_list_t)			(pro_sgl_recx)	CRT_VAR)	\
+	((d_sg_list_t)			(pro_sgl_agg)	CRT_VAR)	\
 	((daos_pipeline_stats_t)	(stats)		CRT_VAR)	\
 	((uint64_t)			(pro_epoch)	CRT_VAR)	\
 	((int32_t)			(pro_ret)	CRT_VAR)	\

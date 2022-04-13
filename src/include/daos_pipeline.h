@@ -283,23 +283,25 @@ daos_pipeline_free(daos_pipeline_t *pipeline);
  *					[out]: Size of each individual key along with checksum type
  *					and size stored just after the key in \a sgl_keys.
  *
- * \param[out]		sgl_keys	[in]: Preallocated array of \nr_kds sgls storing all the
- *					dkeys to be returned. Optional when \dkey passed.
+ * \param[out]		sgl_keys	[in]: Preallocated array of \nr_kds iovs storing all the
+ *					dkeys to be returned. Optional when \dkey passed. When
+ *					doing aggregations, or when \dkey is passed, only one
+ *					dkey at most is returned (no matter the size of \nr_kds).
  *					[out]: All returned dkeys.
  *
- * \param[out]		sgl_recx	[in]: Preallocated array of (\nr_kds * \nr_iods) sgls
+ * \param[out]		sgl_recx	[in]: Preallocated array of (\nr_kds * \nr_iods) iovs
  *					storing all the records to be returned. When doing
  *					aggregations, or when \dkey is passed, only one record
  *					(output size will be 1 x \nr_iods) at most is returned (no
- *					matther the size of \nr_kds).
+ *					matter the size of \nr_kds).
  *					[out]: All returned records.
  *
- * \param[out]		sgl_agg		[in]: Optional preallocated array for aggregated values
- *					(number of values has to match the number of aggregation
- *					filters defined in the pipeline object). All aggregated
- *					values are returned as doubles, no matter the numeric type
- *					of the akey being aggregated. This means that each buffer
- *					here should be at least 8 bytes.
+ * \param[out]		sgl_agg		[in]: Optional preallocated array of iovs for aggregated
+ *					values (number of values has to match the number of
+ *					aggregation filters defined in the pipeline object). All
+ *					aggregated values are returned as doubles, no matter the
+ *					numeric type of the akey being aggregated. This means that
+ *					each buffer here should be at least 8 bytes.
  *					[out]: All returned aggregated values.
  *
  * \param[out]		stats		[in]: Optional preallocated object.

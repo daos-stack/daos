@@ -125,7 +125,7 @@ pipeline_aggregations(struct pipeline_compiled_t *pipe, struct filter_part_run_t
 	for (i = 0; i < pipe->num_aggr_filters; i++) {
 		args->part_idx = 0;
 		args->parts    = pipe->aggr_filters[i].parts;
-		args->iov_aggr = sgl_agg[i].sg_iovs;
+		args->iov_aggr = &sgl_agg->sg_iovs[i];
 
 		rc             = args->parts[0].filter_func(args);
 		if (rc != 0)
@@ -163,18 +163,12 @@ static int
 ds_pipeline_run(daos_handle_t vos_coh, daos_unit_oid_t oid, daos_pipeline_t pipeline,
 		daos_epoch_range_t epr, uint64_t flags, daos_key_t *dkey, uint32_t *nr_iods,
 		daos_iod_t *iods, daos_anchor_t *anchor, uint32_t nr_kds, uint32_t *nr_kds_out,
-		daos_key_desc_t **kds, d_sg_list_t **sgl_keys, uint32_t *nr_recx,
-		d_sg_list_t **sgl_recx, d_sg_list_t *sgl_agg, daos_pipeline_stats_t *stats)
+		daos_key_desc_t *kds, d_sg_list_t *sgl_keys, uint32_t *nr_recx,
+		d_sg_list_t *sgl_recx, d_sg_list_t *sgl_agg, daos_pipeline_stats_t *stats)
 {
 	int                        rc;
 	uint32_t                   nr_kds_pass;
 	d_iov_t                    d_key_iter;
-	daos_key_desc_t           *kds_;
-	uint32_t                   kds_alloc          = 0;
-	d_sg_list_t               *sgl_keys_          = NULL;
-	uint32_t                   sgl_keys_alloc     = 0;
-	d_sg_list_t               *sgl_recx_          = NULL;
-	uint32_t                   sgl_recx_alloc     = 0;
 	d_iov_t                   *d_key_ptr;
 	d_sg_list_t               *sgl_recx_iter      = NULL;
 	d_iov_t                   *sgl_recx_iter_iovs = NULL;
@@ -310,23 +304,9 @@ ds_pipeline_run(daos_handle_t vos_coh, daos_unit_oid_t oid, daos_pipeline_t pipe
 		/**
 		 * dkey
 		 */
-		D_REALLOC_ARRAY(kds_, *kds, nr_kds_pass - 1, nr_kds_pass);
-		if (kds_ == NULL)
-			D_GOTO(exit, rc = -DER_NOMEM);
-		kds_alloc++;
-		*kds = kds_;
 
-		D_REALLOC_ARRAY(sgl_keys_, *sgl_keys, nr_kds_pass - 1, nr_kds_pass);
-		if (sgl_keys_ == NULL)
-			D_GOTO(exit, rc = -DER_NOMEM);
-		sgl_keys_alloc++;
-		*sgl_keys = sgl_keys_;
-
-		D_ALLOC(d_key_ptr, sizeof(*d_key_ptr));
-		sgl_keys_[nr_kds_pass - 1].sg_iovs = d_key_ptr;
-		if (d_key_ptr == NULL)
-			D_GOTO(exit, rc = -DER_NOMEM);
-		d_key_ptr->iov_buf = NULL;
+		d_key_ptr                            = &sgl_keys->sg_iovs[nr_kds_pass - 1];
+		d_key_ptr->iov_buf                   = NULL;
 		D_ALLOC(d_key_ptr->iov_buf, d_key_iter.iov_buf_len);
 		if (d_key_ptr->iov_buf == NULL)
 			D_GOTO(exit, rc = -DER_NOMEM);
@@ -334,53 +314,32 @@ ds_pipeline_run(daos_handle_t vos_coh, daos_unit_oid_t oid, daos_pipeline_t pipe
 		d_key_ptr->iov_len                   = d_key_iter.iov_len;
 		d_key_ptr->iov_buf_len               = d_key_iter.iov_buf_len;
 
-		sgl_keys_[nr_kds_pass - 1].sg_nr     = 1;
-		sgl_keys_[nr_kds_pass - 1].sg_nr_out = 1;
-		kds_[nr_kds_pass - 1].kd_key_len     = d_key_iter.iov_len;
+		sgl_keys->sg_nr_out                 += 1;
+
+		kds[nr_kds_pass - 1].kd_key_len     = d_key_iter.iov_len;
 
 		/**
 		 * akeys
 		 */
-		D_REALLOC_ARRAY(sgl_recx_, *sgl_recx, (nr_kds_pass - 1) * (*nr_iods),
-				nr_kds_pass * (*nr_iods));
-		if (sgl_recx_ == NULL)
-			D_GOTO(exit, rc = -DER_NOMEM);
-
-		sgl_recx_alloc += *nr_iods;
-		*sgl_recx = sgl_recx_;
-
-		/* init structs */
-		for (i = 0; i < *nr_iods; i++) {
-			sgl_recx_[sr_idx + i].sg_nr     = 0;
-			sgl_recx_[sr_idx + i].sg_nr_out = 0;
-			sgl_recx_[sr_idx + i].sg_iovs   = NULL;
-		}
-
-		/** copying data */
 		for (i = 0; i < *nr_iods; i++) {
 			if (sgl_recx_iter[i].sg_nr_out == 0)
 				continue;
 
 			/** copying sgl_recx */
-			D_ALLOC(sgl_recx_[sr_idx].sg_iovs, sizeof(*sgl_recx_[sr_idx].sg_iovs));
-			if (sgl_recx_[sr_idx].sg_iovs == NULL)
-				D_GOTO(exit, rc = -DER_NOMEM);
-
-			sgl_recx_[sr_idx].sg_iovs->iov_buf = NULL;
-			D_ALLOC(sgl_recx_[sr_idx].sg_iovs->iov_buf,
+			sgl_recx->sg_iovs[sr_idx].iov_buf = NULL;
+			D_ALLOC(sgl_recx->sg_iovs[sr_idx].iov_buf,
 				sgl_recx_iter[i].sg_iovs->iov_buf_len);
-			if (sgl_recx_[sr_idx].sg_iovs->iov_buf == NULL)
+			if (sgl_recx->sg_iovs[sr_idx].iov_buf == NULL)
 				D_GOTO(exit, rc = -DER_NOMEM);
 
-			memcpy(sgl_recx_[sr_idx].sg_iovs->iov_buf,
+			memcpy(sgl_recx->sg_iovs[sr_idx].iov_buf,
 			       sgl_recx_iter[i].sg_iovs->iov_buf,
 			       sgl_recx_iter[i].sg_iovs->iov_len);
 
-			sgl_recx_[sr_idx].sg_iovs->iov_buf_len =
-			    sgl_recx_iter[i].sg_iovs->iov_buf_len;
-			sgl_recx_[sr_idx].sg_iovs->iov_len = sgl_recx_iter[i].sg_iovs->iov_len;
-			sgl_recx_[sr_idx].sg_nr            = 1;
-			sgl_recx_[sr_idx].sg_nr_out        = 1;
+			sgl_recx->sg_iovs[sr_idx].iov_buf_len =
+				sgl_recx_iter[i].sg_iovs->iov_buf_len;
+			sgl_recx->sg_iovs[sr_idx].iov_len     = sgl_recx_iter[i].sg_iovs->iov_len;
+			sgl_recx->sg_nr_out                  += 1;
 
 			sr_idx++;
 		}
@@ -422,39 +381,6 @@ exit:
 	if (sgl_recx_iter != NULL)
 		D_FREE(sgl_recx_iter);
 
-	if (rc != 0) {
-		uint32_t limit;
-
-		if (kds_alloc > 0)
-			D_FREE(*kds);
-
-		if (sgl_keys_alloc > 0) {
-			for (i = 0; i < sgl_keys_alloc; i++) {
-				if (sgl_keys[0][i].sg_iovs != NULL) {
-					if (sgl_keys[0][i].sg_iovs->iov_buf != NULL)
-						D_FREE(sgl_keys[0][i].sg_iovs->iov_buf);
-					D_FREE(sgl_keys[0][i].sg_iovs);
-				}
-			}
-			D_FREE(*sgl_keys);
-		}
-		if (sgl_recx_alloc > 0) {
-			if (sr_idx == sgl_recx_alloc)
-				limit = sr_idx;
-			else
-				limit = sr_idx + 1;
-
-			for (i = 0; i < limit; i++) {
-				if (sgl_recx[0][i].sg_iovs != NULL) {
-					if (sgl_recx[0][i].sg_iovs->iov_buf != NULL)
-						D_FREE(sgl_recx[0][i].sg_iovs->iov_buf);
-					D_FREE(sgl_recx[0][i].sg_iovs);
-				}
-			}
-			D_FREE(*sgl_recx);
-		}
-	}
-
 	return rc;
 }
 
@@ -472,10 +398,11 @@ ds_pipeline_run_handler(crt_rpc_t *rpc)
 	daos_key_desc_t         *kds = NULL;
 	uint32_t                 nr_kds;
 	uint32_t                 nr_kds_out = 0;
-	d_sg_list_t             *sgl_keys   = NULL;
-	d_sg_list_t             *sgl_recx   = NULL;
+	d_sg_list_t              sgl_keys;
+	d_sg_list_t              sgl_recx;
 	uint32_t                 nr_recx    = 0;
-	d_sg_list_t             *sgl_aggr   = NULL;
+	uint32_t                 nr_aggr    = 0;
+	d_sg_list_t              sgl_aggr;
 	daos_pipeline_stats_t    stats      = {0};
 
 	pri = crt_req_get(rpc);
@@ -495,36 +422,45 @@ ds_pipeline_run_handler(crt_rpc_t *rpc)
 
 	/** --  */
 
+	printf("pri->pri_kds_bulk=%p pri->pri_sgl_keys_bulk=%p pri->pri_sgl_recx_bulk=%p"
+	       "pri->pri_sgl_agg_bulk=%p\n", pri->pri_kds_bulk, pri->pri_sgl_keys_bulk,
+	       pri->pri_sgl_recx_bulk, pri->pri_sgl_agg_bulk);
+	fflush(stdout);
+
 	nr_iods = pri->pri_iods.nr;
 	nr_kds  = pri->pri_nr_kds;
+	nr_aggr = pri->pri_pipe.num_aggr_filters;
 
-	if (pri->pri_pipe.num_aggr_filters > 0) {
-		D_ALLOC_ARRAY(sgl_aggr, pri->pri_pipe.num_aggr_filters);
-		if (sgl_aggr == NULL)
+	D_ALLOC_ARRAY(kds, nr_kds);
+	if (kds == NULL)
+		D_GOTO(exit0, rc = -DER_NOMEM);
+	D_ALLOC_ARRAY(sgl_keys.sg_iovs, nr_kds);
+	D_ALLOC_ARRAY(sgl_recx.sg_iovs, nr_kds * nr_iods);
+	D_ALLOC_ARRAY(sgl_aggr.sg_iovs, nr_aggr);
+	if (sgl_keys.sg_iovs == NULL || sgl_recx.sg_iovs == NULL || sgl_aggr.sg_iovs == NULL)
+		D_GOTO(exit0, rc = -DER_NOMEM);
+
+	sgl_keys.sg_nr     = nr_kds;
+	sgl_keys.sg_nr_out = 0;
+	sgl_recx.sg_nr     = nr_kds * nr_iods;
+	sgl_recx.sg_nr_out = 0;
+	sgl_aggr.sg_nr     = nr_aggr;
+	sgl_aggr.sg_nr_out = nr_aggr;
+
+	for (i = 0; i < nr_aggr; i++) {
+		D_ALLOC(sgl_aggr.sg_iovs[i].iov_buf, sizeof(double));
+		if (sgl_aggr.sg_iovs[i].iov_buf == NULL)
 			D_GOTO(exit0, rc = -DER_NOMEM);
 
-		for (i = 0; i < pri->pri_pipe.num_aggr_filters; i++) {
-			D_ALLOC(sgl_aggr[i].sg_iovs, sizeof(*sgl_aggr[i].sg_iovs));
-			if (sgl_aggr[i].sg_iovs == NULL)
-				D_GOTO(exit0, rc = -DER_NOMEM);
-
-			sgl_aggr[i].sg_nr     = 1;
-			sgl_aggr[i].sg_nr_out = 1;
-
-			D_ALLOC(sgl_aggr[i].sg_iovs->iov_buf, sizeof(double));
-			if (sgl_aggr[i].sg_iovs->iov_buf == NULL)
-				D_GOTO(exit0, rc = -DER_NOMEM);
-
-			sgl_aggr[i].sg_iovs->iov_len     = sizeof(double);
-			sgl_aggr[i].sg_iovs->iov_buf_len = sizeof(double);
-		}
+		sgl_aggr.sg_iovs[i].iov_len     = sizeof(double);
+		sgl_aggr.sg_iovs[i].iov_buf_len = sizeof(double);
 	}
 
 	/** -- calling pipeline run */
 
 	rc = ds_pipeline_run(vos_coh, pri->pri_oid, pri->pri_pipe, pri->pri_epr, pri->pri_flags,
 			     &pri->pri_dkey, &nr_iods, pri->pri_iods.iods, &pri->pri_anchor, nr_kds,
-			     &nr_kds_out, &kds, &sgl_keys, &nr_recx, &sgl_recx, sgl_aggr, &stats);
+			     &nr_kds_out, kds, &sgl_keys, &nr_recx, &sgl_recx, &sgl_aggr, &stats);
 
 exit0:
 	ds_cont_hdl_put(coh);
@@ -537,21 +473,18 @@ exit:
 		pro->pro_iods.iods         = pri->pri_iods.iods;
 		pro->pro_anchor            = pri->pri_anchor;
 		pro->pro_kds.ca_count      = nr_kds_out;
-		pro->pro_sgl_keys.ca_count = nr_kds_out;
 		if (nr_kds_out == 0) {
 			pro->pro_kds.ca_arrays      = NULL;
-			pro->pro_sgl_keys.ca_arrays = NULL;
+			pro->pro_sgl_keys           = (d_sg_list_t){0};
 		} else {
 			pro->pro_kds.ca_arrays      = kds;
-			pro->pro_sgl_keys.ca_arrays = sgl_keys;
+			pro->pro_sgl_keys           = sgl_keys;
 		}
-		pro->pro_sgl_recx.ca_count = nr_recx;
 		if (nr_recx == 0)
-			pro->pro_sgl_recx.ca_arrays = NULL;
+			pro->pro_sgl_recx           = (d_sg_list_t){0};
 		else
-			pro->pro_sgl_recx.ca_arrays = sgl_recx;
-		pro->pro_sgl_agg.ca_count  = pri->pri_pipe.num_aggr_filters;
-		pro->pro_sgl_agg.ca_arrays = sgl_aggr;
+			pro->pro_sgl_recx           = sgl_recx;
+		pro->pro_sgl_agg           = sgl_aggr;
 		pro->stats                 = stats;
 		/** pro->pro_epoch (TODO) */
 	}
@@ -565,22 +498,20 @@ exit:
 
 	/** free memory */
 
-	if (nr_kds_out > 0) {
-		for (i = 0; i < nr_kds_out; i++) {
-			D_FREE(sgl_keys[i].sg_iovs->iov_buf);
-			D_FREE(sgl_keys[i].sg_iovs);
-		}
-		D_FREE(sgl_keys);
-		D_FREE(kds);
+	D_FREE(kds);
+
+	for (i = 0; i < sgl_keys.sg_nr_out; i++) {
+		D_FREE(sgl_keys.sg_iovs[i].iov_buf);
 	}
-	if (nr_recx > 0) {
-		for (i = 0; i < nr_recx; i++) {
-			if (sgl_recx[i].sg_iovs != NULL) {
-				if (sgl_recx[i].sg_iovs->iov_buf != NULL)
-					D_FREE(sgl_recx[i].sg_iovs->iov_buf);
-				D_FREE(sgl_recx[i].sg_iovs);
-			}
-		}
-		D_FREE(sgl_recx);
+	D_FREE(sgl_keys.sg_iovs);
+
+	for (i = 0; i < sgl_recx.sg_nr_out; i++) {
+		D_FREE(sgl_recx.sg_iovs[i].iov_buf);
 	}
+	D_FREE(sgl_recx.sg_iovs);
+
+	for (i = 0; i < sgl_aggr.sg_nr_out; i++) {
+		D_FREE(sgl_aggr.sg_iovs[i].iov_buf);
+	}
+	D_FREE(sgl_aggr.sg_iovs);
 }

@@ -253,7 +253,7 @@ pipeline_aggregations_fixavgs(daos_pipeline_t *pipeline, double total, d_sg_list
 		part_type   = (char *)pipeline->aggr_filters[i]->parts[0]->part_type.iov_buf;
 		part_type_s = pipeline->aggr_filters[i]->parts[0]->part_type.iov_len;
 		if (!strncmp(part_type, "DAOS_FILTER_FUNC_AVG", part_type_s)) {
-			buf  = (double *)sgl_agg[i].sg_iovs->iov_buf;
+			buf  = (double *)sgl_agg->sg_iovs[i].iov_buf;
 			*buf = *buf / total;
 		}
 	}

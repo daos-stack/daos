@@ -261,20 +261,20 @@ build_pipeline_one(daos_pipeline_t *pipeline)
 static void
 run_pipeline(daos_pipeline_t *pipeline)
 {
-	daos_iod_t            iod;
-	daos_anchor_t         anchor;
-	uint32_t              nr_iods, nr_kds;
-	daos_key_desc_t      *kds;
-	d_sg_list_t          *sgl_keys;
-	d_iov_t              *iovs_keys;
-	char		 *buf_keys;
-	d_sg_list_t          *sgl_recs;
-	d_iov_t              *iovs_recs;
-	char		 *buf_recs;
-	daos_recx_t           recxs[2];
-	daos_pipeline_stats_t stats = {0};
-	uint32_t              i;
-	int                   rc;
+	daos_iod_t             iod;
+	daos_anchor_t          anchor;
+	uint32_t               nr_iods, nr_kds;
+	daos_key_desc_t       *kds;
+	d_sg_list_t            sgl_keys;
+	d_iov_t               *iovs_keys;
+	char                  *buf_keys;
+	d_sg_list_t            sgl_recs;
+	d_iov_t               *iovs_recs;
+	char                  *buf_recs;
+	daos_recx_t            recxs[2];
+	daos_pipeline_stats_t  stats = {0};
+	uint32_t               i;
+	int                    rc;
 
 	/* iod for akey's metadata */
 	iod.iod_nr      = 2;
@@ -292,25 +292,22 @@ run_pipeline(daos_pipeline_t *pipeline)
 	nr_kds    = 16;
 
 	/* to store retrieved dkeys */
-	kds       = malloc(sizeof(daos_key_desc_t) * nr_kds);
-	sgl_keys  = malloc(sizeof(d_sg_list_t) * nr_kds);
-	iovs_keys = malloc(sizeof(d_iov_t) * nr_kds);
-	buf_keys  = malloc(FSIZE * nr_kds);
+	kds                   = malloc(sizeof(daos_key_desc_t) * nr_kds);
+	iovs_keys             = malloc(sizeof(d_iov_t) * nr_kds);
+	sgl_keys.sg_nr        = nr_kds;
+	sgl_keys.sg_nr_out    = 0;
+	sgl_keys.sg_iovs      = iovs_keys;
+	buf_keys              = malloc(FSIZE * nr_kds);
 
 	/* to store retrieved data */
-	sgl_recs  = malloc(sizeof(d_sg_list_t) * nr_kds);
-	iovs_recs = malloc(sizeof(d_iov_t) * nr_kds);
-	buf_recs  = malloc((sizeof(mode_t) + sizeof(time_t)) * nr_kds);
+	iovs_recs             = malloc(sizeof(d_iov_t) * nr_kds);
+	sgl_recs.sg_nr        = nr_kds;
+	sgl_recs.sg_nr_out    = 0;
+	sgl_recs.sg_iovs      = iovs_recs;
+	buf_recs              = malloc((sizeof(mode_t) + sizeof(time_t)) * nr_kds);
 
 	for (i = 0; i < nr_kds; i++) {
-		sgl_keys[i].sg_nr     = 1;
-		sgl_keys[i].sg_nr_out = 0;
-		sgl_keys[i].sg_iovs   = &iovs_keys[i];
 		d_iov_set(&iovs_keys[i], &buf_keys[i * FSIZE], FSIZE);
-
-		sgl_recs[i].sg_nr     = 1;
-		sgl_recs[i].sg_nr_out = 0;
-		sgl_recs[i].sg_iovs   = &iovs_recs[i];
 		d_iov_set(&iovs_recs[i], &buf_recs[i * (sizeof(mode_t) + sizeof(time_t))],
 			  sizeof(mode_t) + sizeof(time_t));
 	}
@@ -323,13 +320,13 @@ run_pipeline(daos_pipeline_t *pipeline)
 		nr_kds = 16; /** trying to read 16 in each iteration */
 
 		rc     = daos_pipeline_run(coh, oh, pipeline, DAOS_TX_NONE, 0, NULL, &nr_iods, &iod,
-					   &anchor, &nr_kds, kds, sgl_keys, sgl_recs, NULL, &stats,
-					   NULL);
+					   &anchor, &nr_kds, kds, &sgl_keys, &sgl_recs, NULL,
+					   &stats, NULL);
 		ASSERT(rc == 0, "Pipeline run failed with %d", rc);
 
 		/** processing nr_kds records */
 		for (i = 0; i < nr_kds; i++) {
-			char       *dkey    = (char *)sgl_keys[i].sg_iovs->iov_buf;
+			char       *dkey    = (char *)sgl_keys.sg_iovs[i].iov_buf;
 			daos_size_t dkeylen = kds[i].kd_key_len;
 
 			printf("\t(dkey)=%.*s, len = %zu\t", (int)dkeylen, dkey, dkeylen);
@@ -349,9 +346,7 @@ run_pipeline(daos_pipeline_t *pipeline)
 	ASSERT(stats.nr_dkeys == NUM_DKEYS, "Number of dkeys scanned != inserted number\n");
 
 	free(kds);
-	free(sgl_keys);
 	free(iovs_keys);
-	free(sgl_recs);
 	free(iovs_recs);
 	free(buf_recs);
 	free(buf_keys);

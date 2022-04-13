@@ -142,8 +142,9 @@ pipeline_shard_run_cb(tse_task_t *task, void *data)
 	nr_agg  = api_args->pipeline->num_aggr_filters;
 
 	D_ASSERT(pro->pro_kds.ca_count <= nr_kds);
-	D_ASSERT(pro->pro_sgl_recx.ca_count <= nr_recx);
-	D_ASSERT(pro->pro_sgl_agg.ca_count == nr_agg);
+	D_ASSERT(pro->pro_sgl_keys.sg_nr_out <= nr_kds);
+	D_ASSERT(pro->pro_sgl_recx.sg_nr_out <= nr_recx);
+	D_ASSERT(pro->pro_sgl_agg.sg_nr_out == nr_agg);
 
 	if (rc != 0) {
 		if (rc == -DER_NONEXIST)
@@ -163,18 +164,16 @@ pipeline_shard_run_cb(tse_task_t *task, void *data)
 		memcpy((void *)kds_ptr, (void *)pro->pro_kds.ca_arrays,
 		       sizeof(*kds_ptr) * (pro->pro_kds.ca_count));
 
-		rc = daos_sgls_copy_data_out(sgl_keys_ptr, nr_kds, pro->pro_sgl_keys.ca_arrays,
-					     pro->pro_kds.ca_count);
+		rc = daos_sgls_copy_data_out(sgl_keys_ptr, 1, &pro->pro_sgl_keys, 1);
 		if (rc != 0)
 			D_GOTO(out, rc);
 	}
 
-	if (pro->pro_sgl_recx.ca_count > 0) {
+	if (pro->pro_sgl_recx.sg_nr_out > 0) {
 		/** copying record data (akeys' data) */
 		sgl_recx_ptr = api_args->sgl_recx;
 
-		rc = daos_sgls_copy_data_out(sgl_recx_ptr, nr_recx, pro->pro_sgl_recx.ca_arrays,
-					     pro->pro_sgl_recx.ca_count);
+		rc = daos_sgls_copy_data_out(sgl_recx_ptr, 1, &pro->pro_sgl_recx, 1);
 		if (rc != 0)
 			D_GOTO(out, rc);
 	}
@@ -186,8 +185,8 @@ pipeline_shard_run_cb(tse_task_t *task, void *data)
 		char               *part_type;
 		size_t              length_part_type;
 
-		dst = (double *)api_args->sgl_agg[i].sg_iovs->iov_buf;
-		src = (double *)pro->pro_sgl_agg.ca_arrays[i].sg_iovs->iov_buf;
+		dst = (double *)api_args->sgl_agg->sg_iovs[i].iov_buf;
+		src = (double *)pro->pro_sgl_agg.sg_iovs[i].iov_buf;
 
 		if (daos_anchor_is_zero(api_args->anchor) && cb_args->shard == 0) {
 			/**
@@ -252,6 +251,8 @@ out:
 	return ret;
 }
 
+#define KDS_BULK_LIMIT	128
+
 static int
 shard_pipeline_run_task(tse_task_t *task)
 {
@@ -268,6 +269,7 @@ shard_pipeline_run_task(tse_task_t *task)
 	struct pipeline_run_in         *pri;
 	uint32_t                        nr_kds;
 	uint32_t                        nr_iods;
+	daos_size_t			size;
 	int                             rc;
 
 	args    = tse_task_buf_embedded(task, sizeof(*args));
@@ -337,6 +339,60 @@ shard_pipeline_run_task(tse_task_t *task)
 	uuid_copy(pri->pri_pool_uuid, pool->dp_pool);
 	uuid_copy(pri->pri_co_hdl, args->pra_coh_uuid);
 	uuid_copy(pri->pri_co_uuid, args->pra_cont_uuid);
+
+	/** Transfer in bulk set up */
+
+	/**
+	 * No need to transfer in bulk kds and sgl_keys if aggregation is to be performed, since
+	 * only one dkey is actually returned.
+	 */
+	if (!args->pra_api_args->pipeline->num_aggr_filters && nr_kds > KDS_BULK_LIMIT) {
+		d_sg_list_t	tmp_sgl = {0};
+		d_iov_t		tmp_iov = {0};
+
+		tmp_iov.iov_buf_len	= sizeof(*args->pra_api_args->kds) * nr_kds;
+		tmp_iov.iov_buf		= args->pra_api_args->kds;
+		tmp_sgl.sg_nr_out	= 1;
+		tmp_sgl.sg_nr		= 1;
+		tmp_sgl.sg_iovs		= &tmp_iov;
+
+		rc = crt_bulk_create(crt_ctx, &tmp_sgl, CRT_BULK_RW, &pri->pri_kds_bulk);
+		if (rc < 0)
+			D_GOTO(out_req, rc);
+	}
+	/** everything else is based on packed size */
+	size = 0;
+	if (nr_kds > 0) {
+		if (args->pra_api_args->sgl_keys != NULL) {
+			size += daos_sgls_packed_size(args->pra_api_args->sgl_keys, 1, NULL);
+			if (size >= DAOS_BULK_LIMIT) {
+				rc = crt_bulk_create(crt_ctx, args->pra_api_args->sgl_keys,
+						     CRT_BULK_RW, &pri->pri_sgl_keys_bulk);
+				if (rc < 0)
+					D_GOTO(out_req, rc);
+			}
+		}
+		if (args->pra_api_args->sgl_recx != NULL) {
+			size += daos_sgls_packed_size(args->pra_api_args->sgl_recx, 1, NULL);
+			if (size >= DAOS_BULK_LIMIT) {
+				rc = crt_bulk_create(crt_ctx, args->pra_api_args->sgl_recx,
+						     CRT_BULK_RW, &pri->pri_sgl_recx_bulk);
+				if (rc < 0)
+					D_GOTO(out_req, rc);
+			}
+		}
+		if (args->pra_api_args->pipeline->num_aggr_filters) {
+			size += daos_sgls_packed_size(args->pra_api_args->sgl_agg, 1, NULL);
+			if (size >= DAOS_BULK_LIMIT) {
+				rc = crt_bulk_create(crt_ctx, args->pra_api_args->sgl_agg,
+						     CRT_BULK_RW, &pri->pri_sgl_agg_bulk);
+				if (rc < 0)
+					D_GOTO(out_req, rc);
+			}
+		}
+	}
+
+	/** -- finally sending rpc... */
 
 	rc = daos_rpc_send(req, task);
 
