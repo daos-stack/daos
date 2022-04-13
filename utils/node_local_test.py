@@ -3425,16 +3425,18 @@ def run_in_fg(server, conf):
     dfuse = DFuse(server, conf, pool=pool.uuid, caching=True, wbcache=False)
     dfuse.start()
 
-    run_daos_cmd(conf,
-                 ['container', 'set-attr',
-                  pool.label, container,
-                  '--attr', 'dfuse-direct-io-disable', '--value', 'off'],
-                 show_stdout=True)
-    run_daos_cmd(conf,
-                 ['container', 'set-attr',
-                  pool.label, container,
-                  '--attr', 'dfuse-data-cache', '--value', 'off'],
-                 show_stdout=True)
+    cont_attrs = OrderedDict()
+    cont_attrs['dfuse-data-cache'] = 'off'
+    cont_attrs['dfuse-attr-time'] = '60s'
+    cont_attrs['dfuse-dentry-time'] = '60s'
+    cont_attrs['dfuse-ndentry-time'] = '60s'
+
+    for key, value in cont_attrs.items():
+
+        run_daos_cmd(conf,
+                     ['container', 'set-attr', pool.label, container,
+                      '--attr', key, '--value', value],
+                     show_stdout=True)
 
     t_dir = join(dfuse.dir, container)
 

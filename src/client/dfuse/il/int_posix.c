@@ -353,6 +353,7 @@ ioil_fini(void)
 	struct ioil_cont *cont, *cnext;
 	int rc;
 
+	return;
 	ioil_iog.iog_initialized = false;
 
 	DFUSE_TRA_DOWN(&ioil_iog);
