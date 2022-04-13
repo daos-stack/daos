@@ -16,7 +16,7 @@
 # oldest so tell it to install the latest which is 3.9
 
 if [ -e /etc/fedora-release ]; then
-        PACKAGES="java-1.8.0-openjdk-devel maven-openjdk8"
+        PACKAGES="java-1.8.0-openjdk-devel maven-openjdk8 python3-devel"
 else
         PACKAGES="maven python39-devel"
 fi
