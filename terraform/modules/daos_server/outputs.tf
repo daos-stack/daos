@@ -21,3 +21,8 @@ output "daos_config_script" {
   description = "Script to configure the DAOS system. This will format the sytem with dmg -l and optionally create the specified pools."
   value       = local.configure_daos_content
 }
+
+output "daos_client_install_script" {
+  description = "Script to install the DAOS client package."
+  value       = local.daos_client_install_script_content
+}

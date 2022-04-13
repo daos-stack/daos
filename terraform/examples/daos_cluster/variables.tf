@@ -148,6 +148,7 @@ variable "server_daos_scm_size" {
 variable "server_daos_crt_timeout" {
   description = "crt_timeout"
   default     = 300
+  type        = number
 }
 
 variable "server_gvnic" {

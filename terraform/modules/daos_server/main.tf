@@ -58,6 +58,9 @@ locals {
     }
   )
 
+  daos_client_install_script_content = file(
+  "${path.module}/scripts/daos_client_install_script.sh")
+
   # Google Virtual NIC (gVNIC) network interface
   nic_type                    = var.gvnic ? "GVNIC" : "VIRTIO_NET"
   total_egress_bandwidth_tier = var.gvnic ? "TIER_1" : "DEFAULT"

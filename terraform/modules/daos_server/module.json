@@ -192,6 +192,10 @@
       "description": "YAML to configure the daos agent. This is typically saved in /etc/daos/daos_agent.yml"
     },
     {
+      "name": "daos_client_install_script",
+      "description": "Script to install the DAOS client package."
+    },
+    {
       "name": "daos_config_script",
       "description": "Script to configure the DAOS system. This will format the sytem with dmg -l and optionally create the specified pools."
     },

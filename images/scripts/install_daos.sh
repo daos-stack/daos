@@ -179,21 +179,14 @@ add_repo() {
       ;;
   esac
 
-    echo "Adding DAOS version ${DAOS_VERSION} repo"
-    cat > /etc/yum.repos.d/daos.repo <<EOF
-[daos-packages]
-name=DAOS v${DAOS_VERSION} Packages
-baseurl=${DAOS_REPO_BASE_URL}/v${DAOS_VERSION}/${DAOS_OS_VERSION}/packages/x86_64/
-enabled=1
-gpgcheck=1
-protect=1
-gpgkey=https://packages.daos.io/RPM-GPG-KEY
-EOF
+  echo "Adding DAOS v${DAOS_VERSION} packages repo"
+  curl -s --output /etc/yum.repos.d/daos_packages.repo "https://packages.daos.io/v${DAOS_VERSION}/${DAOS_OS_VERSION}/packages/x86_64/daos_packages.repo"
+
 }
 
 install_epel() {
   # DAOS has dependencies on packages in epel
-  if rpm -qa | grep -q "epel-release"; then
+  if ! rpm -qa | grep -q "epel-release"; then
     yum install -y epel-release
   fi
 }
