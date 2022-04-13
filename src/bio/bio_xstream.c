@@ -46,6 +46,8 @@ unsigned int bio_chk_cnt_max;
 static unsigned int bio_chk_cnt_init;
 /* Diret RDMA over SCM */
 bool bio_scm_rdma;
+/* SPDK subsystem fini timeout */
+unsigned int bio_spdk_subsys_timeout = 9000;	/* ms */
 
 struct bio_nvme_data {
 	ABT_mutex		 bd_mutex;
@@ -176,6 +178,9 @@ bio_nvme_init(const char *nvme_conf, int shm_id, int mem_size,
 
 	if (nvme_conf == NULL || strlen(nvme_conf) == 0) {
 		D_INFO("NVMe config isn't specified, skip NVMe setup.\n");
+	d_getenv_int("DAOS_SPDK_SUBSYS_TIMEOUT", &bio_spdk_subsys_timeout);
+	D_INFO("SPDK subsystem fini timeout is %u ms\n", bio_spdk_subsys_timeout);
+
 		return 0;
 	}
 
@@ -1213,7 +1218,7 @@ bio_xsctxt_free(struct bio_xs_context *ctxt)
 			 * temporary workaround.
 			 */
 			rc = xs_poll_completion(ctxt, &cp_arg.cca_inflights,
-						9000 /*ms*/);
+						bio_spdk_subsys_timeout);
 			D_CDEBUG(rc == 0, DB_MGMT, DLOG_ERR,
 				 "SPDK subsystems finalized. "DF_RC"\n",
 				 DP_RC(rc));
