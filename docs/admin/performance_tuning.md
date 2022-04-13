@@ -2,7 +2,7 @@
 
 ## Network Performance
 
-The DAOS [CaRT](https://github.com/daos-stack/daos/tree/release/2.0/src/cart)
+The DAOS [CaRT](https://github.com/daos-stack/daos/tree/release/2.0/src/cart/)
 (Collective and RPC Transport) layer can validate and benchmark network communications in
 the same context as an application and using the same networks/tuning options
 as regular DAOS.
@@ -18,7 +18,7 @@ bulk transfers, multiple targets, and the following test scenarios:
     servers that will issue cross-server RPCs. This model supports a
     many to many communication model.
 
-### Building CaRT self_test
+### Building CaRT self\_test
 
 The CaRT `self_test` and its tests are delivered as part of the daos-client
 and daos-tests [distribution packages](https://packages.daos.io/).
@@ -32,10 +32,10 @@ $ cd install
 ```
 
 For detailed information, please refer to the
-[DAOS build documentation](https://docs.daos.io/v2.0/admin/installation/#building-daos-dependencies)
+[DAOS build documentation](https://docs.daos.io/v2.0/QSG/build_from_scratch/)
 section.
 
-### Running CaRT self_test
+### Running CaRT self\_test
 
 Instructions to run CaRT `self_test` are as follows.
 
@@ -481,4 +481,3 @@ restarted to gain visibility to these changes. For additional information,
 please refer to the
 [System Deployment: Agent Startup](https://docs.daos.io/v2.0/admin/deployment/#disable-agent-cache-optional)
 documentation section.
-

@@ -28,7 +28,7 @@ All nodes must have:
     commands in parallel)
 
 In addition the server nodes should also have
-[IOMMU enabled](https://docs.daos.io/v2.0/admin/predeployment_check/#enable-iommu-optional).
+[IOMMU enabled](https://docs.daos.io/v2.0/admin/predeployment_check/#enable-iommu).
 
 For the use of the commands outlined on this page the following shell
 variables will need to be defined:
