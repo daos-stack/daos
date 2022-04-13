@@ -16,7 +16,7 @@
 #include <daos_srv/vos.h>
 #include "vos_internal.h"
 
-int vos_evt_feats = EVT_FEAT_SORT_DIST;
+uint64_t vos_evt_feats = EVT_FEAT_SORT_DIST | VOS_TF_AGG_OPT;
 
 /**
  * VOS Btree attributes, for tree registration and tree creation.
@@ -718,16 +718,14 @@ static struct vos_btr_attr vos_btr_attrs[] = {
 	{
 		.ta_class	= VOS_BTR_DKEY,
 		.ta_order	= VOS_KTR_ORDER,
-		.ta_feats	= VOS_KEY_CMP_LEXICAL | BTR_FEAT_UINT_KEY |
-				  BTR_FEAT_DIRECT_KEY | BTR_FEAT_DYNAMIC_ROOT,
+		.ta_feats	= BTR_FEAT_UINT_KEY | BTR_FEAT_DIRECT_KEY | BTR_FEAT_DYNAMIC_ROOT,
 		.ta_name	= "vos_dkey",
 		.ta_ops		= &key_btr_ops,
 	},
 	{
 		.ta_class	= VOS_BTR_AKEY,
 		.ta_order	= VOS_KTR_ORDER,
-		.ta_feats	= VOS_KEY_CMP_LEXICAL | BTR_FEAT_UINT_KEY |
-				  BTR_FEAT_DIRECT_KEY | BTR_FEAT_DYNAMIC_ROOT,
+		.ta_feats	= BTR_FEAT_UINT_KEY | BTR_FEAT_DIRECT_KEY | BTR_FEAT_DYNAMIC_ROOT,
 		.ta_name	= "vos_akey",
 		.ta_ops		= &key_btr_ops,
 	},
@@ -871,7 +869,7 @@ tree_open_create(struct vos_object *obj, enum vos_tree_class tclass, int flags,
 		}
 	} else {
 		struct vos_btr_attr	*ta;
-		uint64_t		 tree_feats = 0;
+		uint64_t		 tree_feats = VOS_TF_AGG_OPT;
 
 		/* Step-1: find the btree attributes and create btree */
 		if (tclass == VOS_BTR_DKEY) {
@@ -884,7 +882,6 @@ tree_open_create(struct vos_object *obj, enum vos_tree_class tclass, int flags,
 			else if (daos_is_akey_lexical_type(type))
 				tree_feats |= VOS_KEY_CMP_LEXICAL_SET;
 		}
-
 
 		ta = obj_tree_find_attr(tclass);
 
@@ -900,7 +897,9 @@ tree_open_create(struct vos_object *obj, enum vos_tree_class tclass, int flags,
 		}
 	}
 	/* NB: Only happens on create so krec will be in the transaction log
-	 * already.
+	 * already.  Mark that tree supports the aggregation optimizations.
+	 * At akey level, this bit map is used for the optimization.  At higher
+	 * levels, only the tree_feats version is used.
 	 */
 	krec->kr_bmap |= expected_flag;
 out:
@@ -1014,7 +1013,15 @@ key_tree_prepare(struct vos_object *obj, daos_handle_t toh,
  out:
 	D_CDEBUG(rc == 0, DB_TRACE, DB_IO, "prepare tree, flags=%x, tclass=%d %d\n",
 		 flags, tclass, rc);
-	return rc;
+
+	if (rc != 0 || tclass != VOS_BTR_AKEY || !(flags & SUBTR_CREATE))
+		return rc;
+
+	/* As a first cut for aggregation detection, just return 1 if it's not the first update.
+	 * This can be improved upon for evtree to take into account actual extent overlap but
+	 * this is a simpler solution for now.
+	 */
+	return created ? 0 : 1;
 }
 
 /** Close the opened trees */
@@ -1113,6 +1120,8 @@ key_tree_punch(struct vos_object *obj, daos_handle_t toh, daos_epoch_t epoch,
 			D_GOTO(done, rc);
 		*known_key |= 0x1;
 	}
+
+	rc = vos_key_mark_agg(vos_obj2umm(obj), krec, epoch);
 done:
 	VOS_TX_LOG_FAIL(rc, "Failed to punch key: "DF_RC"\n", DP_RC(rc));
 
@@ -1138,7 +1147,7 @@ obj_tree_init(struct vos_object *obj)
 
 	D_ASSERT(obj->obj_df);
 	if (obj->obj_df->vo_tree.tr_class == 0) {
-		uint64_t tree_feats = 0;
+		uint64_t tree_feats = VOS_TF_AGG_OPT;
 		enum daos_otype_t type;
 
 		D_DEBUG(DB_DF, "Create btree for object\n");

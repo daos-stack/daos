@@ -21,6 +21,27 @@ import (
 	"github.com/daos-stack/daos/src/control/logging"
 )
 
+// IsUnsupportedFabric returns true if the supplied error is
+// an instance of errUnsupportedFabric.
+func IsUnsupportedFabric(err error) bool {
+	_, ok := errors.Cause(err).(*errUnsupportedFabric)
+	return ok
+}
+
+type errUnsupportedFabric struct {
+	provider string
+}
+
+func (euf *errUnsupportedFabric) Error() string {
+	return fmt.Sprintf("fabric provider %q not supported", euf.provider)
+}
+
+// ErrUnsupportedFabric returns an error indicating that the denoted
+// fabric provider is not supported by this build/platform.
+func ErrUnsupportedFabric(provider string) error {
+	return &errUnsupportedFabric{provider: provider}
+}
+
 // FabricInterface represents basic information about a fabric interface.
 type FabricInterface struct {
 	// Name is the fabric device name.
@@ -432,10 +453,10 @@ func (f *FabricInterfaceBuilder) BuildPart(ctx context.Context, fis *FabricInter
 	fiSets := make([]*FabricInterfaceSet, 0)
 	for _, fiProv := range f.fiProviders {
 		set, err := fiProv.GetFabricInterfaces(ctx)
-		if errors.Is(errors.Cause(err), dlopen.ErrSoNotFound) {
+		if errors.Is(errors.Cause(err), dlopen.ErrSoNotFound) || IsUnsupportedFabric(err) {
 			// A runtime library wasn't installed. This is okay - we'll still detect
 			// what we can.
-			f.log.Info(err.Error())
+			f.log.Debug(err.Error())
 			continue
 		}
 

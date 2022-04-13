@@ -26,7 +26,6 @@ import platform
 import distro
 from prereq_tools import GitRepoRetriever
 # from prereq_tools import WebRetriever
-from prereq_tools import ProgramBinary
 
 SCONS_EXE = sys.argv[0]
 # Check if this is an ARM platform
@@ -36,7 +35,6 @@ ARM_PLATFORM = False
 if PROCESSOR.lower() in [x.lower() for x in ARM_LIST]:
     ARM_PLATFORM = True
 
-NINJA_PROG = ProgramBinary('ninja', ["ninja-build", "ninja"])
 
 class installed_comps():
     """Checks for installed components and keeps track of prior checks"""
@@ -66,6 +64,7 @@ class installed_comps():
         self.not_installed.append(name)
         return False
 
+
 def include(reqs, name, use_value, exclude_value):
     """Return True if in include list"""
     if set([name, 'all']).intersection(set(reqs.include)):
@@ -74,10 +73,12 @@ def include(reqs, name, use_value, exclude_value):
     print("Excluding %s optional component from build" % name)
     return exclude_value
 
+
 def inst(reqs, name):
     """Return True if name is in list of installed packages"""
     installed = installed_comps(reqs)
     return installed.check(name)
+
 
 def check(reqs, name, built_str, installed_str=""):
     """Return a different string based on whether a component is
@@ -87,12 +88,14 @@ def check(reqs, name, built_str, installed_str=""):
         return installed_str
     return built_str
 
+
 def ofi_config(config):
     """Check ofi version"""
     code = """#include <rdma/fabric.h>
 _Static_assert(FI_MAJOR_VERSION == 1 && FI_MINOR_VERSION >= 11,
                "libfabric must be >= 1.11");"""
     return config.TryCompile(code, ".c")
+
 
 def define_mercury(reqs):
     """mercury definitions"""
@@ -144,8 +147,7 @@ def define_mercury(reqs):
                                    ['--enable-psm2=$PSM2_PREFIX',
                                     'LDFLAGS=-Wl,--enable-new-dtags -Wl,-rpath=$PSM2_PREFIX/lib64'],
                                    ['--enable-psm2']),
-                            ['--disable-psm2']))
-    ofi_build.append(include(reqs, 'psm3', '--enable-psm3', '--disable-psm3'))
+                             ['--disable-psm2']))
 
     reqs.define('ofi',
                 retriever=GitRepoRetriever('https://github.com/ofiwg/libfabric'),
@@ -265,12 +267,14 @@ def define_common(reqs):
         reqs.define('uuid', libs=['uuid'], headers=['uuid/uuid.h'],
                     package='libuuid-devel')
 
+
 def define_ompi(reqs):
     """OMPI and related components"""
     reqs.define('hwloc', headers=['hwloc.h'], libs=['hwloc'],
                 package='hwloc-devel')
     reqs.define('ompi', pkgconfig='ompi', package='ompi-devel')
     reqs.define('mpich', pkgconfig='mpich', package='mpich-devel')
+
 
 def define_components(reqs):
     """Define all of the components"""
@@ -344,7 +348,7 @@ def define_components(reqs):
     # https://gcc.gnu.org/onlinedocs/gcc/x86-Options.html
     dist = distro.linux_distribution()
     if dist[0] == 'CentOS Linux' and dist[1] == '7':
-        spdk_arch='native'
+        spdk_arch = 'native'
     elif dist[0] == 'Ubuntu' and dist[1] == '20.04':
         spdk_arch = 'nehalem'
     else:

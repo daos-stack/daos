@@ -84,7 +84,10 @@ func Init(log logging.Logger) (func(), error) {
 			numLoaded++
 			cleanupFns = append(cleanupFns, cleanupLib)
 		} else {
-			log.Error(err.Error())
+			log.Debugf("failed to load library: %s", err)
+			if !hardware.IsUnsupportedFabric(err) {
+				log.Error(err.Error())
+			}
 		}
 	}
 

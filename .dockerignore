@@ -1,8 +1,8 @@
 # .dockerignore file for DAOS.
 
-# Firsly deny everything and then allow only directories and files that we're
+# Firstly deny everything and then allow only directories and files that we're
 # interested in.  Other files will not be required for the build and they
-# just generate noise and extra work for the docker deamon.
+# just generate noise and extra work for docker.
 *
 !src
 !utils
@@ -12,6 +12,7 @@
 !ftest.sh
 !site_scons
 !.clang-format
+!requirements.txt
 
 # Now disallow extra files which may be present but are not required.
 # Include the rdb repo as well.
@@ -30,6 +31,7 @@ config.log
 .daos_server.active.yml
 autodocs
 utils/rpms/_topdir
+venv
 
 # Doc isn't required for building.
 doc

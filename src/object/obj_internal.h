@@ -526,7 +526,7 @@ int dc_obj_shard_list(struct dc_obj_shard *shard, enum obj_rpc_opc opc,
 int dc_obj_shard_query_key(struct dc_obj_shard *shard, struct dtx_epoch *epoch,
 			   uint32_t flags, struct dc_object *obj,
 			   daos_key_t *dkey, daos_key_t *akey,
-			   daos_recx_t *recx, const uuid_t coh_uuid,
+			   daos_recx_t *recx, daos_epoch_t *max_epoch, const uuid_t coh_uuid,
 			   const uuid_t cont_uuid, struct dtx_id *dti,
 			   unsigned int *map_ver, unsigned int req_map_ver,
 			   daos_handle_t th, tse_task_t *task);
@@ -588,6 +588,7 @@ obj_retry_error(int err)
 	       err == -DER_INPROGRESS || err == -DER_GRPVER ||
 	       err == -DER_EXCLUDED || err == -DER_CSUM ||
 	       err == -DER_TX_BUSY || err == -DER_TX_UNCERTAIN ||
+	       err == -DER_SHARDS_OVERLAP ||
 	       daos_crt_network_error(err);
 }
 
@@ -690,7 +691,8 @@ void ds_obj_tgt_update_handler(crt_rpc_t *rpc);
 void ds_obj_enum_handler(crt_rpc_t *rpc);
 void ds_obj_punch_handler(crt_rpc_t *rpc);
 void ds_obj_tgt_punch_handler(crt_rpc_t *rpc);
-void ds_obj_query_key_handler(crt_rpc_t *rpc);
+void ds_obj_query_key_handler_0(crt_rpc_t *rpc);
+void ds_obj_query_key_handler_1(crt_rpc_t *rpc);
 void ds_obj_sync_handler(crt_rpc_t *rpc);
 void ds_obj_migrate_handler(crt_rpc_t *rpc);
 void ds_obj_ec_agg_handler(crt_rpc_t *rpc);

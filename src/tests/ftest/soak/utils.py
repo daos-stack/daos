@@ -133,7 +133,7 @@ def reserved_file_copy(self, file, pool, container, num_bytes=None, cmd="read"):
             src_file.write(str(os.urandom(num_bytes)))
             src_file.close()
         dst_file = "daos://{}/{}".format(pool.uuid, container.uuid)
-        fscopy_cmd.set_fs_copy_params(src=file, dst=dst_file)
+        fscopy_cmd.set_params(src=file, dst=dst_file)
         fscopy_cmd.run()
     # reads file_name from container and writes to file
     elif cmd == "read":
@@ -142,7 +142,7 @@ def reserved_file_copy(self, file, pool, container, num_bytes=None, cmd="read"):
         dst_path = dst[0]
         src_file = "daos://{}/{}/{}".format(
             pool.uuid, container.uuid, dst_name)
-        fscopy_cmd.set_fs_copy_params(src=src_file, dst=dst_path)
+        fscopy_cmd.set_params(src=src_file, dst=dst_path)
         fscopy_cmd.run()
 
 
@@ -517,7 +517,7 @@ def launch_exclude_reintegrate(self, pool, name, results, args):
         exclude_servers = (
             len(self.hostlist_servers) * int(engine_count)) - 1
         # Exclude one rank.
-        rank = random.randint(0, exclude_servers) #nosec
+        rank = random.randint(0, exclude_servers)  # nosec
 
         if targets >= 8:
             tgt_idx = None
@@ -595,7 +595,7 @@ def launch_server_stop_start(self, pools, name, results, args):
         exclude_servers = (
             len(self.hostlist_servers) * int(engine_count)) - 1
         # Exclude one rank.
-        rank = random.randint(0, exclude_servers) #nosec
+        rank = random.randint(0, exclude_servers)  # nosec
         # init the status dictionary
         params = {"name": name,
                   "status": status,
@@ -1150,17 +1150,13 @@ def build_job_script(self, commands, job, nodesperjob):
     self.log.info("<<Build Script>> at %s", time.ctime())
     script_list = []
     # if additional cmds are needed in the batch script
-    prepend_cmds = [
-        "set -e",
-        "echo Job_Start_Time `date \\+\"%Y-%m-%d %T\"`",
-        "daos pool query {} ".format(self.pool[1].uuid),
-        "daos pool query {} ".format(self.pool[0].uuid)
-        ]
-    append_cmds = [
-        "daos pool query {} ".format(self.pool[1].uuid),
-        "daos pool query {} ".format(self.pool[0].uuid),
-        "echo Job_End_Time `date \\+\"%Y-%m-%d %T\"`"
-        ]
+    prepend_cmds = ["set -e",
+                    "echo Job_Start_Time `date \\+\"%Y-%m-%d %T\"`",
+                    "daos pool query {} ".format(self.pool[1].uuid),
+                    "daos pool query {} ".format(self.pool[0].uuid)]
+    append_cmds = ["daos pool query {} ".format(self.pool[1].uuid),
+                   "daos pool query {} ".format(self.pool[0].uuid),
+                   "echo Job_End_Time `date \\+\"%Y-%m-%d %T\"`"]
     exit_cmd = ["exit $status"]
     # Create the sbatch script for each list of cmdlines
     for cmd, log_name in commands:

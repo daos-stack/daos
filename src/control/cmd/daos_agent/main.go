@@ -18,25 +18,25 @@ import (
 
 	"github.com/daos-stack/daos/src/control/build"
 	"github.com/daos-stack/daos/src/control/common"
-	"github.com/daos-stack/daos/src/control/common/cmdutil"
 	"github.com/daos-stack/daos/src/control/lib/control"
+	"github.com/daos-stack/daos/src/control/lib/hardware/hwprov"
 	"github.com/daos-stack/daos/src/control/logging"
 )
 
 type cliOptions struct {
-	AllowProxy bool                    `long:"allow-proxy" description:"Allow proxy configuration via environment"`
-	Debug      bool                    `short:"d" long:"debug" description:"Enable debug output"`
-	JSON       bool                    `short:"j" long:"json" description:"Enable JSON output"`
-	JSONLogs   bool                    `short:"J" long:"json-logging" description:"Enable JSON-formatted log output"`
-	ConfigPath string                  `short:"o" long:"config-path" description:"Path to agent configuration file"`
-	Insecure   bool                    `short:"i" long:"insecure" description:"have agent attempt to connect without certificates"`
-	RuntimeDir string                  `short:"s" long:"runtime_dir" description:"Path to agent communications socket"`
-	LogFile    string                  `short:"l" long:"logfile" description:"Full path and filename for daos agent log file"`
-	Start      startCmd                `command:"start" description:"Start daos_agent daemon (default behavior)"`
-	Version    versionCmd              `command:"version" description:"Print daos_agent version"`
-	DumpInfo   dumpAttachInfoCmd       `command:"dump-attachinfo" description:"Dump system attachinfo"`
-	DumpTopo   cmdutil.DumpTopologyCmd `command:"dump-topology" description:"Dump system topology"`
-	NetScan    netScanCmd              `command:"net-scan" description:"Perform local network fabric scan"`
+	AllowProxy bool                   `long:"allow-proxy" description:"Allow proxy configuration via environment"`
+	Debug      bool                   `short:"d" long:"debug" description:"Enable debug output"`
+	JSON       bool                   `short:"j" long:"json" description:"Enable JSON output"`
+	JSONLogs   bool                   `short:"J" long:"json-logging" description:"Enable JSON-formatted log output"`
+	ConfigPath string                 `short:"o" long:"config-path" description:"Path to agent configuration file"`
+	Insecure   bool                   `short:"i" long:"insecure" description:"have agent attempt to connect without certificates"`
+	RuntimeDir string                 `short:"s" long:"runtime_dir" description:"Path to agent communications socket"`
+	LogFile    string                 `short:"l" long:"logfile" description:"Full path and filename for daos agent log file"`
+	Start      startCmd               `command:"start" description:"Start daos_agent daemon (default behavior)"`
+	Version    versionCmd             `command:"version" description:"Print daos_agent version"`
+	DumpInfo   dumpAttachInfoCmd      `command:"dump-attachinfo" description:"Dump system attachinfo"`
+	DumpTopo   hwprov.DumpTopologyCmd `command:"dump-topology" description:"Dump system topology"`
+	NetScan    netScanCmd             `command:"net-scan" description:"Perform local network fabric scan"`
 }
 
 type (
@@ -158,7 +158,7 @@ func parseOpts(args []string, opts *cliOptions, invoker control.Invoker, log *lo
 		}
 
 		switch cmd.(type) {
-		case *versionCmd, *netScanCmd, *cmdutil.DumpTopologyCmd:
+		case *versionCmd, *netScanCmd, *hwprov.DumpTopologyCmd:
 			// these commands don't need the rest of the setup
 			return cmd.Execute(args)
 		}

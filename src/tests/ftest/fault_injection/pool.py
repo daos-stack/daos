@@ -114,7 +114,7 @@ class PoolServicesFaultInjection(TestWithServers):
 
         :avocado: tags=all,full_regression
         :avocado: tags=hw,large
-        :avocado: tags=pool_with_faults,test_pool_services
+        :avocado: tags=pool_with_faults,test_pool_services,faults
         """
         failed_commands = 0
         dmg_command = self.get_dmg_command()
