@@ -35,8 +35,8 @@ server_config:
       scm_list: ["/dev/pmem1"]
       scm_mount: /mnt/daos1
 
-pool_size_ratio_50:
-  size: 50%
+pool_size_ratio_80:
+  size: 80%
   control_method: dmg
 pool_size_ratio_40:
   size: 40%
@@ -65,7 +65,7 @@ ior: &ior_base
     # takes about 42 sec in the Shared Cluster. Adjust the value based on the system so
     # that it takes longer than the -D value.
     transfer_size: '512K'
-    block_size: '150G'
+    block_size: '100G'
 ior_wo_rf:
   <<: *ior_base
   dfs_oclass: "SX"

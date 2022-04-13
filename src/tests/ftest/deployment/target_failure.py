@@ -102,14 +102,15 @@ class TargetFailure(IorTestBase):
         6. Reintegrate the excluded targets and wait for the rebuild to finish.
         7. Verify that the container's Health property is HEALTHY.
         8. Restart the IOR and verify that it works. (Recovery test)
-        9. Verify that a new container can be created and IOR works. (Recovery test)
+        9. Destroy the container to retrieve the space.
+        10. Verify that a new container can be created and IOR works. (Recovery test)
 
         Args:
             ior_namespace (str): Yaml namespace that defines the object class used for
                 IOR.
         """
         # 1. Create a pool and a container.
-        self.add_pool(namespace="/run/pool_size_ratio_50/*")
+        self.add_pool(namespace="/run/pool_size_ratio_80/*")
         self.add_container(pool=self.pool, namespace="/run/container_with_rf/*")
 
         # 2. Run IOR with oclass RP_2G1 or EC_2P1G1.
@@ -183,7 +184,10 @@ class TargetFailure(IorTestBase):
             errors.append(
                 "Error found in second IOR run! {}".format(ior_results[job_num][1]))
 
-        # 9. Create a new container and run IOR.
+        # 9. Destroy the container to retrieve the space.
+        self.container.destroy()
+
+        # 10. Create a new container and run IOR.
         self.add_container(pool=self.pool, namespace="/run/container_with_rf/*")
         ior_results = {}
         self.run_ior_report_error(
@@ -224,7 +228,7 @@ class TargetFailure(IorTestBase):
         :avocado: tags=target_failure_wo_rf
         """
         # 1. Create a pool and a container.
-        self.add_pool(namespace="/run/pool_size_ratio_50/*")
+        self.add_pool(namespace="/run/pool_size_ratio_80/*")
         self.add_container(pool=self.pool, namespace="/run/container_wo_rf/*")
 
         # 2. Run IOR with oclass SX so that excluding one target will result in a failure.
