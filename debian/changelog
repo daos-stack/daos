@@ -1,9 +1,10 @@
-daos (2.3.100-2) unstable; urgency=medium
+daos (2.3.100-3) unstable; urgency=medium
   [ Dmitry Eremin ]
   * Update to libfabric to v1.14.0-2 to include critical performance patches
 
  -- Dmitry Eremin <dmitry.eremin@intel.com> Fri, 8 Apr 2022 09:00:00 +0800
 
+daos (2.3.100-2) unstable; urgency=medium
   [ Jeff Olivier ]
   * Extract MPI from many binaries create dpar and dpar_mpi providing a
     similar interface to abstract away the direct MPI dependence
