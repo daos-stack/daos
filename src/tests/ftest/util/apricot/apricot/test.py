@@ -15,6 +15,7 @@ import time
 from avocado import fail_on, skip, TestFail
 from avocado import Test as avocadoTest
 from avocado.core import exceptions
+
 from ClusterShell.NodeSet import NodeSet
 
 from agent_utils import DaosAgentManager, include_local_host
@@ -26,13 +27,13 @@ from distro_utils import detect
 from dmg_utils import get_dmg_command
 from fault_config_utils import FaultInjection
 from general_utils import \
-    get_partition_hosts, stop_processes, \
-    get_default_config_file, pcmd, get_file_listing, DaosTestError, run_command
+    get_partition_hosts, stop_processes, get_default_config_file, pcmd, get_file_listing, \
+    DaosTestError, run_command, get_config_value, set_config_value
 from logger_utils import TestLogger
 from pydaos.raw import DaosContext, DaosLog, DaosApiError
 from server_utils import DaosServerManager
 from test_utils_container import TestContainer
-from test_utils_pool import TestPool, LabelGenerator
+from test_utils_pool import LabelGenerator, add_pool, POOL_NAMESPACE
 from write_host_file import write_host_file
 from job_manager_utils import get_job_manager
 
@@ -129,6 +130,10 @@ class Test(avocadoTest):
         self.ofi_prefix = None
         self.cancel_file = os.path.join(os.sep, "scratch",
                                         "CI-skip-list-master")
+
+        # List of methods to call during tearDown to cleanup after the steps
+        # Use the register_cleanup() method to add methods with optional arguments
+        self._cleanup_methods = []
 
     def setUp(self):
         """Set up each test case."""
@@ -387,6 +392,61 @@ class Test(avocadoTest):
         except DaosTestError as error:
             errors.append("Error removing temporary test files: {}".format(error))
         return errors
+
+    def _cleanup(self):
+        """Run all the the cleanup methods from last to first.
+
+        Returns:
+            list: a list of error strings to report at the end of tearDown().
+
+        """
+        errors = []
+        while self._cleanup_methods:
+            try:
+                cleanup = self._cleanup_methods.pop()
+                errors.extend(cleanup["method"](**cleanup["kwargs"]))
+            except Exception as error:      # pylint: disable=broad-except
+                kwargs_str = ", ".join(
+                    ["=".join([str(key), str(value)]) for key, value in cleanup["kwargs"].items()])
+                errors.append(
+                    "Unhandled exception when calling {}({}): {}".format(
+                        str(cleanup["method"]), kwargs_str, str(error)))
+        return errors
+
+    def register_cleanup(self, method, **kwargs):
+        """Add a method call to the list of cleanup methods to run in tearDown().
+
+        Args:
+            method (str): method to call with the kwargs
+        """
+        self._cleanup_methods.append({"method": method, "kwargs": kwargs})
+        kwargs_str = ", ".join(["=".join([str(key), str(value)]) for key, value in kwargs.items()])
+        self.log.debug("Register: Adding calling %s(%s) during tearDown()", method, kwargs_str)
+
+    def increment_timeout(self, increment):
+        """Increase the avocado runner timeout configuration settings by the provided value.
+
+        Increase the various runner timeout configuration values to ensure tearDown is given enough
+        time to perform all of its steps.
+
+        Args:
+            increment (int): number of additional seconds by which to increase the timeout.
+        """
+        namespace = "runner.timeout"
+        for key in ("after_interrupted", "process_alive", "process_died"):
+            section = ".".join([namespace, key])
+
+            # Get the existing value
+            try:
+                value = int(get_config_value(namespace, key))
+            except (TypeError, ValueError) as error:
+                self.log.debug("Unable to obtain the %s setting: %s", section, str(error))
+                continue
+
+            # Update the setting with the incremented value
+            self.log.debug(
+                "Incrementing %s from %s to %s seconds", section, value, value + increment)
+            set_config_value(namespace, key, value + increment)
 
     def tearDown(self):
         """Tear down after each test case."""
@@ -1228,8 +1288,8 @@ class TestWithServers(TestWithoutServers):
         # Destroy any containers first
         self._teardown_errors.extend(self.destroy_containers(self.container))
 
-        # Destroy any pools next
-        self._teardown_errors.extend(self.destroy_pools(self.pool))
+        # Destroy any pools next - eventually this call will encompass all teardown steps
+        self._teardown_errors.extend(self._cleanup())
 
         # Stop the agents
         self._teardown_errors.extend(self.stop_agents())
@@ -1545,16 +1605,16 @@ class TestWithServers(TestWithoutServers):
 
         This sequence is common for a lot of the container tests.
         """
-        self.add_pool(None, True, True, 0)
+        self.add_pool(POOL_NAMESPACE, True, True, 0)
 
-    def get_pool(self, namespace=None, create=True, connect=True, index=0):
+    def get_pool(self, namespace=POOL_NAMESPACE, create=True, connect=True, index=0, **params):
         """Get a test pool object.
 
         This method defines the common test pool creation sequence.
 
         Args:
             namespace (str, optional): namespace for TestPool parameters in the
-                test yaml file. Defaults to None.
+                test yaml file. Defaults to POOL_NAMESPACE.
             create (bool, optional): should the pool be created. Defaults to
                 True.
             connect (bool, optional): should the pool be connected. Defaults to
@@ -1565,36 +1625,25 @@ class TestWithServers(TestWithoutServers):
             TestPool: the created test pool object.
 
         """
-        pool = TestPool(
-            context=self.context, dmg_command=self.get_dmg_command(index),
-            label_generator=self.label_generator,
-            crt_timeout=self.server_managers[index].get_config_value("crt_timeout"))
-        if namespace is not None:
-            pool.namespace = namespace
-        pool.get_params(self)
-        if create:
-            pool.create()
-        if create and connect:
-            pool.connect()
-        return pool
+        return add_pool(self, namespace, create, connect, index, **params)
 
-    def add_pool(self, namespace=None, create=True, connect=True, index=0):
+    def add_pool(self, namespace=POOL_NAMESPACE, create=True, connect=True, index=0, **params):
         """Add a pool to the test case.
 
         This method defines the common test pool creation sequence.
 
         Args:
             namespace (str, optional): namespace for TestPool parameters in the
-                test yaml file. Defaults to None.
+                test yaml file. Defaults to POOL_NAMESPACE.
             create (bool, optional): should the pool be created. Defaults to
                 True.
             connect (bool, optional): should the pool be connected. Defaults to
                 True.
             index (int, optional): Server index for dmg command. Defaults to 0.
         """
-        self.pool = self.get_pool(namespace, create, connect, index)
+        self.pool = self.get_pool(namespace, create, connect, index, **params)
 
-    def add_pool_qty(self, quantity, namespace=None, create=True, connect=True,
+    def add_pool_qty(self, quantity, namespace=POOL_NAMESPACE, create=True, connect=True,
                      index=0):
         """Add multiple pools to the test case.
 
@@ -1604,7 +1653,7 @@ class TestWithServers(TestWithoutServers):
         Args:
             quantity (int): number of pools to create
             namespace (str, optional): namespace for TestPool parameters in the
-                test yaml file. Defaults to None.
+                test yaml file. Defaults to POOL_NAMESPACE.
             create (bool, optional): should the pool be created. Defaults to
                 True.
             connect (bool, optional): should the pool be connected. Defaults to
