@@ -2767,9 +2767,8 @@ aggregate_34(void **state)
 	cleanup();
 }
 
-#define INIT_FEATS 0x8000000010f93f43ULL
-
-D_CASSERT((INIT_FEATS & VOS_TF_AGG_TIME_MASK) == 0);
+#define INIT_FEATS 0x8000000000073f43ULL
+D_CASSERT((INIT_FEATS & VOS_AGG_TIME_MASK) == 0);
 
 static void
 aggregate_35(void **state)
@@ -2792,18 +2791,40 @@ aggregate_35(void **state)
 	assert_int_equal(epoch, 252);
 	assert_int_equal(feats & INIT_FEATS, INIT_FEATS);
 
-	vos_feats_agg_time_update(252, &feats);
+	/** Set lower time, same answer */
+	vos_feats_agg_time_update(242, &feats);
 	result = vos_feats_agg_time_get(feats, &epoch);
 	assert_true(result);
 	assert_int_equal(epoch, 252);
 	assert_int_equal(feats & INIT_FEATS, INIT_FEATS);
 
-	/** If upper 32-bits is set, we assume HLC */
-	vos_feats_agg_time_update(0x53abcdef00ULL, &feats);
+	/** Set higher time, new answer */
+	vos_feats_agg_time_update(342, &feats);
 	result = vos_feats_agg_time_get(feats, &epoch);
 	assert_true(result);
-	/** Since the lower 32 are masked, we always set them to ffffffff */
-	assert_int_equal(epoch, 0x53ffffffffULL);
+	assert_int_equal(epoch, 342);
+	assert_int_equal(feats & INIT_FEATS, INIT_FEATS);
+
+	/** If upper 24-bits is set, we assume HLC */
+	vos_feats_agg_time_update(0x463abcdef00ULL, &feats);
+	result = vos_feats_agg_time_get(feats, &epoch);
+	assert_true(result);
+	/** When we set the timestamp, we round up */
+	assert_int_equal(epoch, 0x463ac000000ULL);
+	assert_int_equal(feats & INIT_FEATS, INIT_FEATS);
+
+	/** Try setting a lower time, should get same result */
+	vos_feats_agg_time_update(0x463a00def00ULL, &feats);
+	result = vos_feats_agg_time_get(feats, &epoch);
+	assert_true(result);
+	assert_int_equal(epoch, 0x463ac000000ULL);
+	assert_int_equal(feats & INIT_FEATS, INIT_FEATS);
+
+	/** Try setting a higher time, should get updated */
+	vos_feats_agg_time_update(0x463adcdef00ULL, &feats);
+	result = vos_feats_agg_time_get(feats, &epoch);
+	assert_true(result);
+	assert_int_equal(epoch, 0x463ae000000ULL);
 	assert_int_equal(feats & INIT_FEATS, INIT_FEATS);
 }
 
