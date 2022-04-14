@@ -64,6 +64,35 @@ func PrintPoolQueryResponse(pqr *control.PoolQueryResp, out io.Writer, opts ...P
 	return w.Err
 }
 
+// PrintPoolQueryTargetResponse generates a human-readable representation of the supplied
+// PoolQueryTargetResp struct and writes it to the supplied io.Writer.
+func PrintPoolQueryTargetResponse(pqtr *control.PoolQueryTargetResp, out io.Writer, opts ...PrintConfigOption) error {
+	if pqtr == nil {
+		return errors.Errorf("nil %T", pqtr)
+	}
+	w := txtfmt.NewErrWriter(out)
+
+	// Maintain output compatibility with the `daos pool query-targets` output.
+	for infosIdx := range pqtr.Infos {
+		fmt.Fprintf(w, "Target: type %s, state %s\n", pqtr.Infos[infosIdx].Type, pqtr.Infos[infosIdx].State)
+		if pqtr.Infos[infosIdx].Space != nil {
+			for tierIdx, tierUsage := range pqtr.Infos[infosIdx].Space {
+				var tierName string
+				if tierIdx == 0 {
+					tierName = "- Storage tier 0 (SCM):"
+				} else {
+					tierName = fmt.Sprintf("- Storage tier %d (NVMe):", tierIdx)
+				}
+				fmt.Fprintln(w, tierName)
+				fmt.Fprintf(w, "  Total size: %s\n", humanize.Bytes(tierUsage.Total))
+				fmt.Fprintf(w, "  Free: %s\n", humanize.Bytes(tierUsage.Free))
+			}
+		}
+	}
+
+	return w.Err
+}
+
 // PrintPoolCreateResponse generates a human-readable representation of the pool create
 // response and prints it to the supplied io.Writer.
 func PrintPoolCreateResponse(pcr *control.PoolCreateResp, out io.Writer, opts ...PrintConfigOption) error {

@@ -419,6 +419,41 @@ type (
 		UUID   string `json:"uuid"`
 		PoolInfo
 	}
+
+	// PoolQueryTargetReq contains parameters for a pool query target request
+	PoolQueryTargetReq struct {
+		poolRequest
+		ID        string
+		Rank      system.Rank
+		Targetidx []uint32
+	}
+
+	// StorageTargetUsage represents DAOS target storage usage
+	StorageTargetUsage struct {
+		Total uint64 `json:"total"`
+		Free  uint64 `json:"free"`
+	}
+
+	TargetPerf struct {
+		Foo int32 `json:"foo"`
+	}
+
+	PoolQueryTargetType  int32
+	PoolQueryTargetState int32
+
+	// PoolQueryTargetInfo contains information about a single target
+	PoolQueryTargetInfo struct {
+		Type  PoolQueryTargetType  `json:"target_type"`
+		State PoolQueryTargetState `json:"target_state"`
+		Perf  *TargetPerf
+		Space []*StorageTargetUsage
+	}
+
+	// PoolQueryTargetResp contains a pool query target response
+	PoolQueryTargetResp struct {
+		Status int32 `json:"status"`
+		Infos  []*PoolQueryTargetInfo
+	}
 )
 
 func (pqr *PoolQueryResp) MarshalJSON() ([]byte, error) {
@@ -575,6 +610,30 @@ func PoolQuery(ctx context.Context, rpcClient UnaryInvoker, req *PoolQueryReq) (
 
 	pqr := new(PoolQueryResp)
 	return pqr, convertMSResponse(ur, pqr)
+}
+
+const (
+	PoolTargetStateUnknown PoolQueryTargetState = iota
+	// PoolTargetStateDownOut indicates the target is not available
+	PoolTargetStateDownOut
+	// PoolTargetStateDown indicates the target is not available, may need rebuild
+	PoolTargetStateDown
+	// PoolTargetStateUp indicates the target is up
+	PoolTargetStateUp
+	// PoolTargetStateUpIn indicates the target is up and running
+	PoolTargetStateUpIn
+	// PoolTargetStateNew indicates the target is in an intermediate state (pool map change)
+	PoolTargetStateNew
+	// PoolTargetStateDrain indicates the target is being drained
+	PoolTargetStateDrain
+)
+
+func (ptt PoolQueryTargetType) String() string {
+	return strings.ToLower(mgmtpb.PoolQueryTargetInfo_TargetType_name[int32(ptt)])
+}
+
+func (pts PoolQueryTargetState) String() string {
+	return strings.ToLower(mgmtpb.PoolQueryTargetInfo_TargetState_name[int32(pts)])
 }
 
 // PoolSetPropReq contains pool set-prop parameters.

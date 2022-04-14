@@ -74,6 +74,7 @@ func TestSecurity_ComponentHasAccess(t *testing.T) {
 		"/mgmt.MgmtSvc/PoolCreate":             {ComponentAdmin},
 		"/mgmt.MgmtSvc/PoolDestroy":            {ComponentAdmin},
 		"/mgmt.MgmtSvc/PoolQuery":              {ComponentAdmin},
+		"/mgmt.MgmtSvc/PoolQueryTarget":        {ComponentAdmin},
 		"/mgmt.MgmtSvc/PoolSetProp":            {ComponentAdmin},
 		"/mgmt.MgmtSvc/PoolGetProp":            {ComponentAdmin},
 		"/mgmt.MgmtSvc/PoolGetACL":             {ComponentAdmin},

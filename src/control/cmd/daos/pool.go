@@ -17,6 +17,7 @@ import (
 
 	"github.com/daos-stack/daos/src/control/build"
 	"github.com/daos-stack/daos/src/control/cmd/dmg/pretty"
+	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/common/proto/convert"
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	"github.com/daos-stack/daos/src/control/lib/control"
@@ -153,13 +154,14 @@ func (cmd *poolBaseCmd) getAttr(name string) (*attribute, error) {
 }
 
 type poolCmd struct {
-	Query     poolQueryCmd     `command:"query" description:"query pool info"`
-	ListConts containerListCmd `command:"list-containers" alias:"list-cont" description:"list all containers in pool"`
-	ListAttrs poolListAttrsCmd `command:"list-attr" alias:"list-attrs" alias:"lsattr" description:"list pool user-defined attributes"`
-	GetAttr   poolGetAttrCmd   `command:"get-attr" alias:"getattr" description:"get pool user-defined attribute"`
-	SetAttr   poolSetAttrCmd   `command:"set-attr" alias:"setattr" description:"set pool user-defined attribute"`
-	DelAttr   poolDelAttrCmd   `command:"del-attr" alias:"delattr" description:"delete pool user-defined attribute"`
-	AutoTest  poolAutoTestCmd  `command:"autotest" description:"verify setup with smoke tests"`
+	Query        poolQueryCmd        `command:"query" description:"query pool info"`
+	QueryTargets poolQueryTargetsCmd `command:"query-targets" description:"query pool target info"`
+	ListConts    containerListCmd    `command:"list-containers" alias:"list-cont" description:"list all containers in pool"`
+	ListAttrs    poolListAttrsCmd    `command:"list-attr" alias:"list-attrs" alias:"lsattr" description:"list pool user-defined attributes"`
+	GetAttr      poolGetAttrCmd      `command:"get-attr" alias:"getattr" description:"get pool user-defined attribute"`
+	SetAttr      poolSetAttrCmd      `command:"set-attr" alias:"setattr" description:"set pool user-defined attribute"`
+	DelAttr      poolDelAttrCmd      `command:"del-attr" alias:"delattr" description:"delete pool user-defined attribute"`
+	AutoTest     poolAutoTestCmd     `command:"autotest" description:"verify setup with smoke tests"`
 }
 
 type poolQueryCmd struct {
@@ -268,6 +270,100 @@ func (cmd *poolQueryCmd) Execute(_ []string) error {
 
 	var bld strings.Builder
 	if err := pretty.PrintPoolQueryResponse(pqr, &bld); err != nil {
+		return err
+	}
+
+	cmd.Info(bld.String())
+
+	return nil
+}
+
+type poolQueryTargetsCmd struct {
+	poolBaseCmd
+
+	Rank      uint32 `long:"rank" required:"1" description:"Engine rank of the targets to be queried"`
+	Targetidx string `long:"target-idx" description:"Comma-separated list of target idx(s) to be queried"`
+}
+
+func convertDaosSpaceInfo(in *C.struct_daos_space, mt C.uint) *mgmtpb.StorageTargetUsage {
+	if in == nil {
+		return nil
+	}
+
+	return &mgmtpb.StorageTargetUsage{
+		Total: uint64(in.s_total[mt]),
+		Free:  uint64(in.s_free[mt]),
+	}
+}
+
+// For using the pretty printer that dmg uses for this target info.
+//
+// Does the same thing as ds_mgmt_drpc_pool_query_target() will do, to stuff the target info
+// into a protobuf message, then use the automatic conversion from proto to control.
+
+func convertPoolTargetInfo(ptinfo *C.daos_target_info_t) (*control.PoolQueryTargetInfo, error) {
+	pqtp := new(mgmtpb.PoolQueryTargetInfo)
+
+	// daos_target_info_t -> mgmtpb
+	pqtp.Type = mgmtpb.PoolQueryTargetInfo_TargetType(ptinfo.ta_type)
+	pqtp.State = mgmtpb.PoolQueryTargetInfo_TargetState(ptinfo.ta_state)
+	pqtp.Perf = &mgmtpb.TargetPerf{Foo: int32(ptinfo.ta_perf.foo)}
+	pqtp.Space = []*mgmtpb.StorageTargetUsage{
+		convertDaosSpaceInfo(&ptinfo.ta_space, C.DAOS_MEDIA_SCM),
+		convertDaosSpaceInfo(&ptinfo.ta_space, C.DAOS_MEDIA_NVME),
+	}
+
+	// Manual conversion mgmtpb -> control; convert.Types not working for some reason (type, state)
+	pqti := new(control.PoolQueryTargetInfo)
+	pqti.Type = control.PoolQueryTargetType(pqtp.Type)
+	pqti.State = control.PoolQueryTargetState(pqtp.State)
+	pqti.Perf = &control.TargetPerf{Foo: pqtp.Perf.Foo}
+	pqti.Space = []*control.StorageTargetUsage{
+		{pqtp.Space[uint(C.DAOS_MEDIA_SCM)].Total, pqtp.Space[uint(C.DAOS_MEDIA_SCM)].Free},
+		{pqtp.Space[uint(C.DAOS_MEDIA_NVME)].Total, pqtp.Space[uint(C.DAOS_MEDIA_NVME)].Free},
+	}
+
+	//return pqti, convert.Types(pqtp, pqti)
+	return pqti, nil
+}
+
+func (cmd *poolQueryTargetsCmd) Execute(_ []string) error {
+	cleanup, err := cmd.resolveAndConnect(C.DAOS_PC_RO, nil)
+	if err != nil {
+		return err
+	}
+	defer cleanup()
+
+	var idxlist []uint32
+	if err = common.ParseNumberList(cmd.Targetidx, &idxlist); err != nil {
+		return errors.WithMessage(err, "parsing target list")
+	}
+
+	var inforesp *control.PoolQueryTargetResp = &control.PoolQueryTargetResp{}
+	var ptinfo C.daos_target_info_t
+	var rc C.int
+
+	for tgt := 0; tgt < len(idxlist); tgt++ {
+		rc = C.daos_pool_query_target(cmd.cPoolHandle, C.uint32_t(idxlist[tgt]), C.uint32_t(cmd.Rank), &ptinfo, nil)
+		if err := daosError(rc); err != nil {
+			return errors.Wrapf(err,
+				"failed to query pool %s target %d:%d", cmd.poolUUID, cmd.Rank, tgt)
+		}
+
+		var tgtInfo *control.PoolQueryTargetInfo
+		tgtInfo, err = convertPoolTargetInfo(&ptinfo)
+		inforesp.Infos = append(inforesp.Infos, tgtInfo)
+		if err != nil {
+			return err
+		}
+	}
+
+	if cmd.jsonOutputEnabled() {
+		return cmd.outputJSON(inforesp, nil)
+	}
+
+	var bld strings.Builder
+	if err := pretty.PrintPoolQueryTargetResponse(inforesp, &bld); err != nil {
 		return err
 	}
 

@@ -391,7 +391,7 @@ func (cmd *PoolExcludeCmd) Execute(args []string) error {
 
 	var idxlist []uint32
 	if err := common.ParseNumberList(cmd.Targetidx, &idxlist); err != nil {
-		return errors.WithMessage(err, "parsing rank list")
+		return errors.WithMessage(err, "parsing target list")
 	}
 
 	req := &control.PoolExcludeReq{ID: cmd.PoolID().String(), Rank: system.Rank(cmd.Rank), Targetidx: idxlist}
@@ -419,7 +419,7 @@ func (cmd *PoolDrainCmd) Execute(args []string) error {
 
 	var idxlist []uint32
 	if err := common.ParseNumberList(cmd.Targetidx, &idxlist); err != nil {
-		err = errors.WithMessage(err, "parsing rank list")
+		err = errors.WithMessage(err, "parsing target list")
 		return err
 	}
 
@@ -478,7 +478,7 @@ func (cmd *PoolReintegrateCmd) Execute(args []string) error {
 
 	var idxlist []uint32
 	if err := common.ParseNumberList(cmd.Targetidx, &idxlist); err != nil {
-		err = errors.WithMessage(err, "parsing rank list")
+		err = errors.WithMessage(err, "parsing target list")
 		return err
 	}
 
