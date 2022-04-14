@@ -5,7 +5,7 @@
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 from osa_utils import OSAUtils
-from test_utils_pool import add_pool
+from test_utils_pool import TestPool
 
 
 class OSADmgNegativeTest(OSAUtils):
@@ -66,7 +66,10 @@ class OSADmgNegativeTest(OSAUtils):
         pool_uuid = []
 
         for val in range(0, num_pool):
-            pool[val] = add_pool(self, create=False, connect=False)
+            pool[val] = TestPool(
+                context=self.context, dmg_command=self.dmg_command,
+                label_generator=self.label_generator)
+            pool[val].get_params(self)
             # Split total SCM and NVME size for creating multiple pools.
             pool[val].scm_size.value = int(pool[val].scm_size.value /
                                            num_pool)
@@ -96,7 +99,7 @@ class OSADmgNegativeTest(OSAUtils):
                     output = self.dmg_command.pool_extend(self.pool.uuid, rank)
                     self.log.info(output)
                     self.validate_results(expected_result, output.stdout_text)
-                if (extend is False and rank in ["4", "5"]):
+                if (extend is False and rank in ["4","5"]):
                     continue
                 # Exclude a rank, target
                 output = self.dmg_command.pool_exclude(self.pool.uuid,
