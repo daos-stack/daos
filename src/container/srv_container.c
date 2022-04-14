@@ -466,7 +466,6 @@ cont_create_prop_prepare(struct ds_pool_hdl *pool_hdl,
 		case DAOS_PROP_CO_CSUM:
 		case DAOS_PROP_CO_CSUM_CHUNK_SIZE:
 		case DAOS_PROP_CO_CSUM_SERVER_VERIFY:
-		case DAOS_PROP_CO_SCRUBBER_DISABLED:
 		case DAOS_PROP_CO_REDUN_LVL:
 		case DAOS_PROP_CO_SNAPSHOT_MAX:
 		case DAOS_PROP_CO_COMPRESS:
@@ -477,6 +476,7 @@ cont_create_prop_prepare(struct ds_pool_hdl *pool_hdl,
 		case DAOS_PROP_CO_DEDUP_THRESHOLD:
 		case DAOS_PROP_CO_EC_PDA:
 		case DAOS_PROP_CO_RP_PDA:
+		case DAOS_PROP_CO_SCRUBBER_DISABLED:
 			entry_def->dpe_val = entry->dpe_val;
 			break;
 		case DAOS_PROP_CO_REDUN_FAC:
@@ -633,15 +633,6 @@ cont_prop_write(struct rdb_tx *tx, const rdb_path_t *kvs, daos_prop_t *prop,
 					   &ds_cont_prop_csum_server_verify,
 					   &value);
 			break;
-		case DAOS_PROP_CO_SCRUBBER_DISABLED:
-			d_iov_set(&value, &entry->dpe_val,
-				  sizeof(entry->dpe_val));
-			rc = rdb_tx_update(tx, kvs,
-					   &ds_cont_prop_scrubber_disabled,
-					   &value);
-			if (rc)
-				return rc;
-			break;
 		case DAOS_PROP_CO_DEDUP:
 			d_iov_set(&value, &entry->dpe_val,
 				  sizeof(entry->dpe_val));
@@ -762,6 +753,15 @@ cont_prop_write(struct rdb_tx *tx, const rdb_path_t *kvs, daos_prop_t *prop,
 				  sizeof(entry->dpe_val));
 			rc = rdb_tx_update(tx, kvs, &ds_cont_prop_alloced_oid,
 					   &value);
+			break;
+		case DAOS_PROP_CO_SCRUBBER_DISABLED:
+			d_iov_set(&value, &entry->dpe_val,
+				  sizeof(entry->dpe_val));
+			rc = rdb_tx_update(tx, kvs,
+					   &ds_cont_prop_scrubber_disabled,
+					   &value);
+			if (rc)
+				return rc;
 			break;
 		default:
 			D_ERROR("bad dpe_type %d.\n", entry->dpe_type);
@@ -2725,7 +2725,6 @@ cont_query(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl, struct cont *cont,
 			case DAOS_PROP_CO_CSUM:
 			case DAOS_PROP_CO_CSUM_CHUNK_SIZE:
 			case DAOS_PROP_CO_CSUM_SERVER_VERIFY:
-			case DAOS_PROP_CO_SCRUBBER_DISABLED:
 			case DAOS_PROP_CO_REDUN_FAC:
 			case DAOS_PROP_CO_REDUN_LVL:
 			case DAOS_PROP_CO_SNAPSHOT_MAX:
@@ -2739,6 +2738,7 @@ cont_query(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl, struct cont *cont,
 			case DAOS_PROP_CO_EC_PDA:
 			case DAOS_PROP_CO_RP_PDA:
 			case DAOS_PROP_CO_GLOBAL_VERSION:
+			case DAOS_PROP_CO_SCRUBBER_DISABLED:
 				if (entry->dpe_val != iv_entry->dpe_val) {
 					D_ERROR("type %d mismatch "DF_U64" - "
 						DF_U64".\n", entry->dpe_type,

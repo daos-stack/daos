@@ -385,6 +385,17 @@ sts_ctx_punch_dkey(struct sts_context *ctx, int oid_lo, const char *dkey_str,
 }
 
 static void
+clear_ctx(struct scrub_ctx *ctx)
+{
+	uuid_clear(ctx->sc_cont_uuid);
+	memset(&ctx->sc_cur_oid, 0, sizeof(ctx->sc_cur_oid));
+	memset(&ctx->sc_dkey, 0, sizeof(ctx->sc_dkey));
+	memset(&ctx->sc_iod, 0, sizeof(ctx->sc_iod));
+	ctx->sc_epoch = 0;
+	ctx->sc_minor_epoch = 0;
+}
+
+static void
 sts_ctx_do_scrub(struct sts_context *ctx)
 {
 	uuid_copy(ctx->tsc_scrub_ctx.sc_pool_uuid, ctx->tsc_pool_uuid);
@@ -396,6 +407,8 @@ sts_ctx_do_scrub(struct sts_context *ctx)
 	ctx->tsc_scrub_ctx.sc_drain_pool_tgt_fn = fake_target_drain;
 	ctx->tsc_scrub_ctx.sc_pool = &ctx->tsc_pool;
 	ctx->tsc_scrub_ctx.sc_dmi = &ctx->tsc_dmi;
+
+	clear_ctx(&ctx->tsc_scrub_ctx);
 
 	assert_rc_equal(ctx->tsc_expected_rc,
 			vos_scrub_pool(&ctx->tsc_scrub_ctx));
@@ -564,14 +577,11 @@ scrubbing_with_good_akey_then_bad_akey(void **state)
 	sts_ctx_update(ctx, 1, TEST_IOD_SINGLE, "dkey", "akey", 1, false);
 
 	sts_ctx_do_scrub(ctx);
-	assert_success(sts_ctx_fetch(ctx, 1, TEST_IOD_SINGLE,
-				     "dkey", "akey", 1));
+	assert_success(sts_ctx_fetch(ctx, 1, TEST_IOD_SINGLE, "dkey", "akey", 1));
 
-	sts_ctx_update(ctx, 1, TEST_IOD_SINGLE, "dkey", "akey",
-		       1, true);
+	sts_ctx_update(ctx, 1, TEST_IOD_SINGLE, "dkey", "akey", 1, true);
 	sts_ctx_do_scrub(ctx);
-	assert_csum_error(sts_ctx_fetch(ctx, 1, TEST_IOD_SINGLE,
-					"dkey", "akey", 1));
+	assert_csum_error(sts_ctx_fetch(ctx, 1, TEST_IOD_SINGLE, "dkey", "akey", 1));
 }
 
 static int

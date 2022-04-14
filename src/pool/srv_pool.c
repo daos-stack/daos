@@ -1799,12 +1799,13 @@ pool_prop_read(struct rdb_tx *tx, const struct pool_svc *svc, uint64_t bits,
 	daos_prop_t	*prop;
 	d_iov_t	 value;
 	uint64_t	 val;
+	uint64_t	 bit;
 	uint32_t	 idx = 0, nr = 0, val32 = 0, global_ver;
-	int		 rc, bit;
+	int		 rc;
 
 	for (bit = DAOS_PO_QUERY_PROP_BIT_START;
 	     bit <= DAOS_PO_QUERY_PROP_BIT_END; bit++) {
-		if (bits & (1 << bit))
+		if (bits & (1L << bit))
 			nr++;
 	}
 	if (nr == 0)
