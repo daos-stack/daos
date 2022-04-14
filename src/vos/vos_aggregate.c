@@ -155,6 +155,8 @@ struct vos_agg_param {
 	struct vos_agg_credits	ap_credits;
 	daos_handle_t		ap_coh;		/* container handle */
 	daos_unit_oid_t		ap_oid;		/* current object ID */
+	/* Boundary for aggregatable write filter */
+	daos_epoch_t		ap_filter_epoch;
 	uint32_t		ap_flags;
 	unsigned int		ap_discard:1,
 				ap_csum_err:1,
@@ -291,18 +293,16 @@ inc_agg_counter(struct vos_agg_param *agg_param, vos_iter_type_t type, unsigned 
 static inline bool
 need_aggregate(daos_handle_t ih, struct vos_agg_param *agg_param, vos_iter_desc_t *desc)
 {
-	bool			 agg_needed;
+	bool			 agg_needed = true;
 	struct vos_container	*cont = vos_hdl2cont(agg_param->ap_coh);
 
 	/** Skip this check for discard */
 	if (agg_param->ap_discard_obj || agg_param->ap_discard)
 		return true;
 
-	if (desc->id_type == VOS_ITER_OBJ)
-		agg_needed = oi_iter_start_agg(ih, agg_param->ap_flags & VOS_AGG_FL_FORCE_SCAN);
-	else
-		agg_needed = vos_obj_iter_start_agg(ih,
-						    agg_param->ap_flags & VOS_AGG_FL_FORCE_SCAN);
+	if (desc->id_agg_write <= agg_param->ap_filter_epoch &&
+	    desc->id_parent_punch <= agg_param->ap_filter_epoch)
+		agg_needed = false;
 
 	D_DEBUG(DB_EPC, "flags:%u, hae:"DF_U64" agg_needed=%s\n", agg_param->ap_flags,
 		cont->vc_cont_df->cd_hae, agg_needed ? "yes" : "no");
@@ -2562,12 +2562,19 @@ vos_aggregate(daos_handle_t coh, daos_epoch_range_t *epr,
 	if (rc)
 		goto free_agg_data;
 
-	if ((flags & VOS_AGG_FL_FORCE_SCAN) == 0) {
-		feats = dbtree_feats_get(&cont->vc_cont_df->cd_obj_root);
-		has_agg_write = vos_feats_agg_time_get(feats, &agg_write);
-		if (has_agg_write && agg_write <= cont->vc_cont_df->cd_hae)
-			goto update_hae;
-	}
+	/** Use the lower end of the epoch range as the barrier when we are aggregating a
+	 *  deleted snapshot.  If there is no write above that range for a given key,
+	 *  the scan would be a noop anyway.
+	 */
+	if (flags & VOS_AGG_FL_FORCE_SCAN)
+		ad->ad_agg_param.ap_filter_epoch = epr->epr_lo;
+	else
+		ad->ad_agg_param.ap_filter_epoch = cont->vc_cont_df->cd_hae;
+
+	feats = dbtree_feats_get(&cont->vc_cont_df->cd_obj_root);
+	has_agg_write = vos_feats_agg_time_get(feats, &agg_write);
+	if (has_agg_write && agg_write <= ad->ad_agg_param.ap_filter_epoch)
+		goto update_hae;
 
 	/* Set iteration parameters */
 	ad->ad_iter_param.ip_hdl = coh;
