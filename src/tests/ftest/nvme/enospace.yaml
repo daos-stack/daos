@@ -45,8 +45,8 @@ dmg:
 pool:
     mode: 146
     name: daos_server
-    scm_size: 5368709120 #5G
-    nvme_size: 5368709120 #5G
+    scm_size: 50% #5G
+    nvme_size: 50% #5G
     control_method: dmg
 container:
     control_method: daos
