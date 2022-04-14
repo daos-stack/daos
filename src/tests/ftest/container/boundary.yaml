@@ -1,0 +1,37 @@
+hosts:
+  test_servers:
+    - server-A
+    - server-B
+    - server-C
+    - server-D
+timeout: 3600
+server_config:
+  name: daos_server
+  servers:
+    scm_size: 600
+    targets: 1
+pool:
+  name: daos_server
+  scm_size: 200M
+  control_method: dmg
+container:
+  akey_size: 5
+  dkey_size: 5
+  data_size: 256
+  execute_io:
+    run_time: 10
+    rank: 1
+    obj_classs: "OC_RP_3G1"
+boundary_test: !mux
+  test_1:
+    num_pools: 1
+    num_containers: 30000
+    with_io: False
+  test_2:
+    num_pools: 100
+    num_containers: 200
+    with_io: False
+  test_with_io:
+    num_pools: 20
+    num_containers: 200
+    with_io: True
