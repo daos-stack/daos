@@ -322,8 +322,8 @@ func SystemStart(ctx context.Context, rpcClient UnaryInvoker, req *SystemStartRe
 		return nil, errors.New("cannot specify hosts or ranks with checker")
 	}
 
+	req.SystemStartReq.Sys = req.getSystem(rpcClient)
 	req.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
-		req.SystemStartReq.Sys = req.getSystem(rpcClient)
 		return mgmtpb.NewMgmtSvcClient(conn).SystemStart(ctx, &req.SystemStartReq)
 	})
 	rpcClient.Debugf("DAOS system start request: %+v", req)

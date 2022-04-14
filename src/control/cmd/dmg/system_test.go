@@ -13,6 +13,7 @@ import (
 
 	"github.com/pkg/errors"
 
+	"github.com/daos-stack/daos/src/control/build"
 	"github.com/daos-stack/daos/src/control/common"
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	sharedpb "github.com/daos-stack/daos/src/control/common/proto/shared"
@@ -22,6 +23,24 @@ import (
 )
 
 func TestDmg_SystemCommands(t *testing.T) {
+	defSysName := build.DefaultSystemName + "-" + build.DaosVersion
+	startReqWithRanks := func(ranks string) *control.SystemStartReq {
+		return &control.SystemStartReq{
+			SystemStartReq: mgmtpb.SystemStartReq{
+				Sys:   defSysName,
+				Ranks: ranks,
+			},
+		}
+	}
+	startReqWithHosts := func(hosts string) *control.SystemStartReq {
+		return &control.SystemStartReq{
+			SystemStartReq: mgmtpb.SystemStartReq{
+				Sys:   defSysName,
+				Hosts: hosts,
+			},
+		}
+	}
+
 	runCmdTests(t, []cmdTest{
 		{
 			"system query with no arguments",
@@ -145,7 +164,7 @@ func TestDmg_SystemCommands(t *testing.T) {
 			"system start with no arguments",
 			"system start",
 			strings.Join([]string{
-				printRequest(t, &control.SystemStartReq{}),
+				printRequest(t, startReqWithRanks("")),
 			}, " "),
 			nil,
 		},
@@ -153,7 +172,7 @@ func TestDmg_SystemCommands(t *testing.T) {
 			"system start with single rank",
 			"system start --ranks 0",
 			strings.Join([]string{
-				`*control.SystemStartReq-{"Sys":"","HostList":null,"ranks":"0"}`,
+				printRequest(t, startReqWithRanks("0")),
 			}, " "),
 			nil,
 		},
@@ -161,7 +180,7 @@ func TestDmg_SystemCommands(t *testing.T) {
 			"system start with multiple ranks",
 			"system start --ranks 0,1,4",
 			strings.Join([]string{
-				`*control.SystemStartReq-{"Sys":"","HostList":null,"ranks":"0-1,4"}`,
+				printRequest(t, startReqWithRanks("0-1,4")),
 			}, " "),
 			nil,
 		},
@@ -169,7 +188,7 @@ func TestDmg_SystemCommands(t *testing.T) {
 			"system start with multiple hosts",
 			"system start --rank-hosts bar9,foo-[0-100]",
 			strings.Join([]string{
-				`*control.SystemStartReq-{"Sys":"","HostList":null,"hosts":"bar9,foo-[0-100]"}`,
+				printRequest(t, startReqWithHosts("bar9,foo-[0-100]")),
 			}, " "),
 			nil,
 		},
