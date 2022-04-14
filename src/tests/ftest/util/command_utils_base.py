@@ -302,14 +302,6 @@ class ObjectWithParameters():
         for name in self.get_param_names():
             getattr(self, name).get_yaml_value(name, test, self.namespace)
 
-    def update_params(self, **params):
-        """Update each of provided parameter name and value pairs."""
-        for name, value in params.items():
-            try:
-                getattr(self, name).update(value, name)
-            except AttributeError as error:
-                raise CommandFailure("Unknown parameter: {}".format(name)) from error
-
 
 class CommandWithParameters(ObjectWithParameters):
     """A class for command with parameters."""
