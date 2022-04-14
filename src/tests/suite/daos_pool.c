@@ -24,7 +24,7 @@ pool_connect_nonexist(void **state)
 	daos_handle_t	 poh;
 	int		 rc;
 
-	MPI_Barrier(MPI_COMM_WORLD);
+	par_barrier(PAR_COMM_WORLD);
 
 	if (arg->myrank != 0)
 		return;
@@ -47,7 +47,7 @@ pool_connect(void **state)
 	daos_pool_info_t info = {0};
 	int		 rc;
 
-	MPI_Barrier(MPI_COMM_WORLD);
+	par_barrier(PAR_COMM_WORLD);
 
 	if (!arg->hdl_share && arg->myrank != 0)
 		return;
@@ -112,7 +112,7 @@ pool_connect_exclusively(void **state)
 	daos_handle_t	 poh_ex;
 	int		 rc;
 
-	MPI_Barrier(MPI_COMM_WORLD);
+	par_barrier(PAR_COMM_WORLD);
 
 	if (arg->myrank != 0)
 		return;
@@ -165,7 +165,7 @@ pool_exclude(void **state)
 	int		 rc;
 	int		 idx;
 
-	MPI_Barrier(MPI_COMM_WORLD);
+	par_barrier(PAR_COMM_WORLD);
 
 	if (1) {
 		print_message("Skip it for now, because CaRT can't support "
@@ -272,7 +272,7 @@ pool_attribute(void **state)
 	size_t			 out_sizes[] =	{ BUFSIZE, BUFSIZE, BUFSIZE };
 	size_t			 total_size;
 
-	MPI_Barrier(MPI_COMM_WORLD);
+	par_barrier(PAR_COMM_WORLD);
 
 	if (arg->myrank != 0)
 		return;
@@ -378,7 +378,7 @@ init_fini_conn(void **state)
 	daos_handle_t		 poh;
 	int			 rc;
 
-	MPI_Barrier(MPI_COMM_WORLD);
+	par_barrier(PAR_COMM_WORLD);
 
 	rc = daos_pool_connect(arg->pool.pool_str, arg->group, DAOS_PC_RW, &poh, NULL, NULL);
 	assert_rc_equal(rc, 0);
@@ -493,7 +493,7 @@ pool_properties(void **state)
 {
 	test_arg_t		*arg0 = *state;
 	test_arg_t		*arg = NULL;
-	char			*label = "test_pool_properties";
+	char			 label[] = "test_pool_properties";
 #if 0 /* DAOS-5456 space_rb props not supported with dmg pool create */
 	uint64_t		 space_rb = 36;
 #endif
@@ -505,7 +505,7 @@ pool_properties(void **state)
 	char			*expected_owner;
 	char			*expected_group;
 
-	MPI_Barrier(MPI_COMM_WORLD);
+	par_barrier(PAR_COMM_WORLD);
 
 	print_message("create pool with properties, and query it to verify.\n");
 	rc = test_setup((void **)&arg, SETUP_EQ, arg0->multi_rank,
@@ -515,9 +515,9 @@ pool_properties(void **state)
 	prop = daos_prop_alloc(1);
 	/* label - set arg->pool_label to use daos_pool_connect() */
 	prop->dpp_entries[0].dpe_type = DAOS_PROP_PO_LABEL;
-	D_STRNDUP(prop->dpp_entries[0].dpe_str, label, DAOS_PROP_LABEL_MAX_LEN);
+	D_STRNDUP_S(prop->dpp_entries[0].dpe_str, label);
 	assert_ptr_not_equal(prop->dpp_entries[0].dpe_str, NULL);
-	D_STRNDUP(arg->pool_label, label, DAOS_PROP_LABEL_MAX_LEN);
+	D_STRNDUP_S(arg->pool_label, label);
 	assert_ptr_not_equal(arg->pool_label, NULL);
 
 #if 0 /* DAOS-5456 space_rb props not supported with dmg pool create */
@@ -537,7 +537,7 @@ pool_properties(void **state)
 			DMG_KEY_FAIL_LOC, DAOS_FORCE_PROP_VERIFY, 0, NULL);
 		assert_rc_equal(rc, 0);
 	}
-	MPI_Barrier(MPI_COMM_WORLD);
+	par_barrier(PAR_COMM_WORLD);
 
 	prop_query = daos_prop_alloc(0);
 	rc = daos_pool_query(arg->pool.poh, NULL, NULL, prop_query, NULL);
@@ -603,7 +603,7 @@ pool_properties(void **state)
 	if (arg->myrank == 0)
 		daos_debug_set_params(arg->group, -1, DMG_KEY_FAIL_LOC, 0,
 				     0, NULL);
-	MPI_Barrier(MPI_COMM_WORLD);
+	par_barrier(PAR_COMM_WORLD);
 
 	daos_prop_free(prop);
 	daos_prop_free(prop_query);
@@ -619,7 +619,7 @@ pool_op_retry(void **state)
 	d_rank_list_t	*engine_ranks = NULL;
 	int		 rc;
 
-	MPI_Barrier(MPI_COMM_WORLD);
+	par_barrier(PAR_COMM_WORLD);
 
 	if (arg->myrank != 0)
 		return;
@@ -726,7 +726,7 @@ setup_containers(void **state, daos_size_t nconts)
 	}
 
 	if (arg->multi_rank) {
-		MPI_Bcast(&rc, 1, MPI_INT, 0, MPI_COMM_WORLD);
+		par_bcast(PAR_COMM_WORLD, &rc, 1, PAR_INT, 0);
 		if (rc == 0) {
 			handle_share(&lcarg->tpool.poh, HANDLE_POOL,
 				     arg->myrank, lcarg->tpool.poh, 0);
@@ -763,12 +763,11 @@ setup_containers(void **state, daos_size_t nconts)
 		}
 
 		if (arg->multi_rank) {
-			MPI_Bcast(&rc, 1, MPI_INT, 0, MPI_COMM_WORLD);
+			par_bcast(PAR_COMM_WORLD, &rc, 1, PAR_INT, 0);
 			/** broadcast container UUID */
 			if (rc == 0)
-				MPI_Bcast(lcarg->conts[i],
-					  sizeof(lcarg->conts[i]), MPI_CHAR,
-					  0, MPI_COMM_WORLD);
+				par_bcast(PAR_COMM_WORLD, lcarg->conts[i], sizeof(lcarg->conts[i]),
+					  PAR_CHAR, 0);
 		}
 
 		if (rc != 0)
@@ -831,7 +830,7 @@ teardown_containers(void **state)
 		}
 
 		if (arg->multi_rank)
-			MPI_Bcast(&rc, 1, MPI_INT, 0, MPI_COMM_WORLD);
+			par_bcast(PAR_COMM_WORLD, &rc, 1, PAR_INT, 0);
 
 		if (rc != 0)
 			return rc;
@@ -841,7 +840,7 @@ teardown_containers(void **state)
 		rc = pool_destroy_safe(arg, &lcarg->tpool);
 
 	if (arg->multi_rank)
-		MPI_Bcast(&rc, 1, MPI_INT, 0, MPI_COMM_WORLD);
+		par_bcast(PAR_COMM_WORLD, &rc, 1, PAR_INT, 0);
 
 	if (rc != 0)
 		return rc;
@@ -959,7 +958,7 @@ list_containers_test(void **state)
 	struct daos_pool_cont_info	*conts = NULL;
 	int				 tnum = 0;
 
-	MPI_Barrier(MPI_COMM_WORLD);
+	par_barrier(PAR_COMM_WORLD);
 
 	if (arg->myrank != 0)
 		return;
@@ -1090,7 +1089,7 @@ pool_connect_access(void **state)
 {
 	test_arg_t	*arg0 = *state;
 
-	MPI_Barrier(MPI_COMM_WORLD);
+	par_barrier(PAR_COMM_WORLD);
 
 	print_message("pool ACL gives the owner no permissions\n");
 	expect_pool_connect_access(arg0, 0, DAOS_PC_RO, -DER_NO_PERM);
@@ -1173,7 +1172,7 @@ label_strings_test(void **state)
 	size_t	n_valid = ARRAY_SIZE(valid_labels);
 	size_t	n_invalid = ARRAY_SIZE(invalid_labels);
 
-	MPI_Barrier(MPI_COMM_WORLD);
+	par_barrier(PAR_COMM_WORLD);
 
 	if (arg->myrank == 0) {
 		print_message("Verify %zu valid labels\n", n_valid);
@@ -1201,7 +1200,7 @@ pool_map_refreshes(void **state)
 	d_rank_t	 rank = ranks_to_kill[0];
 	int		 tgt = 0;
 
-	MPI_Barrier(MPI_COMM_WORLD);
+	par_barrier(PAR_COMM_WORLD);
 
 	/*
 	 * Since the rebuild_single_pool_target call below refreshes the pool
@@ -1251,7 +1250,7 @@ pool_map_refreshes(void **state)
 		daos_fail_loc_set(0);
 	}
 
-	MPI_Barrier(MPI_COMM_WORLD);
+	par_barrier(PAR_COMM_WORLD);
 
 	print_message("reintegrating the excluded targets\n");
 	reintegrate_single_pool_target(arg, rank, tgt);
@@ -1304,11 +1303,11 @@ run_daos_pool_test(int rank, int size, int *sub_tests, int sub_tests_size)
 {
 	int rc;
 
-	MPI_Barrier(MPI_COMM_WORLD);
+	par_barrier(PAR_COMM_WORLD);
 
 	rc = run_daos_sub_tests("DAOS_Pool", pool_tests, ARRAY_SIZE(pool_tests), sub_tests,
 				sub_tests_size, setup, test_teardown);
 
-	MPI_Barrier(MPI_COMM_WORLD);
+	par_barrier(PAR_COMM_WORLD);
 	return rc;
 }
