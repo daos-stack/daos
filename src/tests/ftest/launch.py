@@ -74,6 +74,8 @@ YAML_KEYS = OrderedDict(
         ("pool_query_timeout", "timeout_multiplier"),
         ("rebuild_timeout", "timeout_multiplier"),
         ("srv_timeout", "timeout_multiplier"),
+        ("storage_prepare_timeout", "timeout_multiplier"),
+        ("storage_format_timeout", "timeout_multiplier"),
     ]
 )
 PROVIDER_KEYS = OrderedDict(
@@ -864,7 +866,9 @@ def auto_detect_devices(host_list, device_type, length, device_filter=None):
             "/sbin/lspci -D",
             "grep -E '^[0-9a-f]{{{0}}}:[0-9a-f]{{2}}:[0-9a-f]{{2}}.[0-9a-f] '".format(length),
             "grep -E 'Non-Volatile memory controller:'"]
-        if device_filter:
+        if device_filter and device_filter.startswith("-"):
+            command_list.append("grep -v '{}'".format(device_filter[1:]))
+        elif device_filter:
             command_list.append("grep '{}'".format(device_filter))
     else:
         print("ERROR: Invalid 'device_type' for NVMe/VMD auto-detection: {}".format(device_type))
@@ -1849,7 +1853,7 @@ def resolve_debuginfo(pkg):
 
 
 def is_el(distro):
-    """Return True if a distro is an EL"""
+    """Return True if a distro is an EL."""
     return [d for d in ["almalinux", "rocky", "centos", "rhel"] if d in distro.name.lower()]
 
 

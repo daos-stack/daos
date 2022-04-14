@@ -1647,10 +1647,10 @@ run_daos_epoch_io_test(int rank, int size, int *sub_tests, int sub_tests_size)
 {
 	int rc;
 
-	MPI_Barrier(MPI_COMM_WORLD);
+	par_barrier(PAR_COMM_WORLD);
 	rc = cmocka_run_group_tests_name("DAOS_Epoch_IO",
 			epoch_io_tests, epoch_io_setup,
 			epoch_io_teardown);
-	MPI_Barrier(MPI_COMM_WORLD);
+	par_barrier(PAR_COMM_WORLD);
 	return rc;
 }

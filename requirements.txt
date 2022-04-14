@@ -1,0 +1,16 @@
+# Requirements which are not versioned.
+defusedxml
+distro
+junit_xml
+ninja
+pyelftools
+pyxattr
+pyyaml
+scons        # Works around a bug in scons on EL 8.
+tabulate
+wheel
+
+# EL8 distribution version of meson will pick up the wrong python so upgrade meson, however latest
+#  release of meson will not build spdk to bind it to a previous version.
+#  https://github.com/DPDK/dpdk/commit/c78471cd061a0f64db006c538be34536bc66c12a
+meson==0.59.4
