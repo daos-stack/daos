@@ -283,8 +283,7 @@ dfs_sys_test_access_chmod(void **state)
 	assert_int_equal(rc, 0);
 
 	/** Give file1 perms */
-	/* TODO - shouldn't need to pass S_IFREG - dfs bug */
-	rc = dfs_sys_chmod(dfs_sys_mt, file1, S_IWUSR | S_IRUSR | S_IFREG);
+	rc = dfs_sys_chmod(dfs_sys_mt, file1, S_IWUSR | S_IRUSR);
 	assert_int_equal(rc, 0);
 
 	/** file1 should have perms now */
@@ -793,6 +792,32 @@ dfs_sys_test_handles(void **state)
 	D_FREE(ghdl.iov_buf);
 }
 
+static void
+dfs_sys_test_chown(void **state)
+{
+	test_arg_t	*arg = *state;
+	const char	*dir1 = "/dir1";
+	struct stat	stbuf = {0};
+	int		rc;
+
+	if (arg->myrank != 0)
+		return;
+
+	rc = dfs_sys_mkdir(dfs_sys_mt, dir1, S_IWUSR | S_IRUSR, 0);
+	assert_int_equal(rc, 0);
+
+	/** set uid to 1, gid to 2 */
+	rc = dfs_sys_chown(dfs_sys_mt, dir1, 1, 2, 0);
+	assert_int_equal(rc, 0);
+	rc = dfs_sys_stat(dfs_sys_mt, dir1, 0, &stbuf);
+	assert_int_equal(rc, 0);
+	assert_int_equal(stbuf.st_uid, 1);
+	assert_int_equal(stbuf.st_gid, 2);
+
+	rc = dfs_sys_remove(dfs_sys_mt, dir1, false, NULL);
+	assert_int_equal(rc, 0);
+}
+
 static const struct CMUnitTest dfs_sys_unit_tests[] = {
 	{ "DFS_SYS_UNIT_TEST1:  DFS Sys mount / umount",
 	  dfs_sys_test_mount, async_disable, test_case_teardown},
@@ -816,6 +841,8 @@ static const struct CMUnitTest dfs_sys_unit_tests[] = {
 	  dfs_sys_test_xattr, async_disable, test_case_teardown},
 	{ "DFS_SYS_UNIT_TEST11: DFS Sys l2g/g2l handles",
 	  dfs_sys_test_handles, async_disable, test_case_teardown},
+	{ "DFS_SYS_UNIT_TEST12: DFS Sys chown",
+	  dfs_sys_test_chown, async_disable, test_case_teardown},
 };
 
 static int
@@ -831,12 +858,10 @@ dfs_sys_setup(void **state)
 	arg = *state;
 
 	if (arg->myrank == 0) {
-		rc = dfs_cont_create(arg->pool.poh, &co_uuid, NULL, &co_hdl,
-				     NULL);
+		rc = dfs_cont_create(arg->pool.poh, &co_uuid, NULL, &co_hdl, NULL);
 		assert_int_equal(rc, 0);
 		printf("Created DFS Container "DF_UUIDF"\n", DP_UUID(co_uuid));
-		rc = dfs_sys_mount(arg->pool.poh, co_hdl, O_RDWR, 0,
-				   &dfs_sys_mt);
+		rc = dfs_sys_mount(arg->pool.poh, co_hdl, O_RDWR, 0, &dfs_sys_mt);
 		assert_int_equal(rc, 0);
 	}
 

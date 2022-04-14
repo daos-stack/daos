@@ -9,12 +9,12 @@ from time import sleep, time
 import ctypes
 import json
 
-from test_utils_base import TestDaosApiBase
+from test_utils_base import TestDaosApiBase, LabelGenerator
 from avocado import fail_on
-from command_utils import BasicParameter, CommandFailure
+from command_utils import BasicParameter
+from exception_utils import CommandFailure
 from pydaos.raw import (DaosApiError, DaosPool, c_uuid_to_str, daos_cref)
-from general_utils import check_pool_files, DaosTestError, run_command
-from env_modules import load_mpi
+from general_utils import check_pool_files, DaosTestError
 from server_utils_base import ServerFailed, AutosizeCancel
 from dmg_utils import DmgCommand
 
@@ -136,8 +136,7 @@ class TestPool(TestDaosApiBase):
         if self.label.value is not None:
             if not isinstance(self.label_generator, LabelGenerator):
                 raise CommandFailure(
-                    "Unable to create a unique pool label; " +\
-                        "Undefined label_generator")
+                    "Unable to create a unique pool label; Undefined label_generator")
             self.label.update(self.label_generator.get_label(self.label.value))
 
     @property
@@ -536,7 +535,7 @@ class TestPool(TestDaosApiBase):
         return self._check_info(checks)
 
     def check_rebuild_status(self, rs_version=None, rs_seconds=None,
-                             rs_errno=None, rs_done=None, rs_padding32=None,
+                             rs_errno=None, rs_state=None, rs_padding32=None,
                              rs_fail_rank=None, rs_toberb_obj_nr=None,
                              rs_obj_nr=None, rs_rec_nr=None, rs_size=None):
         # pylint: disable=unused-argument
@@ -552,7 +551,7 @@ class TestPool(TestDaosApiBase):
             rs_version (int, optional): rebuild version. Defaults to None.
             rs_seconds (int, optional): rebuild seconds. Defaults to None.
             rs_errno (int, optional): rebuild error number. Defaults to None.
-            rs_done (int, optional): rebuild done flag. Defaults to None.
+            rs_state (int, optional): rebuild state flag. Defaults to None.
             rs_padding32 (int, optional): padding. Defaults to None.
             rs_fail_rank (int, optional): rebuild fail target. Defaults to None.
             rs_toberb_obj_nr (int, optional): number of objects to be rebuilt.
@@ -591,7 +590,7 @@ class TestPool(TestDaosApiBase):
 
         if self.control_method.value == self.USE_API:
             self.display_pool_rebuild_status()
-            status = self.info.pi_rebuild_st.rs_done == 1
+            status = self.info.pi_rebuild_st.rs_state == 2
         elif self.control_method.value == self.USE_DMG:
             self.set_query_data()
             self.log.info(
@@ -687,35 +686,6 @@ class TestPool(TestDaosApiBase):
         """
         return check_pool_files(self.log, hosts, self.uuid.lower())
 
-    def write_file(self, orterun, processes, hostfile, size, timeout=60):
-        """Write a file to the pool.
-
-        Args:
-            orterun (str): full path to the orterun command
-            processes (int): number of processes to launch
-            hosts (list): list of clients from which to write the file
-            size (int): size of the file to create in bytes
-            timeout (int, optional): number of seconds before timing out the
-                command. Defaults to 60 seconds.
-
-        Returns:
-            process.CmdResult: command execution result
-
-        """
-        self.log.info("Writing %s bytes to pool %s", size, self.uuid)
-        env = {
-            "DAOS_POOL": self.uuid,
-            "PYTHONPATH": os.getenv("PYTHONPATH", "")
-        }
-        if not load_mpi("openmpi"):
-            raise CommandFailure("Failed to load openmpi")
-
-        current_path = os.path.dirname(os.path.abspath(__file__))
-        command = "{} --np {} --hostfile {} {} {} testfile".format(
-            orterun, processes, hostfile,
-            os.path.join(current_path, "write_some_data.py"), size)
-        return run_command(command, timeout, True, env=env)
-
     def get_pool_daos_space(self):
         """Get the pool info daos space attributes as a dictionary.
 
@@ -786,7 +756,7 @@ class TestPool(TestDaosApiBase):
         """
         self.get_info()
         keys = (
-            "rs_version", "rs_padding32", "rs_errno", "rs_done",
+            "rs_version", "rs_padding32", "rs_errno", "rs_state",
             "rs_toberb_obj_nr", "rs_obj_nr", "rs_rec_nr")
         return {key: getattr(self.info.pi_rebuild_st, key) for key in keys}
 
@@ -941,32 +911,3 @@ class TestPool(TestDaosApiBase):
                 pool=self.identifier, acl_file=self.acl_file.value)
         else:
             self.log.error("self.acl_file isn't defined!")
-
-
-class LabelGenerator():
-    # pylint: disable=too-few-public-methods
-    """Generates label used for pool."""
-
-    def __init__(self, value=1):
-        """Constructor.
-
-        Args:
-            value (int): Number that's attached after the base_label.
-        """
-        self.value = value
-
-    def get_label(self, base_label):
-        """Create a label by adding number after the given base_label.
-
-        Args:
-            base_label (str): Label prefix. Don't include space.
-
-        Returns:
-            str: Created label.
-
-        """
-        label = base_label
-        if label is not None:
-            label = "_".join([base_label, str(self.value)])
-            self.value += 1
-        return label

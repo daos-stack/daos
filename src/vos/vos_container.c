@@ -92,7 +92,7 @@ cont_df_rec_alloc(struct btr_instance *tins, d_iov_t *key_iov,
 	cont_df = umem_off2ptr(&tins->ti_umm, offset);
 	uuid_copy(cont_df->cd_id, ukey->uuid);
 
-	rc = dbtree_create_inplace_ex(VOS_BTR_OBJ_TABLE, 0, VOS_OBJ_ORDER,
+	rc = dbtree_create_inplace_ex(VOS_BTR_OBJ_TABLE, VOS_TF_AGG_OPT, VOS_OBJ_ORDER,
 				      &pool->vp_uma, &cont_df->cd_obj_root,
 				      DAOS_HDL_INVAL, pool, &hdl);
 	if (rc) {
@@ -741,7 +741,7 @@ cont_iter_fetch(struct vos_iterator *iter, vos_iter_entry_t *it_entry,
 }
 
 static int
-cont_iter_next(struct vos_iterator *iter)
+cont_iter_next(struct vos_iterator *iter, daos_anchor_t *anchor)
 {
 	struct cont_iterator	*co_iter = vos_iter2co_iter(iter);
 
@@ -750,14 +750,16 @@ cont_iter_next(struct vos_iterator *iter)
 }
 
 static int
-cont_iter_probe(struct vos_iterator *iter, daos_anchor_t *anchor)
+cont_iter_probe(struct vos_iterator *iter, daos_anchor_t *anchor, uint32_t flags)
 {
 	struct cont_iterator	*co_iter = vos_iter2co_iter(iter);
+	dbtree_probe_opc_t	next_opc;
 	dbtree_probe_opc_t	opc;
 
 	D_ASSERT(iter->it_type == VOS_ITER_COUUID);
 
-	opc = anchor == NULL ? BTR_PROBE_FIRST : BTR_PROBE_GE;
+	next_opc = (flags & VOS_ITER_PROBE_NEXT) ? BTR_PROBE_GT : BTR_PROBE_GE;
+	opc = vos_anchor_is_zero(anchor) ? BTR_PROBE_FIRST : next_opc;
 	/* The container tree will not be affected by the iterator intent,
 	 * just set it as DAOS_INTENT_DEFAULT.
 	 */

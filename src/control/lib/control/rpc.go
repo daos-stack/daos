@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2021 Intel Corporation.
+// (C) Copyright 2020-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -457,6 +457,11 @@ func invokeUnaryRPC(parentCtx context.Context, log debugLogger, c UnaryInvoker, 
 			// should always retry an inner timeout.
 			if reqCtx.Err() == nil && isTimeout(err) {
 				break
+			}
+
+			// If the RPC handler is unimplemented, then we shouldn't retry.
+			if status.Code(errors.Cause(err)) == codes.Unimplemented {
+				return nil, err
 			}
 
 			// In the case that the request specifies that the error

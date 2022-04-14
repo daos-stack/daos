@@ -286,8 +286,16 @@ prop_to_str(uint32_t type)
 		return "DAOS_PROP_CO_ALLOCED_OID";
 	case DAOS_PROP_CO_EC_CELL_SZ:
 		return "DAOS_PROP_CO_EC_CELL_SZ";
+	case DAOS_PROP_CO_EC_PDA:
+		return "DAOS_PROP_CO_EC_PDA";
+	case DAOS_PROP_CO_RP_PDA:
+		return "DAOS_PROP_CO_RP_PDA";
+	case DAOS_PROP_CO_GLOBAL_VERSION:
+		return "DAOS_PROP_CO_GLOBAL_VERSION";
 	case DAOS_PROP_CO_ROOTS:
 		return "DAOS_PROP_CO_ROOTS";
+	case DAOS_PROP_CO_SCRUBBER_DISABLED:
+		return "DAOS_PROP_CO_SCRUBBER_DISABLED";
 	default:
 		return "PROPERTY NOT SUPPORTED";
 	}
@@ -347,7 +355,11 @@ daos_cont_serialize_props(hid_t file_id, daos_prop_t *prop_query)
 			   type == DAOS_PROP_CO_DEDUP ||
 			   type == DAOS_PROP_CO_DEDUP_THRESHOLD ||
 			   type == DAOS_PROP_CO_EC_CELL_SZ ||
-			   type == DAOS_PROP_CO_ALLOCED_OID) {
+			   type == DAOS_PROP_CO_EC_PDA ||
+			   type == DAOS_PROP_CO_RP_PDA ||
+			   type == DAOS_PROP_CO_GLOBAL_VERSION ||
+			   type == DAOS_PROP_CO_ALLOCED_OID ||
+			   type == DAOS_PROP_CO_SCRUBBER_DISABLED) {
 			entry = &prop_query->dpp_entries[i];
 			rc = serialize_uint(file_id, entry->dpe_val,
 					    prop_str);
@@ -1002,6 +1014,37 @@ deserialize_props(daos_handle_t poh, hid_t file_id, daos_prop_t **_prop, uint64_
 		prop->dpp_entries[prop_num].dpe_type = type;
 		entry = &prop->dpp_entries[prop_num];
 		rc = deserialize_uint(file_id, &entry->dpe_val, "DAOS_PROP_CO_EC_CELL_SZ");
+		if (rc != 0) {
+			D_GOTO(out, rc);
+		}
+		prop_num++;
+	}
+	if (H5Aexists(file_id, "DAOS_PROP_CO_EC_PDA") > 0) {
+		type = DAOS_PROP_CO_EC_PDA;
+		prop->dpp_entries[prop_num].dpe_type = type;
+		entry = &prop->dpp_entries[prop_num];
+		rc = deserialize_uint(file_id, &entry->dpe_val,
+				      "DAOS_PROP_CO_EC_PDA");
+		if (rc != 0)
+			D_GOTO(out, rc);
+		prop_num++;
+	}
+	if (H5Aexists(file_id, "DAOS_PROP_CO_RP_PDA") > 0) {
+		type = DAOS_PROP_CO_RP_PDA;
+		prop->dpp_entries[prop_num].dpe_type = type;
+		entry = &prop->dpp_entries[prop_num];
+		rc = deserialize_uint(file_id, &entry->dpe_val,
+				      "DAOS_PROP_CO_RP_PDA");
+		if (rc != 0)
+			D_GOTO(out, rc);
+		prop_num++;
+	}
+	if (H5Aexists(file_id, "DAOS_PROP_CO_SCRUBBER_DISABLED") > 0) {
+		type = DAOS_PROP_CO_SCRUBBER_DISABLED;
+		prop->dpp_entries[prop_num].dpe_type = type;
+		entry = &prop->dpp_entries[prop_num];
+		rc = deserialize_uint(file_id, &entry->dpe_val,
+				      "DAOS_PROP_CO_SCRUBBER_DISABLED");
 		if (rc != 0) {
 			D_GOTO(out, rc);
 		}

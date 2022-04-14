@@ -160,7 +160,7 @@ def configure_mpi(env, libs, required=None):
         return _configure_mpi_pkg(env, libs)
 
     mpis = ['openmpi', 'mpich']
-    if not required is None:
+    if required is not None:
         if isinstance(required, str):
             mpis = [required]
         else:

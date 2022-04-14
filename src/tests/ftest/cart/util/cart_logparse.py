@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# Copyright (C) 2018-2019 Intel Corporation
+# Copyright 2018-2022 Intel Corporation
 # All rights reserved.
 #
 # Redistribution and use in source and binary forms, with or without
@@ -54,6 +54,7 @@ class InvalidPid(Exception):
 
 class InvalidLogFile(Exception):
     """Exception to be raised when log file cannot be parsed."""
+
 
 LOG_LEVELS = {
     'EMIT': 1,

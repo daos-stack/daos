@@ -350,7 +350,7 @@ func TestStartLoggingConfiguration(t *testing.T) {
 		},
 		"Debug": {
 			configFn: func(cfg *config.Server) *config.Server {
-				return cfg.WithControlLogMask(config.ControlLogLevelDebug)
+				return cfg.WithControlLogMask(common.ControlLogLevelDebug)
 			},
 			logFnName: "Debug",
 			input:     "hello",
@@ -358,7 +358,7 @@ func TestStartLoggingConfiguration(t *testing.T) {
 		},
 		"Error": {
 			configFn: func(cfg *config.Server) *config.Server {
-				return cfg.WithControlLogMask(config.ControlLogLevelError)
+				return cfg.WithControlLogMask(common.ControlLogLevelError)
 			},
 			logFnName: "Info",
 			input:     "hello",

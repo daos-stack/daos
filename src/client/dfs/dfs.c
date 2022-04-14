@@ -48,7 +48,7 @@
 /** DFS SB version value */
 #define DFS_SB_VERSION		2
 /** DFS Layout Version Value */
-#define DFS_LAYOUT_VERSION	2
+#define DFS_LAYOUT_VERSION	3
 /** Array object stripe size for regular files */
 #define DFS_DEFAULT_CHUNK_SIZE	1048576
 /** Magic value for serializing / deserializing a DFS handle */
@@ -57,8 +57,9 @@
 #define DFS_OBJ_GLOB_MAGIC	0xdf500b90
 
 /** Number of A-keys for attributes in any object entry */
-#define INODE_AKEYS	8
+#define INODE_AKEYS	10
 #define INODE_AKEY_NAME	"DFS_INODE"
+#define SLINK_AKEY_NAME	"DFS_SLINK"
 #define MODE_IDX	0
 #define OID_IDX		(sizeof(mode_t))
 #define ATIME_IDX	(OID_IDX + sizeof(daos_obj_id_t))
@@ -66,7 +67,10 @@
 #define CTIME_IDX	(MTIME_IDX + sizeof(time_t))
 #define CSIZE_IDX	(CTIME_IDX + sizeof(time_t))
 #define OCLASS_IDX	(CSIZE_IDX + sizeof(daos_size_t))
-#define SYML_IDX	(OCLASS_IDX + sizeof(daos_oclass_id_t))
+#define UID_IDX		(OCLASS_IDX + sizeof(daos_oclass_id_t))
+#define GID_IDX		(UID_IDX + sizeof(uid_t))
+#define SIZE_IDX	(GID_IDX + sizeof(gid_t))
+#define END_IDX		(SIZE_IDX + sizeof(daos_size_t))
 
 /** Parameters for dkey enumeration */
 #define ENUM_DESC_NR	10
@@ -128,6 +132,8 @@ struct dfs {
 	bool			use_dtx;
 	/** lock for threadsafety */
 	pthread_mutex_t		lock;
+	/** layout version of DFS container that is mounted */
+	dfs_layout_ver_t	layout_v;
 	/** uid - inherited from container. */
 	uid_t			uid;
 	/** gid - inherited from container. */
@@ -161,7 +167,7 @@ struct dfs_entry {
 	/** mode (permissions + entry type) */
 	mode_t			mode;
 	/* Length of value string, not including NULL byte */
-	uint16_t		value_len;
+	daos_size_t		value_len;
 	/** Object ID if not a symbolic link */
 	daos_obj_id_t		oid;
 	/* Time of last access */
@@ -174,6 +180,10 @@ struct dfs_entry {
 	daos_size_t		chunk_size;
 	/** oclass of file or all files in a dir */
 	daos_oclass_id_t	oclass;
+	/** uid - not enforced at this level. */
+	uid_t			uid;
+	/** gid - not enforced at this level. */
+	gid_t			gid;
 	/** Sym Link value */
 	char			*value;
 };
@@ -344,9 +354,9 @@ concat(const char *s1, const char *s2)
 }
 
 static int
-fetch_entry(daos_handle_t oh, daos_handle_t th, const char *name, size_t len,
-	    bool fetch_sym, bool *exists, struct dfs_entry *entry, int xnr,
-	    char *xnames[], void *xvals[], daos_size_t *xsizes)
+fetch_entry(dfs_layout_ver_t ver, daos_handle_t oh, daos_handle_t th, const char *name, size_t len,
+	    bool fetch_sym, bool *exists, struct dfs_entry *entry, int xnr, char *xnames[],
+	    void *xvals[], daos_size_t *xsizes)
 {
 	d_sg_list_t	l_sgl, *sgl;
 	d_iov_t		sg_iovs[INODE_AKEYS];
@@ -412,12 +422,12 @@ fetch_entry(daos_handle_t oh, daos_handle_t th, const char *name, size_t len,
 	d_iov_set(&iod->iod_name, INODE_AKEY_NAME, sizeof(INODE_AKEY_NAME) - 1);
 	iod->iod_nr	= 1;
 	recx.rx_idx	= 0;
-	recx.rx_nr	= SYML_IDX;
+	recx.rx_nr	= END_IDX;
 	iod->iod_recxs	= &recx;
 	iod->iod_type	= DAOS_IOD_ARRAY;
 	iod->iod_size	= 1;
-	i = 0;
 
+	i = 0;
 	d_iov_set(&sg_iovs[i++], &entry->mode, sizeof(mode_t));
 	d_iov_set(&sg_iovs[i++], &entry->oid, sizeof(daos_obj_id_t));
 	d_iov_set(&sg_iovs[i++], &entry->atime, sizeof(time_t));
@@ -425,16 +435,27 @@ fetch_entry(daos_handle_t oh, daos_handle_t th, const char *name, size_t len,
 	d_iov_set(&sg_iovs[i++], &entry->ctime, sizeof(time_t));
 	d_iov_set(&sg_iovs[i++], &entry->chunk_size, sizeof(daos_size_t));
 	d_iov_set(&sg_iovs[i++], &entry->oclass, sizeof(daos_oclass_id_t));
+	d_iov_set(&sg_iovs[i++], &entry->uid, sizeof(uid_t));
+	d_iov_set(&sg_iovs[i++], &entry->gid, sizeof(gid_t));
+	d_iov_set(&sg_iovs[i++], &entry->value_len, sizeof(daos_size_t));
+
+	/* if we are reading from a layout ver 2 or older, don't read the uid, gid, and val len */
+	if (ver <= 2) {
+		recx.rx_nr = UID_IDX;
+		i = i - 3;
+	}
 
 	sgl->sg_nr	= i;
 	sgl->sg_nr_out	= 0;
 	sgl->sg_iovs	= sg_iovs;
 
-	rc = daos_obj_fetch(oh, th, 0, &dkey, xnr + 1, iods ? iods : iod,
+	rc = daos_obj_fetch(oh, th, DAOS_COND_DKEY_FETCH, &dkey, xnr + 1, iods ? iods : iod,
 			    sgls ? sgls : sgl, NULL, NULL);
-	if (rc) {
-		D_ERROR("Failed to fetch entry %s "DF_RC"\n", name,
-			DP_RC(rc));
+	if (rc == -DER_NONEXIST) {
+		*exists = false;
+		D_GOTO(out, rc = 0);
+	} else if (rc) {
+		D_ERROR("Failed to fetch entry %s "DF_RC"\n", name, DP_RC(rc));
 		D_GOTO(out, rc = daos_der2errno(rc));
 	}
 
@@ -442,35 +463,69 @@ fetch_entry(daos_handle_t oh, daos_handle_t th, const char *name, size_t len,
 		xsizes[i] = iods[i].iod_size;
 
 	if (fetch_sym && S_ISLNK(entry->mode)) {
-		char *value;
+		char		*value;
+		daos_size_t	val_len;
 
-		D_ALLOC(value, DFS_MAX_PATH);
+		if (ver > 2) {
+			/** symlink is empty */
+			if (entry->value_len == 0)
+				D_GOTO(out, rc = EIO);
+			val_len = entry->value_len;
+			D_ALLOC(value, val_len + 1);
+		} else {
+			val_len = DFS_MAX_PATH;
+			D_ALLOC(value, DFS_MAX_PATH);
+		}
 		if (value == NULL)
 			D_GOTO(out, rc = ENOMEM);
 
-		recx.rx_idx = SYML_IDX;
-		recx.rx_nr = DFS_MAX_PATH;
+		/*
+		 * If we are reading from a layout ver 2 or older container, symlink value starts at
+		 * the current uid_idx; otherwise symlink is in a separate akey.
+		 */
+		if (ver <= 2) {
+			recx.rx_idx = UID_IDX;
+			recx.rx_nr = val_len;
+		} else {
+			d_iov_set(&iod->iod_name, SLINK_AKEY_NAME, sizeof(SLINK_AKEY_NAME) - 1);
+			iod->iod_nr	= 1;
+			iod->iod_recxs	= NULL;
+			iod->iod_type	= DAOS_IOD_SINGLE;
+			iod->iod_size	= DAOS_REC_ANY;
+		}
 
-		d_iov_set(&sg_iovs[0], value, DFS_MAX_PATH);
+		d_iov_set(&sg_iovs[0], value, val_len);
 		sgl->sg_nr	= 1;
 		sgl->sg_nr_out	= 0;
 		sgl->sg_iovs	= sg_iovs;
 
-		rc = daos_obj_fetch(oh, th, 0, &dkey, 1, iod, sgl, NULL,
-				    NULL);
+		rc = daos_obj_fetch(oh, th, DAOS_COND_DKEY_FETCH, &dkey, 1, iod, sgl, NULL, NULL);
 		if (rc) {
-			D_ERROR("Failed to fetch entry %s "DF_RC"\n", name,
-				DP_RC(rc));
 			D_FREE(value);
+			if (rc == -DER_NONEXIST) {
+				*exists = false;
+				D_GOTO(out, rc = 0);
+			}
+			D_ERROR("Failed to fetch entry %s "DF_RC"\n", name, DP_RC(rc));
 			D_GOTO(out, rc = daos_der2errno(rc));
 		}
 
-		entry->value_len = sg_iovs[0].iov_len;
+		if (ver > 2) {
+			/** make sure that the akey value size matches what is in the inode */
+			if (iod->iod_size != val_len) {
+				D_ERROR("Symlink value length inconsistent with inode data\n");
+				D_GOTO(out, rc = EIO);
+			}
+			value[val_len] = 0;
+		} else {
+			/*
+			 * update the length in the entry struct since it's not known at this point
+			 * in the older layout version.
+			 */
+			entry->value_len = sg_iovs[0].iov_len;
+		}
 
 		if (entry->value_len != 0) {
-			/* Return value here, and allow the caller to truncate
-			 * the buffer if they want to
-			 */
 			entry->value = value;
 		} else {
 			D_ERROR("Failed to load value for symlink\n");
@@ -483,7 +538,6 @@ fetch_entry(daos_handle_t oh, daos_handle_t th, const char *name, size_t len,
 		*exists = false;
 	else
 		*exists = true;
-
 out:
 	if (xnr) {
 		if (pxnames) {
@@ -526,34 +580,35 @@ remove_entry(dfs_t *dfs, daos_handle_t th, daos_handle_t parent_oh,
 punch_entry:
 	d_iov_set(&dkey, (void *)name, len);
 	/** we only need a conditional dkey punch if we are not using a DTX */
-	rc = daos_obj_punch_dkeys(parent_oh, th,
-				  dfs->use_dtx ? 0 : DAOS_COND_PUNCH,
-				  1, &dkey, NULL);
+	rc = daos_obj_punch_dkeys(parent_oh, th, dfs->use_dtx ? 0 : DAOS_COND_PUNCH, 1, &dkey,
+				  NULL);
 	return daos_der2errno(rc);
 }
 
 static int
-insert_entry(daos_handle_t oh, daos_handle_t th, const char *name, size_t len,
+insert_entry(dfs_layout_ver_t ver, daos_handle_t oh, daos_handle_t th, const char *name, size_t len,
 	     uint64_t flags, struct dfs_entry *entry)
 {
-	d_sg_list_t	sgl;
+	d_sg_list_t	sgls[2];
 	d_iov_t		sg_iovs[INODE_AKEYS];
-	daos_iod_t	iod;
+	d_iov_t		sym_iov;
+	daos_iod_t	iods[2];
 	daos_recx_t	recx;
 	daos_key_t	dkey;
 	unsigned int	i;
+	unsigned int	nr_iods;
 	int		rc;
 
 	d_iov_set(&dkey, (void *)name, len);
-	d_iov_set(&iod.iod_name, INODE_AKEY_NAME, sizeof(INODE_AKEY_NAME) - 1);
-	iod.iod_nr	= 1;
-	recx.rx_idx	= 0;
-	recx.rx_nr	= SYML_IDX;
-	iod.iod_recxs	= &recx;
-	iod.iod_type	= DAOS_IOD_ARRAY;
-	iod.iod_size	= 1;
-	i = 0;
+	d_iov_set(&iods[0].iod_name, INODE_AKEY_NAME, sizeof(INODE_AKEY_NAME) - 1);
+	iods[0].iod_nr		= 1;
+	recx.rx_idx		= 0;
+	recx.rx_nr		= END_IDX;
+	iods[0].iod_recxs	= &recx;
+	iods[0].iod_type	= DAOS_IOD_ARRAY;
+	iods[0].iod_size	= 1;
 
+	i = 0;
 	d_iov_set(&sg_iovs[i++], &entry->mode, sizeof(mode_t));
 	d_iov_set(&sg_iovs[i++], &entry->oid, sizeof(daos_obj_id_t));
 	d_iov_set(&sg_iovs[i++], &entry->atime, sizeof(time_t));
@@ -562,24 +617,56 @@ insert_entry(daos_handle_t oh, daos_handle_t th, const char *name, size_t len,
 	d_iov_set(&sg_iovs[i++], &entry->chunk_size, sizeof(daos_size_t));
 	d_iov_set(&sg_iovs[i++], &entry->oclass, sizeof(daos_oclass_id_t));
 
-	/** Add symlink value if Symlink */
-	if (S_ISLNK(entry->mode)) {
-		d_iov_set(&sg_iovs[i++], entry->value, entry->value_len);
-		recx.rx_nr += entry->value_len;
+	nr_iods = 1;
+	/*
+	 * if we are writing to a layout ver 2 or older container, don't add the uid/gid, and put
+	 * symlink value in the same akey.
+	 */
+	if (ver <= 2) {
+		/*
+		 * length of the array in that version is at the first new entry added in the new
+		 * format, which is the uid.
+		 */
+		recx.rx_nr = UID_IDX;
+
+		/** Add symlink value to the array */
+		if (S_ISLNK(entry->mode)) {
+			d_iov_set(&sg_iovs[i++], entry->value, entry->value_len);
+			recx.rx_nr += entry->value_len;
+		}
+	} else {
+		d_iov_set(&sg_iovs[i++], &entry->uid, sizeof(uid_t));
+		d_iov_set(&sg_iovs[i++], &entry->gid, sizeof(gid_t));
+		/** Add file size / symlink length. for now, file size cached in the entry is 0. */
+		d_iov_set(&sg_iovs[i++], &entry->value_len, sizeof(daos_size_t));
+
+		/** add the symlink as a separate akey */
+		if (S_ISLNK(entry->mode)) {
+			nr_iods = 2;
+			d_iov_set(&iods[1].iod_name, SLINK_AKEY_NAME, sizeof(SLINK_AKEY_NAME) - 1);
+			iods[1].iod_nr		= 1;
+			iods[1].iod_recxs	= NULL;
+			iods[1].iod_type	= DAOS_IOD_SINGLE;
+			iods[1].iod_size	= entry->value_len;
+
+			d_iov_set(&sym_iov, entry->value, entry->value_len);
+			sgls[1].sg_nr = 1;
+			sgls[1].sg_nr_out = 0;
+			sgls[1].sg_iovs = &sym_iov;
+		}
 	}
 
-	sgl.sg_nr	= i;
-	sgl.sg_nr_out	= 0;
-	sgl.sg_iovs	= sg_iovs;
+	sgls[0].sg_nr		= i;
+	sgls[0].sg_nr_out	= 0;
+	sgls[0].sg_iovs		= sg_iovs;
 
-	rc = daos_obj_update(oh, th, flags, &dkey, 1, &iod, &sgl, NULL);
+	rc = daos_obj_update(oh, th, flags, &dkey, nr_iods, iods, sgls, NULL);
 	if (rc) {
 		/** don't log error if conditional failed */
 		if (rc != -DER_EXIST && rc != -DER_NO_PERM)
 			D_ERROR("Failed to insert entry '%s', "DF_RC"\n", name, DP_RC(rc));
 		return daos_der2errno(rc);
 	}
-
 	return 0;
 }
 
@@ -634,9 +721,17 @@ entry_stat(dfs_t *dfs, daos_handle_t th, daos_handle_t oh, const char *name,
 
 	memset(stbuf, 0, sizeof(struct stat));
 
-	/* Check if parent has the entry */
-	rc = fetch_entry(oh, th, name, len, true, &exists, &entry,
-			 0, NULL, NULL, NULL);
+	/*
+	 * Check if parent has the entry. In older layout version, we need to fetch the symlink to
+	 * determine the size, but in current version, the size is stored in the inode akey, so no
+	 * need to fetch the symlink.
+	 */
+	if (dfs->layout_v > 2)
+		rc = fetch_entry(dfs->layout_v, oh, th, name, len, false, &exists, &entry, 0,
+				 NULL, NULL, NULL);
+	else
+		rc = fetch_entry(dfs->layout_v, oh, th, name, len, true, &exists, &entry, 0,
+				 NULL, NULL, NULL);
 	if (rc)
 		return rc;
 
@@ -649,15 +744,18 @@ entry_stat(dfs_t *dfs, daos_handle_t th, daos_handle_t oh, const char *name,
 	switch (entry.mode & S_IFMT) {
 	case S_IFDIR:
 		size = sizeof(entry);
+		stbuf->st_mtim.tv_sec = entry.mtime;
 		break;
 	case S_IFREG:
 	{
+		daos_array_stbuf_t	array_stbuf = {0};
+
 		if (obj) {
-			rc = daos_array_get_size(obj->oh, th, &size, NULL);
+			rc = daos_array_stat(obj->oh, th, &array_stbuf, NULL);
 			if (rc)
 				return daos_der2errno(rc);
 		} else {
-			daos_handle_t file_oh;
+			daos_handle_t	file_oh;
 
 			rc = daos_array_open_with_attr(dfs->coh, entry.oid, th, DAOS_OO_RO, 1,
 						       entry.chunk_size ? entry.chunk_size :
@@ -667,7 +765,7 @@ entry_stat(dfs_t *dfs, daos_handle_t th, daos_handle_t oh, const char *name,
 				return daos_der2errno(rc);
 			}
 
-			rc = daos_array_get_size(file_oh, th, &size, NULL);
+			rc = daos_array_stat(file_oh, th, &array_stbuf, NULL);
 			if (rc) {
 				daos_array_close(file_oh, NULL);
 				return daos_der2errno(rc);
@@ -677,18 +775,30 @@ entry_stat(dfs_t *dfs, daos_handle_t th, daos_handle_t oh, const char *name,
 			if (rc)
 				return daos_der2errno(rc);
 		}
+
+		size = array_stbuf.st_size;
+		if (array_stbuf.st_max_epoch) {
+			rc = crt_hlc2timespec(array_stbuf.st_max_epoch, &stbuf->st_mtim);
+			if (rc) {
+				D_ERROR("crt_hlc2timespec() failed "DF_RC"\n", DP_RC(rc));
+				return daos_der2errno(rc);
+			}
+		} else {
+			stbuf->st_mtim.tv_sec = entry.mtime;
+		}
+
 		/*
 		 * TODO - this is not accurate since it does not account for
 		 * sparse files or file metadata or xattributes.
 		 */
 		stbuf->st_blocks = (size + (1 << 9) - 1) >> 9;
-		stbuf->st_blksize = entry.chunk_size ? entry.chunk_size :
-			dfs->attr.da_chunk_size;
+		stbuf->st_blksize = entry.chunk_size ? entry.chunk_size : dfs->attr.da_chunk_size;
 		break;
 	}
 	case S_IFLNK:
 		size = entry.value_len;
 		D_FREE(entry.value);
+		stbuf->st_mtim.tv_sec = entry.mtime;
 		break;
 	default:
 		D_ERROR("Invalid entry type (not a dir, file, symlink).\n");
@@ -698,10 +808,9 @@ entry_stat(dfs_t *dfs, daos_handle_t th, daos_handle_t oh, const char *name,
 	stbuf->st_nlink = 1;
 	stbuf->st_size = size;
 	stbuf->st_mode = entry.mode;
-	stbuf->st_uid = dfs->uid;
-	stbuf->st_gid = dfs->gid;
+	stbuf->st_uid = entry.uid;
+	stbuf->st_gid = entry.gid;
 	stbuf->st_atim.tv_sec = entry.atime;
-	stbuf->st_mtim.tv_sec = entry.mtime;
 	stbuf->st_ctim.tv_sec = entry.ctime;
 
 	return 0;
@@ -726,7 +835,7 @@ check_name(const char *name, size_t *_len)
 }
 
 static int
-check_access(dfs_t *dfs, uid_t uid, gid_t gid, mode_t mode, int mask)
+check_access(uid_t c_uid, gid_t c_gid, uid_t uid, gid_t gid, mode_t mode, int mask)
 {
 	mode_t	base_mask;
 
@@ -740,10 +849,10 @@ check_access(dfs_t *dfs, uid_t uid, gid_t gid, mode_t mode, int mask)
 	/** set base_mask to others at first step */
 	base_mask = S_IRWXO;
 	/** update base_mask if uid matches */
-	if (uid == dfs->uid)
+	if (uid == c_uid)
 		base_mask |= S_IRWXU;
 	/** update base_mask if gid matches */
-	if (gid == dfs->gid)
+	if (gid == c_gid)
 		base_mask |= S_IRWXG;
 
 	/** AND the object mode with the base_mask to determine access */
@@ -801,7 +910,7 @@ restart:
 		 * just a file open if the file entry exists.
 		 */
 		if (!oexcl) {
-			rc = fetch_entry(parent->oh, th, file->name, len, false,
+			rc = fetch_entry(dfs->layout_v, parent->oh, th, file->name, len, false,
 					 &exists, entry, 0, NULL, NULL, NULL);
 			if (rc)
 				D_GOTO(out, rc);
@@ -834,12 +943,10 @@ restart:
 		oid_cp(&entry->oid, file->oid);
 
 		/** Open the array object for the file */
-		rc = daos_array_open_with_attr(dfs->coh, file->oid, th,
-					       DAOS_OO_RW, 1, chunk_size,
+		rc = daos_array_open_with_attr(dfs->coh, file->oid, th, DAOS_OO_RW, 1, chunk_size,
 					       &file->oh, NULL);
 		if (rc != 0) {
-			D_ERROR("daos_array_open_with_attr() failed "DF_RC"\n",
-				DP_RC(rc));
+			D_ERROR("daos_array_open_with_attr() failed "DF_RC"\n", DP_RC(rc));
 			D_GOTO(out, rc = daos_der2errno(rc));
 		}
 
@@ -847,17 +954,17 @@ restart:
 		entry->mode = file->mode;
 		entry->atime = entry->mtime = entry->ctime = time(NULL);
 		entry->chunk_size = chunk_size;
+		entry->uid = geteuid();
+		entry->gid = getegid();
 
-		rc = insert_entry(parent->oh, th, file->name, len,
-				  (!dfs->use_dtx || oexcl) ?
-				  DAOS_COND_DKEY_INSERT : 0, entry);
+		rc = insert_entry(dfs->layout_v, parent->oh, th, file->name, len,
+				  (!dfs->use_dtx || oexcl) ? DAOS_COND_DKEY_INSERT : 0, entry);
 		if (rc == EEXIST && !oexcl) {
 			/** just try refetching entry to open the file */
 			daos_array_close(file->oh, NULL);
 		} else if (rc) {
 			daos_array_close(file->oh, NULL);
-			D_DEBUG(DB_TRACE, "Insert file entry %s failed (%d)\n",
-				file->name, rc);
+			D_DEBUG(DB_TRACE, "Insert file entry %s failed (%d)\n", file->name, rc);
 			D_GOTO(out, rc);
 		} else {
 			/** Success, commit */
@@ -866,7 +973,7 @@ restart:
 	}
 
 	/* Check if parent has the filename entry */
-	rc = fetch_entry(parent->oh, th, file->name, len, false, &exists,
+	rc = fetch_entry(dfs->layout_v, parent->oh, th, file->name, len, false, &exists,
 			 entry, 0, NULL, NULL, NULL);
 	if (rc) {
 		D_ERROR("fetch_entry %s failed %d.\n", file->name, rc);
@@ -992,10 +1099,12 @@ open_dir(dfs_t *dfs, dfs_obj_t *parent, int flags, daos_oclass_id_t cid,
 		entry->atime = entry->mtime = entry->ctime = time(NULL);
 		entry->chunk_size = parent->d.chunk_size;
 		entry->oclass = parent->d.oclass;
+		entry->uid = geteuid();
+		entry->gid = getegid();
 
 		/** since it's a single conditional op, we don't need a DTX */
-		rc = insert_entry(parent->oh, DAOS_TX_NONE, dir->name, len, DAOS_COND_DKEY_INSERT,
-				  entry);
+		rc = insert_entry(dfs->layout_v, parent->oh, DAOS_TX_NONE, dir->name, len,
+				  DAOS_COND_DKEY_INSERT, entry);
 		if (rc != 0) {
 			daos_obj_close(dir->oh, NULL);
 			if (rc != EPERM)
@@ -1013,7 +1122,7 @@ open_dir(dfs_t *dfs, dfs_obj_t *parent, int flags, daos_oclass_id_t cid,
 		return EINVAL;
 
 	/* Check if parent has the dirname entry */
-	rc = fetch_entry(parent_oh, DAOS_TX_NONE, dir->name, len, false,
+	rc = fetch_entry(dfs->layout_v, parent_oh, DAOS_TX_NONE, dir->name, len, false,
 			 &exists, entry, 0, NULL, NULL, NULL);
 	if (rc)
 		return rc;
@@ -1078,18 +1187,22 @@ open_symlink(dfs_t *dfs, dfs_obj_t *parent, int flags, daos_oclass_id_t cid,
 		oid_cp(&entry->oid, sym->oid);
 		entry->mode = sym->mode | S_IRWXO | S_IRWXU | S_IRWXG;
 		entry->atime = entry->mtime = entry->ctime = time(NULL);
+		entry->uid = geteuid();
+		entry->gid = getegid();
 		D_STRNDUP(sym->value, value, value_len + 1);
 		if (sym->value == NULL)
 			return ENOMEM;
-
 		entry->value = sym->value;
 		entry->value_len = value_len;
-		rc = insert_entry(parent->oh, DAOS_TX_NONE, sym->name, len,
+
+		rc = insert_entry(dfs->layout_v, parent->oh, DAOS_TX_NONE, sym->name, len,
 				  DAOS_COND_DKEY_INSERT, entry);
-		if (rc) {
+		if (rc == EEXIST) {
 			D_FREE(sym->value);
-			D_ERROR("Inserting entry %s failed (rc = %d)\n",
-				sym->name, rc);
+		} else if (rc != 0) {
+			D_FREE(sym->value);
+			D_ERROR("Inserting entry '%s' failed: %d (%s)\n",
+				sym->name, rc, strerror(rc));
 		}
 		return rc;
 	}
@@ -1129,7 +1242,7 @@ set_inode_params(bool for_update, daos_iod_t *iods, daos_key_t *dkey)
 
 static int
 open_sb(daos_handle_t coh, bool create, daos_obj_id_t super_oid,
-	dfs_attr_t *attr, daos_handle_t *oh)
+	dfs_attr_t *attr, daos_handle_t *oh, dfs_layout_ver_t *ver)
 {
 	d_sg_list_t		sgls[SB_AKEYS];
 	d_iov_t			sg_iovs[SB_AKEYS];
@@ -1217,11 +1330,15 @@ open_sb(daos_handle_t coh, bool create, daos_obj_id_t super_oid,
 	}
 
 	if (iods[2].iod_size != sizeof(layout_ver) ||
-	    layout_ver != DFS_LAYOUT_VERSION) {
-		D_ERROR("Incompatible DFS Layout version.\n");
+	    layout_ver > DFS_LAYOUT_VERSION) {
+		D_ERROR("Incompatible DFS Layout version: %d\n", layout_ver);
 		D_GOTO(err, rc = EINVAL);
 	}
 
+	D_DEBUG(DB_ALL, "DFS Container Layout version: %d\n", layout_ver);
+	D_DEBUG(DB_ALL, "DFS Library Layout version: %d\n", DFS_LAYOUT_VERSION);
+
+	*ver = layout_ver;
 	attr->da_chunk_size = (chunk_size) ? chunk_size :
 		DFS_DEFAULT_CHUNK_SIZE;
 	attr->da_oclass_id = oclass;
@@ -1268,6 +1385,7 @@ dfs_cont_create_int(daos_handle_t poh, uuid_t *cuuid, bool uuid_is_set, uuid_t i
 	char			str[37];
 	struct daos_prop_co_roots roots;
 	int			rc;
+	struct daos_prop_entry  *dpe;
 
 	if (cuuid == NULL)
 		return EINVAL;
@@ -1315,7 +1433,15 @@ dfs_cont_create_int(daos_handle_t poh, uuid_t *cuuid, bool uuid_is_set, uuid_t i
 	}
 
 	/** check if RF factor is set on property */
-	rf_factor = daos_cont_prop2redunfac(prop);
+	dpe = daos_prop_entry_get(prop, DAOS_PROP_CO_REDUN_FAC);
+	if (!dpe) {
+		rc = dc_pool_get_redunc(poh);
+		if (rc < 0)
+			D_GOTO(err_prop, rc = daos_der2errno(rc));
+		rf_factor = rc;
+	} else {
+		rf_factor = dpe->dpe_val;
+	}
 
 	/* select oclass and generate SB OID */
 	roots.cr_oids[0].lo = RESERVED_LO;
@@ -1364,7 +1490,7 @@ dfs_cont_create_int(daos_handle_t poh, uuid_t *cuuid, bool uuid_is_set, uuid_t i
 	}
 
 	/** Create SB */
-	rc = open_sb(coh, true, roots.cr_oids[0], &dattr, &super_oh);
+	rc = open_sb(coh, true, roots.cr_oids[0], &dattr, &super_oh, NULL);
 	if (rc)
 		D_GOTO(err_close, rc);
 
@@ -1374,6 +1500,8 @@ dfs_cont_create_int(daos_handle_t poh, uuid_t *cuuid, bool uuid_is_set, uuid_t i
 	entry.atime = entry.mtime = entry.ctime = time(NULL);
 	entry.chunk_size = dattr.da_chunk_size;
 	entry.oclass = dattr.da_oclass_id;
+	entry.uid = geteuid();
+	entry.gid = getegid();
 
 	/*
 	 * Since we don't support daos cont create atomicity (2 or more cont
@@ -1382,8 +1510,8 @@ dfs_cont_create_int(daos_handle_t poh, uuid_t *cuuid, bool uuid_is_set, uuid_t i
 	 * on another. in this case we can just assume it is inserted, and
 	 * continue.
 	 */
-	rc = insert_entry(super_oh, DAOS_TX_NONE, "/", 1,
-			  DAOS_COND_DKEY_INSERT, &entry);
+	rc = insert_entry(DFS_LAYOUT_VERSION, super_oh, DAOS_TX_NONE, "/", 1, DAOS_COND_DKEY_INSERT,
+			  &entry);
 	if (rc && rc != EEXIST) {
 		D_ERROR("Failed to insert root entry: %d (%s)\n", rc, strerror(rc));
 		D_GOTO(err_super, rc);
@@ -1402,6 +1530,7 @@ dfs_cont_create_int(daos_handle_t poh, uuid_t *cuuid, bool uuid_is_set, uuid_t i
 			D_ERROR("dfs_mount() failed (%d)\n", rc);
 			D_GOTO(err_close, rc);
 		}
+		dfs->layout_v = DFS_LAYOUT_VERSION;
 		*_dfs = dfs;
 	}
 
@@ -1608,13 +1737,13 @@ mount:
 		if (rc)
 			D_GOTO(err, rc);
 	} else {
+		cont_h_bump = true;
 		rc = dfs_mount(poh, cont_hdl->handle, amode, &dfs);
 		if (rc) {
 			D_ERROR("Failed to mount DFS %d (%s)\n", rc, strerror(rc));
 			D_GOTO(err, rc);
 		}
 	}
-	cont_h_bump = true;
 
 	dfs->pool_hdl = pool_hdl;
 	dfs->cont_hdl = cont_hdl;
@@ -1719,31 +1848,6 @@ dfs_mount(daos_handle_t poh, daos_handle_t coh, int flags, dfs_t **_dfs)
 	if (rc != 0)
 		D_GOTO(err_dfs, rc = daos_der2errno(rc));
 
-	/* Convert the owner information to uid/gid */
-	entry = daos_prop_entry_get(prop, DAOS_PROP_CO_OWNER);
-	D_ASSERT(entry != NULL);
-	rc = daos_acl_principal_to_uid(entry->dpe_str, &dfs->uid);
-	if (rc == -DER_NONEXIST)
-		/** Set uid to nobody */
-		rc = daos_acl_principal_to_uid("nobody@", &dfs->uid);
-	if (rc) {
-		D_ERROR("Unable to convert owner to uid "DF_RC"\n",
-			DP_RC(rc));
-		D_GOTO(err_dfs, rc = daos_der2errno(rc));
-	}
-
-	entry = daos_prop_entry_get(prop, DAOS_PROP_CO_OWNER_GROUP);
-	D_ASSERT(entry != NULL);
-	rc = daos_acl_principal_to_gid(entry->dpe_str, &dfs->gid);
-	if (rc == -DER_NONEXIST)
-		/** Set gid to nobody */
-		rc = daos_acl_principal_to_gid("nobody@", &dfs->gid);
-	if (rc) {
-		D_ERROR("Unable to convert owner to gid "DF_RC"\n",
-			DP_RC(rc));
-		D_GOTO(err_dfs, rc = daos_der2errno(rc));
-	}
-
 	entry = daos_prop_entry_get(prop, DAOS_PROP_CO_ROOTS);
 	D_ASSERT(entry != NULL);
 	roots = (struct daos_prop_co_roots *)entry->dpe_val_ptr;
@@ -1758,9 +1862,35 @@ dfs_mount(daos_handle_t poh, daos_handle_t coh, int flags, dfs_t **_dfs)
 	dfs->root.parent_oid = dfs->super_oid;
 
 	/** Verify SB */
-	rc = open_sb(coh, false, dfs->super_oid, &dfs->attr, &dfs->super_oh);
+	rc = open_sb(coh, false, dfs->super_oid, &dfs->attr, &dfs->super_oh, &dfs->layout_v);
 	if (rc)
 		D_GOTO(err_dfs, rc);
+
+	/** older layout versions don't have uid/gid for each entry, so use the ACL. */
+	if (dfs->layout_v <= 2) {
+		/* Convert the owner information to uid/gid */
+		entry = daos_prop_entry_get(prop, DAOS_PROP_CO_OWNER);
+		D_ASSERT(entry != NULL);
+		rc = daos_acl_principal_to_uid(entry->dpe_str, &dfs->uid);
+		if (rc == -DER_NONEXIST)
+			/** Set uid to nobody */
+			rc = daos_acl_principal_to_uid("nobody@", &dfs->uid);
+		if (rc) {
+			D_ERROR("Unable to convert owner to uid "DF_RC"\n", DP_RC(rc));
+			D_GOTO(err_dfs, rc = daos_der2errno(rc));
+		}
+
+		entry = daos_prop_entry_get(prop, DAOS_PROP_CO_OWNER_GROUP);
+		D_ASSERT(entry != NULL);
+		rc = daos_acl_principal_to_gid(entry->dpe_str, &dfs->gid);
+		if (rc == -DER_NONEXIST)
+			/** Set gid to nobody */
+			rc = daos_acl_principal_to_gid("nobody@", &dfs->gid);
+		if (rc) {
+			D_ERROR("Unable to convert owner to gid "DF_RC"\n", DP_RC(rc));
+			D_GOTO(err_dfs, rc = daos_der2errno(rc));
+		}
+	}
 
 	/*
 	 * If container was created with balanced mode, only balanced mode
@@ -1876,6 +2006,7 @@ dfs_query(dfs_t *dfs, dfs_attr_t *attr)
 struct dfs_glob {
 	uint32_t		magic;
 	bool			use_dtx;
+	dfs_layout_ver_t	layout_v;
 	int32_t			amode;
 	uid_t			uid;
 	gid_t			gid;
@@ -1895,6 +2026,7 @@ swap_dfs_glob(struct dfs_glob *dfs_params)
 
 	D_SWAP32S(&dfs_params->magic);
 	D_SWAP32S(&dfs_params->use_dtx);
+	D_SWAP16S(&dfs_params->layout_v);
 	D_SWAP32S(&dfs_params->amode);
 	D_SWAP32S(&dfs_params->uid);
 	D_SWAP32S(&dfs_params->gid);
@@ -1960,6 +2092,7 @@ dfs_local2global(dfs_t *dfs, d_iov_t *glob)
 	dfs_params = (struct dfs_glob *)glob->iov_buf;
 	dfs_params->magic	= DFS_GLOB_MAGIC;
 	dfs_params->use_dtx	= dfs->use_dtx;
+	dfs_params->layout_v	= dfs->layout_v;
 	dfs_params->amode	= dfs->amode;
 	dfs_params->super_oid	= dfs->super_oid;
 	dfs_params->root_oid	= dfs->root.oid;
@@ -2027,6 +2160,7 @@ dfs_global2local(daos_handle_t poh, daos_handle_t coh, int flags, d_iov_t glob,
 	dfs->poh = poh;
 	dfs->coh = coh;
 	dfs->use_dtx = dfs_params->use_dtx;
+	dfs->layout_v = dfs_params->layout_v;
 	dfs->amode = (flags == 0) ? dfs_params->amode : (flags & O_ACCMODE);
 	dfs->uid = dfs_params->uid;
 	dfs->gid = dfs_params->gid;
@@ -2543,9 +2677,11 @@ dfs_mkdir(dfs_t *dfs, dfs_obj_t *parent, const char *name, mode_t mode,
 	entry.atime = entry.mtime = entry.ctime = time(NULL);
 	entry.chunk_size = parent->d.chunk_size;
 	entry.oclass = parent->d.oclass;
+	entry.uid = geteuid();
+	entry.gid = getegid();
 
-	rc = insert_entry(parent->oh, th, name, len,
-			  DAOS_COND_DKEY_INSERT, &entry);
+	rc = insert_entry(dfs->layout_v, parent->oh, th, name, len, DAOS_COND_DKEY_INSERT,
+			  &entry);
 	if (rc != 0) {
 		daos_obj_close(new_dir.oh, NULL);
 		return rc;
@@ -2599,9 +2735,8 @@ remove_dir_contents(dfs_t *dfs, daos_handle_t th, struct dfs_entry entry)
 
 			ptr += kds[i].kd_key_len;
 
-			rc = fetch_entry(oh, th, ptr, kds[i].kd_key_len, false,
-					 &exists, &child_entry,
-					 0, NULL, NULL, NULL);
+			rc = fetch_entry(dfs->layout_v, oh, th, ptr, kds[i].kd_key_len, false,
+					 &exists, &child_entry, 0, NULL, NULL, NULL);
 			if (rc)
 				D_GOTO(out, rc);
 
@@ -2659,7 +2794,7 @@ dfs_remove(dfs_t *dfs, dfs_obj_t *parent, const char *name, bool force,
 
 restart:
 	/** Even with cond punch, need to fetch the entry to check the type */
-	rc = fetch_entry(parent->oh, th, name, len, false, &exists, &entry,
+	rc = fetch_entry(dfs->layout_v, parent->oh, th, name, len, false, &exists, &entry,
 			 0, NULL, NULL, NULL);
 	if (rc)
 		D_GOTO(out, rc);
@@ -2797,8 +2932,7 @@ lookup_rel_path_loop:
 
 			/* Cannot go outside the container */
 			if (daos_oid_cmp(parent.oid, dfs->root.oid) == 0) {
-				D_DEBUG(DB_TRACE,
-					"Failed to lookup path outside container: %s\n",
+				D_DEBUG(DB_TRACE, "Failed to lookup path outside container: %s\n",
 					path);
 				D_GOTO(err_obj, rc = ENOENT);
 			}
@@ -2828,7 +2962,7 @@ lookup_rel_path_loop:
 		len = strlen(token);
 
 		entry.chunk_size = 0;
-		rc = fetch_entry(parent.oh, DAOS_TX_NONE, token, len, true,
+		rc = fetch_entry(dfs->layout_v, parent.oh, DAOS_TX_NONE, token, len, true,
 				 &exists, &entry, 0, NULL, NULL, NULL);
 		if (rc)
 			D_GOTO(err_obj, rc);
@@ -2993,8 +3127,8 @@ lookup_rel_path_loop:
 	if (stbuf) {
 		stbuf->st_nlink = 1;
 		stbuf->st_mode = obj->mode;
-		stbuf->st_uid = dfs->uid;
-		stbuf->st_gid = dfs->gid;
+		stbuf->st_uid = entry.uid;
+		stbuf->st_gid = entry.gid;
 		stbuf->st_atim.tv_sec = entry.atime;
 		stbuf->st_mtim.tv_sec = entry.mtime;
 		stbuf->st_ctim.tv_sec = entry.ctime;
@@ -3219,7 +3353,7 @@ dfs_lookup_rel_int(dfs_t *dfs, dfs_obj_t *parent, const char *name, int flags,
 	if (daos_mode == -1)
 		return EINVAL;
 
-	rc = fetch_entry(parent->oh, DAOS_TX_NONE, name, len, true, &exists,
+	rc = fetch_entry(dfs->layout_v, parent->oh, DAOS_TX_NONE, name, len, true, &exists,
 			 &entry, xnr, xnames, xvals, xsizes);
 	if (rc)
 		return rc;
@@ -3321,8 +3455,8 @@ dfs_lookup_rel_int(dfs_t *dfs, dfs_obj_t *parent, const char *name, int flags,
 	if (stbuf) {
 		stbuf->st_nlink = 1;
 		stbuf->st_mode = obj->mode;
-		stbuf->st_uid = dfs->uid;
-		stbuf->st_gid = dfs->gid;
+		stbuf->st_uid = entry.uid;
+		stbuf->st_gid = entry.gid;
 		stbuf->st_atim.tv_sec = entry.atime;
 		stbuf->st_mtim.tv_sec = entry.mtime;
 		stbuf->st_ctim.tv_sec = entry.ctime;
@@ -3419,14 +3553,15 @@ dfs_open_stat(dfs_t *dfs, dfs_obj_t *parent, const char *name, mode_t mode,
 			D_DEBUG(DB_TRACE, "Failed to open dir (%d)\n", rc);
 			D_GOTO(out, rc);
 		}
+		file_size = sizeof(entry);
 		break;
 	case S_IFLNK:
-		rc = open_symlink(dfs, parent, flags, cid, value, &entry, len,
-				  obj);
+		rc = open_symlink(dfs, parent, flags, cid, value, &entry, len, obj);
 		if (rc) {
 			D_DEBUG(DB_TRACE, "Failed to open symlink (%d)\n", rc);
 			D_GOTO(out, rc);
 		}
+		file_size = entry.value_len;
 		break;
 	default:
 		D_ERROR("Invalid entry type (not a dir, file, symlink).\n");
@@ -3439,8 +3574,8 @@ out:
 			stbuf->st_size = file_size;
 			stbuf->st_nlink = 1;
 			stbuf->st_mode = entry.mode;
-			stbuf->st_uid = dfs->uid;
-			stbuf->st_gid = dfs->gid;
+			stbuf->st_uid = entry.uid;
+			stbuf->st_gid = entry.gid;
 			stbuf->st_atim.tv_sec = entry.atime;
 			stbuf->st_mtim.tv_sec = entry.mtime;
 			stbuf->st_ctim.tv_sec = entry.ctime;
@@ -4025,8 +4160,7 @@ dfs_stat(dfs_t *dfs, dfs_obj_t *parent, const char *name, struct stat *stbuf)
 
 	if (name == NULL) {
 		if (strcmp(parent->name, "/") != 0) {
-			D_ERROR("Invalid path %s and entry name is NULL)\n",
-				parent->name);
+			D_ERROR("Invalid path %s and entry name is NULL)\n", parent->name);
 			return EINVAL;
 		}
 		name = parent->name;
@@ -4058,8 +4192,7 @@ dfs_ostat(dfs_t *dfs, dfs_obj_t *obj, struct stat *stbuf)
 	if (rc)
 		return daos_der2errno(rc);
 
-	rc = entry_stat(dfs, DAOS_TX_NONE, oh, obj->name, strlen(obj->name),
-			obj, stbuf);
+	rc = entry_stat(dfs, DAOS_TX_NONE, oh, obj->name, strlen(obj->name), obj, stbuf);
 	if (rc)
 		D_GOTO(out, rc);
 
@@ -4103,7 +4236,7 @@ dfs_access(dfs_t *dfs, dfs_obj_t *parent, const char *name, int mask)
 	}
 
 	/* Check if parent has the entry */
-	rc = fetch_entry(oh, DAOS_TX_NONE, name, len, true, &exists, &entry,
+	rc = fetch_entry(dfs->layout_v, oh, DAOS_TX_NONE, name, len, true, &exists, &entry,
 			 0, NULL, NULL, NULL);
 	if (rc)
 		return rc;
@@ -4116,22 +4249,29 @@ dfs_access(dfs_t *dfs, dfs_obj_t *parent, const char *name, int mask)
 			return 0;
 
 		/** Use real uid and gid for access() */
-		return check_access(dfs, getuid(), getgid(), entry.mode, mask);
+		if (dfs->layout_v <= 2)
+			return check_access(dfs->uid, dfs->gid, getuid(), getgid(), entry.mode,
+					    mask);
+		else
+			return check_access(entry.uid, entry.gid, getuid(), getgid(), entry.mode,
+					    mask);
 	}
 
 	D_ASSERT(entry.value);
 
-	rc = lookup_rel_path(dfs, parent, entry.value, O_RDONLY, &sym,
-			     NULL, NULL, 0);
+	rc = lookup_rel_path(dfs, parent, entry.value, O_RDONLY, &sym, NULL, NULL, 0);
 	if (rc) {
-		D_DEBUG(DB_TRACE, "Failed to lookup symlink %s\n",
-			entry.value);
+		D_DEBUG(DB_TRACE, "Failed to lookup symlink %s\n", entry.value);
 		D_GOTO(out, rc);
 	}
 
-	if (mask != F_OK)
-		rc = check_access(dfs, getuid(), getgid(), sym->mode, mask);
-
+	if (mask != F_OK) {
+		if (dfs->layout_v <= 2)
+			rc = check_access(dfs->uid, dfs->gid, getuid(), getgid(), sym->mode, mask);
+		else
+			rc = check_access(entry.uid, entry.gid, getuid(), getgid(), sym->mode,
+					  mask);
+	}
 	dfs_release(sym);
 
 out:
@@ -4188,7 +4328,7 @@ dfs_chmod(dfs_t *dfs, dfs_obj_t *parent, const char *name, mode_t mode)
 	}
 
 	/* Check if parent has the entry */
-	rc = fetch_entry(oh, DAOS_TX_NONE, name, len, true, &exists, &entry,
+	rc = fetch_entry(dfs->layout_v, oh, DAOS_TX_NONE, name, len, true, &exists, &entry,
 			 0, NULL, NULL, NULL);
 	if (rc)
 		D_GOTO(out, rc);
@@ -4200,8 +4340,7 @@ dfs_chmod(dfs_t *dfs, dfs_obj_t *parent, const char *name, mode_t mode)
 	if (S_ISLNK(entry.mode)) {
 		D_ASSERT(entry.value);
 
-		rc = lookup_rel_path(dfs, parent, entry.value, O_RDWR, &sym,
-				     NULL, NULL, 0);
+		rc = lookup_rel_path(dfs, parent, entry.value, O_RDWR, &sym, NULL, NULL, 0);
 		if (rc) {
 			D_ERROR("Failed to lookup symlink %s\n", entry.value);
 			D_FREE(entry.value);
@@ -4218,6 +4357,7 @@ dfs_chmod(dfs_t *dfs, dfs_obj_t *parent, const char *name, mode_t mode)
 
 		orig_mode = sym->mode;
 		entry_name = sym->name;
+		len = strlen(entry_name);
 	} else {
 		orig_mode = entry.mode;
 		entry_name = name;
@@ -4263,15 +4403,140 @@ out:
 }
 
 int
+dfs_chown(dfs_t *dfs, dfs_obj_t *parent, const char *name, uid_t uid, gid_t gid, int flags)
+{
+	daos_handle_t		oh;
+	daos_handle_t		th = DAOS_TX_NONE;
+	bool			exists;
+	struct dfs_entry	entry = {0};
+	daos_key_t		dkey;
+	d_sg_list_t		sgl;
+	d_iov_t			sg_iovs[2];
+	daos_iod_t		iod;
+	daos_recx_t		recx[2];
+	size_t			len;
+	dfs_obj_t		*sym;
+	const char		*entry_name;
+	int			i;
+	int			rc;
+
+	if (dfs == NULL || !dfs->mounted)
+		return EINVAL;
+	if (dfs->layout_v <= 2) {
+		D_ERROR("DFS Container has a layout version that does not support dfs_chown()\n");
+		return ENOTSUP;
+	}
+	if (dfs->amode != O_RDWR)
+		return EPERM;
+	if (parent == NULL)
+		parent = &dfs->root;
+	else if (!S_ISDIR(parent->mode))
+		return ENOTDIR;
+	if (name == NULL) {
+		if (strcmp(parent->name, "/") != 0) {
+			D_ERROR("Invalid path %s and entry name is NULL)\n",
+				parent->name);
+			return EINVAL;
+		}
+		name = parent->name;
+		len = strlen(name);
+		oh = dfs->super_oh;
+	} else {
+		rc = check_name(name, &len);
+		if (rc)
+			return rc;
+		oh = parent->oh;
+	}
+
+	/* Check if parent has the entry */
+	rc = fetch_entry(dfs->layout_v, oh, DAOS_TX_NONE, name, len, true, &exists, &entry,
+			 0, NULL, NULL, NULL);
+	if (rc)
+		D_GOTO(out, rc);
+
+	if (!exists)
+		D_GOTO(out, rc = ENOENT);
+
+	if (uid == -1 && gid == -1)
+		D_GOTO(out, rc = 0);
+
+	/** resolve symlink */
+	if (!(flags & O_NOFOLLOW) && S_ISLNK(entry.mode)) {
+		D_ASSERT(entry.value);
+		rc = lookup_rel_path(dfs, parent, entry.value, O_RDWR, &sym, NULL, NULL, 0);
+		if (rc) {
+			D_DEBUG(DB_TRACE, "Failed to lookup symlink '%s': %d (%s)\n",
+				entry.value, rc, strerror(rc));
+			D_FREE(entry.value);
+			return rc;
+		}
+
+		rc = daos_obj_open(dfs->coh, sym->parent_oid, DAOS_OO_RW, &oh, NULL);
+		D_FREE(entry.value);
+		if (rc) {
+			dfs_release(sym);
+			return daos_der2errno(rc);
+		}
+		entry_name = sym->name;
+		len = strlen(entry_name);
+	} else {
+		if (S_ISLNK(entry.mode))
+			D_FREE(entry.value);
+		entry_name = name;
+	}
+
+	i = 0;
+	/** not enforcing any restriction on chown more than write access to the container */
+	if (uid != -1) {
+		d_iov_set(&sg_iovs[i], &uid, sizeof(uid_t));
+		recx[i].rx_idx	= UID_IDX;
+		recx[i].rx_nr	= sizeof(uid_t);
+		i++;
+	}
+	if (gid != -1) {
+		d_iov_set(&sg_iovs[i], &gid, sizeof(gid_t));
+		recx[i].rx_idx	= GID_IDX;
+		recx[i].rx_nr	= sizeof(gid_t);
+		i++;
+	}
+
+	/** set dkey as the entry name */
+	d_iov_set(&dkey, (void *)entry_name, len);
+	d_iov_set(&iod.iod_name, INODE_AKEY_NAME, sizeof(INODE_AKEY_NAME) - 1);
+	iod.iod_nr	= i;
+	iod.iod_recxs	= recx;
+	iod.iod_type	= DAOS_IOD_ARRAY;
+	iod.iod_size	= 1;
+
+	/** set sgl for update */
+	sgl.sg_nr	= i;
+	sgl.sg_nr_out	= 0;
+	sgl.sg_iovs	= &sg_iovs[0];
+
+	rc = daos_obj_update(oh, th, DAOS_COND_DKEY_UPDATE, &dkey, 1, &iod, &sgl, NULL);
+	if (rc) {
+		D_ERROR("Failed to update owner/group, "DF_RC"\n", DP_RC(rc));
+		D_GOTO(out, rc = daos_der2errno(rc));
+	}
+
+out:
+	if (!(flags & O_NOFOLLOW) && S_ISLNK(entry.mode)) {
+		dfs_release(sym);
+		daos_obj_close(oh, NULL);
+	}
+	return rc;
+}
+
+int
 dfs_osetattr(dfs_t *dfs, dfs_obj_t *obj, struct stat *stbuf, int flags)
 {
 	daos_handle_t		th = DAOS_TX_NONE;
 	daos_key_t		dkey;
 	daos_handle_t		oh;
 	d_sg_list_t		sgl;
-	d_iov_t			sg_iovs[3];
+	d_iov_t			sg_iovs[5];
 	daos_iod_t		iod;
-	daos_recx_t		recx[3];
+	daos_recx_t		recx[5];
 	bool			set_size = false;
 	int			i = 0;
 	size_t			len;
@@ -4320,7 +4585,6 @@ dfs_osetattr(dfs_t *dfs, dfs_obj_t *obj, struct stat *stbuf, int flags)
 	iod.iod_size	= 1;
 
 	if (flags & DFS_SET_ATTR_MODE) {
-		/** set akey as the mode attr name */
 		d_iov_set(&sg_iovs[i], &stbuf->st_mode, sizeof(mode_t));
 		recx[i].rx_idx = MODE_IDX;
 		recx[i].rx_nr = sizeof(mode_t);
@@ -4342,6 +4606,22 @@ dfs_osetattr(dfs_t *dfs, dfs_obj_t *obj, struct stat *stbuf, int flags)
 		recx[i].rx_nr = sizeof(time_t);
 		i++;
 		flags &= ~DFS_SET_ATTR_MTIME;
+		rstat.st_mtim = stbuf->st_mtim;
+	}
+	if (flags & DFS_SET_ATTR_UID) {
+		d_iov_set(&sg_iovs[i], &stbuf->st_uid, sizeof(uid_t));
+		recx[i].rx_idx = UID_IDX;
+		recx[i].rx_nr = sizeof(uid_t);
+		i++;
+		flags &= ~DFS_SET_ATTR_UID;
+		rstat.st_mtim = stbuf->st_mtim;
+	}
+	if (flags & DFS_SET_ATTR_GID) {
+		d_iov_set(&sg_iovs[i], &stbuf->st_gid, sizeof(gid_t));
+		recx[i].rx_idx = GID_IDX;
+		recx[i].rx_nr = sizeof(gid_t);
+		i++;
+		flags &= ~DFS_SET_ATTR_GID;
 		rstat.st_mtim = stbuf->st_mtim;
 	}
 	if (flags & DFS_SET_ATTR_SIZE) {
@@ -4383,7 +4663,6 @@ dfs_osetattr(dfs_t *dfs, dfs_obj_t *obj, struct stat *stbuf, int flags)
 
 out_stat:
 	*stbuf = rstat;
-
 out_obj:
 	daos_obj_close(oh, NULL);
 	return rc;
@@ -4499,8 +4778,8 @@ dfs_get_symlink_value(dfs_obj_t *obj, char *buf, daos_size_t *size)
 }
 
 static int
-xattr_copy(daos_handle_t src_oh, char *src_name, daos_handle_t dst_oh,
-	   char *dst_name, daos_handle_t th)
+xattr_copy(daos_handle_t src_oh, const char *src_name, daos_handle_t dst_oh, const char *dst_name,
+	   daos_handle_t th)
 {
 	daos_key_t	src_dkey, dst_dkey;
 	daos_anchor_t	anchor = {0};
@@ -4547,7 +4826,10 @@ xattr_copy(daos_handle_t src_oh, char *src_name, daos_handle_t dst_oh,
 		memset(enum_buf, 0, ENUM_XDESC_BUF);
 		rc = daos_obj_list_akey(src_oh, th, &src_dkey, &number, kds,
 					&sgl, &anchor, NULL);
-		if (rc) {
+		if (rc == -DER_TX_RESTART) {
+			D_DEBUG(DB_TRACE, "daos_obj_list_akey() failed (%d)\n", rc);
+			D_GOTO(out, rc = daos_der2errno(rc));
+		} else if (rc) {
 			D_ERROR("daos_obj_list_akey() failed (%d)\n", rc);
 			D_GOTO(out, rc = daos_der2errno(rc));
 		}
@@ -4599,8 +4881,9 @@ out:
 
 /* Returns oids for both moved and clobbered files, but does not check either of them */
 int
-dfs_move_internal(dfs_t *dfs, unsigned int flags, dfs_obj_t *parent, char *name,
-		  dfs_obj_t *new_parent, char *new_name, daos_obj_id_t *moid, daos_obj_id_t *oid)
+dfs_move_internal(dfs_t *dfs, unsigned int flags, dfs_obj_t *parent, const char *name,
+		  dfs_obj_t *new_parent, const char *new_name, daos_obj_id_t *moid,
+		  daos_obj_id_t *oid)
 {
 	struct dfs_entry	entry = {0}, new_entry = {0};
 	daos_handle_t		th = DAOS_TX_NONE;
@@ -4653,8 +4936,8 @@ dfs_move_internal(dfs_t *dfs, unsigned int flags, dfs_obj_t *parent, char *name,
 	}
 
 restart:
-	rc = fetch_entry(parent->oh, th, name, len, true, &exists, &entry,
-			 0, NULL, NULL, NULL);
+	rc = fetch_entry(dfs->layout_v, parent->oh, th, name, len, true, &exists, &entry, 0,
+			 NULL, NULL, NULL);
 	if (rc) {
 		D_ERROR("Failed to fetch entry %s (%d)\n", name, rc);
 		D_GOTO(out, rc);
@@ -4665,7 +4948,7 @@ restart:
 	if (moid)
 		oid_cp(moid, entry.oid);
 
-	rc = fetch_entry(new_parent->oh, th, new_name, new_len, true, &exists,
+	rc = fetch_entry(dfs->layout_v, new_parent->oh, th, new_name, new_len, true, &exists,
 			 &new_entry, 0, NULL, NULL, NULL);
 	if (rc) {
 		D_ERROR("Failed to fetch entry %s (%d)\n", new_name, rc);
@@ -4689,8 +4972,7 @@ restart:
 			}
 
 			/** make sure new dir is empty */
-			rc = daos_obj_open(dfs->coh, new_entry.oid, DAOS_OO_RW,
-					   &oh, NULL);
+			rc = daos_obj_open(dfs->coh, new_entry.oid, DAOS_OO_RW, &oh, NULL);
 			if (rc) {
 				D_ERROR("daos_obj_open() Failed (%d)\n", rc);
 				D_GOTO(out, rc = daos_der2errno(rc));
@@ -4698,8 +4980,7 @@ restart:
 
 			rc = get_num_entries(oh, th, &nr, true);
 			if (rc) {
-				D_ERROR("failed to check dir %s (%d)\n",
-					new_name, rc);
+				D_ERROR("failed to check dir %s (%d)\n", new_name, rc);
 				daos_obj_close(oh, NULL);
 				D_GOTO(out, rc);
 			}
@@ -4714,11 +4995,9 @@ restart:
 				D_GOTO(out, rc = ENOTEMPTY);
 		}
 
-		rc = remove_entry(dfs, th, new_parent->oh, new_name, new_len,
-				  new_entry);
+		rc = remove_entry(dfs, th, new_parent->oh, new_name, new_len, new_entry);
 		if (rc) {
-			D_ERROR("Failed to remove entry %s (%d)\n",
-				new_name, rc);
+			D_ERROR("Failed to remove entry %s (%d)\n", new_name, rc);
 			D_GOTO(out, rc);
 		}
 
@@ -4730,40 +5009,38 @@ restart:
 	if (S_ISLNK(entry.mode)) {
 		rc = remove_entry(dfs, th, parent->oh, name, len, entry);
 		if (rc) {
-			D_ERROR("Failed to remove entry %s (%d)\n",
-				name, rc);
+			D_ERROR("Failed to remove entry %s (%d)\n", name, rc);
 			D_GOTO(out, rc);
 		}
 
-		rc = insert_entry(parent->oh, th, new_name, new_len,
-				  dfs->use_dtx ? 0 : DAOS_COND_DKEY_INSERT,
-				  &entry);
+		rc = insert_entry(dfs->layout_v, parent->oh, th, new_name, new_len,
+				  dfs->use_dtx ? 0 : DAOS_COND_DKEY_INSERT, &entry);
 		if (rc)
-			D_ERROR("Inserting new entry %s failed (%d)\n",
-				new_name, rc);
+			D_ERROR("Inserting new entry %s failed (%d)\n", new_name, rc);
 		D_GOTO(out, rc);
 	}
 
 	entry.atime = entry.mtime = entry.ctime = time(NULL);
 	/** insert old entry in new parent object */
-	rc = insert_entry(new_parent->oh, th, new_name, new_len,
+	rc = insert_entry(dfs->layout_v, new_parent->oh, th, new_name, new_len,
 			  dfs->use_dtx ? 0 : DAOS_COND_DKEY_INSERT, &entry);
 	if (rc) {
-		D_ERROR("Inserting entry %s failed (%d)\n", new_name, rc);
+		D_ERROR("Inserting entry %s DTX %d failed (%d)\n", new_name, dfs->use_dtx, rc);
 		D_GOTO(out, rc);
 	}
 
 	/** cp the extended attributes if they exist */
 	rc = xattr_copy(parent->oh, name, new_parent->oh, new_name, th);
-	if (rc) {
+	if (rc == ERESTART) {
+		D_GOTO(out, rc);
+	} else if (rc) {
 		D_ERROR("Failed to copy extended attributes (%d)\n", rc);
 		D_GOTO(out, rc);
 	}
 
 	/** remove the old entry from the old parent (just the dkey) */
 	d_iov_set(&dkey, (void *)name, len);
-	rc = daos_obj_punch_dkeys(parent->oh, th,
-				  dfs->use_dtx ? 0 : DAOS_COND_PUNCH, 1, &dkey,
+	rc = daos_obj_punch_dkeys(parent->oh, th, dfs->use_dtx ? 0 : DAOS_COND_PUNCH, 1, &dkey,
 				  NULL);
 	if (rc) {
 		D_ERROR("Punch entry %s failed (%d)\n", name, rc);
@@ -4797,15 +5074,15 @@ out:
 
 /* Wrapper function, only permit oid as a input parameter and return if it has data */
 int
-dfs_move(dfs_t *dfs, dfs_obj_t *parent, char *name, dfs_obj_t *new_parent,
-	 char *new_name, daos_obj_id_t *oid)
+dfs_move(dfs_t *dfs, dfs_obj_t *parent, const char *name, dfs_obj_t *new_parent,
+	 const char *new_name, daos_obj_id_t *oid)
 {
 	return dfs_move_internal(dfs, 0, parent, name, new_parent, new_name, NULL, oid);
 }
 
 int
-dfs_exchange(dfs_t *dfs, dfs_obj_t *parent1, char *name1, dfs_obj_t *parent2,
-	     char *name2)
+dfs_exchange(dfs_t *dfs, dfs_obj_t *parent1, const char *name1, dfs_obj_t *parent2,
+	     const char *name2)
 {
 	struct dfs_entry	entry1 = {0}, entry2 = {0};
 	daos_handle_t		th = DAOS_TX_NONE;
@@ -4844,7 +5121,7 @@ dfs_exchange(dfs_t *dfs, dfs_obj_t *parent1, char *name1, dfs_obj_t *parent2,
 	}
 
 restart:
-	rc = fetch_entry(parent1->oh, th, name1, len1, true, &exists, &entry1,
+	rc = fetch_entry(dfs->layout_v, parent1->oh, th, name1, len1, true, &exists, &entry1,
 			 0, NULL, NULL, NULL);
 	if (rc) {
 		D_ERROR("Failed to fetch entry %s (%d)\n", name1, rc);
@@ -4853,7 +5130,7 @@ restart:
 	if (exists == false)
 		D_GOTO(out, rc = EINVAL);
 
-	rc = fetch_entry(parent2->oh, th, name2, len2, true, &exists, &entry2,
+	rc = fetch_entry(dfs->layout_v, parent2->oh, th, name2, len2, true, &exists, &entry2,
 			 0, NULL, NULL, NULL);
 	if (rc) {
 		D_ERROR("Failed to fetch entry %s (%d)\n", name2, rc);
@@ -4881,7 +5158,7 @@ restart:
 
 	entry1.atime = entry1.mtime = entry1.ctime = time(NULL);
 	/** insert entry1 in parent2 object */
-	rc = insert_entry(parent2->oh, th, name1, len1,
+	rc = insert_entry(dfs->layout_v, parent2->oh, th, name1, len1,
 			  dfs->use_dtx ? 0 : DAOS_COND_DKEY_INSERT, &entry1);
 	if (rc) {
 		D_ERROR("Inserting entry %s failed (%d)\n", name1, rc);
@@ -4890,7 +5167,7 @@ restart:
 
 	entry2.atime = entry2.mtime = entry2.ctime = time(NULL);
 	/** insert entry2 in parent1 object */
-	rc = insert_entry(parent1->oh, th, name2, len2,
+	rc = insert_entry(dfs->layout_v, parent1->oh, th, name2, len2,
 			  dfs->use_dtx ? 0 : DAOS_COND_DKEY_INSERT, &entry2);
 	if (rc) {
 		D_ERROR("Inserting entry %s failed (%d)\n", name2, rc);

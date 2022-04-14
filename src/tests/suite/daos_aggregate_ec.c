@@ -295,7 +295,7 @@ ec_cleanup_cont(struct ec_agg_test_ctx *ctx)
 	rc = daos_cont_close(ctx->coh, NULL);
 	assert_rc_equal(rc, 0);
 	uuid_unparse(ctx->uuid, str);
-	rc = daos_cont_destroy(ctx->poh, ctx->uuid, true, NULL);
+	rc = daos_cont_destroy(ctx->poh, str, true, NULL);
 	assert_rc_equal(rc, 0);
 }
 

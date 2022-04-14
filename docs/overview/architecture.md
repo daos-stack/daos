@@ -18,11 +18,14 @@ does not rely on a third-party tier to manage metadata and data resilience.
 
 ## DAOS Features
 
-DAOS relies on [Open Fabric Interface](https://openfabrics.org/downloads/ofiwg/Industry_presentations/2015_HotI23/paper.pdf) (OFI) for low-latency communications and stores data on
+DAOS relies on [Open Fabric Interface](https://openfabrics.org/downloads/ofiwg/Industry_presentations/2015_HotI23/paper.pdf)
+(OFI) for low-latency communications and stores data on
 both storage-class memory (SCM) and NVMe storage. DAOS presents a native
 key-array-value storage interface that offers a unified storage model
-over which domain-specific data models are ported, such as [HDF5](../../user/hdf5), [MPI-IO](../../user/mpi-io),
-and Apache [Hadoop](../../user/spark). A [POSIX](../../user/posix) I/O emulation layer implementing files and
+over which domain-specific data models are ported, such as
+[HDF5](../../user/hdf5/), [MPI-IO](../../user/mpi-io/),
+and Apache [Hadoop](../../user/spark/). A [POSIX](../../user/filesystem/)
+I/O emulation layer implementing files and
 directories over the native DAOS API is also available.
 
 DAOS I/O operations are logged and then inserted into a persistent index

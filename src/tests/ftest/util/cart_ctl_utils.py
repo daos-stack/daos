@@ -1,6 +1,6 @@
 #!/usr/bin/python
 """
-  (C) Copyright 2019-2021 Intel Corporation.
+  (C) Copyright 2019-2022 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -60,7 +60,7 @@ class CartCtlCommand(ExecutableCommand):
         self.cfg_path = FormattedParameter("--cfg_path {}")
         self.directory = FormattedParameter("--directory {}")
         self.rank = FormattedParameter("--rank {}")
-        self.l = FormattedParameter("-l {}")
+        self.l = FormattedParameter("-l {}") # noqa: E741
         self.n = BasicParameter("-n")
         self.m = FormattedParameter("-m {}")
         self.use_daos_agent_env = FormattedParameter("--use_daos_agent_env", True)

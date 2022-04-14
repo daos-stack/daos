@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2021 Intel Corporation.
+ * (C) Copyright 2016-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -1016,16 +1016,17 @@ strided_array(void **state)
 static void
 truncate_array(void **state)
 {
-	test_arg_t	*arg = *state;
-	daos_obj_id_t	oid;
-	daos_handle_t	oh;
-	daos_array_iod_t iod = {};
-	daos_range_t	rg = {};
-	d_iov_t		iov = {};
-	d_sg_list_t	sgl = {};
-	void		*buf;
-	int		rc;
-	daos_size_t	size;
+	test_arg_t		*arg = *state;
+	daos_obj_id_t		oid;
+	daos_handle_t		oh;
+	daos_array_iod_t	iod = {};
+	daos_range_t		rg = {};
+	d_iov_t			iov = {};
+	d_sg_list_t		sgl = {};
+	void			*buf;
+	daos_array_stbuf_t	stbuf;
+	uint64_t		prev;
+	int			rc;
 
 	MPI_Barrier(MPI_COMM_WORLD);
 	oid = daos_test_oid_gen(arg->coh, OC_SX, typeb, 0, arg->myrank);
@@ -1035,21 +1036,40 @@ truncate_array(void **state)
 			       NULL);
 	assert_rc_equal(rc, 0);
 
+	rc = daos_array_stat(oh, DAOS_TX_NONE, &stbuf, NULL);
+	assert_rc_equal(rc, 0);
+	assert_int_equal(stbuf.st_size, 0);
+	prev = stbuf.st_max_epoch;
+	print_message("Size = %zu, EPOCH = %"PRIu64"\n", stbuf.st_size, stbuf.st_max_epoch);
+
+	char *time_str;
+	struct timespec ts;
+
+	crt_hlc2timespec(stbuf.st_max_epoch, &ts);
+	time_str = ctime(&ts.tv_sec);
+	print_message("EPOCH time is %s", time_str);
+
 	/* Set array size to be large */
 	rc = daos_array_set_size(oh, DAOS_TX_NONE, 1024 * 1024, NULL);
 	assert_rc_equal(rc, 0);
 
-	rc = daos_array_get_size(oh, DAOS_TX_NONE, &size, NULL);
+	rc = daos_array_stat(oh, DAOS_TX_NONE, &stbuf, NULL);
 	assert_rc_equal(rc, 0);
-	assert_int_equal(size, 1024 * 1024);
+	assert_int_equal(stbuf.st_size, 1024 * 1024);
+	assert_true(prev < stbuf.st_max_epoch);
+	prev = stbuf.st_max_epoch;
+	print_message("Size = %zu, EPOCH = %"PRIu64"\n", stbuf.st_size, stbuf.st_max_epoch);
 
 	/* Set array size to zero */
 	rc = daos_array_set_size(oh, DAOS_TX_NONE, 0, NULL);
 	assert_rc_equal(rc, 0);
 
-	rc = daos_array_get_size(oh, DAOS_TX_NONE, &size, NULL);
+	rc = daos_array_stat(oh, DAOS_TX_NONE, &stbuf, NULL);
 	assert_rc_equal(rc, 0);
-	assert_int_equal(size, 0);
+	assert_int_equal(stbuf.st_size, 0);
+	assert_true(prev < stbuf.st_max_epoch);
+	prev = stbuf.st_max_epoch;
+	print_message("Size = %zu, EPOCH = %"PRIu64"\n", stbuf.st_size, stbuf.st_max_epoch);
 
 	D_ALLOC(buf, 1024);
 	assert_non_null(buf);
@@ -1067,10 +1087,12 @@ truncate_array(void **state)
 	assert_rc_equal(rc, 0);
 
 	/* check array size */
-	size = 0;
-	rc = daos_array_get_size(oh, DAOS_TX_NONE, &size, NULL);
+	rc = daos_array_stat(oh, DAOS_TX_NONE, &stbuf, NULL);
 	assert_rc_equal(rc, 0);
-	assert_int_equal(size, 6);
+	assert_int_equal(stbuf.st_size, 6);
+	assert_true(prev < stbuf.st_max_epoch);
+	prev = stbuf.st_max_epoch;
+	print_message("Size = %zu, EPOCH = %"PRIu64"\n", stbuf.st_size, stbuf.st_max_epoch);
 
 	rc = daos_array_close(oh, NULL);
 	assert_rc_equal(rc, 0);
@@ -1078,7 +1100,7 @@ truncate_array(void **state)
 	D_FREE(buf);
 
 	MPI_Barrier(MPI_COMM_WORLD);
-} /* End str_mem_str_arr_io */
+} /* End truncate_array */
 
 static const struct CMUnitTest array_api_tests[] = {
 	{"Array API: create/open/close (blocking)",

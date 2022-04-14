@@ -1,6 +1,6 @@
 #!/usr/bin/python3
 """
-  (C) Copyright 2021 Intel Corporation.
+  (C) Copyright 2021-2022 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -12,7 +12,7 @@ import general_utils
 
 from ClusterShell.NodeSet import NodeSet
 from dfuse_test_base import DfuseTestBase
-from command_utils import CommandFailure
+from exception_utils import CommandFailure
 from io_utilities import DirTree
 
 

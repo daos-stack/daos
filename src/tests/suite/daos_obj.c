@@ -4215,12 +4215,28 @@ check_oclass(daos_handle_t coh, int domain_nr, daos_oclass_hints_t hints,
 		assert_int_equal(attr->u.rp.r_num, nr);
 	} else if (res == DAOS_RES_EC) {
 		assert_int_equal(attr->u.ec.e_p, nr - 1);
-		if (domain_nr >= 10)
-			assert_int_equal(attr->u.ec.e_k, 8);
-		else if (domain_nr >= 6)
-			assert_int_equal(attr->u.ec.e_k, 4);
-		else
-			assert_int_equal(attr->u.ec.e_k, 2);
+
+		if (nr == 1 || nr == 2) {
+			if (domain_nr >= 18)
+				assert_int_equal(attr->u.ec.e_k, 16);
+			if (domain_nr >= 10)
+				assert_int_equal(attr->u.ec.e_k, 8);
+			else if (domain_nr >= 6)
+				assert_int_equal(attr->u.ec.e_k, 4);
+			else
+				assert_int_equal(attr->u.ec.e_k, 2);
+		} else if (nr == 3) {
+			if (domain_nr >= 20)
+				assert_int_equal(attr->u.ec.e_k, 16);
+			if (domain_nr >= 12)
+				assert_int_equal(attr->u.ec.e_k, 8);
+			else if (domain_nr >= 8)
+				assert_int_equal(attr->u.ec.e_k, 4);
+			else
+				assert_int_equal(attr->u.ec.e_k, 2);
+		} else {
+			D_ASSERT(0);
+		}
 	}
 
 	/** need an easier way to determine grp nr. for now use fit for GX */
@@ -4259,7 +4275,10 @@ oclass_auto_setting(void **state)
 	assert_rc_equal(rc, 0);
 
 	/** set the expect EC object class ID based on domain nr */
-	if (attr.pa_domain_nr >= 10) {
+	if (attr.pa_domain_nr >= 18) {
+		ecidx = OC_EC_16P1GX;
+		ecid1 = OC_EC_16P1G1;
+	} else if (attr.pa_domain_nr >= 10) {
 		ecidx = OC_EC_8P1GX;
 		ecid1 = OC_EC_8P1G1;
 	} else if (attr.pa_domain_nr >= 6) {
@@ -4412,10 +4431,13 @@ oclass_auto_setting(void **state)
 	assert_rc_equal(rc, 0);
 
 	/** adjust the expected EC object class ID based on domain nr */
-	if (attr.pa_domain_nr >= 10) {
+	if (attr.pa_domain_nr >= 20) {
+		ecidx = OC_EC_16P2GX;
+		ecid1 = OC_EC_16P2G1;
+	} else if (attr.pa_domain_nr >= 12) {
 		ecidx = OC_EC_8P2GX;
 		ecid1 = OC_EC_8P2G1;
-	} else if (attr.pa_domain_nr >= 6) {
+	} else if (attr.pa_domain_nr >= 8) {
 		ecidx = OC_EC_4P2GX;
 		ecid1 = OC_EC_4P2G1;
 	} else {
@@ -4436,7 +4458,7 @@ oclass_auto_setting(void **state)
 	assert_rc_equal(rc, 0);
 
 	/** oid with EC hint should be OC_EC_NP2G1 */
-	print_message("oid with hint class:\t");
+	print_message("oid with hint DAOS_OCH_RDD_EC class:\t");
 	rc = check_oclass(coh, attr.pa_domain_nr, DAOS_OCH_RDD_EC, 0,
 			  DAOS_RES_EC, 3, ecid1);
 	assert_rc_equal(rc, 0);
@@ -4516,19 +4538,32 @@ oclass_auto_setting(void **state)
 }
 
 static void
-int_key_setting(void **state)
+int_key_setting(void **state, int size)
 {
 	test_arg_t              *arg = *state;
 	daos_obj_id_t		oid;
 	daos_handle_t		oh;
 	d_iov_t			dkey;
-	char			dkey_buf[128];
-	char			akey_buf[128];
+	char			*dkey_buf;
+	char			*akey_buf;
 	d_sg_list_t		sgl;
 	d_iov_t			sg_iov;
 	daos_iod_t		iod;
 	char			buf[STACK_BUF_LEN];
 	int                     rc;
+
+	dkey_buf = malloc(size);
+	if (!dkey_buf) {
+		print_message("allocation memory failed\n");
+		return;
+	}
+
+	akey_buf = malloc(size);
+	if (!akey_buf) {
+		print_message("allocation memory failed\n");
+		free(dkey_buf);
+		return;
+	}
 
 	/*
 	 * Object with integer dkey / akey should fail IO with -DER_INVAL if
@@ -4538,11 +4573,11 @@ int_key_setting(void **state)
 				arg->myrank);
 
 	dts_buf_render(buf, STACK_BUF_LEN);
-	dts_buf_render(dkey_buf, 128);
-	dts_buf_render(akey_buf, 128);
+	dts_buf_render(dkey_buf, size);
+	dts_buf_render(akey_buf, size);
 
 	/** init dkey */
-	d_iov_set(&dkey, dkey_buf, sizeof(dkey_buf));
+	d_iov_set(&dkey, dkey_buf, size);
 
 	/** init scatter/gather */
 	d_iov_set(&sg_iov, buf, sizeof(buf));
@@ -4551,7 +4586,7 @@ int_key_setting(void **state)
 	sgl.sg_iovs		= &sg_iov;
 
 	/** init I/O descriptor */
-	d_iov_set(&iod.iod_name, akey_buf, sizeof(akey_buf));
+	d_iov_set(&iod.iod_name, akey_buf, size);
 	iod.iod_size    = STACK_BUF_LEN;
 	iod.iod_type	= DAOS_IOD_SINGLE;
 	iod.iod_recxs	= NULL;
@@ -4607,6 +4642,15 @@ int_key_setting(void **state)
 
 	rc = daos_obj_close(oh, NULL);
 	assert_rc_equal(rc, 0);
+
+	free(dkey_buf);
+	free(akey_buf);
+}
+
+static void invalid_int_key_setting(void **state)
+{
+	int_key_setting(state, 128);
+	int_key_setting(state, 3);
 }
 
 static void
@@ -4670,6 +4714,26 @@ enum_recxs_with_aggregation(void **state)
 {
 	enum_recxs_with_aggregation_internal(state, true);
 	enum_recxs_with_aggregation_internal(state, false);
+}
+
+static void
+io_tx_convert(void **state)
+{
+	test_arg_t	*arg = *state;
+	daos_obj_id_t	oid;
+	struct ioreq	req;
+
+	oid = daos_test_oid_gen(arg->coh, dts_obj_class, 0, 0, arg->myrank);
+	MPI_Barrier(MPI_COMM_WORLD);
+
+	arg->fail_loc = DAOS_FAIL_TX_CONVERT | DAOS_FAIL_ALWAYS;
+	ioreq_init(&req, arg->coh, oid, DAOS_IOD_ARRAY, arg);
+	/** Insert */
+	insert_single("dkey", "akey", 0, "data",
+		      strlen("data") + 1, DAOS_TX_NONE, &req);
+
+	punch_obj(DAOS_TX_NONE, &req);
+	ioreq_fini(&req);
 }
 
 static const struct CMUnitTest io_tests[] = {
@@ -4762,9 +4826,11 @@ static const struct CMUnitTest io_tests[] = {
 	{ "IO43: Object class selection",
 	  oclass_auto_setting, async_disable, test_case_teardown},
 	{ "IO44: INT dkey/akey checks",
-	  int_key_setting, async_disable, test_case_teardown},
+	  invalid_int_key_setting, async_disable, test_case_teardown},
 	{ "IO45: enum recxs with aggregation",
 	  enum_recxs_with_aggregation, async_disable, test_case_teardown},
+	{ "IO46: tx convert",
+	  io_tx_convert, async_disable, test_case_teardown},
 };
 
 int

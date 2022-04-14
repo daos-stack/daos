@@ -165,16 +165,6 @@ vos_space_query(struct vos_pool *pool, struct vos_pool_space *vps, bool slow)
 	return 0;
 }
 
-static inline daos_size_t
-recx_csum_len(daos_recx_t *recx, struct dcs_csum_info *csum,
-	      daos_size_t rec_size)
-{
-	if (!ci_is_valid(csum))
-		return 0;
-	return (daos_size_t)csum->cs_len * csum_chunk_count(csum->cs_chunksize,
-			recx->rx_idx, recx->rx_idx + recx->rx_nr - 1, rec_size);
-}
-
 static daos_size_t
 estimate_space_key(struct umem_instance *umm, daos_key_t *key)
 {
@@ -225,7 +215,7 @@ estimate_space(struct vos_pool *pool, daos_key_t *dkey, unsigned int iod_nr,
 		/* Akey */
 		scm += estimate_space_key(umm, &iod->iod_name);
 
-		csums = iods_csums ? iods_csums[i].ic_data : NULL;
+		csums = vos_csum_at(iods_csums, i);
 		/* Single value */
 		if (iod->iod_type == DAOS_IOD_SINGLE) {
 			size = iod->iod_size;
@@ -248,7 +238,7 @@ estimate_space(struct vos_pool *pool, daos_key_t *dkey, unsigned int iod_nr,
 		/* Array value */
 		for (j = 0; j < iod->iod_nr; j++) {
 			recx = &iod->iod_recxs[j];
-			recx_csum = csums ? &csums[j] : NULL;
+			recx_csum = recx_csum_at(csums, j, iod);
 
 			size = recx->rx_nr * iod->iod_size;
 			media = vos_policy_media_select(pool, iod->iod_type,

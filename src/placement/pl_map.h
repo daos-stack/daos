@@ -35,6 +35,7 @@ struct pl_map_ops {
 	/** see \a pl_map_obj_select and \a pl_map_obj_rebalance */
 	int (*o_obj_place)(struct pl_map *map,
 			   struct daos_obj_md *md,
+			   unsigned int	mode,
 			   struct daos_obj_shard_md *shard_md,
 			   struct pl_obj_layout **layout_pp);
 	/** see \a pl_map_obj_rebuild */

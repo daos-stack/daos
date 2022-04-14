@@ -20,7 +20,6 @@ import (
 	"github.com/daos-stack/daos/src/control/lib/control"
 	"github.com/daos-stack/daos/src/control/lib/hardware"
 	"github.com/daos-stack/daos/src/control/lib/hardware/hwprov"
-	"github.com/daos-stack/daos/src/control/lib/netdetect"
 	"github.com/daos-stack/daos/src/control/logging"
 )
 
@@ -28,17 +27,17 @@ import (
 // Management Service proxy, handling dRPCs sent by libdaos by forwarding them
 // to MS.
 type mgmtModule struct {
-	log        logging.Logger
-	sys        string
-	ctlInvoker control.Invoker
-	attachInfo *attachInfoCache
-	fabricInfo *localFabricCache
-	numaAware  bool
-	netCtx     context.Context
-	monitor    *procMon
+	log            logging.Logger
+	sys            string
+	ctlInvoker     control.Invoker
+	attachInfo     *attachInfoCache
+	fabricInfo     *localFabricCache
+	monitor        *procMon
+	useDefaultNUMA bool
+	numaGetter     hardware.ProcessNUMAProvider
 }
 
-func (mod *mgmtModule) HandleCall(session *drpc.Session, method drpc.Method, req []byte) ([]byte, error) {
+func (mod *mgmtModule) HandleCall(ctx context.Context, session *drpc.Session, method drpc.Method, req []byte) ([]byte, error) {
 	uc, ok := session.Conn.(*net.UnixConn)
 	if !ok {
 		return nil, errors.Errorf("session.Conn type conversion failed")
@@ -55,8 +54,6 @@ func (mod *mgmtModule) HandleCall(session *drpc.Session, method drpc.Method, req
 	if err != nil {
 		return nil, err
 	}
-
-	ctx := context.TODO() // FIXME: Should be the top-level context.
 
 	switch method {
 	case drpc.MethodGetAttachInfo:
@@ -110,17 +107,15 @@ func (mod *mgmtModule) handleGetAttachInfo(ctx context.Context, reqb []byte, pid
 		return respb, err
 	}
 
-	var err error
-	var numaNode int
-
-	if mod.numaAware {
-		numaNode, err = netdetect.GetNUMASocketIDForPid(mod.netCtx, pid)
-		if err != nil {
-			return nil, err
-		}
+	numaNode, err := mod.getNUMANode(ctx, pid)
+	if err != nil {
+		mod.log.Errorf("unable to get NUMA node: %s", err.Error())
+		return nil, err
 	}
 
-	resp, err := mod.getAttachInfo(ctx, numaNode, pbReq.Sys)
+	mod.log.Debugf("client process NUMA node %d", numaNode)
+
+	resp, err := mod.getAttachInfo(ctx, int(numaNode), pbReq.Sys)
 	if err != nil {
 		return nil, err
 	}
@@ -128,6 +123,23 @@ func (mod *mgmtModule) handleGetAttachInfo(ctx context.Context, reqb []byte, pid
 	mod.log.Debugf("GetAttachInfoResp: %+v", resp)
 
 	return proto.Marshal(resp)
+}
+
+func (mod *mgmtModule) getNUMANode(ctx context.Context, pid int32) (uint, error) {
+	if mod.useDefaultNUMA {
+		return 0, nil
+	}
+
+	numaNode, err := mod.numaGetter.GetNUMANodeIDForPID(ctx, pid)
+	if errors.Is(err, hardware.ErrNoNUMANodes) {
+		mod.log.Debug("system is not NUMA-aware")
+		mod.useDefaultNUMA = true
+		return 0, nil
+	} else if err != nil {
+		return 0, errors.Wrap(err, "get NUMA node ID")
+	}
+
+	return numaNode, nil
 }
 
 func (mod *mgmtModule) getAttachInfo(ctx context.Context, numaNode int, sys string) (*mgmtpb.GetAttachInfoResp, error) {

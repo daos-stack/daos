@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2021 Intel Corporation.
+ * (C) Copyright 2016-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -397,16 +397,6 @@ daos_parse_property(char *name, char *value, daos_prop_t *props)
 			return -DER_INVAL;
 		}
 		entry->dpe_type = DAOS_PROP_CO_CSUM_SERVER_VERIFY;
-	} else if (!strcmp(name, "scrubber_disabled")) {
-		if (!strcmp(value, "yes"))
-			entry->dpe_val = true;
-		else if (!strcmp(value, "no"))
-			entry->dpe_val = false;
-		else {
-			fprintf(stderr, "srv_cksum prop value can only be 'yes/no'\n");
-			return -DER_INVAL;
-		}
-		entry->dpe_type = DAOS_PROP_CO_SCRUBBER_DISABLED;
 	} else if (!strcmp(name, "dedup")) {
 		if (!strcmp(value, "off"))
 			entry->dpe_val = DAOS_PROP_CO_DEDUP_OFF;
@@ -503,6 +493,16 @@ daos_parse_property(char *name, char *value, daos_prop_t *props)
 			return -DER_INVAL;
 		}
 		entry->dpe_type = DAOS_PROP_CO_EC_CELL_SZ;
+	} else if (!strcmp(name, "scrubber_disabled")) {
+		if (!strcmp(value, "yes"))
+			entry->dpe_val = true;
+		else if (!strcmp(value, "no"))
+			entry->dpe_val = false;
+		else {
+			fprintf(stderr, "srv_cksum prop value can only be 'yes/no'\n");
+			return -DER_INVAL;
+		}
+		entry->dpe_type = DAOS_PROP_CO_SCRUBBER_DISABLED;
 	} else {
 		fprintf(stderr, "supported prop names are label/cksum/cksum_size/srv_cksum/dedup/dedup_th/rf\n");
 		return -DER_INVAL;

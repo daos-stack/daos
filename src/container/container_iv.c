@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2019-2021 Intel Corporation.
+ * (C) Copyright 2019-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -10,6 +10,7 @@
 
 #include <daos_srv/container.h>
 #include "srv_internal.h"
+#include "rpc.h"
 #include <daos_srv/iv.h>
 #include <daos/btree_class.h>
 #include <daos/btree.h>
@@ -20,7 +21,7 @@
 #define INIT_SNAP_CNT	10
 
 static int
-cont_iv_prop_g2l(struct cont_iv_prop *iv_prop, daos_prop_t *prop);
+cont_iv_prop_g2l(struct cont_iv_prop *iv_prop, daos_prop_t **prop_out);
 
 static struct cont_iv_key *
 key2priv(struct ds_iv_key *iv_key)
@@ -254,76 +255,106 @@ cont_iv_prop_l2g(daos_prop_t *prop, struct cont_iv_prop *iv_prop)
 	struct daos_prop_co_roots *roots;
 	struct daos_acl		*acl;
 	int			 i;
+	uint64_t		bits = 0;
 
-	D_ASSERT(prop->dpp_nr == CONT_PROP_NUM);
-	for (i = 0; i < CONT_PROP_NUM; i++) {
+	D_ASSERT(prop->dpp_nr <= CONT_PROP_NUM);
+	for (i = 0; i < prop->dpp_nr; i++) {
 		prop_entry = &prop->dpp_entries[i];
+		if (!daos_prop_is_set(prop_entry))
+			continue;
 		switch (prop_entry->dpe_type) {
 		case DAOS_PROP_CO_LABEL:
 			D_ASSERT(strlen(prop_entry->dpe_str) <=
 				 DAOS_PROP_LABEL_MAX_LEN);
 			strcpy(iv_prop->cip_label, prop_entry->dpe_str);
+			bits |= DAOS_CO_QUERY_PROP_LABEL;
 			break;
 		case DAOS_PROP_CO_LAYOUT_TYPE:
 			iv_prop->cip_layout_type = prop_entry->dpe_val;
+			bits |= DAOS_CO_QUERY_PROP_LAYOUT_TYPE;
 			break;
 		case DAOS_PROP_CO_LAYOUT_VER:
 			iv_prop->cip_layout_ver = prop_entry->dpe_val;
+			bits |= DAOS_CO_QUERY_PROP_LAYOUT_VER;
 			break;
 		case DAOS_PROP_CO_CSUM:
 			iv_prop->cip_csum = prop_entry->dpe_val;
+			bits |= DAOS_CO_QUERY_PROP_CSUM;
 			break;
 		case DAOS_PROP_CO_CSUM_CHUNK_SIZE:
 			iv_prop->cip_csum_chunk_size = prop_entry->dpe_val;
+			bits |= DAOS_CO_QUERY_PROP_CSUM_CHUNK;
 			break;
 		case DAOS_PROP_CO_CSUM_SERVER_VERIFY:
 			iv_prop->cip_csum_server_verify = prop_entry->dpe_val;
-			break;
-		case DAOS_PROP_CO_SCRUBBER_DISABLED:
-			iv_prop->cip_scrubbing_disabled = prop_entry->dpe_val;
+			bits |= DAOS_CO_QUERY_PROP_CSUM_SERVER;
 			break;
 		case DAOS_PROP_CO_DEDUP:
 			iv_prop->cip_dedup = prop_entry->dpe_val;
+			bits |= DAOS_CO_QUERY_PROP_DEDUP;
 			break;
 		case DAOS_PROP_CO_DEDUP_THRESHOLD:
 			iv_prop->cip_dedup_size = prop_entry->dpe_val;
+			bits |= DAOS_CO_QUERY_PROP_DEDUP_THRESHOLD;
 			break;
 		case DAOS_PROP_CO_ALLOCED_OID:
 			iv_prop->cip_alloced_oid = prop_entry->dpe_val;
+			bits |= DAOS_CO_QUERY_PROP_ALLOCED_OID;
 			break;
 		case DAOS_PROP_CO_REDUN_FAC:
 			iv_prop->cip_redun_fac = prop_entry->dpe_val;
+			bits |= DAOS_CO_QUERY_PROP_REDUN_FAC;
 			break;
 		case DAOS_PROP_CO_REDUN_LVL:
 			iv_prop->cip_redun_lvl = prop_entry->dpe_val;
+			bits |= DAOS_CO_QUERY_PROP_REDUN_LVL;
 			break;
 		case DAOS_PROP_CO_SNAPSHOT_MAX:
 			iv_prop->cip_snap_max = prop_entry->dpe_val;
+			bits |= DAOS_CO_QUERY_PROP_SNAPSHOT_MAX;
 			break;
 		case DAOS_PROP_CO_COMPRESS:
 			iv_prop->cip_compress = prop_entry->dpe_val;
+			bits |= DAOS_CO_QUERY_PROP_COMPRESS;
 			break;
 		case DAOS_PROP_CO_ENCRYPT:
 			iv_prop->cip_encrypt = prop_entry->dpe_val;
+			bits |= DAOS_CO_QUERY_PROP_ENCRYPT;
 			break;
 		case DAOS_PROP_CO_EC_CELL_SZ:
 			iv_prop->cip_ec_cell_sz = prop_entry->dpe_val;
+			bits |= DAOS_CO_QUERY_PROP_EC_CELL_SZ;
+			break;
+		case DAOS_PROP_CO_EC_PDA:
+			iv_prop->cip_ec_pda = prop_entry->dpe_val;
+			bits |= DAOS_CO_QUERY_PROP_EC_PDA;
+			break;
+		case DAOS_PROP_CO_RP_PDA:
+			iv_prop->cip_rp_pda = prop_entry->dpe_val;
+			bits |= DAOS_CO_QUERY_PROP_RP_PDA;
+			break;
+		case DAOS_PROP_CO_GLOBAL_VERSION:
+			iv_prop->cip_global_version = prop_entry->dpe_val;
+			bits |= DAOS_CO_QUERY_PROP_GLOBAL_VERSION;
 			break;
 		case DAOS_PROP_CO_ACL:
 			acl = prop_entry->dpe_val_ptr;
 			if (acl != NULL)
 				memcpy(&iv_prop->cip_acl, acl,
 				       daos_acl_get_size(acl));
+			bits |= DAOS_CO_QUERY_PROP_ACL;
 			break;
 		case DAOS_PROP_CO_OWNER:
 			D_ASSERT(strlen(prop_entry->dpe_str) <=
 				 DAOS_ACL_MAX_PRINCIPAL_LEN);
 			strcpy(iv_prop->cip_owner, prop_entry->dpe_str);
+			bits |= DAOS_CO_QUERY_PROP_OWNER;
 			break;
 		case DAOS_PROP_CO_OWNER_GROUP:
 			D_ASSERT(strlen(prop_entry->dpe_str) <=
 				 DAOS_ACL_MAX_PRINCIPAL_LEN);
 			strcpy(iv_prop->cip_owner_grp, prop_entry->dpe_str);
+			bits |= DAOS_CO_QUERY_PROP_OWNER_GROUP;
 			break;
 		case DAOS_PROP_CO_ROOTS:
 			roots = prop_entry->dpe_val_ptr;
@@ -331,16 +362,22 @@ cont_iv_prop_l2g(daos_prop_t *prop, struct cont_iv_prop *iv_prop)
 				memcpy(&iv_prop->cip_roots,
 				       roots, sizeof(*roots));
 			}
+			bits |= DAOS_CO_QUERY_PROP_ROOTS;
 			break;
 		case DAOS_PROP_CO_STATUS:
 			daos_prop_val_2_co_status(prop_entry->dpe_val,
 						  &iv_prop->cip_co_status);
+			bits |= DAOS_CO_QUERY_PROP_CO_STATUS;
+			break;
+		case DAOS_PROP_CO_SCRUBBER_DISABLED:
+			iv_prop->cip_scrubbing_disabled = prop_entry->dpe_val;
 			break;
 		default:
 			D_ASSERTF(0, "bad dpe_type %d\n", prop_entry->dpe_type);
 			break;
 		}
 	}
+	iv_prop->cip_valid_bits = bits;
 }
 
 static int
@@ -502,15 +539,10 @@ cont_iv_ent_update(struct ds_iv_entry *entry, struct ds_iv_key *key,
 			struct daos_prop_entry	*iv_entry;
 			struct daos_co_status	 co_stat = {0};
 
-			prop = daos_prop_alloc(CONT_PROP_NUM);
-			if (prop == NULL)
-				D_GOTO(out, rc = -DER_NOMEM);
-
-			rc = cont_iv_prop_g2l(&civ_ent->iv_prop, prop);
+			rc = cont_iv_prop_g2l(&civ_ent->iv_prop, &prop);
 			if (rc) {
 				D_ERROR("cont_iv_prop_g2l failed "DF_RC"\n",
 					DP_RC(rc));
-				daos_prop_free(prop);
 				D_GOTO(out, rc);
 			}
 
@@ -1073,134 +1105,192 @@ cont_iv_capability_invalidate(void *ns, uuid_t cont_hdl_uuid, int mode)
 	return cont_iv_invalidate(ns, IV_CONT_CAPA, cont_hdl_uuid, mode);
 }
 
+uint32_t
+cont_query_bits_cnt(uint64_t query_bits)
+{
+	uint64_t	bitmap;
+	uint32_t	idx = 0, nr = 0;
+
+	bitmap = query_bits & DAOS_CO_QUERY_PROP_ALL;
+	while (idx < DAOS_CO_QUERY_PROP_BITS_NR) {
+		if (bitmap & 0x1)
+			nr++;
+		idx++;
+		bitmap = bitmap >> 1;
+	};
+
+	return nr;
+}
+
 static int
-cont_iv_prop_g2l(struct cont_iv_prop *iv_prop, daos_prop_t *prop)
+cont_iv_prop_g2l(struct cont_iv_prop *iv_prop, daos_prop_t **prop_out)
 {
 	struct daos_prop_entry	*prop_entry;
 	struct daos_prop_co_roots *roots;
+	daos_prop_t		*prop;
 	struct daos_acl		*acl;
-	void			*label_alloc = NULL;
-	void			*acl_alloc = NULL;
-	void			*owner_alloc = NULL;
-	void			*owner_grp_alloc = NULL;
-	int			 i;
+	int			 i = 0;
 	int			 rc = 0;
+	uint64_t		 bits = iv_prop->cip_valid_bits;
 
-	D_ASSERT(prop->dpp_nr == CONT_PROP_NUM);
-	for (i = 0; i < CONT_PROP_NUM; i++) {
-		prop_entry = &prop->dpp_entries[i];
-		prop_entry->dpe_type = DAOS_PROP_CO_MIN + i + 1;
-		switch (prop_entry->dpe_type) {
-		case DAOS_PROP_CO_LABEL:
-			D_ASSERT(strlen(iv_prop->cip_label) <=
-				 DAOS_PROP_LABEL_MAX_LEN);
-			D_STRNDUP(prop_entry->dpe_str, iv_prop->cip_label,
-				  DAOS_PROP_LABEL_MAX_LEN);
-			if (prop_entry->dpe_str == NULL)
+	prop = daos_prop_alloc(cont_query_bits_cnt(bits));
+	if (prop == NULL)
+		return -DER_NOMEM;
+
+	if (bits & DAOS_CO_QUERY_PROP_LABEL) {
+		prop_entry = &prop->dpp_entries[i++];
+		D_ASSERT(strlen(iv_prop->cip_label) <=
+			 DAOS_PROP_LABEL_MAX_LEN);
+		D_STRNDUP(prop_entry->dpe_str, iv_prop->cip_label,
+			  DAOS_PROP_LABEL_MAX_LEN);
+		if (prop_entry->dpe_str == NULL)
+			D_GOTO(out, rc = -DER_NOMEM);
+		prop_entry->dpe_type = DAOS_PROP_CO_LABEL;
+	}
+	if (bits & DAOS_CO_QUERY_PROP_LAYOUT_TYPE) {
+		prop_entry = &prop->dpp_entries[i++];
+		prop_entry->dpe_val = iv_prop->cip_layout_type;
+		prop_entry->dpe_type = DAOS_PROP_CO_LAYOUT_TYPE;
+	}
+	if (bits & DAOS_CO_QUERY_PROP_LAYOUT_VER) {
+		prop_entry = &prop->dpp_entries[i++];
+		prop_entry->dpe_val = iv_prop->cip_layout_ver;
+		prop_entry->dpe_type = DAOS_PROP_CO_LAYOUT_VER;
+	}
+	if (bits & DAOS_CO_QUERY_PROP_CSUM) {
+		prop_entry = &prop->dpp_entries[i++];
+		prop_entry->dpe_val = iv_prop->cip_csum;
+		prop_entry->dpe_type = DAOS_PROP_CO_CSUM;
+	}
+	if (bits & DAOS_CO_QUERY_PROP_CSUM_CHUNK) {
+		prop_entry = &prop->dpp_entries[i++];
+		prop_entry->dpe_val = iv_prop->cip_csum_chunk_size;
+		prop_entry->dpe_type = DAOS_PROP_CO_CSUM_CHUNK_SIZE;
+	}
+	if (bits & DAOS_CO_QUERY_PROP_CSUM_SERVER) {
+		prop_entry = &prop->dpp_entries[i++];
+		prop_entry->dpe_val = iv_prop->cip_csum_server_verify;
+		prop_entry->dpe_type = DAOS_PROP_CO_CSUM_SERVER_VERIFY;
+	}
+	if (bits & DAOS_CO_QUERY_PROP_DEDUP) {
+		prop_entry = &prop->dpp_entries[i++];
+		prop_entry->dpe_val = iv_prop->cip_dedup;
+		prop_entry->dpe_type = DAOS_PROP_CO_DEDUP;
+	}
+	if (bits & DAOS_CO_QUERY_PROP_DEDUP_THRESHOLD) {
+		prop_entry = &prop->dpp_entries[i++];
+		prop_entry->dpe_val = iv_prop->cip_dedup_size;
+		prop_entry->dpe_type = DAOS_PROP_CO_DEDUP_THRESHOLD;
+	}
+	if (bits & DAOS_CO_QUERY_PROP_ALLOCED_OID) {
+		prop_entry = &prop->dpp_entries[i++];
+		prop_entry->dpe_val = iv_prop->cip_alloced_oid;
+		prop_entry->dpe_type = DAOS_PROP_CO_ALLOCED_OID;
+	}
+	if (bits & DAOS_CO_QUERY_PROP_REDUN_FAC) {
+		prop_entry = &prop->dpp_entries[i++];
+		prop_entry->dpe_val = iv_prop->cip_redun_fac;
+		prop_entry->dpe_type = DAOS_PROP_CO_REDUN_FAC;
+	}
+	if (bits & DAOS_CO_QUERY_PROP_REDUN_LVL) {
+		prop_entry = &prop->dpp_entries[i++];
+		prop_entry->dpe_val = iv_prop->cip_redun_lvl;
+		prop_entry->dpe_type = DAOS_PROP_CO_REDUN_LVL;
+	}
+	if (bits & DAOS_CO_QUERY_PROP_SNAPSHOT_MAX) {
+		prop_entry = &prop->dpp_entries[i++];
+		prop_entry->dpe_val = iv_prop->cip_snap_max;
+		prop_entry->dpe_type = DAOS_PROP_CO_SNAPSHOT_MAX;
+	}
+	if (bits & DAOS_CO_QUERY_PROP_COMPRESS) {
+		prop_entry = &prop->dpp_entries[i++];
+		prop_entry->dpe_val = iv_prop->cip_compress;
+		prop_entry->dpe_type = DAOS_PROP_CO_COMPRESS;
+	}
+	if (bits & DAOS_CO_QUERY_PROP_ENCRYPT) {
+		prop_entry = &prop->dpp_entries[i++];
+		prop_entry->dpe_val = iv_prop->cip_encrypt;
+		prop_entry->dpe_type = DAOS_PROP_CO_ENCRYPT;
+	}
+	if (bits & DAOS_CO_QUERY_PROP_EC_CELL_SZ) {
+		prop_entry = &prop->dpp_entries[i++];
+		prop_entry->dpe_val = iv_prop->cip_ec_cell_sz;
+		prop_entry->dpe_type = DAOS_PROP_CO_EC_CELL_SZ;
+	}
+	if (bits & DAOS_CO_QUERY_PROP_EC_PDA) {
+		prop_entry = &prop->dpp_entries[i++];
+		prop_entry->dpe_val = iv_prop->cip_ec_pda;
+		prop_entry->dpe_type = DAOS_PROP_CO_EC_PDA;
+	}
+	if (bits & DAOS_CO_QUERY_PROP_RP_PDA) {
+		prop_entry = &prop->dpp_entries[i++];
+		prop_entry->dpe_val = iv_prop->cip_rp_pda;
+		prop_entry->dpe_type = DAOS_PROP_CO_RP_PDA;
+	}
+	if (bits & DAOS_CO_QUERY_PROP_GLOBAL_VERSION) {
+		prop_entry = &prop->dpp_entries[i++];
+		prop_entry->dpe_val = iv_prop->cip_global_version;
+		prop_entry->dpe_type = DAOS_PROP_CO_GLOBAL_VERSION;
+	}
+	if (bits & DAOS_CO_QUERY_PROP_ACL) {
+		prop_entry = &prop->dpp_entries[i++];
+		acl = &iv_prop->cip_acl;
+		if (acl->dal_ver != 0) {
+			D_ASSERT(daos_acl_validate(acl) == 0);
+			prop_entry->dpe_val_ptr = daos_acl_dup(acl);
+			if (prop_entry->dpe_val_ptr == NULL)
 				D_GOTO(out, rc = -DER_NOMEM);
-			label_alloc = prop_entry->dpe_str;
-			break;
-		case DAOS_PROP_CO_LAYOUT_TYPE:
-			prop_entry->dpe_val = iv_prop->cip_layout_type;
-			break;
-		case DAOS_PROP_CO_LAYOUT_VER:
-			prop_entry->dpe_val = iv_prop->cip_layout_ver;
-			break;
-		case DAOS_PROP_CO_CSUM:
-			prop_entry->dpe_val = iv_prop->cip_csum;
-			break;
-		case DAOS_PROP_CO_CSUM_CHUNK_SIZE:
-			prop_entry->dpe_val = iv_prop->cip_csum_chunk_size;
-			break;
-		case DAOS_PROP_CO_CSUM_SERVER_VERIFY:
-			prop_entry->dpe_val = iv_prop->cip_csum_server_verify;
-			break;
-		case DAOS_PROP_CO_SCRUBBER_DISABLED:
-			prop_entry->dpe_val = iv_prop->cip_scrubbing_disabled;
-			break;
-		case DAOS_PROP_CO_DEDUP:
-			prop_entry->dpe_val = iv_prop->cip_dedup;
-			break;
-		case DAOS_PROP_CO_DEDUP_THRESHOLD:
-			prop_entry->dpe_val = iv_prop->cip_dedup_size;
-			break;
-		case DAOS_PROP_CO_ALLOCED_OID:
-			prop_entry->dpe_val = iv_prop->cip_alloced_oid;
-			break;
-		case DAOS_PROP_CO_REDUN_FAC:
-			prop_entry->dpe_val = iv_prop->cip_redun_fac;
-			break;
-		case DAOS_PROP_CO_REDUN_LVL:
-			prop_entry->dpe_val = iv_prop->cip_redun_lvl;
-			break;
-		case DAOS_PROP_CO_SNAPSHOT_MAX:
-			prop_entry->dpe_val = iv_prop->cip_snap_max;
-			break;
-		case DAOS_PROP_CO_COMPRESS:
-			prop_entry->dpe_val = iv_prop->cip_compress;
-			break;
-		case DAOS_PROP_CO_ENCRYPT:
-			prop_entry->dpe_val = iv_prop->cip_encrypt;
-			break;
-		case DAOS_PROP_CO_EC_CELL_SZ:
-			prop_entry->dpe_val = iv_prop->cip_ec_cell_sz;
-			break;
-		case DAOS_PROP_CO_ACL:
-			acl = &iv_prop->cip_acl;
-			if (acl->dal_ver != 0) {
-				D_ASSERT(daos_acl_validate(acl) == 0);
-				acl_alloc = daos_acl_dup(acl);
-				if (acl_alloc != NULL)
-					prop_entry->dpe_val_ptr = acl_alloc;
-				else
-					D_GOTO(out, rc = -DER_NOMEM);
-			} else {
-				prop_entry->dpe_val_ptr = NULL;
-			}
-			break;
-		case DAOS_PROP_CO_OWNER:
-			D_ASSERT(strlen(iv_prop->cip_owner) <=
-				 DAOS_ACL_MAX_PRINCIPAL_LEN);
-			D_STRNDUP(prop_entry->dpe_str, iv_prop->cip_owner,
-				  DAOS_ACL_MAX_PRINCIPAL_LEN);
-			if (prop_entry->dpe_str == NULL)
-				D_GOTO(out, rc = -DER_NOMEM);
-			owner_alloc = prop_entry->dpe_str;
-			break;
-		case DAOS_PROP_CO_OWNER_GROUP:
-			D_ASSERT(strlen(iv_prop->cip_owner_grp) <=
-				 DAOS_ACL_MAX_PRINCIPAL_LEN);
-			D_STRNDUP(prop_entry->dpe_str, iv_prop->cip_owner_grp,
-				  DAOS_ACL_MAX_PRINCIPAL_LEN);
-			if (prop_entry->dpe_str == NULL)
-				D_GOTO(out, rc = -DER_NOMEM);
-			owner_grp_alloc = prop_entry->dpe_str;
-			break;
-		case DAOS_PROP_CO_ROOTS:
-			roots = &iv_prop->cip_roots;
-			D_ALLOC(prop_entry->dpe_val_ptr, sizeof(*roots));
-			if (!prop_entry->dpe_val_ptr)
-				D_GOTO(out, rc = -DER_NOMEM);
-			memcpy(prop_entry->dpe_val_ptr, roots, sizeof(*roots));
-			break;
-		case DAOS_PROP_CO_STATUS:
-			prop_entry->dpe_val = daos_prop_co_status_2_val(
-						&iv_prop->cip_co_status);
-			break;
-		default:
-			D_ASSERTF(0, "bad dpe_type %d\n", prop_entry->dpe_type);
-			break;
+		} else {
+			prop_entry->dpe_val_ptr = NULL;
 		}
-	}
+		prop_entry->dpe_type = DAOS_PROP_CO_ACL;
 
-out:
-	if (rc) {
-		if (acl_alloc)
-			daos_acl_free(acl_alloc);
-		D_FREE(label_alloc);
-		D_FREE(owner_alloc);
-		D_FREE(owner_grp_alloc);
 	}
+	if (bits & DAOS_CO_QUERY_PROP_OWNER) {
+		prop_entry = &prop->dpp_entries[i++];
+		D_ASSERT(strlen(iv_prop->cip_owner) <=
+			 DAOS_ACL_MAX_PRINCIPAL_LEN);
+		D_STRNDUP(prop_entry->dpe_str, iv_prop->cip_owner,
+			  DAOS_ACL_MAX_PRINCIPAL_LEN);
+		if (prop_entry->dpe_str == NULL)
+			D_GOTO(out, rc = -DER_NOMEM);
+		prop_entry->dpe_type = DAOS_PROP_CO_OWNER;
+	}
+	if (bits & DAOS_CO_QUERY_PROP_OWNER_GROUP) {
+		prop_entry = &prop->dpp_entries[i++];
+		D_ASSERT(strlen(iv_prop->cip_owner_grp) <=
+			 DAOS_ACL_MAX_PRINCIPAL_LEN);
+		D_STRNDUP(prop_entry->dpe_str, iv_prop->cip_owner_grp,
+			  DAOS_ACL_MAX_PRINCIPAL_LEN);
+		if (prop_entry->dpe_str == NULL)
+			D_GOTO(out, rc = -DER_NOMEM);
+		prop_entry->dpe_type = DAOS_PROP_CO_OWNER_GROUP;
+	}
+	if (bits & DAOS_CO_QUERY_PROP_ROOTS) {
+		prop_entry = &prop->dpp_entries[i++];
+		roots = &iv_prop->cip_roots;
+		D_ALLOC(prop_entry->dpe_val_ptr, sizeof(*roots));
+		if (!prop_entry->dpe_val_ptr)
+			D_GOTO(out, rc = -DER_NOMEM);
+		memcpy(prop_entry->dpe_val_ptr, roots, sizeof(*roots));
+		prop_entry->dpe_type = DAOS_PROP_CO_ROOTS;
+	}
+	if (bits & DAOS_CO_QUERY_PROP_CO_STATUS) {
+		prop_entry = &prop->dpp_entries[i++];
+		prop_entry->dpe_val = daos_prop_co_status_2_val(
+					&iv_prop->cip_co_status);
+		prop_entry->dpe_type = DAOS_PROP_CO_STATUS;
+	}
+	if (bits & DAOS_CO_QUERY_PROP_SCRUB_DIS) {
+		prop_entry = &prop->dpp_entries[i++];
+		prop_entry->dpe_val = iv_prop->cip_scrubbing_disabled;
+		prop_entry->dpe_type = DAOS_PROP_CO_SCRUBBER_DISABLED;
+	}
+out:
+	if (rc)
+		daos_prop_free(prop);
+	else
+		*prop_out = prop;
 	return rc;
 }
 
@@ -1267,12 +1357,7 @@ cont_iv_prop_fetch_ult(void *data)
 		D_GOTO(out, rc);
 	}
 
-	prop_fetch = daos_prop_alloc(CONT_PROP_NUM);
-	if (prop_fetch == NULL)
-		D_GOTO(out, rc = -DER_NOMEM);
-
-	D_ASSERT(prop != NULL);
-	rc = cont_iv_prop_g2l(&iv_entry->iv_prop, prop_fetch);
+	rc = cont_iv_prop_g2l(&iv_entry->iv_prop, &prop_fetch);
 	if (rc) {
 		D_ERROR("cont_iv_prop_g2l failed "DF_RC"\n", DP_RC(rc));
 		D_GOTO(out, rc);

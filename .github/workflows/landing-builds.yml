@@ -10,6 +10,8 @@ on:
     paths:
       - .github/workflows/landing-builds.yml
       - utils/docker/Dockerfile.*
+      - 'utils/scripts/install-*.sh'
+      - utils/run_in_ga.sh
 
 jobs:
 
@@ -37,10 +39,10 @@ jobs:
             base: ubuntu.20.04
             with: ubuntu.20.04
           - distro: rocky
-            base: centos.8
+            base: el.8
             with: rockylinux/rockylinux:8
           - distro: fedora
-            base: centos.8
+            base: el.8
             with: fedora:35
           - distro: leap.15
             base: leap.15
@@ -140,10 +142,10 @@ jobs:
             base: ubuntu.20.04
             with: ubuntu.20.04
           - distro: rocky
-            base: centos.8
+            base: el.8
             with: rockylinux/rockylinux:8
           - distro: fedora
-            base: centos.8
+            base: el.8
             with: fedora:35
           - distro: leap.15
             base: leap.15
@@ -215,7 +217,7 @@ jobs:
             base: centos.7
             with: centos.7
           - distro: alma
-            base: centos.8
+            base: el.8
             with: almalinux:8
     env:
       DEPS_JOBS: 10

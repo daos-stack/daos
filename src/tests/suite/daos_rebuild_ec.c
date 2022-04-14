@@ -803,6 +803,7 @@ enumerate_cb(void *data)
 				    buf_len, req);
 		assert_rc_equal(rc, 0);
 		total += number;
+		print_message("total %d  number %d\n", total, number);
 	}
 
 	assert_int_equal(total, 100);

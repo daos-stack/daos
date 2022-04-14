@@ -9,7 +9,7 @@ timeout: 150
 pool:
   control_method: dmg
   mode: 511
-  scm_size: 1073741824
+  scm_size: 1GB
   name: daos_server
 querytests:
    handles: !mux
@@ -21,12 +21,3 @@ querytests:
           handle:
              - 0
              - FAIL
-   infoptr: !mux
-     goodptr:
-          info:
-             - VALID
-             - PASS
-     badptr:
-          info:
-             - NULL
-             - PASS

@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2019-2021 Intel Corporation.
+ * (C) Copyright 2019-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -41,7 +41,7 @@ is_nvme_enabled(test_arg_t *arg)
 	int			 rc;
 
 	pinfo.pi_bits = DPI_ALL;
-	rc = test_pool_get_info(arg, &pinfo);
+	rc = test_pool_get_info(arg, &pinfo, NULL /* engine_ranks */);
 	assert_rc_equal(rc, 0);
 
 	return ps->ps_free_min[DAOS_MEDIA_NVME] != 0;

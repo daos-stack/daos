@@ -48,9 +48,13 @@ typedef struct dfs dfs_t;
  * Reserve bit 3 in the access flags for dfs_mount() - bits 1 and 2 are used
  * for read / write access (O_RDONLY, O_RDRW).
  */
-#define DFS_BALANCED	4 /** DFS operations using a DTX */
-#define DFS_RELAXED	0 /** DFS operations do not use a DTX (default mode). */
+/** DFS container balanced consistency mode. DFS operations using a DTX */
+#define DFS_BALANCED	4
+/** DFS container relaxed consistency mode. DFS operations do not use a DTX (default mode) */
+#define DFS_RELAXED	0
+/** read-only access */
 #define DFS_RDONLY	O_RDONLY
+/** read/write access */
 #define DFS_RDWR	O_RDWR
 
 /** struct holding attributes for a DFS container */
@@ -63,7 +67,7 @@ typedef struct {
 	daos_oclass_id_t	da_oclass_id;
 	/** DAOS properties on the DFS container */
 	daos_prop_t		*da_props;
-	/*
+	/**
 	 * Consistency mode for the DFS container: DFS_RELAXED, DFS_BALANCED.
 	 * If set to 0 or more generally not set to balanced explicitly, relaxed
 	 * mode will be used. In the future, Balanced mode will be the default.
@@ -79,6 +83,7 @@ typedef struct {
 	daos_range_t	       *iod_rgs;
 } dfs_iod_t;
 
+/** DFS object information */
 typedef struct {
 	/** object class */
 	daos_oclass_id_t	doi_oclass_id;
@@ -664,14 +669,14 @@ dfs_remove(dfs_t *dfs, dfs_obj_t *parent, const char *name, bool force,
  *			Target parent directory object. If NULL, use root obj.
  * \param[in]	new_name
  *			New link name of object.
- * \param[in]	oid	Optionally return the DAOS Object ID of a removed obj
- *			as a result of a rename.
+ * \param[out]	oid	Optional: return the intenal object ID of the removed obj
+ *			if the move clobbered it.
  *
  * \return		0 on success, errno code on failure.
  */
 int
-dfs_move(dfs_t *dfs, dfs_obj_t *parent, char *name, dfs_obj_t *new_parent,
-	 char *new_name, daos_obj_id_t *oid);
+dfs_move(dfs_t *dfs, dfs_obj_t *parent, const char *name, dfs_obj_t *new_parent,
+	 const char *new_name, daos_obj_id_t *oid);
 
 /**
  * Exchange two objects.
@@ -685,8 +690,8 @@ dfs_move(dfs_t *dfs, dfs_obj_t *parent, char *name, dfs_obj_t *new_parent,
  * \return		0 on success, errno code on failure.
  */
 int
-dfs_exchange(dfs_t *dfs, dfs_obj_t *parent1, char *name1,
-	     dfs_obj_t *parent2, char *name2);
+dfs_exchange(dfs_t *dfs, dfs_obj_t *parent1, const char *name1, dfs_obj_t *parent2,
+	     const char *name2);
 
 /**
  * Retrieve mode of an open object.
@@ -852,6 +857,10 @@ dfs_ostat(dfs_t *dfs, dfs_obj_t *obj, struct stat *stbuf);
 #define DFS_SET_ATTR_MTIME	(1 << 2)
 /** Option to set size of a file */
 #define DFS_SET_ATTR_SIZE	(1 << 3)
+/** Option to set uid of object */
+#define DFS_SET_ATTR_UID	(1 << 4)
+/** Option to set gid of object */
+#define DFS_SET_ATTR_GID	(1 << 5)
 
 /**
  * set stat attributes for a file and fetch new values.  If the object is a
@@ -901,6 +910,25 @@ dfs_access(dfs_t *dfs, dfs_obj_t *parent, const char *name, int mask);
  */
 int
 dfs_chmod(dfs_t *dfs, dfs_obj_t *parent, const char *name, mode_t mode);
+
+/**
+ * Change owner and group. Since uid and gid are not enforced
+ * at the DFS level, we do not also enforce the process privileges to be able to change the uid and
+ * gid. Any process with write access to the DFS container can make changes to the uid and gid using
+ * this function.
+ *
+ * \param[in]	dfs	Pointer to the mounted file system.
+ * \param[in]	parent	Opened parent directory object. If NULL, use root obj.
+ * \param[in]	name	Link name of the object. Can be NULL if parent is root,
+ *			which means operation will be on root object.
+ * \param[in]	uid	change owner of file (-1 to leave unchanged).
+ * \param[in]	gid	change group of file (-1 to leave unchanged).
+ * \param[in]	flags	if 0, symlinks are dereferenced. Pass O_NOFOLLOW to not dereference.
+ *
+ * \return		0 on success, errno code on failure.
+ */
+int
+dfs_chown(dfs_t *dfs, dfs_obj_t *parent, const char *name, uid_t uid, gid_t gid, int flags);
 
 /**
  * Sync to commit the latest epoch on the container. This applies to the entire
@@ -982,9 +1010,17 @@ dfs_removexattr(dfs_t *dfs, dfs_obj_t *obj, const char *name);
 int
 dfs_listxattr(dfs_t *dfs, dfs_obj_t *obj, char *list, daos_size_t *size);
 
+/**
+ * Backward compatibility code.
+ * Please don't use directly
+ */
 int
 dfs_cont_create2(daos_handle_t poh, uuid_t *cuuid, dfs_attr_t *attr, daos_handle_t *coh,
 		 dfs_t **dfs);
+/**
+ * Backward compatibility code.
+ * Please don't use directly
+ */
 int
 dfs_cont_create1(daos_handle_t poh, const uuid_t cuuid, dfs_attr_t *attr, daos_handle_t *coh,
 		 dfs_t **dfs);
@@ -1008,7 +1044,7 @@ dfs_cont_create_cpp(daos_handle_t poh, const uuid_t cuuid, dfs_attr_t *attr, dao
 };
 #else
 /**
- * for backward compatility, support old api where a const uuid_t was required to be passed in for
+ * for backward compatibility, support old api where a const uuid_t was required to be passed in for
  * the container to be created.
  */
 #define dfs_cont_create(poh, co, ...)					\

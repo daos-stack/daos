@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2015-2021 Intel Corporation.
+ * (C) Copyright 2015-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -7,6 +7,7 @@
 
 #include <daos/container.h>
 #include <daos/task.h>
+#include <daos/pool.h>
 #include "client_internal.h"
 #include "task_internal.h"
 
@@ -69,6 +70,46 @@ daos_cont_create1(daos_handle_t poh, const uuid_t cuuid, daos_prop_t *cont_prop,
 	return daos_cont_create(poh, u, cont_prop, ev);
 }
 
+static int
+cont_inherit_redunc_fac(daos_handle_t poh, daos_prop_t *cont_prop,
+			daos_prop_t **merged_prop)
+{
+	struct daos_prop_entry	*entry;
+	daos_prop_t		*redunc_prop;
+	int			rf, rc = 0;
+
+	*merged_prop = NULL;
+	/* redunc factor specified, no need inherit from pool */
+	entry = daos_prop_entry_get(cont_prop, DAOS_PROP_CO_REDUN_FAC);
+	if (entry)
+		return 0;
+
+	rf = dc_pool_get_redunc(poh);
+	if (rf < 0)
+		return rf;
+
+	redunc_prop = daos_prop_alloc(1);
+	if (redunc_prop == NULL) {
+		D_ERROR("failed to allocate redunc_prop\n");
+		return -DER_NOMEM;
+	}
+	redunc_prop->dpp_entries[0].dpe_type = DAOS_PROP_CO_REDUN_FAC;
+	redunc_prop->dpp_entries[0].dpe_val = rf;
+
+	if (cont_prop) {
+		*merged_prop = daos_prop_merge(cont_prop, redunc_prop);
+		daos_prop_free(redunc_prop);
+		if (merged_prop == NULL) {
+			D_ERROR("failed to merge cont_prop and redunc_prop\n");
+			rc = -DER_NOMEM;
+		}
+	} else {
+		*merged_prop = redunc_prop;
+	}
+
+	return rc;
+}
+
 /**
  * Real latest & greatest implementation of container create.
  * Used by anyone including the daos_cont.h header file.
@@ -80,6 +121,7 @@ daos_cont_create2(daos_handle_t poh, uuid_t *cuuid, daos_prop_t *cont_prop,
 	daos_cont_create_t	*args;
 	tse_task_t		*task;
 	int			 rc;
+	daos_prop_t		*merged_props = NULL;
 
 	DAOS_API_ARG_ASSERT(*args, CONT_CREATE);
 
@@ -88,6 +130,10 @@ daos_cont_create2(daos_handle_t poh, uuid_t *cuuid, daos_prop_t *cont_prop,
 		return -DER_INVAL;
 	}
 
+	rc = cont_inherit_redunc_fac(poh, cont_prop, &merged_props);
+	if (rc)
+		return rc;
+
 	rc = dc_task_create(dc_cont_create, NULL, ev, &task);
 	if (rc)
 		return rc;
@@ -95,10 +141,14 @@ daos_cont_create2(daos_handle_t poh, uuid_t *cuuid, daos_prop_t *cont_prop,
 	args = dc_task_get_args(task);
 	args->poh	= poh;
 	uuid_clear(args->uuid);
-	args->prop	= cont_prop;
+	args->prop	= merged_props ? merged_props : cont_prop;
 	args->cuuid	= cuuid;
 
-	return dc_task_schedule(task, true);
+	rc = dc_task_schedule(task, true);
+	if (merged_props)
+		daos_prop_free(merged_props);
+
+	return rc;
 }
 
 int
@@ -142,44 +192,12 @@ out_prop:
 	return rc;
 }
 
-/** Disable backward compat code */
-#undef daos_cont_open
-
-/** Kept for backward ABI compatibility, but not advertised via header file */
-int
-daos_cont_open(daos_handle_t poh, const char *cont, unsigned int flags,
-	       daos_handle_t *coh, daos_cont_info_t *info, daos_event_t *ev)
-{
-	daos_cont_open_t	*args;
-	tse_task_t		*task;
-	const unsigned char	*uuid = (const unsigned char *) cont;
-	int			 rc;
-
-	DAOS_API_ARG_ASSERT(*args, CONT_OPEN);
-	if (!daos_uuid_valid(uuid))
-		return -DER_INVAL;
-
-	rc = dc_task_create(dc_cont_open, NULL, ev, &task);
-	if (rc)
-		return rc;
-
-	args = dc_task_get_args(task);
-	args->poh	= poh;
-	args->flags	= flags;
-	args->coh	= coh;
-	args->info	= info;
-	uuid_copy((unsigned char *)args->uuid, uuid);
-	args->cont	= NULL;
-
-	return dc_task_schedule(task, true);
-}
-
 /**
  * Real latest & greatest implementation of container open.
  * Used by anyone including the daos_cont.h header file.
  */
 int
-daos_cont_open2(daos_handle_t poh, const char *cont, unsigned int flags,
+daos_cont_open(daos_handle_t poh, const char *cont, unsigned int flags,
 		daos_handle_t *coh, daos_cont_info_t *info, daos_event_t *ev)
 {
 	daos_cont_open_t	*args;
@@ -203,6 +221,12 @@ daos_cont_open2(daos_handle_t poh, const char *cont, unsigned int flags,
 	return dc_task_schedule(task, true);
 }
 
+#undef daos_cont_open
+int
+daos_cont_open(daos_handle_t poh, const char *cont, unsigned int flags,
+	       daos_handle_t *coh, daos_cont_info_t *info, daos_event_t *ev)
+	       __attribute__ ((weak, alias("daos_cont_open2")));
+
 int
 daos_cont_close(daos_handle_t coh, daos_event_t *ev)
 {
@@ -222,42 +246,12 @@ daos_cont_close(daos_handle_t coh, daos_event_t *ev)
 	return dc_task_schedule(task, true);
 }
 
-/** Disable backward compat code */
-#undef daos_cont_destroy
-
-/** Kept for backward ABI compatibility, but not advertised via header file */
-int
-daos_cont_destroy(daos_handle_t poh, const char *cont, int force,
-		  daos_event_t *ev)
-{
-	daos_cont_destroy_t	*args;
-	tse_task_t		*task;
-	const unsigned char	*uuid = (const unsigned char *) cont;
-	int			 rc;
-
-	DAOS_API_ARG_ASSERT(*args, CONT_DESTROY);
-	if (!daos_uuid_valid(uuid))
-		return -DER_INVAL;
-
-	rc = dc_task_create(dc_cont_destroy, NULL, ev, &task);
-	if (rc)
-		return rc;
-
-	args = dc_task_get_args(task);
-	args->poh	= poh;
-	args->force	= force;
-	args->cont	= NULL;
-	uuid_copy((unsigned char *)args->uuid, uuid);
-
-	return dc_task_schedule(task, true);
-}
-
 /**
  * Real latest & greatest implementation of container destroy.
  * Used by anyone including the daos_cont.h header file.
  */
 int
-daos_cont_destroy2(daos_handle_t poh, const char *cont, int force,
+daos_cont_destroy(daos_handle_t poh, const char *cont, int force,
 		   daos_event_t *ev)
 {
 	daos_cont_destroy_t	*args;
@@ -278,6 +272,12 @@ daos_cont_destroy2(daos_handle_t poh, const char *cont, int force,
 
 	return dc_task_schedule(task, true);
 }
+
+#undef daos_cont_destroy
+int
+daos_cont_destroy(daos_handle_t poh, const char *cont, int force,
+		  daos_event_t *ev)
+		  __attribute__ ((weak, alias("daos_cont_destroy2")));
 
 int
 daos_cont_query(daos_handle_t coh, daos_cont_info_t *info,

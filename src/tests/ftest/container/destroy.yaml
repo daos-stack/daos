@@ -1,0 +1,62 @@
+hosts:
+  test_servers:
+    - server-A
+
+timeout: 60
+
+server_config:
+  name: daos_server
+
+pool:
+  scm_size: 1G
+  control_method: dmg
+
+container:
+  control_method: API
+
+destroy_variants:
+  destroy_uuid: !mux
+    good_uid:
+      change_result:
+        - FALSE
+        - PASS
+    nonexisting_uuid:
+      change_result:
+        - TRUE
+        - FAIL
+
+  connection_open: !mux
+    # opened=TRUE and force=0 should FAIL (noForce below causes FAIL)
+    connection_opened:
+      opened:
+        - TRUE
+        - PASS
+    connection_closed:
+      opened:
+        - FALSE
+        - PASS
+
+  force_destroy: !mux
+    # force=0 and opened=FALSE expected to PASS (delete.py overrides this FAIL)
+    no_force:
+      force:
+        - 0
+        - FAIL
+    valid_force:
+      force:
+        - 1
+        - PASS
+    invalid_force:
+      force:
+        - 99999999
+        - PASS
+
+  destroy_pool_handle: !mux
+    valid_pool_handle:
+      poh:
+        - VALID
+        - PASS
+    invalid_pool_handle:
+      poh:
+        - INVALID
+        - FAIL

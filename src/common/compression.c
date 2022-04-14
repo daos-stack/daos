@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2020-2021 Intel Corporation.
+ * (C) Copyright 2020-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -135,6 +135,8 @@ daos_compressor_init(struct daos_compressor **obj,
 
 	if (rc == DC_STATUS_OK)
 		*obj = result;
+	else
+		D_FREE(result);
 
 	return rc;
 }

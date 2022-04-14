@@ -112,7 +112,7 @@ rebuild_targets(test_arg_t **args, int args_cnt, d_rank_t *ranks,
 		daos_pool_info_t	pool_info;
 
 		/* refresh the pool information */
-		rc = test_pool_get_info(args[i], &pool_info);
+		rc = test_pool_get_info(args[i], &pool_info, NULL /* engine_ranks */);
 		if (rc) {
 			print_message("get pool "DF_UUIDF" info failed: %d\n",
 				      DP_UUID(args[i]->pool.pool_uuid), rc);

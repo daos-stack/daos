@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2021 Intel Corporation.
+ * (C) Copyright 2016-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -32,7 +32,7 @@
 #include <daos_types.h>
 
 /* Default layout version */
-#define DS_CONT_MD_VERSION 4
+#define DS_CONT_MD_VERSION 7
 
 /* Lowest compatible layout version */
 #define DS_CONT_MD_VERSION_LOW 4
@@ -75,7 +75,6 @@ extern d_iov_t ds_cont_prop_layout_ver;		/* uint64_t */
 extern d_iov_t ds_cont_prop_csum;		/* uint64_t */
 extern d_iov_t ds_cont_prop_csum_chunk_size;	/* uint64_t */
 extern d_iov_t ds_cont_prop_csum_server_verify;	/* uint64_t */
-extern d_iov_t ds_cont_prop_scrubber_disabled;	/* uint64_t */
 extern d_iov_t ds_cont_prop_dedup;		/* uint64_t */
 extern d_iov_t ds_cont_prop_dedup_threshold;	/* uint64_t */
 extern d_iov_t ds_cont_prop_redun_fac;		/* uint64_t */
@@ -93,6 +92,10 @@ extern d_iov_t ds_cont_attr_user;		/* user attribute KVS */
 extern d_iov_t ds_cont_prop_handles;		/* handle index KVS */
 extern d_iov_t ds_cont_prop_roots;		/* container first citizens */
 extern d_iov_t ds_cont_prop_ec_cell_sz;		/* cell size of EC */
+extern d_iov_t ds_cont_prop_ec_pda;		/* uint32 */
+extern d_iov_t ds_cont_prop_rp_pda;		/* uint32 */
+extern d_iov_t ds_cont_prop_cont_global_version;/* uint32 */
+extern d_iov_t ds_cont_prop_scrubber_disabled;	/* uint64_t */
 
 /*
  * Snapshot KVS (RDB_KVS_INTEGER)
@@ -131,7 +134,9 @@ struct container_hdl {
 };
 
 extern daos_prop_t cont_prop_default;
+extern daos_prop_t cont_prop_default_v0;
 
+#define CONT_PROP_NUM_V0 20
 #define CONT_PROP_NUM	(DAOS_PROP_CO_MAX - DAOS_PROP_CO_MIN - 1)
 
 /**

@@ -55,6 +55,8 @@ enum dtx_operation {
 
 CRT_RPC_DECLARE(dtx, DAOS_ISEQ_DTX, DAOS_OSEQ_DTX);
 
+#define DTX_YIELD_CYCLE		(DTX_THRESHOLD_COUNT >> 3)
+
 /* The time threshold for triggerring DTX cleanup of stale entries.
  * If the oldest active DTX exceeds such threshold, it will trigger
  * DTX cleanup locally.
@@ -109,6 +111,13 @@ extern uint32_t dtx_agg_thd_age_up;
  * this threshold will be aggregated.
  */
 extern uint32_t dtx_agg_thd_age_lo;
+
+/* The threshold for using helper ULT when handle DTX RPC. */
+#define DTX_RPC_HELPER_THD_MAX	(~0U)
+#define DTX_RPC_HELPER_THD_MIN	18
+#define DTX_RPC_HELPER_THD_DEF	(DTX_THRESHOLD_COUNT + 1)
+
+extern uint32_t dtx_rpc_helper_thd;
 
 struct dtx_pool_metrics {
 	struct d_tm_node_t	*dpm_batched_degree;
@@ -169,6 +178,9 @@ int dtx_refresh_internal(struct ds_cont_child *cont, int *check_count,
 			 d_list_t *abt_list, d_list_t *act_list, bool failout);
 int dtx_status_handle_one(struct ds_cont_child *cont, struct dtx_entry *dte,
 			  daos_epoch_t epoch, int *tgt_array, int *err);
+
+int dtx_leader_get(struct ds_pool *pool, struct dtx_memberships *mbs,
+		   struct pool_target **p_tgt);
 
 enum dtx_status_handle_result {
 	DSHR_NEED_COMMIT	= 1,

@@ -30,10 +30,15 @@ dpdk_cli_override_opts;
 #define NVME_DEV_FL_IDENTIFY	(1 << 3) /* SSD being identified by LED activity */
 
 /** Device state combinations */
-#define NVME_DEV_STATE_NORMAL (NVME_DEV_FL_PLUGGED | NVME_DEV_FL_INUSE)
-#define NVME_DEV_STATE_FAULTY (NVME_DEV_STATE_NORMAL | NVME_DEV_FL_FAULTY)
-#define NVME_DEV_STATE_NEW (NVME_DEV_FL_PLUGGED)
-#define NVME_DEV_STATE_INVALID ((NVME_DEV_STATE_FAULTY | NVME_DEV_FL_IDENTIFY) + 1)
+#define NVME_DEV_STATE_NORMAL	(NVME_DEV_FL_PLUGGED | NVME_DEV_FL_INUSE)
+#define NVME_DEV_STATE_FAULTY	(NVME_DEV_STATE_NORMAL | NVME_DEV_FL_FAULTY)
+#define NVME_DEV_STATE_NEW	NVME_DEV_FL_PLUGGED
+#define NVME_DEV_STATE_INVALID	(1 << 4)
+
+/** Env defining the size of a metadata pmem pool/file in MiBs */
+#define DAOS_MD_CAP_ENV			"DAOS_MD_CAP"
+/** Default size of a metadata pmem pool/file (128 MiB) */
+#define DEFAULT_DAOS_MD_CAP_SIZE	(1ul << 27)
 
 #define BIT_SET(x, m) (((x)&(m)) == (m))
 #define BIT_UNSET(x, m) (!BIT_SET(x, m))
@@ -43,7 +48,10 @@ dpdk_cli_override_opts;
 static inline char *
 nvme_state2str(int state)
 {
-	/** If unplugged, return early */
+	if (state == NVME_DEV_STATE_INVALID)
+		return "UNKNOWN";
+
+	/** Otherwise, if unplugged, return early */
 	if BIT_UNSET(state, NVME_DEV_FL_PLUGGED)
 		return "UNPLUGGED";
 
@@ -97,6 +105,7 @@ struct nvme_stats {
 	/* Device space utilization */
 	uint64_t	 total_bytes;
 	uint64_t	 avail_bytes;
+	uint64_t	 cluster_size;
 	/* Device health details */
 	uint32_t	 warn_temp_time;
 	uint32_t	 crit_temp_time;

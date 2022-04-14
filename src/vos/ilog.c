@@ -103,7 +103,7 @@ ilog_is_same_tx(struct ilog_context *lctx, const struct ilog_id *id, bool *same)
 				     cbs->dc_is_same_tx_args);
 }
 
-static int
+static int16_t
 ilog_status_get(struct ilog_context *lctx, const struct ilog_id *id, uint32_t intent, bool retry)
 {
 	struct ilog_desc_cbs	*cbs = &lctx->ic_cbs;
@@ -1035,8 +1035,6 @@ ilog_abort(daos_handle_t loh, const struct ilog_id *id)
 struct ilog_priv {
 	/** Embedded context for current log root */
 	struct ilog_context	 ip_lctx;
-	/** Array marking removed entries */
-	uint32_t		*ip_removals;
 	/** Version of log from prior fetch */
 	int32_t			 ip_log_version;
 	/** Intent for prior fetch */
@@ -1046,7 +1044,7 @@ struct ilog_priv {
 	/** Cached return code for fetch operation */
 	int			 ip_rc;
 	/** Embedded status entries */
-	uint32_t		 ip_embedded[NUM_EMBEDDED];
+	struct ilog_info	 ip_embedded[NUM_EMBEDDED];
 };
 D_CASSERT(sizeof(struct ilog_priv) <= ILOG_PRIV_SIZE);
 
@@ -1063,7 +1061,7 @@ ilog_fetch_init(struct ilog_entries *entries)
 
 	D_ASSERT(entries != NULL);
 	memset(entries, 0, sizeof(*entries));
-	entries->ie_statuses = &priv->ip_embedded[0];
+	entries->ie_info = &priv->ip_embedded[0];
 }
 
 void
@@ -1076,11 +1074,10 @@ ilog_fetch_move(struct ilog_entries *dest, struct ilog_entries *src)
 	D_ASSERT(src != NULL);
 
 	/** We've already copied everything, just fix up any pointers here */
-	if (src->ie_statuses == &priv_src->ip_embedded[0])
-		dest->ie_statuses = &priv_dest->ip_embedded[0];
+	if (src->ie_info == &priv_src->ip_embedded[0])
+		dest->ie_info = &priv_dest->ip_embedded[0];
 
 	priv_src->ip_alloc_size = 0;
-	priv_src->ip_removals = NULL;
 }
 
 static void
@@ -1102,11 +1099,12 @@ ilog_status_refresh(struct ilog_context *lctx, uint32_t intent,
 		status = ilog_status_get(lctx, &entry.ie_id, intent,
 					 (intent == DAOS_INTENT_UPDATE ||
 					  intent == DAOS_INTENT_PUNCH) ? false : true);
-		if (status < 0) {
+		if (status < 0 && status != -DER_INPROGRESS) {
 			priv->ip_rc = status;
 			return;
 		}
-		entries->ie_statuses[entry.ie_idx] = status;
+		entries->ie_info[entry.ie_idx].ii_removed = 0;
+		entries->ie_info[entry.ie_idx].ii_status = status;
 	}
 }
 
@@ -1118,9 +1116,9 @@ ilog_fetch_cached(struct umem_instance *umm, struct ilog_root *root,
 	struct ilog_priv	*priv = ilog_ent2priv(entries);
 	struct ilog_context	*lctx = &priv->ip_lctx;
 
-	D_ASSERT(entries->ie_statuses != NULL);
+	D_ASSERT(entries->ie_info != NULL);
 	D_ASSERT(priv->ip_alloc_size != 0 ||
-		 entries->ie_statuses == &priv->ip_embedded[0]);
+		 entries->ie_info == &priv->ip_embedded[0]);
 
 	if (priv->ip_lctx.ic_root != root ||
 	    priv->ip_log_version != ilog_mag2ver(root->lr_magic)) {
@@ -1155,10 +1153,7 @@ static int
 prepare_entries(struct ilog_entries *entries, struct ilog_array_cache *cache)
 {
 	struct ilog_priv	*priv = ilog_ent2priv(entries);
-	uint32_t		*statuses;
-
-	/** Ensure removals gets reallocated, if necessary */
-	D_FREE(priv->ip_removals);
+	struct ilog_info	*info;
 
 	if (cache->ac_nr <= NUM_EMBEDDED)
 		goto done;
@@ -1166,29 +1161,18 @@ prepare_entries(struct ilog_entries *entries, struct ilog_array_cache *cache)
 	if (cache->ac_nr <= priv->ip_alloc_size)
 		goto done;
 
-	D_ALLOC_ARRAY(statuses, cache->ac_nr);
-	if (statuses == NULL)
+	D_ALLOC_ARRAY(info, cache->ac_nr);
+	if (info == NULL)
 		return -DER_NOMEM;
 
-	if (entries->ie_statuses != &priv->ip_embedded[0])
-		D_FREE(entries->ie_statuses);
+	if (entries->ie_info != &priv->ip_embedded[0])
+		D_FREE(entries->ie_info);
 
-	entries->ie_statuses = statuses;
+	entries->ie_info = info;
 	priv->ip_alloc_size = cache->ac_nr;
 
 done:
 	entries->ie_ids = cache->ac_entries;
-
-	return 0;
-}
-static int
-set_entry(struct ilog_entries *entries, int i, int status)
-{
-	struct ilog_priv	*priv = ilog_ent2priv(entries);
-
-	D_ASSERT(i < NUM_EMBEDDED || i < priv->ip_alloc_size);
-	D_ASSERT(i == entries->ie_num_entries);
-	entries->ie_statuses[entries->ie_num_entries++] = status;
 
 	return 0;
 }
@@ -1212,10 +1196,10 @@ ilog_fetch(struct umem_instance *umm, struct ilog_df *root_df,
 	root = (struct ilog_root *)root_df;
 
 	if (ilog_fetch_cached(umm, root, cbs, intent, entries)) {
-		if (priv->ip_rc == -DER_INPROGRESS ||
-		    priv->ip_rc == -DER_NONEXIST)
+		if (priv->ip_rc == -DER_NONEXIST)
 			return priv->ip_rc;
 		if (priv->ip_rc < 0) {
+			D_ASSERT(priv->ip_rc != -DER_INPROGRESS);
 			/* Don't cache error return codes */
 			rc = priv->ip_rc;
 			priv->ip_rc = 0;
@@ -1240,9 +1224,10 @@ ilog_fetch(struct umem_instance *umm, struct ilog_df *root_df,
 		status = ilog_status_get(lctx, id, intent,
 					 (intent == DAOS_INTENT_UPDATE ||
 					  intent == DAOS_INTENT_PUNCH) ? false : true);
-		if (status != -DER_INPROGRESS && status < 0)
+		if (status < 0 && status != -DER_INPROGRESS)
 			D_GOTO(fail, rc = status);
-		set_entry(entries, i, status);
+		entries->ie_info[entries->ie_num_entries].ii_removed = 0;
+		entries->ie_info[entries->ie_num_entries++].ii_status = status;
 	}
 
 out:
@@ -1267,8 +1252,7 @@ ilog_fetch_finish(struct ilog_entries *entries)
 
 	D_ASSERT(entries != NULL);
 	if (priv->ip_alloc_size)
-		D_FREE(entries->ie_statuses);
-	D_FREE(priv->ip_removals);
+		D_FREE(entries->ie_info);
 }
 
 struct agg_arg {
@@ -1423,8 +1407,8 @@ done:
 }
 
 static int
-collapse_tree(struct ilog_context *lctx, struct ilog_array_cache *cache, struct ilog_priv *priv,
-	      int removed)
+collapse_tree(struct ilog_context *lctx, struct ilog_array_cache *cache,
+	      struct ilog_entries *entries, int removed)
 {
 	struct ilog_id		*dest;
 	struct ilog_array	*array;
@@ -1442,10 +1426,12 @@ collapse_tree(struct ilog_context *lctx, struct ilog_array_cache *cache, struct 
 	array = cache->ac_array;
 
 	for (i = 0; i < cache->ac_nr; i++) {
-		if (!priv->ip_removals[i])
+
+		if (!entries->ie_info[i].ii_removed)
 			continue;
 
 		dest = &cache->ac_entries[i];
+
 		D_DEBUG(DB_TRACE, "Removing ilog entry at "DF_X64"\n",
 			dest->id_epoch);
 
@@ -1464,7 +1450,7 @@ collapse_tree(struct ilog_context *lctx, struct ilog_array_cache *cache, struct 
 	if (cache->ac_nr == removed + 1) {
 		/** all but one entry removed, move it to root */
 		for (i = 0; i < cache->ac_nr; i++) {
-			if (!priv->ip_removals[i])
+			if (!entries->ie_info[i].ii_removed)
 				return reset_root(lctx, cache, i);
 		}
 		D_ASSERT(0);
@@ -1478,7 +1464,7 @@ collapse_tree(struct ilog_context *lctx, struct ilog_array_cache *cache, struct 
 	dest = &array->ia_id[0];
 
 	for (i = 0; i < cache->ac_nr; i++) {
-		if (priv->ip_removals[i])
+		if (entries->ie_info[i].ii_removed)
 			continue;
 
 		dest->id_value = cache->ac_entries[i].id_value;
@@ -1537,12 +1523,6 @@ ilog_aggregate(struct umem_instance *umm, struct ilog_df *ilog,
 
 	ilog_log2cache(lctx, &cache);
 
-	if (priv->ip_removals == NULL) {
-		D_ALLOC_ARRAY(priv->ip_removals, cache.ac_nr);
-		if (priv->ip_removals == NULL)
-			return -DER_NOMEM;
-	}
-
 	agg_arg.aa_epr = epr;
 	agg_arg.aa_prev = -1;
 	agg_arg.aa_prior_punch = -1;
@@ -1553,7 +1533,6 @@ ilog_aggregate(struct umem_instance *umm, struct ilog_df *ilog,
 
 	ilog_foreach_entry(entries, &entry) {
 		D_ASSERT(entry.ie_idx < cache.ac_nr);
-		priv->ip_removals[entry.ie_idx] = false;
 		rc = check_agg_entry(entries, &entry, &agg_arg);
 
 		switch (rc) {
@@ -1563,12 +1542,12 @@ ilog_aggregate(struct umem_instance *umm, struct ilog_df *ilog,
 			agg_arg.aa_prev = entry.ie_idx;
 			break;
 		case AGG_RC_REMOVE_PREV:
-			priv->ip_removals[agg_arg.aa_prev] = true;
+			entries->ie_info[agg_arg.aa_prev].ii_removed = 1;
 			removed++;
 			agg_arg.aa_prev = agg_arg.aa_prior_punch;
 			/* Fall through */
 		case AGG_RC_REMOVE:
-			priv->ip_removals[entry.ie_idx] = true;
+			entries->ie_info[entry.ie_idx].ii_removed = 1;
 			removed++;
 			break;
 		case AGG_RC_ABORT:
@@ -1581,7 +1560,7 @@ ilog_aggregate(struct umem_instance *umm, struct ilog_df *ilog,
 	}
 
 collapse:
-	rc = collapse_tree(lctx, &cache, priv, removed);
+	rc = collapse_tree(lctx, &cache, entries, removed);
 
 	empty = ilog_empty(root);
 done:

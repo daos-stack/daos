@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2021 Intel Corporation.
+ * (C) Copyright 2016-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -391,11 +391,6 @@ co_properties(void **state)
 		print_message("csum server verify verification failed.\n");
 		assert_int_equal(rc, 1); /* fail the test */
 	}
-	entry = daos_prop_entry_get(prop_query, DAOS_PROP_CO_SCRUBBER_DISABLED);
-	if (entry == NULL || entry->dpe_val == true) {
-		print_message("scrubber disabled failed.\n");
-		assert_int_equal(rc, 1); /* fail the test */
-	}
 	entry = daos_prop_entry_get(prop_query, DAOS_PROP_CO_ENCRYPT);
 	if (entry == NULL || entry->dpe_val != DAOS_PROP_CO_ENCRYPT_OFF) {
 		print_message("encrypt verification failed.\n");
@@ -432,6 +427,12 @@ co_properties(void **state)
 		assert_int_equal(rc, 1); /* fail the test */
 	}
 	D_FREE(exp_owner_grp);
+
+	entry = daos_prop_entry_get(prop_query, DAOS_PROP_CO_SCRUBBER_DISABLED);
+	if (entry == NULL || entry->dpe_val == true) {
+		print_message("scrubber disabled failed.\n");
+		assert_int_equal(rc, 1); /* fail the test */
+	}
 
 	if (arg->myrank == 0) {
 		daos_debug_set_params(arg->group, -1, DMG_KEY_FAIL_LOC, 0,
@@ -2448,6 +2449,8 @@ co_api_compat(void **state)
 	daos_handle_t		coh;
 	daos_cont_info_t	info;
 	int			rc;
+	char			uuid_str1[37];
+	char			uuid_str2[37];
 
 	if (arg->myrank != 0)
 		return;
@@ -2456,14 +2459,16 @@ co_api_compat(void **state)
 	uuid_clear(uuid2);
 
 	print_message("creating container with uuid specified ... ");
-	rc = daos_cont_create(arg->pool.poh, uuid1, NULL, NULL);
+	rc = daos_cont_create(arg->pool.poh, &uuid1, NULL, NULL);
 	assert_rc_equal(rc, 0);
 	print_message("success\n");
+	uuid_unparse(uuid1, uuid_str1);
 
 	print_message("creating container with a uuid pointer ... ");
 	rc = daos_cont_create(arg->pool.poh, &uuid2, NULL, NULL);
 	assert_rc_equal(rc, 0);
 	print_message("success\n");
+	uuid_unparse(uuid2, uuid_str2);
 
 	print_message("creating container with a NULL pointer ... ");
 	rc = daos_cont_create(arg->pool.poh, NULL, NULL, NULL);
@@ -2476,7 +2481,7 @@ co_api_compat(void **state)
 	print_message("success\n");
 
 	print_message("opening container using uuid ... ");
-	rc = daos_cont_open(arg->pool.poh, uuid1, DAOS_COO_RW, &coh, &info, NULL);
+	rc = daos_cont_open(arg->pool.poh, uuid_str1, DAOS_COO_RW, &coh, &info, NULL);
 	assert_rc_equal(rc, 0);
 	print_message("success\n");
 	rc = daos_cont_close(coh, NULL);
@@ -2490,9 +2495,9 @@ co_api_compat(void **state)
 	assert_rc_equal(rc, 0);
 
 	print_message("destroying container using uuid ... ");
-	rc = daos_cont_destroy(arg->pool.poh, uuid1, 0, NULL);
+	rc = daos_cont_destroy(arg->pool.poh, uuid_str1, 0, NULL);
 	assert_rc_equal(rc, 0);
-	rc = daos_cont_destroy(arg->pool.poh, uuid2, 0, NULL);
+	rc = daos_cont_destroy(arg->pool.poh, uuid_str2, 0, NULL);
 	assert_rc_equal(rc, 0);
 	print_message("success\n");
 

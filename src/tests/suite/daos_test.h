@@ -387,7 +387,7 @@ typedef int (*test_setup_cb_t)(void **state);
 typedef int (*test_teardown_cb_t)(void **state);
 
 bool test_runable(test_arg_t *arg, unsigned int required_tgts);
-int test_pool_get_info(test_arg_t *arg, daos_pool_info_t *pinfo);
+int test_pool_get_info(test_arg_t *arg, daos_pool_info_t *pinfo, d_rank_list_t **engine_ranks);
 int test_get_leader(test_arg_t *arg, d_rank_t *rank);
 bool test_rebuild_query(test_arg_t **args, int args_cnt);
 void test_rebuild_wait(test_arg_t **args, int args_cnt);

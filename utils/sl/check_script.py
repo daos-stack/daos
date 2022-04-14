@@ -1,5 +1,5 @@
 #!/usr/bin/python3
-# Copyright (c) 2016-2021 Intel Corporation
+# Copyright 2016-2022 Intel Corporation
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -291,6 +291,7 @@ def main():
             check_script(fname, wrap=args.wrap)
 
     os.unlink(pylint3_rc)
+
 
 if __name__ == '__main__':
     main()

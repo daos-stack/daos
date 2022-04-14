@@ -1,6 +1,6 @@
 #!/usr/bin/python3
 '''
-  (C) Copyright 2020-2021 Intel Corporation.
+  (C) Copyright 2020-2022 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
@@ -70,7 +70,7 @@ class RbldNoCapacity(TestWithServers):
             "pi_ndisabled": 0
         }
         rebuild_checks = {
-            "rs_done": 1,
+            "rs_state": 1,
             "rs_obj_nr": 0,
             "rs_rec_nr": 0
         }
@@ -154,14 +154,14 @@ class RbldNoCapacity(TestWithServers):
         # Check for pool and rebuild info after rebuild
         self.log.info("..(8)Verify pool and rebuild info after rebuild")
         pool_checks["pi_ndisabled"] = ">0"
-        rebuild_checks["rs_obj_nr"] = ">0"
-        rebuild_checks["rs_rec_nr"] = ">0"
-        rebuild_checks["rs_done"] = 0
+        rebuild_checks["rs_obj_nr"] = ">=0"
+        rebuild_checks["rs_rec_nr"] = ">=0"
+        rebuild_checks["rs_state"] = 0
         self.assertTrue(
             self.pool.check_pool_info(**pool_checks),
-            "#Invalid pool information detected before rebuild")
+            "#Invalid pool information detected after rebuild")
         self.assertTrue(
             self.pool.check_rebuild_status(**rebuild_checks),
-            "#Invalid pool rebuild info detected before rebuild")
+            "#Invalid pool rebuild info detected after rebuild")
         self.log.info("=Test Passed, expected error -1007 detected after "
                       "rebuild with no pool capacity")

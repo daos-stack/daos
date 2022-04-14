@@ -194,7 +194,6 @@ type (
 		StopErr             error
 		ScmTierConfig       *storage.TierConfig
 		ScanBdevTiersResult []storage.BdevTierScanResult
-		HasBlockDevices     bool
 	}
 
 	MockInstance struct {
@@ -258,14 +257,6 @@ func (mi *MockInstance) Stop(os.Signal) error {
 	return mi.cfg.StopErr
 }
 
-func (mi *MockInstance) GetScmConfig() (*storage.TierConfig, error) {
-	return mi.cfg.ScmTierConfig, nil
-}
-
-func (mi *MockInstance) HasBlockDevices() bool {
-	return mi.cfg.HasBlockDevices
-}
-
 func (mi *MockInstance) ScanBdevTiers() ([]storage.BdevTierScanResult, error) {
 	return nil, nil
 }
@@ -302,10 +293,6 @@ func (mi *MockInstance) GetBioHealth(context.Context, *ctlpb.BioHealthReq) (*ctl
 	return nil, nil
 }
 
-func (mi *MockInstance) GetScmUsage() (*storage.ScmMountPoint, error) {
-	return nil, nil
-}
-
 func (mi *MockInstance) ListSmdDevices(context.Context, *ctlpb.SmdDevReq) (*ctlpb.SmdDevResp, error) {
 	return nil, nil
 }
@@ -318,6 +305,6 @@ func (mi *MockInstance) StorageFormatSCM(context.Context, bool) *ctlpb.ScmMountR
 	return nil
 }
 
-func (mi *MockInstance) StorageWriteNvmeConfig(context.Context) error {
+func (mi *MockInstance) GetStorage() *storage.Provider {
 	return nil
 }

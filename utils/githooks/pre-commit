@@ -1,21 +1,47 @@
 #!/bin/bash
 
-# A git hook to validate  and correct the copyright date in source files.
+# A git hook to validate and correct the copyright date in source files.
 if [ -n "${NO_PRE_COMMIT:=""}" ]; then
-    exit 0
+	exit 0
 fi
 
 regex='(^[[:blank:]]*[\*/]*.*)((Copyright[[:blank:]]*)([0-9]{4})(-([0-9]{4}))?)([[:blank:]]*(Intel.*$))'
 year=$(date +%Y)
 errors=0
+targets=(
+    # Entries with wildcard.  These must be first and start with '*' or
+    # older versions of git will return files that were not changed.
+    '*.c'
+    '*.h'
+    '*.go'
+    '*.py'
+    '*.proto'
+    '*.java'
+    '*.yml'
+    '*.yaml'
+    '*.sh'
+    '*.bash'
+    '*Dockerfile*'
+    '*README*'
+    '*LICENSE*'
+    '*NOTICE*'
+    '*.txt'
+    '*.md'
+    # Entries without a wildcard
+    'Makefile'
+    'Jenkinsfile'
+    'SConscript'
+    'SConstruct'
+    'copyright'
+    '.env'
+)
 
-files=$(git diff --diff-filter=AM --name-only --cached -- \
-       '*.c' '*.h' '*.go' 'Makefile' '*.py' '*.proto' '*.java')
+files=${files:-$(git diff --diff-filter=AM --name-only --cached -- "${targets[@]}")}
 for file in $files; do
-    if [[ "$file" == *vendor* ]] || [[ "$file" == *pb.go ]] || \
-       [[ "$file" == *_string.go ]] || [[ "$file" == *pb-c* ]]; then
-        continue
-    fi
+	if [[ "$file" == *vendor* ]] || [[ "$file" == *pb.go ]] || \
+	   [[ "$file" == *_string.go ]] || [[ "$file" == *pb-c* ]]; then
+		continue
+	fi
 	read -r y1 y2 <<< "$(sed -nre "s/^.*$regex.*$/\4 \6/p" "$file")"
 	if [[ -z $y1 ]] ; then
 		echo "Copyright Information not found in: $file"

@@ -1,7 +1,11 @@
 #!/bin/bash
 
 YUM=dnf
-if [ "$(lsb_release -si)" = "CentOS" ]; then
+id="$(lsb_release -si)"
+if [ "$id" = "CentOS" ] ||
+   [ "$id" = "AlmaLinux" ] ||
+   [ "$id" = "Rocky" ] ||
+   [ "$id" = "RedHatEnterpriseServer" ]; then
     if [[ $(lsb_release -sr) = 8* ]]; then
         OPENMPI_RPM=openmpi
         OPENMPI=mpi/openmpi-x86_64
@@ -87,9 +91,15 @@ sudo chmod 0755 /tmp/daos_sockets
 sudo chown "$me:$me" /tmp/daos_sockets
 sudo mkdir -p /mnt/daos
 sudo mount -t tmpfs -o size=16777216k tmpfs /mnt/daos
-sudo cp /tmp/daos_server.yml /etc/daos/daos_server.yml
-sudo cp /tmp/daos_agent.yml /etc/daos/daos_agent.yml
-sudo cp /tmp/dmg.yml /etc/daos/daos.yml
+
+FTEST=/usr/lib/daos/TESTING/ftest
+sudo PYTHONPATH="$FTEST/util"                               \
+     $FTEST/config_file_gen.py -n "$HOSTNAME"               \
+                               -a /etc/daos/daos_agent.yml  \
+                               -s /etc/daos/daos_server.yml
+sudo PYTHONPATH="$FTEST/util"                        \
+     $FTEST/config_file_gen.py -n "$HOSTNAME"        \
+                               -d /etc/daos/daos.yml
 cat /etc/daos/daos_server.yml
 cat /etc/daos/daos_agent.yml
 cat /etc/daos/daos.yml

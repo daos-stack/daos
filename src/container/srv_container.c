@@ -18,6 +18,7 @@
 
 #include <daos_api.h>	/* for daos_prop_alloc/_free() */
 #include <daos/rpc.h>
+#include <daos/pool.h>
 #include <daos_srv/pool.h>
 #include <daos_srv/rdb.h>
 #include <daos_srv/security.h>
@@ -29,7 +30,7 @@
 
 static int
 cont_prop_read(struct rdb_tx *tx, struct cont *cont, uint64_t bits,
-	       daos_prop_t **prop_out);
+	       daos_prop_t **prop_out, bool ignore_not_set);
 
 /** Container Property knowledge */
 
@@ -436,15 +437,22 @@ cont_create_prop_prepare(struct ds_pool_hdl *pool_hdl,
 	struct daos_prop_entry	*entry_def;
 	int			 i;
 	int			 rc;
+	bool			 inherit_redunc_fac = true;
 
 	if (prop == NULL || prop->dpp_nr == 0 || prop->dpp_entries == NULL)
 		return 0;
 
 	for (i = 0; i < prop->dpp_nr; i++) {
 		entry = &prop->dpp_entries[i];
+		/* skip not set property entry */
+		if (!daos_prop_is_set(entry))
+			continue;
 		entry_def = daos_prop_entry_get(prop_def, entry->dpe_type);
-		D_ASSERTF(entry_def != NULL, "type %d not found in "
-			  "default prop.\n", entry->dpe_type);
+		if (entry_def == NULL) {
+			D_ERROR("type: %d not supported in default prop.\n",
+				entry->dpe_type);
+			return -DER_INVAL;
+		}
 		switch (entry->dpe_type) {
 		case DAOS_PROP_CO_LABEL:
 			D_FREE(entry_def->dpe_str);
@@ -458,8 +466,6 @@ cont_create_prop_prepare(struct ds_pool_hdl *pool_hdl,
 		case DAOS_PROP_CO_CSUM:
 		case DAOS_PROP_CO_CSUM_CHUNK_SIZE:
 		case DAOS_PROP_CO_CSUM_SERVER_VERIFY:
-		case DAOS_PROP_CO_SCRUBBER_DISABLED:
-		case DAOS_PROP_CO_REDUN_FAC:
 		case DAOS_PROP_CO_REDUN_LVL:
 		case DAOS_PROP_CO_SNAPSHOT_MAX:
 		case DAOS_PROP_CO_COMPRESS:
@@ -468,6 +474,13 @@ cont_create_prop_prepare(struct ds_pool_hdl *pool_hdl,
 		case DAOS_PROP_CO_EC_CELL_SZ:
 		case DAOS_PROP_CO_ALLOCED_OID:
 		case DAOS_PROP_CO_DEDUP_THRESHOLD:
+		case DAOS_PROP_CO_EC_PDA:
+		case DAOS_PROP_CO_RP_PDA:
+		case DAOS_PROP_CO_SCRUBBER_DISABLED:
+			entry_def->dpe_val = entry->dpe_val;
+			break;
+		case DAOS_PROP_CO_REDUN_FAC:
+			inherit_redunc_fac = false;
 			entry_def->dpe_val = entry->dpe_val;
 			break;
 		case DAOS_PROP_CO_ACL:
@@ -497,6 +510,9 @@ cont_create_prop_prepare(struct ds_pool_hdl *pool_hdl,
 					return rc;
 			}
 			break;
+		case DAOS_PROP_CO_GLOBAL_VERSION:
+			D_ERROR("container global version could be not set\n");
+			return -DER_INVAL;
 		default:
 			D_ASSERTF(0, "bad dpt_type %d.\n", entry->dpe_type);
 			break;
@@ -510,6 +526,36 @@ cont_create_prop_prepare(struct ds_pool_hdl *pool_hdl,
 		D_ASSERT(pool_hdl->sph_pool->sp_ec_cell_sz != 0);
 		entry_def->dpe_val = pool_hdl->sph_pool->sp_ec_cell_sz;
 	}
+
+	if (pool_hdl->sph_global_ver > 0 && inherit_redunc_fac) {
+		entry_def = daos_prop_entry_get(prop_def, DAOS_PROP_CO_REDUN_FAC);
+		D_ASSERT(entry_def != NULL);
+		/* No specified redun fac from container, inherit from pool */
+		entry_def->dpe_val = pool_hdl->sph_pool->sp_redun_fac;
+	}
+
+	entry_def = daos_prop_entry_get(prop_def, DAOS_PROP_CO_EC_PDA);
+	if (pool_hdl->sph_global_ver > 0)
+		D_ASSERT(entry_def != NULL);
+	if (entry_def && entry_def->dpe_val == 0) {
+		/* No specified ec pda from container, inherit from pool */
+		D_ASSERT(pool_hdl->sph_pool->sp_ec_pda != 0);
+		entry_def->dpe_val = pool_hdl->sph_pool->sp_ec_pda;
+	}
+
+	entry_def = daos_prop_entry_get(prop_def, DAOS_PROP_CO_RP_PDA);
+	if (pool_hdl->sph_global_ver > 0)
+		D_ASSERT(entry_def != NULL);
+	if (entry_def && entry_def->dpe_val == 0) {
+		/* No specified ec pda from container, inherit from pool */
+		D_ASSERT(pool_hdl->sph_pool->sp_rp_pda != 0);
+		entry_def->dpe_val = pool_hdl->sph_pool->sp_rp_pda;
+	}
+
+	/* inherit global version from pool*/
+	entry_def = daos_prop_entry_get(prop_def, DAOS_PROP_CO_GLOBAL_VERSION);
+	if (entry_def)
+		entry_def->dpe_val = pool_hdl->sph_global_ver;
 
 	/* for new container set HEALTHY status with current pm ver */
 	entry_def = daos_prop_entry_get(prop_def, DAOS_PROP_CO_STATUS);
@@ -587,15 +633,6 @@ cont_prop_write(struct rdb_tx *tx, const rdb_path_t *kvs, daos_prop_t *prop,
 					   &ds_cont_prop_csum_server_verify,
 					   &value);
 			break;
-		case DAOS_PROP_CO_SCRUBBER_DISABLED:
-			d_iov_set(&value, &entry->dpe_val,
-				  sizeof(entry->dpe_val));
-			rc = rdb_tx_update(tx, kvs,
-					   &ds_cont_prop_scrubber_disabled,
-					   &value);
-			if (rc)
-				return rc;
-			break;
 		case DAOS_PROP_CO_DEDUP:
 			d_iov_set(&value, &entry->dpe_val,
 				  sizeof(entry->dpe_val));
@@ -651,6 +688,25 @@ cont_prop_write(struct rdb_tx *tx, const rdb_path_t *kvs, daos_prop_t *prop,
 			rc = rdb_tx_update(tx, kvs, &ds_cont_prop_ec_cell_sz,
 					   &value);
 			break;
+		case DAOS_PROP_CO_EC_PDA:
+			d_iov_set(&value, &entry->dpe_val,
+				  sizeof(entry->dpe_val));
+			rc = rdb_tx_update(tx, kvs, &ds_cont_prop_ec_pda,
+					   &value);
+			break;
+		case DAOS_PROP_CO_RP_PDA:
+			d_iov_set(&value, &entry->dpe_val,
+				  sizeof(entry->dpe_val));
+			rc = rdb_tx_update(tx, kvs, &ds_cont_prop_rp_pda,
+					   &value);
+			break;
+		case DAOS_PROP_CO_GLOBAL_VERSION:
+			d_iov_set(&value, &entry->dpe_val,
+				  sizeof(entry->dpe_val));
+			rc = rdb_tx_update(tx, kvs,
+					   &ds_cont_prop_cont_global_version,
+					   &value);
+			break;
 		case DAOS_PROP_CO_OWNER:
 			d_iov_set(&value, entry->dpe_str,
 				  strlen(entry->dpe_str));
@@ -698,6 +754,15 @@ cont_prop_write(struct rdb_tx *tx, const rdb_path_t *kvs, daos_prop_t *prop,
 			rc = rdb_tx_update(tx, kvs, &ds_cont_prop_alloced_oid,
 					   &value);
 			break;
+		case DAOS_PROP_CO_SCRUBBER_DISABLED:
+			d_iov_set(&value, &entry->dpe_val,
+				  sizeof(entry->dpe_val));
+			rc = rdb_tx_update(tx, kvs,
+					   &ds_cont_prop_scrubber_disabled,
+					   &value);
+			if (rc)
+				return rc;
+			break;
 		default:
 			D_ERROR("bad dpe_type %d.\n", entry->dpe_type);
 			return -DER_INVAL;
@@ -741,26 +806,13 @@ cont_create(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
 		D_GOTO(out, rc = -DER_NO_PERM);
 	}
 
-	/* Determine if non-default label property supplied */
-	def_lbl_ent = daos_prop_entry_get(&cont_prop_default,
-					  DAOS_PROP_CO_LABEL);
-	D_ASSERT(def_lbl_ent != NULL);
-	lbl_ent = daos_prop_entry_get(in->cci_prop, DAOS_PROP_CO_LABEL);
-	if (lbl_ent != NULL) {
-		if (strncmp(def_lbl_ent->dpe_str, lbl_ent->dpe_str, DAOS_PROP_LABEL_MAX_LEN) == 0) {
-			D_ERROR(DF_CONT": label is the same as default label\n",
-				DP_CONT(pool_hdl->sph_pool->sp_uuid,
-					in->cci_op.ci_uuid));
-			D_GOTO(out, rc = -DER_INVAL);
-		}
-		lbl = lbl_ent->dpe_str;
-	}
-
 	/* duplicate the default properties, overwrite it with cont create
 	 * parameter (write to rdb below).
 	 */
-	prop_dup = daos_prop_dup(&cont_prop_default, false /* pool */,
-				 false /* input */);
+	if (pool_hdl->sph_global_ver < 1)
+		prop_dup = daos_prop_dup(&cont_prop_default_v0, false, false);
+	else
+		prop_dup = daos_prop_dup(&cont_prop_default, false, false);
 	if (prop_dup == NULL) {
 		D_ERROR(DF_CONT" daos_prop_dup failed.\n",
 			DP_CONT(pool_hdl->sph_pool->sp_uuid,
@@ -773,6 +825,17 @@ cont_create(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
 			DP_CONT(pool_hdl->sph_pool->sp_uuid,
 				in->cci_op.ci_uuid), DP_RC(rc));
 		D_GOTO(out, rc);
+	}
+
+	/* Determine if non-default label property supplied */
+	def_lbl_ent = daos_prop_entry_get(&cont_prop_default,
+					  DAOS_PROP_CO_LABEL);
+	D_ASSERT(def_lbl_ent != NULL);
+	lbl_ent = daos_prop_entry_get(prop_dup, DAOS_PROP_CO_LABEL);
+	D_ASSERT(lbl_ent != NULL);
+	if (strncmp(def_lbl_ent->dpe_str, lbl_ent->dpe_str,
+		    DAOS_PROP_LABEL_MAX_LEN)) {
+		lbl = lbl_ent->dpe_str;
 	}
 
 	/* Check if a container with this UUID and label already exists */
@@ -878,6 +941,7 @@ cont_create(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
 	if (rc != 0) {
 		D_ERROR(DF_CONT" failed to create container snapshots KVS: "DF_RC"\n",
 			DP_CONT(pool_hdl->sph_pool->sp_uuid, in->cci_op.ci_uuid), DP_RC(rc));
+		D_GOTO(out_kvs, rc);
 	}
 
 	/* Create the user attribute KVS. */
@@ -889,6 +953,7 @@ cont_create(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
 			""DF_RC"\n",
 			DP_CONT(pool_hdl->sph_pool->sp_uuid,
 				in->cci_op.ci_uuid), DP_RC(rc));
+		D_GOTO(out_kvs, rc);
 	}
 
 	/* Create the handle index KVS. */
@@ -900,6 +965,7 @@ cont_create(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
 			""DF_RC"\n",
 			DP_CONT(pool_hdl->sph_pool->sp_uuid,
 				in->cci_op.ci_uuid), DP_RC(rc));
+		D_GOTO(out_kvs, rc);
 	}
 
 out_kvs:
@@ -1137,7 +1203,7 @@ cont_destroy(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
 			    DAOS_CO_QUERY_PROP_ACL |
 			    DAOS_CO_QUERY_PROP_OWNER |
 			    DAOS_CO_QUERY_PROP_OWNER_GROUP |
-			    DAOS_CO_QUERY_PROP_LABEL, &prop);
+			    DAOS_CO_QUERY_PROP_LABEL, &prop, true);
 	if (rc != 0)
 		D_GOTO(out, rc);
 	D_ASSERT(prop != NULL);
@@ -1727,11 +1793,11 @@ cont_open(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl, struct cont *cont,
 	 * Need props to check for pool redundancy requirements and access
 	 * control.
 	 */
-	rc = cont_prop_read(tx, cont, DAOS_CO_QUERY_PROP_ALL, &prop);
+	rc = cont_prop_read(tx, cont, DAOS_CO_QUERY_PROP_ALL, &prop, true);
 	if (rc != 0)
 		D_GOTO(out, rc);
 	D_ASSERT(prop != NULL);
-	D_ASSERT(prop->dpp_nr == CONT_PROP_NUM);
+	D_ASSERT(prop->dpp_nr <= CONT_PROP_NUM);
 
 	get_cont_prop_access_info(prop, &owner, &acl);
 
@@ -1856,7 +1922,7 @@ out:
 		 * the allocated prop will be freed after rpc replied in
 		 * ds_cont_op_handler.
 		 */
-		rc = cont_prop_read(tx, cont, in->coi_prop_bits, &prop);
+		rc = cont_prop_read(tx, cont, in->coi_prop_bits, &prop, true);
 		out->coo_prop = prop;
 	}
 	if (rc != 0 && cont_hdl_opened)
@@ -2098,13 +2164,14 @@ out:
 
 static int
 cont_prop_read(struct rdb_tx *tx, struct cont *cont, uint64_t bits,
-	       daos_prop_t **prop_out)
+	       daos_prop_t **prop_out, bool ignore_not_set)
 {
 	daos_prop_t	*prop = NULL;
 	d_iov_t		 value;
 	uint64_t	 val, bitmap;
 	uint32_t	 idx = 0, nr = 0;
 	int		 rc = 0;
+	int		 negative_nr = 0;
 
 	bitmap = bits & DAOS_CO_QUERY_PROP_ALL;
 	while (idx < DAOS_CO_QUERY_PROP_BITS_NR) {
@@ -2391,11 +2458,76 @@ cont_prop_read(struct rdb_tx *tx, struct cont *cont, uint64_t bits,
 		prop->dpp_entries[idx].dpe_val = val;
 		idx++;
 	}
+	if (bits & DAOS_CO_QUERY_PROP_EC_PDA) {
+		d_iov_set(&value, &val, sizeof(val));
+		rc = rdb_tx_lookup(tx, &cont->c_prop, &ds_cont_prop_ec_pda,
+				   &value);
+		if (rc == -DER_NONEXIST)
+			val = DAOS_PROP_PO_EC_PDA_DEFAULT;
+		else if (rc != 0)
+			D_GOTO(out, rc);
+		D_ASSERT(idx < nr);
+		prop->dpp_entries[idx].dpe_type = DAOS_PROP_CO_EC_PDA;
+		prop->dpp_entries[idx].dpe_val = val;
+		if (rc == -DER_NONEXIST) {
+			prop->dpp_entries[idx].dpe_flags |= DAOS_PROP_ENTRY_NOT_SET;
+			negative_nr++;
+			rc = 0;
+		}
+		idx++;
+	}
+	if (bits & DAOS_CO_QUERY_PROP_RP_PDA) {
+		d_iov_set(&value, &val, sizeof(val));
+		rc = rdb_tx_lookup(tx, &cont->c_prop, &ds_cont_prop_rp_pda,
+				   &value);
+		if (rc == -DER_NONEXIST)
+			val = DAOS_PROP_PO_RP_PDA_DEFAULT;
+		else  if (rc != 0)
+			D_GOTO(out, rc);
+		D_ASSERT(idx < nr);
+		prop->dpp_entries[idx].dpe_type = DAOS_PROP_CO_RP_PDA;
+		prop->dpp_entries[idx].dpe_val = val;
+		if (rc == -DER_NONEXIST) {
+			prop->dpp_entries[idx].dpe_flags |= DAOS_PROP_ENTRY_NOT_SET;
+			negative_nr++;
+			rc = 0;
+		}
+		idx++;
+	}
+	if (bits & DAOS_CO_QUERY_PROP_GLOBAL_VERSION) {
+		d_iov_set(&value, &val, sizeof(val));
+		rc = rdb_tx_lookup(tx, &cont->c_prop, &ds_cont_prop_cont_global_version,
+				   &value);
+		if (rc == -DER_NONEXIST)
+			val = 0;
+		else  if (rc != 0)
+			D_GOTO(out, rc);
+		D_ASSERT(idx < nr);
+		prop->dpp_entries[idx].dpe_type = DAOS_PROP_CO_GLOBAL_VERSION;
+		prop->dpp_entries[idx].dpe_val = val;
+		if (rc == -DER_NONEXIST) {
+			prop->dpp_entries[idx].dpe_flags |= DAOS_PROP_ENTRY_NOT_SET;
+			negative_nr++;
+			rc = 0;
+		}
+		idx++;
+	}
 out:
-	if (rc)
+	if (rc == 0) {
+		if (negative_nr == nr) {
+			daos_prop_free(prop);
+			return 0;
+		} else if (negative_nr > 0 && ignore_not_set) {
+			*prop_out = daos_prop_dup(prop, false, false);
+			daos_prop_free(prop);
+			if (*prop_out == NULL)
+				rc = -DER_NOMEM;
+		} else {
+			*prop_out = prop;
+		}
+	} else {
 		daos_prop_free(prop);
-	else
-		*prop_out = prop;
+	}
 	return rc;
 }
 
@@ -2529,7 +2661,7 @@ cont_query(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl, struct cont *cont,
 	/* the allocated prop will be freed after rpc replied in
 	 * ds_cont_op_handler.
 	 */
-	rc = cont_prop_read(tx, cont, in->cqi_bits, &prop);
+	rc = cont_prop_read(tx, cont, in->cqi_bits, &prop, true);
 	out->cqo_prop = prop;
 	if (rc) {
 		D_ERROR(DF_CONT": cont_prop_read failed "DF_RC"\n",
@@ -2593,7 +2725,6 @@ cont_query(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl, struct cont *cont,
 			case DAOS_PROP_CO_CSUM:
 			case DAOS_PROP_CO_CSUM_CHUNK_SIZE:
 			case DAOS_PROP_CO_CSUM_SERVER_VERIFY:
-			case DAOS_PROP_CO_SCRUBBER_DISABLED:
 			case DAOS_PROP_CO_REDUN_FAC:
 			case DAOS_PROP_CO_REDUN_LVL:
 			case DAOS_PROP_CO_SNAPSHOT_MAX:
@@ -2604,6 +2735,10 @@ cont_query(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl, struct cont *cont,
 			case DAOS_PROP_CO_STATUS:
 			case DAOS_PROP_CO_EC_CELL_SZ:
 			case DAOS_PROP_CO_ALLOCED_OID:
+			case DAOS_PROP_CO_EC_PDA:
+			case DAOS_PROP_CO_RP_PDA:
+			case DAOS_PROP_CO_GLOBAL_VERSION:
+			case DAOS_PROP_CO_SCRUBBER_DISABLED:
 				if (entry->dpe_val != iv_entry->dpe_val) {
 					D_ERROR("type %d mismatch "DF_U64" - "
 						DF_U64".\n", entry->dpe_type,
@@ -2847,6 +2982,13 @@ set_prop(struct rdb_tx *tx, struct ds_pool *pool,
 	daos_prop_t		*prop_old = NULL;
 	daos_prop_t		*prop_iv = NULL;
 	bool			 clear_stat;
+	struct daos_prop_entry	*entry;
+
+	entry = daos_prop_entry_get(prop_in, DAOS_PROP_CO_GLOBAL_VERSION);
+	if (entry) {
+		D_ERROR("container global version could be not set\n");
+		D_GOTO(out, rc = -DER_INVAL);
+	}
 
 	if (!daos_prop_valid(prop_in, false, true))
 		D_GOTO(out, rc = -DER_INVAL);
@@ -2855,7 +2997,7 @@ set_prop(struct rdb_tx *tx, struct ds_pool *pool,
 		D_GOTO(out, rc = -DER_NO_PERM);
 
 	/* Read all props for prop IV update */
-	rc = cont_prop_read(tx, cont, DAOS_CO_QUERY_PROP_ALL, &prop_old);
+	rc = cont_prop_read(tx, cont, DAOS_CO_QUERY_PROP_ALL, &prop_old, true);
 	if (rc != 0) {
 		D_ERROR(DF_UUID": failed to read prop for cont, rc=%d\n",
 			DP_UUID(cont->c_uuid), rc);
@@ -2921,7 +3063,7 @@ get_acl(struct rdb_tx *tx, struct cont *cont, struct daos_acl **acl)
 	struct daos_prop_entry	*entry;
 	daos_prop_t		*acl_prop = NULL;
 
-	rc = cont_prop_read(tx, cont, DAOS_CO_QUERY_PROP_ACL, &acl_prop);
+	rc = cont_prop_read(tx, cont, DAOS_CO_QUERY_PROP_ACL, &acl_prop, true);
 	if (rc != 0) {
 		D_ERROR(DF_UUID": failed to read ACL prop for cont, rc=%d\n",
 			DP_UUID(cont->c_uuid), rc);
@@ -3316,7 +3458,7 @@ enum_cont_cb(daos_handle_t ih, d_iov_t *key, d_iov_t *val, void *varg)
 			DP_CONT(ap->pool_uuid, cont_uuid), DP_RC(rc));
 		return rc;
 	}
-	rc = cont_prop_read(ap->tx, cont, DAOS_CO_QUERY_PROP_LABEL, &prop);
+	rc = cont_prop_read(ap->tx, cont, DAOS_CO_QUERY_PROP_LABEL, &prop, true);
 	cont_put(cont);
 	if (rc != 0) {
 		D_ERROR(DF_CONT": cont_prop_read() failed, "DF_RC"\n",
@@ -3394,13 +3536,211 @@ out:
 	return rc;
 }
 
+/* argument type for callback function to upgrade containers */
+struct upgrade_cont_iter_args {
+	uuid_t				 pool_uuid;
+
+	struct cont_svc			*svc;
+	struct rdb_tx			*tx;
+	/* total number of containers */
+	uint32_t			cont_nrs;
+	/* number of upgraded containers */
+	uint32_t			cont_upgraded_nrs;
+	/* if tx commit is needed after iteration */
+	bool				need_commit;
+};
+
+/* callback function for upgrading containers iteration. */
+static int
+upgrade_cont_cb(daos_handle_t ih, d_iov_t *key, d_iov_t *val, void *varg)
+{
+	struct upgrade_cont_iter_args	*ap = varg;
+	uuid_t				 cont_uuid;
+	struct cont			*cont;
+	d_iov_t				 value;
+	uint64_t			 pda;
+	int				 rc;
+	bool				 upgraded = false;
+	uint32_t			 global_ver;
+	daos_prop_t			*prop = NULL;
+	struct daos_prop_entry		*entry;
+	(void)val;
+
+	if (key->iov_len != sizeof(uuid_t)) {
+		D_ERROR("invalid key size: key="DF_U64"\n", key->iov_len);
+		return -DER_IO;
+	}
+
+	uuid_copy(cont_uuid, key->iov_buf);
+	D_DEBUG(DF_DSMS, "pool/cont: "DF_CONTF"\n",
+		DP_CONT(ap->pool_uuid, cont_uuid));
+
+	rc = cont_lookup(ap->tx, ap->svc, cont_uuid, &cont);
+	if (rc != 0) {
+		D_ERROR(DF_CONT": lookup cont failed, "DF_RC"\n",
+			DP_CONT(ap->pool_uuid, cont_uuid), DP_RC(rc));
+		return rc;
+	}
+
+	d_iov_set(&value, &global_ver, sizeof(global_ver));
+	rc = rdb_tx_lookup(ap->tx, &cont->c_prop,
+			   &ds_cont_prop_cont_global_version, &value);
+	if (rc && rc != -DER_NONEXIST)
+		goto out;
+	/* latest container, nothing to update */
+	if (rc == 0 && global_ver == DS_POOL_GLOBAL_VERSION)
+		goto out;
+
+	if (global_ver > DS_POOL_GLOBAL_VERSION) {
+		D_ERROR("Downgrading pool/cont: "DF_CONTF" not supported\n",
+			DP_CONT(ap->pool_uuid, cont_uuid));
+		rc = -DER_NOTSUPPORTED;
+		goto out;
+	}
+
+	/* Read all props for prop IV update */
+	rc = cont_prop_read(ap->tx, cont, DAOS_CO_QUERY_PROP_ALL, &prop, false);
+	if (rc)
+		goto out;
+
+	d_iov_set(&value, &pda, sizeof(pda));
+	rc = rdb_tx_lookup(ap->tx, &cont->c_prop,
+			   &ds_cont_prop_ec_pda, &value);
+	if (rc && rc != -DER_NONEXIST)
+		goto out;
+	if (rc == -DER_NONEXIST) {
+		pda = DAOS_PROP_PO_EC_PDA_DEFAULT;
+		rc = rdb_tx_update(ap->tx, &cont->c_prop,
+				   &ds_cont_prop_ec_pda, &value);
+		if (rc) {
+			D_ERROR("failed to upgrade container ec_pda pool/cont: "DF_CONTF"\n",
+				DP_CONT(ap->pool_uuid, cont_uuid));
+			goto out;
+		}
+		upgraded = true;
+		entry = daos_prop_entry_get(prop, DAOS_PROP_CO_EC_PDA);
+		D_ASSERT(entry != NULL);
+		D_ASSERT(daos_prop_is_set(entry) == false);
+		entry->dpe_flags &= ~DAOS_PROP_ENTRY_NOT_SET;
+		entry->dpe_val = pda;
+	}
+
+	rc = rdb_tx_lookup(ap->tx, &cont->c_prop, &ds_cont_prop_rp_pda,
+			   &value);
+	if (rc && rc != -DER_NONEXIST)
+		goto out;
+	if (rc == -DER_NONEXIST) {
+		pda = DAOS_PROP_PO_RP_PDA_DEFAULT;
+		rc = rdb_tx_update(ap->tx, &cont->c_prop, &ds_cont_prop_rp_pda,
+				   &value);
+		if (rc) {
+			D_ERROR("failed to upgrade container rp_pda pool/cont: "DF_CONTF"\n",
+				DP_CONT(ap->pool_uuid, cont_uuid));
+			goto out;
+		}
+		upgraded = true;
+		entry = daos_prop_entry_get(prop, DAOS_PROP_CO_RP_PDA);
+		D_ASSERT(entry != NULL);
+		D_ASSERT(daos_prop_is_set(entry) == false);
+		entry->dpe_flags &= ~DAOS_PROP_ENTRY_NOT_SET;
+		entry->dpe_val = pda;
+	}
+
+out:
+	if (rc == 0) {
+		ap->cont_nrs++;
+		if (upgraded) {
+			/* Yield in case there are too many containers. */
+			if ((ap->cont_upgraded_nrs + 1) % 32 == 0) {
+				rc = rdb_tx_commit(ap->tx);
+				ap->need_commit = false;
+				if (rc)
+					goto out_free_prop;
+				rdb_tx_end(ap->tx);
+				ABT_thread_yield();
+				rc = rdb_tx_begin(ap->svc->cs_rsvc->s_db,
+						  ap->svc->cs_rsvc->s_term, ap->tx);
+				if (rc)
+					goto out_free_prop;
+			} else {
+				ap->need_commit = true;
+			}
+			ap->cont_upgraded_nrs++;
+			rc = cont_iv_prop_update(ap->svc->cs_pool->sp_iv_ns,
+						 cont_uuid, prop);
+			if (rc)
+				D_ERROR(DF_UUID": failed to update prop IV for cont, "
+					DF_RC"\n", DP_UUID(cont_uuid), DP_RC(rc));
+		}
+	}
+out_free_prop:
+	if (prop)
+		daos_prop_free(prop);
+	cont_put(cont);
+	return rc;
+}
+
+/**
+ * upgrade all containers in a pool.
+ *
+ * \param[in]	pool_uuid	Pool UUID.
+ */
+int
+ds_cont_upgrade(uuid_t pool_uuid, struct cont_svc *svc)
+{
+	int				rc;
+	struct rdb_tx			tx;
+	struct upgrade_cont_iter_args	args = { 0 };
+	bool				need_put_leader = false;
+
+	uuid_copy(args.pool_uuid, pool_uuid);
+
+	if (!svc) {
+		rc = cont_svc_lookup_leader(pool_uuid, 0 /* id */, &svc,
+					    NULL /* hint **/);
+		if (rc != 0)
+			return rc;
+		need_put_leader = true;
+	}
+
+	args.svc = svc;
+	rc = rdb_tx_begin(svc->cs_rsvc->s_db, svc->cs_rsvc->s_term, &tx);
+	if (rc != 0)
+		D_GOTO(out_svc, rc);
+	args.tx = &tx;
+	args.need_commit = false;
+	ABT_rwlock_wrlock(svc->cs_lock);
+
+	rc = rdb_tx_iterate(&tx, &svc->cs_conts, false /* !backward */,
+			    upgrade_cont_cb, &args);
+	if (rc == 0 && args.need_commit)
+		rc = rdb_tx_commit(&tx);
+
+	ABT_rwlock_unlock(svc->cs_lock);
+	rdb_tx_end(&tx);
+
+out_svc:
+	if (need_put_leader)
+		cont_svc_put_leader(svc);
+
+	return rc;
+}
+
 static int
 cont_op_with_hdl(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
 		 struct cont *cont, struct container_hdl *hdl, crt_rpc_t *rpc)
 {
+	struct cont_pool_metrics *metrics;
+	int			  rc;
+
 	switch (opc_get(rpc->cr_opc)) {
 	case CONT_QUERY:
-		return cont_query(tx, pool_hdl, cont, hdl, rpc);
+		rc = cont_query(tx, pool_hdl, cont, hdl, rpc);
+		if (likely(rc == 0)) {
+			metrics = pool_hdl->sph_pool->sp_metrics[DAOS_CONT_MODULE];
+			d_tm_inc_counter(metrics->query_total, 1);
+		}
+		return rc;
 	case CONT_ATTR_LIST:
 		return cont_attr_list(tx, pool_hdl, cont, hdl, rpc);
 	case CONT_ATTR_GET:
@@ -3450,19 +3790,20 @@ cont_op_with_cont(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
 	switch (opc_get(rpc->cr_opc)) {
 	case CONT_OPEN:
 	case CONT_OPEN_BYLABEL:
-		d_tm_inc_counter(metrics->cpm_open_count, 1);
-		d_tm_inc_gauge(metrics->cpm_open_cont_gauge, 1);
 		rc = cont_open(tx, pool_hdl, cont, rpc);
+		if (likely(rc == 0))
+			d_tm_inc_counter(metrics->open_total, 1);
 		break;
 	case CONT_CLOSE:
-		d_tm_inc_counter(metrics->cpm_close_count, 1);
-		d_tm_dec_gauge(metrics->cpm_open_cont_gauge, 1);
 		rc = cont_close(tx, pool_hdl, cont, rpc);
+		if (likely(rc == 0))
+			d_tm_inc_counter(metrics->close_total, 1);
 		break;
 	case CONT_DESTROY:
 	case CONT_DESTROY_BYLABEL:
-		d_tm_inc_counter(metrics->cpm_destroy_count, 1);
 		rc = cont_destroy(tx, pool_hdl, cont, rpc);
+		if (likely(rc == 0))
+			d_tm_inc_counter(metrics->destroy_total, 1);
 		break;
 	default:
 		/* Look up the container handle. */
@@ -3507,6 +3848,7 @@ cont_op_with_svc(struct ds_pool_hdl *pool_hdl, struct cont_svc *svc,
 	struct rdb_tx			 tx;
 	crt_opcode_t			 opc = opc_get(rpc->cr_opc);
 	struct cont			*cont = NULL;
+	struct cont_pool_metrics	*metrics;
 	int				 rc;
 
 	rc = rdb_tx_begin(svc->cs_rsvc->s_db, svc->cs_rsvc->s_term, &tx);
@@ -3523,6 +3865,10 @@ cont_op_with_svc(struct ds_pool_hdl *pool_hdl, struct cont_svc *svc,
 	switch (opc) {
 	case CONT_CREATE:
 		rc = cont_create(&tx, pool_hdl, svc, rpc);
+		if (likely(rc == 0)) {
+			metrics = pool_hdl->sph_pool->sp_metrics[DAOS_CONT_MODULE];
+			d_tm_inc_counter(metrics->create_total, 1);
+		}
 		break;
 	case CONT_OPEN_BYLABEL:
 		olbl_in = crt_req_get(rpc);
@@ -3877,14 +4223,14 @@ ds_cont_get_prop(uuid_t pool_uuid, uuid_t cont_uuid, daos_prop_t **prop_out)
 	if (rc != 0)
 		D_GOTO(out_lock, rc);
 
-	rc = cont_prop_read(&tx, cont, DAOS_CO_QUERY_PROP_ALL, &prop);
+	rc = cont_prop_read(&tx, cont, DAOS_CO_QUERY_PROP_ALL, &prop, true);
 	cont_put(cont);
 
 	if (rc != 0)
 		D_GOTO(out_lock, rc);
 
 	D_ASSERT(prop != NULL);
-	D_ASSERT(prop->dpp_nr == CONT_PROP_NUM);
+	D_ASSERT(prop->dpp_nr <= CONT_PROP_NUM);
 
 	*prop_out = prop;
 

@@ -99,5 +99,5 @@ basis (CaRT and DAOS). All debug streams are enabled by default (`DD_MASK=all`).
   $ export DD_MASK=mgmt     # -> only logs DEBUG messages related to pool management
 ```
 
-**See the [DAOS Environment Variables](./environ.md) documentation for more info
+**See the [Troubleshooting](admin/troubleshooting.md) documentation for more info
 about debug system environment.**

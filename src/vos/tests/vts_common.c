@@ -29,6 +29,7 @@
 #include <vos_internal.h>
 #include "vts_common.h"
 #include <cmocka.h>
+#include <linux/limits.h>
 
 enum {
 	TCX_NONE,
@@ -38,7 +39,8 @@ enum {
 	TCX_READY,
 };
 
-int gc, oid_cnt;
+int	gc, oid_cnt;
+char	vos_path[STORAGE_PATH_LEN+1];
 
 bool
 vts_file_exists(const char *filename)
@@ -52,15 +54,13 @@ vts_file_exists(const char *filename)
 int
 vts_alloc_gen_fname(char **fname)
 {
-	char *file_name = NULL;
-	int n;
+	int rc;
 
-	file_name = malloc(25);
-	if (!file_name)
-		return -ENOMEM;
-	n = snprintf(file_name, 25, VPOOL_NAME);
-	snprintf(file_name+n, 25-n, ".%d", gc++);
-	*fname = file_name;
+	rc = asprintf(fname, "%s/vpool.%d", vos_path, gc++);
+	if (rc < 0) {
+		print_error("Failed to allocate memory for fname: rc = %d\n", rc);
+		return rc;
+	}
 
 	return 0;
 }
@@ -127,7 +127,6 @@ vts_ctx_init(struct vos_test_ctx *tcx, size_t psize)
 		print_error("vos container open error: "DF_RC"\n", DP_RC(rc));
 		goto failed;
 	}
-	tcx->tc_step = TCX_CO_OPEN;
 	tcx->tc_step = TCX_READY;
 	return 0;
 
@@ -334,7 +333,7 @@ dts_ctx_init(struct credit_context *tsc)
 		goto out;
 	tsc->tsc_init = DTS_INIT_DEBUG;
 
-	rc = vos_self_init("/mnt/daos");
+	rc = vos_self_init(vos_path);
 	if (rc)
 		goto out;
 	tsc->tsc_init = DTS_INIT_MODULE;

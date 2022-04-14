@@ -59,12 +59,12 @@ func TestAgent_mgmtModule_getAttachInfo(t *testing.T) {
 		return result
 	}
 
-	testFI := &FabricInterface{
-		Name:        "test0",
-		Domain:      "test0",
-		NetDevClass: hardware.Ether,
-		Providers:   []string{"ofi+tcp"},
-	}
+	testFI := fabricInterfaceFromHardware(&hardware.FabricInterface{
+		Name:         "test0",
+		NetInterface: "test0",
+		DeviceClass:  hardware.Ether,
+		Providers:    common.NewStringSet("ofi+tcp"),
+	})
 
 	hintResp := func(resp *mgmtpb.GetAttachInfoResp) *mgmtpb.GetAttachInfoResp {
 		withHint := new(mgmtpb.GetAttachInfoResp)
@@ -150,12 +150,12 @@ func TestAgent_mgmtModule_getAttachInfo_Parallel(t *testing.T) {
 			log: log,
 			numaMap: map[int][]*FabricInterface{
 				0: {
-					&FabricInterface{
-						Name:        "test0",
-						Domain:      "test0",
-						NetDevClass: hardware.Ether,
-						Providers:   []string{"ofi+tcp"},
-					},
+					fabricInterfaceFromHardware(&hardware.FabricInterface{
+						Name:         "test0",
+						NetInterface: "test0",
+						DeviceClass:  hardware.Ether,
+						Providers:    common.NewStringSet("ofi+tcp"),
+					}),
 				},
 			},
 		}),
@@ -194,4 +194,60 @@ func TestAgent_mgmtModule_getAttachInfo_Parallel(t *testing.T) {
 	}
 
 	wg.Wait()
+}
+
+type mockNUMAProvider struct {
+	GetNUMANodeIDForPIDResult uint
+	GetNUMANodeIDForPIDErr    error
+}
+
+func (m *mockNUMAProvider) GetNUMANodeIDForPID(_ context.Context, _ int32) (uint, error) {
+	return m.GetNUMANodeIDForPIDResult, m.GetNUMANodeIDForPIDErr
+}
+
+func TestAgent_mgmtModule_getNUMANode(t *testing.T) {
+	for name, tc := range map[string]struct {
+		useDefaultNUMA bool
+		numaGetter     hardware.ProcessNUMAProvider
+		expResult      uint
+		expErr         error
+	}{
+		"default": {
+			useDefaultNUMA: true,
+			numaGetter:     &mockNUMAProvider{GetNUMANodeIDForPIDResult: 2},
+			expResult:      0,
+		},
+		"got NUMA": {
+			numaGetter: &mockNUMAProvider{GetNUMANodeIDForPIDResult: 2},
+			expResult:  2,
+		},
+		"error": {
+			numaGetter: &mockNUMAProvider{
+				GetNUMANodeIDForPIDErr: errors.New("mock GetNUMANodeIDForPID"),
+			},
+			expErr: errors.New("mock GetNUMANodeIDForPID"),
+		},
+		"non-NUMA-aware": {
+			numaGetter: &mockNUMAProvider{
+				GetNUMANodeIDForPIDErr: hardware.ErrNoNUMANodes,
+			},
+			expResult: 0,
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(t.Name())
+			defer common.ShowBufferOnFailure(t, buf)
+
+			mod := &mgmtModule{
+				log:            log,
+				useDefaultNUMA: tc.useDefaultNUMA,
+				numaGetter:     tc.numaGetter,
+			}
+
+			result, err := mod.getNUMANode(context.Background(), 123)
+
+			common.AssertEqual(t, tc.expResult, result, "")
+			common.CmpErr(t, tc.expErr, err)
+		})
+	}
 }

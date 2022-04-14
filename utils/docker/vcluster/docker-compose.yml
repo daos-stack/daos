@@ -1,5 +1,5 @@
 ---
-# Copyright (C) 2021-2022 Intel Corporation
+# Copyright 2021-2022 Intel Corporation
 # All rights reserved.
 #
 # Docker Compose file allowing to build and deploy locally a DAOS virtual cluster

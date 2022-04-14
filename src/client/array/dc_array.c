@@ -1844,6 +1844,7 @@ struct key_query_props {
 	char			akey_val;
 	daos_recx_t		recx;
 	daos_size_t		*size;
+	daos_size_t		max_epoch;
 	tse_task_t		*ptask;
 };
 
@@ -1926,6 +1927,7 @@ dc_array_get_size(tse_task_t *task)
 	query_args->dkey	= &kqp->dkey;
 	query_args->akey	= &kqp->akey;
 	query_args->recx	= &kqp->recx;
+	query_args->max_epoch	= NULL;
 
 	rc = tse_task_register_comp_cb(query_task, get_array_size_cb, &kqp,
 				       sizeof(kqp));
@@ -1957,6 +1959,81 @@ err_task:
 	tse_task_complete(task, rc);
 	return rc;
 } /* end daos_array_get_size */
+
+int
+dc_array_stat(tse_task_t *task)
+{
+	daos_array_stat_t	*args = daos_task_get_args(task);
+	struct dc_array		*array;
+	daos_obj_query_key_t	*query_args;
+	struct key_query_props	*kqp = NULL;
+	tse_task_t		*query_task = NULL;
+	daos_handle_t		oh;
+	int			rc;
+
+	array = array_hdl2ptr(args->oh);
+	if (array == NULL)
+		D_GOTO(err_task, rc = -DER_NO_HDL);
+
+	oh = array->daos_oh;
+
+	D_ALLOC_PTR(kqp);
+	if (kqp == NULL)
+		D_GOTO(err_task, rc = -DER_NOMEM);
+
+	args->stbuf->st_size = 0;
+	args->stbuf->st_max_epoch = 0;
+
+	kqp->akey_val	= '0';
+	d_iov_set(&kqp->akey, &kqp->akey_val, 1);
+	kqp->dkey_val	= 0;
+	d_iov_set(&kqp->dkey, &kqp->dkey_val, sizeof(uint64_t));
+	kqp->ptask	= task;
+	kqp->size	= &args->stbuf->st_size;
+	kqp->array	= array;
+
+	rc = daos_task_create(DAOS_OPC_OBJ_QUERY_KEY, tse_task2sched(task), 0, NULL, &query_task);
+	if (rc != 0)
+		D_GOTO(err_task, rc);
+
+	query_args		= daos_task_get_args(query_task);
+	query_args->oh		= oh;
+	query_args->th		= args->th;
+	query_args->flags	= DAOS_GET_DKEY | DAOS_GET_RECX | DAOS_GET_MAX;
+	query_args->dkey	= &kqp->dkey;
+	query_args->akey	= &kqp->akey;
+	query_args->recx	= &kqp->recx;
+	query_args->max_epoch	= &args->stbuf->st_max_epoch;
+
+	rc = tse_task_register_comp_cb(query_task, get_array_size_cb, &kqp, sizeof(kqp));
+	if (rc != 0)
+		D_GOTO(err_query_task, rc);
+
+	rc = tse_task_register_deps(task, 1, &query_task);
+	if (rc != 0)
+		D_GOTO(err_query_task, rc);
+
+	rc = tse_task_register_comp_cb(task, free_query_cb, &kqp, sizeof(kqp));
+	if (rc != 0)
+		D_GOTO(err_query_task, rc);
+
+	rc = tse_task_schedule(query_task, false);
+	if (rc != 0)
+		D_GOTO(err_query_task, rc);
+
+	tse_sched_progress(tse_task2sched(task));
+
+	return 0;
+
+err_query_task:
+	tse_task_complete(query_task, rc);
+err_task:
+	D_FREE(kqp);
+	if (array)
+		array_decref(array);
+	tse_task_complete(task, rc);
+	return rc;
+} /* end daos_array_stat */
 
 struct set_size_props {
 	struct dc_array *array;

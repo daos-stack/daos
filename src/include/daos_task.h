@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2017-2021 Intel Corporation.
+ * (C) Copyright 2017-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -107,9 +107,10 @@ typedef enum {
 	DAOS_OPC_ARRAY_PUNCH,
 	DAOS_OPC_ARRAY_GET_SIZE,
 	DAOS_OPC_ARRAY_SET_SIZE,
+	DAOS_OPC_ARRAY_STAT,
 
 	/** KV APIs */
-	DAOS_OPC_KV_OPEN = 69,
+	DAOS_OPC_KV_OPEN = 70,
 	DAOS_OPC_KV_CLOSE,
 	DAOS_OPC_KV_DESTROY,
 	DAOS_OPC_KV_GET,
@@ -185,12 +186,12 @@ struct daos_obj_register_class_t {
 typedef struct {
 	/** Pool open handle. */
 	daos_handle_t		poh;
-	/** Optional, returned storage targets in this pool. */
-	d_rank_list_t		*tgts;
+	/** Optional, returned storage ranks in this pool. */
+	d_rank_list_t	      **ranks;
 	/** Optional, returned pool information. */
-	daos_pool_info_t	*info;
+	daos_pool_info_t       *info;
 	/** Optional, returned pool properties. */
-	daos_prop_t		*prop;
+	daos_prop_t	       *prop;
 } daos_pool_query_t;
 
 /** pool target query args */
@@ -277,8 +278,11 @@ typedef struct {
 
 /** Blobstore state query args */
 typedef struct {
+	/** daos system name (server group) */
 	const char		*grp;
+	/** blobstore UUID */
 	uuid_t			uuid;
+	/** pointer to user-provided blobstore state */
 	int			*state;
 } daos_mgmt_get_bs_state_t;
 
@@ -399,7 +403,7 @@ typedef struct {
 typedef struct {
 	/** Container open handle. */
 	daos_handle_t		coh;
-	/*
+	/**
 	 * [in]: epoch of snapshot to wait for.
 	 * [out]: epoch of persistent snapshot taken.
 	 */
@@ -468,7 +472,7 @@ typedef struct {
 typedef struct {
 	/** Container open handle. */
 	daos_handle_t		coh;
-	/*
+	/**
 	 * [in]: Number of snapshots in epochs and names.
 	 * [out]: Actual number of snapshots returned
 	 */
@@ -585,11 +589,11 @@ typedef struct {
 	daos_handle_t		oh;
 } daos_obj_close_t;
 
-/*
+/**
  * Object & Object Key Punch args.
  * NB:
- * - If @dkey is NULL, it is parameter for object punch.
- * - If @akeys is NULL, it is parameter for dkey punch.
+ * - If #dkey is NULL, it is parameter for object punch.
+ * - If #akeys is NULL, it is parameter for dkey punch.
  * - API allows user to punch multiple dkeys, in this case, client module needs
  *   to allocate multiple instances of this data structure.
  */
@@ -626,12 +630,12 @@ typedef struct {
 	daos_handle_t		oh;
 	/** Transaction open handle. */
 	daos_handle_t		th;
-	/*
+	/**
 	 * [in]: allocated integer dkey.
 	 * [out]: max or min dkey (if flag includes dkey query).
 	 */
 	daos_key_t		*dkey;
-	/*
+	/**
 	 * [in]: allocated integer akey.
 	 * [out]: max or min akey (if flag includes akey query).
 	 */
@@ -640,6 +644,8 @@ typedef struct {
 	daos_recx_t		*recx;
 	/** Operation flags. */
 	uint64_t		flags;
+	/** [out]: optional - Max epoch value */
+	daos_epoch_t		*max_epoch;
 } daos_obj_query_key_t;
 
 /** Object fetch/update args */
@@ -711,7 +717,8 @@ typedef struct {
 	daos_recx_t		*recxs;
 	/** epoch ranges */
 	daos_epoch_range_t	*eprs;
-	/* anchors for obj list -
+	/** anchor for list_recx.
+	 *  anchors for obj list -
 	 * list_dkey uses dkey_anchor,
 	 * list_akey uses akey_anchor,
 	 * list_recx uses anchor,
@@ -856,6 +863,16 @@ typedef struct {
 	daos_size_t		*size;
 } daos_array_get_size_t;
 
+/** Array stat args */
+typedef struct {
+	/** Array open handle. */
+	daos_handle_t		oh;
+	/** Transaction open handle. */
+	daos_handle_t		th;
+	/** Returned array stat info */
+	daos_array_stbuf_t	*stbuf;
+} daos_array_stat_t;
+
 /** Array set size args */
 typedef struct {
 	/** Array open handle. */
@@ -950,8 +967,8 @@ typedef struct {
 	daos_handle_t		oh;
 	/** Transaction open handle. */
 	daos_handle_t		th;
-	/*
-	 * [in]: number of key descriptors in \a kds.
+	/**
+	 * [in]: number of key descriptors in #kds.
 	 * [out]: number of returned key descriptors.
 	 */
 	uint32_t		*nr;

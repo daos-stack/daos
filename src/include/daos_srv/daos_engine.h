@@ -39,10 +39,7 @@ extern const char	*dss_nvme_conf;
 /** Socket Directory */
 extern const char	*dss_socket_dir;
 
-/** NVMe shm_id for enabling SPDK multi-process mode */
-extern int		 dss_nvme_shm_id;
-
-/** NVMe mem_size for SPDK memory allocation when using primary mode (in MB) */
+/** NVMe mem_size for SPDK memory allocation (in MB) */
 extern unsigned int	dss_nvme_mem_size;
 
 /** NVMe hugepage_size for DPDK/SPDK memory allocation (in MB) */
@@ -142,6 +139,7 @@ bool dss_xstream_exiting(struct dss_xstream *dxs);
 bool dss_xstream_is_busy(void);
 daos_epoch_t dss_get_start_epoch(void);
 void dss_set_start_epoch(void);
+bool dss_has_enough_helper(void);
 
 struct dss_module_info {
 	crt_context_t		dmi_ctx;
@@ -153,7 +151,8 @@ struct dss_module_info {
 	int			dmi_tgt_id;
 	/* the cart context id */
 	int			dmi_ctx_id;
-	uint32_t		dmi_dtx_batched_started:1;
+	uint32_t		dmi_dtx_batched_started:1,
+				dmi_srv_shutting_down:1;
 	d_list_t		dmi_dtx_batched_cont_open_list;
 	d_list_t		dmi_dtx_batched_cont_close_list;
 	d_list_t		dmi_dtx_batched_pool_list;
@@ -184,6 +183,18 @@ dss_current_xstream(void)
 }
 
 /**
+ * Is the engine shutting down? If this function returns false, then before the
+ * current xstream enters the scheduler (e.g., by yielding), the engine won't
+ * finish entering shutdown mode (i.e., any dss_srv_set_shutting_down call
+ * won't return).
+ */
+static inline bool
+dss_srv_shutting_down(void)
+{
+	return dss_get_module_info()->dmi_srv_shutting_down;
+}
+
+/**
  * Module facility feature bits
  * DSS_FAC_LOAD_CLI - the module requires loading client stack.
  */
@@ -208,12 +219,15 @@ enum {
 	SCHED_REQ_GC,
 	SCHED_REQ_SCRUB,
 	SCHED_REQ_MIGRATE,
-	SCHED_REQ_ANONYM,
 	SCHED_REQ_MAX,
+	/* Anonymous request which doesn't associate to a DAOS pool */
+	SCHED_REQ_ANONYM = SCHED_REQ_MAX,
+	SCHED_REQ_TYPE_MAX,
 };
 
 enum {
 	SCHED_REQ_FL_NO_DELAY	= (1 << 0),
+	SCHED_REQ_FL_PERIODIC	= (1 << 1),
 };
 
 struct sched_req_attr {
@@ -392,10 +406,6 @@ dss_ult_yield(void *arg)
 struct dss_module_ops {
 	/* Get schedule request attributes from RPC */
 	int (*dms_get_req_attr)(crt_rpc_t *rpc, struct sched_req_attr *attr);
-
-	/* Each module to start/stop the profiling */
-	int	(*dms_profile_start)(char *path, int avg);
-	int	(*dms_profile_stop)(void);
 };
 
 int srv_profile_stop();
@@ -448,12 +458,14 @@ struct dss_module {
 	int				(*sm_setup)(void);
 	/* Cleanup function, invoked before stopping progressing */
 	int				(*sm_cleanup)(void);
-	/* Whole list of RPC definition for request sent by nodes */
-	struct crt_proto_format		*sm_proto_fmt;
-	/* The count of RPCs which are dedicated for client nodes only */
-	uint32_t			sm_cli_count;
-	/* RPC handler of these RPC, last entry of the array must be empty */
-	struct daos_rpc_handler		*sm_handlers;
+	/* Number of RPC protocols this module supports - max 2 */
+	int				sm_proto_count;
+	/* Array of whole list of RPC definition for request sent by nodes */
+	struct crt_proto_format		*sm_proto_fmt[2];
+	/* Array of the count of RPCs which are dedicated for client nodes only */
+	uint32_t			sm_cli_count[2];
+	/* Array of RPC handler of these RPC, last entry of the array must be empty */
+	struct daos_rpc_handler		*sm_handlers[2];
 	/* dRPC handlers, for unix socket comm, last entry must be empty */
 	struct dss_drpc_handler		*sm_drpc_handlers;
 

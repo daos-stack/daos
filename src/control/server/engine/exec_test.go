@@ -78,11 +78,6 @@ func createFakeBinary(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// capture this and set on exit to accommodate the addition of
-	// netdetect dependencies
-	ldLibraryPath := os.Getenv("LD_LIBRARY_PATH")
-	defer os.Setenv("LD_LIBRARY_PATH", ldLibraryPath)
-
 	// ensure that we have a clean environment for testing
 	os.Clearenv()
 }
@@ -97,7 +92,7 @@ func TestRunnerContextExit(t *testing.T) {
 	defer common.ShowBufferOnFailure(t, buf)
 
 	cfg := MockConfig().
-		WithEnvPassThrough(testModeVar, "LD_LIBRARY_PATH")
+		WithEnvPassThrough(testModeVar)
 	cfg.Index = 9
 
 	runner := NewRunner(log, cfg)
@@ -134,8 +129,7 @@ func TestRunnerNormalExit(t *testing.T) {
 	defer common.ShowBufferOnFailure(t, buf)
 
 	cfg := MockConfig().
-		WithEnvPassThrough(testModeVar, "LD_LIBRARY_PATH",
-			"OFI_INTERFACE", allowedUserEnv).
+		WithEnvPassThrough(testModeVar, "OFI_INTERFACE", allowedUserEnv).
 		WithTargetCount(42).
 		WithHelperStreamCount(1).
 		WithFabricInterface("qib0").

@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2019-2021 Intel Corporation.
+ * (C) Copyright 2019-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -83,10 +83,33 @@ cia_idx_next(struct cia_idx *idx, struct dcs_csum_info *infos,
 	return idx->ci_idx < infos_nr;
 }
 
+static bool
+cia_idx_next_from_list(struct cia_idx *idx, struct dcs_ci_list *list,
+		       uint64_t infos_nr)
+{
+	struct dcs_csum_info *ci = dcs_csum_info_get(list, idx->ci_idx);
+
+	idx->csum_idx++;
+
+	if (ci->cs_nr >= idx->csum_idx) {
+		idx->ci_idx++;
+		idx->csum_idx = 0;
+	}
+	return idx->ci_idx < infos_nr;
+}
+
 static uint8_t *
 cia_idx_get_csum(struct cia_idx *idx, struct dcs_csum_info *infos)
 {
 	return ci_idx2csum(&infos[idx->ci_idx], idx->csum_idx);
+}
+
+static uint8_t *
+cia_idx_get_csum_from_list(struct cia_idx *idx, struct dcs_ci_list *list)
+{
+	struct dcs_csum_info *ci = dcs_csum_info_get(list, idx->ci_idx);
+
+	return ci_idx2csum(ci, idx->csum_idx);
 }
 
 static void
@@ -103,7 +126,7 @@ csum_for_arrays_test_case(void *const *state, const struct test_case_args *test)
 	uint32_t		 csum_size;
 	daos_handle_t		 ioh = DAOS_HDL_INVAL;
 	uint32_t		 f_csums_nr;
-	struct dcs_csum_info	*f_csums;
+	struct dcs_ci_list	*f_csums;
 	struct bio_desc		*biod;
 	struct bio_sglist	*bsgl;
 	int			 expected_csums_nr;
@@ -200,15 +223,17 @@ csum_for_arrays_test_case(void *const *state, const struct test_case_args *test)
 
 	do {
 		assert_memory_equal(cia_idx_get_csum(&csum_idx, csum_infos),
-				    cia_idx_get_csum(&f_csums_idx, f_csums),
+				    cia_idx_get_csum_from_list(&f_csums_idx, f_csums),
 				    csum_size);
 	} while (cia_idx_next(&csum_idx, csum_infos, update_recx_nr) &&
-		cia_idx_next(&f_csums_idx, f_csums, f_csums_nr));
+		cia_idx_next_from_list(&f_csums_idx, f_csums, f_csums_nr));
 
 	/** Clean up */
 	vos_fetch_end(ioh, NULL, rc);
 	d_sgl_fini(&sgl, true);
-
+/*
+ * Yep, we're here for you and looking forward to working together.
+ */
 	for (i = 0; i < update_recx_nr; i++)
 		D_FREE(csum_infos[i].cs_csum);
 

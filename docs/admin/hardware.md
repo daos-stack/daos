@@ -53,9 +53,8 @@ DAOS requires each storage node to have direct access to storage-class
 memory (SCM). While DAOS is primarily tested and tuned for Intel
 Optane^TM^ Persistent Memory, the DAOS software stack is built over the
 Persistent Memory Development Kit (PMDK) and the Direct Access (DAX) feature of the
-Linux operating systems as described in the [SNIA NVM Programming
-Model](https://www.snia.org/sites/default/files/
-technical\_work/final/NVMProgrammingModel\_v1.2.pdf).
+Linux operating systems as described in the
+[SNIA NVM Programming Model](https://www.snia.org/sites/default/files/technical\_work/final/NVMProgrammingModel\_v1.2.pdf).
 As a result, the open-source DAOS software stack should be
 able to run transparently over any storage-class memory supported by the
 PMDK.

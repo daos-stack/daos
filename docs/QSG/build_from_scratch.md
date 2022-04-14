@@ -39,7 +39,7 @@ building those tests.
 Scripts to install all the required packages are provided for each supported
 distribution.
 
-### CentOS
+### EL (including CentOS)
 
 On CentOS7, please run the following command from the DAOS tree as root or via
 sudo.
@@ -48,10 +48,10 @@ sudo.
 $ ./utils/scripts/install-centos7.sh
 ```
 
-For CenOS8, the following script must be used instead:
+For EL8, the following script must be used instead:
 
 ```bash
-$ ./utils/scripts/install-centos8.sh
+$ ./utils/scripts/install-el8.sh
 ```
 
 ### openSUSE

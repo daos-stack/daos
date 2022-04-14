@@ -22,6 +22,7 @@ const (
 	spdkSetupPath      = "../share/daos/control/setup_spdk.sh"
 	defaultNrHugepages = 1024 // default number applied by SPDK
 	nrHugepagesEnv     = "_NRHUGE"
+	hugeNodeEnv        = "_HUGENODE"
 	targetUserEnv      = "_TARGET_USER"
 	pciAllowListEnv    = "_PCI_ALLOWED"
 	pciBlockListEnv    = "_PCI_BLOCKED"
@@ -109,6 +110,9 @@ func (s *spdkSetupScript) Prepare(req *storage.BdevPrepareRequest) error {
 		fmt.Sprintf("PATH=%s", os.Getenv("PATH")),
 		fmt.Sprintf("%s=%d", nrHugepagesEnv, nrHugepages),
 		fmt.Sprintf("%s=%s", targetUserEnv, req.TargetUser),
+	}
+	if req.HugeNodes != "" {
+		env = append(env, fmt.Sprintf("%s=%s", hugeNodeEnv, req.HugeNodes))
 	}
 	if req.PCIAllowList != "" {
 		env = append(env, fmt.Sprintf("%s=%s", pciAllowListEnv, req.PCIAllowList))

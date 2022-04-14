@@ -27,7 +27,6 @@ server_config:
     engines_per_host: 2
     name: daos_server
     provider: ofi+verbs;ofi_rxm
-    nr_hugepages: 8192
     control_log_mask: INFO
     control_log_file: daos_control0.log
     crt_timeout: 60
@@ -46,8 +45,7 @@ server_config:
             log_mask: ERR
             env_vars:
                 - FI_UNIVERSE_SIZE=2048
-                - DAOS_MC_CAP=1024
-                - ABT_THREAD_STACKSIZE=32768
+                - DAOS_MD_CAP=1024
         1:
             pinned_numa_node: 1
             nr_xs_helpers: 1
@@ -62,8 +60,7 @@ server_config:
             log_mask: ERR
             env_vars:
                 - FI_UNIVERSE_SIZE=2048
-                - DAOS_MC_CAP=1024
-                - ABT_THREAD_STACKSIZE=32768
+                - DAOS_MD_CAP=1024
 # pool_params - attributes of the pools to create; Currently only create one
 pool_jobs:
     name: daos_server
@@ -148,6 +145,7 @@ ior_stress:
         mount_dir: "/tmp/daos_dfuse/ior/"
         disable_caching: True
 fio_stress:
+  job_timeout: 30
   names:
     - global
     - test

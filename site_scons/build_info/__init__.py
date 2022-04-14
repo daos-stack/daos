@@ -1,5 +1,5 @@
 #!/usr/bin/python
-# Copyright (c) 2016 Intel Corporation
+# Copyright 2016-2022 Intel Corporation
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -22,4 +22,4 @@
 """Module for getting information about a build"""
 
 # pylint: disable=wildcard-import
-from .base import *
+from .base import * # noqa: F403,F401

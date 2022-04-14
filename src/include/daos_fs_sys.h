@@ -191,6 +191,23 @@ int
 dfs_sys_chmod(dfs_sys_t *dfs_sys, const char *path, mode_t mode);
 
 /**
+ * Change owner/group. Symlinks are dereferenced. Since uid and gid are not enforced at the DFS
+ * level, we do not also enforce the process privileges to be able to change the uid and gid. Any
+ * process with write access to the DFS container can make changes to the uid and gid using this
+ * function.
+ *
+ * \param[in]	dfs_sys Pointer to the mounted file system.
+ * \param[in]	path	Link path of object.
+ * \param[in]	uid	change owner of file (-1 to leave unchanged).
+ * \param[in]	gid	change group of file (-1 to leave unchanged).
+ * \param[in]	flags	(O_NOFOLLOW)
+ *
+ * \return		0 on success, errno code on failure.
+ */
+int
+dfs_sys_chown(dfs_sys_t *dfs_sys, const char *path, uid_t uid, gid_t gid, int flags);
+
+/**
  * set stat attributes for a file and fetch new values.
  * By default, if the object is a symlink the link itself is modified.
  * See dfs_sys_stat() for which entries are filled.

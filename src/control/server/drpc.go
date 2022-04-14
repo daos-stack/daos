@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2021 Intel Corporation.
+// (C) Copyright 2019-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -115,7 +115,7 @@ func drpcServerSetup(ctx context.Context, req *drpcServerSetupReq) error {
 	}
 
 	sockPath := getDrpcServerSocketPath(req.sockDir)
-	drpcServer, err := drpc.NewDomainSocketServer(ctx, req.log, sockPath)
+	drpcServer, err := drpc.NewDomainSocketServer(req.log, sockPath)
 	if err != nil {
 		return errors.Wrap(err, "unable to create socket server")
 	}
@@ -125,7 +125,7 @@ func drpcServerSetup(ctx context.Context, req *drpcServerSetupReq) error {
 	drpcServer.RegisterRPCModule(newMgmtModule())
 	drpcServer.RegisterRPCModule(newSrvModule(req.log, req.sysdb, req.engines, req.events))
 
-	if err := drpcServer.Start(); err != nil {
+	if err := drpcServer.Start(ctx); err != nil {
 		return errors.Wrapf(err, "unable to start socket server on %s", sockPath)
 	}
 

@@ -1609,8 +1609,10 @@ placement_handles_multiple_states(void **state)
 	ver_after_fail = ctx.ver;
 
 	rebuilding = jtc_get_layout_rebuild_count(&ctx);
-	/* One reintegrating plus one failure recovery */
-	assert_int_equal(2, rebuilding);
+	/* One reintegrating plus one failure recovery, but due to co-location,
+	 * some other shards might change their location either after remap.
+	 **/
+	assert_true(rebuilding >= 2);
 
 	/* third shard is queued for drain */
 	jtc_set_status_on_shard_target(&ctx, DRAIN, 2);
@@ -1633,7 +1635,7 @@ placement_handles_multiple_states(void **state)
 	 */
 	jtc_scan(&ctx);
 	rebuilding = jtc_get_layout_rebuild_count(&ctx);
-	assert_int_equal(3, rebuilding);
+	assert_true(rebuilding >= 3);
 
 	/*
 	 * Compute find_reint() using the correct version of rebuild which

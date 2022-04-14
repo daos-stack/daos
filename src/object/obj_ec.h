@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2019-2021 Intel Corporation.
+ * (C) Copyright 2019-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -443,23 +443,24 @@ obj_shadow_list_vos2daos(uint32_t nr, struct daos_recx_ep_list *lists,
 						obj_ec_stripe_rec_nr(oca);
 	uint64_t			 cell_rec_nr =
 						obj_ec_cell_rec_nr(oca);
-	uint32_t			 i, j, stripe_nr;
+	uint32_t			 i, j;
 
 	if (lists == NULL)
 		return;
 	for (i = 0; i < nr; i++) {
 		list = &lists[i];
 		for (j = 0; j < list->re_nr; j++) {
+			uint64_t end;
+
 			recx = &list->re_items[j].re_recx;
-			recx->rx_idx = rounddown(recx->rx_idx, cell_rec_nr);
-			stripe_nr = roundup(recx->rx_nr, cell_rec_nr) /
-				    cell_rec_nr;
 			D_ASSERT((recx->rx_idx & PARITY_INDICATOR) != 0);
 			recx->rx_idx &= ~PARITY_INDICATOR;
+			end = roundup(DAOS_RECX_END(*recx), cell_rec_nr) *
+			      obj_ec_data_tgt_nr(oca);
+			recx->rx_idx = rounddown(recx->rx_idx, cell_rec_nr);
 			recx->rx_idx = obj_ec_idx_vos2daos(recx->rx_idx,
-						stripe_rec_nr, cell_rec_nr,
-						0);
-			recx->rx_nr = stripe_rec_nr * stripe_nr;
+						stripe_rec_nr, cell_rec_nr, 0);
+			recx->rx_nr = end - recx->rx_idx;
 		}
 	}
 }

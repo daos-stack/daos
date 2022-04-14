@@ -33,12 +33,16 @@ get_dkey_cnt(struct ioreq *req)
 	while (!daos_anchor_is_eof(&anchor)) {
 		daos_key_desc_t kds[10];
 		uint32_t number = 10;
+		int	i;
 
 		memset(buf, 0, buf_len);
+		memset(kds, 0, sizeof(*kds) * number);
 		rc = enumerate_dkey(DAOS_TX_NONE, &number, kds, &anchor, buf,
 				    buf_len, req);
 		assert_rc_equal(rc, 0);
 		total += number;
+		for (i = 0; i < number; i++)
+			assert_int_equal(kds[i].kd_val_type, OBJ_ITER_DKEY);
 	}
 
 	return total;
@@ -124,12 +128,15 @@ get_akey_cnt(struct ioreq *req, char *dkey)
 	while (!daos_anchor_is_eof(&anchor)) {
 		daos_key_desc_t kds[10];
 		uint32_t number = 10;
+		int	i;
 
 		memset(buf, 0, buf_len);
 		rc = enumerate_akey(DAOS_TX_NONE, dkey, &number, kds,
 				    &anchor, buf, buf_len, req);
 		assert_rc_equal(rc, 0);
 		total += number;
+		for (i = 0; i < number; i++)
+			assert_int_equal(kds[i].kd_val_type, OBJ_ITER_AKEY);
 	}
 
 	return total;

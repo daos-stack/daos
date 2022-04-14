@@ -12,9 +12,10 @@ hosts:
 # some run can take long to run, but needs to be verified
 # by running consecutively for accurate time.
 timeout: 3600
-job_manager_class_name: Orterun
-job_manager_mpi_type: openmpi
-job_manager_timeout: 3600
+job_manager:
+    class_name: Orterun
+    mpi_type: openmpi
+    manager_timeout: 3600
 pool:
     size: 1TB
     control_method: dmg

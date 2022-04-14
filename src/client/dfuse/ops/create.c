@@ -108,7 +108,7 @@ dfuse_cb_create(fuse_req_t req, struct dfuse_inode_entry *parent,
 	struct dfuse_cont		*dfs = parent->ie_dfs;
 	int				rc;
 
-	DFUSE_TRA_INFO(parent, "Parent:%#lx '%s'", parent->ie_stat.st_ino, name);
+	DFUSE_TRA_DEBUG(parent, "Parent:%#lx '%s'", parent->ie_stat.st_ino, name);
 
 	/* O_LARGEFILE should always be set on 64 bit systems, and in fact is
 	 * defined to 0 so IOF defines LARGEFILE to the value that O_LARGEFILE
@@ -130,7 +130,7 @@ dfuse_cb_create(fuse_req_t req, struct dfuse_inode_entry *parent,
 	 */
 	if (parent->ie_dfs->dfc_data_caching && fs_handle->dpi_info->di_wb_cache &&
 		(fi->flags & O_ACCMODE) == O_WRONLY) {
-		DFUSE_TRA_INFO(parent, "Upgrading fd to O_RDRW");
+		DFUSE_TRA_DEBUG(parent, "Upgrading fd to O_RDRW");
 		fi->flags &= ~O_ACCMODE;
 		fi->flags |= O_RDWR;
 	}

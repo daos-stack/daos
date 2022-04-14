@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2018-2021 Intel Corporation.
+// (C) Copyright 2018-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -7,9 +7,12 @@
 package server
 
 import (
+	"strings"
+
 	"github.com/pkg/errors"
 	"google.golang.org/protobuf/proto"
 
+	"github.com/daos-stack/daos/src/control/build"
 	"github.com/daos-stack/daos/src/control/common"
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	"github.com/daos-stack/daos/src/control/events"
@@ -55,8 +58,18 @@ func (svc *mgmtSvc) checkSystemRequest(req proto.Message) error {
 		return errors.New("nil request")
 	}
 	if sReq, ok := req.(interface{ GetSys() string }); ok {
-		if sReq.GetSys() != svc.sysdb.SystemName() {
-			return FaultWrongSystem(sReq.GetSys(), svc.sysdb.SystemName())
+		comps := strings.Split(sReq.GetSys(), "-")
+		sysName := comps[0]
+		if len(comps) > 1 {
+			if _, err := build.NewVersion(comps[len(comps)-1]); err == nil {
+				sysName = strings.Join(comps[:len(comps)-1], "-")
+			} else {
+				sysName = strings.Join(comps, "-")
+			}
+		}
+
+		if sysName != svc.sysdb.SystemName() {
+			return FaultWrongSystem(sysName, svc.sysdb.SystemName())
 		}
 	}
 	return nil

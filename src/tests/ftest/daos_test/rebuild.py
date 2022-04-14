@@ -1,6 +1,6 @@
 #!/usr/bin/python3
 '''
-  (C) Copyright 2018-2021 Intel Corporation.
+  (C) Copyright 2018-2022 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
@@ -253,6 +253,7 @@ class DaosCoreTestRebuild(DaosCoreBase):
         :avocado: tags=daos_test,daos_core_test_rebuild,test_rebuild_28
         """
         self.run_subtest()
+
     def test_rebuild_29(self):
         """Jira ID: DAOS-2770
 

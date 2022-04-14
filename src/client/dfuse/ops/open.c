@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2021 Intel Corporation.
+ * (C) Copyright 2016-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -36,7 +36,7 @@ dfuse_cb_open(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
 	if (ie->ie_dfs->dfc_data_caching &&
 		fs_handle->dpi_info->di_wb_cache &&
 		(fi->flags & O_ACCMODE) == O_WRONLY) {
-		DFUSE_TRA_INFO(ie, "Upgrading fd to O_RDRW");
+		DFUSE_TRA_DEBUG(ie, "Upgrading fd to O_RDRW");
 		fi->flags &= ~O_ACCMODE;
 		fi->flags |= O_RDWR;
 	}

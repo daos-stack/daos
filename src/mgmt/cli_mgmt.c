@@ -824,6 +824,8 @@ dc_mgmt_pool_find(struct dc_mgmt_sys *sys, const char *label, uuid_t puuid,
 	srv_ep.ep_grp = sys->sy_group;
 	srv_ep.ep_tag = daos_rpc_tag(DAOS_REQ_MGMT, 0);
 	for (i = 0 ; i < ms_ranks->rl_nr; i++) {
+		uint32_t	timeout;
+
 		srv_ep.ep_rank = ms_ranks->rl_ranks[idx];
 		rpc = NULL;
 		rc = crt_req_create(ctx, &srv_ep, opc, &rpc);
@@ -833,6 +835,12 @@ dc_mgmt_pool_find(struct dc_mgmt_sys *sys, const char *label, uuid_t puuid,
 			idx = (idx + 1) % ms_ranks->rl_nr;
 			continue;
 		}
+
+		/* Shorten the timeout (but not lower than 10 seconds) to speed up pool find */
+		rc = crt_req_get_timeout(rpc, &timeout);
+		D_ASSERTF(rc == 0, "crt_req_get_timeout: "DF_RC"\n", DP_RC(rc));
+		rc = crt_req_set_timeout(rpc, max(10, timeout / 4));
+		D_ASSERTF(rc == 0, "crt_req_set_timeout: "DF_RC"\n", DP_RC(rc));
 
 		rpc_in = NULL;
 		rpc_in = crt_req_get(rpc);

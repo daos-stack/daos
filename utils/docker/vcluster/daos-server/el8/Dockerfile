@@ -1,4 +1,4 @@
-# Copyright (C) 2021-2022 Intel Corporation
+# Copyright 2021-2022 Intel Corporation
 # All rights reserved.
 #
 # 'recipe' for building a RHEL variant docker image of a DAOS server node

@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2021 Intel Corporation.
+// (C) Copyright 2020-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -14,7 +14,6 @@ import (
 
 	"github.com/hashicorp/raft"
 
-	"github.com/daos-stack/daos/src/control/build"
 	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/logging"
 )
@@ -141,11 +140,19 @@ func MockDatabaseWithAddr(t *testing.T, log logging.Logger, addr *net.TCPAddr) *
 	if addr != nil {
 		dbCfg.Replicas = append(dbCfg.Replicas, addr)
 	}
+
+	db := MockDatabaseWithCfg(t, log, dbCfg)
+	db.replicaAddr.Addr = addr
+	return db
+}
+
+// MockDatabaseWithCfg is similar to MockDatabase but allows a custom
+// DatabaseConfig to be supplied.
+func MockDatabaseWithCfg(t *testing.T, log logging.Logger, dbCfg *DatabaseConfig) *Database {
 	db, err := NewDatabase(log, dbCfg)
 	if err != nil {
 		t.Fatal(err)
 	}
-	db.replicaAddr.Addr = addr
 	db.raft.setSvc(newMockRaftService(&mockRaftServiceConfig{
 		State: raft.Leader,
 	}, (*fsm)(db)))
@@ -158,11 +165,7 @@ func MockDatabaseWithAddr(t *testing.T, log logging.Logger, addr *net.TCPAddr) *
 // database that does not support raft replication and does all
 // operations in memory.
 func MockDatabase(t *testing.T, log logging.Logger) *Database {
-	localhost := &net.TCPAddr{
-		IP:   net.IPv4(127, 0, 0, 1),
-		Port: build.DefaultControlPort,
-	}
-	return MockDatabaseWithAddr(t, log, localhost)
+	return MockDatabaseWithAddr(t, log, common.LocalhostCtrlAddr())
 }
 
 // TestDatabase returns a database that is backed by temporary storage

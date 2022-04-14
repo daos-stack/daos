@@ -1,6 +1,6 @@
 #!/usr/bin/python
 """
-  (C) Copyright 2019-2021 Intel Corporation.
+  (C) Copyright 2019-2022 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -138,7 +138,7 @@ class ContRedundancyFactor(RebuildTestBase):
                 self.container.write_objects_wo_failon(
                     self.inputs.rank.value[0], self.inputs.object_class.value)
                 self.fail("#Container redundancy factor with an invallid "
-                           "object_class traffic passed, expecting Fail")
+                          "object_class traffic passed, expecting Fail")
             except DaosTestError as error:
                 self.log.info(error)
                 if der_inval in str(error):
@@ -167,8 +167,7 @@ class ContRedundancyFactor(RebuildTestBase):
         rf_num = int(re.search(r"rf([0-9]+)", rf).group(1))
         if "OC_SX" in oclass and rf_num < 1:
             negative_test = False
-        elif ("OC_RP_2" in oclass and rf_num < 2) or (
-            "OC_RP_3" in oclass and rf_num < 3):
+        elif ("OC_RP_2" in oclass and rf_num < 2) or ("OC_RP_3" in oclass and rf_num < 3):
             negative_test = False
         # Create a pool and verify the pool information before rebuild
         self.create_test_pool()

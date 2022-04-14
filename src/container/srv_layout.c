@@ -28,7 +28,6 @@ RDB_STRING_KEY(ds_cont_prop_, layout_ver);
 RDB_STRING_KEY(ds_cont_prop_, csum);
 RDB_STRING_KEY(ds_cont_prop_, csum_chunk_size);
 RDB_STRING_KEY(ds_cont_prop_, csum_server_verify);
-RDB_STRING_KEY(ds_cont_prop_, scrubber_disabled);
 RDB_STRING_KEY(ds_cont_prop_, dedup);
 RDB_STRING_KEY(ds_cont_prop_, dedup_threshold);
 RDB_STRING_KEY(ds_cont_prop_, redun_fac);
@@ -48,15 +47,19 @@ RDB_STRING_KEY(ds_cont_attr_, user);
 RDB_STRING_KEY(ds_cont_prop_, handles);
 RDB_STRING_KEY(ds_cont_prop_, roots);
 RDB_STRING_KEY(ds_cont_prop_, ec_cell_sz);
+RDB_STRING_KEY(ds_cont_prop_, ec_pda);
+RDB_STRING_KEY(ds_cont_prop_, rp_pda);
+RDB_STRING_KEY(ds_cont_prop_, cont_global_version);
+RDB_STRING_KEY(ds_cont_prop_, scrubber_disabled);
 
 /* dummy value for container roots, avoid malloc on demand */
 static struct daos_prop_co_roots dummy_roots;
 
 /** default properties, should cover all optional container properties */
-struct daos_prop_entry cont_prop_entries_default[CONT_PROP_NUM] = {
+struct daos_prop_entry cont_prop_entries_default_v0[CONT_PROP_NUM_V0] = {
 	{
 		.dpe_type	= DAOS_PROP_CO_LABEL,
-		.dpe_str	= DAOS_PROP_CO_LABEL_DEFAULT,
+		.dpe_str	= "container_label_not_set",
 	}, {
 		.dpe_type	= DAOS_PROP_CO_LAYOUT_TYPE,
 		.dpe_val	= DAOS_PROP_CO_LAYOUT_UNKNOWN,
@@ -72,9 +75,6 @@ struct daos_prop_entry cont_prop_entries_default[CONT_PROP_NUM] = {
 	}, {
 		.dpe_type	= DAOS_PROP_CO_CSUM_SERVER_VERIFY,
 		.dpe_val	= DAOS_PROP_CO_CSUM_SV_OFF,
-	}, {
-		.dpe_type	= DAOS_PROP_CO_SCRUBBER_DISABLED,
-		.dpe_val	= 0,
 	}, {
 		.dpe_type	= DAOS_PROP_CO_REDUN_FAC,
 		.dpe_val	= DAOS_PROP_CO_REDUN_RF0,
@@ -121,6 +121,89 @@ struct daos_prop_entry cont_prop_entries_default[CONT_PROP_NUM] = {
 	}
 };
 
+/** default properties, should cover all optional container properties */
+struct daos_prop_entry cont_prop_entries_default[CONT_PROP_NUM] = {
+	{
+		.dpe_type	= DAOS_PROP_CO_LABEL,
+		.dpe_str	= "container_label_not_set",
+	}, {
+		.dpe_type	= DAOS_PROP_CO_LAYOUT_TYPE,
+		.dpe_val	= DAOS_PROP_CO_LAYOUT_UNKNOWN,
+	}, {
+		.dpe_type	= DAOS_PROP_CO_LAYOUT_VER,
+		.dpe_val	= 1,
+	}, {
+		.dpe_type	= DAOS_PROP_CO_CSUM,
+		.dpe_val	= DAOS_PROP_CO_CSUM_OFF,
+	}, {
+		.dpe_type	= DAOS_PROP_CO_CSUM_CHUNK_SIZE,
+		.dpe_val	= 32 * 1024, /** 32K */
+	}, {
+		.dpe_type	= DAOS_PROP_CO_CSUM_SERVER_VERIFY,
+		.dpe_val	= DAOS_PROP_CO_CSUM_SV_OFF,
+	}, {
+		.dpe_type	= DAOS_PROP_CO_REDUN_FAC,
+		.dpe_val	= DAOS_PROP_CO_REDUN_RF0,
+	}, {
+		.dpe_type	= DAOS_PROP_CO_REDUN_LVL,
+		.dpe_val	= DAOS_PROP_CO_REDUN_RANK,
+	}, {
+		.dpe_type	= DAOS_PROP_CO_SNAPSHOT_MAX,
+		.dpe_val	= 0, /* No limitation */
+	}, {
+		.dpe_type	= DAOS_PROP_CO_ACL,
+		.dpe_val_ptr	= NULL, /* generated dynamically */
+	}, {
+		.dpe_type	= DAOS_PROP_CO_COMPRESS,
+		.dpe_val	= DAOS_PROP_CO_COMPRESS_OFF,
+	}, {
+		.dpe_type	= DAOS_PROP_CO_ENCRYPT,
+		.dpe_val	= DAOS_PROP_CO_ENCRYPT_OFF,
+	}, {
+		.dpe_type	= DAOS_PROP_CO_OWNER,
+		.dpe_str	= "NOBODY@",
+	}, {
+		.dpe_type	= DAOS_PROP_CO_OWNER_GROUP,
+		.dpe_str	= "NOBODY@",
+	}, {
+		.dpe_type	= DAOS_PROP_CO_DEDUP,
+		.dpe_val	= DAOS_PROP_CO_DEDUP_OFF,
+	}, {
+		.dpe_type	= DAOS_PROP_CO_DEDUP_THRESHOLD,
+		.dpe_val	= 4096,
+	}, {
+		.dpe_type	= DAOS_PROP_CO_ROOTS,
+		.dpe_val_ptr	= &dummy_roots, /* overwritten by middlewares */
+	}, {
+		.dpe_type	= DAOS_PROP_CO_STATUS,
+		.dpe_val	= DAOS_PROP_CO_STATUS_VAL(DAOS_PROP_CO_HEALTHY,
+							  0, 0),
+	}, {
+		.dpe_type	= DAOS_PROP_CO_ALLOCED_OID,
+		.dpe_val	= 0,
+	}, {
+		.dpe_type	= DAOS_PROP_CO_EC_CELL_SZ,
+		.dpe_val	= 0, /* inherit from pool by default */
+	}, {
+		.dpe_type	= DAOS_PROP_CO_EC_PDA,
+		.dpe_val	= 0, /* inherit from pool by default */
+	}, {
+		.dpe_type	= DAOS_PROP_CO_RP_PDA,
+		.dpe_val	= 0, /* inherit from pool by default */
+	}, {
+		.dpe_type	= DAOS_PROP_CO_GLOBAL_VERSION,
+		.dpe_val	= 0, /* inherit from pool by default */
+	}, {
+		.dpe_type	= DAOS_PROP_CO_SCRUBBER_DISABLED,
+		.dpe_val	= 0,
+	}
+};
+
+daos_prop_t cont_prop_default_v0 = {
+	.dpp_nr		= CONT_PROP_NUM_V0,
+	.dpp_entries	= cont_prop_entries_default_v0,
+};
+
 daos_prop_t cont_prop_default = {
 	.dpp_nr		= CONT_PROP_NUM,
 	.dpp_entries	= cont_prop_entries_default,
@@ -129,17 +212,27 @@ daos_prop_t cont_prop_default = {
 int
 ds_cont_prop_default_init(void)
 {
-	struct daos_prop_entry	*entry;
+	struct daos_prop_entry	*entry1, *entry2;
 
-	entry = daos_prop_entry_get(&cont_prop_default, DAOS_PROP_CO_ACL);
-	if (entry != NULL) {
+	entry1 = daos_prop_entry_get(&cont_prop_default_v0, DAOS_PROP_CO_ACL);
+	if (entry1 != NULL) {
 		D_DEBUG(DB_MGMT,
-			"Initializing default ACL cont prop\n");
-		entry->dpe_val_ptr = ds_sec_alloc_default_daos_cont_acl();
-		if (entry->dpe_val_ptr == NULL)
+			"Initializing default ACL cont prop v0\n");
+		entry1->dpe_val_ptr = ds_sec_alloc_default_daos_cont_acl();
+		if (entry1->dpe_val_ptr == NULL)
 			return -DER_NOMEM;
 	}
 
+	entry2 = daos_prop_entry_get(&cont_prop_default, DAOS_PROP_CO_ACL);
+	if (entry2 != NULL) {
+		D_DEBUG(DB_MGMT,
+			"Initializing default ACL cont prop\n");
+		entry2->dpe_val_ptr = ds_sec_alloc_default_daos_cont_acl();
+		if (entry2->dpe_val_ptr == NULL) {
+			D_FREE(entry1->dpe_val_ptr);
+			return -DER_NOMEM;
+		}
+	}
 	return 0;
 }
 
@@ -147,6 +240,12 @@ void
 ds_cont_prop_default_fini(void)
 {
 	struct daos_prop_entry	*entry;
+
+	entry = daos_prop_entry_get(&cont_prop_default_v0, DAOS_PROP_CO_ACL);
+	if (entry != NULL) {
+		D_DEBUG(DB_MGMT, "Freeing default ACL cont prop\n");
+		D_FREE(entry->dpe_val_ptr);
+	}
 
 	entry = daos_prop_entry_get(&cont_prop_default, DAOS_PROP_CO_ACL);
 	if (entry != NULL) {

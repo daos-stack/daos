@@ -9,7 +9,7 @@ timeout: 600
 server_config:
   name: daos_server
   servers:
-    log_mask: INFO
+    log_mask: ERR
     bdev_class: nvme
     bdev_list: ["aaaa:aa:aa.a","bbbb:bb:bb.b"]
 pool:

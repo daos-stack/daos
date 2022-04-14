@@ -66,7 +66,7 @@ struct crt_gdata {
 	int			cg_init_prov;
 
 	/** Provider specific data */
-	struct crt_prov_gdata	cg_prov_gdata[CRT_NA_OFI_COUNT];
+	struct crt_prov_gdata	cg_prov_gdata[CRT_NA_COUNT];
 
 	/** global timeout value (second) for all RPCs */
 	uint32_t		cg_timeout;

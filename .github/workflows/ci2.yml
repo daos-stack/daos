@@ -71,10 +71,10 @@ jobs:
         compiler: [clang, gcc]
         include:
           - distro: rocky
-            base: centos.8
+            base: el.8
             with: rockylinux/rockylinux:8
           - distro: fedora
-            base: centos.8
+            base: el.8
             with: fedora:35
           - distro: leap.15
             base: leap.15

@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2021 Intel Corporation.
+// (C) Copyright 2020-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -15,7 +15,8 @@ import (
 	"time"
 
 	"github.com/daos-stack/daos/src/control/drpc"
-	"github.com/daos-stack/daos/src/control/lib/netdetect"
+	"github.com/daos-stack/daos/src/control/lib/hardware/hwloc"
+	"github.com/daos-stack/daos/src/control/lib/hardware/hwprov"
 )
 
 const (
@@ -38,33 +39,27 @@ func (cmd *startCmd) Execute(_ []string) error {
 	sockPath := filepath.Join(cmd.cfg.RuntimeDir, agentSockName)
 	cmd.log.Debugf("Full socket path is now: %s", sockPath)
 
-	drpcServer, err := drpc.NewDomainSocketServer(ctx, cmd.log, sockPath)
+	drpcServer, err := drpc.NewDomainSocketServer(cmd.log, sockPath)
 	if err != nil {
 		cmd.log.Errorf("Unable to create socket server: %v", err)
 		return err
 	}
 
-	aicEnabled := (os.Getenv("DAOS_AGENT_DISABLE_CACHE") != "true")
+	aicEnabled := !cmd.attachInfoCacheDisabled()
 	if !aicEnabled {
-		cmd.log.Debugf("GetAttachInfo agent caching has been disabled\n")
+		cmd.log.Debugf("GetAttachInfo agent caching has been disabled")
 	}
 
-	ficEnabled := (os.Getenv("DAOS_AGENT_DISABLE_OFI_CACHE") != "true")
+	ficEnabled := !cmd.fabricCacheDisabled()
 	if !ficEnabled {
-		cmd.log.Debugf("Local fabric interface caching has been disabled\n")
+		cmd.log.Debugf("Local fabric interface caching has been disabled")
 	}
 
-	netCtx, err := netdetect.Init(context.Background())
-	defer netdetect.CleanUp(netCtx)
+	hwprovFini, err := hwprov.Init(cmd.log)
 	if err != nil {
-		cmd.log.Errorf("Unable to initialize netdetect services")
 		return err
 	}
-
-	numaAware := netdetect.HasNUMA(netCtx)
-	if !numaAware {
-		cmd.log.Debugf("This system is not NUMA aware.  Any devices found are reported as NUMA node 0.")
-	}
+	defer hwprovFini()
 
 	procmon := NewProcMon(cmd.log, cmd.ctlInvoker, cmd.cfg.SystemName)
 	procmon.startMonitoring(ctx)
@@ -84,12 +79,18 @@ func (cmd *startCmd) Execute(_ []string) error {
 		ctlInvoker: cmd.ctlInvoker,
 		attachInfo: newAttachInfoCache(cmd.log, aicEnabled),
 		fabricInfo: fabricCache,
-		numaAware:  numaAware,
-		netCtx:     netCtx,
+		numaGetter: hwprov.DefaultProcessNUMAProvider(cmd.log),
 		monitor:    procmon,
 	})
 
-	err = drpcServer.Start()
+	// Cache hwloc data in context on startup, since it'll be used extensively at runtime.
+	hwlocCtx, err := hwloc.CacheContext(ctx, cmd.log)
+	if err != nil {
+		return err
+	}
+	defer hwloc.Cleanup(hwlocCtx)
+
+	err = drpcServer.Start(hwlocCtx)
 	if err != nil {
 		cmd.log.Errorf("Unable to start socket server on %s: %v", sockPath, err)
 		return err
@@ -122,8 +123,15 @@ func (cmd *startCmd) Execute(_ []string) error {
 		}
 	}()
 	<-finish
-	drpcServer.Shutdown()
 
 	cmd.log.Debugf("shutdown complete in %s", time.Since(shutdownRcvd))
 	return nil
+}
+
+func (cmd *startCmd) attachInfoCacheDisabled() bool {
+	return cmd.cfg.DisableCache || os.Getenv("DAOS_AGENT_DISABLE_CACHE") == "true"
+}
+
+func (cmd *startCmd) fabricCacheDisabled() bool {
+	return cmd.cfg.DisableCache || os.Getenv("DAOS_AGENT_DISABLE_OFI_CACHE") == "true"
 }

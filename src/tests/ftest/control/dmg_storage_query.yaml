@@ -1,6 +1,6 @@
 # change host names to your reserved nodes, the
 # required quantity is indicated by the placeholders
-timeout: 75
+timeout: 255
 hosts:
   test_servers:
     - server-A

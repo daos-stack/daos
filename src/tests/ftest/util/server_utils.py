@@ -14,7 +14,8 @@ import random
 
 from avocado import fail_on
 
-from command_utils_base import CommandFailure, CommonConfig
+from command_utils_base import CommonConfig
+from exception_utils import CommandFailure
 from command_utils import SubprocessManager
 from general_utils import pcmd, get_log_file, human_to_bytes, bytes_to_human, \
     convert_list, get_default_config_file, distribute_files, DaosTestError, \
@@ -203,8 +204,6 @@ class DaosServerManager(SubprocessManager):
         if storage:
             # Prepare server storage
             if self.manager.job.using_nvme or self.manager.job.using_dcpm:
-                self.log.info("Preparing storage in <format> mode")
-                self.prepare_storage("root")
                 if hasattr(self.manager, "mca"):
                     self.manager.mca.update({"plm_rsh_args": "-l root"}, "orterun.mca", True)
 
@@ -293,10 +292,6 @@ class DaosServerManager(SubprocessManager):
         elif not using_dcpm and using_nvme:
             cmd.sub_command_class.sub_command_class.nvme_only.value = True
 
-        if using_nvme:
-            hugepages = self.get_config_value("nr_hugepages")
-            cmd.sub_command_class.sub_command_class.hugepages.value = hugepages
-
         self.log.info("Preparing DAOS server storage: %s", str(cmd))
         results = run_pcmd(self._hosts, str(cmd), timeout=40)
 
@@ -310,7 +305,7 @@ class DaosServerManager(SubprocessManager):
             result[res["exit_status"]].add(res["hosts"])
 
         if len(result) > 1 or 0 not in result or \
-            (using_dcpm and "No SCM modules detected; skipping operation" in stdouts):
+           (using_dcpm and "No SCM modules detected; skipping operation" in stdouts):
             dev_type = "nvme"
             if using_dcpm and using_nvme:
                 dev_type = "dcpm & nvme"
@@ -627,8 +622,7 @@ class DaosServerManager(SubprocessManager):
             data = self.get_current_state()
             if not data:
                 # The regex failed to get the rank and state
-                raise ServerFailed(
-                "Error obtaining {} output: {}".format(self.dmg, data))
+                raise ServerFailed("Error obtaining {} output: {}".format(self.dmg, data))
             checks += 1
             if data[rank]["state"] == valid_state:
                 return True
@@ -801,7 +795,7 @@ class DaosServerManager(SubprocessManager):
         """Forcibly terminate any server process running on hosts."""
         regex = self.manager.job.command_regex
         # Try to dump all server's ULTs stacks before kill.
-        result = stop_processes(self._hosts, regex, dump_ult_stacks=True)
+        result = stop_processes(self._hosts, regex)
         if 0 in result and len(result) == 1:
             print("No remote {} server processes killed (none found), done.".format(regex))
         else:

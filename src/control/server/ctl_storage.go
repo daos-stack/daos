@@ -14,6 +14,7 @@ import (
 	"github.com/dustin/go-humanize"
 	"github.com/pkg/errors"
 
+	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/server/engine"
 	"github.com/daos-stack/daos/src/control/server/storage"
@@ -24,36 +25,7 @@ type StorageControlService struct {
 	log             logging.Logger
 	storage         *storage.Provider
 	instanceStorage map[uint32]*storage.Config
-}
-
-// Setup performs storage discovery and validates existence of configured devices.
-func (scs *StorageControlService) Setup() {
-	if _, err := scs.ScmScan(storage.ScmScanRequest{}); err != nil {
-		scs.log.Debugf("%s", errors.Wrap(err, "Warning, SCM Scan"))
-	}
-
-	bdevAddrs := &storage.BdevDeviceList{}
-	for _, storageCfg := range scs.instanceStorage {
-		for _, tierCfg := range storageCfg.Tiers.BdevConfigs() {
-			if tierCfg.Class != storage.ClassNvme {
-				// don't scan if any tier is using emulated NVMe
-				return
-			}
-			if err := bdevAddrs.Add(tierCfg.Bdev.DeviceList.Addresses()...); err != nil {
-				scs.log.Debugf("%s", errors.Wrap(err, "Failed to add bdev addresses"))
-			}
-		}
-	}
-
-	nvmeScanResp, err := scs.NvmeScan(storage.BdevScanRequest{
-		DeviceList: bdevAddrs,
-	})
-	if err != nil {
-		scs.log.Debugf("%s", errors.Wrap(err, "Warning, NVMe Scan"))
-		return
-	}
-
-	scs.storage.SetBdevCache(*nvmeScanResp)
+	getHugePageInfo common.GetHugePageInfoFn
 }
 
 // GetScmState performs required initialization and returns current state
@@ -84,6 +56,7 @@ func (scs *StorageControlService) NvmePrepare(req storage.BdevPrepareRequest) (*
 
 // NvmeScan scans locally attached SSDs.
 func (scs *StorageControlService) NvmeScan(req storage.BdevScanRequest) (*storage.BdevScanResponse, error) {
+	scs.log.Debugf("calling bdev provider scan: %+v", req)
 	return scs.storage.ScanBdevs(req)
 }
 
@@ -93,7 +66,7 @@ func (scs *StorageControlService) WithVMDEnabled() *StorageControlService {
 	return scs
 }
 
-func newStorageControlService(l logging.Logger, ecs []*engine.Config, sp *storage.Provider) *StorageControlService {
+func newStorageControlService(l logging.Logger, ecs []*engine.Config, sp *storage.Provider, hpiFn common.GetHugePageInfoFn) *StorageControlService {
 	instanceStorage := make(map[uint32]*storage.Config)
 	for i, c := range ecs {
 		instanceStorage[uint32(i)] = &c.Storage
@@ -103,6 +76,7 @@ func newStorageControlService(l logging.Logger, ecs []*engine.Config, sp *storag
 		log:             l,
 		storage:         sp,
 		instanceStorage: instanceStorage,
+		getHugePageInfo: hpiFn,
 	}
 }
 
@@ -112,6 +86,7 @@ func NewStorageControlService(log logging.Logger, engineCfgs []*engine.Config) *
 		storage.DefaultProvider(log, 0, &storage.Config{
 			Tiers: nil,
 		}),
+		common.GetHugePageInfo,
 	)
 }
 
@@ -122,6 +97,9 @@ func NewMockStorageControlService(log logging.Logger, engineCfgs []*engine.Confi
 		storage.MockProvider(log, 0, &storage.Config{
 			Tiers: nil,
 		}, sys, scm, bdev),
+		func() (*common.HugePageInfo, error) {
+			return nil, nil
+		},
 	)
 }
 
@@ -158,12 +136,12 @@ func (cs *ControlService) getScmUsage(ssr *storage.ScmScanResponse) (*storage.Sc
 			continue // skip if not running
 		}
 
-		cfg, err := ei.GetScmConfig()
+		cfg, err := ei.GetStorage().GetScmConfig()
 		if err != nil {
 			return nil, err
 		}
 
-		mount, err := ei.GetScmUsage()
+		mount, err := ei.GetStorage().GetScmUsage()
 		if err != nil {
 			return nil, err
 		}
@@ -222,7 +200,7 @@ func (cs *ControlService) scanAssignedBdevs(ctx context.Context, statsReq bool) 
 	ctrlrs := storage.NvmeControllers{}
 
 	for _, ei := range instances {
-		if !ei.HasBlockDevices() {
+		if !ei.GetStorage().HasBlockDevices() {
 			continue
 		}
 

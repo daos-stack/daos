@@ -1032,6 +1032,7 @@ jump_map_query(struct pl_map *map, struct pl_map_attr *attr)
  *                              place the object shard.
  * \param[in]   md              The object metadata which contains data about
  *                              the object being placed such as the object ID.
+ * \param[in]   mode		mode of daos_obj_open(DAOS_OO_RO, DAOS_OO_RW etc).
  * \param[in]   shard_md        Shard metadata.
  * \param[out]  layout_pp       The layout generated for the object. Contains
  *                              references to the targets in the pool map where
@@ -1043,7 +1044,7 @@ jump_map_query(struct pl_map *map, struct pl_map_attr *attr)
  */
 static int
 jump_map_obj_place(struct pl_map *map, struct daos_obj_md *md,
-		   struct daos_obj_shard_md *shard_md,
+		   unsigned int mode, struct daos_obj_shard_md *shard_md,
 		   struct pl_obj_layout **layout_pp)
 {
 	struct pl_jump_map	*jmap;
@@ -1088,10 +1089,11 @@ jump_map_obj_place(struct pl_map *map, struct daos_obj_md *md,
 	if (is_pool_adding(root))
 		is_adding_new = true;
 
-	/* If the layout might being extended, i.e. so extra shards needs
-	 * to be added to the layout.
+	/**
+	 * If the layout might being extended, i.e. so extra shards needs
+	 * to be added to the layout. But this is only needed for update.
 	 */
-	if (unlikely(is_extending || is_adding_new)) {
+	if (unlikely(is_extending || is_adding_new) && !(mode & DAOS_OO_RO)) {
 		/* Needed to check if domains are being added to pool map */
 		D_DEBUG(DB_PL, DF_OID"/%d is being added: %s or extended: %s\n",
 			DP_OID(oid), md->omd_ver, is_adding_new ? "yes" : "no",
@@ -1104,10 +1106,6 @@ jump_map_obj_place(struct pl_map *map, struct daos_obj_md *md,
 		if (is_extending)
 			allow_status |= PO_COMP_ST_UP;
 
-		/* Don't repeat remapping failed shards during this phase -
-		 * they have already been remapped.
-		 */
-		allow_status |= PO_COMP_ST_DOWN;
 		rc = obj_layout_alloc_and_get(jmap, &jmop, md, allow_status, -1,
 					      &extend_layout, NULL, NULL);
 		if (rc)
@@ -1148,9 +1146,9 @@ out:
  * \param[in]   md              Metadata describing the object.
  * \param[in]   shard_md        Metadata describing how the shards.
  * \param[in]   rebuild_ver     Current Rebuild version
- * \param[out]   tgt_rank       The rank of the targets that need to be rebuild
- *                              will be stored in this array to be passed out
- *                              (this is allocated by the caller)
+ * \param[out]   tgt_rank       The engine rank of the targets that need to be
+ *                              rebuilt will be stored in this array to be passed
+ *                              out (this is allocated by the caller)
  * \param[out]   shard_id       The shard IDs of the shards that need to be
  *                              rebuilt (This is allocated by the caller)
  * \param[in]   array_size      The max size of the passed in arrays to store

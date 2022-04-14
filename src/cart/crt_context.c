@@ -221,13 +221,15 @@ crt_context_provider_create(crt_context_t *crt_ctx, int provider)
 		D_GOTO(out, rc);
 	}
 
-	rc = crt_hg_get_addr(ctx->cc_hg_ctx.chc_hgcla,
-			     ctx->cc_self_uri, &uri_len);
-	if (rc != 0) {
-		D_ERROR("ctx_hg_get_addr() failed; rc: %d.\n", rc);
-		D_RWLOCK_UNLOCK(&crt_gdata.cg_rwlock);
-		crt_context_destroy(ctx, true);
-		D_GOTO(out, rc);
+	if (crt_is_service()) {
+		rc = crt_hg_get_addr(ctx->cc_hg_ctx.chc_hgcla,
+				     ctx->cc_self_uri, &uri_len);
+		if (rc != 0) {
+			D_ERROR("ctx_hg_get_addr() failed; rc: %d.\n", rc);
+			D_RWLOCK_UNLOCK(&crt_gdata.cg_rwlock);
+			crt_context_destroy(ctx, true);
+			D_GOTO(out, rc);
+		}
 	}
 
 	ctx->cc_idx = cur_ctx_num;

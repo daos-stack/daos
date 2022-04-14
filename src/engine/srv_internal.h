@@ -79,6 +79,7 @@ struct dss_xstream {
 	bool			dx_main_xs;	/* true for main XS */
 	bool			dx_comm;	/* true with cart context */
 	bool			dx_dsc_started;	/* DSC progress ULT started */
+	bool			dx_progress_started;	/* Network poll started */
 };
 
 /** Engine module's metrics */
@@ -139,6 +140,7 @@ int dss_module_cleanup_all(void);
 extern struct dss_module_key daos_srv_modkey;
 int dss_srv_init(void);
 int dss_srv_fini(bool force);
+void dss_srv_set_shutting_down(void);
 void dss_dump_ABT_state(FILE *fp);
 void dss_xstreams_open_barrier(void);
 struct dss_xstream *dss_get_xstream(int stream_id);
@@ -196,7 +198,6 @@ extern bool sched_watchdog_all;
 
 void dss_sched_fini(struct dss_xstream *dx);
 int dss_sched_init(struct dss_xstream *dx);
-int sched_set_throttle(unsigned int type, unsigned int percent);
 int sched_req_enqueue(struct dss_xstream *dx, struct sched_req_attr *attr,
 		      void (*func)(void *), void *arg);
 void sched_stop(struct dss_xstream *dx);

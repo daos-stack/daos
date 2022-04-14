@@ -199,9 +199,10 @@ func TestBackend_newSpdkConfig(t *testing.T) {
 						WithScmMountPoint(mockMntpt),
 					cfg,
 				).
-				WithStorageEnableHotplug(tc.enableHotplug)
+				WithStorageEnableHotplug(tc.enableHotplug).
+				WithPinnedNumaNode(0)
 
-			gotValidateErr := engineConfig.Validate(context.TODO(), log) // populate output path
+			gotValidateErr := engineConfig.Validate(log, nil) // populate output path
 			common.CmpErr(t, tc.expValidateErr, gotValidateErr)
 			if tc.expValidateErr != nil {
 				return

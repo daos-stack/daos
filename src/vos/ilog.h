@@ -166,7 +166,15 @@ struct ilog_entry {
 	int32_t		ie_idx;
 };
 
-#define ILOG_PRIV_SIZE 416
+#define ILOG_PRIV_SIZE 408
+/* Information about ilog entries */
+struct ilog_info {
+	/** Status of ilog entry */
+	int16_t		ii_status;
+	/** Used internally to indicate removal during aggregation */
+	uint16_t	ii_removed;
+};
+
 /** Structure for storing the full incarnation log for ilog_fetch.  The
  * fields shouldn't generally be accessed directly but via the iteration
  * APIs below.
@@ -174,7 +182,8 @@ struct ilog_entry {
 struct ilog_entries {
 	/** Array of log entries */
 	struct ilog_id		*ie_ids;
-	uint32_t		*ie_statuses;
+	/** Parsed information about each ilog entry */
+	struct ilog_info	*ie_info;
 	/** Number of entries in the log */
 	int64_t			 ie_num_entries;
 	/** Private log data */
@@ -256,7 +265,7 @@ ilog_cache_entry(const struct ilog_entries *entries, struct ilog_entry *entry, i
 {
 	entry->ie_id.id_value = entries->ie_ids[idx].id_value;
 	entry->ie_id.id_epoch = entries->ie_ids[idx].id_epoch;
-	entry->ie_status = entries->ie_statuses[idx];
+	entry->ie_status = entries->ie_info[idx].ii_status;
 	return true;
 }
 

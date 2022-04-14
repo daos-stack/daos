@@ -1,0 +1,17 @@
+hosts:
+  test_servers:
+    - server-A
+  test_clients:
+    - client-C
+# Test typically takes around 15 minutes, set timeout for 30.
+timeout: 1800
+server_config:
+  name: daos_server
+pool:
+  size: 5GiB
+  control_method: dmg
+container:
+  type: POSIX
+  control_method: daos
+dfuse:
+  mount_dir: "/tmp/daos_dfuse/"
