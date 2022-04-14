@@ -39,8 +39,8 @@ func SystemCheckStart(ctx context.Context, rpcClient UnaryInvoker, req *SystemCh
 		return errors.Errorf("nil %T", req)
 	}
 
+	req.CheckStartReq.Sys = req.getSystem(rpcClient)
 	req.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
-		req.CheckStartReq.Sys = req.getSystem(rpcClient)
 		return mgmtpb.NewMgmtSvcClient(conn).SystemCheckStart(ctx, &req.CheckStartReq)
 	})
 	rpcClient.Debugf("DAOS system check start request: %+v", req)
@@ -71,8 +71,8 @@ func SystemCheckStop(ctx context.Context, rpcClient UnaryInvoker, req *SystemChe
 		return errors.Errorf("nil %T", req)
 	}
 
+	req.CheckStopReq.Sys = req.getSystem(rpcClient)
 	req.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
-		req.CheckStopReq.Sys = req.getSystem(rpcClient)
 		return mgmtpb.NewMgmtSvcClient(conn).SystemCheckStop(ctx, &req.CheckStopReq)
 	})
 	rpcClient.Debugf("DAOS system check stop request: %+v", req)
@@ -115,8 +115,8 @@ func SystemCheckQuery(ctx context.Context, rpcClient UnaryInvoker, req *SystemCh
 		return nil, errors.Errorf("nil %T", req)
 	}
 
+	req.CheckQueryReq.Sys = req.getSystem(rpcClient)
 	req.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
-		req.CheckQueryReq.Sys = req.getSystem(rpcClient)
 		return mgmtpb.NewMgmtSvcClient(conn).SystemCheckQuery(ctx, &req.CheckQueryReq)
 	})
 	rpcClient.Debugf("DAOS system check query request: %+v", req)
@@ -161,8 +161,8 @@ func SystemCheckProp(ctx context.Context, rpcClient UnaryInvoker, req *SystemChe
 		return nil, errors.Errorf("nil %T", req)
 	}
 
+	req.CheckPropReq.Sys = req.getSystem(rpcClient)
 	req.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
-		req.CheckPropReq.Sys = req.getSystem(rpcClient)
 		return mgmtpb.NewMgmtSvcClient(conn).SystemCheckProp(ctx, &req.CheckPropReq)
 	})
 	rpcClient.Debugf("DAOS system check prop request: %+v", req)
