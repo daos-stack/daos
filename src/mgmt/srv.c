@@ -81,6 +81,9 @@ process_drpc_request(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	case DRPC_METHOD_MGMT_POOL_DESTROY:
 		ds_mgmt_drpc_pool_destroy(drpc_req, drpc_resp);
 		break;
+	case DRPC_METHOD_MGMT_POOL_UPGRADE:
+		ds_mgmt_drpc_pool_upgrade(drpc_req, drpc_resp);
+		break;
 	case DRPC_METHOD_MGMT_POOL_EVICT:
 		ds_mgmt_drpc_pool_evict(drpc_req, drpc_resp);
 		break;

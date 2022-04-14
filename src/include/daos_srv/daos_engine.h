@@ -219,8 +219,10 @@ enum {
 	SCHED_REQ_GC,
 	SCHED_REQ_SCRUB,
 	SCHED_REQ_MIGRATE,
-	SCHED_REQ_ANONYM,
 	SCHED_REQ_MAX,
+	/* Anonymous request which doesn't associate to a DAOS pool */
+	SCHED_REQ_ANONYM = SCHED_REQ_MAX,
+	SCHED_REQ_TYPE_MAX,
 };
 
 enum {

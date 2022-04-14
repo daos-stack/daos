@@ -1517,16 +1517,16 @@ rdb_raft_compact(struct rdb *db, uint64_t index)
 	return 0;
 }
 
-static inline bool
+static inline int
 rdb_gc_yield(void *arg)
 {
 	struct dss_xstream	*dx = dss_current_xstream();
 
 	if (dss_xstream_exiting(dx))
-		return true;
+		return -1;
 
 	ABT_thread_yield();
-	return false;
+	return 0;
 }
 
 /* Daemon ULT for compacting polled entries (i.e., indices <= base). */
@@ -2534,6 +2534,7 @@ rdb_raft_start(struct rdb *db)
 		goto err_compact_cv;
 	}
 
+	raft_set_nodeid(db->d_raft, dss_self_rank());
 	raft_set_callbacks(db->d_raft, &rdb_raft_cbs, db);
 
 	rc = rdb_raft_load(db);

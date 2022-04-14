@@ -1043,6 +1043,145 @@ out:
 	return rc;
 }
 
+static bool	stop_progress;
+static int	polled_events;
+pthread_mutex_t	eqh_mutex;
+
+static void *
+th_eq_poll(void *arg)
+{
+	struct daos_event	*eps[EQT_EV_COUNT] = { 0 };
+
+	while (1) {
+		int rc;
+
+		if (stop_progress)
+			pthread_exit(NULL);
+
+		rc = daos_eq_poll(my_eqh, 0, DAOS_EQ_NOWAIT, EQT_EV_COUNT, eps);
+		if (rc < 0) {
+			print_error("EQ poll failed: %d\n", rc);
+			rc = -1;
+			pthread_exit(NULL);
+		}
+
+		if (rc) {
+			D_MUTEX_LOCK(&eqh_mutex);
+			polled_events += rc;
+			D_MUTEX_UNLOCK(&eqh_mutex);
+		}
+	}
+}
+
+static int
+eq_test_9()
+{
+	struct daos_event	*events[EQT_EV_COUNT] = { 0 };
+	struct daos_event	*eps[EQT_EV_COUNT] = { 0 };
+	int			nr_threads;
+	cpu_set_t		cpuset;
+	pthread_t		*c_th = NULL;
+	int			rc;
+	int			i;
+
+	DAOS_TEST_ENTRY("9", "Event multi thread EQ pollers");
+
+	rc = D_MUTEX_INIT(&eqh_mutex, NULL);
+	if (rc)
+		D_GOTO(out, rc);
+
+	rc = sched_getaffinity(0, sizeof(cpuset), &cpuset);
+	if (rc != 0) {
+		printf("Failed to get cpuset information\n");
+		D_GOTO(out, rc = -DER_INVAL);
+	}
+	nr_threads = CPU_COUNT(&cpuset);
+
+	print_message("create and launch events\n");
+	for (i = 0; i < EQT_EV_COUNT; i++) {
+		D_ALLOC_PTR_NZ(events[i]);
+		if (events[i] == NULL) {
+			rc = -ENOMEM;
+			goto out;
+		}
+		rc = daos_event_init(events[i], my_eqh, NULL);
+		if (rc != 0)
+			goto out;
+
+		rc = daos_event_launch(events[i]);
+		if (rc != 0) {
+			print_error("Failed to launch event %d: %d\n", i, rc);
+			goto out;
+		}
+	}
+
+	D_ALLOC_ARRAY(c_th, nr_threads);
+	if (c_th == NULL)
+		D_GOTO(out, rc = -DER_NOMEM);
+
+	polled_events = 0;
+	print_message("create %d progress threads.\n", nr_threads);
+	for (i = 0; i < nr_threads; i++) {
+		rc = pthread_create(&c_th[i], NULL, th_eq_poll, NULL);
+		if (rc != 0) {
+			print_error("Failed to create pthread: %d\n", rc);
+			D_GOTO(out, rc);
+		}
+	}
+
+	/** Complete the events */
+	for (i = 0; i < EQT_EV_COUNT; i++)
+		daos_event_complete(events[i], 0);
+
+	while (1) {
+		rc = daos_eq_query(my_eqh, DAOS_EQR_ALL, 0, NULL);
+		if (rc == 0) {
+			stop_progress = true;
+			break;
+		}
+	}
+
+	for (i = 0; i < nr_threads; i++) {
+		rc = pthread_join(c_th[i], NULL);
+		if (rc != 0) {
+			print_error("Failed pthread_join: %d\n", rc);
+			D_GOTO(out, rc);
+		}
+	}
+
+	print_message("total polled events = %d\n", polled_events);
+	if (polled_events != EQT_EV_COUNT) {
+		print_error("Total polled events (%d) != total events (%d)\n",
+			    polled_events, EQT_EV_COUNT);
+		rc = -1;
+		D_GOTO(out, rc);
+	}
+
+	rc = daos_eq_poll(my_eqh, 0, DAOS_EQ_NOWAIT, EQT_EV_COUNT, eps);
+	if (rc < 0) {
+		rc = -1;
+		goto out;
+	}
+	D_ASSERT(rc == 0);
+
+	rc = 0;
+out:
+	for (i = 0; i < EQT_EV_COUNT; i++) {
+		if (events[i] != NULL) {
+			rc = daos_event_fini(events[i]);
+			if (rc == -DER_BUSY) {
+				daos_event_complete(events[i], 0);
+				rc = daos_event_fini(events[i]);
+			}
+			D_FREE(events[i]);
+		}
+	}
+	D_FREE(c_th);
+	D_MUTEX_DESTROY(&eqh_mutex);
+	DAOS_TEST_EXIT(rc);
+	return rc;
+}
+
 int
 main(int argc, char **argv)
 {
@@ -1122,6 +1261,12 @@ main(int argc, char **argv)
 	rc = eq_test_8();
 	if (rc != 0) {
 		print_error("EQ TEST 8 failed: %d\n", rc);
+		test_fail++;
+	}
+
+	rc = eq_test_9();
+	if (rc != 0) {
+		print_error("EQ TEST 1 failed: %d\n", rc);
 		test_fail++;
 	}
 

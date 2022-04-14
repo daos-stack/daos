@@ -110,7 +110,7 @@ struct daos_rebuild_status {
 	/** errno for rebuild failure */
 	int32_t			rs_errno;
 	/**
-	 * rebuild state, DRS_COMPLETED is valid only if @rs_version is non-zero
+	 * rebuild state, DRS_COMPLETED is valid only if #rs_version is non-zero
 	 */
 	union {
 		int32_t		rs_state;

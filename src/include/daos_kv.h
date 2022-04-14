@@ -19,13 +19,13 @@
 extern "C" {
 #endif
 
-/* Conditional Op: Insert key if it doesn't exist, fail otherwise */
+/** Conditional Op: Insert key if it doesn't exist, fail otherwise */
 #define DAOS_COND_KEY_INSERT	DAOS_COND_DKEY_INSERT
-/* Conditional Op: Update key if it exists, fail otherwise */
+/** Conditional Op: Update key if it exists, fail otherwise */
 #define DAOS_COND_KEY_UPDATE	DAOS_COND_DKEY_UPDATE
-/* Conditional Op: Get key if it exists, fail otherwise */
+/** Conditional Op: Get key if it exists, fail otherwise */
 #define DAOS_COND_KEY_GET	DAOS_COND_DKEY_FETCH
-/* Conditional Op: Remove key if it exists, fail otherwise */
+/** Conditional Op: Remove key if it exists, fail otherwise */
 #define DAOS_COND_KEY_REMOVE	DAOS_COND_PUNCH
 
 /**

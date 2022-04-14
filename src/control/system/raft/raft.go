@@ -1,10 +1,10 @@
 //
-// (C) Copyright 2020-2021 Intel Corporation.
+// (C) Copyright 2020-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
 
-package system
+package raft
 
 import (
 	"encoding/json"
@@ -19,6 +19,7 @@ import (
 	"google.golang.org/grpc"
 
 	"github.com/daos-stack/daos/src/control/logging"
+	"github.com/daos-stack/daos/src/control/system"
 )
 
 // This file contains the "guts" of the new MS database. The basic theory
@@ -58,7 +59,7 @@ type (
 	// particular, it specifies whether or not the NextRank counter should
 	// be incremented in order for the next new member to receive a unique rank.
 	memberUpdate struct {
-		Member   *Member
+		Member   *system.Member
 		NextRank bool
 	}
 )
@@ -73,6 +74,18 @@ func (ro raftOp) String() string {
 		"updatePoolService",
 		"removePoolService",
 	}[ro]
+}
+
+// IsRaftLeadershipError returns true if the given error is a known
+// leadership error returned by the raft library.
+func IsRaftLeadershipError(err error) bool {
+	switch errors.Cause(err) {
+	case raft.ErrLeadershipLost, raft.ErrLeadershipTransferInProgress,
+		raft.ErrNotLeader:
+		return true
+	default:
+		return false
+	}
 }
 
 // ResignLeadership causes this instance to give up its raft
@@ -286,7 +299,7 @@ func (db *Database) submitMemberUpdate(op raftOp, m *memberUpdate) error {
 
 // submitPoolUpdate submits the given pool service update operation to
 // the raft service.
-func (db *Database) submitPoolUpdate(op raftOp, ps *PoolService) error {
+func (db *Database) submitPoolUpdate(op raftOp, ps *system.PoolService) error {
 	ps.LastUpdate = time.Now()
 	data, err := createRaftUpdate(op, ps)
 	if err != nil {
@@ -299,7 +312,17 @@ func (db *Database) submitPoolUpdate(op raftOp, ps *PoolService) error {
 // submitRaftUpdate submits the serialized operation to the raft service.
 func (db *Database) submitRaftUpdate(data []byte) error {
 	return db.raft.withReadLock(func(svc raftService) error {
-		return svc.Apply(data, 0).Error()
+		err := svc.Apply(data, 0).Error()
+
+		// In the case that leadership is lost while trying to
+		// apply an update, return a sentinel error that may
+		// signal some callers to retry the operation on the
+		// new leader.
+		if IsRaftLeadershipError(err) {
+			return system.ErrRaftUnavail
+		}
+
+		return err
 	})
 }
 
@@ -389,7 +412,7 @@ func (d *dbData) applyMemberUpdate(op raftOp, data []byte, panicFn func(error)) 
 // applyPoolUpdate is responsible for applying the pool service update
 // operation to the database.
 func (d *dbData) applyPoolUpdate(op raftOp, data []byte, panicFn func(error)) {
-	ps := new(PoolService)
+	ps := new(system.PoolService)
 	if err := json.Unmarshal(data, ps); err != nil {
 		panicFn(errors.Wrap(err, "failed to decode pool service update"))
 		return

@@ -107,9 +107,8 @@ type storageFormatCmd struct {
 	ctlInvokerCmd
 	hostListCmd
 	jsonOutputCmd
-	Verbose  bool `short:"v" long:"verbose" description:"Show results of each SCM & NVMe device format operation"`
-	Reformat bool `long:"reformat" description:"Alias for --force, will be removed in a future release"`
-	Force    bool `long:"force" description:"Force storage format on a host, stopping any running engines (CAUTION: destructive operation)"`
+	Verbose bool `short:"v" long:"verbose" description:"Show results of each SCM & NVMe device format operation"`
+	Force   bool `long:"force" description:"Force storage format on a host, stopping any running engines (CAUTION: destructive operation)"`
 }
 
 // Execute is run when storageFormatCmd activates.
@@ -120,14 +119,6 @@ func (cmd *storageFormatCmd) Execute(args []string) (err error) {
 
 	req := &control.StorageFormatReq{Reformat: cmd.Force}
 	req.SetHostList(cmd.hostlist)
-
-	// TODO (DAOS-7080): Deprecate this parameter in favor of wiping SCM
-	// during the erase operation. For the moment, though, the reworked
-	// logic will prevent format of a running system, so the main use case
-	// here is to enable backward-compatibility for existing scripts.
-	if cmd.Reformat {
-		req.Reformat = true
-	}
 
 	resp, err := control.StorageFormat(ctx, cmd.ctlInvoker, req)
 	if err != nil {

@@ -33,6 +33,7 @@ import (
 	"github.com/daos-stack/daos/src/control/server/engine"
 	"github.com/daos-stack/daos/src/control/server/storage"
 	"github.com/daos-stack/daos/src/control/system"
+	"github.com/daos-stack/daos/src/control/system/raft"
 )
 
 func processConfig(log *logging.LeveledLogger, cfg *config.Server, fis *hardware.FabricInterfaceSet) (*system.FaultDomain, error) {
@@ -107,7 +108,7 @@ type server struct {
 
 	harness      *EngineHarness
 	membership   *system.Membership
-	sysdb        *system.Database
+	sysdb        *raft.Database
 	pubSub       *events.PubSub
 	evtForwarder *control.EventForwarder
 	evtLogger    *control.EventLogger
@@ -160,7 +161,7 @@ func (srv *server) createServices(ctx context.Context) error {
 
 	// If this daos_server instance ends up being the MS leader,
 	// this will record the DAOS system membership.
-	sysdb, err := system.NewDatabase(srv.log, &system.DatabaseConfig{
+	sysdb, err := raft.NewDatabase(srv.log, &raft.DatabaseConfig{
 		Replicas:   dbReplicas,
 		RaftDir:    cfgGetRaftDir(srv.cfg),
 		SystemName: srv.cfg.SystemName,
@@ -213,6 +214,21 @@ func (srv *server) shutdown() {
 	for _, fn := range onShutdownCbs {
 		fn()
 	}
+}
+
+func (srv *server) setCoreDumpFilter() error {
+	if srv.cfg.CoreDumpFilter == 0 {
+		return nil
+	}
+
+	srv.log.Debugf("setting core dump filter to 0x%x", srv.cfg.CoreDumpFilter)
+
+	// Set core dump filter.
+	if err := writeCoreDumpFilter(srv.log, "/proc/self/coredump_filter", srv.cfg.CoreDumpFilter); err != nil {
+		return errors.Wrap(err, "failed to set core dump filter")
+	}
+
+	return nil
 }
 
 // initNetwork resolves local address and starts TCP listener.
@@ -449,6 +465,10 @@ func Start(log *logging.LeveledLogger, cfg *config.Server) error {
 		return err
 	}
 	defer srv.shutdown()
+
+	if err := srv.setCoreDumpFilter(); err != nil {
+		return err
+	}
 
 	if srv.netDevClass, err = getFabricNetDevClass(cfg, fiSet); err != nil {
 		return err

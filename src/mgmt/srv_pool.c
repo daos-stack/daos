@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2021 Intel Corporation.
+ * (C) Copyright 2016-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -582,6 +582,14 @@ ds_mgmt_pool_set_prop(uuid_t pool_uuid, d_rank_list_t *svc_ranks,
 
 out:
 	return rc;
+}
+
+int ds_mgmt_pool_upgrade(uuid_t pool_uuid, d_rank_list_t *svc_ranks)
+{
+	D_DEBUG(DB_MGMT, "Upgrading pool "DF_UUID"\n",
+		DP_UUID(pool_uuid));
+
+	return ds_pool_svc_upgrade(pool_uuid, svc_ranks);
 }
 
 int

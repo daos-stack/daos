@@ -16,13 +16,7 @@ def scons():
 
     tenv = base_env.Clone()
 
-    libs = ['cart', 'gurt', 'pthread', 'm']
-    if not GetOption('help') and not GetOption('clean'):
-        mpi = daos_build.configure_mpi(tenv, libs)
-        if mpi is None:
-            print("\nSkipping compilation for tests that need MPI")
-            print("Install and load mpich or openmpi\n")
-            return
+    libs = ['dpar', 'cart', 'gurt', 'pthread', 'm']
 
     tenv.AppendUnique(LIBS=libs)
     prereqs.require(tenv, 'mercury')
