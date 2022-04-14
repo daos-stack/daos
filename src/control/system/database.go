@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2021 Intel Corporation.
+// (C) Copyright 2020-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -461,8 +461,7 @@ func (db *Database) monitorLeadershipState(parent context.Context) {
 					cancelGainedCtx()
 				}
 				runOnLeadershipLost()
-
-				return
+				break
 			}
 
 			db.log.Debugf("node %s gained MS leader state", db.replicaAddr)

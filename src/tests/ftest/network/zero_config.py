@@ -1,6 +1,6 @@
 #!/usr/bin/python
 """
-  (C) Copyright 2020-2021 Intel Corporation.
+  (C) Copyright 2020-2022 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -12,7 +12,7 @@ import random
 from avocado import fail_on
 from apricot import TestWithServers
 from daos_racer_utils import DaosRacerCommand
-from command_utils import CommandFailure
+from exception_utils import CommandFailure
 from general_utils import check_file_exists, get_host_data, get_log_file, run_pcmd
 
 

@@ -18,8 +18,9 @@ from avocado.utils import process
 from ClusterShell.NodeSet import NodeSet
 
 from command_utils_base import \
-    CommandFailure, BasicParameter, CommandWithParameters, \
+    BasicParameter, CommandWithParameters, \
     EnvironmentVariables, LogParameter
+from exception_utils import CommandFailure
 from general_utils import check_file_exists, get_log_file, \
     run_command, DaosTestError, get_job_manager_class, create_directory, \
     distribute_files, change_file_owner, get_file_listing, run_pcmd, \

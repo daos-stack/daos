@@ -10,7 +10,8 @@ import random
 from apricot import TestWithServers
 from command_utils import ExecutableCommand
 from command_utils_base import \
-    CommandFailure, BasicParameter, FormattedParameter
+    BasicParameter, FormattedParameter
+from exception_utils import CommandFailure
 from job_manager_utils import Orterun
 
 

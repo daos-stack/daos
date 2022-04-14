@@ -4,7 +4,9 @@
 
 The purpose of this Guide is to provide a user with a set of command lines to quickly set up and use DAOS with POSIX on openSUSE/SLES 15.2.
 
-This document covers the installation of the DAOS RPMs on openSUSE/SLES 15.2 and updating the DAOS configuration files needed by daos servers.
+The purpose of this guide is to provide a user with a set of command lines to quickly setup and use DAOS with POSIX on openSUSE/SLES 15.3.
+
+This document covers installation of the DAOS rpms on openSUSE/SLES 15.3 and updating the DAOS configuration files needed by daos servers.
 
 This Guide will also describe how to use dfuse to take advantage of DAOS support for POSIX.
 For setup instructions on CentOS, refer to the [CentOS setup](setup_centos.md).
@@ -15,11 +17,11 @@ For more details, reference the DAOS administration guide:
 
 This Guide requires a minimum of:
 
-- 1 server with PMEM and SSDs connected via an Infiniband storage network. -JEO
-- 1 client node. -JEO
-- 1 admin node without pmem/SSD but on the Infiniband storage network. -JEO
-- All nodes have a base openSUSE or SLES 15.2 installed. -JEO
-- Install pdsh on the admin node _JEO
+- 1 server with PMEM and SSDs connected via infiniband storage network.
+- 1 client node.
+- 1 admin node without pmem/ssd but on the infiniband storage network.
+- All nodes have a base openSUSE or SLES 15.3 installed.
+
 
 ## Requirements
 
@@ -56,7 +58,7 @@ SERVER_NODES=server-1,server-2,server-3
 ALL_NODES=$ADMIN_NODE,$CLIENT_NODES,$SERVER_NODES
 ```
 
-!!!note
+!!! note
 
       If a client node is also serving as an admin node, exclude
       `$ADMIN_NODE` from the `ALL_NODES` assignment to prevent duplication.
@@ -109,12 +111,11 @@ pdsh -w $ALL_NODES -x $SERVER_NODES 'sudo zypper install -y daos-client'
 In this section, PMem (Intel(R) Optane(TM) persistent memory) and NVME
 SSDs will be prepared and configured to be used by DAOS.
 
-!!!note
-      PMem preparation is required once per DAOS installation.
+!!! note
+	PMem preparation is required once per DAOS installation.
 
-!!!note
-      For OpenSUSE 15.2 installation, update ipmctl to the latest package available from
-      <https://build.opensuse.opackage/binaries/hardware:nvdimm/ipmctl/openSUSE_Leap_15.2>
+!!! note
+	For OpenSUSE 15.3 installation, update ipmctl to the latest package available from https://build.opensuse.org/package/binaries/hardware:nvdimm/ipmctl/openSUSE_Leap_15.3
 
 1. Prepare the pmem devices on Server nodes:
 
@@ -209,8 +210,8 @@ See
 <https://docs.daos.io/v2.0/admin/deployment/#certificate-configuration>
 for more informaation.
 
-!!!note
-      The following commands are run from the `$ADMIN_NODE`.
+!!! note
+	The following commands are run from the `$ADMIN_NODE`.
 
 1. Generate a new set of certificates:
 
@@ -219,8 +220,8 @@ cd /tmp
 /usr/lib64/daos/certgen/gen_certificates.sh
 ```
 
-!!!note
-      These files should be protected from unauthorized access and preserved for future use.
+	!!! note
+		These files should be protected from unauthorized access and preserved for future use.
 
 2. Copy the certificates to a common location on each node in order to
     move them to the final location:
@@ -254,8 +255,8 @@ pdsh -S -w $CLIENT_NODES sudo cp /tmp/daosCA/certs/agent.crt /etc/daos/certs/.
 pdsh -S -w $CLIENT_NODES sudo cp /tmp/daosCA/certs/agent.key /etc/daos/certs/.
 ```
 
-!!!note
-      If the /etc/daos/certs directory does not exist on the client nodes, use the following command to create it:
+	!!! note
+		If the /etc/daos/certs directory does not exist on the client nodes, use the following command to create it:
 
 ```command
 pdsh -S -w $CLIENT_NODES sudo mkdir /etc/daos/certs
@@ -313,11 +314,12 @@ configuration files will be defined in this section. Examples are available at
 pdsh -S -w $SERVER_NODES sudo lspci | grep -i nvme
 ```
 
-!!!note
-	Save the addresses of the NVMe devices to use with each DAOS server,
-	e.g., "81:00.0", from each server node.  This information will be
-	used to populate the "bdev_list" server configuration parameter
-	below.
+	!!! note
+		Save the addresses of the NVMe devices to use with each DAOS server,
+		e.g. "81:00.0", from each server node.  This information will be
+		used to populate the "bdev_list" server configuration parameter
+		below.
+
 
 2. Create a server configuration file by modifying the default
     `/etc/daos/daos_server.yml` file on the server nodes.

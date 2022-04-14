@@ -8,7 +8,7 @@ import agent_utils as agu
 from ClusterShell.NodeSet import NodeSet
 
 from apricot import TestWithServers
-from command_utils_base import CommandFailure
+from exception_utils import CommandFailure
 from dfuse_utils import Dfuse
 
 

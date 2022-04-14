@@ -14,7 +14,7 @@ import random
 from filecmp import cmp
 from apricot import TestWithServers
 from general_utils import run_command, DaosTestError
-from command_utils_base import CommandFailure
+from exception_utils import CommandFailure
 import slurm_utils
 from ClusterShell.NodeSet import NodeSet
 from getpass import getuser

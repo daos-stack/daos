@@ -1,6 +1,6 @@
 #!/usr/bin/python
 """
-  (C) Copyright 2020-2021 Intel Corporation.
+  (C) Copyright 2020-2022 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -332,6 +332,9 @@ class DaosServerYamlParameters(YamlParameters):
                 "CRT_SWIM_RPC_TIMEOUT=10"],
             "ofi_rxm": [
                 "FI_OFI_RXM_USE_SRX=1"],
+            "ofi+cxi": [
+                "FI_OFI_RXM_USE_SRX=1",
+                "CRT_MRC_ENABLE=1"],
         }
 
         def __init__(self, index=None, provider=None):

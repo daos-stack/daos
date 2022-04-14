@@ -1,6 +1,6 @@
 #!/usr/bin/python
 """
-  (C) Copyright 2020-2021 Intel Corporation.
+  (C) Copyright 2020-2022 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -125,7 +125,7 @@ class MfuCommandBase(ExecutableCommand):
         self.log.info('Starting %s', str(self.command).lower())
 
         # Get job manager cmd
-        job_manager = Mpirun(self, mpitype="mpich")
+        job_manager = Mpirun(self, mpi_type="mpich")
         job_manager.assign_hosts(self.hosts, self.tmp)
         job_manager.assign_processes(processes)
         job_manager.exit_status_exception = self.exit_status_exception

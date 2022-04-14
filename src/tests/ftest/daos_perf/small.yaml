@@ -10,9 +10,10 @@ hosts:
     - client-G
     - client-H
 timeout: 540
-job_manager_class_name: Orterun
-job_manager_mpi_type: openmpi
-job_manager_timeout: 480
+job_manager:
+    class_name: Orterun
+    mpi_type: openmpi
+    manager_timeout: 480
 pool:
     size: 500GB
     control_method: dmg

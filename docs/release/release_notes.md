@@ -2,19 +2,72 @@
 
 We are pleased to announce the release of DAOS version 2.0.
 
-# DAOS Version 2.0.2 (2022-03-21)
 
-TBD
+## DAOS Version 2.0.2 (2022-03-21)
 
-## Updates in this Release
+### Updates in this Release
 
-TBD
+The DAOS 2.0.2 release contains the following updates on top of DAOS 2.0.1:
 
-## Known Issues and limitations
+- DAOS 2.0.2 includes fixes to the EC, VOS, MS, telemetry, dtx, object components,
+  raft, VMD, as well as the test and build infrastructure.
 
-TBD
+- `mercury` has been updated from 2.1.0~rc4-3 to 2.1.0~rc4-5.
+  This fixes multiple issues with `dmg pool destroy`, including
+  [DAOS-9725](https://daosio.atlassian.net/browse/DAOS-9561) and
+  [DAOS-9006](https://daosio.atlassian.net/browse/DAOS-9006).
 
-# DAOS Version 2.0.1 (2022-01-31)
+- dfuse readahead caching has been disabled when write-through caching is enabled
+  [DAOS-9738](https://daosio.atlassian.net/browse/DAOS-9738).
+
+- An issue with EC aggregation has been fixed  where it was running too frequently
+  and consuming CPU cycles even when EC is not used
+  [DAOS-9926](https://daosio.atlassian.net/browse/DAOS-9926).
+
+- Minor changes to the
+  DFS API [DAOS-10009](https://daosio.atlassian.net/browse/DAOS-10009) and
+  DAOS Java API [DAOS-9379](https://daosio.atlassian.net/browse/DAOS-9379).
+
+- The sightings with SOAK testing in 2.0.1 have been resolved.
+  See [DAOS-9725](https://daosio.atlassian.net/browse/DAOS-9725).
+
+- The `daos_server` and `daos_agent` daemons now have a secondary group membership
+  in a new `daos_daemons` Linux group
+  [DAOS-6344](https://daosio.atlassian.net/browse/DAOS-6344).
+
+- Go dependency has been updated to >= 1.17
+  [DAOS-9908](https://daosio.atlassian.net/browse/DAOS-9908).
+
+- Hadoop dependency has been updated to 3.3.2
+  [DAOS-10068](https://daosio.atlassian.net/browse/DAOS-10068).
+
+- The `spdk` version has been updated from 21.07-11 to 21.07-13 (no content changes).
+
+### Known Issues and limitations
+
+- For Replication and Erasure Coding (EC), in DAOS 2.0 the redundancy level (`rf_lvl`)
+  is set to `1 (rank=engine)`. On servers with more than one engine per server,
+  setting the redundancy level to `2 (server)` would be more appropriate
+  but the `daos cont create` command currently does not support this
+  [DAOS-10215](https://daosio.atlassian.net/browse/DAOS-10215).
+
+- For some workloads, performance degradations have been observed with
+  libfabric 1.14 and the `tcp` provider
+  [DAOS-9883](https://daosio.atlassian.net/browse/DAOS-9883).
+
+- DFS POSIX containers and the `daos fs copy` do not support symlinks /
+  [DAOS-9254](https://daosio.atlassian.net/browse/DAOS-9254)
+
+- No OPA/PSM2 support.
+  Please refer to the "Fabric Support" section of the
+  [Support Matrix](https://docs.daos.io/v2.0/release/support_matrix/) for details.
+
+- Premature ENOSPC error / [DAOS-8943](https://daosio.atlassian.net/browse/DAOS-8943)
+  Reclaiming free NVMe space is too slow and can cause early out-of-space errors
+  to be reported to applications.
+
+
+## DAOS Version 2.0.1 (2022-01-31)
 
 !!! note
     DAOS version 2.0.1 does not include the latest functional and security
@@ -22,7 +75,7 @@ TBD
     include additional functional and/or security updates. Customers should
     update to the latest version as it becomes available.
 
-## Updates in this Release
+### Updates in this Release
 
 The DAOS 2.0.1 release contains the following updates on top of DAOS 2.0.0:
 
@@ -43,7 +96,7 @@ The DAOS 2.0.1 release contains the following updates on top of DAOS 2.0.0:
 
 - `spdk` has been updated from 21.07-8 to 21.07-11 (minor fixes only).
 
-## Known Issues and limitations
+### Known Issues and limitations
 
 - Under heavy load, `dmg pool delete` has been observed to fail.
   In some cases the pool deletion completely fails.
@@ -74,7 +127,7 @@ The DAOS 2.0.1 release contains the following updates on top of DAOS 2.0.0:
 - Misconfiguration of certificates causes server crash at start up / [DAOS-8114](https://daosio.atlassian.net/browse/DAOS-8114)
 
 
-# DAOS Version 2.0.0 (2021-12-23)
+## DAOS Version 2.0.0 (2021-12-23)
 
 !!! note
     The DAOS version 2.0 java/hadoop DAOS connector has been updated to
@@ -84,7 +137,7 @@ The DAOS 2.0.1 release contains the following updates on top of DAOS 2.0.0:
     include additional functional and/or security updates.
     Customers should update to the latest version as it becomes available.
 
-## General Support
+### General Support
 
 This release adds the following changes to the DAOS support matrix:
 
@@ -97,9 +150,9 @@ This release adds the following changes to the DAOS support matrix:
 For a complete list of supported hardware and software, refer to the
 [Support Matrix](https://docs.daos.io/v2.0/release/support_matrix/).
 
-## Key features and improvements
+### Key features and improvements
 
-### Erasure code
+#### Erasure code
 
 With the 2.0 release, DAOS provides the option of Reed Solomon based EC for data
 protection, supporting EC data recovery for storage target failures, and data
@@ -112,7 +165,7 @@ include:
 
 - Data recovery for EC protected object.
 
-### Telemetry and monitoring
+#### Telemetry and monitoring
 
 DAOS maintains metrics and statistics for each storage engine while the engines
 are running, to provide insight into DAOS health and performance and
@@ -123,30 +176,30 @@ overall bandwidth and other statistics. The information provided includes
 bytes read and written to the engine's storage, I/O latency, I/O operations,
 error events, and internal state.
 
-### Pool and container labels
+#### Pool and container labels
 
 To improve ease of use, DAOS 2.0 introduces labels (in addition to UUID) as an
 option to identify and reference pools and containers.
 
-### Improved usability and management capabilities
+#### Improved usability and management capabilities
 
 DAOS 2.0 has added a number of usability and management improvements, such as
 improving command structures for consistency and automated client resource
 management that allows DAOS to be resilient even if clients are not.
 
-### Increased flexibility in object layout
+#### Increased flexibility in object layout
 
 The object layout has been restructured to support an arbitrary number of targets
 and SSDs. This addresses a performance issue when running with a total number of
 targets that is not a power of two.
 
-### mpifileutils integration
+#### mpifileutils integration
 
 Tools for parallel data copy are located within mpiFileUtils. mpiFileUtils
 provides an MPI-based suite of tools to handle large datasets. A DAOS backend
 was written to support tools like dcp and dsync.
 
-## Known Issues and limitations
+### Known Issues and limitations
 
 - Application segfault with  MOFED > 5.4-1.0.3.0 / [DAOS-9376](https://daosio.atlassian.net/browse/DAOS-9376)
   Validation of CentOS 8.5 indicates an integration issue with
@@ -172,7 +225,7 @@ was written to support tools like dcp and dsync.
 
 A complete list of known issues in v2.0 can be found [**HERE**](https://daosio.atlassian.net/issues/?jql=project%20in%20(DAOS%2C%20CART)%20AND%20type%20%3D%20bug%20AND%20statuscategory%20!%3D%20done%20AND%20affectedVersion%20!%3D%20%222.1%20Community%20Release%22%20AND%20%22Bug%20Source%22%20!%3D%20%22non-product%20bug%22%20ORDER%20BY%20priority%20DESC).
 
-## Bug fixes
+### Bug fixes
 
 The DAOS 2.0 release includes fixes for numerous defects, including:
 
@@ -186,6 +239,7 @@ The DAOS 2.0 release includes fixes for numerous defects, including:
 - DAOS v2.0 resolves a number of memory leak issues in prior test builds.
 
 A complete list of bugs resolved in v2.0 can be found [**HERE**](https://daosio.atlassian.net/issues/?jql=project%20in%20(DAOS%2C%20CART)%20AND%20type%20%3D%20bug%20AND%20statuscategory%20%3D%20done%20AND%20resolution%20in%20(fixed%2C%20Fixed-Verified%2C%20Done)%20AND%20fixversion%20%3D%20%222.0%20Community%20Release%22%20AND%20%22Bug%20Source%22%20!%3D%20%22non-product%20bug%22%20ORDER%20BY%20priority%20DESC).
+
 
 ## Additional resources
 

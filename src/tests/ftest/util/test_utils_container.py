@@ -1,6 +1,6 @@
 #!/usr/bin/python
 """
-  (C) Copyright 2018-2021 Intel Corporation.
+  (C) Copyright 2018-2022 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -10,7 +10,8 @@ from time import time
 from test_utils_base import TestDaosApiBase
 
 from avocado import fail_on
-from command_utils_base import BasicParameter, CommandFailure
+from command_utils_base import BasicParameter
+from exception_utils import CommandFailure
 from pydaos.raw import (DaosApiError, DaosContainer, DaosInputParams,
                         c_uuid_to_str, str_to_c_uuid)
 from general_utils import get_random_bytes, DaosTestError

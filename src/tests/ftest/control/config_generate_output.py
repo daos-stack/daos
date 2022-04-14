@@ -8,7 +8,7 @@ from collections import defaultdict
 import yaml
 
 from apricot import TestWithServers
-from command_utils import CommandFailure
+from exception_utils import CommandFailure
 from dmg_utils import DmgCommand
 
 

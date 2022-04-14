@@ -16,7 +16,7 @@ from apricot import TestWithServers
 from mdtest_test_base import MdtestBase
 from fio_test_base import FioBase
 from pydaos.raw import DaosApiError
-from command_utils_base import CommandFailure
+from exception_utils import CommandFailure
 from general_utils import DaosTestError
 
 

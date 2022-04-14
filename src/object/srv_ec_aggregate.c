@@ -298,7 +298,6 @@ agg_clear_extents(struct ec_agg_entry *entry)
 				   ae_link) {
 		/* Check for carry-over extent. */
 		tail = agg_carry_over(entry, extent);
-		D_ASSERT(tail == 0);
 		if (extent->ae_hole && tail)
 			carry_is_hole = true;
 
@@ -2389,7 +2388,6 @@ ec_agg_param_fini(struct ec_agg_param *agg_param)
 
 	D_ASSERT(agg_entry->ae_sgl.sg_nr == AGG_IOV_CNT || agg_entry->ae_sgl.sg_nr == 0);
 	d_sgl_fini(&agg_entry->ae_sgl, true);
-	agg_clear_extents(agg_entry);
 	if (daos_handle_is_valid(agg_param->ap_pool_info.api_pool_hdl))
 		dsc_pool_close(agg_param->ap_pool_info.api_pool_hdl);
 
@@ -2532,6 +2530,9 @@ cont_ec_aggregate_cb(struct ds_cont_child *cont, daos_epoch_range_t *epr,
 again:
 	rc = vos_iterate(&iter_param, VOS_ITER_OBJ, true, &anchors,
 			 agg_iterate_pre_cb, agg_iterate_post_cb, ec_agg_param, dth);
+
+	/* Post_cb may not being executed in some cases */
+	agg_clear_extents(&ec_agg_param->ap_agg_entry);
 	if (obj_dtx_need_refresh(dth, rc)) {
 		rc = dtx_refresh(dth, cont);
 		if (rc == -DER_AGAIN) {

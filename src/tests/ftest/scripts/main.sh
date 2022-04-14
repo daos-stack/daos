@@ -226,9 +226,11 @@ ulimit -n 4096
 
 launch_args="-jcrisa"
 # can only process cores on EL7 currently
-if [ "$(lsb_release -s -i)" = "CentOS" ] ||
+if [ "$(lsb_release -s -i)" = "CentOS" ]    ||
+   [ "$(lsb_release -s -i)" = "Rocky" ]     ||
+   [ "$(lsb_release -s -i)" = "AlmaLinux" ] ||
    [ "$(lsb_release -s -i)" = "openSUSE" ]; then
-    launch_args="-jcrispa"
+    launch_args+="p"
 fi
 
 # Clean stale job results

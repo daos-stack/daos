@@ -1,6 +1,6 @@
 #!/usr/bin/python
 """
-  (C) Copyright 2018-2021 Intel Corporation.
+  (C) Copyright 2018-2022 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -434,6 +434,7 @@ def colate_results(command, results):
             res += "    %s\n" % line
 
     return res
+
 
 def get_host_data(hosts, command, text, error, timeout=None):
     """Get the data requested for each host using the specified command.
@@ -961,8 +962,8 @@ def get_job_manager_class(name, job=None, subprocess=False, mpi="openmpi"):
 
     """
     manager_class = get_module_class(name, "job_manager_utils")
-    if name == "Mpirun":
-        manager = manager_class(job, subprocess=subprocess, mpitype=mpi)
+    if name in ["Mpirun", "Orterun"]:
+        manager = manager_class(job, subprocess=subprocess, mpi_type=mpi)
     elif name == "Systemctl":
         manager = manager_class(job)
     else:

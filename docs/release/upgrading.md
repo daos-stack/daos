@@ -1,5 +1,32 @@
 # Upgrading to DAOS Version 2.0
 
+
+## Upgrading DAOS from Version 2.0.x to Version 2.0.y
+
+Upgrading DAOS from one 2.0.x fix level to a newer 2.0.y fix level is
+supported as an offline update, maintaining the data in DAOS pools and
+containers.
+
+The recommended procedure for the upgrade is:
+
+- Ensure that there are no client applications with open pool connections.
+  If necessary, the `dmg pool evict` command can be used to disconnect
+  any active pool connections.
+- Stop the `daos_agent` daemons.
+- Stop the DAOS engines by running `dmg system stop`.
+- Stop the `daos_server` daemons.
+- Perform the RPM update to the new DAOS fix level.
+- Start the `daos_server` daemons.
+- Validate that all engines have started successfully,
+  for example using `dmg system query -v`.
+- Start the `daos_agent` daemons.
+
+DAOS fix levels include all previous fix levels. So it is possible to updating
+from Version 2.0.0 to Version 2.0.2 without updating to Version 2.0.1 first.
+
+
+## Upgrading DAOS from Version 1.x to Version 2.0
+
 DAOS Version 2.0 is a major feature release, and it was a conscious
 design decision to **not** provide backwards compatibility with previous
 DAOS releases in favor of new feature development and stabilization.

@@ -1,6 +1,6 @@
 #!/usr/bin/python
 '''
-  (C) Copyright 2020-2021 Intel Corporation.
+  (C) Copyright 2020-2022 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
@@ -9,7 +9,7 @@ import os
 
 from nvme_utils import ServerFillUp, get_device_ids
 from dmg_utils import DmgCommand
-from command_utils_base import CommandFailure
+from exception_utils import CommandFailure
 
 class NvmeHealth(ServerFillUp):
     # pylint: disable=too-many-ancestors
