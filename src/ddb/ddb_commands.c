@@ -107,7 +107,7 @@ ls_obj_handler(struct ddb_obj *obj, void *args)
 	 * daos_oclass_id_t	 oclass;
 	 * oclass = daos_obj_id2class(obj->ddbo_oid);
 	 * if (!SUCCESS(rc))
-	 * 	return rc;
+	 *	return rc;
 	 * daos_oclass_id2name(oclass, obj_class_name);
 	 * obj_class_fini();
 	*/
