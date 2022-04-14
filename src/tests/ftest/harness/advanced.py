@@ -8,7 +8,7 @@ from random import choice
 from re import findall
 
 from apricot import TestWithServers
-from general_utils import run_pcmd, get_config_value
+from general_utils import run_pcmd
 
 
 class HarnessAdvancedTest(TestWithServers):
@@ -77,50 +77,3 @@ class HarnessAdvancedTest(TestWithServers):
         :avocado: tags=test_core_files_hw
         """
         self.test_core_files()
-
-    def test_pool_timeout(self):
-        """Test to verify tearDown() timeout setting for timed out tests.
-
-        Adding a pool should increase the runner.timeout.after_interrupted,
-        runner.timeout.process_alive, and runner.timeout.process_died timeouts by 200 seconds each.
-
-        :avocado: tags=all
-        :avocado: tags=harness,harness_advanced_test,pool_timeout
-        :avocado: tags=test_pool_timeout
-        """
-        namespace = "runner.timeout"
-        timeouts = {"after_interrupted": [], "process_alive": [], "process_died": []}
-
-        self.log.info("Before creating pools:")
-        for key in sorted(timeouts):
-            timeouts[key].append(get_config_value(namespace, key))
-            self.log.info("    %s.%s = %s", namespace, key, timeouts[key][0])
-
-        self.add_pool(create=True, connect=True)
-        self.add_pool(create=True, connect=False)
-        self.add_pool(create=False)
-
-        self.log.info("After creating pools:")
-        for key in sorted(timeouts):
-            timeouts[key].append(get_config_value(namespace, key))
-            self.log.info("    %s.%s = %s", namespace, key, timeouts[key][1])
-
-        for key in sorted(timeouts):
-            self.assertEqual(
-                timeouts[key][1] - timeouts[key][0], 600,
-                "Incorrect {}.{} value detected after adding 3 pools".format(namespace, key))
-
-        self.log.info("Test passed")
-
-    def test_pool_timeout_hw(self):
-        """Test to verify tearDown() timeout setting for timed out tests.
-
-        Adding a pool should increase the runner.timeout.after_interrupted,
-        runner.timeout.process_alive, and runner.timeout.process_died timeouts by 200 seconds each.
-
-        :avocado: tags=all
-        :avocado: tags=hw,small,medium,ib2,large
-        :avocado: tags=harness,harness_advanced_test,pool_timeout
-        :avocado: tags=test_pool_timeout_hw
-        """
-        self.test_pool_timeout()
