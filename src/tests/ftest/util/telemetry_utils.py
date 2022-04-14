@@ -13,6 +13,11 @@ class TelemetryUtils():
     # pylint: disable=too-many-nested-blocks
     """Defines a object used to verify telemetry information."""
 
+    # Define a set of patterns that shouldn't be used for comparisons.
+    METRIC_EXCLUDE_PATTERNS = [
+        re.compile("^go_.*"),       # internal Go metrics
+        re.compile("^process_.*"),  # internal process metrics
+    ]
     ENGINE_CONTAINER_METRICS = [
         "engine_pool_ops_cont_open",
         "engine_pool_ops_cont_close",
@@ -357,43 +362,6 @@ class TelemetryUtils():
         "engine_net_uri_lookup_self"]
     ENGINE_RANK_METRICS = [
         "engine_rank"]
-    GO_METRICS = [
-        "go_gc_duration_seconds",
-        "go_goroutines",
-        "go_info",
-        "go_memstats_alloc_bytes",
-        "go_memstats_alloc_bytes_total",
-        "go_memstats_buck_hash_sys_bytes",
-        "go_memstats_frees_total",
-        "go_memstats_gc_cpu_fraction",
-        "go_memstats_gc_sys_bytes",
-        "go_memstats_heap_alloc_bytes",
-        "go_memstats_heap_idle_bytes",
-        "go_memstats_heap_inuse_bytes",
-        "go_memstats_heap_objects",
-        "go_memstats_heap_released_bytes",
-        "go_memstats_heap_sys_bytes",
-        "go_memstats_last_gc_time_seconds",
-        "go_memstats_lookups_total",
-        "go_memstats_mallocs_total",
-        "go_memstats_mcache_inuse_bytes",
-        "go_memstats_mcache_sys_bytes",
-        "go_memstats_mspan_inuse_bytes",
-        "go_memstats_mspan_sys_bytes",
-        "go_memstats_next_gc_bytes",
-        "go_memstats_other_sys_bytes",
-        "go_memstats_stack_inuse_bytes",
-        "go_memstats_stack_sys_bytes",
-        "go_memstats_sys_bytes",
-        "go_threads"]
-    PROCESS_METRICS = [
-        "process_cpu_seconds_total",
-        "process_max_fds",
-        "process_open_fds",
-        "process_resident_memory_bytes",
-        "process_start_time_seconds",
-        "process_virtual_memory_bytes",
-        "process_virtual_memory_max_bytes"]
     ENGINE_NVME_HEALTH_METRICS = [
         "engine_nvme_<id>_commands_data_units_written",
         "engine_nvme_<id>_commands_data_units_read",
@@ -476,8 +444,6 @@ class TelemetryUtils():
         all_metrics_names.extend(self.ENGINE_SCHED_METRICS)
         all_metrics_names.extend(self.ENGINE_IO_METRICS)
         all_metrics_names.extend(self.ENGINE_RANK_METRICS)
-        all_metrics_names.extend(self.GO_METRICS)
-        all_metrics_names.extend(self.PROCESS_METRICS)
         if with_pools:
             all_metrics_names.extend(self.ENGINE_POOL_METRICS)
             all_metrics_names.extend(self.ENGINE_CONTAINER_METRICS)
@@ -504,6 +470,21 @@ class TelemetryUtils():
 
         return all_metrics_names
 
+    def is_excluded_metric(self, name):
+        """Check if the given metric is excluded.
+
+        Args:
+            name (str): the metric name to check
+
+        Returns:
+            bool: True if the metric is excluded, False otherwise
+
+        """
+        for pat in self.METRIC_EXCLUDE_PATTERNS:
+            if pat.match(name):
+                return True
+        return False
+
     def list_metrics(self):
         """List the available metrics for each host.
 
@@ -519,7 +500,7 @@ class TelemetryUtils():
             if "response" in data:
                 if "available_metric_sets" in data["response"]:
                     for entry in data["response"]["available_metric_sets"]:
-                        if "name" in entry:
+                        if "name" in entry and not self.is_excluded_metric(entry["name"]):
                             info[host].append(entry["name"])
         return info
 
