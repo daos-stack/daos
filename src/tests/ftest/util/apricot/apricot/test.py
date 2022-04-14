@@ -127,8 +127,7 @@ class Test(avocadoTest):
         self.basepath = None
         self.prefix = None
         self.ofi_prefix = None
-        self.cancel_file = os.path.join(os.sep, "scratch",
-                                        "CI-skip-list-master")
+        self.cancel_file = os.path.join(os.sep, "scratch", "CI-skip-list-release-2.2")
 
     def setUp(self):
         """Set up each test case."""
