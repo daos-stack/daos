@@ -15,6 +15,7 @@ from job_manager_utils import get_job_manager
 from ior_utils import IorCommand, IorMetrics
 from exception_utils import CommandFailure
 from general_utils import error_count
+from test_utils_container import TestContainer
 
 
 class NvmeEnospace(ServerFillUp):
@@ -100,8 +101,13 @@ class NvmeEnospace(ServerFillUp):
 
         # Define the job manager for the IOR command
         job_manager = get_job_manager(self, "Mpirun", ior_bg_cmd, mpi_type="mpich")
-        self.create_cont()
-        job_manager.job.dfs_cont.update(self.container.uuid)
+
+        # create container
+        container = TestContainer(self.pool, daos_command=DaosCommand(self.bin))
+        container.get_params(self)
+        container.create()
+
+        job_manager.job.dfs_cont.update(container.uuid)
         env = ior_bg_cmd.get_default_env(str(job_manager))
         job_manager.assign_hosts(self.hostlist_clients, self.workdir, None)
         job_manager.assign_processes(1)

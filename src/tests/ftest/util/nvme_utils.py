@@ -13,6 +13,8 @@ from ior_test_base import IorTestBase
 from ior_utils import IorCommand
 from server_utils import ServerFailed
 from job_manager_utils import get_job_manager
+from daos_utils import DaosCommand
+from test_utils_container import TestContainer
 
 def get_device_ids(dmg, servers):
     """Get the NVMe Device ID from servers.
@@ -72,6 +74,7 @@ class ServerFillUp(IorTestBase):
         self.fail_on_warning = False
         self.rank_to_kill = []
         self.pool_exclude = {}
+        self.nvme_local_cont = None
 
     def setUp(self):
         """Set up each test case."""
@@ -92,6 +95,18 @@ class ServerFillUp(IorTestBase):
         self.engines = self.server_managers[0].manager.job.yaml.engine_params
         self.dmg_command = self.get_dmg_command()
 
+    def create_container(self):
+        """Create the container """
+        # Get container params
+        self.nvme_local_cont = TestContainer(self.pool, daos_command=DaosCommand(self.bin))
+        self.nvme_local_cont.get_params(self)
+
+        # update container oclass
+        if self.ior_local_cmd.dfs_oclass:
+            self.nvme_local_cont.oclass.update(self.ior_local_cmd.dfs_oclass.value)
+
+        self.nvme_local_cont.create()
+
     def start_ior_thread(self, create_cont, operation):
         """Start IOR write/read threads and wait until all threads are finished.
 
@@ -102,7 +117,7 @@ class ServerFillUp(IorTestBase):
                 Auto_Write/Auto_Read: It will calculate the IOR block size based on requested
                                         storage % to be fill.
         """
-        # IOR flag can be Write only or Write/Read based on test yaml
+        # IOR flag can Write/Read based on test yaml
         self.ior_local_cmd.flags.value = self.ior_default_flags
 
         # Calculate the block size based on server % to fill up.
@@ -118,11 +133,10 @@ class ServerFillUp(IorTestBase):
         self.ior_local_cmd.set_daos_params(self.server_group, self.pool)
         self.ior_local_cmd.test_file.update('/testfile')
 
-        # Created new container
+        # Created new container or use the existing container for reading
         if create_cont:
-            self.create_cont()
-        else:
-            self.ior_local_cmd.dfs_cont.update(self.container.uuid)
+            self.create_container()
+        self.ior_local_cmd.dfs_cont.update(self.nvme_local_cont.uuid)
 
         # Define the job manager for the IOR command
         job_manager_main = get_job_manager(self, "Mpirun", self.ior_local_cmd, mpi_type="mpich")
