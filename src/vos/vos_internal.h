@@ -376,13 +376,13 @@ extern uint64_t vos_evt_feats;
 /** Mask to check if epoch is HLC. */
 #define VOS_AGG_HLC_MASK	(VOS_AGG_HLC_BITS << (64 - VOS_AGG_NR_HLC_BITS))
 /** Mask of bits of epoch */
-#define VOS_AGG_EPOCH_MASK	(~VOS_AGG_HLC_MASK << (64 - VOS_AGG_NR_BITS))
+#define VOS_AGG_EPOCH_MASK	(~VOS_AGG_HLC_MASK << (VOS_AGG_NR_HLC_BITS))
 /** Start bit of stored timestamp */
 #define VOS_TF_AGG_BIT	60
 /** Right shift for stored portion of epoch */
 #define VOS_AGG_RSHIFT	(63 - VOS_TF_AGG_BIT)
 /** Left shift for stored portion of epoch */
-#define VOS_AGG_LSHIFT	(VOS_AGG_NR_BITS - VOS_AGG_RSHIFT)
+#define VOS_AGG_LSHIFT	(64 - VOS_AGG_NR_BITS - VOS_AGG_RSHIFT)
 /** In-place mask to get epoch from feature bits */
 #define VOS_AGG_TIME_MASK	(VOS_AGG_EPOCH_MASK >> VOS_AGG_RSHIFT)
 
