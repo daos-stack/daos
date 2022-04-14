@@ -2835,6 +2835,7 @@ aggregate_35(void **state)
 	assert_true(result);
 	assert_int_equal(epoch, (1ULL << VOS_AGG_NR_BITS) - 1);
 	assert_false(feats & VOS_TF_AGG_HLC);
+	assert_int_equal(feats & INIT_FEATS, INIT_FEATS);
 
 	/** Test minimum HLC */
 	epoch = 1ULL << VOS_AGG_NR_BITS;
@@ -2844,6 +2845,7 @@ aggregate_35(void **state)
 	/** Already rounded to nearest 1/4 ms */
 	assert_int_equal(epoch, 1ULL << VOS_AGG_NR_BITS);
 	assert_true(feats & VOS_TF_AGG_HLC);
+	assert_int_equal(feats & INIT_FEATS, INIT_FEATS);
 
 	/** Test rounding */
 	epoch = (1ULL << VOS_AGG_NR_BITS) + 1;
@@ -2852,6 +2854,7 @@ aggregate_35(void **state)
 	assert_true(result);
 	assert_int_equal(epoch, (1ULL << VOS_AGG_NR_BITS) + (1ULL << VOS_AGG_NR_HLC_BITS));
 	assert_true(feats & VOS_TF_AGG_HLC);
+	assert_int_equal(feats & INIT_FEATS, INIT_FEATS);
 }
 
 static int
