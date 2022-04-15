@@ -1,6 +1,6 @@
 #!/usr/bin/python
 """
-  (C) Copyright 2020-2021 Intel Corporation.
+  (C) Copyright 2020-2022 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -61,8 +61,7 @@ class MultipleContainerDelete(IorTestBase):
         self.log.info("SCM = %d, SSD = %d", final_scm_fs, final_ssd_fs)
 
         self.log.info("Verifying SSD space is recovered")
-        self.log.info("%d == %d", final_ssd_fs, initial_ssd_fs)
-        self.assertTrue(final_ssd_fs == initial_ssd_fs)
+        self.check_pool_free_space(expected_ssd=initial_ssd_fs)
 
         self.log.info("Verifying SCM space is recovered")
         self.log.info("%d == %d", final_scm_fs, initial_scm_fs)

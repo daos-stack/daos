@@ -6,6 +6,7 @@ SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 import os
 import threading
+from time import sleep, time
 
 from ClusterShell.NodeSet import NodeSet
 
@@ -226,6 +227,44 @@ class IorTestBase(DfuseTestBase):
         if not self.ior_cmd.check_ior_subprocess_status(
                 self.job_manager.process, self.ior_cmd):
             self.fail("Exiting Test: Subprocess not running")
+
+    def check_pool_free_space(self, expected_scm=None, expected_ssd=None,
+                              timeout=30):
+        """Check pool free space with expected value.
+        Args:
+            expected_scm (int, optional): pool expected SCM free space.
+            expected_ssd (int, optional): pool expected SSD free space.
+            timeout(int, optional): time to fail test if it could not match
+                expected values.
+        """
+        if not expected_scm and not expected_ssd:
+            self.fail("at least one space parameter specified")
+        if self.pool is None:
+            self.fail("pool is none")
+        done = 0
+        scm_fs = 0
+        ssd_fs = 0
+        self.pool.connect()
+        start = time()
+        while time() - start < timeout:
+            sleep(1)
+            scm_index, ssd_index = 0, 1
+            pool_info = self.pool.pool.pool_query()
+            scm_fs = pool_info.pi_space.ps_space.s_free[scm_index]
+            ssd_fs = pool_info.pi_space.ps_space.s_free[ssd_index]
+            if expected_scm is not None:
+                if scm_fs != expected_scm:
+                    continue
+            if expected_ssd is not None:
+                if ssd_fs != expected_ssd:
+                    continue
+            done = 1
+            break
+
+        if done == 0:
+            self.fail(
+                "Pool Free space did not match: actual={},{} expected={},{}".format(
+                    scm_fs, ssd_fs, expected_scm, expected_ssd))
 
     def run_ior(self, manager, processes, intercept=None, display_space=True,
                 plugin_path=None, fail_on_warning=False, pool=None,
