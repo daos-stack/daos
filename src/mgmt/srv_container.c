@@ -36,13 +36,18 @@ ds_mgmt_cont_set_owner(uuid_t pool_uuid, d_rank_list_t *svc_ranks,
 	daos_prop_t	*prop;
 	uint32_t	prop_nr = 0;
 	uint32_t	i = 0;
+	bool		user_set = false;
+	bool		grp_set = false;
 
 	D_DEBUG(DB_MGMT, "Setting owner for container "DF_UUID" in pool "
 		DF_UUID"\n", DP_UUID(cont_uuid), DP_UUID(pool_uuid));
 
-	if (user != NULL)
+	user_set = user != NULL && strnlen(user, DAOS_ACL_MAX_PRINCIPAL_LEN) > 0;
+	grp_set = group != NULL && strnlen(group, DAOS_ACL_MAX_PRINCIPAL_LEN) > 0;
+
+	if (user_set)
 		prop_nr++;
-	if (group != NULL)
+	if (grp_set)
 		prop_nr++;
 	if (prop_nr == 0) {
 		D_ERROR("user and group both null\n");
@@ -53,7 +58,7 @@ ds_mgmt_cont_set_owner(uuid_t pool_uuid, d_rank_list_t *svc_ranks,
 	if (prop == NULL)
 		return -DER_NOMEM;
 
-	if (user != NULL) {
+	if (user_set) {
 		prop->dpp_entries[i].dpe_type = DAOS_PROP_CO_OWNER;
 		D_STRNDUP(prop->dpp_entries[i].dpe_str, user,
 			  DAOS_ACL_MAX_PRINCIPAL_LEN);
@@ -62,7 +67,7 @@ ds_mgmt_cont_set_owner(uuid_t pool_uuid, d_rank_list_t *svc_ranks,
 		i++;
 	}
 
-	if (group != NULL) {
+	if (grp_set) {
 		prop->dpp_entries[i].dpe_type = DAOS_PROP_CO_OWNER_GROUP;
 		D_STRNDUP(prop->dpp_entries[i].dpe_str, group,
 			  DAOS_ACL_MAX_PRINCIPAL_LEN);

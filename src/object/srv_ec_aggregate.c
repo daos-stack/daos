@@ -119,6 +119,7 @@ struct ec_agg_param {
 	struct ec_agg_pool_info	 ap_pool_info;	 /* pool/cont info            */
 	struct ec_agg_entry	 ap_agg_entry;	 /* entry used for each OID   */
 	daos_epoch_range_t	 ap_epr;	 /* hi/lo extent threshold    */
+	daos_epoch_t		 ap_filter_eph;	 /* Aggregatable filter epoch */
 	daos_handle_t		 ap_cont_handle; /* VOS container handle */
 	int			(*ap_yield_func)(void *arg); /* yield function*/
 	void			*ap_yield_arg;   /* yield argument            */
@@ -2181,10 +2182,8 @@ agg_filter(daos_handle_t ih, vos_iter_desc_t *desc, void *cb_arg, unsigned int *
 	struct daos_oclass_attr  oca;
 	int			 rc = 0;
 
-	if (desc->id_type != VOS_ITER_OBJ) {
-		agg_param->ap_credits++;
-		goto done;
-	}
+	if (desc->id_type != VOS_ITER_OBJ)
+		goto check;
 
 	rc = dsc_obj_id2oc_attr(desc->id_oid.id_pub, &info->api_props, &oca);
 	if (rc) {
@@ -2201,6 +2200,22 @@ agg_filter(daos_handle_t ih, vos_iter_desc_t *desc, void *cb_arg, unsigned int *
 			DP_UOID(desc->id_oid));
 		agg_param->ap_credits++;
 		*acts = VOS_ITER_CB_SKIP;
+		goto done;
+	}
+
+check:
+	if (desc->id_agg_write <= agg_param->ap_filter_eph) {
+		if (desc->id_type == VOS_ITER_OBJ)
+			D_DEBUG(DB_EPC, "Skip oid:"DF_UOID" agg_epoch="DF_X64" filter="DF_X64"\n",
+				DP_UOID(desc->id_oid), desc->id_agg_write,
+				agg_param->ap_filter_eph);
+		else
+			D_DEBUG(DB_EPC, "Skip key:"DF_KEY" agg_epoch="DF_X64" filter="DF_X64"\n",
+				DP_KEY(&desc->id_key), desc->id_agg_write,
+				agg_param->ap_filter_eph);
+		agg_param->ap_credits++;
+		*acts = VOS_ITER_CB_SKIP;
+		goto done;
 	}
 done:
 	if (agg_param->ap_credits > agg_param->ap_credits_max) {
@@ -2490,10 +2505,19 @@ cont_ec_aggregate_cb(struct ds_cont_child *cont, daos_epoch_range_t *epr,
 			return rc;
 	}
 
-	if (cont->sc_ec_agg_eph != 0 &&
-	    cont->sc_ec_agg_eph >= cont->sc_ec_update_timestamp) {
+	if (flags & VOS_AGG_FL_FORCE_SCAN) {
+		/** We don't want to use the latest container aggregation epoch for the filter
+		 *  in this case.   We instead use the lower bound of the epoch range.
+		 */
+		ec_agg_param->ap_filter_eph = epr->epr_lo;
+	} else {
+		ec_agg_param->ap_filter_eph = MAX(epr->epr_lo, cont->sc_ec_agg_eph);
+	}
+
+	if (ec_agg_param->ap_filter_eph != 0 &&
+	    ec_agg_param->ap_filter_eph >= cont->sc_ec_update_timestamp) {
 		D_DEBUG(DB_EPC, DF_CONT" skip EC agg "DF_U64">= "DF_U64"\n",
-			DP_CONT(cont->sc_pool_uuid, cont->sc_uuid), cont->sc_ec_agg_eph,
+			DP_CONT(cont->sc_pool_uuid, cont->sc_uuid), ec_agg_param->ap_filter_eph,
 			cont->sc_ec_update_timestamp);
 		goto update_hae;
 	}
