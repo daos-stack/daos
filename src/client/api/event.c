@@ -1222,12 +1222,10 @@ daos_event_priv_get(daos_event_t **ev)
 
 	D_ASSERT(*ev == NULL);
 
-	if (!ev_thpriv_is_init) {
-		rc = daos_event_priv_reset();
-		if (rc)
-			return rc;
-		ev_thpriv_is_init = true;
-	}
+	rc = daos_event_priv_reset();
+	if (rc)
+		return rc;
+	ev_thpriv_is_init = true;
 
 	if (evx->evx_status != DAOS_EVS_READY) {
 		D_CRIT("private event is inuse, status=%d\n", evx->evx_status);
