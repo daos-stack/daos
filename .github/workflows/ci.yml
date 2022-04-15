@@ -62,32 +62,32 @@ jobs:
       with:
         submodules: true
     - name: Prepare base image in Docker
-      run: docker build . -f utils/docker/Dockerfile.centos.8
+      run: docker build . -f utils/docker/Dockerfile.el.8
                           --build-arg DAOS_DEPS_BUILD=no
                           --build-arg BASE_DISTRO=fedora:34
     - name: Build dependencies in Docker
-      run: docker build . -f utils/docker/Dockerfile.centos.8
+      run: docker build . -f utils/docker/Dockerfile.el.8
                           --build-arg DEPS_JOBS=8 --build-arg DAOS_BUILD=no
                           --build-arg BASE_DISTRO=fedora:34
     - name: Build DAOS in Docker image
-      run: docker build . -f utils/docker/Dockerfile.centos.8
+      run: docker build . -f utils/docker/Dockerfile.el.8
                           --build-arg COMPILER=${{ matrix.compiler }}
                           --build-arg DEPS_JOBS=8 --build-arg DAOS_JAVA_BUILD=no
                           --build-arg BASE_DISTRO=fedora:34
 #    - name: Build DAOS Java client in Docker image
-#      run: docker build . -f utils/docker/Dockerfile.centos.8
+#      run: docker build . -f utils/docker/Dockerfile.el.8
 #                          --build-arg COMPILER=${{ matrix.compiler }}
 #                          --build-arg DEPS_JOBS=8
 #                          --build-arg BASE_DISTRO=fedora:34
     - name: Build debug in docker
-      run: docker build . --file utils/docker/Dockerfile.centos.8
+      run: docker build . --file utils/docker/Dockerfile.el.8
                           --build-arg DAOS_JAVA_BUILD=no
                           --build-arg DEPS_JOBS=8
                           --build-arg DAOS_BUILD_TYPE=debug
                           --build-arg COMPILER=${{ matrix.compiler }}
                           --build-arg BASE_DISTRO=fedora:34
     - name: Build devel in docker
-      run: docker build . --file utils/docker/Dockerfile.centos.8
+      run: docker build . --file utils/docker/Dockerfile.el.8
                           --build-arg DAOS_JAVA_BUILD=no
                           --build-arg DEPS_JOBS=8
                           --build-arg DAOS_BUILD_TYPE=dev

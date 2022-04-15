@@ -33,7 +33,7 @@ name=created from ${MY_REPO}\n\
 baseurl=${MY_REPO}\n\
 enabled=1\n\
 repo_gpgcheck=0\n\
-gpgcheck=1\n" >> /etc/yum.repos.d/local-centos-group.repo;      \
+gpgcheck=1\n" >> /etc/yum.repos.d/local-el-group.repo;          \
       dnf -y install --disablerepo extras --disablerepo baseos  \
           epel-release-8-8.el8 dnf-plugins-core dnf-utils;      \
       rpm --import /etc/pki/rpm-gpg/RPM-GPG-KEY-EPEL-8;         \
@@ -60,7 +60,7 @@ name=created from ${MY_REPO}\n\
 baseurl=${MY_REPO}\n\
 enabled=1\n\
 repo_gpgcheck=1\n\
-gpgcheck=1\n" >> /etc/yum.repos.d/local-centos-appstream.repo;  \
+gpgcheck=1\n" >> /etc/yum.repos.d/local-el-appstream.repo;      \
       dnf config-manager --assumeyes --quiet --disable          \
           appstream;                                            \
     fi
@@ -95,7 +95,7 @@ RUN for repo in $REPOS; do                                                \
         fi;                                                               \
         echo -e "[$repo:$branch:$build_number]\n\
 name=$repo:$branch:$build_number\n\
-baseurl=${JENKINS_URL}job/daos-stack/job/$repo/job/$branch/$build_number/artifact/artifacts/centos7/\n\
+baseurl=${JENKINS_URL}job/daos-stack/job/$repo/job/$branch/$build_number/artifact/artifacts/el8/\n\
 enabled=1\n\
 gpgcheck=False\n" >> /etc/yum.repos.d/$repo:$branch:$build_number.repo;   \
         cat /etc/yum.repos.d/$repo:$branch:$build_number.repo; \
