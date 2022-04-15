@@ -79,6 +79,11 @@ main(int argc, char **argv)
 			rc = dfs_open(dfs, dir1, name, create_mode | S_IFREG, create_flags, 0, 0,
 				      NULL, &f1);
 			ASSERT(rc == 0, "create /dir1/%s failed\n", name);
+
+			daos_obj_id_t oid;;
+			dfs_obj2id(f1, &oid);
+			/* printf("File %s \t OID: %"PRIu64".%"PRIu64"\n", name, oid.hi, oid.lo); */
+
 			rc = dfs_release(f1);
 			ASSERT(rc == 0, "dfs_release failed\n");
 		}
@@ -107,9 +112,13 @@ main(int argc, char **argv)
 
 	daos_anchor_t *anchors;
 	struct dirent *dents = NULL;
+	daos_obj_id_t *oids = NULL;
+	daos_size_t *csizes = NULL;
 
 	anchors = malloc(sizeof(daos_anchor_t) * num_split);
 	dents = malloc (sizeof(struct dirent) * NR_ENUM);
+	oids = calloc(NR_ENUM, sizeof(daos_obj_id_t));
+	csizes = calloc(NR_ENUM, sizeof(daos_size_t));
 
 	uint64_t nr_total = 0, nr_matched = 0, nr_scanned;
 
@@ -124,8 +133,8 @@ main(int argc, char **argv)
 
 		while (!daos_anchor_is_eof(anchor)) {
 			nr = NR_ENUM;
-			rc = dfs_readdir_with_filter(dfs, dir1, dpipe, anchor, &nr, dents,
-						     &nr_scanned);
+			rc = dfs_readdir_with_filter(dfs, dir1, dpipe, anchor, &nr, dents, oids,
+						     csizes, &nr_scanned);
 			ASSERT(rc == 0, "dfs_readdir_with_filter failed with %d\n", rc);
 
 			nr_total += nr_scanned;
@@ -133,6 +142,8 @@ main(int argc, char **argv)
 
 			for (i = 0; i < nr; i++) {
 				printf("Name: %s\t", dents[i].d_name);
+				printf("OID: %"PRIu64".%"PRIu64"\t", oids[i].hi, oids[i].lo);
+				printf("CSIZE = %zu\n", csizes[i]);
 				if (dents[i].d_type == DT_DIR)
 					printf("Type: DIR\n");
 				else if (dents[i].d_type == DT_REG)
@@ -148,6 +159,8 @@ main(int argc, char **argv)
 
 	free(dents);
 	free(anchors);
+	free(oids);
+	free(csizes);
 	rc = dfs_pipeline_destroy(dpipe);
 	ASSERT(rc == 0, "dfs_release failed\n");
 	/** close / finalize */

@@ -5371,6 +5371,36 @@ dfs_get_size(dfs_t *dfs, dfs_obj_t *obj, daos_size_t *size)
 }
 
 int
+dfs_get_size_by_oid(dfs_t *dfs, daos_obj_id_t oid, daos_size_t chunk_size, daos_size_t *size)
+{
+	daos_handle_t	oh;
+	int		rc;
+
+	if (dfs == NULL || !dfs->mounted)
+		return EINVAL;
+	if (daos_obj_id2type(oid) != DAOS_OT_ARRAY_BYTE)
+		return EINVAL;
+
+	rc = daos_array_open_with_attr(dfs->coh, oid, DAOS_TX_NONE, DAOS_OO_RO, 1,
+				       chunk_size ? chunk_size : dfs->attr.da_chunk_size,
+				       &oh, NULL);
+	if (rc != 0) {
+		D_ERROR("daos_array_open() failed: "DF_RC"\n", DP_RC(rc));
+		return daos_der2errno(rc);
+	}
+
+	rc = daos_array_get_size(oh, DAOS_TX_NONE, size, NULL);
+	if (rc) {
+		daos_array_close(oh, NULL);
+		D_ERROR("daos_array_get_size() failed: "DF_RC"\n", DP_RC(rc));
+		return daos_der2errno(rc);
+	}
+
+	rc = daos_array_close(oh, NULL);
+	return daos_der2errno(rc);
+}
+
+int
 dfs_punch(dfs_t *dfs, dfs_obj_t *obj, daos_off_t offset, daos_size_t len)
 {
 	daos_size_t		size;
@@ -6514,14 +6544,15 @@ dfs_pipeline_destroy(dfs_pipeline_t *dpipe)
 
 int
 dfs_readdir_with_filter(dfs_t *dfs, dfs_obj_t *obj, dfs_pipeline_t *dpipe, daos_anchor_t *anchor,
-			uint32_t *nr, struct dirent *dirs, uint64_t *nr_scanned)
+			uint32_t *nr, struct dirent *dirs, daos_obj_id_t *oids, daos_size_t *csize,
+			uint64_t *nr_scanned)
 {
 	daos_iod_t	iod;
 	daos_key_desc_t	*kds;
 	d_sg_list_t	*sgl_keys = NULL, *sgl_recs = NULL;
 	d_iov_t		*iovs_keys = NULL, *iovs_recs = NULL;
 	char		*buf_keys = NULL, *buf_recs = NULL;
-	daos_recx_t	recxs[2];
+	daos_recx_t	recxs[4];
 	uint32_t	nr_iods, nr_kds, key_nr, i;
 	daos_size_t	record_len;
 	int		rc = 0;
@@ -6545,10 +6576,23 @@ dfs_readdir_with_filter(dfs_t *dfs, dfs_obj_t *obj, dfs_pipeline_t *dpipe, daos_
 	iod.iod_recxs	= recxs;
 	iod.iod_type	= DAOS_IOD_ARRAY;
 	d_iov_set(&iod.iod_name, INODE_AKEY_NAME, sizeof(INODE_AKEY_NAME) - 1);
+	record_len = recxs[0].rx_nr + recxs[1].rx_nr;
+
+	if (oids) {
+		iod.iod_nr ++;
+		recxs[2].rx_idx	= OID_IDX;
+		recxs[2].rx_nr	= sizeof(daos_obj_id_t);
+		record_len += recxs[2].rx_nr;
+	}
+	if (csize) {
+		iod.iod_nr ++;
+		recxs[3].rx_idx	= CSIZE_IDX;
+		recxs[3].rx_nr	= sizeof(daos_size_t);
+		record_len += recxs[3].rx_nr;
+	}
 
 	nr_kds = *nr;
 	nr_iods = 1;
-	record_len = sizeof(mode_t) + sizeof(time_t);
 
 	D_ALLOC_ARRAY(kds, nr_kds);
 	if (kds == NULL)
@@ -6572,7 +6616,7 @@ dfs_readdir_with_filter(dfs_t *dfs, dfs_obj_t *obj, dfs_pipeline_t *dpipe, daos_
 	D_ALLOC_ARRAY(iovs_recs, nr_kds);
 	if (iovs_recs == NULL)
 		D_GOTO(out, rc = ENOMEM);
-	D_ALLOC_ARRAY(buf_recs, nr_kds * DFS_MAX_NAME);
+	D_ALLOC_ARRAY(buf_recs, nr_kds * record_len);
 	if (buf_recs == NULL)
 		D_GOTO(out, rc = ENOMEM);
 
@@ -6611,7 +6655,7 @@ dfs_readdir_with_filter(dfs_t *dfs, dfs_obj_t *obj, dfs_pipeline_t *dpipe, daos_
 			dirs[key_nr].d_name[kds[i].kd_key_len] = '\0';
 
 			/** set the dentry type */
-			ptr2 = &buf_recs[i * (sizeof(mode_t) + sizeof(time_t))];
+			ptr2 = &buf_recs[i * record_len];
 			mode = *((mode_t *) ptr2);
 
 			if (S_ISDIR(mode)) {
@@ -6623,6 +6667,21 @@ dfs_readdir_with_filter(dfs_t *dfs, dfs_obj_t *obj, dfs_pipeline_t *dpipe, daos_
 			} else {
 				D_ERROR("Invalid DFS entry type found, possible data corruption\n");
 				D_GOTO(out, rc = EINVAL);
+			}
+
+			/** set the OID for dentry if requested */
+			if (oids) {
+				ptr2 += sizeof(mode_t) + sizeof(time_t);
+				oid_cp(&oids[key_nr], *((daos_obj_id_t *) ptr2));
+			}
+
+			/** set the chunk size for dentry if requested */
+			if (csize) {
+				if (oids)
+					ptr2 += sizeof(daos_obj_id_t);
+				else
+					ptr2 += sizeof(mode_t) + sizeof(time_t);
+				csize[key_nr] = *((daos_size_t *) ptr2);
 			}
 
 			key_nr++;

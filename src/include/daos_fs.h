@@ -605,6 +605,22 @@ int
 dfs_get_size(dfs_t *dfs, dfs_obj_t *obj, daos_size_t *size);
 
 /**
+ * Same as dfs_get_size() but using the OID of the file instead of the open handle. Note that the
+ * chunk_size of the file is also required to be passed if the file was created with a different
+ * chunk size than the default (passing other than 0 to dfs_open). Otherwise, 0 should be passed to
+ * chunk size.
+ *
+ * \param[in]	dfs		Pointer to the mounted file system.
+ * \param[in]	oid		Object ID of the file.
+ * \param[in]	chunk_size	Chunk size of the file (pass 0 if it was created with default).
+ * \param[out]	size		Returned size of the file.
+ *
+ * \return		0 on success, errno code on failure.
+ */
+int
+dfs_get_size_by_oid(dfs_t *dfs, daos_obj_id_t oid, daos_size_t chunk_size, daos_size_t *size);
+
+/**
  * Punch a hole in the file starting at offset to len. If len is set to
  * DFS_MAX_FSIZE, this will be equivalent to a truncate operation to shrink or
  * extend the file to \a offset bytes depending on the file size.
@@ -1142,7 +1158,8 @@ dfs_pipeline_destroy(dfs_pipeline_t *dpipe);
 
 /**
  * Same as dfs_readdir() but this additionally applies a filter created with dfs_pipeline_create()
- * on the entries that are enumerated.
+ * on the entries that are enumerated. This function also optionally returns the object ID of each
+ * dirent if requested through a pre-allocated OID input array.
  * 
  * \param[in]	dfs	Pointer to the mounted file system.
  * \param[in]	obj	Opened directory object.
@@ -1157,13 +1174,20 @@ dfs_pipeline_destroy(dfs_pipeline_t *dpipe);
  * \param[in,out]
  *		dirs	[in] preallocated array of dirents.
  *			[out]: dirents returned with d_name filled only.
+ * \param[in,out]
+ *		oids	[in] Optional preallocated array of object IDs.
+ *			[out]: Object ID associated with each dirent that was read.
+ * \param[in,out]
+ *		csizes	[in] Optional preallocated array of sizes.
+ *			[out]: chunk size associated with each dirent that was read.
  * \param[out]		Total number of entries scanned by readdir before returning.
  *
  * \return		0 on success, errno code on failure.
  */
 int
 dfs_readdir_with_filter(dfs_t *dfs, dfs_obj_t *obj, dfs_pipeline_t *dpipe, daos_anchor_t *anchor,
-			uint32_t *nr, struct dirent *dirs, uint64_t *nr_scanned);
+			uint32_t *nr, struct dirent *dirs, daos_obj_id_t *oids, daos_size_t *csizes,
+			uint64_t *nr_scanned);
 
 #if defined(__cplusplus)
 }
