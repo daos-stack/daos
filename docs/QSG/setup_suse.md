@@ -35,7 +35,7 @@ All nodes must have:
 - password-less ssh configured
 - pdsh installed (or some other means of running multiple remote commands in parallel)
 - server nodes should also have [IOMMU enabled](https://docs.daos.io/v2.0/admin/predeployment_check/#enable-iommu-optional).
-- Set the shell variables as outlined below (reccomended)
+- Set the shell variables as outlined below (recomended)
 
 ## Setting the shell variables
 
