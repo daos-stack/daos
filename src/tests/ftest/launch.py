@@ -345,6 +345,8 @@ def set_provider_environment(interface, args):
     """
     # Use the detected provider if one is not set
     provider = os.environ.get("CRT_PHY_ADDR_STR")
+
+    # FORCE UCX
     provider = "ucx+dc_x"
     if provider is None:
         print("Detecting provider for {} - CRT_PHY_ADDR_STR not set".format(interface))
