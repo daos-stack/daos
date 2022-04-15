@@ -8,10 +8,10 @@ centos7/daos-firmware*.rpm
 centos7/daos-serialize*.rpm
 centos7/daos-server-tests-openmpi*.rpm
 
-centos8/daos-client-tests-openmpi*.rpm
-centos8/daos-firmware*.rpm
-centos8/daos-serialize*.rpm
-centos8/daos-server-tests-openmpi*.rpm
+el8/daos-client-tests-openmpi*.rpm
+el8/daos-firmware*.rpm
+el8/daos-serialize*.rpm
+el8/daos-server-tests-openmpi*.rpm
 
 leap15/daos-client-tests-openmpi*.rpm
 leap15/daos-firmware*.rpm
