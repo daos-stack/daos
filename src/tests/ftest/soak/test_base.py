@@ -165,7 +165,7 @@ class SoakTestBase(TestWithServers):
         # Gather server logs
         try:
             get_daos_server_logs(self)
-        except DaosTestError as error:
+        except SoakTestError as error:
             errors.append("<<FAILED: Failed to gather server logs {}>>".format(error))
         # Gather journalctl logs
         hosts = list(set(self.hostlist_servers))
