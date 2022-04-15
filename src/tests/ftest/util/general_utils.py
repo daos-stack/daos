@@ -1381,4 +1381,4 @@ def set_avocado_config_value(section, key, value):
     if int(MAJOR) >= 82:
         settings.update_option(".".join([section, key]), value)
     else:
-        settings.config.set(".".join([section, key]), str(value))
+        settings.config.set(section, key, str(value))
