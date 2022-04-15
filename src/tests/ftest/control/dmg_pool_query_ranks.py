@@ -4,8 +4,6 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
-import time
-
 from control_test_base import ControlTestBase
 
 
