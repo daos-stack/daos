@@ -6,9 +6,9 @@ hosts:
         - server-D
         - server-E
         - server-F
-        - server-G
     test_clients:
         - client-A
+        - client-B
 
 timeout: 300
 
