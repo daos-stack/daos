@@ -6,7 +6,7 @@ hosts:
 timeouts:
   test_pool_query_ranks_basic: 120
   test_pool_query_ranks_error: 120
-  test_pool_query_ranks_mgmt: 360
+  test_pool_query_ranks_mgmt: 480
 server_config:
   name: daos_server
   servers:
@@ -17,5 +17,4 @@ server_config:
 pool:
   name: daos_server
   control_method: dmg
-  scm_size: 4GB
-  nvme_size: 16GB
+  size: 4GB

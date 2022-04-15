@@ -34,7 +34,7 @@ class DmgPoolQueryRanks(ControlTestBase):
 
         :avocado: tags=all,daily_regression
         :avocado: tags=vm
-        :avocado: tags=dmg,pool_query,pool_query_ranks
+        :avocado: tags=dmg,control,pool_query,pool_query_ranks
         :avocado: tags=pool_query_ranks_basic
         """
         self.log.info("Basic tests of pool query with ranks state")
@@ -51,7 +51,7 @@ class DmgPoolQueryRanks(ControlTestBase):
         self.log.debug("Checking enabled ranks state information")
         data = self.dmg.pool_query(self.pool.identifier, show_enabled=True)
         self.assertListEqual(data['response']['enabled_ranks'], [0, 1, 2],
-                "Invalid enabled_ranks field: want=None, "
+                "Invalid enabled_ranks field: want=[0, 1, 2], "
                 "got={}".format(data['response']['enabled_ranks']))
         self.assertIsNone(data['response']['disabled_ranks'],
                 "Invalid disabled_ranks field: want=None, "
@@ -63,7 +63,7 @@ class DmgPoolQueryRanks(ControlTestBase):
                 "Invalid enabled_ranks field: want=None, "
                 "got={}".format(data['response']['enabled_ranks']))
         self.assertListEqual(data['response']['disabled_ranks'], [],
-                "Invalid disabled_ranks field: want=None, "
+                "Invalid disabled_ranks field: want=[], "
                 "got={}".format(data['response']['disabled_ranks']))
 
     def test_pool_query_ranks_error(self):
@@ -74,7 +74,7 @@ class DmgPoolQueryRanks(ControlTestBase):
 
         :avocado: tags=all,daily_regression
         :avocado: tags=vm
-        :avocado: tags=dmg,pool_query,pool_query_ranks
+        :avocado: tags=dmg,control,pool_query,pool_query_ranks
         :avocado: tags=pool_query_ranks_error
         """
         self.log.info("Tests of pool query with incompatible options")
@@ -83,8 +83,7 @@ class DmgPoolQueryRanks(ControlTestBase):
         self.dmg.exit_status_exception = False
         try:
             data = self.dmg.pool_query(self.pool.identifier, show_enabled=True, show_disabled=True)
-            self.assertIsNotNone(data["error"], "Invalid error field: want={}, "
-                    "got=None".format(data['error']))
+            self.assertIsNotNone(data["error"], "Expected error not returned")
             self.assertIn(r'may not be mixed with', str(data['error']), "Invalid error message")
         finally:
             self.dmg.exit_status_exception = True
@@ -99,7 +98,7 @@ class DmgPoolQueryRanks(ControlTestBase):
 
         :avocado: tags=all,daily_regression
         :avocado: tags=vm
-        :avocado: tags=dmg,pool_query,pool_query_ranks
+        :avocado: tags=dmg,control,pool_query,pool_query_ranks
         :avocado: tags=pool_query_ranks_mgmt
         """
         self.log.info("Tests of pool query with ranks state when playing with ranks")
@@ -124,26 +123,12 @@ class DmgPoolQueryRanks(ControlTestBase):
                     "Invalid disabled_ranks field: want={}, "
                     "got={}".format(disabled_ranks, data['response']['disabled_ranks']))
 
+            self.log.debug("Waiting for pool to be rebuild")
+            self.pool.wait_for_rebuild(False)
+
         for rank in [2, 0, 1]:
             self.log.debug("Reintegrating rank %d", rank)
-            self.dmg.exit_status_exception = False
-            # NOTE Reintegrating ranks could not be done immediately => looping with timeout until
-            # the eviction is done.
-            timeout = 60
-            try:
-                while timeout > 0:
-                    rc = self.dmg.pool_reintegrate(self.pool.uuid, rank)
-                    if rc.exit_status == 0:
-                        break
-                    self.assertIn('DER_BUSY', str(rc.stdout),
-                            "Pool reintegration failed: {}".format(str(rc.stdout)))
-                    self.log.debug('Pool reintegration of rank=%d failed: msg="Resource busy", '
-                            'timeout=%d', rank, timeout)
-                    time.sleep(1.)
-                    timeout -= 1
-            finally:
-                self.dmg.exit_status_exception = True
-            self.assertNotEqual(timeout, 0, "Rank {} could not be reintegrated".format(rank))
+            self.pool.reintegrate(rank)
 
             enabled_ranks = sorted(enabled_ranks + [rank])
             disabled_ranks.remove(rank)
@@ -159,3 +144,6 @@ class DmgPoolQueryRanks(ControlTestBase):
             self.assertListEqual(data['response']['disabled_ranks'], disabled_ranks,
                     "Invalid disabled_ranks field: want={}, "
                     "got={}".format(disabled_ranks, data['response']['disabled_ranks']))
+
+            self.log.debug("Waiting for pool to be rebuild")
+            self.pool.wait_for_rebuild(False)
