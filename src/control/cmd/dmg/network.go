@@ -22,7 +22,7 @@ type NetCmd struct {
 // networkScanCmd is the struct representing the command to scan the machine for network interface devices
 // that match the given fabric provider.
 type networkScanCmd struct {
-	logCmd
+	baseCmd
 	cfgCmd
 	ctlInvokerCmd
 	hostListCmd
@@ -38,7 +38,7 @@ func (cmd *networkScanCmd) Execute(_ []string) error {
 
 	req.SetHostList(cmd.hostlist)
 
-	cmd.log.Debugf("network scan req: %+v", req)
+	cmd.Debugf("network scan req: %+v", req)
 
 	resp, err := control.NetworkScan(ctx, cmd.ctlInvoker, req)
 
@@ -58,7 +58,7 @@ func (cmd *networkScanCmd) Execute(_ []string) error {
 	if err := pretty.PrintHostFabricMap(resp.HostFabrics, &bld); err != nil {
 		return err
 	}
-	cmd.log.Info(bld.String())
+	cmd.Info(bld.String())
 
 	return resp.Errors()
 }
