@@ -27,7 +27,7 @@
 
 Name:          daos
 Version:       2.1.101
-Release:       1%{?relval}%{?dist}
+Release:       2%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       BSD-2-Clause-Patent
@@ -158,7 +158,11 @@ Requires: openssl
 # This should only be temporary until we can get a stable upstream release
 # of mercury, at which time the autoprov shared library version should
 # suffice
+%if 0%{ucx} > 0
+Requires: mercury-ucx >= %{mercury_version}
+%else
 Requires: mercury >= %{mercury_version}
+%endif
 
 
 %description
@@ -562,6 +566,9 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 # No files in a shim package
 
 %changelog
+* Fri Apr 15 2022 Phillip Henderson <phillip.henderson@intel.com> 2.1.101-2
+ - Require the mercury-ucx package when built with UCX
+
 * Wed Apr  6 2022 Johann Lombardi <johann.lombardi@intel.com> 2.1.101-1
  - Switch version to 2.1.101
 
