@@ -4,9 +4,8 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
-
-import re
 from apricot import TestWithServers
+
 
 class PoolPDAProperty(TestWithServers):
     # pylint: disable=too-many-ancestors
@@ -17,18 +16,22 @@ class PoolPDAProperty(TestWithServers):
 
     :avocado: recursive
     """
-    def verify_cont_pda(self, expected_value, match_str):
+    def verify_cont_pda(self, expected_value, match_name):
         """
         Verify the container pda property.
 
         Args:
             expected_value (int): expected container pda value
+            match_name (str): name field used to obtain the value from the output
         """
-        daos_cmd = self.get_daos_command()
-        cont_prop = daos_cmd.container_get_prop(self.pool.uuid,
-                                                self.container.uuid)
-        cont_prop_stdout = cont_prop.stdout_text
-        pda_value = int(re.search(match_str + r".*([\d]+)", cont_prop_stdout).group(1))
+        pda_value = None
+
+        cont_props = self.container.get_prop()
+        for cont_prop in cont_props["response"]:
+            if cont_prop["name"] == match_name:
+                pda_value = int(cont_prop["value"])
+                break
+
         self.assertEqual(expected_value, pda_value)
 
     def test_pda_pool_property(self):
@@ -70,8 +73,8 @@ class PoolPDAProperty(TestWithServers):
         ec_pda = self.pool.get_property("ec_pda")
         rp_pda = self.pool.get_property("rp_pda")
 
-        match_ec_str = 'Performance domain affinity level of EC'
-        match_rp_str = 'Performance domain affinity level of RP'
+        match_ec_str = 'ec_pda'
+        match_rp_str = 'rp_pda'
         self.verify_cont_pda(ec_pda, match_ec_str)
         self.verify_cont_pda(rp_pda, match_rp_str)
         # Destroy the container.
@@ -86,8 +89,3 @@ class PoolPDAProperty(TestWithServers):
 
         self.verify_cont_pda(ec_pda, match_ec_str)
         self.verify_cont_pda(rp_pda, match_rp_str)
-
-        # Destroy the container.
-        self.container.destroy()
-
-        self.destroy_pools(pools=self.pool)
