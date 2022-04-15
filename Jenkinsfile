@@ -123,7 +123,7 @@ pipeline {
                         }
                     }
                 } // stage('Functional on CentOS 7')
-                stage('Functional on CentOS 8') {
+                stage('Functional on EL 8') {
                     when {
                         beforeAgent true
                         expression { ! skipStage() }
@@ -146,7 +146,7 @@ pipeline {
                             functionalTestPostV2()
                         }
                     }
-                } // stage('Functional on CentOS 8')
+                } // stage('Functional on EL 8')
                 stage('Functional on Leap 15') {
                     when {
                         beforeAgent true
