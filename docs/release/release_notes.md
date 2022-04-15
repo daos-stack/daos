@@ -240,7 +240,8 @@ The DAOS 2.0 release includes fixes for numerous defects, including:
 
 A complete list of bugs resolved in v2.0 can be found [**HERE**](https://daosio.atlassian.net/issues/?jql=project%20in%20(DAOS%2C%20CART)%20AND%20type%20%3D%20bug%20AND%20statuscategory%20%3D%20done%20AND%20resolution%20in%20(fixed%2C%20Fixed-Verified%2C%20Done)%20AND%20fixversion%20%3D%20%222.0%20Community%20Release%22%20AND%20%22Bug%20Source%22%20!%3D%20%22non-product%20bug%22%20ORDER%20BY%20priority%20DESC).
 
-### Additional resources
+
+## Additional resources
 
 Visit the [online documentation](https://docs.daos.io/v2.0/) for more
 information. All DAOS project source code is maintained in the

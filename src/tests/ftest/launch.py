@@ -1937,7 +1937,7 @@ def install_debuginfos():
 
     # Now install a few pkgs that debuginfo-install wouldn't
     cmd = ["sudo", "dnf", "-y"]
-    if is_el(distro_info):
+    if is_el(distro_info) or "suse" in distro_info.name.lower():
         cmd.append("--enablerepo=*debug*")
     cmd.append("install")
     for pkg in install_pkgs:
@@ -1962,7 +1962,7 @@ def install_debuginfos():
     if retry:
         print("Going to refresh caches and try again")
         cmd_prefix = ["sudo", "dnf"]
-        if is_el(distro_info):
+        if is_el(distro_info) or "suse" in distro_info.name.lower():
             cmd_prefix.append("--enablerepo=*debug*")
         cmds.insert(0, cmd_prefix + ["clean", "all"])
         cmds.insert(1, cmd_prefix + ["makecache"])
