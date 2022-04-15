@@ -1472,8 +1472,6 @@ agg_process_holes_ult(void *arg)
 	crt_endpoint_t		 tgt_ep = { 0 };
 	struct ec_agg_stripe_ud	*stripe_ud = (struct ec_agg_stripe_ud *)arg;
 	daos_iod_t		*iod = &stripe_ud->asu_iod;
-	d_iov_t			*csum_iov_fetch = &stripe_ud->asu_csum_iov;
-	d_iov_t			 tmp_csum_iov;
 	struct ec_agg_entry	*entry = stripe_ud->asu_agg_entry;
 	struct ec_agg_extent	*agg_extent;
 	struct pool_target	*targets = NULL;
@@ -1538,64 +1536,24 @@ agg_process_holes_ult(void *arg)
 	entry->ae_sgl.sg_iovs[AGG_IOV_DATA].iov_len = ext_tot_len *
 						      entry->ae_rsize;
 	D_ASSERT(entry->ae_sgl.sg_iovs[AGG_IOV_DATA].iov_len <= k * cell_b);
+	agg_param = container_of(entry, struct ec_agg_param, ap_agg_entry);
 	/* Pull data via dsc_obj_fetch */
 	if (ext_cnt) {
-		bool	retried = false;
+		struct daos_csummer	*csummer;
 
-		rc = daos_iov_alloc(csum_iov_fetch, EC_CSUM_BUF_SIZE, false);
-		if (rc != 0)
-			goto out;
-
-fetch_again:
-		rc = dsc_obj_fetch(entry->ae_obj_hdl,
-				   entry->ae_cur_stripe.as_hi_epoch,
+		rc = dsc_obj_fetch(entry->ae_obj_hdl, entry->ae_cur_stripe.as_hi_epoch,
 				   &entry->ae_dkey, 1, iod, &entry->ae_sgl,
-				   NULL, DIOF_FOR_EC_AGG, NULL, csum_iov_fetch);
+				   NULL, DIOF_FOR_EC_AGG, NULL, NULL);
 		if (rc) {
 			D_ERROR("dsc_obj_fetch failed: "DF_RC"\n", DP_RC(rc));
 			goto out;
 		}
 
-		if (retried)
-			D_ASSERT(csum_iov_fetch->iov_len == 0 ||
-				 csum_iov_fetch->iov_len <=
-				 csum_iov_fetch->iov_buf_len);
-
-		if (csum_iov_fetch->iov_len > csum_iov_fetch->iov_buf_len &&
-		    !retried) {
-			/** retry dsc_obj_fetch with appropriate csum_iov
-			 * buf length
-			 */
-			void *tmp_ptr;
-
-			D_REALLOC(tmp_ptr, csum_iov_fetch->iov_buf,
-				  csum_iov_fetch->iov_buf_len,
-				  csum_iov_fetch->iov_len);
-			if (tmp_ptr == NULL)
-				D_GOTO(out, rc = -DER_NOMEM);
-
-			csum_iov_fetch->iov_buf_len = csum_iov_fetch->iov_len;
-			csum_iov_fetch->iov_len = 0;
-			csum_iov_fetch->iov_buf = tmp_ptr;
-			retried = true;
-			goto fetch_again;
-		}
-
-		rc = daos_csummer_csum_init_with_packed(&stripe_ud->asu_csummer,
-							csum_iov_fetch);
-		if (rc) {
-			D_ERROR("daos_csummer_csum_init_with_packed failed: "
-				DF_RC"\n", DP_RC(rc));
-			goto out;
-		}
-
-		tmp_csum_iov = *csum_iov_fetch;
-		rc = daos_csummer_alloc_iods_csums_with_packed(
-			stripe_ud->asu_csummer, iod, 1, &tmp_csum_iov,
-			&stripe_ud->asu_iod_csums);
+		csummer = ec_agg_param2csummer(agg_param);
+		rc = daos_csummer_calc_iods(csummer, &entry->ae_sgl, iod, NULL, 1, false,
+					    NULL, -1, &stripe_ud->asu_iod_csums);
 		if (rc != 0) {
-			D_ERROR("setting up iods csums failed: "DF_RC"\n",
-				DP_RC(rc));
+			D_ERROR("setting up iods csums failed: "DF_RC"\n", DP_RC(rc));
 			goto out;
 		}
 	}
@@ -1613,7 +1571,6 @@ fetch_again:
 		}
 	}
 
-	agg_param = container_of(entry, struct ec_agg_param, ap_agg_entry);
 	rc = pool_map_find_failed_tgts(agg_param->ap_pool_info.api_pool->sp_map,
 				       &targets, &failed_tgts_cnt);
 	if (rc) {
