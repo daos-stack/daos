@@ -481,10 +481,11 @@ class TestPool(TestDaosApiBase):
     def evict(self):
         """Evict all pool connections to a DAOS pool."""
         if self.pool:
-            self.log.info(
-                "Evict all pool connections for pool: %s", self.identifier)
-
-            self.dmg.pool_evict(self.identifier)
+            self.log.info("Evict all pool connections for pool: %s", self.identifier)
+            try:
+                self.dmg.pool_evict(self.identifier)
+            finally:
+                self.connected = False
 
     @fail_on(DaosApiError)
     def get_info(self):
