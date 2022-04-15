@@ -123,15 +123,19 @@ ec_setup_cont_obj(struct ec_agg_test_ctx *ctx, daos_oclass_id_t oclass)
 {
 	char	str[37];
 	int	rc;
-	daos_prop_t *prop;
+	daos_prop_t *props;
 
-	prop = daos_prop_alloc(1);
-	assert_non_null(prop);
-	prop->dpp_entries[0].dpe_type = DAOS_PROP_CO_EC_CELL_SZ;
-	prop->dpp_entries[0].dpe_val = TEST_EC_CELL_SZ;
+	props = daos_prop_alloc(3);
+	assert_non_null(props);
+	props->dpp_entries[0].dpe_type = DAOS_PROP_CO_EC_CELL_SZ;
+	props->dpp_entries[0].dpe_val = TEST_EC_CELL_SZ;
+	props->dpp_entries[1].dpe_type = DAOS_PROP_CO_CSUM;
+	props->dpp_entries[1].dpe_val = DAOS_PROP_CO_CSUM_CRC32;
+	props->dpp_entries[2].dpe_type = DAOS_PROP_CO_CSUM_SERVER_VERIFY;
+	props->dpp_entries[2].dpe_val = DAOS_PROP_CO_CSUM_SV_ON;
 
-	rc = daos_cont_create(ctx->poh, &ctx->uuid, prop, NULL);
-	daos_prop_free(prop);
+	rc = daos_cont_create(ctx->poh, &ctx->uuid, props, NULL);
+	daos_prop_free(props);
 	assert_success(rc);
 
 	uuid_unparse(ctx->uuid, str);
