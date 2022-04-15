@@ -1,27 +1,23 @@
 # DAOS Set-Up on CentOS
 
-The following instructions detail how to install, set up and start DAOS servers and clients on two or more nodes.
+The following instructions detail how to install, set up, and start DAOS servers and clients on two or more nodes.
 This document includes instructions for CentOS.
-The process is identical for CentOS Linux 7 and CentOS Linux 8,
-except for the location of the DAOS RPM repository.
-For setup instructions on OpenSuse, refer to
+The process is identical for CentOS Linux 7 and CentOS Linux 8, except for the 
+location of the DAOS RPM repository. For setup instructions on OpenSuse, refer to
 [OpenSuse setup](setup_suse.md).
 
 For more details, reference the [DAOS administration guide](https://docs.daos.io/v2.0/admin/hardware/).
 
 ## Requirements
 
-The following steps require two or more hosts, divided up
-into admin, client, and server roles. A single node can be used for multiple
+The following steps require two or more hosts, divided up into admin, client,
+and server roles. A single node can be used for multiple
 roles. For example, the admin role can reside on a server, client, or dedicated admin node.
 
-All nodes must have:
-
-- sudo access configured
 - password-less ssh configured
 - pdsh installed (or some other means of running multiple remote commands in parallel)
 - server nodes should also have [IOMMU enabled](https://docs.daos.io/v2.0/admin/predeployment_check/#enable-iommu-optional).
-- Set the shell variables as outlined below (reccomended)
+- Set the shell variables as outlined below (recommended)
 
 ## Setting the shell variables
 
@@ -34,8 +30,8 @@ variables will need to be defined:
 - ALL\_NODES
 
 For example, if you want to use admin-1 as the admin node, client-1 and
-client-2 as client nodes, and server-\[1-3\] as server nodes,
-the variables would be defined as:
+client-2 as client nodes, and server-\[1-3\] as server nodes, the variables
+would be defined as:
 
 ```console
 ADMIN_NODE=admin-1
@@ -100,7 +96,7 @@ SSDs will be prepared and configured to be used by DAOS.
 !!! note
     PMem preparation is required once per DAOS installation.
 
-1. Prepare the pmem devices on Server nodes:
+1. Prepare the PMem devices on Server nodes:
 
 ```command
 daos_server storage prepare --scm-only
@@ -124,7 +120,7 @@ daos_server storage prepare --scm-only
 
 2. Reboot the server node.
 
-3. rerun the prepare cmdline:
+3. Re-run the prepare cmdline:
 
 ```command
             daos_server storage prepare --scm-only
@@ -139,14 +135,14 @@ daos_server storage prepare --scm-only
             pmem1                   0                 3.2 TB
 ```
 
-4. Prepare the NVME devices on Server nodes:
+4. Prepare the NVME devices on the server nodes:
 
 ```command
 daos_server storage prepare --nvme-only -u root
       Preparing locally-attached NVMe storage...
 ```
 
-5. Scan the available storage on the Server nodes:
+5. Scan the available storage on the server nodes:
 
 ```bash
       daos_server storage scan -jeo
@@ -285,9 +281,8 @@ pdsh -S -w $SERVER_NODES sudo chown daos_server:daos_server /etc/daos/certs/clie
 
 ## Create Configuration Files
 
-The `daos_server`, `daos_agent`, and dmg command
-configuration files will be defined in this section. Examples are available at
-<https://github.com/daos-stack/daos/tree/release/2.0/utils/config/examples>
+The `daos_server`, `daos_agent`, and dmg command configuration files will be
+defined in this section. Examples are available [here](<https://github.com/daos-stack/daos/tree/release/2.0/utils/config/examples>)
 
 1. Determine the addresses for the NVMe devices on the server nodes:
 
@@ -405,7 +400,7 @@ pdsh -S -w $SERVER_NODES "sudo systemctl status daos_server"
       wolf-179: May 05 22:21:03 wolf-179.wolf.hpdd.intel.com daos_server[37431]: Metadata format required on instance 0
 ```
 
-3. Format storage(optional)
+3. Format storage (optional)
 
 ```command
       dmg storage format -l $SERVER_NODES --force
@@ -416,7 +411,7 @@ pdsh -S -w $SERVER_NODES "sudo systemctl status daos_server"
 ```bash
 dmg system query -v
 
-      #all the server ranks should show 'Joined' STATE
+      #all the server ranks should show the state of 'Joined' 
       Rank UUID                                 Control Address  Fault Domain                  State  Reason
       ---- ----                                 ---------------  ------------                  -----  ------
       0    604c4ffa-563a-49dc-b702-3c87293dbcf3 10.8.1.179:10001 /wolf-179.wolf.hpdd.intel.com Joined
@@ -427,13 +422,13 @@ dmg system query -v
 
 ## Start the DAOS Agents
 
-1. Start the daos agents on the client nodes:
+1. Start the DAOS agents on the client nodes:
 
 ```command
 pdsh -S -w $CLIENT_NODES "sudo systemctl start daos_agent"
 ```
 
-2. (Optional) Check daos_agent status:
+2. Check DAOS agent status (optional) :
 
 ```command
 pdsh -S -w $CLIENT_NODES "cat /tmp/daos_agent.log"

@@ -2,32 +2,31 @@
 
 ## Introduction
 
-The purpose of this Guide is to provide a user with a set of command lines to quickly set up and use DAOS with POSIX on openSUSE/SLES 15.2.
+The purpose of this QSG is to provide a user with a set of command lines to quickly set up and use DAOS with POSIX on openSUSE/SLES 15.2.
 
-The purpose of this guide is to provide a user with a set of command lines to quickly setup and use DAOS with POSIX on openSUSE/SLES 15.3.
+This document covers the installation of the DAOS rpms on openSUSE/SLES 15.3 and updating the DAOS configuration files needed by DAOS servers.
 
-This document covers installation of the DAOS rpms on openSUSE/SLES 15.3 and updating the DAOS configuration files needed by daos servers.
-
-This Guide will also describe how to use dfuse to take advantage of DAOS support for POSIX.
+This QSG will also describe how to use dfuse to take advantage of DAOS support for POSIX.
 For setup instructions on CentOS, refer to the [CentOS setup](setup_centos.md).
 For more details, reference the DAOS administration guide:
 <https://docs.daos.io/v2.0/admin/hardware/>
 
 ## Requirements
 
-This Guide requires a minimum of:
+This QSG requires a minimum of:
 
-- 1 server with PMEM and SSDs connected via infiniband storage network.
+- 1 server with PMem and SSDs connected via the Infiniband storage network.
 - 1 client node.
-- 1 admin node without pmem/ssd but on the infiniband storage network.
+- 1 admin node without PMem/SSD but on the Infiniband storage network.
 - All nodes have a base openSUSE or SLES 15.3 installed.
 
+## Configuration
 
-## Requirements
+The following configuration steps will require access to two or more nodes.
 
-The following steps require two or more hosts, divided up
-into admin, client, and server roles. A single node can be used for multiple
-roles. For example, the admin role can reside on a server, client, or dedicated admin node.
+A single node can be used for multiple roles.
+
+For example, the admin role can reside on a server, client, or dedicated admin node.
 
 All nodes must have:
 
@@ -35,11 +34,11 @@ All nodes must have:
 - password-less ssh configured
 - pdsh installed (or some other means of running multiple remote commands in parallel)
 - server nodes should also have [IOMMU enabled](https://docs.daos.io/v2.0/admin/predeployment_check/#enable-iommu-optional).
-- Set the shell variables as outlined below (recomended)
+- Set the shell variables as outlined below (recommended)
 
 ## Setting the shell variables
 
-For the use of the commands outlined in this guide, the following shell
+For the use of the commands outlined in this QSG, the following shell
 variables will need to be defined:
 
 - ADMIN\_NODE
@@ -48,8 +47,8 @@ variables will need to be defined:
 - ALL\_NODES
 
 For example, if you want to use admin-1 as the admin node, client-1 and
-client-2 as client nodes, and server-\[1-3\] as server nodes,
-the variables would be defined as:
+client-2 as client nodes, and server-\[1-3\] as server nodes, the variables
+would be defined as:
 
 ```console
 ADMIN_NODE=admin-1
@@ -71,7 +70,7 @@ ALL_NODES=$CLIENT_NODES,$SERVER_NODES
 
 ## RPM Installation
 
-This section will install the required RPMs on each node based on their role.  Admin and client nodes require the installation
+This section will install the required RPMs on each node based on their role. The admin and client nodes require the installation
 of the daos-client RPM, and the server nodes require the installation of the
 daos-server RPM.
 
@@ -115,9 +114,10 @@ SSDs will be prepared and configured to be used by DAOS.
 	PMem preparation is required once per DAOS installation.
 
 !!! note
-	For OpenSUSE 15.3 installation, update ipmctl to the latest package available from https://build.opensuse.org/package/binaries/hardware:nvdimm/ipmctl/openSUSE_Leap_15.3
+	For OpenSUSE 15.3 installation, update (ipmctl) to the latest package
+      available from 
 
-1. Prepare the pmem devices on Server nodes:
+1. Prepare the PMem devices on Server nodes:
 
 ```command
 daos_server storage prepare --scm-only
@@ -141,7 +141,7 @@ daos_server storage prepare --scm-only
 
 2. Reboot the server node.
 
-3. rerun the prepare cmdline:
+3. Re-run the prepare cmdline:
 
 ```command
       daos_server storage prepare --scm-only
@@ -183,7 +183,7 @@ daos_server storage prepare --nvme-only -u root
 
 ## Generate certificates
 
-In this section, certificates will be generated and installed for
+In this section, certificates are generated and installed for
 encrypting the DAOS control plane communications.
 
 Administrative nodes require the following certificate files:
@@ -223,8 +223,7 @@ cd /tmp
 	!!! note
 		These files should be protected from unauthorized access and preserved for future use.
 
-2. Copy the certificates to a common location on each node in order to
-    move them to the final location:
+2. Copy the certificates to a common location on each node
 
 ```command
 pdsh -S -w $ALL_NODES -x $(hostname -s) scp -r $(hostname -s):/tmp/daosCA /tmp
@@ -303,8 +302,8 @@ pdsh -S -w $SERVER_NODES sudo chown daos_server:daos_server /etc/daos/certs/clie
 
 ## Create Configuration Files
 
-The `daos_server`, `daos_agent`, and dmg command
-configuration files will be defined in this section. Examples are available at
+The `daos_server`, `daos_agent`, and dmg command configuration files will be
+defined in this section. Examples are available at
 <https://github.com/daos-stack/daos/tree/release/1.2/utils/config/examples>
 
 1. Determine the addresses for the NVMe devices on the server
@@ -320,11 +319,9 @@ pdsh -S -w $SERVER_NODES sudo lspci | grep -i nvme
 		used to populate the "bdev_list" server configuration parameter
 		below.
 
-
 2. Create a server configuration file by modifying the default
-    `/etc/daos/daos_server.yml` file on the server nodes.
-
-      An example of the daos_server.yml is presented below.  Copy the modified server yaml file to all the server nodes at `/etc/daos/daos_server.yml`
+`/etc/daos/daos_server.yml` file on the server nodes. An example of the
+daos_server.yml is below.
 
 ```bash
 name: daos_server
