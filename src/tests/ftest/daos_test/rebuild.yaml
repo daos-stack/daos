@@ -120,8 +120,3 @@ daos_tests:
     test_rebuild_27: ["random"]
     test_rebuild_28: [7]
     test_rebuild_29: ["random"]
-  pools_created:
-    test_rebuild_0to10: 16
-    test_rebuild_12to15: 5
-    test_rebuild_18: 5
-    test_rebuild_28: 2
