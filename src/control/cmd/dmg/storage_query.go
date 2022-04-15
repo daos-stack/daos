@@ -29,7 +29,7 @@ func (r *rankCmd) GetRank() system.Rank {
 }
 
 type smdQueryCmd struct {
-	logCmd
+	baseCmd
 	ctlInvokerCmd
 	hostListCmd
 	jsonOutputCmd
@@ -54,7 +54,7 @@ func (cmd *smdQueryCmd) makeRequest(ctx context.Context, req *control.SmdQueryRe
 	if err := pretty.PrintSmdInfoMap(req, resp.HostStorage, &bld, opts...); err != nil {
 		return err
 	}
-	cmd.log.Info(bld.String())
+	cmd.Info(bld.String())
 
 	return resp.Errors()
 }
@@ -146,7 +146,7 @@ func (cmd *listPoolsQueryCmd) Execute(_ []string) error {
 
 // usageQueryCmd is the struct representing the scan storage subcommand.
 type usageQueryCmd struct {
-	logCmd
+	baseCmd
 	ctlInvokerCmd
 	hostListCmd
 	jsonOutputCmd
@@ -178,7 +178,7 @@ func (cmd *usageQueryCmd) Execute(_ []string) error {
 	}
 	// Infof prints raw string and doesn't try to expand "%"
 	// preserving column formatting in txtfmt table
-	cmd.log.Infof("%s", bld.String())
+	cmd.Infof("%s", bld.String())
 
 	return resp.Errors()
 }
