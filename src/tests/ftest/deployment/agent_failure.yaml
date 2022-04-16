@@ -55,7 +55,7 @@ container:
 
 ior:
     client_processes:
-        ppn: 10
+        np: 4
     iorflags:
         flags: "-k -v -w -W"
         api: DFS
@@ -63,7 +63,7 @@ ior:
         # block_size and/or decrease transfer_size. To decrease transfer_size, divide it
         # by 2, 4, 8, etc.
         transfer_size: '256K'
-        block_size: '5G'
+        block_size: '20G'
         sw_deadline: 60
         dfs_oclass: "SX"
         dfs_dir_oclass: "SX"
