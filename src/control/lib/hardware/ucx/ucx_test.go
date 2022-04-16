@@ -51,7 +51,7 @@ func TestUCX_Provider_getProviderSet(t *testing.T) {
 	}{
 		"dc": {
 			in:     "dc_mlx5",
-			expSet: common.NewStringSet("ucx+dc"),
+			expSet: common.NewStringSet("ucx+dc_x", "ucx+dc"),
 		},
 		"tcp": {
 			in:     "tcp",
@@ -102,8 +102,12 @@ func TestUCX_transportToDAOSProvider(t *testing.T) {
 			in:  "ud_mlx5",
 			exp: "ucx+ud_x",
 		},
+		"dc_mlx5": {
+			in:  "dc_mlx5",
+			exp: "ucx+dc_x",
+		},
 		"dc": {
-			in:  "dc_something",
+			in:  "dc",
 			exp: "ucx+dc",
 		},
 		"tcp": {
