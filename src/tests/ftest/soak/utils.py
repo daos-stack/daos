@@ -979,7 +979,7 @@ def create_macsio_cmdline(self, job_spec, pool, ppn, nodesperjob):
             sbatch_cmds = ["module purge", "module load {}".format(self.mpi_module)]
             mpirun_cmd = Mpirun(macsio, mpi_type=self.mpi_module)
             mpirun_cmd.assign_processes(nodesperjob * ppn)
-            if api in ["HDF-VOL"]:
+            if api in ["HDF5-VOL"]:
                 # include dfuse cmdlines
                 dfuse, dfuse_start_cmdlist = start_dfuse(
                     self, pool, self.container[-1], name=log_name, job_spec=job_spec)
@@ -992,7 +992,7 @@ def create_macsio_cmdline(self, job_spec, pool, ppn, nodesperjob):
             mpirun_cmd.ppn.update(ppn)
             sbatch_cmds.append(str(mpirun_cmd))
             sbatch_cmds.append("status=$?")
-            if api in ["HDF-VOL"]:
+            if api in ["HDF5-VOL"]:
                 sbatch_cmds.extend(stop_dfuse(dfuse, vol=True))
             commands.append([sbatch_cmds, log_name])
             self.log.info("<<MACSio cmdlines>>:")
