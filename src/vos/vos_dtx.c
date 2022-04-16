@@ -548,6 +548,11 @@ dtx_ilog_rec_release(struct umem_instance *umm, struct vos_container *cont,
 		rc = ilog_persist(loh, &id);
 
 	ilog_close(loh);
+
+	if (rc != 0)
+		D_ERROR("Failed to release ilog rec for "DF_DTI", abort %s: "DF_RC"\n",
+			DP_DTI(&DAE_XID(dae)), abort ? "yes" : "no", DP_RC(rc));
+
 	return rc;
 }
 
@@ -745,10 +750,9 @@ dtx_rec_release(struct vos_container *cont, struct vos_dtx_act_ent *dae,
 }
 
 static int
-vos_dtx_commit_one(struct vos_container *cont, struct dtx_id *dti,
-		   daos_epoch_t epoch, struct vos_dtx_cmt_ent **dce_p,
-		   struct vos_dtx_act_ent **dae_p,
-		   bool *rm_cos, bool *fatal)
+vos_dtx_commit_one(struct vos_container *cont, struct dtx_id *dti, daos_epoch_t epoch,
+		   daos_epoch_t cmt_time, struct vos_dtx_cmt_ent **dce_p,
+		   struct vos_dtx_act_ent **dae_p, bool *rm_cos, bool *fatal)
 {
 	struct vos_dtx_act_ent		*dae = NULL;
 	struct vos_dtx_cmt_ent		*dce = NULL;
@@ -811,10 +815,10 @@ vos_dtx_commit_one(struct vos_container *cont, struct dtx_id *dti,
 	if (dce == NULL)
 		D_GOTO(out, rc = -DER_NOMEM);
 
+	DCE_CMT_TIME(dce) = cmt_time;
 	if (dae != NULL) {
 		DCE_XID(dce) = DAE_XID(dae);
 		DCE_EPOCH(dce) = DAE_EPOCH(dae);
-		DCE_HANDLE_TIME(dce) = dae->dae_start_time;
 	} else {
 		struct dtx_handle	*dth = vos_dth_get();
 
@@ -822,7 +826,6 @@ vos_dtx_commit_one(struct vos_container *cont, struct dtx_id *dti,
 
 		DCE_XID(dce) = *dti;
 		DCE_EPOCH(dce) = dth->dth_epoch;
-		DCE_HANDLE_TIME(dce) = crt_hlc_get();
 	}
 
 	d_iov_set(&riov, dce, sizeof(*dce));
@@ -1829,6 +1832,7 @@ vos_dtx_commit_internal(struct vos_container *cont, struct dtx_id dtis[],
 	struct vos_dtx_blob_df		*dbd;
 	struct vos_dtx_blob_df		*dbd_prev;
 	umem_off_t			 dbd_off;
+	daos_epoch_t			 cmt_time = crt_hlc_get();
 	int				 committed = 0;
 	int				 cur = 0;
 	int				 rc = 0;
@@ -1857,7 +1861,7 @@ again:
 	     i++, cur++) {
 		struct vos_dtx_cmt_ent	*dce = NULL;
 
-		rc = vos_dtx_commit_one(cont, &dtis[cur], epoch, &dce,
+		rc = vos_dtx_commit_one(cont, &dtis[cur], epoch, cmt_time, &dce,
 					daes != NULL ? &daes[cur] : NULL,
 					rm_cos != NULL ? &rm_cos[cur] : NULL, &fatal);
 		if (dces != NULL)
@@ -2172,16 +2176,23 @@ vos_dtx_set_flags(daos_handle_t coh, struct dtx_id *dti, uint32_t flags)
 	rc = dbtree_lookup(cont->vc_dtx_active_hdl, &kiov, &riov);
 	if (rc == -DER_NONEXIST) {
 		rc = dbtree_lookup(cont->vc_dtx_committed_hdl, &kiov, &riov);
-		if (rc == 0)
+		if (rc == 0) {
+			D_ERROR("Not allow to set flag on committed/aborted DTX entry "DF_DTI"\n",
+				DP_DTI(dti));
 			D_GOTO(out, rc = -DER_NO_PERM);
+		}
 	}
 
 	if (rc != 0)
 		goto out;
 
 	dae = (struct vos_dtx_act_ent *)riov.iov_buf;
-	if (dae->dae_committable || dae->dae_committed || dae->dae_aborted)
+	if (dae->dae_committable || dae->dae_committed || dae->dae_aborted) {
+		D_ERROR("Not allow to set flag on the %s DTX entry "DF_DTI"\n",
+			dae->dae_committable ? "committable" :
+			dae->dae_committed ? "committed" : "aborted", DP_DTI(dti));
 		D_GOTO(out, rc = -DER_NO_PERM);
+	}
 
 	umm = vos_cont2umm(cont);
 	dae_df = umem_off2ptr(umm, dae->dae_df_off);
@@ -2382,9 +2393,8 @@ cmt:
 			dce = &dbd->dbd_committed_data[i];
 
 			if (!daos_is_zero_dti(&dce->dce_xid) &&
-			    dce->dce_handle_time != 0) {
-				stat->dtx_first_cmt_blob_time_up =
-							dce->dce_handle_time;
+			    dce->dce_cmt_time != 0) {
+				stat->dtx_first_cmt_blob_time_up = dce->dce_cmt_time;
 				break;
 			}
 		}
@@ -2393,9 +2403,8 @@ cmt:
 			dce = &dbd->dbd_committed_data[i];
 
 			if (!daos_is_zero_dti(&dce->dce_xid) &&
-			    dce->dce_handle_time != 0) {
-				stat->dtx_first_cmt_blob_time_lo =
-							dce->dce_handle_time;
+			    dce->dce_cmt_time != 0) {
+				stat->dtx_first_cmt_blob_time_lo = dce->dce_cmt_time;
 				break;
 			}
 		}
