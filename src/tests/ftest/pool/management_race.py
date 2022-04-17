@@ -84,12 +84,11 @@ class PoolManagementRace(TestWithServers):
             pool_list.
         Use case:
             1. Create num_pools pools.
-            2. Setup the thread manager for del_and_recreate_pool
-            3. Setup multiple threads query_and_list_pools
-            4. Launch all the threads
-            5. Multiple threads perform pool delete, recreate with same label, while multiple
-               queries to the pool.
-            6. Check for failure from each thread_manager
+            2. Setup the thread manager for delete and recreate the pool with same label.
+            3. Setup multiple threads query and list pools, retry when the pool been deleted
+               by the other Thread, until timeout.
+            4. Launch all the threads with number of test loops.
+            5. Check for failure from thread_manager
         :avocado: tags=all,full_regression
         :avocado: tags=hw,medium,ib2
         :avocado: tags=boundary_test
@@ -100,9 +99,10 @@ class PoolManagementRace(TestWithServers):
         num_pools = self.params.get("num_pools", '/run/boundary_test/*')
         test_loop = self.params.get("test_loop", '/run/boundary_test/*')
         num_query_threads = self.params.get("num_query_threads", '/run/boundary_test/*')
+        pool_label_prefix = self.params.get("pool_label_prefix", '/run/boundary_test/*')
         self.pool = []
         for pool_number in range(num_pools):
-            label = "Pool_" + str(pool_number)
+            label = pool_label_prefix + str(pool_number)
             pool = self.get_pool()
             pool.set_property(prop_name="label", prop_value=label)
             pool.label.update(label)
