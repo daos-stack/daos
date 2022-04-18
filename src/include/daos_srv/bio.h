@@ -13,7 +13,6 @@
 #define __BIO_API_H__
 
 #include <daos/mem.h>
-#include <daos/common.h>
 #include <daos_srv/control.h>
 #include <abt.h>
 

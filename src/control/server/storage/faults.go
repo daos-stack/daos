@@ -49,6 +49,15 @@ func FaultBdevNotFound(bdevs ...string) *fault.Fault {
 	)
 }
 
+// FaultBdevAccelEngineUnknown creates a Fault when an unrecognized acceleration engine setting is
+// detected.
+func FaultBdevAccelEngineUnknown(input string) *fault.Fault {
+	return storageFault(
+		code.BdevAccelEngineUnknown,
+		fmt.Sprintf("unknown acceleration engine setting %q", input),
+		fmt.Sprintf("see server config file documentation for supported settings"))
+}
+
 func storageFault(code code.Code, desc, res string) *fault.Fault {
 	return &fault.Fault{
 		Domain:      "storage",

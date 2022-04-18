@@ -574,7 +574,8 @@ type newEngineCfgFn func(int) *engine.Config
 func defaultEngineCfg(idx int) *engine.Config {
 	return engine.NewConfig().
 		WithTargetCount(defaultTargetCount).
-		WithLogFile(fmt.Sprintf("%s.%d.log", defaultEngineLogFile, idx))
+		WithLogFile(fmt.Sprintf("%s.%d.log", defaultEngineLogFile, idx)).
+		WithStorageAccelEngine(storage.AccelEngineNative)
 }
 
 // genConfig generates server config file from details of network, storage and CPU hardware after

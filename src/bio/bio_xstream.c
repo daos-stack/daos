@@ -114,6 +114,12 @@ bio_spdk_env_init(void)
 			D_ERROR("Failed to set hotplug filter, "DF_RC"\n", DP_RC(rc));
 			goto out;
 		}
+
+		rc = bio_read_accel_props(nvme_glb.bd_nvme_conf);
+		if (rc != 0) {
+			D_ERROR("Failed to read acceleration properties, "DF_RC"\n", DP_RC(rc));
+			goto out;
+		}
 	}
 
 	rc = spdk_env_init(&opts);

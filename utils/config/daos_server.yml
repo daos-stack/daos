@@ -327,6 +327,22 @@
 #  env_vars:
 #      - CRT_TIMEOUT=30
 #
+#  # Specify accelerator engine setting (experimental).
+#  # Options are:
+#  # - "spdk" to assigned management of hardware/software acceleration to SPDK.
+#  # - "dml" te set DML as accelerator engine.
+#  # - "native" to use the current system accelerator engine implementation.
+#
+#  # default: native
+#  accel_engine: spdk
+#
+#  # Specify acceleration optional capabilities (experimental).
+#  # Optional capability settings are ignored if accel_engine set to "native".
+#
+#  # defaults: false
+#  accel_opt_move: true
+#  accel_opt_crc: true
+#
 #  storage:
 #  -
 #    # Define a pre-configured mountpoint for storage class memory to be used
@@ -466,6 +482,16 @@
 #
 #  env_vars:
 #      - CRT_TIMEOUT=100
+#
+#  # default: native
+#  accel_engine: dml
+#
+#  # Specify acceleration optional capabilities (experimental).
+#  # Optional capability settings are ignored if accel_engine set to "native".
+#
+#  # defaults: false
+#  accel_opt_move: false
+#  accel_opt_crc: true
 #
 #  storage:
 #  -

@@ -34,7 +34,7 @@ func TestBackend_newSpdkConfig(t *testing.T) {
 		return append(defaultSpdkConfig().Subsystems[0].Configs,
 			[]*SpdkSubsystemConfig{
 				{
-					Method: SpdkBdevNvmeAttachController,
+					Method: storage.ConfBdevNvmeAttachController,
 					Params: NvmeAttachControllerParams{
 						TransportType:    "PCIe",
 						DeviceName:       fmt.Sprintf("Nvme_%s_0_%d", host, tierID),
@@ -42,7 +42,7 @@ func TestBackend_newSpdkConfig(t *testing.T) {
 					},
 				},
 				{
-					Method: SpdkBdevNvmeAttachController,
+					Method: storage.ConfBdevNvmeAttachController,
 					Params: NvmeAttachControllerParams{
 						TransportType:    "PCIe",
 						DeviceName:       fmt.Sprintf("Nvme_%s_1_%d", host, tierID),
@@ -65,9 +65,12 @@ func TestBackend_newSpdkConfig(t *testing.T) {
 		enableHotplug      bool
 		busidRange         string
 		vosEnv             string
+		accelEngine        string
+		accelOptCRC        bool
+		accelOptMove       bool
 		expExtraSubsystems []*SpdkSubsystem
 		expBdevCfgs        []*SpdkSubsystemConfig
-		expDaosCfgs        []*SpdkDaosConfig
+		expDaosCfgs        []*DaosConfig
 		expValidateErr     error
 		expErr             error
 	}{
@@ -91,7 +94,7 @@ func TestBackend_newSpdkConfig(t *testing.T) {
 					Name: "vmd",
 					Configs: []*SpdkSubsystemConfig{
 						{
-							Method: SpdkVmdEnable,
+							Method: storage.ConfVmdEnable,
 							Params: VmdEnableParams{},
 						},
 					},
@@ -104,9 +107,9 @@ func TestBackend_newSpdkConfig(t *testing.T) {
 			enableHotplug: true,
 			busidRange:    "0x8a-0x8f",
 			expBdevCfgs:   hotplugConfs,
-			expDaosCfgs: []*SpdkDaosConfig{
+			expDaosCfgs: []*DaosConfig{
 				{
-					Method: SpdkHotplugBusidRange,
+					Method: storage.ConfSetHotplugBusidRange,
 					Params: HotplugBusidRangeParams{
 						Begin: 138, End: 143,
 					},
@@ -125,7 +128,7 @@ func TestBackend_newSpdkConfig(t *testing.T) {
 			expBdevCfgs: append(defaultSpdkConfig().Subsystems[0].Configs,
 				[]*SpdkSubsystemConfig{
 					{
-						Method: SpdkBdevAioCreate,
+						Method: storage.ConfBdevAioCreate,
 						Params: AioCreateParams{
 							BlockSize:  humanize.KiByte * 4,
 							DeviceName: fmt.Sprintf("AIO_%s_0_%d", host, tierID),
@@ -133,7 +136,7 @@ func TestBackend_newSpdkConfig(t *testing.T) {
 						},
 					},
 					{
-						Method: SpdkBdevAioCreate,
+						Method: storage.ConfBdevAioCreate,
 						Params: AioCreateParams{
 							BlockSize:  humanize.KiByte * 4,
 							DeviceName: fmt.Sprintf("AIO_%s_1_%d", host, tierID),
@@ -149,14 +152,14 @@ func TestBackend_newSpdkConfig(t *testing.T) {
 			expBdevCfgs: append(defaultSpdkConfig().Subsystems[0].Configs,
 				[]*SpdkSubsystemConfig{
 					{
-						Method: SpdkBdevAioCreate,
+						Method: storage.ConfBdevAioCreate,
 						Params: AioCreateParams{
 							DeviceName: fmt.Sprintf("AIO_%s_0_%d", host, tierID),
 							Filename:   "/dev/sdb",
 						},
 					},
 					{
-						Method: SpdkBdevAioCreate,
+						Method: storage.ConfBdevAioCreate,
 						Params: AioCreateParams{
 							DeviceName: fmt.Sprintf("AIO_%s_1_%d", host, tierID),
 							Filename:   "/dev/sdc",
@@ -164,6 +167,25 @@ func TestBackend_newSpdkConfig(t *testing.T) {
 					},
 				}...),
 			vosEnv: "AIO",
+		},
+		"multiple controllers; acceleration set to spdk; move and crc opts specified": {
+			class:        storage.ClassNvme,
+			devList:      []string{common.MockPCIAddr(1), common.MockPCIAddr(2)},
+			accelEngine:  "spdk",
+			accelOptCRC:  true,
+			accelOptMove: true,
+			expBdevCfgs:  multiCtrlrConfs(),
+			expDaosCfgs: []*DaosConfig{
+				{
+					Method: storage.ConfSetAccelProps,
+					Params: AccelPropsParams{
+						AccelEngine:  "spdk",
+						AccelOptMove: true,
+						AccelOptCRC:  true,
+						AccelOpts:    0b11, // verify bitmask calculated on Validate()
+					},
+				},
+			},
 		},
 	}
 
@@ -200,7 +222,10 @@ func TestBackend_newSpdkConfig(t *testing.T) {
 					cfg,
 				).
 				WithStorageEnableHotplug(tc.enableHotplug).
-				WithPinnedNumaNode(0)
+				WithPinnedNumaNode(0).
+				WithStorageAccelEngine(tc.accelEngine).
+				WithStorageAccelOptCRC(tc.accelOptCRC).
+				WithStorageAccelOptMove(tc.accelOptMove)
 
 			gotValidateErr := engineConfig.Validate(log, nil) // populate output path
 			common.CmpErr(t, tc.expValidateErr, gotValidateErr)
@@ -211,7 +236,7 @@ func TestBackend_newSpdkConfig(t *testing.T) {
 			writeReq, _ := storage.BdevWriteConfigRequestFromConfig(context.TODO(), log,
 				&engineConfig.Storage, tc.enableVmd, storage.MockGetTopology)
 
-			gotCfg, gotErr := newSpdkConfig(log, &writeReq)
+			gotCfg, gotErr := newSpdkConfig(log, writeReq)
 			common.CmpErr(t, tc.expErr, gotErr)
 			if tc.expErr != nil {
 				return

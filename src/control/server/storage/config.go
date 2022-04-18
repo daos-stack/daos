@@ -568,12 +568,22 @@ func parsePCIBusRange(numRange string, bitSize int) (uint8, uint8, error) {
 	return uint8(begin), uint8(end), nil
 }
 
+// AccelProps can be used to select acceleration engine and capabilities.
+// Type is used both in YAML server config and JSON NVMe config files.
+type AccelProps struct {
+	AccelEngine  string `yaml:"accel_engine,omitempty" json:"accel_engine"`
+	AccelOptMove bool   `yaml:"accel_opt_move,omitempty" json:"-"`
+	AccelOptCRC  bool   `yaml:"accel_opt_crc,omitempty" json:"-"`
+	AccelOpts    uint16 `yaml:"-" json:"accel_opts"` // Bitmask of optional capabilities.
+}
+
 type Config struct {
 	Tiers            TierConfigs `yaml:"storage" cmdLongFlag:"--storage_tiers,nonzero" cmdShortFlag:"-T,nonzero"`
 	ConfigOutputPath string      `yaml:"-" cmdLongFlag:"--nvme" cmdShortFlag:"-n"`
 	VosEnv           string      `yaml:"-" cmdEnv:"VOS_BDEV_CLASS"`
 	EnableHotplug    bool        `yaml:"-"`
 	NumaNodeIndex    uint        `yaml:"-"`
+	AccelProps       AccelProps  `yaml:",inline,omitempty"`
 }
 
 func (c *Config) Validate() error {
@@ -595,6 +605,10 @@ func (c *Config) Validate() error {
 
 	if len(scmCfgs) == 0 {
 		return errors.New("missing scm storage tier in config")
+	}
+
+	if err := validateAccelProps(&c.AccelProps); err != nil {
+		return err
 	}
 
 	// set persistent location for engine bdev config file to be consumed by provider

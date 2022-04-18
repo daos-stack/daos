@@ -15,6 +15,7 @@
 #include <stdbool.h>
 #include <assert.h>
 #include <string.h>
+#include <daos/common.h>
 
 /**
  * Space separated string of CLI options to pass to DPDK when started during
@@ -40,10 +41,30 @@ dpdk_cli_override_opts;
 /** Default size of a metadata pmem pool/file (128 MiB) */
 #define DEFAULT_DAOS_MD_CAP_SIZE	(1ul << 27)
 
-#define BIT_SET(x, m) (((x)&(m)) == (m))
-#define BIT_UNSET(x, m) (!BIT_SET(x, m))
-
+/** Utility macros */
+#define CHECK_FLAG(x, m) (((x)&(m)) == (m))
+#define SET_FLAG(x, m) (x |= m)
+#define UNSET_FLAG(x, m) (x &= ~(m))
 #define STR_EQ(x, m) (strcmp(x, m) == 0)
+
+/** NVMe config keys */
+#define NVME_CONF_ATTACH_CONTROLLER	"bdev_nvme_attach_controller"
+#define NVME_CONF_ENABLE_VMD		"enable_vmd"
+#define NVME_CONF_SET_HOTPLUG_RANGE	"hotplug_busid_range"
+#define NVME_CONF_SET_ACCEL_PROPS	"accel_props"
+
+/** Supported acceleration engine settings */
+#define NVME_ACCEL_NATIVE	"native"
+#define NVME_ACCEL_SPDK		"spdk"
+#define NVME_ACCEL_DML		"dml"
+
+/* Can support up to 16 flags for acceleration engine optional capabilities */
+enum NVME_ACCEL_FLAG {
+	/* The accelerator should support "Move" calculations */
+	NVME_ACCEL_FLAG_MOVE = (1 << 0),
+	/* The accelerator should support "CRC" calculations */
+	NVME_ACCEL_FLAG_CRC = (1 << 1),
+};
 
 static inline char *
 nvme_state2str(int state)
@@ -52,22 +73,22 @@ nvme_state2str(int state)
 		return "UNKNOWN";
 
 	/** Otherwise, if unplugged, return early */
-	if BIT_UNSET(state, NVME_DEV_FL_PLUGGED)
+	if (!CHECK_FLAG(state, NVME_DEV_FL_PLUGGED))
 		return "UNPLUGGED";
 
 	/** If identify is set, return combination with faulty taking precedence over new */
-	if (BIT_SET(state, NVME_DEV_FL_IDENTIFY)) {
-		if BIT_SET(state, NVME_DEV_FL_FAULTY)
+	if (CHECK_FLAG(state, NVME_DEV_FL_IDENTIFY)) {
+		if CHECK_FLAG(state, NVME_DEV_FL_FAULTY)
 			return "EVICTED|IDENTIFY";
-		if BIT_UNSET(state, NVME_DEV_FL_INUSE)
+		if (!CHECK_FLAG(state, NVME_DEV_FL_INUSE))
 			return "NEW|IDENTIFY";
 		return "NORMAL|IDENTIFY";
 	}
 
 	/** Otherwise, return single state with faulty taking precedence over new */
-	if BIT_SET(state, NVME_DEV_FL_FAULTY)
+	if CHECK_FLAG(state, NVME_DEV_FL_FAULTY)
 		return "EVICTED";
-	if BIT_UNSET(state, NVME_DEV_FL_INUSE)
+	if (!CHECK_FLAG(state, NVME_DEV_FL_INUSE))
 		return "NEW";
 
 	return "NORMAL";
@@ -162,4 +183,57 @@ struct nvme_stats {
  * \return		Zero on success, negative value on error
  */
 int copy_ascii(char *dst, size_t dst_sz, const void *src, size_t src_sz);
+
+/**
+ * Check acceleration engine setting is valid.
+ *
+ * \param[in]  in	input acceleration engine string buffer
+ * \param[out] result	true if input matches a known setting, false otherwise
+ *
+ * \return		non-zero on error, zero otherwise
+ */
+static inline int
+nvme_conf_validate_accel_engine(char *in, bool *result)
+{
+	if (!in)
+		return -DER_INVAL;
+	if (!result)
+		return -DER_INVAL;
+
+	*result = 0;
+
+	if STR_EQ(in, NVME_ACCEL_NATIVE)
+		*result = 1;
+	else if STR_EQ(in, NVME_ACCEL_SPDK)
+		*result = 1;
+	else if STR_EQ(in, NVME_ACCEL_DML)
+		*result = 1;
+
+	return 0;
+}
+
+/**
+ * Return bitmask of enabled acceleration capabilities.
+ *
+ * \param[in]  move	bool indicating MOVE capability is enabled
+ * \param[in]  crc	bool indicating CRC capability is enabled
+ * \param[out] opt_mask	uint16_t bitmask of enabled capabilities
+ *
+ * \return		non-zero on error, zero otherwise
+ */
+static inline int
+nvme_conf_get_accel_optmask(bool move, bool crc, uint16_t *opt_mask)
+{
+	if (!opt_mask)
+		return -DER_INVAL;
+
+	*opt_mask = 0;
+
+	if (move)
+		SET_FLAG(*opt_mask, NVME_ACCEL_FLAG_MOVE);
+	if (crc)
+		SET_FLAG(*opt_mask, NVME_ACCEL_FLAG_CRC);
+
+	return 0;
+}
 #endif /** __CONTROL_H_ */
