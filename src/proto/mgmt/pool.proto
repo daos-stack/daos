@@ -218,6 +218,8 @@ message PoolQueryResp {
 	string enabled_ranks = 12; // optional set of ranks enabled
 	string disabled_ranks = 13; // optional set of ranks disabled
 	uint32 total_engines = 14; // total engines in pool
+	uint32 current_global_version = 15; // current pool global version
+	uint32 latest_global_version = 16; // latest pool global version
 }
 
 message PoolProperty {

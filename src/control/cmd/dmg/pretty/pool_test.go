@@ -28,7 +28,7 @@ func TestPretty_PrintPoolQueryResp(t *testing.T) {
 		"empty response": {
 			pqr: &control.PoolQueryResp{},
 			expPrintStr: `
-Pool , ntarget=0, disabled=0, leader=0, version=0
+Pool , ntarget=0, disabled=0, leader=0, version=0, global_version=0, latest_global_version=0
 Pool space info:
 - Target(VOS) count:0
 `,
@@ -37,11 +37,13 @@ Pool space info:
 			pqr: &control.PoolQueryResp{
 				UUID: test.MockUUID(),
 				PoolInfo: control.PoolInfo{
-					TotalTargets:    2,
-					DisabledTargets: 1,
-					ActiveTargets:   1,
-					Leader:          42,
-					Version:         100,
+					TotalTargets:         2,
+					DisabledTargets:      1,
+					ActiveTargets:        1,
+					Leader:               42,
+					Version:              100,
+					CurrentGlobalVersion: 1,
+					LatestGlobalVersion:  2,
 					Rebuild: &control.PoolRebuildStatus{
 						State:   control.PoolRebuildStateBusy,
 						Objects: 42,
@@ -60,7 +62,7 @@ Pool space info:
 				},
 			},
 			expPrintStr: fmt.Sprintf(`
-Pool %s, ntarget=2, disabled=1, leader=42, version=100
+Pool %s, ntarget=2, disabled=1, leader=42, version=100, global_version=1, latest_global_version=2
 Pool space info:
 - Target(VOS) count:1
 - Storage tier 0 (SCM):
@@ -76,12 +78,14 @@ Rebuild busy, 42 objs, 21 recs
 			pqr: &control.PoolQueryResp{
 				UUID: test.MockUUID(),
 				PoolInfo: control.PoolInfo{
-					TotalTargets:    2,
-					DisabledTargets: 1,
-					ActiveTargets:   1,
-					Leader:          42,
-					Version:         100,
-					EnabledRanks:    system.MustCreateRankSet("[0,1,2]"),
+					TotalTargets:         2,
+					DisabledTargets:      1,
+					ActiveTargets:        1,
+					Leader:               42,
+					Version:              100,
+					CurrentGlobalVersion: 1,
+					LatestGlobalVersion:  2,
+					EnabledRanks:         system.MustCreateRankSet("[0,1,2]"),
 					Rebuild: &control.PoolRebuildStatus{
 						State:   control.PoolRebuildStateBusy,
 						Objects: 42,
@@ -100,7 +104,7 @@ Rebuild busy, 42 objs, 21 recs
 				},
 			},
 			expPrintStr: fmt.Sprintf(`
-Pool %s, ntarget=2, disabled=1, leader=42, version=100
+Pool %s, ntarget=2, disabled=1, leader=42, version=100, global_version=1, latest_global_version=2
 Pool space info:
 - Enabled targets: 0-2
 - Target(VOS) count:1
@@ -117,12 +121,14 @@ Rebuild busy, 42 objs, 21 recs
 			pqr: &control.PoolQueryResp{
 				UUID: test.MockUUID(),
 				PoolInfo: control.PoolInfo{
-					TotalTargets:    2,
-					DisabledTargets: 1,
-					ActiveTargets:   1,
-					Leader:          42,
-					Version:         100,
-					DisabledRanks:   system.MustCreateRankSet("[0,1,3]"),
+					TotalTargets:         2,
+					DisabledTargets:      1,
+					ActiveTargets:        1,
+					Leader:               42,
+					Version:              100,
+					CurrentGlobalVersion: 1,
+					LatestGlobalVersion:  2,
+					DisabledRanks:        system.MustCreateRankSet("[0,1,3]"),
 					Rebuild: &control.PoolRebuildStatus{
 						State:   control.PoolRebuildStateBusy,
 						Objects: 42,
@@ -141,7 +147,7 @@ Rebuild busy, 42 objs, 21 recs
 				},
 			},
 			expPrintStr: fmt.Sprintf(`
-Pool %s, ntarget=2, disabled=1, leader=42, version=100
+Pool %s, ntarget=2, disabled=1, leader=42, version=100, global_version=1, latest_global_version=2
 Pool space info:
 - Disabled targets: 0-1,3
 - Target(VOS) count:1
@@ -158,12 +164,14 @@ Rebuild busy, 42 objs, 21 recs
 			pqr: &control.PoolQueryResp{
 				UUID: test.MockUUID(),
 				PoolInfo: control.PoolInfo{
-					TotalTargets:    2,
-					DisabledTargets: 1,
-					ActiveTargets:   1,
-					Leader:          42,
-					Version:         100,
-					DisabledRanks:   system.MustCreateRankSet("[0,1,3]"),
+					TotalTargets:         2,
+					DisabledTargets:      1,
+					ActiveTargets:        1,
+					Leader:               42,
+					Version:              100,
+					CurrentGlobalVersion: 1,
+					LatestGlobalVersion:  2,
+					DisabledRanks:        system.MustCreateRankSet("[0,1,3]"),
 					Rebuild: &control.PoolRebuildStatus{
 						State:   42,
 						Objects: 42,
@@ -182,7 +190,7 @@ Rebuild busy, 42 objs, 21 recs
 				},
 			},
 			expPrintStr: fmt.Sprintf(`
-Pool %s, ntarget=2, disabled=1, leader=42, version=100
+Pool %s, ntarget=2, disabled=1, leader=42, version=100, global_version=1, latest_global_version=2
 Pool space info:
 - Disabled targets: 0-1,3
 - Target(VOS) count:1
@@ -199,11 +207,13 @@ Rebuild unknown, 42 objs, 21 recs
 			pqr: &control.PoolQueryResp{
 				UUID: test.MockUUID(),
 				PoolInfo: control.PoolInfo{
-					TotalTargets:    2,
-					DisabledTargets: 1,
-					ActiveTargets:   1,
-					Leader:          42,
-					Version:         100,
+					TotalTargets:         2,
+					DisabledTargets:      1,
+					ActiveTargets:        1,
+					Leader:               42,
+					Version:              100,
+					CurrentGlobalVersion: 1,
+					LatestGlobalVersion:  2,
 					Rebuild: &control.PoolRebuildStatus{
 						Status:  2,
 						State:   control.PoolRebuildStateBusy,
@@ -223,7 +233,7 @@ Rebuild unknown, 42 objs, 21 recs
 				},
 			},
 			expPrintStr: fmt.Sprintf(`
-Pool %s, ntarget=2, disabled=1, leader=42, version=100
+Pool %s, ntarget=2, disabled=1, leader=42, version=100, global_version=1, latest_global_version=2
 Pool space info:
 - Target(VOS) count:1
 - Storage tier 0 (SCM):
@@ -972,9 +982,9 @@ no pools in system
 				},
 			},
 			expPrintStr: `
-Pool     Size State Used Imbalance Disabled 
-----     ---- ----- ---- --------- -------- 
-00000001 0 B  Ready 0%   0%        0/0      
+Pool     Size State Used Imbalance Disabled Upgrade 
+----     ---- ----- ---- --------- -------- ------- 
+00000001 0 B  Ready 0%   0%        0/0      0->0    
 
 `,
 		},
@@ -993,19 +1003,23 @@ Pool     Size State Used Imbalance Disabled
 			resp: &control.ListPoolsResp{
 				Pools: []*control.Pool{
 					{
-						UUID:            test.MockUUID(1),
-						ServiceReplicas: []system.Rank{0, 1, 2},
-						Usage:           exampleUsage,
-						TargetsTotal:    16,
-						TargetsDisabled: 0,
+						UUID:                 test.MockUUID(1),
+						ServiceReplicas:      []system.Rank{0, 1, 2},
+						Usage:                exampleUsage,
+						TargetsTotal:         16,
+						TargetsDisabled:      0,
+						CurrentGlobalVersion: 1,
+						LatestGlobalVersion:  2,
 					},
 					{
-						UUID:            test.MockUUID(2),
-						Label:           "one",
-						ServiceReplicas: []system.Rank{3, 4, 5},
-						Usage:           exampleUsage[1:],
-						TargetsTotal:    64,
-						TargetsDisabled: 8,
+						UUID:                 test.MockUUID(2),
+						Label:                "one",
+						ServiceReplicas:      []system.Rank{3, 4, 5},
+						Usage:                exampleUsage[1:],
+						TargetsTotal:         64,
+						TargetsDisabled:      8,
+						CurrentGlobalVersion: 2,
+						LatestGlobalVersion:  2,
 					},
 				},
 			},
@@ -1015,29 +1029,33 @@ Pool     Size State Used Imbalance Disabled
 			resp: &control.ListPoolsResp{
 				Pools: []*control.Pool{
 					{
-						UUID:            test.MockUUID(1),
-						ServiceReplicas: []system.Rank{0, 1, 2},
-						Usage:           exampleUsage,
-						TargetsTotal:    16,
-						TargetsDisabled: 0,
-						State:           system.PoolServiceStateReady.String(),
+						UUID:                 test.MockUUID(1),
+						ServiceReplicas:      []system.Rank{0, 1, 2},
+						Usage:                exampleUsage,
+						TargetsTotal:         16,
+						TargetsDisabled:      0,
+						State:                system.PoolServiceStateReady.String(),
+						CurrentGlobalVersion: 1,
+						LatestGlobalVersion:  2,
 					},
 					{
-						Label:           "two",
-						UUID:            test.MockUUID(2),
-						ServiceReplicas: []system.Rank{3, 4, 5},
-						Usage:           exampleUsage,
-						TargetsTotal:    64,
-						TargetsDisabled: 8,
-						State:           system.PoolServiceStateReady.String(),
+						Label:                "two",
+						UUID:                 test.MockUUID(2),
+						ServiceReplicas:      []system.Rank{3, 4, 5},
+						Usage:                exampleUsage,
+						TargetsTotal:         64,
+						TargetsDisabled:      8,
+						State:                system.PoolServiceStateReady.String(),
+						CurrentGlobalVersion: 1,
+						LatestGlobalVersion:  2,
 					},
 				},
 			},
 			expPrintStr: `
-Pool     Size   State Used Imbalance Disabled 
-----     ----   ----- ---- --------- -------- 
-00000001 6.0 TB Ready 83%  12%       0/16     
-two      6.0 TB Ready 83%  12%       8/64     
+Pool     Size   State Used Imbalance Disabled Upgrade 
+----     ----   ----- ---- --------- -------- ------- 
+00000001 6.0 TB Ready 83%  12%       0/16     1->2    
+two      6.0 TB Ready 83%  12%       8/64     1->2    
 
 `,
 		},
@@ -1045,13 +1063,15 @@ two      6.0 TB Ready 83%  12%       8/64
 			resp: &control.ListPoolsResp{
 				Pools: []*control.Pool{
 					{
-						Label:           "one",
-						UUID:            test.MockUUID(1),
-						ServiceReplicas: []system.Rank{0, 1, 2},
-						Usage:           exampleUsage,
-						TargetsTotal:    16,
-						TargetsDisabled: 0,
-						State:           system.PoolServiceStateReady.String(),
+						Label:                "one",
+						UUID:                 test.MockUUID(1),
+						ServiceReplicas:      []system.Rank{0, 1, 2},
+						Usage:                exampleUsage,
+						TargetsTotal:         16,
+						TargetsDisabled:      0,
+						State:                system.PoolServiceStateReady.String(),
+						CurrentGlobalVersion: 1,
+						LatestGlobalVersion:  2,
 					},
 					{
 						Label:           "two",
@@ -1061,17 +1081,19 @@ two      6.0 TB Ready 83%  12%       8/64
 							exampleUsage[0],
 							{TierName: "NVME"},
 						},
-						TargetsTotal:    64,
-						TargetsDisabled: 8,
-						State:           system.PoolServiceStateReady.String(),
+						TargetsTotal:         64,
+						TargetsDisabled:      8,
+						State:                system.PoolServiceStateReady.String(),
+						CurrentGlobalVersion: 2,
+						LatestGlobalVersion:  2,
 					},
 				},
 			},
 			expPrintStr: `
-Pool Size   State Used Imbalance Disabled 
----- ----   ----- ---- --------- -------- 
-one  6.0 TB Ready 83%  12%       0/16     
-two  100 GB Ready 80%  12%       8/64     
+Pool Size   State Used Imbalance Disabled Upgrade 
+---- ----   ----- ---- --------- -------- ------- 
+one  6.0 TB Ready 83%  12%       0/16     1->2    
+two  100 GB Ready 80%  12%       8/64     2->2    
 
 `,
 		},
@@ -1079,13 +1101,15 @@ two  100 GB Ready 80%  12%       8/64
 			resp: &control.ListPoolsResp{
 				Pools: []*control.Pool{
 					{
-						Label:           "one",
-						UUID:            test.MockUUID(1),
-						ServiceReplicas: []system.Rank{0, 1, 2},
-						Usage:           exampleUsage,
-						TargetsTotal:    16,
-						TargetsDisabled: 0,
-						State:           system.PoolServiceStateReady.String(),
+						Label:                "one",
+						UUID:                 test.MockUUID(1),
+						ServiceReplicas:      []system.Rank{0, 1, 2},
+						Usage:                exampleUsage,
+						TargetsTotal:         16,
+						TargetsDisabled:      0,
+						State:                system.PoolServiceStateReady.String(),
+						CurrentGlobalVersion: 1,
+						LatestGlobalVersion:  2,
 					},
 					{
 						Label:           "two",
@@ -1098,9 +1122,9 @@ two  100 GB Ready 80%  12%       8/64
 			expPrintStr: `
 Query on pool "two" unsuccessful, error: "stats unavailable"
 
-Pool Size   State Used Imbalance Disabled 
----- ----   ----- ---- --------- -------- 
-one  6.0 TB Ready 83%  12%       0/16     
+Pool Size   State Used Imbalance Disabled Upgrade 
+---- ----   ----- ---- --------- -------- ------- 
+one  6.0 TB Ready 83%  12%       0/16     1->2    
 
 `,
 		},
@@ -1108,13 +1132,15 @@ one  6.0 TB Ready 83%  12%       0/16
 			resp: &control.ListPoolsResp{
 				Pools: []*control.Pool{
 					{
-						Label:           "one",
-						UUID:            test.MockUUID(1),
-						ServiceReplicas: []system.Rank{0, 1, 2},
-						Usage:           exampleUsage,
-						TargetsTotal:    16,
-						TargetsDisabled: 0,
-						State:           system.PoolServiceStateReady.String(),
+						Label:                "one",
+						UUID:                 test.MockUUID(1),
+						ServiceReplicas:      []system.Rank{0, 1, 2},
+						Usage:                exampleUsage,
+						TargetsTotal:         16,
+						TargetsDisabled:      0,
+						State:                system.PoolServiceStateReady.String(),
+						CurrentGlobalVersion: 1,
+						LatestGlobalVersion:  1,
 					},
 					{
 						UUID:            test.MockUUID(2),
@@ -1133,9 +1159,9 @@ one  6.0 TB Ready 83%  12%       0/16
 Query on pool "00000002" unsuccessful, error: "stats unavailable"
 Query on pool "three" unsuccessful, status: "DER_UNINIT"
 
-Pool Size   State Used Imbalance Disabled 
----- ----   ----- ---- --------- -------- 
-one  6.0 TB Ready 83%  12%       0/16     
+Pool Size   State Used Imbalance Disabled Upgrade 
+---- ----   ----- ---- --------- -------- ------- 
+one  6.0 TB Ready 83%  12%       0/16     1->1    
 
 `,
 		},
@@ -1150,19 +1176,21 @@ no pools in system
 			resp: &control.ListPoolsResp{
 				Pools: []*control.Pool{
 					{
-						UUID:            test.MockUUID(1),
-						Usage:           exampleUsage,
-						TargetsTotal:    16,
-						TargetsDisabled: 0,
-						State:           system.PoolServiceStateReady.String(),
+						UUID:                 test.MockUUID(1),
+						Usage:                exampleUsage,
+						TargetsTotal:         16,
+						TargetsDisabled:      0,
+						State:                system.PoolServiceStateReady.String(),
+						CurrentGlobalVersion: 1,
+						LatestGlobalVersion:  2,
 					},
 				},
 			},
 			verbose: true,
 			expPrintStr: `
-Label UUID                                 State SvcReps SCM Size SCM Used SCM Imbalance NVME Size NVME Used NVME Imbalance Disabled 
------ ----                                 ----- ------- -------- -------- ------------- --------- --------- -------------- -------- 
--     00000001-0001-0001-0001-000000000001 Ready N/A     100 GB   80 GB    12%           6.0 TB    5.0 TB    1%             0/16     
+Label UUID                                 State SvcReps SCM Size SCM Used SCM Imbalance NVME Size NVME Used NVME Imbalance Disabled Upgrade 
+----- ----                                 ----- ------- -------- -------- ------------- --------- --------- -------------- -------- ------- 
+-     00000001-0001-0001-0001-000000000001 Ready N/A     100 GB   80 GB    12%           6.0 TB    5.0 TB    1%             0/16     1->2    
 
 `,
 		},
@@ -1170,31 +1198,35 @@ Label UUID                                 State SvcReps SCM Size SCM Used SCM I
 			resp: &control.ListPoolsResp{
 				Pools: []*control.Pool{
 					{
-						Label:           "one",
-						UUID:            test.MockUUID(1),
-						ServiceReplicas: []system.Rank{0, 1, 2},
-						Usage:           exampleUsage,
-						TargetsTotal:    16,
-						TargetsDisabled: 0,
-						State:           system.PoolServiceStateReady.String(),
+						Label:                "one",
+						UUID:                 test.MockUUID(1),
+						ServiceReplicas:      []system.Rank{0, 1, 2},
+						Usage:                exampleUsage,
+						TargetsTotal:         16,
+						TargetsDisabled:      0,
+						State:                system.PoolServiceStateReady.String(),
+						CurrentGlobalVersion: 1,
+						LatestGlobalVersion:  2,
 					},
 					{
-						Label:           "two",
-						UUID:            test.MockUUID(2),
-						ServiceReplicas: []system.Rank{3, 4, 5},
-						Usage:           exampleUsage,
-						TargetsTotal:    64,
-						TargetsDisabled: 8,
-						State:           system.PoolServiceStateDestroying.String(),
+						Label:                "two",
+						UUID:                 test.MockUUID(2),
+						ServiceReplicas:      []system.Rank{3, 4, 5},
+						Usage:                exampleUsage,
+						TargetsTotal:         64,
+						TargetsDisabled:      8,
+						State:                system.PoolServiceStateDestroying.String(),
+						CurrentGlobalVersion: 1,
+						LatestGlobalVersion:  2,
 					},
 				},
 			},
 			verbose: true,
 			expPrintStr: `
-Label UUID                                 State      SvcReps SCM Size SCM Used SCM Imbalance NVME Size NVME Used NVME Imbalance Disabled 
------ ----                                 -----      ------- -------- -------- ------------- --------- --------- -------------- -------- 
-one   00000001-0001-0001-0001-000000000001 Ready      [0-2]   100 GB   80 GB    12%           6.0 TB    5.0 TB    1%             0/16     
-two   00000002-0002-0002-0002-000000000002 Destroying [3-5]   100 GB   80 GB    12%           6.0 TB    5.0 TB    1%             8/64     
+Label UUID                                 State      SvcReps SCM Size SCM Used SCM Imbalance NVME Size NVME Used NVME Imbalance Disabled Upgrade 
+----- ----                                 -----      ------- -------- -------- ------------- --------- --------- -------------- -------- ------- 
+one   00000001-0001-0001-0001-000000000001 Ready      [0-2]   100 GB   80 GB    12%           6.0 TB    5.0 TB    1%             0/16     1->2    
+two   00000002-0002-0002-0002-000000000002 Destroying [3-5]   100 GB   80 GB    12%           6.0 TB    5.0 TB    1%             8/64     1->2    
 
 `,
 		},

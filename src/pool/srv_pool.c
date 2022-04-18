@@ -2223,6 +2223,7 @@ ds_pool_connect_handler(crt_rpc_t *rpc)
 	struct ownership		owner;
 	struct daos_prop_entry	       *owner_entry, *global_ver_entry;
 	struct daos_prop_entry	       *owner_grp_entry;
+	struct daos_prop_entry	       *rf_entry;
 	uint64_t			sec_capas = 0;
 	struct pool_metrics	       *metrics;
 	char			       *machine = NULL;
@@ -2312,6 +2313,12 @@ ds_pool_connect_handler(crt_rpc_t *rpc)
 	global_ver_entry = daos_prop_entry_get(prop, DAOS_PROP_PO_GLOBAL_VERSION);
 	D_ASSERT(global_ver_entry != NULL);
 	global_ver = global_ver_entry->dpe_val;
+	out->pco_current_global_ver = global_ver;
+	out->pco_latest_global_ver = DS_POOL_GLOBAL_VERSION;
+
+	rf_entry = daos_prop_entry_get(prop, DAOS_PROP_PO_REDUN_FAC);
+	D_ASSERT(rf_entry != NULL);
+	out->pco_redun_fac = rf_entry->dpe_val;
 
 	/*
 	 * Security capabilities determine the access control policy on this
@@ -2954,6 +2961,7 @@ ds_pool_query_handler(crt_rpc_t *rpc)
 	d_iov_t			value;
 	struct pool_hdl		hdl = {0};
 	int			rc;
+	struct daos_prop_entry	*entry;
 
 	D_DEBUG(DB_MD, DF_UUID": processing rpc %p: hdl="DF_UUID"\n",
 		DP_UUID(in->pqi_op.pi_uuid), rpc, DP_UUID(in->pqi_op.pi_hdl));
@@ -2992,15 +3000,26 @@ ds_pool_query_handler(crt_rpc_t *rpc)
 		}
 	}
 
+	rc = pool_prop_read(&tx, svc, DAOS_PO_QUERY_PROP_GLOBAL_VERSION, &prop);
+	if (rc != 0)
+		D_GOTO(out_lock, rc);
+
+	entry = daos_prop_entry_get(prop, DAOS_PROP_PO_GLOBAL_VERSION);
+	D_ASSERT(entry != NULL);
+	out->pqo_current_global_ver = entry->dpe_val;
+	daos_prop_free(prop);
+	prop = NULL;
+
 	/* read optional properties */
 	rc = pool_prop_read(&tx, svc, in->pqi_query_bits, &prop);
 	if (rc != 0)
 		D_GOTO(out_lock, rc);
 	out->pqo_prop = prop;
+	out->pqo_latest_global_ver = DS_POOL_GLOBAL_VERSION;
 
 	if (unlikely(DAOS_FAIL_CHECK(DAOS_FORCE_PROP_VERIFY) && prop != NULL)) {
 		daos_prop_t		*iv_prop = NULL;
-		struct daos_prop_entry	*entry, *iv_entry;
+		struct daos_prop_entry	*iv_entry;
 		int			i;
 
 		D_ALLOC_PTR(iv_prop);
@@ -3275,6 +3294,7 @@ out:
 static int
 process_query_result(d_rank_list_t **ranks, daos_pool_info_t *info, uuid_t pool_uuid,
 		     uint32_t map_version, uint32_t leader_rank, struct daos_pool_space *ps,
+		     uint32_t cur_global_ver, uint32_t lat_global_ver,
 		     struct daos_rebuild_status *rs, struct pool_buf *map_buf)
 {
 	struct pool_map	       *map;
@@ -3309,7 +3329,8 @@ process_query_result(d_rank_list_t **ranks, daos_pool_info_t *info, uuid_t pool_
 			DP_UUID(pool_uuid), (*ranks)->rl_nr, get_enabled ? "ENABLED" : "DISABLED");
 	}
 
-	pool_query_reply_to_info(pool_uuid, map_buf, map_version, leader_rank, ps, rs, info);
+	pool_query_reply_to_info(pool_uuid, map_buf, map_version, leader_rank,
+				 ps, rs, cur_global_ver, lat_global_ver, info);
 
 out:
 	pool_map_decref(map);
@@ -3410,7 +3431,9 @@ realloc:
 
 	rc = process_query_result(ranks, pool_info, pool_uuid,
 				  out->pqo_op.po_map_version, out->pqo_op.po_hint.sh_rank,
-				  &out->pqo_space, &out->pqo_rebuild_st, map_buf);
+				  &out->pqo_space, out->pqo_current_global_ver,
+				  out->pqo_latest_global_ver, &out->pqo_rebuild_st,
+				  map_buf);
 	if (rc != 0)
 		D_ERROR(DF_UUID": failed to process pool query results, "DF_RC"\n",
 			DP_UUID(pool_uuid), DP_RC(rc));

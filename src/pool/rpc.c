@@ -229,6 +229,8 @@ out:
  * \param[in]		leader_rank	Pool leader rank
  * \param[in]		ps		Pool space
  * \param[in]		rs		Rebuild status
+ * \param[in]		cur_global_ver	Pool current global version
+ * \param[in]		lat_global_ver	Pool latest global version
  * @param[in][out]	info		Pool info - pass in with pi_bits set
  *					Returned populated with inputs
  */
@@ -237,6 +239,7 @@ pool_query_reply_to_info(uuid_t pool_uuid, struct pool_buf *map_buf,
 			 uint32_t map_version, uint32_t leader_rank,
 			 struct daos_pool_space *ps,
 			 struct daos_rebuild_status *rs,
+			 uint32_t cur_global_ver, uint32_t lat_global_ver,
 			 daos_pool_info_t *info)
 {
 	D_ASSERT(ps != NULL);
@@ -247,6 +250,8 @@ pool_query_reply_to_info(uuid_t pool_uuid, struct pool_buf *map_buf,
 	info->pi_nnodes		= map_buf->pb_node_nr;
 	info->pi_map_ver	= map_version;
 	info->pi_leader		= leader_rank;
+	info->pi_latest_global_ver = lat_global_ver;
+	info->pi_current_global_ver = cur_global_ver;
 	if (info->pi_bits & DPI_SPACE)
 		info->pi_space		= *ps;
 	if (info->pi_bits & DPI_REBUILD_STATUS)

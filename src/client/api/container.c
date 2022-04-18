@@ -77,6 +77,7 @@ cont_inherit_redunc_fac(daos_handle_t poh, daos_prop_t *cont_prop,
 	struct daos_prop_entry	*entry;
 	daos_prop_t		*redunc_prop;
 	int			rf, rc = 0;
+	struct dc_pool          *pool;
 
 	*merged_prop = NULL;
 	/* redunc factor specified, no need inherit from pool */
@@ -84,10 +85,12 @@ cont_inherit_redunc_fac(daos_handle_t poh, daos_prop_t *cont_prop,
 	if (entry)
 		return 0;
 
-	rf = dc_pool_get_redunc(poh);
-	if (rf < 0)
-		return rf;
+	pool = dc_hdl2pool(poh);
+	if (pool == NULL)
+		return -DER_NO_HDL;
 
+	rf = pool->dp_rf;
+	dc_pool_put(pool);
 	redunc_prop = daos_prop_alloc(1);
 	if (redunc_prop == NULL) {
 		D_ERROR("failed to allocate redunc_prop\n");

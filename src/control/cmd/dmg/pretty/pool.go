@@ -38,8 +38,9 @@ func PrintPoolQueryResponse(pqr *control.PoolQueryResp, out io.Writer, opts ...P
 	w := txtfmt.NewErrWriter(out)
 
 	// Maintain output compatibility with the `daos pool query` output.
-	fmt.Fprintf(w, "Pool %s, ntarget=%d, disabled=%d, leader=%d, version=%d\n",
-		pqr.UUID, pqr.TotalTargets, pqr.DisabledTargets, pqr.Leader, pqr.Version)
+	fmt.Fprintf(w, "Pool %s, ntarget=%d, disabled=%d, leader=%d, version=%d, global_version=%d, latest_global_version=%d\n",
+		pqr.UUID, pqr.TotalTargets, pqr.DisabledTargets, pqr.Leader, pqr.Version,
+		pqr.CurrentGlobalVersion, pqr.LatestGlobalVersion)
 	fmt.Fprintln(w, "Pool space info:")
 	if pqr.EnabledRanks != nil {
 		fmt.Fprintf(w, "- Enabled targets: %s\n", pqr.EnabledRanks)
@@ -180,6 +181,7 @@ func poolListCreateRow(pool *control.Pool) txtfmt.TableRow {
 		"Used":      fmt.Sprintf("%d%%", used),
 		"Imbalance": fmt.Sprintf("%d%%", imbalance),
 		"Disabled":  fmt.Sprintf("%d/%d", pool.TargetsDisabled, pool.TargetsTotal),
+		"Upgrade":   fmt.Sprintf("%d->%d", pool.CurrentGlobalVersion, pool.LatestGlobalVersion),
 	}
 
 	return row
@@ -191,7 +193,7 @@ func printListPoolsResp(out io.Writer, resp *control.ListPoolsResp) error {
 		return nil
 	}
 
-	formatter := txtfmt.NewTableFormatter("Pool", "Size", "State", "Used", "Imbalance", "Disabled")
+	formatter := txtfmt.NewTableFormatter("Pool", "Size", "State", "Used", "Imbalance", "Disabled", "Upgrade")
 
 	var table []txtfmt.TableRow
 	for _, pool := range resp.Pools {
@@ -232,6 +234,7 @@ func poolListCreateRowVerbose(pool *control.Pool) txtfmt.TableRow {
 		"State":    pool.State,
 		"SvcReps":  svcReps,
 		"Disabled": fmt.Sprintf("%d/%d", pool.TargetsDisabled, pool.TargetsTotal),
+		"Upgrade":  fmt.Sprintf("%d->%d", pool.CurrentGlobalVersion, pool.LatestGlobalVersion),
 	}
 
 	for _, tu := range pool.Usage {
@@ -255,6 +258,7 @@ func printListPoolsRespVerbose(out io.Writer, resp *control.ListPoolsResp) error
 			t.TierName+" Imbalance")
 	}
 	titles = append(titles, "Disabled")
+	titles = append(titles, "Upgrade")
 	formatter := txtfmt.NewTableFormatter(titles...)
 
 	var table []txtfmt.TableRow

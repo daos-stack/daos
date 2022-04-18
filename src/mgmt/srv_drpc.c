@@ -1748,6 +1748,8 @@ ds_mgmt_drpc_pool_query(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	resp.version = pool_info.pi_map_ver;
 	resp.enabled_ranks = (req->include_enabled_ranks) ? range_list_str : "";
 	resp.disabled_ranks = (req->include_disabled_ranks) ? range_list_str : "";
+	resp.current_global_version = pool_info.pi_current_global_ver;
+	resp.latest_global_version = pool_info.pi_latest_global_ver;
 
 	D_ALLOC_ARRAY(resp.tier_stats, DAOS_MEDIA_MAX);
 	if (resp.tier_stats == NULL) {
