@@ -21,8 +21,14 @@
 #define TSE_TASK_SIZE		1024
 /* 8 bytes used for public members */
 #define TSE_PRIV_SIZE		1016
+
 /* tse_task arguments max length */
-#define TSE_TASK_ARG_LEN		880
+#ifdef __aarch64__
+/** pthread_mutex_t is 8 bytes more on aarch64 in obj_auxi_args->obj_reasb_req->orr_mutex */
+#define TSE_TASK_ARG_LEN	888
+#else
+#define TSE_TASK_ARG_LEN	880
+#endif
 
 typedef struct tse_task {
 	int			dt_result;
