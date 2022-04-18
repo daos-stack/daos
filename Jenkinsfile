@@ -35,11 +35,11 @@ if (!env.CHANGE_ID &&
 pipeline {
     agent { label 'lightweight' }
 
+    /* DAOS-10336: disable timed weekly runs for release/2.0
     triggers {
-        cron(env.BRANCH_NAME == 'master' ? 'TZ=America/Toronto\n0 0 * * *\n' : '' +
-             env.BRANCH_NAME == 'release/2.0' ? 'TZ=America/Toronto\n0 12 * * *\n' : '' +
-             env.BRANCH_NAME.startsWith('weekly-testing') ? 'H 0 * * 6' : '')
+        cron(env.BRANCH_NAME.startsWith('weekly-testing') ? 'H 0 * * 6' : '')
     }
+    */
 
     environment {
         BULLSEYE = credentials('bullseye_license_key')
