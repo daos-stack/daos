@@ -7,4 +7,4 @@ timeout: 180
 server_config:
   name: daos_server
   port: 10001
-  control_log_mask: INFO
+  control_log_mask: DEBUG
