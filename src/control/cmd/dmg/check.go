@@ -11,6 +11,7 @@ import (
 
 	"github.com/pkg/errors"
 
+	"github.com/daos-stack/daos/src/control/common/cmdutil"
 	"github.com/daos-stack/daos/src/control/lib/control"
 )
 
@@ -34,7 +35,7 @@ func (p poolIDSet) List() (ids []string) {
 }
 
 type checkCmdBase struct {
-	logCmd
+	cmdutil.LogCmd
 	cfgCmd
 	ctlInvokerCmd
 	jsonOutputCmd
@@ -80,7 +81,7 @@ func (cmd *checkStartCmd) Execute(_ []string) error {
 		return err
 	}
 
-	cmd.log.Info("system checker started")
+	cmd.Info("system checker started")
 
 	return nil
 }
@@ -99,7 +100,7 @@ func (cmd *checkStopCmd) Execute(_ []string) error {
 		return err
 	}
 
-	cmd.log.Info("system checker stopped")
+	cmd.Info("system checker stopped")
 
 	return nil
 }
@@ -122,7 +123,7 @@ func (cmd *checkQueryCmd) Execute(_ []string) error {
 		return err
 	}
 
-	cmd.log.Infof("System check status: %s\n", resp.Status())
+	cmd.Infof("System check status: %s\n", resp.Status())
 
 	return nil
 }
@@ -143,7 +144,7 @@ func (cmd *checkPropCmd) Execute(_ []string) error {
 		return err
 	}
 
-	cmd.log.Infof("System check properties: %s\n", "TODO")
+	cmd.Infof("System check properties: %s\n", "TODO")
 
 	return nil
 }
