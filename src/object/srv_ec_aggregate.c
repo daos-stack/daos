@@ -2088,13 +2088,14 @@ agg_reset_entry(struct ec_agg_entry *agg_entry, vos_iter_entry_t *entry,
 }
 
 static int
-agg_obj_is_leader(struct ds_pool *pool, struct daos_oclass_attr *oca,
+agg_obj_is_leader(struct ds_pool *pool, daos_handle_t cont_hdl, struct daos_oclass_attr *oca,
 		  daos_unit_oid_t *oid, uint32_t version)
 {
 	struct daos_obj_md	 md = { 0 };
 	struct pl_map		*map;
 	struct pl_obj_layout	*layout = NULL;
 	struct pl_obj_shard	*shard;
+	struct cont_props	 props;
 	uint32_t		 idx;
 	int			 rc;
 
@@ -2108,8 +2109,10 @@ agg_obj_is_leader(struct ds_pool *pool, struct daos_oclass_attr *oca,
 		return -DER_INVAL;
 	}
 
+	props = dc_cont_hdl2props(cont_hdl);
 	md.omd_id = oid->id_pub;
 	md.omd_ver = version;
+	md.omd_pda = props.dcp_ec_pda;
 	rc = pl_obj_place(map, &md, DAOS_OO_RO, NULL, &layout);
 	if (rc != 0)
 		goto out;
@@ -2203,7 +2206,7 @@ ec_agg_object(daos_handle_t ih, vos_iter_entry_t *entry, struct ec_agg_param *ag
 	/** We should have filtered it if it isn't EC */
 	rc = dsc_obj_id2oc_attr(entry->ie_oid.id_pub, &info->api_props, &oca);
 	D_ASSERT(rc == 0 && daos_oclass_is_ec(&oca));
-	rc = agg_obj_is_leader(info->api_pool, &oca, &entry->ie_oid,
+	rc = agg_obj_is_leader(info->api_pool, info->api_cont_hdl, &oca, &entry->ie_oid,
 			       info->api_pool->sp_map_version);
 	if (rc == 1) {
 		D_ASSERT((entry->ie_oid.id_shard % obj_ec_tgt_nr(&oca)) ==

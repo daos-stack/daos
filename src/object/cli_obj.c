@@ -302,6 +302,16 @@ dc_obj_hdl2cont_hdl(daos_handle_t oh)
 	return hdl;
 }
 
+static uint32_t
+dc_obj_get_pda(struct dc_object *obj)
+{
+	struct cont_props	props;
+
+	props = dc_cont_hdl2props(obj->cob_coh);
+
+	return daos_cont_props2pda(&props, obj_is_ec(obj));
+}
+
 static int
 obj_layout_create(struct dc_object *obj, unsigned int mode, bool refresh)
 {
@@ -326,6 +336,7 @@ obj_layout_create(struct dc_object *obj, unsigned int mode, bool refresh)
 	}
 
 	obj->cob_md.omd_ver = dc_pool_get_version(pool);
+	obj->cob_md.omd_pda = dc_obj_get_pda(obj);
 	dc_pool_put(pool);
 	rc = pl_obj_place(map, &obj->cob_md, mode, NULL, &layout);
 	pl_map_decref(map);

@@ -322,6 +322,7 @@ rebuild_object_insert(struct rebuild_tgt_pool_tracker *rpt,
 struct rebuild_scan_arg {
 	struct rebuild_tgt_pool_tracker *rpt;
 	uuid_t				co_uuid;
+	struct cont_props		co_props;
 	int				snapshot_cnt;
 	uint32_t			yield_freq;
 };
@@ -517,6 +518,7 @@ rebuild_obj_scan_cb(daos_handle_t ch, vos_iter_entry_t *ent,
 	dc_obj_fetch_md(oid.id_pub, &md);
 	crt_group_rank(rpt->rt_pool->sp_group, &myrank);
 	md.omd_ver = rpt->rt_rebuild_ver;
+	md.omd_pda = daos_cont_props2pda(&arg->co_props, daos_oclass_is_ec(oc_attr));
 
 	if (rpt->rt_rebuild_op == RB_OP_FAIL ||
 	    rpt->rt_rebuild_op == RB_OP_DRAIN ||
@@ -692,7 +694,16 @@ rebuild_container_scan_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 	rc = ds_cont_fetch_snaps(rpt->rt_pool->sp_iv_ns, entry->ie_couuid, NULL,
 				 &snapshot_cnt);
 	if (rc) {
-		D_ERROR("ds_cont_fetch_snaps failed: "DF_RC"\n", DP_RC(rc));
+		D_ERROR("Container "DF_UUID", ds_cont_fetch_snaps failed: "DF_RC"\n",
+			DP_UUID(entry->ie_couuid), DP_RC(rc));
+		vos_cont_close(coh);
+		return rc;
+	}
+
+	rc = ds_cont_get_props(&arg->co_props, rpt->rt_pool->sp_uuid, entry->ie_couuid);
+	if (rc) {
+		D_ERROR("Container "DF_UUID", ds_cont_get_props failed: "DF_RC"\n",
+			DP_UUID(entry->ie_couuid), DP_RC(rc));
 		vos_cont_close(coh);
 		return rc;
 	}

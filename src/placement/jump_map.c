@@ -115,8 +115,7 @@ jm_obj_pd_init(struct pl_jump_map *jmap, struct daos_obj_md *md, struct pool_dom
 	jmop->jmop_root = root;
 	if (md->omd_pda == 0)
 		pd_nr = 0;
-	if (pd_nr <= 1)
-		jmop->jmop_pd_nr = pd_nr;
+	jmop->jmop_pd_nr = pd_nr;
 	if (jmop->jmop_pd_nr == 0)
 		return 0;
 
@@ -129,7 +128,7 @@ jm_obj_pd_init(struct pl_jump_map *jmap, struct daos_obj_md *md, struct pool_dom
 	jmop->jmop_pd_nr = min(pd_grp_nr, pd_nr);
 
 	D_ASSERT(pd_nr >= 1);
-	rc = pool_map_find_domain(jmap->jmp_map.pl_poolmap, PO_COMP_TP_PD, PO_COMP_ID_ALL, &pds);
+	rc = pool_map_find_domain(jmap->jmp_map.pl_poolmap, PO_COMP_TP_GRP, PO_COMP_ID_ALL, &pds);
 	D_ASSERT(rc == pd_nr);
 	rc = 0;
 
@@ -525,6 +524,17 @@ retry:
 			range_set = isset_range(dom_occupied, start_dom, end_dom);
 			if (range_set) {
 				if (top == -1) {
+					if (curr_pd != root_pos) {
+						/* all domains within the PD occupied, ignore the
+						 * PD restrict and try again.
+						 */
+						D_INFO("PD[%d] all doms occupied, weak the PD "
+							"restrict\n",
+							(int)(curr_dom - root_pos));
+						curr_pd = root_pos;
+						curr_dom = curr_pd;
+						goto retry;
+					}
 					/* shard nr > target nr, no extra target for the shard */
 					*target = NULL;
 					return;
@@ -541,6 +551,18 @@ retry:
 			range_set = isset_range(dom_cur_grp_used, start_dom, end_dom);
 			if (range_set) {
 				if (top == -1) {
+					if (curr_pd != root_pos) {
+						/* all domains within the PD have been used by the
+						 * current group, try to avoid co-located shards for
+						 * same group by ignoring the PD restrict.
+						 */
+						D_INFO("PD[%d] all doms used for group, "
+							"weak the PD restrict\n",
+							(int)(curr_dom - root_pos));
+						curr_pd = root_pos;
+						curr_dom = curr_pd;
+						goto retry;
+					}
 					/* all domains have been used by the current group,
 					 * then we cleanup the dom_cur_grp_used bits, i.e.
 					 * the shards within the same group might be put
@@ -1109,7 +1131,7 @@ jump_map_create(struct pool_map *poolmap, struct pl_map_init_attr *mia,
 
 	jmap->jmp_redundant_dom = mia->ia_jump_map.domain;
 
-	rc = pool_map_find_domain(poolmap, PO_COMP_TP_PD, PO_COMP_ID_ALL, &doms);
+	rc = pool_map_find_domain(poolmap, PO_COMP_TP_GRP, PO_COMP_ID_ALL, &doms);
 	if (rc < 0)
 		goto ERR;
 	jmap->jmp_pd_nr = rc;
@@ -1120,6 +1142,12 @@ jump_map_create(struct pool_map *poolmap, struct pl_map_init_attr *mia,
 		goto ERR;
 	}
 	jmap->jmp_domain_nr = rc;
+
+	if (jmap->jmp_domain_nr < jmap->jmp_pd_nr) {
+		D_ERROR("Bad parameter, dom_nr %d < pd_nr %d\n",
+			jmap->jmp_domain_nr, jmap->jmp_pd_nr);
+		return -DER_INVAL;
+	}
 
 	rc = pool_map_find_upin_tgts(poolmap, NULL, &jmap->jmp_target_nr);
 	if (rc) {

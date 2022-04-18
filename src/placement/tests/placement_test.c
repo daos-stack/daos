@@ -130,7 +130,7 @@ int main(int argc, char *argv[])
 	}
 	if (pda_test)
 		pda_tests_run(verbose);
-	if (dist_test)
+	else if (dist_test)
 		dist_tests_run(verbose, num_objs, obj_class);
 	else
 		placement_tests_run(verbose);
