@@ -43,10 +43,6 @@ def getuid() {
 pipeline {
     agent { label 'lightweight' }
 
-    triggers {
-        cron(env.BRANCH_NAME == 'release/2.0' ? 'TZ=America/Toronto\n0 12 * * *\n' : '')
-    }
-
     environment {
         BULLSEYE = credentials('bullseye_license_key')
         GITHUB_USER = credentials('daos-jenkins-review-posting')
