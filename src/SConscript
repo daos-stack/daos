@@ -107,6 +107,9 @@ def scons():
     # Build test
     SConscript('tests/SConscript')
 
+    # Build ddb
+    SConscript('ddb/SConscript')
+
     if not env.GetOption('clean') and not env.GetOption('help'):
 
         print("Checking local headers can be included")
