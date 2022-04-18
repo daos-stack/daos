@@ -431,3 +431,27 @@ func (c *Config) WithPinnedNumaNode(numa uint) *Config {
 	c.PinnedNumaNode = &numa
 	return c
 }
+
+// WithStorageAccelEngine sets the acceleration engine setting for the I/O Engine instance.
+func (c *Config) WithStorageAccelEngine(name string) *Config {
+	c.Storage.AccelProps.AccelEngine = name
+	return c
+}
+
+// WithStorageAccelOptMove sets the acceleration move option for the I/O Engine instance.
+func (c *Config) WithStorageAccelOptMove(b bool) *Config {
+	c.Storage.AccelProps.AccelOptMove = b
+	return c
+}
+
+// WithStorageAccelOptCRC sets the acceleration CRC option for the I/O Engine instance.
+func (c *Config) WithStorageAccelOptCRC(b bool) *Config {
+	c.Storage.AccelProps.AccelOptCRC = b
+	return c
+}
+
+// WithStorageAccelOpts sets the acceleration option bit mask for the I/O Engine instance.
+func (c *Config) WithStorageAccelOpts(mask uint16) *Config {
+	c.Storage.AccelProps.AccelOpts = mask
+	return c
+}

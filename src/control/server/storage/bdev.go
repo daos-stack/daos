@@ -6,12 +6,6 @@
 
 package storage
 
-/*
-#include "stdlib.h"
-#include "daos_srv/control.h"
-*/
-import "C"
-
 import (
 	"context"
 	"encoding/json"
@@ -31,11 +25,77 @@ import (
 	"github.com/daos-stack/daos/src/control/system"
 )
 
+/*
+#include "stdlib.h"
+#include "daos_srv/control.h"
+*/
+import "C"
+
 // BdevPciAddrSep defines the separator used between PCI addresses in string lists.
 const (
 	BdevPciAddrSep = " "
 	NilBdevAddress = "<nil>"
 )
+
+// JSON config file constants.
+const (
+	ConfBdevSetOptions           = "bdev_set_options"
+	ConfBdevNvmeSetOptions       = "bdev_nvme_set_options"
+	ConfBdevNvmeSetHotplug       = "bdev_nvme_set_hotplug"
+	ConfBdevAioCreate            = "bdev_aio_create"
+	ConfBdevNvmeAttachController = C.NVME_CONF_ATTACH_CONTROLLER
+	ConfVmdEnable                = C.NVME_CONF_ENABLE_VMD
+	ConfSetHotplugBusidRange     = C.NVME_CONF_SET_HOTPLUG_RANGE
+	ConfSetAccelProps            = C.NVME_CONF_SET_ACCEL_PROPS
+)
+
+// AccelEngineNative is the default acceleration engine setting.
+const AccelEngineNative = C.NVME_ACCEL_NATIVE
+
+// validateAccelProps validates the provided accceleration properties.
+func validateAccelProps(props *AccelProps) error {
+	if props == nil {
+		return errors.New("nil AccelProps")
+	}
+	// Apply default if "accel_engine" unset in config.
+	if props.AccelEngine == "" {
+		props.AccelEngine = AccelEngineNative
+	}
+	// No acceleration if setting is "native" (default).
+	if props.AccelEngine == AccelEngineNative {
+		props.AccelOptMove = false
+		props.AccelOptCRC = false
+		props.AccelOpts = 0
+
+		return nil
+	}
+
+	var result C.bool
+	cStr := C.CString(props.AccelEngine)
+	defer C.free(unsafe.Pointer(cStr))
+
+	// Check provided engine setting string is supported.
+	rc := C.nvme_conf_validate_accel_engine(cStr, &result)
+	if rc != 0 {
+		return errors.Errorf("nvme_conf_validate_accel_engine returned rc: %d", rc)
+	}
+	if result != C.bool(true) {
+		return FaultBdevAccelEngineUnknown(props.AccelEngine)
+	}
+
+	var flags C.uint16_t
+	move := C.bool(props.AccelOptMove)
+	crc := C.bool(props.AccelOptCRC)
+
+	// Set bitmask of enabled optional acceleration capabilities from individual flags.
+	rc = C.nvme_conf_get_accel_optmask(move, crc, &flags)
+	if rc != 0 {
+		return errors.Errorf("nvme_conf_get_accel_optmask returned rc: %d", rc)
+	}
+	props.AccelOpts = uint16(flags)
+
+	return nil
+}
 
 // NvmeDevState represents the health state of NVMe device as reported by DAOS engine BIO module.
 type NvmeDevState uint32
@@ -413,6 +473,7 @@ type (
 		HotplugBusidEnd   uint8
 		Hostname          string
 		BdevCache         *BdevScanResponse
+		AccelProps        AccelProps
 	}
 
 	// BdevWriteConfigResponse contains the result of a WriteConfig operation.
