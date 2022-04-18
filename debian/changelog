@@ -1,3 +1,9 @@
+daos (2.1.101-2) unstable; urgency=medium
+  [ Li Wei ]
+  * Update raft to 0.9.1-1401.gc18bcb8 to fix uninitialized node IDs
+
+ -- Li Wei <wei.g.li@intel.com>  Thu, 14 Apr 2022 11:29:00 +0800
+
 daos (2.1.101-1) unstable; urgency=medium
   [ Johann Lombardi ]
   * Bump version to 2.1.101
