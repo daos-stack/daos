@@ -50,8 +50,8 @@ dmg:
 pool:
   mode: 146
   name: daos_server
-  scm_size: 6000000000
-  nvme_size: 54000000000
+  scm_size: 6G
+  nvme_size: 54G
   svcn: 4
   control_method: dmg
   rebuild_timeout: 120
@@ -78,4 +78,3 @@ ior:
 faults:
   fault_list:
      - DAOS_CSUM_CORRUPT_DISK
-

@@ -1,11 +1,12 @@
 #!/usr/bin/python
 """
-  (C) Copyright 2018-2021 Intel Corporation.
+  (C) Copyright 2018-2022 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 import time
 from scrubber_test_base import TestWithScrubber
+from apricot import skipForTicket
 
 
 class TestWithScrubberTargetEviction(TestWithScrubber):
@@ -16,6 +17,7 @@ class TestWithScrubberTargetEviction(TestWithScrubber):
 
     :avocado: recursive
     """
+    @skipForTicket("DAOS-10377")
     def test_scrubber_ssd_auto_eviction(self):
         """JIRA ID: DAOS-7300
 
