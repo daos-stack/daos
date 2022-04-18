@@ -46,7 +46,7 @@ class HarnessBasicTest(TestWithoutServers):
             self.fail("Orterun initialization failed: {}".format(error))
 
         try:
-            Mpirun(None, mpitype="mpich")
+            Mpirun(None, mpi_type="mpich")
         except CommandFailure as error:
             self.fail("Mpirun initialization failed: {}".format(error))
 
