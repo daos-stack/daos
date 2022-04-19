@@ -60,7 +60,7 @@ class DaosBuild(DfuseTestBase):
 
         daos_cmd = self.get_daos_command()
         daos_cmd.container_set_attr(pool=self.pool.uuid, cont=self.container.uuid,
-                                    attr='dfuse-data-cache', val='off')
+                                    attr='dfuse-data-cache', val='on')
 
         daos_cmd.container_set_attr(pool=self.pool.uuid, cont=self.container.uuid,
                                     attr='dfuse-attr-time', val='60s')

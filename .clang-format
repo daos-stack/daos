@@ -17,7 +17,7 @@ AlwaysBreakAfterReturnType: All
 IndentGotoLabels: false
 AlignConsecutiveDeclarations: AcrossEmptyLinesAndComments
 AlignConsecutiveMacros: AcrossEmptyLinesAndComments
-AlignConsecutiveAssignments: AcrossEmptyLinesAndComments
+AlignConsecutiveAssignments: Consecutive
 AlignConsecutiveBitFields: AcrossEmptyLinesAndComments
 SpaceBeforeParens: ControlStatementsExceptForEachMacros
 KeepEmptyLinesAtTheStartOfBlocks: false
