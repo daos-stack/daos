@@ -167,32 +167,42 @@ initialized and configured.
 
 #### DAOS UNS Path
 
-The simple form of URI is "daos:///\<your uns path\>\[/sub path\]".
-"\<your path\>" is your OS file path created with the `daos` command or Java
-DAOS UNS method, `DaosUns.create()`. The "\[sub path\]" is optional. You can
-create the UNS path with below command.
+The simple form of URI is `daos://<your_uns_path>[/sub_path]`.
+`<your_uns_path>` is your OS file path created with the `daos` command or Java
+DAOS UNS method, `DaosUns.create()`.
+The `[/sub_path]` is optional. You can create the UNS path with below command.
 
 ```bash
-$ daos cont create --label $DAOS_CONT --path <your_path> --type POSIX $DAOS_POOL
+$ daos cont create --label $DAOS_CONT --path <your_uns_path> --type POSIX $DAOS_POOL
 ```
 Or
 
 ```bash
-$ java -Dpath="your_path" -Dpool_id=$DAOS_POOL -cp ./daos-java-<version>-shaded.jar io.daos.dfs.DaosUns create
+$ java -Dpath="your_uns_path" -Dpool_id=$DAOS_POOL -cp ./daos-java-<version>-shaded.jar io.daos.dfs.DaosUns create
 ```
 
 After creation, you can use below command to see what DAOS properties set to
 the path.
 
 ```path
-$ getfattr -d -m - <your path>
+$ getfattr -d -m - <your_uns_path>
 ```
 
 #### DAOS Non-UNS Path
 
-Check [Set DAOS URI and Pool/Container]().
+If the DAOS container has not been created with an UNS path,
+it can be dfuse-mounted at a (non-UNS) mount-point using the
+pool and container UUIDs (or labels):
+
+```bash
+dfuse --pool=$DAOS_POOL --container=$DAOS_CONT --mountpoint=<your_path>
+```
+
+That non-UNS path `<your_path>` can then be used as the path in the DAOS URI.
+
 
 #### Special UUID Path
+
 DAOS supports a specialized URI with pool/container UUIDs embedded. The format
 is "daos://pool UUID/container UUID". As you can see, we don't need to find the
 UUIDs from neither UNS path nor configuration like above two types of URIs.
