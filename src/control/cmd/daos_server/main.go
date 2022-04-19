@@ -17,6 +17,7 @@ import (
 
 	"github.com/daos-stack/daos/src/control/build"
 	"github.com/daos-stack/daos/src/control/common"
+	"github.com/daos-stack/daos/src/control/common/cmdutil"
 	"github.com/daos-stack/daos/src/control/fault"
 	"github.com/daos-stack/daos/src/control/lib/hardware/hwprov"
 	"github.com/daos-stack/daos/src/control/logging"
@@ -53,18 +54,6 @@ func (cmd *versionCmd) Execute(_ []string) error {
 	return nil
 }
 
-type cmdLogger interface {
-	setLog(*logging.LeveledLogger)
-}
-
-type logCmd struct {
-	log *logging.LeveledLogger
-}
-
-func (c *logCmd) setLog(log *logging.LeveledLogger) {
-	c.log = log
-}
-
 func exitWithError(log *logging.LeveledLogger, err error) {
 	log.Debugf("%+v", err)
 	log.Errorf("%v", err)
@@ -98,8 +87,8 @@ func parseOpts(args []string, opts *mainOpts, log *logging.LeveledLogger) error 
 			log.WithErrorLogger((&logging.DefaultErrorLogger{}).WithSyslogOutput())
 		}
 
-		if logCmd, ok := cmd.(cmdLogger); ok {
-			logCmd.setLog(log)
+		if logCmd, ok := cmd.(cmdutil.LogSetter); ok {
+			logCmd.SetLog(log)
 		}
 
 		if cfgCmd, ok := cmd.(cfgLoader); ok {
