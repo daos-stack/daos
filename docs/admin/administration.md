@@ -269,7 +269,7 @@ wolf-72 6.4 TB    2.0 TB   68 %     1.5 TB     1.1 TB    27 %
 
 Note that the table values are per-host (storage server) and SCM/NVMe capacity
 pool component values specified in
-[`dmg pool create`](https://docs.daos.io/v2.2/admin/pool_operations/#pool-creationdestroy)
+[`dmg pool create`](https://docs.daos.io/v2.2/admin/pool_operations/#creating-a-pool)
 are per rank.
 If multiple ranks (I/O processes) have been configured per host in the server
 configuration file

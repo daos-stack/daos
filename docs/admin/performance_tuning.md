@@ -468,13 +468,13 @@ is enabled, the Agent must be restarted to gain visibility to these changes.
 For additional information, please refer to the
 [System Deployment: Agent Startup][6] documentation section.
 
-[1]: <https://github.com/daos-stack/daos/blob/release/2.2/src/cart#readme> (Collective and RPC Transport)
-[2]: <installation.md#distribution-packages> (DAOS distribution packages)
-[3]: <installation.md#building-daos--dependencies> (DAOS build documentation)
-[4]: <deployment.md#server-startup> (DAOS server startup documentation)
-[5]: <https://www.open-mpi.org/faq/?category=running#mpirun-hostfile> (mpirun hostfile)
-[6]: <deployment.md#disable-agent-cache-optional> (System Deployment Agent Startup)
-[7]: <../user/posix/#dfuse>
-[8]: <../user/mpi-io.md>
-[9]: <../user/hdf5.md>
-[10]: <https://github.com/hpc/ior/blob/main/README_DAOS>
+[^1]: <https://github.com/daos-stack/daos/blob/release/2.2/src/cart#readme> (Collective and RPC Transport)
+[^2]: <installation.md#distribution-packages> (DAOS distribution packages)
+[^3]: <installation.md#building-daos--dependencies> (DAOS build documentation)
+[^4]: <deployment.md#server-startup> (DAOS server startup documentation)
+[^5]: <https://www.open-mpi.org/faq/?category=running#mpirun-hostfile> (mpirun hostfile)
+[^6]: <deployment.md#disable-agent-cache-optional> (System Deployment Agent Startup)
+[^7]: <../user/posix/#dfuse>
+[^8]: <../user/mpi-io.md>
+[^9]: <../user/hdf5.md>
+[^10]: <https://github.com/hpc/ior/blob/main/README_DAOS>
