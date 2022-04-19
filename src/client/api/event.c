@@ -1081,14 +1081,15 @@ daos_event_fini(struct daos_event *ev)
 		}
 		eq = daos_eqx2eq(eqx);
 		D_MUTEX_LOCK(&eqx->eqx_lock);
-	} else {
-		D_MUTEX_DESTROY(&evx->evx_lock);
 	}
 
 	if (evx->evx_status == DAOS_EVS_RUNNING) {
 		rc = -DER_BUSY;
 		goto out;
 	}
+
+	if (daos_handle_is_inval(evx->evx_eqh) && evx->evx_parent == NULL)
+		D_MUTEX_DESTROY(&evx->evx_lock);
 
 	/* If there are child events */
 	while (!d_list_empty(&evx->evx_child)) {
@@ -1207,6 +1208,8 @@ daos_event_abort(struct daos_event *ev)
 			return -DER_NONEXIST;
 		}
 		D_MUTEX_LOCK(&eqx->eqx_lock);
+	} else {
+		D_MUTEX_LOCK(&evx->evx_lock);
 	}
 
 	daos_event_abort_locked(eqx, evx);
@@ -1214,6 +1217,8 @@ daos_event_abort(struct daos_event *ev)
 	if (eqx != NULL) {
 		D_MUTEX_UNLOCK(&eqx->eqx_lock);
 		daos_eq_putref(eqx);
+	} else {
+		D_MUTEX_UNLOCK(&evx->evx_lock);
 	}
 
 	return 0;
