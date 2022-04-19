@@ -19,6 +19,8 @@ jobs:
     steps:
       - name: Check out source repository
         uses: actions/checkout@v2
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
       - name: Set up Python environment
         uses: actions/setup-python@v3
         with:
