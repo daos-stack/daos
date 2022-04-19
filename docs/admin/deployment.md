@@ -74,7 +74,7 @@ the default location (`/etc/daos/daos_server.yml`).
 Parameter descriptions are specified in
 [`daos_server.yml`](https://github.com/daos-stack/daos/blob/release/1.2/utils/config/daos_server.yml)
 and example configuration files in the
-[examples](https://github.com/daos-stack/daos/tree/release/1.2/utils/config/examples)
+[examples](https://github.com/daos-stack/daos/tree/release/1.2/utils/config/examples/)
 directory.
 
 Any option supplied to `daos_server` as a command line option or flag will
@@ -178,7 +178,7 @@ devices, taking into account any specified network device class preference
 
 Some CentOS 7.x kernels from before the 7.9 release were known to have a defect
 that prevented `ndctl` from being able to report the NUMA affinity for a
-namespace.
+namespace, see [here](https://github.com/pmem/ndctl/issues/130).
 This prevents generation of dual engine configs using `dmg config generate`
 when running with one of the above-mentioned affected kernels.
 
@@ -1047,7 +1047,7 @@ $ sudo journalctl --unit daos_agent.service
 In certain circumstances (e.g. for DAOS development or system evaluation), it
 may be desirable to disable the DAOS Agent's caching mechanism in order to avoid
 stale system information being retained across reformats of a system. The DAOS
-Agent normally caches a map of rank->fabric URI lookups as well as client network
+Agent normally caches a map of rank-to-fabric URI lookups as well as client network
 configuration data in order to reduce the number of management RPCs required to
 start an application. When this information becomes stale, the Agent must be
 restarted in order to repopulate the cache with new information. Alternatively,
@@ -1098,19 +1098,10 @@ device domain is required.  To manually configure the domain, set `OFI_DOMAIN` s
 export OFI_DOMAIN=hfi1_0
 ```
 ### Launch the client application
+
 ```bash
 mpirun -np <num_clients> --hostfile <hostfile> ./daos_test
 ```
 
 `daos_test` requires at least 8GB of SCM (or DRAM with tmpfs) storage on
 each storage node.
-
-[^1]: https://github.com/intel/ipmctl
-
-[^2]: https://github.com/daos-stack/daos/tree/release/1.2/utils/config
-
-[^3]: [*https://www.open-mpi.org/faq/?category=running\#mpirun-hostfile*](https://www.open-mpi.org/faq/?category=running#mpirun-hostfile)
-
-[^4]: https://github.com/daos-stack/daos/tree/release/1.2/src/control/README.md
-
-[^5]: https://github.com/pmem/ndctl/issues/130
