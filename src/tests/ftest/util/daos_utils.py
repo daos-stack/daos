@@ -372,7 +372,7 @@ class DaosCommand(DaosCommandBase):
             ("container", "set-prop"),
             pool=pool, cont=cont, prop=prop_value)
 
-    def container_get_prop(self, pool, cont, properties):
+    def container_get_prop(self, pool, cont, properties=None):
         """Call daos container get-prop.
 
         Args:
@@ -507,15 +507,7 @@ class DaosCommand(DaosCommandBase):
         #   "error": null,
         #   "status": 0
         # }
-        props = None
-
-        if properties:
-            for prop in properties:
-                if props:
-                    props += ","
-                    props += prop
-                else:
-                    props = prop
+        props = ','.join(properties) if properties else None
 
         return self._get_json_result(
             ("container", "get-prop"), pool=pool, cont=cont, prop=props)
