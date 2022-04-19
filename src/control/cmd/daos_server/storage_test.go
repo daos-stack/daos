@@ -17,6 +17,7 @@ import (
 
 	"github.com/daos-stack/daos/src/control/cmd/dmg/pretty"
 	"github.com/daos-stack/daos/src/control/common"
+	"github.com/daos-stack/daos/src/control/common/cmdutil"
 	commands "github.com/daos-stack/daos/src/control/common/storage"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/server"
@@ -161,8 +162,8 @@ func TestDaosServer_StoragePrepare_SCM(t *testing.T) {
 
 			cmd := &storagePrepareCmd{
 				StoragePrepareCmd: spc,
-				logCmd: logCmd{
-					log: log,
+				LogCmd: cmdutil.LogCmd{
+					Logger: log,
 				},
 			}
 			scanErrors := make(errs, 0, 2)
@@ -318,8 +319,8 @@ func TestDaosServer_StoragePrepare_NVMe(t *testing.T) {
 
 			cmd := &storagePrepareCmd{
 				StoragePrepareCmd: tc.prepCmd,
-				logCmd: logCmd{
-					log: log,
+				LogCmd: cmdutil.LogCmd{
+					Logger: log,
 				},
 				scs: server.NewMockStorageControlService(log, nil, nil,
 					scm.NewMockProvider(log, nil, nil), mbp),

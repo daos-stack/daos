@@ -16,6 +16,7 @@ import (
 
 	"github.com/daos-stack/daos/src/control/cmd/dmg/pretty"
 	"github.com/daos-stack/daos/src/control/common"
+	"github.com/daos-stack/daos/src/control/common/cmdutil"
 	commands "github.com/daos-stack/daos/src/control/common/storage"
 	"github.com/daos-stack/daos/src/control/pbin"
 	"github.com/daos-stack/daos/src/control/server"
@@ -30,7 +31,7 @@ type storageCmd struct {
 
 type storagePrepareCmd struct {
 	scs *server.StorageControlService
-	logCmd
+	cmdutil.LogCmd
 	commands.StoragePrepareCmd
 	HelperLogFile string `short:"l" long:"helper-log-file" description:"Log debug from daos_admin binary."`
 }
@@ -58,7 +59,7 @@ func (cmd *storagePrepareCmd) prepNvme(scanErrors *errs, prep nvmePrepFn) error 
 		op = "Reset"
 	}
 
-	cmd.log.Info(op + " locally-attached NVMe storage...")
+	cmd.Info(op + " locally-attached NVMe storage...")
 
 	if cmd.TargetUser == "" {
 		runningUser, err := user.Current()
@@ -99,9 +100,9 @@ func (cmd *storagePrepareCmd) prepScm(scanErrors *errs, prep scmPrepFn) error {
 		op = "Reset"
 	}
 
-	cmd.log.Info(op + " locally-attached SCM...")
+	cmd.Info(op + " locally-attached SCM...")
 
-	if err := cmd.Warn(cmd.log); err != nil {
+	if err := cmd.Warn(cmd.Logger); err != nil {
 		return scanErrors.add(err)
 	}
 
@@ -113,7 +114,7 @@ func (cmd *storagePrepareCmd) prepScm(scanErrors *errs, prep scmPrepFn) error {
 	if err != nil {
 		return scanErrors.add(err)
 	}
-	cmd.log.Debugf("%s scm resp: %+v", op, resp)
+	cmd.Debugf("%s scm resp: %+v", op, resp)
 
 	state := resp.State
 
@@ -131,7 +132,7 @@ func (cmd *storagePrepareCmd) prepScm(scanErrors *errs, prep scmPrepFn) error {
 		case storage.ScmStateNoFreeCapacity:
 			msg = "PMem namespaces removed and AppDirect interleaved regions will be removed. "
 		}
-		cmd.log.Info(msg + storage.ScmMsgRebootRequired)
+		cmd.Info(msg + storage.ScmMsgRebootRequired)
 
 		return nil
 	}
@@ -146,7 +147,7 @@ func (cmd *storagePrepareCmd) prepScm(scanErrors *errs, prep scmPrepFn) error {
 	if cmd.Reset {
 		// Respond to resultant state on prepare reset.
 		if state == storage.ScmStateNoRegions {
-			cmd.log.Info("SCM reset successfully!")
+			cmd.Info("SCM reset successfully!")
 			return nil
 		}
 
@@ -169,7 +170,7 @@ func (cmd *storagePrepareCmd) prepScm(scanErrors *errs, prep scmPrepFn) error {
 		if err := pretty.PrintScmNamespaces(resp.Namespaces, &bld); err != nil {
 			return err
 		}
-		cmd.log.Infof("%s\n", bld.String())
+		cmd.Infof("%s\n", bld.String())
 	default:
 		scanErrors.add(errors.Errorf("unexpected state %q after prepare reset", state))
 	}
@@ -180,7 +181,7 @@ func (cmd *storagePrepareCmd) prepScm(scanErrors *errs, prep scmPrepFn) error {
 func (cmd *storagePrepareCmd) Execute(args []string) error {
 	if cmd.HelperLogFile != "" {
 		if err := os.Setenv(pbin.DaosAdminLogFileEnvVar, cmd.HelperLogFile); err != nil {
-			cmd.log.Errorf("unable to configure privileged helper logging: %s", err)
+			cmd.Errorf("unable to configure privileged helper logging: %s", err)
 		}
 	}
 
@@ -189,7 +190,7 @@ func (cmd *storagePrepareCmd) Execute(args []string) error {
 	// that we should have made these Execute() methods thin
 	// wrappers around more easily-testable functions.
 	if cmd.scs == nil {
-		cmd.scs = server.NewStorageControlService(cmd.log, config.DefaultServer().Engines)
+		cmd.scs = server.NewStorageControlService(cmd.Logger, config.DefaultServer().Engines)
 	}
 
 	scanErrors := make(errs, 0, 2)
@@ -214,7 +215,7 @@ func (cmd *storagePrepareCmd) Execute(args []string) error {
 }
 
 type storageScanCmd struct {
-	logCmd
+	cmdutil.LogCmd
 	HelperLogFile string `short:"l" long:"helper-log-file" description:"Log debug from daos_admin binary."`
 	DisableVMD    bool   `short:"d" long:"disable-vmd" description:"Disable VMD-aware scan."`
 }
@@ -222,18 +223,18 @@ type storageScanCmd struct {
 func (cmd *storageScanCmd) Execute(args []string) error {
 	if cmd.HelperLogFile != "" {
 		if err := os.Setenv(pbin.DaosAdminLogFileEnvVar, cmd.HelperLogFile); err != nil {
-			cmd.log.Errorf("unable to configure privileged helper logging: %s", err)
+			cmd.Errorf("unable to configure privileged helper logging: %s", err)
 		}
 	}
 
-	svc := server.NewStorageControlService(cmd.log, config.DefaultServer().Engines)
+	svc := server.NewStorageControlService(cmd.Logger, config.DefaultServer().Engines)
 	if !cmd.DisableVMD {
 		svc.WithVMDEnabled()
 	}
 
 	msg := "Scanning locally-attached storage..."
 
-	cmd.log.Info(msg)
+	cmd.Info(msg)
 
 	var bld strings.Builder
 	scanErrors := make([]error, 0, 2)
@@ -273,7 +274,7 @@ func (cmd *storageScanCmd) Execute(args []string) error {
 		}
 	}
 
-	cmd.log.Info(bld.String())
+	cmd.Info(bld.String())
 
 	if len(scanErrors) > 0 {
 		errStr := "scan error(s):\n"
