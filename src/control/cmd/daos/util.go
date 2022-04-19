@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2021 Intel Corporation.
+// (C) Copyright 2021-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -226,7 +226,7 @@ type daosCaller interface {
 type daosCmd struct {
 	cmdutil.NoArgsCmd
 	jsonOutputCmd
-	logCmd
+	cmdutil.LogCmd
 }
 
 func (dc *daosCmd) initDAOS() (func(), error) {
@@ -238,7 +238,7 @@ func (dc *daosCmd) initDAOS() (func(), error) {
 
 	return func() {
 		if rc := C.daos_fini(); rc != 0 {
-			dc.log.Errorf("daos_fini() failed: %s", daosError(rc))
+			dc.Errorf("daos_fini() failed: %s", daosError(rc))
 		}
 	}, nil
 }

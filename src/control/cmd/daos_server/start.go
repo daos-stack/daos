@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2021 Intel Corporation.
+// (C) Copyright 2019-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -12,15 +12,16 @@ import (
 	"github.com/pkg/errors"
 
 	"github.com/daos-stack/daos/src/control/common"
+	"github.com/daos-stack/daos/src/control/common/cmdutil"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/server"
 	"github.com/daos-stack/daos/src/control/server/config"
 )
 
-type serverStarter func(*logging.LeveledLogger, *config.Server) error
+type serverStarter func(logging.Logger, *config.Server) error
 
 type startCmd struct {
-	logCmd
+	cmdutil.LogCmd
 	cfgCmd
 	start               serverStarter
 	Port                uint16  `short:"p" long:"port" description:"Port for the gRPC management interfect to listen on"`
@@ -44,7 +45,7 @@ func (cmd *startCmd) setCLIOverrides() error {
 		cmd.config.ControlPort = int(cmd.Port)
 	}
 	if cmd.MountPath != "" {
-		cmd.log.Info("NOTICE: -s, --storage is deprecated")
+		cmd.Info("NOTICE: -s, --storage is deprecated")
 		if len(cmd.config.Engines) < 1 {
 			return errors.New("config has zero engines")
 		}
@@ -81,21 +82,28 @@ func (cmd *startCmd) setCLIOverrides() error {
 }
 
 func (cmd *startCmd) configureLogging() error {
+	log, ok := cmd.Logger.(*logging.LeveledLogger)
+	if !ok {
+		return errors.New("logger is not a LeveledLogger")
+	}
+
 	// Set log level mask for default logger from config,
 	// unless it was explicitly set to debug via CLI flag.
-	applyLogConfig := func() {
+	applyLogConfig := func() error {
 		switch logging.LogLevel(cmd.config.ControlLogMask) {
 		case logging.LogLevelDebug:
-			cmd.log.SetLevel(logging.LogLevelDebug)
-			cmd.log.Debugf("Switching control log level to DEBUG")
+			log.SetLevel(logging.LogLevelDebug)
+			cmd.Debugf("Switching control log level to DEBUG")
 		case logging.LogLevelError:
-			cmd.log.Debugf("Switching control log level to ERROR")
-			cmd.log.SetLevel(logging.LogLevelError)
+			cmd.Debugf("Switching control log level to ERROR")
+			log.SetLevel(logging.LogLevelError)
 		}
 
 		if cmd.config.ControlLogJSON {
-			cmd.log = cmd.log.WithJSONOutput()
+			cmd.Logger = log.WithJSONOutput()
 		}
+
+		return nil
 	}
 
 	hostname, err := os.Hostname()
@@ -105,7 +113,7 @@ func (cmd *startCmd) configureLogging() error {
 
 	for i, srv := range cmd.config.Engines {
 		if srv.LogFile == "" {
-			cmd.log.Errorf("no daos log file specified for server %d", i)
+			cmd.Errorf("no daos log file specified for server %d", i)
 		}
 	}
 
@@ -116,23 +124,22 @@ func (cmd *startCmd) configureLogging() error {
 			return errors.WithMessage(err, "create log file")
 		}
 
-		cmd.log.Infof("%s logging to file %s",
+		cmd.Infof("%s logging to file %s",
 			os.Args[0], cmd.config.ControlLogFile)
+
 		// Create an additional set of loggers which append everything
 		// to the specified file.
-		cmd.log = cmd.log.
+		cmd.Logger = log.
 			WithErrorLogger(logging.NewErrorLogger(hostname, f)).
 			WithInfoLogger(logging.NewInfoLogger(hostname, f)).
 			WithDebugLogger(logging.NewDebugLogger(f))
-		applyLogConfig()
 
-		return nil
+		return applyLogConfig()
 	}
 
-	cmd.log.Info("no control log file specified; logging to stdout")
-	applyLogConfig()
+	cmd.Info("no control log file specified; logging to stdout")
 
-	return nil
+	return applyLogConfig()
 }
 
 func (cmd *startCmd) Execute(args []string) error {
@@ -144,5 +151,5 @@ func (cmd *startCmd) Execute(args []string) error {
 		return err
 	}
 
-	return cmd.start(cmd.log, cmd.config)
+	return cmd.start(cmd.Logger, cmd.config)
 }

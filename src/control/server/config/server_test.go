@@ -1020,7 +1020,7 @@ func TestServerConfig_Parsing(t *testing.T) {
 		},
 		"legacy storage; no bdev_list": {
 			legacyStorage: true,
-			inTxt:         "  bdev_list: []",
+			inTxt:         "    bdev_list: []",
 			outTxt:        "",
 			expCheck: func(c *Server) error {
 				nr := len(c.Engines[0].Storage.Tiers)
@@ -1032,7 +1032,7 @@ func TestServerConfig_Parsing(t *testing.T) {
 		},
 		"legacy storage; no bdev_class": {
 			legacyStorage: true,
-			inTxt:         "  bdev_class: nvme",
+			inTxt:         "    bdev_class: nvme",
 			outTxt:        "",
 			expCheck: func(c *Server) error {
 				nr := len(c.Engines[0].Storage.Tiers)
@@ -1044,8 +1044,8 @@ func TestServerConfig_Parsing(t *testing.T) {
 		},
 		"legacy storage; non-empty bdev_list": {
 			legacyStorage: true,
-			inTxt:         "  bdev_list: []",
-			outTxt:        "  bdev_list: [0000:80:00.0]",
+			inTxt:         "    bdev_list: []",
+			outTxt:        "    bdev_list: [0000:80:00.0]",
 			expCheck: func(c *Server) error {
 				nr := len(c.Engines[0].Storage.Tiers)
 				if nr != 2 {
@@ -1057,10 +1057,10 @@ func TestServerConfig_Parsing(t *testing.T) {
 		"legacy storage; non-empty bdev_busid_range": {
 			legacyStorage: true,
 			inTxtList: []string{
-				"  bdev_list: []", "  bdev_busid_range: \"\"",
+				"    bdev_list: []", "    bdev_busid_range: \"\"",
 			},
 			outTxtList: []string{
-				"  bdev_list: [0000:80:00.0]", "  bdev_busid_range: \"0x00-0x80\"",
+				"    bdev_list: [0000:80:00.0]", "    bdev_busid_range: \"0x00-0x80\"",
 			},
 			expCheck: func(c *Server) error {
 				nr := len(c.Engines[0].Storage.Tiers)

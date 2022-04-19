@@ -30,11 +30,13 @@ import (
 	"github.com/daos-stack/daos/src/control/server/engine"
 	"github.com/daos-stack/daos/src/control/server/storage"
 	"github.com/daos-stack/daos/src/control/system"
+	"github.com/daos-stack/daos/src/control/system/raft"
 )
 
-func addTestPoolService(t *testing.T, sysdb *system.Database, ps *system.PoolService) {
+func addTestPoolService(t *testing.T, sysdb *raft.Database, ps *system.PoolService) {
 	t.Helper()
 
+	var i uint32
 	for _, r := range ps.Replicas {
 		_, err := sysdb.FindMemberByRank(r)
 		if err == nil {
@@ -44,9 +46,11 @@ func addTestPoolService(t *testing.T, sysdb *system.Database, ps *system.PoolSer
 			t.Fatal(err)
 		}
 
-		if err := sysdb.AddMember(system.MockMember(t, 0, system.MemberStateJoined)); err != nil {
+		if err := sysdb.AddMember(system.MockMember(t, i, system.MemberStateJoined)); err != nil {
 			t.Fatal(err)
 		}
+
+		i++
 	}
 
 	if err := sysdb.AddPoolService(ps); err != nil {
@@ -54,7 +58,7 @@ func addTestPoolService(t *testing.T, sysdb *system.Database, ps *system.PoolSer
 	}
 }
 
-func addTestPools(t *testing.T, sysdb *system.Database, poolUUIDs ...string) {
+func addTestPools(t *testing.T, sysdb *raft.Database, poolUUIDs ...string) {
 	t.Helper()
 
 	for i, uuidStr := range poolUUIDs {
@@ -445,7 +449,8 @@ func TestServer_MgmtSvc_PoolCreate(t *testing.T) {
 				}
 				harness.started.SetTrue()
 
-				ms, db := system.MockMembership(t, log, mockTCPResolver)
+				db := raft.MockDatabase(t, log)
+				ms := system.MockMembership(t, log, db, mockTCPResolver)
 				tc.mgmtSvc = newMgmtSvc(harness, ms, db, nil,
 					events.NewPubSub(context.Background(), log))
 			}

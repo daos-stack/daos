@@ -33,6 +33,7 @@ import (
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/server/storage"
 	"github.com/daos-stack/daos/src/control/system"
+	"github.com/daos-stack/daos/src/control/system/raft"
 )
 
 func act2state(a string) string {
@@ -193,7 +194,7 @@ func TestServer_MgmtSvc_GetAttachInfo(t *testing.T) {
 			srv.setDrpcClient(newMockDrpcClient(nil))
 			harness.started.SetTrue()
 
-			db := system.MockDatabaseWithAddr(t, log, msReplica.Addr)
+			db := raft.MockDatabaseWithAddr(t, log, msReplica.Addr)
 			m := system.NewMembership(log, db)
 			tc.svc = newMgmtSvc(harness, m, db, nil, nil)
 			if _, err := tc.svc.membership.Add(msReplica); err != nil {
@@ -255,7 +256,7 @@ func TestServer_MgmtSvc_LeaderQuery(t *testing.T) {
 			defer common.ShowBufferOnFailure(t, buf)
 
 			svc := newTestMgmtSvc(t, log)
-			db, cleanup := system.TestDatabase(t, log)
+			db, cleanup := raft.TestDatabase(t, log)
 			defer cleanup()
 			svc.sysdb = db
 
@@ -473,7 +474,7 @@ func checkMembers(t *testing.T, exp system.Members, ms *system.Membership) {
 		}
 
 		// state is not exported so compare using access method
-		if diff := cmp.Diff(em.State(), am.State()); diff != "" {
+		if diff := cmp.Diff(em.State, am.State); diff != "" {
 			t.Fatalf("unexpected member state for rank %d (-want, +got)\n%s\n", em.Rank, diff)
 		}
 
@@ -508,7 +509,8 @@ func mgmtSystemTestSetup(t *testing.T, l logging.Logger, mbs system.Members, r .
 	svc := newTestMgmtSvcMulti(t, l, maxEngines, false)
 	svc.harness.started.SetTrue()
 	svc.harness.instances[0].(*EngineInstance)._superblock.Rank = system.NewRankPtr(0)
-	svc.membership, svc.sysdb = system.MockMembership(t, l, mockResolver)
+	svc.sysdb = raft.MockDatabase(t, l)
+	svc.membership = system.MockMembership(t, l, svc.sysdb, mockResolver)
 	for _, m := range mbs {
 		if _, err := svc.membership.Add(m); err != nil {
 			t.Fatal(err)

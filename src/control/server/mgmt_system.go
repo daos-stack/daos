@@ -30,6 +30,7 @@ import (
 	"github.com/daos-stack/daos/src/control/lib/control"
 	"github.com/daos-stack/daos/src/control/lib/hostlist"
 	"github.com/daos-stack/daos/src/control/system"
+	"github.com/daos-stack/daos/src/control/system/raft"
 )
 
 // GetAttachInfo handles a request to retrieve a map of ranks to fabric URIs, in addition
@@ -55,7 +56,7 @@ func (svc *mgmtSvc) GetAttachInfo(ctx context.Context, req *mgmtpb.GetAttachInfo
 	resp := new(mgmtpb.GetAttachInfoResp)
 	rankURIs := groupMap.RankURIs
 	if !req.GetAllRanks() {
-		rankURIs = make(map[system.Rank]system.URIs)
+		rankURIs = make(map[system.Rank]raft.URIs)
 
 		// If the request does not indicate that all ranks should be returned,
 		// it may be from an older client, in which case we should just return
@@ -298,7 +299,7 @@ func (svc *mgmtSvc) join(ctx context.Context, req *batchJoinRequest) *batchJoinR
 			member.Rank, req.peerAddr, member.PrimaryFabricURI, member.SecondaryFabricURIs)
 	} else {
 		svc.log.Debugf("updated system member: rank %d, primary uri %s, secondary uris %s, %s->%s",
-			member.Rank, member.PrimaryFabricURI, member.SecondaryFabricURIs, joinResponse.PrevState, member.State())
+			member.Rank, member.PrimaryFabricURI, member.SecondaryFabricURIs, joinResponse.PrevState, member.State)
 	}
 
 	resp := &batchJoinResponse{

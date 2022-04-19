@@ -81,6 +81,8 @@ enum vos_pool_open_flags {
 	VOS_POF_SMALL	= (1 << 0),
 	/** Exclusive (-DER_BUSY if already opened) */
 	VOS_POF_EXCL	= (1 << 1),
+	/** Ignore the pool uuid passed into vos_pool_open */
+	VOS_POF_SKIP_UUID_CHECK = (1 << 2),
 };
 
 enum vos_oi_attr {
