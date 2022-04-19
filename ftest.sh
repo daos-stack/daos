@@ -60,7 +60,7 @@ LAUNCH_OPT_ARGS="${3:-}"
 
 # Add the missing '--nvme' argument identifier for backwards compatibility with
 # the 'auto:Optane' optional argument specified without the identifier.
-if [[ "${LAUNCH_OPT_ARGS}" == "auto:Optane" ]]; then
+if [[ "${LAUNCH_OPT_ARGS}" == "auto:-3DNAND" ]]; then
     LAUNCH_OPT_ARGS="--nvme=${LAUNCH_OPT_ARGS}"
 fi
 
