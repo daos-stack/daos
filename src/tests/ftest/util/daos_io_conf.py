@@ -11,7 +11,8 @@ from apricot import TestWithServers
 from command_utils import ExecutableCommand
 from command_utils_base import \
     BasicParameter, FormattedParameter
-from exception_utils import CommandFailure
+from exception_utils import CommandFailure, MPILoadError
+from env_modules import load_mpi
 from job_manager_utils import Orterun
 
 
@@ -41,6 +42,20 @@ class IoConfGen(ExecutableCommand):
         self.record_size = FormattedParameter("-s {}")
         self.obj_class = FormattedParameter("-O {}")
         self.filename = BasicParameter(None, filename)
+        self.mpi_type = "openmpi"
+
+    def run(self):
+        """Run the command.
+
+        Raises:
+            CommandFailure: if there is an error running the command
+            MPILoadError: if there is an error loading mpi
+
+        """
+        if not load_mpi(self.mpi_type):
+            raise MPILoadError(self.mpi_type)
+
+        return super().run()
 
     def run_conf(self, dmg_config_file):
         """Run the daos_run_io_conf command as a foreground process.
@@ -56,24 +71,25 @@ class IoConfGen(ExecutableCommand):
         command = " ".join([os.path.join(self._path, "daos_run_io_conf"), " -n ",
                             dmg_config_file, self.filename.value])
 
-        manager = Orterun(command)
+        manager = Orterun(command, mpi_type=self.mpi_type)
         # run daos_run_io_conf Command using Openmpi
         try:
             out = manager.run()
 
-            #Return False if "ERROR" in stdout
+            # Return False if "ERROR" in stdout
             for line in out.stdout_text.splitlines():
                 if 'ERROR' in line:
                     return False
-            #Return False if not expected message to confirm test completed.
+            # Return False if not expected message to confirm test completed.
             if success_msg not in out.stdout_text.splitlines()[-1]:
                 return False
 
-        #Return False if Command failed.
+        # Return False if Command failed.
         except CommandFailure:
             return False
 
         return True
+
 
 def gen_unaligned_io_conf(record_size, filename="testfile"):
     """Generate the data-set file based on record size.
@@ -104,11 +120,13 @@ def gen_unaligned_io_conf(record_size, filename="testfile"):
     except Exception as error:
         raise error
 
+
 class IoConfTestBase(TestWithServers):
     """Base rebuild test class.
 
     :avocado: recursive
     """
+
     def __init__(self, *args, **kwargs):
         """Initialize a IoConfTestBase object."""
         super().__init__(*args, **kwargs)
