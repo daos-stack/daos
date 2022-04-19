@@ -996,6 +996,8 @@ typedef struct {
 	uint64_t			flags;
 	/** operation done on this specific dkey */
 	daos_key_t			*dkey;
+	/** I/O descriptors per dkey */
+	uint32_t			nr_iods_dkey;
 	/** I/O descriptors in the iods table. */
 	uint32_t			*nr_iods;
 	/** akeys */
@@ -1008,9 +1010,9 @@ typedef struct {
 	daos_key_desc_t			*kds;
 	/** dkeys */
 	d_sg_list_t			*sgl_keys;
-	/** returned records  */
+	/** records  */
 	d_sg_list_t			*sgl_recx;
-	/** returned aggregations */
+	/** aggregations */
 	d_sg_list_t			*sgl_agg;
 	/** returned pipeline stats  */
 	daos_pipeline_stats_t		*stats;

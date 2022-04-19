@@ -97,11 +97,11 @@ getdata_func_akey_(struct filter_part_run_t *args)
 	char        *akey_name_str;
 	size_t       akey_name_size;
 	daos_iod_t  *iod;
-	d_sg_list_t *akey;
-	/*daos_iom_t	*iom;*/
+	d_iov_t     *akey;
+	/*daos_iom_t  *iom;*/
 	daos_recx_t *recx;
-	char        *iod_str;
-	size_t       iod_size;
+	char        *iod_name_str;
+	size_t       iod_name_size;
 	uint32_t     i, j;
 	char        *buf;
 	size_t       target_offset;
@@ -115,20 +115,21 @@ getdata_func_akey_(struct filter_part_run_t *args)
 	buf            = NULL;
 
 	for (i = 0; i < args->nr_iods; i++) {
-		iod      = &args->iods[i];
-		iod_str  = (char *)iod->iod_name.iov_buf;
-		iod_size = iod->iod_name.iov_len;
-		if (iod_size != akey_name_size)
+		iod           = &args->iods[i];
+		iod_name_str  = (char *)iod->iod_name.iov_buf;
+		iod_name_size = iod->iod_name.iov_len;
+		if (iod_name_size != akey_name_size)
 			continue;
 
-		akey = &args->akeys[i];
+		akey = args->akeys[i].sg_iovs;
 		/** akey exists and has data */
-		if (!memcmp(akey_name_str, iod_str, iod_size) && akey->sg_iovs->iov_len > 0) {
+		if (!memcmp(akey_name_str, iod_name_str, iod_name_size) &&
+		    akey->iov_len > 0) {
 			if (iod->iod_type == DAOS_IOD_SINGLE) {
-				buf = (char *)akey->sg_iovs->iov_buf;
+				buf = (char *)akey->iov_buf;
 				buf = &buf[target_offset];
-				if (target_offset + len > akey->sg_iovs->iov_len)
-					len = akey->sg_iovs->iov_len - target_offset;
+				if (target_offset + len > iod->iod_size)
+					len = iod->iod_size - target_offset;
 
 				D_GOTO(exit, buf);
 			}
@@ -143,7 +144,7 @@ getdata_func_akey_(struct filter_part_run_t *args)
 
 				if ((target_offset < recx->rx_idx + recx->rx_nr) &&
 				    target_offset >= recx->rx_idx) { /** extend found */
-					buf = (char *)akey->sg_iovs->iov_buf;
+					buf = (char *)akey->iov_buf;
 					buf = &buf[offset];
 					if (iod->iod_size * recx->rx_nr < len)
 						len = (size_t)recx->rx_nr * iod->iod_size;
@@ -154,9 +155,9 @@ getdata_func_akey_(struct filter_part_run_t *args)
 			}
 			D_GOTO(exit, buf);
 			/**
-			  * Even if extent is not found we return, since there are not two akeys
-			  * with the same name (i.e., key value)
-			  */
+			 * Even if extent is not found we return, since there are not two akeys
+			 * with the same name (i.e., key value)
+			 */
 		}
 	}
 exit:
@@ -178,12 +179,10 @@ exit:
 
 getdata_func_akey(u, 1, uint8_t, u, uint64_t)
 getdata_func_akey(u, 2, uint16_t, u, uint64_t)
-
 getdata_func_akey(u, 4, uint32_t, u, uint64_t)
 getdata_func_akey(u, 8, uint64_t, u, uint64_t)
 getdata_func_akey(i, 1, int8_t, i, int64_t)
 getdata_func_akey(i, 2, int16_t, i, int64_t)
-
 getdata_func_akey(i, 4, int32_t, i, int64_t)
 getdata_func_akey(i, 8, int64_t, i, int64_t)
 getdata_func_akey(r, 4, float, d, double)
@@ -229,7 +228,6 @@ getdata_func_akey_cst(struct filter_part_run_t *args)
 
 		if (len < args->data_len_out)
 			args->data_len_out = len;
-
 	}
 	return 0;
 }
@@ -237,7 +235,7 @@ getdata_func_akey_cst(struct filter_part_run_t *args)
 #define getdata_func_const(typename, size, typec, outtypename, outtypec)                           \
 	int getdata_func_const_##typename##size(struct filter_part_run_t *args)                    \
 	{                                                                                          \
-		args->data_out = (char *)args->parts[args->part_idx].iov->iov_buf;                 \
+		args->data_out                  = (char *)args->parts[args->part_idx].iov->iov_buf;\
 		args->value_##outtypename##_out = (_##outtypec) * ((_##typec *)args->data_out);    \
 		return 0;                                                                          \
 	}

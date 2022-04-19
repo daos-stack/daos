@@ -100,7 +100,6 @@ pipeline_comp_cb(tse_task_t *task, void *data)
 
 	anchor_check_eof(api_args->anchor, cb_args->oca, cb_args->total_shards,
 			 cb_args->total_replicas);
-
 	return 0;
 }
 
@@ -116,12 +115,8 @@ pipeline_shard_run_cb(tse_task_t *task, void *data)
 	crt_rpc_t                   *rpc;
 	uint32_t                     nr_iods;
 	uint32_t                     nr_kds;
-	uint32_t                     nr_recx;
 	uint32_t                     nr_agg;
 	uint32_t                     i;
-	daos_key_desc_t             *kds_ptr;
-	d_sg_list_t                 *sgl_keys_ptr;
-	d_sg_list_t                 *sgl_recx_ptr;
 
 	cb_args  = (struct pipeline_run_cb_args *)data;
 	api_args = cb_args->api_args;
@@ -133,17 +128,17 @@ pipeline_shard_run_cb(tse_task_t *task, void *data)
 		D_GOTO(out, ret);
 	}
 
-	pro     = (struct pipeline_run_out *)crt_reply_get(rpc);
-	rc      = pro->pro_ret; /** get status */
+	pro          = (struct pipeline_run_out *)crt_reply_get(rpc);
+	rc           = pro->pro_ret; /** get status */
 
-	nr_iods = cb_args->nr_iods;
-	nr_kds  = cb_args->nr_kds;
-	nr_recx = nr_iods * nr_kds;
-	nr_agg  = api_args->pipeline->num_aggr_filters;
+	nr_iods      = cb_args->nr_iods;
+	nr_kds       = cb_args->nr_kds;
+	nr_agg       = api_args->pipeline->num_aggr_filters;
 
 	D_ASSERT(pro->pro_kds.ca_count <= nr_kds);
 	D_ASSERT(pro->pro_sgl_keys.sg_nr_out <= nr_kds);
-	D_ASSERT(pro->pro_sgl_recx.sg_nr_out <= nr_recx);
+	D_ASSERT(pro->pro_iods.nr <= nr_iods);
+	D_ASSERT(pro->pro_sgl_recx.sg_nr_out <= nr_iods);
 	D_ASSERT(pro->pro_sgl_agg.sg_nr_out == nr_agg);
 
 	if (rc != 0) {
@@ -158,26 +153,30 @@ pipeline_shard_run_cb(tse_task_t *task, void *data)
 
 	if (pro->pro_kds.ca_count > 0) {
 		/** copying key descriptors and keys */
-		kds_ptr      = api_args->kds;
-		sgl_keys_ptr = api_args->sgl_keys;
+		memcpy((void *)api_args->kds, (void *)pro->pro_kds.ca_arrays,
+		       sizeof(*api_args->kds) * (pro->pro_kds.ca_count));
 
-		memcpy((void *)kds_ptr, (void *)pro->pro_kds.ca_arrays,
-		       sizeof(*kds_ptr) * (pro->pro_kds.ca_count));
-
-		rc = daos_sgls_copy_data_out(sgl_keys_ptr, 1, &pro->pro_sgl_keys, 1);
+		rc = daos_sgls_copy_data_out(api_args->sgl_keys, 1, &pro->pro_sgl_keys, 1);
 		if (rc != 0)
 			D_GOTO(out, rc);
 	}
-
+	if (pro->pro_iods.nr > 0) {
+		/**
+		 * copying I/O descriptors
+		 *
+		 * Note: the only thing that is really an output is iod_size (i.e., size of the
+		 * data), everything else is kept the same.
+		 */
+		for (i = 0; i < pro->pro_iods.nr; i++) {
+			api_args->iods[i].iod_size = pro->pro_iods.iods[i].iod_size;
+		}
+	}
 	if (pro->pro_sgl_recx.sg_nr_out > 0) {
-		/** copying record data (akeys' data) */
-		sgl_recx_ptr = api_args->sgl_recx;
-
-		rc = daos_sgls_copy_data_out(sgl_recx_ptr, 1, &pro->pro_sgl_recx, 1);
+		/** copying record data (akeys' values) */
+		rc = daos_sgls_copy_data_out(api_args->sgl_recx, 1, &pro->pro_sgl_recx, 1);
 		if (rc != 0)
 			D_GOTO(out, rc);
 	}
-
 	for (i = 0; i < nr_agg; i++) {
 		/** copying aggregation buffers */
 		double             *src, *dst;
@@ -215,17 +214,13 @@ pipeline_shard_run_cb(tse_task_t *task, void *data)
 			if (*src > *dst)
 				*dst = *src;
 		}
+		api_args->sgl_agg->sg_iovs[i].iov_len = sizeof(double);
 	}
-	*api_args->nr_kds = pro->pro_kds.ca_count;
+	if (nr_agg > 0)
+		api_args->sgl_agg->sg_nr_out = nr_agg;
 
-	/**
-	 * TODO: nr_iods and iods are left as they are for now. Once pipeline is able to
-	 *       filter/aggregate akeys by a provided dkey, then outputting iods and nr_iods will
-	 *       make sense. For now, this is IN only.
-	 *
-	 *       api_args->nr_iods =
-	 *       api_args->iods =
-	 */
+	*api_args->nr_kds  = pro->pro_kds.ca_count;
+	*api_args->nr_iods = pro->pro_iods.nr;
 
 	if (api_args->stats != NULL) {
 		/** user wants stats */
@@ -241,6 +236,7 @@ pipeline_shard_run_cb(tse_task_t *task, void *data)
 	/** anchor should always be updated at the end */
 	*api_args->anchor = pro->pro_anchor;
 
+
 out:
 	crt_req_decref(rpc);
 	tse_task_list_del(task);
@@ -250,6 +246,20 @@ out:
 		ret = rc;
 	return ret;
 }
+
+static void
+shard_pipeline_set_buffers_to_zero(d_sg_list_t *sgl)
+{
+	uint32_t i;
+
+	if (sgl != NULL && sgl->sg_iovs != NULL) {
+		for (i = 0; i < sgl->sg_nr; i++) {
+			sgl->sg_iovs[i].iov_len = 0;
+		}
+		sgl->sg_nr_out = 0;
+	}
+}
+
 
 #define KDS_BULK_LIMIT	128
 
@@ -269,6 +279,7 @@ shard_pipeline_run_task(tse_task_t *task)
 	struct pipeline_run_in         *pri;
 	uint32_t                        nr_kds;
 	uint32_t                        nr_iods;
+	uint32_t			nr_iods_dkey;
 	daos_size_t			size;
 	int                             rc;
 
@@ -298,22 +309,36 @@ shard_pipeline_run_task(tse_task_t *task)
 
 	/** -- nr_iods, nr_kds for this shard */
 
-	nr_iods = *args->pra_api_args->nr_iods;
-	nr_kds  = *args->pra_api_args->nr_kds;
+	nr_iods_dkey   = args->pra_api_args->nr_iods_dkey;
+	nr_iods        = *args->pra_api_args->nr_iods;
+	nr_kds         = *args->pra_api_args->nr_kds;
 
 	/** -- register call back function for this particular shard task */
 
 	crt_req_addref(req);
-	cb_args.shard    = args->pra_shard;
-	cb_args.rpc      = req;
-	cb_args.map_ver  = &args->pra_map_ver;
-	cb_args.api_args = args->pra_api_args;
-	cb_args.nr_iods  = nr_iods;
-	cb_args.nr_kds   = nr_kds;
+	cb_args.shard        = args->pra_shard;
+	cb_args.rpc          = req;
+	cb_args.map_ver      = &args->pra_map_ver;
+	cb_args.api_args     = args->pra_api_args;
+	cb_args.nr_iods      = nr_iods;
+	cb_args.nr_kds       = nr_kds;
 
 	rc = tse_task_register_comp_cb(task, pipeline_shard_run_cb, &cb_args, sizeof(cb_args));
 	if (rc != 0)
 		D_GOTO(out_req, rc);
+
+	/**
+	 * -- Forcing iov buffers to be empty. Pipeline API is read only for now, so we don't need
+	 *  to be careful here. This operation is necessary to avoid sending empty buffers over with
+	 *  the RPC. We only need to send the structure of the sgl, not its contents.
+	 *  An exception happens with sgl_aggr, which can have valid contents from previous runs.
+	 *  However, the content is not needed on the server, since it is merged on the client when
+	 *  the call back is executed.
+	 */
+	shard_pipeline_set_buffers_to_zero(args->pra_api_args->sgl_keys);
+	shard_pipeline_set_buffers_to_zero(args->pra_api_args->sgl_recx);
+	if (args->pra_api_args->pipeline->num_aggr_filters != 0)
+		shard_pipeline_set_buffers_to_zero(args->pra_api_args->sgl_agg);
 
 	/** -- sending the RPC */
 
@@ -331,11 +356,22 @@ shard_pipeline_run_task(tse_task_t *task)
 	else
 		pri->pri_dkey = (daos_key_t){.iov_buf = NULL, .iov_buf_len = 0, .iov_len = 0};
 
-	pri->pri_iods.nr   = nr_iods;
-	pri->pri_iods.iods = args->pra_api_args->iods;
-	pri->pri_anchor    = *args->pra_api_args->anchor;
-	pri->pri_flags     = args->pra_api_args->flags;
-	pri->pri_nr_kds    = nr_kds;
+	pri->pri_iods.nr      = nr_iods;
+	pri->pri_iods.iods    = args->pra_api_args->iods;
+	pri->pri_sgl_keys     = *args->pra_api_args->sgl_keys;
+	pri->pri_sgl_recx     = *args->pra_api_args->sgl_recx;
+
+	if (!args->pra_api_args->pipeline->num_aggr_filters)
+		pri->pri_sgl_agg = (d_sg_list_t){.sg_nr = 0, .sg_nr_out = 0, .sg_iovs = NULL};
+	else {
+		pri->pri_sgl_agg = *args->pra_api_args->sgl_agg;
+	}
+	D_ASSERT(pri->pri_sgl_agg.sg_nr == args->pra_api_args->pipeline->num_aggr_filters);
+
+	pri->pri_anchor       = *args->pra_api_args->anchor;
+	pri->pri_flags        = args->pra_api_args->flags;
+	pri->pri_nr_kds       = nr_kds;
+	pri->pri_nr_iods_dkey = nr_iods_dkey;
 	uuid_copy(pri->pri_pool_uuid, pool->dp_pool);
 	uuid_copy(pri->pri_co_hdl, args->pra_coh_uuid);
 	uuid_copy(pri->pri_co_uuid, args->pra_cont_uuid);

@@ -50,6 +50,9 @@ obj_opc_to_str(crt_opcode_t opc)
 	((uuid_t)		(pri_co_uuid)		CRT_VAR)	\
 	((daos_key_t)		(pri_dkey)		CRT_VAR)	\
 	((daos_pipeline_iods_t)	(pri_iods)		CRT_VAR)	\
+	((d_sg_list_t)		(pri_sgl_keys)		CRT_VAR)	\
+	((d_sg_list_t)		(pri_sgl_recx)		CRT_VAR)	\
+	((d_sg_list_t)		(pri_sgl_agg)		CRT_VAR)	\
 	((daos_anchor_t)	(pri_anchor)		CRT_RAW)	\
 	((daos_epoch_range_t)	(pri_epr)		CRT_VAR)	\
 	((crt_bulk_t)		(pri_kds_bulk)		CRT_VAR)	\
@@ -58,7 +61,7 @@ obj_opc_to_str(crt_opcode_t opc)
 	((crt_bulk_t)		(pri_sgl_agg_bulk)	CRT_VAR)	\
 	((uint64_t)		(pri_flags)		CRT_VAR)	\
 	((uint32_t)		(pri_nr_kds)		CRT_VAR)	\
-	((uint32_t)		(pri_pad32)		CRT_VAR)
+	((uint32_t)		(pri_nr_iods_dkey)	CRT_VAR)
 
 #define DAOS_OSEQ_PIPELINE_RUN	/* output fields */			\
 	((daos_pipeline_iods_t)		(pro_iods)	CRT_VAR)	\

@@ -17,6 +17,9 @@
 #include "pipeline_rpc.h"
 #include "pipeline_internal.h"
 
+/**
+ * ULT yields every PIPELINE_ITERATION_MAX record fetches.
+ */
 #define PIPELINE_ITERATION_MAX	1024
 
 /**
@@ -25,6 +28,19 @@
 struct enum_credits {
 	uint32_t used;
 	uint32_t max;
+};
+
+/**
+ * Used to keep track of where we need to copy data on return buffers.
+ */
+struct pack_ret_data_args {
+	daos_iod_t       *iods;
+	uint32_t          nr_iods;
+	daos_key_desc_t  *kds;
+	d_sg_list_t      *keys;
+	uint32_t          keys_iov_idx;
+	d_sg_list_t      *recx;
+	uint32_t          recx_iov_idx;
 };
 
 static int
@@ -57,6 +73,7 @@ pipeline_fetch_record(daos_handle_t vos_coh, daos_unit_oid_t oid, struct vos_ite
 	daos_handle_t		ioh   = DAOS_HDL_INVAL;
 	struct bio_desc		*biod;
 	size_t			io_size;
+	uint32_t		i;
 
 	param.ip_hdl        = vos_coh;
 	param.ip_oid        = oid;
@@ -67,8 +84,13 @@ pipeline_fetch_record(daos_handle_t vos_coh, daos_unit_oid_t oid, struct vos_ite
 
 	/* TODO: Set enum_arg.csummer !  Figure out how checksum works */
 
-	/** iterating over dkeys only */
+	/** reset buffers */
 	d_key->iov_len      = 0;
+	for (i = 0; i < nr_iods; i++) {
+		sgl_recx[i].sg_iovs->iov_len = 0;
+	}
+
+	/** iterating over dkeys only */
 	rc = vos_iterate(&param, type, false, anchors, enum_pack_cb, NULL, d_key, NULL);
 	D_DEBUG(DB_IO, "enum type %d rc " DF_RC "\n", type, DP_RC(rc));
 	if (rc < 0)
@@ -113,7 +135,7 @@ out:
 	return rc;
 }
 
-int
+static int
 pipeline_aggregations(struct pipeline_compiled_t *pipe, struct filter_part_run_t *args,
 		      d_iov_t *dkey, d_sg_list_t *akeys, d_sg_list_t *sgl_agg)
 {
@@ -135,7 +157,7 @@ exit:
 	return rc;
 }
 
-int
+static int
 pipeline_filters(struct pipeline_compiled_t *pipe, struct filter_part_run_t *args, d_iov_t *dkey,
 		 d_sg_list_t *akeys)
 {
@@ -158,39 +180,191 @@ exit:
 	return rc;
 }
 
+static int
+alloc_iter_bufs(daos_iod_t *iods, uint32_t nr, daos_iod_t **iods_iter, d_sg_list_t **sgl_recx_iter)
+{
+	daos_iod_t     *iods_iter_out;
+	d_sg_list_t    *sgl_recx_iter_out  = NULL;
+	d_iov_t        *sgl_recx_iter_iovs = NULL;
+	uint32_t        i                   = 0;
+	uint32_t        j;
+	size_t          iov_alloc_size;
+	int             rc;
+
+	D_ALLOC_ARRAY(sgl_recx_iter_out, nr);
+	D_ALLOC_ARRAY(sgl_recx_iter_iovs, nr);
+	D_ALLOC_ARRAY(iods_iter_out, nr);
+	if (sgl_recx_iter_out == NULL || sgl_recx_iter_iovs == NULL || iods_iter_out == NULL)
+		D_GOTO(error, rc = -DER_NOMEM);
+
+	memcpy(iods_iter_out, iods, sizeof(*iods) * nr);
+
+	for (; i < nr; i++) {
+		iov_alloc_size = 0;
+		if (iods[i].iod_type == DAOS_IOD_ARRAY) {
+			for (j = 0; j < iods[i].iod_nr; j++)
+				iov_alloc_size += iods[i].iod_recxs[j].rx_nr;
+			iov_alloc_size *= iods[i].iod_size;
+		} else {
+			iov_alloc_size = iods[i].iod_size;
+		}
+		D_ALLOC(sgl_recx_iter_iovs[i].iov_buf, iov_alloc_size);
+		if (sgl_recx_iter_iovs[i].iov_buf == NULL)
+			D_GOTO(error, rc = -DER_NOMEM);
+		sgl_recx_iter_iovs[i].iov_buf_len = iov_alloc_size;
+
+		sgl_recx_iter_out[i].sg_nr     = 1;
+		sgl_recx_iter_out[i].sg_nr_out = 0;
+		sgl_recx_iter_out[i].sg_iovs   = &sgl_recx_iter_iovs[i];
+	}
+
+	*iods_iter     = iods_iter_out;
+	*sgl_recx_iter = sgl_recx_iter_out;
+	return 0;
+error:
+	if (iods_iter_out != NULL)
+		D_FREE(iods_iter_out);
+	for (j = 0; j < i; j++)
+		D_FREE(sgl_recx_iter_iovs[j].iov_buf);
+	if (sgl_recx_iter_iovs != NULL)
+		D_FREE(sgl_recx_iter_iovs);
+	if (sgl_recx_iter_out != NULL)
+		D_FREE(sgl_recx_iter_out);
+	return rc;
+}
+
+static void
+free_iter_bufs(uint32_t nr, daos_iod_t *iods_iter, d_sg_list_t *sgl_recx_iter)
+{
+	uint32_t i;
+
+	if (sgl_recx_iter != NULL) {
+		for (i = 0; i < nr; i++) {
+			if (sgl_recx_iter[i].sg_iovs != NULL &&
+			    sgl_recx_iter[i].sg_iovs->iov_buf != NULL)
+				D_FREE(sgl_recx_iter[i].sg_iovs->iov_buf);
+		}
+		if (sgl_recx_iter[0].sg_iovs != NULL)
+			D_FREE(sgl_recx_iter[0].sg_iovs);
+		D_FREE(sgl_recx_iter);
+	}
+	if (iods_iter != NULL)
+		D_FREE(iods_iter);
+}
+
+static int
+pack_value(d_sg_list_t *sgl, uint32_t *iov_idx, d_iov_t *iov)
+{
+	uint32_t      iov_idx_bk = *iov_idx;
+	d_iov_t      *out_iov    = &sgl->sg_iovs[*iov_idx];
+	char         *ptr;
+
+try_out_iov:
+	if (iov->iov_len + out_iov->iov_len > out_iov->iov_buf_len) {
+		if (iov_idx_bk > *iov_idx || (iov_idx_bk == *iov_idx && !out_iov->iov_len)) {
+			/**
+			 * If we can't still copy the input iov in an empty out_iov, then the
+			 * out_iov is way too small. No empty iovs are skipped in the sgl.
+			 */
+			D_ERROR("iov has no space available for data value\n");
+			return -DER_REC2BIG;
+		}
+		/**
+		 * No space left in current out_iov to copy the iov, and data values are never split
+		 * among different iovs. Trying one more time with the next iov in the sgl.
+		 */
+		iov_idx_bk++;
+		if (iov_idx_bk == sgl->sg_nr) {
+			D_ERROR("Consumed all iovs in the sgl, no space available for the rest of "
+				"the data\n");
+			return -DER_REC2BIG;
+		}
+		out_iov = &sgl->sg_iovs[iov_idx_bk];
+		goto try_out_iov;
+	}
+	*iov_idx = iov_idx_bk;
+
+	ptr               = out_iov->iov_buf;
+	ptr              += out_iov->iov_len;
+	memcpy(ptr, iov->iov_buf, iov->iov_len);
+
+	out_iov->iov_len += iov->iov_len;
+	if (out_iov->iov_len == iov->iov_len) {
+		/**
+		 * out_iov was a fresh new iov, so we need to increase the number of valid output
+		 * iovs in the sgl.
+		 */
+		sgl->sg_nr_out++;
+	}
+
+	return 0;
+}
+
+static int
+pack_record(d_iov_t *d_key_iter, daos_iod_t *iods_iter, d_sg_list_t *sgl_recx_iter,
+	    uint32_t dkey_idx, struct pack_ret_data_args *pack_args)
+{
+	uint32_t idx;
+	uint32_t i;
+	uint32_t nr_iods = pack_args->nr_iods;
+	int      rc;
+
+	/**
+	 * dkey
+	 */
+	idx = pack_args->keys_iov_idx;
+	rc  = pack_value(pack_args->keys, &idx, d_key_iter);
+	if (rc != 0)
+		return rc;
+	pack_args->keys_iov_idx             = idx;
+	pack_args->kds[dkey_idx].kd_key_len = d_key_iter->iov_len;
+
+	/**
+	 * akeys' record data
+	 */
+	idx = pack_args->recx_iov_idx;
+	for (i = 0; i < nr_iods; i++) {
+		rc = pack_value(pack_args->recx, &idx, sgl_recx_iter[i].sg_iovs);
+		if (rc != 0)
+			return rc;
+		pack_args->recx_iov_idx = idx;
+		if (iods_iter[i].iod_type == DAOS_IOD_SINGLE)
+			pack_args->iods[dkey_idx * nr_iods + i].iod_size = iods_iter[i].iod_size;
+	}
+
+	return 0;
+}
+
 /** TODO: This code still assumes dkey==NULL. The code for dkey!=NULL has to be written */
 static int
 ds_pipeline_run(daos_handle_t vos_coh, daos_unit_oid_t oid, daos_pipeline_t pipeline,
-		daos_epoch_range_t epr, uint64_t flags, daos_key_t *dkey, uint32_t *nr_iods,
-		daos_iod_t *iods, daos_anchor_t *anchor, uint32_t nr_kds, uint32_t *nr_kds_out,
-		daos_key_desc_t *kds, d_sg_list_t *sgl_keys, uint32_t *nr_recx,
-		d_sg_list_t *sgl_recx, d_sg_list_t *sgl_agg, daos_pipeline_stats_t *stats)
+		daos_epoch_range_t epr, uint64_t flags, daos_key_t *dkey, uint32_t nr_iods,
+		uint32_t nr_iods_dkey, uint32_t *nr_iods_out, daos_iod_t *iods,
+		daos_anchor_t *anchor, uint32_t nr_kds, uint32_t *nr_kds_out, daos_key_desc_t *kds,
+		d_sg_list_t *sgl_keys, d_sg_list_t *sgl_recx, d_sg_list_t *sgl_agg,
+		daos_pipeline_stats_t *stats)
 {
-	int                        rc;
-	uint32_t                   nr_kds_pass;
-	d_iov_t                    d_key_iter;
-	d_iov_t                   *d_key_ptr;
-	d_sg_list_t               *sgl_recx_iter      = NULL;
-	d_iov_t                   *sgl_recx_iter_iovs = NULL;
-	size_t                     iov_alloc_size;
-	uint32_t                   i, k;
-	uint32_t                   j                  = 0;
-	struct enum_credits        credits            = {0};
-	uint32_t                   sr_idx             = 0;
-	struct vos_iter_anchors    anchors            = {0};
-	struct pipeline_compiled_t pipeline_compiled  = {0};
-	struct filter_part_run_t   pipe_run_args      = {0};
+	int                         rc;
+	uint32_t                    nr_kds_pass;
+	d_iov_t                     d_key_iter;
+	d_sg_list_t                *sgl_recx_iter      = NULL;
+	daos_iod_t                 *iods_iter          = NULL;
+	struct enum_credits         credits            = {0};
+	struct vos_iter_anchors     anchors            = {0};
+	struct pipeline_compiled_t  pipeline_compiled  = {0};
+	struct filter_part_run_t    pipe_run_args      = {0};
+	struct pack_ret_data_args   pack_args          = {0};
 
-	*nr_kds_out = 0;
-	*nr_recx    = 0;
-	rc          = d_pipeline_check(&pipeline);
+	*nr_kds_out  = 0;
+	*nr_iods_out = 0;
+	rc           = d_pipeline_check(&pipeline);
 	if (rc != 0)
 		D_GOTO(exit, rc); /** bad pipeline */
 	if (pipeline.version != 1)
 		D_GOTO(exit, rc = -DER_MISMATCH); /** wrong version */
 	if (daos_anchor_is_eof(anchor))
 		D_GOTO(exit, rc = 0); /** no more rows */
-	if (*nr_iods == 0)
+	if (nr_iods == 0)
 		D_GOTO(exit, rc = 0); /** nothing to return */
 	if (nr_kds == 0 && pipeline.num_aggr_filters == 0)
 		D_GOTO(exit, rc = 0); /** nothing to return */
@@ -199,44 +373,30 @@ ds_pipeline_run(daos_handle_t vos_coh, daos_unit_oid_t oid, daos_pipeline_t pipe
 
 	pipeline_aggregations_init(&pipeline, sgl_agg);
 
-	/** -- init pipe_run_args data struct */
-
-	pipe_run_args.nr_iods = *nr_iods;
-	pipe_run_args.iods    = iods;
-
 	/** -- "compile" pipeline */
 
-	rc                    = pipeline_compile(&pipeline, &pipeline_compiled);
+	rc = pipeline_compile(&pipeline, &pipeline_compiled);
 	if (rc != 0)
 		D_GOTO(exit, rc); /** compilation failed. Bad pipeline? */
 
-	/** -- allocating space for sgl_recx_iter */
+	/** -- allocating space for temporary bufs */
 
-	D_ALLOC_ARRAY(sgl_recx_iter, *nr_iods);
-	D_ALLOC_ARRAY(sgl_recx_iter_iovs, *nr_iods);
-	if (sgl_recx_iter == NULL || sgl_recx_iter_iovs == NULL)
-		D_GOTO(exit, rc = -DER_NOMEM);
+	rc = alloc_iter_bufs(iods, nr_iods_dkey, &iods_iter, &sgl_recx_iter);
+	if (rc != 0)
+		D_GOTO(exit, rc);
 
-	for (; j < *nr_iods; j++) {
-		if (iods[j].iod_type == DAOS_IOD_ARRAY) {
-			iov_alloc_size = 0;
-			for (k = 0; k < iods[j].iod_nr; k++)
-				iov_alloc_size += iods[j].iod_recxs[k].rx_nr;
-			iov_alloc_size *= iods[j].iod_size;
-		} else {
-			iov_alloc_size = iods[j].iod_size;
-		}
+	/** -- init pipe run data struct and pack result data struct */
 
-		D_ALLOC(sgl_recx_iter_iovs[j].iov_buf, iov_alloc_size);
-		if (sgl_recx_iter_iovs[j].iov_buf == NULL)
-			D_GOTO(exit, rc = -DER_NOMEM);
+	pipe_run_args.nr_iods  = nr_iods_dkey;
+	pipe_run_args.iods     = iods_iter;
 
-		sgl_recx_iter_iovs[j].iov_len     = 0;
-		sgl_recx_iter_iovs[j].iov_buf_len = iov_alloc_size;
-		sgl_recx_iter[j].sg_iovs          = &sgl_recx_iter_iovs[j];
-		sgl_recx_iter[j].sg_nr            = 1;
-		sgl_recx_iter[j].sg_nr_out        = 0;
-	}
+	pack_args.iods         = iods;
+	pack_args.nr_iods      = nr_iods_dkey;
+	pack_args.kds          = kds;
+	pack_args.keys         = sgl_keys;
+	pack_args.recx         = sgl_recx;
+	pack_args.keys_iov_idx = 0;
+	pack_args.recx_iov_idx = 0;
 
 	/**
 	 *  -- Iterating over dkeys and doing filtering and aggregation. The variable nr_kds_pass
@@ -253,8 +413,8 @@ ds_pipeline_run(daos_handle_t vos_coh, daos_unit_oid_t oid, daos_pipeline_t pipe
 
 		/** -- fetching record */
 
-		rc = pipeline_fetch_record(vos_coh, oid, &anchors, epr, iods, *nr_iods, &d_key_iter,
-					   sgl_recx_iter);
+		rc = pipeline_fetch_record(vos_coh, oid, &anchors, epr, iods_iter, nr_iods_dkey,
+					   &d_key_iter, sgl_recx_iter);
 		if (rc < 0)
 			D_GOTO(exit, rc); /** error */
 		if (rc == 1)
@@ -298,51 +458,13 @@ ds_pipeline_run(daos_handle_t vos_coh, daos_unit_oid_t oid, daos_pipeline_t pipe
 			continue;
 
 		/**
-		 * saving record info
+		 * -- Saving record info to be returned.
 		 */
 
-		/**
-		 * dkey
-		 */
-
-		d_key_ptr                            = &sgl_keys->sg_iovs[nr_kds_pass - 1];
-		d_key_ptr->iov_buf                   = NULL;
-		D_ALLOC(d_key_ptr->iov_buf, d_key_iter.iov_buf_len);
-		if (d_key_ptr->iov_buf == NULL)
-			D_GOTO(exit, rc = -DER_NOMEM);
-		memcpy(d_key_ptr->iov_buf, d_key_iter.iov_buf, d_key_iter.iov_len);
-		d_key_ptr->iov_len                   = d_key_iter.iov_len;
-		d_key_ptr->iov_buf_len               = d_key_iter.iov_buf_len;
-
-		sgl_keys->sg_nr_out                 += 1;
-
-		kds[nr_kds_pass - 1].kd_key_len     = d_key_iter.iov_len;
-
-		/**
-		 * akeys
-		 */
-		for (i = 0; i < *nr_iods; i++) {
-			if (sgl_recx_iter[i].sg_nr_out == 0)
-				continue;
-
-			/** copying sgl_recx */
-			sgl_recx->sg_iovs[sr_idx].iov_buf = NULL;
-			D_ALLOC(sgl_recx->sg_iovs[sr_idx].iov_buf,
-				sgl_recx_iter[i].sg_iovs->iov_buf_len);
-			if (sgl_recx->sg_iovs[sr_idx].iov_buf == NULL)
-				D_GOTO(exit, rc = -DER_NOMEM);
-
-			memcpy(sgl_recx->sg_iovs[sr_idx].iov_buf,
-			       sgl_recx_iter[i].sg_iovs->iov_buf,
-			       sgl_recx_iter[i].sg_iovs->iov_len);
-
-			sgl_recx->sg_iovs[sr_idx].iov_buf_len =
-				sgl_recx_iter[i].sg_iovs->iov_buf_len;
-			sgl_recx->sg_iovs[sr_idx].iov_len     = sgl_recx_iter[i].sg_iovs->iov_len;
-			sgl_recx->sg_nr_out                  += 1;
-
-			sr_idx++;
-		}
+		rc = pack_record(&d_key_iter, iods_iter, sgl_recx_iter, nr_kds_pass - 1,
+				 &pack_args);
+		if (rc != 0)
+			D_GOTO(exit, rc);
 	}
 
 	/**
@@ -360,28 +482,50 @@ ds_pipeline_run(daos_handle_t vos_coh, daos_unit_oid_t oid, daos_pipeline_t pipe
 	/** -- kds and recx returned */
 
 	if (nr_kds > 0 && pipeline.num_aggr_filters == 0) {
-		*nr_kds_out = nr_kds_pass;
-		*nr_recx    = (*nr_iods) * nr_kds_pass;
+		*nr_kds_out     = nr_kds_pass;
+		*nr_iods_out    = nr_iods_dkey * nr_kds_pass;
 	} else if (nr_kds > 0 && pipeline.num_aggr_filters > 0 && nr_kds_pass > 0) {
-		*nr_kds_out = 1;
-		*nr_recx    = *nr_iods;
+		*nr_kds_out     = 1;
+		*nr_iods_out    = nr_iods_dkey;
 	} else {
-		*nr_kds_out = 0;
-		*nr_recx    = 0;
+		*nr_kds_out     = 0;
+		*nr_iods_out    = 0;
 	}
 
 	rc = 0;
 exit:
 	pipeline_compile_free(&pipeline_compiled);
-
-	for (i = 0; i < j; i++)
-		D_FREE(sgl_recx_iter_iovs[i].iov_buf);
-	if (sgl_recx_iter_iovs != NULL)
-		D_FREE(sgl_recx_iter_iovs);
-	if (sgl_recx_iter != NULL)
-		D_FREE(sgl_recx_iter);
+	free_iter_bufs(nr_iods_dkey, iods_iter, sgl_recx_iter);
 
 	return rc;
+}
+
+static int
+alloc_iovs_in_sgl(d_sg_list_t *sgl)
+{
+	uint32_t i = 0;
+	uint32_t j;
+
+	for (; i < sgl->sg_nr; i++) {
+		D_ALLOC(sgl->sg_iovs[i].iov_buf, sgl->sg_iovs[i].iov_buf_len);
+		if (sgl->sg_iovs[i].iov_buf == NULL)
+			goto error;
+	}
+
+	return 0;
+error:
+	for (j = 0; j < i; j++)
+		D_FREE(sgl->sg_iovs[j].iov_buf);
+	return -DER_NOMEM;
+}
+
+static void
+free_iovs_in_sgl(d_sg_list_t *sgl)
+{
+	uint32_t i;
+
+	for (i = 0; i < sgl->sg_nr; i++)
+		D_FREE(sgl->sg_iovs[i].iov_buf);
 }
 
 void
@@ -391,19 +535,12 @@ ds_pipeline_run_handler(crt_rpc_t *rpc)
 	struct pipeline_run_out *pro;
 	int                      rc;
 	struct ds_cont_hdl      *coh;
-	struct ds_cont_child    *coc = NULL;
+	struct ds_cont_child    *coc         = NULL;
 	daos_handle_t            vos_coh;
-	uint32_t                 i;
-	uint32_t                 nr_iods;
-	daos_key_desc_t         *kds = NULL;
-	uint32_t                 nr_kds;
-	uint32_t                 nr_kds_out = 0;
-	d_sg_list_t              sgl_keys;
-	d_sg_list_t              sgl_recx;
-	uint32_t                 nr_recx    = 0;
-	uint32_t                 nr_aggr    = 0;
-	d_sg_list_t              sgl_aggr;
-	daos_pipeline_stats_t    stats      = {0};
+	daos_key_desc_t         *kds         = NULL;
+	uint32_t                 nr_kds_out  = 0;
+	uint32_t                 nr_iods_out = 0;
+	daos_pipeline_stats_t    stats       = {0};
 
 	pri = crt_req_get(rpc);
 	D_ASSERT(pri != NULL);
@@ -427,40 +564,27 @@ ds_pipeline_run_handler(crt_rpc_t *rpc)
 	       pri->pri_sgl_recx_bulk, pri->pri_sgl_agg_bulk);
 	fflush(stdout);
 
-	nr_iods = pri->pri_iods.nr;
-	nr_kds  = pri->pri_nr_kds;
-	nr_aggr = pri->pri_pipe.num_aggr_filters;
-
-	D_ALLOC_ARRAY(kds, nr_kds);
+	D_ALLOC_ARRAY(kds, pri->pri_nr_kds);
 	if (kds == NULL)
 		D_GOTO(exit0, rc = -DER_NOMEM);
-	D_ALLOC_ARRAY(sgl_keys.sg_iovs, nr_kds);
-	D_ALLOC_ARRAY(sgl_recx.sg_iovs, nr_kds * nr_iods);
-	D_ALLOC_ARRAY(sgl_aggr.sg_iovs, nr_aggr);
-	if (sgl_keys.sg_iovs == NULL || sgl_recx.sg_iovs == NULL || sgl_aggr.sg_iovs == NULL)
-		D_GOTO(exit0, rc = -DER_NOMEM);
 
-	sgl_keys.sg_nr     = nr_kds;
-	sgl_keys.sg_nr_out = 0;
-	sgl_recx.sg_nr     = nr_kds * nr_iods;
-	sgl_recx.sg_nr_out = 0;
-	sgl_aggr.sg_nr     = nr_aggr;
-	sgl_aggr.sg_nr_out = nr_aggr;
-
-	for (i = 0; i < nr_aggr; i++) {
-		D_ALLOC(sgl_aggr.sg_iovs[i].iov_buf, sizeof(double));
-		if (sgl_aggr.sg_iovs[i].iov_buf == NULL)
-			D_GOTO(exit0, rc = -DER_NOMEM);
-
-		sgl_aggr.sg_iovs[i].iov_len     = sizeof(double);
-		sgl_aggr.sg_iovs[i].iov_buf_len = sizeof(double);
-	}
+	rc = alloc_iovs_in_sgl(&pri->pri_sgl_keys);
+	if (rc != 0)
+		D_GOTO(exit0, rc);
+	rc = alloc_iovs_in_sgl(&pri->pri_sgl_recx);
+	if (rc != 0)
+		D_GOTO(exit0, rc);
+	rc = alloc_iovs_in_sgl(&pri->pri_sgl_agg);
+	if (rc != 0)
+		D_GOTO(exit0, rc);
 
 	/** -- calling pipeline run */
 
 	rc = ds_pipeline_run(vos_coh, pri->pri_oid, pri->pri_pipe, pri->pri_epr, pri->pri_flags,
-			     &pri->pri_dkey, &nr_iods, pri->pri_iods.iods, &pri->pri_anchor, nr_kds,
-			     &nr_kds_out, kds, &sgl_keys, &nr_recx, &sgl_recx, &sgl_aggr, &stats);
+			     &pri->pri_dkey, pri->pri_iods.nr, pri->pri_nr_iods_dkey, &nr_iods_out,
+			     pri->pri_iods.iods, &pri->pri_anchor, pri->pri_nr_kds, &nr_kds_out,
+			     kds, &pri->pri_sgl_keys, &pri->pri_sgl_recx, &pri->pri_sgl_agg,
+			     &stats);
 
 exit0:
 	ds_cont_hdl_put(coh);
@@ -469,22 +593,18 @@ exit:
 	/** set output data */
 
 	if (rc == 0) {
-		pro->pro_iods.nr           = nr_iods;
+		pro->pro_iods.nr           = nr_iods_out;
 		pro->pro_iods.iods         = pri->pri_iods.iods;
 		pro->pro_anchor            = pri->pri_anchor;
 		pro->pro_kds.ca_count      = nr_kds_out;
 		if (nr_kds_out == 0) {
 			pro->pro_kds.ca_arrays      = NULL;
-			pro->pro_sgl_keys           = (d_sg_list_t){0};
 		} else {
 			pro->pro_kds.ca_arrays      = kds;
-			pro->pro_sgl_keys           = sgl_keys;
 		}
-		if (nr_recx == 0)
-			pro->pro_sgl_recx           = (d_sg_list_t){0};
-		else
-			pro->pro_sgl_recx           = sgl_recx;
-		pro->pro_sgl_agg           = sgl_aggr;
+		pro->pro_sgl_keys          = pri->pri_sgl_keys;
+		pro->pro_sgl_recx          = pri->pri_sgl_recx;
+		pro->pro_sgl_agg           = pri->pri_sgl_agg;
 		pro->stats                 = stats;
 		/** pro->pro_epoch (TODO) */
 	}
@@ -492,26 +612,14 @@ exit:
 
 	/** send RPC back */
 
-	rc           = crt_reply_send(rpc);
+	rc = crt_reply_send(rpc);
 	if (rc != 0)
 		D_ERROR("send reply failed: " DF_RC "\n", DP_RC(rc));
 
 	/** free memory */
 
 	D_FREE(kds);
-
-	for (i = 0; i < sgl_keys.sg_nr_out; i++) {
-		D_FREE(sgl_keys.sg_iovs[i].iov_buf);
-	}
-	D_FREE(sgl_keys.sg_iovs);
-
-	for (i = 0; i < sgl_recx.sg_nr_out; i++) {
-		D_FREE(sgl_recx.sg_iovs[i].iov_buf);
-	}
-	D_FREE(sgl_recx.sg_iovs);
-
-	for (i = 0; i < sgl_aggr.sg_nr_out; i++) {
-		D_FREE(sgl_aggr.sg_iovs[i].iov_buf);
-	}
-	D_FREE(sgl_aggr.sg_iovs);
+	free_iovs_in_sgl(&pri->pri_sgl_keys);
+	free_iovs_in_sgl(&pri->pri_sgl_recx);
+	free_iovs_in_sgl(&pri->pri_sgl_agg);
 }

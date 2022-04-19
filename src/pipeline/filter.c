@@ -62,7 +62,10 @@ pipeline_aggregations_init(daos_pipeline_t *pipeline, d_sg_list_t *sgl_agg)
 			*buf = INFINITY;
 		else
 			*buf = 0;
+
+		sgl_agg->sg_iovs[i].iov_len = sizeof(double);
 	}
+	sgl_agg->sg_nr_out = pipeline->num_aggr_filters;
 }
 
 static uint32_t
