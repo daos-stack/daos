@@ -213,8 +213,11 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        distro: [alma]
+        distro: [centos.7, alma]
         include:
+          - distro: centos.7
+            base: centos.7
+            with: centos.7
           - distro: alma
             base: el.8
             with: almalinux:8
