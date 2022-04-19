@@ -8,7 +8,7 @@
 
 #include <daos_srv/daos_chk.h>
 
-#include "check.pb-c.h"
+#include "chk.pb-c.h"
 #include "chk_internal.h"
 
 int
