@@ -7,7 +7,7 @@ hosts:
     - server-E
   test_clients:
     - client-A
-timeout: 800
+timeout: 300
 server_config:
   engines_per_host: 2
   name: daos_server
@@ -57,30 +57,30 @@ ior:
   transfer_size: 1M
   block_size: 1G
   objectclass: !mux
-    #SX Should write to all Targets
     SX:
       dfs_oclass: "SX"
       target_usage_count: 20
-    #RP_2G1 is Group G1 so will write to Two replica targets with in 1 groups only.
+      notes: "SX should write to all Targets"
     RP_2G1:
       dfs_oclass: "RP_2G1"
       target_usage_count: 2
-    #RP_2GX is Group GX and so will write to all targets with Two Replicas.
+      notes: "RP_2G1 is Group G1 so it should write to Two replica targets with in 1 group only."
     RP_2GX:
       dfs_oclass: "RP_2GX"
       target_usage_count: 20
-    #EC_2P1G1 is Group G1 with EC_2P1, so it should write to 2data+1parity (3 targets),
-    #with in 1 group only.
+      notes: "RP_2GX is Group GX and so it should write to all targets with Two Replicas."
     EC_2P1G1:
       dfs_oclass: "EC_2P1G1"
       target_usage_count: 3
-    #EC_4P2GX is Group GX with EC_4P2, so it should write to 4data+2parity (6 targets),
-    #among max groups (In this case Three so 6x3 targets)
+      notes: "EC_2P1G1 is Group G1 with EC_2P1, so it should write to 2data+1parity (3 targets),
+              with in 1 group only."
     EC_4P2GX:
       dfs_oclass: "EC_4P2GX"
       target_usage_count: 18
-    #EC_8P2GX is Group GX with EC_8P2, so it should write to 8data+2parity (10 targets),
-    #among max groups (In this case 2 so 10x2 targets)
+      notes: "EC_4P2GX is Group GX with EC_4P2, so it should write to 4data+2parity (6 targets),
+              among max groups (In this case 3 so 6x3=18 targets)"
     EC_8P2GX:
       dfs_oclass: "EC_8P2GX"
       target_usage_count: 20
+      notes: "EC_8P2GX is Group GX with EC_8P2, so it should write to 8data+2parity (10 targets),
+              among max groups (In this case 2 so 10x2 targets)"

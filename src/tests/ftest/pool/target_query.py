@@ -19,6 +19,7 @@ class PoolTargetQueryTest(IorTestBase):
         engine_count = self.server_managers[0].get_config_value("engines_per_host")
         self.server_count = len(self.hostlist_servers) * engine_count
         self.target_usage_count = self.params.get("target_usage_count", '/run/ior/objectclass/*')
+        self.notes = self.params.get("notes", '/run/ior/objectclass/*')
 
     def target_space_info(self):
         """Get the NVMe Target Space Information from all Targets.
@@ -55,22 +56,40 @@ class PoolTargetQueryTest(IorTestBase):
         self.update_ior_cmd_with_pool()
         # Check the initial size of all targets
         initial_nvme_size = self.target_space_info()
-        self.log.info("Initial Target space = %s", initial_nvme_size)
+        if not initial_nvme_size.count(initial_nvme_size[0]) == len(initial_nvme_size):
+            self.fail("Initial Target Free space is not equal for all targets {}"
+                      .format(initial_nvme_size))
 
         # Write the IOR data
         self.run_ior_with_pool()
 
         # Get the size after writing the IOR data
         latest_nvme_size = self.target_space_info()
-        self.log.info("Latest Target space = %s", latest_nvme_size)
 
         # Verify the target sizes is only increasing based on object layout
         # specified in yaml file
         target_count = 0
+        self.log.info("Verify that target pool space has decrease for %s targets after running "
+                      "IOR with %s oclass", self.target_usage_count, self.ior_cmd.dfs_oclass.value)
+        self.log.info("Target\t initial_nvme_size\t latest_nvme_size\t Change")
+        self.log.info("------\t -----------------\t ----------------\t ------")
+        status = ""
         for count, initial_size in enumerate(initial_nvme_size):
-            if latest_nvme_size[count] != initial_size:
+            if latest_nvme_size[count] < initial_size:
                 target_count += 1
+                status = "Decrease"
+            elif latest_nvme_size[count] > initial_size:
+                status = "Increase"
+            elif latest_nvme_size[count] == initial_size:
+                status = "No Change"
+            self.log.info("%s\t %s\t %s\t %s",
+                          str(count).ljust(6),
+                          str(initial_size).ljust(20),
+                          str(latest_nvme_size[count]).ljust(20),
+                          status)
+
         if target_count != self.target_usage_count:
-            self.fail("Expected to change the free space capacity for {} targets,"
-                      " But it's changed for {} targets".format(self.target_usage_count,
-                                                               str(target_count)))
+            self.fail("ERROR: Detected free space reduction in only {}/{} targets, {}"
+                      .format(target_count, self.target_usage_count, self.notes))
+        else:
+            self.log.info("Test passed")
