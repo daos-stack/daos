@@ -519,14 +519,6 @@ error:
 	return -DER_NOMEM;
 }
 
-static void
-free_iovs_in_sgl(d_sg_list_t *sgl)
-{
-	uint32_t i;
-
-	for (i = 0; i < sgl->sg_nr; i++)
-		D_FREE(sgl->sg_iovs[i].iov_buf);
-}
 
 void
 ds_pipeline_run_handler(crt_rpc_t *rpc)
@@ -619,7 +611,7 @@ exit:
 	/** free memory */
 
 	D_FREE(kds);
-	free_iovs_in_sgl(&pri->pri_sgl_keys);
-	free_iovs_in_sgl(&pri->pri_sgl_recx);
-	free_iovs_in_sgl(&pri->pri_sgl_agg);
+	d_sgl_fini(&pri->pri_sgl_keys, true);
+	d_sgl_fini(&pri->pri_sgl_recx, true);
+	d_sgl_fini(&pri->pri_sgl_agg, true);
 }
