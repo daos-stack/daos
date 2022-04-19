@@ -638,6 +638,56 @@ crt_context_flush(crt_context_t crt_ctx, uint64_t timeout)
 	return rc;
 }
 
+struct crt_ep_inflight *
+crt_alloc_ep_inflight(d_rank_t ep_rank, struct crt_context *crt_ctx,
+		      int *rc)
+{
+	struct crt_ep_inflight *epi;
+
+	D_ALLOC_PTR(epi);
+	if (epi == NULL) {
+		*rc = -DER_NOMEM;
+		return NULL;
+	}
+
+	/* init the epi fields */
+	D_INIT_LIST_HEAD(&epi->epi_link);
+	epi->epi_ep.ep_rank = ep_rank;
+	epi->epi_ctx = crt_ctx;
+	D_INIT_LIST_HEAD(&epi->epi_req_q);
+	epi->epi_req_num = 0;
+	epi->epi_reply_num = 0;
+	D_INIT_LIST_HEAD(&epi->epi_req_waitq);
+	epi->epi_req_wait_num = 0;
+	/*
+	 * epi_ref init as 1 to avoid other thread delete it but here
+	 * still need to access it, decref before exit this routine.
+	 */
+	epi->epi_ref = 1;
+	epi->epi_initialized = 1;
+	epi->epi_stopping = 0;
+	*rc = D_MUTEX_INIT(&epi->epi_mutex, NULL);
+	if (*rc != 0)
+		goto out_free;
+
+	*rc = d_hash_rec_insert(&crt_ctx->cc_epi_table, &ep_rank,
+				sizeof(ep_rank), &epi->epi_link,
+				true /* exclusive */);
+	if (*rc != 0) {
+		D_ERROR("d_hash_rec_insert failed, rc: %d.\n", *rc);
+		goto out_destroy;
+	}
+
+	return epi;
+
+out_destroy:
+	D_MUTEX_DESTROY(&epi->epi_mutex);
+out_free:
+	D_FREE(epi);
+
+	return NULL;
+}
+
 int
 crt_rank_abort(d_rank_t rank)
 {
@@ -646,6 +696,7 @@ crt_rank_abort(d_rank_t rank)
 	int			 flags;
 	int			 rc = 0;
 	d_list_t		*ctx_list;
+	struct crt_ep_inflight	*epi;
 
 	D_RWLOCK_RDLOCK(&crt_gdata.cg_rwlock);
 
@@ -656,9 +707,17 @@ crt_rank_abort(d_rank_t rank)
 		rlink = d_hash_rec_find(&ctx->cc_epi_table,
 					(void *)&rank, sizeof(rank));
 		if (rlink != NULL) {
+			epi = epi_link2ptr(rlink);
+			epi->epi_stopping = 1;
 			flags = CRT_EPI_ABORT_FORCE;
 			rc = crt_ctx_epi_abort(rlink, &flags);
 			d_hash_rec_decref(&ctx->cc_epi_table, rlink);
+		} else {
+			epi = crt_alloc_ep_inflight(rank, ctx, &rc);
+			if (epi) {
+				epi->epi_stopping = 1;
+				d_hash_rec_decref(&ctx->cc_epi_table, &epi->epi_link);
+			}
 		}
 		D_MUTEX_UNLOCK(&ctx->cc_mutex);
 		if (rc != 0) {
@@ -975,37 +1034,15 @@ crt_context_req_track(struct crt_rpc_priv *rpc_priv)
 	rlink = d_hash_rec_find(&crt_ctx->cc_epi_table, (void *)&ep_rank,
 				sizeof(ep_rank));
 	if (rlink == NULL) {
-		D_ALLOC_PTR(epi);
-		if (epi == NULL)
-			D_GOTO(out_unlock, rc = -DER_NOMEM);
-
-		/* init the epi fields */
-		D_INIT_LIST_HEAD(&epi->epi_link);
-		epi->epi_ep.ep_rank = ep_rank;
-		epi->epi_ctx = crt_ctx;
-		D_INIT_LIST_HEAD(&epi->epi_req_q);
-		epi->epi_req_num = 0;
-		epi->epi_reply_num = 0;
-		D_INIT_LIST_HEAD(&epi->epi_req_waitq);
-		epi->epi_req_wait_num = 0;
-		/* epi_ref init as 1 to avoid other thread delete it but here
-		 * still need to access it, decref before exit this routine. */
-		epi->epi_ref = 1;
-		epi->epi_initialized = 1;
-		rc = D_MUTEX_INIT(&epi->epi_mutex, NULL);
-		if (rc != 0)
+		epi = crt_alloc_ep_inflight(ep_rank, crt_ctx, &rc);
+		if (rc)
 			D_GOTO(out_unlock, rc);
-
-		rc = d_hash_rec_insert(&crt_ctx->cc_epi_table, &ep_rank,
-				       sizeof(ep_rank), &epi->epi_link,
-				       true /* exclusive */);
-		if (rc != 0) {
-			D_ERROR("d_hash_rec_insert failed, rc: %d.\n", rc);
-			D_MUTEX_DESTROY(&epi->epi_mutex);
-			D_GOTO(out_unlock, rc);
-		}
 	} else {
 		epi = epi_link2ptr(rlink);
+		if (epi->epi_stopping) {
+			d_hash_rec_decref(&crt_ctx->cc_epi_table, rlink);
+			D_GOTO(out_unlock, rc = -DER_SHUTDOWN);
+		}
 		D_ASSERT(epi->epi_ctx == crt_ctx);
 	}
 	D_MUTEX_UNLOCK(&crt_ctx->cc_mutex);
@@ -1062,8 +1099,6 @@ out:
 
 out_unlock:
 	D_MUTEX_UNLOCK(&crt_ctx->cc_mutex);
-	if (epi != NULL)
-		D_FREE(epi);
 	return rc;
 }
 

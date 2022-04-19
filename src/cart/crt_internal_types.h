@@ -216,7 +216,8 @@ struct crt_ep_inflight {
 	int64_t			 epi_req_wait_num;
 
 	unsigned int		 epi_ref;
-	unsigned int		 epi_initialized:1;
+	unsigned int		 epi_initialized:1,
+				 epi_stopping:1;
 
 	/* mutex to protect ei_req_q and some counters */
 	pthread_mutex_t		 epi_mutex;

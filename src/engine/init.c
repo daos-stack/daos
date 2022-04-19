@@ -788,6 +788,8 @@ server_fini(bool force)
 	 * xstreams won't start shutting down until we call dss_srv_fini below.
 	 */
 	dss_srv_set_shutting_down();
+	crt_rank_abort(dss_self_rank());
+	D_INFO("dss_rank_abort() done\n");
 	crt_unregister_event_cb(dss_crt_event_cb, NULL);
 	D_INFO("unregister event callbacks done\n");
 	/*
