@@ -4,6 +4,8 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
+import random
+
 from control_test_base import ControlTestBase
 
 
@@ -101,9 +103,13 @@ class DmgPoolQueryRanks(ControlTestBase):
         """
         self.log.info("Tests of pool query with ranks state when playing with ranks")
 
-        enabled_ranks = [0, 1, 2]
+        enabled_ranks = list(range(len(self.hostlist_servers)))
         disabled_ranks = []
-        for rank in [1, 0, 2]:
+
+        all_ranks = enabled_ranks.copy()
+        random.shuffle(all_ranks)
+        self.log.info("Starting excluding ranks: all_ranks=%s", all_ranks)
+        for rank in all_ranks:
             self.log.debug("Excluding rank %d", rank)
             self.dmg.pool_exclude(self.pool.uuid, rank)
             enabled_ranks.remove(rank)
@@ -124,7 +130,9 @@ class DmgPoolQueryRanks(ControlTestBase):
             self.log.debug("Waiting for pool to be rebuild")
             self.pool.wait_for_rebuild(False)
 
-        for rank in [2, 0, 1]:
+        random.shuffle(all_ranks)
+        self.log.info("Starting reintegrating ranks: all_ranks=%s", all_ranks)
+        for rank in all_ranks:
             self.log.debug("Reintegrating rank %d", rank)
             self.pool.reintegrate(rank)
 
