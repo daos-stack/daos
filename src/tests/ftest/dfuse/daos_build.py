@@ -8,6 +8,7 @@
 import os
 import distro
 import general_utils
+from collections import OrderedDict
 
 from avocado import skip
 from dfuse_test_base import DfuseTestBase
@@ -59,17 +60,16 @@ class DaosBuild(DfuseTestBase):
         self.add_container(self.pool)
 
         daos_cmd = self.get_daos_command()
-        daos_cmd.container_set_attr(pool=self.pool.uuid, cont=self.container.uuid,
-                                    attr='dfuse-data-cache', val='off')
 
-        daos_cmd.container_set_attr(pool=self.pool.uuid, cont=self.container.uuid,
-                                    attr='dfuse-attr-time', val='60s')
+        cont_attrs = OrderedDict()
+        cont_attrs['dfuse-data-cache'] = 'off'
+        cont_attrs['dfuse-attr-time'] = '60s'
+        cont_attrs['dfuse-dentry-time'] = '60s'
+        cont_attrs['dfuse-ndentry-time'] = '60s'
 
-        daos_cmd.container_set_attr(pool=self.pool.uuid, cont=self.container.uuid,
-                                    attr='dfuse-dentry-time', val='60s')
-
-        daos_cmd.container_set_attr(pool=self.pool.uuid, cont=self.container.uuid,
-                                    attr='dfuse-ndentry-time', val='60s')
+        for key, value in cont_attrs.items():
+            daos_cmd.container_set_attr(pool=self.pool.uuid, cont=self.container.uuid,
+                                        attr=key, val=value)
 
         self.start_dfuse(self.hostlist_clients, self.pool, self.container)
 

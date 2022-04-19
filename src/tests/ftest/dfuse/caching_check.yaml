@@ -15,7 +15,7 @@ server_config:
         scm_class: dcpm
         scm_list: ["/dev/pmem0"]
 pool:
-    mode: 146 # 146 is RW
+    mode: 146  # 146 is RW
     name: daos_server
     scm_size: 20%
     nvme_size: 40%
@@ -30,15 +30,15 @@ ior:
     test_file: testFile
     repetitions: 1
     api: POSIX
-    dfs_destroy: False
+    dfs_destroy: false
     transfer_size: '1M'
     block_size: '64M'
     dfs_oclass: "EC_2P1G1"
-    read_x: 10 # 1000%
+    read_x: 10  # 1000%
     iorflags:
-      - "-v -w -k"
-      - "-v -r -k"
+        - "-v -w -k"
+        - "-v -r -k"
 dfuse:
     mount_dir: "/tmp/daos_dfuse/"
-    disable_caching: True
-    disable_wb_caching: True
+    disable_caching: true
+    disable_wb_caching: true
