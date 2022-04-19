@@ -23,14 +23,8 @@ class PoolRedunFacProperty(IorTestBase):
         Args:
             expected_value (int): expected container rf value
         """
-        rf_str = None
-
-        cont_props = self.container.get_prop()
-        for cont_prop in cont_props["response"]:
-            if cont_prop["name"] == "rf":
-                rf_str = cont_prop["value"]
-                break
-
+        cont_props = self.container.get_prop(properties=["rf"])
+        rf_str = cont_props["response"][0]["value"]
         rf_value = int(rf_str.replace("rf", ""))
         self.assertEqual(expected_value, rf_value)
 

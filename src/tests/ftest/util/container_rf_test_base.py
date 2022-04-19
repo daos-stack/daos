@@ -66,7 +66,7 @@ class ContRedundancyFactor(RebuildTestBase):
         actual_health = None
 
         cont_props = self.daos_cmd.container_get_prop(
-            pool=self.pool.uuid, cont=self.container.uuid)
+            pool=self.pool.uuid, cont=self.container.uuid, properties=["rf", "status"])
         for cont_prop in cont_props["response"]:
             if cont_prop["name"] == "rf":
                 actual_rf = cont_prop["value"]

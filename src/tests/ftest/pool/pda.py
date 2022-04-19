@@ -24,15 +24,10 @@ class PoolPDAProperty(TestWithServers):
             expected_value (int): expected container pda value
             match_name (str): name field used to obtain the value from the output
         """
-        pda_value = None
+        cont_prop = self.container.get_prop(properties=[match_name])
+        actual_value = int(cont_prop["response"][0]["value"])
 
-        cont_props = self.container.get_prop()
-        for cont_prop in cont_props["response"]:
-            if cont_prop["name"] == match_name:
-                pda_value = int(cont_prop["value"])
-                break
-
-        self.assertEqual(expected_value, pda_value)
+        self.assertEqual(expected_value, actual_value)
 
     def test_pda_pool_property(self):
         """Jira ID: DAOS-9550.
@@ -77,6 +72,7 @@ class PoolPDAProperty(TestWithServers):
         match_rp_str = 'rp_pda'
         self.verify_cont_pda(ec_pda, match_ec_str)
         self.verify_cont_pda(rp_pda, match_rp_str)
+
         # Destroy the container.
         self.container.destroy()
 

@@ -372,12 +372,13 @@ class DaosCommand(DaosCommandBase):
             ("container", "set-prop"),
             pool=pool, cont=cont, prop=prop_value)
 
-    def container_get_prop(self, pool, cont):
+    def container_get_prop(self, pool, cont, properties):
         """Call daos container get-prop.
 
         Args:
             pool (str): Pool UUID.
             cont (str): Container UUID.
+            properties (list): "name" field(s). Defaults to None.
 
         Returns:
             str: JSON that contains the command output.
@@ -506,7 +507,18 @@ class DaosCommand(DaosCommandBase):
         #   "error": null,
         #   "status": 0
         # }
-        return self._get_json_result(("container", "get-prop"), pool=pool, cont=cont)
+        props = None
+
+        if properties:
+            for prop in properties:
+                if props:
+                    props += ","
+                    props += prop
+                else:
+                    props = prop
+
+        return self._get_json_result(
+            ("container", "get-prop"), pool=pool, cont=cont, prop=props)
 
     def container_set_owner(self, pool, cont, user, group):
         """Call daos container set-owner.
