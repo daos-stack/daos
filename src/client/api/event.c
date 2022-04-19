@@ -90,6 +90,7 @@ daos_eq_lib_init()
 		D_GOTO(crt, rc);
 
 	eq_ref = 1;
+	ev_thpriv_is_init = false;
 
 unlock:
 	D_MUTEX_UNLOCK(&daos_eq_lock);
@@ -328,6 +329,8 @@ daos_event_complete_locked(struct daos_eq_private *eqx,
 
 	if (eqx != NULL)
 		eq = daos_eqx2eq(eqx);
+	else
+		D_MUTEX_LOCK(&evx->evx_lock);
 
 	evx->evx_status = DAOS_EVS_COMPLETED;
 	rc = daos_event_complete_cb(evx, rc);
@@ -380,6 +383,8 @@ daos_event_complete_locked(struct daos_eq_private *eqx,
 		eq->eq_n_comp++;
 		D_ASSERT(eq->eq_n_running > 0);
 		eq->eq_n_running--;
+	} else {
+		D_MUTEX_UNLOCK(&evx->evx_lock);
 	}
 
 	return 0;
@@ -514,12 +519,11 @@ ev_progress_cb(void *arg)
 	if (evx->evx_nchild_running > 0)
 		return 0;
 
-	/*
-	 * Change status of event to INIT only if event is not in EQ and get
-	 * out.
-	 */
+	/** Change status of event to INIT only if event is not in EQ and get out. */
 	if (daos_handle_is_inval(evx->evx_eqh)) {
+		D_MUTEX_LOCK(&evx->evx_lock);
 		evx->evx_status = DAOS_EVS_READY;
+		D_MUTEX_UNLOCK(&evx->evx_lock);
 		return 1;
 	}
 
@@ -1040,12 +1044,17 @@ daos_event_init(struct daos_event *ev, daos_handle_t eqh,
 		daos_eq_putref(eqx);
 	} else {
 		if (daos_sched_g.ds_udata == NULL) {
-			D_ERROR("The DAOS client library is not initialized: "
-				DF_RC"\n", DP_RC(-DER_UNINIT));
+			D_ERROR("The DAOS client library is not initialized: "DF_RC"\n",
+				DP_RC(-DER_UNINIT));
 			return -DER_UNINIT;
 		}
 		evx->evx_ctx = daos_eq_ctx;
 		evx->evx_sched = &daos_sched_g;
+
+		/** since there is no EQ, initialize the evx lock */
+		rc = D_MUTEX_INIT(&evx->evx_lock, NULL);
+		if (rc)
+			return rc;
 	}
 
 	return rc;
@@ -1072,6 +1081,8 @@ daos_event_fini(struct daos_event *ev)
 		}
 		eq = daos_eqx2eq(eqx);
 		D_MUTEX_LOCK(&eqx->eqx_lock);
+	} else {
+		D_MUTEX_DESTROY(&evx->evx_lock);
 	}
 
 	if (evx->evx_status == DAOS_EVS_RUNNING) {
@@ -1222,10 +1233,12 @@ daos_event_priv_get(daos_event_t **ev)
 
 	D_ASSERT(*ev == NULL);
 
-	rc = daos_event_priv_reset();
-	if (rc)
-		return rc;
-	ev_thpriv_is_init = true;
+	if (!ev_thpriv_is_init) {
+		rc = daos_event_priv_reset();
+		if (rc)
+			return rc;
+		ev_thpriv_is_init = true;
+	}
 
 	if (evx->evx_status != DAOS_EVS_READY) {
 		D_CRIT("private event is inuse, status=%d\n", evx->evx_status);
@@ -1246,7 +1259,7 @@ daos_event_priv_wait()
 {
 	struct ev_progress_arg	epa;
 	struct daos_event_private *evx = daos_ev2evx(&ev_thpriv);
-	int rc = 0;
+	int rc = 0, rc2;
 
 	D_ASSERT(ev_thpriv_is_init);
 
@@ -1255,19 +1268,13 @@ daos_event_priv_wait()
 
 	/* Wait on the event to complete */
 	while (evx->evx_status != DAOS_EVS_READY) {
-		int rc2;
-
 		rc = crt_progress_cond(evx->evx_ctx, 0, ev_progress_cb, &epa);
 
 		/** progress succeeded, loop can exit if event completed */
 		if (rc == 0) {
 			rc = ev_thpriv.ev_error;
-			if (rc) {
-				rc2 = daos_event_priv_reset();
-				D_ASSERT(rc2 == 0);
-				ev_thpriv_is_init = true;
+			if (rc)
 				break;
-			}
 			continue;
 		}
 
@@ -1277,15 +1284,14 @@ daos_event_priv_wait()
 
 		D_ERROR("crt progress failed with "DF_RC"\n", DP_RC(rc));
 
-		/*
-		 * other progress failure; op should fail with that err. reset the private event
-		 * first so it can be resused.
-		 */
-		rc2 = daos_event_priv_reset();
-		D_ASSERT(rc2 == 0);
-		ev_thpriv_is_init = true;
+		/** other progress failure; op should fail with that err. */
 		break;
 	}
+
+	rc2 = daos_event_priv_reset();
+	if (rc == 0)
+		rc = rc2;
+	D_ASSERT(ev_thpriv.ev_error == 0);
 	return rc;
 }
 
