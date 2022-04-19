@@ -38,7 +38,7 @@ type telemCmd struct {
 }
 
 type telemConfigCmd struct {
-	logCmd
+	baseCmd
 	cfgCmd
 	jsonOutputCmd
 	InstallDir string `long:"install-dir" short:"i" description:"Install directory for telemetry binary"`
@@ -79,7 +79,7 @@ func (cmd *telemConfigCmd) fetchAsset(repo, platform string) (*os.File, error) {
 		return nil, err
 	}
 
-	cmd.log.Infof("fetching %s %s", repo, data.TagName)
+	cmd.Infof("fetching %s %s", repo, data.TagName)
 
 	var dlURL string
 	var dlName string
@@ -254,15 +254,15 @@ func (cmd *telemConfigCmd) configurePrometheus() (*installInfo, error) {
 
 	promInfo.binPath, err = exec.LookPath("prometheus")
 	if err != nil {
-		cmd.log.Info("Downloading and installing Prometheus...")
+		cmd.Info("Downloading and installing Prometheus...")
 		promInfo, err = cmd.installPrometheus(cfgPath)
 		if err != nil {
 			return nil, errors.Wrap(err, "failed to install prometheus")
 		}
-		cmd.log.Infof("Installed prometheus to %s", promInfo.binPath)
+		cmd.Infof("Installed prometheus to %s", promInfo.binPath)
 	}
 
-	cmd.log.Info("Configuring Prometheus for DAOS monitoring...")
+	cmd.Info("Configuring Prometheus for DAOS monitoring...")
 	cfg, err := cmd.loadPromCfg(promInfo.cfgPath)
 	if err != nil {
 		return nil, err
@@ -292,7 +292,7 @@ func (cmd *telemConfigCmd) configurePrometheus() (*installInfo, error) {
 	if err := ioutil.WriteFile(promInfo.cfgPath, data, 0644); err != nil {
 		return nil, errors.Wrapf(err, "failed to write %s", promInfo.cfgPath)
 	}
-	cmd.log.Infof("Wrote DAOS monitoring config to %s)", promInfo.cfgPath)
+	cmd.Infof("Wrote DAOS monitoring config to %s)", promInfo.cfgPath)
 
 	return promInfo, nil
 }
@@ -317,7 +317,7 @@ type metricsCmd struct {
 
 // metricsListCmd provides a list of metrics available from the requested DAOS servers.
 type metricsListCmd struct {
-	logCmd
+	baseCmd
 	jsonOutputCmd
 	hostListCmd
 	Port uint32 `short:"p" long:"port" default:"9191" description:"Telemetry port on the host"`
@@ -335,7 +335,7 @@ func (cmd *metricsListCmd) Execute(args []string) error {
 	req.Host = host
 
 	if !cmd.shouldEmitJSON {
-		cmd.log.Info(getConnectingMsg(req.Host, req.Port))
+		cmd.Info(getConnectingMsg(req.Host, req.Port))
 	}
 
 	resp, err := control.MetricsList(context.Background(), req)
@@ -352,7 +352,7 @@ func (cmd *metricsListCmd) Execute(args []string) error {
 	if err != nil {
 		return err
 	}
-	cmd.log.Info(b.String())
+	cmd.Info(b.String())
 	return nil
 }
 
@@ -377,7 +377,7 @@ func getConnectingMsg(host string, port uint32) string {
 
 // metricsQueryCmd collects the requested metrics from the requested DAOS servers.
 type metricsQueryCmd struct {
-	logCmd
+	baseCmd
 	jsonOutputCmd
 	hostListCmd
 	Port    uint32 `short:"p" long:"port" default:"9191" description:"Telemetry port on the host"`
@@ -397,7 +397,7 @@ func (cmd *metricsQueryCmd) Execute(args []string) error {
 	req.MetricNames = common.TokenizeCommaSeparatedString(cmd.Metrics)
 
 	if !cmd.shouldEmitJSON {
-		cmd.log.Info(getConnectingMsg(req.Host, req.Port))
+		cmd.Info(getConnectingMsg(req.Host, req.Port))
 	}
 
 	resp, err := control.MetricsQuery(context.Background(), req)
@@ -414,6 +414,6 @@ func (cmd *metricsQueryCmd) Execute(args []string) error {
 	if err != nil {
 		return err
 	}
-	cmd.log.Info(b.String())
+	cmd.Info(b.String())
 	return nil
 }
