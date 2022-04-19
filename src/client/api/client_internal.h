@@ -67,7 +67,7 @@ struct daos_event_private {
 
 	tse_sched_t		*evx_sched;
 	/** Lock for events that are not in an EQ, including the thread private event */
-	pthread_mutex_t		evx_lock;	
+	pthread_mutex_t		evx_lock;
 };
 
 static inline struct daos_event_private *
