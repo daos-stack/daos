@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2021 Intel Corporation.
+// (C) Copyright 2021-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -165,6 +165,8 @@ func getDistribution(open openFunc) Distribution {
 	getKernelVersion(&dist.Kernel, open)
 
 	switch dist.ID {
+	// The centos and redhat cases here are actually targeted at only the 7.x
+	// releases.  The default case should handle all EL8s.
 	case "centos":
 		getDistributionRelease("/etc/centos-release", &dist.Version, open)
 	case "redhat":
