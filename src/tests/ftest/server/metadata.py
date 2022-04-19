@@ -310,20 +310,25 @@ class ObjectMetadata(TestWithServers):
         containers_created = []
         for loop in range(10):
             self.log.info("Container Create Iteration %d / 9", loop)
+            # The test will encounter ENOSPACE (-1007) while creating
+            # containers.
             if not self.create_all_containers():
                 self.log.error("Errors during create iteration %d/9", loop)
-                test_failed = True
 
             containers_created.append(len(self.container))
-
+            # We should make sure containers which are created should
+            # be destroyed without issues. Here we have to check for
+            # any container destroy errors.
             self.log.info("Container Remove Iteration %d / 9", loop)
             if not self.destroy_all_containers():
                 self.log.error("Errors during remove iteration %d/9", loop)
                 test_failed = True
 
+
             # Calculate the mean container count
             mean_cont_cnt = mean_cont_cnt + containers_created[loop]
-            mean_cont_cnt = int(mean_cont_cnt / (loop + 1))
+            if loop > 0:
+                mean_cont_cnt = int(mean_cont_cnt / 2)
 
         self.log.info("Summary")
         self.log.info("  Loop  Containers Created  Variation")
@@ -333,7 +338,7 @@ class ObjectMetadata(TestWithServers):
             if loop > 0:
                 # Variation in the number of containers created
                 # should be less than %x from mean containers created
-                variation = mean_cont_cnt - containers_created[loop - 1]
+                variation = abs(mean_cont_cnt - containers_created[loop - 1])
                 percent_from_mean = int(mean_cont_cnt * (percent_cont / 100))
                 if variation > percent_from_mean:
                     test_failed = True
