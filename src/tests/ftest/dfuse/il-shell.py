@@ -46,7 +46,7 @@ class ILShell(DfuseTestBase):
 
         mount_dir = self.dfuse.mount_dir.value
 
-        shell_script = """/bin/bash
+        shell_script = b"""/bin/bash
 
 set -e
 FILES=$(/bin/ls -l)
