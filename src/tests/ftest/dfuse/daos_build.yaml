@@ -15,4 +15,3 @@ container:
 dfuse:
   mount_dir: "/tmp/daos_dfuse/"
   disable_wb_cache: true
-  disable_caching: true

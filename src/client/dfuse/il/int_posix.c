@@ -1768,7 +1768,6 @@ dfuse___fxstat(int ver, int fd, struct stat *buf)
 	 * to use the kernel cache and keep it up-to-date than query the severs each time.
 	 */
 
-	assert(entry);
 	if (!entry->fd_fstat) {
 		vector_decref(&fd_table, entry);
 		goto do_real_fstat;
