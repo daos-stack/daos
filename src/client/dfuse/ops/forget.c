@@ -13,8 +13,6 @@ dfuse_forget_one(struct dfuse_projection_info *fs_handle, fuse_ino_t ino, uintpt
 	d_list_t		 *rlink;
 	int                       rc;
 	struct dfuse_inode_entry *ie;
-	uint                      open_ref;
-	uint                      il_ref;
 
 	/* One additional reference is needed because the rec_find() itself acquires one */
 	nlookup++;
@@ -26,16 +24,6 @@ dfuse_forget_one(struct dfuse_projection_info *fs_handle, fuse_ino_t ino, uintpt
 	}
 
 	ie = container_of(rlink, struct dfuse_inode_entry, ie_htl);
-
-	il_ref = atomic_load_relaxed(&ie->ie_il_count);
-	if (il_ref != 0) {
-		DFUSE_TRA_ERROR(ie, "Forget with non-zero ioctl count %d", il_ref);
-	}
-
-	open_ref = atomic_load_relaxed(&ie->ie_open_count);
-	if (open_ref != 0) {
-		DFUSE_TRA_ERROR(ie, "Forget with non-zero open count %d", open_ref);
-	}
 
 	DFUSE_TRA_DEBUG(ie, "inode %#lx count %lu", ino, nlookup);
 
