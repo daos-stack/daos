@@ -1,4 +1,7 @@
-#!/bin/sh -e
+#!/bin/bash
+
+set -e
+set -f
 
 # Install OS updates and packages as required for building DAOS on EL 8 and
 # derivatives.  Include basic tools and daos dependencies that come from the core repos.
