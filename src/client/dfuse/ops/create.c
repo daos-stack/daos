@@ -30,7 +30,7 @@ _dfuse_mode_update(fuse_req_t req, struct dfuse_inode_entry *parent, mode_t *_mo
 
 	/* First check the UID, if this is different then copy the mode bits from user to group */
 	if (ctx->uid != parent->ie_stat.st_uid) {
-		DFUSE_TRA_DEBUG(parent, "create with mismatched UID, setting group perms\n");
+		DFUSE_TRA_DEBUG(parent, "create with mismatched UID, setting group perms");
 		if (mode & S_IRUSR)
 			mode |= S_IRGRP;
 		if (mode & S_IWUSR)
@@ -49,7 +49,7 @@ _dfuse_mode_update(fuse_req_t req, struct dfuse_inode_entry *parent, mode_t *_mo
 		bool have_group_match = false;
 		int i;
 
-		DFUSE_TRA_DEBUG(parent, "create with mismatched GID\n");
+		DFUSE_TRA_DEBUG(parent, "create with mismatched GID");
 
 		gcount = fuse_req_getgroups(req, START_GROUP_SIZE, glist);
 		gsize = min(2, gcount);
@@ -79,7 +79,7 @@ _dfuse_mode_update(fuse_req_t req, struct dfuse_inode_entry *parent, mode_t *_mo
 		}
 
 		if (!have_group_match) {
-			DFUSE_TRA_DEBUG(parent, "No GIDs match, setting other perms\n");
+			DFUSE_TRA_DEBUG(parent, "No GIDs match, setting other perms");
 
 			if (mode & S_IRUSR)
 				mode |= S_IROTH;
