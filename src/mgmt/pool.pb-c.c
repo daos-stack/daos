@@ -3133,12 +3133,12 @@ static const ProtobufCFieldDescriptor mgmt__pool_query_resp__field_descriptors[1
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
   {
-    "total_nodes",
+    "total_engines",
     9,
     PROTOBUF_C_LABEL_NONE,
     PROTOBUF_C_TYPE_UINT32,
     0,   /* quantifier_offset */
-    offsetof(Mgmt__PoolQueryResp, total_nodes),
+    offsetof(Mgmt__PoolQueryResp, total_engines),
     NULL,
     NULL,
     0,             /* flags */
@@ -3203,7 +3203,7 @@ static const unsigned mgmt__pool_query_resp__field_indices_by_name[] = {
   6,   /* field[6] = rebuild */
   0,   /* field[0] = status */
   7,   /* field[7] = tier_stats */
-  8,   /* field[8] = total_nodes */
+  8,   /* field[8] = total_engines */
   3,   /* field[3] = total_targets */
   1,   /* field[1] = uuid */
   9,   /* field[9] = version */

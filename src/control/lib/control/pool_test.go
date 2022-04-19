@@ -477,7 +477,7 @@ func TestControl_PoolQueryResp_MarshallJSON(t *testing.T) {
 					Leader:          6,
 				},
 			},
-			exp: `{"enabled_ranks":null,"disabled_ranks":null,"status":0,"uuid":"foo","total_targets":1,"active_targets":2,"total_nodes":3,"disabled_targets":4,"version":5,"leader":6,"rebuild":null,"tier_stats":null}`,
+			exp: `{"enabled_ranks":null,"disabled_ranks":null,"status":0,"uuid":"foo","total_targets":1,"active_targets":2,"total_engines":3,"disabled_targets":4,"version":5,"leader":6,"rebuild":null,"tier_stats":null}`,
 		},
 		"valid rankset": {
 			pqr: &PoolQueryResp{
@@ -494,7 +494,7 @@ func TestControl_PoolQueryResp_MarshallJSON(t *testing.T) {
 					DisabledRanks:   &system.RankSet{},
 				},
 			},
-			exp: `{"enabled_ranks":[0,1,2,3,5],"disabled_ranks":[],"status":0,"uuid":"foo","total_targets":1,"active_targets":2,"total_nodes":3,"disabled_targets":4,"version":5,"leader":6,"rebuild":null,"tier_stats":null}`,
+			exp: `{"enabled_ranks":[0,1,2,3,5],"disabled_ranks":[],"status":0,"uuid":"foo","total_targets":1,"active_targets":2,"total_engines":3,"disabled_targets":4,"version":5,"leader":6,"rebuild":null,"tier_stats":null}`,
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
@@ -517,7 +517,7 @@ func TestControl_PoolQueryResp_UnmarshallJSON(t *testing.T) {
 		expErr  error
 	}{
 		"null rankset": {
-			data: `{"enabled_ranks":null,"disabled_ranks":null,"status":0,"uuid":"foo","total_targets":1,"active_targets":2,"total_nodes":3,"disabled_targets":4,"version":5,"leader":6,"rebuild":null,"tier_stats":null}`,
+			data: `{"enabled_ranks":null,"disabled_ranks":null,"status":0,"uuid":"foo","total_targets":1,"active_targets":2,"total_engines":3,"disabled_targets":4,"version":5,"leader":6,"rebuild":null,"tier_stats":null}`,
 			expResp: PoolQueryResp{
 				Status: 0,
 				UUID:   "foo",
@@ -532,7 +532,7 @@ func TestControl_PoolQueryResp_UnmarshallJSON(t *testing.T) {
 			},
 		},
 		"valid rankset": {
-			data: `{"enabled_ranks":"[0,1-3,5]","disabled_ranks":"[]","status":0,"uuid":"foo","total_targets":1,"active_targets":2,"total_nodes":3,"disabled_targets":4,"version":5,"leader":6,"rebuild":null,"tier_stats":null}`,
+			data: `{"enabled_ranks":"[0,1-3,5]","disabled_ranks":"[]","status":0,"uuid":"foo","total_targets":1,"active_targets":2,"total_engines":3,"disabled_targets":4,"version":5,"leader":6,"rebuild":null,"tier_stats":null}`,
 			expResp: PoolQueryResp{
 				Status: 0,
 				UUID:   "foo",
@@ -553,7 +553,7 @@ func TestControl_PoolQueryResp_UnmarshallJSON(t *testing.T) {
 			expErr: errors.New("invalid character"),
 		},
 		"invalid rankset": {
-			data:   `{"enabled_ranks":"a cow goes quack","disabled_ranks":null,"status":0,"uuid":"foo","total_targets":1,"active_targets":2,"total_nodes":3,"disabled_targets":4,"version":5,"leader":6,"rebuild":null,"tier_stats":null}`,
+			data:   `{"enabled_ranks":"a cow goes quack","disabled_ranks":null,"status":0,"uuid":"foo","total_targets":1,"active_targets":2,"total_engines":3,"disabled_targets":4,"version":5,"leader":6,"rebuild":null,"tier_stats":null}`,
 			expErr: errors.New("unexpected alphabetic character(s)"),
 		},
 	} {
