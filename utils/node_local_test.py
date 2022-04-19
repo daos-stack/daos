@@ -1514,9 +1514,8 @@ class needs_dfuse_with_opt():
 
     # pylint: disable=too-few-public-methods
 
-    def __init__(self, caching=None, wbcache=None, single_threaded=False):
+    def __init__(self, caching=None, single_threaded=False):
         self.caching = caching
-        self.wbcache = wbcache
         self.single_threaded = single_threaded
 
     def __call__(self, method):
@@ -1533,14 +1532,9 @@ class needs_dfuse_with_opt():
                 else:
                     caching = False
 
-            wbcache = True
-            if self.wbcache is not None:
-                wbcache = self.wbcache
-
             obj.dfuse = DFuse(obj.server,
                               obj.conf,
                               caching=caching,
-                              wbcache=wbcache,
                               pool=obj.pool.dfuse_mount_name(),
                               container=obj.container)
             obj.dfuse.start(v_hint=method.__name__, single_threaded=self.single_threaded)
@@ -1976,29 +1970,6 @@ class posix_tests():
                                   'bs=128k'],
                      check_fstat=False)
         assert ret.returncode == 0
-
-    @needs_dfuse_with_opt(wbcache=False)
-    def test_il_copy(self):
-        """Copy to a file with IL and verify the size is correct"""
-
-        src_file = os.path.join(self.dfuse.dir, 'src_file')
-        dst_file = os.path.join(self.dfuse.dir, 'dst_file')
-
-        with open(src_file, 'w') as fd:
-            fd.write('content')
-
-        il_cmd(self.dfuse, ['cp', src_file, dst_file], check_fstat=False)
-
-        with open(dst_file, 'r') as fd:
-            data = fd.read(1024)
-            print('__{}__'.format(data))
-            print(len(data))
-
-        src = os.stat(src_file)
-        dst = os.stat(dst_file)
-        print(os.stat(src_file))
-        print(os.stat(dst_file))
-        assert src.st_size == dst.st_size
 
     @needs_dfuse
     def test_xattr(self):
