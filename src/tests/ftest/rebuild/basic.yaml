@@ -39,7 +39,7 @@ container:
       record_qty: 1
     ten_records:
       record_qty: 10
-  debug: True
+  debug: true
 testparams:
   ranks: !mux
     rank1:
@@ -50,4 +50,3 @@ testparams:
       rank: 3
   quantity: 2
   object_class: OC_RP_3G1
-
