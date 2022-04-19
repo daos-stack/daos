@@ -107,7 +107,7 @@ class HarnessAdvancedTest(TestWithServers):
 
         for key in sorted(timeouts):
             self.assertEqual(
-                timeouts[key][1] - timeouts[key][0], 600,
+                int(timeouts[key][1]) - int(timeouts[key][0]), 600,
                 "Incorrect {}.{} value detected after adding 3 pools".format(namespace, key))
 
         self.log.info("Test passed")
