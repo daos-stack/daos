@@ -323,8 +323,6 @@ class ObjectMetadata(TestWithServers):
             if not self.destroy_all_containers():
                 self.log.error("Errors during remove iteration %d/9", loop)
                 test_failed = True
-
-
             # Calculate the mean container count
             mean_cont_cnt = mean_cont_cnt + containers_created[loop]
             if loop > 0:
