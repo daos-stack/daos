@@ -7,6 +7,8 @@ import time
 import errno
 import SCons.Warnings
 from SCons.Script import BUILD_TARGETS
+import SCons as sc
+import packaging.version
 
 if sys.version_info.major < 3:
     print(""""Python 2.7 is no longer supported in the DAOS build.
@@ -338,9 +340,12 @@ def scons(): # pylint: disable=too-many-locals
 
         Exit(0)
 
-    env = Environment(TOOLS=['extra', 'default', 'textfile', 'compilation_db'], COMPILATIONDB_USE_ABSPATH=True)
-    cdb = env.CompilationDatabase()
-    Alias('cdb', cdb)
+    if packaging.version.parse(sc.__version__) >= packaging.version.parse('4.0.0'):
+        env = Environment(TOOLS=['extra', 'default', 'textfile', 'compilation_db'], COMPILATIONDB_USE_ABSPATH=True)
+        cdb = env.CompilationDatabase()
+        Alias('cdb', cdb)
+    else:
+         env = Environment(TOOLS=['extra', 'default', 'textfile'])
 
     opts_file = os.path.join(Dir('#').abspath, 'daos.conf')
     opts = Variables(opts_file)
