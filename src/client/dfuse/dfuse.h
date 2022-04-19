@@ -96,6 +96,8 @@ struct dfuse_obj_hdl {
 	uint32_t			doh_dre_last_index;
 	/** Next value from anchor */
 	uint32_t			doh_anchor_index;
+
+	ATOMIC uint			doh_il_calls;
 };
 
 struct dfuse_inode_ops {
@@ -368,13 +370,15 @@ struct fuse_lowlevel_ops dfuse_ops;
 #define DFUSE_REPLY_ATTR(ie, req, attr)					\
 	do {								\
 		int __rc;						\
+		double timeout = 0;					\
+		if (atomic_load_relaxed(&(ie)->ie_il_count) == 0)	\
+			timeout = (ie)->ie_dfs->dfc_attr_timeout;	\
 		DFUSE_TRA_DEBUG(ie,					\
 				"Returning attr inode %#lx mode %#o size %zi",	\
 				(attr)->st_ino,				\
 				(attr)->st_mode,			\
 				(attr)->st_size);			\
-		__rc = fuse_reply_attr(req, attr,			\
-				(ie)->ie_dfs->dfc_attr_timeout);	\
+		__rc = fuse_reply_attr(req, attr, timeout);		\
 		if (__rc != 0)						\
 			DFUSE_TRA_ERROR(ie,				\
 					"fuse_reply_attr returned %d:%s", \
@@ -542,6 +546,12 @@ struct dfuse_inode_entry {
 
 	/** File has been unlinked from daos */
 	bool			ie_unlinked;
+
+	/* Number of open file descriptors for this inode */
+	ATOMIC uint		ie_open_count;
+
+	/* Number of file open file descriptors using IL */
+	ATOMIC uint		ie_il_count;
 };
 
 /* Generate the inode to use for this dfs object.  This is generating a single
