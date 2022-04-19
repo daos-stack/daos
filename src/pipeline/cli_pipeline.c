@@ -137,7 +137,7 @@ pipeline_shard_run_cb(tse_task_t *task, void *data)
 
 	D_ASSERT(pro->pro_kds.ca_count <= nr_kds);
 	D_ASSERT(pro->pro_sgl_keys.sg_nr_out <= nr_kds);
-	D_ASSERT(pro->pro_iods.nr <= nr_iods);
+	D_ASSERT(pro->pro_recx_size.ca_count <= nr_iods);
 	D_ASSERT(pro->pro_sgl_recx.sg_nr_out <= nr_iods);
 	D_ASSERT(pro->pro_sgl_agg.sg_nr_out == nr_agg);
 
@@ -160,15 +160,16 @@ pipeline_shard_run_cb(tse_task_t *task, void *data)
 		if (rc != 0)
 			D_GOTO(out, rc);
 	}
-	if (pro->pro_iods.nr > 0) {
+	if (pro->pro_recx_size.ca_count > 0) {
 		/**
 		 * copying I/O descriptors
 		 *
 		 * Note: the only thing that is really an output is iod_size (i.e., size of the
 		 * data), everything else is kept the same.
 		 */
-		for (i = 0; i < pro->pro_iods.nr; i++) {
-			api_args->iods[i].iod_size = pro->pro_iods.iods[i].iod_size;
+		for (i = 0; i < pro->pro_recx_size.ca_count; i++) {
+			if (api_args->iods[i].iod_type == DAOS_IOD_SINGLE)
+				api_args->iods[i].iod_size = pro->pro_recx_size.ca_arrays[i];
 		}
 	}
 	if (pro->pro_sgl_recx.sg_nr_out > 0) {
@@ -220,7 +221,7 @@ pipeline_shard_run_cb(tse_task_t *task, void *data)
 		api_args->sgl_agg->sg_nr_out = nr_agg;
 
 	*api_args->nr_kds  = pro->pro_kds.ca_count;
-	*api_args->nr_iods = pro->pro_iods.nr;
+	*api_args->nr_iods = pro->pro_recx_size.ca_count;
 
 	if (api_args->stats != NULL) {
 		/** user wants stats */
@@ -396,8 +397,18 @@ shard_pipeline_run_task(tse_task_t *task)
 		if (rc < 0)
 			D_GOTO(out_req, rc);
 	}
+
+	pri->pri_iods.nr      = nr_iods;
+	pri->pri_iods.iods    = args->pra_api_args->iods;
+
 	/** everything else is based on packed size */
 	size = 0;
+	/*if (nr_iods > 0) {
+		size += nr_iods * sizeof(daos_size_t);
+		if (size >= DAOS_BULK_LIMIT) {
+
+		}
+	}*/
 	if (nr_kds > 0) {
 		if (args->pra_api_args->sgl_keys != NULL) {
 			size += daos_sgls_packed_size(args->pra_api_args->sgl_keys, 1, NULL);
