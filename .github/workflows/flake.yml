@@ -3,7 +3,7 @@ name: Flake
 # Run flake on all PRs.  This ignores many pre-existing errors however should catch
 # regressions and allows us to remove ignores and results issues iteratively.
 
-on:  # yamllint disable-line rule:truthy
+on:
   pull_request:
     paths:
       - '**/*.py'
