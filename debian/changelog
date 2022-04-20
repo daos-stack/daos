@@ -1,8 +1,14 @@
-daos (2.0.2-3) unstable; urgency=medium
+daos (2.0.2-4) unstable; urgency=medium
   [ Lei Huang ]
   * Update libfabric to v1.15.0rc3-1 with critical performance patches
 
  -- Lei Huang <lei.huang@intel.com>  Wed, 20 Apr 2022 10:00:00 -0500
+
+daos (2.0.2-3) unstable; urgency=medium
+  [ Li Wei ]
+  * Update raft to 0.9.1-1401.gc18bcb8 to fix uninitialized node IDs
+
+ -- Li Wei <wei.g.li@intel.com>  Sun, 17 Apr 2022 11:15:00 +0800
 
 daos (2.0.2-2) unstable; urgency=medium
   [ Johann Lombardi ]
