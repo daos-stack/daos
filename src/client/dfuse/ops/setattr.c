@@ -112,11 +112,7 @@ dfuse_cb_setattr(fuse_req_t req, struct dfuse_inode_entry *ie,
 
 	attr->st_ino = ie->ie_stat.st_ino;
 
-	/* Update the size as dfuse knows about it for future use, but only if it was set as part
-	 * of this call.  See DAOS-8333
-	 */
-	if (dfs_flags & DFS_SET_ATTR_SIZE)
-		ie->ie_stat.st_size = attr->st_size;
+	ie->ie_stat = attr;
 
 	DFUSE_REPLY_ATTR(ie, req, attr);
 	return;
