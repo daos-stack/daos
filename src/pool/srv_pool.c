@@ -1174,18 +1174,23 @@ primary_group_initialized(void)
 }
 
 /*
- * Read the DB for map_buf, map_version, and prop. Callers are responsible for
- * freeing *map_buf and *prop.
+ * Read the DB for map_buf_out, map_version_out, and prop_out. If the return
+ * value is 0, the caller is responsible for freeing *map_buf_out and *prop_out
+ * eventually.
  */
 static int
-read_db_for_stepping_up(struct pool_svc *svc, struct pool_buf **map_buf,
-			uint32_t *map_version, daos_prop_t **prop)
+read_db_for_stepping_up(struct pool_svc *svc, struct pool_buf **map_buf_out,
+			uint32_t *map_version_out, daos_prop_t **prop_out)
 {
-	struct rdb_tx	tx;
-	d_iov_t		value;
-	bool		version_exists = false;
-	uint32_t	version, global_version;
-	int		rc;
+	struct rdb_tx		tx;
+	d_iov_t			value;
+	bool			version_exists = false;
+	uint32_t		version;
+	uint32_t		global_version;
+	struct pool_buf	       *map_buf;
+	uint32_t		map_version;
+	daos_prop_t	       *prop;
+	int			rc;
 
 	rc = rdb_tx_begin(svc->ps_rsvc.s_db, svc->ps_rsvc.s_term, &tx);
 	if (rc != 0)
@@ -1227,7 +1232,7 @@ read_db_for_stepping_up(struct pool_svc *svc, struct pool_buf **map_buf,
 	}
 
 check_map:
-	rc = read_map_buf(&tx, &svc->ps_root, map_buf, map_version);
+	rc = read_map_buf(&tx, &svc->ps_root, &map_buf, &map_version);
 	if (rc != 0) {
 		if (rc == -DER_NONEXIST && !version_exists) {
 			/*
@@ -1255,15 +1260,17 @@ check_map:
 				     NULL /* data */,
 				     "incompatible layout version");
 		rc = -DER_DF_INCOMPT;
-		goto out_lock;
+		goto out_map_buf;
 	}
 
 	d_iov_set(&value, &global_version, sizeof(global_version));
 	rc = rdb_tx_lookup(&tx, &svc->ps_root, &ds_pool_prop_global_version, &value);
-	if (rc == -DER_NONEXIST)
+	if (rc == -DER_NONEXIST) {
 		global_version = 0;
-	else if (rc)
-		goto out_lock;
+		rc = 0;
+	} else if (rc != 0) {
+		goto out_map_buf;
+	}
 
 	/**
 	 * downgrading the DAOS software of an upgraded pool report
@@ -1281,14 +1288,24 @@ check_map:
 				     "%u", global_version,
 				     DS_POOL_GLOBAL_VERSION);
 		rc = -DER_DF_INCOMPT;
-		goto out_lock;
+		goto out_map_buf;
 	}
 
-	rc = pool_prop_read(&tx, svc, DAOS_PO_QUERY_PROP_ALL, prop);
-	if (rc != 0)
-		D_ERROR(DF_UUID": cannot get access data for pool: "DF_RC"\n",
+	rc = pool_prop_read(&tx, svc, DAOS_PO_QUERY_PROP_ALL, &prop);
+	if (rc != 0) {
+		D_ERROR(DF_UUID": failed to read pool properties: "DF_RC"\n",
 			DP_UUID(svc->ps_uuid), DP_RC(rc));
+		daos_prop_free(prop);
+		goto out_map_buf;
+	}
 
+	D_ASSERTF(rc == 0, DF_RC"\n", DP_RC(rc));
+	*map_buf_out = map_buf;
+	*map_version_out = map_version;
+	*prop_out = prop;
+out_map_buf:
+	if (rc != 0)
+		D_FREE(map_buf);
 out_lock:
 	ABT_rwlock_unlock(svc->ps_lock);
 	rdb_tx_end(&tx);
@@ -1355,7 +1372,6 @@ pool_svc_check_node_status(struct pool_svc *svc)
 	return rc;
 }
 
-/* up */
 static int
 pool_svc_step_up_cb(struct ds_rsvc *rsvc)
 {
