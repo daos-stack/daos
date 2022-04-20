@@ -365,20 +365,30 @@ struct fuse_lowlevel_ops dfuse_ops;
 					__rc, strerror(-__rc));		\
 	} while (0)
 
-#define DFUSE_REPLY_ATTR(ie, req, attr)					\
-	do {								\
-		int __rc;						\
-		DFUSE_TRA_DEBUG(ie,					\
-				"Returning attr inode %#lx mode %#o size %zi",	\
-				(attr)->st_ino,				\
-				(attr)->st_mode,			\
-				(attr)->st_size);			\
-		__rc = fuse_reply_attr(req, attr,			\
-				(ie)->ie_dfs->dfc_attr_timeout);	\
-		if (__rc != 0)						\
-			DFUSE_TRA_ERROR(ie,				\
-					"fuse_reply_attr returned %d:%s", \
-					__rc, strerror(-__rc));		\
+#define DFUSE_REPLY_ATTR(ie, req, attr)                                                            \
+	do {                                                                                       \
+		int             __rc;                                                              \
+		struct timespec now;                                                               \
+		DFUSE_TRA_DEBUG(ie, "Returning attr inode %#lx mode %#o size %zi", (attr)->st_ino, \
+				(attr)->st_mode, (attr)->st_size);                                 \
+		clock_gettime(CLOCK_MONOTONIC_COARSE, &now);                                       \
+		(ie)->ie_attr_last_update = now;                                                   \
+		__rc = fuse_reply_attr(req, attr, (ie)->ie_dfs->dfc_attr_timeout);                 \
+		if (__rc != 0)                                                                     \
+			DFUSE_TRA_ERROR(ie, "fuse_reply_attr returned %d:%s", __rc,                \
+					strerror(-__rc));                                          \
+	} while (0)
+
+#define DFUSE_REPLY_ATTR_FORCE(ie, req, timeout)                                                   \
+	do {                                                                                       \
+		int __rc;                                                                          \
+		DFUSE_TRA_DEBUG(ie, "Returning attr inode %#lx mode %#o size %zi timeout %lf",     \
+				(ie)->ie_stat.st_ino, (ie)->ie_stat.st_mode,                       \
+				(ie)->ie_stat.st_size, timeout);                                   \
+		__rc = fuse_reply_attr(req, &ie->ie_stat, timeout);                                \
+		if (__rc != 0)                                                                     \
+			DFUSE_TRA_ERROR(ie, "fuse_reply_attr returned %d:%s", __rc,                \
+					strerror(-__rc));                                          \
 	} while (0)
 
 #define DFUSE_REPLY_READLINK(ie, req, path)				\
@@ -524,6 +534,8 @@ struct dfuse_inode_entry {
 	 * locking.
 	 */
 	d_list_t		ie_htl;
+
+	struct timespec          ie_attr_last_update;
 
 	/** Reference counting for the inode.
 	 * Used by the hash table callbacks
