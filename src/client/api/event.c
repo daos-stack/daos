@@ -352,21 +352,21 @@ daos_event_complete_locked(struct daos_eq_private *eqx,
 		if (parent_evx->evx_nchild_comp < parent_evx->evx_nchild) {
 			/* Not all children have completed yet */
 			parent_ev->ev_error = parent_ev->ev_error ?: rc;
-			return 0;
+			goto out;
 		}
 
 		/* If the parent is not launched yet, let's return */
 		if (parent_evx->evx_status == DAOS_EVS_READY)
-			return 0;
+			goto out;
 
 		/* If the parent was completed or aborted, we can return */
 		if (parent_evx->evx_status == DAOS_EVS_COMPLETED ||
 		    parent_evx->evx_status == DAOS_EVS_ABORTED)
-			return 0;
+			goto out;
 
 		/* If the parent is not a barrier it will complete on its own */
 		if (!parent_evx->is_barrier)
-			return 0;
+			goto out;
 
 		/* Complete the barrier parent */
 		D_ASSERT(parent_evx->evx_status == DAOS_EVS_RUNNING);
@@ -383,10 +383,11 @@ daos_event_complete_locked(struct daos_eq_private *eqx,
 		eq->eq_n_comp++;
 		D_ASSERT(eq->eq_n_running > 0);
 		eq->eq_n_running--;
-	} else {
-		D_MUTEX_UNLOCK(&evx->evx_lock);
 	}
 
+out:
+	if (eq == NULL)
+		D_MUTEX_UNLOCK(&evx->evx_lock);
 	return 0;
 }
 
@@ -1050,7 +1051,9 @@ daos_event_init(struct daos_event *ev, daos_handle_t eqh,
 		}
 		evx->evx_ctx = daos_eq_ctx;
 		evx->evx_sched = &daos_sched_g;
+	}
 
+	if (daos_handle_is_inval(evx->evx_eqh)) {
 		/** since there is no EQ, initialize the evx lock */
 		rc = D_MUTEX_INIT(&evx->evx_lock, NULL);
 		if (rc)
@@ -1088,7 +1091,8 @@ daos_event_fini(struct daos_event *ev)
 		goto out;
 	}
 
-	if (daos_handle_is_inval(evx->evx_eqh) && evx->evx_parent == NULL)
+	/** destroy the event lock if there is not event queue or this is a child event */
+	if (daos_handle_is_inval(evx->evx_eqh))
 		D_MUTEX_DESTROY(&evx->evx_lock);
 
 	/* If there are child events */
