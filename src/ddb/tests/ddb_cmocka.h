@@ -13,11 +13,11 @@
 
 #define assert_uuid_equal(a, b) \
 	do { \
-	char str_a[DAOS_UUID_STR_SIZE]; \
-	char str_b[DAOS_UUID_STR_SIZE]; \
-	uuid_unparse(a, str_a); \
-	uuid_unparse(b, str_b); \
-	assert_string_equal(str_a, str_b); \
+		char str_a[DAOS_UUID_STR_SIZE]; \
+		char str_b[DAOS_UUID_STR_SIZE]; \
+		uuid_unparse(a, str_a); \
+		uuid_unparse(b, str_b); \
+		assert_string_equal(str_a, str_b); \
 	} while (0)
 #define assert_uuid_not_equal(a, b) \
 	do { \
@@ -40,5 +40,18 @@
 		assert_int_equal(a.iov_buf_len, b.iov_buf_len); \
 		assert_memory_equal(a.iov_buf, b.iov_buf, a.iov_len); \
 	} while (0)
+
+#define assert_key_not_equal(a, b) \
+	do { \
+		if (a.iov_len == b.iov_len && a.iov_buf_len == b.iov_buf_len) \
+			assert_memory_not_equal(a.iov_buf, b.iov_buf, a.iov_len); \
+	} while (0)
+
+#define assert_string_contains(str, substr) \
+	do { \
+		if (strstr(str, substr) == NULL) \
+			fail_msg("'%s' not found in '%s'", substr, str); \
+	} while (0)
+
 
 #endif /* DAOS_DDB_CMOCKA_H */

@@ -3,18 +3,19 @@ import daos_build
 
 def scons():
     """Execute build"""
-    Import('base_env', 'prereqs')
+    Import('env', 'prereqs')
 
     if not prereqs.server_requested():
         return
 
-    denv = base_env.Clone()
+    denv = env.Clone()
 
     libs = ['vos', 'daos_common_pmem', 'abt', 'gurt', 'uuid', 'bio']
     src = ['ddb_cmd_options.c',
            'ddb_commands.c',
            'ddb_main.c',
            'ddb_parse.c',
+           'ddb_printer.c',
            'ddb_vos.c']
 
     ddblib = denv.StaticObject(src)
@@ -23,6 +24,13 @@ def scons():
     # Add runtime paths for daos libraries
     denv.AppendUnique(RPATH_FULL=['$PREFIX/lib64/daos_srv'])
     denv.AppendUnique(RPATH_FULL=['$PREFIX/lib64'])
+
+    denv.Append(CPPDEFINES={'DAOS_PMEM_BUILD': '1'})
+
+    # Because ddb is so heavily dependent on VOS, allow it to have some internal
+    # knowledge of it.
+    denv.AppendUnique(CPPPATH=[Dir('../vos/').srcnode()])
+    denv.AppendUnique(CPPPATH=[Dir('../vos/')])
 
     prereqs.require(denv, 'argobots', 'protobufc', 'pmdk')
 
