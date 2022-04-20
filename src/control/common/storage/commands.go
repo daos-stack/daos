@@ -52,7 +52,7 @@ func (cmd *StoragePrepareCmd) Validate() (bool, bool, error) {
 	return prepNvme, prepScm, nil
 }
 
-func (cmd *StoragePrepareCmd) Warn(log *logging.LeveledLogger) error {
+func (cmd *StoragePrepareCmd) Warn(log logging.Logger) error {
 	log.Info(MsgStoragePrepareWarn)
 
 	if !cmd.Force && !common.GetConsent(log) {
