@@ -87,6 +87,13 @@ anchor_check_eof(daos_anchor_t *anchor, struct daos_oclass_attr *oca, uint32_t t
 	}
 }
 
+static bool
+first_ever_cb(daos_anchor_t *anchor, uint32_t shard)
+{
+	return daos_anchor_is_zero(anchor) &&
+		(shard == 0 || (daos_anchor_get_flags(anchor) & DIOF_TO_SPEC_SHARD));
+}
+
 static int
 pipeline_comp_cb(tse_task_t *task, void *data)
 {
@@ -188,7 +195,7 @@ pipeline_shard_run_cb(tse_task_t *task, void *data)
 		dst = (double *)api_args->sgl_agg->sg_iovs[i].iov_buf;
 		src = (double *)pro->pro_sgl_agg.sg_iovs[i].iov_buf;
 
-		if (daos_anchor_is_zero(api_args->anchor) && cb_args->shard == 0) {
+		if (first_ever_cb(api_args->anchor, cb_args->shard)) {
 			/**
 			 * This is the first time ever that this callback is executed for this
 			 * particular pipeline run.
@@ -225,7 +232,7 @@ pipeline_shard_run_cb(tse_task_t *task, void *data)
 
 	if (api_args->stats != NULL) {
 		/** user wants stats */
-		if (daos_anchor_is_zero(api_args->anchor) && cb_args->shard == 0)
+		if (first_ever_cb(api_args->anchor, cb_args->shard))
 			*api_args->stats = pro->stats;
 		else {
 			api_args->stats->nr_objs += pro->stats.nr_objs;
@@ -236,7 +243,6 @@ pipeline_shard_run_cb(tse_task_t *task, void *data)
 
 	/** anchor should always be updated at the end */
 	*api_args->anchor = pro->pro_anchor;
-
 
 out:
 	crt_req_decref(rpc);
