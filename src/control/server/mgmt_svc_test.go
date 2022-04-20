@@ -17,7 +17,7 @@ import (
 	"github.com/daos-stack/daos/src/control/common"
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	"github.com/daos-stack/daos/src/control/logging"
-	"github.com/daos-stack/daos/src/control/system"
+	"github.com/daos-stack/daos/src/control/system/raft"
 )
 
 func TestServer_MgmtSvc_checkSystemRequest(t *testing.T) {
@@ -77,7 +77,7 @@ func TestServer_MgmtSvc_checkSystemRequest(t *testing.T) {
 
 			svc := newTestMgmtSvc(t, log)
 			if tc.sysName != "" {
-				svc.sysdb = system.MockDatabaseWithCfg(t, log, &system.DatabaseConfig{
+				svc.sysdb = raft.MockDatabaseWithCfg(t, log, &raft.DatabaseConfig{
 					SystemName: tc.sysName,
 					Replicas:   []*net.TCPAddr{common.LocalhostCtrlAddr()},
 				})
