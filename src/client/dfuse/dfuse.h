@@ -439,30 +439,31 @@ struct fuse_lowlevel_ops dfuse_ops;
 					__rc, strerror(-__rc));		\
 	} while (0)
 
-#define DFUSE_REPLY_CREATE(desc, req, entry, fi)			\
-	do {								\
-		int __rc;						\
-		DFUSE_TRA_DEBUG(desc, "Returning create");		\
-		__rc = fuse_reply_create(req, &entry, fi);		\
-		if (__rc != 0)						\
-			DFUSE_TRA_ERROR(desc,				\
-					"fuse_reply_create returned %d:%s",\
-					__rc, strerror(-__rc));		\
+#define DFUSE_REPLY_CREATE(desc, req, entry, fi)                                                   \
+	do {                                                                                       \
+		int             __rc;                                                              \
+		struct timespec now;                                                               \
+		DFUSE_TRA_DEBUG(desc, "Returning create");                                         \
+		clock_gettime(CLOCK_MONOTONIC_COARSE, &now);                                       \
+		(desc)->ie_attr_last_update = now;                                                 \
+		__rc                        = fuse_reply_create(req, &entry, fi);                  \
+		if (__rc != 0)                                                                     \
+			DFUSE_TRA_ERROR(desc, "fuse_reply_create returned %d:%s", __rc,            \
+					strerror(-__rc));                                          \
 	} while (0)
 
-#define DFUSE_REPLY_ENTRY(desc, req, entry)				\
-	do {								\
-		int __rc;						\
-		DFUSE_TRA_DEBUG(desc,					\
-				"Returning entry inode %#lx mode %#o size %zi",	\
-				(entry).attr.st_ino,			\
-				(entry).attr.st_mode,			\
-				(entry).attr.st_size);			\
-		__rc = fuse_reply_entry(req, &entry);			\
-		if (__rc != 0)						\
-			DFUSE_TRA_ERROR(desc,				\
-					"fuse_reply_entry returned %d:%s", \
-					__rc, strerror(-__rc));		\
+#define DFUSE_REPLY_ENTRY(desc, req, entry)                                                        \
+	do {                                                                                       \
+		int             __rc;                                                              \
+		struct timespec now;                                                               \
+		DFUSE_TRA_DEBUG(desc, "Returning entry inode %#lx mode %#o size %zi",              \
+				(entry).attr.st_ino, (entry).attr.st_mode, (entry).attr.st_size);  \
+		clock_gettime(CLOCK_MONOTONIC_COARSE, &now);                                       \
+		(desc)->ie_attr_last_update = now;                                                 \
+		__rc                        = fuse_reply_entry(req, &entry);                       \
+		if (__rc != 0)                                                                     \
+			DFUSE_TRA_ERROR(desc, "fuse_reply_entry returned %d:%s", __rc,             \
+					strerror(-__rc));                                          \
 	} while (0)
 
 #define DFUSE_REPLY_STATFS(desc, req, stat)				\
