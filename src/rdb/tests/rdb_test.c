@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2017-2021 Intel Corporation.
+ * (C) Copyright 2017-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -793,6 +793,7 @@ struct dss_module rdbt_module = {
 	.sm_name	= "rdbt",
 	.sm_mod_id	= DAOS_RDBT_MODULE,
 	.sm_ver		= DAOS_RDBT_VERSION,
+	.sm_proto_count	= 1,
 	.sm_init	= rdbt_module_init,
 	.sm_fini	= rdbt_module_fini,
 	.sm_proto_fmt	= &rdbt_proto_fmt,

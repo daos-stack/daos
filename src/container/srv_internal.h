@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2021 Intel Corporation.
+ * (C) Copyright 2016-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -29,10 +29,11 @@ struct ds_pool_hdl;
 
 /* Container metrics */
 struct cont_pool_metrics {
-	struct d_tm_node_t	*cpm_open_count;
-	struct d_tm_node_t	*cpm_close_count;
-	struct d_tm_node_t	*cpm_destroy_count;
-	struct d_tm_node_t	*cpm_open_cont_gauge;
+	struct d_tm_node_t	*open_total;
+	struct d_tm_node_t	*close_total;
+	struct d_tm_node_t	*query_total;
+	struct d_tm_node_t	*create_total;
+	struct d_tm_node_t	*destroy_total;
 };
 
 /* ds_cont thread local storage structure */
@@ -142,6 +143,8 @@ struct cont_iv_prop {
 	uint64_t	cip_ec_cell_sz;
 	uint32_t	cip_ec_pda;
 	uint32_t	cip_rp_pda;
+	uint32_t	cip_global_version;
+	uint64_t	cip_valid_bits;
 	struct daos_prop_co_roots	cip_roots;
 	struct daos_co_status		cip_co_status;
 	/* MUST be the last member */

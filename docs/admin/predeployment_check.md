@@ -13,7 +13,7 @@ the Linux kernel. Exact details depend on the distribution, but the following
 example should be illustrative:
 
 ```bash
-# Enable IOMMU on CentOS 7
+# Enable IOMMU on CentOS 7 and EL 8
 # All commands must be run as root/sudo!
 
 $ sudo vi /etc/default/grub # add the following line:
@@ -129,7 +129,7 @@ $ sysctl -w net.ipv4.conf.all.arp_ignore=1
 ```
 
 Finally, the rp_filter is set to 1 by default on several distributions (e.g. on
-CentOS 7) and should be set to either 0 or 2, with 2 being more secure. This is
+CentOS 7 and EL 8) and should be set to either 0 or 2, with 2 being more secure. This is
 true even if the configuration uses a single logical subnet.
 
 ```

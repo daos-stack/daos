@@ -522,7 +522,7 @@ class TestWithTelemetryIOLatency(IorTestBase, TestWithTelemetry):
             size.
 
         :avocado: tags=all,full_regression
-        :avocado: tags=hw,medium
+        :avocado: tags=hw,medium,ib2
         :avocado: tags=telemetry
         :avocado: tags=test_ior_latency_telemetry
 

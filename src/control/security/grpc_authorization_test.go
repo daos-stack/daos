@@ -90,6 +90,7 @@ func TestSecurity_ComponentHasAccess(t *testing.T) {
 		"/mgmt.MgmtSvc/ListContainers":         {ComponentAdmin},
 		"/mgmt.MgmtSvc/ContSetOwner":           {ComponentAdmin},
 		"/mgmt.MgmtSvc/SystemCleanup":          {ComponentAdmin},
+		"/mgmt.MgmtSvc/PoolUpgrade":            {ComponentAdmin},
 		"/RaftTransport/AppendEntries":         {ComponentServer},
 		"/RaftTransport/AppendEntriesPipeline": {ComponentServer},
 		"/RaftTransport/RequestVote":           {ComponentServer},

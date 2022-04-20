@@ -11,6 +11,7 @@ import (
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/pkg/errors"
 
 	"github.com/daos-stack/daos/src/control/common"
@@ -210,32 +211,32 @@ func TestAgent_localFabricCache_CacheScan(t *testing.T) {
 			lfc: newLocalFabricCache(nil, true),
 			input: hardware.NewFabricInterfaceSet(
 				&hardware.FabricInterface{
-					Providers:   common.NewStringSet("ofi+sockets"),
-					Name:        "test0",
-					OSDevice:    "os_test0",
-					NUMANode:    1,
-					DeviceClass: hardware.Ether,
+					Providers:    common.NewStringSet("ofi+sockets"),
+					Name:         "test0",
+					NetInterface: "os_test0",
+					NUMANode:     1,
+					DeviceClass:  hardware.Ether,
 				},
 				&hardware.FabricInterface{
-					Providers:   common.NewStringSet("ofi+verbs"),
-					Name:        "test1",
-					OSDevice:    "os_test1",
-					NUMANode:    0,
-					DeviceClass: hardware.Infiniband,
+					Providers:    common.NewStringSet("ofi+verbs"),
+					Name:         "test1",
+					NetInterface: "os_test1",
+					NUMANode:     0,
+					DeviceClass:  hardware.Infiniband,
 				},
 				&hardware.FabricInterface{
-					Providers:   common.NewStringSet("ofi+sockets"),
-					Name:        "test2",
-					OSDevice:    "os_test2",
-					NUMANode:    0,
-					DeviceClass: hardware.Ether,
+					Providers:    common.NewStringSet("ofi+sockets"),
+					Name:         "test2",
+					NetInterface: "os_test2",
+					NUMANode:     0,
+					DeviceClass:  hardware.Ether,
 				},
 				&hardware.FabricInterface{
-					Providers:   common.NewStringSet("ofi+sockets"),
-					Name:        "lo",
-					OSDevice:    "lo",
-					NUMANode:    0,
-					DeviceClass: hardware.Loopback,
+					Providers:    common.NewStringSet("ofi+sockets"),
+					Name:         "lo",
+					NetInterface: "lo",
+					NUMANode:     0,
+					DeviceClass:  hardware.Loopback,
 				},
 			),
 			expCached: true,
@@ -245,21 +246,38 @@ func TestAgent_localFabricCache_CacheScan(t *testing.T) {
 
 						{
 							Name:        "lo",
-							Domain:      "lo",
 							NetDevClass: hardware.Loopback,
-							Providers:   []string{"ofi+sockets"},
+							hw: &hardware.FabricInterface{
+								Providers:    common.NewStringSet("ofi+sockets"),
+								Name:         "lo",
+								NetInterface: "lo",
+								NUMANode:     0,
+								DeviceClass:  hardware.Loopback,
+							},
 						},
 						{
 							Name:        "os_test1",
 							Domain:      "test1",
 							NetDevClass: hardware.Infiniband,
-							Providers:   []string{"ofi+verbs"},
+							hw: &hardware.FabricInterface{
+								Providers:    common.NewStringSet("ofi+verbs"),
+								Name:         "test1",
+								NetInterface: "os_test1",
+								NUMANode:     0,
+								DeviceClass:  hardware.Infiniband,
+							},
 						},
 						{
 							Name:        "os_test2",
 							Domain:      "test2",
 							NetDevClass: hardware.Ether,
-							Providers:   []string{"ofi+sockets"},
+							hw: &hardware.FabricInterface{
+								Providers:    common.NewStringSet("ofi+sockets"),
+								Name:         "test2",
+								NetInterface: "os_test2",
+								NUMANode:     0,
+								DeviceClass:  hardware.Ether,
+							},
 						},
 					},
 					1: {
@@ -267,7 +285,13 @@ func TestAgent_localFabricCache_CacheScan(t *testing.T) {
 							Name:        "os_test0",
 							Domain:      "test0",
 							NetDevClass: hardware.Ether,
-							Providers:   []string{"ofi+sockets"},
+							hw: &hardware.FabricInterface{
+								Providers:    common.NewStringSet("ofi+sockets"),
+								Name:         "test0",
+								NetInterface: "os_test0",
+								NUMANode:     1,
+								DeviceClass:  hardware.Ether,
+							},
 						},
 					},
 				},
@@ -291,7 +315,7 @@ func TestAgent_localFabricCache_CacheScan(t *testing.T) {
 			}
 
 			if tc.expCached {
-				if diff := cmp.Diff(tc.expResult.numaMap, tc.lfc.localNUMAFabric.numaMap); diff != "" {
+				if diff := cmp.Diff(tc.expResult.numaMap, tc.lfc.localNUMAFabric.numaMap, cmp.AllowUnexported(FabricInterface{})); diff != "" {
 					t.Fatalf("-want, +got:\n%s", diff)
 				}
 			} else if len(tc.lfc.localNUMAFabric.numaMap) > 0 {
@@ -364,7 +388,7 @@ func TestAgent_localFabricCache_Cache(t *testing.T) {
 			}
 
 			if tc.expCached {
-				if diff := cmp.Diff(tc.input.numaMap, tc.lfc.localNUMAFabric.numaMap); diff != "" {
+				if diff := cmp.Diff(tc.input.numaMap, tc.lfc.localNUMAFabric.numaMap, cmp.AllowUnexported(FabricInterface{})); diff != "" {
 					t.Fatalf("-want, +got:\n%s", diff)
 				}
 			} else if len(tc.lfc.localNUMAFabric.numaMap) > 0 {
@@ -378,51 +402,51 @@ func TestAgent_localFabricCache_GetDevice(t *testing.T) {
 	populatedCache := &NUMAFabric{
 		numaMap: map[int][]*FabricInterface{
 			0: {
-				{
-					Name:        "test1",
-					NetDevClass: hardware.Infiniband,
-					Domain:      "test1_alias",
-					Providers:   []string{"ofi+verbs"},
-				},
-				{
-					Name:        "test2",
-					NetDevClass: hardware.Ether,
-					Domain:      "test2_alias",
-					Providers:   []string{"ofi+sockets"},
-				},
+				fabricInterfaceFromHardware(&hardware.FabricInterface{
+					NetInterface: "test1",
+					DeviceClass:  hardware.Infiniband,
+					Name:         "test1_alias",
+					Providers:    common.NewStringSet("ofi+verbs"),
+				}),
+				fabricInterfaceFromHardware(&hardware.FabricInterface{
+					NetInterface: "test2",
+					DeviceClass:  hardware.Ether,
+					Name:         "test2_alias",
+					Providers:    common.NewStringSet("ofi+sockets"),
+				}),
 			},
 			1: {
-				{
-					Name:        "test3",
-					NetDevClass: hardware.Infiniband,
-					Domain:      "test3_alias",
-					Providers:   []string{"ofi+verbs"},
-				},
-				{
-					Name:        "test4",
-					NetDevClass: hardware.Infiniband,
-					Domain:      "test4_alias",
-					Providers:   []string{"ofi+verbs"},
-				},
-				{
-					Name:        "test5",
-					NetDevClass: hardware.Ether,
-					Domain:      "test5_alias",
-					Providers:   []string{"ofi+sockets"},
-				},
+				fabricInterfaceFromHardware(&hardware.FabricInterface{
+					NetInterface: "test3",
+					DeviceClass:  hardware.Infiniband,
+					Name:         "test3_alias",
+					Providers:    common.NewStringSet("ofi+verbs"),
+				}),
+				fabricInterfaceFromHardware(&hardware.FabricInterface{
+					NetInterface: "test4",
+					DeviceClass:  hardware.Infiniband,
+					Name:         "test4_alias",
+					Providers:    common.NewStringSet("ofi+verbs"),
+				}),
+				fabricInterfaceFromHardware(&hardware.FabricInterface{
+					NetInterface: "test5",
+					DeviceClass:  hardware.Ether,
+					Name:         "test5_alias",
+					Providers:    common.NewStringSet("ofi+sockets"),
+				}),
 			},
 			2: {
-				{
-					Name:        "test6",
-					NetDevClass: hardware.Ether,
-					Providers:   []string{"ofi+sockets"},
-				},
-				{
-					Name:        "test7",
-					NetDevClass: hardware.Ether,
-					Domain:      "test7_alias",
-					Providers:   []string{"ofi+sockets", "ofi+verbs"},
-				},
+				fabricInterfaceFromHardware(&hardware.FabricInterface{
+					NetInterface: "test6",
+					DeviceClass:  hardware.Ether,
+					Providers:    common.NewStringSet("ofi+sockets"),
+				}),
+				fabricInterfaceFromHardware(&hardware.FabricInterface{
+					NetInterface: "test7",
+					DeviceClass:  hardware.Ether,
+					Name:         "test7_alias",
+					Providers:    common.NewStringSet("ofi+sockets", "ofi+verbs"),
+				}),
 			},
 		},
 	}
@@ -451,7 +475,6 @@ func TestAgent_localFabricCache_GetDevice(t *testing.T) {
 				Name:        "test7",
 				NetDevClass: hardware.Ether,
 				Domain:      "test7_alias",
-				Providers:   []string{"ofi+sockets", "ofi+verbs"},
 			},
 		},
 		"request sockets": {
@@ -463,7 +486,6 @@ func TestAgent_localFabricCache_GetDevice(t *testing.T) {
 				Name:        "test2",
 				NetDevClass: hardware.Ether,
 				Domain:      "test2_alias",
-				Providers:   []string{"ofi+sockets"},
 			},
 		},
 	} {
@@ -485,7 +507,7 @@ func TestAgent_localFabricCache_GetDevice(t *testing.T) {
 			dev, err := tc.lfc.GetDevice(tc.numaNode, tc.netDevClass, tc.provider)
 
 			common.CmpErr(t, tc.expErr, err)
-			if diff := cmp.Diff(tc.expDevice, dev); diff != "" {
+			if diff := cmp.Diff(tc.expDevice, dev, cmpopts.IgnoreUnexported(FabricInterface{})); diff != "" {
 				t.Fatalf("-want, +got:\n%s", diff)
 			}
 		})

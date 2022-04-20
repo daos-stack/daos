@@ -145,7 +145,7 @@ scons: Reading SConscript files ...
 
 INCLUDE: Optional components to build
     (all|none|comma-separated list of names)
-    allowed names: psm2 psm3
+    allowed names: psm2
     default: none
     actual:
 ```

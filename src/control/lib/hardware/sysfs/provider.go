@@ -234,6 +234,7 @@ func (s *Provider) getCXIFabricInterfaces() ([]*hardware.FabricInterface, error)
 	for _, dev := range cxiDevs {
 		cxiFIs = append(cxiFIs, &hardware.FabricInterface{
 			Name:      dev.Name(),
+			OSName:    dev.Name(),
 			Providers: common.NewStringSet("ofi+cxi"),
 		})
 	}

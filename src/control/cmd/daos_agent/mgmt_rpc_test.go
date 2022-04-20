@@ -59,12 +59,12 @@ func TestAgent_mgmtModule_getAttachInfo(t *testing.T) {
 		return result
 	}
 
-	testFI := &FabricInterface{
-		Name:        "test0",
-		Domain:      "test0",
-		NetDevClass: hardware.Ether,
-		Providers:   []string{"ofi+tcp"},
-	}
+	testFI := fabricInterfaceFromHardware(&hardware.FabricInterface{
+		Name:         "test0",
+		NetInterface: "test0",
+		DeviceClass:  hardware.Ether,
+		Providers:    common.NewStringSet("ofi+tcp"),
+	})
 
 	hintResp := func(resp *mgmtpb.GetAttachInfoResp) *mgmtpb.GetAttachInfoResp {
 		withHint := new(mgmtpb.GetAttachInfoResp)
@@ -150,12 +150,12 @@ func TestAgent_mgmtModule_getAttachInfo_Parallel(t *testing.T) {
 			log: log,
 			numaMap: map[int][]*FabricInterface{
 				0: {
-					&FabricInterface{
-						Name:        "test0",
-						Domain:      "test0",
-						NetDevClass: hardware.Ether,
-						Providers:   []string{"ofi+tcp"},
-					},
+					fabricInterfaceFromHardware(&hardware.FabricInterface{
+						Name:         "test0",
+						NetInterface: "test0",
+						DeviceClass:  hardware.Ether,
+						Providers:    common.NewStringSet("ofi+tcp"),
+					}),
 				},
 			},
 		}),

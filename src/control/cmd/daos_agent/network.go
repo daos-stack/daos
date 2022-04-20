@@ -12,13 +12,14 @@ import (
 	"strings"
 
 	"github.com/daos-stack/daos/src/control/cmd/dmg/pretty"
+	"github.com/daos-stack/daos/src/control/common/cmdutil"
 	"github.com/daos-stack/daos/src/control/lib/control"
 	"github.com/daos-stack/daos/src/control/lib/hardware"
 	"github.com/daos-stack/daos/src/control/lib/hardware/hwprov"
 )
 
 type netScanCmd struct {
-	logCmd
+	cmdutil.LogCmd
 	jsonOutputCmd
 	FabricProvider string `short:"p" long:"provider" description:"Filter device list to those that support the given OFI provider or 'all' for all available (default is all local providers)"`
 }
@@ -27,11 +28,11 @@ func (cmd *netScanCmd) printUnlessJson(fmtStr string, args ...interface{}) {
 	if cmd.jsonOutputEnabled() {
 		return
 	}
-	cmd.log.Infof(fmtStr, args...)
+	cmd.Infof(fmtStr, args...)
 }
 
 func (cmd *netScanCmd) Execute(_ []string) error {
-	fabricScanner := hwprov.DefaultFabricScanner(cmd.log)
+	fabricScanner := hwprov.DefaultFabricScanner(cmd.Logger)
 
 	results, err := fabricScanner.Scan(context.Background())
 	if err != nil {
@@ -56,7 +57,7 @@ func (cmd *netScanCmd) Execute(_ []string) error {
 	if err := pretty.PrintHostFabricMap(hfm, &bld); err != nil {
 		return err
 	}
-	cmd.log.Info(bld.String())
+	cmd.Info(bld.String())
 
 	return nil
 }
@@ -74,7 +75,7 @@ func fabricInterfaceSetToHostFabric(fis *hardware.FabricInterfaceSet, filterProv
 			continue
 		}
 
-		name := fi.OSDevice
+		name := fi.NetInterface
 		if name == "" {
 			name = fi.Name
 		}

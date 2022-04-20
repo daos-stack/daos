@@ -20,6 +20,17 @@
 /* The time (in second) threshold for batched DTX commit. */
 #define DTX_COMMIT_THRESHOLD_AGE	10
 
+/*
+ * VOS aggregation should try to avoid aggregating in the epoch range where
+ * lots of data records are pending to commit, so the aggregation epoch upper
+ * bound is: current HLC - (DTX batched commit threshold + buffer period)
+ *
+ * To avoid conflicting of aggregation vs. transactions, any transactional
+ * update/fetch with epoch lower than the aggregation upper bound should be
+ * rejected and restarted.
+ */
+#define DAOS_AGG_THRESHOLD	(DTX_COMMIT_THRESHOLD_AGE + 10) /* seconds */
+
 enum dtx_target_flags {
 	/* The target only contains read-only operations for the DTX. */
 	DTF_RDONLY			= (1 << 0),

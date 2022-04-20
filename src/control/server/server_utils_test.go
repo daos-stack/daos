@@ -255,8 +255,7 @@ func TestServer_prepBdevStorage(t *testing.T) {
 		hugePagesFree   int
 		bmbc            *bdev.MockBackendConfig
 		expPrepErr      error
-		expPrepCalls    []storage.BdevPrepareRequest
-		expResetCalls   []storage.BdevPrepareRequest
+		expPrepCall     *storage.BdevPrepareRequest
 		expMemChkErr    error
 		expMemSize      int
 		expHugePageSize int
@@ -286,17 +285,9 @@ func TestServer_prepBdevStorage(t *testing.T) {
 				return sc.WithNrHugePages(0).
 					WithEngines(scmEngine(0), scmEngine(1))
 			},
-			expResetCalls: []storage.BdevPrepareRequest{
-				{
-					Reset_:     true,
-					TargetUser: username,
-				},
-			},
-			expPrepCalls: []storage.BdevPrepareRequest{
-				{
-					HugePageCount: scanMinHugePageCount,
-					TargetUser:    username,
-				},
+			expPrepCall: &storage.BdevPrepareRequest{
+				HugePageCount: scanMinHugePageCount,
+				TargetUser:    username,
 			},
 		},
 		"no bdevs configured; nr_hugepages set": {
@@ -304,17 +295,9 @@ func TestServer_prepBdevStorage(t *testing.T) {
 				return sc.WithNrHugePages(1024).
 					WithEngines(scmEngine(0), scmEngine(1))
 			},
-			expResetCalls: []storage.BdevPrepareRequest{
-				{
-					Reset_:     true,
-					TargetUser: username,
-				},
-			},
-			expPrepCalls: []storage.BdevPrepareRequest{
-				{
-					HugePageCount: 1024,
-					TargetUser:    username,
-				},
+			expPrepCall: &storage.BdevPrepareRequest{
+				HugePageCount: 1024,
+				TargetUser:    username,
 			},
 		},
 		"2 engines both numa 0; hugepage alloc only on numa 0": {
@@ -325,27 +308,13 @@ func TestServer_prepBdevStorage(t *testing.T) {
 					WithBdevExclude(common.MockPCIAddr(1))
 			},
 			hugePagesFree: 16384,
-			// with reset set to false in request, two calls will be made to
-			// bdev backend prepare, one to reset device bindings and hugepage
-			// allocations and another to set them as requested
-			expResetCalls: []storage.BdevPrepareRequest{
-				{
-					Reset_:     true,
-					TargetUser: username,
-					PCIAllowList: fmt.Sprintf("%s%s%s", common.MockPCIAddr(1),
-						storage.BdevPciAddrSep, common.MockPCIAddr(2)),
-					PCIBlockList: common.MockPCIAddr(1),
-				},
-			},
-			expPrepCalls: []storage.BdevPrepareRequest{
-				{
-					HugePageCount: 16386, // 2 extra huge pages requested
-					HugeNodes:     "0",
-					TargetUser:    username,
-					PCIAllowList: fmt.Sprintf("%s%s%s", common.MockPCIAddr(1),
-						storage.BdevPciAddrSep, common.MockPCIAddr(2)),
-					PCIBlockList: common.MockPCIAddr(1),
-				},
+			expPrepCall: &storage.BdevPrepareRequest{
+				HugePageCount: 16386, // 2 extra huge pages requested
+				HugeNodes:     "0",
+				TargetUser:    username,
+				PCIAllowList: fmt.Sprintf("%s%s%s", common.MockPCIAddr(1),
+					storage.BdevPciAddrSep, common.MockPCIAddr(2)),
+				PCIBlockList: common.MockPCIAddr(1),
 			},
 			expMemSize:      16384,
 			expHugePageSize: 2,
@@ -356,18 +325,10 @@ func TestServer_prepBdevStorage(t *testing.T) {
 					WithEngines(nvmeEngine(0).WithPinnedNumaNode(1), nvmeEngine(1))
 			},
 			hugePagesFree: 16384,
-			expResetCalls: []storage.BdevPrepareRequest{
-				{
-					Reset_:     true,
-					TargetUser: username,
-				},
-			},
-			expPrepCalls: []storage.BdevPrepareRequest{
-				{
-					HugePageCount: 16386,
-					HugeNodes:     "1",
-					TargetUser:    username,
-				},
+			expPrepCall: &storage.BdevPrepareRequest{
+				HugePageCount: 16386,
+				HugeNodes:     "1",
+				TargetUser:    username,
 			},
 			expMemSize:      16384,
 			expHugePageSize: 2,
@@ -378,18 +339,10 @@ func TestServer_prepBdevStorage(t *testing.T) {
 					WithEngines(nvmeEngine(0), nvmeEngine(1))
 			},
 			hugePagesFree: 16384,
-			expResetCalls: []storage.BdevPrepareRequest{
-				{
-					Reset_:     true,
-					TargetUser: username,
-				},
-			},
-			expPrepCalls: []storage.BdevPrepareRequest{
-				{
-					HugePageCount: 8194, // 2 extra huge pages requested per-engine
-					HugeNodes:     "0,1",
-					TargetUser:    username,
-				},
+			expPrepCall: &storage.BdevPrepareRequest{
+				HugePageCount: 8194, // 2 extra huge pages requested per-engine
+				HugeNodes:     "0,1",
+				TargetUser:    username,
 			},
 			expMemSize:      16384,
 			expHugePageSize: 2,
@@ -400,96 +353,49 @@ func TestServer_prepBdevStorage(t *testing.T) {
 					WithEngines(nvmeEngine(0), nvmeEngine(1))
 			},
 			hugePagesFree: 8191,
-			expResetCalls: []storage.BdevPrepareRequest{
-				{
-					Reset_:     true,
-					TargetUser: username,
-				},
-			},
-			expPrepCalls: []storage.BdevPrepareRequest{
-				{
-					HugePageCount: 8194,
-					HugeNodes:     "0,1",
-					TargetUser:    username,
-				},
+			expPrepCall: &storage.BdevPrepareRequest{
+				HugePageCount: 8194,
+				HugeNodes:     "0,1",
+				TargetUser:    username,
 			},
 			expMemChkErr: errors.New("0: want 16 GiB (8192 hugepages), got 16 GiB (8191"),
 		},
 		"2 engines; scm only; nr_hugepages unset": {
 			hugePagesFree: 128,
-			expResetCalls: []storage.BdevPrepareRequest{
-				{
-					Reset_:     true,
-					TargetUser: username,
-				},
-			},
-			expPrepCalls: []storage.BdevPrepareRequest{
-				{
-					HugePageCount: 128,
-					TargetUser:    username,
-				},
+			expPrepCall: &storage.BdevPrepareRequest{
+				HugePageCount: 128,
+				TargetUser:    username,
 			},
 		},
 		"2 engines; scm only; nr_hugepages unset; insufficient free": {
 			hugePagesFree: 0,
-			expResetCalls: []storage.BdevPrepareRequest{
-				{
-					Reset_:     true,
-					TargetUser: username,
-				},
-			},
-			expPrepCalls: []storage.BdevPrepareRequest{
-				{
-					HugePageCount: 128,
-					TargetUser:    username,
-				},
+			expPrepCall: &storage.BdevPrepareRequest{
+				HugePageCount: 128,
+				TargetUser:    username,
 			},
 			expMemChkErr: errors.New("requested 128 hugepages; got 0"),
 		},
 		"0 engines; nr_hugepages unset": {
 			hugePagesFree: 128,
-			expResetCalls: []storage.BdevPrepareRequest{
-				{
-					Reset_:     true,
-					TargetUser: username,
-				},
-			},
-			expPrepCalls: []storage.BdevPrepareRequest{
-				{
-					HugePageCount: 128,
-					TargetUser:    username,
-				},
+			expPrepCall: &storage.BdevPrepareRequest{
+				HugePageCount: 128,
+				TargetUser:    username,
 			},
 		},
 		"0 engines; nr_hugepages unset; insufficient free": {
 			hugePagesFree: 0,
-			expResetCalls: []storage.BdevPrepareRequest{
-				{
-					Reset_:     true,
-					TargetUser: username,
-				},
+			expPrepCall: &storage.BdevPrepareRequest{
+				HugePageCount: 128,
+				TargetUser:    username,
 			},
-			expPrepCalls: []storage.BdevPrepareRequest{
-				{
-					HugePageCount: 128,
-					TargetUser:    username,
-				},
-			},
+
 			expMemChkErr: errors.New("requested 128 hugepages; got 0"),
 		},
 		"0 engines; nr_hugepages unset; hpi fetch fails": {
 			getHpiErr: errors.New("could not find hugepage info"),
-			expResetCalls: []storage.BdevPrepareRequest{
-				{
-					Reset_:     true,
-					TargetUser: username,
-				},
-			},
-			expPrepCalls: []storage.BdevPrepareRequest{
-				{
-					HugePageCount: 128,
-					TargetUser:    username,
-				},
+			expPrepCall: &storage.BdevPrepareRequest{
+				HugePageCount: 128,
+				TargetUser:    username,
 			},
 		},
 		"1 engine; nr_hugepages unset; hpi fetch fails": {
@@ -498,18 +404,10 @@ func TestServer_prepBdevStorage(t *testing.T) {
 					WithEngines(nvmeEngine(0))
 			},
 			getHpiErr: errors.New("could not find hugepage info"),
-			expResetCalls: []storage.BdevPrepareRequest{
-				{
-					Reset_:     true,
-					TargetUser: username,
-				},
-			},
-			expPrepCalls: []storage.BdevPrepareRequest{
-				{
-					HugePageCount: 8194,
-					HugeNodes:     "0",
-					TargetUser:    username,
-				},
+			expPrepCall: &storage.BdevPrepareRequest{
+				HugePageCount: 8194,
+				HugeNodes:     "0",
+				TargetUser:    username,
 			},
 			expMemChkErr: errors.New("could not find hugepage info"),
 		},
@@ -525,24 +423,13 @@ func TestServer_prepBdevStorage(t *testing.T) {
 			bmbc: &bdev.MockBackendConfig{
 				ResetErr: errors.New("backed prep reset failed"),
 			},
-			expResetCalls: []storage.BdevPrepareRequest{
-				{
-					Reset_:     true,
-					TargetUser: username,
-					PCIAllowList: fmt.Sprintf("%s%s%s", common.MockPCIAddr(1),
-						storage.BdevPciAddrSep, common.MockPCIAddr(2)),
-					PCIBlockList: common.MockPCIAddr(1),
-				},
-			},
-			expPrepCalls: []storage.BdevPrepareRequest{
-				{
-					HugePageCount: 8194,
-					HugeNodes:     "0,1",
-					TargetUser:    username,
-					PCIAllowList: fmt.Sprintf("%s%s%s", common.MockPCIAddr(1),
-						storage.BdevPciAddrSep, common.MockPCIAddr(2)),
-					PCIBlockList: common.MockPCIAddr(1),
-				},
+			expPrepCall: &storage.BdevPrepareRequest{
+				HugePageCount: 8194,
+				HugeNodes:     "0,1",
+				TargetUser:    username,
+				PCIAllowList: fmt.Sprintf("%s%s%s", common.MockPCIAddr(1),
+					storage.BdevPciAddrSep, common.MockPCIAddr(2)),
+				PCIBlockList: common.MockPCIAddr(1),
 			},
 			expMemSize:      16384,
 			expHugePageSize: 2,
@@ -559,27 +446,16 @@ func TestServer_prepBdevStorage(t *testing.T) {
 			bmbc: &bdev.MockBackendConfig{
 				ResetErr: errors.New("backed prep reset failed"),
 			},
-			expResetCalls: []storage.BdevPrepareRequest{
-				{
-					Reset_:     true,
-					TargetUser: username,
-					PCIAllowList: fmt.Sprintf("%s%s%s", common.MockPCIAddr(1),
-						storage.BdevPciAddrSep, common.MockPCIAddr(2)),
-					PCIBlockList: common.MockPCIAddr(1),
-					EnableVMD:    true,
-				},
+			expPrepCall: &storage.BdevPrepareRequest{
+				HugePageCount: 8194,
+				HugeNodes:     "0,1",
+				TargetUser:    username,
+				PCIAllowList: fmt.Sprintf("%s%s%s", common.MockPCIAddr(1),
+					storage.BdevPciAddrSep, common.MockPCIAddr(2)),
+				PCIBlockList: common.MockPCIAddr(1),
+				EnableVMD:    true,
 			},
-			expPrepCalls: []storage.BdevPrepareRequest{
-				{
-					HugePageCount: 8194,
-					HugeNodes:     "0,1",
-					TargetUser:    username,
-					PCIAllowList: fmt.Sprintf("%s%s%s", common.MockPCIAddr(1),
-						storage.BdevPciAddrSep, common.MockPCIAddr(2)),
-					PCIBlockList: common.MockPCIAddr(1),
-					EnableVMD:    true,
-				},
-			},
+
 			expMemSize:      16384,
 			expHugePageSize: 2,
 		},
@@ -618,14 +494,15 @@ func TestServer_prepBdevStorage(t *testing.T) {
 			gotErr := prepBdevStorage(srv, !tc.iommuDisabled)
 
 			mbb.RLock()
-			if diff := cmp.Diff(tc.expPrepCalls, mbb.PrepareCalls); diff != "" {
-				t.Fatalf("unexpected prepare calls (-want, +got):\n%s\n", diff)
-			}
-			mbb.RUnlock()
-
-			mbb.RLock()
-			if diff := cmp.Diff(tc.expResetCalls, mbb.ResetCalls); diff != "" {
-				t.Fatalf("unexpected reset calls (-want, +got):\n%s\n", diff)
+			if tc.expPrepCall != nil {
+				if len(mbb.PrepareCalls) != 1 {
+					t.Fatalf("expected prepare to be called once")
+				}
+				if diff := cmp.Diff(*tc.expPrepCall, mbb.PrepareCalls[0]); diff != "" {
+					t.Fatalf("unexpected prepare calls (-want, +got):\n%s\n", diff)
+				}
+			} else if len(mbb.PrepareCalls) != 0 {
+				t.Fatalf("expected prepare not to be called")
 			}
 			mbb.RUnlock()
 
@@ -795,30 +672,30 @@ func TestServer_getNetDevClass(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			fis := hardware.NewFabricInterfaceSet(
 				&hardware.FabricInterface{
-					Name:        "eth0",
-					OSDevice:    "eth0",
-					DeviceClass: hardware.Ether,
-					Providers:   common.NewStringSet("test"),
+					Name:         "eth0",
+					NetInterface: "eth0",
+					DeviceClass:  hardware.Ether,
+					Providers:    common.NewStringSet("test"),
 				},
 				&hardware.FabricInterface{
-					Name:        "eth1",
-					OSDevice:    "eth1",
-					DeviceClass: hardware.Ether,
-					NUMANode:    1,
-					Providers:   common.NewStringSet("test"),
+					Name:         "eth1",
+					NetInterface: "eth1",
+					DeviceClass:  hardware.Ether,
+					NUMANode:     1,
+					Providers:    common.NewStringSet("test"),
 				},
 				&hardware.FabricInterface{
-					Name:        "ib0",
-					OSDevice:    "ib0",
-					DeviceClass: hardware.Infiniband,
-					Providers:   common.NewStringSet("test"),
+					Name:         "ib0",
+					NetInterface: "ib0",
+					DeviceClass:  hardware.Infiniband,
+					Providers:    common.NewStringSet("test"),
 				},
 				&hardware.FabricInterface{
-					Name:        "ib1",
-					OSDevice:    "ib1",
-					DeviceClass: hardware.Infiniband,
-					NUMANode:    1,
-					Providers:   common.NewStringSet("test"),
+					Name:         "ib1",
+					NetInterface: "ib1",
+					DeviceClass:  hardware.Infiniband,
+					NUMANode:     1,
+					Providers:    common.NewStringSet("test"),
 				},
 			)
 

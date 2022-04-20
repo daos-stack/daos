@@ -510,10 +510,12 @@ func TestSysfs_Provider_GetFabricInterfaces(t *testing.T) {
 			expResult: hardware.NewFabricInterfaceSet(
 				&hardware.FabricInterface{
 					Name:      "cxi0",
+					OSName:    "cxi0",
 					Providers: common.NewStringSet("ofi+cxi"),
 				},
 				&hardware.FabricInterface{
 					Name:      "cxi1",
+					OSName:    "cxi1",
 					Providers: common.NewStringSet("ofi+cxi"),
 				},
 			),

@@ -844,7 +844,7 @@ rdb_tx_apply(struct rdb *db, uint64_t index, const void *buf, size_t len,
 	if (rc != 0) {
 		D_ERROR(DF_DB": could not query free space: "DF_RC"\n",
 			DP_DB(db), DP_RC(rc));
-		goto err_checks;
+		return rc;
 	}
 
 	if (buf) {
@@ -855,7 +855,7 @@ rdb_tx_apply(struct rdb *db, uint64_t index, const void *buf, size_t len,
 			D_ERROR(DF_DB": invalid header: buf=%p, len="DF_U64"\n",
 				DP_DB(db), buf, sizeof(struct rdb_tx_hdr));
 			rc = n;
-			goto err_checks;
+			return rc;
 		}
 		p += n;
 		crit = hdr.critical;
@@ -893,13 +893,12 @@ rdb_tx_apply(struct rdb *db, uint64_t index, const void *buf, size_t len,
 					index, op.dto_opc, p - buf, n, rc);
 			break;
 		}
-
 		p += n;
 	}
 
-err_checks:
 	/*
-	 * If an error occurs, empty the rdb_kvs cache (to evict any rdb_kvs
+	 * If an error occurs after we have potentially made some
+	 * modifications, empty the rdb_kvs cache (to evict any rdb_kvs
 	 * objects corresponding to KVSs created by this TX) and discard all
 	 * updates in index. Don't bother with undoing the exact set of changes
 	 * made by this TX, as nondeterministic errors must be rare and
