@@ -410,41 +410,6 @@ pipeline {
                         }
                     }
                 }
-                stage('Build DEB on Ubuntu 20.04') {
-                    when {
-                        beforeAgent true
-                        expression { ! skipStage() }
-                    }
-                    agent {
-                        dockerfile {
-                            filename 'Dockerfile.ubuntu.20.04'
-                            dir 'utils/rpms/packaging'
-                            label 'docker_runner'
-                            additionalBuildArgs dockerBuildArgs()
-                            args  '--cap-add=SYS_ADMIN --privileged=true'
-                        }
-                    }
-                    steps {
-                        buildRpm()
-                    }
-                    post {
-                        success {
-                            buildRpmPost condition: 'success'
-                        }
-                        unstable {
-                            buildRpmPost condition: 'unstable'
-                        }
-                        failure {
-                            buildRpmPost condition: 'failure'
-                        }
-                        unsuccessful {
-                            buildRpmPost condition: 'unsuccessful'
-                        }
-                        cleanup {
-                            buildRpmPost condition: 'cleanup'
-                        }
-                    }
-                }
                 stage('Build on CentOS 7') {
                     when {
                         beforeAgent true
@@ -627,7 +592,7 @@ pipeline {
                                                      'covc_vm_test/**']
                         }
                     }
-                } // stage('Unit test  Bullseye')
+                } // stage('Unit test Bullseye')
                 stage('Unit Test with memcheck') {
                     when {
                       beforeAgent true
