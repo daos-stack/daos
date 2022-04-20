@@ -13,8 +13,6 @@ server_config:
   name: daos_server
   servers:
     targets: 2
-    env_vars:
-     - DD_MASK=mgmt,io,md,epc,rebuild,trace
 pool:
   mode: 511
   name: daos_server
