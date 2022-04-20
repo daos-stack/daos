@@ -81,7 +81,10 @@ crt_proc_prop_entries(crt_proc_t proc, crt_proc_op_t proc_op, daos_prop_t *prop)
 		rc = crt_proc_uint32_t(proc, proc_op, &entry->dpe_type);
 		if (rc)
 			break;
-		rc = crt_proc_uint32_t(proc, proc_op, &entry->dpe_reserv);
+		rc = crt_proc_uint16_t(proc, proc_op, &entry->dpe_flags);
+		if (rc)
+			break;
+		rc = crt_proc_uint16_t(proc, proc_op, &entry->dpe_reserv);
 		if (rc)
 			break;
 

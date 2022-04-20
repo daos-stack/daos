@@ -116,7 +116,7 @@ func (svc *mgmtSvc) getPoolServiceRanks(ps *system.PoolService) ([]uint32, error
 		if err != nil {
 			return nil, err
 		}
-		if m.State()&system.AvailableMemberFilter == 0 {
+		if m.State&system.AvailableMemberFilter == 0 {
 			continue
 		}
 		readyRanks = append(readyRanks, r)
@@ -543,18 +543,20 @@ func (svc *mgmtSvc) PoolDestroy(ctx context.Context, req *mgmtpb.PoolDestroyReq)
 		ds := drpc.DaosStatus(evresp.Status)
 		svc.log.Debugf("MgmtSvc.PoolDestroy drpc.MethodPoolEvict, evresp:%+v\n", evresp)
 
-		// Transition pool state (unless evict returned busy, and not force destroying).
-		if !(ds == drpc.DaosBusy && !req.Force) {
-			ps.State = system.PoolServiceStateDestroying
-			if err := svc.sysdb.UpdatePoolService(ps); err != nil {
-				return nil, errors.Wrapf(err, "failed to update pool %s", uuid)
-			}
-		}
-
 		// If the destroy request is being forced, we should additionally zap the label
 		// so the entry doesn't prevent a new pool with the same label from being created.
 		if req.Force {
 			ps.PoolLabel = ""
+		}
+
+		// If the request is being forced, or the evict request did not fail
+		// due to the pool being busy, then transition to the destroying state
+		// and persist the update(s).
+		if req.Force || ds != drpc.DaosBusy {
+			ps.State = system.PoolServiceStateDestroying
+			if err := svc.sysdb.UpdatePoolService(ps); err != nil {
+				return nil, errors.Wrapf(err, "failed to update pool %s", uuid)
+			}
 		}
 
 		if ds != drpc.DaosSuccess {
@@ -752,6 +754,28 @@ func (svc *mgmtSvc) PoolQuery(ctx context.Context, req *mgmtpb.PoolQueryReq) (*m
 	}
 
 	svc.log.Debugf("MgmtSvc.PoolQuery dispatch, resp:%+v\n", resp)
+
+	return resp, nil
+}
+
+// PoolUpgrade forwards a pool upgrade request to the I/O Engine.
+func (svc *mgmtSvc) PoolUpgrade(ctx context.Context, req *mgmtpb.PoolUpgradeReq) (*mgmtpb.PoolUpgradeResp, error) {
+	if err := svc.checkLeaderRequest(req); err != nil {
+		return nil, err
+	}
+	svc.log.Debugf("MgmtSvc.PoolUpgrade dispatch, req:%+v\n", req)
+
+	dresp, err := svc.makePoolServiceCall(ctx, drpc.MethodPoolUpgrade, req)
+	if err != nil {
+		return nil, err
+	}
+
+	resp := &mgmtpb.PoolUpgradeResp{}
+	if err = proto.Unmarshal(dresp.Body, resp); err != nil {
+		return nil, errors.Wrap(err, "unmarshal PoolUpgrade response")
+	}
+
+	svc.log.Debugf("MgmtSvc.PoolUpgrade dispatch, resp:%+v\n", resp)
 
 	return resp, nil
 }
@@ -995,7 +1019,7 @@ func (svc *mgmtSvc) ListPools(ctx context.Context, req *mgmtpb.ListPoolsReq) (*m
 	}
 	svc.log.Debugf("MgmtSvc.ListPools dispatch, req:%+v\n", req)
 
-	psList, err := svc.sysdb.PoolServiceList(false)
+	psList, err := svc.sysdb.PoolServiceList(true)
 	if err != nil {
 		return nil, err
 	}
@@ -1006,6 +1030,7 @@ func (svc *mgmtSvc) ListPools(ctx context.Context, req *mgmtpb.ListPoolsReq) (*m
 			Uuid:    ps.PoolUUID.String(),
 			Label:   ps.PoolLabel,
 			SvcReps: system.RanksToUint32(ps.Replicas),
+			State:   ps.State.String(),
 		})
 	}
 

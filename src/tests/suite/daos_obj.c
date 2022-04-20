@@ -1958,7 +1958,7 @@ punch_simple_internal(void **state, daos_obj_id_t oid)
 		D_FREE(dkeys[i]);
 
 	ioreq_fini(&req);
-	MPI_Barrier(MPI_COMM_WORLD);
+	par_barrier(PAR_COMM_WORLD);
 }
 
 #define MANYREC_NUMRECS	5
@@ -2619,7 +2619,7 @@ tx_discard(void **state)
 	int		 i, t;
 	int		 rc;
 
-	MPI_Barrier(MPI_COMM_WORLD);
+	par_barrier(PAR_COMM_WORLD);
 
 	D_ALLOC(rec_nvme, IO_SIZE_NVME);
 	assert_non_null(rec_nvme);
@@ -2669,7 +2669,7 @@ tx_discard(void **state)
 		}
 		insert(dkey, nakeys, (const char **)akey, rec_size, rx_nr,
 		       offset, (void **)rec, th[t], &req);
-		MPI_Barrier(MPI_COMM_WORLD);
+		par_barrier(PAR_COMM_WORLD);
 	}
 
 	for (t = 0; t < 3; t++) {
@@ -2683,7 +2683,7 @@ tx_discard(void **state)
 			rc = daos_tx_commit(th[t], NULL);
 			assert_int_equal(rc, 0);
 		}
-		MPI_Barrier(MPI_COMM_WORLD);
+		par_barrier(PAR_COMM_WORLD);
 	}
 
 	/** Check the three transactions. */
@@ -2721,7 +2721,7 @@ tx_discard(void **state)
 	}
 
 	/** Close and reopen the container and the obj. */
-	MPI_Barrier(MPI_COMM_WORLD);
+	par_barrier(PAR_COMM_WORLD);
 	close_reopen_coh_oh(arg, &req, oid);
 
 	/** Verify record is the same as the last committed transaction. */
@@ -2757,7 +2757,7 @@ tx_discard(void **state)
 	D_FREE(rec_scm);
 
 	ioreq_fini(&req);
-	MPI_Barrier(MPI_COMM_WORLD);
+	par_barrier(PAR_COMM_WORLD);
 #endif
 }
 
@@ -2798,7 +2798,7 @@ tx_commit(void **state)
 	int		 i, t;
 	int		 rc;
 
-	MPI_Barrier(MPI_COMM_WORLD);
+	par_barrier(PAR_COMM_WORLD);
 
 	D_ALLOC(rec_nvme, IO_SIZE_NVME);
 	assert_non_null(rec_nvme);
@@ -2847,7 +2847,7 @@ tx_commit(void **state)
 		}
 		insert(dkey, nakeys, (const char **)akey, /*iod_size*/rec_size,
 			rx_nr, offset, (void **)rec, th[t], &req);
-		MPI_Barrier(MPI_COMM_WORLD);
+		par_barrier(PAR_COMM_WORLD);
 	}
 
 	/** Check the three transactions. */
@@ -2874,7 +2874,7 @@ tx_commit(void **state)
 		}
 	}
 
-	MPI_Barrier(MPI_COMM_WORLD);
+	par_barrier(PAR_COMM_WORLD);
 
 	/** Commit only the first 2 transactions */
 	for (t = 0; t < 3; t++) {
@@ -2889,7 +2889,7 @@ tx_commit(void **state)
 		}
 		rc = daos_tx_close(th[t], NULL);
 		assert_int_equal(rc, 0);
-		MPI_Barrier(MPI_COMM_WORLD);
+		par_barrier(PAR_COMM_WORLD);
 	}
 
 	/** Close and reopen the container and the obj */
@@ -2950,7 +2950,7 @@ tx_commit(void **state)
 	D_FREE(rec_scm);
 
 	ioreq_fini(&req);
-	MPI_Barrier(MPI_COMM_WORLD);
+	par_barrier(PAR_COMM_WORLD);
 #endif
 }
 
@@ -3101,7 +3101,7 @@ tgt_idx_change_retry(void **state)
 				     DAOS_OBJ_TGT_IDX_CHANGE,
 				     replica, NULL);
 	}
-	MPI_Barrier(MPI_COMM_WORLD);
+	par_barrier(PAR_COMM_WORLD);
 
 	ioreq_init(&req, arg->coh, oid, DAOS_IOD_ARRAY, arg);
 
@@ -3171,7 +3171,7 @@ tgt_idx_change_retry(void **state)
 		daos_debug_set_params(arg->group, -1, DMG_KEY_FAIL_LOC, 0,
 				     0, NULL);
 	}
-	MPI_Barrier(MPI_COMM_WORLD);
+	par_barrier(PAR_COMM_WORLD);
 	insert_wait(&req);
 
 	daos_fail_loc_set(DAOS_OBJ_SPECIAL_SHARD);
@@ -3201,7 +3201,7 @@ tgt_idx_change_retry(void **state)
 		daos_reint_server(arg->pool.pool_uuid, arg->group,
 				  arg->dmg_config, rank);
 	}
-	MPI_Barrier(MPI_COMM_WORLD);
+	par_barrier(PAR_COMM_WORLD);
 	ioreq_fini(&req);
 }
 
@@ -3240,7 +3240,7 @@ fetch_replica_unavail(void **state)
 		daos_exclude_server(arg->pool.pool_uuid, arg->group,
 				    arg->dmg_config, rank);
 	}
-	MPI_Barrier(MPI_COMM_WORLD);
+	par_barrier(PAR_COMM_WORLD);
 
 	/** Lookup */
 	buf = calloc(size, 1);
@@ -3263,7 +3263,7 @@ fetch_replica_unavail(void **state)
 
 	}
 	D_FREE(buf);
-	MPI_Barrier(MPI_COMM_WORLD);
+	par_barrier(PAR_COMM_WORLD);
 	ioreq_fini(&req);
 }
 
@@ -3490,7 +3490,7 @@ blob_unmap_trigger(void **state)
 	int		 i, t;
 	int		 rc;
 
-	MPI_Barrier(MPI_COMM_WORLD);
+	par_barrier(PAR_COMM_WORLD);
 
 	oid = daos_test_oid_gen(arg->coh, dts_obj_class, 0, 0, arg->myrank);
 	/* Tx discard only currently supports DAOS_IOD_SINGLE type */
@@ -3525,7 +3525,7 @@ blob_unmap_trigger(void **state)
 			assert_memory_equal(update_buf, fetch_buf,
 					    IO_SIZE_NVME);
 		}
-		MPI_Barrier(MPI_COMM_WORLD);
+		par_barrier(PAR_COMM_WORLD);
 	}
 
 	/* Discard the NVMe records (Discard second tx) */
@@ -3535,7 +3535,7 @@ blob_unmap_trigger(void **state)
 	rc = daos_tx_close(th[1], NULL);
 	assert_int_equal(rc, 0);
 
-	MPI_Barrier(MPI_COMM_WORLD);
+	par_barrier(PAR_COMM_WORLD);
 
 	/* Wait for >= VEA_MIGRATE_INTVL */
 	print_message("Wait for free extents to expire (15 sec)\n");
@@ -3563,7 +3563,7 @@ blob_unmap_trigger(void **state)
 	D_FREE(fetch_buf);
 	D_FREE(update_buf);
 	ioreq_fini(&req);
-	MPI_Barrier(MPI_COMM_WORLD);
+	par_barrier(PAR_COMM_WORLD);
 #endif
 }
 
@@ -3813,7 +3813,7 @@ io_pool_map_refresh_trigger(void **state)
 		daos_debug_set_params(arg->group, -1, DMG_KEY_FAIL_LOC,
 				 DAOS_FORCE_REFRESH_POOL_MAP | DAOS_FAIL_ONCE,
 				 0, NULL);
-	MPI_Barrier(MPI_COMM_WORLD);
+	par_barrier(PAR_COMM_WORLD);
 
 	ioreq_init(&req, arg->coh, oid, DAOS_IOD_ARRAY, arg);
 	/** Insert */
@@ -4014,7 +4014,7 @@ io_capa_iv_fetch(void **state)
 		daos_debug_set_params(arg->group, -1, DMG_KEY_FAIL_LOC,
 				 DAOS_FORCE_CAPA_FETCH | DAOS_FAIL_ONCE,
 				 0, NULL);
-	MPI_Barrier(MPI_COMM_WORLD);
+	par_barrier(PAR_COMM_WORLD);
 
 	ioreq_init(&req, arg->coh, oid, DAOS_IOD_ARRAY, arg);
 	/** Insert */
@@ -4716,6 +4716,26 @@ enum_recxs_with_aggregation(void **state)
 	enum_recxs_with_aggregation_internal(state, false);
 }
 
+static void
+io_tx_convert(void **state)
+{
+	test_arg_t	*arg = *state;
+	daos_obj_id_t	oid;
+	struct ioreq	req;
+
+	oid = daos_test_oid_gen(arg->coh, dts_obj_class, 0, 0, arg->myrank);
+	par_barrier(PAR_COMM_WORLD);
+
+	arg->fail_loc = DAOS_FAIL_TX_CONVERT | DAOS_FAIL_ALWAYS;
+	ioreq_init(&req, arg->coh, oid, DAOS_IOD_ARRAY, arg);
+	/** Insert */
+	insert_single("dkey", "akey", 0, "data",
+		      strlen("data") + 1, DAOS_TX_NONE, &req);
+
+	punch_obj(DAOS_TX_NONE, &req);
+	ioreq_fini(&req);
+}
+
 static const struct CMUnitTest io_tests[] = {
 	{ "IO1: simple update/fetch/verify",
 	  io_simple, async_disable, test_case_teardown},
@@ -4809,6 +4829,8 @@ static const struct CMUnitTest io_tests[] = {
 	  invalid_int_key_setting, async_disable, test_case_teardown},
 	{ "IO45: enum recxs with aggregation",
 	  enum_recxs_with_aggregation, async_disable, test_case_teardown},
+	{ "IO46: tx convert",
+	  io_tx_convert, async_disable, test_case_teardown},
 };
 
 int
@@ -4846,7 +4868,7 @@ run_daos_io_test(int rank, int size, int *sub_tests, int sub_tests_size)
 	char oclass[16] = {0};
 	char buf[32];
 
-	MPI_Barrier(MPI_COMM_WORLD);
+	par_barrier(PAR_COMM_WORLD);
 	if (sub_tests_size == 0) {
 		sub_tests_size = ARRAY_SIZE(io_tests);
 		sub_tests = NULL;
@@ -4863,6 +4885,6 @@ run_daos_io_test(int rank, int size, int *sub_tests, int sub_tests_size)
 				ARRAY_SIZE(io_tests), sub_tests, sub_tests_size,
 				obj_setup, test_teardown);
 
-	MPI_Barrier(MPI_COMM_WORLD);
+	par_barrier(PAR_COMM_WORLD);
 	return rc;
 }

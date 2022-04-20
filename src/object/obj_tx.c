@@ -1618,7 +1618,7 @@ dc_tx_commit_prepare(struct dc_tx *tx, tse_task_t *task)
 		if (grp_idx < 0)
 			D_GOTO(out, rc = grp_idx);
 
-		if (obj_is_ec(obj))
+		if (obj_is_ec(obj) && dcsr->dcsr_reasb != NULL)
 			bit_map = ((struct obj_reasb_req *)(dcsr->dcsr_reasb))->tgt_bitmap;
 		else
 			bit_map = NIL_BITMAP;
