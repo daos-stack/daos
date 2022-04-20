@@ -325,6 +325,13 @@ class ObjectMetadata(TestWithServers):
                 test_failed = True
         # Calculate the mean container count
         mean_cont_cnt = sum(containers_created) / len(containers_created)
+        percent_from_mean = int(mean_cont_cnt * (percent_cont / 100))
+        self.log.info(
+            "Mean number of containers created in %s loops: %s",
+            len(containers_created), mean_cont_cnt)
+        self.log.info(
+            "Max variation in number of containers from %s%% from mean: %s",
+            percent_cont, percent_from_mean)
 
         self.log.info("Summary")
         self.log.info("  Loop  Containers Created  Variation")
@@ -335,7 +342,6 @@ class ObjectMetadata(TestWithServers):
                 # Variation in the number of containers created
                 # should be less than %x from mean containers created
                 variation = abs(mean_cont_cnt - containers_created[loop - 1])
-                percent_from_mean = int(mean_cont_cnt * (percent_cont / 100))
                 if variation > percent_from_mean:
                     test_failed = True
                     variation = \
