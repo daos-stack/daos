@@ -90,7 +90,6 @@ daos_eq_lib_init()
 		D_GOTO(crt, rc);
 
 	eq_ref = 1;
-	ev_thpriv_is_init = false;
 
 unlock:
 	D_MUTEX_UNLOCK(&daos_eq_lock);
