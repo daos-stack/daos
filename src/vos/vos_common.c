@@ -12,6 +12,8 @@
 #define D_LOGFAC	DD_FAC(vos)
 
 #include <fcntl.h>
+#include <unistd.h>
+#include <sys/syscall.h>
 #include <daos/common.h>
 #include <daos/rpc.h>
 #include <daos/lru.h>
@@ -697,17 +699,42 @@ vos_self_nvme_init()
 	return rc;
 }
 
-static void
-vos_self_fini_locked(void)
-{
-	vos_self_nvme_fini();
-	vos_db_fini();
+enum {
+	VOS_INIT_NONE,
+	VOS_INIT_ABT,
+	VOS_INIT_TLS,
+	VOS_INIT_MOD,
+	VOS_INIT_DB,
+	VOS_INIT_DONE,
+};
 
-	if (self_mode.self_tls) {
-		vos_tls_fini(self_mode.self_tls);
-		self_mode.self_tls = NULL;
+static void
+vos_self_fini_locked(int stage)
+{
+	D_DEBUG(DB_TRACE, "thread=%d, stage=%d\n", (int)syscall(SYS_gettid), stage);
+	switch (stage) {
+	case VOS_INIT_DONE:
+		vos_self_nvme_fini();
+		/** fallthrough */
+	case VOS_INIT_MOD:
+		vos_mod_fini();
+		/** fallthrough */
+	case VOS_INIT_DB:
+		vos_db_fini();
+		/** fallthrough */
+	case VOS_INIT_TLS:
+		if (self_mode.self_tls) {
+			vos_tls_fini(self_mode.self_tls);
+			self_mode.self_tls = NULL;
+		}
+		/** fallthrough */
+	case VOS_INIT_ABT:
+		ABT_finalize();
+		break;
+	default:
+		/** Shouldn't happen in practice */
+		D_ASSERTF(0, "Unexpected stage %d\n", stage);
 	}
-	ABT_finalize();
 }
 
 void
@@ -720,11 +747,16 @@ vos_self_fini(void)
 
 	D_MUTEX_LOCK(&self_mode.self_lock);
 
+	D_DEBUG(DB_TRACE, "enter ref_count=%d, thread=%d\n", self_mode.self_ref,
+		(int)syscall(SYS_gettid));
+
 	D_ASSERT(self_mode.self_ref > 0);
 	self_mode.self_ref--;
 	if (self_mode.self_ref == 0)
-		vos_self_fini_locked();
+		vos_self_fini_locked(VOS_INIT_DONE);
 
+	D_DEBUG(DB_TRACE, "exit  ref_count=%d, thread=%d\n", self_mode.self_ref,
+		(int)syscall(SYS_gettid));
 	D_MUTEX_UNLOCK(&self_mode.self_lock);
 }
 
@@ -733,8 +765,11 @@ vos_self_init(const char *db_path)
 {
 	char	*evt_mode;
 	int	 rc = 0;
+	int	 stage = VOS_INIT_NONE;
 
 	D_MUTEX_LOCK(&self_mode.self_lock);
+	D_DEBUG(DB_TRACE, "enter ref_count=%d, thread=%d\n", self_mode.self_ref,
+		(int)syscall(SYS_gettid));
 	if (self_mode.self_ref) {
 		self_mode.self_ref++;
 		D_GOTO(out, rc);
@@ -745,6 +780,7 @@ vos_self_init(const char *db_path)
 		D_MUTEX_UNLOCK(&self_mode.self_lock);
 		return rc;
 	}
+	stage = VOS_INIT_ABT;
 
 	vos_start_epoch = 0;
 
@@ -756,14 +792,17 @@ vos_self_init(const char *db_path)
 		return rc;
 	}
 #endif
+	stage = VOS_INIT_TLS;
 	rc = vos_mod_init();
 	if (rc)
 		D_GOTO(failed, rc);
+	stage = VOS_INIT_MOD;
 
 	rc = vos_db_init(db_path, "self_db", true);
 	if (rc)
 		D_GOTO(failed, rc);
 
+	stage = VOS_INIT_DB;
 	rc = vos_self_nvme_init();
 	if (rc)
 		D_GOTO(failed, rc);
@@ -792,10 +831,12 @@ vos_self_init(const char *db_path)
 
 	self_mode.self_ref = 1;
 out:
+	D_DEBUG(DB_TRACE, "exit  ref_count=%d, thread=%d\n", self_mode.self_ref,
+		(int)syscall(SYS_gettid));
 	D_MUTEX_UNLOCK(&self_mode.self_lock);
 	return 0;
 failed:
-	vos_self_fini_locked();
+	vos_self_fini_locked(stage);
 	D_MUTEX_UNLOCK(&self_mode.self_lock);
 	return rc;
 }
