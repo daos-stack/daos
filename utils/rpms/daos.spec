@@ -26,8 +26,8 @@
 %endif
 
 Name:          daos
-Version:       2.3.100
-Release:       3%{?relval}%{?dist}
+Version:       2.1.101
+Release:       2%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       BSD-2-Clause-Patent
@@ -94,7 +94,7 @@ BuildRequires: libisa-l_crypto-devel
 BuildRequires: libisal-devel
 BuildRequires: libisal_crypto-devel
 %endif
-BuildRequires: daos-raft-devel = 0.9.1-1401.gc18bcb8%{?dist}
+BuildRequires: daos-raft-devel = 0.9.0-1394.gc81505f%{?dist}%{?dist}
 BuildRequires: openssl-devel
 BuildRequires: libevent-devel
 BuildRequires: libyaml-devel
@@ -158,7 +158,11 @@ Requires: openssl
 # This should only be temporary until we can get a stable upstream release
 # of mercury, at which time the autoprov shared library version should
 # suffice
+%if 0%{ucx} > 0
+Requires: mercury-ucx >= %{mercury_version}
+%else
 Requires: mercury >= %{mercury_version}
+%endif
 
 
 %description
@@ -227,6 +231,7 @@ This is the package needed to run a DAOS client
 %package tests
 Summary: The entire DAOS test suite
 Requires: %{name}-client-tests-openmpi%{?_isa} = %{version}-%{release}
+Requires: %{name}-server-tests-openmpi%{?_isa} = %{version}-%{release}
 
 %description tests
 This is the package is a metapackage to install all of the test packages
@@ -272,6 +277,13 @@ Requires: %{name}-server%{?_isa} = %{version}-%{release}
 
 %description server-tests
 This is the package needed to run the DAOS server test suite (server tests)
+
+%package server-tests-openmpi
+Summary: The DAOS server test suite - tools which need openmpi
+Requires: %{name}-server-tests%{?_isa} = %{version}-%{release}
+
+%description server-tests-openmpi
+This is the package needed to run the DAOS server test suite openmpi tools
 
 %package devel
 Summary: The DAOS development libraries and headers
@@ -502,20 +514,18 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %{_bindir}/security_test
 %{conf_dir}/fault-inject-cart.yaml
 %{_bindir}/fault_status
-%{_bindir}/crt_launch
 # For avocado tests
 %{daoshome}/.build_vars.json
 %{daoshome}/.build_vars.sh
+
+%files client-tests-openmpi
+%{_bindir}/crt_launch
 %{_bindir}/daos_perf
 %{_bindir}/daos_racer
 %{_bindir}/daos_test
 %{_bindir}/dfs_test
 %{_bindir}/jobtest
 %{_libdir}/libdts.so
-%{_libdir}/libdpar.so
-
-%files client-tests-openmpi
-%{_libdir}/libdpar_mpi.so
 
 %files server-tests
 %{_bindir}/evt_ctl
@@ -528,6 +538,8 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %{_bindir}/vea_ut
 %{_bindir}/vos_tests
 %{_bindir}/vea_stress
+
+%files server-tests-openmpi
 %{_bindir}/daos_gen_io_conf
 %{_bindir}/daos_run_io_conf
 %{_bindir}/obj_ctl
@@ -554,14 +566,11 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 # No files in a shim package
 
 %changelog
-* Tue Apr 12 2022 Li Wei <wei.g.li@intel.com> 2.3.100-3
-- Update raft to 0.9.1-1401.gc18bcb8 to fix uninitialized node IDs
+* Fri Apr 15 2022 Phillip Henderson <phillip.henderson@intel.com> 2.1.101-2
+ - Require the mercury-ucx package when built with UCX
 
-* Wed Apr 6 2022 Jeff Olivier <jeffrey.v.olivier@intel.com> 2.3.100-2
-- Remove direct MPI dependency from most of tests
-
-* Wed Apr  6 2022 Johann Lombardi <johann.lombardi@intel.com> 2.3.100-1
-- Switch version to 2.3.100 for 2.4 test builds
+* Wed Apr  6 2022 Johann Lombardi <johann.lombardi@intel.com> 2.1.101-1
+ - Switch version to 2.1.101
 
 * Wed Apr  6 2022 Joseph Moore <joseph.moore@intel.com> 2.1.100-26
 - Add build depends entries for UCX libraries.
