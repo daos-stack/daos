@@ -1,9 +1,3 @@
-# Yamllint configuration file, used by github actions and commit hooks.
-#
-# Disables some tests for src/tests/ftest due to existing errors.
-# .yamllint is used in preference by the tool and is in .gitignore so can be used locally to
-# overrule settings here for local commit hooks.
-
 extends: default
 
 rules:
@@ -34,6 +28,3 @@ ignore: |
   src/control/vendor/
   .git/
   src/rdb/raft/
-  /venv/
-  /build/
-  /install/
