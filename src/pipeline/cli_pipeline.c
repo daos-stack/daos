@@ -51,6 +51,7 @@ struct pipeline_run_cb_args {
 	daos_pipeline_run_t *api_args;
 	uint32_t             nr_iods;
 	uint32_t             nr_kds;
+	daos_size_t         *recx_size; /** to store the bulk buffer if we need it */
 };
 
 /** final complete call back arguments */
@@ -142,11 +143,13 @@ pipeline_shard_run_cb(tse_task_t *task, void *data)
 	nr_kds       = cb_args->nr_kds;
 	nr_agg       = api_args->pipeline->num_aggr_filters;
 
-	D_ASSERT(pro->pro_kds.ca_count <= nr_kds);
-	D_ASSERT(pro->pro_sgl_keys.sg_nr_out <= nr_kds);
-	D_ASSERT(pro->pro_recx_size.ca_count <= nr_iods);
-	D_ASSERT(pro->pro_sgl_recx.sg_nr_out <= nr_iods);
-	D_ASSERT(pro->pro_sgl_agg.sg_nr_out == nr_agg);
+	D_ASSERT(pro->pro_nr_kds             <= nr_kds);
+	D_ASSERT(pro->pro_kds.ca_count       <= pro->pro_nr_kds);
+	D_ASSERT(pro->pro_sgl_keys.sg_nr_out <= pro->pro_nr_kds);
+	D_ASSERT(pro->pro_nr_iods            <= nr_iods);
+	D_ASSERT(pro->pro_recx_size.ca_count <= pro->pro_nr_iods);
+	D_ASSERT(pro->pro_sgl_recx.sg_nr_out <= pro->pro_nr_iods);
+	D_ASSERT(pro->pro_sgl_agg.sg_nr_out  == nr_agg);
 
 	if (rc != 0) {
 		if (rc == -DER_NONEXIST)
@@ -178,6 +181,17 @@ pipeline_shard_run_cb(tse_task_t *task, void *data)
 			if (api_args->iods[i].iod_type == DAOS_IOD_SINGLE)
 				api_args->iods[i].iod_size = pro->pro_recx_size.ca_arrays[i];
 		}
+	} else if (cb_args->recx_size != NULL) {
+		/**
+		 * I/O descriptors were sent through bulk transfer. Since we only transfer iod_size
+		 * from server, the iods[] array is not used for bulk. Instead a temporary buffer is
+		 * used. Here we have to copy the contents of that buffer to the iods[].
+		 */
+		for (i = 0; i < pro->pro_nr_iods; i++) {
+			if (api_args->iods[i].iod_type == DAOS_IOD_SINGLE)
+				api_args->iods[i].iod_size = cb_args->recx_size[i];
+		}
+		D_FREE(cb_args->recx_size);
 	}
 	if (pro->pro_sgl_recx.sg_nr_out > 0) {
 		/** copying record data (akeys' values) */
@@ -197,8 +211,8 @@ pipeline_shard_run_cb(tse_task_t *task, void *data)
 
 		if (first_ever_cb(api_args->anchor, cb_args->shard)) {
 			/**
-			 * This is the first time ever that this callback is executed for this
-			 * particular pipeline run.
+			 * This is the first time ever that this callback is executed for
+			 * this particular pipeline run.
 			 */
 			*dst = *src;
 			continue;
@@ -208,8 +222,9 @@ pipeline_shard_run_cb(tse_task_t *task, void *data)
 		part_type        = (char *)part->part_type.iov_buf;
 
 		length_part_type = 20; /**
-					* XXX: we can do this because all function names are the
-					* same length. Change this in the future if needed.
+					* XXX: we can do this because all function names
+					* are the same length. Change this in the future
+					* if needed.
 					*/
 
 		if (!strncmp(part_type, "DAOS_FILTER_FUNC_SUM", length_part_type) ||
@@ -227,8 +242,8 @@ pipeline_shard_run_cb(tse_task_t *task, void *data)
 	if (nr_agg > 0)
 		api_args->sgl_agg->sg_nr_out = nr_agg;
 
-	*api_args->nr_kds  = pro->pro_kds.ca_count;
-	*api_args->nr_iods = pro->pro_recx_size.ca_count;
+	*api_args->nr_kds  = pro->pro_nr_kds;
+	*api_args->nr_iods = pro->pro_nr_iods;
 
 	if (api_args->stats != NULL) {
 		/** user wants stats */
@@ -320,7 +335,7 @@ shard_pipeline_run_task(tse_task_t *task)
 	nr_iods        = *args->pra_api_args->nr_iods;
 	nr_kds         = *args->pra_api_args->nr_kds;
 
-	/** -- register call back function for this particular shard task */
+	/** -- call back function arguments */
 
 	crt_req_addref(req);
 	cb_args.shard        = args->pra_shard;
@@ -329,10 +344,7 @@ shard_pipeline_run_task(tse_task_t *task)
 	cb_args.api_args     = args->pra_api_args;
 	cb_args.nr_iods      = nr_iods;
 	cb_args.nr_kds       = nr_kds;
-
-	rc = tse_task_register_comp_cb(task, pipeline_shard_run_cb, &cb_args, sizeof(cb_args));
-	if (rc != 0)
-		D_GOTO(out_req, rc);
+	cb_args.recx_size    = NULL;
 
 	/**
 	 * -- Forcing iov buffers to be empty. Pipeline API is read only for now, so we don't need
@@ -403,18 +415,29 @@ shard_pipeline_run_task(tse_task_t *task)
 		if (rc < 0)
 			D_GOTO(out_req, rc);
 	}
-
-	pri->pri_iods.nr      = nr_iods;
-	pri->pri_iods.iods    = args->pra_api_args->iods;
-
 	/** everything else is based on packed size */
 	size = 0;
-	/*if (nr_iods > 0) {
+	if (nr_iods > 0) {
 		size += nr_iods * sizeof(daos_size_t);
 		if (size >= DAOS_BULK_LIMIT) {
+			d_sg_list_t	tmp_sgl = {0};
+			d_iov_t		tmp_iov = {0};
 
+			D_ALLOC_ARRAY(cb_args.recx_size, nr_iods);
+			if (cb_args.recx_size == NULL)
+				D_GOTO(out_req, rc = -DER_NOMEM);
+
+			tmp_iov.iov_buf_len	= nr_iods * sizeof(daos_size_t);
+			tmp_iov.iov_buf		= cb_args.recx_size;
+			tmp_sgl.sg_nr_out	= 1;
+			tmp_sgl.sg_nr		= 1;
+			tmp_sgl.sg_iovs		= &tmp_iov;
+
+			rc = crt_bulk_create(crt_ctx, &tmp_sgl, CRT_BULK_RW, &pri->pri_iods_bulk);
+			if (rc < 0)
+				D_GOTO(out_req, rc);
 		}
-	}*/
+	}
 	if (nr_kds > 0) {
 		if (args->pra_api_args->sgl_keys != NULL) {
 			size += daos_sgls_packed_size(args->pra_api_args->sgl_keys, 1, NULL);
@@ -434,16 +457,13 @@ shard_pipeline_run_task(tse_task_t *task)
 					D_GOTO(out_req, rc);
 			}
 		}
-		if (args->pra_api_args->pipeline->num_aggr_filters) {
-			size += daos_sgls_packed_size(args->pra_api_args->sgl_agg, 1, NULL);
-			if (size >= DAOS_BULK_LIMIT) {
-				rc = crt_bulk_create(crt_ctx, args->pra_api_args->sgl_agg,
-						     CRT_BULK_RW, &pri->pri_sgl_agg_bulk);
-				if (rc < 0)
-					D_GOTO(out_req, rc);
-			}
-		}
 	}
+
+	/** -- register call back function for this particular shard task */
+
+	rc = tse_task_register_comp_cb(task, pipeline_shard_run_cb, &cb_args, sizeof(cb_args));
+	if (rc != 0)
+		D_GOTO(out_req, rc);
 
 	/** -- finally sending rpc... */
 
