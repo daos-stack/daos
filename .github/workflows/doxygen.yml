@@ -1,6 +1,6 @@
 name: Doxygen
 
-on:  # yamllint disable-line rule:truthy
+on:
   pull_request:
     paths:
       - Doxyfile
