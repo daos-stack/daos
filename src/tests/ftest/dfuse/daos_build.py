@@ -8,6 +8,7 @@
 import os
 import distro
 import general_utils
+from collections import OrderedDict
 
 from avocado import skip
 from dfuse_test_base import DfuseTestBase
@@ -59,22 +60,61 @@ class DaosBuild(DfuseTestBase):
         self.add_container(self.pool)
 
         daos_cmd = self.get_daos_command()
-        daos_cmd.container_set_attr(pool=self.pool.uuid, cont=self.container.uuid,
-                                    attr='dfuse-data-cache', val='off')
 
-        daos_cmd.container_set_attr(pool=self.pool.uuid, cont=self.container.uuid,
-                                    attr='dfuse-attr-time', val='60s')
+        cont_attrs = OrderedDict()
 
-        daos_cmd.container_set_attr(pool=self.pool.uuid, cont=self.container.uuid,
-                                    attr='dfuse-dentry-time', val='60s')
+        cache_mode = self.params.get('name', '/run/dfuse/*')
 
-        daos_cmd.container_set_attr(pool=self.pool.uuid, cont=self.container.uuid,
-                                    attr='dfuse-ndentry-time', val='60s')
+        if cache_mode == 'writeback':
+            cont_attrs['dfuse-data-cache'] = 'on'
+            cont_attrs['dfuse-attr-time'] = '60s'
+            cont_attrs['dfuse-dentry-time'] = '60s'
+            cont_attrs['dfuse-ndentry-time'] = '60s'
+        elif cache_mode == 'writethrough':
+            cont_attrs['dfuse-data-cache'] = 'on'
+            cont_attrs['dfuse-attr-time'] = '60s'
+            cont_attrs['dfuse-dentry-time'] = '60s'
+            cont_attrs['dfuse-ndentry-time'] = '60s'
+        elif cache_mode == 'metadata':
+            cont_attrs['dfuse-data-cache'] = 'off'
+            cont_attrs['dfuse-attr-time'] = '60s'
+            cont_attrs['dfuse-dentry-time'] = '60s'
+            cont_attrs['dfuse-ndentry-time'] = '60s'
+        elif cache_mode == 'nocache':
+            cont_attrs['dfuse-data-cache'] = 'off'
+            cont_attrs['dfuse-attr-time'] = '0'
+            cont_attrs['dfuse-dentry-time'] = '0'
+            cont_attrs['dfuse-ndentry-time'] = '0'
+
+        for key, value in cont_attrs.items():
+            daos_cmd.container_set_attr(pool=self.pool.uuid, cont=self.container.uuid,
+                                        attr=key, val=value)
 
         self.start_dfuse(self.hostlist_clients, self.pool, self.container)
 
         mount_dir = self.dfuse.mount_dir.value
         build_dir = os.path.join(mount_dir, 'daos')
+
+        intercept = self.params.get('use_intercept', '/run/intercept/*', default=False)
+
+        preload_cmd = None
+
+        if intercept:
+            # This will apply to SCons, but not sub-commands as scons strips the environment.
+
+            remote_env = OrderedDict()
+            remote_env['LD_PRELOAD'] = '/usr/lib64/libioil.so'
+            remote_env['D_LOG_FILE'] = '/var/tmp/daos_testing/daos-il.log'
+            remote_env['DD_MASK'] = 'all'
+            remote_env['DD_SUBSYS'] = 'all'
+            remote_env['D_IL_REPORT'] = '2'
+            remote_env['D_LOG_MASK'] = 'INFO,IL=DEBUG'
+
+            envs = []
+            for env, value in remote_env.items():
+                envs.append('export {}={}'.format(env, value))
+
+            preload_cmd = ';'.join(envs)
 
         cmds = ['git clone https://github.com/daos-stack/daos.git {}'.format(build_dir),
                 'git -C {} submodule init'.format(build_dir),
@@ -82,8 +122,11 @@ class DaosBuild(DfuseTestBase):
                 '{} -C {} --jobs 50 build --build-deps=yes'.format(scons, build_dir)]
         for cmd in cmds:
             try:
-                # Set a timeout of 1500 seconds, the whole test will timeout after 1800
-                ret_code = general_utils.pcmd(self.hostlist_clients, cmd, timeout=1500)
+                if preload_cmd:
+                    command = '{};{}'.format(preload_cmd, cmd)
+                else:
+                    command = cmd
+                ret_code = general_utils.pcmd(self.hostlist_clients, command, timeout=1500)
                 if 0 in ret_code:
                     continue
                 self.log.info(ret_code)
