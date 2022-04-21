@@ -15,11 +15,11 @@
 
 #include <gurt/list.h>
 
-/* tse_task arguments max length */
+/* tse_task arguments max length (pthread_mutex_t is of different size between x86 and aarch64). */
 #define TSE_TASK_ARG_LEN	(840 + sizeof(pthread_mutex_t))
-/* 8 bytes used for public members */
+/* internal tse private data size (struct tse_task_private) */
 #define TSE_PRIV_SIZE		(TSE_TASK_ARG_LEN + 136)
-/* tse_task is used to track single asynchronous operation. */
+/* tse_task is used to track single asynchronous operation (8 bytes used for public members). */
 #define TSE_TASK_SIZE		(TSE_PRIV_SIZE + 8)
 
 typedef struct tse_task {
