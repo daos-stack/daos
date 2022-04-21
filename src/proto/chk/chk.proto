@@ -205,5 +205,5 @@ message CheckReport {
         string msg = 13; // Information to describe the inconsistency in detail.
         repeated CheckInconsistAction act_choices = 14; // Potential actions to be made in interaction mode.
         repeated string act_details = 15; // Details for each potential action (length should match actions).
-	repeated string act_msgs = 16; // Formatted messages containting details for each action choice.
+	repeated string act_msgs = 16; // Formatted messages containing details for each action choice.
 }

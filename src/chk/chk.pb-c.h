@@ -416,7 +416,7 @@ struct  _Chk__CheckReport
   size_t n_act_details;
   char **act_details;
   /*
-   * Formatted messages containting details for each action choice.
+   * Formatted messages containing details for each action choice.
    */
   size_t n_act_msgs;
   char **act_msgs;

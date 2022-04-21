@@ -560,7 +560,7 @@ type CheckReport struct {
 	Msg        string                 `protobuf:"bytes,13,opt,name=msg,proto3" json:"msg,omitempty"`                                                                       // Information to describe the inconsistency in detail.
 	ActChoices []CheckInconsistAction `protobuf:"varint,14,rep,packed,name=act_choices,json=actChoices,proto3,enum=chk.CheckInconsistAction" json:"act_choices,omitempty"` // Potential actions to be made in interaction mode.
 	ActDetails []string               `protobuf:"bytes,15,rep,name=act_details,json=actDetails,proto3" json:"act_details,omitempty"`                                       // Details for each potential action (length should match actions).
-	ActMsgs    []string               `protobuf:"bytes,16,rep,name=act_msgs,json=actMsgs,proto3" json:"act_msgs,omitempty"`                                                // Formatted messages containting details for each action choice.
+	ActMsgs    []string               `protobuf:"bytes,16,rep,name=act_msgs,json=actMsgs,proto3" json:"act_msgs,omitempty"`                                                // Formatted messages containing details for each action choice.
 }
 
 func (x *CheckReport) Reset() {
