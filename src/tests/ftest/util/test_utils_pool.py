@@ -641,7 +641,6 @@ class TestPool(TestDaosApiBase):
         expected_states = ["busy", "done"] if to_start else ["done"]
 
         start = time()
-        # while self.rebuild_complete() == to_start:
         while self.get_rebuild_state() not in expected_states:
             self.log.info(
                 "  Rebuild %s ...",
@@ -909,3 +908,20 @@ class TestPool(TestDaosApiBase):
                 pool=self.identifier, acl_file=self.acl_file.value)
         else:
             self.log.error("self.acl_file isn't defined!")
+
+    def measure_rebuild_time(self, operation, interval=1):
+        """Measure rebuild time.
+
+        This method is mainly for debugging purpose. We'll analyze the output when we
+        realize that rebuild is taking too long.
+
+        Args:
+            operation (str): Type of operation to print in the log.
+            interval (int): Interval (sec) to call pool query to check the rebuild status.
+                Defaults to 1.
+        """
+        start = float(time())
+        self.wait_for_rebuild(to_start=True, interval=interval)
+        self.wait_for_rebuild(to_start=False, interval=interval)
+        duration = float(time()) - start
+        self.log.info("%s duration: %.1f sec", operation, duration)
