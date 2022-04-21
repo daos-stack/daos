@@ -119,7 +119,7 @@ struct ec_agg_param {
 	struct ec_agg_pool_info	 ap_pool_info;	 /* pool/cont info            */
 	struct ec_agg_entry	 ap_agg_entry;	 /* entry used for each OID   */
 	daos_epoch_range_t	 ap_epr;	 /* hi/lo extent threshold    */
-	struct dtx_handle	*ap_dth;	 /* handle for DTX refresh    */
+	daos_epoch_t		 ap_filter_eph;	 /* Aggregatable filter epoch */
 	daos_handle_t		 ap_cont_handle; /* VOS container handle */
 	int			(*ap_yield_func)(void *arg); /* yield function*/
 	void			*ap_yield_arg;   /* yield argument            */
@@ -1473,8 +1473,6 @@ agg_process_holes_ult(void *arg)
 	crt_endpoint_t		 tgt_ep = { 0 };
 	struct ec_agg_stripe_ud	*stripe_ud = (struct ec_agg_stripe_ud *)arg;
 	daos_iod_t		*iod = &stripe_ud->asu_iod;
-	d_iov_t			*csum_iov_fetch = &stripe_ud->asu_csum_iov;
-	d_iov_t			 tmp_csum_iov;
 	struct ec_agg_entry	*entry = stripe_ud->asu_agg_entry;
 	struct ec_agg_extent	*agg_extent;
 	struct pool_target	*targets = NULL;
@@ -1539,64 +1537,24 @@ agg_process_holes_ult(void *arg)
 	entry->ae_sgl.sg_iovs[AGG_IOV_DATA].iov_len = ext_tot_len *
 						      entry->ae_rsize;
 	D_ASSERT(entry->ae_sgl.sg_iovs[AGG_IOV_DATA].iov_len <= k * cell_b);
+	agg_param = container_of(entry, struct ec_agg_param, ap_agg_entry);
 	/* Pull data via dsc_obj_fetch */
 	if (ext_cnt) {
-		bool	retried = false;
+		struct daos_csummer	*csummer;
 
-		rc = daos_iov_alloc(csum_iov_fetch, EC_CSUM_BUF_SIZE, false);
-		if (rc != 0)
-			goto out;
-
-fetch_again:
-		rc = dsc_obj_fetch(entry->ae_obj_hdl,
-				   entry->ae_cur_stripe.as_hi_epoch,
+		rc = dsc_obj_fetch(entry->ae_obj_hdl, entry->ae_cur_stripe.as_hi_epoch,
 				   &entry->ae_dkey, 1, iod, &entry->ae_sgl,
-				   NULL, DIOF_FOR_EC_AGG, NULL, csum_iov_fetch);
+				   NULL, DIOF_FOR_EC_AGG, NULL, NULL);
 		if (rc) {
 			D_ERROR("dsc_obj_fetch failed: "DF_RC"\n", DP_RC(rc));
 			goto out;
 		}
 
-		if (retried)
-			D_ASSERT(csum_iov_fetch->iov_len == 0 ||
-				 csum_iov_fetch->iov_len <=
-				 csum_iov_fetch->iov_buf_len);
-
-		if (csum_iov_fetch->iov_len > csum_iov_fetch->iov_buf_len &&
-		    !retried) {
-			/** retry dsc_obj_fetch with appropriate csum_iov
-			 * buf length
-			 */
-			void *tmp_ptr;
-
-			D_REALLOC(tmp_ptr, csum_iov_fetch->iov_buf,
-				  csum_iov_fetch->iov_buf_len,
-				  csum_iov_fetch->iov_len);
-			if (tmp_ptr == NULL)
-				D_GOTO(out, rc = -DER_NOMEM);
-
-			csum_iov_fetch->iov_buf_len = csum_iov_fetch->iov_len;
-			csum_iov_fetch->iov_len = 0;
-			csum_iov_fetch->iov_buf = tmp_ptr;
-			retried = true;
-			goto fetch_again;
-		}
-
-		rc = daos_csummer_csum_init_with_packed(&stripe_ud->asu_csummer,
-							csum_iov_fetch);
-		if (rc) {
-			D_ERROR("daos_csummer_csum_init_with_packed failed: "
-				DF_RC"\n", DP_RC(rc));
-			goto out;
-		}
-
-		tmp_csum_iov = *csum_iov_fetch;
-		rc = daos_csummer_alloc_iods_csums_with_packed(
-			stripe_ud->asu_csummer, iod, 1, &tmp_csum_iov,
-			&stripe_ud->asu_iod_csums);
+		csummer = ec_agg_param2csummer(agg_param);
+		rc = daos_csummer_calc_iods(csummer, &entry->ae_sgl, iod, NULL, 1, false,
+					    NULL, -1, &stripe_ud->asu_iod_csums);
 		if (rc != 0) {
-			D_ERROR("setting up iods csums failed: "DF_RC"\n",
-				DP_RC(rc));
+			D_ERROR("setting up iods csums failed: "DF_RC"\n", DP_RC(rc));
 			goto out;
 		}
 	}
@@ -1614,7 +1572,6 @@ fetch_again:
 		}
 	}
 
-	agg_param = container_of(entry, struct ec_agg_param, ap_agg_entry);
 	rc = pool_map_find_failed_tgts(agg_param->ap_pool_info.api_pool->sp_map,
 				       &targets, &failed_tgts_cnt);
 	if (rc) {
@@ -1785,7 +1742,6 @@ out:
 static int
 agg_process_stripe(struct ec_agg_param *agg_param, struct ec_agg_entry *entry)
 {
-	struct dtx_handle	*dth = agg_param->ap_dth;
 	vos_iter_param_t	iter_param = { 0 };
 	struct vos_iter_anchors	anchors = { 0 };
 	bool			update_vos = true;
@@ -1813,7 +1769,7 @@ agg_process_stripe(struct ec_agg_param *agg_param, struct ec_agg_entry *entry)
 					   iter_param.ip_recx.rx_nr);
 	ec_age_set_no_parity(entry);
 	rc = vos_iterate(&iter_param, VOS_ITER_RECX, false, &anchors,
-			 agg_recx_iter_pre_cb, NULL, entry, dth);
+			 agg_recx_iter_pre_cb, NULL, entry, NULL);
 	D_DEBUG(DB_EPC, "Querying parity for stripe: %lu, offset: "DF_X64
 		", "DF_RC"\n", entry->ae_cur_stripe.as_stripenum,
 		iter_param.ip_recx.rx_idx, DP_RC(rc));
@@ -2183,10 +2139,8 @@ agg_filter(daos_handle_t ih, vos_iter_desc_t *desc, void *cb_arg, unsigned int *
 	struct daos_oclass_attr  oca;
 	int			 rc = 0;
 
-	if (desc->id_type != VOS_ITER_OBJ) {
-		agg_param->ap_credits++;
-		goto done;
-	}
+	if (desc->id_type != VOS_ITER_OBJ)
+		goto check;
 
 	rc = dsc_obj_id2oc_attr(desc->id_oid.id_pub, &info->api_props, &oca);
 	if (rc) {
@@ -2203,6 +2157,22 @@ agg_filter(daos_handle_t ih, vos_iter_desc_t *desc, void *cb_arg, unsigned int *
 			DP_UOID(desc->id_oid));
 		agg_param->ap_credits++;
 		*acts = VOS_ITER_CB_SKIP;
+		goto done;
+	}
+
+check:
+	if (desc->id_agg_write <= agg_param->ap_filter_eph) {
+		if (desc->id_type == VOS_ITER_OBJ)
+			D_DEBUG(DB_EPC, "Skip oid:"DF_UOID" agg_epoch="DF_X64" filter="DF_X64"\n",
+				DP_UOID(desc->id_oid), desc->id_agg_write,
+				agg_param->ap_filter_eph);
+		else
+			D_DEBUG(DB_EPC, "Skip key:"DF_KEY" agg_epoch="DF_X64" filter="DF_X64"\n",
+				DP_KEY(&desc->id_key), desc->id_agg_write,
+				agg_param->ap_filter_eph);
+		agg_param->ap_credits++;
+		*acts = VOS_ITER_CB_SKIP;
+		goto done;
 	}
 done:
 	if (agg_param->ap_credits > agg_param->ap_credits_max) {
@@ -2474,12 +2444,8 @@ cont_ec_aggregate_cb(struct ds_cont_child *cont, daos_epoch_range_t *epr,
 		     uint32_t flags, struct agg_param *agg_param)
 {
 	struct ec_agg_param	 *ec_agg_param = agg_param->ap_data;
-	struct dtx_handle	 *dth = NULL;
 	vos_iter_param_t	 iter_param = { 0 };
 	struct vos_iter_anchors  anchors = { 0 };
-	struct dtx_id		 dti = { 0 };
-	struct dtx_epoch	 epoch = { 0 };
-	daos_unit_oid_t		 oid = { 0 };
 	int			 rc = 0;
 
 	/*
@@ -2496,10 +2462,19 @@ cont_ec_aggregate_cb(struct ds_cont_child *cont, daos_epoch_range_t *epr,
 			return rc;
 	}
 
-	if (cont->sc_ec_agg_eph != 0 &&
-	    cont->sc_ec_agg_eph >= cont->sc_ec_update_timestamp) {
+	if (flags & VOS_AGG_FL_FORCE_SCAN) {
+		/** We don't want to use the latest container aggregation epoch for the filter
+		 *  in this case.   We instead use the lower bound of the epoch range.
+		 */
+		ec_agg_param->ap_filter_eph = epr->epr_lo;
+	} else {
+		ec_agg_param->ap_filter_eph = MAX(epr->epr_lo, cont->sc_ec_agg_eph);
+	}
+
+	if (ec_agg_param->ap_filter_eph != 0 &&
+	    ec_agg_param->ap_filter_eph >= cont->sc_ec_update_timestamp) {
 		D_DEBUG(DB_EPC, DF_CONT" skip EC agg "DF_U64">= "DF_U64"\n",
-			DP_CONT(cont->sc_pool_uuid, cont->sc_uuid), cont->sc_ec_agg_eph,
+			DP_CONT(cont->sc_pool_uuid, cont->sc_uuid), ec_agg_param->ap_filter_eph,
 			cont->sc_ec_update_timestamp);
 		goto update_hae;
 	}
@@ -2516,37 +2491,12 @@ cont_ec_aggregate_cb(struct ds_cont_child *cont, daos_epoch_range_t *epr,
 
 	agg_reset_entry(&ec_agg_param->ap_agg_entry, NULL, NULL);
 
-	rc = dtx_begin(cont->sc_hdl, &dti, &epoch, 0, 0, &oid,
-		       NULL, 0, 0, NULL, &dth);
-	if (rc != 0) {
-		D_ERROR("Fail to start DTX for EC aggregation: "DF_RC"\n",
-			DP_RC(rc));
-		return rc;
-	}
-
-	ec_agg_param->ap_dth = dth;
 	ec_agg_param->ap_obj_skipped = 0;
-
-again:
 	rc = vos_iterate(&iter_param, VOS_ITER_OBJ, true, &anchors,
-			 agg_iterate_pre_cb, agg_iterate_post_cb, ec_agg_param, dth);
+			 agg_iterate_pre_cb, agg_iterate_post_cb, ec_agg_param, NULL);
 
 	/* Post_cb may not being executed in some cases */
 	agg_clear_extents(&ec_agg_param->ap_agg_entry);
-	if (obj_dtx_need_refresh(dth, rc)) {
-		rc = dtx_refresh(dth, cont);
-		if (rc == -DER_AGAIN) {
-			anchors.ia_reprobe_co = 0;
-			anchors.ia_reprobe_obj = 0;
-			anchors.ia_reprobe_dkey = 0;
-			anchors.ia_reprobe_akey = 0;
-			anchors.ia_reprobe_sv = 0;
-			anchors.ia_reprobe_ev = 0;
-			goto again;
-		}
-	}
-
-	dtx_end(dth, cont, rc);
 
 	if (daos_handle_is_valid(ec_agg_param->ap_agg_entry.ae_obj_hdl)) {
 		dsc_obj_close(ec_agg_param->ap_agg_entry.ae_obj_hdl);

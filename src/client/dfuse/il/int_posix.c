@@ -1650,6 +1650,33 @@ dfuse_mmap(void *address, size_t length, int prot, int flags, int fd,
 }
 
 DFUSE_PUBLIC int
+dfuse_ftruncate(int fd, off_t length)
+{
+	struct fd_entry *entry;
+	int              rc;
+
+	rc = vector_get(&fd_table, fd, &entry);
+	if (rc != 0)
+		goto do_real_ftruncate;
+
+	DFUSE_LOG_DEBUG("ftuncate(fd=%d) intercepted, bypass=%s offset %#lx", fd,
+			bypass_status[entry->fd_status], length);
+
+	rc = dfs_punch(entry->fd_cont->ioc_dfs, entry->fd_dfsoh, length, DFS_MAX_FSIZE);
+
+	vector_decref(&fd_table, entry);
+
+	if (rc == -DER_SUCCESS)
+		return 0;
+
+	errno = rc;
+	return -1;
+
+do_real_ftruncate:
+	return __real_ftruncate(fd, length);
+}
+
+DFUSE_PUBLIC int
 dfuse_fsync(int fd)
 {
 	struct fd_entry *entry;

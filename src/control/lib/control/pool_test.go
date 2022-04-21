@@ -8,6 +8,7 @@ package control
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"strings"
 	"testing"
@@ -24,6 +25,19 @@ import (
 	"github.com/daos-stack/daos/src/control/server/storage"
 	"github.com/daos-stack/daos/src/control/system"
 )
+
+func rankSetCmpOpt() []cmp.Option {
+	return []cmp.Option{
+		cmp.Transformer("RankSet", func(in *system.RankSet) *[]system.Rank {
+			if in == nil {
+				return nil
+			}
+
+			ranks := in.Ranks()
+			return &ranks
+		}),
+	}
+}
 
 func TestControl_PoolDestroy(t *testing.T) {
 	for name, tc := range map[string]struct {
@@ -442,6 +456,122 @@ func TestControl_PoolCreate(t *testing.T) {
 	}
 }
 
+func TestControl_PoolQueryResp_MarshallJSON(t *testing.T) {
+	for name, tc := range map[string]struct {
+		pqr *PoolQueryResp
+		exp string
+	}{
+		"nil": {
+			exp: "null",
+		},
+		"null rankset": {
+			pqr: &PoolQueryResp{
+				Status: 0,
+				UUID:   "foo",
+				PoolInfo: PoolInfo{
+					TotalTargets:    1,
+					ActiveTargets:   2,
+					TotalNodes:      3,
+					DisabledTargets: 4,
+					Version:         5,
+					Leader:          6,
+				},
+			},
+			exp: `{"enabled_ranks":null,"disabled_ranks":null,"status":0,"uuid":"foo","total_targets":1,"active_targets":2,"total_nodes":3,"disabled_targets":4,"version":5,"leader":6,"rebuild":null,"tier_stats":null}`,
+		},
+		"valid rankset": {
+			pqr: &PoolQueryResp{
+				Status: 0,
+				UUID:   "foo",
+				PoolInfo: PoolInfo{
+					TotalTargets:    1,
+					ActiveTargets:   2,
+					TotalNodes:      3,
+					DisabledTargets: 4,
+					Version:         5,
+					Leader:          6,
+					EnabledRanks:    system.MustCreateRankSet("[0-3,5]"),
+					DisabledRanks:   &system.RankSet{},
+				},
+			},
+			exp: `{"enabled_ranks":[0,1,2,3,5],"disabled_ranks":[],"status":0,"uuid":"foo","total_targets":1,"active_targets":2,"total_nodes":3,"disabled_targets":4,"version":5,"leader":6,"rebuild":null,"tier_stats":null}`,
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			got, err := json.Marshal(tc.pqr)
+			if err != nil {
+				t.Fatalf("Unexpected error: %s\n", err.Error())
+			}
+
+			if diff := cmp.Diff(tc.exp, string(got)); diff != "" {
+				t.Fatalf("Unexpected response (-want, +got):\n%s\n", diff)
+			}
+		})
+	}
+}
+
+func TestControl_PoolQueryResp_UnmarshallJSON(t *testing.T) {
+	for name, tc := range map[string]struct {
+		data    string
+		expResp PoolQueryResp
+		expErr  error
+	}{
+		"null rankset": {
+			data: `{"enabled_ranks":null,"disabled_ranks":null,"status":0,"uuid":"foo","total_targets":1,"active_targets":2,"total_nodes":3,"disabled_targets":4,"version":5,"leader":6,"rebuild":null,"tier_stats":null}`,
+			expResp: PoolQueryResp{
+				Status: 0,
+				UUID:   "foo",
+				PoolInfo: PoolInfo{
+					TotalTargets:    1,
+					ActiveTargets:   2,
+					TotalNodes:      3,
+					DisabledTargets: 4,
+					Version:         5,
+					Leader:          6,
+				},
+			},
+		},
+		"valid rankset": {
+			data: `{"enabled_ranks":"[0,1-3,5]","disabled_ranks":"[]","status":0,"uuid":"foo","total_targets":1,"active_targets":2,"total_nodes":3,"disabled_targets":4,"version":5,"leader":6,"rebuild":null,"tier_stats":null}`,
+			expResp: PoolQueryResp{
+				Status: 0,
+				UUID:   "foo",
+				PoolInfo: PoolInfo{
+					TotalTargets:    1,
+					ActiveTargets:   2,
+					TotalNodes:      3,
+					DisabledTargets: 4,
+					Version:         5,
+					Leader:          6,
+					EnabledRanks:    system.MustCreateRankSet("[0-3,5]"),
+					DisabledRanks:   &system.RankSet{},
+				},
+			},
+		},
+		"invalid resp": {
+			data:   `a cow goes quack`,
+			expErr: errors.New("invalid character"),
+		},
+		"invalid rankset": {
+			data:   `{"enabled_ranks":"a cow goes quack","disabled_ranks":null,"status":0,"uuid":"foo","total_targets":1,"active_targets":2,"total_nodes":3,"disabled_targets":4,"version":5,"leader":6,"rebuild":null,"tier_stats":null}`,
+			expErr: errors.New("unexpected alphabetic character(s)"),
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			var gotResp PoolQueryResp
+			err := json.Unmarshal([]byte(tc.data), &gotResp)
+			common.CmpErr(t, tc.expErr, err)
+			if tc.expErr != nil {
+				return
+			}
+
+			if diff := cmp.Diff(tc.expResp, gotResp, rankSetCmpOpt()...); diff != "" {
+				t.Fatalf("Unexpected response (-want, +got):\n%s\n", diff)
+			}
+		})
+	}
+}
+
 func TestControl_PoolQuery(t *testing.T) {
 	for name, tc := range map[string]struct {
 		mic     *MockInvokerConfig
@@ -527,6 +657,142 @@ func TestControl_PoolQuery(t *testing.T) {
 				},
 			},
 		},
+		"query succeeds enabled ranks": {
+			mic: &MockInvokerConfig{
+				UnaryResponse: MockMSResponse("host1", nil,
+					&mgmtpb.PoolQueryResp{
+						Uuid:            common.MockUUID(),
+						TotalTargets:    42,
+						ActiveTargets:   16,
+						DisabledTargets: 17,
+						Rebuild: &mgmtpb.PoolRebuildStatus{
+							State:   mgmtpb.PoolRebuildStatus_BUSY,
+							Objects: 1,
+							Records: 2,
+						},
+						TierStats: []*mgmtpb.StorageUsageStats{
+							{
+								Total:     123456,
+								Free:      0,
+								Min:       1,
+								Max:       2,
+								Mean:      3,
+								MediaType: drpc.MediaTypeScm,
+							},
+							{
+								Total:     123456,
+								Free:      0,
+								Min:       1,
+								Max:       2,
+								Mean:      3,
+								MediaType: drpc.MediaTypeNvme,
+							},
+						},
+						EnabledRanks: "[0,1,2,3,5]",
+					},
+				),
+			},
+			expResp: &PoolQueryResp{
+				UUID: common.MockUUID(),
+				PoolInfo: PoolInfo{
+					TotalTargets:    42,
+					ActiveTargets:   16,
+					DisabledTargets: 17,
+					Rebuild: &PoolRebuildStatus{
+						State:   PoolRebuildStateBusy,
+						Objects: 1,
+						Records: 2,
+					},
+					TierStats: []*StorageUsageStats{
+						{
+							Total:     123456,
+							Free:      0,
+							Min:       1,
+							Max:       2,
+							Mean:      3,
+							MediaType: "scm",
+						},
+						{
+							Total:     123456,
+							Free:      0,
+							Min:       1,
+							Max:       2,
+							Mean:      3,
+							MediaType: "nvme",
+						},
+					},
+					EnabledRanks: system.MustCreateRankSet("[0-3,5]"),
+				},
+			},
+		},
+		"query succeeds disabled ranks": {
+			mic: &MockInvokerConfig{
+				UnaryResponse: MockMSResponse("host1", nil,
+					&mgmtpb.PoolQueryResp{
+						Uuid:            common.MockUUID(),
+						TotalTargets:    42,
+						ActiveTargets:   16,
+						DisabledTargets: 17,
+						Rebuild: &mgmtpb.PoolRebuildStatus{
+							State:   mgmtpb.PoolRebuildStatus_BUSY,
+							Objects: 1,
+							Records: 2,
+						},
+						TierStats: []*mgmtpb.StorageUsageStats{
+							{
+								Total:     123456,
+								Free:      0,
+								Min:       1,
+								Max:       2,
+								Mean:      3,
+								MediaType: drpc.MediaTypeScm,
+							},
+							{
+								Total:     123456,
+								Free:      0,
+								Min:       1,
+								Max:       2,
+								Mean:      3,
+								MediaType: drpc.MediaTypeNvme,
+							},
+						},
+						DisabledRanks: "[]",
+					},
+				),
+			},
+			expResp: &PoolQueryResp{
+				UUID: common.MockUUID(),
+				PoolInfo: PoolInfo{
+					TotalTargets:    42,
+					ActiveTargets:   16,
+					DisabledTargets: 17,
+					Rebuild: &PoolRebuildStatus{
+						State:   PoolRebuildStateBusy,
+						Objects: 1,
+						Records: 2,
+					},
+					TierStats: []*StorageUsageStats{
+						{
+							Total:     123456,
+							Free:      0,
+							Min:       1,
+							Max:       2,
+							Mean:      3,
+							MediaType: "scm",
+						},
+						{
+							Total:     123456,
+							Free:      0,
+							Min:       1,
+							Max:       2,
+							Mean:      3,
+							MediaType: "nvme",
+						},
+					},
+					DisabledRanks: &system.RankSet{},
+				},
+			},
+		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
@@ -552,7 +818,7 @@ func TestControl_PoolQuery(t *testing.T) {
 				return
 			}
 
-			if diff := cmp.Diff(tc.expResp, gotResp); diff != "" {
+			if diff := cmp.Diff(tc.expResp, gotResp, rankSetCmpOpt()...); diff != "" {
 				t.Fatalf("Unexpected response (-want, +got):\n%s\n", diff)
 			}
 		})
@@ -1034,6 +1300,7 @@ func TestControl_ListPools(t *testing.T) {
 							{
 								Uuid:    common.MockUUID(1),
 								SvcReps: []uint32{1, 3, 5, 8},
+								State:   system.PoolServiceStateReady.String(),
 							},
 						},
 					}),
@@ -1048,6 +1315,7 @@ func TestControl_ListPools(t *testing.T) {
 						TargetsTotal:    42,
 						TargetsDisabled: 17,
 						Usage:           expUsage,
+						State:           system.PoolServiceStateReady.String(),
 					},
 				},
 			},
@@ -1060,6 +1328,7 @@ func TestControl_ListPools(t *testing.T) {
 							{
 								Uuid:    common.MockUUID(1),
 								SvcReps: []uint32{1, 3, 5, 8},
+								State:   system.PoolServiceStateReady.String(),
 							},
 						},
 					}),
@@ -1076,10 +1345,12 @@ func TestControl_ListPools(t *testing.T) {
 							{
 								Uuid:    common.MockUUID(1),
 								SvcReps: []uint32{1, 3, 5, 8},
+								State:   system.PoolServiceStateReady.String(),
 							},
 							{
 								Uuid:    common.MockUUID(2),
 								SvcReps: []uint32{1, 2, 3},
+								State:   system.PoolServiceStateReady.String(),
 							},
 						},
 					}),
@@ -1095,6 +1366,7 @@ func TestControl_ListPools(t *testing.T) {
 						TargetsTotal:    42,
 						TargetsDisabled: 17,
 						Usage:           expUsage,
+						State:           system.PoolServiceStateReady.String(),
 					},
 					{
 						UUID:            common.MockUUID(2),
@@ -1102,6 +1374,7 @@ func TestControl_ListPools(t *testing.T) {
 						TargetsTotal:    42,
 						TargetsDisabled: 17,
 						Usage:           expUsage,
+						State:           system.PoolServiceStateReady.String(),
 					},
 				},
 			},
@@ -1114,10 +1387,12 @@ func TestControl_ListPools(t *testing.T) {
 							{
 								Uuid:    common.MockUUID(1),
 								SvcReps: []uint32{1, 3, 5, 8},
+								State:   system.PoolServiceStateReady.String(),
 							},
 							{
 								Uuid:    common.MockUUID(2),
 								SvcReps: []uint32{1, 2, 3},
+								State:   system.PoolServiceStateReady.String(),
 							},
 						},
 					}),
@@ -1131,6 +1406,7 @@ func TestControl_ListPools(t *testing.T) {
 						UUID:            common.MockUUID(1),
 						ServiceReplicas: []system.Rank{1, 3, 5, 8},
 						QueryErrorMsg:   "remote failed",
+						State:           system.PoolServiceStateReady.String(),
 					},
 					{
 						UUID:            common.MockUUID(2),
@@ -1138,6 +1414,7 @@ func TestControl_ListPools(t *testing.T) {
 						TargetsTotal:    42,
 						TargetsDisabled: 17,
 						Usage:           expUsage,
+						State:           system.PoolServiceStateReady.String(),
 					},
 				},
 			},
@@ -1150,10 +1427,12 @@ func TestControl_ListPools(t *testing.T) {
 							{
 								Uuid:    common.MockUUID(1),
 								SvcReps: []uint32{1, 3, 5, 8},
+								State:   system.PoolServiceStateReady.String(),
 							},
 							{
 								Uuid:    common.MockUUID(2),
 								SvcReps: []uint32{1, 2, 3},
+								State:   system.PoolServiceStateReady.String(),
 							},
 						},
 					}),
@@ -1169,6 +1448,7 @@ func TestControl_ListPools(t *testing.T) {
 						UUID:            common.MockUUID(1),
 						ServiceReplicas: []system.Rank{1, 3, 5, 8},
 						QueryStatusMsg:  "DER_UNINIT(-1015): Device or resource not initialized",
+						State:           system.PoolServiceStateReady.String(),
 					},
 					{
 						UUID:            common.MockUUID(2),
@@ -1176,6 +1456,46 @@ func TestControl_ListPools(t *testing.T) {
 						TargetsTotal:    42,
 						TargetsDisabled: 17,
 						Usage:           expUsage,
+						State:           system.PoolServiceStateReady.String(),
+					},
+				},
+			},
+		},
+		"two pools; one in destroying state": {
+			mic: &MockInvokerConfig{
+				UnaryResponseSet: []*UnaryResponse{
+					MockMSResponse("host1", nil, &mgmtpb.ListPoolsResp{
+						Pools: []*mgmtpb.ListPoolsResp_Pool{
+							{
+								Uuid:    common.MockUUID(1),
+								SvcReps: []uint32{1, 3, 5, 8},
+								State:   system.PoolServiceStateReady.String(),
+							},
+							{
+								Uuid:    common.MockUUID(2),
+								SvcReps: []uint32{1, 2, 3},
+								State:   system.PoolServiceStateDestroying.String(),
+							},
+						},
+					}),
+					MockMSResponse("host1", nil, queryResp(1)),
+					MockMSResponse("host1", nil, queryResp(2)),
+				},
+			},
+			expResp: &ListPoolsResp{
+				Pools: []*Pool{
+					{
+						UUID:            common.MockUUID(1),
+						ServiceReplicas: []system.Rank{1, 3, 5, 8},
+						TargetsTotal:    42,
+						TargetsDisabled: 17,
+						Usage:           expUsage,
+						State:           system.PoolServiceStateReady.String(),
+					},
+					{
+						UUID:            common.MockUUID(2),
+						ServiceReplicas: []system.Rank{1, 2, 3},
+						State:           system.PoolServiceStateDestroying.String(),
 					},
 				},
 			},

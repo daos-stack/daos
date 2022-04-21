@@ -101,14 +101,6 @@ type cmdLogger interface {
 	setLog(*logging.LeveledLogger)
 }
 
-type logCmd struct {
-	log *logging.LeveledLogger
-}
-
-func (c *logCmd) setLog(log *logging.LeveledLogger) {
-	c.log = log
-}
-
 type cliOptions struct {
 	Debug      bool           `long:"debug" description:"enable debug output"`
 	Verbose    bool           `long:"verbose" description:"enable verbose output (when applicable)"`
@@ -174,8 +166,8 @@ or query/manage an object inside a container.`
 			}
 		}
 
-		if logCmd, ok := cmd.(cmdLogger); ok {
-			logCmd.setLog(log)
+		if logCmd, ok := cmd.(cmdutil.LogSetter); ok {
+			logCmd.SetLog(log)
 		}
 
 		if daosCmd, ok := cmd.(daosCaller); ok {

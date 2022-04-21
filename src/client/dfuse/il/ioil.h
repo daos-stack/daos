@@ -15,28 +15,28 @@
 
 struct ioil_cont {
 	/* Container open handle */
-	daos_handle_t	ioc_coh;
+	daos_handle_t     ioc_coh;
 	/* ioil pool descriptor */
 	struct ioil_pool *ioc_pool;
 	/* uuid of container */
-	uuid_t		ioc_uuid;
+	uuid_t            ioc_uuid;
 	/* dfs handle */
-	dfs_t		*ioc_dfs;
+	dfs_t            *ioc_dfs;
 	/* List of containers */
-	d_list_t	ioc_containers;
+	d_list_t          ioc_containers;
 	/* Number of files open in container */
-	int		ioc_open_count;
+	int               ioc_open_count;
 };
 
 struct fd_entry {
-	struct ioil_cont	*fd_cont;
-	dfs_obj_t		*fd_dfsoh;
-	off_t			fd_pos;
-	int			fd_flags;
-	int			fd_status;
-	int			fd_ino;
-	int			fd_dev;
-	bool			fd_fstat;
+	struct ioil_cont *fd_cont;
+	dfs_obj_t        *fd_dfsoh;
+	off_t             fd_pos;
+	ino_t             fd_ino;
+	dev_t             fd_dev;
+	int               fd_flags;
+	int               fd_status;
+	bool              fd_fstat;
 
 	/* Used for streaming I/O only */
 	bool			fd_eof;
@@ -44,16 +44,14 @@ struct fd_entry {
 };
 
 ssize_t
-ioil_do_pread(char *buff, size_t len, off_t position,
-	      struct fd_entry *entry, int *errcode);
+ioil_do_pread(char *buff, size_t len, off_t position, struct fd_entry *entry, int *errcode);
 ssize_t
-ioil_do_preadv(const struct iovec *iov, int count, off_t position,
-	       struct fd_entry *entry, int *errcode);
+ioil_do_preadv(const struct iovec *iov, int count, off_t position, struct fd_entry *entry,
+	       int *errcode);
 ssize_t
-ioil_do_writex(const char *buff, size_t len, off_t position,
-	       struct fd_entry *entry, int *errcode);
+ioil_do_writex(const char *buff, size_t len, off_t position, struct fd_entry *entry, int *errcode);
 ssize_t
-ioil_do_pwritev(const struct iovec *iov, int count, off_t position,
-		struct fd_entry *entry, int *errcode);
+ioil_do_pwritev(const struct iovec *iov, int count, off_t position, struct fd_entry *entry,
+		int *errcode);
 
 #endif /* __IOIL_H__ */
