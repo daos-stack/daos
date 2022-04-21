@@ -22,7 +22,7 @@ void
 ddb_print_cont(struct ddb_ctx *ctx, struct ddb_cont *cont)
 {
 	ddb_printf(ctx, DF_IDX" "DF_UUIDF"\n", DP_IDX(cont->ddbc_idx),
-		DP_UUID(cont->ddbc_cont_uuid));
+		   DP_UUID(cont->ddbc_cont_uuid));
 }
 
 void

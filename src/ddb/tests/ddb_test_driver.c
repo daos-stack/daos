@@ -61,7 +61,8 @@ char *g_akeys_str[] = {
 	"akey-9",
 	"akey-10",
 };
-char	*g_invalid_key_str = "invalid key";
+
+char *g_invalid_key_str = "invalid key";
 
 daos_unit_oid_t	g_oids[10];
 uuid_t		g_uuids[10];
@@ -307,7 +308,7 @@ dvt_iov_alloc_str(d_iov_t *iov, const char *str)
 
 static void
 create_object_data(daos_handle_t *coh, uint32_t obj_to_create, uint32_t dkeys_to_create,
-			uint32_t akeys_to_create, uint32_t recx_to_create)
+		   uint32_t akeys_to_create, uint32_t recx_to_create)
 {
 	int o, d, a, r; /* loop indexes */
 

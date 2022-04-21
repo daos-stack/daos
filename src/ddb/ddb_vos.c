@@ -1113,7 +1113,7 @@ daos_recx_match(daos_recx_t a, daos_recx_t b)
 
 static int
 find_cb(daos_handle_t ih, vos_iter_entry_t *entry, vos_iter_type_t type, vos_iter_param_t *param,
-			     void *cb_arg, unsigned int *acts)
+	void *cb_arg, unsigned int *acts)
 {
 	struct dv_tree_path *path = cb_arg;
 

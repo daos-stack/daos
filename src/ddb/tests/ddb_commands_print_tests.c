@@ -102,32 +102,34 @@ print_key_test(void **state)
 	dvt_fake_print_reset();
 
 	/* short key */
-	*((short *)key_buf) = 0xabcd;
+	short s = 0xabcd;
+	key.ddbk_key.iov_buf = (uint8_t *)&s;
 	key.ddbk_key.iov_len = sizeof(short);
 	ddb_print_key(&ctx, &key, 0);
 	assert_str_exact("[4] '{uint16:0xabcd}'\n");
 	dvt_fake_print_reset();
 
 	/* int key */
-	*((int *)key_buf) = 0x1234abcd;
+	int i = 0x1234abcd;
+	key.ddbk_key.iov_buf = (int *)&i;
 	key.ddbk_key.iov_len = sizeof(int);
 	ddb_print_key(&ctx, &key, 0);
 	assert_str_exact("[4] '{uint32:0x1234abcd}'\n");
 	dvt_fake_print_reset();
 
 	/* 64 bit key */
-	*((uint64_t *)key_buf) = 0x1abc2abc3abc4abc;
+	uint64_t ll = 0x1abc2abc3abc4abc;
+	key.ddbk_key.iov_buf = (uint64_t *)&ll;
 	key.ddbk_key.iov_len = sizeof(uint64_t);
 	ddb_print_key(&ctx, &key, 0);
 	assert_str_exact("[4] '{uint64:0x1abc2abc3abc4abc}'\n");
 	dvt_fake_print_reset();
 
 	/* random length binary key */
-	*((uint64_t *)key_buf) = 0x1abc2abc3abc4abc;
 	key_buf[0] = 0xaa;
 	key_buf[1] = 0xbb;
 	key_buf[2] = 0xcc;
-
+	key.ddbk_key.iov_buf = key_buf;
 	key.ddbk_key.iov_len = 3;
 	ddb_print_key(&ctx, &key, 0);
 	assert_str_exact("[4] '{bin(3):0xaabbcc}'\n");

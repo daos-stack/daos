@@ -271,7 +271,7 @@ ddb_run_dump_ilog(struct ddb_ctx *ctx, struct dump_ilog_options *opt)
 		return rc;
 	}
 	rc = dv_get_obj_ilog_entries(coh, vtp.vtp_path.vtp_oid,
-				dump_ilog_entry_cb, ctx);
+				     dump_ilog_entry_cb, ctx);
 	dv_cont_close(&coh);
 	ddb_vtp_fini(&vtp);
 
@@ -360,7 +360,7 @@ create_path_str(struct dv_tree_path *vt_path, char *buf, uint32_t buf_len)
 
 	if (vt_path->vtp_recx.rx_nr > 0)
 		snprintf(buf, buf_len, "%s/{%lu-%lu}", buf, vt_path->vtp_recx.rx_idx,
-			   vt_path->vtp_recx.rx_idx + vt_path->vtp_recx.rx_nr - 1);
+			 vt_path->vtp_recx.rx_idx + vt_path->vtp_recx.rx_nr - 1);
 }
 
 int

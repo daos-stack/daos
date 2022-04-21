@@ -26,6 +26,7 @@ struct dt_vos_pool_ctx {
 	int		dvt_fd;
 	char		dvt_pmem_file[128];
 };
+
 daos_unit_oid_t dvt_gen_uoid(uint32_t i);
 void dvt_vos_insert_recx(daos_handle_t coh, daos_unit_oid_t uoid, char *dkey_str, char *akey_str,
 			 daos_recx_t *recx, daos_epoch_t epoch);

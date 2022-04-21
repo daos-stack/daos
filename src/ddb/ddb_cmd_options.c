@@ -66,10 +66,11 @@ ls_option_parse(struct ddb_ctx *ctx, struct ls_options *cmd_args, struct argv_pa
 
 	return 0;
 }
+
 /* Parse command line options for the 'dump_ilog' command */
 static int
 dump_ilog_option_parse(struct ddb_ctx *ctx, struct dump_ilog_options *cmd_args,
-	struct argv_parsed *argc_v)
+		       struct argv_parsed *argc_v)
 {
 	int		  index = 1;
 	uint32_t	  argc = argc_v->ap_argc;
@@ -95,6 +96,7 @@ dump_ilog_option_parse(struct ddb_ctx *ctx, struct dump_ilog_options *cmd_args,
 
 	return 0;
 }
+
 /* Parse command line options for the 'dump_dtx' command */
 static int
 dump_dtx_option_parse(struct ddb_ctx *ctx, struct dump_dtx_options *cmd_args,
@@ -150,6 +152,7 @@ dump_dtx_option_parse(struct ddb_ctx *ctx, struct dump_dtx_options *cmd_args,
 
 	return 0;
 }
+
 /* Parse command line options for the 'dump_value' command */
 static int
 dump_value_option_parse(struct ddb_ctx *ctx, struct dump_value_options *cmd_args,
@@ -186,6 +189,7 @@ dump_value_option_parse(struct ddb_ctx *ctx, struct dump_value_options *cmd_args
 
 	return 0;
 }
+
 /* Parse command line options for the 'rm' command */
 static int
 rm_option_parse(struct ddb_ctx *ctx, struct rm_options *cmd_args, struct argv_parsed *argc_v)
@@ -214,6 +218,7 @@ rm_option_parse(struct ddb_ctx *ctx, struct rm_options *cmd_args, struct argv_pa
 
 	return 0;
 }
+
 /* Parse command line options for the 'load' command */
 static int
 load_option_parse(struct ddb_ctx *ctx, struct load_options *cmd_args, struct argv_parsed *argc_v)

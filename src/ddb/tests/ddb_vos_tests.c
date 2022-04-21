@@ -536,7 +536,7 @@ get_value_tests(void **state)
 
 	/* first akey is a recx */
 	assert_success(test_dump_value(tctx->dvt_poh, g_uuids[0], g_oids[0], &g_dkeys[0],
-				     &g_akeys[0], &recx, fake_dump_value_cb, NULL));
+				       &g_akeys[0], &recx, fake_dump_value_cb, NULL));
 
 	assert_int_equal(1, fake_dump_value_cb_called);
 	assert_non_null(fake_dump_value_cb_value.iov_buf);
@@ -545,7 +545,7 @@ get_value_tests(void **state)
 	/* second akey is a single value */
 	fake_dump_value_cb_called = 0;
 	assert_success(test_dump_value(tctx->dvt_poh, g_uuids[0], g_oids[0], &g_dkeys[0],
-				     &g_akeys[1], NULL, fake_dump_value_cb, NULL));
+				       &g_akeys[1], NULL, fake_dump_value_cb, NULL));
 
 	assert_int_equal(1, fake_dump_value_cb_called);
 	assert_non_null(fake_dump_value_cb_value.iov_buf);
@@ -586,6 +586,7 @@ get_obj_ilog_tests(void **state)
 
 	vos_cont_close(coh);
 }
+
 static void
 get_dkey_ilog_tests(void **state)
 {
