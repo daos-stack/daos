@@ -2,6 +2,36 @@
 
 set -eux
 
+report_junit() {
+    local name="$1"
+    local results="$2"
+    local nodes="$3"
+
+    clush -o '-i ci_key' -l root -w "$nodes" --rcopy "$results"
+
+    local results_files
+    results_files=("$results".*)
+
+    if [ ${#results_files[@]} -eq 0 ]; then
+        echo "No results found to report as JUnit results"
+        ls -l
+        return
+    fi
+
+    mkdir -p "$STAGE_NAME"/framework/
+
+    cat <<EOF > "$STAGE_NAME"/framework/framework_results.xml
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite errors="${#results_files[@]}" failures="0" name="$name" skipped="0"
+           tests="${#results_files[@]}" time="0" timestamp="$(date +%FT%T)">
+$(cat "${results_files[@]}")
+</testsuite>
+EOF
+
+    clush -o '-i ci_key' -l root -w "$nodes" --rcopy /tmp/artifacts --dest "$STAGE_NAME"/framework/
+
+}
+
 if [ -z "$TEST_TAG" ]; then
     echo "TEST_TAG must be set"
     exit 1
@@ -15,11 +45,17 @@ first_node=${NODELIST%%,*}
 clush -B -S -o '-i ci_key' -l root -w "${first_node}" \
     "NODELIST=${NODELIST} $(cat ci/functional/setup_nfs.sh)"
 
-clush -B -S -o '-i ci_key' -l root -w "${tnodes}" \
-  "OPERATIONS_EMAIL=${OPERATIONS_EMAIL}                \
-   FIRST_NODE=${first_node}                            \
-   TEST_RPMS=${TEST_RPMS}                              \
-   $(cat ci/functional/test_main_prep_node.sh)"
+if ! clush -B -S -o '-i ci_key' -l root -w "${tnodes}"   \
+  "OPERATIONS_EMAIL=\"${OPERATIONS_EMAIL}\"              \
+   FIRST_NODE=\"${first_node}\"                          \
+   TEST_RPMS=\"${TEST_RPMS}\"                            \
+   BUILD_URL=\"${BUILD_URL}\"                            \
+   STAGE_NAME=\"${STAGE_NAME}\"                          \
+   $(cat ci/provisioning/post_provision_config_common.sh \
+         ci/functional/test_main_prep_node.sh)"; then
+    report_junit test_main_prep_node.sh results.xml "$tnodes"
+    exit 1
+fi
 
 # this is being mis-flagged as SC2026 where shellcheck.net is OK with it
 # shellcheck disable=SC2026

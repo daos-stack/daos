@@ -12,6 +12,16 @@ set -eux
 send_mail() {
     local subject="$1"
     local message="$2"
+    local attachments="${3:-}"
+
+    local attach
+    local attach_args=()
+
+    for attach in $attachments; do
+        [ -e "$attach" ] || break  # handle the case of a wildcard matching no files
+        attach_args+=("-a" "$attach")
+    done
+
     set +x
     {
         echo "Build: $BUILD_URL"
@@ -19,7 +29,7 @@ send_mail() {
         echo "Host:  $HOSTNAME"
         echo ""
         echo -e "$message"
-    } 2>&1 | mail -s "$subject" -r "$HOSTNAME"@intel.com "$OPERATIONS_EMAIL"
+    } 2>&1 | mail -s "$subject" -r "$HOSTNAME"@intel.com "${attach_args[@]}" "$OPERATIONS_EMAIL"
     set -x
 }
 
