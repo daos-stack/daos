@@ -156,7 +156,6 @@ def define_mercury(reqs):
                 package='libfabric-devel' if inst(reqs, 'ofi') else None,
                 patch_rpath=['lib'])
 
-
     reqs.define('ucx', libs=['ucp'])
 
     mercury_build = ['cmake',

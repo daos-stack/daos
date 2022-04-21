@@ -1,6 +1,6 @@
 """Common DAOS library for setting up the compiler"""
 
-from SCons.Script import GetOption, Exit, Configure
+from SCons.Script import GetOption, Exit
 
 DESIRED_FLAGS = ['-Wno-gnu-designator',
                  '-Wno-missing-braces',
@@ -22,7 +22,7 @@ PP_ONLY_FLAGS = ['-Wno-parentheses-equality', '-Wno-builtin-requires-header',
                  '-Wno-unused-function']
 
 
-def base_setup(env, prereqs=None):
+def base_setup(env):
     """Setup the scons environment for the compiler
 
     Include all our preferred compile options for the chosen

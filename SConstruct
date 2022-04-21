@@ -386,7 +386,7 @@ def scons(): # pylint: disable=too-many-locals
 
     base_env = env.Clone()
 
-    compiler_setup.base_setup(env, prereqs=prereqs)
+    compiler_setup.base_setup(env)
 
     args = GetOption('analyze_stack')
     if args is not None:
