@@ -12,6 +12,7 @@ import (
 	"strings"
 
 	chkpb "github.com/daos-stack/daos/src/control/common/proto/chk"
+	"google.golang.org/protobuf/proto"
 )
 
 type (
@@ -36,8 +37,8 @@ func (ro reportObject) String() string {
 	}[ro]
 }
 
-func (f *Finding) IsValidAction(action chkpb.CheckInconsistAction) bool {
-	for _, a := range f.Actions {
+func (f *Finding) HasChoice(action chkpb.CheckInconsistAction) bool {
+	for _, a := range f.ActChoices {
 		if a == action {
 			return true
 		}
@@ -45,13 +46,13 @@ func (f *Finding) IsValidAction(action chkpb.CheckInconsistAction) bool {
 	return false
 }
 
-func (f *Finding) ValidActionsString() string {
-	if len(f.Actions) == 0 {
-		return "no valid actions (already repaired?)"
+func (f *Finding) ValidChoicesString() string {
+	if len(f.ActChoices) == 0 {
+		return "no valid action choices (already repaired?)"
 	}
 
 	var actions []string
-	for _, a := range f.Actions {
+	for _, a := range f.ActChoices {
 		actions = append(actions, strconv.Itoa(int(a)))
 	}
 	return strings.Join(actions, ",")
@@ -62,7 +63,9 @@ func NewFinding(report *chkpb.CheckReport) *Finding {
 		return nil
 	}
 
-	return &Finding{*report}
+	f := new(Finding)
+	proto.Merge(&f.CheckReport, report)
+	return f
 }
 
 func descAction(action chkpb.CheckInconsistAction, ro reportObject, details ...string) string {
@@ -108,37 +111,38 @@ func AnnotateFinding(f *Finding) *Finding {
 
 	// Pad out the list of details as necessary to match
 	// the length of the action list.
-	if len(f.Details) != len(f.Actions) {
-		for i := len(f.Details); i < len(f.Actions); i++ {
-			f.Details = append(f.Details, "")
+	if len(f.ActDetails) != len(f.ActChoices) {
+		for i := len(f.ActDetails); i < len(f.ActChoices); i++ {
+			f.ActDetails = append(f.ActDetails, "")
 		}
 	}
+	f.ActMsgs = make([]string, len(f.ActChoices))
 
 	switch f.Class {
 	case chkpb.CheckInconsistClass_CIC_POOL_NONEXIST_ON_MS:
 		if f.Msg == "" {
 			f.Msg = fmt.Sprintf("Scanned pool service %s missing from MS", f.PoolUuid)
 		}
-		for i, act := range f.Actions {
-			f.Details[i] = descAction(act, poolObj, f.PoolUuid)
+		for i, act := range f.ActChoices {
+			f.ActMsgs[i] = descAction(act, poolObj, f.PoolUuid)
 		}
 	case chkpb.CheckInconsistClass_CIC_POOL_NONEXIST_ON_ENGINE:
 		if f.Msg == "" {
 			f.Msg = fmt.Sprintf("MS pool service %s missing on engines", f.PoolUuid)
 		}
-		for i, act := range f.Actions {
-			f.Details[i] = descAction(act, poolObj, f.PoolUuid)
+		for i, act := range f.ActChoices {
+			f.ActMsgs[i] = descAction(act, poolObj, f.PoolUuid)
 		}
 	case chkpb.CheckInconsistClass_CIC_POOL_BAD_LABEL:
 		if f.Msg == "" {
 			f.Msg = fmt.Sprintf("The pool label for %s does not match MS", f.PoolUuid)
 		}
-		for i, act := range f.Actions {
-			f.Details[i] = descAction(act, poolObj, f.PoolUuid, f.Details[i])
+		for i, act := range f.ActChoices {
+			f.ActMsgs[i] = descAction(act, poolObj, f.PoolUuid, f.ActDetails[i])
 		}
 	default:
 		if f.Msg == "" {
-			f.Msg = fmt.Sprintf("Inconsistency found: %s (details: %+v)", f.Class, f.Details)
+			f.Msg = fmt.Sprintf("Inconsistency found: %s (details: %+v)", f.Class, f.ActDetails)
 		}
 	}
 

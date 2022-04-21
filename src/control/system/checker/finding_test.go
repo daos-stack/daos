@@ -32,25 +32,26 @@ func TestChecker_AnnotateFinding(t *testing.T) {
 				Class:    chkpb.CheckInconsistClass_CIC_POOL_BAD_LABEL,
 				Action:   chkpb.CheckInconsistAction_CIA_INTERACT,
 				PoolUuid: common.MockUUID(),
-				Actions: []chkpb.CheckInconsistAction{
+				ActChoices: []chkpb.CheckInconsistAction{
 					chkpb.CheckInconsistAction_CIA_TRUST_MS,
 					chkpb.CheckInconsistAction_CIA_TRUST_PS,
 					chkpb.CheckInconsistAction_CIA_IGNORE,
 				},
-				Details: []string{"ms-label", "ps-label"},
+				ActDetails: []string{"ms-label", "ps-label"},
 			},
 			expFinding: checker.NewFinding(
 				&chkpb.CheckReport{
 					Class:    chkpb.CheckInconsistClass_CIC_POOL_BAD_LABEL,
 					Action:   chkpb.CheckInconsistAction_CIA_INTERACT,
 					PoolUuid: common.MockUUID(),
-					Actions: []chkpb.CheckInconsistAction{
+					ActChoices: []chkpb.CheckInconsistAction{
 						chkpb.CheckInconsistAction_CIA_TRUST_MS,
 						chkpb.CheckInconsistAction_CIA_TRUST_PS,
 						chkpb.CheckInconsistAction_CIA_IGNORE,
 					},
-					Msg: fmt.Sprintf("The pool label for %s does not match MS", common.MockUUID()),
-					Details: []string{
+					ActDetails: []string{"ms-label", "ps-label", ""},
+					Msg:        fmt.Sprintf("The pool label for %s does not match MS", common.MockUUID()),
+					ActMsgs: []string{
 						fmt.Sprintf("Trust the MS pool entry (ms-label) for %s", common.MockUUID()),
 						fmt.Sprintf("Trust the PS pool entry (ps-label) for %s", common.MockUUID()),
 						"Ignore the pool finding",

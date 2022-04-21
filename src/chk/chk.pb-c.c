@@ -52,7 +52,7 @@ void   chk__check_report__free_unpacked
   assert(message->base.descriptor == &chk__check_report__descriptor);
   protobuf_c_message_free_unpacked ((ProtobufCMessage*)message, allocator);
 }
-static const ProtobufCFieldDescriptor chk__check_report__field_descriptors[15] =
+static const ProtobufCFieldDescriptor chk__check_report__field_descriptors[16] =
 {
   {
     "seq",
@@ -211,24 +211,36 @@ static const ProtobufCFieldDescriptor chk__check_report__field_descriptors[15] =
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
   {
-    "actions",
+    "act_choices",
     14,
     PROTOBUF_C_LABEL_REPEATED,
     PROTOBUF_C_TYPE_ENUM,
-    offsetof(Chk__CheckReport, n_actions),
-    offsetof(Chk__CheckReport, actions),
+    offsetof(Chk__CheckReport, n_act_choices),
+    offsetof(Chk__CheckReport, act_choices),
     &chk__check_inconsist_action__descriptor,
     NULL,
     0 | PROTOBUF_C_FIELD_FLAG_PACKED,             /* flags */
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
   {
-    "details",
+    "act_details",
     15,
     PROTOBUF_C_LABEL_REPEATED,
     PROTOBUF_C_TYPE_STRING,
-    offsetof(Chk__CheckReport, n_details),
-    offsetof(Chk__CheckReport, details),
+    offsetof(Chk__CheckReport, n_act_details),
+    offsetof(Chk__CheckReport, act_details),
+    NULL,
+    &protobuf_c_empty_string,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
+  {
+    "act_msgs",
+    16,
+    PROTOBUF_C_LABEL_REPEATED,
+    PROTOBUF_C_TYPE_STRING,
+    offsetof(Chk__CheckReport, n_act_msgs),
+    offsetof(Chk__CheckReport, act_msgs),
     NULL,
     &protobuf_c_empty_string,
     0,             /* flags */
@@ -236,12 +248,13 @@ static const ProtobufCFieldDescriptor chk__check_report__field_descriptors[15] =
   },
 };
 static const unsigned chk__check_report__field_indices_by_name[] = {
+  13,   /* field[13] = act_choices */
+  14,   /* field[14] = act_details */
+  15,   /* field[15] = act_msgs */
   2,   /* field[2] = action */
-  13,   /* field[13] = actions */
   10,   /* field[10] = akey */
   1,   /* field[1] = class */
   7,   /* field[7] = cont_uuid */
-  14,   /* field[14] = details */
   9,   /* field[9] = dkey */
   12,   /* field[12] = msg */
   8,   /* field[8] = objid */
@@ -255,7 +268,7 @@ static const unsigned chk__check_report__field_indices_by_name[] = {
 static const ProtobufCIntRange chk__check_report__number_ranges[1 + 1] =
 {
   { 1, 0 },
-  { 0, 15 }
+  { 0, 16 }
 };
 const ProtobufCMessageDescriptor chk__check_report__descriptor =
 {
@@ -265,7 +278,7 @@ const ProtobufCMessageDescriptor chk__check_report__descriptor =
   "Chk__CheckReport",
   "chk",
   sizeof(Chk__CheckReport),
-  15,
+  16,
   chk__check_report__field_descriptors,
   chk__check_report__field_indices_by_name,
   1,  chk__check_report__number_ranges,

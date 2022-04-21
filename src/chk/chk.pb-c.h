@@ -408,17 +408,22 @@ struct  _Chk__CheckReport
   /*
    * Potential actions to be made in interaction mode.
    */
-  size_t n_actions;
-  Chk__CheckInconsistAction *actions;
+  size_t n_act_choices;
+  Chk__CheckInconsistAction *act_choices;
   /*
-   * Details for each potential action (length should match actions)
+   * Details for each potential action (length should match actions).
    */
-  size_t n_details;
-  char **details;
+  size_t n_act_details;
+  char **act_details;
+  /*
+   * Formatted messages containting details for each action choice.
+   */
+  size_t n_act_msgs;
+  char **act_msgs;
 };
 #define CHK__CHECK_REPORT__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&chk__check_report__descriptor) \
-    , 0, CHK__CHECK_INCONSIST_CLASS__CIC_NONE, CHK__CHECK_INCONSIST_ACTION__CIA_DEFAULT, 0, 0, 0, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, 0,NULL, 0,NULL }
+    , 0, CHK__CHECK_INCONSIST_CLASS__CIC_NONE, CHK__CHECK_INCONSIST_ACTION__CIA_DEFAULT, 0, 0, 0, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, 0,NULL, 0,NULL, 0,NULL }
 
 
 /* Chk__CheckReport methods */

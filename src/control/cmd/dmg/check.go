@@ -128,15 +128,15 @@ func (cmd *checkCmdBase) printQueryResp(resp *control.SystemCheckQueryResp) {
 	cmd.Info("Inconsistency Reports:")
 	for _, report := range resp.Reports {
 		fmt.Fprintf(iw, "0x%x %s: %s\n", report.Seq, report.Class, report.Msg)
-		if len(report.Actions) > 0 {
+		if len(report.ActChoices) > 0 {
 			fmt.Fprintf(iw, "Potential resolution actions:\n")
 			iw2 := txtfmt.NewIndentWriter(iw)
-			for i, action := range report.Actions {
-				fmt.Fprintf(iw2, "%d: %s\n", action, report.Details[i])
+			for i, action := range report.ActChoices {
+				fmt.Fprintf(iw2, "%d: %s\n", action, report.ActMsgs[i])
 			}
 			fmt.Fprintln(&buf)
-		} else if len(report.Details) == 1 {
-			fmt.Fprintf(iw, "Resolution: %s (%s)\n", report.Action, report.Details[0])
+		} else if len(report.ActMsgs) == 1 {
+			fmt.Fprintf(iw, "Resolution: %s (%s)\n", report.Action, report.ActMsgs[0])
 		} else {
 			fmt.Fprintln(iw, "No resolutions available")
 			continue
@@ -218,8 +218,8 @@ type checkRepairCmd struct {
 	ForAll bool `short:"f" long:"for-all" description:"Take the same action for all inconsistencies with the same class."`
 
 	Args struct {
-		SeqNum repairSeqNum `positional-arg-name:"[seq-num]" required:"1"`
-		Action int32        `positional-arg-name:"[action]" required:"1"`
+		SeqNum         repairSeqNum `positional-arg-name:"[seq-num]" required:"1"`
+		SelectedAction int32        `positional-arg-name:"[action]" required:"1"`
 	} `positional-args:"yes"`
 }
 
@@ -229,7 +229,7 @@ func (cmd *checkRepairCmd) Execute(_ []string) error {
 	req := new(control.SystemCheckRepairReq)
 	req.Seq = uint64(cmd.Args.SeqNum)
 	req.ForAll = cmd.ForAll
-	if err := req.SetAction(cmd.Args.Action); err != nil {
+	if err := req.SetAction(cmd.Args.SelectedAction); err != nil {
 		return err
 	}
 

@@ -15,7 +15,6 @@ import (
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	"github.com/daos-stack/daos/src/control/drpc"
 	"github.com/daos-stack/daos/src/control/system"
-	"github.com/daos-stack/daos/src/control/system/checker"
 )
 
 func (svc *mgmtSvc) makeCheckerCall(ctx context.Context, method drpc.Method, req proto.Message) (*drpc.Response, error) {
@@ -159,24 +158,13 @@ func (svc *mgmtSvc) SystemCheckRepair(ctx context.Context, req *mgmtpb.CheckActR
 	}()
 	svc.log.Debugf("Received SystemCheckRepair RPC: %+v", req)
 
-	cfList, err := svc.sysdb.GetCheckerFindings()
+	f, err := svc.sysdb.GetCheckerFinding(req.Seq)
 	if err != nil {
 		return nil, err
 	}
 
-	var finding *checker.Finding
-	for _, f := range cfList {
-		if req.Seq == f.Seq {
-			finding = f
-			break
-		}
-	}
-	if finding == nil {
-		return nil, errors.Errorf("finding with report sequence 0x%x not found", req.Seq)
-	}
-
-	if !finding.IsValidAction(req.Act) {
-		return nil, errors.Errorf("invalid action %d (must be one of %s)", req.Act, finding.ValidActionsString())
+	if !f.HasChoice(req.Act) {
+		return nil, errors.Errorf("invalid action %d (must be one of %s)", req.Act, f.ValidChoicesString())
 	}
 
 	dResp, err := svc.makeCheckerCall(ctx, drpc.MethodCheckerAction, req)
@@ -184,17 +172,7 @@ func (svc *mgmtSvc) SystemCheckRepair(ctx context.Context, req *mgmtpb.CheckActR
 		return nil, err
 	}
 
-	finding.Action = req.Act
-	var chosen int
-	for i, d := range finding.Actions {
-		if d == req.Act {
-			chosen = i
-			break
-		}
-	}
-	finding.Details = []string{finding.Details[chosen]}
-	finding.Actions = nil
-	if err := svc.sysdb.UpdateCheckerFinding(finding); err != nil {
+	if err := svc.sysdb.SetCheckerFindingAction(req.Seq, int32(req.Act)); err != nil {
 		return nil, err
 	}
 
