@@ -28,4 +28,3 @@ ignore: |
   src/control/vendor/
   .git/
   src/rdb/raft/
-  venv
