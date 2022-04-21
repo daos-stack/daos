@@ -70,9 +70,7 @@ struct dfuse_readdir_entry {
 	off_t	dre_next_offset;
 };
 
-/** what is returned as the handle for fuse fuse_file_info on
- * create/open/opendir
- */
+/** what is returned as the handle for fuse fuse_file_info on create/open/opendir */
 struct dfuse_obj_hdl {
 	/** pointer to dfs_t */
 	dfs_t				*doh_dfs;
@@ -83,6 +81,9 @@ struct dfuse_obj_hdl {
 
 	/** True if caching is enabled for this file. */
 	bool				doh_caching;
+
+	/* True if the file handle is writeable - used for cache invalidation */
+	bool                             doh_writeable;
 
 	/* Below here is only used for directories */
 	/** an anchor to track listing in readdir */

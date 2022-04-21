@@ -33,21 +33,25 @@ handle_il_ioctl(struct dfuse_obj_hdl *oh, fuse_req_t req)
 	if (oh->doh_ie->ie_dfs->dfc_attr_timeout > 0)
 		il_reply.fir_flags |= DFUSE_IOCTL_FLAGS_MCACHE;
 
-	rc = fuse_lowlevel_notify_inval_inode(fs_handle->dpi_info->di_session,
-					      oh->doh_ie->ie_stat.st_ino, 0, 0);
+	if (oh->doh_writeable) {
+		rc = fuse_lowlevel_notify_inval_inode(fs_handle->dpi_info->di_session,
+						      oh->doh_ie->ie_stat.st_ino, 0, 0);
 
-	if (rc == 0) {
-		DFUSE_TRA_DEBUG(oh, "inval inode %#lx rc is %d", oh->doh_ie->ie_stat.st_ino, rc);
-	} else {
-		DFUSE_TRA_ERROR(oh, "inval inode %#lx rc is %d", oh->doh_ie->ie_stat.st_ino, rc);
-	}
+		if (rc == 0) {
+			DFUSE_TRA_DEBUG(oh, "inval inode %#lx rc is %d", oh->doh_ie->ie_stat.st_ino,
+					rc);
+		} else {
+			DFUSE_TRA_ERROR(oh, "inval inode %#lx rc is %d", oh->doh_ie->ie_stat.st_ino,
+					rc);
+		}
 
-	/* Mark this file handle as using the IL or similar, and if this is new then mark the
-	 * inode as well
-	 */
-	old_calls = atomic_fetch_add_relaxed(&oh->doh_il_calls, 1);
-	if (old_calls == 0) {
-		atomic_fetch_add_relaxed(&oh->doh_ie->ie_il_count, 1);
+		/* Mark this file handle as using the IL or similar, and if this is new then mark
+		 * the inode as well
+		 */
+		old_calls = atomic_fetch_add_relaxed(&oh->doh_il_calls, 1);
+		if (old_calls == 0) {
+			atomic_fetch_add_relaxed(&oh->doh_ie->ie_il_count, 1);
+		}
 	}
 
 	DFUSE_REPLY_IOCTL(oh, req, il_reply);
