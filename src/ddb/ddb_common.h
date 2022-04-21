@@ -182,7 +182,7 @@ dvp_is_empty(struct dv_tree_path *vtp)
 }
 
 static inline void
-vtp_print(struct ddb_ctx *ctx, struct dv_tree_path *vt_path)
+vtp_print(struct ddb_ctx *ctx, struct dv_tree_path *vt_path, bool include_new_line)
 {
 	if (dv_has_cont(vt_path))
 		ddb_printf(ctx, "/"DF_UUIDF"", DP_UUID(vt_path->vtp_cont));
@@ -196,7 +196,8 @@ vtp_print(struct ddb_ctx *ctx, struct dv_tree_path *vt_path)
 	if (vt_path->vtp_recx.rx_nr > 0)
 		ddb_printf(ctx, "/{%lu-%lu}", vt_path->vtp_recx.rx_idx,
 			   vt_path->vtp_recx.rx_idx + vt_path->vtp_recx.rx_nr - 1);
-	ddb_print(ctx, "/\n");
+	if (include_new_line)
+		ddb_print(ctx, "/\n");
 }
 
 struct argv_parsed {

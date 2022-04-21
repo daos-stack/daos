@@ -132,7 +132,7 @@ ddb_run_ls(struct ddb_ctx *ctx, struct ls_options *opt)
 		return -DER_NONEXIST;
 	}
 
-	vtp_print(ctx, &vtp.vtp_path);
+	vtp_print(ctx, &vtp.vtp_path, true);
 	lsctx.ctx = ctx;
 	rc = dv_iterate(ctx->dc_poh, &vtp.vtp_path, opt->recursive, &handlers, &lsctx);
 
@@ -180,7 +180,7 @@ write_file_value_cb(void *cb_args, d_iov_t *value)
 
 	if (value->iov_len == 0) {
 		ddb_print(ctx, "No value at: ");
-		vtp_print(ctx, args->dva_vtp);
+		vtp_print(ctx, args->dva_vtp, true);
 		return 0;
 	}
 
@@ -210,7 +210,7 @@ ddb_run_dump_value(struct ddb_ctx *ctx, struct dump_value_options *opt)
 	if (!SUCCESS(rc))
 		return rc;
 
-	vtp_print(ctx, &vtp.vtp_path);
+	vtp_print(ctx, &vtp.vtp_path, true);
 
 	if (!dvp_is_complete(&vtp.vtp_path)) {
 		ddb_errorf(ctx, "Path [%s] is incomplete.\n", opt->path);
@@ -264,7 +264,7 @@ ddb_run_dump_ilog(struct ddb_ctx *ctx, struct dump_ilog_options *opt)
 		return -DER_INVAL;
 	}
 
-	vtp_print(ctx, &vtp.vtp_path);
+	vtp_print(ctx, &vtp.vtp_path, true);
 	rc = dv_cont_open(ctx->dc_poh, vtp.vtp_path.vtp_cont, &coh);
 	if (!SUCCESS(rc)) {
 		ddb_vtp_fini(&vtp);
@@ -345,30 +345,11 @@ ddb_run_dump_dtx(struct ddb_ctx *ctx, struct dump_dtx_options *opt)
 	return 0;
 }
 
-static void
-create_path_str(struct dv_tree_path *vt_path, char *buf, uint32_t buf_len)
-{
-
-	if (dv_has_cont(vt_path))
-		snprintf(buf, buf_len, "/"DF_UUIDF"", DP_UUID(vt_path->vtp_cont));
-	if (dv_has_obj(vt_path))
-		snprintf(buf, buf_len, "%s/"DF_UOID"", buf, DP_UOID(vt_path->vtp_oid));
-	if (dv_has_dkey(vt_path))
-		snprintf(buf, buf_len, "%s/%s", buf, (char *)vt_path->vtp_dkey.iov_buf);
-	if (dv_has_akey(vt_path))
-		snprintf(buf, buf_len, "%s/%s", buf, (char *)vt_path->vtp_akey.iov_buf);
-
-	if (vt_path->vtp_recx.rx_nr > 0)
-		snprintf(buf, buf_len, "%s/{%lu-%lu}", buf, vt_path->vtp_recx.rx_idx,
-			 vt_path->vtp_recx.rx_idx + vt_path->vtp_recx.rx_nr - 1);
-}
-
 int
 ddb_run_rm(struct ddb_ctx *ctx, struct rm_options *opt)
 {
 	struct dv_tree_path_builder	vtpb;
 	int				rc;
-	char				path_str[256] = {0};
 
 	rc = init_path(ctx->dc_poh, opt->path, &vtpb);
 
@@ -384,8 +365,9 @@ ddb_run_rm(struct ddb_ctx *ctx, struct rm_options *opt)
 		return rc;
 	}
 
-	create_path_str(&vtpb.vtp_path, path_str, ARRAY_SIZE(path_str));
-	ddb_printf(ctx, "%s deleted\n", path_str);
+	vtp_print(ctx, &vtpb.vtp_path, false);
+	ddb_print(ctx, " deleted\n");
+
 	ddb_vtp_fini(&vtpb);
 
 	return 0;
@@ -424,7 +406,7 @@ ddb_run_load(struct ddb_ctx *ctx, struct load_options *opt)
 		D_GOTO(done, rc = -DER_INVAL);
 	}
 
-	vtp_print(ctx, &vtpb.vtp_path);
+	vtp_print(ctx, &vtpb.vtp_path, true);
 
 	if (!ctx->dc_io_ft.ddb_get_file_exists(opt->src)) {
 		ddb_errorf(ctx, "Unable to access '%s'\n", opt->src);

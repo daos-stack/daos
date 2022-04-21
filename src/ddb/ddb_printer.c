@@ -87,15 +87,16 @@ ddb_print_key(struct ddb_ctx *ctx, struct ddb_key *key, uint32_t indent)
 	default:
 	{
 		int i;
+		char *buf_dst = buf;
 
-		sprintf(buf, "bin(%lu):0x", key->ddbk_key.iov_len);
+		buf_dst += sprintf(buf_dst, "bin(%lu):0x", key->ddbk_key.iov_len);
 
 		for (i = 0; i < key->ddbk_key.iov_len; i++) {
-			sprintf(buf, "%s%02x", buf, ((uint8_t *)key->ddbk_key.iov_buf)[i]);
+			buf_dst += sprintf(buf_dst, "%02x", ((uint8_t *)key->ddbk_key.iov_buf)[i]);
 
 			if (key->ddbk_key.iov_len > buf_len
 			    && i == (buf_len / 4) - 12) {
-				sprintf(buf, "%s...", buf);
+				buf_dst += sprintf(buf_dst, "...");
 				i = key->ddbk_key.iov_len - ((buf_len / 4) - 10);
 			}
 		}

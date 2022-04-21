@@ -486,7 +486,7 @@ static void
 obj_id_2_ddb_test(void **state)
 {
 	struct ddb_obj	obj = {0};
-	daos_obj_id_t	oid;
+	daos_obj_id_t	oid = {0};
 
 	daos_obj_set_oid(&oid, DAOS_OT_MULTI_HASHED, OR_RP_2, 2, 0);
 
@@ -672,11 +672,11 @@ static void
 assert_update_existing_path(daos_handle_t poh, struct dv_tree_path *vtp)
 {
 	d_iov_t	value_iov = {0};
-	char	value_buf[64];
+	char	value_buf[256];
 
 	/* First get the value_buf using dump_value then use it to create an updated value */
 	assert_success(dv_dump_value(poh, vtp, fake_dump_value_cb, NULL));
-	snprintf(value_buf, 64, "Updated: %s", fake_dump_value_cb_value_buf);
+	snprintf(value_buf, 256, "Updated: %s", fake_dump_value_cb_value_buf);
 
 	d_iov_set(&value_iov, value_buf, strlen(value_buf));
 
