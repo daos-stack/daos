@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2021 Intel Corporation.
+ * (C) Copyright 2016-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -29,8 +29,7 @@
 
 #include <daos/tests_lib.h>
 #include <daos.h>
-#include "suite/daos_test.h"
-#include <mpi.h>
+#include "simple_common.h"
 
 /** local task information */
 int			 rank = -1;
@@ -98,19 +97,6 @@ char astr[] = "data";
 
 /** data buffer */
 uint64_t data[SLICE_SIZE];
-
-#define FAIL(fmt, ...)						\
-do {								\
-	fprintf(stderr, "Process %d(%s): " fmt " aborting\n",	\
-		rank, node, ## __VA_ARGS__);			\
-	MPI_Abort(MPI_COMM_WORLD, 1);				\
-} while (0)
-
-#define	ASSERT(cond, ...)					\
-do {								\
-	if (!(cond))						\
-		FAIL(__VA_ARGS__);				\
-} while (0)
 
 void
 pool_create(void)

@@ -19,8 +19,8 @@ var (
 		code.ScmUnknown, "unknown scm error", "",
 	)
 
-	// FaultDiscoveryFailed represents an SCM discovery failure.
-	FaultDiscoveryFailed = scmFault(
+	// FaultGetModulesFailed represents an SCM discovery failure.
+	FaultGetModulesFailed = scmFault(
 		code.ScmDiscoveryFailed, "module discovery failed", "",
 	)
 

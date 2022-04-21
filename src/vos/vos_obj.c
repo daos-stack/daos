@@ -790,6 +790,9 @@ key_iter_fetch(struct vos_obj_iter *oiter, vos_iter_entry_t *ent,
 	uint64_t		 start_seq;
 	vos_iter_desc_t		 desc;
 	struct vos_rec_bundle	 rbund;
+	struct vos_krec_df	*krec;
+	uint64_t		 feats;
+	uint32_t		 ts_type;
 	unsigned int		 acts;
 	int			 rc;
 
@@ -799,10 +802,26 @@ key_iter_fetch(struct vos_obj_iter *oiter, vos_iter_entry_t *ent,
 	if (rc != 0)
 		return rc;
 
+	D_ASSERT(rbund.rb_krec);
+	krec = rbund.rb_krec;
+
 	if (check_existence && oiter->it_iter.it_filter_cb != NULL &&
 	    (flags & VOS_ITER_PROBE_AGAIN) == 0) {
 		desc.id_type = oiter->it_iter.it_type;
 		desc.id_key = ent->ie_key;
+		desc.id_parent_punch = oiter->it_punched.pr_epc;
+		if (krec->kr_bmap & KREC_BF_BTR)
+			feats = dbtree_feats_get(&krec->kr_btr);
+		else
+			feats = evt_feats_get(&krec->kr_evt);
+		if (!vos_feats_agg_time_get(feats, &desc.id_agg_write)) {
+			if (desc.id_type == VOS_ITER_DKEY)
+				ts_type = VOS_TS_TYPE_DKEY;
+			else
+				ts_type = VOS_TS_TYPE_AKEY;
+			vos_ilog_last_update(&krec->kr_ilog, ts_type, &desc.id_agg_write);
+		}
+
 		acts = 0;
 		start_seq = vos_sched_seq();
 		rc = oiter->it_iter.it_filter_cb(vos_iter2hdl(&oiter->it_iter), &desc,
@@ -819,8 +838,7 @@ key_iter_fetch(struct vos_obj_iter *oiter, vos_iter_entry_t *ent,
 			return VOS_ITER_CB_SKIP;
 	}
 
-	D_ASSERT(rbund.rb_krec);
-	return key_iter_fill(rbund.rb_krec, oiter, check_existence, ent);
+	return key_iter_fill(krec, oiter, check_existence, ent);
 }
 
 static int
@@ -1998,70 +2016,6 @@ sv_iter_corrupt(struct vos_obj_iter *oiter)
 
 	rc = umem_tx_end(umm, rc);
 	return rc;
-}
-
-int
-vos_obj_iter_start_agg(daos_handle_t ih, bool full_scan)
-{
-	vos_iter_entry_t	 ent;
-	struct vos_iterator	*iter = vos_hdl2iter(ih);
-	struct vos_obj_iter	*oiter = vos_iter2oiter(iter);
-	struct vos_container	*cont = oiter->it_obj->obj_cont;
-	struct vos_krec_df	*krec;
-	daos_key_t		 key;
-	struct vos_rec_bundle	 rbund;
-	int			 rc;
-	uint64_t		 feats;
-	daos_epoch_t		 agg_write;
-	daos_epoch_t		 hae;
-	bool			 agg_has_write;
-
-	D_ASSERTF(oiter->it_iter.it_for_purge,
-		  "Function should only be called by aggregation\n");
-	D_ASSERTF(iter->it_type == VOS_ITER_AKEY ||
-		  iter->it_type == VOS_ITER_DKEY,
-		  "Aggregation only supported on keys\n");
-
-	if (full_scan)
-		return 1;
-
-	rc = key_iter_fetch_helper(oiter, &rbund, &key, NULL);
-	D_ASSERTF(rc != -DER_NONEXIST,
-		  "Iterator should probe before aggregation\n");
-	if (rc != 0)
-		return rc;
-
-	krec = rbund.rb_krec;
-
-	if (krec->kr_bmap & KREC_BF_BTR)
-		feats = dbtree_feats_get(&krec->kr_btr);
-	else
-		feats = evt_feats_get(&krec->kr_evt);
-
-	agg_has_write = vos_feats_agg_time_get(feats, &agg_write);
-	hae = cont->vc_cont_df->cd_hae;
-	if (agg_has_write) {
-		if (agg_write <= hae && oiter->it_punched.pr_epc <= hae)
-			return 0;
-		return 1;
-	}
-
-	/** Fall through to check other filters for legacy case */
-	rc = key_iter_fill(krec, oiter, true, &ent);
-	if (rc == VOS_ITER_CB_SKIP)
-		return 0;
-	if (rc < 0)
-		return rc; /** Likely the entry isn't in the range or we hit some other error.
-			    *  Let the iterator sort this out later.
-			    */
-	if (ent.ie_vis_flags & VOS_VIS_FLAG_COVERED)
-		return 1; /* Punched entries can likely be aggregated */
-
-	D_ASSERT(ent.ie_last_update != 0);
-	if (ent.ie_last_update <= hae)
-		return 0; /* No new updates since last time we ran */
-
-	return 1;
 }
 
 int

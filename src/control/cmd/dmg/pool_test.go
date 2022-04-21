@@ -777,7 +777,18 @@ func TestPoolCommands(t *testing.T) {
 		},
 		{
 			"Query pool with UUID and enabled ranks",
-			"pool query --show-enabled-ranks 12345678-1234-1234-1234-1234567890ab",
+			"pool query --show-enabled 12345678-1234-1234-1234-1234567890ab",
+			strings.Join([]string{
+				printRequest(t, &control.PoolQueryReq{
+					ID:                  "12345678-1234-1234-1234-1234567890ab",
+					IncludeEnabledRanks: true,
+				}),
+			}, " "),
+			nil,
+		},
+		{
+			"Query pool with UUID and enabled ranks",
+			"pool query -e 12345678-1234-1234-1234-1234567890ab",
 			strings.Join([]string{
 				printRequest(t, &control.PoolQueryReq{
 					ID:                  "12345678-1234-1234-1234-1234567890ab",
@@ -788,7 +799,18 @@ func TestPoolCommands(t *testing.T) {
 		},
 		{
 			"Query pool with UUID and disabled ranks",
-			"pool query --show-disabled-ranks 12345678-1234-1234-1234-1234567890ab",
+			"pool query --show-disabled 12345678-1234-1234-1234-1234567890ab",
+			strings.Join([]string{
+				printRequest(t, &control.PoolQueryReq{
+					ID:                   "12345678-1234-1234-1234-1234567890ab",
+					IncludeDisabledRanks: true,
+				}),
+			}, " "),
+			nil,
+		},
+		{
+			"Query pool with UUID and disabled ranks",
+			"pool query -b 12345678-1234-1234-1234-1234567890ab",
 			strings.Join([]string{
 				printRequest(t, &control.PoolQueryReq{
 					ID:                   "12345678-1234-1234-1234-1234567890ab",
@@ -831,7 +853,7 @@ func TestPoolCommands(t *testing.T) {
 		},
 		{
 			"Query pool with incompatible arguments",
-			"pool query --show-disabled-ranks --show-enabled-ranks 12345678-1234-1234-1234-1234567890ab",
+			"pool query --show-disabled --show-enabled 12345678-1234-1234-1234-1234567890ab",
 			"",
 			errors.New("may not be mixed"),
 		},
@@ -954,7 +976,7 @@ func TestDmg_PoolListCmd_Errors(t *testing.T) {
 
 			PoolListCmd := new(PoolListCmd)
 			PoolListCmd.setInvoker(mi)
-			PoolListCmd.setLog(log)
+			PoolListCmd.SetLog(log)
 			PoolListCmd.setConfig(tc.ctlCfg)
 
 			gotErr := PoolListCmd.Execute(nil)
@@ -1269,7 +1291,7 @@ func TestDmg_PoolCreateAllCmd(t *testing.T) {
 
 			poolCreateCmd := new(PoolCreateCmd)
 			poolCreateCmd.setInvoker(mockInvoker)
-			poolCreateCmd.setLog(log)
+			poolCreateCmd.SetLog(log)
 			poolCreateCmd.Size = tc.StorageRatio
 
 			err := poolCreateCmd.Execute(nil)

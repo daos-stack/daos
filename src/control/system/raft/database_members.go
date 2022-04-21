@@ -1,27 +1,28 @@
 //
-// (C) Copyright 2020-2021 Intel Corporation.
+// (C) Copyright 2020-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
 
-package system
+package raft
 
 import (
 	"encoding/json"
-	"fmt"
 	"net"
 
 	"github.com/google/uuid"
 	"github.com/pkg/errors"
+
+	"github.com/daos-stack/daos/src/control/system"
 )
 
 type (
-	// MemberRankMap provides a map of Rank->*Member.
-	MemberRankMap map[Rank]*Member
-	// MemberUuidMap provides a map of UUID->*Member.
-	MemberUuidMap map[uuid.UUID]*Member
-	// MemberAddrMap provides a map of string->[]*Member.
-	MemberAddrMap map[string][]*Member
+	// MemberRankMap provides a map of Rank->*system.Member.
+	MemberRankMap map[system.Rank]*system.Member
+	// MemberUuidMap provides a map of UUID->*system.Member.
+	MemberUuidMap map[uuid.UUID]*system.Member
+	// MemberAddrMap provides a map of string->[]*system.Member.
+	MemberAddrMap map[string][]*system.Member
 
 	// MemberDatabase contains a set of maps for looking
 	// up members and provides methods for managing the
@@ -30,31 +31,29 @@ type (
 		Ranks        MemberRankMap
 		Uuids        MemberUuidMap
 		Addrs        MemberAddrMap
-		FaultDomains *FaultDomainTree
+		FaultDomains *system.FaultDomainTree
 	}
 )
-
-const rankFaultDomainPrefix = "rank"
 
 // MarshalJSON creates a serialized representation of the MemberRankMap.
 // The member's UUID is used to represent the member in order to
 // avoid duplicating member details in the serialized format.
 func (mrm MemberRankMap) MarshalJSON() ([]byte, error) {
-	jm := make(map[Rank]uuid.UUID)
+	jm := make(map[system.Rank]uuid.UUID)
 	for rank, member := range mrm {
 		jm[rank] = member.UUID
 	}
 	return json.Marshal(jm)
 }
 
-func (mam MemberAddrMap) addMember(addr *net.TCPAddr, m *Member) {
+func (mam MemberAddrMap) addMember(addr *net.TCPAddr, m *system.Member) {
 	if _, exists := mam[addr.String()]; !exists {
-		mam[addr.String()] = []*Member{}
+		mam[addr.String()] = []*system.Member{}
 	}
 	mam[addr.String()] = append(mam[addr.String()], m)
 }
 
-func (mam MemberAddrMap) removeMember(m *Member) {
+func (mam MemberAddrMap) removeMember(m *system.Member) {
 	members, exists := mam[m.Addr.String()]
 	if !exists {
 		return
@@ -98,11 +97,11 @@ func (mdb *MemberDatabase) UnmarshalJSON(data []byte) error {
 
 	type fromJSON MemberDatabase
 	from := &struct {
-		Ranks map[Rank]uuid.UUID
+		Ranks map[system.Rank]uuid.UUID
 		Addrs map[string][]uuid.UUID
 		*fromJSON
 	}{
-		Ranks:    make(map[Rank]uuid.UUID),
+		Ranks:    make(map[system.Rank]uuid.UUID),
 		Addrs:    make(map[string][]uuid.UUID),
 		fromJSON: (*fromJSON)(mdb),
 	}
@@ -137,17 +136,9 @@ func (mdb *MemberDatabase) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
-// memberFaultDomain generates a standardized fault domain for a Member,
-// based on its parent fault domain and rank.
-func memberFaultDomain(m *Member) *FaultDomain {
-	rankDomain := fmt.Sprintf("%s%d", rankFaultDomainPrefix, uint32(m.Rank))
-	// we know the string we're adding is valid, so can't fail
-	return m.FaultDomain.MustCreateChild(rankDomain)
-}
-
 // addMember is responsible for adding a new Member and updating all
 // of the relevant maps.
-func (mdb *MemberDatabase) addMember(m *Member) {
+func (mdb *MemberDatabase) addMember(m *system.Member) {
 	mdb.Ranks[m.Rank] = m
 	mdb.Uuids[m.UUID] = m
 	mdb.Addrs.addMember(m.Addr, m)
@@ -155,18 +146,18 @@ func (mdb *MemberDatabase) addMember(m *Member) {
 	mdb.addToFaultDomainTree(m)
 }
 
-func (mdb *MemberDatabase) addToFaultDomainTree(m *Member) {
-	if err := mdb.FaultDomains.AddDomain(memberFaultDomain(m)); err != nil {
+func (mdb *MemberDatabase) addToFaultDomainTree(m *system.Member) {
+	if err := mdb.FaultDomains.AddDomain(system.MemberFaultDomain(m)); err != nil {
 		panic(err)
 	}
 }
 
-func (mdb *MemberDatabase) updateMember(m *Member) {
+func (mdb *MemberDatabase) updateMember(m *system.Member) {
 	cur, found := mdb.Uuids[m.UUID]
 	if !found {
 		panic(errors.Errorf("member update for unknown member %+v", m))
 	}
-	cur.state = m.state
+	cur.State = m.State
 	cur.Info = m.Info
 	cur.LastUpdate = m.LastUpdate
 	cur.Incarnation = m.Incarnation
@@ -178,15 +169,15 @@ func (mdb *MemberDatabase) updateMember(m *Member) {
 
 // removeMember is responsible for removing new Member and updating all
 // of the relevant maps.
-func (mdb *MemberDatabase) removeMember(m *Member) {
+func (mdb *MemberDatabase) removeMember(m *system.Member) {
 	delete(mdb.Ranks, m.Rank)
 	delete(mdb.Uuids, m.UUID)
 	mdb.Addrs.removeMember(m)
 	mdb.removeFromFaultDomainTree(m)
 }
 
-func (mdb *MemberDatabase) removeFromFaultDomainTree(m *Member) {
-	if err := mdb.FaultDomains.RemoveDomain(memberFaultDomain(m)); err != nil {
+func (mdb *MemberDatabase) removeFromFaultDomainTree(m *system.Member) {
+	if err := mdb.FaultDomains.RemoveDomain(system.MemberFaultDomain(m)); err != nil {
 		panic(err)
 	}
 }
