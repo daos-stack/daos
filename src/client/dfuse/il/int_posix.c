@@ -1474,20 +1474,19 @@ DFUSE_PUBLIC int
 dfuse_ftruncate(int fd, off_t length)
 {
 	struct fd_entry *entry;
-	int rc;
+	int              rc;
 
 	rc = vector_get(&fd_table, fd, &entry);
 	if (rc != 0)
 		goto do_real_ftruncate;
 
-	DFUSE_LOG_DEBUG("ftuncate(fd=%d) intercepted, bypass=%s offset %#lx",
-			fd, bypass_status[entry->fd_status], length);
+	DFUSE_LOG_DEBUG("ftuncate(fd=%d) intercepted, bypass=%s offset %#lx", fd,
+			bypass_status[entry->fd_status], length);
 
 	rc = dfs_punch(entry->fd_cont->ioc_dfs, entry->fd_dfsoh, length, DFS_MAX_FSIZE);
 
 	vector_decref(&fd_table, entry);
 
-	/* TODO: Is this correct? */
 	if (rc == -DER_SUCCESS)
 		return 0;
 
