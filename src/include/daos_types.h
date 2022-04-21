@@ -57,10 +57,10 @@ typedef enum {
 /** Iteration Anchor */
 typedef struct {
 	uint16_t	da_type;	/**< daos_anchor_type_t */
-	uint16_t	da_shard;
+	uint16_t	da_shard;	/**< internal, do not use */
 	uint32_t	da_flags;	/**< see enum daos_anchor_flags */
 	uint64_t	da_sub_anchors;	/**< record the offset for each shards for EC object */
-	uint8_t		da_buf[DAOS_ANCHOR_BUF_MAX];
+	uint8_t		da_buf[DAOS_ANCHOR_BUF_MAX];	/**< internal, do not use */
 } daos_anchor_t;
 
 #define DAOS_ANCHOR_INIT	{ .da_type = DAOS_ANCHOR_TYPE_ZERO,	\
@@ -71,6 +71,7 @@ typedef struct {
 
 /** Generic handle for various DAOS components like container, object, etc. */
 typedef struct {
+	/** generic handle value */
 	uint64_t	cookie;
 } daos_handle_t;
 
@@ -112,6 +113,9 @@ daos_handle_is_valid(daos_handle_t hdl)
  */
 typedef uint64_t	daos_epoch_t;
 
+/**
+ * Epoch range
+ */
 typedef struct {
 	/** Low bound of the epoch range */
 	daos_epoch_t	epr_lo;
@@ -129,6 +133,7 @@ typedef d_iov_t daos_key_t;
  */
 
 typedef struct daos_event {
+	/** return code of non-blocking operation */
 	int			ev_error;
 	/** Internal use, please do not modify */
 	struct {
@@ -200,7 +205,9 @@ enum {
  * It is put here because it's almost used by everyone.
  */
 typedef struct {
+	/** least significant (low) bits of object ID */
 	uint64_t	lo;
+	/** most significant (high) bits of object ID */
 	uint64_t	hi;
 } daos_obj_id_t;
 

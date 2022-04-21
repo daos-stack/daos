@@ -778,7 +778,6 @@ out:
 	if (obj != NULL)
 		vos_obj_release(vos_obj_cache_current(), obj, false);
 
-	vos_dth_set(NULL);
 	if (rc == 0 || rc == -DER_NONEXIST) {
 		if (vos_ts_wcheck(query->qt_ts_set, obj_epr.epr_hi,
 				  query->qt_bound))
@@ -790,6 +789,7 @@ out:
 
 	vos_ts_set_free(query->qt_ts_set);
 free_query:
+	vos_dth_set(NULL);
 	D_FREE(query);
 
 	return rc;

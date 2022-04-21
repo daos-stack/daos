@@ -486,7 +486,15 @@ enum btr_feats {
 	BTR_FEAT_DYNAMIC_ROOT		= (1 << 2),
 	/** Skip rebalance leaf when delete some record from the leaf. */
 	BTR_FEAT_SKIP_LEAF_REBAL	= (1 << 3),
+
+	/** Put new entries above this line */
+	/** Convenience entry for calculating mask for all feats */
+	BTR_FEAT_HELPER,
+	/** Mask for all feats */
+	BTR_FEAT_MASK			= ((BTR_FEAT_HELPER - 1) << 1) - 1,
 };
+
+D_CASSERT(((BTR_FEAT_HELPER - 1) & BTR_FEAT_MASK) == (BTR_FEAT_HELPER - 1));
 
 /**
  * Get the return code of to_hkey_cmp/to_key_cmp in case of success, for failure
@@ -545,6 +553,14 @@ int  dbtree_delete(daos_handle_t toh, dbtree_probe_opc_t opc,
 int  dbtree_query(daos_handle_t toh, struct btr_attr *attr,
 		  struct btr_stat *stat);
 int  dbtree_is_empty(daos_handle_t toh);
+int  dbtree_feats_set(struct btr_root *root, struct umem_instance *umm, uint64_t feats);
+
+static inline uint64_t
+dbtree_feats_get(struct btr_root *root)
+{
+	return root->tr_feats;
+}
+
 struct umem_instance *btr_hdl2umm(daos_handle_t toh);
 
 /**

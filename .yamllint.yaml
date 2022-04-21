@@ -1,0 +1,42 @@
+# Yamllint configuration file, used by github actions and commit hooks.
+#
+# Disables some tests for src/tests/ftest due to existing errors.
+# The yamllint tool will use .yamllint in preference to this file and it is in .gitignore so users
+# can create one locally to overrule these settings for local commit hooks.
+
+extends: default
+
+rules:
+  line-length:
+    max: 100
+    ignore: |
+      /src/tests/ftest/
+      /src/vos/storage_estimator/
+  indentation:
+    ignore: /src/tests/ftest/
+  commas:
+    ignore: /src/tests/ftest/
+  truthy:
+    ignore: /src/tests/ftest/
+    # Other than for src/tests/ftest/container/destroy.yaml we could enable this for ftest without
+    # making any other changes.
+    # allowed-values: ['true', 'false', 'True', 'False']
+    check-keys: false
+  document-start:
+    present: false
+  document-end:
+    present: false
+  comments-indentation:
+    ignore: /src/tests/ftest/
+  comments:
+    ignore: |
+      /src/tests/ftest/
+      /utils/config/
+
+ignore: |
+  /src/control/vendor/
+  /.git/
+  /src/rdb/raft/
+  /venv/
+  /build/
+  /install/

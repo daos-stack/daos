@@ -568,24 +568,6 @@ def append_if_supported(env, **kwargs):
     config.Finish()
 
 
-class ProgramBinary():
-    """Define possible names for a required executable"""
-
-    def __init__(self, name, possible_names):
-        """ Define a binary allowing for unique names on various platforms """
-        self.name = name
-        self.options = possible_names
-
-    def configure(self, config, prereqs):
-        """ Do configure checks for binary name options to get a match """
-        for option in self.options:
-            if config.CheckProg(option):
-                args = {self.name: option}
-                prereqs.replace_env(**args)
-                return True
-        return False
-
-
 def ensure_dir_exists(dirname, dry_run):
     """Ensure a directory exists"""
     if not os.path.exists(dirname):
@@ -720,7 +702,7 @@ class PreReqComponent():
                         'Comma separated list of preinstalled dependencies',
                         'none')
         self.add_opts(ListVariable('INCLUDE', "Optional components to build",
-                                   'none', ['psm2', 'psm3']))
+                                   'none', ['psm2']))
         self.add_opts(('MPI_PKG',
                        'Specifies name of pkg-config to load for MPI', None))
         self.add_opts(BoolVariable('FIRMWARE_MGMT',
@@ -1452,11 +1434,7 @@ class _Component():
 
         try:
             for prog in self.required_progs:
-                if isinstance(prog, ProgramBinary):
-                    has_bin = prog.configure(config, self.prereqs)
-                else:
-                    has_bin = config.CheckProg(prog)
-                if not has_bin:
+                if not config.CheckProg(prog):
                     config.Finish()
                     if self.__check_only:
                         env.SetOption('no_exec', True)
@@ -1802,5 +1780,4 @@ __all__ = ["GitRepoRetriever", "WebRetriever",
            "MissingPath", "BuildFailure",
            "MissingDefinition", "MissingTargets",
            "MissingSystemLibs", "DownloadRequired",
-           "PreReqComponent", "BuildRequired",
-           "ProgramBinary"]
+           "PreReqComponent", "BuildRequired"]
