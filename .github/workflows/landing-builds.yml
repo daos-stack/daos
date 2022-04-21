@@ -16,8 +16,8 @@ on:  # yamllint disable-line rule:truthy
       - 'utils/scripts/install-*.sh'
       - .dockerignore
       - utils/run_in_ga.sh
-      - ci/gha_helper.py
       - requirements.txt
+      - ci/gha_helper.py
 
 jobs:
 
