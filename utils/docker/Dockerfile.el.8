@@ -25,9 +25,11 @@ RUN set -e;                                                      \
         done;                                                    \
         mv daos_ci-el8-artifactory.repo{.tmp,};                  \
     fi;                                                          \
+    dnf --assumeyes --disablerepo \*epel\* install dnf-plugins-core;     \
+    dnf config-manager --save --setopt=assumeyes=True;           \
+    dnf config-manager --save --setopt=install_weak_deps=False;  \
     if [ ! -f /etc/fedora-release ]; then                        \
-        dnf --assumeyes --disablerepo \*epel\* install           \
-                            epel-release dnf-plugins-core;       \
+        dnf --assumeyes --disablerepo \*epel\* install epel-release; \
         if [ -n "$REPO_FILE_URL" ]; then                         \
             PT_REPO=daos_ci-rocky8-powertools-artifactory;       \
         else                                                     \
@@ -35,8 +37,6 @@ RUN set -e;                                                      \
         fi;                                                      \
         dnf --assumeyes config-manager --enable $PT_REPO;        \
     fi;                                                          \
-    dnf config-manager --save --setopt=assumeyes=True;           \
-    dnf config-manager --save --setopt=install_weak_deps=False;  \
     dnf clean all
 
 ARG JENKINS_URL
