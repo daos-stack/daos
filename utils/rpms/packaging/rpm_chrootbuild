@@ -2,17 +2,7 @@
 
 set -uex
 
-# shellcheck disable=SC2153
-IFS=\| read -r -a distro_base_local_repos <<< "$DISTRO_BASE_LOCAL_REPOS"
-repo_adds=()
-repo_dels=()
-
-if [ -n "${REPOSITORY_URL:-}" ] && [ -n "$DISTRO_REPOS" ]; then
-    repo_dels+=("--disablerepo=\*")
-fi
-
-: "${WORKSPACE:=$PWD}"
-mock_config_dir="$WORKSPACE/mock"
+mock_config_dir="${WORKSPACE:-$PWD}/mock"
 original_cfg_file="/etc/mock/${CHROOT_NAME}.cfg"
 cfg_file="$mock_config_dir/${CHROOT_NAME}.cfg"
 mkdir -p "$mock_config_dir"
@@ -26,7 +16,39 @@ if [ "${CHROOT_NAME}" == "epel-8-x86_64" ]; then
         >> "$cfg_file"
 fi
 
+# shellcheck disable=SC2153
+repo_adds=()
+repo_dels=()
+
 echo -e "config_opts['yum.conf'] += \"\"\"\n" >> "$cfg_file"
+
+if { [ -n "${REPOSITORY_URL:-}" ] || [ -n "${ARTIFACTORY_URL:-}" ]; } \
+   && [ -n "$DISTRO_REPOS" ]; then
+    repo_dels+=("--disablerepo=\*")
+
+    if [ -n "${REPO_FILE_URL:-}" ]; then
+        if [ -n "$REPO_FILES_PR" ]; then
+            if [[ $REPO_FILES_PR = PR-* ]]; then
+                build_number="lastSuccessfulBuild"
+                branch="$REPO_FILES_PR"
+                if [[ $branch = *:* ]]; then
+                    build_number="${branch#*:}"
+                    branch="${branch%:*}"
+                fi
+                REPO_FILE_URL="${JENKINS_URL:-https://build.hpdd.intel.com/}job/daos-do/job/repo-files/job/$branch/$build_number/artifact/"
+            else
+                if [ ! -d "$REPO_FILES_PR" ]; then
+                    echo "Could not find your specified directory \"$REPO_FILES_PR\" to read repo-files from"
+                    exit 1
+                fi
+                REPO_FILE_URL="file://$(readlink -e "$REPO_FILES_PR")/"
+            fi
+        fi
+        curl -sSf "$REPO_FILE_URL"daos_ci-"$DISTRO"-mock-artifactory.repo >> "$cfg_file"
+        repo_adds+=("--enablerepo *-artifactory")
+    fi
+fi
+
 for repo in $DISTRO_BASE_PR_REPOS $PR_REPOS; do
     branch="master"
     build_number="lastSuccessfulBuild"
@@ -45,7 +67,7 @@ baseurl=${JENKINS_URL:-https://build.hpdd.intel.com/}job/daos-stack/job/$repo/jo
 enabled=1\n\
 gpgcheck=False\n" >> "$cfg_file"
 done
-for repo in $JOB_REPOS "${distro_base_local_repos[@]}"; do
+for repo in $JOB_REPOS; do
     repo_name=${repo##*://}
     repo_name=${repo_name//\//_}
     repo_adds+=("--enablerepo $repo_name")
@@ -58,5 +80,5 @@ echo "\"\"\"" >> "$cfg_file"
 
 # shellcheck disable=SC2086
 eval mock --configdir "$mock_config_dir" -r "${CHROOT_NAME}" \
-     ${repo_dels[*]} ${repo_adds[*]}                         \
+     ${repo_dels[*]} ${repo_adds[*]} --disablerepo=\*-debug* \
      $MOCK_OPTIONS $RPM_BUILD_OPTIONS "$TARGET"
