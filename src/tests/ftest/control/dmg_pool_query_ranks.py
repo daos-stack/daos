@@ -70,7 +70,7 @@ class DmgPoolQueryRanks(ControlTestBase):
         """Test that ranks state option are mutually exclusive
 
         Test Description:
-            Check that options '--show-enabled' and '--show-disabled" are muttually exclusive.
+            Check that options '--show-enabled' and '--show-disabled" are mutually exclusive.
 
         :avocado: tags=all,daily_regression
         :avocado: tags=vm
