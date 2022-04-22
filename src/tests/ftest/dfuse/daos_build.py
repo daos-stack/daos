@@ -50,11 +50,6 @@ class DaosBuild(DfuseTestBase):
         :avocado: tags=dfusedaosbuild
         """
 
-        scons = 'scons-3'
-        dist = distro.linux_distribution()
-        if dist[0] == 'openSUSE Leap':
-            scons = 'scons'
-
         # Create a pool, container and start dfuse.
         self.add_pool(connect=False)
         self.add_container(self.pool)
@@ -97,36 +92,34 @@ class DaosBuild(DfuseTestBase):
 
         intercept = self.params.get('use_intercept', '/run/intercept/*', default=False)
 
-        preload_cmd = None
+        remote_env = OrderedDict()
+        remote_env['PATH'] = f'$PATH:{mount_dir}/venv/bin'
+        remote_env['VIRTUAL_ENV'] = f'VIRTUAL_ENV={mount_dir}/venv'
 
         if intercept:
-            # This will apply to SCons, but not sub-commands as scons strips the environment.
-
-            remote_env = OrderedDict()
             remote_env['LD_PRELOAD'] = '/usr/lib64/libioil.so'
             remote_env['D_LOG_FILE'] = '/var/tmp/daos_testing/daos-il.log'
             remote_env['DD_MASK'] = 'all'
             remote_env['DD_SUBSYS'] = 'all'
-            remote_env['D_IL_REPORT'] = '2'
             remote_env['D_LOG_MASK'] = 'INFO,IL=DEBUG'
 
-            envs = []
-            for env, value in remote_env.items():
-                envs.append('export {}={}'.format(env, value))
+        envs = []
+        for env, value in remote_env.items():
+            envs.append('export {}={}'.format(env, value))
 
-            preload_cmd = ';'.join(envs)
+        preload_cmd = ';'.join(envs)
 
-        cmds = ['git clone https://github.com/daos-stack/daos.git {}'.format(build_dir),
-                'git -C {} submodule init'.format(build_dir),
-                'git -C {} submodule update'.format(build_dir),
-                '{} -C {} --jobs 50 build --build-deps=yes'.format(scons, build_dir)]
+        cmds = [f'python3 -m venv {mount_dir}/venv',
+                f'git clone https://github.com/daos-stack/daos.git {build_dir}',
+                f'git -C {build_dir} submodule init',
+                f'git -C {build_dir} submodule update',
+                f'git -C {build_dir} checkout daos-build-test-mux',
+                f'python3 -m pip install -r {build_dir}/requirements.txt',
+                f'scons -C {build_dir} --jobs 50 build --build-deps=yes']
         for cmd in cmds:
             try:
-                if preload_cmd:
-                    command = '{};{}'.format(preload_cmd, cmd)
-                else:
-                    command = cmd
-                ret_code = general_utils.pcmd(self.hostlist_clients, command, timeout=1500)
+                command = '{};{}'.format(preload_cmd, cmd)
+                ret_code = general_utils.pcmd(self.hostlist_clients, command, timeout=15*60)
                 if 0 in ret_code:
                     continue
                 self.log.info(ret_code)
