@@ -162,10 +162,12 @@ pipeline_shard_run_cb(tse_task_t *task, void *data)
 	}
 
 	if (pro->pro_kds.ca_count > 0) {
-		/** copying key descriptors and keys */
+		/** copying key descriptors */
 		memcpy((void *)api_args->kds, (void *)pro->pro_kds.ca_arrays,
 		       sizeof(*api_args->kds) * (pro->pro_kds.ca_count));
-
+	}
+	if (pro->pro_sgl_keys.sg_nr_out > 0) {
+		/** copying keys */
 		rc = daos_sgls_copy_data_out(api_args->sgl_keys, 1, &pro->pro_sgl_keys, 1);
 		if (rc != 0)
 			D_GOTO(out, rc);
@@ -303,6 +305,7 @@ shard_pipeline_run_task(tse_task_t *task)
 	uint32_t                        nr_iods;
 	uint32_t			nr_iods_dkey;
 	daos_size_t			size;
+	bool                            no_aggregation;
 	int                             rc;
 
 	args    = tse_task_buf_embedded(task, sizeof(*args));
@@ -397,11 +400,12 @@ shard_pipeline_run_task(tse_task_t *task)
 
 	/** Transfer in bulk set up */
 
+	no_aggregation = !args->pra_api_args->pipeline->num_aggr_filters;
 	/**
 	 * No need to transfer in bulk kds and sgl_keys if aggregation is to be performed, since
 	 * only one dkey is actually returned.
 	 */
-	if (!args->pra_api_args->pipeline->num_aggr_filters && nr_kds > KDS_BULK_LIMIT) {
+	if (no_aggregation && nr_kds > KDS_BULK_LIMIT) {
 		d_sg_list_t	tmp_sgl = {0};
 		d_iov_t		tmp_iov = {0};
 
@@ -439,7 +443,7 @@ shard_pipeline_run_task(tse_task_t *task)
 		}
 	}
 	if (nr_kds > 0) {
-		if (args->pra_api_args->sgl_keys != NULL) {
+		if (no_aggregation && args->pra_api_args->sgl_keys != NULL) {
 			size += daos_sgls_packed_size(args->pra_api_args->sgl_keys, 1, NULL);
 			if (size >= DAOS_BULK_LIMIT) {
 				rc = crt_bulk_create(crt_ctx, args->pra_api_args->sgl_keys,
