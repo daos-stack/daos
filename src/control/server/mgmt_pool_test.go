@@ -36,6 +36,7 @@ import (
 func addTestPoolService(t *testing.T, sysdb *raft.Database, ps *system.PoolService) {
 	t.Helper()
 
+	var i uint32
 	for _, r := range ps.Replicas {
 		_, err := sysdb.FindMemberByRank(r)
 		if err == nil {
@@ -45,9 +46,11 @@ func addTestPoolService(t *testing.T, sysdb *raft.Database, ps *system.PoolServi
 			t.Fatal(err)
 		}
 
-		if err := sysdb.AddMember(system.MockMember(t, 0, system.MemberStateJoined)); err != nil {
+		if err := sysdb.AddMember(system.MockMember(t, i, system.MemberStateJoined)); err != nil {
 			t.Fatal(err)
 		}
+
+		i++
 	}
 
 	if err := sysdb.AddPoolService(ps); err != nil {
