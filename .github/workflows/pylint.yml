@@ -16,8 +16,7 @@ jobs:
         uses: actions/checkout@v2
         with:
           ref: ${{ github.event.pull_request.head.sha }}
-
       - name: Get file-list
         run: git ls-files > utils/to-check
       - name: Run
-        run: ./utils/daos_pylint.py from-file
+        run: docker build . --file utils/docker/Dockerfile.pylint
