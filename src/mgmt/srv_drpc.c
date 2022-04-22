@@ -355,6 +355,55 @@ err_out:
 	return rc;
 }
 
+static int pool_create_fill_resp(Mgmt__PoolCreateResp *resp, uuid_t uuid, d_rank_list_t *svc_ranks)
+{
+	int			rc = 0;
+	d_rank_list_t	       *enabled_ranks = NULL;
+	daos_pool_info_t	pool_info = { .pi_bits = DPI_ENGINES_ENABLED | DPI_SPACE };
+
+	D_ASSERT(svc_ranks != NULL);
+	D_ASSERT(svc_ranks->rl_nr > 0);
+
+	rc = rank_list_to_uint32_array(svc_ranks, &resp->svc_reps, &resp->n_svc_reps);
+	if (rc != 0) {
+		D_ERROR("Failed to convert svc rank list: rc=%d\n", rc);
+		D_GOTO(out, rc);
+	}
+
+	D_DEBUG(DB_MGMT, "%d service replicas\n", svc_ranks->rl_nr);
+
+	rc = ds_mgmt_pool_query(uuid, svc_ranks, &enabled_ranks, &pool_info);
+	if (rc != 0) {
+		D_ERROR("Failed to query created pool: rc=%d\n", rc);
+		D_GOTO(out, rc);
+	}
+
+	rc = rank_list_to_uint32_array(enabled_ranks, &resp->tgt_ranks, &resp->n_tgt_ranks);
+	if (rc != 0) {
+		D_ERROR("Failed to convert enabled target rank list: rc=%d\n", rc);
+		D_GOTO(out, rc);
+	}
+
+	D_ASSERT(pool_info.pi_space.ps_space.s_total[DAOS_MEDIA_SCM] % resp->n_tgt_ranks == 0);
+	D_ASSERT(pool_info.pi_space.ps_space.s_total[DAOS_MEDIA_NVME] % resp->n_tgt_ranks == 0);
+	D_ALLOC_ARRAY(resp->tier_bytes, DAOS_MEDIA_MAX);
+	if (resp->tier_bytes == NULL) {
+		rc = -DER_NOMEM;
+		D_ERROR("Failed to allocate memory for tiers size: rc=%d\n", rc);
+		D_GOTO(out, rc);
+	}
+	resp->n_tier_bytes = DAOS_MEDIA_MAX;
+	resp->tier_bytes[DAOS_MEDIA_SCM] =
+		pool_info.pi_space.ps_space.s_total[DAOS_MEDIA_SCM] / resp->n_tgt_ranks;
+	resp->tier_bytes[DAOS_MEDIA_NVME] =
+		pool_info.pi_space.ps_space.s_total[DAOS_MEDIA_NVME] / resp->n_tgt_ranks;
+
+out:
+	d_rank_list_free(enabled_ranks);
+	d_rank_list_free(svc_ranks);
+	return rc;
+}
+
 void
 ds_mgmt_drpc_pool_create(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 {
@@ -435,16 +484,8 @@ ds_mgmt_drpc_pool_create(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 		goto out;
 	}
 
-	D_ASSERT(svc->rl_nr > 0);
+	pool_create_fill_resp(&resp, pool_uuid, svc);
 
-	rc = rank_list_to_uint32_array(svc, &resp.svc_reps, &resp.n_svc_reps);
-	if (rc != 0)
-		D_GOTO(out_svc, rc);
-
-	D_DEBUG(DB_MGMT, "%d service replicas\n", svc->rl_nr);
-
-out_svc:
-	d_rank_list_free(svc);
 out:
 	resp.status = rc;
 	len = mgmt__pool_create_resp__get_packed_size(&resp);
@@ -464,6 +505,8 @@ out:
 	if (targets != NULL)
 		d_rank_list_free(targets);
 
+	D_FREE(resp.tier_bytes);
+	D_FREE(resp.tgt_ranks);
 	D_FREE(resp.svc_reps);
 }
 

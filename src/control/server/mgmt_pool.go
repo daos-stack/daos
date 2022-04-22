@@ -430,11 +430,6 @@ func (svc *mgmtSvc) PoolCreate(ctx context.Context, req *mgmtpb.PoolCreateReq) (
 
 		return resp, nil
 	}
-	// let the caller know what was actually created
-	resp.TgtRanks = req.GetRanks()
-	resp.TierBytes = make([]uint64, 2)
-	resp.TierBytes[0] = req.Tierbytes[0]
-	resp.TierBytes[1] = req.Tierbytes[1]
 
 	ps.Replicas = system.RanksFromUint32(resp.GetSvcReps())
 	ps.State = system.PoolServiceStateReady
