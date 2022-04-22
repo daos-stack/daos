@@ -38,8 +38,7 @@ def add_pool(test, namespace=POOL_NAMESPACE, create=True, connect=True, index=0,
     """
     pool = TestPool(
         namespace=namespace, context=test.context, dmg_command=test.get_dmg_command(index),
-        label_generator=test.label_generator,
-        crt_timeout=test.server_managers[index].get_config_value("crt_timeout"))
+        label_generator=test.label_generator)
     pool.get_params(test)
     if params:
         pool.update_params(**params)
@@ -104,7 +103,7 @@ class TestPool(TestDaosApiBase):
     """A class for functional testing of DaosPools objects."""
 
     def __init__(self, context, dmg_command, cb_handler=None,
-                 label_generator=None, crt_timeout=None, namespace=POOL_NAMESPACE):
+                 label_generator=None, namespace=POOL_NAMESPACE):
         # pylint: disable=unused-argument
         """Initialize a TestPool object.
 
@@ -122,11 +121,9 @@ class TestPool(TestDaosApiBase):
                 There's a link between label_generator and label. If the label
                 is used as it is, i.e., not None, label_generator must be
                 provided in order to call create(). Defaults to None.
-            crt_timeout (str, optional): value to use for the CRT_TIMEOUT when running pydaos
-                commands. Defaults to None.
             namespace (str, optional): path to test yaml parameters. Defaults to POOL_NAMESPACE.
         """
-        super().__init__(namespace, cb_handler, crt_timeout)
+        super().__init__(namespace, cb_handler)
         self.context = context
         self.uid = os.geteuid()
         self.gid = os.getegid()
@@ -728,7 +725,6 @@ class TestPool(TestDaosApiBase):
         expected_states = ["busy", "done"] if to_start else ["done"]
 
         start = time()
-        # while self.rebuild_complete() == to_start:
         while self.get_rebuild_state() not in expected_states:
             self.log.info(
                 "  Rebuild %s ...",
@@ -996,3 +992,20 @@ class TestPool(TestDaosApiBase):
                 pool=self.identifier, acl_file=self.acl_file.value)
         else:
             self.log.error("self.acl_file isn't defined!")
+
+    def measure_rebuild_time(self, operation, interval=1):
+        """Measure rebuild time.
+
+        This method is mainly for debugging purpose. We'll analyze the output when we
+        realize that rebuild is taking too long.
+
+        Args:
+            operation (str): Type of operation to print in the log.
+            interval (int): Interval (sec) to call pool query to check the rebuild status.
+                Defaults to 1.
+        """
+        start = float(time())
+        self.wait_for_rebuild(to_start=True, interval=interval)
+        self.wait_for_rebuild(to_start=False, interval=interval)
+        duration = float(time()) - start
+        self.log.info("%s duration: %.1f sec", operation, duration)
