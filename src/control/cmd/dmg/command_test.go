@@ -167,6 +167,8 @@ func (bci *bridgeConnInvoker) InvokeUnaryRPC(ctx context.Context, uReq control.U
 		resp = control.MockMSResponse("", nil, &mgmtpb.CheckQueryResp{})
 	case *control.SystemCheckPropReq:
 		resp = control.MockMSResponse("", nil, &mgmtpb.CheckPropResp{})
+	case *control.SystemCheckRepairReq:
+		resp = control.MockMSResponse("", nil, &mgmtpb.CheckActResp{})
 	}
 
 	return resp, nil

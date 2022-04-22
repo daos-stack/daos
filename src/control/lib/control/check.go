@@ -14,7 +14,6 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/protobuf/proto"
 
-	"github.com/daos-stack/daos/src/control/common/proto/chk"
 	chkpb "github.com/daos-stack/daos/src/control/common/proto/chk"
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 )
@@ -98,15 +97,7 @@ type SystemCheckQueryReq struct {
 }
 
 type SystemCheckQueryResp struct {
-	pb *mgmtpb.CheckQueryResp
-}
-
-func (r *SystemCheckQueryResp) MarshalJSON() ([]byte, error) {
-	return json.Marshal(r.pb)
-}
-
-func (r *SystemCheckQueryResp) Status() string {
-	return chk.CheckInstStatus_name[int32(r.pb.InsStatus)]
+	mgmtpb.CheckQueryResp
 }
 
 // SystemCheckQuery queries the system checker status.
@@ -133,7 +124,7 @@ func SystemCheckQuery(ctx context.Context, rpcClient UnaryInvoker, req *SystemCh
 
 	resp := new(SystemCheckQueryResp)
 	if pbResp, ok := ms.(*mgmtpb.CheckQueryResp); ok {
-		resp.pb = pbResp
+		resp.CheckQueryResp = *pbResp
 	} else {
 		return nil, errors.Errorf("unexpected response type %T", ms)
 	}
@@ -184,4 +175,45 @@ func SystemCheckProp(ctx context.Context, rpcClient UnaryInvoker, req *SystemChe
 		return nil, errors.Errorf("unexpected response type %T", ms)
 	}
 	return resp, nil
+}
+
+type SystemCheckRepairReq struct {
+	unaryRequest
+	msRequest
+
+	mgmtpb.CheckActReq
+}
+
+func (r *SystemCheckRepairReq) SetAction(action int32) error {
+	if _, ok := chkpb.CheckInconsistAction_name[action]; !ok {
+		return errors.Errorf("invalid action %d", action)
+	}
+	r.Act = chkpb.CheckInconsistAction(action)
+	return nil
+}
+
+// SystemCheckRepair sends a request to the system checker to indicate
+// what the desired repair action is for a reported inconsistency.
+func SystemCheckRepair(ctx context.Context, rpcClient UnaryInvoker, req *SystemCheckRepairReq) error {
+	if req == nil {
+		return errors.Errorf("nil %T", req)
+	}
+
+	req.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
+		req.CheckActReq.Sys = req.getSystem(rpcClient)
+		return mgmtpb.NewMgmtSvcClient(conn).SystemCheckRepair(ctx, &req.CheckActReq)
+	})
+	rpcClient.Debugf("DAOS system check repair request: %+v", req)
+
+	ur, err := rpcClient.InvokeUnaryRPC(ctx, req)
+	if err != nil {
+		return err
+	}
+	msResp, err := ur.getMSResponse()
+	if err != nil {
+		return err
+	}
+	rpcClient.Debugf("DAOS system check repair response: %+v", msResp)
+
+	return nil
 }

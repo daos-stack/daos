@@ -71,7 +71,6 @@ func (svc *mgmtSvc) SystemCheckStart(ctx context.Context, req *mgmtpb.CheckStart
 	defer func() {
 		svc.log.Debugf("Responding to SystemCheckStart RPC: %s (%+v)", mgmtpb.Debug(resp), err)
 	}()
-
 	svc.log.Debugf("Received SystemCheckStart RPC: %+v", req)
 
 	dResp, err := svc.makePoolCheckerCall(ctx, drpc.MethodCheckerStart, req)
@@ -91,7 +90,6 @@ func (svc *mgmtSvc) SystemCheckStop(ctx context.Context, req *mgmtpb.CheckStopRe
 	defer func() {
 		svc.log.Debugf("Responding to SystemCheckStop RPC: %s (%+v)", mgmtpb.Debug(resp), err)
 	}()
-
 	svc.log.Debugf("Received SystemCheckStop RPC: %+v", req)
 
 	dResp, err := svc.makePoolCheckerCall(ctx, drpc.MethodCheckerStop, req)
@@ -111,7 +109,6 @@ func (svc *mgmtSvc) SystemCheckQuery(ctx context.Context, req *mgmtpb.CheckQuery
 	defer func() {
 		svc.log.Debugf("Responding to SystemCheckQuery RPC: %s (%+v)", mgmtpb.Debug(resp), err)
 	}()
-
 	svc.log.Debugf("Received SystemCheckQuery RPC: %+v", req)
 
 	dResp, err := svc.makePoolCheckerCall(ctx, drpc.MethodCheckerQuery, req)
@@ -124,6 +121,15 @@ func (svc *mgmtSvc) SystemCheckQuery(ctx context.Context, req *mgmtpb.CheckQuery
 		return nil, errors.Wrap(err, "unmarshal CheckQuery response")
 	}
 
+	cfList, err := svc.sysdb.GetCheckerFindings()
+	if err != nil {
+		return nil, err
+	}
+
+	for _, f := range cfList {
+		resp.Reports = append(resp.Reports, &f.CheckReport)
+	}
+
 	return resp, nil
 }
 
@@ -131,7 +137,6 @@ func (svc *mgmtSvc) SystemCheckProp(ctx context.Context, req *mgmtpb.CheckPropRe
 	defer func() {
 		svc.log.Debugf("Responding to SystemCheckProp RPC: %s (%+v)", mgmtpb.Debug(resp), err)
 	}()
-
 	svc.log.Debugf("Received SystemCheckProp RPC: %+v", req)
 
 	dResp, err := svc.makeCheckerCall(ctx, drpc.MethodCheckerProp, req)
@@ -142,6 +147,38 @@ func (svc *mgmtSvc) SystemCheckProp(ctx context.Context, req *mgmtpb.CheckPropRe
 	resp = new(mgmtpb.CheckPropResp)
 	if err = proto.Unmarshal(dResp.Body, resp); err != nil {
 		return nil, errors.Wrap(err, "unmarshal CheckProp response")
+	}
+
+	return resp, nil
+}
+
+func (svc *mgmtSvc) SystemCheckRepair(ctx context.Context, req *mgmtpb.CheckActReq) (resp *mgmtpb.CheckActResp, err error) {
+	defer func() {
+		svc.log.Debugf("Responding to SystemCheckRepair RPC: %s (%+v)", mgmtpb.Debug(resp), err)
+	}()
+	svc.log.Debugf("Received SystemCheckRepair RPC: %+v", req)
+
+	f, err := svc.sysdb.GetCheckerFinding(req.Seq)
+	if err != nil {
+		return nil, err
+	}
+
+	if !f.HasChoice(req.Act) {
+		return nil, errors.Errorf("invalid action %d (must be one of %s)", req.Act, f.ValidChoicesString())
+	}
+
+	dResp, err := svc.makeCheckerCall(ctx, drpc.MethodCheckerAction, req)
+	if err != nil {
+		return nil, err
+	}
+
+	if err := svc.sysdb.SetCheckerFindingAction(req.Seq, int32(req.Act)); err != nil {
+		return nil, err
+	}
+
+	resp = new(mgmtpb.CheckActResp)
+	if err = proto.Unmarshal(dResp.Body, resp); err != nil {
+		return nil, errors.Wrap(err, "unmarshal CheckRepair response")
 	}
 
 	return resp, nil
