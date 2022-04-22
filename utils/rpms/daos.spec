@@ -4,7 +4,7 @@
 %define sysctl_script_name 10-daos_server.conf
 
 %global mercury_version 2.1.0~rc4-8%{?dist}
-%global libfabric_version 1.14.0-1
+%global libfabric_version 1.15.0~rc3-1
 %global __python %{__python3}
 
 %if 0%{?rhel} > 0
@@ -27,7 +27,7 @@
 
 Name:          daos
 Version:       2.3.100
-Release:       3%{?relval}%{?dist}
+Release:       4%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       BSD-2-Clause-Patent
@@ -555,6 +555,9 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 # No files in a shim package
 
 %changelog
+* Wed Apr 20 2022 Lei Huang <lei.huang@intel.com> 2.3.100-4
+- Update to libfabric to v1.15.0rc3-1 to include critical performance patches
+
 * Tue Apr 12 2022 Li Wei <wei.g.li@intel.com> 2.3.100-3
 - Update raft to 0.9.1-1401.gc18bcb8 to fix uninitialized node IDs
 
