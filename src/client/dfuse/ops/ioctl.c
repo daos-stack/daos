@@ -63,9 +63,9 @@ err:
 static void
 handle_size_ioctl(struct dfuse_obj_hdl *oh, fuse_req_t req)
 {
-	struct dfuse_hs_reply hs_reply = {0};
-	d_iov_t               iov      = {};
-	int                   rc;
+	struct dfuse_hs_reply	hs_reply = {0};
+	d_iov_t			iov = {};
+	int			rc;
 
 	hs_reply.fsr_version = DFUSE_IOCTL_VERSION;
 
@@ -101,7 +101,7 @@ static void
 handle_poh_ioctl(struct dfuse_obj_hdl *oh, size_t size, fuse_req_t req)
 {
 	d_iov_t iov = {};
-	int     rc;
+	int rc;
 
 	iov.iov_buf_len = size;
 
@@ -130,11 +130,11 @@ err:
 static void
 handle_pfile_ioctl(struct dfuse_obj_hdl *oh, size_t size, fuse_req_t req)
 {
-	d_iov_t iov = {};
-	ssize_t fsize;
-	int     rc;
-	int     fd;
-	char   *fname = NULL;
+	d_iov_t	iov = {};
+	ssize_t	fsize;
+	int	rc;
+	int	fd;
+	char	*fname = NULL;
 
 	D_STRNDUP(fname, POH_FILE_TEMPLATE, sizeof(POH_FILE_TEMPLATE));
 	if (fname == NULL)
@@ -154,7 +154,7 @@ handle_pfile_ioctl(struct dfuse_obj_hdl *oh, size_t size, fuse_req_t req)
 		D_GOTO(free, rc = daos_der2errno(rc));
 
 	errno = 0;
-	fd    = mkstemp(fname);
+	fd = mkstemp(fname);
 	if (fd == -1)
 		D_GOTO(free, rc = errno);
 
@@ -179,7 +179,7 @@ static void
 handle_coh_ioctl(struct dfuse_obj_hdl *oh, size_t size, fuse_req_t req)
 {
 	d_iov_t iov = {};
-	int     rc;
+	int rc;
 
 	iov.iov_buf_len = size;
 
@@ -206,9 +206,9 @@ err:
 static void
 handle_dsize_ioctl(struct dfuse_obj_hdl *oh, fuse_req_t req)
 {
-	struct dfuse_hsd_reply hsd_reply = {0};
-	d_iov_t                iov       = {};
-	int                    rc;
+	struct dfuse_hsd_reply	hsd_reply = {0};
+	d_iov_t			iov = {};
+	int			rc;
 
 	/* Handle directory */
 	hsd_reply.fsr_version = DFUSE_IOCTL_VERSION;
@@ -231,7 +231,7 @@ static void
 handle_doh_ioctl(struct dfuse_obj_hdl *oh, size_t size, fuse_req_t req)
 {
 	d_iov_t iov = {};
-	int     rc;
+	int rc;
 
 	iov.iov_buf_len = size;
 
@@ -259,7 +259,7 @@ static void
 handle_dooh_ioctl(struct dfuse_obj_hdl *oh, size_t size, fuse_req_t req)
 {
 	d_iov_t iov = {};
-	int     rc;
+	int rc;
 
 	iov.iov_buf_len = size;
 
@@ -284,21 +284,20 @@ err:
 }
 
 #ifdef FUSE_IOCTL_USE_INT
-void
-dfuse_cb_ioctl(fuse_req_t req, fuse_ino_t ino, int cmd, void *arg, struct fuse_file_info *fi,
-	       unsigned int flags, const void *in_buf, size_t in_bufsz, size_t out_bufsz)
+void dfuse_cb_ioctl(fuse_req_t req, fuse_ino_t ino, int cmd, void *arg,
+		    struct fuse_file_info *fi, unsigned int flags,
+		    const void *in_buf, size_t in_bufsz, size_t out_bufsz)
 #else
-void
-dfuse_cb_ioctl(fuse_req_t req, fuse_ino_t ino, unsigned int cmd, void *arg,
-	       struct fuse_file_info *fi, unsigned int flags, const void *in_buf, size_t in_bufsz,
-	       size_t out_bufsz)
+void dfuse_cb_ioctl(fuse_req_t req, fuse_ino_t ino, unsigned int cmd, void *arg,
+		    struct fuse_file_info *fi, unsigned int flags,
+		    const void *in_buf, size_t in_bufsz, size_t out_bufsz)
 #endif
 {
-	struct dfuse_obj_hdl  *oh = (struct dfuse_obj_hdl *)fi->fh;
-	int                    rc;
-	const struct fuse_ctx *fc;
-	uid_t                  uid;
-	gid_t                  gid;
+	struct dfuse_obj_hdl	*oh = (struct dfuse_obj_hdl *)fi->fh;
+	int			rc;
+	const struct fuse_ctx	*fc;
+	uid_t			uid;
+	gid_t			gid;
 
 	if (cmd == TCGETS) {
 		DFUSE_TRA_DEBUG(oh, "Ignoring TCGETS ioctl");
@@ -352,7 +351,7 @@ dfuse_cb_ioctl(fuse_req_t req, fuse_ino_t ino, unsigned int cmd, void *arg,
 		return;
 	}
 
-	fc  = fuse_req_ctx(req);
+	fc = fuse_req_ctx(req);
 	uid = getuid();
 	gid = getgid();
 
