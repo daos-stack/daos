@@ -84,14 +84,16 @@ insert_example_records(void)
 		sgls[NR_IODS_PER_DKEY - 1].sg_iovs   = &iovs[NR_IODS_PER_DKEY - 1];
 		d_iov_set(&iovs[NR_IODS_PER_DKEY - 1], &intdata[i], sizeof(uint64_t));
 
-		d_iov_set(&iods[NR_IODS_PER_DKEY - 1].iod_name, (void *)fields[NR_IODS_PER_DKEY - 1],
+		d_iov_set(&iods[NR_IODS_PER_DKEY - 1].iod_name,
+			  (void *)fields[NR_IODS_PER_DKEY - 1],
 			  strlen(fields[NR_IODS_PER_DKEY - 1]));
 		iods[NR_IODS_PER_DKEY - 1].iod_nr    = 1;
 		iods[NR_IODS_PER_DKEY - 1].iod_size  = sizeof(uint64_t);
 		iods[NR_IODS_PER_DKEY - 1].iod_recxs = NULL;
 		iods[NR_IODS_PER_DKEY - 1].iod_type  = DAOS_IOD_SINGLE;
 
-		rc = daos_obj_update(oh, DAOS_TX_NONE, 0, &dkey, NR_IODS_PER_DKEY, iods, sgls, NULL);
+		rc = daos_obj_update(oh, DAOS_TX_NONE, 0, &dkey, NR_IODS_PER_DKEY, iods, sgls,
+				     NULL);
 		ASSERT(rc == 0, "Obj update failed with %d", rc);
 	}
 	printf("\n");
