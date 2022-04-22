@@ -242,13 +242,31 @@ configure_gcp_project() {
   log "Packer will be using service account ${CLOUD_BUILD_ACCOUNT}"
 
   # Add cloudbuild SA permissions
-  gcloud projects add-iam-policy-binding "${GCP_PROJECT}" \
-    --member "${CLOUD_BUILD_ACCOUNT}" \
-    --role roles/compute.instanceAdmin.v1
+  CHECK_ROLE_INST_ADMIN=$(
+    gcloud projects get-iam-policy "${GCP_PROJECT}" \
+    --flatten="bindings[].members" \
+    --filter="bindings.role=roles/compute.instanceAdmin.v1 AND \
+              bindings.members=${CLOUD_BUILD_ACCOUNT}" \
+    --format="value(bindings.members[])"
+  )
+  if [[ "${CHECK_ROLE_INST_ADMIN}" != "${CLOUD_BUILD_ACCOUNT}" ]]; then
+    gcloud projects add-iam-policy-binding "${GCP_PROJECT}" \
+      --member "${CLOUD_BUILD_ACCOUNT}" \
+      --role roles/compute.instanceAdmin.v1
+  fi
 
-  gcloud projects add-iam-policy-binding "${GCP_PROJECT}" \
-    --member "${CLOUD_BUILD_ACCOUNT}" \
-    --role roles/iam.serviceAccountUser
+  CHECK_ROLE_SVC_ACCT=$(
+    gcloud projects get-iam-policy "${GCP_PROJECT}" \
+    --flatten="bindings[].members" \
+    --filter="bindings.role=roles/iam.serviceAccountUser AND \
+              bindings.members=${CLOUD_BUILD_ACCOUNT}" \
+    --format="value(bindings.members[])"
+  )
+  if [[ "${CHECK_ROLE_SVC_ACCT}" != "${CLOUD_BUILD_ACCOUNT}" ]]; then
+    gcloud projects add-iam-policy-binding "${GCP_PROJECT}" \
+      --member "${CLOUD_BUILD_ACCOUNT}" \
+      --role roles/iam.serviceAccountUser
+  fi
 
   FWRULENAME="gcp-cloudbuild-ssh"
 
@@ -313,4 +331,3 @@ main() {
 }
 
 main "$@"
-
