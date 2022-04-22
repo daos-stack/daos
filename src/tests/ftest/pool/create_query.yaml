@@ -1,0 +1,22 @@
+hosts:
+  test_servers:
+    - server-A
+    - server-B
+    - server-C
+    - server-D
+timeouts:
+  test_create_and_query: 180
+server_config:
+  name: daos_server
+  servers:
+    0:
+      bdev_class: nvme
+      bdev_list: ["aaaa:aa:aa.a", "bbbb:bb:bb.b"]
+      scm_class: dcpm
+      scm_list: ["/dev/pmem0"]
+      scm_mount: /mnt/daos0
+pool:
+  name: daos_server
+  control_method: dmg
+  scm_size: 10000000000  # 10 GB
+  nvme_size: 99999999999  # 100 GB

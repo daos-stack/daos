@@ -90,6 +90,9 @@ class TestPool(TestDaosApiBase):
 
         self.query_data = []
 
+        self.scm_per_rank = None
+        self.nvme_per_rank = None
+
     def get_params(self, test):
         """Get values for all of the command params from the yaml file.
 
@@ -267,6 +270,10 @@ class TestPool(TestDaosApiBase):
             # Set UUID and attached to the DaosPool object
             self.uuid = data["uuid"]
             self.pool.attached = 1
+
+            # Set effective size of mediums per rank
+            self.scm_per_rank = data["scm_per_rank"]
+            self.nvme_per_rank = data["nvme_per_rank"]
 
         # Set the TestPool attributes for the created pool
         if self.pool.attached:
