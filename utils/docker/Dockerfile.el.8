@@ -29,14 +29,26 @@ RUN set -e;                                                      \
     dnf config-manager --save --setopt=assumeyes=True;           \
     dnf config-manager --save --setopt=install_weak_deps=False;  \
     if [ ! -f /etc/fedora-release ]; then                        \
+<<<<<<< HEAD
         dnf --disablerepo \*epel\* install epel-release;         \
+=======
+        dnf --assumeyes --disablerepo \*epel\* install           \
+                            epel-release dnf-plugins-core;       \
+>>>>>>> fed4c9754 (DAOS-9919 ci: Update dnf settings in docker containers.)
         if [ -n "$REPO_FILE_URL" ]; then                         \
             PT_REPO=daos_ci-rocky8-powertools-artifactory;       \
         else                                                     \
             PT_REPO=powertools;                                  \
         fi;                                                      \
+<<<<<<< HEAD
         dnf config-manager --enable $PT_REPO;                    \
     fi;                                                          \
+=======
+        dnf --assumeyes config-manager --enable $PT_REPO;        \
+    fi;                                                          \
+    dnf config-manager --save --setopt=assumeyes=True;           \
+    dnf config-manager --save --setopt=install_weak_deps=False;  \
+>>>>>>> fed4c9754 (DAOS-9919 ci: Update dnf settings in docker containers.)
     dnf clean all
 
 ARG JENKINS_URL
