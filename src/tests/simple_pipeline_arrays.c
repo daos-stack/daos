@@ -363,7 +363,7 @@ run_pipeline(daos_pipeline_t *pipeline)
 
 	/** until anchor is EOF we call pipeline run */
 	while (!daos_anchor_is_eof(&anchor)) {
-		/** restorin value for in/out parametes */
+		/** restorin value for in/out parameters */
 		nr_kds  = 64; /** trying to read 64 in each iteration */
 		nr_iods = NR_IODS_PER_DKEY * nr_kds;
 
