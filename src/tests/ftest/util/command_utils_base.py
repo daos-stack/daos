@@ -254,11 +254,11 @@ class LogParameter(FormattedParameter):
         self.log.debug("  Added the directory: %s => %s", name, self.value)
 
 
-class KeywordParameter(BasicParameter):
+class MappedParameter(BasicParameter):
     """A class for parameters whose values are read from a yaml file."""
 
     def __init__(self, value, default=None, yaml_key=None, mapping=None):
-        """Create a KeywordParameter object.
+        """Create a MappedParameter object.
 
         In addition to BasicParameter usage, a mapping can be supplied to replace
         values from the yaml. This is useful, for example, when the value is a python reference.
