@@ -11,8 +11,7 @@
 set -e
 
 dnf -y install deltarpm
-dnf -y upgrade
-dnf -y install \
+dnf -y --nodocs install \
     boost-python36-devel \
     bzip2 \
     clang-analyzer \
@@ -21,8 +20,8 @@ dnf -y install \
     e2fsprogs \
     file \
     flex \
-    fuse3-devel \
     fuse3 \
+    fuse3-devel \
     gcc \
     gcc-c++ \
     git \
@@ -70,4 +69,3 @@ dnf -y install \
     sudo \
     valgrind-devel \
     yasm
-dnf clean all
