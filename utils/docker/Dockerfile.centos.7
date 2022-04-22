@@ -24,14 +24,16 @@ RUN set -e;                                                      \
         done;                                                    \
         mv daos_ci-centos7-artifactory.repo{.tmp,};              \
     fi;                                                          \
-    yum -y install dnf;                                          \
+    yum --assumeyes install dnf;                                 \
     yum clean all;                                               \
-    dnf --disablerepo \*epel\* -y install epel-release           \
-                                          dnf-plugins-core;      \
+    dnf --assumeyes --disablerepo \*epel\* install               \
+                        epel-release dnf-plugins-core;           \
+    dnf config-manager --save --setopt=assumeyes=True;           \
+    dnf config-manager --save --setopt=install_weak_deps=False;  \
     if [ -n "$REPO_FILE_URL" ]; then                             \
-        dnf -y --quiet config-manager --disable epel;            \
+        dnf --quiet config-manager --disable epel;               \
     fi;                                                          \
-    dnf -y clean all
+    dnf clean all
 
 ARG JENKINS_URL
 ARG REPOS
@@ -52,13 +54,13 @@ baseurl=${JENKINS_URL}job/daos-stack/job/$repo/job/$branch/$build_number/artifac
 enabled=1\n\
 gpgcheck=False\n" >> /etc/yum.repos.d/$repo:$branch:$build_number.repo;   \
         cat /etc/yum.repos.d/$repo:$branch:$build_number.repo; \
-        dnf -y repolist; \
+        dnf repolist; \
         dnf --disablerepo=\* --enablerepo=$repo:$branch:$build_number makecache; \
     done
 
 # Install OS updates and package.  Include basic tools and daos dependencies
 COPY ./utils/scripts/install-centos7.sh /tmp/install.sh
-RUN chmod +x /tmp/install.sh && dnf -y upgrade && /tmp/install.sh && dnf -y clean all && \
+RUN chmod +x /tmp/install.sh && dnf upgrade && /tmp/install.sh && dnf clean all && \
     rm -f /tmp/install.sh
 
 ARG UID=1000
@@ -84,8 +86,8 @@ ARG QUICKBUILD_DEPS
 RUN if $QUICKBUILD; then                                          \
         echo "Installing: $QUICKBUILD_DEPS";                      \
         echo "$QUICKBUILD_DEPS" | sed -e '/^$/d' | tr '\n' '\0' | \
-          xargs -0 dnf -y install;                                \
-        dnf -y clean all;                                            \
+          xargs -0 dnf install;                                   \
+        dnf clean all;                                            \
     fi
 
 ARG BULLSEYE
@@ -124,10 +126,9 @@ ARG DAOS_TARGET_TYPE=release
 # src hasn't changed then this won't do anything, but if it has then we want to
 # ensure that latest dependencies are used.
 USER root:root
-RUN [ "$DAOS_DEPS_BUILD" != "yes" ] || {                                       \
-        dnf -y upgrade                                                         \
-            --exclude=spdk,spdk-devel,dpdk-devel,dpdk,mercury-devel,mercury && \
-        dnf -y clean all;                                                         \
+RUN [ "$DAOS_DEPS_BUILD" != "yes" ] || {                                               \
+        dnf upgrade --exclude=spdk,spdk-devel,dpdk-devel,dpdk,mercury-devel,mercury && \
+        dnf clean all;                                                                 \
     }
 USER daos_server:daos_server
 
@@ -140,13 +141,11 @@ RUN [ "$DAOS_DEPS_BUILD" != "yes" ] || {                            \
     }
 USER root:root
 
-# select compiler to use
-ARG COMPILER=gcc
 # force an upgrade to get any newly built RPMs, but only if CACHEBUST is set.
 ARG CACHEBUST
-RUN [ -z "$CACHEBUST" ] || {                                                              \
-        dnf -y upgrade --exclude=spdk,spdk-devel,dpdk-devel,dpdk,mercury-devel,mercury && \
-        dnf -y clean all;                                                                    \
+RUN [ -z "$CACHEBUST" ] || {                                                           \
+        dnf upgrade --exclude=spdk,spdk-devel,dpdk-devel,dpdk,mercury-devel,mercury && \
+        dnf clean all;                                                                 \
     }
 USER daos_server:daos_server
 
@@ -160,6 +159,8 @@ COPY --chown=daos_server:daos_server site_scons site_scons
 COPY --chown=daos_server:daos_server utils utils
 COPY --chown=daos_server:daos_server src src
 
+# select compiler to use
+ARG COMPILER=gcc
 ARG JOBS=$DEPS_JOBS
 ARG DAOS_BUILD_TYPE=$DAOS_TARGET_TYPE
 ARG DAOS_BUILD=$DAOS_DEPS_BUILD
@@ -186,7 +187,7 @@ RUN [ "$DAOS_JAVA_BUILD" != "yes" ] || {                                        
         mkdir /home/daos/.m2 &&                                                               \
         cp /home/daos/daos/utils/scripts/maven-settings.xml.in /home/daos/.m2/settings.xml && \
         mvn clean install -T 1C                                                               \
-            -B -Dorg.slf4j.simpleLogger.log.org.apache.maven.cli.transfer.Slf4jMavenTransferListener=warn                                                   \
+            -B -Dorg.slf4j.simpleLogger.log.org.apache.maven.cli.transfer.Slf4jMavenTransferListener=warn \
             -DskipITs -Dgpg.skip -Ddaos.install.path=/opt/daos;                               \
     }
 WORKDIR /home/daos

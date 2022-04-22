@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/sh -e
 
 # Install OS updates and package.  Include basic tools and daos dependencies
 # that come from the core repo.
@@ -8,9 +8,7 @@
 # post provisioning issue.
 # *** Keep these in as much alphbetical order as possible ***
 
-set -e
-
-dnf -y --nodocs install \
+dnf --nodocs install \
     boost-devel \
     bzip2 \
     curl \
