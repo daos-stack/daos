@@ -570,8 +570,9 @@ int main(int argc, char *argv[])
 
 		/* filtering suites and tests */
 		char test_suites[] = "";
-
+#if CMOCKA_FILTER_SUPPORTED == 1 /** requires cmocka 1.1.5 */
 		cmocka_set_test_filter("**");
+#endif
 		RUN_TEST_SUIT('a', ddb_parse_tests_run);
 		RUN_TEST_SUIT('b', ddb_cmd_options_tests_run);
 		RUN_TEST_SUIT('c', dv_tests_run);
