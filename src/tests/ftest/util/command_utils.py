@@ -1,6 +1,6 @@
 #!/usr/bin/python
 """
-  (C) Copyright 2018-2021 Intel Corporation.
+  (C) Copyright 2018-2022 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -24,7 +24,7 @@ from exception_utils import CommandFailure
 from general_utils import check_file_exists, get_log_file, \
     run_command, DaosTestError, get_job_manager_class, create_directory, \
     distribute_files, change_file_owner, get_file_listing, run_pcmd, \
-    get_subprocess_stdout
+    get_subprocess_stdout, get_primary_group
 
 
 class ExecutableCommand(CommandWithParameters):
@@ -966,7 +966,7 @@ class YamlCommand(SubProcessCommand):
                     self.command, directory, user, nodes)
                 try:
                     create_directory(nodes, directory, sudo=True)
-                    change_file_owner(nodes, directory, user, user, sudo=True)
+                    change_file_owner(nodes, directory, user, get_primary_group(user), sudo=True)
                 except DaosTestError as error:
                     raise CommandFailure(
                         "{}: error setting up missing socket directory {} for "
