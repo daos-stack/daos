@@ -20,7 +20,7 @@ import uuid
 import re
 import ctypes
 from general_utils import create_string_buffer
-from command_utils_base import KeywordParameter
+from command_utils_base import MappedParameter
 
 
 class DataMoverTestBase(IorTestBase, MdtestBase):
@@ -97,10 +97,8 @@ class DataMoverTestBase(IorTestBase, MdtestBase):
         self.ddeserialize_np = None
 
         # Root directory for POSIX paths
-        self.posix_root = KeywordParameter(None, mapping={
-            'self.workdir': self.workdir,
-            'self.tmp': self.tmp
-        })
+        posix_root_map = {'self.workdir': self.workdir, 'self.tmp': self.tmp}
+        self.posix_root = MappedParameter(None, mapping=posix_root_map, default=self.tmp)
 
         # Temp directory for serialize/deserialize
         self.serial_tmp_dir = self.tmp
@@ -145,7 +143,7 @@ class DataMoverTestBase(IorTestBase, MdtestBase):
         self.ddeserialize_np = self.params.get("np", "/run/ddeserialize/*", self.processes)
         self.ddeserialize_ppn = self.params.get("ppn", "/run/ddeserialize/*", self.ppn)
 
-        self.posix_root.update(self.params.get("posix_root", "/run/datamover/*", self.tmp))
+        self.posix_root.get_yaml_value("posix_root", self, "/run/datamover/*")
 
         tool = self.params.get("tool", "/run/datamover/*")
         if tool:
