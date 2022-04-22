@@ -132,6 +132,10 @@ dvt_vos_insert_single(daos_handle_t coh, daos_unit_oid_t uoid, char *dkey_str, c
 /*
  * These tests look at and verify how the ddb types are printed.
  */
+
+uint32_t dvt_fake_print_called;
+char dvt_fake_print_buffer[1024];
+
 int
 dvt_fake_print(const char *fmt, ...)
 {
@@ -155,17 +159,24 @@ void dvt_fake_print_reset(void)
 	memset(dvt_fake_print_buffer, 0, ARRAY_SIZE(dvt_fake_print_buffer));
 }
 
+size_t dvt_fake_get_file_size_result;
+
 size_t
 dvt_fake_get_file_size(const char *path)
 {
 	return dvt_fake_get_file_size_result;
 }
 
+bool dvt_fake_get_file_exists_result;
+
 bool
 dvt_fake_get_file_exists(const char *path)
 {
 	return dvt_fake_get_file_exists_result;
 }
+
+size_t dvt_fake_read_file_result;
+char dvt_fake_read_file_buf[64];
 
 size_t
 dvt_fake_read_file(const char *src_path, d_iov_t *contents)

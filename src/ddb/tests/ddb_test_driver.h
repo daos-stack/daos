@@ -57,20 +57,20 @@ void dvt_insert_data(daos_handle_t poh, uint32_t conts, uint32_t objs, uint32_t 
 
 int ddb_test_pool_setup(struct dt_vos_pool_ctx *tctx);
 
-uint32_t dvt_fake_print_called;
-char dvt_fake_print_buffer[1024];
+extern uint32_t dvt_fake_print_called;
+extern char dvt_fake_print_buffer[1024];
 int dvt_fake_print(const char *fmt, ...);
 void dvt_fake_print_reset(void);
 
 
-size_t dvt_fake_get_file_size_result;
+extern size_t dvt_fake_get_file_size_result;
 size_t dvt_fake_get_file_size(const char *path);
 
-bool dvt_fake_get_file_exists_result;
+extern bool dvt_fake_get_file_exists_result;
 bool dvt_fake_get_file_exists(const char *path);
 
-size_t dvt_fake_read_file_result;
-char dvt_fake_read_file_buf[64];
+extern size_t dvt_fake_read_file_result;
+extern char dvt_fake_read_file_buf[64];
 size_t dvt_fake_read_file(const char *src_path, d_iov_t *contents);
 
 void dvt_vos_insert_2_records_with_dtx(daos_handle_t coh);
