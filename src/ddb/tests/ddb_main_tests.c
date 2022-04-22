@@ -51,13 +51,12 @@ static char *
 fake_get_input(char *buf, uint32_t buf_len)
 {
 	char *input;
-	uint32_t input_len;
 
 	assert_true(fake_get_input_inputs_idx < ARRAY_SIZE(fake_get_input_inputs));
 	input = fake_get_input_inputs[fake_get_input_inputs_idx++];
-	input_len = strlen(input) + 1;
+	assert_true(strlen(input) < buf_len);
 
-	strncpy(buf, input, min(input_len, buf_len));
+	strcpy(buf, input);
 	fake_get_input_called++;
 
 	return input;
