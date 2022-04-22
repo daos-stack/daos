@@ -1481,7 +1481,7 @@ def clean_logs(test_yaml, args):
     # Remove any log files from the DAOS_TEST_LOG_DIR directory
     logs_dir = os.environ.get("DAOS_TEST_LOG_DIR", DEFAULT_DAOS_TEST_LOG_DIR)
     host_list = get_hosts_from_yaml(test_yaml, args)
-    command = "sudo rm -fr {}".format(os.path.join(logs_dir, "*.log*"))
+    command = "rm -fr {}".format(os.path.join(logs_dir, "*.log*"))
     # also remove any ABT infos/stacks dumps
     command += " /tmp/daos_dump*.txt*"
     print("-" * 80)
@@ -2190,7 +2190,7 @@ def stop_service(hosts, service):
                 else:
                     # Issue the appropriate systemctl command to remedy the
                     # detected state, e.g. 'stop' for 'active'.
-                    command = "sudo systemctl {} {}".format(key, service)
+                    command = "systemctl {} {}".format(key, service)
                     get_remote_output(str(result[key]), command)
 
                     # Run the status check again on this group of hosts

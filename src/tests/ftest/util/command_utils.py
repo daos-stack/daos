@@ -899,7 +899,7 @@ class YamlCommand(SubProcessCommand):
                         self.log.debug("  %s -> %s", src_file, dst_file)
                         result = distribute_files(
                             hosts, src_file, dst_file, mkdir=False,
-                            verbose=False, raise_exception=False, sudo=True,
+                            verbose=False, raise_exception=False, sudo=False,
                             owner=self.certificate_owner)
                         if result.exit_status != 0:
                             self.log.info(
@@ -937,7 +937,7 @@ class YamlCommand(SubProcessCommand):
                 try:
                     distribute_files(
                         hosts, self.temporary_file, self.yaml.filename,
-                        verbose=False, sudo=True)
+                        verbose=False, sudo=False)
                 except DaosTestError as error:
                     raise CommandFailure(
                         "ERROR: Copying yaml configuration file to {}: "
@@ -1342,7 +1342,7 @@ class SystemctlCommand(ExecutableCommand):
         """Create a SystemctlCommand object."""
         super().__init__(
             "/run/systemctl/*", "systemctl", subprocess=False)
-        self.sudo = True
+        self.sudo = False
 
         self.unit_command = BasicParameter(None)
         self.service = BasicParameter(None)

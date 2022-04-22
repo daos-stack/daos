@@ -231,16 +231,16 @@ class DaosServerManager(SubprocessManager):
             self.log.info("Cleaning up the %s directory.", str(scm_mount))
 
             # Remove the superblocks
-            cmd = "sudo rm -fr {}/*".format(scm_mount)
+            cmd = "rm -fr {}/*".format(scm_mount)
             if cmd not in clean_commands:
                 clean_commands.append(cmd)
 
             # Remove the shared memory segment associated with this io server
-            cmd = "sudo ipcrm -M {}".format(self.D_TM_SHARED_MEMORY_KEY + index)
+            cmd = "ipcrm -M {}".format(self.D_TM_SHARED_MEMORY_KEY + index)
             clean_commands.append(cmd)
 
             # Dismount the scm mount point
-            cmd = "while sudo umount {}; do continue; done".format(scm_mount)
+            cmd = "while umount {}; do continue; done".format(scm_mount)
             if cmd not in clean_commands:
                 clean_commands.append(cmd)
 
@@ -255,11 +255,11 @@ class DaosServerManager(SubprocessManager):
                         "for dev in {}".format(" ".join(scm_list)),
                         "do mount=$(lsblk $dev -n -o MOUNTPOINT)",
                         "if [ ! -z $mount ]",
-                        "then while sudo umount $mount",
+                        "then while umount $mount",
                         "do continue",
                         "done",
                         "fi",
-                        "sudo wipefs -a $dev",
+                        "wipefs -a $dev",
                         "done"
                     ]
                     cmd = "; ".join(cmd_list)
@@ -308,7 +308,7 @@ class DaosServerManager(SubprocessManager):
             cmd.sub_command_class.sub_command_class.hugepages.value = hugepages
 
         self.log.info("Preparing DAOS server storage: %s", str(cmd))
-        results = run_pcmd(self._hosts, str(cmd), timeout=40)
+        results = run_pcmd(self._hosts, str(cmd), timeout=300)
 
         # gratuitously lifted from pcmd() and get_current_state()
         result = {}
@@ -327,7 +327,7 @@ class DaosServerManager(SubprocessManager):
                 dev_type = "dcpm & nvme"
             elif using_dcpm:
                 dev_type = "dcpm"
-            pcmd(self._hosts, "sudo -n ipmctl show -v -dimm")
+            pcmd(self._hosts, "ipmctl show -v -dimm")
             pcmd(self._hosts, "ndctl list ")
             raise ServerFailed("Error preparing {} storage".format(dev_type))
 
@@ -476,7 +476,7 @@ class DaosServerManager(SubprocessManager):
 
             self.log.info("Changing ownership to %s for: %s", user, scm_mount)
             cmd_list.add(
-                "sudo chown -R {0}:{0} {1}".format(user, " ".join(scm_mount)))
+                "chown -R {0}:{0} {1}".format(user, " ".join(scm_mount)))
 
         if cmd_list:
             pcmd(self._hosts, "; ".join(cmd_list), verbose)
@@ -531,7 +531,7 @@ class DaosServerManager(SubprocessManager):
             "<SERVER> Formatting hosts: <%s>", self.dmg.hostlist)
         # Temporarily increasing timeout to avoid CI errors until DAOS-5764 can
         # be further investigated.
-        self.dmg.storage_format(timeout=40)
+        self.dmg.storage_format(timeout=300)
 
         # Wait for all the engines to start
         self.detect_engine_start()
