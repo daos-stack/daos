@@ -704,7 +704,7 @@ run_pipeline(daos_pipeline_t *pipeline)
 				       (int)(STRING_MAX_LEN - rec_s), ' ');
 				rec += rec_s;
 			}
-			printf("%.*s(akey)=%lu\n", (int)iods[nr_iods - 1].iod_name.iov_len,
+			printf("%.*s(akey)=%lu\n", (int)iods[NR_IODS_PER_DKEY - 1].iod_name.iov_len,
 			       (char *)iods[nr_iods - 1].iod_name.iov_buf, *((uint64_t *)rec));
 			rec += sizeof(uint64_t);
 		}
