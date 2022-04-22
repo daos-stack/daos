@@ -3,18 +3,18 @@ name: Create Release
 on:
   push:
     paths:
-    - 'TAG'
+      - TAG
     branches:
-    - master
-    - 'release/**'
+      - master
+      - 'release/**'
 
 jobs:
   make_release:
     name: Create Release
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v1
-    - uses: ./.github/actions/make_release
-      id: make_release
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - uses: actions/checkout@v1
+      - uses: ./.github/actions/make_release
+        id: make_release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

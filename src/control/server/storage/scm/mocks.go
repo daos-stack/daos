@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2021 Intel Corporation.
+// (C) Copyright 2019-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -166,60 +166,43 @@ func DefaultMockSysProvider(log logging.Logger) *MockSysProvider {
 // implementation providing capability to access and configure
 // SCM modules and namespaces.
 type MockBackendConfig struct {
-	DiscoverRes          storage.ScmModules
-	DiscoverErr          error
-	GetPmemNamespaceRes  storage.ScmNamespaces
-	GetPmemNamespaceErr  error
-	GetPmemStateErr      error
-	StartingState        storage.ScmState
-	NextState            storage.ScmState
-	PrepNeedsReboot      bool
-	PrepNamespaceRes     storage.ScmNamespaces
+	GetModulesRes        storage.ScmModules
+	GetModulesErr        error
+	GetNamespacesRes     storage.ScmNamespaces
+	GetNamespacesErr     error
+	GetStateRes          storage.ScmState
+	GetStateErr          error
+	PrepRes              *storage.ScmPrepareResponse
 	PrepErr              error
+	PrepResetRes         *storage.ScmPrepareResponse
+	PrepResetErr         error
 	GetFirmwareStatusErr error
 	GetFirmwareStatusRes *storage.ScmFirmwareInfo
 	UpdateFirmwareErr    error
 }
 
 type MockBackend struct {
-	sync.RWMutex
-	curState storage.ScmState
-	cfg      MockBackendConfig
+	cfg MockBackendConfig
 }
 
-func (mb *MockBackend) Discover() (storage.ScmModules, error) {
-	return mb.cfg.DiscoverRes, mb.cfg.DiscoverErr
+func (mb *MockBackend) getModules() (storage.ScmModules, error) {
+	return mb.cfg.GetModulesRes, mb.cfg.GetModulesErr
 }
 
-func (mb *MockBackend) GetPmemNamespaces() (storage.ScmNamespaces, error) {
-	return mb.cfg.GetPmemNamespaceRes, mb.cfg.GetPmemNamespaceErr
+func (mb *MockBackend) getNamespaces() (storage.ScmNamespaces, error) {
+	return mb.cfg.GetNamespacesRes, mb.cfg.GetNamespacesErr
 }
 
-func (mb *MockBackend) GetPmemState() (storage.ScmState, error) {
-	if mb.cfg.GetPmemStateErr != nil {
-		return storage.ScmStateUnknown, mb.cfg.GetPmemStateErr
-	}
-	mb.RLock()
-	defer mb.RUnlock()
-	return mb.curState, nil
+func (mb *MockBackend) getRegionState() (storage.ScmState, error) {
+	return mb.cfg.GetStateRes, mb.cfg.GetStateErr
 }
 
-func (mb *MockBackend) Prep(_ storage.ScmState) (bool, storage.ScmNamespaces, error) {
-	if mb.cfg.PrepErr == nil {
-		mb.Lock()
-		mb.curState = mb.cfg.NextState
-		mb.Unlock()
-	}
-	return mb.cfg.PrepNeedsReboot, mb.cfg.PrepNamespaceRes, mb.cfg.PrepErr
+func (mb *MockBackend) prep(storage.ScmPrepareRequest, *storage.ScmScanResponse) (*storage.ScmPrepareResponse, error) {
+	return mb.cfg.PrepRes, mb.cfg.PrepErr
 }
 
-func (mb *MockBackend) PrepReset(_ storage.ScmState) (bool, error) {
-	if mb.cfg.PrepErr == nil {
-		mb.Lock()
-		mb.curState = mb.cfg.NextState
-		mb.Unlock()
-	}
-	return mb.cfg.PrepNeedsReboot, mb.cfg.PrepErr
+func (mb *MockBackend) prepReset(*storage.ScmScanResponse) (*storage.ScmPrepareResponse, error) {
+	return mb.cfg.PrepResetRes, mb.cfg.PrepResetErr
 }
 
 func (mb *MockBackend) GetFirmwareStatus(deviceUID string) (*storage.ScmFirmwareInfo, error) {
@@ -235,8 +218,7 @@ func NewMockBackend(cfg *MockBackendConfig) *MockBackend {
 		cfg = &MockBackendConfig{}
 	}
 	return &MockBackend{
-		curState: cfg.StartingState,
-		cfg:      *cfg,
+		cfg: *cfg,
 	}
 }
 

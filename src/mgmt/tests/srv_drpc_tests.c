@@ -1177,6 +1177,7 @@ setup_pool_query_drpc_call(Drpc__Call *call, char *uuid)
 	Mgmt__PoolQueryReq req = MGMT__POOL_QUERY_REQ__INIT;
 
 	req.id = uuid;
+	req.include_enabled_ranks = true;
 	pack_pool_query_req(call, &req);
 }
 
