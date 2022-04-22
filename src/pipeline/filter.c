@@ -47,12 +47,12 @@ pipeline_aggregations_init(daos_pipeline_t *pipeline, d_sg_list_t *sgl_agg)
 	uint32_t            i;
 	double             *buf;
 	daos_filter_part_t *part;
-	char	       *part_type;
+	char               *part_type;
 	size_t              part_type_s;
 
 	for (i = 0; i < pipeline->num_aggr_filters; i++) {
 		part        = pipeline->aggr_filters[i]->parts[0];
-		buf         = (double *)sgl_agg[i].sg_iovs->iov_buf;
+		buf         = (double *)sgl_agg->sg_iovs[i].iov_buf;
 		part_type   = (char *)part->part_type.iov_buf;
 		part_type_s = part->part_type.iov_len;
 
@@ -62,7 +62,10 @@ pipeline_aggregations_init(daos_pipeline_t *pipeline, d_sg_list_t *sgl_agg)
 			*buf = INFINITY;
 		else
 			*buf = 0;
+
+		sgl_agg->sg_iovs[i].iov_len = sizeof(double);
 	}
+	sgl_agg->sg_nr_out = pipeline->num_aggr_filters;
 }
 
 static uint32_t
