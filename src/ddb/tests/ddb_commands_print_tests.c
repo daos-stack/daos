@@ -57,6 +57,9 @@ print_key_test(void **state)
 {
 	struct ddb_key	key = {0};
 	char		key_buf[1024] = {0};
+	uint64_t	ll = 0x1abc2abc3abc4abc;
+	int		i = 0x1234abcd;
+	short		s = 0xabcd;
 
 	key.ddbk_idx = 4;
 	d_iov_set(&key.ddbk_key, key_buf, ARRAY_SIZE(key_buf));
@@ -102,7 +105,6 @@ print_key_test(void **state)
 	dvt_fake_print_reset();
 
 	/* short key */
-	short s = 0xabcd;
 	key.ddbk_key.iov_buf = (uint8_t *)&s;
 	key.ddbk_key.iov_len = sizeof(short);
 	ddb_print_key(&ctx, &key, 0);
@@ -110,7 +112,6 @@ print_key_test(void **state)
 	dvt_fake_print_reset();
 
 	/* int key */
-	int i = 0x1234abcd;
 	key.ddbk_key.iov_buf = (int *)&i;
 	key.ddbk_key.iov_len = sizeof(int);
 	ddb_print_key(&ctx, &key, 0);
@@ -118,7 +119,6 @@ print_key_test(void **state)
 	dvt_fake_print_reset();
 
 	/* 64 bit key */
-	uint64_t ll = 0x1abc2abc3abc4abc;
 	key.ddbk_key.iov_buf = (uint64_t *)&ll;
 	key.ddbk_key.iov_len = sizeof(uint64_t);
 	ddb_print_key(&ctx, &key, 0);
