@@ -1,0 +1,23 @@
+name: Build
+
+on:
+  pull_request:
+    paths:
+      - '**/*.py'
+      - .github/workflows/pylint.yml
+
+jobs:
+
+  pylint:
+    name: Run pylint with spell checking
+    runs-on: ubuntu-20.04
+    strategy:
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v2
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+      - name: Get file-list
+        run: git ls-files > utils/to-check
+      - name: Run
+        run: docker build . --file utils/docker/Dockerfile.pylint
