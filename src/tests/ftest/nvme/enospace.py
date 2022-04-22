@@ -103,9 +103,7 @@ class NvmeEnospace(ServerFillUp):
         job_manager = get_job_manager(self, "Mpirun", ior_bg_cmd, mpi_type="mpich")
 
         # create container
-        container = TestContainer(self.pool, daos_command=DaosCommand(self.bin))
-        container.get_params(self)
-        container.create()
+        container = self.get_container(self.pool)
 
         job_manager.job.dfs_cont.update(container.uuid)
         env = ior_bg_cmd.get_default_env(str(job_manager))
