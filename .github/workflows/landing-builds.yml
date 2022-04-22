@@ -1,7 +1,7 @@
 name: Landings
 
 # Run on landings, or when this action itself is changed.
-on:  # yamllint disable-line rule:truthy
+on:
   push:
     branches:
       - master
