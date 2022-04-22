@@ -977,8 +977,8 @@ evt_ent_array_sort(struct evt_context *tcx, struct evt_entry_array *ent_array,
 	int			 num_visible = 0;
 	int			 rc;
 
-	D_DEBUG(DB_TRACE, "Sorting array with filter "DF_FILTER"\n",
-		DP_FILTER(filter));
+	D_DEBUG(DB_TRACE, "Sorting array with filter "DF_FILTER", ea_ent_nr %d.\n",
+		DP_FILTER(filter), ent_array->ea_ent_nr);
 	if (ent_array->ea_ent_nr == 0)
 		return 0;
 
@@ -2815,7 +2815,7 @@ evt_close(daos_handle_t toh)
 	return 0;
 }
 
-#define EVT_AGG_MASK (VOS_TF_AGG_HLC | VOS_TF_AGG_TIME_MASK | VOS_TF_AGG_OPT)
+#define EVT_AGG_MASK (VOS_TF_AGG_HLC | VOS_AGG_TIME_MASK | VOS_TF_AGG_OPT)
 /**
  * Create a new tree inplace of \a root, return the open handle.
  * Please check API comment in evtree.h for the details.

@@ -12,8 +12,7 @@ import sys
 
 from ClusterShell.NodeSet import NodeSet
 
-from launch import \
-    check_remote_output, display, get_remote_output, run_command, spawn_commands, get_output
+from launch import display, get_remote_output, run_command, spawn_commands, get_output
 
 # The distro_utils.py file is installed in the util sub-directory relative to this file location
 sys.path.append(os.path.join(os.getcwd(), "util"))
@@ -89,15 +88,10 @@ def get_core_files(args):
     required_1k_blocks = 0
     core_files = []
 
-    # Get a list of any core files and their size in 1k blocks
+    # Get a list of any remote core files and their size in 1k blocks
     command = ["ls", "-1sk", os.path.join(args.source, "core.*")]
     task = get_remote_output(list(args.nodes), " ".join(command))
-    if not check_remote_output(task, command):
-        raise RuntimeError("Error detecting core files on {}".format(args.nodes))
-
-    # Populate a dictionary of active interfaces with a NodSet of nodes on which it was found
     for output, nodelist in task.iter_buffers():
-        # nodeset = NodeSet.fromlist(nodelist)
         core_files.append([NodeSet.fromlist(nodelist)])
         display(args, "Core files detected on {}:".format(str(core_files[-1][0])), 0)
         for line in output:

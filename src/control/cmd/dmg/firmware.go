@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2021 Intel Corporation.
+// (C) Copyright 2020-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -28,7 +28,7 @@ type firmwareCmd struct {
 
 // firmwareQueryCmd is used to query the storage device firmware on a set of DAOS hosts.
 type firmwareQueryCmd struct {
-	logCmd
+	baseCmd
 	ctlInvokerCmd
 	hostListCmd
 	jsonOutputCmd
@@ -81,7 +81,7 @@ func (cmd *firmwareQueryCmd) Execute(args []string) error {
 			return err
 		}
 	}
-	cmd.log.Info(bld.String())
+	cmd.Info(bld.String())
 
 	return resp.Errors()
 }
@@ -112,7 +112,7 @@ func (cmd *firmwareQueryCmd) getDisplayFunctions() (hostSCMQueryMapPrinter, host
 
 // firmwareUpdateCmd updates the firmware on storage devices on a set of DAOS hosts.
 type firmwareUpdateCmd struct {
-	logCmd
+	baseCmd
 	ctlInvokerCmd
 	hostListCmd
 	jsonOutputCmd
@@ -164,7 +164,7 @@ func (cmd *firmwareUpdateCmd) Execute(args []string) error {
 		return err
 	}
 
-	cmd.log.Info(bld.String())
+	cmd.Info(bld.String())
 
 	return resp.Errors()
 }

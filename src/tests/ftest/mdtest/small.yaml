@@ -2,14 +2,36 @@ hosts:
   test_servers:
     - server-A
     - server-B
-    - server-C
-    - server-D
   test_clients:
     - client-E
     - client-F
-timeout: 605
+timeout: 360
 server_config:
+  engines_per_host: 2
   name: daos_server
+  servers:
+    0:
+      pinned_numa_node: 0
+      nr_xs_helpers: 1
+      fabric_iface: ib0
+      fabric_iface_port: 31317
+      log_file: daos_server0.log
+      bdev_class: nvme
+      bdev_list: ["0000:81:00.0"]
+      scm_class: dcpm
+      scm_list: ["/dev/pmem0"]
+      scm_mount: /mnt/daos0
+    1:
+      pinned_numa_node: 1
+      nr_xs_helpers: 1
+      fabric_iface: ib1
+      fabric_iface_port: 31417
+      log_file: daos_server1.log
+      bdev_class: nvme
+      bdev_list: ["0000:da:00.0"]
+      scm_class: dcpm
+      scm_list: ["/dev/pmem1"]
+      scm_mount: /mnt/daos1
   transport_config:
     allow_insecure: True
 agent_config:
@@ -21,7 +43,7 @@ dmg:
 pool:
   mode: 146
   name: daos_server
-  scm_size: 6000000000
+  size: 50G
   svcn: 1
   control_method: dmg
 container:
@@ -30,22 +52,19 @@ container:
   control_method: daos
 mdtest:
   client_processes:
-    np_8:
-      np: 8
+    ppn: 32
   test_dir: "/"
-  iteration: 1
-  dfs_destroy: True
   manager: "MPICH"
   mdtest_params:
 #     [api, write, read, branching_factor, num_of_dir_files, depth, flags]
-    - [DFS, 4096, 4096, 1, 1000, 0, ' ']
-    - [DFS, 4096, 4096, 1, 1000, 20, ' ']
-    - [POSIX, 0, 0, 1, 1000, 0, ' ']
-    - [POSIX, 0, 0, 1, 1000, 20, ' ']
-    - [DFS, 4096, 4096, 2, 10, 5, ' ']
-    - [POSIX, 4096, 4096, 2, 10, 5, ' ']
-    - [DFS, 4096, 4096, 1, 1000, 20, '-u']
-    - [POSIX, 0, 0, 2, 10, 5, '-u']
-
+    - [DFS,   4096, 4096, 1, 100, 0,   ' ']
+    - [DFS,   4096, 4096, 1, 100, 20,  ' ']
+    - [DFS,   4096, 4096, 1, 100, 100, ' ']
+    - [DFS,   4096, 4096, 2, 10,  5,   ' ']
+    - [POSIX, 0,    0,    1, 100, 0,   ' ']
+    - [POSIX, 0,    0,    1, 100, 20,  ' ']
+    - [POSIX, 4096, 4096, 2, 10,  5,   ' ']
+    - [DFS,   4096, 4096, 1, 100, 20,  '-u']
+    - [POSIX, 0,    0,    2, 10,  5,   '-u']
 dfuse:
   mount_dir: "/tmp/daos_dfuse/"
