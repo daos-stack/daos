@@ -45,8 +45,8 @@ dmg:
 pool:
     mode: 146
     name: daos_server
-    scm_size: 5368709120 #5G
-    nvme_size: 5368709120 #5G
+    scm_size: 5G
+    nvme_size: 5G
     control_method: dmg
 container:
     control_method: daos
@@ -60,12 +60,8 @@ ior:
       flags: "-w -F -k -G 1"
       read_flags: "-r -R -F -k -G 1"
   test_file: daos:testFile
-  repetitions: 1
   transfersize_blocksize:
     2K:
       transfer_size: 2048 #2K
     16M:
       nvme_transfer_size: 16777216 #16M
-  objectclass:
-    S1:
-      obj_class: "S1"
