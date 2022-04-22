@@ -17,7 +17,6 @@ class TestWithScrubberTargetEviction(TestWithScrubber):
 
     :avocado: recursive
     """
-    @skipForTicket("DAOS-10377")
     def test_scrubber_ssd_auto_eviction(self):
         """JIRA ID: DAOS-7300
 
