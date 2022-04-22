@@ -1,0 +1,34 @@
+
+
+FROM rockylinux/rockylinux:8
+
+RUN dnf --assumeyes install python39 python39-devel gcc enchant && dnf --assumeyes clean all
+
+#RUN dnf --assumeyes install dnf-plugins-core &&                   \
+#    dnf config-manager --save --setopt=assumeyes=True &&          \
+#    dnf config-manager --save --setopt=install_weak_deps=False && \
+#    dnf update &&                                                 \
+#    dnf install python39 python39-devel gcc &&                    \
+#    dnf clean all
+
+# Add DAOS users
+RUN useradd --no-log-init --user-group --create-home --home /home/daos daos_server
+
+USER daos_server:daos_server
+WORKDIR /home/daos
+
+# Setup a python venv so that python packages can be installed locally.
+RUN python3 -m venv /home/daos/venv
+ENV PATH=/home/daos/venv/bin:$PATH
+ENV VIRTUAL_ENV=/home/daos/venv/
+
+# Install latest versions of python tools.
+# wheel is needed first to avoid a warning when installing pyyaml.
+COPY requirements.txt .
+RUN python3 -m pip --no-cache-dir install --upgrade pip && \
+    python3 -m pip --no-cache-dir install wheel && \
+    python3 -m pip --no-cache-dir install -r requirements.txt
+
+COPY --chown=daos_server:daos_server . .
+RUN mv utils/words.dict .
+RUN ./utils/daos_pylint.py from-file

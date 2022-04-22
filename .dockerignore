@@ -13,6 +13,7 @@
 !site_scons
 !.clang-format
 !requirements.txt
+!pylintrc
 
 # Now disallow extra files which may be present but are not required.
 # Include the rdb repo as well.
@@ -39,7 +40,6 @@ doc
 # Deny dockerfiles themselves.  Avoid rebuilding deps if only the instructions
 # have changed.
 utils/docker
-utils/sl/fake_scons
 utils/docker_nlt.sh
 
 # Test log files.

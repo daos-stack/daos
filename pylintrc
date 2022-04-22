@@ -1,0 +1,69 @@
+# Requirements for pylint checking in DAOS.
+
+# Wrapper script for pylint that does the following:
+#  Wraps scons commands and adjusts report line numbers
+#  Sets python-path or similar
+#  Runs in parallel across whole tree
+#  Supports minimum python version
+#  Supports venv
+#  Can be used by atom.io live
+#  Can be used in Jenkins to report regressions
+#  Can output github stype warnings
+#  Can be used as a commit-hook
+#  flake8 style --diff option
+
+# Modes:
+# Jenkins:
+#  Runs against whole tree, produces warnings-ng style output for everything, and Jenkins warns
+#   on regressions.
+# GHA:
+#  Runs against whole tree with some warnings.
+# Commit-hook:
+#  Runs against whole tree with some warnings, and against diff with others.
+# Editor:
+#  Runs against single-file, but restricted in output format.
+# Direct:
+#  Summary mode?
+
+
+[MASTER]
+extension-pkg-allow-list=xattr
+persistent=no
+init-hook=import sys
+        sys.path.append('src/tests/ftest/util/apricot')
+        sys.path.append('src/tests/ftest/cart/util/')
+        sys.path.append('src/tests/ftest/util')
+        sys.path.append('src/tests/ftest')
+        sys.path.append('site_scons')
+        sys.path.append('utils/sl/fake_scons')
+
+[BASIC]
+good-names=rc,ret
+
+[MESSAGES CONTROL]
+disable=locally-disabled,locally-enabled,star-args,wrong-import-order,
+        unused-wildcard-import,invalid-name,global-statement,bad-option-value,
+        wrong-import-position,C0209,W1514,consider-using-f-string,modified-iterating-list,
+        duplicate-code
+
+[SPELLING]
+spelling-dict=en_US
+spelling-private-dict-file=words.dict
+spelling-ignore-comment-directives=fmt: on,fmt: off,noqa:,noqa,nosec,isort:skip,mypy:,:avocado:
+
+[FORMAT]
+max-line-length=100
+max-locals=30
+max-args=10
+min-similarity-lines=10
+max-branches=25
+max-statements=200
+max-attributes=30
+
+[MISCELLANEOUS]
+# List of note tags to take in consideration, separated by a comma.
+notes=FIXME,XXX,TODO
+
+[REPORTS]
+reports=no
+score=no
