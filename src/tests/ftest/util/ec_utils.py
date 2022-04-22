@@ -82,6 +82,7 @@ class ErasureCodeIor(ServerFillUp):
         self.cont_uuid = []
         self.cont_number = 0
         self.read_set_from_beginning = True
+        self.nvme_local_cont = None
 
     def setUp(self):
         """Set up each test case."""

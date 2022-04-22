@@ -15,7 +15,6 @@ from job_manager_utils import get_job_manager
 from ior_utils import IorCommand, IorMetrics
 from exception_utils import CommandFailure
 from general_utils import error_count
-from test_utils_container import TestContainer
 
 
 class NvmeEnospace(ServerFillUp):

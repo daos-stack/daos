@@ -13,8 +13,6 @@ from ior_test_base import IorTestBase
 from ior_utils import IorCommand
 from server_utils import ServerFailed
 from job_manager_utils import get_job_manager
-from daos_utils import DaosCommand
-from test_utils_container import TestContainer
 
 def get_device_ids(dmg, servers):
     """Get the NVMe Device ID from servers.
@@ -98,12 +96,12 @@ class ServerFillUp(IorTestBase):
     def create_container(self):
         """Create the container """
         self.nvme_local_cont = self.get_container(self.pool, create=False)
-	
+
         # update container oclass
-	if self.ior_local_cmd.dfs_oclass:
+        if self.ior_local_cmd.dfs_oclass:
             self.nvme_local_cont.oclass.update(self.ior_local_cmd.dfs_oclass.value)
-	
-        self.nvme_local_cont.create()        
+
+        self.nvme_local_cont.create()
 
     def start_ior_thread(self, create_cont, operation):
         """Start IOR write/read threads and wait until all threads are finished.
