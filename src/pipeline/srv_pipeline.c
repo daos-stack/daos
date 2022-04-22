@@ -553,6 +553,7 @@ pipeline_bulk_comp_cb(const struct crt_bulk_cb_info *cb_info)
 		ABT_eventual_set(arg->eventual, &arg->result, sizeof(arg->result));
 
 	crt_req_decref(rpc);
+
 	return cb_info->bci_rc;
 }
 
@@ -736,12 +737,12 @@ pipeline_bulk_transfer(crt_rpc_t *rpc)
 
 		D_DEBUG(DB_IO, "reply iods bulk %zd\n", tmp_iov[1].iov_len);
 	}
-	if (pri->pri_sgl_keys_bulk != NULL) {
+	if (pri->pri_sgl_keys_bulk != NULL && pro->pro_sgl_keys.sg_nr_out > 0) {
 		sgls[idx]              = &pro->pro_sgl_keys;
 		bulks[idx]             = pri->pri_sgl_keys_bulk;
 		idx++;
 	}
-	if (pri->pri_sgl_recx_bulk != NULL) {
+	if (pri->pri_sgl_recx_bulk != NULL && pro->pro_sgl_recx.sg_nr_out > 0) {
 		sgls[idx]              = &pro->pro_sgl_recx;
 		bulks[idx]             = pri->pri_sgl_recx_bulk;
 		idx++;
@@ -755,18 +756,22 @@ pipeline_bulk_transfer(crt_rpc_t *rpc)
 	 * -- after bulk transfers, we have to free buffers to avoid sending the data inline with
 	 *    the RPC.
 	 */
-	if (pri->pri_kds_bulk != NULL) {
+	if (pri->pri_kds_bulk != NULL && pro->pro_kds.ca_count > 0) {
 		D_FREE(pro->pro_kds.ca_arrays);
 		pro->pro_kds.ca_count = 0;
 	}
-	if (pri->pri_iods_bulk != NULL) {
+	if (pri->pri_iods_bulk != NULL && pro->pro_recx_size.ca_count > 0) {
 		D_FREE(pro->pro_recx_size.ca_arrays);
 		pro->pro_recx_size.ca_count = 0;
 	}
-	if (pri->pri_sgl_keys_bulk != NULL)
-		d_sgl_fini(&pro->pro_sgl_keys, true);
-	if (pri->pri_sgl_recx_bulk != NULL)
-		d_sgl_fini(&pro->pro_sgl_recx, true);
+	/**
+	 * These will be freed when pri* sgls are freed. Setting output sgls to zero here to avoid
+	 * sending them with RPC.
+	 */
+	if (pri->pri_sgl_keys_bulk != NULL && pro->pro_sgl_keys.sg_nr_out > 0)
+		pro->pro_sgl_keys = (d_sg_list_t){0};
+	if (pri->pri_sgl_recx_bulk != NULL && pro->pro_sgl_recx.sg_nr_out > 0)
+		pro->pro_sgl_recx = (d_sg_list_t){0};
 
 	return rc;
 }
@@ -802,12 +807,6 @@ ds_pipeline_run_handler(crt_rpc_t *rpc)
 	vos_coh = coc->sc_hdl;
 
 	/** --  */
-
-	printf("pri->pri_kds_bulk=%p pri->pri_iods_bulk=%p pri->pri_sgl_keys_bulk=%p "
-	       "pri->pri_sgl_recx_bulk=%p\n",
-	       pri->pri_kds_bulk, pri->pri_iods_bulk, pri->pri_sgl_keys_bulk,
-	       pri->pri_sgl_recx_bulk);
-	fflush(stdout);
 
 	D_ALLOC_ARRAY(kds, pri->pri_nr_kds);
 	D_ALLOC_ARRAY(recx_size, pri->pri_iods.nr);
