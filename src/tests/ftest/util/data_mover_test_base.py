@@ -183,7 +183,7 @@ class DataMoverTestBase(IorTestBase, MdtestBase):
             command = "rm -rf {}".format(shared_path_strs)
             try:
                 # only call rm on one client since this is cleaning up shared dir
-                self._execute_command(command, hosts=self.hostlist_clients[0:1])
+                self._execute_command(command, hosts=list(self.hostlist_clients)[0:1])
             except CommandFailure as error:
                 error_list.append("Error removing created directories: {}".format(error))
         return error_list

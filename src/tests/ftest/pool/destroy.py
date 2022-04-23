@@ -169,7 +169,7 @@ class DestroyTests(TestWithServers):
         :avocado: tags=pool,pool_destroy
         :avocado: tags=pool_destroy_single
         """
-        hostlist_servers = self.hostlist_servers[:1]
+        hostlist_servers = list(self.hostlist_servers)[:1]
         setid = self.params.get("setname", '/run/setnames/validsetname/')
 
         # Attempt to destroy a pool
@@ -183,7 +183,7 @@ class DestroyTests(TestWithServers):
         :avocado: tags=pool,pool_destroy
         :avocado: tags=pool_destroy_multi
         """
-        hostlist_servers = self.hostlist_servers[:2]
+        hostlist_servers = list(self.hostlist_servers)[:2]
         setid = self.params.get("setname", '/run/setnames/validsetname/')
 
         # Attempt to destroy a pool
@@ -200,7 +200,7 @@ class DestroyTests(TestWithServers):
         :avocado: tags=pool,pool_destroy
         :avocado: tags=pool_destroy_single_loop
         """
-        hostlist_servers = self.hostlist_servers[:1]
+        hostlist_servers = list(self.hostlist_servers)[:1]
 
         # Start servers
         self.start_servers(self.get_group(self.server_group, hostlist_servers))
@@ -225,7 +225,7 @@ class DestroyTests(TestWithServers):
         :avocado: tags=pool,pool_destroy
         :avocado: tags=pool_destroy_multi_loop
         """
-        hostlist_servers = self.hostlist_servers[:6]
+        hostlist_servers = list(self.hostlist_servers)[:6]
 
         # Start servers
         self.start_servers(self.get_group(self.server_group, hostlist_servers))
@@ -250,7 +250,7 @@ class DestroyTests(TestWithServers):
         :avocado: tags=pool,pool_destroy
         :avocado: tags=pool_destroy_invalid_uuid
         """
-        hostlist_servers = self.hostlist_servers[:1]
+        hostlist_servers = list(self.hostlist_servers)[:1]
         setid = self.params.get("setname", '/run/setnames/validsetname/')
 
         # Start servers
@@ -285,7 +285,7 @@ class DestroyTests(TestWithServers):
         :avocado: tags=pool,pool_destroy
         :avocado: tags=pool_destroy_invalid_label
         """
-        hostlist_servers = self.hostlist_servers[:1]
+        hostlist_servers = list(self.hostlist_servers)[:1]
         setid = self.params.get("setname", '/run/setnames/validsetname/')
 
         # Start servers
@@ -384,7 +384,7 @@ class DestroyTests(TestWithServers):
 
         # Update the third server manager's hostlist from "localhost" to
         # daos_server_a's hostname.
-        dmg_c.hostlist = self.hostlist_servers[:1]
+        dmg_c.hostlist = list(self.hostlist_servers)[:1]
 
         # Try destroying the pool in server a with dmg_c. Should fail because
         # of the group name mismatch.
@@ -418,7 +418,7 @@ class DestroyTests(TestWithServers):
         :avocado: tags=pool,pool_destroy
         :avocado: tags=pool_destroy_connected
         """
-        hostlist_servers = self.hostlist_servers[:1]
+        hostlist_servers = list(self.hostlist_servers)[:1]
 
         # Start servers
         self.start_servers(self.get_group(self.server_group, hostlist_servers))
@@ -468,7 +468,7 @@ class DestroyTests(TestWithServers):
         :avocado: tags=pool,pool_destroy
         :avocado: tags=pool_force_destroy_connected
         """
-        hostlist_servers = self.hostlist_servers[:1]
+        hostlist_servers = list(self.hostlist_servers)[:1]
 
         # Start servers
         self.start_servers(self.get_group(self.server_group, hostlist_servers))

@@ -531,8 +531,8 @@ class TestWithServers(TestWithoutServers):
         self.agent_manager_class = "Systemctl"
         self.setup_start_servers = True
         self.setup_start_agents = True
-        self.hostlist_servers = None
-        self.hostlist_clients = None
+        self.hostlist_servers = NodeSet()
+        self.hostlist_clients = NodeSet()
         self.hostfile_clients = None
         self.server_partition = None
         self.client_partition = None
@@ -589,37 +589,10 @@ class TestWithServers(TestWithoutServers):
         self.manager_class = self.params.get("manager_class", "/", "Orterun")
 
         # Determine which hosts to use as servers and optionally clients.
-        self.hostlist_servers = self.params.get("test_servers", "/run/hosts/*")
-        self.hostlist_clients = self.params.get("test_clients", "/run/hosts/*")
-
-        # If server or client host list are defined through valid slurm
-        # partition names override any hosts specified through lists.
-        for name in ("servers", "clients"):
-            host_list_name = "_".join(["hostlist", name])
-            partition_name = "_".join([name[:-1], "partition"])
-            reservation_name = "_".join([name[:-1], "reservation"])
-            reservation_env = "_".join(["DAOS", reservation_name.upper()])
-            partition = self.params.get(partition_name, "/run/hosts/*")
-            reservation = os.environ.get(reservation_env, None)
-            self.log.info("env %s = %s", reservation_env, reservation)
-            if reservation is None:
-                reservation = self.params.get(reservation_name, "/run/hosts/*")
-            host_list = getattr(self, host_list_name)
-            if partition is not None and host_list is None:
-                # If a partition is provided instead of a list of hosts use the
-                # partition information to populate the list of hosts.
-                setattr(self, partition_name, partition)
-                setattr(self, reservation_name, reservation)
-                slurm_nodes = get_partition_hosts(partition, reservation)
-                if not slurm_nodes:
-                    self.fail(
-                        "No valid nodes in {} partition with {} "
-                        "reservation".format(partition, reservation))
-                setattr(self, host_list_name, slurm_nodes)
-            elif partition is not None and host_list is not None:
-                self.fail(
-                    "Specifying both a {} partition name and a list of hosts "
-                    "is not supported!".format(name))
+        self.hostlist_servers = self.get_hosts_from_yaml(
+            "test_servers", "server_partition", "server_reservation", "/run/hosts/*")
+        self.hostlist_clients = self.get_hosts_from_yaml(
+            "test_clients", "client_partition", "client_reservation", "/run/hosts/*")
 
         # # Find a configuration that meets the test requirements
         # self.config = Configuration(
@@ -627,17 +600,17 @@ class TestWithServers(TestWithoutServers):
         # if not self.config.set_config(self):
         #     self.cancel("Test requirements not met!")
 
-        # Create host files - In the future this should be the responsibility of
-        # tests/classes that need a host file and hostfile_clients should not be
-        # a property of this class.
-        if self.hostlist_clients:
-            self.hostfile_clients = write_host_file(
-                self.hostlist_clients, self.workdir,
-                self.hostfile_clients_slots)
+        # # Create host files - In the future this should be the responsibility of
+        # # tests/classes that need a host file and hostfile_clients should not be
+        # # a property of this class.
+        # if self.hostlist_clients:
+        #     self.hostfile_clients = write_host_file(
+        #         self.hostlist_clients, self.workdir,
+        #         self.hostfile_clients_slots)
 
         # Access points to use by default when starting servers and agents
         self.access_points = self.params.get(
-            "access_points", "/run/setup/*", self.hostlist_servers[:1])
+            "access_points", "/run/setup/*", list(self.hostlist_servers)[:1])
 
         # Display host information
         self.log.info("-" * 100)
@@ -719,6 +692,50 @@ class TestWithServers(TestWithoutServers):
 
         # Mark the end of setup
         self.log.info("=" * 100)
+
+    def get_hosts_from_yaml(self, yaml_key, partition_key, reservation_key, namespace):
+        """Get a NodeSet for the hosts to use in the test.
+
+        Args:
+            yaml_key (str): test yaml key used to obtain the set of hosts to test
+            partition_key (str): test yaml key used to obtain the host partition name
+            reservation_key (str): test yaml key used to obtain the host reservation name
+            namespace (str): test yaml path to the keys
+
+        Returns:
+            NodeSet: the set of hosts to test obtained from the test yaml
+
+        """
+        reservation_env = os.environ.get("_".join(["DAOS", reservation_key.upper()]), None)
+
+        # Collect any host information from the test yaml
+        host_data = self.params.get(yaml_key, namespace)
+        partition = self.params.get(partition_key, namespace)
+        reservation = self.params.get(reservation_key, namespace, reservation_env)
+
+        if partition is not None and host_data is not None:
+            # Specifying a set of hosts and a host partition is not supported
+            self.fail(
+                "Specifying both a '{}' partition and '{}' set of hosts is not supported!".format(
+                    partition_key, yaml_key))
+
+        if partition is not None and host_data is None:
+            # If a partition is provided instead of a set of hosts get the set of hosts from the
+            # partition information
+            setattr(self, partition_key, partition)
+            setattr(self, reservation_key, reservation)
+            slurm_nodes = get_partition_hosts(partition, reservation)
+            if not slurm_nodes:
+                self.fail(
+                    "No valid nodes in {} partition with {} reservation".format(
+                        partition, reservation))
+            host_data = slurm_nodes
+
+        # Convert the set of hosts from slurm or the yaml file into a NodeSet
+        if isinstance(host_data, (list, tuple)):
+            return NodeSet.fromlist(host_data)
+        else:
+            return NodeSet(host_data)
 
     def write_string_to_logfile(self, message):
         """Write a string to the server log.

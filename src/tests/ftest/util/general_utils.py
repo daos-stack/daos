@@ -354,7 +354,7 @@ def run_pcmd(hosts, command, verbose=True, timeout=None, expect_rc=0):
     results = []
 
     # Run the command on each host in parallel
-    task = run_task(hosts, command, timeout)
+    task = run_task(list(hosts), command, timeout)
 
     # Get the exit status of each host
     host_exit_status = {host: None for host in hosts}
