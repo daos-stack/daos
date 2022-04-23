@@ -46,7 +46,7 @@ server_config:
             scm_mount: /mnt/daos1
 
 pool:
-    size: 100%
+    size: 90%
     control_method: dmg
 
 container:
