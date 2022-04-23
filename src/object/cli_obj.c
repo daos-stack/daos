@@ -6107,6 +6107,9 @@ dc_obj_query_key(tse_task_t *api_task)
 
 			leader = obj_grp_leader_get(obj, i, map_ver, NIL_BITMAP);
 			if (leader >= 0) {
+				if (obj_is_ec(obj) && !is_ec_parity_shard(leader, obj_get_oca(obj)))
+					goto non_leader;
+
 				rc = queue_shard_query_key_task(api_task, obj_auxi, &epoch, leader,
 								map_ver, obj, dkey_hash, &dti,
 								coh_uuid, cont_uuid);
@@ -6126,6 +6129,7 @@ dc_obj_query_key(tse_task_t *api_task)
 			}
 		}
 
+non_leader:
 		/* Then Try non-leader shards */
 		D_DEBUG(DB_IO, DF_OID" try non-leader shards for group %d.\n",
 			DP_OID(obj->cob_md.omd_id), i);

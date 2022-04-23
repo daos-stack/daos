@@ -487,7 +487,9 @@ agg_get_obj_handle(struct ec_agg_entry *entry)
 	struct ec_agg_param	*agg_param;
 	unsigned int		 k = ec_age2k(entry);
 	d_rank_t		 myrank;
-	int			 i, j, rc = 0;
+	uint32_t		 grp_idx;
+	struct daos_obj_shard	*sd;
+	int			 i, p, rc = 0;
 
 	if (daos_handle_is_valid(entry->ae_obj_hdl))
 		return rc;
@@ -504,19 +506,15 @@ agg_get_obj_handle(struct ec_agg_entry *entry)
 	if (rc)
 		goto out;
 
-	for (i = 0; i < layout->ol_nr; i++) {
-		struct daos_obj_shard *sd = layout->ol_shards[i];
-		int p;
-
-		for (j = p = 0; j < sd->os_replica_nr; j++) {
-			if (j >= k) {
-				entry->ae_peer_pshards[p].sd_rank
-					= sd->os_shard_loc[j].sd_rank;
-				entry->ae_peer_pshards[p].sd_tgt_idx
-					= sd->os_shard_loc[j].sd_tgt_idx;
-				p++;
-			}
-		}
+	grp_idx = ec_age2shard(entry) / (ec_age2k(entry) + ec_age2p(entry));
+	sd = layout->ol_shards[grp_idx];
+	for (i = k, p = 0; i < sd->os_replica_nr; i++) {
+		entry->ae_peer_pshards[p].sd_rank = sd->os_shard_loc[i].sd_rank;
+		entry->ae_peer_pshards[p].sd_tgt_idx = sd->os_shard_loc[i].sd_tgt_idx;
+		D_DEBUG(DB_TRACE, "ae_peer_pshards[%d] (grp %d), rank %d, tgt_idx %d\n",
+			p, grp_idx, entry->ae_peer_pshards[p].sd_rank,
+			entry->ae_peer_pshards[p].sd_tgt_idx);
+		p++;
 	}
 	daos_obj_layout_free(layout);
 out:
@@ -1368,6 +1366,8 @@ agg_peer_update_ult(void *arg)
 			crt_bulk_free(bulk_hdl);
 			bulk_hdl = NULL;
 		}
+		D_DEBUG(DB_TRACE, "send DAOS_OBJ_RPC_EC_AGGREGATE to %d:%d, peer %d, rc %d\n",
+			tgt_ep.ep_rank, tgt_ep.ep_tag, peer, rc);
 		if (csummer != NULL && iod_csums != NULL)
 			daos_csummer_free_ic(csummer, &iod_csums);
 		crt_req_decref(rpc);
@@ -2209,10 +2209,13 @@ ec_agg_object(daos_handle_t ih, vos_iter_entry_t *entry, struct ec_agg_param *ag
 	rc = agg_obj_is_leader(info->api_pool, info->api_cont_hdl, &oca, &entry->ie_oid,
 			       info->api_pool->sp_map_version);
 	if (rc == 1) {
+		char	obj_class_name[32] = {0};
+
 		D_ASSERT((entry->ie_oid.id_shard % obj_ec_tgt_nr(&oca)) ==
 			 obj_ec_tgt_nr(&oca) - 1);
-		D_DEBUG(DB_EPC, "oid:"DF_UOID" ec agg starting\n",
-			DP_UOID(entry->ie_oid));
+		daos_oclass_id2name(daos_obj_id2class(entry->ie_oid.id_pub), obj_class_name);
+		D_DEBUG(DB_EPC, "oid:"DF_UOID"(%s) ec agg starting\n",
+			DP_UOID(entry->ie_oid), obj_class_name);
 
 		agg_reset_entry(&agg_param->ap_agg_entry, entry, &oca);
 		rc = 0;
