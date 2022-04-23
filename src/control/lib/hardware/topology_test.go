@@ -17,17 +17,54 @@ import (
 	"github.com/daos-stack/daos/src/control/common"
 )
 
+func TestHardware_VirtualDevice(t *testing.T) {
+	mockPCIDev := mockPCIDevice("testdev")
+
+	for name, tc := range map[string]struct {
+		dev       *VirtualDevice
+		expName   string
+		expType   DeviceType
+		expPCIDev *PCIDevice
+	}{
+		"nil": {},
+		"no PCI dev": {
+			dev: &VirtualDevice{
+				Name: "testname",
+				Type: DeviceTypeNetInterface,
+			},
+			expName: "testname",
+			expType: DeviceTypeNetInterface,
+		},
+		"PCI dev": {
+			dev: &VirtualDevice{
+				Name:          "testname",
+				Type:          DeviceTypeNetInterface,
+				BackingDevice: mockPCIDev,
+			},
+			expName:   "testname",
+			expType:   DeviceTypeNetInterface,
+			expPCIDev: mockPCIDev,
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			common.AssertEqual(t, tc.expName, tc.dev.DeviceName(), "")
+			common.AssertEqual(t, tc.expType, tc.dev.DeviceType(), "")
+			common.AssertEqual(t, tc.expPCIDev, tc.dev.PCIDevice(), "")
+		})
+	}
+}
+
 func TestHardware_Topology_AllDevices(t *testing.T) {
 	for name, tc := range map[string]struct {
 		topo      *Topology
-		expResult map[string]*PCIDevice
+		expResult map[string]Device
 	}{
 		"nil": {
-			expResult: make(map[string]*PCIDevice),
+			expResult: make(map[string]Device),
 		},
 		"no NUMA nodes": {
 			topo:      &Topology{},
-			expResult: make(map[string]*PCIDevice),
+			expResult: make(map[string]Device),
 		},
 		"no PCI addrs": {
 			topo: &Topology{
@@ -35,7 +72,7 @@ func TestHardware_Topology_AllDevices(t *testing.T) {
 					0: MockNUMANode(0, 8),
 				},
 			},
-			expResult: make(map[string]*PCIDevice),
+			expResult: make(map[string]Device),
 		},
 		"single device": {
 			topo: &Topology{
@@ -47,7 +84,7 @@ func TestHardware_Topology_AllDevices(t *testing.T) {
 					),
 				},
 			},
-			expResult: map[string]*PCIDevice{
+			expResult: map[string]Device{
 				"test00": mockPCIDevice("test").withType(DeviceTypeNetInterface),
 			},
 		},
@@ -71,7 +108,7 @@ func TestHardware_Topology_AllDevices(t *testing.T) {
 					),
 				},
 			},
-			expResult: map[string]*PCIDevice{
+			expResult: map[string]Device{
 				"test001": mockPCIDevice("test0", 1, 1, 0).withType(DeviceTypeNetInterface),
 				"test101": mockPCIDevice("test1", 1, 1, 0).withType(DeviceTypeOFIDomain),
 				"test201": mockPCIDevice("test2", 1, 2, 1).withType(DeviceTypeNetInterface),
@@ -79,6 +116,38 @@ func TestHardware_Topology_AllDevices(t *testing.T) {
 				"test402": mockPCIDevice("test4", 2, 1, 1).withType(DeviceTypeNetInterface),
 				"test502": mockPCIDevice("test5", 2, 1, 1).withType(DeviceTypeOFIDomain),
 				"test602": mockPCIDevice("test6", 2, 2, 1).withType(DeviceTypeNetInterface),
+			},
+		},
+		"virtual devices": {
+			topo: &Topology{
+				NUMANodes: map[uint]*NUMANode{
+					0: MockNUMANode(0, 8).WithDevices(
+						[]*PCIDevice{
+							mockPCIDevice("test").withType(DeviceTypeNetInterface),
+						},
+					),
+				},
+				VirtualDevices: []*VirtualDevice{
+					{
+						Name: "virt0",
+						Type: DeviceTypeNetInterface,
+					},
+					{
+						Name: "virt1",
+						Type: DeviceTypeNetInterface,
+					},
+				},
+			},
+			expResult: map[string]Device{
+				"test00": mockPCIDevice("test").withType(DeviceTypeNetInterface),
+				"virt0": &VirtualDevice{
+					Name: "virt0",
+					Type: DeviceTypeNetInterface,
+				},
+				"virt1": &VirtualDevice{
+					Name: "virt1",
+					Type: DeviceTypeNetInterface,
+				},
 			},
 		},
 	} {
@@ -251,6 +320,75 @@ func TestHardware_Topology_AddDevice(t *testing.T) {
 	}
 }
 
+func TestHardware_Topology_AddVirtualDevice(t *testing.T) {
+	for name, tc := range map[string]struct {
+		topo      *Topology
+		device    *VirtualDevice
+		expResult *Topology
+		expErr    error
+	}{
+		"nil topology": {
+			device: &VirtualDevice{
+				Name: "test",
+			},
+			expErr: errors.New("nil"),
+		},
+		"nil input": {
+			topo:      &Topology{},
+			expErr:    errors.New("nil"),
+			expResult: &Topology{},
+		},
+		"add to empty": {
+			topo: &Topology{},
+			device: &VirtualDevice{
+				Name: "test",
+			},
+			expResult: &Topology{
+				VirtualDevices: []*VirtualDevice{
+					{
+						Name: "test",
+					},
+				},
+			},
+		},
+		"add to existing": {
+			topo: &Topology{
+				VirtualDevices: []*VirtualDevice{
+					{
+						Name: "test0",
+						Type: DeviceTypeNetInterface,
+					},
+				},
+			},
+			device: &VirtualDevice{
+				Name: "test1",
+				Type: DeviceTypeNetInterface,
+			},
+			expResult: &Topology{
+				VirtualDevices: []*VirtualDevice{
+					{
+						Name: "test0",
+						Type: DeviceTypeNetInterface,
+					},
+					{
+						Name: "test1",
+						Type: DeviceTypeNetInterface,
+					},
+				},
+			},
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			err := tc.topo.AddVirtualDevice(tc.device)
+
+			common.CmpErr(t, tc.expErr, err)
+			if diff := cmp.Diff(tc.expResult, tc.topo); diff != "" {
+				t.Fatalf("(-want, +got)\n%s\n", diff)
+			}
+		})
+	}
+}
+
 func TestHardware_Topology_Merge(t *testing.T) {
 	testNuma := func(idx int) *NUMANode {
 		nodes := []*NUMANode{
@@ -298,9 +436,8 @@ func TestHardware_Topology_Merge(t *testing.T) {
 			expErr: errors.New("nil"),
 		},
 		"nil input": {
-			topo:      &Topology{},
-			expResult: &Topology{},
-			expErr:    errors.New("nil"),
+			topo:   &Topology{},
+			expErr: errors.New("nil"),
 		},
 		"all empties": {
 			topo:      &Topology{},
@@ -491,11 +628,251 @@ func TestHardware_Topology_Merge(t *testing.T) {
 				},
 			},
 		},
+		"add virtual devices": {
+			topo: &Topology{
+				NUMANodes: NodeMap{
+					testNuma(0).ID: testNuma(0),
+				},
+				VirtualDevices: []*VirtualDevice{
+					{
+						Name: "virt0",
+						Type: DeviceTypeNetInterface,
+					},
+				},
+			},
+			input: &Topology{
+				VirtualDevices: []*VirtualDevice{
+					{
+						Name: "virt1",
+						Type: DeviceTypeNetInterface,
+					},
+				},
+			},
+			expResult: &Topology{
+				NUMANodes: NodeMap{
+					testNuma(0).ID: testNuma(0),
+				},
+				VirtualDevices: []*VirtualDevice{
+					{
+						Name: "virt0",
+						Type: DeviceTypeNetInterface,
+					},
+					{
+						Name: "virt1",
+						Type: DeviceTypeNetInterface,
+					},
+				},
+			},
+		},
+		"update virtual devices": {
+			topo: &Topology{
+				NUMANodes: NodeMap{
+					testNuma(0).ID: testNuma(0),
+				},
+				VirtualDevices: []*VirtualDevice{
+					{
+						Name: "virt0",
+						Type: DeviceTypeNetInterface,
+					},
+					{
+						Name: "virt1",
+					},
+				},
+			},
+			input: &Topology{
+				NUMANodes: NodeMap{
+					testNuma(0).ID: MockNUMANode(testNuma(0).ID, 5).
+						WithDevices([]*PCIDevice{
+							{
+								Name:    "test0",
+								Type:    DeviceTypeNetInterface,
+								PCIAddr: *MustNewPCIAddress("0000:00:00.1"),
+							},
+						}),
+				},
+				VirtualDevices: []*VirtualDevice{
+					{
+						Name: "virt0",
+						BackingDevice: &PCIDevice{
+							Name:    "test0",
+							Type:    DeviceTypeNetInterface,
+							PCIAddr: *MustNewPCIAddress("0000:00:00.1"),
+						},
+					},
+					{
+						Name: "virt1",
+						Type: DeviceTypeNetInterface,
+					},
+				},
+			},
+			expResult: &Topology{
+				NUMANodes: NodeMap{
+					testNuma(0).ID: MockNUMANode(testNuma(0).ID, 5).
+						WithDevices([]*PCIDevice{
+							{
+								Name:      "test0",
+								Type:      DeviceTypeNetInterface,
+								PCIAddr:   *MustNewPCIAddress("0000:00:00.1"),
+								LinkSpeed: 60,
+							},
+						}).
+						WithPCIBuses([]*PCIBus{
+							testNuma(0).PCIBuses[0],
+						}),
+				},
+				VirtualDevices: []*VirtualDevice{
+					{
+						Name: "virt0",
+						Type: DeviceTypeNetInterface,
+						BackingDevice: &PCIDevice{
+							Name:      "test0",
+							Type:      DeviceTypeNetInterface,
+							PCIAddr:   *MustNewPCIAddress("0000:00:00.1"),
+							LinkSpeed: 60,
+						},
+					},
+					{
+						Name: "virt1",
+						Type: DeviceTypeNetInterface,
+					},
+				},
+			},
+		},
+		"incoming virtual dev named after HW dev": {
+			topo: &Topology{
+				NUMANodes: NodeMap{
+					testNuma(0).ID: testNuma(0),
+				},
+			},
+			input: &Topology{
+				NUMANodes: NodeMap{},
+				VirtualDevices: []*VirtualDevice{
+					{
+						Name: "test0",
+						Type: DeviceTypeNetInterface,
+					},
+				},
+			},
+			expErr: errors.New("same name"),
+		},
+		"updated backing device not mapped": {
+			topo: &Topology{
+				NUMANodes: NodeMap{
+					testNuma(0).ID: testNuma(0),
+				},
+				VirtualDevices: []*VirtualDevice{
+					{
+						Name: "virt0",
+						Type: DeviceTypeNetInterface,
+					},
+				},
+			},
+			input: &Topology{
+				NUMANodes: NodeMap{},
+				VirtualDevices: []*VirtualDevice{
+					{
+						Name: "virt0",
+						Type: DeviceTypeNetInterface,
+						BackingDevice: &PCIDevice{
+							Name:    "doesnotexist",
+							Type:    DeviceTypeNetInterface,
+							PCIAddr: *MustNewPCIAddress("0000:00:00.1"),
+						},
+					},
+				},
+			},
+			expErr: errors.New("does not exist"),
+		},
+		"new backing device not mapped": {
+			topo: &Topology{
+				NUMANodes: NodeMap{
+					testNuma(0).ID: testNuma(0),
+				},
+			},
+			input: &Topology{
+				NUMANodes: NodeMap{},
+				VirtualDevices: []*VirtualDevice{
+					{
+						Name: "virt0",
+						Type: DeviceTypeNetInterface,
+						BackingDevice: &PCIDevice{
+							Name:    "doesnotexist",
+							Type:    DeviceTypeNetInterface,
+							PCIAddr: *MustNewPCIAddress("0000:00:00.1"),
+						},
+					},
+				},
+			},
+			expErr: errors.New("does not exist"),
+		},
+		"updated backing device is virtual": {
+			topo: &Topology{
+				NUMANodes: NodeMap{
+					testNuma(0).ID: testNuma(0),
+				},
+				VirtualDevices: []*VirtualDevice{
+					{
+						Name: "virt0",
+						Type: DeviceTypeNetInterface,
+					},
+					{
+						Name: "virt1",
+						Type: DeviceTypeNetInterface,
+					},
+				},
+			},
+			input: &Topology{
+				NUMANodes: NodeMap{},
+				VirtualDevices: []*VirtualDevice{
+					{
+						Name: "virt1",
+						Type: DeviceTypeNetInterface,
+						BackingDevice: &PCIDevice{
+							Name:    "virt0",
+							Type:    DeviceTypeNetInterface,
+							PCIAddr: *MustNewPCIAddress("0000:00:00.1"),
+						},
+					},
+				},
+			},
+			expErr: errors.New("not a PCI device"),
+		},
+		"new backing device is virtual": {
+			topo: &Topology{
+				NUMANodes: NodeMap{
+					testNuma(0).ID: testNuma(0),
+				},
+				VirtualDevices: []*VirtualDevice{
+					{
+						Name: "virt0",
+						Type: DeviceTypeNetInterface,
+					},
+				},
+			},
+			input: &Topology{
+				NUMANodes: NodeMap{},
+				VirtualDevices: []*VirtualDevice{
+					{
+						Name: "virt1",
+						Type: DeviceTypeNetInterface,
+						BackingDevice: &PCIDevice{
+							Name:    "virt0",
+							Type:    DeviceTypeNetInterface,
+							PCIAddr: *MustNewPCIAddress("0000:00:00.1"),
+						},
+					},
+				},
+			},
+			expErr: errors.New("not a PCI device"),
+		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			err := tc.topo.Merge(tc.input)
 
 			common.CmpErr(t, tc.expErr, err)
+			if tc.expErr != nil {
+				return
+			}
 			if diff := cmp.Diff(tc.expResult, tc.topo, common.CmpOptIgnoreFieldAnyType("NUMANode")); diff != "" {
 				t.Fatalf("(-want, +got)\n%s\n", diff)
 			}

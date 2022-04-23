@@ -537,3 +537,27 @@ func TestHardware_PCIBus(t *testing.T) {
 		})
 	}
 }
+
+func TestHardware_PCIDevice(t *testing.T) {
+	for name, tc := range map[string]struct {
+		dev     *PCIDevice
+		expName string
+		expType DeviceType
+	}{
+		"nil": {},
+		"valid": {
+			dev: &PCIDevice{
+				Name: "testname",
+				Type: DeviceTypeNetInterface,
+			},
+			expName: "testname",
+			expType: DeviceTypeNetInterface,
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			common.AssertEqual(t, tc.expName, tc.dev.DeviceName(), "")
+			common.AssertEqual(t, tc.expType, tc.dev.DeviceType(), "")
+			common.AssertEqual(t, tc.dev, tc.dev.PCIDevice(), "")
+		})
+	}
+}
