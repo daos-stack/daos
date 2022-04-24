@@ -10,6 +10,7 @@ import os
 import socket
 import time
 import yaml
+import random
 
 from avocado import fail_on
 
@@ -626,6 +627,36 @@ class DaosServerManager(SubprocessManager):
                     states, data))
         return states[0]
 
+    def check_rank_state(self, rank, valid_state, max_checks=1):
+        """Check the state of single rank in DAOS system
+
+        Args:
+            rankv(int): daos rank whose state need's to be checked
+            valid_state (str): expected state for the rank
+            max_checks (int, optional): number of times to check the state
+                Defaults to 1.
+        Raises:
+            ServerFailed: if there was error obtaining the data for daos
+                          system query
+        Returns:
+            bool: returns True if there is a match for checked state,
+                  else False.
+        """
+        checks = 0
+        while checks < max_checks:
+            if checks > 0:
+                time.sleep(1)
+            data = self.get_current_state()
+            if not data:
+                # The regex failed to get the rank and state
+                raise ServerFailed(
+                "Error obtaining {} output: {}".format(self.dmg, data))
+            checks += 1
+            if data[rank]["state"] == valid_state:
+                return True
+
+        return False
+
     def check_system_state(self, valid_states, max_checks=1):
         """Check that the DAOS system state is one of the provided states.
 
@@ -756,6 +787,42 @@ class DaosServerManager(SubprocessManager):
 
         # Update the expected status of the stopped/excluded ranks
         self.update_expected_states(ranks, ["stopped", "excluded"])
+
+    def stop_random_rank(self, daos_log, force=False, exclude_ranks=None):
+        """Kill/Stop a random server rank that is expected to be running.
+
+        Args:
+            daos_log (DaosLog): object for logging messages
+            force (bool, optional): whether to use --force option to dmg system
+                stop. Defaults to False.
+            exclude_ranks (list, optional): ranks to exclude from the random selection.
+                Default is None.
+
+        Raises:
+            avocado.core.exceptions.TestFail: if there is an issue stopping the server ranks.
+            ServerFailed: if there are no available ranks to stop.
+
+        """
+        # Exclude non-running ranks
+        rank_state = self.get_expected_states()
+        candidate_ranks = []
+        for rank, state in rank_state.items():
+            for running_state in self._states["running"]:
+                if running_state in state:
+                    candidate_ranks.append(rank)
+                    continue
+
+        # Exclude specified ranks
+        for rank in exclude_ranks or []:
+            if rank in candidate_ranks:
+                del candidate_ranks[candidate_ranks.index(rank)]
+
+        if len(candidate_ranks) < 1:
+            raise ServerFailed("No available candidate ranks to stop.")
+
+        # Stop a random rank
+        random_rank = random.choice(candidate_ranks) #nosec
+        return self.stop_ranks([random_rank], daos_log=daos_log, force=force)
 
     def kill(self):
         """Forcibly terminate any server process running on hosts."""
@@ -1065,3 +1132,27 @@ class DaosServerManager(SubprocessManager):
             self.log.info("-" * 100)
 
         return params
+
+    def get_daos_metrics(self, verbose=False, timeout=60):
+        """Get daos_metrics for the server
+
+        Args:
+            verbose (bool, optional): pass verbose to run_pcmd. Defaults to False.
+            timeout (int, optional): pass timeout to each execution ofrun_pcmd. Defaults to 60.
+
+        Returns:
+            list: list of pcmd results for each host. See general_utils.run_pcmd for details.
+                [
+                    general_utils.run_pcmd(), # engine 0
+                    general_utils.run_pcmd()  # engine 1
+                ]
+        """
+        engines_per_host = self.get_config_value("engines_per_host") or 1
+        engines = []
+        daos_metrics_exe = os.path.join(self.manager.job.command_path, "daos_metrics")
+        for engine in range(engines_per_host):
+            results = run_pcmd(
+                hosts=self._hosts, verbose=verbose, timeout=timeout,
+                command="sudo {} -S {} --csv".format(daos_metrics_exe, engine))
+            engines.append(results)
+        return engines

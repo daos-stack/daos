@@ -37,9 +37,7 @@ class IorSmall(IorTestBase):
         :avocado: tags=daosio,checksum,mpich,dfuse,DAOS_5610
         :avocado: tags=iorsmall
         """
-        results = []
         cncl_tickets = []
-        ior_timeout = self.params.get("ior_timeout", '/run/ior/*')
         flags = self.params.get("ior_flags", '/run/ior/iorflags/*')
         apis = self.params.get("ior_api", '/run/ior/iorflags/*')
         dfuse_mount_dir = self.params.get("mount_dir", "/run/dfuse/*")
@@ -47,33 +45,8 @@ class IorSmall(IorTestBase):
                                               '/run/ior/iorflags/*')
         obj_class = self.params.get("obj_class", '/run/ior/iorflags/*')
 
-        for oclass in obj_class:
-            self.ior_cmd.dfs_oclass.update(oclass)
-            for api in apis:
-                if api == "HDF5-VOL":
-                    self.ior_cmd.api.update("HDF5")
-                    hdf5_plugin_path = self.params.get(
-                        "plugin_path", '/run/hdf5_vol/*')
-                    flags_w_k = " ".join([flags[0]] + ["-k"])
-                    self.ior_cmd.flags.update(flags_w_k, "ior.flags")
-                else:
-                    # run tests for different variants
-                    self.ior_cmd.flags.update(flags[0], "ior.flags")
-                    hdf5_plugin_path = None
-                    self.ior_cmd.api.update(api)
-                for test in transfer_block_size:
-                    # update transfer and block size
-                    self.ior_cmd.transfer_size.update(test[0])
-                    self.ior_cmd.block_size.update(test[1])
-                    # run ior
-                    try:
-                        self.run_ior_with_pool(
-                            plugin_path=hdf5_plugin_path, timeout=ior_timeout,
-                            mount_dir=dfuse_mount_dir)
-                        results.append(["PASS", str(self.ior_cmd)])
-                    except TestFail:
-                        results.append(["FAIL", str(self.ior_cmd)])
-
+        results = self.run_ior_multiple_variants(obj_class, apis, transfer_block_size,
+                                                 flags, dfuse_mount_dir)
         # Running a variant for ior fpp
         self.ior_cmd.flags.update(flags[1])
         self.ior_cmd.api.update(apis[0])
@@ -82,7 +55,7 @@ class IorSmall(IorTestBase):
         self.ior_cmd.dfs_oclass.update(obj_class[0])
         # run ior
         try:
-            self.run_ior_with_pool(plugin_path=None, timeout=ior_timeout)
+            self.run_ior_with_pool(plugin_path=None, timeout=self.ior_timeout)
             results.append(["PASS", str(self.ior_cmd)])
         except TestFail:
             results.append(["FAIL", str(self.ior_cmd)])

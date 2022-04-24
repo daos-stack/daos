@@ -38,23 +38,5 @@ class MdtestSmall(MdtestBase):
         """
         # local params
         mdtest_params = self.params.get("mdtest_params", "/run/mdtest/*")
-
-        # Running mdtest for different variants
-        for params in mdtest_params:
-            # update mdtest params
-            self.mdtest_cmd.api.update(params[0])
-            self.mdtest_cmd.write_bytes.update(params[1])
-            self.mdtest_cmd.read_bytes.update(params[2])
-            self.mdtest_cmd.branching_factor.update(params[3])
-            # if branching factor is 1 use num_of_files_dirs
-            # else use items option of mdtest
-            if params[3] == 1:
-                self.mdtest_cmd.num_of_files_dirs.update(params[4])
-            else:
-                self.mdtest_cmd.items.update(params[4])
-            self.mdtest_cmd.depth.update(params[5])
-            self.mdtest_cmd.flags.update(params[6])
-            # run mdtest
-            self.execute_mdtest()
-            # re-set mdtest params before next iteration
-            self.mdtest_cmd.get_params(self)
+        # run mdtest
+        self.run_mdtest_multiple_variants(mdtest_params)

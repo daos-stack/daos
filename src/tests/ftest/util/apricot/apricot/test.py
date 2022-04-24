@@ -1637,6 +1637,33 @@ class TestWithServers(TestWithoutServers):
         """
         self.container = self.get_container(pool, namespace, create)
 
+    def add_container_qty(self, quantity, pool, namespace=None, create=True):
+        """Add multiple containers to the test case.
+
+        This method requires self.container to be defined as a list.
+        If self.container is undefined it will define it as a list.
+
+        Args:
+            quantity (int): number of containers to create
+            namespace (str, optional): namespace for TestContainer parameters in the
+                test yaml file. Defaults to None.
+            pool (TestPool): Pool object
+            create (bool, optional): should the container be created. Defaults to
+                True.
+
+        Raises:
+            TestFail: if self.pool is defined, but not as a list object.
+
+        """
+        if self.container is None:
+            self.container = []
+        if not isinstance(self.container, list):
+            self.fail(
+                "add_container_qty(): self.container must be a list: {}".format(
+                    type(self.container)))
+        for _ in range(quantity):
+            self.container.append(self.get_container(pool, namespace, create))
+
     def start_additional_servers(self, additional_servers, index=0,
                                  access_points=None):
         """Start additional servers.
