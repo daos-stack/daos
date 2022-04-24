@@ -5,7 +5,6 @@
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 from logging import getLogger
-from os import environ
 from time import sleep
 
 from command_utils_base import ObjectWithParameters, BasicParameter
