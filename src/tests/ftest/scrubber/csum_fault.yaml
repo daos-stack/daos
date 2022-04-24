@@ -77,7 +77,7 @@ ior:
       - DFS
     transfer_block_size:
       - [256B, 2M]
-      - [1M, 64M]
+      - [1M, 512M]
     obj_class:
       - RP_2GX
 faults:
