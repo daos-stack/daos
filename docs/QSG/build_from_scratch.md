@@ -67,7 +67,7 @@ $ ./utils/scripts/install-leap15.sh
 As for Ubuntu, please run the following script as the root user or via sudo:
 
 ```bash
-$ ./utils/scripts/install-ubuntu20.sh
+$ ./utils/scripts/install-ubuntu22.sh
 ```
 
 ## Build DAOS
@@ -77,6 +77,13 @@ DAOS can be built via the following command:
 
 ```bash
 $ scons-3 --config=force --build-deps=yes install
+```
+
+or, on Linux distributions (like Ubuntu 22.04) that have abandoned SCons
+versions older than 3:
+
+```bash
+$ scons --config=force --build-deps=yes install
 ```
 
 By default, DAOS and its dependencies are installed under the `install`

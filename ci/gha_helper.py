@@ -67,7 +67,7 @@ def main():
         cmd.append(dockerfile)
 
         install_helper = docker_distro.replace('.', '')
-        if install_helper == 'ubuntu2004':
+        if install_helper == 'ubuntu2204':
             install_helper = install_helper[:-2]
         install_script = join('utils', 'scripts', 'install-{}.sh'.format(install_helper))
 

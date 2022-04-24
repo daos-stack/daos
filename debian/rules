@@ -18,7 +18,7 @@ endif
 SCONS = scons -j $(NUMJOBS)
 DEB_SCONS_OPTIONS := --config=force --no-rpath USE_INSTALLED=all \
                      CONF_DIR=$(sysconfdir)/daos PREFIX=$(prefix) \
-                     $(SCONS_ARGS)
+                     client test $(SCONS_ARGS)
 
 export GOCACHE := $(CURDIR)/.gocache
 
@@ -51,12 +51,7 @@ override_dh_auto_install:
 	         --install-sandbox=$(CURDIR)/${buildroot} \
 	         $(CURDIR)/${buildroot}${prefix}          \
 	         $(CURDIR)/${buildroot}$(sysconfdir)
-	mkdir -p ${buildroot}$(sysconfdir)/ld.so.conf.d/
-	echo "$(prefix)/lib64/daos_srv" > ${buildroot}$(sysconfdir)/ld.so.conf.d/daos.conf
-	mkdir -p ${buildroot}$(prefix)/lib/sysctl.d
-	install -m 644 utils/rpms/10-daos_server.conf ${buildroot}$(prefix)/lib/sysctl.d
 	mkdir -p ${buildroot}$(prefix)/lib/systemd/system
-	install -m 644 utils/systemd/daos_server.service ${buildroot}$(prefix)/lib/systemd/system
 	install -m 644 utils/systemd/daos_agent.service ${buildroot}$(prefix)/lib/systemd/system
 	mkdir -p ${buildroot}$(sysconfdir)/daos/certs/clients
 	mv ${buildroot}$(sysconfdir)/daos/bash_completion.d ${buildroot}$(sysconfdir)/
@@ -68,8 +63,3 @@ override_dh_missing:
 override_dh_fixperms:
 	dh_fixperms
 	chmod 0700 debian/tmp$(sysconfdir)/daos/certs debian/tmp$(sysconfdir)/daos/certs/clients
-	chmod 0664 debian/tmp$(sysconfdir)/daos/daos_server.yml
-	# set daos_admin to be setuid root and group daos_server in order to perform privileged tasks
-	chmod 4750 debian/tmp$(prefix)/bin/daos_admin
-	# set daos_server to be setgid daos_server in order to invoke daos_admin
-	chmod 2755 debian/tmp$(prefix)/bin/daos_server

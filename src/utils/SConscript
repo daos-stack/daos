@@ -30,7 +30,6 @@ def scons():
     # Build cart_ctl
     SConscript('ctl/SConscript')
 
-    # Can remove this when pmdk is not needed on client
     denv.AppendUnique(LIBPATH=["../client/dfs"])
 
     daos_hdlrs_src = ['daos_hdlr.c', 'daos_autotest.c', 'daos_dfs_hdlr.c']

@@ -8,11 +8,9 @@ def build_tests(prereqs, env, client_libs):
     denv = env.Clone()
     compiler_setup.base_setup(denv)
 
-    libs_server = ['daos', 'daos_common_pmem', 'gurt', 'm', 'cart', 'uuid', 'cmocka', 'daos_tests',
-                   'pthread', 'dts', 'dpar']
     libs_client = client_libs + ['pthread', 'dts', 'dpar']
 
-    prereqs.require(denv, 'argobots', 'hwloc', 'protobufc', 'pmdk', 'isal')
+    prereqs.require(denv, 'hwloc', 'protobufc', 'isal')
 
     daos_racer = daos_build.program(denv, 'daos_racer',
                                     ['daos_racer.c'],
@@ -26,19 +24,24 @@ def build_tests(prereqs, env, client_libs):
                                    LIBS=libs_client)
     denv.Install('$PREFIX/bin/', daos_perf)
 
-    libs_server += ['vos', 'bio', 'abt']
-    vos_engine = denv.StaticObject(['vos_engine.c'])
+    if prereqs.server_requested():
+        # Build server-side tests only if building server
+        libs_server = ['daos', 'daos_common_pmem', 'gurt', 'm', 'cart', 'uuid',
+	               'cmocka', 'daos_tests', 'pthread', 'dts', 'dpar']
+        libs_server += ['vos', 'bio', 'abt']
+        prereqs.require(denv, 'argobots', 'pmdk')
+        vos_engine = denv.StaticObject(['vos_engine.c'])
 
-    vos_perf = daos_build.program(denv, 'vos_perf',
-                                  ['vos_perf.c', perf_common, vos_engine],
-                                  LIBS=libs_server)
-    denv.Install('$PREFIX/bin/', vos_perf)
+        vos_perf = daos_build.program(denv, 'vos_perf',
+                                      ['vos_perf.c', perf_common, vos_engine],
+                                      LIBS=libs_server)
+        denv.Install('$PREFIX/bin/', vos_perf)
 
-    Import('mpi_cmd_parser')
-    obj_ctl = daos_build.program(denv, 'obj_ctl',
-                                 ['obj_ctl.c', mpi_cmd_parser, vos_engine],
-                                 LIBS=libs_server)
-    denv.Install('$PREFIX/bin/', obj_ctl)
+        Import('mpi_cmd_parser')
+        obj_ctl = daos_build.program(denv, 'obj_ctl',
+                                     ['obj_ctl.c', mpi_cmd_parser, vos_engine],
+                                     LIBS=libs_server)
+        denv.Install('$PREFIX/bin/', obj_ctl)
 
     jobtest = daos_build.program(denv, 'jobtest', ['jobtest.c'], LIBS=libs_client)
     denv.Install('$PREFIX/bin/', jobtest)

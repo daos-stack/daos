@@ -13,7 +13,7 @@
 #include <daos_srv/pool.h>
 #include <daos/rpc.h>
 #include "obj_rpc.h"
-#include "obj_internal.h"
+#include "srv_internal.h"
 
 /**
  * Switch of enable DTX or not, enabled by default.
