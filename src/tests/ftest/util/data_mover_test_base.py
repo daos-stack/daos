@@ -373,7 +373,7 @@ class DataMoverTestBase(IorTestBase, MdtestBase):
             when dfuse was not started for a specific pool/container.
 
         """
-        container = self.get_container(pool, create=False)
+        params = {}
 
         if use_dfuse_uns:
             path = str(self.dfuse.mount_dir.value)
@@ -382,15 +382,14 @@ class DataMoverTestBase(IorTestBase, MdtestBase):
             if dfuse_uns_cont:
                 path = join(path, dfuse_uns_cont.uuid)
             path = join(path, "uns{}".format(str(len(self.container))))
-            container.path.update(path)
+            params["path"] = path
 
         if cont_type:
-            container.type.update(cont_type)
+            params["type"] = cont_type
         if oclass:
-            container.oclass.update(oclass)
+            params["oclass"] = oclass
 
-        # Create container
-        container.create()
+        container = self.get_container(pool, **params)
 
         # Save container and uuid
         self.container.append(container)
