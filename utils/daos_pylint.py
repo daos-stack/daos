@@ -11,9 +11,6 @@ import sys
 # Test against python 3.6 as this is what CentOS 7.9 is using.
 MIN_PY_VER = '3.6'
 
-# atom.io will call
-# /Library/Developer/CommandLineTools/Library/Frameworks/Python3.framework/Versions/3.8/Resources/Python.app/Contents/MacOS/Python /Users/ampittma/coral/daos/venv/bin/pylint --msg-template='{line},{column},{category},{msg_id}:{msg_id} {symbol} {msg}' --reports=n --output-format=text --rcfile=/Users/ampittma/coral/daos/pylintrc /Users/ampittma/coral/daos/utils/node_local_test.py
-
 def parse_file(target_file):
     """Main program"""
 
