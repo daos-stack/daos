@@ -120,17 +120,17 @@ The permissions in a resource's ACE permit a certain type of user access to
 the resource. The order of the permission "bits" (characters) within the
 `PERMISSIONS` field of the ACE is not significant.
 
-| Permission	| Pool Meaning		| Container Meaning				|
+| Permission | Pool Meaning| Container Meaning|
 | ------------- | --------------------- | --------------------------------------------- |
-| r (Read)	| Alias for 't'		| Read container data and attributes		|
-| w (Write)	| Alias for 'c' + 'd'	| Write container data and attributes		|
-| c (Create)	| Create containers	| N/A						|
-| d (Delete)	| Delete any container	| Delete this container				|
-| t (Get-Prop)	| Connect/query		| Get container properties			|
-| T (Set-Prop)	| N/A			| Set/Change container properties		|
-| a (Get-ACL)	| N/A			| Get container ACL				|
-| A (Set-ACL)	| N/A			| Set/Change container ACL			|
-| o (Set-Owner)	| N/A			| Set/Change container's owner user and group	|
+| r (Read)| Alias for 't'| Read container data and attributes|
+| w (Write)| Alias for 'c' + 'd'| Write container data and attributes|
+| c (Create)| Create containers| N/A|
+| d (Delete)| Delete any container| Delete this container|
+| t (Get-Prop)| Connect/query| Get container properties|
+| T (Set-Prop)| N/A| Set/Change container properties|
+| a (Get-ACL)| N/A| Get container ACL|
+| A (Set-ACL)| N/A| Set/Change container ACL|
+| o (Set-Owner)| N/A| Set/Change container's owner user and group|
 
 ACEs containing permissions not applicable to the given resource are considered
 invalid.
