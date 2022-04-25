@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2021 Intel Corporation.
+ * (C) Copyright 2016-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -315,7 +315,7 @@ dc_array_l2g(daos_handle_t oh, d_iov_t *glob)
 	}
 
 	if (glob->iov_buf_len < glob_buf_size) {
-		D_DEBUG(DF_DSMC, "Larger glob buffer needed ("DF_U64" bytes "
+		D_DEBUG(DB_ANY, "Larger glob buffer needed ("DF_U64" bytes "
 			"provided, "DF_U64" required).\n", glob->iov_buf_len,
 			glob_buf_size);
 		glob->iov_buf_len = glob_buf_size;
@@ -1844,6 +1844,7 @@ struct key_query_props {
 	char			akey_val;
 	daos_recx_t		recx;
 	daos_size_t		*size;
+	daos_size_t		max_epoch;
 	tse_task_t		*ptask;
 };
 
@@ -1926,6 +1927,7 @@ dc_array_get_size(tse_task_t *task)
 	query_args->dkey	= &kqp->dkey;
 	query_args->akey	= &kqp->akey;
 	query_args->recx	= &kqp->recx;
+	query_args->max_epoch	= NULL;
 
 	rc = tse_task_register_comp_cb(query_task, get_array_size_cb, &kqp,
 				       sizeof(kqp));
@@ -1958,6 +1960,81 @@ err_task:
 	return rc;
 } /* end daos_array_get_size */
 
+int
+dc_array_stat(tse_task_t *task)
+{
+	daos_array_stat_t	*args = daos_task_get_args(task);
+	struct dc_array		*array;
+	daos_obj_query_key_t	*query_args;
+	struct key_query_props	*kqp = NULL;
+	tse_task_t		*query_task = NULL;
+	daos_handle_t		oh;
+	int			rc;
+
+	array = array_hdl2ptr(args->oh);
+	if (array == NULL)
+		D_GOTO(err_task, rc = -DER_NO_HDL);
+
+	oh = array->daos_oh;
+
+	D_ALLOC_PTR(kqp);
+	if (kqp == NULL)
+		D_GOTO(err_task, rc = -DER_NOMEM);
+
+	args->stbuf->st_size = 0;
+	args->stbuf->st_max_epoch = 0;
+
+	kqp->akey_val	= '0';
+	d_iov_set(&kqp->akey, &kqp->akey_val, 1);
+	kqp->dkey_val	= 0;
+	d_iov_set(&kqp->dkey, &kqp->dkey_val, sizeof(uint64_t));
+	kqp->ptask	= task;
+	kqp->size	= &args->stbuf->st_size;
+	kqp->array	= array;
+
+	rc = daos_task_create(DAOS_OPC_OBJ_QUERY_KEY, tse_task2sched(task), 0, NULL, &query_task);
+	if (rc != 0)
+		D_GOTO(err_task, rc);
+
+	query_args		= daos_task_get_args(query_task);
+	query_args->oh		= oh;
+	query_args->th		= args->th;
+	query_args->flags	= DAOS_GET_DKEY | DAOS_GET_RECX | DAOS_GET_MAX;
+	query_args->dkey	= &kqp->dkey;
+	query_args->akey	= &kqp->akey;
+	query_args->recx	= &kqp->recx;
+	query_args->max_epoch	= &args->stbuf->st_max_epoch;
+
+	rc = tse_task_register_comp_cb(query_task, get_array_size_cb, &kqp, sizeof(kqp));
+	if (rc != 0)
+		D_GOTO(err_query_task, rc);
+
+	rc = tse_task_register_deps(task, 1, &query_task);
+	if (rc != 0)
+		D_GOTO(err_query_task, rc);
+
+	rc = tse_task_register_comp_cb(task, free_query_cb, &kqp, sizeof(kqp));
+	if (rc != 0)
+		D_GOTO(err_query_task, rc);
+
+	rc = tse_task_schedule(query_task, false);
+	if (rc != 0)
+		D_GOTO(err_query_task, rc);
+
+	tse_sched_progress(tse_task2sched(task));
+
+	return 0;
+
+err_query_task:
+	tse_task_complete(query_task, rc);
+err_task:
+	D_FREE(kqp);
+	if (array)
+		array_decref(array);
+	tse_task_complete(task, rc);
+	return rc;
+} /* end daos_array_stat */
+
 struct set_size_props {
 	struct dc_array *array;
 	char		buf[ENUM_DESC_BUF];
@@ -1987,63 +2064,6 @@ free_set_size_cb(tse_task_t *task, void *data)
 		array_decref(props->array);
 	D_FREE(props);
 	return 0;
-}
-
-static int
-punch_key(daos_handle_t oh, daos_handle_t th, daos_size_t dkey_val,
-	  tse_task_t *task)
-{
-	daos_obj_punch_t	*p_args;
-	daos_key_t		*dkey;
-	struct io_params	*params = NULL;
-	tse_task_t		*io_task = NULL;
-	daos_opc_t		opc = DAOS_OPC_OBJ_PUNCH_DKEYS;
-	int			rc;
-
-	D_ALLOC_PTR(params);
-	if (params == NULL)
-		return -DER_NOMEM;
-
-	params->dkey_val = dkey_val;
-	dkey = &params->dkey;
-	d_iov_set(dkey, &params->dkey_val, sizeof(uint64_t));
-
-	/** Punch this entire dkey */
-	D_DEBUG(DB_IO, "Punching Key %zu\n", dkey_val);
-
-	D_ASSERT(dkey_val != 0);
-
-	rc = daos_task_create(opc, tse_task2sched(task), 0, NULL, &io_task);
-	if (rc) {
-		D_ERROR("daos_task_create() failed "DF_RC"\n", DP_RC(rc));
-		D_GOTO(free, rc);
-	}
-
-	p_args = daos_task_get_args(io_task);
-	p_args->oh	= oh;
-	p_args->th	= th;
-	p_args->dkey	= dkey;
-
-	rc = tse_task_register_comp_cb(io_task, free_io_params_cb, &params,
-				       sizeof(params));
-	if (rc)
-		D_GOTO(free, rc);
-
-	rc = tse_task_register_deps(task, 1, &io_task);
-	if (rc)
-		D_GOTO(err, rc);
-
-	rc = tse_task_schedule(io_task, false);
-	if (rc)
-		D_GOTO(err, rc);
-
-	return rc;
-free:
-	D_FREE(params);
-err:
-	if (io_task)
-		tse_task_complete(io_task, rc);
-	return rc;
 }
 
 static int
@@ -2373,12 +2393,16 @@ adjust_array_size_cb(tse_task_t *task, void *data)
 			if (dkey_val == 0)
 				continue;
 			/*
-			 * Punch the entire dkey since it's in a higher dkey
-			 * group than the intended size.
+			 * The dkey is higher than the adjustded size so we could punch it here.
+			 * But it's better to punch the extent so that the max_write for the object
+			 * doesn't get lost by aggregation.
 			 */
-			D_DEBUG(DB_IO, "Punching key: "DF_U64"\n", dkey_val);
-			rc = punch_key(args->oh, args->th, dkey_val,
-				       props->ptask);
+			D_DEBUG(DB_IO, "Punch full extent in key "DF_U64"\n",
+				dkey_val);
+			rc = punch_extent(args->oh, args->th,
+					  dkey_val, (daos_off_t)-1,
+					  props->chunk_size,
+					  props->ptask);
 			if (rc)
 				return rc;
 		} else if (dkey_val == props->dkey_val && props->record_i) {

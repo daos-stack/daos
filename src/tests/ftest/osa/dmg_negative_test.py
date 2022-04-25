@@ -1,6 +1,6 @@
 #!/usr/bin/python
 """
-  (C) Copyright 2020-2021 Intel Corporation.
+  (C) Copyright 2020-2022 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -38,9 +38,8 @@ class OSADmgNegativeTest(OSAUtils):
         """
         if exp_result == "Pass":
             # Check state before hand as wait for rebuild
-            # does not consider the idle state
             state = self.get_rebuild_state()
-            if state not in ("done", "idle"):
+            if state != "done":
                 self.is_rebuild_done(3)
             if "succeeded" in dmg_output:
                 self.log.info("Test Passed")

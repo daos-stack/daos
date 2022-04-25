@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2021 Intel Corporation.
+// (C) Copyright 2021-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -48,7 +48,7 @@ type poolBaseCmd struct {
 
 func (cmd *poolBaseCmd) poolUUIDPtr() *C.uchar {
 	if cmd.poolUUID == uuid.Nil {
-		cmd.log.Errorf("poolUUIDPtr(): nil UUID")
+		cmd.Errorf("poolUUIDPtr(): nil UUID")
 		return nil
 	}
 	return (*C.uchar)(unsafe.Pointer(&cmd.poolUUID[0]))
@@ -76,8 +76,8 @@ func (cmd *poolBaseCmd) connectPool(flags C.uint) error {
 		cLabel := C.CString(cmd.PoolID().Label)
 		defer freeString(cLabel)
 
-		cmd.log.Debugf("connecting to pool: %s", cmd.PoolID().Label)
-		rc = C.daos_pool_connect2(cLabel, cSysName, flags,
+		cmd.Debugf("connecting to pool: %s", cmd.PoolID().Label)
+		rc = C.daos_pool_connect(cLabel, cSysName, flags,
 			&cmd.cPoolHandle, &poolInfo, nil)
 		if rc == 0 {
 			var err error
@@ -89,10 +89,10 @@ func (cmd *poolBaseCmd) connectPool(flags C.uint) error {
 		}
 	case cmd.PoolID().HasUUID():
 		cmd.poolUUID = cmd.PoolID().UUID
-		cmd.log.Debugf("connecting to pool: %s", cmd.poolUUID)
+		cmd.Debugf("connecting to pool: %s", cmd.poolUUID)
 		cUUIDstr := C.CString(cmd.poolUUID.String())
 		defer freeString(cUUIDstr)
-		rc = C.daos_pool_connect2(cUUIDstr, cSysName, flags,
+		rc = C.daos_pool_connect(cUUIDstr, cSysName, flags,
 			&cmd.cPoolHandle, nil, nil)
 	default:
 		return errors.New("no pool UUID or label supplied")
@@ -102,17 +102,21 @@ func (cmd *poolBaseCmd) connectPool(flags C.uint) error {
 }
 
 func (cmd *poolBaseCmd) disconnectPool() {
-	cmd.log.Debugf("disconnecting pool %s", cmd.PoolID())
+	cmd.Debugf("disconnecting pool %s", cmd.PoolID())
 	// Hack for NLT fault injection testing: If the rc
 	// is -DER_NOMEM, retry once in order to actually
 	// shut down and release resources.
 	rc := C.daos_pool_disconnect(cmd.cPoolHandle, nil)
 	if rc == -C.DER_NOMEM {
 		rc = C.daos_pool_disconnect(cmd.cPoolHandle, nil)
+		// DAOS-8866, daos_pool_disconnect() might have failed, but worked anyway.
+		if rc == -C.DER_NO_HDL {
+			rc = -C.DER_SUCCESS
+		}
 	}
 
 	if err := daosError(rc); err != nil {
-		cmd.log.Errorf("pool disconnect failed: %s", err)
+		cmd.Errorf("pool disconnect failed: %s", err)
 	}
 }
 
@@ -190,7 +194,7 @@ func convertPoolRebuildStatus(in *C.struct_daos_rebuild_status) *mgmtpb.PoolRebu
 		switch {
 		case in.rs_version == 0:
 			out.State = mgmtpb.PoolRebuildStatus_IDLE
-		case in.rs_done == 1:
+		case C.get_rebuild_state(in) == C.DRS_COMPLETED:
 			out.State = mgmtpb.PoolRebuildStatus_DONE
 		default:
 			out.State = mgmtpb.PoolRebuildStatus_BUSY
@@ -267,7 +271,7 @@ func (cmd *poolQueryCmd) Execute(_ []string) error {
 		return err
 	}
 
-	cmd.log.Info(bld.String())
+	cmd.Info(bld.String())
 
 	return nil
 }
@@ -302,7 +306,7 @@ func (cmd *poolListAttrsCmd) Execute(_ []string) error {
 	title := fmt.Sprintf("Attributes for pool %s:", cmd.poolUUID)
 	printAttributes(&bld, title, attrs...)
 
-	cmd.log.Info(bld.String())
+	cmd.Info(bld.String())
 
 	return nil
 }
@@ -337,7 +341,7 @@ func (cmd *poolGetAttrCmd) Execute(_ []string) error {
 	title := fmt.Sprintf("Attributes for pool %s:", cmd.poolUUID)
 	printAttributes(&bld, title, attr)
 
-	cmd.log.Info(bld.String())
+	cmd.Info(bld.String())
 
 	return nil
 }
@@ -402,7 +406,7 @@ type poolAutoTestCmd struct {
 }
 
 func (cmd *poolAutoTestCmd) Execute(_ []string) error {
-	ap, deallocCmdArgs, err := allocCmdArgs(cmd.log)
+	ap, deallocCmdArgs, err := allocCmdArgs(cmd.Logger)
 	if err != nil {
 		return err
 	}

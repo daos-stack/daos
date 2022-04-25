@@ -1,6 +1,6 @@
 #!/usr/bin/python
 '''
-  (C) Copyright 2020-2021 Intel Corporation.
+  (C) Copyright 2020-2022 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
@@ -29,7 +29,7 @@ class DmvrNegativeSpaceTest(DataMoverTestBase):
             DAOS-6387: posix filesystem does not have enough space.
         :avocado: tags=all,full_regression
         :avocado: tags=hw,small
-        :avocado: tags=datamover,dcp
+        :avocado: tags=datamover,mfu,mfu_dcp,dfs,ior
         :avocado: tags=dm_negative,dm_negative_space_dcp
         """
         self.set_tool("DCP")

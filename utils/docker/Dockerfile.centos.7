@@ -1,7 +1,7 @@
-# Copyright (C) 2018-2021 Intel Corporation
+# Copyright 2018-2022 Intel Corporation
 # All rights reserved.
 #
-# 'recipe' for Docker to build an image of centOS 7 based
+# 'recipe' for Docker to build an image of CentOS 7 based
 # environment for building the DAOS project.
 #
 
@@ -12,56 +12,26 @@ LABEL maintainer="daos@daos.groups.io"
 # Intermittent cache-bust.  Used to reduce load on the actual CACHEBUST later.
 ARG CB0
 
-# If a local distro repository is supplied, then we should use it
-# and disable using the distro repositories that can be mirrored.
-# The Docker image starts out with the DISTRO provided GPG keys
-# on the disk, but not installed.  These must be installed before
-# adding any repo that needs GPG keys but does not provide meta
-# data for installing those keys.  Then the epel-release package
-# version from the extras repository must be installed and the
-# GPG key it provides must be installed.
-ARG REPO_URL
-ARG REPO_DISTRO
-RUN if [ -n "$REPO_DISTRO" ]; then                              \
-      rpm --import /etc/pki/rpm-gpg/*;                          \
-      MY_REPO="${REPO_URL}${REPO_DISTRO}/";                     \
-      MY_NAME="${MY_REPO#*//}";                                 \
-      MY_NAME="${MY_NAME//\//_}";                               \
-      echo -e "[${MY_NAME}]\n\
-name=created from ${MY_REPO}\n\
-baseurl=${MY_REPO}\n\
-enabled=1\n\
-repo_gpgcheck=0\n\
-gpgcheck=1\n" >> /etc/yum.repos.d/local-centos-group.repo;      \
-      sed "s/^mirrorlist_expire=0*/mirrorlist_expire=99999999/" \
-          -i /etc/yum.conf;                                     \
-      yum -y install --disablerepo=base,extras,updates          \
-             dnf dnf-plugins-core epel-release-7-11;            \
-      rpm --import /etc/pki/rpm-gpg/RPM-GPG-KEY-EPEL-7;         \
-      dnf config-manager --assumeyes --quiet                    \
-          --disable base epel extras updates;                   \
-    else                                                        \
-      yum -y install dnf dnf-plugins-core epel-release-7-11;    \
-    fi;                                                         \
-    dnf -y upgrade epel-release;                                \
-    yum clean all;                                              \
-    dnf clean all
-
-# If a local DAOS repository is supplied, then we should use it
-# This is mainly for quickbuilds
-ARG REPO_DAOS
-RUN if [ -n "$REPO_DAOS" ]; then                                \
-      MY_REPO="${REPO_URL}${REPO_DAOS}/";                       \
-      MY_NAME="${MY_REPO#*//}";                                 \
-      MY_NAME="${MY_NAME//\//_}";                               \
-      echo -e "[${MY_NAME}]\n\
-name=created from ${MY_REPO}\n\
-baseurl=${MY_REPO}\n\
-enabled=1\n\
-repo_gpgcheck=0\n\
-exclude=fuse-3* fuse-devel-3* fuse-libs-3* fuse-debuginfo-3* ompi*\n\
-gpgcheck=0\n" >> /etc/yum.repos.d/local-daos-group.repo;        \
-    fi
+# Use local repo server if present
+ARG REPO_FILE_URL
+RUN set -e;                                                      \
+    if [ -n "$REPO_FILE_URL" ]; then                             \
+        cd /etc/yum.repos.d/ &&                                  \
+        curl -k -f -o daos_ci-centos7-artifactory.repo.tmp       \
+             "$REPO_FILE_URL"daos_ci-centos7-artifactory.repo && \
+        for file in *.repo; do                                   \
+            true > $file;                                        \
+        done;                                                    \
+        mv daos_ci-centos7-artifactory.repo{.tmp,};              \
+    fi;                                                          \
+    yum -y install dnf;                                          \
+    yum clean all;                                               \
+    dnf --disablerepo \*epel\* -y install epel-release           \
+                                          dnf-plugins-core;      \
+    if [ -n "$REPO_FILE_URL" ]; then                             \
+        dnf -y --quiet config-manager --disable epel;            \
+    fi;                                                          \
+    dnf -y clean all
 
 ARG JENKINS_URL
 ARG REPOS
@@ -82,14 +52,14 @@ baseurl=${JENKINS_URL}job/daos-stack/job/$repo/job/$branch/$build_number/artifac
 enabled=1\n\
 gpgcheck=False\n" >> /etc/yum.repos.d/$repo:$branch:$build_number.repo;   \
         cat /etc/yum.repos.d/$repo:$branch:$build_number.repo; \
-        dnf repolist; \
+        dnf -y repolist; \
         dnf --disablerepo=\* --enablerepo=$repo:$branch:$build_number makecache; \
     done
 
 # Install OS updates and package.  Include basic tools and daos dependencies
 COPY ./utils/scripts/install-centos7.sh /tmp/install.sh
-RUN chmod +x /tmp/install.sh
-RUN /tmp/install.sh
+RUN chmod +x /tmp/install.sh && dnf -y upgrade && /tmp/install.sh && dnf -y clean all && \
+    rm -f /tmp/install.sh
 
 ARG UID=1000
 
@@ -102,25 +72,20 @@ RUN echo "daos_agent:daos_agent" | chpasswd
 RUN echo "daos_server ALL=(root) NOPASSWD: ALL" >> /etc/sudoers.d/daos_sudo_setup
 
 # Create directory for DAOS backend storage
-RUN mkdir -p /opt/daos /mnt/daos /var/run/daos_server /var/run/daos_agent &&   \
-    chown daos_server.daos_server /opt/daos /mnt/daos /var/run/daos_server &&  \
+RUN mkdir -p /opt/daos /mnt/daos /var/run/daos_server /var/run/daos_agent /home/daos/pre /home/daos/daos &&   \
+    chown -R daos_server.daos_server /opt/daos /mnt/daos /var/run/daos_server /home/daos &&  \
     chown daos_agent.daos_agent /var/run/daos_agent
 
-# DPDK/SPDK needs pyelftools now
-# Longer term, we should upload our RPM build of this to the public packaging
-# site and install it by RPM, but for now, we'll just pip install it
-USER daos_server:daos_server
-RUN python3 -m pip --no-cache-dir --disable-pip-version-check install --user pyelftools
-USER root:root
+ENV PATH=/home/daos/.local/bin:$PATH
 
 ARG QUICKBUILD=false
 ARG QUICKBUILD_DEPS
 
-RUN if $QUICKBUILD; then                                                      \
-        echo "Installing: $QUICKBUILD_DEPS";                                  \
-        echo "$QUICKBUILD_DEPS" | sed -e '/^$/d' | tr '\n' '\0' |             \
-          xargs -0 dnf -y install;                                            \
-        dnf clean all;                                                        \
+RUN if $QUICKBUILD; then                                          \
+        echo "Installing: $QUICKBUILD_DEPS";                      \
+        echo "$QUICKBUILD_DEPS" | sed -e '/^$/d' | tr '\n' '\0' | \
+          xargs -0 dnf -y install;                                \
+        dnf -y clean all;                                            \
     fi
 
 ARG BULLSEYE
@@ -136,15 +101,17 @@ RUN if [ "x$BULLSEYE" != "x" ]; then \
       rm -rf bullseye; \
     fi
 
-# The COPY command has a --chown option but it's not well supported so copy as
-# root then run a chown command which is frustrating as the copy can take a few
-# seconds.
-WORKDIR /home/daos/pre
-COPY SConstruct .
-COPY site_scons site_scons
-COPY utils/build.config utils/
-RUN chown -R daos_server.daos_server /home/daos
 USER daos_server:daos_server
+
+# DPDK/SPDK needs pyelftools now
+# Longer term, we should upload our RPM build of this to the public packaging
+# site and install it by RPM, but for now, we'll just pip install it
+RUN python3 -m pip --no-cache-dir --disable-pip-version-check install --user pyelftools
+
+WORKDIR /home/daos/pre
+COPY --chown=daos_server:daos_server SConstruct .
+COPY --chown=daos_server:daos_server site_scons site_scons
+COPY --chown=daos_server:daos_server utils/build.config utils/
 
 # Control what to build.  By default Dockerfiles build everything to allow for
 # ease-of-use for users, however in CI everything is turned off and then
@@ -157,25 +124,30 @@ ARG DAOS_TARGET_TYPE=release
 # src hasn't changed then this won't do anything, but if it has then we want to
 # ensure that latest dependencies are used.
 USER root:root
-RUN [ "$DAOS_DEPS_BUILD" != "yes" ] || \
-    { dnf -y upgrade \
-          --exclude=spdk,spdk-devel,dpdk-devel,dpdk,mercury-devel,mercury && \
-    dnf clean all; }
+RUN [ "$DAOS_DEPS_BUILD" != "yes" ] || {                                       \
+        dnf -y upgrade                                                         \
+            --exclude=spdk,spdk-devel,dpdk-devel,dpdk,mercury-devel,mercury && \
+        dnf -y clean all;                                                         \
+    }
 USER daos_server:daos_server
 
 ARG DEPS_JOBS=1
 
-RUN [ "$DAOS_DEPS_BUILD" != "yes" ] || \
-    { scons-3 --build-deps=yes --jobs $DEPS_JOBS PREFIX=/opt/daos \
-      TARGET_TYPE=$DAOS_TARGET_TYPE --deps-only && \
-    ([ "$DAOS_KEEP_BUILD" != "no" ] || /bin/rm -rf build *.gz); }
-
-# force an upgrade to get any newly built RPMs
+RUN [ "$DAOS_DEPS_BUILD" != "yes" ] || {                            \
+        scons-3 --build-deps=yes --jobs $DEPS_JOBS PREFIX=/opt/daos \
+                TARGET_TYPE=$DAOS_TARGET_TYPE --deps-only &&        \
+        ([ "$DAOS_KEEP_BUILD" != "no" ] || /bin/rm -rf build *.gz); \
+    }
 USER root:root
+
+# select compiler to use
+ARG COMPILER=gcc
+# force an upgrade to get any newly built RPMs, but only if CACHEBUST is set.
 ARG CACHEBUST
-RUN [ -z "$CACHEBUST" ] || \
-    { dnf -y upgrade --exclude=spdk,spdk-devel,dpdk-devel,dpdk,mercury-devel,mercury && \
-    dnf clean all; }
+RUN [ -z "$CACHEBUST" ] || {                                                              \
+        dnf -y upgrade --exclude=spdk,spdk-devel,dpdk-devel,dpdk,mercury-devel,mercury && \
+        dnf -y clean all;                                                                    \
+    }
 USER daos_server:daos_server
 
 # Set a label.  This is useful for searching for DAOS images, but is also used
@@ -183,26 +155,23 @@ USER daos_server:daos_server
 LABEL DAOS=true
 
 WORKDIR /home/daos/daos/
-COPY VERSION LICENSE ftest.sh SConstruct ./
-COPY site_scons site_scons
-COPY utils utils
-COPY src src
-USER root:root
-RUN chown -R daos_server.daos_server /home/daos/daos/
-USER daos_server:daos_server
+COPY --chown=daos_server:daos_server VERSION LICENSE ftest.sh SConstruct ./
+COPY --chown=daos_server:daos_server site_scons site_scons
+COPY --chown=daos_server:daos_server utils utils
+COPY --chown=daos_server:daos_server src src
 
-# select compiler to use
-ARG COMPILER=gcc
 ARG JOBS=$DEPS_JOBS
 ARG DAOS_BUILD_TYPE=$DAOS_TARGET_TYPE
 ARG DAOS_BUILD=$DAOS_DEPS_BUILD
 
 # Build DAOS
-RUN [ "$DAOS_BUILD" != "yes" ] || \
-    { scons-3 --jobs $JOBS install PREFIX=/opt/daos COMPILER=$COMPILER \
-      BUILD_TYPE=$DAOS_BUILD_TYPE TARGET_TYPE=$DAOS_TARGET_TYPE && \
-    /bin/rm -rf build && go clean -cache && \
-    cp -r utils/config/examples /opt/daos; }
+RUN [ "$DAOS_BUILD" != "yes" ] || {                                          \
+        scons-3 --jobs $JOBS install PREFIX=/opt/daos COMPILER=$COMPILER     \
+                BUILD_TYPE=$DAOS_BUILD_TYPE TARGET_TYPE=$DAOS_TARGET_TYPE && \
+        ([ "$DAOS_KEEP_BUILD" != "no" ] || /bin/rm -rf build) &&             \
+        go clean -cache &&                                                   \
+        cp -r utils/config/examples /opt/daos;                               \
+    }
 
 # Set environment variables
 ENV PATH=/opt/daos/bin:$PATH
@@ -213,12 +182,13 @@ WORKDIR /home/daos/daos/src/client/java
 
 ARG DAOS_JAVA_BUILD=$DAOS_BUILD
 
-RUN [ "$DAOS_JAVA_BUILD" != "yes" ] || \
-    { mkdir /home/daos/.m2 && \
-    cp /home/daos/daos/utils/scripts/maven-settings.xml.in /home/daos/.m2/settings.xml && \
-    mvn clean install -T 1C \
- -B -Dorg.slf4j.simpleLogger.log.org.apache.maven.cli.transfer.Slf4jMavenTransferListener=warn \
- -DskipITs -Dgpg.skip -Ddaos.install.path=/opt/daos; }
+RUN [ "$DAOS_JAVA_BUILD" != "yes" ] || {                                                      \
+        mkdir /home/daos/.m2 &&                                                               \
+        cp /home/daos/daos/utils/scripts/maven-settings.xml.in /home/daos/.m2/settings.xml && \
+        mvn clean install -T 1C                                                               \
+            -B -Dorg.slf4j.simpleLogger.log.org.apache.maven.cli.transfer.Slf4jMavenTransferListener=warn                                                   \
+            -DskipITs -Dgpg.skip -Ddaos.install.path=/opt/daos;                               \
+    }
 WORKDIR /home/daos
 
 ARG DAOS_KEEP_SRC=no

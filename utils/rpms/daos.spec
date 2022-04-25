@@ -3,9 +3,21 @@
 %define agent_svc_name daos_agent.service
 %define sysctl_script_name 10-daos_server.conf
 
-%global mercury_version 2.1.0~rc4-3%{?dist}
-%global libfabric_version 1.14.0~rc3-2
+%global mercury_version 2.1.0~rc4-8%{?dist}
+%global libfabric_version 1.15.0~rc3-1
 %global __python %{__python3}
+
+%if 0%{?rhel} > 0
+%if 0%{?rhel} > 7
+# only RHEL 8+ has a new enough ucx-devel
+%global ucx 1
+%else
+%global ucx 0
+%endif
+%else
+# but assume that anything else does also
+%global ucx 1
+%endif
 
 %if (0%{?rhel} >= 8)
 # https://bugzilla.redhat.com/show_bug.cgi?id=1955184
@@ -14,8 +26,8 @@
 %endif
 
 Name:          daos
-Version:       2.1.100
-Release:       17%{?relval}%{?dist}
+Version:       2.3.100
+Release:       4%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       BSD-2-Clause-Patent
@@ -67,10 +79,7 @@ BuildRequires: fuse3-devel >= 3
 BuildRequires: fuse3-devel >= 3.4.2
 %endif
 %if (0%{?suse_version} >= 1500)
-# NB: OpenSUSE is stupid about this... If we just
-# specify go >= 1.X, it installs go=1.11 AND 1.X.
-BuildRequires: go1.14
-BuildRequires: go1.14-race
+BuildRequires: go-race
 BuildRequires: libprotobuf-c-devel
 BuildRequires: liblz4-devel
 %else
@@ -85,17 +94,17 @@ BuildRequires: libisa-l_crypto-devel
 BuildRequires: libisal-devel
 BuildRequires: libisal_crypto-devel
 %endif
-BuildRequires: daos-raft-devel = 0.8.1
+BuildRequires: daos-raft-devel = 0.9.1-1401.gc18bcb8%{?dist}
 BuildRequires: openssl-devel
 BuildRequires: libevent-devel
 BuildRequires: libyaml-devel
 BuildRequires: libcmocka-devel
 BuildRequires: valgrind-devel
 BuildRequires: systemd
+BuildRequires: go >= 1.14
 %if (0%{?rhel} >= 7)
 BuildRequires: numactl-devel
 BuildRequires: CUnit-devel
-BuildRequires: golang-bin >= 1.12
 # needed to retrieve PMM region info through control-plane
 BuildRequires: libipmctl-devel
 BuildRequires: python36-devel
@@ -134,12 +143,23 @@ BuildRequires: libpsm_infinipath1
 %endif
 %endif
 %endif
+%if 0%{ucx} > 0
+%if (0%{?suse_version} > 0)
+BuildRequires: libucp-devel
+BuildRequires: libucs-devel
+BuildRequires: libuct-devel
+%else
+BuildRequires: ucx-devel
+%endif
+%endif
+
 Requires: protobuf-c
 Requires: openssl
 # This should only be temporary until we can get a stable upstream release
 # of mercury, at which time the autoprov shared library version should
 # suffice
 Requires: mercury >= %{mercury_version}
+
 
 %description
 The Distributed Asynchronous Object Storage (DAOS) is an open-source
@@ -207,7 +227,6 @@ This is the package needed to run a DAOS client
 %package tests
 Summary: The entire DAOS test suite
 Requires: %{name}-client-tests-openmpi%{?_isa} = %{version}-%{release}
-Requires: %{name}-server-tests-openmpi%{?_isa} = %{version}-%{release}
 
 %description tests
 This is the package is a metapackage to install all of the test packages
@@ -225,6 +244,8 @@ Requires: python3-tabulate
 Requires: python3-defusedxml
 %endif
 Requires: fio
+Requires: meson
+Requires: python3-pyelftools
 Requires: dbench
 Requires: lbzip2
 Requires: attr
@@ -251,13 +272,6 @@ Requires: %{name}-server%{?_isa} = %{version}-%{release}
 
 %description server-tests
 This is the package needed to run the DAOS server test suite (server tests)
-
-%package server-tests-openmpi
-Summary: The DAOS server test suite - tools which need openmpi
-Requires: %{name}-server-tests%{?_isa} = %{version}-%{release}
-
-%description server-tests-openmpi
-This is the package needed to run the DAOS server test suite openmpi tools
 
 %package devel
 Summary: The DAOS development libraries and headers
@@ -360,7 +374,8 @@ mv %{buildroot}/%{conf_dir}/bash_completion.d %{buildroot}/%{_sysconfdir}
 %pre server
 getent group daos_metrics >/dev/null || groupadd -r daos_metrics
 getent group daos_server >/dev/null || groupadd -r daos_server
-getent passwd daos_server >/dev/null || useradd -s /sbin/nologin -r -g daos_server -G daos_metrics daos_server
+getent group daos_daemons >/dev/null || groupadd -r daos_daemons
+getent passwd daos_server >/dev/null || useradd -s /sbin/nologin -r -g daos_server -G daos_metrics,daos_daemons daos_server
 %post server
 /sbin/ldconfig
 %systemd_post %{server_svc_name}
@@ -373,7 +388,8 @@ getent passwd daos_server >/dev/null || useradd -s /sbin/nologin -r -g daos_serv
 
 %pre client
 getent group daos_agent >/dev/null || groupadd -r daos_agent
-getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent daos_agent
+getent group daos_daemons >/dev/null || groupadd -r daos_daemons
+getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent -G daos_daemons daos_agent
 %post client
 %systemd_post %{agent_svc_name}
 %preun client
@@ -395,6 +411,7 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %{_libdir}/%{name}/VERSION
 %{_libdir}/libcart.so.*
 %{_libdir}/libgurt.so.*
+%{_libdir}/libdaos_common.so
 %doc
 
 %files server
@@ -438,7 +455,6 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %{_sysctldir}/%{sysctl_script_name}
 
 %files client
-%{_libdir}/libdaos_common.so
 %{_libdir}/libdaos.so.*
 %{_bindir}/cart_ctl
 %{_bindir}/self_test
@@ -452,7 +468,6 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %{_libdir}/libduns.so
 %{_libdir}/libdfuse.so
 %{_libdir}/libioil.so
-%{_libdir}/libdfs_internal.so
 %dir %{python3_sitearch}/pydaos
 %{python3_sitearch}/pydaos/*.py
 %dir %{python3_sitearch}/pydaos/raw
@@ -487,18 +502,20 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %{_bindir}/security_test
 %{conf_dir}/fault-inject-cart.yaml
 %{_bindir}/fault_status
+%{_bindir}/crt_launch
 # For avocado tests
 %{daoshome}/.build_vars.json
 %{daoshome}/.build_vars.sh
-
-%files client-tests-openmpi
-%{_bindir}/crt_launch
 %{_bindir}/daos_perf
 %{_bindir}/daos_racer
 %{_bindir}/daos_test
 %{_bindir}/dfs_test
 %{_bindir}/jobtest
 %{_libdir}/libdts.so
+%{_libdir}/libdpar.so
+
+%files client-tests-openmpi
+%{_libdir}/libdpar_mpi.so
 
 %files server-tests
 %{_bindir}/evt_ctl
@@ -511,8 +528,6 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %{_bindir}/vea_ut
 %{_bindir}/vos_tests
 %{_bindir}/vea_stress
-
-%files server-tests-openmpi
 %{_bindir}/daos_gen_io_conf
 %{_bindir}/daos_run_io_conf
 %{_bindir}/obj_ctl
@@ -539,6 +554,45 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 # No files in a shim package
 
 %changelog
+* Wed Apr 20 2022 Lei Huang <lei.huang@intel.com> 2.3.100-4
+- Update to libfabric to v1.15.0rc3-1 to include critical performance patches
+
+* Tue Apr 12 2022 Li Wei <wei.g.li@intel.com> 2.3.100-3
+- Update raft to 0.9.1-1401.gc18bcb8 to fix uninitialized node IDs
+
+* Wed Apr 6 2022 Jeff Olivier <jeffrey.v.olivier@intel.com> 2.3.100-2
+- Remove direct MPI dependency from most of tests
+
+* Wed Apr  6 2022 Johann Lombardi <johann.lombardi@intel.com> 2.3.100-1
+- Switch version to 2.3.100 for 2.4 test builds
+
+* Wed Apr  6 2022 Joseph Moore <joseph.moore@intel.com> 2.1.100-26
+- Add build depends entries for UCX libraries.
+
+* Sat Apr  2 2022 Joseph Moore <joseph.moore@intel.com> 2.1.100-25
+- Update to mercury 2.1.0.rc4-8 to include UCX provider patch
+
+* Fri Mar 11 2022 Alexander Oganezov <alexander.a.oganezov@intel.com> 2.1.100-24
+- Update to mercury 2.1.0.rc4-6 to include CXI provider patch
+
+* Wed Mar 02 2022 Michael Hennecke <michael.hennecke@intel.com> 2.1.100-23
+- DAOS-6344: Create secondary group daos_daemons for daos_server and daos_agent
+
+* Tue Feb 22 2022 Alexander Oganezov <alexander.a.oganezov@intel.com> 2.1.100-22
+- Update mercury to include DAOS-9561 workaround
+
+* Sun Feb 13 2022 Michael MacDonald <mjmac.macdonald@intel.com> 2.1.100-21
+- Update go toolchain requirements
+
+* Thu Feb 10 2022 Li Wei <wei.g.li@intel.com> 2.1.100-20
+- Update raft to 0.9.0-1394.gc81505f to fix membership change bugs
+
+* Wed Jan 19 2022 Michael MacDonald <mjmac.macdonald@intel.com> 2.1.100-19
+- Move libdaos_common.so from daos-client to daos package
+
+* Mon Jan 17 2022 Johann Lombardi <johann.lombardi@intel.com> 2.1.100-18
+- Update libfabric to 1.14.0 GA and apply fix for DAOS-9376
+
 * Thu Dec 23 2021 Alexander Oganezov <alexander.a.oganezov@intel.com> 2.1.100-17
 - Update to v2.1.0-rc4-3 to pick fix for DAOS-9325 high cpu usage
 - Change mercury pinning to be >= instead of strict =

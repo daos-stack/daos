@@ -1,6 +1,6 @@
 #!/usr/bin/python3
 """
-  (C) Copyright 2019-2021 Intel Corporation.
+  (C) Copyright 2019-2022 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -10,8 +10,9 @@ import os
 from getpass import getuser
 
 from command_utils_base import \
-    CommandFailure, FormattedParameter, EnvironmentVariables, \
+    FormattedParameter, EnvironmentVariables, \
     CommonConfig
+from exception_utils import CommandFailure
 from command_utils import YamlCommand, CommandWithSubCommand, SubprocessManager
 from general_utils import get_log_file, run_pcmd
 from agent_utils_params import \

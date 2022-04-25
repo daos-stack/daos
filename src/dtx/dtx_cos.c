@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2019-2021 Intel Corporation.
+ * (C) Copyright 2019-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -380,7 +380,7 @@ dtx_add_cos(struct ds_cont_child *cont, struct dtx_entry *dte,
 	d_iov_t				riov;
 	int				rc;
 
-	if (cont->sc_dtx_cos_shutdown || cont->sc_closing)
+	if (!dtx_cont_opened(cont))
 		return -DER_SHUTDOWN;
 
 	D_ASSERT(dte->dte_mbs != NULL);

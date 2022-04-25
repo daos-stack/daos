@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2021 Intel Corporation.
+// (C) Copyright 2021-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -34,12 +34,14 @@ transport_config:
   allow_insecure: true
 `)
 
-	fabricCfg := common.CreateTestFile(t, dir, `
+	optCfg := common.CreateTestFile(t, dir, `
 name: shire
 access_points: ["one:10001", "two:10001"]
 port: 4242
 runtime_dir: /tmp/runtime
 log_file: /home/frodo/logfile
+control_log_mask: debug
+disable_caching: true
 transport_config:
   allow_insecure: true
 fabric_ifaces:
@@ -61,6 +63,17 @@ fabric_ifaces:
   -
      iface: ib3
      domain: mlx5_3
+`)
+
+	badLogMaskCfg := common.CreateTestFile(t, dir, `
+name: shire
+access_points: ["one:10001", "two:10001"]
+port: 4242
+runtime_dir: /tmp/runtime
+log_file: /home/frodo/logfile
+control_log_mask: gandalf
+transport_config:
+  allow_insecure: true
 `)
 
 	for name, tc := range map[string]struct {
@@ -91,20 +104,27 @@ fabric_ifaces:
 				ControlPort:  4242,
 				RuntimeDir:   "/tmp/runtime",
 				LogFile:      "/home/frodo/logfile",
+				LogLevel:     common.DefaultControlLogLevel,
 				TransportConfig: &security.TransportConfig{
 					AllowInsecure:     true,
 					CertificateConfig: DefaultConfig().TransportConfig.CertificateConfig,
 				},
 			},
 		},
-		"manual fabric config": {
-			path: fabricCfg,
+		"bad log mask": {
+			path:   badLogMaskCfg,
+			expErr: errors.New("not a valid log level"),
+		},
+		"all options": {
+			path: optCfg,
 			expResult: &Config{
 				SystemName:   "shire",
 				AccessPoints: []string{"one:10001", "two:10001"},
 				ControlPort:  4242,
 				RuntimeDir:   "/tmp/runtime",
 				LogFile:      "/home/frodo/logfile",
+				LogLevel:     common.ControlLogLevelDebug,
+				DisableCache: true,
 				TransportConfig: &security.TransportConfig{
 					AllowInsecure:     true,
 					CertificateConfig: DefaultConfig().TransportConfig.CertificateConfig,

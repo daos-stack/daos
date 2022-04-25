@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2021 Intel Corporation.
+ * (C) Copyright 2016-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -76,14 +76,15 @@ rebuild_ec_internal(void **state, daos_oclass_id_t oclass, int kill_data_nr,
 		verify_ec_full(&req, arg->index, 0);
 	ioreq_fini(&req);
 
+	print_message("daos_obj_verify ...\n");
 	rc = daos_obj_verify(arg->coh, oid, DAOS_EPOCH_MAX);
 	assert_int_equal(rc, 0);
 
 	reintegrate_pools_ranks(&arg, 1, kill_ranks, kill_ranks_num);
 	if (oclass == OC_EC_2P1G1)
-		reintegrate_pools_ranks(&arg, 1, &extra_kill_ranks[1], 1);
+		reintegrate_pools_ranks(&arg, 1, &extra_kill_ranks[0], 1);
 	else /* oclass OC_EC_4P2G1 */
-		reintegrate_pools_ranks(&arg, 1, &extra_kill_ranks[2], 2);
+		reintegrate_pools_ranks(&arg, 1, &extra_kill_ranks[0], 2);
 
 	ioreq_init(&req, arg->coh, oid, DAOS_IOD_ARRAY, arg);
 	if (write_type == PARTIAL_UPDATE)
@@ -802,6 +803,7 @@ enumerate_cb(void *data)
 				    buf_len, req);
 		assert_rc_equal(rc, 0);
 		total += number;
+		print_message("total %d  number %d\n", total, number);
 	}
 
 	assert_int_equal(total, 100);
@@ -1121,7 +1123,7 @@ run_daos_rebuild_simple_ec_test(int rank, int size, int *sub_tests,
 {
 	int rc = 0;
 
-	MPI_Barrier(MPI_COMM_WORLD);
+	par_barrier(PAR_COMM_WORLD);
 	if (sub_tests_size == 0) {
 		sub_tests_size = ARRAY_SIZE(rebuild_tests);
 		sub_tests = NULL;
@@ -1131,7 +1133,7 @@ run_daos_rebuild_simple_ec_test(int rank, int size, int *sub_tests,
 				ARRAY_SIZE(rebuild_tests), sub_tests,
 				sub_tests_size);
 
-	MPI_Barrier(MPI_COMM_WORLD);
+	par_barrier(PAR_COMM_WORLD);
 
 	return rc;
 }

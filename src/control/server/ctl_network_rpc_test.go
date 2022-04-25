@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2021 Intel Corporation.
+// (C) Copyright 2020-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -12,60 +12,121 @@ import (
 	"github.com/google/go-cmp/cmp"
 
 	"github.com/daos-stack/daos/src/control/common"
-	"github.com/daos-stack/daos/src/control/common/proto/convert"
 	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
-	"github.com/daos-stack/daos/src/control/lib/netdetect"
+	"github.com/daos-stack/daos/src/control/lib/hardware"
+	"github.com/daos-stack/daos/src/control/logging"
+	"github.com/daos-stack/daos/src/control/server/config"
 )
 
-var (
-	ib1 = &ctlpb.FabricInterface{
-		Provider:    "ofi+psm2",
-		Device:      "ib1",
-		Numanode:    1,
-		Netdevclass: 32,
-		Priority:    1,
-	}
-	ib1Native = netdetect.FabricScan{
-		Provider:    "ofi+psm2",
-		DeviceName:  "ib1",
-		NUMANode:    1,
-		NetDevClass: 32,
-		Priority:    1,
-	}
-	eth1 = &ctlpb.FabricInterface{
-		Provider:    "ofi+tcp",
-		Device:      "eth1",
-		Numanode:    1,
-		Netdevclass: 32,
-		Priority:    2,
-	}
-)
+func TestServer_ControlService_fabricInterfaceSetToNetworkScanResp(t *testing.T) {
+	for name, tc := range map[string]struct {
+		fis       *hardware.FabricInterfaceSet
+		provider  string
+		expResult *ctlpb.NetworkScanResp
+	}{
+		"empty": {
+			expResult: &ctlpb.NetworkScanResp{},
+		},
+		"single interface": {
+			fis: hardware.NewFabricInterfaceSet(
+				&hardware.FabricInterface{
+					Name:         "fi0",
+					NetInterface: "net0",
+					Providers:    common.NewStringSet("p1"),
+					NUMANode:     1,
+					DeviceClass:  hardware.Infiniband,
+				},
+			),
+			expResult: &ctlpb.NetworkScanResp{
+				Interfaces: []*ctlpb.FabricInterface{
+					{
+						Provider:    "p1",
+						Device:      "net0",
+						Numanode:    1,
+						Netdevclass: uint32(hardware.Infiniband),
+					},
+				},
+			},
+		},
+		"multi provider": {
+			fis: hardware.NewFabricInterfaceSet(
+				&hardware.FabricInterface{
+					Name:         "fi0",
+					NetInterface: "net0",
+					Providers:    common.NewStringSet("p1", "p2"),
+					NUMANode:     1,
+					DeviceClass:  hardware.Infiniband,
+				},
+			),
+			expResult: &ctlpb.NetworkScanResp{
+				Interfaces: []*ctlpb.FabricInterface{
+					{
+						Provider:    "p1",
+						Device:      "net0",
+						Numanode:    1,
+						Netdevclass: uint32(hardware.Infiniband),
+					},
+					{
+						Provider:    "p2",
+						Device:      "net0",
+						Numanode:    1,
+						Netdevclass: uint32(hardware.Infiniband),
+					},
+				},
+			},
+		},
+		"multi interface": {
+			fis: hardware.NewFabricInterfaceSet(
+				&hardware.FabricInterface{
+					Name:         "fi0",
+					NetInterface: "net0",
+					Providers:    common.NewStringSet("p1"),
+					NUMANode:     0,
+					DeviceClass:  hardware.Infiniband,
+				},
+				&hardware.FabricInterface{
+					Name:         "fi1",
+					NetInterface: "net1",
+					Providers:    common.NewStringSet("p1", "p2"),
+					NUMANode:     1,
+					DeviceClass:  hardware.Infiniband,
+				},
+			),
+			expResult: &ctlpb.NetworkScanResp{
+				Interfaces: []*ctlpb.FabricInterface{
+					{
+						Provider:    "p1",
+						Device:      "net0",
+						Numanode:    0,
+						Netdevclass: uint32(hardware.Infiniband),
+					},
+					{
+						Provider:    "p1",
+						Device:      "net1",
+						Numanode:    1,
+						Netdevclass: uint32(hardware.Infiniband),
+					},
+					{
+						Provider:    "p2",
+						Device:      "net1",
+						Numanode:    1,
+						Netdevclass: uint32(hardware.Infiniband),
+					},
+				},
+			},
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(t.Name())
+			defer common.ShowBufferOnFailure(t, buf)
 
-func TestServer_ConvertFabricInterface(t *testing.T) {
-	native := new(netdetect.FabricScan)
-	if err := convert.Types(ib1, native); err != nil {
-		t.Fatal(err)
-	}
-	expNative := &ib1Native
+			cs := mockControlService(t, log, config.DefaultServer(), nil, nil, nil)
 
-	if diff := cmp.Diff(expNative, native, common.DefaultCmpOpts()...); diff != "" {
-		t.Fatalf("unexpected result (-want, +got):\n%s\n", diff)
-	}
-}
+			result := cs.fabricInterfaceSetToNetworkScanResp(tc.fis, tc.provider)
 
-func TestServer_ConvertFabricInterfaces(t *testing.T) {
-	pbs := []*ctlpb.FabricInterface{ib1, eth1}
-	natives := new([]*netdetect.FabricScan)
-	if err := convert.Types(pbs, natives); err != nil {
-		t.Fatal(err)
-	}
-
-	scanResp := new(ctlpb.NetworkScanResp)
-	scanResp.Interfaces = make([]*ctlpb.FabricInterface, len(pbs))
-	if err := convert.Types(natives, &scanResp.Interfaces); err != nil {
-		t.Fatal(err)
-	}
-	if diff := cmp.Diff(pbs, scanResp.Interfaces, common.DefaultCmpOpts()...); diff != "" {
-		t.Fatalf("unexpected result (-want, +got):\n%s\n", diff)
+			if diff := cmp.Diff(tc.expResult, result, common.DefaultCmpOpts()...); diff != "" {
+				t.Fatalf("(-want, +got)\n%s\n", diff)
+			}
+		})
 	}
 }

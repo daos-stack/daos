@@ -1,0 +1,85 @@
+hosts:
+  test_servers:
+    - server-A
+    - server-B
+    - server-C
+  test_clients:
+    - client-C
+    - client-D
+    - client-E
+    - client-F
+    - client-G
+timeout: 300 # Additional 180s timeout for each rank stopped
+timeouts:
+  test_performance_mdtest_easy_dfs_rp_2gx_stop: 480
+  test_performance_mdtest_easy_dfs_ec_16p2gx_stop: 480
+server_config:
+    name: daos_server
+    control_log_mask: INFO
+    engines_per_host: 2
+    servers:
+        0:
+          pinned_numa_node: 0
+          nr_xs_helpers: 1
+          fabric_iface: ib0
+          fabric_iface_port: 31317
+          log_file: daos_server0.log
+          log_mask: ERR
+          bdev_class: nvme
+          bdev_list: ["aaaa:aa:aa.a"]
+          scm_class: dcpm
+          scm_list: ["/dev/pmem0"]
+          scm_mount: /mnt/daos0
+        1:
+          pinned_numa_node: 1
+          nr_xs_helpers: 1
+          fabric_iface: ib1
+          fabric_iface_port: 31417
+          log_file: daos_server1.log
+          log_mask: ERR
+          bdev_class: nvme
+          bdev_list: ["bbbb:bb:bb.b"]
+          scm_class: dcpm
+          scm_list: ["/dev/pmem1"]
+          scm_mount: /mnt/daos1
+pool:
+  mode: 146
+  name: daos_server
+  size: 95%
+  control_method: dmg
+  properties: ec_cell_sz:128KiB
+container:
+  type: POSIX
+  control_method: daos
+mdtest: &mdtest_base
+  client_processes:
+    ppn: 32
+  test_dir: "/"
+  manager: "MPICH"
+  flags: "-C -T -r -F -P -G 27 -N 1 -Y -v -u -L"
+  api: "DFS"
+  read_bytes: 0
+  write_bytes: 0
+  num_of_files_dirs: 100000000
+  stonewall_timer: 30
+  stonewall_statusfile: "/var/tmp/daos_testing/stoneWallingStatusFile"
+  dfs_destroy: False
+mdtest_dfs_s1:
+  <<: *mdtest_base
+  dfs_oclass: S1
+  dfs_dir_oclass: SX
+  dfs_chunk: 1MiB
+mdtest_dfs_ec_4p2g1:
+  <<: *mdtest_base
+  api: DFS
+  dfs_oclass: EC_4P2G1
+  dfs_dir_oclass: RP_3GX
+  dfs_chunk: 4MiB
+mdtest_dfs_ec_16p2g1:
+  <<: *mdtest_base
+  dfs_oclass: EC_16P2G1
+  dfs_dir_oclass: RP_3GX
+  dfs_chunk: 16MiB
+performance:
+  env:
+    - D_LOG_MASK=ERR

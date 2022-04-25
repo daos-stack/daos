@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2021 Intel Corporation.
+// (C) Copyright 2019-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -10,15 +10,11 @@ import (
 	"context"
 	"strings"
 
-	"github.com/pkg/errors"
-
 	"github.com/daos-stack/daos/src/control/cmd/dmg/pretty"
+	"github.com/daos-stack/daos/src/control/common/cmdutil"
 	"github.com/daos-stack/daos/src/control/lib/control"
-	"github.com/daos-stack/daos/src/control/lib/netdetect"
-)
-
-const (
-	defaultExcludeInterfaces = "lo"
+	"github.com/daos-stack/daos/src/control/lib/hardware"
+	"github.com/daos-stack/daos/src/control/lib/hardware/hwprov"
 )
 
 type networkCmd struct {
@@ -29,43 +25,23 @@ type networkCmd struct {
 // that match the given fabric provider.
 type networkScanCmd struct {
 	cfgCmd
-	logCmd
+	cmdutil.LogCmd
 	FabricProvider string `short:"p" long:"provider" description:"Filter device list to those that support the given OFI provider or 'all' for all available (default is the provider specified in daos_server.yml)"`
 }
 
-func (cmd *networkScanCmd) Execute(args []string) error {
-	if len(args) > 0 {
-		return errors.WithMessage(nil, "failed to execute the fabric and device scan.  An invalid argument was provided.")
-	}
+func (cmd *networkScanCmd) Execute(_ []string) error {
+	fabricScanner := hwprov.DefaultFabricScanner(cmd.Logger)
 
-	provider := cmd.config.Fabric.Provider
-	switch {
-	case strings.EqualFold(cmd.FabricProvider, "all"):
-		provider = ""
-	case cmd.FabricProvider != "":
-		provider = cmd.FabricProvider
-	}
-
-	netCtx, err := netdetect.Init(context.Background())
+	results, err := fabricScanner.Scan(context.Background())
 	if err != nil {
-		return err
-	}
-	defer netdetect.CleanUp(netCtx)
-
-	results, err := netdetect.ScanFabric(netCtx, provider, defaultExcludeInterfaces)
-	if err != nil {
-		return errors.WithMessage(err, "failed to execute the fabric and device scan")
+		return nil
 	}
 
-	hf := &control.HostFabric{}
-	for _, fi := range results {
-		hf.AddInterface(&control.HostFabricInterface{
-			Provider: fi.Provider,
-			Device:   fi.DeviceName,
-			NumaNode: uint32(fi.NUMANode),
-		})
+	if cmd.FabricProvider == "" {
+		cmd.FabricProvider = cmd.config.Fabric.Provider
 	}
 
+	hf := fabricInterfaceSetToHostFabric(results, cmd.FabricProvider)
 	hfm := make(control.HostFabricMap)
 	if err := hfm.Add("localhost", hf); err != nil {
 		return err
@@ -75,7 +51,39 @@ func (cmd *networkScanCmd) Execute(args []string) error {
 	if err := pretty.PrintHostFabricMap(hfm, &bld); err != nil {
 		return err
 	}
-	cmd.log.Info(bld.String())
+	cmd.Info(bld.String())
 
 	return nil
+}
+
+func fabricInterfaceSetToHostFabric(fis *hardware.FabricInterfaceSet, filterProvider string) *control.HostFabric {
+	hf := &control.HostFabric{}
+	for _, fiName := range fis.Names() {
+		fi, err := fis.GetInterface(fiName)
+		if err != nil {
+			continue
+		}
+
+		if fi.DeviceClass == hardware.Loopback {
+			// Ignore loopback
+			continue
+		}
+
+		name := fi.NetInterface
+		if name == "" {
+			name = fi.Name
+		}
+		for _, provider := range fi.Providers.ToSlice() {
+			if filterProvider == "all" || strings.HasPrefix(provider, filterProvider) {
+				hf.AddInterface(&control.HostFabricInterface{
+					Provider:    provider,
+					Device:      name,
+					NumaNode:    uint32(fi.NUMANode),
+					NetDevClass: fi.DeviceClass,
+				})
+			}
+		}
+	}
+
+	return hf
 }

@@ -1,5 +1,5 @@
 #!/bin/bash
-# Copyright (C) Copyright 2021 Intel Corporation
+# Copyright 2021-2022 Intel Corporation
 # All rights reserved.
 #
 # Redistribution and use in source and binary forms, with or without

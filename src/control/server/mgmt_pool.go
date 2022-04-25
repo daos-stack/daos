@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2021 Intel Corporation.
+// (C) Copyright 2020-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -116,7 +116,7 @@ func (svc *mgmtSvc) getPoolServiceRanks(ps *system.PoolService) ([]uint32, error
 		if err != nil {
 			return nil, err
 		}
-		if m.State()&system.AvailableMemberFilter == 0 {
+		if m.State&system.AvailableMemberFilter == 0 {
 			continue
 		}
 		readyRanks = append(readyRanks, r)
@@ -127,6 +127,22 @@ func (svc *mgmtSvc) getPoolServiceRanks(ps *system.PoolService) ([]uint32, error
 	}
 
 	return system.RanksToUint32(readyRanks), nil
+}
+
+func minRankScm(tgtCount uint64) uint64 {
+	return tgtCount * engine.ScmMinBytesPerTarget
+}
+
+func minPoolScm(tgtCount, rankCount uint64) uint64 {
+	return minRankScm(tgtCount) * rankCount
+}
+
+func minRankNvme(tgtCount uint64) uint64 {
+	return tgtCount * engine.NvmeMinBytesPerTarget
+}
+
+func minPoolNvme(tgtCount, rankCount uint64) uint64 {
+	return minRankNvme(tgtCount) * rankCount
 }
 
 // calculateCreateStorage determines the amount of SCM/NVMe storage to
@@ -141,6 +157,12 @@ func (svc *mgmtSvc) calculateCreateStorage(req *mgmtpb.PoolCreateReq) error {
 	if len(req.GetRanks()) == 0 {
 		return errors.New("zero ranks in calculateCreateStorage()")
 	}
+
+	// NB: The following logic is based on the assumption that
+	// a request will always include SCM as tier 0. Currently,
+	// we only support one additional tier, NVMe, which is
+	// optional. As we add support for other tiers, this logic
+	// will need to be updated.
 
 	// the engine will accept only 2 tiers - add missing
 	if len(req.GetTierratio()) == 0 {
@@ -160,7 +182,7 @@ func (svc *mgmtSvc) calculateCreateStorage(req *mgmtpb.PoolCreateReq) error {
 	}
 
 	switch {
-	case !instances[0].HasBlockDevices():
+	case !instances[0].GetStorage().HasBlockDevices():
 		svc.log.Info("config has 0 bdevs; excluding NVMe from pool create request")
 		for tierIdx := range req.Tierbytes {
 			if tierIdx > 0 {
@@ -175,23 +197,28 @@ func (svc *mgmtSvc) calculateCreateStorage(req *mgmtpb.PoolCreateReq) error {
 		}
 	}
 
-	// zero these out as they're not needed anymore
-	req.Totalbytes = 0
-	for tierIdx := range req.Tierratio {
-		req.Tierratio[tierIdx] = 0
-	}
-
 	targetCount := instances[0].GetTargetCount()
 	if targetCount == 0 {
 		return errors.New("zero target count")
 	}
-	minNvmeRequired := engine.NvmeMinBytesPerTarget * uint64(targetCount)
 
-	if req.Tierbytes[1] != 0 && req.Tierbytes[1] < minNvmeRequired {
-		return FaultPoolNvmeTooSmall(req.Tierbytes[1], targetCount)
+	tgts, ranks := uint64(targetCount), uint64(len(req.GetRanks()))
+	minPoolTotal := minPoolScm(tgts, ranks)
+	if req.Tierbytes[1] > 0 {
+		minPoolTotal += minPoolNvme(tgts, ranks)
 	}
-	if req.Tierbytes[0] < engine.ScmMinBytesPerTarget*uint64(targetCount) {
-		return FaultPoolScmTooSmall(req.Tierbytes[0], targetCount)
+
+	if req.Tierbytes[0] < minRankScm(tgts) {
+		return FaultPoolScmTooSmall(minPoolTotal, minPoolScm(tgts, ranks))
+	}
+	if req.Tierbytes[1] != 0 && req.Tierbytes[1] < minRankNvme(tgts) {
+		return FaultPoolNvmeTooSmall(minPoolTotal, minPoolNvme(tgts, ranks))
+	}
+
+	// zero these out as they're not needed anymore
+	req.Totalbytes = 0
+	for tierIdx := range req.Tierratio {
+		req.Tierratio[tierIdx] = 0
 	}
 
 	return nil
@@ -516,18 +543,20 @@ func (svc *mgmtSvc) PoolDestroy(ctx context.Context, req *mgmtpb.PoolDestroyReq)
 		ds := drpc.DaosStatus(evresp.Status)
 		svc.log.Debugf("MgmtSvc.PoolDestroy drpc.MethodPoolEvict, evresp:%+v\n", evresp)
 
-		// Transition pool state (unless evict returned busy, and not force destroying).
-		if !(ds == drpc.DaosBusy && !req.Force) {
-			ps.State = system.PoolServiceStateDestroying
-			if err := svc.sysdb.UpdatePoolService(ps); err != nil {
-				return nil, errors.Wrapf(err, "failed to update pool %s", uuid)
-			}
-		}
-
 		// If the destroy request is being forced, we should additionally zap the label
 		// so the entry doesn't prevent a new pool with the same label from being created.
 		if req.Force {
 			ps.PoolLabel = ""
+		}
+
+		// If the request is being forced, or the evict request did not fail
+		// due to the pool being busy, then transition to the destroying state
+		// and persist the update(s).
+		if req.Force || ds != drpc.DaosBusy {
+			ps.State = system.PoolServiceStateDestroying
+			if err := svc.sysdb.UpdatePoolService(ps); err != nil {
+				return nil, errors.Wrapf(err, "failed to update pool %s", uuid)
+			}
 		}
 
 		if ds != drpc.DaosSuccess {
@@ -564,7 +593,13 @@ func (svc *mgmtSvc) PoolDestroy(ctx context.Context, req *mgmtpb.PoolDestroyReq)
 			resp.Status = int32(drpc.DaosSuccess)
 		}
 		if err := svc.sysdb.RemovePoolService(uuid); err != nil {
-			return nil, errors.Wrapf(err, "failed to remove pool %s", uuid)
+			// In rare cases, there may be a race between pool cleanup handlers.
+			// As we know the service entry existed when we started this handler,
+			// if the attempt to remove it now fails because it doesn't exist,
+			// then there's nothing else to do.
+			if !system.IsPoolNotFound(err) {
+				return nil, errors.Wrapf(err, "failed to remove pool %s", uuid)
+			}
 		}
 	default:
 		svc.log.Errorf("PoolDestroy dRPC call failed: %s", ds)
@@ -719,6 +754,28 @@ func (svc *mgmtSvc) PoolQuery(ctx context.Context, req *mgmtpb.PoolQueryReq) (*m
 	}
 
 	svc.log.Debugf("MgmtSvc.PoolQuery dispatch, resp:%+v\n", resp)
+
+	return resp, nil
+}
+
+// PoolUpgrade forwards a pool upgrade request to the I/O Engine.
+func (svc *mgmtSvc) PoolUpgrade(ctx context.Context, req *mgmtpb.PoolUpgradeReq) (*mgmtpb.PoolUpgradeResp, error) {
+	if err := svc.checkLeaderRequest(req); err != nil {
+		return nil, err
+	}
+	svc.log.Debugf("MgmtSvc.PoolUpgrade dispatch, req:%+v\n", req)
+
+	dresp, err := svc.makePoolServiceCall(ctx, drpc.MethodPoolUpgrade, req)
+	if err != nil {
+		return nil, err
+	}
+
+	resp := &mgmtpb.PoolUpgradeResp{}
+	if err = proto.Unmarshal(dresp.Body, resp); err != nil {
+		return nil, errors.Wrap(err, "unmarshal PoolUpgrade response")
+	}
+
+	svc.log.Debugf("MgmtSvc.PoolUpgrade dispatch, resp:%+v\n", resp)
 
 	return resp, nil
 }
@@ -962,7 +1019,7 @@ func (svc *mgmtSvc) ListPools(ctx context.Context, req *mgmtpb.ListPoolsReq) (*m
 	}
 	svc.log.Debugf("MgmtSvc.ListPools dispatch, req:%+v\n", req)
 
-	psList, err := svc.sysdb.PoolServiceList(false)
+	psList, err := svc.sysdb.PoolServiceList(true)
 	if err != nil {
 		return nil, err
 	}
@@ -973,6 +1030,7 @@ func (svc *mgmtSvc) ListPools(ctx context.Context, req *mgmtpb.ListPoolsReq) (*m
 			Uuid:    ps.PoolUUID.String(),
 			Label:   ps.PoolLabel,
 			SvcReps: system.RanksToUint32(ps.Replicas),
+			State:   ps.State.String(),
 		})
 	}
 

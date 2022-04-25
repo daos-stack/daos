@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2019-2021 Intel Corporation.
+ * (C) Copyright 2019-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -105,6 +105,19 @@ uint64_t crt_nsec2hlc(uint64_t nsec)
 uint64_t crt_hlc2unixnsec(uint64_t hlc)
 {
 	return hlc / CRT_HLC_NSEC + CRT_HLC_START_SEC * NSEC_PER_SEC;
+}
+
+int crt_hlc2timespec(uint64_t hlc, struct timespec *ts)
+{
+	uint64_t nsec;
+
+	if (ts == NULL)
+		return -DER_INVAL;
+
+	nsec = crt_hlc2nsec(hlc);
+	ts->tv_sec = nsec / NSEC_PER_SEC + CRT_HLC_START_SEC;
+	ts->tv_nsec = nsec % NSEC_PER_SEC;
+	return 0;
 }
 
 uint64_t crt_unixnsec2hlc(uint64_t unixnsec)

@@ -22,7 +22,7 @@ fi
 : "${SCONS_FAULTS_ARGS:=BUILD_TYPE=dev}"
 SCONS_ARGS="${SCONS_FAULTS_ARGS}"
 
-: "${CHROOT_NAME:='epel-7-x86_64'}"
+: "${CHROOT_NAME:='centos+epel-7-x86_64'}"
 : "${TARGET:='centos7'}"
 
 : "${COVFN_DISABLED:=true}"

@@ -1,12 +1,14 @@
 # Project Information
-site_name: DAOS v2.2 - dev
+site_name: DAOS v2.3 - master
 site_description: Distributed Asynchronous Object Storage
 site_author: DAOS Project
 
 # Repository
 repo_name: daos-stack/daos
 repo_url: https://github.com/daos-stack/daos
-copyright: Copyright &copy; 2016 - 2021 Intel Corporation
+# edit_uri: blob/release/2.4/docs/
+edit_uri: blob/master/docs/
+copyright: Copyright 2016-2022 Intel Corporation
 
 # Theme
 theme:
@@ -34,81 +36,82 @@ theme:
         - search.highlight
 
 extra:
-    homepage: http://daos.io
+    homepage: https://docs.daos.io/
     version:
         provider: mike
 
 plugins:
     - search
     - mike:
-        version_selector: true
+          version_selector: true
 
 markdown_extensions:
     - admonition
     - footnotes
     - tables
     - toc:
-        permalink: true
-        toc_depth: 4
+          permalink: true
+          toc_depth: 4
 
 # Page tree
 nav:
     - Intro:
-        - 'index.md'
-        - 'Community Wiki': 'http://wiki.daos.io'
-        - 'Community Roadmap': 'http://wiki.daos.io/spaces/DC/pages/4836661105/Roadmap'
-        - 'Community Mailing list': 'https://daos.groups.io/g/daos'
-        - 'Issue tracker': 'http://jira.daos.io'
+          - 'index.md'
+          - 'Community Wiki': 'http://wiki.daos.io/'
+          - 'Community Roadmap': 'http://wiki.daos.io/spaces/DC/pages/4836661105/Roadmap'
+          - 'Community Mailing list': 'https://daos.groups.io/g/daos'
+          - 'Issue tracker': 'http://jira.daos.io/'
+    - Release Information:
+          - 'Release Notes v2.4': 'release/release_notes.md'
+          - 'Support Matrix v2.4': 'release/support_matrix.md'
+          - 'Upgrading to v2.4': 'release/upgrading.md'
+          - 'Roadmap': 'http://wiki.daos.io/spaces/DC/pages/4836661105/Roadmap'
     - Overview:
-        - 'Architecture': 'overview/architecture.md'
-        - 'Storage Model': 'overview/storage.md'
-        - 'Transaction Model': 'overview/transaction.md'
-        - 'Data Integrity': 'overview/data_integrity.md'
-        - 'Fault Model': 'overview/fault.md'
-        - 'Security Model': 'overview/security.md'
-        - 'Use Cases': 'overview/use_cases.md'
-        - 'Terminology': 'overview/terminology.md'
+          - 'Architecture': 'overview/architecture.md'
+          - 'Storage Model': 'overview/storage.md'
+          - 'Transaction Model': 'overview/transaction.md'
+          - 'Data Integrity': 'overview/data_integrity.md'
+          - 'Fault Model': 'overview/fault.md'
+          - 'Security Model': 'overview/security.md'
+          - 'Use Cases': 'overview/use_cases.md'
+          - 'Terminology': 'overview/terminology.md'
     - Installation and Setup:
-        - 'CentOS': 'QSG/setup_centos.md'
-        - 'openSUSE': 'QSG/setup_suse.md'
-        - 'DAOS in Docker': 'QSG/docker.md'
-        - 'Build from Scratch': 'QSG/build_from_scratch.md'
-        - 'Admin/Client Tools': 'QSG/tour.md'
+          - 'CentOS': 'QSG/setup_centos.md'
+          - 'openSUSE': 'QSG/setup_suse.md'
+          - 'DAOS in Docker': 'QSG/docker.md'
+          - 'Build from Scratch': 'QSG/build_from_scratch.md'
+          - 'Admin/Client Tools': 'QSG/tour.md'
     - Administration Guide:
-        - 'Hardware Requirements': 'admin/hardware.md'
-        - 'Pre-deployment Checklist': 'admin/predeployment_check.md'
-        - 'System Deployment': 'admin/deployment.md'
-        - 'System Administration': 'admin/administration.md'
-        - 'Pool Operations': 'admin/pool_operations.md'
-        - 'Tiering and Unified Namespace': 'admin/tiering_uns.md'
-        - 'Performance Tuning': 'admin/performance_tuning.md'
-        - 'Troubleshooting': 'admin/troubleshooting.md'
-        - 'Environment Variables': 'admin/env_variables.md'
-        - 'Management (DMG) Tool Reference': 'QSG/dmg_tool.md'
+          - 'Hardware Requirements': 'admin/hardware.md'
+          - 'Pre-deployment Checklist': 'admin/predeployment_check.md'
+          - 'System Deployment': 'admin/deployment.md'
+          - 'System Administration': 'admin/administration.md'
+          - 'Pool Operations': 'admin/pool_operations.md'
+          - 'Tiering and Unified Namespace': 'admin/tiering_uns.md'
+          - 'Performance Tuning': 'admin/performance_tuning.md'
+          - 'Troubleshooting': 'admin/troubleshooting.md'
+          - 'Environment Variables': 'admin/env_variables.md'
     - Test and Benchmarking:
-        - 'Run DAOS Autotest': 'testing/autotest.md'
-        - 'Run CaRT Self_test': 'testing/cartselftest.md'
-        - 'Run IOR and mdtest': 'testing/ior.md'
-        - 'Run dbench': 'testing/dbench.md'
-        - 'Run Datamover test': 'testing/datamover.md'
-        - 'Run IO500': 'http://wiki.daos.io/spaces/DC/pages/4873388103/DAOS+IO-500+Instructions'
+          - 'Run DAOS Autotest': 'testing/autotest.md'
+          - 'Run CaRT Self_test': 'testing/cartselftest.md'
+          - 'Run IOR and mdtest': 'testing/ior.md'
+          - 'Run dbench': 'testing/dbench.md'
+          - 'Run Datamover test': 'testing/datamover.md'
+          - 'Run IO500': 'http://wiki.daos.io/spaces/DC/pages/4873388103/DAOS+IO-500+Instructions'
     - User Guide:
-        - 'Workflow': 'user/workflow.md'
-        - 'Container Management': 'user/container.md'
-        - 'File System': 'user/filesystem.md'
-        - 'MPI-IO Support': 'user/mpi-io.md'
-        - 'HDF5 Support': 'user/hdf5.md'
-        - 'Python Support': 'user/python.md'
-        - 'Spark and Hadoop': 'user/spark.md'
-        - 'Data Mover': 'user/datamover.md'
-        - 'Native Programming Interface': 'user/interface.md'
-        - 'DAOS Tool Reference': 'QSG/daos_tool.md'
-    - Releases:
-        - 'Release Notes v2.2': 'release/release_notes_v2_2.md'
-        - 'Support Matrix': 'release/support_matrix.md'
-        - 'Roadmap': 'http://wiki.daos.io/spaces/DC/pages/4836661105/Roadmap'
+          - 'Workflow': 'user/workflow.md'
+          - 'Container Management': 'user/container.md'
+          - 'File System': 'user/filesystem.md'
+          - 'MPI-IO Support': 'user/mpi-io.md'
+          - 'HDF5 Support': 'user/hdf5.md'
+          - 'Python Support': 'user/python.md'
+          - 'Spark and Hadoop': 'user/spark.md'
+          - 'Data Mover': 'user/datamover.md'
+          - 'Tensorflow-IO Support': 'user/tensorflow.md'
+          - 'Native Programming Interface': 'user/interface.md'
     - Developer Zone:
-        - 'Dev Environment': 'dev/development.md'
-        - 'Contributing': 'dev/contributing.md'
-        - 'DAOS Internals': 'https://github.com/daos-stack/daos/blob/master/src/README.md'
-        - 'DAOS API Documentation': 'html/index.html'
+          - 'Dev Environment': 'dev/development.md'
+          - 'Contributing': 'dev/contributing.md'
+          - 'DAOS Internals': 'https://github.com/daos-stack/daos/blob/master/src/README.md'
+          - 'DAOS API Documentation': 'https://docs.daos.io/v2.3/doxygen/html/index.html'
+          # Attention: Don't change that doxygen path to a relative path, or mkdocs will stumble...

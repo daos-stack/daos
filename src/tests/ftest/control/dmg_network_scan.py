@@ -1,6 +1,6 @@
 #!/usr/bin/python
 """
-  (C) Copyright 2020-2021 Intel Corporation.
+  (C) Copyright 2020-2022 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -199,6 +199,10 @@ class DmgNetworkScanTest(TestWithServers):
         # Get the provider specified in server config
         cfg_p = self.server_managers[0].get_config_value("provider")
         if cfg_p:
+            if cfg_p == "ofi+tcp":
+                cfg_p = "ofi+tcp;ofi_rxm"
+            elif cfg_p == "ofi+verbs":
+                cfg_p = "ofi+verbs;ofi_rxm"
             f_net_devs = [dev for dev in f_net_devs if dev.providers == [cfg_p]]
 
         return f_net_devs

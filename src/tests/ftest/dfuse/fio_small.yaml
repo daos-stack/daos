@@ -64,7 +64,10 @@ fio:
     ioengine: 'libaio'
     thread: 1
     group_reporting: 1
-    direct: 1
+    direct_io: !mux
+      on:
+        direct: 1
+      off:
     verify: 'crc64'
     iodepth: 16
     bs: !mux
@@ -73,7 +76,7 @@ fio:
         size: '1M'
       bs_1M:
         blocksize: '1M'
-        size: '1G'
+        size: '2G'
     read_write: !mux
       sequential:
         rw: 'rw'
@@ -83,3 +86,5 @@ fio:
     numjobs: 1
 dfuse:
   mount_dir: "/tmp/daos_dfuse"
+  thread_count: 8
+  cores: '0-3'

@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2021 Intel Corporation.
+// (C) Copyright 2021-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -74,7 +74,7 @@ func TestBackend_newSpdkConfig(t *testing.T) {
 		"config validation failure": {
 			class:          storage.ClassNvme,
 			devList:        []string{"not a pci address"},
-			expValidateErr: errors.New("unexpected pci address"),
+			expValidateErr: errors.New("valid PCI addresses"),
 		},
 		"multiple controllers": {
 			class:       storage.ClassNvme,
@@ -176,7 +176,7 @@ func TestBackend_newSpdkConfig(t *testing.T) {
 				Tier:  tierID,
 				Class: storage.ClassNvme,
 				Bdev: storage.BdevConfig{
-					DeviceList: tc.devList,
+					DeviceList: storage.MustNewBdevDeviceList(tc.devList...),
 					FileSize:   tc.fileSizeGB,
 					BusidRange: storage.MustNewBdevBusRange(tc.busidRange),
 				},
@@ -194,24 +194,22 @@ func TestBackend_newSpdkConfig(t *testing.T) {
 				WithFabricInterfacePort(42).
 				WithStorage(
 					storage.NewTierConfig().
-						WithScmClass("dcpm").
+						WithStorageClass("dcpm").
 						WithScmDeviceList("foo").
 						WithScmMountPoint(mockMntpt),
 					cfg,
 				).
-				WithStorageEnableHotplug(tc.enableHotplug)
+				WithStorageEnableHotplug(tc.enableHotplug).
+				WithPinnedNumaNode(0)
 
-			gotValidateErr := engineConfig.Validate(context.TODO(), log) // populate output path
+			gotValidateErr := engineConfig.Validate(log, nil) // populate output path
 			common.CmpErr(t, tc.expValidateErr, gotValidateErr)
 			if tc.expValidateErr != nil {
 				return
 			}
 
 			writeReq, _ := storage.BdevWriteConfigRequestFromConfig(context.TODO(), log,
-				&engineConfig.Storage, storage.MockGetTopology)
-			if tc.enableVmd {
-				writeReq.VMDEnabled = true
-			}
+				&engineConfig.Storage, tc.enableVmd, storage.MockGetTopology)
 
 			gotCfg, gotErr := newSpdkConfig(log, &writeReq)
 			common.CmpErr(t, tc.expErr, gotErr)

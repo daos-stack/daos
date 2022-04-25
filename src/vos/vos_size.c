@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2019-2021 Intel Corporation.
+ * (C) Copyright 2019-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -134,7 +134,8 @@ get_daos_csummers(struct d_string_buffer_t *buf)
 }
 
 int
-get_vos_structure_sizes_yaml(int alloc_overhead, struct d_string_buffer_t *buf)
+get_vos_structure_sizes_yaml(int alloc_overhead, struct d_string_buffer_t *buf,
+			     const char *vos_path)
 {
 	FOREACH_TYPE(DECLARE_TYPE)
 	int rc;
@@ -146,8 +147,7 @@ get_vos_structure_sizes_yaml(int alloc_overhead, struct d_string_buffer_t *buf)
 	if (rc) {
 		goto exit_0;
 	}
-
-	rc = vos_self_init("/mnt/daos");
+	rc = vos_self_init(vos_path);
 	if (rc) {
 		goto exit_1;
 	}

@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2021 Intel Corporation.
+// (C) Copyright 2021-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -101,9 +101,10 @@ func PoolProperties() PoolPropertyMap {
 				Description: "EC cell size",
 				valueHandler: func(s string) (*PoolPropertyValue, error) {
 					b, err := humanize.ParseBytes(s)
-					if err != nil {
+					if err != nil || !drpc.EcCellSizeIsValid(b) {
 						return nil, errors.Errorf("invalid EC Cell size %q", s)
 					}
+
 					return &PoolPropertyValue{b}, nil
 				},
 				valueStringer: func(v *PoolPropertyValue) string {
@@ -114,6 +115,122 @@ func PoolProperties() PoolPropertyMap {
 					return humanize.IBytes(n)
 				},
 				jsonNumeric: true,
+			},
+		},
+		"rf": {
+			Property: PoolProperty{
+				Number:      drpc.PoolPropertyRedunFac,
+				Description: "Pool redundancy factor",
+				valueHandler: func(s string) (*PoolPropertyValue, error) {
+					rbErr := errors.Errorf("invalid redun fac value %s (valid values: 0-4)", s)
+					rfVal, err := strconv.ParseUint(s, 10, 64)
+					if err != nil {
+						return nil, rbErr
+					}
+					if rfVal > 4 {
+						return nil, rbErr
+					}
+					return &PoolPropertyValue{rfVal}, nil
+				},
+				valueStringer: func(v *PoolPropertyValue) string {
+					n, err := v.GetNumber()
+					if err != nil {
+						return "not set"
+					}
+					return fmt.Sprintf("%d", n)
+				},
+				jsonNumeric: true,
+			},
+		},
+		"ec_pda": {
+			Property: PoolProperty{
+				Number:      drpc.PoolPropertyECPda,
+				Description: "Performance domain affinity level of EC",
+				valueHandler: func(s string) (*PoolPropertyValue, error) {
+					ecpdaErr := errors.Errorf("invalid ec_pda value %q", s)
+					pdalvl, err := strconv.ParseUint(s, 10, 32)
+					if err != nil || !drpc.EcPdaIsValid(pdalvl) {
+						return nil, ecpdaErr
+					}
+					return &PoolPropertyValue{pdalvl}, nil
+				},
+				valueStringer: func(v *PoolPropertyValue) string {
+					n, err := v.GetNumber()
+					if err != nil {
+						return "not set"
+					}
+					return fmt.Sprintf("%d", n)
+				},
+				jsonNumeric: true,
+			},
+		},
+		"rp_pda": {
+			Property: PoolProperty{
+				Number:      drpc.PoolPropertyRPPda,
+				Description: "Performance domain affinity level of RP",
+				valueHandler: func(s string) (*PoolPropertyValue, error) {
+					rppdaErr := errors.Errorf("invalid rp_pda value %q", s)
+					pdalvl, err := strconv.ParseUint(s, 10, 32)
+					if err != nil || !drpc.RpPdaIsValid(pdalvl) {
+						return nil, rppdaErr
+					}
+					return &PoolPropertyValue{pdalvl}, nil
+				},
+				valueStringer: func(v *PoolPropertyValue) string {
+					n, err := v.GetNumber()
+					if err != nil {
+						return "not set"
+					}
+					return fmt.Sprintf("%d", n)
+				},
+				jsonNumeric: true,
+			},
+		},
+		"policy": {
+			Property: PoolProperty{
+				Number:      drpc.PoolPropertyPolicy,
+				Description: "Tier placement policy",
+				valueHandler: func(s string) (*PoolPropertyValue, error) {
+					if !drpc.PoolPolicyIsValid(s) {
+						return nil, errors.Errorf("invalid policy string %q", s)
+					}
+					return &PoolPropertyValue{s}, nil
+
+				},
+			},
+		},
+		"global_version": {
+			Property: PoolProperty{
+				Number:      drpc.PoolPropertyGlobalVersion,
+				Description: "Global Version",
+				valueHandler: func(s string) (*PoolPropertyValue, error) {
+					gvErr := errors.Errorf("invalid global version %q", s)
+					gvvl, err := strconv.ParseUint(s, 10, 32)
+					if err != nil {
+						return nil, gvErr
+					}
+					return &PoolPropertyValue{gvvl}, nil
+				},
+				valueStringer: func(v *PoolPropertyValue) string {
+					n, err := v.GetNumber()
+					if err != nil {
+						return "not set"
+					}
+					return fmt.Sprintf("%d", n)
+				},
+				jsonNumeric: true,
+			},
+		},
+		"upgrade_status": {
+			Property: PoolProperty{
+				Number:      drpc.PoolPropertyUpgradeStatus,
+				Description: "Upgrade Status",
+			},
+			values: map[string]uint64{
+				"not started": drpc.PoolUpgradeStatusNotStarted,
+				"in progress": drpc.PoolUpgradeStatusInProgress,
+				"completed":   drpc.PoolUpgradeStatusCompleted,
+				"failed":      drpc.PoolUpgradeStatusFailed,
 			},
 		},
 	}

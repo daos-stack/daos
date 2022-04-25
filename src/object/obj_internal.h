@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2021 Intel Corporation.
+ * (C) Copyright 2016-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -181,7 +181,7 @@ struct obj_reasb_req {
 					 orr_size_fetch:1,
 	/* for iod_size fetched flag */
 					 orr_size_fetched:1,
-	/* only with single target flag */
+	/* only with single data target flag */
 					 orr_single_tgt:1,
 	/* only for single-value IO flag */
 					 orr_singv_only:1,
@@ -350,6 +350,7 @@ struct shard_auxi_args {
 struct shard_rw_args {
 	struct shard_auxi_args	 auxi;
 	daos_obj_rw_t		*api_args;
+	d_sg_list_t		*sgls_dup;
 	struct dtx_id		 dti;
 	uint64_t		 dkey_hash;
 	crt_bulk_t		*bulks;
@@ -368,6 +369,28 @@ struct shard_punch_args {
 	uint64_t		 pa_dkey_hash;
 	struct dtx_id		 pa_dti;
 	uint32_t		 pa_opc;
+};
+
+struct shard_sub_anchor {
+	daos_anchor_t	ssa_anchor;
+	/* These two extra anchors are for migration enumeration */
+	daos_anchor_t	*ssa_akey_anchor;
+	daos_anchor_t	*ssa_recx_anchor;
+	d_sg_list_t	ssa_sgl;
+	daos_key_desc_t	*ssa_kds;
+	daos_recx_t	*ssa_recxs;
+};
+
+/**
+ * This structure is attached to daos_anchor_t->da_sub_anchor for
+ * tracking multiple shards enumeration, for example degraded EC
+ * enumeration or EC parity rotate enumeration.
+ */
+struct shard_anchors {
+	d_list_t		sa_merged_list;
+	int			sa_nr;
+	int			sa_anchors_nr;
+	struct shard_sub_anchor	sa_anchors[0];
 };
 
 struct shard_list_args {
@@ -391,6 +414,7 @@ struct obj_auxi_list_recx {
 
 struct obj_auxi_list_key {
 	d_iov_t		key;
+	struct ktr_hkey	hkey;
 	d_list_t	key_list;
 };
 
@@ -502,7 +526,7 @@ int dc_obj_shard_list(struct dc_obj_shard *shard, enum obj_rpc_opc opc,
 int dc_obj_shard_query_key(struct dc_obj_shard *shard, struct dtx_epoch *epoch,
 			   uint32_t flags, struct dc_object *obj,
 			   daos_key_t *dkey, daos_key_t *akey,
-			   daos_recx_t *recx, const uuid_t coh_uuid,
+			   daos_recx_t *recx, daos_epoch_t *max_epoch, const uuid_t coh_uuid,
 			   const uuid_t cont_uuid, struct dtx_id *dti,
 			   unsigned int *map_ver, unsigned int req_map_ver,
 			   daos_handle_t th, tse_task_t *task);
@@ -533,6 +557,8 @@ int obj_pool_query_task(tse_sched_t *sched, struct dc_object *obj,
 bool obj_csum_dedup_candidate(struct cont_props *props, daos_iod_t *iods,
 			      uint32_t iod_nr);
 
+int obj_grp_leader_get(struct dc_object *obj, int grp_idx,
+		       unsigned int map_ver, uint8_t *bit_map);
 #define obj_shard_close(shard)	dc_obj_shard_close(shard)
 int obj_recx_ec_daos2shard(struct daos_oclass_attr *oca, int shard, daos_recx_t **recxs_p,
 			   daos_epoch_t **recx_ephs_p, unsigned int *iod_nr);
@@ -562,6 +588,7 @@ obj_retry_error(int err)
 	       err == -DER_INPROGRESS || err == -DER_GRPVER ||
 	       err == -DER_EXCLUDED || err == -DER_CSUM ||
 	       err == -DER_TX_BUSY || err == -DER_TX_UNCERTAIN ||
+	       err == -DER_SHARDS_OVERLAP ||
 	       daos_crt_network_error(err);
 }
 
@@ -664,7 +691,8 @@ void ds_obj_tgt_update_handler(crt_rpc_t *rpc);
 void ds_obj_enum_handler(crt_rpc_t *rpc);
 void ds_obj_punch_handler(crt_rpc_t *rpc);
 void ds_obj_tgt_punch_handler(crt_rpc_t *rpc);
-void ds_obj_query_key_handler(crt_rpc_t *rpc);
+void ds_obj_query_key_handler_0(crt_rpc_t *rpc);
+void ds_obj_query_key_handler_1(crt_rpc_t *rpc);
 void ds_obj_sync_handler(crt_rpc_t *rpc);
 void ds_obj_migrate_handler(crt_rpc_t *rpc);
 void ds_obj_ec_agg_handler(crt_rpc_t *rpc);

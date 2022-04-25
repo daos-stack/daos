@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2021 Intel Corporation.
+// (C) Copyright 2019-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -158,7 +158,7 @@ func TestProvider_Format(t *testing.T) {
 			req: storage.BdevFormatRequest{
 				Properties: storage.BdevTierProperties{
 					Class:      storage.ClassNvme,
-					DeviceList: []string{mockSingle.PciAddr},
+					DeviceList: storage.MustNewBdevDeviceList(mockSingle.PciAddr),
 				},
 			},
 			mbc: &MockBackendConfig{
@@ -184,7 +184,7 @@ func TestProvider_Format(t *testing.T) {
 			req: storage.BdevFormatRequest{
 				Properties: storage.BdevTierProperties{
 					Class:      storage.ClassNvme,
-					DeviceList: []string{mockSingle.PciAddr},
+					DeviceList: storage.MustNewBdevDeviceList(mockSingle.PciAddr),
 				},
 			},
 			mbc: &MockBackendConfig{

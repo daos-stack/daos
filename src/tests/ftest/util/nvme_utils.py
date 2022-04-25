@@ -1,19 +1,18 @@
 #!/usr/bin/python
 """
-  (C) Copyright 2020-2021 Intel Corporation.
+  (C) Copyright 2020-2022 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 import threading
 import re
 import time
-import queue
-from command_utils_base import CommandFailure
+from exception_utils import CommandFailure
 from avocado.core.exceptions import TestFail
 from ior_test_base import IorTestBase
 from ior_utils import IorCommand
 from server_utils import ServerFailed
-
+from job_manager_utils import get_job_manager
 
 def get_device_ids(dmg, servers):
     """Get the NVMe Device ID from servers.
@@ -68,6 +67,8 @@ class ServerFillUp(IorTestBase):
         self.scm_fill = False
         self.nvme_fill = False
         self.ior_matrix = None
+        self.ior_local_cmd = None
+        self.result = []
         self.fail_on_warning = False
         self.rank_to_kill = []
         self.pool_exclude = {}
@@ -79,7 +80,9 @@ class ServerFillUp(IorTestBase):
         # Start the servers and agents
         super().setUp()
         self.hostfile_clients = None
-        self.ior_default_flags = self.ior_cmd.flags.value
+        self.ior_local_cmd = IorCommand()
+        self.ior_local_cmd.get_params(self)
+        self.ior_default_flags = self.ior_local_cmd.flags.value
         self.ior_scm_xfersize = self.params.get("transfer_size",
                                                 '/run/ior/transfersize_blocksize/*', '2048')
         self.ior_read_flags = self.params.get("read_flags", '/run/ior/iorflags/*', '-r -R -k -G 1')
@@ -87,14 +90,12 @@ class ServerFillUp(IorTestBase):
                                                  '/run/ior/transfersize_blocksize/*', '16777216')
         # Get the number of daos_engine
         self.engines = self.server_managers[0].manager.job.yaml.engine_params
-        self.out_queue = queue.Queue()
         self.dmg_command = self.get_dmg_command()
 
-    def start_ior_thread(self, results, create_cont, operation):
+    def start_ior_thread(self, create_cont, operation):
         """Start IOR write/read threads and wait until all threads are finished.
 
         Args:
-            results (queue): queue for returning thread results
             create_cont (Bool): To create the new container or not.
             operation (str):
                 Write/WriteRead: It will Write or Write/Read base on IOR parameter in yaml file.
@@ -102,26 +103,44 @@ class ServerFillUp(IorTestBase):
                                         storage % to be fill.
         """
         # IOR flag can be Write only or Write/Read based on test yaml
-        self.ior_cmd.flags.value = self.ior_default_flags
+        self.ior_local_cmd.flags.value = self.ior_default_flags
 
         # Calculate the block size based on server % to fill up.
         if 'Auto' in operation:
             block_size = self.calculate_ior_block_size()
-            self.ior_cmd.block_size.update('{}'.format(block_size))
+            self.ior_local_cmd.block_size.update('{}'.format(block_size))
 
-        # For IOR Read operation update the read flax from yaml file.
+        # For IOR Read operation update the read only flag from yaml file.
         if 'Auto_Read' in operation or operation == "Read":
             create_cont = False
-            self.ior_cmd.flags.value = self.ior_read_flags
+            self.ior_local_cmd.flags.value = self.ior_read_flags
+
+        self.ior_local_cmd.set_daos_params(self.server_group, self.pool)
+        self.ior_local_cmd.test_file.update('/testfile')
+
+        # Created new container
+        if create_cont:
+            self.create_cont()
+        else:
+            self.ior_local_cmd.dfs_cont.update(self.container.uuid)
+
+        # Define the job manager for the IOR command
+        job_manager_main = get_job_manager(self, "Mpirun", self.ior_local_cmd, mpi_type="mpich")
+        env = self.ior_local_cmd.get_default_env(str(job_manager_main))
+        job_manager_main.assign_hosts(self.hostlist_clients, self.workdir, None)
+        job_manager_main.assign_environment(env, True)
+        job_manager_main.assign_processes(self.params.get("np", '/run/ior/client_processes/*'))
 
         # run IOR Command
         try:
-            out = self.run_ior_with_pool(create_cont=create_cont,
-                                         fail_on_warning=self.fail_on_warning)
-            self.ior_matrix = IorCommand.get_ior_metrics(out)
-            results.put("PASS")
-        except (CommandFailure, TestFail) as _error:
-            results.put("FAIL")
+            output = job_manager_main.run()
+            self.ior_matrix = IorCommand.get_ior_metrics(output)
+
+            for line in output.stdout_text.splitlines():
+                if 'WARNING' in line and self.fail_on_warning:
+                    self.result.append("FAIL-IOR command issued warnings.")
+        except (CommandFailure, TestFail):
+            self.result.append("FAIL")
 
     def calculate_ior_block_size(self):
         """Calculate IOR Block size to fill up the Server.
@@ -132,10 +151,10 @@ class ServerFillUp(IorTestBase):
         """
         if self.scm_fill:
             free_space = self.pool.get_pool_daos_space()["s_total"][0]
-            self.ior_cmd.transfer_size.value = self.ior_scm_xfersize
+            self.ior_local_cmd.transfer_size.value = self.ior_scm_xfersize
         elif self.nvme_fill:
             free_space = self.pool.get_pool_daos_space()["s_total"][1]
-            self.ior_cmd.transfer_size.value = self.ior_nvme_xfersize
+            self.ior_local_cmd.transfer_size.value = self.ior_nvme_xfersize
         else:
             self.fail('Provide storage type (SCM/NVMe) to be filled')
 
@@ -145,7 +164,7 @@ class ServerFillUp(IorTestBase):
         _tmp_block_size = ((free_space/100)*self.capacity)
 
         # Check the IOR object type to calculate the correct block size.
-        _replica = re.findall(r'_(.+?)G', self.ior_cmd.dfs_oclass.value)
+        _replica = re.findall(r'_(.+?)G', self.ior_local_cmd.dfs_oclass.value)
 
         # This is for non replica and EC class where _tmp_block_size will not change.
         if not _replica:
@@ -170,8 +189,8 @@ class ServerFillUp(IorTestBase):
         _tmp_block_size = int(_tmp_block_size) / self.processes
 
         # Calculate the Final block size of IOR multiple of Transfer size.
-        block_size = (int(_tmp_block_size / int(self.ior_cmd.transfer_size.value)) * int(
-            self.ior_cmd.transfer_size.value))
+        block_size = (int(_tmp_block_size / int(self.ior_local_cmd.transfer_size.value)) * int(
+            self.ior_local_cmd.transfer_size.value))
 
         return block_size
 
@@ -285,14 +304,14 @@ class ServerFillUp(IorTestBase):
         """
         kill_rank_job = []
         kill_target_job = []
+        self.result.clear()
         self.capacity = percent
         # Fill up NVMe by default
         self.nvme_fill = 'NVMe' in storage
         self.scm_fill = 'SCM' in storage
 
         # Create the IOR threads
-        job = threading.Thread(target=self.start_ior_thread, kwargs={"results": self.out_queue,
-                                                                     "create_cont": create_cont,
+        job = threading.Thread(target=self.start_ior_thread, kwargs={"create_cont": create_cont,
                                                                      "operation": operation})
         # Launch the IOR thread
         job.start()
@@ -309,7 +328,7 @@ class ServerFillUp(IorTestBase):
             # Kill the server rank in BG thread
             for _id, _rank in enumerate(self.rank_to_kill):
                 kill_rank_job.append(threading.Thread(target=self.kill_rank_thread,
-                                                     kwargs={"rank": _rank}))
+                                                      kwargs={"rank": _rank}))
                 kill_rank_job[_id].start()
 
             # Kill the target from rank in BG thread
@@ -330,7 +349,7 @@ class ServerFillUp(IorTestBase):
         # Wait to finish the IOR thread
         job.join()
 
-        # Verify the queue and make sure no FAIL for any IOR run
-        while not self.out_queue.empty():
-            if self.out_queue.get() == "FAIL":
-                self.fail("FAIL")
+        # Verify if any test failed for any IOR run
+        for test_result in self.result:
+            if "FAIL" in test_result:
+                self.fail(test_result)

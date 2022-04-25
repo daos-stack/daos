@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2021 Intel Corporation.
+// (C) Copyright 2019-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -22,6 +22,7 @@ import (
 	"github.com/daos-stack/daos/src/control/server/engine"
 	"github.com/daos-stack/daos/src/control/server/storage"
 	"github.com/daos-stack/daos/src/control/system"
+	"github.com/daos-stack/daos/src/control/system/raft"
 )
 
 // Utilities for internal server package tests
@@ -163,7 +164,7 @@ func newTestEngine(log logging.Logger, isAP bool, provider *storage.Provider, en
 			WithTargetCount(1).
 			WithStorage(
 				storage.NewTierConfig().
-					WithBdevClass("nvme").
+					WithStorageClass("nvme").
 					WithBdevDeviceList("foo", "bar"),
 			),
 		)
@@ -204,7 +205,8 @@ func newTestMgmtSvc(t *testing.T, log logging.Logger) *mgmtSvc {
 	}
 	harness.started.SetTrue()
 
-	ms, db := system.MockMembership(t, log, mockTCPResolver)
+	db := raft.MockDatabase(t, log)
+	ms := system.MockMembership(t, log, db, mockTCPResolver)
 	return newMgmtSvc(harness, ms, db, nil, events.NewPubSub(context.Background(), log))
 }
 
@@ -235,6 +237,6 @@ func newTestMgmtSvcMulti(t *testing.T, log logging.Logger, count int, isAP bool)
 // fail if operations expect it to be a replica.
 func newTestMgmtSvcNonReplica(t *testing.T, log logging.Logger) *mgmtSvc {
 	svc := newTestMgmtSvc(t, log)
-	svc.sysdb = system.MockDatabaseWithAddr(t, log, nil)
+	svc.sysdb = raft.MockDatabaseWithAddr(t, log, nil)
 	return svc
 }

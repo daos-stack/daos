@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2021 Intel Corporation.
+// (C) Copyright 2019-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -18,7 +18,8 @@ import (
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	"github.com/daos-stack/daos/src/control/drpc"
 	"github.com/daos-stack/daos/src/control/lib/control"
-	"github.com/daos-stack/daos/src/control/lib/netdetect"
+	"github.com/daos-stack/daos/src/control/lib/hardware"
+	"github.com/daos-stack/daos/src/control/lib/hardware/hwprov"
 	"github.com/daos-stack/daos/src/control/logging"
 )
 
@@ -26,17 +27,17 @@ import (
 // Management Service proxy, handling dRPCs sent by libdaos by forwarding them
 // to MS.
 type mgmtModule struct {
-	log        logging.Logger
-	sys        string
-	ctlInvoker control.Invoker
-	attachInfo *attachInfoCache
-	fabricInfo *localFabricCache
-	numaAware  bool
-	netCtx     context.Context
-	monitor    *procMon
+	log            logging.Logger
+	sys            string
+	ctlInvoker     control.Invoker
+	attachInfo     *attachInfoCache
+	fabricInfo     *localFabricCache
+	monitor        *procMon
+	useDefaultNUMA bool
+	numaGetter     hardware.ProcessNUMAProvider
 }
 
-func (mod *mgmtModule) HandleCall(session *drpc.Session, method drpc.Method, req []byte) ([]byte, error) {
+func (mod *mgmtModule) HandleCall(ctx context.Context, session *drpc.Session, method drpc.Method, req []byte) ([]byte, error) {
 	uc, ok := session.Conn.(*net.UnixConn)
 	if !ok {
 		return nil, errors.Errorf("session.Conn type conversion failed")
@@ -53,8 +54,6 @@ func (mod *mgmtModule) HandleCall(session *drpc.Session, method drpc.Method, req
 	if err != nil {
 		return nil, err
 	}
-
-	ctx := context.TODO() // FIXME: Should be the top-level context.
 
 	switch method {
 	case drpc.MethodGetAttachInfo:
@@ -108,17 +107,15 @@ func (mod *mgmtModule) handleGetAttachInfo(ctx context.Context, reqb []byte, pid
 		return respb, err
 	}
 
-	var err error
-	var numaNode int
-
-	if mod.numaAware {
-		numaNode, err = netdetect.GetNUMASocketIDForPid(mod.netCtx, pid)
-		if err != nil {
-			return nil, err
-		}
+	numaNode, err := mod.getNUMANode(ctx, pid)
+	if err != nil {
+		mod.log.Errorf("unable to get NUMA node: %s", err.Error())
+		return nil, err
 	}
 
-	resp, err := mod.getAttachInfo(ctx, numaNode, pbReq.Sys)
+	mod.log.Debugf("client process NUMA node %d", numaNode)
+
+	resp, err := mod.getAttachInfo(ctx, int(numaNode), pbReq.Sys)
 	if err != nil {
 		return nil, err
 	}
@@ -128,6 +125,23 @@ func (mod *mgmtModule) handleGetAttachInfo(ctx context.Context, reqb []byte, pid
 	return proto.Marshal(resp)
 }
 
+func (mod *mgmtModule) getNUMANode(ctx context.Context, pid int32) (uint, error) {
+	if mod.useDefaultNUMA {
+		return 0, nil
+	}
+
+	numaNode, err := mod.numaGetter.GetNUMANodeIDForPID(ctx, pid)
+	if errors.Is(err, hardware.ErrNoNUMANodes) {
+		mod.log.Debug("system is not NUMA-aware")
+		mod.useDefaultNUMA = true
+		return 0, nil
+	} else if err != nil {
+		return 0, errors.Wrap(err, "get NUMA node ID")
+	}
+
+	return numaNode, nil
+}
+
 func (mod *mgmtModule) getAttachInfo(ctx context.Context, numaNode int, sys string) (*mgmtpb.GetAttachInfoResp, error) {
 	resp, err := mod.getAttachInfoResp(ctx, numaNode, sys)
 	if err != nil {
@@ -135,10 +149,10 @@ func (mod *mgmtModule) getAttachInfo(ctx context.Context, numaNode int, sys stri
 		return nil, err
 	}
 
-	fabricIF, err := mod.getFabricInterface(ctx, numaNode, resp.ClientNetHint.NetDevClass, resp.ClientNetHint.Provider)
+	fabricIF, err := mod.getFabricInterface(ctx, numaNode, hardware.NetDevClass(resp.ClientNetHint.NetDevClass), resp.ClientNetHint.Provider)
 	if err != nil {
 		mod.log.Errorf("failed to fetch fabric interface of type %s: %s",
-			netdetect.DevClassName(resp.ClientNetHint.NetDevClass), err.Error())
+			hardware.NetDevClass(resp.ClientNetHint.NetDevClass), err.Error())
 		return nil, err
 	}
 
@@ -180,23 +194,19 @@ func (mod *mgmtModule) getAttachInfoRemote(ctx context.Context, numaNode int, sy
 	return pbResp, nil
 }
 
-func (mod *mgmtModule) getFabricInterface(ctx context.Context, numaNode int, netDevClass uint32, provider string) (*FabricInterface, error) {
+func (mod *mgmtModule) getFabricInterface(ctx context.Context, numaNode int, netDevClass hardware.NetDevClass, provider string) (*FabricInterface, error) {
 	if mod.fabricInfo.IsCached() {
 		return mod.fabricInfo.GetDevice(numaNode, netDevClass, provider)
 	}
 
-	netCtx, err := netdetect.Init(ctx)
-	if err != nil {
-		return nil, err
-	}
-	defer netdetect.CleanUp(netCtx)
+	scanner := hwprov.DefaultFabricScanner(mod.log)
 
-	result, err := netdetect.ScanFabric(netCtx, "")
+	result, err := scanner.Scan(ctx)
 	if err != nil {
 		return nil, err
 	}
 
-	mod.fabricInfo.CacheScan(netCtx, result)
+	mod.fabricInfo.CacheScan(ctx, result)
 
 	return mod.fabricInfo.GetDevice(numaNode, netDevClass, provider)
 }

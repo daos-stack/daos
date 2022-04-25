@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2021 Intel Corporation.
+// (C) Copyright 2021-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -34,7 +34,7 @@ type Provider struct {
 	engineIndex   int
 	engineStorage *Config
 	Sys           SystemProvider
-	Scm           ScmProvider
+	scm           ScmProvider
 	bdev          BdevProvider
 	bdevCache     BdevScanResponse
 	vmdEnabled    bool
@@ -47,6 +47,19 @@ func DefaultProvider(log logging.Logger, idx int, engineStorage *Config) *Provid
 	}
 	return NewProvider(log, idx, engineStorage, system.DefaultProvider(),
 		NewScmForwarder(log), NewBdevForwarder(log))
+}
+
+// PrepareScm calls into storage SCM provider to attempt to configure PMem devices to be usable by
+// DAOS.
+func (p *Provider) PrepareScm(req ScmPrepareRequest) (*ScmPrepareResponse, error) {
+	p.log.Debugf("calling scm storage provider prepare: %+v", req)
+	return p.scm.Prepare(req)
+}
+
+// ScanScm calls into storage SCM provider to discover PMem modules, namespaces and state.
+func (p *Provider) ScanScm(req ScmScanRequest) (*ScmScanResponse, error) {
+	p.log.Debugf("calling scm storage provider scan: %+v", req)
+	return p.scm.Scan(req)
 }
 
 // GetScmConfig returns the only SCM tier config.
@@ -118,7 +131,7 @@ func (p *Provider) MountScm() error {
 
 	p.log.Debugf("attempting to mount existing SCM dir %s\n", cfg.Scm.MountPoint)
 
-	res, err := p.Scm.Mount(req)
+	res, err := p.scm.Mount(req)
 	if err != nil {
 		return err
 	}
@@ -168,7 +181,7 @@ func (p *Provider) ScmNeedsFormat() (bool, error) {
 		return false, err
 	}
 
-	res, err := p.Scm.CheckFormat(*req)
+	res, err := p.scm.CheckFormat(*req)
 	if err != nil {
 		return false, err
 	}
@@ -192,7 +205,7 @@ func (p *Provider) FormatScm(force bool) error {
 
 	scmStr := fmt.Sprintf("SCM (%s:%s)", cfg.Class, cfg.Scm.MountPoint)
 	p.log.Infof("Instance %d: starting format of %s", p.engineIndex, scmStr)
-	res, err := p.Scm.Format(*req)
+	res, err := p.scm.Format(*req)
 	if err == nil && !res.Formatted {
 		err = errors.Errorf("%s is still unformatted", cfg.Scm.MountPoint)
 	}
@@ -206,6 +219,21 @@ func (p *Provider) FormatScm(force bool) error {
 	return nil
 }
 
+// GetBdevConfig returns the Bdev tier configs.
+func (p *Provider) GetBdevConfigs() []*TierConfig {
+	return p.engineStorage.Tiers.BdevConfigs()
+}
+
+// QueryScmFirmware queries PMem SSD firmware.
+func (p *Provider) QueryScmFirmware(req ScmFirmwareQueryRequest) (*ScmFirmwareQueryResponse, error) {
+	return p.scm.QueryFirmware(req)
+}
+
+// UpdateScmFirmware queries PMem SSD firmware.
+func (p *Provider) UpdateScmFirmware(req ScmFirmwareUpdateRequest) (*ScmFirmwareUpdateResponse, error) {
+	return p.scm.UpdateFirmware(req)
+}
+
 // PrepareBdevs attempts to configure NVMe devices to be usable by DAOS.
 func (p *Provider) PrepareBdevs(req BdevPrepareRequest) (*BdevPrepareResponse, error) {
 	resp, err := p.bdev.Prepare(req)
@@ -213,7 +241,7 @@ func (p *Provider) PrepareBdevs(req BdevPrepareRequest) (*BdevPrepareResponse, e
 	p.Lock()
 	defer p.Unlock()
 
-	if err == nil && resp != nil {
+	if err == nil && resp != nil && !req.CleanHugePagesOnly {
 		p.vmdEnabled = resp.VMDPrepared
 	}
 	return resp, err
@@ -223,7 +251,7 @@ func (p *Provider) PrepareBdevs(req BdevPrepareRequest) (*BdevPrepareResponse, e
 // block devices.
 func (p *Provider) HasBlockDevices() bool {
 	for _, cfg := range p.engineStorage.Tiers.BdevConfigs() {
-		if len(cfg.Bdev.DeviceList) > 0 {
+		if cfg.Bdev.DeviceList.Len() > 0 {
 			return true
 		}
 	}
@@ -312,7 +340,7 @@ func (p *Provider) FormatBdevTiers() (results []BdevTierFormatResult) {
 type topologyGetter func(ctx context.Context) (*hardware.Topology, error)
 
 // BdevWriteConfigRequestFromConfig returns a config write request from a storage config.
-func BdevWriteConfigRequestFromConfig(ctx context.Context, log logging.Logger, cfg *Config, getTopo topologyGetter) (BdevWriteConfigRequest, error) {
+func BdevWriteConfigRequestFromConfig(ctx context.Context, log logging.Logger, cfg *Config, vmdEnabled bool, getTopo topologyGetter) (BdevWriteConfigRequest, error) {
 	req := BdevWriteConfigRequest{
 		OwnerUID: os.Geteuid(),
 		OwnerGID: os.Getegid(),
@@ -343,11 +371,21 @@ func BdevWriteConfigRequestFromConfig(ctx context.Context, log logging.Logger, c
 		}
 
 		// Populate hotplug bus-ID range limits when processing the first bdev tier.
-		// Applying the range limits hotplug activity of engine to a ssd device set.
+
+		if vmdEnabled {
+			req.HotplugBusidBegin = 0x00
+			req.HotplugBusidEnd = 0xFF
+			log.Debug("hotplug bus-id filter allows all as vmd is enabled")
+			continue
+		}
+
+		// Applying the bus-id range limits hotplug activity of engine to a set of ssd
+		// devices.
 
 		var begin, end uint8
-		if tier.Bdev.BusidRange != nil {
-			log.Debugf("received user-specified hotplug bus-id range %q", tier.Bdev.BusidRange)
+		if tier.Bdev.BusidRange != nil && !tier.Bdev.BusidRange.IsZero() {
+			log.Debugf("received user-specified hotplug bus-id range %q",
+				tier.Bdev.BusidRange)
 			begin = tier.Bdev.BusidRange.LowAddress.Bus
 			end = tier.Bdev.BusidRange.HighAddress.Bus
 		} else {
@@ -366,26 +404,32 @@ func BdevWriteConfigRequestFromConfig(ctx context.Context, log logging.Logger, c
 		req.HotplugBusidEnd = end
 	}
 
+	req.VMDEnabled = vmdEnabled
+
 	return req, nil
 }
 
 // WriteNvmeConfig creates an NVMe config file which describes what devices
 // should be used by a DAOS engine process.
 func (p *Provider) WriteNvmeConfig(ctx context.Context, log logging.Logger) error {
-	req, err := BdevWriteConfigRequestFromConfig(ctx, log, p.engineStorage,
-		hwloc.NewProvider(log).GetTopology)
+	p.RLock()
+	vmdEnabled := p.vmdEnabled
+	engineIndex := p.engineIndex
+	engineStorage := p.engineStorage
+	p.RUnlock()
+
+	req, err := BdevWriteConfigRequestFromConfig(ctx, log, engineStorage,
+		vmdEnabled, hwloc.NewProvider(log).GetTopology)
 	if err != nil {
 		return errors.Wrap(err, "creating write config request")
 	}
 
-	log.Infof("Writing NVMe config file for engine instance %d to %q", p.engineIndex,
+	log.Infof("Writing NVMe config file for engine instance %d to %q", engineIndex,
 		req.ConfigOutputPath)
 
 	p.RLock()
 	defer p.RUnlock()
-
 	req.BdevCache = &p.bdevCache
-	req.VMDEnabled = p.vmdEnabled
 
 	_, err = p.bdev.WriteConfig(req)
 
@@ -411,7 +455,7 @@ func (p *Provider) scanBdevTiers(direct bool, scan scanFn) (results []BdevTierSc
 		if cfg.Class != ClassNvme {
 			continue
 		}
-		if len(cfg.Bdev.DeviceList) == 0 {
+		if cfg.Bdev.DeviceList.Len() == 0 {
 			continue
 		}
 
@@ -451,14 +495,16 @@ type scanFn func(BdevScanRequest) (*BdevScanResponse, error)
 
 func scanBdevs(log logging.Logger, req BdevScanRequest, cachedResp *BdevScanResponse, scan scanFn) (*BdevScanResponse, error) {
 	if !req.BypassCache && cachedResp != nil && len(cachedResp.Controllers) != 0 {
+		log.Debugf("returning bdev storage provider scan cache: %+v", req)
 		return cachedResp, nil
 	}
 
+	log.Debugf("calling bdev storage provider scan: %+v", req)
 	return scan(req)
 }
 
-// ScanBdevs either calls into backend bdev provider to scan SSDs or returns
-// cached results if BypassCache is set to false in the request.
+// ScanBdevs either calls into bdev storage provider to scan SSDs or returns cached results
+// if BypassCache is set to false in the request.
 func (p *Provider) ScanBdevs(req BdevScanRequest) (*BdevScanResponse, error) {
 	p.RLock()
 	defer p.RUnlock()
@@ -499,7 +545,7 @@ func NewProvider(log logging.Logger, idx int, engineStorage *Config, sys SystemP
 		engineIndex:   idx,
 		engineStorage: engineStorage,
 		Sys:           sys,
-		Scm:           scm,
+		scm:           scm,
 		bdev:          bdev,
 	}
 }

@@ -1,11 +1,12 @@
 //
-// (C) Copyright 2020-2021 Intel Corporation.
+// (C) Copyright 2020-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
 package proto
 
 import (
+	"context"
 	"encoding/json"
 	"strconv"
 
@@ -74,8 +75,12 @@ func MetaFromFault(f *fault.Fault) map[string]string {
 // AnnotateError adds more details to the gRPC error, if available.
 func AnnotateError(in error) error {
 	var details *errdetails.ErrorInfo
-
 	cause := errors.Cause(in)
+
+	if cause == context.DeadlineExceeded || cause == context.Canceled {
+		return status.FromContextError(cause).Err()
+	}
+
 	switch et := cause.(type) {
 	case *fault.Fault:
 		details = &errdetails.ErrorInfo{

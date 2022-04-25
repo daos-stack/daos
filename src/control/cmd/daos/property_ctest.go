@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2021 Intel Corporation.
+// (C) Copyright 2021-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -27,8 +27,8 @@ import (
 	"github.com/daos-stack/daos/src/control/common"
 )
 
-func testProperty_EcCellSize(testRunner *testing.T) {
-	for testingName, testData := range map[string]struct {
+func testProperty_EcCellSize(t *testing.T) {
+	for name, tc := range map[string]struct {
 		SizeStr    string
 		EntryBytes uint64
 	}{
@@ -57,31 +57,31 @@ func testProperty_EcCellSize(testRunner *testing.T) {
 			EntryBytes: C.DAOS_EC_CELL_MAX,
 		},
 	} {
-		testRunner.Run(testingName, func(testRunner *testing.T) {
+		t.Run(name, func(t *testing.T) {
 			propEntry := new(C.struct_daos_prop_entry)
 			err := propHdlrs[C.DAOS_PROP_ENTRY_EC_CELL_SZ].nameHdlr(nil,
 				propEntry,
-				testData.SizeStr)
+				tc.SizeStr)
 			if err != nil {
-				testRunner.Fatalf("Expected no error: %s", err.Error())
+				t.Fatalf("Expected no error: %s", err.Error())
 			}
-			common.AssertEqual(testRunner,
+			common.AssertEqual(t,
 				uint64(C.get_dpe_val(propEntry)),
-				testData.EntryBytes,
+				tc.EntryBytes,
 				"Invalid EC Cell size")
 
 			sizeStr := propHdlrs[C.DAOS_PROP_ENTRY_EC_CELL_SZ].toString(propEntry,
 				C.DAOS_PROP_ENTRY_EC_CELL_SZ)
-			common.AssertEqual(testRunner,
-				humanize.IBytes(testData.EntryBytes),
+			common.AssertEqual(t,
+				humanize.IBytes(tc.EntryBytes),
 				sizeStr,
 				"Invalid EC Cell size representation")
 		})
 	}
 }
 
-func testProperty_EcCellSize_Errors(testRunner *testing.T) {
-	for testingName, testData := range map[string]struct {
+func testProperty_EcCellSize_Errors(t *testing.T) {
+	for name, tc := range map[string]struct {
 		SizeStr     string
 		ExpectError error
 	}{
@@ -94,29 +94,29 @@ func testProperty_EcCellSize_Errors(testRunner *testing.T) {
 			ExpectError: errors.New("invalid EC cell size 10"),
 		},
 	} {
-		testRunner.Run(testingName, func(testRunner *testing.T) {
+		t.Run(name, func(t *testing.T) {
 			propEntry := new(C.struct_daos_prop_entry)
 			err := propHdlrs[C.DAOS_PROP_ENTRY_EC_CELL_SZ].nameHdlr(nil,
 				propEntry,
-				testData.SizeStr)
-			common.CmpErr(testRunner, testData.ExpectError, err)
+				tc.SizeStr)
+			common.CmpErr(t, tc.ExpectError, err)
 		})
 	}
 
-	testRunner.Run("Invalid Entry error message: nil entry", func(testRunner *testing.T) {
+	t.Run("Invalid Entry error message: nil entry", func(t *testing.T) {
 		sizeStr := propHdlrs[C.DAOS_PROP_ENTRY_EC_CELL_SZ].toString(nil,
 			C.DAOS_PROP_ENTRY_EC_CELL_SZ)
-		common.AssertEqual(testRunner,
+		common.AssertEqual(t,
 			"property \""+C.DAOS_PROP_ENTRY_EC_CELL_SZ+"\" not found",
 			sizeStr,
 			"Invalid error message")
 	})
 
-	testRunner.Run("Invalid Entry error message: invalid size", func(testRunner *testing.T) {
+	t.Run("Invalid Entry error message: invalid size", func(t *testing.T) {
 		propEntry := new(C.struct_daos_prop_entry)
 		sizeStr := propHdlrs[C.DAOS_PROP_ENTRY_EC_CELL_SZ].toString(propEntry,
 			C.DAOS_PROP_ENTRY_EC_CELL_SZ)
-		common.AssertEqual(testRunner,
+		common.AssertEqual(t,
 			"invalid size 0",
 			sizeStr,
 			"Invalid error message")

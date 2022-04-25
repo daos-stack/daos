@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2021 Intel Corporation.
+// (C) Copyright 2019-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -7,6 +7,7 @@
 package main
 
 import (
+	"context"
 	"errors"
 	"net"
 	"testing"
@@ -52,7 +53,7 @@ func TestAgentSecurityModule_BadMethod(t *testing.T) {
 }
 
 func callRequestCreds(mod *SecurityModule, t *testing.T, log logging.Logger, conn net.Conn) ([]byte, error) {
-	return mod.HandleCall(newTestSession(t, log, conn), drpc.MethodRequestCredentials, nil)
+	return mod.HandleCall(context.Background(), newTestSession(t, log, conn), drpc.MethodRequestCredentials, nil)
 }
 
 func setupTestUnixConn(t *testing.T) (*net.UnixConn, func()) {

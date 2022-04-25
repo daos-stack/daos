@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2021 Intel Corporation.
+ * (C) Copyright 2016-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -479,6 +479,16 @@ vos_mod_init(void)
 	if (rc)
 		D_ERROR("Failed to initialize incarnation log capability\n");
 
+	d_getenv_int("DAOS_VOS_AGG_THRESH", &vos_agg_nvme_thresh);
+	if (vos_agg_nvme_thresh == 0 || vos_agg_nvme_thresh > 256)
+		vos_agg_nvme_thresh = VOS_MW_NVME_THRESH;
+	/* Round down to 2^n blocks */
+	if (vos_agg_nvme_thresh > 1)
+		vos_agg_nvme_thresh = (vos_agg_nvme_thresh / 2) * 2;
+
+	D_INFO("Set aggregate NVMe record threshold to %u blocks (blk_sz:%lu).\n",
+	       vos_agg_nvme_thresh, VOS_BLK_SZ);
+
 	return rc;
 }
 
@@ -504,10 +514,30 @@ vos_metrics_free(void *data)
 	D_FREE(data);
 }
 
+#define VOS_AGG_DIR	"vos_aggregation"
+
+static inline char *
+agg_op2str(unsigned int agg_op)
+{
+	switch (agg_op) {
+	case AGG_OP_SCAN:
+		return "scanned";
+	case AGG_OP_SKIP:
+		return "skipped";
+	case AGG_OP_DEL:
+		return "deleted";
+	default:
+		return "unknown";
+	}
+}
+
 static void *
 vos_metrics_alloc(const char *path, int tgt_id)
 {
 	struct vos_pool_metrics	*vp_metrics;
+	struct vos_agg_metrics	*vam;
+	char			 desc[40];
+	int			 i, rc;
 
 	D_ASSERT(tgt_id >= 0);
 
@@ -520,6 +550,78 @@ vos_metrics_alloc(const char *path, int tgt_id)
 		vos_metrics_free(vp_metrics);
 		return NULL;
 	}
+
+	vam = &vp_metrics->vp_agg_metrics;
+
+	/* VOS aggregation EPR scan duration */
+	rc = d_tm_add_metric(&vam->vam_epr_dur, D_TM_DURATION | D_TM_CLOCK_THREAD_CPUTIME,
+			     "EPR scan duration", NULL, "%s/%s/epr_duration/tgt_%u",
+			     path, VOS_AGG_DIR, tgt_id);
+	if (rc)
+		D_WARN("Failed to create 'epr_duration' telemetry: "DF_RC"\n", DP_RC(rc));
+
+	/* VOS aggregation scanned/skipped/deleted objs/dkeys/akeys */
+	for (i = 0; i < AGG_OP_MERGE; i++) {
+		snprintf(desc, sizeof(desc), "%s objs", agg_op2str(i));
+		rc = d_tm_add_metric(&vam->vam_obj[i], D_TM_COUNTER, desc, NULL,
+				     "%s/%s/obj_%s/tgt_%u", path, VOS_AGG_DIR,
+				     agg_op2str(i), tgt_id);
+		if (rc)
+			D_WARN("Failed to create 'obj_%s' telemetry : "DF_RC"\n",
+			       agg_op2str(i), DP_RC(rc));
+
+		snprintf(desc, sizeof(desc), "%s dkeys", agg_op2str(i));
+		rc = d_tm_add_metric(&vam->vam_dkey[i], D_TM_COUNTER, desc, NULL,
+				     "%s/%s/dkey_%s/tgt_%u", path, VOS_AGG_DIR,
+				     agg_op2str(i), tgt_id);
+		if (rc)
+			D_WARN("Failed to create 'dkey_%s' telemetry : "DF_RC"\n",
+			       agg_op2str(i), DP_RC(rc));
+
+		snprintf(desc, sizeof(desc), "%s akeys", agg_op2str(i));
+		rc = d_tm_add_metric(&vam->vam_akey[i], D_TM_COUNTER, desc, NULL,
+				     "%s/%s/akey_%s/tgt_%u", path, VOS_AGG_DIR,
+				     agg_op2str(i), tgt_id);
+		if (rc)
+			D_WARN("Failed to create 'akey_%s' telemetry : "DF_RC"\n",
+			       agg_op2str(i), DP_RC(rc));
+	}
+
+	/* VOS aggregation hit uncommitted entries */
+	rc = d_tm_add_metric(&vam->vam_uncommitted, D_TM_COUNTER, "uncommitted entries", NULL,
+			     "%s/%s/uncommitted/tgt_%u", path, VOS_AGG_DIR, tgt_id);
+	if (rc)
+		D_WARN("Failed to create 'uncommitted' telemetry : "DF_RC"\n", DP_RC(rc));
+
+	/* VOS aggregation hit CSUM errors */
+	rc = d_tm_add_metric(&vam->vam_csum_errs, D_TM_COUNTER, "CSUM errors", NULL,
+			     "%s/%s/csum_errors/tgt_%u", path, VOS_AGG_DIR, tgt_id);
+	if (rc)
+		D_WARN("Failed to create 'csum_errors' telemetry : "DF_RC"\n", DP_RC(rc));
+
+	/* VOS aggregation SV deletions */
+	rc = d_tm_add_metric(&vam->vam_del_sv, D_TM_COUNTER, "deleted single values", NULL,
+			     "%s/%s/deleted_sv/tgt_%u", path, VOS_AGG_DIR, tgt_id);
+	if (rc)
+		D_WARN("Failed to create 'deleted_sv' telemetry : "DF_RC"\n", DP_RC(rc));
+
+	/* VOS aggregation EV deletions */
+	rc = d_tm_add_metric(&vam->vam_del_ev, D_TM_COUNTER, "deleted array values", NULL,
+			     "%s/%s/deleted_ev/tgt_%u", path, VOS_AGG_DIR, tgt_id);
+	if (rc)
+		D_WARN("Failed to create 'deleted_ev' telemetry : "DF_RC"\n", DP_RC(rc));
+
+	/* VOS aggregation total merged recx */
+	rc = d_tm_add_metric(&vam->vam_merge_recs, D_TM_COUNTER, "total merged recs", NULL,
+			     "%s/%s/merged_recs/tgt_%u", path, VOS_AGG_DIR, tgt_id);
+	if (rc)
+		D_WARN("Failed to create 'merged_recs' telemetry : "DF_RC"\n", DP_RC(rc));
+
+	/* VOS aggregation total merged size */
+	rc = d_tm_add_metric(&vam->vam_merge_size, D_TM_COUNTER, "total merged size", "bytes",
+			     "%s/%s/merged_size/tgt_%u", path, VOS_AGG_DIR, tgt_id);
+	if (rc)
+		D_WARN("Failed to create 'merged_size' telemetry : "DF_RC"\n", DP_RC(rc));
 
 	return vp_metrics;
 }
@@ -535,6 +637,7 @@ struct dss_module vos_srv_module =  {
 	.sm_name	= "vos_srv",
 	.sm_mod_id	= DAOS_VOS_MODULE,
 	.sm_ver		= 1,
+	.sm_proto_count	= 1,
 	.sm_init	= vos_mod_init,
 	.sm_fini	= vos_mod_fini,
 	.sm_key		= &vos_module_key,
@@ -554,10 +657,9 @@ vos_self_nvme_fini(void)
 	}
 }
 
-/* Storage path, NVMe config & shm_id used by standalone VOS */
-#define VOS_STORAGE_PATH	"/mnt/daos"
+/* Storage path, NVMe config & numa node used by standalone VOS */
 #define VOS_NVME_CONF		"/etc/daos_nvme.conf"
-#define VOS_NVME_SHM_ID		DAOS_NVME_SHMID_NONE
+#define VOS_NVME_NUMA_NODE	DAOS_NVME_NUMANODE_NONE
 #define VOS_NVME_MEM_SIZE	1024
 #define VOS_NVME_HUGEPAGE_SIZE	2	/* 2MB */
 #define VOS_NVME_NR_TARGET	1
@@ -578,10 +680,10 @@ vos_self_nvme_init()
 	/* Only use hugepages if NVME SSD configuration existed. */
 	fd = open(VOS_NVME_CONF, O_RDONLY, 0600);
 	if (fd < 0) {
-		rc = bio_nvme_init(NULL, VOS_NVME_SHM_ID, 0, 0,
+		rc = bio_nvme_init(NULL, VOS_NVME_NUMA_NODE, 0, 0,
 				   VOS_NVME_NR_TARGET, vos_db_get(), true);
 	} else {
-		rc = bio_nvme_init(VOS_NVME_CONF, VOS_NVME_SHM_ID,
+		rc = bio_nvme_init(VOS_NVME_CONF, VOS_NVME_NUMA_NODE,
 				   VOS_NVME_MEM_SIZE, VOS_NVME_HUGEPAGE_SIZE,
 				   VOS_NVME_NR_TARGET, vos_db_get(), true);
 		close(fd);
@@ -668,12 +770,15 @@ vos_self_init(const char *db_path)
 
 	evt_mode = getenv("DAOS_EVTREE_MODE");
 	if (evt_mode) {
-		if (strcasecmp("soff", evt_mode) == 0)
-			vos_evt_feats = EVT_FEAT_SORT_SOFF;
-		else if (strcasecmp("dist_even", evt_mode) == 0)
-			vos_evt_feats = EVT_FEAT_SORT_DIST_EVEN;
+		if (strcasecmp("soff", evt_mode) == 0) {
+			vos_evt_feats &= ~EVT_FEATS_SUPPORTED;
+			vos_evt_feats |= EVT_FEAT_SORT_SOFF;
+		} else if (strcasecmp("dist_even", evt_mode) == 0) {
+			vos_evt_feats &= ~EVT_FEATS_SUPPORTED;
+			vos_evt_feats |= EVT_FEAT_SORT_DIST_EVEN;
+		}
 	}
-	switch (vos_evt_feats) {
+	switch (vos_evt_feats & EVT_FEATS_SUPPORTED) {
 	case EVT_FEAT_SORT_SOFF:
 		D_INFO("Using start offset sort for evtree\n");
 		break;

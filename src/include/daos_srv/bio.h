@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2018-2021 Intel Corporation.
+ * (C) Copyright 2018-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -404,7 +404,7 @@ void bio_register_bulk_ops(int (*bulk_create)(void *ctxt, d_sg_list_t *sgl,
  * Global NVMe initialization.
  *
  * \param[IN] nvme_conf		NVMe config file
- * \param[IN] shm_id		shm id to enable multiprocess mode in SPDK
+ * \param[IN] numa_node		NUMA node that engine is assigned to
  * \param[IN] mem_size		SPDK memory alloc size when using primary mode
  * \param[IN] hugepage_size	Configured hugepage size on system
  * \paran[IN] tgt_nr		Number of targets
@@ -413,7 +413,7 @@ void bio_register_bulk_ops(int (*bulk_create)(void *ctxt, d_sg_list_t *sgl,
  *
  * \return		Zero on success, negative value on error
  */
-int bio_nvme_init(const char *nvme_conf, int shm_id, unsigned int mem_size,
+int bio_nvme_init(const char *nvme_conf, int numa_node, unsigned int mem_size,
 		  unsigned int hugepage_size, unsigned int tgt_nr,
 		  struct sys_db *db, bool bypass);
 

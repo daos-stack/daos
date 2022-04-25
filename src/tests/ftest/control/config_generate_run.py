@@ -1,16 +1,15 @@
 #!/usr/bin/python3
 '''
-  (C) Copyright 2018-2021 Intel Corporation.
+  (C) Copyright 2018-2022 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
-import os
+
 import yaml
 
 from apricot import TestWithServers
-from command_utils import CommandFailure
+from exception_utils import CommandFailure
 from server_utils import ServerFailed
-from server_utils_params import DaosServerYamlParameters
 
 
 class ConfigGenerateRun(TestWithServers):
@@ -56,7 +55,7 @@ class ConfigGenerateRun(TestWithServers):
 
         try:
             generated_yaml = yaml.safe_load(result.stdout)
-        except yaml.YAMLError as error:
+        except yaml.YAMLError:
             raise CommandFailure("Error loading dmg generated config!")
 
         # Stop and restart daos_server. self.start_server_managers() has the

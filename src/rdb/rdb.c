@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2017-2021 Intel Corporation.
+ * (C) Copyright 2017-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -17,13 +17,12 @@
 #include "rdb_internal.h"
 #include "rdb_layout.h"
 
-static int rdb_start_internal(daos_handle_t pool, daos_handle_t mc,
-			      const uuid_t uuid, struct rdb_cbs *cbs, void *arg,
-			      struct rdb **dbp);
+static int rdb_open_internal(daos_handle_t pool, daos_handle_t mc, const uuid_t uuid,
+			     struct rdb_cbs *cbs, void *arg, struct rdb **dbp);
 
 /**
  * Create an RDB replica at \a path with \a uuid, \a size, and \a replicas, and
- * start it with \a cbs and \a arg.
+ * open it with \a cbs and \a arg.
  *
  * \param[in]	path		replica path
  * \param[in]	uuid		database UUID
@@ -31,17 +30,17 @@ static int rdb_start_internal(daos_handle_t pool, daos_handle_t mc,
  * \param[in]	replicas	list of replica ranks
  * \param[in]	cbs		callbacks (not copied)
  * \param[in]	arg		argument for cbs
- * \param[out]	dbp		database
+ * \param[out]	storagep	database storage
  */
 int
-rdb_create(const char *path, const uuid_t uuid, size_t size,
-	   const d_rank_list_t *replicas, struct rdb_cbs *cbs, void *arg,
-	   struct rdb **dbp)
+rdb_create(const char *path, const uuid_t uuid, size_t size, const d_rank_list_t *replicas,
+	   struct rdb_cbs *cbs, void *arg, struct rdb_storage **storagep)
 {
 	daos_handle_t	pool;
 	daos_handle_t	mc;
 	d_iov_t		value;
 	uint32_t	version = RDB_LAYOUT_VERSION;
+	struct rdb     *db;
 	int		rc;
 
 	D_DEBUG(DB_MD, DF_UUID": creating db %s with %u replicas\n",
@@ -87,8 +86,11 @@ rdb_create(const char *path, const uuid_t uuid, size_t size,
 	if (rc != 0)
 		goto out_mc_hdl;
 
-	rc = rdb_start_internal(pool, mc, uuid, cbs, arg, dbp);
+	rc = rdb_open_internal(pool, mc, uuid, cbs, arg, &db);
+	if (rc != 0)
+		goto out_mc_hdl;
 
+	*storagep = rdb_to_storage(db);
 out_mc_hdl:
 	if (rc != 0)
 		vos_cont_close(mc);
@@ -222,8 +224,8 @@ rdb_lookup(const uuid_t uuid)
  * the caller shall not close in this case.
  */
 static int
-rdb_start_internal(daos_handle_t pool, daos_handle_t mc, const uuid_t uuid,
-		   struct rdb_cbs *cbs, void *arg, struct rdb **dbp)
+rdb_open_internal(daos_handle_t pool, daos_handle_t mc, const uuid_t uuid, struct rdb_cbs *cbs,
+		  void *arg, struct rdb **dbp)
 {
 	struct rdb	       *db;
 	int			rc;
@@ -307,25 +309,13 @@ rdb_start_internal(daos_handle_t pool, daos_handle_t mc, const uuid_t uuid,
 		SCM_TOTAL(&vps), SCM_FREE(&vps), SCM_SYS(&vps),
 		rdb_extra_sys[DAOS_MEDIA_SCM]);
 
-	rc = rdb_raft_start(db);
+	rc = rdb_raft_open(db);
 	if (rc != 0)
 		goto err_kvss;
-
-	ABT_mutex_lock(rdb_hash_lock);
-	rc = d_hash_rec_insert(&rdb_hash, db->d_uuid, sizeof(uuid_t),
-			       &db->d_entry, true /* exclusive */);
-	ABT_mutex_unlock(rdb_hash_lock);
-	if (rc != 0) {
-		/* We have the PMDK pool open. */
-		D_ASSERT(rc != -DER_EXIST);
-		goto err_raft;
-	}
 
 	*dbp = db;
 	return 0;
 
-err_raft:
-	rdb_raft_stop(db);
 err_kvss:
 	rdb_kvs_cache_destroy(db->d_kvss);
 err_ref_cv:
@@ -341,26 +331,27 @@ err:
 }
 
 /**
- * Start an RDB replica at \a path.
+ * Open an RDB replica at \a path.
  *
- * \param[in]	path	replica path
- * \param[in]	uuid	database UUID
- * \param[in]	cbs	callbacks (not copied)
- * \param[in]	arg	argument for cbs
- * \param[out]	dbp	database
+ * \param[in]	path		replica path
+ * \param[in]	uuid		database UUID
+ * \param[in]	cbs		callbacks (not copied)
+ * \param[in]	arg		argument for cbs
+ * \param[out]	storagep	database storage
  */
 int
-rdb_start(const char *path, const uuid_t uuid, struct rdb_cbs *cbs, void *arg,
-	  struct rdb **dbp)
+rdb_open(const char *path, const uuid_t uuid, struct rdb_cbs *cbs, void *arg,
+	 struct rdb_storage **storagep)
 {
-	daos_handle_t		pool;
-	daos_handle_t		mc;
-	d_iov_t			value;
-	uuid_t			uuid_persist;
-	uint32_t		version;
-	int			rc;
+	daos_handle_t	pool;
+	daos_handle_t	mc;
+	d_iov_t		value;
+	uuid_t		uuid_persist;
+	uint32_t	version;
+	struct rdb     *db;
+	int		rc;
 
-	D_INFO(DF_UUID": starting RDB %s\n", DP_UUID(uuid), path);
+	D_DEBUG(DB_MD, DF_UUID": opening db %s\n", DP_UUID(uuid), path);
 
 	/*
 	 * RDB pools specify VOS_POF_SMALL for basic system memory reservation
@@ -431,13 +422,12 @@ rdb_start(const char *path, const uuid_t uuid, struct rdb_cbs *cbs, void *arg,
 		goto err_mc;
 	}
 
-	rc = rdb_start_internal(pool, mc, uuid, cbs, arg, dbp);
+	rc = rdb_open_internal(pool, mc, uuid, cbs, arg, &db);
 	if (rc != 0)
 		goto err_mc;
 
-	D_DEBUG(DB_MD, DF_DB": started db %s %p with %u replicas\n",
-		DP_DB(*dbp), path, *dbp,
-		(*dbp)->d_replicas == NULL ? 0 : (*dbp)->d_replicas->rl_nr);
+	D_DEBUG(DB_MD, DF_DB": opened db %s %p\n", DP_DB(db), path, db);
+	*storagep = rdb_to_storage(db);
 	return 0;
 
 err_mc:
@@ -449,50 +439,137 @@ err:
 }
 
 /**
- * Stop an RDB replica \a db. All TXs in \a db must be either ended already or
- * blocking only in rdb.
+ * Close \a storage.
  *
- * \param[in]	db	database
+ * \param[in]	storage	database storage
  */
 void
-rdb_stop(struct rdb *db)
+rdb_close(struct rdb_storage *storage)
 {
-	bool deleted;
+	struct rdb *db = rdb_from_storage(storage);
 
-	if (db == NULL) {
-		D_ERROR("db is NULL\n");
-		return;
-	}
-
-	D_DEBUG(DB_MD, DF_DB": stopping db %p\n", DP_DB(db), db);
-	ABT_mutex_lock(rdb_hash_lock);
-	deleted = d_hash_rec_delete(&rdb_hash, db->d_uuid, sizeof(uuid_t));
-	ABT_mutex_unlock(rdb_hash_lock);
-	D_ASSERT(deleted);
-	rdb_raft_stop(db);
+	D_ASSERTF(db->d_ref == 1, "d_ref %d == 1\n", db->d_ref);
+	rdb_raft_close(db);
 	vos_cont_close(db->d_mc);
 	vos_pool_close(db->d_pool);
 	rdb_kvs_cache_destroy(db->d_kvss);
 	ABT_cond_free(&db->d_ref_cv);
 	ABT_mutex_free(&db->d_raft_mutex);
 	ABT_mutex_free(&db->d_mutex);
-	D_DEBUG(DB_MD, DF_DB": stopped db %p\n", DP_DB(db), db);
+	D_DEBUG(DB_MD, DF_DB": closed db %p\n", DP_DB(db), db);
 	D_FREE(db);
 }
 
+/**
+ * Start \a storage, converting \a storage into \a dbp. If this is successful,
+ * the caller must stop using \a storage; otherwise, the caller remains
+ * responsible for closing \a storage.
+ *
+ * \param[in]	storage	database storage
+ * \param[out]	dbp	database
+ */
+int
+rdb_start(struct rdb_storage *storage, struct rdb **dbp)
+{
+	struct rdb     *db = rdb_from_storage(storage);
+	int		rc;
+
+	rc = rdb_raft_start(db);
+	if (rc != 0)
+		return rc;
+
+	ABT_mutex_lock(rdb_hash_lock);
+	rc = d_hash_rec_insert(&rdb_hash, db->d_uuid, sizeof(uuid_t), &db->d_entry,
+			       true /* exclusive */);
+	ABT_mutex_unlock(rdb_hash_lock);
+	if (rc != 0) {
+		/* We have the PMDK pool open. */
+		D_ASSERT(rc != -DER_EXIST);
+		rdb_raft_stop(db);
+		return rc;
+	}
+
+	D_DEBUG(DB_MD, DF_DB": started db %p\n", DP_DB(db), db);
+	*dbp = db;
+	return 0;
+}
+
+/**
+ * Stop \a db, converting \a db into \a storagep. All TXs in \a db must be
+ * either ended already or blocking only in rdb.
+ *
+ * \param[in]	db		database
+ * \param[out]	storagep	database storage
+ */
+void
+rdb_stop(struct rdb *db, struct rdb_storage **storagep)
+{
+	bool deleted;
+
+	D_DEBUG(DB_MD, DF_DB": stopping db %p\n", DP_DB(db), db);
+
+	ABT_mutex_lock(rdb_hash_lock);
+	deleted = d_hash_rec_delete(&rdb_hash, db->d_uuid, sizeof(uuid_t));
+	ABT_mutex_unlock(rdb_hash_lock);
+	D_ASSERT(deleted);
+
+	rdb_raft_stop(db);
+
+	D_DEBUG(DB_MD, DF_DB": stopped db %p\n", DP_DB(db), db);
+	*storagep = rdb_to_storage(db);
+}
+
+/**
+ * Stop and close \a db. All TXs in \a db must be either ended already or
+ * blocking only in rdb.
+ *
+ * \param[in]	db	database
+ */
+void
+rdb_stop_and_close(struct rdb *db)
+{
+	struct rdb_storage *storage;
+
+	rdb_stop(db, &storage);
+	rdb_close(storage);
+}
+
+/**
+ * Add \a replicas.
+ *
+ * \param[in]	db		database
+ * \param[in,out]
+ *		replicas	[in] list of replica ranks;
+ *				[out] list of replica ranks that could not be added
+ */
 int
 rdb_add_replicas(struct rdb *db, d_rank_list_t *replicas)
 {
-	int i;
-	int rc = -DER_INVAL;
+	int	i;
+	int	rc;
 
 	D_DEBUG(DB_MD, DF_DB": Adding %d replicas\n",
 		DP_DB(db), replicas->rl_nr);
+
+	ABT_mutex_lock(db->d_raft_mutex);
+
+	rc = rdb_raft_wait_applied(db, db->d_debut, raft_get_current_term(db->d_raft));
+	if (rc != 0) {
+		ABT_mutex_unlock(db->d_raft_mutex);
+		return rc;
+	}
+
+	rc = -DER_INVAL;
 	for (i = 0; i < replicas->rl_nr; ++i) {
 		rc = rdb_raft_add_replica(db, replicas->rl_ranks[i]);
-		if (rc != 0)
+		if (rc != 0) {
+			D_ERROR(DF_DB": failed to add rank %u: "DF_RC"\n", DP_DB(db),
+				replicas->rl_ranks[i], DP_RC(rc));
 			break;
+		}
 	}
+
+	ABT_mutex_unlock(db->d_raft_mutex);
 
 	/* Update list to only contain ranks which could not be added. */
 	replicas->rl_nr -= i;
@@ -502,19 +579,42 @@ rdb_add_replicas(struct rdb *db, d_rank_list_t *replicas)
 	return rc;
 }
 
+/**
+ * Remove \a replicas.
+ *
+ * \param[in]	db		database
+ * \param[in,out]
+ *		replicas	[in] list of replica ranks;
+ *				[out] list of replica ranks that could not be removed
+ */
 int
 rdb_remove_replicas(struct rdb *db, d_rank_list_t *replicas)
 {
-	int i;
-	int rc = -DER_INVAL;
+	int	i;
+	int	rc;
 
 	D_DEBUG(DB_MD, DF_DB": Removing %d replicas\n",
 		DP_DB(db), replicas->rl_nr);
+
+	ABT_mutex_lock(db->d_raft_mutex);
+
+	rc = rdb_raft_wait_applied(db, db->d_debut, raft_get_current_term(db->d_raft));
+	if (rc != 0) {
+		ABT_mutex_unlock(db->d_raft_mutex);
+		return rc;
+	}
+
+	rc = -DER_INVAL;
 	for (i = 0; i < replicas->rl_nr; ++i) {
 		rc = rdb_raft_remove_replica(db, replicas->rl_ranks[i]);
-		if (rc != 0)
+		if (rc != 0) {
+			D_ERROR(DF_DB": failed to remove rank %u: "DF_RC"\n", DP_DB(db),
+				replicas->rl_ranks[i], DP_RC(rc));
 			break;
+		}
 	}
+
+	ABT_mutex_unlock(db->d_raft_mutex);
 
 	/* Update list to only contain ranks which could not be removed. */
 	replicas->rl_nr -= i;
@@ -540,7 +640,11 @@ rdb_resign(struct rdb *db, uint64_t term)
 }
 
 /**
- * Call for a new election (campaign to become leader).
+ * Call a new election (campaign to become leader). Must be a voting replica.
+ *
+ * \param[in]	db	database
+ *
+ * \retval -DER_INVAL	not a voting replica
  */
 int
 rdb_campaign(struct rdb *db)
@@ -608,17 +712,5 @@ rdb_get_leader(struct rdb *db, uint64_t *term, d_rank_t *rank)
 int
 rdb_get_ranks(struct rdb *db, d_rank_list_t **ranksp)
 {
-	return daos_rank_list_dup(ranksp, db->d_replicas);
-}
-
-/**
- * Get the UUID of the database.
- *
- * \param[in]	db	database
- * \param[out]	uuid	UUID
- */
-
-void rdb_get_uuid(struct rdb *db, uuid_t uuid)
-{
-	uuid_copy(uuid, db->d_uuid);
+	return rdb_raft_get_ranks(db, ranksp);
 }

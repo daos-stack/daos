@@ -4,11 +4,12 @@
 import sys
 import os
 import daos_build
+import subprocess
 from os.path import join, isdir
 from os import urandom
 from binascii import b2a_hex
 
-Import('env', 'prereqs', 'daos_version', 'conf_dir', 'gurt_lib')
+Import('env', 'prereqs', 'daos_version', 'conf_dir', 'gurt_lib', 'cart_lib')
 
 GO_COMPILER = 'go'
 MIN_GO_VERSION = '1.12.0'
@@ -38,11 +39,20 @@ def is_firmware_mgmt_build(benv):
     "Check whether this build has firmware management enabled."
     return benv["FIRMWARE_MGMT"] == 1
 
+def is_ucx_build(benv):
+    "Check whether this build has UCX enabled."
+    return benv["UCX"] == 1
+
 def get_build_tags(benv):
     "Get custom go build tags."
-    if not is_firmware_mgmt_build(benv):
+    tags = []
+    if is_firmware_mgmt_build(benv):
+        tags.append("firmware")
+    if is_ucx_build(benv):
+        tags.append("ucx")
+    if len(tags) == 0:
         return ""
-    return "-tags firmware"
+    return "-tags {}".format(','.join(tags))
 
 def is_release_build(benv):
     "Check whether this build is for release."
@@ -86,7 +96,7 @@ def install_go_bin(denv, gosrc, libs, name, install_name):
 
     if libs is None:
         libs = []
-    libs.extend(gurt_lib)
+    libs.extend([gurt_lib, cart_lib])
 
     def gen_build_id():
         """generate a unique build id per binary for use by RPM
@@ -128,7 +138,7 @@ def configure_go(denv):
         return
     def check_go_version(context):
         """Check GO Version"""
-        context.Display('Checking for Go compiler in $PATH... ')
+        context.Display('Checking for Go compiler... ')
         if GO_BIN:
             context.Display(GO_BIN + '\n')
         else:
@@ -136,7 +146,8 @@ def configure_go(denv):
             return 0
 
         context.Display('Checking %s version... ' % GO_BIN)
-        out = os.popen('%s version' % GO_BIN).read()
+        cmd_rc = subprocess.run([GO_BIN, 'version'], check=True, stdout=subprocess.PIPE)
+        out = cmd_rc.stdout.decode('utf-8')
         if len(out.split(' ')) < 3:
             context.Result('failed to get version from "%s"' % out)
             return 0
@@ -195,7 +206,6 @@ def scons():
     gosrc = Dir('.').srcnode().abspath
 
     prereqs.require(denv, 'ofi', 'hwloc')
-    old_cgold = denv["ENV"].get("CGO_LDFLAGS", "")
     # Sets CGO_LDFLAGS for rpath options
     daos_build.add_rpaths(denv, "..", True, True)
     denv.AppendENVPath("CGO_CFLAGS", denv.subst("$_CPPINCFLAGS"), sep=" ")
@@ -228,18 +238,29 @@ def scons():
         return
 
     senv = denv.Clone()
-    denv = senv
-    prereqs.require(denv, 'spdk')
 
     denv.AppendENVPath("CGO_CFLAGS", denv.subst("$_CPPINCFLAGS"), sep=" ")
 
     SConscript('lib/spdk/SConscript', exports='denv')
 
-    denv.AppendUnique(LINKFLAGS=["-Wl,--no-as-needed"])
-    prereqs.require(senv, 'pmdk', 'spdk', 'ofi', 'hwloc')
+    prereqs.require(senv, 'ofi', 'hwloc')
     daos_build.add_rpaths(denv, "..", True, True)
 
-    cgolibdirs = senv.subst("-L$BUILD_DIR/src/control/lib/spdk "
+    # Copy setup_spdk.sh script to be executed at daos_server runtime.
+    senv.Install(join('$PREFIX', 'share/daos/control'),
+                 join(gosrc, 'server/init/setup_spdk.sh'))
+
+    serverbin = install_go_bin(senv, gosrc, None, "daos_server",
+                               "daos_server")
+
+    aenv = denv.Clone()
+    denv = aenv
+    prereqs.require(denv, 'spdk')
+
+    aenv.AppendUnique(LINKFLAGS=["-Wl,--no-as-needed"])
+    prereqs.require(aenv, 'pmdk', 'spdk', 'ofi', 'hwloc')
+    aenv.Replace(RPATH=[])
+    cgolibdirs = aenv.subst("-L$BUILD_DIR/src/control/lib/spdk "
                             "-L$BUILD_DIR/src/gurt "
                             "-L$BUILD_DIR/src/cart "
                             "-L$SPDK_PREFIX/lib "
@@ -248,27 +269,15 @@ def scons():
     ldopts = cgolibdirs +                                                     \
              " -lspdk_env_dpdk -lspdk_nvme -lspdk_vmd -lrte_mempool" +        \
              " -lrte_mempool_ring -lrte_bus_pci -lnvme_control -lnuma -ldl"
-    senv.AppendENVPath("CGO_LDFLAGS", ldopts, sep=" ")
+    aenv.AppendENVPath("CGO_LDFLAGS", ldopts, sep=" ")
 
-    senv.AppendENVPath("CGO_CFLAGS",
+    aenv.AppendENVPath("CGO_CFLAGS",
                        senv.subst("-I$SPDK_PREFIX/include "
                                   "-I$OFI_PREFIX/include"),
                        sep=" ")
 
-    # Copy setup_spdk.sh script to be executed at daos_server runtime.
-    senv.Install(join('$PREFIX', 'share/daos/control'),
-                 join(gosrc, 'server/init/setup_spdk.sh'))
-
-    serverbin = install_go_bin(senv, gosrc, [denv.nvmecontrol], "daos_server",
-                               "daos_server")
-
-    #Admin binary is expected to be relocated so origin based paths are useless
-    aenv = senv.Clone()
-    aenv["ENV"]["CGO_LDFLAGS"] = old_cgold
-    aenv.Replace(RPATH=[])
     # Sets CGO_LDFLAGS for rpath
     daos_build.add_rpaths(aenv, None, True, True)
-    aenv.AppendENVPath("CGO_LDFLAGS", ldopts, sep=" ")
     adminbin = install_go_bin(aenv, gosrc, [denv.nvmecontrol], "daos_admin",
                               "daos_admin")
 

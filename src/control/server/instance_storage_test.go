@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2021 Intel Corporation.
+// (C) Copyright 2020-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -138,13 +138,13 @@ func TestEngineInstance_NeedsScmFormat(t *testing.T) {
 	var (
 		ramCfg = engine.MockConfig().WithStorage(
 			storage.NewTierConfig().
-				WithBdevClass(storage.ClassRam.String()).
+				WithStorageClass(storage.ClassRam.String()).
 				WithScmMountPoint(goodMountPoint).
 				WithScmRamdiskSize(1),
 		)
 		dcpmCfg = engine.MockConfig().WithStorage(
 			storage.NewTierConfig().
-				WithBdevClass(storage.ClassDcpm.String()).
+				WithStorageClass(storage.ClassDcpm.String()).
 				WithScmMountPoint(goodMountPoint).
 				WithScmDeviceList("/dev/foo"),
 		)
@@ -224,7 +224,7 @@ func TestEngineInstance_NeedsScmFormat(t *testing.T) {
 		"check dcpm fails (missing device)": {
 			engineCfg: engine.MockConfig().WithStorage(
 				storage.NewTierConfig().
-					WithBdevClass(storage.ClassDcpm.String()).
+					WithStorageClass(storage.ClassDcpm.String()).
 					WithScmMountPoint(goodMountPoint)),
 			expErr: storage.ErrInvalidDcpmCount,
 		},
@@ -244,7 +244,7 @@ func TestEngineInstance_NeedsScmFormat(t *testing.T) {
 				nil)
 			instance := NewEngineInstance(log, mp, nil, runner)
 
-			gotNeedsFormat, gotErr := instance.NeedsScmFormat()
+			gotNeedsFormat, gotErr := instance.GetStorage().ScmNeedsFormat()
 			common.CmpErr(t, tc.expErr, gotErr)
 			if diff := cmp.Diff(tc.expNeedsFormat, gotNeedsFormat); diff != "" {
 				t.Fatalf("unexpected needs format (-want, +got):\n%s\n", diff)
@@ -280,7 +280,7 @@ func TestIOEngineInstance_awaitStorageReady(t *testing.T) {
 	errStarted := errors.New("already started")
 	dcpmCfg := engine.MockConfig().WithStorage(
 		storage.NewTierConfig().
-			WithBdevClass(storage.ClassDcpm.String()).
+			WithStorageClass(storage.ClassDcpm.String()).
 			WithScmMountPoint("/mnt/test").
 			WithScmDeviceList("/dev/foo"),
 	)

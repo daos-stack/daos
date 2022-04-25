@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2019-2021 Intel Corporation.
+ * (C) Copyright 2019-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -109,6 +109,8 @@ D_CASSERT(sizeof(((struct dtx_cf_rec_bundle *)0)->dcrb_rank) +
 	  sizeof(((struct dtx_cf_rec_bundle *)0)->dcrb_tag) ==
 	  sizeof(((struct dtx_cf_rec_bundle *)0)->dcrb_key));
 
+uint32_t dtx_rpc_helper_thd;
+
 static void
 dtx_req_cb(const struct crt_cb_info *cb_info)
 {
@@ -196,7 +198,7 @@ dtx_req_cb(const struct crt_cb_info *cb_info)
 			/* The leader does not have related DTX info, we may miss related DTX abort
 			 * request, let's abort it locally.
 			 */
-			rc1 = vos_dtx_abort(dra->dra_cont->sc_hdl, &dsp->dsp_xid, DAOS_EPOCH_MAX);
+			rc1 = vos_dtx_abort(dra->dra_cont->sc_hdl, &dsp->dsp_xid, dsp->dsp_epoch);
 			if (rc1 < 0 && rc1 != -DER_NONEXIST && dra->dra_abt_list != NULL)
 				d_list_add_tail(&dsp->dsp_link, dra->dra_abt_list);
 			else
@@ -487,8 +489,6 @@ btr_ops_t dbtree_dtx_cf_ops = {
 };
 
 #define DTX_CF_BTREE_ORDER	20
-/* The threshold for using helper ULT when handle DTX RPC. */
-#define DTX_RPC_HELPER_THD	10
 
 static int
 dtx_classify_one(struct ds_pool *pool, daos_handle_t tree, d_list_t *head,
@@ -649,7 +649,8 @@ dtx_rpc_helper(void *arg)
 static int
 dtx_rpc_prep(struct ds_cont_child *cont, d_list_t *head, struct btr_root *tree_root,
 	     daos_handle_t *tree_hdl, struct dtx_req_args *dra, ABT_thread *helper,
-	     struct dtx_id dtis[], struct dtx_entry **dtes, daos_epoch_t epoch, int count, int opc)
+	     struct dtx_id dtis[], struct dtx_entry **dtes, daos_epoch_t epoch,
+	     uint32_t count, int opc)
 {
 	d_rank_t	my_rank;
 	uint32_t	my_tgtid;
@@ -660,7 +661,9 @@ dtx_rpc_prep(struct ds_cont_child *cont, d_list_t *head, struct btr_root *tree_r
 	crt_group_rank(NULL, &my_rank);
 	my_tgtid = dss_get_module_info()->dmi_tgt_id;
 
-	if (dtes[0]->dte_mbs->dm_tgt_cnt * count >= DTX_RPC_HELPER_THD) {
+	/* Use helper ULT to handle DTX RPC if there are enough helper XS. */
+	if (dss_has_enough_helper() &&
+	    (dtes[0]->dte_mbs->dm_tgt_cnt - 1) * count >= dtx_rpc_helper_thd) {
 		struct dtx_helper_args	*dha = NULL;
 
 		D_ALLOC_PTR(dha);
@@ -880,7 +883,6 @@ dtx_refresh_internal(struct ds_cont_child *cont, int *check_count,
 		     d_list_t *abt_list, d_list_t *act_list, bool failout)
 {
 	struct ds_pool		*pool = cont->sc_pool->spc_pool;
-	struct pool_target	*target;
 	struct dtx_share_peer	*dsp;
 	struct dtx_share_peer	*tmp;
 	struct dtx_req_rec	*drr;
@@ -896,62 +898,26 @@ dtx_refresh_internal(struct ds_cont_child *cont, int *check_count,
 	crt_group_rank(NULL, &myrank);
 
 	d_list_for_each_entry_safe(dsp, tmp, check_list, dsp_link) {
-		int		leader_tgt = PO_COMP_ID_ALL;
-		int		tgt;
+		struct pool_target *target;
+		int		count = 0;
 		bool		drop = false;
-
-		if (!(dsp->dsp_mbs.dm_flags & DMF_CONTAIN_LEADER)) {
-
 again:
-			rc = ds_pool_elect_dtx_leader(pool, &dsp->dsp_oid, &dsp->dsp_mbs,
-						      pool->sp_map_version, &tgt);
-			if (rc < 0) {
-				/* Currently, for EC object, if parity node is
-				 * in rebuilding, we will get -DER_STALE, that
-				 * is not fatal, the caller or related request
-				 * sponsor can retry sometime later.
-				 */
-				D_CDEBUG(rc == -DER_STALE, DB_TRACE, DLOG_WARN,
-					 "Failed to find DTX leader for "
-					 DF_DTI", ver %d: "DF_RC"\n",
-					 DP_DTI(&dsp->dsp_xid),
-					 pool->sp_map_version, DP_RC(rc));
+		rc = dtx_leader_get(pool, &dsp->dsp_mbs, &target);
+		if (rc < 0) {
+			/**
+			 * Currently, for EC object, if parity node is
+			 * in rebuilding, we will get -DER_STALE, that
+			 * is not fatal, the caller or related request
+			 * sponsor can retry sometime later.
+			 */
+			D_WARN("Failed to find DTX leader for "DF_DTI", ver %d: "DF_RC"\n",
+			       DP_DTI(&dsp->dsp_xid), pool->sp_map_version, DP_RC(rc));
+			if (failout)
+				goto out;
 
-				if (failout)
-					goto out;
-
-				drop = true;
-				goto next;
-			}
-
-			/* Still get the same leader. That is abnormal. */
-			if (leader_tgt == tgt) {
-				D_ERROR("Get DTX leader on %d (rebuilding) for "
-					DF_DTI", that is abnormal, ver is %d\n",
-					rc, DP_DTI(&dsp->dsp_xid),
-					pool->sp_map_version);
-
-				if (failout)
-					D_GOTO(out, rc = -DER_IO);
-
-				drop = true;
-				goto next;
-			}
-
-			leader_tgt = tgt;
-		} else {
-			leader_tgt = dsp->dsp_mbs.dm_tgts[0].ddt_id;
+			drop = true;
+			goto next;
 		}
-
-		ABT_rwlock_rdlock(pool->sp_lock);
-		rc = pool_map_find_target(pool->sp_map, leader_tgt, &target);
-		if (rc != 1) {
-			D_WARN("Cannot find target %u, flags %x\n",
-			       leader_tgt, dsp->dsp_mbs.dm_flags);
-			ABT_rwlock_unlock(pool->sp_lock);
-			D_GOTO(out, rc = -DER_UNINIT);
-		}
-		ABT_rwlock_unlock(pool->sp_lock);
 
 		/* If current server is the leader, then two possible cases:
 		 *
@@ -973,8 +939,16 @@ again:
 		 * then pool map may be refreshed during that. Let's retry
 		 * to find out the new leader.
 		 */
-		if (target->ta_comp.co_status != PO_COMP_ST_UPIN)
+		if (target->ta_comp.co_status != PO_COMP_ST_UP &&
+		    target->ta_comp.co_status != PO_COMP_ST_UPIN) {
+			if (unlikely(++count % 10 == 3))
+				D_WARN("Get stale DTX leader %u/%u (st: %x) for "DF_DTI
+				       " %d times, maybe dead loop\n",
+				       target->ta_comp.co_rank, target->ta_comp.co_id,
+				       target->ta_comp.co_status, DP_DTI(&dsp->dsp_xid), count);
+
 			goto again;
+		}
 
 		d_list_for_each_entry(drr, &head, drr_link) {
 			if (drr->drr_rank == target->ta_comp.co_rank &&

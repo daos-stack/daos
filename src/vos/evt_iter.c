@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2017-2021 Intel Corporation.
+ * (C) Copyright 2017-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -109,6 +109,23 @@ evt_iter_finish(daos_handle_t ih)
 	return rc;
 }
 
+/**
+ * Since we only support visible extent probe, and sorted array will be
+ * filled with visible extent only, so let's ignore the epoch inside
+ * anchor during probe.
+ */
+static int
+evt_rect_anchor_cmp(const struct evt_rect *rt1, const struct evt_rect *rt2)
+{
+	if (rt1->rc_ex.ex_lo > rt2->rc_ex.ex_hi)
+		return 1;
+
+	if (rt1->rc_ex.ex_hi < rt2->rc_ex.ex_lo)
+		return -1;
+
+	return 0;
+}
+
 static int
 evt_iter_probe_find(struct evt_iterator *iter, const struct evt_rect *rect)
 {
@@ -119,6 +136,7 @@ evt_iter_probe_find(struct evt_iterator *iter, const struct evt_rect *rect)
 	int			 mid;
 	int			 cmp = 0;
 
+	D_ASSERT(iter->it_options & EVT_ITER_VISIBLE);
 	enta = iter->it_entries;
 	start = 0;
 	end = enta->ea_ent_nr - 1;
@@ -126,13 +144,13 @@ evt_iter_probe_find(struct evt_iterator *iter, const struct evt_rect *rect)
 	if (start == end) {
 		mid = start;
 		evt_ent2rect(&rect2, evt_ent_array_get(enta, mid));
-		cmp = evt_rect_cmp(rect, &rect2);
+		cmp = evt_rect_anchor_cmp(rect, &rect2);
 	}
 
 	while (start != end) {
 		mid = start + ((end + 1 - start) / 2);
 		evt_ent2rect(&rect2, evt_ent_array_get(enta, mid));
-		cmp = evt_rect_cmp(rect, &rect2);
+		cmp = evt_rect_anchor_cmp(rect, &rect2);
 
 		if (cmp == 0)
 			break;
@@ -141,7 +159,7 @@ evt_iter_probe_find(struct evt_iterator *iter, const struct evt_rect *rect)
 				mid = start;
 				evt_ent2rect(&rect2,
 					     evt_ent_array_get(enta, mid));
-				cmp = evt_rect_cmp(rect, &rect2);
+				cmp = evt_rect_anchor_cmp(rect, &rect2);
 				break;
 			}
 			end = mid;
@@ -312,6 +330,7 @@ evt_iter_probe_sorted(struct evt_context *tcx, struct evt_iterator *iter,
 {
 	struct evt_entry_array	*enta;
 	struct evt_entry	*entry;
+	struct evt_filter	filter;
 	struct evt_rect		 rtmp;
 	uint32_t		 intent;
 	int			 flags = 0;
@@ -320,14 +339,24 @@ evt_iter_probe_sorted(struct evt_context *tcx, struct evt_iterator *iter,
 
 	flags = iter->it_options & EVT_VIS_MASK;
 
-	rtmp.rc_ex.ex_lo = iter->it_filter.fr_ex.ex_lo;
-	rtmp.rc_ex.ex_hi = iter->it_filter.fr_ex.ex_hi;
-	rtmp.rc_epc = DAOS_EPOCH_MAX;
-
 	enta = iter->it_entries;
 	intent = evt_iter_intent(iter);
-	rc = evt_ent_array_fill(tcx, EVT_FIND_ALL, intent, &iter->it_filter,
-				&rtmp, enta);
+	if (anchor != NULL && rect == NULL)
+		rect = (struct evt_rect *)&anchor->da_buf[0];
+	filter = iter->it_filter;
+	if (rect) {
+		if (iter->it_forward)
+			filter.fr_ex.ex_lo = max(filter.fr_ex.ex_lo, rect->rc_ex.ex_lo);
+		else
+			filter.fr_ex.ex_hi = min(filter.fr_ex.ex_hi, rect->rc_ex.ex_hi);
+	}
+
+	rtmp.rc_ex.ex_lo = filter.fr_ex.ex_lo;
+	rtmp.rc_ex.ex_hi = filter.fr_ex.ex_hi;
+	rtmp.rc_epc = DAOS_EPOCH_MAX;
+	rtmp.rc_minor_epc = EVT_MINOR_EPC_MAX;
+
+	rc = evt_ent_array_fill(tcx, EVT_FIND_ALL, intent, &filter, &rtmp, enta);
 	if (rc == 0)
 		rc = evt_ent_array_sort(tcx, enta, &iter->it_filter, flags);
 
@@ -353,12 +382,16 @@ evt_iter_probe_sorted(struct evt_context *tcx, struct evt_iterator *iter,
 		return -DER_NOSYS;
 	}
 
-	rect = rect ? rect : (struct evt_rect *)&anchor->da_buf[0];
 	/** If entry doesn't exist, it will return next entry */
 	index = evt_iter_probe_find(iter, rect);
 	if (index == -1)
 		return -DER_NONEXIST;
+
 	iter->it_index = index;
+	entry = evt_ent_array_get(iter->it_entries, index);
+
+	D_DEBUG(DB_TRACE, "probe ent "DF_EXT" Update ent "DF_EXT"\n",
+		DP_EXT(&rect->rc_ex), DP_EXT(&entry->en_sel_ext));
 out:
 	iter->it_state = EVT_ITER_READY;
 	return evt_iter_skip(tcx, iter);

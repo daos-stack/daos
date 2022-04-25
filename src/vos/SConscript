@@ -7,7 +7,7 @@ FILES = ["evt_iter.c", "vos_common.c", "vos_iterator.c", "vos_io.c",
          "vos_obj_cache.c", "vos_obj_index.c", "vos_tree.c", "evtree.c",
          "vos_dtx.c", "vos_query.c", "vos_overhead.c",
          "vos_dtx_iter.c", "vos_gc.c", "vos_ilog.c", "ilog.c", "vos_ts.c",
-         "lru_array.c", "vos_space.c", "sys_db.c", "vos_csum_recalc.c"]
+         "lru_array.c", "vos_space.c", "sys_db.c", "vos_policy.c", "vos_csum_recalc.c"]
 
 def build_vos(env, standalone):
     """build vos"""

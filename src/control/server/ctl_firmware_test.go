@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2021 Intel Corporation.
+// (C) Copyright 2020-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -94,7 +94,7 @@ func TestCtlSvc_FirmwareQuery(t *testing.T) {
 				QueryScm: true,
 			},
 			smbc: &scm.MockBackendConfig{
-				DiscoverErr: errors.New("mock discovery failed"),
+				GetModulesErr: errors.New("mock discovery failed"),
 			},
 			expErr: errors.New("mock discovery failed"),
 		},
@@ -112,7 +112,7 @@ func TestCtlSvc_FirmwareQuery(t *testing.T) {
 				QueryScm: true,
 			},
 			smbc: &scm.MockBackendConfig{
-				DiscoverRes:          mockSCM,
+				GetModulesRes:        mockSCM,
 				GetFirmwareStatusRes: testFWInfo,
 			},
 			expResp: &ctlpb.FirmwareQueryResp{
@@ -146,7 +146,7 @@ func TestCtlSvc_FirmwareQuery(t *testing.T) {
 				QueryScm: true,
 			},
 			smbc: &scm.MockBackendConfig{
-				DiscoverRes:          mockSCM,
+				GetModulesRes:        mockSCM,
 				GetFirmwareStatusErr: errors.New("mock query"),
 			},
 			expResp: &ctlpb.FirmwareQueryResp{
@@ -172,7 +172,7 @@ func TestCtlSvc_FirmwareQuery(t *testing.T) {
 				FirmwareRev: "FwRev0",
 			},
 			smbc: &scm.MockBackendConfig{
-				DiscoverRes:          mockSCM,
+				GetModulesRes:        mockSCM,
 				GetFirmwareStatusRes: testFWInfo,
 			},
 			expResp: &ctlpb.FirmwareQueryResp{
@@ -193,7 +193,7 @@ func TestCtlSvc_FirmwareQuery(t *testing.T) {
 				ModelID:  "PartNumber1",
 			},
 			smbc: &scm.MockBackendConfig{
-				DiscoverRes:          mockSCM,
+				GetModulesRes:        mockSCM,
 				GetFirmwareStatusRes: testFWInfo,
 			},
 			expResp: &ctlpb.FirmwareQueryResp{
@@ -214,7 +214,7 @@ func TestCtlSvc_FirmwareQuery(t *testing.T) {
 				DeviceIDs: []string{"Device1", "Device2"},
 			},
 			smbc: &scm.MockBackendConfig{
-				DiscoverRes:          mockSCM,
+				GetModulesRes:        mockSCM,
 				GetFirmwareStatusRes: testFWInfo,
 			},
 			expResp: &ctlpb.FirmwareQueryResp{
@@ -322,7 +322,7 @@ func TestCtlSvc_FirmwareQuery(t *testing.T) {
 				QueryScm:  true,
 			},
 			smbc: &scm.MockBackendConfig{
-				DiscoverRes:          mockSCM,
+				GetModulesRes:        mockSCM,
 				GetFirmwareStatusRes: testFWInfo,
 			},
 			bmbc: &bdev.MockBackendConfig{
@@ -361,7 +361,7 @@ func TestCtlSvc_FirmwareQuery(t *testing.T) {
 				QueryScm:  true,
 			},
 			smbc: &scm.MockBackendConfig{
-				DiscoverRes: storage.ScmModules{},
+				GetModulesRes: storage.ScmModules{},
 			},
 			bmbc: &bdev.MockBackendConfig{
 				ScanRes: &storage.BdevScanResponse{Controllers: testNVMeDevs},
@@ -377,7 +377,7 @@ func TestCtlSvc_FirmwareQuery(t *testing.T) {
 				QueryScm:  true,
 			},
 			smbc: &scm.MockBackendConfig{
-				DiscoverRes:          mockSCM,
+				GetModulesRes:        mockSCM,
 				GetFirmwareStatusRes: testFWInfo,
 			},
 			bmbc: &bdev.MockBackendConfig{},
@@ -415,7 +415,7 @@ func TestCtlSvc_FirmwareQuery(t *testing.T) {
 				FirmwareRev: "FWRev0",
 			},
 			smbc: &scm.MockBackendConfig{
-				DiscoverRes:          mockSCM,
+				GetModulesRes:        mockSCM,
 				GetFirmwareStatusRes: testFWInfo,
 			},
 			bmbc: &bdev.MockBackendConfig{
@@ -441,7 +441,7 @@ func TestCtlSvc_FirmwareQuery(t *testing.T) {
 				ModelID:   "model-0",
 			},
 			smbc: &scm.MockBackendConfig{
-				DiscoverRes:          mockSCM,
+				GetModulesRes:        mockSCM,
 				GetFirmwareStatusRes: testFWInfo,
 			},
 			bmbc: &bdev.MockBackendConfig{
@@ -463,7 +463,7 @@ func TestCtlSvc_FirmwareQuery(t *testing.T) {
 				DeviceIDs: []string{"0000:80:00.1", "Device0", "0000:80:00.2"},
 			},
 			smbc: &scm.MockBackendConfig{
-				DiscoverRes:          mockSCM,
+				GetModulesRes:        mockSCM,
 				GetFirmwareStatusRes: testFWInfo,
 			},
 			bmbc: &bdev.MockBackendConfig{
@@ -558,7 +558,7 @@ func TestCtlSvc_FirmwareUpdate(t *testing.T) {
 				FirmwarePath: "/some/path",
 			},
 			smbc: &scm.MockBackendConfig{
-				DiscoverErr: errors.New("mock discovery failed"),
+				GetModulesErr: errors.New("mock discovery failed"),
 			},
 			expErr: errors.New("mock discovery failed"),
 		},
@@ -576,7 +576,7 @@ func TestCtlSvc_FirmwareUpdate(t *testing.T) {
 				FirmwarePath: "/some/path",
 			},
 			smbc: &scm.MockBackendConfig{
-				DiscoverRes:       mockSCM,
+				GetModulesRes:     mockSCM,
 				UpdateFirmwareErr: nil,
 			},
 			expResp: &ctlpb.FirmwareUpdateResp{
@@ -599,7 +599,7 @@ func TestCtlSvc_FirmwareUpdate(t *testing.T) {
 				FirmwarePath: "/some/path",
 			},
 			smbc: &scm.MockBackendConfig{
-				DiscoverRes:       mockSCM,
+				GetModulesRes:     mockSCM,
 				UpdateFirmwareErr: errors.New("mock update"),
 			},
 			expResp: &ctlpb.FirmwareUpdateResp{
@@ -626,7 +626,7 @@ func TestCtlSvc_FirmwareUpdate(t *testing.T) {
 				FirmwareRev:  "FWRev2",
 			},
 			smbc: &scm.MockBackendConfig{
-				DiscoverRes:       mockSCM,
+				GetModulesRes:     mockSCM,
 				UpdateFirmwareErr: nil,
 			},
 			expResp: &ctlpb.FirmwareUpdateResp{
@@ -644,7 +644,7 @@ func TestCtlSvc_FirmwareUpdate(t *testing.T) {
 				ModelID:      "PartNumber1",
 			},
 			smbc: &scm.MockBackendConfig{
-				DiscoverRes:       mockSCM,
+				GetModulesRes:     mockSCM,
 				UpdateFirmwareErr: nil,
 			},
 			expResp: &ctlpb.FirmwareUpdateResp{
@@ -662,7 +662,7 @@ func TestCtlSvc_FirmwareUpdate(t *testing.T) {
 				DeviceIDs:    []string{"Device1", "Device2"},
 			},
 			smbc: &scm.MockBackendConfig{
-				DiscoverRes:       mockSCM,
+				GetModulesRes:     mockSCM,
 				UpdateFirmwareErr: nil,
 			},
 			expResp: &ctlpb.FirmwareUpdateResp{

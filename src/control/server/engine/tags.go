@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2021 Intel Corporation.
+// (C) Copyright 2019-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -189,11 +189,13 @@ func parseCmdTags(in interface{}, tagFilter string, joiner joinFn, seenRefs refM
 			continue
 		}
 
-		nested, err := parseCmdTags(fVal.Interface(), tagFilter, joiner, seenRefs)
-		if err != nil {
-			return nil, err
+		if fVal.CanInterface() {
+			nested, err := parseCmdTags(fVal.Interface(), tagFilter, joiner, seenRefs)
+			if err != nil {
+				return nil, err
+			}
+			out = append(out, nested...)
 		}
-		out = append(out, nested...)
 	}
 
 	return

@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2015-2021 Intel Corporation.
+ * (C) Copyright 2015-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -172,7 +172,7 @@ daos_tx_hdl2epoch(daos_handle_t th, daos_epoch_t *epoch);
  * \param[in]	opts	(reserved) Initialization options
  */
 static inline int
-daos_anchor_init(daos_anchor_t *anchor, unsigned int opts)
+daos_anchor_init(daos_anchor_t *anchor, __attribute__((unused)) unsigned int opts)
 {
 	daos_anchor_t	_anchor = DAOS_ANCHOR_INIT;
 
@@ -187,7 +187,7 @@ daos_anchor_init(daos_anchor_t *anchor, unsigned int opts)
  * \param[in]	anchor	Anchor to be finialized
  */
 static inline void
-daos_anchor_fini(daos_anchor_t *anchor)
+daos_anchor_fini(__attribute__((unused)) daos_anchor_t *anchor)
 {
 	/* NOOP for now, might need to free memory */
 }

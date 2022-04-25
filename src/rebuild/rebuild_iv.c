@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2017-2021 Intel Corporation.
+ * (C) Copyright 2017-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -140,12 +140,12 @@ rebuild_iv_ent_update(struct ds_iv_entry *entry, struct ds_iv_key *key,
 				rgt->rgt_status.rs_fail_rank = src_iv->riv_rank;
 		}
 		D_DEBUG(DB_TRACE, "update rebuild "DF_UUID" ver %d "
-			"toberb_obj/rb_obj/rec/global done/status/rank "
+			"toberb_obj/rb_obj/rec/global state/status/rank "
 			DF_U64"/"DF_U64"/"DF_U64"/%d/%d/%d\n",
 			DP_UUID(rgt->rgt_pool_uuid), rgt->rgt_rebuild_ver,
 			rgt->rgt_status.rs_toberb_obj_nr,
 			rgt->rgt_status.rs_obj_nr, rgt->rgt_status.rs_rec_nr,
-			rgt->rgt_status.rs_done, rgt->rgt_status.rs_errno,
+			rgt->rgt_status.rs_state, rgt->rgt_status.rs_errno,
 			src_iv->riv_rank);
 	}
 	rgt_put(rgt);
@@ -170,9 +170,10 @@ rebuild_iv_ent_refresh(struct ds_iv_entry *entry, struct ds_iv_key *key,
 	dst_iv->riv_global_done = src_iv->riv_global_done;
 	dst_iv->riv_global_scan_done = src_iv->riv_global_scan_done;
 	dst_iv->riv_stable_epoch = src_iv->riv_stable_epoch;
+	dst_iv->riv_global_dtx_resyc_version = src_iv->riv_global_dtx_resyc_version;
 
 	if (dst_iv->riv_global_done || dst_iv->riv_global_scan_done ||
-	    dst_iv->riv_stable_epoch) {
+	    dst_iv->riv_stable_epoch || dst_iv->riv_dtx_resyc_version) {
 		struct rebuild_tgt_pool_tracker *rpt;
 
 		rpt = rpt_lookup(src_iv->riv_pool_uuid, src_iv->riv_ver);
@@ -184,11 +185,11 @@ rebuild_iv_ent_refresh(struct ds_iv_entry *entry, struct ds_iv_key *key,
 			return 0;
 		}
 
-		D_DEBUG(DB_REBUILD, DF_UUID" rebuild status gsd/gd %d/%d"
-			" stable eph "DF_U64"\n",
-			 DP_UUID(src_iv->riv_pool_uuid),
-			 dst_iv->riv_global_scan_done,
-			 dst_iv->riv_global_done, dst_iv->riv_stable_epoch);
+		D_DEBUG(DB_REBUILD, DF_UUID"/%u rebuild status gsd/gd %d/%d"
+			" stable eph "DF_U64" resync ver %u\n",
+			DP_UUID(src_iv->riv_pool_uuid), src_iv->riv_ver,
+			dst_iv->riv_global_scan_done, dst_iv->riv_global_done,
+			dst_iv->riv_stable_epoch, dst_iv->riv_dtx_resyc_version);
 
 		if (rpt->rt_stable_epoch == 0)
 			rpt->rt_stable_epoch = dst_iv->riv_stable_epoch;
@@ -198,6 +199,7 @@ rebuild_iv_ent_refresh(struct ds_iv_entry *entry, struct ds_iv_key *key,
 			       dst_iv->riv_stable_epoch);
 		rpt->rt_global_done = dst_iv->riv_global_done;
 		rpt->rt_global_scan_done = dst_iv->riv_global_scan_done;
+		rpt->rt_global_dtx_resync_version = dst_iv->riv_global_dtx_resyc_version;
 		rpt_put(rpt);
 	}
 

@@ -3,7 +3,7 @@ hosts:
     - server-A
     - server-B
 
-timeout: 140
+timeout: 320
 
 server_config:
   servers:

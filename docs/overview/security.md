@@ -42,7 +42,7 @@ administrative tool) is authenticated by means of a certificate generated for
 that component by the system administrator. All of the component certificates
 must be generated with the same root certificate and distributed to the
 appropriate DAOS nodes, as described in the
-[DAOS Administration Guide](https://daos-stack.github.io/admin/deployment/#certificate-configuration).
+[DAOS Administration Guide](https://docs.daos.io/v2.2/admin/deployment/#certificate-configuration).
 
 DAOS components identify one another over the DAOS management network via
 gRPC over mutually-authenticated TLS using their respective component
@@ -54,7 +54,7 @@ certificates. DAOS verifies the certificate chain, as well as the Common Name
 Client authorization for resources is controlled by the Access Control List
 (ACL) on the resource. Authorization on the management network is
 achieved by settings on the
-[certificates](https://daos-stack.github.io/admin/deployment/#certificate-configuration)
+[certificates](https://docs.daos.io/v2.2/admin/deployment/#certificate-configuration)
 that are generated while setting up the DAOS system.
 
 ### Component Certificates
@@ -78,7 +78,7 @@ The permissions of a handle last for the duration of its existence, similar to
 an open file descriptor in a POSIX system. A handle cannot currently be revoked.
 
 A DAOS ACL is composed of zero or more Access Control Entries (ACEs). The ACEs
-are the [rules](https://daos-stack.github.io/overview/security/#enforcement)
+are the [rules](https://docs.daos.io/v2.2/overview/security/#enforcement)
 used to grant or deny privileges to a user who requests access to a resource.
 
 #### Access Control Entries

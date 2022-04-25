@@ -1,16 +1,18 @@
 #!/usr/bin/python
 """
-(C) Copyright 2021 Intel Corporation.
+(C) Copyright 2021-2022 Intel Corporation.
 
 SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 from logging import getLogger
 import os
+import re
 
 from ClusterShell.NodeSet import NodeSet
 
 from command_utils_base import FormattedParameter, CommandWithParameters
-from command_utils import YamlCommand, CommandWithSubCommand, CommandFailure
+from command_utils import YamlCommand, CommandWithSubCommand
+from exception_utils import CommandFailure
 from general_utils import get_display_size, human_to_bytes
 
 
@@ -32,7 +34,7 @@ class DaosServerCommand(YamlCommand):
 
     DEFAULT_CONFIG_FILE = os.path.join(os.sep, "etc", "daos", "daos_server.yml")
 
-    def __init__(self, path="", yaml_cfg=None, timeout=30):
+    def __init__(self, path="", yaml_cfg=None, timeout=45):
         """Create a daos_server command object.
 
         Args:
@@ -40,7 +42,7 @@ class DaosServerCommand(YamlCommand):
             yaml_cfg (YamlParameters, optional): yaml configuration parameters.
                 Defaults to None.
             timeout (int, optional): number of seconds to wait for patterns to
-                appear in the subprocess output. Defaults to 30 seconds.
+                appear in the subprocess output. Defaults to 45 seconds.
         """
         super().__init__(
             "/run/daos_server/*", "daos_server", path, yaml_cfg, timeout)
@@ -297,7 +299,6 @@ class DaosServerCommand(YamlCommand):
                 self.scm_only = FormattedParameter("--scm-only", False)
                 self.reset = FormattedParameter("--reset", False)
                 self.force = FormattedParameter("--force", False)
-                self.enable_vmd = FormattedParameter("--enable-vmd", False)
 
 class DaosServerInformation():
     """An object that stores the daos_server storage and network scan data."""
@@ -519,8 +520,15 @@ class DaosServerInformation():
             storage_capacity["nvme"].append(0)
             for device in bdev_list:
                 if device in device_capacity["nvme"]:
-                    storage_capacity["nvme"][-1] += min(
-                        device_capacity["nvme"][device])
+                    storage_capacity["nvme"][-1] += min(device_capacity["nvme"][device])
+                else:
+                    # VMD controlled devices include the controller address at the beginning of
+                    # their address, e.g. "0000:85:05.5" -> "850505:01:00.0"
+                    address_split = [int(x, 16) for x in re.split(r":|\.", device)]
+                    vmd_device = "{1:02x}{2:02x}{3:02x}:".format(*address_split)
+                    for controller in device_capacity["nvme"]:
+                        if controller.startswith(vmd_device):
+                            storage_capacity["nvme"][-1] += min(device_capacity["nvme"][controller])
 
             # Get the SCM storage configuration for this engine
             scm_size = engine_param.get_value("scm_size")

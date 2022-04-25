@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2021 Intel Corporation.
+// (C) Copyright 2019-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -147,6 +147,26 @@ func MockNvmeControllers(length int) NvmeControllers {
 	return result
 }
 
+// MockNvmeAioFile returns struct representing an emulated NVMe AIO-file device.
+func MockNvmeAioFile(varIdx ...int32) *NvmeAioDevice {
+	idx := common.GetIndex(varIdx...)
+
+	return &NvmeAioDevice{
+		Path: concat("/tmp/daos-bdev-", idx),
+		Size: uint64(humanize.GByte * idx),
+	}
+}
+
+// MockNvmeAioKdev returns struct representing an emulated NVMe AIO-kdev device.
+func MockNvmeAioKdev(varIdx ...int32) *NvmeAioDevice {
+	idx := common.GetIndex(varIdx...)
+
+	return &NvmeAioDevice{
+		Path: concat("/dev/sda", idx),
+		Size: uint64(humanize.GByte * idx),
+	}
+}
+
 // MockScmModule returns struct with examples values.
 func MockScmModule(varIdx ...int32) *ScmModule {
 	idx := uint32(common.GetIndex(varIdx...))
@@ -206,7 +226,7 @@ func MockScmNamespace(varIdx ...int32) *ScmNamespace {
 func MockProvider(log logging.Logger, idx int, engineStorage *Config, sys SystemProvider, scm ScmProvider, bdev BdevProvider) *Provider {
 	p := DefaultProvider(log, idx, engineStorage)
 	p.Sys = sys
-	p.Scm = scm
+	p.scm = scm
 	p.bdev = bdev
 	return p
 }

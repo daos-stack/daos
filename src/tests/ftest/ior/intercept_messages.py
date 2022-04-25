@@ -1,6 +1,6 @@
 #!/usr/bin/python
 """
-  (C) Copyright 2019-2021 Intel Corporation.
+  (C) Copyright 2019-2022 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -33,8 +33,8 @@ class IorInterceptMessages(IorTestBase):
 
         :avocado: tags=all,full_regression
         :avocado: tags=hw,small
-        :avocado: tags=daosio,dfuse,il
-        :avocado: tags=iorinterceptmessages
+        :avocado: tags=daosio,dfuse,il,ior_intercept
+        :avocado: tags=ior_intercept_messages
         """
         d_il_report_value = self.params.get("value",
                                             "/run/tests/D_IL_REPORT/*")
@@ -67,7 +67,7 @@ class IorInterceptMessages(IorTestBase):
 
         # Intercept
         match_intercept_results = []
-        intercept_pattern = "^\[libioil\] Intercepting write*"
+        intercept_pattern = "^\[libioil\] Intercepting write*"  # noqa: W605
         compiled_ip = re.compile(intercept_pattern)
         expected_total_intercepts = self.processes * int(env['D_IL_REPORT'])
 

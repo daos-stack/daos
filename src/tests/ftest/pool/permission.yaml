@@ -18,19 +18,16 @@ pool:
     scm_size: 1000000000
     name: daos_server
 createtests:
-    createmode: !mux
-        mode_RO:
-            mode: 73
-        mode_RW:
-            mode: 146
-        mode_EX:
-            mode: 292
-        mode_ALL:
-            mode: 511
     permissions: !mux
         perm_RO:
-            perm: 0
+           perm: 0
+           exp_result: FAIL
         perm_RW:
-            perm: 1
+           perm: 1
+           exp_result: PASS
         perm_EX:
-            perm: 2
+           perm: 2
+           exp_result: PASS
+        perm_invalid:
+           perm: 777
+           exp_result: FAIL

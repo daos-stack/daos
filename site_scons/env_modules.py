@@ -1,5 +1,4 @@
-#!/usr/bin/python3
-# Copyright (c) 2019-2020 Intel Corporation
+# Copyright 2019-2022 Intel Corporation
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -69,9 +68,12 @@ class _env_module(): # pylint: disable=invalid-name
 
             return ns['_mlstatus'], stderr.decode()
 
-        exec(stdout.decode()) # nosec
+        # Should not get to this point.
+        assert False
 
-        return _mlstatus, stderr.decode() # pylint: disable=undefined-variable
+        # exec(stdout.decode()) # nosec
+
+        # return _mlstatus, stderr.decode() # pylint: disable=undefined-variable
         # pylint: enable=exec-used
 
     def _init_mpi_module(self):
@@ -84,11 +86,16 @@ class _env_module(): # pylint: disable=invalid-name
         load = []
         unload = []
 
-        for key, value in self._mpi_map.items():
-            if key == mpi:
-                load = value
-            else:
-                unload += value
+        if mpi in self._mpi_map:
+            for key, value in self._mpi_map.items():
+                if key == mpi:
+                    load = value
+                else:
+                    unload += value
+        else:
+            # Support forcing specific mpi modules
+            load.append(mpi)
+            unload = [item for value in self._mpi_map.values() for item in value if item != mpi]
 
         for to_load in load:
             if self._module_func('is-loaded', to_load)[0]:
@@ -153,10 +160,16 @@ class _env_module(): # pylint: disable=invalid-name
     def show_avail(self):
         """list available modules"""
         try:
-            if not self._module_func('avail')[0]:
+            status, output = self._module_func('avail')
+            if not status:
                 print("Modules doesn't appear to be installed")
         except subprocess.CalledProcessError:
             print("Could not invoke module avail")
+        return output
+
+    def get_map(self, key):
+        """return the mpi map"""
+        return self._mpi_map[key]
 
 def load_mpi(mpi):
     """global function to load MPI into os.environ"""
@@ -185,3 +198,15 @@ def load_mpi(mpi):
     if _env_module.env_module_init is None:
         _env_module.env_module_init = _env_module()
     return _env_module.env_module_init.load_mpi(mpi)
+
+def show_avail():
+    """ global function to show the available modules"""
+    if _env_module.env_module_init is None:
+        _env_module.env_module_init = _env_module()
+    return _env_module.env_module_init.show_avail()
+
+def get_module_list(key):
+    """ global function to show the modules that map to a key"""
+    if _env_module.env_module_init is None:
+        _env_module.env_module_init = _env_module()
+    return _env_module.env_module_init.get_map(key)

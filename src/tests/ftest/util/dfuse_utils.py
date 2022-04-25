@@ -1,13 +1,14 @@
 #!/usr/bin/python
 """
-  (C) Copyright 2019-2021 Intel Corporation.
+  (C) Copyright 2019-2022 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 
 import time
 
-from command_utils_base import CommandFailure, FormattedParameter
+from command_utils_base import FormattedParameter
+from exception_utils import CommandFailure
 from command_utils import ExecutableCommand
 from ClusterShell.NodeSet import NodeSet
 from general_utils import check_file_exists, pcmd
@@ -25,6 +26,7 @@ class DfuseCommand(ExecutableCommand):
         self.cuuid = FormattedParameter("--container {}")
         self.mount_dir = FormattedParameter("--mountpoint {}")
         self.sys_name = FormattedParameter("--sys-name {}")
+        self.thread_count = FormattedParameter("--thread-count {}")
         self.singlethreaded = FormattedParameter("--singlethread", False)
         self.foreground = FormattedParameter("--foreground", False)
         self.enable_caching = FormattedParameter("--enable-caching", False)
@@ -118,31 +120,26 @@ class Dfuse(DfuseCommand):
         command = "test -d {0} -a ! -L {0}".format(self.mount_dir.value)
         retcodes = pcmd(nodes, command, expect_rc=None)
         for retcode, hosts in list(retcodes.items()):
-            for host in hosts:
-                if retcode == 0:
-                    check_mounted.add(host)
-                else:
-                    command = "grep 'dfuse {}' /proc/mounts" .format(self.mount_dir.value)
-                    retcodes = pcmd([host], command, expect_rc=None)
-                    for ret_code, host_names in list(retcodes.items()):
-                        for node in host_names:
-                            if ret_code == 0:
-                                check_mounted.add(node)
-                            else:
-                                state["nodirectory"].add(node)
+            if retcode == 0:
+                check_mounted.add(hosts)
+            else:
+                command = "grep 'dfuse {}' /proc/mounts" .format(self.mount_dir.value)
+                retcodes = pcmd(hosts, command, expect_rc=None)
+                for ret_code, host_names in list(retcodes.items()):
+                    if ret_code == 0:
+                        check_mounted.add(host_names)
+                    else:
+                        state["nodirectory"].add(host_names)
 
         if check_mounted:
-            # Detect which hosts with mount point directories have it mounted as
-            # a fuseblk device
-            command = "stat -c %T -f {0} | grep -v fuseblk".format(
-                self.mount_dir.value)
+            # Detect which hosts with mount point directories have it mounted as a fuseblk device
+            command = "stat -c %T -f {0} | grep -v fuseblk".format(self.mount_dir.value)
             retcodes = pcmd(check_mounted, command, expect_rc=None)
             for retcode, hosts in list(retcodes.items()):
-                for host in hosts:
-                    if retcode == 1:
-                        state["mounted"].add(host)
-                    else:
-                        state["unmounted"].add(host)
+                if retcode == 1:
+                    state["mounted"].add(hosts)
+                else:
+                    state["unmounted"].add(hosts)
 
         return state
 
@@ -251,13 +248,14 @@ class Dfuse(DfuseCommand):
                 "No %s dfuse mount point directory found on %s",
                 self.mount_dir.value, self.hosts)
 
-    def run(self, check=True):
+    def run(self, check=True, bind_cores=None):
         # pylint: disable=arguments-differ
         """Run the dfuse command.
 
         Args:
             check (bool): Check if dfuse mounted properly after
                 mount is executed.
+            bind_cores (str): List of CPU cores to pass to taskset
         Raises:
             CommandFailure: In case dfuse run command fails
 
@@ -269,11 +267,18 @@ class Dfuse(DfuseCommand):
             raise CommandFailure(
                 "Dfuse missing environment variables for D_LOG_FILE")
 
+        if 'D_LOG_MASK' not in self.env:
+            self.env['D_LOG_MASK'] = 'INFO'
+
         # create dfuse dir if does not exist
         self.create_mount_point()
 
         # run dfuse command
-        cmd = "".join([self.env.get_export_str(), self.__str__()])
+        cmd = self.env.get_export_str()
+        if bind_cores:
+            cmd += 'taskset -c {} '.format(bind_cores)
+        cmd += str(self)
+        self.log.info("Command is '%s'", cmd)
         ret_code = pcmd(self.hosts, cmd, timeout=30)
 
         if 0 in ret_code:

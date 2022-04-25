@@ -256,12 +256,10 @@ dfuse_cb_readdir(fuse_req_t req, struct dfuse_obj_hdl *oh,
 		 * many entries. This is the telldir/seekdir use case.
 		 */
 
-		DFUSE_TRA_INFO(oh,
-			       "Seeking from offset %ld(%d) to %ld (index %d)",
-			       oh->doh_dre[oh->doh_dre_index].dre_offset,
-			       oh->doh_anchor_index,
-			       offset,
-			       oh->doh_dre_index);
+		DFUSE_TRA_DEBUG(oh,
+				"Seeking from offset %ld(%d) to %ld (index %d)",
+				oh->doh_dre[oh->doh_dre_index].dre_offset, oh->doh_anchor_index,
+				offset,	oh->doh_dre_index);
 
 		dfuse_readdir_reset(oh);
 		num = (uint32_t)offset - OFFSET_BASE;
