@@ -1395,8 +1395,16 @@ obj_local_rw_internal(crt_rpc_t *rpc, struct obj_io_context *ioc,
 			}
 			iod_converted = true;
 
-			if (orw->orw_flags & ORF_EC_RECOV_FROM_PARITY)
+			if (orw->orw_flags & ORF_EC_RECOV_FROM_PARITY) {
+				if (shadows == NULL) {
+					rc = -DER_IO;
+					D_ERROR(DF_UOID" ORF_EC_RECOV_FROM_PARITY should not with "
+						"NULL shadows, "DF_RC"\n", DP_UOID(orw->orw_oid),
+						DP_RC(rc));
+					goto out;
+				}
 				fetch_flags |= VOS_OF_SKIP_FETCH;
+			}
 		}
 
 		rc = vos_fetch_begin(ioc->ioc_vos_coh, orw->orw_oid,
@@ -2539,7 +2547,7 @@ again1:
 	}
 
 again2:
-	if (orw->orw_iod_array.oia_oiods != NULL && split_req == NULL && tgt_cnt != 0) {
+	if (orw->orw_iod_array.oia_oiods != NULL && split_req == NULL) {
 		rc = obj_ec_rw_req_split(orw->orw_oid, &orw->orw_iod_array,
 					 orw->orw_nr, orw->orw_start_shard,
 					 orw->orw_tgt_max, PO_COMP_ID_ALL,
