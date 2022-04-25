@@ -1,0 +1,20 @@
+hosts:
+  test_servers:
+    - server-A
+    - server-B
+    - server-C
+timeouts:
+  test_pool_query_ranks_basic: 120
+  test_pool_query_ranks_error: 120
+  test_pool_query_ranks_mgmt: 480
+server_config:
+  name: daos_server
+  servers:
+    0:
+      scm_class: ram
+      scm_mount: /mnt/daos
+      scm_size: 6
+pool:
+  name: daos_server
+  control_method: dmg
+  size: 4GB
