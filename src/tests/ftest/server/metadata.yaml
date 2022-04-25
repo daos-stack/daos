@@ -70,3 +70,5 @@ ior:
     F: "-r -R -G 1"
   objectclass:
     dfs_oclass: "SX"
+metadata:
+  mean_percent: 0.5
