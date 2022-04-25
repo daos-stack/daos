@@ -607,12 +607,12 @@ ctl_init()
 	/* waiting to sync with the following parameters
 	 * 0 - tag 0
 	 * 1 - total ctx
-	 * 5 - ping timeout
+	 * 60 - ping timeout
 	 * 150 - total timeout
 	 */
 	if (!ctl_gdata.cg_no_wait_for_ranks) {
 		rc = crtu_wait_for_ranks(ctl_gdata.cg_crt_ctx, grp, rank_list,
-					 0, 1, 5, 150);
+					 0, 1, 60, 150);
 		if (rc != 0) {
 			D_ERROR("wait_for_ranks() failed; rc=%d\n", rc);
 			D_GOTO(out, rc);

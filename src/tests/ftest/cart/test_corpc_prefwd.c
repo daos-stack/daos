@@ -180,9 +180,8 @@ int main(void)
 			assert(0);
 		}
 
-		sleep(2);
 		rc = crtu_wait_for_ranks(g_main_ctx, grp, rank_list,
-					 0, 1, 10, 100.0);
+					 0, 1, 60, 100.0);
 		if (rc != 0) {
 			D_ERROR("wait_for_ranks() failed; rc=%d\n", rc);
 			assert(0);

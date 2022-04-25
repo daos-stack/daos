@@ -127,7 +127,7 @@ test_run(void)
 					 rank_list,
 					 test_g.t_srv_ctx_num - 1,
 					 test_g.t_srv_ctx_num,
-					 5,
+					 60,
 					 test_g.t_wait_ranks_time);
 		D_ASSERTF(rc == 0, "wait_for_ranks() failed; rc=%d\n", rc);
 	}
