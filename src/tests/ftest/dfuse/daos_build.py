@@ -93,7 +93,7 @@ class DaosBuild(DfuseTestBase):
         intercept = self.params.get('use_intercept', '/run/intercept/*', default=False)
 
         remote_env = OrderedDict()
-        remote_env['PATH'] = f'$PATH:{mount_dir}/venv/bin'
+        remote_env['PATH'] = f'{mount_dir}/venv/bin:$PATH'
         remote_env['VIRTUAL_ENV'] = f'VIRTUAL_ENV={mount_dir}/venv'
 
         if intercept:
@@ -114,6 +114,7 @@ class DaosBuild(DfuseTestBase):
                 f'git -C {build_dir} submodule init',
                 f'git -C {build_dir} submodule update',
                 f'git -C {build_dir} checkout daos-build-test-mux',
+                'python3 -m pip install pip --upgrade',
                 f'python3 -m pip install -r {build_dir}/requirements.txt',
                 f'scons -C {build_dir} --jobs 50 build --build-deps=yes']
         for cmd in cmds:
