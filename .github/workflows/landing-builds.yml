@@ -38,7 +38,7 @@ jobs:
         include:
           - distro: ubuntu.20.04
             base: ubuntu.20.04
-            with: ubuntu.20.04
+            with: ubuntu:20.04
           - distro: rocky
             base: el.8
             with: rockylinux/rockylinux:8
@@ -141,7 +141,7 @@ jobs:
         include:
           - distro: ubuntu.20.04
             base: ubuntu.20.04
-            with: ubuntu.20.04
+            with: ubuntu:20.04
           - distro: rocky
             base: el.8
             with: rockylinux/rockylinux:8

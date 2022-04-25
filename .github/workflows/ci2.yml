@@ -17,10 +17,13 @@ jobs:
     strategy:
       matrix:
         distro: [ubuntu.20.04]
+        include:
+          - distro: ubuntu.20.04
+            with: ubuntu:20.04
     env:
       DEPS_JOBS: 10
       COMPILER: clang
-      BASE_DISTRO: ${{ matrix.distro }}
+      BASE_DISTRO: ${{ matrix.with }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v2
