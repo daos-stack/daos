@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2021 Intel Corporation.
+ * (C) Copyright 2016-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -277,7 +277,7 @@ grp_li_uri_get(struct crt_lookup_item *li, int tag)
 static int
 generate_cxi_uris(int prov_type, char *addr, int tag, struct crt_uri_item *ui)
 {
-	char		tmp_addr[CRT_ADDR_STR_MAX_LEN];
+	char		tmp_addr[CRT_ADDR_STR_MAX_LEN + 1] = {0};
 	int		i, k;
 	uint32_t	raw_addr;
 	uint32_t	raw_tag0_addr;
@@ -320,7 +320,7 @@ exit:
 static int
 generate_port_based_uris(int prov_type, char *base_addr, int tag, struct crt_uri_item *ui)
 {
-	char	tmp_addr[CRT_ADDR_STR_MAX_LEN];
+	char	tmp_addr[CRT_ADDR_STR_MAX_LEN+1] = {0};
 	int	base_port;
 	char	*p;
 	int	i, k;
