@@ -17,6 +17,7 @@ blocksize
 bool
 boolean
 bput
+Broadwell
 buf
 bullseye
 BW
@@ -36,6 +37,7 @@ config
 configs
 cp
 ctype
+ctypes
 daos
 DArray
 darray
@@ -49,6 +51,7 @@ DDict
 ddict
 debian
 debuginfo
+dependances
 deregister
 deserialize
 deserializing
@@ -62,6 +65,7 @@ dkey
 dkeys
 dmg
 doneapi
+dpdk
 dst
 dsync
 dtx
@@ -89,6 +93,7 @@ gdb
 GHA
 gid
 grp
+Haswell
 hostfile
 hostlist
 hostname
@@ -156,12 +161,15 @@ multi
 munge
 mux
 mv
+n-th
 namespace
 namespaces
 nfs
 nosec
 num
 numa
+numpy
+numpy's
 nvme
 OC
 oclass
@@ -216,6 +224,7 @@ rpaths
 rpc
 runtime
 rw
+sandybridge
 sbin
 scancel
 scm
