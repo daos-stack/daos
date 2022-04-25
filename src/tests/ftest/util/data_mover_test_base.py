@@ -98,7 +98,7 @@ class DataMoverTestBase(IorTestBase, MdtestBase):
 
         # Root directory for POSIX paths
         posix_root_map = {'self.workdir': self.workdir, 'self.tmp': self.tmp}
-        self.posix_root = MappedParameter(None, mapping=posix_root_map, default=self.tmp)
+        self.posix_root = MappedParameter(None, mapping=posix_root_map) # default will be self.tmp
 
         # Temp directory for serialize/deserialize
         self.serial_tmp_dir = self.tmp
@@ -143,6 +143,7 @@ class DataMoverTestBase(IorTestBase, MdtestBase):
         self.ddeserialize_np = self.params.get("np", "/run/ddeserialize/*", self.processes)
         self.ddeserialize_ppn = self.params.get("ppn", "/run/ddeserialize/*", self.ppn)
 
+        self.posix_root.update_default(self.tmp)
         self.posix_root.get_yaml_value("posix_root", self, "/run/datamover/*")
 
         tool = self.params.get("tool", "/run/datamover/*")
