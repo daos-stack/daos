@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2021 Intel Corporation.
+// (C) Copyright 2020-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -212,10 +212,10 @@ func (rgs RankGroups) FromMembers(members Members) error {
 		}
 		ranksSeen[m.Rank] = struct{}{}
 
-		if _, exists := ranksInState[m.State()]; !exists {
-			ranksInState[m.State()] = new(bytes.Buffer)
+		if _, exists := ranksInState[m.State]; !exists {
+			ranksInState[m.State] = new(bytes.Buffer)
 		}
-		fmt.Fprintf(ranksInState[m.State()], "%d,", m.Rank)
+		fmt.Fprintf(ranksInState[m.State], "%d,", m.Rank)
 	}
 
 	for state, ranksStrBuf := range ranksInState {

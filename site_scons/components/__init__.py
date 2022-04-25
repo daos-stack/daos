@@ -26,7 +26,6 @@ import platform
 import distro
 from prereq_tools import GitRepoRetriever
 # from prereq_tools import WebRetriever
-from prereq_tools import ProgramBinary
 
 SCONS_EXE = sys.argv[0]
 # Check if this is an ARM platform
@@ -35,8 +34,6 @@ ARM_LIST = ["ARMv7", "armeabi", "aarch64", "arm64"]
 ARM_PLATFORM = False
 if PROCESSOR.lower() in [x.lower() for x in ARM_LIST]:
     ARM_PLATFORM = True
-
-NINJA_PROG = ProgramBinary('ninja', ["ninja-build", "ninja"])
 
 
 class installed_comps():
@@ -137,6 +134,7 @@ def define_mercury(reqs):
                  '--prefix=$OFI_PREFIX',
                  '--disable-efa',
                  '--disable-psm3',
+                 '--disable-opx',
                  '--without-gdrcopy']
     if reqs.target_type == 'debug':
         ofi_build.append('--enable-debug')

@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2019-2021 Intel Corporation.
+ * (C) Copyright 2019-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -94,11 +94,11 @@ main(int argc, char **argv)
 
 	d_register_alt_assert(mock_assert);
 
-	MPI_Init(&argc, &argv);
+	par_init(&argc, &argv);
 
-	MPI_Comm_rank(MPI_COMM_WORLD, &rank);
-	MPI_Comm_size(MPI_COMM_WORLD, &size);
-	MPI_Barrier(MPI_COMM_WORLD);
+	par_rank(PAR_COMM_WORLD, &rank);
+	par_size(PAR_COMM_WORLD, &size);
+	par_barrier(PAR_COMM_WORLD);
 
 	static struct option long_options[] = {
 		{"all",		no_argument,		NULL,	'a'},
@@ -169,8 +169,7 @@ main(int argc, char **argv)
 	nr_failed = run_specified_tests(tests, rank, size, NULL, 0);
 
 exit:
-	MPI_Allreduce(&nr_failed, &nr_total_failed, 1, MPI_INT, MPI_SUM,
-		      MPI_COMM_WORLD);
+	par_allreduce(PAR_COMM_WORLD, &nr_failed, &nr_total_failed, 1, PAR_INT, PAR_SUM);
 
 	rc = daos_fini();
 	if (rc)
@@ -185,7 +184,7 @@ exit:
 				      nr_total_failed);
 	}
 
-	MPI_Finalize();
+	par_fini();
 
 	return nr_failed;
 }

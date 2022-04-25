@@ -843,7 +843,7 @@ csum_add2iods(daos_handle_t ioh, daos_iod_t *iods, uint32_t iods_nr,
 		D_DEBUG(DB_CSUM, DF_C_UOID_DKEY"Adding fetched to IOD: "
 				 DF_C_IOD", csum: "DF_CI"\n",
 			DP_C_UOID_DKEY(oid, dkey),
-			DP_C_IOD(&iods[i]), DP_CI(*dcs_csum_info_get(csum_infos, biov_csums_idx)));
+			DP_C_IOD(&iods[i]), DP_CI(*dcs_csum_info_get(csum_infos, 0)));
 		csum_infos->dcl_csum_offset += biov_csums_used;
 		rc = ds_csum_add2iod(
 			&iods[i], csummer,
@@ -1402,8 +1402,16 @@ obj_local_rw_internal(crt_rpc_t *rpc, struct obj_io_context *ioc,
 			}
 			iod_converted = true;
 
-			if (orw->orw_flags & ORF_EC_RECOV_FROM_PARITY)
+			if (orw->orw_flags & ORF_EC_RECOV_FROM_PARITY) {
+				if (shadows == NULL) {
+					rc = -DER_IO;
+					D_ERROR(DF_UOID" ORF_EC_RECOV_FROM_PARITY should not with "
+						"NULL shadows, "DF_RC"\n", DP_UOID(orw->orw_oid),
+						DP_RC(rc));
+					goto out;
+				}
 				fetch_flags |= VOS_OF_SKIP_FETCH;
+			}
 		}
 
 		rc = vos_fetch_begin(ioc->ioc_vos_coh, orw->orw_oid,
@@ -2559,7 +2567,7 @@ again1:
 	}
 
 again2:
-	if (orw->orw_iod_array.oia_oiods != NULL && split_req == NULL && tgt_cnt != 0) {
+	if (orw->orw_iod_array.oia_oiods != NULL && split_req == NULL) {
 		rc = obj_ec_rw_req_split(orw->orw_oid, &orw->orw_iod_array,
 					 orw->orw_nr, orw->orw_start_shard,
 					 orw->orw_tgt_max, PO_COMP_ID_ALL,
