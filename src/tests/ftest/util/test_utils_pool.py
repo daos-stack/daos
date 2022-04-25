@@ -489,14 +489,14 @@ class TestPool(TestDaosApiBase):
             val = locals()[key]
             if isinstance(val, list):
                 for index, item in val:
-                    checks.append((
+                    checks.extend([
                         "{}[{}]".format(key, index),
                         getattr(self.info.pi_space, key)[index],
-                        item))
+                        item])
         for key in ("ps_ntargets", "ps_padding"):
             val = locals()[key]
             if val is not None:
-                checks.append(key, getattr(self.info.pi_space, key), val)
+                checks.extend([key, getattr(self.info.pi_space, key), val])
         return self._check_info(checks)
 
     def check_pool_daos_space(self, s_total=None, s_free=None):
