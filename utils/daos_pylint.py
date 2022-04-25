@@ -48,7 +48,7 @@ def parse_file(target_file):
         vals['message'] = msg.msg
         vals['symbol'] = msg.symbol
 
-        print('AMP:{path}:{line}:{column}: {message-id}: {message} ({symbol})'.format(**vals))
+        print('{path}:{line}:{column}: {message-id}: {message} ({symbol})'.format(**vals))
         types[msg.category] += 1
         symbols[msg.symbol] += 1
 

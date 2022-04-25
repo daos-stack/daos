@@ -2,7 +2,12 @@
 
 FROM rockylinux/rockylinux:8
 
+
+RUN echo -n "echo ::group::Install packages"
+
 RUN dnf --assumeyes install python39 python39-devel gcc enchant && dnf --assumeyes clean all
+
+RUN echo -n "::end-group""
 
 #RUN dnf --assumeyes install dnf-plugins-core &&                   \
 #    dnf config-manager --save --setopt=assumeyes=True &&          \
@@ -22,12 +27,17 @@ RUN python3 -m venv /home/daos/venv
 ENV PATH=/home/daos/venv/bin:$PATH
 ENV VIRTUAL_ENV=/home/daos/venv/
 
+RUN echo -n "echo \:\:group\:\:Install pyton packages"
+
 # Install latest versions of python tools.
 # wheel is needed first to avoid a warning when installing pyyaml.
 COPY requirements.txt .
 RUN python3 -m pip --no-cache-dir install --upgrade pip && \
     python3 -m pip --no-cache-dir install wheel && \
     python3 -m pip --no-cache-dir install -r requirements.txt
+
+RUN echo -n "\:\:end-group""
+
 
 COPY --chown=daos_server:daos_server . .
 RUN mv utils/words.dict .
