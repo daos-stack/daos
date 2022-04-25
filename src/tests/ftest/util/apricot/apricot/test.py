@@ -332,6 +332,7 @@ class Test(avocadoTest):
         """
         return self.get_test_info()["method"]
 
+    @staticmethod
     def get_stage_name(self):
         """Get the current CI stage name.
 
