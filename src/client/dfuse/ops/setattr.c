@@ -47,7 +47,7 @@ dfuse_cb_setattr(fuse_req_t req, struct dfuse_inode_entry *ie, struct stat *attr
 		if (to_set & FUSE_SET_ATTR_UID)
 			dfs_flags |= DFS_SET_ATTR_UID;
 
-		if (to_set & FUSE_SET_ATTR_GID) {
+		if (to_set & FUSE_SET_ATTR_GID)
 			dfs_flags |= DFS_SET_ATTR_GID;
 
 		to_set &= ~(FUSE_SET_ATTR_UID | FUSE_SET_ATTR_GID);
