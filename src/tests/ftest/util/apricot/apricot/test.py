@@ -257,6 +257,13 @@ class Test(avocadoTest):
                     value = data.pop(0)
                     if name == "test_method_name":
                         skip_variant &= self.get_test_name() == value
+                    elif name == "stage_name":
+                        stage_name = self.get_stage_name()
+                        if stage_name is None:
+                            self.log.info(
+                                "Unable to get STAGE_NAME; skip variant cannot be verified: %s=%s",
+                                name, value)
+                        skip_variant &= stage_name == value
                     else:
                         skip_variant &= self.params.get(name) == value
                 except IndexError:
@@ -324,6 +331,15 @@ class Test(avocadoTest):
 
         """
         return self.get_test_info()["method"]
+
+    def get_stage_name(self):
+        """Get the current CI stage name.
+
+        Returns:
+            str: the current CI stage name or None if not set
+
+        """
+        return os.environ.get("STAGE_NAME", None)
 
     def get_elapsed_time(self):
         """Get the elapsed test time.
