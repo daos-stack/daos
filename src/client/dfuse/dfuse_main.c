@@ -538,10 +538,6 @@ main(int argc, char **argv)
 		D_GOTO(out_pool, rc = daos_errno2der(rc));
 	}
 
-	if (dfuse_info->di_multi_user) {
-		dfs->dfs_multi_user = true;
-	}
-
 	rc = dfuse_fs_start(fs_handle, dfs);
 	if (rc != -DER_SUCCESS)
 		D_GOTO(out_cont, rc);

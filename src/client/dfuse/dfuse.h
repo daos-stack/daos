@@ -214,11 +214,6 @@ struct dfuse_cont {
 	bool			dfc_data_caching;
 	bool			dfc_direct_io_disable;
 	pthread_mutex_t		dfs_read_mutex;
-
-	/** This container is multi-user, so should access uid/gid acls
-	 * on access
-	 */
-	bool			dfs_multi_user;
 };
 
 void

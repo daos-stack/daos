@@ -1045,7 +1045,7 @@ dfuse_fs_start(struct dfuse_projection_info *fs_handle, struct dfuse_cont *dfs)
 
 	args.argc = 4;
 
-	if (dfs->dfs_multi_user)
+	if (fs_handle->dpi_info->di_multi_user)
 		args.argc++;
 
 	/* These allocations are freed later by libfuse so do not use the
@@ -1072,7 +1072,7 @@ dfuse_fs_start(struct dfuse_projection_info *fs_handle, struct dfuse_cont *dfs)
 	if (!args.argv[3])
 		D_GOTO(err, rc = -DER_NOMEM);
 
-	if (dfs->dfs_multi_user) {
+	if (fs_handle->dpi_info->di_multi_user)
 		args.argv[4] = strdup("-oallow_other");
 		if (!args.argv[4])
 			D_GOTO(err, rc = -DER_NOMEM);

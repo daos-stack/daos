@@ -36,27 +36,20 @@ dfuse_cb_setattr(fuse_req_t req, struct dfuse_inode_entry *ie, struct stat *attr
 	}
 
 	if (to_set & (FUSE_SET_ATTR_GID | FUSE_SET_ATTR_UID)) {
+		/* Fuse will sometimes call chown to self and we used to ignore this but with
+		* kernel caching we can't tell if the in-memory copy is up-to-date so always
+		* send to the server although in some cases it might end up being a noop
+		*/
 		DFUSE_TRA_DEBUG(ie, "uid flags %#x uid %d gid %d",
 				(to_set & (FUSE_SET_ATTR_UID | FUSE_SET_ATTR_GID)),
 				attr->st_uid, attr->st_gid);
 
-		if (ie->ie_dfs->dfs_multi_user) {
-			if (to_set & FUSE_SET_ATTR_UID)
-				dfs_flags |= DFS_SET_ATTR_UID;
+		if (to_set & FUSE_SET_ATTR_UID)
+			dfs_flags |= DFS_SET_ATTR_UID;
 
-			if (to_set & FUSE_SET_ATTR_GID)
-				dfs_flags |= DFS_SET_ATTR_GID;
+		if (to_set & FUSE_SET_ATTR_GID) {
+			dfs_flags |= DFS_SET_ATTR_GID;
 
-		} else {
-			bool set_uid = to_set & FUSE_SET_ATTR_UID;
-			bool set_gid = to_set & FUSE_SET_ATTR_GID;
-
-			if ((set_uid && ie->ie_stat.st_uid != attr->st_uid) ||
-				(set_gid && ie->ie_stat.st_gid != attr->st_gid)) {
-				DFUSE_TRA_INFO(ie, "File uid/gid support not enabled");
-				D_GOTO(err, rc = ENOTSUP);
-			}
-		}
 		to_set &= ~(FUSE_SET_ATTR_UID | FUSE_SET_ATTR_GID);
 	}
 
