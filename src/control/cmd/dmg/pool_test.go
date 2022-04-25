@@ -958,7 +958,7 @@ func TestDmg_PoolListCmd_Errors(t *testing.T) {
 
 			PoolListCmd := new(PoolListCmd)
 			PoolListCmd.setInvoker(mi)
-			PoolListCmd.setLog(log)
+			PoolListCmd.SetLog(log)
 			PoolListCmd.setConfig(tc.ctlCfg)
 
 			gotErr := PoolListCmd.Execute(nil)
@@ -1273,7 +1273,7 @@ func TestDmg_PoolCreateAllCmd(t *testing.T) {
 
 			poolCreateCmd := new(PoolCreateCmd)
 			poolCreateCmd.setInvoker(mockInvoker)
-			poolCreateCmd.setLog(log)
+			poolCreateCmd.SetLog(log)
 			poolCreateCmd.Size = tc.StorageRatio
 
 			err := poolCreateCmd.Execute(nil)

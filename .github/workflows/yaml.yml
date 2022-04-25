@@ -6,13 +6,11 @@ name: Yamllint
 # Checks out a merge of the PR onto the target branch  so should test the code as landed, not as it
 # is in the PR.
 
-on:  # yamllint disable-line rule:truthy
+on:
   pull_request:
     paths:
       - '**/*.yaml'
       - '**/*.yml'
-      - .yamllint
-      - .github/workflows/yaml.yml
 
 jobs:
   yaml-lint:
@@ -21,6 +19,8 @@ jobs:
     steps:
       - name: Check out source repository
         uses: actions/checkout@v2
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
       - name: Set up Python environment
         uses: actions/setup-python@v3
         with:
