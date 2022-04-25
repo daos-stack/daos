@@ -16,9 +16,9 @@ WORKDIR /home/daos
 RUN python3 -m venv /home/daos/venv
 ENV PATH=/home/daos/venv/bin:$PATH
 ENV VIRTUAL_ENV=/home/daos/venv/
-RUN echo "::end-group::
+RUN echo "::end-group::"
 
-RUN echo "::group\:\:Install python packages"
+RUN echo "::group::Install python packages"
 
 # Install latest versions of python tools.
 # wheel is needed first to avoid a warning when installing pyyaml.
