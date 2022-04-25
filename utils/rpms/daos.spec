@@ -14,7 +14,7 @@
 
 Name:          daos
 Version:       2.0.2
-Release:       2%{?relval}%{?dist}
+Release:       3%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       BSD-2-Clause-Patent
@@ -81,7 +81,7 @@ BuildRequires: libisa-l_crypto-devel
 BuildRequires: libisal-devel
 BuildRequires: libisal_crypto-devel
 %endif
-BuildRequires: daos-raft-devel = 0.9.0-1394.gc81505f%{?dist}%{?dist}
+BuildRequires: daos-raft-devel = 0.9.1-1401.gc18bcb8%{?dist}
 BuildRequires: openssl-devel
 BuildRequires: libevent-devel
 BuildRequires: libyaml-devel
@@ -516,6 +516,9 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 # No files in a meta-package
 
 %changelog
+* Sun Apr 17 2022 Li Wei <wei.g.li@intel.com> 2.0.2-3
+- Update raft to 0.9.1-1401.gc18bcb8 to fix uninitialized node IDs
+
 * Fri Mar 18 2022 Johann Lombardi <johann.lombardi@intel.com> 2.0.2-2
 - Version bump to 2.0.2 (rc2)
 
