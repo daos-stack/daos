@@ -13,6 +13,7 @@ import (
 	"sort"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/pkg/errors"
 
@@ -40,6 +41,51 @@ func (euf *errUnsupportedFabric) Error() string {
 // fabric provider is not supported by this build/platform.
 func ErrUnsupportedFabric(provider string) error {
 	return &errUnsupportedFabric{provider: provider}
+}
+
+// IsFabricNotReady returns true if the supplied error is an instance of errFabricNotReady.
+func IsFabricNotReady(err error) bool {
+	_, ok := errors.Cause(err).(*errFabricNotReady)
+	return ok
+}
+
+type errFabricNotReady struct {
+	iface string
+}
+
+func (e *errFabricNotReady) Error() string {
+	return fmt.Sprintf("fabric interface %q is not ready", e.iface)
+}
+
+// ErrFabricNotReady returns an error indicating that the denoted fabric interface is not ready
+// for use.
+func ErrFabricNotReady(iface string) error {
+	return &errFabricNotReady{iface: iface}
+}
+
+// IsProviderNotOnDevice indicates whether the error is an instance of
+// errProviderNotOnDevice.
+func IsProviderNotOnDevice(err error) bool {
+	_, ok := errors.Cause(err).(*errProviderNotOnDevice)
+	return ok
+}
+
+type errProviderNotOnDevice struct {
+	provider string
+	device   string
+}
+
+func (e *errProviderNotOnDevice) Error() string {
+	return fmt.Sprintf("fabric provider %q not supported on network device %q", e.provider, e.device)
+}
+
+// ErrProviderNotOnDevice returns an error indicated that the fabric provider
+// is not available on the given network device.
+func ErrProviderNotOnDevice(provider, dev string) error {
+	return &errProviderNotOnDevice{
+		provider: provider,
+		device:   dev,
+	}
 }
 
 // FabricInterface represents basic information about a fabric interface.
@@ -344,7 +390,7 @@ func (s *FabricInterfaceSet) GetInterfaceOnNetDevice(netDev string, provider str
 		}
 	}
 
-	return nil, errors.Errorf("fabric provider %q not supported on network device %q", provider, netDev)
+	return nil, ErrProviderNotOnDevice(provider, netDev)
 }
 
 // NetDevClass represents the class of network device.
@@ -811,4 +857,81 @@ func (s *FabricScanner) CacheTopology(t *Topology) error {
 
 	s.topo = t
 	return nil
+}
+
+// FabricReadyChecker is an interface for a type that can be used to check whether a fabric
+// interface is ready.
+type FabricReadyChecker interface {
+	CheckFabricReady(string) error
+}
+
+// WaitFabricReadyParams defines the parameters for a WaitFabricReady call.
+type WaitFabricReadyParams struct {
+	Checker        FabricReadyChecker
+	FabricIfaces   []string      // Fabric interfaces that must become ready
+	IterationSleep time.Duration // Time between iterations if some interfaces aren't ready
+}
+
+// WaitFabricReady loops until either all fabric interfaces are ready, or the context is canceled.
+func WaitFabricReady(ctx context.Context, log logging.Logger, params WaitFabricReadyParams) error {
+	if common.InterfaceIsNil(params.Checker) {
+		return errors.New("nil FabricReadyChecker")
+	}
+
+	if len(params.FabricIfaces) == 0 {
+		return errors.New("no fabric interfaces requested")
+	}
+
+	params.FabricIfaces = common.DedupeStringSlice(params.FabricIfaces)
+
+	ch := make(chan error)
+	go loopFabricReady(log, params, ch)
+
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case err := <-ch:
+		return err
+	}
+}
+
+func loopFabricReady(log logging.Logger, params WaitFabricReadyParams, ch chan error) {
+	readySet := common.NewStringSet()
+	log.Debug("waiting for fabric interfaces to become ready...")
+	for {
+		for _, iface := range params.FabricIfaces {
+			// No need to check again if we marked it ready
+			if readySet.Has(iface) {
+				continue
+			}
+
+			err := params.Checker.CheckFabricReady(iface)
+
+			switch {
+			case err == nil:
+				log.Debugf("fabric interface %q is ready", iface)
+				readySet.Add(iface)
+			case !IsFabricNotReady(err):
+				log.Errorf("error while checking readiness of fabric interface %q: %s", iface, err.Error())
+				ch <- err
+				return
+			}
+		}
+
+		// All interfaces up
+		if len(readySet) == len(params.FabricIfaces) {
+			break
+		}
+
+		numNotReady := len(params.FabricIfaces) - len(readySet)
+		readyMsg := ""
+		if len(readySet) != 0 {
+			readyMsg = fmt.Sprintf("; ready: %s", readySet.String())
+		}
+		log.Errorf("%d fabric interface(s) not ready (requested: %s%s)",
+			numNotReady, strings.Join(params.FabricIfaces, ", "), readyMsg)
+		time.Sleep(params.IterationSleep)
+	}
+
+	ch <- nil
 }
