@@ -27,7 +27,7 @@
 
 Name:          daos
 Version:       2.3.100
-Release:       3%{?relval}%{?dist}
+Release:       4%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       BSD-2-Clause-Patent
@@ -511,6 +511,8 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %{_bindir}/daos_test
 %{_bindir}/dfs_test
 %{_bindir}/jobtest
+%{_bindir}/daos_gen_io_conf
+%{_bindir}/daos_run_io_conf
 %{_libdir}/libdts.so
 %{_libdir}/libdpar.so
 
@@ -528,8 +530,6 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %{_bindir}/vea_ut
 %{_bindir}/vos_tests
 %{_bindir}/vea_stress
-%{_bindir}/daos_gen_io_conf
-%{_bindir}/daos_run_io_conf
 %{_bindir}/obj_ctl
 %{_bindir}/vos_perf
 
@@ -554,6 +554,9 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 # No files in a shim package
 
 %changelog
+* Tue Apr 26 2022 Phillip Henderson <phillip.henderson@intel.com> 2.3.100-4
+- Move daos_gen_io_conf and daos_run_io_conf to daos-client-tests
+
 * Tue Apr 12 2022 Li Wei <wei.g.li@intel.com> 2.3.100-3
 - Update raft to 0.9.1-1401.gc18bcb8 to fix uninitialized node IDs
 
