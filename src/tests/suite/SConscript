@@ -117,8 +117,15 @@ def scons():
     dfstest = daos_build.program(newenv, 'dfs_test', c_files + daos_test_tgt,
                                  LIBS=['daos_common'] + libraries)
 
+    c_files = Split("""daos_debug_set_params.c""")
+    newenv.AppendUnique(CPPPATH=["#/src/client/dfs"])
+    daosdebug = daos_build.program(newenv, 'daos_debug_set_params',
+                                   c_files + daos_test_tgt,
+                                   LIBS=['daos_common'] + libraries)
+
     denv.Install('$PREFIX/bin/', daostest)
     denv.Install('$PREFIX/bin/', dfstest)
+    denv.Install('$PREFIX/bin/', daosdebug)
     denv.Install('$PREFIX/bin/io_conf', Glob('io_conf/daos_io_conf_1'))
     denv.Install('$PREFIX/bin/io_conf', Glob('io_conf/daos_io_conf_2'))
     denv.Install('$PREFIX/bin/io_conf', Glob('io_conf/daos_io_conf_3'))
