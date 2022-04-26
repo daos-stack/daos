@@ -715,15 +715,13 @@ class TestWithServers(TestWithoutServers):
             NodeSet: the set of hosts to test obtained from the test yaml
 
         """
-        reservation_env = os.environ.get("_".join(["DAOS", reservation_key.upper()]), None)
+        reservation_default = os.environ.get("_".join(["DAOS", reservation_key.upper()]), None)
 
         # Collect any host information from the test yaml
         host_data = self.params.get(yaml_key, namespace)
         partition = self.params.get(partition_key, namespace)
-        reservation = self.params.get(reservation_key, namespace, reservation_env)
-
+        reservation = self.params.get(reservation_key, namespace, reservation_default)
         if partition is not None and host_data is not None:
-            # Specifying a set of hosts and a host partition is not supported
             self.fail(
                 "Specifying both a '{}' partition and '{}' set of hosts is not supported!".format(
                     partition_key, yaml_key))
@@ -743,8 +741,7 @@ class TestWithServers(TestWithoutServers):
         # Convert the set of hosts from slurm or the yaml file into a NodeSet
         if isinstance(host_data, (list, tuple)):
             return NodeSet.fromlist(host_data)
-        else:
-            return NodeSet(host_data)
+        return NodeSet(host_data)
 
     def write_string_to_logfile(self, message):
         """Write a string to the server log.
