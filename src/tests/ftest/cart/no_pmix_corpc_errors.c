@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2018-2021 Intel Corporation.
+ * (C) Copyright 2018-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -264,6 +264,12 @@ int main(int argc, char **argv)
 	crt_rpc_t		*rpc;
 	sem_t			sem;
 	int			rc;
+
+	if (D_ON_VALGRIND) {
+		crtu_set_shutdown_delay(10);
+	} else {
+		crtu_set_shutdown_delay(2);
+	}
 
 	env_self_rank = getenv("CRT_L_RANK");
 	my_rank = atoi(env_self_rank);

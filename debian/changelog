@@ -1,8 +1,14 @@
-daos (2.3.100-4) unstable; urgency=medium
+daos (2.3.100-5) unstable; urgency=medium
   [ Phillip Henderson ]
   * Move daos_gen_io_conf and daos_run_io_conf to daos-client-tests
 
  -- Phillip Henderson <phillip.henderson@intel.com>  Tue, 26 Apr 2022 17:13:00 -0400
+
+daos (2.3.100-4) unstable; urgency=medium
+  [ Lei Huang ]
+  * Update libfabric to v1.15.0rc3-1 to include critical performance patches
+
+ -- Lei Huang <lei.huang@intel.com> Wed, 20 Apr 2022 09:00:00 -0500
 
 daos (2.3.100-3) unstable; urgency=medium
   [ Li Wei ]
