@@ -137,6 +137,7 @@ def define_mercury(reqs):
                  '--prefix=$OFI_PREFIX',
                  '--disable-efa',
                  '--disable-psm3',
+                 '--disable-opx',
                  '--without-gdrcopy']
     if reqs.target_type == 'debug':
         ofi_build.append('--enable-debug')
