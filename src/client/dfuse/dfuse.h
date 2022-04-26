@@ -98,7 +98,7 @@ struct dfuse_obj_hdl {
 	/** Next value from anchor */
 	uint32_t			doh_anchor_index;
 
-	ATOMIC uint			doh_il_calls;
+	ATOMIC uint32_t                  doh_il_calls;
 };
 
 struct dfuse_inode_ops {
@@ -530,14 +530,20 @@ struct dfuse_inode_entry {
 	 */
 	d_list_t		ie_htl;
 
+	/** written region for truncated files (i.e. ie_truncated set) */
+	size_t                   ie_start_off;
+	size_t                   ie_end_off;
+
 	/** Reference counting for the inode.
 	 * Used by the hash table callbacks
 	 */
 	ATOMIC uint		ie_ref;
 
-	/** written region for truncated files (i.e. ie_truncated set) */
-	size_t			ie_start_off;
-	size_t			ie_end_off;
+	/* Number of open file descriptors for this inode */
+	ATOMIC uint32_t          ie_open_count;
+
+	/* Number of file open file descriptors using IL */
+	ATOMIC uint32_t          ie_il_count;
 
 	/** file was truncated from 0 to a certain size */
 	bool			ie_truncated;
@@ -546,13 +552,7 @@ struct dfuse_inode_entry {
 	bool			ie_root;
 
 	/** File has been unlinked from daos */
-	bool			ie_unlinked;
-
-	/* Number of open file descriptors for this inode */
-	ATOMIC uint		ie_open_count;
-
-	/* Number of file open file descriptors using IL */
-	ATOMIC uint		ie_il_count;
+	bool                     ie_unlinked;
 };
 
 /* Generate the inode to use for this dfs object.  This is generating a single

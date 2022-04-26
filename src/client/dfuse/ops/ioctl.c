@@ -19,7 +19,7 @@ handle_il_ioctl(struct dfuse_obj_hdl *oh, fuse_req_t req)
 	struct dfuse_projection_info *fs_handle = fuse_req_userdata(req);
 	struct dfuse_il_reply         il_reply  = {0};
 	int                           rc;
-	uint                          old_calls;
+	uint32_t                      old_calls;
 
 	rc = dfs_obj2id(oh->doh_ie->ie_obj, &il_reply.fir_oid);
 	if (rc)
@@ -49,9 +49,8 @@ handle_il_ioctl(struct dfuse_obj_hdl *oh, fuse_req_t req)
 		 * the inode as well
 		 */
 		old_calls = atomic_fetch_add_relaxed(&oh->doh_il_calls, 1);
-		if (old_calls == 0) {
+		if (old_calls == 0)
 			atomic_fetch_add_relaxed(&oh->doh_ie->ie_il_count, 1);
-		}
 	}
 
 	DFUSE_REPLY_IOCTL(oh, req, il_reply);
