@@ -252,9 +252,9 @@ dc_obj_list_obj_task_create(daos_handle_t oh, daos_handle_t th,
 int
 dc_pipeline_run_task_create(daos_handle_t coh, daos_handle_t oh, daos_handle_t th,
 			    daos_pipeline_t *pipeline, uint64_t flags, daos_key_t *dkey,
-			    uint32_t nr_iods_dkey, uint32_t *nr_iods, daos_iod_t *iods,
-			    daos_anchor_t *anchor, uint32_t *nr_kds, daos_key_desc_t *kds,
-			    d_sg_list_t *sgl_keys, d_sg_list_t *sgl_recx, d_sg_list_t *sgl_agg,
+			    uint32_t *nr_iods, daos_iod_t *iods, daos_anchor_t *anchor,
+			    uint32_t *nr_kds, daos_key_desc_t *kds, d_sg_list_t *sgl_keys,
+			    d_sg_list_t *sgl_recx, daos_size_t *recx_size, d_sg_list_t *sgl_agg,
 			    daos_pipeline_stats_t *stats, daos_event_t *ev, tse_sched_t *tse,
 			    tse_task_t **task);
 
