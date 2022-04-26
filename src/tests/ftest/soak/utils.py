@@ -185,7 +185,8 @@ def get_remote_dir(self, source_dir, dest_dir, host_list, shared_dir=None,
                 run_command(command, timeout=30)
             except DaosTestError as error:
                 raise SoakTestError(
-                    "<<FAILED: Soak logfiles not copied from shared area>>: {}") from error
+                    "<<FAILED: Soak logfiles not copied from shared area>>: {}".format(
+                        shared_dir_tmp)) from error
 
     else:
         # copy the remote dir on all client nodes to a shared directory
@@ -204,7 +205,8 @@ def get_remote_dir(self, source_dir, dest_dir, host_list, shared_dir=None,
                 run_command(command, timeout=30)
             except DaosTestError as error:
                 raise SoakTestError(
-                    "<<FAILED: Soak logfiles not copied from shared area>>: {}") from error
+                    "<<FAILED: Soak logfiles not copied from shared area>>: {}".format(
+                        directory)) from error
 
     if rm_remote:
         # remove the remote soak logs for this pass
@@ -217,7 +219,7 @@ def get_remote_dir(self, source_dir, dest_dir, host_list, shared_dir=None,
                 run_command(command, timeout=30)
             except DaosTestError as error:
                 raise SoakTestError(
-                    "<<FAILED: Soak logfiles removal failed>>: {}") from error
+                    "<<FAILED: Soak logfiles removal failed>>: {}".format(directory)) from error
 
 
 def write_logfile(data, name, destination):
