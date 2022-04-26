@@ -211,9 +211,9 @@ pipeline_shard_run_cb(tse_task_t *task, void *data)
 					*/
 
 		if (!strncmp(part_type, "DAOS_FILTER_FUNC_SUM", length_part_type) ||
-		    !strncmp(part_type, "DAOS_FILTER_FUNC_AVG", length_part_type))
+		    !strncmp(part_type, "DAOS_FILTER_FUNC_AVG", length_part_type)) {
 			*dst += *src;
-		else if (!strncmp(part_type, "DAOS_FILTER_FUNC_MIN", length_part_type)) {
+		} else if (!strncmp(part_type, "DAOS_FILTER_FUNC_MIN", length_part_type)) {
 			if (*src < *dst)
 				*dst = *src;
 		} else if (!strncmp(part_type, "DAOS_FILTER_FUNC_MAX", length_part_type)) {
@@ -230,9 +230,9 @@ pipeline_shard_run_cb(tse_task_t *task, void *data)
 
 	if (api_args->stats != NULL) {
 		/** user wants stats */
-		if (first_ever_cb(api_args->anchor, cb_args->shard))
+		if (first_ever_cb(api_args->anchor, cb_args->shard)) {
 			*api_args->stats = pro->stats;
-		else {
+		} else {
 			api_args->stats->nr_objs += pro->stats.nr_objs;
 			api_args->stats->nr_dkeys += pro->stats.nr_dkeys;
 			api_args->stats->nr_akeys += pro->stats.nr_akeys;
@@ -258,13 +258,11 @@ shard_pipeline_set_buffers_to_zero(d_sg_list_t *sgl)
 	uint32_t i;
 
 	if (sgl != NULL && sgl->sg_iovs != NULL) {
-		for (i = 0; i < sgl->sg_nr; i++) {
+		for (i = 0; i < sgl->sg_nr; i++)
 			sgl->sg_iovs[i].iov_len = 0;
-		}
 		sgl->sg_nr_out = 0;
 	}
 }
-
 
 #define KDS_BULK_LIMIT	128
 
@@ -361,9 +359,9 @@ shard_pipeline_run_task(tse_task_t *task)
 	pri->pri_sgl_keys     = *args->pra_api_args->sgl_keys;
 	pri->pri_sgl_recx     = *args->pra_api_args->sgl_recx;
 
-	if (!args->pra_api_args->pipeline->num_aggr_filters)
+	if (!args->pra_api_args->pipeline->num_aggr_filters) {
 		pri->pri_sgl_agg = (d_sg_list_t){.sg_nr = 0, .sg_nr_out = 0, .sg_iovs = NULL};
-	else {
+	} else {
 		pri->pri_sgl_agg = *args->pra_api_args->sgl_agg;
 	}
 	D_ASSERT(pri->pri_sgl_agg.sg_nr == args->pra_api_args->pipeline->num_aggr_filters);

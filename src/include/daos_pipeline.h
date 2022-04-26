@@ -302,9 +302,9 @@ daos_pipeline_free(daos_pipeline_t *pipeline);
  *					returned (no matter the size of \nr_kds).
  *					[out]: All returned records.
  *
- * \param[in]		recx_size	[in]: Optional prealocated array to store all the records'
+ * \param[in]		recx_size	[in]: Optional preallocated array to store all the records'
  *					sizes to be returned (at most \nr_kds x \nr_iods). When
- *					doing aggregations, or when \dkey is pased, only the sizes
+ *					doing aggregations, or when \dkey is passed, only the sizes
  *					for one dkey's records (the data corresponding to \nr_iods
  *					I/O descriptors) at most is returned (no matter the size of
  *					\nr_kds).

@@ -86,9 +86,8 @@ pipeline_fetch_record(daos_handle_t vos_coh, daos_unit_oid_t oid, struct vos_ite
 
 	/** reset buffers */
 	d_key->iov_len      = 0;
-	for (i = 0; i < nr_iods; i++) {
+	for (i = 0; i < nr_iods; i++)
 		sgl_recx[i].sg_iovs->iov_len = 0;
-	}
 
 	/** iterating over dkeys only */
 	rc = vos_iterate(&param, type, false, anchors, enum_pack_cb, NULL, d_key, NULL);

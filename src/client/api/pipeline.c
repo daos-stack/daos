@@ -64,9 +64,9 @@ daos_filter_add(daos_filter_t *filter, daos_filter_part_t *part)
 	daos_filter_part_t **ptr;
 
 	D_REALLOC_ARRAY(ptr, filter->parts, filter->num_parts, filter->num_parts + 1);
-	if (ptr == NULL) {
+	if (ptr == NULL)
 		return -DER_NOMEM;
-	}
+
 	filter->parts                    = ptr;
 
 	filter->parts[filter->num_parts] = part;
@@ -139,8 +139,8 @@ daos_pipeline_run(daos_handle_t coh, daos_handle_t oh, daos_pipeline_t *pipeline
 	rc = dc_pipeline_run_task_create(coh, oh, th, pipeline, flags, dkey, nr_iods, iods, anchor,
 					 nr_kds, kds, sgl_keys, sgl_recx, recx_size, sgl_agg,
 					 scanned, ev, NULL, &task);
-	if (rc) {
+	if (rc)
 		return rc;
-	}
+
 	return dc_task_schedule(task, true);
 }
