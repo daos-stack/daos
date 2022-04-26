@@ -6549,8 +6549,8 @@ dfs_readdir_with_filter(dfs_t *dfs, dfs_obj_t *obj, dfs_pipeline_t *dpipe, daos_
 {
 	daos_iod_t	iod;
 	daos_key_desc_t	*kds;
-	d_sg_list_t	*sgl_keys = NULL, *sgl_recs = NULL;
-	d_iov_t		*iovs_keys = NULL, *iovs_recs = NULL;
+	d_sg_list_t	sgl_keys, sgl_recs;
+	d_iov_t		iov_keys, iov_recs;
 	char		*buf_keys = NULL, *buf_recs = NULL;
 	daos_recx_t	recxs[4];
 	uint32_t	nr_iods, nr_kds, key_nr, i;
@@ -6598,57 +6598,45 @@ dfs_readdir_with_filter(dfs_t *dfs, dfs_obj_t *obj, dfs_pipeline_t *dpipe, daos_
 	if (kds == NULL)
 		return ENOMEM;
 
-	/** alloc buffers to store dkeys enumerated */
-	D_ALLOC_ARRAY(sgl_keys, nr_kds);
-	if (sgl_keys == NULL)
-		D_GOTO(out, rc = ENOMEM);
-	D_ALLOC_ARRAY(iovs_keys, nr_kds);
-	if (iovs_keys == NULL)
-		D_GOTO(out, rc = ENOMEM);
+	/** alloc buffer to store dkeys enumerated */
+	sgl_keys.sg_nr		= 1;
+	sgl_keys.sg_nr_out	= 0;
+	sgl_keys.sg_iovs	= &iov_keys;
 	D_ALLOC_ARRAY(buf_keys, nr_kds * DFS_MAX_NAME);
 	if (buf_keys == NULL)
 		D_GOTO(out, rc = ENOMEM);
+	d_iov_set(&iov_keys, buf_keys, nr_kds * DFS_MAX_NAME);
 
-	/** alloc buffers to store records enumerated */
-	D_ALLOC_ARRAY(sgl_recs, nr_kds);
-	if (sgl_recs == NULL)
-		D_GOTO(out, rc = ENOMEM);
-	D_ALLOC_ARRAY(iovs_recs, nr_kds);
-	if (iovs_recs == NULL)
-		D_GOTO(out, rc = ENOMEM);
+
+	/** alloc buffer to store records enumerated */
+	sgl_recs.sg_nr		= 1;
+	sgl_recs.sg_nr_out	= 0;
+	sgl_recs.sg_iovs	= &iov_recs;
 	D_ALLOC_ARRAY(buf_recs, nr_kds * record_len);
 	if (buf_recs == NULL)
 		D_GOTO(out, rc = ENOMEM);
-
-	for (i = 0; i < nr_kds; i++) {
-		sgl_keys[i].sg_nr	= 1;
-		sgl_keys[i].sg_nr_out	= 0;
-		sgl_keys[i].sg_iovs	= &iovs_keys[i];
-		d_iov_set(&iovs_keys[i], &buf_keys[i * DFS_MAX_NAME], DFS_MAX_NAME);
-
-		sgl_recs[i].sg_nr	= 1;
-		sgl_recs[i].sg_nr_out	= 0;
-		sgl_recs[i].sg_iovs	= &iovs_recs[i];
-		d_iov_set(&iovs_recs[i], &buf_recs[i * record_len], record_len);
-	}
+	d_iov_set(&iov_recs, buf_recs, nr_kds * record_len);
 
 	key_nr = 0;
 	*nr_scanned = 0;
 	while (!daos_anchor_is_eof(anchor)) {
 		daos_pipeline_stats_t	stats = {0};
-
+		char			*ptr1;
 		memset(buf_keys, 0, *nr * DFS_MAX_NAME);
 
 		rc = daos_pipeline_run(dfs->coh, obj->oh, &dpipe->pipeline, DAOS_TX_NONE, 0, NULL,
-				       &nr_iods, &iod, anchor, &nr_kds, kds, sgl_keys, sgl_recs,
-				       NULL, &stats, NULL);
+				       &nr_iods, &iod, anchor, &nr_kds, kds, &sgl_keys, &sgl_recs,
+				       NULL, NULL, &stats, NULL);
 		if (rc)
 			D_GOTO(out, rc = daos_der2errno(rc));
 
+		D_ASSERT(nr_iods == 1);
+		ptr1 = buf_keys;
+
 		for (i = 0; i < nr_kds; i++) {
-			char	*ptr2;
-			mode_t	mode;
-			char	*dkey = (char *) sgl_keys[i].sg_iovs->iov_buf;
+			char		*ptr2;
+			mode_t		mode;
+			char		*dkey = (char *) ptr1;
 
 			/** set the dentry name */
 			memcpy(dirs[key_nr].d_name, dkey, kds[i].kd_key_len);
@@ -6685,6 +6673,7 @@ dfs_readdir_with_filter(dfs_t *dfs, dfs_obj_t *obj, dfs_pipeline_t *dpipe, daos_
 			}
 
 			key_nr++;
+			ptr1 += kds[i].kd_key_len;
 		}
 
 		*nr_scanned += stats.nr_dkeys;
@@ -6696,10 +6685,6 @@ dfs_readdir_with_filter(dfs_t *dfs, dfs_obj_t *obj, dfs_pipeline_t *dpipe, daos_
 
 out:
 	D_FREE(kds);
-	D_FREE(sgl_keys);
-	D_FREE(iovs_keys);
-	D_FREE(sgl_recs);
-	D_FREE(iovs_recs);
 	D_FREE(buf_recs);
 	D_FREE(buf_keys);
 	return rc;
