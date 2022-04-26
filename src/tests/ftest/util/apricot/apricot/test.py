@@ -609,13 +609,13 @@ class TestWithServers(TestWithoutServers):
         # if not self.config.set_config(self):
         #     self.cancel("Test requirements not met!")
 
-        # # Create host files - In the future this should be the responsibility of
-        # # tests/classes that need a host file and hostfile_clients should not be
-        # # a property of this class.
-        # if self.hostlist_clients:
-        #     self.hostfile_clients = write_host_file(
-        #         self.hostlist_clients, self.workdir,
-        #         self.hostfile_clients_slots)
+        # Create host files - In the future this should be the responsibility of
+        # tests/classes that need a host file and hostfile_clients should not be
+        # a property of this class.
+        if self.hostlist_clients:
+            self.hostfile_clients = write_host_file(
+                self.hostlist_clients, self.workdir,
+                self.hostfile_clients_slots)
 
         # Access points to use by default when starting servers and agents
         self.access_points = self.params.get(
