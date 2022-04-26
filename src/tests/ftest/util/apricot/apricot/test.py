@@ -505,9 +505,9 @@ class TestWithoutServers(Test):
             scm_fs = pool.info.pi_space.ps_space.s_free[scm_index]
             nvme_fs = pool.info.pi_space.ps_space.s_free[nvme_index]
             if expected_scm is not None:
-                checks.extend(["scm", scm_fs, expected_scm])
+                checks.append(("scm", scm_fs, expected_scm))
             if expected_nvme is not None:
-                checks.extend(["nvme", nvme_fs, expected_nvme])
+                checks.append(("nvme", nvme_fs, expected_nvme))
             done = pool._check_info(checks)
             if done:
                 break
