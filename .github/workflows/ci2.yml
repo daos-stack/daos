@@ -19,11 +19,13 @@ jobs:
         distro: [ubuntu.20.04]
         include:
           - distro: ubuntu.20.04
+            base: ubuntu.20.04
             with: ubuntu:20.04
     env:
       DEPS_JOBS: 10
       COMPILER: clang
       BASE_DISTRO: ${{ matrix.with }}
+      DOCKER_BASE: ${{ matrix.base }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v2
@@ -47,6 +49,7 @@ jobs:
         run: docker build . --file utils/docker/Dockerfile.${{ matrix.distro }}
                             --build-arg DAOS_BUILD=no
                             --build-arg DEPS_JOBS
+                            --build-arg BASE_DISTRO
                             --build-arg DAOS_KEEP_SRC=yes
                             --tag build-image
       - name: Build and Test
