@@ -186,55 +186,7 @@ static void cont_svc_ec_agg_leader_stop(struct cont_svc *svc);
 int
 ds_cont_svc_step_up(struct cont_svc *svc)
 {
-	struct rdb_tx	tx;
-	d_iov_t		value;
-	uint32_t	version;
-	int		rc;
-
-	rc = rdb_tx_begin(svc->cs_rsvc->s_db, svc->cs_rsvc->s_term, &tx);
-	if (rc != 0)
-		goto out;
-	ABT_rwlock_rdlock(svc->cs_lock);
-
-	/* Check the layout version. */
-	d_iov_set(&value, &version, sizeof(version));
-	rc = rdb_tx_lookup(&tx, &svc->cs_root, &ds_cont_prop_version, &value);
-	if (rc == -DER_NONEXIST) {
-		ds_notify_ras_eventf(RAS_CONT_DF_INCOMPAT, RAS_TYPE_INFO,
-				     RAS_SEV_ERROR, NULL /* hwid */,
-				     NULL /* rank */, NULL /* inc */,
-				     NULL /* jobid */,
-				     &svc->cs_pool_uuid, NULL /* cont */,
-				     NULL /* objid */, NULL /* ctlop */,
-				     NULL /* data */,
-				     "incompatible layout version");
-		rc = -DER_DF_INCOMPT;
-		goto out_lock;
-	} else if (rc != 0) {
-		D_ERROR(DF_UUID": failed to look up layout version: "DF_RC"\n",
-			DP_UUID(svc->cs_pool_uuid), DP_RC(rc));
-		goto out_lock;
-	}
-	if (version < DS_CONT_MD_VERSION_LOW || version > DS_CONT_MD_VERSION) {
-		ds_notify_ras_eventf(RAS_CONT_DF_INCOMPAT, RAS_TYPE_INFO,
-				     RAS_SEV_ERROR, NULL /* hwid */,
-				     NULL /* rank */, NULL /* inc */,
-				     NULL /* jobid */,
-				     &svc->cs_pool_uuid, NULL /* cont */,
-				     NULL /* objid */, NULL /* ctlop */,
-				     NULL /* data */,
-				     "incompatible layout version: %u not in "
-				     "[%u, %u]", version,
-				     DS_CONT_MD_VERSION_LOW,
-				     DS_CONT_MD_VERSION);
-		rc = -DER_DF_INCOMPT;
-	}
-
-out_lock:
-	ABT_rwlock_unlock(svc->cs_lock);
-	rdb_tx_end(&tx);
-	if (rc != 0)
-		goto out;
+	int rc;
 
 	D_ASSERT(svc->cs_pool == NULL);
 	svc->cs_pool = ds_pool_lookup(svc->cs_pool_uuid);
@@ -245,7 +197,6 @@ out_lock:
 		D_ERROR(DF_UUID": start ec agg leader failed: "DF_RC"\n",
 			DP_UUID(svc->cs_pool_uuid), DP_RC(rc));
 
-out:
 	return rc;
 }
 
@@ -317,18 +268,8 @@ int
 ds_cont_init_metadata(struct rdb_tx *tx, const rdb_path_t *kvs,
 		      const uuid_t pool_uuid)
 {
-	d_iov_t			value;
-	uint32_t		version = DS_CONT_MD_VERSION;
 	struct rdb_kvs_attr	attr;
 	int			rc;
-
-	d_iov_set(&value, &version, sizeof(version));
-	rc = rdb_tx_update(tx, kvs, &ds_cont_prop_version, &value);
-	if (rc != 0) {
-		D_ERROR(DF_UUID": failed to initialize layout version: %d\n",
-			DP_UUID(pool_uuid), rc);
-		return rc;
-	}
 
 	attr.dsa_class = RDB_KVS_GENERIC;
 	attr.dsa_order = 16;
@@ -777,7 +718,6 @@ cont_create(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
 	d_iov_t			value;
 	struct rdb_kvs_attr	attr;
 	rdb_path_t		kvs;
-	uint64_t		ghce = 0;
 	uint64_t		alloced_oid = 0;
 	struct daos_prop_entry *lbl_ent;
 	struct daos_prop_entry *def_lbl_ent;
@@ -869,16 +809,6 @@ cont_create(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
 	rc = rdb_path_push(&kvs, &key);
 	if (rc != 0)
 		D_GOTO(out_kvs, rc);
-
-	/* Create the GHCE property. */
-	d_iov_set(&value, &ghce, sizeof(ghce));
-	rc = rdb_tx_update(tx, &kvs, &ds_cont_prop_ghce, &value);
-	if (rc != 0) {
-		D_ERROR(DF_CONT": create ghce property failed: "DF_RC"\n",
-			DP_CONT(pool_hdl->sph_pool->sp_uuid,
-				in->cci_op.ci_uuid), DP_RC(rc));
-		D_GOTO(out_kvs, rc);
-	}
 
 	/** Create the ALLOCED_OID property. */
 	d_iov_set(&value, &alloced_oid, sizeof(alloced_oid));
