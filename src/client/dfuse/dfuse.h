@@ -79,12 +79,6 @@ struct dfuse_obj_hdl {
 	/** the inode entry for the file */
 	struct dfuse_inode_entry	*doh_ie;
 
-	/** True if caching is enabled for this file. */
-	bool				doh_caching;
-
-	/* True if the file handle is writeable - used for cache invalidation */
-	bool                             doh_writeable;
-
 	/* Below here is only used for directories */
 	/** an anchor to track listing in readdir */
 	daos_anchor_t			doh_anchor;
@@ -99,6 +93,12 @@ struct dfuse_obj_hdl {
 	uint32_t			doh_anchor_index;
 
 	ATOMIC uint32_t                  doh_il_calls;
+
+	/** True if caching is enabled for this file. */
+	bool				doh_caching;
+
+	/* True if the file handle is writeable - used for cache invalidation */
+	bool                             doh_writeable;
 };
 
 struct dfuse_inode_ops {
