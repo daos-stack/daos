@@ -60,21 +60,24 @@ class DaosBuild(DfuseTestBase):
 
         cache_mode = self.params.get('name', '/run/dfuse/*')
 
+        # How long to cache things for, if caching is enabled.
+        cache_time = '300s'
+
         if cache_mode == 'writeback':
             cont_attrs['dfuse-data-cache'] = 'on'
-            cont_attrs['dfuse-attr-time'] = '60s'
-            cont_attrs['dfuse-dentry-time'] = '60s'
-            cont_attrs['dfuse-ndentry-time'] = '60s'
+            cont_attrs['dfuse-attr-time'] = cache_time
+            cont_attrs['dfuse-dentry-time'] = cache_time
+            cont_attrs['dfuse-ndentry-time'] = cache_time
         elif cache_mode == 'writethrough':
             cont_attrs['dfuse-data-cache'] = 'on'
-            cont_attrs['dfuse-attr-time'] = '60s'
-            cont_attrs['dfuse-dentry-time'] = '60s'
-            cont_attrs['dfuse-ndentry-time'] = '60s'
+            cont_attrs['dfuse-attr-time'] = cache_time
+            cont_attrs['dfuse-dentry-time'] = cache_time
+            cont_attrs['dfuse-ndentry-time'] = cache_time
         elif cache_mode == 'metadata':
             cont_attrs['dfuse-data-cache'] = 'off'
-            cont_attrs['dfuse-attr-time'] = '60s'
-            cont_attrs['dfuse-dentry-time'] = '60s'
-            cont_attrs['dfuse-ndentry-time'] = '60s'
+            cont_attrs['dfuse-attr-time'] = cache_time
+            cont_attrs['dfuse-dentry-time'] = cache_time
+            cont_attrs['dfuse-ndentry-time'] = cache_time
         elif cache_mode == 'nocache':
             cont_attrs['dfuse-data-cache'] = 'off'
             cont_attrs['dfuse-attr-time'] = '0'
