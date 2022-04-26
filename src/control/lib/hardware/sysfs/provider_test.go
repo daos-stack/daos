@@ -13,6 +13,7 @@ import (
 	"io/ioutil"
 	"os"
 	"path/filepath"
+	"strconv"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
@@ -35,17 +36,11 @@ func TestSysfs_NewProvider(t *testing.T) {
 	common.AssertEqual(t, "/sys", p.root, "")
 }
 
-func TestSysfs_Provider_GetNetDevClass(t *testing.T) {
-	testDir, cleanupTestDir := common.CreateTestDir(t)
-	defer cleanupTestDir()
+func setupTestNetDevClasses(t *testing.T, root string, devClasses map[string]uint32) {
+	t.Helper()
 
-	devs := map[string]uint32{
-		"lo":   uint32(hardware.Loopback),
-		"eth1": uint32(hardware.Ether),
-	}
-
-	for dev, class := range devs {
-		path := filepath.Join(testDir, "class", "net", dev)
+	for dev, class := range devClasses {
+		path := filepath.Join(root, "class", "net", dev)
 		os.MkdirAll(path, 0755)
 
 		f, err := os.Create(filepath.Join(path, "type"))
@@ -59,6 +54,18 @@ func TestSysfs_Provider_GetNetDevClass(t *testing.T) {
 			t.Fatal(err.Error())
 		}
 	}
+}
+
+func TestSysfs_Provider_GetNetDevClass(t *testing.T) {
+	testDir, cleanupTestDir := common.CreateTestDir(t)
+	defer cleanupTestDir()
+
+	devs := map[string]uint32{
+		"lo":   uint32(hardware.Loopback),
+		"eth1": uint32(hardware.Ether),
+	}
+
+	setupTestNetDevClasses(t, testDir, devs)
 
 	for name, tc := range map[string]struct {
 		in        string
@@ -117,8 +124,10 @@ func setupPCIDev(t *testing.T, root, pciAddr, class, dev string) string {
 		t.Fatal(err)
 	}
 
-	if err := os.Symlink(pciPath, filepath.Join(path, "device")); err != nil {
-		t.Fatal(err)
+	if dev != "" {
+		if err := os.Symlink(pciPath, filepath.Join(path, "device")); err != nil && !os.IsExist(err) {
+			t.Fatal(err)
+		}
 	}
 
 	return path
@@ -134,11 +143,11 @@ func setupClassLink(t *testing.T, root, class, devPath string) {
 		return
 	}
 
-	if err := os.Symlink(devPath, filepath.Join(classPath, filepath.Base(devPath))); err != nil {
+	if err := os.Symlink(devPath, filepath.Join(classPath, filepath.Base(devPath))); err != nil && !os.IsExist(err) {
 		t.Fatal(err)
 	}
 
-	if err := os.Symlink(classPath, filepath.Join(devPath, "subsystem")); err != nil {
+	if err := os.Symlink(classPath, filepath.Join(devPath, "subsystem")); err != nil && !os.IsExist(err) {
 		t.Fatal(err)
 	}
 }
@@ -549,6 +558,265 @@ func TestSysfs_Provider_GetFabricInterfaces(t *testing.T) {
 			); diff != "" {
 				t.Errorf("(-want, +got)\n%s\n", diff)
 			}
+		})
+	}
+}
+
+func TestSysfs_Provider_CheckFabricReady(t *testing.T) {
+	setupNet := func(t *testing.T, root string) {
+		t.Helper()
+
+		path := setupPCIDev(t, root, "0000:02:02.1", "net", "net0")
+		setupClassLink(t, root, "net", path)
+
+		setupTestNetDevClasses(t, root, map[string]uint32{
+			"net0": uint32(hardware.Ether),
+		})
+	}
+
+	setupIBPorts := func(t *testing.T, ibPath string, portState map[int]string) {
+		t.Helper()
+
+		for port, state := range portState {
+			portPath := filepath.Join(ibPath, "ports", strconv.Itoa(port))
+			if err := os.MkdirAll(portPath, 0755); err != nil {
+				t.Fatal(err)
+			}
+
+			statePath := filepath.Join(portPath, "state")
+			if err := ioutil.WriteFile(statePath, []byte(state), 0644); err != nil {
+				t.Fatal(err)
+			}
+		}
+	}
+
+	setupIBDevPath := func(t *testing.T, root, iface, domain string) string {
+		t.Helper()
+
+		ibPath := setupPCIDev(t, root, "0000:01:01.1", "infiniband", domain)
+		setupClassLink(t, root, "infiniband", ibPath)
+		netPath := setupPCIDev(t, root, "0000:01:01.1", "net", iface)
+		setupClassLink(t, root, "net", netPath)
+
+		setupTestNetDevClasses(t, root, map[string]uint32{
+			iface: uint32(hardware.Infiniband),
+		})
+
+		return ibPath
+	}
+
+	setupIB := func(t *testing.T, root string) {
+		t.Helper()
+
+		ibPath := setupIBDevPath(t, root, "ib0", "mlx0")
+
+		setupIBPorts(t, ibPath, map[int]string{
+			1: "4: ACTIVE",
+		})
+	}
+
+	setupDefault := func(t *testing.T, root string) {
+		t.Helper()
+
+		setupIB(t, root)
+		setupNet(t, root)
+	}
+
+	for name, tc := range map[string]struct {
+		setup  func(*testing.T, string)
+		p      *Provider
+		iface  string
+		expErr error
+	}{
+		"nil": {
+			iface:  "ib0",
+			expErr: errors.New("nil"),
+		},
+		"no iface": {
+			p:      &Provider{},
+			expErr: errors.New("interface name is required"),
+		},
+		"bad interface": {
+			p:      &Provider{},
+			iface:  "fake",
+			expErr: errors.New("can't determine device class"),
+		},
+		"not infiniband": {
+			setup: setupNet,
+			p:     &Provider{},
+			iface: "net0",
+		},
+		"no IB dir": {
+			setup: func(t *testing.T, root string) {
+				setupTestNetDevClasses(t, root, map[string]uint32{
+					"ib0": uint32(hardware.Infiniband),
+				})
+			},
+			p:      &Provider{},
+			iface:  "ib0",
+			expErr: errors.New("can't access Infiniband details"),
+		},
+		"no IB devices": {
+			setup: func(t *testing.T, root string) {
+				netPath := setupPCIDev(t, root, "0000:01:01.1", "net", "ib0")
+				setupClassLink(t, root, "net", netPath)
+				_ = setupPCIDev(t, root, "0000:01:01.1", "infiniband", "")
+
+				setupTestNetDevClasses(t, root, map[string]uint32{
+					"ib0": uint32(hardware.Infiniband),
+				})
+			},
+			p:      &Provider{},
+			iface:  "ib0",
+			expErr: hardware.ErrFabricNotReady("ib0"),
+		},
+		"no port info": {
+			setup: func(t *testing.T, root string) {
+				_ = setupIBDevPath(t, root, "ib0", "mlx0")
+			},
+			p:      &Provider{},
+			iface:  "ib0",
+			expErr: errors.New("unable to get ports"),
+		},
+		"no port state file": {
+			setup: func(t *testing.T, root string) {
+				ibPath := setupIBDevPath(t, root, "ib0", "mlx0")
+				portPath := filepath.Join(ibPath, "ports", "1")
+				if err := os.MkdirAll(portPath, 0755); err != nil {
+					t.Fatal(err)
+				}
+			},
+			p:      &Provider{},
+			iface:  "ib0",
+			expErr: errors.New("unable to get state"),
+		},
+		"invalid port state": {
+			setup: func(t *testing.T, root string) {
+				t.Helper()
+
+				ibPath := setupIBDevPath(t, root, "ib0", "mlx0")
+
+				setupIBPorts(t, ibPath, map[int]string{
+					1: "garbage",
+				})
+			},
+			p:      &Provider{},
+			iface:  "ib0",
+			expErr: hardware.ErrFabricNotReady("ib0"),
+		},
+		"port not ready": {
+			setup: func(t *testing.T, root string) {
+				t.Helper()
+
+				ibPath := setupIBDevPath(t, root, "ib0", "mlx0")
+
+				setupIBPorts(t, ibPath, map[int]string{
+					1: "1: DOWN",
+				})
+			},
+			p:      &Provider{},
+			iface:  "ib0",
+			expErr: hardware.ErrFabricNotReady("ib0"),
+		},
+		"success": {
+			p:     &Provider{},
+			iface: "ib0",
+		},
+		"all devs not ready": {
+			setup: func(t *testing.T, root string) {
+				t.Helper()
+
+				for dev, state := range map[string]string{
+					"mlx0_0": "1: DOWN",
+					"mlx0_1": "0: UNKNOWN",
+					"mlx0_2": "2: INITIALIZING",
+				} {
+					ibPath := setupIBDevPath(t, root, "ib0", dev)
+
+					setupIBPorts(t, ibPath, map[int]string{
+						1: state,
+					})
+				}
+			},
+			p:      &Provider{},
+			iface:  "ib0",
+			expErr: hardware.ErrFabricNotReady("ib0"),
+		},
+		"one of many devs up": {
+			setup: func(t *testing.T, root string) {
+				t.Helper()
+
+				for dev, state := range map[string]string{
+					"mlx0_0": "1: DOWN",
+					"mlx0_1": "0: UNKNOWN",
+					"mlx0_2": "4: ACTIVE",
+				} {
+					ibPath := setupIBDevPath(t, root, "ib0", dev)
+
+					setupIBPorts(t, ibPath, map[int]string{
+						1: state,
+					})
+				}
+			},
+			p:     &Provider{},
+			iface: "ib0",
+		},
+		"all ports not ready": {
+			setup: func(t *testing.T, root string) {
+				t.Helper()
+
+				ibPath := setupIBDevPath(t, root, "ib0", "mlx0")
+
+				setupIBPorts(t, ibPath, map[int]string{
+					1: "1: DOWN",
+					2: "0: UNKNOWN",
+					3: "1: DOWN",
+					4: "2: INITIALIZING",
+				})
+			},
+			p:      &Provider{},
+			iface:  "ib0",
+			expErr: hardware.ErrFabricNotReady("ib0"),
+		},
+		"at least one port up": {
+			setup: func(t *testing.T, root string) {
+				t.Helper()
+
+				ibPath := setupIBDevPath(t, root, "ib0", "mlx0")
+
+				setupIBPorts(t, ibPath, map[int]string{
+					1: "1: DOWN",
+					2: "0: UNKNOWN",
+					3: "4: ACTIVE",
+					4: "2: INITIALIZING",
+				})
+			},
+			p:     &Provider{},
+			iface: "ib0",
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(name)
+			defer common.ShowBufferOnFailure(t, buf)
+
+			testDir, cleanupTestDir := common.CreateTestDir(t)
+			defer cleanupTestDir()
+
+			if tc.p != nil {
+				tc.p.log = log
+
+				// Mock out a fake sysfs in the testDir
+				tc.p.root = testDir
+			}
+
+			if tc.setup == nil {
+				tc.setup = setupDefault
+			}
+			tc.setup(t, testDir)
+
+			err := tc.p.CheckFabricReady(tc.iface)
+
+			common.CmpErr(t, tc.expErr, err)
 		})
 	}
 }
