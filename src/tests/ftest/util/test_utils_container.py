@@ -884,8 +884,11 @@ class TestContainer(TestDaosApiBase):
         return count
 
     @fail_on(CommandFailure)
-    def get_prop(self):
+    def get_prop(self, properties=None):
         """Get container property by calling daos container get-prop.
+
+        Args:
+            properties (list): "name" field(s). Defaults to None.
 
         Returns:
             str: JSON output of daos container get-prop.
@@ -896,7 +899,8 @@ class TestContainer(TestDaosApiBase):
         """
         if self.control_method.value == self.USE_DAOS and self.daos:
             # Get container property using daos utility.
-            return self.daos.container_get_prop(pool=self.pool.uuid, cont=self.uuid)
+            return self.daos.container_get_prop(
+                pool=self.pool.uuid, cont=self.uuid, properties=properties)
 
         if self.control_method.value == self.USE_DAOS:
             self.log.error("Error: Undefined daos command")

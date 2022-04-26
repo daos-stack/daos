@@ -1490,6 +1490,8 @@ insert_segments(daos_handle_t ih, struct agg_merge_window *mw,
 		 */
 		rc = evt_insert(oiter->it_hdl, ent_in,
 				&ent_in->ei_csum.cs_csum);
+		if (rc == 1)
+			rc = 0;
 		if (rc) {
 			D_ERROR("Insert segment "DF_RECT" error: "DF_RC"\n",
 				DP_RECT(&ent_in->ei_rect), DP_RC(rc));
