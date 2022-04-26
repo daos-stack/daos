@@ -22,10 +22,10 @@ static daos_handle_t coh; /** container */
 static daos_handle_t oh;  /** object */
 
 /** DB info */
-#define NR_IODS_PER_DKEY 4
-#define STRING_MAX_LEN   10
+#define NR_IODS		4
+#define STRING_MAX_LEN	10
 
-static char *fields[NR_IODS_PER_DKEY] = {"Owner", "Species", "Sex", "Age"};
+static char *fields[NR_IODS] = {"Owner", "Species", "Sex", "Age"};
 int          nr_aggr;
 
 void
@@ -33,19 +33,19 @@ insert_example_records(void)
 {
 	int         rc;
 	d_iov_t     dkey;
-	d_sg_list_t sgls[NR_IODS_PER_DKEY];
-	d_iov_t     iovs[NR_IODS_PER_DKEY];
-	daos_iod_t  iods[NR_IODS_PER_DKEY];
+	d_sg_list_t sgls[NR_IODS];
+	d_iov_t     iovs[NR_IODS];
+	daos_iod_t  iods[NR_IODS];
 	uint32_t    i, j;
 
-	char       *name[] = {"Slim",   "Buffy",   "Claws", "Whistler",
+	char     *name[] = {"Slim",   "Buffy",   "Claws", "Whistler",
 			      "Chirpy", "Browser", "Fang",  "Fluffy"};
-	char    *owner[] = {"Benny", "Harold", "GWen", "Gwen", "Gwen", "Diane", "Benny", "Harold"};
-	char    *species[] = {"snake", "dog", "cat", "bird", "bird", "dog", "dog", "cat"};
-	char    *sex[]     = {"m", "f", "m", "m", "f", "m", "m", "f"};
-	uint64_t age[]     = {1, 10, 4, 2, 3, 2, 7, 9};
+	char     *owner[] = {"Benny", "Harold", "GWen", "Gwen", "Gwen", "Diane", "Benny", "Harold"};
+	char     *species[] = {"snake", "dog", "cat", "bird", "bird", "dog", "dog", "cat"};
+	char     *sex[]     = {"m", "f", "m", "m", "f", "m", "m", "f"};
+	uint64_t  age[]     = {1, 10, 4, 2, 3, 2, 7, 9};
 
-	void    *data[NR_IODS_PER_DKEY];
+	void      *data[NR_IODS];
 
 	data[0] = (void *)owner;
 	data[1] = (void *)species;
@@ -58,7 +58,7 @@ insert_example_records(void)
 		/** set dkey for record */
 		d_iov_set(&dkey, name[i], strlen(name[i]));
 
-		for (j = 0; j < NR_IODS_PER_DKEY - 1; j++) { /** str fields */
+		for (j = 0; j < NR_IODS - 1; j++) { /** str fields */
 			char **strdata = (char **)data[j];
 
 			printf("%s(akey)=%s%*c", fields[j], strdata[i],
@@ -75,25 +75,24 @@ insert_example_records(void)
 			iods[j].iod_recxs = NULL;
 			iods[j].iod_type  = DAOS_IOD_SINGLE;
 		}
-		uint64_t *intdata = (uint64_t *)data[NR_IODS_PER_DKEY - 1];
+		uint64_t *intdata = (uint64_t *)data[NR_IODS - 1];
 
-		printf("%s(akey)=%lu\n", fields[NR_IODS_PER_DKEY - 1], intdata[i]);
+		printf("%s(akey)=%lu\n", fields[NR_IODS - 1], intdata[i]);
 		/** akeys */
-		sgls[NR_IODS_PER_DKEY - 1].sg_nr     = 1;
-		sgls[NR_IODS_PER_DKEY - 1].sg_nr_out = 0;
-		sgls[NR_IODS_PER_DKEY - 1].sg_iovs   = &iovs[NR_IODS_PER_DKEY - 1];
-		d_iov_set(&iovs[NR_IODS_PER_DKEY - 1], &intdata[i], sizeof(uint64_t));
+		sgls[NR_IODS - 1].sg_nr     = 1;
+		sgls[NR_IODS - 1].sg_nr_out = 0;
+		sgls[NR_IODS - 1].sg_iovs   = &iovs[NR_IODS - 1];
+		d_iov_set(&iovs[NR_IODS - 1], &intdata[i], sizeof(uint64_t));
 
-		d_iov_set(&iods[NR_IODS_PER_DKEY - 1].iod_name,
-			  (void *)fields[NR_IODS_PER_DKEY - 1],
-			  strlen(fields[NR_IODS_PER_DKEY - 1]));
-		iods[NR_IODS_PER_DKEY - 1].iod_nr    = 1;
-		iods[NR_IODS_PER_DKEY - 1].iod_size  = sizeof(uint64_t);
-		iods[NR_IODS_PER_DKEY - 1].iod_recxs = NULL;
-		iods[NR_IODS_PER_DKEY - 1].iod_type  = DAOS_IOD_SINGLE;
+		d_iov_set(&iods[NR_IODS - 1].iod_name,
+			  (void *)fields[NR_IODS - 1],
+			  strlen(fields[NR_IODS - 1]));
+		iods[NR_IODS - 1].iod_nr    = 1;
+		iods[NR_IODS - 1].iod_size  = sizeof(uint64_t);
+		iods[NR_IODS - 1].iod_recxs = NULL;
+		iods[NR_IODS - 1].iod_type  = DAOS_IOD_SINGLE;
 
-		rc = daos_obj_update(oh, DAOS_TX_NONE, 0, &dkey, NR_IODS_PER_DKEY, iods, sgls,
-				     NULL);
+		rc = daos_obj_update(oh, DAOS_TX_NONE, 0, &dkey, NR_IODS, iods, sgls, NULL);
 		ASSERT(rc == 0, "Obj update failed with %d", rc);
 	}
 	printf("\n");
@@ -590,47 +589,43 @@ build_pipeline_four(daos_pipeline_t *pipeline)
 void
 run_pipeline(daos_pipeline_t *pipeline)
 {
-	daos_iod_t            *iods      = NULL;
-	daos_anchor_t          anchor;
-	uint32_t               nr_iods;
-	uint32_t               nr_kds;
-	daos_key_desc_t       *kds       = NULL;
-	d_sg_list_t            sgl_keys;
-	d_iov_t               *iov_keys  = NULL;
-	char                  *buf_keys  = NULL;
-	d_sg_list_t            sgl_recx;
-	d_iov_t               *iov_recx  = NULL;
-	char                  *buf_recx  = NULL;
-	d_sg_list_t            sgl_aggr;
-	d_iov_t               *iovs_aggr = NULL;
-	char                  *buf_aggr  = NULL;
-	daos_pipeline_stats_t  stats     = {0};
-	uint32_t               i, j;
-	int                    rc;
+	daos_iod_t             *iods      = NULL;
+	daos_anchor_t           anchor;
+	uint32_t                nr_iods;
+	uint32_t                nr_kds;
+	daos_key_desc_t        *kds       = NULL;
+	d_sg_list_t             sgl_keys;
+	d_iov_t                *iov_keys  = NULL;
+	char                   *buf_keys  = NULL;
+	d_sg_list_t             sgl_recx;
+	d_iov_t                *iov_recx  = NULL;
+	char                   *buf_recx  = NULL;
+	daos_size_t            *recx_size = NULL;
+	d_sg_list_t             sgl_aggr;
+	d_iov_t                *iovs_aggr = NULL;
+	char                   *buf_aggr  = NULL;
+	daos_pipeline_stats_t   stats     = {0};
+	uint32_t                i, j;
+	int                     rc;
 
 	/**
 	 * reading in chunks of 64 keys (at most) at a time
 	 */
 	nr_kds    = 64;
-	nr_iods   = NR_IODS_PER_DKEY * nr_kds;
+	nr_iods   = NR_IODS;
 
 	kds       = malloc(sizeof(*kds) * nr_kds);
-	iods      = calloc(nr_iods, sizeof(*iods));
+	iods      = malloc(sizeof(*iods) * nr_iods);
 
 	/**
-	 * iods:
-	 *  --  0 <= i < NR_IODS_PER_DKEY: information about what akeys to retrieve
-	 *  --  0 <= i < nr_iods         : output information about akeys retrieved
+	 * iods: information about what akeys to retrieve
 	 */
 	for (i = 0; i < nr_iods; i++) {
 		iods[i].iod_nr    = 1;
 		iods[i].iod_size  = STRING_MAX_LEN;
 		iods[i].iod_recxs = NULL;
 		iods[i].iod_type  = DAOS_IOD_SINGLE;
-		if (i < NR_IODS_PER_DKEY) {
-			/** The rest of iods are output only */
-			d_iov_set(&iods[i].iod_name, (void *)fields[i], strlen(fields[i]));
-		}
+		d_iov_set(&iods[i].iod_name, (void *)fields[i], strlen(fields[i]));
 	}
 
 	/** sgl_keys: to store the retrieved dkeys */
@@ -643,15 +638,16 @@ run_pipeline(daos_pipeline_t *pipeline)
 	iov_keys->iov_buf_len = nr_kds * STRING_MAX_LEN;
 	iov_keys->iov_len     = 0;
 
-	/** sgl_recx: to store the retrieved data for the akeys of each dkey */
+	/** sgl_recx and recx_size: to store the retrieved data for the akeys of each dkey */
 	sgl_recx.sg_nr        = 1;
 	sgl_recx.sg_nr_out    = 0;
-	iov_recx              = malloc(sizeof(*iov_recx) * nr_iods);
+	iov_recx              = malloc(sizeof(*iov_recx));
 	sgl_recx.sg_iovs      = iov_recx;
-	buf_recx              = malloc(nr_iods * STRING_MAX_LEN);
+	buf_recx              = malloc(nr_iods * nr_kds * STRING_MAX_LEN);
 	iov_recx->iov_buf     = buf_recx;
-	iov_recx->iov_buf_len = nr_iods * STRING_MAX_LEN;
+	iov_recx->iov_buf_len = nr_iods * nr_kds * STRING_MAX_LEN;
 	iov_recx->iov_len     = 0;
+	recx_size             = malloc(sizeof(*recx_size) * nr_iods * nr_kds);
 
 	/** sgl_aggr: for aggregation of data */
 	sgl_aggr.sg_nr     = nr_aggr;
@@ -677,13 +673,10 @@ run_pipeline(daos_pipeline_t *pipeline)
 
 		/** restoring value for in/out parameters */
 		nr_kds  = 64; /** trying to read 64 at a time again */
-		nr_iods = NR_IODS_PER_DKEY * nr_kds;
-		for (i = 0; i < NR_IODS_PER_DKEY; i++) {
-			iods[i].iod_size  = STRING_MAX_LEN; /** restoring iod_size to buf size */
-		}
+		nr_iods = NR_IODS;
 		/** calling pipeline run */
-		rc = daos_pipeline_run(coh, oh, pipeline, DAOS_TX_NONE, 0, NULL, NR_IODS_PER_DKEY,
-				       &nr_iods, iods, &anchor, &nr_kds, kds, &sgl_keys, &sgl_recx,
+		rc = daos_pipeline_run(coh, oh, pipeline, DAOS_TX_NONE, 0, NULL, &nr_iods, iods,
+				       &anchor, &nr_kds, kds, &sgl_keys, &sgl_recx, recx_size,
 				       &sgl_aggr, &stats, NULL);
 
 		ASSERT(rc == 0, "Pipeline run failed with %d", rc);
@@ -698,15 +691,15 @@ run_pipeline(daos_pipeline_t *pipeline)
 			       (int)(STRING_MAX_LEN - dkey_s), ' ');
 			dkey += dkey_s;
 
-			for (j = 0; j < NR_IODS_PER_DKEY - 1; j++) {
-				rec_s         = iods[j].iod_size;
+			for (j = 0; j < nr_iods - 1; j++) {
+				rec_s = recx_size[i * nr_iods + j];
 
 				printf("%.*s(akey)=%.*s%*c", (int)iods[j].iod_name.iov_len,
 				       (char *)iods[j].iod_name.iov_buf, (int)rec_s, rec,
 				       (int)(STRING_MAX_LEN - rec_s), ' ');
 				rec += rec_s;
 			}
-			printf("%.*s(akey)=%lu\n", (int)iods[NR_IODS_PER_DKEY - 1].iod_name.iov_len,
+			printf("%.*s(akey)=%lu\n", (int)iods[nr_iods - 1].iod_name.iov_len,
 			       (char *)iods[nr_iods - 1].iod_name.iov_buf, *((uint64_t *)rec));
 			rec += sizeof(uint64_t);
 		}
@@ -725,6 +718,7 @@ run_pipeline(daos_pipeline_t *pipeline)
 	free(buf_keys);
 	free(iov_recx);
 	free(buf_recx);
+	free(recx_size);
 	if (nr_aggr > 0) {
 		free(iovs_aggr);
 		free(buf_aggr);

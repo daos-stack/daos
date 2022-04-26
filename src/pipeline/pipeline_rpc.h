@@ -61,7 +61,7 @@ obj_opc_to_str(crt_opcode_t opc)
 	((crt_bulk_t)		(pri_sgl_recx_bulk)	CRT_VAR)	\
 	((uint64_t)		(pri_flags)		CRT_VAR)	\
 	((uint32_t)		(pri_nr_kds)		CRT_VAR)	\
-	((uint32_t)		(pri_nr_iods_dkey)	CRT_VAR)
+	((uint32_t)		(pri_pad32)		CRT_VAR)
 
 #define DAOS_OSEQ_PIPELINE_RUN	/* output fields */			\
 	((daos_size_t)			(pro_recx_size)	CRT_ARRAY)	\

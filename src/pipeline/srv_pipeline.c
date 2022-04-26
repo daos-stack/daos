@@ -327,9 +327,9 @@ pack_record(d_iov_t *d_key_iter, daos_iod_t *iods_iter, d_sg_list_t *sgl_recx_it
 		rc = pack_value(pack_args->recx, &idx, sgl_recx_iter[i].sg_iovs);
 		if (rc != 0)
 			return rc;
-		pack_args->recx_iov_idx = idx;
-		if (iods_iter[i].iod_type == DAOS_IOD_SINGLE)
-			pack_args->recx_size[dkey_idx * nr_iods + i] = iods_iter[i].iod_size;
+
+		pack_args->recx_iov_idx                      = idx;
+		pack_args->recx_size[dkey_idx * nr_iods + i] = iods_iter[i].iod_size;
 	}
 
 	return 0;
@@ -339,10 +339,10 @@ pack_record(d_iov_t *d_key_iter, daos_iod_t *iods_iter, d_sg_list_t *sgl_recx_it
 static int
 ds_pipeline_run(daos_handle_t vos_coh, daos_unit_oid_t oid, daos_pipeline_t pipeline,
 		daos_epoch_range_t epr, uint64_t flags, daos_key_t *dkey, uint32_t nr_iods,
-		uint32_t nr_iods_dkey, uint32_t *nr_iods_out, daos_iod_t *iods,
-		daos_anchor_t *anchor, uint32_t nr_kds, uint32_t *nr_kds_out, daos_key_desc_t *kds,
-		daos_size_t *recx_size, d_sg_list_t *sgl_keys, d_sg_list_t *sgl_recx,
-		d_sg_list_t *sgl_agg, daos_pipeline_stats_t *stats)
+		uint32_t *nr_iods_out, daos_iod_t *iods, daos_anchor_t *anchor, uint32_t nr_kds,
+		uint32_t *nr_kds_out, daos_key_desc_t *kds, daos_size_t *recx_size,
+		d_sg_list_t *sgl_keys, d_sg_list_t *sgl_recx, d_sg_list_t *sgl_agg,
+		daos_pipeline_stats_t *stats)
 {
 	int                         rc;
 	uint32_t                    nr_kds_pass;
@@ -381,17 +381,17 @@ ds_pipeline_run(daos_handle_t vos_coh, daos_unit_oid_t oid, daos_pipeline_t pipe
 
 	/** -- allocating space for temporary bufs */
 
-	rc = alloc_iter_bufs(iods, nr_iods_dkey, &iods_iter, &sgl_recx_iter);
+	rc = alloc_iter_bufs(iods, nr_iods, &iods_iter, &sgl_recx_iter);
 	if (rc != 0)
 		D_GOTO(exit, rc);
 
 	/** -- init pipe run data struct and pack result data struct */
 
-	pipe_run_args.nr_iods  = nr_iods_dkey;
+	pipe_run_args.nr_iods  = nr_iods;
 	pipe_run_args.iods     = iods_iter;
 
 	pack_args.recx_size    = recx_size;
-	pack_args.nr_iods      = nr_iods_dkey;
+	pack_args.nr_iods      = nr_iods;
 	pack_args.kds          = kds;
 	pack_args.keys         = sgl_keys;
 	pack_args.recx         = sgl_recx;
@@ -413,7 +413,7 @@ ds_pipeline_run(daos_handle_t vos_coh, daos_unit_oid_t oid, daos_pipeline_t pipe
 
 		/** -- fetching record */
 
-		rc = pipeline_fetch_record(vos_coh, oid, &anchors, epr, iods_iter, nr_iods_dkey,
+		rc = pipeline_fetch_record(vos_coh, oid, &anchors, epr, iods_iter, nr_iods,
 					   &d_key_iter, sgl_recx_iter);
 		if (rc < 0)
 			D_GOTO(exit, rc); /** error */
@@ -483,10 +483,10 @@ ds_pipeline_run(daos_handle_t vos_coh, daos_unit_oid_t oid, daos_pipeline_t pipe
 
 	if (nr_kds > 0 && pipeline.num_aggr_filters == 0) {
 		*nr_kds_out     = nr_kds_pass;
-		*nr_iods_out    = nr_iods_dkey * nr_kds_pass;
+		*nr_iods_out    = nr_iods * nr_kds_pass;
 	} else if (nr_kds > 0 && pipeline.num_aggr_filters > 0 && nr_kds_pass > 0) {
 		*nr_kds_out     = 1;
-		*nr_iods_out    = nr_iods_dkey;
+		*nr_iods_out    = nr_iods;
 	} else {
 		*nr_kds_out     = 0;
 		*nr_iods_out    = 0;
@@ -495,7 +495,7 @@ ds_pipeline_run(daos_handle_t vos_coh, daos_unit_oid_t oid, daos_pipeline_t pipe
 	rc = 0;
 exit:
 	pipeline_compile_free(&pipeline_compiled);
-	free_iter_bufs(nr_iods_dkey, iods_iter, sgl_recx_iter);
+	free_iter_bufs(nr_iods, iods_iter, sgl_recx_iter);
 
 	return rc;
 }
@@ -809,7 +809,7 @@ ds_pipeline_run_handler(crt_rpc_t *rpc)
 	/** --  */
 
 	D_ALLOC_ARRAY(kds, pri->pri_nr_kds);
-	D_ALLOC_ARRAY(recx_size, pri->pri_iods.nr);
+	D_ALLOC_ARRAY(recx_size, pri->pri_iods.nr * pri->pri_nr_kds);
 	if (kds == NULL || recx_size == NULL)
 		D_GOTO(exit0, rc = -DER_NOMEM);
 
@@ -826,10 +826,9 @@ ds_pipeline_run_handler(crt_rpc_t *rpc)
 	/** -- calling pipeline run */
 
 	rc = ds_pipeline_run(vos_coh, pri->pri_oid, pri->pri_pipe, pri->pri_epr, pri->pri_flags,
-			     &pri->pri_dkey, pri->pri_iods.nr, pri->pri_nr_iods_dkey, &nr_iods_out,
-			     pri->pri_iods.iods, &pri->pri_anchor, pri->pri_nr_kds, &nr_kds_out,
-			     kds, recx_size, &pri->pri_sgl_keys, &pri->pri_sgl_recx,
-			     &pri->pri_sgl_agg, &stats);
+			     &pri->pri_dkey, pri->pri_iods.nr, &nr_iods_out, pri->pri_iods.iods,
+			     &pri->pri_anchor, pri->pri_nr_kds, &nr_kds_out, kds, recx_size,
+			     &pri->pri_sgl_keys, &pri->pri_sgl_recx, &pri->pri_sgl_agg, &stats);
 
 exit0:
 	ds_cont_hdl_put(coh);
@@ -854,7 +853,10 @@ exit:
 		pro->pro_sgl_agg           = pri->pri_sgl_agg;
 		pro->stats                 = stats;
 		pro->pro_nr_kds            = nr_kds_out;
-		pro->pro_nr_iods           = nr_iods_out;
+
+		/** TODO: for dkey!=NULL, this will be nr_iods_out */
+		pro->pro_nr_iods           = pri->pri_iods.nr;
+
 		/** pro->pro_epoch (TODO) */
 
 		/** handle any data that has to be transferred in bulk (RDMA) */
@@ -872,12 +874,12 @@ exit:
 
 	if (pro->pro_kds.ca_arrays != NULL)
 		D_FREE(pro->pro_kds.ca_arrays);
-	else if (nr_kds_out == 0) /** no bulk transfer since nr_kds_out==0 */
+	else if (nr_kds_out == 0)
 		D_FREE(kds);
 
 	if (pro->pro_recx_size.ca_arrays != NULL)
 		D_FREE(pro->pro_recx_size.ca_arrays);
-	else if (nr_iods_out == 0) /** no bulk transfer since nr_iods_out==0 */
+	else if (nr_iods_out == 0)
 		D_FREE(recx_size);
 
 	d_sgl_fini(&pri->pri_sgl_keys, true);
