@@ -111,6 +111,7 @@ ARG DAOS_TARGET_TYPE=release
 # Now do an update to ensure software is up to date for the deps build.  If the
 # src hasn't changed then this won't do anything, but if it has then we want to
 # ensure that latest dependencies are used.
+USER root:root
 RUN [ "$DAOS_DEPS_BUILD" != "yes" ] || {                                                  \
         dnf upgrade                                                                       \
             --exclude=fuse,fuse-libs,fuse-devel,libraft0,raft-devel,mercury,mercury-devel \
