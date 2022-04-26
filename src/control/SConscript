@@ -50,6 +50,8 @@ def get_build_tags(benv):
         tags.append("firmware")
     if is_ucx_build(benv):
         tags.append("ucx")
+    if not is_release_build(benv):
+        tags.append("fault_injection")
     if len(tags) == 0:
         return ""
     return "-tags {}".format(','.join(tags))
