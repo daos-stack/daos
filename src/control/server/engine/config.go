@@ -201,6 +201,8 @@ func (c *Config) setAffinity(log logging.Logger, fis *hardware.FabricInterfaceSe
 	// set engine numa node index to that of selected fabric interface
 	c.Fabric.NumaNodeIndex = fi.NUMANode
 	c.Storage.NumaNodeIndex = fi.NUMANode
+	// always set pinned_numa_node as it will be passed as CLI argument to engine executable
+	c.PinnedNumaNode = &fi.NUMANode
 
 	return
 }

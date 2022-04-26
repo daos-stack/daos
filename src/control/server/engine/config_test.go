@@ -757,11 +757,20 @@ func TestConfig_setAffinity(t *testing.T) {
 
 			err := tc.cfg.setAffinity(log, fis)
 			common.CmpErr(t, tc.expErr, err)
+			if tc.expErr != nil {
+				return
+			}
 
 			common.AssertEqual(t, tc.expNuma, tc.cfg.Storage.NumaNodeIndex,
 				"unexpected storage numa node id")
 			common.AssertEqual(t, tc.expNuma, tc.cfg.Fabric.NumaNodeIndex,
 				"unexpected fabric numa node id")
+
+			if tc.cfg.PinnedNumaNode == nil {
+				t.Fatal("pinned_numa_node was not set")
+			}
+			common.AssertEqual(t, tc.expNuma, *tc.cfg.PinnedNumaNode,
+				"unexpected pinned numa node id")
 		})
 	}
 }
