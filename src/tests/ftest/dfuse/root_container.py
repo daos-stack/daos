@@ -6,8 +6,6 @@
 """
 from dfuse_test_base import DfuseTestBase
 from exception_utils import CommandFailure
-from daos_utils import DaosCommand
-from test_utils_container import TestContainer
 from general_utils import pcmd
 from ClusterShell.NodeSet import NodeSet
 
@@ -51,28 +49,6 @@ class RootContainerTest(DfuseTestBase):
         self.pool.append(self.get_pool(connect=False))
         return self.pool[-1]
 
-    def _create_cont(self, pool, path=None):
-        """Add a new TestContainer object to the list of containers.
-
-        Args:
-            pool (TestPool): pool object
-            path (str): Unified namespace path for container
-
-        Returns:
-            TestContainer: the newly added container
-
-        """
-        # Get container params
-        container = TestContainer(pool, daos_command=DaosCommand(self.bin))
-        container.get_params(self)
-        if path is not None:
-            container.path.update(path)
-
-        # create container
-        container.create()
-        self.container.append(container)
-        return container
-
     def test_rootcontainer(self):
         """Jira ID: DAOS-3782.
 
@@ -93,14 +69,14 @@ class RootContainerTest(DfuseTestBase):
         """
         # Create a pool and start dfuse.
         pool = self._create_pool()
-        container = self._create_cont(pool)
+        self.container.append(self.get_container(pool))
         self.dfuse_hosts = self.agent_managers[0].hosts
         # mount fuse
-        self.start_dfuse(self.dfuse_hosts, pool, container)
+        self.start_dfuse(self.dfuse_hosts, pool, self.container[0])
         # Create another container and add it as sub container under
         # root container
         sub_container = str(self.dfuse.mount_dir.value + "/cont0")
-        container = self._create_cont(pool, path=sub_container)
+        self.container.append(self.get_container(pool, path=sub_container))
         # Insert files into root container
         self.insert_files_and_verify("")
         # Insert files into sub container
@@ -121,7 +97,7 @@ class RootContainerTest(DfuseTestBase):
             for j in range(self.cont_count):
                 cont_name = "/cont_{}{}".format(i, j)
                 sub_cont = str(self.dfuse.mount_dir.value + cont_name)
-                self._create_cont(pool=pool, path=sub_cont)
+                self.container.append(self.get_container(pool=pool, path=sub_cont))
                 self.insert_files_and_verify(cont_name)
 
     def verify_create_delete_containers(self, pool, cont_count):
@@ -140,7 +116,7 @@ class RootContainerTest(DfuseTestBase):
         self.log.info("Pool space before = %s", pool_space_before)
         for i in range(cont_count):
             sub_cont = str(self.dfuse.mount_dir.value + "/cont{}".format(i+1))
-            self._create_cont(pool, path=sub_cont)
+            self.container.append(self.get_container(pool, path=sub_cont))
             self.insert_files_and_verify("cont{}".format(i+1))
         expected = pool_space_before - \
             cont_count * self.tmp_file_count * self.tmp_file_size

@@ -61,7 +61,7 @@ class DmvrPreserveProps(DataMoverTestBase):
         self.preserve_props_path = join(self.tmp, "cont_props.h5")
 
         # Create a source cont
-        cont1 = self.create_cont(pool1, cont_type=cont_type)
+        cont1 = self.get_container(pool1, type=cont_type)
 
         # Create source data
         src_props = self.write_cont(cont1)

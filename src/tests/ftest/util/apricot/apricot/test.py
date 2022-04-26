@@ -1716,13 +1716,14 @@ class TestWithServers(TestWithoutServers):
             self.pool.append(self.get_pool(namespace, create, connect, index))
 
     @fail_on(AttributeError)
-    def get_container(self, pool, namespace=None, create=True, **kwargs):
+    def get_container(self, pool, namespace=None, extra_props=None, create=True, **kwargs):
         """Create a TestContainer object.
 
         Args:
             pool (TestPool): pool in which to create the container.
             namespace (str, optional): namespace for TestContainer parameters in
                 the test yaml file. Defaults to None.
+            extra_props (str, optional): extra properties to append. Defaults to None.
             create (bool, optional): should the container be created. Defaults to True.
             kwargs (dict): name/value of attributes for which to call update(value, name).
                 See TestContainer for available attributes.
@@ -1744,6 +1745,12 @@ class TestWithServers(TestWithoutServers):
         for name, value in kwargs.items():
             getattr(container, name).update(value, name=name)
 
+        # Append properties
+        if extra_props:
+            cur_props = container.properties.value
+            new_props = ','.join(filter(None, [cur_props, extra_props]))
+            container.properties.update(new_props)
+
         if create:
             container.create()
 
@@ -1762,34 +1769,6 @@ class TestWithServers(TestWithoutServers):
                 to True.
         """
         self.container = self.get_container(pool=pool, namespace=namespace, create=create)
-
-    def add_container_qty(self, quantity, pool, namespace=None, create=True):
-        """Add multiple containers to the test case.
-
-        This method requires self.container to be defined as a list.
-        If self.container is undefined it will define it as a list.
-
-        Args:
-            quantity (int): number of containers to create
-            namespace (str, optional): namespace for TestContainer parameters in the
-                test yaml file. Defaults to None.
-            pool (TestPool): Pool object
-            create (bool, optional): should the container be created. Defaults to
-                True.
-
-        Raises:
-            TestFail: if self.pool is defined, but not as a list object.
-
-        """
-        if self.container is None:
-            self.container = []
-        if not isinstance(self.container, list):
-            self.fail(
-                "add_container_qty(): self.container must be a list: {}".format(
-                    type(self.container)))
-        for _ in range(quantity):
-            self.container.append(
-                self.get_container(pool=pool, namespace=namespace, create=create))
 
     def start_additional_servers(self, additional_servers, index=0,
                                  access_points=None):

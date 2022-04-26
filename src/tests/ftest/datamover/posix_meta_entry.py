@@ -64,7 +64,7 @@ class DmvrPosixMetaEntry(DataMoverTestBase):
         pool1 = self.create_pool()
 
         # Create 1 source container with test data
-        cont1 = self.create_cont(pool1)
+        cont1 = self.get_container(pool1)
         daos_src_path = self.new_daos_test_path(False)
         dfuse_src_path = "{}/{}/{}{}".format(
             self.dfuse.mount_dir.value, pool1.uuid, cont1.uuid, daos_src_path)

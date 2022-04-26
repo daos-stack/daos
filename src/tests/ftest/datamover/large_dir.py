@@ -48,7 +48,7 @@ class DmvrLargeDir(DataMoverTestBase):
 
         # create pool and cont1
         pool = self.create_pool()
-        cont1 = self.create_cont(pool)
+        cont1 = self.get_container(pool)
 
         # run mdtest to create data in cont1
         self.mdtest_cmd.write_bytes.update(file_size)
@@ -57,7 +57,7 @@ class DmvrLargeDir(DataMoverTestBase):
             flags=mdtest_flags[0])
 
         # create cont2
-        cont2 = self.create_cont(pool)
+        cont2 = self.get_container(pool)
 
         # copy from daos cont1 to cont2
         self.run_datamover(
@@ -74,7 +74,7 @@ class DmvrLargeDir(DataMoverTestBase):
             "POSIX", posix_path)
 
         # create cont3
-        cont3 = self.create_cont(pool)
+        cont3 = self.get_container(pool)
 
         # copy from posix file system to daos cont3
         self.run_datamover(

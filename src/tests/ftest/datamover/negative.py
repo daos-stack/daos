@@ -61,10 +61,11 @@ class DmvrNegativeTest(DataMoverTestBase):
         pool1 = self.create_pool()
 
         # Create a special container to hold UNS entries
-        uns_cont = self.create_cont(pool1)
+        uns_cont = self.get_container(pool1)
 
         # Create a test container
-        cont1 = self.create_cont(pool1, True, pool1, uns_cont)
+        cont1_path = join(self.dfuse.mount_dir.value, pool1.uuid, uns_cont.uuid, 'uns1')
+        cont1 = self.get_container(pool1, path=cont1_path)
 
         # Create test files
         self.run_ior_with_params("POSIX", self.posix_test_file)
@@ -203,7 +204,7 @@ class DmvrNegativeTest(DataMoverTestBase):
 
         # Create pool and containers
         pool1 = self.create_pool()
-        cont1 = self.create_cont(pool1)
+        cont1 = self.get_container(pool1)
 
         # Create source file
         self.run_ior_with_params("DAOS_UUID", self.daos_test_file,

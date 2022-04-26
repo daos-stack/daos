@@ -56,42 +56,6 @@ class IorTestBase(DfuseTestBase):
         # Get the pool params and create a pool
         self.add_pool(connect=False)
 
-    def create_cont(self, chunk_size=None, properties=None):
-        """Create a TestContainer object to be used to create container.
-
-        Args:
-            chunk_size (str, optional): container chunk size. Defaults to None.
-            properties (str, optional): additional properties to append. Defaults to None.
-        Returns:
-            TestContainer: the created container.
-
-        """
-        params = {}
-
-        # Set container oclass to match ior oclass
-        if self.ior_cmd.dfs_oclass:
-            params["oclass"] = self.ior_cmd.dfs_oclass.value
-
-        # update container chunk size
-        if chunk_size is not None:
-            params["chunk_size"] = chunk_size
-
-        # create container from params
-        self.container = self.get_container(self.pool, create=False, **params)
-
-        # append container properties
-        if properties is not None:
-            current_properties = self.container.properties.value
-            if current_properties:
-                new_properties = current_properties + "," + properties
-            else:
-                new_properties = properties
-            self.container.properties.update(new_properties)
-
-        # create container
-        self.container.create()
-        return self.container
-
     def display_pool_space(self, pool=None):
         """Display the current pool space.
 
@@ -200,7 +164,9 @@ class IorTestBase(DfuseTestBase):
         # It will not enable checksum feature
         if create_cont:
             self.pool.connect()
-            self.create_cont()
+            self.container = self.get_container(
+                self.pool,
+                oclass=(self.ior_cmd.dfs_oclass.value if self.ior_cmd.dfs_oclass else None))
         # Update IOR params with the pool and container params
         self.ior_cmd.set_daos_params(self.server_group, self.pool,
                                      self.container.uuid)

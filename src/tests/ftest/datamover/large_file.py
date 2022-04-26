@@ -42,13 +42,13 @@ class DmvrPosixLargeFile(DataMoverTestBase):
 
         # create pool and cont
         pool = self.create_pool()
-        cont1 = self.create_cont(pool)
+        cont1 = self.get_container(pool)
 
         # create initial data in cont1
         self.run_ior_with_params("DAOS", self.ior_cmd.test_file.value, pool, cont1)
 
         # create cont2
-        cont2 = self.create_cont(pool)
+        cont2 = self.get_container(pool)
 
         # copy from daos cont1 to cont2
         self.run_datamover(
@@ -65,7 +65,7 @@ class DmvrPosixLargeFile(DataMoverTestBase):
             "POSIX", posix_path)
 
         # create cont3
-        cont3 = self.create_cont(pool)
+        cont3 = self.get_container(pool)
 
         # copy from posix file system to daos cont3
         self.run_datamover(

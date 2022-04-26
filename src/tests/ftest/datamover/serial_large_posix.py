@@ -43,7 +43,7 @@ class DmvrSerialLargePosix(DataMoverTestBase):
 
         # Create pool1 and cont1
         pool1 = self.create_pool()
-        cont1 = self.create_cont(pool1)
+        cont1 = self.get_container(pool1)
 
         # Create a large directory in cont1
         self.mdtest_cmd.write_bytes.update(file_size)
@@ -55,7 +55,7 @@ class DmvrSerialLargePosix(DataMoverTestBase):
         pool2 = self.create_pool()
 
         # Use dfuse as a shared intermediate for serialize + deserialize
-        dfuse_cont = self.create_cont(pool1)
+        dfuse_cont = self.get_container(pool1)
         self.start_dfuse(self.dfuse_hosts, pool1, dfuse_cont)
         self.serial_tmp_dir = self.dfuse.mount_dir.value
 

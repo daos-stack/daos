@@ -39,7 +39,7 @@ class DmvrObjLargePosix(DataMoverTestBase):
 
         # Create pool1 and cont1
         pool1 = self.create_pool()
-        cont1 = self.create_cont(pool1)
+        cont1 = self.get_container(pool1)
 
         # Create a large directory in cont1
         self.mdtest_cmd.write_bytes.update(file_size)

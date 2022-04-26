@@ -93,16 +93,6 @@ class ServerFillUp(IorTestBase):
         self.engines = self.server_managers[0].manager.job.yaml.engine_params
         self.dmg_command = self.get_dmg_command()
 
-    def create_container(self):
-        """Create the container """
-        self.nvme_local_cont = self.get_container(self.pool, create=False)
-
-        # update container oclass
-        if self.ior_local_cmd.dfs_oclass:
-            self.nvme_local_cont.oclass.update(self.ior_local_cmd.dfs_oclass.value)
-
-        self.nvme_local_cont.create()
-
     def start_ior_thread(self, create_cont, operation):
         """Start IOR write/read threads and wait until all threads are finished.
 
@@ -131,7 +121,8 @@ class ServerFillUp(IorTestBase):
 
         # Created new container or use the existing container for reading
         if create_cont:
-            self.create_container()
+            self.nvme_local_cont = self.get_container(
+                self.pool, oclass=self.ior_local_cmd.dfs_oclass.value)
         self.ior_local_cmd.dfs_cont.update(self.nvme_local_cont.uuid)
 
         # Define the job manager for the IOR command

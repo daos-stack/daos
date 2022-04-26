@@ -41,7 +41,7 @@ class MultipleContainerDelete(IorTestBase):
 
         for i in range(50):
             self.log.info("Create-Write-Destroy Iteration %d", i)
-            self.create_cont()
+            self.container = self.get_container(self.pool, oclass=self.ior_cmd.dfs_oclass.value)
             self.ior_cmd.set_daos_params(
                 self.server_group, self.pool, self.container.uuid)
             # If the transfer size is less than 4K, the objects are

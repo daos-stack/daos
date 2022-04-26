@@ -1,6 +1,6 @@
 #!/usr/bin/python
 """
-  (C) Copyright 2018-2021 Intel Corporation.
+  (C) Copyright 2018-2022 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -53,8 +53,9 @@ class IoSysAdmin(DataMoverTestBase, FileCountTestBase):
             PoolTestBase.check_pool_creation(self, 60)
             self.pool[-1].connect()
             for cont_idx in range(1, 4):
-                self.add_container_qty(1, self.pool[-1],
-                                       namespace="/run/container_{}/".format(cont_idx))
+                # Appends to self.container
+                self.get_container(
+                    self.pool[-1], namespace="/run/container_{}/".format(cont_idx))
                 daos.container_set_owner(self.pool[-1].uuid, self.container[-1].uuid,
                                          new_test_user, new_test_group)
 

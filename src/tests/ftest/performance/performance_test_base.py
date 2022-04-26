@@ -370,8 +370,9 @@ class PerformanceTestBase(IorTestBase, MdtestBase):
 
         # Create pool and container upfront for flexibility and so rank stop timing is accurate
         self.create_pool()
-        self.create_cont(
-            chunk_size=self.ior_cmd.dfs_chunk.value, properties="rf:{}".format(cont_rf))
+        self.container = self.get_container(
+            self.pool, extra_props="rf:{}".format(cont_rf),
+            chunk_size=self.ior_cmd.dfs_chunk.value, oclass=self.ior_cmd.dfs_oclass.value)
         self.update_ior_cmd_with_pool(False)
 
         for iteration in range(num_iterations):
