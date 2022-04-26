@@ -72,9 +72,8 @@ type NUMAFabric struct {
 
 	numaMap map[int][]*FabricInterface
 
-	// current device idx to use on each NUMA node
-	currentNumaDevIdx map[int]int
-	defaultNumaNode   int
+	currentNumaDevIdx map[int]int // current device idx to use on each NUMA node
+	currentNUMANode   int         // current NUMA node to search
 
 	getAddrInterface func(name string) (addrFI, error)
 }
@@ -240,12 +239,10 @@ func (n *NUMAFabric) getNextDevice(numaNode int) *FabricInterface {
 func (n *NUMAFabric) findOnAnyNUMA(netDevClass hardware.NetDevClass, provider string) (*FabricInterface, error) {
 	numNodes := n.getNumNUMANodes()
 	for i := 0; i < numNodes; i++ {
-		numa := (n.defaultNumaNode + i) % numNodes
-		fi, err := n.getDeviceFromNUMA(numa, netDevClass, provider)
+		n.currentNUMANode = (n.currentNUMANode + 1) % numNodes
+		fi, err := n.getDeviceFromNUMA(n.currentNUMANode, netDevClass, provider)
 		if err == nil {
-			// Start the search on this node next time
-			n.defaultNumaNode = numa
-			n.log.Debugf("Suitable fabric interface %q found on NUMA node %d", fi.Name, numa)
+			n.log.Debugf("Suitable fabric interface %q found on NUMA node %d", fi.Name, n.currentNUMANode)
 			return fi, nil
 		}
 	}
@@ -267,14 +264,6 @@ func (n *NUMAFabric) getNextDevIndex(numaNode int) int {
 
 	// Unreachable -- callers looping on n.getNumDevices()
 	panic(fmt.Sprintf("no fabric interfaces on NUMA node %d", numaNode))
-}
-
-func (n *NUMAFabric) setDefaultNUMANode() {
-	for numa := range n.numaMap {
-		n.defaultNumaNode = numa
-		n.log.Debugf("The default NUMA node is: %d", numa)
-		break
-	}
 }
 
 // Find finds a specific fabric device by name. There may be more than one domain associated.
@@ -379,8 +368,6 @@ func NUMAFabricFromScan(ctx context.Context, log logging.Logger, scan *hardware.
 			newIF.Name, newIF.Domain, numa, fabric.NumDevices(numa)-1)
 	}
 
-	fabric.setDefaultNUMANode()
-
 	if fabric.NumNUMANodes() == 0 {
 		log.Info("No network devices detected in fabric scan")
 	}
@@ -417,7 +404,6 @@ func NUMAFabricFromConfig(log logging.Logger, cfg []*NUMAFabricConfig) *NUMAFabr
 				})
 		}
 	}
-	fabric.setDefaultNUMANode()
 
 	return fabric
 }
