@@ -15,7 +15,7 @@
 
 Name:          daos
 Version:       2.1.103
-Release:       1%{?relval}%{?dist}
+Release:       2%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       BSD-2-Clause-Patent
@@ -526,6 +526,7 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %{_bindir}/daos_perf
 %{_bindir}/daos_racer
 %{_bindir}/daos_test
+%{_bindir}/daos_debug_set_params
 %{_bindir}/dfs_test
 %{_bindir}/jobtest
 %{_libdir}/libdts.so
@@ -572,6 +573,9 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 # No files in a shim package
 
 %changelog
+* Tue Jun 14 2022 Johann Lombardi <johann.lombardi@intel.com> 2.1.103-2
+- Add daos_debug_set_params to daos-client-tests rpm for fault injection test.
+
 * Mon Jun 13 2022 Johann Lombardi <johann.lombardi@intel.com> 2.1.103-1
 - Bump version to 2.1.103
 
