@@ -12,6 +12,7 @@ usr/bin/io_conf
 usr/bin/fault_status
 usr/lib64/libdaos_tests.so
 etc/daos/fault-inject-cart.yaml
+usr/bin/daos_debug_set_params
 usr/bin/daos_perf
 usr/bin/daos_racer
 usr/bin/daos_test
