@@ -92,11 +92,12 @@ pipeline_part_checkop(const char *part_type, size_t part_type_s, const char *ope
 		       !strncmp(operand_type, "DAOS_FILTER_FUNC_NOT", operand_type_s) ||
 		       !strncmp(operand_type, "DAOS_FILTER_FUNC_AND", operand_type_s) ||
 		       !strncmp(operand_type, "DAOS_FILTER_FUNC_OR", operand_type_s);
-	} else if (!strncmp(part_type, "DAOS_FILTER_FUNC_LIKE", part_type_s) ||
-		   !strncmp(part_type, "DAOS_FILTER_FUNC_ISNULL", part_type_s) ||
-		   !strncmp(part_type, "DAOS_FILTER_FUNC_ISNOTNULL",
-			    part_type_s)) /* no functions */
+	} else if (!strncmp(part_type, "DAOS_FILTER_FUNC_LIKE", part_type_s)) { /* no functions */
 		return strncmp(operand_type, "DAOS_FILTER_FUN", strlen("DAOS_FILTER_FUN"));
+	} else if (!strncmp(part_type, "DAOS_FILTER_FUNC_ISNULL", part_type_s) ||
+		   !strncmp(part_type, "DAOS_FILTER_FUNC_ISNOTNULL",
+			    part_type_s)) /* only akeys */
+		return !strncmp(operand_type, "DAOS_FILTER_AKEY", strlen("DAOS_FILTER_AKEY"));
 	else { /* arithmetic functions or keys and constants (no functions) */
 		return strncmp(operand_type, "DAOS_FILTER_FUN", strlen("DAOS_FILTER_FUN")) ||
 		       !strncmp(operand_type, "DAOS_FILTER_FUNC_BITAND", operand_type_s) ||
@@ -152,7 +153,6 @@ d_pipeline_check(daos_pipeline_t *pipeline)
 	 * TODO: Check that functions' operands always have the right type
 	 * TODO: Check that constants that are arrays are always on the right
 	 * TODO: Check that arithmetic functions only support number types
-	 * TODO: Check that isnull and isnotnull operands are always akeys
 	 * TODO: Check that offsets and sizes are correct (i.e, offset <= size)
 	 * TODO: Check that parts of type CTRING always have at least one '\0'
 	 * TODO: Check that parts of type STRING have a sane size
