@@ -3,7 +3,7 @@
 %define agent_svc_name daos_agent.service
 
 %global mercury_version 2.1.0~rc4-4%{?dist}
-%global libfabric_version 1.14.0-1
+%global libfabric_version 1.15.0~rc3-1
 %global __python %{__python3}
 
 %if (0%{?rhel} >= 8)
@@ -14,7 +14,7 @@
 
 Name:          daos
 Version:       2.0.2
-Release:       2%{?relval}%{?dist}
+Release:       4%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       BSD-2-Clause-Patent
@@ -81,7 +81,7 @@ BuildRequires: libisa-l_crypto-devel
 BuildRequires: libisal-devel
 BuildRequires: libisal_crypto-devel
 %endif
-BuildRequires: daos-raft-devel = 0.9.0-1394.gc81505f%{?dist}%{?dist}
+BuildRequires: daos-raft-devel = 0.9.1-1401.gc18bcb8%{?dist}
 BuildRequires: openssl-devel
 BuildRequires: libevent-devel
 BuildRequires: libyaml-devel
@@ -516,6 +516,12 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 # No files in a meta-package
 
 %changelog
+* Wed Apr 20 2022 Lei Huang <lei.huang@intel.com> 2.0.2-4
+- Update libfabric to v1.15.0rc3-1 with critical performance patches
+
+* Sun Apr 17 2022 Li Wei <wei.g.li@intel.com> 2.0.2-3
+- Update raft to 0.9.1-1401.gc18bcb8 to fix uninitialized node IDs
+
 * Fri Mar 18 2022 Johann Lombardi <johann.lombardi@intel.com> 2.0.2-2
 - Version bump to 2.0.2 (rc2)
 

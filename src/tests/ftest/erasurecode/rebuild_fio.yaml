@@ -40,6 +40,7 @@ server_config:
       scm_class: dcpm
       scm_list: ["/dev/pmem0"]
       scm_mount: /mnt/daos0
+      targets: 2
     1:
       pinned_numa_node: 1
       nr_xs_helpers: 1
@@ -51,6 +52,7 @@ server_config:
       scm_class: dcpm
       scm_list: ["/dev/pmem1"]
       scm_mount: /mnt/daos1
+      targets: 2
 pool:
   mode: 146
   name: daos_server
@@ -68,6 +70,7 @@ container:
 fio:
   names:
     - test
+  api: POSIX
   test:
     numjobs: 10
     directory: "/tmp/daos_dfuse"
@@ -75,7 +78,7 @@ fio:
     verify_pattern: '0xabcdabcd'
     do_verify: 1
     iodepth: 10
-    size: 333MB
+    size: 133MB
     read_write: !mux
       write_read:
         rw: 'write'
