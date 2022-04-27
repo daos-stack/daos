@@ -9,6 +9,7 @@ package hardware
 import (
 	"context"
 	"testing"
+	"time"
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
@@ -17,6 +18,66 @@ import (
 	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/logging"
 )
+
+func TestHardware_IsUnsupportedFabric(t *testing.T) {
+	for name, tc := range map[string]struct {
+		err       error
+		expResult bool
+	}{
+		"nil": {},
+		"true": {
+			err:       ErrUnsupportedFabric("dontcare"),
+			expResult: true,
+		},
+		"false": {
+			err: errors.New("something else"),
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			common.AssertEqual(t, tc.expResult, IsUnsupportedFabric(tc.err), "")
+		})
+	}
+}
+
+func TestHardware_IsFabricNotReady(t *testing.T) {
+	for name, tc := range map[string]struct {
+		err       error
+		expResult bool
+	}{
+		"nil": {},
+		"true": {
+			err:       ErrFabricNotReady("dontcare"),
+			expResult: true,
+		},
+		"false": {
+			err: errors.New("something else"),
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			common.AssertEqual(t, tc.expResult, IsFabricNotReady(tc.err), "")
+		})
+	}
+}
+
+func TestHardware_IsProviderNotOnDevice(t *testing.T) {
+	for name, tc := range map[string]struct {
+		err       error
+		expResult bool
+	}{
+		"nil": {},
+		"true": {
+			err:       ErrProviderNotOnDevice("dontcare", "dontcare"),
+			expResult: true,
+		},
+		"false": {
+			err: errors.New("something else"),
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			common.AssertEqual(t, tc.expResult, IsProviderNotOnDevice(tc.err), "")
+		})
+	}
+}
 
 func TestHardware_FabricInterface_String(t *testing.T) {
 	for name, tc := range map[string]struct {
@@ -1952,6 +2013,117 @@ func TestHardware_NetDevClassBuilder_BuildPart(t *testing.T) {
 			); diff != "" {
 				t.Fatalf("(-want, +got)\n%s\n", diff)
 			}
+		})
+	}
+}
+
+func TestHardware_WaitFabricReady(t *testing.T) {
+	for name, tc := range map[string]struct {
+		checker *mockFabricReadyChecker
+		ifaces  []string
+		timeout time.Duration
+		expErr  error
+	}{
+		"nil checker": {
+			ifaces: []string{"fi0"},
+			expErr: errors.New("nil"),
+		},
+		"no interfaces": {
+			checker: &mockFabricReadyChecker{},
+			expErr:  errors.New("no fabric interfaces"),
+		},
+		"instant success": {
+			checker: &mockFabricReadyChecker{},
+			ifaces:  []string{"fi0"},
+		},
+		"instant failure": {
+			checker: &mockFabricReadyChecker{
+				isReadyErr: []error{errors.New("mock CheckFabricReady")},
+			},
+			ifaces: []string{"fi0"},
+			expErr: errors.New("mock CheckFabricReady"),
+		},
+		"success after tries": {
+			checker: &mockFabricReadyChecker{
+				isReadyErr: []error{
+					ErrFabricNotReady("fi0"),
+					ErrFabricNotReady("fi0"),
+					ErrFabricNotReady("fi0"),
+					nil,
+				},
+			},
+			ifaces: []string{"fi0"},
+		},
+		"failure after tries": {
+			checker: &mockFabricReadyChecker{
+				isReadyErr: []error{
+					ErrFabricNotReady("fi0"),
+					ErrFabricNotReady("fi0"),
+					errors.New("mock CheckFabricReady"),
+				},
+			},
+			ifaces: []string{"fi0"},
+			expErr: errors.New("mock CheckFabricReady"),
+		},
+		"multi iface with failure": {
+			checker: &mockFabricReadyChecker{
+				isReadyErr: []error{
+					ErrFabricNotReady("fi0"),
+					ErrFabricNotReady("fi1"),
+					nil,
+					errors.New("mock CheckFabricReady"),
+				},
+			},
+			ifaces: []string{"fi0", "fi1"},
+			expErr: errors.New("mock CheckFabricReady"),
+		},
+		"multi iface success": {
+			checker: &mockFabricReadyChecker{
+				isReadyErr: []error{
+					ErrFabricNotReady("fi0"),
+					ErrFabricNotReady("fi1"),
+					nil,
+					ErrFabricNotReady("fi1"),
+					nil,
+				},
+			},
+			ifaces: []string{"fi0", "fi1"},
+		},
+		"duplicates": {
+			checker: &mockFabricReadyChecker{},
+			ifaces:  []string{"fi0", "fi0"},
+		},
+		"timeout": {
+			checker: &mockFabricReadyChecker{
+				isReadyErr: []error{
+					ErrFabricNotReady("fi0"),
+				},
+			},
+			timeout: time.Millisecond,
+			ifaces:  []string{"fi0"},
+			expErr:  errors.New("context deadline"),
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(t.Name())
+			defer common.ShowBufferOnFailure(t, buf)
+
+			var ctx context.Context
+
+			if tc.timeout == 0 {
+				ctx = context.Background()
+			} else {
+				var cancel context.CancelFunc
+				ctx, cancel = context.WithTimeout(context.Background(), tc.timeout)
+				defer cancel()
+			}
+
+			err := WaitFabricReady(ctx, log, WaitFabricReadyParams{
+				Checker:      tc.checker,
+				FabricIfaces: tc.ifaces,
+			})
+
+			common.CmpErr(t, tc.expErr, err)
 		})
 	}
 }
