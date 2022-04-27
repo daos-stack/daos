@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2021 Intel Corporation.
+ * (C) Copyright 2016-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -65,7 +65,7 @@ co_create(void **state)
 	print_message("container closed\n");
 
 	if (arg->hdl_share)
-		MPI_Barrier(MPI_COMM_WORLD);
+		par_barrier(PAR_COMM_WORLD);
 
 	/** destroy container */
 	if (arg->myrank == 0) {
@@ -356,7 +356,7 @@ co_properties(void **state)
 			DMG_KEY_FAIL_LOC, DAOS_FORCE_PROP_VERIFY, 0, NULL);
 		assert_rc_equal(rc, 0);
 	}
-	MPI_Barrier(MPI_COMM_WORLD);
+	par_barrier(PAR_COMM_WORLD);
 
 	prop_query = get_query_prop_all();
 	rc = daos_cont_query(arg->coh, NULL, prop_query, NULL);
@@ -508,7 +508,7 @@ co_properties(void **state)
 		print_message("destroyed container C3: %s : "
 			      "UUID:"DF_UUIDF"\n", label2_v2, DP_UUID(cuuid3));
 	}
-	MPI_Barrier(MPI_COMM_WORLD);
+	par_barrier(PAR_COMM_WORLD);
 
 	daos_prop_free(prop);
 	daos_prop_free(prop_query);
@@ -667,10 +667,10 @@ co_acl(void **state)
 	daos_prop_t		*prop_in;
 	daos_pool_info_t	 info = {0};
 	int			 rc;
-	const char		*exp_owner = "fictionaluser@";
-	const char		*exp_owner_grp = "admins@";
+	const char		 exp_owner[] = "fictionaluser@";
+	char			 exp_owner_grp[] = "admins@";
 	struct daos_acl		*exp_acl;
-	struct daos_acl		*update_acl;
+	struct daos_acl		*update_acl = NULL;
 	struct daos_ace		*ace;
 	char			*user;
 	d_string_t		 name_to_remove = "friendlyuser@";
@@ -706,11 +706,9 @@ co_acl(void **state)
 	prop_in = daos_prop_alloc(3);
 	assert_non_null(prop_in);
 	prop_in->dpp_entries[0].dpe_type = DAOS_PROP_CO_OWNER;
-	D_STRNDUP(prop_in->dpp_entries[0].dpe_str, exp_owner,
-		  DAOS_ACL_MAX_PRINCIPAL_BUF_LEN);
+	D_STRNDUP_S(prop_in->dpp_entries[0].dpe_str, exp_owner);
 	prop_in->dpp_entries[1].dpe_type = DAOS_PROP_CO_OWNER_GROUP;
-	D_STRNDUP(prop_in->dpp_entries[1].dpe_str, exp_owner_grp,
-		  DAOS_ACL_MAX_PRINCIPAL_BUF_LEN);
+	D_STRNDUP_S(prop_in->dpp_entries[1].dpe_str, exp_owner_grp);
 	prop_in->dpp_entries[2].dpe_type = DAOS_PROP_CO_ACL;
 	prop_in->dpp_entries[2].dpe_val_ptr = daos_acl_dup(exp_acl);
 
@@ -725,7 +723,7 @@ co_acl(void **state)
 			DMG_KEY_FAIL_LOC, DAOS_FORCE_PROP_VERIFY, 0, NULL);
 		assert_rc_equal(rc, 0);
 	}
-	MPI_Barrier(MPI_COMM_WORLD);
+	par_barrier(PAR_COMM_WORLD);
 
 	co_acl_get(arg, exp_acl, exp_owner, exp_owner_grp);
 
@@ -827,7 +825,7 @@ co_acl(void **state)
 	if (arg->myrank == 0)
 		daos_debug_set_params(arg->group, -1, DMG_KEY_FAIL_LOC, 0,
 				     0, NULL);
-	MPI_Barrier(MPI_COMM_WORLD);
+	par_barrier(PAR_COMM_WORLD);
 
 	daos_prop_free(prop_in);
 	daos_acl_free(exp_acl);
@@ -845,8 +843,8 @@ co_set_prop(void **state)
 	daos_prop_t		*prop_out = NULL;
 	struct daos_prop_entry	*entry;
 	int			 rc;
-	const char		*exp_label = "NEW_FANCY_LABEL";
-	const char		*exp_owner = "wonderfuluser@wonderfuldomain";
+	const char		exp_label[] = "NEW_FANCY_LABEL";
+	const char		exp_owner[] = "wonderfuluser@wonderfuldomain";
 
 	print_message("create container with default props and modify them.\n");
 	rc = test_setup((void **)&arg, SETUP_POOL_CONNECT, arg0->multi_rank,
@@ -857,7 +855,7 @@ co_set_prop(void **state)
 		rc = test_setup_next_step((void **)&arg, NULL, NULL, NULL);
 	assert_int_equal(rc, 0);
 
-	MPI_Barrier(MPI_COMM_WORLD);
+	par_barrier(PAR_COMM_WORLD);
 
 	/*
 	 * Set some props
@@ -865,11 +863,9 @@ co_set_prop(void **state)
 	prop_in = daos_prop_alloc(2);
 	assert_non_null(prop_in);
 	prop_in->dpp_entries[0].dpe_type = DAOS_PROP_CO_LABEL;
-	D_STRNDUP(prop_in->dpp_entries[0].dpe_str, exp_label,
-		  DAOS_PROP_LABEL_MAX_LEN);
+	D_STRNDUP_S(prop_in->dpp_entries[0].dpe_str, exp_label);
 	prop_in->dpp_entries[1].dpe_type = DAOS_PROP_CO_OWNER;
-	D_STRNDUP(prop_in->dpp_entries[1].dpe_str, exp_owner,
-		  DAOS_ACL_MAX_PRINCIPAL_LEN);
+	D_STRNDUP_S(prop_in->dpp_entries[1].dpe_str, exp_owner);
 
 	print_message("Setting the container props\n");
 	rc = daos_cont_set_prop(arg->coh, prop_in, NULL);
@@ -902,7 +898,7 @@ co_set_prop(void **state)
 		assert_int_equal(rc, 1); /* fail the test */
 	}
 
-	MPI_Barrier(MPI_COMM_WORLD);
+	par_barrier(PAR_COMM_WORLD);
 
 	daos_prop_free(prop_in);
 	daos_prop_free(prop_out);
@@ -1999,8 +1995,9 @@ expect_co_set_attr_access(test_arg_t *arg, uint64_t perms, int exp_result)
 	daos_prop_t	*cont_prop;
 	int		 rc = 0;
 	const char	*name = "AttrName";
-	const char	*value = "This is the value";
-	const size_t	 size = strnlen(value, TEST_MAX_ATTR_LEN);
+	const char	 value_buf[] = "This is the value";
+	const char	*value = value_buf;
+	const size_t	 size = sizeof(value_buf) - 1;
 
 	cont_prop = get_daos_prop_with_owner_acl_perms(perms,
 						       DAOS_PROP_CO_ACL);
@@ -2237,7 +2234,7 @@ co_rf_simple(void **state)
 		assert_rc_equal(rc, 0);
 		assert_int_equal(info.ci_redun_fac, DAOS_PROP_CO_REDUN_RF2);
 	}
-	MPI_Barrier(MPI_COMM_WORLD);
+	par_barrier(PAR_COMM_WORLD);
 
 	print_message("verify cont rf and obj open ...\n");
 	oid = daos_test_oid_gen(arg->coh, OC_RP_2G1, 0, 0, arg->myrank);
@@ -2278,7 +2275,7 @@ co_rf_simple(void **state)
 		daos_exclude_server(arg->pool.pool_uuid, arg->group,
 				    arg->dmg_config, 4);
 	}
-	MPI_Barrier(MPI_COMM_WORLD);
+	par_barrier(PAR_COMM_WORLD);
 	rc = daos_cont_query(arg->coh, NULL, prop, NULL);
 	assert_rc_equal(rc, 0);
 	entry = daos_prop_entry_get(prop, DAOS_PROP_CO_STATUS);
@@ -2316,7 +2313,7 @@ co_rf_simple(void **state)
 	if (arg->myrank == 0)
 		daos_exclude_server(arg->pool.pool_uuid, arg->group,
 				    arg->dmg_config, 3);
-	MPI_Barrier(MPI_COMM_WORLD);
+	par_barrier(PAR_COMM_WORLD);
 	rc = daos_cont_query(arg->coh, NULL, prop, NULL);
 	assert_rc_equal(rc, 0);
 	entry = daos_prop_entry_get(prop, DAOS_PROP_CO_STATUS);
@@ -2345,7 +2342,7 @@ co_rf_simple(void **state)
 				  arg->dmg_config, 5);
 		test_rebuild_wait(&arg, 1);
 	}
-	MPI_Barrier(MPI_COMM_WORLD);
+	par_barrier(PAR_COMM_WORLD);
 
 	print_message("obj update should success after re-integrate\n");
 	rc = daos_obj_update(io_oh, DAOS_TX_NONE, 0, &dkey, 1, &iod, &sgl,
@@ -2443,6 +2440,8 @@ co_api_compat(void **state)
 	daos_handle_t		coh;
 	daos_cont_info_t	info;
 	int			rc;
+	char			uuid_str1[37];
+	char			uuid_str2[37];
 
 	if (arg->myrank != 0)
 		return;
@@ -2451,14 +2450,16 @@ co_api_compat(void **state)
 	uuid_clear(uuid2);
 
 	print_message("creating container with uuid specified ... ");
-	rc = daos_cont_create(arg->pool.poh, uuid1, NULL, NULL);
+	rc = daos_cont_create(arg->pool.poh, &uuid1, NULL, NULL);
 	assert_rc_equal(rc, 0);
 	print_message("success\n");
+	uuid_unparse(uuid1, uuid_str1);
 
 	print_message("creating container with a uuid pointer ... ");
 	rc = daos_cont_create(arg->pool.poh, &uuid2, NULL, NULL);
 	assert_rc_equal(rc, 0);
 	print_message("success\n");
+	uuid_unparse(uuid2, uuid_str2);
 
 	print_message("creating container with a NULL pointer ... ");
 	rc = daos_cont_create(arg->pool.poh, NULL, NULL, NULL);
@@ -2471,7 +2472,7 @@ co_api_compat(void **state)
 	print_message("success\n");
 
 	print_message("opening container using uuid ... ");
-	rc = daos_cont_open(arg->pool.poh, uuid1, DAOS_COO_RW, &coh, &info, NULL);
+	rc = daos_cont_open(arg->pool.poh, uuid_str1, DAOS_COO_RW, &coh, &info, NULL);
 	assert_rc_equal(rc, 0);
 	print_message("success\n");
 	rc = daos_cont_close(coh, NULL);
@@ -2485,9 +2486,9 @@ co_api_compat(void **state)
 	assert_rc_equal(rc, 0);
 
 	print_message("destroying container using uuid ... ");
-	rc = daos_cont_destroy(arg->pool.poh, uuid1, 0, NULL);
+	rc = daos_cont_destroy(arg->pool.poh, uuid_str1, 0, NULL);
 	assert_rc_equal(rc, 0);
-	rc = daos_cont_destroy(arg->pool.poh, uuid2, 0, NULL);
+	rc = daos_cont_destroy(arg->pool.poh, uuid_str2, 0, NULL);
 	assert_rc_equal(rc, 0);
 	print_message("success\n");
 
@@ -2581,7 +2582,7 @@ run_daos_cont_test(int rank, int size, int *sub_tests, int sub_tests_size)
 {
 	int rc = 0;
 
-	MPI_Barrier(MPI_COMM_WORLD);
+	par_barrier(PAR_COMM_WORLD);
 	if (sub_tests_size == 0) {
 		sub_tests_size = ARRAY_SIZE(co_tests);
 		sub_tests = NULL;
@@ -2591,6 +2592,6 @@ run_daos_cont_test(int rank, int size, int *sub_tests, int sub_tests_size)
 				ARRAY_SIZE(co_tests), sub_tests, sub_tests_size,
 				setup, test_teardown);
 
-	MPI_Barrier(MPI_COMM_WORLD);
+	par_barrier(PAR_COMM_WORLD);
 	return rc;
 }

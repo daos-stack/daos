@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2018-2021 Intel Corporation.
+ * (C) Copyright 2018-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -535,16 +535,94 @@ csum_copy_inline(int type, vos_iter_entry_t *ent, struct dss_enum_arg *arg,
 	return 0;
 }
 
+static bool
+need_new_entry(struct dss_enum_arg *arg, vos_iter_entry_t *key_ent,
+	       daos_size_t iod_size, int type)
+{
+	struct obj_enum_rec	*rec;
+	d_iov_t			*iovs = arg->sgl->sg_iovs;
+	uint64_t		curr_off = key_ent->ie_recx.rx_idx;
+	uint64_t		curr_size = key_ent->ie_recx.rx_nr;
+	uint64_t		prev_off;
+	uint64_t		prev_size;
+
+	if (arg->last_type != OBJ_ITER_RECX || type != OBJ_ITER_RECX)
+		return true;
+
+	rec = iovs[arg->sgl_idx].iov_buf + iovs[arg->sgl_idx].iov_len - sizeof(*rec);
+	prev_off = rec->rec_recx.rx_idx;
+	prev_size = rec->rec_recx.rx_nr;
+	if (prev_off + prev_size != curr_off) /* not continuous */
+		return true;
+
+	if (arg->rsize != iod_size)
+		return true;
+
+	if (arg->ec_cell_sz > 0 &&
+	    (prev_off + prev_size - 1) / arg->ec_cell_sz !=
+	    (curr_off + curr_size) / arg->ec_cell_sz)
+		return true;
+
+	return false;
+}
+
+static void
+insert_new_rec(struct dss_enum_arg *arg, vos_iter_entry_t *new_ent, int type,
+	       daos_size_t iod_size, struct obj_enum_rec **new_rec)
+{
+	d_iov_t			*iovs = arg->sgl->sg_iovs;
+	struct obj_enum_rec	*rec;
+	daos_size_t		new_idx = new_ent->ie_recx.rx_idx;
+	daos_off_t		new_nr = new_ent->ie_recx.rx_nr;
+
+	/* For cross-cell recx, let's check if the new recx needs to merge with current
+	 * recx, then insert the left to the new recx.
+	 */
+	if (arg->last_type == OBJ_ITER_RECX && type == OBJ_ITER_RECX &&
+	    arg->ec_cell_sz > 0 && arg->rsize == iod_size) {
+		rec = iovs[arg->sgl_idx].iov_buf + iovs[arg->sgl_idx].iov_len - sizeof(*rec);
+		*new_rec = rec;
+		if (rec->rec_recx.rx_idx + rec->rec_recx.rx_nr == new_ent->ie_recx.rx_idx) {
+			new_idx = roundup(DAOS_RECX_END(rec->rec_recx), arg->ec_cell_sz);
+			if (new_idx > new_ent->ie_recx.rx_idx) {
+				new_nr -= new_idx - new_ent->ie_recx.rx_idx;
+				rec->rec_recx.rx_nr += new_ent->ie_recx.rx_nr - new_nr;
+				rec->rec_epr.epr_lo = max(new_ent->ie_epoch, rec->rec_epr.epr_lo);
+			}
+			if (new_nr == 0)
+				return;
+		}
+	}
+
+	/* Grow the next new descriptor (instead of creating yet a new one). */
+	arg->kds[arg->kds_len].kd_val_type = type;
+	arg->kds[arg->kds_len].kd_key_len += sizeof(*rec);
+	rec = iovs[arg->sgl_idx].iov_buf + iovs[arg->sgl_idx].iov_len;
+	/* Append the recx record to iovs. */
+	D_ASSERT(iovs[arg->sgl_idx].iov_len + sizeof(*rec) <= iovs[arg->sgl_idx].iov_buf_len);
+	rec->rec_recx.rx_idx = new_idx;
+	rec->rec_recx.rx_nr = new_nr;
+	rec->rec_size = iod_size;
+	rec->rec_epr.epr_lo = new_ent->ie_epoch;
+	rec->rec_epr.epr_hi = DAOS_EPOCH_MAX;
+	rec->rec_version = new_ent->ie_ver;
+	rec->rec_flags = 0;
+	iovs[arg->sgl_idx].iov_len += sizeof(*rec);
+	arg->rsize = iod_size;
+	*new_rec = rec;
+}
+
 /* Callers are responsible for incrementing arg->kds_len. See iter_akey_cb. */
 static int
 fill_rec(daos_handle_t ih, vos_iter_entry_t *key_ent, struct dss_enum_arg *arg,
 	 vos_iter_type_t vos_type, vos_iter_param_t *param, unsigned int *acts)
 {
 	d_iov_t			*iovs = arg->sgl->sg_iovs;
-	struct obj_enum_rec	*rec;
 	daos_size_t		data_size = 0, iod_size;
+	struct obj_enum_rec	*rec;
 	daos_size_t		size = sizeof(*rec);
 	bool			inline_data = false, bump_kds_len = false;
+	bool			insert_new_entry = false;
 	int			type;
 	int			rc = 0;
 
@@ -559,11 +637,8 @@ fill_rec(daos_handle_t ih, vos_iter_entry_t *key_ent, struct dss_enum_arg *arg,
 			iod_size = key_ent->ie_gsize;
 			if (iod_size == key_ent->ie_rsize)
 				data_size = iod_size;
-			else
-				data_size = 0;
 		} else {
 			iod_size = key_ent->ie_rsize;
-			data_size = iod_size * key_ent->ie_recx.rx_nr;
 		}
 	}
 
@@ -596,34 +671,30 @@ fill_rec(daos_handle_t ih, vos_iter_entry_t *key_ent, struct dss_enum_arg *arg,
 		return 0;
 	}
 
-	if (is_sgl_full(arg, size) || arg->kds_len >= arg->kds_cap) {
-		/* NB: if it is rebuild object iteration, let's
-		 * check if both dkey & akey was already packed
-		 * (kds_len < 3) before return KEY2BIG.
-		 */
-		if ((arg->chk_key2big && arg->kds_len < 3)) {
-			if (arg->kds[0].kd_key_len < size)
-				arg->kds[0].kd_key_len = size;
-			D_GOTO(out, rc = -DER_KEY2BIG);
+	insert_new_entry = need_new_entry(arg, key_ent, iod_size, type);
+	if (insert_new_entry) {
+		/* Check if there are still space */
+		if (is_sgl_full(arg, size) || arg->kds_len >= arg->kds_cap) {
+			/* NB: if it is rebuild object iteration, let's
+			 * check if both dkey & akey was already packed
+			 * (kds_len < 3) before return KEY2BIG.
+			 */
+			if ((arg->chk_key2big && arg->kds_len < 3)) {
+				if (arg->kds[0].kd_key_len < size)
+					arg->kds[0].kd_key_len = size;
+				D_GOTO(out, rc = -DER_KEY2BIG);
+			}
+			D_GOTO(out, rc = 1);
+		} else {
+			insert_new_rec(arg, key_ent, type, iod_size, &rec);
 		}
-		D_GOTO(out, rc = 1);
+	} else {
+		D_ASSERTF(arg->last_type == OBJ_ITER_RECX, "type=%d\n", arg->last_type);
+		D_ASSERTF(type == OBJ_ITER_RECX, "type=%d\n", type);
+		rec = iovs[arg->sgl_idx].iov_buf + iovs[arg->sgl_idx].iov_len - sizeof(*rec);
+		rec->rec_recx.rx_nr += key_ent->ie_recx.rx_nr;
+		rec->rec_epr.epr_lo = max(key_ent->ie_epoch, rec->rec_epr.epr_lo);
 	}
-
-	/* Grow the next new descriptor (instead of creating yet a new one). */
-	arg->kds[arg->kds_len].kd_val_type = type;
-	arg->kds[arg->kds_len].kd_key_len += sizeof(*rec);
-
-	/* Append the recx record to iovs. */
-	D_ASSERT(iovs[arg->sgl_idx].iov_len + sizeof(*rec) <=
-		 iovs[arg->sgl_idx].iov_buf_len);
-	rec = iovs[arg->sgl_idx].iov_buf + iovs[arg->sgl_idx].iov_len;
-	rec->rec_recx = key_ent->ie_recx;
-	rec->rec_size = iod_size;
-	rec->rec_epr.epr_lo = key_ent->ie_epoch;
-	rec->rec_epr.epr_hi = DAOS_EPOCH_MAX;
-	rec->rec_version = key_ent->ie_ver;
-	rec->rec_flags = 0;
-	iovs[arg->sgl_idx].iov_len += sizeof(*rec);
 
 	/*
 	 * If we've decided to inline the data, append the data to iovs.
@@ -638,15 +709,12 @@ fill_rec(daos_handle_t ih, vos_iter_entry_t *key_ent, struct dss_enum_arg *arg,
 		 * may be invisible to current enumeration. Then it
 		 * may be located on SCM or NVMe.
 		 */
-		if (type != OBJ_ITER_RECX)
-			D_ASSERTF(key_ent->ie_biov.bi_addr.ba_type ==
-				  DAOS_MEDIA_SCM,
-				  "Invalid storage media type %d, ba_off "
-				  DF_X64", thres %ld, data_size %ld, type %d, "
-				  "iod_size %ld\n",
-				  key_ent->ie_biov.bi_addr.ba_type,
-				  key_ent->ie_biov.bi_addr.ba_off,
-				  arg->inline_thres, data_size, type, iod_size);
+		D_ASSERT(type != OBJ_ITER_RECX);
+		D_ASSERTF(key_ent->ie_biov.bi_addr.ba_type ==
+			  DAOS_MEDIA_SCM, "Invalid storage media type %d, ba_off "
+			  DF_X64", thres %ld, data_size %ld, type %d, iod_size %ld\n",
+			  key_ent->ie_biov.bi_addr.ba_type, key_ent->ie_biov.bi_addr.ba_off,
+			  arg->inline_thres, data_size, type, iod_size);
 
 		d_iov_set(&iov_out, iovs[arg->sgl_idx].iov_buf +
 				       iovs[arg->sgl_idx].iov_len, data_size);
@@ -889,8 +957,8 @@ unpack_recxs(daos_iod_t *iod, daos_epoch_t **recx_ephs, int *recxs_cap,
 			  sgl->sg_nr, iod->iod_nr);
 	}
 
-	D_DEBUG(DB_IO, "unpacked data %p idx/nr "DF_U64"/"DF_U64
-		" ver %u eph "DF_U64" size %zd epr ["DF_U64"/"DF_U64"]\n",
+	D_DEBUG(DB_IO, "unpacked data %p idx/nr "DF_X64"/"DF_U64
+		" ver %u eph "DF_X64" size %zd epr ["DF_X64"/"DF_X64"]\n",
 		rec, iod->iod_recxs[iod->iod_nr - 1].rx_idx,
 		iod->iod_recxs[iod->iod_nr - 1].rx_nr, rec->rec_version,
 		*eph, iod->iod_size, rec->rec_epr.epr_lo, rec->rec_epr.epr_hi);

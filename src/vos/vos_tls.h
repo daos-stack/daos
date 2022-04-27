@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2021 Intel Corporation.
+ * (C) Copyright 2016-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -159,9 +159,6 @@ vos_kh_get(uint64_t *hash)
 	return tls->vtl_hash_set;
 }
 
-/** hash seed for murmur hash */
-#define VOS_BTR_MUR_SEED	0xC0FFEE
-
 static inline uint64_t
 vos_hash_get(const void *buf, uint64_t len)
 {
@@ -172,7 +169,7 @@ vos_hash_get(const void *buf, uint64_t len)
 		return hash;
 	}
 
-	return d_hash_murmur64(buf, len, VOS_BTR_MUR_SEED);
+	return d_hash_murmur64(buf, len, BTR_MUR_SEED);
 }
 
 #ifdef VOS_STANDALONE

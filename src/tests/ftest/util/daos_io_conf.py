@@ -1,6 +1,6 @@
 #!/usr/bin/python
 """
-  (C) Copyright 2020-2021 Intel Corporation.
+  (C) Copyright 2020-2022 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -10,7 +10,8 @@ import random
 from apricot import TestWithServers
 from command_utils import ExecutableCommand
 from command_utils_base import \
-    CommandFailure, BasicParameter, FormattedParameter
+    BasicParameter, FormattedParameter
+from exception_utils import CommandFailure
 from job_manager_utils import Orterun
 
 
@@ -69,7 +70,7 @@ class IoConfGen(ExecutableCommand):
                 return False
 
         #Return False if Command failed.
-        except CommandFailure as _error:
+        except CommandFailure:
             return False
 
         return True
@@ -89,12 +90,12 @@ def gen_unaligned_io_conf(record_size, filename="testfile"):
         "akey akey_0",
         "iod_size 1",
         "pool --query",
-        "update --tx 0 --recx \"[0, {}]045\"".format(record_size),
-        "update --tx 1 --recx \"[{}, {}]123\"".format(
+        "update --tx 0 --recx \"[0, {}]045 \"".format(record_size),
+        "update --tx 1 --recx \"[{}, {}]123 \"".format(
             rand_ofs_start, rand_ofs_end),
         "fetch  --tx 1 -v --recx \"[0, {0}]045 [{0}, {1}]123 [{1}, "
         "{2}]045\"".format(rand_ofs_start, rand_ofs_end, record_size),
-        "pool --query")
+        "pool --query\n")
 
     try:
         file_hd = open(filename, "w+")

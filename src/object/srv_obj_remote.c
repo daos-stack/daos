@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2019-2021 Intel Corporation.
+ * (C) Copyright 2019-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -37,15 +37,12 @@ struct obj_remote_cb_arg {
 };
 
 static void
-shard_update_req_cb(const struct crt_cb_info *cb_info)
+do_shard_update_req_cb(crt_rpc_t *req, struct obj_remote_cb_arg *arg, int rc)
 {
-	crt_rpc_t			*req = cb_info->cci_rpc;
-	struct obj_remote_cb_arg	*arg = cb_info->cci_arg;
 	crt_rpc_t			*parent_req = arg->parent_req;
 	struct obj_rw_out		*orwo = crt_reply_get(req);
 	struct obj_rw_in		*orw_parent = crt_req_get(parent_req);
 	struct dtx_leader_handle	*dlh = arg->dlh;
-	int				rc = cb_info->cci_rc;
 	int				rc1 = 0;
 
 	if (orw_parent->orw_map_ver < orwo->orw_map_version) {
@@ -60,11 +57,15 @@ shard_update_req_cb(const struct crt_cb_info *cb_info)
 	if (rc >= 0)
 		rc = rc1;
 
-	if (arg->comp_cb)
-		arg->comp_cb(dlh, arg->idx, rc);
-
+	arg->comp_cb(dlh, arg->idx, rc);
 	crt_req_decref(parent_req);
 	D_FREE(arg);
+}
+
+static inline void
+shard_update_req_cb(const struct crt_cb_info *cb_info)
+{
+	do_shard_update_req_cb(cb_info->cci_rpc, cb_info->cci_arg, cb_info->cci_rc);
 }
 
 /* Execute update on the remote target */
@@ -145,15 +146,16 @@ ds_obj_remote_update(struct dtx_leader_handle *dlh, void *data, int idx,
 	D_DEBUG(DB_TRACE, DF_UOID" forwarding to rank:%d tag:%d.\n",
 		DP_UOID(orw->orw_oid), tgt_ep.ep_rank, tgt_ep.ep_tag);
 	rc = crt_req_send(req, shard_update_req_cb, remote_arg);
-	if (rc != 0)
+	if (rc != 0) {
+		D_ASSERT(sub->dss_comp == 1);
 		D_ERROR("crt_req_send failed, rc "DF_RC"\n", DP_RC(rc));
+	}
 	return rc;
 
 out:
 	if (rc) {
 		sub->dss_result = rc;
-		if (comp_cb)
-			comp_cb(dlh, idx, rc);
+		comp_cb(dlh, idx, rc);
 		if (remote_arg) {
 			crt_req_decref(parent_req);
 			D_FREE(remote_arg);
@@ -163,15 +165,12 @@ out:
 }
 
 static void
-shard_punch_req_cb(const struct crt_cb_info *cb_info)
+do_shard_punch_req_cb(crt_rpc_t *req, struct obj_remote_cb_arg *arg, int rc)
 {
-	crt_rpc_t			*req = cb_info->cci_rpc;
-	struct obj_remote_cb_arg	*arg = cb_info->cci_arg;
 	crt_rpc_t			*parent_req = arg->parent_req;
 	struct obj_punch_out		*opo = crt_reply_get(req);
 	struct obj_punch_in		*opi_parent = crt_req_get(req);
 	struct dtx_leader_handle	*dlh = arg->dlh;
-	int				rc = cb_info->cci_rc;
 	int				rc1 = 0;
 
 	if (opi_parent->opi_map_ver < opo->opo_map_version) {
@@ -186,11 +185,15 @@ shard_punch_req_cb(const struct crt_cb_info *cb_info)
 	if (rc >= 0)
 		rc = rc1;
 
-	if (arg->comp_cb)
-		arg->comp_cb(dlh, arg->idx, rc);
-
+	arg->comp_cb(dlh, arg->idx, rc);
 	crt_req_decref(parent_req);
 	D_FREE(arg);
+}
+
+static inline void
+shard_punch_req_cb(const struct crt_cb_info *cb_info)
+{
+	do_shard_punch_req_cb(cb_info->cci_rpc, cb_info->cci_arg, cb_info->cci_rc);
 }
 
 /* Execute punch on the remote target */
@@ -257,15 +260,16 @@ ds_obj_remote_punch(struct dtx_leader_handle *dlh, void *data, int idx,
 		DP_UOID(opi->opi_oid), tgt_ep.ep_rank, tgt_ep.ep_tag);
 
 	rc = crt_req_send(req, shard_punch_req_cb, remote_arg);
-	if (rc != 0)
+	if (rc != 0) {
+		D_ASSERT(sub->dss_comp == 1);
 		D_ERROR("crt_req_send failed, rc "DF_RC"\n", DP_RC(rc));
+	}
 	return rc;
 
 out:
 	if (rc) {
 		sub->dss_result = rc;
-		if (comp_cb != NULL)
-			comp_cb(dlh, idx, rc);
+		comp_cb(dlh, idx, rc);
 		if (remote_arg) {
 			crt_req_decref(parent_req);
 			D_FREE(remote_arg);
@@ -275,12 +279,9 @@ out:
 }
 
 static void
-shard_cpd_req_cb(const struct crt_cb_info *cb_info)
+do_shard_cpd_req_cb(crt_rpc_t *req, struct obj_remote_cb_arg *arg, int rc)
 {
-	crt_rpc_t			*req = cb_info->cci_rpc;
-	struct obj_remote_cb_arg	*arg = cb_info->cci_arg;
-	struct obj_cpd_out		*oco = crt_reply_get(req);
-	int				rc = cb_info->cci_rc;
+	struct obj_cpd_out	*oco = crt_reply_get(req);
 
 	if (rc >= 0)
 		rc = oco->oco_ret;
@@ -295,12 +296,16 @@ shard_cpd_req_cb(const struct crt_cb_info *cb_info)
 	D_FREE(arg);
 }
 
+static inline void
+shard_cpd_req_cb(const struct crt_cb_info *cb_info)
+{
+	do_shard_cpd_req_cb(cb_info->cci_rpc, cb_info->cci_arg, cb_info->cci_rc);
+}
+
 static int
-ds_obj_cpd_clone_reqs(struct dtx_leader_handle *dlh, struct daos_shard_tgt *tgt,
-		      struct daos_cpd_disp_ent *dcde_parent,
+ds_obj_cpd_clone_reqs(struct daos_shard_tgt *tgt, struct daos_cpd_disp_ent *dcde_parent,
 		      struct daos_cpd_sub_req *dcsr_parent, int total,
-		      struct daos_cpd_disp_ent **p_dcde,
-		      struct daos_cpd_sub_req **p_dcsr)
+		      struct daos_cpd_disp_ent **p_dcde, struct daos_cpd_sub_req **p_dcsr)
 {
 	struct daos_cpd_disp_ent	*dcde = NULL;
 	struct daos_cpd_sub_req		*dcsr = NULL;
@@ -480,7 +485,7 @@ ds_obj_cpd_dispatch(struct dtx_leader_handle *dlh, void *arg, int idx,
 
 	count = dcde_parent->dcde_read_cnt + dcde_parent->dcde_write_cnt;
 	if (count < total || (exec_arg->flags & ORF_HAS_EC_SPLIT)) {
-		rc = ds_obj_cpd_clone_reqs(dlh, shard_tgt, dcde_parent,
+		rc = ds_obj_cpd_clone_reqs(shard_tgt, dcde_parent,
 					   dcsr_parent, total, &dcde, &dcsr);
 		if (rc != 0)
 			D_GOTO(out, rc);
@@ -509,8 +514,10 @@ ds_obj_cpd_dispatch(struct dtx_leader_handle *dlh, void *arg, int idx,
 		tgt_ep.ep_rank, tgt_ep.ep_tag, idx, DP_DTI(&dcsh->dcsh_xid));
 
 	rc = crt_req_send(req, shard_cpd_req_cb, remote_arg);
-	if (rc != 0)
+	if (rc != 0) {
+		D_ASSERT(sub->dss_comp == 1);
 		D_ERROR("crt_req_send failed, rc "DF_RC"\n", DP_RC(rc));
+	}
 
 	D_CDEBUG(rc != 0, DLOG_ERR, DB_TRACE,
 		 "Forwarded CPD RPC to rank:%d tag:%d idx %u for DXT "
@@ -523,7 +530,6 @@ out:
 		crt_req_decref(req);
 
 	comp_cb(dlh, idx, rc);
-
 	if (remote_arg != NULL) {
 		crt_req_decref(parent_req);
 		D_FREE(remote_arg);

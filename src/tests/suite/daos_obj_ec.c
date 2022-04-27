@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2021 Intel Corporation.
+ * (C) Copyright 2016-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -33,16 +33,22 @@ get_dkey_cnt(struct ioreq *req)
 	while (!daos_anchor_is_eof(&anchor)) {
 		daos_key_desc_t kds[10];
 		uint32_t number = 10;
+		int	i;
 
 		memset(buf, 0, buf_len);
+		memset(kds, 0, sizeof(*kds) * number);
 		rc = enumerate_dkey(DAOS_TX_NONE, &number, kds, &anchor, buf,
 				    buf_len, req);
 		assert_rc_equal(rc, 0);
 		total += number;
+		for (i = 0; i < number; i++)
+			assert_int_equal(kds[i].kd_val_type, OBJ_ITER_DKEY);
 	}
 
 	return total;
 }
+
+#define EC_CELL_SIZE	DAOS_EC_CELL_DEF
 
 static void
 ec_dkey_list_punch(void **state)
@@ -67,7 +73,7 @@ ec_dkey_list_punch(void **state)
 		req.iod_type = DAOS_IOD_ARRAY;
 		sprintf(dkey, "dkey_%d", i);
 		recx.rx_nr = 5;
-		recx.rx_idx = i * 1048576;
+		recx.rx_idx = i * EC_CELL_SIZE;
 		memset(data, 'a', 16);
 		insert_recxs(dkey, "a_key", 1, DAOS_TX_NONE, &recx, 1,
 			     data, 16, &req);
@@ -122,12 +128,15 @@ get_akey_cnt(struct ioreq *req, char *dkey)
 	while (!daos_anchor_is_eof(&anchor)) {
 		daos_key_desc_t kds[10];
 		uint32_t number = 10;
+		int	i;
 
 		memset(buf, 0, buf_len);
 		rc = enumerate_akey(DAOS_TX_NONE, dkey, &number, kds,
 				    &anchor, buf, buf_len, req);
 		assert_rc_equal(rc, 0);
 		total += number;
+		for (i = 0; i < number; i++)
+			assert_int_equal(kds[i].kd_val_type, OBJ_ITER_AKEY);
 	}
 
 	return total;
@@ -156,7 +165,7 @@ ec_akey_list_punch(void **state)
 		req.iod_type = DAOS_IOD_ARRAY;
 		sprintf(akey, "akey_%d", i);
 		recx.rx_nr = 5;
-		recx.rx_idx = i * 1048576;
+		recx.rx_idx = i * EC_CELL_SIZE;
 		memset(data, 'a', 16);
 		insert_recxs("d_key", akey, 1, DAOS_TX_NONE, &recx, 1,
 			     data, 16, &req);
@@ -214,7 +223,8 @@ get_rec_cnt(struct ioreq *req, char *dkey, char *akey, int start)
 			      &number, recxs, eprs, &anchor, true, req);
 		total += number;
 		for (i = 0; i < number; i++, idx++) {
-			assert_int_equal((int)recxs[i].rx_idx, idx * 1048576);
+			assert_int_equal((int)recxs[i].rx_idx,
+					 idx * EC_CELL_SIZE);
 			assert_int_equal((int)recxs[i].rx_nr, 5);
 		}
 
@@ -244,7 +254,7 @@ ec_rec_list_punch(void **state)
 		/* Make dkey on different shards */
 		req.iod_type = DAOS_IOD_ARRAY;
 		recx.rx_nr = 5;
-		recx.rx_idx = i * 1048576;
+		recx.rx_idx = i * EC_CELL_SIZE;
 		memset(data, 'a', 16);
 		insert_recxs("d_key", "a_key", 1, DAOS_TX_NONE, &recx, 1,
 			     data, 16, &req);
@@ -262,7 +272,7 @@ ec_rec_list_punch(void **state)
 		daos_recx_t recx;
 
 		recx.rx_nr = 5;
-		recx.rx_idx = i * 1048576;
+		recx.rx_idx = i * EC_CELL_SIZE;
 
 		punch_recxs("d_key", "a_key", &recx, 1, DAOS_TX_NONE, &req);
 		if (i % 10 == 0) {
@@ -376,8 +386,8 @@ trigger_and_wait_ec_aggreation(test_arg_t *arg, daos_obj_id_t *oids,
 					      0, NULL);
 	}
 
-	print_message("wait for 20 seconds for EC aggregation.\n");
-	sleep(20);
+	print_message("wait for 30 seconds for EC aggregation.\n");
+	sleep(30);
 
 	for (i = 0; i < oids_nr; i++) {
 		struct daos_oclass_attr *oca;
@@ -424,7 +434,6 @@ ec_verify_parity_data(struct ioreq *req, char *dkey, char *akey,
 	free(data);
 }
 
-#define EC_CELL_SIZE	1048576
 static void
 ec_partial_update_agg(void **state)
 {
@@ -677,8 +686,15 @@ dfs_ec_check_size_internal(void **state, unsigned fail_loc)
 	int		i;
 	daos_obj_id_t	oid;
 	int		rc;
+	dfs_attr_t	attr = {};
 
+	attr.da_props = daos_prop_alloc(1);
+	assert_non_null(attr.da_props);
+	attr.da_props->dpp_entries[0].dpe_type = DAOS_PROP_CO_EC_CELL_SZ;
+	attr.da_props->dpp_entries[0].dpe_val = 1 << 15;
 	rc = dfs_cont_create(arg->pool.poh, &co_uuid, NULL, &co_hdl, &dfs_mt);
+	daos_prop_free(attr.da_props);
+
 	assert_int_equal(rc, 0);
 	printf("Created DFS Container "DF_UUIDF"\n", DP_UUID(co_uuid));
 
@@ -687,7 +703,7 @@ dfs_ec_check_size_internal(void **state, unsigned fail_loc)
 
 	sprintf(filename, "ec_file");
 	rc = dfs_open(dfs_mt, NULL, filename, S_IFREG | S_IWUSR | S_IRUSR,
-		      O_RDWR | O_CREAT, DAOS_OC_EC_K4P2_L32K, chunk_size,
+		      O_RDWR | O_CREAT, OC_EC_4P2G1, chunk_size,
 		      NULL, &obj);
 	assert_int_equal(rc, 0);
 
@@ -1095,8 +1111,14 @@ ec_punch_check_size(void **state)
 	int		i;
 	daos_obj_id_t	oid;
 	int		rc;
+	dfs_attr_t	attr = {};
 
+	attr.da_props = daos_prop_alloc(1);
+	assert_non_null(attr.da_props);
+	attr.da_props->dpp_entries[0].dpe_type = DAOS_PROP_CO_EC_CELL_SZ;
+	attr.da_props->dpp_entries[0].dpe_val = 1 << 15;
 	rc = dfs_cont_create(arg->pool.poh, &co_uuid, NULL, &co_hdl, &dfs_mt);
+	daos_prop_free(attr.da_props);
 	assert_int_equal(rc, 0);
 	printf("Created DFS Container "DF_UUIDF"\n", DP_UUID(co_uuid));
 
@@ -1105,7 +1127,7 @@ ec_punch_check_size(void **state)
 
 	sprintf(filename, "ec_file");
 	rc = dfs_open(dfs_mt, NULL, filename, S_IFREG | S_IWUSR | S_IRUSR,
-		      O_RDWR | O_CREAT, DAOS_OC_EC_K4P2_L32K, chunk_size,
+		      O_RDWR | O_CREAT, OC_EC_4P2G1, chunk_size,
 		      NULL, &obj);
 	assert_int_equal(rc, 0);
 
@@ -1135,7 +1157,7 @@ ec_punch_check_size(void **state)
 
 	sprintf(filename, "ec_file1");
 	rc = dfs_open(dfs_mt, NULL, filename, S_IFREG | S_IWUSR | S_IRUSR,
-		      O_RDWR | O_CREAT, DAOS_OC_EC_K4P2_L32K, chunk_size,
+		      O_RDWR | O_CREAT, OC_EC_4P2G1, chunk_size,
 		      NULL, &obj);
 	assert_int_equal(rc, 0);
 
@@ -1582,7 +1604,7 @@ run_daos_ec_io_test(int rank, int size, int *sub_tests, int sub_tests_size)
 {
 	int rc = 0;
 
-	MPI_Barrier(MPI_COMM_WORLD);
+	par_barrier(PAR_COMM_WORLD);
 	if (sub_tests_size == 0) {
 		sub_tests_size = ARRAY_SIZE(ec_tests);
 		sub_tests = NULL;
@@ -1592,7 +1614,7 @@ run_daos_ec_io_test(int rank, int size, int *sub_tests, int sub_tests_size)
 				sub_tests, sub_tests_size, ec_setup,
 				test_teardown);
 
-	MPI_Barrier(MPI_COMM_WORLD);
+	par_barrier(PAR_COMM_WORLD);
 
 	return rc;
 }

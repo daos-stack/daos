@@ -11,10 +11,8 @@ ENV:
 env_CRT_PHY_ADDR_STR: !mux
   sm:
     CRT_PHY_ADDR_STR: "sm"
-  ofi_sockets:
-    CRT_PHY_ADDR_STR: "ofi+sockets"
   ofi_tcp:
-    CRT_PHY_ADDR_STR: "ofi+tcp;ofi_rxm"
+    CRT_PHY_ADDR_STR: "ofi+tcp"
 env_CRT_CTX_SHARE_ADDR: !mux
   no_sep:
     env: no_sep

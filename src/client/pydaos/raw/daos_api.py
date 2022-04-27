@@ -1,6 +1,6 @@
 #!/usr/bin/python
 """
-  (C) Copyright 2018-2021 Intel Corporation.
+  (C) Copyright 2018-2022 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -82,8 +82,13 @@ class DaosPool():
 
         # the callback function is optional, if not supplied then run the
         # create synchronously, if its there then run it in a thread
+
+        if self.uuid is None:
+            raise DaosApiError("Pool uuid is None.")
+        uuid_str = self.get_uuid_str()
+
         if cb_func is None:
-            ret = func(self.uuid, self.group, c_flags,
+            ret = func(bytes(uuid_str, encoding='utf-8'), self.group, c_flags,
                        ctypes.byref(self.handle), ctypes.byref(c_info), None)
 
             if ret != 0:
@@ -93,7 +98,7 @@ class DaosPool():
             self.connected = 1
         else:
             event = daos_cref.DaosEvent()
-            params = [self.uuid, self.group, c_flags,
+            params = [bytes(uuid_str, encoding='utf-8'), self.group, c_flags,
                       ctypes.byref(self.handle), ctypes.byref(c_info), event]
             thread = threading.Thread(target=daos_cref.AsyncWorker1,
                                       args=(func,
@@ -212,9 +217,29 @@ class DaosPool():
         thread.start()
         return None
 
-    def target_query(self, tgt):
+    def target_query(self, tgt, rank, cb_func=None):
         """Query information of storage targets within a DAOS pool."""
-        raise NotImplementedError("Target_query not yet implemented in C API.")
+        self.target_info = daos_cref.TargetInfo()
+        func = self.context.get_function('query-target')
+
+        if cb_func is None:
+            ret = func(self.handle, tgt, rank, ctypes.byref(self.target_info),
+                       None)
+            if ret != 0:
+                raise DaosApiError("Pool query returned non-zero. RC: {0}"
+                                   .format(ret))
+            return self.target_info
+
+        event = daos_cref.DaosEvent()
+        params = [self.handle, tgt, rank, ctypes.byref(self.target_info), event]
+        thread = threading.Thread(target=daos_cref.AsyncWorker1,
+                                  args=(func,
+                                        params,
+                                        self.context,
+                                        cb_func,
+                                        self))
+        thread.start()
+        return None
 
     def set_svc(self, rank):
         """Set svc.
@@ -326,11 +351,14 @@ class DaosPool():
         """Retrieve a list of user-defined pool attribute values.
 
         Args:
-            attr_names:         list of attributes to retrieve
-            poh [Optional]:     Pool Handle if you really want to override it
-            cb_func[Optional]:  To run API in Asynchronous mode.
+            attr_names (list): list of attributes to retrieve
+            poh (ctypes.c_uint64, optional): Pool Handle if you really want to override it
+            cb_func (CallbackHandler, optional): To run API in Asynchronous mode.
+
         return:
-            Requested Attributes as a dictionary.
+            dict/tuple: Requested Attributes as a dictionary for synchronous and tuple
+                for asynchronous mode.
+
         """
         if not attr_names:
             raise DaosApiError("Attribute list should not be blank")
@@ -357,25 +385,29 @@ class DaosPool():
             if ret != 0:
                 raise DaosApiError("Pool Get Attribute returned non-zero. "
                                    "RC: {0}".format(ret))
-        else:
-            event = daos_cref.DaosEvent()
-            params = [self.handle, no_of_att, ctypes.byref(attr_names_c),
-                      ctypes.byref(buff), sizes, event]
-            thread = threading.Thread(target=daos_cref.AsyncWorker1,
-                                      args=(func,
-                                            params,
-                                            self.context,
-                                            cb_func,
-                                            self))
-            thread.start()
 
-        results = {}
-        i = 0
-        for attr in attr_names:
-            results[attr] = buff[i][:sizes[i]]
-            i += 1
+            # Construct the results dictionary from buff and sizes set in the function
+            # call.
+            results = {}
+            i = 0
+            for attr in attr_names:
+                results[attr] = buff[i][:sizes[i]]
+                i += 1
+            return results
 
-        return results
+        # Asynchronous mode.
+        event = daos_cref.DaosEvent()
+        params = [self.handle, no_of_att, ctypes.byref(attr_names_c), ctypes.byref(buff),
+                  sizes, event]
+        thread = threading.Thread(
+            target=daos_cref.AsyncWorker1, args=(
+                func, params, self.context, cb_func, self))
+        thread.start()
+
+        # Return buff and sizes because at this point, the values aren't set. The
+        # caller should wait with the callback handler. When the wait is over, obtain
+        # the name and value from buff and sizes as in synchronous mode.
+        return (buff, sizes)
 
     # pylint: disable=unused-private-member
     @staticmethod
@@ -407,9 +439,6 @@ class DaosObjClassOld(enum.IntEnum):
     DAOS_OC_R1S_SPEC_RANK = 19
     DAOS_OC_R2S_SPEC_RANK = 20
     DAOS_OC_R3S_SPEC_RANK = 21
-    DAOS_OC_EC_K2P1_L32K = 22
-    DAOS_OC_EC_K2P2_L32K = 23
-    DAOS_OC_EC_K4P2_L32K = 24
 
 
 # pylint: disable=no-member
@@ -646,7 +675,7 @@ class DaosObj():
         Args:
             txn (int): the transaction from which keys will be deleted
             dkeys (list): the keys to be deleted, None will be passed as NULL
-            cb_func (object, optional): callback function. Defaults to None.
+            cb_func (CallbackHandler, optional): Callback function. Defaults to None.
 
         Raises:
             DaosApiError: if there is an error deleting the keys.
@@ -700,7 +729,7 @@ class DaosObj():
             txn (int): the transaction from which keys will be deleted.
             dkey (str): the parent dkey from which the akeys will be deleted
             akeys (list): a list of akeys (strings) which are to be deleted
-            cb_func ([type], optional): callback function. Defaults to None.
+            cb_func (CallbackHandler, optional): callback function. Defaults to None.
 
         Raises:
             DaosApiError: if there is an error deleting the akeys.
@@ -1303,8 +1332,7 @@ class IORequest():
             # set in the kds (key descriptors) object to get the individual
             # keys.
             dkeys.extend(
-                self.collect_keys(key_count=nr_val.value, daos_kds=daos_kds,
-                buf=buf))
+                self.collect_keys(key_count=nr_val.value, daos_kds=daos_kds, buf=buf))
 
         return dkeys
 
@@ -1474,7 +1502,7 @@ class DaosContainer():
         # Create DaosProperty for checksum
         # 1. Layout Type.
         # 2. Enable checksum,
-        # 3. Server Verfiy
+        # 3. Server Verify
         # 4. Chunk Size Allocation.
         if ((self.cont_input_values.type.decode("UTF-8") != "Unknown")
                 and (self.cont_input_values.enable_chksum is False)):
@@ -1482,7 +1510,7 @@ class DaosContainer():
             num_prop = 1
         elif ((self.cont_input_values.type.decode("UTF-8") == "Unknown")
               and (self.cont_input_values.enable_chksum is True)):
-            # Obly checksum enabled.
+            # Only checksum enabled.
             num_prop = 3
         elif ((self.cont_input_values.type.decode("UTF-8") != "Unknown")
               and (self.cont_input_values.enable_chksum is True)):
@@ -1492,7 +1520,7 @@ class DaosContainer():
         if ((self.cont_input_values.type.decode("UTF-8") != "Unknown")
                 or (self.cont_input_values.enable_chksum is True)):
             self.cont_prop = daos_cref.DaosProperty(num_prop)
-        # idx index is used to increment the dpp_entried array
+        # idx index is used to increment the dpp_entries array
         # value. If layer_type is None and checksum is enabled
         # the index will vary. [eg: layer is none, checksum
         # dpp_entries will start with idx=0. If layer is not
@@ -1578,6 +1606,10 @@ class DaosContainer():
         if con_uuid is not None:
             conversion.c_uuid(con_uuid, self.uuid)
 
+        if self.uuid is None:
+            raise DaosApiError("Container uuid is None.")
+        uuid_str = self.get_uuid_str()
+
         c_force = ctypes.c_uint(force)
 
         func = self.context.get_function('destroy-cont')
@@ -1585,14 +1617,14 @@ class DaosContainer():
         # the callback function is optional, if not supplied then run the
         # create synchronously, if its there then run it in a thread
         if cb_func is None:
-            ret = func(self.poh, self.uuid, c_force, None)
+            ret = func(self.poh, bytes(uuid_str, encoding='utf-8'), c_force, None)
             if ret != 0:
                 raise DaosApiError("Container destroy returned non-zero. "
                                    "RC: {0}".format(ret))
             self.attached = 0
         else:
             event = daos_cref.DaosEvent()
-            params = [self.poh, self.uuid, c_force, event]
+            params = [self.poh, bytes(uuid_str, encoding='utf-8'), c_force, event]
             thread = threading.Thread(target=daos_cref.AsyncWorker1,
                                       args=(func,
                                             params,
@@ -1615,21 +1647,25 @@ class DaosContainer():
         if flags is not None:
             c_flags = ctypes.c_uint(flags)
 
+        if self.uuid is None:
+            raise DaosApiError("Container uuid is None.")
+        uuid_str = self.get_uuid_str()
+
         func = self.context.get_function('open-cont')
 
         # the callback function is optional, if not supplied then run the
         # create synchronously, if its there then run it in a thread
         if cb_func is None:
-            ret = func(self.poh, self.uuid, c_flags, ctypes.byref(self.coh),
-                       ctypes.byref(self.info), None)
+            ret = func(self.poh, bytes(uuid_str, encoding='utf-8'), c_flags,
+                       ctypes.byref(self.coh), ctypes.byref(self.info), None)
             if ret != 0:
                 raise DaosApiError("Container open returned non-zero. RC: {0}"
                                    .format(ret))
             self.opened = 1
         else:
             event = daos_cref.DaosEvent()
-            params = [self.poh, self.uuid, c_flags, ctypes.byref(self.coh),
-                      ctypes.byref(self.info), event]
+            params = [self.poh, bytes(uuid_str, encoding='utf-8'), c_flags,
+                      ctypes.byref(self.coh), ctypes.byref(self.info), event]
             thread = threading.Thread(target=daos_cref.AsyncWorker1,
                                       args=(func,
                                             params,
@@ -1666,8 +1702,22 @@ class DaosContainer():
                                             self))
             thread.start()
 
-    def query(self, coh=None, cb_func=None):
-        """Query container information."""
+    def query(self, coh=None, cont_prop=None, cb_func=None):
+        """Query container information.
+
+        Args:
+            coh (ctypes.c_uint64, optional): Container handle. Defaults to None.
+            cont_prop (daos_cref.DaosProperty, optional): Empty data structure that
+                stores the property values. The values are set during create(). The
+                configuration of the data structure depends on the property values set.
+                See create() for more details. Defaults to None.
+            cb_func (CallbackHandler, None): Callback function. Defaults to None.
+
+        Returns:
+            daos_cref.ContInfo: Container info that stores UUID, snapshots, redundancy
+                factor, etc.
+
+        """
         # allow caller to override the handle
         if coh is not None:
             self.coh = coh
@@ -1675,10 +1725,14 @@ class DaosContainer():
         func = self.context.get_function('query-cont')
 
         if cb_func is None:
-            ret = func(self.coh, ctypes.byref(self.info), None, None)
+            if cont_prop:
+                ret = func(
+                    self.coh, ctypes.byref(self.info), ctypes.byref(cont_prop), None)
+            else:
+                ret = func(self.coh, ctypes.byref(self.info), None, None)
             if ret != 0:
-                raise DaosApiError("Container query returned non-zero. RC: {0}"
-                                   .format(ret))
+                raise DaosApiError(
+                    "Container query returned non-zero. RC: {0}".format(ret))
             return self.info
 
         event = daos_cref.DaosEvent()
@@ -1974,14 +2028,21 @@ class DaosContainer():
         return local_handle
 
     def list_attr(self, coh=None, cb_func=None):
-        """Retrieve a list of user-defined container attribute values.
+        """Retrieve a list of user-defined container attribute names.
 
         Args:
-            coh [Optional]:     Container Handler.
-            cb_func[Optional]:  To run API in Asynchronous mode.
+            coh(ctypes.c_uint64): Container Handle. Defaults to None.
+            cb_func(CallbackHandler, optional): To run API in Asynchronous mode. Defaults
+                to None.
+
         return:
-            total_size[int]: Total aggregate size of attributes names.
-            buffer[String]: Complete aggregated attributes names.
+            tuple: Size and name(s).
+                total_size[int]: Total aggregate size of attributes names.
+                buffer[String]: Complete aggregated attributes names.
+                Size in async mode is one more than the sync mode. e.g.,
+                buff = b'Name1\x00Name2\x00\x00'
+                Async is 13 (10 characters and 3 "\x00"s), but sync is 12.
+
         """
         if coh is not None:
             self.coh = coh
@@ -1991,7 +2052,7 @@ class DaosContainer():
         # if it's not passed as a dictionary.
         sbuf = ctypes.create_string_buffer(100).raw
         t_size = ctypes.pointer(ctypes.c_size_t(100))
-        ret = func(self.coh, sbuf, t_size)
+        ret = func(self.coh, sbuf, t_size, None)
         if ret != 0:
             raise DaosApiError("Container list-cont-attr returned non-zero. "
                                "RC: {0}".format(ret))
@@ -2017,6 +2078,7 @@ class DaosContainer():
                                             cb_func,
                                             self))
             thread.start()
+
         return total_size[0], buff
 
     def set_attr(self, data, coh=None, cb_func=None):
@@ -2069,15 +2131,20 @@ class DaosContainer():
             thread.start()
 
     def get_attr(self, attr_names, coh=None, cb_func=None):
-        """Retrieve a list of user-defined container attribute values.
+        """Get container attribute value(s) from given attr_names.
 
         Note the presumption that no value is larger than 100 chars.
+
         Args:
-            attr_names[Required]:     Attribute name list
-            coh [Optional]:     Container Handler
-            cb_func[Optional]:  To run API in Asynchronous mode.
+            attr_names(list): Attribute name list
+            coh(ctypes.c_uint64): Container Handle. Defaults to None.
+            cb_func(CallbackHandler, optional): To run API in Asynchronous mode. Defaults
+                to None.
+
         return:
-            dictionary containing the requested attributes as key:value pairs.
+            dict/tuple: Requested Attributes as a dictionary for synchronous and tuple
+                for asynchronous mode.
+
         """
         if not attr_names:
             raise DaosApiError("Attribute names should not be empty")
@@ -2104,25 +2171,28 @@ class DaosContainer():
             if ret != 0:
                 raise DaosApiError("Container Get Attribute returned non-zero "
                                    "RC: {0}".format(ret))
-        else:
-            event = daos_cref.DaosEvent()
-            params = [self.coh, no_of_att, ctypes.byref(attr_names_c),
-                      ctypes.byref(buff), sizes, event]
-            thread = threading.Thread(target=daos_cref.AsyncWorker1,
-                                      args=(func,
-                                            params,
-                                            self.context,
-                                            cb_func,
-                                            self))
-            thread.start()
 
-        results = {}
-        i = 0
-        for attr in attr_names:
-            results[attr] = buff[i][:sizes[i]]
-            i += 1
+            # Construct the results dictionary from buff and sizes set in the function
+            # call.
+            results = {}
+            i = 0
+            for attr in attr_names:
+                results[attr] = buff[i][:sizes[i]]
+                i += 1
+            return results
 
-        return results
+        event = daos_cref.DaosEvent()
+        params = [self.coh, no_of_att, ctypes.byref(attr_names_c), ctypes.byref(buff),
+                  sizes, event]
+        thread = threading.Thread(
+            target=daos_cref.AsyncWorker1, args=(
+                func, params, self.context, cb_func, self))
+        thread.start()
+
+        # Return buff and sizes because at this point, the values aren't set. The
+        # caller should wait with the callback handler. When the wait is over, construct
+        # the results dictionary as in synchronous mode.
+        return (buff, sizes)
 
     def aggregate(self, coh, epoch, cb_func=None):
         """Aggregate the container epochs.

@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2021 Intel Corporation.
+ * (C) Copyright 2016-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -24,17 +24,13 @@ struct crt_na_dict crt_na_dict[] = {
 	}, {
 		.nad_type	= CRT_NA_OFI_SOCKETS,
 		.nad_str	= "ofi+sockets",
+		.nad_alt_str	= "ofi+socket",
 		.nad_contig_eps	= true,
 		.nad_port_bind  = true,
 	}, {
 		.nad_type	= CRT_NA_OFI_VERBS_RXM,
 		.nad_str	= "ofi+verbs;ofi_rxm",
-		.nad_contig_eps	= true,
-		.nad_port_bind  = true,
-	}, {
-	/* verbs is not supported. Keep entry in order to print warning */
-		.nad_type	= CRT_NA_OFI_VERBS,
-		.nad_str	= "ofi+verbs",
+		.nad_alt_str	= "ofi+verbs",
 		.nad_contig_eps	= true,
 		.nad_port_bind  = true,
 	}, {
@@ -50,6 +46,7 @@ struct crt_na_dict crt_na_dict[] = {
 	}, {
 		.nad_type	= CRT_NA_OFI_TCP_RXM,
 		.nad_str	= "ofi+tcp;ofi_rxm",
+		.nad_alt_str	= "ofi+tcp",
 		.nad_contig_eps	= true,
 		.nad_port_bind  = true,
 	}, {
@@ -57,6 +54,56 @@ struct crt_na_dict crt_na_dict[] = {
 		.nad_str	= "ofi+cxi",
 		.nad_contig_eps	= true,
 		.nad_port_bind  = false,
+	}, {
+		.nad_type	= CRT_NA_UCX_RC,
+		.nad_str	= "ucx+rc_v",
+		.nad_contig_eps	= true,
+		.nad_port_bind	= true,
+	}, {
+		.nad_type	= CRT_NA_UCX_UD,
+		.nad_str	= "ucx+ud_v",
+		.nad_contig_eps	= true,
+		.nad_port_bind	= true,
+	}, {
+		.nad_type	= CRT_NA_UCX_RC_UD,
+		.nad_str	= "ucx+rc_v,ud_v",
+		.nad_contig_eps	= true,
+		.nad_port_bind	= true,
+	}, {
+		.nad_type	= CRT_NA_UCX_RC_O,
+		.nad_str	= "ucx+rc",
+		.nad_contig_eps	= true,
+		.nad_port_bind	= true,
+	}, {
+		.nad_type	= CRT_NA_UCX_UD_O,
+		.nad_str	= "ucx+ud",
+		.nad_contig_eps	= true,
+		.nad_port_bind	= true,
+	}, {
+		.nad_type	= CRT_NA_UCX_RC_UD_O,
+		.nad_str	= "ucx+rc,ud",
+		.nad_contig_eps	= true,
+		.nad_port_bind	= true,
+	}, {
+		.nad_type	= CRT_NA_UCX_RC_X,
+		.nad_str	= "ucx+rc_x",
+		.nad_contig_eps	= true,
+		.nad_port_bind	= true,
+	}, {
+		.nad_type	= CRT_NA_UCX_UD_X,
+		.nad_str	= "ucx+ud_x",
+		.nad_contig_eps	= true,
+		.nad_port_bind	= true,
+	}, {
+		.nad_type	= CRT_NA_UCX_RC_UD_X,
+		.nad_str	= "ucx+rc_x,ud_x",
+		.nad_contig_eps	= true,
+		.nad_port_bind	= true,
+	}, {
+		.nad_type	= CRT_NA_UCX_DC_X,
+		.nad_str	= "ucx+dc_x",
+		.nad_contig_eps	= true,
+		.nad_port_bind	= true,
 	}, {
 		.nad_str	= NULL,
 	}
@@ -103,8 +150,10 @@ crt_prov_str_to_na_type(const char *prov_str)
 {
 	int i;
 
-	for (i = 0; i < CRT_NA_OFI_COUNT; i++) {
-		if (strcmp(prov_str, crt_na_dict[i].nad_str) == 0)
+	for (i = 0; i < CRT_NA_COUNT; i++) {
+		if (strcmp(prov_str, crt_na_dict[i].nad_str) == 0 ||
+		    (crt_na_dict[i].nad_alt_str &&
+		     strcmp(prov_str, crt_na_dict[i].nad_alt_str) == 0))
 			return crt_na_dict[i].nad_type;
 	}
 
@@ -665,11 +714,13 @@ crt_hg_class_init(int provider, int idx, hg_class_t **ret_hg_class)
 		D_GOTO(out, rc = -DER_HG);
 	}
 
-	rc = crt_hg_get_addr(hg_class, addr_str, &str_size);
-	if (rc != 0) {
-		D_ERROR("crt_hg_get_addr() failed, rc: %d.\n", rc);
-		HG_Finalize(hg_class);
-		D_GOTO(out, rc = -DER_HG);
+	if (crt_is_service()) {
+		rc = crt_hg_get_addr(hg_class, addr_str, &str_size);
+		if (rc != 0) {
+			D_ERROR("crt_hg_get_addr() failed, rc: %d.\n", rc);
+			HG_Finalize(hg_class);
+			D_GOTO(out, rc = -DER_HG);
+		}
 	}
 
 	D_DEBUG(DB_NET, "New context(idx:%d), listen address: %s.\n",
@@ -893,7 +944,7 @@ crt_rpc_handler_common(hg_handle_t hg_hdl)
 	rpc_pub->cr_ep.ep_rank = rpc_priv->crp_req_hdr.cch_dst_rank;
 	rpc_pub->cr_ep.ep_tag = rpc_priv->crp_req_hdr.cch_dst_tag;
 
-	RPC_TRACE(DB_TRACE, rpc_priv,
+	RPC_TRACE(DB_ALL, rpc_priv,
 		  "(opc: %#x rpc_pub: %p) allocated per RPC request received.\n",
 		  rpc_priv->crp_opc_info->coi_opc,
 		  &rpc_priv->crp_pub);

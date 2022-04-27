@@ -60,7 +60,7 @@ ones used by OpenMPI. For additional details, please refer to the
 
 **Run CaRT self_test**
 
-The example below uses an Ethernet interface and Sockets provider.
+The example below uses an Ethernet interface and TCP provider.
 In the `self_test` commands:
 
 -   **Selftest client to servers** - Replace the argument for `--endpoint`
@@ -93,7 +93,7 @@ $ ./bin/self_test --help
 ```bash
 
 # Specify provider
-export CRT_PHY_ADDR_STR='ofi+sockets'
+export CRT_PHY_ADDR_STR='ofi+tcp'
 
 # Specify interface
 export OFI_INTERFACE=eth0
@@ -235,7 +235,7 @@ The `-R` option is used to define the operation to be performanced:
 - `P` for `punch` (i.e. truncate) operation
 - `p` to display the performance result for the previous operation.
 
-For instance, -R "U;p F;P" means update the keys, print the update rate/bandwidth,
+For instance, -R "U;p F;p" means update the keys, print the update rate/bandwidth,
 fetch the keys and then print the fetch rate/bandwidth. The number of
 object/dkey/akey/value can be passed via respectively the -o, -d, -a and -n
 options. The value size is specified via the -s parameter (e.g. -s 4K for 4K
@@ -249,7 +249,7 @@ $ cd /mnt/daos0
 $ df .
 Filesystem      1K-blocks  Used  Available Use% Mounted on
 /dev/pmem0     4185374720 49152 4118216704   1% /mnt/daos0
-$ taskset -c 1 vos_perf -f ./vos -P 100G -d 10000000 -a 1 -n 1 -s 4K -z -R "U;p F;p"
+$ taskset -c 1 vos_perf -D . -P 100G -d 10000000 -a 1 -n 1 -s 4K -z -R "U;p F;p"
 Test :
         VOS (storage only)
 Pool :
@@ -305,7 +305,7 @@ $ cd /mnt/daos1/
 $ df .
 Filesystem      1K-blocks   Used  Available Use% Mounted on
 /dev/pmem1     4185374720 262144 4118003712   1% /mnt/daos1
-$ taskset -c 36 vos_perf -f ./vos -P 100G -d 10000000 -a 1 -n 1 -s 4K -z -R "U;p F;p"
+$ taskset -c 36 vos_perf -D . -P 100G -d 10000000 -a 1 -n 1 -s 4K -z -R "U;p F;p"
 Test :
         VOS (storage only)
 Pool :
@@ -351,7 +351,7 @@ Bandwidth can be tested by using a larger record size (i.e. -s option). For
 instance:
 
 ```
-$ taskset -c 36 vos_perf -f ./vos -P 100G -d 40000 -a 1 -n 1 -s 1M -z -R "U;p F;p"
+$ taskset -c 36 vos_perf -D . -P 100G -d 40000 -a 1 -n 1 -s 1M -z -R "U;p F;p"
 Test :
         VOS (storage only)
 Pool :
@@ -460,25 +460,21 @@ into the configuration problem.
 
 The default configuration enables the Agent GetAttachInfo cache.  If it is
 desired, the cache may be disabled prior to DAOS Agent startup by setting the
-Agent's environment variable `DAOS_AGENT_DISABLE_CACHE=true`.  The cache is
-loaded only at Agent startup. The following debug message will be found in the
-Agent's log:
-```
-GetAttachInfo agent caching has been disabled
-```
+Agent's environment variable `DAOS_AGENT_DISABLE_CACHE=true` or updating the
+Agent configuration file with `disable_caching: true`.
 
-If the network configuration changes while the Agent is running, it must be
-restarted to gain visibility to these changes. For additional information,
-please refer to the [System Deployment: Agent Startup][6] documentation
-section.
+If the network configuration changes while the Agent is running, and the cache
+is enabled, the Agent must be restarted to gain visibility to these changes.
+For additional information, please refer to the
+[System Deployment: Agent Startup][6] documentation section.
 
-[1]: </src/cart> (Collective and RPC Transport)
-[2]: </docs/admin/installation.md#distribution-packages> (DAOS distribution packages)
-[3]: </docs/admin/installation.md#building-daos--dependencies> (DAOS build documentation)
-[4]: </docs/admin/deployment.md#server-startup> (DAOS server startup documentation)
+[1]: <https://github.com/daos-stack/daos/blob/master/src/cart#readme> (Collective and RPC Transport)
+[2]: <installation.md#distribution-packages> (DAOS distribution packages)
+[3]: <installation.md#building-daos--dependencies> (DAOS build documentation)
+[4]: <deployment.md#server-startup> (DAOS server startup documentation)
 [5]: <https://www.open-mpi.org/faq/?category=running#mpirun-hostfile> (mpirun hostfile)
-[6]: </docs/admin/deployment.md#disable-agent-cache-optional> (System Deployment Agent Startup)
-[7]: <https://daos-stack.github.io/user/posix/#dfuse>
-[8]: </docs/user/mpi-io.md>
-[9]: </docs/user/hdf5.md>
+[6]: <deployment.md#disable-agent-cache-optional> (System Deployment Agent Startup)
+[7]: <../user/posix/#dfuse>
+[8]: <../user/mpi-io.md>
+[9]: <../user/hdf5.md>
 [10]: <https://github.com/hpc/ior/blob/main/README_DAOS>

@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2021 Intel Corporation.
+// (C) Copyright 2019-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -52,14 +52,10 @@ type Engine interface {
 	// These methods should probably be refactored out into functions that
 	// accept the engine instance as a parameter.
 	GetBioHealth(context.Context, *ctlpb.BioHealthReq) (*ctlpb.BioHealthResp, error)
-	GetScmConfig() (*storage.TierConfig, error)
-	GetScmUsage() (*storage.ScmMountPoint, error)
-	HasBlockDevices() bool
 	ScanBdevTiers() ([]storage.BdevTierScanResult, error)
 	ListSmdDevices(context.Context, *ctlpb.SmdDevReq) (*ctlpb.SmdDevResp, error)
 	StorageFormatSCM(context.Context, bool) *ctlpb.ScmMountResult
 	StorageFormatNVMe() commonpb.NvmeControllerResults
-	StorageWriteNvmeConfig() error
 
 	// This is a more reasonable surface that will be easier to maintain and test.
 	CallDrpc(context.Context, drpc.Method, proto.Message) (*drpc.Response, error)
@@ -75,6 +71,7 @@ type Engine interface {
 	Stop(os.Signal) error
 	OnInstanceExit(...onInstanceExitFn)
 	OnReady(...onReadyFn)
+	GetStorage() *storage.Provider
 }
 
 // EngineHarness is responsible for managing Engine instances.

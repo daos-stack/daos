@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2017-2021 Intel Corporation.
+ * (C) Copyright 2017-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -11,6 +11,7 @@
 
 #include <daos_srv/rdb.h>
 #include <daos_srv/security.h>
+#include <daos/pool.h>
 #include "srv_layout.h"
 
 /** Root KVS */
@@ -26,8 +27,17 @@ RDB_STRING_KEY(ds_pool_prop_, owner);
 RDB_STRING_KEY(ds_pool_prop_, owner_group);
 RDB_STRING_KEY(ds_pool_prop_, connectable);
 RDB_STRING_KEY(ds_pool_prop_, nhandles);
+RDB_STRING_KEY(ds_pool_prop_, policy);
+RDB_STRING_KEY(ds_pool_prop_, global_version);
+RDB_STRING_KEY(ds_pool_prop_, upgrade_global_version);
+RDB_STRING_KEY(ds_pool_prop_, upgrade_status);
+
+/** pool handle KVS */
 RDB_STRING_KEY(ds_pool_prop_, handles);
 RDB_STRING_KEY(ds_pool_prop_, ec_cell_sz);
+RDB_STRING_KEY(ds_pool_prop_, redun_fac);
+RDB_STRING_KEY(ds_pool_prop_, ec_pda);
+RDB_STRING_KEY(ds_pool_prop_, rp_pda);
 RDB_STRING_KEY(ds_pool_attr_, user);
 
 /** default properties, should cover all optional pool properties */
@@ -59,8 +69,26 @@ struct daos_prop_entry pool_prop_entries_default[DAOS_PROP_PO_NUM] = {
 		.dpe_val_ptr	= NULL,
 	}, {
 		.dpe_type	= DAOS_PROP_PO_EC_CELL_SZ,
-		/* TODO: change it to DAOS_EC_CELL_DEF in a separate patch */
-		.dpe_val	= DAOS_EC_CELL_MAX,
+		.dpe_val	= DAOS_EC_CELL_DEF,
+	}, {
+		.dpe_type	= DAOS_PROP_PO_REDUN_FAC,
+		.dpe_val	= DAOS_RPOP_PO_REDUN_FAC_DEFAULT,
+	}, {
+		.dpe_type	= DAOS_PROP_PO_EC_PDA,
+		.dpe_val	= DAOS_PROP_PO_EC_PDA_DEFAULT,
+
+	}, {
+		.dpe_type	= DAOS_PROP_PO_RP_PDA,
+		.dpe_val	= DAOS_PROP_PO_RP_PDA_DEFAULT,
+	}, {
+		.dpe_type	= DAOS_PROP_PO_POLICY,
+		.dpe_str	= DAOS_PROP_POLICYSTR_DEFAULT,
+	}, {
+		.dpe_type	= DAOS_PROP_PO_GLOBAL_VERSION,
+		.dpe_val	= DS_POOL_GLOBAL_VERSION,
+	}, {
+		.dpe_type	= DAOS_PROP_PO_UPGRADE_STATUS,
+		.dpe_val	= DAOS_UPGRADE_STATUS_NOT_STARTED,
 	}
 };
 
@@ -82,7 +110,6 @@ ds_pool_prop_default_init(void)
 		if (entry->dpe_val_ptr == NULL)
 			return -DER_NOMEM;
 	}
-
 	return 0;
 }
 

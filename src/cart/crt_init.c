@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2021 Intel Corporation.
+ * (C) Copyright 2016-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -28,7 +28,7 @@ dump_envariables(void)
 		"DD_STDERR", "DD_SUBSYS", "CRT_TIMEOUT", "CRT_ATTACH_INFO_PATH",
 		"OFI_PORT", "OFI_INTERFACE", "OFI_DOMAIN", "CRT_CREDIT_EP_CTX",
 		"CRT_CTX_SHARE_ADDR", "CRT_CTX_NUM", "D_FI_CONFIG",
-		"FI_UNIVERSE_SIZE", "CRT_DISABLE_MEM_PIN",
+		"FI_UNIVERSE_SIZE", "CRT_ENABLE_MEM_PIN",
 		"FI_OFI_RXM_USE_SRX", "D_LOG_FLUSH", "CRT_MRC_ENABLE" };
 
 	D_INFO("-- ENVARS: --\n");
@@ -235,7 +235,6 @@ static int
 crt_plugin_init(void)
 {
 	struct crt_prog_cb_priv *cbs_prog;
-	struct crt_timeout_cb_priv *cbs_timeout;
 	struct crt_event_cb_priv *cbs_event;
 	size_t cbs_size = CRT_CALLBACKS_NUM;
 	int i, rc;
@@ -254,18 +253,10 @@ crt_plugin_init(void)
 		crt_plugin_gdata.cpg_prog_cbs[i]  = cbs_prog;
 	}
 
-	crt_plugin_gdata.cpg_timeout_cbs_old = NULL;
-	D_ALLOC_ARRAY(cbs_timeout, cbs_size);
-	if (cbs_timeout == NULL)
-		D_GOTO(out_destroy_prog, rc = -DER_NOMEM);
-
-	crt_plugin_gdata.cpg_timeout_size = cbs_size;
-	crt_plugin_gdata.cpg_timeout_cbs  = cbs_timeout;
-
 	crt_plugin_gdata.cpg_event_cbs_old = NULL;
 	D_ALLOC_ARRAY(cbs_event, cbs_size);
 	if (cbs_event == NULL) {
-		D_GOTO(out_destroy_timeout, rc = -DER_NOMEM);
+		D_GOTO(out_destroy_prog, rc = -DER_NOMEM);
 	}
 	crt_plugin_gdata.cpg_event_size = cbs_size;
 	crt_plugin_gdata.cpg_event_cbs  = cbs_event;
@@ -279,8 +270,6 @@ crt_plugin_init(void)
 
 out_destroy_event:
 	D_FREE(crt_plugin_gdata.cpg_event_cbs);
-out_destroy_timeout:
-	D_FREE(crt_plugin_gdata.cpg_timeout_cbs);
 out_destroy_prog:
 	for (i = 0; i < CRT_SRV_CONTEXT_NUM; i++)
 		D_FREE(crt_plugin_gdata.cpg_prog_cbs[i]);
@@ -302,9 +291,6 @@ crt_plugin_fini(void)
 		if (crt_plugin_gdata.cpg_prog_cbs_old[i])
 			D_FREE(crt_plugin_gdata.cpg_prog_cbs_old[i]);
 	}
-
-	D_FREE(crt_plugin_gdata.cpg_timeout_cbs);
-	D_FREE(crt_plugin_gdata.cpg_timeout_cbs_old);
 
 	D_FREE(crt_plugin_gdata.cpg_event_cbs);
 	D_FREE(crt_plugin_gdata.cpg_event_cbs_old);
@@ -395,25 +381,29 @@ crt_init_opt(crt_group_id_t grpid, uint32_t flags, crt_init_options_t *opt)
 					"but crt_group_config_path_set failed "
 					"rc: %d, ignore the ENV.\n", path, rc);
 			else
-				D_DEBUG(DB_ALL, "set group_config_path as "
-					"%s.\n", path);
+				D_DEBUG(DB_ALL, "set group_config_path as %s.\n", path);
 		}
 
-		addr_env = (crt_phy_addr_t)getenv(CRT_PHY_ADDR_ENV);
+		if (opt && opt->cio_provider)
+			addr_env = opt->cio_provider;
+		else
+			addr_env = (crt_phy_addr_t)getenv(CRT_PHY_ADDR_ENV);
+
 		if (addr_env == NULL) {
-			D_DEBUG(DB_ALL, "ENV %s not found.\n",
-				CRT_PHY_ADDR_ENV);
+			D_DEBUG(DB_ALL, "ENV %s not found.\n", CRT_PHY_ADDR_ENV);
 			goto do_init;
-		} else{
-			D_DEBUG(DB_ALL, "EVN %s: %s.\n", CRT_PHY_ADDR_ENV,
-				addr_env);
+		} else {
+			D_DEBUG(DB_ALL, "EVN %s: %s.\n", CRT_PHY_ADDR_ENV, addr_env);
 		}
 
 		provider_found = false;
 		for (plugin_idx = 0; crt_na_dict[plugin_idx].nad_str != NULL;
 		     plugin_idx++) {
 			if (!strncmp(addr_env, crt_na_dict[plugin_idx].nad_str,
-				     strlen(crt_na_dict[plugin_idx].nad_str) + 1)) {
+				     strlen(crt_na_dict[plugin_idx].nad_str) + 1) ||
+			    (crt_na_dict[plugin_idx].nad_alt_str &&
+			     !strncmp(addr_env, crt_na_dict[plugin_idx].nad_alt_str,
+				      strlen(crt_na_dict[plugin_idx].nad_alt_str) + 1))) {
 				provider_found = true;
 				crt_gdata.cg_init_prov =
 					crt_na_dict[plugin_idx].nad_type;
@@ -457,17 +447,8 @@ do_init:
 			       prov, set_sep, max_num_ctx,
 			       max_expect_size, max_unexpect_size);
 
-		/* Print notice that "ofi+verbs" is legacy */
-		if (prov == CRT_NA_OFI_VERBS) {
-			D_ERROR("\"ofi+verbs\" is no longer supported. "
-				"Use \"ofi+verbs;ofi_rxm\" instead for %s env",
-				CRT_PHY_ADDR_ENV);
-			D_GOTO(out, rc = -DER_INVAL);
-		}
-
 		/* rxm and verbs providers only works with regular EP */
 		if ((prov == CRT_NA_OFI_VERBS_RXM ||
-		     prov == CRT_NA_OFI_VERBS ||
 		     prov == CRT_NA_OFI_TCP_RXM) &&
 		    crt_provider_is_sep(prov)) {
 			D_WARN("set CRT_CTX_SHARE_ADDR as 1 is invalid "
@@ -492,8 +473,8 @@ do_init:
 			setenv("FI_PSM2_NAME_SERVER", "1", true);
 			D_DEBUG(DB_ALL, "Setting FI_PSM2_NAME_SERVER to 1\n");
 		}
-		if (crt_na_type_is_ofi(prov)) {
-			rc = crt_na_ofi_config_init(prov);
+		if (crt_na_type_is_ofi(prov) || crt_na_type_is_ucx(prov)) {
+			rc = crt_na_ofi_config_init(prov, opt);
 			if (rc != 0) {
 				D_ERROR("crt_na_ofi_config_init() failed, "
 					DF_RC"\n", DP_RC(rc));
@@ -764,7 +745,7 @@ crt_port_range_verify(int port)
 	}
 }
 
-int crt_na_ofi_config_init(int provider)
+int crt_na_ofi_config_init(int provider, crt_init_options_t *opt)
 {
 	char		*port_str;
 	char		*interface;
@@ -780,7 +761,11 @@ int crt_na_ofi_config_init(int provider)
 
 	na_ofi_cfg = &crt_gdata.cg_prov_gdata[provider].cpg_na_ofi_config;
 
-	interface = getenv("OFI_INTERFACE");
+	if (opt && opt->cio_interface)
+		interface = opt->cio_interface;
+	else
+		interface = getenv("OFI_INTERFACE");
+
 	if (interface != NULL && strlen(interface) > 0) {
 		D_STRNDUP(na_ofi_cfg->noc_interface, interface, 64);
 		if (na_ofi_cfg->noc_interface == NULL)
@@ -791,7 +776,11 @@ int crt_na_ofi_config_init(int provider)
 		D_GOTO(out, rc = -DER_INVAL);
 	}
 
-	domain = getenv("OFI_DOMAIN");
+	if (opt && opt->cio_domain)
+		domain = opt->cio_domain;
+	else
+		domain = getenv("OFI_DOMAIN");
+
 	if (domain == NULL) {
 		D_DEBUG(DB_ALL, "OFI_DOMAIN is not set. Setting it to %s\n",
 			interface);
@@ -856,7 +845,12 @@ int crt_na_ofi_config_init(int provider)
 	}
 
 	port = -1;
-	port_str = getenv("OFI_PORT");
+
+	if (opt && opt->cio_port)
+		port_str = opt->cio_port;
+	else
+		port_str = getenv("OFI_PORT");
+
 	if (crt_is_service() && port_str != NULL && strlen(port_str) > 0) {
 		if (!is_integer_str(port_str)) {
 			D_DEBUG(DB_ALL, "ignoring invalid OFI_PORT %s.",

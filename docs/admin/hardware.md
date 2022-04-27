@@ -34,10 +34,17 @@ validated on a regular basis.
 
 The DAOS data plane relies on [OFI libfabrics](https://ofiwg.github.io/libfabric/)
 and supports OFI
-providers for Ethernet/sockets and InfiniBand/verbs. An RDMA-capable
-fabric is preferred for better performance. DAOS can support multiple
-rails by binding different instances of the DAOS server to individual
+providers for Ethernet/tcp and InfiniBand/verbs. An RDMA-capable
+fabric is preferred for better performance.
+
+DAOS supports multiple network interfaces on the servers
+by binding different instances of the DAOS engine to individual
 network cards.
+DAOS can support multiple network interfaces on the clients,
+by assigning different client processes on the node to different
+network interfaces. Note that DAOS does *not* support network-level
+striping over multiple network interfaces, so a *single* client process
+will always use a single network link.
 
 The DAOS control plane provides methods for administering and managing
 the DAOS servers using a secure socket layer interface. Management
@@ -53,9 +60,8 @@ DAOS requires each storage node to have direct access to storage-class
 memory (SCM). While DAOS is primarily tested and tuned for Intel
 Optane^TM^ Persistent Memory, the DAOS software stack is built over the
 Persistent Memory Development Kit (PMDK) and the Direct Access (DAX) feature of the
-Linux operating systems as described in the [SNIA NVM Programming
-Model](https://www.snia.org/sites/default/files/
-technical\_work/final/NVMProgrammingModel\_v1.2.pdf).
+Linux operating systems as described in the
+[SNIA NVM Programming Model](https://www.snia.org/sites/default/files/technical\_work/final/NVMProgrammingModel\_v1.2.pdf).
 As a result, the open-source DAOS software stack should be
 able to run transparently over any storage-class memory supported by the
 PMDK.

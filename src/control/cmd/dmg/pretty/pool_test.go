@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2021 Intel Corporation.
+// (C) Copyright 2020-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -72,6 +72,89 @@ Pool space info:
 Rebuild busy, 42 objs, 21 recs
 `, common.MockUUID()),
 		},
+		"normal response; enabled ranks": {
+			pqr: &control.PoolQueryResp{
+				UUID: common.MockUUID(),
+				PoolInfo: control.PoolInfo{
+					TotalTargets:    2,
+					DisabledTargets: 1,
+					ActiveTargets:   1,
+					Leader:          42,
+					Version:         100,
+					EnabledRanks:    system.MustCreateRankSet("[0,1,2]"),
+					Rebuild: &control.PoolRebuildStatus{
+						State:   control.PoolRebuildStateBusy,
+						Objects: 42,
+						Records: 21,
+					},
+					TierStats: []*control.StorageUsageStats{
+						{
+							Total: 2,
+							Free:  1,
+						},
+						{
+							Total: 2,
+							Free:  1,
+						},
+					},
+				},
+			},
+			expPrintStr: fmt.Sprintf(`
+Pool %s, ntarget=2, disabled=1, leader=42, version=100
+Pool space info:
+- Enabled targets: 0-2
+- Target(VOS) count:1
+- Storage tier 0 (SCM):
+  Total size: 2 B
+  Free: 1 B, min:0 B, max:0 B, mean:0 B
+- Storage tier 1 (NVMe):
+  Total size: 2 B
+  Free: 1 B, min:0 B, max:0 B, mean:0 B
+Rebuild busy, 42 objs, 21 recs
+`, common.MockUUID()),
+		},
+		"normal response; disabled ranks": {
+			pqr: &control.PoolQueryResp{
+				UUID: common.MockUUID(),
+				PoolInfo: control.PoolInfo{
+					TotalTargets:    2,
+					DisabledTargets: 1,
+					ActiveTargets:   1,
+					Leader:          42,
+					Version:         100,
+					DisabledRanks:   system.MustCreateRankSet("[0,1,3]"),
+					Rebuild: &control.PoolRebuildStatus{
+						State:   control.PoolRebuildStateBusy,
+						Objects: 42,
+						Records: 21,
+					},
+					TierStats: []*control.StorageUsageStats{
+						{
+							Total: 2,
+							Free:  1,
+						},
+						{
+							Total: 2,
+							Free:  1,
+						},
+					},
+				},
+			},
+			expPrintStr: fmt.Sprintf(`
+Pool %s, ntarget=2, disabled=1, leader=42, version=100
+Pool space info:
+- Disabled targets: 0-1,3
+- Target(VOS) count:1
+- Storage tier 0 (SCM):
+  Total size: 2 B
+  Free: 1 B, min:0 B, max:0 B, mean:0 B
+- Storage tier 1 (NVMe):
+  Total size: 2 B
+  Free: 1 B, min:0 B, max:0 B, mean:0 B
+Rebuild busy, 42 objs, 21 recs
+`, common.MockUUID()),
+		},
+
 		"rebuild failed": {
 			pqr: &control.PoolQueryResp{
 				UUID: common.MockUUID(),
@@ -235,13 +318,14 @@ no pools in system
 					{
 						UUID:            common.MockUUID(1),
 						ServiceReplicas: []system.Rank{0, 1, 2},
+						State:           system.PoolServiceStateReady.String(),
 					},
 				},
 			},
 			expPrintStr: `
-Pool     Size Used Imbalance Disabled 
-----     ---- ---- --------- -------- 
-00000001 0 B  0%   0%        0/0      
+Pool     Size State Used Imbalance Disabled 
+----     ---- ----- ---- --------- -------- 
+00000001 0 B  Ready 0%   0%        0/0      
 
 `,
 		},
@@ -287,6 +371,7 @@ Pool     Size Used Imbalance Disabled
 						Usage:           exampleUsage,
 						TargetsTotal:    16,
 						TargetsDisabled: 0,
+						State:           system.PoolServiceStateReady.String(),
 					},
 					{
 						Label:           "two",
@@ -295,14 +380,15 @@ Pool     Size Used Imbalance Disabled
 						Usage:           exampleUsage,
 						TargetsTotal:    64,
 						TargetsDisabled: 8,
+						State:           system.PoolServiceStateReady.String(),
 					},
 				},
 			},
 			expPrintStr: `
-Pool     Size   Used Imbalance Disabled 
-----     ----   ---- --------- -------- 
-00000001 6.0 TB 83%  12%       0/16     
-two      6.0 TB 83%  12%       8/64     
+Pool     Size   State Used Imbalance Disabled 
+----     ----   ----- ---- --------- -------- 
+00000001 6.0 TB Ready 83%  12%       0/16     
+two      6.0 TB Ready 83%  12%       8/64     
 
 `,
 		},
@@ -316,6 +402,7 @@ two      6.0 TB 83%  12%       8/64
 						Usage:           exampleUsage,
 						TargetsTotal:    16,
 						TargetsDisabled: 0,
+						State:           system.PoolServiceStateReady.String(),
 					},
 					{
 						Label:           "two",
@@ -323,18 +410,19 @@ two      6.0 TB 83%  12%       8/64
 						ServiceReplicas: []system.Rank{3, 4, 5},
 						Usage: []*control.PoolTierUsage{
 							exampleUsage[0],
-							&control.PoolTierUsage{TierName: "NVME"},
+							{TierName: "NVME"},
 						},
 						TargetsTotal:    64,
 						TargetsDisabled: 8,
+						State:           system.PoolServiceStateReady.String(),
 					},
 				},
 			},
 			expPrintStr: `
-Pool Size   Used Imbalance Disabled 
----- ----   ---- --------- -------- 
-one  6.0 TB 83%  12%       0/16     
-two  100 GB 80%  12%       8/64     
+Pool Size   State Used Imbalance Disabled 
+---- ----   ----- ---- --------- -------- 
+one  6.0 TB Ready 83%  12%       0/16     
+two  100 GB Ready 80%  12%       8/64     
 
 `,
 		},
@@ -348,6 +436,7 @@ two  100 GB 80%  12%       8/64
 						Usage:           exampleUsage,
 						TargetsTotal:    16,
 						TargetsDisabled: 0,
+						State:           system.PoolServiceStateReady.String(),
 					},
 					{
 						Label:           "two",
@@ -360,9 +449,9 @@ two  100 GB 80%  12%       8/64
 			expPrintStr: `
 Query on pool "two" unsuccessful, error: "stats unavailable"
 
-Pool Size   Used Imbalance Disabled 
----- ----   ---- --------- -------- 
-one  6.0 TB 83%  12%       0/16     
+Pool Size   State Used Imbalance Disabled 
+---- ----   ----- ---- --------- -------- 
+one  6.0 TB Ready 83%  12%       0/16     
 
 `,
 		},
@@ -376,6 +465,7 @@ one  6.0 TB 83%  12%       0/16
 						Usage:           exampleUsage,
 						TargetsTotal:    16,
 						TargetsDisabled: 0,
+						State:           system.PoolServiceStateReady.String(),
 					},
 					{
 						UUID:            common.MockUUID(2),
@@ -394,9 +484,9 @@ one  6.0 TB 83%  12%       0/16
 Query on pool "00000002" unsuccessful, error: "stats unavailable"
 Query on pool "three" unsuccessful, status: "DER_UNINIT"
 
-Pool Size   Used Imbalance Disabled 
----- ----   ---- --------- -------- 
-one  6.0 TB 83%  12%       0/16     
+Pool Size   State Used Imbalance Disabled 
+---- ----   ----- ---- --------- -------- 
+one  6.0 TB Ready 83%  12%       0/16     
 
 `,
 		},
@@ -415,18 +505,19 @@ no pools in system
 						Usage:           exampleUsage,
 						TargetsTotal:    16,
 						TargetsDisabled: 0,
+						State:           system.PoolServiceStateReady.String(),
 					},
 				},
 			},
 			verbose: true,
 			expPrintStr: `
-Label UUID                                 SvcReps SCM Size SCM Used SCM Imbalance NVME Size NVME Used NVME Imbalance Disabled 
------ ----                                 ------- -------- -------- ------------- --------- --------- -------------- -------- 
--     00000001-0001-0001-0001-000000000001 N/A     100 GB   80 GB    12%           6.0 TB    5.0 TB    1%             0/16     
+Label UUID                                 State SvcReps SCM Size SCM Used SCM Imbalance NVME Size NVME Used NVME Imbalance Disabled 
+----- ----                                 ----- ------- -------- -------- ------------- --------- --------- -------------- -------- 
+-     00000001-0001-0001-0001-000000000001 Ready N/A     100 GB   80 GB    12%           6.0 TB    5.0 TB    1%             0/16     
 
 `,
 		},
-		"verbose; two pools": {
+		"verbose; two pools; one destroying": {
 			resp: &control.ListPoolsResp{
 				Pools: []*control.Pool{
 					{
@@ -436,6 +527,7 @@ Label UUID                                 SvcReps SCM Size SCM Used SCM Imbalan
 						Usage:           exampleUsage,
 						TargetsTotal:    16,
 						TargetsDisabled: 0,
+						State:           system.PoolServiceStateReady.String(),
 					},
 					{
 						Label:           "two",
@@ -444,15 +536,16 @@ Label UUID                                 SvcReps SCM Size SCM Used SCM Imbalan
 						Usage:           exampleUsage,
 						TargetsTotal:    64,
 						TargetsDisabled: 8,
+						State:           system.PoolServiceStateDestroying.String(),
 					},
 				},
 			},
 			verbose: true,
 			expPrintStr: `
-Label UUID                                 SvcReps SCM Size SCM Used SCM Imbalance NVME Size NVME Used NVME Imbalance Disabled 
------ ----                                 ------- -------- -------- ------------- --------- --------- -------------- -------- 
-one   00000001-0001-0001-0001-000000000001 [0-2]   100 GB   80 GB    12%           6.0 TB    5.0 TB    1%             0/16     
-two   00000002-0002-0002-0002-000000000002 [3-5]   100 GB   80 GB    12%           6.0 TB    5.0 TB    1%             8/64     
+Label UUID                                 State      SvcReps SCM Size SCM Used SCM Imbalance NVME Size NVME Used NVME Imbalance Disabled 
+----- ----                                 -----      ------- -------- -------- ------------- --------- --------- -------------- -------- 
+one   00000001-0001-0001-0001-000000000001 Ready      [0-2]   100 GB   80 GB    12%           6.0 TB    5.0 TB    1%             0/16     
+two   00000002-0002-0002-0002-000000000002 Destroying [3-5]   100 GB   80 GB    12%           6.0 TB    5.0 TB    1%             8/64     
 
 `,
 		},

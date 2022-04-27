@@ -41,9 +41,8 @@ $ cat /proc/meminfo | grep -e "^Huge"
 ```
 
 The platform was tested and validated with the
-[rockylinux/rockylinux:8.4](https://hub.docker.com/r/rockylinux/rockylinux) and
-[centos:centos8](https://hub.docker.com/_/centos) official docker images.  However other RHEL-like
-distributions should be supported.
+[rockylinux/rockylinux:8.5](https://hub.docker.com/r/rockylinux/rockylinux) official docker images.
+However other RHEL-like distributions should be supported.
 
 !!! warning
     Some distributions are not yet well supported such as
@@ -72,7 +71,7 @@ following command:
 ```bash
 $ cat <<< "vm.nr_hugepages = 8192" > /etc/sysctl.d/50-hugepages.conf
 $ sysctl -p
-````
+```
 
 ## Building Docker Images
 
@@ -95,7 +94,7 @@ This Docker file accept the following arguments:
 	value such as the date of the day shall be given.
 - `DAOS_AUTH`: Enable DAOS authentication when set to "yes" (default "yes")
 - `DAOS_REPOS`: Space separated list of repos needed to install DAOS (default
-	"https://packages.daos.io/v2.0/CentOS8/packages/x86_64/")
+	"https://packages.daos.io/v2.0/EL8/packages/x86_64/")
 - `DAOS_GPG_KEYS`: Space separated list of GPG keys associated with DAOS repos (default
 	"https://packages.daos.io/RPM-GPG-KEY")
 - `DAOS_REPOS_NOAUTH`: Space separated list of repos to use without GPG authentication
@@ -200,7 +199,7 @@ $ docker exec daos-admin dmg -i storage format
 
 Upon successful completion of the format, the storage engine is started, and pools
 can be created using the daos admin tool.  For more advanced configurations and usage refer to the
-section [DAOS Tour](https://docs.daos.io/QSG/tour/).
+section [DAOS Tour](https://docs.daos.io/v2.2/QSG/tour/).
 
 
 ### Via docker-compose

@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2021 Intel Corporation.
+// (C) Copyright 2019-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -19,7 +19,6 @@ import (
 	"github.com/google/go-cmp/cmp/cmpopts"
 
 	"github.com/daos-stack/daos/src/control/common"
-	"github.com/daos-stack/daos/src/control/lib/netdetect"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/security"
 	"github.com/daos-stack/daos/src/control/server/config"
@@ -39,14 +38,11 @@ func testExpectedError(t *testing.T, expected, actual error) {
 func genMinimalConfig() *config.Server {
 	cfg := config.DefaultServer().
 		WithFabricProvider("foo").
-		WithProviderValidator(netdetect.ValidateProviderStub).
-		WithNUMAValidator(netdetect.ValidateNUMAStub).
-		WithGetNetworkDeviceClass(getDeviceClassStub).
 		WithEngines(
-			engine.NewConfig().
+			engine.MockConfig().
 				WithStorage(
 					storage.NewTierConfig().
-						WithScmClass("ram").
+						WithStorageClass("ram").
 						WithScmRamdiskSize(1).
 						WithScmMountPoint("/mnt/daos"),
 				).
@@ -60,10 +56,10 @@ func genMinimalConfig() *config.Server {
 func genDefaultExpected() *config.Server {
 	return genMinimalConfig().
 		WithEngines(
-			engine.NewConfig().
+			engine.MockConfig().
 				WithStorage(
 					storage.NewTierConfig().
-						WithScmClass("ram").
+						WithStorageClass("ram").
 						WithScmRamdiskSize(1).
 						WithScmMountPoint("/mnt/daos"),
 				).
@@ -107,10 +103,6 @@ func cmpEnv(t *testing.T, wantConfig, gotConfig *engine.Config) {
 	if diff := cmp.Diff(wantEnv, gotEnv, cmpOpts...); diff != "" {
 		t.Fatalf("(-want, +got)\n%s", diff)
 	}
-}
-
-func getDeviceClassStub(netdev string) (uint32, error) {
-	return 0, nil
 }
 
 func TestStartOptions(t *testing.T) {
@@ -249,19 +241,13 @@ func TestStartOptions(t *testing.T) {
 
 			var gotConfig *config.Server
 			var opts mainOpts
-			opts.Start.start = func(log *logging.LeveledLogger, cfg *config.Server) error {
+			opts.Start.start = func(log logging.Logger, cfg *config.Server) error {
 				gotConfig = cfg
 				return nil
 			}
 
-			opts.Start.config = genMinimalConfig().
-				WithProviderValidator(netdetect.ValidateProviderStub).
-				WithNUMAValidator(netdetect.ValidateNUMAStub).
-				WithGetNetworkDeviceClass(getDeviceClassStub)
-			wantConfig := tc.expCfgFn(genDefaultExpected().
-				WithProviderValidator(netdetect.ValidateProviderStub).
-				WithNUMAValidator(netdetect.ValidateNUMAStub).
-				WithGetNetworkDeviceClass(getDeviceClassStub))
+			opts.Start.config = genMinimalConfig()
+			wantConfig := tc.expCfgFn(genDefaultExpected())
 
 			err := parseOpts(append([]string{"start"}, tc.argList...), &opts, log)
 			if err != tc.expErr {
@@ -273,10 +259,8 @@ func TestStartOptions(t *testing.T) {
 
 			cmpOpts := []cmp.Option{
 				cmpopts.IgnoreUnexported(
-					config.Server{},
 					security.CertificateConfig{},
 				),
-				cmpopts.IgnoreFields(config.Server{}, "GetDeviceClassFn"),
 				cmpopts.SortSlices(func(a, b string) bool { return a < b }),
 			}
 			if diff := cmp.Diff(wantConfig, gotConfig, cmpOpts...); diff != "" {
@@ -326,7 +310,7 @@ func TestStartLoggingOptions(t *testing.T) {
 			log := logging.NewCombinedLogger(t.Name(), &logBuf)
 
 			var opts mainOpts
-			opts.Start.start = func(log *logging.LeveledLogger, cfg *config.Server) error {
+			opts.Start.start = func(log logging.Logger, cfg *config.Server) error {
 				return nil
 			}
 			opts.Start.config = genMinimalConfig()
@@ -366,7 +350,7 @@ func TestStartLoggingConfiguration(t *testing.T) {
 		},
 		"Debug": {
 			configFn: func(cfg *config.Server) *config.Server {
-				return cfg.WithControlLogMask(config.ControlLogLevelDebug)
+				return cfg.WithControlLogMask(common.ControlLogLevelDebug)
 			},
 			logFnName: "Debug",
 			input:     "hello",
@@ -374,7 +358,7 @@ func TestStartLoggingConfiguration(t *testing.T) {
 		},
 		"Error": {
 			configFn: func(cfg *config.Server) *config.Server {
-				return cfg.WithControlLogMask(config.ControlLogLevelError)
+				return cfg.WithControlLogMask(common.ControlLogLevelError)
 			},
 			logFnName: "Info",
 			input:     "hello",
@@ -386,7 +370,7 @@ func TestStartLoggingConfiguration(t *testing.T) {
 			log := logging.NewCombinedLogger(t.Name(), &logBuf)
 
 			var opts mainOpts
-			opts.Start.start = func(log *logging.LeveledLogger, cfg *config.Server) error {
+			opts.Start.start = func(log logging.Logger, cfg *config.Server) error {
 				return nil
 			}
 			opts.Start.config = tc.configFn(genMinimalConfig())

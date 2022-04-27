@@ -1,12 +1,10 @@
 #!/usr/bin/env python
 '''
-  (C) Copyright 2020-2021 Intel Corporation.
+  (C) Copyright 2020-2022 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
 
-import json
-import sys
 import os
 import ctypes
 
@@ -252,11 +250,13 @@ class VOS_SIZE(BASE_CLASS):
     def __del__(self):
         self._lib.d_free_string(ctypes.byref(self._data))
 
-    def get_vos_size_str(self, alloc_overhead):
+    def get_vos_size_str(self, alloc_overhead, vospath):
+        """vospath - mount point of daos. Default is /mnt/daos"""
         print('  Reading VOS structures from current installation')
         ret = self._lib.get_vos_structure_sizes_yaml(
             ctypes.c_int(alloc_overhead),
-            ctypes.byref(self._data))
+            ctypes.byref(self._data),
+            bytes(vospath, encoding='utf-8'))
 
         if ret != 0:
             raise Exception(
@@ -269,7 +269,7 @@ class VOS_SIZE(BASE_CLASS):
 
 class FREE_DFS_SB(BASE_CLASS):
     def __init__(self):
-        super().__init__('libdfs_internal.so')
+        super().__init__('libdfs.so')
 
     def dfs_free_sb_layout(self, data_pointer):
         self._lib.dfs_free_sb_layout(data_pointer)

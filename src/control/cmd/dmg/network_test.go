@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2021 Intel Corporation.
+// (C) Copyright 2019-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -24,21 +24,21 @@ func TestNetworkCommands(t *testing.T) {
 			nil,
 		},
 		{
-			"Perform network scan with provider ofi+sockets (short)",
-			"network scan -p 'ofi+sockets'",
+			"Perform network scan with provider ofi+tcp (short)",
+			"network scan -p 'ofi+tcp'",
 			strings.Join([]string{
 				printRequest(t, &control.NetworkScanReq{
-					Provider: "'ofi+sockets'",
+					Provider: "'ofi+tcp'",
 				}),
 			}, " "),
 			nil,
 		},
 		{
-			"Perform network scan with provider ofi+sockets (long)",
-			"network scan --provider 'ofi+sockets'",
+			"Perform network scan with provider ofi+tcp (long)",
+			"network scan --provider 'ofi+tcp'",
 			strings.Join([]string{
 				printRequest(t, &control.NetworkScanReq{
-					Provider: "'ofi+sockets'",
+					Provider: "'ofi+tcp'",
 				}),
 			}, " "),
 			nil,

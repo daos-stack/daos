@@ -4,12 +4,13 @@ hosts:
     test_clients:
         - client-B
 timeout: 1000
-job_manager_timeout: 900
+job_manager:
+    manager_timeout: 900
 server_config:
     name: daos_server
     servers:
         bdev_class: nvme
-        bdev_list: ["0000:81:00.0","0000:da:00.0"]
+        bdev_list: ["0000:81:00.0", "0000:da:00.0"]
         scm_class: dcpm
         scm_list: ["/dev/pmem0"]
 pool:
@@ -22,8 +23,8 @@ container:
     type: POSIX
     control_method: daos
 dfuse:
-  mount_dir: "/tmp/daos_dfuse"
-daos_vol_tests:  !mux
+    mount_dir: "/tmp/daos_dfuse"
+daos_vol_tests: !mux
     test1:
         testname: h5_partest_t_shapesame
         client_processes: 6

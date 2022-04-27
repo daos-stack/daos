@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2021 Intel Corporation.
+ * (C) Copyright 2016-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -162,24 +162,15 @@ char *d_realpath(const char *path, char *resolved_path);
  * realpath, however if it doesn't fail then we want to preserve the previous errno, in
  * addition the fault injection code could insert an error in the D_CHECK_ALLOC() macro
  * so if that happens then we want to set ENOMEM there.
- * Save the original error on the way in, overwrite it and then if realpath does not change
- * it then re-instate it.
  */
 #define D_REALPATH(ptr, path)						\
 	do {								\
-		int _errno = errno;					\
-		errno = 0;						\
 		(ptr) = d_realpath((path), NULL);			\
-		if (errno == 0 || errno == ENOMEM) {			\
-			int _size = 0;					\
-			void *_ptr = (ptr);				\
-			if (_ptr)					\
-				_size = strnlen(_ptr, PATH_MAX + 1) + 1 ; \
+		if ((ptr) != NULL) {					\
+			int _size = strnlen(ptr, PATH_MAX + 1) + 1 ;	\
 			D_CHECK_ALLOC(realpath, true, ptr, #ptr, _size,	0, #ptr, 0); \
-			if (errno == 0 && ((ptr) == NULL) && _ptr != NULL) \
+			if (((ptr) == NULL))				\
 				errno = ENOMEM;				\
-			else if (errno == 0)				\
-				errno = _errno;				\
 		}							\
 	} while (0)
 
@@ -415,6 +406,12 @@ int d_rank_list_append(d_rank_list_t *rank_list, d_rank_t rank);
 int d_rank_list_dump(d_rank_list_t *rank_list, d_string_t name, int name_len);
 d_rank_list_t *uint32_array_to_rank_list(uint32_t *ints, size_t len);
 int rank_list_to_uint32_array(d_rank_list_t *rl, uint32_t **ints, size_t *len);
+
+d_rank_range_list_t *d_rank_range_list_alloc(uint32_t size);
+d_rank_range_list_t *d_rank_range_list_realloc(d_rank_range_list_t *range_list, uint32_t size);
+d_rank_range_list_t *d_rank_range_list_create_from_ranks(d_rank_list_t *rank_list);
+char *d_rank_range_list_str(d_rank_range_list_t *list, bool *truncated);
+void d_rank_range_list_free(d_rank_range_list_t *range_list);
 
 static inline int
 d_sgl_init(d_sg_list_t *sgl, unsigned int nr)

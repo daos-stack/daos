@@ -1,6 +1,6 @@
 #!/usr/bin/python
 """
-  (C) Copyright 2020-2021 Intel Corporation.
+  (C) Copyright 2020-2022 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -95,7 +95,9 @@ class DmgPoolQueryTest(ControlTestBase, IorTestBase):
                     "objects", path="/run/exp_vals/rebuild/*"),
                 "records": self.params.get(
                     "records", path="/run/exp_vals/rebuild/*")
-            }
+            },
+            "enabled_ranks": None,
+            "disabled_ranks": None
         }
 
         self.assertDictEqual(

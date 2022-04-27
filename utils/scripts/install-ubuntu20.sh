@@ -1,23 +1,20 @@
-#!/bin/sh
+#!/bin/sh -e
 
 # Install OS updates and package.  Include basic tools and daos dependencies
 # that come from the core repo.
-# Clean up any repos afterwards to save space.
-# Switch to dnf as it seems a bit faster.
+
 # libatomic should be in this list, but can not for now due to CI
 # post provisioning issue.
-# *** Keep these in as much alphbetical order as possible ***
 
-export DEBIAN_FRONTEND=noninteractive
-set -e
+# This script use used by docker but can be invoked from elsewhere, in order to run it
+# interactively then these this commands can be used to set apt-get into automatic mode.
+# echo "APT::Get::Assume-Yes \"true\";" > /etc/apt/apt.conf.d/no-prompt
 
-apt-get -y update
-apt-get -y install apt-utils
-apt-get -y upgrade
-apt-get -y install \
+apt-get install \
     autoconf \
     build-essential \
     clang \
+    clang-format \
     cmake \
     curl \
     fuse3 \
@@ -56,9 +53,10 @@ apt-get -y install \
     python3-junit.xml \
     python3-pyelftools \
     python3-pyxattr \
+    python3-setuptools \
     python3-tabulate \
+    python3-yaml \
     scons \
     uuid-dev \
     valgrind \
     yasm
-apt-get clean all

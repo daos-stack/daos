@@ -1,13 +1,12 @@
 #!/usr/bin/python
 """
-  (C) Copyright 2020-2021 Intel Corporation.
+  (C) Copyright 2020-2022 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 import os
 
 from general_utils import pcmd, run_pcmd
-from apricot import TestWithServers
 from control_test_base import ControlTestBase
 
 

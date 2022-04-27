@@ -44,6 +44,8 @@ typedef struct _Mgmt__PoolSetPropReq Mgmt__PoolSetPropReq;
 typedef struct _Mgmt__PoolSetPropResp Mgmt__PoolSetPropResp;
 typedef struct _Mgmt__PoolGetPropReq Mgmt__PoolGetPropReq;
 typedef struct _Mgmt__PoolGetPropResp Mgmt__PoolGetPropResp;
+typedef struct _Mgmt__PoolUpgradeReq Mgmt__PoolUpgradeReq;
+typedef struct _Mgmt__PoolUpgradeResp Mgmt__PoolUpgradeResp;
 
 
 /* --- enums --- */
@@ -514,10 +516,14 @@ struct  _Mgmt__ListPoolsResp__Pool
    */
   size_t n_svc_reps;
   uint32_t *svc_reps;
+  /*
+   * pool state
+   */
+  char *state;
 };
 #define MGMT__LIST_POOLS_RESP__POOL__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&mgmt__list_pools_resp__pool__descriptor) \
-    , (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, 0,NULL }
+    , (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, 0,NULL, (char *)protobuf_c_empty_string }
 
 
 /*
@@ -615,10 +621,18 @@ struct  _Mgmt__PoolQueryReq
    */
   size_t n_svc_ranks;
   uint32_t *svc_ranks;
+  /*
+   * True if the list of enabled ranks shall be returned
+   */
+  protobuf_c_boolean include_enabled_ranks;
+  /*
+   * True if the list of disabled ranks shall be returned
+   */
+  protobuf_c_boolean include_disabled_ranks;
 };
 #define MGMT__POOL_QUERY_REQ__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&mgmt__pool_query_req__descriptor) \
-    , (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, 0,NULL }
+    , (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, 0,NULL, 0, 0 }
 
 
 /*
@@ -709,10 +723,18 @@ struct  _Mgmt__PoolQueryResp
    * current raft leader
    */
   uint32_t leader;
+  /*
+   * Optional set of ranks enabled
+   */
+  char *enabled_ranks;
+  /*
+   * Optional set of ranks disabled
+   */
+  char *disabled_ranks;
 };
 #define MGMT__POOL_QUERY_RESP__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&mgmt__pool_query_resp__descriptor) \
-    , 0, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, 0, 0, 0, NULL, 0,NULL, 0, 0, 0 }
+    , 0, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, 0, 0, 0, NULL, 0,NULL, 0, 0, 0, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string }
 
 
 typedef enum {
@@ -832,6 +854,45 @@ struct  _Mgmt__PoolGetPropResp
 #define MGMT__POOL_GET_PROP_RESP__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&mgmt__pool_get_prop_resp__descriptor) \
     , 0, 0,NULL }
+
+
+/*
+ * PoolUpgradeReq upgrades the disk format of an existing pool to the
+ * latest version.
+ */
+struct  _Mgmt__PoolUpgradeReq
+{
+  ProtobufCMessage base;
+  /*
+   * DAOS system identifier
+   */
+  char *sys;
+  char *id;
+  /*
+   * List of pool service ranks
+   */
+  size_t n_svc_ranks;
+  uint32_t *svc_ranks;
+};
+#define MGMT__POOL_UPGRADE_REQ__INIT \
+ { PROTOBUF_C_MESSAGE_INIT (&mgmt__pool_upgrade_req__descriptor) \
+    , (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, 0,NULL }
+
+
+/*
+ * PoolUpgradeResp returns resultant state of upgrade operation.
+ */
+struct  _Mgmt__PoolUpgradeResp
+{
+  ProtobufCMessage base;
+  /*
+   * DAOS error code
+   */
+  int32_t status;
+};
+#define MGMT__POOL_UPGRADE_RESP__INIT \
+ { PROTOBUF_C_MESSAGE_INIT (&mgmt__pool_upgrade_resp__descriptor) \
+    , 0 }
 
 
 /* Mgmt__PoolCreateReq methods */
@@ -1353,6 +1414,44 @@ Mgmt__PoolGetPropResp *
 void   mgmt__pool_get_prop_resp__free_unpacked
                      (Mgmt__PoolGetPropResp *message,
                       ProtobufCAllocator *allocator);
+/* Mgmt__PoolUpgradeReq methods */
+void   mgmt__pool_upgrade_req__init
+                     (Mgmt__PoolUpgradeReq         *message);
+size_t mgmt__pool_upgrade_req__get_packed_size
+                     (const Mgmt__PoolUpgradeReq   *message);
+size_t mgmt__pool_upgrade_req__pack
+                     (const Mgmt__PoolUpgradeReq   *message,
+                      uint8_t             *out);
+size_t mgmt__pool_upgrade_req__pack_to_buffer
+                     (const Mgmt__PoolUpgradeReq   *message,
+                      ProtobufCBuffer     *buffer);
+Mgmt__PoolUpgradeReq *
+       mgmt__pool_upgrade_req__unpack
+                     (ProtobufCAllocator  *allocator,
+                      size_t               len,
+                      const uint8_t       *data);
+void   mgmt__pool_upgrade_req__free_unpacked
+                     (Mgmt__PoolUpgradeReq *message,
+                      ProtobufCAllocator *allocator);
+/* Mgmt__PoolUpgradeResp methods */
+void   mgmt__pool_upgrade_resp__init
+                     (Mgmt__PoolUpgradeResp         *message);
+size_t mgmt__pool_upgrade_resp__get_packed_size
+                     (const Mgmt__PoolUpgradeResp   *message);
+size_t mgmt__pool_upgrade_resp__pack
+                     (const Mgmt__PoolUpgradeResp   *message,
+                      uint8_t             *out);
+size_t mgmt__pool_upgrade_resp__pack_to_buffer
+                     (const Mgmt__PoolUpgradeResp   *message,
+                      ProtobufCBuffer     *buffer);
+Mgmt__PoolUpgradeResp *
+       mgmt__pool_upgrade_resp__unpack
+                     (ProtobufCAllocator  *allocator,
+                      size_t               len,
+                      const uint8_t       *data);
+void   mgmt__pool_upgrade_resp__free_unpacked
+                     (Mgmt__PoolUpgradeResp *message,
+                      ProtobufCAllocator *allocator);
 /* --- per-message closures --- */
 
 typedef void (*Mgmt__PoolCreateReq_Closure)
@@ -1442,6 +1541,12 @@ typedef void (*Mgmt__PoolGetPropReq_Closure)
 typedef void (*Mgmt__PoolGetPropResp_Closure)
                  (const Mgmt__PoolGetPropResp *message,
                   void *closure_data);
+typedef void (*Mgmt__PoolUpgradeReq_Closure)
+                 (const Mgmt__PoolUpgradeReq *message,
+                  void *closure_data);
+typedef void (*Mgmt__PoolUpgradeResp_Closure)
+                 (const Mgmt__PoolUpgradeResp *message,
+                  void *closure_data);
 
 /* --- services --- */
 
@@ -1478,6 +1583,8 @@ extern const ProtobufCMessageDescriptor mgmt__pool_set_prop_req__descriptor;
 extern const ProtobufCMessageDescriptor mgmt__pool_set_prop_resp__descriptor;
 extern const ProtobufCMessageDescriptor mgmt__pool_get_prop_req__descriptor;
 extern const ProtobufCMessageDescriptor mgmt__pool_get_prop_resp__descriptor;
+extern const ProtobufCMessageDescriptor mgmt__pool_upgrade_req__descriptor;
+extern const ProtobufCMessageDescriptor mgmt__pool_upgrade_resp__descriptor;
 
 PROTOBUF_C__END_DECLS
 

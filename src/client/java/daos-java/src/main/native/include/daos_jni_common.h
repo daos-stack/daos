@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2018-2021 Intel Corporation.
+ * (C) Copyright 2018-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -73,6 +73,17 @@ typedef struct {
     d_iov_t *iovs;
     uint64_t ret_buf_address;
 } data_desc_async_t;
+
+typedef struct {
+    daos_key_t dkey;
+    uint16_t maxKeyLen;
+    data_event_t *event;
+    daos_iod_t *iods;
+    d_sg_list_t *sgls;
+    daos_recx_t *recxs;
+    d_iov_t *iovs;
+    uint64_t ret_buf_address;
+} data_desc_upd_async_t;
 
 typedef struct {
     int nbrOfDescs;

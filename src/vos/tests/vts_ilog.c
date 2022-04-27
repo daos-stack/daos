@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2019-2021 Intel Corporation.
+ * (C) Copyright 2019-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -90,7 +90,7 @@ static D_LIST_HEAD(fake_tx_list);
 
 static int
 fake_tx_status_get(struct umem_instance *umm, uint32_t tx_id,
-		   daos_epoch_t epoch, uint32_t intent, void *args)
+		   daos_epoch_t epoch, uint32_t intent, bool retry, void *args)
 {
 	struct lru_array	*array = args;
 	struct fake_tx_entry	*entry;

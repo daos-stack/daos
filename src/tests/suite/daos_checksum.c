@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2019-2021 Intel Corporation.
+ * (C) Copyright 2019-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -16,7 +16,7 @@
 #include <daos/container.h>
 #include <daos_srv/daos_engine.h>
 
-#define EC_CSUM_OC	(DAOS_OC_EC_K2P2_L32K)
+#define EC_CSUM_OC	OC_EC_2P2G1
 
 static void
 iov_update_fill(d_iov_t *iov, char *data, uint64_t len_to_fill);
@@ -166,7 +166,7 @@ setup_cont_obj(struct csum_test_ctx *ctx, int csum_prop_type, bool csum_sv,
 	       int chunksize, daos_oclass_id_t oclass)
 {
 	char		str[37];
-	daos_prop_t	*props = daos_prop_alloc(3);
+	daos_prop_t	*props = daos_prop_alloc(4);
 	int		 rc;
 
 	assert_non_null(props);
@@ -177,6 +177,8 @@ setup_cont_obj(struct csum_test_ctx *ctx, int csum_prop_type, bool csum_sv,
 					DAOS_PROP_CO_CSUM_SV_OFF;
 	props->dpp_entries[2].dpe_type = DAOS_PROP_CO_CSUM_CHUNK_SIZE;
 	props->dpp_entries[2].dpe_val = chunksize != 0 ? chunksize : 1024*16;
+	props->dpp_entries[3].dpe_type = DAOS_PROP_CO_EC_CELL_SZ;
+	props->dpp_entries[3].dpe_val = 1 << 15;
 
 	rc = daos_cont_create(ctx->poh, &ctx->uuid, props, NULL);
 	daos_prop_free(props);
@@ -664,12 +666,15 @@ insert_data(const char *akey_format, const char *dkey, struct ioreq *req,
 }
 
 static int
-disabled_targets(test_arg_t *arg)
+disabled_targets(test_arg_t *arg, d_rank_list_t **affected_engines)
 {
 	int			rc;
 	daos_pool_info_t	info;
 
-	rc = daos_pool_query(arg->pool.poh, NULL, &info, NULL, NULL);
+	/* Note: (info.pi_bits & DPI_ENGINES_ENABLED) == 0, so we get a list of engines with
+	 * some (or all) of their targets disabled.
+	 */
+	rc = daos_pool_query(arg->pool.poh, affected_engines, &info, NULL, NULL);
 
 	if (rc < 0)
 		return rc;
@@ -1790,7 +1795,8 @@ rebuild_test(void **state, int chunksize, int data_len_bytes, int iod_type)
 	struct daos_obj_layout *layout2 = NULL;
 	uint32_t		 rank_to_exclude;
 	int			 rank_to_fetch;
-	uint32_t		 disabled_nr;
+	uint32_t		 disabled_nr, after_disabled_nr;
+	d_rank_list_t		*affected_engines = NULL;
 	int			 rc;
 
 	if (!test_runable(*state, 3))
@@ -1828,11 +1834,15 @@ rebuild_test(void **state, int chunksize, int data_len_bytes, int iod_type)
 
 	rank_to_exclude = layout1->ol_shards[0]->os_shard_loc[0].sd_rank;
 	print_message("Excluding rank %d\n", rank_to_exclude);
-	disabled_nr = disabled_targets(arg);
+	disabled_nr = disabled_targets(arg, NULL /* affected_engines */);
 	daos_exclude_server(arg->pool.pool_uuid, arg->group,
 			    arg->dmg_config,
 			    layout1->ol_shards[0]->os_shard_loc[0].sd_rank);
-	assert_true(disabled_nr < disabled_targets(arg));
+	after_disabled_nr = disabled_targets(arg, &affected_engines);
+	assert_true(disabled_nr < after_disabled_nr);
+	assert_true(d_rank_list_find(affected_engines, rank_to_exclude, NULL));
+	assert_int_equal(affected_engines->rl_nr, 1);
+	d_rank_list_free(affected_engines);
 
 	/** wait for rebuild */
 	test_rebuild_wait(&arg, 1);
@@ -1864,7 +1874,8 @@ rebuild_test(void **state, int chunksize, int data_len_bytes, int iod_type)
 
 	daos_reint_server(arg->pool.pool_uuid, arg->group, arg->dmg_config,
 			  rank_to_exclude);
-	assert_int_equal(disabled_nr, disabled_targets(arg));
+	after_disabled_nr = disabled_targets(arg, NULL);
+	assert_int_equal(disabled_nr, after_disabled_nr);
 	/** wait for rebuild */
 	test_rebuild_wait(&arg, 1);
 
@@ -2446,8 +2457,8 @@ test_enumerate_object2(void **state)
 	 */
 	assert_int_equal(4, nr);
 
-	/** only 3 checksums, dkey, akey, and inlined recx */
-	assert_int_equal(3, get_csum_count(&csum_iov));
+	/** only 2 checksums, dkey, akey */
+	assert_int_equal(2, get_csum_count(&csum_iov));
 
 	/** Clean up */
 	d_sgl_fini(&list_sgl, true);
@@ -2505,14 +2516,6 @@ test_enumerate_object_csum_buf_too_small(void **state)
 	assert_memory_equal(&zero_anchor, &anchor, sizeof(zero_anchor));
 	assert_memory_equal(&zero_anchor, &dkey_anchor, sizeof(zero_anchor));
 	assert_memory_equal(&zero_anchor, &akey_anchor, sizeof(zero_anchor));
-
-	/** csum iov buf len shouldn't change, but iov_len should reflect
-	 * what's needed to hold all csum info. Caller can decide what to do
-	 * from here.
-	 */
-	assert_int_equal(10, csum_iov.iov_buf_len);
-	assert_int_equal(11 * (sizeof(struct dcs_csum_info) + 8),
-		csum_iov.iov_len);
 
 	/** Clean up */
 	d_sgl_fini(&sgl, true);
@@ -2680,7 +2683,7 @@ run_daos_checksum_test(int rank, int size, int *sub_tests, int sub_tests_size)
 	int i;
 
 	if (rank != 0) {
-		MPI_Barrier(MPI_COMM_WORLD);
+		par_barrier(PAR_COMM_WORLD);
 		return 0;
 	}
 
@@ -2706,6 +2709,6 @@ run_daos_checksum_test(int rank, int size, int *sub_tests, int sub_tests_size)
 					test_teardown);
 	}
 
-	MPI_Barrier(MPI_COMM_WORLD);
+	par_barrier(PAR_COMM_WORLD);
 	return rc;
 }

@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2021 Intel Corporation.
+ * (C) Copyright 2016-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -26,7 +26,7 @@
 #include <daos_types.h>
 
 /* Default layout version */
-#define DS_POOL_MD_VERSION 4
+#define DS_POOL_MD_VERSION 7
 
 /* Lowest compatible layout version */
 #define DS_POOL_MD_VERSION_LOW 4
@@ -55,7 +55,15 @@ extern d_iov_t ds_pool_prop_connectable;	/* uint32_t */
 extern d_iov_t ds_pool_prop_nhandles;		/* uint32_t */
 extern d_iov_t ds_pool_prop_handles;		/* pool handle KVS */
 extern d_iov_t ds_pool_prop_ec_cell_sz;		/* pool EC cell size */
+extern d_iov_t ds_pool_prop_redun_fac;		/* pool redundancy factor */
+extern d_iov_t ds_pool_prop_ec_pda;		/* uint32_t */
+extern d_iov_t ds_pool_prop_rp_pda;		/* uint32_t */
 extern d_iov_t ds_pool_attr_user;		/* pool user attributes KVS */
+extern d_iov_t ds_pool_prop_policy;		/* tiering policy uint32_t */
+extern d_iov_t ds_pool_prop_global_version;	/* global pool status */
+extern d_iov_t ds_pool_prop_upgrade_status;	/* upgrade status */
+/* Target upgrade global version */
+extern d_iov_t ds_pool_prop_upgrade_global_version;
 
 /*
  * Pool handle KVS (RDB_KVS_GENERIC)

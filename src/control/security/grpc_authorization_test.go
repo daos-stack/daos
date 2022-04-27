@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2021 Intel Corporation.
+// (C) Copyright 2019-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -52,6 +52,8 @@ func TestSecurity_ComponentHasAccess(t *testing.T) {
 	testCases := map[string][]Component{
 		"/ctl.CtlSvc/StorageScan":              {ComponentAdmin},
 		"/ctl.CtlSvc/StorageFormat":            {ComponentAdmin},
+		"/ctl.CtlSvc/StorageNvmeRebind":        {ComponentAdmin},
+		"/ctl.CtlSvc/StorageNvmeAddDevice":     {ComponentAdmin},
 		"/ctl.CtlSvc/NetworkScan":              {ComponentAdmin},
 		"/ctl.CtlSvc/FirmwareQuery":            {ComponentAdmin},
 		"/ctl.CtlSvc/FirmwareUpdate":           {ComponentAdmin},
@@ -88,6 +90,7 @@ func TestSecurity_ComponentHasAccess(t *testing.T) {
 		"/mgmt.MgmtSvc/ListContainers":         {ComponentAdmin},
 		"/mgmt.MgmtSvc/ContSetOwner":           {ComponentAdmin},
 		"/mgmt.MgmtSvc/SystemCleanup":          {ComponentAdmin},
+		"/mgmt.MgmtSvc/PoolUpgrade":            {ComponentAdmin},
 		"/RaftTransport/AppendEntries":         {ComponentServer},
 		"/RaftTransport/AppendEntriesPipeline": {ComponentServer},
 		"/RaftTransport/RequestVote":           {ComponentServer},

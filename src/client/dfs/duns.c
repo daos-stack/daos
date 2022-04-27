@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2019-2021 Intel Corporation.
+ * (C) Copyright 2019-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -42,6 +42,8 @@ static bool liblustre_notfound;
 static bool liblustre_binded;
 static int (*dir_create_foreign)(const char *, mode_t, __u32, __u32,
 				 const char *) = NULL;
+static int (*file_create_foreign)(const char *, mode_t, __u32, __u32,
+				 const char *) = NULL;
 static int (*unlink_foreign)(char *);
 
 static int
@@ -78,6 +80,21 @@ bind_liblustre()
 	D_DEBUG(DB_TRACE, "llapi_dir_create_foreign() resolved at %p\n",
 		dir_create_foreign);
 
+	file_create_foreign = (int (*)(const char *, mode_t, __u32, __u32,
+			      const char *))dlsym(lib,
+						  "llapi_file_create_foreign");
+	if (file_create_foreign == NULL) {
+		liblustre_notfound = true;
+		D_ERROR("unable to resolve llapi_file_create_foreign symbol, "
+			"dlerror() says '%s', Lustre version do not seem to "
+			"support foreign LOV/LMV, reverting to non-lustre "
+			"behavior.\n", dlerror());
+		return EINVAL;
+	}
+
+	D_DEBUG(DB_TRACE, "llapi_file_create_foreign() resolved at %p\n",
+		file_create_foreign);
+
 	unlink_foreign = (int (*)(char *))dlsym(lib,
 						      "llapi_unlink_foreign");
 	if (unlink_foreign == NULL) {
@@ -103,6 +120,7 @@ duns_resolve_lustre_path(const char *path, struct duns_attr_t *attr)
 	char			*saveptr, *t;
 	char			*buf;
 	struct lmv_user_md	*lum;
+	/* both foreign LOV/LMV have same format */
 	struct lmv_foreign_md	*lfm;
 	int			fd;
 	int			rc;
@@ -133,9 +151,8 @@ duns_resolve_lustre_path(const char *path, struct duns_attr_t *attr)
 
 	/* get LOV/LMV
 	 * llapi_getstripe() API can not be used here as it frees
-	 * param.[fp_lmv_md, fp_lmd->lmd_lmm]  buffer for LMV after printing
-	 * its content
-	 * raw/ioctl() way must be used then
+	 * param.[fp_lmv_md, fp_lmd->lmd_lmm]  buffer for LOV/LMV after printing
+	 * its content, raw/ioctl() way must be used then
 	 */
 	buf = calloc(1, XATTR_SIZE_MAX);
 	if (buf == NULL) {
@@ -146,17 +163,39 @@ duns_resolve_lustre_path(const char *path, struct duns_attr_t *attr)
 	}
 	fd = open(path, O_RDONLY | O_DIRECTORY | O_NOFOLLOW);
 	if (fd == -1 && errno != ENOTDIR) {
-		int err = errno;
-
 		D_ERROR("unable to open '%s' errno %d(%s).\n", path, errno,
 			strerror(errno));
-		return err;
+		return errno;
 	} else if (errno == ENOTDIR) {
-		/* should we handle file/LOV case ?
-		 * for link to HDF5 container ?
-		 */
-		D_ERROR("file with foreign LOV support is presently not "
-			"supported\n");
+		/* it is a file so get LOV ! */
+		fd = open(path, O_RDONLY | O_NOFOLLOW);
+		if (fd == -1) {
+			int err = errno;
+
+			D_ERROR("unable to open '%s' errno %d(%s).\n", path, errno,
+				strerror(errno));
+			return err;
+		}
+
+		rc = ioctl(fd, LL_IOC_LOV_GETSTRIPE, buf);
+		if (rc != 0) {
+			int err = errno;
+
+			D_ERROR("ioctl(LL_IOC_LOV_GETSTRIPE) failed, rc: %d, "
+				"errno %d(%s).\n", rc, errno, strerror(errno));
+			return err;
+		}
+
+		lfm = (struct lmv_foreign_md *)buf;
+		/* sanity check */
+		if (lfm->lfm_magic != LOV_MAGIC_FOREIGN  ||
+		    lfm->lfm_type != LU_FOREIGN_TYPE_SYMLINK ||
+		    lfm->lfm_length > DUNS_MAX_XATTR_LEN ||
+		    snprintf(str, DUNS_MAX_XATTR_LEN, "%s",
+			     lfm->lfm_value) > DUNS_MAX_XATTR_LEN) {
+			D_ERROR("Invalid DAOS LOV format (%s).\n", str);
+			return EINVAL;
+		}
 	} else {
 		/* it is a dir so get LMV ! */
 		lum = (struct lmv_user_md *)buf;
@@ -189,35 +228,23 @@ duns_resolve_lustre_path(const char *path, struct duns_attr_t *attr)
 		}
 	}
 
-	t = strtok_r(str, ".", &saveptr);
-	if (t == NULL) {
-		D_ERROR("Invalid DAOS LMV format (%s).\n", str);
-		return EINVAL;
-	}
-
-	t = strtok_r(NULL, ":", &saveptr);
-	if (t == NULL) {
-		D_ERROR("Invalid DAOS LMV format (%s).\n", str);
-		return EINVAL;
-	}
-
-	daos_parse_ctype(t, &attr->da_type);
+	attr->da_type = (daos_cont_layout_t)lfm->lfm_flags;
 	if (attr->da_type == DAOS_PROP_CO_LAYOUT_UNKNOWN) {
-		D_ERROR("Invalid DAOS LMV format: Container layout cannot be"
+		D_ERROR("Invalid DAOS LOV/LMV format: Container layout cannot be"
 			" unknown\n");
 		return EINVAL;
 	}
 
-	t = strtok_r(NULL, "/", &saveptr);
+	t = strtok_r(str, "/", &saveptr);
 	if (t == NULL) {
-		D_ERROR("Invalid DAOS LMV format (%s).\n", str);
+		D_ERROR("Invalid DAOS LOV/LMV format (%s).\n", str);
 		return EINVAL;
 	}
 
 	/** da_puuid is deprecated, but in case users are still using it parse the uuid there */
 	rc = uuid_parse(t, attr->da_puuid);
 	if (rc) {
-		D_ERROR("Invalid DAOS LMV format: pool UUID cannot be parsed\n");
+		D_ERROR("Invalid DAOS LOV/LMV format: pool UUID cannot be parsed\n");
 		return EINVAL;
 	}
 	strncpy(attr->da_pool, t, DAOS_PROP_LABEL_MAX_LEN);
@@ -225,7 +252,7 @@ duns_resolve_lustre_path(const char *path, struct duns_attr_t *attr)
 
 	t = strtok_r(NULL, "/", &saveptr);
 	if (t == NULL) {
-		D_ERROR("Invalid DAOS LMV format (%s).\n", str);
+		D_ERROR("Invalid DAOS LOV/LMV format (%s).\n", str);
 		return EINVAL;
 	}
 
@@ -694,9 +721,9 @@ create_cont(daos_handle_t poh, struct duns_attr_t *attrp, bool create_with_label
 #ifdef LUSTRE_INCLUDE
 static int
 duns_create_lustre_path(daos_handle_t poh, daos_pool_info_t info, const char *path,
-			struct duns_attr_t *attrp)
+			mode_t mode, struct duns_attr_t *attrp)
 {
-	char			oclass[10], type[10];
+	char			oclass[10];
 	char			str[DUNS_MAX_XATTR_LEN + 1];
 	int			len;
 	int			rc, rc2;
@@ -712,7 +739,6 @@ duns_create_lustre_path(daos_handle_t poh, daos_pool_info_t info, const char *pa
 
 	uuid_unparse(info.pi_uuid, attrp->da_pool);
 	daos_oclass_id2name(attrp->da_oclass_id, oclass);
-	daos_unparse_ctype(attrp->da_type, type);
 
 	/* create container */
 	rc = create_cont(poh, attrp, false);
@@ -721,22 +747,35 @@ duns_create_lustre_path(daos_handle_t poh, daos_pool_info_t info, const char *pa
 		D_GOTO(err, rc);
 	}
 
-	/* XXX should file with foreign LOV be expected/supoorted here ? */
-
-	/** create dir and store the daos attributes in the path LMV */
-	len = snprintf(str, DUNS_MAX_XATTR_LEN, DUNS_XATTR_FMT, type,
+	/** create file/dir and store the daos attributes in the path LOV/LMV */
+	len = snprintf(str, DUNS_MAX_XATTR_LEN, DUNS_LUSTRE_XATTR_FMT,
 		       attrp->da_pool, attrp->da_cont);
 	if (len < 0) {
-		D_ERROR("Failed to create LMV value\n");
+		D_ERROR("Failed to create foreign LOV/LMV value\n");
 		D_GOTO(err_cont, rc = EINVAL);
 	}
 
-	rc = (*dir_create_foreign)(path, S_IRWXU | S_IRWXG | S_IROTH | S_IWOTH,
-				   LU_FOREIGN_TYPE_SYMLINK, 0xda05, str);
-	if (rc) {
-		D_ERROR("Failed to create Lustre dir '%s' with foreign "
-			"LMV '%s' (rc = %d).\n", path, str, rc);
-		D_GOTO(err_cont, rc = EINVAL);
+	if (attrp->da_type == DAOS_PROP_CO_LAYOUT_POSIX) {
+		rc = (*dir_create_foreign)(path, mode, LU_FOREIGN_TYPE_SYMLINK,
+					   (__u32)attrp->da_type, str);
+		if (rc) {
+			D_ERROR("Failed to create Lustre dir '%s' with foreign "
+				"LMV '%s' (rc = %d).\n", path, str, rc);
+			D_GOTO(err_cont, rc = EINVAL);
+		}
+	} else {
+		rc = (*file_create_foreign)(path, mode, LU_FOREIGN_TYPE_SYMLINK,
+					    (__u32)attrp->da_type, str);
+		if (rc < 0) {
+			/* llapi_file_crate_foreign() returns fd upon success but
+			 * -errno upon error
+			 */
+			D_ERROR("Failed to create Lustre file '%s' with foreign "
+				"LOV '%s' (rc = %d).\n", path, str, rc);
+			D_GOTO(err_cont, rc = EINVAL);
+		} else {
+			rc = 0;
+		}
 	}
 
 	return rc;
@@ -836,7 +875,7 @@ duns_create_path(daos_handle_t poh, const char *path, struct duns_attr_t *attrp)
 
 #ifdef LUSTRE_INCLUDE
 		if (fs.f_type == LL_SUPER_MAGIC) {
-			rc = duns_create_lustre_path(poh, info, path, attrp);
+			rc = duns_create_lustre_path(poh, info, path, mode, attrp);
 			if (rc == 0)
 				return 0;
 			/* if Lustre specific method fails, fallback to try the normal way... */
@@ -854,8 +893,37 @@ duns_create_path(daos_handle_t poh, const char *path, struct duns_attr_t *attrp)
 	} else if (attrp->da_type != DAOS_PROP_CO_LAYOUT_UNKNOWN) {
 		/** create a new file for other container types */
 		int fd;
+		mode_t mode = S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP | S_IROTH;
+#ifdef LUSTRE_INCLUDE
+		struct statfs   fs;
+		char            *dir, *dirp;
 
-		fd = open(path, O_CREAT | O_EXCL, S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP | S_IROTH);
+		D_STRNDUP(dir, path, path_len);
+		if (dir == NULL) {
+			D_ERROR("Failed copy path %s: %s\n", path, strerror(errno));
+			return ENOMEM;
+		}
+
+		dirp = dirname(dir);
+		rc = statfs(dirp, &fs);
+		if (rc == -1) {
+			int err = errno;
+
+			D_ERROR("Failed to statfs dir %s: %s\n", dirp, strerror(errno));
+			D_FREE(dir);
+			return err;
+		}
+		D_FREE(dir);
+
+		if (fs.f_type == LL_SUPER_MAGIC) {
+			rc = duns_create_lustre_path(poh, info, path, mode, attrp);
+			if (rc == 0)
+				return 0;
+			/* if Lustre specific method fails, fallback to try the normal way... */
+		}
+#endif
+
+		fd = open(path, O_CREAT | O_EXCL, mode);
 		if (fd == -1) {
 			rc = errno;
 

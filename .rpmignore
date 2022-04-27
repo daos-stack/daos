@@ -1,0 +1,23 @@
+#
+# DAOS RPMs / DEBs that are built in CI,
+# but should not be included in the current release
+#
+
+centos7/daos-client-tests-openmpi*.rpm
+centos7/daos-firmware*.rpm
+centos7/daos-serialize*.rpm
+centos7/daos-server-tests-openmpi*.rpm
+
+el8/daos-client-tests-openmpi*.rpm
+el8/daos-firmware*.rpm
+el8/daos-serialize*.rpm
+el8/daos-server-tests-openmpi*.rpm
+
+leap15/daos-client-tests-openmpi*.rpm
+leap15/daos-firmware*.rpm
+leap15/daos-serialize*.rpm
+leap15/daos-server-tests-openmpi*.rpm
+
+ubuntu20.04/daos-*.deb
+ubuntu20.04/libdaos*.deb
+

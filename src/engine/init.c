@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2021 Intel Corporation.
+ * (C) Copyright 2016-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -56,10 +56,7 @@ const char	       *dss_nvme_conf;
 /** Socket Directory */
 const char	       *dss_socket_dir = "/var/run/daos_server";
 
-/** NVMe shm_id for enabling SPDK multi-process mode */
-int			dss_nvme_shm_id = DAOS_NVME_SHMID_NONE;
-
-/** NVMe mem_size for SPDK memory allocation when using primary mode */
+/** NVMe mem_size for SPDK memory allocation */
 unsigned int		dss_nvme_mem_size = DAOS_NVME_MEM_PRIMARY;
 
 /** NVMe hugepage_size for DPDK/SPDK memory allocation */
@@ -231,8 +228,7 @@ modules_load(void)
 
 		rc = dss_module_load(mod);
 		if (rc != 0) {
-			D_ERROR("Failed to load module %s: %d\n",
-				mod, rc);
+			D_ERROR("Failed to load module %s: %d\n", mod, rc);
 			break;
 		}
 
@@ -740,7 +736,7 @@ server_init(int argc, char *argv[])
 	d_tm_record_timestamp(metrics->ready_time);
 
 	/** Report rank */
-	d_tm_set_counter(metrics->rank_id, dss_self_rank());
+	d_tm_set_gauge(metrics->rank_id, dss_self_rank());
 
 	D_PRINT("DAOS I/O Engine (v%s) process %u started on rank %u "
 		"with %u target, %d helper XS, firstcore %d, host %s.\n",
@@ -785,12 +781,27 @@ static void
 server_fini(bool force)
 {
 	D_INFO("Service is shutting down\n");
+	/*
+	 * The first thing to do is to inform every xstream that the engine is
+	 * shutting down, so that we can avoid allocating new resources or
+	 * taking new references on existing ones if necessary. Note that
+	 * xstreams won't start shutting down until we call dss_srv_fini below.
+	 */
+	dss_srv_set_shutting_down();
 	crt_unregister_event_cb(dss_crt_event_cb, NULL);
 	D_INFO("unregister event callbacks done\n");
+	/*
+	 * Cleaning up modules needs to create ULTs on other xstreams; must be
+	 * called before shutting down the xstreams.
+	 */
 	dss_module_cleanup_all();
 	D_INFO("dss_module_cleanup_all() done\n");
 	server_init_state_fini();
 	D_INFO("server_init_state_fini() done\n");
+	/*
+	 * All other xstreams start shutting down here. ULT/tasklet creations
+	 * on them are no longer possible.
+	 */
 	dss_srv_fini(force);
 	D_INFO("dss_srv_fini() done\n");
 	ds_iv_fini();
@@ -850,8 +861,6 @@ Options:\n\
       Directory where daos_server sockets are located (default \"%s\")\n\
   --nvme=config, -n config\n\
       NVMe config file (default \"%s\")\n\
-  --shm_id=shm_id, -i shm_id\n\
-      Shared segment ID (enable multi-process mode in SPDK, default none)\n\
   --instance_idx=idx, -I idx\n\
       Identifier for this server instance (default %u)\n\
   --pinned_numa_node=numanode, -p numanode\n\
@@ -892,7 +901,6 @@ parse(int argc, char **argv)
 		{ "firstcore",		required_argument,	NULL,	'f' },
 		{ "group",		required_argument,	NULL,	'g' },
 		{ "help",		no_argument,		NULL,	'h' },
-		{ "shm_id",		required_argument,	NULL,	'i' },
 		{ "modules",		required_argument,	NULL,	'm' },
 		{ "nvme",		required_argument,	NULL,	'n' },
 		{ "pinned_numa_node",	required_argument,	NULL,	'p' },
@@ -956,9 +964,6 @@ parse(int argc, char **argv)
 			break;
 		case 'p':
 			dss_numa_node = atoi(optarg);
-			break;
-		case 'i':
-			dss_nvme_shm_id = atoi(optarg);
 			break;
 		case 'r':
 			rc = arg_strtoul(optarg, &dss_nvme_mem_size, "\"-r\"");

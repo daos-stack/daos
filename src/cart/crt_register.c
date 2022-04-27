@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2021 Intel Corporation.
+ * (C) Copyright 2016-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -542,19 +542,19 @@ proto_query_cb(const struct crt_cb_info *cb_info)
 	struct proto_query_t		*proto_query = cb_info->cci_arg;
 	struct crt_proto_query_cb_info	 user_cb_info = {};
 
-	if (cb_info->cci_rc != 0) {
-		D_ERROR("rpc (opc: %#x failed, rc: %d.\n", rpc_req->cr_opc,
-			cb_info->cci_rc);
-		D_GOTO(out, user_cb_info.pq_rc = cb_info->cci_rc);
-	}
-
+	user_cb_info.pq_arg = proto_query->pq_user_arg;
 	rpc_req_input = crt_req_get(rpc_req);
 	D_FREE(rpc_req_input->pq_ver.iov_buf);
+
+	if (cb_info->cci_rc != 0) {
+		D_ERROR("rpc (opc: %#x) failed: "DF_RC"\n", rpc_req->cr_opc,
+			DP_RC(cb_info->cci_rc));
+		D_GOTO(out, user_cb_info.pq_rc = cb_info->cci_rc);
+	}
 
 	rpc_req_output = crt_reply_get(rpc_req);
 	user_cb_info.pq_rc = rpc_req_output->pq_rc;
 	user_cb_info.pq_ver = rpc_req_output->pq_ver;
-	user_cb_info.pq_arg = proto_query->pq_user_arg;
 
 out:
 	if (user_cb_info.pq_rc == 0) {
@@ -573,10 +573,10 @@ out:
 }
 
 int
-crt_proto_query(crt_endpoint_t *tgt_ep, crt_opcode_t base_opc,
-		uint32_t *ver, int count, crt_proto_query_cb_t cb, void *arg)
+crt_proto_query_int(crt_endpoint_t *tgt_ep, crt_opcode_t base_opc, uint32_t *ver, int count,
+		    crt_proto_query_cb_t cb, void *arg, crt_context_t ctx)
 {
-	crt_rpc_t			*rpc_req;
+	crt_rpc_t			*rpc_req = NULL;
 	crt_context_t			 crt_ctx;
 	struct crt_proto_query_in	*rpc_req_input;
 	struct proto_query_t		*proto_query = NULL;
@@ -591,15 +591,19 @@ crt_proto_query(crt_endpoint_t *tgt_ep, crt_opcode_t base_opc,
 	if (cb == NULL)
 		D_WARN("crt_proto_query() is not useful when cb is NULL.\n");
 
-	crt_ctx = crt_context_lookup(0);
-	if (crt_ctx == NULL) {
-		D_ERROR("crt_context 0 doesn't exist.\n");
-		return -DER_INVAL;
+	if (ctx == NULL) {
+		crt_ctx = crt_context_lookup(0);
+		if (crt_ctx == NULL) {
+			D_ERROR("crt_context 0 doesn't exist.\n");
+			return -DER_INVAL;
+		}
+	} else {
+		crt_ctx = ctx;
 	}
 
 	rc = crt_req_create(crt_ctx, tgt_ep, CRT_OPC_PROTO_QUERY, &rpc_req);
 	if (rc != 0) {
-		D_ERROR("crt_req_create() failed, rc: %d\n", rc);
+		D_ERROR("crt_req_create() failed: "DF_RC"\n", DP_RC(rc));
 		D_GOTO(out, rc);
 	}
 
@@ -607,7 +611,7 @@ crt_proto_query(crt_endpoint_t *tgt_ep, crt_opcode_t base_opc,
 
 	D_ALLOC_ARRAY(tmp_array, count);
 	if (tmp_array == NULL)
-		D_GOTO(out, rc = -DER_NOMEM);
+		D_GOTO(err_rpc, rc = -DER_NOMEM);
 	memcpy(tmp_array, ver, sizeof(tmp_array[0]) * count);
 
 	/* set input */
@@ -617,11 +621,11 @@ crt_proto_query(crt_endpoint_t *tgt_ep, crt_opcode_t base_opc,
 
 	D_ALLOC_PTR(proto_query);
 	if (proto_query == NULL)
-		D_GOTO(out, rc = -DER_NOMEM);
+		D_GOTO(err_rpc, rc = -DER_NOMEM);
 
 	D_ALLOC_PTR(proto_query->pq_coq);
 	if (proto_query->pq_coq == NULL)
-		D_GOTO(out, rc = -DER_NOMEM);
+		D_GOTO(err_rpc, rc = -DER_NOMEM);
 
 	proto_query->pq_user_cb = cb;
 	proto_query->pq_user_arg = arg;
@@ -629,8 +633,11 @@ crt_proto_query(crt_endpoint_t *tgt_ep, crt_opcode_t base_opc,
 
 	rc = crt_req_send(rpc_req, proto_query_cb, proto_query);
 	if (rc != 0)
-		D_ERROR("crt_req_send() failed, rc: %d.\n", rc);
+		D_ERROR("crt_req_send() failed: "DF_RC"\n", DP_RC(rc));
+	D_GOTO(out, rc);
 
+err_rpc:
+	crt_req_decref(rpc_req);
 out:
 	if (rc != DER_SUCCESS) {
 		if (proto_query) {
@@ -642,6 +649,20 @@ out:
 	}
 
 	return rc;
+}
+
+int
+crt_proto_query(crt_endpoint_t *tgt_ep, crt_opcode_t base_opc,
+		uint32_t *ver, int count, crt_proto_query_cb_t cb, void *arg)
+{
+	return crt_proto_query_int(tgt_ep, base_opc, ver, count, cb, arg, NULL);
+}
+
+int
+crt_proto_query_with_ctx(crt_endpoint_t *tgt_ep, crt_opcode_t base_opc, uint32_t *ver, int count,
+			 crt_proto_query_cb_t cb, void *arg, crt_context_t ctx)
+{
+	return crt_proto_query_int(tgt_ep, base_opc, ver, count, cb, arg, ctx);
 }
 
 /* local operation, query if base_opc with version number ver is registered. */

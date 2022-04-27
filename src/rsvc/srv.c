@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2019-2021 Intel Corporation.
+ * (C) Copyright 2019-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -14,6 +14,7 @@
 #include <sys/stat.h>
 #include <daos_srv/daos_engine.h>
 #include <daos_srv/rsvc.h>
+#include <daos_srv/control.h>
 #include "rpc.h"
 
 static struct ds_rsvc_class *rsvc_classes[DS_RSVC_CLASS_COUNT];
@@ -166,7 +167,8 @@ ds_rsvc_put(struct ds_rsvc *svc)
 	D_ASSERTF(svc->s_ref > 0, "%d\n", svc->s_ref);
 	svc->s_ref--;
 	if (svc->s_ref == 0) {
-		rdb_stop(svc->s_db);
+		if (svc->s_db != NULL) /* "nodb" */
+			rdb_stop_and_close(svc->s_db);
 		fini_free(svc);
 	}
 }
@@ -213,7 +215,8 @@ rsvc_rec_free(struct d_hash_table *htable, d_list_t *rlink)
 {
 	struct ds_rsvc *svc = rsvc_obj(rlink);
 
-	rdb_stop(svc->s_db);
+	if (svc->s_db != NULL) /* "nodb" */
+		rdb_stop_and_close(svc->s_db);
 	fini_free(svc);
 }
 
@@ -685,8 +688,9 @@ static int
 start(enum ds_rsvc_class_id class, d_iov_t *id, uuid_t db_uuid, bool create,
       size_t size, d_rank_list_t *replicas, void *arg, struct ds_rsvc **svcp)
 {
-	struct ds_rsvc *svc = NULL;
-	int		rc;
+	struct rdb_storage     *storage;
+	struct ds_rsvc	       *svc = NULL;
+	int			rc;
 
 	rc = alloc_init(class, id, db_uuid, &svc);
 	if (rc != 0)
@@ -694,13 +698,16 @@ start(enum ds_rsvc_class_id class, d_iov_t *id, uuid_t db_uuid, bool create,
 	svc->s_ref++;
 
 	if (create)
-		rc = rdb_create(svc->s_db_path, svc->s_db_uuid, size, replicas,
-				&rsvc_rdb_cbs, svc, &svc->s_db);
+		rc = rdb_create(svc->s_db_path, svc->s_db_uuid, size, replicas, &rsvc_rdb_cbs, svc,
+				&storage);
 	else
-		rc = rdb_start(svc->s_db_path, svc->s_db_uuid, &rsvc_rdb_cbs,
-			       svc, &svc->s_db);
+		rc = rdb_open(svc->s_db_path, svc->s_db_uuid, &rsvc_rdb_cbs, svc, &storage);
 	if (rc != 0)
 		goto err_svc;
+
+	rc = rdb_start(storage, &svc->s_db);
+	if (rc != 0)
+		goto err_storage;
 
 	/*
 	 * If creating a replica with an initial membership, we are
@@ -727,7 +734,9 @@ start(enum ds_rsvc_class_id class, d_iov_t *id, uuid_t db_uuid, bool create,
 	return 0;
 
 err_db:
-	rdb_stop(svc->s_db);
+	rdb_stop(svc->s_db, &storage);
+err_storage:
+	rdb_close(storage);
 	if (create)
 		rdb_destroy(svc->s_db_path, svc->s_db_uuid);
 err_svc:
@@ -1225,6 +1234,8 @@ ds_rsvc_start_handler(crt_rpc_t *rpc)
 	rc = ds_rsvc_start(in->sai_class, &in->sai_svc_id, in->sai_db_uuid,
 			   create, in->sai_size,
 			   bootstrap ? in->sai_ranks : NULL, NULL /* arg */);
+	if (rc == -DER_ALREADY)
+		rc = 0;
 
 out:
 	out->sao_rc_errval = rc;
@@ -1322,7 +1333,9 @@ ds_rsvc_stop_handler(crt_rpc_t *rpc)
 
 	rc = ds_rsvc_stop(in->soi_class, &in->soi_svc_id,
 			  in->soi_flags & RDB_OF_DESTROY);
-	out->soo_rc = (rc == 0 || rc == -DER_ALREADY ? 0 : 1);
+	if (rc == -DER_ALREADY)
+		rc = 0;
+	out->soo_rc = (rc == 0 ? 0 : 1);
 	crt_reply_send(rpc);
 }
 
@@ -1364,14 +1377,14 @@ static struct daos_rpc_handler rsvc_handlers[] = {
 size_t
 ds_rsvc_get_md_cap(void)
 {
-	const size_t	size_default = 1 << 27 /* 128 MB */;
+	const size_t	size_default = DEFAULT_DAOS_MD_CAP_SIZE;
 	char	       *v;
 	int		n;
 
-	v = getenv("DAOS_MD_CAP"); /* in MB */
+	v = getenv(DAOS_MD_CAP_ENV); /* in MB */
 	if (v == NULL)
 		return size_default;
-	n = atoi(v);
+	n = atoi(v);    /* FIXME DAOS-9846 */
 	if (n < size_default >> 20) {
 		D_ERROR("metadata capacity too low; using %zu MB\n",
 			size_default >> 20);
@@ -1397,6 +1410,7 @@ struct dss_module rsvc_module = {
 	.sm_name	= "rsvc",
 	.sm_mod_id	= DAOS_RSVC_MODULE,
 	.sm_ver		= DAOS_RSVC_VERSION,
+	.sm_proto_count	= 1,
 	.sm_init	= rsvc_module_init,
 	.sm_fini	= rsvc_module_fini,
 	.sm_proto_fmt	= &rsvc_proto_fmt,

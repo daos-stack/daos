@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2021 Intel Corporation.
+// (C) Copyright 2021-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -11,7 +11,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/daos-stack/daos/src/control/common"
 	"github.com/google/go-cmp/cmp"
 )
 
@@ -30,8 +29,8 @@ func TestHardware_PrintTopology(t *testing.T) {
 						WithPCIBuses(
 							[]*PCIBus{
 								{
-									LowAddress:  *common.MustNewPCIAddress("0000:00:00.0"),
-									HighAddress: *common.MustNewPCIAddress("0000:0f:00.0"),
+									LowAddress:  *MustNewPCIAddress("0000:00:00.0"),
+									HighAddress: *MustNewPCIAddress("0000:0f:00.0"),
 								},
 							},
 						).
@@ -40,13 +39,13 @@ func TestHardware_PrintTopology(t *testing.T) {
 								{
 									Name:      "test0",
 									Type:      DeviceTypeNetInterface,
-									PCIAddr:   *common.MustNewPCIAddress("0000:01:01.1"),
+									PCIAddr:   *MustNewPCIAddress("0000:01:01.1"),
 									LinkSpeed: 2.5,
 								},
 								{
 									Name:      "test0-peer",
 									Type:      DeviceTypeNetInterface,
-									PCIAddr:   *common.MustNewPCIAddress("0000:01:01.1"),
+									PCIAddr:   *MustNewPCIAddress("0000:01:01.1"),
 									LinkSpeed: 1.2,
 								},
 							},

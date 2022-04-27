@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2021 Intel Corporation.
+// (C) Copyright 2020-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -14,6 +14,7 @@ import (
 	"gopkg.in/yaml.v2"
 
 	"github.com/daos-stack/daos/src/control/build"
+	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/security"
 )
 
@@ -30,7 +31,9 @@ type Config struct {
 	ControlPort      int                       `yaml:"port"`
 	RuntimeDir       string                    `yaml:"runtime_dir"`
 	LogFile          string                    `yaml:"log_file"`
+	LogLevel         common.ControlLogLevel    `yaml:"control_log_mask,omitempty"`
 	TransportConfig  *security.TransportConfig `yaml:"transport_config"`
+	DisableCache     bool                      `yaml:"disable_caching,omitempty"`
 	FabricInterfaces []*NUMAFabricConfig       `yaml:"fabric_ifaces,omitempty"`
 }
 
@@ -73,6 +76,7 @@ func DefaultConfig() *Config {
 		AccessPoints:    []string{localServer},
 		RuntimeDir:      defaultRuntimeDir,
 		LogFile:         defaultLogFile,
+		LogLevel:        common.DefaultControlLogLevel,
 		TransportConfig: security.DefaultAgentTransportConfig(),
 	}
 }

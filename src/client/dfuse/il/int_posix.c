@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2017-2021 Intel Corporation.
+ * (C) Copyright 2017-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -110,12 +110,12 @@ ioil_shrink_pool(struct ioil_pool *pool)
 }
 
 static int
-ioil_shrink_cont(struct ioil_cont *cont, bool shrink_pool)
+ioil_shrink_cont(struct ioil_cont *cont, bool shrink_pool, bool force)
 {
 	struct ioil_pool	*pool;
 	int			rc;
 
-	if (cont->ioc_open_count != 0)
+	if (cont->ioc_open_count != 0 && !force)
 		return 0;
 
 	if (cont->ioc_dfs != NULL) {
@@ -168,7 +168,7 @@ entry_array_close(void *arg) {
 
 	/* Do not close container/pool handles at this point
 	 * to allow for re-use.
-	 * ioil_shrink_cont(entry->fd_cont, true);
+	 * ioil_shrink_cont(entry->fd_cont, true, true);
 	*/
 }
 
@@ -371,9 +371,9 @@ ioil_fini(void)
 			 * is tried later, and if the container close succeeds but pool close
 			 * fails the cont may not be valid afterwards.
 			 */
-			rc = ioil_shrink_cont(cont, false);
+			rc = ioil_shrink_cont(cont, false, true);
 			if (rc == -DER_NOMEM)
-				ioil_shrink_cont(cont, false);
+				ioil_shrink_cont(cont, false, true);
 		}
 		rc = ioil_shrink_pool(pool);
 		if (rc == -DER_NOMEM)
@@ -819,7 +819,7 @@ obj_close:
 	dfs_release(entry->fd_dfsoh);
 
 shrink:
-	ioil_shrink_cont(cont, true);
+	ioil_shrink_cont(cont, true, false);
 
 err:
 	rc = pthread_mutex_unlock(&ioil_iog.iog_lock);
@@ -1467,6 +1467,33 @@ dfuse_mmap(void *address, size_t length, int prot, int flags, int fd,
 	}
 
 	return __real_mmap(address, length, prot, flags, fd, offset);
+}
+
+DFUSE_PUBLIC int
+dfuse_ftruncate(int fd, off_t length)
+{
+	struct fd_entry *entry;
+	int              rc;
+
+	rc = vector_get(&fd_table, fd, &entry);
+	if (rc != 0)
+		goto do_real_ftruncate;
+
+	DFUSE_LOG_DEBUG("ftuncate(fd=%d) intercepted, bypass=%s offset %#lx", fd,
+			bypass_status[entry->fd_status], length);
+
+	rc = dfs_punch(entry->fd_cont->ioc_dfs, entry->fd_dfsoh, length, DFS_MAX_FSIZE);
+
+	vector_decref(&fd_table, entry);
+
+	if (rc == -DER_SUCCESS)
+		return 0;
+
+	errno = rc;
+	return -1;
+
+do_real_ftruncate:
+	return __real_ftruncate(fd, length);
 }
 
 DFUSE_PUBLIC int

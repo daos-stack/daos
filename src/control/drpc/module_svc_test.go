@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2021 Intel Corporation.
+// (C) Copyright 2019-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -7,6 +7,7 @@
 package drpc
 
 import (
+	"context"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
@@ -193,7 +194,7 @@ func TestService_ProcessMessage(t *testing.T) {
 			service := NewModuleService(log)
 			service.RegisterModule(mockMod)
 
-			respBytes, err := service.ProcessMessage(&Session{}, tc.callBytes)
+			respBytes, err := service.ProcessMessage(context.Background(), &Session{}, tc.callBytes)
 
 			if err != nil {
 				t.Fatalf("expected nil error, got: %v", err)

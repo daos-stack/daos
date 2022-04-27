@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2018-2021 Intel Corporation.
+ * (C) Copyright 2018-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -8,6 +8,7 @@ package io.daos.obj;
 
 import io.daos.BufferAllocator;
 import io.daos.Constants;
+import io.daos.DaosUtils;
 import io.netty.buffer.ByteBuf;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -68,11 +69,7 @@ public class IOKeyDesc {
   protected IOKeyDesc(String dkey, int nbrOfKeys, int akeyLen, int batchSize) throws IOException {
     this.dkey = dkey;
     if (dkey != null) {
-      dkeyBytes = dkey.getBytes(Constants.KEY_CHARSET);
-      if (dkeyBytes.length > Short.MAX_VALUE) {
-        throw new IllegalArgumentException("dkey length in " + Constants.KEY_CHARSET + " should not exceed "
-          + Short.MAX_VALUE);
-      }
+      dkeyBytes = DaosUtils.keyToBytes(dkey);
     }
     if (nbrOfKeys < 1) {
       throw new IllegalArgumentException("nbrOfKeys should be at least 1, " + nbrOfKeys);

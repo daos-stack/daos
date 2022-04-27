@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2019-2021 Intel Corporation.
+ * (C) Copyright 2019-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -17,8 +17,6 @@
 #include <gurt/telemetry_consumer.h>
 #include "dtx_internal.h"
 
-#define DTX_YIELD_CYCLE		(DTX_THRESHOLD_COUNT >> 3)
-
 static void *
 dtx_tls_init(int xs_id, int tgt_id)
 {
@@ -33,6 +31,7 @@ dtx_tls_init(int xs_id, int tgt_id)
 	if (tgt_id < 0)
 		return tls;
 
+	tls->dt_agg_gen = 1;
 	rc = d_tm_add_metric(&tls->dt_committable, D_TM_STATS_GAUGE,
 			     "total number of committable DTX entries",
 			     "entries", "io/dtx/committable/tgt_%u", tgt_id);
@@ -80,7 +79,7 @@ dtx_metrics_alloc(const char *path, int tgt_id)
 	if (metrics == NULL)
 		return NULL;
 
-	rc = d_tm_add_metric(&metrics->dpm_batched_degree, D_TM_COUNTER,
+	rc = d_tm_add_metric(&metrics->dpm_batched_degree, D_TM_GAUGE,
 			     "degree of DTX entries per batched commit RPC",
 			     "entries", "%s/entries/dtx_batched_degree/tgt_%u",
 			     path, tgt_id);
@@ -186,8 +185,7 @@ dtx_handler(crt_rpc_t *rpc)
 		rc1 = d_tm_get_counter(NULL, &opc_cnt, dpm->dpm_total[opc]);
 		D_ASSERT(rc1 == DER_SUCCESS);
 
-		d_tm_set_counter(dpm->dpm_batched_degree,
-				 ent_cnt / (opc_cnt + 1));
+		d_tm_set_gauge(dpm->dpm_batched_degree, ent_cnt / (opc_cnt + 1));
 
 		break;
 	}
@@ -214,9 +212,15 @@ dtx_handler(crt_rpc_t *rpc)
 			D_GOTO(out, rc = -DER_PROTO);
 
 		rc = vos_dtx_check(cont->sc_hdl, din->di_dtx_array.ca_arrays,
-				   NULL, NULL, NULL, NULL, false);
+				   NULL, NULL, NULL, NULL);
 		if (rc == -DER_NONEXIST && cont->sc_dtx_reindex)
 			rc = -DER_INPROGRESS;
+		else if (rc == DTX_ST_INITED)
+			/* For DTX_CHECK, non-ready one is equal to non-exist. Do not directly
+			 * return 'DTX_ST_INITED' to avoid interoperability trouble if related
+			 * request is from old server.
+			 */
+			rc = -DER_NONEXIST;
 
 		break;
 	case DTX_REFRESH:
@@ -245,11 +249,9 @@ dtx_handler(crt_rpc_t *rpc)
 		for (i = 0, rc1 = 0; i < count; i++) {
 			ptr = (int *)dout->do_sub_rets.ca_arrays + i;
 			dtis = (struct dtx_id *)din->di_dtx_array.ca_arrays + i;
-			*ptr = vos_dtx_check(cont->sc_hdl, dtis, NULL, &vers[i],
-					     &mbs[i], &dcks[i], false);
+			*ptr = vos_dtx_check(cont->sc_hdl, dtis, NULL, &vers[i], &mbs[i], &dcks[i]);
 			/* The DTX status may be changes by DTX resync soon. */
-			if ((*ptr == DTX_ST_PREPARED &&
-			     cont->sc_dtx_resyncing) ||
+			if ((*ptr == DTX_ST_PREPARED && cont->sc_dtx_resyncing) ||
 			    (*ptr == -DER_NONEXIST && cont->sc_dtx_reindex))
 				*ptr = -DER_INPROGRESS;
 
@@ -269,6 +271,13 @@ dtx_handler(crt_rpc_t *rpc)
 					       stat.dtx_newest_aggregated);
 					*ptr = -DER_TX_UNCERTAIN;
 				}
+			} else if (*ptr == DTX_ST_INITED) {
+				/* Leader is in progress, it is not important whether ready or not.
+				 * Return DTX_ST_PREPARED to the remote non-leader to handle it as
+				 * non-committable case. If we directly return DTX_ST_INITED, then
+				 * it will cause interoperability trouble if remote server is old.
+				 */
+				*ptr = DTX_ST_PREPARED;
 			}
 
 			if (mbs[i] != NULL)
@@ -386,6 +395,23 @@ dtx_init(void)
 	D_INFO("Set DTX aggregation time threshold as %d (seconds)\n",
 	       dtx_agg_thd_age_up);
 
+	str = getenv("DTX_RPC_HELPER_THD");
+	if (str != NULL) {
+		dtx_rpc_helper_thd = atoi(str);
+		if (dtx_rpc_helper_thd == 0) {
+			dtx_rpc_helper_thd = DTX_RPC_HELPER_THD_MAX;
+		} else if (dtx_rpc_helper_thd < DTX_RPC_HELPER_THD_MIN) {
+			D_WARN("Invalid DTX RPC helper threshold %u, the valid range is "
+			       "[%u, unlimited), 0 is for unlimited, use the default value %u\n",
+			       dtx_rpc_helper_thd, DTX_RPC_HELPER_THD_MIN, DTX_RPC_HELPER_THD_DEF);
+			dtx_rpc_helper_thd = DTX_RPC_HELPER_THD_DEF;
+		}
+	} else {
+		dtx_rpc_helper_thd = DTX_RPC_HELPER_THD_DEF;
+	}
+
+	D_INFO("Set DTX RPC helper threshold as %u\n", dtx_rpc_helper_thd);
+
 	rc = dbtree_class_register(DBTREE_CLASS_DTX_CF,
 				   BTR_FEAT_UINT_KEY | BTR_FEAT_DYNAMIC_ROOT,
 				   &dbtree_dtx_cf_ops);
@@ -407,12 +433,15 @@ dtx_setup(void)
 {
 	int	rc;
 
-	dtx_agg_gen = 1;
-
 	rc = dss_ult_create_all(dtx_batched_commit, NULL, true);
+	if (rc != 0) {
+		D_ERROR("Failed to create DTX batched commit ULT: "DF_RC"\n", DP_RC(rc));
+		return rc;
+	}
+
+	rc = dss_ult_create_all(dtx_aggregation_main, NULL, true);
 	if (rc != 0)
-		D_ERROR("Failed to create DTX batched commit ULT: "DF_RC"\n",
-			DP_RC(rc));
+		D_ERROR("Failed to create DTX aggregation ULT: "DF_RC"\n", DP_RC(rc));
 
 	return rc;
 }
@@ -434,6 +463,7 @@ struct dss_module dtx_module =  {
 	.sm_name	= "dtx",
 	.sm_mod_id	= DAOS_DTX_MODULE,
 	.sm_ver		= DAOS_DTX_VERSION,
+	.sm_proto_count	= 1,
 	.sm_init	= dtx_init,
 	.sm_fini	= dtx_fini,
 	.sm_setup	= dtx_setup,

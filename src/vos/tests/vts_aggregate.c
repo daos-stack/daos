@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2019-2021 Intel Corporation.
+ * (C) Copyright 2019-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -269,7 +269,7 @@ generate_view(struct io_test_args *arg, daos_unit_oid_t oid, char *dkey,
 	epr_a = &ds->td_agg_epr;
 	view_len = get_view_len(ds, &recx);
 
-	VERBOSE_MSG("Generate logcial view: OID:"DF_UOID", DKEY:%s, AKEY:%s, "
+	VERBOSE_MSG("Generate logical view: OID:"DF_UOID", DKEY:%s, AKEY:%s, "
 		    "U_ERP:["DF_U64", "DF_U64"], A_EPR["DF_U64", "DF_U64"], "
 		    "discard:%d, expected_nr:%d\n", DP_UOID(oid), dkey, akey,
 		    epr_u->epr_lo, epr_u->epr_hi, epr_a->epr_lo, epr_a->epr_hi,
@@ -359,7 +359,7 @@ generate_akeys(struct io_test_args *arg, daos_unit_oid_t oid, int nr)
 
 static void
 aggregate_basic_lb(struct io_test_args *arg, struct agg_tst_dataset *ds, int punch_nr,
-		   daos_epoch_t punch_epoch[], daos_epoch_t punch_bound[])
+		   daos_epoch_t punch_epoch[], daos_epoch_t punch_bound[], unsigned int agg_flags)
 {
 	daos_unit_oid_t		 oid;
 	char			 dkey[UPDATE_DKEY_SIZE] = { 0 };
@@ -369,7 +369,7 @@ aggregate_basic_lb(struct io_test_args *arg, struct agg_tst_dataset *ds, int pun
 	char			*buf_u;
 	daos_recx_t		 recx = { 0 }, *recx_p;
 	daos_size_t		 view_len;
-	int			 punch_idx = 0, recx_idx = 0, rc;
+	int			 punch_idx = 0, recx_idx = 0, rc = 0;
 	int			 punch_or_delete = TF_PUNCH;
 
 	if (ds->td_delete)
@@ -423,7 +423,7 @@ aggregate_basic_lb(struct io_test_args *arg, struct agg_tst_dataset *ds, int pun
 	if (ds->td_discard)
 		rc = vos_discard(arg->ctx.tc_co_hdl, NULL /* objp */, epr_a, NULL, NULL);
 	else
-		rc = vos_aggregate(arg->ctx.tc_co_hdl, epr_a, NULL, NULL, false);
+		rc = vos_aggregate(arg->ctx.tc_co_hdl, epr_a, NULL, NULL, agg_flags);
 	if (rc != -DER_CSUM) {
 		/* Skip delete verification for now */
 		assert_rc_equal(rc, 0);
@@ -441,7 +441,7 @@ static void
 aggregate_basic(struct io_test_args *arg, struct agg_tst_dataset *ds,
 		int punch_nr, daos_epoch_t punch_epoch[])
 {
-	aggregate_basic_lb(arg, ds, punch_nr, punch_epoch, NULL);
+	aggregate_basic_lb(arg, ds, punch_nr, punch_epoch, NULL, VOS_AGG_FL_FORCE_MERGE);
 }
 
 static inline int
@@ -608,7 +608,7 @@ aggregate_multi(struct io_test_args *arg, struct agg_tst_dataset *ds_sample)
 	if (ds_sample->td_discard)
 		rc = vos_discard(arg->ctx.tc_co_hdl, NULL /* objp */, epr_a, NULL, NULL);
 	else
-		rc = vos_aggregate(arg->ctx.tc_co_hdl, epr_a, NULL, NULL, false);
+		rc = vos_aggregate(arg->ctx.tc_co_hdl, epr_a, NULL, NULL, 0);
 	assert_rc_equal(rc, 0);
 
 	multi_view(arg, oids, dkeys, akeys, AT_OBJ_KEY_NR, ds_arr, true);
@@ -1033,7 +1033,7 @@ discard_13(void **state)
 	 * Generate enough amount of akeys to ensure vos_iterate()
 	 * trigger re-probe on dkey
 	 */
-	generate_akeys(arg, ds.td_oid, VOS_AGG_CREDITS_MAX + 10);
+	generate_akeys(arg, ds.td_oid, AGG_CREDS_SCAN_TIGHT + 10);
 
 	recx_tot.rx_idx = 0;
 	recx_tot.rx_nr = 20;
@@ -1159,7 +1159,7 @@ agg_punches_test_helper(void **state, int record_type, int type, bool discard,
 		if (discard)
 			rc = vos_discard(arg->ctx.tc_co_hdl, NULL /* objp */, &epr, NULL, NULL);
 		else
-			rc = vos_aggregate(arg->ctx.tc_co_hdl, &epr, NULL, NULL, false);
+			rc = vos_aggregate(arg->ctx.tc_co_hdl, &epr, NULL, NULL, 0);
 
 		assert_rc_equal(rc, 0);
 
@@ -1244,6 +1244,11 @@ agg_punches_test(void **state, int record_type, bool discard)
 			}
 		}
 	}
+	/** cleanup() sets the flag to assert if there are items in container garbage collection
+	 *  heap which will always be the case for these punch tests.  So let's run garbage
+	 *  collection before cleanup in this case.
+	 */
+	gc_wait();
 }
 static void
 discard_14(void **state)
@@ -1944,9 +1949,10 @@ aggregate_14(void **state)
 
 		VERBOSE_MSG("Aggregate round: %d\n", i);
 		epr.epr_hi = epc_hi;
-		rc = vos_aggregate(arg->ctx.tc_co_hdl, &epr, NULL, NULL, false);
+		rc = vos_aggregate(arg->ctx.tc_co_hdl, &epr, NULL, NULL, 0);
 		if (rc) {
-			print_error("aggregate %d failed:%d\n", i, rc);
+			print_error("aggregate %d failed: "DF_RC"\n", i,
+				    DP_RC(rc));
 			break;
 		}
 
@@ -2134,7 +2140,7 @@ aggregate_22(void **state)
 
 	epr.epr_hi = epoch++;
 
-	rc = vos_aggregate(arg->ctx.tc_co_hdl, &epr, NULL, NULL, false);
+	rc = vos_aggregate(arg->ctx.tc_co_hdl, &epr, NULL, NULL, 0);
 	assert_rc_equal(rc, 0);
 
 	fetch_value(arg, oid, epoch++,
@@ -2529,7 +2535,7 @@ removal_stress_case(struct io_test_args *arg, int recx_nr, daos_recx_t *recx_arr
 	ds.td_delete = true;
 
 	VERBOSE_MSG("Stress test recx_nr=%d, remove_nr=%d\n", recx_nr, remove_nr);
-	aggregate_basic_lb(arg, &ds, remove_nr, &remove_epochs[0], &remove_bounds[0]);
+	aggregate_basic_lb(arg, &ds, remove_nr, &remove_epochs[0], &remove_bounds[0], 0);
 }
 
 static void
@@ -2708,6 +2714,149 @@ aggregate_33(void **state)
 	cleanup();
 }
 
+/*
+ * Aggregate on single akey-EV, with or w/o 'force_merge' flag
+ */
+static void
+aggregate_34(void **state)
+{
+	struct io_test_args	*arg = *state;
+	vos_pool_info_t		 pool_info;
+	struct vos_pool_space	*vps = &pool_info.pif_space;
+	struct agg_tst_dataset	 ds = { 0 };
+	daos_recx_t		*recx_arr;
+	int			 rc, i, rec_cnt = vos_agg_nvme_thresh - 1;
+
+	rc = vos_pool_query(arg->ctx.tc_po_hdl, &pool_info);
+	assert_rc_equal(rc, 0);
+
+	/* NVMe isn't enabled */
+	if (NVME_TOTAL(vps) == 0) {
+		print_message("NVMe isn't enabled, skip test\n");
+		skip();
+	}
+
+	D_ASSERT(rec_cnt > 0);
+	D_ALLOC_ARRAY(recx_arr, rec_cnt);
+	D_ASSERT(recx_arr != NULL);
+
+	for (i = 0; i < rec_cnt; i++) {
+		recx_arr[i].rx_idx = i * VOS_BLK_SZ;
+		recx_arr[i].rx_nr = VOS_BLK_SZ;
+	}
+
+	ds.td_type = DAOS_IOD_ARRAY;
+	ds.td_iod_size = 1;
+	ds.td_recx_nr = rec_cnt;
+	ds.td_recx = recx_arr;
+	ds.td_expected_recs = rec_cnt;
+	ds.td_upd_epr.epr_lo = 1;
+	ds.td_upd_epr.epr_hi = rec_cnt;
+	ds.td_agg_epr.epr_lo = 0;
+	ds.td_agg_epr.epr_hi = rec_cnt + 1;
+	ds.td_discard = false;
+
+	VERBOSE_MSG("Aggregate NVMe records w/o 'force_merge' flag\n");
+	aggregate_basic_lb(arg, &ds, 0, NULL, NULL, 0);
+
+	VERBOSE_MSG("Aggregate NVMe records with 'force_merge' flag\n");
+	ds.td_expected_recs = 1;
+	aggregate_basic_lb(arg, &ds, 0, NULL, NULL, VOS_AGG_FL_FORCE_MERGE);
+
+	D_FREE(recx_arr);
+	cleanup();
+}
+
+#define INIT_FEATS 0x8000000000073f43ULL
+D_CASSERT((INIT_FEATS & VOS_AGG_TIME_MASK) == 0);
+
+static void
+aggregate_35(void **state)
+{
+	uint64_t	feats = INIT_FEATS;
+	daos_epoch_t	epoch;
+	bool		result;
+
+	result = vos_feats_agg_time_get(feats, &epoch);
+	assert_false(result);
+
+	feats |= VOS_TF_AGG_OPT;
+	result = vos_feats_agg_time_get(feats, &epoch);
+	assert_true(result);
+	assert_int_equal(epoch, 0);
+
+	vos_feats_agg_time_update(252, &feats);
+	result = vos_feats_agg_time_get(feats, &epoch);
+	assert_true(result);
+	assert_int_equal(epoch, 252);
+	assert_int_equal(feats & INIT_FEATS, INIT_FEATS);
+
+	/** Set lower time, same answer */
+	vos_feats_agg_time_update(242, &feats);
+	result = vos_feats_agg_time_get(feats, &epoch);
+	assert_true(result);
+	assert_int_equal(epoch, 252);
+	assert_int_equal(feats & INIT_FEATS, INIT_FEATS);
+
+	/** Set higher time, new answer */
+	vos_feats_agg_time_update(342, &feats);
+	result = vos_feats_agg_time_get(feats, &epoch);
+	assert_true(result);
+	assert_int_equal(epoch, 342);
+	assert_int_equal(feats & INIT_FEATS, INIT_FEATS);
+
+	/** If upper 24-bits is set, we assume HLC */
+	vos_feats_agg_time_update(0x463abcdef00ULL, &feats);
+	result = vos_feats_agg_time_get(feats, &epoch);
+	assert_true(result);
+	/** When we set the timestamp, we round up */
+	assert_int_equal(epoch, 0x463ac000000ULL);
+	assert_int_equal(feats & INIT_FEATS, INIT_FEATS);
+
+	/** Try setting a lower time, should get same result */
+	vos_feats_agg_time_update(0x463a00def00ULL, &feats);
+	result = vos_feats_agg_time_get(feats, &epoch);
+	assert_true(result);
+	assert_int_equal(epoch, 0x463ac000000ULL);
+	assert_int_equal(feats & INIT_FEATS, INIT_FEATS);
+
+	/** Try setting a higher time, should get updated */
+	vos_feats_agg_time_update(0x463adcdef00ULL, &feats);
+	result = vos_feats_agg_time_get(feats, &epoch);
+	assert_true(result);
+	assert_int_equal(epoch, 0x463ae000000ULL);
+	assert_int_equal(feats & INIT_FEATS, INIT_FEATS);
+
+	/** Test maximum epoch (not HLC) */
+	feats = INIT_FEATS;
+	epoch = (1ULL << VOS_AGG_NR_BITS) - 1;
+	vos_feats_agg_time_update(epoch, &feats);
+	result = vos_feats_agg_time_get(feats, &epoch);
+	assert_true(result);
+	assert_int_equal(epoch, (1ULL << VOS_AGG_NR_BITS) - 1);
+	assert_false(feats & VOS_TF_AGG_HLC);
+	assert_int_equal(feats & INIT_FEATS, INIT_FEATS);
+
+	/** Test minimum HLC */
+	epoch = 1ULL << VOS_AGG_NR_BITS;
+	vos_feats_agg_time_update(epoch, &feats);
+	result = vos_feats_agg_time_get(feats, &epoch);
+	assert_true(result);
+	/** Already rounded to nearest 1/4 ms */
+	assert_int_equal(epoch, 1ULL << VOS_AGG_NR_BITS);
+	assert_true(feats & VOS_TF_AGG_HLC);
+	assert_int_equal(feats & INIT_FEATS, INIT_FEATS);
+
+	/** Test rounding */
+	epoch = (1ULL << VOS_AGG_NR_BITS) + 1;
+	vos_feats_agg_time_update(epoch, &feats);
+	result = vos_feats_agg_time_get(feats, &epoch);
+	assert_true(result);
+	assert_int_equal(epoch, (1ULL << VOS_AGG_NR_BITS) + (1ULL << VOS_AGG_NR_HLC_BITS));
+	assert_true(feats & VOS_TF_AGG_HLC);
+	assert_int_equal(feats & INIT_FEATS, INIT_FEATS);
+}
+
 static int
 agg_tst_teardown(void **state)
 {
@@ -2754,26 +2903,6 @@ static const struct CMUnitTest discard_tests[] = {
 };
 
 static const struct CMUnitTest aggregate_tests[] = {
-	{ "VOS424: Aggregate extents not fully covered by delete record",
-	  aggregate_24, NULL, agg_tst_teardown },
-	{ "VOS425: Aggregate delete of end of merge window",
-	  aggregate_25, NULL, agg_tst_teardown },
-	{ "VOS426: Consecutive removed extents",
-	  aggregate_26, NULL, agg_tst_teardown },
-	{ "VOS427: Consecutive removed extents, no logical extents",
-	  aggregate_27, NULL, agg_tst_teardown },
-	{ "VOS428: Logical extent followed by consecutive removed extents",
-	  aggregate_28, NULL, agg_tst_teardown },
-	{ "VOS429: Logical extent followed by disjoint removed extents",
-	  aggregate_29, NULL, agg_tst_teardown },
-	{ "VOS430: Removal stress test",
-	  aggregate_30, NULL, agg_tst_teardown },
-	{ "VOS431: Removal spans windows, flush with no physical records",
-	  aggregate_31, NULL, agg_tst_teardown },
-	{ "VOS432: Overlapping removals",
-	  aggregate_32, NULL, agg_tst_teardown },
-	{ "VOS433: Many small removals",
-	  aggregate_33, NULL, agg_tst_teardown },
 	{ "VOS401: Aggregate SV with confined epr",
 	  aggregate_1, NULL, agg_tst_teardown },
 	{ "VOS402: Aggregate SV with punch records",
@@ -2820,6 +2949,30 @@ static const struct CMUnitTest aggregate_tests[] = {
 	  aggregate_22, NULL, agg_tst_teardown },
 	{ "VOS423: Aggregate deleted records spanning window end",
 	  aggregate_23, NULL, agg_tst_teardown },
+	{ "VOS424: Aggregate extents not fully covered by delete record",
+	  aggregate_24, NULL, agg_tst_teardown },
+	{ "VOS425: Aggregate delete of end of merge window",
+	  aggregate_25, NULL, agg_tst_teardown },
+	{ "VOS426: Consecutive removed extents",
+	  aggregate_26, NULL, agg_tst_teardown },
+	{ "VOS427: Consecutive removed extents, no logical extents",
+	  aggregate_27, NULL, agg_tst_teardown },
+	{ "VOS428: Logical extent followed by consecutive removed extents",
+	  aggregate_28, NULL, agg_tst_teardown },
+	{ "VOS429: Logical extent followed by disjoint removed extents",
+	  aggregate_29, NULL, agg_tst_teardown },
+	{ "VOS430: Removal stress test",
+	  aggregate_30, NULL, agg_tst_teardown },
+	{ "VOS431: Removal spans windows, flush with no physical records",
+	  aggregate_31, NULL, agg_tst_teardown },
+	{ "VOS432: Overlapping removals",
+	  aggregate_32, NULL, agg_tst_teardown },
+	{ "VOS433: Many small removals",
+	  aggregate_33, NULL, agg_tst_teardown },
+	{ "VOS434: Selectively merging NVMe records",
+	  aggregate_34, NULL, agg_tst_teardown },
+	{ "VOS435: Test aggregation timestamp functions",
+	  aggregate_35, NULL, NULL },
 };
 
 int

@@ -6,9 +6,9 @@ hosts:
     - server-B
     - server-C
     - server-D
-timeout: 600
+timeout: 800
 timeouts:
-    test_rebuild_0to10: 1500
+    test_rebuild_0to10: 2000
     test_rebuild_12to15: 1500
     test_rebuild_27: 1500
 pool:
@@ -31,7 +31,7 @@ server_config:
       scm_mount: /mnt/daos0
       log_mask: DEBUG,MEM=ERR
       env_vars:
-        - DD_MASK=mgmt,io,md,epc,dsms,rebuild
+        - DD_MASK=group_metadata_only,io,epc,rebuild
         - D_LOG_FILE_APPEND_PID=1
     1:
       pinned_numa_node: 1
@@ -47,7 +47,7 @@ server_config:
       scm_mount: /mnt/daos1
       log_mask: DEBUG,MEM=ERR
       env_vars:
-        - DD_MASK=mgmt,io,md,epc,dsms,rebuild
+        - DD_MASK=group_metadata_only,io,epc,rebuild
         - D_LOG_FILE_APPEND_PID=1
   transport_config:
     allow_insecure: False
@@ -106,7 +106,7 @@ daos_tests:
     test_rebuild_22: -s3 -u subtests="22"
     test_rebuild_23: -s3 -u subtests="23"
     test_rebuild_24: -s3 -u subtests="24"
-    test_rebuild_25: -s3 -u subtests="25"
+    test_rebuild_25: -s5 -u subtests="25"
     test_rebuild_26: -s3 -u subtests="26"
     test_rebuild_27: -s6 -u subtests="27"
     test_rebuild_28: -s3 -u subtests="28"

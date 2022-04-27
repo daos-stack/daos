@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2021 Intel Corporation.
+ * (C) Copyright 2021-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -91,15 +91,15 @@ engine_cont_fini(struct credit_context *tsc)
 }
 
 static void
-engine_fini(void)
+engine_fini(struct credit_context *tsc)
 {
 	vos_self_fini();
 }
 
 static int
-engine_init(void)
+engine_init(struct credit_context *tsc)
 {
-	return vos_self_init("/mnt/daos");
+	return vos_self_init(tsc->tsc_pmem_path);
 }
 
 struct io_engine vos_engine = {

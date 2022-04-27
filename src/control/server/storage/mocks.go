@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2021 Intel Corporation.
+// (C) Copyright 2019-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -13,6 +13,7 @@ package storage
 import "C"
 
 import (
+	"context"
 	"fmt"
 	"math/rand"
 	"time"
@@ -20,6 +21,7 @@ import (
 	"github.com/dustin/go-humanize"
 
 	"github.com/daos-stack/daos/src/control/common"
+	"github.com/daos-stack/daos/src/control/lib/hardware"
 	"github.com/daos-stack/daos/src/control/logging"
 )
 
@@ -145,6 +147,26 @@ func MockNvmeControllers(length int) NvmeControllers {
 	return result
 }
 
+// MockNvmeAioFile returns struct representing an emulated NVMe AIO-file device.
+func MockNvmeAioFile(varIdx ...int32) *NvmeAioDevice {
+	idx := common.GetIndex(varIdx...)
+
+	return &NvmeAioDevice{
+		Path: concat("/tmp/daos-bdev-", idx),
+		Size: uint64(humanize.GByte * idx),
+	}
+}
+
+// MockNvmeAioKdev returns struct representing an emulated NVMe AIO-kdev device.
+func MockNvmeAioKdev(varIdx ...int32) *NvmeAioDevice {
+	idx := common.GetIndex(varIdx...)
+
+	return &NvmeAioDevice{
+		Path: concat("/dev/sda", idx),
+		Size: uint64(humanize.GByte * idx),
+	}
+}
+
 // MockScmModule returns struct with examples values.
 func MockScmModule(varIdx ...int32) *ScmModule {
 	idx := uint32(common.GetIndex(varIdx...))
@@ -204,7 +226,32 @@ func MockScmNamespace(varIdx ...int32) *ScmNamespace {
 func MockProvider(log logging.Logger, idx int, engineStorage *Config, sys SystemProvider, scm ScmProvider, bdev BdevProvider) *Provider {
 	p := DefaultProvider(log, idx, engineStorage)
 	p.Sys = sys
-	p.Scm = scm
+	p.scm = scm
 	p.bdev = bdev
 	return p
+}
+
+func MockGetTopology(context.Context) (*hardware.Topology, error) {
+	return &hardware.Topology{
+		NUMANodes: map[uint]*hardware.NUMANode{
+			0: hardware.MockNUMANode(0, 14).
+				WithPCIBuses(
+					[]*hardware.PCIBus{
+						{
+							LowAddress:  *hardware.MustNewPCIAddress("0000:00:00.0"),
+							HighAddress: *hardware.MustNewPCIAddress("0000:07:00.0"),
+						},
+					},
+				),
+			1: hardware.MockNUMANode(0, 14).
+				WithPCIBuses(
+					[]*hardware.PCIBus{
+						{
+							LowAddress:  *hardware.MustNewPCIAddress("0000:80:00.0"),
+							HighAddress: *hardware.MustNewPCIAddress("0000:8f:00.0"),
+						},
+					},
+				),
+		},
+	}, nil
 }

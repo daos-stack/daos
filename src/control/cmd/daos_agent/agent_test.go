@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2021 Intel Corporation.
+// (C) Copyright 2021-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -19,10 +19,11 @@ import (
 	"google.golang.org/protobuf/testing/protocmp"
 
 	"github.com/daos-stack/daos/src/control/common"
+	"github.com/daos-stack/daos/src/control/common/cmdutil"
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	"github.com/daos-stack/daos/src/control/drpc"
 	"github.com/daos-stack/daos/src/control/lib/control"
-	"github.com/daos-stack/daos/src/control/lib/netdetect"
+	"github.com/daos-stack/daos/src/control/lib/hardware"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/pbin"
 )
@@ -128,7 +129,7 @@ func TestAgent_MultiProcess_AttachInfoCache(t *testing.T) {
 	srvResp := &mgmtpb.GetAttachInfoResp{
 		ClientNetHint: &mgmtpb.ClientNetHint{
 			Provider:    "tcp+sockets",
-			NetDevClass: netdetect.Ether,
+			NetDevClass: uint32(hardware.Ether),
 		},
 	}
 
@@ -138,8 +139,8 @@ func TestAgent_MultiProcess_AttachInfoCache(t *testing.T) {
 		UnaryResponse: control.MockMSResponse("localhost", nil, srvResp),
 	})
 	testAgentStart := &startCmd{
-		logCmd: logCmd{
-			log: log,
+		LogCmd: cmdutil.LogCmd{
+			Logger: log,
 		},
 		configCmd: configCmd{
 			cfg: agentCfg,

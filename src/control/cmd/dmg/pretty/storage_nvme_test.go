@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2021 Intel Corporation.
+// (C) Copyright 2020-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -397,13 +397,13 @@ PCI:%s Model:%s FW:%s Socket:%d Capacity:%s
 				controllerC.SocketID, humanize.Bytes(controllerC.Capacity()),
 				controllerC.SmdDevices[0].UUID, controllerC.PciAddr,
 				controllerC.SmdDevices[0].TargetIDs,
-				controllerC.SmdDevices[0].Rank, controllerC.SmdDevices[0].NvmeState.StatusString(),
+				controllerC.SmdDevices[0].Rank, controllerC.SmdDevices[0].NvmeState.String(),
 
 				controllerD.PciAddr, controllerD.Model, controllerD.FwRev,
 				controllerD.SocketID, humanize.Bytes(controllerD.Capacity()),
 				controllerD.SmdDevices[0].UUID, controllerD.PciAddr,
 				controllerD.SmdDevices[0].TargetIDs,
-				controllerD.SmdDevices[0].Rank, controllerD.SmdDevices[0].NvmeState.StatusString()),
+				controllerD.SmdDevices[0].Rank, controllerD.SmdDevices[0].NvmeState.String()),
 		},
 		"multiple smd devices on each controller": {
 			hsm: mockHostStorageMap(t,
@@ -439,16 +439,16 @@ PCI:%s Model:%s FW:%s Socket:%d Capacity:%s
 				controllerE.PciAddr, controllerE.Model, controllerE.FwRev,
 				controllerE.SocketID, humanize.Bytes(controllerE.Capacity()),
 				controllerE.SmdDevices[0].UUID, controllerE.SmdDevices[0].TargetIDs,
-				controllerE.SmdDevices[0].Rank, controllerE.SmdDevices[0].NvmeState.StatusString(),
+				controllerE.SmdDevices[0].Rank, controllerE.SmdDevices[0].NvmeState.String(),
 				controllerE.SmdDevices[1].UUID, controllerE.SmdDevices[1].TargetIDs,
-				controllerE.SmdDevices[1].Rank, controllerE.SmdDevices[1].NvmeState.StatusString(),
+				controllerE.SmdDevices[1].Rank, controllerE.SmdDevices[1].NvmeState.String(),
 
 				controllerF.PciAddr, controllerF.Model, controllerF.FwRev,
 				controllerF.SocketID, humanize.Bytes(controllerF.Capacity()),
 				controllerF.SmdDevices[0].UUID, controllerF.SmdDevices[0].TargetIDs,
-				controllerF.SmdDevices[0].Rank, controllerF.SmdDevices[0].NvmeState.StatusString(),
+				controllerF.SmdDevices[0].Rank, controllerF.SmdDevices[0].NvmeState.String(),
 				controllerF.SmdDevices[1].UUID, controllerF.SmdDevices[1].TargetIDs,
-				controllerF.SmdDevices[1].Rank, controllerF.SmdDevices[1].NvmeState.StatusString()),
+				controllerF.SmdDevices[1].Rank, controllerF.SmdDevices[1].NvmeState.String()),
 		},
 	} {
 		t.Run(name, func(t *testing.T) {

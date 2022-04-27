@@ -1,7 +1,5 @@
 # DAOS Tour
 
-
-
 ## Introduction
 
 This documentation provides a general tour to the DAOS management commands
@@ -10,7 +8,7 @@ Help and setup for the following is provided in this chapter:
 
 - Pool and Container create, list, query and destroy on
 DAOS server for daos\_admin and daos\_client users.
-- Common errors and workarounds for new users when using the dmg and daos tools. 
+- Common errors and workarounds for new users when using the dmg and daos tools.
 - Example runs of data transfer between DAOS file systems, by setting up
 of the DAOS dfuse mount point and run traffic with dfuse fio and mpirun
 mdtest.
@@ -38,7 +36,7 @@ Set environment variables for list of servers, client and admin node.
 
 ## Set-Up
 
-Refer to the [DAOS CentOS Setup](setup.md) or the [DAOS openSUSE Setup](suse_setup.md) for RPM installation, daos
+Refer to the [DAOS RHEL Setup](setup_rhel.md) or the [DAOS SUSE Setup](setup_suse.md) for RPM installation, daos
 server/agent/admin configuration yml files, certificate generation, and
 bring-up DAOS servers and clients.
 
@@ -50,20 +48,19 @@ bring-up DAOS servers and clients.
 
 ### run fio
 
-	$ export DAOS_POOL="mypool"
-	$ export DAOS_CONT="mycont"
-	$ dmg pool create --size 10G $DAOS_POOL
-	$ daos cont create --label $DAOS_CONT --type POSIX $DAOS_POOL
-	$ daos cont query $DAOS_POOL $DAOS_CONT
+	$ dmg pool create --size 10G Pool1
+	$ daos cont create --label Cont1 --type POSIX Pool1
+	$ daos cont query Pool1 Cont1
 	$ /usr/bin/mkdir /tmp/daos_test1
 	$ /usr/bin/touch /tmp/daos_test1/testfile
 	$ /usr/bin/df -h -t fuse.daos
 	df: no file systems processed
-	$ /usr/bin/dfuse --m=/tmp/daos_test1 --pool=$DAOS_POOL --cont=$DAOS_CONT
+	$ /usr/bin/dfuse --m=/tmp/daos_test1 --pool=Pool1 --cont=Cont1
 	$ /usr/bin/df -h -t fuse.daos
 	Filesystem Size Used Avail Use% Mounted on
 	dfuse 954M 144K 954M 1% /tmp/daos_test1
-	$ /usr/bin/fio --name=random-write --ioengine=pvsync --rw=randwrite --bs=4k --size=128M --nrfiles=4 --directory=/tmp/daos_test1 --numjobs=8 --iodepth=16 --runtime=60 --time_based --direct=1 --buffered=0 --randrepeat=0 --norandommap --refill_buffers --group_reportingrandom-write: (g=0): rw=randwrite, bs=(R) 4096B-4096B, (W) 4096B-4096B, (T) 4096B-4096B, ioengine=pvsync, iodepth=16
+	$ /usr/bin/fio --name=random-write --ioengine=pvsync --rw=randwrite --bs=4k --size=128M --nrfiles=4 --directory=/tmp/daos_test1 --numjobs=8 --iodepth=16 --runtime=60 --time_based --direct=1 --buffered=0 --randrepeat=0 --norandommap --refill_buffers --group_reporting
+	random-write: (g=0): rw=randwrite, bs=(R) 4096B-4096B, (W) 4096B-4096B, (T) 4096B-4096B, ioengine=pvsync, iodepth=16
 	...
 	fio-3.7
 	Starting 8 processes
@@ -141,13 +138,14 @@ bring-up DAOS servers and clients.
 ### required rpms
 
 	$ sudo yum install -y mpich
-	$ sudo yum install -y mdtest
+	$ sudo yum install -y ior
 	$ sudo yum install -y Lmod
 	$ sudo module load mpi/mpich-x86_64
 	$ /usr/bin/touch /tmp/daos_test1/testfile
 
 ### run mpirun ior and mdtest
 
+        $ /usr/bin/dfuse --m=/tmp/daos_test1 --pool=Pool1 --cont=Cont1
 	# Run mpirun ior
 	$ /usr/lib64/mpich/bin/mpirun -host <host1> -np 30 ior -a POSIX -b 26214400 -v -w -k -i 1 -o /tmp/daos_test1/testfile -t 25M
 	IOR-3.4.0+dev: MPI Coordinated Test of Parallel I/O
@@ -192,7 +190,7 @@ bring-up DAOS servers and clients.
 # Run mpirun mdtest
 
 	$ /usr/lib64/mpich/bin/mpirun -host <host1> -np 30 mdtest -a DFS -z 0 -F -C -i 1 -n 1667 -e 4096 -d / -w 4096 --dfs.chunk_size 1048576 --dfs.cont <container.uuid> --dfs.destroy --dfs.dir_oclass RP_3G1 --dfs.group daos_server --dfs.oclass RP_3G1 --dfs.pool <pool_uuid>
-	– started at 04/16/2021 22:01:55 –
+	- started at 04/16/2021 22:01:55 -
 	mdtest-3.4.0+dev was launched with 30 total task(s) on 1 node(s)
 	Command line used: mdtest 'a' 'DFS' '-z' '0' '-F' '-C' '-i' '1' '-n' '1667' '-e' '4096' '-d' '/' '-w' '4096' 'dfs.chunk_size' '1048576' 'dfs.cont' '3e661024-2f1f-4d7a-9cd4-1b05601e0789' 'dfs.destroy' 'dfs.dir_oclass' 'SX' 'dfs.group' 'daos_server' 'dfs.oclass' 'SX' '-dfs.pool' 'd546a7f5-586c-4d8f-aecd-372878df7b97'
 	WARNING: unable to use realpath() on file system.
@@ -202,17 +200,17 @@ bring-up DAOS servers and clients.
 	30 tasks, 50010 files
 	SUMMARY rate: (of 1 iterations)
 	Operation Max Min Mean Std Dev
-	--------- — — ---- -------
+	--------- - - ---- -------
 	File creation : 14206.584 14206.334 14206.511 0.072
 	File stat : 0.000 0.000 0.000 0.000
 	File read : 0.000 0.000 0.000 0.000
 	File removal : 0.000 0.000 0.000 0.000
 	Tree creation : 1869.791 1869.791 1869.791 0.000
 	Tree removal : 0.000 0.000 0.000 0.000
-	– finished at 04/16/2021 22:01:58 –
+	- finished at 04/16/2021 22:01:58 -
 
 	$ /usr/lib64/mpich/bin/mpirun -host <host1> -np 50 mdtest -a DFS -z 0 -F -C -i 1 -n 1667 -e 4096 -d / -w 4096 --dfs.chunk_size 1048576 --dfs.cont 3e661024-2f1f-4d7a-9cd4-1b05601e0789 --dfs.destroy --dfs.dir_oclass SX --dfs.group daos_server --dfs.oclass SX --dfs.pool d546a7f5-586c-4d8f-aecd-372878df7b97
-	– started at 04/16/2021 22:02:21 –
+	- started at 04/16/2021 22:02:21 -
 	mdtest-3.4.0+dev was launched with 50 total task(s) on 1 node(s)
 	Command line used: mdtest 'a' 'DFS' '-z' '0' '-F' '-C' '-i' '1' '-n' '1667' '-e' '4096' '-d' '/' '-w' '4096' 'dfs.chunk_size' '1048576' 'dfs.cont' '3e661024-2f1f-4d7a-9cd4-1b05601e0789' 'dfs.destroy' 'dfs.dir_oclass' 'SX' 'dfs.group' 'daos_server' 'dfs.oclass' 'SX' '-dfs.pool' 'd546a7f5-586c-4d8f-aecd-372878df7b97'
 	WARNING: unable to use realpath() on file system.
@@ -222,14 +220,14 @@ bring-up DAOS servers and clients.
 	50 tasks, 83350 files
 	SUMMARY rate: (of 1 iterations)
 	Operation Max Min Mean Std Dev
-	--------- — — ---- -------
+	--------- - - ---- -------
 	File creation : 13342.303 13342.093 13342.228 0.059
 	File stat : 0.000 0.000 0.000 0.000
 	File read : 0.000 0.000 0.000 0.000
 	File removal : 0.000 0.000 0.000 0.000
 	Tree creation : 1782.938 1782.938 1782.938 0.000
 	Tree removal : 0.000 0.000 0.000 0.000
-	– finished at 04/16/2021 22:02:27 –
+	- finished at 04/16/2021 22:02:27 -
 
 ## Run with 4 DAOS hosts server, rebuild with dfuse io and mpirun
 
@@ -252,19 +250,14 @@ bring-up DAOS servers and clients.
 	  -----             ----------- ------------
 	  boro-[8,35,52-53] 1           0
 
-	$ dmg pool list
-	Pool UUID Svc Replicas
-	--------- ------------
-	733bee7b-c2af-499e-99dd-313b1ef092a9
-	[1-3]
+	$ dmg pool create --size 10G Pool1
+	$ daos cont create --label Cont1 --type POSIX --oclass RP_3G1 --properties rf:2 Pool1
+	$ daos pool list-cont Pool1
+	UUID                                 Label
+	----                                 -----
+	2649aa0f-3ad7-4943-abf5-4343205a637b Cont1
 
-	$ daos cont create --label mycont --type POSIX --oclass RP_3G1 --properties rf:2 $DAOS_POOL
-	Successfully created container 2649aa0f-3ad7-4943-abf5-4343205a637b
-
-	$ daos pool list-cont $DAOS_POOL
-	2649aa0f-3ad7-4943-abf5-4343205a637b
-
-	$ dmg pool query $DAOS_POOL
+	$ dmg pool query Pool1
 	Pool 733bee7b-c2af-499e-99dd-313b1ef092a9, ntarget=32, disabled=0, leader=2, version=1
 	Pool space info:
 	- Target(VOS) count:32
@@ -281,7 +274,7 @@ bring-up DAOS servers and clients.
 
 	$ mkdir /tmp/daos_test1
 
-	$ dfuse --mountpoint=/tmp/daos_test1 --pool=$DAOS_POOL --cont=$DAOS_CONT
+	$ dfuse --mountpoint=/tmp/daos_test1 --pool=Pool1 --cont=Cont1
 
 	$ df -h -t fuse.daos
 	Filesystem      Size  Used Avail Use% Mounted on
@@ -359,10 +352,10 @@ bring-up DAOS servers and clients.
 	--------- ------
 	3 stop OK
 
-	$ daos pool list-cont $DAOS_POOL
+	$ daos pool list-cont Pool1
 	cf2a95ce-9910-4d5e-814c-cafb0a7f0944
 
-	$ dmg pool query $DAOS_POOL
+	$ dmg pool query Pool1
 	Pool 70f73efc-848e-4f6e-b4fd-909bcf9bd427,
 	ntarget=32,
 	disabled=8,
@@ -403,9 +396,7 @@ bring-up DAOS servers and clients.
 
 ### Run mpirun mdtest with rebuild
 
-	$ export DAOS_POOL="mypool1"
-	$ export DAOS_CONT="mycont"
-	$ dmg pool create --size=50G $DAOS_POOL
+	$ dmg pool create --size=50G Pool1
 	Creating DAOS pool with automatic storage allocation: 50 GB NVMe + 6.00% SCM
 	Pool created with 100.00% SCM/NVMe ratio
 	-----------------------------------------
@@ -416,12 +407,12 @@ bring-up DAOS servers and clients.
 	 SCM : 50 GB (12 GB / rank)
 	 NVMe : 0 B (0 B / rank)
 
-	$ daos cont create --label $DAOS_CONT --type POSIX --oclass RP_3G1 --properties rf:2 $DAOS_POOL
+	$ daos cont create --label Cont1 --type POSIX --oclass RP_3G1 --properties rf:2 Pool1
 	Successfully created container d71ff6a5-15a5-43fe-b829-bef9c65b9ccb
 
-	$ /usr/lib64/mpich/bin/mpirun -host boro-8 -np 30 mdtest -a DFS -z 0 -F -C -i 100 -n 1667 -e 4096 -d / -w 4096 --dfs.chunk_size 1048576 --dfs.cont $DAOS_CONT --dfs.destroy --dfs.dir_oclass RP_3G1 --dfs.group daos_server --dfs.oclass RP_3G1 --dfs.pool $DAOS_POOL
+	$ /usr/lib64/mpich/bin/mpirun -host boro-8 -np 30 mdtest -a DFS -z 0 -F -C -i 100 -n 1667 -e 4096 -d / -w 4096 --dfs.chunk_size 1048576 --dfs.cont Cont1 --dfs.destroy --dfs.dir_oclass RP_3G1 --dfs.group daos_server --dfs.oclass RP_3G1 --dfs.pool Pool1
 
-	started at 04/22/2021 17:46:20 –
+	started at 04/22/2021 17:46:20 -
 	mdtest-3.4.0+dev was launched with 30 total task(s) on 1 node(s)
 	Command line used: mdtest 'a' 'DFS' '-z' '0' '-F' '-C' '-i' '100' '-n' '1667' '-e' '4096' '-d' '/' '-w' '4096' 'dfs.chunk_size' '1048576' 'dfs.cont' 'd71ff6a5-15a5-43fe-b829-bef9c65b9ccb' 'dfs.destroy' 'dfs.dir_oclass' 'RP_3G1' 'dfs.group' 'daos_server' 'dfs.oclass' 'RP_3G1' '-dfs.pool' '4eda8a8c-028c-461c-afd3-704534961572'
 	WARNING: unable to use realpath() on file system.
@@ -458,14 +449,14 @@ bring-up DAOS servers and clients.
 ## Clean-Up
 
 	# pool reintegrate
-	$ dmg pool reintegrate $DAOS_POOL --rank=2
+	$ dmg pool reintegrate Pool1 --rank=2
 	Reintegration command succeeded
 
 	# destroy container
-	$ daos container destroy $DAOS_POOL $DAOS_CONT
+	$ daos container destroy Pool1 Cont1
 
 	# destroy pool
-	$ dmg pool destroy $DAOS_POOL
+	$ dmg pool destroy Pool1
 	Pool-destroy command succeeded
 
 	# stop clients

@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2021 Intel Corporation.
+// (C) Copyright 2019-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -78,11 +78,6 @@ func createFakeBinary(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// capture this and set on exit to accommodate the addition of
-	// netdetect dependencies
-	ldLibraryPath := os.Getenv("LD_LIBRARY_PATH")
-	defer os.Setenv("LD_LIBRARY_PATH", ldLibraryPath)
-
 	// ensure that we have a clean environment for testing
 	os.Clearenv()
 }
@@ -96,8 +91,8 @@ func TestRunnerContextExit(t *testing.T) {
 	log, buf := logging.NewTestLogger(t.Name())
 	defer common.ShowBufferOnFailure(t, buf)
 
-	cfg := NewConfig().
-		WithEnvPassThrough(testModeVar, "LD_LIBRARY_PATH")
+	cfg := MockConfig().
+		WithEnvPassThrough(testModeVar)
 	cfg.Index = 9
 
 	runner := NewRunner(log, cfg)
@@ -116,7 +111,6 @@ func TestRunnerContextExit(t *testing.T) {
 }
 
 func TestRunnerNormalExit(t *testing.T) {
-	var numaNode uint = 1
 	var bypass bool = false
 	createFakeBinary(t)
 
@@ -134,20 +128,19 @@ func TestRunnerNormalExit(t *testing.T) {
 	log, buf := logging.NewTestLogger(t.Name())
 	defer common.ShowBufferOnFailure(t, buf)
 
-	cfg := NewConfig().
-		WithEnvPassThrough(testModeVar, "LD_LIBRARY_PATH",
-			"OFI_INTERFACE", allowedUserEnv).
+	cfg := MockConfig().
+		WithEnvPassThrough(testModeVar, "OFI_INTERFACE", allowedUserEnv).
 		WithTargetCount(42).
 		WithHelperStreamCount(1).
 		WithFabricInterface("qib0").
 		WithLogMask("DEBUG,MGMT=DEBUG,RPC=ERR,MEM=ERR").
-		WithPinnedNumaNode(&numaNode).
+		WithPinnedNumaNode(1).
 		WithBypassHealthChk(&bypass).
 		WithCrtCtxShareAddr(1).
 		WithCrtTimeout(30).
 		WithStorage(
 			storage.NewTierConfig().
-				WithScmClass("ram").
+				WithStorageClass("ram").
 				WithScmMountPoint("/foo/bar"),
 		)
 	runner := NewRunner(log, cfg)

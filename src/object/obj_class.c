@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2021 Intel Corporation.
+ * (C) Copyright 2016-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -26,11 +26,9 @@ static struct daos_obj_class  *oclass_resil2cl(struct daos_oclass_attr *ca);
 
 /**
  * Find the object class attributes for the provided @oid.
- * NB: Because ec.e_len can be overwritten by pool/container property,
- * please don't directly use ec.e_len.
  */
 struct daos_oclass_attr *
-daos_oclass_attr_find(daos_obj_id_t oid, bool *is_priv, uint32_t *nr_grps)
+daos_oclass_attr_find(daos_obj_id_t oid, uint32_t *nr_grps)
 {
 	struct daos_obj_class	*oc;
 
@@ -43,9 +41,25 @@ daos_oclass_attr_find(daos_obj_id_t oid, bool *is_priv, uint32_t *nr_grps)
 	}
 	D_DEBUG(DB_PL, "Find class %s for oid "DF_OID"\n",
 		oc->oc_name, DP_OID(oid));
-	if (is_priv)
-		*is_priv = oc->oc_private;
+
 	return &oc->oc_attr;
+}
+
+int daos_obj2oc_attr(daos_handle_t oh, struct daos_oclass_attr *oca)
+{
+	struct dc_object *dc_object;
+	struct daos_oclass_attr *tmp;
+
+	dc_object = obj_hdl2ptr(oh);
+	if (dc_object == NULL)
+		return -DER_NO_HDL;
+
+	tmp = obj_get_oca(dc_object);
+	D_ASSERT(tmp != NULL);
+	*oca = *tmp;
+	obj_decref(dc_object);
+
+	return 0;
 }
 
 int
@@ -594,11 +608,6 @@ oc_scale_cmp(struct daos_oclass_attr *ca1, struct daos_oclass_attr *ca2)
 		return -1;
 
 	if (ca1->ca_resil == DAOS_RES_EC) {
-		if (ca1->ca_ec_cell > ca2->ca_ec_cell)
-			return 1;
-		if (ca1->ca_ec_cell < ca2->ca_ec_cell)
-			return -1;
-
 		if (ca1->ca_ec_k + ca1->ca_ec_p > ca2->ca_ec_k + ca2->ca_ec_p)
 			return 1;
 		if (ca1->ca_ec_k + ca1->ca_ec_p < ca2->ca_ec_k + ca2->ca_ec_p)

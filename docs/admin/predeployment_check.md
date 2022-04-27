@@ -13,7 +13,7 @@ the Linux kernel. Exact details depend on the distribution, but the following
 example should be illustrative:
 
 ```bash
-# Enable IOMMU on CentOS 7
+# Enable IOMMU on CentOS 7 and EL 8
 # All commands must be run as root/sudo!
 
 $ sudo vi /etc/default/grub # add the following line:
@@ -53,12 +53,38 @@ The DAOS transaction model relies on timestamps and requires time to be
 synchronized across all the storage nodes. This can be done using NTP or
 any other equivalent protocol.
 
-## User/Group Synchronization
+## User and Group Management
 
-DAOS ACLs store the actual user and group names (instead of numeric IDs), and
-therefore the servers do not need access to a synchronized user/group database.
-The DAOS Agent (running on the client nodes) is responsible for resolving
-UID/GID to user/group names which are added to a signed credential and sent to
+### DAOS User/Groups on the Servers
+
+The `daos_server` and `daos_engine` processes run under a non-privileged userid `daos_server`.
+If that user does not exist at the time the `daos-server` RPM is installed, the user will be
+created as part of the RPM installation. A group `daos-server` will also be created as its
+primary group, as well as two additional groups `daos_metrics` and `daos_daemons` to which
+the `daos_server` user will be added.
+
+If there are site-specific rules for the creation of users and groups, it is advisable to
+create these users and groups following the site-specific conventions _before_ installing the
+`daos-server` RPM.
+
+### DAOS User/Groups on the Clients
+
+The `daos_agent` process runs under a non-privileged userid `daos_agent`.
+If that user does not exist at the time the `daos-client` RPM is installed, the user will be
+created as part of the RPM installation. A group `daos-agent` will also be created as its
+primary group, as well as an additional group `daos_daemons` to which the `daos_agent` user
+will be added.
+
+If there are site-specific rules for the creation of users and groups, it is advisable to
+create these users and groups following the site-specific conventions _before_ installing the
+`daos-client` RPM.
+
+### User/Group Synchronization for End Users
+
+DAOS ACLs for pools and containers store the actual user and group names (instead of numeric
+IDs). Therefore the servers do not need access to a synchronized user/group database.
+The DAOS Agent (running on the client nodes) is responsible for resolving a user's
+UID/GID to user/group names, which are then added to a signed credential and sent to
 the DAOS storage nodes.
 
 ## Multi-rail/NIC Setup
@@ -103,7 +129,7 @@ $ sysctl -w net.ipv4.conf.all.arp_ignore=1
 ```
 
 Finally, the rp_filter is set to 1 by default on several distributions (e.g. on
-CentOS 7) and should be set to either 0 or 2, with 2 being more secure. This is
+CentOS 7 and EL 8) and should be set to either 0 or 2, with 2 being more secure. This is
 true even if the configuration uses a single logical subnet.
 
 ```
@@ -287,3 +313,159 @@ For further information see
 [this article on network kernel settings](https://access.redhat.com/documentation/en-us/red_hat_enterprise_linux/5/html/tuning_and_optimizing_red_hat_enterprise_linux_for_oracle_9i_and_10g_databases/sect-oracle_9i_and_10g_tuning_guide-adjusting_network_settings-changing_network_kernel_settings)
 using any of the methods described in
 [this article on adjusting kernel tunables](https://access.redhat.com/documentation/en-us/red_hat_enterprise_linux/7/html/kernel_administration_guide/working_with_sysctl_and_kernel_tunables).
+
+## Optimize NVMe SSD Block Size
+
+DAOS server performs NVMe I/O in 4K granularity so in order to avoid alignment
+issues it is beneficial to format the SSDs that will be used with a 4K block size.
+
+First the SSDs need to be bound to a user-space driver to be usable with SPDK, to do
+this, use the SPDK setup script.
+
+`setup.sh` script is provided by SPDK and will be found in the following locations:
+- `/usr/share/spdk/scripts/setup.sh` if DAOS-maintained spdk-tools-21.07 (or greater) RPM
+is installed
+- `<daos_src>/install/share/spdk/scripts/setup.sh` after build from DAOS source
+
+Bind the SSDs with the following commands:
+```bash
+$ sudo /usr/share/spdk/scripts/setup.sh
+0000:01:00.0 (8086 0953): nvme -> vfio-pci
+"daos" user memlock limit: 2048 MB
+
+This is the maximum amount of memory you will be
+able to use with DPDK and VFIO if run as user "daos".
+To change this, please adjust limits.conf memlock limit for user "daos".
+```
+
+Now the SSDs can be accessed by SPDK we can use the `spdk_nvme_manage` tool to format
+the SSDs with a 4K block size.
+
+`spdk_nvme_manage` tool is provided by SPDK and will be found in the following locations:
+- `/usr/bin/spdk_nvme_manage` if DAOS-maintained spdk-21.07-10 (or greater) RPM is installed
+- `<daos_src>/install/prereq/release/spdk/bin/spdk_nvme_manage` after build from DAOS source
+
+Choose to format a SSD, use option "6" for formatting:
+```bash
+$ sudo /usr/bin/spdk_nvme_manage
+NVMe Management Options
+[1: list controllers]
+[2: create namespace]
+[3: delete namespace]
+[4: attach namespace to controller]
+[5: detach namespace from controller]
+[6: format namespace or controller]
+[7: firmware update]
+[8: quit]
+6
+```
+
+Available SSDs will then be listed and you will be prompted to select one.
+
+Select the SSD to format, enter PCI Address "01:00.00":
+```bash
+0000:01:00.00 INTEL SSDPEDMD800G4 CVFT45050002800CGN 0
+Please Input PCI Address(domain:bus:dev.func):
+01:00.00
+```
+
+Erase settings will be displayed and you will be prompted to select one.
+
+Erase the SSD using option "0":
+```bash
+Please Input Secure Erase Setting:
+0: No secure erase operation requested
+1: User data erase
+2: Cryptographic erase
+0
+```
+
+Supported LBA formats will then be displayed and you will be prompted to select one.
+
+Format the SSD into 4KB block size using option "3".
+```bash
+Supported LBA formats:
+0: 512 data bytes
+1: 512 data bytes + 8 metadata bytes
+2: 512 data bytes + 16 metadata bytes
+3: 4096 data bytes
+4: 4096 data bytes + 8 metadata bytes
+5: 4096 data bytes + 64 metadata bytes
+6: 4096 data bytes + 128 metadata bytes
+Please input LBA format index (0 - 6):
+3
+```
+
+A warning will be displayed and you will be prompted to confirm format action.
+
+Confirm format request by entering "Y":
+```bash
+Warning: use this utility at your own risk.
+This command will format your namespace and all data will be lost.
+This command may take several minutes to complete,
+so do not interrupt the utility until it completes.
+Press 'Y' to continue with the format operation.
+Y
+```
+
+Format will now proceed and a reset notice will be displayed for the given SSD.
+
+Format is complete if you see something like the following:
+```bash
+[2022-01-04 12:56:30.075104] nvme_ctrlr.c:1414:nvme_ctrlr_reset: *NOTICE*: [0000:01:00.0] resetting
+controller
+press Enter to display cmd menu ...
+<enter>
+```
+
+Once formats has completed, verify LBA format has been applied as expected.
+
+Choose to list SSD controller details, use option "1":
+```bash
+NVMe Management Options
+[1: list controllers]
+[2: create namespace]
+[3: delete namespace]
+[4: attach namespace to controller]
+[5: detach namespace from controller]
+[6: format namespace or controller]
+[7: firmware update]
+[8: quit]
+1
+```
+
+Controller details should show new "Current LBA Format".
+
+Verify "Current LBA Format" is set to "LBA Format #03":
+```bash
+=====================================================
+NVMe Controller:        0000:01:00.00
+============================
+Controller Capabilities/Features
+Controller ID:          0
+Serial Number:          CVFT550400F4800HGN
+
+Admin Command Set Attributes
+============================
+Namespace Manage And Attach:            Not Supported
+Namespace Format:                       Supported
+
+NVM Command Set Attributes
+============================
+Namespace format operation applies to all namespaces
+
+Namespace Attributes
+============================
+Namespace ID:1
+Size (in LBAs):              195353046 (186M)
+Capacity (in LBAs):          195353046 (186M)
+Utilization (in LBAs):       195353046 (186M)
+Format Progress Indicator:   Not Supported
+Number of LBA Formats:       7
+Current LBA Format:          LBA Format #03
+...
+```
+
+Displayed details for controller show LBA format is now "#03".
+
+Perform the above process for all SSDs that will be used by DAOS.

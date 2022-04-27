@@ -1,6 +1,6 @@
 #!/usr/bin/python
 """
-  (C) Copyright 2018-2021 Intel Corporation.
+  (C) Copyright 2018-2022 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -10,7 +10,7 @@ from grp import getgrgid
 from pwd import getpwuid
 import re
 
-from command_utils_base import CommandFailure
+from exception_utils import CommandFailure
 from dmg_utils_base import DmgCommandBase
 from general_utils import get_numeric_list
 from dmg_utils_params import DmgYamlParameters, DmgTransportCredentials
@@ -238,22 +238,19 @@ class DmgCommand(DmgCommandBase):
         # }
         return self._get_json_result(("storage", "scan"), verbose=verbose)
 
-    def storage_format(self, reformat=False, timeout=30, verbose=False,
-                       force=False):
+    def storage_format(self, force=False, timeout=30, verbose=False):
         """Get the result of the dmg storage format command.
 
         Args:
-            reformat (bool): always reformat storage, could be destructive.
+            force (bool): force storage format on a host, stopping any
+                running engines (CAUTION: destructive operation).
                 This will create control-plane related metadata i.e. superblock
                 file and reformat if the storage media is available and
-                formattable.
+                formattable.  Defaults to False
             timeout: seconds after which the format is considered a failure and
                 times out.
             verbose (bool): show results of each SCM & NVMe device format
                 operation.
-            force (bool, optional): force storage format on a host, stopping any
-                running engines (CAUTION: destructive operation). Defaults to
-                False.
 
         Returns:
             CmdResult: an avocado CmdResult object containing the dmg command
@@ -266,8 +263,7 @@ class DmgCommand(DmgCommandBase):
         saved_timeout = self.timeout
         self.timeout = timeout
         self._get_result(
-            ("storage", "format"), reformat=reformat, verbose=verbose,
-            force=force)
+            ("storage", "format"), force=force, verbose=verbose)
         self.timeout = saved_timeout
         return self.result
 
@@ -371,9 +367,87 @@ class DmgCommand(DmgCommandBase):
         """
         return self._get_result(("storage", "scan"), nvme_health=True)
 
+    def storage_query_usage(self):
+        """Get the result of the 'dmg storage query usage' command.
+
+        Raises:
+            CommandFailure: if the dmg pool query command fails.
+
+        Returns:
+            dict: the dmg json command output converted to a python dictionary
+
+        """
+        # {
+        #   "response": {
+        #     "host_errors": {},
+        #     "HostStorage": {
+        #       "12630866472711427587": {
+        #         "storage": {
+        #           "nvme_devices": [
+        #             {
+        #               "info": "",
+        #               "model": "INTEL SSDPEDMD400G4",
+        #               "serial": "CVFT534200AY400BGN",
+        #               "pci_addr": "0000:05:00.0",
+        #               "fw_rev": "8DV10131",
+        #               "socket_id": 0,
+        #               "health_stats": null,
+        #               "namespaces": [
+        #                 {
+        #                   "id": 1,
+        #                   "size": 400088457216
+        #                 }
+        #               ],
+        #               "smd_devices": [
+        #                 {
+        #                   "dev_state": "NORMAL",
+        #                   "uuid": "259608d1-c469-4684-9986-9f7708b20ca3",
+        #                   "tgt_ids": [ 0, 1, 2, 3, 4, 5, 6, 7 ],
+        #                   "rank": 0,
+        #                   "total_bytes": 398358216704,
+        #                   "avail_bytes": 0,
+        #                   "cluster_size": 1073741824,
+        #                   "health": null,
+        #                   "tr_addr": "0000:05:00.0"
+        #                 }
+        #               ]
+        #             }
+        #           ],
+        #           "scm_modules": null,
+        #           "scm_namespaces": [
+        #             {
+        #               "uuid": "",
+        #               "blockdev": "ramdisk",
+        #               "dev": "",
+        #               "numa_node": 0,
+        #               "size": 17179869184,
+        #               "mount": {
+        #                 "class": "ram",
+        #                 "device_list": null,
+        #                 "info": "",
+        #                 "path": "/mnt/daos",
+        #                 "total_bytes": 17179869184,
+        #                 "avail_bytes": 0
+        #               }
+        #             }
+        #           ],
+        #           "scm_mount_points": null,
+        #           "smd_info": null,
+        #           "reboot_required": false
+        #         },
+        #         "hosts": "wolf-67:10001"
+        #       }
+        #     }
+        #   },
+        #   "error": null,
+        #   "status": 0
+        # }
+        return self._get_json_result(("storage", "query", "usage"))
+
     def pool_create(self, scm_size, uid=None, gid=None, nvme_size=None,
                     target_list=None, svcn=None, acl_file=None, size=None,
                     tier_ratio=None, properties=None, label=None, nranks=None):
+        # pylint: disable=too-many-arguments
         """Create a pool with the dmg command.
 
         The uid and gid method arguments can be specified as either an integer
@@ -442,8 +516,7 @@ class DmgCommand(DmgCommandBase):
         # },
         # "error": null,
         # "status": 0
-        output = self._get_json_result(("pool", "create"),
-                                       json_err=True, **kwargs)
+        output = self._get_json_result(("pool", "create"), json_err=True, **kwargs)
         if output["error"] is not None:
             self.log.error(output["error"])
             if self.exit_status_exception:
@@ -453,20 +526,20 @@ class DmgCommand(DmgCommandBase):
             return data
 
         data["uuid"] = output["response"]["uuid"]
-        data["svc"] = ",".join(
-            [str(svc) for svc in output["response"]["svc_reps"]])
-        data["ranks"] = ",".join(
-            [str(r) for r in output["response"]["tgt_ranks"]])
+        data["svc"] = ",".join([str(svc) for svc in output["response"]["svc_reps"]])
+        data["ranks"] = ",".join([str(r) for r in output["response"]["tgt_ranks"]])
         data["scm_per_rank"] = output["response"]["tier_bytes"][0]
         data["nvme_per_rank"] = output["response"]["tier_bytes"][1]
 
         return data
 
-    def pool_query(self, pool):
+    def pool_query(self, pool, show_enabled=False, show_disabled=False):
         """Query a pool with the dmg command.
 
         Args:
             uuid (str): Pool UUID to query.
+            show_enabled (bool, optional): Display enabled ranks.
+            show_disabled (bool, optional): Display disabled ranks.
 
         Raises:
             CommandFailure: if the dmg pool query command fails.
@@ -505,12 +578,15 @@ class DmgCommand(DmgCommandBase):
         #             "min": 3999993856,
         #             "max": 3999993856,
         #             "mean": 3999993856
-        #         }
+        #         },
+        #         "enabled_ranks": None,
+        #         "disabled_ranks": None
         #     },
         #     "error": null,
         #     "status": 0
         # }
-        return self._get_json_result(("pool", "query"), pool=pool)
+        return self._get_json_result(("pool", "query"), pool=pool,
+                show_enabled=show_enabled, show_disabled=show_disabled)
 
     def pool_destroy(self, pool, force=True):
         """Destroy a pool with the dmg command.
@@ -1134,6 +1210,18 @@ class DmgCommand(DmgCommandBase):
         """
         return self._parse_pool_list("svc_reps", **kwargs)
 
+    def version(self):
+        """Call dmg version.
+
+        Returns:
+            CmdResult: an avocado CmdResult object containing the dmg command
+                information, e.g. exit status, stdout, stderr, etc.
+
+        Raises:
+            CommandFailure: if the dmg storage query command fails.
+
+        """
+        return self._get_result(["version"])
 
 def check_system_query_status(data):
     """Check if any server crashed.

@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2018-2021 Intel Corporation.
+ * (C) Copyright 2018-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -42,12 +42,16 @@
 unsigned int bio_chk_sz;
 /* Per-xstream maximum DMA buffer size (in chunk count) */
 unsigned int bio_chk_cnt_max;
+/* NUMA node affinity */
+unsigned int bio_numa_node;
 /* Per-xstream initial DMA buffer size (in chunk count) */
 static unsigned int bio_chk_cnt_init;
 /* Diret RDMA over SCM */
 bool bio_scm_rdma;
 /* Whether SPDK inited */
 bool bio_spdk_inited;
+/* SPDK subsystem fini timeout */
+unsigned int bio_spdk_subsys_timeout = 9000;	/* ms */
 
 struct bio_nvme_data {
 	ABT_mutex		 bd_mutex;
@@ -65,7 +69,6 @@ struct bio_nvme_data {
 	uint64_t		 bd_scan_age;
 	/* Path to input SPDK JSON NVMe config file */
 	const char		*bd_nvme_conf;
-	int			 bd_shm_id;
 	/* When using SPDK primary mode, specifies memory allocation in MB */
 	int			 bd_mem_size;
 	bool			 bd_started;
@@ -87,7 +90,7 @@ bio_spdk_env_init(void)
 	spdk_env_opts_init(&opts);
 	opts.name = "daos_engine";
 
-	if (nvme_glb.bd_nvme_conf != NULL) {
+	if (bio_nvme_configured()) {
 		rc = bio_add_allowed_alloc(nvme_glb.bd_nvme_conf, &opts);
 		if (rc != 0) {
 			D_ERROR("Failed to add allowed devices to SPDK env, "DF_RC"\n",
@@ -96,17 +99,22 @@ bio_spdk_env_init(void)
 		}
 	}
 
-	/*
+	/**
 	 * TODO: Set opts.mem_size to nvme_glb.bd_mem_size
 	 * Currently we can't guarantee clean shutdown (no hugepages leaked).
 	 * Setting mem_size could cause EAL: Not enough memory available error,
 	 * and DPDK will fail to initialize.
 	 */
 
-	if (nvme_glb.bd_shm_id != DAOS_NVME_SHMID_NONE)
-		opts.shm_id = nvme_glb.bd_shm_id;
-
 	opts.env_context = (char *)dpdk_cli_override_opts;
+
+	if (bio_nvme_configured()) {
+		rc = bio_set_hotplug_filter(nvme_glb.bd_nvme_conf);
+		if (rc != 0) {
+			D_ERROR("Failed to set hotplug filter, "DF_RC"\n", DP_RC(rc));
+			goto out;
+		}
+	}
 
 	rc = spdk_env_init(&opts);
 	if (rc != 0) {
@@ -142,7 +150,7 @@ bypass_health_collect()
 }
 
 int
-bio_nvme_init(const char *nvme_conf, int shm_id, unsigned int mem_size,
+bio_nvme_init(const char *nvme_conf, int numa_node, unsigned int mem_size,
 	      unsigned int hugepage_size, unsigned int tgt_nr,
 	      struct sys_db *db, bool bypass_health_collect)
 {
@@ -160,6 +168,7 @@ bio_nvme_init(const char *nvme_conf, int shm_id, unsigned int mem_size,
 		return -DER_INVAL;
 	}
 
+	bio_numa_node = 0;
 	nvme_glb.bd_xstream_cnt = 0;
 	nvme_glb.bd_init_thread = NULL;
 	nvme_glb.bd_nvme_conf = NULL;
@@ -183,6 +192,9 @@ bio_nvme_init(const char *nvme_conf, int shm_id, unsigned int mem_size,
 
 	d_getenv_bool("DAOS_SCM_RDMA_ENABLED", &bio_scm_rdma);
 	D_INFO("RDMA to SCM is %s\n", bio_scm_rdma ? "enabled" : "disabled");
+
+	d_getenv_int("DAOS_SPDK_SUBSYS_TIMEOUT", &bio_spdk_subsys_timeout);
+	D_INFO("SPDK subsystem fini timeout is %u ms\n", bio_spdk_subsys_timeout);
 
 	/* Hugepages disabled */
 	if (mem_size == 0) {
@@ -238,7 +250,9 @@ bio_nvme_init(const char *nvme_conf, int shm_id, unsigned int mem_size,
 	vmd_led_period = env ? atoi(env) : 0;
 	vmd_led_period *= (NSEC_PER_SEC / NSEC_PER_USEC);
 
-	nvme_glb.bd_shm_id = shm_id;
+	if (numa_node > 0)
+		bio_numa_node = (unsigned int)numa_node;
+
 	nvme_glb.bd_mem_size = mem_size;
 	nvme_glb.bd_nvme_conf = nvme_conf;
 
@@ -1226,7 +1240,7 @@ bio_xsctxt_free(struct bio_xs_context *ctxt)
 			 * temporary workaround.
 			 */
 			rc = xs_poll_completion(ctxt, &cp_arg.cca_inflights,
-						9000 /*ms*/);
+						bio_spdk_subsys_timeout);
 			D_CDEBUG(rc == 0, DB_MGMT, DLOG_ERR,
 				 "SPDK subsystems finalized. "DF_RC"\n",
 				 DP_RC(rc));

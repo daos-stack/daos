@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2021 Intel Corporation.
+// (C) Copyright 2020-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -32,12 +32,12 @@ func TestServer_Instance_createSuperblock(t *testing.T) {
 		if err := os.MkdirAll(filepath.Join(testDir, mnt), 0777); err != nil {
 			t.Fatal(err)
 		}
-		cfg := engine.NewConfig().
+		cfg := engine.MockConfig().
 			WithRank(uint32(idx)).
 			WithSystemName(t.Name()).
 			WithStorage(
 				storage.NewTierConfig().
-					WithScmClass("ram").
+					WithStorageClass("ram").
 					WithScmRamdiskSize(1).
 					WithScmMountPoint(mnt),
 			)

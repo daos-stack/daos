@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2021 Intel Corporation.
+// (C) Copyright 2020-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -8,10 +8,11 @@ package config
 
 import (
 	"fmt"
+	"math"
 
 	"github.com/daos-stack/daos/src/control/fault"
 	"github.com/daos-stack/daos/src/control/fault/code"
-	"github.com/daos-stack/daos/src/control/lib/netdetect"
+	"github.com/daos-stack/daos/src/control/lib/hardware"
 )
 
 var (
@@ -90,6 +91,16 @@ var (
 		"only a single fault domain layer below the root is supported",
 		"update either the fault domain ('fault_path' parameter) or callback script ('fault_cb' parameter) and restart the control server",
 	)
+	FaultConfigNrHugepagesOutOfRange = serverConfigFault(
+		code.ServerConfigNrHugepagesOutOfRange,
+		"number of hugepages specified is out of range",
+		fmt.Sprintf("specify a nr_hugepages value between -1 and %d", math.MaxInt32),
+	)
+	FaultConfigHugepagesDisabled = serverConfigFault(
+		code.ServerConfigHugepagesDisabled,
+		"hugepages cannot be disabled if bdevs have been specified in config",
+		"remove nr_hugepages parameter from config to have the value automatically calculated",
+	)
 )
 
 func FaultConfigDuplicateFabric(curIdx, seenIdx int) *fault.Fault {
@@ -126,11 +137,38 @@ func FaultConfigOverlappingBdevDeviceList(curIdx, seenIdx int) *fault.Fault {
 	)
 }
 
-func FaultConfigInvalidNetDevClass(curIdx int, primaryDevClass, thisDevClass uint32, iface string) *fault.Fault {
+func FaultConfigBdevCountMismatch(curIdx, curCount, seenIdx, seenCount int) *fault.Fault {
+	return serverConfigFault(
+		code.ServerConfigBdevCountMismatch,
+		fmt.Sprintf("the total number of bdev_list entries in all tiers is not equal across engines, engine %d has %d but engine %d has %d",
+			curIdx, curCount, seenIdx, seenCount),
+		"ensure that each I/O Engine has an equal number of total bdev_list entries and restart",
+	)
+}
+
+func FaultConfigTargetCountMismatch(curIdx, curCount, seenIdx, seenCount int) *fault.Fault {
+	return serverConfigFault(
+		code.ServerConfigTargetCountMismatch,
+		fmt.Sprintf("the target count is not equal across engines, engine %d has %d but engine %d has %d",
+			curIdx, curCount, seenIdx, seenCount),
+		"ensure that each I/O Engine has an equal integer value for targets parameter and restart",
+	)
+}
+
+func FaultConfigHelperStreamCountMismatch(curIdx, curCount, seenIdx, seenCount int) *fault.Fault {
+	return serverConfigFault(
+		code.ServerConfigHelperStreamCountMismatch,
+		fmt.Sprintf("the helper stream count is not equal across engines, engine %d has %d but engine %d has %d",
+			curIdx, curCount, seenIdx, seenCount),
+		"ensure that each I/O Engine has an equal integer value for nr_xs_helpers parameter and restart",
+	)
+}
+
+func FaultConfigInvalidNetDevClass(curIdx int, primaryDevClass, thisDevClass hardware.NetDevClass, iface string) *fault.Fault {
 	return serverConfigFault(
 		code.ServerConfigInvalidNetDevClass,
 		fmt.Sprintf("I/O Engine %d specifies fabric_iface %q of class %q that conflicts with the primary server's device class %q",
-			curIdx, iface, netdetect.DevClassName(thisDevClass), netdetect.DevClassName(primaryDevClass)),
+			curIdx, iface, thisDevClass, primaryDevClass),
 		"ensure that each I/O Engine specifies a fabric_iface with a matching device class and restart",
 	)
 }
@@ -161,6 +199,16 @@ func FaultConfigFaultCallbackInsecure(requiredDir string) *fault.Fault {
 		fmt.Sprintf("ensure that the 'fault_cb' path is under the parent directory %q, "+
 			"not a symbolic link, does not have the setuid bit set, and does not have "+
 			"write permissions for non-owners", requiredDir),
+	)
+}
+
+// FaultConfigInsufficientHugePages creates a fault for the scenario where the
+// number of configured huge pages is less than required.
+func FaultConfigInsufficientHugePages(min, req int) *fault.Fault {
+	return serverConfigFault(
+		code.ServerConfigInsufficientHugePages,
+		fmt.Sprintf("insufficient huge pages configured for the number of targets (%d < %d)", req, min),
+		"update the 'nr_hugepages' parameter or remove it for automatic configuration",
 	)
 }
 

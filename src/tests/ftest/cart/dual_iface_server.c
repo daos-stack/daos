@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2018-2021 Intel Corporation.
+ * (C) Copyright 2018-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -240,11 +240,8 @@ server_main(d_rank_t my_rank, const char *str_port, const char *str_interface,
 	size_t			size = 0;
 	int			fd;
 	struct stat		st;
+	crt_init_options_t	init_opts;
 
-	setenv("OFI_PORT", str_port, 1);
-	setenv("OFI_INTERFACE", str_interface, 1);
-	setenv("OFI_DOMAIN", str_domain, 1);
-	setenv("CRT_PHY_ADDR_STR", str_provider, 1);
 	setenv("FI_UNIVERSE_SIZE", "1024", 1);
 	setenv("D_LOG_MASK", "ERR", 1);
 
@@ -263,7 +260,13 @@ server_main(d_rank_t my_rank, const char *str_port, const char *str_interface,
 		error_exit();
 	}
 
-	rc = crt_init("server_grp", CRT_FLAG_BIT_SERVER | CRT_FLAG_BIT_AUTO_SWIM_DISABLE);
+	init_opts.cio_provider = (char *)str_provider;
+	init_opts.cio_interface = (char *)str_interface;
+	init_opts.cio_domain = (char *)str_domain;
+	init_opts.cio_port = (char *)str_port;
+
+	rc = crt_init_opt("server_grp", CRT_FLAG_BIT_SERVER | CRT_FLAG_BIT_AUTO_SWIM_DISABLE,
+			  &init_opts);
 	if (rc != 0) {
 		D_ERROR("crt_init() failed; rc=%d\n", rc);
 		error_exit();
@@ -485,7 +488,7 @@ print_usage(const char *msg)
 	printf("-d 'domain0,domain1': Specify two domains to use; ");
 	printf("e.g. 'eth0,eth1'\n");
 	printf("-p 'provider'       : Specify provider to use; ");
-	printf("e.g. 'ofi+sockets'\n");
+	printf("e.g. 'ofi+tcp'\n");
 	printf("-f [filename]       : If set will transfer contents ");
 	printf("of the specified file via bulk/rdma as part of 'PING' rpc\n");
 }

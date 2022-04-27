@@ -1,11 +1,12 @@
 //
-// (C) Copyright 2020-2021 Intel Corporation.
+// (C) Copyright 2020-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
 package proto_test
 
 import (
+	"context"
 	"errors"
 	"testing"
 
@@ -78,9 +79,20 @@ func TestProto_AnnotateError(t *testing.T) {
 	}
 
 	for name, tc := range map[string]struct {
-		err    error
-		expErr error
+		err      error
+		expErr   error
+		errExact bool
 	}{
+		"wrap/unwrap context.DeadlineExceeded": {
+			err:      context.DeadlineExceeded,
+			expErr:   status.FromContextError(context.DeadlineExceeded).Err(),
+			errExact: true,
+		},
+		"wrap/unwrap context.Canceled": {
+			err:      context.Canceled,
+			expErr:   status.FromContextError(context.Canceled).Err(),
+			errExact: true,
+		},
 		"wrap/unwrap Fault": {
 			err:    testFault,
 			expErr: testFault,
@@ -107,7 +119,11 @@ func TestProto_AnnotateError(t *testing.T) {
 			aErr := proto.AnnotateError(tc.err)
 
 			gotErr := proto.UnwrapError(status.Convert(aErr))
-			common.CmpErr(t, tc.expErr, gotErr)
+			if tc.errExact {
+				common.AssertTrue(t, gotErr.Error() == tc.expErr.Error(), "error does not match exactly")
+			} else {
+				common.CmpErr(t, tc.expErr, gotErr)
+			}
 			if tc.expErr == nil {
 				return
 			}

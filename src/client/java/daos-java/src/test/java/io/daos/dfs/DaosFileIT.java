@@ -215,6 +215,46 @@ public class DaosFileIT {
   }
 
   @Test
+  public void testWriteFileAsyncDiscard() throws Exception {
+    DaosFile daosFile = client.getFile("/data_async11");
+    daosFile.createNewFile();
+    int length = 100;
+    ByteBuf buffer = BufferAllocator.directNettyBuf(length);
+    ByteBuf buffer2 = BufferAllocator.directNettyBuf(length);
+    byte[] bytes = new byte[length];
+    for (int i = 0; i < length; i++) {
+      bytes[i] = (byte) i;
+    }
+    buffer.writeBytes(bytes);
+    buffer2.writeBytes(bytes);
+
+    DaosEventQueue eq = DaosEventQueue.getInstance(-1);
+    IODfsDesc desc = DaosFile.createDfsDesc(buffer, eq);
+    desc.setEvent(eq.acquireEvent());
+    daosFile.writeAsync(desc, 0, length);
+    IODfsDesc desc2 = DaosFile.createDfsDesc(buffer, eq);
+    desc2.setEvent(eq.acquireEvent());
+    daosFile.writeAsync(desc2, length, length);
+    // discard
+    desc2.discard();
+    Thread.sleep(200);
+    List<DaosEventQueue.Attachment> completed = new ArrayList<>();
+    eq.pollCompleted(completed, IODfsDesc.class, null, 1, 100);
+    Assert.assertTrue(desc.isSucceeded());
+    Assert.assertEquals(desc, completed.get(0));
+    Assert.assertEquals(200, daosFile.length());
+    // verify discarded desc2
+    completed.clear();
+    eq.pollCompleted(completed, IODfsDesc.class, null, 1, 100);
+    Assert.assertTrue(completed.isEmpty());
+    Assert.assertEquals(0, desc2.getDescBuffer().refCnt());
+    // release
+    desc.release();
+    desc2.release();
+    daosFile.release();
+  }
+
+  @Test
   public void testReadFileAsync() throws Exception {
     DaosFile daosFile = client.getFile("/data_async2");
     daosFile.createNewFile();
@@ -351,7 +391,7 @@ public class DaosFileIT {
 
     file = client.getFile("/zjf44");
     long time = System.currentTimeMillis();
-    file.createNewFile(Constants.FILE_DEFAULT_FILE_MODE, DaosObjectType.OC_SX, 4096, false);
+    file.createNewFile(Constants.FILE_DEFAULT_FILE_MODE, DaosObjectClass.OC_SX, 4096, false);
     attributes = file.getStatAttributes();
     Assert.assertTrue(attributes.getBlockSize() == 4096);
 
@@ -397,7 +437,7 @@ public class DaosFileIT {
   @Test
   public void testGetChunkSize() throws Exception {
     DaosFile file = client.getFile("/zjf7");
-    file.createNewFile(0754, DaosObjectType.OC_SX, 2048, false);
+    file.createNewFile(0754, DaosObjectClass.OC_SX, 2048, false);
     Assert.assertEquals(2048, file.getChunkSize());
   }
 

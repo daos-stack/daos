@@ -1,0 +1,15 @@
+# Flake8 config file for the DAOS project.
+#
+# This does not disable any checks so is stronger than the github-actions checks
+# which have to allow for existing code.
+[flake8]
+exclude =
+    .git,
+    __pycache__,
+    src/rdb/raft,
+    src/control/vendor,
+    src/client/pydaos/raw,
+    venv,
+    build,
+    install
+max-line-length: 100

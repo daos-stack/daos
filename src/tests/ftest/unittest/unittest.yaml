@@ -6,16 +6,6 @@ timeout: 600
 server_config:
   name: daos_server
 UnitTest:
-  smd_ut:
-    testname: smd_ut
-  vea_ut:
-    testname: vea_ut
-  jump_pl_map:
-    testname: jump_pl_map
-  eq_tests:
-    testname: eq_tests
-  vos_tests:
-    testname: vos_tests
   agent_tests:
     testname: agent_tests
   job_tests:

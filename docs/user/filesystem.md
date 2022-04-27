@@ -121,6 +121,16 @@ to DAOS. It should be run with the credentials of the user, and typically will
 be started and stopped on each compute node as part of the prolog and epilog
 scripts of any resource manager or scheduler in use.
 
+### Core binding and threads.
+
+DFuse will launch one thread per available core by default, although this can be
+changed by the `--thread-count` option. To change the cores that DFuse runs on
+use kernel level tasksets which will bind DFuse to a subset of cores. This can be
+done via the `tasket` or `numactl` programs or similar. If doing this then DFuse
+will again launch one thread per available core by default.  Many metadata
+operations will block a thread until completed so if restricting DFuse to a small
+number of cores then overcommiting via the `--thread-count` option is desirable.
+
 ### Restrictions
 
 DFuse is limited to a single user. Access to the filesystem from other users,
@@ -166,6 +176,7 @@ Additionally, there are several optional command-line options:
 | --sys-name=<name\>         | DAOS system name                 |
 | --foreground               | run in foreground                |
 | --singlethreaded           | run single threaded              |
+| --thread-count=<count>     | Number of threads to use         |
 
 When DFuse starts, it will register a single mount with the kernel, at the
 location specified by the `--mountpoint` option. This mount will be
@@ -334,8 +345,9 @@ DFuse needs 'r' permission for pools only.
 
 #### Container permissions.
 
-DFuse needs 'r', 't', and 'a' permissions to run: read for accessing the data, 't' to read container
-properties to know the container type and 'a' to read the ACLs to know the container owner.
+DFuse needs 'r' and 't' permissions to run: read for accessing the data, 't' to read container
+properties to know the container type. For older layout versions (containers created by DAOS v2.0.x
+and before), 'a' permission is also required to read the ACLs to know the container owner.
 
 Write permission for the container is optional; however, without it the container will be read-only.
 

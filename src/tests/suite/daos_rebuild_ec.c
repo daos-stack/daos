@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2021 Intel Corporation.
+ * (C) Copyright 2016-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -76,14 +76,15 @@ rebuild_ec_internal(void **state, daos_oclass_id_t oclass, int kill_data_nr,
 		verify_ec_full(&req, arg->index, 0);
 	ioreq_fini(&req);
 
+	print_message("daos_obj_verify ...\n");
 	rc = daos_obj_verify(arg->coh, oid, DAOS_EPOCH_MAX);
 	assert_int_equal(rc, 0);
 
 	reintegrate_pools_ranks(&arg, 1, kill_ranks, kill_ranks_num);
 	if (oclass == OC_EC_2P1G1)
-		reintegrate_pools_ranks(&arg, 1, &extra_kill_ranks[1], 1);
+		reintegrate_pools_ranks(&arg, 1, &extra_kill_ranks[0], 1);
 	else /* oclass OC_EC_4P2G1 */
-		reintegrate_pools_ranks(&arg, 1, &extra_kill_ranks[2], 2);
+		reintegrate_pools_ranks(&arg, 1, &extra_kill_ranks[0], 2);
 
 	ioreq_init(&req, arg->coh, oid, DAOS_IOD_ARRAY, arg);
 	if (write_type == PARTIAL_UPDATE)
@@ -101,7 +102,7 @@ rebuild_ec_internal(void **state, daos_oclass_id_t oclass, int kill_data_nr,
 	assert_int_equal(rc, 0);
 }
 
-#define CELL_SIZE	1048576
+#define CELL_SIZE	DAOS_EC_CELL_DEF
 
 static void
 rebuild_mixed_stripes(void **state)
@@ -113,7 +114,7 @@ rebuild_mixed_stripes(void **state)
 	char		*verify_data;
 	daos_recx_t	recxs[5];
 	d_rank_t	rank = 0;
-	int		size = 8 * 1048576 + 10000;
+	int		size = 8 * CELL_SIZE + 10000;
 
 	if (!test_runable(arg, 7))
 		return;
@@ -128,12 +129,12 @@ rebuild_mixed_stripes(void **state)
 	recxs[1].rx_nr = 2000;
 
 	recxs[2].rx_idx = 8 * CELL_SIZE;	/* full stripe */
-	recxs[2].rx_nr = 4 * 1048576;
+	recxs[2].rx_nr = 4 * CELL_SIZE;
 
-	recxs[3].rx_idx = 12 * 1048576;	/* partial stripe */
+	recxs[3].rx_idx = 12 * CELL_SIZE;	/* partial stripe */
 	recxs[3].rx_nr = 5000;
 
-	recxs[4].rx_idx = 16 * 1048576 - 3000;	/* partial stripe */
+	recxs[4].rx_idx = 16 * CELL_SIZE - 3000;	/* partial stripe */
 	recxs[4].rx_nr = 3000;
 
 	data = (char *)malloc(size);
@@ -535,8 +536,8 @@ dfs_ec_seq_fail(void **state, int *shards, int shards_nr)
 	d_sg_list_t	sgl;
 	d_iov_t		iov;
 	dfs_obj_t	*obj;
-	daos_size_t	buf_size = 16 * 1048576;
-	daos_size_t	chunk_size = 16 * 1048576;
+	daos_size_t	buf_size = 16 * CELL_SIZE;
+	daos_size_t	chunk_size = 16 * CELL_SIZE;
 	char		filename[32];
 	d_rank_t	ranks[4] = { -1 };
 	int		idx = 0;
@@ -592,10 +593,10 @@ dfs_ec_seq_fail(void **state, int *shards, int shards_nr)
 	for (i = 0; i < 30; i++) {
 		daos_off_t	offset;
 
-		offset = (i + 20) * 4 * 1048576;
+		offset = (i + 20) * 4 * CELL_SIZE;
 		rc = dfs_write(dfs_mt, obj, &small_sgl, offset, NULL);
 		assert_int_equal(rc, 0);
-		offset += 1048576 - 10;
+		offset += CELL_SIZE - 10;
 		rc = dfs_write(dfs_mt, obj, &small_sgl, offset, NULL);
 		assert_int_equal(rc, 0);
 	}
@@ -620,14 +621,14 @@ dfs_ec_seq_fail(void **state, int *shards, int shards_nr)
 			daos_off_t	offset;
 
 			memset(small_buf, 0, small_buf_size);
-			offset = (i + 20) * 4 * 1048576;
+			offset = (i + 20) * 4 * CELL_SIZE;
 			rc = dfs_read(dfs_mt, obj, &small_sgl, offset,
 				      &fetch_size, NULL);
 			assert_int_equal(rc, 0);
 			assert_int_equal(fetch_size, small_buf_size);
 			assert_memory_equal(small_buf, small_vbuf,
 					    small_buf_size);
-			offset += 1048576 - 10;
+			offset += CELL_SIZE - 10;
 			memset(small_buf, 0, small_buf_size);
 			rc = dfs_read(dfs_mt, obj, &small_sgl, offset,
 				      &fetch_size, NULL);
@@ -802,6 +803,7 @@ enumerate_cb(void *data)
 				    buf_len, req);
 		assert_rc_equal(rc, 0);
 		total += number;
+		print_message("total %d  number %d\n", total, number);
 	}
 
 	assert_int_equal(total, 100);
@@ -871,7 +873,6 @@ rebuild_ec_parity_multi_group(void **state)
 }
 
 #define SNAP_CNT	20
-#define EC_CELL_SIZE	1048576
 static void
 rebuild_ec_snapshot(void **state, daos_oclass_id_t oclass, int shard)
 {
@@ -892,7 +893,7 @@ rebuild_ec_snapshot(void **state, daos_oclass_id_t oclass, int shard)
 	daos_pool_set_prop(arg->pool.pool_uuid, "reclaim", "time");
 	oid = daos_test_oid_gen(arg->coh, oclass, 0, 0, arg->myrank);
 	ioreq_init(&req, arg->coh, oid, DAOS_IOD_ARRAY, arg);
-	data_size = ec_data_nr_get(oid) * (uint64_t)EC_CELL_SIZE + 1000;
+	data_size = ec_data_nr_get(oid) * (uint64_t)CELL_SIZE + 1000;
 	data = (char *)malloc(data_size);
 	assert_true(data != NULL);
 	verify_data = (char *)malloc(data_size);
@@ -1122,7 +1123,7 @@ run_daos_rebuild_simple_ec_test(int rank, int size, int *sub_tests,
 {
 	int rc = 0;
 
-	MPI_Barrier(MPI_COMM_WORLD);
+	par_barrier(PAR_COMM_WORLD);
 	if (sub_tests_size == 0) {
 		sub_tests_size = ARRAY_SIZE(rebuild_tests);
 		sub_tests = NULL;
@@ -1132,7 +1133,7 @@ run_daos_rebuild_simple_ec_test(int rank, int size, int *sub_tests,
 				ARRAY_SIZE(rebuild_tests), sub_tests,
 				sub_tests_size);
 
-	MPI_Barrier(MPI_COMM_WORLD);
+	par_barrier(PAR_COMM_WORLD);
 
 	return rc;
 }

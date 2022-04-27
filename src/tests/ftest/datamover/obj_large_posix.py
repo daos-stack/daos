@@ -1,6 +1,6 @@
 #!/usr/bin/python
 '''
-  (C) Copyright 2020-2021 Intel Corporation.
+  (C) Copyright 2020-2022 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
@@ -68,7 +68,7 @@ class DmvrObjLargePosix(DataMoverTestBase):
             Clone a large POSIX container to another POSIX container using dcp.
         :avocado: tags=all,full_regression
         :avocado: tags=hw,large
-        :avocado: tags=datamover,dcp
+        :avocado: tags=datamover,mfu,mfu_dcp,mdtest
         :avocado: tags=dm_obj_large_posix,dm_obj_large_posix_dcp
         """
         self.run_dm_obj_large_posix("DCP")
@@ -80,7 +80,7 @@ class DmvrObjLargePosix(DataMoverTestBase):
             daos cont clone.
         :avocado: tags=all,full_regression
         :avocado: tags=hw,large
-        :avocado: tags=datamover,cont_clone
+        :avocado: tags=datamover,daos_cont_clone,mdtest
         :avocado: tags=dm_obj_large_posix,dm_obj_large_posix_cont_clone
         """
         self.run_dm_obj_large_posix("CONT_CLONE")

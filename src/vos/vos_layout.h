@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2021 Intel Corporation.
+ * (C) Copyright 2016-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -147,8 +147,14 @@ struct vos_dtx_cmt_ent_df {
 	struct dtx_id			dce_xid;
 	/** The epoch# for the DTX. */
 	daos_epoch_t			dce_epoch;
-	/** The time of the DTX being handled on the server. */
-	daos_epoch_t			dce_handle_time;
+	/**
+	 * The time of the DTX being committed on the server.
+	 *
+	 * XXX: in the future, this field will be moved into
+	 *	vos_dtx_blob_df to shrink each committed DTX
+	 *	entry size.
+	 */
+	daos_epoch_t			dce_cmt_time;
 };
 
 /** Active DTX entry on-disk layout in both SCM and DRAM. */
@@ -350,7 +356,7 @@ struct vos_obj_df {
 	/** Offset of known existing dkey */
 	umem_off_t			vo_known_dkey;
 	/** Attributes for future use */
-	uint64_t			vo_attr;
+	daos_epoch_t			vo_max_write;
 	/** Incarnation log for the object */
 	struct ilog_df			vo_ilog;
 	/** VOS dkey btree root */

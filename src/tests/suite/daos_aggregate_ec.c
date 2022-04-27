@@ -1,4 +1,4 @@
-/** * (C) Copyright 2020-2021 Intel Corporation.
+/** * (C) Copyright 2020-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -29,12 +29,14 @@ enum {
 	EC_SPECIFIED,
 };
 
+#define TEST_EC_CELL_SZ	(1 << 15)
+
 bool
 oid_is_ec(daos_obj_id_t oid, struct daos_oclass_attr **attr)
 {
 	struct daos_oclass_attr *oca;
 
-	oca = daos_oclass_attr_find(oid, NULL, NULL);
+	oca = daos_oclass_attr_find(oid, NULL);
 	if (attr != NULL)
 		*attr = oca;
 	if (oca == NULL)
@@ -101,7 +103,7 @@ iov_update_fill(d_iov_t *iov, unsigned int cells, unsigned int len,
 	for (j = 0; j < cells; j++)
 		for (k = 0; k < len; k++)
 			if (overwrite)
-				dest[i++] = 128;
+				dest[i++] = (char)128;
 			else
 				dest[i++] = j;
 }
@@ -121,8 +123,19 @@ ec_setup_cont_obj(struct ec_agg_test_ctx *ctx, daos_oclass_id_t oclass)
 {
 	char	str[37];
 	int	rc;
+	daos_prop_t *props;
 
-	rc = daos_cont_create(ctx->poh, &ctx->uuid, NULL, NULL);
+	props = daos_prop_alloc(3);
+	assert_non_null(props);
+	props->dpp_entries[0].dpe_type = DAOS_PROP_CO_EC_CELL_SZ;
+	props->dpp_entries[0].dpe_val = TEST_EC_CELL_SZ;
+	props->dpp_entries[1].dpe_type = DAOS_PROP_CO_CSUM;
+	props->dpp_entries[1].dpe_val = DAOS_PROP_CO_CSUM_CRC32;
+	props->dpp_entries[2].dpe_type = DAOS_PROP_CO_CSUM_SERVER_VERIFY;
+	props->dpp_entries[2].dpe_val = DAOS_PROP_CO_CSUM_SV_ON;
+
+	rc = daos_cont_create(ctx->poh, &ctx->uuid, props, NULL);
+	daos_prop_free(props);
 	assert_success(rc);
 
 	uuid_unparse(ctx->uuid, str);
@@ -155,15 +168,19 @@ ec_setup_punch_recx_data(struct ec_agg_test_ctx *ctx, unsigned int mode,
 			 daos_size_t offset, daos_size_t data_bytes,
 			 unsigned char switch_akey, unsigned int cell)
 {
-	struct daos_oclass_attr	*oca;
+	struct daos_oclass_attr	*oca, oca1;
 	unsigned int		len;
+	int			rc;
 
 	if (mode != EC_SPECIFIED)
 		return;
 	/* else set databytes based on oclass */
 
 	assert_int_equal(oid_is_ec(ctx->oid, &oca), true);
-	len = oca->u.ec.e_len;
+	rc = daos_obj2oc_attr(ctx->oh, &oca1);
+	assert_int_equal(rc, 0);
+	len = oca1.u.ec.e_len;
+
 	iov_alloc_str(&ctx->dkey, "dkey");
 	if (switch_akey == 1)
 		iov_alloc_str(&ctx->update_iod.iod_name, "bkey");
@@ -205,15 +222,19 @@ ec_setup_single_recx_data(struct ec_agg_test_ctx *ctx, unsigned int mode,
 			  unsigned char switch_akey, bool partial_write,
 			  bool overwrite, unsigned int cell)
 {
-	struct daos_oclass_attr	*oca;
+	struct daos_oclass_attr	*oca, oca1;
 	unsigned int		k, len;
+	int			rc;
 
 	if (mode != EC_SPECIFIED)
 		return;
 	/* else set databytes based on oclass */
 
 	assert_int_equal(oid_is_ec(ctx->oid, &oca), true);
-	len = oca->u.ec.e_len;
+	rc = daos_obj2oc_attr(ctx->oh, &oca1);
+	assert_int_equal(rc, 0);
+	len = oca1.u.ec.e_len;
+
 	k = oca->u.ec.e_k;
 	iov_alloc_str(&ctx->dkey, "dkey");
 	if (switch_akey == 1)
@@ -259,12 +280,12 @@ ec_setup_single_recx_data(struct ec_agg_test_ctx *ctx, unsigned int mode,
 	ctx->fetch_iod.iod_type = ctx->update_iod.iod_type;
 }
 
-static daos_oclass_id_t dts_ec_agg_oc = DAOS_OC_EC_K2P1_L32K;
+static daos_oclass_id_t dts_ec_agg_oc = OC_EC_2P1G1;
 
 static int
 incremental_fill(void **statep)
 {
-	dts_ec_agg_oc = DAOS_OC_EC_K2P1_L32K;
+	dts_ec_agg_oc = OC_EC_2P1G1;
 	return 0;
 }
 
@@ -278,7 +299,7 @@ ec_cleanup_cont(struct ec_agg_test_ctx *ctx)
 	rc = daos_cont_close(ctx->coh, NULL);
 	assert_rc_equal(rc, 0);
 	uuid_unparse(ctx->uuid, str);
-	rc = daos_cont_destroy(ctx->poh, ctx->uuid, true, NULL);
+	rc = daos_cont_destroy(ctx->poh, str, true, NULL);
 	assert_rc_equal(rc, 0);
 }
 
@@ -296,15 +317,18 @@ ec_cleanup_data(struct ec_agg_test_ctx *ctx)
 static void
 test_filled_stripe(struct ec_agg_test_ctx *ctx)
 {
-	struct daos_oclass_attr	*oca;
+	struct daos_oclass_attr	*oca, oca1;
 	unsigned int		 len;
 	int			 i, j, rc;
 
-	dts_ec_agg_oc = DAOS_OC_EC_K2P1_L32K;
+	dts_ec_agg_oc = OC_EC_2P1G1;
 	ec_setup_cont_obj(ctx, dts_ec_agg_oc);
 	assert_int_equal(oid_is_ec(ctx->oid, &oca), true);
 	assert_int_equal(oca->u.ec.e_k, 2);
-	len = oca->u.ec.e_len;
+	rc = daos_obj2oc_attr(ctx->oh, &oca1);
+	assert_int_equal(rc, 0);
+	len = oca1.u.ec.e_len;
+
 
 	for (j = 0; j < NUM_KEYS; j++)
 		for (i = 0; i < NUM_STRIPES * EXTS_PER_STRIPE; i++) {
@@ -328,7 +352,7 @@ static void
 verify_1p(struct ec_agg_test_ctx *ctx, daos_oclass_id_t ec_agg_oc,
 	  unsigned int shard)
 {
-	struct daos_oclass_attr	*oca;
+	struct daos_oclass_attr	*oca, oca1;
 	struct obj_ec_codec     *codec;
 	tse_task_t		*task = NULL;
 	unsigned char		**data = NULL;
@@ -342,7 +366,9 @@ verify_1p(struct ec_agg_test_ctx *ctx, daos_oclass_id_t ec_agg_oc,
 	else
 		ec_setup_obj(ctx, ec_agg_oc, 1);
 	assert_int_equal(oid_is_ec(ctx->oid, &oca), true);
-	len = oca->u.ec.e_len;
+	rc = daos_obj2oc_attr(ctx->oh, &oca1);
+	assert_int_equal(rc, 0);
+	len = oca1.u.ec.e_len;
 	k = oca->u.ec.e_k;
 	p = oca->u.ec.e_p;
 	D_ALLOC_ARRAY(data, k);
@@ -418,15 +444,17 @@ verify_1p(struct ec_agg_test_ctx *ctx, daos_oclass_id_t ec_agg_oc,
 static void
 test_half_stripe(struct ec_agg_test_ctx *ctx)
 {
-	struct daos_oclass_attr	*oca;
+	struct daos_oclass_attr	*oca, oca1;
 	unsigned int		 len;
 	int			 i, j, rc;
 
-	dts_ec_agg_oc = DAOS_OC_EC_K2P2_L32K;
+	dts_ec_agg_oc = OC_EC_2P2G1;
 	ec_setup_obj(ctx, dts_ec_agg_oc, 2);
 	assert_int_equal(oid_is_ec(ctx->oid, &oca), true);
 	assert_int_equal(oca->u.ec.e_k, 2);
-	len = oca->u.ec.e_len;
+	rc = daos_obj2oc_attr(ctx->oh, &oca1);
+	assert_int_equal(rc, 0);
+	len = oca1.u.ec.e_len;
 
 	for (j = 0; j < NUM_KEYS; j++)
 		for (i = 0; i < NUM_STRIPES; i++) {
@@ -461,7 +489,7 @@ test_half_stripe(struct ec_agg_test_ctx *ctx)
 static void
 verify_2p(struct ec_agg_test_ctx *ctx, daos_oclass_id_t ec_agg_oc)
 {
-	struct daos_oclass_attr	*oca;
+	struct daos_oclass_attr	*oca, oca1;
 	struct obj_ec_codec     *codec;
 	tse_task_t		*task = NULL;
 	unsigned char		**data = NULL;
@@ -473,7 +501,9 @@ verify_2p(struct ec_agg_test_ctx *ctx, daos_oclass_id_t ec_agg_oc)
 	ec_setup_obj(ctx, ec_agg_oc, 2);
 	assert_int_equal(oid_is_ec(ctx->oid, &oca), true);
 	assert_int_equal(oca->u.ec.e_k, 2);
-	len = oca->u.ec.e_len;
+	rc = daos_obj2oc_attr(ctx->oh, &oca1);
+	assert_int_equal(rc, 0);
+	len = oca1.u.ec.e_len;
 	k = oca->u.ec.e_k;
 	p = oca->u.ec.e_p;
 	D_ALLOC_ARRAY(data, k);
@@ -583,14 +613,16 @@ verify_2p(struct ec_agg_test_ctx *ctx, daos_oclass_id_t ec_agg_oc)
 static void
 test_partial_stripe(struct ec_agg_test_ctx *ctx)
 {
-	struct daos_oclass_attr	*oca;
+	struct daos_oclass_attr	*oca, oca1;
 	unsigned int		 len;
 	int			 i, j, rc;
 
-	dts_ec_agg_oc = DAOS_OC_EC_K4P1_L32K;
+	dts_ec_agg_oc = OC_EC_4P1G1;
 	ec_setup_obj(ctx, dts_ec_agg_oc, 3);
 	assert_int_equal(oid_is_ec(ctx->oid, &oca), true);
-	len = oca->u.ec.e_len;
+	rc = daos_obj2oc_attr(ctx->oh, &oca1);
+	assert_int_equal(rc, 0);
+	len = oca1.u.ec.e_len;
 
 	for (j = 0; j < NUM_KEYS; j++)
 		for (i = 0; i < NUM_STRIPES; i++) {
@@ -625,14 +657,16 @@ test_partial_stripe(struct ec_agg_test_ctx *ctx)
 static void
 test_range_punch(struct ec_agg_test_ctx *ctx)
 {
-	struct daos_oclass_attr	*oca;
+	struct daos_oclass_attr	*oca, oca1;
 	unsigned int		 len, k;
 	int			 i, j, rc;
 
-	dts_ec_agg_oc = DAOS_OC_EC_K4P1_L32K;
+	dts_ec_agg_oc = OC_EC_4P1G1;
 	ec_setup_obj(ctx, dts_ec_agg_oc, 4);
 	assert_int_equal(oid_is_ec(ctx->oid, &oca), true);
-	len = oca->u.ec.e_len;
+	rc = daos_obj2oc_attr(ctx->oh, &oca1);
+	assert_int_equal(rc, 0);
+	len = oca1.u.ec.e_len;
 	k = oca->u.ec.e_k;
 	for (j = 0; j < NUM_KEYS; j++)
 		for (i = 0; i < NUM_STRIPES; i++) {
@@ -679,7 +713,7 @@ static void
 verify_rp1p(struct ec_agg_test_ctx *ctx, daos_oclass_id_t ec_agg_oc,
 	    unsigned int shard)
 {
-	struct daos_oclass_attr	*oca;
+	struct daos_oclass_attr	*oca, oca1;
 	tse_task_t		*task = NULL;
 	unsigned int		 k, len;
 	int			 i, j, rc;
@@ -687,7 +721,10 @@ verify_rp1p(struct ec_agg_test_ctx *ctx, daos_oclass_id_t ec_agg_oc,
 	ec_setup_obj(ctx, ec_agg_oc, 4);
 
 	assert_int_equal(oid_is_ec(ctx->oid, &oca), true);
-	len = oca->u.ec.e_len;
+	rc = daos_obj2oc_attr(ctx->oh, &oca1);
+	assert_int_equal(rc, 0);
+	len = oca1.u.ec.e_len;
+
 	k = oca->u.ec.e_k;
 
 	for (j = 0; j < NUM_KEYS; j++)
@@ -805,20 +842,26 @@ test_all_ec_agg(void **statep)
 	if (!test_runable(arg, 5))
 		return;
 
-	daos_pool_set_prop(arg->pool.pool_uuid, "reclaim", "time");
+	daos_pool_set_prop(arg->pool.pool_uuid, "reclaim", "disabled");
 	setup_ec_agg_tests(statep, &ctx);
 	test_filled_stripe(&ctx);
 	test_half_stripe(&ctx);
 	test_partial_stripe(&ctx);
 	test_range_punch(&ctx);
+	daos_pool_set_prop(arg->pool.pool_uuid, "reclaim", "time");
+	daos_debug_set_params(arg->group, -1, DMG_KEY_FAIL_LOC,
+			      DAOS_FORCE_EC_AGG | DAOS_FAIL_ALWAYS,
+			      0, NULL);
 	print_message("sleep 45 seconds for aggregation ...\n");
 	sleep(45);
 	print_message("verification after aggregation\n");
-	verify_1p(&ctx, DAOS_OC_EC_K2P1_L32K, 2);
-	verify_2p(&ctx, DAOS_OC_EC_K2P2_L32K);
-	verify_1p(&ctx, DAOS_OC_EC_K4P1_L32K, 4);
-	verify_rp1p(&ctx, DAOS_OC_EC_K4P1_L32K, 4);
+	verify_1p(&ctx, OC_EC_2P1G1, 2);
+	verify_2p(&ctx, OC_EC_2P2G1);
+	verify_1p(&ctx, OC_EC_4P1G1, 4);
+	verify_rp1p(&ctx, OC_EC_4P1G1, 4);
 	cleanup_ec_agg_tests(&ctx);
+	daos_debug_set_params(arg->group, -1, DMG_KEY_FAIL_LOC,
+			      0, 0, NULL);
 }
 
 static void
@@ -850,12 +893,12 @@ fetch_snap_with_agg(void **statep)
 
 	daos_pool_set_prop(arg->pool.pool_uuid, "reclaim", "time");
 	setup_ec_agg_tests(statep, &ctx);
-	dts_ec_agg_oc = DAOS_OC_EC_K2P2_L32K;
+	dts_ec_agg_oc = OC_EC_2P2G1;
 	ec_setup_cont_obj(&ctx, dts_ec_agg_oc);
 	assert_int_equal(oid_is_ec(ctx.oid, &oca), true);
 	assert_int_equal(oca->u.ec.e_k, 2);
 	assert_int_equal(oca->u.ec.e_k, 2);
-	cs = oca->u.ec.e_len;
+	cs = TEST_EC_CELL_SZ;
 	ss = cs * oca->u.ec.e_k;
 	wbuf1 = calloc(ss, 1);
 	wbuf2 = calloc(ss, 1);
@@ -970,7 +1013,7 @@ int run_daos_aggregation_ec_test(int rank, int size, int *sub_tests,
 {
 	int rc = 0;
 
-	MPI_Barrier(MPI_COMM_WORLD);
+	par_barrier(PAR_COMM_WORLD);
 	if (sub_tests_size == 0) {
 		sub_tests_size = ARRAY_SIZE(ec_agg_tests);
 		sub_tests = NULL;
@@ -982,6 +1025,6 @@ int run_daos_aggregation_ec_test(int rank, int size, int *sub_tests,
 				 sub_tests_size, ec_setup, test_teardown);
 
 out:
-	MPI_Barrier(MPI_COMM_WORLD);
+	par_barrier(PAR_COMM_WORLD);
 	return rc;
 }

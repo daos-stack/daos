@@ -9,24 +9,22 @@ hosts:
     # server_partition: daos_server
     client_partition: normal
     client_reservation: daos-test
-orterun:
-    allow_run_as_root: True
+mpi_module: mpich/gnu-sockets
 # This timeout must be longer than the test_timeout param (+15minutes)
 # 2 hour test
-timeout: 1H15M
+timeout: 2H15M
 setup:
     start_servers: False
     start_agents: False
 server_config:
     name: daos_server
-    provider: ofi+sockets
+    provider: ofi+tcp
     control_log_mask: INFO
     control_log_file: daos_control0.log
     servers:
         log_mask: ERR
         fabric_iface: ib0
         fabric_iface_port: 31416
-        log_mask: ERR
         log_file: daos_io0.log
         # Storage definitions for AEP and NVMe
         scm_mount: /mnt/daos0
@@ -135,8 +133,8 @@ mdtest_stress:
         - 3901
     depth:
         - 5
-    dfs_oclass: 'SX'
-    dfs_dir_oclass: 'S1'
+    dfs_oclass:
+        - 'S1'
     dfs_destroy: False
     dfuse:
         mount_dir: "/tmp/daos_dfuse/mdtest/"

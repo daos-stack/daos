@@ -1,6 +1,6 @@
 #!/usr/bin/python
 '''
-  (C) Copyright 2018-2021 Intel Corporation.
+  (C) Copyright 2018-2022 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
@@ -237,7 +237,6 @@ def write_until_full(container):
     """
     total_written = 0
     size = 2048
-    _oid = None
 
     try:
         while True:
@@ -246,7 +245,7 @@ def write_until_full(container):
             akey = get_random_bytes(5)
             data = get_random_bytes(size)
 
-            _oid = container.write_an_obj(data, size, dkey, akey)
+            container.write_an_obj(data, size, dkey, akey)
             total_written += size
 
             # collapse down the committed epochs
@@ -277,7 +276,6 @@ def write_quantity(container, size_in_bytes):
     """
     total_written = 0
     size = 2048
-    _oid = None
 
     try:
         while total_written < size_in_bytes:
@@ -287,7 +285,7 @@ def write_quantity(container, size_in_bytes):
             akey = get_random_bytes(5)
             data = get_random_bytes(size)
 
-            _oid = container.write_an_obj(data, size, dkey, akey)
+            container.write_an_obj(data, size, dkey, akey)
             total_written += size
 
             # collapse down the committed epochs

@@ -1,6 +1,6 @@
 #!/usr/bin/python3
 '''
-  (C) Copyright 2018-2021 Intel Corporation.
+  (C) Copyright 2018-2022 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
@@ -40,52 +40,6 @@ class UnitTestWithoutServers(TestWithoutServers):
                             need servers.
     :avocado: recursive
     """
-
-    def test_smd_ut(self):
-        """
-        Test Description: Test smd unittest.
-        Use Case: This tests smd's following functions: nvme_list_streams,
-                  nvme_get_pool, nvme_set_pool_info, nvme_add_pool,
-                  nvme_get_device, nvme_set_device_status,
-                  nvme_add_stream_bond, nvme_get_stream_bond
-        :avocado: tags=all,unittest,tiny,full_regression,smd_ut
-        """
-        unittest_runner(self, "smd_ut")
-
-    def test_vea_ut(self):
-        """
-        Test Description: Test vea unittest.
-        Use Case: This tests vea's following functions: load, format,
-                  query, hint_load, reserve, cancel, tx_publish,
-                  free, unload, hint_unload
-        :avocado: tags=all,unittest,tiny,full_regression,vea_ut
-        """
-        unittest_runner(self, "vea_ut")
-
-    def test_jump_pl_map(self):
-        """
-        Test Description: Test jump_pl_map unittest.
-        Use Case: This tests the jump placement map
-        :avocado: tags=all,unittest,tiny,full_regression,jump_pl_map
-        """
-        unittest_runner(self, "jump_pl_map")
-
-    def test_eq_tests(self):
-        """
-        Test Description: Test eq_tests unittest.
-        Use Case: This tests Daos Event queue
-        :avocado: tags=all,unittest,tiny,full_regression,eq_tests
-        """
-        unittest_runner(self, "eq_tests")
-
-    def test_vos_tests(self):
-        """
-        Test Description: Test vos_tests unittest.
-        Use Cases: Performs following set of tests - pool_tests,
-                   container_tests, io_tests, dtx_tests, aggregate-tests
-        :avocado: tags=all,unittest,tiny,full_regression,vos_tests
-        """
-        unittest_runner(self, "vos_tests")
 
     def test_agent_tests(self):
         """

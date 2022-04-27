@@ -1,15 +1,14 @@
 /*
- * (C) Copyright 2018-2021 Intel Corporation.
+ * (C) Copyright 2018-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 
 package io.daos.obj;
 
-import io.daos.Constants;
+import io.daos.DaosUtils;
 import io.netty.buffer.ByteBuf;
 
-import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -37,18 +36,12 @@ public abstract class IODataDescBase implements IODataDesc {
 
   protected boolean resultParsed;
 
+  protected boolean discarded;
+
   protected IODataDescBase(String dkey, boolean updateOrFetch) {
     this.dkey = dkey;
     if (dkey != null) {
-      try {
-        this.dkeyBytes = dkey.getBytes(Constants.KEY_CHARSET);
-      } catch (IOException e) {
-        throw new IllegalArgumentException("failed to get bytes in " + Constants.KEY_CHARSET + " of dkey " + dkey);
-      }
-      if (dkeyBytes.length > Short.MAX_VALUE) {
-        throw new IllegalArgumentException("dkey length in " + Constants.KEY_CHARSET + " should not exceed "
-            + Short.MAX_VALUE);
-      }
+      dkeyBytes = DaosUtils.keyToBytes8(dkey);
     }
     this.akeyEntries = new ArrayList<>();
     this.updateOrFetch = updateOrFetch;
@@ -120,6 +113,14 @@ public abstract class IODataDescBase implements IODataDesc {
   @Override
   public BaseEntry getEntry(int index) {
     return (BaseEntry) akeyEntries.get(index);
+  }
+
+  public boolean isDiscarded() {
+    return discarded;
+  }
+
+  public void discard() {
+    discarded = true;
   }
 
   public abstract class BaseEntry extends Entry {

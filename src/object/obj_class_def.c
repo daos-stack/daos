@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2021 Intel Corporation.
+ * (C) Copyright 2021-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -89,7 +89,6 @@
 		.ca_grp_nr	= g,			\
 		.ca_ec_k	= k,			\
 		.ca_ec_p	= p,			\
-		.ca_ec_cell	= (1 << 20),		\
 	}						\
 }
 
@@ -105,7 +104,6 @@
 		.ca_grp_nr	= DAOS_OBJ_GRP_MAX,	\
 		.ca_ec_k	= k,			\
 		.ca_ec_p	= p,			\
-		.ca_ec_cell	= (1 << 20),		\
 	}						\
 }
 
@@ -122,25 +120,6 @@
 		.ca_resil	= DAOS_RES_REPL,	\
 		.ca_grp_nr	= 1,			\
 		.ca_rp_nr	= r,			\
-	},						\
-	.oc_private	= true,				\
-}
-
-/* EC(k+p), 32K cell size, this is really for debugging, because cell size
- * should be part of the pool/container properties
- */
-#define OC_EC_32K_DEF(k, p, g)				\
-{							\
-	.oc_name	= "EC_K"#k"P"#p"_L32K",		\
-	.oc_id		= DAOS_OC_EC_K##k##P##p##_L32K,	\
-	.oc_redun	= OR_RS_##k##P##p,		\
-	{						\
-		.ca_schema	= DAOS_OS_SINGLE,	\
-		.ca_resil	= DAOS_RES_EC,		\
-		.ca_grp_nr	= g,			\
-		.ca_ec_k	= k,			\
-		.ca_ec_p	= p,			\
-		.ca_ec_cell	= (1 << 15),		\
 	},						\
 	.oc_private	= true,				\
 }
@@ -320,12 +299,6 @@ struct daos_obj_class daos_obj_classes[] = {
 	OC_RP_SRANK_DEF(1, 1),
 	OC_RP_SRANK_DEF(2, 1),
 	OC_RP_SRANK_DEF(3, 1),
-
-	/* Internal classes: XXX for debug and development */
-	OC_EC_32K_DEF(2, 1, 1),
-	OC_EC_32K_DEF(2, 2, 1),
-	OC_EC_32K_DEF(4, 1, 1),
-	OC_EC_32K_DEF(4, 2, 1),
 
 	/* The last one */
 	{

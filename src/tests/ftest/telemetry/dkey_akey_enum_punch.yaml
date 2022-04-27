@@ -1,0 +1,15 @@
+hosts:
+  test_servers:
+    - server-A
+    - server-B
+
+timeout: 320
+
+server_config:
+  servers:
+    0:
+      targets: 8
+
+pool:
+  scm_size: 10G
+  control_method: dmg

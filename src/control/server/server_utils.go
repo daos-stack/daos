@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2021 Intel Corporation.
+// (C) Copyright 2021-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net"
+	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -22,7 +23,7 @@ import (
 	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/events"
 	"github.com/daos-stack/daos/src/control/lib/control"
-	"github.com/daos-stack/daos/src/control/lib/netdetect"
+	"github.com/daos-stack/daos/src/control/lib/hardware"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/pbin"
 	"github.com/daos-stack/daos/src/control/security"
@@ -30,6 +31,7 @@ import (
 	"github.com/daos-stack/daos/src/control/server/engine"
 	"github.com/daos-stack/daos/src/control/server/storage"
 	"github.com/daos-stack/daos/src/control/system"
+	"github.com/daos-stack/daos/src/control/system/raft"
 )
 
 // netListenerFn is a type alias for the net.Listener function signature.
@@ -39,20 +41,30 @@ type netListenFn func(string, string) (net.Listener, error)
 type resolveTCPFn func(string, string) (*net.TCPAddr, error)
 
 const (
-	iommuPath        = "/sys/class/iommu"
-	minHugePageCount = 128
+	iommuPath            = "/sys/class/iommu"
+	scanMinHugePageCount = 128
 )
 
-func cfgHasBdevs(cfg *config.Server) bool {
-	for _, engineCfg := range cfg.Engines {
-		for _, bc := range engineCfg.Storage.Tiers.BdevConfigs() {
-			if len(bc.Bdev.DeviceList) > 0 {
-				return true
-			}
-		}
+func engineCfgGetBdevs(engineCfg *engine.Config) *storage.BdevDeviceList {
+	bdevs := []string{}
+	for _, bc := range engineCfg.Storage.Tiers.BdevConfigs() {
+		bdevs = append(bdevs, bc.Bdev.DeviceList.Devices()...)
 	}
 
-	return false
+	return storage.MustNewBdevDeviceList(bdevs...)
+}
+
+func cfgGetBdevs(cfg *config.Server) *storage.BdevDeviceList {
+	bdevs := []string{}
+	for _, engineCfg := range cfg.Engines {
+		bdevs = append(bdevs, engineCfgGetBdevs(engineCfg).Devices()...)
+	}
+
+	return storage.MustNewBdevDeviceList(bdevs...)
+}
+
+func cfgHasBdevs(cfg *config.Server) bool {
+	return cfgGetBdevs(cfg).Len() != 0
 }
 
 func cfgGetReplicas(cfg *config.Server, resolver resolveTCPFn) ([]*net.TCPAddr, error) {
@@ -77,6 +89,23 @@ func cfgGetRaftDir(cfg *config.Server) string {
 	}
 
 	return filepath.Join(cfg.Engines[0].Storage.Tiers.ScmConfigs()[0].Scm.MountPoint, "control_raft")
+}
+
+func writeCoreDumpFilter(log logging.Logger, path string, filter uint8) error {
+	f, err := os.OpenFile(path, os.O_WRONLY, 0644)
+	if err != nil {
+		// Work around a testing oddity that seems to be related to launching
+		// the server via SSH, with the result that the /proc file is unwritable.
+		if os.IsPermission(err) {
+			log.Debugf("Unable to write core dump filter to %s: %s", path, err)
+			return nil
+		}
+		return errors.Wrapf(err, "unable to open core dump filter file %s", path)
+	}
+	defer f.Close()
+
+	_, err = f.WriteString(fmt.Sprintf("0x%x\n", filter))
+	return err
 }
 
 func iommuDetected() bool {
@@ -106,93 +135,74 @@ func createListener(ctlPort int, resolver resolveTCPFn, listener netListenFn) (*
 }
 
 // updateFabricEnvars adjusts the engine fabric configuration.
-func updateFabricEnvars(ctx context.Context, log logging.Logger, cfg *engine.Config) error {
+func updateFabricEnvars(log logging.Logger, cfg *engine.Config, fis *hardware.FabricInterfaceSet) error {
 	// In the case of some providers, mercury uses the interface name
 	// such as ib0, while OFI uses the device name such as hfi1_0 CaRT and
 	// Mercury will now support the new OFI_DOMAIN environment variable so
 	// that we can specify the correct device for each.
 	if !cfg.HasEnvVar("OFI_DOMAIN") {
-		domain, err := netdetect.GetDeviceDomain(ctx, cfg.Fabric.Provider, cfg.Fabric.Interface)
+		fi, err := fis.GetInterfaceOnNetDevice(cfg.Fabric.Interface, cfg.Fabric.Provider)
 		if err != nil {
 			return errors.Wrapf(err, "unable to determine device domain for %s", cfg.Fabric.Interface)
 		}
-		log.Debugf("setting OFI_DOMAIN=%s for %s", domain, cfg.Fabric.Interface)
-		envVar := "OFI_DOMAIN=" + domain
+		log.Debugf("setting OFI_DOMAIN=%s for %s", fi.Name, cfg.Fabric.Interface)
+		envVar := "OFI_DOMAIN=" + fi.Name
 		cfg.WithEnvVars(envVar)
 	}
 
 	return nil
 }
 
-// netInit performs all network detection tasks in one place starting with
-// netdetect library init and cleaning up on exit. Warn if configured number
-// of engines is less than NUMA node count and update-in-place engine configs.
-func netInit(ctx context.Context, log *logging.LeveledLogger, cfg *config.Server) (uint32, error) {
-	engineCount := len(cfg.Engines)
-	if engineCount == 0 {
-		log.Debug("no engines configured, skipping network init")
-		return 0, nil
-	}
+func getFabricNetDevClass(cfg *config.Server, fis *hardware.FabricInterfaceSet) (hardware.NetDevClass, error) {
+	var netDevClass hardware.NetDevClass
+	for index, engine := range cfg.Engines {
+		fi, err := fis.GetInterface(engine.Fabric.Interface)
+		if err != nil {
+			return 0, err
+		}
 
-	ctx, err := netdetect.Init(ctx)
-	if err != nil {
-		return 0, err
-	}
-	defer netdetect.CleanUp(ctx)
-
-	// On a NUMA-aware system, emit a message when the configuration may be
-	// sub-optimal.
-	numaCount := netdetect.NumNumaNodes(ctx)
-	if numaCount > 0 && engineCount > numaCount {
-		log.Infof("NOTICE: Detected %d NUMA node(s); %d-server config may not perform as expected",
-			numaCount, engineCount)
-	}
-
-	netDevClass, err := cfg.CheckFabric(ctx)
-	if err != nil {
-		return 0, errors.Wrap(err, "validate fabric config")
-	}
-
-	for _, engine := range cfg.Engines {
-		if err := updateFabricEnvars(ctx, log, engine); err != nil {
-			return 0, errors.Wrap(err, "update engine fabric envars")
+		ndc := fi.DeviceClass
+		if index == 0 {
+			netDevClass = ndc
+			continue
+		}
+		if ndc != netDevClass {
+			return 0, config.FaultConfigInvalidNetDevClass(index, netDevClass,
+				ndc, engine.Fabric.Interface)
 		}
 	}
-
 	return netDevClass, nil
 }
 
-func prepBdevStorage(srv *server, iommuEnabled bool, hpiGetter common.GetHugePageInfoFn) error {
-	// Perform an automatic prepare based on the values in the config file.
-	prepReq := storage.BdevPrepareRequest{
-		// Default to minimum necessary for scan to work correctly.
-		HugePageCount: minHugePageCount,
-		TargetUser:    srv.runningUser,
-		PCIAllowList:  strings.Join(srv.cfg.BdevInclude, storage.BdevPciAddrSep),
-		PCIBlockList:  strings.Join(srv.cfg.BdevExclude, storage.BdevPciAddrSep),
-		DisableVFIO:   srv.cfg.DisableVFIO,
-		EnableVMD:     srv.cfg.EnableVMD && !srv.cfg.DisableVFIO && iommuEnabled,
-		Reset_:        true, // first reset allocations before preparing devices
+// Detect if any engines share numa nodes and if that's the case, allocate only on the shared numa
+// node and notify user.
+func getEngineNUMANodes(log logging.Logger, engineCfgs []*engine.Config) []string {
+	nodeMap := make(map[string]bool)
+	nodes := make([]string, 0, len(engineCfgs))
+	for _, ec := range engineCfgs {
+		nn := fmt.Sprintf("%d", ec.Storage.NumaNodeIndex)
+		if nodeMap[nn] {
+			log.Infof("Multiple engines assigned to NUMA node %s, "+
+				"allocating all hugepages on this node.", nn)
+			nodes = []string{nn}
+			break
+		}
+		nodeMap[nn] = true
+		nodes = append(nodes, nn)
 	}
 
+	return nodes
+}
+
+func prepBdevStorage(srv *server, iommuEnabled bool) error {
+	defer srv.logDuration(track("time to prepare bdev storage"))
+
 	hasBdevs := cfgHasBdevs(srv.cfg)
-	// Use default value
-	if srv.cfg.NrHugepages < 0 {
-		srv.cfg.NrHugepages = 4096
-	}
-	// The config value is intended to be per-engine, so we need to adjust
-	// based on the number of engines.
-	if srv.cfg.NrHugepages > 0 {
-		if len(srv.cfg.Engines) == 0 {
-			prepReq.HugePageCount = srv.cfg.NrHugepages
-		} else {
-			prepReq.HugePageCount = srv.cfg.NrHugepages * len(srv.cfg.Engines)
-		}
-	}
+
 	if hasBdevs {
-		// Perform these checks to avoid even trying a prepare if the system
-		// isn't configured properly.
-		if srv.runningUser != "root" {
+		// Perform these checks to avoid even trying a prepare if the system isn't
+		// configured properly.
+		if srv.runningUser.Username != "root" {
 			if srv.cfg.DisableVFIO {
 				return FaultVfioDisabled
 			}
@@ -201,49 +211,123 @@ func prepBdevStorage(srv *server, iommuEnabled bool, hpiGetter common.GetHugePag
 				return FaultIommuDisabled
 			}
 		}
+	} else if srv.cfg.NrHugepages < 0 {
+		srv.log.Debugf("skip nvme prepare as no bdevs in cfg and nr_hugepages: -1 in config")
+		return nil
 	}
 
-	// Run prepare with reset first to release resources.
+	prepReq := storage.BdevPrepareRequest{
+		TargetUser:   srv.runningUser.Username,
+		PCIAllowList: strings.Join(srv.cfg.BdevInclude, storage.BdevPciAddrSep),
+		PCIBlockList: strings.Join(srv.cfg.BdevExclude, storage.BdevPciAddrSep),
+		DisableVFIO:  srv.cfg.DisableVFIO,
+		EnableVMD:    srv.cfg.EnableVMD && !srv.cfg.DisableVFIO && iommuEnabled,
+	}
+
+	if hasBdevs {
+		// The NrHugepages config value is a total for all engines. Distribute allocation
+		// of hugepages equally across each engine's numa node (as validation ensures that
+		// TargetsCount is equal for each engine).
+		numaNodes := getEngineNUMANodes(srv.log, srv.cfg.Engines)
+
+		if len(numaNodes) == 0 {
+			return errors.New("invalid number of numa nodes detected (0)")
+		}
+
+		// Request a few more hugepages than actually required for each NUMA node
+		// allocation as some overhead may result in one or two being unavailable.
+		prepReq.HugePageCount = srv.cfg.NrHugepages / len(numaNodes)
+		prepReq.HugePageCount += common.ExtraHugePages
+		prepReq.HugeNodes = strings.Join(numaNodes, ",")
+
+		srv.log.Debugf("allocating %d hugepages on each of these numa nodes: %v",
+			prepReq.HugePageCount, numaNodes)
+	} else {
+		if srv.cfg.NrHugepages == 0 {
+			// If nr_hugepages is unset then set minimum needed for scanning in prepare
+			// request.
+			prepReq.HugePageCount = scanMinHugePageCount
+		} else {
+			// If nr_hugepages has been set manually but no bdevs in config then
+			// allocate on numa node 0 (for example if a bigger number of hugepages are
+			// required in discovery mode for an unusually large number of SSDs).
+			prepReq.HugePageCount = srv.cfg.NrHugepages
+		}
+
+		srv.log.Debugf("allocating %d hugepages on numa node 0", prepReq.HugePageCount)
+	}
+
+	// Run prepare to bind devices to user-space driver and allocate hugepages.
 	//
 	// TODO: should be passing root context into prepare request to
 	//       facilitate cancellation.
-	prepReq.Reset_ = true
 	if _, err := srv.ctlSvc.NvmePrepare(prepReq); err != nil {
-		srv.log.Errorf("automatic NVMe prepare reset failed: %s", err)
-	} else {
-		prepReq.Reset_ = false
-		if _, err := srv.ctlSvc.NvmePrepare(prepReq); err != nil {
-			srv.log.Errorf("automatic NVMe prepare failed: %s", err)
-		}
+		srv.log.Errorf("automatic NVMe prepare failed: %s", err)
 	}
 
-	hugePages, err := hpiGetter()
+	return nil
+}
+
+// scanBdevStorage performs discovery and validates existence of configured NVMe SSDs.
+func scanBdevStorage(srv *server) (*storage.BdevScanResponse, error) {
+	defer srv.logDuration(track("time to scan bdev storage"))
+
+	if srv.cfg.NrHugepages < 0 {
+		srv.log.Debugf("skip nvme scan as hugepages have been disabled in config")
+		return &storage.BdevScanResponse{}, nil
+	}
+
+	nvmeScanResp, err := srv.ctlSvc.NvmeScan(storage.BdevScanRequest{
+		DeviceList:  cfgGetBdevs(srv.cfg),
+		BypassCache: true, // init cache on first scan
+	})
 	if err != nil {
-		return errors.Wrap(err, "unable to read system hugepage info")
+		err = errors.Wrap(err, "NVMe Scan Failed")
+		srv.log.Errorf("%s", err)
+		return nil, err
 	}
 
-	// Double-check that we got the requested number of huge pages after prepare.
-	if srv.cfg.NrHugepages > 0 && hugePages.Free < prepReq.HugePageCount {
-		return FaultInsufficientFreeHugePages(hugePages.Free, prepReq.HugePageCount)
+	return nvmeScanResp, nil
+}
+
+// Minimum recommended number of hugepages has already been calculated and set in config so verify
+// we have enough free hugepage memory to satisfy this requirement before setting mem_size and
+// hugepage_size parameters for engine.
+func updateMemValues(srv *server, ei *EngineInstance, getHugePageInfo common.GetHugePageInfoFn) error {
+	ei.RLock()
+	engineCfg := ei.runner.GetConfig()
+	engineIdx := engineCfg.Index
+	if engineCfgGetBdevs(engineCfg).Len() == 0 {
+		srv.log.Debugf("skipping mem check on engine %d, no bdevs", engineIdx)
+		ei.RUnlock()
+		return nil
+	}
+	ei.RUnlock()
+
+	// Retrieve up-to-date hugepage info to check that we got the requested number of hugepages.
+	hpi, err := getHugePageInfo()
+	if err != nil {
+		return err
 	}
 
-	for _, engineCfg := range srv.cfg.Engines {
-		// Calculate mem_size per I/O engine (in MB)
-		PageSizeMb := hugePages.PageSizeKb >> 10
-		engineCfg.MemSize = srv.cfg.NrHugepages
-		engineCfg.MemSize *= PageSizeMb
-		// Pass hugepage size, do not assume 2MB is used
-		engineCfg.HugePageSz = PageSizeMb
-		srv.log.Debugf("MemSize:%dMB, HugepageSize:%dMB", engineCfg.MemSize, engineCfg.HugePageSz)
-		// Warn if hugepages are not enough to sustain average
-		// I/O workload (~1GB), ignore warning if using SCM backend with 0 hugepages
-		if !hasBdevs && engineCfg.MemSize == 0 {
-			continue
-		}
-		if (engineCfg.MemSize / engineCfg.TargetCount) < 1024 {
-			srv.log.Errorf("Not enough hugepages are allocated!")
-		}
+	// Calculate mem_size per I/O engine (in MB) from number of hugepages required per engine.
+	nrPagesRequired := srv.cfg.NrHugepages / len(srv.cfg.Engines)
+	pageSizeMb := hpi.PageSizeKb >> 10
+	memSizeReqMb := nrPagesRequired * pageSizeMb
+	memSizeFreeMb := hpi.Free * pageSizeMb
+
+	// Fail if free hugepage mem is not enough to sustain average I/O workload (~1GB).
+	if memSizeFreeMb < memSizeReqMb {
+		srv.log.Errorf("huge page info: %+v", *hpi)
+
+		return FaultInsufficientFreeHugePageMem(int(engineIdx), memSizeReqMb, memSizeFreeMb,
+			nrPagesRequired, hpi.Free)
 	}
+	srv.log.Debugf("Per-engine MemSize:%dMB, HugepageSize:%dMB", memSizeReqMb, pageSizeMb)
+
+	// Set engine mem_size and hugepage_size (MiB) values based on hugepage info.
+	ei.setMemSize(memSizeReqMb)
+	ei.setHugePageSz(pageSizeMb)
 
 	return nil
 }
@@ -264,27 +348,59 @@ func setDaosHelperEnvs(cfg *config.Server, setenv func(k, v string) error) error
 	return nil
 }
 
-func registerEngineEventCallbacks(engine *EngineInstance, hostname string, pubSub *events.PubSub, allStarted *sync.WaitGroup) {
+func cleanEngineHugePagesFn(log logging.Logger, username string, svc *ControlService) onInstanceExitFn {
+	return func(ctx context.Context, engineIdx uint32, _ system.Rank, _ error, exPid uint64) error {
+		msg := fmt.Sprintf("cleaning engine %d (pid %d) hugepages after exit", engineIdx, exPid)
+
+		prepReq := storage.BdevPrepareRequest{
+			CleanHugePagesOnly: true,
+			CleanHugePagesPID:  exPid,
+			TargetUser:         username,
+		}
+
+		resp, err := svc.NvmePrepare(prepReq)
+		if err != nil {
+			err = errors.Wrap(err, msg)
+			log.Errorf(err.Error())
+			return err
+		}
+
+		log.Debugf("%s, %d removed", msg, resp.NrHugePagesRemoved)
+
+		return nil
+	}
+}
+
+func registerEngineEventCallbacks(srv *server, engine *EngineInstance, allStarted *sync.WaitGroup) {
 	// Register callback to publish engine process exit events.
-	engine.OnInstanceExit(publishInstanceExitFn(pubSub.Publish, hostname))
+	engine.OnInstanceExit(publishInstanceExitFn(srv.pubSub.Publish, srv.hostname))
+
+	// Register callback to clear hugepages used by engine process after it has exited.
+	engine.OnInstanceExit(cleanEngineHugePagesFn(srv.log, srv.runningUser.Username, srv.ctlSvc))
 
 	// Register callback to publish engine format requested events.
-	engine.OnAwaitFormat(publishFormatRequiredFn(pubSub.Publish, hostname))
+	engine.OnAwaitFormat(publishFormatRequiredFn(srv.pubSub.Publish, srv.hostname))
 
 	var onceReady sync.Once
 	engine.OnReady(func(_ context.Context) error {
-		// Indicate that engine has been started, only do this
-		// the first time that the engine starts as shared
-		// memory persists between engine restarts.
+		// Indicate that engine has been started, only do this the first time that the
+		// engine starts as shared memory persists between engine restarts.
 		onceReady.Do(func() {
 			allStarted.Done()
 		})
 
 		return nil
 	})
+
+	// Register callback to update engine cfg mem_size after format.
+	engine.OnStorageReady(func(_ context.Context) error {
+		// Retrieve up-to-date hugepage info to evaluate and assign available memory.
+		return errors.Wrap(updateMemValues(srv, engine, common.GetHugePageInfo),
+			"updating engine memory parameters")
+	})
 }
 
-func configureFirstEngine(ctx context.Context, engine *EngineInstance, sysdb *system.Database, joinFn systemJoinFn) {
+func configureFirstEngine(ctx context.Context, engine *EngineInstance, sysdb *raft.Database, joinFn systemJoinFn) {
 	if !sysdb.IsReplica() {
 		return
 	}
@@ -382,6 +498,7 @@ func getGrpcOpts(cfgTransport *security.TransportConfig) ([]grpc.ServerOption, e
 	unaryInterceptors := []grpc.UnaryServerInterceptor{
 		unaryErrorInterceptor,
 		unaryStatusInterceptor,
+		unaryVersionInterceptor,
 	}
 	streamInterceptors := []grpc.StreamServerInterceptor{
 		streamErrorInterceptor,

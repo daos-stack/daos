@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2017-2021 Intel Corporation.
+ * (C) Copyright 2017-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -156,19 +156,18 @@ dsc_obj_id2oc_attr(daos_obj_id_t oid, struct cont_props *prop,
 		   struct daos_oclass_attr *oca)
 {
 	struct daos_oclass_attr *tmp;
-	bool			 priv;
 	uint32_t                 nr_grps;
 
-	tmp = daos_oclass_attr_find(oid, &priv, &nr_grps);
+	tmp = daos_oclass_attr_find(oid, &nr_grps);
 	if (!tmp)
 		return -DER_NOSCHEMA;
 
 	*oca = *tmp;
 	oca->ca_grp_nr = nr_grps;
-	if (daos_oclass_is_ec(oca) && !priv) {
-		/* don't ovewrite cell size of private class */
+	if (daos_oclass_is_ec(oca)) {
 		D_ASSERT(prop->dcp_ec_cell_sz > 0);
 		oca->u.ec.e_len = prop->dcp_ec_cell_sz;
 	}
+
 	return 0;
 }

@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2018-2021 Intel Corporation.
+ * (C) Copyright 2018-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -39,7 +39,6 @@ compound_alloc(struct vea_space_info *vsi, struct vea_free_extent *vfe,
 		/* Adjust in-tree offset & length */
 		remain->vfe_blk_off += vfe->vfe_blk_cnt;
 		remain->vfe_blk_cnt -= vfe->vfe_blk_cnt;
-		remain->vfe_age = get_current_age();
 
 		rc = free_class_add(vsi, entry);
 	}
@@ -93,9 +92,64 @@ reserve_hint(struct vea_space_info *vsi, uint32_t blk_cnt,
 	return 0;
 }
 
-int
-reserve_large(struct vea_space_info *vsi, uint32_t blk_cnt,
+static int
+reserve_small(struct vea_space_info *vsi, uint32_t blk_cnt,
 	      struct vea_resrvd_ext *resrvd)
+{
+	daos_handle_t		 btr_hdl;
+	struct vea_sized_class	*sc;
+	struct vea_free_extent	 vfe;
+	struct vea_entry	*entry;
+	d_iov_t			 key, val_out;
+	uint64_t		 int_key = blk_cnt;
+	int			 rc;
+
+	/* Skip huge allocate request */
+	if (blk_cnt > vsi->vsi_class.vfc_large_thresh)
+		return 0;
+
+	btr_hdl = vsi->vsi_class.vfc_size_btr;
+	D_ASSERT(daos_handle_is_valid(btr_hdl));
+
+	d_iov_set(&key, &int_key, sizeof(int_key));
+	d_iov_set(&val_out, NULL, 0);
+
+	rc = dbtree_fetch(btr_hdl, BTR_PROBE_GE, DAOS_INTENT_DEFAULT, &key, NULL, &val_out);
+	if (rc == -DER_NONEXIST) {
+		return 0;
+	} else if (rc) {
+		D_ERROR("Search size class:%u failed. "DF_RC"\n", blk_cnt, DP_RC(rc));
+		return rc;
+	}
+
+	sc = (struct vea_sized_class *)val_out.iov_buf;
+	D_ASSERT(sc != NULL);
+	D_ASSERT(!d_list_empty(&sc->vsc_lru));
+
+	/* Get the least used item from head */
+	entry = d_list_entry(sc->vsc_lru.next, struct vea_entry, ve_link);
+	D_ASSERT(entry->ve_sized_class == sc);
+	D_ASSERT(entry->ve_ext.vfe_blk_cnt >= blk_cnt);
+
+	vfe.vfe_blk_off = entry->ve_ext.vfe_blk_off;
+	vfe.vfe_blk_cnt = blk_cnt;
+
+	rc = compound_alloc(vsi, &vfe, entry);
+	if (rc)
+		return rc;
+
+	resrvd->vre_blk_off = vfe.vfe_blk_off;
+	resrvd->vre_blk_cnt = blk_cnt;
+	inc_stats(vsi, STAT_RESRV_SMALL, 1);
+
+	D_DEBUG(DB_IO, "["DF_U64", %u]\n", resrvd->vre_blk_off, resrvd->vre_blk_cnt);
+
+	return rc;
+}
+
+int
+reserve_single(struct vea_space_info *vsi, uint32_t blk_cnt,
+	       struct vea_resrvd_ext *resrvd)
 {
 	struct vea_free_class *vfc = &vsi->vsi_class;
 	struct vea_free_extent vfe;
@@ -105,7 +159,7 @@ reserve_large(struct vea_space_info *vsi, uint32_t blk_cnt,
 
 	/* No large free extent available */
 	if (d_binheap_is_empty(&vfc->vfc_heap))
-		return 0;
+		return reserve_small(vsi, blk_cnt, resrvd);
 
 	root = d_binheap_root(&vfc->vfc_heap);
 	entry = container_of(root, struct vea_entry, ve_node);
@@ -119,12 +173,17 @@ reserve_large(struct vea_space_info *vsi, uint32_t blk_cnt,
 		return 0;
 
 	/*
-	 * Reserve from the largest free extent when it's idle or too
-	 * small for splitting, otherwise, divide it in half-and-half
-	 * and reserve from the second half.
+	 * If the largest free extent is large enough for splitting, divide it in
+	 * half-and-half then reserve from the second half, otherwise, try to
+	 * reserve from the small extents first, if it fails, reserve from the
+	 * largest free extent.
 	 */
-	if (ext_is_idle(&entry->ve_ext) ||
-	    (entry->ve_ext.vfe_blk_cnt <= (blk_cnt * 2))) {
+	if (entry->ve_ext.vfe_blk_cnt <= (max(blk_cnt, vfc->vfc_large_thresh) * 2)) {
+		/* Try small extents first */
+		rc = reserve_small(vsi, blk_cnt, resrvd);
+		if (rc != 0 || resrvd->vre_blk_cnt != 0)
+			return rc;
+
 		vfe.vfe_blk_off = entry->ve_ext.vfe_blk_off;
 		vfe.vfe_blk_cnt = blk_cnt;
 
@@ -152,7 +211,7 @@ reserve_large(struct vea_space_info *vsi, uint32_t blk_cnt,
 		if (tot_blks > (half_blks + blk_cnt)) {
 			vfe.vfe_blk_off = blk_off + half_blks + blk_cnt;
 			vfe.vfe_blk_cnt = tot_blks - half_blks - blk_cnt;
-			vfe.vfe_age = get_current_age();
+			vfe.vfe_age = 0;	/* Not used */
 
 			rc = compound_free(vsi, &vfe, VEA_FL_NO_MERGE |
 						VEA_FL_NO_ACCOUNTING);
@@ -171,150 +230,6 @@ reserve_large(struct vea_space_info *vsi, uint32_t blk_cnt,
 		resrvd->vre_blk_cnt);
 
 	return 0;
-}
-
-#define EXT_AGE_WEIGHT	300	/* seconds */
-
-static void
-cursor_update(struct free_ext_cursor *cursor, struct vea_entry *ent,
-	      int ent_idx)
-{
-	uint64_t age_cur, age_next;
-
-	D_ASSERT(ent != NULL);
-
-	if (cursor->fec_cur == NULL)
-		goto update;
-	else if (ext_is_idle(&cursor->fec_cur->ve_ext))
-		return;
-	else if (ext_is_idle(&ent->ve_ext))
-		goto update;
-
-	D_ASSERT(!ext_is_idle(&cursor->fec_cur->ve_ext));
-	D_ASSERT(!ext_is_idle(&ent->ve_ext));
-
-	age_cur = cursor->fec_cur->ve_ext.vfe_age;
-	age_cur += (uint64_t)cursor->fec_idx * EXT_AGE_WEIGHT;
-	age_next = ent->ve_ext.vfe_age;
-	age_next += (uint64_t)ent_idx * EXT_AGE_WEIGHT;
-
-	if (age_cur <= age_next)
-		return;
-update:
-	cursor->fec_cur = ent;
-	cursor->fec_idx = ent_idx;
-}
-
-static struct free_ext_cursor *
-cursor_prepare(struct vea_free_class *vfc, uint32_t blk_cnt)
-{
-	struct free_ext_cursor *cursor = vfc->vfc_cursor;
-	struct vea_entry *entry;
-	int i, e_cnt;
-
-	for (e_cnt = 0; e_cnt < vfc->vfc_lru_cnt; e_cnt++) {
-		if (blk_cnt > vfc->vfc_sizes[e_cnt])
-			break;
-	}
-
-	cursor->fec_cur = NULL;
-	cursor->fec_idx = 0;
-	cursor->fec_entry_cnt = e_cnt;
-	memset(cursor->fec_entries, 0, vfc->vfc_lru_cnt * sizeof(entry));
-
-	/* Initialize vea_entry pointer array, setup starting entry */
-	for (i = 0; i < e_cnt; i++) {
-		d_list_t *lru = &vfc->vfc_lrus[i];
-
-		if (d_list_empty(lru)) {
-			cursor->fec_entries[i] = NULL;
-			continue;
-		}
-
-		entry = d_list_entry(lru->next, struct vea_entry, ve_link);
-		cursor->fec_entries[i] = entry;
-		cursor_update(cursor, entry, i);
-	}
-
-	return cursor;
-}
-
-static struct vea_entry *
-cursor_next(struct vea_free_class *vfc, struct free_ext_cursor *cursor)
-{
-	struct vea_entry *cur, *next;
-	d_list_t *lru_head;
-	int i, cur_idx = cursor->fec_idx;
-
-	D_ASSERT(cursor->fec_cur != NULL);
-	cur = cursor->fec_cur;
-	lru_head = &vfc->vfc_lrus[cur_idx];
-
-	/* Make sure the fec_cur is cleared */
-	cursor->fec_cur = NULL;
-
-	if (cur->ve_link.next == lru_head) {
-		cursor->fec_entries[cur_idx] = NULL;
-	} else {
-		next = d_list_entry(cur->ve_link.next, struct vea_entry,
-				    ve_link);
-		cursor->fec_entries[cur_idx] = next;
-
-		/* Keeping on current size class if the extent is idle */
-		if (ext_is_idle(&next->ve_ext)) {
-			cursor->fec_cur = next;
-			return cursor->fec_cur;
-		}
-	}
-
-	for (i = 0; i < cursor->fec_entry_cnt; i++) {
-		cur = cursor->fec_entries[i];
-		if (cur != NULL)
-			cursor_update(cursor, cur, i);
-	}
-
-	return cursor->fec_cur;
-}
-
-int
-reserve_small(struct vea_space_info *vsi, uint32_t blk_cnt,
-	      struct vea_resrvd_ext *resrvd)
-{
-	struct vea_free_extent vfe;
-	struct vea_entry *entry;
-	struct free_ext_cursor *cursor;
-	int rc = 0;
-
-	/* Skip huge allocate request */
-	if (blk_cnt > vsi->vsi_class.vfc_large_thresh)
-		return 0;
-
-	cursor = cursor_prepare(&vsi->vsi_class, blk_cnt);
-	D_ASSERT(cursor != NULL);
-
-	entry = cursor->fec_cur;
-	while (entry != NULL) {
-		if (entry->ve_ext.vfe_blk_cnt >= blk_cnt) {
-			vfe.vfe_blk_off = entry->ve_ext.vfe_blk_off;
-			vfe.vfe_blk_cnt = blk_cnt;
-
-			rc = compound_alloc(vsi, &vfe, entry);
-			if (rc)
-				break;
-
-			resrvd->vre_blk_off = vfe.vfe_blk_off;
-			resrvd->vre_blk_cnt = blk_cnt;
-
-			inc_stats(vsi, STAT_RESRV_SMALL, 1);
-
-			D_DEBUG(DB_IO, "["DF_U64", %u]\n",
-				resrvd->vre_blk_off, resrvd->vre_blk_cnt);
-			break;
-		}
-		entry = cursor_next(&vsi->vsi_class, cursor);
-	}
-
-	return rc;
 }
 
 int

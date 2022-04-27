@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2021 Intel Corporation.
+// (C) Copyright 2021-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -7,6 +7,8 @@
 package storage
 
 import (
+	"context"
+	"os"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
@@ -115,6 +117,169 @@ func Test_scanBdevs(t *testing.T) {
 
 			if diff := cmp.Diff(tc.expResp, gotResp, defBdevCmpOpts()...); diff != "" {
 				t.Fatalf("\nunexpected response (-want, +got):\n%s\n", diff)
+			}
+		})
+	}
+}
+
+func Test_BdevWriteRequestFromConfig(t *testing.T) {
+	hostname, err := os.Hostname()
+	if err != nil {
+		t.Fatal(err)
+	}
+	mockScmTier := NewTierConfig().WithStorageClass(ClassDcpm.String()).
+		WithScmMountPoint("/mnt/daos0").
+		WithScmDeviceList("/dev/pmem0")
+
+	for name, tc := range map[string]struct {
+		cfg        *Config
+		vmdEnabled bool
+		getTopoFn  topologyGetter
+		expReq     BdevWriteConfigRequest
+		expErr     error
+	}{
+		"nil config": {
+			expErr: errors.New("nil config"),
+		},
+		"nil topo function": {
+			cfg:    &Config{},
+			expErr: errors.New("nil GetTopology"),
+		},
+		"no bdev configs": {
+			cfg: &Config{
+				Tiers:         TierConfigs{mockScmTier},
+				EnableHotplug: true,
+			},
+			getTopoFn: MockGetTopology,
+			expReq: BdevWriteConfigRequest{
+				OwnerUID:       os.Geteuid(),
+				OwnerGID:       os.Getegid(),
+				TierProps:      []BdevTierProperties{},
+				Hostname:       hostname,
+				HotplugEnabled: true,
+			},
+		},
+		"hotplug disabled": {
+			cfg: &Config{
+				Tiers: TierConfigs{
+					mockScmTier,
+					NewTierConfig().WithStorageClass(ClassNvme.String()).
+						WithBdevBusidRange("0x00-0x7f"),
+				},
+			},
+			getTopoFn: MockGetTopology,
+			expReq: BdevWriteConfigRequest{
+				OwnerUID: os.Geteuid(),
+				OwnerGID: os.Getegid(),
+				TierProps: []BdevTierProperties{
+					{Class: ClassNvme},
+				},
+				Hostname: hostname,
+			},
+		},
+		"range specified": {
+			cfg: &Config{
+				Tiers: TierConfigs{
+					mockScmTier,
+					NewTierConfig().WithStorageClass(ClassNvme.String()).
+						WithBdevBusidRange("0x70-0x7f"),
+				},
+				EnableHotplug: true,
+			},
+			getTopoFn: MockGetTopology,
+			expReq: BdevWriteConfigRequest{
+				OwnerUID: os.Geteuid(),
+				OwnerGID: os.Getegid(),
+				TierProps: []BdevTierProperties{
+					{Class: ClassNvme},
+				},
+				Hostname:          hostname,
+				HotplugEnabled:    true,
+				HotplugBusidBegin: 0x70,
+				HotplugBusidEnd:   0x7f,
+			},
+		},
+		"range specified; vmd enabled": {
+			cfg: &Config{
+				Tiers: TierConfigs{
+					mockScmTier,
+					NewTierConfig().WithStorageClass(ClassNvme.String()).
+						WithBdevBusidRange("0x70-0x7f"),
+				},
+				EnableHotplug: true,
+			},
+			vmdEnabled: true,
+			getTopoFn:  MockGetTopology,
+			expReq: BdevWriteConfigRequest{
+				OwnerUID: os.Geteuid(),
+				OwnerGID: os.Getegid(),
+				TierProps: []BdevTierProperties{
+					{Class: ClassNvme},
+				},
+				Hostname:          hostname,
+				HotplugEnabled:    true,
+				HotplugBusidBegin: 0x00,
+				HotplugBusidEnd:   0xff,
+				VMDEnabled:        true,
+			},
+		},
+		"range unspecified": {
+			cfg: &Config{
+				Tiers: TierConfigs{
+					mockScmTier,
+					NewTierConfig().WithStorageClass(ClassNvme.String()),
+				},
+				EnableHotplug: true,
+			},
+			getTopoFn: MockGetTopology,
+			expReq: BdevWriteConfigRequest{
+				OwnerUID: os.Geteuid(),
+				OwnerGID: os.Getegid(),
+				TierProps: []BdevTierProperties{
+					{Class: ClassNvme},
+				},
+				Hostname:        hostname,
+				HotplugEnabled:  true,
+				HotplugBusidEnd: 0x07,
+			},
+		},
+		"range unspecified; vmd enabled": {
+			cfg: &Config{
+				Tiers: TierConfigs{
+					mockScmTier,
+					NewTierConfig().WithStorageClass(ClassNvme.String()),
+				},
+				EnableHotplug: true,
+			},
+			vmdEnabled: true,
+			getTopoFn:  MockGetTopology,
+			expReq: BdevWriteConfigRequest{
+				OwnerUID: os.Geteuid(),
+				OwnerGID: os.Getegid(),
+				TierProps: []BdevTierProperties{
+					{Class: ClassNvme},
+				},
+				Hostname:          hostname,
+				HotplugEnabled:    true,
+				HotplugBusidBegin: 0x00,
+				HotplugBusidEnd:   0xff,
+				VMDEnabled:        true,
+			},
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(name)
+			defer common.ShowBufferOnFailure(t, buf)
+
+			gotReq, gotErr := BdevWriteConfigRequestFromConfig(context.TODO(), log, tc.cfg,
+				tc.vmdEnabled, tc.getTopoFn)
+			common.CmpErr(t, tc.expErr, gotErr)
+			if gotErr != nil {
+				return
+			}
+
+			if diff := cmp.Diff(tc.expReq, gotReq, defBdevCmpOpts()...); diff != "" {
+				t.Fatalf("\nunexpected generated request (-want, +got):\n%s\n", diff)
 			}
 		})
 	}

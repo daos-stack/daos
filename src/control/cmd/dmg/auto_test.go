@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2021 Intel Corporation.
+// (C) Copyright 2020-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -170,6 +170,7 @@ control_log_file: /tmp/daos_server.log
 helper_log_file: ""
 firmware_helper_log_file: ""
 fault_path: ""
+core_dump_filter: 19
 name: daos_server
 socket_dir: /var/run/daos_server
 provider: ofi+verbs
@@ -180,52 +181,47 @@ hyperthreads: false
 `
 	)
 
-	var (
-		numa0 = uint(0)
-		numa1 = uint(1)
-	)
-
 	typicalAutoGenOutCfg := config.DefaultServer().
 		WithControlLogFile(defaultControlLogFile).
 		WithFabricProvider("ofi+verbs").
 		WithAccessPoints("hostX:10002").
 		WithNrHugePages(6144).
 		WithEngines(
-			engine.NewConfig().
+			engine.MockConfig().
 				WithTargetCount(defaultTargetCount).
 				WithLogFile(fmt.Sprintf("%s.%d.log", defaultEngineLogFile, 0)).
 				WithFabricInterface("ib0").
 				WithFabricInterfacePort(defaultFiPort).
 				WithFabricProvider("ofi+verbs").
-				WithPinnedNumaNode(&numa0).
+				WithPinnedNumaNode(0).
 				WithStorage(
 					storage.NewTierConfig().
-						WithScmClass(storage.ClassDcpm.String()).
+						WithStorageClass(storage.ClassDcpm.String()).
 						WithScmDeviceList("/dev/pmem0").
 						WithScmMountPoint("/mnt/daos0"),
 					storage.NewTierConfig().
-						WithBdevClass(storage.ClassNvme.String()).
+						WithStorageClass(storage.ClassNvme.String()).
 						WithBdevDeviceList(common.MockPCIAddrs(0, 1, 2, 3)...),
 				).
 				WithStorageConfigOutputPath("/mnt/daos0/daos_nvme.conf").
 				WithStorageVosEnv("NVME").
 				WithTargetCount(12).
 				WithHelperStreamCount(2),
-			engine.NewConfig().
+			engine.MockConfig().
 				WithTargetCount(defaultTargetCount).
 				WithLogFile(fmt.Sprintf("%s.%d.log", defaultEngineLogFile, 1)).
 				WithFabricInterface("ib1").
 				WithFabricInterfacePort(
 					int(defaultFiPort+defaultFiPortInterval)).
 				WithFabricProvider("ofi+verbs").
-				WithPinnedNumaNode(&numa1).
+				WithPinnedNumaNode(1).
 				WithStorage(
 					storage.NewTierConfig().
-						WithScmClass(storage.ClassDcpm.String()).
+						WithStorageClass(storage.ClassDcpm.String()).
 						WithScmDeviceList("/dev/pmem1").
 						WithScmMountPoint("/mnt/daos1"),
 					storage.NewTierConfig().
-						WithBdevClass(storage.ClassNvme.String()).
+						WithStorageClass(storage.ClassNvme.String()).
 						WithBdevDeviceList(common.MockPCIAddrs(4, 5, 6)...),
 				).
 				WithStorageConfigOutputPath("/mnt/daos1/daos_nvme.conf").

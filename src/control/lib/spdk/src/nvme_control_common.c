@@ -1,5 +1,5 @@
 /**
-* (C) Copyright 2019-2021 Intel Corporation.
+* (C) Copyright 2019-2022 Intel Corporation.
 *
 * SPDX-License-Identifier: BSD-2-Clause-Patent
 */
@@ -495,7 +495,8 @@ _collect(struct ret_t *ret, data_copier copy_data, pci_getter get_pci,
 fail:
 	ret->rc = rc;
 	if (ret->rc == 0)
-		ret->rc = -1;
+		/* Catch unexpected failures */
+		ret->rc = -EINVAL;
 	if (ctrlr_tmp)
 		free(ctrlr_tmp);
 	clean_ret(ret);

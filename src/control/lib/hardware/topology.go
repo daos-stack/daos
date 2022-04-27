@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2021 Intel Corporation.
+// (C) Copyright 2021-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -8,16 +8,24 @@ package hardware
 
 import (
 	"context"
-	"encoding/json"
-	"fmt"
+	"sort"
 
-	"github.com/daos-stack/daos/src/control/common"
+	"github.com/pkg/errors"
 )
+
+// ErrNoNUMANodes indicates that the system can't detect any NUMA nodes.
+var ErrNoNUMANodes = errors.New("no NUMA nodes detected")
 
 type (
 	// TopologyProvider is an interface for acquiring a system topology.
 	TopologyProvider interface {
 		GetTopology(context.Context) (*Topology, error)
+	}
+
+	// ProcessNUMAProvider is an interface for getting the NUMA node associated with a
+	// process ID.
+	ProcessNUMAProvider interface {
+		GetNUMANodeIDForPID(context.Context, int32) (uint, error)
 	}
 
 	// NodeMap maps a node ID to a node.
@@ -47,29 +55,144 @@ func (t *Topology) AllDevices() map[string]*PCIDevice {
 	return devsByName
 }
 
+// NumNUMANodes gets the number of NUMA nodes in the system topology.
+func (t *Topology) NumNUMANodes() int {
+	if t == nil {
+		return 0
+	}
+	return len(t.NUMANodes)
+}
+
+// NumCoresPerNUMA gets the number of cores per NUMA node.
+func (t *Topology) NumCoresPerNUMA() int {
+	if t == nil {
+		return 0
+	}
+
+	for _, numa := range t.NUMANodes {
+		return len(numa.Cores)
+	}
+
+	return 0
+}
+
+// AddDevice adds a device to the topology.
+func (t *Topology) AddDevice(numaID uint, device *PCIDevice) error {
+	if t == nil {
+		return errors.New("nil Topology")
+	}
+
+	if device == nil {
+		return errors.New("nil PCIDevice")
+	}
+
+	if t.NUMANodes == nil {
+		t.NUMANodes = make(NodeMap)
+	}
+
+	numa, exists := t.NUMANodes[numaID]
+	if !exists {
+		numa = &NUMANode{
+			ID:         numaID,
+			Cores:      []CPUCore{},
+			PCIDevices: PCIDevices{},
+		}
+		t.NUMANodes[numaID] = numa
+	}
+
+	numa.AddDevice(device)
+
+	return nil
+}
+
+// Merge updates the contents of the initial topology from the incoming topology.
+func (t *Topology) Merge(newTopo *Topology) error {
+	if t == nil {
+		return errors.New("nil original Topology")
+	}
+
+	if newTopo == nil {
+		return errors.New("nil new Topology")
+	}
+
+	for numaID, node := range newTopo.NUMANodes {
+		if t.NUMANodes == nil {
+			t.NUMANodes = make(NodeMap)
+		}
+
+		current, exists := t.NUMANodes[numaID]
+		if !exists {
+			t.NUMANodes[numaID] = node
+			continue
+		}
+
+		for _, core := range node.Cores {
+			found := false
+			for _, curCore := range current.Cores {
+				if curCore.ID == core.ID {
+					found = true
+					break
+				}
+			}
+
+			if !found {
+				current.AddCore(core)
+			}
+		}
+
+		for _, bus := range node.PCIBuses {
+			found := false
+			for _, curBus := range current.PCIBuses {
+				if curBus.HighAddress.Equals(&bus.HighAddress) &&
+					curBus.LowAddress.Equals(&bus.LowAddress) {
+					found = true
+					break
+				}
+			}
+
+			if !found {
+				current.AddPCIBus(bus)
+			}
+		}
+
+		if current.PCIDevices == nil {
+			current.PCIDevices = make(PCIDevices)
+		}
+
+		for key, newDevs := range node.PCIDevices {
+			oldDevs := current.PCIDevices[key]
+			for _, newDev := range newDevs {
+				devExists := false
+				for _, oldDev := range oldDevs {
+					if newDev.Name == oldDev.Name {
+						devExists = true
+
+						// Only a couple parameters can be overridden
+						if oldDev.Type == DeviceTypeUnknown {
+							oldDev.Type = newDev.Type
+						}
+
+						if oldDev.LinkSpeed == 0 {
+							oldDev.LinkSpeed = newDev.LinkSpeed
+						}
+					}
+				}
+				if !devExists {
+					if err := current.PCIDevices.Add(newDev); err != nil {
+						return err
+					}
+				}
+			}
+		}
+	}
+	return nil
+}
+
 type (
 	// CPUCore represents a CPU core within a NUMA node.
 	CPUCore struct {
 		ID       uint      `json:"id"`
 		NUMANode *NUMANode `json:"-"`
-	}
-
-	// PCIDevice represents an individual hardware device.
-	PCIDevice struct {
-		Name      string            `json:"name"`
-		Type      DeviceType        `json:"type"`
-		NUMANode  *NUMANode         `json:"-"`
-		Bus       *PCIBus           `json:"-"`
-		PCIAddr   common.PCIAddress `json:"pci_address"`
-		LinkSpeed float64           `json:"link_speed"`
-	}
-
-	// PCIBus represents the root of a PCI bus hierarchy.
-	PCIBus struct {
-		LowAddress  common.PCIAddress `json:"low_address"`
-		HighAddress common.PCIAddress `json:"high_address"`
-		NUMANode    *NUMANode         `json:"-"`
-		PCIDevices  PCIDevices        `json:"pci_devices"`
 	}
 
 	// NUMANode represents an individual NUMA node in the system and the devices associated with it.
@@ -79,83 +202,24 @@ type (
 		PCIBuses   []*PCIBus  `json:"pci_buses"`
 		PCIDevices PCIDevices `json:"pci_devices"`
 	}
-
-	// PCIDevices groups hardware devices by PCI address.
-	PCIDevices map[common.PCIAddress][]*PCIDevice
 )
 
-// AddDevice adds a PCI device to the bus.
-func (b *PCIBus) AddDevice(dev *PCIDevice) {
-	if b == nil || dev == nil {
-		return
-	}
-	if !b.Contains(dev.PCIAddr) {
-		return
-	}
-	if b.PCIDevices == nil {
-		b.PCIDevices = make(PCIDevices)
-	}
-
-	dev.Bus = b
-	b.PCIDevices[dev.PCIAddr] = append(b.PCIDevices[dev.PCIAddr], dev)
-}
-
-// Contains returns true if the given PCI address is contained within the bus.
-func (b *PCIBus) Contains(addr common.PCIAddress) bool {
-	if b == nil {
-		return false
-	}
-
-	return b.LowAddress.Domain == addr.Domain &&
-		b.LowAddress.Bus <= addr.Bus &&
-		addr.Bus <= b.HighAddress.Bus
-}
-
-func (b *PCIBus) String() string {
-	if b.LowAddress.Bus == b.HighAddress.Bus {
-		return fmt.Sprintf("%s:%s", b.LowAddress.Domain, b.LowAddress.Bus)
-	}
-	return fmt.Sprintf("%s:[%s-%s]", b.LowAddress.Domain, b.LowAddress.Bus, b.HighAddress.Bus)
-}
-
-func (d *PCIDevice) String() string {
-	var speedStr string
-	if d.LinkSpeed > 0 {
-		speedStr = fmt.Sprintf(" @ %.2f GB/s", d.LinkSpeed)
-	}
-	return fmt.Sprintf("%s %s (%s)%s", &d.PCIAddr, d.Name, d.Type, speedStr)
-}
-
-func (pd PCIDevices) MarshalJSON() ([]byte, error) {
-	strMap := make(map[string][]*PCIDevice)
-	for k, v := range pd {
-		strMap[k.String()] = v
-	}
-	return json.Marshal(strMap)
-}
-
 // AddPCIBus adds a PCI bus to the node.
-func (n *NUMANode) AddPCIBus(bus *PCIBus) {
+func (n *NUMANode) AddPCIBus(bus *PCIBus) error {
 	if n == nil || bus == nil {
-		return
+		return errors.New("node or bus is nil")
 	}
 
 	bus.NUMANode = n
 	n.PCIBuses = append(n.PCIBuses, bus)
-}
 
-// WithPCIBuses is a convenience function to add multiple PCI buses to the node.
-func (n *NUMANode) WithPCIBuses(buses []*PCIBus) *NUMANode {
-	for _, bus := range buses {
-		n.AddPCIBus(bus)
-	}
-	return n
+	return nil
 }
 
 // AddDevice adds a PCI device to the node.
-func (n *NUMANode) AddDevice(dev *PCIDevice) {
+func (n *NUMANode) AddDevice(dev *PCIDevice) error {
 	if n == nil || dev == nil {
-		return
+		return errors.New("node or device is nil")
 	}
 	if n.PCIDevices == nil {
 		n.PCIDevices = make(PCIDevices)
@@ -166,57 +230,23 @@ func (n *NUMANode) AddDevice(dev *PCIDevice) {
 
 	for _, bus := range n.PCIBuses {
 		if bus.Contains(dev.PCIAddr) {
-			bus.AddDevice(dev)
-			return
+			return bus.AddDevice(dev)
 		}
 	}
-}
 
-// WithDevices is a convenience function to add a set of devices to a node.
-func (n *NUMANode) WithDevices(devices []*PCIDevice) *NUMANode {
-	for _, dev := range devices {
-		n.AddDevice(dev)
-	}
-	return n
+	return nil
 }
 
 // AddCore adds a CPU core to the node.
-func (n *NUMANode) AddCore(core CPUCore) {
+func (n *NUMANode) AddCore(core CPUCore) error {
 	if n == nil {
-		return
+		return errors.New("node is nil")
 	}
 
 	core.NUMANode = n
 	n.Cores = append(n.Cores, core)
-}
 
-// WithCPUCores is a convenience function to add a set of cores to a node.
-func (n *NUMANode) WithCPUCores(cores []CPUCore) *NUMANode {
-	for _, core := range cores {
-		n.AddCore(core)
-	}
-	return n
-}
-
-// Add adds a device to the PCIDevices.
-func (d PCIDevices) Add(dev *PCIDevice) {
-	if d == nil || dev == nil {
-		return
-	}
-	addr := dev.PCIAddr
-	d[addr] = append(d[addr], dev)
-}
-
-// Keys fetches the sorted keys for the map.
-func (d PCIDevices) Keys() []*common.PCIAddress {
-	set := new(common.PCIAddressSet)
-	for k := range d {
-		ref := k
-		if err := set.Add(&ref); err != nil {
-			panic(err)
-		}
-	}
-	return set.Addresses()
+	return nil
 }
 
 // DeviceType indicates the type of a hardware device.
@@ -240,4 +270,55 @@ func (t DeviceType) String() string {
 	}
 
 	return "unknown device type"
+}
+
+// WeightedTopologyProvider is a provider with associated weight to determine order of operations.
+// Greater weights indicate higher priority.
+type WeightedTopologyProvider struct {
+	Provider TopologyProvider
+	Weight   int
+}
+
+// TopologyFactory is a TopologyProvider that merges results from multiple other
+// TopologyProviders.
+type TopologyFactory struct {
+	providers []TopologyProvider
+}
+
+// GetTopology gets a merged master topology from all the topology providers.
+func (tf *TopologyFactory) GetTopology(ctx context.Context) (*Topology, error) {
+	if tf == nil {
+		return nil, errors.New("nil TopologyFactory")
+	}
+
+	if len(tf.providers) == 0 {
+		return nil, errors.New("no TopologyProviders in TopologyFactory")
+	}
+
+	newTopo := &Topology{}
+	for _, prov := range tf.providers {
+		topo, err := prov.GetTopology(ctx)
+		if err != nil {
+			return nil, err
+		}
+		newTopo.Merge(topo)
+	}
+	return newTopo, nil
+}
+
+// NewTopologyFactory creates a TopologyFactory based on the list of weighted topology providers.
+func NewTopologyFactory(providers ...*WeightedTopologyProvider) *TopologyFactory {
+	sort.Slice(providers, func(i, j int) bool {
+		// Higher weight goes first
+		return providers[i].Weight > providers[j].Weight
+	})
+
+	orderedProviders := make([]TopologyProvider, 0, len(providers))
+	for _, wtp := range providers {
+		orderedProviders = append(orderedProviders, wtp.Provider)
+	}
+
+	return &TopologyFactory{
+		providers: orderedProviders,
+	}
 }

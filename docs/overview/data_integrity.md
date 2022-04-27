@@ -123,7 +123,7 @@ The actual checksum calculations are done by the
 and [isa-l_crypto](https://github.com/intel/isa-l_crypto) libraries. However,
 these libraries are abstracted away from much of DAOS and a common checksum
 library is used with appropriate adapters to the actual isa-l implementations.
-[common checksum library](../../src/common/README.md#checksum)
+[common checksum library](https://github.com/daos-stack/daos/blob/master/src/common/README.md#checksum)
 
 ## Performance Impact
 Calculating checksums can be CPU intensive and will impact performance. To

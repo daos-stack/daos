@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2021 Intel Corporation.
+// (C) Copyright 2020-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -10,10 +10,12 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"math"
 	"strconv"
 	"strings"
 	"time"
 
+	"github.com/dustin/go-humanize"
 	"github.com/google/uuid"
 	"github.com/pkg/errors"
 	"google.golang.org/grpc"
@@ -22,6 +24,7 @@ import (
 	"github.com/daos-stack/daos/src/control/common/proto/convert"
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	"github.com/daos-stack/daos/src/control/drpc"
+	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/security/auth"
 	"github.com/daos-stack/daos/src/control/system"
 )
@@ -31,7 +34,7 @@ const (
 	// request can take before being timed out.
 	PoolCreateTimeout = 10 * time.Minute // be generous for large pools
 	// DefaultPoolTimeout is the default timeout for a pool request.
-	DefaultPoolTimeout = 60 * time.Second // fail faster if it's going to fail
+	DefaultPoolTimeout = drpc.DefaultCartTimeout * 3
 )
 
 // checkUUID is a helper function for validating that the supplied
@@ -137,7 +140,6 @@ func (pcr *PoolCreateReq) MarshalJSON() ([]byte, error) {
 	})
 }
 
-// genPoolCreateRequest takes a *PoolCreateRequest and generates a valid protobuf
 // request, filling in any missing fields with reasonable defaults.
 func genPoolCreateRequest(in *PoolCreateReq) (out *mgmtpb.PoolCreateReq, err error) {
 	// ensure pool ownership is set up correctly
@@ -163,7 +165,6 @@ func genPoolCreateRequest(in *PoolCreateReq) (out *mgmtpb.PoolCreateReq, err err
 	}
 
 	out.Uuid = uuid.New().String()
-
 	return
 }
 
@@ -197,7 +198,8 @@ func (r *poolRequest) canRetry(reqErr error, try uint) bool {
 		switch e {
 		// These pool errors can be retried.
 		case drpc.DaosTimedOut, drpc.DaosGroupVersionMismatch,
-			drpc.DaosTryAgain, drpc.DaosOutOfGroup, drpc.DaosUnreachable:
+			drpc.DaosTryAgain, drpc.DaosOutOfGroup, drpc.DaosUnreachable,
+			drpc.DaosExcluded:
 			return true
 		default:
 			return false
@@ -269,6 +271,7 @@ func PoolCreate(ctx context.Context, rpcClient UnaryInvoker, req *PoolCreateReq)
 
 	pcr := new(PoolCreateResp)
 	pcr.UUID = pbReq.Uuid
+
 	return pcr, convert.Types(pbPcr, pcr)
 }
 
@@ -300,6 +303,36 @@ func PoolDestroy(ctx context.Context, rpcClient UnaryInvoker, req *PoolDestroyRe
 		return errors.Wrap(err, "pool destroy failed")
 	}
 	rpcClient.Debugf("Destroy DAOS pool response: %s\n", msResp)
+
+	return nil
+}
+
+// PoolUpgradeReq contains the parameters for a pool upgrade request.
+type PoolUpgradeReq struct {
+	poolRequest
+	ID string
+}
+
+// PoolUpgrade performs a pool upgrade operation on a DAOS Management Server instance.
+func PoolUpgrade(ctx context.Context, rpcClient UnaryInvoker, req *PoolUpgradeReq) error {
+	req.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
+		return mgmtpb.NewMgmtSvcClient(conn).PoolUpgrade(ctx, &mgmtpb.PoolUpgradeReq{
+			Sys: req.getSystem(rpcClient),
+			Id:  req.ID,
+		})
+	})
+
+	rpcClient.Debugf("Upgrade DAOS pool request: %v\n", req)
+	ur, err := rpcClient.InvokeUnaryRPC(ctx, req)
+	if err != nil {
+		return err
+	}
+
+	msResp, err := ur.getMSResponse()
+	if err != nil {
+		return errors.Wrap(err, "pool upgrade failed")
+	}
+	rpcClient.Debugf("Upgrade DAOS pool response: %s\n", msResp)
 
 	return nil
 }
@@ -340,7 +373,9 @@ type (
 	// PoolQueryReq contains the parameters for a pool query request.
 	PoolQueryReq struct {
 		poolRequest
-		ID string
+		ID                   string
+		IncludeEnabledRanks  bool
+		IncludeDisabledRanks bool
 	}
 
 	// StorageUsageStats represents DAOS storage usage statistics.
@@ -374,6 +409,8 @@ type (
 		Leader          uint32               `json:"leader"`
 		Rebuild         *PoolRebuildStatus   `json:"rebuild"`
 		TierStats       []*StorageUsageStats `json:"tier_stats"`
+		EnabledRanks    *system.RankSet      `json:"-"`
+		DisabledRanks   *system.RankSet      `json:"-"`
 	}
 
 	// PoolQueryResp contains the pool query response.
@@ -383,6 +420,73 @@ type (
 		PoolInfo
 	}
 )
+
+func (pqr *PoolQueryResp) MarshalJSON() ([]byte, error) {
+	if pqr == nil {
+		return []byte("null"), nil
+	}
+
+	type Alias PoolQueryResp
+	aux := &struct {
+		EnabledRanks  *[]system.Rank `json:"enabled_ranks"`
+		DisabledRanks *[]system.Rank `json:"disabled_ranks"`
+		*Alias
+	}{
+		Alias: (*Alias)(pqr),
+	}
+
+	if pqr.EnabledRanks != nil {
+		ranks := pqr.EnabledRanks.Ranks()
+		aux.EnabledRanks = &ranks
+	}
+
+	if pqr.DisabledRanks != nil {
+		ranks := pqr.DisabledRanks.Ranks()
+		aux.DisabledRanks = &ranks
+	}
+
+	return json.Marshal(&aux)
+}
+
+func unmarshallRankSet(ranks string) (*system.RankSet, error) {
+	switch ranks {
+	case "":
+		return nil, nil
+	case "[]":
+		return &system.RankSet{}, nil
+	default:
+		return system.CreateRankSet(ranks)
+	}
+}
+
+func (pqr *PoolQueryResp) UnmarshalJSON(data []byte) error {
+	type Alias PoolQueryResp
+	aux := &struct {
+		EnabledRanks  string `json:"enabled_ranks"`
+		DisabledRanks string `json:"disabled_ranks"`
+		*Alias
+	}{
+		Alias: (*Alias)(pqr),
+	}
+
+	if err := json.Unmarshal(data, &aux); err != nil {
+		return err
+	}
+
+	if rankSet, err := unmarshallRankSet(aux.EnabledRanks); err != nil {
+		return err
+	} else {
+		pqr.EnabledRanks = rankSet
+	}
+
+	if rankSet, err := unmarshallRankSet(aux.DisabledRanks); err != nil {
+		return err
+	} else {
+		pqr.DisabledRanks = rankSet
+	}
+
+	return nil
+}
 
 func (sus *StorageUsageStats) UnmarshalJSON(data []byte) error {
 	type fromJSON StorageUsageStats
@@ -456,8 +560,10 @@ func (prs *PoolRebuildState) UnmarshalJSON(data []byte) error {
 func PoolQuery(ctx context.Context, rpcClient UnaryInvoker, req *PoolQueryReq) (*PoolQueryResp, error) {
 	req.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
 		return mgmtpb.NewMgmtSvcClient(conn).PoolQuery(ctx, &mgmtpb.PoolQueryReq{
-			Sys: req.getSystem(rpcClient),
-			Id:  req.ID,
+			Sys:                  req.getSystem(rpcClient),
+			Id:                   req.ID,
+			IncludeEnabledRanks:  req.IncludeEnabledRanks,
+			IncludeDisabledRanks: req.IncludeDisabledRanks,
 		})
 	})
 
@@ -568,7 +674,6 @@ func PoolGetProp(ctx context.Context, rpcClient UnaryInvoker, req *PoolGetPropRe
 	if err != nil {
 		return nil, err
 	}
-
 	pbResp, ok := msResp.(*mgmtpb.PoolGetPropResp)
 	if !ok {
 		return nil, errors.New("unable to extract PoolGetPropResp from MS response")
@@ -586,7 +691,7 @@ func PoolGetProp(ctx context.Context, rpcClient UnaryInvoker, req *PoolGetPropRe
 	for _, prop := range resp {
 		pbProp, found := pbMap[prop.Number]
 		if !found {
-			return nil, errors.Errorf("unable to find prop %d (%s) in resp", prop.Number, prop.Name)
+			continue
 		}
 		switch v := pbProp.GetValue().(type) {
 		case *mgmtpb.PoolProperty_Strval:
@@ -789,6 +894,8 @@ type (
 		// ServiceReplicas is the list of ranks on which this pool's
 		// service replicas are running.
 		ServiceReplicas []system.Rank `json:"svc_reps"`
+		// State is the current state of the pool.
+		State string `json:"state"`
 
 		// TargetsTotal is the total number of targets in pool.
 		TargetsTotal uint32 `json:"targets_total"`
@@ -927,6 +1034,10 @@ func ListPools(ctx context.Context, rpcClient UnaryInvoker, req *ListPoolsReq) (
 
 	// issue query request and populate usage statistics for each pool
 	for _, p := range resp.Pools {
+		if p.State != system.PoolServiceStateReady.String() {
+			rpcClient.Debugf("Skipping query of pool in state: %s", p.State)
+			continue
+		}
 		rpcClient.Debugf("Fetching details for discovered pool: %v", p)
 
 		resp, err := PoolQuery(ctx, rpcClient, &PoolQueryReq{ID: p.UUID})
@@ -958,4 +1069,80 @@ func ListPools(ctx context.Context, rpcClient UnaryInvoker, req *ListPoolsReq) (
 	}
 
 	return resp, nil
+}
+
+// Return the maximal SCM and NVMe size of a pool which could be created with all the storage nodes.
+//
+// TODO (DAOS-9557) This function should takes an extra parameter to filter the engine ranks to use.
+func GetMaxPoolSize(ctx context.Context, log logging.Logger, rpcClient UnaryInvoker) (uint64, uint64, error) {
+	storageScanReq := &StorageScanReq{Usage: true}
+	resp, err := StorageScan(ctx, rpcClient, storageScanReq)
+	if err != nil {
+		return 0, 0, err
+	}
+
+	if len(resp.HostStorage) == 0 {
+		return 0, 0, errors.New("No DAOS server available")
+	}
+
+	hostStorageMap := resp.HostStorage
+	var scmBytes uint64 = math.MaxUint64
+	var nvmeBytes uint64 = math.MaxUint64
+	for _, key := range hostStorageMap.Keys() {
+		hostStorageSet := hostStorageMap[key]
+		hostStorage := hostStorageSet.HostStorage
+
+		if hostStorage.ScmNamespaces.Free() == uint64(0) {
+			return 0, 0, errors.Errorf("Host without SCM storage: hostname=%s",
+				hostStorageSet.HostSet.String())
+		}
+
+		// FIXME (DAOS-9557) At this time the rank associated to one namespace is not
+		// defined in the StorageScanResp.  Thus we rely on the hypothesis that each SCM
+		// namespace is associated to one and only one rank. Eventually, the protocol should
+		// be changed to define if a SCM namespace is associated with one rank or not. If
+		// yes, it should define with which rank the SCM namespace is associated.
+		for _, scmNamespace := range hostStorage.ScmNamespaces {
+			if scmNamespace.Mount == nil {
+				continue
+			}
+			scmNamespaceFreeBytes := scmNamespace.Mount.AvailBytes
+
+			if scmBytes > scmNamespaceFreeBytes {
+				scmBytes = scmNamespaceFreeBytes
+			}
+		}
+
+		nvmeRanksBytes := make(map[system.Rank]uint64, 0)
+		for _, nvmeController := range hostStorage.NvmeDevices {
+			for _, smdDevice := range nvmeController.SmdDevices {
+				if !smdDevice.NvmeState.IsNormal() {
+					log.Infof("WARNING: SMD device %s (instance %d, ctrlr %s) "+
+						"not usable (device state %q)",
+						smdDevice.UUID, smdDevice.Rank, smdDevice.TrAddr,
+						smdDevice.NvmeState.String())
+					continue
+				}
+
+				nvmeRanksBytes[smdDevice.Rank] += smdDevice.AvailBytes
+			}
+		}
+		for _, nvmeRankBytes := range nvmeRanksBytes {
+			if nvmeBytes > nvmeRankBytes {
+				nvmeBytes = nvmeRankBytes
+			}
+		}
+	}
+
+	if nvmeBytes == math.MaxUint64 {
+		nvmeBytes = 0
+	}
+
+	// TODO (DAOS-9557) Check if there is no ranks (i.e. rank with SCM available) with some NVMe
+	// storage and other without
+
+	rpcClient.Debugf("Maximal size of a pool: scmBytes=%s (%d B) nvmeBytes=%s (%d B)",
+		humanize.Bytes(scmBytes), scmBytes, humanize.Bytes(nvmeBytes), nvmeBytes)
+
+	return scmBytes, nvmeBytes, nil
 }

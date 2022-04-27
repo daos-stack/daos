@@ -16,9 +16,27 @@ server_config:
    bdev_class: nvme
    bdev_list: ["0000:81:00.0"]
 pool:
- mode: 511
- name: daos_server
- control_method: dmg
+ ior_sequence_pool_qty: 4
+ pool_0:
+   name: daos_server
+   control_method: dmg
+   scm_size: 10%
+   nvme_size: 20%
+ pool_1:
+   name: daos_server
+   control_method: dmg
+   scm_size: 15%
+   nvme_size: 30%
+ pool_2:
+   name: daos_server
+   control_method: dmg
+   scm_size: 20%
+   nvme_size: 50%
+ pool_3:
+   name: daos_server
+   control_method: dmg
+   scm_size: 30%
+   nvme_size: 60%
 container:
  type: POSIX
  control_method: daos
@@ -50,10 +68,3 @@ ior:
        - 2400000
        - 30000000
        - 60000000
- ior_sequence:
-#   - [scmsize, nvmesize]
-    - [500M, 10G]
-    - [500M, 50G]
-    - [3G, 500G]
-# Uncomment this once DAOS-3339 is resolved
-#    - [3000000000, 800000000000]     #[3G, 800G]

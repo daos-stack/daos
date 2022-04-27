@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2018-2021 Intel Corporation.
+ * (C) Copyright 2018-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -16,14 +16,14 @@ reconnect(test_arg_t *arg) {
 	int rc;
 	unsigned int flags;
 
-	MPI_Barrier(MPI_COMM_WORLD);
+	par_barrier(PAR_COMM_WORLD);
 	rc = daos_cont_close(arg->coh, NULL);
 	assert_rc_equal(rc, 0);
-	MPI_Barrier(MPI_COMM_WORLD);
+	par_barrier(PAR_COMM_WORLD);
 	rc = daos_pool_disconnect(arg->pool.poh, NULL /* ev */);
 	arg->pool.poh = DAOS_HDL_INVAL;
 	assert_rc_equal(rc, 0);
-	MPI_Barrier(MPI_COMM_WORLD);
+	par_barrier(PAR_COMM_WORLD);
 
 	flags = (DAOS_COO_RW | DAOS_COO_FORCE);
 	if (arg->myrank == 0) {
@@ -39,7 +39,7 @@ reconnect(test_arg_t *arg) {
 bcast:
 	/** broadcast container open result */
 	if (arg->rank_size > 1)
-		MPI_Bcast(&rc, 1, MPI_INT, 0, MPI_COMM_WORLD);
+		par_bcast(PAR_COMM_WORLD, &rc, 1, PAR_INT, 0);
 	assert_rc_equal(rc, 0);
 	/** l2g and g2l the container handle */
 	if (arg->rank_size > 1) {
@@ -60,10 +60,10 @@ simple_oid_allocator(void **state)
 	int		rc;
 
 	for (i = 0; i < 10; i++) {
-		MPI_Barrier(MPI_COMM_WORLD);
+		par_barrier(PAR_COMM_WORLD);
 		if (arg->myrank == 0)
 			fprintf(stderr, "%d ---------------------\n", i);
-		MPI_Barrier(MPI_COMM_WORLD);
+		par_barrier(PAR_COMM_WORLD);
 
 		rc = daos_cont_alloc_oids(arg->coh, num_oids, &oid, NULL);
 		if (rc)
@@ -86,7 +86,7 @@ multi_cont_oid_allocator(void **state)
 	int		i;
 	int		rc = 0, rc_reduce;
 
-	MPI_Barrier(MPI_COMM_WORLD);
+	par_barrier(PAR_COMM_WORLD);
 	if (arg->myrank != 0)
 		goto verify_rc;
 
@@ -139,7 +139,7 @@ multi_cont_oid_allocator(void **state)
 	}
 
 verify_rc:
-	MPI_Allreduce(&rc, &rc_reduce, 1, MPI_INT, MPI_MIN, MPI_COMM_WORLD);
+	par_allreduce(PAR_COMM_WORLD, &rc, &rc_reduce, 1, PAR_INT, PAR_MIN);
 	assert_int_equal(rc_reduce, 0);
 }
 
@@ -154,13 +154,11 @@ check_ranges(int *num_oids, uint64_t *oids, int num_rgs, test_arg_t *arg)
 	D_ALLOC_ARRAY(g_num_oids, num_rgs * arg->rank_size);
 	D_ALLOC_ARRAY(g_oids, num_rgs * arg->rank_size);
 
-	rc = MPI_Gather(num_oids, num_rgs, MPI_INT, g_num_oids, num_rgs,
-			MPI_INT, 0, MPI_COMM_WORLD);
-	assert_int_equal(rc, MPI_SUCCESS);
+	rc = par_gather(PAR_COMM_WORLD, num_oids, g_num_oids, num_rgs, PAR_INT, 0);
+	assert_int_equal(rc, 0);
 
-	rc = MPI_Gather(oids, num_rgs, MPI_UINT64_T, g_oids, num_rgs,
-			MPI_UINT64_T, 0, MPI_COMM_WORLD);
-	assert_int_equal(rc, MPI_SUCCESS);
+	rc = par_gather(PAR_COMM_WORLD, oids, g_oids, num_rgs, PAR_UINT64, 0);
+	assert_int_equal(rc, 0);
 
 	if (arg->myrank != 0) {
 		rc = 0;
@@ -194,7 +192,7 @@ check_ranges(int *num_oids, uint64_t *oids, int num_rgs, test_arg_t *arg)
 	print_message("Verified %d ranges...\n", i);
 
 out:
-	MPI_Bcast(&rc, 1, MPI_INT, 0, MPI_COMM_WORLD);
+	par_bcast(PAR_COMM_WORLD, &rc, 1, PAR_INT, 0);
 	return rc;
 }
 
@@ -218,13 +216,13 @@ oid_allocator_mult_hdls(void **state)
 		assert_rc_equal(rc, 0);
 	}
 
-	MPI_Barrier(MPI_COMM_WORLD);
+	par_barrier(PAR_COMM_WORLD);
 	while (i < NUM_OIDS) {
-		rc = daos_pool_connect(arg->pool.pool_uuid, arg->group, DAOS_PC_RW,
+		rc = daos_pool_connect(arg->pool.pool_str, arg->group, DAOS_PC_RW,
 				       &poh1, NULL, NULL);
 		assert_rc_equal(rc, 0);
 
-		rc = daos_pool_connect(arg->pool.pool_uuid, arg->group, DAOS_PC_RW,
+		rc = daos_pool_connect(arg->pool.pool_str, arg->group, DAOS_PC_RW,
 				       &poh2, NULL, NULL);
 		assert_rc_equal(rc, 0);
 
@@ -257,12 +255,12 @@ oid_allocator_mult_hdls(void **state)
 	rc = check_ranges(num_oids, oids, NUM_OIDS, arg);
 	assert_int_equal(rc, 0);
 
-	MPI_Barrier(MPI_COMM_WORLD);
+	par_barrier(PAR_COMM_WORLD);
 	if (arg->myrank == 0) {
 		rc = daos_cont_destroy(arg->pool.poh, label, 0, NULL);
 		assert_rc_equal(rc, 0);
 	}
-	MPI_Barrier(MPI_COMM_WORLD);
+	par_barrier(PAR_COMM_WORLD);
 }
 
 #define NUM_RGS 1000
@@ -304,7 +302,7 @@ oid_allocator_checker(void **state)
 		if (i && i % (NUM_RGS/3 + 1) == 0) {
 			daos_pool_info_t info = {0};
 
-			MPI_Barrier(MPI_COMM_WORLD);
+			par_barrier(PAR_COMM_WORLD);
 			rc = daos_pool_query(arg->pool.poh, NULL, &info, NULL,
 					     NULL);
 			assert_rc_equal(rc, 0);
@@ -315,15 +313,14 @@ oid_allocator_checker(void **state)
 						arg->group,
 						arg->pool.svc, -1);
 			}
-			MPI_Barrier(MPI_COMM_WORLD);
+			par_barrier(PAR_COMM_WORLD);
 		}
 		i++;
 	}
 
 check:
 	if (arg->rank_size > 1) {
-		MPI_Allreduce(&rc, &rc_reduce, 1, MPI_INT, MPI_MIN,
-			      MPI_COMM_WORLD);
+		par_allreduce(PAR_COMM_WORLD, &rc, &rc_reduce, 1, PAR_INT, PAR_MIN);
 		rc = rc_reduce;
 	}
 	assert_int_equal(rc, 0);
@@ -417,9 +414,9 @@ run_daos_oid_alloc_test(int rank, int size)
 {
 	int rc = 0;
 
-	MPI_Barrier(MPI_COMM_WORLD);
+	par_barrier(PAR_COMM_WORLD);
 	rc = cmocka_run_group_tests_name("DAOS_OID_Allocator", oid_alloc_tests,
 					 oid_alloc_setup, test_teardown);
-	MPI_Barrier(MPI_COMM_WORLD);
+	par_barrier(PAR_COMM_WORLD);
 	return rc;
 }

@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2021 Intel Corporation.
+// (C) Copyright 2020-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -15,7 +15,7 @@ import (
 
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	"github.com/daos-stack/daos/src/control/lib/atm"
-	"github.com/daos-stack/daos/src/control/lib/netdetect"
+	"github.com/daos-stack/daos/src/control/lib/hardware"
 	"github.com/daos-stack/daos/src/control/logging"
 )
 
@@ -107,8 +107,6 @@ type localFabricCache struct {
 	initialized atm.Bool
 	// cached fabric interfaces organized by NUMA affinity
 	localNUMAFabric *NUMAFabric
-
-	getDevAlias func(ctx context.Context, devName string) (string, error)
 }
 
 // IsEnabled reports whether the cache is enabled.
@@ -130,7 +128,7 @@ func (c *localFabricCache) IsCached() bool {
 }
 
 // Cache caches the results of a fabric scan locally.
-func (c *localFabricCache) CacheScan(ctx context.Context, scan []*netdetect.FabricScan) {
+func (c *localFabricCache) CacheScan(ctx context.Context, scan *hardware.FabricInterfaceSet) {
 	if c == nil {
 		return
 	}
@@ -138,11 +136,7 @@ func (c *localFabricCache) CacheScan(ctx context.Context, scan []*netdetect.Fabr
 	c.mutex.Lock()
 	defer c.mutex.Unlock()
 
-	if c.getDevAlias == nil {
-		c.getDevAlias = netdetect.GetDeviceAlias
-	}
-
-	scanResult := NUMAFabricFromScan(ctx, c.log, scan, c.getDevAlias)
+	scanResult := NUMAFabricFromScan(ctx, c.log, scan)
 	c.setCache(scanResult)
 }
 
@@ -170,7 +164,7 @@ func (c *localFabricCache) setCache(nf *NUMAFabric) {
 }
 
 // GetDevices fetches an appropriate fabric device from the cache.
-func (c *localFabricCache) GetDevice(numaNode int, netDevClass uint32, provider string) (*FabricInterface, error) {
+func (c *localFabricCache) GetDevice(numaNode int, netDevClass hardware.NetDevClass, provider string) (*FabricInterface, error) {
 	if c == nil {
 		return nil, NotCachedErr
 	}

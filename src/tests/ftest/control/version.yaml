@@ -1,0 +1,6 @@
+hosts:
+  test_servers:
+    - server-A
+timeout: 60
+pool:
+  control_method: dmg

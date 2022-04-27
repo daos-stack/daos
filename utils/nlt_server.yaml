@@ -1,23 +1,22 @@
 name: daos_server
 port: 10001
-provider: ofi+sockets
-nr_hugepages: 0
+provider: ofi+tcp;ofi_rxm
+nr_hugepages: -1
 control_log_mask: DEBUG
 access_points: ['localhost:10001']
 engines:
--
-  targets: 4
-  nr_xs_helpers: 2
-  fabric_iface: lo
-  fabric_iface_port: 31416
-  env_vars:
-  - DAOS_MD_CAP=1024
-  - CRT_CTX_SHARE_ADDR=0
-  - FI_SOCKETS_MAX_CONN_RETRY=1
-  - FI_SOCKETS_CONN_TIMEOUT=2000
-  - ABT_STACK_OVERFLOW_CHECK=mprotect
-  storage:
   -
-    class: ram
-    scm_mount: /mnt/daos
-    scm_size: 32
+    targets: 4
+    nr_xs_helpers: 2
+    fabric_iface: lo
+    fabric_iface_port: 31416
+    env_vars:
+      - DAOS_MD_CAP=1024
+      - DAOS_STRICT_SHUTDOWN=1
+      - CRT_CTX_SHARE_ADDR=0
+      - ABT_STACK_OVERFLOW_CHECK=mprotect
+    storage:
+      -
+        class: ram
+        scm_mount: /mnt/daos
+        scm_size: 32

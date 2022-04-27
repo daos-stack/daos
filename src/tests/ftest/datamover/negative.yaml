@@ -2,7 +2,7 @@ hosts:
     test_servers:
         - server-A
     test_clients:
-        - server-B
+        - client-B
 timeout: 300
 server_config:
     name: daos_server
@@ -19,7 +19,6 @@ ior:
         np: 1
     test_file: testFile
     flags: "-v -w -k"
-    block_size_large: '5200M' # Over 5.1G
     block_size: '1K'
     transfer_size: '1K'
     signature: 5

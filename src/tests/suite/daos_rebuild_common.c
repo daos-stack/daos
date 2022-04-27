@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2021 Intel Corporation.
+ * (C) Copyright 2016-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -112,7 +112,7 @@ rebuild_targets(test_arg_t **args, int args_cnt, d_rank_t *ranks,
 		daos_pool_info_t	pool_info;
 
 		/* refresh the pool information */
-		rc = test_pool_get_info(args[i], &pool_info);
+		rc = test_pool_get_info(args[i], &pool_info, NULL /* engine_ranks */);
 		if (rc) {
 			print_message("get pool "DF_UUIDF" info failed: %d\n",
 				      DP_UUID(args[i]->pool.pool_uuid), rc);
@@ -125,7 +125,7 @@ rebuild_targets(test_arg_t **args, int args_cnt, d_rank_t *ranks,
 		if (args[i]->rebuild_pre_cb)
 			args[i]->rebuild_pre_cb(args[i]);
 
-	MPI_Barrier(MPI_COMM_WORLD);
+	par_barrier(PAR_COMM_WORLD);
 	/** include or exclude the target from the pool */
 	if (args[0]->myrank == 0) {
 		for (i = 0; i < rank_nr; i++) {
@@ -159,7 +159,7 @@ rebuild_targets(test_arg_t **args, int args_cnt, d_rank_t *ranks,
 			}
 		}
 	}
-	MPI_Barrier(MPI_COMM_WORLD);
+	par_barrier(PAR_COMM_WORLD);
 
 	for (i = 0; i < args_cnt; i++)
 		if (args[i]->rebuild_cb)
@@ -168,7 +168,7 @@ rebuild_targets(test_arg_t **args, int args_cnt, d_rank_t *ranks,
 	if (args[0]->myrank == 0 && !args[0]->no_rebuild)
 		test_rebuild_wait(args, args_cnt);
 
-	MPI_Barrier(MPI_COMM_WORLD);
+	par_barrier(PAR_COMM_WORLD);
 	for (i = 0; i < args_cnt; i++) {
 		daos_cont_status_clear(args[i]->coh, NULL);
 
@@ -244,8 +244,7 @@ rebuild_pool_disconnect_internal(void *data)
 	/* Close cont and disconnect pool */
 	rc = daos_cont_close(arg->coh, NULL);
 	if (arg->multi_rank) {
-		MPI_Allreduce(&rc, &rc_reduce, 1, MPI_INT, MPI_MIN,
-		MPI_COMM_WORLD);
+		par_allreduce(PAR_COMM_WORLD, &rc, &rc_reduce, 1, PAR_INT, PAR_MIN);
 		rc = rc_reduce;
 	}
 	print_message("container close "DF_UUIDF"\n",
@@ -266,7 +265,7 @@ rebuild_pool_disconnect_internal(void *data)
 	DP_UUID(arg->pool.pool_uuid));
 
 	arg->pool.poh = DAOS_HDL_INVAL;
-	MPI_Barrier(MPI_COMM_WORLD);
+	par_barrier(PAR_COMM_WORLD);
 	return rc;
 }
 
@@ -276,7 +275,7 @@ rebuild_pool_connect_internal(void *data)
 	test_arg_t      *arg = data;
 	int             rc = 0;
 
-	MPI_Barrier(MPI_COMM_WORLD);
+	par_barrier(PAR_COMM_WORLD);
 	if (arg->myrank == 0) {
 		rc = daos_pool_connect(arg->pool.pool_str, arg->group,
 				       DAOS_PC_RW,
@@ -287,22 +286,22 @@ rebuild_pool_connect_internal(void *data)
 
 		print_message("pool connect %s\n", arg->pool.pool_str);
 	}
-	MPI_Barrier(MPI_COMM_WORLD);
+	par_barrier(PAR_COMM_WORLD);
 	if (arg->multi_rank)
-		MPI_Bcast(&rc, 1, MPI_INT, 0, MPI_COMM_WORLD);
+		par_bcast(PAR_COMM_WORLD, &rc, 1, PAR_INT, 0);
 	if (rc)
 		return rc;
 
 	/** broadcast pool info */
 	if (arg->multi_rank) {
-		MPI_Bcast(&arg->pool.pool_info, sizeof(arg->pool.pool_info),
-		MPI_CHAR, 0, MPI_COMM_WORLD);
+		par_bcast(PAR_COMM_WORLD, &arg->pool.pool_info, sizeof(arg->pool.pool_info),
+			  PAR_CHAR, 0);
 		handle_share(&arg->pool.poh, HANDLE_POOL, arg->myrank,
 		arg->pool.poh, 0);
 	}
 
 	/** open container */
-	MPI_Barrier(MPI_COMM_WORLD);
+	par_barrier(PAR_COMM_WORLD);
 	if (arg->myrank == 0) {
 		rc = daos_cont_open(arg->pool.poh, arg->co_str,
 				    DAOS_COO_RW | DAOS_COO_FORCE,
@@ -313,15 +312,15 @@ rebuild_pool_connect_internal(void *data)
 		print_message("container open "DF_UUIDF"\n",
 		DP_UUID(arg->co_uuid));
 	}
-	MPI_Barrier(MPI_COMM_WORLD);
+	par_barrier(PAR_COMM_WORLD);
 	if (arg->multi_rank)
-		MPI_Bcast(&rc, 1, MPI_INT, 0, MPI_COMM_WORLD);
+		par_bcast(PAR_COMM_WORLD, &rc, 1, PAR_INT, 0);
 	if (rc)
 		return rc;
 
 	/** broadcast container info */
 	if (arg->multi_rank) {
-		MPI_Bcast(&rc, 1, MPI_INT, 0, MPI_COMM_WORLD);
+		par_bcast(PAR_COMM_WORLD, &rc, 1, PAR_INT, 0);
 		handle_share(&arg->coh, HANDLE_CO, arg->myrank, arg->pool.poh,
 		0);
 	}
@@ -393,7 +392,7 @@ void
 rebuild_add_back_tgts(test_arg_t *arg, d_rank_t failed_rank, int *failed_tgts,
 		      int nr)
 {
-	MPI_Barrier(MPI_COMM_WORLD);
+	par_barrier(PAR_COMM_WORLD);
 	/* Add back the target if it is not being killed */
 	if (arg->myrank == 0 && !arg->pool.destroyed) {
 		int i;
@@ -404,7 +403,7 @@ rebuild_add_back_tgts(test_arg_t *arg, d_rank_t failed_rank, int *failed_tgts,
 					  failed_rank,
 					  failed_tgts ? failed_tgts[i] : -1);
 	}
-	MPI_Barrier(MPI_COMM_WORLD);
+	par_barrier(PAR_COMM_WORLD);
 }
 
 static int
@@ -826,8 +825,16 @@ dfs_ec_rebuild_io(void **state, int *shards, int shards_nr)
 	int		i;
 	int		rc;
 
-	rc = dfs_cont_create(arg->pool.poh, &co_uuid, NULL, &co_hdl,
+	dfs_attr_t attr = {};
+
+	attr.da_props = daos_prop_alloc(1);
+	assert_non_null(attr.da_props);
+	attr.da_props->dpp_entries[0].dpe_type = DAOS_PROP_CO_EC_CELL_SZ;
+	attr.da_props->dpp_entries[0].dpe_val = 1 << 15;
+
+	rc = dfs_cont_create(arg->pool.poh, &co_uuid, &attr, &co_hdl,
 			     &dfs_mt);
+	daos_prop_free(attr.da_props);
 	assert_int_equal(rc, 0);
 	printf("Created DFS Container "DF_UUIDF"\n", DP_UUID(co_uuid));
 
@@ -847,7 +854,7 @@ dfs_ec_rebuild_io(void **state, int *shards, int shards_nr)
 	/* Full stripe update */
 	sprintf(filename, "degrade_file");
 	rc = dfs_open(dfs_mt, NULL, filename, S_IFREG | S_IWUSR | S_IRUSR,
-		      O_RDWR | O_CREAT, DAOS_OC_EC_K4P2_L32K, chunk_size,
+		      O_RDWR | O_CREAT, OC_EC_4P2G1, chunk_size,
 		      NULL, &obj);
 	assert_int_equal(rc, 0);
 	rc = dfs_write(dfs_mt, obj, &sgl, 0, NULL);
@@ -981,7 +988,7 @@ ec_data_nr_get(daos_obj_id_t oid)
 {
 	struct daos_oclass_attr *oca;
 
-	oca = daos_oclass_attr_find(oid, NULL, NULL);
+	oca = daos_oclass_attr_find(oid, NULL);
 	assert_true(oca->ca_resil == DAOS_RES_EC);
 	return oca->u.ec.e_k;
 }
@@ -991,7 +998,7 @@ ec_parity_nr_get(daos_obj_id_t oid)
 {
 	struct daos_oclass_attr *oca;
 
-	oca = daos_oclass_attr_find(oid, NULL, NULL);
+	oca = daos_oclass_attr_find(oid, NULL);
 	assert_true(oca->ca_resil == DAOS_RES_EC);
 	return oca->u.ec.e_p;
 }
@@ -1004,7 +1011,7 @@ get_killing_rank_by_oid(test_arg_t *arg, daos_obj_id_t oid, int data_nr,
 	uint32_t		shard;
 	int			idx = 0;
 
-	oca = daos_oclass_attr_find(oid, NULL, NULL);
+	oca = daos_oclass_attr_find(oid, NULL);
 	if (oca->ca_resil == DAOS_RES_REPL) {
 		ranks[0] = get_rank_by_oid_shard(arg, oid, 0);
 		if (ranks_num)

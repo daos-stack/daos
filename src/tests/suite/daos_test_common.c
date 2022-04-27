@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2018-2021 Intel Corporation.
+ * (C) Copyright 2018-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -26,6 +26,8 @@ unsigned int svc_nreplicas = 1;
 unsigned int	dt_csum_type;
 unsigned int	dt_csum_chunksize;
 bool		dt_csum_server_verify;
+/** container cell size */
+unsigned int	dt_cell_size;
 int		dt_obj_class;
 
 
@@ -57,7 +59,7 @@ test_setup_pool_create(void **state, struct test_pool *ipool,
 		d_rank_list_dup(&outpool->svc, ipool->svc);
 		outpool->slave = 1;
 		if (arg->multi_rank)
-			MPI_Barrier(MPI_COMM_WORLD);
+			par_barrier(PAR_COMM_WORLD);
 		return 0;
 	}
 
@@ -112,23 +114,20 @@ test_setup_pool_create(void **state, struct test_pool *ipool,
 out:
 	/** broadcast pool create result */
 	if (arg->multi_rank) {
-		MPI_Bcast(&rc, 1, MPI_INT, 0, MPI_COMM_WORLD);
+		par_bcast(PAR_COMM_WORLD, &rc, 1, PAR_INT, 0);
 		/** broadcast pool UUID and svc addresses */
 		if (!rc) {
-			MPI_Bcast(outpool->pool_uuid, 16,
-				  MPI_CHAR, 0, MPI_COMM_WORLD);
+			par_bcast(PAR_COMM_WORLD, outpool->pool_uuid, 16, PAR_CHAR, 0);
 			uuid_unparse(outpool->pool_uuid, outpool->pool_str);
 
 			/* TODO: Should we even be broadcasting this now? */
 			if (outpool->svc == NULL)
 				return rc;
-			MPI_Bcast(&outpool->svc->rl_nr,
-				  sizeof(outpool->svc->rl_nr),
-				  MPI_CHAR, 0, MPI_COMM_WORLD);
-			MPI_Bcast(outpool->svc->rl_ranks,
-				  sizeof(outpool->svc->rl_ranks[0]) *
-					 outpool->svc->rl_nr,
-				  MPI_CHAR, 0, MPI_COMM_WORLD);
+			par_bcast(PAR_COMM_WORLD, &outpool->svc->rl_nr, sizeof(outpool->svc->rl_nr),
+				  PAR_CHAR, 0);
+			par_bcast(PAR_COMM_WORLD, outpool->svc->rl_ranks,
+				  sizeof(outpool->svc->rl_ranks[0]) * outpool->svc->rl_nr,
+				  PAR_CHAR, 0);
 		}
 	}
 	return rc;
@@ -147,7 +146,7 @@ test_setup_pool_connect(void **state, struct test_pool *pool)
 		       sizeof(pool->pool_info));
 		arg->pool.poh = pool->poh;
 		if (arg->multi_rank)
-			MPI_Barrier(MPI_COMM_WORLD);
+			par_barrier(PAR_COMM_WORLD);
 		return 0;
 	}
 
@@ -190,12 +189,11 @@ test_setup_pool_connect(void **state, struct test_pool *pool)
 
 	/** broadcast pool connect result */
 	if (arg->multi_rank) {
-		MPI_Bcast(&rc, 1, MPI_INT, 0, MPI_COMM_WORLD);
+		par_bcast(PAR_COMM_WORLD, &rc, 1, PAR_INT, 0);
 		if (!rc) {
 			/** broadcast pool info */
-			MPI_Bcast(&arg->pool.pool_info,
-				  sizeof(arg->pool.pool_info),
-				  MPI_CHAR, 0, MPI_COMM_WORLD);
+			par_bcast(PAR_COMM_WORLD, &arg->pool.pool_info, sizeof(arg->pool.pool_info),
+				  PAR_CHAR, 0);
 			/** l2g and g2l the pool handle */
 			handle_share(&arg->pool.poh, HANDLE_POOL,
 				     arg->myrank, arg->pool.poh, 0);
@@ -234,11 +232,10 @@ test_setup_cont_create(void **state, daos_prop_t *co_prop)
 	}
 	/** broadcast container create result */
 	if (arg->multi_rank) {
-		MPI_Bcast(&rc, 1, MPI_INT, 0, MPI_COMM_WORLD);
+		par_bcast(PAR_COMM_WORLD, &rc, 1, PAR_INT, 0);
 		/** broadcast container UUID */
 		if (!rc) {
-			MPI_Bcast(arg->co_uuid, 16,
-				  MPI_CHAR, 0, MPI_COMM_WORLD);
+			par_bcast(PAR_COMM_WORLD, arg->co_uuid, 16, PAR_CHAR, 0);
 			uuid_unparse(arg->co_uuid, arg->co_str);
 		}
 	}
@@ -273,7 +270,7 @@ test_setup_cont_open(void **state)
 	}
 	/** broadcast container open result */
 	if (arg->multi_rank) {
-		MPI_Bcast(&rc, 1, MPI_INT, 0, MPI_COMM_WORLD);
+		par_bcast(PAR_COMM_WORLD, &rc, 1, PAR_INT, 0);
 		/** l2g and g2l the container handle */
 		if (!rc)
 			handle_share(&arg->coh, HANDLE_CO,
@@ -317,7 +314,7 @@ test_setup(void **state, unsigned int step, bool multi_rank,
 	unsigned int		 seed;
 	int			 rc = 0;
 	daos_prop_t		 co_props = {0};
-	struct daos_prop_entry	 csum_entry[3] = {0};
+	struct daos_prop_entry	 dpp_entry[4] = {0};
 	struct daos_prop_entry	*entry;
 
 	/* feed a seed for pseudo-random number generator */
@@ -334,8 +331,8 @@ test_setup(void **state, unsigned int step, bool multi_rank,
 		*state = arg;
 		memset(arg, 0, sizeof(*arg));
 
-		MPI_Comm_rank(MPI_COMM_WORLD, &arg->myrank);
-		MPI_Comm_size(MPI_COMM_WORLD, &arg->rank_size);
+		par_rank(PAR_COMM_WORLD, &arg->myrank);
+		par_size(PAR_COMM_WORLD, &arg->rank_size);
 		arg->multi_rank = multi_rank;
 		arg->pool.pool_size = pool_size;
 		arg->setup_state = -1;
@@ -370,7 +367,7 @@ test_setup(void **state, unsigned int step, bool multi_rank,
 		print_message("\n-------\n"
 			      "Checksum enabled in test!"
 			      "\n-------\n");
-		entry = &csum_entry[co_props.dpp_nr];
+		entry = &dpp_entry[co_props.dpp_nr];
 		entry->dpe_type = DAOS_PROP_CO_CSUM;
 		entry->dpe_val = dt_csum_type;
 
@@ -378,14 +375,14 @@ test_setup(void **state, unsigned int step, bool multi_rank,
 	}
 
 	if (dt_csum_chunksize) {
-		entry = &csum_entry[co_props.dpp_nr];
+		entry = &dpp_entry[co_props.dpp_nr];
 		entry->dpe_type = DAOS_PROP_CO_CSUM_CHUNK_SIZE;
 		entry->dpe_val = dt_csum_chunksize;
 		co_props.dpp_nr++;
 	}
 
 	if (dt_csum_server_verify) {
-		entry = &csum_entry[co_props.dpp_nr];
+		entry = &dpp_entry[co_props.dpp_nr];
 		entry->dpe_type = DAOS_PROP_CO_CSUM_SERVER_VERIFY;
 		entry->dpe_val = dt_csum_server_verify ?
 			DAOS_PROP_CO_CSUM_SV_ON :
@@ -394,8 +391,15 @@ test_setup(void **state, unsigned int step, bool multi_rank,
 		co_props.dpp_nr++;
 	}
 
+	if (dt_cell_size) {
+		entry = &dpp_entry[co_props.dpp_nr];
+		entry->dpe_type = DAOS_PROP_CO_EC_CELL_SZ;
+		entry->dpe_val = dt_cell_size;
+		co_props.dpp_nr++;
+	}
+
 	if (co_props.dpp_nr > 0)
-		co_props.dpp_entries = csum_entry;
+		co_props.dpp_entries = dpp_entry;
 
 	while (!rc && step != arg->setup_state)
 		rc = test_setup_next_step(state, pool, NULL, &co_props);
@@ -441,7 +445,7 @@ pool_destroy_safe(test_arg_t *arg, struct test_pool *extpool)
 			return rc;
 		}
 
-		if (rstat->rs_done == 0) {
+		if (rstat->rs_state == DRS_IN_PROGRESS) {
 			print_message("waiting for rebuild\n");
 			sleep(1);
 			continue;
@@ -474,8 +478,7 @@ test_teardown_cont_hdl(test_arg_t *arg)
 
 	rc = daos_cont_close(arg->coh, NULL);
 	if (arg->multi_rank) {
-		MPI_Allreduce(&rc, &rc_reduce, 1, MPI_INT, MPI_MIN,
-			      MPI_COMM_WORLD);
+		par_allreduce(PAR_COMM_WORLD, &rc, &rc_reduce, 1, PAR_INT, PAR_MIN);
 		rc = rc_reduce;
 	}
 	arg->coh = DAOS_HDL_INVAL;
@@ -505,7 +508,7 @@ test_teardown_cont(test_arg_t *arg)
 		break;
 	}
 	if (arg->multi_rank)
-		MPI_Bcast(&rc, 1, MPI_INT, 0, MPI_COMM_WORLD);
+		par_bcast(PAR_COMM_WORLD, &rc, 1, PAR_INT, 0);
 	if (rc)
 		print_message("failed to destroy container "DF_UUIDF
 			      ": %d\n", DP_UUID(arg->co_uuid), rc);
@@ -531,7 +534,7 @@ test_teardown(void **state)
 	}
 
 	if (arg->multi_rank)
-		MPI_Barrier(MPI_COMM_WORLD);
+		par_barrier(PAR_COMM_WORLD);
 
 	if (daos_handle_is_valid(arg->coh)) {
 		rc = test_teardown_cont_hdl(arg);
@@ -562,12 +565,12 @@ test_teardown(void **state)
 				rc = daos_pool_disconnect(arg->pool.poh, NULL);
 		}
 		if (arg->multi_rank)
-			MPI_Barrier(MPI_COMM_WORLD);
+			par_barrier(PAR_COMM_WORLD);
 		if (arg->myrank == 0)
 			rc = pool_destroy_safe(arg, NULL);
 
 		if (arg->multi_rank)
-			MPI_Bcast(&rc, 1, MPI_INT, 0, MPI_COMM_WORLD);
+			par_bcast(PAR_COMM_WORLD, &rc, 1, PAR_INT, 0);
 		if (rc) {
 			print_message("failed to destroy pool "DF_UUIDF
 				      " rc: %d\n",
@@ -661,13 +664,13 @@ test_runable(test_arg_t *arg, unsigned int required_nodes)
 		arg->hce = crt_hlc_get();
 	}
 
-	MPI_Bcast(&runable, 1, MPI_INT, 0, MPI_COMM_WORLD);
-	MPI_Barrier(MPI_COMM_WORLD);
+	par_bcast(PAR_COMM_WORLD, &runable, 1, PAR_INT, 0);
+	par_barrier(PAR_COMM_WORLD);
 	return runable == 1;
 }
 
 int
-test_pool_get_info(test_arg_t *arg, daos_pool_info_t *pinfo)
+test_pool_get_info(test_arg_t *arg, daos_pool_info_t *pinfo, d_rank_list_t **engine_ranks)
 {
 	bool	   connect_pool = false;
 	int	   rc;
@@ -686,7 +689,7 @@ test_pool_get_info(test_arg_t *arg, daos_pool_info_t *pinfo)
 		connect_pool = true;
 	}
 
-	rc = daos_pool_query(arg->pool.poh, NULL, pinfo, NULL, NULL);
+	rc = daos_pool_query(arg->pool.poh, engine_ranks, pinfo, NULL, NULL);
 	if (rc != 0)
 		print_message("pool query failed %d\n", rc);
 
@@ -710,9 +713,9 @@ rebuild_pool_wait(test_arg_t *arg)
 	bool			   done = false;
 
 	pinfo.pi_bits = DPI_REBUILD_STATUS;
-	rc = test_pool_get_info(arg, &pinfo);
+	rc = test_pool_get_info(arg, &pinfo, NULL /* engine_ranks */);
 	rst = &pinfo.pi_rebuild_st;
-	if ((rst->rs_done || rc != 0) && rst->rs_version != 0 &&
+	if ((rst->rs_state == DRS_COMPLETED || rc != 0) && rst->rs_version != 0 &&
 	     rst->rs_version != arg->rebuild_pre_pool_ver) {
 		print_message("Rebuild "DF_UUIDF" (ver=%u orig_ver=%u) is done %d/%d, "
 			      "obj="DF_U64", rec="DF_U64".\n",
@@ -740,7 +743,7 @@ test_get_leader(test_arg_t *arg, d_rank_t *rank)
 	daos_pool_info_t	pinfo = {0};
 	int			rc;
 
-	rc = test_pool_get_info(arg, &pinfo);
+	rc = test_pool_get_info(arg, &pinfo, NULL /* engine_ranks */);
 	if (rc)
 		return rc;
 

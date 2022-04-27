@@ -1,6 +1,6 @@
 #!/usr/bin/python3
 """
-  (C) Copyright 2018-2021 Intel Corporation.
+  (C) Copyright 2018-2022 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -54,7 +54,7 @@ class RbldWithIO(TestWithServers):
             "Invalid pool information detected before rebuild")
 
         self.assertTrue(
-            self.pool.check_rebuild_status(rs_errno=0, rs_done=1,
+            self.pool.check_rebuild_status(rs_errno=0, rs_state=1,
                                            rs_obj_nr=0, rs_rec_nr=0),
             "Invalid pool rebuild info detected before rebuild")
 
@@ -97,7 +97,7 @@ class RbldWithIO(TestWithServers):
             pi_ndisabled=targets,                  # DAOS-2799
         )
         status &= self.pool.check_rebuild_status(
-            rs_done=1, rs_obj_nr=">0", rs_rec_nr=">0", rs_errno=0)
+            rs_state=2, rs_obj_nr=">0", rs_rec_nr=">0", rs_errno=0)
         self.assertTrue(status, "Error confirming pool info after rebuild")
 
         # Verify the data after rebuild

@@ -1,6 +1,6 @@
 #!/usr/bin/python3
 '''
-  (C) Copyright 2020-2021 Intel Corporation.
+  (C) Copyright 2020-2022 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
@@ -41,13 +41,13 @@ class DaosRunPoolSecurityTest(PoolSecurityTestBase):
         '''
         user_gid = os.getegid()
         current_group = grp.getgrgid(user_gid)[0]
-        primary_grp_perm = self.params.get(\
+        primary_grp_perm = self.params.get(
             "pg_permission", "/run/pool_acl/primary_secondary_group_test/*")[0]
-        read, write = self.params.get(\
+        read, write = self.params.get(
             "pg_read_write", "/run/pool_acl/primary_secondary_group_test/*")
-        acl_entries = ["", "", "",\
-            secTestBase.acl_entry("group", current_group, primary_grp_perm,
-                                  PERMISSIONS), ""]
+        acl_entries = ["", "", "",
+                       secTestBase.acl_entry("group", current_group, primary_grp_perm,
+                                             PERMISSIONS), ""]
         if primary_grp_perm.lower() == "none":
             primary_grp_perm = ""
         if primary_grp_perm not in PERMISSIONS:

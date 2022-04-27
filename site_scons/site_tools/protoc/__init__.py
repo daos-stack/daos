@@ -1,5 +1,5 @@
 #!/usr/bin/python
-# Copyright (c) 2018 Intel Corporation
+# Copyright 2018-2022 Intel Corporation
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -21,7 +21,6 @@
 # -*- coding: utf-8 -*-
 
 import SCons.Builder
-from SCons.Script import Dir
 import os
 
 
@@ -36,6 +35,7 @@ class GoProtocCompilerNotFound(ToolProtocWarning):
 
 class PythonGRPCCompilerNotFound(ToolProtocWarning):
     pass
+
 
 SCons.Warnings.enableWarningClass(ToolProtocWarning)
 
@@ -69,7 +69,8 @@ def _detect(env):
             protoc_gen_go_found = True
 
     try:
-        import grpc_tools.protoc # pylint: disable=unused-import
+        # pylint: disable=unused-import,import-outside-toplevel
+        import grpc_tools.protoc # noqa: F401
         grpc_tools_found = True
     except ImportError:
         grpc_tools_found = False
@@ -95,6 +96,7 @@ def run_python(_source, _target, env, _for_signature):
     actions.append('$PYTHON_COM')
     return actions
 
+
 _grpc_python_builder = SCons.Builder.Builder(
     generator=run_python,
     suffix='$PYTHON_SUFFIX',
@@ -108,6 +110,7 @@ def run_go(_source, _target, env, _for_signature):
     actions.append(mkdir_str)
     actions.append('$GO_COM')
     return actions
+
 
 _grpc_go_builder = SCons.Builder.Builder(
     generator=run_go,
@@ -124,7 +127,6 @@ def generate(env, **kwargs):
         PYTHON_SUFFIX='_pb2_grpc.py',
         GO_SUFFIX='.pb.go',
         PROTO_SUFFIX='.proto',
-
         PYTHON_COM='python -m grpc_tools.protoc -I$PROTO_INCLUDES --python_out=$GTARGET_DIR --grpc_python_out=$GTARGET_DIR $SOURCE',
         PYTHON_COMSTR='',
         GO_COM='$PROTOC -I$PROTO_INCLUDES $SOURCE --go_out=plugins=grpc:$GTARGET_DIR',

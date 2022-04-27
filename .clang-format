@@ -1,5 +1,6 @@
-# clang-format script for daos
----
+# clang-format script for daos that most closely matches our coding style.
+# Tested on EL 8, and uses version 12 so check for that in
+# site_scons/site_tools/extra/extra.py
 BasedOnStyle: LLVM
 IndentWidth: 8
 UseTab: ForContinuationAndIndentation
@@ -9,8 +10,15 @@ IndentCaseLabels: false
 ForEachMacros: ['d_list_for_each_entry', 'd_list_for_each_entry_safe',
                 'evt_ent_array_for_each']
 PointerAlignment: Right
-AlignConsecutiveAssignments: true
-AlignConsecutiveDeclarations: true
 AlignTrailingComments: true
 ColumnLimit: 100
-...
+SortIncludes: false
+AlwaysBreakAfterReturnType: All
+IndentGotoLabels: false
+AlignConsecutiveDeclarations: AcrossEmptyLinesAndComments
+AlignConsecutiveMacros: AcrossEmptyLinesAndComments
+AlignConsecutiveAssignments: AcrossEmptyLinesAndComments
+AlignConsecutiveBitFields: AcrossEmptyLinesAndComments
+SpaceBeforeParens: ControlStatementsExceptForEachMacros
+KeepEmptyLinesAtTheStartOfBlocks: false
+MaxEmptyLinesToKeep: 1

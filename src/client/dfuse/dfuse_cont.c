@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2021 Intel Corporation.
+ * (C) Copyright 2016-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -34,7 +34,7 @@ dfuse_cont_lookup(fuse_req_t req, struct dfuse_inode_entry *parent, const char *
 	if (uuid_parse(name, cont) < 0) {
 		struct fuse_entry_param entry = {.entry_timeout = 60};
 
-		DFUSE_TRA_INFO(parent, "Invalid container uuid");
+		DFUSE_TRA_DEBUG(parent, "Invalid container uuid '%s'", name);
 		DFUSE_REPLY_ENTRY(parent, req, entry);
 		return;
 	}
@@ -53,8 +53,7 @@ dfuse_cont_lookup(fuse_req_t req, struct dfuse_inode_entry *parent, const char *
 
 		ie = container_of(rlink, struct dfuse_inode_entry, ie_htl);
 
-		DFUSE_TRA_INFO(ie,
-			       "Reusing existing container entry without reconnect");
+		DFUSE_TRA_DEBUG(ie, "Reusing existing container entry without reconnect");
 
 		/* Update the stat information, but copy in the
 		 * inode value afterwards.

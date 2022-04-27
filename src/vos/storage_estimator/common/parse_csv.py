@@ -1,11 +1,9 @@
 #!/usr/bin/env python
 '''
-  (C) Copyright 2019-2021 Intel Corporation.
+  (C) Copyright 2019-2022 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
-
-import sys
 
 from storage_estimator.explorer import AverageFS
 from storage_estimator.dfs_sb import get_dfs_inode_akey

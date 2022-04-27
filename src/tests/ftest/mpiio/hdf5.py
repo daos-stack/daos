@@ -1,10 +1,10 @@
 #!/usr/bin/python
 """
-  (C) Copyright 2019-2021 Intel Corporation.
+  (C) Copyright 2019-2022 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
-from mpio_test_base import MpiioTests
+from mpiio_test_base import MpiioTests
 
 
 # pylint: disable=too-many-ancestors

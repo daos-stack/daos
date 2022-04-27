@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2021 Intel Corporation.
+ * (C) Copyright 2016-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -103,6 +103,9 @@ static d_list_t	d_log_caches;
 
 /* default name for facility 0 */
 static const char *default_fac0name = "CLOG";
+
+/* whether we should merge log and stderr */
+static bool merge_stderr = false;
 
 #ifdef DLOG_MUTEX
 #define clog_lock()		D_MUTEX_LOCK(&mst.clogmux)
@@ -437,11 +440,21 @@ d_log_write(char *msg, int len, bool flush)
 		mst.log_old_fd = mst.log_fd;
 
 		/* create a new log file */
-		mst.log_fd = open(mst.log_file,  O_RDWR | O_CREAT, 0666);
-		if (mst.log_fd < 0) {
-			dlog_print_err(errno, "failed to recreate log file\n");
-			return -1;
+		if (merge_stderr) {
+			if (freopen(mst.log_file, "w", stderr) == NULL) {
+				fprintf(stderr, "d_log_write(): cannot open new %s: %s\n",
+					mst.log_file, strerror(errno));
+				return -1;
+			}
+		} else {
+			mst.log_fd = open(mst.log_file,  O_RDWR | O_CREAT, 0644);
+			if (mst.log_fd < 0) {
+				fprintf(stderr, "d_log_write(): failed to recreate log file %s: %s\n",
+					mst.log_file, strerror(errno));
+				return -1;
+			}
 		}
+
 		mst.log_size = 0;
 	}
 
@@ -862,12 +875,11 @@ d_log_open(char *tag, int maxfac_hint, int default_mask, int stderr_mask,
 	mst.stderr_mask = stderr_mask;
 	if (logfile) {
 		int log_flags = O_RDWR | O_CREAT;
-		bool	merge = false;
 		struct stat st;
 
 		env = getenv(D_LOG_STDERR_IN_LOG_ENV);
 		if (env != NULL && atoi(env) > 0)
-			merge = true;
+			merge_stderr = true;
 
 		if (!truncate)
 			log_flags |= O_APPEND;
@@ -877,11 +889,10 @@ d_log_open(char *tag, int maxfac_hint, int default_mask, int stderr_mask,
 			fprintf(stderr, "strdup failed.\n");
 			goto error;
 		}
-		mst.log_fd = open(mst.log_file, log_flags, 0666);
 		/* merge stderr into log file, to aggregate and order with
 		 * messages from Mercury/libfabric
 		 */
-		if (merge) {
+		if (merge_stderr) {
 			if (freopen(mst.log_file, truncate ? "w" : "a",
 				    stderr) == NULL) {
 				fprintf(stderr, "d_log_open: cannot "

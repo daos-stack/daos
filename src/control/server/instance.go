@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2021 Intel Corporation.
+// (C) Copyright 2019-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -317,6 +317,22 @@ func (ei *EngineInstance) GetRank() (system.Rank, error) {
 	}
 
 	return *sb.Rank, nil
+}
+
+// setMemSize updates memory size in engine config.
+func (ei *EngineInstance) setMemSize(memSizeMb int) {
+	ei.Lock()
+	defer ei.Unlock()
+
+	ei.runner.GetConfig().MemSize = memSizeMb
+}
+
+// setHugePageSz updates hugepage size in engine config.
+func (ei *EngineInstance) setHugePageSz(hpSizeMb int) {
+	ei.Lock()
+	defer ei.Unlock()
+
+	ei.runner.GetConfig().HugePageSz = hpSizeMb
 }
 
 // setTargetCount updates target count in engine config.

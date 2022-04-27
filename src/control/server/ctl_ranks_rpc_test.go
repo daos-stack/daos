@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2021 Intel Corporation.
+// (C) Copyright 2020-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -191,8 +191,8 @@ func TestServer_CtlSvc_PrepShutdownRanks(t *testing.T) {
 			defer common.ShowBufferOnFailure(t, buf)
 
 			cfg := config.DefaultServer().WithEngines(
-				engine.NewConfig().WithTargetCount(1),
-				engine.NewConfig().WithTargetCount(1),
+				engine.MockConfig().WithTargetCount(1),
+				engine.MockConfig().WithTargetCount(1),
 			)
 			svc := mockControlService(t, log, cfg, nil, nil, nil)
 			for i, e := range svc.harness.instances {
@@ -207,7 +207,7 @@ func TestServer_CtlSvc_PrepShutdownRanks(t *testing.T) {
 					trc.Running.SetTrue()
 					srv.ready.SetTrue()
 				}
-				srv.runner = engine.NewTestRunner(trc, engine.NewConfig())
+				srv.runner = engine.NewTestRunner(trc, engine.MockConfig())
 				srv.setIndex(uint32(i))
 
 				srv._superblock.Rank = new(system.Rank)
@@ -348,8 +348,8 @@ func TestServer_CtlSvc_StopRanks(t *testing.T) {
 			}
 
 			cfg := config.DefaultServer().WithEngines(
-				engine.NewConfig().WithTargetCount(1),
-				engine.NewConfig().WithTargetCount(1),
+				engine.MockConfig().WithTargetCount(1),
+				engine.MockConfig().WithTargetCount(1),
 			)
 			svc := mockControlService(t, log, cfg, nil, nil, nil)
 
@@ -388,7 +388,7 @@ func TestServer_CtlSvc_StopRanks(t *testing.T) {
 						common.NormalExit)
 				}
 				trc.SignalErr = tc.signalErr
-				srv.runner = engine.NewTestRunner(trc, engine.NewConfig())
+				srv.runner = engine.NewTestRunner(trc, engine.MockConfig())
 				srv.setIndex(uint32(i))
 
 				srv._superblock.Rank = new(system.Rank)
@@ -577,8 +577,8 @@ func TestServer_CtlSvc_PingRanks(t *testing.T) {
 			defer common.ShowBufferOnFailure(t, buf)
 
 			cfg := config.DefaultServer().WithEngines(
-				engine.NewConfig().WithTargetCount(1),
-				engine.NewConfig().WithTargetCount(1),
+				engine.MockConfig().WithTargetCount(1),
+				engine.MockConfig().WithTargetCount(1),
 			)
 			svc := mockControlService(t, log, cfg, nil, nil, nil)
 
@@ -594,7 +594,7 @@ func TestServer_CtlSvc_PingRanks(t *testing.T) {
 					trc.Running.SetTrue()
 					srv.ready.SetTrue()
 				}
-				srv.runner = engine.NewTestRunner(trc, engine.NewConfig())
+				srv.runner = engine.NewTestRunner(trc, engine.MockConfig())
 				srv.setIndex(uint32(i))
 
 				srv._superblock.Rank = new(system.Rank)
@@ -708,17 +708,17 @@ func TestServer_CtlSvc_ResetFormatRanks(t *testing.T) {
 			ctx := context.Background()
 
 			cfg := config.DefaultServer().WithEngines(
-				engine.NewConfig().
+				engine.MockConfig().
 					WithTargetCount(1).
 					WithStorage(
 						storage.NewTierConfig().
-							WithScmClass("ram"),
+							WithStorageClass("ram"),
 					),
-				engine.NewConfig().
+				engine.MockConfig().
 					WithTargetCount(1).
 					WithStorage(
 						storage.NewTierConfig().
-							WithScmClass("ram"),
+							WithStorageClass("ram"),
 					),
 			)
 			svc := mockControlService(t, log, cfg, nil, nil, nil)
@@ -861,8 +861,8 @@ func TestServer_CtlSvc_StartRanks(t *testing.T) {
 			ctx := context.Background()
 
 			cfg := config.DefaultServer().WithEngines(
-				engine.NewConfig().WithTargetCount(1),
-				engine.NewConfig().WithTargetCount(1),
+				engine.MockConfig().WithTargetCount(1),
+				engine.MockConfig().WithTargetCount(1),
 			)
 			svc := mockControlService(t, log, cfg, nil, nil, nil)
 
@@ -878,7 +878,7 @@ func TestServer_CtlSvc_StartRanks(t *testing.T) {
 					trc.Running.SetTrue()
 					srv.ready.SetTrue()
 				}
-				srv.runner = engine.NewTestRunner(trc, engine.NewConfig())
+				srv.runner = engine.NewTestRunner(trc, engine.MockConfig())
 				srv.setIndex(uint32(i))
 
 				srv._superblock.Rank = new(system.Rank)
@@ -1000,8 +1000,8 @@ func TestServer_CtlSvc_SetEngineLogMasks(t *testing.T) {
 			defer common.ShowBufferOnFailure(t, buf)
 
 			cfg := config.DefaultServer().WithEngines(
-				engine.NewConfig().WithTargetCount(1).WithLogMask(tc.cfgLogMask),
-				engine.NewConfig().WithTargetCount(1).WithLogMask(tc.cfgLogMask),
+				engine.MockConfig().WithTargetCount(1).WithLogMask(tc.cfgLogMask),
+				engine.MockConfig().WithTargetCount(1).WithLogMask(tc.cfgLogMask),
 			)
 			svc := mockControlService(t, log, cfg, nil, nil, nil)
 			for i, e := range svc.harness.instances {
@@ -1012,7 +1012,7 @@ func TestServer_CtlSvc_SetEngineLogMasks(t *testing.T) {
 					trc.Running.SetTrue()
 					srv.ready.SetTrue()
 				}
-				srv.runner = engine.NewTestRunner(trc, engine.NewConfig())
+				srv.runner = engine.NewTestRunner(trc, engine.MockConfig())
 				srv.setIndex(uint32(i))
 
 				if !tc.missingRank {
