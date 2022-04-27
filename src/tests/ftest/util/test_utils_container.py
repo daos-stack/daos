@@ -602,7 +602,7 @@ class TestContainer(TestDaosApiBase):
              val)
             for key, val in list(locals().items())
             if key != "self" and val is not None]
-        return self._check_info(checks)
+        return self.check_info(checks)
 
     def write_objects_wo_failon(self, rank=None, obj_class=None):
         """Write objects to the container without fail_on DaosTestError,
