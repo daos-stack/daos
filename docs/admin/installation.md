@@ -25,14 +25,13 @@ version of at least 1.13 is required.
 
 A script is provided for each Linux distribution to install the packages required, and the Docker
 install process calls out to this script as part of the install process.
-Check the [utils/docker](https://../../utils/docker) directory for different Linux distribution
-versions.
+Check the [utils/docker](https://github.com/daos-stack/daos/blob/master/utils/docker) directory for
+different Linux distribution versions.
 
--    [EL 8](https://../..//utils/scripts/install-el8.sh)
--    [CentOS 7](https://../../utils/scripts/install-centos7.sh)
--    [openSUSE Leap 15](https://../../utils/scripts/install-leap15.sh)
--    [Ubuntu 20.04](https://../../utils/scripts/install-ubuntu-20.sh)
-
+-    [EL 8](https://github.com/daos-stack/daos/blob/master/utils/scripts/install-el8.sh)
+-    [CentOS 7](https://github.com/daos-stack/daos/blob/master/utils/scripts/install-centos7.sh)
+-    [openSUSE Leap 15](https://github.com/daos-stack/daos/blob/master/utils/scripts/install-leap15.sh)
+-    [Ubuntu 20.04](https://github.com/daos-stack/daos/blob/master/utils/scripts/intall-ubuntu20.sh)
 
 Some DAOS tests use MPI. The DAOS build process uses the environment modules
 package to detect the presence of MPI. If none is found, the build will skip
