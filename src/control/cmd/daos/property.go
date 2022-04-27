@@ -55,6 +55,23 @@ type propHdlr struct {
 	readOnly bool
 }
 
+// newTestPropEntry returns an initialized property entry for testing.
+// NB: The entry is initialized with Go-managed memory, so it is not
+// suitable for use when calling real C functions.
+func newTestPropEntry() *C.struct_daos_prop_entry {
+	return new(C.struct_daos_prop_entry)
+}
+
+// getDpeVal returns the value of the given property entry.
+func getDpeVal(e *C.struct_daos_prop_entry) (uint64, error) {
+	if e == nil {
+		return 0, errors.New("nil property entry")
+	}
+
+	v := C.get_dpe_val(e)
+	return uint64(v), nil
+}
+
 // propHdlrs defines a map of property names to handlers that
 // take care of parsing the value and setting it. This odd construction
 // allows us to maintain a type-safe set of valid property names and
