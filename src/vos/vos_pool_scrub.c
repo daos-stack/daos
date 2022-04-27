@@ -24,6 +24,21 @@ sc_csum_calc_inc(struct scrub_ctx *ctx)
 	ctx->sc_pool_csum_calcs++;
 }
 
+static inline void
+sc_scrub_count_inc(struct scrub_ctx *ctx)
+{
+	m_inc_counter(ctx->sc_metrics.scm_scrub_count);
+	ctx->sc_pool_scrub_count++;
+}
+
+static inline bool
+sc_is_idle(struct scrub_ctx *ctx)
+{
+	if (ctx->sc_is_idle_fn)
+		return ctx->sc_is_idle_fn();
+	return false;
+}
+
 /* Telemetry Metrics */
 static void
 sc_m_pool_start(struct scrub_ctx *ctx)
@@ -40,8 +55,7 @@ sc_m_pool_stop(struct scrub_ctx *ctx)
 	ctx->sc_pool_last_csum_calcs = ctx->sc_pool_csum_calcs;
 
 	d_tm_mark_duration_end(ctx->sc_metrics.scm_last_duration);
-	d_tm_set_counter(ctx->sc_metrics.scm_last_csum_calcs,
-			 ctx->sc_pool_last_csum_calcs);
+	d_tm_set_counter(ctx->sc_metrics.scm_last_csum_calcs, ctx->sc_pool_last_csum_calcs);
 
 	d_tm_record_timestamp(ctx->sc_metrics.scm_end);
 }
@@ -81,9 +95,9 @@ sc_chunksize(const struct scrub_ctx *ctx)
 }
 
 static inline int
-sc_schedule(const struct scrub_ctx *ctx)
+sc_mode(const struct scrub_ctx *ctx)
 {
-	return ctx->sc_pool->sp_scrub_sched;
+	return ctx->sc_pool->sp_scrub_mode;
 }
 
 static inline int
@@ -97,25 +111,30 @@ sc_thresh(const struct scrub_ctx *ctx)
 {
 	return ctx->sc_pool->sp_scrub_thresh;
 }
-static inline void
-sc_yield(struct scrub_ctx *ctx)
+
+static uuid_t *
+sc_cont_uuid(struct scrub_ctx *ctx)
 {
-	if (ctx->sc_yield_fn) {
-		d_tm_set_gauge(ctx->sc_metrics.scm_pool_ult_wait_time, 0);
-		ctx->sc_yield_fn(ctx->sc_sched_arg);
-		ctx->sc_did_yield = true;
-	}
+	return &ctx->sc_cont_uuid;
+}
+
+static daos_handle_t
+sc_cont_hdl(struct scrub_ctx *ctx)
+{
+	return ctx->sc_cont.scs_cont_hdl;
 }
 
 static inline void
 sc_sleep(struct scrub_ctx *ctx, uint32_t ms)
 {
-	if (ctx->sc_sleep_fn) {
-		d_tm_set_gauge(ctx->sc_metrics.scm_pool_ult_wait_time, ms);
+	if (ctx->sc_sleep_fn == NULL || ctx->sc_yield_fn == NULL)
+		return;
+
+	if (ms > 0)
 		ctx->sc_sleep_fn(ctx->sc_sched_arg, ms);
-		ctx->sc_did_yield = true;
-		d_tm_set_gauge(ctx->sc_metrics.scm_pool_ult_wait_time, 0);
-	}
+	else
+		ctx->sc_yield_fn(ctx->sc_sched_arg);
+	ctx->sc_did_yield = true;
 }
 
 static inline bool
@@ -124,6 +143,54 @@ sc_cont_is_stopping(struct scrub_ctx *ctx)
 	if (ctx->sc_cont_is_stopping_fn == NULL)
 		return false;
 	return ctx->sc_cont_is_stopping_fn(ctx->sc_cont.scs_cont_src);
+}
+
+static inline bool
+sc_scrub_enabled(struct scrub_ctx *ctx)
+{
+	return sc_mode(ctx) != DAOS_SCRUB_MODE_OFF && sc_freq(ctx) > 0;
+}
+
+static bool
+sc_frequency_time_over(struct scrub_ctx *ctx)
+{
+	struct timespec period_over = ctx->sc_pool_start_scrub;
+
+	d_timeinc(&period_over, SEC2NS(ctx->sc_pool->sp_scrub_freq_sec));
+
+	return d_timeleft_ns(&period_over) <= 0;
+}
+
+static uint32_t
+sc_get_ms_between_scrubs(struct scrub_ctx *ctx)
+{
+	struct timespec now;
+
+	d_gettime(&now);
+
+	return get_ms_between_periods(ctx->sc_pool_start_scrub,
+				      now, ctx->sc_pool->sp_scrub_freq_sec,
+				      ctx->sc_pool_last_csum_calcs,
+				      ctx->sc_pool_csum_calcs - 1);
+}
+
+static bool
+sc_should_start(struct scrub_ctx *ctx)
+{
+	D_ASSERT(ctx->sc_status == SCRUB_STATUS_NOT_RUNNING);
+	if (!sc_scrub_enabled(ctx))
+		return false;
+
+	if (ctx->sc_pool_scrub_count == 0 || sc_frequency_time_over(ctx)) {
+		if (ctx->sc_pool->sp_scrub_mode == DAOS_SCRUB_MODE_LAZY)
+			/* only run if idle */
+			return sc_is_idle(ctx);
+		else if (ctx->sc_pool->sp_scrub_mode == DAOS_SCRUB_MODE_TIMED)
+			return true;
+		D_ASSERTF(false, "Unknown scrubbing mode");
+	}
+
+	return false;
 }
 
 /**
@@ -147,83 +214,22 @@ sc_get_rec_in_chunk_at_idx(const struct scrub_ctx *ctx, uint32_t i)
 }
 
 static void
-sc_credit_decrement(struct scrub_ctx *ctx)
+sc_wait_until_should_continue(struct scrub_ctx *ctx)
 {
-	if (ctx->sc_credits_left == 0)
-		return;
-	ctx->sc_credits_left--;
-}
+	if (sc_mode(ctx) == DAOS_SCRUB_MODE_TIMED) {
+		struct timespec	now;
+		uint64_t	msec_between;
 
-static void
-sc_credit_reset(struct scrub_ctx *ctx)
-{
-	if (ctx->sc_credits_left == 0)
-		ctx->sc_credits_left = ctx->sc_pool->sp_scrub_cred;
-}
-
-void
-sc_yield_sleep_while_running(struct scrub_ctx *ctx)
-{
-	uint64_t msec_between = 0;
-	struct timespec now;
-
-	/* must have a frequency set */
-	D_ASSERT(ctx->sc_pool->sp_scrub_freq_sec > 0);
-
-	d_gettime(&now);
-	sc_credit_decrement(ctx);
-	if (ctx->sc_credits_left > 0)
-		return;
-
-	if (sc_schedule(ctx) == DAOS_SCRUB_SCHED_CONTINUOUS) {
-		msec_between = get_ms_between_periods(ctx->sc_pool_start_scrub,
-			now, ctx->sc_pool->sp_scrub_freq_sec,
-			ctx->sc_pool_last_csum_calcs,
-			/* -1 to convert to index (from count) */
-			ctx->sc_pool_csum_calcs - 1);
-	}
-
-	if (msec_between == 0)
-		sc_yield(ctx);
-	else
-		sc_sleep(ctx, msec_between);
-
-	sc_credit_reset(ctx);
-}
-
-/*
- * DAOS_CSUM_SCRUB_DISABLED_WAIT_SEC can be set in the server config to change
- * how long to wait before checking again if the scrubber is enabled.
- */
-static uint32_t
-seconds_to_wait_while_disabled()
-{
-	char *sec = getenv("DAOS_CSUM_SCRUB_DISABLED_WAIT_SEC");
-
-	return sec != NULL ? atoll(sec) : 5;
-}
-
-void
-sc_yield_or_sleep(struct scrub_ctx *ctx)
-{
-	struct timespec	now, diff;
-	uint32_t	left_sec;
-
-	d_gettime(&now);
-	diff = d_timediff(ctx->sc_pool_start_scrub, now);
-
-	if (diff.tv_sec < sc_freq(ctx)) {
-		left_sec = sc_freq(ctx) - diff.tv_sec;
-		sc_sleep(ctx, left_sec * 1000);
+		d_gettime(&now);
+		while ((msec_between = sc_get_ms_between_scrubs(ctx)) > 0)
+			sc_sleep(ctx, min(5000, msec_between)); /* don't wait longer than 5 sec */
+	} else if (sc_mode(ctx) == DAOS_SCRUB_MODE_LAZY) {
+		sc_sleep(ctx, 0);
+		while (!ctx->sc_is_idle_fn())
+			sc_sleep(ctx, 5000);
 	} else {
-		sc_yield(ctx);
+		D_ASSERTF(false, "Unknown Scrub Mode\n");
 	}
-}
-
-static inline bool
-sc_scrub_enabled(struct scrub_ctx *ctx)
-{
-	return sc_schedule(ctx) != DAOS_SCRUB_SCHED_OFF && sc_freq(ctx) > 0;
 }
 
 static void
@@ -231,7 +237,85 @@ sc_verify_finish(struct scrub_ctx *ctx)
 {
 	sc_csum_calc_inc(ctx);
 	sc_m_pool_csum_inc(ctx);
-	sc_yield_sleep_while_running(ctx);
+	sc_wait_until_should_continue(ctx);
+}
+
+static void
+sc_raise_ras(struct scrub_ctx *ctx)
+{
+	if (ds_notify_ras_event != NULL) {
+		ds_notify_ras_event(RAS_POOL_CORRUPTION_DETECTED,
+				    "Data corruption detected",
+				    RAS_TYPE_INFO,
+				    RAS_SEV_ERROR, NULL, NULL, NULL, NULL,
+				    &ctx->sc_pool_uuid, sc_cont_uuid(ctx),
+				    NULL, NULL, NULL);
+	}
+}
+
+static int
+sc_mark_corrupt(struct scrub_ctx *ctx)
+{
+	return vos_iter_process(ctx->sc_vos_iter_handle,
+				VOS_ITER_PROC_OP_MARK_CORRUPT, NULL);
+}
+
+static int
+sc_pool_drain(struct scrub_ctx *ctx)
+{
+	D_ASSERT(ctx->sc_drain_pool_tgt_fn);
+
+	return ctx->sc_drain_pool_tgt_fn(ctx->sc_pool);
+}
+
+static bool
+sc_should_evict(struct scrub_ctx *ctx)
+{
+
+	return sc_thresh(ctx) > 0 && /* threshold set */
+	       ctx->sc_pool_tgt_corrupted_detected >= /* hit or exceeded */
+	       sc_thresh(ctx);
+}
+
+static bool
+sc_is_nvme(struct scrub_ctx *ctx)
+{
+	return bio_iov2media(ctx->sc_cur_biov) == DAOS_MEDIA_NVME;
+}
+
+static int
+sc_handle_corruption(struct scrub_ctx *ctx)
+{
+	int rc;
+
+	sc_raise_ras(ctx);
+	sc_m_pool_corr_inc(ctx);
+	rc = sc_mark_corrupt(ctx);
+
+	if (sc_is_nvme(ctx))
+		bio_log_csum_err(ctx->sc_dmi->dmi_nvme_ctxt);
+	if (rc != 0) {
+		/* Log error but don't let it stop the scrubbing process */
+		D_ERROR("Error trying to mark corrupt: "DF_RC"\n", DP_RC(rc));
+		rc = 0;
+	}
+	ctx->sc_pool_tgt_corrupted_detected++;
+	D_ERROR("Checksum scrubber found corruption. %d so far.\n",
+		ctx->sc_pool_tgt_corrupted_detected);
+	if (sc_should_evict(ctx)) {
+		D_ERROR("Corruption threshold reached. %d >= %d",
+			ctx->sc_pool_tgt_corrupted_detected,
+			sc_thresh(ctx));
+		d_tm_set_counter(ctx->sc_metrics.scm_csum_calcs, 0);
+		d_tm_set_counter(ctx->sc_metrics.scm_last_csum_calcs, 0);
+		rc = sc_pool_drain(ctx);
+		if (rc != 0)
+			D_ERROR("Drain error: "DF_RC"\n", DP_RC(rc));
+
+		rc = -DER_SHUTDOWN;
+	}
+
+	return rc;
 }
 
 /**
@@ -289,20 +373,21 @@ sc_verify_recx(struct scrub_ctx *ctx, d_iov_t *data)
 		rc = daos_csummer_calc_for_iov(sc_csummer(ctx), &chunk_iov,
 					       csum_buf, csum_len);
 		if (rc != 0) {
-			D_ERROR("daos_csummer_calc_for_iov error: "DF_RC"\n",
-				DP_RC(rc));
+			D_ERROR("daos_csummer_calc_for_iov error: "DF_RC"\n", DP_RC(rc));
 			D_GOTO(done, rc);
 		}
 
-		match = daos_csummer_csum_compare(sc_csummer(ctx), orig_csum,
-						  csum_buf, csum_len);
+		match = daos_csummer_csum_compare(sc_csummer(ctx), orig_csum, csum_buf, csum_len);
 
 		if (!match) {
-			D_ERROR("Corruption found for chunk #%d of recx: "
-					DF_RECX"\n", i, DP_RECX(*recx));
+			D_ERROR("Corruption found for chunk #%d of recx: "DF_RECX", epoch: %lu\n",
+				i, DP_RECX(*recx), ctx->sc_epoch);
+
+			rc = sc_handle_corruption(ctx);
+
 			sc_verify_finish(ctx);
 
-			D_GOTO(done, rc = -DER_CSUM);
+			D_GOTO(done, rc);
 		}
 
 		processed_bytes += chunk_iov.iov_len;
@@ -324,65 +409,16 @@ sc_verify_sv(struct scrub_ctx *ctx, d_iov_t *data)
 	if (sc_cont_is_stopping(ctx))
 		return 0;
 
-	rc = daos_csummer_verify_key(sc_csummer(ctx), data,
-				     ctx->sc_csum_to_verify);
+	rc = daos_csummer_verify_key(sc_csummer(ctx), data, ctx->sc_csum_to_verify);
+	if (rc == -DER_CSUM)
+		rc = sc_handle_corruption(ctx);
 	sc_verify_finish(ctx);
 
 	return rc;
 }
 
-static uuid_t *
-sc_cont_uuid(struct scrub_ctx *ctx)
-{
-	return &ctx->sc_cont_uuid;
-}
-
-static daos_handle_t
-sc_cont_hdl(struct scrub_ctx *ctx)
-{
-	return ctx->sc_cont.scs_cont_hdl;
-}
-
-static void
-sc_raise_ras(struct scrub_ctx *ctx)
-{
-	if (ds_notify_ras_event != NULL) {
-		ds_notify_ras_event(RAS_POOL_CORRUPTION_DETECTED,
-				    "Data corruption detected",
-				    RAS_TYPE_INFO,
-				    RAS_SEV_ERROR, NULL, NULL, NULL, NULL,
-				    &ctx->sc_pool_uuid, sc_cont_uuid(ctx),
-				    NULL, NULL, NULL);
-	}
-}
-
 static int
-sc_mark_corrupt(struct scrub_ctx *ctx)
-{
-	return vos_iter_process(ctx->sc_vos_iter_handle,
-				VOS_ITER_PROC_OP_MARK_CORRUPT, NULL);
-}
-
-static int
-sc_pool_drain(struct scrub_ctx *ctx)
-{
-	D_ASSERT(ctx->sc_drain_pool_tgt_fn);
-
-	return ctx->sc_drain_pool_tgt_fn(ctx->sc_pool);
-}
-
-static bool
-sc_should_evict(struct scrub_ctx *ctx)
-{
-
-	return sc_thresh(ctx) > 0 && /* threshold set */
-	       ctx->sc_pool_tgt_corrupted_detected >= /* hit or exceeded */
-	       sc_thresh(ctx);
-}
-
-static int
-sc_verify_obj_value(struct scrub_ctx *ctx, struct bio_iov *biov,
-		    daos_handle_t ih)
+sc_verify_obj_value(struct scrub_ctx *ctx, struct bio_iov *biov, daos_handle_t ih)
 {
 	d_iov_t			 data;
 	daos_iod_t		*iod = &ctx->sc_iod;
@@ -419,43 +455,17 @@ sc_verify_obj_value(struct scrub_ctx *ctx, struct bio_iov *biov,
 		/* Already know this is corrupt so just return */
 		D_GOTO(out, rc = DER_SUCCESS);
 	} else if (rc != 0) {
-		D_WARN("Unable to fetch data for scrubber: "DF_RC"\n",
-		       DP_RC(rc));
+		D_WARN("Unable to fetch data for scrubber: "DF_RC"\n", DP_RC(rc));
 		D_GOTO(out, rc);
 	}
 
+	ctx->sc_cur_biov = biov;
 	rc = iod->iod_type == DAOS_IOD_ARRAY ?
 	     sc_verify_recx(ctx, &data) :
 	     sc_verify_sv(ctx, &data);
-
-	if (rc == -DER_CSUM) {
-		sc_raise_ras(ctx);
-		sc_m_pool_corr_inc(ctx);
-		rc = sc_mark_corrupt(ctx);
-		if (bio_iov2media(biov) == DAOS_MEDIA_NVME) {
-			bio_log_csum_err(ctx->sc_dmi->dmi_nvme_ctxt);
-		}
-		if (rc != 0)
-			D_ERROR("Error trying to mark corrupt: "DF_RC"\n",
-				DP_RC(rc));
-		ctx->sc_pool_tgt_corrupted_detected++;
-		D_ERROR("Checksum scrubber found corruption. %d so far.\n",
-			ctx->sc_pool_tgt_corrupted_detected);
-		if (sc_should_evict(ctx)) {
-			D_ERROR("Corruption threshold reached. %d >= %d",
-				ctx->sc_pool_tgt_corrupted_detected,
-				sc_thresh(ctx));
-			d_tm_set_counter(ctx->sc_metrics.scm_csum_calcs, 0);
-			d_tm_set_counter(ctx->sc_metrics.scm_last_csum_calcs, 0);
-			rc = sc_pool_drain(ctx);
-			if (rc != 0)
-				D_ERROR("Drain error: "DF_RC"\n", DP_RC(rc));
-
-			rc = -DER_SHUTDOWN;
-		}
-	} else if (rc != 0) {
+	ctx->sc_cur_biov = NULL;
+	if (rc != 0)
 		D_ERROR("Error while scrubbing: "DF_RC"\n", DP_RC(rc));
-	}
 
 out:
 	D_FREE(data.iov_buf);
@@ -723,6 +733,16 @@ cont_iter_scrub_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 }
 
 static void
+sc_reset_iterator_checks(struct scrub_ctx *ctx)
+{
+	uuid_clear(ctx->sc_cont_uuid);
+	memset(&ctx->sc_cur_oid, 0, sizeof(ctx->sc_cur_oid));
+	memset(&ctx->sc_dkey, 0, sizeof(ctx->sc_dkey));
+	memset(&ctx->sc_iod, 0, sizeof(ctx->sc_iod));
+	sc_obj_value_reset(ctx);
+}
+
+static void
 sc_pool_start(struct scrub_ctx *ctx)
 {
 	/* remember previous checksum calculations */
@@ -733,12 +753,15 @@ sc_pool_start(struct scrub_ctx *ctx)
 
 	sc_m_pool_csum_reset(ctx);
 	sc_m_pool_start(ctx);
+	ctx->sc_status = SCRUB_STATUS_RUNNING;
+	sc_reset_iterator_checks(ctx);
 }
 
 static void
 sc_pool_stop(struct scrub_ctx *ctx)
 {
 	sc_m_pool_stop(ctx);
+	ctx->sc_status = SCRUB_STATUS_NOT_RUNNING;
 }
 
 int
@@ -748,15 +771,14 @@ vos_scrub_pool(struct scrub_ctx *ctx)
 	struct vos_iter_anchors	anchor = {0};
 	int			rc = 0;
 
+	ctx->sc_status = SCRUB_STATUS_NOT_RUNNING;
 	if (daos_handle_is_inval(ctx->sc_vos_pool_hdl)) {
 		D_ERROR("vos_iter_handle is invalid.\n");
 		return -DER_INVAL;
 	}
 
-	if (!sc_scrub_enabled(ctx)) {
-		sc_sleep(ctx, seconds_to_wait_while_disabled() * 1000);
+	if (!sc_should_start(ctx))
 		return 0;
-	}
 
 	sc_pool_start(ctx);
 
@@ -764,23 +786,10 @@ vos_scrub_pool(struct scrub_ctx *ctx)
 	param.ip_epr.epr_hi = DAOS_EPOCH_MAX;
 	rc = vos_iterate(&param, VOS_ITER_COUUID, false, &anchor,
 			 NULL, cont_iter_scrub_cb, ctx, NULL);
-	d_tm_inc_counter(ctx->sc_metrics.scm_scrub_count, 1);
+	sc_scrub_count_inc(ctx);
 	sc_pool_stop(ctx);
 	if (rc == SCRUB_POOL_OFF)
 		return 0;
-	if (rc == -DER_SHUTDOWN)
-		return rc; /* Don't try again if is shutting down. */
-	if (rc != 0) {
-		/*
-		 * If scrubbing failed for some reason, wait a minute
-		 * before trying again
-		 */
-		D_ERROR("Scrubbing failed. "DF_RC"\n", DP_RC(rc));
-		sc_sleep(ctx, 1000 * 60);
-		rc = 0; /* error reported and handled */
-	} else {
-		sc_yield_or_sleep(ctx);
-	}
 
 	return rc;
 }

@@ -235,13 +235,13 @@ func PoolProperties() PoolPropertyMap {
 		},
 		"scrub": {
 			Property: PoolProperty{
-				Number:      daos.PoolPropertyScrubSched,
-				Description: "Checksum scrubbing policy",
+				Number:      daos.PoolPropertyScrubMode,
+				Description: "Checksum scrubbing mode",
 			},
 			values: map[string]uint64{
-				"off":        daos.PoolScrubSchedOff,
-				"wait":       daos.PoolScrubSchedWait,
-				"continuous": daos.PoolScrubSchedContinuous,
+				"off":   daos.PoolScrubModeOff,
+				"lazy":  daos.PoolScrubModeLazy,
+				"timed": daos.PoolScrubModeTimed,
 			},
 		},
 		"scrub-freq": {
@@ -254,29 +254,6 @@ func PoolProperties() PoolPropertyMap {
 					if err != nil {
 						return nil, rbErr
 					}
-					return &PoolPropertyValue{rsPct}, nil
-				},
-				valueStringer: func(v *PoolPropertyValue) string {
-					n, err := v.GetNumber()
-					if err != nil {
-						return "not set"
-					}
-					return fmt.Sprintf("%d", n)
-				},
-				jsonNumeric: true,
-			},
-		},
-		"scrub-cred": {
-			Property: PoolProperty{
-				Number:      daos.PoolPropertyScrubCred,
-				Description: "Checksum scrubbing credits",
-				valueHandler: func(s string) (*PoolPropertyValue, error) {
-					rbErr := errors.Errorf("invalid Scrubbing Credits value %s", s)
-					rsPct, err := strconv.ParseUint(strings.ReplaceAll(s, "%", ""), 10, 64)
-					if err != nil {
-						return nil, rbErr
-					}
-
 					return &PoolPropertyValue{rsPct}, nil
 				},
 				valueStringer: func(v *PoolPropertyValue) string {

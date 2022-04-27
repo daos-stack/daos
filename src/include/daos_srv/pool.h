@@ -82,9 +82,8 @@ struct ds_pool {
 	 */
 	void			*sp_metrics[DAOS_NR_MODULE];
 	/** checksum scrubbing properties */
-	uint64_t		sp_scrub_sched;
+	uint64_t		sp_scrub_mode;
 	uint64_t		sp_scrub_freq_sec;
-	uint64_t		sp_scrub_cred;
 	uint64_t		sp_scrub_thresh;
 };
 

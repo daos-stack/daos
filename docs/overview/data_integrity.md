@@ -229,33 +229,22 @@ also be able to update them. When updated, they should be active right away.
 - **Pool Scrubber Mode** - How the scrubber will run for each pool target. The
   container configuration can disable scrubbing for the container, but it cannot
   alter the mode.
-    - **OFF** - The Scrubber will not run.
-    - **Run & Wait** - Will run the scrubber to completion, yielding after
-      consuming configured "credits". Then, if completed before configured
-      frequency, will sleep until it's time to start again.
-    - **Continuous** - Will run the scanner, sleeping in between object scrubs so
-      that the duration of the scrubber takes whole frequency time and will
-      start again as soon as it completes. Knowing how many objects are in the
-      system is required for this approach to work. The scrubber will use the
-      previous scrubber count of objects as best guess for current.
-    - **Run Once** - Run the scrubber once then turn off. Useful for better
-      control by external scripts to control the schedule. Will still yield after
-      consuming "credits".
-- **Pool Scrubber Frequency** - How frequently the scrubber should run in
-  number of seconds. If a scan takes longer than frequency, it would start
-  again as soon as the previous scan completes.
-- **Pool Credits** - Number of credits consumed before the scrubber yields. Each
-  time a checksum is calculated to verify object data, a credit is consumed.
-- **In Place Correction** - If the number checksum errors is below the Eviction
-  Threshold, DAOS will attempt to repair the corrupted data using replicas if
-  they exist.
+  - **OFF** - The Scrubber will not run.
+  - **Lazy** - Trigger the scrubber only when there is no IO activity. Trigger
+    aggregation regularly despite of IO activities.
+  - **Timed** - Trigger the scrubber regularly despite IO activities.
+- **Pool Scrubber Frequency** - How frequently the scrubber should scrub a pool.
+  This value indicates the regularity of scrubbing activity when the Scrubber
+  Mode is set to Timed.
+- **Threshold** - Number of checksum errors when the pool target is evicted. A
+  value of 0 disables auto eviction
 
 The command to create a pool with scrubbing enabled might look like this:
 ```bash
-dmg pool create --scm-size 1G --properties=scrub:continuous,scrub-freq:1,scrub-cred:10
+dmg pool create --scm-size 1G --properties=scrub:lazy,scrub-freq:1
 # or
 dmg pool create --scm-size 1G
-dmg pool set-prop ${POOL} --properties=scrub:run_wait
+dmg pool set-prop ${POOL} --properties=scrub:timed
 ```
 
 ### Container Properties (-> doc/user/container.md)
@@ -321,7 +310,6 @@ ds_start_scrubbing_ult ~> scrubbing_ult -> scrub_pool ~> cont_iter_scrub_cb ->
 
 ## Testing
 - pool_scrubbing_tests
-- Add scrubbing status to daos_pool_info_t so it can be queried
 
 
 ## Debugging

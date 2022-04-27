@@ -219,7 +219,12 @@ drain_pool_tgt_cb(struct ds_pool *pool)
 	ABT_thread_free(&thread);
 
 	return 0;
+}
 
+static inline bool
+is_idle()
+{
+	return !dss_xstream_is_busy();
 }
 
 /** Setup scrubbing context and start scrubbing the pool */
@@ -254,12 +259,21 @@ scrubbing_ult(void *arg)
 	ctx.sc_cont_is_stopping_fn = cont_is_stopping_cb;
 	ctx.sc_dmi =  dss_get_module_info();
 	ctx.sc_drain_pool_tgt_fn = drain_pool_tgt_cb;
+	ctx.sc_is_idle_fn = is_idle;
 
 	sc_add_pool_metrics(&ctx);
 	while (!dss_ult_exiting(child->spc_scrubbing_req)) {
+		uint32_t sleep_time = 5000;
+
 		rc = vos_scrub_pool(&ctx);
-		if (rc != 0)
+		if (rc == -DER_SHUTDOWN)
 			break;
+		if (rc != 0) {
+			D_ERROR("Issue with VOS Scrub: "DF_RC"\n", DP_RC(rc));
+			sleep_time = 60000; /* wait longer if there's an error */
+		}
+
+		sched_req_sleep(child->spc_scrubbing_req, sleep_time);
 	}
 }
 

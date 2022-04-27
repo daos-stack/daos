@@ -94,14 +94,11 @@ struct daos_prop_entry pool_prop_entries_default[DAOS_PROP_PO_NUM] = {
 		.dpe_type	= DAOS_PROP_PO_UPGRADE_STATUS,
 		.dpe_val	= DAOS_UPGRADE_STATUS_NOT_STARTED,
 	}, {
-		.dpe_type	= DAOS_PROP_PO_SCRUB_SCHED,
-		.dpe_val	= DAOS_SCRUB_SCHED_OFF,
+		.dpe_type	= DAOS_PROP_PO_SCRUB_MODE,
+		.dpe_val	= DAOS_SCRUB_MODE_OFF,
 	}, {
 		.dpe_type	= DAOS_PROP_PO_SCRUB_FREQ,
-		.dpe_val	= 604800,
-	}, {
-		.dpe_type	= DAOS_PROP_PO_SCRUB_CREDITS,
-		.dpe_val	= 1,
+		.dpe_val	= 604800, /* 1 week in seconds */
 	}, {
 		.dpe_type	= DAOS_PROP_PO_SCRUB_THRESH,
 		.dpe_val	= 0,

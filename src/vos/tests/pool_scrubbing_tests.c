@@ -17,6 +17,83 @@
 #include <fcntl.h>
 #include <daos/tests_lib.h>
 
+/*
+ * ms_between_periods is a helper function for determining how much time to wait between
+ * scrubs if mode is "timed"
+ */
+static void
+ms_between_periods_tests(void **state)
+{
+#define ONE_SECOND_NS (1000000000) /* 1e+9 */
+#define HALF_SECOND_NS (500000000) /* 5e+8 */
+#define assert_ms_eq(exp, duration, periods, curr, elapsed_ns) do {  \
+	struct timespec start;                                       \
+	struct timespec elapsed;                                     \
+	d_gettime(&start); elapsed = start;                          \
+	d_timeinc(&elapsed, elapsed_ns);                             \
+	assert_int_equal(exp,                                        \
+		get_ms_between_periods(start, elapsed, duration,     \
+		periods, curr));                                     \
+	} while (false)
+
+	/*
+	 * ---------------------------------------------------------
+	 * assert_ms_eq takes the following values in this order:
+	 * Expected, duration, periods, current period, elapsed ns
+	 * ---------------------------------------------------------
+	 */
+
+	/*
+	 * First period, no time has elapsed, total of 10 periods in 10 seconds.
+	 * Should be 1 second.
+	 */
+	assert_ms_eq(1000, 10, 10, 0, 0);
+
+	/*
+	 * With 10 periods and 10 second duration, then each period should
+	 * take 1 second.
+	 * if half a second has elapsed already for the first period, then only
+	 * need to wait another half second
+	 */
+	assert_ms_eq(500, 10, 10, 0, HALF_SECOND_NS);
+
+	/*
+	 * With 10 periods and 10 second duration, then each period should
+	 * take 1 second.
+	 * if one second (or more) has elapsed already for the first period,
+	 * then shouldn't wait at all
+	 */
+	assert_ms_eq(0, 10, 10, 0, ONE_SECOND_NS);
+	assert_ms_eq(0, 10, 10, 0, ONE_SECOND_NS + HALF_SECOND_NS);
+
+	/*
+	 * With 10 periods and 10 second duration, then each period should
+	 * take 1 second.
+	 * if one and a half second has elapsed and in the second period,
+	 * then should wait half a second
+	 */
+	assert_ms_eq(500, 10, 10, 1, ONE_SECOND_NS + HALF_SECOND_NS);
+
+	/*
+	 * Multiple tests with 5 periods into a 10 second duration
+	 */
+	assert_ms_eq(2000, 10, 5, 0, 0);
+	assert_ms_eq(1750, 10, 5, 0, HALF_SECOND_NS / 2);
+	assert_ms_eq(3750, 10, 5, 1, HALF_SECOND_NS / 2);
+
+	/* No time has elapsed, but already done with all periods, plus
+	 * some. Should wait full 10 seconds now, but not more
+	 */
+	assert_ms_eq(10000, 10, 5, 6, 0);
+	assert_ms_eq(10000, 10, 5, 100, 0);
+
+	/* What should wait be if duration isn't set and periods are not set */
+	assert_ms_eq(0, 0, 0, 0, 0);
+
+	/* periods is larger than duration in seconds */
+	assert_ms_eq(908, 10, 11, 0, 1);
+}
+
 /**
  * Scrubbing tests are integration tests between checksum functionality
  * and VOS. VOS does not calculate any checksums so the checksums for the
@@ -120,6 +197,8 @@ struct sts_context {
 	struct daos_csummer	*tsc_csummer;
 	sc_get_cont_fn_t	 tsc_get_cont_fn;
 	sc_yield_fn_t		 tsc_yield_fn;
+	sc_sleep_fn_t		 tsc_sleep_fn;
+	sc_is_idle_fn_t		 tsc_is_idle_fn;
 	void			*tsc_sched_arg;
 	int			 tsc_fd;
 	int			 tsc_expected_rc;
@@ -207,6 +286,13 @@ fake_yield(void *arg)
 	return 0;
 }
 
+static bool fake_is_idle_result;
+static bool
+fake_is_idle()
+{
+	return fake_is_idle_result;
+}
+
 static void
 sts_ctx_init(struct sts_context *ctx)
 {
@@ -228,6 +314,7 @@ sts_ctx_init(struct sts_context *ctx)
 	sts_ctx_cont_init(ctx);
 
 	ctx->tsc_yield_fn = fake_yield;
+	ctx->tsc_is_idle_fn = fake_is_idle;
 	assert_success(
 		daos_csummer_init_with_type(&test_csummer,
 					    HASH_TYPE_CRC16,
@@ -286,8 +373,9 @@ sts_ctx_fetch(struct sts_context *ctx, int oid_lo, int iod_type,
 
 
 	D_FREE(dkey.iov_buf);
-	D_FREE(iod.iod_name.iov_buf);
+	daos_iov_free(&iod.iod_name);
 	D_FREE(data);
+	d_sgl_fini(&sgl, false);
 
 	return rc;
 }
@@ -354,8 +442,10 @@ sts_ctx_update(struct sts_context *ctx, int oid_lo, int iod_type,
 
 	daos_csummer_free_ic(ctx->tsc_csummer, &iod_csum);
 
+	D_FREE(data);
 	D_FREE(dkey.iov_buf);
-	D_FREE(iod.iod_name.iov_buf);
+	daos_iov_free(&iod.iod_name);
+	d_sgl_fini(&sgl, false);
 }
 
 int fake_target_drain_call_count;
@@ -396,17 +486,25 @@ clear_ctx(struct scrub_ctx *ctx)
 }
 
 static void
-sts_ctx_do_scrub(struct sts_context *ctx)
+sts_ctx_setup_scrub_ctx(struct sts_context *ctx)
 {
 	uuid_copy(ctx->tsc_scrub_ctx.sc_pool_uuid, ctx->tsc_pool_uuid);
 	ctx->tsc_scrub_ctx.sc_vos_pool_hdl = ctx->tsc_poh;
 	ctx->tsc_scrub_ctx.sc_sleep_fn = NULL;
 	ctx->tsc_scrub_ctx.sc_yield_fn = ctx->tsc_yield_fn;
+	ctx->tsc_scrub_ctx.sc_sleep_fn = ctx->tsc_sleep_fn;
+	ctx->tsc_scrub_ctx.sc_is_idle_fn = ctx->tsc_is_idle_fn;
 	ctx->tsc_scrub_ctx.sc_sched_arg = ctx->tsc_sched_arg;
 	ctx->tsc_scrub_ctx.sc_cont_lookup_fn = ctx->tsc_get_cont_fn;
 	ctx->tsc_scrub_ctx.sc_drain_pool_tgt_fn = fake_target_drain;
 	ctx->tsc_scrub_ctx.sc_pool = &ctx->tsc_pool;
 	ctx->tsc_scrub_ctx.sc_dmi = &ctx->tsc_dmi;
+}
+
+static void
+sts_ctx_do_scrub(struct sts_context *ctx)
+{
+	sts_ctx_setup_scrub_ctx(ctx);
 
 	clear_ctx(&ctx->tsc_scrub_ctx);
 
@@ -419,6 +517,28 @@ sts_ctx_do_scrub(struct sts_context *ctx)
  * Tests
  * ----------------------------------------------------------------------------
  */
+
+static void
+lazy_scrubbing_only_when_idle(void **state)
+{
+	struct sts_context *ctx = *state;
+
+	/* setup data with corruption */
+	sts_ctx_update(ctx, 1, TEST_IOD_SINGLE, "dkey", "akey", 1, true);
+	ctx->tsc_pool.sp_scrub_mode = DAOS_SCRUB_MODE_LAZY;
+
+	/* When not idle it shouldn't run the scrubber and won't find corruption */
+	fake_is_idle_result = false;
+	sts_ctx_do_scrub(ctx);
+	/* value is still good because didn't actually scrub */
+	assert_success(sts_ctx_fetch(ctx, 1, TEST_IOD_SINGLE, "dkey", "akey", 1));
+
+	/* When idle it should now run the scrubber */
+	fake_is_idle_result = true;
+	sts_ctx_do_scrub(ctx);
+	assert_csum_error(sts_ctx_fetch(ctx, 1, TEST_IOD_SINGLE, "dkey", "akey", 1));
+}
+
 static void
 scrubbing_with_no_corruption_sv(void **state)
 {
@@ -428,13 +548,11 @@ scrubbing_with_no_corruption_sv(void **state)
 	sts_ctx_update(ctx, 1, TEST_IOD_SINGLE, "dkey", "akey", 1, false);
 
 	/** act */
-	ctx->tsc_pool.sp_scrub_sched = DAOS_SCRUB_SCHED_RUN_WAIT;
+	ctx->tsc_pool.sp_scrub_mode = DAOS_SCRUB_MODE_LAZY;
 	sts_ctx_do_scrub(ctx);
 
 	/** verify after scrub value is still good */
-	assert_success(
-		sts_ctx_fetch(ctx, 1, TEST_IOD_SINGLE, "dkey",
-			      "akey", 1));
+	assert_success(sts_ctx_fetch(ctx, 1, TEST_IOD_SINGLE, "dkey", "akey", 1));
 }
 
 static void
@@ -452,9 +570,7 @@ scrubbing_with_no_corruption_array(void **state)
 	sts_ctx_do_scrub(ctx);
 
 	/** verify after scrub value is still good */
-	assert_success(
-		sts_ctx_fetch(ctx, 1, TEST_IOD_ARRAY_1, "dkey",
-			      "akey", 1));
+	assert_success(sts_ctx_fetch(ctx, 1, TEST_IOD_ARRAY_1, "dkey", "akey", 1));
 }
 
 static void
@@ -463,16 +579,13 @@ scrubbing_with_sv_corrupted(void **state)
 	struct sts_context *ctx = *state;
 
 	/** setup data */
-	sts_ctx_update(ctx, 1, TEST_IOD_SINGLE, "dkey", "akey",
-		       1, true);
+	sts_ctx_update(ctx, 1, TEST_IOD_SINGLE, "dkey", "akey", 1, true);
 
 	/** act */
 	sts_ctx_do_scrub(ctx);
 
 	/** verify after scrub fetching the akey returns a csum error */
-	assert_csum_error(
-		sts_ctx_fetch(ctx, 1, TEST_IOD_SINGLE, "dkey",
-			      "akey", 1));
+	assert_csum_error(sts_ctx_fetch(ctx, 1, TEST_IOD_SINGLE, "dkey", "akey", 1));
 }
 
 static void
@@ -483,14 +596,11 @@ corrupted_extent(void **state)
 
 	ctx->tsc_data_len = ctx->tsc_chunk_size * 2;
 	/** setup data */
-	sts_ctx_update(ctx, 1, TEST_IOD_ARRAY_1, "dkey", "akey",
-		       1, true);
+	sts_ctx_update(ctx, 1, TEST_IOD_ARRAY_1, "dkey", "akey", 1, true);
 
 	sts_ctx_do_scrub(ctx);
 
-	assert_csum_error(
-		sts_ctx_fetch(ctx, 1, TEST_IOD_ARRAY_1, "dkey",
-			      "akey", 1));
+	assert_csum_error(sts_ctx_fetch(ctx, 1, TEST_IOD_ARRAY_1, "dkey", "akey", 1));
 }
 
 static void
@@ -507,15 +617,9 @@ scrubbing_with_arrays_corrupted(void **state)
 	sts_ctx_do_scrub(ctx);
 
 	/** verify after scrub fetching the akey values return csum errors */
-	assert_csum_error(
-		sts_ctx_fetch(ctx, 1, TEST_IOD_ARRAY_1, "dkey",
-			      "akey-1", 1));
-	assert_csum_error(
-		sts_ctx_fetch(ctx, 1, TEST_IOD_ARRAY_2, "dkey",
-			      "akey-2", 1));
-	assert_csum_error(
-		sts_ctx_fetch(ctx, 1, TEST_IOD_ARRAY_4, "dkey",
-			      "akey-4", 1));
+	assert_csum_error(sts_ctx_fetch(ctx, 1, TEST_IOD_ARRAY_1, "dkey", "akey-1", 1));
+	assert_csum_error(sts_ctx_fetch(ctx, 1, TEST_IOD_ARRAY_2, "dkey", "akey-2", 1));
+	assert_csum_error(sts_ctx_fetch(ctx, 1, TEST_IOD_ARRAY_4, "dkey", "akey-4", 1));
 }
 
 static void
@@ -523,27 +627,22 @@ scrub_multiple_epochs(void **state)
 {
 	struct sts_context *ctx = *state;
 
-	sts_ctx_update(ctx, 1, TEST_IOD_SINGLE, "dkey", "akey",
-		       1, false);
+	sts_ctx_update(ctx, 1, TEST_IOD_SINGLE, "dkey", "akey", 1, false);
 
 	/** insert a corrupted value */
-	sts_ctx_update(ctx, 1, TEST_IOD_SINGLE, "dkey",
-		       "akey-corrupted", 1, true);
+	sts_ctx_update(ctx, 1, TEST_IOD_SINGLE, "dkey", "akey-corrupted", 1, true);
 
 	/** Cover corruption with write to later epoch */
-	sts_ctx_update(ctx, 1, TEST_IOD_SINGLE, "dkey",
-		       "akey-corrupted", 2, false);
+	sts_ctx_update(ctx, 1, TEST_IOD_SINGLE, "dkey", "akey-corrupted", 2, false);
 
 	/** Act */
 	sts_ctx_do_scrub(ctx);
 
 	/** corrupted akey should error */
-	assert_csum_error(sts_ctx_fetch(ctx, 1, TEST_IOD_SINGLE,
-					"dkey", "akey-corrupted", 1));
+	assert_csum_error(sts_ctx_fetch(ctx, 1, TEST_IOD_SINGLE, "dkey", "akey-corrupted", 1));
 
 	/** non-corrupted akey should still succeed */
-	assert_success(sts_ctx_fetch(ctx, 1, TEST_IOD_SINGLE,
-				     "dkey", "akey", 2));
+	assert_success(sts_ctx_fetch(ctx, 1, TEST_IOD_SINGLE, "dkey", "akey", 2));
 }
 
 static void
@@ -559,14 +658,10 @@ scrubbing_with_multiple_akeys(void **state)
 	/** Act */
 	sts_ctx_do_scrub(ctx);
 
-	assert_success(
-		sts_ctx_fetch(ctx, 1, TEST_IOD_SINGLE, "dkey", "akey-1", 1));
-	assert_success(
-		sts_ctx_fetch(ctx, 1, TEST_IOD_SINGLE, "dkey", "akey-2", 1));
-	assert_success(
-		sts_ctx_fetch(ctx, 1, TEST_IOD_ARRAY_1, "dkey", "akey-3", 1));
-	assert_success(
-		sts_ctx_fetch(ctx, 1, TEST_IOD_ARRAY_2, "dkey", "akey-4", 1));
+	assert_success(sts_ctx_fetch(ctx, 1, TEST_IOD_SINGLE, "dkey", "akey-1", 1));
+	assert_success(sts_ctx_fetch(ctx, 1, TEST_IOD_SINGLE, "dkey", "akey-2", 1));
+	assert_success(sts_ctx_fetch(ctx, 1, TEST_IOD_ARRAY_1, "dkey", "akey-3", 1));
+	assert_success(sts_ctx_fetch(ctx, 1, TEST_IOD_ARRAY_2, "dkey", "akey-4", 1));
 }
 
 static void
@@ -578,6 +673,7 @@ scrubbing_with_good_akey_then_bad_akey(void **state)
 
 	sts_ctx_do_scrub(ctx);
 	assert_success(sts_ctx_fetch(ctx, 1, TEST_IOD_SINGLE, "dkey", "akey", 1));
+	ctx->tsc_scrub_ctx.sc_pool_start_scrub.tv_sec -= 10;
 
 	sts_ctx_update(ctx, 1, TEST_IOD_SINGLE, "dkey", "akey", 1, true);
 	sts_ctx_do_scrub(ctx);
@@ -601,20 +697,19 @@ test_yield_deletes_extent(void *arg)
 	/* insert another extent at a later epoch so the original extent is
 	 * deleted by vos_aggregation.
 	 */
-	sts_ctx_update(ctx, 1, TEST_IOD_ARRAY_1, "dkey", "akey",
-		       2, false);
+	sts_ctx_update(ctx, 1, TEST_IOD_ARRAY_1, "dkey", "akey", 2, false);
 
 	rc = vos_aggregate(ctx->tsc_coh, &epr, NULL, NULL,
 			   VOS_AGG_FL_FORCE_SCAN | VOS_AGG_FL_FORCE_MERGE);
 	assert_success(rc);
-	/*
-	 * not totally sure why this is needed, but maybe to wait for
-	 * aggregation to finish? But without it, extent_deleted_by_aggregation
-	 * test fails with last assert_success. Is a checksum failure.
-	 */
-	sleep(1);
 
 	return 0;
+}
+
+static int
+test_sleep_deletes_extent(void *arg, uint32_t msec)
+{
+	return test_yield_deletes_extent(arg);
 }
 
 static void
@@ -622,20 +717,18 @@ extent_deleted_by_aggregation(void **state)
 {
 	struct sts_context *ctx = *state;
 
-	sts_ctx_update(ctx, 1, TEST_IOD_ARRAY_1, "dkey", "akey",
-		       1, true);
+	sts_ctx_update(ctx, 1, TEST_IOD_ARRAY_1, "dkey", "akey", 1, true);
 
 	ctx->tsc_yield_fn = test_yield_deletes_extent;
+	ctx->tsc_sleep_fn = test_sleep_deletes_extent;
 	ctx->tsc_sched_arg = ctx;
 
 	sts_ctx_do_scrub(ctx);
 
 	/* First epoch should not exist */
-	assert_rc_equal(sts_ctx_fetch(ctx, 1, TEST_IOD_ARRAY_1, "dkey",
-				     "akey", 1), -DER_NONEXIST);
+	assert_rc_equal(sts_ctx_fetch(ctx, 1, TEST_IOD_ARRAY_1, "dkey", "akey", 1), -DER_NONEXIST);
 	/* Second (inserted by test_yield_deletes_extent) should now exist */
-	assert_success(sts_ctx_fetch(ctx, 1, TEST_IOD_ARRAY_1, "dkey",
-				     "akey", 2));
+	assert_success(sts_ctx_fetch(ctx, 1, TEST_IOD_ARRAY_1, "dkey", "akey", 2));
 }
 
 static int
@@ -643,8 +736,7 @@ test_yield_deletes_dkey(void *arg)
 {
 	struct sts_context	*ctx = arg;
 	int			 rc;
-	daos_epoch_range_t	 epr = {.epr_lo = 0,
-		.epr_hi = DAOS_EPOCH_MAX - 1};
+	daos_epoch_range_t	 epr = {.epr_lo = 0, .epr_hi = DAOS_EPOCH_MAX - 1};
 
 	sts_ctx_punch_dkey(ctx, 1, "dkey", 2);
 
@@ -674,12 +766,9 @@ dkey_deleted_by_aggregation_with_multiple_akeys(void **state)
 {
 	struct sts_context *ctx = *state;
 
-	sts_ctx_update(ctx, 1, TEST_IOD_ARRAY_1, "dkey", "akey1",
-		       1, false);
-	sts_ctx_update(ctx, 1, TEST_IOD_ARRAY_1, "dkey", "akey2",
-		       1, false);
-	sts_ctx_update(ctx, 1, TEST_IOD_ARRAY_1, "dkey", "akey3",
-		       1, false);
+	sts_ctx_update(ctx, 1, TEST_IOD_ARRAY_1, "dkey", "akey1", 1, false);
+	sts_ctx_update(ctx, 1, TEST_IOD_ARRAY_1, "dkey", "akey2", 1, false);
+	sts_ctx_update(ctx, 1, TEST_IOD_ARRAY_1, "dkey", "akey3", 1, false);
 
 	ctx->tsc_yield_fn = test_yield_deletes_dkey;
 	ctx->tsc_sched_arg = ctx;
@@ -704,12 +793,9 @@ container_deleted(void **state)
 {
 	struct sts_context *ctx = *state;
 
-	sts_ctx_update(ctx, 1, TEST_IOD_ARRAY_1, "dkey", "akey1",
-		       1, false);
-	sts_ctx_update(ctx, 1, TEST_IOD_ARRAY_1, "dkey", "akey2",
-		       1, false);
-	sts_ctx_update(ctx, 1, TEST_IOD_ARRAY_1, "dkey", "akey3",
-		       1, false);
+	sts_ctx_update(ctx, 1, TEST_IOD_ARRAY_1, "dkey", "akey1", 1, false);
+	sts_ctx_update(ctx, 1, TEST_IOD_ARRAY_1, "dkey", "akey2", 1, false);
+	sts_ctx_update(ctx, 1, TEST_IOD_ARRAY_1, "dkey", "akey3", 1, false);
 
 	ctx->tsc_yield_fn = test_yield_deletes_container;
 	ctx->tsc_sched_arg = ctx;
@@ -729,14 +815,10 @@ multiple_objects(void **state)
 
 	sts_ctx_do_scrub(ctx);
 
-	assert_success(sts_ctx_fetch(ctx, 1, TEST_IOD_SINGLE, "dkey",
-				     "akey", 1));
-	assert_success(sts_ctx_fetch(ctx, 2, TEST_IOD_SINGLE, "dkey",
-				     "akey", 1));
-	assert_success(sts_ctx_fetch(ctx, 3, TEST_IOD_SINGLE, "dkey",
-				     "akey", 1));
-	assert_csum_error(sts_ctx_fetch(ctx, 4, TEST_IOD_SINGLE, "dkey",
-					"akey", 1));
+	assert_success(sts_ctx_fetch(ctx, 1, TEST_IOD_SINGLE, "dkey", "akey", 1));
+	assert_success(sts_ctx_fetch(ctx, 2, TEST_IOD_SINGLE, "dkey", "akey", 1));
+	assert_success(sts_ctx_fetch(ctx, 3, TEST_IOD_SINGLE, "dkey", "akey", 1));
+	assert_csum_error(sts_ctx_fetch(ctx, 4, TEST_IOD_SINGLE, "dkey", "akey", 1));
 }
 
 static void
@@ -798,8 +880,7 @@ multiple_overlapping_extents(void **state)
 	sts_ctx_do_scrub(ctx);
 
 	ctx->tsc_data_len = 2048;
-	assert_success(sts_ctx_fetch(ctx, 1, TEST_IOD_ARRAY_1, "dkey",
-				     "akey", 3));
+	assert_success(sts_ctx_fetch(ctx, 1, TEST_IOD_ARRAY_1, "dkey", "akey", 3));
 }
 
 static int
@@ -814,11 +895,11 @@ sts_setup(void **state)
 	*state = ctx;
 
 	/* set some defaults */
-	ctx->tsc_pool.sp_scrub_sched = DAOS_SCRUB_SCHED_RUN_WAIT;
+	ctx->tsc_pool.sp_scrub_mode = DAOS_SCRUB_MODE_LAZY;
 	ctx->tsc_pool.sp_scrub_freq_sec = 1;
-	ctx->tsc_pool.sp_scrub_cred = 1;
 	ctx->tsc_pool.sp_scrub_thresh = 10;
 	fake_target_drain_call_count = 0;
+	fake_is_idle_result = true; /* should be idle most of the time */
 
 	return 0;
 }
@@ -838,6 +919,9 @@ sts_teardown(void **state)
 	{ desc, test_fn, sts_setup, sts_teardown }
 
 static const struct CMUnitTest scrubbing_tests[] = {
+	TS("calculate time between periods", ms_between_periods_tests),
+	TS("CSUM_SCRUBBING_00: Only scrub when idle",
+	   lazy_scrubbing_only_when_idle),
 	TS("CSUM_SCRUBBING_01: SV with no corruption",
 	   scrubbing_with_no_corruption_sv),
 	TS("CSUM_SCRUBBING_02: Array with no corruption",
@@ -891,7 +975,6 @@ run_scrubbing_tests(int argc, char *argv[])
 	}
 #endif
 
-	rc += run_scrubbing_sched_tests();
 	rc += cmocka_run_group_tests_name(
 		"Storage and retrieval of checksums for Single Value Type",
 		scrubbing_tests, NULL, NULL);
