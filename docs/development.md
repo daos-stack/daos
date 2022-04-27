@@ -15,7 +15,6 @@ You will also need to install the dependencies that are required for the pre-com
 
    Instructions can be found at the [pre-commit website](https://pre-commit.com/#install).
 
-
 2. Install [TFLint](https://github.com/terraform-linters/tflint)
 
    See the [installation instructions](https://github.com/terraform-linters/tflint#installation)
@@ -31,8 +30,23 @@ You will also need to install the dependencies that are required for the pre-com
 
    See [https://github.com/terraform-docs/terraform-docs](https://github.com/terraform-docs/terraform-docs)
 
+4. Add `ADDLICENSE_COMPANY_NAME` environment variable to your `~/.bashrc` file
 
-4. MacOS only
+   When pre-commit runs for the first time it will download the [google/addlicense](https://github.com/google/addlicense/releases/tag/v1.0.0) binary into the `tools/autodoc/` directory. The `addlicense` binary is excluded in the `.gitignore` file so it does not get checked into the repo.
+
+   The `addlicense` pre-commit hook will ensure that files have the proper license header.
+
+   The company name that is used in the license header is specified in the `ADDLICENSE_COMPANY_NAME` environment variable.
+
+   If the `ADDLICENSE_COMPANY_NAME` environment variable is not present, the company name in the license header will be set to **Intel Corporation**
+
+   If you do not work for Intel be sure to export the `ADDLICENSE_COMPANY_NAME` environment variable with the name of your company as it should appear in the license header of files.
+
+   ```bash
+   export ADDLICENSE_COMPANY_NAME="your_company_name_here"
+   ```
+
+5. MacOS only
 
    MacOS users will need to install `findutils` and `coreutils`.
 

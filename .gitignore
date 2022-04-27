@@ -26,3 +26,6 @@ id_rsa*
 hosts*
 *.flag
 keys.txt
+
+# addlicense binary for pre-commit
+tools/autodoc/addlicense
