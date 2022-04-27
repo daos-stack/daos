@@ -21,14 +21,12 @@ apt-get install \
     git \
     golang-go \
     kmod \
-    libaio-dev \
     libboost-dev \
     libcmocka-dev \
     libcunit1-dev \
     libfuse3-dev \
     libhwloc-dev \
     libibverbs-dev \
-    libipmctl-dev \
     libjson-c-dev \
     liblz4-dev \
     libnuma-dev \
@@ -36,16 +34,12 @@ apt-get install \
     librdmacm-dev \
     libssl-dev \
     libtool-bin \
-    libunwind-dev \
     libyaml-dev \
     locales \
     maven \
-    meson \
     numactl \
-    ninja-build \
     openjdk-8-jdk \
     patchelf \
-    pciutils \
     pkg-config \
     python3-defusedxml \
     python3-dev \

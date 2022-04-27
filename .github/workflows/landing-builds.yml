@@ -34,11 +34,11 @@ jobs:
       fail-fast: false
       max-parallel: 1
       matrix:
-        distro: [ubuntu.20.04, rocky, fedora, leap.15]
+        distro: [ubuntu.22.04, rocky, fedora, leap.15]
         include:
-          - distro: ubuntu.20.04
-            base: ubuntu.20.04
-            with: ubuntu.20.04
+          - distro: ubuntu.22.04
+            base: ubuntu.22.04
+            with: ubuntu.22.04
           - distro: rocky
             base: el.8
             with: rockylinux/rockylinux:8
@@ -85,7 +85,7 @@ jobs:
     runs-on: ubuntu-20.04
     strategy:
       matrix:
-        distro: [ubuntu.20.04]
+        distro: [ubuntu.22.04]
     env:
       DEPS_JOBS: 10
       BASE_DISTRO: ${{ matrix.distro }}
@@ -136,12 +136,12 @@ jobs:
       fail-fast: false
       max-parallel: 2
       matrix:
-        distro: [ubuntu.20.04, rocky, fedora, leap.15]
+        distro: [ubuntu.22.04, rocky, fedora, leap.15]
         compiler: [clang, gcc]
         include:
-          - distro: ubuntu.20.04
-            base: ubuntu.20.04
-            with: ubuntu.20.04
+          - distro: ubuntu.22.04
+            base: ubuntu.22.04
+            with: ubuntu.22.04
           - distro: rocky
             base: el.8
             with: rockylinux/rockylinux:8

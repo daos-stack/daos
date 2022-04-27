@@ -16,11 +16,19 @@ jobs:
     runs-on: ubuntu-20.04
     strategy:
       matrix:
-        distro: [ubuntu.20.04]
+        distro: [rocky]
+      include:
+        - distro: rocky
+          base: el.8
+          with: rockylinux/rockylinux:8
+        - distro: leap.15
+          base: leap.15
+          with: leap.15
     env:
       DEPS_JOBS: 10
+      DOCKER_BASE: ${{ matrix.base }}
+      BASE_DISTRO: ${{ matrix.with }}
       COMPILER: clang
-      BASE_DISTRO: ${{ matrix.distro }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v2

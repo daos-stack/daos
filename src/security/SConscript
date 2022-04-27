@@ -1,7 +1,8 @@
 """Build security library"""
 import daos_build
 
-SRC_FILES = ['srv.c', 'cli_security.c', 'srv_acl.c', 'auth.pb-c.c']
+SRC_CLI_FILES = ['cli_security.c', 'auth.pb-c.c']
+SRC_SRV_FILES = ['srv.c', 'srv_acl.c']
 
 def get_objects(cache, *args):
     """Retrieve built objects from the object cache"""
@@ -17,31 +18,42 @@ def scons():
     env.AppendUnique(LIBPATH=[Dir('.')])
     denv = env.Clone()
 
-    prereqs.require(denv, 'protobufc', 'argobots', 'hwloc')
+    prereqs.require(denv, 'protobufc', 'hwloc')
 
     # Populate the object cache
     cache = {}
-    for src_file in SRC_FILES:
+    for src_file in SRC_CLI_FILES:
         cache[src_file] = denv.SharedObject(src_file)
 
     # dc_security: Security Client
     dc_security_tgts = get_objects(cache, 'cli_security.c', 'auth.pb-c.c')
     Export('dc_security_tgts')
 
+    if prereqs.test_requested():
+        dc_sectest_tgts = get_objects(cache, 'cli_security.c', 'auth.pb-c.c')
+        Export('dc_sectest_tgts')
+
     if not prereqs.server_requested():
         return
 
-    denv.AppendUnique(LIBS=['gurt'])
-    ds_sec = daos_build.library(denv, 'security',
+    # generate server module
+    senv = denv.Clone()
+    prereqs.require(senv, 'argobots')
+
+    for src_file in SRC_SRV_FILES:
+        cache[src_file] = senv.SharedObject(src_file)
+
+    senv.AppendUnique(LIBS=['gurt'])
+    ds_sec = daos_build.library(senv, 'security',
                                 get_objects(cache, 'srv.c', 'srv_acl.c'),
                                 install_off="../..")
-    denv.Install('$PREFIX/lib64/daos_srv', ds_sec)
-
-    dc_sectest_tgts = get_objects(cache, 'srv_acl.c', 'cli_security.c',
-                                  'auth.pb-c.c')
-    Export('dc_sectest_tgts')
+    senv.Install('$PREFIX/lib64/daos_srv', ds_sec)
 
     if prereqs.test_requested():
+        dc_sectest_tgts += get_objects(cache, 'srv_acl.c')
+        Export('dc_sectest_tgts')
+
+        denv = senv
         SConscript('tests/SConscript', exports='denv')
 
 if __name__ == "SCons.Script":

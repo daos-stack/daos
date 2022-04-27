@@ -6,7 +6,7 @@
 #
 
 # Pull base image
-FROM ubuntu:20.04
+FROM ubuntu:22.04
 LABEL maintainer="daos@daos.groups.io"
 
 # Intermittent cache-bust.  Used to reduce load on the actual CACHEBUST later.
@@ -15,7 +15,7 @@ ARG CB0
 ENV DEBIAN_FRONTEND=noninteractive
 
 # Install basic tools
-COPY ./utils/scripts/install-ubuntu20.sh /tmp/install.sh
+COPY ./utils/scripts/install-ubuntu22.sh /tmp/install.sh
 RUN echo "APT::Get::Assume-Yes \"true\";" > /etc/apt/apt.conf.d/no-prompt
 RUN echo "APT::Install-Recommends \"false\";" > /etc/apt/apt.conf.d/no-recommends
 RUN apt-get update && apt-get install apt-utils && apt-get upgrade && chmod +x /tmp/install.sh && \
@@ -37,8 +37,8 @@ RUN useradd --no-log-init --user-group --create-home --shell /bin/bash daos_agen
 RUN echo "daos_agent:daos_agent" | chpasswd
 
 # Create directory for DAOS backend storage
-RUN mkdir -p /opt/daos /mnt/daos /var/run/daos_server /var/run/daos_agent /home/daos/pre /home/daos/daos &&   \
-    chown -R daos_server.daos_server /opt/daos /mnt/daos /var/run/daos_server /home/daos &&  \
+RUN mkdir -p /opt/daos /mnt/daos /var/run/daos_agent /home/daos/pre /home/daos/daos &&   \
+    chown -R daos_server.daos_server /opt/daos /mnt/daos /home/daos &&  \
     chown daos_agent.daos_agent /var/run/daos_agent
 
 # The COPY command has a --chown option but it's not well supported so copy as
@@ -66,8 +66,9 @@ USER daos_server:daos_server
 
 ARG DEPS_JOBS=1
 
+# Build DAOS client dependencies
 RUN [ "$DAOS_DEPS_BUILD" != "yes" ] || \
-    { scons --build-deps=yes --jobs $DEPS_JOBS PREFIX=/opt/daos \
+    { scons --build-deps=yes --jobs $DEPS_JOBS client test PREFIX=/opt/daos \
       TARGET_TYPE=$DAOS_TARGET_TYPE --deps-only && \
     ([ "$DAOS_KEEP_BUILD" != "no" ] || /bin/rm -rf build *.gz); }
 
@@ -94,7 +95,7 @@ ARG DAOS_BUILD=$DAOS_DEPS_BUILD
 
 # Build DAOS
 RUN [ "$DAOS_BUILD" != "yes" ] || \
-    { scons --jobs $JOBS install PREFIX=/opt/daos COMPILER=$COMPILER \
+    { scons --jobs $JOBS client test install PREFIX=/opt/daos COMPILER=$COMPILER \
       BUILD_TYPE=$DAOS_BUILD_TYPE TARGET_TYPE=$DAOS_TARGET_TYPE && \
     ([ "$DAOS_KEEP_BUILD" != "no" ] || /bin/rm -rf build) && \
     go clean -cache && cp -r utils/config/examples /opt/daos; }

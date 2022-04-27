@@ -5,6 +5,11 @@ def scons():
     """Execute build"""
     Import('env', 'prereqs', 'dc_sectest_tgts')
 
+    if not prereqs.server_requested():
+        return
+    if not prereqs.test_requested():
+        return
+
     libs = ['$LIBS', 'daos', 'daos_common', 'gurt']
     sec_sources = ['security_test.c', dc_sectest_tgts]
     acl_sources = ['acl_dump_test.c']

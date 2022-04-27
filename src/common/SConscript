@@ -105,6 +105,9 @@ def scons():
 
     if not prereqs.test_requested():
         return
+    if not prereqs.server_requested():
+        return
+
     tlib_env = denv.Clone()
     tlib_env.AppendUnique(LIBS=['json-c'])
 
