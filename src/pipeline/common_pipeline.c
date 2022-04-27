@@ -122,13 +122,19 @@ pipeline_filter_checkops(daos_filter_t *ftr, size_t *p)
 	part_type    = (char *)ftr->parts[*p]->part_type.iov_buf;
 	part_type_s  = ftr->parts[*p]->part_type.iov_len;
 	for (i = 0; i < num_operands; i++) {
-		*p += 1;
-		child_part_type   = (char *)ftr->parts[*p]->part_type.iov_buf;
-		child_part_type_s = ftr->parts[*p]->part_type.iov_len;
+		child_part_type   = (char *)ftr->parts[*p + 1]->part_type.iov_buf;
+		child_part_type_s = ftr->parts[*p + 1]->part_type.iov_len;
 		res               = pipeline_part_checkop(part_type, part_type_s, child_part_type,
 							  child_part_type_s);
-		if (!res)
+		if (!res) {
+			D_ERROR("part %zu: wrong child part type %.*s for part type %.*s\n", *p,
+				(int)child_part_type_s, child_part_type, (int)part_type_s,
+				part_type);
 			return res;
+		}
+
+		/** recursive call */
+		*p += 1;
 		res = pipeline_filter_checkops(ftr, p);
 		if (!res)
 			return res;
@@ -139,7 +145,8 @@ pipeline_filter_checkops(daos_filter_t *ftr, size_t *p)
 int
 d_pipeline_check(daos_pipeline_t *pipeline)
 {
-	size_t i;
+	size_t  i;
+	int     rc;
 
 	/**
 	 * TODO: Check that functions' operands always have the right type
@@ -153,21 +160,27 @@ d_pipeline_check(daos_pipeline_t *pipeline)
 
 	/** -- Check 0: Check that pipeline is not NULL. */
 
-	if (pipeline == NULL)
+	if (pipeline == NULL) {
+		D_ERROR("pipeline object is NULL\n");
 		return -DER_INVAL;
+	}
 
 	/** -- Check 1: Check that filters are chained together correctly. */
 
 	for (i = 0; i < pipeline->num_filters; i++) {
 		if (strncmp((char *)pipeline->filters[i]->filter_type.iov_buf,
-			    "DAOS_FILTER_CONDITION", pipeline->filters[i]->filter_type.iov_len))
+			    "DAOS_FILTER_CONDITION", pipeline->filters[i]->filter_type.iov_len)) {
+			D_ERROR("filter %zu: filter type is not DAOS_FILTER_CONDITION\n", i);
 			return -DER_INVAL;
+		}
 	}
 	for (i = 0; i < pipeline->num_aggr_filters; i++) {
 		if (strncmp((char *)pipeline->aggr_filters[i]->filter_type.iov_buf,
 			    "DAOS_FILTER_AGGREGATION",
-			    pipeline->aggr_filters[i]->filter_type.iov_len))
+			    pipeline->aggr_filters[i]->filter_type.iov_len)) {
+			D_ERROR("aggr_filter %zu: filter type is not DAOS_FILTER_AGGREGATION\n", i);
 			return -DER_INVAL;
+		}
 	}
 
 	/** -- Rest of the checks are done for each filter */
@@ -206,8 +219,12 @@ d_pipeline_check(daos_pipeline_t *pipeline)
 
 			res = pipeline_part_chk_type((char *)part->part_type.iov_buf,
 						     part->part_type.iov_len, is_aggr);
-			if (!res)
+			if (!res) {
+				D_ERROR("filter %zu, part %zu: part type %.*s is not supported\n",
+					i, p, (int)part->part_type.iov_len,
+					(char *)part->part_type.iov_buf);
 				return -DER_NOSYS;
+			}
 
 			/** 3 */
 
@@ -216,15 +233,24 @@ d_pipeline_check(daos_pipeline_t *pipeline)
 
 			if (num_operands < 0) { /** special cases for AND and OR */
 				if (part->num_operands < 2)
-					return -DER_INVAL;
-			} else if (((uint32_t)num_operands) != part->num_operands)
-				return -DER_INVAL;
+					rc = -DER_INVAL;
+			} else if (((uint32_t)num_operands) != part->num_operands) {
+				rc = -DER_INVAL;
+			}
+			if (rc != 0) {
+				D_ERROR("filter %zu, part %zu: part has an incorrect number of "
+					"operands\n", i, p);
+				return rc;
+			}
 			num_parts += part->num_operands;
 		}
 		/** 3 */
 
-		if (num_parts != ftr->num_parts)
+		if (num_parts != ftr->num_parts) {
+			D_ERROR("filter %zu: mismatch between counted parts %u and .num_parts %u\n",
+				i, num_parts, ftr->num_parts);
 			return -DER_INVAL;
+		}
 
 		/**
 		 * -- Check 4: Check that all parts have the right type of operands.
@@ -232,8 +258,10 @@ d_pipeline_check(daos_pipeline_t *pipeline)
 
 		p   = 0;
 		res = pipeline_filter_checkops(ftr, &p);
-		if (!res)
+		if (!res) {
+			D_ERROR("filter %zu: wrong type for some part operands\n", i);
 			return -DER_INVAL;
+		}
 	}
 
 	return 0;
