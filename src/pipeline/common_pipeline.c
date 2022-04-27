@@ -133,7 +133,12 @@ pipeline_part_checkop(const char *part_type, size_t part_type_s, const char *ope
 	    !strncmp(part_type, "DAOS_FILTER_FUNC_LT", part_type_s) ||
 	    !strncmp(part_type, "DAOS_FILTER_FUNC_LE", part_type_s) ||
 	    !strncmp(part_type, "DAOS_FILTER_FUNC_GE", part_type_s) ||
-	    !strncmp(part_type, "DAOS_FILTER_FUNC_GT", part_type_s)) {
+	    !strncmp(part_type, "DAOS_FILTER_FUNC_GT", part_type_s) ||
+	    !strncmp(part_type, "DAOS_FILTER_FUNC_BITAND", part_type_s) ||
+	    !strncmp(part_type, "DAOS_FILTER_FUNC_ADD", part_type_s) ||
+	    !strncmp(part_type, "DAOS_FILTER_FUNC_SUB", part_type_s) ||
+	    !strncmp(part_type, "DAOS_FILTER_FUNC_MUL", part_type_s) ||
+	    !strncmp(part_type, "DAOS_FILTER_FUNC_DIV", part_type_s)) {
 		/* arithmetic functions or keys and constants */
 		return strncmp(operand_type, "DAOS_FILTER_FUN", strlen("DAOS_FILTER_FUN")) ||
 		       !strncmp(operand_type, "DAOS_FILTER_FUNC_BITAND", operand_type_s) ||
@@ -159,6 +164,24 @@ is_comp_logical_func(const char *part_type, size_t part_type_s)
 }
 
 static bool
+is_arith_func(const char *part_type, size_t part_type_s)
+{
+	return !strncmp(part_type, "DAOS_FILTER_FUNC_BITAND", part_type_s) ||
+	       !strncmp(part_type, "DAOS_FILTER_FUNC_ADD", part_type_s) ||
+	       !strncmp(part_type, "DAOS_FILTER_FUNC_SUB", part_type_s) ||
+	       !strncmp(part_type, "DAOS_FILTER_FUNC_MUL", part_type_s) ||
+	       !strncmp(part_type, "DAOS_FILTER_FUNC_DIV", part_type_s);
+}
+
+static bool
+is_numeric_type(const char *data_type, size_t data_type_s)
+{
+	return strncmp(data_type, "DAOS_FILTER_TYPE_BINARY", data_type_s) &&
+	       strncmp(data_type, "DAOS_FILTER_TYPE_STRING", data_type_s) &&
+	       strncmp(data_type, "DAOS_FILTER_TYPE_CSTRING", data_type_s);
+}
+
+static bool
 pipeline_filter_checkops(daos_filter_t *ftr, size_t *p)
 {
 	uint32_t  i;
@@ -169,6 +192,8 @@ pipeline_filter_checkops(daos_filter_t *ftr, size_t *p)
 	size_t    part_type_s;
 	char     *child_part_type;
 	size_t    child_part_type_s;
+	char     *child_data_type;
+	size_t    child_data_type_s;
 
 	num_operands  = ftr->parts[*p]->num_operands;
 	part_type     = (char *)ftr->parts[*p]->part_type.iov_buf;
@@ -176,6 +201,8 @@ pipeline_filter_checkops(daos_filter_t *ftr, size_t *p)
 	for (i = 0; i < num_operands; i++) {
 		child_part_type     = (char *)ftr->parts[*p + 1]->part_type.iov_buf;
 		child_part_type_s   = ftr->parts[*p + 1]->part_type.iov_len;
+		child_data_type     = (char *)ftr->parts[*p + 1]->data_type.iov_buf;
+		child_data_type_s   = ftr->parts[*p + 1]->data_type.iov_len;
 		child_num_constants = ftr->parts[*p+1]->num_constants;
 
 		res               = pipeline_part_checkop(part_type, part_type_s, child_part_type,
@@ -186,12 +213,22 @@ pipeline_filter_checkops(daos_filter_t *ftr, size_t *p)
 				part_type);
 			return res;
 		}
+
 		if (!strncmp(child_part_type, "DAOS_FILTER_CONST", child_part_type_s) &&
 		    child_num_constants > 1 &&
 		    (!is_comp_logical_func(part_type, part_type_s) ||
 		     !strncmp(part_type, "DAOS_FILTER_FUNC_LIKE", part_type_s))) {
 			D_ERROR("part %zu: CONST array can't be operand of part type %.*s\n", *p,
 				(int)part_type_s, part_type);
+			return false;
+		}
+
+		if (is_arith_func(part_type, part_type_s) &&
+		    strncmp(child_part_type, "DAOS_FILTER_FUN", strlen("DAOS_FILTER_FUN")) &&
+		    !is_numeric_type(child_data_type, child_data_type_s)) {
+			D_ERROR("part %zu: wrong data type %.*s operand for part type %.*s\n",
+				*p, (int)child_data_type_s, child_data_type, (int)part_type_s,
+				part_type);
 			return false;
 		}
 
@@ -311,7 +348,6 @@ d_pipeline_check(daos_pipeline_t *pipeline)
 
 	/**
 	 * TODO: Check that functions' operands always have the right type
-	 * TODO: Check that arithmetic functions only support number types
 	 */
 
 	/** 0 */
