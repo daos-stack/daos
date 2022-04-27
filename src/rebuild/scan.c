@@ -494,13 +494,6 @@ rebuild_obj_scan_cb(daos_handle_t ch, vos_iter_entry_t *ent,
 		return 1;
 	}
 
-	if (--arg->yield_freq == 0) {
-		arg->yield_freq = DEFAULT_YIELD_FREQ;
-		ABT_thread_yield();
-		*acts |= VOS_ITER_CB_YIELD;
-		return 0;
-	}
-
 	/* If the OID is invisible, then snapshots must be created on the object. */
 	D_ASSERTF(!(ent->ie_vis_flags & VOS_VIS_FLAG_COVERED) || arg->snapshot_cnt > 0,
 		  "flags %x snapshot_cnt %d\n", ent->ie_vis_flags, arg->snapshot_cnt);
@@ -653,6 +646,15 @@ out:
 
 	if (map != NULL)
 		pl_map_decref(map);
+
+	if (--arg->yield_freq == 0) {
+		D_DEBUG(DB_REBUILD, DF_UUID" rebuild yield: %d\n",
+			DP_UUID(rpt->rt_pool_uuid), rc);
+		arg->yield_freq = DEFAULT_YIELD_FREQ;
+		if (rc == 0)
+			dss_sleep(0);
+		*acts |= VOS_ITER_CB_YIELD;
+	}
 
 	return rc;
 }

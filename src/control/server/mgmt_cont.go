@@ -45,7 +45,7 @@ func (svc *mgmtSvc) ContSetOwner(ctx context.Context, req *mgmtpb.ContSetOwnerRe
 	}
 	svc.log.Debugf("MgmtSvc.ContSetOwner dispatch, req:%+v\n", *req)
 
-	dresp, err := svc.harness.CallDrpc(ctx, drpc.MethodContSetOwner, req)
+	dresp, err := svc.makePoolServiceCall(ctx, drpc.MethodContSetOwner, req)
 	if err != nil {
 		return nil, err
 	}

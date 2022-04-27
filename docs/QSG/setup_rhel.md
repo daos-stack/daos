@@ -1,4 +1,4 @@
-# DAOS Set-Up on EL (including CentOS)
+# DAOS Set-Up on RHEL and Clones
 
 
 The following instructions detail how to install, set up and start DAOS servers and clients on two or more nodes.

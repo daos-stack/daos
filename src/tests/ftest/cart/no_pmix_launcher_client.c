@@ -142,7 +142,7 @@ int main(int argc, char **argv)
 	}
 
 	rc = crtu_wait_for_ranks(crt_ctx, grp, rank_list, NUM_SERVER_CTX - 1,
-				 NUM_SERVER_CTX, 5, 150);
+				 NUM_SERVER_CTX, 60, 120);
 	if (rc != 0) {
 		D_ERROR("wait_for_ranks() failed; rc=%d\n", rc);
 		assert(0);

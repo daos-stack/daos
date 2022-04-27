@@ -183,6 +183,21 @@ func (r *DeleteACLReq) SetUUID(id uuid.UUID) {
 	r.Id = id.String()
 }
 
+// SetSvcRanks sets the request's Pool Service Ranks.
+func (r *ContSetOwnerReq) SetSvcRanks(rl []uint32) {
+	r.SvcRanks = rl
+}
+
+// SetUUID sets the request's ID to a UUID.
+func (r *ContSetOwnerReq) SetUUID(id uuid.UUID) {
+	r.PoolUUID = id.String()
+}
+
+// GetId fetches the pool ID.
+func (r *ContSetOwnerReq) GetId() string {
+	return r.PoolUUID
+}
+
 func Debug(msg proto.Message) string {
 	var bld strings.Builder
 	switch m := msg.(type) {

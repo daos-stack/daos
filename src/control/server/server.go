@@ -33,18 +33,19 @@ import (
 	"github.com/daos-stack/daos/src/control/server/engine"
 	"github.com/daos-stack/daos/src/control/server/storage"
 	"github.com/daos-stack/daos/src/control/system"
+	"github.com/daos-stack/daos/src/control/system/raft"
 )
 
-func processConfig(log *logging.LeveledLogger, cfg *config.Server, fis *hardware.FabricInterfaceSet) (*system.FaultDomain, error) {
+func processConfig(log logging.Logger, cfg *config.Server, fis *hardware.FabricInterfaceSet) error {
 	processFabricProvider(cfg)
 
 	hpi, err := common.GetHugePageInfo()
 	if err != nil {
-		return nil, errors.Wrapf(err, "retrieve hugepage info")
+		return errors.Wrapf(err, "retrieve hugepage info")
 	}
 
 	if err := cfg.Validate(log, hpi.PageSizeKb, fis); err != nil {
-		return nil, errors.Wrapf(err, "%s: validation failed", cfg.Path)
+		return errors.Wrapf(err, "%s: validation failed", cfg.Path)
 	}
 
 	lookupNetIF := func(name string) (netInterface, error) {
@@ -54,29 +55,24 @@ func processConfig(log *logging.LeveledLogger, cfg *config.Server, fis *hardware
 		}
 		return iface, nil
 	}
+
 	for _, ec := range cfg.Engines {
 		if err := checkFabricInterface(ec.Fabric.Interface, lookupNetIF); err != nil {
-			return nil, err
+			return err
 		}
 
 		if err := updateFabricEnvars(log, ec, fis); err != nil {
-			return nil, errors.Wrap(err, "update engine fabric envars")
+			return errors.Wrap(err, "update engine fabric envars")
 		}
 	}
 
 	cfg.SaveActiveConfig(log)
 
 	if err := setDaosHelperEnvs(cfg, os.Setenv); err != nil {
-		return nil, err
+		return err
 	}
 
-	faultDomain, err := getFaultDomain(cfg)
-	if err != nil {
-		return nil, err
-	}
-	log.Debugf("fault domain: %s", faultDomain.String())
-
-	return faultDomain, nil
+	return nil
 }
 
 func processFabricProvider(cfg *config.Server) {
@@ -96,7 +92,7 @@ func shouldAppendRXM(provider string) bool {
 
 // server struct contains state and components of DAOS Server.
 type server struct {
-	log         *logging.LeveledLogger
+	log         logging.Logger
 	cfg         *config.Server
 	hostname    string
 	runningUser *user.User
@@ -107,7 +103,7 @@ type server struct {
 
 	harness      *EngineHarness
 	membership   *system.Membership
-	sysdb        *system.Database
+	sysdb        *raft.Database
 	pubSub       *events.PubSub
 	evtForwarder *control.EventForwarder
 	evtLogger    *control.EventLogger
@@ -120,7 +116,7 @@ type server struct {
 	onShutdown       []func()
 }
 
-func newServer(log *logging.LeveledLogger, cfg *config.Server, faultDomain *system.FaultDomain) (*server, error) {
+func newServer(log logging.Logger, cfg *config.Server, faultDomain *system.FaultDomain) (*server, error) {
 	hostname, err := os.Hostname()
 	if err != nil {
 		return nil, errors.Wrap(err, "get hostname")
@@ -160,7 +156,7 @@ func (srv *server) createServices(ctx context.Context) error {
 
 	// If this daos_server instance ends up being the MS leader,
 	// this will record the DAOS system membership.
-	sysdb, err := system.NewDatabase(srv.log, &system.DatabaseConfig{
+	sysdb, err := raft.NewDatabase(srv.log, &raft.DatabaseConfig{
 		Replicas:   dbReplicas,
 		RaftDir:    cfgGetRaftDir(srv.cfg),
 		SystemName: srv.cfg.SystemName,
@@ -435,8 +431,25 @@ func (srv *server) start(ctx context.Context, shutdown context.CancelFunc) error
 		"%s harness exited", build.ControlPlaneName)
 }
 
+func waitFabricReady(ctx context.Context, log logging.Logger, cfg *config.Server) error {
+	ifaces := make([]string, 0, len(cfg.Engines))
+	for _, eng := range cfg.Engines {
+		ifaces = append(ifaces, eng.Fabric.Interface)
+	}
+
+	if err := hardware.WaitFabricReady(ctx, log, hardware.WaitFabricReadyParams{
+		Checker:        hwprov.DefaultFabricReadyChecker(log),
+		FabricIfaces:   ifaces,
+		IterationSleep: time.Second,
+	}); err != nil {
+		return err
+	}
+
+	return nil
+}
+
 // Start is the entry point for a daos_server instance.
-func Start(log *logging.LeveledLogger, cfg *config.Server) error {
+func Start(log logging.Logger, cfg *config.Server) error {
 	// Create the root context here. All contexts should inherit from this one so
 	// that they can be shut down from one place.
 	ctx, shutdown := context.WithCancel(context.Background())
@@ -448,16 +461,27 @@ func Start(log *logging.LeveledLogger, cfg *config.Server) error {
 	}
 	defer hwprovFini()
 
+	if err := waitFabricReady(ctx, log, cfg); err != nil {
+		return err
+	}
+
 	scanner := hwprov.DefaultFabricScanner(log)
+
 	fiSet, err := scanner.Scan(ctx)
 	if err != nil {
 		return errors.Wrap(err, "scan fabric")
 	}
 
-	faultDomain, err := processConfig(log, cfg, fiSet)
+	err = processConfig(log, cfg, fiSet)
 	if err != nil {
 		return err
 	}
+
+	faultDomain, err := getFaultDomain(cfg)
+	if err != nil {
+		return err
+	}
+	log.Debugf("fault domain: %s", faultDomain.String())
 
 	srv, err := newServer(log, cfg, faultDomain)
 	if err != nil {

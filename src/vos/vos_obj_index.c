@@ -504,6 +504,7 @@ oi_iter_match_probe(struct vos_iterator *iter, daos_anchor_t *anchor, uint32_t f
 	struct vos_oi_iter	*oiter	= iter2oiter(iter);
 	char			*str	= NULL;
 	vos_iter_desc_t		 desc;
+	uint64_t		 feats;
 	unsigned int		 acts;
 	int			 rc;
 
@@ -523,6 +524,18 @@ oi_iter_match_probe(struct vos_iterator *iter, daos_anchor_t *anchor, uint32_t f
 		if (iter->it_filter_cb != NULL && (flags & VOS_ITER_PROBE_AGAIN) == 0) {
 			desc.id_type = VOS_ITER_OBJ;
 			desc.id_oid = obj->vo_id;
+			desc.id_parent_punch = 0;
+
+			feats = dbtree_feats_get(&obj->vo_tree);
+
+			if (!vos_feats_agg_time_get(feats, &desc.id_agg_write)) {
+				/* Upgrading case, set it to latest known epoch */
+				if (obj->vo_max_write == 0)
+					vos_ilog_last_update(&obj->vo_ilog, VOS_TS_TYPE_OBJ,
+							     &desc.id_agg_write);
+				else
+					desc.id_agg_write = obj->vo_max_write;
+			}
 			acts = 0;
 			start_seq = vos_sched_seq();
 			rc = iter->it_filter_cb(vos_iter2hdl(iter), &desc, iter->it_filter_arg,
@@ -683,61 +696,6 @@ oi_iter_delete(struct vos_iterator *iter, void *args)
 		D_ERROR("Failed to delete oid entry: "DF_RC"\n", DP_RC(rc));
 exit:
 	return rc;
-}
-
-int
-oi_iter_start_agg(daos_handle_t ih, bool full_scan)
-{
-	struct vos_iterator	*iter = vos_hdl2iter(ih);
-	struct vos_oi_iter	*oiter = iter2oiter(iter);
-	daos_epoch_t		 agg_write;
-	struct vos_obj_df	*obj;
-	vos_iter_entry_t	 ent;
-	d_iov_t			 rec_iov;
-	int			 rc;
-	bool			 has_agg_write;
-	uint64_t		 feats;
-
-	D_ASSERT(iter->it_type == VOS_ITER_OBJ);
-	D_ASSERT(iter->it_for_purge);
-	if (full_scan)
-		return 1;
-
-	d_iov_set(&rec_iov, NULL, 0);
-	rc = dbtree_iter_fetch(oiter->oit_hdl, NULL, &rec_iov, NULL);
-	D_ASSERTF(rc != -DER_NONEXIST,
-		  "Probe should be done before aggregation\n");
-	if (rc != 0)
-		return rc;
-
-	D_ASSERT(rec_iov.iov_len == sizeof(struct vos_obj_df));
-	obj = (struct vos_obj_df *)rec_iov.iov_buf;
-	feats = dbtree_feats_get(&obj->vo_tree);
-
-	has_agg_write = vos_feats_agg_time_get(feats, &agg_write);
-	if (has_agg_write) {
-		if (agg_write <= oiter->oit_cont->vc_cont_df->cd_hae)
-			return 0;
-		return 1;
-	}
-
-	/** Fall through to check other filters */
-
-	rc = oi_iter_fill(rec_iov.iov_buf, oiter, true, &ent);
-	if (rc == -DER_NONEXIST)
-		return 0; /** No match for iterator range so let's skip it */
-	if (rc != 0)
-		return rc; /**  Likely the entry isn't in the range or we hit some other error.
-			      * Let the iterator sort this out later.
-			      */
-	if (ent.ie_vis_flags & VOS_VIS_FLAG_COVERED)
-		return 1;
-
-	D_ASSERT(ent.ie_last_update != 0);
-	if (ent.ie_last_update <= oiter->oit_cont->vc_cont_df->cd_hae)
-		return 0;
-
-	return 1;
 }
 
 int

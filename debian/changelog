@@ -1,3 +1,34 @@
+daos (2.3.100-4) unstable; urgency=medium
+  [ Lei Huang ]
+  * Update libfabric to v1.15.0rc3-1 to include critical performance patches
+
+ -- Lei Huang <lei.huang@intel.com> Wed, 20 Apr 2022 09:00:00 -0500
+
+daos (2.3.100-3) unstable; urgency=medium
+  [ Li Wei ]
+  * Update raft to 0.9.1-1401.gc18bcb8 to fix uninitialized node IDs
+
+ -- Li Wei <wei.g.li@intel.com>  Tue, 12 Apr 2022 08:33:00 +0800
+
+daos (2.3.100-2) unstable; urgency=medium
+  [ Jeff Olivier ]
+  * Extract MPI from many binaries create dpar and dpar_mpi providing a
+    similar interface to abstract away the direct MPI dependence
+
+ -- Jeff Olivier <jeffrey.v.olivier@intel.com>  Wed, 6 Apr 2022 14:30:01 -0100
+
+daos (2.3.100-1) unstable; urgency=medium
+  [ Johann Lombardi ]
+  * Bump version to 2.3.100
+
+ -- Johann Lombardi <johann.lombardi@intel.com>  Wed, 6 Apr 2022 12:00:00 +0800
+
+daos (2.1.100-26) unstable; urgency=medium
+  [ Joseph Moore ]
+  * Add build depends entries for UCX libraries
+
+ -- Joseph Moore <joseph.moore@intel.com>  Wed, 6 Apr 2022 10:44:21 +0800
+
 daos (2.1.100-25) unstable; urgency=medium
   [ Joseph Moore ]
   * Update mercury to UCX provider patch
