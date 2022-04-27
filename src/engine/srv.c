@@ -337,8 +337,8 @@ wait_all_exited(struct dss_xstream *dx, struct dss_module_info *dmi)
 			break;
 
 		/*
-		 * Abort timeout rpc properly, otherwise some ult like(DTX)
-		 * will wait forever.
+		 * Call progress in case any replies are pending in the
+		 * queue which might block some ULTs forever.
 		 */
 		if (dx->dx_comm) {
 			rc = crt_progress(dmi->dmi_ctx, 0);
