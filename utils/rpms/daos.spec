@@ -4,7 +4,7 @@
 %define sysctl_script_name 10-daos_server.conf
 
 %global mercury_version 2.1.0~rc4-8%{?dist}
-%global libfabric_version 1.14.0-1
+%global libfabric_version 1.15.0~rc3-1
 %global __python %{__python3}
 
 %if 0%{?rhel} > 0
@@ -27,7 +27,7 @@
 
 Name:          daos
 Version:       2.3.100
-Release:       1%{?relval}%{?dist}
+Release:       4%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       BSD-2-Clause-Patent
@@ -94,7 +94,7 @@ BuildRequires: libisa-l_crypto-devel
 BuildRequires: libisal-devel
 BuildRequires: libisal_crypto-devel
 %endif
-BuildRequires: daos-raft-devel = 0.9.0-1394.gc81505f%{?dist}%{?dist}
+BuildRequires: daos-raft-devel = 0.9.1-1401.gc18bcb8%{?dist}
 BuildRequires: openssl-devel
 BuildRequires: libevent-devel
 BuildRequires: libyaml-devel
@@ -227,7 +227,6 @@ This is the package needed to run a DAOS client
 %package tests
 Summary: The entire DAOS test suite
 Requires: %{name}-client-tests-openmpi%{?_isa} = %{version}-%{release}
-Requires: %{name}-server-tests-openmpi%{?_isa} = %{version}-%{release}
 
 %description tests
 This is the package is a metapackage to install all of the test packages
@@ -273,13 +272,6 @@ Requires: %{name}-server%{?_isa} = %{version}-%{release}
 
 %description server-tests
 This is the package needed to run the DAOS server test suite (server tests)
-
-%package server-tests-openmpi
-Summary: The DAOS server test suite - tools which need openmpi
-Requires: %{name}-server-tests%{?_isa} = %{version}-%{release}
-
-%description server-tests-openmpi
-This is the package needed to run the DAOS server test suite openmpi tools
 
 %package devel
 Summary: The DAOS development libraries and headers
@@ -510,18 +502,20 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %{_bindir}/security_test
 %{conf_dir}/fault-inject-cart.yaml
 %{_bindir}/fault_status
+%{_bindir}/crt_launch
 # For avocado tests
 %{daoshome}/.build_vars.json
 %{daoshome}/.build_vars.sh
-
-%files client-tests-openmpi
-%{_bindir}/crt_launch
 %{_bindir}/daos_perf
 %{_bindir}/daos_racer
 %{_bindir}/daos_test
 %{_bindir}/dfs_test
 %{_bindir}/jobtest
 %{_libdir}/libdts.so
+%{_libdir}/libdpar.so
+
+%files client-tests-openmpi
+%{_libdir}/libdpar_mpi.so
 
 %files server-tests
 %{_bindir}/evt_ctl
@@ -535,8 +529,6 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %{_bindir}/vea_ut
 %{_bindir}/vos_tests
 %{_bindir}/vea_stress
-
-%files server-tests-openmpi
 %{_bindir}/daos_gen_io_conf
 %{_bindir}/daos_run_io_conf
 %{_bindir}/obj_ctl
@@ -563,6 +555,15 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 # No files in a shim package
 
 %changelog
+* Wed Apr 20 2022 Lei Huang <lei.huang@intel.com> 2.3.100-4
+- Update to libfabric to v1.15.0rc3-1 to include critical performance patches
+
+* Tue Apr 12 2022 Li Wei <wei.g.li@intel.com> 2.3.100-3
+- Update raft to 0.9.1-1401.gc18bcb8 to fix uninitialized node IDs
+
+* Wed Apr 6 2022 Jeff Olivier <jeffrey.v.olivier@intel.com> 2.3.100-2
+- Remove direct MPI dependency from most of tests
+
 * Wed Apr  6 2022 Johann Lombardi <johann.lombardi@intel.com> 2.3.100-1
 - Switch version to 2.3.100 for 2.4 test builds
 

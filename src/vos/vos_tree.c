@@ -1017,10 +1017,12 @@ key_tree_prepare(struct vos_object *obj, daos_handle_t toh,
 	if (rc != 0 || tclass != VOS_BTR_AKEY || !(flags & SUBTR_CREATE))
 		return rc;
 
-	/* As a first cut for aggregation detection, just return 1 if it's not the first update.
-	 * This can be improved upon for evtree to take into account actual extent overlap but
-	 * this is a simpler solution for now.
+	/** If it's evtree, evt_insert will detect if aggregation is needed.  For single value,
+	 *  return 1 to indicate aggregation is on update to an existing tree.
 	 */
+	if (flags & SUBTR_EVT)
+		return 0;
+
 	return created ? 0 : 1;
 }
 

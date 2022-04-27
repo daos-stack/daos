@@ -71,7 +71,7 @@
 # organized by NUMA node.
 # If not defined, the agent will automatically detect all fabric interfaces and
 # select appropriate ones based on the server preferences.
-# 
+#
 #fabric_ifaces:
 #-
 #  numa_node: 0
