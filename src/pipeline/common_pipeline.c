@@ -226,19 +226,34 @@ d_pipeline_check(daos_pipeline_t *pipeline)
 	int     rc;
 
 	/**
+	 * TOTAL: 8 checks:
+	 *
+	 *      -- Check 0: Check that pipeline is not NULL.
+	 *      -- Check 1: Check that filters are chained together correctly.
+	 *      -- Check 2: Check that all parts have a correct type.
+	 *      -- Check 3: Check that all parts have a correct number of operands and also that
+	 *                  the number of total parts is correct.
+	 *      -- Check 4: Check that constants have a type.
+	 *      -- Check 5: Check that constants of type CSTRING always end in '\0'.
+	 *      -- Check 6: Check that constants of type STRING have a sane size.
+	 *      -- Check 7: Check that all parts have a correct data type.
+	 *      -- Check 8: Check that all parts have the right type of operands.
+	 */
+
+	/**
 	 * TODO: Check that functions' operands always have the right type
 	 * TODO: Check that constants that are arrays are always on the right
 	 * TODO: Check that arithmetic functions only support number types
 	 */
 
-	/** -- Check 0: Check that pipeline is not NULL. */
+	/** 0 */
 
 	if (pipeline == NULL) {
 		D_ERROR("pipeline object is NULL\n");
 		return -DER_INVAL;
 	}
 
-	/** -- Check 1: Check that filters are chained together correctly. */
+	/** 1 */
 
 	for (i = 0; i < pipeline->num_filters; i++) {
 		if (strncmp((char *)pipeline->filters[i]->filter_type.iov_buf,
@@ -276,22 +291,7 @@ d_pipeline_check(daos_pipeline_t *pipeline)
 		if (ftr->num_parts)
 			num_parts = 1;
 
-		/** -- Checks 2 ... 6 */
-
-		/**
-		 * -- Check 2: Check that all parts have a correct type.
-		 *
-		 * -- Check 3: Check that all parts have a correct number of operands and also that
-		 *             the number of total parts is correct.
-		 *
-		 * -- Check 4: Check that constants have a type.
-		 *
-		 * -- Check 5: Check that constants of type CSTRING always end in '\0'.
-		 *
-		 * -- Check 6: Check that constants of type STRING have a sane size.
-		 *
-		 * -- Check 7: Check that all parts have a correct data type.
-		 */
+		/** -- Checks 2 ... 7 */
 
 		for (p = 0; p < ftr->num_parts; p++) {
 			daos_filter_part_t *part = ftr->parts[p];
@@ -356,9 +356,7 @@ d_pipeline_check(daos_pipeline_t *pipeline)
 			return -DER_INVAL;
 		}
 
-		/**
-		 * -- Check 8: Check that all parts have the right type of operands.
-		 */
+		/** 8 */
 
 		p   = 0;
 		res = pipeline_filter_checkops(ftr, &p);
