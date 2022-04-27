@@ -73,27 +73,27 @@ pipeline_part_nops(const char *part_type, size_t part_type_s)
 	if (!strncmp(part_type, "DAOS_FILTER_FUNC_AND", part_type_s) ||
 	    !strncmp(part_type, "DAOS_FILTER_FUNC_OR", part_type_s))
 		return -1;
-	else if (!strncmp(part_type, "DAOS_FILTER_FUNC_EQ", part_type_s) ||
-		 !strncmp(part_type, "DAOS_FILTER_FUNC_IN", part_type_s) ||
-		 !strncmp(part_type, "DAOS_FILTER_FUNC_NE", part_type_s) ||
-		 !strncmp(part_type, "DAOS_FILTER_FUNC_LT", part_type_s) ||
-		 !strncmp(part_type, "DAOS_FILTER_FUNC_LE", part_type_s) ||
-		 !strncmp(part_type, "DAOS_FILTER_FUNC_GE", part_type_s) ||
-		 !strncmp(part_type, "DAOS_FILTER_FUNC_GT", part_type_s) ||
-		 !strncmp(part_type, "DAOS_FILTER_FUNC_LIKE", part_type_s) ||
-		 !strncmp(part_type, "DAOS_FILTER_FUNC_ADD", part_type_s) ||
-		 !strncmp(part_type, "DAOS_FILTER_FUNC_SUB", part_type_s) ||
-		 !strncmp(part_type, "DAOS_FILTER_FUNC_MUL", part_type_s) ||
-		 !strncmp(part_type, "DAOS_FILTER_FUNC_DIV", part_type_s) ||
-		 !strncmp(part_type, "DAOS_FILTER_FUNC_BITAND", part_type_s))
+	if (!strncmp(part_type, "DAOS_FILTER_FUNC_EQ", part_type_s) ||
+	    !strncmp(part_type, "DAOS_FILTER_FUNC_IN", part_type_s) ||
+	    !strncmp(part_type, "DAOS_FILTER_FUNC_NE", part_type_s) ||
+	    !strncmp(part_type, "DAOS_FILTER_FUNC_LT", part_type_s) ||
+	    !strncmp(part_type, "DAOS_FILTER_FUNC_LE", part_type_s) ||
+	    !strncmp(part_type, "DAOS_FILTER_FUNC_GE", part_type_s) ||
+	    !strncmp(part_type, "DAOS_FILTER_FUNC_GT", part_type_s) ||
+	    !strncmp(part_type, "DAOS_FILTER_FUNC_LIKE", part_type_s) ||
+	    !strncmp(part_type, "DAOS_FILTER_FUNC_ADD", part_type_s) ||
+	    !strncmp(part_type, "DAOS_FILTER_FUNC_SUB", part_type_s) ||
+	    !strncmp(part_type, "DAOS_FILTER_FUNC_MUL", part_type_s) ||
+	    !strncmp(part_type, "DAOS_FILTER_FUNC_DIV", part_type_s) ||
+	    !strncmp(part_type, "DAOS_FILTER_FUNC_BITAND", part_type_s))
 		return 2;
-	else if (!strncmp(part_type, "DAOS_FILTER_FUNC_ISNULL", part_type_s) ||
-		 !strncmp(part_type, "DAOS_FILTER_FUNC_ISNOTNULL", part_type_s) ||
-		 !strncmp(part_type, "DAOS_FILTER_FUNC_NOT", part_type_s) ||
-		 !strncmp(part_type, "DAOS_FILTER_FUNC_SUM", part_type_s) ||
-		 !strncmp(part_type, "DAOS_FILTER_FUNC_MIN", part_type_s) ||
-		 !strncmp(part_type, "DAOS_FILTER_FUNC_MAX", part_type_s) ||
-		 !strncmp(part_type, "DAOS_FILTER_FUNC_AVG", part_type_s))
+	if (!strncmp(part_type, "DAOS_FILTER_FUNC_ISNULL", part_type_s) ||
+	    !strncmp(part_type, "DAOS_FILTER_FUNC_ISNOTNULL", part_type_s) ||
+	    !strncmp(part_type, "DAOS_FILTER_FUNC_NOT", part_type_s) ||
+	    !strncmp(part_type, "DAOS_FILTER_FUNC_SUM", part_type_s) ||
+	    !strncmp(part_type, "DAOS_FILTER_FUNC_MIN", part_type_s) ||
+	    !strncmp(part_type, "DAOS_FILTER_FUNC_MAX", part_type_s) ||
+	    !strncmp(part_type, "DAOS_FILTER_FUNC_AVG", part_type_s))
 		return 1;
 	return 0; /** Everything else has zero operands */
 }
@@ -104,7 +104,8 @@ pipeline_part_checkop(const char *part_type, size_t part_type_s, const char *ope
 {
 	if (!strncmp(part_type, "DAOS_FILTER_FUNC_NOT", part_type_s) ||
 	    !strncmp(part_type, "DAOS_FILTER_FUNC_AND", part_type_s) ||
-	    !strncmp(part_type, "DAOS_FILTER_FUNC_OR", part_type_s)) { /* only logical funcs */
+	    !strncmp(part_type, "DAOS_FILTER_FUNC_OR", part_type_s)) {
+		/* only logical funcs */
 		return !strncmp(operand_type, "DAOS_FILTER_FUNC_EQ", operand_type_s) ||
 		       !strncmp(operand_type, "DAOS_FILTER_FUNC_IN", operand_type_s) ||
 		       !strncmp(operand_type, "DAOS_FILTER_FUNC_NE", operand_type_s) ||
@@ -116,13 +117,24 @@ pipeline_part_checkop(const char *part_type, size_t part_type_s, const char *ope
 		       !strncmp(operand_type, "DAOS_FILTER_FUNC_NOT", operand_type_s) ||
 		       !strncmp(operand_type, "DAOS_FILTER_FUNC_AND", operand_type_s) ||
 		       !strncmp(operand_type, "DAOS_FILTER_FUNC_OR", operand_type_s);
-	} else if (!strncmp(part_type, "DAOS_FILTER_FUNC_LIKE", part_type_s)) { /* no functions */
+	}
+	if (!strncmp(part_type, "DAOS_FILTER_FUNC_LIKE", part_type_s)) {
+		/* no functions */
 		return strncmp(operand_type, "DAOS_FILTER_FUN", strlen("DAOS_FILTER_FUN"));
-	} else if (!strncmp(part_type, "DAOS_FILTER_FUNC_ISNULL", part_type_s) ||
-		   !strncmp(part_type, "DAOS_FILTER_FUNC_ISNOTNULL",
-			    part_type_s)) /* only akeys */
+	}
+	if (!strncmp(part_type, "DAOS_FILTER_FUNC_ISNULL", part_type_s) ||
+	    !strncmp(part_type, "DAOS_FILTER_FUNC_ISNOTNULL", part_type_s)) {
+		/* only akeys */
 		return !strncmp(operand_type, "DAOS_FILTER_AKEY", operand_type_s);
-	else { /* arithmetic functions or keys and constants (no functions) */
+	}
+	if (!strncmp(part_type, "DAOS_FILTER_FUNC_EQ", part_type_s) ||
+	    !strncmp(part_type, "DAOS_FILTER_FUNC_IN", part_type_s) ||
+	    !strncmp(part_type, "DAOS_FILTER_FUNC_NE", part_type_s) ||
+	    !strncmp(part_type, "DAOS_FILTER_FUNC_LT", part_type_s) ||
+	    !strncmp(part_type, "DAOS_FILTER_FUNC_LE", part_type_s) ||
+	    !strncmp(part_type, "DAOS_FILTER_FUNC_GE", part_type_s) ||
+	    !strncmp(part_type, "DAOS_FILTER_FUNC_GT", part_type_s)) {
+		/* arithmetic functions or keys and constants */
 		return strncmp(operand_type, "DAOS_FILTER_FUN", strlen("DAOS_FILTER_FUN")) ||
 		       !strncmp(operand_type, "DAOS_FILTER_FUNC_BITAND", operand_type_s) ||
 		       !strncmp(operand_type, "DAOS_FILTER_FUNC_ADD", operand_type_s) ||
@@ -130,32 +142,88 @@ pipeline_part_checkop(const char *part_type, size_t part_type_s, const char *ope
 		       !strncmp(operand_type, "DAOS_FILTER_FUNC_MUL", operand_type_s) ||
 		       !strncmp(operand_type, "DAOS_FILTER_FUNC_DIV", operand_type_s);
 	}
+	return false;
+}
+
+static bool
+is_comp_logical_func(const char *part_type, size_t part_type_s)
+{
+	return !strncmp(part_type, "DAOS_FILTER_FUNC_EQ", part_type_s) ||
+	       !strncmp(part_type, "DAOS_FILTER_FUNC_IN", part_type_s) ||
+	       !strncmp(part_type, "DAOS_FILTER_FUNC_NE", part_type_s) ||
+	       !strncmp(part_type, "DAOS_FILTER_FUNC_LT", part_type_s) ||
+	       !strncmp(part_type, "DAOS_FILTER_FUNC_LE", part_type_s) ||
+	       !strncmp(part_type, "DAOS_FILTER_FUNC_GE", part_type_s) ||
+	       !strncmp(part_type, "DAOS_FILTER_FUNC_GT", part_type_s) ||
+	       !strncmp(part_type, "DAOS_FILTER_FUNC_LIKE", part_type_s);
 }
 
 static bool
 pipeline_filter_checkops(daos_filter_t *ftr, size_t *p)
 {
-	uint32_t i;
-	uint32_t num_operands;
-	bool     res;
-	char    *part_type;
-	size_t   part_type_s;
-	char    *child_part_type;
-	size_t   child_part_type_s;
+	uint32_t  i;
+	uint32_t  num_operands;
+	size_t    child_num_constants;
+	bool      res;
+	char     *part_type;
+	size_t    part_type_s;
+	char     *child_part_type;
+	size_t    child_part_type_s;
 
-	num_operands = ftr->parts[*p]->num_operands;
-	part_type    = (char *)ftr->parts[*p]->part_type.iov_buf;
-	part_type_s  = ftr->parts[*p]->part_type.iov_len;
+	num_operands  = ftr->parts[*p]->num_operands;
+	part_type     = (char *)ftr->parts[*p]->part_type.iov_buf;
+	part_type_s   = ftr->parts[*p]->part_type.iov_len;
 	for (i = 0; i < num_operands; i++) {
-		child_part_type   = (char *)ftr->parts[*p + 1]->part_type.iov_buf;
-		child_part_type_s = ftr->parts[*p + 1]->part_type.iov_len;
+		child_part_type     = (char *)ftr->parts[*p + 1]->part_type.iov_buf;
+		child_part_type_s   = ftr->parts[*p + 1]->part_type.iov_len;
+		child_num_constants = ftr->parts[*p+1]->num_constants;
+
 		res               = pipeline_part_checkop(part_type, part_type_s, child_part_type,
 							  child_part_type_s);
 		if (!res) {
-			D_ERROR("part %zu: wrong child part type %.*s for part type %.*s\n", *p,
+			D_ERROR("part %zu: wrong part type %.*s operand for part type %.*s\n", *p,
 				(int)child_part_type_s, child_part_type, (int)part_type_s,
 				part_type);
 			return res;
+		}
+		if (!strncmp(child_part_type, "DAOS_FILTER_CONST", child_part_type_s) &&
+		    child_num_constants > 1 &&
+		    (!is_comp_logical_func(part_type, part_type_s) ||
+		     !strncmp(part_type, "DAOS_FILTER_FUNC_LIKE", part_type_s))) {
+			D_ERROR("part %zu: CONST array can't be operand of part type %.*s\n", *p,
+				(int)part_type_s, part_type);
+			return false;
+		}
+
+		/** recursive call */
+		*p += 1;
+		res = pipeline_filter_checkops(ftr, p);
+		if (!res)
+			return res;
+	}
+	return true;
+}
+
+static bool
+pipeline_filter_check_array_constants(daos_filter_t *ftr, size_t *p)
+{
+	uint32_t  i;
+	uint32_t  num_operands;
+	size_t    child_num_constants;
+	bool      res;
+	char     *child_part_type;
+	size_t    child_part_type_s;
+
+	num_operands = ftr->parts[*p]->num_operands;
+	for (i = 0; i < num_operands; i++) {
+		child_part_type     = (char *)ftr->parts[*p + 1]->part_type.iov_buf;
+		child_part_type_s   = ftr->parts[*p + 1]->part_type.iov_len;
+		child_num_constants = ftr->parts[*p + 1]->num_constants;
+
+		if (!strncmp(child_part_type, "DAOS_FILTER_CONST", child_part_type_s) &&
+		    child_num_constants > 1 && i < num_operands - 1) {
+			D_ERROR("part %zu: CONST array should always be the last operand\n", *p);
+			return false;
 		}
 
 		/** recursive call */
@@ -168,7 +236,7 @@ pipeline_filter_checkops(daos_filter_t *ftr, size_t *p)
 }
 
 static int
-do_checks_for_constants(size_t ft, size_t pa, daos_filter_part_t *part)
+do_checks_for_string_constants(size_t ft, size_t pa, daos_filter_part_t *part)
 {
 	size_t   k;
 	char    *string;
@@ -226,7 +294,7 @@ d_pipeline_check(daos_pipeline_t *pipeline)
 	int     rc;
 
 	/**
-	 * TOTAL: 8 checks:
+	 * TOTAL: 9 checks:
 	 *
 	 *      -- Check 0: Check that pipeline is not NULL.
 	 *      -- Check 1: Check that filters are chained together correctly.
@@ -238,11 +306,11 @@ d_pipeline_check(daos_pipeline_t *pipeline)
 	 *      -- Check 6: Check that constants of type STRING have a sane size.
 	 *      -- Check 7: Check that all parts have a correct data type.
 	 *      -- Check 8: Check that all parts have the right type of operands.
+	 *      -- Check 9: Check that arrays of constants are always on the right operand.
 	 */
 
 	/**
 	 * TODO: Check that functions' operands always have the right type
-	 * TODO: Check that constants that are arrays are always on the right
 	 * TODO: Check that arithmetic functions only support number types
 	 */
 
@@ -331,7 +399,7 @@ d_pipeline_check(daos_pipeline_t *pipeline)
 
 				/** 4, 5 and 6 */
 
-				rc = do_checks_for_constants(i, p, part);
+				rc = do_checks_for_string_constants(i, p, part);
 				if (rc != 0)
 					return rc;
 			}
@@ -362,6 +430,15 @@ d_pipeline_check(daos_pipeline_t *pipeline)
 		res = pipeline_filter_checkops(ftr, &p);
 		if (!res) {
 			D_ERROR("filter %zu: wrong type for some part operands\n", i);
+			return -DER_INVAL;
+		}
+
+		/** 9 */
+
+		p = 0;
+		res = pipeline_filter_check_array_constants(ftr, &p);
+		if (!res) {
+			D_ERROR("filter %zu: array of constants placed in wrong operand\n", i);
 			return -DER_INVAL;
 		}
 	}

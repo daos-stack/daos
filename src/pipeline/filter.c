@@ -197,17 +197,17 @@ static int
 compile_filter(daos_filter_t *filter, struct filter_compiled_t *comp_filter, uint32_t *part_idx,
 	       uint32_t *comp_part_idx, char **type, size_t *type_len)
 {
-	uint32_t                       nops;
-	uint32_t                       func_idx;
-	uint32_t                       type_idx;
-	uint32_t                       i;
-	size_t                         j;
-	char			  *part_type;
-	size_t                         part_type_s;
-	size_t                         comp_size;
-	struct filter_part_compiled_t *comp_part;
-	int                            rc = 0;
-	uint32_t                       idx;
+	uint32_t                        nops;
+	uint32_t                        func_idx;
+	uint32_t                        type_idx;
+	uint32_t                        i;
+	size_t                          j;
+	char                           *part_type;
+	size_t                          part_type_s;
+	size_t                          comp_size;
+	struct filter_part_compiled_t  *comp_part;
+	int                             rc = 0;
+	uint32_t                        idx;
 
 	part_type   = (char *)filter->parts[*part_idx]->part_type.iov_buf;
 	part_type_s = filter->parts[*part_idx]->part_type.iov_len;
