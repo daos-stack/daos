@@ -471,7 +471,7 @@ func TestControl_PoolQueryResp_MarshallJSON(t *testing.T) {
 				PoolInfo: PoolInfo{
 					TotalTargets:    1,
 					ActiveTargets:   2,
-					TotalNodes:      3,
+					TotalEngines:    3,
 					DisabledTargets: 4,
 					Version:         5,
 					Leader:          6,
@@ -486,7 +486,7 @@ func TestControl_PoolQueryResp_MarshallJSON(t *testing.T) {
 				PoolInfo: PoolInfo{
 					TotalTargets:    1,
 					ActiveTargets:   2,
-					TotalNodes:      3,
+					TotalEngines:    3,
 					DisabledTargets: 4,
 					Version:         5,
 					Leader:          6,
@@ -524,7 +524,7 @@ func TestControl_PoolQueryResp_UnmarshallJSON(t *testing.T) {
 				PoolInfo: PoolInfo{
 					TotalTargets:    1,
 					ActiveTargets:   2,
-					TotalNodes:      3,
+					TotalEngines:    3,
 					DisabledTargets: 4,
 					Version:         5,
 					Leader:          6,
@@ -539,7 +539,7 @@ func TestControl_PoolQueryResp_UnmarshallJSON(t *testing.T) {
 				PoolInfo: PoolInfo{
 					TotalTargets:    1,
 					ActiveTargets:   2,
-					TotalNodes:      3,
+					TotalEngines:    3,
 					DisabledTargets: 4,
 					Version:         5,
 					Leader:          6,

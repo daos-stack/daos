@@ -403,7 +403,7 @@ type (
 	PoolInfo struct {
 		TotalTargets    uint32               `json:"total_targets"`
 		ActiveTargets   uint32               `json:"active_targets"`
-		TotalNodes      uint32               `json:"total_engines"`
+		TotalEngines    uint32               `json:"total_engines"`
 		DisabledTargets uint32               `json:"disabled_targets"`
 		Version         uint32               `json:"version"`
 		Leader          uint32               `json:"leader"`
