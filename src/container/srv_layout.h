@@ -79,6 +79,7 @@ extern d_iov_t ds_cont_prop_cont_handles;	/* container handle KVS */
  *   usage shall be described above in this comment following existing
  *   examples. If the value is another KVS, its type shall be the KVS name.
  */
+extern d_iov_t ds_cont_prop_ghce;		/* uint64_t */
 extern d_iov_t ds_cont_prop_alloced_oid;	/* uint64_t */
 extern d_iov_t ds_cont_prop_label;		/* string */
 extern d_iov_t ds_cont_prop_layout_type;	/* uint64_t */

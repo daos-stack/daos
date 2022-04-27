@@ -18,6 +18,8 @@ RDB_STRING_KEY(ds_cont_prop_, conts);
 RDB_STRING_KEY(ds_cont_prop_, cont_handles);
 
 /* Container properties KVS */
+RDB_STRING_KEY(ds_cont_prop_, ghce);
+RDB_STRING_KEY(ds_cont_prop_, ghpce);
 RDB_STRING_KEY(ds_cont_prop_, alloced_oid);
 RDB_STRING_KEY(ds_cont_prop_, label);
 RDB_STRING_KEY(ds_cont_prop_, layout_type);

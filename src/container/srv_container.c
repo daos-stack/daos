@@ -718,6 +718,7 @@ cont_create(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
 	d_iov_t			value;
 	struct rdb_kvs_attr	attr;
 	rdb_path_t		kvs;
+	uint64_t		ghce = 0;
 	uint64_t		alloced_oid = 0;
 	struct daos_prop_entry *lbl_ent;
 	struct daos_prop_entry *def_lbl_ent;
@@ -809,6 +810,16 @@ cont_create(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
 	rc = rdb_path_push(&kvs, &key);
 	if (rc != 0)
 		D_GOTO(out_kvs, rc);
+
+	/* Create the GHCE property. */
+	d_iov_set(&value, &ghce, sizeof(ghce));
+	rc = rdb_tx_update(tx, &kvs, &ds_cont_prop_ghce, &value);
+	if (rc != 0) {
+		D_ERROR(DF_CONT": create ghce property failed: "DF_RC"\n",
+			DP_CONT(pool_hdl->sph_pool->sp_uuid,
+				in->cci_op.ci_uuid), DP_RC(rc));
+		D_GOTO(out_kvs, rc);
+	}
 
 	/** Create the ALLOCED_OID property. */
 	d_iov_set(&value, &alloced_oid, sizeof(alloced_oid));
