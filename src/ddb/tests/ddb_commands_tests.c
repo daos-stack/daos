@@ -238,6 +238,13 @@ load_cmd_tests(void **state)
 	opt.dst = "/[0]/[0]/'a-new-key'/'a-new-key'";
 	assert_success(ddb_run_load(&g_ctx, &opt));
 
+	/* add a new object */
+	new_oid.id_pub.lo = 999;
+	sprintf(buf, "%s/"DF_OID"/'dkey_new'/'akey_new'", g_uuids_str[3],
+		DP_OID(new_oid.id_pub));
+	opt.dst = buf;
+	assert_success(ddb_run_load(&g_ctx, &opt));
+
 	/*
 	 * Error cases ...
 	 */
@@ -265,13 +272,6 @@ load_cmd_tests(void **state)
 	/* can't create new container */
 	sprintf(buf, "%s/"DF_OID"/'dkey_new'/'akey_new'", g_invalid_uuid_str,
 		DP_OID(g_oids[0].id_pub));
-	opt.dst = buf;
-	assert_rc_equal(-DER_NONEXIST, ddb_run_load(&g_ctx, &opt));
-
-	/* can't create new object */
-	new_oid.id_pub.lo = 999;
-	sprintf(buf, "%s/"DF_OID"/'dkey_new'/'akey_new'", g_uuids_str[0],
-		DP_OID(new_oid.id_pub));
 	opt.dst = buf;
 	assert_rc_equal(-DER_NONEXIST, ddb_run_load(&g_ctx, &opt));
 }
