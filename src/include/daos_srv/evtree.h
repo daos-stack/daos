@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2017-2021 Intel Corporation.
+ * (C) Copyright 2017-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -154,8 +154,8 @@ struct evt_filter {
 
 #define DP_FILTER(filter)					\
 	DP_EXT(&(filter)->fr_ex), (filter)->fr_epr.epr_lo,	\
-	(filter)->fr_epr.epr_hi, (filter)->fr_punch_epc,	\
-	(filter)->fr_epoch, (filter)->fr_punch_minor_epc
+	(filter)->fr_epr.epr_hi, (filter)->fr_epoch,		\
+	(filter)->fr_punch_epc, (filter)->fr_punch_minor_epc
 
 /** Return the width of an extent */
 static inline daos_size_t

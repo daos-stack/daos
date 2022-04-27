@@ -489,8 +489,9 @@ class DaosServerManager(SubprocessManager):
             pcmd(self._hosts, "; ".join(cmd_list), verbose)
 
     def restart(self, hosts, wait=False):
-        """Restart the specified servers after a stop. The servers must
-           have been previously formatted and started.
+        """Restart the specified servers after a stop.
+
+           The servers must have been previously formatted and started.
 
         Args:
             hosts (list): List of servers to restart.
@@ -506,7 +507,7 @@ class DaosServerManager(SubprocessManager):
             self.manager.run()
 
             host_ranks = self.get_host_ranks(hosts)
-            self.update_expected_states(host_ranks , ["joined"])
+            self.update_expected_states(host_ranks, ["joined"])
 
             if not wait:
                 return

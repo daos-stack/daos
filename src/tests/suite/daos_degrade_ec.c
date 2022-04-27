@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2021 Intel Corporation.
+ * (C) Copyright 2016-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -582,6 +582,7 @@ degrade_ec_update(void **state)
 	if (!test_runable(arg, 6) || (arg->srv_ntgts / arg->srv_nnodes) < 2)
 		return;
 
+	print_message("test 1 - DER_SHARDS_OVERLAP case\n");
 	data = (char *)malloc(TEST_EC_STRIPE_SIZE);
 	assert_true(data != NULL);
 	oid = daos_test_oid_gen(arg->coh, OC_EC_4P2G2, DAOS_OF_DKEY_UINT64, 0, arg->myrank);
@@ -601,6 +602,7 @@ degrade_ec_update(void **state)
 	}
 	ioreq_fini(&req);
 
+	print_message("test 2 - DAOS_FAIL_SHARD_OPEN case\n");
 	fail_shards[0] = 7;
 	fail_shards[1] = 8;
 	arg->fail_loc = DAOS_FAIL_SHARD_OPEN | DAOS_FAIL_ALWAYS;
@@ -615,6 +617,27 @@ degrade_ec_update(void **state)
 		memset(data, 'a' + i, TEST_EC_STRIPE_SIZE);
 		inset_recxs_dkey_uint64(&dkey_int, "a_key_1", 1, DAOS_TX_NONE, &recx, 1,
 			     data, TEST_EC_STRIPE_SIZE, &req);
+	}
+	ioreq_fini(&req);
+
+	print_message("test 3 - partial update only one leader alive case\n");
+	oid = daos_test_oid_gen(arg->coh, OC_EC_4P1G1, DAOS_OF_DKEY_UINT64, 0, arg->myrank);
+	/* simulate shard 0's failure, then partial update [0, 4096] will need to update
+	 * data shard 0 and parity shard 4, so only the leader shard 4 alive.
+	 */
+	fail_shards[0] = 1;
+	arg->fail_loc = DAOS_FAIL_SHARD_OPEN | DAOS_FAIL_ALWAYS;
+	arg->fail_value = daos_shard_fail_value(fail_shards, 1);
+	ioreq_init(&req, arg->coh, oid, DAOS_IOD_ARRAY, arg);
+	for (i = 0; i < 1; i++) {
+		daos_recx_t recx;
+
+		req.iod_type = DAOS_IOD_ARRAY;
+		recx.rx_nr = 4096;
+		recx.rx_idx = i * TEST_EC_STRIPE_SIZE;
+		memset(data, 'a' + i, 4096);
+		inset_recxs_dkey_uint64(&dkey_int, "a_key_2", 1, DAOS_TX_NONE, &recx, 1,
+					data, 4096, &req);
 	}
 	ioreq_fini(&req);
 

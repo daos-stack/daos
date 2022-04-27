@@ -1305,10 +1305,13 @@ def percent_change(val1, val2):
 
 def get_primary_group(user=None):
     """Get the name of the user's primary group.
+
     Args:
         user (str, optional): the user account name. Defaults to None, which uses the current user.
+
     Returns:
         str: the primary group name
+
     """
     if user is None:
         user = getuser()

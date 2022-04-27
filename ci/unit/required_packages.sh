@@ -27,9 +27,16 @@ pkgs="gotestsum openmpi$OPENMPI_VER                \
       valgrind-devel patchelf"
 
 if $quick_build; then
-    read -r mercury_version < "$distro"-required-mercury-rpm-version
-    pkgs="$pkgs spdk-tools mercury-$mercury_version         \
-          libisa-l_crypto libfabric-debuginfo   \
+    if ! read -r mercury_version < "$distro"-required-mercury-rpm-version; then
+        echo "Error reading from $distro-required-mercury-rpm-version"
+        if ! ls -l "$distro"-required-mercury-rpm-version; then
+            ls -l
+        fi
+        cat "$distro"-required-mercury-rpm-version
+        exit 1
+    fi
+    pkgs="$pkgs spdk-tools mercury\ \>=\ $mercury_version \
+          libisa-l_crypto libfabric-debuginfo             \
           argobots-debuginfo protobuf-c-debuginfo"
 fi
 

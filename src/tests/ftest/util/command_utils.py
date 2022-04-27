@@ -994,6 +994,7 @@ class SubprocessManager(ObjectWithParameters):
             manager (str, optional): the name of the JobManager class used to
                 manage the YamlCommand defined through the "job" attribute.
                 Defaults to "OpenMpi"
+            namespace (str): yaml namespace (path to parameters)
         """
         super().__init__(namespace)
         self.log = getLogger(__name__)

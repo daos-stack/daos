@@ -13,7 +13,7 @@ to access DAOS from Hadoop and Spark.
 
 We assume that the DAOS servers and agents have already been deployed in the
 environment. Otherwise, they can be deployed by following the
-[DAOS Installation Guide](https://docs.daos.io/v2.0/admin/installation/).
+[DAOS Installation Guide](https://docs.daos.io/v2.0/admin/deployment/).
 
 ## Maven Download
 
@@ -30,7 +30,7 @@ Or search these artifacts from [Maven central](https://search.maven.org/) and
 download them manually.
 
 You can also build artifacts by yourself.
-see [Build DAOS Hadoop Filesystem](#builddaos) for details.
+see [Build DAOS Hadoop Filesystem](#building-daos-hadoop-filesystem) for details.
 
 ## Deployment
 
@@ -66,7 +66,7 @@ $ export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:<DAOS_INSTALL>/lib64:<DAOS_INSTALL>/li
 ### DAOS URI
 
 In `daos-site.xml`, we default the DAOS URI as simplest form, "daos:///". For
-other form of URIs, please check [DAOS More URIs](#uris).
+other form of URIs, please check [DAOS More URIs](#daos-more-uris).
 
 If the DAOS pool and container have not been created, we can use the following
 command to create them and get the pool UUID and container UUID.
@@ -111,7 +111,7 @@ $ hadoop fs -ls /
 
 You can also play around with other Hadoop commands, like -copyFromLocal and
 -copyToLocal. You can also start Yarn and run some mapreduce jobs on Yarn.
-See [Run Map-Reduce in Hadoop](#mapreduce)
+See [Run Map-Reduce in Hadoop](#run-map-reduce-in-hadoop)
 
 ## Configuring Spark
 
@@ -124,7 +124,7 @@ spark.executor.extraClassPath   /path/to/daos-java-<version>.jar:/path/to/hadoop
 spark.driver.extraClassPath     /path/to/daos-java-<version>.jar:/path/to/hadoop-daos-<version>.jar
 ```
 
-### Validatng Spark Access
+### Validating Spark Access
 
 All Spark APIs that work with the Hadoop filesystem will work with DAOS. We can
 use the `daos:///` URI to access files stored in DAOS. For example, to read the
@@ -137,7 +137,7 @@ df = spark.read.json("daos:///people.json")
 
 ## Appendix
 
-### <a name="builddaos"></a>Building DAOS Hadoop Filesystem
+### Building DAOS Hadoop Filesystem
 
 Below are the steps to build the Java jar files for the DAOS Java and DAOS
 Hadoop filesystem. Spark and Hadoop require these jars in their classpath.
@@ -157,7 +157,7 @@ $ mvn -Pdistribute,with-proto3-netty4-deps clean package -DskipTests -Dgpg.skip 
 After build, the package `daos-java-<version>-assemble.tgz` will be available
 under `distribution/target`.
 
-### <a name="uris"></a>DAOS More URIs
+### DAOS More URIs
 
 DAOS FileSystem binds to schema "daos".  DAOS URIs are in the format of
 "daos://\[authority\]//\[path\]". Both authority and path are optional. There
@@ -167,32 +167,42 @@ initialized and configured.
 
 #### DAOS UNS Path
 
-The simple form of URI is "daos:///\<your uns path\>\[/sub path\]".
-"\<your path\>" is your OS file path created with the `daos` command or Java
-DAOS UNS method, `DaosUns.create()`. The "\[sub path\]" is optional. You can
-create the UNS path with below command.
+The simple form of URI is `daos://<your_uns_path>[/sub_path]`.
+`<your_uns_path>` is your OS file path created with the `daos` command or Java
+DAOS UNS method, `DaosUns.create()`.
+The `[/sub_path]` is optional. You can create the UNS path with below command.
 
 ```bash
-$ daos cont create --label $DAOS_CONT --path <your_path> --type POSIX $DAOS_POOL
+$ daos cont create --label $DAOS_CONT --path <your_uns_path> --type POSIX $DAOS_POOL
 ```
 Or
 
 ```bash
-$ java -Dpath="your_path" -Dpool_id=$DAOS_POOL -cp ./daos-java-<version>-shaded.jar io.daos.dfs.DaosUns create
+$ java -Dpath="your_uns_path" -Dpool_id=$DAOS_POOL -cp ./daos-java-<version>-shaded.jar io.daos.dfs.DaosUns create
 ```
 
 After creation, you can use below command to see what DAOS properties set to
 the path.
 
 ```path
-$ getfattr -d -m - <your path>
+$ getfattr -d -m - <your_uns_path>
 ```
 
 #### DAOS Non-UNS Path
 
-Check [Set DAOS URI and Pool/Container](#non-uns).
+If the DAOS container has not been created with an UNS path,
+it can be dfuse-mounted at a (non-UNS) mount-point using the
+pool and container UUIDs (or labels):
+
+```bash
+dfuse --pool=$DAOS_POOL --container=$DAOS_CONT --mountpoint=<your_path>
+```
+
+That non-UNS path `<your_path>` can then be used as the path in the DAOS URI.
+
 
 #### Special UUID Path
+
 DAOS supports a specialized URI with pool/container UUIDs embedded. The format
 is "daos://pool UUID/container UUID". As you can see, we don't need to find the
 UUIDs from neither UNS path nor configuration like above two types of URIs.
@@ -203,7 +213,7 @@ authority to your URI to make it unique since Hadoop caches filesystem instance
 keyed by "schema + authority" in global (JVM). It applies to the both types of
 URIs described above.
 
-### <a name="mapreduce"></a>Run Map-Reduce in Hadoop
+### Run Map-Reduce in Hadoop
 
 Edit `$HADOOP_HOME/etc/hadoop/core-site.xml` to change fs.defaultFS to
 `daos:///`. It is not recommended to set fs.defaultFS to a DAOS UNS path.

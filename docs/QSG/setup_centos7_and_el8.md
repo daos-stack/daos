@@ -1,9 +1,9 @@
-# DAOS Set-Up on CentOS
+# DAOS Set-Up on EL (including CentOS)
 
 
 The following instructions detail how to install, set up and start DAOS servers and clients on two or more nodes.
-This document includes instructions for CentOS.
-The process is identical for CentOS Linux 7 and CentOS Linux 8,
+This document includes instructions for EL8 and CentOS 7.
+The process is identical for CentOS Linux 7 and EL 8,
 except for the location of the DAOS RPM repository.
 For setup instructions on OpenSuse, refer to
 [OpenSuse setup](setup_suse.md).
@@ -28,7 +28,7 @@ All nodes must have:
     commands in parallel)
 
 In addition the server nodes should also have
-[IOMMU enabled](https://docs.daos.io/v2.0/admin/predeployment_check/#enable-iommu-optional).
+[IOMMU enabled](https://docs.daos.io/v2.0/admin/predeployment_check/#enable-iommu).
 
 For the use of the commands outlined on this page the following shell
 variables will need to be defined:
@@ -63,16 +63,16 @@ of the daos-client RPM and the server nodes require the installation of the
 daos-server RPM.
 
 1. Configure access to the [DAOS package repository](https://packages.daos.io/v2.0/),
-   using the subdirectory that matches the CentOS Linux of the nodes:
+   using the subdirectory that matches the EL/CentOS version of the nodes:
 
 	**For CentOS7:**
 
 		pdsh -w $ALL_NODES 'sudo wget -O /etc/yum.repos.d/daos-packages.repo https://packages.daos.io/v2.0/CentOS7/packages/x86_64/daos_packages.repo'
 
 
-	**For CentOS8:**
+	**For EL8:**
 
-		pdsh -w $ALL_NODES 'sudo wget -O /etc/yum.repos.d/daos-packages.repo https://packages.daos.io/v2.0/CentOS8/packages/x86_64/daos_packages.repo'
+		pdsh -w $ALL_NODES 'sudo wget -O /etc/yum.repos.d/daos-packages.repo https://packages.daos.io/v2.0/EL8/packages/x86_64/daos_packages.repo'
 
 
 2. Import GPG key on all nodes:

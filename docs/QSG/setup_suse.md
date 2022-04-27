@@ -10,7 +10,7 @@ The purpose of this guide is to provide a user with a set of command lines to qu
 This document covers installation of the DAOS rpms on openSUSE/SLES 15.3 and updating the DAOS configuration files needed by daos servers.
 
 This guide will also describe how to use dfuse in order to take advantage of DAOS support for POSIX. 
-For setup instructions on CentOS, refer to the [CentOS setup](setup_centos.md).
+For setup instructions on CentOS7 and EL8, refer to the [CentOS7/EL8 setup](setup_centos7_and_el8.md).
 For more details reference the DAOS administration guide:
 <https://docs.daos.io/v2.0/admin/hardware/>
 
@@ -35,8 +35,8 @@ admin and client node.  All nodes must have:
 -   pdsh installed (or some other means of running multiple remote
     commands in parallel)
 
-In addition the server nodes should also have IOMMU enabled:
-<https://docs.daos.io/v2.0/admin/predeployment_check/#enable-iommu-optional>
+In addition the server nodes should also have
+[IOMMU enabled](https://docs.daos.io/v2.0/admin/predeployment_check/#enable-iommu).
 
 For the use of the commands outlined on this page the following shell
 variables will need to be defined:

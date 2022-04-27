@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2021 Intel Corporation.
+// (C) Copyright 2019-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -180,7 +180,7 @@ func (cmd *PoolCreateCmd) Execute(args []string) error {
 			cmd.log.Infof("SCM:NVMe ratio is less than %0.2f %%, DAOS "+
 				"performance will suffer!\n", storage.MinScmToNVMeRatio*100)
 		}
-		cmd.log.Infof("Creating DAOS pool with manual per-server storage allocation: "+
+		cmd.log.Infof("Creating DAOS pool with manual per-engine storage allocation: "+
 			"%s SCM, %s NVMe (%0.2f%% ratio)", humanize.Bytes(ScmBytes),
 			humanize.Bytes(NvmeBytes), scmRatio*100)
 	}

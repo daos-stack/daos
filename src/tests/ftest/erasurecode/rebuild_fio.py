@@ -1,6 +1,6 @@
 #!/usr/bin/python3
 '''
-  (C) Copyright 2019-2021 Intel Corporation.
+  (C) Copyright 2019-2022 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
@@ -40,12 +40,16 @@ class EcodFioRebuild(ErasureCodeFio):
         self.start_online_fio()
 
         # Verify Aggregation should start for Partial stripes IO
-        if not any(check_aggregation_status(self.pool).values()):
+        if not any(check_aggregation_status(self.pool, attempt=60).values()):
             self.fail("Aggregation failed to start..")
 
         if 'off-line' in rebuild_mode:
             self.server_managers[0].stop_ranks(
                 [self.server_count - 1], self.d_log, force=True)
+
+        # Adding unlink option for final read command
+        if int(self.container.properties.value.split(":")[1]) == 1:
+            self.fio_cmd._jobs['test'].unlink.value = 1
 
         # Read and verify the original data.
         self.fio_cmd._jobs['test'].rw.value = self.read_option
@@ -53,6 +57,7 @@ class EcodFioRebuild(ErasureCodeFio):
 
         # If RF is 2 kill one more server and validate the data is not corrupted.
         if int(self.container.properties.value.split(":")[1]) == 2:
+            self.fio_cmd._jobs['test'].unlink.value = 1
             self.log.info("RF is 2,So kill another server and verify data")
             # Kill one more server rank
             self.server_managers[0].stop_ranks([self.server_count - 2],
