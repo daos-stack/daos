@@ -97,7 +97,7 @@ pipeline_part_checkop(const char *part_type, size_t part_type_s, const char *ope
 	} else if (!strncmp(part_type, "DAOS_FILTER_FUNC_ISNULL", part_type_s) ||
 		   !strncmp(part_type, "DAOS_FILTER_FUNC_ISNOTNULL",
 			    part_type_s)) /* only akeys */
-		return !strncmp(operand_type, "DAOS_FILTER_AKEY", strlen("DAOS_FILTER_AKEY"));
+		return !strncmp(operand_type, "DAOS_FILTER_AKEY", operand_type_s);
 	else { /* arithmetic functions or keys and constants (no functions) */
 		return strncmp(operand_type, "DAOS_FILTER_FUN", strlen("DAOS_FILTER_FUN")) ||
 		       !strncmp(operand_type, "DAOS_FILTER_FUNC_BITAND", operand_type_s) ||
@@ -154,7 +154,6 @@ d_pipeline_check(daos_pipeline_t *pipeline)
 	 * TODO: Check that constants that are arrays are always on the right
 	 * TODO: Check that arithmetic functions only support number types
 	 * TODO: Check that offsets and sizes are correct (i.e, offset <= size)
-	 * TODO: Check that parts of type CTRING always have at least one '\0'
 	 * TODO: Check that parts of type STRING have a sane size
 	 */
 
@@ -210,6 +209,9 @@ d_pipeline_check(daos_pipeline_t *pipeline)
 		 *
 		 * -- Check 3: Check that all parts have a correct number of operands and also that
 		 *             the number of total parts is correct.
+		 *
+		 * -- Check 4: Check that constants have a type and that the ones of type CSTRING
+		 *             always have at least one '\0'.
 		 */
 
 		for (p = 0; p < ftr->num_parts; p++) {
@@ -243,6 +245,45 @@ d_pipeline_check(daos_pipeline_t *pipeline)
 				return rc;
 			}
 			num_parts += part->num_operands;
+
+			/** 4 */
+
+			if (part->part_type.iov_len == strlen("DAOS_FILTER_CONST") &&
+			    !strncmp((char *)part->part_type.iov_buf, "DAOS_FILTER_CONST",
+				    strlen("DAOS_FILTER_CONST"))) {
+				/** constants */
+				if (!part->data_type.iov_len) {
+					D_ERROR("filter %zu, part %zu: constant does not have data "
+						"type\n", i, p);
+					return -DER_INVAL;
+				}
+				if (part->data_type.iov_len == strlen("DAOS_FILTER_TYPE_CSTRING") &&
+				    !strncmp((char *)part->data_type.iov_buf,
+					    "DAOS_FILTER_TYPE_CSTRING",
+					    strlen("DAOS_FILTER_TYPE_CSTRING"))) {
+					/** constants are CSTRING */
+					size_t  k, c;
+					bool    eos_found;
+					char   *string;
+
+					for (k = 0; k < part->num_constants; k++) {
+						eos_found = false;
+						string    = (char *)part->constant[k].iov_buf;
+						for (c = 0; c < part->constant[k].iov_len; c++) {
+							if (string[c] == '\0') {
+								eos_found = true;
+								break;
+							}
+						}
+						if (!eos_found) {
+							D_ERROR("filter %zu, part %zu, const %zu: "
+								"CSTRING constant does not "
+								"terminate in \\0\n", i, p, k);
+							return -DER_INVAL;
+						}
+					}
+				}
+			}
 		}
 		/** 3 */
 
@@ -253,7 +294,7 @@ d_pipeline_check(daos_pipeline_t *pipeline)
 		}
 
 		/**
-		 * -- Check 4: Check that all parts have the right type of operands.
+		 * -- Check 5: Check that all parts have the right type of operands.
 		 */
 
 		p   = 0;
