@@ -3,9 +3,9 @@ name: Doxygen
 on:
   pull_request:
     paths:
-    - 'Doxyfile'
-    - 'src/include/*.h'
-    - '.github/workflows/doxygen.yml'
+      - Doxyfile
+      - 'src/include/*.h'
+      - .github/workflows/doxygen.yml
 
 jobs:
 
@@ -13,14 +13,14 @@ jobs:
     name: Run doxygen
     runs-on: ubuntu-20.04
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v2.3.4
-      with:
-        fetch-depth: 100
-        ref: ${{ github.event.pull_request.head.sha }}
-    - name: Install doxygen
-      run: sudo apt-get install doxygen
-    - name: Add parser
-      run: echo -n "::add-matcher::ci/daos-doxygen-matcher.json"
-    - name: Run check
-      run: doxygen Doxyfile
+      - name: Checkout code
+        uses: actions/checkout@v2.3.4
+        with:
+          fetch-depth: 100
+          ref: ${{ github.event.pull_request.head.sha }}
+      - name: Install doxygen
+        run: sudo apt-get install doxygen
+      - name: Add parser
+        run: echo -n "::add-matcher::ci/daos-doxygen-matcher.json"
+      - name: Run check
+        run: doxygen Doxyfile

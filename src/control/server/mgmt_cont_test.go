@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2018-2021 Intel Corporation.
+// (C) Copyright 2018-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -11,6 +11,7 @@ import (
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
+	uuid "github.com/google/uuid"
 	"github.com/pkg/errors"
 
 	"github.com/daos-stack/daos/src/control/build"
@@ -19,6 +20,7 @@ import (
 	"github.com/daos-stack/daos/src/control/events"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/system"
+	"github.com/daos-stack/daos/src/control/system/raft"
 )
 
 const (
@@ -44,7 +46,8 @@ func TestListCont_NoMS(t *testing.T) {
 	log, buf := logging.NewTestLogger(t.Name())
 	defer common.ShowBufferOnFailure(t, buf)
 
-	ms, db := system.MockMembership(t, log, mockTCPResolver)
+	db := raft.MockDatabase(t, log)
+	ms := system.MockMembership(t, log, db, mockTCPResolver)
 	svc := newMgmtSvc(NewEngineHarness(log), ms, db, nil,
 		events.NewPubSub(context.Background(), log))
 
@@ -140,88 +143,102 @@ func TestListCont_ManyContSuccess(t *testing.T) {
 	}
 }
 
-func newTestContSetOwnerReq() *mgmtpb.ContSetOwnerReq {
-	return &mgmtpb.ContSetOwnerReq{
-		Sys:        build.DefaultSystemName,
-		ContUUID:   "contUUID",
-		PoolUUID:   "poolUUID",
-		Owneruser:  "user@",
-		Ownergroup: "group@",
-	}
-}
-
-func TestContSetOwner_NoMS(t *testing.T) {
-	log, buf := logging.NewTestLogger(t.Name())
-	defer common.ShowBufferOnFailure(t, buf)
-
-	ms, db := system.MockMembership(t, log, mockTCPResolver)
-	svc := newMgmtSvc(NewEngineHarness(log), ms, db, nil,
-		events.NewPubSub(context.Background(), log))
-
-	resp, err := svc.ContSetOwner(context.TODO(), newTestContSetOwnerReq())
-
-	if resp != nil {
-		t.Errorf("Expected no response, got: %+v", resp)
+func TestMgmt_ContSetOwner(t *testing.T) {
+	validContSetOwnerReq := func() *mgmtpb.ContSetOwnerReq {
+		return &mgmtpb.ContSetOwnerReq{
+			Sys:        build.DefaultSystemName,
+			ContUUID:   "contUUID",
+			PoolUUID:   mockUUID,
+			Owneruser:  "user@",
+			Ownergroup: "group@",
+		}
 	}
 
-	common.CmpErr(t, FaultHarnessNotStarted, err)
-}
-
-func TestContSetOwner_DrpcFailed(t *testing.T) {
-	log, buf := logging.NewTestLogger(t.Name())
-	defer common.ShowBufferOnFailure(t, buf)
-
-	svc := newTestMgmtSvc(t, log)
-	expectedErr := errors.New("mock error")
-	setupMockDrpcClient(svc, nil, expectedErr)
-
-	resp, err := svc.ContSetOwner(context.TODO(), newTestContSetOwnerReq())
-
-	if resp != nil {
-		t.Errorf("Expected no response, got: %+v", resp)
+	testPoolService := &system.PoolService{
+		PoolLabel: "test-pool",
+		PoolUUID:  uuid.MustParse(mockUUID),
+		Replicas:  []system.Rank{0, 1, 2},
+		State:     system.PoolServiceStateReady,
+		Storage: &system.PoolServiceStorage{
+			CreationRankStr: system.MustCreateRankSet("0-2").String(),
+		},
 	}
 
-	common.CmpErr(t, expectedErr, err)
-}
+	for name, tc := range map[string]struct {
+		createMS  func(*testing.T, logging.Logger) *mgmtSvc
+		setupDrpc func(*testing.T, *mgmtSvc)
+		req       *mgmtpb.ContSetOwnerReq
+		expResp   *mgmtpb.ContSetOwnerResp
+		expErr    error
+	}{
+		"nil req": {
+			expErr: errors.New("nil"),
+		},
+		"pool svc not found": {
+			req: &mgmtpb.ContSetOwnerReq{
+				Sys:        build.DefaultSystemName,
+				ContUUID:   "contUUID",
+				PoolUUID:   "fake",
+				Owneruser:  "user@",
+				Ownergroup: "group@",
+			},
+			expErr: errors.New("unable to find pool"),
+		},
+		"harness not started": {
+			createMS: func(t *testing.T, log logging.Logger) *mgmtSvc {
+				db := raft.MockDatabase(t, log)
+				ms := system.MockMembership(t, log, db, mockTCPResolver)
+				return newMgmtSvc(NewEngineHarness(log), ms, db, nil,
+					events.NewPubSub(context.Background(), log))
+			},
+			req:    validContSetOwnerReq(),
+			expErr: FaultHarnessNotStarted,
+		},
+		"drpc error": {
+			setupDrpc: func(t *testing.T, svc *mgmtSvc) {
+				setupMockDrpcClient(svc, nil, errors.New("mock drpc"))
+			},
+			req:    validContSetOwnerReq(),
+			expErr: errors.New("mock drpc"),
+		},
+		"bad drpc resp": {
+			setupDrpc: func(t *testing.T, svc *mgmtSvc) {
+				badBytes := makeBadBytes(16)
+				setupMockDrpcClientBytes(svc, badBytes, nil)
+			},
+			req:    validContSetOwnerReq(),
+			expErr: errors.New("unmarshal"),
+		},
+		"success": {
+			setupDrpc: func(t *testing.T, svc *mgmtSvc) {
+				setupMockDrpcClient(svc, &mgmtpb.ContSetOwnerResp{}, nil)
+			},
+			req: validContSetOwnerReq(),
+			expResp: &mgmtpb.ContSetOwnerResp{
+				Status: 0,
+			},
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(t.Name())
+			defer common.ShowBufferOnFailure(t, buf)
 
-func TestContSetOwner_BadDrpcResp(t *testing.T) {
-	log, buf := logging.NewTestLogger(t.Name())
-	defer common.ShowBufferOnFailure(t, buf)
+			if tc.createMS == nil {
+				tc.createMS = newTestMgmtSvc
+			}
+			svc := tc.createMS(t, log)
+			addTestPoolService(t, svc.sysdb, testPoolService)
 
-	svc := newTestMgmtSvc(t, log)
-	// dRPC call returns junk in the message body
-	badBytes := makeBadBytes(16)
+			if tc.setupDrpc != nil {
+				tc.setupDrpc(t, svc)
+			}
 
-	setupMockDrpcClientBytes(svc, badBytes, nil)
+			resp, err := svc.ContSetOwner(context.TODO(), tc.req)
 
-	resp, err := svc.ContSetOwner(context.TODO(), newTestContSetOwnerReq())
-
-	if resp != nil {
-		t.Errorf("Expected no response, got: %+v", resp)
-	}
-
-	common.CmpErr(t, errors.New("unmarshal"), err)
-}
-
-func TestContSetOwner_Success(t *testing.T) {
-	log, buf := logging.NewTestLogger(t.Name())
-	defer common.ShowBufferOnFailure(t, buf)
-
-	svc := newTestMgmtSvc(t, log)
-
-	expectedResp := &mgmtpb.ContSetOwnerResp{
-		Status: 0,
-	}
-	setupMockDrpcClient(svc, expectedResp, nil)
-
-	resp, err := svc.ContSetOwner(context.TODO(), newTestContSetOwnerReq())
-
-	if err != nil {
-		t.Errorf("Expected no error, got: %v", err)
-	}
-
-	cmpOpts := common.DefaultCmpOpts()
-	if diff := cmp.Diff(expectedResp, resp, cmpOpts...); diff != "" {
-		t.Fatalf("bad response (-want, +got): \n%s\n", diff)
+			common.CmpErr(t, tc.expErr, err)
+			if diff := cmp.Diff(tc.expResp, resp, common.DefaultCmpOpts()...); diff != "" {
+				t.Fatalf("(-want, +got): \n%s\n", diff)
+			}
+		})
 	}
 }

@@ -99,7 +99,7 @@ func printSystemQueryVerbose(out io.Writer, members system.Members) {
 		row[uuidTitle] = m.UUID.String()
 		row[addrTitle] = m.Addr.String()
 		row[faultDomainTitle] = m.FaultDomain.String()
-		row[stateTitle] = m.State().String()
+		row[stateTitle] = m.State.String()
 		row[reasonTitle] = m.Info
 
 		table = append(table, row)

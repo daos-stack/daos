@@ -360,6 +360,8 @@ ts_add_rect(void)
 	entry.ei_inob = val == NULL ? 0 : 1;
 
 	rc = evt_insert(ts_toh, &entry, NULL);
+	if (rc == 1)
+		rc = 0;
 	if (rc == 0)
 		total_added++;
 
@@ -744,6 +746,8 @@ ts_many_add(void)
 		entry.ei_inob = 1;
 
 		rc = evt_insert(ts_toh, &entry, NULL);
+		if (rc == 1)
+			rc = 0;
 		if (rc != 0) {
 			D_FATAL("Add rect %d failed "DF_RC"\n", i, DP_RC(rc));
 			fail();
@@ -1099,6 +1103,8 @@ test_evt_iter_flags(void **state)
 			if (rc != 0)
 				goto finish;
 			rc = evt_insert(toh, &entry, NULL);
+			if (rc == 1)
+				rc = 0;
 			if (rc != 0)
 				goto finish;
 		}
@@ -1235,6 +1241,8 @@ test_evt_iter_delete(void **state)
 			assert_int_equal(rc, 0);
 
 			rc = evt_insert(toh, &entry, NULL);
+			if (rc == 1)
+				rc = 0;
 			assert_rc_equal(rc, 0);
 			rc = utest_check_mem_increase(arg->ta_utx);
 			assert_int_equal(rc, 0);
@@ -1391,6 +1399,8 @@ test_evt_find_internal(void **state)
 				assert_int_equal(rc, 0);
 			}
 			rc = evt_insert(toh, &entry, NULL);
+			if (rc == 1)
+				rc = 0;
 			assert_rc_equal(rc, 0);
 			rc = utest_check_mem_increase(arg->ta_utx);
 			assert_int_equal(rc, 0);
@@ -1517,6 +1527,8 @@ test_evt_iter_delete_internal(void **state)
 			assert_int_equal(rc, 0);
 
 			rc = evt_insert(toh, &entry, NULL);
+			if (rc == 1)
+				rc = 0;
 			assert_rc_equal(rc, 0);
 		}
 	}
@@ -1584,6 +1596,8 @@ test_evt_variable_record_size_internal(void **state)
 					    data, data_size);
 			assert_int_equal(rc, 0);
 			rc = evt_insert(toh, &entry, NULL);
+			if (rc == 1)
+				rc = 0;
 			if (count > 0)
 				assert_int_not_equal(rc, 0);
 			else
@@ -1655,6 +1669,8 @@ test_evt_various_data_size_internal(void **state)
 				break;
 			}
 			rc = evt_insert(toh, &entry, NULL);
+			if (rc == 1)
+				rc = 0;
 			if (rc != 0) {
 				assert_rc_equal(rc, -DER_NOSPACE);
 				break;
@@ -1731,6 +1747,82 @@ test_evt_various_data_size_internal(void **state)
 	}
 }
 
+static int
+insert_one(struct test_arg *arg, daos_handle_t toh, daos_epoch_t epoch, uint64_t start_offset,
+	   uint64_t length)
+{
+	struct evt_entry_in	 entry = {0};
+	char			*data;
+	int			 rc;
+
+	D_ALLOC_ARRAY(data, length);
+	if (data == NULL)
+		return -DER_NOMEM;
+	memset(data, 'a', length);
+
+	entry.ei_rect.rc_ex.ex_lo = start_offset;
+	entry.ei_rect.rc_ex.ex_hi = start_offset + length - 1;
+	entry.ei_rect.rc_epc = epoch;
+	entry.ei_ver = 0;
+	entry.ei_bound = epoch;
+	entry.ei_inob = 1;
+
+	memset(&entry.ei_csum, 0, sizeof(entry.ei_csum));
+
+	rc = bio_alloc_init(arg->ta_utx, &entry.ei_addr,
+			    &data, sizeof(data));
+	if (rc != 0)
+		return rc;
+
+	D_FREE(data);
+
+	return evt_insert(toh, &entry, NULL);
+}
+
+static void
+test_evt_agg_check(void **state)
+{
+	struct test_arg		*arg = *state;
+	daos_handle_t		 toh;
+	int			 rc;
+	int			 epoch;
+
+	epoch = 1;
+	rc = evt_create(arg->ta_root, ts_feats, ORDER_DEF_INTERNAL,
+			arg->ta_uma, &ts_evt_desc_cbs, &toh);
+	assert_rc_equal(rc, 0);
+
+	rc = insert_one(arg, toh, epoch++, 0, 1);
+	assert_rc_equal(rc, 0);
+
+	rc = insert_one(arg, toh, epoch++, 1, 2);
+	assert_rc_equal(rc, 1); /* Adjacent is aggregatable */
+
+	rc = insert_one(arg, toh, epoch++, 10, 5);
+	assert_rc_equal(rc, 0); /** Standalone, not aggregatable */
+
+	rc = insert_one(arg, toh, epoch++, 9, 8);
+	assert_rc_equal(rc, 1); /** Encapsulates prior extent, aggregatable */
+
+	rc = insert_one(arg, toh, epoch++, 7, 2);
+	assert_rc_equal(rc, 1); /** Adjacent to prior extent, aggregatable */
+
+	rc = insert_one(arg, toh, epoch++, 5, 1);
+	assert_rc_equal(rc, 0); /** Standalone, not aggregatable */
+
+	rc = insert_one(arg, toh, epoch++, 11, 2);
+	assert_rc_equal(rc, 1); /** Partial coverage, aggregatable */
+
+	rc = insert_one(arg, toh, epoch++, DAOS_EC_PARITY_BIT | 1000, 2);
+	assert_rc_equal(rc, 1); /** Parity written with non-parity in tree, aggregatable */
+
+	rc = insert_one(arg, toh, epoch++, 1000, 2);
+	assert_rc_equal(rc, 1); /** Simulate partial write with in-tree parity, aggregatable */
+
+	rc = evt_destroy(toh);
+	assert_rc_equal(rc, 0);
+}
+
 static void
 test_evt_node_size_internal(void **state)
 {
@@ -1791,6 +1883,8 @@ set_data(struct test_arg *arg, daos_handle_t toh, char *dest_data,
 			    src, size);
 	assert_int_equal(rc, 0);
 	rc = evt_insert(toh, &entry, NULL);
+	if (rc == 1)
+		rc = 0;
 	assert_rc_equal(rc, 0);
 }
 
@@ -1963,6 +2057,8 @@ insert_and_check(daos_handle_t toh, struct evt_entry_in *entry, int idx, int nr)
 	entry->ei_rect.rc_epc = epoch;
 	entry->ei_bound = epoch;
 	rc = evt_insert(toh, entry, NULL);
+	if (rc == 1)
+		rc = 0;
 	assert_rc_equal(rc, 0);
 
 	return epoch++;
@@ -2114,6 +2210,8 @@ test_evt_outer_punch(void **state)
 			assert_int_equal(rc, 0);
 
 			rc = evt_insert(toh, &entry, NULL);
+			if (rc == 1)
+				rc = 0;
 			assert_rc_equal(rc, 0);
 		}
 	}
@@ -2242,6 +2340,9 @@ run_internal_tests(char *test_name)
 			setup_builtin, teardown_builtin},
 		{ "EVT019: evt_various_data_size_internal",
 			test_evt_various_data_size_internal,
+			setup_builtin, teardown_builtin},
+		{ "EVT020: evt_agg_check",
+			test_evt_agg_check,
 			setup_builtin, teardown_builtin},
 		{ NULL, NULL, NULL, NULL }
 	};

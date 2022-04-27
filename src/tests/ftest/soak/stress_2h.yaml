@@ -25,7 +25,6 @@ server_config:
         log_mask: ERR
         fabric_iface: ib0
         fabric_iface_port: 31416
-        log_mask: ERR
         log_file: daos_io0.log
         # Storage definitions for AEP and NVMe
         scm_mount: /mnt/daos0

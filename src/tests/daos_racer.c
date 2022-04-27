@@ -15,12 +15,12 @@
 #include <sys/ioctl.h>
 #include <stdlib.h>
 #include <getopt.h>
-#include <mpi.h>
 #include <daos/common.h>
 #include <daos/tests_lib.h>
 #include <daos_test.h>
 #include <daos/dts.h>
 #include <daos/credit.h>
+#include <daos/dpar.h>
 
 enum {
 	UPDATE,
@@ -99,13 +99,9 @@ daos_obj_id_t
 racer_oid_gen(int random)
 {
 	daos_obj_id_t	oid;
-	uint64_t	hdr;
 	uint16_t	oclass;
 
 	oclass = oclass_get(random);
-
-	hdr = oclass;
-	hdr <<= 32;
 
 	oid.lo	= random % obj_cnt_per_class;
 	oid.lo	|= oclass;
@@ -477,9 +473,9 @@ main(int argc, char **argv)
 	struct racer_sub_tests	sub_tests[TEST_SIZE] = { 0 };
 	int		rc;
 
-	MPI_Init(&argc, &argv);
-	MPI_Comm_rank(MPI_COMM_WORLD, &ts_ctx.tsc_mpi_rank);
-	MPI_Comm_size(MPI_COMM_WORLD, &ts_ctx.tsc_mpi_size);
+	par_init(&argc, &argv);
+	par_rank(PAR_COMM_WORLD, &ts_ctx.tsc_mpi_rank);
+	par_size(PAR_COMM_WORLD, &ts_ctx.tsc_mpi_size);
 	while ((rc = getopt_long(argc, argv,
 				 "n:p:c:t:",
 				 ts_ops, NULL)) != -1) {
@@ -563,13 +559,13 @@ main(int argc, char **argv)
 	expire = dts_time_now() + duration;
 
 	idx = racer_test_idx(sub_tests);
-	MPI_Barrier(MPI_COMM_WORLD);
+	par_barrier(PAR_COMM_WORLD);
 	while (1) {
 		sub_tests[idx].sub_test();
 		if (dts_time_now() > expire)
 			break;
 	}
-	MPI_Barrier(MPI_COMM_WORLD);
+	par_barrier(PAR_COMM_WORLD);
 
 	if (ts_ctx.tsc_mpi_rank == 0) {
 		daos_pool_info_t	pinfo = { 0 };
@@ -634,6 +630,6 @@ main(int argc, char **argv)
 fini:
 	dts_ctx_fini(&ts_ctx);
 out:
-	MPI_Finalize();
+	par_fini();
 	return rc;
 }

@@ -30,7 +30,7 @@ type SystemCmd struct {
 }
 
 type leaderQueryCmd struct {
-	logCmd
+	baseCmd
 	cfgCmd
 	ctlInvokerCmd
 	jsonOutputCmd
@@ -57,7 +57,7 @@ func (cmd *leaderQueryCmd) Execute(_ []string) (errOut error) {
 		return cmd.outputJSON(resp, err)
 	}
 
-	cmd.log.Infof("Current Leader: %s\n   Replica Set: %s\n", resp.Leader,
+	cmd.Infof("Current Leader: %s\n   Replica Set: %s\n", resp.Leader,
 		strings.Join(resp.Replicas, ", "))
 
 	return nil
@@ -92,7 +92,7 @@ func (cmd *rankListCmd) validateHostsRanks() (outHosts *hostlist.HostSet, outRan
 
 // systemQueryCmd is the struct representing the command to query system status.
 type systemQueryCmd struct {
-	logCmd
+	baseCmd
 	cfgCmd
 	ctlInvokerCmd
 	jsonOutputCmd
@@ -128,16 +128,16 @@ func (cmd *systemQueryCmd) Execute(_ []string) (errOut error) {
 		pretty.PrintWithVerboseOutput(cmd.Verbose)); err != nil {
 		return err
 	}
-	cmd.log.Info(out.String())
+	cmd.Info(out.String())
 	if outErr.String() != "" {
-		cmd.log.Error(outErr.String())
+		cmd.Error(outErr.String())
 	}
 
 	return resp.Errors()
 }
 
 type systemEraseCmd struct {
-	logCmd
+	baseCmd
 	ctlInvokerCmd
 }
 
@@ -152,7 +152,7 @@ func (cmd *systemEraseCmd) Execute(_ []string) error {
 
 // systemStopCmd is the struct representing the command to shutdown DAOS system.
 type systemStopCmd struct {
-	logCmd
+	baseCmd
 	cfgCmd
 	ctlInvokerCmd
 	jsonOutputCmd
@@ -189,9 +189,9 @@ func (cmd *systemStopCmd) Execute(_ []string) (errOut error) {
 	if err := pretty.PrintSystemStopResponse(&out, &outErr, resp); err != nil {
 		return err
 	}
-	cmd.log.Info(out.String())
+	cmd.Info(out.String())
 	if outErr.String() != "" {
-		cmd.log.Error(outErr.String())
+		cmd.Error(outErr.String())
 	}
 
 	return resp.Errors()
@@ -199,7 +199,7 @@ func (cmd *systemStopCmd) Execute(_ []string) (errOut error) {
 
 // systemStartCmd is the struct representing the command to start system.
 type systemStartCmd struct {
-	logCmd
+	baseCmd
 	cfgCmd
 	ctlInvokerCmd
 	jsonOutputCmd
@@ -233,16 +233,16 @@ func (cmd *systemStartCmd) Execute(_ []string) (errOut error) {
 	if err := pretty.PrintSystemStartResponse(&out, &outErr, resp); err != nil {
 		return err
 	}
-	cmd.log.Info(out.String())
+	cmd.Info(out.String())
 	if outErr.String() != "" {
-		cmd.log.Error(outErr.String())
+		cmd.Error(outErr.String())
 	}
 
 	return resp.Errors()
 }
 
 type systemCleanupCmd struct {
-	logCmd
+	baseCmd
 	cfgCmd
 	ctlInvokerCmd
 	jsonOutputCmd
@@ -278,12 +278,12 @@ func (cmd *systemCleanupCmd) Execute(_ []string) (errOut error) {
 		return err
 	}
 	if outErr.String() != "" {
-		cmd.log.Error(outErr.String())
+		cmd.Error(outErr.String())
 	}
 
 	// Infof prints raw string and doesn't try to expand "%"
 	// preserving column formatting in txtfmt table
-	cmd.log.Infof("%s", out.String())
+	cmd.Infof("%s", out.String())
 
 	return resp.Errors()
 }

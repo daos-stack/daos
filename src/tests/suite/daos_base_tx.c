@@ -23,11 +23,11 @@ static const char *dts_dtx_akey	= "dtx_io akey";
 static void
 dtx_set_fail_loc(test_arg_t *arg, uint64_t fail_loc)
 {
-	MPI_Barrier(MPI_COMM_WORLD);
+	par_barrier(PAR_COMM_WORLD);
 	if (arg->myrank == 0)
 		daos_debug_set_params(arg->group, -1, DMG_KEY_FAIL_LOC,
 				     fail_loc, 0, NULL);
-	MPI_Barrier(MPI_COMM_WORLD);
+	par_barrier(PAR_COMM_WORLD);
 }
 
 static void
@@ -636,7 +636,7 @@ dtx_17(void **state)
 		      DAOS_TX_NONE, &req);
 	punch_akey(dkey, akey1, DAOS_TX_NONE, &req);
 
-	MPI_Barrier(MPI_COMM_WORLD);
+	par_barrier(PAR_COMM_WORLD);
 	close_reopen_coh_oh(arg, &req, oid);
 
 	lookup_single(dkey, akey1, 0, fetch_buf, dts_dtx_iosize, DAOS_TX_NONE,
@@ -687,7 +687,7 @@ dtx_resend_delay(test_arg_t *arg, daos_oclass_id_t oclass)
 	assert_int_equal(req.iod[0].iod_size, size);
 	assert_memory_equal(update_buf, fetch_buf, size);
 
-	MPI_Barrier(MPI_COMM_WORLD);
+	par_barrier(PAR_COMM_WORLD);
 	daos_fail_loc_set(0);
 	dtx_set_fail_loc(arg, 0);
 
@@ -780,7 +780,7 @@ run_daos_base_tx_test(int rank, int size, int *sub_tests, int sub_tests_size)
 {
 	int rc = 0;
 
-	MPI_Barrier(MPI_COMM_WORLD);
+	par_barrier(PAR_COMM_WORLD);
 	if (sub_tests_size == 0) {
 		sub_tests_size = ARRAY_SIZE(dtx_tests);
 		sub_tests = NULL;
@@ -790,7 +790,7 @@ run_daos_base_tx_test(int rank, int size, int *sub_tests, int sub_tests_size)
 				ARRAY_SIZE(dtx_tests), sub_tests,
 				sub_tests_size, dtx_test_setup, test_teardown);
 
-	MPI_Barrier(MPI_COMM_WORLD);
+	par_barrier(PAR_COMM_WORLD);
 
 	return rc;
 }

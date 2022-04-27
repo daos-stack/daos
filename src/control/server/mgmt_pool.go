@@ -116,7 +116,7 @@ func (svc *mgmtSvc) getPoolServiceRanks(ps *system.PoolService) ([]uint32, error
 		if err != nil {
 			return nil, err
 		}
-		if m.State()&system.AvailableMemberFilter == 0 {
+		if m.State&system.AvailableMemberFilter == 0 {
 			continue
 		}
 		readyRanks = append(readyRanks, r)
@@ -1019,7 +1019,7 @@ func (svc *mgmtSvc) ListPools(ctx context.Context, req *mgmtpb.ListPoolsReq) (*m
 	}
 	svc.log.Debugf("MgmtSvc.ListPools dispatch, req:%+v\n", req)
 
-	psList, err := svc.sysdb.PoolServiceList(false)
+	psList, err := svc.sysdb.PoolServiceList(true)
 	if err != nil {
 		return nil, err
 	}
@@ -1030,6 +1030,7 @@ func (svc *mgmtSvc) ListPools(ctx context.Context, req *mgmtpb.ListPoolsReq) (*m
 			Uuid:    ps.PoolUUID.String(),
 			Label:   ps.PoolLabel,
 			SvcReps: system.RanksToUint32(ps.Replicas),
+			State:   ps.State.String(),
 		})
 	}
 

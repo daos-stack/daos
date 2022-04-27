@@ -475,7 +475,7 @@ func checkSystemErase(ctx context.Context, rpcClient UnaryInvoker) error {
 		return err
 	}
 	for _, member := range resp.Members {
-		if member.State()&system.AvailableMemberFilter != 0 {
+		if member.State&system.AvailableMemberFilter != 0 {
 			aliveRanks.Add(member.Rank)
 		}
 	}
