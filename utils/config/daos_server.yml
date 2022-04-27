@@ -290,7 +290,7 @@
 #  # For best performance, it is necessary that the fabric_iface of this engine
 #  # resides on the same NUMA node as the first_core.
 #  #
-#  # Optional parameter; set either this option or pinned_numa_node but not both.
+#  # Optional parameter; set either this option non-zero or pinned_numa_node but not both.
 #
 #  first_core: 0
 #
@@ -422,7 +422,7 @@
 #  #
 #  # Optional parameter; set either this option or first_core, but not both.
 #
-#  pinned_numa_node: 1
+#  #pinned_numa_node: 1
 #
 #  # Offset of the first core to be used for I/O service threads (targets).
 #  # Immutable after running "dmg storage format".
@@ -430,7 +430,7 @@
 #  # For best performance, it is necessary that the fabric_iface of this engine
 #  # resides on the same NUMA node as the first_core.
 #  #
-#  # Optional parameter; set either this option or pinned_numa_node but not both.
+#  # Optional parameter; set either this option non-zero or pinned_numa_node but not both.
 #
 #  first_core: 22
 #

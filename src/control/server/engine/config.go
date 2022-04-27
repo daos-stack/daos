@@ -181,6 +181,10 @@ func (c *Config) setAffinity(log logging.Logger, fis *hardware.FabricInterfaceSe
 	}
 
 	if c.PinnedNumaNode != nil {
+		if c.ServiceThreadCore != 0 {
+			return errors.New("pinned_numa_node and first_core cannot both be set")
+		}
+
 		c.Fabric.NumaNodeIndex = *c.PinnedNumaNode
 		c.Storage.NumaNodeIndex = *c.PinnedNumaNode
 
@@ -194,15 +198,22 @@ func (c *Config) setAffinity(log logging.Logger, fis *hardware.FabricInterfaceSe
 		return
 	}
 
+	var numaNode uint
 	if fi == nil {
-		return errors.New("pinned_numa_node unset in config and fabric info not provided")
+		log.Error("pinned_numa_node unset in config and fabric info not provided, " +
+			"default to NUMA node 0")
+	} else {
+		numaNode = fi.NUMANode
 	}
 
 	// set engine numa node index to that of selected fabric interface
-	c.Fabric.NumaNodeIndex = fi.NUMANode
-	c.Storage.NumaNodeIndex = fi.NUMANode
-	// always set pinned_numa_node as it will be passed as CLI argument to engine executable
-	c.PinnedNumaNode = &fi.NUMANode
+	c.Fabric.NumaNodeIndex = numaNode
+	c.Storage.NumaNodeIndex = numaNode
+
+	// set pinned_numa_node only if first_core is 0 to ensure appropriate affinity of engine
+	if c.ServiceThreadCore == 0 {
+		c.PinnedNumaNode = &numaNode
+	}
 
 	return
 }

@@ -716,6 +716,7 @@ func TestConfig_setAffinity(t *testing.T) {
 			fi: &hardware.FabricInterface{
 				Name:         "net1",
 				NetInterface: "net1",
+				NUMANode:     1,
 				Providers:    common.NewStringSet("test"),
 			},
 			expNuma: 1,
@@ -728,6 +729,7 @@ func TestConfig_setAffinity(t *testing.T) {
 			fi: &hardware.FabricInterface{
 				Name:         "net1",
 				NetInterface: "net1",
+				NUMANode:     1,
 				Providers:    common.NewStringSet("test2"),
 			},
 			expErr: errors.New("not supported"),
@@ -743,7 +745,30 @@ func TestConfig_setAffinity(t *testing.T) {
 			cfg: MockConfig().
 				WithFabricInterface("net1").
 				WithFabricProvider("test"),
-			expErr: errors.New("fabric info not provided"),
+			expNuma: 0,
+		},
+		"pinned numa; first_core set": {
+			cfg: MockConfig().
+				WithFabricInterface("net1").
+				WithFabricProvider("test").
+				WithPinnedNumaNode(1).
+				WithServiceThreadCore(25),
+			expErr: errors.New("cannot both be set"),
+		},
+		// TODO DAOS-10472: Add test cases to verify derived NUMA values are consistent for
+		//                  engine and control plane.
+		"numa not pinned; first_core set": {
+			cfg: MockConfig().
+				WithFabricInterface("net1").
+				WithFabricProvider("test").
+				WithServiceThreadCore(25),
+			fi: &hardware.FabricInterface{
+				Name:         "net1",
+				NetInterface: "net1",
+				NUMANode:     1,
+				Providers:    common.NewStringSet("test"),
+			},
+			expNuma: 1,
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
@@ -761,16 +786,25 @@ func TestConfig_setAffinity(t *testing.T) {
 				return
 			}
 
+			switch {
+			case tc.cfg.ServiceThreadCore == 0:
+				if tc.cfg.PinnedNumaNode == nil {
+					t.Fatal("pinned_numa_node was not set")
+				}
+				common.AssertEqual(t, tc.expNuma, *tc.cfg.PinnedNumaNode,
+					"unexpected pinned numa node id")
+			default:
+				if tc.cfg.PinnedNumaNode != nil {
+					t.Fatal("pinned_numa_node was unexpectedly set")
+				}
+			}
+
+			// Regardless of whether first_core is set, control plane value for
+			// NUMA node will follow fabric interface affinity.
 			common.AssertEqual(t, tc.expNuma, tc.cfg.Storage.NumaNodeIndex,
 				"unexpected storage numa node id")
 			common.AssertEqual(t, tc.expNuma, tc.cfg.Fabric.NumaNodeIndex,
 				"unexpected fabric numa node id")
-
-			if tc.cfg.PinnedNumaNode == nil {
-				t.Fatal("pinned_numa_node was not set")
-			}
-			common.AssertEqual(t, tc.expNuma, *tc.cfg.PinnedNumaNode,
-				"unexpected pinned numa node id")
 		})
 	}
 }

@@ -263,13 +263,11 @@ func TestServerConfig_Constructed(t *testing.T) {
 					WithBdevDeviceList("/tmp/daos-bdev1", "/tmp/daos-bdev2").
 					WithBdevFileSize(16),
 			).
-			WithPinnedNumaNode(1).
 			WithFabricInterface("ib1").
 			WithFabricInterfacePort(20000).
 			WithFabricProvider("ofi+verbs").
 			WithCrtCtxShareAddr(0).
 			WithCrtTimeout(30).
-			WithPinnedNumaNode(1).
 			WithBypassHealthChk(&bypass).
 			WithEnvVars("CRT_TIMEOUT=100").
 			WithLogFile("/tmp/daos_engine.1.log").
