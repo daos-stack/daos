@@ -27,6 +27,7 @@ from test_utils_container import TestContainer
 from ClusterShell.NodeSet import NodeSet
 from avocado.core.exceptions import TestFail
 from pydaos.raw import DaosSnapshot, DaosApiError
+from oclass_utils import extract_redundancy_factor
 
 H_LOCK = threading.Lock()
 
@@ -82,36 +83,13 @@ def add_containers(self, pool, oclass=None, path="/run/container/*"):
     # include rf based on the class
     if oclass:
         self.container[-1].oclass.update(oclass)
-        redundancy_factor = get_rf(oclass)
+        redundancy_factor = extract_redundancy_factor(oclass)
         rf = 'rf:{}'.format(str(redundancy_factor))
     properties = self.container[-1].properties.value
     cont_properties = (",").join(filter(None, [properties, rf]))
     if cont_properties is not None:
         self.container[-1].properties.update(cont_properties)
     self.container[-1].create()
-
-
-def get_rf(oclass):
-    """Return redundancy factor based on the oclass.
-
-    Args:
-        oclass(string): object class.
-
-    return:
-        redundancy factor(int) from object type
-    """
-    rf = 0
-    if "EC" in oclass:
-        tmp = re.findall(r'\d+', oclass)
-        if tmp:
-            rf = int(tmp[1])
-    elif "RP" in oclass:
-        tmp = re.findall(r'\d+', oclass)
-        if tmp:
-            rf = int(tmp[0]) - 1
-    else:
-        rf = 0
-    return rf
 
 
 def reserved_file_copy(self, file, pool, container, num_bytes=None, cmd="read"):
@@ -981,7 +959,7 @@ def create_mdtest_cmdline(self, job_spec, pool, ppn, nodesperjob):
                         mdtest_cmd.dfs_dir_oclass.update(oclass)
                         if "EC" in oclass:
                             # oclass_dir can not be EC must be RP based on rf
-                            rf = get_rf(oclass)
+                            rf = extract_redundancy_factor(oclass)
                             if rf >= 2:
                                 mdtest_cmd.dfs_dir_oclass.update("RP_3G1")
                             elif rf == 1:
