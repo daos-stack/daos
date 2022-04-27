@@ -189,9 +189,11 @@ vtp_print(struct ddb_ctx *ctx, struct dv_tree_path *vt_path, bool include_new_li
 	if (dv_has_obj(vt_path))
 		ddb_printf(ctx, "/"DF_UOID"",  DP_UOID(vt_path->vtp_oid));
 	if (dv_has_dkey(vt_path))
-		ddb_printf(ctx, "/%s", (char *)vt_path->vtp_dkey.iov_buf);
+		ddb_printf(ctx, "/'%.*s'", (int)vt_path->vtp_dkey.iov_len,
+			   (char *)vt_path->vtp_dkey.iov_buf);
 	if (dv_has_akey(vt_path))
-		ddb_printf(ctx, "/%s", (char *)vt_path->vtp_akey.iov_buf);
+		ddb_printf(ctx, "/'%.*s'", (int)vt_path->vtp_dkey.iov_len,
+			   (char *)vt_path->vtp_akey.iov_buf);
 
 	if (vt_path->vtp_recx.rx_nr > 0)
 		ddb_printf(ctx, "/{%lu-%lu}", vt_path->vtp_recx.rx_idx,

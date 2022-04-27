@@ -230,6 +230,27 @@ vos_path_parse_tests(void **state)
 }
 
 static void
+vos_path_parse_and_print_tests(void **state)
+{
+	struct dv_tree_path_builder	 vt = {0};
+	daos_handle_t			 poh = {0};
+	struct ddb_ctx			 ctx = {0};
+	char				*path;
+
+	path = "/12435678-1234-1234-1234-124356789012/1234.4321.0/'akey'/'dkey'";
+
+	ctx.dc_io_ft.ddb_print_message = dvt_fake_print;
+
+	assert_success(ddb_vtp_init(poh, path, &vt));
+
+	vtp_print(&ctx, &vt.vtp_path, false);
+
+	assert_string_equal(path, dvt_fake_print_buffer);
+
+	ddb_vtp_fini(&vt);
+}
+
+static void
 parse_idx_tests(void **state)
 {
 	struct dv_tree_path_builder expected_vt = {0};
@@ -290,6 +311,7 @@ ddb_parse_tests_run()
 		TEST(string_to_argv_tests),
 		TEST(parse_args_tests),
 		TEST(vos_path_parse_tests),
+		TEST(vos_path_parse_and_print_tests),
 		TEST(parse_idx_tests),
 		TEST(has_parts_tests)
 	};

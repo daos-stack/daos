@@ -312,20 +312,20 @@ dcv_suit_teardown(void **state)
 }
 
 #define TEST(test) { #test, test, NULL, NULL }
-static const struct CMUnitTest tests[] = {
-	TEST(quit_cmd_tests),
-	TEST(ls_cmd_tests),
-	TEST(dump_value_cmd_tests),
-	TEST(dump_ilog_cmd_tests),
-	TEST(dump_superblock_cmd_tests),
-	TEST(dump_dtx_cmd_tests),
-	TEST(rm_cmd_tests),
-	TEST(load_cmd_tests),
-};
 
 int
 dvc_tests_run()
 {
+	const struct CMUnitTest tests[] = {
+		TEST(quit_cmd_tests),
+		TEST(ls_cmd_tests),
+		TEST(dump_value_cmd_tests),
+		TEST(dump_ilog_cmd_tests),
+		TEST(dump_superblock_cmd_tests),
+		TEST(dump_dtx_cmd_tests),
+		TEST(rm_cmd_tests),
+		TEST(load_cmd_tests),
+	};
 	return cmocka_run_group_tests_name("DDB commands tests", tests,
 					   dcv_suit_setup, dcv_suit_teardown);
 }

@@ -397,7 +397,7 @@ ddb_run_load(struct ddb_ctx *ctx, struct load_options *opt)
 
 	if (!SUCCESS(rc)) {
 		ddb_error(ctx, "Invalid VOS path\n");
-		return rc;
+		D_GOTO(done, rc);
 	}
 
 
@@ -410,7 +410,7 @@ ddb_run_load(struct ddb_ctx *ctx, struct load_options *opt)
 
 	if (!ctx->dc_io_ft.ddb_get_file_exists(opt->src)) {
 		ddb_errorf(ctx, "Unable to access '%s'\n", opt->src);
-		return -DER_INVAL;
+		D_GOTO(done, rc = -DER_INVAL);
 	}
 
 	file_size = ctx->dc_io_ft.ddb_get_file_size(opt->src);

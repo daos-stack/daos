@@ -960,11 +960,10 @@ committed_dtx_cb(daos_handle_t ih, d_iov_t *key, d_iov_t *val, void *cb_arg)
 static int
 active_dtx_cb(daos_handle_t ih, d_iov_t *key, d_iov_t *val, void *cb_arg)
 {
-	int rc;
-	struct active_dtx_cb_arg *arg = cb_arg;
-	struct dv_dtx_active_entry entry;
-
-	struct vos_dtx_act_ent *ent = val->iov_buf;
+	struct dv_dtx_active_entry	 entry = {0};
+	struct active_dtx_cb_arg	*arg = cb_arg;
+	struct vos_dtx_act_ent		*ent = val->iov_buf;
+	int				 rc;
 
 	uuid_copy(entry.ddtx_uuid, ent->dae_base.dae_xid.dti_uuid);
 	entry.ddtx_oid_cnt = ent->dae_oid_cnt;
@@ -990,9 +989,9 @@ active_dtx_cb(daos_handle_t ih, d_iov_t *key, d_iov_t *val, void *cb_arg)
 int
 dv_committed_dtx(daos_handle_t coh, dv_committed_dtx_handler handler_cb, void *handler_arg)
 {
-	struct vos_container	*cont;
-	int			 rc;
-	struct committed_dtx_cb_arg cb_arg = {0};
+	struct vos_container		*cont;
+	int				 rc;
+	struct committed_dtx_cb_arg	 cb_arg = {0};
 
 	if (daos_handle_is_inval(coh))
 		return -DER_INVAL;

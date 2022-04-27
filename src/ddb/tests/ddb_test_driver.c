@@ -149,7 +149,7 @@ dvt_fake_print(const char *fmt, ...)
 	vsnprintf(dvt_fake_print_buffer + buffer_offset, buffer_left, fmt, args);
 	va_end(args);
 	if (g_verbose)
-		printf("%s", dvt_fake_print_buffer);
+		printf("%s", dvt_fake_print_buffer + buffer_offset);
 
 	return 0;
 }
@@ -374,7 +374,6 @@ dvt_insert_data(daos_handle_t poh, uint32_t conts, uint32_t objs, uint32_t dkeys
 	}
 }
 
-
 static void
 dvt_dtx_begin_helper(daos_handle_t coh, const daos_unit_oid_t *oid, daos_epoch_t epoch,
 		     uint64_t dkey_hash, struct dtx_handle **dthp)
@@ -466,6 +465,8 @@ dvt_vos_insert_2_records_with_dtx(daos_handle_t coh)
 
 	dvt_dtx_end(dth1);
 	dvt_dtx_end(dth2);
+	daos_iov_free(&iod.iod_name);
+	d_sgl_fini(&sgl, false);
 }
 
 struct ddb_test_driver_arguments {

@@ -108,16 +108,22 @@ is_idx(char *str, uint32_t *idx)
 static int
 process_key(const char *tok, uint8_t **key_buf, daos_key_t *key)
 {
+	uint32_t key_buf_len;
+
 	if (tok[0] != '\'' || tok[strlen(tok) - 1] != '\'') {
 		D_ERROR("Keys must be surrounded by '\n");
 		return -DER_INVAL;
 	}
 
-	D_ALLOC(*key_buf, strlen(tok) - 2);
+	key_buf_len = strlen(tok) - 2 + 1; /* minus 2 because of "'"s, + 1 for '\0' */
+
+	D_ALLOC(*key_buf, key_buf_len);
 	if (*key_buf == NULL)
 		return -DER_NOMEM;
-	memcpy(*key_buf, tok + 1, strlen(tok) - 1);
-	d_iov_set(key, *key_buf, strlen(tok) - 2);
+	memcpy(*key_buf, tok + 1, key_buf_len);
+	(*key_buf)[key_buf_len - 1] = '\0';
+	d_iov_set(key, *key_buf, key_buf_len);
+	key->iov_len = key_buf_len - 1; /* don't include terminator */
 
 	return 0;
 }
