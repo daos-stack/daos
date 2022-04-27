@@ -84,7 +84,7 @@ jobs:
             with: fedora:35
           - distro: leap.15
             base: leap.15
-            with: leap.15
+            with: opensuse/leap:15.3
     env:
       DEPS_JOBS: 10
       BASE_DISTRO: ${{ matrix.with }}
