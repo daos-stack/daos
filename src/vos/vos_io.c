@@ -1196,8 +1196,15 @@ akey_fetch(struct vos_io_context *ioc, daos_handle_t ak_toh)
 		iod->iod_type == DAOS_IOD_ARRAY ? "array" : "single",
 		ioc->ic_epr.epr_lo, ioc->ic_epr.epr_hi);
 
-	if (is_array)
+	if (is_array) {
+		if (iod->iod_nr == 0 || iod->iod_recxs == NULL) {
+			D_ASSERT(iod->iod_nr == 0 && iod->iod_recxs == NULL);
+			D_DEBUG(DB_TRACE, "akey "DF_KEY" fetch array bypassed - NULL iod_recxs.\n",
+				DP_KEY(&iod->iod_name));
+			return 0;
+		}
 		flags |= SUBTR_EVT;
+	}
 
 	rc = key_tree_prepare(ioc->ic_obj, ak_toh,
 			      VOS_BTR_AKEY, &iod->iod_name, flags,
@@ -1709,8 +1716,15 @@ akey_update(struct vos_io_context *ioc, uint32_t pm_ver, daos_handle_t ak_toh,
 		DP_KEY(&iod->iod_name), is_array ? "array" : "single",
 		ioc->ic_epr.epr_hi);
 
-	if (is_array)
+	if (is_array) {
+		if (iod->iod_nr == 0 || iod->iod_recxs == NULL) {
+			D_ASSERT(iod->iod_nr == 0 && iod->iod_recxs == NULL);
+			D_DEBUG(DB_TRACE, "akey "DF_KEY" update array bypassed - NULL iod_recxs.\n",
+				DP_KEY(&iod->iod_name));
+			return rc;
+		}
 		flags |= SUBTR_EVT;
+	}
 
 	rc = key_tree_prepare(obj, ak_toh, VOS_BTR_AKEY,
 			      &iod->iod_name, flags, DAOS_INTENT_UPDATE,
