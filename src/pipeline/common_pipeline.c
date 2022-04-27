@@ -43,6 +43,30 @@ pipeline_part_chk_type(const char *part_type, size_t part_type_s, bool is_aggr)
 	return false;
 }
 
+static bool
+pipeline_part_chk_data_type(const char *data_type, size_t data_type_s)
+{
+	if (!data_type_s) /** some parts do not need to declare type */
+		return true;
+
+	if (!strncmp(data_type, "DAOS_FILTER_TYPE_BINARY", data_type_s) ||
+	    !strncmp(data_type, "DAOS_FILTER_TYPE_STRING", data_type_s) ||
+	    !strncmp(data_type, "DAOS_FILTER_TYPE_CSTRING", data_type_s) ||
+	    !strncmp(data_type, "DAOS_FILTER_TYPE_UINTEGER1", data_type_s) ||
+	    !strncmp(data_type, "DAOS_FILTER_TYPE_UINTEGER2", data_type_s) ||
+	    !strncmp(data_type, "DAOS_FILTER_TYPE_UINTEGER4", data_type_s) ||
+	    !strncmp(data_type, "DAOS_FILTER_TYPE_UINTEGER8", data_type_s) ||
+	    !strncmp(data_type, "DAOS_FILTER_TYPE_INTEGER1", data_type_s) ||
+	    !strncmp(data_type, "DAOS_FILTER_TYPE_INTEGER2", data_type_s) ||
+	    !strncmp(data_type, "DAOS_FILTER_TYPE_INTEGER4", data_type_s) ||
+	    !strncmp(data_type, "DAOS_FILTER_TYPE_INTEGER8", data_type_s) ||
+	    !strncmp(data_type, "DAOS_FILTER_TYPE_REAL4", data_type_s) ||
+	    !strncmp(data_type, "DAOS_FILTER_TYPE_REAL8", data_type_s))
+		return true;
+
+	return false;
+}
+
 static int
 pipeline_part_nops(const char *part_type, size_t part_type_s)
 {
@@ -202,7 +226,6 @@ d_pipeline_check(daos_pipeline_t *pipeline)
 	int     rc;
 
 	/**
-	 * TODO: Check data types
 	 * TODO: Check that functions' operands always have the right type
 	 * TODO: Check that constants that are arrays are always on the right
 	 * TODO: Check that arithmetic functions only support number types
@@ -253,7 +276,7 @@ d_pipeline_check(daos_pipeline_t *pipeline)
 		if (ftr->num_parts)
 			num_parts = 1;
 
-		/** -- Checks 2 ... 5 */
+		/** -- Checks 2 ... 6 */
 
 		/**
 		 * -- Check 2: Check that all parts have a correct type.
@@ -266,6 +289,8 @@ d_pipeline_check(daos_pipeline_t *pipeline)
 		 * -- Check 5: Check that constants of type CSTRING always end in '\0'.
 		 *
 		 * -- Check 6: Check that constants of type STRING have a sane size.
+		 *
+		 * -- Check 7: Check that all parts have a correct data type.
 		 */
 
 		for (p = 0; p < ftr->num_parts; p++) {
@@ -300,21 +325,30 @@ d_pipeline_check(daos_pipeline_t *pipeline)
 			}
 			num_parts += part->num_operands;
 
-			/** 4 */
-
 			if (part->part_type.iov_len == strlen("DAOS_FILTER_CONST") &&
 			    !strncmp((char *)part->part_type.iov_buf, "DAOS_FILTER_CONST",
 				    strlen("DAOS_FILTER_CONST"))) {
-				/** constant checks */
 
-				/* 4, 5 and 6 */
+				/** 4, 5 and 6 */
+
 				rc = do_checks_for_constants(i, p, part);
 				if (rc != 0)
 					return rc;
 			}
 
+			/** 7 */
+
+			res = pipeline_part_chk_data_type((char *)part->data_type.iov_buf,
+							  part->part_type.iov_len);
+			if (!res) {
+				D_ERROR("filter %zu, part %zu: data type %.*s is not supported\n",
+					i, p, (int)part->data_type.iov_len,
+					(char *)part->data_type.iov_buf);
+				return -DER_NOSYS;
+			}
+
 		}
-		/** 3 */
+		/** 3 (continued) */
 
 		if (num_parts != ftr->num_parts) {
 			D_ERROR("filter %zu: mismatch between counted parts %u and .num_parts %u\n",
@@ -323,7 +357,7 @@ d_pipeline_check(daos_pipeline_t *pipeline)
 		}
 
 		/**
-		 * -- Check 7: Check that all parts have the right type of operands.
+		 * -- Check 8: Check that all parts have the right type of operands.
 		 */
 
 		p   = 0;
