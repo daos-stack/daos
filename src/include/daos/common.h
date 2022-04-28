@@ -837,7 +837,11 @@ struct daos_hhash_table {
 extern struct daos_hhash_table daos_ht;
 
 /* daos handle hash table helpers */
-int daos_hhash_init(void);
+int daos_hhash_init_feats(uint32_t feats);
+static inline int daos_hhash_init(void)
+{
+	return daos_hhash_init_feats(D_HASH_FT_GLOCK | D_HASH_FT_LRU);
+}
 int daos_hhash_fini(void);
 struct d_hlink *daos_hhash_link_lookup(uint64_t key);
 void daos_hhash_link_insert(struct d_hlink *hlink, int type);

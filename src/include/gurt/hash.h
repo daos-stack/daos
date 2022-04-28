@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2021 Intel Corporation.
+ * (C) Copyright 2016-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -19,6 +19,7 @@
 
 #include <gurt/list.h>
 #include <gurt/types.h>
+#include <gurt/atomic.h>
 
 /**
  * Hash table keeps and prints extra debugging information
@@ -539,7 +540,7 @@ struct d_hlink_ops {
 
 struct d_rlink {
 	d_list_t		rl_link;
-	uint32_t		rl_ref;
+	ATOMIC uint32_t		rl_ref;
 	uint32_t		rl_initialized:1;
 };
 

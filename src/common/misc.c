@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2021 Intel Corporation.
+ * (C) Copyright 2016-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -545,7 +545,7 @@ static pthread_mutex_t	daos_ht_lock = PTHREAD_MUTEX_INITIALIZER;
 static unsigned int	daos_ht_ref;
 
 int
-daos_hhash_init(void)
+daos_hhash_init_feats(uint32_t feats)
 {
 	int rc;
 
@@ -555,7 +555,7 @@ daos_hhash_init(void)
 		D_GOTO(unlock, rc = 0);
 	}
 
-	rc = d_hhash_create(D_HASH_FT_GLOCK | D_HASH_FT_LRU, D_HHASH_BITS,
+	rc = d_hhash_create(feats, D_HHASH_BITS,
 			    &daos_ht.dht_hhash);
 	if (rc == 0) {
 		D_ASSERT(daos_ht.dht_hhash != NULL);

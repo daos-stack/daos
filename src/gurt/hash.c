@@ -1022,15 +1022,20 @@ link2rlink(d_list_t *link)
 static void
 rl_op_addref(struct d_rlink *rlink)
 {
-	rlink->rl_ref++;
+	atomic_fetch_add_relaxed(&rlink->rl_ref, 1);
 }
 
 static bool
 rl_op_decref(struct d_rlink *rlink)
 {
-	D_ASSERT(rlink->rl_ref > 0);
-	rlink->rl_ref--;
-	return rlink->rl_ref == 0;
+	uint32_t oldref;
+
+	D_ASSERT(atomic_load_relaxed(&rlink->rl_ref) > 0);
+
+	oldref = atomic_fetch_sub_relaxed(&rlink->rl_ref, 1);
+	D_ASSERT(oldref > 0);
+
+	return oldref == 1;
 }
 
 static void
@@ -1038,7 +1043,7 @@ rl_op_init(struct d_rlink *rlink)
 {
 	D_INIT_LIST_HEAD(&rlink->rl_link);
 	rlink->rl_initialized	= 1;
-	rlink->rl_ref		= 1; /* for caller */
+	atomic_store_relaxed(&rlink->rl_ref, 1); /* for caller */
 }
 
 static bool
@@ -1050,7 +1055,7 @@ rl_op_empty(struct d_rlink *rlink)
 		return true;
 
 	is_unlinked = d_hash_rec_unlinked(&rlink->rl_link);
-	D_ASSERT(rlink->rl_ref != 0 || is_unlinked);
+	D_ASSERT(atomic_load_relaxed(&rlink->rl_ref) != 0 || is_unlinked);
 	return is_unlinked;
 }
 
@@ -1514,7 +1519,7 @@ d_uhash_link_insert(struct d_hash_table *htable, struct d_uuid *key,
 bool
 d_uhash_link_last_ref(struct d_ulink *ulink)
 {
-	return ulink->ul_link.rl_ref == 1;
+	return atomic_load_relaxed(&ulink->ul_link.rl_ref) == 1;
 }
 
 void
