@@ -174,11 +174,12 @@ func convertPoolSpaceInfo(in *C.struct_daos_pool_space, mt C.uint) *mgmtpb.Stora
 	}
 
 	return &mgmtpb.StorageUsageStats{
-		Total: uint64(in.ps_space.s_total[mt]),
-		Free:  uint64(in.ps_space.s_free[mt]),
-		Min:   uint64(in.ps_free_min[mt]),
-		Max:   uint64(in.ps_free_max[mt]),
-		Mean:  uint64(in.ps_free_mean[mt]),
+		Total:     uint64(in.ps_space.s_total[mt]),
+		Free:      uint64(in.ps_space.s_free[mt]),
+		Min:       uint64(in.ps_free_min[mt]),
+		Max:       uint64(in.ps_free_max[mt]),
+		Mean:      uint64(in.ps_free_mean[mt]),
+		MediaType: mgmtpb.StorageMediaType(mt),
 	}
 }
 
@@ -281,8 +282,8 @@ func (cmd *poolQueryCmd) Execute(_ []string) error {
 type poolQueryTargetsCmd struct {
 	poolBaseCmd
 
-	Rank      uint32 `long:"rank" required:"1" description:"Engine rank of the targets to be queried"`
-	Targetidx string `long:"target-idx" description:"Comma-separated list of target idx(s) to be queried"`
+	Rank    uint32 `long:"rank" required:"1" description:"Engine rank of the targets to be queried"`
+	Targets string `long:"target-idx" description:"Comma-separated list of target idx(s) to be queried"`
 }
 
 func convertDaosSpaceInfo(in *C.struct_daos_space, mt C.uint) *mgmtpb.StorageTargetUsage {
@@ -291,8 +292,9 @@ func convertDaosSpaceInfo(in *C.struct_daos_space, mt C.uint) *mgmtpb.StorageTar
 	}
 
 	return &mgmtpb.StorageTargetUsage{
-		Total: uint64(in.s_total[mt]),
-		Free:  uint64(in.s_free[mt]),
+		Total:     uint64(in.s_total[mt]),
+		Free:      uint64(in.s_free[mt]),
+		MediaType: mgmtpb.StorageMediaType(mt),
 	}
 }
 
@@ -304,10 +306,8 @@ func convertDaosSpaceInfo(in *C.struct_daos_space, mt C.uint) *mgmtpb.StorageTar
 func convertPoolTargetInfo(ptinfo *C.daos_target_info_t) (*control.PoolQueryTargetInfo, error) {
 	pqtp := new(mgmtpb.PoolQueryTargetInfo)
 
-	// daos_target_info_t -> mgmtpb
 	pqtp.Type = mgmtpb.PoolQueryTargetInfo_TargetType(ptinfo.ta_type)
 	pqtp.State = mgmtpb.PoolQueryTargetInfo_TargetState(ptinfo.ta_state)
-	pqtp.Perf = &mgmtpb.TargetPerf{Foo: int32(ptinfo.ta_perf.foo)}
 	pqtp.Space = []*mgmtpb.StorageTargetUsage{
 		convertDaosSpaceInfo(&ptinfo.ta_space, C.DAOS_MEDIA_SCM),
 		convertDaosSpaceInfo(&ptinfo.ta_space, C.DAOS_MEDIA_NVME),
@@ -317,13 +317,12 @@ func convertPoolTargetInfo(ptinfo *C.daos_target_info_t) (*control.PoolQueryTarg
 	pqti := new(control.PoolQueryTargetInfo)
 	pqti.Type = control.PoolQueryTargetType(pqtp.Type)
 	pqti.State = control.PoolQueryTargetState(pqtp.State)
-	pqti.Perf = &control.TargetPerf{Foo: pqtp.Perf.Foo}
+	pqti.Perf = &control.TargetPerf{Foo: int32(ptinfo.ta_perf.foo)}
 	pqti.Space = []*control.StorageTargetUsage{
-		{pqtp.Space[uint(C.DAOS_MEDIA_SCM)].Total, pqtp.Space[uint(C.DAOS_MEDIA_SCM)].Free},
-		{pqtp.Space[uint(C.DAOS_MEDIA_NVME)].Total, pqtp.Space[uint(C.DAOS_MEDIA_NVME)].Free},
+		{pqtp.Space[uint(C.DAOS_MEDIA_SCM)].Total, pqtp.Space[uint(C.DAOS_MEDIA_SCM)].Free, C.DAOS_MEDIA_SCM},
+		{pqtp.Space[uint(C.DAOS_MEDIA_NVME)].Total, pqtp.Space[uint(C.DAOS_MEDIA_NVME)].Free, C.DAOS_MEDIA_NVME},
 	}
 
-	//return pqti, convert.Types(pqtp, pqti)
 	return pqti, nil
 }
 
@@ -334,36 +333,35 @@ func (cmd *poolQueryTargetsCmd) Execute(_ []string) error {
 	}
 	defer cleanup()
 
-	var idxlist []uint32
-	if err = common.ParseNumberList(cmd.Targetidx, &idxlist); err != nil {
+	var idxList []uint32
+	if err = common.ParseNumberList(cmd.Targets, &idxList); err != nil {
 		return errors.WithMessage(err, "parsing target list")
 	}
 
-	var inforesp *control.PoolQueryTargetResp = &control.PoolQueryTargetResp{}
-	var ptinfo C.daos_target_info_t
+	infoResp := new(control.PoolQueryTargetResp)
+	ptInfo := new(C.daos_target_info_t)
 	var rc C.int
 
-	for tgt := 0; tgt < len(idxlist); tgt++ {
-		rc = C.daos_pool_query_target(cmd.cPoolHandle, C.uint32_t(idxlist[tgt]), C.uint32_t(cmd.Rank), &ptinfo, nil)
+	for tgt := 0; tgt < len(idxList); tgt++ {
+		rc = C.daos_pool_query_target(cmd.cPoolHandle, C.uint32_t(idxList[tgt]), C.uint32_t(cmd.Rank), ptInfo, nil)
 		if err := daosError(rc); err != nil {
 			return errors.Wrapf(err,
-				"failed to query pool %s target %d:%d", cmd.poolUUID, cmd.Rank, tgt)
+				"failed to query pool %s rank:target %d:%d", cmd.poolUUID, cmd.Rank, idxList[tgt])
 		}
 
-		var tgtInfo *control.PoolQueryTargetInfo
-		tgtInfo, err = convertPoolTargetInfo(&ptinfo)
-		inforesp.Infos = append(inforesp.Infos, tgtInfo)
+		tgtInfo, err := convertPoolTargetInfo(ptInfo)
+		infoResp.Infos = append(infoResp.Infos, tgtInfo)
 		if err != nil {
 			return err
 		}
 	}
 
 	if cmd.jsonOutputEnabled() {
-		return cmd.outputJSON(inforesp, nil)
+		return cmd.outputJSON(infoResp, nil)
 	}
 
 	var bld strings.Builder
-	if err := pretty.PrintPoolQueryTargetResponse(inforesp, &bld); err != nil {
+	if err := pretty.PrintPoolQueryTargetResponse(infoResp, &bld); err != nil {
 		return err
 	}
 

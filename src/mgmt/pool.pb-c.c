@@ -1414,51 +1414,6 @@ void   mgmt__storage_target_usage__free_unpacked
   assert(message->base.descriptor == &mgmt__storage_target_usage__descriptor);
   protobuf_c_message_free_unpacked ((ProtobufCMessage*)message, allocator);
 }
-void   mgmt__target_perf__init
-                     (Mgmt__TargetPerf         *message)
-{
-  static const Mgmt__TargetPerf init_value = MGMT__TARGET_PERF__INIT;
-  *message = init_value;
-}
-size_t mgmt__target_perf__get_packed_size
-                     (const Mgmt__TargetPerf *message)
-{
-  assert(message->base.descriptor == &mgmt__target_perf__descriptor);
-  return protobuf_c_message_get_packed_size ((const ProtobufCMessage*)(message));
-}
-size_t mgmt__target_perf__pack
-                     (const Mgmt__TargetPerf *message,
-                      uint8_t       *out)
-{
-  assert(message->base.descriptor == &mgmt__target_perf__descriptor);
-  return protobuf_c_message_pack ((const ProtobufCMessage*)message, out);
-}
-size_t mgmt__target_perf__pack_to_buffer
-                     (const Mgmt__TargetPerf *message,
-                      ProtobufCBuffer *buffer)
-{
-  assert(message->base.descriptor == &mgmt__target_perf__descriptor);
-  return protobuf_c_message_pack_to_buffer ((const ProtobufCMessage*)message, buffer);
-}
-Mgmt__TargetPerf *
-       mgmt__target_perf__unpack
-                     (ProtobufCAllocator  *allocator,
-                      size_t               len,
-                      const uint8_t       *data)
-{
-  return (Mgmt__TargetPerf *)
-     protobuf_c_message_unpack (&mgmt__target_perf__descriptor,
-                                allocator, len, data);
-}
-void   mgmt__target_perf__free_unpacked
-                     (Mgmt__TargetPerf *message,
-                      ProtobufCAllocator *allocator)
-{
-  if(!message)
-    return;
-  assert(message->base.descriptor == &mgmt__target_perf__descriptor);
-  protobuf_c_message_free_unpacked ((ProtobufCMessage*)message, allocator);
-}
 void   mgmt__pool_query_target_info__init
                      (Mgmt__PoolQueryTargetInfo         *message)
 {
@@ -3115,10 +3070,10 @@ static const ProtobufCFieldDescriptor mgmt__storage_usage_stats__field_descripto
     "media_type",
     6,
     PROTOBUF_C_LABEL_NONE,
-    PROTOBUF_C_TYPE_UINT32,
+    PROTOBUF_C_TYPE_ENUM,
     0,   /* quantifier_offset */
     offsetof(Mgmt__StorageUsageStats, media_type),
-    NULL,
+    &mgmt__storage_media_type__descriptor,
     NULL,
     0,             /* flags */
     0,NULL,NULL    /* reserved1,reserved2, etc */
@@ -3901,12 +3856,12 @@ static const ProtobufCFieldDescriptor mgmt__pool_query_target_req__field_descrip
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
   {
-    "targetidx",
+    "targets",
     4,
     PROTOBUF_C_LABEL_REPEATED,
     PROTOBUF_C_TYPE_UINT32,
-    offsetof(Mgmt__PoolQueryTargetReq, n_targetidx),
-    offsetof(Mgmt__PoolQueryTargetReq, targetidx),
+    offsetof(Mgmt__PoolQueryTargetReq, n_targets),
+    offsetof(Mgmt__PoolQueryTargetReq, targets),
     NULL,
     NULL,
     0 | PROTOBUF_C_FIELD_FLAG_PACKED,             /* flags */
@@ -3917,7 +3872,7 @@ static const unsigned mgmt__pool_query_target_req__field_indices_by_name[] = {
   1,   /* field[1] = id */
   2,   /* field[2] = rank */
   0,   /* field[0] = sys */
-  3,   /* field[3] = targetidx */
+  3,   /* field[3] = targets */
 };
 static const ProtobufCIntRange mgmt__pool_query_target_req__number_ranges[1 + 1] =
 {
@@ -3969,10 +3924,10 @@ static const ProtobufCFieldDescriptor mgmt__storage_target_usage__field_descript
     "media_type",
     3,
     PROTOBUF_C_LABEL_NONE,
-    PROTOBUF_C_TYPE_UINT32,
+    PROTOBUF_C_TYPE_ENUM,
     0,   /* quantifier_offset */
     offsetof(Mgmt__StorageTargetUsage, media_type),
-    NULL,
+    &mgmt__storage_media_type__descriptor,
     NULL,
     0,             /* flags */
     0,NULL,NULL    /* reserved1,reserved2, etc */
@@ -4001,44 +3956,6 @@ const ProtobufCMessageDescriptor mgmt__storage_target_usage__descriptor =
   mgmt__storage_target_usage__field_indices_by_name,
   1,  mgmt__storage_target_usage__number_ranges,
   (ProtobufCMessageInit) mgmt__storage_target_usage__init,
-  NULL,NULL,NULL    /* reserved[123] */
-};
-static const ProtobufCFieldDescriptor mgmt__target_perf__field_descriptors[1] =
-{
-  {
-    "foo",
-    1,
-    PROTOBUF_C_LABEL_NONE,
-    PROTOBUF_C_TYPE_INT32,
-    0,   /* quantifier_offset */
-    offsetof(Mgmt__TargetPerf, foo),
-    NULL,
-    NULL,
-    0,             /* flags */
-    0,NULL,NULL    /* reserved1,reserved2, etc */
-  },
-};
-static const unsigned mgmt__target_perf__field_indices_by_name[] = {
-  0,   /* field[0] = foo */
-};
-static const ProtobufCIntRange mgmt__target_perf__number_ranges[1 + 1] =
-{
-  { 1, 0 },
-  { 0, 1 }
-};
-const ProtobufCMessageDescriptor mgmt__target_perf__descriptor =
-{
-  PROTOBUF_C__MESSAGE_DESCRIPTOR_MAGIC,
-  "mgmt.TargetPerf",
-  "TargetPerf",
-  "Mgmt__TargetPerf",
-  "mgmt",
-  sizeof(Mgmt__TargetPerf),
-  1,
-  mgmt__target_perf__field_descriptors,
-  mgmt__target_perf__field_indices_by_name,
-  1,  mgmt__target_perf__number_ranges,
-  (ProtobufCMessageInit) mgmt__target_perf__init,
   NULL,NULL,NULL    /* reserved[123] */
 };
 static const ProtobufCEnumValue mgmt__pool_query_target_info__target_type__enum_values_by_number[5] =
@@ -4113,7 +4030,7 @@ const ProtobufCEnumDescriptor mgmt__pool_query_target_info__target_state__descri
   mgmt__pool_query_target_info__target_state__value_ranges,
   NULL,NULL,NULL,NULL   /* reserved[1234] */
 };
-static const ProtobufCFieldDescriptor mgmt__pool_query_target_info__field_descriptors[4] =
+static const ProtobufCFieldDescriptor mgmt__pool_query_target_info__field_descriptors[3] =
 {
   {
     "type",
@@ -4140,20 +4057,8 @@ static const ProtobufCFieldDescriptor mgmt__pool_query_target_info__field_descri
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
   {
-    "perf",
-    3,
-    PROTOBUF_C_LABEL_NONE,
-    PROTOBUF_C_TYPE_MESSAGE,
-    0,   /* quantifier_offset */
-    offsetof(Mgmt__PoolQueryTargetInfo, perf),
-    &mgmt__target_perf__descriptor,
-    NULL,
-    0,             /* flags */
-    0,NULL,NULL    /* reserved1,reserved2, etc */
-  },
-  {
     "space",
-    4,
+    3,
     PROTOBUF_C_LABEL_REPEATED,
     PROTOBUF_C_TYPE_MESSAGE,
     offsetof(Mgmt__PoolQueryTargetInfo, n_space),
@@ -4165,15 +4070,14 @@ static const ProtobufCFieldDescriptor mgmt__pool_query_target_info__field_descri
   },
 };
 static const unsigned mgmt__pool_query_target_info__field_indices_by_name[] = {
-  2,   /* field[2] = perf */
-  3,   /* field[3] = space */
+  2,   /* field[2] = space */
   1,   /* field[1] = state */
   0,   /* field[0] = type */
 };
 static const ProtobufCIntRange mgmt__pool_query_target_info__number_ranges[1 + 1] =
 {
   { 1, 0 },
-  { 0, 4 }
+  { 0, 3 }
 };
 const ProtobufCMessageDescriptor mgmt__pool_query_target_info__descriptor =
 {
@@ -4183,7 +4087,7 @@ const ProtobufCMessageDescriptor mgmt__pool_query_target_info__descriptor =
   "Mgmt__PoolQueryTargetInfo",
   "mgmt",
   sizeof(Mgmt__PoolQueryTargetInfo),
-  4,
+  3,
   mgmt__pool_query_target_info__field_descriptors,
   mgmt__pool_query_target_info__field_indices_by_name,
   1,  mgmt__pool_query_target_info__number_ranges,
@@ -4240,4 +4144,32 @@ const ProtobufCMessageDescriptor mgmt__pool_query_target_resp__descriptor =
   1,  mgmt__pool_query_target_resp__number_ranges,
   (ProtobufCMessageInit) mgmt__pool_query_target_resp__init,
   NULL,NULL,NULL    /* reserved[123] */
+};
+static const ProtobufCEnumValue mgmt__storage_media_type__enum_values_by_number[2] =
+{
+  { "SCM", "MGMT__STORAGE_MEDIA_TYPE__SCM", 0 },
+  { "NVME", "MGMT__STORAGE_MEDIA_TYPE__NVME", 1 },
+};
+static const ProtobufCIntRange mgmt__storage_media_type__value_ranges[] = {
+{0, 0},{0, 2}
+};
+static const ProtobufCEnumValueIndex mgmt__storage_media_type__enum_values_by_name[2] =
+{
+  { "NVME", 1 },
+  { "SCM", 0 },
+};
+const ProtobufCEnumDescriptor mgmt__storage_media_type__descriptor =
+{
+  PROTOBUF_C__ENUM_DESCRIPTOR_MAGIC,
+  "mgmt.StorageMediaType",
+  "StorageMediaType",
+  "Mgmt__StorageMediaType",
+  "mgmt",
+  2,
+  mgmt__storage_media_type__enum_values_by_number,
+  2,
+  mgmt__storage_media_type__enum_values_by_name,
+  1,
+  mgmt__storage_media_type__value_ranges,
+  NULL,NULL,NULL,NULL   /* reserved[1234] */
 };

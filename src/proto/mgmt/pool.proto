@@ -173,6 +173,11 @@ message PoolQueryReq {
 	bool include_disabled_ranks = 5; // True if the list of disabled ranks shall be returned
 }
 
+enum StorageMediaType {
+	SCM = 0;
+	NVME = 1;
+}
+
 // StorageUsageStats represents usage statistics for a storage subsystem.
 message StorageUsageStats {
 	uint64 total = 1;
@@ -180,7 +185,7 @@ message StorageUsageStats {
 	uint64 min = 3;
 	uint64 max = 4;
 	uint64 mean = 5;
-	uint32 media_type = 6;
+	StorageMediaType media_type = 6;
 }
 
 // PoolRebuildStatus represents a pool's rebuild status.
@@ -266,18 +271,14 @@ message PoolQueryTargetReq {
 	string sys = 1; // DAOS system identifier
 	string id = 2;	// Pool label or UUID
 	uint32 rank = 3; // Engine rank with targets to query
-	repeated uint32 targetidx = 4; // indices of targets to be queried
+	repeated uint32 targets = 4; // indices of targets to be queried
 }
 
 // StorageTargetUsage represent's a target's capacity and usage
 message StorageTargetUsage {
 	uint64 total = 1; // total space in bytes
 	uint64 free = 2; // free space in bytes
-	uint32 media_type = 3; // see daos_media_type_t (e.g., SCM, NVME)
-}
-
-message TargetPerf {
-	int32 foo = 1; // placeholder. TODO: storage/network bandwidth, latency, etc.
+	StorageMediaType  media_type = 3; // see daos_media_type_t (e.g., SCM, NVME)
 }
 
 // PoolQueryTargetInfo represents pool target query info for a single target.
@@ -302,8 +303,8 @@ message PoolQueryTargetInfo {
 		DRAIN = 6; // Being drained
 	}
 	TargetState state = 2; // target state see enum daos_target_state_t
-	TargetPerf perf = 3; // target performance data
-	repeated StorageTargetUsage space = 4; // this target's usage per storage tier
+	// TODO: target performance data
+	repeated StorageTargetUsage space = 3; // this target's usage per storage tier
 }
 
 // PoolQueryTargetResp represents a pool target query response

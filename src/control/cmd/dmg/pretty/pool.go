@@ -40,10 +40,13 @@ func PrintPoolQueryResponse(pqr *control.PoolQueryResp, out io.Writer, opts ...P
 	if pqr.TierStats != nil {
 		for tierIdx, tierStats := range pqr.TierStats {
 			var tierName string
-			if tierIdx == 0 {
-				tierName = "- Storage tier 0 (SCM):"
-			} else {
+			switch tierIdx {
+			case int(control.StorageMediaTypeScm):
+				tierName = fmt.Sprintf("- Storage tier %d (SCM):", tierIdx)
+			case int(control.StorageMediaTypeNvme):
 				tierName = fmt.Sprintf("- Storage tier %d (NVMe):", tierIdx)
+			default:
+				tierName = fmt.Sprintf("- Storage tier %d (unknown):", tierIdx)
 			}
 			fmt.Fprintln(w, tierName)
 			fmt.Fprintf(w, "  Total size: %s\n", humanize.Bytes(tierStats.Total))
@@ -78,10 +81,13 @@ func PrintPoolQueryTargetResponse(pqtr *control.PoolQueryTargetResp, out io.Writ
 		if pqtr.Infos[infosIdx].Space != nil {
 			for tierIdx, tierUsage := range pqtr.Infos[infosIdx].Space {
 				var tierName string
-				if tierIdx == 0 {
-					tierName = "- Storage tier 0 (SCM):"
-				} else {
+				switch tierIdx {
+				case int(control.StorageMediaTypeScm):
+					tierName = fmt.Sprintf("- Storage tier %d (SCM):", tierIdx)
+				case int(control.StorageMediaTypeNvme):
 					tierName = fmt.Sprintf("- Storage tier %d (NVMe):", tierIdx)
+				default:
+					tierName = fmt.Sprintf("- Storage tier %d (unknown):", tierIdx)
 				}
 				fmt.Fprintln(w, tierName)
 				fmt.Fprintf(w, "  Total size: %s\n", humanize.Bytes(tierUsage.Total))

@@ -380,12 +380,12 @@ type (
 
 	// StorageUsageStats represents DAOS storage usage statistics.
 	StorageUsageStats struct {
-		Total     uint64 `json:"total"`
-		Free      uint64 `json:"free"`
-		Min       uint64 `json:"min"`
-		Max       uint64 `json:"max"`
-		Mean      uint64 `json:"mean"`
-		MediaType string `json:"media_type"`
+		Total     uint64           `json:"total"`
+		Free      uint64           `json:"free"`
+		Min       uint64           `json:"min"`
+		Max       uint64           `json:"max"`
+		Mean      uint64           `json:"mean"`
+		MediaType StorageMediaType `json:"media_type"`
 	}
 
 	// PoolRebuildState indicates the current state of the pool rebuild process.
@@ -423,17 +423,21 @@ type (
 	// PoolQueryTargetReq contains parameters for a pool query target request
 	PoolQueryTargetReq struct {
 		poolRequest
-		ID        string
-		Rank      system.Rank
-		Targetidx []uint32
+		ID      string
+		Rank    system.Rank
+		Targets []uint32
 	}
+
+	StorageMediaType int32
 
 	// StorageTargetUsage represents DAOS target storage usage
 	StorageTargetUsage struct {
-		Total uint64 `json:"total"`
-		Free  uint64 `json:"free"`
+		Total     uint64           `json:"total"`
+		Free      uint64           `json:"free"`
+		MediaType StorageMediaType `json:"media_type"`
 	}
 
+	// TargetPerf - placeholder. TODO: storage/network bandwidth, latency, etc.
 	TargetPerf struct {
 		Foo int32 `json:"foo"`
 	}
@@ -454,6 +458,13 @@ type (
 		Status int32 `json:"status"`
 		Infos  []*PoolQueryTargetInfo
 	}
+)
+
+const (
+	// StorageMediaTypeScm indicates that the media is storage class (persistent) memory
+	StorageMediaTypeScm StorageMediaType = iota
+	// StorageMediaTypeNvme indicates that the media is NVMe SSD
+	StorageMediaTypeNvme
 )
 
 func (pqr *PoolQueryResp) MarshalJSON() ([]byte, error) {
@@ -523,31 +534,6 @@ func (pqr *PoolQueryResp) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
-func (sus *StorageUsageStats) UnmarshalJSON(data []byte) error {
-	type fromJSON StorageUsageStats
-	from := &struct {
-		MediaType uint32 `json:"media_type"`
-		*fromJSON
-	}{
-		fromJSON: (*fromJSON)(sus),
-	}
-
-	if err := json.Unmarshal(data, from); err != nil {
-		return err
-	}
-
-	switch from.MediaType {
-	case drpc.MediaTypeScm:
-		sus.MediaType = "scm"
-	case drpc.MediaTypeNvme:
-		sus.MediaType = "nvme"
-	default:
-		sus.MediaType = "unknown"
-	}
-
-	return nil
-}
-
 const (
 	// PoolRebuildStateIdle indicates that the rebuild process is idle.
 	PoolRebuildStateIdle PoolRebuildState = iota
@@ -612,6 +598,32 @@ func PoolQuery(ctx context.Context, rpcClient UnaryInvoker, req *PoolQueryReq) (
 	return pqr, convertMSResponse(ur, pqr)
 }
 
+func (smt StorageMediaType) MarshalJSON() ([]byte, error) {
+	typeStr, ok := mgmtpb.StorageMediaType_name[int32(smt)]
+	if !ok {
+		return nil, errors.Errorf("invalid storage media type %d", smt)
+	}
+	fmt.Fprintf(os.Stdout, "typeStr: %s smt %d\n", typeStr, int32(smt))
+	return []byte(`"` + strings.ToLower(typeStr) + `"`), nil
+}
+
+func (smt StorageMediaType) String() string {
+	return strings.ToLower(mgmtpb.StorageMediaType_name[int32(smt)])
+}
+
+func (pqtt PoolQueryTargetType) MarshalJSON() ([]byte, error) {
+	typeStr, ok := mgmtpb.PoolQueryTargetInfo_TargetType_name[int32(pqtt)]
+	if !ok {
+		return nil, errors.Errorf("invalid target type %d", pqtt)
+	}
+	fmt.Fprintf(os.Stdout, "typeStr: %s pqts %d\n", typeStr, int32(pqtt))
+	return []byte(`"` + strings.ToLower(typeStr) + `"`), nil
+}
+
+func (ptt PoolQueryTargetType) String() string {
+	return strings.ToLower(mgmtpb.PoolQueryTargetInfo_TargetType_name[int32(ptt)])
+}
+
 const (
 	PoolTargetStateUnknown PoolQueryTargetState = iota
 	// PoolTargetStateDownOut indicates the target is not available
@@ -628,8 +640,13 @@ const (
 	PoolTargetStateDrain
 )
 
-func (ptt PoolQueryTargetType) String() string {
-	return strings.ToLower(mgmtpb.PoolQueryTargetInfo_TargetType_name[int32(ptt)])
+func (pqts PoolQueryTargetState) MarshalJSON() ([]byte, error) {
+	stateStr, ok := mgmtpb.PoolQueryTargetInfo_TargetState_name[int32(pqts)]
+	if !ok {
+		return nil, errors.Errorf("invalid target state %d", pqts)
+	}
+	fmt.Fprintf(os.Stdout, "stateStr: %s pqts %d\n", stateStr, int32(pqts))
+	return []byte(`"` + strings.ToLower(stateStr) + `"`), nil
 }
 
 func (pts PoolQueryTargetState) String() string {
