@@ -941,7 +941,7 @@ throttle_io(struct sched_info *info, struct sched_pool_info *spi, uint32_t *kick
 		return;
 
 	gc_wts_max = tot_wts * pr->pr_gc_ratio / 100;
-	avail_wts = (uint64_t)kick[SCHED_REQ_SCRUB] * req_weights[SCHED_REQ_SCRUB];
+	avail_wts = (uint64_t) kick[SCHED_REQ_SCRUB] * req_weights[SCHED_REQ_SCRUB];
 	if (gc_wts > gc_wts_max) {
 		if (kick[SCHED_REQ_GC] == 0)
 			goto done;

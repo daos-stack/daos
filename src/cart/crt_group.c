@@ -320,7 +320,7 @@ exit:
 static int
 generate_port_based_uris(int prov_type, char *base_addr, int tag, struct crt_uri_item *ui)
 {
-	char	tmp_addr[CRT_ADDR_STR_MAX_LEN+1] = {0};
+	char	tmp_addr[CRT_ADDR_STR_MAX_LEN + 1] = {0};
 	int	base_port;
 	char	*p;
 	int	i, k;

@@ -1188,7 +1188,7 @@ dfs_test_mt_connect(void **state)
 	pthread_barrier_wait(&barrier);
 	for (i = 0; i < dfs_test_thread_nr; i++) {
 		rc = pthread_join(dfs_test_tid[i], NULL);
-		assert_int_equal(rc,0);
+		assert_int_equal(rc, 0);
 	}
 
 	for (i = 0; i < dfs_test_thread_nr; i++)
