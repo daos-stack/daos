@@ -25,7 +25,7 @@ class DaosRunIoConf(IoConfTestBase):
 
         Use Cases:
             Write data set, modified 1bytes in different offsets. Verify
-            read through
+            read through.
 
         :avocado: tags=all,full_regression,hw,large,unaligned_io
         """
