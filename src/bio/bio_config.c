@@ -131,8 +131,8 @@ struct accel_props_info accel_props = {};
 
 static struct spdk_json_object_decoder
 accel_props_decoders[] = {
-	{"accel_engine", offsetof(struct busid_range_info, begin), spdk_json_decode_string},
-	{"accel_opts", offsetof(struct busid_range_info, end), spdk_json_decode_uint16},
+	{"accel_engine", offsetof(struct accel_props_info, engine), spdk_json_decode_string},
+	{"accel_opts", offsetof(struct accel_props_info, opt_mask), spdk_json_decode_uint16},
 };
 
 static int
@@ -789,8 +789,10 @@ get_accel_props(const char *nvme_conf)
 		goto out;
 	}
 
-	D_INFO("'%s' read from config, setting: %s, mask: %X\n", NVME_CONF_SET_ACCEL_PROPS,
-	       accel_props.engine, accel_props.opt_mask);
+	D_INFO("'%s' read from config, setting: %s, capabilities: move=%s,crc=%s\n",
+		NVME_CONF_SET_ACCEL_PROPS, accel_props.engine,
+		CHK_FLAG(accel_props.opt_mask, NVME_ACCEL_FLAG_MOVE) ? "true" : "false",
+		CHK_FLAG(accel_props.opt_mask, NVME_ACCEL_FLAG_CRC) ? "true" : "false");
 out:
 	free(ctx->json_data);
 	free(ctx->values);
@@ -801,7 +803,6 @@ out:
 int
 bio_read_accel_props(const char *nvme_conf) {
 	/* TODO: do something useful with acceleration engine properties */
-	D_INFO("reading acceleration properties from config\n");
 	return get_accel_props(nvme_conf);
 }
 
