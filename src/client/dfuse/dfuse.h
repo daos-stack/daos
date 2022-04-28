@@ -48,6 +48,10 @@ struct dfuse_projection_info {
 	sem_t				dpi_sem;
 	pthread_t			dpi_thread;
 	bool				dpi_shutdown;
+
+	ATOMIC uint64_t                  dpi_lookup_new;
+	ATOMIC uint64_t                  dpi_lookup_found;
+	ATOMIC uint64_t                  dpi_lookup_inserted;
 };
 
 /* Launch fuse, and do not return until complete */

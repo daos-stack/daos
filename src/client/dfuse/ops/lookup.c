@@ -50,12 +50,18 @@ dfuse_reply_entry(struct dfuse_projection_info *fs_handle,
 		rc = d_hash_rec_insert(&fs_handle->dpi_iet, &ie->ie_stat.st_ino,
 				       sizeof(ie->ie_stat.st_ino), &ie->ie_htl, false);
 		D_ASSERT(rc == -DER_SUCCESS);
+		atomic_fetch_add_relaxed(&fs_handle->dpi_lookup_new, 1);
 	} else {
 		rlink = d_hash_rec_find_insert(&fs_handle->dpi_iet, &ie->ie_stat.st_ino,
 					       sizeof(ie->ie_stat.st_ino), &ie->ie_htl);
 
-		if (rlink != &ie->ie_htl) {
+		if (rlink == &ie->ie_htl) {
+			atomic_fetch_add_relaxed(&fs_handle->dpi_lookup_inserted, 1);
+
+		} else {
 			struct dfuse_inode_entry *inode;
+
+			atomic_fetch_add_relaxed(&fs_handle->dpi_lookup_found, 1);
 
 			inode = container_of(rlink, struct dfuse_inode_entry, ie_htl);
 

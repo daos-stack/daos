@@ -694,7 +694,11 @@ d_hash_rec_decref(struct d_hash_table *htable, d_list_t *link)
 	uint32_t idx = 0;
 	bool	 need_lock = !(htable->ht_feats & D_HASH_FT_NOLOCK);
 	bool	 ephemeral = (htable->ht_feats & D_HASH_FT_EPHEMERAL);
+	bool     ephemeral_ro_dec = (htable->ht_feats & D_HASH_FT_EPHEMERAL_RO_DEC);
 	bool	 zombie;
+
+	if (ephemeral_ro_dec)
+		ephemeral = false;
 
 	if (need_lock) {
 		idx = ch_rec_hash(htable, link);
@@ -702,6 +706,8 @@ d_hash_rec_decref(struct d_hash_table *htable, d_list_t *link)
 	}
 
 	zombie = ch_rec_decref(htable, link);
+	if (zombie)
+		D_ASSERT(!ephemeral_ro_dec);
 	if (zombie && ephemeral && !d_list_empty(link))
 		ch_rec_delete(htable, link);
 

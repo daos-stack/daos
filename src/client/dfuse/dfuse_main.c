@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2021 Intel Corporation.
+ * (C) Copyright 2016-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -544,6 +544,10 @@ main(int argc, char **argv)
 	d_hash_rec_decref(&fs_handle->dpi_pool_table, &dfp->dfp_entry);
 
 	rc = dfuse_fs_stop(fs_handle);
+
+	DFUSE_TRA_INFO(fs_handle, "Counts, new %ld found %ld inserted %ld",
+		       fs_handle->dpi_lookup_new, fs_handle->dpi_lookup_found,
+		       fs_handle->dpi_lookup_inserted);
 
 	/* Remove all inodes from the hash tables */
 	rc2 = dfuse_fs_fini(fs_handle);
