@@ -876,7 +876,7 @@ apportion_wts(uint64_t avail_wts, uint32_t *kick, unsigned int req_type)
 		return 0;
 	}
 
-	pending_wts = (uint64_t) kick[req_type] * req_weights[req_type];
+	pending_wts = (uint64_t)kick[req_type] * req_weights[req_type];
 	if (avail_wts <= pending_wts) {
 		kick_cnt = avail_wts / req_weights[req_type];
 		if (kick_cnt < kick[req_type])
@@ -941,7 +941,7 @@ throttle_io(struct sched_info *info, struct sched_pool_info *spi, uint32_t *kick
 		return;
 
 	gc_wts_max = tot_wts * pr->pr_gc_ratio / 100;
-	avail_wts = (uint64_t) kick[SCHED_REQ_SCRUB] * req_weights[SCHED_REQ_SCRUB];
+	avail_wts = (uint64_t)kick[SCHED_REQ_SCRUB] * req_weights[SCHED_REQ_SCRUB];
 	if (gc_wts > gc_wts_max) {
 		if (kick[SCHED_REQ_GC] == 0)
 			goto done;
