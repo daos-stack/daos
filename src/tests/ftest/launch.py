@@ -1406,12 +1406,18 @@ def get_yaml_data(yaml_file):
         dict: the contents of the yaml file
 
     """
+    class SafeLoaderIgnoreUnknown(yaml.SafeLoader):
+        def ignore_unknown(self, node):
+            return None
+
+    SafeLoaderIgnoreUnknown.add_constructor(None, SafeLoaderIgnoreUnknown.ignore_unknown)
+
     yaml_data = {}
     if os.path.isfile(yaml_file):
         with open(yaml_file, "r") as open_file:
             try:
                 file_data = open_file.read()
-                yaml_data = yaml.safe_load(file_data.replace("!mux", ""))
+                yaml_data = yaml.load(file_data.replace("!mux", ""), Loader=SafeLoaderIgnoreUnknown)
             except yaml.YAMLError as error:
                 print("Error reading {}: {}".format(yaml_file, error))
                 sys.exit(1)
