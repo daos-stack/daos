@@ -333,10 +333,6 @@ do_checks_for_string_constants(size_t ft, size_t pa, daos_filter_part_t *part)
 	size_t   k;
 	char    *string;
 
-	if (!part->data_type.iov_len) {
-		D_ERROR("filter %zu, part %zu: constant does not have data type\n", ft, pa);
-		return -DER_INVAL;
-	}
 	if (part->data_type.iov_len == strlen("DAOS_FILTER_TYPE_CSTRING") &&
 	    !strncmp((char *)part->data_type.iov_buf, "DAOS_FILTER_TYPE_CSTRING",
 		     strlen("DAOS_FILTER_TYPE_CSTRING"))) {
@@ -383,7 +379,7 @@ int
 d_pipeline_check(daos_pipeline_t *pipeline)
 {
 	size_t  i;
-	int     rc;
+	int     rc = 0;
 
 	/**
 	 * TOTAL: 9 checks:
@@ -482,6 +478,13 @@ d_pipeline_check(daos_pipeline_t *pipeline)
 			}
 			num_parts += part->num_operands;
 
+			if (strncmp((char *)part->part_type.iov_buf, "DAOS_FILTER_FUN",
+				    strlen("DAOS_FILTER_FUN")) &&
+			    !part->data_type.iov_len) {
+				D_ERROR("filter %zu, part %zu: no data type defined\n", i, p);
+				return -DER_INVAL;
+			}
+
 			if (part->part_type.iov_len == strlen("DAOS_FILTER_CONST") &&
 			    !strncmp((char *)part->part_type.iov_buf, "DAOS_FILTER_CONST",
 				    strlen("DAOS_FILTER_CONST"))) {
@@ -496,14 +499,13 @@ d_pipeline_check(daos_pipeline_t *pipeline)
 			/** 7 */
 
 			res = pipeline_part_chk_data_type((char *)part->data_type.iov_buf,
-							  part->part_type.iov_len);
+							  part->data_type.iov_len);
 			if (!res) {
 				D_ERROR("filter %zu, part %zu: data type %.*s is not supported\n",
 					i, p, (int)part->data_type.iov_len,
 					(char *)part->data_type.iov_buf);
 				return -DER_NOSYS;
 			}
-
 		}
 		/** 3 (continued) */
 
