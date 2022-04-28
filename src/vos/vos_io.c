@@ -2349,6 +2349,8 @@ abort:
 	if (err == 0)
 		err = vos_ioc_mark_agg(ioc);
 
+	vos_dth_set(NULL);
+
 	err = vos_tx_end(ioc->ic_cont, dth, &ioc->ic_rsrvd_scm,
 			 &ioc->ic_blk_exts, tx_started, err);
 	if (err == 0) {
@@ -2383,7 +2385,6 @@ abort:
 	D_FREE(daes);
 	D_FREE(dces);
 	vos_ioc_destroy(ioc, err != 0);
-	vos_dth_set(NULL);
 
 	return err;
 }
