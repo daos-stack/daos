@@ -218,7 +218,7 @@ func (cmd *PoolCreateCmd) Execute(args []string) error {
 
 		scmRatio := cmd.updateRequest(req, scmBytes, nvmeBytes)
 
-		cmd.Infof("Creating DAOS pool with manual per-server storage allocation: "+
+		cmd.Infof("Creating DAOS pool with manual per-engine storage allocation: "+
 			"%s SCM, %s NVMe (%0.2f%% ratio)",
 			humanize.Bytes(scmBytes),
 			humanize.Bytes(nvmeBytes),

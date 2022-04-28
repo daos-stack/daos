@@ -18,6 +18,8 @@ usr/bin/daos_test
 usr/bin/dfs_test
 usr/bin/jobtest
 usr/bin/crt_launch
+usr/bin/daos_gen_io_conf
+usr/bin/daos_run_io_conf
 usr/lib64/libdts.so
 usr/lib64/libdpar.so
 # For avocado tests
