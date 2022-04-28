@@ -42,7 +42,7 @@ dpdk_cli_override_opts;
 #define DEFAULT_DAOS_MD_CAP_SIZE	(1ul << 27)
 
 /** Utility macros */
-#define CHECK_FLAG(x, m) (((x)&(m)) == (m))
+#define CHECK_FLAG(x, m) (((x) & (m)) == (m))
 #define SET_FLAG(x, m) (x |= m)
 #define UNSET_FLAG(x, m) (x &= ~(m))
 #define STR_EQ(x, m) (strcmp(x, m) == 0)
