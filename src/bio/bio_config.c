@@ -761,7 +761,7 @@ get_accel_props(const char *nvme_conf)
 
 	while (ctx->config_it != NULL) {
 		rc = spdk_json_decode_object(ctx->config_it, config_entry_decoders,
-					    SPDK_COUNTOF(config_entry_decoders), &cfg);
+					     SPDK_COUNTOF(config_entry_decoders), &cfg);
 		if (rc < 0) {
 			D_ERROR("Failed to decode 'config' entry: %s\n", strerror(-rc));
 			rc = -DER_INVAL;
