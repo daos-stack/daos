@@ -15,9 +15,11 @@ import (
 	"reflect"
 	"sort"
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
 	"golang.org/x/sys/unix"
 	"google.golang.org/protobuf/testing/protocmp"
 )
@@ -165,6 +167,7 @@ func ShowBufferOnFailure(t *testing.T, buf fmt.Stringer) {
 // DefaultCmpOpts gets default go-cmp comparison options for tests.
 func DefaultCmpOpts() []cmp.Option {
 	return []cmp.Option{
+		cmpopts.IgnoreTypes(sync.Mutex{}, sync.RWMutex{}),
 		protocmp.Transform(), // makes Protobuf structs comparable
 	}
 }

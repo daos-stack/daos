@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2021 Intel Corporation.
+// (C) Copyright 2020-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -125,7 +125,12 @@ func (m *Membership) Join(req *JoinRequest) (resp *JoinResponse, err error) {
 		if curMember.state == MemberStateAdminExcluded {
 			return nil, errAdminExcluded(curMember.UUID, curMember.Rank)
 		}
-		if !curMember.Rank.Equals(req.Rank) {
+		// If the member is already in the membership, don't allow rejoining
+		// with a different rank, as this may indicate something strange
+		// has happened on the node. The only exception is if the rejoin
+		// request has a rank of NilRank, which would indicate that
+		// the original join response was never received.
+		if !curMember.Rank.Equals(req.Rank) && !req.Rank.Equals(NilRank) {
 			return nil, errRankChanged(req.Rank, curMember.Rank, curMember.UUID)
 		}
 		if curMember.UUID != req.UUID {

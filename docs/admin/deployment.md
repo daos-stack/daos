@@ -75,7 +75,7 @@ The configuration file location can be specified on the command line
 Parameter descriptions are specified in
 [`daos_server.yml`](https://github.com/daos-stack/daos/blob/master/utils/config/daos_server.yml)
 and example configuration files in the
-[examples](https://github.com/daos-stack/daos/tree/master/utils/config/examples)
+[examples](https://github.com/daos-stack/daos/tree/master/utils/config/examples/)
 directory.
 
 Any option supplied to `daos_server` as a command line option or flag will
@@ -87,9 +87,9 @@ file for reference, and the location will be written to the log.
 #### Configuration Options
 
 The example configuration file lists the default empty configuration, listing
-all the options (living documentation of the config file). Live examples are
-available at
-<https://github.com/daos-stack/daos/tree/master/utils/config/examples>
+all the options (living documentation of the config file).
+Live [examples](https://github.com/daos-stack/daos/tree/master/utils/config/examples/)
+are available.
 
 The location of this configuration file is determined by first checking
 for the path specified through the -o option of the `daos_server` command
@@ -187,7 +187,7 @@ Config file output will not be generated in the following cases:
 
 Some CentOS 7.x kernels from before the 7.9 release were known to have a defect
 that prevented `ndctl` from being able to report the NUMA affinity for a
-namespace.
+namespace, see [here](https://github.com/pmem/ndctl/issues/130).
 This prevents generation of dual engine configs using `dmg config generate`
 when running with one of the above-mentioned affected kernels.
 
@@ -1165,16 +1165,3 @@ the `[Service]` section before reloading systemd and restarting the
 `daos_agent` service:
 
 `Environment=DAOS_AGENT_DISABLE_CACHE=true`
-
-
-[^1]: https://github.com/intel/ipmctl
-
-[^2]: https://github.com/daos-stack/daos/tree/master/utils/config
-
-[^3]: [https://www.open-mpi.org/faq/?category=running\#mpirun-hostfile](https://www.open-mpi.org/faq/?category=running#mpirun-hostfile)
-
-[^4]: https://github.com/daos-stack/daos/tree/master/src/control/README.md
-
-[^5]: https://github.com/pmem/ndctl/issues/130
-
-[6]: <../dev/development.md#building-optional-components> (Building DAOS for Development)
