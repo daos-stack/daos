@@ -438,7 +438,7 @@ func waitFabricReady(ctx context.Context, log logging.Logger, cfg *config.Server
 	}
 
 	if err := hardware.WaitFabricReady(ctx, log, hardware.WaitFabricReadyParams{
-		Checker:        hwprov.DefaultFabricReadyChecker(log),
+		StateProvider:  hwprov.DefaultNetDevStateProvider(log),
 		FabricIfaces:   ifaces,
 		IterationSleep: time.Second,
 	}); err != nil {
