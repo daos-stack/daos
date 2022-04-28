@@ -42,7 +42,7 @@ dpdk_cli_override_opts;
 #define DEFAULT_DAOS_MD_CAP_SIZE	(1ul << 27)
 
 /** Utility macros */
-#define CHECK_FLAG(x, m) (((x) & (m)) == (m))
+#define CHK_FLAG(x, m) ((x & m) == m)
 #define SET_FLAG(x, m) (x |= m)
 #define UNSET_FLAG(x, m) (x &= ~(m))
 #define STR_EQ(x, m) (strcmp(x, m) == 0)
@@ -73,22 +73,22 @@ nvme_state2str(int state)
 		return "UNKNOWN";
 
 	/** Otherwise, if unplugged, return early */
-	if (!CHECK_FLAG(state, NVME_DEV_FL_PLUGGED))
+	if (!CHK_FLAG(state, NVME_DEV_FL_PLUGGED))
 		return "UNPLUGGED";
 
 	/** If identify is set, return combination with faulty taking precedence over new */
-	if (CHECK_FLAG(state, NVME_DEV_FL_IDENTIFY)) {
-		if CHECK_FLAG(state, NVME_DEV_FL_FAULTY)
+	if (CHK_FLAG(state, NVME_DEV_FL_IDENTIFY)) {
+		if CHK_FLAG(state, NVME_DEV_FL_FAULTY)
 			return "EVICTED|IDENTIFY";
-		if (!CHECK_FLAG(state, NVME_DEV_FL_INUSE))
+		if (!CHK_FLAG(state, NVME_DEV_FL_INUSE))
 			return "NEW|IDENTIFY";
 		return "NORMAL|IDENTIFY";
 	}
 
 	/** Otherwise, return single state with faulty taking precedence over new */
-	if CHECK_FLAG(state, NVME_DEV_FL_FAULTY)
+	if CHK_FLAG(state, NVME_DEV_FL_FAULTY)
 		return "EVICTED";
-	if (!CHECK_FLAG(state, NVME_DEV_FL_INUSE))
+	if (!CHK_FLAG(state, NVME_DEV_FL_INUSE))
 		return "NEW";
 
 	return "NORMAL";
@@ -202,11 +202,8 @@ nvme_conf_validate_accel_engine(char *in, bool *result)
 
 	*result = 0;
 
-	if STR_EQ(in, NVME_ACCEL_NATIVE)
-		*result = 1;
-	else if STR_EQ(in, NVME_ACCEL_SPDK)
-		*result = 1;
-	else if STR_EQ(in, NVME_ACCEL_DML)
+	if (STR_EQ(in, NVME_ACCEL_NATIVE) || STR_EQ(in, NVME_ACCEL_SPDK) || \
+	   STR_EQ(in, NVME_ACCEL_DML))
 		*result = 1;
 
 	return 0;
