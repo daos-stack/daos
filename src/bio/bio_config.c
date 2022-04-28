@@ -790,7 +790,7 @@ get_accel_props(const char *nvme_conf)
 	}
 
 	D_INFO("'%s' read from config, setting: %s, capabilities: move=%s,crc=%s\n",
-		NVME_CONF_SET_ACCEL_PROPS, accel_props.engine,
+	       NVME_CONF_SET_ACCEL_PROPS, accel_props.engine,
 		CHK_FLAG(accel_props.opt_mask, NVME_ACCEL_FLAG_MOVE) ? "true" : "false",
 		CHK_FLAG(accel_props.opt_mask, NVME_ACCEL_FLAG_CRC) ? "true" : "false");
 out:
