@@ -603,7 +603,6 @@ func (smt StorageMediaType) MarshalJSON() ([]byte, error) {
 	if !ok {
 		return nil, errors.Errorf("invalid storage media type %d", smt)
 	}
-	fmt.Fprintf(os.Stdout, "typeStr: %s smt %d\n", typeStr, int32(smt))
 	return []byte(`"` + strings.ToLower(typeStr) + `"`), nil
 }
 
@@ -616,7 +615,6 @@ func (pqtt PoolQueryTargetType) MarshalJSON() ([]byte, error) {
 	if !ok {
 		return nil, errors.Errorf("invalid target type %d", pqtt)
 	}
-	fmt.Fprintf(os.Stdout, "typeStr: %s pqts %d\n", typeStr, int32(pqtt))
 	return []byte(`"` + strings.ToLower(typeStr) + `"`), nil
 }
 
@@ -645,7 +643,6 @@ func (pqts PoolQueryTargetState) MarshalJSON() ([]byte, error) {
 	if !ok {
 		return nil, errors.Errorf("invalid target state %d", pqts)
 	}
-	fmt.Fprintf(os.Stdout, "stateStr: %s pqts %d\n", stateStr, int32(pqts))
 	return []byte(`"` + strings.ToLower(stateStr) + `"`), nil
 }
 
