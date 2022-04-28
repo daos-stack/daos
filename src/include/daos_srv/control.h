@@ -202,9 +202,8 @@ nvme_conf_validate_accel_engine(char *in, bool *result)
 
 	*result = 0;
 
-	if (STR_EQ(in, NVME_ACCEL_NATIVE) || STR_EQ(in, NVME_ACCEL_SPDK) || \
-	   STR_EQ(in, NVME_ACCEL_DML))
-		*result = 1;
+	if (STR_EQ(in, NVME_ACCEL_NATIVE) || STR_EQ(in, NVME_ACCEL_SPDK) || STR_EQ(in, NVME_ACCEL_DML))
+		(*result) = 1;
 
 	return 0;
 }
