@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2021 Intel Corporation.
+ * (C) Copyright 2016-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -968,8 +968,7 @@ dfuse_fs_init(struct dfuse_info *dfuse_info,
 	if (rc != 0)
 		D_GOTO(err, rc);
 
-	rc = d_hash_table_create_inplace(D_HASH_FT_LRU | D_HASH_FT_EPHEMERAL,
-					 5, fs_handle, &ie_hops,
+	rc = d_hash_table_create_inplace(D_HASH_FT_EPHEMERAL, 5, fs_handle, &ie_hops,
 					 &fs_handle->dpi_iet);
 	if (rc != 0)
 		D_GOTO(err_pt, rc);

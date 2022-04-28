@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2021 Intel Corporation.
+ * (C) Copyright 2016-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -120,7 +120,7 @@ d_hash_string_u32(const char *string, unsigned int len)
 	uint32_t result = 5381;
 	const unsigned char *p;
 
-	p = (const unsigned char *) string;
+	p = (const unsigned char *)string;
 
 	for (; len > 0; len--) {
 		result = (result << 5) + result + *p;
@@ -512,6 +512,23 @@ d_hash_rec_find_insert(struct d_hash_table *htable, const void *key,
 out_unlock:
 	ch_bucket_unlock(htable, idx, false);
 	return link;
+}
+
+void
+d_hash_rec_promote(struct d_hash_table *htable, const void *key, unsigned int ksize, d_list_t *link)
+{
+	struct d_hash_bucket *bucket;
+	uint32_t              idx;
+
+	D_ASSERT(key != NULL && ksize != 0);
+	idx    = ch_key_hash(htable, key, ksize);
+	bucket = &htable->ht_buckets[idx];
+
+	ch_bucket_lock(htable, idx, false);
+	if (link != bucket->hb_head.next)
+		d_list_move(link, &bucket->hb_head);
+
+	ch_bucket_unlock(htable, idx, false);
 }
 
 int

@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2021 Intel Corporation.
+ * (C) Copyright 2016-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -358,6 +358,19 @@ d_list_t *d_hash_rec_find(struct d_hash_table *htable, const void *key,
 d_list_t *d_hash_rec_find_insert(struct d_hash_table *htable,
 				 const void *key, unsigned int ksize,
 				 d_list_t *link);
+
+/**
+ * Move the record to the front of the per-bucket queue.  Can be used to layer LRU behavior
+ * on non-LRU hashtables.
+ *
+ * \param[in] htable		Pointer to the hash table
+ * \param[in] key		The key to be moved
+ * \param[in] ksize		Size of the key
+ * \param[in] link		The link chain of the record being moved
+ */
+void
+	  d_hash_rec_promote(struct d_hash_table *htable, const void *key, unsigned int ksize,
+			     d_list_t *link);
 
 /**
  * Insert a new key and its record chain \p link into the hash table. The hash

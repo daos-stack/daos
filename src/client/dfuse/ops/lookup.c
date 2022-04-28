@@ -43,80 +43,83 @@ dfuse_reply_entry(struct dfuse_projection_info *fs_handle,
 	DFUSE_TRA_DEBUG(ie, "Inserting inode %#lx mode 0%o",
 			entry.ino, ie->ie_stat.st_mode);
 
-	rlink = d_hash_rec_find_insert(&fs_handle->dpi_iet,
-				       &ie->ie_stat.st_ino,
-				       sizeof(ie->ie_stat.st_ino),
-				       &ie->ie_htl);
-
-	if (rlink != &ie->ie_htl) {
-		struct dfuse_inode_entry *inode;
-
-		inode = container_of(rlink, struct dfuse_inode_entry, ie_htl);
-
-		/* The lookup has resulted in an existing file, so reuse that
-		 * entry, drop the inode in the lookup descriptor and do not
-		 * keep a reference on the parent.
+	if (is_new) {
+		/* Insert a new entry into the hash table, this can only fail of the exclusive
+		 * flag is true which it isn't, so simply assert on the result.
 		 */
+		rc = d_hash_rec_insert(&fs_handle->dpi_iet, &ie->ie_stat.st_ino,
+				       sizeof(ie->ie_stat.st_ino), &ie->ie_htl, false);
+		D_ASSERT(rc == -DER_SUCCESS);
+	} else {
+		rlink = d_hash_rec_find_insert(&fs_handle->dpi_iet, &ie->ie_stat.st_ino,
+					       sizeof(ie->ie_stat.st_ino), &ie->ie_htl);
 
-		/* Update the existing object with the new name/parent */
+		if (rlink != &ie->ie_htl) {
+			struct dfuse_inode_entry *inode;
 
-		DFUSE_TRA_DEBUG(inode, "inode dfs %p %#lx hi %#lx lo %#lx",
-				inode->ie_dfs,
-				inode->ie_dfs->dfs_ino,
-				inode->ie_oid.hi,
-				inode->ie_oid.lo);
+			inode = container_of(rlink, struct dfuse_inode_entry, ie_htl);
 
-		DFUSE_TRA_DEBUG(ie, "inode dfs %p %#lx hi %#lx lo %#lx",
-				ie->ie_dfs,
-				ie->ie_dfs->dfs_ino,
-				ie->ie_oid.hi,
-				ie->ie_oid.lo);
+			/* The lookup has resulted in an existing file, so reuse that
+			 * entry, drop the inode in the lookup descriptor and do not
+			 * keep a reference on the parent.
+			 */
 
-		/* Check for conflicts, in either the dfs or oid space.  This
-		 * can happen because of the fact we squash larger identifiers
-		 * into a shorter 64 bit space, but if the bitshifting is right
-		 * it shouldn't happen until there are a large number of active
-		 * files. DAOS-4928 has more details.
-		 */
-		if (ie->ie_dfs != inode->ie_dfs) {
-			DFUSE_TRA_ERROR(inode, "Duplicate inode found (dfs)");
-			D_GOTO(out_err, rc = EIO);
+			/* Update the existing object with the new name/parent */
+
+			DFUSE_TRA_DEBUG(inode, "inode dfs %p %#lx hi %#lx lo %#lx", inode->ie_dfs,
+					inode->ie_dfs->dfs_ino, inode->ie_oid.hi, inode->ie_oid.lo);
+
+			DFUSE_TRA_DEBUG(ie, "inode dfs %p %#lx hi %#lx lo %#lx", ie->ie_dfs,
+					ie->ie_dfs->dfs_ino, ie->ie_oid.hi, ie->ie_oid.lo);
+
+			/* Check for conflicts, in either the dfs or oid space.  This
+			 * can happen because of the fact we squash larger identifiers
+			 * into a shorter 64 bit space, but if the bitshifting is right
+			 * it shouldn't happen until there are a large number of active
+			 * files. DAOS-4928 has more details.
+			 */
+			if (ie->ie_dfs != inode->ie_dfs) {
+				DFUSE_TRA_ERROR(inode, "Duplicate inode found (dfs)");
+				D_GOTO(out_err, rc = EIO);
+			}
+
+			/* Check the OID */
+			if (ie->ie_oid.lo != inode->ie_oid.lo ||
+			    ie->ie_oid.hi != inode->ie_oid.hi) {
+				DFUSE_TRA_ERROR(inode, "Duplicate inode found (oid)");
+				D_GOTO(out_err, rc = EIO);
+			}
+
+			DFUSE_TRA_DEBUG(inode, "Maybe updating parent inode %#lx dfs_ino %#lx",
+					entry.ino, ie->ie_dfs->dfs_ino);
+
+			/** update the chunk size and oclass of inode entry */
+			dfs_obj_copy_attr(inode->ie_obj, ie->ie_obj);
+
+			if (ie->ie_stat.st_ino == ie->ie_dfs->dfs_ino) {
+				DFUSE_TRA_DEBUG(inode, "Not updating parent");
+			} else if ((inode->ie_parent != ie->ie_parent) ||
+				   (strncmp(inode->ie_name, ie->ie_name, NAME_MAX) != 0)) {
+				DFUSE_TRA_DEBUG(inode, "File has moved from '%s to '%s'",
+						inode->ie_name, ie->ie_name);
+
+				dfs_update_parent(inode->ie_obj, ie->ie_obj, ie->ie_name);
+
+				/* Save the old name so that we can invalidate it in later */
+				wipe_parent = inode->ie_parent;
+				strncpy(wipe_name, inode->ie_name, NAME_MAX);
+				wipe_name[NAME_MAX] = '\0';
+
+				inode->ie_parent    = ie->ie_parent;
+				strncpy(inode->ie_name, ie->ie_name, NAME_MAX + 1);
+			}
+			atomic_fetch_sub_relaxed(&ie->ie_ref, 1);
+			dfuse_ie_close(fs_handle, ie);
+			ie = inode;
+
+			d_hash_rec_promote(&fs_handle->dpi_iet, &ie->ie_stat.st_ino,
+					   sizeof(ie->ie_stat.st_ino), rlink);
 		}
-
-		/* Check the OID */
-		if (ie->ie_oid.lo != inode->ie_oid.lo ||
-		    ie->ie_oid.hi != inode->ie_oid.hi) {
-			DFUSE_TRA_ERROR(inode, "Duplicate inode found (oid)");
-			D_GOTO(out_err, rc = EIO);
-		}
-
-		DFUSE_TRA_DEBUG(inode,
-				"Maybe updating parent inode %#lx dfs_ino %#lx",
-				entry.ino, ie->ie_dfs->dfs_ino);
-
-		/** update the chunk size and oclass of inode entry */
-		dfs_obj_copy_attr(inode->ie_obj, ie->ie_obj);
-
-		if (ie->ie_stat.st_ino == ie->ie_dfs->dfs_ino) {
-			DFUSE_TRA_DEBUG(inode, "Not updating parent");
-		} else if ((inode->ie_parent != ie->ie_parent) ||
-			(strncmp(inode->ie_name, ie->ie_name, NAME_MAX) != 0)) {
-			DFUSE_TRA_DEBUG(inode, "File has moved from '%s to '%s'",
-					inode->ie_name, ie->ie_name);
-
-			dfs_update_parent(inode->ie_obj, ie->ie_obj, ie->ie_name);
-
-			/* Save the old name so that we can invalidate it in later */
-			wipe_parent = inode->ie_parent;
-			strncpy(wipe_name, inode->ie_name, NAME_MAX);
-			wipe_name[NAME_MAX] = '\0';
-
-			inode->ie_parent = ie->ie_parent;
-			strncpy(inode->ie_name, ie->ie_name, NAME_MAX + 1);
-		}
-		atomic_fetch_sub_relaxed(&ie->ie_ref, 1);
-		dfuse_ie_close(fs_handle, ie);
-		ie = inode;
 	}
 
 	if (fi_out)
