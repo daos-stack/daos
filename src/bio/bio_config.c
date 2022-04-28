@@ -790,7 +790,7 @@ get_accel_props(const char *nvme_conf)
 	}
 
 	D_INFO("'%s' read from config, setting: %s, mask: %X\n", NVME_CONF_SET_ACCEL_PROPS,
-		accel_props.engine, accel_props.opt_mask);
+	       accel_props.engine, accel_props.opt_mask);
 out:
 	free(ctx->json_data);
 	free(ctx->values);
