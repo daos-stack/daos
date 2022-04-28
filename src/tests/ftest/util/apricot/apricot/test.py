@@ -484,59 +484,6 @@ class TestWithoutServers(Test):
                 hosts, ",".join(processes))
             stop_processes(hosts, "'({})'".format("|".join(processes)))
 
-    def check_info(self, check_list):
-        """Verify each info attribute value matches an expected value.
-
-        Args:
-            check_list (list): a list of tuples containing the name of the
-                information attribute to check, the current value of the
-                attribute, and the expected value of the attribute. If the
-                expected value is specified as a string with a number preceded
-                by '<', '<=', '>', or '>=' then this comparison will be used
-                instead of the default '=='.
-
-        Returns:
-            bool: True if at least one check has been specified and all the
-            actual and expected values match; False otherwise.
-
-        """
-        check_status = len(check_list) > 0
-        for check, actual, expect in check_list:
-            # Determine which comparison to utilize for this check
-            compare = ("==", lambda x, y: x == y, "does not match")
-            if isinstance(expect, str):
-                comparisons = [
-                    ["<=", (lambda x, y: x <= y, "is too large or does not match")],
-                    ["<", (lambda x, y: x < y, "is too large")],
-                    [">=", (lambda x, y: x >= y, "is too small or does not match")],
-                    [">", (lambda x, y: x > y, "is too small")],
-                ]
-                for comparison in comparisons:
-                    # If the expected value is preceded by one of the known
-                    # comparison keys, use the comparison and remove the key
-                    # from the expected value
-                    key = comparison[0]
-                    val = comparison[1]
-                    if expect[:len(key)] == key:
-                        compare = (key, val[0], val[1])
-                        expect = expect[len(key):]
-                        try:
-                            expect = int(expect)
-                        except ValueError:
-                            # Allow strings to be strings
-                            pass
-                        break
-            self.log.info(
-                "Verifying the %s %s: %s %s %s",
-                self.__class__.__name__.replace("Test", "").lower(),
-                check, actual, compare[0], expect)
-            if not compare[1](actual, expect):
-                msg = "  The {} {}: actual={}, expected={}".format(
-                    check, compare[2], actual, expect)
-                self.log.error(msg)
-                check_status = False
-        return check_status
-
     def check_pool_free_space(self, pool, expected_scm=None, expected_nvme=None,
                               timeout=30):
         """Check pool free space with expected value.
@@ -568,7 +515,7 @@ class TestWithoutServers(Test):
                 checks.append(("scm", scm_fs, expected_scm))
             if expected_nvme is not None:
                 checks.append(("nvme", nvme_fs, expected_nvme))
-            done = self.check_info(checks)
+            done = pool._check_info(checks)
             if done:
                 break
 

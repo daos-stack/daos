@@ -453,7 +453,7 @@ class TestPool(TestDaosApiBase):
              val)
             for key, val in list(locals().items())
             if key != "self" and val is not None]
-        return self.check_info(checks)
+        return self._check_info(checks)
 
     def check_pool_space(self, ps_free_min=None, ps_free_max=None,
                          ps_free_mean=None, ps_ntargets=None, ps_padding=None):
@@ -499,7 +499,7 @@ class TestPool(TestDaosApiBase):
             val = locals()[key]
             if val is not None:
                 checks.append((key, getattr(self.info.pi_space, key), val))
-        return self.check_info(checks)
+        return self._check_info(checks)
 
     def check_pool_daos_space(self, s_total=None, s_free=None):
         # pylint: disable=unused-argument
@@ -532,7 +532,7 @@ class TestPool(TestDaosApiBase):
             for key, val in list(locals().items())
             if key != "self" and val is not None
             for index, item in enumerate(val)]
-        return self.check_info(checks)
+        return self._check_info(checks)
 
     def check_rebuild_status(self, rs_version=None, rs_seconds=None,
                              rs_errno=None, rs_state=None, rs_padding32=None,
@@ -577,7 +577,7 @@ class TestPool(TestDaosApiBase):
             (key, getattr(self.info.pi_rebuild_st, key), val)
             for key, val in list(locals().items())
             if key != "self" and val is not None]
-        return self.check_info(checks)
+        return self._check_info(checks)
 
     def rebuild_complete(self):
         """Determine if the pool rebuild is complete.
