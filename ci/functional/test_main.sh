@@ -42,6 +42,7 @@ if $TEST_RPMS; then
        TNODES=\"$tnodes\"                            \
        FTEST_ARG=\"$FTEST_ARG\"                      \
        WITH_VALGRIND=\"$WITH_VALGRIND\"              \
+       STAGE_NAME=\"$STAGE_NAME\"                    \
        $(cat ci/functional/test_main_node.sh)"
 else
     ./ftest.sh "$test_tag" "$tnodes" "$FTEST_ARG"

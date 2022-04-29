@@ -27,7 +27,7 @@
 
 Name:          daos
 Version:       2.3.100
-Release:       4%{?relval}%{?dist}
+Release:       5%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       BSD-2-Clause-Patent
@@ -509,6 +509,8 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %{_bindir}/daos_test
 %{_bindir}/dfs_test
 %{_bindir}/jobtest
+%{_bindir}/daos_gen_io_conf
+%{_bindir}/daos_run_io_conf
 %{_libdir}/libdts.so
 %{_libdir}/libdpar.so
 
@@ -526,8 +528,6 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %{_bindir}/vea_ut
 %{_bindir}/vos_tests
 %{_bindir}/vea_stress
-%{_bindir}/daos_gen_io_conf
-%{_bindir}/daos_run_io_conf
 %{_bindir}/obj_ctl
 %{_bindir}/vos_perf
 
@@ -552,6 +552,9 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 # No files in a shim package
 
 %changelog
+* Tue Apr 26 2022 Phillip Henderson <phillip.henderson@intel.com> 2.3.100-5
+- Move daos_gen_io_conf and daos_run_io_conf to daos-client-tests
+
 * Wed Apr 20 2022 Lei Huang <lei.huang@intel.com> 2.3.100-4
 - Update to libfabric to v1.15.0rc3-1 to include critical performance patches
 
