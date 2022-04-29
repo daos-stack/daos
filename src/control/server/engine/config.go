@@ -171,7 +171,7 @@ func NewConfig() *Config {
 }
 
 // setAffinity ensures engine NUMA locality is assigned and valid.
-func (c *Config) setAffinity(log logging.Logger, fis *hardware.FabricInterfaceSet) (err error) {
+func (c *Config) setAffinity(log logging.Logger, nrEngines int, fis *hardware.FabricInterfaceSet) (err error) {
 	var fi *hardware.FabricInterface
 	if fis != nil {
 		fi, err = fis.GetInterfaceOnNetDevice(c.Fabric.Interface, c.Fabric.Provider)
@@ -215,7 +215,7 @@ func (c *Config) setAffinity(log logging.Logger, fis *hardware.FabricInterfaceSe
 	// - If first_core is non-zero 0 (as core # denotes affinity)
 	// - If only one engine is defined and engine's assigned NUMA node is zero (pinning is
 	//   not required in the case that only a single engine is running on NUMA node zero)
-	if c.ServiceThreadCore == 0 && (nrEngines == 1 && numaNode == 0) {
+	if c.ServiceThreadCore == 0 && !(nrEngines == 1 && numaNode == 0) {
 		c.PinnedNumaNode = &numaNode
 	}
 
@@ -223,7 +223,7 @@ func (c *Config) setAffinity(log logging.Logger, fis *hardware.FabricInterfaceSe
 }
 
 // Validate ensures that the configuration meets minimum standards.
-func (c *Config) Validate(log logging.Logger, fis *hardware.FabricInterfaceSet) error {
+func (c *Config) Validate(log logging.Logger, nrEngines int, fis *hardware.FabricInterfaceSet) error {
 	if err := c.Fabric.Validate(); err != nil {
 		return errors.Wrap(err, "fabric config validation failed")
 	}
@@ -236,7 +236,7 @@ func (c *Config) Validate(log logging.Logger, fis *hardware.FabricInterfaceSet) 
 		return errors.Wrap(err, "validate engine log masks")
 	}
 
-	return errors.Wrap(c.setAffinity(log, fis), "setting numa affinity for engine")
+	return errors.Wrap(c.setAffinity(log, nrEngines, fis), "setting numa affinity for engine")
 }
 
 // CmdLineArgs returns a slice of command line arguments to be

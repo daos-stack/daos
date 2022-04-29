@@ -521,7 +521,7 @@ func (cfg *Server) Validate(log logging.Logger, hugePageSize int, fis *hardware.
 
 		ec.Fabric.Update(cfg.Fabric)
 
-		if err := ec.Validate(log, fis); err != nil {
+		if err := ec.Validate(log, len(cfg.Engines), fis); err != nil {
 			return errors.Wrapf(err, "I/O Engine %d failed config validation", idx)
 		}
 
