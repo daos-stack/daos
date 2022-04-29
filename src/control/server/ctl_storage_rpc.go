@@ -167,10 +167,12 @@ func (c *ControlService) scanScm(ctx context.Context, req *ctlpb.ScanScmReq) (*c
 
 // Adjust the NVME available size to its real usable size.
 func (c *ControlService) adjustNvmeSize(resp *ctlpb.ScanNvmeResp) {
-	devicesToAdjust := make(map[uint32]*struct {
+	type deviceSizeStat struct {
 		size    uint64
 		devices []*ctl.NvmeController_SmdDevice
-	}, 0)
+	}
+
+	devicesToAdjust := make(map[uint32]*deviceSizeStat, 0)
 	for _, ctlr := range resp.GetCtrlrs() {
 		for _, dev := range ctlr.GetSmdDevices() {
 			if dev.GetDevState() != "NORMAL" {
@@ -189,10 +191,7 @@ func (c *ControlService) adjustNvmeSize(resp *ctlpb.ScanNvmeResp) {
 
 			rank := dev.GetRank()
 			if devicesToAdjust[rank] == nil {
-				devicesToAdjust[rank] = &struct {
-					size    uint64
-					devices []*ctl.NvmeController_SmdDevice
-				}{
+				devicesToAdjust[rank] = &deviceSizeStat{
 					size: math.MaxUint64,
 				}
 			}
