@@ -5,7 +5,6 @@
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 from container_rf_test_base import ContRedundancyFactor
-from apricot import skipForTicket
 
 
 class RbldContRfTest(ContRedundancyFactor):
@@ -20,7 +19,6 @@ class RbldContRfTest(ContRedundancyFactor):
         super().__init__(*args, **kwargs)
         self.daos_cmd = None
 
-    @skipForTicket("DAOS-10156")
     def test_rebuild_with_container_rf(self):
         """Jira ID:
         DAOS-6270: container with RF 2 can lose up to 2 concurrent
