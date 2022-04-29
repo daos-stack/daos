@@ -184,7 +184,10 @@ def get_remote_dir(self, source_dir, dest_dir, host_list, shared_dir=None,
             try:
                 run_command(command, timeout=30)
             except DaosTestError as error:
-                raise SoakTestError("<<FAILED: job logs failed to copy>>") from error
+                raise SoakTestError(
+                    "<<FAILED: Soak logfiles not copied from shared area>>: {}".format(
+                        shared_dir_tmp)) from error
+
     else:
         # copy the remote dir on all client nodes to a shared directory
         command = "/usr/bin/rsync -avtr --min-size=1B {0} {1}/..".format(
@@ -201,7 +204,10 @@ def get_remote_dir(self, source_dir, dest_dir, host_list, shared_dir=None,
             try:
                 run_command(command, timeout=30)
             except DaosTestError as error:
-                raise SoakTestError("<<FAILED: job logs failed to copy>>") from error
+                raise SoakTestError(
+                    "<<FAILED: Soak logfiles not copied from shared area>>: {}".format(
+                        directory)) from error
+
     if rm_remote:
         # remove the remote soak logs for this pass
         command = "/usr/bin/rm -rf {0}".format(source_dir)
@@ -210,10 +216,10 @@ def get_remote_dir(self, source_dir, dest_dir, host_list, shared_dir=None,
         for directory in [source_dir, shared_dir]:
             command = "/usr/bin/rm -rf {0}".format(directory)
             try:
-                run_command(command)
+                run_command(command, timeout=30)
             except DaosTestError as error:
                 raise SoakTestError(
-                    "<<FAILED: job logs failed to delete>>") from error
+                    "<<FAILED: Soak logfiles removal failed>>: {}".format(directory)) from error
 
 
 def write_logfile(data, name, destination):
@@ -287,8 +293,8 @@ def get_journalctl(self, hosts, since, until, journalctl_type, logging=False):
             "data":  data requested for the group of hosts
 
     """
-    command = "sudo /usr/bin/journalctl --system -t {} --since=\"{}\" --until=\"{}\"".format(
-        journalctl_type, since, until)
+    command = "{} /usr/bin/journalctl --system -t {} --since=\"{}\" --until=\"{}\"".format(
+        self.sudo_cmd, journalctl_type, since, until)
     err = "Error gathering system log events"
     results = get_host_data(hosts, command, "journalctl", err)
     name = "journalctl_{}.log".format(journalctl_type)
@@ -316,7 +322,11 @@ def get_daos_server_logs(self):
             commands = ["scp {}:/var/tmp/daos_testing/daos*.log.* {}".format(host, daos_dir),
                         "scp {}:/var/tmp/daos_testing/daos*.log {}".format(host, daos_dir)]
             for command in commands:
-                run_command(command, timeout=120)
+                try:
+                    run_command(command, timeout=30)
+                except DaosTestError as error:
+                    raise SoakTestError(
+                        "<<FAILED: daos logs file from {} not copied>>".format(host)) from error
 
 
 def run_monitor_check(self):
@@ -330,8 +340,7 @@ def run_monitor_check(self):
     hosts = self.hostlist_servers
     if monitor_cmds:
         for cmd in monitor_cmds:
-            command = "sudo {}".format(cmd)
-            pcmd(hosts, command, timeout=30)
+            pcmd(hosts, cmd, timeout=30)
 
 
 def run_metrics_check(self, logging=True, prefix=None):
@@ -351,7 +360,7 @@ def run_metrics_check(self, logging=True, prefix=None):
             if prefix:
                 name = prefix + "_metrics_{}.csv".format(engine)
             destination = self.outputsoak_dir
-            daos_metrics = "sudo daos_metrics -S {} --csv".format(engine)
+            daos_metrics = "{} daos_metrics -S {} --csv".format(self.sudo_cmd, engine)
             self.log.info("Running %s", daos_metrics)
             results = run_pcmd(hosts=self.hostlist_servers,
                                command=daos_metrics,
@@ -802,7 +811,7 @@ def cleanup_dfuse(self):
     """
     cmd = [
         "/usr/bin/bash -c 'for pid in $(pgrep dfuse)",
-        "do sudo kill $pid",
+        "do kill $pid",
         "done'"]
     cmd2 = [
         "/usr/bin/bash -c 'for dir in $(find /tmp/daos_dfuse/)",
