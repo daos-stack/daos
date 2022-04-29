@@ -145,16 +145,20 @@ check_cmds $SCONS_EXE
 
 set -e
 
-if [[ -d "$DAOS_INSTALL_DIR" && "$CMD" == install ]]; then
-	[[ -n "$FORCE_INSTALL" ]] || fatal "DAOS already installed: use install --force or update."
-	info "Removing old DAOS install at $DAOS_INSTALL_DIR"
-	if ! run /bin/rm -fr "$DAOS_INSTALL_DIR" ; then
-		fatal "Old install t $DAOS_INSTALL_DIR could not be removed"
+for dir in "$DAOS_INSTALL_DIR" "$DAOS_SOURCE_DIR/build"
+do
+	if [[ -d "$dir" && "$CMD" == install ]]; then
+		[[ -n "$FORCE_INSTALL" ]] || fatal "DAOS already installed: use install --force or update."
+		info "Removing old DAOS install directory $dir"
+		if ! run /bin/rm -fr "$dir" ; then
+			fatal "Old install directory $dir could not be removed"
+		fi
+
 	fi
-fi
+done
 
 if [[ ! -d "$DAOS_INSTALL_DIR" ]] ; then
-	info "Creatin DAOS install directory $DAOS_INSTALL_DIR"
+	info "Creating DAOS install directory $DAOS_INSTALL_DIR"
 	if ! run mkdir -p "$DAOS_INSTALL_DIR" ; then
 		fatal "DAOS install directory $DAOS_INSTALL_DIR could not be created"
 	fi
@@ -176,13 +180,13 @@ info "Finalizing spdk install"
 for item in $(find "$DAOS_INSTALL_DIR/share/daos" -type f)
 do
         dest="/usr/${item#$DAOS_INSTALL_DIR/}"
-        $CLUSH_EXE -l root -w $SERVERS_LIST install -v -D -o root -g root -m 755 "$item" "$dest"
+        run $CLUSH_EXE -l root -w $SERVERS_LIST install -v -D -o root -g root -m 755 "$item" "$dest"
 done
 
 
 info "Finalizing daos-admin install"
-chmod 0446 "$DAOS_INSTALL_DIR/bin/daos_admin"
-$CLUSH_EXE -l root -w $SERVERS_LIST cp -f "$DAOS_INSTALL_DIR/bin/daos_admin" /usr/bin
-$CLUSH_EXE -l root -w $SERVERS_LIST chown root:daos_server /usr/bin/daos_admin
-$CLUSH_EXE -l root -w $SERVERS_LIST chmod 4755 /usr/bin/daos_admin
-$CLUSH_EXE -w $SERVERS_LIST chmod a-x  "$DAOS_INSTALL_DIR/bin/daos_admin"
+run chmod 0446 "$DAOS_INSTALL_DIR/bin/daos_admin"
+run $CLUSH_EXE -l root -w $SERVERS_LIST cp -f "$DAOS_INSTALL_DIR/bin/daos_admin" /usr/bin
+run $CLUSH_EXE -l root -w $SERVERS_LIST chown root:daos_server /usr/bin/daos_admin
+run $CLUSH_EXE -l root -w $SERVERS_LIST chmod 4755 /usr/bin/daos_admin
+run $CLUSH_EXE -w $SERVERS_LIST chmod a-x  "$DAOS_INSTALL_DIR/bin/daos_admin"

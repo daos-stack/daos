@@ -4,7 +4,7 @@
 - name: Gather distribution specific variables
   include_vars: "{{ item }}"
   with_first_found:
-    - "{{ playbook_dir }}/vars/{{ ansible_distribution }}{{ ansible_distribution_major_version }}.yml"
+    - "{{ playbook_dir }}/vars/{{ ansible_distribution | replace(' ', '_') }}{{ ansible_distribution_major_version }}.yml"
 
 - name: Set includedir in sudoers
   remote_user: root

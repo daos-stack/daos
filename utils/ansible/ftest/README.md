@@ -166,7 +166,7 @@ used the following command line to install or reinstall the DAOS binaries and it
 the `/home/foo/daos/install` directory.
 
 ```bash
-/home/foo/daos/daos-make.sh -v -j 0 -f install
+/home/foo/daos/daos-make.sh -v -j 32 -f install
 ```
 
 When the previous *install* step has been done and the DAOS source code tests have been updated, the
@@ -174,10 +174,10 @@ DAOS binaries could be build and reinstalled thanks to the `update` sub-command.
 should be far more quicker than a full reinstall.
 
 ```bash
-/home/foo/daos/daos-make.sh -v -j 0 update
+/home/foo/daos/daos-make.sh -v -j 32 update
 ```
 
-> :bulb: The option `-j 0` (i.e. one per core) seems to be a good compromise between compilation
+> :bulb: The option `-j 32` (i.e. one per core) seems to be a good compromise between compilation
 > reliability and speed.
 
 ## Launching Functional Tests

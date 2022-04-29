@@ -14,7 +14,7 @@
 - name: Install DAOS client dependency packages
   include_tasks: "{{ item }}"
   with_first_found:
-    - "{{ ansible_distribution }}{{ ansible_distribution_major_version}}/clients_dependencies.yml"
+    - "{{ ansible_distribution | replace(' ', '_') }}{{ ansible_distribution_major_version}}/clients_dependencies.yml"
 
 - name: Add DAOS agent groups
   remote_user: root
