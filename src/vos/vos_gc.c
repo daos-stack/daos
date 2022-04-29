@@ -117,7 +117,7 @@ gc_drain_evt(struct vos_gc *gc, struct vos_pool *pool, daos_handle_t coh,
 {
 	struct evt_desc_cbs cbs;
 	daos_handle_t	    toh;
-	int		    rc, close_rc;
+	int		    rc;
 
 	vos_evt_desc_cbs_init(&cbs, pool, coh);
 	rc = evt_open(root, &pool->vp_uma, &cbs, &toh);
@@ -130,8 +130,7 @@ gc_drain_evt(struct vos_gc *gc, struct vos_pool *pool, daos_handle_t coh,
 
 	D_DEBUG(DB_TRACE, "drain %s evtree, creds=%d\n", gc->gc_name, *credits);
 	rc = evt_drain(toh, credits, empty);
-	close_rc = evt_close(toh);
-	D_ASSERT(close_rc == 0);
+	evt_close(toh);
 	if (rc)
 		goto failed;
 
