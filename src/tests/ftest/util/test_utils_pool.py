@@ -532,6 +532,49 @@ class TestPool(TestDaosApiBase):
             for index, item in enumerate(val)]
         return self._check_info(checks)
 
+    def check_pool_free_space(self, expected_scm=None, expected_nvme=None,
+                              timeout=30):
+        """Check pool free space with expected value.
+        Args:
+            expected_scm (int, optional): pool expected SCM free space.
+            expected_nvme (int, optional): pool expected NVME free space.
+            timeout(int, optional): time to fail test if it could not match
+                expected values.
+        Note:
+            Arguments may also be provided as a string with a number preceded
+            by '<', '<=', '>', or '>=' for other comparisons besides the
+            default '=='.
+        """
+        if not expected_scm and not expected_nvme:
+            self.log.error("at least one space parameter must be specified")
+            return False
+
+        done = False
+        scm_fs = 0
+        nvme_fs = 0
+        start = time()
+        scm_index, nvme_index = 0, 1
+        while time() - start < timeout:
+            sleep(1)
+            checks = []
+            self.get_info()
+            scm_fs = self.info.pi_space.ps_space.s_free[scm_index]
+            nvme_fs = self.info.pi_space.ps_space.s_free[nvme_index]
+            if expected_scm is not None:
+                checks.append(("scm", scm_fs, expected_scm))
+            if expected_nvme is not None:
+                checks.append(("nvme", nvme_fs, expected_nvme))
+            done = self._check_info(checks)
+            if done:
+                break
+
+        if not done:
+            self.log.error(
+                "Pool Free space did not match: actual=%s,%s expected=%s,%s",
+                scm_fs, nvme_fs, expected_scm, expected_nvme)
+
+        return done
+
     def check_rebuild_status(self, rs_version=None, rs_seconds=None,
                              rs_errno=None, rs_state=None, rs_padding32=None,
                              rs_fail_rank=None, rs_toberb_obj_nr=None,
