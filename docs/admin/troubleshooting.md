@@ -54,7 +54,7 @@ errors are documented in the table below.
 
 When an operation fails, DAOS returns a negative DER error.
 For a full list of errors, please check
-<https://github.com/daos-stack/daos/blob/release/2.0/src/include/daos_errno.h>
+[daos_errno.h](https://github.com/daos-stack/daos/blob/release/2.0/src/include/daos_errno.h)
 (`DER_ERR_GURT_BASE` is equal to 1000, and `DER_ERR_DAOS_BASE` is equal
 to 2000).
 
@@ -70,7 +70,7 @@ server operations:
 |-|-|-|
 |Control Plane|control_log_file|/tmp/daos_server.log|
 |Data Plane|log_file|/tmp/daos_engine.\*.log|
-|[Privileged Helper](https://docs.daos.io/v2.0/admin/deployment/#elevated-privileges)|helper_log_file|/tmp/daos_admin.log|
+|Privileged Helper|helper_log_file|/tmp/daos_admin.log|
 |agent|log_file|/tmp/daos_agent.log|
 
 ### Control Plane Log
@@ -106,7 +106,7 @@ DEBUG-level logging will be sent to the specified file.
 ## Debugging System
 
 DAOS uses the debug system defined in
-[CaRT](https://github.com/daos-stack/daos/tree/release/2.0/src/cart),
+[CaRT](https://github.com/daos-stack/daos/tree/release/2.0/src/cart/),
 specifically the GURT library.
 Both server and client default log is `stdout`, unless
 otherwise set by `D_LOG_FILE` environment variable (client) or
@@ -216,7 +216,9 @@ Refer to the DAOS Environment Variables document for
 more information about the debug system environment.
 
 ## Common DAOS Problems
+
 ### Incompatible Agent ####
+
 When DER_AGENT_INCOMPAT is received, it means that the client library libdaos.so
 is likely mismatched with the DAOS Agent.  The libdaos.so, DAOS Agent and DAOS
 Server must be built from compatible sources so that the GetAttachInfo protocol
@@ -225,6 +227,7 @@ to either update the DAOS Agent or the libdaos.so to the newer version in order
 to maintain compatibility with each other.
 
 ### HLC Sync ###
+
 When DER_HLC_SYNC is received, it means that sender and receiver HLC timestamps
 are off by more than maximum allowed system clock offset (1 second by default).
 
@@ -232,6 +235,7 @@ In order to correct this situation synchronize all server clocks to the same
 reference time, using services like NTP.
 
 ### Shared Memory Errors ###
+
 When DER_SHMEM_PERMS is received it means that this I/O Engine lacked the
 permissions to access the shared memory megment left behind by a previous run of
 the I/O Engine on the same machine.  This happens when the I/O Engine fails to
@@ -273,6 +277,7 @@ sudo ipcrm -M 0x10242049
 ```
 
 ### Server Start Issues
+
 1. Read the log located in the `control_log_file`.
 1. Verify that the `daos_server` process is not currently running.
 1. Check the SCM device path in /dev.
@@ -291,10 +296,12 @@ sudo ipcrm -M 0x10242049
 1. Check that `socket_dir` is writeable by the daos_server.
 
 ### Errors creating a Pool
+
 1. Check which engine rank you want to create a pool in with `dmg system query --verbose` and verify their State is Joined.
 1. `DER_NOSPACE(-1007)` appears: Check the size of the NVMe and PMEM. Next, check the size of the existing pool. Then check that this new pool being created will fit into the remaining disk space.
 
 ### Problems creating a container
+
 1. Check that the path to daos is your intended binary. It's usually `/usr/bin/daos`.
 1. When the server configuration is changed, it's necessary to restart the agent.
 1. `DER_UNREACH(-1006)`: Check the socket ID consistency between PMEM and NVMe. First, determine which socket you're using with `daos_server network scan -p all`. e.g., if the interface you're using in the engine section is eth0, find which NUMA Socket it belongs to. Next, determine the disks you can use with this socket by calling `daos_server storage scan` or `dmg storage scan`. e.g., if eth0 belongs to NUMA Socket 0, use only the disks with 0 in the Socket ID column.
@@ -303,6 +310,7 @@ sudo ipcrm -M 0x10242049
 1. Call `daos pool query` and check that the pool exists and has free space.
 
 ### Applications run slow
+
 Verify if you're using Infiniband for `fabric_iface`: in the server config. The IO will be significantly slower with Ethernet.
 
 ## Common Errors and Workarounds
