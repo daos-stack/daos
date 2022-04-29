@@ -79,8 +79,8 @@ class DaosCoreTestDfuse(DfuseTestBase):
         intercept = self.params.get('use_intercept', '/run/intercept/*', default=False)
 
         remote_env = OrderedDict()
-        remote_env['PATH'] = f'{mount_dir}/venv/bin:$PATH'
-        remote_env['VIRTUAL_ENV'] = f'{mount_dir}/venv'
+        remote_env['PATH'] = '{}/venv/bin:$PATH'.format(mount_dir)
+        remote_env['VIRTUAL_ENV'] = '{}/venv'.format(mount_dir)
 
         if intercept:
             remote_env['LD_PRELOAD'] = '/usr/lib64/libioil.so'
