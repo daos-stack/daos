@@ -96,8 +96,8 @@ class DaosCoreTestDfuse(DfuseTestBase):
         preload_cmd = ';'.join(envs)
 
         cmd = [self.daos_test, '--test-dir', mount_dir]
-        command = '{};{}'.format(preload_cmd, cmd)
-        ret_code = general_utils.pcmd(self.hostlist_clients, command, timeout=150*60)
+        command = '{};{}'.format(preload_cmd, ' '.join(cmd))
+        ret_code = general_utils.pcmd(self.hostlist_clients, command, timeout=60)
         if 0 in ret_code:
             return
         self.log.info(ret_code)
