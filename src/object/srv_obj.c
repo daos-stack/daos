@@ -243,6 +243,7 @@ obj_bulk_comp_cb(const struct crt_bulk_cb_info *cb_info)
 
 	D_ASSERT(arg->bulks_inflight > 0);
 	arg->bulks_inflight--;
+	D_INFO("after decrement, bulks_inflight=%d, rpc=%p\n", arg->bulks_inflight, rpc);
 	if (arg->bulks_inflight == 0)
 		ABT_eventual_set(arg->eventual, &arg->result,
 				 sizeof(arg->result));
@@ -442,14 +443,16 @@ bulk_transfer_sgl(daos_handle_t ioh, crt_rpc_t *rpc, crt_bulk_t remote_bulk,
 		bulk_desc.bd_local_off	= local_off;
 
 		p_arg->bulks_inflight++;
-		if (bulk_bind)
+		if (bulk_bind) {
+			D_INFO("bulk_bind start rpc=%p\n", rpc);
 			rc = crt_bulk_bind_transfer(&bulk_desc,
 				cached_bulk ? cached_bulk_cp : bulk_cp, p_arg,
 				&bulk_opid);
-		else
+		} else {
 			rc = crt_bulk_transfer(&bulk_desc,
 				cached_bulk ? cached_bulk_cp : bulk_cp, p_arg,
 				&bulk_opid);
+		}
 		if (rc < 0) {
 			D_ERROR("crt_bulk_transfer %d error "DF_RC".\n",
 				sgl_idx, DP_RC(rc));
@@ -493,6 +496,7 @@ obj_bulk_transfer(crt_rpc_t *rpc, crt_bulk_op_t bulk_op, bool bulk_bind,
 	D_DEBUG(DB_IO, "bulk_op %d sgl_nr %d\n", bulk_op, sgl_nr);
 
 	p_arg->bulks_inflight++;
+	D_INFO("bulk_op %d sgl_nr %d bulks_inflight=%d\n", bulk_op, sgl_nr, p_arg->bulks_inflight);
 
 	if (daos_handle_is_valid(ioh)) {
 		rc = vos_dedup_verify_init(ioh, rpc->cr_ctx, CRT_BULK_RW);
@@ -532,16 +536,25 @@ obj_bulk_transfer(crt_rpc_t *rpc, crt_bulk_op_t bulk_op, bool bulk_bind,
 		if (rc)
 			break;
 	}
+	D_INFO("Done bulk_xfer_sgls rc=%d for bulk op %d sgl_nr %d, bulks_inflight=%d\n",
+	       rc, bulk_op, sgl_nr, p_arg->bulks_inflight);
 done:
-	if (--(p_arg->bulks_inflight) == 0)
+	if (--(p_arg->bulks_inflight) == 0) {
+		D_INFO("bulks_inflight now 0, set the eventual\n");
 		ABT_eventual_set(p_arg->eventual, &rc, sizeof(rc));
+	}
 
 	if (async)
 		return rc;
 
+	D_INFO("rc=%d wait for eventual for bulk op %d sgl_nr %d, bulks_inflight=%d\n",
+	       rc, bulk_op, sgl_nr, p_arg->bulks_inflight);
 	ret = ABT_eventual_wait(p_arg->eventual, (void **)&status);
 	if (rc == 0)
 		rc = ret ? dss_abterr2der(ret) : *status;
+	D_INFO("\rc=%d done wait for eventual for bulk op %d sgl_nr %d, bulks_inflight=%d\n",
+	       rc, bulk_op, sgl_nr, p_arg->bulks_inflight);
+
 
 	ABT_eventual_free(&p_arg->eventual);
 	/* After RDMA is done, corrupt the server data */
@@ -1320,6 +1333,10 @@ obj_local_rw_internal(crt_rpc_t *rpc, struct obj_io_context *ioc,
 				DP_UOID(orw->orw_oid), DP_RC(rc));
 			goto out;
 		}
+		D_INFO("vos_update_begin done for: "
+		       "opc %d oid "DF_UOID" dkey "DF_KEY" tag %d epc "DF_X64".\n",
+		       opc_get(rpc->cr_opc), DP_UOID(orw->orw_oid), DP_KEY(dkey),
+		       tag, orw->orw_epoch);
 	} else {
 		uint32_t			 fetch_flags = 0;
 		bool				 ec_deg_fetch;
@@ -1490,6 +1507,11 @@ obj_local_rw_internal(crt_rpc_t *rpc, struct obj_io_context *ioc,
 			DP_UOID(orw->orw_oid), DP_RC(rc));
 		goto out;
 	}
+	D_INFO("bio_iod_prep() done for: "
+	       "opc %d oid "DF_UOID" dkey "DF_KEY" tag %d epc "DF_X64".\n",
+	       opc_get(rpc->cr_opc), DP_UOID(orw->orw_oid), DP_KEY(dkey),
+	       tag, orw->orw_epoch);
+
 
 	if (obj_rpc_is_fetch(rpc) && !spec_fetch &&
 	    daos_csummer_initialized(ioc->ioc_coc->sc_csummer)) {
@@ -1520,8 +1542,21 @@ obj_local_rw_internal(crt_rpc_t *rpc, struct obj_io_context *ioc,
 		rc = obj_bulk_transfer(rpc, bulk_op, bulk_bind,
 				       orw->orw_bulks.ca_arrays, offs,
 				       ioh, NULL, orw->orw_nr, NULL);
+		if (obj_rpc_is_update(rpc)) {
+			D_INFO("obj_bulk_transfer() done rc=%d for: "
+			       "opc %d oid "DF_UOID" dkey "DF_KEY" tag %d epc "DF_X64".\n",
+			       rc, opc_get(rpc->cr_opc), DP_UOID(orw->orw_oid), DP_KEY(dkey),
+			       tag, orw->orw_epoch);
+		}
 		if (rc == 0) {
 			bio_iod_flush(biod);
+
+			if (obj_rpc_is_update(rpc)) {
+				D_INFO("bio_iod_flush() done for: "
+				       "opc %d oid "DF_UOID" dkey "DF_KEY" tag %d epc "DF_X64".\n",
+				       opc_get(rpc->cr_opc), DP_UOID(orw->orw_oid),
+				       DP_KEY(dkey), tag, orw->orw_epoch);
+			}
 
 			/* Timeout for the update RPC from client to server is
 			 * 3 seconds. Here, make the server to sleep more than
@@ -1531,11 +1566,20 @@ obj_local_rw_internal(crt_rpc_t *rpc, struct obj_io_context *ioc,
 			 */
 			if (obj_rpc_is_update(rpc) &&
 			    !(orw->orw_flags & ORF_RESEND) &&
-			    DAOS_FAIL_CHECK(DAOS_DTX_RESEND_DELAY1))
+			    DAOS_FAIL_CHECK(DAOS_DTX_RESEND_DELAY1)) {
+				D_ERROR("Why am I here for 3.1 second sleep?!?!\n");
 				rc = dss_sleep(3100);
+			}
 		}
+
 	} else if (orw->orw_sgls.ca_arrays != NULL) {
 		rc = bio_iod_copy(biod, orw->orw_sgls.ca_arrays, orw->orw_nr);
+		if (obj_rpc_is_update(rpc)) {
+			D_INFO("bio_iod_copy() done rc=%d for: "
+			       "opc %d oid "DF_UOID" dkey "DF_KEY" tag %d epc "DF_X64".\n",
+			       rc, opc_get(rpc->cr_opc), DP_UOID(orw->orw_oid), DP_KEY(dkey),
+			       tag, orw->orw_epoch);
+		}
 	}
 
 	if (rc) {
@@ -1550,6 +1594,10 @@ obj_local_rw_internal(crt_rpc_t *rpc, struct obj_io_context *ioc,
 
 	if (obj_rpc_is_update(rpc)) {
 		rc = vos_dedup_verify(ioh);
+		D_INFO("vos_dedup_verify() done rc=%d for: "
+		       "opc %d oid "DF_UOID" dkey "DF_KEY" tag %d epc "DF_X64".\n",
+		       rc, opc_get(rpc->cr_opc), DP_UOID(orw->orw_oid), DP_KEY(dkey),
+		       tag, orw->orw_epoch);
 		if (rc)
 			goto post;
 
@@ -1561,6 +1609,11 @@ obj_local_rw_internal(crt_rpc_t *rpc, struct obj_io_context *ioc,
 				DF_RC"\n",
 				DP_C_UOID_DKEY(orw->orw_oid, dkey),
 				DP_RC(rc));
+		D_INFO("obj_verify_bio_csum() done for: "
+		       "opc %d oid "DF_UOID" dkey "DF_KEY" tag %d epc "DF_X64".\n",
+		       opc_get(rpc->cr_opc), DP_UOID(orw->orw_oid), DP_KEY(dkey),
+		       tag, orw->orw_epoch);
+
 		/** CSUM Verified on update, now corrupt to fake corruption
 		 * on disk
 		 */
@@ -1594,6 +1647,7 @@ out:
 		daos_epoch_t	epoch = 0;
 		int		rc1;
 
+		D_INFO("CPU yield detected, call dtx_handle_resend()\n");
 		rc1 = dtx_handle_resend(ioc->ioc_vos_coh, &orw->orw_dti, &epoch, NULL);
 		switch (rc1) {
 		case 0:
@@ -1609,9 +1663,17 @@ out:
 			rc = rc1;
 			break;
 		}
+		D_INFO("CPU yield detected,  dtx_handle_resend() rc1=%d, rc=%d\n", rc1, rc);
+
 	}
 
 	rc = obj_rw_complete(rpc, ioc, ioh, rc, dth);
+	if (obj_rpc_is_update(rpc)) {
+		D_INFO("obj_rw_complete() done rc=%d for: "
+		       "opc %d oid "DF_UOID" dkey "DF_KEY" tag %d epc "DF_X64".\n",
+		       rc, opc_get(rpc->cr_opc), DP_UOID(orw->orw_oid), DP_KEY(&orw->orw_dkey),
+		       tag, orw->orw_epoch);
+	}
 	if (iods_dup != NULL)
 		daos_iod_recx_free(iods_dup, orw->orw_nr);
 	return unlikely(rc == -DER_ALREADY) ? 0 : rc;
@@ -1623,6 +1685,7 @@ obj_local_rw(crt_rpc_t *rpc, struct obj_io_context *ioc,
 	     uint64_t *split_offs, struct dtx_handle *dth, bool pin)
 {
 	int	rc;
+	int	count = 0;
 
 again:
 	if (pin) {
@@ -1647,9 +1710,25 @@ again:
 				return -DER_INPROGRESS;
 		}
 
+#if 0
+		if (++count % 10 == 3) {
+#endif
+		if (++count) { /* always print */
+			struct obj_rw_in	*orw = crt_req_get(rpc);
+			struct dtx_share_peer	*dsp;
+
+			dsp = d_list_entry(dth->dth_share_tbd_list.next, struct dtx_share_peer,
+					   dsp_link);
+			D_WARN("DTX refresh for "DF_DTI" because of "DF_DTI" (%d) for %d times, "
+			       "maybe dead loop\n", DP_DTI(&orw->orw_dti), DP_DTI(&dsp->dsp_xid),
+			       dth->dth_share_tbd_count, count);
+		}
+
 		rc = dtx_refresh(dth, ioc->ioc_coc);
-		if (rc == -DER_AGAIN)
+		if (rc == -DER_AGAIN) {
+			D_WARN("dtx_refresh() returns -DER_AGAIN\n");
 			goto again;
+		}
 	}
 
 	return rc;
@@ -1704,6 +1783,8 @@ obj_ioc_init(uuid_t pool_uuid, uuid_t coh_uuid, uuid_t cont_uuid, int opc,
 		return rc;
 	}
 
+	D_DEBUG(DF_DSMS, "hdl="DF_UUID": sch_ref=%d after find hdl\n",
+		DP_UUID(coh_uuid), coh->sch_ref);
 	/* normal container open handle with ds_cont_child attached */
 	if (coh->sch_cont != NULL) {
 		ds_cont_child_get(coh->sch_cont);
@@ -1751,6 +1832,8 @@ out:
 failed:
 	if (coc != NULL)
 		ds_cont_child_put(coc);
+	D_DEBUG(DF_DSMS, "hdl="DF_UUID": in failed path, sch_ref=%d before ds_cont_hdl_put()\n",
+		DP_UUID(coh_uuid), coh->sch_ref);
 	ds_cont_hdl_put(coh);
 	return rc;
 }
@@ -1759,6 +1842,9 @@ static void
 obj_ioc_fini(struct obj_io_context *ioc, int err)
 {
 	if (ioc->ioc_coh != NULL) {
+		D_DEBUG(DF_DSMS, "hdl="DF_UUID": sch_ref=%d before ds_cont_hdl_put()\n",
+			DP_UUID(ioc->ioc_coh->sch_uuid), ioc->ioc_coh->sch_ref);
+
 		ds_cont_hdl_put(ioc->ioc_coh);
 		ioc->ioc_coh = NULL;
 	}

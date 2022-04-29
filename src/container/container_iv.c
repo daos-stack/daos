@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2019-2021 Intel Corporation.
+ * (C) Copyright 2019-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -909,7 +909,7 @@ cont_iv_hdl_fetch(uuid_t cont_hdl_uuid, uuid_t pool_uuid,
 	} else {
 		*cont_hdl = ds_cont_hdl_lookup(cont_hdl_uuid);
 		if (*cont_hdl != NULL) {
-			D_DEBUG(DB_TRACE, "get hdl "DF_UUID"\n",
+			D_DEBUG(DF_DSMS, "get hdl "DF_UUID"\n",
 				DP_UUID(cont_hdl_uuid));
 			return 0;
 		}
@@ -948,6 +948,8 @@ cont_iv_hdl_fetch(uuid_t cont_hdl_uuid, uuid_t pool_uuid,
 			DP_UUID(cont_hdl_uuid));
 		D_GOTO(out_eventual, rc = -DER_NONEXIST);
 	}
+	D_DEBUG(DF_DSMS, "get hdl (via cont_iv_capa_refresh_ult "DF_UUID"\n",
+		DP_UUID(cont_hdl_uuid));
 
 out_eventual:
 	ABT_eventual_free(&eventual);

@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2021 Intel Corporation.
+ * (C) Copyright 2016-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -286,12 +286,22 @@ pool_child_delete_one(void *uuid)
 
 	d_list_del_init(&child->spc_list);
 	ds_cont_child_stop_all(child);
+	D_INFO(DF_UUID": ds_cont_child_stop_all() done\n", DP_UUID(uuid));
+
 	ds_stop_scrubbing_ult(child);
+	D_INFO(DF_UUID": ds_stop_scrubbing_ult() done\n", DP_UUID(uuid));
+
 	ds_pool_child_put(child); /* -1 for the list */
+	D_INFO(DF_UUID": ds_pool_child_put() 1 done, remaining spc_ref=%d\n", DP_UUID(uuid),
+	       child->spc_ref);
 
 	ds_pool_child_put(child); /* -1 for lookup */
 
+	D_INFO(DF_UUID": wait for child->spc_ref_eventual, remaining spc_ref=%d\n",
+	       DP_UUID(uuid), child->spc_ref);
 	rc = ABT_eventual_wait(child->spc_ref_eventual, (void **)&ref);
+	D_INFO(DF_UUID": done waiting for child->spc_ref_eventual, abt rc=%d\n",
+	       DP_UUID(uuid), rc);
 	if (rc != ABT_SUCCESS)
 		return dss_abterr2der(rc);
 
@@ -302,6 +312,7 @@ pool_child_delete_one(void *uuid)
 	 */
 	D_FREE(child);
 
+	D_INFO(DF_UUID": done\n", DP_UUID(uuid));
 	return 0;
 }
 
@@ -733,13 +744,20 @@ ds_pool_stop(uuid_t uuid)
 	pool->sp_stopping = 1;
 
 	ds_iv_ns_stop(pool->sp_iv_ns);
+	D_INFO(DF_UUID": ds_iv_ns_stop() done\n", DP_UUID(uuid));
 	ds_pool_tgt_ec_eph_query_abort(pool);
+	D_INFO(DF_UUID": ds_pool_tgt_ec_eph_query_abort() done\n", DP_UUID(uuid));
 	pool_fetch_hdls_ult_abort(pool);
+	D_INFO(DF_UUID": pool_fetch_hdls_ult_abort() done\n", DP_UUID(uuid));
 
 	ds_rebuild_abort(pool->sp_uuid, -1);
+	D_INFO(DF_UUID": ds_rebuild_abort() done\n", DP_UUID(uuid));
 	ds_migrate_abort(pool->sp_uuid, -1);
+	D_INFO(DF_UUID": ds_migrate_abort() done\n", DP_UUID(uuid));
 	ds_pool_put(pool); /* held by ds_pool_start */
+	D_INFO(DF_UUID": ds_pool_put() done\n", DP_UUID(uuid));
 	ds_pool_put(pool);
+	D_INFO(DF_UUID": pool service is aborted\n", DP_UUID(uuid));
 }
 
 /* ds_pool_hdl ****************************************************************/
