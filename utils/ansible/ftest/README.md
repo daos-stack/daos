@@ -1,9 +1,8 @@
 # Running DAOS Functional Tests
 
 This document describes how to setup with [Ansible](https://www.ansible.com/) one or more nodes to
-run DAOS avocado functional tests.  The ansible playbook also generates two bash scripts allowing in
-a first time to easily build DAOS binaries, and in a second time to run a set of DAOS avocado
-functional tests.
+run DAOS avocado functional tests.  The ansible playbook also generates two bash scripts allowing
+for easy build DAOS binaries, and the ability to run a set of DAOS avocado functional tests.
 
 ## Prerequisites
 
@@ -16,6 +15,10 @@ installed for example on the node wolf-666 with the following command:
 ```bash
 nodemgr -n wolf-666 -p daos_ci-rocky8.5 install
 ```
+
+The node(s) to used should be selected according to the hardware requirements of the the test(s) to
+launch (e.g. pmem, vmd, etc.).  According to the selected nodes, the yaml configuration file(s) of
+the test(s) to launch should eventually be adapted.
 
 > :warning: It is **strongly discouraged** to deploy (i.e. apply the playbook tasks) the DAOS
 > functional test platform on nodes used by the end user for other tasks such as day to day
@@ -31,7 +34,7 @@ Ansible could be easily installed with running the following command from the di
 this README.md file:
 
 ```bash
-pip3 install --user --requirement requirements.txt
+python3 -m pip install --user --requirement requirements.txt
 ```
 
 ### Ssh Authorization
@@ -48,11 +51,10 @@ ssh-copy-id root@wolf-666
 
 ### Ansible Inventory
 
-The [ansible
-inventory](https://docs.ansible.com/ansible/latest/user_guide/intro_inventory.html) list the
-different nodes of the the sub-cluster and gather them in different groups according to their roles
-in the functional test platform.
-- **daos\_devs**: This group should contains only one node.  This last one will be used for
+The [ansible inventory](https://docs.ansible.com/ansible/latest/user_guide/intro_inventory.html)
+list the different nodes of the the sub-cluster and gather them in different groups (which can
+freely overlap) according to their roles in the functional test platform.
+- **daos\_dev**: This group should contains only one node.  This last one will be used for
   installing DAOS binaries and launch functional tests thanks to generated bash scripts.  Details on
   how to use these scripts will be detailed in following sections.
 - **daos\_servers**: This group contains the nodes where DAOS servers will be running.
@@ -63,17 +65,17 @@ The inventory should also contains a set of mandatory and optional variables.
 - **daos\_runtime\_dir**: mandatory variable defining the shared directory used to install DAOS
   binaries. This directory should be accessible with the same path from all the nodes of the
   sub-cluster.
-- **daos\_source\_dir**: mandatory variable only used by the node of the *daos\_devs* group defining
+- **daos\_source\_dir**: mandatory variable only used by the node of the *daos\_dev* group defining
   the path of the directory containing the DAOS source code.
-- **daos\_ofi\_interface**: optional variable only used by the node of the daos\_devs group defining
+- **daos\_ofi\_interface**: optional variable only used by the node of the daos\_dev group defining
   the network interface to use.  When this variable is not defined, the network interface is
   arbitrarily selected by DAOS.
 - **daos\_hugepages\_nb**: optional variable (default value: 4096) only used by the nodes of the
   *daos\_servers* group defining the number of hugepages to be allocated by the linux kernel.
 - **daos\_avocado\_version**: optional variable (default value: "2.4.3") only used by the node of
-  the *daos\_devs* group defining the version of *avocado* to install.
+  the *daos\_dev* group defining the version of *avocado* to install.
 - **daos\_avocado\_framework\_version**: optional variable (default value: "82.1") only used by the
-  node od the  *daos\_devs* group defining the version of *avocado\_framework* to install.
+  node od the  *daos\_dev* group defining the version of *avocado\_framework* to install.
 
 Different file format (e.g. YAML, INI, etc.) and file tree structure are supported to define an
 ansible inventory.  The following simple ansible inventory describe for example in one YAML file
@@ -84,7 +86,7 @@ all:
   vars:
     daos_runtime_dir: /home/foo/daos
   children:
-    daos_devs:
+    daos_dev:
       vars:
         daos_source_dir: /home/foo/work/daos
         daos_ofi_interface: eth0
@@ -110,7 +112,7 @@ ansible-inventory --graph --vars --inventory my-inventory.yml
   |  |--wolf-999
   |  |  |--{daos_hugepages_nb = 8182}
   |  |  |--{daos_runtime_dir = /home/foo/daos}
-  |--@daos_devs:
+  |--@daos_dev:
   |  |--wolf-666
   |  |  |--{daos_hugepages_nb = 8182}
   |  |  |--{daos_ofi_interface = eth0}
@@ -147,7 +149,7 @@ scripts `daos-launch.sh` and `daos-make.sh` should be available in the DAOS runt
 defined in the inventory. Usage of these two scripts will be detailed in the following sections.
 
 > :bulb: As *ftest.yml* playbook is
-> [idempotent](https://docs.ansible.com/ansible/latest/reference_appendices/glossary.html),
+> [idempotent](https://docs.ansible.com/ansible/latest/reference_appendices/glossary.html#term-Idempotency),
 > it could be safely run several times without side effect.
 
 ## Installing DAOS Binaries
@@ -164,7 +166,7 @@ used the following command line to install or reinstall the DAOS binaries and it
 the `/home/foo/daos/install` directory.
 
 ```bash
-/home/foo/daos/daos-make.sh -v -j 32 -f install
+/home/foo/daos/daos-make.sh -v -j 0 -f install
 ```
 
 When the previous *install* step has been done and the DAOS source code tests have been updated, the
@@ -172,10 +174,11 @@ DAOS binaries could be build and reinstalled thanks to the `update` sub-command.
 should be far more quicker than a full reinstall.
 
 ```bash
-/home/foo/daos/daos-make.sh -v -j 32 update
+/home/foo/daos/daos-make.sh -v -j 0 update
 ```
 
-> :bulb: The option `-j 32` seems to be a good compromise between compilation reliability and speed.
+> :bulb: The option `-j 0` (i.e. one per core) seems to be a good compromise between compilation
+> reliability and speed.
 
 ## Launching Functional Tests
 

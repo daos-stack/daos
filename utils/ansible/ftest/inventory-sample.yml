@@ -5,7 +5,7 @@ all:
   vars:
     daos_runtime_dir: /home/foo/daos
   children:
-    daos_devs:
+    daos_dev:
       vars:
         daos_source_dir: /home/foo/work/daos
         daos_ofi_interface: eth0

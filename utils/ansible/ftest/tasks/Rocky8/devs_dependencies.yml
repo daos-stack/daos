@@ -1,7 +1,7 @@
 ---
 # Install dependencies of a developmene node
 
-- name: Install rpms missing developmen dependencies
+- name: Install rpms missing development dependencies
   remote_user: root
   dnf:
     state: latest
@@ -11,6 +11,7 @@
       - rpm-build
       - rpmdevtools
       - createrepo
+      - python3-clustershell
 
 - name: Install python development dependencies
   remote_user: root
