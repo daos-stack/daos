@@ -1,5 +1,5 @@
----
-# Install dependencies of a developmene node
+# Install dependencies of a development node
+# yamllint disable rule:line-length
 
 - name: Install rpms missing development dependencies
   remote_user: root

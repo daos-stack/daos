@@ -145,6 +145,13 @@ check_cmds $SCONS_EXE
 
 set -e
 
+info "Mount of home partition"
+{% if "daos_clients" in groups and groups["daos_clients"] | length > 0 %}
+run $CLUSH_EXE -l root -w $CLIENTS_LIST -w $SERVERS_LIST  mountpoint "$HOME"
+{% else %}
+run $CLUSH_EXE -w $SERVERS_LIST ldcondig mountpoint "$HOME"
+{% endif %}
+
 for dir in "$DAOS_INSTALL_DIR" "$DAOS_SOURCE_DIR/build"
 do
 	if [[ -d "$dir" && "$CMD" == install ]]; then
@@ -183,10 +190,20 @@ do
         run $CLUSH_EXE -l root -w $SERVERS_LIST install -v -D -o root -g root -m 755 "$item" "$dest"
 done
 
-
 info "Finalizing daos-admin install"
 run chmod 0446 "$DAOS_INSTALL_DIR/bin/daos_admin"
 run $CLUSH_EXE -l root -w $SERVERS_LIST cp -f "$DAOS_INSTALL_DIR/bin/daos_admin" /usr/bin
 run $CLUSH_EXE -l root -w $SERVERS_LIST chown root:daos_server /usr/bin/daos_admin
 run $CLUSH_EXE -l root -w $SERVERS_LIST chmod 4755 /usr/bin/daos_admin
 run $CLUSH_EXE -w $SERVERS_LIST chmod a-x  "$DAOS_INSTALL_DIR/bin/daos_admin"
+
+{% if "daos_clients" in groups and groups["daos_clients"] | length > 0 %}
+info "Finalizing dfuse install"
+run $CLUSH_EXE -l root -w $CLIENTS_LIST cp -f "$DAOS_INSTALL_DIR/bin/dfuse" /usr/bin
+run $CLUSH_EXE -l root -w $SERVERS_LIST chown root:daos_server /usr/bin/dfuse
+run $CLUSH_EXE -l root -w $SERVERS_LIST chmod 755 /usr/bin/dfuse
+run $CLUSH_EXE -w $CLIENTS_LIST chmod a-x  "$DAOS_INSTALL_DIR/bin/dfuse"
+
+info "Updating dynamic linker configuration"
+run $CLUSH_EXE -l root -w $CLIENTS_LIST ldconfig
+{% endif %}

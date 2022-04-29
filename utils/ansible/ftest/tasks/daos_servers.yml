@@ -1,5 +1,5 @@
----
 # Ansible scripts for deploying a DAOS development node
+# yamllint disable rule:line-length
 
 - name: Checking required variables
   fail:

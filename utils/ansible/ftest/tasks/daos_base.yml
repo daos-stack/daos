@@ -1,5 +1,5 @@
----
 # Ansible scripts for configuring a DAOS node with ftest
+# yamllint disable rule:line-length
 
 - name: Gather distribution specific variables
   include_vars: "{{ item }}"

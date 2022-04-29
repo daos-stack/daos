@@ -1,4 +1,3 @@
----
 # Ansible scripts for deploying the DAOS functional test platform
 
 - hosts: daos_dev

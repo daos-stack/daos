@@ -1,5 +1,5 @@
----
 # Ansible scripts for deploying a DAOS development node
+# yamllint disable rule:line-length
 
 # Needed by ftest
 - name: Setup DAOS server node

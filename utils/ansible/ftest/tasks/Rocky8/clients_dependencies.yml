@@ -1,4 +1,3 @@
----
 # Install dependencies of an admin/client node
 
 - name: Install base dpendencies packages

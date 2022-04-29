@@ -1,4 +1,3 @@
----
 # Install dependencies of a server node
 
 - name: Install base dpendencies packages

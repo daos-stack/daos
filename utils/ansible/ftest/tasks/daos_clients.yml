@@ -1,5 +1,5 @@
----
 # Ansible scripts for deploying a DAOS client node
+# yamllint disable rule:line-length
 
 - name: Checking required variables
   fail:
@@ -59,3 +59,13 @@
   loop:
     - /etc/daos
     - /etc/daos/certs
+
+- name: Update dynamic linker configuration
+  remote_user: root
+  template:
+    src: templates/daos-ld.so.conf.j2
+    dest: /etc/ld.so.conf.d/daos-ftest-x86_64.conf
+    owner: root
+    group: root
+    mode: '0644'
+    backup: true

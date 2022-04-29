@@ -1,4 +1,3 @@
----
 # Install base dependencies of a developmene node
 
 - name: Install dnf builddep plugin
