@@ -210,8 +210,12 @@ func (c *Config) setAffinity(log logging.Logger, fis *hardware.FabricInterfaceSe
 	c.Fabric.NumaNodeIndex = numaNode
 	c.Storage.NumaNodeIndex = numaNode
 
-	// set pinned_numa_node only if first_core is 0 to ensure appropriate affinity of engine
-	if c.ServiceThreadCore == 0 {
+	// Don't set pinned_numa_node (which would define engine affinity if set), and as a
+	// result enable engine legacy core allocation algorithm in the following cases:
+	// - If first_core is non-zero 0 (as core # denotes affinity)
+	// - If only one engine is defined and engine's assigned NUMA node is zero (pinning is
+	//   not required in the case that only a single engine is running on NUMA node zero)
+	if c.ServiceThreadCore == 0 && (nrEngines == 1 && numaNode == 0) {
 		c.PinnedNumaNode = &numaNode
 	}
 
