@@ -5,7 +5,6 @@
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 from container_rf_test_base import ContRedundancyFactor
-from apricot import skipForTicket
 
 
 class RbldContRfTest(ContRedundancyFactor):
