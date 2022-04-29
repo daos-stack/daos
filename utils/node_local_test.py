@@ -2785,7 +2785,7 @@ class posix_tests():
         assert rc.returncode == 0
         destroy_container(self.conf, self.pool.id(), container)
 
-    def test_dfuse_bin(self):
+    def XXXtest_dfuse_bin(self):
         """Call the dfuse_test binary"""
 
         def run_test(dirname):
