@@ -740,7 +740,7 @@ migrate_fetch_update_inline(struct migrate_one *mrone, daos_handle_t oh,
 		}
 
 		rc = vos_obj_update(ds_cont->sc_hdl, mrone->mo_oid,
-				    mrone->mo_min_epoch, mrone->mo_version,
+				    mrone->mo_epoch, mrone->mo_version,
 				    0, &mrone->mo_dkey, iod_cnt, &iods[start],
 				    iod_csums, &sgls[start]);
 		daos_csummer_free_ic(csummer, &iod_csums);
@@ -762,7 +762,7 @@ migrate_fetch_update_inline(struct migrate_one *mrone, daos_handle_t oh,
 		}
 
 		rc = vos_obj_update(ds_cont->sc_hdl, mrone->mo_oid,
-				    mrone->mo_min_epoch, mrone->mo_version,
+				    mrone->mo_epoch, mrone->mo_version,
 				    0, &mrone->mo_dkey, iod_cnt,
 				    &mrone->mo_iods[start], iod_csums,
 				    &sgls[start]);
@@ -1115,7 +1115,7 @@ migrate_fetch_update_single(struct migrate_one *mrone, daos_handle_t oh,
 		update_flags |= VOS_OF_EC;
 
 	rc = vos_obj_update(ds_cont->sc_hdl, mrone->mo_oid,
-			    mrone->mo_min_epoch, mrone->mo_version,
+			    mrone->mo_epoch, mrone->mo_version,
 			    update_flags, &mrone->mo_dkey, mrone->mo_iod_num,
 			    mrone->mo_iods, iod_csums, sgls);
 out:
@@ -1270,7 +1270,7 @@ migrate_fetch_update_bulk(struct migrate_one *mrone, daos_handle_t oh,
 	if (!daos_oclass_is_ec(&mrone->mo_oca))
 		return __migrate_fetch_update_bulk(mrone, oh, mrone->mo_iods,
 						   mrone->mo_iod_num,
-						   mrone->mo_min_epoch,
+						   mrone->mo_epoch,
 						   DIOF_FOR_MIGRATION, ds_cont);
 
 	/* For EC object, if the migration include both extent from parity rebuild
