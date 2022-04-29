@@ -14,6 +14,11 @@ class RbldContRfTest(ContRedundancyFactor):
     :avocado: recursive
     """
 
+    CANCEL_FOR_TICKET = [
+        ["DAOS-8827", "properties", "rf:1", "rank", [3,4,5]],
+        ["DAOS-8827", "properties", "rf:2", "rank", [3]]
+    ]
+
     def test_rebuild_with_container_rf(self):
         """Jira ID:
         DAOS-6270: container with RF 2 can lose up to 2 concurrent
