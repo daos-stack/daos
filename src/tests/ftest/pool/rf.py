@@ -4,8 +4,8 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
-
 from ior_test_base import IorTestBase
+
 
 class PoolRedunFacProperty(IorTestBase):
     # pylint: disable=too-many-ancestors
@@ -23,14 +23,8 @@ class PoolRedunFacProperty(IorTestBase):
         Args:
             expected_value (int): expected container rf value
         """
-        daos_cmd = self.get_daos_command()
-        cont_prop = daos_cmd.container_get_prop(self.pool.uuid,
-                                                self.container.uuid)
-        cont_prop_stdout = cont_prop.stdout_text
-        prop_list = cont_prop_stdout.split('\n')[1:]
-        cont_index = [i for i, word in enumerate(prop_list)
-                      if word.startswith('Redundancy Factor')][0]
-        rf_str = (prop_list[cont_index].split('Redundancy Factor')[1].strip())
+        cont_props = self.container.get_prop(properties=["rf"])
+        rf_str = cont_props["response"][0]["value"]
         rf_value = int(rf_str.replace("rf", ""))
         self.assertEqual(expected_value, rf_value)
 

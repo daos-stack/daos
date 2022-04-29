@@ -153,3 +153,21 @@ func (m *mockFabricInterfaceSetBuilder) BuildPart(_ context.Context, _ *FabricIn
 	m.buildPartCalled++
 	return m.buildPartReturn
 }
+
+type mockFabricReadyChecker struct {
+	isReadyCount int
+	isReadyErr   []error
+}
+
+func (m *mockFabricReadyChecker) CheckFabricReady(iface string) error {
+	if len(m.isReadyErr) == 0 {
+		return nil
+	}
+
+	idx := m.isReadyCount
+	if idx >= len(m.isReadyErr) {
+		idx = len(m.isReadyErr) - 1
+	}
+	m.isReadyCount++
+	return m.isReadyErr[idx]
+}
