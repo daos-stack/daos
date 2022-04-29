@@ -7,21 +7,21 @@ def scons():
 
     env.AppendUnique(LIBPATH=[Dir('.')])
 
+    denv = env.Clone()
+
+    # common
+    prereqs.require(denv, 'argobots', 'protobufc')
+    chk_pb = denv.SharedObject(['chk.pb-c.c'])
+    Export('chk_pb')
+
     if not prereqs.server_requested():
         return
 
-    denv = env.Clone()
-
-    prereqs.require(denv, 'argobots', 'protobufc')
-
     # chk
-    chk_pb = denv.SharedObject(['chk.pb-c.c'])
     chk = daos_build.library(denv, 'chk',
                              [chk_pb, 'chk_srv.c', 'chk_common.c'],
                              install_off="../..")
     denv.Install('$PREFIX/lib64/daos_srv', chk)
-
-    Export('chk_pb')
 
 if __name__ == "SCons.Script":
     scons()
