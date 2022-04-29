@@ -457,8 +457,6 @@ vos_obj_punch(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 	if (rc != 0)
 		goto reset;
 
-	vos_dth_set(dth);
-
 	/* Commit the CoS DTXs via the PUNCH PMDK transaction. */
 	if (dtx_is_valid_handle(dth) && dth->dth_dti_cos_count > 0 &&
 	    !dth->dth_cos_done) {
@@ -526,7 +524,6 @@ reset:
 			rc = -DER_TX_RESTART;
 	}
 
-	vos_dth_set(NULL);
 	rc = vos_tx_end(cont, dth, NULL, NULL, true, rc);
 
 	if (rc == 0) {
