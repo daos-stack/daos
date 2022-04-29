@@ -200,8 +200,8 @@ run $CLUSH_EXE -w $SERVERS_LIST chmod a-x  "$DAOS_INSTALL_DIR/bin/daos_admin"
 {% if "daos_clients" in groups and groups["daos_clients"] | length > 0 %}
 info "Finalizing dfuse install"
 run $CLUSH_EXE -l root -w $CLIENTS_LIST cp -f "$DAOS_INSTALL_DIR/bin/dfuse" /usr/bin
-run $CLUSH_EXE -l root -w $SERVERS_LIST chown root:daos_server /usr/bin/dfuse
-run $CLUSH_EXE -l root -w $SERVERS_LIST chmod 755 /usr/bin/dfuse
+run $CLUSH_EXE -l root -w $CLIENTS_LIST chown root:root /usr/bin/dfuse
+run $CLUSH_EXE -l root -w $CLIENTS_LIST chmod 755 /usr/bin/dfuse
 run $CLUSH_EXE -w $CLIENTS_LIST chmod a-x  "$DAOS_INSTALL_DIR/bin/dfuse"
 
 info "Updating dynamic linker configuration"
