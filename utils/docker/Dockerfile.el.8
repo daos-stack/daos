@@ -110,6 +110,11 @@ COPY ./utils/scripts/install-el8.sh /tmp/install.sh
 RUN chmod +x /tmp/install.sh && dnf upgrade && /tmp/install.sh && dnf clean all && \
     rm -f /tmp/install.sh
 
+# The install script will have installed python3.9 only, however adding other packages later might
+# also pull in 3.6 which is configured at a higher priority so reconfigure here which will put
+# it into manual mode and prevent it reverting on additional packages being installed.
+RUN [ -e /etc/fedora-release ] || update-alternatives --set python3 /usr/bin/python3.9
+
 ARG UID=1000
 
 # Add DAOS users
