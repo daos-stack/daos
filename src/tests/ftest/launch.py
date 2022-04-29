@@ -17,11 +17,11 @@ import json
 import os
 import re
 import socket
-import subprocess #nosec
+import subprocess  # nosec
 import site
 import sys
 import time
-from xml.etree.ElementTree import Element, SubElement, tostring #nosec
+from xml.etree.ElementTree import Element, SubElement, tostring  # nosec
 import yaml
 from defusedxml import minidom
 import defusedxml.ElementTree as ET
@@ -43,7 +43,7 @@ except ImportError:
     from tempfile import mkdtemp
     from shutil import rmtree
 
-    class TemporaryDirectory(object):
+    class TemporaryDirectory():
         # pylint: disable=too-few-public-methods
         """Create a temporary directory.
 
@@ -1394,7 +1394,8 @@ def run_tests(test_files, tag_filter, args):
 
 
 def get_yaml_data(yaml_file):
-    """Get the contents of a yaml file as a dictionary.
+    """Get the contents of a yaml file as a dictionary, removing any mux tags and ignoring any
+    other tags present.
 
     Args:
         yaml_file (str): yaml file to read
@@ -1406,12 +1407,26 @@ def get_yaml_data(yaml_file):
         dict: the contents of the yaml file
 
     """
+    class DaosLoader(yaml.SafeLoader):  # pylint: disable=too-many-ancestors
+        """Helper class for parsing avocado yaml files"""
+
+        def forward_mux(self, node):
+            """Pass on mux tags unedited"""
+            return self.construct_mapping(node)
+
+        def ignore_unknown(self, node):  # pylint: disable=no-self-use,unused-argument
+            """Drop any other tag"""
+            return None
+
+    DaosLoader.add_constructor('!mux', DaosLoader.forward_mux)
+    DaosLoader.add_constructor(None, DaosLoader.ignore_unknown)
+
     yaml_data = {}
     if os.path.isfile(yaml_file):
         with open(yaml_file, "r") as open_file:
             try:
                 file_data = open_file.read()
-                yaml_data = yaml.safe_load(file_data.replace("!mux", ""))
+                yaml_data = yaml.load(file_data, Loader=DaosLoader)
             except yaml.YAMLError as error:
                 print("Error reading {}: {}".format(yaml_file, error))
                 sys.exit(1)

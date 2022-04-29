@@ -353,7 +353,7 @@ ioil_fini(void)
 	struct ioil_cont *cont, *cnext;
 	int rc;
 
-#if 0
+#if 1
 	/* Needed for shell subshells, DAOS-10354 but introduces leaks. */
 	return;
 #endif

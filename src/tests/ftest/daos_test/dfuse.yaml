@@ -4,8 +4,6 @@ hosts:
   test_clients:
     - client-B
 timeout: 60
-timeouts:
-  test_daos_dfs_openat: 10
 pool:
   scm_size: 1G
   control_method: dmg
@@ -14,12 +12,29 @@ server_config:
 container:
   type: POSIX
   control_method: daos
-daos_tests:
-  test_name:
-    test_daos_dfuse_openat: DAOS_DFUSE_Openat
-  daos_test:
-    test_daos_dfuse_openat: false
-  num_client:
-    test_data_dfuse_openat: true
-dfuse:
-  mount_dir: "/tmp/daos_dfuse/"
+dfuse: !mux
+  writeback:
+    mount_dir: "/tmp/daos_dfuse/"
+    name: "writeback"
+  writethrough:
+    # !filter-only : "/run/intercept/off"  # yamllint disable-line rule:colons
+    mount_dir: "/tmp/daos_dfuse/"
+    disable_wb_cache: true
+    name: "writethrough"
+  metadata:
+    !filter-only : "/run/intercept/off"  # yamllint disable-line rule:colons
+    mount_dir: "/tmp/daos_dfuse/"
+    disable_wb_cache: true
+    disable_caching: true
+    name: "metadata"
+  nocache:
+    !filter-only : "/run/intercept/off"  # yamllint disable-line rule:colons
+    mount_dir: "/tmp/daos_dfuse/"
+    disable_wb_cache: true
+    disable_caching: true
+    name: "nocache"
+intercept: !mux
+  off:
+    use_intercept: false
+  on:
+    use_intercept: true
