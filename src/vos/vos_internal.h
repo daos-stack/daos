@@ -899,16 +899,6 @@ enum vos_iter_state {
 
 struct vos_iter_ops;
 
-/** Common fields for I/O operations */
-struct vos_io_info {
-	daos_epoch_range_t	 ii_epr;
-	daos_epoch_t		 ii_bound;
-	struct dtx_handle	*ii_dth;
-	struct vos_ts_set	*ii_ts_set;
-	struct vos_ilog_info	*ii_parent;
-	struct vos_ilog_info	 ii_info;
-};
-
 /** the common part of vos iterators */
 struct vos_iterator {
 	struct dtx_handle	*it_dth;
