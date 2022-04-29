@@ -53,7 +53,7 @@ errors are documented in the table below.
 |DER_AGENT_INCOMPAT|2029|Agent is incompatible with libdaos
 
 When an operation fails, DAOS returns a negative DER error.
-For a full list of errors, please check
+For a complete list of errors, please check
 <https://github.com/daos-stack/daos/blob/release/2.2/src/include/daos_errno.h>
 (`DER_ERR_GURT_BASE` is equal to 1000, and `DER_ERR_DAOS_BASE` is equal
 to 2000).
@@ -63,7 +63,7 @@ number to an error message.
 
 ## Log Files
 
-On the server side, there are three log files created as part of normal
+On the server-side, there are three log files created as part of normal
 server operations:
 
 |Component|Config Parameter|Example Config Value|
@@ -93,7 +93,7 @@ section of this document.
 
 ### Privileged Helper Log
 
-By default, the privileged helper only emits ERROR-level logging which
+By default, the privileged helper only emits ERROR-level logging, which
 is captured by the control plane and included in that log. If the
 `helper_log_file` parameter is set in the server config, then
 DEBUG-level logging will be sent to the specified file.
@@ -107,96 +107,79 @@ DEBUG-level logging will be sent to the specified file.
 
 DAOS uses the debug system defined in
 [CaRT](https://github.com/daos-stack/daos/tree/release/2.2/src/cart),
-specifically the GURT library.
-Both server and client default log is `stdout`, unless
-otherwise set by `D_LOG_FILE` environment variable (client) or
+specifically, the GURT library.
+Both server and client default log is `stdout` unless
+otherwise set by the `D_LOG_FILE` environment variable (client) or
 `log_file` config parameter (server).
 
 ### Registered Subsystems/Facilities
 
 The debug logging system includes a series of subsystems or facilities
 which define groups for related log messages (defined per source file).
-There are common facilities which are defined in GURT, as well as other
+There are common facilities that are defined in GURT, as well as to other
 facilities that can be defined on a per-project basis (such as those for
 CaRT and DAOS). DD_SUBSYS can be used to set which subsystems to enable
-logging. By default all subsystems are enabled ("DD_SUBSYS=all").
+logging. By default, all subsystems are enabled ("DD_SUBSYS=all").
 
--   DAOS Facilities:
-    array, kv, common, tree, vos, client, server, rdb, rsvc, pool, container,
+* DAOS Facilities:
+    array, kV, common, tree, vos, client, server, rdb, rsvc, pool, container,
     object, placement, rebuild, tier, mgmt, bio, tests, dfs, duns, drpc,
     security, dtx, dfuse, il, csum
-
--   Common Facilities (GURT):
+* Common Facilities (GURT):
     MISC, MEM, SWIM, TELEM
-
--   CaRT Facilities:
+* CaRT Facilities:
     RPC, BULK, CORPC, GRP, HG, ST, IV, CTL
 
 ### Priority Logging
 
 The priority level that outputs to stderr is set with DD_STDERR. By
-default in DAOS (specific to the project), this is set to CRIT
+Default, in DAOS (specific to the project), this is set to CRIT
 ("DD_STDERR=CRIT") meaning that all CRIT and more severe log messages
 will dump to stderr. However, this is separate from the priority of
 logging to "/tmp/daos.log". The priority level of logging can be set
 with D_LOG_MASK, which by default is set to INFO
-("D_LOG_MASK=INFO"), which will result in all messages excluding DEBUG
-messages being logged. D_LOG_MASK can also be used to specify the
+("D_LOG_MASK=INFO"), which will result in all messages, excluding DEBUG
+messages, being logged. D_LOG_MASK can also be used to specify the
 level of logging on a per-subsystem basis as well
 ("D_LOG_MASK=DEBUG,MEM=ERR").
 
-### Debug Masks/Streams:
+### Debug Masks/Streams
 
-DEBUG messages account for a majority of the log messages, and
-finer-granularity might be desired. Mask bits are set as the first
+DEBUG messages account for most log messages, and
+finer granularity might be desired. Mask bits are set as the first
 argument passed in D_DEBUG(mask, ...). To accomplish this, DD_MASK can
 be set to enable different debug streams. Similar to facilities, there
-are common debug streams defined in GURT, as well as other streams that
+are common to debug streams defined in GURT, and other streams that
 can be defined on a per-project basis (CaRT and DAOS). All debug streams
 are enabled by default ("DD_MASK=all"). Convenience "group mask" values
-are defined for common use cases and convenience, and consist of a
+are defined for common use cases and convenience and consist of a
 composition of multiple individual bits.
 
--   DAOS Debug Masks:
-
-    -   md = metadata operations
-
-    -   pl = placement operations
-
-    -   mgmt = pool management
-
-    -   epc = epoch system
-
-    -   df = durable format
-
-    -   rebuild = rebuild process
-
-    -   group_default = (group mask) io, md, pl, and rebuild operations
-
-    -   group_metadata_only = (group mask) mgmt, md operations
-
-    -   group_metadata = (group mask) group_default plus mgmt operations
-
--   Common Debug Masks (GURT):
-
-    -   any = generic messages, no classification
-
-    -   trace = function trace, tree/hash/lru operations
-
-    -   mem = memory operations
-
-    -   net = network operations
-
-    -   io = object I/Otest = test programs
+* DAOS Debug Masks:
+  * md = metadata operations
+  * pl = placement operations
+  * mgmt = pool management
+  * epc = epoch system
+  * df = durable format
+  * rebuild = rebuild process
+  * group_default = (group mask) io, md, pl, and rebuild operations
+  * group_metadata_only = (group mask) mgmt, md operations
+  * group_metadata = (group mask) group_default plus mgmt operations
+* Common Debug Masks (GURT):
+  * any = generic messages, no classification
+  * trace = function trace, tree/hash/lru operations
+  * mem = memory operations
+  * net = network operations
+  * io = object I/Otest = test programs
 
 ### Common Use Cases
 
-Please note: where in these examples the export command is shown setting an environment variable,
-this is intended to convey either that the variable is actually set (for the client environment), or
+Please note wherein these examples, the export command is shown setting an environment variable,
+this is intended to convey either that the variable is set (for the client environment), or
 configured for the engines in the `daos_server.yml` file (`log_mask` per engine, and env_vars
 values per engine for the `DD_SUBSYS` and `DD_MASK` variable assignments).
 
--   Generic setup for all messages (default settings)
+- Generic setup for all messages (default settings)
 
         D_LOG_MASK=DEBUG
         DD_SUBSYS=all
@@ -205,7 +188,7 @@ values per engine for the `DD_SUBSYS` and `DD_MASK` variable assignments).
 -   Disable all logs for performance tuning
 
         D_LOG_MASK=ERR -> will only log error messages from all facilities
-        D_LOG_MASK=FATAL -> will only log system fatal messages
+        D_LOG_MASK=FATAL -> will only log fatal system messages
 
 -   Gather daos metadata logs if a pool/container resource problem is observed, using the provided group mask
 
@@ -234,7 +217,9 @@ Refer to the DAOS Environment Variables document for
 more information about the debug system environment.
 
 ## Common DAOS Problems
-### Incompatible Agent ####
+
+### Incompatible Agent
+
 When DER_AGENT_INCOMPAT is received, it means that the client library libdaos.so
 is likely mismatched with the DAOS Agent.  The libdaos.so, DAOS Agent and DAOS
 Server must be built from compatible sources so that the GetAttachInfo protocol
@@ -242,25 +227,27 @@ is the same between each component.  Depending on your situation, you will need
 to either update the DAOS Agent or the libdaos.so to the newer version in order
 to maintain compatibility with each other.
 
-### HLC Sync ###
-When DER_HLC_SYNC is received, it means that sender and receiver HLC timestamps
-are off by more than maximum allowed system clock offset (1 second by default).
+### HLC Sync
 
-In order to correct this situation synchronize all server clocks to the same
+When DER_HLC_SYNC is received, it means that sender and receiver HLC timestamps
+are off by more than the maximum allowed system clock offset (1 second by default).
+
+To correct this situation, synchronize all server clocks to the same
 reference time, using services like NTP.
 
-### Shared Memory Errors ###
-When DER_SHMEM_PERMS is received it means that this I/O Engine lacked the
-permissions to access the shared memory megment left behind by a previous run of
+### Shared Memory Errors
+
+When DER_SHMEM_PERMS is received, this I/O Engine lacks the
+permissions to access the shared memory segment left behind by a previous run of
 the I/O Engine on the same machine.  This happens when the I/O Engine fails to
-remove the shared memory segment upon shutdown, and, there is a mismatch between
+remove the shared memory segment upon shutdown, and there is a mismatch between
 the user/group used to launch the I/O Engine between these successive runs.  To
 remedy the problem, manually identify the shared memory segment and remove it.
 
-Issue ```ipcs``` to view the Shared Memory Segments.  The output will show a
-list of segments organized by ```key```.
+Issue `ipcs` to view the Shared Memory Segments.  The output will show a
+list of segments organized by `key`.
 
-```
+```bash
 ipcs
 
 ------ Message Queues --------
@@ -277,20 +264,20 @@ key        semid      owner      perms      nsems
 ```
 
 Shared Memory Segments with keys [0x10242048 .. (0x10242048 + number of I/O
-Engines running)] are the segments that must be removed.  Use ```ipcrm``` to
+Engines running)] are the segments that must be removed.  Use `ipcrm` to
 remove the segment.
 
 For example, to remove the shared memory segment left behind by I/O Engine
 instance 0, issue:
-```
-sudo ipcrm -M 0x10242048
-```
+
+    sudo ipcrm -M 0x10242048
+
 To remove the shared memory segment left behind by I/O Engine instance 1, issue:
-```
-sudo ipcrm -M 0x10242049
-```
+
+    sudo ipcrm -M 0x10242049
 
 ### Server Start Issues
+
 1. Read the log located in the `control_log_file`.
 1. Verify that the `daos_server` process is not currently running.
 1. Check the SCM device path in /dev.
@@ -304,15 +291,17 @@ sudo ipcrm -M 0x10242049
 1. Generate the config file using `dmg config generate`. The various requirements will be populated without a syntax error.
 1. Try starting with `allow_insecure: true`. This will rule out the credential certificate issue.
 1. Verify that the `access_points` host is accessible and the port is not used.
-1. Check the `provider` entry. See the "Network Scan and Configuration" section of the admin guide for determining the right provider to use.
+1. Check the `provider` entry. See the "Network Scan and Configuration" section of the admin guide to determine the right provider.
 1. Check `fabric_iface` in `engines`. They should be available and enabled.
 1. Check that `socket_dir` is writeable by the daos_server.
 
 ### Errors creating a Pool
+
 1. Check which engine rank you want to create a pool in with `dmg system query --verbose` and verify their State is Joined.
-1. `DER_NOSPACE(-1007)` appears: Check the size of the NVMe and PMEM. Next, check the size of the existing pool. Then check that this new pool being created will fit into the remaining disk space.
+1. `DER_NOSPACE(-1007)` appears: Check the size of the NVMe and PMEM. Next, check the size of the existing pool. Then check that this new pool will fit into the remaining disk space.
 
 ### Problems creating a container
+
 1. Check that the path to daos is your intended binary. It's usually `/usr/bin/daos`.
 1. When the server configuration is changed, it's necessary to restart the agent.
 1. `DER_UNREACH(-1006)`: Check the socket ID consistency between PMEM and NVMe. First, determine which socket you're using with `daos_server network scan -p all`. e.g., if the interface you're using in the engine section is eth0, find which NUMA Socket it belongs to. Next, determine the disks you can use with this socket by calling `daos_server storage scan` or `dmg storage scan`. e.g., if eth0 belongs to NUMA Socket 0, use only the disks with 0 in the Socket ID column.
@@ -321,6 +310,7 @@ sudo ipcrm -M 0x10242049
 1. Call `daos pool query` and check that the pool exists and has free space.
 
 ### Applications run slow
+
 Verify if you're using Infiniband for `fabric_iface`: in the server config. The IO will be significantly slower with Ethernet.
 
 ## Common Errors and Workarounds
@@ -345,7 +335,7 @@ Verify if you're using Infiniband for `fabric_iface`: in the server config. The 
 
 	# 2. Make sure the admin-host allow_insecure mode matches the applicable servers.
 
-### use daos command before daos_agent started
+### use the daos command before daos_agent started
 
 	$ daos cont create $DAOS_POOL
 	daos ERR  src/common/drpc.c:217 unixcomm_connect() Failed to connect to /var/run/daos_agent/daos_agent.sock, errno=2(No such file or directory)
@@ -358,7 +348,7 @@ Verify if you're using Infiniband for `fabric_iface`: in the server config. The 
 		$ sudo systemctl enable daos_agent.service
 		$ sudo systemctl start daos_agent.service
 
-### use daos command with invalid or wrong parameters
+### use the daos command with invalid or wrong parameters
 
 	# Lack of providing daos pool_uuid
 	$ daos pool list-cont
@@ -402,7 +392,7 @@ Verify if you're using Infiniband for `fabric_iface`: in the server config. The 
 	Creating DAOS pool with automatic storage allocation: 50 GB NVMe + 6.00% SCM
 	ERROR: dmg: pool create failed: DER_NOSPACE(-1007): No space on storage target
 
-	# Workaround: dmg storage query scan to find current available storage
+	# Workaround: dmg storage query scan to find currently available storage
 		dmg storage query usage
 		Hosts  SCM-Total SCM-Free SCM-Used NVMe-Total NVMe-Free NVMe-Used
 		-----  --------- -------- -------- ---------- --------- ---------

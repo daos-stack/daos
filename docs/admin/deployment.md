@@ -1,6 +1,6 @@
 # System Deployment
 
-The DAOS deployment workflow requires to start the DAOS server instances
+The DAOS deployment workflow requires starting the DAOS server instances
 early on to enable administrators to perform remote operations in parallel
 across multiple storage nodes via the dmg management utility. Security is
 guaranteed via the use of certificates.
@@ -9,7 +9,7 @@ storage hardware provisioning and would typically be run from a login
 node.
 
 After `daos_server` instances have been started on each storage node for the
-first time, `daos_server storage prepare --scm-only` will set PMem storage
+The first time, `daos_server storage prepare --scm-only` will set PMem storage
 into the necessary state for use with DAOS when run on each host.
 Then `dmg storage format` formats persistent storage devices (specified in the
 server configuration file) on the storage nodes and writes necessary metadata
@@ -30,46 +30,41 @@ following steps:
 - [Validate](#system-validation) that the DAOS system is operational
 
 Note that starting the DAOS server instances can be performed automatically
-on boot if start-up scripts are registered with systemd.
+on boot, if start-up scripts are registered with systemd.
 
 The following subsections will cover each step in more detail.
 
 ## DAOS Server Setup
 
-First of all, the DAOS server should be started to allow remote administration
-command to be executed via the dmg tool. This section describes the minimal
-DAOS server configuration and how to start it on all the storage nodes.
+This section describes the minimal DAOS server configuration and how to start it on all the storage nodes.
 
 ### Example RPM Deployment Workflow
 
 A recommended workflow to get up and running is as follows:
 
-* Install DAOS Server RPMs - `daos_server` systemd services will start in
-  listening mode which means DAOS I/O engine processes will not be started as the
+- Install DAOS Server RPMs - `daos_server` systemd services will start in
+  listening mode, which means DAOS I/O engine processes will not be started as the
   server config file (default location at `/etc/daos/daos_server.yml`) has not
   yet been populated.
-
-* Run `dmg config generate -l <hostset> -a <access_points>` across the entire
+- Run `dmg config generate -l <hostset> -a <access_points>` across the entire
   hostset (all the storage servers that are now running the `daos_server` service
   after RPM install).
   The command will only generate a config if hardware setups on all the hosts are
   similar and have been given sensible NUMA mappings.
   Adjust the hostset until you have a set with homogeneous hardware configurations.
-
-* Once a recommended config file can be generated, copy it to the server config
+- Once a recommended config file can be generated, copy it to the server config
   file default location (`/etc/daos/daos_server.yml`) on each DAOS Server host
   and restart all `daos_server` services.
   An example command to restart the services is
   `clush -w machines-[118-121,130-133] "sudo systemctl restart daos_server"`.
-  The services should prompt for format on restart and after format is triggered
+  The services should prompt for format on a restart, and after the format is triggered
   from `dmg`, the DAOS I/O engine processes should start.
 
 ### Server Configuration File
 
-The `daos_server` configuration file is parsed when starting the `daos_server`
-process.
+The `daos_server` configuration file is parsed when starting the `daos_server` process.
 The configuration file location can be specified on the command line
-(`daos_server -h` for usage) otherwise it will be read from the default location
+(`daos_server -h` for usage) otherwise, it will be read from the default location
 (`/etc/daos/daos_server.yml`).
 
 Parameter descriptions are specified in
@@ -78,11 +73,11 @@ and example configuration files in the
 [examples](https://github.com/daos-stack/daos/tree/release/2.2/utils/config/examples)
 directory.
 
-Any option supplied to `daos_server` as a command line option or flag will
-take precedence over equivalent configuration file parameter.
+Any option supplied to `daos_server` as a command-line option or flag will
+take precedence over equivalent configuration file parameters.
 
 For convenience, active parsed configuration values are written to a temporary
-file for reference, and the location will be written to the log.
+file for reference and the location will be written to the log.
 
 #### Configuration Options
 
@@ -93,11 +88,11 @@ available at
 
 The location of this configuration file is determined by first checking
 for the path specified through the -o option of the `daos_server` command
-line, if unspecified then `/etc/daos/daos_server.yml` is used.
+line, if unspecified, then `/etc/daos/daos_server.yml` is used.
 
 Refer to the example configuration file
 [`daos_server.yml`](https://github.com/daos-stack/daos/blob/release/2.2/utils/config/daos_server.yml)
-for latest information and examples.
+for the latest information and examples.
 
 At this point of the process, the servers: and provider: section of the yaml
 file can be left blank and will be populated in the subsequent sections.
@@ -135,53 +130,48 @@ Application Options:
 
 The command will output recommended config file if supplied requirements are
 met. Requirements will be derived based on the number of NUMA nodes present on
-the hosts if '--num-engines' is not specified on the commandline.
+the hosts if '--num-engines' is not specified on the command line.
 
 - '--num-engines' specifies the number of engine sections to populate in the
   config file output.
   Each section will specify a persistent memory (PMem) block devices that must be
   present on the host in addition to a fabric network interface and SSDs all
   bound to the same NUMA node.
-  If not set explicitly on the commandline, default is the number of NUMA nodes
+  If not set explicitly on the command line, the default is the number of NUMA nodes
   detected on the host.
 
-- '--min-ssds' specifies the minimum number of NVMe SSDs per-engine that need
+- '--min-ssds' specifies the minimum number of NVMe SSDs per engine that needs
   to be present on each host.
   For each engine entry in the generated config, at least this number of SSDs
   must be bound to the NUMA node that matches the affinity of the PMem device
-  and fabric network interface associated with the engine.
-  If not set on the commandline, default is "1".
-  If set to "0" NVMe SSDs will not be added to the generated config and SSD
+  and fabric network interfaces associated with the engine.
+  If not set on the command line, the default is "1".
+  If set to "0", the NVMe SSDs will not be added to the generated config and SSD
   validation will be disabled.
 
-- '--net-class' specifies preference for network interface class, options are
-  'ethernet', 'infiband' or 'best-available'.
+- '--net-class' specifies a preference for network interface class, options are
+  'ethernet', 'infiniband' or 'best-available'.
   'best-available' will attempt to choose the most performant (as judged by
-  libfabric) sets of interfaces and supported provider that match the number and
+  libfabric) sets of interfaces and supported providers that match the number and
   NUMA affinity of PMem devices.
-  If not set on the commandline, default is "best-available".
+  If not set on the command line, the default is "best-available".
 
 The configuration file that is generated by the command and output to stdout
-can be copied to a file and used on the relevant hosts and used as server
+can be copied to a file and used on the relevant hosts, and used as the server
 config to determine the starting environment for 'daos_server' instances.
 
 Config file output will not be generated in the following cases:
 
 - PMem device count, capacity or NUMA mappings differ on any of the hosts in the
   hostlist (the hostlist can be specified either in the 'dmg' config file or on
-  the commandline).
-
-- NVMe SSD count, PCI address distribution or NUMA affinity differs on any of
+  the command line).
+- NVMe SSD count, PCI address distribution, or NUMA affinity differs on any of
   the hosts in the host list.
-
 - NUMA node count can't be detected on the hosts or differs on any host in the
   host list.
-
 - PMem device count or NUMA affinity doesn't meet the 'num-engines' requirement.
-
 - NVMe device count or NUMA affinity doesn't meet the 'min-ssds' requirement.
-
-- network device count or NUMA affinity doesn't match the configured PMem
+- Network device count or NUMA affinity doesn't match the configured PMem
   devices, taking into account any specified network device class preference
   (Ethernet or InfiniBand).
 
@@ -189,24 +179,27 @@ Config file output will not be generated in the following cases:
     Some CentOS 7.x kernels from before the 7.9 release were known to have a defect
     that prevented `ndctl` from being able to report the NUMA affinity for a
     namespace.
-    This prevents generation of dual engine configs using `dmg config generate`
+    This prevents the generation of dual engine configs using `dmg config generate`
     when running with one of the above-mentioned affected kernels.
 
 #### Certificate Configuration
 
 The DAOS security framework relies on certificates to authenticate
-components and administrators in addition to encrypting DAOS control plane
-communications. A set of certificates for a given DAOS system may be
+components,administrators and encrypting the DAOS control plane
+communications.
+
+A set of certificates for a given DAOS system may be
 generated by running the `gen_certificates.sh` script provided with the DAOS
-software if there is not an existing TLS certificate infrastructure. The
-`gen_certificates.sh` script uses the `openssl` tool to generate all of the
-necessary files. We highly recommend using OpenSSL Version 1.1.1h or higher as
+software if there is not an existing TLS certificate infrastructure.
+
+The `gen_certificates.sh` script uses the `OpenSSL` tool to generate all the
+necessary files. We recommend using OpenSSL Version 1.1.1h or higher as
 keys and certificates generated with earlier versions are vulnerable to attack.
 
 When DAOS is installed from RPMs, this script is provided in the base `daos` RPM, and
 may be invoked in the directory to which the certificates will be written. As part
 of the generation process, a new local Certificate Authority is created to handle
-certificate signing, and three role certificates are created:
+certificate signing and three role certificates are created:
 
 ```bash
 # /usr/lib64/daos/certgen/gen_certificates.sh
@@ -260,7 +253,7 @@ Server nodes require:
   config file below)
 
 After the certificates have been securely distributed, the DAOS configuration files must be
-updated in order to enable authentication and secure communications. These examples assume
+updated to enable authentication and secure communications. These examples assume
 that the configuration and certificate files have been installed under `/etc/daos`:
 
 ```yaml
@@ -305,7 +298,7 @@ transport_config:
 
 The DAOS Server is started as a systemd service. The DAOS Server
 unit file is installed in the correct location when installing from RPMs.
-The DAOS Server will be run as `daos-server` user which will be created
+The DAOS Server will be run as a `daos-server` user which will be created
 during RPM install.
 
 If you wish to use systemd with a development build, you must copy the service
@@ -315,38 +308,38 @@ modify the ExecStart line to point to your `daos_server` binary.
 After modifying ExecStart, run the following command:
 
 ```bash
-$ sudo systemctl daemon-reload
+udo systemctl daemon-reload
 ```
 
 Once the service file is installed you can start `daos_server`
 with the following commands:
 
 ```bash
-$ systemctl enable daos_server.service
-$ systemctl start daos_server.service
+systemctl enable daos_server.service
+systemctl start daos_server.service
 ```
 
 To check the component status use:
 
 ```bash
-$ systemctl status daos_server.service
+systemctl status daos_server.service
 ```
 
 If DAOS Server failed to start, check the logs with:
 
 ```bash
-$ journalctl --unit daos_server.service
+journalctl --unit daos_server.service
 ```
 
-After RPM install, `daos_server` service starts automatically running as user
+After RPM is installed, the `daos_server` service starts automatically running as thw user
 "daos". The server config is read from `/etc/daos/daos_server.yml` and
 certificates are read from `/etc/daos/certs`.
 With no other admin intervention other than the loading of certificates,
-`daos_server` will enter a listening state enabling discovery of storage and
+`daos_server` will enter a listening state enabling the discovery of storage and
 network hardware through the `dmg` tool without any I/O engines specified in the
 configuration file. After device discovery and provisioning, an updated
 configuration file with a populated per-engine section can be stored in
-`/etc/daos/daos_server.yml`, and after reestarting the `daos_server` service
+`/etc/daos/daos_server.yml`, and after restarting the `daos_server` service
 it is then ready for the storage to be formatted.
 
 ## DAOS Server Remote Access
@@ -356,8 +349,7 @@ performed via the `dmg` utility.
 
 To set the addresses of which DAOS Servers to task, provide either:
 
-- `-l <hostlist>` on the commandline when invoking, or
-
+- `-l <hostlist>` on the command line when invoking, or
 - `hostlist: <hostlist>` in the control configuration file
   [`daos_control.yml`](https://github.com/daos-stack/daos/blob/release/2.2/utils/config/daos_control.yml)
 
@@ -367,7 +359,7 @@ The first entry in the hostlist (after alphabetic then numeric sorting) will be
 assumed to be the access point as set in the server configuration file.
 
 Local configuration files stored in the user directory will be used in
-preference to the default location e.g. `~/.daos_control.yml`.
+preference to the default location e.g., `~/.daos_control.yml`.
 
 ## Hardware Provisioning
 
@@ -402,11 +394,11 @@ as resource allocations on any available PMem modules (one region per NUMA
 node/socket). The regions are activated after BIOS reads the new resource
 allocations.
 Upon completion, the storage prepare command will prompt the admin to reboot
-the storage node(s) in order for the BIOS to activate the new storage
+the storage node(s) for the BIOS to activate the new storage
 allocations.
 The storage prepare command does not initiate the reboot itself.
 
-After running the command a reboot will be required, the command will then need
+After running the command, a reboot will be required, the command will then need
 to be run for a second time to expose the namespace device to be used by DAOS.
 
 Example usage:
@@ -421,17 +413,17 @@ Example usage:
   regions) should be available on each of the hosts.
 
 On the second run, one namespace per region is created, and each namespace may
-take up to a few minutes to create. Details of the pmem devices will be
+take up to a few minutes to create. Details of the PMem devices will be
 displayed in JSON format on command completion.
 
-Upon successful creation of the pmem devices, the Intel(R) Optane(TM)
-persistent memory is configured and one can move on to the next step.
+Upon successful creation of the PMem devices, the Intel(R) Optane(TM)
+persistent memory is configured, and one can move on to the next step.
 
-If required, the pmem devices can be destroyed with the command
+If required, the PMem devices can be destroyed with the command
 `daos_server storage prepare --scm-only --reset`.
 
 All namespaces are disabled and destroyed. The SCM regions are removed by
-resetting modules into "MemoryMode" through resource allocations.
+resetting modules into "Memory Mode" through resource allocations.
 
 Note that undefined behavior may result if the namespaces/pmem kernel
 devices are mounted before running reset (as per the printed warning).
@@ -456,11 +448,11 @@ storage selection.
 processes over the management network.
 
 `daos_server storage scan` can be used to query local `daos_server` instances
-directly (scans locally-attached SSDs and Intel Persistent Memory Modules usable
+directly (scans locally attached SSDs and Intel Persistent Memory Modules usable
 by DAOS).
 NVMe SSDs need to be made accessible first by running
 `daos_server storage prepare --nvme-only`.
-The output will be equivalent running `dmg storage scan --verbose` remotely.
+The output will be equivalent to running `dmg storage scan --verbose` remotely.
 
 ```bash
 bash-4.2$ dmg storage scan
@@ -485,7 +477,7 @@ NVMe PCI     Model                FW Revision Socket ID Capacity
 ```
 
 The NVMe PCI field above is what should be used in the server
-configuration file to identified NVMe SSDs.
+configuration file to identify NVMe SSDs.
 
 Devices with the same NUMA node/socket should be used in the same per-engine
 section of the server configuration file for best performance.
@@ -704,9 +696,9 @@ memory) and "nvme" for NVMe SSDs.
 
 For class == "dcpm", the following parameters should be populated:
 
-- `scm_list` should should contain PMem interleaved-set namespaces
-  (e.g. `/dev/pmem1`).
-  Currently the size of the list is limited to 1.
+- `scm_list` should contain PMem interleaved-set namespaces
+  (e.g., `/dev/pmem1`).
+  Currently, the size of the list is limited to 1.
 - `scm_mount` gives the desired local directory to be used as the mount point
   for DAOS persistent storage mounted on the specified PMem device specified in
   `scm_list`.
@@ -810,11 +802,12 @@ This section will help you determine what to provide for the `provider`,
 `fabric_iface` and `pinned_numa_node` entries in the `daos_server.yml` file.
 
 The following commands are typical examples:
+
 ```bash
-$ dmg network scan
-$ dmg network scan -p all
-$ dmg network scan -p ofi+tcp
-$ dmg network scan --provider ofi+verbs
+dmg network scan
+dmg network scan -p all
+dmg network scan -p ofi+tcp
+dmg network scan --provider ofi+verbs
 ```
 
 In the early stages when a `daos_server` has not yet been fully configured and
@@ -825,11 +818,12 @@ Use either of these `dmg` commands in the early stages to accomplish
 this goal:
 
 ```bash
-$ dmg network scan
-$ dgm network scan -p all
+dmg network scan
+dgm network scan -p all
 ```
 
 Typical network scan results look as follows:
+
 ```bash
 $ dmg network scan
 -------
@@ -889,7 +883,7 @@ Each I/O engine is configured with a unique `fabric_iface` and optional
 `pinned_numa_node`.
 The interfaces and NUMA Sockets listed in the scan results map to the
 `daos_server.yml` `fabric_iface` and `pinned_numa_node` respectively.
-The use of `pinned_numa_node` is optional, but recommended for best
+The use of `pinned_numa_node` is optional but recommended for best
 performance.
 When specified with the value that matches the network interface, the I/O
 engine will bind itself to that NUMA node and to cores purely within that NUMA
@@ -935,11 +929,10 @@ Each storage target manages a fraction of the (interleaved) SCM storage space,
 and a fraction of one of the NVMe SSDs that are managed by this engine.
 The optimal number of storage targets per engine depends on two conditions:
 
-* For optimal balance regarding the NVMe space, the number of targets should be
+- For optimal balance regarding the NVMe space, the number of targets should be
 an integer multiple of the number of NVMe disks that are configured in the
 `bdev_list:` of the engine.
-
-* To obtain the maximum SCM performance, a certain number of targets is needed.
+- To obtain the maximum SCM performance, a certain number of targets is needed.
 This is device- and workload-dependent, but around 16 targets usually work well.
 
 While not required, it is recommended to also specify a number of
@@ -949,7 +942,6 @@ the dispatching of server-side RPCs from the main I/O service threads.
 
 The server should have sufficiently many physical cores to support the
 number of targets plus the additional service threads.
-
 
 ## Storage Formatting
 
@@ -967,12 +959,12 @@ modules and NVMe SSDs installed and prepared.
 Upon successful format, DAOS Control Servers will start DAOS I/O engines that
 have been specified in the server config file.
 
-Successful start-up is indicated by the following on stdout:
+A successful start-up is indicated by the following on stdout:
 `DAOS I/O Engine (v2.0.1) process 433456 started on rank 1 with 8 target, 2 helper XS, firstcore 0, host wolf-72.wolf.hpdd.intel.com.`
 
 ### SCM Format
 
-When the command is run, the pmem kernel devices created on SCM/PMem regions are
+When the command is run, the PMem kernel devices created on SCM/PMem regions are
 formatted and mounted based on the parameters provided in the server config file.
 
 - `scm_mount` specifies the location of the mountpoint to create.
@@ -1015,7 +1007,6 @@ the necessary DAOS metadata indicating that the server has been formatted.
 When starting, `daos_server` will skip `maintenance mode` and attempt to start
 I/O engines if valid DAOS metadata is found in `scm_mount`.
 
-
 ## Agent Setup
 
 This section addresses how to configure the DAOS Agents on the client nodes.
@@ -1039,7 +1030,7 @@ for details on creating the necessary certificates.
 
 !!! note
     It is possible to disable the use of certificates for testing purposes.
-    This should *never* be done in production environments.
+    This should _never_ be done in production environments.
     Running in insecure mode will allow arbitrary un-authenticated user processes
     to access and potentially damage the DAOS storage.
 
@@ -1064,21 +1055,23 @@ precedence over equivalent configuration file parameter.
 The following section lists the format, options, defaults, and descriptions
 available in the configuration file.
 
-
 #### Defining fabric interfaces manually
 
 By default, the DAOS Agent automatically detects all fabric interfaces on the
-client node. It selects an appropriate one for DAOS I/O based on the NUMA node
-of the client request and the interface type preferences reported by the DAOS
-management service.
+client node. It selects an appropriate one for DAOS I/O based on:
+
+- NUMA node of the client request
+- interface type preferences reported by the DAOS management service.
 
 If the DAOS Agent does not detect the fabric interfaces correctly,
 the administrator may define them manually in the Agent configuration file.
-These `fabric_iface` entries must be organized by NUMA node.
-If using the verbs provider, the interface domain is also required.
+
+These `fabric_iface` entries must be organized by NUMA node. If using the
+verbs provider, the interface domain is also required.
 
 Example:
-```
+
+```bash
 fabric_ifaces:
 -
   numa_node: 0
@@ -1102,26 +1095,26 @@ fabric_ifaces:
 
 ### Agent Startup
 
-The DAOS Agent is a standalone application to be run on each client node.
+The DAOS Agent is a standalone application that is run on each client node.
 By default, the DAOS Agent will be run as a systemd service.
-The DAOS Agent unit file is installed in the correct location
+The DAOS Agent unit file is installed at
 (`/usr/lib/systemd/system/daos_agent.service`) during RPM installation.
 
-After the RPM installation, and after the Agent configuration file has
+After the RPM installation, and the Agent configuration file has
 been created, the following commands will enable the DAOS Agent to be
-started at the next reboot, will start it immediately,
-and will check the status of the Agent after being started:
+started at the next reboot. Upon reboot it will start immediately,
+and will check the status of the Agent:
 
 ```bash
-$ sudo systemctl enable daos_agent.service
-$ sudo systemctl start  daos_agent.service
-$ sudo systemctl status daos_agent.service
+sudo systemctl enable daos_agent.service
+sudo systemctl start  daos_agent.service
+sudo systemctl status daos_agent.service
 ```
 
 If the DAOS Agent fails to start, check the systemd logs for errors:
 
 ```bash
-$ sudo journalctl --unit daos_agent.service
+sudo journalctl --unit daos_agent.service
 ```
 
 #### Starting the DAOS Agent with a non-default configuration
@@ -1130,7 +1123,7 @@ To start the DAOS Agent from the command line, for example to run with a
 non-default configuration file, run:
 
 ```bash
-$ daos_agent -o <'path to agent configuration file/daos_agent.yml'> &
+daos_agent -o <'path to agent configuration file/daos_agent.yml'> &
 ```
 
 If you wish to use systemd with a development build, you must copy the Agent service
@@ -1145,15 +1138,15 @@ as shown above.
 
 #### Disable Agent Cache (Optional)
 
-In certain circumstances (e.g. for DAOS development or system evaluation), it
+In certain circumstances (e.g., for DAOS development or system evaluation), it
 may be desirable to disable the DAOS Agent's caching mechanism in order to avoid
 stale system information being retained across reformats of a system. The DAOS
-Agent normally caches a map of rank-to-fabric URI lookups as well as client network
-configuration data in order to reduce the number of management RPCs required to
+agent normally caches a map of rank-to-fabric URI lookups as well as client network
+configuration data to reduce the number of management RPCs required to
 start an application. When this information becomes stale, the Agent must be
-restarted in order to repopulate the cache with new information.
+restarted to repopulate the cache with new information.
 Alternatively, the caching mechanism may be disabled, with the tradeoff that
-each application launch will invoke management RPCs in order to obtain system
+each application launch will invoke management RPCs to obtain system
 connection information.
 
 To disable the DAOS Agent caching mechanism, set the following environment
@@ -1166,7 +1159,6 @@ the `[Service]` section before reloading systemd and restarting the
 `daos_agent` service:
 
 `Environment=DAOS_AGENT_DISABLE_CACHE=true`
-
 
 [^1]: https://github.com/intel/ipmctl
 
