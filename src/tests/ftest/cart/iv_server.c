@@ -1316,7 +1316,7 @@ int main(int argc, char **argv)
 	rc = crt_group_ranks_get(grp, &rank_list);
 	assert(rc == 0);
 
-	rc = crtu_wait_for_ranks(g_main_ctx, grp, rank_list, 0, 1, 5, 120);
+	rc = crtu_wait_for_ranks(g_main_ctx, grp, rank_list, 0, 1, 60, 120);
 	assert(rc == 0);
 
 	d_rank_list_free(rank_list);
