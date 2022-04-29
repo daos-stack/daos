@@ -151,6 +151,7 @@ enum {
 /** self headling strategy bits */
 #define DAOS_SELF_HEAL_AUTO_EXCLUDE	(1U << 0)
 #define DAOS_SELF_HEAL_AUTO_REBUILD	(1U << 1)
+#define DAOS_SELF_HEAL_AUTO_REINT	(1U << 2)
 
 /**
  * DAOS container property types
