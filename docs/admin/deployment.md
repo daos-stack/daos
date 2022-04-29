@@ -331,7 +331,7 @@ If DAOS Server failed to start, check the logs with:
 journalctl --unit daos_server.service
 ```
 
-After RPM is installed, the `daos_server` service starts automatically running as thw user
+After RPM is installed, the `daos_server` service starts automatically running as the user
 "daos". The server config is read from `/etc/daos/daos_server.yml` and
 certificates are read from `/etc/daos/certs`.
 With no other admin intervention other than the loading of certificates,
