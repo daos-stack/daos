@@ -68,7 +68,7 @@ in the same DAOS pool represented by the gray box. The simulation reads data
 from the input container and writes raw timesteps to another container.
 It also regularly dumps checkpoints to a dedicated ckpt container.
 Finally, the down-sample job reads the raw timesteps and generates sampled timesteps
-to be analyzed by the post-process, which stores analysis data into 
+to be analyzed by the post-process, which stores analysis data into
 another container.
 
 <a id="63"></a>

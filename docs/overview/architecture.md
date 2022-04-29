@@ -96,7 +96,7 @@ DAOS aims to deliver:
 ## DAOS System
 
 A data center may have hundreds of thousands of compute instances
-interconnected via a scalable, high-performance network, where all, or 
+interconnected via a scalable, high-performance network, where all, or
 a subset of the instances called storage nodes have direct access to NVM
 storage. A DAOS installation involves several components that can be
 either collocated or distributed.

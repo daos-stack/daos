@@ -295,7 +295,7 @@ overhead).
 
 Useful admin dmg commands to query NVMe SSD health:
 
-- Query Per-Server Metadata:
+##### Query Per-Server Metadata:
 
 ```bash
 $ dmg storage query list-devices --help
@@ -399,7 +399,7 @@ boro-11
 
 ```
 
-- Query Storage Device Health Data:
+##### Query Storage Device Health Data
 
 ```bash
 $ dmg storage query device-health --help
@@ -501,7 +501,7 @@ boro-11
 
 ```
 
-#### Exclusion and Hotplug
+##### Exclusion and Hotplug
 
 - Manually exclude an NVMe SSD:
 
