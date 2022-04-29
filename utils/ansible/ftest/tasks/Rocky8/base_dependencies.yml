@@ -1,4 +1,4 @@
-# Install base dependencies of a developmene node
+# Install base dependencies of a development node
 
 - name: Install dnf builddep plugin
   remote_user: root

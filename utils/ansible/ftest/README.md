@@ -16,7 +16,7 @@ installed for example on the node wolf-666 with the following command:
 nodemgr -n wolf-666 -p daos_ci-rocky8.5 install
 ```
 
-The node(s) to used should be selected according to the hardware requirements of the the test(s) to
+The node(s) to used should be selected according to the hardware requirements of the test(s) to
 launch (e.g. pmem, vmd, etc.).  According to the selected nodes, the yaml configuration file(s) of
 the test(s) to launch should eventually be adapted.
 
@@ -54,14 +54,14 @@ ssh-copy-id root@wolf-666
 The [ansible inventory](https://docs.ansible.com/ansible/latest/user_guide/intro_inventory.html)
 list the different nodes of the the sub-cluster and gather them in different groups (which can
 freely overlap) according to their roles in the functional test platform.
-- **daos\_dev**: This group should contains only one node.  This last one will be used for
-  installing DAOS binaries and launch functional tests thanks to generated bash scripts.  Details on
-  how to use these scripts will be detailed in following sections.
+- **daos\_dev**: This group should contain only one node.  This last one will be used for installing
+  DAOS binaries and launch functional tests thanks to generated bash scripts.  Details on how to use
+  these scripts will be detailed in following sections.
 - **daos\_servers**: This group contains the nodes where DAOS servers will be running.
 - **daos\_clients**: This group contains the node where end user application such as *ior* or *fio*
   using DAOS file system will be run.
 
-The inventory should also contains a set of mandatory and optional variables.
+The inventory should also contain a set of mandatory and optional variables.
 - **daos\_runtime\_dir**: mandatory variable defining the shared directory used to install DAOS
   binaries. This directory should be accessible with the same path from all the nodes of the
   sub-cluster.
@@ -75,7 +75,7 @@ The inventory should also contains a set of mandatory and optional variables.
 - **daos\_avocado\_version**: optional variable (default value: "2.4.3") only used by the node of
   the *daos\_dev* group defining the version of *avocado* to install.
 - **daos\_avocado\_framework\_version**: optional variable (default value: "82.1") only used by the
-  node od the  *daos\_dev* group defining the version of *avocado\_framework* to install.
+  node of the *daos\_dev* group defining the version of *avocado\_framework* to install.
 
 Different file format (e.g. YAML, INI, etc.) and file tree structure are supported to define an
 ansible inventory.  The following simple ansible inventory describe for example in one YAML file
@@ -144,7 +144,7 @@ When the inventory is defined, then the
 ansible-playbook -i my-inventory.yml ftest.yml
 ```
 
-If the play succeed, the different nodes of the platform should be well configured and the two bash
+If the play succeeds, the different nodes of the platform should be well configured and the two bash
 scripts `daos-launch.sh` and `daos-make.sh` should be available in the DAOS runtime directory
 defined in the inventory. Usage of these two scripts will be detailed in the following sections.
 
@@ -155,14 +155,14 @@ defined in the inventory. Usage of these two scripts will be detailed in the fol
 ## Installing DAOS Binaries
 
 Building and installing binaries could be done thanks to the generated bash script `daos-make.sh`.
-This last script support several options and the two sub-commands `install` and `update`.
+This last script supports several options and the two sub-commands `install` and `update`.
 
 More details on the supported options could be found with running the command with the `--help`
 option.
 
 The `install` sub-command should be used to install/reinstall from scratch all the DAOS binaries and
 their dependencies such as the *spdk* or the *mercury* libraries. For example, the *foo* user could
-used the following command line to install or reinstall the DAOS binaries and its dependencides into
+use the following command line to install or reinstall the DAOS binaries and its dependencides into
 the `/home/foo/daos/install` directory.
 
 ```bash
@@ -170,8 +170,8 @@ the `/home/foo/daos/install` directory.
 ```
 
 When the previous *install* step has been done and the DAOS source code tests have been updated, the
-DAOS binaries could be build and reinstalled thanks to the `update` sub-command.  This last one will
-should be far more quicker than a full reinstall.
+DAOS binaries could be build and reinstalled thanks to the `update` sub-command.  This last one
+should be far quicker than a full reinstall.
 
 ```bash
 /home/foo/daos/daos-make.sh -v -j 32 update
@@ -184,7 +184,7 @@ should be far more quicker than a full reinstall.
 
 Launching the DAOS functional tests could be done thanks to the generated bash script
 `daos-launch.sh`. This last script supports several options and it is also possible to give some
-options to the original `launch.py` python script of the DAOS functional test plaftrom.
+options to the original `launch.py` python script of the DAOS functional test platform.
 
 More details on the supported options and the way to passing options to `launch.py` could be found
 with running the command with the `--help` option.

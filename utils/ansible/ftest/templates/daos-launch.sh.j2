@@ -101,6 +101,8 @@ function usage
 		Launch DAOS avocado functional tests
 
 		Options:
+		   -s, --start-cleanup      cleanup platform before starting tests
+		   -e, --end-cleanup        cleanup platform after running the tests
 		   -h, --help               show this help message and exit
 		   -V, --version            show version number
 		   -q, --quiet              quiet mode
@@ -119,6 +121,57 @@ function run
 	fi
 }
 
+function cleanup
+{
+
+{% if "daos_clients" in groups and groups["daos_clients"] | length > 0 %}
+	info "Clean up of clients $CLIENTS_LIST"
+	$CLUSH_EXE -l root -w $CLIENTS_LIST sudo systemctl stop daos_agent
+	$CLUSH_EXE -l root -w $CLIENTS_LIST rm -rf /var/run/daos_agent
+	$CLUSH_EXE -l root -w $CLIENTS_LIST mkdir -p /var/run/daos_agent
+{% endif %}
+
+	info "Clean up of servers $SERVERS_LIST"
+	$CLUSH_EXE -l root -w $SERVERS_LIST sudo systemctl stop daos_server
+	$CLUSH_EXE -l root -w $SERVERS_LIST rm -rf /var/run/daos_server
+	$CLUSH_EXE -l root -w $SERVERS_LIST mkdir -p /var/run/daos_server
+
+	info "Stopping all DAOS processes"
+	{% if "daos_clients" in groups and groups["daos_clients"] | length > 0 %}
+	CLUSH_NODESET="-w $SERVERS_LIST -w $CLIENTS_LIST"
+	{% else %}
+	CLUSH_NODESET="-w $SERVERS_LIST"
+	{% endif %}
+	$CLUSH_EXE -l root $CLUSH_NODESET 'bash -c "killall -q -9 avocado orterun mpirun orted daos_server daos_io_server daos_agent || true"'
+
+	info "Cleanning mount points of servers"
+	for host in {{ groups["daos_servers"] | join(' ') }}
+	do
+		for index in {0..3}
+		do
+			mountpoint="/mnt/daos$index"
+			if ssh root@$host mountpoint -q "$mountpoint" ; then
+				info "Cleanning mount points $mountpoint of host $host"
+				ssh root@$host rm -fr /mnt/daos0/*
+				ssh root@$host umount /mnt/daos0
+			fi
+		done
+
+		for index in {0..1}
+		do
+			bdev="/dev/pmem$index"
+			if ssh root@$host test -b "$bdev" ; then
+				info "Cleanning persistent memory $bdev of host $host"
+				ssh root@$host wipefs -a "$bdev"
+			fi
+		done
+	done
+
+	info "Cleanning huge pages"
+	$CLUSH_EXE -l root -w $SERVERS_LIST ipcrm --all=shm
+	$CLUSH_EXE -l root -w $SERVERS_LIST /bin/rm -f "/dev/hugepages/spdk_*"
+}
+
 {% raw %}
 opts=()
 args=()
@@ -133,11 +186,13 @@ done
 args=("${args[@]:1}")
 {% endraw %}
 
-OPTIONS=$(getopt -o "hVvDq" --long "help,version,verbose,debug,quiet" -- "${opts[@]}") || exit 1
+OPTIONS=$(getopt -o "sehVvDq" --long "start-cleanup,end-cleanup,help,version,verbose,debug,quiet" -- "${opts[@]}") || exit 1
 eval set -- "$OPTIONS"
 while true
 do
 	case "$1" in
+		-s|--start-cleanup) START_CLEANUP=true ; shift 1;;
+		-e|--end-cleanup) END_CLEANUP=true ; shift 1;;
 		-h|--help) usage ; exit 0;;
 		-V|--version) echo "daos-launch.sh version=$VERSION" ; exit 0 ;;
 		-v|--verbose) TRACE_LEVEL=$TRACE_LEVEL_VERBOSE ; shift 1 ;;
@@ -150,25 +205,9 @@ done
 
 check_cmds $PYTHON_EXE $CLUSH_EXE $MODULE_EXE
 
-{% if "daos_clients" in groups and groups["daos_clients"] | length > 0 %}
-info "Clean up of clients $CLIENTS_LIST"
-$CLUSH_EXE -l root -w $CLIENTS_LIST sudo systemctl stop daos_agent
-$CLUSH_EXE -l root -w $CLIENTS_LIST rm -rf /var/run/daos_agent
-$CLUSH_EXE -l root -w $CLIENTS_LIST mkdir -p /var/run/daos_agent
-{% endif %}
-
-info "Clean up of servers $SERVERS_LIST"
-$CLUSH_EXE -l root -w $SERVERS_LIST sudo systemctl stop daos_server
-$CLUSH_EXE -l root -w $SERVERS_LIST rm -rf /var/run/daos_server
-$CLUSH_EXE -l root -w $SERVERS_LIST mkdir -p /var/run/daos_server
-
-info "Stopping all DAOS processes"
-{% if "daos_clients" in groups and groups["daos_clients"] | length > 0 %}
-CLUSH_NODESET="-w $SERVERS_LIST -w $CLIENTS_LIST"
-{% else %}
-CLUSH_NODESET="-w $SERVERS_LIST"
-{% endif %}
-$CLUSH_EXE -l root $CLUSH_NODESET 'bash -c "killall -q -9 avocado orterun mpirun orted daos_server daos_io_server daos_agent || true"'
+if [[ -n $START_CLEANUP ]] ; then
+	cleanup
+fi
 
 info "Setting simulation environment"
 export PYTHONPATH="$DAOS_INSTALL_DIR/lib64/python3.6/site-packages:$DAOS_INSTALL_DIR/lib/daos/TESTING/ftest/util"
@@ -190,3 +229,7 @@ env OFI_INTERFACE=$OFI_INTERFACE $PYTHON_EXE launch.py $common_opts "${args[@]}"
 {% else %}
 $PYTHON_EXE launch.py $common_opts "${args[@]}"
 {% endif %}
+
+if [[ -n $END_CLEANUP ]] ; then
+	cleanup
+fi
