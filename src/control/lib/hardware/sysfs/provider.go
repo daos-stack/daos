@@ -257,11 +257,27 @@ func (s *Provider) GetNetDevState(iface string) (hardware.NetDevState, error) {
 		return hardware.NetDevStateUnknown, errors.Wrapf(err, "can't determine device class for %q", iface)
 	}
 
-	if devClass == hardware.Infiniband {
+	switch devClass {
+	case hardware.Infiniband:
 		return s.getInfinibandDevState(iface)
+	case hardware.Loopback:
+		return s.getLoopbackDevState(iface)
+	default:
+		return s.getNetOperState(iface)
+	}
+}
+
+func (s *Provider) getLoopbackDevState(iface string) (hardware.NetDevState, error) {
+	state, err := s.getNetOperState(iface)
+	if err != nil {
+		return hardware.NetDevStateUnknown, err
 	}
 
-	return s.getNetOperState(iface)
+	// Loopback devices with state unknown are up
+	if state == hardware.NetDevStateUnknown {
+		return hardware.NetDevStateReady, nil
+	}
+	return state, nil
 }
 
 func (s *Provider) getNetOperState(iface string) (hardware.NetDevState, error) {

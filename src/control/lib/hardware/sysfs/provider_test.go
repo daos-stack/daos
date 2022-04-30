@@ -591,6 +591,7 @@ func TestSysfs_Provider_GetNetDevState(t *testing.T) {
 
 		setupTestNetDevClasses(t, root, map[string]uint32{
 			"net0": uint32(hardware.Ether),
+			"lo":   uint32(hardware.Loopback),
 		})
 	}
 
@@ -746,6 +747,17 @@ func TestSysfs_Provider_GetNetDevState(t *testing.T) {
 			p:        &Provider{},
 			iface:    "net0",
 			expState: hardware.NetDevStateUnknown,
+		},
+		"loopback unknown is ready": {
+			setup: func(t *testing.T, root string) {
+				setupNet(t, root)
+				setupTestNetDevOperStates(t, root, map[string]string{
+					"lo": "unknown",
+				})
+			},
+			p:        &Provider{},
+			iface:    "lo",
+			expState: hardware.NetDevStateReady,
 		},
 		"no IB dir": {
 			setup: func(t *testing.T, root string) {
