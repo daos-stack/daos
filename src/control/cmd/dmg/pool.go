@@ -75,9 +75,13 @@ var allFlagPattern = regexp.MustCompile(`^\s*(\d{1,3})\s*%\s*$`)
 // Execute is run when PoolCreateCmd subcommand is activated
 func (cmd *PoolCreateCmd) Execute(args []string) error {
 	if cmd.Size != "" && (cmd.ScmSize != "" || cmd.NVMeSize != "") {
+		cmd.log.Debugf("Error: size, scm-size, nvme-size incompatible args\n")
+		os.Stderr.Sync()
 		return errIncompatFlags("size", "scm-size", "nvme-size")
 	}
 	if cmd.Size == "" && cmd.ScmSize == "" {
+		cmd.log.Debugf("Error: size, scm-size incompatible args\n")
+		os.Stderr.Sync()
 		return errors.New("either --size or --scm-size must be supplied")
 	}
 
@@ -88,10 +92,14 @@ func (cmd *PoolCreateCmd) Execute(args []string) error {
 	if cmd.Args.PoolLabel != "" {
 		for _, prop := range cmd.Properties.ToSet {
 			if prop.Name == "label" {
+				cmd.log.Debugf("can't set label property with label argument\n")
+				os.Stderr.Sync()
 				return errors.New("can't set label property with label argument")
 			}
 		}
 		if err := cmd.Properties.UnmarshalFlag(fmt.Sprintf("label:%s", cmd.Args.PoolLabel)); err != nil {
+			cmd.log.Debugf("UnmarshalFlag(label:%s)\n", cmd.Args.PoolLabel)
+			os.Stderr.Sync()
 			return err
 		}
 	}
@@ -107,18 +115,24 @@ func (cmd *PoolCreateCmd) Execute(args []string) error {
 	if cmd.ACLFile != "" {
 		req.ACL, err = control.ReadACLFile(cmd.ACLFile)
 		if err != nil {
-			return err
+			cmd.log.Debugf("reading ACL file %s\n", cmd.ACLFile)
+			os.Stderr.Sync()
+			return errors.Wrap(err, "reading ACL file")
 		}
 	}
 
 	req.Ranks, err = system.ParseRanks(cmd.RankList)
 	if err != nil {
+		cmd.log.Debugf("parsing rank list\n")
+		os.Stderr.Sync()
 		return errors.Wrap(err, "parsing rank list")
 	}
 
 	switch {
 	case allFlagPattern.MatchString(cmd.Size):
 		if cmd.NumRanks > 0 {
+			cmd.log.Debugf("size, num-ranks incompatible args\n")
+			os.Stderr.Sync()
 			return errIncompatFlags("size", "num-ranks")
 		}
 
@@ -135,6 +149,8 @@ func (cmd *PoolCreateCmd) Execute(args []string) error {
 		if storageRatio <= 0 || storageRatio > 100 {
 			msg := "Creating DAOS pool with invalid full size ratio %d%%:"
 			msg += " allowed range 0 < ratio <= 100"
+			cmd.log.Debugf("invalid full size ratio: %d not in 0-100 range\n", storageRatio)
+			os.Stderr.Sync()
 			return errors.Errorf(msg, storageRatio)
 		}
 
@@ -142,6 +158,8 @@ func (cmd *PoolCreateCmd) Execute(args []string) error {
 		// queries of storage request and the pool creation from the management server
 		scmBytes, nvmeBytes, err := control.GetMaxPoolSize(context.Background(), cmd.log, cmd.ctlInvoker)
 		if err != nil {
+			cmd.log.Debugf("GetMaxPoolSize\n")
+			os.Stderr.Sync()
 			return err
 		}
 
@@ -151,6 +169,8 @@ func (cmd *PoolCreateCmd) Execute(args []string) error {
 		}
 
 		if scmBytes == 0 {
+			cmd.log.Debugf("Not enough SCM storage available with ratio %d%%: SCM storage capacity or ratio should be increased\n", storageRatio)
+			os.Stderr.Sync()
 			return errors.Errorf("Not enough SCM storage available with ratio %d%%: "+
 				"SCM storage capacity or ratio should be increased",
 				storageRatio)
@@ -163,16 +183,22 @@ func (cmd *PoolCreateCmd) Execute(args []string) error {
 		// auto-selection of storage values
 		req.TotalBytes, err = humanize.ParseBytes(cmd.Size)
 		if err != nil {
+			cmd.log.Debugf("failed to parse pool size\n")
+			os.Stderr.Sync()
 			return errors.Wrap(err, "failed to parse pool size")
 		}
 
 		if cmd.NumRanks > 0 && cmd.RankList != "" {
+			cmd.log.Debugf("num-ranks, ranks incompatible args\n")
+			os.Stderr.Sync()
 			return errIncompatFlags("num-ranks", "ranks")
 		}
 		req.NumRanks = cmd.NumRanks
 
 		tierRatio, err := parseUint64Array(cmd.TierRatio)
 		if err != nil {
+			cmd.log.Debugf("failed to parse tier ratios\n")
+			os.Stderr.Sync()
 			return errors.Wrap(err, "failed to parse tier ratios")
 		}
 
@@ -187,24 +213,33 @@ func (cmd *PoolCreateCmd) Execute(args []string) error {
 		var totalRatios uint64
 		for tierIdx, ratio := range tierRatio {
 			if ratio > 100 {
+				cmd.log.Debugf("Storage tier ratio must be a value between 0-100\n")
+				os.Stderr.Sync()
 				return errors.New("Storage tier ratio must be a value between 0-100")
 			}
 			totalRatios += ratio
 			req.TierRatio[tierIdx] = float64(ratio) / 100
 		}
 		if totalRatios != 100 {
+			cmd.log.Debugf("Storage tier ratios must add up to 100\n")
+			os.Stderr.Sync()
 			return errors.New("Storage tier ratios must add up to 100")
 		}
 		cmd.log.Infof("Creating DAOS pool with automatic storage allocation: "+
 			"%s total, %s tier ratio", humanize.Bytes(req.TotalBytes), cmd.TierRatio)
+		os.Stderr.Sync()
 	default:
 		// manual selection of storage values
 		if cmd.NumRanks > 0 {
+			cmd.log.Debugf("nranks, scm-size incompatible args\n")
+			os.Stderr.Sync()
 			return errIncompatFlags("nranks", "scm-size")
 		}
 
 		scmBytes, err := humanize.ParseBytes(cmd.ScmSize)
 		if err != nil {
+			cmd.log.Debugf("failed to parse pool SCM size\n")
+			os.Stderr.Sync()
 			return errors.Wrap(err, "failed to parse pool SCM size")
 		}
 
@@ -212,6 +247,8 @@ func (cmd *PoolCreateCmd) Execute(args []string) error {
 		if cmd.NVMeSize != "" {
 			nvmeBytes, err = humanize.ParseBytes(cmd.NVMeSize)
 			if err != nil {
+				cmd.log.Debugf("failed to parse pool NVMe size\n")
+				os.Stderr.Sync()
 				return errors.Wrap(err, "failed to parse pool NVMe size")
 			}
 		}
@@ -223,24 +260,39 @@ func (cmd *PoolCreateCmd) Execute(args []string) error {
 			humanize.Bytes(scmBytes),
 			humanize.Bytes(nvmeBytes),
 			scmRatio*100)
+		os.Stderr.Sync()
 	}
 
 	resp, err := control.PoolCreate(context.Background(), cmd.ctlInvoker, req)
 
 	if cmd.jsonOutputEnabled() {
-		return cmd.outputJSON(resp, err)
+		if err != nil {
+			cmd.log.Debugf("PoolCreate failed, return errorJSON\n")
+			os.Stderr.Sync()
+			return cmd.errorJSON(err)
+		} else {
+			cmd.log.Debugf("PoolCreate succeeded, outputJSON\n")
+			os.Stderr.Sync()
+			return cmd.outputJSON(resp, err)
+		}
 	}
 
 	if err != nil {
+		cmd.log.Debugf("PoolCreate failed\n")
+		os.Stderr.Sync()
 		return err
 	}
 
 	var bld strings.Builder
 	if err := pretty.PrintPoolCreateResponse(resp, &bld); err != nil {
+		cmd.log.Debugf("PrintPoolCreateResponse failed\n")
+		os.Stderr.Sync()
 		return err
 	}
 	cmd.log.Info(bld.String())
 
+	cmd.log.Debugf("PoolCreate succeeded\n")
+	os.Stderr.Sync()
 	return nil
 }
 
@@ -350,9 +402,12 @@ func (cmd *PoolDestroyCmd) Execute(args []string) error {
 	err := control.PoolDestroy(context.Background(), cmd.ctlInvoker, req)
 	if err != nil {
 		msg = errors.WithMessage(err, "failed").Error()
+		cmd.log.Debugf("error: %s\n", msg)
+		os.Stderr.Sync()
 	}
 
 	cmd.log.Infof("Pool-destroy command %s\n", msg)
+	os.Stderr.Sync()
 
 	return err
 }

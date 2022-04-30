@@ -62,6 +62,7 @@ cmd_string(const char *cmd_base, char *args[], int argcount)
 {
 	char		*tmp = NULL;
 	char		*cmd_str = NULL;
+	const char	*cmd_stderr_str = " 2> /tmp/dmg_cmd_stderr.log";
 	size_t		size, old;
 	int		i;
 
@@ -90,6 +91,20 @@ cmd_string(const char *cmd_base, char *args[], int argcount)
 		cmd_str = tmp;
 		old = size;
 	}
+
+	size += strlen(cmd_stderr_str) + 1;
+	if (size >= ARG_MAX) {
+		D_ERROR("arg list too long\n");
+		D_FREE(cmd_str);
+		return NULL;
+	}
+	D_REALLOC(tmp, cmd_str, old, size);
+	if (tmp == NULL) {
+		D_FREE(cmd_str);
+		return NULL;
+	}
+	strncat(tmp, cmd_stderr_str, strlen(cmd_stderr_str));
+	cmd_str = tmp;
 
 	return cmd_str;
 }
@@ -126,6 +141,10 @@ daos_dmg_json_pipe(const char *dmg_cmd, const char *dmg_config_file,
 	D_FREE(cmd_base);
 	if (cmd_str == NULL)
 		return -DER_NOMEM;
+
+	if (unlink("/tmp/dmg_cmd_stderr.log") == -1) {
+		D_WARN("did not unlink /tmp/dmg_cmd_stderr.log");
+	}
 
 	D_DEBUG(DB_TEST, "running %s\n", cmd_str);
 	fp = popen(cmd_str, "r");
@@ -175,14 +194,20 @@ daos_dmg_json_pipe(const char *dmg_cmd, const char *dmg_config_file,
 	if (tok == NULL)
 		D_GOTO(out_jbuf, rc = -DER_NOMEM);
 
+	D_DEBUG(DB_TEST, "Try to process JSON output, jbuf total=%zu, len=%zu\n",
+		total, strlen(jbuf));
 	obj = json_tokener_parse_ex(tok, jbuf, total);
 	if (obj == NULL) {
-		enum json_tokener_error jerr = json_tokener_get_error(tok);
-		int fail_off = json_tokener_get_parse_end(tok);
-		char *aterr = &jbuf[fail_off];
+		enum	json_tokener_error jerr = json_tokener_get_error(tok);
+		int	fail_off = json_tokener_get_parse_end(tok);
+		char   *aterr = &jbuf[fail_off];
 
+		D_ERROR("failed to parse JSON jerr=%d, jbuf total=%zu, len=%zu\n",
+			jerr, total, strlen(jbuf));
+		D_ERROR("failed to parse output\n%s\n", jbuf);
 		D_ERROR("failed to parse JSON at offset %d: %s %c\n",
 			fail_off, json_tokener_error_desc(jerr), aterr[0]);
+
 		D_GOTO(out_tokener, rc = -DER_INVAL);
 	}
 
@@ -193,9 +218,25 @@ out_jbuf:
 out_pclose:
 	pc_rc = pclose(fp);
 	if (pc_rc != 0) {
+		FILE   *logfp = NULL;
+		char   *logline = NULL;
+		size_t	logline_len;
+		size_t	line_num = 1;
+
 		D_ERROR("%s exited with %d\n", cmd_str, pc_rc % 0xFF);
 		if (rc == 0)
 			rc = -DER_MISC;
+
+		logfp = fopen("/tmp/dmg_cmd_stderr.log", "r");
+		if (logfp != NULL) {
+			while (getline(&logline, &logline_len, logfp) != -1) {
+				D_ERROR("log-line-%zu: %s\n", line_num, logline);
+				line_num++;
+			}
+			if (fclose(logfp)) {
+				D_ERROR("could not close logfp\n");
+			}
+		}
 	}
 out:
 	D_FREE(cmd_str);
@@ -400,6 +441,10 @@ dmg_pool_create(const char *dmg_config_file,
 	bool			 has_label = false;
 	int			fd = -1, rc = 0;
 
+	args = cmd_push_arg(args, &argcount, "-d ");
+	if (args == NULL)
+		D_GOTO(out, rc = -DER_NOMEM);
+
 	if (grp != NULL) {
 		args = cmd_push_arg(args, &argcount,
 				    "--sys=%s ", grp);
@@ -519,6 +564,7 @@ dmg_pool_create(const char *dmg_config_file,
 		if (args == NULL)
 			D_GOTO(out, rc = -DER_NOMEM);
 	}
+
 
 	rc = daos_dmg_json_pipe("pool create", dmg_config_file,
 				args, argcount, &dmg_out);

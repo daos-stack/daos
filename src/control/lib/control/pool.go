@@ -255,7 +255,7 @@ func PoolCreate(ctx context.Context, rpcClient UnaryInvoker, req *PoolCreateReq)
 	rpcClient.Debugf("Create DAOS pool request: %+v\n", req)
 	ur, err := rpcClient.InvokeUnaryRPC(ctx, req)
 	if err != nil {
-		return nil, err
+		return nil, errors.Wrap(err, "InvokeUnaryRPC")
 	}
 
 	msResp, err := ur.getMSResponse()
@@ -295,11 +295,13 @@ func PoolDestroy(ctx context.Context, rpcClient UnaryInvoker, req *PoolDestroyRe
 	rpcClient.Debugf("Destroy DAOS pool request: %v\n", req)
 	ur, err := rpcClient.InvokeUnaryRPC(ctx, req)
 	if err != nil {
+		rpcClient.Debugf("error: InvokeUnaryRPC\n")
 		return err
 	}
 
 	msResp, err := ur.getMSResponse()
 	if err != nil {
+		rpcClient.Debugf("error: getMSResponse\n")
 		return errors.Wrap(err, "pool destroy failed")
 	}
 	rpcClient.Debugf("Destroy DAOS pool response: %s\n", msResp)

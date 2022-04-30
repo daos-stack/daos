@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2018-2021 Intel Corporation.
+// (C) Copyright 2018-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -220,6 +220,7 @@ and access control settings, along with system wide operations.`
 		if opts.Debug {
 			log.WithLogLevel(logging.LogLevelDebug)
 			log.Debug("debug output enabled")
+			os.Stderr.Sync()
 		}
 
 		if opts.JSONLogs {
@@ -241,19 +242,24 @@ and access control settings, along with system wide operations.`
 		ctlCfg, err := control.LoadConfig(opts.ConfigPath)
 		if err != nil {
 			if errors.Cause(err) != control.ErrNoConfigFile {
-				return errors.Wrap(err, "failed to load control configuration")
+					log.Debug("failed to load control configuration")
+					os.Stderr.Sync()
+					return errors.Wrap(err, "failed to load control configuration")
 			}
 			// Use the default config if no config file was found.
 			ctlCfg = control.DefaultConfig()
 		}
 		if ctlCfg.Path != "" {
 			log.Debugf("control config loaded from %s", ctlCfg.Path)
+			os.Stderr.Sync()
 		}
 
 		if opts.Insecure {
 			ctlCfg.TransportConfig.AllowInsecure = true
 		}
 		if err := ctlCfg.TransportConfig.PreLoadCertData(); err != nil {
+			log.Debug("Unable to load Certificate Data")
+			os.Stderr.Sync()
 			return errors.Wrap(err, "Unable to load Certificate Data")
 		}
 
@@ -268,6 +274,8 @@ and access control settings, along with system wide operations.`
 				hlCmd.setHostList(hl)
 				ctlCfg.HostList = hl
 			} else {
+				log.Debug("hostlist parameter not accepted with this command")
+				os.Stderr.Sync()
 				return errors.Errorf("this command does not accept a hostlist parameter (set it in %s or %s)",
 					control.UserConfigPath(), control.SystemConfigPath())
 			}
@@ -279,12 +287,16 @@ and access control settings, along with system wide operations.`
 
 		if argsCmd, ok := cmd.(cmdutil.ArgsHandler); ok {
 			if err := argsCmd.CheckArgs(args); err != nil {
-				return err
+				log.Debug("checkArgs")
+				os.Stderr.Sync()
+				return errors.Wrap(err, "checkArgs")
 			}
 		}
 
 		if err := cmd.Execute(args); err != nil {
-			return err
+			log.Debug("checkArgs")
+			os.Stderr.Sync()
+			return errors.Wrap(err, "cmd.Execute")
 		}
 
 		return nil
