@@ -662,11 +662,15 @@ func TestConfig_ToCmdVals(t *testing.T) {
 }
 
 func TestConfig_setAffinity(t *testing.T) {
+	var zero uint = 0
+	var one uint = 1
+
 	for name, tc := range map[string]struct {
-		cfg     *Config
-		fi      *hardware.FabricInterface
-		expErr  error
-		expNuma uint
+		cfg           *Config
+		fi            *hardware.FabricInterface
+		expErr        error
+		expPinnedNuma *uint
+		expNuma       uint
 	}{
 		"numa pinned; matching iface": {
 			cfg: MockConfig().
@@ -679,7 +683,8 @@ func TestConfig_setAffinity(t *testing.T) {
 				NUMANode:     1,
 				Providers:    common.NewStringSet("ofi+verbs"),
 			},
-			expNuma: 1,
+			expNuma:       1,
+			expPinnedNuma: &one,
 		},
 		// NOTE: this currently logs an error but could instead return one
 		//       but there might be legitimate use cases e.g. sharing interface
@@ -694,7 +699,8 @@ func TestConfig_setAffinity(t *testing.T) {
 				NUMANode:     2,
 				Providers:    common.NewStringSet("ofi+verbs"),
 			},
-			expNuma: 1,
+			expNuma:       1,
+			expPinnedNuma: &one,
 		},
 		"numa not pinned": {
 			cfg: MockConfig().
@@ -706,7 +712,8 @@ func TestConfig_setAffinity(t *testing.T) {
 				NUMANode:     1,
 				Providers:    common.NewStringSet("ofi+verbs"),
 			},
-			expNuma: 1,
+			expNuma:       1,
+			expPinnedNuma: &one,
 		},
 		"validation success": {
 			cfg: MockConfig().
@@ -719,7 +726,8 @@ func TestConfig_setAffinity(t *testing.T) {
 				NUMANode:     1,
 				Providers:    common.NewStringSet("test"),
 			},
-			expNuma: 1,
+			expNuma:       1,
+			expPinnedNuma: &one,
 		},
 		"provider not supported": {
 			cfg: MockConfig().
@@ -739,8 +747,10 @@ func TestConfig_setAffinity(t *testing.T) {
 				WithFabricInterface("net1").
 				WithFabricProvider("test").
 				WithPinnedNumaNode(1),
-			expNuma: 1,
+			expNuma:       1,
+			expPinnedNuma: &one,
 		},
+		// Legacy core allocation mode activated, no pinned numa as no multi-engine and NUMA-0.
 		"no fabric info; no pinned numa": {
 			cfg: MockConfig().
 				WithFabricInterface("net1").
@@ -755,8 +765,10 @@ func TestConfig_setAffinity(t *testing.T) {
 				WithServiceThreadCore(25),
 			expErr: errors.New("cannot both be set"),
 		},
+		// Regardless of whether first_core is set, control plane value for NUMA node will follow
+		// fabric interface affinity.
 		// TODO DAOS-10472: Add test cases to verify derived NUMA values are consistent for
-		//                  engine and control plane.
+		//                  engine and control plane when first_core > 0.
 		"numa not pinned; first_core set": {
 			cfg: MockConfig().
 				WithFabricInterface("net1").
@@ -769,6 +781,61 @@ func TestConfig_setAffinity(t *testing.T) {
 				Providers:    common.NewStringSet("test"),
 			},
 			expNuma: 1,
+		},
+		// Legacy core allocation mode activated, no pinned numa as no multi-engine and NUMA-0.
+		"numa not pinned; iface on numa 0; 1 engine": {
+			cfg: MockConfig().
+				WithFabricInterface("net0").
+				WithFabricProvider("test").
+				WithServiceThreadCore(25),
+			fi: &hardware.FabricInterface{
+				Name:         "net0",
+				NetInterface: "net0",
+				NUMANode:     0,
+				Providers:    common.NewStringSet("test"),
+			},
+			expNuma: 0,
+		},
+		"numa not pinned; iface on numa 0; 2 engines": {
+			cfg: MockConfig().
+				WithFabricInterface("net0").
+				WithFabricProvider("test").
+				WithMultiEngine(true),
+			fi: &hardware.FabricInterface{
+				Name:         "net0",
+				NetInterface: "net0",
+				NUMANode:     0,
+				Providers:    common.NewStringSet("test"),
+			},
+			expNuma:       0,
+			expPinnedNuma: &zero,
+		},
+		"numa not pinned; iface on numa 1; 1 engine": {
+			cfg: MockConfig().
+				WithFabricInterface("net1").
+				WithFabricProvider("test"),
+			fi: &hardware.FabricInterface{
+				Name:         "net1",
+				NetInterface: "net1",
+				NUMANode:     1,
+				Providers:    common.NewStringSet("test"),
+			},
+			expNuma:       1,
+			expPinnedNuma: &one,
+		},
+		"numa not pinned; iface on numa 1; 2 engines": {
+			cfg: MockConfig().
+				WithFabricInterface("net1").
+				WithFabricProvider("test").
+				WithMultiEngine(true),
+			fi: &hardware.FabricInterface{
+				Name:         "net1",
+				NetInterface: "net1",
+				NUMANode:     1,
+				Providers:    common.NewStringSet("test"),
+			},
+			expNuma:       1,
+			expPinnedNuma: &one,
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
@@ -786,21 +853,8 @@ func TestConfig_setAffinity(t *testing.T) {
 				return
 			}
 
-			switch {
-			case tc.cfg.ServiceThreadCore == 0:
-				if tc.cfg.PinnedNumaNode == nil {
-					t.Fatal("pinned_numa_node was not set")
-				}
-				common.AssertEqual(t, tc.expNuma, *tc.cfg.PinnedNumaNode,
-					"unexpected pinned numa node id")
-			default:
-				if tc.cfg.PinnedNumaNode != nil {
-					t.Fatal("pinned_numa_node was unexpectedly set")
-				}
-			}
-
-			// Regardless of whether first_core is set, control plane value for
-			// NUMA node will follow fabric interface affinity.
+			common.AssertEqual(t, tc.expPinnedNuma, tc.cfg.PinnedNumaNode,
+				"unexpected pinned numa node id")
 			common.AssertEqual(t, tc.expNuma, tc.cfg.Storage.NumaNodeIndex,
 				"unexpected storage numa node id")
 			common.AssertEqual(t, tc.expNuma, tc.cfg.Fabric.NumaNodeIndex,
