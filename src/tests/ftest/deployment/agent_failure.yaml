@@ -6,9 +6,9 @@ hosts:
         - server-D
         - server-E
         - server-F
-        - server-G
     test_clients:
         - client-A
+        - client-B
 
 timeout: 300
 
@@ -57,13 +57,13 @@ ior:
     client_processes:
         np: 4
     iorflags:
-        flags: "-k -v -w -W"
+        flags: -k -v -w -W
         api: DFS
         # This test doesn't work if the IOR runs too fast. In that case, increase
         # block_size and/or decrease transfer_size. To decrease transfer_size, divide it
         # by 2, 4, 8, etc.
-        transfer_size: '256K'
-        block_size: '20G'
+        transfer_size: 256K
+        block_size: 20G
         sw_deadline: 60
-        dfs_oclass: "SX"
-        dfs_dir_oclass: "SX"
+        dfs_oclass: SX
+        dfs_dir_oclass: SX
