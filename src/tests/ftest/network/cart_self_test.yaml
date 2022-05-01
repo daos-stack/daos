@@ -10,6 +10,8 @@ setup:
   start_servers_once: False
   agent_manager_class: Orterun
   server_manager_class: Orterun
+daos_server:
+  pattern_timeout: 60
 server_config:
   name: daos_server
 self_test:
