@@ -412,8 +412,6 @@ pipeline {
                         }
                     }
                 }
-<<<<<<< HEAD
-=======
                 stage('Build DEB on Ubuntu 20.04') {
                     when {
                         beforeAgent true
@@ -449,7 +447,6 @@ pipeline {
                         }
                     }
                 }
->>>>>>> master
                 stage('Build on CentOS 7') {
                     when {
                         beforeAgent true
