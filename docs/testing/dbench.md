@@ -3,7 +3,7 @@
 Install dbench on all client nodes:
 
 ```sh
-$ sudo yum install dbench
+sudo yum install dbench
 ```
 
 From one of the client node:
@@ -49,6 +49,7 @@ Throughput 104.568 MB/sec  100 clients  10 procs  max_latency=285.639 ms
 ```
 
 List the dfuse mount point:
+
 ```sh
 # 'testfile' comes from ior run
 # 'test-dir.0-0' comes from mdtest run

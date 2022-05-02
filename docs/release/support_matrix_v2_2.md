@@ -1,6 +1,5 @@
 # DAOS Version 2.2 Support
 
-
 ## Community Support and Commercial Support
 
 Community support for DAOS is available through the
@@ -8,7 +7,7 @@ Community support for DAOS is available through the
 [DAOS Slack channel](https://daos-stack.slack.com/).
 The [DAOS community JIRA tickets](https://daosio.atlassian.net/jira)
 can be searched for known issues and possible solutions.
-Community support is provided on a best effort basis
+Community support is provided on a best-effort basis
 without any guaranteed SLAs.
 
 Starting with DAOS Version 2, the Intel DAOS engineering team
@@ -25,16 +24,15 @@ for information on the DAOS partner ecosystem.
 This document describes the supported environments for Intel Level-3 support
 at the DAOS 2.2 release level.
 Information for future releases is indicative only and may change.
-Partner support offerings may impose further constraints, for example if they
+Partner support offerings may impose further constraints, for example, if they
 include DAOS support as part of a more general cluster support offering
-with its own release cycle.
+with its release cycle.
 
 Some members of the DAOS community have reported successful compilation
-and basic testing of DAOS in other environments (for example on ARM64
+and basic testing of DAOS in other environments (for example, on ARM64
 platforms, or on other Linux distributions). Those activities are highly
-appreciated community contributions. However such environments are
+appreciated community contributions. However, such environments are
 not currently supported in a production environment.
-
 
 ## Hardware platforms supported for DAOS Servers
 
@@ -55,9 +53,9 @@ All Optane PMem modules in a DAOS server must have the same capacity.
 
 While not strictly required, DAOS servers typically include NVMe disks
 for bulk storage, which must be supported by [SPDK](https://spdk.io/).
-(NVMe storage can be emulated by files on non-NVMe storage for development
+(Files on non-NVMe storage can emulate nVMe storage for development
 and testing purposes, but this is not supported in a production environment.)
-All NVMe disks managed by a single DAOS engine must have identical capacity,
+All NVMe disks managed by a single DAOS engine must have the identical capacity,
 and it is strongly recommended to use identical drive models.
 It is also strongly recommended that all DAOS engines in a DAOS system
 have identical NVMe storage configurations.
@@ -70,7 +68,7 @@ in the Administration Guide.
 Each DAOS engine needs one high-speed network port for communication in the
 DAOS data plane. DAOS Version 2.2 does not support more than one
 high-speed network port per DAOS engine.
-(It is possible that two DAOS engines on a 2-socket server share a
+(Two DAOS engines on a 2-socket server may share a
 single high-speed network port for development and testing purposes,
 but this is not supported in a production environment.)
 It is strongly recommended that all DAOS engines in a DAOS system use the same
@@ -78,7 +76,6 @@ model of high-speed fabric adapter.
 Heterogeneous adapter population across DAOS engines has **not** been tested,
 and running with such configurations may cause unexpected behavior.
 Please refer to "Fabric Support" below for more details.
-
 
 ## Hardware platforms supported for DAOS Clients
 
@@ -89,7 +86,6 @@ DAOS clients have no specific hardware dependencies.
 Each DAOS client needs a network port on the same high-speed interconnect
 that the DAOS servers are connected to.
 Multiple high-speed network ports per DAOS client are supported.
-
 
 ## Operating Systems supported for DAOS Servers
 
@@ -120,16 +116,16 @@ Links to CentOS Linux 7 and RHEL 7 Release Notes:
 * [CentOS 7.9.2009](https://wiki.centos.org/Manuals/ReleaseNotes/CentOS7.2009)
 * [RHEL 7.9](https://access.redhat.com/documentation/en-us/red_hat_enterprise_linux/7/html/7.9_release_notes/index)
 
-CentOS Linux 7 will reach End Of Life (EOL) on June 30st, 2024.
+CentOS Linux 7 will reach End Of Life (EOL) on June 30th, 2024.
 Refer to the [RHEL Life Cycle](https://access.redhat.com/support/policy/updates/errata/)
 description on the Red Hat support website for information on RHEL support phases.
 
 ### CentOS Linux 8
 
-CentOS Linux 8 has reached End Of Life (EOL) on December 31st, 2021.
+CentOS Linux 8 reached the End Of Life (EOL) on December 31st, 2021.
 Consequently, DAOS Version 2.2 does not support CentOS Linux 8.
 DAOS clusters that have been running CentOS Linux 8 have to be migrated to
-Rocky Linux 8 or RHEL 8 in order to deploy DAOS Version 2.2.
+Rocky Linux 8 or RHEL 8 to deploy DAOS Version 2.2.
 
 ### Red Hat Enterprise Linux 8
 
@@ -140,7 +136,7 @@ DAOS Version 2.2 supports RHEL 8.5 and RHEL 8.6.
     which is expected to be superseded by RHEL 8.6 by the end of May 2022.
     DAOS 2.2 support of RHEL 8.6 may therefore not be available with
     the initial DAOS 2.2.0 release: If validation issues are discovered that
-    require a fix, those fixes may only be provided in a DAOS 2.2.x bugfix release.
+    require a fix; those fixes may only be provided in a DAOS 2.2.x bugfix release.
 
 Links to RHEL 8 Release Notes:
 
@@ -159,7 +155,7 @@ DAOS Version 2.2 supports Rocky Linux 8.5 and 8.6.
     which is expected to be superseded by Rocky Linux 8.6 by the end of May 2022.
     DAOS 2.2 support of Rocky Linux 8.6 may therefore not be available with
     the initial DAOS 2.2.0 release: If validation issues are discovered that
-    require a fix, those fixes may only be provided in a DAOS 2.2.x bugfix release.
+    require a fix; those fixes may only be provided in a DAOS 2.2.x bugfix release.
 
 Links to Rocky Linux Release Notes:
 
@@ -195,7 +191,6 @@ Alma Linux,
 Ubuntu, or
 Oracle Linux.
 
-
 ## Operating Systems supported for DAOS Clients
 
 The DAOS software stack is built and supported on
@@ -207,7 +202,6 @@ are identical to those for DAOS servers. Please refer to the previous section fo
 In future DAOS releases, DAOS client support may be added for additional
 Linux distributions and/or versions.
 
-
 ## Fabric Support
 
 DAOS relies on [libfabric](https://ofiwg.github.io/libfabric/)
@@ -215,23 +209,23 @@ for communication in the DAOS data plane.
 
 DAOS Version 2.2 requires at least libfabric Version 1.14. The RPM distribution
 of DAOS includes libfabric RPM packages with the correct version.
-It is strongly recommended to use exactly the provided libfabric version
+It is strongly recommended to use the provided libfabric version
 on all DAOS servers and all DAOS clients.
 
 Not all libfabric providers are supported.
 DAOS Version 2.2 has been validated mainly with the `verbs` provider
-for InfiniBand fabrics, and the `tcp` provider for other fabrics.
+for InfiniBand fabrics and the `tcp` provider for other fabrics.
 Future DAOS releases may add support for additional libfabric providers.
 
 Note:
-DAOS Version 2.2 has been validated with and supports the `tcp` provider.
+DAOS Version 2.2 has been validated and supports the `tcp` provider.
 Please refer to the
 [Provider Feature Matrix v1.14](https://github.com/ofiwg/libfabric/wiki/Provider-Feature-Matrix-v1.14.x)
 for information on the `tcp` provider in libfabric-1.14.
 
 Note:
 The `psm2` provider for Omni-Path fabrics has known issues
-when used in a DAOS context, and is not supported for production
+when used in a DAOS context and is not supported for production
 environments. Please refer to the
 [Cornelis Networks presentation](https://daosio.atlassian.net/wiki/download/attachments/11015454821/12_Update_on_Omni-Path_Support_for_DAOS_DUG21_19Nov2021.pdf)
 at [DUG21](https://daosio.atlassian.net/wiki/spaces/DC/pages/11015454821/DUG21)
@@ -262,15 +256,14 @@ The only exception to this recommendation is the mix of single-port
 and dual-port adapters of the same generation, where only one of the ports
 of the dual-port adapter(s) is used by DAOS.
 
-
 ## DAOS Scaling
 
 DAOS is a scale-out storage solution that is designed for extreme scale.
-This section summarizes the DAOS scaling targets, some DAOS architectural limits,
+This section summarizes the DAOS scaling targets,, some DAOS architectural limits,
 and the current testing limits of DAOS Version 2.2.
 
 Note: Scaling characteristics depend on the properties of the high-performance
-interconnect, and the libfaric provider that is used. The DAOS scaling targets
+interconnect, and the libfabric provider that is used. The DAOS scaling targets
 below assume a non-blocking, RDMA-capable fabric. Most scaling tests so far
 have been performed on InfiniBand fabrics with the libfabric `verbs`provider.
 

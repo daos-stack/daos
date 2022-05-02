@@ -1,7 +1,7 @@
 # HDF5 Support
 
 The Hierarchical Data Format Version 5 (HDF5) specification and tools are
-maintained by the HDF Group (https://www.hdfgroup.org/).
+maintained by the [HDF Group](https://www.hdfgroup.org/).
 Applications that use HDF5 can utilize DAOS in two ways:
 
 ## HDF5 over MPI-IO
@@ -21,11 +21,10 @@ is available from the HDF Group.
 
 Please refer to the [HDF5 DAOS VOL Connector Users
 Guide](https://github.com/HDFGroup/vol-daos/blob/master/docs/users_guide.pdf)
-for instructions on how to build and use HDF5 with this DAOS VOL connector.
+for instructions on building and using HDF5 with this DAOS VOL connector.
 
 The presentation [Advancing HDF5's Parallel I/O for Exascale with
 DAOS](https://www.hdfgroup.org/wp-content/uploads/2020/10/HDF5_HUG_2020_DAOS.pdf)
 from the HDF Users Group 2020 describes the HDF5 DAOS VOL Connector Project
 and its current status.  The [video](https://youtu.be/P_V7y_G4vM0)
 of that presentation is also available online.
-

@@ -295,7 +295,7 @@ overhead).
 
 Useful admin dmg commands to query NVMe SSD health:
 
-##### Query Per-Server Metadata:
+##### Query Per-Server Metadata
 
 ```bash
 $ dmg storage query list-devices --help
@@ -498,7 +498,6 @@ boro-11
         PLL Lock Loss Count:0
         NAND Bytes Written:244081
         Host Bytes Written:52114
-
 ```
 
 ##### Exclusion and Hotplug
@@ -509,7 +508,6 @@ boro-11
 $ dmg storage set nvme-faulty --help
 Usage:
   dmg [OPTIONS] storage set nvme-faulty [nvme-faulty-OPTIONS]
-
 ...
 
 [nvme-faulty command options]
@@ -575,7 +573,6 @@ The device will now be registered in the engine's persistent NVMe config so that
 $ dmg storage replace nvme --help
 Usage:
   dmg [OPTIONS] storage replace nvme [nvme-OPTIONS]
-
 ...
 
 [nvme command options]
@@ -631,7 +628,6 @@ The feature supports two LED device events: locating a healthy device and an evi
 $ dmg storage identify vmd --help
 Usage:
   dmg [OPTIONS] storage identify vmd [vmd-OPTIONS]
-
 ...
 
 [vmd command options]
@@ -646,7 +642,6 @@ $ dmg -l boro-11 storage identify vmd --uuid=6fccb374-413b-441a-bfbe-860099ac5e8
 
 If a non-VMD device UUID is used with the command, the following error will occur:
 localhost DAOS error (-1010): DER_NOSYS
-
 ```
 
 The status LED on the VMD device is now set to an "IDENTIFY" state, represented

@@ -18,10 +18,10 @@ The pydaos.raw submodule provides access to DAOS API functionality via Ctypes
 and was developed with an emphasis on test use cases. While the majority of unit
 tests are written in C, higher-level tests are written primarily using the
 Python API. Interfaces are provided for accessing DAOS management and DAOS API
-functionality from Python. This higher level interface allows a faster
-turnaround time on implementing test cases for DAOS.
+functionality from Python. This higher-level interface allows a faster
+turnaround time for implementing test cases for DAOS.
 
-#### Layout
+### Layout
 
 The Python API is split into several files based on functionality:
 
@@ -31,6 +31,7 @@ The Python API is split into several files based on functionality:
   [daos_cref.py](https://github.com/daos-stack/daos/tree/release/2.2/src/client/pydaos/raw/daos_cref.py)
 
 High-level abstraction classes exist to manipulate DAOS storage:
+
 ```python
 class DaosPool(object)
 class DaosContainer(object)
@@ -56,6 +57,7 @@ from the specified transaction only), and object query.
 DAOS object.
 
 Several classes exist for management purposes as well:
+
 ```python
 class DaosContext(object)
 class DaosLog
@@ -83,7 +85,7 @@ Ctypes is a built-in Python module for interfacing Python with existing
 libraries written in C/C++. The Python API is built as an object-oriented
 wrapper around the DAOS libraries utilizing ctypes.
 
-Ctypes documentation can be found here <https://docs.python.org/3/library/ctypes.html>
+For additional information, check out the [Ctypes documentation](https://docs.python.org/3/library/ctypes.html)
 
 The following demonstrates a simplified example of creating a Python wrapper
 for the C function `daos_pool_tgt_exclude_out`, with each input parameter to the
@@ -104,11 +106,12 @@ an input parameter, a corresponding Python class can be created. For struct `d_t
 
 ```c
 struct d_tgt_list {
-	d_rank_t	*tl_ranks;
-	int32_t		*tl_tgts;
-	uint32_t	tl_nr;
+ d_rank_t *tl_ranks;
+ int32_t  *tl_tgts;
+ uint32_t tl_nr;
 };
 ```
+
 ```python
 class DTgtList(ctypes.Structure):
     _fields_ = [("tl_ranks", ctypes.POINTER(ctypes.c_uint32)),
@@ -145,9 +148,9 @@ my_lib.daos_pool_tgt_exclude_out(c_uuid, c_grp, c_tgt_list, None)
 
 #### Error Handling
 
-The API was designed using the EAFP (<b>E</b>asier to <b>A</b>sk
-<b>F</b>orgiveness than get <b>P</b>ermission) idiom. A given function will
-raise a custom exception on error state, `DaosApiError`.
+The API was designed using the EAFP (**E**asier to **A**sk
+**F**orgiveness than get **P**ermission) idiom. A given function will
+raise a custom exception on the error state, `DaosApiError`.
 A user of the API is expected to catch and handle this exception as needed:
 
 ```python
@@ -174,6 +177,7 @@ self.d_log.DEBUG("Debugging code")
 self.d_log.WARNING("Be aware, may be issues")
 self.d_log.ERROR("Something went very wrong")
 ```
+
 ## Go Bindings
 
 API bindings for Go[^2] are also available.

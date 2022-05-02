@@ -11,22 +11,16 @@ in an HDF5 file(s) and can be restored to a new DAOS container.
 
 These tools are implemented within the `daos` command.
 
-* `daos filesystem copy` - Copy between POSIX containers and POSIX filesystems
-  using the `libdfs` library.
-* `daos container clone` - Copy any container to a new container using the
-  Object API (`libdaos` library).
+- `daos filesystem copy` - Copy between POSIX containers and POSIX filesystems using the `libdfs` library.
+- `daos container clone` - Copy any container to a new container using the   Object API (`libdaos` library).
 
 These tools have MPI support and are implemented in the external
 [MpiFileutils](https://github.com/hpc/mpifileutils) repository.
 
-* `dcp` - Copy between POSIX containers and POSIX filesystems using the
-  `libdfs` library, or copy between any two DAOS containers using the
-  Object API (`libdaos` library).
-* `dsync` - Similar to `dcp`, but attempts to only copy the difference
-  between the source and destination.
-* `daos-serialize` - Serialize any DAOS container to an HDF5 file(s).
-* `daos-deserialize` - Deserialize any DAOS container that was serialized with
-  `daos-serialize`.
+- `dcp` - Copy between POSIX containers and POSIX filesystems using the `libdfs` library, or copy between any two DAOS containers using the Object API (`libdaos` library).
+- `dsync` - Similar to `dcp`, but attempts to only copy the difference   between the source and destination.
+- `daos-serialize` - Serialize any DAOS container to an HDF5 file(s).
+- `daos-deserialize` - Deserialize any DAOS container that was serialized with `daos-serialize`.
 
 More documentation and uses cases for these tools can be found
 [here](https://github.com/hpc/mpifileutils/blob/release/2.2/DAOS-Support.md).
@@ -49,21 +43,24 @@ There are two mandatory command-line options; these are:
     In DAOS 1.2, only directories are supported as the source or destination.
     Files, directories, and symbolic links are copied from the source directory.
 
-#### Examples
+#### Example #1
 
 Copy a POSIX container to a POSIX filesystem:
+
 ```shell
-$ daos filesystem copy --src daos://<pool_uuid>/<cont_uuid> --dst <posix_path>
+daos filesystem copy --src daos://<pool_uuid>/<cont_uuid> --dst <posix_path>
 ```
 
 Copy from a POSIX filesystem to a sub-directory in a POSIX container:
+
 ```shell
-$ daos filesystem copy --src <posix_path> --dst daos://<pool_uuid>/<cont_uuid>/<sub_dir>
+ daos filesystem copy --src <posix_path> --dst daos://<pool_uuid>/<cont_uuid>/<sub_dir>
 ```
 
 Copy from a POSIX container by specifying a UNS path:
+
 ```shell
-$ daos filesystem copy --src <uns_path> --dst <posix_path>
+ daos filesystem copy --src <uns_path> --dst <posix_path>
 ```
 
 ### `daos container clone`
@@ -77,14 +74,16 @@ There are two mandatory command-line options; these are:
 
 The destination container must not already exist.
 
-#### Examples
+#### Examples #2
 
 Clone a container to a new container with a given UUID:
+
 ```shell
-$ daos container clone --src /<pool_uuid>/<cont_uuid> --dst /<pool_uuid>/<new_cont_uuid>
+daos container clone --src /<pool_uuid>/<cont_uuid> --dst /<pool_uuid>/<new_cont_uuid>
 ```
 
 Clone a container to a new container with an auto-generated UUID:
+
 ```shell
-$ daos container clone --src /<pool_uuid>/<cont_uuid> --dst /<pool_uuid>
+daos container clone --src /<pool_uuid>/<cont_uuid> --dst /<pool_uuid>
 ```

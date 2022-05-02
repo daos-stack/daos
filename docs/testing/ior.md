@@ -24,14 +24,14 @@ section of the Administration Guide contains further information on IOR and mdte
 ## Build ior and mdtest
 
 ```sh
-$ module load mpi/mpich-x86_64 # or any other MPI stack
-$ git clone https://github.com/hpc/ior.git
-$ cd ior
-$ ./bootstrap
-$ mkdir build;cd build
-$ ../configure --with-daos=/usr --prefix=<your_dir>
-$ make
-$ make install
+module load mpi/mpich-x86_64 # or any other MPI stack
+git clone https://github.com/hpc/ior.git
+cd ior
+./bootstrap
+mkdir build;cd build
+../configure --with-daos=/usr --prefix=<your_dir>
+make
+make install
 ```
 
 ## Run ior
