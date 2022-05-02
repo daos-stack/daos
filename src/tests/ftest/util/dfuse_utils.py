@@ -36,6 +36,8 @@ class DfuseCommand(ExecutableCommand):
 
         # Environment variable names to export when running dfuse
         self.update_env_names(["D_LOG_FILE"])
+##DH+
+        self.update_env_names(["COVFILE"])
 
     def set_dfuse_params(self, pool, display=True):
         """Set the dfuse params for the DAOS group, pool, and container uuid.
@@ -269,6 +271,10 @@ class Dfuse(DfuseCommand):
 
         if 'D_LOG_MASK' not in self.env:
             self.env['D_LOG_MASK'] = 'INFO'
+
+#DH+
+        if 'COVFILE' not in self.env:
+            self.env['COVFILE'] = '/tmp/test.cov'
 
         # create dfuse dir if does not exist
         self.create_mount_point()
