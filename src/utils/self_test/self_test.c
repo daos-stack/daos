@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2021 Intel Corporation.
+ * (C) Copyright 2016-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -194,11 +194,10 @@ static int self_test_init(char *dest_name, crt_context_t *crt_ctx,
 	/* waiting to sync with the following parameters
 	 * 0 - tag 0
 	 * 1 - total ctx
-	 * 5 - ping timeout
-	 * 150 - total timeout
+	 * 60 - ping timeout
+	 * 120 - total timeout
 	 */
-	ret = crtu_wait_for_ranks(*crt_ctx, *srv_grp, rank_list,
-				  0, 1, 5, 150);
+	ret = crtu_wait_for_ranks(*crt_ctx, *srv_grp, rank_list, 0, 1, 60, 120);
 	D_ASSERTF(ret == 0, "wait_for_ranks() failed; ret=%d\n", ret);
 
 	max_rank = rank_list->rl_ranks[0];

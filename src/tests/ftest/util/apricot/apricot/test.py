@@ -10,7 +10,7 @@ from ast import literal_eval
 import os
 import json
 import re
-import time
+from time import sleep, time
 
 from avocado import fail_on, skip, TestFail
 from avocado import Test as avocadoTest
@@ -130,6 +130,11 @@ class Test(avocadoTest):
         self.ofi_prefix = None
         self.cancel_file = os.path.join(os.sep, "scratch",
                                         "CI-skip-list-master")
+
+        # Current CI stage name
+        self._stage_name = os.environ.get("STAGE_NAME", None)
+        if self._stage_name is None:
+            self.log.info("Unable to get CI stage name: 'STAGE_NAME' not set")
 
     def setUp(self):
         """Set up each test case."""
@@ -257,6 +262,10 @@ class Test(avocadoTest):
                     value = data.pop(0)
                     if name == "test_method_name":
                         skip_variant &= self.get_test_name() == value
+                    elif name == "stage_name":
+                        if self._stage_name is None:
+                            self.log.info("Skip variant cannot be verified: %s=%s", name, value)
+                        skip_variant &= self._stage_name == value
                     else:
                         skip_variant &= self.params.get(name) == value
                 except IndexError:
@@ -476,6 +485,46 @@ class TestWithoutServers(Test):
                 "Stopping any of the following commands left running on %s: %s",
                 hosts, ",".join(processes))
             stop_processes(hosts, "'({})'".format("|".join(processes)))
+
+    def check_pool_free_space(self, pool, expected_scm=None, expected_nvme=None,
+                              timeout=30):
+        """Check pool free space with expected value.
+        Args:
+            pool (TestPool): The pool for which to check free space.
+            expected_scm (int, optional): pool expected SCM free space.
+            expected_nvme (int, optional): pool expected NVME free space.
+            timeout(int, optional): time to fail test if it could not match
+                expected values.
+        Note:
+            Arguments may also be provided as a string with a number preceded
+            by '<', '<=', '>', or '>=' for other comparisons besides the
+            default '=='.
+        """
+        if not expected_scm and not expected_nvme:
+            self.fail("at least one space parameter must be specified")
+        done = False
+        scm_fs = 0
+        nvme_fs = 0
+        start = time()
+        scm_index, nvme_index = 0, 1
+        while time() - start < timeout:
+            sleep(1)
+            checks = []
+            pool.get_info()
+            scm_fs = pool.info.pi_space.ps_space.s_free[scm_index]
+            nvme_fs = pool.info.pi_space.ps_space.s_free[nvme_index]
+            if expected_scm is not None:
+                checks.append(("scm", scm_fs, expected_scm))
+            if expected_nvme is not None:
+                checks.append(("nvme", nvme_fs, expected_nvme))
+            done = pool._check_info(checks)
+            if done:
+                break
+
+        if not done:
+            self.fail(
+                "Pool Free space did not match: actual={},{} expected={},{}".format(
+                    scm_fs, nvme_fs, expected_scm, expected_nvme))
 
 
 class TestWithServers(TestWithoutServers):
@@ -1235,15 +1284,15 @@ class TestWithServers(TestWithoutServers):
             # dump engines ULT stacks upon test timeout
             self.dump_engines_stacks("Test has timed-out")
 
-    def fail(self, message=None):
+    def fail(self, msg=None):
         """Dump engines ULT stacks upon test failure."""
         self.dump_engines_stacks("Test has failed")
-        super().fail(message)
+        super().fail(msg)
 
-    def error(self, message=None):
+    def error(self, msg=None):
         """Dump engines ULT stacks upon test error."""
         self.dump_engines_stacks("Test has errored")
-        super().error(message)
+        super().error(msg)
 
     def tearDown(self):
         """Tear down after each test case."""
@@ -1666,26 +1715,38 @@ class TestWithServers(TestWithoutServers):
         for _ in range(quantity):
             self.pool.append(self.get_pool(namespace, create, connect, index))
 
-    def get_container(self, pool, namespace=None, create=True):
-        """Get a test container object.
+    @fail_on(AttributeError)
+    def get_container(self, pool, namespace=None, create=True, **kwargs):
+        """Create a TestContainer object.
 
         Args:
             pool (TestPool): pool in which to create the container.
             namespace (str, optional): namespace for TestContainer parameters in
                 the test yaml file. Defaults to None.
-            create (bool, optional): should the container be created. Defaults
-                to True.
+            create (bool, optional): should the container be created. Defaults to True.
+            kwargs (dict): name/value of attributes for which to call update(value, name).
+                See TestContainer for available attributes.
 
         Returns:
-            TestContainer: the created test container object.
+            TestContainer: the created container.
+
+        Raises:
+            AttributeError: if an attribute does not exist or does not have an update() method.
 
         """
+        # Create a container with params from the config
         container = TestContainer(pool, daos_command=self.get_daos_command())
         if namespace is not None:
             container.namespace = namespace
         container.get_params(self)
+
+        # Set passed params
+        for name, value in kwargs.items():
+            getattr(container, name).update(value, name=name)
+
         if create:
             container.create()
+
         return container
 
     def add_container(self, pool, namespace=None, create=True):
@@ -1700,7 +1761,7 @@ class TestWithServers(TestWithoutServers):
             create (bool, optional): should the container be created. Defaults
                 to True.
         """
-        self.container = self.get_container(pool, namespace, create)
+        self.container = self.get_container(pool=pool, namespace=namespace, create=create)
 
     def add_container_qty(self, quantity, pool, namespace=None, create=True):
         """Add multiple containers to the test case.
@@ -1727,7 +1788,8 @@ class TestWithServers(TestWithoutServers):
                 "add_container_qty(): self.container must be a list: {}".format(
                     type(self.container)))
         for _ in range(quantity):
-            self.container.append(self.get_container(pool, namespace, create))
+            self.container.append(
+                self.get_container(pool=pool, namespace=namespace, create=create))
 
     def start_additional_servers(self, additional_servers, index=0,
                                  access_points=None):
