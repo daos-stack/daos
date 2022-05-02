@@ -464,6 +464,7 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %{_bindir}/daos
 %{_libdir}/libdaos_cmd_hdlrs.so
 %{_libdir}/libdfs.so
+%{_libdir}/libds3.so
 %{_libdir}/%{name}/API_VERSION
 %{_libdir}/libduns.so
 %{_libdir}/libdfuse.so

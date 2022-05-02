@@ -5,6 +5,7 @@ usr/bin/daos_agent
 usr/bin/dfuse
 usr/bin/daos
 usr/lib64/libdfs.so
+usr/lib64/libds3.so
 usr/lib64/daos/API_VERSION
 usr/lib64/libduns.so
 usr/lib64/libdfuse.so

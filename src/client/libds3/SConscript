@@ -1,0 +1,22 @@
+"""Build DAOS S3 client library"""
+import daos_build
+
+def scons():
+    """Execute build"""
+    Import('env base_env')
+
+    daos_build.add_build_rpath(base_env)
+    daos_build.add_build_rpath(env)
+
+    denv = env.Clone()
+
+    libraries = ['daos', 'dfs', 'gurt', 'cart', 'uuid']
+    denv.AppendUnique(LIBPATH=["../dfs"])
+    denv.AppendUnique(CPPPATH=["../dfs"])
+
+    ds3_src = ['pool.c', 'user.c', 'bucket.c', 'object.c']
+    ds3 = daos_build.library(denv, 'ds3', ds3_src, LIBS=libraries)
+    denv.Install('$PREFIX/lib64/', ds3)
+
+if __name__ == "SCons.Script":
+    scons()
