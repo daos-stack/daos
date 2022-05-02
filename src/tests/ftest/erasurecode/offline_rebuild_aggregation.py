@@ -13,6 +13,7 @@ class EcodAggregationOffRebuild(ErasureCodeIor):
     """
     Test Class Description: To validate Erasure code object for offline rebuild
                         with different Aggregation mode for Partial strip data.
+
     :avocado: recursive
     """
     def execution(self, agg_trigger=False):
