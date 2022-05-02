@@ -1096,7 +1096,7 @@ def create_mdtest_cmdline(self, job_spec, pool, ppn, nodesperjob):
     return commands
 
 
-def create_racer_cmdline(self, job_spec):
+def create_racer_cmdline(self, job_spec, pool):
     """Create the srun cmdline to run daos_racer.
 
     Args:
@@ -1107,11 +1107,14 @@ def create_racer_cmdline(self, job_spec):
 
     """
     commands = []
+    add_containers(self, pool, "SX")
     racer_namespace = os.path.join(os.sep, "run", job_spec, "*")
     daos_racer = DaosRacerCommand(
-        self.bin, self.hostlist_clients[0], self.dmg_command)
+        self.bin, self.hostlist_clients[0])
     daos_racer.namespace = racer_namespace
     daos_racer.get_params(self)
+    daos_racer.pool_uuid.update(pool.uuid)
+    daos_racer.cont_uuid.update(self.container[-1].uuid)
     racer_log = os.path.join(
         self.soaktest_dir,
         self.test_name + "_" + job_spec + "_`hostname -s`_"

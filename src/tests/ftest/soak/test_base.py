@@ -317,7 +317,7 @@ class SoakTestBase(TestWithServers):
                         commands = create_mdtest_cmdline(
                             self, job, pool, ppn, npj)
                     elif "daos_racer" in job:
-                        commands = create_racer_cmdline(self, job)
+                        commands = create_racer_cmdline(self, job, pool)
                     elif "macsio" in job:
                         commands = create_macsio_cmdline(self, job, pool, ppn, npj)
                     else:
