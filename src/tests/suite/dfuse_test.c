@@ -22,15 +22,11 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 
-#ifndef O_PATH
-#define O_PATH 0
-#endif
-
 static void
 print_usage()
 {
 	printf("DFuse tests\n");
-	printf("dfuse_test -m <path to test>\n");
+	printf("dfuse_test --test-dir <path to test>\n");
 }
 
 char *test_dir;
@@ -140,8 +136,6 @@ do_openat(void **state)
 	rc = close(root);
 	assert_return_code(rc, errno);
 }
-
-typedef int(dfuse_test)(char *);
 
 int
 main(int argc, char **argv)
