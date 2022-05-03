@@ -27,10 +27,10 @@ import tabulate
 import threading
 import functools
 import traceback
-import subprocess  # nosec
+import subprocess #nosec
 import junit_xml
 import tempfile
-import pickle  # nosec
+import pickle #nosec
 import xattr
 from collections import OrderedDict
 import yaml
@@ -519,7 +519,7 @@ class DaosServer():
 
         # Detect the number of cores for dfuse and do something sensible, if there are
         # more than 32 on the node then use 12, otherwise use the whole node.
-        num_cores = len(os.sched_getaffinity(0))  # pylint: disable=no-member
+        num_cores = len(os.sched_getaffinity(0))
         if num_cores > 32:
             self.dfuse_cores = 12
         else:
@@ -950,7 +950,7 @@ class DaosServer():
 
         return self.test_pool.id()
 
-def il_cmd(server, cmd, dfuse, stdout=False, check_read=True, check_write=True, check_fstat=True):
+def il_cmd(dfuse, cmd, check_read=True, check_write=True, check_fstat=True):
     """Run a command under the interception library
 
     Do not run valgrind here, not because it's not useful
@@ -964,34 +964,19 @@ def il_cmd(server, cmd, dfuse, stdout=False, check_read=True, check_write=True, 
     with tempfile.NamedTemporaryFile(prefix=prefix, suffix='.log', delete=False) as log_file:
         log_name = log_file.name
     my_env['D_LOG_FILE'] = log_name
-    my_env['LD_PRELOAD'] = join(server.conf['PREFIX'], 'lib64', 'libioil.so')
-    my_env['DAOS_AGENT_DRPC_DIR'] = server.agent_dir
+    my_env['LD_PRELOAD'] = join(dfuse.conf['PREFIX'], 'lib64', 'libioil.so')
+    # pylint: disable=protected-access
+    my_env['DAOS_AGENT_DRPC_DIR'] = dfuse._daos.agent_dir
     my_env['D_IL_REPORT'] = '2'
-
-    if server.conf.args.dfuse_debug:
-        my_env['D_LOG_MASK'] = server.conf.args.dfuse_debug
-
-    if stdout:
-        stdout = subprocess.PIPE
-        stderr = subprocess.PIPE
-    else:
-        stdout = None
-        stderr = None
-    ret = subprocess.run(cmd, stdout=stdout, stderr=stderr, env=my_env, check=False)
-    if stdout:
-        for line in ret.stdout.decode('utf-8').splitlines():
-            print(line)
-        for line in ret.stderr.decode('utf-8').splitlines():
-            print(line)
-
+    ret = subprocess.run(cmd, env=my_env, check=False)
     print('Logged il to {}'.format(log_name))
     print(ret)
 
-    if dfuse and dfuse.caching:
+    if dfuse.caching:
         check_fstat = False
 
     try:
-        log_test(server.conf, log_name, check_read=check_read, check_write=check_write,
+        log_test(dfuse.conf, log_name, check_read=check_read, check_write=check_write,
                  check_fstat=check_fstat)
         assert ret.returncode == 0
     except NLTestNoFunction as error:
@@ -1075,7 +1060,7 @@ class DFuse():
     instance_num = 0
 
     def __init__(self,
-                 server,
+                 daos,
                  conf,
                  pool=None,
                  container=None,
@@ -1091,8 +1076,8 @@ class DFuse():
         self.uns_path = uns_path
         self.container = container
         self.conf = conf
-        self.cores = server.dfuse_cores
-        self.server = server
+        self.cores = daos.dfuse_cores
+        self._daos = daos
         self.caching = caching
         self.wbcache = wbcache
         self.use_valgrind = True
@@ -1136,7 +1121,7 @@ class DFuse():
         self.log_file = log_file.name
 
         my_env['D_LOG_FILE'] = self.log_file
-        my_env['DAOS_AGENT_DRPC_DIR'] = self.server.agent_dir
+        my_env['DAOS_AGENT_DRPC_DIR'] = self._daos.agent_dir
         if self.conf.args.dtx == 'yes':
             my_env['DFS_USE_DTX'] = '1'
 
@@ -1197,7 +1182,7 @@ class DFuse():
             if total_time > 60:
                 raise Exception('Timeout starting dfuse')
 
-        self.server.add_fuse(self)
+        self._daos.add_fuse(self)
 
     def _close_files(self):
         work_done = False
@@ -1253,7 +1238,7 @@ class DFuse():
         # prefix to the src dir.
         self.valgrind.convert_xml()
         os.rmdir(self.dir)
-        self.server.remove_fuse(self)
+        self._daos.remove_fuse(self)
         return fatal_errors
 
     def wait_for_exit(self):
@@ -1776,6 +1761,11 @@ class posix_tests():
         """Test reading a directory with 25 entries"""
         self.readdir_test(25, test_all=True)
 
+    # Works, but is very slow so needs to be run without debugging.
+    #@needs_dfuse
+    #def test_readdir_300(self):
+    #    self.readdir_test(300, test_all=False)
+
     def readdir_test(self, count, test_all=False):
         """Run a rudimentary readdir test"""
 
@@ -1933,9 +1923,8 @@ class posix_tests():
         if self.dfuse.caching:
             check_fstat = False
 
-        rc = il_cmd(self.server,
+        rc = il_cmd(self.dfuse,
                     ['cat', fname],
-                    self.dfuse,
                     check_write=False,
                     check_fstat=check_fstat)
         assert rc.returncode == 0
@@ -1957,29 +1946,29 @@ class posix_tests():
         with open(f, 'w') as fd:
             fd.write('Hello')
         # Copy it across containers.
-        ret = il_cmd(self.server, ['cp', f, sub_cont_dir], self.dfuse)
+        ret = il_cmd(self.dfuse, ['cp', f, sub_cont_dir])
         assert ret.returncode == 0
 
         # Copy it within the container.
         child_dir = join(self.dfuse.dir, 'new_dir')
         os.mkdir(child_dir)
-        il_cmd(self.server, ['cp', f, child_dir], self.dfuse)
+        il_cmd(self.dfuse, ['cp', f, child_dir])
         assert ret.returncode == 0
 
         # Copy something into a container
-        ret = il_cmd(self.server, ['cp', '/bin/bash', sub_cont_dir], self.dfuse, check_read=False)
+        ret = il_cmd(self.dfuse, ['cp', '/bin/bash', sub_cont_dir], check_read=False)
         assert ret.returncode == 0
         # Read it from within a container
-        ret = il_cmd(self.server, ['md5sum', join(sub_cont_dir, 'bash')], self.dfuse,
+        ret = il_cmd(self.dfuse, ['md5sum', join(sub_cont_dir, 'bash')],
                      check_read=False, check_write=False, check_fstat=False)
         assert ret.returncode == 0
-        ret = il_cmd(self.server, ['dd',
-                                   'if={}'.format(join(sub_cont_dir, 'bash')),
-                                   'of={}'.format(join(sub_cont_dir, 'bash_copy')),
-                                   'iflag=direct',
-                                   'oflag=direct',
-                                   'bs=128k'],
-                     self.dfuse, check_fstat=False)
+        ret = il_cmd(self.dfuse, ['dd',
+                                  'if={}'.format(join(sub_cont_dir, 'bash')),
+                                  'of={}'.format(join(sub_cont_dir, 'bash_copy')),
+                                  'iflag=direct',
+                                  'oflag=direct',
+                                  'bs=128k'],
+                     check_fstat=False)
         assert ret.returncode == 0
 
     @needs_dfuse
@@ -2303,7 +2292,7 @@ class posix_tests():
         if dfuse.stop():
             self.fatal_errors = True
 
-        # Update container ACLs so current user has rw permissions only, the minimum required.
+            # Update container ACLs so current user has rw permissions only, the minimum required.
         rc = run_daos_cmd(self.conf, ['container',
                                       'update-acl',
                                       self.pool.id(),
@@ -2785,7 +2774,6 @@ class posix_tests():
         assert rc.returncode == 0
         destroy_container(self.conf, self.pool.id(), container)
 
-
 class nlt_stdout_wrapper():
     """Class for capturing stdout from threads"""
 
@@ -2997,7 +2985,7 @@ def run_tests(dfuse):
 
     fname = join(path, 'test_file3')
 
-    rc = subprocess.run(['dd', 'if=/dev/zero', 'bs=16k', 'count=64',  # nosec
+    rc = subprocess.run(['dd', 'if=/dev/zero', 'bs=16k', 'count=64', # nosec
                          'of={}'.format(join(path, 'dd_file'))],
                         check=True)
     print(rc)
@@ -3018,7 +3006,7 @@ def run_tests(dfuse):
     assert_file_size(ofd, 21)
     print(os.fstat(ofd.fileno()))
     ofd.close()
-    ret = il_cmd(dfuse.server, ['cat', fname], dfuse, check_write=False)
+    ret = il_cmd(dfuse, ['cat', fname], check_write=False)
     assert ret.returncode == 0
     ofd = os.open(fname, os.O_TRUNC)
     assert_file_size_fd(ofd, 0)
@@ -3242,7 +3230,7 @@ def set_server_fi(server):
     vh.convert_xml()
     log_test(server.conf, log_file.name)
     assert rc.returncode == 0
-    return False  # fatal_errors
+    return False # fatal_errors
 
 def create_and_read_via_il(dfuse, path):
     """Create file in dir, write to and read
@@ -3255,7 +3243,7 @@ def create_and_read_via_il(dfuse, path):
         ofd.flush()
         assert_file_size(ofd, 12)
         print(os.fstat(ofd.fileno()))
-    ret = il_cmd(dfuse.server, ['cat', fname], dfuse, check_write=False)
+    ret = il_cmd(dfuse, ['cat', fname], check_write=False)
     assert ret.returncode == 0
 
 def run_container_query(conf, path):
@@ -3316,8 +3304,8 @@ def run_dfuse(server, conf):
         raise
     dfuse.start(v_hint='no_pool')
     print(os.statvfs(dfuse.dir))
-    subprocess.run(['df', '-h'], check=True)  # nosec
-    subprocess.run(['df', '-i', dfuse.dir], check=True)  # nosec
+    subprocess.run(['df', '-h'], check=True) # nosec
+    subprocess.run(['df', '-i', dfuse.dir], check=True) # nosec
     print('Running dfuse with nothing')
     stat_and_check(dfuse, pre_stat)
     check_no_file(dfuse)
@@ -3327,7 +3315,7 @@ def run_dfuse(server, conf):
     print(pool_stat)
     container = create_cont(server.conf, pool, ctype="POSIX")
     cdir = join(dfuse.dir, pool, container)
-    # create_and_read_via_il(dfuse, cdir)
+    #create_and_read_via_il(dfuse, cdir)
     fatal_errors.add_result(dfuse.stop())
 
     dfuse = DFuse(server, conf, pool=pool, caching=False)
@@ -3386,18 +3374,16 @@ def run_in_fg(server, conf):
     dfuse = DFuse(server, conf, pool=pool.uuid, caching=True, wbcache=False)
     dfuse.start()
 
-    cont_attrs = OrderedDict()
-    cont_attrs['dfuse-data-cache'] = 'off'
-    cont_attrs['dfuse-attr-time'] = '60s'
-    cont_attrs['dfuse-dentry-time'] = '60s'
-    cont_attrs['dfuse-ndentry-time'] = '60s'
-
-    for key, value in cont_attrs.items():
-
-        run_daos_cmd(conf,
-                     ['container', 'set-attr', pool.label, container,
-                      '--attr', key, '--value', value],
-                     show_stdout=True)
+    run_daos_cmd(conf,
+                 ['container', 'set-attr',
+                  pool.label, container,
+                  '--attr', 'dfuse-direct-io-disable', '--value', 'off'],
+                 show_stdout=True)
+    run_daos_cmd(conf,
+                 ['container', 'set-attr',
+                  pool.label, container,
+                  '--attr', 'dfuse-data-cache', '--value', 'off'],
+                 show_stdout=True)
 
     t_dir = join(dfuse.dir, container)
 
@@ -3941,7 +3927,7 @@ class AllocFailTest():
         print('Expected stdout is')
         print(self.expected_stdout)
 
-        num_cores = len(os.sched_getaffinity(0))  # pylint: disable=no-member
+        num_cores = len(os.sched_getaffinity(0))
 
         if num_cores < 20:
             max_child = 1
