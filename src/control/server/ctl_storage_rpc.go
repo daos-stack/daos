@@ -8,6 +8,7 @@ package server
 
 import (
 	"fmt"
+	"math"
 	"os/user"
 	"strconv"
 
@@ -17,6 +18,7 @@ import (
 
 	"github.com/daos-stack/daos/src/control/common/proto"
 	"github.com/daos-stack/daos/src/control/common/proto/convert"
+	"github.com/daos-stack/daos/src/control/common/proto/ctl"
 	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
 	"github.com/daos-stack/daos/src/control/drpc"
 	"github.com/daos-stack/daos/src/control/server/engine"
@@ -165,28 +167,52 @@ func (c *ControlService) scanScm(ctx context.Context, req *ctlpb.ScanScmReq) (*c
 
 // Adjust the NVME available size to its real usable size.
 func (c *ControlService) adjustNvmeSize(resp *ctlpb.ScanNvmeResp) {
-	for _, ctl := range resp.GetCtrlrs() {
-		for _, dev := range ctl.GetSmdDevices() {
+	type deviceSizeStat struct {
+		size    uint64
+		devices []*ctl.NvmeController_SmdDevice
+	}
+
+	devicesToAdjust := make(map[uint32]*deviceSizeStat, 0)
+	for _, ctlr := range resp.GetCtrlrs() {
+		for _, dev := range ctlr.GetSmdDevices() {
 			if dev.GetDevState() != "NORMAL" {
 				c.log.Debugf("Adjusting available size of unusable SMD device %s "+
 					"(ctlr %s) to O Bytes: device state %q",
-					dev.GetUuid(), ctl.GetPciAddr(), dev.GetDevState())
+					dev.GetUuid(), ctlr.GetPciAddr(), dev.GetDevState())
 				dev.AvailBytes = 0
 				continue
 			}
+
 			if dev.GetClusterSize() == 0 || len(dev.GetTgtIds()) == 0 {
 				c.log.Errorf("Skipping device %s (%s) with missing storage info",
-					dev.GetUuid(), ctl.GetPciAddr())
+					dev.GetUuid(), ctlr.GetPciAddr())
 				continue
 			}
 
+			rank := dev.GetRank()
+			if devicesToAdjust[rank] == nil {
+				devicesToAdjust[rank] = &deviceSizeStat{
+					size: math.MaxUint64,
+				}
+			}
 			targetCount := uint64(len(dev.GetTgtIds()))
 			unalignedBytes := dev.GetAvailBytes() % (targetCount * dev.GetClusterSize())
-			c.log.Debugf("Adjusting available size of SMD device %s (ctlr %s): "+
-				"excluding %s (%d Bytes) of unaligned storage",
-				dev.GetUuid(), ctl.GetPciAddr(),
-				humanize.Bytes(unalignedBytes), unalignedBytes)
-			dev.AvailBytes -= unalignedBytes
+			availBytes := dev.AvailBytes - unalignedBytes
+			if availBytes < devicesToAdjust[rank].size {
+				devicesToAdjust[rank].size = availBytes
+			}
+			devicesToAdjust[rank].devices = append(devicesToAdjust[rank].devices, dev)
+		}
+	}
+
+	for rank, item := range devicesToAdjust {
+		for _, dev := range item.devices {
+			unusedBytes := dev.AvailBytes - item.size
+			c.log.Debugf("Adjusting available size of SMD device %s from rank %d: "+
+				"excluding %s (%d Bytes) of unusable storage",
+				dev.GetUuid(), rank,
+				humanize.Bytes(unusedBytes), unusedBytes)
+			dev.AvailBytes = item.size
 		}
 	}
 }
