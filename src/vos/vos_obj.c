@@ -422,7 +422,6 @@ vos_obj_punch(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 	D_DEBUG(DB_IO, "Punch "DF_UOID", epoch "DF_X64"\n",
 		DP_UOID(oid), epr.epr_hi);
 
-	vos_dth_set(dth);
 	cont = vos_hdl2cont(coh);
 
 	if (dtx_is_valid_handle(dth)) {
@@ -533,7 +532,6 @@ reset:
 	D_FREE(daes);
 	D_FREE(dces);
 	vos_ts_set_free(ts_set);
-	vos_dth_set(NULL);
 
 	return rc;
 }
