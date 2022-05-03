@@ -167,25 +167,44 @@ func (srv *server) logDuration(msg string, start time.Time) {
 	srv.log.Debugf("%v: %v\n", msg, time.Since(start))
 }
 
-// createServices builds scaffolding for rpc and event services.
-func (srv *server) createServices(ctx context.Context) error {
-	dbReplicas, err := cfgGetReplicas(srv.cfg, net.ResolveTCPAddr)
+// CreateDatabaseConfig creates a new database configuration.
+func CreateDatabaseConfig(cfg *config.Server) (*raft.DatabaseConfig, error) {
+	dbReplicas, err := cfgGetReplicas(cfg, net.ResolveTCPAddr)
 	if err != nil {
-		return errors.Wrap(err, "retrieve replicas from config")
+		return nil, errors.Wrap(err, "unable to retrieve replicas from config")
+	}
+
+	raftDir := cfgGetRaftDir(cfg)
+	if raftDir == "" {
+		return nil, errors.New("raft directory not available (missing SCM in config?)")
+	}
+
+	return &raft.DatabaseConfig{
+		Replicas:   dbReplicas,
+		RaftDir:    raftDir,
+		SystemName: cfg.SystemName,
+	}, nil
+}
+
+// newManagementDatabase creates a new instance of the raft-backed management database.
+func newManagementDatabase(log logging.Logger, cfg *config.Server) (*raft.Database, error) {
+	dbCfg, err := CreateDatabaseConfig(cfg)
+	if err != nil {
+		return nil, errors.Wrap(err, "unable to create database config")
 	}
 
 	// If this daos_server instance ends up being the MS leader,
 	// this will record the DAOS system membership.
-	sysdb, err := raft.NewDatabase(srv.log, &raft.DatabaseConfig{
-		Replicas:   dbReplicas,
-		RaftDir:    cfgGetRaftDir(srv.cfg),
-		SystemName: srv.cfg.SystemName,
-	})
+	return raft.NewDatabase(log, dbCfg)
+}
+
+// createServices builds scaffolding for rpc and event services.
+func (srv *server) createServices(ctx context.Context) (err error) {
+	srv.sysdb, err = newManagementDatabase(srv.log, srv.cfg)
 	if err != nil {
-		return errors.Wrap(err, "create system database")
+		return
 	}
-	srv.sysdb = sysdb
-	srv.membership = system.NewMembership(srv.log, sysdb)
+	srv.membership = system.NewMembership(srv.log, srv.sysdb)
 
 	// Create rpcClient for inter-server communication.
 	cliCfg := control.DefaultConfig()
@@ -202,7 +221,7 @@ func (srv *server) createServices(ctx context.Context) error {
 
 	srv.ctlSvc = NewControlService(srv.log, srv.harness, srv.cfg, srv.pubSub,
 		hwprov.DefaultFabricScanner(srv.log))
-	srv.mgmtSvc = newMgmtSvc(srv.harness, srv.membership, sysdb, rpcClient, srv.pubSub)
+	srv.mgmtSvc = newMgmtSvc(srv.harness, srv.membership, srv.sysdb, rpcClient, srv.pubSub)
 
 	if err := srv.mgmtSvc.systemProps.UpdateCompPropVal(daos.SystemPropertyDaosSystem, func() string {
 		return srv.cfg.SystemName
@@ -376,7 +395,9 @@ func (srv *server) setupGrpc() error {
 	if err != nil {
 		return err
 	}
-	srv.sysdb.ConfigureTransport(srv.grpcServer, tSec)
+	if err := srv.sysdb.ConfigureTransport(srv.grpcServer, tSec); err != nil {
+		return err
+	}
 
 	return nil
 }

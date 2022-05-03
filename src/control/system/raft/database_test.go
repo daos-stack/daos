@@ -241,7 +241,7 @@ func TestSystem_Database_SnapshotRestore(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	db0, cleanup0 := TestDatabase(t, log, nil)
+	db0, cleanup0 := TestDatabase(t, log)
 	defer cleanup0()
 
 	nextAddr := ctrlAddrGen(ctx, net.IPv4(127, 0, 0, 1), 4)
@@ -311,7 +311,7 @@ func TestSystem_Database_SnapshotRestore(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	db1, cleanup1 := TestDatabase(t, log, nil)
+	db1, cleanup1 := TestDatabase(t, log)
 	defer cleanup1()
 
 	if err := (*fsm)(db1).Restore(sink.Reader()); err != nil {
@@ -332,7 +332,7 @@ func TestSystem_Database_SnapshotRestoreBadVersion(t *testing.T) {
 	log, buf := logging.NewTestLogger(t.Name())
 	defer test.ShowBufferOnFailure(t, buf)
 
-	db0, cleanup0 := TestDatabase(t, log, nil)
+	db0, cleanup0 := TestDatabase(t, log)
 	defer cleanup0()
 	db0.data.SchemaVersion = 1024 // arbitrarily large, should never get here
 
@@ -345,7 +345,7 @@ func TestSystem_Database_SnapshotRestoreBadVersion(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	db1, cleanup1 := TestDatabase(t, log, nil)
+	db1, cleanup1 := TestDatabase(t, log)
 	defer cleanup1()
 
 	wantErr := errors.Errorf("%d != %d", db0.data.SchemaVersion, CurrentSchemaVersion)

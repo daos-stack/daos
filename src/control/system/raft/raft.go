@@ -9,10 +9,12 @@ package raft
 import (
 	"encoding/json"
 	"io"
-	"path/filepath"
+	"net"
+	"os"
 	"time"
 
 	transport "github.com/Jille/raft-grpc-transport"
+	"github.com/hashicorp/go-hclog"
 	"github.com/hashicorp/raft"
 	boltdb "github.com/hashicorp/raft-boltdb/v2"
 	"github.com/pkg/errors"
@@ -132,34 +134,114 @@ func (db *Database) ShutdownRaft() error {
 	})
 }
 
-// configureRaft sets up the raft service in preparation for starting it.
-func (db *Database) configureRaft() error {
-	if db.raftTransport == nil {
-		return errors.New("no raft transport configured")
+const (
+	// numRetainSnapshots is the number of snapshots to retain in the
+	// snapshot store.
+	numRetainSnapshots = 2
+)
+
+func getSnapshotStore(log hclog.Logger, dbCfg *DatabaseConfig) (raft.SnapshotStore, error) {
+	// Check to see if the database directory exists before we configure the store.
+	var dbDirExists bool
+	if _, err := os.Stat(dbCfg.RaftDir); err == nil {
+		dbDirExists = true
 	}
 
-	rc := raft.DefaultConfig()
-	rc.Logger = newHcLogger(db.log)
+	store, err := raft.NewFileSnapshotStoreWithLogger(dbCfg.RaftDir, numRetainSnapshots, log)
+	if err != nil {
+		return nil, err
+	}
+
+	// If the directory did not exist before we configured the store, then
+	// we want to remove it in order to avoid interfering with other
+	// initialization logic. This is a kludge, but it's the best we
+	// can do given the current raft implementation.
+	if !dbDirExists {
+		if err := os.RemoveAll(dbCfg.RaftDir); err != nil {
+			return nil, errors.Wrapf(err, "failed to clean up %s", dbCfg.RaftDir)
+		}
+	}
+
+	return store, nil
+}
+
+// ConfigureComponents configures the raft components of the database.
+func ConfigureComponents(log logging.Logger, dbCfg *DatabaseConfig) (*RaftComponents, error) {
+	if _, err := os.Stat(dbCfg.RaftDir); err != nil {
+		return nil, errors.Wrapf(err, "raft directory %s is not accessible", dbCfg.RaftDir)
+	}
+
+	repAddr, err := dbCfg.LocalReplicaAddr()
+	if err != nil {
+		return nil, err
+	}
+
+	// Start with the default raft config and modify as necessary.
+	raftCfg := raft.DefaultConfig()
+	raftCfg.Logger = newHcLogger(log)
 	// The default threshold is 8192, ehich is way too high for
 	// this use case. Our MS DB shouldn't be particularly high
 	// volume, so set this value to strike a balance between
 	// creating snapshots too frequently and not often enough.
-	rc.SnapshotThreshold = 32
-	rc.HeartbeatTimeout = 2000 * time.Millisecond
-	rc.ElectionTimeout = 2000 * time.Millisecond
-	rc.LeaderLeaseTimeout = 1000 * time.Millisecond
-	rc.LocalID = raft.ServerID(db.serverAddress())
-	rc.NotifyCh = db.raftLeaderNotifyCh
+	raftCfg.SnapshotThreshold = 32
+	raftCfg.HeartbeatTimeout = 2000 * time.Millisecond
+	raftCfg.ElectionTimeout = 2000 * time.Millisecond
+	raftCfg.LeaderLeaseTimeout = 1000 * time.Millisecond
+	// Set the local ID to the address of the replica.
+	raftCfg.LocalID = raft.ServerID(repAddr.String())
 
-	snaps, err := raft.NewFileSnapshotStoreWithLogger(db.cfg.RaftDir, 2, rc.Logger)
+	snaps, err := getSnapshotStore(raftCfg.Logger, dbCfg)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to init snapshot store")
+	}
+
+	boltDB, err := boltdb.NewBoltStore(dbCfg.DBFilePath())
+	if err != nil {
+		return nil, errors.Wrapf(err, "failed to init boltdb at %s", dbCfg.DBFilePath())
+	}
+
+	return &RaftComponents{
+		Logger:        log,
+		Config:        raftCfg,
+		LogStore:      boltDB,
+		StableStore:   boltDB,
+		SnapshotStore: snaps,
+	}, nil
+}
+
+// ConfigureTransport configures the raft transport for the database.
+func (db *Database) ConfigureTransport(srv *grpc.Server, dialOpts ...grpc.DialOption) error {
+	repAddr, err := db.cfg.LocalReplicaAddr()
 	if err != nil {
 		return err
 	}
 
-	sysDBPath := filepath.Join(db.cfg.RaftDir, sysDBFile)
-	boltDB, err := boltdb.NewBoltStore(sysDBPath)
-	if err != nil {
+	tm := transport.New(raft.ServerAddress(repAddr.String()), dialOpts)
+	tm.Register(srv)
+	db.raftTransport = &loggingTransport{
+		Transport: tm.Transport(),
+		log:       db.log,
+	}
+
+	return nil
+}
+
+// initRaft sets up the backing raft service for use. If the service has
+// already been bootstrapped, then it will start immediately. Otherwise,
+// it will need to be bootstrapped before it can be used.
+func (db *Database) initRaft() error {
+	if err := createRaftDir(db.cfg.RaftDir); err != nil {
 		return err
+	}
+
+	cmps, err := ConfigureComponents(db.log, db.cfg)
+	if err != nil {
+		return errors.Wrap(err, "failed to configure raft components")
+	}
+
+	// NB: ConfigureTransport() should have been called by now.
+	if db.raftTransport == nil {
+		return errors.New("no raft transport configured")
 	}
 
 	// Rank 0 is reserved for the first instance on the bootstrap server.
@@ -169,40 +251,57 @@ func (db *Database) configureRaft() error {
 	// to peers as they're added. Instead, we just set everyone to start
 	// at rank 1 and increment from there as memberUpdate logs are applied.
 	db.data.NextRank = 1
-	db.OnRaftShutdown(func() error {
-		return boltDB.Close()
-	})
 
-	r, err := raft.NewRaft(rc, (*fsm)(db), boltDB, boltDB, snaps, db.raftTransport)
+	// Set the channel to be used for monitoring leadership changes.
+	cmps.Config.NotifyCh = db.raftLeaderNotifyCh
+	// Set a closure to properly close the boltDB store when the raft
+	// instance is shut down.
+	if boltDB, ok := cmps.StableStore.(*boltdb.BoltStore); ok {
+		db.OnRaftShutdown(func() error {
+			return boltDB.Close()
+		})
+	}
+
+	r, err := raft.NewRaft(
+		cmps.Config,        // *raft.Config
+		(*fsm)(db),         // raft.FSM
+		cmps.LogStore,      // raft.LogStore
+		cmps.StableStore,   // raft.StableStore
+		cmps.SnapshotStore, // raft.SnapshotStore
+		db.raftTransport,   // raft.Transport
+	)
 	if err != nil {
 		return err
 	}
 	db.raft.setSvc(r)
+	db.initialized.SetTrue()
 
 	return nil
 }
 
-// startRaft is responsible for configuring and starting the raft service
-// on this node. If the database is new and the node is designated as the
-// bootstrap instance, then the service will be started in a special bootstrap
-// mode that does not require a quorum.
-func (db *Database) startRaft(newDB bool) error {
+func genBootstrapCfg(localReplicaAddr *net.TCPAddr) raft.Configuration {
+	return raft.Configuration{
+		Servers: []raft.Server{
+			{
+				Suffrage: raft.Voter,
+				ID:       raft.ServerID(localReplicaAddr.String()),
+				Address:  raft.ServerAddress(localReplicaAddr.String()),
+			},
+		},
+	}
+}
+
+// bootstrapRaft handles the initial bootstrap of the backing raft instance.
+// It is a no-op if the replica is already bootstrapped or is not designated
+// as the bootstrap server.
+func (db *Database) bootstrapRaft(newDB bool) error {
 	db.log.Debugf("isBootstrap: %t, newDB: %t", db.IsBootstrap(), newDB)
 
 	if db.IsBootstrap() && newDB {
 		db.log.Debugf("bootstrapping MS on %s", db.replicaAddr)
-		bsc := raft.Configuration{
-			Servers: []raft.Server{
-				{
-					Suffrage: raft.Voter,
-					ID:       raft.ServerID(db.getReplica().String()),
-					Address:  raft.ServerAddress(db.getReplica().String()),
-				},
-			},
-		}
 		if err := db.raft.withReadLock(func(svc raftService) error {
-			if f := svc.BootstrapCluster(bsc); f.Error() != nil {
-				return errors.Wrapf(f.Error(), "failed to bootstrap raft instance on %s", db.getReplica())
+			if f := svc.BootstrapCluster(genBootstrapCfg(db.replicaAddr)); f.Error() != nil {
+				return errors.Wrapf(f.Error(), "failed to bootstrap raft instance on %s", db.replicaAddr)
 			}
 			return nil
 		}); err != nil {
@@ -248,21 +347,10 @@ func (dt *loggingTransport) TimeoutNow(id raft.ServerID, target raft.ServerAddre
 	return dt.Transport.TimeoutNow(id, target, args, resp)
 }
 
-// ConfigureTransport sets up a grpc implementation of a raft transport
-// and registers it with the supplied grpc Server.
-func (db *Database) ConfigureTransport(srv *grpc.Server, dialOpts ...grpc.DialOption) {
-	tm := transport.New(db.serverAddress(), dialOpts)
-	tm.Register(srv)
-	db.raftTransport = &loggingTransport{
-		Transport: tm.Transport(),
-		log:       db.log,
-	}
-}
-
 // serverAddress returns a raft.ServerAddress representation of
 // the db's replica address.
 func (db *Database) serverAddress() raft.ServerAddress {
-	return raft.ServerAddress(db.getReplica().String())
+	return raft.ServerAddress(db.replicaAddr.String())
 }
 
 // createRaftUpdate serializes the inner payload and then wraps
