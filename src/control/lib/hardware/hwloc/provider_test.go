@@ -357,6 +357,13 @@ func runTest_GetNUMANodeForPID_Parallel(t *testing.T, parent context.Context, lo
 	doneCh := make(chan error)
 	total := 500
 
+	// If we aren't testing with a cached context, reduce the number
+	// of goroutines in order to avoid timing out on more complex
+	// topologies.
+	if _, err := topologyFromContext(ctx); err != nil {
+		total = 128
+	}
+
 	for i := 0; i < total; i++ {
 		go func() {
 			_, err := p.GetNUMANodeIDForPID(ctx, int32(os.Getpid()))

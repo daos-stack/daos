@@ -39,9 +39,9 @@ server_config:
       scm_list: ["/dev/pmem1"]
       scm_mount: /mnt/daos1
 job_manager:
-    class_name: Orterun
-    mpi_type: openmpi
-    manager_timeout: 630
+  class_name: Orterun
+  mpi_type: openmpi
+  manager_timeout: 630
 daos_racer:
   runtime: 600
   clush_timeout: 900

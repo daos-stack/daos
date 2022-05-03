@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"net"
 	"sort"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -19,6 +20,7 @@ import (
 	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/pkg/errors"
 	"google.golang.org/grpc/peer"
+	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/testing/protocmp"
 
 	"github.com/daos-stack/daos/src/control/build"
@@ -31,6 +33,7 @@ import (
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/server/storage"
 	"github.com/daos-stack/daos/src/control/system"
+	"github.com/daos-stack/daos/src/control/system/raft"
 )
 
 func act2state(a string) string {
@@ -186,7 +189,7 @@ func TestServer_MgmtSvc_GetAttachInfo(t *testing.T) {
 			srv.setDrpcClient(newMockDrpcClient(nil))
 			harness.started.SetTrue()
 
-			db := system.MockDatabaseWithAddr(t, log, msReplica.Addr)
+			db := raft.MockDatabaseWithAddr(t, log, msReplica.Addr)
 			m := system.NewMembership(log, db)
 			tc.svc = newMgmtSvc(harness, m, db, nil, nil)
 			if _, err := tc.svc.membership.Add(msReplica); err != nil {
@@ -248,7 +251,7 @@ func TestServer_MgmtSvc_LeaderQuery(t *testing.T) {
 			defer common.ShowBufferOnFailure(t, buf)
 
 			svc := newTestMgmtSvc(t, log)
-			db, cleanup := system.TestDatabase(t, log)
+			db, cleanup := raft.TestDatabase(t, log)
 			defer cleanup()
 			svc.sysdb = db
 
@@ -439,7 +442,19 @@ func mockMember(t *testing.T, r, a int32, s string) *system.Member {
 		t.Fatalf("testcase specifies unknown member state %s", s)
 	}
 
-	return system.NewMember(system.Rank(r), common.MockUUID(r), "", common.MockHostAddr(a), state)
+	addr := common.MockHostAddr(a)
+	fd, err := system.NewFaultDomain(addr.String(), strconv.Itoa(int(r)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	uri := fmt.Sprintf("tcp://%s", addr)
+
+	m := system.NewMember(system.Rank(r), common.MockUUID(r), uri, addr, state).WithFaultDomain(fd)
+	m.FabricContexts = uint32(r)
+	m.FaultDomain = fd
+	m.Incarnation = uint64(r)
+
+	return m
 }
 
 func checkMembers(t *testing.T, exp system.Members, ms *system.Membership) {
@@ -454,7 +469,7 @@ func checkMembers(t *testing.T, exp system.Members, ms *system.Membership) {
 		}
 
 		// state is not exported so compare using access method
-		if diff := cmp.Diff(em.State(), am.State()); diff != "" {
+		if diff := cmp.Diff(em.State, am.State); diff != "" {
 			t.Fatalf("unexpected member state for rank %d (-want, +got)\n%s\n", em.Rank, diff)
 		}
 
@@ -465,6 +480,7 @@ func checkMembers(t *testing.T, exp system.Members, ms *system.Membership) {
 		if diff := cmp.Diff(em, am, cmpOpts...); diff != "" {
 			t.Fatalf("unexpected members (-want, +got)\n%s\n", diff)
 		}
+
 	}
 }
 
@@ -488,7 +504,8 @@ func mgmtSystemTestSetup(t *testing.T, l logging.Logger, mbs system.Members, r .
 	svc := newTestMgmtSvcMulti(t, l, maxEngines, false)
 	svc.harness.started.SetTrue()
 	svc.harness.instances[0].(*EngineInstance)._superblock.Rank = system.NewRankPtr(0)
-	svc.membership, _ = system.MockMembership(t, l, mockResolver)
+	svc.sysdb = raft.MockDatabase(t, l)
+	svc.membership = system.MockMembership(t, l, svc.sysdb, mockResolver)
 	for _, m := range mbs {
 		if _, err := svc.membership.Add(m); err != nil {
 			t.Fatal(err)
@@ -1599,6 +1616,205 @@ func TestServer_MgmtSvc_SystemErase(t *testing.T) {
 			}
 			common.AssertEqual(t, tc.expResults, gotResp.Results, name)
 			checkMembers(t, tc.expMembers, svc.membership)
+		})
+	}
+}
+
+func TestServer_MgmtSvc_Join(t *testing.T) {
+	curMember := mockMember(t, 0, 0, "excluded")
+	newMember := mockMember(t, 1, 1, "joined")
+
+	for name, tc := range map[string]struct {
+		req      *mgmtpb.JoinReq
+		guResp   *mgmtpb.GroupUpdateResp
+		expGuReq *mgmtpb.GroupUpdateReq
+		expResp  *mgmtpb.JoinResp
+		expErr   error
+	}{
+		"bad sys": {
+			req: &mgmtpb.JoinReq{
+				Sys: "bad sys",
+			},
+			expErr: errors.New("bad sys"),
+		},
+		"bad uuid": {
+			req: &mgmtpb.JoinReq{
+				Uuid: "bad uuid",
+			},
+			expErr: errors.New("bad uuid"),
+		},
+		"bad fault domain": {
+			req: &mgmtpb.JoinReq{
+				SrvFaultDomain: "bad fault domain",
+			},
+			expErr: errors.New("bad fault domain"),
+		},
+		"dupe host same rank diff uuid": {
+			req: &mgmtpb.JoinReq{
+				Rank: curMember.Rank.Uint32(),
+				Uuid: common.MockUUID(5),
+			},
+			expErr: errors.New("uuid changed"),
+		},
+		"dupe host diff rank same uuid": {
+			req: &mgmtpb.JoinReq{
+				Rank: 22,
+				Uuid: curMember.UUID.String(),
+			},
+			expErr: errors.New("already exists"),
+		},
+		"rejoining host": {
+			req: &mgmtpb.JoinReq{
+				Rank: curMember.Rank.Uint32(),
+				Uuid: curMember.UUID.String(),
+			},
+			expGuReq: &mgmtpb.GroupUpdateReq{
+				MapVersion: 2,
+				Engines: []*mgmtpb.GroupUpdateReq_Engine{
+					{
+						Rank: curMember.Rank.Uint32(),
+						Uri:  curMember.FabricURI,
+					},
+				},
+			},
+			expResp: &mgmtpb.JoinResp{
+				Status: 0,
+				Rank:   curMember.Rank.Uint32(),
+				State:  mgmtpb.JoinResp_IN,
+			},
+		},
+		"rejoining host; NilRank": {
+			req: &mgmtpb.JoinReq{
+				Rank: uint32(system.NilRank),
+				Uuid: curMember.UUID.String(),
+			},
+			expGuReq: &mgmtpb.GroupUpdateReq{
+				MapVersion: 2,
+				Engines: []*mgmtpb.GroupUpdateReq_Engine{
+					{
+						Rank: curMember.Rank.Uint32(),
+						Uri:  curMember.FabricURI,
+					},
+				},
+			},
+			expResp: &mgmtpb.JoinResp{
+				Status: 0,
+				Rank:   curMember.Rank.Uint32(),
+				State:  mgmtpb.JoinResp_IN,
+			},
+		},
+		"new host (non local)": {
+			req: &mgmtpb.JoinReq{
+				Rank: uint32(system.NilRank),
+			},
+			expGuReq: &mgmtpb.GroupUpdateReq{
+				MapVersion: 2,
+				Engines: []*mgmtpb.GroupUpdateReq_Engine{
+					// rank 0 is excluded, so shouldn't be in the map
+					{
+						Rank: newMember.Rank.Uint32(),
+						Uri:  newMember.FabricURI,
+					},
+				},
+			},
+			expResp: &mgmtpb.JoinResp{
+				Status:    0,
+				Rank:      newMember.Rank.Uint32(),
+				State:     mgmtpb.JoinResp_IN,
+				LocalJoin: false,
+			},
+		},
+		"new host (local)": {
+			req: &mgmtpb.JoinReq{
+				Addr: common.LocalhostCtrlAddr().String(),
+				Uri:  "tcp://" + common.LocalhostCtrlAddr().String(),
+				Rank: uint32(system.NilRank),
+			},
+			expGuReq: &mgmtpb.GroupUpdateReq{
+				MapVersion: 2,
+				Engines: []*mgmtpb.GroupUpdateReq_Engine{
+					// rank 0 is excluded, so shouldn't be in the map
+					{
+						Rank: newMember.Rank.Uint32(),
+						Uri:  "tcp://" + common.LocalhostCtrlAddr().String(),
+					},
+				},
+			},
+			expResp: &mgmtpb.JoinResp{
+				Status:    0,
+				Rank:      newMember.Rank.Uint32(),
+				State:     mgmtpb.JoinResp_IN,
+				LocalJoin: true,
+			},
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(t.Name())
+			defer common.ShowBufferOnFailure(t, buf)
+
+			// Make a copy to avoid test side-effects.
+			curCopy := &system.Member{}
+			*curCopy = *curMember
+			curCopy.Rank = system.NilRank // ensure that db.data.NextRank is incremented
+
+			svc := mgmtSystemTestSetup(t, log, system.Members{curCopy}, nil)
+
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+			svc.startJoinLoop(ctx)
+
+			if tc.req.Sys == "" {
+				tc.req.Sys = build.DefaultSystemName
+			}
+			if tc.req.Uuid == "" {
+				tc.req.Uuid = newMember.UUID.String()
+			}
+			if tc.req.Addr == "" {
+				tc.req.Addr = newMember.Addr.String()
+			}
+			if tc.req.Uri == "" {
+				tc.req.Uri = newMember.FabricURI
+			}
+			if tc.req.SrvFaultDomain == "" {
+				tc.req.SrvFaultDomain = newMember.FaultDomain.String()
+			}
+			if tc.req.Nctxs == 0 {
+				tc.req.Nctxs = newMember.FabricContexts
+			}
+			if tc.req.Incarnation == 0 {
+				tc.req.Incarnation = newMember.Incarnation
+			}
+			peerAddr, err := net.ResolveTCPAddr("tcp", tc.req.Addr)
+			if err != nil {
+				t.Fatal(err)
+			}
+			peerCtx := peer.NewContext(ctx, &peer.Peer{Addr: peerAddr})
+
+			setupMockDrpcClient(svc, tc.guResp, nil)
+			ei := svc.harness.instances[0].(*EngineInstance)
+			mdc := ei._drpcClient.(*mockDrpcClient)
+
+			gotResp, gotErr := svc.Join(peerCtx, tc.req)
+			common.CmpErr(t, tc.expErr, gotErr)
+			if tc.expErr != nil {
+				return
+			}
+
+			gotGuReq := new(mgmtpb.GroupUpdateReq)
+			if err := proto.Unmarshal(mdc.calls[len(mdc.calls)-1].Body, gotGuReq); err != nil {
+				t.Fatal(err)
+			}
+			cmpOpts := cmp.Options{
+				protocmp.Transform(),
+				protocmp.SortRepeatedFields(&mgmtpb.GroupUpdateReq{}, "engines"),
+			}
+			if diff := cmp.Diff(tc.expGuReq, gotGuReq, cmpOpts...); diff != "" {
+				t.Fatalf("unexpected GroupUpdate request (-want, +got):\n%s", diff)
+			}
+
+			if diff := cmp.Diff(tc.expResp, gotResp, protocmp.Transform()); diff != "" {
+				t.Fatalf("unexpected response (-want, +got)\n%s\n", diff)
+			}
 		})
 	}
 }

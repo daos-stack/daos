@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2021 Intel Corporation.
+ * (C) Copyright 2016-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -67,8 +67,12 @@ obj_mod_fini(void)
 	.dr_corpc_ops = e,	\
 },
 
-static struct daos_rpc_handler obj_handlers[] = {
-	OBJ_PROTO_CLI_RPC_LIST
+static struct daos_rpc_handler obj_handlers_0[] = {
+	OBJ_PROTO_CLI_RPC_LIST(0)
+};
+
+static struct daos_rpc_handler obj_handlers_1[] = {
+	OBJ_PROTO_CLI_RPC_LIST(1)
 };
 
 #undef X
@@ -98,7 +102,7 @@ obj_tls_init(int xs_id, int tgt_id)
 				     "io/ops/%s/active/tgt_%u",
 				     obj_opc_to_str(opc), tgt_id);
 		if (rc)
-			D_WARN("Failed to create active cnt sensor: "DF_RC"\n",
+			D_WARN("Failed to create active counter: "DF_RC"\n",
 			       DP_RC(rc));
 
 		if (opc == DAOS_OBJ_RPC_UPDATE ||
@@ -235,7 +239,7 @@ obj_metrics_alloc(const char *path, int tgt_id)
 				     "ops", "%s/ops/%s/tgt_%u", path,
 				     obj_opc_to_str(opc), tgt_id);
 		if (rc)
-			D_WARN("Failed to create total cnt sensor: "DF_RC"\n",
+			D_WARN("Failed to create total counter: "DF_RC"\n",
 			       DP_RC(rc));
 	}
 
@@ -244,7 +248,7 @@ obj_metrics_alloc(const char *path, int tgt_id)
 			     "total number of restarted update ops", "updates",
 			     "%s/restarted/tgt_%u", path, tgt_id);
 	if (rc)
-		D_WARN("Failed to create restarted cnt sensor: "DF_RC"\n",
+		D_WARN("Failed to create restarted counter: "DF_RC"\n",
 		       DP_RC(rc));
 
 	/** Total number of resent updates, of type counter */
@@ -252,7 +256,7 @@ obj_metrics_alloc(const char *path, int tgt_id)
 			     "total number of resent update RPCs", "updates",
 			     "%s/resent/tgt_%u", path, tgt_id);
 	if (rc)
-		D_WARN("Failed to create resent cnt sensor: "DF_RC"\n",
+		D_WARN("Failed to create resent counter: "DF_RC"\n",
 		       DP_RC(rc));
 
 	/** Total number of retry updates locally, of type counter */
@@ -267,7 +271,7 @@ obj_metrics_alloc(const char *path, int tgt_id)
 			     "total number of bytes fetched/read", "bytes",
 			     "%s/xferred/fetch/tgt_%u", path, tgt_id);
 	if (rc)
-		D_WARN("Failed to create bytes fetch sensor: "DF_RC"\n",
+		D_WARN("Failed to create bytes fetch counter: "DF_RC"\n",
 		       DP_RC(rc));
 
 	/** Total bytes written */
@@ -275,7 +279,7 @@ obj_metrics_alloc(const char *path, int tgt_id)
 			     "total number of bytes updated/written", "bytes",
 			     "%s/xferred/update/tgt_%u", path, tgt_id);
 	if (rc)
-		D_WARN("Failed to create bytes update sensor: "DF_RC"\n",
+		D_WARN("Failed to create bytes update counter: "DF_RC"\n",
 		       DP_RC(rc));
 
 	return metrics;
@@ -300,15 +304,16 @@ struct dss_module_metrics obj_metrics = {
 	.dmm_nr_metrics = obj_metrics_count,
 };
 
-struct dss_module obj_module =  {
+struct dss_module obj_module = {
 	.sm_name	= "obj",
 	.sm_mod_id	= DAOS_OBJ_MODULE,
 	.sm_ver		= DAOS_OBJ_VERSION,
 	.sm_init	= obj_mod_init,
 	.sm_fini	= obj_mod_fini,
-	.sm_proto_fmt	= &obj_proto_fmt,
-	.sm_cli_count	= OBJ_PROTO_CLI_COUNT,
-	.sm_handlers	= obj_handlers,
+	.sm_proto_count	= 2,
+	.sm_proto_fmt	= {&obj_proto_fmt_0, &obj_proto_fmt_1},
+	.sm_cli_count	= {OBJ_PROTO_CLI_COUNT, OBJ_PROTO_CLI_COUNT},
+	.sm_handlers	= {obj_handlers_0, obj_handlers_1},
 	.sm_key		= &obj_module_key,
 	.sm_mod_ops	= &ds_obj_mod_ops,
 	.sm_metrics	= &obj_metrics,

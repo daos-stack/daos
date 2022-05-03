@@ -24,6 +24,10 @@ import (
 
 var netSubsystems = []string{"cxi", "infiniband", "net"}
 
+// ibPortActiveState is the enum used to represent the "active" state for an infiniband port in
+// sysfs.
+const ibPortActiveState = 4
+
 func isNetwork(subsystem string) bool {
 	for _, netSubsystem := range netSubsystems {
 		if subsystem == netSubsystem {
@@ -234,9 +238,71 @@ func (s *Provider) getCXIFabricInterfaces() ([]*hardware.FabricInterface, error)
 	for _, dev := range cxiDevs {
 		cxiFIs = append(cxiFIs, &hardware.FabricInterface{
 			Name:      dev.Name(),
+			OSName:    dev.Name(),
 			Providers: common.NewStringSet("ofi+cxi"),
 		})
 	}
 
 	return cxiFIs, nil
+}
+
+// CheckFabricReady inspects the fabric interface to determine whether it is fully initialized
+// and ready for use.
+func (s *Provider) CheckFabricReady(iface string) error {
+	if s == nil {
+		return errors.New("sysfs provider is nil")
+	}
+
+	if iface == "" {
+		return errors.New("fabric interface name is required")
+	}
+
+	devClass, err := s.GetNetDevClass(iface)
+	if err != nil {
+		return errors.Wrapf(err, "can't determine device class for %q", iface)
+	}
+
+	if devClass != hardware.Infiniband {
+		// Infiniband is the only type we need to actively check
+		return nil
+	}
+
+	// The best way to determine that an Infiniband interface is ready is to check the state
+	// of its ports. Ports in the "ACTIVE" state are either fully ready or will be very soon.
+	ibPath := s.sysPath("class", "net", iface, "device", "infiniband")
+	ibDevs, err := ioutil.ReadDir(ibPath)
+	if err != nil {
+		return errors.Wrapf(err, "can't access Infiniband details for %q", iface)
+	}
+
+	for _, dev := range ibDevs {
+		portPath := filepath.Join(ibPath, dev.Name(), "ports")
+		ports, err := ioutil.ReadDir(portPath)
+		if err != nil {
+			return errors.Wrapf(err, "unable to get ports for %s/%s", iface, dev.Name())
+		}
+
+		for _, port := range ports {
+			statePath := filepath.Join(portPath, port.Name(), "state")
+			stateBytes, err := ioutil.ReadFile(statePath)
+			if err != nil {
+				return errors.Wrapf(err, "unable to get state for %s/%s port %s",
+					iface, dev.Name(), port.Name())
+			}
+
+			stateStrs := strings.Split(string(stateBytes), ": ")
+			stateNum, err := strconv.Atoi(stateStrs[0])
+			if err != nil {
+				s.log.Debugf("unable to parse %s/%s port %s state %q: %s",
+					iface, dev.Name(), port.Name(), string(stateBytes), err.Error())
+				continue
+			}
+			if stateNum == ibPortActiveState {
+				// At least one IB port is active on the interface
+				return nil
+			}
+		}
+	}
+
+	return hardware.ErrFabricNotReady(iface)
 }

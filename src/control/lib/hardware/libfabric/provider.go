@@ -56,7 +56,7 @@ func (p *Provider) getFabricInterfaces(ch chan *fabricResult) {
 	}
 	defer hdl.Close()
 
-	fiInfo, cleanup, err := fiGetInfo(hdl, "")
+	fiInfo, cleanup, err := fiGetInfo(hdl)
 	if err != nil {
 		ch <- &fabricResult{
 			err: err,
@@ -110,6 +110,7 @@ func (p *Provider) infoToFabricInterface(fi info) (*hardware.FabricInterface, er
 
 	newFI := &hardware.FabricInterface{
 		Name:      name,
+		OSName:    name,
 		Providers: common.NewStringSet(extProvider),
 	}
 	return newFI, nil

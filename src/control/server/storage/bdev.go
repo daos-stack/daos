@@ -129,6 +129,7 @@ type NvmeHealth struct {
 	PllLockLossCnt          uint64 `json:"pll_lock_loss_cnt"`
 	NandBytesWritten        uint64 `json:"nand_bytes_written"`
 	HostBytesWritten        uint64 `json:"host_bytes_written"`
+	ClusterSize             uint64 `json:"cluster_size"`
 }
 
 // TempK returns controller temperature in degrees Kelvin.
@@ -156,14 +157,15 @@ type NvmeNamespace struct {
 // SmdDevice contains DAOS storage device information, including
 // health details if requested.
 type SmdDevice struct {
-	UUID       string       `json:"uuid"`
-	TargetIDs  []int32      `hash:"set" json:"tgt_ids"`
-	NvmeState  NvmeDevState `json:"-"`
-	Rank       system.Rank  `json:"rank"`
-	TotalBytes uint64       `json:"total_bytes"`
-	AvailBytes uint64       `json:"avail_bytes"`
-	Health     *NvmeHealth  `json:"health"`
-	TrAddr     string       `json:"tr_addr"`
+	UUID        string       `json:"uuid"`
+	TargetIDs   []int32      `hash:"set" json:"tgt_ids"`
+	NvmeState   NvmeDevState `json:"-"`
+	Rank        system.Rank  `json:"rank"`
+	TotalBytes  uint64       `json:"total_bytes"`
+	AvailBytes  uint64       `json:"avail_bytes"`
+	ClusterSize uint64       `json:"cluster_size"`
+	Health      *NvmeHealth  `json:"health"`
+	TrAddr      string       `json:"tr_addr"`
 }
 
 // MarshalJSON marshals SmdDevice to JSON.

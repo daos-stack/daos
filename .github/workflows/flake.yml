@@ -18,9 +18,9 @@ jobs:
         with:
           ref: ${{ github.event.pull_request.head.sha }}
       - name: Set up Python environment
-        uses: actions/setup-python@v1
+        uses: actions/setup-python@v3
         with:
-          python-version: "3.8"
+          python-version: '3'
       - name: Add parser
         run: echo -n "::add-matcher::ci/daos-flake-matcher.json"
       - name: Add whitespace parser
@@ -32,8 +32,8 @@ jobs:
         with:
           # W503 and W504 are related as they conflict.  W504 is the preferred style, however we
           # have more code that matches W503 so accept either at this point.
-          ignore: "F841,W503,W504,E12,E2,E302,E402,E714,E731"
-          exclude: "src/control/vendor,src/client/pydaos/raw"
+          ignore: 'F841,W503,W504,E122,E126,E127,E128,E203,E226,E231,E261,E262,E265,E266,E302,E402,E731'  # yamllint disable-line rule:line-length
+          exclude: 'src/control/vendor,src/client/pydaos/raw'
           # Max line length is 100, and pylint will warn about lines longer than this, but some
           # existing lines are longer so allow them here.
-          max-line-length: "133"
+          max-line-length: '133'

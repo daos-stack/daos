@@ -1,6 +1,6 @@
 #!/usr/bin/python
 '''
-  (C) Copyright 2020-2021 Intel Corporation.
+  (C) Copyright 2020-2022 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
@@ -119,7 +119,8 @@ class DmvrObjSmallTest(DataMoverTestBase):
         Test Description:
             DAOS-6858: Verify cloning a small container.
         :avocado: tags=all,full_regression
-        :avocado: tags=datamover,dcp
+        :avocado: tags=vm
+        :avocado: tags=datamover,mfu,mfu_dcp
         :avocado: tags=dm_obj_small,dm_obj_small_dcp
         """
         self.run_dm_obj_small("DCP")
@@ -130,7 +131,8 @@ class DmvrObjSmallTest(DataMoverTestBase):
         Test Description:
             DAOS-6858: Verify cloning a small container.
         :avocado: tags=all,daily_regression
-        :avocado: tags=datamover,cont_clone
+        :avocado: tags=vm
+        :avocado: tags=datamover,daos_cont_clone
         :avocado: tags=dm_obj_small,dm_obj_small_cont_clone
         """
         self.run_dm_obj_small("CONT_CLONE")

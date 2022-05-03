@@ -744,15 +744,18 @@ entry_stat(dfs_t *dfs, daos_handle_t th, daos_handle_t oh, const char *name,
 	switch (entry.mode & S_IFMT) {
 	case S_IFDIR:
 		size = sizeof(entry);
+		stbuf->st_mtim.tv_sec = entry.mtime;
 		break;
 	case S_IFREG:
 	{
+		daos_array_stbuf_t	array_stbuf = {0};
+
 		if (obj) {
-			rc = daos_array_get_size(obj->oh, th, &size, NULL);
+			rc = daos_array_stat(obj->oh, th, &array_stbuf, NULL);
 			if (rc)
 				return daos_der2errno(rc);
 		} else {
-			daos_handle_t file_oh;
+			daos_handle_t	file_oh;
 
 			rc = daos_array_open_with_attr(dfs->coh, entry.oid, th, DAOS_OO_RO, 1,
 						       entry.chunk_size ? entry.chunk_size :
@@ -762,7 +765,7 @@ entry_stat(dfs_t *dfs, daos_handle_t th, daos_handle_t oh, const char *name,
 				return daos_der2errno(rc);
 			}
 
-			rc = daos_array_get_size(file_oh, th, &size, NULL);
+			rc = daos_array_stat(file_oh, th, &array_stbuf, NULL);
 			if (rc) {
 				daos_array_close(file_oh, NULL);
 				return daos_der2errno(rc);
@@ -772,18 +775,30 @@ entry_stat(dfs_t *dfs, daos_handle_t th, daos_handle_t oh, const char *name,
 			if (rc)
 				return daos_der2errno(rc);
 		}
+
+		size = array_stbuf.st_size;
+		if (array_stbuf.st_max_epoch) {
+			rc = crt_hlc2timespec(array_stbuf.st_max_epoch, &stbuf->st_mtim);
+			if (rc) {
+				D_ERROR("crt_hlc2timespec() failed "DF_RC"\n", DP_RC(rc));
+				return daos_der2errno(rc);
+			}
+		} else {
+			stbuf->st_mtim.tv_sec = entry.mtime;
+		}
+
 		/*
 		 * TODO - this is not accurate since it does not account for
 		 * sparse files or file metadata or xattributes.
 		 */
 		stbuf->st_blocks = (size + (1 << 9) - 1) >> 9;
-		stbuf->st_blksize = entry.chunk_size ? entry.chunk_size :
-			dfs->attr.da_chunk_size;
+		stbuf->st_blksize = entry.chunk_size ? entry.chunk_size : dfs->attr.da_chunk_size;
 		break;
 	}
 	case S_IFLNK:
 		size = entry.value_len;
 		D_FREE(entry.value);
+		stbuf->st_mtim.tv_sec = entry.mtime;
 		break;
 	default:
 		D_ERROR("Invalid entry type (not a dir, file, symlink).\n");
@@ -796,7 +811,6 @@ entry_stat(dfs_t *dfs, daos_handle_t th, daos_handle_t oh, const char *name,
 	stbuf->st_uid = entry.uid;
 	stbuf->st_gid = entry.gid;
 	stbuf->st_atim.tv_sec = entry.atime;
-	stbuf->st_mtim.tv_sec = entry.mtime;
 	stbuf->st_ctim.tv_sec = entry.ctime;
 
 	return 0;
@@ -2066,7 +2080,7 @@ dfs_local2global(dfs_t *dfs, d_iov_t *glob)
 		return daos_der2errno(rc);
 
 	if (glob->iov_buf_len < glob_buf_size) {
-		D_DEBUG(DF_DSMC, "Larger glob buffer needed ("DF_U64" bytes "
+		D_DEBUG(DB_ANY, "Larger glob buffer needed ("DF_U64" bytes "
 			"provided, "DF_U64" required).\n", glob->iov_buf_len,
 			glob_buf_size);
 		glob->iov_buf_len = glob_buf_size;
@@ -3539,14 +3553,15 @@ dfs_open_stat(dfs_t *dfs, dfs_obj_t *parent, const char *name, mode_t mode,
 			D_DEBUG(DB_TRACE, "Failed to open dir (%d)\n", rc);
 			D_GOTO(out, rc);
 		}
+		file_size = sizeof(entry);
 		break;
 	case S_IFLNK:
-		rc = open_symlink(dfs, parent, flags, cid, value, &entry, len,
-				  obj);
+		rc = open_symlink(dfs, parent, flags, cid, value, &entry, len, obj);
 		if (rc) {
 			D_DEBUG(DB_TRACE, "Failed to open symlink (%d)\n", rc);
 			D_GOTO(out, rc);
 		}
+		file_size = entry.value_len;
 		break;
 	default:
 		D_ERROR("Invalid entry type (not a dir, file, symlink).\n");
@@ -3714,7 +3729,7 @@ dfs_obj_local2global(dfs_t *dfs, dfs_obj_t *obj, d_iov_t *glob)
 		return daos_der2errno(rc);
 
 	if (glob->iov_buf_len < glob_buf_size) {
-		D_DEBUG(DF_DSMC, "Larger glob buffer needed ("DF_U64" bytes "
+		D_DEBUG(DB_ANY, "Larger glob buffer needed ("DF_U64" bytes "
 			"provided, "DF_U64" required).\n", glob->iov_buf_len,
 			glob_buf_size);
 		glob->iov_buf_len = glob_buf_size;

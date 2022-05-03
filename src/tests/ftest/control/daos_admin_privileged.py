@@ -40,9 +40,8 @@ class DaosAdminPrivTest(TestWithServers):
         file_stats = os.stat("/usr/bin/daos_admin")
 
         # regular file, mode 4750
-        desired = (stat.S_IFREG|stat.S_ISUID|
-                   stat.S_IRWXU|stat.S_IRGRP|stat.S_IXGRP)
-        actual = file_stats.st_mode & ~stat.S_IRWXO # mask out Other bits for non-RPM
+        desired = (stat.S_IFREG | stat.S_ISUID | stat.S_IRWXU | stat.S_IRGRP | stat.S_IXGRP)
+        actual = file_stats.st_mode & ~stat.S_IRWXO  # mask out Other bits for non-RPM
         if (actual ^ desired) > 0:
             self.fail("Incorrect daos_admin permissions: {}".format(oct(actual)))
 
@@ -58,6 +57,8 @@ class DaosAdminPrivTest(TestWithServers):
         user = getpass.getuser()
 
         # Prep server for format, run command under non-root user
+        # Note: This will just report the presence of PMem namespaces if the NVDIMMs are already
+        #       configured in AppDirect interleaved mode and namespaces have been created.
         self.log.info("Performing SCM storage prepare")
         try:
             self.server_managers[0].prepare_storage(user, True, False)

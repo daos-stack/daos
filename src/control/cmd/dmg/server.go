@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2021 Intel Corporation.
+// (C) Copyright 2021-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -24,7 +24,7 @@ type serverCmd struct {
 // serverSetLogMasksCmd is the struct representing the command to set engine log
 // levels at runtime across system.
 type serverSetLogMasksCmd struct {
-	logCmd
+	baseCmd
 	ctlInvokerCmd
 	hostListCmd
 	jsonOutputCmd
@@ -65,9 +65,9 @@ func (cmd *serverSetLogMasksCmd) Execute(_ []string) (errOut error) {
 		return err
 	}
 	if outErr.Len() > 0 {
-		cmd.log.Error(outErr.String())
+		cmd.Error(outErr.String())
 	} else {
-		cmd.log.Info("Engine log levels have been updated successfully.")
+		cmd.Info("Engine log levels have been updated successfully.")
 	}
 
 	return resp.Errors()

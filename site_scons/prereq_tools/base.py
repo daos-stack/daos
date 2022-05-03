@@ -56,9 +56,9 @@ from SCons.Errors import UserError
 # pylint: enable=no-name-in-module
 # pylint: enable=import-error
 from prereq_tools import mocked_tests
-import subprocess #nosec
+import subprocess  # nosec
 try:
-    from subprocess import DEVNULL #nosec
+    from subprocess import DEVNULL  # nosec
 except ImportError:
     DEVNULL = open(os.devnull, "wb")
 import tarfile
@@ -68,6 +68,7 @@ if sys.version_info < (3, 0):
     import ConfigParser
 else:
     import configparser as ConfigParser
+
 
 class DownloadFailure(Exception):
     """Exception raised when source can't be downloaded
@@ -260,6 +261,7 @@ class BuildRequired(Exception):
 
 class Runner():
     """Runs commands in a specified environment"""
+
     def __init__(self):
         self.env = None
         self.__dry_run = False
@@ -297,6 +299,7 @@ class Runner():
 
 RUNNER = Runner()
 
+
 def default_libpath():
     """On debian systems, the default library path can be queried"""
     if not os.path.isfile('/etc/debian_version'):
@@ -315,6 +318,7 @@ def default_libpath():
     except Exception:
         print('default_libpath, Exception: subprocess.Popen dpkg-architecture')
     return []
+
 
 class GitRepoRetriever():
     """Identify a git repository from which to download sources"""
@@ -406,6 +410,7 @@ build with random upstream changes.
         self.apply_patches(subdir, kw.get("patches", None))
         self.update_submodules(subdir)
 
+
 class WebRetriever():
     """Identify a location from where to download a source package"""
 
@@ -424,7 +429,7 @@ class WebRetriever():
             return False
 
         with open(filename, "rb") as src:
-            hexdigest = hashlib.md5(src.read()).hexdigest() #nosec
+            hexdigest = hashlib.md5(src.read()).hexdigest()  # nosec
 
         if hexdigest != self.md5:
             print("Removing existing file %s: md5 %s != %s" % (filename,
@@ -464,7 +469,7 @@ class WebRetriever():
 
         return False
 
-    def get(self, subdir, **kw): #pylint: disable=unused-argument
+    def get(self, subdir, **kw):  # pylint: disable=unused-argument
         """Downloads and extracts sources from a url into subdir"""
 
         basename = os.path.basename(self.url)
@@ -492,6 +497,7 @@ class WebRetriever():
         else:
             raise UnsupportedCompression(subdir)
 
+
 def check_flag_helper(context, compiler, ext, flag):
     """Helper function to allow checking for compiler flags"""
     if compiler in ["icc", "icpc"]:
@@ -500,7 +506,7 @@ def check_flag_helper(context, compiler, ext, flag):
         # bug in older scons, need CFLAGS to exist, -O2 is default.
         context.env.Replace(CFLAGS=['-O2'])
     elif compiler in ["gcc", "g++"]:
-        #remove -no- for test
+        # remove -no- for test
         test_flag = flag.replace("-Wno-", "-W")
         flags = ["-Werror", test_flag]
     else:
@@ -515,13 +521,16 @@ int main() {
     context.Result(ret)
     return ret
 
+
 def check_flag(context, flag):
     """Check C specific compiler flags"""
     return check_flag_helper(context, context.env.get("CC"), ".c", flag)
 
+
 def check_flag_cc(context, flag):
     """Check C++ specific compiler flags"""
     return check_flag_helper(context, context.env.get("CXX"), ".cpp", flag)
+
 
 def check_flags(env, config, key, value):
     """Check and append all supported flags"""
@@ -541,37 +550,23 @@ def check_flags(env, config, key, value):
         elif config.CheckFlagCC(flag):
             insert = True
         if insert:
-            env.AppendUnique(**{key : [flag]})
+            env.AppendUnique(**{key: [flag]})
         checked.append(flag)
+
 
 def append_if_supported(env, **kwargs):
     """Check and append flags for construction variables"""
     cenv = env.Clone()
-    config = Configure(cenv, custom_tests={'CheckFlag' : check_flag,
-                                           'CheckFlagCC' : check_flag_cc})
+    config = Configure(cenv, custom_tests={'CheckFlag': check_flag,
+                                           'CheckFlagCC': check_flag_cc})
     for key, value in kwargs.items():
         if key not in ["CFLAGS", "CXXFLAGS", "CCFLAGS"]:
-            env.AppendUnique(**{key : value})
+            env.AppendUnique(**{key: value})
             continue
         check_flags(env, config, key, value)
 
     config.Finish()
 
-class ProgramBinary():
-    """Define possible names for a required executable"""
-    def __init__(self, name, possible_names):
-        """ Define a binary allowing for unique names on various platforms """
-        self.name = name
-        self.options = possible_names
-
-    def configure(self, config, prereqs):
-        """ Do configure checks for binary name options to get a match """
-        for option in self.options:
-            if config.CheckProg(option):
-                args = {self.name: option}
-                prereqs.replace_env(**args)
-                return True
-        return False
 
 def ensure_dir_exists(dirname, dry_run):
     """Ensure a directory exists"""
@@ -589,6 +584,8 @@ def ensure_dir_exists(dirname, dry_run):
         raise IOError(errno.ENOTDIR, 'Not a directory', dirname)
 
 # pylint: disable=too-many-public-methods
+
+
 class PreReqComponent():
     """A class for defining and managing external components required
        by a project.
@@ -705,11 +702,12 @@ class PreReqComponent():
                         'Comma separated list of preinstalled dependencies',
                         'none')
         self.add_opts(ListVariable('INCLUDE', "Optional components to build",
-                                   'none', ['psm2', 'psm3']))
+                                   'none', ['psm2']))
         self.add_opts(('MPI_PKG',
                        'Specifies name of pkg-config to load for MPI', None))
         self.add_opts(BoolVariable('FIRMWARE_MGMT',
                                    'Build in device firmware management.', 0))
+        self.add_opts(BoolVariable('UCX', 'Build UCX support.', 0))
         self.add_opts(PathVariable('PREFIX', 'Installation path', install_dir,
                                    PathVariable.PathIsDirCreate),
                       PathVariable('GOPATH',
@@ -751,7 +749,7 @@ class PreReqComponent():
     def has_source(self, env, *comps, **kw):
         """Check if source exists for a component"""
         new_env = env.Clone()
-        #first require the binary of the component.
+        # first require the binary of the component.
         self.require(new_env, *comps, **kw)
 
         for comp in comps:
@@ -813,17 +811,16 @@ class PreReqComponent():
                                              "-diag-disable:188",
                                              "-diag-disable:2405",
                                              "-diag-disable:1338"])
-        return {'CC' : env.get("CC"), "CXX" : env.get("CXX")}
+        return {'CC': env.get("CC"), "CXX": env.get("CXX")}
 
     def _setup_compiler(self, warning_level):
         """Setup the compiler to use"""
-        compiler_map = {'gcc': {'CC' : 'gcc', 'CXX' : 'g++'},
-                        'covc' : {'CC' : '/opt/BullseyeCoverage/bin/gcc',
-                                  'CXX' : '/opt/BullseyeCoverage/bin/g++',
-                                  'CVS' : '/opt/BullseyeCoverage/bin/covselect',
-                                  'COV01' : '/opt/BullseyeCoverage/bin/cov01'},
-                        'clang' : {'CC' : 'clang', 'CXX' : 'clang++'},
-                       }
+        compiler_map = {'gcc': {'CC': 'gcc', 'CXX': 'g++'},
+                        'covc': {'CC': '/opt/BullseyeCoverage/bin/gcc',
+                                 'CXX': '/opt/BullseyeCoverage/bin/g++',
+                                 'CVS': '/opt/BullseyeCoverage/bin/covselect',
+                                 'COV01': '/opt/BullseyeCoverage/bin/cov01'},
+                        'clang': {'CC': 'clang', 'CXX': 'clang++'}}
         self.add_opts(EnumVariable('COMPILER', "Set the compiler family to use",
                                    'gcc', ['gcc', 'covc', 'clang', 'icc'],
                                    ignorecase=1))
@@ -856,7 +853,7 @@ class PreReqComponent():
                     continue
                 config.Finish()
                 raise MissingSystemLibs(prog)
-            args = {name : prog}
+            args = {name: prog}
             self.__env.Replace(**args)
 
         if compiler == 'covc':
@@ -1033,9 +1030,9 @@ class PreReqComponent():
         """
 
         try:
-            #pylint: disable=import-outside-toplevel
+            # pylint: disable=import-outside-toplevel
             from components import define_components
-            #pylint: enable=import-outside-toplevel
+            # pylint: enable=import-outside-toplevel
             define_components(self)
         except Exception as old:
             raise BadScript("components", traceback.format_exc()) from old
@@ -1049,7 +1046,7 @@ class PreReqComponent():
 
     def load_defaults(self, is_arm):
         """Setup default build parameters"""
-        #argobots is not really needed by client but it's difficult to separate
+        # argobots is not really needed by client but it's difficult to separate
         common_reqs = ['argobots', 'ofi', 'hwloc', 'mercury', 'boost', 'uuid',
                        'crypto', 'protobufc', 'lz4']
         client_reqs = ['fuse', 'json-c']
@@ -1083,7 +1080,7 @@ class PreReqComponent():
         """return True if test build is requested"""
         return "test" in self._build_targets
 
-    def modify_prefix(self, comp_def, env): #pylint: disable=unused-argument
+    def modify_prefix(self, comp_def, env):  # pylint: disable=unused-argument
         """Overwrite the prefix in cases where we may be using the default"""
         if comp_def.package:
             return
@@ -1289,6 +1286,7 @@ class PreReqComponent():
 
 # pylint: enable=too-many-public-methods
 
+
 class _Component():
     """A class to define attributes of an external component
 
@@ -1436,11 +1434,7 @@ class _Component():
 
         try:
             for prog in self.required_progs:
-                if isinstance(prog, ProgramBinary):
-                    has_bin = prog.configure(config, self.prereqs)
-                else:
-                    has_bin = config.CheckProg(prog)
-                if not has_bin:
+                if not config.CheckProg(prog):
                     config.Finish()
                     if self.__check_only:
                         env.SetOption('no_exec', True)
@@ -1602,7 +1596,7 @@ class _Component():
             # and this allows LD_LIBRARY_PATH to override RPATH
             env.AppendUnique(LINKFLAGS=["-Wl,--enable-new-dtags"])
         if self.component_prefix == "/usr" and self.package is None:
-            #hack until we have everything installed in lib64
+            # hack until we have everything installed in lib64
             env.AppendUnique(RPATH=["/usr/lib"])
             env.AppendUnique(LINKFLAGS=["-Wl,--enable-new-dtags"])
 
@@ -1786,5 +1780,4 @@ __all__ = ["GitRepoRetriever", "WebRetriever",
            "MissingPath", "BuildFailure",
            "MissingDefinition", "MissingTargets",
            "MissingSystemLibs", "DownloadRequired",
-           "PreReqComponent", "BuildRequired",
-           "ProgramBinary"]
+           "PreReqComponent", "BuildRequired"]

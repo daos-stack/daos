@@ -977,8 +977,8 @@ evt_ent_array_sort(struct evt_context *tcx, struct evt_entry_array *ent_array,
 	int			 num_visible = 0;
 	int			 rc;
 
-	D_DEBUG(DB_TRACE, "Sorting array with filter "DF_FILTER"\n",
-		DP_FILTER(filter));
+	D_DEBUG(DB_TRACE, "Sorting array with filter "DF_FILTER", ea_ent_nr %d.\n",
+		DP_FILTER(filter), ent_array->ea_ent_nr);
 	if (ent_array->ea_ent_nr == 0)
 		return 0;
 
@@ -2073,6 +2073,7 @@ evt_large_hole_insert(daos_handle_t toh, const struct evt_entry_in *entry)
 	struct evt_entry_in	 hole;
 	struct evt_filter	 filter = {0};
 	EVT_ENT_ARRAY_SM_PTR(ent_array);
+	int			 alt_rc = 0;
 	int			 rc = 0;
 
 	filter.fr_epr.epr_hi = entry->ei_bound;
@@ -2091,13 +2092,17 @@ evt_large_hole_insert(daos_handle_t toh, const struct evt_entry_in *entry)
 		hole = *entry;
 		hole.ei_rect.rc_ex = ent->en_sel_ext;
 		rc = evt_insert(toh, &hole, NULL);
-		if (rc != 0)
+		if (rc < 0)
 			break;
+		if (rc == 1) {
+			alt_rc = 1;
+			rc = 0;
+		}
 	}
 done:
 	evt_ent_array_fini(ent_array);
 
-	return rc;
+	return rc == 0 ? alt_rc : rc;
 }
 
 /**
@@ -2116,6 +2121,7 @@ evt_insert(daos_handle_t toh, const struct evt_entry_in *entry,
 	const struct evt_entry_in	*entryp = entry;
 	struct evt_filter		 filter;
 	int				 rc;
+	int				 alt_rc = 0;
 
 	tcx = evt_hdl2tcx(toh);
 	if (tcx == NULL)
@@ -2155,7 +2161,8 @@ evt_insert(daos_handle_t toh, const struct evt_entry_in *entry,
 	/* Phase-1: Check for overwrite and uncertainty */
 	rc = evt_ent_array_fill(tcx, EVT_FIND_OVERWRITE, DAOS_INTENT_UPDATE,
 				&filter, &entry->ei_rect, ent_array);
-	if (rc != 0)
+	alt_rc = rc;
+	if (rc < 0)
 		return rc;
 
 	if (ent_array->ea_ent_nr == 1) {
@@ -2232,7 +2239,9 @@ insert:
 	 * with 1 entry in the list
 	 */
 out:
-	return evt_tx_end(tcx, rc);
+	rc = evt_tx_end(tcx, rc);
+
+	return rc == 0 ? alt_rc : rc;
 }
 
 /** Fill the entry with the extent at the specified position of \a node */
@@ -2411,6 +2420,27 @@ evt_data_loss_check(d_list_t *head, struct evt_entry_array *ent_array)
 	return 0;
 }
 
+static inline bool
+agg_check(const struct evt_extent *inserted, const struct evt_extent *intree)
+{
+	if (inserted->ex_hi + 1 >= intree->ex_lo &&
+	    intree->ex_hi + 1 >= inserted->ex_lo) {
+		/** Extent overlaps or is adjacent, so assume aggregation is needed. */
+		return true;
+	} else if ((inserted->ex_hi & DAOS_EC_PARITY_BIT) !=
+		   (intree->ex_hi & DAOS_EC_PARITY_BIT)) {
+		/** EC aggregation needs to run if there is parity and we are doing a
+		 *  partial stripe write or vice versa.   Since we don't know the
+		 *  cell or stripe size, we can only approximate this by just flagging
+		 *  any parity mismatch between what we are writing and what is in
+		 *  the tree.
+		 */
+		return true;
+	}
+
+	return false;
+}
+
 /**
  * See the description in evt_priv.h
  */
@@ -2427,6 +2457,7 @@ evt_ent_array_fill(struct evt_context *tcx, enum evt_find_opc find_opc,
 	int				 at;
 	int				 i;
 	int				 rc = 0;
+	bool				 has_agg = false;
 
 	V_TRACE(DB_TRACE, "Searching rectangle "DF_RECT" opc=%d\n",
 		DP_RECT(rect), find_opc);
@@ -2463,10 +2494,16 @@ evt_ent_array_fill(struct evt_context *tcx, enum evt_find_opc find_opc,
 
 			if (evt_filter_rect(filter, &rtmp, leaf)) {
 				V_TRACE(DB_TRACE, "Filtered "DF_RECT" filter=("
-					DF_FILTER")\n", DP_RECT(&rtmp),
-					DP_FILTER(filter));
+					DF_FILTER")\n", DP_RECT(&rtmp), DP_FILTER(filter));
+				if (find_opc == EVT_FIND_OVERWRITE && !has_agg) {
+					if (agg_check(&filter->fr_ex, &rtmp.rc_ex))
+						has_agg = true;
+				}
 				continue; /* Doesn't match the filter */
 			}
+
+			if (find_opc == EVT_FIND_OVERWRITE)
+				has_agg = true;
 
 			evt_rect_overlap(&rtmp, rect, &range_overlap,
 					 &time_overlap);
@@ -2515,8 +2552,9 @@ evt_ent_array_fill(struct evt_context *tcx, enum evt_find_opc find_opc,
 			rc = evt_desc_log_status(tcx, rtmp.rc_epc, desc,
 						 intent);
 			/* Skip the unavailable record. */
-			if (rc == ALB_UNAVAILABLE)
+			if (rc == ALB_UNAVAILABLE) {
 				continue;
+			}
 
 			/* early check */
 			switch (find_opc) {
@@ -2571,7 +2609,6 @@ evt_ent_array_fill(struct evt_context *tcx, enum evt_find_opc find_opc,
 					if (evt_data_loss_add(&data_loss_list,
 							      &rtmp) == NULL)
 						D_GOTO(out, rc = -DER_NOMEM);
-
 					continue;
 				}
 
@@ -2621,7 +2658,7 @@ evt_ent_array_fill(struct evt_context *tcx, enum evt_find_opc find_opc,
 			if (level == 0) { /* done with the root */
 				V_TRACE(DB_TRACE, "Found total %d rects\n",
 					ent_array ? ent_array->ea_ent_nr : 0);
-				return 0; /* succeed and return */
+				return has_agg ? 1 : 0; /* succeed and return */
 			}
 
 			level--;
@@ -2643,6 +2680,8 @@ out:
 					edli_link)) != NULL)
 		D_FREE(edli);
 
+	if (rc == 0 && has_agg)
+		rc = 1;
 	return rc;
 }
 
@@ -2815,6 +2854,7 @@ evt_close(daos_handle_t toh)
 	return 0;
 }
 
+#define EVT_AGG_MASK (VOS_TF_AGG_HLC | VOS_AGG_TIME_MASK | VOS_TF_AGG_OPT)
 /**
  * Create a new tree inplace of \a root, return the open handle.
  * Please check API comment in evtree.h for the details.
@@ -2826,7 +2866,7 @@ evt_create(struct evt_root *root, uint64_t feats, unsigned int order,
 	struct evt_context *tcx;
 	int		    rc;
 
-	if (!(feats & EVT_FEATS_SUPPORTED)) {
+	if (!(feats & (EVT_AGG_MASK | EVT_FEATS_SUPPORTED))) {
 		D_ERROR("Unknown feature bits "DF_X64"\n", feats);
 		return -DER_INVAL;
 	}
@@ -3631,6 +3671,7 @@ evt_remove_all(daos_handle_t toh, const struct evt_extent *ext,
 	struct evt_filter	 filter = {0};
 	struct evt_rect		 rect;
 	int			 rc = 0;
+	int			 alt_rc = 0;
 
 	/** Find all of the overlapping rectangles and insert a delete record
 	 *  for each one in the specified epoch range
@@ -3669,14 +3710,18 @@ evt_remove_all(daos_handle_t toh, const struct evt_extent *ext,
 		BIO_ADDR_SET_HOLE(&entry.ei_addr);
 
 		rc = evt_insert(toh, &entry, NULL);
-		if (rc != 0)
+		if (rc == 1) {
+			alt_rc = 1;
+			rc = 0;
+		}
+		if (rc < 0)
 			break;
 	}
 	rc = evt_tx_end(tcx, rc);
 done:
 	evt_ent_array_fini(ent_array);
 
-	return rc;
+	return rc == 0 ? alt_rc : rc;
 }
 
 daos_size_t
@@ -3857,3 +3902,35 @@ out:
 	tcx->tc_creds = 0;
 	return rc;
 }
+
+int
+evt_feats_set(struct evt_root *root, struct umem_instance *umm, uint64_t feats)
+
+{
+	int			 rc = 0;
+
+	if (root->tr_feats == feats)
+		return 0;
+
+	if ((feats & ~EVT_AGG_MASK) != (root->tr_feats & EVT_FEATS_SUPPORTED)) {
+		D_ERROR("Attempt to set internal features denied "DF_X64"\n", feats);
+		return -DER_INVAL;
+	}
+
+	if (DAOS_ON_VALGRIND) {
+		rc = umem_tx_begin(umm, NULL);
+		if (rc != 0)
+			return rc;
+		rc = umem_tx_xadd_ptr(umm, &root->tr_feats, sizeof(root->tr_feats),
+				      POBJ_XADD_NO_SNAPSHOT);
+	}
+
+	if (rc == 0)
+		root->tr_feats = feats;
+
+	if (DAOS_ON_VALGRIND)
+		rc = umem_tx_end(umm, rc);
+
+	return rc;
+}
+

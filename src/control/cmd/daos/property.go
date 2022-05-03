@@ -439,6 +439,9 @@ var propHdlrs = propHdlrMap{
 			if e == nil {
 				return propNotFound(name)
 			}
+			if C.dpe_is_negative(e) {
+				return fmt.Sprintf("not set")
+			}
 
 			value := C.get_dpe_val(e)
 			if !C.daos_ec_pda_valid(C.uint32_t(value)) {
@@ -458,7 +461,7 @@ var propHdlrs = propHdlrMap{
 			}
 
 			if !C.daos_rp_pda_valid(C.uint32_t(value)) {
-				return errors.Errorf("invalid EC PDA %d", value)
+				return errors.Errorf("invalid RP PDA %d", value)
 			}
 
 			C.set_dpe_val(e, C.uint64_t(value))
@@ -470,9 +473,12 @@ var propHdlrs = propHdlrMap{
 				return propNotFound(name)
 			}
 
+			if C.dpe_is_negative(e) {
+				return fmt.Sprintf("not set")
+			}
 			value := C.get_dpe_val(e)
-			if !C.daos_ec_pda_valid(C.uint32_t(value)) {
-				return fmt.Sprintf("invalid ec pda %d", value)
+			if !C.daos_rp_pda_valid(C.uint32_t(value)) {
+				return fmt.Sprintf("invalid RP PDA %d", value)
 			}
 			return fmt.Sprintf("%d", value)
 		},
@@ -548,6 +554,23 @@ var propHdlrs = propHdlrMap{
 		"Group",
 		nil, nil,
 		strValStringer,
+		true,
+	},
+	C.DAOS_PROP_ENTRY_GLOBAL_VERSION: {
+		C.DAOS_PROP_CO_GLOBAL_VERSION,
+		"Global Version",
+		nil, nil,
+		func(e *C.struct_daos_prop_entry, name string) string {
+			if e == nil {
+				return propNotFound(name)
+			}
+			if C.dpe_is_negative(e) {
+				return fmt.Sprintf("not set")
+			}
+
+			value := C.get_dpe_val(e)
+			return fmt.Sprintf("%d", value)
+		},
 		true,
 	},
 }

@@ -9,6 +9,7 @@ package server
 import (
 	"context"
 	"fmt"
+	"math"
 	"os"
 	"os/user"
 	"path/filepath"
@@ -24,6 +25,7 @@ import (
 	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/common/proto"
 	"github.com/daos-stack/daos/src/control/common/proto/convert"
+	"github.com/daos-stack/daos/src/control/common/proto/ctl"
 	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
 	"github.com/daos-stack/daos/src/control/drpc"
 	"github.com/daos-stack/daos/src/control/fault"
@@ -36,10 +38,43 @@ import (
 	"github.com/daos-stack/daos/src/control/system"
 )
 
+const (
+	clusterSize uint64 = humanize.GiByte
+	mdcapSize   uint64 = 128 * humanize.MiByte
+)
+
 var (
 	defStorageScanCmpOpts = append(common.DefaultCmpOpts(),
 		protocmp.IgnoreFields(&ctlpb.NvmeController{}, "serial"))
 )
+
+func adjustNvmeSize(smdDevices []*ctl.NvmeController_SmdDevice) {
+	const targetNb uint64 = 4
+
+	availBytes := uint64(math.MaxUint64)
+	for _, dev := range smdDevices {
+		unalignedMemory := dev.AvailBytes % (targetNb * clusterSize)
+		usabledMemory := dev.AvailBytes - unalignedMemory
+		if usabledMemory < availBytes {
+			availBytes = usabledMemory
+		}
+	}
+
+	for _, dev := range smdDevices {
+		dev.AvailBytes = availBytes
+	}
+}
+
+func adjustScmSize(availBytes uint64) uint64 {
+	const mdCapSize uint64 = uint64(128) * humanize.MiByte
+	const mdBytes uint64 = mdCapSize + mdDaosScmBytes
+
+	if availBytes < mdBytes {
+		return 0
+	}
+
+	return availBytes - mdBytes
+}
 
 func TestServer_CtlSvc_StorageScan_PreEngineStart(t *testing.T) {
 	ctrlr := storage.MockNvmeController()
@@ -75,8 +110,8 @@ func TestServer_CtlSvc_StorageScan_PreEngineStart(t *testing.T) {
 				},
 			},
 			smbc: &scm.MockBackendConfig{
-				DiscoverRes:         storage.ScmModules{storage.MockScmModule()},
-				GetPmemNamespaceRes: storage.ScmNamespaces{storage.MockScmNamespace()},
+				GetModulesRes:    storage.ScmModules{storage.MockScmModule()},
+				GetNamespacesRes: storage.ScmNamespaces{storage.MockScmNamespace()},
 			},
 			expResp: &ctlpb.StorageScanResp{
 				Nvme: &ctlpb.ScanNvmeResp{
@@ -99,7 +134,7 @@ func TestServer_CtlSvc_StorageScan_PreEngineStart(t *testing.T) {
 				},
 			},
 			smbc: &scm.MockBackendConfig{
-				DiscoverRes: storage.ScmModules{storage.MockScmModule()},
+				GetModulesRes: storage.ScmModules{storage.MockScmModule()},
 			},
 			expResp: &ctlpb.StorageScanResp{
 				Nvme: &ctlpb.ScanNvmeResp{
@@ -117,8 +152,8 @@ func TestServer_CtlSvc_StorageScan_PreEngineStart(t *testing.T) {
 				ScanErr: errors.New("spdk scan failed"),
 			},
 			smbc: &scm.MockBackendConfig{
-				DiscoverRes:         storage.ScmModules{storage.MockScmModule()},
-				GetPmemNamespaceRes: storage.ScmNamespaces{storage.MockScmNamespace()},
+				GetModulesRes:    storage.ScmModules{storage.MockScmModule()},
+				GetNamespacesRes: storage.ScmNamespaces{storage.MockScmNamespace()},
 			},
 			expResp: &ctlpb.StorageScanResp{
 				Nvme: &ctlpb.ScanNvmeResp{
@@ -140,7 +175,7 @@ func TestServer_CtlSvc_StorageScan_PreEngineStart(t *testing.T) {
 				},
 			},
 			smbc: &scm.MockBackendConfig{
-				DiscoverErr: errors.New("scm discover failed"),
+				GetModulesErr: errors.New("scm discover failed"),
 			},
 			expResp: &ctlpb.StorageScanResp{
 				Nvme: &ctlpb.ScanNvmeResp{
@@ -155,12 +190,36 @@ func TestServer_CtlSvc_StorageScan_PreEngineStart(t *testing.T) {
 				},
 			},
 		},
+		"scm get state failure": {
+			bmbc: &bdev.MockBackendConfig{
+				ScanRes: &storage.BdevScanResponse{
+					Controllers: storage.NvmeControllers{ctrlr},
+				},
+			},
+			smbc: &scm.MockBackendConfig{
+				GetModulesRes:    storage.ScmModules{storage.MockScmModule()},
+				GetNamespacesRes: storage.ScmNamespaces{storage.MockScmNamespace()},
+				GetStateErr:      errors.New("scm get state failed"),
+			},
+			expResp: &ctlpb.StorageScanResp{
+				Nvme: &ctlpb.ScanNvmeResp{
+					Ctrlrs: proto.NvmeControllers{ctrlrPB},
+					State:  new(ctlpb.ResponseState),
+				},
+				Scm: &ctlpb.ScanScmResp{
+					State: &ctlpb.ResponseState{
+						Error:  "scm get state failed",
+						Status: ctlpb.ResponseStatus_CTL_ERR_SCM,
+					},
+				},
+			},
+		},
 		"all discover fail": {
 			bmbc: &bdev.MockBackendConfig{
 				ScanErr: errors.New("spdk scan failed"),
 			},
 			smbc: &scm.MockBackendConfig{
-				DiscoverErr: errors.New("scm discover failed"),
+				GetModulesErr: errors.New("scm discover failed"),
 			},
 			expResp: &ctlpb.StorageScanResp{
 				Nvme: &ctlpb.ScanNvmeResp{
@@ -354,6 +413,7 @@ func TestServer_CtlSvc_StorageScan_PostEngineStart(t *testing.T) {
 		}
 		bioHealthResp.TotalBytes = uint64(idx) * uint64(humanize.TByte)
 		bioHealthResp.AvailBytes = uint64(idx) * uint64(humanize.TByte/2)
+		bioHealthResp.ClusterSize = clusterSize
 
 		return ctrlr, bioHealthResp
 	}
@@ -395,6 +455,7 @@ func TestServer_CtlSvc_StorageScan_PostEngineStart(t *testing.T) {
 			// expect resultant controller to have updated utilization values
 			ctrlr.SmdDevices[i].TotalBytes = uint64(idx) * uint64(humanize.TByte)
 			ctrlr.SmdDevices[i].AvailBytes = uint64(idx) * uint64(humanize.TByte/2)
+			ctrlr.SmdDevices[i].ClusterSize = clusterSize
 			ctrlr.Namespaces[i] = proto.MockNvmeNamespace(int32(i + 1))
 		}
 
@@ -413,6 +474,7 @@ func TestServer_CtlSvc_StorageScan_PostEngineStart(t *testing.T) {
 	}
 	newCtrlrPBwMeta := func(idx int32, smdIndexes ...int32) *ctlpb.NvmeController {
 		c, _ := newCtrlrMeta(idx, smdIndexes...)
+		adjustNvmeSize(c.GetSmdDevices())
 		return c
 	}
 	newSmdDevResp := func(idx int32, smdIndexes ...int32) *ctlpb.SmdDevResp {
@@ -427,11 +489,13 @@ func TestServer_CtlSvc_StorageScan_PostEngineStart(t *testing.T) {
 	ctrlrPBwMetaNew.SmdDevices[0].AvailBytes = 0
 	ctrlrPBwMetaNew.SmdDevices[0].TotalBytes = 0
 	ctrlrPBwMetaNew.SmdDevices[0].DevState = storage.MockNvmeStateNew.String()
+	ctrlrPBwMetaNew.SmdDevices[0].ClusterSize = 0
 
 	ctrlrPBwMetaNormal := newCtrlrPBwMeta(1)
 	ctrlrPBwMetaNormal.SmdDevices[0].AvailBytes = 0
 	ctrlrPBwMetaNormal.SmdDevices[0].TotalBytes = 0
 	ctrlrPBwMetaNormal.SmdDevices[0].DevState = storage.MockNvmeStateNormal.String()
+	ctrlrPBwMetaNormal.SmdDevices[0].ClusterSize = 0
 
 	mockPbScmMount0 := proto.MockScmMountPoint(0)
 	mockPbScmNamespace0 := proto.MockScmNamespace(0)
@@ -713,8 +777,8 @@ func TestServer_CtlSvc_StorageScan_PostEngineStart(t *testing.T) {
 				Nvme: new(ctlpb.ScanNvmeReq),
 			},
 			smbc: &scm.MockBackendConfig{
-				DiscoverRes:         storage.ScmModules{storage.MockScmModule(0)},
-				GetPmemNamespaceRes: storage.ScmNamespaces{storage.MockScmNamespace(0)},
+				GetModulesRes:    storage.ScmModules{storage.MockScmModule(0)},
+				GetNamespacesRes: storage.ScmNamespaces{storage.MockScmNamespace(0)},
 			},
 			smsc: &scm.MockSysConfig{
 				GetfsUsageResps: []scm.GetfsUsageRetval{
@@ -740,8 +804,22 @@ func TestServer_CtlSvc_StorageScan_PostEngineStart(t *testing.T) {
 					State: new(ctlpb.ResponseState),
 				},
 				Scm: &ctlpb.ScanScmResp{
-					Namespaces: proto.ScmNamespaces{mockPbScmNamespace0},
-					State:      new(ctlpb.ResponseState),
+					Namespaces: proto.ScmNamespaces{
+						&ctlpb.ScmNamespace{
+							Blockdev: mockPbScmNamespace0.Blockdev,
+							Dev:      mockPbScmNamespace0.Dev,
+							Size:     mockPbScmNamespace0.Size,
+							Uuid:     mockPbScmNamespace0.Uuid,
+							Mount: &ctlpb.ScmNamespace_Mount{
+								Class:      mockPbScmMount0.Class,
+								DeviceList: mockPbScmMount0.DeviceList,
+								Path:       mockPbScmMount0.Path,
+								TotalBytes: mockPbScmMount0.TotalBytes,
+								AvailBytes: adjustScmSize(mockPbScmMount0.AvailBytes),
+							},
+						},
+					},
+					State: new(ctlpb.ResponseState),
 				},
 			},
 		},
@@ -751,8 +829,8 @@ func TestServer_CtlSvc_StorageScan_PostEngineStart(t *testing.T) {
 				Nvme: new(ctlpb.ScanNvmeReq),
 			},
 			smbc: &scm.MockBackendConfig{
-				DiscoverRes:         storage.ScmModules{storage.MockScmModule(0)},
-				GetPmemNamespaceRes: storage.ScmNamespaces{storage.MockScmNamespace(0)},
+				GetModulesRes:    storage.ScmModules{storage.MockScmModule(0)},
+				GetNamespacesRes: storage.ScmNamespaces{storage.MockScmNamespace(0)},
 			},
 			smsc: &scm.MockSysConfig{
 				GetfsUsageResps: []scm.GetfsUsageRetval{
@@ -791,8 +869,8 @@ func TestServer_CtlSvc_StorageScan_PostEngineStart(t *testing.T) {
 				Nvme: new(ctlpb.ScanNvmeReq),
 			},
 			smbc: &scm.MockBackendConfig{
-				DiscoverRes:         storage.ScmModules{storage.MockScmModule(0)},
-				GetPmemNamespaceRes: storage.ScmNamespaces{storage.MockScmNamespace(0)},
+				GetModulesRes:    storage.ScmModules{storage.MockScmModule(0)},
+				GetNamespacesRes: storage.ScmNamespaces{storage.MockScmNamespace(0)},
 			},
 			smsc: &scm.MockSysConfig{
 				GetfsUsageResps: []scm.GetfsUsageRetval{
@@ -826,7 +904,7 @@ func TestServer_CtlSvc_StorageScan_PostEngineStart(t *testing.T) {
 								Class:      "ram",
 								Path:       mockPbScmMount0.Path,
 								TotalBytes: mockPbScmMount0.TotalBytes,
-								AvailBytes: mockPbScmMount0.AvailBytes,
+								AvailBytes: adjustScmSize(mockPbScmMount0.AvailBytes),
 							},
 						},
 					},
@@ -842,10 +920,10 @@ func TestServer_CtlSvc_StorageScan_PostEngineStart(t *testing.T) {
 			csCtrlrs: &storage.NvmeControllers{newCtrlr(1), newCtrlr(2)},
 			eCtrlrs:  []*storage.NvmeControllers{{newCtrlr(1)}, {newCtrlr(2)}},
 			smbc: &scm.MockBackendConfig{
-				DiscoverRes: storage.ScmModules{
+				GetModulesRes: storage.ScmModules{
 					storage.MockScmModule(0),
 				},
-				GetPmemNamespaceRes: storage.ScmNamespaces{
+				GetNamespacesRes: storage.ScmNamespaces{
 					storage.MockScmNamespace(0),
 					storage.MockScmNamespace(1),
 				},
@@ -902,8 +980,33 @@ func TestServer_CtlSvc_StorageScan_PostEngineStart(t *testing.T) {
 				},
 				Scm: &ctlpb.ScanScmResp{
 					Namespaces: proto.ScmNamespaces{
-						mockPbScmNamespace0,
-						mockPbScmNamespace1,
+						&ctlpb.ScmNamespace{
+							Blockdev: mockPbScmNamespace0.Blockdev,
+							Dev:      mockPbScmNamespace0.Dev,
+							Size:     mockPbScmNamespace0.Size,
+							Uuid:     mockPbScmNamespace0.Uuid,
+							Mount: &ctlpb.ScmNamespace_Mount{
+								Class:      mockPbScmMount0.Class,
+								DeviceList: mockPbScmMount0.DeviceList,
+								Path:       mockPbScmMount0.Path,
+								TotalBytes: mockPbScmMount0.TotalBytes,
+								AvailBytes: adjustScmSize(mockPbScmMount0.AvailBytes),
+							},
+						},
+						&ctlpb.ScmNamespace{
+							Blockdev: mockPbScmNamespace1.Blockdev,
+							Dev:      mockPbScmNamespace1.Dev,
+							Size:     mockPbScmNamespace1.Size,
+							Uuid:     mockPbScmNamespace1.Uuid,
+							NumaNode: mockPbScmNamespace1.NumaNode,
+							Mount: &ctlpb.ScmNamespace_Mount{
+								Class:      mockPbScmMount1.Class,
+								DeviceList: mockPbScmMount1.DeviceList,
+								Path:       mockPbScmMount1.Path,
+								TotalBytes: mockPbScmMount1.TotalBytes,
+								AvailBytes: adjustScmSize(mockPbScmMount1.AvailBytes),
+							},
+						},
 					},
 					State: new(ctlpb.ResponseState),
 				},
@@ -2127,6 +2230,528 @@ func TestServer_CtlSvc_StorageNvmeAddDevice(t *testing.T) {
 			gotDevs := es.GetBdevConfigs()[tc.req.StorageTierIndex-1].Bdev.DeviceList.Strings()
 			if diff := cmp.Diff(tc.expDevList, gotDevs, common.DefaultCmpOpts()...); diff != "" {
 				t.Fatalf("unexpected response (-want, +got):\n%s\n", diff)
+			}
+		})
+	}
+}
+
+func TestServer_adjustNvmeSize(t *testing.T) {
+	type ExpectedOutput struct {
+		availableBytes []uint64
+		message        string
+	}
+
+	for name, tc := range map[string]struct {
+		input  *ctlpb.ScanNvmeResp
+		output ExpectedOutput
+	}{
+		"success": {
+			input: &ctlpb.ScanNvmeResp{
+				Ctrlrs: []*ctlpb.NvmeController{
+					{
+						SmdDevices: []*ctlpb.NvmeController_SmdDevice{
+							{
+								Uuid:        "nvme0",
+								TgtIds:      []int32{0, 1, 2, 3},
+								AvailBytes:  10 * humanize.GiByte,
+								ClusterSize: clusterSize,
+								DevState:    "NORMAL",
+								Rank:        0,
+							},
+							{
+								Uuid:        "nvme1",
+								TgtIds:      []int32{0, 1, 2, 3},
+								AvailBytes:  10 * humanize.GiByte,
+								ClusterSize: clusterSize,
+								DevState:    "NORMAL",
+								Rank:        0,
+							},
+							{
+								TgtIds:      []int32{0, 1, 2, 3},
+								AvailBytes:  20 * humanize.GiByte,
+								ClusterSize: clusterSize,
+								DevState:    "NORMAL",
+								Rank:        0,
+							},
+							{
+								TgtIds:      []int32{0, 1, 2},
+								AvailBytes:  20 * humanize.GiByte,
+								ClusterSize: clusterSize,
+								DevState:    "NORMAL",
+								Rank:        1,
+							},
+							{
+								TgtIds:      []int32{0, 1, 2},
+								AvailBytes:  20 * humanize.GiByte,
+								ClusterSize: clusterSize,
+								DevState:    "NORMAL",
+								Rank:        1,
+							},
+						},
+					},
+				},
+			},
+			output: ExpectedOutput{
+				availableBytes: []uint64{
+					8 * humanize.GiByte,
+					8 * humanize.GiByte,
+					8 * humanize.GiByte,
+					18 * humanize.GiByte,
+					18 * humanize.GiByte,
+				},
+			},
+		},
+		"new": {
+			input: &ctlpb.ScanNvmeResp{
+				Ctrlrs: []*ctlpb.NvmeController{
+					{
+						SmdDevices: []*ctlpb.NvmeController_SmdDevice{
+							{
+								Uuid:        "nvme0",
+								TgtIds:      []int32{0, 1, 2, 3},
+								AvailBytes:  10 * humanize.GiByte,
+								ClusterSize: clusterSize,
+								DevState:    "NORMAL",
+							},
+							{
+								Uuid:        "nvme1",
+								TgtIds:      []int32{0, 1, 2},
+								AvailBytes:  10 * humanize.GiByte,
+								ClusterSize: clusterSize,
+								DevState:    "NEW",
+							},
+						},
+					},
+				},
+			},
+			output: ExpectedOutput{
+				availableBytes: []uint64{
+					8 * humanize.GiByte,
+					0,
+				},
+				message: "Adjusting available size of unusable SMD device",
+			},
+		},
+		"evicted": {
+			input: &ctlpb.ScanNvmeResp{
+				Ctrlrs: []*ctlpb.NvmeController{
+					{
+						SmdDevices: []*ctlpb.NvmeController_SmdDevice{
+							{
+								TgtIds:      []int32{0, 1, 2, 3},
+								AvailBytes:  10 * humanize.GiByte,
+								ClusterSize: clusterSize,
+								DevState:    "NORMAL",
+							},
+							{
+								TgtIds:      []int32{0, 1, 2},
+								AvailBytes:  10 * humanize.GiByte,
+								ClusterSize: clusterSize,
+								DevState:    "EVICTED",
+							},
+						},
+					},
+				},
+			},
+			output: ExpectedOutput{
+				availableBytes: []uint64{
+					8 * humanize.GiByte,
+					0,
+				},
+				message: "Adjusting available size of unusable SMD device",
+			},
+		},
+		"missing targets": {
+			input: &ctlpb.ScanNvmeResp{
+				Ctrlrs: []*ctlpb.NvmeController{
+					{
+						SmdDevices: []*ctlpb.NvmeController_SmdDevice{
+							{
+								TgtIds:      []int32{0, 1, 2, 3},
+								AvailBytes:  10 * humanize.GiByte,
+								ClusterSize: clusterSize,
+								DevState:    "NORMAL",
+							},
+							{
+								TgtIds:      []int32{},
+								AvailBytes:  10 * humanize.GiByte,
+								ClusterSize: clusterSize,
+								DevState:    "NORMAL",
+							},
+						},
+					},
+				},
+			},
+			output: ExpectedOutput{
+				availableBytes: []uint64{
+					8 * humanize.GiByte,
+					10 * humanize.GiByte,
+				},
+				message: "missing storage info",
+			},
+		},
+		"missing cluster size": {
+			input: &ctlpb.ScanNvmeResp{
+				Ctrlrs: []*ctlpb.NvmeController{
+					{
+						SmdDevices: []*ctlpb.NvmeController_SmdDevice{
+							{
+								Uuid:        "nvme0",
+								TgtIds:      []int32{0, 1, 2, 3},
+								AvailBytes:  10 * humanize.GiByte,
+								ClusterSize: clusterSize,
+								DevState:    "NORMAL",
+							},
+							{
+								Uuid:       "nvme1",
+								TgtIds:     []int32{0, 1, 2},
+								AvailBytes: 10 * humanize.GiByte,
+								DevState:   "NORMAL",
+							},
+						},
+					},
+				},
+			},
+			output: ExpectedOutput{
+				availableBytes: []uint64{
+					8 * humanize.GiByte,
+					10 * humanize.GiByte,
+				},
+				message: "missing storage info",
+			},
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(t.Name())
+			defer common.ShowBufferOnFailure(t, buf)
+
+			cs := mockControlService(t, log, nil, nil, nil, nil)
+			cs.adjustNvmeSize(tc.input)
+
+			ctlr := tc.input.GetCtrlrs()[0]
+			for index, device := range ctlr.GetSmdDevices() {
+				common.AssertEqual(t, device.GetAvailBytes(),
+					tc.output.availableBytes[index], "Invalid available bytes")
+			}
+			if tc.output.message != "" {
+				common.AssertTrue(t,
+					strings.Contains(buf.String(), tc.output.message),
+					"missing message: "+tc.output.message)
+			}
+		})
+	}
+}
+
+func TestServer_getMetadataCapacity(t *testing.T) {
+	type EngineConfig struct {
+		mdCap       string
+		mountPoints []string
+	}
+
+	type ExpectedOutput struct {
+		size    uint64
+		message string
+		err     error
+	}
+
+	for name, tc := range map[string]struct {
+		mountPoint string
+		configs    []*EngineConfig
+		output     ExpectedOutput
+	}{
+		"simple env var": {
+			mountPoint: "/mnt/daos0",
+			configs: []*EngineConfig{
+				{
+					mdCap:       "DAOS_MD_CAP=1024",
+					mountPoints: []string{"/mnt/daos0"},
+				},
+			},
+			output: ExpectedOutput{
+				size: 1024 * humanize.MiByte,
+			},
+		},
+		"simple default": {
+			mountPoint: "/mnt/daos0",
+			configs: []*EngineConfig{
+				{
+					mountPoints: []string{"/mnt/daos0"},
+				},
+			},
+			output: ExpectedOutput{
+				size:    mdcapSize,
+				message: " using default metadata capacity with SCM",
+			},
+		},
+		"complex env var": {
+			mountPoint: "/mnt/daos2",
+			configs: []*EngineConfig{
+				{
+					mdCap:       "DAOS_MD_CAP=1024",
+					mountPoints: []string{"/mnt/daos0"},
+				},
+				{
+					mdCap:       "DAOS_MD_CAP=512",
+					mountPoints: []string{"/mnt/daos1", "/mnt/daos2", "/mnt/daos3"},
+				},
+				{
+					mountPoints: []string{"/mnt/daos4"},
+				},
+			},
+			output: ExpectedOutput{
+				size: 512 * humanize.MiByte,
+			},
+		},
+		"unknown device": {
+			mountPoint: "/mnt/daos0",
+			output: ExpectedOutput{
+				err: errors.New("unknown SCM mount point"),
+			},
+		},
+		"invalid mdcap": {
+			mountPoint: "/mnt/daos0",
+			configs: []*EngineConfig{
+				{
+					mdCap:       "DAOS_MD_CAP=foo",
+					mountPoints: []string{"/mnt/daos0"},
+				},
+			},
+			output: ExpectedOutput{
+				err: errors.New("invalid metadata capacity"),
+			},
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(t.Name())
+			defer common.ShowBufferOnFailure(t, buf)
+
+			var enginesCfg []*engine.Config
+			for _, cfg := range tc.configs {
+				var storagesCfg []*storage.TierConfig
+				for _, mountPoint := range cfg.mountPoints {
+					storageCfg := storage.NewTierConfig()
+					storageCfg.WithStorageClass(storage.ClassDcpm.String())
+					storageCfg.WithScmMountPoint(mountPoint)
+
+					storagesCfg = append(storagesCfg, storageCfg)
+				}
+
+				engineCfg := engine.MockConfig()
+				engineCfg.WithStorage(storagesCfg...)
+				engineCfg.WithEnvVars(cfg.mdCap)
+
+				enginesCfg = append(enginesCfg, engineCfg)
+			}
+			serverCfg := config.DefaultServer().WithEngines(enginesCfg...)
+			cs := mockControlService(t, log, serverCfg, nil, nil, nil)
+
+			size, err := cs.getMetadataCapacity(tc.mountPoint)
+
+			if err != nil {
+				common.AssertTrue(t, tc.output.err != nil,
+					fmt.Sprintf("Unexpected error %q", err))
+				common.CmpErr(t, tc.output.err, err)
+				return
+			}
+
+			common.AssertTrue(t, err == nil, "Expected error")
+			common.AssertEqual(t, tc.output.size, size, "invalid meta data capacity size")
+			if tc.output.message != "" {
+				common.AssertTrue(t,
+					strings.Contains(buf.String(), tc.output.message),
+					"missing message: "+tc.output.message)
+			}
+		})
+	}
+}
+
+func TestServer_adjustScmSize(t *testing.T) {
+	type EngineConfig struct {
+		mdCap       string
+		mountPoints []string
+	}
+
+	type DataInput struct {
+		configs  []*EngineConfig
+		response *ctlpb.ScanScmResp
+	}
+
+	type ExpectedOutput struct {
+		availableBytes []uint64
+		message        string
+	}
+
+	for name, tc := range map[string]struct {
+		input  DataInput
+		output ExpectedOutput
+	}{
+		"single mountPoint": {
+			input: DataInput{
+				configs: []*EngineConfig{
+					{
+						mountPoints: []string{"/mnt/daos0"},
+					},
+				},
+				response: &ctlpb.ScanScmResp{
+					Namespaces: []*ctlpb.ScmNamespace{
+						{
+							Mount: &ctlpb.ScmNamespace_Mount{
+								Path:       "/mnt/daos0",
+								AvailBytes: uint64(64) * humanize.GiByte,
+								Class:      storage.ClassFile.String(),
+							},
+						},
+					},
+				},
+			},
+			output: ExpectedOutput{
+				availableBytes: []uint64{uint64(64)*humanize.GiByte - mdcapSize - mdDaosScmBytes},
+			},
+		},
+		"three mountPoints": {
+			input: DataInput{
+				configs: []*EngineConfig{
+					{
+						mdCap:       "DAOS_MD_CAP=1024",
+						mountPoints: []string{"/mnt/daos0", "/mnt/daos1", "/mnt/daos2"},
+					},
+				},
+				response: &ctlpb.ScanScmResp{
+					Namespaces: []*ctlpb.ScmNamespace{
+						{
+							Mount: &ctlpb.ScmNamespace_Mount{
+								Path:       "/mnt/daos0",
+								AvailBytes: uint64(64) * humanize.GiByte,
+								Class:      storage.ClassFile.String(),
+							},
+						},
+						{
+							Mount: &ctlpb.ScmNamespace_Mount{
+								Path:       "/mnt/daos1",
+								AvailBytes: uint64(32) * humanize.GiByte,
+								Class:      storage.ClassFile.String(),
+							},
+						},
+						{
+							Mount: &ctlpb.ScmNamespace_Mount{
+								Path:       "/mnt/daos2",
+								AvailBytes: uint64(128) * humanize.GiByte,
+								Class:      storage.ClassFile.String(),
+							},
+						},
+					},
+				},
+			},
+			output: ExpectedOutput{
+				availableBytes: []uint64{
+					uint64(64)*humanize.GiByte - 1024*humanize.MiByte - mdDaosScmBytes,
+					uint64(32)*humanize.GiByte - 1024*humanize.MiByte - mdDaosScmBytes,
+					uint64(128)*humanize.GiByte - 1024*humanize.MiByte - mdDaosScmBytes,
+				},
+			},
+		},
+		"Missing SCM": {
+			input: DataInput{
+				configs: []*EngineConfig{
+					{
+						mdCap:       "DAOS_MD_CAP=1024",
+						mountPoints: []string{"/mnt/daos0", "/mnt/daos2"},
+					},
+				},
+				response: &ctlpb.ScanScmResp{
+					Namespaces: []*ctlpb.ScmNamespace{
+						{
+							Mount: &ctlpb.ScmNamespace_Mount{
+								Path:       "/mnt/daos0",
+								AvailBytes: uint64(64) * humanize.GiByte,
+								Class:      storage.ClassFile.String(),
+							},
+						},
+						{
+							Mount: &ctlpb.ScmNamespace_Mount{
+								Path:       "/mnt/daos1",
+								AvailBytes: uint64(32) * humanize.GiByte,
+								Class:      storage.ClassFile.String(),
+							},
+						},
+						{
+							Mount: &ctlpb.ScmNamespace_Mount{
+								Path:       "/mnt/daos2",
+								AvailBytes: uint64(128) * humanize.GiByte,
+								Class:      storage.ClassFile.String(),
+							},
+						},
+					},
+				},
+			},
+			output: ExpectedOutput{
+				availableBytes: []uint64{
+					uint64(64)*humanize.GiByte - 1024*humanize.MiByte - mdDaosScmBytes,
+					uint64(32) * humanize.GiByte,
+					uint64(128)*humanize.GiByte - 1024*humanize.MiByte - mdDaosScmBytes,
+				},
+				message: "Skipping SCM /mnt/daos1",
+			},
+		},
+		"No more space": {
+			input: DataInput{
+				configs: []*EngineConfig{
+					{
+						mountPoints: []string{"/mnt/daos0"},
+					},
+				},
+				response: &ctlpb.ScanScmResp{
+					Namespaces: []*ctlpb.ScmNamespace{
+						{
+							Mount: &ctlpb.ScmNamespace_Mount{
+								Path:       "/mnt/daos0",
+								AvailBytes: uint64(64) * humanize.KiByte,
+								Class:      storage.ClassFile.String(),
+							},
+						},
+					},
+				},
+			},
+			output: ExpectedOutput{
+				availableBytes: []uint64{0},
+				message:        "WARNING: Adjusting available size to 0 Bytes of SCM device",
+			},
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(t.Name())
+			defer common.ShowBufferOnFailure(t, buf)
+
+			var enginesCfg []*engine.Config
+			for _, cfg := range tc.input.configs {
+				var storagesCfg []*storage.TierConfig
+				for _, mountPoint := range cfg.mountPoints {
+					storageCfg := storage.NewTierConfig()
+					storageCfg.WithStorageClass(storage.ClassDcpm.String())
+					storageCfg.WithScmMountPoint(mountPoint)
+
+					storagesCfg = append(storagesCfg, storageCfg)
+				}
+
+				engineCfg := engine.MockConfig()
+				engineCfg.WithStorage(storagesCfg...)
+				engineCfg.WithEnvVars(cfg.mdCap)
+
+				enginesCfg = append(enginesCfg, engineCfg)
+			}
+			serverCfg := config.DefaultServer().WithEngines(enginesCfg...)
+			cs := mockControlService(t, log, serverCfg, nil, nil, nil)
+
+			cs.adjustScmSize(tc.input.response)
+
+			for index, namespace := range tc.input.response.Namespaces {
+				common.AssertEqual(t, namespace.GetMount().GetAvailBytes(),
+					tc.output.availableBytes[index], "Invalid available bytes")
+			}
+			if tc.output.message != "" {
+				common.AssertTrue(t,
+					strings.Contains(buf.String(), tc.output.message),
+					"missing message: "+tc.output.message)
 			}
 		})
 	}

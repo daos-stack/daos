@@ -5,7 +5,6 @@
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 from logging import getLogger
-from os import environ
 from time import sleep
 
 from command_utils_base import ObjectWithParameters, BasicParameter
@@ -67,15 +66,13 @@ class TestDaosApiBase(ObjectWithParameters):
     USE_DMG = "dmg"
     USE_DAOS = "daos"
 
-    def __init__(self, namespace, cb_handler=None, crt_timeout=None):
+    def __init__(self, namespace, cb_handler=None):
         """Create a TestDaosApi object.
 
         Args:
             namespace (str): yaml namespace (path to parameters)
             cb_handler (CallbackHandler, optional): callback object to use with
                 the API methods. Defaults to None.
-            crt_timeout (str, optional): value to use for the CRT_TIMEOUT when running pydaos
-                commands. Defaults to None.
         """
         super().__init__(namespace)
         self.cb_handler = cb_handler
@@ -87,11 +84,6 @@ class TestDaosApiBase(ObjectWithParameters):
         #   USE_DMG    - use the dmg command to create/destroy pools/containers
         #   USE_DAOS   - use the daos command to create/destroy pools/containers
         self.control_method = BasicParameter(self.USE_API, self.USE_API)
-
-        # Set the CRT_TIMEOUT, if specified, for pydaos commands
-        if crt_timeout is not None:
-            environ["CRT_TIMEOUT"] = str(crt_timeout)
-            self.log.info("Setting CRT_TIMEOUT to %s for pydaos commands", environ["CRT_TIMEOUT"])
 
     def _log_method(self, name, kwargs):
         """Log the method call with its arguments.
@@ -160,18 +152,18 @@ class TestDaosApiBase(ObjectWithParameters):
             # Determine which comparison to utilize for this check
             compare = ("==", lambda x, y: x == y, "does not match")
             if isinstance(expect, str):
-                comparisons = {
-                    "<": (lambda x, y: x < y, "is too large"),
-                    ">": (lambda x, y: x > y, "is too small"),
-                    "<=": (
-                        lambda x, y: x <= y, "is too large or does not match"),
-                    ">=": (
-                        lambda x, y: x >= y, "is too small or does not match"),
-                }
-                for key, val in list(comparisons.items()):
+                comparisons = [
+                    ["<=", (lambda x, y: x <= y, "is too large or does not match")],
+                    ["<", (lambda x, y: x < y, "is too large")],
+                    [">=", (lambda x, y: x >= y, "is too small or does not match")],
+                    [">", (lambda x, y: x > y, "is too small")],
+                ]
+                for comparison in comparisons:
                     # If the expected value is preceded by one of the known
                     # comparison keys, use the comparison and remove the key
                     # from the expected value
+                    key = comparison[0]
+                    val = comparison[1]
                     if expect[:len(key)] == key:
                         compare = (key, val[0], val[1])
                         expect = expect[len(key):]

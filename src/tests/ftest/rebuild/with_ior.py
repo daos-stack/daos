@@ -54,7 +54,7 @@ class RbldWithIOR(IorTestBase):
             "Invalid pool information detected before rebuild")
 
         self.assertTrue(
-            self.pool.check_rebuild_status(rs_errno=0, rs_state=0,
+            self.pool.check_rebuild_status(rs_errno=0, rs_state=1,
                                            rs_obj_nr=0, rs_rec_nr=0),
             "Invalid pool rebuild info detected before rebuild")
 
