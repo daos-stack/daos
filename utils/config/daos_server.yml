@@ -199,12 +199,11 @@
 ##nr_hugepages: -1
 #
 #
-## Force specific debug mask for daos_server (control plane).
-## By default, just use the default debug mask used by daos_server.
-## Mask specifies minimum level of message significance to pass to logger.
-## Currently supported values are DEBUG and ERROR.
+## Set specific debug mask for daos_server (control plane).
+## The mask specifies minimum level of message significance to pass to logger.
+## Currently supported values are DISABLED, ERROR, INFO and DEBUG.
 #
-## default: DEBUG
+## default: INFO
 #control_log_mask: ERROR
 #
 #
