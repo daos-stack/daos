@@ -63,7 +63,7 @@ of pool map invalidation each time they communicate with any engine. To do so,
 clients pack their current pool map version in every RPC. Servers reply not
 only with the current pool map version. Consequently, when a DAOS client
 experiences RPC timeout, it regularly communicates with the other DAOS
-target to guarantee its pool map is always current. Clients will 
+target to guarantee its pool map is always current. Clients will
 eventually be informed of the target exclusion and enter into degraded mode.
 
 This mechanism guarantees global node eviction and that all nodes eventually
