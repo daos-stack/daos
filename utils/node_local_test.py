@@ -2785,45 +2785,6 @@ class posix_tests():
         assert rc.returncode == 0
         destroy_container(self.conf, self.pool.id(), container)
 
-    def XXXtest_dfuse_bin(self):
-        """Call the dfuse_test binary"""
-
-        def run_test(dirname):
-            cmd = [dcmd, '--test-dir', dirname]
-
-            il_cmd(self.server, cmd, dfuse,
-                   stdout=True, check_read=False, check_write=False, check_fstat=False)
-
-        dcmd = os.path.join(self.conf['PREFIX'], 'bin', 'dfuse_test')
-        dfuse = None
-
-        with tempfile.TemporaryDirectory(prefix='il_test') as tmp:
-            run_test(tmp)
-
-        tests = {'uncached': {'Caching': False,
-                              'WB_Cache': False},
-                 'write-through': {'Caching': True,
-                                   'WB_Cache': False}}
-#                 'write-back': {'Caching': True,
-#                                'WB_Cache': True}}
-
-        for (test, data) in tests.items():
-            print(test)
-            dfuse = DFuse(self.server,
-                          self.conf,
-                          pool=self.pool.id(),
-                          container=self.container,
-                          caching=data['Caching'],
-                          wbcache=data['WB_Cache'])
-            dfuse.start(v_hint=f'bin_{test}')
-
-            dcmd = os.path.join(dfuse.conf['PREFIX'], 'bin', 'dfuse_test')
-
-            run_test(dfuse.dir)
-
-            if dfuse.stop():
-                self.fatal_errors = True
-
 
 class nlt_stdout_wrapper():
     """Class for capturing stdout from threads"""
