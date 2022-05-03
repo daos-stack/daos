@@ -157,7 +157,7 @@ scalable object ID allocator is provided in the DAOS API. The object ID to
 be stored by the application is the full 128-bit address, which is for single
 use only and can be associated with only a single object schema.
 
-**DAOS Object ID Structure**
+## DAOS Object ID Structure
 
 <pre>
 
@@ -209,7 +209,7 @@ and storage.
 
 A DAOS object can be accessed through different APIs:
 
--    **Multi-level key-array** API is the native object interface with locality
+- **Multi-level key-array** API is the native object interface with locality
      feature. The key is split into a distribution (dkey) and an
      attribute (akey) key. Both keys can be variable
      length and type (a string, an integer or even a complex data
@@ -217,10 +217,8 @@ A DAOS object can be accessed through different APIs:
      collocated on the same target. The value associated with akey can be
      either a single variable-length value or an array of fixed-length values.
      Both the akeys and dkeys support enumeration.
-
--    **Key-value** API provides a simple key and variable-length value
+- **Key-value** API provides a simple key and variable-length value
      interface. It supports the traditional put, get, remove and list operations.
-
--    **Array API** implements a one-dimensional array of fixed-size elements
+- **Array API** implements a one-dimensional array of fixed-size elements
      addressed by a 64-bit offset. A DAOS array supports arbitrary extent read,
      write and punch operations.

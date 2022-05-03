@@ -31,38 +31,38 @@ a per-file or per-directory basis.
 
 The DFS API closely represents the POSIX API. The API includes operations to:
 
-* Mount: create/open superblock and root object
-* Un-mount: release open handles
-* Lookup: traverse a path and return an open file/dir handle
-* IO: read & write with an iovec
-* Stat: retrieve attributes of an entry
-* Mkdir: create a dir
-* Readdir: enumerate all entries under a directory
-* Open: create/Open a file/dir
-* Remove: unlink a file/dir
-* Move: rename
-* Release: close an open handle of a file/dir
-* Extended Attributes: set, get, list, remove
+- Mount: create/open superblock and root object
+- Un-mount: release open handles
+- Lookup: traverse a path and return an open file/dir handle
+- IO: read & write with an iovec
+- Stat: retrieve attributes of an entry
+- Mkdir: create a dir
+- Readdir: enumerate all entries under a directory
+- Open: create/Open a file/dir
+- Remove: unlink a file/dir
+- Move: rename
+- Release: close an open handle of a file/dir
+- Extended Attributes: set, get, list, remove
 
 ### POSIX Compliance
 
 The following features from POSIX will not be supported:
 
-* Hard links
-* mmap support with MAP\_SHARED will be consistent from single client only. Note
+- Hard links
+- mmap support with MAP\_SHARED will be consistent from single client only. Note
   that this is supported through DFUSE only (i.e. not through the DFS API).
-* Char devices, block devices, sockets and pipes
-* User/group quotas
-* setuid(), setgid() programs, supplementary groups, ACLs are not supported
+- Char devices, block devices, sockets and pipes
+- User/group quotas
+- setuid(), setgid() programs, supplementary groups, ACLs are not supported
   within the DFS namespace.
-* [access/change/modify] time not updated appropriately, potentially on close only.
-* Flock (maybe at dfuse local node level only)
-* Block size in stat buf is not accurate (no account for holes, extended attributes)
-* Various parameters reported via statfs like number of blocks, files,
+- [access/change/modify] time not updated appropriately, potentially on close only.
+- Flock (maybe at dfuse local node level only)
+- Block size in stat buf is not accurate (no account for holes, extended attributes)
+- Various parameters reported via statfs like number of blocks, files,
   free/available space
-* POSIX permissions inside an encapsulated namespace
-  * Still enforced at the DAOS pool/container level
-  * Effectively means that all files belong to the same "project"
+- POSIX permissions inside an encapsulated namespace
+  - Still enforced at the DAOS pool/container level
+  - Effectively means that all files belong to the same "project"
 
 It is possible to use `libdfs` in a parallel application from multiple nodes.
 DFS provides two modes that offer different levels of consistency. The modes can
@@ -80,7 +80,7 @@ accessed in balanced mode only. If the container was created with relaxed mode,
 it can be accessed in relaxed or balanced mode. In either mode, there is a
 consistency semantic issue that is not properly handled:
 
-* Open-unlink semantics: This occurs when a client obtains an open handle on an
+- Open-unlink semantics: This occurs when a client obtains an open handle on an
   object (file or directory), and accesses that object (reads/writes data or
   create other files), while another client removes that object that the other
   client has opened from under it. In DAOS, we don't track object open handles
@@ -90,15 +90,15 @@ consistency semantic issue that is not properly handled:
 
 Other consistency issues are handled differently between the two consistency mode:
 
-* Same Operation Executed Concurrently (Supported in both Relaxed and Balanced
+- Same Operation Executed Concurrently (Supported in both Relaxed and Balanced
   Mode): For example, clients try to create or remove the same file
   concurrently, one should succeed and others will fail.
-* Create/Unlink/Rename Conflicts (Supported in Balanced Mode only): For example,
+- Create/Unlink/Rename Conflicts (Supported in Balanced Mode only): For example,
   a client renames a file, but another unlinks the old file at the same time.
-* Operation Atomicity (Supported only in Balanced mode): If a client crashes in
+- Operation Atomicity (Supported only in Balanced mode): If a client crashes in
   the middle of the rename, the state of the container should be consistent as
   if the operation never happened.
-* Visibility (Supported in Balanced and Relaxed mode): A write from one client
+- Visibility (Supported in Balanced and Relaxed mode): A write from one client
   should be visible to another client with a simple coordination between the
   clients.
 
@@ -176,7 +176,7 @@ Additionally, there are several optional command-line options:
 | --sys-name=<name\>         | DAOS system name                 |
 | --foreground               | run in foreground                |
 | --singlethreaded           | run single threaded              |
-| --thread-count=<count>     | Number of threads to use         |
+| --thread-count=< count >   | Number of threads to use         |
 
 When DFuse starts, it will register a single mount with the kernel, at the
 location specified by the `--mountpoint` option. This mount will be
@@ -274,12 +274,12 @@ on the DFuse command line and fine grained control via container attributes.
 
 The following types of data will be cached by default.
 
-* Kernel caching of dentries
-* Kernel caching of negative dentries
-* Kernel caching of inodes (file sizes, permissions etc)
-* Kernel caching of file contents
-* Readahead in dfuse and inserting data into kernel cache
-* MMAP write optimization
+- Kernel caching of dentries
+- Kernel caching of negative dentries
+- Kernel caching of inodes (file sizes, permissions etc)
+- Kernel caching of file contents
+- Readahead in dfuse and inserting data into kernel cache
+- MMAP write optimization
 
 !!! warning
     Caching is enabled by default in dfuse. This might cause some parallel

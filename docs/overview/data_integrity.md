@@ -96,13 +96,12 @@ more information):
 A single extent update (blue line) from index 2-13. A fetched extent (orange
 line) from index 2-6. The fetch is only part of the original extent written.
 
-![](../graph/data_integrity/array_example_1.png)
+![Fetch 1](../graph/data_integrity/array_example_1.png)
 
 Many extent updates and different epochs. A fetch from index 2-13 requires parts
 from each extent.
 
 ![Array Example 2](../graph/data_integrity/array_example_2.png)
-
 
 The nature of the array type requires that a more sophisticated approach to
 creating checksums is used. DAOS uses a "chunking" approach where each extent
@@ -113,7 +112,7 @@ size configured to be 4 (units are arbitrary in this example). Though not all
 chunks have a total size of 4, an absolute offset alignment is maintained.
 The gray boxes around the extents represent the chunks.
 
-![](../graph/data_integrity/array_with_chunks.png)
+![Fetch 2](../graph/data_integrity/array_with_chunks.png)
 
 (
 See [Object Layer](https://github.com/daos-stack/daos/blob/release/2.2/src/object/README.md)

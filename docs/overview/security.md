@@ -155,19 +155,19 @@ It is _not_ possible to deny access to a specific group in this way, due to
 ##### ACE Examples
 
 * `A::daos_user@:rw`
-    * Allow the UNIX user named `daos_user` to have read-write access.
+  * Allow the UNIX user named `daos_user` to have read-write access.
 * `A:G:project_users@:tc`
-    * Allow anyone in the UNIX group `project_users` to access a pool's
+  * Allow anyone in the UNIX group `project_users` to access a pool's
       contents and create containers.
 * `A::OWNER@:rwdtTaAo`
-    * Allow the UNIX user who owns the container to have full control.
+  * Allow the UNIX user who owns the container to have full control.
 * `A:G:GROUP@:rwdtT`
-    * Allow the UNIX group that owns the container to read and write data, delete
+  * Allow the UNIX group that owns the container to read and write data, delete
       the container, and manipulate container properties.
 * `A::EVERYONE@:r`
-    * Allow any user not covered by other rules to have read-only access.
+  * Allow any user not covered by other rules to have read-only access.
 * `A::daos_user@:`
-    * Deny the UNIX user named `daos_user` any access to the resource.
+  * Deny the UNIX user named `daos_user` any access to the resource.
 
 #### Enforcement
 
@@ -209,7 +209,7 @@ non-whitespace character on the line.
 
 For example:
 
-```
+```sh
 # ACL for my container
 # Owner can't touch data - just do admin-type things
 A::OWNER@:dtTaAo
@@ -231,8 +231,7 @@ To calculate the internal data size of an ACL, use the following formula for
 each ACE:
 
 * The base size of an ACE is 256 Bytes.
-* If the ACE principal is *not* one of the special principals:
+* If the ACE principal is _not_ one of the special principals:
   * Add the length of the principal string + 1.
   * If that value is not 64-Byte aligned, round up to the nearest 64-Byte
     boundary.
-

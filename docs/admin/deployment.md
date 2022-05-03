@@ -19,14 +19,10 @@ To sum up, the typical workflow of a DAOS system deployment consists of the
 following steps:
 
 - Configure and start the [DAOS server](#daos-server-setup).
-
 - [Provision Hardware](#hardware-provisioning) on all the storage nodes via the
   dmg utility.
-
 - [Format](#storage-formatting) the DAOS system
-
 - [Set up and start the agent](#agent-setup) on the client nodes
-
 - [Validate](#system-validation) that the DAOS system is operational
 
 Note that starting the DAOS server instances can be performed automatically
@@ -139,7 +135,6 @@ the hosts if '--num-engines' is not specified on the command line.
   bound to the same NUMA node.
   If not set explicitly on the command line, the default is the number of NUMA nodes
   detected on the host.
-
 - '--min-ssds' specifies the minimum number of NVMe SSDs per engine that needs
   to be present on each host.
   For each engine entry in the generated config, at least this number of SSDs
@@ -148,7 +143,6 @@ the hosts if '--num-engines' is not specified on the command line.
   If not set on the command line, the default is "1".
   If set to "0", the NVMe SSDs will not be added to the generated config and SSD
   validation will be disabled.
-
 - '--net-class' specifies a preference for network interface class, options are
   'ethernet', 'infiniband' or 'best-available'.
   'best-available' will attempt to choose the most performant (as judged by
@@ -308,7 +302,7 @@ modify the ExecStart line to point to your `daos_server` binary.
 After modifying ExecStart, run the following command:
 
 ```bash
-udo systemctl daemon-reload
+sudo systemctl daemon-reload
 ```
 
 Once the service file is installed you can start `daos_server`
@@ -405,9 +399,7 @@ Example usage:
 
 - `clush -w wolf-[118-121,130-133] daos_server storage prepare --scm-only`
   after running, the user should be prompted for a reboot.
-
 - `clush -w wolf-[118-121,130-133] reboot`
-
 - `clush -w wolf-[118-121,130-133] daos_server storage prepare --scm-only`
   after running, PMem devices (/dev/pmemX namespaces created on the new SCM
   regions) should be available on each of the hosts.
@@ -791,11 +783,12 @@ information, please refer to the [DAOS build documentation][6].
 
 ### Network Configuration
 
-#### Network Scan
-
 The `dmg` utility supports the `network scan` function to display the network
 interfaces, related OFI fabric providers and associated NUMA node for each
 device.
+
+#### Network Scan
+
 This information is used to configure the global fabric provider and the unique
 local network interface for each I/O engine on the storage nodes.
 This section will help you determine what to provide for the `provider`,

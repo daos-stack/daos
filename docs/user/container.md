@@ -545,21 +545,13 @@ Client user and group access for containers is controlled by
 Access-controlled container accesses include:
 
 - Opening the container for access.
-
 - Reading and writing data in the container.
-
   - Reading and writing objects.
-
   - Getting, setting, and listing user attributes.
-
   - Getting, setting, and listing snapshots.
-
 - Deleting the container (if the pool does not grant the user permission).
-
 - Getting and setting container properties.
-
 - Getting and modifying the container ACL.
-
 - Modifying the container's owner.
 
 This is reflected in the set of supported

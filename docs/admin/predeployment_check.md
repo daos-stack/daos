@@ -38,13 +38,12 @@ $ sudo reboot
     https://github.com/spdk/spdk/issues/1153)
     The problem manifests with the following signature in the kernel logs:
 
-    ```bash
-    [82734.333834] genirq: Threaded irq requested with handler=NULL and !ONESHOT for irq 113
-    [82734.341761] uio_pci_generic: probe of 0000:18:00.0 failed with error -22
-    ```
-
-    As a consequence, the use of VFIO on these distributions is a requirement
-    since UIO is not supported.
+  ```bash
+  [82734.333834] genirq: Threaded irq requested with handler=NULL and !ONESHOT for irq 113
+  [82734.341761] uio_pci_generic: probe of 0000:18:00.0 failed with error -22
+  As a consequence, the use of VFIO on these distributions is a requirement
+  since UIO is not supported.
+  ```
 
 ## Time Synchronization
 
@@ -61,7 +60,7 @@ As part of the `daos-server` RPM Install, several users and groups are required 
 - `daos-server` will also be created as its primary group
 - `daos_metrics` secondary group
 - `daos_daemons` secondary group
-- `daos_server` - non-privileged user
+- `daos_server`  non-privileged user
 
 Note: The `daos_server` and `daos_engine` processes run under the `daos_server` userid.
 
@@ -75,7 +74,7 @@ As part of the `daos-client RPM Install, several users and groups are required a
 
 - `daos-agent` will also be created as its primary group
 - `daos_daemons` secondary group
-- `daos_agent` - non-privileged user, member of daos_daemons
+- `daos_agent` non-privileged user, member of daos_daemons
 
 Note: The `daos_agent` process runs under a non-privileged userid `daos_agent`.
 

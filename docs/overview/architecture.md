@@ -51,46 +51,32 @@ Persistent Memory Development Kit (PMDK) allows managing
 transactional access to SCM, and the Storage Performance Development Kit
 (SPDK) enables user-space I/O to NVMe devices.
 
-![](../admin/media/image1.png)
+![Figure 2-1. DAOS Storage](../admin/media/image1.png)
 Figure 2-1. DAOS Storage
 
 DAOS aims to deliver:
 
--   High throughput and IOPS at arbitrary alignment and size
-
--   Fine-grained I/O operations with true zero-copy I/O to SCM
-
--   Support for massively distributed NVM storage via scalable
+- High throughput and IOPS at arbitrary alignment and size
+- Fine-grained I/O operations with true zero-copy I/O to SCM
+- Support for massively distributed NVM storage via scalable
     collective communications across the storage servers
-
--   Non-blocking data and metadata operations to allow I/O and
+- Non-blocking data and metadata operations to allow I/O and
     computation to overlap
-
--   Advanced data placement taking into account fault domains
-
--   Software-managed redundancy supporting both replication and erasure
+- Advanced data placement taking into account fault domains
+- Software-managed redundancy supporting both replication and erasure
     code with an online rebuild
-
--   End-to-end data integrity
-
--   Scalable distributed transactions with guaranteed data consistency
+- End-to-end data integrity
+- Scalable distributed transactions with guaranteed data consistency
     and automated recovery
-
--   Dataset snapshot
-
--   Security framework to manage access control to storage pools
-
--   Software-defined storage management to provision, configure, modify
+- Dataset snapshot
+- Security framework to manage access control to storage pools
+- Software-defined storage management to provision, configure, modify
     and monitor storage pools over COTS hardware
-
--   Native support for Hierarchical Data Format (HDF)5, MPI-IO and POSIX
+- Native support for Hierarchical Data Format (HDF)5, MPI-IO and POSIX
     namespace over the DAOS data model
-
--   Tools for disaster recovery
-
--   Seamless integration with the Lustre parallel filesystem
-
--   Mover agent to migrate datasets among DAOS pools and from parallel
+- Tools for disaster recovery
+- Seamless integration with the Lustre parallel filesystem
+- Mover agent to migrate datasets among DAOS pools and from parallel
     filesystems to DAOS and vice versa
 
 ## DAOS System
@@ -128,7 +114,7 @@ target has its private storage, its pool of service threads, and its
 dedicated network context that can be directly addressed over the fabric
 independently of the other targets hosted on the same storage node.
 
-* The SCM modules are configured in *AppDirect interleaved* mode.
+- The SCM modules are configured in *AppDirect interleaved* mode.
   They are thus presented to the operating system as a single PMem
   namespace per socket (in `fsdax` mode).
 
@@ -140,11 +126,11 @@ independently of the other targets hosted on the same storage node.
     DAX does not yet support the `relink` filesystem feature,
     but DAOS does not use this feature.
 
-* When *N* targets per engine are configured,
+- When *N* targets per engine are configured,
   each target is using *1/N* of the capacity of the `fsdax` SCM capacity
   of that socket, independently of the other targets.
 
-* Each target also uses a fraction of the NVMe capacity of the NVMe
+- Each target also uses a fraction of the NVMe capacity of the NVMe
   drives attached to this socket. For example, in an engine
   with 4 NVMe disks and 16 targets, each target will manage 1/4 of
   a single NVMe disk.

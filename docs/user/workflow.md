@@ -9,9 +9,7 @@ the administrators.
 The typical workflow consists of:
 
 - New project members meet and define storage requirements, including space, bandwidth, IOPS & data protection needs.
-
 - Administrators collect those requirements, create a pool for the new project and set relevant ACL to grant access to project members.
-
 - Administrators notify the project members that the pool has been created and provide the pool label to the users.
 
 Users can then create containers (i.e., datasets or buckets) in their pool.

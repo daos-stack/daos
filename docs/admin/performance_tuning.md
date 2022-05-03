@@ -62,7 +62,6 @@ In the `self_test` commands:
 
 - Selftest client to servers: Replace the argument for `--endpoint`
     accordingly.
-
 - Cross-servers: Replace the argument for `--endpoint` and `--master-endpoint` accordingly.
 
 For example, if you have eight servers, you would specify `--endpoint 0-7:0` and
@@ -141,19 +140,16 @@ IOR (<https://github.com/hpc/ior>) with the following backends:
     interception library (`libioil`). Performance is significantly better when
     using `libioil`. For detailed information on dfuse usage with the IO
     interception library, please refer to the [POSIX DFUSE section][7].
-
 - A custom DFS (DAOS File System) plugin for DAOS can be used by building IOR
     with DAOS support and selecting API=DFS. This integrates IOR directly with the
     DAOS File System (`libdfs`), without requiring FUSE or an interception library.
     Please refer to the [DAOS README][10] in the hpc/ior repository for some basic
     instructions on how to use the DFS driver.
-
 - When using the IOR API=MPIIO, the ROMIO ADIO driver for DAOS can be used by
     providing the `daos://` prefix to the filename. This ADIO driver bypasses `dfuse`
     and directly invkes the `libdfs` calls to perform I/O to a DAOS POSIX container.
     The DAOS-enabled MPIIO driver is available in the upstream MPICH repository and
     included with Intel MPI. Please refer to the [MPI-IO documentation][8].
-
 - An HDF5 VOL connector for DAOS is under development. This maps the HDF5 data model
     directly to the DAOS data model and works in conjunction with DAOS containers of
     `--type=HDF5` (in contrast to the DAOS container of `--type=POSIX` used for
@@ -459,7 +455,7 @@ In either situation, the admin may execute the command
 `daos_agent net-scan` with appropriate debug flags to gain more insight
 into the configuration problem.
 
-**Disabling the GetAttachInfo cache:**
+### Disabling the GetAttachInfo cache
 
 The default configuration enables the Agent GetAttachInfo cache.  If it is
 desired, the cache may be disabled prior to DAOS Agent startup by setting the

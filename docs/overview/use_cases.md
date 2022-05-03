@@ -7,9 +7,9 @@ This document contains the following sections:
 
 - <a href="#61">Storage Management and Workflow Integration</a>
 - <a href="#62">Workflow Execution</a>
-    -  <a href="#63">Bulk Synchronous Checkpoint</a>
-    - <a href="#64">Producer/Consumer</a>
-    - <a href="#65">Concurrent Producers</a>
+  - <a href="#63">Bulk Synchronous Checkpoint</a>
+  - <a href="#64">Producer/Consumer</a>
+  - <a href="#65">Concurrent Producers</a>
 - <a href="#66">Storage Node Failure and Resilvering</a>
 
 <a id="61"></a>
@@ -18,9 +18,9 @@ This document contains the following sections:
 
 In this section, we consider two different cluster configurations:
 
-* Cluster A: All or a majority of the compute nodes have local persistent
+- Cluster A: All or a majority of the compute nodes have local persistent
   memory. In other words, each compute node is also a storage node.
-* Cluster B: Storage nodes are dedicated to storage and disseminated across
+- Cluster B: Storage nodes are dedicated to storage and disseminated across
   the fabric. They are not used for computation and thus do not run any
   application code.
 
@@ -83,7 +83,7 @@ elaborates on how checkpointing could be implemented on the DAOS
 storage stack. We first consider the traditional approach relying on
 blocking barriers and then a more loosely coupled execution.
 
-<b>Blocking Barrier</b>
+### Blocking Barrier
 
 When the simulation job starts, one task opens the checkpoint container
 and fetches the current global HCE. It then obtains an epoch hold and
@@ -100,7 +100,7 @@ task (e.g., rank 0) commits the LHE, which is then increased by one on
 a successful commit. This process is repeated regularly until the simulation
 successfully completes.
 
-<b>Non-blocking Barrier</b>
+### Non-blocking Barrier
 
 We now consider another approach to checkpointing where the execution is
 more loosely coupled. As in the previous case, one task is responsible for
@@ -131,7 +131,7 @@ post-process job. The DAOS stack provides specific mechanisms for
 producer/consumer workflow, allowing the consumer to dump the
 result of its analysis into the same container as the producer.
 
-<b>Private Container</b>
+#### Private Container
 
 The down-sample job opens the sampled timesteps container, fetches the
 current global HCE, obtains an epoch hold and writes newly sampled data to
@@ -151,7 +151,7 @@ Another approach is for the producer job to create explicit snapshots for
 epochs of interest and have the analysis job waiting and processing
 snapshots. This avoids processing every single committed epoch.
 
-<b>Shared Container</b>
+#### Shared Container
 
 We now assume that the container storing the sampled timesteps and the one
 storing the analyzed data is a single container. In other words, the
@@ -191,9 +191,9 @@ should acquire a write lock on the object. This lock carries a lock value
 block (LVB) storing the last epoch number in which this object was last
 modified and committed. Once the lock is acquired, the writer must:
 
-* read from an epoch equal to the greatest of the epoch specified in the
+- read from an epoch equal to the greatest of the epoch specified in the
   LVB and the handle LRE.
-* submit new writes with an epoch higher than the one in the LVB and the
+- submit new writes with an epoch higher than the one in the LVB and the
   currently held epoch.
 
 After all the I/O operations have been completed, flushed, and committed by
@@ -221,4 +221,3 @@ process is executed online while the container is still being accessed and
 modified. Once redundancy has been restored for all objects, the pool map is
 updated again to inform everyone that the system has recovered from the fault
 and can exit from degraded mode.
-

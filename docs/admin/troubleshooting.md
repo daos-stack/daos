@@ -179,39 +179,51 @@ this is intended to convey either that the variable is set (for the client envir
 configured for the engines in the `daos_server.yml` file (`log_mask` per engine, and env_vars
 values per engine for the `DD_SUBSYS` and `DD_MASK` variable assignments).
 
-- Generic setup for all messages (default settings)
+* Generic setup for all messages (default settings)
 
-        D_LOG_MASK=DEBUG
-        DD_SUBSYS=all
-        DD_MASK=all
+  ```sh
+  D_LOG_MASK=DEBUG
+  DD_SUBSYS=all
+  DD_MASK=all
+  ```
 
--   Disable all logs for performance tuning
+* Disable all logs for performance tuning
 
-        D_LOG_MASK=ERR -> will only log error messages from all facilities
-        D_LOG_MASK=FATAL -> will only log fatal system messages
+  ```sh
+  D_LOG_MASK=ERR -> will only log error messages from all facilities
+  D_LOG_MASK=FATAL -> will only log fatal system messages
+  ```
 
--   Gather daos metadata logs if a pool/container resource problem is observed, using the provided group mask
+* Gather daos metadata logs if a pool/container resource problem is observed, using the provided group mask
 
-        D_LOG_MASK=DEBUG -> log at DEBUG level from all facilities
-        DD_MASK=group_metadata -> limit logging to include deault and metadata-specific streams. Or, specify DD_MASK=group_metadata_only for just metadata-specific log entries.
+  ```sh
+  D_LOG_MASK=DEBUG -> log at DEBUG level from all facilities
+  DD_MASK=group_metadata -> limit logging to include deault and metadata-specific streams. Or, specify DD_MASK=group_metadata_only for just metadata-specific log entries.
+  ```
 
--   Disable a noisy debug logging subsystem
+* Disable a noisy debug logging subsystem
 
-        D_LOG_MASK=DEBUG,MEM=ERR -> disables MEM facility by
-        restricting all logs from that facility to ERROR or higher priority only
-        D_LOG_MASK=DEBUG,SWIM=ERR,RPC=ERR,HG=ERR -> disables SWIM and RPC/HG facilities
+  ```sh
+  D_LOG_MASK=DEBUG,MEM=ERR -> disables MEM facility by
+  restricting all logs from that facility to ERROR or higher priority only
+  D_LOG_MASK=DEBUG,SWIM=ERR,RPC=ERR,HG=ERR -> disables SWIM and RPC/HG facilities
+  ```
 
--   Enable a subset of facilities of interest
+* Enable a subset of facilities of interest
 
-        DD_SUBSYS=rpc,tests
-        D_LOG_MASK=DEBUG -> required to see logs for RPC and TESTS
-        less severe than INFO (the majority of log messages)
+  ```sh
+  DD_SUBSYS=rpc,tests
+  D_LOG_MASK=DEBUG -> required to see logs for RPC and TESTS
+  less severe than INFO (the majority of log messages)
+  ```
 
--   Fine-tune the debug messages by setting a debug mask
+* Fine-tune the debug messages by setting a debug mask
 
-        D_LOG_MASK=DEBUG
-        DD_MASK=mgmt -> only logs DEBUG messages related to pool
-        management
+  ```sh
+  D_LOG_MASK=DEBUG
+  DD_MASK=mgmt -> only logs DEBUG messages related to pool
+  management
+  ```
 
 Refer to the DAOS Environment Variables document for
 more information about the debug system environment.
@@ -270,11 +282,15 @@ remove the segment.
 For example, to remove the shared memory segment left behind by I/O Engine
 instance 0, issue:
 
-    sudo ipcrm -M 0x10242048
+  ```bash
+  sudo ipcrm -M 0x10242048
+  ```
 
 To remove the shared memory segment left behind by I/O Engine instance 1, issue:
 
-    sudo ipcrm -M 0x10242049
+  ```bash
+  sudo ipcrm -M 0x10242049
+  ```
 
 ### Server Start Issues
 
@@ -317,110 +333,113 @@ Verify if you're using Infiniband for `fabric_iface`: in the server config. The 
 
 ### Use dmg command without daos_admin privilege
 
-	# Error message or timeout after dmg system query
-	$ dmg system query
-	ERROR: dmg: Unable to load Certificate Data: could not load cert: stat /etc/daos/certs/admin.crt: no such file or directory
-
-	# Workaround
-
-	# 1. Make sure the admin-host /etc/daos/daos_control.yml is correctly configured.
-		# including:
-			# hostlist: <daos_server_lists>
-			# port: <port_num>
-			# transport\config:
-				# allow_insecure: <true/false>
-				# ca\cert: /etc/daos/certs/daosCA.crt
-				# cert: /etc/daos/certs/admin.crt
-				# key: /etc/daos/certs/admin.key
-
-	# 2. Make sure the admin-host allow_insecure mode matches the applicable servers.
+  ```bash
+  # Error message or timeout after dmg system query
+  $ dmg system query
+  ERROR: dmg: Unable to load Certificate Data: could not load cert: stat /etc/daos/certs/admin.crt: no such file or directory
+  
+  # Workaround
+    # 1. Make sure the admin-host /etc/daos/daos_control.yml is correctly configured.
+      # including:
+      # hostlist: <daos_server_lists>
+      # port: <port_num>
+      # transport\config:
+      # allow_insecure: <true/false>
+      # ca\cert: /etc/daos/certs/daosCA.crt
+      # cert: /etc/daos/certs/admin.crt
+      # key: /etc/daos/certs/admin.key
+    # 2. Make sure the admin-host allow_insecure mode matches the applicable servers.
+```
 
 ### use the daos command before daos_agent started
 
-	$ daos cont create $DAOS_POOL
-	daos ERR  src/common/drpc.c:217 unixcomm_connect() Failed to connect to /var/run/daos_agent/daos_agent.sock, errno=2(No such file or directory)
-	mgmt ERR  src/mgmt/cli_mgmt.c:222 get_attach_info() failed to connect to /var/run/daos_agent/daos_agent.sock DER_MISC(-1025): 'Miscellaneous error'
-	failed to initialize daos: Miscellaneous error (-1025)
-
-
-	# Work around to check for daos_agent certification and start daos_agent
-		#check for /etc/daos/certs/daosCA.crt, agent.crt and agent.key
-		$ sudo systemctl enable daos_agent.service
-		$ sudo systemctl start daos_agent.service
+  ```bash
+  $ daos cont create $DAOS_POOL
+  daos ERR  src/common/drpc.c:217 unixcomm_connect() Failed to connect to /var/run/daos_agent/daos_agent.sock, errno=2(No such file or directory)
+  mgmt ERR  src/mgmt/cli_mgmt.c:222 get_attach_info() failed to connect to /var/run/daos_agent/daos_agent.sock DER_MISC(-1025): 'Miscellaneous error'
+  failed to initialize daos: Miscellaneous error (-1025)
+    # Work around to check for daos_agent certification and start daos_agent
+      #check for /etc/daos/certs/daosCA.crt, agent.crt and agent.key
+        $ sudo systemctl enable daos_agent.service
+        $ sudo systemctl start daos_agent.service
+```
 
 ### use the daos command with invalid or wrong parameters
 
-	# Lack of providing daos pool_uuid
-	$ daos pool list-cont
-	pool UUID required
-	rc: 2
-	daos command (v1.2), libdaos 1.2.0
-	usage: daos RESOURCE COMMAND [OPTIONS]
-	resources:
-			  pool             pool
-			  container (cont) container
-			  filesystem (fs)  copy to and from a POSIX filesystem
-			  object (obj)     object
-			  shell            Interactive obj ctl shell for DAOS
-			  version          print command version
-			  help             print this message and exit
-	use 'daos help RESOURCE' for resource specifics
+  ```bash
+   # Lack of providing daos pool_uuid
+   $ daos pool list-cont
+   pool UUID required
+   rc: 2
+   daos command (v1.2), libdaos 1.2.0
+   usage: daos RESOURCE COMMAND [OPTIONS]
+   resources:
+     pool             pool
+     container (cont) container
+     filesystem (fs)  copy to and from a POSIX filesystem
+     object (obj)     object
+     shell            Interactive obj ctl shell for DAOS
+     version          print command version
+     help             print this message and exit
+   use 'daos help RESOURCE' for resource specifics
 
-	# Invalid sub-command cont-list
-	$ daos pool cont-list --pool=$DAOS_POOL
-	invalid pool command: cont-list
-	error parsing command line arguments
-	daos command (v1.2), libdaos 1.2.0
-	usage: daos RESOURCE COMMAND [OPTIONS]
-	resources:
-			  pool             pool
-			  container (cont) container
-			  filesystem (fs)  copy to and from a POSIX filesystem
-			  object (obj)     object
-			  shell            Interactive obj ctl shell for DAOS
-			  version          print command version
-			  help             print this message and exit
-	use 'daos help RESOURCE' for resource specifics
+   # Invalid sub-command cont-list
+   $ daos pool cont-list --pool=$DAOS_POOL
+   invalid pool command: cont-list
+   error parsing command line arguments
+   daos command (v1.2), libdaos 1.2.0
+   usage: daos RESOURCE COMMAND [OPTIONS]
+   resources:
+     pool             pool
+     container (cont) container
+     filesystem (fs)  copy to and from a POSIX filesystem
+     object (obj)     object
+     shell            Interactive obj ctl shell for DAOS
+     version          print command version
+     help             print this message and exit
+   use 'daos help RESOURCE' for resource specifics
 
-	# Working daos pool command
-	$ daos pool list-cont --pool=$DAOS_POOL
-	bc4fe707-7470-4b7d-83bf-face75cc98fc
+   # Working daos pool command
+   $ daos pool list-cont --pool=$DAOS_POOL
+   bc4fe707-7470-4b7d-83bf-face75cc98fc
+   ```
 
 ## dmg pool create failed due to no space
 
-	$ dmg pool create --size=50G mypool
-	Creating DAOS pool with automatic storage allocation: 50 GB NVMe + 6.00% SCM
-	ERROR: dmg: pool create failed: DER_NOSPACE(-1007): No space on storage target
+  ```bash
+  $ dmg pool create --size=50G mypool
+  Creating DAOS pool with automatic storage allocation: 50 GB NVMe + 6.00% SCM
+  ERROR: dmg: pool create failed: DER_NOSPACE(-1007): No space on storage target
 
-	# Workaround: dmg storage query scan to find currently available storage
-		dmg storage query usage
-		Hosts  SCM-Total SCM-Free SCM-Used NVMe-Total NVMe-Free NVMe-Used
-		-----  --------- -------- -------- ---------- --------- ---------
-		boro-8 17 GB     6.0 GB   65 %     0 B        0 B       N/A
+  # Workaround: dmg storage query scan to find currently available storage
+  dmg storage query usage
+  Hosts  SCM-Total SCM-Free SCM-Used NVMe-Total NVMe-Free NVMe-Used
+  -----  --------- -------- -------- ---------- --------- ---------
+  boro-8 17 GB     6.0 GB   65 %     0 B        0 B       N/A
 
-		$ dmg pool create --size=2G mypool
-		Creating DAOS pool with automatic storage allocation: 2.0 GB NVMe + 6.00% SCM
-		Pool created with 100.00% SCM/NVMe ratio
-		-----------------------------------------
-		  UUID          : b5ce2954-3f3e-4519-be04-ea298d776132
-		  Service Ranks : 0
-		  Storage Ranks : 0
-		  Total Size    : 2.0 GB
-		  SCM           : 2.0 GB (2.0 GB / rank)
-		  NVMe          : 0 B (0 B / rank)
+  $ dmg pool create --size=2G mypool
+  Creating DAOS pool with automatic storage allocation: 2.0 GB NVMe + 6.00% SCM
+  Pool created with 100.00% SCM/NVMe ratio
+  -----------------------------------------
+    UUID          : b5ce2954-3f3e-4519-be04-ea298d776132
+    Service Ranks : 0
+    Storage Ranks : 0
+    Total Size    : 2.0 GB
+    SCM           : 2.0 GB (2.0 GB / rank)
+    NVMe          : 0 B (0 B / rank)
 
-		$ dmg storage query usage
-		Hosts  SCM-Total SCM-Free SCM-Used NVMe-Total NVMe-Free NVMe-Used
-		-----  --------- -------- -------- ---------- --------- ---------
-		boro-8 17 GB     2.9 GB   83 %     0 B        0 B       N/A
+  $ dmg storage query usage
+  Hosts  SCM-Total SCM-Free SCM-Used NVMe-Total NVMe-Free NVMe-Used
+  -----  --------- -------- -------- ---------- --------- ---------
+  boro-8 17 GB     2.9 GB   83 %     0 B        0 B       N/A
 
 ### dmg pool destroy timeout
 
-	# dmg pool destroy Timeout or failed due to pool has active container(s)
-	# Workaround pool destroy --force option
+ # dmg pool destroy Timeout or failed due to pool has active container(s)
+ # Workaround pool destroy --force option
 
-		$ dmg pool destroy --pool=$DAOS_POOL --force
-		Pool-destroy command succeeded
+  $ dmg pool destroy --pool=$DAOS_POOL --force
+  Pool-destroy command succeeded
 
 ## Bug Report
 

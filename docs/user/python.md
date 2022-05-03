@@ -18,10 +18,8 @@ Python objects allocated by PyDAOS are:
 - **persistent** and identified by a string name. The namespace is shared
   by all the objects and implemented by a root key-value store storing the
   association between names and objects.
-
 - immediately **visible** upon creation to any process running on the same
   or a different node.
-
 - not consuming any significant amount of memory. Objects have a **very low
   memory footprint** since the actual content is stored remotely.  This allows
   manipulation of massive datasets that are way bigger than the amount of

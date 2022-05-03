@@ -8,9 +8,8 @@ Create Second container:
 # Create Second container
 $ daos container create --pool $DAOS_POOL --type POSIX --label cont2
 Successfully created container 158469db-70d2-4a5d-aac9-3c06cbfa7459
-```
-
 export DAOS_CONT2=<cont uuid>
+```
 
 Pool Query before copy:
 

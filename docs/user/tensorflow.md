@@ -152,11 +152,11 @@ import tensorflow_io as tfio
 To use the DFS Plugin, all that needs to be done is to supply the paths of the required
 files/directories in the form of a DFS URI:
 
+```sh
 dfs://<Pool-Label-or-UUID>/<Cont-Label-Or-UUID>/<Path>
-
-OR
-
+# OR
 dfs://Path, where Path includes the path to the DAOS container
+```
 
 ```python
 filename = "dfs://POOL_LABEL/CONT_LABEL/FILE_NAME.ext"

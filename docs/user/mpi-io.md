@@ -63,8 +63,8 @@ includes DAOS support since the
 
 Note that Intel MPI uses `libfabric` and includes it as part of the Intel MPI installation:
 
-* 2019.8 and 2019.9 include` libfabric-1.10.1-impi`
-* 2021.1, 2021.2 and 2021.3 includes `libfabric-1.12.1-impi`
+- 2019.8 and 2019.9 include` libfabric-1.10.1-impi`
+- 2021.1, 2021.2 and 2021.3 includes `libfabric-1.12.1-impi`
 
 Care must be taken to ensure that the version of libfabric that is used
 is at a level that includes the patches that are critical for DAOS.
@@ -162,4 +162,4 @@ The user still needs to append the `daos:` prefix to the file passed to MPI_File
 
 Limitations of the current implementation include:
 
-* No support for MPI file atomicity, preallocate, or shared file pointers.
+- No support for MPI file atomicity, preallocate, or shared file pointers.

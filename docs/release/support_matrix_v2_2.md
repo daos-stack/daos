@@ -73,7 +73,7 @@ single high-speed network port for development and testing purposes,
 but this is not supported in a production environment.)
 It is strongly recommended that all DAOS engines in a DAOS system use the same
 model of high-speed fabric adapter.
-Heterogeneous adapter population across DAOS engines has **not** been tested,
+Heterogeneous adapter population across DAOS engines has **not*- been tested,
 and running with such configurations may cause unexpected behavior.
 Please refer to "Fabric Support" below for more details.
 
@@ -98,7 +98,7 @@ and [openSUSE Leap 15.3](https://en.opensuse.org/openSUSE:Roadmap).
 The following subsections provide details on the Linux distributions
 which DAOS Version 2.2 supports on DAOS servers.
 
-Note that all DAOS servers in a DAOS server cluster (also called _DAOS system_)
+Note that all DAOS servers in a DAOS server cluster (also called *DAOS system*)
 must run the same Linux distribution. DAOS clients that access a DAOS server
 cluster can run the same or different Linux distributions.
 
@@ -107,14 +107,14 @@ cluster can run the same or different Linux distributions.
 With DAOS Version 2.2, CentOS 7.9 and RHEL 7.9 are supported on DAOS servers
 with 2nd gen Intel Xeon Scalable processors (Cascade Lake).
 
-CentOS 7.9 or RHEL 7.9 are **not** supported on DAOS servers
+CentOS 7.9 or RHEL 7.9 are **not*- supported on DAOS servers
 with 3rd gen Intel Xeon Scalable processors (Ice Lake)
 or newer Intel Xeon processor generations.
 
 Links to CentOS Linux 7 and RHEL 7 Release Notes:
 
-* [CentOS 7.9.2009](https://wiki.centos.org/Manuals/ReleaseNotes/CentOS7.2009)
-* [RHEL 7.9](https://access.redhat.com/documentation/en-us/red_hat_enterprise_linux/7/html/7.9_release_notes/index)
+- [CentOS 7.9.2009](https://wiki.centos.org/Manuals/ReleaseNotes/CentOS7.2009)
+- [RHEL 7.9](https://access.redhat.com/documentation/en-us/red_hat_enterprise_linux/7/html/7.9_release_notes/index)
 
 CentOS Linux 7 will reach End Of Life (EOL) on June 30th, 2024.
 Refer to the [RHEL Life Cycle](https://access.redhat.com/support/policy/updates/errata/)
@@ -140,8 +140,8 @@ DAOS Version 2.2 supports RHEL 8.5 and RHEL 8.6.
 
 Links to RHEL 8 Release Notes:
 
-* [RHEL 8.5](https://access.redhat.com/documentation/en-us/red_hat_enterprise_linux/8/html/8.5_release_notes/index)
-* [RHEL 8.6](https://access.redhat.com/documentation/en-us/red_hat_enterprise_linux/8/html/8.6_release_notes/index)
+- [RHEL 8.5](https://access.redhat.com/documentation/en-us/red_hat_enterprise_linux/8/html/8.5_release_notes/index)
+- [RHEL 8.6](https://access.redhat.com/documentation/en-us/red_hat_enterprise_linux/8/html/8.6_release_notes/index)
 
 Refer to the [RHEL Life Cycle](https://access.redhat.com/support/policy/updates/errata/)
 description on the Red Hat support website for information on RHEL support phases.
@@ -159,8 +159,8 @@ DAOS Version 2.2 supports Rocky Linux 8.5 and 8.6.
 
 Links to Rocky Linux Release Notes:
 
-* [Rocky Linux 8.5](https://docs.rockylinux.org/release_notes/8.5/)
-* [Rocky Linux 8.6](https://docs.rockylinux.org/release_notes/8.6/)
+- [Rocky Linux 8.5](https://docs.rockylinux.org/release_notes/8.5/)
+- [Rocky Linux 8.6](https://docs.rockylinux.org/release_notes/8.6/)
 
 ### openSUSE Leap 15
 
@@ -168,7 +168,7 @@ DAOS Version 2.2 is supported on openSUSE Leap 15.3.
 
 Links to openSUSE Leap 15 Release Notes:
 
-* [openSUSE Leap 15.3](https://doc.opensuse.org/release-notes/x86_64/openSUSE/Leap/15.3/)
+- [openSUSE Leap 15.3](https://doc.opensuse.org/release-notes/x86_64/openSUSE/Leap/15.3/)
 
 ### SUSE Linux Enterprise Server 15
 
@@ -176,7 +176,7 @@ DAOS Version 2.2 is supported on SLES 15 SP3.
 
 Links to SLES 15 Release Notes:
 
-* [SLES 15 SP3](https://www.suse.com/releasenotes/x86_64/SUSE-SLES/15-SP3/)
+- [SLES 15 SP3](https://www.suse.com/releasenotes/x86_64/SUSE-SLES/15-SP3/)
 
 Refer to the [SLES Life Cycle](https://www.suse.com/lifecycle/)
 description on the SUSE support website for information on SLES support phases.
@@ -184,12 +184,13 @@ description on the SUSE support website for information on SLES support phases.
 ### Unsupported Linux Distributions
 
 DAOS does not support
-openSUSE Tumbleweed,
-Fedora,
-CentOS Stream,
-Alma Linux,
-Ubuntu, or
-Oracle Linux.
+
+- openSUSE Tumbleweed
+- Fedora
+- CentOS Stream
+- Alma Linux
+- Ubuntu
+- Oracle Linux
 
 ## Operating Systems supported for DAOS Clients
 
@@ -240,9 +241,9 @@ Version 5.6-1. Versions older than 5.4-3 are not supported by DAOS 2.2.
 
 Links to MLNX\_OFED Release Notes:
 
-* [MLNX\_OFED 5.4-3](https://docs.nvidia.com/networking/display/MLNXOFEDv543100/Release+Notes)
-* [MLNX\_OFED 5.5-1](https://docs.nvidia.com/networking/display/MLNXOFEDv551032/Release+Notes)
-* [MLNX\_OFED 5.6-1](https://docs.nvidia.com/networking/display/MLNXOFEDv561000/Release+Notes)
+- [MLNX\_OFED 5.4-3](https://docs.nvidia.com/networking/display/MLNXOFEDv543100/Release+Notes)
+- [MLNX\_OFED 5.5-1](https://docs.nvidia.com/networking/display/MLNXOFEDv551032/Release+Notes)
+- [MLNX\_OFED 5.6-1](https://docs.nvidia.com/networking/display/MLNXOFEDv561000/Release+Notes)
 
 It is strongly recommended that all DAOS servers and all DAOS clients
 run the same version of MLNX\_OFED, and that the InfiniBand adapters are
@@ -250,7 +251,7 @@ updated to the firmware levels that are included in that MLNX\_OFED
 distribution.
 It is also strongly recommended that the same model of
 InfiniBand fabric adapter is used in all DAOS servers.
-DAOS Version 2.2 has **not** been tested with heterogeneous InfiniBand
+DAOS Version 2.2 has **not*- been tested with heterogeneous InfiniBand
 adapter configurations.
 The only exception to this recommendation is the mix of single-port
 and dual-port adapters of the same generation, where only one of the ports
@@ -271,16 +272,16 @@ DAOS scaling targets
 (these are order of magnitude figures that indicate what the DAOS architecture
 should support - see below for the scales at which DAOS 2.2 has been validated):
 
-* DAOS client nodes in a DAOS system:   10<sup>5</sup> (hundreds of thousands)
-* DAOS servers in a DAOS system:        10<sup>3</sup> (thousands)
-* DAOS engines per DAOS server:         10<sup>0</sup> (less than ten)
-* DAOS targets per DAOS engine:         10<sup>1</sup> (tens)
-* SCM storage devices per DAOS engine:  10<sup>1</sup> (tens)
-* NVMe storage devices per DAOS engine: 10<sup>1</sup> (tens)
-* DAOS pools in a DAOS system:          10<sup>2</sup> (hundreds)
-* DAOS containers in a DAOS pool:       10<sup>2</sup> (hundreds)
-* DAOS objects in a DAOS container:     10<sup>10</sup> (tens of billions)
-* Application tasks accessing a DAOS container: 10<sup>6</sup> (millions)
+- DAOS client nodes in a DAOS system:   10<sup>5</sup> (hundreds of thousands)
+- DAOS servers in a DAOS system:        10<sup>3</sup> (thousands)
+- DAOS engines per DAOS server:         10<sup>0</sup> (less than ten)
+- DAOS targets per DAOS engine:         10<sup>1</sup> (tens)
+- SCM storage devices per DAOS engine:  10<sup>1</sup> (tens)
+- NVMe storage devices per DAOS engine: 10<sup>1</sup> (tens)
+- DAOS pools in a DAOS system:          10<sup>2</sup> (hundreds)
+- DAOS containers in a DAOS pool:       10<sup>2</sup> (hundreds)
+- DAOS objects in a DAOS container:     10<sup>10</sup> (tens of billions)
+- Application tasks accessing a DAOS container: 10<sup>6</sup> (millions)
 
 Note that DAOS has an architectural limit of 2<sup>16</sup>=65536 storage targets
 in a DAOS system, because the number of storage targets is encoded in
@@ -288,15 +289,15 @@ in a DAOS system, because the number of storage targets is encoded in
 
 DAOS Version 2.2 has been validated at the following scales:
 
-* DAOS client nodes in a DAOS system:   256
-* DAOS servers in a DAOS system:        128
-* DAOS engines per DAOS server:         1, 2 and 4
-* DAOS targets per DAOS engine:         4-16
-* SCM storage devices per DAOS engine:  6 (Optane PMem 100), 8 (Optane PMem 200)
-* NVMe storage devices per DAOS engine: 0 (PMem-only pools), 4-12
-* DAOS pools in a DAOS system:          100
-* DAOS containers in a DAOS pool:       100
-* DAOS objects in a DAOS container:     6 billion (in mdtest benchmarks)
-* Application tasks accessing a DAOS container: 3072 (using verbs)
+- DAOS client nodes in a DAOS system:   256
+- DAOS servers in a DAOS system:        128
+- DAOS engines per DAOS server:         1, 2 and 4
+- DAOS targets per DAOS engine:         4-16
+- SCM storage devices per DAOS engine:  6 (Optane PMem 100), 8 (Optane PMem 200)
+- NVMe storage devices per DAOS engine: 0 (PMem-only pools), 4-12
+- DAOS pools in a DAOS system:          100
+- DAOS containers in a DAOS pool:       100
+- DAOS objects in a DAOS container:     6 billion (in mdtest benchmarks)
+- Application tasks accessing a DAOS container: 3072 (using verbs)
 
 This test coverage will be expanded in subsequent DAOS releases.

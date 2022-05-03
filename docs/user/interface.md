@@ -25,9 +25,9 @@ turnaround time for implementing test cases for DAOS.
 
 The Python API is split into several files based on functionality:
 
-* The Python object API:
+- The Python object API:
   [daos_api.py](https://github.com/daos-stack/daos/tree/release/2.2/src/client/pydaos/raw/daos_api.py).
-* The mapping of C structures to Python classes
+- The mapping of C structures to Python classes
   [daos_cref.py](https://github.com/daos-stack/daos/tree/release/2.2/src/client/pydaos/raw/daos_cref.py)
 
 High-level abstraction classes exist to manipulate DAOS storage:
