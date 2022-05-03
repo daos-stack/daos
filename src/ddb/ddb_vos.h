@@ -46,7 +46,7 @@ int ddb_vos_pool_open(char *path, daos_handle_t *poh);
 int ddb_vos_pool_close(daos_handle_t poh);
 
 /* Open and close a cont for a ddb_ctx */
-int dv_cont_open(daos_handle_t poh, unsigned char *uuid, daos_handle_t *coh);
+int dv_cont_open(daos_handle_t poh, uuid_t uuid, daos_handle_t *coh);
 int dv_cont_close(daos_handle_t *coh);
 
 /*
