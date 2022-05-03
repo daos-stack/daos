@@ -62,6 +62,7 @@ class DaosBuild(DfuseTestBase):
 
         # How long to cache things for, if caching is enabled.
         cache_time = '30m'
+        build_time = 15
 
         if cache_mode == 'writeback':
             cont_attrs['dfuse-data-cache'] = 'on'
@@ -79,6 +80,7 @@ class DaosBuild(DfuseTestBase):
             cont_attrs['dfuse-dentry-time'] = cache_time
             cont_attrs['dfuse-ndentry-time'] = cache_time
         elif cache_mode == 'nocache':
+            build_time = 150
             cont_attrs['dfuse-data-cache'] = 'off'
             cont_attrs['dfuse-attr-time'] = '0'
             cont_attrs['dfuse-dentry-time'] = '0'
@@ -123,7 +125,12 @@ class DaosBuild(DfuseTestBase):
         for cmd in cmds:
             try:
                 command = '{};{}'.format(preload_cmd, cmd)
-                ret_code = general_utils.pcmd(self.hostlist_clients, command, timeout=150*60)
+                # Use a 10 minute timeout for most commands, but vary the build timeout based on
+                # the dfuse mode.
+                timeout = 10 * 60
+                if cmd.startswith('scons'):
+                    timeout = build_time * 60
+                ret_code = general_utils.pcmd(self.hostlist_clients, command, timeout=timeout)
                 if 0 in ret_code:
                     continue
                 self.log.info(ret_code)

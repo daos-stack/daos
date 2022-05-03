@@ -18,16 +18,16 @@ dfuse: !mux
     !filter-only : "/run/intercept/off"  # yamllint disable-line rule:colons
     mount_dir: "/tmp/daos_dfuse/"
     name: "writeback"
-  writethrough:
-    !filter-only : "/run/intercept/off"  # yamllint disable-line rule:colons
-    mount_dir: "/tmp/daos_dfuse/"
-    disable_wb_cache: true
-    name: "writethrough"
-  metadata:
-    !filter-only : "/run/intercept/off"  # yamllint disable-line rule:colons
-    mount_dir: "/tmp/daos_dfuse/"
-    disable_wb_cache: true
-    name: "metadata"
+  # writethrough:
+  #   !filter-only : "/run/intercept/off"  # yamllint disable-line rule:colons
+  #   mount_dir: "/tmp/daos_dfuse/"
+  #   disable_wb_cache: true
+  #   name: "writethrough"
+  # metadata:
+  #   !filter-only : "/run/intercept/off"  # yamllint disable-line rule:colons
+  #   mount_dir: "/tmp/daos_dfuse/"
+  #   disable_wb_cache: true
+  #   name: "metadata"
   nocache:
     !filter-only : "/run/intercept/off"  # yamllint disable-line rule:colons
     mount_dir: "/tmp/daos_dfuse/"
