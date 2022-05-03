@@ -397,7 +397,7 @@ use 'daos help RESOURCE' for resource specifics
 $ daos pool list-cont --pool=$DAOS_POOL
 bc4fe707-7470-4b7d-83bf-face75cc98fc
 ```
-## dmg pool create failed due to no space
+### dmg pool create failed due to no space
 ```
 $ dmg pool create --size=50G mypool
 Creating DAOS pool with automatic storage allocation: 50 GB NVMe + 6.00% SCM
@@ -433,6 +433,142 @@ ERROR: dmg: pool create failed: DER_NOSPACE(-1007): No space on storage target
 	$ dmg pool destroy --pool=$DAOS_POOL --force
 	Pool-destroy command succeeded
 ```
+
+## Diagnostic and Recovery Tools
+
+!!! WARNING : Please be careful and use this tool under supervision of DAOS export.
+
+In case of PMEM device restored to healthy state, the ext4 filesystem
+created on each PMEM devices may need to verified and repaired if needed.
+
+!!! Make sure that PMEM is not in use and not mounted while doing check or repair.
+
+#### Use dmg command to stop the daos engines.
+
+```
+# dmg -o test_daos_dmg.yaml system stop
+Rank  Operation Result
+----  --------- ------
+[0-1] stop      OK
+```
+#### Stop the daos server service.
+
+        #systemctl stop daos_server.service
+
+#### Unmount the DAOS PMem mountpoint.
+
+```
+# df
+Filesystem                    1K-blocks       Used  Available Use% Mounted on
+devtmpfs                           4096          0       4096   0% /dev
+tmpfs                          97577660          0   97577660   0% /dev/shm
+tmpfs                          39031068      10588   39020480   1% /run
+tmpfs                              4096          0       4096   0% /sys/fs/cgroup
+/dev/sda5                      38141328    6117252   30056872  17% /
+/dev/sda7                      28513060      45128   26996496   1% /var/tmp
+wolf-1:/export/home/samirrav 6289369088 5927896416  361472672  95% /home/samirrav
+/dev/pmem1                   3107622576     131116 3107475076   1% /mnt/daos1
+/dev/pmem0                   3107622576     131172 3107475020   1% /mnt/daos0
+# umount /mnt/daos*
+# df
+Filesystem                    1K-blocks       Used Available Use% Mounted on
+devtmpfs                           4096          0      4096   0% /dev
+tmpfs                          97577664          0  97577664   0% /dev/shm
+tmpfs                          39031068      10588  39020480   1% /run
+tmpfs                              4096          0      4096   0% /sys/fs/cgroup
+/dev/sda5                      38141328    6120656  30053468  17% /
+/dev/sda7                      28513060      45124  26996500   1% /var/tmp
+wolf-1:/export/home/samirrav 6289369088 5927917792 361451296  95% /home/samirrav
+#
+```
+### e2fsck
+
+
+#### e2fsck command execution on non-corrupted file system.
+
+- "-f": Force check file system even it seems clean.
+- "-n": Use the option to assume an answer of 'no' to all questions.
+```
+#/sbin/e2fsck -f -n /dev/pmem1
+e2fsck 1.43.8 (1-Jan-2018)
+Pass 1: Checking inodes, blocks, and sizes
+Pass 2: Checking directory structure
+Pass 3: Checking directory connectivity
+Pass 4: Checking reference counts
+Pass 5: Checking group summary information
+daos: 34/759040 files (0.0% non-contiguous), 8179728/777240064 blocks
+
+#echo $?
+0
+```
+- Return Code: "0 - No errors"
+
+#### e2fsck command execution on corrupted file system.
+
+- "-f": Force check file system even it seems clean.
+- "-n": Use the option to assume an answer of 'no' to all questions.
+- "-C0": To monitored the progress of the filesystem check.
+```
+# /sbin/e2fsck -f -n -C0 /dev/pmem1
+e2fsck 1.43.8 (1-Jan-2018)
+ext2fs_check_desc: Corrupt group descriptor: bad block for block bitmap
+/sbin/e2fsck: Group descriptors look bad... trying backup blocks...
+Pass 1: Checking inodes, blocks, and sizes
+Pass 2: Checking directory structure
+Pass 3: Checking directory connectivity
+Pass 4: Checking reference counts
+Pass 5: Checking group summary information
+Block bitmap differences:  +(0--563) +(24092--24187) +(32768--33139) +(48184--48279) +(71904--334053) +334336 +335360
+Fix? no
+
+Free blocks count wrong for group #0 (32108, counted=32768).
+Fix? no
+
+Free blocks count wrong for group #1 (32300, counted=32768).
+Fix? no
+.....
+.....
+
+Free inodes count wrong for group #23719 (0, counted=32).
+Fix? no
+
+Padding at end of inode bitmap is not set. Fix? no
+
+
+daos: ********** WARNING: Filesystem still has errors **********
+
+daos: 13/759040 files (0.0% non-contiguous), 334428/777240064 blocks
+
+# echo $?
+4
+```
+- Return Code: "4 - File system errors left uncorrected"
+
+#### e2fsck command to repair and fixing the issue.
+
+- "-f": Force check file system even it seems clean.
+- "-p": Automatically fix any filesystem problems that can be safely fixed without human intervention.
+- "-C0": To monitored the progress of the filesystem check.
+```
+#/sbin/e2fsck -f -p -C0 /dev/pmem1
+daos was not cleanly unmounted, check forced.
+daos: Relocating group 96's block bitmap to 468...
+daos: Relocating group 96's inode bitmap to 469...
+daos: Relocating group 96's inode table to 470...
+.....
+.....
+.....
+daos: Relocating group 23719's inode table to 775946359...
+Restarting e2fsck from the beginning...
+daos: Padding at end of inode bitmap is not set. FIXED.
+daos: 13/759040 files (0.0% non-contiguous), 334428/777240064 blocks
+
+# echo $?
+1
+```
+- Return Code: "1 - File system errors corrected"
+
+
 ### ipmctl
 
 IPMCTL utility is used for Intel® Optane™ persistent memory for managing, diagnostic and testing purpose.
