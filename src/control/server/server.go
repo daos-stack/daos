@@ -44,7 +44,11 @@ func processConfig(log logging.Logger, cfg *config.Server, fis *hardware.FabricI
 		return errors.Wrapf(err, "retrieve hugepage info")
 	}
 
-	if err := cfg.Validate(log, hpi.PageSizeKb, fis); err != nil {
+	if err := cfg.SetEngineAffinities(log, fis); err != nil {
+		return errors.Wrap(err, "failed to set engine affinities")
+	}
+
+	if err := cfg.Validate(log, hpi.PageSizeKb); err != nil {
 		return errors.Wrapf(err, "%s: validation failed", cfg.Path)
 	}
 
