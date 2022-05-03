@@ -278,12 +278,18 @@ ddb_run_dump_ilog(struct ddb_ctx *ctx, struct dump_ilog_options *opt)
 	return rc;
 }
 
+struct committed_cb_args {
+	struct ddb_ctx *ctx;
+	uint32_t entry_count;
+};
+
 static int
 active_dtx_cb(struct dv_dtx_active_entry *entry, void *cb_arg)
 {
-	struct ddb_ctx *ctx = cb_arg;
+	struct committed_cb_args *args = cb_arg;
 
-	ddb_print_dtx_active(ctx, entry);
+	ddb_print_dtx_active(args->ctx, entry);
+	args->entry_count++;
 
 	return 0;
 }
@@ -291,9 +297,10 @@ active_dtx_cb(struct dv_dtx_active_entry *entry, void *cb_arg)
 static int
 committed_cb(struct dv_dtx_committed_entry *entry, void *cb_arg)
 {
-	struct ddb_ctx *ctx = cb_arg;
+	struct committed_cb_args *args = cb_arg;
 
-	ddb_print_dtx_committed(ctx, entry);
+	ddb_print_dtx_committed(args->ctx, entry);
+	args->entry_count++;
 
 	return 0;
 }
@@ -305,6 +312,8 @@ ddb_run_dump_dtx(struct ddb_ctx *ctx, struct dump_dtx_options *opt)
 	int				rc;
 	daos_handle_t			coh;
 	bool				both = !(opt->committed ^ opt->active);
+	struct committed_cb_args	args = {.ctx = ctx, .entry_count = 0};
+
 
 	rc = init_path(ctx->dc_poh, opt->path, &vtp);
 	if (!SUCCESS(rc))
@@ -322,21 +331,26 @@ ddb_run_dump_dtx(struct ddb_ctx *ctx, struct dump_dtx_options *opt)
 		return rc;
 	}
 
+	vtp_print(ctx, &vtp.vtp_path, true);
+
 	if (both || opt->active) {
 		ddb_print(ctx, "Active Transactions:\n");
-		rc = dv_active_dtx(coh, active_dtx_cb, ctx);
+		rc = dv_active_dtx(coh, active_dtx_cb, &args);
 		if (!SUCCESS(rc)) {
 			ddb_vtp_fini(&vtp);
 			return rc;
 		}
+		ddb_printf(ctx, "%d Active Entries\n", args.entry_count);
 	}
-	if (both || opt->active) {
+	if (both || opt->committed) {
+		args.entry_count = 0;
 		ddb_print(ctx, "Committed Transactions:\n");
-		rc = dv_committed_dtx(coh, committed_cb, ctx);
+		rc = dv_committed_dtx(coh, committed_cb, &args);
 		if (!SUCCESS(rc)) {
 			ddb_vtp_fini(&vtp);
 			return rc;
 		}
+		ddb_printf(ctx, "%d Committed Entries\n", args.entry_count);
 	}
 
 	dv_cont_close(&coh);
@@ -442,5 +456,94 @@ done:
 	if (SUCCESS(rc))
 		ddb_printf(ctx, "Successfully loaded file '%s'\n", opt->src);
 
+	return rc;
+}
+
+static int
+process_ilog_op(struct ddb_ctx *ctx, char *path, enum ddb_ilog_op op)
+{
+	struct dv_tree_path_builder	 vtpb = {0};
+	daos_handle_t			 coh = {0};
+	int				 rc;
+	struct dv_tree_path		*vtp = &vtpb.vtp_path;
+
+	if (path == NULL) {
+		ddb_error(ctx, "path is required\n");
+		return -DER_INVAL;
+	}
+
+	rc = init_path(ctx->dc_poh, path, &vtpb);
+	if (!SUCCESS(rc))
+		D_GOTO(done, rc);
+	vtp_print(ctx, &vtpb.vtp_path, true);
+
+	if (!dv_has_obj(vtp)) /* At least object is required */
+		D_GOTO(done, rc = -DER_INVAL);
+
+	rc = dv_cont_open(ctx->dc_poh, vtp->vtp_cont, &coh);
+	if (!SUCCESS(rc))
+		D_GOTO(done, rc);
+
+	if (dv_has_dkey(vtp))
+		rc = dv_process_dkey_ilog_entries(coh, vtp->vtp_oid, &vtp->vtp_dkey, op);
+	else
+		rc = dv_process_obj_ilog_entries(coh, vtp->vtp_oid, op);
+	if (!SUCCESS(rc))
+		D_GOTO(done, rc);
+
+	ddb_print(ctx, "Done\n");
+done:
+	dv_cont_close(&coh);
+	ddb_vtp_fini(&vtpb);
+
+	return rc;
+}
+
+int
+ddb_run_rm_ilog(struct ddb_ctx *ctx, struct rm_ilog_options *opt)
+{
+	return process_ilog_op(ctx, opt->path, DDB_ILOG_OP_ABORT);
+}
+
+int
+ddb_run_process_ilog(struct ddb_ctx *ctx, struct process_ilog_options *opt)
+{
+	return process_ilog_op(ctx, opt->path, DDB_ILOG_OP_PERSIST);
+}
+
+int
+ddb_run_clear_dtx(struct ddb_ctx *ctx, struct clear_dtx_options *opt)
+{
+	struct dv_tree_path_builder	 vtpb = {0};
+	struct dv_tree_path		*vtp = &vtpb.vtp_path;
+	daos_handle_t			 coh = {0};
+	int				 rc;
+
+	if (opt->path == NULL) {
+		ddb_error(ctx, "path is required\n");
+		return -DER_INVAL;
+	}
+
+	rc = init_path(ctx->dc_poh, opt->path, &vtpb);
+	if (!SUCCESS(rc))
+		D_GOTO(done, rc);
+	vtp_print(ctx, &vtpb.vtp_path, true);
+
+	if (!dv_has_cont(vtp))
+		D_GOTO(done, rc = -DER_INVAL);
+
+	rc = dv_cont_open(ctx->dc_poh, vtp->vtp_cont, &coh);
+	if (!SUCCESS(rc))
+		D_GOTO(done, rc);
+
+	rc = dv_clear_committed_table(coh);
+	if (!SUCCESS(rc))
+		D_GOTO(done, rc);
+
+	ddb_print(ctx, "Done\n");
+
+done:
+	ddb_vtp_fini(&vtpb);
+	dv_cont_close(&coh);
 	return rc;
 }

@@ -36,6 +36,12 @@ run_cmd(struct ddb_ctx *ctx, struct argv_parsed *parse_args)
 
 	switch (info.dci_cmd) {
 	case DDB_CMD_UNKNOWN:
+		ddb_print(ctx, "Unknown command\n");
+		ddb_run_help(ctx);
+		rc = -DER_INVAL;
+		break;
+	case DDB_CMD_HELP:
+		rc = ddb_run_help(ctx);
 		break;
 	case DDB_CMD_QUIT:
 		rc = ddb_run_quit(ctx);
@@ -61,10 +67,16 @@ run_cmd(struct ddb_ctx *ctx, struct argv_parsed *parse_args)
 	case DDB_CMD_LOAD:
 		rc = ddb_run_load(ctx, &info.dci_cmd_option.dci_load);
 		break;
+	case DDB_CMD_PROCESS_ILOG:
+		rc = ddb_run_process_ilog(ctx, &info.dci_cmd_option.dci_process_ilog);
+		break;
+	case DDB_CMD_RM_ILOG:
+		rc = ddb_run_rm_ilog(ctx, &info.dci_cmd_option.dci_rm_ilog);
+		break;
+	case DDB_CMD_CLEAR_DTX:
+		rc = ddb_run_clear_dtx(ctx, &info.dci_cmd_option.dci_clear_dtx);
+		break;
 	}
-
-	if (!SUCCESS(rc))
-		ddb_errorf(ctx, "Error with command: "DF_RC"\n", DP_RC(rc));
 
 	ddb_str2argv_free(parse_args);
 
@@ -117,8 +129,6 @@ ddb_main(struct ddb_io_ft *io_ft, int argc, char *argv[])
 		}
 
 		rc = run_cmd(&ctx, &parse_args);
-		if (!SUCCESS(rc))
-			ddb_errorf(&ctx, "Error with command: "DF_RC"\n", DP_RC(rc));
 
 		ddb_str2argv_free(&parse_args);
 		D_GOTO(done, rc);
@@ -146,8 +156,6 @@ ddb_main(struct ddb_io_ft *io_ft, int argc, char *argv[])
 		}
 
 		rc = run_cmd(&ctx, &parse_args);
-		if (!SUCCESS(rc))
-			ddb_errorf(&ctx, "Error: "DF_RC"\n", DP_RC(rc));
 		ddb_str2argv_free(&parse_args);
 	}
 
