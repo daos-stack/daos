@@ -61,7 +61,7 @@ class MultipleContainerDelete(IorTestBase):
         self.log.info("SCM = %d, SSD = %d", final_scm_fs, final_ssd_fs)
 
         self.log.info("Verifying SSD space is recovered")
-        self.assertTrue(self.pool.check_pool_free_space(expected_nvme=initial_ssd_fs))
+        self.assertTrue(self.pool.check_free_space(expected_nvme=initial_ssd_fs))
 
         self.log.info("Verifying SCM space is recovered")
         self.log.info("%d == %d", final_scm_fs, initial_scm_fs)

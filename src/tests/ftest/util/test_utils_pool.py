@@ -532,8 +532,8 @@ class TestPool(TestDaosApiBase):
             for index, item in enumerate(val)]
         return self._check_info(checks)
 
-    def check_pool_free_space(self, expected_scm=None, expected_nvme=None,
-                              timeout=30):
+    def check_free_space(self, expected_scm=None, expected_nvme=None,
+                         timeout=30):
         """Check pool free space with expected value.
         Args:
             expected_scm (int, optional): pool expected SCM free space.
