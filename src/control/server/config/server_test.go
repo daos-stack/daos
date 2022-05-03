@@ -21,7 +21,6 @@ import (
 	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/pkg/errors"
 
-	"github.com/daos-stack/daos/src/control/common"
 	. "github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/lib/hardware"
 	"github.com/daos-stack/daos/src/control/logging"
@@ -1292,7 +1291,7 @@ func TestConfig_detectEngineAffinity(t *testing.T) {
 				Name:         "ib1",
 				NetInterface: "ib1",
 				NUMANode:     1,
-				Providers:    common.NewStringSet("ofi+verbs"),
+				Providers:    NewStringSet("ofi+verbs"),
 			},
 			expDetected: 1,
 		},
@@ -1304,7 +1303,7 @@ func TestConfig_detectEngineAffinity(t *testing.T) {
 				Name:         "ib2",
 				NetInterface: "ib2",
 				NUMANode:     1,
-				Providers:    common.NewStringSet("ofi+verbs"),
+				Providers:    NewStringSet("ofi+verbs"),
 			},
 			expErr: errors.New("not found"),
 		},
@@ -1317,7 +1316,7 @@ func TestConfig_detectEngineAffinity(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
-			defer common.ShowBufferOnFailure(t, buf)
+			defer ShowBufferOnFailure(t, buf)
 
 			var fis *hardware.FabricInterfaceSet
 			if tc.fi != nil {
@@ -1325,12 +1324,12 @@ func TestConfig_detectEngineAffinity(t *testing.T) {
 			}
 
 			detected, err := detectEngineAffinity(log, tc.cfg, fis)
-			common.CmpErr(t, tc.expErr, err)
+			CmpErr(t, tc.expErr, err)
 			if tc.expErr != nil {
 				return
 			}
 
-			common.AssertEqual(t, tc.expDetected, detected,
+			AssertEqual(t, tc.expDetected, detected,
 				"unexpected detected numa node")
 		})
 	}
@@ -1369,19 +1368,19 @@ func TestConfig_setEngineAffinity(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
-			defer common.ShowBufferOnFailure(t, buf)
+			defer ShowBufferOnFailure(t, buf)
 
 			err := setEngineAffinity(log, tc.cfg, tc.setNUMA)
-			common.CmpErr(t, tc.expErr, err)
+			CmpErr(t, tc.expErr, err)
 			if tc.expErr != nil {
 				return
 			}
 
-			common.AssertEqual(t, tc.expNUMA, *tc.cfg.PinnedNumaNode,
+			AssertEqual(t, tc.expNUMA, *tc.cfg.PinnedNumaNode,
 				"unexpected pinned numa node")
-			common.AssertEqual(t, tc.expNUMA, tc.cfg.Fabric.NumaNodeIndex,
+			AssertEqual(t, tc.expNUMA, tc.cfg.Fabric.NumaNodeIndex,
 				"unexpected numa node in fabric config")
-			common.AssertEqual(t, tc.expNUMA, tc.cfg.Storage.NumaNodeIndex,
+			AssertEqual(t, tc.expNUMA, tc.cfg.Storage.NumaNodeIndex,
 				"unexpected numa node in storage config")
 		})
 	}
@@ -1456,7 +1455,7 @@ func TestConfig_SetEngineAffinities(t *testing.T) {
 					Name:         "ib0",
 					NetInterface: "ib0",
 					NUMANode:     1,
-					Providers:    common.NewStringSet("ofi+verbs"),
+					Providers:    NewStringSet("ofi+verbs"),
 				},
 			},
 			expNumaSet: []int{1},
@@ -1473,7 +1472,7 @@ func TestConfig_SetEngineAffinities(t *testing.T) {
 					Name:         "ib0",
 					NetInterface: "ib0",
 					NUMANode:     0,
-					Providers:    common.NewStringSet("ofi+verbs"),
+					Providers:    NewStringSet("ofi+verbs"),
 				},
 			},
 			expNumaSet: []int{-1},
@@ -1493,13 +1492,13 @@ func TestConfig_SetEngineAffinities(t *testing.T) {
 					Name:         "ib0",
 					NetInterface: "ib0",
 					NUMANode:     0,
-					Providers:    common.NewStringSet("ofi+verbs"),
+					Providers:    NewStringSet("ofi+verbs"),
 				},
 				{
 					Name:         "ib1",
 					NetInterface: "ib1",
 					NUMANode:     0,
-					Providers:    common.NewStringSet("ofi+verbs"),
+					Providers:    NewStringSet("ofi+verbs"),
 				},
 			},
 			expNumaSet: []int{0, 0},
@@ -1519,13 +1518,13 @@ func TestConfig_SetEngineAffinities(t *testing.T) {
 					Name:         "ib0",
 					NetInterface: "ib0",
 					NUMANode:     1,
-					Providers:    common.NewStringSet("ofi+verbs"),
+					Providers:    NewStringSet("ofi+verbs"),
 				},
 				{
 					Name:         "ib1",
 					NetInterface: "ib1",
 					NUMANode:     2,
-					Providers:    common.NewStringSet("ofi+verbs"),
+					Providers:    NewStringSet("ofi+verbs"),
 				},
 			},
 			expNumaSet: []int{1, 2},
@@ -1547,13 +1546,13 @@ func TestConfig_SetEngineAffinities(t *testing.T) {
 					Name:         "ib0",
 					NetInterface: "ib0",
 					NUMANode:     1,
-					Providers:    common.NewStringSet("ofi+verbs"),
+					Providers:    NewStringSet("ofi+verbs"),
 				},
 				{
 					Name:         "ib1",
 					NetInterface: "ib1",
 					NUMANode:     2,
-					Providers:    common.NewStringSet("ofi+verbs"),
+					Providers:    NewStringSet("ofi+verbs"),
 				},
 			},
 			expNumaSet: []int{1, 2},
@@ -1575,13 +1574,13 @@ func TestConfig_SetEngineAffinities(t *testing.T) {
 					Name:         "ib0",
 					NetInterface: "ib0",
 					NUMANode:     1,
-					Providers:    common.NewStringSet("ofi+verbs"),
+					Providers:    NewStringSet("ofi+verbs"),
 				},
 				{
 					Name:         "ib1",
 					NetInterface: "ib1",
 					NUMANode:     2,
-					Providers:    common.NewStringSet("ofi+verbs"),
+					Providers:    NewStringSet("ofi+verbs"),
 				},
 			},
 			expNumaSet: []int{2, 1},
@@ -1603,13 +1602,13 @@ func TestConfig_SetEngineAffinities(t *testing.T) {
 					Name:         "ib0",
 					NetInterface: "ib0",
 					NUMANode:     1,
-					Providers:    common.NewStringSet("ofi+verbs"),
+					Providers:    NewStringSet("ofi+verbs"),
 				},
 				{
 					Name:         "ib1",
 					NetInterface: "ib1",
 					NUMANode:     2,
-					Providers:    common.NewStringSet("ofi+verbs"),
+					Providers:    NewStringSet("ofi+verbs"),
 				},
 			},
 			expNumaSet:  []int{-1, -1}, // PinnedNumaNode should not be set
@@ -1621,14 +1620,14 @@ func TestConfig_SetEngineAffinities(t *testing.T) {
 			fabNumaSet := make([]int, 0, len(tc.expFabNumas))
 
 			log, buf := logging.NewTestLogger(t.Name())
-			defer common.ShowBufferOnFailure(t, buf)
+			defer ShowBufferOnFailure(t, buf)
 
 			var fis *hardware.FabricInterfaceSet
 			if len(tc.fis) > 0 {
 				fis = hardware.NewFabricInterfaceSet(tc.fis...)
 			}
 			gotErr := tc.cfg.SetEngineAffinities(log, fis)
-			common.CmpErr(t, tc.expErr, gotErr)
+			CmpErr(t, tc.expErr, gotErr)
 			if tc.expErr != nil {
 				return
 			}
@@ -1653,211 +1652,3 @@ func TestConfig_SetEngineAffinities(t *testing.T) {
 		})
 	}
 }
-
-/*
-func TestConfig_detectEngineAffinity(t *testing.T) {
-	var zero uint = 0
-	var one uint = 1
-
-	for name, tc := range map[string]struct {
-		cfg           *engine.Config
-		fi            *hardware.FabricInterface
-		expErr        error
-		expPinnedNuma *uint
-		expNuma       uint
-	}{
-		"numa pinned; matching iface": {
-			cfg: engine.MockConfig().
-				WithPinnedNumaNode(1).
-				WithFabricInterface("ib1").
-				WithFabricProvider("ofi+verbs"),
-			fi: &hardware.FabricInterface{
-				Name:         "ib1",
-				NetInterface: "ib1",
-				NUMANode:     1,
-				Providers:    common.NewStringSet("ofi+verbs"),
-			},
-			expNuma:       1,
-			expPinnedNuma: &one,
-		},
-		// NOTE: this currently logs an error but could instead return one
-		//       but there might be legitimate use cases e.g. sharing interface
-		"numa pinned; not matching iface": {
-			cfg: engine.MockConfig().
-				WithPinnedNumaNode(1).
-				WithFabricInterface("ib2").
-				WithFabricProvider("ofi+verbs"),
-			fi: &hardware.FabricInterface{
-				Name:         "ib2",
-				NetInterface: "ib2",
-				NUMANode:     2,
-				Providers:    common.NewStringSet("ofi+verbs"),
-			},
-			expNuma:       1,
-			expPinnedNuma: &one,
-		},
-		"numa not pinned": {
-			cfg: engine.MockConfig().
-				WithFabricInterface("ib1").
-				WithFabricProvider("ofi+verbs"),
-			fi: &hardware.FabricInterface{
-				Name:         "ib1",
-				NetInterface: "ib1",
-				NUMANode:     1,
-				Providers:    common.NewStringSet("ofi+verbs"),
-			},
-			expNuma:       1,
-			expPinnedNuma: &one,
-		},
-		"validation success": {
-			cfg: engine.MockConfig().
-				WithFabricInterface("net1").
-				WithFabricProvider("test").
-				WithPinnedNumaNode(1),
-			fi: &hardware.FabricInterface{
-				Name:         "net1",
-				NetInterface: "net1",
-				NUMANode:     1,
-				Providers:    common.NewStringSet("test"),
-			},
-			expNuma:       1,
-			expPinnedNuma: &one,
-		},
-		"provider not supported": {
-			cfg: engine.MockConfig().
-				WithFabricInterface("net1").
-				WithFabricProvider("test").
-				WithPinnedNumaNode(1),
-			fi: &hardware.FabricInterface{
-				Name:         "net1",
-				NetInterface: "net1",
-				NUMANode:     1,
-				Providers:    common.NewStringSet("test2"),
-			},
-			expErr: errors.New("not supported"),
-		},
-		"no fabric info; pinned numa": {
-			cfg: engine.MockConfig().
-				WithFabricInterface("net1").
-				WithFabricProvider("test").
-				WithPinnedNumaNode(1),
-			expNuma:       1,
-			expPinnedNuma: &one,
-		},
-		// Legacy core allocation mode activated, no pinned numa as no multi-engine and NUMA-0.
-		"no fabric info; no pinned numa": {
-			cfg: engine.MockConfig().
-				WithFabricInterface("net1").
-				WithFabricProvider("test"),
-			expNuma: 0,
-		},
-		"pinned numa; first_core set": {
-			cfg: engine.MockConfig().
-				WithFabricInterface("net1").
-				WithFabricProvider("test").
-				WithPinnedNumaNode(1).
-				WithServiceThreadCore(25),
-			expErr: errors.New("cannot both be set"),
-		},
-		// Regardless of whether first_core is set, control plane value for NUMA node will follow
-		// fabric interface affinity.
-		// TODO DAOS-10472: Add test cases to verify derived NUMA values are consistent for
-		//                  engine and control plane when first_core > 0.
-		"numa not pinned; first_core set": {
-			cfg: engine.MockConfig().
-				WithFabricInterface("net1").
-				WithFabricProvider("test").
-				WithServiceThreadCore(25),
-			fi: &hardware.FabricInterface{
-				Name:         "net1",
-				NetInterface: "net1",
-				NUMANode:     1,
-				Providers:    common.NewStringSet("test"),
-			},
-			expNuma: 1,
-		},
-		// Legacy core allocation mode activated, no pinned numa as no multi-engine and NUMA-0.
-		"numa not pinned; iface on numa 0; 1 engine": {
-			cfg: engine.MockConfig().
-				WithFabricInterface("net0").
-				WithFabricProvider("test").
-				WithServiceThreadCore(25),
-			fi: &hardware.FabricInterface{
-				Name:         "net0",
-				NetInterface: "net0",
-				NUMANode:     0,
-				Providers:    common.NewStringSet("test"),
-			},
-			expNuma: 0,
-		},
-		"numa not pinned; iface on numa 0; 2 engines": {
-			cfg: engine.MockConfig().
-				WithFabricInterface("net0").
-				WithFabricProvider("test"),
-			fi: &hardware.FabricInterface{
-				Name:         "net0",
-				NetInterface: "net0",
-				NUMANode:     0,
-				Providers:    common.NewStringSet("test"),
-			},
-			expNuma:       0,
-			expPinnedNuma: &zero,
-		},
-		"numa not pinned; iface on numa 1; 1 engine": {
-			cfg: engine.MockConfig().
-				WithFabricInterface("net1").
-				WithFabricProvider("test"),
-			fi: &hardware.FabricInterface{
-				Name:         "net1",
-				NetInterface: "net1",
-				NUMANode:     1,
-				Providers:    common.NewStringSet("test"),
-			},
-			expNuma:       1,
-			expPinnedNuma: &one,
-		},
-		"numa not pinned; iface on numa 1; 2 engines": {
-			cfg: engine.MockConfig().
-				WithFabricInterface("net1").
-				WithFabricProvider("test"),
-			fi: &hardware.FabricInterface{
-				Name:         "net1",
-				NetInterface: "net1",
-				NUMANode:     1,
-				Providers:    common.NewStringSet("test"),
-			},
-			expNuma:       1,
-			expPinnedNuma: &one,
-		},
-	} {
-		t.Run(name, func(t *testing.T) {
-			log, buf := logging.NewTestLogger(t.Name())
-			defer common.ShowBufferOnFailure(t, buf)
-
-			var fis *hardware.FabricInterfaceSet
-			if tc.fi != nil {
-				fis = hardware.NewFabricInterfaceSet(tc.fi)
-			}
-
-			affinity, err := detectEngineAffinity(log, tc.cfg, fis)
-			if err != nil {
-				if err != errNoAffinityDetected {
-					t.Fatal(err)
-				}
-			}
-			err = setEngineAffinity(log, tc.cfg, affinity)
-			common.CmpErr(t, tc.expErr, err)
-			if tc.expErr != nil {
-				return
-			}
-
-			common.AssertEqual(t, tc.expPinnedNuma, tc.cfg.PinnedNumaNode,
-				"unexpected pinned numa node id")
-			common.AssertEqual(t, tc.expNuma, tc.cfg.Storage.NumaNodeIndex,
-				"unexpected storage numa node id")
-			common.AssertEqual(t, tc.expNuma, tc.cfg.Fabric.NumaNodeIndex,
-				"unexpected fabric numa node id")
-		})
-	}
-}
-*/
