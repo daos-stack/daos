@@ -907,8 +907,7 @@ func TestControl_AutoConfig_genConfig(t *testing.T) {
 					WithStorageConfigOutputPath("/mnt/daos0/daos_nvme.conf").
 					WithStorageVosEnv("NVME").
 					WithTargetCount(15).
-					WithHelperStreamCount(6).
-					WithMultiEngine(true),
+					WithHelperStreamCount(6),
 				defaultEngineCfg(1).
 					WithPinnedNumaNode(1).
 					WithFabricInterface("ib1").
@@ -928,8 +927,7 @@ func TestControl_AutoConfig_genConfig(t *testing.T) {
 					WithStorageConfigOutputPath("/mnt/daos1/daos_nvme.conf").
 					WithStorageVosEnv("NVME").
 					WithTargetCount(15).
-					WithHelperStreamCount(6).
-					WithMultiEngine(true)),
+					WithHelperStreamCount(6)),
 		},
 		"hugepages test": {
 			engineCount:  1,
@@ -992,8 +990,7 @@ func TestControl_AutoConfig_genConfig(t *testing.T) {
 					WithStorageConfigOutputPath("/mnt/daos0/daos_nvme.conf").
 					WithStorageVosEnv("NVME").
 					WithTargetCount(6).
-					WithHelperStreamCount(0).
-					WithMultiEngine(true),
+					WithHelperStreamCount(0),
 				defaultEngineCfg(1).
 					WithPinnedNumaNode(1).
 					WithFabricInterface("ib1").
@@ -1014,8 +1011,7 @@ func TestControl_AutoConfig_genConfig(t *testing.T) {
 					WithStorageVosEnv("NVME").
 					WithStorageNumaNodeIndex(1).
 					WithTargetCount(6).
-					WithHelperStreamCount(0).
-					WithMultiEngine(true)),
+					WithHelperStreamCount(0)),
 		},
 		"vmd enabled; balanced nr ssds": {
 			engineCount:  2,
@@ -1048,8 +1044,7 @@ func TestControl_AutoConfig_genConfig(t *testing.T) {
 					WithStorageConfigOutputPath("/mnt/daos0/daos_nvme.conf").
 					WithStorageVosEnv("NVME").
 					WithTargetCount(22).
-					WithHelperStreamCount(1).
-					WithMultiEngine(true),
+					WithHelperStreamCount(1),
 				defaultEngineCfg(1).
 					WithPinnedNumaNode(1).
 					WithFabricInterface("ib1").
@@ -1070,8 +1065,7 @@ func TestControl_AutoConfig_genConfig(t *testing.T) {
 					WithStorageVosEnv("NVME").
 					WithStorageNumaNodeIndex(1).
 					WithTargetCount(22).
-					WithHelperStreamCount(1).
-					WithMultiEngine(true)),
+					WithHelperStreamCount(1)),
 		},
 		"vmd enabled; imbalanced nr ssds": {
 			engineCount:  2,

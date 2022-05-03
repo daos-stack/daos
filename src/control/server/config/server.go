@@ -400,7 +400,7 @@ func getAccessPointAddrWithPort(log logging.Logger, addr string, portDefault int
 }
 
 // Validate asserts that config meets minimum requirements.
-func (cfg *Server) Validate(log logging.Logger, hugePageSize int, fis *hardware.FabricInterfaceSet) (err error) {
+func (cfg *Server) Validate(log logging.Logger, hugePageSize int) (err error) {
 	msg := "validating config file"
 	if cfg.Path != "" {
 		msg += fmt.Sprintf(" read from %q", cfg.Path)
@@ -521,11 +521,7 @@ func (cfg *Server) Validate(log logging.Logger, hugePageSize int, fis *hardware.
 
 		ec.Fabric.Update(cfg.Fabric)
 
-		if len(cfg.Engines) > 1 {
-			ec.MultiEngine = true
-		}
-
-		if err := ec.Validate(log, fis); err != nil {
+		if err := ec.Validate(); err != nil {
 			return errors.Wrapf(err, "I/O Engine %d failed config validation", idx)
 		}
 
@@ -652,6 +648,89 @@ func (cfg *Server) validateMultiServerConfig(log logging.Logger) error {
 		seenBdevCount = bdevCount
 		seenTargetCount = engine.TargetCount
 		seenHelperStreamCount = engine.HelperStreamCount
+	}
+
+	return nil
+}
+
+var (
+	errNoAffinityDetected = errors.New("no NUMA affinity detected")
+)
+
+func detectEngineAffinity(log logging.Logger, eCfg *engine.Config, fis *hardware.FabricInterfaceSet) (node uint, err error) {
+	// TODO: Add pmem as the primary source of NUMA affinity, if available,
+	// then fall back to other sources if necessary.
+	if fis != nil {
+		fi, err := fis.GetInterfaceOnNetDevice(eCfg.Fabric.Interface, eCfg.Fabric.Provider)
+		if err != nil {
+			return 0, err
+		}
+		return fi.NUMANode, nil
+	}
+
+	return 0, errNoAffinityDetected
+}
+
+func setEngineAffinity(log logging.Logger, engineCfg *engine.Config, node uint) error {
+	if engineCfg.PinnedNumaNode != nil && engineCfg.ServiceThreadCore != 0 {
+		return errors.New("cannot set both NUMA node and service core")
+	}
+
+	if engineCfg.PinnedNumaNode != nil {
+		if *engineCfg.PinnedNumaNode != node {
+			// TODO: This should probably be a fatal error, but we may need to allow the config
+			// override in case our affinity detection is incorrect.
+			log.Errorf("engine config pinned_numa_node is set to %d but detected affinity is with NUMA node %d",
+				*engineCfg.PinnedNumaNode, node)
+		}
+	} else {
+		// If not set via config, use the detected NUMA node affinity.
+		engineCfg.PinnedNumaNode = &node
+	}
+
+	// Propagate the NUMA node affinity to the nested config structs.
+	engineCfg.Fabric.NumaNodeIndex = *engineCfg.PinnedNumaNode
+	engineCfg.Storage.NumaNodeIndex = *engineCfg.PinnedNumaNode
+
+	// TODO: Remove this special case when we have removed first_core as an exposed config
+	// parameter. For the moment, if first_core is set, then we need to unset pinned_numa_node
+	// so that the engine uses its legacy core allocation algorithm.
+	if engineCfg.ServiceThreadCore != 0 {
+		log.Debugf("engine is pinned to core %d; not setting NUMA affinity", engineCfg.ServiceThreadCore)
+		engineCfg.PinnedNumaNode = nil
+	}
+
+	return nil
+}
+
+// SetEngineAffinities sets the NUMA node affinity for all engines in the configuration.
+func (cfg *Server) SetEngineAffinities(log logging.Logger, fis *hardware.FabricInterfaceSet) error {
+	defaultAffinity := uint(0)
+
+	for idx, engineCfg := range cfg.Engines {
+		numaAffinity, err := detectEngineAffinity(log, engineCfg, fis)
+		if err != nil {
+			if err != errNoAffinityDetected {
+				return errors.Wrap(err, "failure while detecting engine affinity")
+			}
+
+			log.Debugf("no NUMA affinity detected for engine %d; defaulting to %d", idx, defaultAffinity)
+			numaAffinity = defaultAffinity
+		} else {
+			log.Debugf("detected NUMA affinity %d for engine %d", numaAffinity, idx)
+		}
+
+		// Special case: If only one engine is defined and engine's detected NUMA node is zero,
+		// don't pin the engine to any NUMA node in order to enable the engine's legacy core
+		// allocation algorithm.
+		if len(cfg.Engines) == 1 && numaAffinity == 0 {
+			log.Debug("enabling single-engine legacy core allocation algorithm")
+			continue
+		}
+
+		if err := setEngineAffinity(log, engineCfg, numaAffinity); err != nil {
+			return errors.Wrapf(err, "unable to set engine affinity to %d", numaAffinity)
+		}
 	}
 
 	return nil

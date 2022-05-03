@@ -12,8 +12,6 @@ import (
 
 	"github.com/pkg/errors"
 
-	"github.com/daos-stack/daos/src/control/lib/hardware"
-	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/server/storage"
 	"github.com/daos-stack/daos/src/control/system"
 )
@@ -161,7 +159,6 @@ type Config struct {
 	Index             uint32         `yaml:"-" cmdLongFlag:"--instance_idx" cmdShortFlag:"-I"`
 	MemSize           int            `yaml:"-" cmdLongFlag:"--mem_size" cmdShortFlag:"-r"`
 	HugePageSz        int            `yaml:"-" cmdLongFlag:"--hugepage_size" cmdShortFlag:"-H"`
-	MultiEngine       bool           `yaml:"-"`
 }
 
 // NewConfig returns an I/O Engine config.
@@ -171,63 +168,12 @@ func NewConfig() *Config {
 	}
 }
 
-// setAffinity ensures engine NUMA locality is assigned and valid.
-func (c *Config) setAffinity(log logging.Logger, fis *hardware.FabricInterfaceSet) (err error) {
-	var fi *hardware.FabricInterface
-	if fis != nil {
-		fi, err = fis.GetInterfaceOnNetDevice(c.Fabric.Interface, c.Fabric.Provider)
-		if err != nil {
-			return
-		}
-	}
-
-	if c.PinnedNumaNode != nil {
-		if c.ServiceThreadCore != 0 {
-			return errors.New("pinned_numa_node and first_core cannot both be set")
-		}
-
-		c.Fabric.NumaNodeIndex = *c.PinnedNumaNode
-		c.Storage.NumaNodeIndex = *c.PinnedNumaNode
-
-		// validate that numa node is correct for the given device
-		if fi != nil && fi.NUMANode != *c.PinnedNumaNode {
-			log.Errorf("misconfiguration: network interface %s is on NUMA "+
-				"node %d but engine is pinned to NUMA node %d", c.Fabric.Interface,
-				fi.NUMANode, *c.PinnedNumaNode)
-		}
-
-		return
-	}
-
-	var numaNode uint
-	if fi == nil {
-		log.Error("pinned_numa_node unset in config and fabric info not provided, " +
-			"default to NUMA node 0")
-	} else {
-		numaNode = fi.NUMANode
-	}
-
-	// set engine numa node index to that of selected fabric interface
-	c.Fabric.NumaNodeIndex = numaNode
-	c.Storage.NumaNodeIndex = numaNode
-
-	// Don't set pinned_numa_node (which would define engine affinity if set), and as a
-	// result enable engine legacy core allocation algorithm in the following cases:
-	// - If first_core is non-zero 0 (as core # denotes affinity) or
-	// - If only one engine is defined and engine's assigned NUMA node is zero (pinning is
-	//   not required in the case that only a single engine is running on NUMA node zero)
-	if c.ServiceThreadCore != 0 || (!c.MultiEngine && numaNode == 0) {
-		log.Debugf("multiengine %v", c.MultiEngine)
-		return
-	}
-
-	c.PinnedNumaNode = &numaNode
-
-	return
-}
-
 // Validate ensures that the configuration meets minimum standards.
-func (c *Config) Validate(log logging.Logger, fis *hardware.FabricInterfaceSet) error {
+func (c *Config) Validate() error {
+	if c.PinnedNumaNode != nil && c.ServiceThreadCore != 0 {
+		return errors.New("cannot specify both pinned_numa_node and first_core")
+	}
+
 	if err := c.Fabric.Validate(); err != nil {
 		return errors.Wrap(err, "fabric config validation failed")
 	}
@@ -240,7 +186,7 @@ func (c *Config) Validate(log logging.Logger, fis *hardware.FabricInterfaceSet) 
 		return errors.Wrap(err, "validate engine log masks")
 	}
 
-	return errors.Wrap(c.setAffinity(log, fis), "setting numa affinity for engine")
+	return nil
 }
 
 // CmdLineArgs returns a slice of command line arguments to be
@@ -483,12 +429,5 @@ func (c *Config) WithHugePageSize(hugepagesz int) *Config {
 // WithPinnedNumaNode sets the NUMA node affinity for the I/O Engine instance.
 func (c *Config) WithPinnedNumaNode(numa uint) *Config {
 	c.PinnedNumaNode = &numa
-	return c
-}
-
-// WithMultiEngine sets the field to indicate if multiple I/O Engine instances are configured on the
-// same host.
-func (c *Config) WithMultiEngine(b bool) *Config {
-	c.MultiEngine = b
 	return c
 }
