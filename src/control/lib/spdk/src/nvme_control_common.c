@@ -520,25 +520,34 @@ cleanup(bool detach)
 {
 	struct ns_entry		*nentry;
 	struct ctrlr_entry	*centry, *cnext;
+	fprintf(stderr, "cleanup: checkpoint 1\n");
 
 	centry = g_controllers;
 
 	while (centry) {
-		if ((centry->ctrlr) && (detach))
+		fprintf(stderr, "cleanup: checkpoint 2-A\n");
+		if ((centry->ctrlr) && (detach)) {
+			fprintf(stderr, "cleanup: checkpoint 2-B\n");
 			spdk_nvme_detach(centry->ctrlr);
+			fprintf(stderr, "cleanup: checkpoint 2-C\n");
+		}
+		fprintf(stderr, "cleanup: checkpoint 2-D\n");
 		while (centry->nss) {
 			nentry = centry->nss->next;
 			free(centry->nss);
 			centry->nss = nentry;
 		}
+		fprintf(stderr, "cleanup: checkpoint 2-E\n");
 		if (centry->health)
 			free(centry->health);
 
 		cnext = centry->next;
 		free(centry);
 		centry = cnext;
+		fprintf(stderr, "cleanup: checkpoint 2-F\n");
 	}
 
 	g_controllers = NULL;
+	fprintf(stderr, "cleanup: checkpoint 3\n");
 }
 
