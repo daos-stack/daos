@@ -69,7 +69,19 @@ pipeline {
                description: 'Priority of this build.  DO NOT USE WITHOUT PERMISSION.')
         string(name: 'TestTag',
                defaultValue: 'full_regression',
-               description: 'Test-tag to use for this run (i.e. pr, daily_regression, full_regression, etc.)')
+               description: 'Test-tag to use for the weekly stages of this run (i.e. pr, daily_regression, full_regression, etc.)')
+        string(name: 'TestTagDailyTCP',
+               defaultValue: 'pr daily_regression',
+               description: 'Test-tag to use for the daily TCP stages of this run (i.e. pr, daily_regression, full_regression, etc.)')
+        string(name: 'TestTagDailyUCX',
+               defaultValue: 'pr daily_regression',
+               description: 'Test-tag to use for the daily UCX stages of this run (i.e. pr, daily_regression, full_regression, etc.)')
+        string(name: 'LaunchArgsDailyTCP',
+               defaultValue: '--nvme=auto:-3DNAND --provider=ofi+tcp',
+               description: 'Launch.py arguments to use in the HW daily TCP stages of this run')
+        string(name: 'LaunchArgsDailyUCX',
+               defaultValue: '--nvme=auto:-3DNAND --provider=ucx+dc_x',
+               description: 'Launch.py arguments to use in the HW daily UCX stages of this run')
         string(name: 'BaseBranch',
                defaultValue: base_branch,
                description: 'The base branch to run weekly-testing against (i.e. master, or a PR\'s branch)')
@@ -85,6 +97,24 @@ pipeline {
         string(name: 'CI_NVME_9_LABEL',
                defaultValue: 'ci_nvme9',
                description: 'Label to use for 9 node NVMe tests')
+        string(name: 'CI_HW_SMALL_DAILY_TCP_LABEL',
+               defaultValue: 'ci_nvme3',
+               description: 'Label to use for 3 node HW Small Daily TCP tests')
+        string(name: 'CI_HW_MEDIUM_DAILY_TCP_LABEL',
+               defaultValue: 'ci_nvme5',
+               description: 'Label to use for 5 node HW Medium Daily TCP tests')
+        string(name: 'CI_HW_LARGE_DAILY_TCP_LABEL',
+               defaultValue: 'ci_nvme9',
+               description: 'Label to use for 9 node HW Large Daily TCP tests')
+        string(name: 'CI_HW_SMALL_DAILY_UCX_LABEL',
+               defaultValue: 'ci_nvme3',
+               description: 'Label to use for 3 node HW Small Daily UCX tests')
+        string(name: 'CI_HW_MEDIUM_DAILY_UCX_LABEL',
+               defaultValue: 'ci_nvme5',
+               description: 'Label to use for 5 node HW Medium Daily UCX tests')
+        string(name: 'CI_HW_LARGE_DAILY_UCX_LABEL',
+               defaultValue: 'ci_nvme9',
+               description: 'Label to use for 9 node HW Large Daily UCX tests')
     }
 
     stages {
@@ -272,6 +302,162 @@ pipeline {
                         }
                     }
                 } // stage('Functional_Hardware_Large')
+                stage('Functional Hardware Small Daily TCP') {
+                    when {
+                        beforeAgent true
+                        expression { !skipStage() }
+                    }
+                    agent {
+                        // 2 node cluster with 1 IB/node + 1 test control node
+                        label params.CI_HW_SMALL_DAILY_TCP_LABEL
+                    }
+                    steps {
+                        // Need to get back onto base_branch for ci/
+                        checkoutScm url: 'https://github.com/daos-stack/daos.git',
+                                    branch: env.BaseBranch,
+                                    withSubmodules: true
+                        functionalTest inst_repos: daosRepos(),
+                                       inst_rpms: functionalPackages(1, next_version),
+                                       test_tag: params.TestTagDailyTCP,
+                                       ftest_arg: params.LaunchArgsDailyTCP,
+                                       test_function: 'runTestFunctionalV2'
+                    }
+                    post {
+                        always {
+                            functionalTestPostV2()
+                        }
+                    }
+                } // stage('Functional Hardware Small Daily TCP')
+                stage('Functional Hardware Medium Daily TCP') {
+                    when {
+                        beforeAgent true
+                        expression { !skipStage() }
+                    }
+                    agent {
+                        // 4 node cluster with 2 IB/node + 1 test control node
+                        label params.CI_HW_MEDIUM_DAILY_TCP_LABEL
+                    }
+                    steps {
+                        // Need to get back onto base_branch for ci/
+                        checkoutScm url: 'https://github.com/daos-stack/daos.git',
+                                    branch: env.BaseBranch,
+                                    withSubmodules: true
+                        functionalTest inst_repos: daosRepos(),
+                                       inst_rpms: functionalPackages(1, next_version),
+                                       test_tag: params.TestTagDailyTCP,
+                                       ftest_arg: params.LaunchArgsDailyTCP,
+                                       test_function: 'runTestFunctionalV2'
+                    }
+                    post {
+                        always {
+                            functionalTestPostV2()
+                        }
+                    }
+                } // stage('Functional Hardware Medium Daily TCP')
+                stage('Functional Hardware Large Daily TCP') {
+                    when {
+                        beforeAgent true
+                        expression { !skipStage() }
+                    }
+                    agent {
+                        // 8+ node cluster with 1 IB/node + 1 test control node
+                        label params.CI_HW_LARGE_DAILY_TCP_LABEL
+                    }
+                    steps {
+                        // Need to get back onto base_branch for ci/
+                        checkoutScm url: 'https://github.com/daos-stack/daos.git',
+                                    branch: env.BaseBranch,
+                                    withSubmodules: true
+                        functionalTest inst_repos: daosRepos(),
+                                       inst_rpms: functionalPackages(1, next_version),
+                                       test_tag: params.TestTagDailyTCP,
+                                       ftest_arg: params.LaunchArgsDailyTCP,
+                                       test_function: 'runTestFunctionalV2'
+                    }
+                    post {
+                        always {
+                            functionalTestPostV2()
+                        }
+                    }
+                } // stage('Functional Hardware Large Daily TCP')
+                stage('Functional Hardware Small Daily UCX') {
+                    when {
+                        beforeAgent true
+                        expression { !skipStage() }
+                    }
+                    agent {
+                        // 2 node cluster with 1 IB/node + 1 test control node
+                        label params.CI_HW_SMALL_DAILY_UCX_LABEL
+                    }
+                    steps {
+                        // Need to get back onto base_branch for ci/
+                        checkoutScm url: 'https://github.com/daos-stack/daos.git',
+                                    branch: env.BaseBranch,
+                                    withSubmodules: true
+                        functionalTest inst_repos: daosRepos(),
+                                       inst_rpms: functionalPackages(1, next_version),
+                                       test_tag: params.TestTagDailyUCX,
+                                       ftest_arg: params.LaunchArgsDailyUCX,
+                                       test_function: 'runTestFunctionalV2'
+                    }
+                    post {
+                        always {
+                            functionalTestPostV2()
+                        }
+                    }
+                } // stage('Functional Hardware Small Daily UCX')
+                stage('Functional Hardware Medium Daily UCX') {
+                    when {
+                        beforeAgent true
+                        expression { !skipStage() }
+                    }
+                    agent {
+                        // 4 node cluster with 2 IB/node + 1 test control node
+                        label params.CI_HW_MEDIUM_DAILY_UCX_LABEL
+                    }
+                    steps {
+                        // Need to get back onto base_branch for ci/
+                        checkoutScm url: 'https://github.com/daos-stack/daos.git',
+                                    branch: env.BaseBranch,
+                                    withSubmodules: true
+                        functionalTest inst_repos: daosRepos(),
+                                       inst_rpms: functionalPackages(1, next_version),
+                                       test_tag: params.TestTagDailyUCX,
+                                       ftest_arg: params.LaunchArgsDailyUCX,
+                                       test_function: 'runTestFunctionalV2'
+                    }
+                    post {
+                        always {
+                            functionalTestPostV2()
+                        }
+                    }
+                } // stage('Functional Hardware Medium Daily UCX')
+                stage('Functional Hardware Large Daily UCX') {
+                    when {
+                        beforeAgent true
+                        expression { !skipStage() }
+                    }
+                    agent {
+                        // 8+ node cluster with 1 IB/node + 1 test control node
+                        label params.CI_HW_LARGE_DAILY_UCX_LABEL
+                    }
+                    steps {
+                        // Need to get back onto base_branch for ci/
+                        checkoutScm url: 'https://github.com/daos-stack/daos.git',
+                                    branch: env.BaseBranch,
+                                    withSubmodules: true
+                        functionalTest inst_repos: daosRepos(),
+                                       inst_rpms: functionalPackages(1, next_version),
+                                       test_tag: params.TestTagDailyUCX,
+                                       ftest_arg: params.LaunchArgsDailyUCX,
+                                       test_function: 'runTestFunctionalV2'
+                    }
+                    post {
+                        always {
+                            functionalTestPostV2()
+                        }
+                    }
+                } // stage('Functional Hardware Large Daily UCX')
             } // parallel
         } // stage('Test')
     } //stages
