@@ -221,12 +221,14 @@ class ZeroConfigTest(TestWithServers):
         """
         env_state = self.params.get("env_state", '/run/zero_config/*')
 
+        # Configure the daos server
+        self.setup_servers()
+
         # Get the available interfaces and their domains
         self.get_device_info()
         exp_iface = random.choice(list(self.interfaces.keys())) #nosec
 
-        # Configure the daos server
-        self.setup_servers()
+        # Update the server network configuration
         self.assertTrue(
             self.server_managers[0].set_config_value(
                 "fabric_iface", exp_iface),
