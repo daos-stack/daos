@@ -144,14 +144,14 @@ function cleanup
 {% endif %}
 	$CLUSH_EXE -l root $CLUSH_NODESET 'bash -c "killall -q -9 avocado orterun mpirun orted daos_server daos_io_server daos_agent || true"'
 
-	info "Cleanning mount points of servers"
+	info "Cleaning mount points of servers"
 	for host in {{ groups["daos_servers"] | join(' ') }}
 	do
 		for index in {0..3}
 		do
 			mountpoint="/mnt/daos$index"
 			if ssh root@$host mountpoint -q "$mountpoint" ; then
-				info "Cleanning mount points $mountpoint of host $host"
+				info "Cleaning mount points $mountpoint of host $host"
 				ssh root@$host rm -fr /mnt/daos0/*
 				ssh root@$host umount /mnt/daos0
 			fi
@@ -161,13 +161,13 @@ function cleanup
 		do
 			bdev="/dev/pmem$index"
 			if ssh root@$host test -b "$bdev" ; then
-				info "Cleanning persistent memory $bdev of host $host"
+				info "Cleaning persistent memory $bdev of host $host"
 				ssh root@$host wipefs -a "$bdev"
 			fi
 		done
 	done
 
-	info "Cleanning huge pages"
+	info "Cleaning huge pages"
 	$CLUSH_EXE -l root -w $SERVERS_LIST ipcrm --all=shm
 	$CLUSH_EXE -l root -w $SERVERS_LIST /bin/rm -f "/dev/hugepages/spdk_*"
 }
