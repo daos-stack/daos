@@ -132,8 +132,6 @@ message CheckQueryResp {
 	CheckQueryTime time = 5;
 	// Per pool based query result for the phases since CSP_POOL_MBS.
 	repeated CheckQueryPool pools = 6;
-	// Inconsistency reports to be displayed
-	repeated chk.CheckReport reports = 7;
 }
 
 // For 'dmg check prop'

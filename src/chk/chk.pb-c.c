@@ -91,12 +91,12 @@ static const ProtobufCFieldDescriptor chk__check_report__field_descriptors[16] =
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
   {
-    "repaired",
+    "result",
     4,
     PROTOBUF_C_LABEL_NONE,
-    PROTOBUF_C_TYPE_BOOL,
+    PROTOBUF_C_TYPE_INT32,
     0,   /* quantifier_offset */
-    offsetof(Chk__CheckReport, repaired),
+    offsetof(Chk__CheckReport, result),
     NULL,
     NULL,
     0,             /* flags */
@@ -260,7 +260,7 @@ static const unsigned chk__check_report__field_indices_by_name[] = {
   8,   /* field[8] = objid */
   6,   /* field[6] = pool_uuid */
   4,   /* field[4] = rank */
-  3,   /* field[3] = repaired */
+  3,   /* field[3] = result */
   0,   /* field[0] = seq */
   5,   /* field[5] = target */
   11,   /* field[11] = timestamp */

@@ -1322,7 +1322,7 @@ const ProtobufCMessageDescriptor mgmt__check_query_pool__descriptor =
   (ProtobufCMessageInit) mgmt__check_query_pool__init,
   NULL,NULL,NULL    /* reserved[123] */
 };
-static const ProtobufCFieldDescriptor mgmt__check_query_resp__field_descriptors[7] =
+static const ProtobufCFieldDescriptor mgmt__check_query_resp__field_descriptors[6] =
 {
   {
     "req_status",
@@ -1396,32 +1396,19 @@ static const ProtobufCFieldDescriptor mgmt__check_query_resp__field_descriptors[
     0,             /* flags */
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
-  {
-    "reports",
-    7,
-    PROTOBUF_C_LABEL_REPEATED,
-    PROTOBUF_C_TYPE_MESSAGE,
-    offsetof(Mgmt__CheckQueryResp, n_reports),
-    offsetof(Mgmt__CheckQueryResp, reports),
-    &chk__check_report__descriptor,
-    NULL,
-    0,             /* flags */
-    0,NULL,NULL    /* reserved1,reserved2, etc */
-  },
 };
 static const unsigned mgmt__check_query_resp__field_indices_by_name[] = {
   3,   /* field[3] = inconsistency */
   2,   /* field[2] = ins_phase */
   1,   /* field[1] = ins_status */
   5,   /* field[5] = pools */
-  6,   /* field[6] = reports */
   0,   /* field[0] = req_status */
   4,   /* field[4] = time */
 };
 static const ProtobufCIntRange mgmt__check_query_resp__number_ranges[1 + 1] =
 {
   { 1, 0 },
-  { 0, 7 }
+  { 0, 6 }
 };
 const ProtobufCMessageDescriptor mgmt__check_query_resp__descriptor =
 {
@@ -1431,7 +1418,7 @@ const ProtobufCMessageDescriptor mgmt__check_query_resp__descriptor =
   "Mgmt__CheckQueryResp",
   "mgmt",
   sizeof(Mgmt__CheckQueryResp),
-  7,
+  6,
   mgmt__check_query_resp__field_descriptors,
   mgmt__check_query_resp__field_indices_by_name,
   1,  mgmt__check_query_resp__number_ranges,

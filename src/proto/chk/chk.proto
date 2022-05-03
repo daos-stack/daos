@@ -193,7 +193,11 @@ message CheckReport {
         uint64 seq = 1; // DAOS Check event sequence, unique for the instance.
         CheckInconsistClass class = 2; // Inconsistency class
         CheckInconsistAction action = 3; // The action taken to repair the inconsistency
-        bool repaired = 4; // Repaired or not, meaningless if the action is CIA_INTERACT.
+        // Repair result: zero is for repaired successfully.
+        //		  negative value if failed to repair.
+        //		  positive value is for CIA_IGNORE or dryrun mode.
+        // It is meaningless if the action is CIA_INTERACT.
+        int32 result = 4;
         uint32 rank = 5; // Inconsistency happened on which rank if applicable.
         uint32 target = 6; // Inconsistency happened on which target in the rank if applicable.
         string pool_uuid = 7; // The consistency is in which pool if applicable.

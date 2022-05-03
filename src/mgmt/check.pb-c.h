@@ -339,15 +339,10 @@ struct  _Mgmt__CheckQueryResp
    */
   size_t n_pools;
   Mgmt__CheckQueryPool **pools;
-  /*
-   * Inconsistency reports to be displayed
-   */
-  size_t n_reports;
-  Chk__CheckReport **reports;
 };
 #define MGMT__CHECK_QUERY_RESP__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&mgmt__check_query_resp__descriptor) \
-    , 0, CHK__CHECK_INST_STATUS__CIS_INIT, CHK__CHECK_SCAN_PHASE__CSP_PREPARE, NULL, NULL, 0,NULL, 0,NULL }
+    , 0, CHK__CHECK_INST_STATUS__CIS_INIT, CHK__CHECK_SCAN_PHASE__CSP_PREPARE, NULL, NULL, 0,NULL, }
 
 
 /*
