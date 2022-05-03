@@ -890,7 +890,7 @@ reintegrate_inflight_io(void *data)
 
 	ioreq_init(&req, arg->coh, oid, DAOS_IOD_ARRAY, arg);
 	for (i = 0; i < 5; i++) {
-		char	key[32];
+		char	key[64];
 		daos_recx_t recx;
 		char	buf[DATA_SIZE];
 
