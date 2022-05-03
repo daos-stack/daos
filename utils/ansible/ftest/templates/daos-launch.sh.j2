@@ -137,11 +137,11 @@ function cleanup
 	$CLUSH_EXE -l root -w $SERVERS_LIST mkdir -p /var/run/daos_server
 
 	info "Stopping all DAOS processes"
-	{% if "daos_clients" in groups and groups["daos_clients"] | length > 0 %}
+{% if "daos_clients" in groups and groups["daos_clients"] | length > 0 %}
 	CLUSH_NODESET="-w $SERVERS_LIST -w $CLIENTS_LIST"
-	{% else %}
+{% else %}
 	CLUSH_NODESET="-w $SERVERS_LIST"
-	{% endif %}
+{% endif %}
 	$CLUSH_EXE -l root $CLUSH_NODESET 'bash -c "killall -q -9 avocado orterun mpirun orted daos_server daos_io_server daos_agent || true"'
 
 	info "Cleanning mount points of servers"
