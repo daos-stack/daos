@@ -4649,6 +4649,12 @@ ds_obj_cpd_handler(crt_rpc_t *rpc)
 	if (rc != 0)
 		goto reply;
 
+	if ((oci->oci_flags & ORF_REINTEGRATING_IO) &&
+	    ioc.ioc_coc->sc_pool->spc_rebuild_fence == 0) {
+		D_ERROR("reintegrating "DF_UUID" retry.\n", DP_UUID(oci->oci_pool_uuid));
+		D_GOTO(reply, rc = -DER_UPDATE_AGAIN);
+	}
+
 	if (!leader) {
 		if (tx_count != 1 || oci->oci_sub_reqs.ca_count != 1 ||
 		    oci->oci_disp_ents.ca_count != 1 ||

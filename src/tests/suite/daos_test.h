@@ -509,6 +509,7 @@ void make_buffer(char *buffer, char start, int total);
 
 bool oid_is_ec(daos_obj_id_t oid, struct daos_oclass_attr **attr);
 uint32_t test_ec_get_parity_off(daos_key_t *dkey, struct daos_oclass_attr *oca);
+int reintegrate_inflight_io(void *data);
 
 static inline void
 daos_test_print(int rank, char *message)

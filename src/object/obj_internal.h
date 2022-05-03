@@ -379,6 +379,7 @@ struct obj_auxi_args {
 					 shards_scheded:1,
 					 sub_anchors:1,
 					 ec_degrade_fetch:1,
+					 reintegrating:1,
 					 tx_convert:1;
 	/* request flags. currently only: ORF_RESEND */
 	uint32_t			 flags;

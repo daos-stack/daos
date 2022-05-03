@@ -80,6 +80,8 @@ rebuild_ec_internal(void **state, daos_oclass_id_t oclass, int kill_data_nr,
 	rc = daos_obj_verify(arg->coh, oid, DAOS_EPOCH_MAX);
 	assert_int_equal(rc, 0);
 
+	arg->rebuild_cb = reintegrate_inflight_io;
+	arg->rebuild_cb_arg = &oid;
 	reintegrate_pools_ranks(&arg, 1, kill_ranks, kill_ranks_num, false);
 	if (oclass == OC_EC_2P1G1)
 		reintegrate_pools_ranks(&arg, 1, &extra_kill_ranks[0], 1, false);

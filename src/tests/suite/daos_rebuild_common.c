@@ -879,6 +879,50 @@ dfs_ec_rebuild_io(void **state, int *shards, int shards_nr)
 #endif
 }
 
+int
+reintegrate_inflight_io(void *data)
+{
+	test_arg_t	*arg = data;
+	daos_obj_id_t	oid = *(daos_obj_id_t *)arg->rebuild_cb_arg;
+	char		single_data[LARGE_SINGLE_VALUE_SIZE];
+	struct ioreq	req;
+	int		i;
+
+	ioreq_init(&req, arg->coh, oid, DAOS_IOD_ARRAY, arg);
+	for (i = 0; i < 5; i++) {
+		char	key[32];
+		daos_recx_t recx;
+		char	buf[DATA_SIZE];
+
+		sprintf(key, "d_inflight_%d", i);
+		insert_single(key, "a_key", 0, "data", strlen("data") + 1,
+			      DAOS_TX_NONE, &req);
+
+		sprintf(key, "d_inflight_1M_%d", i);
+		recx.rx_idx = 0;
+		recx.rx_nr = DATA_SIZE;
+		memset(buf, 'a' + i, DATA_SIZE);
+		insert_recxs(key, "a_key_1M", 1, DAOS_TX_NONE, &recx, 1,
+			     buf, DATA_SIZE, &req);
+
+		req.iod_type = DAOS_IOD_SINGLE;
+		memset(single_data, 'a' + i, LARGE_SINGLE_VALUE_SIZE);
+		sprintf(key, "d_inflight_single_small_%d", i);
+		insert_single(key, "a_key", 0, single_data,
+			      SMALL_SINGLE_VALUE_SIZE, DAOS_TX_NONE, &req);
+
+		sprintf(key, "d_inflight_single_large_%d",  i);
+		insert_single(key, "a_key", 0, single_data,
+			      LARGE_SINGLE_VALUE_SIZE, DAOS_TX_NONE, &req);
+
+	}
+	ioreq_fini(&req);
+	if (arg->myrank == 0)
+		daos_debug_set_params(arg->group, -1, DMG_KEY_FAIL_LOC, 0, 0,
+				      NULL);
+	return 0;
+}
+
 /* Create a new pool for the sub_test */
 int
 rebuild_pool_create(test_arg_t **new_arg, test_arg_t *old_arg, int flag,

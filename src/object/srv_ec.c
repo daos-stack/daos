@@ -123,18 +123,23 @@ obj_ec_rw_req_split(daos_unit_oid_t oid, uint64_t dkey_hash,
 		} else {
 			if (tgts[i].st_rank == DAOS_TGT_IGNORE)
 				continue;
-			D_ASSERT(tgts[i].st_shard >= start_shard);
-			tgt_idx = tgts[i].st_shard - start_shard;
-			D_ASSERT(tgt_idx <= tgt_max_idx);
+			D_ASSERT(tgts[i].st_shard_id >= start_shard);
+			tgt_idx = tgts[i].st_shard_id - start_shard;
+			D_ASSERTF(tgt_idx <= tgt_max_idx, "tgt_idx %u tgt_max_idx %u\n",
+				  tgt_idx, tgt_max_idx);
 		}
 
-		setbit(tgt_bit_map, tgt_idx);
-		count++;
+		if (isclr(tgt_bit_map, tgt_idx)) {
+			setbit(tgt_bit_map, tgt_idx);
+			count++;
+		}
 	}
 
 	if (tgt_map != NULL) {
-		D_ASSERT(count == map_size);
-
+		/* NB: if there is inflight I/O during reintegration, then multiple
+		 * shards(map_size) might write the same data(iod/count), so count
+		 * might be smaller than  map_size.
+		 */
 		/* If leader is not any EC shard, neither parity nor data,
 		 * then temporarily set leader as tgt_max_idx, that is not
 		 * important since current server will not take part in EC
@@ -148,8 +153,10 @@ obj_ec_rw_req_split(daos_unit_oid_t oid, uint64_t dkey_hash,
 		D_ASSERT(leader_id == PO_COMP_ID_ALL);
 
 		leader = oid.id_shard % obj_ec_tgt_nr(oca);
-		setbit(tgt_bit_map, leader);
-		count++;
+		if (isclr(tgt_bit_map, leader)) {
+			setbit(tgt_bit_map, leader);
+			count++;
+		}
 	}
 
 	tgt_oiods = obj_ec_tgt_oiod_init(oiods, iod_nr, tgt_bit_map,

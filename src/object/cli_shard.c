@@ -1271,6 +1271,8 @@ dc_obj_shard_rw(struct dc_obj_shard *shard, enum obj_rpc_opc opc,
 	uuid_copy(orw->orw_co_uuid, cont_uuid);
 	daos_dti_copy(&orw->orw_dti, &args->dti);
 	orw->orw_flags = auxi->flags | flags;
+	if (auxi->obj_auxi->reintegrating)
+		orw->orw_flags |= ORF_REINTEGRATING_IO;
 	orw->orw_tgt_idx = auxi->ec_tgt_idx;
 	if (args->reasb_req && args->reasb_req->orr_oca)
 		orw->orw_tgt_max = obj_ec_tgt_nr(args->reasb_req->orr_oca) - 1;
