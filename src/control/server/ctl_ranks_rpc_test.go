@@ -281,18 +281,12 @@ func TestServer_CtlSvc_StopRanks(t *testing.T) {
 		"instances remain started": { // states don't change within the allotted time
 			req:            &ctlpb.RanksReq{Ranks: "0-3"},
 			expSignalsSent: map[uint32]os.Signal{0: syscall.SIGINT, 1: syscall.SIGINT},
-			expResults: []*sharedpb.RankResult{
-				{Rank: 1, State: msErrored, Errored: true},
-				{Rank: 2, State: msErrored, Errored: true},
-			},
+			expErr:         errors.New("deadline exceeded"),
 		},
 		"force; instances remain started": { // states don't change within the allotted time
 			req:            &ctlpb.RanksReq{Ranks: "0-3", Force: true},
 			expSignalsSent: map[uint32]os.Signal{0: syscall.SIGKILL, 1: syscall.SIGKILL},
-			expResults: []*sharedpb.RankResult{
-				{Rank: 1, State: msErrored, Errored: true},
-				{Rank: 2, State: msErrored, Errored: true},
-			},
+			expErr:         errors.New("deadline exceeded"),
 		},
 		"instances already stopped": { // successful result for kill
 			req:              &ctlpb.RanksReq{Ranks: "0-3"},
@@ -326,7 +320,7 @@ func TestServer_CtlSvc_StopRanks(t *testing.T) {
 			)
 			svc := mockControlService(t, log, cfg, nil, nil, nil)
 
-			ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
+			ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 			defer cancel()
 
 			ps := events.NewPubSub(ctx, log)
@@ -352,7 +346,7 @@ func TestServer_CtlSvc_StopRanks(t *testing.T) {
 					signalsSent.Store(idx, sig)
 					// simulate process exit which will call
 					// onInstanceExit handlers.
-					svc.harness.instances[idx].(*EngineInstance).exit(context.TODO(),
+					svc.harness.instances[idx].(*EngineInstance).exit(ctx,
 						common.NormalExit)
 				}
 				trc.SignalErr = tc.signalErr
@@ -638,10 +632,7 @@ func TestServer_CtlSvc_ResetFormatRanks(t *testing.T) {
 		"instances stay stopped": {
 			req:        &ctlpb.RanksReq{Ranks: "0-3"},
 			startFails: true,
-			expResults: []*sharedpb.RankResult{
-				{Rank: 1, State: msStopped, Errored: true},
-				{Rank: 2, State: msStopped, Errored: true},
-			},
+			expErr:     errors.New("deadline exceeded"),
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
@@ -652,7 +643,7 @@ func TestServer_CtlSvc_ResetFormatRanks(t *testing.T) {
 				tc.engineCount = maxEngines
 			}
 
-			ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
+			ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 			defer cancel()
 
 			cfg := config.DefaultServer().WithEngines(
@@ -717,6 +708,7 @@ func TestServer_CtlSvc_ResetFormatRanks(t *testing.T) {
 					}
 					// processing loop reaches wait for format state
 					s.waitFormat.SetTrue()
+					t.Log("wait format set to true")
 				}(srv, tc.startFails)
 			}
 
@@ -779,10 +771,7 @@ func TestServer_CtlSvc_StartRanks(t *testing.T) {
 			req:              &ctlpb.RanksReq{Ranks: "0-3"},
 			instancesStopped: true,
 			startFails:       true,
-			expResults: []*sharedpb.RankResult{
-				{Rank: 1, State: msErrored, Errored: true},
-				{Rank: 2, State: msErrored, Errored: true},
-			},
+			expErr:           errors.New("deadline exceeded"),
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
@@ -793,7 +782,7 @@ func TestServer_CtlSvc_StartRanks(t *testing.T) {
 				tc.engineCount = maxEngines
 			}
 
-			ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
+			ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 			defer cancel()
 
 			cfg := config.DefaultServer().WithEngines(
@@ -830,12 +819,13 @@ func TestServer_CtlSvc_StartRanks(t *testing.T) {
 
 					// set instance runner started and ready
 					ch := make(chan error, 1)
-					if err := s.runner.Start(context.TODO(), ch); err != nil {
+					if err := s.runner.Start(ctx, ch); err != nil {
 						t.Logf("failed to start runner: %s", err)
 						return
 					}
 					<-ch
 					s.ready.SetTrue()
+					t.Log("ready set to true")
 				}(srv, tc.startFails)
 			}
 

@@ -191,7 +191,7 @@ func (svc *ControlService) StopRanks(ctx context.Context, req *ctlpb.RanksReq) (
 
 	// ignore poll results as we gather state immediately after
 	if err := pollInstanceState(ctx, instances, func(e Engine) bool { return !e.IsStarted() }); err != nil {
-		svc.log.Error(errors.Wrap(err, "CtlSvc.StopRanks pollInstanceState").Error())
+		return nil, errors.Wrap(err, "waiting for engines to stop")
 	}
 
 	results, err := svc.memberStateResults(instances, system.MemberStateStopped, "system stop",
@@ -310,7 +310,7 @@ func (svc *ControlService) ResetFormatRanks(ctx context.Context, req *ctlpb.Rank
 
 	// ignore poll results as we gather state immediately after
 	if err = pollInstanceState(ctx, instances, func(e Engine) bool { return e.isAwaitingFormat() }); err != nil {
-		svc.log.Error(errors.Wrap(err, "CtlSvc.ResetFormatRanks pollInstanceState").Error())
+		return nil, errors.Wrap(err, "waiting for engines to await format")
 	}
 
 	// rank cannot be pulled from superblock so use saved value
@@ -363,7 +363,7 @@ func (svc *ControlService) StartRanks(ctx context.Context, req *ctlpb.RanksReq) 
 
 	// ignore poll results as we gather state immediately after
 	if err = pollInstanceState(ctx, instances, func(e Engine) bool { return e.IsReady() }); err != nil {
-		svc.log.Error(errors.Wrap(err, "CtlSvc.StartRanks pollInstanceState").Error())
+		return nil, errors.Wrap(err, "waiting for engines to start")
 	}
 
 	// instances will update state to "Started" through join or
