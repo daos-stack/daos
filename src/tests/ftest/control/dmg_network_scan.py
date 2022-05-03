@@ -16,8 +16,7 @@ class NetDev():
     # pylint: disable=too-few-public-methods
     """A class to represent the information of a network device"""
 
-    SUPPORTED_PROV = [
-        "gni", "psm2", "tcp", "sockets", "verbs", "ofi_rxm"]
+    SUPPORTED_PROV = ["gni", "psm2", "tcp", "sockets", "verbs", "ofi_rxm", "ucx"]
 
     def __init__(self, host=None, f_iface=None, providers=None, numa=None):
         """Initialize the network device data object."""
@@ -181,20 +180,25 @@ class DmgNetworkScanTest(TestWithServers):
 
         # Get device names on this system
         dev_names = self.get_devs()
+        self.log.debug("get_sys_info() detected: dev_names=%s", dev_names)
         for dev in dev_names:
             dev_info = NetDev(self.hostlist_servers[-1], dev)
             for dev_name in dev_names[dev]:
                 dev_info.set_dev_info(dev_name, self.ofi_prefix)
             sys_net_devs.append(dev_info)
+        self.log.debug("get_sys_info() detected: sys_net_devs=%s", sys_net_devs)
 
         # Create NetDev per provider to match dmg output
         f_net_devs = []
-        for dev in self.clean_info(sys_net_devs):
+        clean_devs = self.clean_info(sys_net_devs)
+        self.log.debug("get_sys_info() detected: clean_devs=%s", clean_devs)
+        for dev in clean_devs:
             if dev.providers:
                 for provider in dev.providers:
                     new_dev = dev.get_copy()
                     new_dev.providers = [provider]
                     f_net_devs.append(new_dev)
+        self.log.debug("get_sys_info() detected: dev_names=%s", dev_names)
 
         # Get the provider specified in server config
         cfg_p = self.server_managers[0].get_config_value("provider")
@@ -204,6 +208,7 @@ class DmgNetworkScanTest(TestWithServers):
             elif cfg_p == "ofi+verbs":
                 cfg_p = "ofi+verbs;ofi_rxm"
             f_net_devs = [dev for dev in f_net_devs if dev.providers == [cfg_p]]
+        self.log.debug("get_sys_info() detected: f_net_devs=%s", f_net_devs)
 
         return f_net_devs
 

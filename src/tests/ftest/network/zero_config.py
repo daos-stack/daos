@@ -58,10 +58,14 @@ class ZeroConfigTest(TestWithServers):
         results = run_pcmd(self.hostlist_servers, command)
         try:
             if results[0]["exit_status"] == 0:
+                port = []
+                if "ucx" in self.server_managers[0].get_config_value("provider"):
+                    # Include the port number in the OFI_DOMAIN assignment for UCX
+                    port = ["1"]
                 regex = r"(mlx\d_\d)\s+net-(ib\d)\s+(\d)"
                 for match in re.findall(regex, "\n".join(results[0]["stdout"])):
                     self.interfaces[match[1]]["numa"] = int(match[2])
-                    self.interfaces[match[1]]["domain"] = match[0]
+                    self.interfaces[match[1]]["domain"] = ":".join([match[0]] + port)
         except (IndexError, KeyError, ValueError) as error:
             self.log.error("Error obtaining interfaces: %s", str(error))
             self.fail("Error obtaining interfaces - unexpected error")
