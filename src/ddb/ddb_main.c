@@ -43,6 +43,24 @@ run_cmd(struct ddb_ctx *ctx, struct argv_parsed *parse_args)
 	case DDB_CMD_LS:
 		rc = ddb_run_ls(ctx, &info.dci_cmd_option.dci_ls);
 		break;
+	case DDB_CMD_DUMP_SUPERBLOCK:
+		rc = ddb_run_dump_superblock(ctx);
+		break;
+	case DDB_CMD_DUMP_ILOG:
+		rc = ddb_run_dump_ilog(ctx, &info.dci_cmd_option.dci_dump_ilog);
+		break;
+	case DDB_CMD_DUMP_VALUE:
+		rc = ddb_run_dump_value(ctx, &info.dci_cmd_option.dci_dump_value);
+		break;
+	case DDB_CMD_RM:
+		rc = ddb_run_rm(ctx, &info.dci_cmd_option.dci_rm);
+		break;
+	case DDB_CMD_DUMP_DTX:
+		rc = ddb_run_dump_dtx(ctx, &info.dci_cmd_option.dci_dump_dtx);
+		break;
+	case DDB_CMD_LOAD:
+		rc = ddb_run_load(ctx, &info.dci_cmd_option.dci_load);
+		break;
 	}
 
 	if (!SUCCESS(rc))
@@ -61,23 +79,32 @@ ddb_main(struct ddb_io_ft *io_ft, int argc, char *argv[])
 	struct program_args	 pa = {0};
 	uint32_t		 input_buf_len = 1024;
 	uint32_t		 buf_len = input_buf_len * 2;
-	char			 buf[buf_len + 1024];
-	char			 input_buf[input_buf_len];
+	char			*buf;
+	char			*input_buf;
 	struct argv_parsed	 parse_args = {0};
-	int			 rc;
+	int			 rc = 0;
 	struct ddb_ctx		 ctx = {0};
 
 	D_ASSERT(io_ft);
 	ctx.dc_io_ft = *io_ft;
 
-	rc = ddb_parse_program_args(argc, argv, &pa);
+	D_ALLOC(buf, buf_len + 1024);
+	if (buf == NULL)
+		return -DER_NOMEM;
+	D_ALLOC(input_buf, input_buf_len);
+	if (input_buf == NULL) {
+		D_FREE(buf);
+		return -DER_NOMEM;
+	}
+
+	rc = ddb_parse_program_args(&ctx, argc, argv, &pa);
 	if (!SUCCESS(rc))
-		return rc;
+		D_GOTO(done, rc);
 
 	if (str_has_value(pa.pa_pool_path)) {
 		rc = ddb_vos_pool_open(pa.pa_pool_path, &ctx.dc_poh);
 		if (!SUCCESS(rc))
-			return rc;
+			D_GOTO(done, rc);
 	}
 
 	if (str_has_value(pa.pa_r_cmd_run)) {
@@ -86,7 +113,7 @@ ddb_main(struct ddb_io_ft *io_ft, int argc, char *argv[])
 		rc = ddb_str2argv_create(buf, &parse_args);
 		if (!SUCCESS(rc)) {
 			ddb_vos_pool_close(ctx.dc_poh);
-			return rc;
+			D_GOTO(done, rc);
 		}
 
 		rc = run_cmd(&ctx, &parse_args);
@@ -94,13 +121,12 @@ ddb_main(struct ddb_io_ft *io_ft, int argc, char *argv[])
 			ddb_errorf(&ctx, "Error with command: "DF_RC"\n", DP_RC(rc));
 
 		ddb_str2argv_free(&parse_args);
-		return rc;
+		D_GOTO(done, rc);
 	}
 
 	if (str_has_value(pa.pa_cmd_file)) {
 		/* Still to be implemented */
-
-		return -DER_NOSYS;
+		D_GOTO(done, rc = -DER_NOSYS);
 	}
 
 	while (!ctx.dc_should_quit) {
@@ -125,6 +151,9 @@ ddb_main(struct ddb_io_ft *io_ft, int argc, char *argv[])
 		ddb_str2argv_free(&parse_args);
 	}
 
-	ddb_fini();
-	return 0;
+done:
+	D_FREE(buf);
+	D_FREE(input_buf);
+
+	return rc;
 }

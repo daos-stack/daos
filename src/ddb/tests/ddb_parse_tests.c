@@ -10,6 +10,12 @@
 #include "ddb_cmocka.h"
 #include "ddb_test_driver.h"
 
+static int
+fake_print(const char *fmt, ...)
+{
+	return 0;
+}
+
 #define assert_parsed_words2(str, count, ...) \
 	__assert_parsed_words2(str, count, (char *[])__VA_ARGS__)
 static void
@@ -45,7 +51,7 @@ assert_parsed_fail(const char *str)
  */
 
 static void
-test_string_to_argv(void **state)
+string_to_argv_tests(void **state)
 {
 	assert_parsed_words2("one", 1, { "one" });
 	assert_parsed_words2("one two", 2, {"one", "two"});
@@ -67,8 +73,12 @@ static int
 _assert_invalid_program_args(uint32_t argc, char **argv)
 {
 	struct program_args	pa;
+	struct ddb_ctx		ctx = {
+		.dc_io_ft.ddb_print_message = fake_print,
+		.dc_io_ft.ddb_print_error = fake_print
+	};
 
-	return ddb_parse_program_args(argc, argv, &pa);
+	return ddb_parse_program_args(&ctx, argc, argv, &pa);
 }
 
 #define assert_program_args(expected_program_args, argc, ...) \
@@ -76,10 +86,14 @@ _assert_invalid_program_args(uint32_t argc, char **argv)
 static int
 _assert_program_args(struct program_args *expected_pa, uint32_t argc, char **argv)
 {
-	struct program_args pa = {0};
-	int rc;
+	struct program_args	pa = {0};
+	int			rc;
+	struct ddb_ctx		ctx = {
+		.dc_io_ft.ddb_print_message = fake_print,
+		.dc_io_ft.ddb_print_error = fake_print
+	};
 
-	rc = ddb_parse_program_args(argc, argv, &pa);
+	rc = ddb_parse_program_args(&ctx, argc, argv, &pa);
 	if (rc != 0)
 		return rc;
 
@@ -100,7 +114,7 @@ _assert_program_args(struct program_args *expected_pa, uint32_t argc, char **arg
 }
 
 static void
-test_parse_args(void **state)
+parse_args_tests(void **state)
 {
 	struct program_args pa = {0};
 
@@ -130,20 +144,22 @@ do { \
 					a.vtp_path.vtp_dkey.iov_len); \
 	assert_int_equal(a.vtp_path.vtp_akey.iov_len, b.vtp_path.vtp_akey.iov_len); \
 	if (a.vtp_path.vtp_akey.iov_len > 0) \
-		assert_memory_equal(a.vtp_path.vtp_akey.iov_buf, b.vtp_path.vtp_akey.iov_buf,\
+		assert_memory_equal(a.vtp_path.vtp_akey.iov_buf, b.vtp_path.vtp_akey.iov_buf, \
 					a.vtp_path.vtp_akey.iov_len); \
 	} while (0)
 
 #define assert_invalid_path(path) \
 do { \
 	struct dv_tree_path_builder __vt = {0}; \
-	assert_rc_equal(-DER_INVAL, ddb_vtp_init(path, &__vt)); \
+		daos_handle_t poh = {0}; \
+		assert_rc_equal(-DER_INVAL, ddb_vtp_init(poh, path, &__vt)); \
 } while (0)
 
 #define assert_path(path, expected) \
 do { \
 	struct dv_tree_path_builder __vt = {0}; \
-	assert_success(ddb_vtp_init(path, &__vt)); \
+	daos_handle_t poh = {0}; \
+	assert_success(ddb_vtp_init(poh, path, &__vt)); \
 	assert_vtp_eq(expected, __vt); \
 	ddb_vtp_fini(&__vt); \
 } while (0)
@@ -166,23 +182,19 @@ iov_alloc_str(d_iov_t *iov, const char *str)
 }
 
 static void
-test_vos_path_parse(void **state)
+vos_path_parse_tests(void **state)
 {
 	struct dv_tree_path_builder expected_vt = {0};
-	daos_obj_id_t oid;
 
 	ddb_vos_tree_path_setup(&expected_vt);
 
 	/* empty paths are valid */
 	assert_path("", expected_vt);
-	assert_path(NULL, expected_vt);
 
 	/* first part must be a valid uuid */
 	assert_invalid_path("12345678");
 
 	uuid_parse("12345678-1234-1234-1234-123456789012", expected_vt.vtp_path.vtp_cont);
-	oid.lo = 1234;
-	oid.hi = 4321;
 
 	/* handle just container */
 	assert_path("12345678-1234-1234-1234-123456789012", expected_vt);
@@ -199,23 +211,47 @@ test_vos_path_parse(void **state)
 
 	/* handle dkey */
 	iov_alloc_str(&expected_vt.vtp_path.vtp_dkey, "dkey");
-	assert_path("/12345678-1234-1234-1234-123456789012/4321.1234/dkey", expected_vt);
-	assert_path("/12345678-1234-1234-1234-123456789012/4321.1234/dkey/", expected_vt);
+	assert_invalid_path("/12345678-1234-1234-1234-123456789012/4321.1234/dkey");
+	assert_path("/12345678-1234-1234-1234-123456789012/4321.1234/'dkey'", expected_vt);
+	assert_path("/12345678-1234-1234-1234-123456789012/4321.1234/'dkey'/", expected_vt);
 
 	iov_alloc_str(&expected_vt.vtp_path.vtp_akey, "akey");
-	assert_path("/12345678-1234-1234-1234-123456789012/4321.1234/dkey/akey", expected_vt);
-	assert_path("/12345678-1234-1234-1234-123456789012/4321.1234/dkey/akey/", expected_vt);
+	assert_invalid_path("/12345678-1234-1234-1234-123456789012/4321.1234/'dkey'/akey");
+	assert_path("/12345678-1234-1234-1234-123456789012/4321.1234/'dkey'/'akey'", expected_vt);
+	assert_path("/12345678-1234-1234-1234-123456789012/4321.1234/'dkey'/'akey'/", expected_vt);
 
 	expected_vt.vtp_path.vtp_recx.rx_idx = 1;
 	expected_vt.vtp_path.vtp_recx.rx_nr = 5;
-	assert_path("/12345678-1234-1234-1234-123456789012/4321.1234/dkey/akey/{1-6}", expected_vt);
+	assert_path("/12345678-1234-1234-1234-123456789012/4321.1234/'dkey'/'akey'/{1-6}",
+		    expected_vt);
 
 	daos_iov_free(&expected_vt.vtp_path.vtp_dkey);
 	daos_iov_free(&expected_vt.vtp_path.vtp_akey);
 }
 
 static void
-test_parse_idx(void **state)
+vos_path_parse_and_print_tests(void **state)
+{
+	struct dv_tree_path_builder	 vt = {0};
+	daos_handle_t			 poh = {0};
+	struct ddb_ctx			 ctx = {0};
+	char				*path;
+
+	path = "/12435678-1234-1234-1234-124356789012/1234.4321.0/'akey'/'dkey'";
+
+	ctx.dc_io_ft.ddb_print_message = dvt_fake_print;
+
+	assert_success(ddb_vtp_init(poh, path, &vt));
+
+	vtp_print(&ctx, &vt.vtp_path, false);
+
+	assert_string_equal(path, dvt_fake_print_buffer);
+
+	ddb_vtp_fini(&vt);
+}
+
+static void
+parse_idx_tests(void **state)
 {
 	struct dv_tree_path_builder expected_vt = {0};
 
@@ -240,7 +276,7 @@ test_parse_idx(void **state)
 }
 
 static void
-test_has_parts(void **state)
+has_parts_tests(void **state)
 {
 	struct dv_tree_path vtp = {0};
 
@@ -261,24 +297,24 @@ test_has_parts(void **state)
 	assert_true(dv_has_akey(&vtp));
 }
 
-#define TEST(dsc, test) { dsc, test, NULL, NULL }
-
-static const struct CMUnitTest tests[] = {
-	TEST("01: string to argv", test_string_to_argv),
-	TEST("03: parse program arguments", test_parse_args),
-	TEST("04: parse a vos path", test_vos_path_parse),
-	TEST("05: parse a vos path with indexes", test_parse_idx),
-	TEST("06: check to see if the path has parts", test_has_parts)
-};
 
 /*
  * -----------------------------------------------
  * Execute
  * -----------------------------------------------
  */
+#define TEST(x) {#x, x, NULL, NULL}
 int
 ddb_parse_tests_run()
 {
+	static const struct CMUnitTest tests[] = {
+		TEST(string_to_argv_tests),
+		TEST(parse_args_tests),
+		TEST(vos_path_parse_tests),
+		TEST(vos_path_parse_and_print_tests),
+		TEST(parse_idx_tests),
+		TEST(has_parts_tests)
+	};
 	return cmocka_run_group_tests_name("DDB helper parsing function tests", tests,
 					   NULL, NULL);
 }

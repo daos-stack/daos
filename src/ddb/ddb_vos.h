@@ -7,6 +7,7 @@
 #ifndef DAOS_DDB_VOS_H
 #define DAOS_DDB_VOS_H
 
+#include <vos_layout.h>
 #include <daos_srv/vos_types.h>
 #include "ddb_common.h"
 
@@ -16,8 +17,12 @@ struct ddb_cont {
 };
 
 struct ddb_obj {
-	daos_obj_id_t	ddbo_oid;
-	uint32_t	ddbo_idx;
+	daos_obj_id_t		ddbo_oid;
+	uint32_t		ddbo_idx;
+	enum daos_otype_t	ddbo_otype;
+	char			ddbo_otype_str[32];
+	char			ddbo_obj_class_name[16];
+	uint32_t		ddbo_nr_grps;
 };
 
 struct ddb_key {
@@ -41,7 +46,7 @@ int ddb_vos_pool_open(char *path, daos_handle_t *poh);
 int ddb_vos_pool_close(daos_handle_t poh);
 
 /* Open and close a cont for a ddb_ctx */
-int dv_cont_open(daos_handle_t poh, unsigned char *uuid, daos_handle_t *coh);
+int dv_cont_open(daos_handle_t poh, uuid_t uuid, daos_handle_t *coh);
 int dv_cont_close(daos_handle_t *coh);
 
 /*
@@ -73,7 +78,6 @@ struct vos_tree_handlers {
 int dv_iterate(daos_handle_t poh, struct dv_tree_path *path, bool recursive,
 	       struct vos_tree_handlers *handlers, void *handler_args);
 
-
 /* The following functions lookup a vos path part given a starting point and the index desired */
 int dv_get_cont_uuid(daos_handle_t poh, uint32_t idx, uuid_t uuid);
 int dv_get_object_oid(daos_handle_t coh, uint32_t idx, daos_unit_oid_t *uoid);
@@ -90,5 +94,83 @@ int dv_get_recx(daos_handle_t coh, daos_unit_oid_t uoid, daos_key_t *dkey, daos_
  * @return		0 if successful, else error.
  */
 int dv_path_update_from_indexes(struct dv_tree_path_builder *vt_path);
+
+struct ddb_superblock {
+	uuid_t		dsb_id;
+	uint64_t	dsb_cont_nr;
+	uint64_t	dsb_nvme_sz;
+	uint64_t	dsb_scm_sz;
+	uint64_t	dsb_tot_blks; /* vea: Block device capacity */
+	uint32_t	dsb_durable_format_version;
+	uint32_t	dsb_blk_sz; /* vea: Block size, 4k bytes by default */
+	uint32_t	dsb_hdr_blks; /* vea: Reserved blocks for the block device header */
+};
+
+typedef int (*dv_dump_superblock_cb)(void *cb_arg, struct ddb_superblock *sb);
+
+int dv_superblock(daos_handle_t poh, dv_dump_superblock_cb cb, void *cb_args);
+
+typedef int (*dv_dump_value_cb)(void *cb_arg, d_iov_t *value);
+int dv_dump_value(daos_handle_t poh, struct dv_tree_path *path, dv_dump_value_cb dump_cb,
+		  void *cb_arg);
+
+struct ddb_ilog_entry {
+	uint32_t	die_idx;
+	int32_t		die_status;
+	char		die_status_str[32];
+	daos_epoch_t	die_epoch;
+	uint32_t	die_tx_id;
+	uint16_t	die_update_minor_eph;
+	uint16_t	die_punch_minor_eph;
+};
+
+typedef int (*dv_dump_ilog_entry)(void *cb_arg, struct ddb_ilog_entry *entry);
+int dv_get_obj_ilog_entries(daos_handle_t coh, daos_unit_oid_t oid, dv_dump_ilog_entry cb,
+			    void *cb_args);
+int dv_get_dkey_ilog_entries(daos_handle_t coh, daos_unit_oid_t oid, daos_key_t *dkey,
+			     dv_dump_ilog_entry cb, void *cb_args);
+
+
+struct dv_dtx_committed_entry {
+	uuid_t		ddtx_uuid;
+	bool		ddtx_reindex;
+	bool		ddtx_exist;
+	bool		ddtx_invalid;
+	daos_epoch_t	ddtx_cmt_time;
+	daos_epoch_t	ddtx_epoch;
+};
+
+struct dv_dtx_active_entry {
+	uuid_t		ddtx_uuid;
+	bool		ddtx_reindex;
+	bool		ddtx_exist;
+	bool		ddtx_invalid;
+	daos_epoch_t	ddtx_handle_time;
+	daos_epoch_t	ddtx_epoch;
+	uint32_t	ddtx_oid_cnt;
+	daos_epoch_t	ddtx_start_time;
+	uint32_t	ddtx_committable;
+	uint32_t	ddtx_committed;
+	uint32_t	ddtx_aborted;
+	uint32_t	ddtx_maybe_shared;
+	uint32_t	ddtx_prepared;
+	uint32_t	ddtx_grp_cnt;
+	uint32_t	ddtx_ver;
+	uint32_t	ddtx_rec_cnt;
+	uint16_t	ddtx_mbs_flags;
+	uint16_t	ddtx_flags;
+	daos_unit_oid_t ddtx_oid;
+};
+
+typedef int (*dv_committed_dtx_handler)(struct dv_dtx_committed_entry *entry, void *cb_arg);
+int dv_committed_dtx(daos_handle_t coh, dv_committed_dtx_handler handler_cb, void *handler_arg);
+typedef int (*dv_active_dtx_handler)(struct dv_dtx_active_entry *entry, void *cb_arg);
+int dv_active_dtx(daos_handle_t coh, dv_active_dtx_handler handler_cb, void *handler_arg);
+int dv_delete(daos_handle_t poh, struct dv_tree_path *vtp);
+int dv_update(daos_handle_t poh, struct dv_tree_path *vtp, d_iov_t *iov, daos_epoch_t epoch);
+
+void dv_oid_to_obj(daos_obj_id_t oid, struct ddb_obj *obj);
+
+int ddb_vtp_verify(daos_handle_t poh, struct dv_tree_path *vtp);
 
 #endif /* DAOS_DDB_VOS_H */

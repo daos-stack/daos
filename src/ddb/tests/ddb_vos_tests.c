@@ -112,10 +112,10 @@ static struct vos_tree_handlers fake_handlers = {
 	} while (0)
 
 #define assert_ddb_iterate(poh, cont_uuid, oid, dkey, akey, recursive, expected_cont, \
-			   expected_obj, expected_dkey, expected_akey,                   \
-			   expected_sv, expected_array)                                    \
-	assert_success(__assert_ddb_iterate(poh, cont_uuid, oid, dkey,    \
-	akey, recursive, expected_cont, expected_obj,                     \
+			   expected_obj, expected_dkey, expected_akey, \
+			   expected_sv, expected_array) \
+	assert_success(__assert_ddb_iterate(poh, cont_uuid, oid, dkey, \
+	akey, recursive, expected_cont, expected_obj, \
 	expected_dkey, expected_akey, expected_sv, expected_array))
 static int
 __assert_ddb_iterate(daos_handle_t poh, uuid_t *cont_uuid, daos_unit_oid_t *oid, daos_key_t *dkey,
@@ -223,14 +223,14 @@ list_items_test(void **state)
 }
 
 static void
-get_cont_uuid_tests(void **state)
+get_cont_uuid_from_idx_tests(void **state)
 {
 	struct dt_vos_pool_ctx	*tctx = *state;
 	uuid_t uuid;
 	uuid_t uuid_2;
 	int i;
 
-	assert_rc_equal(-DER_INVAL, dv_get_cont_uuid(tctx->dvt_poh, 10000000, uuid));
+	assert_rc_equal(-DER_NONEXIST, dv_get_cont_uuid(tctx->dvt_poh, 10000000, uuid));
 	assert_success(dv_get_cont_uuid(tctx->dvt_poh, 0, uuid));
 	for (i = 1; i < 5; i++) {
 		assert_success(dv_get_cont_uuid(tctx->dvt_poh, i, uuid_2));
@@ -248,7 +248,7 @@ get_cont_uuid_tests(void **state)
 }
 
 static void
-get_oid_tests(void **state)
+get_oid_from_idx_tests(void **state)
 {
 	struct dt_vos_pool_ctx	*tctx = *state;
 	daos_unit_oid_t		 uoid;
@@ -259,7 +259,7 @@ get_oid_tests(void **state)
 	assert_rc_equal(-DER_INVAL, dv_get_object_oid(coh, 0, &uoid));
 	vos_cont_open(tctx->dvt_poh, g_uuids[0], &coh);
 
-	assert_rc_equal(-DER_INVAL, dv_get_object_oid(coh, 10000000, &uoid));
+	assert_rc_equal(-DER_NONEXIST, dv_get_object_oid(coh, 10000000, &uoid));
 	assert_success(dv_get_object_oid(coh, 0, &uoid));
 	for (i = 1; i < 5; i++) {
 		assert_success(dv_get_object_oid(coh, i, &uoid_2));
@@ -279,7 +279,7 @@ get_oid_tests(void **state)
 }
 
 static void
-get_dkey_tests(void **state)
+get_dkey_from_idx_tests(void **state)
 {
 	struct dt_vos_pool_ctx	*tctx = *state;
 	daos_unit_oid_t uoid = {0};
@@ -309,7 +309,7 @@ get_dkey_tests(void **state)
 }
 
 static void
-get_akey_tests(void **state)
+get_akey_from_idx_tests(void **state)
 {
 	struct dt_vos_pool_ctx	*tctx = *state;
 	daos_unit_oid_t uoid = {0};
@@ -325,7 +325,7 @@ get_akey_tests(void **state)
 	assert_success(vos_cont_open(tctx->dvt_poh, g_uuids[0], &coh));
 	assert_rc_equal(-DER_INVAL, dv_get_akey(coh, uoid, &dkey, 0, &akey));
 	uoid = g_oids[0];
-	assert_rc_equal(-DER_INVAL, dv_get_akey(coh, uoid, &dkey, 0, &akey));
+	assert_rc_equal(-DER_NONEXIST, dv_get_akey(coh, uoid, &dkey, 0, &akey));
 	dv_get_dkey(coh, uoid, 0, &dkey);
 
 	assert_success(dv_get_akey(coh, uoid, &dkey, 0, &akey));
@@ -343,7 +343,7 @@ get_akey_tests(void **state)
 }
 
 static void
-get_recx_tests(void **state)
+get_recx_from_idx_tests(void **state)
 {
 	struct dt_vos_pool_ctx	*tctx = *state;
 	daos_unit_oid_t		 uoid = {0};
@@ -357,9 +357,9 @@ get_recx_tests(void **state)
 	assert_success(vos_cont_open(tctx->dvt_poh, g_uuids[0], &coh));
 	assert_rc_equal(-DER_INVAL, dv_get_recx(coh, uoid, &dkey, &akey, 0, &recx));
 	dv_get_object_oid(coh, 0, &uoid);
-	assert_rc_equal(-DER_INVAL, dv_get_recx(coh, uoid, &dkey, &akey, 0, &recx));
+	assert_rc_equal(-DER_NONEXIST, dv_get_recx(coh, uoid, &dkey, &akey, 0, &recx));
 	dv_get_dkey(coh, uoid, 0, &dkey);
-	assert_rc_equal(-DER_INVAL, dv_get_recx(coh, uoid, &dkey, &akey, 0, &recx));
+	assert_rc_equal(-DER_NONEXIST, dv_get_recx(coh, uoid, &dkey, &akey, 0, &recx));
 	dv_get_akey(coh, uoid, &dkey, 0, &akey);
 	assert_success(dv_get_recx(coh, uoid, &dkey, &akey, 0, &recx));
 
@@ -367,7 +367,7 @@ get_recx_tests(void **state)
 }
 
 static void
-test_update_path_with_values_from_index(void **state)
+update_path_with_values_from_index_tests(void **state)
 {
 	struct dt_vos_pool_ctx	*tctx = *state;
 
@@ -381,8 +381,446 @@ test_update_path_with_values_from_index(void **state)
 	assert_oid_equal(g_oids[0].id_pub, vt_path.vtp_path.vtp_oid.id_pub);
 	assert_key_equal(g_dkeys[0], vt_path.vtp_path.vtp_dkey);
 	assert_key_equal(g_akeys[0], vt_path.vtp_path.vtp_akey);
-	assert_int_equal(1, vt_path.vtp_path.vtp_recx.rx_idx);
-	assert_int_equal(0x16, vt_path.vtp_path.vtp_recx.rx_nr);
+	assert_int_equal(9, vt_path.vtp_path.vtp_recx.rx_idx);
+	assert_int_equal(10, vt_path.vtp_path.vtp_recx.rx_nr);
+}
+
+static void
+idx_in_path_must_be_valid_tests(void **state)
+{
+	struct dt_vos_pool_ctx	*tctx = *state;
+
+	struct dv_tree_path_builder vt_path = {0};
+
+	vt_path.vtp_poh = tctx->dvt_poh;
+	vt_path.vtp_cont_idx = 999;
+	assert_rc_equal(-DER_NONEXIST, dv_path_update_from_indexes(&vt_path));
+	vt_path.vtp_cont_idx = 0;
+
+	vt_path.vtp_oid_idx = 999;
+	assert_rc_equal(-DER_NONEXIST, dv_path_update_from_indexes(&vt_path));
+	vt_path.vtp_oid_idx = 0;
+
+	vt_path.vtp_dkey_idx = 999;
+	assert_rc_equal(-DER_NONEXIST, dv_path_update_from_indexes(&vt_path));
+	vt_path.vtp_dkey_idx = 0;
+
+	vt_path.vtp_akey_idx = 999;
+	assert_rc_equal(-DER_NONEXIST, dv_path_update_from_indexes(&vt_path));
+	vt_path.vtp_akey_idx = 0;
+}
+
+#define assert_path(path, expected) \
+do { \
+	struct dv_tree_path_builder __vt = {0}; \
+	daos_handle_t poh = {0}; \
+	assert_success(ddb_vtp_init(poh, path, &__vt)); \
+	assert_vtp_eq(expected, __vt); \
+	ddb_vtp_fini(&__vt); \
+} while (0)
+
+static void
+path_must_be_valid_tests(void **state)
+{
+	struct dt_vos_pool_ctx		*tctx = *state;
+	daos_handle_t			 poh = tctx->dvt_poh;
+	struct dv_tree_path		 vt_path = {0};
+
+	/* Nothing set should be a valid path */
+	assert_success(ddb_vtp_verify(poh, &vt_path));
+
+	uuid_parse(g_invalid_uuid_str, vt_path.vtp_cont);
+	assert_rc_equal(-DER_NONEXIST, ddb_vtp_verify(poh, &vt_path));
+
+	uuid_copy(vt_path.vtp_cont, g_uuids[0]);
+	assert_success(ddb_vtp_verify(poh, &vt_path));
+
+	vt_path.vtp_oid = g_invalid_oid;
+	assert_rc_equal(-DER_NONEXIST, ddb_vtp_verify(poh, &vt_path));
+	vt_path.vtp_oid = g_oids[0];
+	assert_success(ddb_vtp_verify(poh, &vt_path));
+
+	vt_path.vtp_dkey = g_invalid_key;
+	assert_rc_equal(-DER_NONEXIST, ddb_vtp_verify(poh, &vt_path));
+	vt_path.vtp_dkey = g_dkeys[0];
+	assert_success(ddb_vtp_verify(poh, &vt_path));
+
+	vt_path.vtp_akey = g_invalid_key;
+	assert_rc_equal(-DER_NONEXIST, ddb_vtp_verify(poh, &vt_path));
+	vt_path.vtp_akey = g_akeys[0];
+	assert_success(ddb_vtp_verify(poh, &vt_path));
+
+	vt_path.vtp_recx = g_invalid_recx;
+	assert_rc_equal(-DER_NONEXIST, ddb_vtp_verify(poh, &vt_path));
+	vt_path.vtp_recx = g_recxs[0];
+	assert_success(ddb_vtp_verify(poh, &vt_path));
+}
+
+static int fake_dump_superblock_cb_called;
+static struct ddb_superblock fake_dump_superblock_cb_sb;
+static int
+fake_dump_superblock_cb(void *cb_arg, struct ddb_superblock *sb)
+{
+	fake_dump_superblock_cb_called++;
+	fake_dump_superblock_cb_sb = *sb;
+
+	return 0;
+}
+
+static void
+get_superblock_tests(void **state)
+{
+	struct dt_vos_pool_ctx	*tctx = *state;
+
+	assert_rc_equal(-DER_INVAL, dv_superblock(DAOS_HDL_INVAL,
+						  fake_dump_superblock_cb, NULL));
+
+	assert_success(dv_superblock(tctx->dvt_poh, fake_dump_superblock_cb, NULL));
+	assert_int_equal(1, fake_dump_superblock_cb_called);
+
+	/* just do some basics to verify got a valid pool df */
+	assert_true(fake_dump_superblock_cb_sb.dsb_durable_format_version);
+}
+
+static void
+obj_id_2_ddb_test(void **state)
+{
+	struct ddb_obj	obj = {0};
+	daos_obj_id_t	oid = {0};
+
+	daos_obj_set_oid(&oid, DAOS_OT_MULTI_HASHED, OR_RP_2, 2, 0);
+
+	dv_oid_to_obj(oid, &obj);
+
+	assert_int_equal(2, obj.ddbo_nr_grps);
+	assert_string_equal("DAOS_OT_MULTI_HASHED", obj.ddbo_otype_str);
+}
+
+
+static uint32_t fake_dump_value_cb_called;
+static d_iov_t fake_dump_value_cb_value;
+static uint8_t fake_dump_value_cb_value_buf[128];
+static int
+fake_dump_value_cb(void *cb_args, d_iov_t *value)
+{
+	fake_dump_value_cb_called++;
+	assert_true(value->iov_len <= ARRAY_SIZE(fake_dump_value_cb_value_buf));
+	fake_dump_value_cb_value = *value;
+	fake_dump_value_cb_value.iov_buf = fake_dump_value_cb_value_buf;
+	memcpy(fake_dump_value_cb_value_buf, value->iov_buf, value->iov_len);
+	return 0;
+}
+
+static int
+test_dump_value(daos_handle_t poh, uuid_t cont_uuid, daos_unit_oid_t oid, daos_key_t *dkey,
+		daos_key_t *akey, daos_recx_t *recx, dv_dump_value_cb dump_cb, void *cb_arg)
+{
+	struct dv_tree_path	 path = {0};
+
+	uuid_copy(path.vtp_cont, cont_uuid);
+	path.vtp_oid = oid;
+	path.vtp_dkey = *dkey;
+	path.vtp_akey = *akey;
+	if (recx)
+		path.vtp_recx = *recx;
+
+	return dv_dump_value(poh, &path, dump_cb, cb_arg);
+
+}
+
+static void
+get_value_tests(void **state)
+{
+	struct dt_vos_pool_ctx	*tctx = *state;
+	daos_recx_t		 recx = {.rx_idx = 0, .rx_nr = 10};
+
+	/* first akey is a recx */
+	assert_success(test_dump_value(tctx->dvt_poh, g_uuids[0], g_oids[0], &g_dkeys[0],
+				       &g_akeys[0], &recx, fake_dump_value_cb, NULL));
+
+	assert_int_equal(1, fake_dump_value_cb_called);
+	assert_non_null(fake_dump_value_cb_value.iov_buf);
+	assert_true(fake_dump_value_cb_value.iov_len > 0);
+
+	/* second akey is a single value */
+	fake_dump_value_cb_called = 0;
+	assert_success(test_dump_value(tctx->dvt_poh, g_uuids[0], g_oids[0], &g_dkeys[0],
+				       &g_akeys[1], NULL, fake_dump_value_cb, NULL));
+
+	assert_int_equal(1, fake_dump_value_cb_called);
+	assert_non_null(fake_dump_value_cb_value.iov_buf);
+	assert_true(fake_dump_value_cb_value.iov_len > 0);
+}
+
+static uint32_t fake_dump_ilog_entry_called;
+static int
+fake_dump_ilog_entry(void *cb_arg, struct ddb_ilog_entry *entry)
+{
+	fake_dump_ilog_entry_called++;
+	return 0;
+}
+
+static void
+get_obj_ilog_tests(void **state)
+{
+	struct dt_vos_pool_ctx	*tctx = *state;
+	daos_handle_t coh;
+
+	daos_unit_oid_t null_oid = {0};
+	daos_unit_oid_t bad_oid = {.id_pub.lo = 1};
+
+	assert_success(vos_cont_open(tctx->dvt_poh, g_uuids[0], &coh));
+
+	assert_rc_equal(-DER_INVAL, dv_get_obj_ilog_entries(DAOS_HDL_INVAL, null_oid,
+							    fake_dump_ilog_entry, NULL));
+	assert_rc_equal(-DER_INVAL, dv_get_obj_ilog_entries(DAOS_HDL_INVAL, g_oids[0],
+							    fake_dump_ilog_entry, NULL));
+	assert_rc_equal(-DER_INVAL, dv_get_obj_ilog_entries(coh, null_oid,
+							    fake_dump_ilog_entry, NULL));
+	assert_rc_equal(-DER_INVAL, dv_get_obj_ilog_entries(coh, bad_oid,
+							    fake_dump_ilog_entry, NULL));
+
+	assert_success(dv_get_obj_ilog_entries(coh, g_oids[0], fake_dump_ilog_entry, NULL));
+
+	assert_int_equal(1, fake_dump_ilog_entry_called);
+
+	vos_cont_close(coh);
+}
+
+static void
+get_dkey_ilog_tests(void **state)
+{
+	struct dt_vos_pool_ctx	*tctx = *state;
+	daos_handle_t		 coh;
+	daos_unit_oid_t		 null_oid = {0};
+
+	assert_success(vos_cont_open(tctx->dvt_poh, g_uuids[0], &coh));
+
+	assert_rc_equal(-DER_INVAL, dv_get_dkey_ilog_entries(DAOS_HDL_INVAL, null_oid, NULL,
+							     fake_dump_ilog_entry, NULL));
+
+	fake_dump_ilog_entry_called = 0;
+	assert_success(dv_get_dkey_ilog_entries(coh, g_oids[0], &g_dkeys[0], fake_dump_ilog_entry,
+						NULL));
+	assert_int_equal(1, fake_dump_ilog_entry_called);
+
+	vos_cont_close(coh);
+}
+
+/* End of where to put these functions */
+
+int entry_handler_called;
+static int
+committed_entry_handler(struct dv_dtx_committed_entry *entry, void *cb_arg)
+{
+	entry_handler_called++;
+	return 0;
+}
+
+static int
+active_entry_handler(struct dv_dtx_active_entry *entry, void *cb_arg)
+{
+	entry_handler_called++;
+	return 0;
+}
+
+static void
+get_dtx_tables_tests(void **state)
+{
+	struct dt_vos_pool_ctx	*tctx = *state;
+	daos_handle_t		 coh = DAOS_HDL_INVAL;
+
+	assert_rc_equal(-DER_INVAL, dv_committed_dtx(coh, committed_entry_handler, NULL));
+	assert_int_equal(0, entry_handler_called);
+
+	assert_rc_equal(-DER_INVAL, dv_active_dtx(coh, active_entry_handler, NULL));
+	assert_int_equal(0, entry_handler_called);
+
+	assert_success(vos_cont_open(tctx->dvt_poh, g_uuids[0], &coh));
+
+	dvt_vos_insert_2_records_with_dtx(coh);
+
+	assert_success(dv_committed_dtx(coh, committed_entry_handler, NULL));
+	assert_int_equal(1, entry_handler_called);
+
+	entry_handler_called = 0;
+	assert_success(dv_active_dtx(coh, active_entry_handler, NULL));
+	assert_int_equal(1, entry_handler_called);
+
+	vos_cont_close(coh);
+}
+
+static void
+verify_correct_params_for_update_value_tests(void **state)
+{
+	struct dt_vos_pool_ctx *tctx = *state;
+	daos_handle_t		poh = tctx->dvt_poh;
+	struct dv_tree_path	vtp = {};
+	d_iov_t			value_iov = {0};
+
+	assert_rc_equal(-DER_INVAL, dv_update(DAOS_HDL_INVAL, &vtp, &value_iov, 1));
+	assert_rc_equal(-DER_INVAL, dv_update(poh, &vtp, &value_iov, 1));
+
+	uuid_copy(vtp.vtp_cont, g_uuids[3]);
+	vtp.vtp_oid = g_oids[0];
+	vtp.vtp_dkey = g_dkeys[0];
+	vtp.vtp_akey = g_akeys[0];
+	assert_rc_equal(-DER_INVAL, dv_update(poh, &vtp, &value_iov, 1));
+}
+
+static void
+assert_update_existing_path(daos_handle_t poh, struct dv_tree_path *vtp)
+{
+	d_iov_t	value_iov = {0};
+	char	value_buf[256];
+
+	/* First get the value_buf using dump_value then use it to create an updated value */
+	assert_success(dv_dump_value(poh, vtp, fake_dump_value_cb, NULL));
+	snprintf(value_buf, 256, "Updated: %s", fake_dump_value_cb_value_buf);
+
+	d_iov_set(&value_iov, value_buf, strlen(value_buf));
+
+	/* if it's an array path, update so will be same length as new value */
+	if (vtp->vtp_recx.rx_nr > 0)
+		vtp->vtp_recx.rx_nr = value_iov.iov_len;
+	assert_success(dv_update(poh, vtp, &value_iov, 3));
+
+	/* Verify that after loading the value_buf, the same value_buf is dumped */
+	assert_success(dv_dump_value(poh, vtp, fake_dump_value_cb, NULL));
+	assert_key_equal(value_iov, fake_dump_value_cb_value);
+}
+
+static void
+update_value_to_modify_tests(void **state)
+{
+	struct dt_vos_pool_ctx *tctx = *state;
+	daos_handle_t		poh = tctx->dvt_poh;
+	struct dv_tree_path	vtp = {};
+	daos_handle_t		coh;
+
+
+	uuid_copy(vtp.vtp_cont, g_uuids[3]);
+	vtp.vtp_oid = g_oids[0];
+	vtp.vtp_dkey = g_dkeys[0];
+	vtp.vtp_akey = g_akeys[1]; /* single value type */
+
+	assert_update_existing_path(poh, &vtp);
+
+	vtp.vtp_akey = g_akeys[0]; /* array value type */
+	dv_cont_open(poh, vtp.vtp_cont, &coh);
+	dv_get_recx(coh, vtp.vtp_oid, &vtp.vtp_dkey, &vtp.vtp_akey, 0, &vtp.vtp_recx);
+	dv_cont_close(&coh);
+	assert_update_existing_path(poh, &vtp);
+}
+
+static void
+assert_update_new_path(daos_handle_t poh, struct dv_tree_path *vtp)
+{
+	d_iov_t	 value_iov = {0};
+	char	*value_buf = "A New value";
+
+	/* First check that the value doesn't exist */
+	memset(fake_dump_value_cb_value_buf, 0, ARRAY_SIZE(fake_dump_value_cb_value_buf));
+	assert_success(dv_dump_value(poh, vtp, fake_dump_value_cb, NULL));
+	assert_string_equal("", fake_dump_value_cb_value_buf);
+
+	d_iov_set(&value_iov, value_buf, strlen(value_buf));
+
+	assert_success(dv_update(poh, vtp, &value_iov, 3));
+
+	/* Verify that after loading the value_buf, the same value_buf is dumped */
+	assert_success(dv_dump_value(poh, vtp, fake_dump_value_cb, NULL));
+	assert_key_equal(value_iov, fake_dump_value_cb_value);
+}
+
+static void
+update_value_to_insert_tests(void **state)
+{
+	struct dt_vos_pool_ctx *tctx = *state;
+	daos_handle_t		poh = tctx->dvt_poh;
+	struct dv_tree_path	vtp = {};
+
+	uuid_copy(vtp.vtp_cont, g_uuids[3]);
+	/*
+	 * Create a new object with dkey & akey. If this succeeds, we assume that could also create
+	 * a new dkey within an existing oid, etc
+	 */
+	vtp.vtp_oid = dvt_gen_uoid(999);
+	vtp.vtp_dkey = g_dkeys[0];
+	vtp.vtp_akey = g_akeys[0];
+
+	assert_update_new_path(poh, &vtp);
+}
+
+#define DELETE_SUCCESS(poh, vtp) assert_success(dv_delete(poh, &vtp))
+static void
+delete_path_parts_tests(void **state)
+{
+	struct dt_vos_pool_ctx	*tctx = *state;
+	daos_handle_t		 poh = tctx->dvt_poh;
+	daos_handle_t		 coh;
+	struct dv_tree_path	 vtp = {0};
+	uuid_t			 cont_test;
+	daos_unit_oid_t		 uoid_test = {0};
+	daos_key_t		 dkey_test = {0};
+	daos_key_t		 akey_test = {0};
+
+	/* Don't allow empty path */
+	assert_rc_equal(-DER_INVAL, dv_delete(poh, &vtp));
+
+	dv_get_cont_uuid(poh, 0, vtp.vtp_cont);
+	DELETE_SUCCESS(poh, vtp);
+	dv_get_cont_uuid(poh, 0, cont_test);
+	assert_uuid_not_equal(vtp.vtp_cont, cont_test);
+	/* shouldn't be able to delete same container */
+	assert_rc_equal(-DER_NONEXIST, dv_delete(poh, &vtp));
+
+	/*
+	 * Remaining deletes happen within a container, so open the container to get the
+	 * VOS path part identifier
+	 */
+	dv_get_cont_uuid(poh, 0, vtp.vtp_cont);
+	assert_success(dv_cont_open(poh, vtp.vtp_cont, &coh));
+
+	/*
+	 * Delete an object
+	 * get oid from index 0. This will be deleted, so should not exist after
+	 */
+	assert_success(dv_get_object_oid(coh, 0, &vtp.vtp_oid));
+	DELETE_SUCCESS(poh, vtp);
+	/* index 0 should not be same oid now */
+	assert_success(dv_get_object_oid(coh, 0, &uoid_test));
+	assert_oid_not_equal(vtp.vtp_oid.id_pub, uoid_test.id_pub);
+	/* Shouldn't be able to delete the same object again */
+	assert_rc_equal(-DER_NONEXIST, dv_delete(poh, &vtp));
+
+	/*
+	 * delete dkey
+	 */
+	vtp.vtp_oid = uoid_test; /* reset uoid_before to oid that hasn't been deleted */
+	dv_get_dkey(coh, vtp.vtp_oid, 0, &vtp.vtp_dkey);
+	DELETE_SUCCESS(poh, vtp);
+	/* should still have the object */
+	assert_success(dv_get_object_oid(coh, 0, &uoid_test));
+	assert_oid_equal(vtp.vtp_oid.id_pub, uoid_test.id_pub);
+	dv_get_dkey(coh, vtp.vtp_oid, 0, &dkey_test);
+	assert_key_not_equal(vtp.vtp_dkey, dkey_test);
+
+	/*
+	 * delete akey
+	 */
+	vtp.vtp_dkey = dkey_test;
+	dv_get_akey(coh, vtp.vtp_oid, &vtp.vtp_dkey, 0, &vtp.vtp_akey);
+	DELETE_SUCCESS(poh, vtp);
+	/* should still have the object and dkey */
+	assert_success(dv_get_object_oid(coh, 0, &uoid_test));
+	assert_oid_equal(vtp.vtp_oid.id_pub, uoid_test.id_pub);
+	dv_get_dkey(coh, vtp.vtp_oid, 0, &dkey_test);
+	assert_key_equal(vtp.vtp_dkey, dkey_test);
+	dv_get_akey(coh, vtp.vtp_oid, &vtp.vtp_dkey, 0, &akey_test);
+	assert_key_not_equal(vtp.vtp_akey, akey_test);
+
+	dv_cont_close(&coh);
 }
 
 static int
@@ -422,16 +860,32 @@ dv_test_teardown(void **state)
 }
 
 
-#define TEST(dsc, test) { dsc, test, dv_test_setup, dv_test_teardown }
+/*
+ * All these tests use the same VOS tree that is created at suit_setup. Therefore, tests
+ * that modify the state of the tree (delete, add, etc) should be run after all others.
+ */
+#define TEST(x) { #x, x, dv_test_setup, dv_test_teardown }
 const struct CMUnitTest dv_test_cases[] = {
 	{ "open_pool", open_pool_test, NULL, NULL }, /* don't want this test to run with setup */
-	TEST("list items", list_items_test),
-	TEST("get container uuid from idx", get_cont_uuid_tests),
-	TEST("get object oid from idx", get_oid_tests),
-	TEST("get dkey from idx", get_dkey_tests),
-	TEST("get akey from idx", get_akey_tests),
-	TEST("get recx from idx", get_recx_tests),
-	TEST("get data value", test_update_path_with_values_from_index),
+	TEST(list_items_test),
+	TEST(get_cont_uuid_from_idx_tests),
+	TEST(get_oid_from_idx_tests),
+	TEST(get_dkey_from_idx_tests),
+	TEST(get_akey_from_idx_tests),
+	TEST(get_recx_from_idx_tests),
+	TEST(update_path_with_values_from_index_tests),
+	TEST(idx_in_path_must_be_valid_tests),
+	TEST(path_must_be_valid_tests),
+	TEST(get_value_tests),
+	TEST(get_obj_ilog_tests),
+	TEST(get_dkey_ilog_tests),
+	TEST(get_superblock_tests),
+	TEST(obj_id_2_ddb_test),
+	TEST(get_dtx_tables_tests),
+	TEST(delete_path_parts_tests),
+	TEST(verify_correct_params_for_update_value_tests),
+	TEST(update_value_to_modify_tests),
+	TEST(update_value_to_insert_tests),
 };
 
 int
