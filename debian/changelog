@@ -1,3 +1,9 @@
+daos (2.3.100-6) unstable; urgency=medium
+  [ Alexander Oganezov ]
+  * Update libfabric to 1.15.0
+
+ -- Alexander Oganezov <alexander.a.oganezov@intel.com>  Tue, 3 May 2022 17:13:00 -0400
+
 daos (2.3.100-5) unstable; urgency=medium
   [ Phillip Henderson ]
   * Move daos_gen_io_conf and daos_run_io_conf to daos-client-tests
