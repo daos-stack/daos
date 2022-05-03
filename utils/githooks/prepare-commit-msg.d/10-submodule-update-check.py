@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Adds a warning message to the commit if a module is updated"""
 import re
-import subprocess
+import subprocess  # nosec
 import sys
 
 modified_re = re.compile(r'^(?:M|A)(\s+)(?P<name>.*)')
@@ -9,10 +9,11 @@ modified_re = re.compile(r'^(?:M|A)(\s+)(?P<name>.*)')
 def rebasing():
     """Determines if the current operation is a rebase"""
     with subprocess.Popen(["git", "branch"],
-                               stdout=subprocess.PIPE,
-                               stderr=subprocess.PIPE) as process:
+                          stdout=subprocess.PIPE,
+                          stderr=subprocess.PIPE) as process:
 
-        return process.communicate()[0].decode().split('\n', maxsplit=1)[0].startswith("* (no branch, rebasing")
+        stdout = process.communicate()[0].decode()
+        return stdout.split('\n', maxsplit=1)[0].startswith("* (no branch, rebasing")
 
 def submodule_check(modname, msg_file):
     """Determines if a submodule has been updated"""
@@ -42,7 +43,7 @@ def submodule_check(modname, msg_file):
 def main(msg_file):
     """main"""
     for line in subprocess.check_output(['git', 'submodule',
-                                      'status']).decode().rstrip().split('\n'):
+                                        'status']).decode().rstrip().split('\n'):
         if line:
             submodule_check(line[1:].split(' ')[1], msg_file)
 
