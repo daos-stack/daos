@@ -1,5 +1,0 @@
-#!/bin/bash
-
-set -eu
-
-python utils/githooks/submodule_update_check.py "$1"

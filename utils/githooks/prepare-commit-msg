@@ -1,5 +1,5 @@
 #!/bin/bash
-set -eux
+set -eu
 
 run-parts() {
     local dir="$1"
