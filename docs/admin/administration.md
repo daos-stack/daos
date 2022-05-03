@@ -840,7 +840,7 @@ DAOS I/O Engines will be started, and all DAOS pools will have been removed.
     $ wipefs -a /dev/pmem0
     $ wipefs -a /dev/pmem0
     ```
-    
+
     Then restart DAOS Servers and format.
 
 ### System Erase
