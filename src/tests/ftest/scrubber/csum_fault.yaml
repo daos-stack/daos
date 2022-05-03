@@ -60,7 +60,7 @@ pool:
 container:
   type: POSIX
   control_method: daos
-  oclass: RP_2G1
+  oclass: RP_2GX
   properties: "cksum:crc16"
 ior:
   ior_timeout: 60
@@ -77,9 +77,9 @@ ior:
       - DFS
     transfer_block_size:
       - [256B, 2M]
-      - [1M, 32M]
+      - [1M, 512M]
     obj_class:
-      - RP_2G1
+      - RP_2GX
 faults:
   fault_list:
      - DAOS_CSUM_CORRUPT_DISK
