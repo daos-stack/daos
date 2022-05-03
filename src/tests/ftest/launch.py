@@ -1,13 +1,10 @@
-#!/usr/bin/env python3 -u
+#!/usr/bin/env python3
 """
   (C) Copyright 2018-2022 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 # pylint: disable=too-many-lines
-# this needs to be disabled as list_tests.py is still using python2
-# pylint: disable=raise-missing-from
-
 
 from argparse import ArgumentParser, RawDescriptionHelpFormatter
 from collections import OrderedDict
