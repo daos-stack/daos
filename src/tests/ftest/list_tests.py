@@ -1,6 +1,6 @@
-#!/usr/bin/env python3 -u
+#!/usr/bin/python2 -u
 """
-  (C) Copyright 2021-2022 Intel Corporation.
+  (C) Copyright 2021 Intel Corporation.
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 from __future__ import print_function
