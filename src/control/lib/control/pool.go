@@ -437,11 +437,6 @@ type (
 		MediaType StorageMediaType `json:"media_type"`
 	}
 
-	// TargetPerf - placeholder. TODO: storage/network bandwidth, latency, etc.
-	TargetPerf struct {
-		Foo int32 `json:"foo"`
-	}
-
 	PoolQueryTargetType  int32
 	PoolQueryTargetState int32
 
@@ -449,7 +444,6 @@ type (
 	PoolQueryTargetInfo struct {
 		Type  PoolQueryTargetType  `json:"target_type"`
 		State PoolQueryTargetState `json:"target_state"`
-		Perf  *TargetPerf
 		Space []*StorageTargetUsage
 	}
 

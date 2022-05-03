@@ -317,7 +317,6 @@ func convertPoolTargetInfo(ptinfo *C.daos_target_info_t) (*control.PoolQueryTarg
 	pqti := new(control.PoolQueryTargetInfo)
 	pqti.Type = control.PoolQueryTargetType(pqtp.Type)
 	pqti.State = control.PoolQueryTargetState(pqtp.State)
-	pqti.Perf = &control.TargetPerf{Foo: int32(ptinfo.ta_perf.foo)}
 	pqti.Space = []*control.StorageTargetUsage{
 		{pqtp.Space[uint(C.DAOS_MEDIA_SCM)].Total, pqtp.Space[uint(C.DAOS_MEDIA_SCM)].Free, C.DAOS_MEDIA_SCM},
 		{pqtp.Space[uint(C.DAOS_MEDIA_NVME)].Total, pqtp.Space[uint(C.DAOS_MEDIA_NVME)].Free, C.DAOS_MEDIA_NVME},
