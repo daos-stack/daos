@@ -224,7 +224,7 @@ func convertPoolInfo(pinfo *C.daos_pool_info_t) (*control.PoolQueryResp, error) 
 	pqp.TotalTargets = uint32(pinfo.pi_ntargets)
 	pqp.DisabledTargets = uint32(pinfo.pi_ndisabled)
 	pqp.ActiveTargets = uint32(pinfo.pi_space.ps_ntargets)
-	pqp.TotalNodes = uint32(pinfo.pi_nnodes)
+	pqp.TotalEngines = uint32(pinfo.pi_nnodes)
 	pqp.Leader = uint32(pinfo.pi_leader)
 	pqp.Version = uint32(pinfo.pi_map_ver)
 

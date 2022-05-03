@@ -203,6 +203,8 @@ message PoolRebuildStatus {
 
 // PoolQueryResp represents a pool query response.
 message PoolQueryResp {
+	reserved 9;
+	reserved "total_nodes";
 	int32 status = 1; // DAOS error code
 	string uuid = 2; // pool uuid
 	string label = 3; // pool label
@@ -211,11 +213,11 @@ message PoolQueryResp {
 	uint32 disabled_targets = 6; // number of disabled targets in pool
 	PoolRebuildStatus rebuild = 7; // pool rebuild status
 	repeated StorageUsageStats tier_stats = 8; // storage tiers usage stats
-	uint32 total_nodes = 9; // total nodes in pool
 	uint32 version = 10; // latest pool map version
 	uint32 leader = 11; // current raft leader
-	string enabled_ranks = 12; // Optional set of ranks enabled
-	string disabled_ranks = 13; // Optional set of ranks disabled
+	string enabled_ranks = 12; // optional set of ranks enabled
+	string disabled_ranks = 13; // optional set of ranks disabled
+	uint32 total_engines = 14; // total engines in pool
 }
 
 message PoolProperty {
