@@ -34,12 +34,11 @@ print_object_test(void **state)
 	obj.ddbo_oid.lo = 1;
 	obj.ddbo_oid.hi = 10;
 	obj.ddbo_nr_grps = 2;
-	strcpy(obj.ddbo_obj_class_name, "TEST CLASS");
 	strcpy(obj.ddbo_otype_str, "TEST TYPE");
 
 	ddb_print_obj(&ctx, &obj, 1);
 
-	assert_str_exact("\t[2] '10.1' (class: TEST CLASS, type: TEST TYPE, groups: 2)\n");
+	assert_str_exact("\t[2] '10.1' (type: TEST TYPE, groups: 2)\n");
 }
 
 static void set_key_buf(struct ddb_key	*key, uint32_t len)
@@ -231,10 +230,10 @@ print_ilog_test(void **state)
 
 	ddb_print_ilog_entry(&ctx, &ilog);
 
-	assert_str_exact("Index: 1\n"
-			 "Status: TEST STATUS (1)\n"
-			 "Epoch: 1234567890\n"
-			 "Txn ID: 2\n");
+	assert_str("Index: 1\n");
+	assert_str("Status: TEST STATUS (1)\n");
+	assert_str("Epoch: 1234567890\n");
+	assert_str("Txn ID: 2\n");
 }
 
 static void
@@ -242,6 +241,7 @@ print_dtx_active(void **state)
 {
 	struct dv_dtx_active_entry entry = {
 		.ddtx_uuid = {0x12, 0x34, 0x56, 0x78, 0x9a, 0xbc},
+		.ddtx_id_hlc = 1234,
 		.ddtx_reindex = false,
 		.ddtx_exist = true,
 		.ddtx_invalid = false,
@@ -265,6 +265,7 @@ print_dtx_active(void **state)
 	ddb_print_dtx_active(&ctx, &entry);
 
 	assert_str("UUID: 12345678-9abc-0000-0000-000000000000\n");
+	assert_str("ID HLC: 1234\n");
 	assert_str("Epoch: 99\n");
 	assert_str("Exist: true\n");
 	assert_str("Invalid: false\n");

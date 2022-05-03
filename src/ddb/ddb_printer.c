@@ -29,10 +29,9 @@ void
 ddb_print_obj(struct ddb_ctx *ctx, struct ddb_obj *obj, uint32_t indent)
 {
 	print_indent(ctx, indent);
-	ddb_printf(ctx, DF_IDX" '"DF_OID"' (class: %s, type: %s, groups: %d)\n",
+	ddb_printf(ctx, DF_IDX" '"DF_OID"' (type: %s, groups: %d)\n",
 		   DP_IDX(obj->ddbo_idx),
 		   DP_OID(obj->ddbo_oid),
-		   obj->ddbo_obj_class_name,
 		   obj->ddbo_otype_str,
 		   obj->ddbo_nr_grps);
 }
@@ -166,40 +165,41 @@ void
 ddb_print_ilog_entry(struct ddb_ctx *ctx, struct ddb_ilog_entry *entry)
 {
 	ddb_printf(ctx, "Index: %d\n", entry->die_idx);
-	ddb_printf(ctx, "Status: %s (%d)\n", entry->die_status_str, entry->die_status);
-	ddb_printf(ctx, "Epoch: %lu\n", entry->die_epoch);
-	ddb_printf(ctx, "Txn ID: %d\n", entry->die_tx_id);
+	ddb_printf(ctx, "\tStatus: %s (%d)\n", entry->die_status_str, entry->die_status);
+	ddb_printf(ctx, "\tEpoch: %lu\n", entry->die_epoch);
+	ddb_printf(ctx, "\tTxn ID: %d\n", entry->die_tx_id);
 }
 
 void
 ddb_print_dtx_committed(struct ddb_ctx *ctx, struct dv_dtx_committed_entry *entry)
 {
 	ddb_printf(ctx, "UUID: "DF_UUIDF"\n", DP_UUID(entry->ddtx_uuid));
-	ddb_printf(ctx, "Epoch: "DF_U64"\n", entry->ddtx_epoch);
-	ddb_printf(ctx, "Exist: "DF_BOOL"\n", DP_BOOL(entry->ddtx_exist));
-	ddb_printf(ctx, "Invalid: "DF_BOOL"\n", DP_BOOL(entry->ddtx_invalid));
+	ddb_printf(ctx, "\tEpoch: "DF_U64"\n", entry->ddtx_epoch);
+	ddb_printf(ctx, "\tExist: "DF_BOOL"\n", DP_BOOL(entry->ddtx_exist));
+	ddb_printf(ctx, "\tInvalid: "DF_BOOL"\n", DP_BOOL(entry->ddtx_invalid));
 }
 
 void
 ddb_print_dtx_active(struct ddb_ctx *ctx, struct dv_dtx_active_entry *entry)
 {
 	ddb_printf(ctx, "UUID: "DF_UUIDF"\n", DP_UUID(entry->ddtx_uuid));
-	ddb_printf(ctx, "Epoch: "DF_U64"\n", entry->ddtx_epoch);
-	ddb_printf(ctx, "Exist: "DF_BOOL"\n", DP_BOOL(entry->ddtx_exist));
-	ddb_printf(ctx, "Invalid: "DF_BOOL"\n", DP_BOOL(entry->ddtx_invalid));
-	ddb_printf(ctx, "Reindex: "DF_BOOL"\n", DP_BOOL(entry->ddtx_reindex));
-	ddb_printf(ctx, "Handle Time: "DF_U64"\n", entry->ddtx_handle_time);
-	ddb_printf(ctx, "Oid Cnt: %d\n", entry->ddtx_oid_cnt);
-	ddb_printf(ctx, "Start Time: "DF_U64"\n", entry->ddtx_start_time);
-	ddb_printf(ctx, "Committable: "DF_BOOL"\n", DP_BOOL(entry->ddtx_committable));
-	ddb_printf(ctx, "Committed: "DF_BOOL"\n", DP_BOOL(entry->ddtx_committed));
-	ddb_printf(ctx, "Aborted: "DF_BOOL"\n", DP_BOOL(entry->ddtx_aborted));
-	ddb_printf(ctx, "Maybe Shared: "DF_BOOL"\n", DP_BOOL(entry->ddtx_maybe_shared));
-	ddb_printf(ctx, "Prepared: "DF_BOOL"\n", DP_BOOL(entry->ddtx_prepared));
-	ddb_printf(ctx, "Grp Cnt: %d\n", entry->ddtx_grp_cnt);
-	ddb_printf(ctx, "Ver: %d\n", entry->ddtx_ver);
-	ddb_printf(ctx, "Rec Cnt: %d\n", entry->ddtx_rec_cnt);
-	ddb_printf(ctx, "Mbs Flags: %d\n", entry->ddtx_mbs_flags);
-	ddb_printf(ctx, "Flags: %d\n", entry->ddtx_flags);
-	ddb_printf(ctx, "Oid: "DF_UOID"\n", DP_UOID(entry->ddtx_oid));
+	ddb_printf(ctx, "\tID HLC: "DF_U64"\n", entry->ddtx_id_hlc);
+	ddb_printf(ctx, "\tEpoch: "DF_U64"\n", entry->ddtx_epoch);
+	ddb_printf(ctx, "\tExist: "DF_BOOL"\n", DP_BOOL(entry->ddtx_exist));
+	ddb_printf(ctx, "\tInvalid: "DF_BOOL"\n", DP_BOOL(entry->ddtx_invalid));
+	ddb_printf(ctx, "\tReindex: "DF_BOOL"\n", DP_BOOL(entry->ddtx_reindex));
+	ddb_printf(ctx, "\tHandle Time: "DF_U64"\n", entry->ddtx_handle_time);
+	ddb_printf(ctx, "\tOid Cnt: %d\n", entry->ddtx_oid_cnt);
+	ddb_printf(ctx, "\tStart Time: "DF_U64"\n", entry->ddtx_start_time);
+	ddb_printf(ctx, "\tCommittable: "DF_BOOL"\n", DP_BOOL(entry->ddtx_committable));
+	ddb_printf(ctx, "\tCommitted: "DF_BOOL"\n", DP_BOOL(entry->ddtx_committed));
+	ddb_printf(ctx, "\tAborted: "DF_BOOL"\n", DP_BOOL(entry->ddtx_aborted));
+	ddb_printf(ctx, "\tMaybe Shared: "DF_BOOL"\n", DP_BOOL(entry->ddtx_maybe_shared));
+	ddb_printf(ctx, "\tPrepared: "DF_BOOL"\n", DP_BOOL(entry->ddtx_prepared));
+	ddb_printf(ctx, "\tGrp Cnt: %d\n", entry->ddtx_grp_cnt);
+	ddb_printf(ctx, "\tVer: %d\n", entry->ddtx_ver);
+	ddb_printf(ctx, "\tRec Cnt: %d\n", entry->ddtx_rec_cnt);
+	ddb_printf(ctx, "\tMbs Flags: %d\n", entry->ddtx_mbs_flags);
+	ddb_printf(ctx, "\tFlags: %d\n", entry->ddtx_flags);
+	ddb_printf(ctx, "\tOid: "DF_UOID"\n", DP_UOID(entry->ddtx_oid));
 }

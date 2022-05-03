@@ -53,5 +53,6 @@
 			fail_msg("'%s' not found in '%s'", substr, str); \
 	} while (0)
 
+#define assert_invalid(x) assert_rc_equal(-DER_INVAL, (x))
 
 #endif /* DAOS_DDB_CMOCKA_H */

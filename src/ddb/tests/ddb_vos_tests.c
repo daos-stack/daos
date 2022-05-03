@@ -588,6 +588,35 @@ get_obj_ilog_tests(void **state)
 }
 
 static void
+abort_obj_ilog_tests(void **state)
+{
+	struct dt_vos_pool_ctx	*tctx = *state;
+	daos_handle_t		 coh = {0};
+	daos_unit_oid_t		 null_oid = {0};
+
+	fake_dump_ilog_entry_called = 0;
+
+	/* error handling */
+	assert_rc_equal(-DER_INVAL, dv_process_obj_ilog_entries(coh, null_oid, DDB_ILOG_OP_ABORT));
+
+	assert_success(vos_cont_open(tctx->dvt_poh, g_uuids[0], &coh));
+
+	/* First make sure there is an ilog to rm */
+	assert_success(dv_get_obj_ilog_entries(coh, g_oids[0], fake_dump_ilog_entry, NULL));
+	assert_int_equal(1, fake_dump_ilog_entry_called);
+	fake_dump_ilog_entry_called = 0;
+
+	/* Abort the ilogs */
+	assert_success(dv_process_obj_ilog_entries(coh, g_oids[0], DDB_ILOG_OP_ABORT));
+
+	/* Now should not be any ilog entries */
+	assert_success(dv_get_obj_ilog_entries(coh, g_oids[0], fake_dump_ilog_entry, NULL));
+	assert_int_equal(0, fake_dump_ilog_entry_called);
+
+	vos_cont_close(coh);
+}
+
+static void
 get_dkey_ilog_tests(void **state)
 {
 	struct dt_vos_pool_ctx	*tctx = *state;
@@ -600,14 +629,35 @@ get_dkey_ilog_tests(void **state)
 							     fake_dump_ilog_entry, NULL));
 
 	fake_dump_ilog_entry_called = 0;
-	assert_success(dv_get_dkey_ilog_entries(coh, g_oids[0], &g_dkeys[0], fake_dump_ilog_entry,
+	assert_success(dv_get_dkey_ilog_entries(coh, g_oids[1], &g_dkeys[0], fake_dump_ilog_entry,
 						NULL));
 	assert_int_equal(1, fake_dump_ilog_entry_called);
 
 	vos_cont_close(coh);
 }
 
-/* End of where to put these functions */
+static void
+abort_dkey_ilog_tests(void **state)
+{
+	struct dt_vos_pool_ctx	*tctx = *state;
+	daos_handle_t		 coh;
+	daos_unit_oid_t		 null_oid = {0};
+
+	assert_success(vos_cont_open(tctx->dvt_poh, g_uuids[0], &coh));
+
+	assert_rc_equal(-DER_INVAL, dv_process_dkey_ilog_entries(DAOS_HDL_INVAL, null_oid, NULL,
+								 DDB_ILOG_OP_UNKNOWN));
+
+	assert_success(dv_process_dkey_ilog_entries(coh, g_oids[0], &g_dkeys[0],
+						    DDB_ILOG_OP_ABORT));
+
+	fake_dump_ilog_entry_called = 0;
+	assert_success(dv_get_dkey_ilog_entries(coh, g_oids[0], &g_dkeys[0], fake_dump_ilog_entry,
+						NULL));
+	assert_int_equal(0, fake_dump_ilog_entry_called);
+
+	vos_cont_close(coh);
+}
 
 int entry_handler_called;
 static int
@@ -752,6 +802,28 @@ update_value_to_insert_tests(void **state)
 	assert_update_new_path(poh, &vtp);
 }
 
+static void
+clear_committed_table(void **state)
+{
+	struct dt_vos_pool_ctx *tctx = *state;
+	daos_handle_t		poh = tctx->dvt_poh;
+	daos_handle_t		coh;
+
+	dv_cont_open(poh, g_uuids[5], &coh);
+
+	dvt_vos_insert_2_records_with_dtx(coh);
+
+	assert_success(dv_clear_committed_table(coh));
+
+	entry_handler_called = 0;
+	dv_committed_dtx(coh, committed_entry_handler, NULL);
+
+	assert_int_equal(0, entry_handler_called);
+
+	dv_cont_close(&coh);
+
+}
+
 #define DELETE_SUCCESS(poh, vtp) assert_success(dv_delete(poh, &vtp))
 static void
 delete_path_parts_tests(void **state)
@@ -878,7 +950,9 @@ const struct CMUnitTest dv_test_cases[] = {
 	TEST(path_must_be_valid_tests),
 	TEST(get_value_tests),
 	TEST(get_obj_ilog_tests),
+	TEST(abort_obj_ilog_tests),
 	TEST(get_dkey_ilog_tests),
+	TEST(abort_dkey_ilog_tests),
 	TEST(get_superblock_tests),
 	TEST(obj_id_2_ddb_test),
 	TEST(get_dtx_tables_tests),
@@ -886,6 +960,7 @@ const struct CMUnitTest dv_test_cases[] = {
 	TEST(verify_correct_params_for_update_value_tests),
 	TEST(update_value_to_modify_tests),
 	TEST(update_value_to_insert_tests),
+	TEST(clear_committed_table),
 };
 
 int
