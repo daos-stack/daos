@@ -6,13 +6,9 @@ hosts:
   test_clients:
     - client-A
 
-# These values are for Aurora. Can be lower in CI.
-timeout: 1200
-server_manager:
-  storage_prepare_timeout: 360
-  storage_format_timeout: 360
+timeout: 300
 daos_server:
-  pattern_timeout: 1200
+  pattern_timeout: 60
 
 server_config:
   name: daos_server
@@ -46,6 +42,9 @@ server_config:
 pool_size_ratio_80:
   size: 80%
   control_method: dmg
+pool_size_value:
+  size: 50G
+  control_method: dmg
 
 container_wo_rf:
   type: POSIX
@@ -63,7 +62,7 @@ ior: &ior_base
     api: DFS
     # We wait for a few seconds before excluding a target. If the IOR finishes too
     # quickly, the test will not work. We use -D (deadlineForStonewalling) 10, so the
-    # process ends in about 60 sec. Adjust the transfer_size - block_size combination
+    # process ends in about 10 sec. Adjust the transfer_size - block_size combination
     # based on the system so that it takes longer than the -D value.
     transfer_size: '512K'
     block_size: '100G'

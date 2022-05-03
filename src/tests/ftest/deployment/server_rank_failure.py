@@ -92,8 +92,14 @@ class ServerRankFailure(IorTestBase):
         Then start on all nodes.
         """
         self.log.info("Call systemctl stop daos_server")
-        self.server_managers[0].stop()
-        self.log.info("Call systemctl start daos_server")
+        # self.server_managers[0].stop() is the usual way, but this will also stop
+        # reset storage etc., which will make the server not start in the next step. It's
+        # also not the representation of the expected user behavior. Here, we just want
+        # to call systemctl stop daos_server.
+        # Calling manager.stop() is the equivalent of super().stop() in
+        # DaosServerManager.stop().
+        self.server_managers[0].manager.stop()
+        self.log.info("Start daos_server and detect the DAOS I/O engine message")
         self.server_managers[0].restart(hosts=self.hostlist_servers)
 
     def kill_engine(self, engine_kill_host):
@@ -305,7 +311,7 @@ class ServerRankFailure(IorTestBase):
         self.log.info("engine_kill_host = %s", engine_kill_host)
 
         # 2. Create a pool across two ranks on the same node; 0 and rank_r.
-        self.add_pool(namespace="/run/pool_size_ratio_80/*", create=False)
+        self.add_pool(namespace="/run/pool_size_value/*", create=False)
         self.pool.target_list.update([0, rank_r])
         self.pool.create()
 
