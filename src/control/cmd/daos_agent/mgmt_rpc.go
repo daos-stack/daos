@@ -8,6 +8,7 @@ package main
 
 import (
 	"net"
+	"sync"
 	"time"
 
 	"github.com/pkg/errors"
@@ -27,6 +28,8 @@ import (
 // Management Service proxy, handling dRPCs sent by libdaos by forwarding them
 // to MS.
 type mgmtModule struct {
+	attachInfoMutex sync.RWMutex
+
 	log            logging.Logger
 	sys            string
 	ctlInvoker     control.Invoker
@@ -200,6 +203,9 @@ func (mod *mgmtModule) getAttachInfoRemote(ctx context.Context, numaNode int, sy
 }
 
 func (mod *mgmtModule) getFabricInterface(ctx context.Context, numaNode int, netDevClass hardware.NetDevClass, provider string) (*FabricInterface, error) {
+	mod.attachInfoMutex.Lock()
+	defer mod.attachInfoMutex.Unlock()
+
 	if mod.fabricInfo.IsCached() {
 		return mod.fabricInfo.GetDevice(numaNode, netDevClass, provider)
 	}

@@ -748,6 +748,17 @@ func TestSysfs_Provider_GetNetDevState(t *testing.T) {
 			iface:    "net0",
 			expState: hardware.NetDevStateUnknown,
 		},
+		"net operstate case-insensitive": {
+			setup: func(t *testing.T, root string) {
+				setupNet(t, root)
+				setupTestNetDevOperStates(t, root, map[string]string{
+					"net0": "UP",
+				})
+			},
+			p:        &Provider{},
+			iface:    "net0",
+			expState: hardware.NetDevStateReady,
+		},
 		"loopback unknown is ready": {
 			setup: func(t *testing.T, root string) {
 				setupNet(t, root)

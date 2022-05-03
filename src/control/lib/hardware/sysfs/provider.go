@@ -287,7 +287,7 @@ func (s *Provider) getNetOperState(iface string) (hardware.NetDevState, error) {
 		return hardware.NetDevStateUnknown, errors.Wrapf(err, "failed to get %q operational state", iface)
 	}
 
-	stateStr := strings.TrimSpace(string(stateBytes))
+	stateStr := strings.ToLower(strings.TrimSpace(string(stateBytes)))
 
 	// Operational states as described in kernel docs:
 	// https://www.kernel.org/doc/html/latest/networking/operstates.html#tlv-ifla-operstate
