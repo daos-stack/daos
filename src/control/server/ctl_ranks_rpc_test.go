@@ -613,10 +613,10 @@ func TestServer_CtlSvc_ResetFormatRanks(t *testing.T) {
 			// no results as rank can't be read from superblock
 			expResults: []*sharedpb.RankResult{},
 		},
-		"missing ranks": {
-			req:        &ctlpb.RanksReq{Ranks: "0,3"},
-			expResults: []*sharedpb.RankResult{},
-		},
+		//		"missing ranks": {
+		//			req:        &ctlpb.RanksReq{Ranks: "0,3"},
+		//			expResults: []*sharedpb.RankResult{},
+		//		},
 		"instances already started": {
 			req:              &ctlpb.RanksReq{Ranks: "0-3"},
 			instancesStarted: true,
