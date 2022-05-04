@@ -21,7 +21,7 @@ pool:
     control_method: dmg
 container: !mux
    properties:
-       enable_checksum: True
+       enable_checksum: False
 dkeys: !mux
   single:
     no_of_dkeys:
