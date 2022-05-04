@@ -518,8 +518,9 @@ collect(void)
 void
 cleanup(bool detach)
 {
-	struct ns_entry		*nentry;
-	struct ctrlr_entry	*centry, *cnext;
+	struct ns_entry			*nentry;
+	struct ctrlr_entry		*centry, *cnext;
+	struct spdk_nvme_detach_ctx	*detach_ctx = NULL;
 	fprintf(stderr, "cleanup: checkpoint 1\n");
 
 	centry = g_controllers;
@@ -528,7 +529,7 @@ cleanup(bool detach)
 		fprintf(stderr, "cleanup: checkpoint 2-A\n");
 		if ((centry->ctrlr) && (detach)) {
 			fprintf(stderr, "cleanup: checkpoint 2-B\n");
-			spdk_nvme_detach(centry->ctrlr);
+			spdk_nvme_detach_async(centry->ctrlr, &detach_ctx);
 			fprintf(stderr, "cleanup: checkpoint 2-C\n");
 		}
 		fprintf(stderr, "cleanup: checkpoint 2-D\n");
@@ -546,6 +547,9 @@ cleanup(bool detach)
 		centry = cnext;
 		fprintf(stderr, "cleanup: checkpoint 2-F\n");
 	}
+
+	if (detach_ctx)
+		spdk_nvme_detach_poll(detach_ctx);
 
 	g_controllers = NULL;
 	fprintf(stderr, "cleanup: checkpoint 3\n");
