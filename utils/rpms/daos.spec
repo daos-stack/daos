@@ -554,7 +554,7 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 # No files in a shim package
 
 %changelog
-* Wed May  4 2022 Joseph More <joseph.moore@intel.com> 2.3.100.6
+* Wed May  4 2022 Joseph More <joseph.moore@intel.com> 2.3.100-6
 - Update to mercury 2.1.0.rc4-9 to enable non-unified mode in UCX
 
 * Tue Apr 26 2022 Phillip Henderson <phillip.henderson@intel.com> 2.3.100-5
