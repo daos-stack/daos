@@ -14,8 +14,6 @@ server_config:
         bdev_list: ["aaaa:aa:aa.a","bbbb:bb:bb.b"]
         scm_class: dcpm
         scm_list: ["/dev/pmem0"]
-        env_vars:
-          - DAOS_SPDK_SUBSYS_TIMEOUT=0
 pool:
     mode: 146 # 146 is RW
     name: daos_server

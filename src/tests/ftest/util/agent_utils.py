@@ -243,6 +243,7 @@ class DaosAgentManager(SubprocessManager):
 
     def get_attachinfo_file(self):
         """Run dump-attachinfo on the daos_agent."""
+
         server_name = self.get_config_value("name")
 
         self.dump_attachinfo()

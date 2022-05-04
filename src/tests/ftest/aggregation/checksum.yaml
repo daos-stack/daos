@@ -11,8 +11,6 @@ server_config:
   servers:
     bdev_class: nvme
     bdev_list: ["0000:81:00.0"]
-    env_vars:
-      - DAOS_SPDK_SUBSYS_TIMEOUT=0
 pool:
   mode: 146
   name: daos_server
