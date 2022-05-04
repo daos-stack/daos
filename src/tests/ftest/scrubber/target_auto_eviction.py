@@ -6,7 +6,6 @@
 """
 import time
 from scrubber_test_base import TestWithScrubber
-from apricot import skipForTicket
 
 
 class TestWithScrubberTargetEviction(TestWithScrubber):
