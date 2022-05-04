@@ -15,7 +15,7 @@
 #include <daos/rpc.h>
 #include <daos_types.h>
 #include "obj_rpc.h"
-#include "obj_internal.h"
+#include "srv_internal.h"
 
 static inline bool
 obj_ec_is_valid_tgt(struct daos_cpd_ec_tgts *tgt_map, uint32_t map_size,
