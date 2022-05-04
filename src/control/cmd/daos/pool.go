@@ -21,6 +21,7 @@ import (
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	"github.com/daos-stack/daos/src/control/lib/control"
 	"github.com/daos-stack/daos/src/control/lib/ui"
+	"github.com/daos-stack/daos/src/control/system"
 )
 
 /*
@@ -164,6 +165,8 @@ type poolCmd struct {
 
 type poolQueryCmd struct {
 	poolBaseCmd
+	ShowEnabledRanks  bool `short:"e" long:"show-enabled" description:"Show engine unique identifiers (ranks) which are enabled"`
+	ShowDisabledRanks bool `short:"b" long:"show-disabled" description:"Show engine unique identifiers (ranks) which are disabled"`
 }
 
 func convertPoolSpaceInfo(in *C.struct_daos_pool_space, mt C.uint) *mgmtpb.StorageUsageStats {
@@ -241,7 +244,33 @@ const (
 	dpiQueryAll     = C.uint64_t(^uint64(0)) // DPI_ALL is -1
 )
 
+func generateRankSet(ranklist *C.d_rank_list_t) (string) {
+	if ranklist.rl_nr == 0 {
+		return ""
+	}
+	ranks := uintptr(unsafe.Pointer(ranklist.rl_ranks))
+	const size = unsafe.Sizeof(uint32(0))
+	rankset := "["
+	for i := 0; i < int(ranklist.rl_nr); i++ {
+		if i > 0 {
+			rankset += ","
+		}
+		rankset += fmt.Sprint(*(*uint32)(unsafe.Pointer(ranks + uintptr(i) * size)))
+	}
+	rankset += "]"
+	return rankset
+}
+
 func (cmd *poolQueryCmd) Execute(_ []string) error {
+	if cmd.ShowEnabledRanks && cmd.ShowDisabledRanks {
+		return errors.New("show-enabled and show-disabled can't be used at the same time.")
+	}
+	var ranklistPtr **C.d_rank_list_t = nil
+	var ranklist *C.d_rank_list_t = nil
+	if cmd.ShowEnabledRanks || cmd.ShowDisabledRanks {
+		ranklistPtr = &ranklist
+	}
+
 	cleanup, err := cmd.resolveAndConnect(C.DAOS_PC_RO, nil)
 	if err != nil {
 		return err
@@ -251,16 +280,32 @@ func (cmd *poolQueryCmd) Execute(_ []string) error {
 	pinfo := C.daos_pool_info_t{
 		pi_bits: dpiQueryAll,
 	}
-	rc := C.daos_pool_query(cmd.cPoolHandle, nil, &pinfo, nil, nil)
+	if cmd.ShowDisabledRanks {
+		pinfo.pi_bits &= C.uint64_t(^(uint64(C.DPI_ENGINES_ENABLED)))
+	}
+
+	rc := C.daos_pool_query(cmd.cPoolHandle, ranklistPtr, &pinfo, nil, nil)
 	if err := daosError(rc); err != nil {
+		C.d_rank_list_free(ranklist)
 		return errors.Wrapf(err,
 			"failed to query pool %s", cmd.poolUUID)
 	}
 
 	pqr, err := convertPoolInfo(&pinfo)
 	if err != nil {
+		C.d_rank_list_free(ranklist)
 		return err
 	}
+
+	if ranklistPtr != nil {
+		if cmd.ShowEnabledRanks {
+			pqr.EnabledRanks = system.MustCreateRankSet(generateRankSet(ranklist))
+		}
+		if cmd.ShowDisabledRanks {
+			pqr.DisabledRanks = system.MustCreateRankSet(generateRankSet(ranklist))
+		}
+	}
+	C.d_rank_list_free(ranklist)
 
 	if cmd.jsonOutputEnabled() {
 		return cmd.outputJSON(pqr, nil)
