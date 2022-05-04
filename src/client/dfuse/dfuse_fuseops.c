@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2021 Intel Corporation.
+ * (C) Copyright 2016-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -180,7 +180,7 @@ df_ll_getattr(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
 		inode = container_of(rlink, struct dfuse_inode_entry, ie_htl);
 	}
 
-	if (inode->ie_dfs->dfc_attr_timeout) {
+	if (inode->ie_dfs->dfc_attr_timeout && (atomic_load_relaxed(&inode->ie_il_count) == 0)) {
 		struct timespec now;
 		struct timespec left;
 		double          age;

@@ -371,7 +371,6 @@ struct fuse_lowlevel_ops dfuse_ops;
 #define DFUSE_REPLY_ATTR(ie, req, attr)                                                            \
 	do {                                                                                       \
 		int             __rc;                                                              \
-		struct timespec now;                                                               \
 		double timeout = 0;                                                                \
 		DFUSE_TRA_DEBUG(ie, "Returning attr inode %#lx mode %#o size %zi", (attr)->st_ino, \
 				(attr)->st_mode, (attr)->st_size);                                 \
@@ -544,13 +543,11 @@ struct dfuse_inode_entry {
 	 */
 	d_list_t		ie_htl;
 
-<<<<<<< HEAD
 	struct timespec          ie_attr_last_update;
-=======
+
 	/** written region for truncated files (i.e. ie_truncated set) */
 	size_t                   ie_start_off;
 	size_t                   ie_end_off;
->>>>>>> master
 
 	/** Reference counting for the inode.
 	 * Used by the hash table callbacks
