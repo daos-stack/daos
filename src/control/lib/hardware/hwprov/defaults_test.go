@@ -156,11 +156,11 @@ func TestHwprov_DefaultFabricScanner(t *testing.T) {
 	}
 }
 
-func TestHwprov_DefaultFabricReadyChecker(t *testing.T) {
+func TestHwprov_DefaultNetDevStateProvider(t *testing.T) {
 	log, buf := logging.NewTestLogger(t.Name())
 	defer common.ShowBufferOnFailure(t, buf)
 
-	result := DefaultFabricReadyChecker(log)
+	result := DefaultNetDevStateProvider(log)
 
 	if diff := cmp.Diff(sysfs.NewProvider(log), result,
 		cmpopts.IgnoreUnexported(sysfs.Provider{}),
