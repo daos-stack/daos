@@ -1,3 +1,9 @@
+daos (2.3.100-11) unstable; urgency=medium
+  [ Michael MacDonald ]
+  * Move dmg to new daos-admin package
+
+ -- Michael MacDonald <mjmac.macdonald@intel.com>  Wed, 01 Jun 2022 13:58:03 -0000
+
 daos (2.3.100-10) unstable; urgency=medium
   [ Lei Huang ]
   * Update libfabric to v1.15.1-1 to include critical performance patches
