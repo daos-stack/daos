@@ -22,72 +22,6 @@ import (
 	"github.com/daos-stack/daos/src/control/logging"
 )
 
-// IsUnsupportedFabric returns true if the supplied error is
-// an instance of errUnsupportedFabric.
-func IsUnsupportedFabric(err error) bool {
-	_, ok := errors.Cause(err).(*errUnsupportedFabric)
-	return ok
-}
-
-type errUnsupportedFabric struct {
-	provider string
-}
-
-func (euf *errUnsupportedFabric) Error() string {
-	return fmt.Sprintf("fabric provider %q not supported", euf.provider)
-}
-
-// ErrUnsupportedFabric returns an error indicating that the denoted
-// fabric provider is not supported by this build/platform.
-func ErrUnsupportedFabric(provider string) error {
-	return &errUnsupportedFabric{provider: provider}
-}
-
-// IsFabricNotReady returns true if the supplied error is an instance of errFabricNotReady.
-func IsFabricNotReady(err error) bool {
-	_, ok := errors.Cause(err).(*errFabricNotReady)
-	return ok
-}
-
-type errFabricNotReady struct {
-	iface string
-}
-
-func (e *errFabricNotReady) Error() string {
-	return fmt.Sprintf("fabric interface %q is not ready", e.iface)
-}
-
-// ErrFabricNotReady returns an error indicating that the denoted fabric interface is not ready
-// for use.
-func ErrFabricNotReady(iface string) error {
-	return &errFabricNotReady{iface: iface}
-}
-
-// IsProviderNotOnDevice indicates whether the error is an instance of
-// errProviderNotOnDevice.
-func IsProviderNotOnDevice(err error) bool {
-	_, ok := errors.Cause(err).(*errProviderNotOnDevice)
-	return ok
-}
-
-type errProviderNotOnDevice struct {
-	provider string
-	device   string
-}
-
-func (e *errProviderNotOnDevice) Error() string {
-	return fmt.Sprintf("fabric provider %q not supported on network device %q", e.provider, e.device)
-}
-
-// ErrProviderNotOnDevice returns an error indicated that the fabric provider
-// is not available on the given network device.
-func ErrProviderNotOnDevice(provider, dev string) error {
-	return &errProviderNotOnDevice{
-		provider: provider,
-		device:   dev,
-	}
-}
-
 // FabricInterface represents basic information about a fabric interface.
 type FabricInterface struct {
 	// Name is the fabric device name.
@@ -859,23 +793,39 @@ func (s *FabricScanner) CacheTopology(t *Topology) error {
 	return nil
 }
 
-// FabricReadyChecker is an interface for a type that can be used to check whether a fabric
-// interface is ready.
-type FabricReadyChecker interface {
-	CheckFabricReady(string) error
+// NetDevState describes the state of a network device.
+type NetDevState int
+
+const (
+	// NetDevStateUnknown indicates that the device state can't be determined.
+	NetDevStateUnknown NetDevState = iota
+	// NetDevStateDown indicates that the device is down. This could mean the device is disabled
+	// or physically disconnected.
+	NetDevStateDown
+	// NetDevStateNotReady indicates that the device is connected but not ready to communicate.
+	NetDevStateNotReady
+	// NetDevStateReady indicates that the device is up and ready to communicate.
+	NetDevStateReady
+)
+
+// NetDevStateProvider is an interface for a type that can be used to get the state of a network
+// device.
+type NetDevStateProvider interface {
+	GetNetDevState(string) (NetDevState, error)
 }
 
 // WaitFabricReadyParams defines the parameters for a WaitFabricReady call.
 type WaitFabricReadyParams struct {
-	Checker        FabricReadyChecker
+	StateProvider  NetDevStateProvider
 	FabricIfaces   []string      // Fabric interfaces that must become ready
 	IterationSleep time.Duration // Time between iterations if some interfaces aren't ready
+	IgnoreUnusable bool          // Ignore interfaces that are in an unusable state
 }
 
 // WaitFabricReady loops until either all fabric interfaces are ready, or the context is canceled.
 func WaitFabricReady(ctx context.Context, log logging.Logger, params WaitFabricReadyParams) error {
-	if common.InterfaceIsNil(params.Checker) {
-		return errors.New("nil FabricReadyChecker")
+	if common.InterfaceIsNil(params.StateProvider) {
+		return errors.New("nil NetDevStateProvider")
 	}
 
 	if len(params.FabricIfaces) == 0 {
@@ -897,29 +847,45 @@ func WaitFabricReady(ctx context.Context, log logging.Logger, params WaitFabricR
 
 func loopFabricReady(log logging.Logger, params WaitFabricReadyParams, ch chan error) {
 	readySet := common.NewStringSet()
+	unusableSet := common.NewStringSet()
 	log.Debug("waiting for fabric interfaces to become ready...")
 	for {
 		for _, iface := range params.FabricIfaces {
-			// No need to check again if we marked it ready
-			if readySet.Has(iface) {
+			// No need to check again if we marked it ready or unusable
+			if readySet.Has(iface) || unusableSet.Has(iface) {
 				continue
 			}
 
-			err := params.Checker.CheckFabricReady(iface)
-
-			switch {
-			case err == nil:
-				log.Debugf("fabric interface %q is ready", iface)
-				readySet.Add(iface)
-			case !IsFabricNotReady(err):
-				log.Errorf("error while checking readiness of fabric interface %q: %s", iface, err.Error())
+			state, err := params.StateProvider.GetNetDevState(iface)
+			if err != nil {
+				log.Errorf("error while checking state of fabric interface %q: %s", iface, err.Error())
 				ch <- err
 				return
 			}
+
+			switch state {
+			case NetDevStateReady:
+				log.Debugf("fabric interface %q is ready", iface)
+				readySet.Add(iface)
+			case NetDevStateDown, NetDevStateUnknown:
+				// Down or unknown can be interpreted as disabled/unusable
+				if params.IgnoreUnusable {
+					log.Debugf("ignoring unusable fabric interface %q", iface)
+					unusableSet.Add(iface)
+				} else {
+					ch <- errors.Errorf("requested fabric interface %q is unusable", iface)
+					return
+				}
+			}
 		}
 
-		// All interfaces up
-		if len(readySet) == len(params.FabricIfaces) {
+		if len(unusableSet) == len(params.FabricIfaces) {
+			ch <- errors.Errorf("no usable fabric interfaces requested: %s", strings.Join(params.FabricIfaces, ", "))
+			return
+		}
+
+		// All usable interfaces up
+		if len(readySet)+len(unusableSet) == len(params.FabricIfaces) {
 			break
 		}
 
