@@ -244,15 +244,16 @@ func TestServer_CtlSvc_PrepShutdownRanks(t *testing.T) {
 
 func TestServer_CtlSvc_StopRanks(t *testing.T) {
 	for name, tc := range map[string]struct {
-		missingSB        bool
-		engineCount      int
-		instancesStopped bool
-		req              *ctlpb.RanksReq
-		signal           os.Signal
-		signalErr        error
-		expSignalsSent   map[uint32]os.Signal
-		expResults       []*sharedpb.RankResult
-		expErr           error
+		missingSB         bool
+		engineCount       int
+		instancesStopped  bool
+		instancesDontStop bool
+		req               *ctlpb.RanksReq
+		signal            os.Signal
+		signalErr         error
+		expSignalsSent    map[uint32]os.Signal
+		expResults        []*sharedpb.RankResult
+		expErr            error
 	}{
 		"nil request": {
 			expErr: errors.New("nil request"),
@@ -278,15 +279,27 @@ func TestServer_CtlSvc_StopRanks(t *testing.T) {
 			signalErr: errors.New("sending signal failed"),
 			expErr:    errors.New("sending killed: sending signal failed"),
 		},
-		"instances remain started": { // states don't change within the allotted time
+		"instances successfully stopped": {
 			req:            &ctlpb.RanksReq{Ranks: "0-3"},
 			expSignalsSent: map[uint32]os.Signal{0: syscall.SIGINT, 1: syscall.SIGINT},
-			expErr:         errors.New("deadline exceeded"),
+			expResults: []*sharedpb.RankResult{
+				{Rank: 1, State: msStopped},
+				{Rank: 2, State: msStopped},
+			},
 		},
-		"force; instances remain started": { // states don't change within the allotted time
+		"instances successfully stopped with force": {
 			req:            &ctlpb.RanksReq{Ranks: "0-3", Force: true},
 			expSignalsSent: map[uint32]os.Signal{0: syscall.SIGKILL, 1: syscall.SIGKILL},
-			expErr:         errors.New("deadline exceeded"),
+			expResults: []*sharedpb.RankResult{
+				{Rank: 1, State: msStopped},
+				{Rank: 2, State: msStopped},
+			},
+		},
+		"instances not stopped in time": {
+			req:               &ctlpb.RanksReq{Ranks: "0-3"},
+			expSignalsSent:    map[uint32]os.Signal{0: syscall.SIGINT, 1: syscall.SIGINT},
+			instancesDontStop: true,
+			expErr:            errors.New("deadline exceeded"),
 		},
 		"instances already stopped": { // successful result for kill
 			req:              &ctlpb.RanksReq{Ranks: "0-3"},
@@ -331,32 +344,36 @@ func TestServer_CtlSvc_StopRanks(t *testing.T) {
 			svc.events.Subscribe(events.RASTypeStateChange, dispatched)
 
 			for i, e := range svc.harness.instances {
-				srv := e.(*EngineInstance)
+				ei := e.(*EngineInstance)
 				if tc.missingSB {
-					srv._superblock = nil
+					ei._superblock = nil
 					continue
 				}
 
 				trc := &engine.TestRunnerConfig{}
 				if !tc.instancesStopped {
 					trc.Running.SetTrue()
-					srv.ready.SetTrue()
+					ei.ready.SetTrue()
 				}
 				trc.SignalCb = func(idx uint32, sig os.Signal) {
 					signalsSent.Store(idx, sig)
-					// simulate process exit which will call
-					// onInstanceExit handlers.
-					svc.harness.instances[idx].(*EngineInstance).exit(ctx,
-						common.NormalExit)
+					if tc.instancesDontStop {
+						return
+					}
+					// simulate process exit which will call onInstanceExit handlers
+					ei.exit(ctx, common.NormalExit)
+					// set false on test runner so IsStarted on engine returns false
+					ei.runner.(*engine.TestRunner).GetRunnerConfig().Running.SetFalse()
+					log.Debugf("mock handling signal %v on engine %d", sig, idx)
 				}
 				trc.SignalErr = tc.signalErr
-				srv.runner = engine.NewTestRunner(trc, engine.MockConfig())
-				srv.setIndex(uint32(i))
+				ei.runner = engine.NewTestRunner(trc, engine.MockConfig())
+				ei.setIndex(uint32(i))
 
-				srv._superblock.Rank = new(system.Rank)
-				*srv._superblock.Rank = system.Rank(i + 1)
+				ei._superblock.Rank = new(system.Rank)
+				*ei._superblock.Rank = system.Rank(i + 1)
 
-				srv.OnInstanceExit(
+				ei.OnInstanceExit(
 					func(_ context.Context, _ uint32, _ system.Rank, _ error, _ uint64) error {
 						svc.events.Publish(mockEvtEngineDied(t))
 						return nil
@@ -613,10 +630,6 @@ func TestServer_CtlSvc_ResetFormatRanks(t *testing.T) {
 			// no results as rank can't be read from superblock
 			expResults: []*sharedpb.RankResult{},
 		},
-		//		"missing ranks": {
-		//			req:        &ctlpb.RanksReq{Ranks: "0,3"},
-		//			expResults: []*sharedpb.RankResult{},
-		//		},
 		"instances already started": {
 			req:              &ctlpb.RanksReq{Ranks: "0-3"},
 			instancesStarted: true,

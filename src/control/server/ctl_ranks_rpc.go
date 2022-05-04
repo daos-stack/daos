@@ -44,8 +44,8 @@ func pollInstanceState(ctx context.Context, instances []Engine, validate func(En
 			}
 
 			success := true
-			for _, srv := range instances {
-				if !validate(srv) {
+			for _, ei := range instances {
+				if !validate(ei) {
 					success = false
 				}
 			}
@@ -180,11 +180,11 @@ func (svc *ControlService) StopRanks(ctx context.Context, req *ctlpb.RanksReq) (
 	svc.events.DisableEventIDs(events.RASEngineDied)
 	defer svc.events.EnableEventIDs(events.RASEngineDied)
 
-	for _, srv := range instances {
-		if !srv.IsStarted() {
+	for _, ei := range instances {
+		if !ei.IsStarted() {
 			continue
 		}
-		if err := srv.Stop(signal); err != nil {
+		if err := ei.Stop(signal); err != nil {
 			return nil, errors.Wrapf(err, "sending %s", signal)
 		}
 	}
