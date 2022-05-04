@@ -22,8 +22,9 @@
 #include <daos_srv/dtx_srv.h>
 #include <daos_srv/srv_csum.h>
 #include <daos_srv/rebuild.h>
+#include <daos_srv/object.h>
 #include "obj_rpc.h"
-#include "obj_internal.h"
+#include "srv_internal.h"
 
 #if D_HAS_WARNING(4, "-Wframe-larger-than=")
 	#pragma GCC diagnostic ignored "-Wframe-larger-than="
@@ -639,20 +640,20 @@ static int
 migrate_fetch_update_inline(struct migrate_one *mrone, daos_handle_t oh,
 			    struct ds_cont_child *ds_cont)
 {
-	d_sg_list_t		 sgls[DSS_ENUM_UNPACK_MAX_IODS];
-	d_iov_t			 iov[DSS_ENUM_UNPACK_MAX_IODS];
+	d_sg_list_t		 sgls[OBJ_ENUM_UNPACK_MAX_IODS];
+	d_iov_t			 iov[OBJ_ENUM_UNPACK_MAX_IODS];
 	struct daos_csummer	*csummer = NULL;
 	struct dcs_iod_csums	*iod_csums = NULL;
 	int			 iod_cnt = 0;
 	int			 start;
-	char		 iov_buf[DSS_ENUM_UNPACK_MAX_IODS][MAX_BUF_SIZE];
+	char		 iov_buf[OBJ_ENUM_UNPACK_MAX_IODS][MAX_BUF_SIZE];
 	bool			 fetch = false;
 	int			 i;
 	int			 rc = 0;
 	d_iov_t			*p_csum_iov = NULL;
 	d_iov_t			 csum_iov = {0};
 
-	D_ASSERT(mrone->mo_iod_num <= DSS_ENUM_UNPACK_MAX_IODS);
+	D_ASSERT(mrone->mo_iod_num <= OBJ_ENUM_UNPACK_MAX_IODS);
 	for (i = 0; i < mrone->mo_iod_num; i++) {
 		if (mrone->mo_iods[i].iod_size == 0)
 			continue;
@@ -886,8 +887,8 @@ static int
 migrate_fetch_update_parity(struct migrate_one *mrone, daos_handle_t oh,
 			    struct ds_cont_child *ds_cont)
 {
-	d_sg_list_t	 sgls[DSS_ENUM_UNPACK_MAX_IODS];
-	d_iov_t		 iov[DSS_ENUM_UNPACK_MAX_IODS] = { 0 };
+	d_sg_list_t	 sgls[OBJ_ENUM_UNPACK_MAX_IODS];
+	d_iov_t		 iov[OBJ_ENUM_UNPACK_MAX_IODS] = { 0 };
 	char		*data;
 	daos_size_t	 size;
 	unsigned int	 p = obj_ec_parity_tgt_nr(&mrone->mo_oca);
@@ -897,7 +898,7 @@ migrate_fetch_update_parity(struct migrate_one *mrone, daos_handle_t oh,
 	int		 i;
 	int		 rc;
 
-	D_ASSERT(mrone->mo_iod_num <= DSS_ENUM_UNPACK_MAX_IODS);
+	D_ASSERT(mrone->mo_iod_num <= OBJ_ENUM_UNPACK_MAX_IODS);
 	for (i = 0; i < mrone->mo_iod_num; i++) {
 		size = daos_iods_len(&mrone->mo_iods[i], 1);
 		D_ALLOC(data, size);
@@ -979,9 +980,9 @@ static int
 migrate_fetch_update_single(struct migrate_one *mrone, daos_handle_t oh,
 			    struct ds_cont_child *ds_cont)
 {
-	d_sg_list_t		 sgls[DSS_ENUM_UNPACK_MAX_IODS];
-	d_iov_t			 iov[DSS_ENUM_UNPACK_MAX_IODS] = { 0 };
-	struct dcs_layout	 los[DSS_ENUM_UNPACK_MAX_IODS] = { 0 };
+	d_sg_list_t		 sgls[OBJ_ENUM_UNPACK_MAX_IODS];
+	d_iov_t			 iov[OBJ_ENUM_UNPACK_MAX_IODS] = { 0 };
+	struct dcs_layout	 los[OBJ_ENUM_UNPACK_MAX_IODS] = { 0 };
 	char			*data;
 	daos_size_t		 size;
 	d_iov_t			 csum_iov = {0};
@@ -992,7 +993,7 @@ migrate_fetch_update_single(struct migrate_one *mrone, daos_handle_t oh,
 	int			 i;
 	int			 rc;
 
-	D_ASSERT(mrone->mo_iod_num <= DSS_ENUM_UNPACK_MAX_IODS);
+	D_ASSERT(mrone->mo_iod_num <= OBJ_ENUM_UNPACK_MAX_IODS);
 	for (i = 0; i < mrone->mo_iod_num; i++) {
 		D_ASSERT(mrone->mo_iods[i].iod_type == DAOS_IOD_SINGLE);
 
@@ -1133,7 +1134,7 @@ __migrate_fetch_update_bulk(struct migrate_one *mrone, daos_handle_t oh,
 			    daos_iod_t *iods, int iod_num, daos_epoch_t update_eph,
 			    uint32_t flags, struct ds_cont_child *ds_cont)
 {
-	d_sg_list_t		 sgls[DSS_ENUM_UNPACK_MAX_IODS];
+	d_sg_list_t		 sgls[OBJ_ENUM_UNPACK_MAX_IODS];
 	daos_handle_t		 ioh;
 	int			 rc, rc1, i, sgl_cnt = 0;
 	d_iov_t			csum_iov = {0};
@@ -1144,7 +1145,7 @@ __migrate_fetch_update_bulk(struct migrate_one *mrone, daos_handle_t oh,
 	if (daos_oclass_is_ec(&mrone->mo_oca))
 		mrone_recx_daos2_vos(mrone, iods, iod_num);
 
-	D_ASSERT(iod_num <= DSS_ENUM_UNPACK_MAX_IODS);
+	D_ASSERT(iod_num <= OBJ_ENUM_UNPACK_MAX_IODS);
 	rc = vos_update_begin(ds_cont->sc_hdl, mrone->mo_oid, update_eph, 0,
 			      &mrone->mo_dkey, iod_num, iods, mrone->mo_iods_csums,
 			      0, &ioh, NULL);
@@ -1915,7 +1916,7 @@ migrate_one_insert_recx(struct migrate_one *mrone, daos_iod_t *iod,
  * return 1 means not all recxs of the IOD are merged.
  */
 static int
-migrate_try_merge_recx(struct migrate_one *mo, struct dss_enum_unpack_io *io)
+migrate_try_merge_recx(struct migrate_one *mo, struct dc_obj_enum_unpack_io *io)
 {
 	bool	all_merged = true;
 	int	i;
@@ -1966,7 +1967,7 @@ struct enum_unpack_arg {
 };
 
 static int
-migrate_one_create(struct enum_unpack_arg *arg, struct dss_enum_unpack_io *io)
+migrate_one_create(struct enum_unpack_arg *arg, struct dc_obj_enum_unpack_io *io)
 {
 	struct iter_obj_arg	*iter_arg = arg->arg;
 	daos_unit_oid_t		oid = io->ui_oid;
@@ -2103,7 +2104,7 @@ put:
 }
 
 static int
-migrate_enum_unpack_cb(struct dss_enum_unpack_io *io, void *data)
+migrate_enum_unpack_cb(struct dc_obj_enum_unpack_io *io, void *data)
 {
 	struct enum_unpack_arg	*arg = data;
 	struct migrate_one	*mo;
@@ -2457,8 +2458,8 @@ retry:
 			break;
 		}
 
-		rc = dss_enum_unpack(arg->oid, kds, num, &sgl, p_csum,
-				     migrate_enum_unpack_cb, &unpack_arg);
+		rc = dc_obj_enum_unpack(arg->oid, kds, num, &sgl, p_csum,
+					migrate_enum_unpack_cb, &unpack_arg);
 		if (rc) {
 			D_ERROR("migrate "DF_UOID" failed: %d\n",
 				DP_UOID(arg->oid), rc);
