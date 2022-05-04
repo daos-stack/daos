@@ -69,7 +69,7 @@ ior:
    np: 32
   dfs_destroy: False
   iorflags:
-   flags: "-C -c -k -e -w -g -G 27 -D 150 -Q 1 -vv"
+   flags: "-C -k -e -w -g -G 27 -D 150 -Q 1 -vv"
    read_flags: "-C -k -e -r -R -g -G 27 -D 150 -Q 1 -vv"
   test_file: daos:testFile
   segment_count: 2000000
