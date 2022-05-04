@@ -11,7 +11,7 @@ class PoolCreateQueryTests(PoolTestBase):
     # pylint: disable=too-many-ancestors
     """Pool create tests.
 
-    All of the tests verify pool create performance with 7 servers and 1 client.
+    All of the tests verify pool create response with 4 servers.
     Each server should be configured with full compliment of NVDIMMs and SSDs.
 
     :avocado: recursive
@@ -28,15 +28,16 @@ class PoolCreateQueryTests(PoolTestBase):
         :avocado: tags=all,pr,daily_regression
         :avocado: tags=hw,medium,ib2
         :avocado: tags=pool
-        :avocado: tags=pool_create_tests,create_and_query
+        :avocado: tags=pool_create_and_query
         """
         # Create pool
-        self.add_pool(namespace="/run/pool/*")
+        self.add_pool()
         epsilon_bytes = 1 << 20 # 1MiB
         self.assertLessEqual(abs(self.pool.scm_per_rank - self.pool.scm_size.value), epsilon_bytes,
                 "SCM size of the pool created too different from the given size")
         self.assertGreaterEqual(self.pool.scm_per_rank, self.pool.scm_size.value,
-                "SCM size of the pool created should be at least greater than the given size")
+                "SCM size of the pool created should be at least "
+                "greater than or equal to the given size")
         self.assertLessEqual(abs(self.pool.nvme_per_rank - self.pool.nvme_size.value),
                 epsilon_bytes,
                 "NVMe size of the pool created too different from the given size")
