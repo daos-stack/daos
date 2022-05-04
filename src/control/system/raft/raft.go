@@ -40,6 +40,7 @@ const (
 	raftOpUpdatePoolService
 	raftOpRemovePoolService
 	raftOpIncMapVer
+	raftOpUpdateSystemAttrs
 
 	sysDBFile = "daos_system.db"
 )
@@ -73,6 +74,8 @@ func (ro raftOp) String() string {
 		"addPoolService",
 		"updatePoolService",
 		"removePoolService",
+		"incMapVer",
+		"updateSystemAttrs",
 	}[ro]
 }
 
@@ -309,6 +312,16 @@ func (db *Database) submitPoolUpdate(op raftOp, ps *system.PoolService) error {
 	return db.submitRaftUpdate(data)
 }
 
+// submitSystemAttrsUpdate submits the given system properties update
+// the raft service.
+func (db *Database) submitSystemAttrsUpdate(props map[string]string) error {
+	data, err := createRaftUpdate(raftOpUpdateSystemAttrs, props)
+	if err != nil {
+		return err
+	}
+	return db.submitRaftUpdate(data)
+}
+
 // submitRaftUpdate submits the serialized operation to the raft service.
 func (db *Database) submitRaftUpdate(data []byte) error {
 	return db.raft.withReadLock(func(svc raftService) error {
@@ -364,10 +377,16 @@ func (f *fsm) Apply(l *raft.Log) interface{} {
 		f.data.applyMemberUpdate(c.Op, c.Data, f.EmergencyShutdown)
 	case raftOpAddPoolService, raftOpUpdatePoolService, raftOpRemovePoolService:
 		f.data.applyPoolUpdate(c.Op, c.Data, f.EmergencyShutdown)
+	case raftOpUpdateSystemAttrs:
+		f.data.applySystemUpdate(c.Op, c.Data, f.EmergencyShutdown)
 	default:
 		f.EmergencyShutdown(errors.Errorf("unhandled Apply operation: %d", c.Op))
 		return nil
 	}
+
+	f.data.Lock()
+	f.data.Version++ // Successful updates should increment this value.
+	f.data.Unlock()
 
 	return nil
 }
@@ -437,8 +456,33 @@ func (d *dbData) applyPoolUpdate(op raftOp, data []byte, panicFn func(error)) {
 		panicFn(errors.Errorf("unhandled Pool Service Apply operation: %d", op))
 		return
 	}
+}
 
-	d.MapVersion++
+// applySystemUpdate is responsible for applying the system properties update
+// operation to the database.
+func (d *dbData) applySystemUpdate(op raftOp, data []byte, panicFn func(error)) {
+	props := make(map[string]string)
+	if err := json.Unmarshal(data, &props); err != nil {
+		panicFn(errors.Wrap(err, "failed to decode system properties update"))
+		return
+	}
+
+	d.Lock()
+	defer d.Unlock()
+
+	switch op {
+	case raftOpUpdateSystemAttrs:
+		for k, v := range props {
+			if v == "" {
+				delete(d.System.Attributes, k)
+				continue
+			}
+			d.System.Attributes[k] = v
+		}
+	default:
+		panicFn(errors.Errorf("unhandled System Apply operation: %d", op))
+		return
+	}
 }
 
 // Snapshot is called to support log compaction, so that we don't have to keep
@@ -454,7 +498,7 @@ func (f *fsm) Snapshot() (raft.FSMSnapshot, error) {
 		return nil, err
 	}
 
-	f.log.Debugf("created raft db snapshot (map version %d)", f.data.MapVersion)
+	f.log.Debugf("created raft db snapshot (map version %d; data version %d)", f.data.MapVersion, f.data.Version)
 	return &fsmSnapshot{data}, nil
 }
 
@@ -475,8 +519,10 @@ func (f *fsm) Restore(rc io.ReadCloser) error {
 	f.data.Pools = db.data.Pools
 	f.data.NextRank = db.data.NextRank
 	f.data.MapVersion = db.data.MapVersion
+	f.data.System = db.data.System
+	f.data.Version = db.data.Version
 	f.data.Unlock()
-	f.log.Debugf("db snapshot loaded (map version %d)", db.data.MapVersion)
+	f.log.Debugf("db snapshot loaded (map version %d; data version %d)", db.data.MapVersion, db.data.Version)
 	return nil
 }
 
