@@ -25,8 +25,8 @@ import (
 )
 
 type storageCmd struct {
-	Prepare storagePrepareCmd `command:"prepare" description:"Prepare SCM and NVMe storage attached to remote servers."`
-	Scan    storageScanCmd    `command:"scan" description:"Scan SCM and NVMe storage attached to local server"`
+	Prepare storagePrepareCmd `command:"prepare" description:"Prepare SCM and NVMe storage attached to a local server."`
+	Scan    storageScanCmd    `command:"scan" description:"Scan SCM and NVMe storage attached to a local server"`
 }
 
 type storagePrepareCmd struct {
