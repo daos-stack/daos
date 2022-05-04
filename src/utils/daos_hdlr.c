@@ -1724,8 +1724,6 @@ out:
 	if (num_attrs > 0) {
 		dm_cont_free_usr_attrs(num_attrs, &names, &buffers, &sizes);
 	}
-	if (handle)
-		dlclose(handle);
 	return rc;
 }
 
@@ -1751,8 +1749,6 @@ dm_deserialize_cont_md(struct cmd_args_s *ap, struct dm_args *ca, char *preserve
 	}
 	(*daos_cont_deserialize_props)(ca->dst_poh, preserve_props, props, &ca->cont_layout);
 out:
-	if (handle)
-		dlclose(handle);
 	return rc;
 }
 
@@ -1790,8 +1786,6 @@ dm_deserialize_cont_attrs(struct cmd_args_s *ap, struct dm_args *ca, char *prese
 		dm_cont_free_usr_attrs(num_attrs, &names, &buffers, &sizes);
 	}
 out:
-	if (handle)
-		dlclose(handle);
 	return rc;
 }
 
