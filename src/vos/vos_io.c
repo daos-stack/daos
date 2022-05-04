@@ -1784,6 +1784,10 @@ akey_update(struct vos_io_context *ioc, uint32_t pm_ver, daos_handle_t ak_toh,
 		rc = akey_update_recx(toh, pm_ver, &iod->iod_recxs[i],
 				      recx_csum, iod->iod_size, ioc,
 				      minor_epc);
+		if (rc == 1) {
+			ioc->ic_agg_needed = 1;
+			rc = 0;
+		}
 		if (rc != 0) {
 			VOS_TX_LOG_FAIL(rc, "akey "DF_KEY" update, akey_update_recx failed, "
 					DF_RC"\n", DP_KEY(&iod->iod_name), DP_RC(rc));
@@ -2281,8 +2285,6 @@ vos_update_end(daos_handle_t ioh, uint32_t pm_ver, daos_key_t *dkey, int err,
 
 	tx_started = true;
 
-	vos_dth_set(dth);
-
 	/* Commit the CoS DTXs via the IO PMDK transaction. */
 	if (dtx_is_valid_handle(dth) && dth->dth_dti_cos_count > 0 &&
 	    !dth->dth_cos_done) {
@@ -2379,7 +2381,6 @@ abort:
 	D_FREE(daes);
 	D_FREE(dces);
 	vos_ioc_destroy(ioc, err != 0);
-	vos_dth_set(NULL);
 
 	return err;
 }
