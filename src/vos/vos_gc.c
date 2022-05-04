@@ -129,7 +129,7 @@ gc_drain_evt(struct vos_gc *gc, struct vos_pool *pool, daos_handle_t coh,
 
 	D_DEBUG(DB_TRACE, "drain %s evtree, creds=%d\n", gc->gc_name, *credits);
 	rc = evt_drain(toh, credits, empty);
-	evt_close(toh);
+	D_ASSERT(evt_close(toh) == 0);
 	if (rc)
 		goto failed;
 
