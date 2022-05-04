@@ -1,13 +1,10 @@
-#!/usr/bin/python3 -u
+#!/usr/bin/env python3
 """
   (C) Copyright 2018-2022 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 # pylint: disable=too-many-lines
-# this needs to be disabled as list_tests.py is still using python2
-# pylint: disable=raise-missing-from
-
 
 from argparse import ArgumentParser, RawDescriptionHelpFormatter
 from collections import OrderedDict
@@ -17,11 +14,11 @@ import json
 import os
 import re
 import socket
-import subprocess #nosec
+import subprocess  # nosec
 import site
 import sys
 import time
-from xml.etree.ElementTree import Element, SubElement, tostring #nosec
+from xml.etree.ElementTree import Element, SubElement, tostring  # nosec
 import yaml
 from defusedxml import minidom
 import defusedxml.ElementTree as ET
@@ -43,7 +40,7 @@ except ImportError:
     from tempfile import mkdtemp
     from shutil import rmtree
 
-    class TemporaryDirectory(object):
+    class TemporaryDirectory():
         # pylint: disable=too-few-public-methods
         """Create a temporary directory.
 
@@ -439,12 +436,10 @@ def run_command(cmd):
     print("Running {}".format(" ".join(cmd)))
 
     try:
-        # pylint: disable=consider-using-with
-        process = subprocess.Popen(
-            cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
-            universal_newlines=True)
-        stdout, _ = process.communicate()
-        retcode = process.poll()
+        with subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                              universal_newlines=True) as process:
+            stdout, _ = process.communicate()
+            retcode = process.poll()
     except Exception as error:
         raise RuntimeError("Error executing '{}':\n\t{}".format(" ".join(cmd), error))
     if retcode:
