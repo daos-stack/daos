@@ -244,7 +244,7 @@ const (
 	dpiQueryAll     = C.uint64_t(^uint64(0)) // DPI_ALL is -1
 )
 
-func generateRankSet(ranklist *C.d_rank_list_t) (string) {
+func generateRankSet(ranklist *C.d_rank_list_t) string {
 	if ranklist.rl_nr == 0 {
 		return ""
 	}
@@ -255,7 +255,7 @@ func generateRankSet(ranklist *C.d_rank_list_t) (string) {
 		if i > 0 {
 			rankset += ","
 		}
-		rankset += fmt.Sprint(*(*uint32)(unsafe.Pointer(ranks + uintptr(i) * size)))
+		rankset += fmt.Sprint(*(*uint32)(unsafe.Pointer(ranks + uintptr(i)*size)))
 	}
 	rankset += "]"
 	return rankset
