@@ -98,8 +98,8 @@ class DaosBuild(DfuseTestBase):
         intercept = self.params.get('use_intercept', '/run/intercept/*', default=False)
 
         remote_env = OrderedDict()
-        remote_env['PATH'] = f'{mount_dir}/venv/bin:$PATH'
-        remote_env['VIRTUAL_ENV'] = f'{mount_dir}/venv'
+        remote_env['PATH'] = '{}/venv/bin:$PATH'.format(mount_dir)
+        remote_env['VIRTUAL_ENV'] = '{}/venv'.format(mount_dir)
 
         if intercept:
             remote_env['LD_PRELOAD'] = '/usr/lib64/libioil.so'
@@ -114,14 +114,13 @@ class DaosBuild(DfuseTestBase):
 
         preload_cmd = ';'.join(envs)
 
-        cmds = [f'python3 -m venv {mount_dir}/venv',
-                f'git clone https://github.com/daos-stack/daos.git {build_dir}',
-                f'git -C {build_dir} submodule init',
-                f'git -C {build_dir} submodule update',
-                f'git -C {build_dir} checkout daos-build-test-mux',
+        cmds = ['python3 -m venv {}/venv'.format(mount_dir),
+                'git clone https://github.com/daos-stack/daos.git {}'.format(build_dir),
+                'git -C {} submodule init'.format(build_dir),
+                'git -C {} submodule update'.format(build_dir),
                 'python3 -m pip install pip --upgrade',
-                f'python3 -m pip install -r {build_dir}/requirements.txt',
-                f'scons -C {build_dir} --jobs 50 build --build-deps=yes']
+                'python3 -m pip install -r {}/requirements.txt'.format(build_dir),
+                'scons -C {} --jobs 50 build --build-deps=yes'.format(build_dir)]
         for cmd in cmds:
             try:
                 command = '{};{}'.format(preload_cmd, cmd)

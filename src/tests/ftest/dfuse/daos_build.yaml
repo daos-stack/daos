@@ -3,7 +3,7 @@ hosts:
     - server-A
   test_clients:
     - client-C
-# Limit the test at four hours.
+# Hard limit the test at four hours, however individual tests have lower timeouts.
 timeout: 14400
 server_config:
   name: daos_server
