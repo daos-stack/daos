@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2021 Intel Corporation.
+// (C) Copyright 2020-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -31,10 +31,9 @@ const (
 // pollInstanceState waits for either context to be cancelled/timeout or for the
 // provided validate function to return true for each of the provided instances.
 //
-// Returns true if all instances return true from the validate function within
-// the given timeout, false otherwise. Error is returned if parent context is
-// cancelled or times out.
-func pollInstanceState(ctx context.Context, instances []Engine, validate func(Engine) bool, timeout time.Duration) (bool, error) {
+// Returns true if all instances return true from the validate function, false
+// if context is cancelled before.
+func pollInstanceState(ctx context.Context, instances []Engine, validate func(Engine) bool) error {
 	ready := make(chan struct{})
 	go func() {
 		for {
@@ -45,8 +44,8 @@ func pollInstanceState(ctx context.Context, instances []Engine, validate func(En
 			}
 
 			success := true
-			for _, srv := range instances {
-				if !validate(srv) {
+			for _, ei := range instances {
+				if !validate(ei) {
 					success = false
 				}
 			}
@@ -60,20 +59,15 @@ func pollInstanceState(ctx context.Context, instances []Engine, validate func(En
 
 	select {
 	case <-ctx.Done():
-		return false, ctx.Err()
-	case <-time.After(timeout):
-		return false, nil
+		return ctx.Err()
 	case <-ready:
-		return true, nil
+		return nil
 	}
 }
 
 // drpcOnLocalRanks iterates over local instances issuing dRPC requests in
 // parallel and returning system member results when all have been received.
-func (svc *ControlService) drpcOnLocalRanks(parent context.Context, req *ctlpb.RanksReq, method drpc.Method) ([]*system.MemberResult, error) {
-	ctx, cancel := context.WithTimeout(parent, svc.harness.rankReqTimeout)
-	defer cancel()
-
+func (svc *ControlService) drpcOnLocalRanks(ctx context.Context, req *ctlpb.RanksReq, method drpc.Method) ([]*system.MemberResult, error) {
 	instances, err := svc.harness.FilterInstancesByRankSet(req.GetRanks())
 	if err != nil {
 		return nil, errors.Wrap(err, "sending request over dRPC to local ranks")
@@ -186,25 +180,22 @@ func (svc *ControlService) StopRanks(ctx context.Context, req *ctlpb.RanksReq) (
 	svc.events.DisableEventIDs(events.RASEngineDied)
 	defer svc.events.EnableEventIDs(events.RASEngineDied)
 
-	for _, srv := range instances {
-		if !srv.IsStarted() {
+	for _, ei := range instances {
+		if !ei.IsStarted() {
 			continue
 		}
-		if err := srv.Stop(signal); err != nil {
+		if err := ei.Stop(signal); err != nil {
 			return nil, errors.Wrapf(err, "sending %s", signal)
 		}
 	}
 
 	// ignore poll results as we gather state immediately after
-	if _, err = pollInstanceState(ctx, instances,
-		func(s Engine) bool { return !s.IsStarted() },
-		svc.harness.rankReqTimeout); err != nil {
-
-		return nil, err
+	if err := pollInstanceState(ctx, instances, func(e Engine) bool { return !e.IsStarted() }); err != nil {
+		return nil, errors.Wrap(err, "waiting for engines to stop")
 	}
 
 	results, err := svc.memberStateResults(instances, system.MemberStateStopped, "system stop",
-		"system stop: rank failed to stop within "+svc.harness.rankReqTimeout.String())
+		"system stop: rank failed to stop")
 	if err != nil {
 		return nil, err
 	}
@@ -318,12 +309,8 @@ func (svc *ControlService) ResetFormatRanks(ctx context.Context, req *ctlpb.Rank
 	}
 
 	// ignore poll results as we gather state immediately after
-	if _, err = pollInstanceState(ctx, instances, func(e Engine) bool {
-		return e.isAwaitingFormat()
-	},
-		svc.harness.rankStartTimeout); err != nil {
-
-		return nil, err
+	if err = pollInstanceState(ctx, instances, func(e Engine) bool { return e.isAwaitingFormat() }); err != nil {
+		return nil, errors.Wrap(err, "waiting for engines to await format")
 	}
 
 	// rank cannot be pulled from superblock so use saved value
@@ -375,18 +362,14 @@ func (svc *ControlService) StartRanks(ctx context.Context, req *ctlpb.RanksReq) 
 	}
 
 	// ignore poll results as we gather state immediately after
-	if _, err = pollInstanceState(ctx, instances, func(e Engine) bool {
-		return e.IsReady()
-	},
-		svc.harness.rankStartTimeout); err != nil {
-
-		return nil, err
+	if err = pollInstanceState(ctx, instances, func(e Engine) bool { return e.IsReady() }); err != nil {
+		return nil, errors.Wrap(err, "waiting for engines to start")
 	}
 
 	// instances will update state to "Started" through join or
 	// bootstrap in membership, here just make sure instances are "Ready"
 	results, err := svc.memberStateResults(instances, system.MemberStateReady, "system start",
-		"system start: rank failed to start within "+svc.harness.rankStartTimeout.String())
+		"system start: rank failed to start")
 	if err != nil {
 		return nil, err
 	}
