@@ -154,20 +154,28 @@ func (m *mockFabricInterfaceSetBuilder) BuildPart(_ context.Context, _ *FabricIn
 	return m.buildPartReturn
 }
 
-type mockFabricReadyChecker struct {
-	isReadyCount int
-	isReadyErr   []error
+// MockNetDevStateResult is a structure for injecting results into MockNetDevStateProvider.
+type MockNetDevStateResult struct {
+	State NetDevState
+	Err   error
 }
 
-func (m *mockFabricReadyChecker) CheckFabricReady(iface string) error {
-	if len(m.isReadyErr) == 0 {
-		return nil
+// MockNetDevStateProvider is a fake NetDevStateProvider for testing.
+type MockNetDevStateProvider struct {
+	GetStateReturn []MockNetDevStateResult
+	GetStateCalled []string
+}
+
+func (m *MockNetDevStateProvider) GetNetDevState(iface string) (NetDevState, error) {
+	m.GetStateCalled = append(m.GetStateCalled, iface)
+
+	if len(m.GetStateReturn) == 0 {
+		return NetDevStateReady, nil
 	}
 
-	idx := m.isReadyCount
-	if idx >= len(m.isReadyErr) {
-		idx = len(m.isReadyErr) - 1
+	idx := len(m.GetStateCalled) - 1
+	if idx >= len(m.GetStateReturn) {
+		idx = len(m.GetStateReturn) - 1
 	}
-	m.isReadyCount++
-	return m.isReadyErr[idx]
+	return m.GetStateReturn[idx].State, m.GetStateReturn[idx].Err
 }
