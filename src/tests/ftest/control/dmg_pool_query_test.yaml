@@ -32,7 +32,7 @@ exp_vals:
   pool_status: 0
   total_targets: 8
   active_targets: 8
-  total_nodes: 1
+  total_engines: 1
   disabled_targets: 0
   version: 1
   leader: 0

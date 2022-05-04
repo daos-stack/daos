@@ -1741,7 +1741,7 @@ ds_mgmt_drpc_pool_query(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	resp.total_targets = pool_info.pi_ntargets;
 	resp.disabled_targets = pool_info.pi_ndisabled;
 	resp.active_targets = pool_info.pi_space.ps_ntargets;
-	resp.total_nodes = pool_info.pi_nnodes;
+	resp.total_engines = pool_info.pi_nnodes;
 	resp.leader = pool_info.pi_leader;
 	resp.version = pool_info.pi_map_ver;
 	resp.enabled_ranks = (req->include_enabled_ranks) ? range_list_str : "";

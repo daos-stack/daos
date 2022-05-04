@@ -1417,12 +1417,18 @@ agg_peer_update(struct ec_agg_entry *entry, bool write_parity)
 			DP_UOID(entry->ae_oid), DP_RC(rc));
 		goto out;
 	}
+
+	rc = agg_get_obj_handle(entry);
+	if (rc) {
+		D_ERROR("Failed to open object: "DF_RC"\n", DP_RC(rc));
+		goto out;
+	}
+
 	if (targets != NULL) {
 		for (peer = 0; peer < p; peer++) {
 			peer_loc = &entry->ae_peer_pshards[peer];
 			for (i = 0; i < failed_tgts_cnt; i++) {
-				if (targets[i].ta_comp.co_rank ==
-				    peer_loc->sd_rank) {
+				if (targets[i].ta_comp.co_rank == peer_loc->sd_rank) {
 					D_DEBUG(DB_EPC, DF_UOID" peer parity "
 						"tgt failed rank %d, tgt_idx "
 						"%d.\n", DP_UOID(entry->ae_oid),
@@ -1437,11 +1443,6 @@ agg_peer_update(struct ec_agg_entry *entry, bool write_parity)
 	stripe_ud.asu_write_par = write_parity;
 	stripe_ud.asu_agg_entry = entry;
 
-	rc = agg_get_obj_handle(entry);
-	if (rc) {
-		D_ERROR("Failed to open object: "DF_RC"\n", DP_RC(rc));
-		goto out;
-	}
 	rc = ABT_eventual_create(sizeof(*status), &stripe_ud.asu_eventual);
 	if (rc != ABT_SUCCESS) {
 		rc = dss_abterr2der(rc);
