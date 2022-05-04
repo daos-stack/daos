@@ -54,11 +54,13 @@ class EcodIorHardRebuild(ErasureCodeIor):
         # Do not change the stoneWallingStatusFile during read
         self.ior_cmd.sw_wearout.update(None)
 
+        # remove first ior_read_dataset() calling, as it will zero the stoneWallingStatusFile
+        # and then fail the following 2nd ior_read_dataset (details in DAOS-10342).
         # Disabled Online rebuild
-        self.set_online_rebuild = False
+        # self.set_online_rebuild = False
         # Read IOR data and verify for different EC object kill single server while IOR Read phase
         # is in progress.
-        self.ior_read_dataset()
+        # self.ior_read_dataset()
 
         # Enabled Online rebuild during Read phase
         self.set_online_rebuild = True

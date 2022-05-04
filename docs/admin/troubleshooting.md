@@ -310,12 +310,12 @@ sudo ipcrm -M 0x10242049
 
 ### Errors creating a Pool
 1. Check which engine rank you want to create a pool in with `dmg system query --verbose` and verify their State is Joined.
-1. `DER_NOSPACE(-1007)` appears: Check the size of the NVMe and PMEM. Next, check the size of the existing pool. Then check that this new pool being created will fit into the remaining disk space.
+1. `DER_NOSPACE(-1007)` appears: Check the size of the NVMe and PMem. Next, check the size of the existing pool. Then check that this new pool being created will fit into the remaining disk space.
 
 ### Problems creating a container
 1. Check that the path to daos is your intended binary. It's usually `/usr/bin/daos`.
 1. When the server configuration is changed, it's necessary to restart the agent.
-1. `DER_UNREACH(-1006)`: Check the socket ID consistency between PMEM and NVMe. First, determine which socket you're using with `daos_server network scan -p all`. e.g., if the interface you're using in the engine section is eth0, find which NUMA Socket it belongs to. Next, determine the disks you can use with this socket by calling `daos_server storage scan` or `dmg storage scan`. e.g., if eth0 belongs to NUMA Socket 0, use only the disks with 0 in the Socket ID column.
+1. `DER_UNREACH(-1006)`: Check the socket ID consistency between PMem and NVMe. First, determine which socket you're using with `daos_server network scan -p all`. e.g., if the interface you're using in the engine section is eth0, find which NUMA Socket it belongs to. Next, determine the disks you can use with this socket by calling `daos_server storage scan` or `dmg storage scan`. e.g., if eth0 belongs to NUMA Socket 0, use only the disks with 0 in the Socket ID column.
 1. Check the interface used in the server config (`fabric_iface`) also exists in the client and can communicate with the server.
 1. Check the access_points of the agent config points to the correct server host.
 1. Call `daos pool query` and check that the pool exists and has free space.
@@ -326,112 +326,408 @@ Verify if you're using Infiniband for `fabric_iface`: in the server config. The 
 ## Common Errors and Workarounds
 
 ### Use dmg command without daos_admin privilege
+```
+# Error message or timeout after dmg system query
+$ dmg system query
+ERROR: dmg: Unable to load Certificate Data: could not load cert: stat /etc/daos/certs/admin.crt: no such file or directory
 
-	# Error message or timeout after dmg system query
-	$ dmg system query
-	ERROR: dmg: Unable to load Certificate Data: could not load cert: stat /etc/daos/certs/admin.crt: no such file or directory
+# Workaround
 
-	# Workaround
+# 1. Make sure the admin-host /etc/daos/daos_control.yml is correctly configured.
+	# including:
+		# hostlist: <daos_server_lists>
+		# port: <port_num>
+		# transport\config:
+			# allow_insecure: <true/false>
+			# ca_cert: /etc/daos/certs/daosCA.crt
+			# cert: /etc/daos/certs/admin.crt
+			# key: /etc/daos/certs/admin.key
 
-	# 1. Make sure the admin-host /etc/daos/daos_control.yml is correctly configured.
-		# including:
-			# hostlist: <daos_server_lists>
-			# port: <port_num>
-			# transport\config:
-				# allow_insecure: <true/false>
-				# ca\cert: /etc/daos/certs/daosCA.crt
-				# cert: /etc/daos/certs/admin.crt
-				# key: /etc/daos/certs/admin.key
-
-	# 2. Make sure the admin-host allow_insecure mode matches the applicable servers.
-
+# 2. Make sure the admin-host allow_insecure mode matches the applicable servers.
+```
 ### use daos command before daos_agent started
+```
+$ daos cont create $DAOS_POOL
+daos ERR  src/common/drpc.c:217 unixcomm_connect() Failed to connect to /var/run/daos_agent/daos_agent.sock, errno=2(No such file or directory)
+mgmt ERR  src/mgmt/cli_mgmt.c:222 get_attach_info() failed to connect to /var/run/daos_agent/daos_agent.sock DER_MISC(-1025): 'Miscellaneous error'
+failed to initialize daos: Miscellaneous error (-1025)
 
-	$ daos cont create $DAOS_POOL
-	daos ERR  src/common/drpc.c:217 unixcomm_connect() Failed to connect to /var/run/daos_agent/daos_agent.sock, errno=2(No such file or directory)
-	mgmt ERR  src/mgmt/cli_mgmt.c:222 get_attach_info() failed to connect to /var/run/daos_agent/daos_agent.sock DER_MISC(-1025): 'Miscellaneous error'
-	failed to initialize daos: Miscellaneous error (-1025)
 
-
-	# Work around to check for daos_agent certification and start daos_agent
-		#check for /etc/daos/certs/daosCA.crt, agent.crt and agent.key
-		$ sudo systemctl enable daos_agent.service
-		$ sudo systemctl start daos_agent.service
-
+# Work around to check for daos_agent certification and start daos_agent
+	#check for /etc/daos/certs/daosCA.crt, agent.crt and agent.key
+	$ sudo systemctl enable daos_agent.service
+	$ sudo systemctl start daos_agent.service
+	$ sudo systemctl status daos_agent.service
+```
 ### use daos command with invalid or wrong parameters
+```
+# Lack of providing daos pool_uuid
+$ daos pool list-cont
+pool UUID required
+rc: 2
+daos command (v1.2), libdaos 1.2.0
+usage: daos RESOURCE COMMAND [OPTIONS]
+resources:
+		  pool             pool
+		  container (cont) container
+		  filesystem (fs)  copy to and from a POSIX filesystem
+		  object (obj)     object
+		  shell            Interactive obj ctl shell for DAOS
+		  version          print command version
+		  help             print this message and exit
+use 'daos help RESOURCE' for resource specifics
 
-	# Lack of providing daos pool_uuid
-	$ daos pool list-cont
-	pool UUID required
-	rc: 2
-	daos command (v1.2), libdaos 1.2.0
-	usage: daos RESOURCE COMMAND [OPTIONS]
-	resources:
-			  pool             pool
-			  container (cont) container
-			  filesystem (fs)  copy to and from a POSIX filesystem
-			  object (obj)     object
-			  shell            Interactive obj ctl shell for DAOS
-			  version          print command version
-			  help             print this message and exit
-	use 'daos help RESOURCE' for resource specifics
+# Invalid sub-command cont-list
+$ daos pool cont-list --pool=$DAOS_POOL
+invalid pool command: cont-list
+error parsing command line arguments
+daos command (v1.2), libdaos 1.2.0
+usage: daos RESOURCE COMMAND [OPTIONS]
+resources:
+		  pool             pool
+		  container (cont) container
+		  filesystem (fs)  copy to and from a POSIX filesystem
+		  object (obj)     object
+		  shell            Interactive obj ctl shell for DAOS
+		  version          print command version
+		  help             print this message and exit
+use 'daos help RESOURCE' for resource specifics
 
-	# Invalid sub-command cont-list
-	$ daos pool cont-list --pool=$DAOS_POOL
-	invalid pool command: cont-list
-	error parsing command line arguments
-	daos command (v1.2), libdaos 1.2.0
-	usage: daos RESOURCE COMMAND [OPTIONS]
-	resources:
-			  pool             pool
-			  container (cont) container
-			  filesystem (fs)  copy to and from a POSIX filesystem
-			  object (obj)     object
-			  shell            Interactive obj ctl shell for DAOS
-			  version          print command version
-			  help             print this message and exit
-	use 'daos help RESOURCE' for resource specifics
-
-	# Working daos pool command
-	$ daos pool list-cont --pool=$DAOS_POOL
-	bc4fe707-7470-4b7d-83bf-face75cc98fc
-
+# Working daos pool command
+$ daos pool list-cont --pool=$DAOS_POOL
+bc4fe707-7470-4b7d-83bf-face75cc98fc
+```
 ## dmg pool create failed due to no space
+```
+$ dmg pool create --size=50G mypool
+Creating DAOS pool with automatic storage allocation: 50 GB NVMe + 6.00% SCM
+ERROR: dmg: pool create failed: DER_NOSPACE(-1007): No space on storage target
 
-	$ dmg pool create --size=50G mypool
-	Creating DAOS pool with automatic storage allocation: 50 GB NVMe + 6.00% SCM
-	ERROR: dmg: pool create failed: DER_NOSPACE(-1007): No space on storage target
+# Workaround: dmg storage query scan to find current available storage
+	dmg storage query usage
+	Hosts  SCM-Total SCM-Free SCM-Used NVMe-Total NVMe-Free NVMe-Used
+	-----  --------- -------- -------- ---------- --------- ---------
+	boro-8 17 GB     6.0 GB   65 %     0 B        0 B       N/A
 
-	# Workaround: dmg storage query scan to find current available storage
-		dmg storage query usage
-		Hosts  SCM-Total SCM-Free SCM-Used NVMe-Total NVMe-Free NVMe-Used
-		-----  --------- -------- -------- ---------- --------- ---------
-		boro-8 17 GB     6.0 GB   65 %     0 B        0 B       N/A
+	$ dmg pool create --size=2G mypool
+	Creating DAOS pool with automatic storage allocation: 2.0 GB NVMe + 6.00% SCM
+	Pool created with 100.00% SCM/NVMe ratio
+	-----------------------------------------
+	  UUID          : b5ce2954-3f3e-4519-be04-ea298d776132
+	  Service Ranks : 0
+	  Storage Ranks : 0
+	  Total Size    : 2.0 GB
+	  SCM           : 2.0 GB (2.0 GB / rank)
+	  NVMe          : 0 B (0 B / rank)
 
-		$ dmg pool create --size=2G mypool
-		Creating DAOS pool with automatic storage allocation: 2.0 GB NVMe + 6.00% SCM
-		Pool created with 100.00% SCM/NVMe ratio
-		-----------------------------------------
-		  UUID          : b5ce2954-3f3e-4519-be04-ea298d776132
-		  Service Ranks : 0
-		  Storage Ranks : 0
-		  Total Size    : 2.0 GB
-		  SCM           : 2.0 GB (2.0 GB / rank)
-		  NVMe          : 0 B (0 B / rank)
+	$ dmg storage query usage
+	Hosts  SCM-Total SCM-Free SCM-Used NVMe-Total NVMe-Free NVMe-Used
+	-----  --------- -------- -------- ---------- --------- ---------
+	boro-8 17 GB     2.9 GB   83 %     0 B        0 B       N/A
+```
+### dmg pool destroy force
+```
+# dmg pool destroy Timeout or failed due to pool has active container(s)
+# Workaround pool destroy --force option
 
-		$ dmg storage query usage
-		Hosts  SCM-Total SCM-Free SCM-Used NVMe-Total NVMe-Free NVMe-Used
-		-----  --------- -------- -------- ---------- --------- ---------
-		boro-8 17 GB     2.9 GB   83 %     0 B        0 B       N/A
+	$ dmg pool destroy --pool=$DAOS_POOL --force
+	Pool-destroy command succeeded
+```
+### ipmctl
 
-### dmg pool destroy timeout
+IPMCTL utility is used for Intel® Optane™ persistent memory for managing, diagnostic and testing purpose.
+[IPMCTL user guide](https://docs.pmem.io/ipmctl-user-guide/) has more details about the utility.
 
-	# dmg pool destroy Timeout or failed due to pool has active container(s)
-	# Workaround pool destroy --force option
+DAOS user can use the [diagnostic](https://docs.pmem.io/ipmctl-user-guide/debug/run-diagnostic) and
+[show error log](https://docs.pmem.io/ipmctl-user-guide/debug/show-error-log) functionality to debug the PMem related issues.
 
-		$ dmg pool destroy --pool=$DAOS_POOL --force
-		Pool-destroy command succeeded
+#### ipmctl show command to get the DIMM ID connected to specific CPU.
 
+Example shows Eight PMem DIMMs are connected to both CPU0 and CPU1.
+
+```
+# ipmctl show -topology
+ DimmID | MemoryType                  | Capacity    | PhysicalID| DeviceLocator
+================================================================================
+ 0x0001 | Logical Non-Volatile Device | 507.688 GiB | 0x003a    | CPU0_DIMM_A2
+ 0x0011 | Logical Non-Volatile Device | 507.688 GiB | 0x003c    | CPU0_DIMM_B2
+ 0x0101 | Logical Non-Volatile Device | 507.688 GiB | 0x003e    | CPU0_DIMM_C2
+ 0x0111 | Logical Non-Volatile Device | 507.688 GiB | 0x0040    | CPU0_DIMM_D2
+ 0x0201 | Logical Non-Volatile Device | 507.688 GiB | 0x0042    | CPU0_DIMM_E2
+ 0x0211 | Logical Non-Volatile Device | 507.688 GiB | 0x0044    | CPU0_DIMM_F2
+ 0x0301 | Logical Non-Volatile Device | 507.688 GiB | 0x0046    | CPU0_DIMM_G2
+ 0x0311 | Logical Non-Volatile Device | 507.688 GiB | 0x0048    | CPU0_DIMM_H2
+ 0x1001 | Logical Non-Volatile Device | 507.688 GiB | 0x004a    | CPU1_DIMM_A2
+ 0x1011 | Logical Non-Volatile Device | 507.688 GiB | 0x004c    | CPU1_DIMM_B2
+ 0x1101 | Logical Non-Volatile Device | 507.688 GiB | 0x004e    | CPU1_DIMM_C2
+ 0x1111 | Logical Non-Volatile Device | 507.688 GiB | 0x0050    | CPU1_DIMM_D2
+ 0x1201 | Logical Non-Volatile Device | 507.688 GiB | 0x0052    | CPU1_DIMM_E2
+ 0x1211 | Logical Non-Volatile Device | 507.688 GiB | 0x0054    | CPU1_DIMM_F2
+ 0x1301 | Logical Non-Volatile Device | 507.688 GiB | 0x0056    | CPU1_DIMM_G2
+ 0x1311 | Logical Non-Volatile Device | 507.688 GiB | 0x0058    | CPU1_DIMM_H2
+```
+
+#### Run a quick diagnostic test on clean system
+
+This test will verify the PMem health parameters are under acceptable values. It will return the single State indication
+('OK', 'Warning', 'Failed', 'Aborted') based on health information from all the PMem modules.
+```
+#ipmctl start -diagnostic
+```
+
+#### Run quick diagnostic test on specific dimm from socket. By default it will run diagnostic test for all dimms.
+
+* -dimm : DIMM ID from the ipmctl command above
+```
+#ipmctl start -diagnostic quick -dimm 0x0001
+--Test = Quick
+   State = Ok
+   Message = The quick health check succeeded.
+   --SubTest = Manageability
+          State = Ok
+   --SubTest = Boot status
+          State = Ok
+   --SubTest = Health
+          State = Ok
+```
+
+#### Run quick diagnostic test on system which has health warning.
+
+```
+#ipmctl start -diagnostic quick
+--Test = Quick
+   State = Warning
+   --SubTest = Manageability
+          State = Ok
+   --SubTest = Boot status
+          State = Ok
+   --SubTest = Health
+          State = Warning
+          Message.1 = The quick health check detected that PMem module 0x0001 is reporting a bad health state Noncritical failure (Package Sparing occurred).
+          Message.2 = The quick health check detected that PMem module 0x0001 is reporting that it has no package spares available.
+```
+
+#### Run quick diagnostic test on system where PMem life remaining percentage is below threshold.
+
+```
+#ipmctl start -diagnostic quick
+--Test = Quick
+   State = Warning
+   --SubTest = Manageability
+          State = Ok
+   --SubTest = Boot status
+          State = Ok
+   --SubTest = Health
+          State = Warning
+          Message.1 = The quick health check detected that PMem module 0x0001 is reporting percentage remaining at 10% which is less than the alarm threshold 50%
+```
+
+#### Run showerror Thermal and Media log on clean system.
+
+```
+#ipmctl show -error Thermal
+No errors found on PMem module 0x0001
+No errors found on PMem module 0x0011
+No errors found on PMem module 0x0021
+No errors found on PMem module 0x0101
+No errors found on PMem module 0x0111
+No errors found on PMem module 0x0121
+No errors found on PMem module 0x1001
+No errors found on PMem module 0x1011
+No errors found on PMem module 0x1021
+No errors found on PMem module 0x1101
+No errors found on PMem module 0x1111
+No errors found on PMem module 0x1121
+Show Error executed successfully
+
+#ipmctl show -error Media
+No errors found on PMem module 0x0001
+No errors found on PMem module 0x0011
+No errors found on PMem module 0x0021
+No errors found on PMem module 0x0101
+No errors found on PMem module 0x0111
+No errors found on PMem module 0x0121
+No errors found on PMem module 0x1001
+No errors found on PMem module 0x1011
+No errors found on PMem module 0x1021
+No errors found on PMem module 0x1101
+No errors found on PMem module 0x1111
+No errors found on PMem module 0x1121
+Show Error executed successfully
+```
+
+#### Run showerror command for Thermal and Media log on non clean system.
+
+```
+#ipmctl show -error Thermal  Level=Low
+ DimmID | System Timestamp    | Temperature | Reported
+=============================================================
+ 0x0001 | 02/02/2022 21:45:26 | 86          | User Alarm Trip
+ 0x0001 | 02/03/2022 00:06:36 | 86          | User Alarm Trip
+No errors found on PMem module 0x0011
+No errors found on PMem module 0x0021
+No errors found on PMem module 0x0101
+No errors found on PMem module 0x0111
+No errors found on PMem module 0x0121
+No errors found on PMem module 0x1001
+No errors found on PMem module 0x1011
+No errors found on PMem module 0x1021
+No errors found on PMem module 0x1101
+No errors found on PMem module 0x1111
+No errors found on PMem module 0x1121
+
+# ipmctl show -error Media
+ DimmID | System Timestamp    | Error Type
+=============================================================
+ 0x0001 | 01/12/2022 21:18:53 | 0x04 - Locked/Illegal Access
+ 0x0001 | 01/12/2022 21:18:53 | 0x04 - Locked/Illegal Access
+ ....
+ ....
+ ....
+ 0x1121 | 02/03/2022 16:50:17 | 0x04 - Locked/Illegal Access
+ 0x1121 | 02/03/2022 16:50:17 | 0x04 - Locked/Illegal Access
+Show Error executed successfully
+```
+### ndctl
+
+NDCTL is another utility library for managing the PMem. The ndctl provides functional used for PMem and namespace management,
+device list, update firmware and more.
+It can detect the media errors and scrub it to avoid accesses that could lead to uncorrectable memory error handling events.
+[NDCTL user guide](https://docs.pmem.io/ndctl-user-guide/) has more details about the utility.
+This utility can be used after ipmctl where name space is already created by ipmctl.
+
+#### Read bad blocks data from sys filesystem on clean system.
+
+```
+# cat /sys/block/pmem*/badblocks
+#
+```
+#### ndctl list command on clean system.
+
+Please refer the [ndctl-list](https://docs.pmem.io/ndctl-user-guide/ndctl-man-pages/ndctl-list) command guide for more details about the command options.
+
+Total Sixteen PMem connected to single system. Eight PMem DIMMs are connected to single socket (reference "ipmctl show -topology" section under ipmctl). 
+The SCM modules are typically configured in AppDirect interleaved mode. They are thus presented to the operating system as a single PMem namespace per socket (in fsdax mode).
+
+* -M : Include Media Error
+```
+# ndctl list -M
+[
+  {
+        "dev":"namespace1.0",
+        "mode":"fsdax",
+        "map":"dev",
+        "size":3183575302144,
+        "uuid":"c0d02d75-2629-4393-ae91-44e914c82e7d",
+        "sector_size":512,
+        "align":2097152,
+        "blockdev":"pmem1",
+  },
+  {
+        "dev":"namespace0.0",
+        "mode":"fsdax",
+        "map":"dev",
+        "size":3183575302144,
+        "uuid":"7294d1c0-2145-436b-a2af-3115db839832",
+        "sector_size":512,
+        "align":2097152,
+        "blockdev":"pmem0"
+  }
+]
+```
+
+#### ndctl start-scrub command ran on system which has bad blocks.
+
+Please refer the [ndctl start-scrub](https://docs.pmem.io/ndctl-user-guide/ndctl-man-pages/ndctl-start-scrub) command guide for more information about the command options.
+
+* Address Range Scrub is a device-specific method defined in the ACPI specification. Privileged software can call such as ARS at runtime to retrieve or scan for the locations of uncorrectable memory errors for all persistent memory in the platform.
+Persistent memory uncorrectable errors are persistent. Unlike volatile memory, if power is lost or an application crashes and restarts, the uncorrectable error will remain on the hardware.
+This can lead to an application getting stuck in an infinite loop on IO operation or it might get crash.
+
+* Ideally to use this scrub check when system is recovered from PMem error or when PMem was replace and it need to check for any uncorrectable errors.
+
+**Scrubbing takes time and this command will take longer time (From minutes to hours) based on number of PMem on the system and capacity.**
+
+```
+# ndctl start-scrub
+[
+  {
+	"provider":"ACPI.NFIT",
+	"dev":"ndbus0",
+	"scrub_state":"active",
+	"firmware":{
+	  "activate_method":"reset"
+	}
+  }
+]
+```    
+
+#### ndctl wait-scrub command ran on system which has bad blocks.
+
+Please refer the [ndctl wait-scrub](https://docs.pmem.io/ndctl-user-guide/ndctl-man-pages/untitled-2) command guide for more information about the command options.
+```
+# ndctl wait-scrub
+[
+  {
+	"provider":"ACPI.NFIT",
+	"dev":"ndbus0",
+	"scrub_state":"idle",
+	"firmware":{
+	  "activate_method":"reset"
+	}
+  }
+]
+```
+
+#### Read bad blocks data from sys filesystem after scrubbing is finished.
+
+```
+# cat /sys/block/pmem*/badblocks
+42 8
+```
+
+#### command execution on system where bad blocks are scrubbed.
+
+Please refer the [ndctl list](https://docs.pmem.io/ndctl-user-guide/ndctl-man-pages/ndctl-list) user guide for more information about the command options.
+
+* -M : Include Media Error
+
+```
+# ndctl list -M
+[
+  {
+	"dev":"namespace1.0",
+	"mode":"fsdax",
+	"map":"dev",
+	"size":3183575302144,
+	"uuid":"c0d02d75-2629-4393-ae91-44e914c82e7d",
+	"sector_size":512,
+	"align":2097152,
+	"blockdev":"pmem1",
+	"badblock_count":8,
+	"badblocks":[
+	  {
+		"offset":42,
+		"length":8,
+		"dimms":[
+		  "nmem8",
+		  "nmem10"
+		]
+	  }
+	]
+  },
+  {
+	"dev":"namespace0.0",
+	"mode":"fsdax",
+	"map":"dev",
+	"size":3183575302144,
+	"uuid":"7294d1c0-2145-436b-a2af-3115db839832",
+	"sector_size":512,
+	"align":2097152,
+	"blockdev":"pmem0"
+  }
+]
+```
 ### pmempool
 
 The pmempool is a management tool for Persistent Memory pool files created by PMDK libraries.
