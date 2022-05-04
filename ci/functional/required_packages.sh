@@ -30,7 +30,9 @@ elif [[ $distro = el* ]] || [[ $distro = centos* ]] ||
           hdf5-$openmpi-tests          \
           hdf5-vol-daos-$openmpi-tests \
           hdf5-vol-daos-mpich-tests    \
-          MACSio-mpich                 \
+          simul-mpich                  \
+          simul-$openmpi               \
+	  MACSio-mpich                 \
           MACSio-$openmpi              \
           mpifileutils-mpich"
 else
