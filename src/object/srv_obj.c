@@ -28,6 +28,7 @@
 #include "daos_srv/srv_csum.h"
 #include "obj_rpc.h"
 #include "obj_internal.h"
+#include "../engine/srv_internal.h"
 
 static int
 obj_verify_bio_csum(daos_obj_id_t oid, daos_iod_t *iods,
@@ -224,9 +225,13 @@ struct obj_bulk_args {
 static int
 obj_bulk_comp_cb(const struct crt_bulk_cb_info *cb_info)
 {
+	struct obj_tls		*tls;
 	struct obj_bulk_args	*arg;
 	struct crt_bulk_desc	*bulk_desc;
 	crt_rpc_t		*rpc;
+
+	tls = obj_tls_get();
+	tls->ot_bulk_inflight--;
 
 	if (cb_info->bci_rc != 0)
 		D_ERROR("bulk transfer failed: %d\n", cb_info->bci_rc);
@@ -314,6 +319,7 @@ bulk_transfer_sgl(daos_handle_t ioh, crt_rpc_t *rpc, crt_bulk_t remote_bulk,
 		  off_t remote_off, crt_bulk_op_t bulk_op, bool bulk_bind,
 		  d_sg_list_t *sgl, int sgl_idx, struct obj_bulk_args *p_arg)
 {
+	struct obj_tls		*tls;
 	struct crt_bulk_desc	bulk_desc;
 	crt_bulk_perm_t		bulk_perm;
 	crt_bulk_opid_t		bulk_opid;
@@ -347,6 +353,7 @@ bulk_transfer_sgl(daos_handle_t ioh, crt_rpc_t *rpc, crt_bulk_t remote_bulk,
 	}
 
 	bulk_perm = bulk_op == CRT_BULK_PUT ? CRT_BULK_RO : CRT_BULK_RW;
+	tls = obj_tls_get();
 
 	while (iov_idx < sgl->sg_nr_out) {
 		d_sg_list_t	sgl_sent;
@@ -442,6 +449,8 @@ bulk_transfer_sgl(daos_handle_t ioh, crt_rpc_t *rpc, crt_bulk_t remote_bulk,
 		bulk_desc.bd_local_off	= local_off;
 
 		p_arg->bulks_inflight++;
+		tls->ot_bulk_inflight++;
+
 		if (bulk_bind)
 			rc = crt_bulk_bind_transfer(&bulk_desc,
 				cached_bulk ? cached_bulk_cp : bulk_cp, p_arg,
@@ -453,6 +462,7 @@ bulk_transfer_sgl(daos_handle_t ioh, crt_rpc_t *rpc, crt_bulk_t remote_bulk,
 		if (rc < 0) {
 			D_ERROR("crt_bulk_transfer %d error "DF_RC".\n",
 				sgl_idx, DP_RC(rc));
+			tls->ot_bulk_inflight--;
 			p_arg->bulks_inflight--;
 			if (!cached_bulk)
 				crt_bulk_free(local_bulk);
@@ -465,12 +475,37 @@ bulk_transfer_sgl(daos_handle_t ioh, crt_rpc_t *rpc, crt_bulk_t remote_bulk,
 	return rc;
 }
 
+static void
+obj_io_watchdog(void *args)
+{
+	struct dss_module_info  *dmi = dss_get_module_info();
+	struct obj_tls		*tls = obj_tls_get();
+	struct sched_request	*req;
+	struct sched_req_attr	attr;
+	uuid_t			uuid;
+
+	uuid_generate(uuid);
+	sched_req_attr_init(&attr, SCHED_REQ_FETCH, &uuid);
+
+	req = sched_req_get(&attr, ABT_THREAD_NULL);
+	D_ASSERT(req);
+
+	while (!dss_xstream_exiting(dmi->dmi_xstream)) {
+		printf("XStream-%d: inflight bulk = %d, ioc = %d\n",
+			dmi->dmi_xstream->dx_xs_id, tls->ot_bulk_inflight, tls->ot_ioc);
+		/* print to console for each 10 seconds */
+		sched_req_sleep(req, 10 * 1000);
+	}
+	sched_req_put(req);
+}
+
 static int
 obj_bulk_transfer(crt_rpc_t *rpc, crt_bulk_op_t bulk_op, bool bulk_bind,
 		  crt_bulk_t *remote_bulks, uint64_t *remote_offs,
 		  daos_handle_t ioh, d_sg_list_t **sgls, int sgl_nr,
 		  struct obj_bulk_args *p_arg, struct ds_cont_hdl *coh)
 {
+	struct obj_tls		*tls = obj_tls_get();
 	struct obj_bulk_args	arg = { 0 };
 	int			i, rc, *status, ret;
 	bool			async = true;
@@ -501,6 +536,15 @@ obj_bulk_transfer(crt_rpc_t *rpc, crt_bulk_op_t bulk_op, bool bulk_bind,
 				DP_RC(rc));
 			goto done;
 		}
+	}
+
+	if (!tls->ot_io_watchdog) {
+		struct dss_module_info  *dmi = dss_get_module_info();
+
+		rc = sched_create_thread(dmi->dmi_xstream, obj_io_watchdog, NULL,
+					 ABT_THREAD_ATTR_NULL, NULL, 0);
+		if (rc == 0)
+			tls->ot_io_watchdog = true;
 	}
 
 	for (i = 0; i < sgl_nr; i++) {
@@ -1871,6 +1915,7 @@ out:
 	d_tm_inc_gauge(tls->ot_op_active[opc], 1);
 	ioc->ioc_start_time = daos_get_ntime();
 	ioc->ioc_began = 1;
+	tls->ot_ioc++;
 	return rc;
 }
 
@@ -1936,11 +1981,14 @@ static void
 obj_ioc_end(struct obj_io_context *ioc, int err)
 {
 	if (likely(ioc->ioc_began)) {
+		struct obj_tls *tls = obj_tls_get();
+
 		dss_rpc_cntr_exit(DSS_RC_OBJ, !!err);
 		ioc->ioc_began = 0;
 
 		/** Update sensors */
 		obj_update_sensors(ioc, err);
+		tls->ot_ioc--;
 	}
 	obj_ioc_fini(ioc, err);
 }
