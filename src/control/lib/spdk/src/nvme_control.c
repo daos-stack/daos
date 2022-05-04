@@ -130,8 +130,6 @@ wipe_ctrlr(struct ctrlr_entry *centry)
 
 	res = init_wipe_res();
 
-	fprintf(stderr, "wipe_ctrlr: checkpoint 1\n");
-
 	/** convert pci addr to string */
 	rc = spdk_pci_addr_fmt(res->ctrlr_pci_addr, sizeof(res->ctrlr_pci_addr),
 			       &centry->pci_addr);
@@ -140,8 +138,6 @@ wipe_ctrlr(struct ctrlr_entry *centry)
 		return res;
 	}
 
-	fprintf(stderr, "wipe_ctrlr: checkpoint 2\n");
-
 	/** allocate NVMe queue pair for the controller */
 	qpair = spdk_nvme_ctrlr_alloc_io_qpair(centry->ctrlr, NULL, 0);
 	if (qpair == NULL) {
@@ -149,8 +145,6 @@ wipe_ctrlr(struct ctrlr_entry *centry)
 		res->rc = -ENOMEM;
 		return res;
 	}
-
-	fprintf(stderr, "wipe_ctrlr: checkpoint 3\n");
 
 	/** allocate a 4K page, with 4K alignment */
 	buf =  spdk_dma_zmalloc(4096, 4096, NULL);
@@ -167,15 +161,11 @@ wipe_ctrlr(struct ctrlr_entry *centry)
 	while (nentry != NULL) {
 		uint32_t sector_size;
 
-		fprintf(stderr, "wipe_ctrlr: checkpoint 4-A\n");
-
 		if (tmp == NULL) {
 			/** first iteration */
 			tmp = res;
-			fprintf(stderr, "wipe_ctrlr: checkpoint 4-B\n");
 		} else {
 			/** allocate new result */
-			fprintf(stderr, "wipe_ctrlr: checkpoint 4-C\n");
 			res = init_wipe_res();
 			rc = spdk_pci_addr_fmt(res->ctrlr_pci_addr, sizeof(res->ctrlr_pci_addr),
 					       &centry->pci_addr);
@@ -185,7 +175,6 @@ wipe_ctrlr(struct ctrlr_entry *centry)
 			}
 			res->next = tmp;
 			tmp = res;
-			fprintf(stderr, "wipe_ctrlr: checkpoint 4-D\n");
 		}
 
 		/** retrieve namespace ID and sector size */
@@ -206,7 +195,6 @@ wipe_ctrlr(struct ctrlr_entry *centry)
 			break;
 		}
 
-		fprintf(stderr, "wipe_ctrlr: checkpoint 4-E\n");
 		/** wait for command completion */
 		while (data.result == LBA0_WRITE_PENDING) {
 			rc = spdk_nvme_qpair_process_completions(qpair, 0);
@@ -216,7 +204,6 @@ wipe_ctrlr(struct ctrlr_entry *centry)
 			}
 		}
 
-		fprintf(stderr, "wipe_ctrlr: checkpoint 4-F\n");
 		/** check command result */
 		if (data.result != LBA0_WRITE_SUCCESS) {
 			snprintf(res->info, sizeof(res->info),
@@ -224,14 +211,12 @@ wipe_ctrlr(struct ctrlr_entry *centry)
 			res->rc = -1;
 			break;
 		}
-		fprintf(stderr, "wipe_ctrlr: checkpoint 4-H\n");
 
 		nentry = nentry->next;
 	}
 
 	spdk_free(buf);
 	spdk_nvme_ctrlr_free_io_qpair(qpair);
-	fprintf(stderr, "wipe_ctrlr: checkpoint 5\n");
 
 	return res;
 }
@@ -243,11 +228,9 @@ wipe_ctrlrs(void)
 	struct wipe_res_t	*start = NULL, *end = NULL;
 
 	while (centry != NULL) {
-		fprintf(stderr, "wipe_ctrlrs: checkpoint 1-A\n");
 		struct wipe_res_t *results = wipe_ctrlr(centry);
 		struct wipe_res_t *tmp = results;
 
-		fprintf(stderr, "wipe_ctrlrs: checkpoint 1-B\n");
 		if (results == NULL) {
 			continue;
 		}
@@ -265,8 +248,6 @@ wipe_ctrlrs(void)
 		}
 
 		centry = centry->next;
-
-		fprintf(stderr, "wipe_ctrlrs: checkpoint 1-C\n");
 	}
 
 	return start;
@@ -278,7 +259,6 @@ nvme_wipe_namespaces(void)
 	struct ret_t	*ret;
 	int		 rc;
 
-	fprintf(stderr, "nvme_wipe_namespaces: checkpoint 1\n");
 	ret = init_ret();
 
 	/*
@@ -295,14 +275,12 @@ nvme_wipe_namespaces(void)
 		goto out;
 	}
 
-	fprintf(stderr, "nvme_wipe_namespaces: checkpoint 2\n");
 	if (g_controllers == NULL) {
 		snprintf(ret->info, sizeof(ret->info), "no controllers found\n");
 		ret->rc = -ENOENT;
 		goto out;
 	}
 
-	fprintf(stderr, "nvme_wipe_namespaces: checkpoint 3\n");
 	ret->wipe_results = wipe_ctrlrs();
 	if (ret->wipe_results == NULL) {
 		snprintf(ret->info, sizeof(ret->info), "no namespaces on controller\n");
@@ -310,10 +288,8 @@ nvme_wipe_namespaces(void)
 		goto out;
 	}
 
-	fprintf(stderr, "nvme_wipe_namespaces: checkpoint 4\n");
 out:
 	cleanup(true);
-	fprintf(stderr, "nvme_wipe_namespaces: checkpoint 5\n");
 	return ret;
 }
 
