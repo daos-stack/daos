@@ -436,7 +436,7 @@ ERROR: dmg: pool create failed: DER_NOSPACE(-1007): No space on storage target
 
 ## Diagnostic and Recovery Tools
 
-!!! WARNING : Please be careful and use this tool under supervision of DAOS export.
+!!! WARNING : Please be careful and use this tool under supervision of DAOS support team.
 
 In case of PMEM device restored to healthy state, the ext4 filesystem
 created on each PMEM devices may need to verified and repaired if needed.
