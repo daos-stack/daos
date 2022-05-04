@@ -8,6 +8,7 @@ package main
 
 import (
 	"fmt"
+	"io/ioutil"
 	"os"
 	"os/user"
 	"strings"
@@ -23,6 +24,8 @@ import (
 	"github.com/daos-stack/daos/src/control/server/config"
 	"github.com/daos-stack/daos/src/control/server/storage"
 )
+
+const iommuPath = "/sys/class/iommu"
 
 type storageCmd struct {
 	Prepare storagePrepareCmd `command:"prepare" description:"Prepare SCM and NVMe storage attached to remote servers."`
@@ -47,19 +50,23 @@ func (es *errs) add(err error) error {
 	return nil
 }
 
+func iommuDetected() bool {
+	// Simple test for now -- if the path exists and contains
+	// DMAR entries, we assume that's good enough.
+	dmars, err := ioutil.ReadDir(iommuPath)
+	if err != nil {
+		return false
+	}
+
+	return len(dmars) > 0
+}
+
 type nvmePrepFn func(storage.BdevPrepareRequest) (*storage.BdevPrepareResponse, error)
 
-func (cmd *storagePrepareCmd) prepNvme(scanErrors *errs, prep nvmePrepFn) error {
+func (cmd *storagePrepareCmd) prepNvme(prep nvmePrepFn, iommuEnabled bool) error {
 	if doPrep, _, err := cmd.Validate(); err != nil || !doPrep {
 		return err
 	}
-
-	op := "Prepare"
-	if cmd.Reset {
-		op = "Reset"
-	}
-
-	cmd.Info(op + " locally-attached NVMe storage...")
 
 	if cmd.TargetUser == "" {
 		runningUser, err := user.Current()
@@ -69,19 +76,39 @@ func (cmd *storagePrepareCmd) prepNvme(scanErrors *errs, prep nvmePrepFn) error 
 		cmd.TargetUser = runningUser.Username
 	}
 
-	// Prepare NVMe access through SPDK
-	if _, err := prep(storage.BdevPrepareRequest{
+	if cmd.TargetUser != "root" {
+		if cmd.DisableVFIO {
+			return errors.New("VFIO can not be disabled if running as non-root user")
+		}
+		if !iommuEnabled {
+			return errors.New("no IOMMU detected, to discover NVMe devices enable " +
+				"IOMMU per the DAOS Admin Guide")
+		}
+	}
+
+	op := "Prepare"
+	if cmd.Reset {
+		op = "Reset"
+	}
+
+	cmd.Info(op + " locally-attached NVMe storage...")
+
+	req := storage.BdevPrepareRequest{
 		HugePageCount: cmd.NrHugepages,
 		TargetUser:    cmd.TargetUser,
 		PCIAllowList:  cmd.PCIAllowList,
 		PCIBlockList:  cmd.PCIBlockList,
 		Reset_:        cmd.Reset,
-		EnableVMD:     true, // vmd will be prepared if available
-	}); err != nil {
-		return scanErrors.add(err)
+		DisableVFIO:   cmd.DisableVFIO,
+		EnableVMD:     !cmd.DisableVFIO && iommuEnabled, // vmd will be prepared if available
 	}
 
-	return nil
+	cmd.Debugf("request parameters: %+v", req)
+
+	// Prepare NVMe access through SPDK
+	_, err := prep(req)
+
+	return err
 }
 
 type scmPrepFn func(storage.ScmPrepareRequest) (*storage.ScmPrepareResponse, error)
@@ -195,8 +222,8 @@ func (cmd *storagePrepareCmd) Execute(args []string) error {
 
 	scanErrors := make(errs, 0, 2)
 
-	if err := cmd.prepNvme(&scanErrors, cmd.scs.NvmePrepare); err != nil {
-		return err
+	if err := cmd.prepNvme(cmd.scs.NvmePrepare, iommuDetected()); err != nil {
+		scanErrors.add(err)
 	}
 
 	if err := cmd.prepScm(&scanErrors, cmd.scs.ScmPrepare); err != nil {
