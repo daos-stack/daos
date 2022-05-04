@@ -470,7 +470,7 @@ func TestServer_prepBdevStorage(t *testing.T) {
 			}
 
 			// ensure that the engine affinities are set.
-			if err := cfg.SetEngineAffinities(log, nil); err != nil {
+			if err := cfg.SetEngineAffinities(log); err != nil {
 				t.Fatal(err)
 			}
 

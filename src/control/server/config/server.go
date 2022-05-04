@@ -21,7 +21,6 @@ import (
 	"github.com/daos-stack/daos/src/control/build"
 	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/fault"
-	"github.com/daos-stack/daos/src/control/lib/hardware"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/security"
 	"github.com/daos-stack/daos/src/control/server/engine"
@@ -654,21 +653,30 @@ func (cfg *Server) validateMultiServerConfig(log logging.Logger) error {
 }
 
 var (
-	errNoAffinityDetected = errors.New("no NUMA affinity detected")
+	// ErrNoAffinityDetected is a sentinel error used to indicate that no affinity was detected.
+	ErrNoAffinityDetected = errors.New("no NUMA affinity detected")
 )
 
-func detectEngineAffinity(log logging.Logger, eCfg *engine.Config, fis *hardware.FabricInterfaceSet) (node uint, err error) {
-	// TODO: Add pmem as the primary source of NUMA affinity, if available,
-	// then fall back to other sources if necessary.
-	if fis != nil {
-		fi, err := fis.GetInterfaceOnNetDevice(eCfg.Fabric.Interface, eCfg.Fabric.Provider)
-		if err != nil {
-			return 0, err
+// EngineAffinityFn defines a function which returns the NUMA node affinity of a given engine.
+type EngineAffinityFn func(logging.Logger, *engine.Config) (uint, error)
+
+func detectEngineAffinity(log logging.Logger, engineCfg *engine.Config, affSources ...EngineAffinityFn) (node uint, err error) {
+	for _, affSource := range affSources {
+		if affSource == nil {
+			return 0, errors.New("nil affinity source")
 		}
-		return fi.NUMANode, nil
+
+		node, err = affSource(log, engineCfg)
+		if err == nil {
+			return
+		}
+
+		if err != nil && err != ErrNoAffinityDetected {
+			return
+		}
 	}
 
-	return 0, errNoAffinityDetected
+	return 0, ErrNoAffinityDetected
 }
 
 func setEngineAffinity(log logging.Logger, engineCfg *engine.Config, node uint) error {
@@ -704,13 +712,13 @@ func setEngineAffinity(log logging.Logger, engineCfg *engine.Config, node uint) 
 }
 
 // SetEngineAffinities sets the NUMA node affinity for all engines in the configuration.
-func (cfg *Server) SetEngineAffinities(log logging.Logger, fis *hardware.FabricInterfaceSet) error {
+func (cfg *Server) SetEngineAffinities(log logging.Logger, affSources ...EngineAffinityFn) error {
 	defaultAffinity := uint(0)
 
 	for idx, engineCfg := range cfg.Engines {
-		numaAffinity, err := detectEngineAffinity(log, engineCfg, fis)
+		numaAffinity, err := detectEngineAffinity(log, engineCfg, affSources...)
 		if err != nil {
-			if err != errNoAffinityDetected {
+			if err != ErrNoAffinityDetected {
 				return errors.Wrap(err, "failure while detecting engine affinity")
 			}
 
