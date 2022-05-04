@@ -76,8 +76,9 @@ def _preprocess_emitter(source, target, env):
     """generate target list for preprocessor builder"""
     target = []
     for src in source:
+        dirname = os.path.dirname(src.abspath)
         basename = os.path.basename(src.abspath)
-        (base, _ext) = os.path.splitext(basename)
+        (base, ext) = os.path.splitext(basename)
         prefix = ""
         for var in ["OBJPREFIX", "OBJSUFFIX", "SHOBJPREFIX", "SHOBJSUFFIX"]:
             mod = env.subst("$%s" % var)
@@ -87,7 +88,9 @@ def _preprocess_emitter(source, target, env):
                 continue
             if mod != "":
                 prefix = prefix + "_" + mod
-        target.append(prefix + base + "_pp.c")
+            newtarget = dirname + '/' + prefix + base + "_pp" + ext
+            print("newtarget = %s\n" % newtarget)
+            target.append(dirname + '/' + prefix + base + "_pp" + ext)
     return target, source
 
 def generate(env):
