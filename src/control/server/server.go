@@ -36,6 +36,16 @@ import (
 	"github.com/daos-stack/daos/src/control/system/raft"
 )
 
+func genFiAffFn(fis *hardware.FabricInterfaceSet) config.EngineAffinityFn {
+	return func(l logging.Logger, e *engine.Config) (uint, error) {
+		fi, err := fis.GetInterfaceOnNetDevice(e.Fabric.Interface, e.Fabric.Provider)
+		if err != nil {
+			return 0, err
+		}
+		return fi.NUMANode, nil
+	}
+}
+
 func processConfig(log logging.Logger, cfg *config.Server, fis *hardware.FabricInterfaceSet) error {
 	processFabricProvider(cfg)
 
@@ -44,7 +54,12 @@ func processConfig(log logging.Logger, cfg *config.Server, fis *hardware.FabricI
 		return errors.Wrapf(err, "retrieve hugepage info")
 	}
 
-	if err := cfg.SetEngineAffinities(log, fis); err != nil {
+	affinitySources := []config.EngineAffinityFn{
+		// TODO: Add pmem as the primary source of NUMA affinity, if available,
+		// then fall back to other sources as necessary.
+		genFiAffFn(fis),
+	}
+	if err := cfg.SetEngineAffinities(log, affinitySources...); err != nil {
 		return errors.Wrap(err, "failed to set engine affinities")
 	}
 

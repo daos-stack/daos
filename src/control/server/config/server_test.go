@@ -22,7 +22,6 @@ import (
 	"github.com/pkg/errors"
 
 	. "github.com/daos-stack/daos/src/control/common"
-	"github.com/daos-stack/daos/src/control/lib/hardware"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/security"
 	"github.com/daos-stack/daos/src/control/server/engine"
@@ -1277,53 +1276,60 @@ func TestServerConfig_SaveActiveConfig(t *testing.T) {
 }
 
 func TestConfig_detectEngineAffinity(t *testing.T) {
+	genAffFn := func(node uint, err error) EngineAffinityFn {
+		return func(logging.Logger, *engine.Config) (uint, error) {
+			return node, err
+		}
+	}
+
 	for name, tc := range map[string]struct {
 		cfg         *engine.Config
-		fi          *hardware.FabricInterface
+		affSrcSet   []EngineAffinityFn
 		expErr      error
 		expDetected uint
 	}{
-		"matching iface": {
-			cfg: engine.MockConfig().
-				WithFabricInterface("ib1").
-				WithFabricProvider("ofi+verbs"),
-			fi: &hardware.FabricInterface{
-				Name:         "ib1",
-				NetInterface: "ib1",
-				NUMANode:     1,
-				Providers:    NewStringSet("ofi+verbs"),
+		"first source misses; second hits": {
+			cfg: engine.MockConfig(),
+			affSrcSet: []EngineAffinityFn{
+				genAffFn(0, ErrNoAffinityDetected),
+				genAffFn(1, nil),
 			},
 			expDetected: 1,
 		},
-		"missing iface": {
-			cfg: engine.MockConfig().
-				WithFabricInterface("ib1").
-				WithFabricProvider("ofi+verbs"),
-			fi: &hardware.FabricInterface{
-				Name:         "ib2",
-				NetInterface: "ib2",
-				NUMANode:     1,
-				Providers:    NewStringSet("ofi+verbs"),
+		"first source hits": {
+			cfg: engine.MockConfig(),
+			affSrcSet: []EngineAffinityFn{
+				genAffFn(1, nil),
+				genAffFn(2, nil),
 			},
-			expErr: errors.New("not found"),
+			expDetected: 1,
 		},
-		"nil iface set": {
-			cfg: engine.MockConfig().
-				WithFabricInterface("ib0").
-				WithFabricProvider("ofi+verbs"),
-			expErr: errNoAffinityDetected,
+		"first source errors": {
+			cfg: engine.MockConfig(),
+			affSrcSet: []EngineAffinityFn{
+				genAffFn(1, errors.New("fatal")),
+				genAffFn(2, nil),
+			},
+			expErr: errors.New("fatal"),
+		},
+		"no sources hit": {
+			cfg: engine.MockConfig(),
+			affSrcSet: []EngineAffinityFn{
+				genAffFn(1, ErrNoAffinityDetected),
+				genAffFn(2, ErrNoAffinityDetected),
+			},
+			expErr: ErrNoAffinityDetected,
+		},
+		"no sources defined": {
+			cfg:    engine.MockConfig(),
+			expErr: ErrNoAffinityDetected,
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
 			defer ShowBufferOnFailure(t, buf)
 
-			var fis *hardware.FabricInterfaceSet
-			if tc.fi != nil {
-				fis = hardware.NewFabricInterfaceSet(tc.fi)
-			}
-
-			detected, err := detectEngineAffinity(log, tc.cfg, fis)
+			detected, err := detectEngineAffinity(log, tc.cfg, tc.affSrcSet...)
 			CmpErr(t, tc.expErr, err)
 			if tc.expErr != nil {
 				return
@@ -1390,15 +1396,23 @@ func TestConfig_SetEngineAffinities(t *testing.T) {
 	baseSrvCfg := func() *Server {
 		return DefaultServer()
 	}
+	genAffFn := func(iface string, node uint) EngineAffinityFn {
+		return func(_ logging.Logger, cfg *engine.Config) (uint, error) {
+			if iface == cfg.Fabric.Interface {
+				return node, nil
+			}
+			return 0, ErrNoAffinityDetected
+		}
+	}
 
 	for name, tc := range map[string]struct {
 		cfg         *Server
-		fis         []*hardware.FabricInterface
+		affSrcSet   []EngineAffinityFn
 		expNumaSet  []int
 		expFabNumas []int
 		expErr      error
 	}{
-		"nil iface set (default NUMA nodes)": {
+		"no affinity detected (default NUMA nodes)": {
 			cfg: baseSrvCfg().
 				WithEngines(
 					engine.MockConfig().
@@ -1450,13 +1464,8 @@ func TestConfig_SetEngineAffinities(t *testing.T) {
 						WithFabricInterface("ib0").
 						WithFabricProvider("ofi+verbs"),
 				),
-			fis: []*hardware.FabricInterface{
-				{
-					Name:         "ib0",
-					NetInterface: "ib0",
-					NUMANode:     1,
-					Providers:    NewStringSet("ofi+verbs"),
-				},
+			affSrcSet: []EngineAffinityFn{
+				genAffFn("ib0", 1),
 			},
 			expNumaSet: []int{1},
 		},
@@ -1467,13 +1476,8 @@ func TestConfig_SetEngineAffinities(t *testing.T) {
 						WithFabricInterface("ib0").
 						WithFabricProvider("ofi+verbs"),
 				),
-			fis: []*hardware.FabricInterface{
-				{
-					Name:         "ib0",
-					NetInterface: "ib0",
-					NUMANode:     0,
-					Providers:    NewStringSet("ofi+verbs"),
-				},
+			affSrcSet: []EngineAffinityFn{
+				genAffFn("ib0", 0),
 			},
 			expNumaSet: []int{-1},
 		},
@@ -1487,19 +1491,9 @@ func TestConfig_SetEngineAffinities(t *testing.T) {
 						WithFabricInterface("ib1").
 						WithFabricProvider("ofi+verbs"),
 				),
-			fis: []*hardware.FabricInterface{
-				{
-					Name:         "ib0",
-					NetInterface: "ib0",
-					NUMANode:     0,
-					Providers:    NewStringSet("ofi+verbs"),
-				},
-				{
-					Name:         "ib1",
-					NetInterface: "ib1",
-					NUMANode:     0,
-					Providers:    NewStringSet("ofi+verbs"),
-				},
+			affSrcSet: []EngineAffinityFn{
+				genAffFn("ib0", 0),
+				genAffFn("ib1", 0),
 			},
 			expNumaSet: []int{0, 0},
 		},
@@ -1513,19 +1507,9 @@ func TestConfig_SetEngineAffinities(t *testing.T) {
 						WithFabricInterface("ib1").
 						WithFabricProvider("ofi+verbs"),
 				),
-			fis: []*hardware.FabricInterface{
-				{
-					Name:         "ib0",
-					NetInterface: "ib0",
-					NUMANode:     1,
-					Providers:    NewStringSet("ofi+verbs"),
-				},
-				{
-					Name:         "ib1",
-					NetInterface: "ib1",
-					NUMANode:     2,
-					Providers:    NewStringSet("ofi+verbs"),
-				},
+			affSrcSet: []EngineAffinityFn{
+				genAffFn("ib0", 1),
+				genAffFn("ib1", 2),
 			},
 			expNumaSet: []int{1, 2},
 		},
@@ -1541,19 +1525,9 @@ func TestConfig_SetEngineAffinities(t *testing.T) {
 						WithFabricInterface("ib1").
 						WithFabricProvider("ofi+verbs"),
 				),
-			fis: []*hardware.FabricInterface{
-				{
-					Name:         "ib0",
-					NetInterface: "ib0",
-					NUMANode:     1,
-					Providers:    NewStringSet("ofi+verbs"),
-				},
-				{
-					Name:         "ib1",
-					NetInterface: "ib1",
-					NUMANode:     2,
-					Providers:    NewStringSet("ofi+verbs"),
-				},
+			affSrcSet: []EngineAffinityFn{
+				genAffFn("ib0", 1),
+				genAffFn("ib1", 2),
 			},
 			expNumaSet: []int{1, 2},
 		},
@@ -1569,19 +1543,9 @@ func TestConfig_SetEngineAffinities(t *testing.T) {
 						WithFabricInterface("ib1").
 						WithFabricProvider("ofi+verbs"),
 				),
-			fis: []*hardware.FabricInterface{
-				{
-					Name:         "ib0",
-					NetInterface: "ib0",
-					NUMANode:     1,
-					Providers:    NewStringSet("ofi+verbs"),
-				},
-				{
-					Name:         "ib1",
-					NetInterface: "ib1",
-					NUMANode:     2,
-					Providers:    NewStringSet("ofi+verbs"),
-				},
+			affSrcSet: []EngineAffinityFn{
+				genAffFn("ib0", 1),
+				genAffFn("ib1", 2),
 			},
 			expNumaSet: []int{2, 1},
 		},
@@ -1597,19 +1561,9 @@ func TestConfig_SetEngineAffinities(t *testing.T) {
 						WithFabricInterface("ib1").
 						WithFabricProvider("ofi+verbs"),
 				),
-			fis: []*hardware.FabricInterface{
-				{
-					Name:         "ib0",
-					NetInterface: "ib0",
-					NUMANode:     1,
-					Providers:    NewStringSet("ofi+verbs"),
-				},
-				{
-					Name:         "ib1",
-					NetInterface: "ib1",
-					NUMANode:     2,
-					Providers:    NewStringSet("ofi+verbs"),
-				},
+			affSrcSet: []EngineAffinityFn{
+				genAffFn("ib0", 1),
+				genAffFn("ib1", 2),
 			},
 			expNumaSet:  []int{-1, -1}, // PinnedNumaNode should not be set
 			expFabNumas: []int{1, 2},
@@ -1622,11 +1576,7 @@ func TestConfig_SetEngineAffinities(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
 			defer ShowBufferOnFailure(t, buf)
 
-			var fis *hardware.FabricInterfaceSet
-			if len(tc.fis) > 0 {
-				fis = hardware.NewFabricInterfaceSet(tc.fis...)
-			}
-			gotErr := tc.cfg.SetEngineAffinities(log, fis)
+			gotErr := tc.cfg.SetEngineAffinities(log, tc.affSrcSet...)
 			CmpErr(t, tc.expErr, gotErr)
 			if tc.expErr != nil {
 				return
