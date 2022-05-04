@@ -45,7 +45,8 @@ class ZeroConfigTest(TestWithServers):
         try:
             # Find any ib* device in the listing and initially use default numa and domain values
             for index, interface in enumerate(re.findall(r"ib\d", "\n".join(results[0]["stdout"]))):
-                self.interfaces[interface] = {"numa": index, "domain": "hfi1_{}".format(index)}
+                self.interfaces[interface] = {
+                    "numa": index, "domain": "hfi1_{}".format(index), "port": "1"}
         except (IndexError, KeyError) as error:
             self.log.error("Error obtaining interfaces: %s", str(error))
             self.fail("Error obtaining interfaces - unexpected error")
@@ -58,14 +59,11 @@ class ZeroConfigTest(TestWithServers):
         results = run_pcmd(self.hostlist_servers, command)
         try:
             if results[0]["exit_status"] == 0:
-                port = []
-                if "ucx" in self.server_managers[0].get_config_value("provider"):
-                    # Include the port number in the OFI_DOMAIN assignment for UCX
-                    port = ["1"]
                 regex = r"(mlx\d_\d)\s+net-(ib\d)\s+(\d)"
                 for match in re.findall(regex, "\n".join(results[0]["stdout"])):
                     self.interfaces[match[1]]["numa"] = int(match[2])
-                    self.interfaces[match[1]]["domain"] = ":".join([match[0]] + port)
+                    self.interfaces[match[1]]["domain"] = match[0]
+                    self.interfaces[match[1]]["port"] = "1"
         except (IndexError, KeyError, ValueError) as error:
             self.log.error("Error obtaining interfaces: %s", str(error))
             self.fail("Error obtaining interfaces - unexpected error")
@@ -89,7 +87,7 @@ class ZeroConfigTest(TestWithServers):
             # Check the port counter for each interface on all of the hosts
             counter_file = os.path.join(
                 os.sep, "sys", "class", "infiniband", self.interfaces[interface]["domain"], "ports",
-                "1", "counters", port_counter)
+                self.interfaces[interface]["port"], "counters", port_counter)
             check_result = check_file_exists(hosts, counter_file)
             if not check_result[0]:
                 self.fail("{}: {} not found".format(check_result[1], counter_file))
@@ -169,10 +167,13 @@ class ZeroConfigTest(TestWithServers):
         log_file = "daos_racer_{}_{}.log".format(exp_iface, env)
 
         # Add FI_LOG_LEVEL to get more info on device issues
+        exp_iface_port = []
+        if "ucx" in self.server_managers[0].get_config_value("provider"):
+            exp_iface_port = [self.interfaces[exp_iface]["port"]]
         racer_env = daos_racer.get_environment(self.server_managers[0], log_file)
         racer_env["FI_LOG_LEVEL"] = "info"
         racer_env["D_LOG_MASK"] = "INFO,object=ERR,placement=ERR"
-        racer_env["OFI_DOMAIN"] = self.interfaces[exp_iface]["domain"]
+        racer_env["OFI_DOMAIN"] = ":".join([self.interfaces[exp_iface]["domain"]] + exp_iface_port)
         daos_racer.set_environment(racer_env)
 
         # Run client
@@ -221,14 +222,12 @@ class ZeroConfigTest(TestWithServers):
         """
         env_state = self.params.get("env_state", '/run/zero_config/*')
 
-        # Configure the daos server
-        self.setup_servers()
-
         # Get the available interfaces and their domains
         self.get_device_info()
         exp_iface = random.choice(list(self.interfaces.keys())) #nosec
 
-        # Update the server network configuration
+        # Configure the daos server
+        self.setup_servers()
         self.assertTrue(
             self.server_managers[0].set_config_value(
                 "fabric_iface", exp_iface),
