@@ -178,13 +178,63 @@ is_arith_func(const char *part_type, size_t part_type_s)
 }
 
 static bool
-is_numeric_type(const char *data_type, size_t data_type_s)
+type_is_uint(const char *type, size_t type_s)
+{
+	size_t len = strlen("DAOS_FILTER_TYPE_UINTEGER");
+
+	if (type_s != len + 1)
+		return false;
+	return !strncmp(type, "DAOS_FILTER_TYPE_UINTEGER", len);
+}
+
+static bool
+type_is_int(const char *type, size_t type_s)
+{
+	size_t len = strlen("DAOS_FILTER_TYPE_INTEGER");
+
+	if (type_s != len + 1)
+		return false;
+	return !strncmp(type, "DAOS_FILTER_TYPE_INTEGER", len);
+}
+
+static bool
+type_is_real(const char *type, size_t type_s)
+{
+	size_t len = strlen("DAOS_FILTER_TYPE_REAL");
+
+	if (type_s != len + 1)
+		return false;
+	return !strncmp(type, "DAOS_FILTER_TYPE_REAL", len);
+}
+
+static bool
+type_is_string(const char *type, size_t type_s)
+{
+	return !strncmp(type, "DAOS_FILTER_TYPE_BINARY", type_s) ||
+	       !strncmp(type, "DAOS_FILTER_TYPE_STRING", type_s) ||
+	       !strncmp(type, "DAOS_FILTER_TYPE_CSTRING", type_s);
+}
+
+static bool
+type_is_numeric(const char *data_type, size_t data_type_s)
 {
 	if (!data_type_s)
 		return false;
-	return strncmp(data_type, "DAOS_FILTER_TYPE_BINARY", data_type_s) &&
-	       strncmp(data_type, "DAOS_FILTER_TYPE_STRING", data_type_s) &&
-	       strncmp(data_type, "DAOS_FILTER_TYPE_CSTRING", data_type_s);
+	return !type_is_string(data_type, data_type_s);
+}
+
+static bool
+types_are_the_same(const char *type1, size_t type1_s, const char *type2, size_t type2_s)
+{
+	if (type_is_uint(type1, type1_s) && type_is_uint(type2, type2_s))
+		return true;
+	if (type_is_int(type1, type1_s) && type_is_int(type2, type2_s))
+		return true;
+	if (type_is_real(type1, type1_s) && type_is_real(type2, type2_s))
+		return true;
+	if (type_is_string(type1, type1_s) && type_is_string(type2, type2_s))
+		return true;
+	return false;
 }
 
 static bool
@@ -239,7 +289,7 @@ pipeline_filter_checkops(daos_filter_t *ftr, size_t *p, char **data_type, size_t
 
 		if (is_arith_func(part_type, part_type_s) &&
 		    strncmp(child_part_type, "DAOS_FILTER_FUN", strlen("DAOS_FILTER_FUN")) &&
-		    !is_numeric_type(child_data_type, child_data_type_s)) {
+		    !type_is_numeric(child_data_type, child_data_type_s)) {
 			/**
 			 * we can use child_data_type here because we make sure the child is not a
 			 * function
@@ -271,8 +321,8 @@ pipeline_filter_checkops(daos_filter_t *ftr, size_t *p, char **data_type, size_t
 				*data_type_s = child_data_type_s;
 			} else {
 				/* types must be the same */
-				if (child_data_type_s != *data_type_s ||
-				    strncmp(*data_type, child_data_type, *data_type_s)) {
+				if (!types_are_the_same(*data_type, *data_type_s,
+							child_data_type, child_data_type_s)) {
 					D_ERROR("part %zu: data type mismatch (%.*s vs %.*s) for "
 						"operand of part type %.*s\n", *p,
 						(int)child_data_type_s, child_data_type,
