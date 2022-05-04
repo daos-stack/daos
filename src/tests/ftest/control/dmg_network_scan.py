@@ -13,8 +13,7 @@ from apricot import TestWithServers
 
 
 class NetDev():
-    # pylint: disable=too-few-public-methods
-    """A class to represent the information of a network device"""
+    """A class to represent the information of a network device."""
 
     SUPPORTED_PROV = ["gni", "psm2", "tcp", "sockets", "verbs", "ofi_rxm", "ucx"]
 
@@ -54,15 +53,16 @@ class NetDev():
         """Create a copy instance of this object."""
         return NetDev(self.host, self.f_iface, self.providers, self.numa)
 
-    def set_dev_info(self, dev_name, libfabric_prefix):
+    def set_dev_info(self, dev_name, ofi_info, ucx_info):
         """Get all of this devices' information.
 
         Args:
             dev_name (str): device name or infiniband device name
-            prefix (str): prefix path pointing to libfabric install path
+            ofi_info (str): provider information from the fi_info command
+            ucx_info (str): provider information from the ucx_info command
         """
         self.set_numa()
-        self.set_providers(dev_name, libfabric_prefix)
+        self.set_providers(dev_name, ofi_info, ucx_info)
 
     def set_numa(self):
         """Get the numa node information for this device."""
@@ -71,19 +71,20 @@ class NetDev():
             if os.path.exists(p):
                 self.numa = ''.join(open(p, 'r').read()).rstrip()
 
-    def set_providers(self, dev_name, libfabric_prefix):
-        """Get the provider information."""
-        # Setup and run command
-        fi_info = os.path.join(libfabric_prefix, "bin",
-                               "fi_info -d {}".format(dev_name))
-        out = process.run(fi_info)
+    def set_providers(self, dev_name, ofi_info, ucx_info):
+        """Get the provider information.
 
+        Args:
+            dev_name (str): device name or infiniband device name
+            ofi_info (str): provider information from the fi_info command
+            ucx_info (str): provider information from the ucx_info command
+        """
         # Parse the list and divide the info
-        # pylint: disable=no-member
-        prov = re.findall(
-            r"(?:provider:|domain:)\s+([A-Za-z0-9;_+]+)", out.stdout_text, re.M)
-        # pylint: enable=no-member
-        info = [prov[i:(i + 2)] for i in range(0, len(prov), 2)]
+        info = []
+        for regex, output in ((r"(?:provider:|domain:)\s+([A-Za-z0-9;_+]+)", ofi_info),
+                              (r"(?:Transport:|Device:)\s+([A-Za-z0-9;_+]+)", ucx_info)):
+            data = re.findall(regex, output, re.M)
+            info.extend([data[i:(i + 2)] for i in range(0, len(data), 2)])
 
         # Get providers that are supported
         supported = []
@@ -107,7 +108,9 @@ class NetDev():
 class DmgNetworkScanTest(TestWithServers):
     # pylint: disable=too-many-ancestors
     """Test Class Description:
+
     Simple test to verify the network scan function of the dmg tool.
+
     :avocado: recursive
     """
 
@@ -131,7 +134,7 @@ class DmgNetworkScanTest(TestWithServers):
 
     @staticmethod
     def get_devs():
-        """ Get list of devices."""
+        """Get list of devices."""
         devs = {}
         for dev in os.listdir("/sys/class/net/"):
             devs[dev] = [dev]
@@ -181,10 +184,16 @@ class DmgNetworkScanTest(TestWithServers):
         # Get device names on this system
         dev_names = self.get_devs()
         self.log.debug("get_sys_info() detected: dev_names=%s", dev_names)
+
+        # Get provider information
+        ofi_info_command = os.path.join(self.ofi_prefix, "bin", "fi_info")
+        ofi_info = process.run(ofi_info_command)
+        ucx_info_command = os.path.join(os.sep, "usr", "bin", "ucx_info")
+        ucx_info = process.run(ucx_info_command)
         for dev in dev_names:
             dev_info = NetDev(self.hostlist_servers[-1], dev)
             for dev_name in dev_names[dev]:
-                dev_info.set_dev_info(dev_name, self.ofi_prefix)
+                dev_info.set_dev_info(dev_name, ofi_info.stdout_text, ucx_info.stdout_text)
             sys_net_devs.append(dev_info)
         self.log.debug("get_sys_info() detected: sys_net_devs=%s", sys_net_devs)
 
@@ -264,11 +273,14 @@ class DmgNetworkScanTest(TestWithServers):
         return dmg_net_devs
 
     def test_dmg_network_scan_basic(self):
-        """
-        JIRA ID: DAOS-2516
+        """JIRA ID: DAOS-2516
+
         Test Description: Test basic dmg functionality to scan the network
         devices on the system.
-        :avocado: tags=all,small,daily_regression,hw,dmg,network_scan,basic
+
+        :avocado: tags=all,daily_regression
+        :avocado: tags=hw,small
+        :avocado: tags=dmg,network_scan,basic
         """
         # Get info, both these functions will return a list of NetDev objects
         dmg_info = sorted(
