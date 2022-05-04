@@ -1418,3 +1418,120 @@ func TestControl_SystemJoin_Timeouts(t *testing.T) {
 		})
 	}
 }
+
+func TestControl_SystemSetAttr(t *testing.T) {
+	for name, tc := range map[string]struct {
+		req    *SystemSetAttrReq
+		mic    *MockInvokerConfig
+		expErr error
+	}{
+		"nil req": {
+			expErr: errors.New("nil"),
+		},
+		"req fails": {
+			req: &SystemSetAttrReq{
+				Attributes: map[string]string{
+					"foo": "bar",
+				},
+			},
+			mic: &MockInvokerConfig{
+				UnaryResponseSet: []*UnaryResponse{
+					MockMSResponse("", errors.New("error"), nil),
+				},
+			},
+			expErr: errors.New("error"),
+		},
+		"empty attributes": {
+			req: &SystemSetAttrReq{
+				Attributes: map[string]string{},
+			},
+			expErr: errors.New("cannot be empty"),
+		},
+		"success": {
+			req: &SystemSetAttrReq{
+				Attributes: map[string]string{
+					"foo": "bar",
+					"baz": "qux",
+				},
+			},
+			mic: &MockInvokerConfig{
+				UnaryResponseSet: []*UnaryResponse{
+					MockMSResponse("", nil, &mgmtpb.DaosResp{}),
+				},
+			},
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(name)
+			defer test.ShowBufferOnFailure(t, buf)
+
+			client := NewMockInvoker(log, tc.mic)
+			gotErr := SystemSetAttr(context.TODO(), client, tc.req)
+			test.CmpErr(t, tc.expErr, gotErr)
+			if tc.expErr != nil {
+				return
+			}
+		})
+	}
+}
+
+func TestControl_SystemGetAttr(t *testing.T) {
+	for name, tc := range map[string]struct {
+		req     *SystemGetAttrReq
+		mic     *MockInvokerConfig
+		expResp *SystemGetAttrResp
+		expErr  error
+	}{
+		"nil req": {
+			expErr: errors.New("nil"),
+		},
+		"req fails": {
+			req: &SystemGetAttrReq{
+				Keys: []string{"foo", "baz"},
+			},
+			mic: &MockInvokerConfig{
+				UnaryResponseSet: []*UnaryResponse{
+					MockMSResponse("", errors.New("error"), nil),
+				},
+			},
+			expErr: errors.New("error"),
+		},
+		"success": {
+			req: &SystemGetAttrReq{
+				Keys: []string{"foo", "baz"},
+			},
+			mic: &MockInvokerConfig{
+				UnaryResponseSet: []*UnaryResponse{
+					MockMSResponse("", nil, &mgmtpb.SystemGetAttrResp{
+						Attributes: map[string]string{
+							"foo": "bar",
+							"baz": "qux",
+						},
+					}),
+				},
+			},
+			expResp: &SystemGetAttrResp{
+				Attributes: map[string]string{
+					"foo": "bar",
+					"baz": "qux",
+				},
+			},
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(name)
+			defer test.ShowBufferOnFailure(t, buf)
+
+			client := NewMockInvoker(log, tc.mic)
+			gotResp, gotErr := SystemGetAttr(context.TODO(), client, tc.req)
+			test.CmpErr(t, tc.expErr, gotErr)
+			if tc.expErr != nil {
+				return
+			}
+
+			if diff := cmp.Diff(tc.expResp, gotResp); diff != "" {
+				t.Fatalf("unexpected response (-want, +got):\n%s\n", diff)
+			}
+		})
+	}
+}

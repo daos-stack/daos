@@ -31,6 +31,7 @@ import (
 	"github.com/daos-stack/daos/src/control/common/test"
 	"github.com/daos-stack/daos/src/control/events"
 	"github.com/daos-stack/daos/src/control/logging"
+	"github.com/daos-stack/daos/src/control/system"
 	. "github.com/daos-stack/daos/src/control/system"
 )
 
@@ -232,6 +233,7 @@ func (tss *testSnapshotSink) Reader() io.ReadCloser {
 func TestSystem_Database_SnapshotRestore(t *testing.T) {
 	maxRanks := 2048
 	maxPools := 1024
+	maxAttrs := 4096
 
 	log, buf := logging.NewTestLogger(t.Name())
 	defer test.ShowBufferOnFailure(t, buf)
@@ -286,6 +288,19 @@ func TestSystem_Database_SnapshotRestore(t *testing.T) {
 		}
 		(*fsm)(db0).Apply(rl)
 	}
+
+	attrs := make(map[string]string)
+	for i := 0; i < maxAttrs; i++ {
+		attrs[fmt.Sprintf("prop%04d", i)] = fmt.Sprintf("value%04d", i)
+	}
+	data, err := createRaftUpdate(raftOpUpdateSystemAttrs, attrs)
+	if err != nil {
+		t.Fatal(err)
+	}
+	rl := &raft.Log{
+		Data: data,
+	}
+	(*fsm)(db0).Apply(rl)
 
 	snap, err := (*fsm)(db0).Snapshot()
 	if err != nil {
@@ -630,6 +645,77 @@ func TestSystem_Database_FaultDomainTree(t *testing.T) {
 
 			if result != nil && result == db.data.Members.FaultDomains {
 				t.Fatal("expected fault domain tree to be a copy")
+			}
+		})
+	}
+}
+
+func raftUpdateSystemAttrs(t *testing.T, db *Database, attrs map[string]string) {
+	t.Helper()
+	data, err := createRaftUpdate(raftOpUpdateSystemAttrs, attrs)
+	if err != nil {
+		t.Fatal(err)
+	}
+	rl := &raft.Log{
+		Data: data,
+	}
+	(*fsm)(db).Apply(rl)
+}
+
+func TestSystem_Database_SystemAttrs(t *testing.T) {
+	for name, tc := range map[string]struct {
+		startAttrs  map[string]string
+		attrsUpdate map[string]string
+		searchKeys  []string
+		expAttrs    map[string]string
+		expErr      error
+	}{
+		"add success": {
+			startAttrs:  map[string]string{},
+			attrsUpdate: map[string]string{"foo": "bar"},
+			expAttrs:    map[string]string{"foo": "bar"},
+		},
+		"remove success": {
+			startAttrs:  map[string]string{"bye": "gone"},
+			attrsUpdate: map[string]string{"bye": ""},
+			expAttrs:    map[string]string{},
+		},
+		"update success": {
+			startAttrs:  map[string]string{"foo": "baz"},
+			attrsUpdate: map[string]string{"foo": "bar"},
+			expAttrs:    map[string]string{"foo": "bar"},
+		},
+		"get bad key": {
+			startAttrs:  map[string]string{},
+			attrsUpdate: map[string]string{"foo": "bar"},
+			expAttrs:    map[string]string{"foo": "bar"},
+			searchKeys:  []string{"whoops"},
+			expErr:      system.ErrSystemAttrNotFound("whoops"),
+		},
+		"get good key": {
+			startAttrs:  map[string]string{"foo": "bar", "baz": "qux"},
+			attrsUpdate: map[string]string{"foo": "quux"},
+			expAttrs:    map[string]string{"baz": "qux"},
+			searchKeys:  []string{"baz"},
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(t.Name())
+			defer test.ShowBufferOnFailure(t, buf)
+
+			db := MockDatabase(t, log)
+
+			db.data.System.Attributes = tc.startAttrs
+			db.SetSystemAttrs(tc.attrsUpdate)
+
+			gotAttrs, gotErr := db.GetSystemAttrs(tc.searchKeys)
+			test.CmpErr(t, tc.expErr, gotErr)
+			if tc.expErr != nil {
+				return
+			}
+
+			if diff := cmp.Diff(tc.expAttrs, gotAttrs); diff != "" {
+				t.Fatalf("unexpected system properties (-want, +got):\n%s\n", diff)
 			}
 		})
 	}

@@ -20,66 +20,6 @@ import (
 	"github.com/daos-stack/daos/src/control/logging"
 )
 
-func TestHardware_IsUnsupportedFabric(t *testing.T) {
-	for name, tc := range map[string]struct {
-		err       error
-		expResult bool
-	}{
-		"nil": {},
-		"true": {
-			err:       ErrUnsupportedFabric("dontcare"),
-			expResult: true,
-		},
-		"false": {
-			err: errors.New("something else"),
-		},
-	} {
-		t.Run(name, func(t *testing.T) {
-			test.AssertEqual(t, tc.expResult, IsUnsupportedFabric(tc.err), "")
-		})
-	}
-}
-
-func TestHardware_IsFabricNotReady(t *testing.T) {
-	for name, tc := range map[string]struct {
-		err       error
-		expResult bool
-	}{
-		"nil": {},
-		"true": {
-			err:       ErrFabricNotReady("dontcare"),
-			expResult: true,
-		},
-		"false": {
-			err: errors.New("something else"),
-		},
-	} {
-		t.Run(name, func(t *testing.T) {
-			test.AssertEqual(t, tc.expResult, IsFabricNotReady(tc.err), "")
-		})
-	}
-}
-
-func TestHardware_IsProviderNotOnDevice(t *testing.T) {
-	for name, tc := range map[string]struct {
-		err       error
-		expResult bool
-	}{
-		"nil": {},
-		"true": {
-			err:       ErrProviderNotOnDevice("dontcare", "dontcare"),
-			expResult: true,
-		},
-		"false": {
-			err: errors.New("something else"),
-		},
-	} {
-		t.Run(name, func(t *testing.T) {
-			test.AssertEqual(t, tc.expResult, IsProviderNotOnDevice(tc.err), "")
-		})
-	}
-}
-
 func TestHardware_FabricInterface_String(t *testing.T) {
 	for name, tc := range map[string]struct {
 		fi        *FabricInterface
@@ -2020,89 +1960,126 @@ func TestHardware_NetDevClassBuilder_BuildPart(t *testing.T) {
 
 func TestHardware_WaitFabricReady(t *testing.T) {
 	for name, tc := range map[string]struct {
-		checker *mockFabricReadyChecker
-		ifaces  []string
-		timeout time.Duration
-		expErr  error
+		stateProv      *MockNetDevStateProvider
+		ifaces         []string
+		ignoreUnusable bool
+		timeout        time.Duration
+		expErr         error
 	}{
 		"nil checker": {
 			ifaces: []string{"fi0"},
 			expErr: errors.New("nil"),
 		},
 		"no interfaces": {
-			checker: &mockFabricReadyChecker{},
-			expErr:  errors.New("no fabric interfaces"),
+			stateProv: &MockNetDevStateProvider{},
+			expErr:    errors.New("no fabric interfaces"),
 		},
 		"instant success": {
-			checker: &mockFabricReadyChecker{},
-			ifaces:  []string{"fi0"},
+			stateProv: &MockNetDevStateProvider{},
+			ifaces:    []string{"fi0"},
 		},
 		"instant failure": {
-			checker: &mockFabricReadyChecker{
-				isReadyErr: []error{errors.New("mock CheckFabricReady")},
+			stateProv: &MockNetDevStateProvider{
+				GetStateReturn: []MockNetDevStateResult{
+					{Err: errors.New("mock GetNetDevState")},
+				},
 			},
 			ifaces: []string{"fi0"},
-			expErr: errors.New("mock CheckFabricReady"),
+			expErr: errors.New("mock GetNetDevState"),
 		},
 		"success after tries": {
-			checker: &mockFabricReadyChecker{
-				isReadyErr: []error{
-					ErrFabricNotReady("fi0"),
-					ErrFabricNotReady("fi0"),
-					ErrFabricNotReady("fi0"),
-					nil,
+			stateProv: &MockNetDevStateProvider{
+				GetStateReturn: []MockNetDevStateResult{
+					{State: NetDevStateNotReady},
+					{State: NetDevStateNotReady},
+					{State: NetDevStateReady},
 				},
 			},
 			ifaces: []string{"fi0"},
 		},
 		"failure after tries": {
-			checker: &mockFabricReadyChecker{
-				isReadyErr: []error{
-					ErrFabricNotReady("fi0"),
-					ErrFabricNotReady("fi0"),
-					errors.New("mock CheckFabricReady"),
+			stateProv: &MockNetDevStateProvider{
+				GetStateReturn: []MockNetDevStateResult{
+					{State: NetDevStateNotReady},
+					{State: NetDevStateNotReady},
+					{Err: errors.New("mock GetNetDevState")},
 				},
 			},
 			ifaces: []string{"fi0"},
-			expErr: errors.New("mock CheckFabricReady"),
+			expErr: errors.New("mock GetNetDevState"),
 		},
 		"multi iface with failure": {
-			checker: &mockFabricReadyChecker{
-				isReadyErr: []error{
-					ErrFabricNotReady("fi0"),
-					ErrFabricNotReady("fi1"),
-					nil,
-					errors.New("mock CheckFabricReady"),
+			stateProv: &MockNetDevStateProvider{
+				GetStateReturn: []MockNetDevStateResult{
+					{State: NetDevStateNotReady},
+					{State: NetDevStateNotReady},
+					{State: NetDevStateReady},
+					{Err: errors.New("mock GetNetDevState")},
 				},
 			},
 			ifaces: []string{"fi0", "fi1"},
-			expErr: errors.New("mock CheckFabricReady"),
+			expErr: errors.New("mock GetNetDevState"),
 		},
 		"multi iface success": {
-			checker: &mockFabricReadyChecker{
-				isReadyErr: []error{
-					ErrFabricNotReady("fi0"),
-					ErrFabricNotReady("fi1"),
-					nil,
-					ErrFabricNotReady("fi1"),
-					nil,
+			stateProv: &MockNetDevStateProvider{
+				GetStateReturn: []MockNetDevStateResult{
+					{State: NetDevStateNotReady},
+					{State: NetDevStateNotReady},
+					{State: NetDevStateReady},
+					{State: NetDevStateNotReady},
+					{State: NetDevStateReady},
 				},
 			},
 			ifaces: []string{"fi0", "fi1"},
 		},
 		"duplicates": {
-			checker: &mockFabricReadyChecker{},
-			ifaces:  []string{"fi0", "fi0"},
+			stateProv: &MockNetDevStateProvider{},
+			ifaces:    []string{"fi0", "fi0"},
 		},
 		"timeout": {
-			checker: &mockFabricReadyChecker{
-				isReadyErr: []error{
-					ErrFabricNotReady("fi0"),
+			stateProv: &MockNetDevStateProvider{
+				GetStateReturn: []MockNetDevStateResult{
+					{State: NetDevStateNotReady},
 				},
 			},
 			timeout: time.Millisecond,
 			ifaces:  []string{"fi0"},
 			expErr:  errors.New("context deadline"),
+		},
+		"requested interface unusable": {
+			stateProv: &MockNetDevStateProvider{
+				GetStateReturn: []MockNetDevStateResult{
+					{State: NetDevStateNotReady},
+					{State: NetDevStateDown},
+				},
+			},
+			ifaces: []string{"fi0", "fi1"},
+			expErr: errors.New("unusable"),
+		},
+		"ignore unusable": {
+			stateProv: &MockNetDevStateProvider{
+				GetStateReturn: []MockNetDevStateResult{
+					{State: NetDevStateNotReady},
+					{State: NetDevStateDown},
+					{State: NetDevStateUnknown},
+					{State: NetDevStateReady},
+					{State: NetDevStateDown},
+					{State: NetDevStateUnknown},
+				},
+			},
+			ignoreUnusable: true,
+			ifaces:         []string{"fi0", "fi1", "fi2"},
+		},
+		"all unusable": {
+			stateProv: &MockNetDevStateProvider{
+				GetStateReturn: []MockNetDevStateResult{
+					{State: NetDevStateDown},
+					{State: NetDevStateUnknown},
+				},
+			},
+			ignoreUnusable: true,
+			ifaces:         []string{"fi0", "fi1"},
+			expErr:         errors.New("no usable fabric interfaces"),
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
@@ -2120,8 +2097,9 @@ func TestHardware_WaitFabricReady(t *testing.T) {
 			}
 
 			err := WaitFabricReady(ctx, log, WaitFabricReadyParams{
-				Checker:      tc.checker,
-				FabricIfaces: tc.ifaces,
+				StateProvider:  tc.stateProv,
+				FabricIfaces:   tc.ifaces,
+				IgnoreUnusable: tc.ignoreUnusable,
 			})
 
 			test.CmpErr(t, tc.expErr, err)
