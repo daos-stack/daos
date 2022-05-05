@@ -55,6 +55,7 @@ dnf -y --nodocs install \
     patchelf \
     pciutils \
     python3-devel \
+    python3-distro \
     python3-pip \
     python3-scons \
     sg3_utils \
