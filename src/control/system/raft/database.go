@@ -63,11 +63,13 @@ type (
 		sync.RWMutex
 		log logging.Logger
 
+		Version       uint64
 		NextRank      system.Rank
 		MapVersion    uint32
 		Members       *MemberDatabase
 		Pools         *PoolDatabase
 		Checker       *CheckerDatabase
+		System        *SystemDatabase
 		SchemaVersion uint
 	}
 
@@ -209,7 +211,10 @@ func NewDatabase(log logging.Logger, cfg *DatabaseConfig) (*Database, error) {
 				Uuids:  make(PoolUuidMap),
 				Labels: make(PoolLabelMap),
 			},
-			Checker:       &CheckerDatabase{},
+			Checker: &CheckerDatabase{},
+			System: &SystemDatabase{
+				Attributes: make(map[string]string),
+			},
 			SchemaVersion: CurrentSchemaVersion,
 		},
 	}
@@ -965,4 +970,46 @@ func (db *Database) OnEvent(_ context.Context, evt *events.RASEvent) {
 	case events.RASPoolRepsUpdate:
 		db.handlePoolRepsUpdate(evt)
 	}
+}
+
+// SetSystemAttrs submits an update to the system properties map.
+func (db *Database) SetSystemAttrs(props map[string]string) error {
+	if err := db.CheckLeader(); err != nil {
+		return err
+	}
+	db.Lock()
+	defer db.Unlock()
+
+	if err := db.submitSystemAttrsUpdate(props); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// GetSystemAttrs returns a copy of the system properties map.
+func (db *Database) GetSystemAttrs(keys []string) (map[string]string, error) {
+	if err := db.CheckReplica(); err != nil {
+		return nil, err
+	}
+	db.data.RLock()
+	defer db.data.RUnlock()
+
+	// Always return a copy of the map to avoid safety issues.
+	out := make(map[string]string)
+	if len(keys) == 0 {
+		for k, v := range db.data.System.Attributes {
+			out[k] = v
+		}
+		return out, nil
+	}
+
+	for _, k := range keys {
+		if v, found := db.data.System.Attributes[k]; found {
+			out[k] = v
+			continue
+		}
+		return nil, system.ErrSystemAttrNotFound(k)
+	}
+	return out, nil
 }

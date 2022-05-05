@@ -92,4 +92,8 @@ service MgmtSvc {
 	rpc PoolUpgrade(PoolUpgradeReq) returns (PoolUpgradeResp) {}
 	// FaultInjectReport injects a checker report.
 	rpc FaultInjectReport(chk.CheckReport) returns (DaosResp) {}
+	// Set a system attribute or attributes.
+	rpc SystemSetAttr(SystemSetAttrReq) returns (DaosResp) {}
+	// Get a system attribute or attributes.
+	rpc SystemGetAttr(SystemGetAttrReq) returns (SystemGetAttrResp) {}
 }
