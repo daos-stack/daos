@@ -108,9 +108,6 @@ RUN python3 -m pip --no-cache-dir install --upgrade pip && \
     python3 -m pip --no-cache-dir install wheel && \
     python3 -m pip --no-cache-dir --disable-pip-version-check install --requirement requirements.txt
 
-RUN cat requirements.txt
-RUN scons
-
 USER daos_server:daos_server
 
 WORKDIR /home/daos/pre
