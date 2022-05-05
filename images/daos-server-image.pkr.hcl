@@ -49,6 +49,10 @@ source "googlecompute" "daos-server-centos-7" {
   source_image_project_id = ["centos-cloud"]
   ssh_username            = "packer"
   zone                    = "${var.zone}"
+  state_timeout           = "10m"
+  use_internal_ip         = true
+  omit_external_ip        = true
+  use_iap                 = true
 }
 
 build {

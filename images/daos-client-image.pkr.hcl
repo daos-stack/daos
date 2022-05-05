@@ -49,6 +49,10 @@ source "googlecompute" "daos-client-hpc-centos-7" {
   source_image_project_id = ["cloud-hpc-image-public"]
   ssh_username            = "packer"
   zone                    = "${var.zone}"
+  state_timeout           = "10m"
+  use_internal_ip         = true
+  omit_external_ip        = true
+  use_iap                 = true
 }
 
 build {

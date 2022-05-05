@@ -282,26 +282,19 @@ configure_gcp_project() {
       --role roles/iam.serviceAccountUser
   fi
 
-  FWRULENAME="gcp-cloudbuild-ssh"
-
-  # Check if we have an ssh firewall rule for cloudbuild in place already
-  FWLIST=$(gcloud compute --project="${GCP_PROJECT}" \
-    firewall-rules list \
-    --filter name="${FWRULENAME}" \
-    --sort-by priority \
-    --format='value(name)')
-
-  if [[ -z ${FWLIST} ]]; then
-    # Setup firewall rule to allow ssh from clould build.
-    # FIXME: Needs to be fixed to restric to IP range
-    # for clound build only once we know what that is.
-    log "Setting up firewall rule for ssh and clouldbuild"
-    gcloud compute --project="${GCP_PROJECT}" firewall-rules create "${FWRULENAME}" \
-    --direction=INGRESS --priority=1000 --network=default --action=ALLOW \
-    --rules=tcp:22 --source-ranges=0.0.0.0/0
-  else
-    log "Firewall rule for ssh and cloud build already in place."
+  CHECK_ROLE_IAP_TUNL_RESR_ACCS=$(
+    gcloud projects get-iam-policy "${GCP_PROJECT}" \
+    --flatten="bindings[].members" \
+    --filter="bindings.role=roles/iap.tunnelResourceAccessor AND \
+              bindings.members=${CLOUD_BUILD_ACCOUNT}" \
+    --format="value(bindings.members[])"
+  )
+  if [[ "${CHECK_ROLE_IAP_TUNL_RESR_ACCS}" != "${CLOUD_BUILD_ACCOUNT}" ]]; then
+    gcloud projects add-iam-policy-binding "${GCP_PROJECT}" \
+      --member "${CLOUD_BUILD_ACCOUNT}" \
+      --role roles/iap.tunnelResourceAccessor
   fi
+
 }
 
 build_images() {
@@ -321,10 +314,6 @@ build_images() {
   fi
 }
 
-remove_firewall() {
-  gcloud -q compute --project="${GCP_PROJECT}" firewall-rules delete "${FWRULENAME}"
-}
-
 list_images() {
   log "Image(s) created"
   gcloud compute images list \
@@ -340,7 +329,6 @@ main() {
   log_section "Building DAOS Image(s)"
   configure_gcp_project
   build_images
-  remove_firewall
   list_images
 }
 
