@@ -8,8 +8,6 @@ import os
 from collections import OrderedDict
 import general_utils
 from dfuse_test_base import DfuseTestBase
-from exception_utils import CommandFailure
-
 
 class DaosCoreTestDfuse(DfuseTestBase):
     # pylint: disable=too-many-ancestors
@@ -21,8 +19,7 @@ class DaosCoreTestDfuse(DfuseTestBase):
     def test_daos_dfuse_unit(self):
         """
 
-        Test Description:
-            Run dfuse_test -o
+        Test Description: Run dfuse_test to check correctness.
 
         Use cases:
             DAOS DFuse unit tests
@@ -67,6 +64,8 @@ class DaosCoreTestDfuse(DfuseTestBase):
             cont_attrs['dfuse-attr-time'] = '0'
             cont_attrs['dfuse-dentry-time'] = '0'
             cont_attrs['dfuse-ndentry-time'] = '0'
+        else:
+            self.fail('Invalid cache_mode: {}'.format(cache_mode))
 
         for key, value in cont_attrs.items():
             daos_cmd.container_set_attr(pool=self.pool.uuid, cont=self.container.uuid,
@@ -78,27 +77,26 @@ class DaosCoreTestDfuse(DfuseTestBase):
 
         intercept = self.params.get('use_intercept', '/run/intercept/*', default=False)
 
-        remote_env = OrderedDict()
-        remote_env['PATH'] = '{}/venv/bin:$PATH'.format(mount_dir)
-        remote_env['VIRTUAL_ENV'] = '{}/venv'.format(mount_dir)
+        cmd = [self.daos_test, '--test-dir', mount_dir]
 
         if intercept:
-            remote_env['LD_PRELOAD'] = '/usr/lib64/libioil.so'
+            remote_env = OrderedDict()
+
+            remote_env['LD_PRELOAD'] = os.path.join(self.prefix, 'libioil.so')
             remote_env['D_LOG_FILE'] = '/var/tmp/daos_testing/daos-il.log'
             remote_env['DD_MASK'] = 'all'
             remote_env['DD_SUBSYS'] = 'all'
             remote_env['D_LOG_MASK'] = 'INFO,IL=DEBUG'
 
-        envs = []
-        for env, value in remote_env.items():
-            envs.append('export {}={}'.format(env, value))
+            envs = ['export {}={}'.format(env, value) for env, value in remote_env.items()]
 
-        preload_cmd = ';'.join(envs)
+            preload_cmd = ';'.join(envs)
 
-        cmd = [self.daos_test, '--test-dir', mount_dir]
-        command = '{};{}'.format(preload_cmd, ' '.join(cmd))
+            command = '{};{}'.format(preload_cmd, ' '.join(cmd))
+        else:
+            command = ' '.join(cmd)
         ret_code = general_utils.pcmd(self.hostlist_clients, command, timeout=60)
         if 0 in ret_code:
             return
         self.log.info(ret_code)
-        raise CommandFailure("Error running '{}'".format(cmd))
+        self.fail('Error running {}'.format(cmd))
