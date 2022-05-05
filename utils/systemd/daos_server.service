@@ -4,6 +4,9 @@ StartLimitIntervalSec=60
 Wants=network-online.target
 After=network-online.target
 
+StartLimitIntervalSec=60
+StartLimitBurst=1
+
 [Service]
 Type=simple
 User=daos_server
@@ -11,11 +14,15 @@ Group=daos_server
 RuntimeDirectory=daos_server
 RuntimeDirectoryMode=0755
 ExecStart=/usr/bin/daos_server start
+
 StandardOutput=journal
 StandardError=journal
-StartLimitBurst=5
+
+# Restart once with 5s delay
+# If service needs to be restarted more than
+# once every 60s, just give up
 Restart=on-failure
-RestartSec=10
+RestartSec=5
 
 # bump limits
 LimitMEMLOCK=infinity
