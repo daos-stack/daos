@@ -46,7 +46,9 @@ dnf -y --nodocs install \
     lz4-devel \
     make \
     maven \
+    meson \
     ndctl \
+    ninja-build \
     numactl \
     numactl-devel \
     openmpi3-devel \
