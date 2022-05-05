@@ -614,6 +614,7 @@ func TestServer_CtlSvc_ResetFormatRanks(t *testing.T) {
 		instancesStarted bool
 		startFails       bool
 		req              *ctlpb.RanksReq
+		timeout          time.Duration
 		expResults       []*sharedpb.RankResult
 		expErr           error
 	}{
@@ -636,7 +637,8 @@ func TestServer_CtlSvc_ResetFormatRanks(t *testing.T) {
 			expErr:           FaultInstancesNotStopped("reset format", 1),
 		},
 		"instances reach wait format": {
-			req: &ctlpb.RanksReq{Ranks: "0-3"},
+			req:     &ctlpb.RanksReq{Ranks: "0-3"},
+			timeout: 5 * time.Second,
 			expResults: []*sharedpb.RankResult{
 				{Rank: 1, State: msWaitFormat},
 				{Rank: 2, State: msWaitFormat},
@@ -645,6 +647,7 @@ func TestServer_CtlSvc_ResetFormatRanks(t *testing.T) {
 		"instances stay stopped": {
 			req:        &ctlpb.RanksReq{Ranks: "0-3"},
 			startFails: true,
+			timeout:    500 * time.Millisecond,
 			expErr:     errors.New("deadline exceeded"),
 		},
 	} {
@@ -656,8 +659,13 @@ func TestServer_CtlSvc_ResetFormatRanks(t *testing.T) {
 				tc.engineCount = maxEngines
 			}
 
-			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-			defer cancel()
+			ctx := context.Background()
+			if tc.timeout != time.Duration(0) {
+				t.Logf("timeout of %s being applied", tc.timeout)
+				newCtx, cancel := context.WithTimeout(context.Background(), tc.timeout)
+				ctx = newCtx
+				defer cancel()
+			}
 
 			cfg := config.DefaultServer().WithEngines(
 				engine.MockConfig().
