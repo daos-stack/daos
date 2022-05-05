@@ -85,6 +85,8 @@ class DaosBuild(DfuseTestBase):
             cont_attrs['dfuse-attr-time'] = '0'
             cont_attrs['dfuse-dentry-time'] = '0'
             cont_attrs['dfuse-ndentry-time'] = '0'
+        else:
+            self.fail('Invalid cache_mode: {}'.format(cache_mode))
 
         for key, value in cont_attrs.items():
             daos_cmd.container_set_attr(pool=self.pool.uuid, cont=self.container.uuid,
@@ -102,15 +104,13 @@ class DaosBuild(DfuseTestBase):
         remote_env['VIRTUAL_ENV'] = '{}/venv'.format(mount_dir)
 
         if intercept:
-            remote_env['LD_PRELOAD'] = '/usr/lib64/libioil.so'
+            remote_env['LD_PRELOAD'] = os.path.join(self.prefix, 'libioil.so')
             remote_env['D_LOG_FILE'] = '/var/tmp/daos_testing/daos-il.log'
             remote_env['DD_MASK'] = 'all'
             remote_env['DD_SUBSYS'] = 'all'
             remote_env['D_LOG_MASK'] = 'INFO,IL=DEBUG'
 
-        envs = []
-        for env, value in remote_env.items():
-            envs.append('export {}={}'.format(env, value))
+        envs = ['export {}={}'.format(env, value) for env, value in remote_env.items()]
 
         preload_cmd = ';'.join(envs)
 
@@ -135,5 +135,5 @@ class DaosBuild(DfuseTestBase):
                 self.log.info(ret_code)
                 raise CommandFailure("Error running '{}'".format(cmd))
             except CommandFailure as error:
-                self.log.error("BuildDaos Test Failed: %s", str(error))
-                self.fail("Test was expected to pass but it failed.\n")
+                self.log.error('BuildDaos Test Failed: %s', str(error))
+                self.fail('Unable to build daos over dfuse in mode {}.\n'.format(cache_mode))
