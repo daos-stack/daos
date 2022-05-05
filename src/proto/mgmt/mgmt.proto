@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2021 Intel Corporation.
+// (C) Copyright 2019-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -76,4 +76,10 @@ service MgmtSvc {
 	rpc SystemErase(SystemEraseReq) returns(SystemEraseResp) {}
 	// Clean up leaked resources for a given node
 	rpc SystemCleanup(SystemCleanupReq) returns(SystemCleanupResp){}
+	// PoolUpgrade queries a DAOS pool.
+	rpc PoolUpgrade(PoolUpgradeReq) returns (PoolUpgradeResp) {}
+	// Set a system attribute or attributes.
+	rpc SystemSetAttr(SystemSetAttrReq) returns (DaosResp) {}
+	// Get a system attribute or attributes.
+	rpc SystemGetAttr(SystemGetAttrReq) returns (SystemGetAttrResp) {}
 }

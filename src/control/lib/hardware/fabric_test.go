@@ -9,6 +9,7 @@ package hardware
 import (
 	"context"
 	"testing"
+	"time"
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
@@ -1952,6 +1953,155 @@ func TestHardware_NetDevClassBuilder_BuildPart(t *testing.T) {
 			); diff != "" {
 				t.Fatalf("(-want, +got)\n%s\n", diff)
 			}
+		})
+	}
+}
+
+func TestHardware_WaitFabricReady(t *testing.T) {
+	for name, tc := range map[string]struct {
+		stateProv      *MockNetDevStateProvider
+		ifaces         []string
+		ignoreUnusable bool
+		timeout        time.Duration
+		expErr         error
+	}{
+		"nil checker": {
+			ifaces: []string{"fi0"},
+			expErr: errors.New("nil"),
+		},
+		"no interfaces": {
+			stateProv: &MockNetDevStateProvider{},
+			expErr:    errors.New("no fabric interfaces"),
+		},
+		"instant success": {
+			stateProv: &MockNetDevStateProvider{},
+			ifaces:    []string{"fi0"},
+		},
+		"instant failure": {
+			stateProv: &MockNetDevStateProvider{
+				GetStateReturn: []MockNetDevStateResult{
+					{Err: errors.New("mock GetNetDevState")},
+				},
+			},
+			ifaces: []string{"fi0"},
+			expErr: errors.New("mock GetNetDevState"),
+		},
+		"success after tries": {
+			stateProv: &MockNetDevStateProvider{
+				GetStateReturn: []MockNetDevStateResult{
+					{State: NetDevStateNotReady},
+					{State: NetDevStateNotReady},
+					{State: NetDevStateReady},
+				},
+			},
+			ifaces: []string{"fi0"},
+		},
+		"failure after tries": {
+			stateProv: &MockNetDevStateProvider{
+				GetStateReturn: []MockNetDevStateResult{
+					{State: NetDevStateNotReady},
+					{State: NetDevStateNotReady},
+					{Err: errors.New("mock GetNetDevState")},
+				},
+			},
+			ifaces: []string{"fi0"},
+			expErr: errors.New("mock GetNetDevState"),
+		},
+		"multi iface with failure": {
+			stateProv: &MockNetDevStateProvider{
+				GetStateReturn: []MockNetDevStateResult{
+					{State: NetDevStateNotReady},
+					{State: NetDevStateNotReady},
+					{State: NetDevStateReady},
+					{Err: errors.New("mock GetNetDevState")},
+				},
+			},
+			ifaces: []string{"fi0", "fi1"},
+			expErr: errors.New("mock GetNetDevState"),
+		},
+		"multi iface success": {
+			stateProv: &MockNetDevStateProvider{
+				GetStateReturn: []MockNetDevStateResult{
+					{State: NetDevStateNotReady},
+					{State: NetDevStateNotReady},
+					{State: NetDevStateReady},
+					{State: NetDevStateNotReady},
+					{State: NetDevStateReady},
+				},
+			},
+			ifaces: []string{"fi0", "fi1"},
+		},
+		"duplicates": {
+			stateProv: &MockNetDevStateProvider{},
+			ifaces:    []string{"fi0", "fi0"},
+		},
+		"timeout": {
+			stateProv: &MockNetDevStateProvider{
+				GetStateReturn: []MockNetDevStateResult{
+					{State: NetDevStateNotReady},
+				},
+			},
+			timeout: time.Millisecond,
+			ifaces:  []string{"fi0"},
+			expErr:  errors.New("context deadline"),
+		},
+		"requested interface unusable": {
+			stateProv: &MockNetDevStateProvider{
+				GetStateReturn: []MockNetDevStateResult{
+					{State: NetDevStateNotReady},
+					{State: NetDevStateDown},
+				},
+			},
+			ifaces: []string{"fi0", "fi1"},
+			expErr: errors.New("unusable"),
+		},
+		"ignore unusable": {
+			stateProv: &MockNetDevStateProvider{
+				GetStateReturn: []MockNetDevStateResult{
+					{State: NetDevStateNotReady},
+					{State: NetDevStateDown},
+					{State: NetDevStateUnknown},
+					{State: NetDevStateReady},
+					{State: NetDevStateDown},
+					{State: NetDevStateUnknown},
+				},
+			},
+			ignoreUnusable: true,
+			ifaces:         []string{"fi0", "fi1", "fi2"},
+		},
+		"all unusable": {
+			stateProv: &MockNetDevStateProvider{
+				GetStateReturn: []MockNetDevStateResult{
+					{State: NetDevStateDown},
+					{State: NetDevStateUnknown},
+				},
+			},
+			ignoreUnusable: true,
+			ifaces:         []string{"fi0", "fi1"},
+			expErr:         errors.New("no usable fabric interfaces"),
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(t.Name())
+			defer common.ShowBufferOnFailure(t, buf)
+
+			var ctx context.Context
+
+			if tc.timeout == 0 {
+				ctx = context.Background()
+			} else {
+				var cancel context.CancelFunc
+				ctx, cancel = context.WithTimeout(context.Background(), tc.timeout)
+				defer cancel()
+			}
+
+			err := WaitFabricReady(ctx, log, WaitFabricReadyParams{
+				StateProvider:  tc.stateProv,
+				FabricIfaces:   tc.ifaces,
+				IgnoreUnusable: tc.ignoreUnusable,
+			})
+
+			common.CmpErr(t, tc.expErr, err)
 		})
 	}
 }

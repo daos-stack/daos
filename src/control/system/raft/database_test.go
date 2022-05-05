@@ -1,10 +1,10 @@
 //
-// (C) Copyright 2020-2021 Intel Corporation.
+// (C) Copyright 2020-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
 
-package system
+package raft
 
 import (
 	"bytes"
@@ -30,6 +30,8 @@ import (
 	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/events"
 	"github.com/daos-stack/daos/src/control/logging"
+	"github.com/daos-stack/daos/src/control/system"
+	. "github.com/daos-stack/daos/src/control/system"
 )
 
 func waitForLeadership(ctx context.Context, t *testing.T, db *Database, gained bool, timeout time.Duration) {
@@ -81,8 +83,8 @@ func TestSystem_Database_filterMembers(t *testing.T) {
 				if matchLen != 1 {
 					t.Fatalf("expected exactly 1 member to match %s (got %d)", ms, matchLen)
 				}
-				if matches[0].state != ms {
-					t.Fatalf("filtered member doesn't match requested state (%s != %s)", matches[0].state, ms)
+				if matches[0].State != ms {
+					t.Fatalf("filtered member doesn't match requested state (%s != %s)", matches[0].State, ms)
 				}
 			}
 		},
@@ -101,10 +103,10 @@ func TestSystem_Database_filterMembers(t *testing.T) {
 			}
 
 			// sort the results for stable comparison
-			sort.Slice(matches, func(i, j int) bool { return matches[i].state < matches[j].state })
+			sort.Slice(matches, func(i, j int) bool { return matches[i].State < matches[j].State })
 			for i, ms := range filter {
-				if matches[i].state != ms {
-					t.Fatalf("filtered member %d doesn't match requested state (%s != %s)", i, matches[i].state, ms)
+				if matches[i].State != ms {
+					t.Fatalf("filtered member %d doesn't match requested state (%s != %s)", i, matches[i].State, ms)
 				}
 			}
 		},
@@ -230,6 +232,7 @@ func (tss *testSnapshotSink) Reader() io.ReadCloser {
 func TestSystem_Database_SnapshotRestore(t *testing.T) {
 	maxRanks := 2048
 	maxPools := 1024
+	maxAttrs := 4096
 
 	log, buf := logging.NewTestLogger(t.Name())
 	defer common.ShowBufferOnFailure(t, buf)
@@ -248,7 +251,7 @@ func TestSystem_Database_SnapshotRestore(t *testing.T) {
 				Rank:        Rank(i),
 				UUID:        uuid.New(),
 				Addr:        <-nextAddr,
-				state:       MemberStateJoined,
+				State:       MemberStateJoined,
 				FaultDomain: MustCreateFaultDomainFromString("/my/test/domain"),
 			},
 			NextRank: true,
@@ -284,6 +287,19 @@ func TestSystem_Database_SnapshotRestore(t *testing.T) {
 		}
 		(*fsm)(db0).Apply(rl)
 	}
+
+	attrs := make(map[string]string)
+	for i := 0; i < maxAttrs; i++ {
+		attrs[fmt.Sprintf("prop%04d", i)] = fmt.Sprintf("value%04d", i)
+	}
+	data, err := createRaftUpdate(raftOpUpdateSystemAttrs, attrs)
+	if err != nil {
+		t.Fatal(err)
+	}
+	rl := &raft.Log{
+		Data: data,
+	}
+	(*fsm)(db0).Apply(rl)
 
 	snap, err := (*fsm)(db0).Snapshot()
 	if err != nil {
@@ -393,6 +409,14 @@ func raftUpdateTestMember(t *testing.T, db *Database, op raftOp, member *Member)
 	(*fsm)(db).Apply(rl)
 }
 
+// For tests where the ID is unimportant
+func ignoreFaultDomainIDOption() cmp.Option {
+	return cmp.FilterPath(
+		func(p cmp.Path) bool {
+			return p.Last().String() == ".ID"
+		}, cmp.Ignore())
+}
+
 func TestSystem_Database_memberRaftOps(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -404,7 +428,7 @@ func TestSystem_Database_memberRaftOps(t *testing.T) {
 			Rank:        Rank(i),
 			UUID:        uuid.New(),
 			Addr:        <-nextAddr,
-			state:       MemberStateJoined,
+			State:       MemberStateJoined,
 			FaultDomain: MustCreateFaultDomainFromString("/rack0"),
 		})
 	}
@@ -413,7 +437,7 @@ func TestSystem_Database_memberRaftOps(t *testing.T) {
 		Rank:        testMembers[1].Rank,
 		UUID:        testMembers[1].UUID,
 		Addr:        testMembers[1].Addr,
-		state:       testMembers[1].state,
+		State:       testMembers[1].State,
 		FaultDomain: MustCreateFaultDomainFromString("/rack1"),
 	}
 
@@ -434,7 +458,7 @@ func TestSystem_Database_memberRaftOps(t *testing.T) {
 			expMembers: []*Member{
 				testMembers[0],
 			},
-			expFDTree: NewFaultDomainTree(memberFaultDomain(testMembers[0])),
+			expFDTree: NewFaultDomainTree(MemberFaultDomain(testMembers[0])),
 		},
 		"update state success": {
 			startingMembers: testMembers,
@@ -443,7 +467,7 @@ func TestSystem_Database_memberRaftOps(t *testing.T) {
 				Rank:        testMembers[1].Rank,
 				UUID:        testMembers[1].UUID,
 				Addr:        testMembers[1].Addr,
-				state:       MemberStateStopped,
+				State:       MemberStateStopped,
 				FaultDomain: testMembers[1].FaultDomain,
 			},
 			expMembers: []*Member{
@@ -452,15 +476,15 @@ func TestSystem_Database_memberRaftOps(t *testing.T) {
 					Rank:        testMembers[1].Rank,
 					UUID:        testMembers[1].UUID,
 					Addr:        testMembers[1].Addr,
-					state:       MemberStateStopped,
+					State:       MemberStateStopped,
 					FaultDomain: testMembers[1].FaultDomain,
 				},
 				testMembers[2],
 			},
 			expFDTree: NewFaultDomainTree(
-				memberFaultDomain(testMembers[0]),
-				memberFaultDomain(testMembers[1]),
-				memberFaultDomain(testMembers[2]),
+				MemberFaultDomain(testMembers[0]),
+				MemberFaultDomain(testMembers[1]),
+				MemberFaultDomain(testMembers[2]),
 			),
 		},
 		"update fault domain success": {
@@ -473,9 +497,9 @@ func TestSystem_Database_memberRaftOps(t *testing.T) {
 				testMembers[2],
 			},
 			expFDTree: NewFaultDomainTree(
-				memberFaultDomain(testMembers[0]),
-				memberFaultDomain(changedFaultDomainMember),
-				memberFaultDomain(testMembers[2]),
+				MemberFaultDomain(testMembers[0]),
+				MemberFaultDomain(changedFaultDomainMember),
+				MemberFaultDomain(testMembers[2]),
 			),
 		},
 		"remove success": {
@@ -487,8 +511,8 @@ func TestSystem_Database_memberRaftOps(t *testing.T) {
 				testMembers[1],
 			},
 			expFDTree: NewFaultDomainTree(
-				memberFaultDomain(testMembers[0]),
-				memberFaultDomain(testMembers[1]),
+				MemberFaultDomain(testMembers[0]),
+				MemberFaultDomain(testMembers[1]),
 			),
 		},
 	} {
@@ -582,7 +606,7 @@ func TestSystem_Database_memberFaultDomain(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			m := testMemberWithFaultDomain(tc.rank, tc.faultDomain)
 
-			result := memberFaultDomain(m)
+			result := MemberFaultDomain(m)
 
 			if diff := cmp.Diff(tc.expResult, result); diff != "" {
 				t.Fatalf("unexpected response (-want, +got):\n%s\n", diff)
@@ -620,6 +644,77 @@ func TestSystem_Database_FaultDomainTree(t *testing.T) {
 
 			if result != nil && result == db.data.Members.FaultDomains {
 				t.Fatal("expected fault domain tree to be a copy")
+			}
+		})
+	}
+}
+
+func raftUpdateSystemAttrs(t *testing.T, db *Database, attrs map[string]string) {
+	t.Helper()
+	data, err := createRaftUpdate(raftOpUpdateSystemAttrs, attrs)
+	if err != nil {
+		t.Fatal(err)
+	}
+	rl := &raft.Log{
+		Data: data,
+	}
+	(*fsm)(db).Apply(rl)
+}
+
+func TestSystem_Database_SystemAttrs(t *testing.T) {
+	for name, tc := range map[string]struct {
+		startAttrs  map[string]string
+		attrsUpdate map[string]string
+		searchKeys  []string
+		expAttrs    map[string]string
+		expErr      error
+	}{
+		"add success": {
+			startAttrs:  map[string]string{},
+			attrsUpdate: map[string]string{"foo": "bar"},
+			expAttrs:    map[string]string{"foo": "bar"},
+		},
+		"remove success": {
+			startAttrs:  map[string]string{"bye": "gone"},
+			attrsUpdate: map[string]string{"bye": ""},
+			expAttrs:    map[string]string{},
+		},
+		"update success": {
+			startAttrs:  map[string]string{"foo": "baz"},
+			attrsUpdate: map[string]string{"foo": "bar"},
+			expAttrs:    map[string]string{"foo": "bar"},
+		},
+		"get bad key": {
+			startAttrs:  map[string]string{},
+			attrsUpdate: map[string]string{"foo": "bar"},
+			expAttrs:    map[string]string{"foo": "bar"},
+			searchKeys:  []string{"whoops"},
+			expErr:      system.ErrSystemAttrNotFound("whoops"),
+		},
+		"get good key": {
+			startAttrs:  map[string]string{"foo": "bar", "baz": "qux"},
+			attrsUpdate: map[string]string{"foo": "quux"},
+			expAttrs:    map[string]string{"baz": "qux"},
+			searchKeys:  []string{"baz"},
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(t.Name())
+			defer common.ShowBufferOnFailure(t, buf)
+
+			db := MockDatabase(t, log)
+
+			db.data.System.Attributes = tc.startAttrs
+			db.SetSystemAttrs(tc.attrsUpdate)
+
+			gotAttrs, gotErr := db.GetSystemAttrs(tc.searchKeys)
+			common.CmpErr(t, tc.expErr, gotErr)
+			if tc.expErr != nil {
+				return
+			}
+
+			if diff := cmp.Diff(tc.expAttrs, gotAttrs); diff != "" {
+				t.Fatalf("unexpected system properties (-want, +got):\n%s\n", diff)
 			}
 		})
 	}
@@ -831,14 +926,14 @@ func TestSystem_Database_GroupMap(t *testing.T) {
 			expGroupMap: &GroupMap{
 				Version: 11,
 				RankURIs: map[Rank]string{
-					0:  mockControlAddr(t, 0).String(),
-					2:  mockControlAddr(t, 2).String(),
-					3:  mockControlAddr(t, 3).String(),
-					4:  mockControlAddr(t, 4).String(),
-					5:  mockControlAddr(t, 5).String(),
-					6:  mockControlAddr(t, 6).String(),
-					9:  mockControlAddr(t, 9).String(),
-					10: mockControlAddr(t, 10).String(),
+					0:  MockControlAddr(t, 0).String(),
+					2:  MockControlAddr(t, 2).String(),
+					3:  MockControlAddr(t, 3).String(),
+					4:  MockControlAddr(t, 4).String(),
+					5:  MockControlAddr(t, 5).String(),
+					6:  MockControlAddr(t, 6).String(),
+					9:  MockControlAddr(t, 9).String(),
+					10: MockControlAddr(t, 10).String(),
 				},
 			},
 		},
@@ -847,20 +942,20 @@ func TestSystem_Database_GroupMap(t *testing.T) {
 			expGroupMap: &GroupMap{
 				Version: 2,
 				RankURIs: map[Rank]string{
-					0: mockControlAddr(t, 0).String(),
-					1: mockControlAddr(t, 1).String(),
+					0: MockControlAddr(t, 0).String(),
+					1: MockControlAddr(t, 1).String(),
 				},
 				MSRanks: []Rank{1},
 			},
 		},
 		"unset fabric URI skipped": {
 			members: append([]*Member{
-				NewMember(2, common.MockUUID(2), "", mockControlAddr(t, 2), MemberStateJoined),
+				NewMember(2, common.MockUUID(2), "", MockControlAddr(t, 2), MemberStateJoined),
 			}, membersWithStates(MemberStateJoined)...),
 			expGroupMap: &GroupMap{
 				Version: 2,
 				RankURIs: map[Rank]string{
-					0: mockControlAddr(t, 0).String(),
+					0: MockControlAddr(t, 0).String(),
 				},
 			},
 		},

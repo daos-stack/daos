@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2021 Intel Corporation.
+// (C) Copyright 2019-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -202,6 +202,42 @@ func TestDmg_SystemCommands(t *testing.T) {
 			nil,
 		},
 		{
+			"system set-attr multi attributes",
+			"system set-attr foo:bar,baz:qux",
+			strings.Join([]string{
+				printRequest(t, &control.SystemSetAttrReq{
+					Attributes: map[string]string{
+						"foo": "bar",
+						"baz": "qux",
+					},
+				}),
+			}, " "),
+			nil,
+		},
+		{
+			"system get-attr multi attributes",
+			"system get-attr foo,baz",
+			strings.Join([]string{
+				printRequest(t, &control.SystemGetAttrReq{
+					Keys: []string{"baz", "foo"},
+				}),
+			}, " "),
+			nil,
+		},
+		{
+			"system del-attr multi attributes",
+			"system del-attr foo,baz",
+			strings.Join([]string{
+				printRequest(t, &control.SystemSetAttrReq{
+					Attributes: map[string]string{
+						"foo": "",
+						"baz": "",
+					},
+				}),
+			}, " "),
+			nil,
+		},
+		{
 			"Non-existent subcommand",
 			"system quack",
 			"",
@@ -249,7 +285,7 @@ func TestDmg_LeaderQueryCmd_Errors(t *testing.T) {
 
 			leaderQueryCmd := new(leaderQueryCmd)
 			leaderQueryCmd.setInvoker(mi)
-			leaderQueryCmd.setLog(log)
+			leaderQueryCmd.SetLog(log)
 			leaderQueryCmd.setConfig(tc.ctlCfg)
 
 			gotErr := leaderQueryCmd.Execute(nil)
@@ -318,7 +354,7 @@ func TestDmg_systemQueryCmd_Errors(t *testing.T) {
 
 			queryCmd := new(systemQueryCmd)
 			queryCmd.setInvoker(mi)
-			queryCmd.setLog(log)
+			queryCmd.SetLog(log)
 
 			gotErr := queryCmd.Execute(nil)
 			common.CmpErr(t, tc.expErr, gotErr)
@@ -447,7 +483,7 @@ func TestDmg_systemStartCmd_Errors(t *testing.T) {
 
 			startCmd := new(systemStartCmd)
 			startCmd.setInvoker(mi)
-			startCmd.setLog(log)
+			startCmd.SetLog(log)
 
 			gotErr := startCmd.Execute(nil)
 			common.CmpErr(t, tc.expErr, gotErr)
@@ -576,7 +612,7 @@ func TestDmg_systemStopCmd_Errors(t *testing.T) {
 
 			stopCmd := new(systemStopCmd)
 			stopCmd.setInvoker(mi)
-			stopCmd.setLog(log)
+			stopCmd.SetLog(log)
 
 			gotErr := stopCmd.Execute(nil)
 			common.CmpErr(t, tc.expErr, gotErr)

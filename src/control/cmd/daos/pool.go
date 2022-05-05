@@ -48,7 +48,7 @@ type poolBaseCmd struct {
 
 func (cmd *poolBaseCmd) poolUUIDPtr() *C.uchar {
 	if cmd.poolUUID == uuid.Nil {
-		cmd.log.Errorf("poolUUIDPtr(): nil UUID")
+		cmd.Errorf("poolUUIDPtr(): nil UUID")
 		return nil
 	}
 	return (*C.uchar)(unsafe.Pointer(&cmd.poolUUID[0]))
@@ -76,7 +76,7 @@ func (cmd *poolBaseCmd) connectPool(flags C.uint) error {
 		cLabel := C.CString(cmd.PoolID().Label)
 		defer freeString(cLabel)
 
-		cmd.log.Debugf("connecting to pool: %s", cmd.PoolID().Label)
+		cmd.Debugf("connecting to pool: %s", cmd.PoolID().Label)
 		rc = C.daos_pool_connect(cLabel, cSysName, flags,
 			&cmd.cPoolHandle, &poolInfo, nil)
 		if rc == 0 {
@@ -89,7 +89,7 @@ func (cmd *poolBaseCmd) connectPool(flags C.uint) error {
 		}
 	case cmd.PoolID().HasUUID():
 		cmd.poolUUID = cmd.PoolID().UUID
-		cmd.log.Debugf("connecting to pool: %s", cmd.poolUUID)
+		cmd.Debugf("connecting to pool: %s", cmd.poolUUID)
 		cUUIDstr := C.CString(cmd.poolUUID.String())
 		defer freeString(cUUIDstr)
 		rc = C.daos_pool_connect(cUUIDstr, cSysName, flags,
@@ -102,7 +102,7 @@ func (cmd *poolBaseCmd) connectPool(flags C.uint) error {
 }
 
 func (cmd *poolBaseCmd) disconnectPool() {
-	cmd.log.Debugf("disconnecting pool %s", cmd.PoolID())
+	cmd.Debugf("disconnecting pool %s", cmd.PoolID())
 	// Hack for NLT fault injection testing: If the rc
 	// is -DER_NOMEM, retry once in order to actually
 	// shut down and release resources.
@@ -116,7 +116,7 @@ func (cmd *poolBaseCmd) disconnectPool() {
 	}
 
 	if err := daosError(rc); err != nil {
-		cmd.log.Errorf("pool disconnect failed: %s", err)
+		cmd.Errorf("pool disconnect failed: %s", err)
 	}
 }
 
@@ -221,7 +221,7 @@ func convertPoolInfo(pinfo *C.daos_pool_info_t) (*control.PoolQueryResp, error) 
 	pqp.TotalTargets = uint32(pinfo.pi_ntargets)
 	pqp.DisabledTargets = uint32(pinfo.pi_ndisabled)
 	pqp.ActiveTargets = uint32(pinfo.pi_space.ps_ntargets)
-	pqp.TotalNodes = uint32(pinfo.pi_nnodes)
+	pqp.TotalEngines = uint32(pinfo.pi_nnodes)
 	pqp.Leader = uint32(pinfo.pi_leader)
 	pqp.Version = uint32(pinfo.pi_map_ver)
 
@@ -271,7 +271,7 @@ func (cmd *poolQueryCmd) Execute(_ []string) error {
 		return err
 	}
 
-	cmd.log.Info(bld.String())
+	cmd.Info(bld.String())
 
 	return nil
 }
@@ -306,7 +306,7 @@ func (cmd *poolListAttrsCmd) Execute(_ []string) error {
 	title := fmt.Sprintf("Attributes for pool %s:", cmd.poolUUID)
 	printAttributes(&bld, title, attrs...)
 
-	cmd.log.Info(bld.String())
+	cmd.Info(bld.String())
 
 	return nil
 }
@@ -341,7 +341,7 @@ func (cmd *poolGetAttrCmd) Execute(_ []string) error {
 	title := fmt.Sprintf("Attributes for pool %s:", cmd.poolUUID)
 	printAttributes(&bld, title, attr)
 
-	cmd.log.Info(bld.String())
+	cmd.Info(bld.String())
 
 	return nil
 }
@@ -406,7 +406,7 @@ type poolAutoTestCmd struct {
 }
 
 func (cmd *poolAutoTestCmd) Execute(_ []string) error {
-	ap, deallocCmdArgs, err := allocCmdArgs(cmd.log)
+	ap, deallocCmdArgs, err := allocCmdArgs(cmd.Logger)
 	if err != nil {
 		return err
 	}

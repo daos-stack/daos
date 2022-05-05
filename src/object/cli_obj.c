@@ -90,7 +90,8 @@ struct obj_auxi_args {
 					 new_shard_tasks:1,
 					 reset_param:1,
 					 force_degraded:1,
-					 shards_scheded:1;
+					 shards_scheded:1,
+					 tx_convert:1;
 	/* request flags. currently only: ORF_RESEND */
 	uint32_t			 flags;
 	uint32_t			 specified_shard;
@@ -832,6 +833,8 @@ obj_dkey2grpidx(struct dc_object *obj, uint64_t hash, unsigned int map_ver)
 	D_RWLOCK_RDLOCK(&obj->cob_lock);
 	if (obj->cob_version != map_ver || map_ver < pool_map_ver) {
 		D_RWLOCK_UNLOCK(&obj->cob_lock);
+		D_DEBUG(DB_IO, "cob_ersion %u map_ver %u pool_map_ver %u\n",
+			obj->cob_version, map_ver, pool_map_ver);
 		dc_pool_put(pool);
 		return -DER_STALE;
 	}
@@ -4386,6 +4389,9 @@ obj_comp_cb(tse_task_t *task, void *data)
 		     task->dt_result == -DER_CSUM)))
 			obj_auxi->io_retry = 0;
 
+		if (task->dt_result == -DER_SHARDS_OVERLAP)
+			obj_auxi->tx_convert = 1;
+
 		if (task->dt_result == -DER_CSUM ||
 		    task->dt_result == -DER_TX_UNCERTAIN) {
 			if (!obj_auxi->spec_shard && !obj_auxi->spec_group &&
@@ -4606,6 +4612,11 @@ obj_task_init(tse_task_t *task, int opc, uint32_t map_ver, daos_handle_t th,
 	int	rc;
 
 	obj_task_init_common(task, opc, map_ver, th, auxi, obj);
+	if ((*auxi)->tx_convert) {
+		D_ASSERT((*auxi)->io_retry);
+		D_DEBUG(DB_IO, "task %p, convert to dtx opc %d\n", task, opc);
+		return 0;
+	}
 	rc = tse_task_register_comp_cb(task, obj_comp_cb, NULL, 0);
 	if (rc) {
 		D_ERROR("task %p, register_comp_cb "DF_RC"\n", task, DP_RC(rc));
@@ -5024,66 +5035,45 @@ dc_obj_update(tse_task_t *task, struct dtx_epoch *epoch, uint32_t map_ver,
 	uint64_t		 dkey_hash;
 	int			 rc;
 
-	obj_task_init_common(task, DAOS_OBJ_RPC_UPDATE, map_ver, args->th,
-			     &obj_auxi, obj);
+	rc = obj_task_init(task, DAOS_OBJ_RPC_UPDATE, map_ver, args->th,
+			   &obj_auxi, obj);
+	if (rc != 0) {
+		obj_decref(obj);
+		D_GOTO(out_task, rc);
+	}
 
 	rc = obj_update_sgls_dup(obj_auxi, args);
 	if (rc) {
 		D_ERROR(DF_OID" obj_update_sgls_dup failed %d.\n", DP_OID(obj->cob_md.omd_id), rc);
-		obj_comp_cb(task, NULL);
-		goto out_task;
+		D_GOTO(out_task, rc);
+	}
+
+	if (obj_auxi->tx_convert) {
+		if (obj_auxi->is_ec_obj && obj_auxi->req_reasbed) {
+			args->iods = obj_auxi->reasb_req.orr_uiods;
+			args->sgls = obj_auxi->reasb_req.orr_usgls;
+		}
+
+		obj_auxi->tx_convert = 0;
+		return dc_tx_convert(obj, DAOS_OBJ_RPC_UPDATE, task);
 	}
 
 	rc = obj_rw_req_reassemb(obj, args, NULL, obj_auxi);
 	if (rc) {
 		D_ERROR(DF_OID" obj_req_reassemb failed %d.\n",
 			DP_OID(obj->cob_md.omd_id), rc);
-		obj_comp_cb(task, NULL);
-		goto out_task;
+		D_GOTO(out_task, rc);
 	}
 
 	dkey_hash = obj_dkey2hash(obj->cob_md.omd_id, args->dkey);
 	rc = obj_req_get_tgts(obj, NULL, args->dkey, dkey_hash,
 			      obj_auxi->reasb_req.tgt_bitmap, map_ver, false,
 			      false, obj_auxi);
-	if (rc != 0) {
-		if (rc != -DER_SHARDS_OVERLAP) {
-			int rc1;
+	if (rc != 0)
+		D_GOTO(out_task, rc);
 
-			task->dt_result = rc;
-			/* If the task needs to retry, it has to go through registered
-			 * object completion callback, otherwise tse_task_complete()
-			 * will complete the retry task, instead of retrying it.
-			 */
-			rc1 = tse_task_register_comp_cb(task, obj_comp_cb, NULL, 0);
-			if (rc1 != 0) {
-				D_ERROR("update task %p, register_comp_cb "DF_RC"\n",
-					task, DP_RC(rc1));
-				obj_comp_cb(task, NULL);
-			}
-			goto out_task;
-		}
-
-		if (obj_auxi->is_ec_obj && obj_auxi->req_reasbed) {
-			args->iods = obj_auxi->reasb_req.orr_uiods;
-			args->sgls = obj_auxi->reasb_req.orr_usgls;
-		}
-		/* For OSA case, 2 or more shards locate on the same
-		 * VOS target. We will handle such case via internal
-		 * transaction.
-		 */
-		obj_addref(obj);
-		obj_comp_cb(task, NULL);
-		return dc_tx_convert(obj, DAOS_OBJ_RPC_UPDATE, task);
-	}
-
-	rc = tse_task_register_comp_cb(task, obj_comp_cb, NULL, 0);
-	if (rc != 0) {
-		D_ERROR("update task %p, register_comp_cb "DF_RC"\n",
-			task, DP_RC(rc));
-		obj_comp_cb(task, NULL);
-		goto out_task;
-	}
+	if (daos_fail_check(DAOS_FAIL_TX_CONVERT))
+		D_GOTO(out_task, rc = -DER_SHARDS_OVERLAP);
 
 	/* For update, based on re-assembled sgl for csum calculate (to match with iod).
 	 * Then if with single data target use original user sgl in IO request to avoid
@@ -5790,45 +5780,25 @@ dc_obj_punch(tse_task_t *task, struct dc_object *obj, struct dtx_epoch *epoch,
 		 */
 		return dc_tx_convert(obj, opc, task);
 
-	obj_task_init_common(task, opc, map_ver, api_args->th, &obj_auxi, obj);
+	rc = obj_task_init(task, opc, map_ver, api_args->th, &obj_auxi, obj);
+	if (rc != 0) {
+		obj_decref(obj);
+		D_GOTO(out_task, rc);
+	}
+
+	if (obj_auxi->tx_convert) {
+		obj_auxi->tx_convert = 0;
+		return dc_tx_convert(obj, opc, task);
+	}
 
 	dkey_hash = obj_dkey2hash(obj->cob_md.omd_id, api_args->dkey);
 	rc = obj_req_get_tgts(obj, NULL, api_args->dkey, dkey_hash, NIL_BITMAP,
 			      map_ver, false, false, obj_auxi);
-	if (rc != 0) {
-		if (rc != -DER_SHARDS_OVERLAP) {
-			int rc1;
+	if (rc != 0)
+		D_GOTO(out_task, rc);
 
-			/* If the task needs to retry, it has to go through registered
-			 * object completion callback, otherwise tse_task_complete()
-			 * will complete the retry task, instead of retrying it.
-			 */
-			task->dt_result = rc;
-			rc1 = tse_task_register_comp_cb(task, obj_comp_cb, NULL, 0);
-			if (rc1 != 0) {
-				D_ERROR("update task %p, register_comp_cb "DF_RC"\n",
-					task, DP_RC(rc1));
-				obj_comp_cb(task, NULL);
-			}
-			goto out_task;
-		}
-
-		/* For OSA case, 2 or more shards locate on the same
-		 * VOS target. We will handle such case via internal
-		 * transaction.
-		 */
-		obj_addref(obj);
-		obj_comp_cb(task, NULL);
-		return dc_tx_convert(obj, opc, task);
-	}
-
-	rc = tse_task_register_comp_cb(task, obj_comp_cb, NULL, 0);
-	if (rc != 0) {
-		D_ERROR("punch (%d) task %p, register_comp_cb "DF_RC"\n",
-			opc, task, DP_RC(rc));
-		obj_comp_cb(task, NULL);
-		goto out_task;
-	}
+	if (daos_fail_check(DAOS_FAIL_TX_CONVERT))
+		D_GOTO(out_task, rc = -DER_SHARDS_OVERLAP);
 
 	if (DAOS_FAIL_CHECK(DAOS_DTX_COMMIT_SYNC))
 		obj_auxi->flags |= ORF_DTX_SYNC;
@@ -6126,6 +6096,9 @@ dc_obj_query_key(tse_task_t *api_task)
 
 			leader = obj_grp_leader_get(obj, i, map_ver, NIL_BITMAP);
 			if (leader >= 0) {
+				if (obj_is_ec(obj) && !is_ec_parity_shard(leader, obj_get_oca(obj)))
+					goto non_leader;
+
 				rc = queue_shard_query_key_task(api_task, obj_auxi, &epoch, leader,
 								map_ver, obj, dkey_hash, &dti,
 								coh_uuid, cont_uuid);
@@ -6145,6 +6118,7 @@ dc_obj_query_key(tse_task_t *api_task)
 			}
 		}
 
+non_leader:
 		/* Then Try non-leader shards */
 		D_DEBUG(DB_IO, DF_OID" try non-leader shards for group %d.\n",
 			DP_OID(obj->cob_md.omd_id), i);

@@ -4,7 +4,7 @@
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
 
-package system
+package raft
 
 import (
 	"context"
@@ -23,6 +23,7 @@ import (
 	"github.com/daos-stack/daos/src/control/events"
 	"github.com/daos-stack/daos/src/control/lib/atm"
 	"github.com/daos-stack/daos/src/control/logging"
+	"github.com/daos-stack/daos/src/control/system"
 )
 
 const (
@@ -62,10 +63,12 @@ type (
 		sync.RWMutex
 		log logging.Logger
 
-		NextRank      Rank
+		Version       uint64
+		NextRank      system.Rank
 		MapVersion    uint32
 		Members       *MemberDatabase
 		Pools         *PoolDatabase
+		System        *SystemDatabase
 		SchemaVersion uint
 	}
 
@@ -107,8 +110,8 @@ type (
 	// GroupMap represents a version of the system membership map.
 	GroupMap struct {
 		Version  uint32
-		RankURIs map[Rank]string
-		MSRanks  []Rank
+		RankURIs map[system.Rank]string
+		MSRanks  []system.Rank
 	}
 )
 
@@ -126,7 +129,7 @@ func (sr *syncRaft) getSvc() (raftService, func(), error) {
 
 	if sr.svc == nil {
 		sr.RUnlock()
-		return nil, func() {}, ErrRaftUnavail
+		return nil, func() {}, system.ErrRaftUnavail
 	}
 
 	return sr.svc, sr.RUnlock, nil
@@ -196,12 +199,15 @@ func NewDatabase(log logging.Logger, cfg *DatabaseConfig) (*Database, error) {
 				Ranks:        make(MemberRankMap),
 				Uuids:        make(MemberUuidMap),
 				Addrs:        make(MemberAddrMap),
-				FaultDomains: NewFaultDomainTree(),
+				FaultDomains: system.NewFaultDomainTree(),
 			},
 			Pools: &PoolDatabase{
 				Ranks:  make(PoolRankMap),
 				Uuids:  make(PoolUuidMap),
 				Labels: make(PoolLabelMap),
+			},
+			System: &SystemDatabase{
+				Attributes: make(map[string]string),
 			},
 			SchemaVersion: CurrentSchemaVersion,
 		},
@@ -237,7 +243,7 @@ func (db *Database) SystemName() string {
 // LeaderQuery returns the system leader, if known.
 func (db *Database) LeaderQuery() (leader string, replicas []string, err error) {
 	if !db.IsReplica() {
-		return "", nil, &ErrNotReplica{db.cfg.stringReplicas(nil)}
+		return "", nil, &system.ErrNotReplica{db.cfg.stringReplicas(nil)}
 	}
 
 	return db.leaderHint(), db.cfg.stringReplicas(nil), nil
@@ -247,7 +253,7 @@ func (db *Database) LeaderQuery() (leader string, replicas []string, err error) 
 // the system is configured as a MS replica.
 func (db *Database) ReplicaAddr() (*net.TCPAddr, error) {
 	if !db.IsReplica() {
-		return nil, &ErrNotReplica{db.cfg.stringReplicas(nil)}
+		return nil, &system.ErrNotReplica{db.cfg.stringReplicas(nil)}
 	}
 	return db.getReplica(), nil
 }
@@ -300,11 +306,11 @@ func (db *Database) IsBootstrap() bool {
 // replica or the service is not running.
 func (db *Database) CheckReplica() error {
 	if !db.IsReplica() {
-		return &ErrNotReplica{db.cfg.stringReplicas(nil)}
+		return &system.ErrNotReplica{db.cfg.stringReplicas(nil)}
 	}
 
 	if db.initialized.IsFalse() {
-		return ErrUninitialized
+		return system.ErrUninitialized
 	}
 
 	return db.raft.withReadLock(func(_ raftService) error { return nil })
@@ -320,7 +326,7 @@ func (db *Database) CheckLeader() error {
 
 	return db.raft.withReadLock(func(svc raftService) error {
 		if svc.State() != raft.Leader {
-			return &ErrNotLeader{
+			return &system.ErrNotLeader{
 				LeaderHint: db.leaderHint(),
 				Replicas:   db.cfg.stringReplicas(db.getReplica()),
 			}
@@ -492,7 +498,7 @@ func (db *Database) IncMapVer() error {
 func newGroupMap(version uint32) *GroupMap {
 	return &GroupMap{
 		Version:  version,
-		RankURIs: make(map[Rank]string),
+		RankURIs: make(map[system.Rank]string),
 	}
 }
 
@@ -510,12 +516,12 @@ func (db *Database) GroupMap() (*GroupMap, error) {
 		// excluded should be omitted from the group map. If a member
 		// is actually down, it will be marked dead by swim and moved
 		// into the excluded state eventually.
-		if srv.state&ExcludedMemberFilter != 0 {
+		if srv.State&system.ExcludedMemberFilter != 0 {
 			continue
 		}
 		// Quick sanity-check: Don't include members that somehow have
 		// a nil rank or fabric URI, either.
-		if srv.Rank.Equals(NilRank) || srv.FabricURI == "" {
+		if srv.Rank.Equals(system.NilRank) || srv.FabricURI == "" {
 			db.log.Errorf("member has invalid rank (%d) or URI (%s)", srv.Rank, srv.FabricURI)
 			continue
 		}
@@ -526,7 +532,7 @@ func (db *Database) GroupMap() (*GroupMap, error) {
 	}
 
 	if len(gm.RankURIs) == 0 {
-		return nil, ErrEmptyGroupMap
+		return nil, system.ErrEmptyGroupMap
 	}
 
 	return gm, nil
@@ -534,14 +540,14 @@ func (db *Database) GroupMap() (*GroupMap, error) {
 
 // copyMember makes a copy of the supplied Member pointer
 // for safe use outside of the database.
-func copyMember(in *Member) *Member {
-	out := new(Member)
+func copyMember(in *system.Member) *system.Member {
+	out := new(system.Member)
 	*out = *in
 	return out
 }
 
 // AllMembers returns a copy of the system membership.
-func (db *Database) AllMembers() ([]*Member, error) {
+func (db *Database) AllMembers() ([]*system.Member, error) {
 	if err := db.CheckReplica(); err != nil {
 		return nil, err
 	}
@@ -551,7 +557,7 @@ func (db *Database) AllMembers() ([]*Member, error) {
 	// NB: This is expensive! We make a copy of the
 	// membership to ensure that it can't be changed
 	// elsewhere.
-	dbCopy := make([]*Member, len(db.data.Members.Uuids))
+	dbCopy := make([]*system.Member, len(db.data.Members.Uuids))
 	copyIdx := 0
 	for _, dbRec := range db.data.Members.Uuids {
 		dbCopy[copyIdx] = copyMember(dbRec)
@@ -568,26 +574,26 @@ func (db *Database) AllMembers() ([]*Member, error) {
 // NB: If the returned members will be used outside of the database,
 // they should be copied using the copyMember() helper in order to
 // allow them to be safely modified.
-func (db *Database) filterMembers(desiredStates ...MemberState) (result []*Member) {
+func (db *Database) filterMembers(desiredStates ...system.MemberState) (result []*system.Member) {
 	// NB: Must be done under a lock!
 
 	var includeUnknown bool
-	stateMask := AllMemberFilter
+	stateMask := system.AllMemberFilter
 	if len(desiredStates) > 0 {
 		stateMask = 0
 		for _, s := range desiredStates {
-			if s == MemberStateUnknown {
+			if s == system.MemberStateUnknown {
 				includeUnknown = true
 			}
 			stateMask |= s
 		}
 	}
-	if stateMask == AllMemberFilter {
+	if stateMask == system.AllMemberFilter {
 		includeUnknown = true
 	}
 
 	for _, m := range db.data.Members.Ranks {
-		if m.state == MemberStateUnknown && includeUnknown || m.state&stateMask > 0 {
+		if m.State == system.MemberStateUnknown && includeUnknown || m.State&stateMask > 0 {
 			result = append(result, m)
 		}
 	}
@@ -596,14 +602,14 @@ func (db *Database) filterMembers(desiredStates ...MemberState) (result []*Membe
 }
 
 // MemberRanks returns a slice of all the ranks in the membership.
-func (db *Database) MemberRanks(desiredStates ...MemberState) ([]Rank, error) {
+func (db *Database) MemberRanks(desiredStates ...system.MemberState) ([]system.Rank, error) {
 	if err := db.CheckReplica(); err != nil {
 		return nil, err
 	}
 	db.data.RLock()
 	defer db.data.RUnlock()
 
-	ranks := make([]Rank, 0, len(db.data.Members.Ranks))
+	ranks := make([]system.Rank, 0, len(db.data.Members.Ranks))
 	for _, m := range db.filterMembers(desiredStates...) {
 		ranks = append(ranks, m.Rank)
 	}
@@ -614,7 +620,7 @@ func (db *Database) MemberRanks(desiredStates ...MemberState) ([]Rank, error) {
 }
 
 // MemberCount returns the number of members in the system.
-func (db *Database) MemberCount(desiredStates ...MemberState) (int, error) {
+func (db *Database) MemberCount(desiredStates ...system.MemberState) (int, error) {
 	if err := db.CheckReplica(); err != nil {
 		return -1, err
 	}
@@ -636,7 +642,7 @@ func (db *Database) CurMapVersion() (uint32, error) {
 }
 
 // RemoveMember removes a member from the system.
-func (db *Database) RemoveMember(m *Member) error {
+func (db *Database) RemoveMember(m *system.Member) error {
 	if err := db.CheckLeader(); err != nil {
 		return err
 	}
@@ -651,7 +657,7 @@ func (db *Database) RemoveMember(m *Member) error {
 	return db.submitMemberUpdate(raftOpRemoveMember, &memberUpdate{Member: m})
 }
 
-func (db *Database) manageVoter(vc *Member, op raftOp) error {
+func (db *Database) manageVoter(vc *system.Member, op raftOp) error {
 	// Ignore self as a voter candidate.
 	if common.CmpTCPAddr(db.getReplica(), vc.Addr) {
 		return nil
@@ -691,7 +697,7 @@ func (db *Database) manageVoter(vc *Member, op raftOp) error {
 }
 
 // AddMember adds a member to the system.
-func (db *Database) AddMember(newMember *Member) error {
+func (db *Database) AddMember(newMember *system.Member) error {
 	if err := db.CheckLeader(); err != nil {
 		return err
 	}
@@ -699,10 +705,10 @@ func (db *Database) AddMember(newMember *Member) error {
 	defer db.Unlock()
 
 	if _, err := db.FindMemberByUUID(newMember.UUID); err == nil {
-		return errUuidExists(newMember.UUID)
+		return system.ErrUuidExists(newMember.UUID)
 	}
 	if _, err := db.FindMemberByRank(newMember.Rank); err == nil {
-		return errRankExists(newMember.Rank)
+		return system.ErrRankExists(newMember.Rank)
 	}
 
 	if err := db.manageVoter(newMember, raftOpAddMember); err != nil {
@@ -710,7 +716,7 @@ func (db *Database) AddMember(newMember *Member) error {
 	}
 
 	mu := &memberUpdate{Member: newMember}
-	if newMember.Rank.Equals(NilRank) {
+	if newMember.Rank.Equals(system.NilRank) {
 		newMember.Rank = db.data.NextRank
 		mu.NextRank = true
 	}
@@ -723,7 +729,7 @@ func (db *Database) AddMember(newMember *Member) error {
 }
 
 // UpdateMember updates an existing member.
-func (db *Database) UpdateMember(m *Member) error {
+func (db *Database) UpdateMember(m *system.Member) error {
 	if err := db.CheckLeader(); err != nil {
 		return err
 	}
@@ -740,7 +746,7 @@ func (db *Database) UpdateMember(m *Member) error {
 
 // FindMemberByRank searches the member database by rank. If no
 // member is found, an error is returned.
-func (db *Database) FindMemberByRank(rank Rank) (*Member, error) {
+func (db *Database) FindMemberByRank(rank system.Rank) (*system.Member, error) {
 	if err := db.CheckReplica(); err != nil {
 		return nil, err
 	}
@@ -751,12 +757,12 @@ func (db *Database) FindMemberByRank(rank Rank) (*Member, error) {
 		return copyMember(m), nil
 	}
 
-	return nil, &ErrMemberNotFound{byRank: &rank}
+	return nil, system.ErrMemberRankNotFound(rank)
 }
 
 // FindMemberByUUID searches the member database by UUID. If no
 // member is found, an error is returned.
-func (db *Database) FindMemberByUUID(uuid uuid.UUID) (*Member, error) {
+func (db *Database) FindMemberByUUID(uuid uuid.UUID) (*system.Member, error) {
 	if err := db.CheckReplica(); err != nil {
 		return nil, err
 	}
@@ -767,20 +773,20 @@ func (db *Database) FindMemberByUUID(uuid uuid.UUID) (*Member, error) {
 		return copyMember(m), nil
 	}
 
-	return nil, &ErrMemberNotFound{byUUID: &uuid}
+	return nil, system.ErrMemberUUIDNotFound(uuid)
 }
 
 // FindMembersByAddr searches the member database by control address. If no
 // members are found, an error is returned. This search may return multiple
 // members, as a given address may be associated with more than one rank.
-func (db *Database) FindMembersByAddr(addr *net.TCPAddr) ([]*Member, error) {
+func (db *Database) FindMembersByAddr(addr *net.TCPAddr) ([]*system.Member, error) {
 	if err := db.CheckReplica(); err != nil {
 		return nil, err
 	}
 	db.data.RLock()
 	defer db.data.RUnlock()
 
-	var copies []*Member
+	var copies []*system.Member
 	if members, found := db.data.Members.Addrs[addr.String()]; found {
 		for _, m := range members {
 			copies = append(copies, copyMember(m))
@@ -788,11 +794,11 @@ func (db *Database) FindMembersByAddr(addr *net.TCPAddr) ([]*Member, error) {
 		return copies, nil
 	}
 
-	return nil, &ErrMemberNotFound{byAddr: addr}
+	return nil, system.ErrMemberAddrNotFound(addr)
 }
 
 // FaultDomainTree returns the tree of fault domains of joined members.
-func (db *Database) FaultDomainTree() *FaultDomainTree {
+func (db *Database) FaultDomainTree() *system.FaultDomainTree {
 	db.data.RLock()
 	defer db.data.RUnlock()
 
@@ -801,8 +807,8 @@ func (db *Database) FaultDomainTree() *FaultDomainTree {
 
 // copyPoolService makes a copy of the supplied PoolService pointer
 // for safe use outside of the database.
-func copyPoolService(in *PoolService) *PoolService {
-	out := new(PoolService)
+func copyPoolService(in *system.PoolService) *system.PoolService {
+	out := new(system.PoolService)
 	*out = *in
 	return out
 }
@@ -810,7 +816,7 @@ func copyPoolService(in *PoolService) *PoolService {
 // PoolServiceList returns a list of pool services registered
 // with the system. If the all parameter is not true, only
 // pool services in the "Ready" state are returned.
-func (db *Database) PoolServiceList(all bool) ([]*PoolService, error) {
+func (db *Database) PoolServiceList(all bool) ([]*system.PoolService, error) {
 	if err := db.CheckReplica(); err != nil {
 		return nil, err
 	}
@@ -820,9 +826,9 @@ func (db *Database) PoolServiceList(all bool) ([]*PoolService, error) {
 	// NB: This is expensive! We make a copy of the
 	// pool services to ensure that they can't be changed
 	// elsewhere.
-	dbCopy := make([]*PoolService, 0, len(db.data.Pools.Uuids))
+	dbCopy := make([]*system.PoolService, 0, len(db.data.Pools.Uuids))
 	for _, ps := range db.data.Pools.Uuids {
-		if ps.State != PoolServiceStateReady && !all {
+		if ps.State != system.PoolServiceStateReady && !all {
 			continue
 		}
 		dbCopy = append(dbCopy, copyPoolService(ps))
@@ -832,7 +838,7 @@ func (db *Database) PoolServiceList(all bool) ([]*PoolService, error) {
 
 // FindPoolServiceByUUID searches the pool database by UUID. If no
 // pool service is found, an error is returned.
-func (db *Database) FindPoolServiceByUUID(uuid uuid.UUID) (*PoolService, error) {
+func (db *Database) FindPoolServiceByUUID(uuid uuid.UUID) (*system.PoolService, error) {
 	if err := db.CheckReplica(); err != nil {
 		return nil, err
 	}
@@ -843,12 +849,12 @@ func (db *Database) FindPoolServiceByUUID(uuid uuid.UUID) (*PoolService, error) 
 		return copyPoolService(p), nil
 	}
 
-	return nil, &ErrPoolNotFound{byUUID: &uuid}
+	return nil, system.ErrPoolUUIDNotFound(uuid)
 }
 
 // FindPoolServiceByLabel searches the pool database by Label. If no
 // pool service is found, an error is returned.
-func (db *Database) FindPoolServiceByLabel(label string) (*PoolService, error) {
+func (db *Database) FindPoolServiceByLabel(label string) (*system.PoolService, error) {
 	if err := db.CheckReplica(); err != nil {
 		return nil, err
 	}
@@ -859,11 +865,11 @@ func (db *Database) FindPoolServiceByLabel(label string) (*PoolService, error) {
 		return copyPoolService(p), nil
 	}
 
-	return nil, &ErrPoolNotFound{byLabel: &label}
+	return nil, system.ErrPoolLabelNotFound(label)
 }
 
 // AddPoolService creates an entry for a new pool service in the pool database.
-func (db *Database) AddPoolService(ps *PoolService) error {
+func (db *Database) AddPoolService(ps *system.PoolService) error {
 	if err := db.CheckLeader(); err != nil {
 		return err
 	}
@@ -902,7 +908,7 @@ func (db *Database) RemovePoolService(uuid uuid.UUID) error {
 }
 
 // UpdatePoolService updates an existing pool database entry.
-func (db *Database) UpdatePoolService(ps *PoolService) error {
+func (db *Database) UpdatePoolService(ps *system.PoolService) error {
 	if err := db.CheckLeader(); err != nil {
 		return err
 	}
@@ -945,7 +951,7 @@ func (db *Database) handlePoolRepsUpdate(evt *events.RASEvent) {
 	db.log.Debugf("update pool %s (state=%s) svc ranks %v->%v",
 		ps.PoolUUID, ps.State, ps.Replicas, ei.SvcReplicas)
 
-	ps.Replicas = RanksFromUint32(ei.SvcReplicas)
+	ps.Replicas = system.RanksFromUint32(ei.SvcReplicas)
 
 	if err := db.UpdatePoolService(ps); err != nil {
 		db.log.Errorf("failed to apply pool service update: %s", err)
@@ -958,4 +964,46 @@ func (db *Database) OnEvent(_ context.Context, evt *events.RASEvent) {
 	case events.RASPoolRepsUpdate:
 		db.handlePoolRepsUpdate(evt)
 	}
+}
+
+// SetSystemAttrs submits an update to the system properties map.
+func (db *Database) SetSystemAttrs(props map[string]string) error {
+	if err := db.CheckLeader(); err != nil {
+		return err
+	}
+	db.Lock()
+	defer db.Unlock()
+
+	if err := db.submitSystemAttrsUpdate(props); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// GetSystemAttrs returns a copy of the system properties map.
+func (db *Database) GetSystemAttrs(keys []string) (map[string]string, error) {
+	if err := db.CheckReplica(); err != nil {
+		return nil, err
+	}
+	db.data.RLock()
+	defer db.data.RUnlock()
+
+	// Always return a copy of the map to avoid safety issues.
+	out := make(map[string]string)
+	if len(keys) == 0 {
+		for k, v := range db.data.System.Attributes {
+			out[k] = v
+		}
+		return out, nil
+	}
+
+	for _, k := range keys {
+		if v, found := db.data.System.Attributes[k]; found {
+			out[k] = v
+			continue
+		}
+		return nil, system.ErrSystemAttrNotFound(k)
+	}
+	return out, nil
 }

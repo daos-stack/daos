@@ -110,6 +110,8 @@ CRT_RPC_DEFINE(pool_acl_delete, DAOS_ISEQ_POOL_ACL_DELETE,
 		DAOS_OSEQ_POOL_ACL_DELETE)
 CRT_RPC_DEFINE(pool_ranks_get, DAOS_ISEQ_POOL_RANKS_GET,
 		DAOS_OSEQ_POOL_RANKS_GET)
+CRT_RPC_DEFINE(pool_upgrade, DAOS_ISEQ_POOL_UPGRADE,
+		DAOS_OSEQ_POOL_UPGRADE)
 CRT_RPC_DEFINE(pool_list_cont, DAOS_ISEQ_POOL_LIST_CONT,
 		DAOS_OSEQ_POOL_LIST_CONT)
 CRT_RPC_DEFINE(pool_query_info, DAOS_ISEQ_POOL_QUERY_INFO,
@@ -201,6 +203,12 @@ pool_query_bits(daos_pool_info_t *po_info, daos_prop_t *prop)
 			break;
 		case DAOS_PROP_PO_POLICY:
 			bits |= DAOS_PO_QUERY_PROP_POLICY;
+			break;
+		case DAOS_PROP_PO_GLOBAL_VERSION:
+			bits |= DAOS_PO_QUERY_PROP_GLOBAL_VERSION;
+			break;
+		case DAOS_PROP_PO_UPGRADE_STATUS:
+			bits |= DAOS_PO_QUERY_PROP_UPGRADE_STATUS;
 			break;
 		default:
 			D_ERROR("ignore bad dpt_type %d.\n", entry->dpe_type);

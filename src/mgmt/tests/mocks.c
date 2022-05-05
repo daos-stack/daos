@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2019-2021 Intel Corporation.
+ * (C) Copyright 2019-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -504,4 +504,21 @@ int
 ds_mgmt_dev_identify(uuid_t uuid, Ctl__DevIdentifyResp *resp)
 {
 	return 0;
+}
+
+int	ds_mgmt_pool_upgrade_return;
+uuid_t  ds_mgmt_pool_upgrade_uuid;
+
+int
+ds_mgmt_pool_upgrade(uuid_t pool_uuid, d_rank_list_t *svc_ranks)
+{
+	uuid_copy(ds_mgmt_pool_upgrade_uuid, pool_uuid);
+	return ds_mgmt_pool_upgrade_return;
+}
+
+void
+mock_ds_mgmt_pool_upgrade_setup(void)
+{
+	ds_mgmt_pool_upgrade_return = 0;
+	uuid_clear(ds_mgmt_pool_upgrade_uuid);
 }

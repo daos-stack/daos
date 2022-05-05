@@ -81,6 +81,8 @@ enum vos_pool_open_flags {
 	VOS_POF_SMALL	= (1 << 0),
 	/** Exclusive (-DER_BUSY if already opened) */
 	VOS_POF_EXCL	= (1 << 1),
+	/** Ignore the pool uuid passed into vos_pool_open */
+	VOS_POF_SKIP_UUID_CHECK = (1 << 2),
 };
 
 enum vos_oi_attr {
@@ -339,6 +341,11 @@ typedef struct {
 		/** The key for the entry */
 		d_iov_t		 id_key;
 	};
+	/** Conservative approximation of last aggregatable write for object or key. */
+	daos_epoch_t		 id_agg_write;
+	/** Timestamp of latest parent punch, if applicable.  Zero if there is no punch */
+	daos_epoch_t		 id_parent_punch;
+	/** Type of entry */
 	vos_iter_type_t		 id_type;
 } vos_iter_desc_t;
 

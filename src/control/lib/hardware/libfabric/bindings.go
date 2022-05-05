@@ -143,33 +143,19 @@ func (f *fiInfo) hfiUnit() (uint, error) {
 
 // fiGetInfo fetches the list of fi_info structs with the desired provider (if non-empty), or all of
 // them otherwise. It also returns the cleanup function to free the fi_info.
-func fiGetInfo(hdl *dlopen.LibHandle, provider string) ([]*fiInfo, func() error, error) {
-	hint, freeHint, err := fiAllocInfo(hdl)
-	if err != nil {
-		return nil, nil, err
-	}
-	defer func() {
-		if err := freeHint(); err != nil {
-			panic(err)
-		}
-	}()
-
-	if provider != "" {
-		hint.fabric_attr.prov_name = C.CString(provider)
-	}
-
+func fiGetInfo(hdl *dlopen.LibHandle) ([]*fiInfo, func() error, error) {
 	getInfoPtr, err := getLibFuncPtr(hdl, "fi_getinfo")
 	if err != nil {
 		return nil, nil, err
 	}
 
 	var fi *C.struct_fi_info
-	result := C.call_fi_getinfo(getInfoPtr, hint, &fi)
+	result := C.call_fi_getinfo(getInfoPtr, nil, &fi)
 	if result < 0 {
 		return nil, nil, errors.Errorf("fi_getinfo() failed: %s", fiStrError(hdl, -result))
 	}
 	if fi == nil {
-		return nil, nil, errors.Errorf("fi_getinfo() returned no results for provider %q", provider)
+		return nil, nil, errors.Errorf("fi_getinfo() returned no results")
 	}
 
 	fiList := make([]*fiInfo, 0)

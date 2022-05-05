@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2021 Intel Corporation.
+// (C) Copyright 2021-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -16,6 +16,8 @@ type ArgsHandler interface {
 	CheckArgs([]string) error
 	HandleArgs([]string) error
 }
+
+var _ ArgsHandler = (*NoArgsCmd)(nil)
 
 // NoArgsCmd defines an embeddable struct that can be used to
 // implement a command that does not take any arguments.
