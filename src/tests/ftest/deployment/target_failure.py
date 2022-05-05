@@ -353,7 +353,7 @@ class TargetFailure(IorTestBase):
         # 1. Create 2 pools and a container in each pool. Each pool uses about 40% of the
         # available storage.
         self.pool.append(self.get_pool(namespace="/run/pool_size_ratio_40/*"))
-        self.pool.append(self.get_pool(namespace="/run/pool_size_ratio_66/*"))
+        self.pool.append(self.get_pool(namespace="/run/pool_size_ratio_40/*"))
         for i in range(2):
             self.container.append(
                 self.get_container(pool=self.pool[i], namespace="/run/container_wo_rf/*"))
