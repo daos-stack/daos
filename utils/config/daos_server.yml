@@ -70,12 +70,13 @@
 #
 ## Network provider
 #
-## Force a specific libfabric provider to be used by all the engines.
-## The default provider depends on the interfaces that will be auto-detected:
-##  ofi+verbs for Infiniband/RoCE and
-##  ofi+tcp for non-RDMA-capable Ethernet.
+## Set the libfabric provider to be used by all the engines.
+## There is no default - run "daos_server network scan" to list the
+## providers that are supported on the fabric interfaces. Examples:
+##  ofi+verbs;ofi_rxm  for Infiniband/RoCE and
+##  ofi+tcp            for non-RDMA-capable fabrics
 #
-#provider: ofi+verbs
+#provider: ofi+verbs;ofi_rxm
 #
 #
 ## CART: Whether to enable share address in the network stack
