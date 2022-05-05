@@ -1,10 +1,13 @@
-#!/usr/bin/env python3
+#!/usr/bin/python3 -u
 """
   (C) Copyright 2018-2022 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 # pylint: disable=too-many-lines
+# this needs to be disabled as list_tests.py is still using python2
+# pylint: disable=raise-missing-from
+
 
 from argparse import ArgumentParser, RawDescriptionHelpFormatter
 from collections import OrderedDict
@@ -14,11 +17,11 @@ import json
 import os
 import re
 import socket
-import subprocess  # nosec
+import subprocess #nosec
 import site
 import sys
 import time
-from xml.etree.ElementTree import Element, SubElement, tostring  # nosec
+from xml.etree.ElementTree import Element, SubElement, tostring #nosec
 import yaml
 from defusedxml import minidom
 import defusedxml.ElementTree as ET
@@ -40,7 +43,7 @@ except ImportError:
     from tempfile import mkdtemp
     from shutil import rmtree
 
-    class TemporaryDirectory():
+    class TemporaryDirectory(object):
         # pylint: disable=too-few-public-methods
         """Create a temporary directory.
 
@@ -436,10 +439,12 @@ def run_command(cmd):
     print("Running {}".format(" ".join(cmd)))
 
     try:
-        with subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
-                              universal_newlines=True) as process:
-            stdout, _ = process.communicate()
-            retcode = process.poll()
+        # pylint: disable=consider-using-with
+        process = subprocess.Popen(
+            cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+            universal_newlines=True)
+        stdout, _ = process.communicate()
+        retcode = process.poll()
     except Exception as error:
         raise RuntimeError("Error executing '{}':\n\t{}".format(" ".join(cmd), error))
     if retcode:
@@ -1420,8 +1425,7 @@ def get_yaml_data(yaml_file):
     if os.path.isfile(yaml_file):
         with open(yaml_file, "r") as open_file:
             try:
-                file_data = open_file.read()
-                yaml_data = yaml.load(file_data, Loader=DaosLoader)
+                yaml_data = yaml.load(open_file.read(), Loader=DaosLoader)
             except yaml.YAMLError as error:
                 print("Error reading {}: {}".format(yaml_file, error))
                 sys.exit(1)
