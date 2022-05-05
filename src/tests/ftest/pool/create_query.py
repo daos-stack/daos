@@ -43,7 +43,7 @@ class PoolCreateQueryTests(PoolTestBase):
                 "NVMe size of the pool created too different from the given size")
 
         # Query pool created
-        resp = self.dmg.pool_query(self.pool.identifier, show_enabled = True)["response"]
+        resp = self.dmg.pool_query(self.pool.identifier, show_enabled=True)["response"]
         nb_ranks = len(resp["enabled_ranks"])
         tier_stats = resp["tier_stats"]
         self.assertEqual("SCM", tier_stats[0]["media_type"].upper(), "Unexpected tier media type")
