@@ -93,7 +93,3 @@ func (tr *TestRunner) GetLastPid() uint64 {
 func (tr *TestRunner) GetConfig() *Config {
 	return tr.serverCfg
 }
-
-func (tr *TestRunner) GetRunnerConfig() *TestRunnerConfig {
-	return &tr.runnerCfg
-}
