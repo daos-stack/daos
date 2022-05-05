@@ -57,11 +57,25 @@ typedef struct dfs dfs_t;
 /** read/write access */
 #define DFS_RDWR	O_RDWR
 
+/** DFS Hints for Redundancy and Sharding*/
 enum {
-	DFS_HINT_LARGE_FILES	= (1 << 0),
-	DFS_HINT_SMALL_FILES	= (1 << 1),
-	DFS_HINT_LARGE_DIRS	= (1 << 2),
-	DFS_HINT_SMALL_DIRS	= (1 << 3),
+	/** Tiny files 0-10m:		1 shard - RP */
+	DFS_HINT_FILE_TY	= (1 << 0),
+	/** Small files 10m-1g:		max(25%, 128 shards) - EC */
+	DFS_HINT_FILE_SM	= (1 << 1),
+	/** Medium files 100m-100g:	max(50%, 256 shards) - EC */
+	DFS_HINT_FILE_MD	= (1 << 2),
+	/** Large files >100g:		all shards - EC */
+	DFS_HINT_FILE_LG	= (1 << 3),
+
+	/** Small dir 0-1k:		1 shard - RP */
+	DFS_HINT_DIR_TY		= (1 << 4),
+	/** Small dir 1k-10k:		max(25%, 128 shards) - RP */
+	DFS_HINT_DIR_SM		= (1 << 5),
+	/** Medium dir 10k-1m:		max(50%, 256 shards) - RP */
+	DFS_HINT_DIR_MD		= (1 << 6),
+	/** Large dir >1m:		all shards - RP */
+	DFS_HINT_DIR_LG		= (1 << 7),
 };
 
 /** struct holding attributes for a DFS container - all optional */

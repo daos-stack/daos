@@ -43,7 +43,7 @@
 /** A-key name of Default Object Class for directories */
 #define DIR_OC_NAME	"DFS_DIR_OBJ_CLASS"
 /** A-key name of the object class hints */
-#define HINT_OC_NAME	"DFS_OC_HINTS"
+#define HINT_NAME	"DFS_HINTS"
 /** Consistency mode of the DFS container */
 #define MODE_NAME	"DFS_MODE"
 
@@ -329,6 +329,40 @@ check_tx(daos_handle_t th, int rc)
 	}
 
 	return rc;
+}
+
+static inline daos_oclass_hints_t
+dir2oid_hint(uint64_t hints)
+{
+	daos_oclass_hints_t dir_oclass_hint = 0;
+
+	if (hints & DFS_HINT_DIR_TY)
+		dir_oclass_hint = DAOS_OCH_SHD_TINY | DAOS_OCH_RDD_RP;
+	else if (hints & DFS_HINT_DIR_SM)
+		dir_oclass_hint = DAOS_OCH_SHD_REG | DAOS_OCH_RDD_RP;
+	else if (hints & DFS_HINT_DIR_MD)
+		dir_oclass_hint = DAOS_OCH_SHD_HI | DAOS_OCH_RDD_RP;
+	else if (hints & DFS_HINT_DIR_LG)
+		dir_oclass_hint = DAOS_OCH_SHD_MAX | DAOS_OCH_RDD_RP;
+
+	return dir_oclass_hint;
+}
+
+static inline daos_oclass_hints_t
+file2oid_hint(uint64_t hints)
+{
+	daos_oclass_hints_t file_oclass_hint = 0;
+
+	if (hints & DFS_HINT_FILE_TY)
+		file_oclass_hint = DAOS_OCH_SHD_TINY | DAOS_OCH_RDD_RP;
+	else if (hints & DFS_HINT_FILE_SM)
+		file_oclass_hint = DAOS_OCH_SHD_REG | DAOS_OCH_RDD_EC;
+	else if (hints & DFS_HINT_FILE_MD)
+		file_oclass_hint = DAOS_OCH_SHD_HI | DAOS_OCH_RDD_EC;
+	else if (hints & DFS_HINT_FILE_LG)
+		file_oclass_hint = DAOS_OCH_SHD_MAX | DAOS_OCH_RDD_EC;
+
+	return file_oclass_hint;
 }
 
 #define MAX_OID_HI ((1UL << 32) - 1)
@@ -1417,7 +1451,7 @@ set_inode_params(bool for_update, daos_iod_t *iods, daos_key_t *dkey)
 	set_daos_iod(for_update, &iods[i++], OC_NAME, sizeof(daos_oclass_id_t));
 	set_daos_iod(for_update, &iods[i++], MODE_NAME, sizeof(uint32_t));
 	set_daos_iod(for_update, &iods[i++], DIR_OC_NAME, sizeof(daos_oclass_id_t));
-	set_daos_iod(for_update, &iods[i++], HINT_OC_NAME, sizeof(uint64_t));
+	set_daos_iod(for_update, &iods[i++], HINT_NAME, sizeof(uint64_t));
 }
 
 static int
@@ -1625,12 +1659,8 @@ dfs_cont_create(daos_handle_t poh, uuid_t *cuuid, dfs_attr_t *attr,
 	}
 
 	/** check hint for SB and Root Dir */
-	if (dattr.da_hints != 0) {
-		if (dattr.da_hints & DFS_HINT_SMALL_DIRS)
-			dir_oclass_hint = DAOS_OCH_SHD_TINY;
-		else if (dattr.da_hints & DFS_HINT_LARGE_DIRS)
-			dir_oclass_hint = DAOS_OCH_SHD_MAX;
-	}
+	if (dattr.da_hints != 0)
+		dir_oclass_hint = dir2oid_hint(dattr.da_hints);
 
 	/** check if RF factor is set on property */
 	dpe = daos_prop_entry_get(prop, DAOS_PROP_CO_REDUN_FAC);
@@ -2062,15 +2092,8 @@ dfs_mount(daos_handle_t poh, daos_handle_t coh, int flags, dfs_t **_dfs)
 
 	/** set oid hints for files and dirs */
 	if (dfs->attr.da_hints != 0) {
-		if (dfs->attr.da_hints & DFS_HINT_SMALL_FILES)
-			dfs->file_oclass_hint = DAOS_OCH_SHD_TINY;
-		else if (dfs->attr.da_hints & DFS_HINT_LARGE_FILES)
-			dfs->file_oclass_hint = DAOS_OCH_SHD_MAX;
-
-		if (dfs->attr.da_hints & DFS_HINT_SMALL_DIRS)
-			dfs->dir_oclass_hint = DAOS_OCH_SHD_TINY;
-		else if (dfs->attr.da_hints & DFS_HINT_LARGE_DIRS)
-			dfs->dir_oclass_hint = DAOS_OCH_SHD_MAX;
+		dfs->file_oclass_hint = file2oid_hint(dfs->attr.da_hints);
+		dfs->dir_oclass_hint = dir2oid_hint(dfs->attr.da_hints);
 	}
 
 	/*

@@ -443,3 +443,52 @@ func TestFlags_ContTypeFlag(t *testing.T) {
 		})
 	}
 }
+
+func TestFlags_ContHintsFlag(t *testing.T) {
+	for name, tc := range map[string]struct {
+		arg     string
+		expFlag *ContHintsFlag
+		expErr  error
+	}{
+		"unset": {
+			expErr: errors.New("empty container hints"),
+		},
+		"invalid": {
+			arg:    "huge_file",
+			expErr: errors.New("unknown container hint"),
+		},
+		"valid129": {
+			arg: "tiny_file,large_dir",
+			expFlag: &ContHintsFlag{
+				Set:   true,
+				Hints: 129,
+			},
+		},
+		"valid1": {
+			arg: "tiny_file",
+			expFlag: &ContHintsFlag{
+				Set:   true,
+				Hints: 1,
+			},
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			f := ContHintsFlag{}
+			gotErr := f.UnmarshalFlag(tc.arg)
+			test.CmpErr(t, tc.expErr, gotErr)
+			if tc.expErr != nil {
+				return
+			}
+
+			flagTestFini, err := flagTestInit()
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer flagTestFini()
+
+			if diff := cmp.Diff(tc.expFlag, &f); diff != "" {
+				t.Fatalf("unexpected flag value: (-want, +got)\n%s\n", diff)
+			}
+		})
+	}
+}
