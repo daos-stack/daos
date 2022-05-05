@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2021 Intel Corporation.
+// (C) Copyright 2019-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -198,6 +198,42 @@ func TestDmg_SystemCommands(t *testing.T) {
 			"system list-pools",
 			strings.Join([]string{
 				printRequest(t, &control.ListPoolsReq{}),
+			}, " "),
+			nil,
+		},
+		{
+			"system set-attr multi attributes",
+			"system set-attr foo:bar,baz:qux",
+			strings.Join([]string{
+				printRequest(t, &control.SystemSetAttrReq{
+					Attributes: map[string]string{
+						"foo": "bar",
+						"baz": "qux",
+					},
+				}),
+			}, " "),
+			nil,
+		},
+		{
+			"system get-attr multi attributes",
+			"system get-attr foo,baz",
+			strings.Join([]string{
+				printRequest(t, &control.SystemGetAttrReq{
+					Keys: []string{"baz", "foo"},
+				}),
+			}, " "),
+			nil,
+		},
+		{
+			"system del-attr multi attributes",
+			"system del-attr foo,baz",
+			strings.Join([]string{
+				printRequest(t, &control.SystemSetAttrReq{
+					Attributes: map[string]string{
+						"foo": "",
+						"baz": "",
+					},
+				}),
 			}, " "),
 			nil,
 		},

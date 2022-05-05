@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2017-2021 Intel Corporation.
+ * (C) Copyright 2017-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -26,17 +26,18 @@
  * all aio routines (for now)
  * fcntl (for now though we likely need for dup)
  */
-#define FOREACH_ALIASED_INTERCEPT(ACTION)                                     \
-	ACTION(FILE *,  fopen,     (const char *, const char *))              \
-	ACTION(FILE *,  freopen,   (const char *, const char *, FILE *))      \
-	ACTION(int,     open,      (const char *, int, ...))                  \
-	ACTION(int,     openat,    (int, const char *, int, ...))             \
-	ACTION(ssize_t, pread,     (int, void *, size_t, off_t))              \
-	ACTION(ssize_t, pwrite,    (int, const void *, size_t, off_t))        \
-	ACTION(off_t,   lseek,     (int, off_t, int))                         \
-	ACTION(ssize_t, preadv,    (int, const struct iovec *, int, off_t))   \
-	ACTION(ssize_t, pwritev,   (int, const struct iovec *, int, off_t))   \
-	ACTION(void *,  mmap,      (void *, size_t, int, int, int, off_t))
+#define FOREACH_ALIASED_INTERCEPT(ACTION)                                                          \
+	ACTION(FILE *, fopen, (const char *, const char *))                                        \
+	ACTION(FILE *, freopen, (const char *, const char *, FILE *))                              \
+	ACTION(int, open, (const char *, int, ...))                                                \
+	ACTION(int, openat, (int, const char *, int, ...))                                         \
+	ACTION(ssize_t, pread, (int, void *, size_t, off_t))                                       \
+	ACTION(ssize_t, pwrite, (int, const void *, size_t, off_t))                                \
+	ACTION(off_t, lseek, (int, off_t, int))                                                    \
+	ACTION(ssize_t, preadv, (int, const struct iovec *, int, off_t))                           \
+	ACTION(ssize_t, pwritev, (int, const struct iovec *, int, off_t))                          \
+	ACTION(void *, mmap, (void *, size_t, int, int, int, off_t))                               \
+	ACTION(int, ftruncate, (int, off_t))
 
 #define FOREACH_SINGLE_INTERCEPT(ACTION)                                      \
 	ACTION(int,     fclose,    (FILE *))                                  \

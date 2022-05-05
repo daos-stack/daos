@@ -533,11 +533,13 @@ class DmgCommand(DmgCommandBase):
 
         return data
 
-    def pool_query(self, pool):
+    def pool_query(self, pool, show_enabled=False, show_disabled=False):
         """Query a pool with the dmg command.
 
         Args:
             uuid (str): Pool UUID to query.
+            show_enabled (bool, optional): Display enabled ranks.
+            show_disabled (bool, optional): Display disabled ranks.
 
         Raises:
             CommandFailure: if the dmg pool query command fails.
@@ -553,7 +555,7 @@ class DmgCommand(DmgCommandBase):
         #         "uuid": "EDAE0965-7A6E-48BD-A71C-A29F199C679F",
         #         "total_targets": 8,
         #         "active_targets": 8,
-        #         "total_nodes": 1,
+        #         "total_engines": 1,
         #         "disabled_targets": 0,
         #         "version": 1,
         #         "leader": 0,
@@ -576,12 +578,15 @@ class DmgCommand(DmgCommandBase):
         #             "min": 3999993856,
         #             "max": 3999993856,
         #             "mean": 3999993856
-        #         }
+        #         },
+        #         "enabled_ranks": None,
+        #         "disabled_ranks": None
         #     },
         #     "error": null,
         #     "status": 0
         # }
-        return self._get_json_result(("pool", "query"), pool=pool)
+        return self._get_json_result(("pool", "query"), pool=pool,
+                show_enabled=show_enabled, show_disabled=show_disabled)
 
     def pool_destroy(self, pool, force=True):
         """Destroy a pool with the dmg command.

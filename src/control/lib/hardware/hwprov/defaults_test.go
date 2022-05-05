@@ -155,3 +155,16 @@ func TestHwprov_DefaultFabricScanner(t *testing.T) {
 		t.Fatalf("(-want, +got)\n%s\n", diff)
 	}
 }
+
+func TestHwprov_DefaultNetDevStateProvider(t *testing.T) {
+	log, buf := logging.NewTestLogger(t.Name())
+	defer common.ShowBufferOnFailure(t, buf)
+
+	result := DefaultNetDevStateProvider(log)
+
+	if diff := cmp.Diff(sysfs.NewProvider(log), result,
+		cmpopts.IgnoreUnexported(sysfs.Provider{}),
+	); diff != "" {
+		t.Fatalf("(-want, +got)\n%s\n", diff)
+	}
+}

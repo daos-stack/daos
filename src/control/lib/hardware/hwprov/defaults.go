@@ -69,6 +69,11 @@ func DefaultFabricScanner(log logging.Logger) *hardware.FabricScanner {
 	return fs
 }
 
+// DefaultNetDevStateProvider gets the default provider for getting the fabric interface state.
+func DefaultNetDevStateProvider(log logging.Logger) hardware.NetDevStateProvider {
+	return sysfs.NewProvider(log)
+}
+
 // Init loads up any dynamic libraries that need to be loaded at runtime.
 func Init(log logging.Logger) (func(), error) {
 	initFns := []func() (func(), error){

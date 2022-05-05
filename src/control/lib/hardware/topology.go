@@ -13,9 +13,6 @@ import (
 	"github.com/pkg/errors"
 )
 
-// ErrNoNUMANodes indicates that the system can't detect any NUMA nodes.
-var ErrNoNUMANodes = errors.New("no NUMA nodes detected")
-
 type (
 	// TopologyProvider is an interface for acquiring a system topology.
 	TopologyProvider interface {

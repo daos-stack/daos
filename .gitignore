@@ -59,3 +59,4 @@ src/client/java/hadoop-daos/target/
 src/client/java/daos-java/build/
 docs/doxygen/
 venv
+.yamllint
