@@ -58,8 +58,8 @@ echo $FILES
 # Write to a file using re-direct.
 dd if=/dev/urandom bs=1k count=2 > out-file
 
-echo {}
-""".format(mount_dir)
+echo $1
+"""
 
         remote_env = OrderedDict()
         remote_env['LD_PRELOAD'] = '/usr/lib64/libioil.so'
@@ -79,7 +79,7 @@ echo {}
             os.fchmod(script, stat.S_IRUSR | stat.S_IWUSR | stat.S_IXUSR)
 
             try:
-                command = '{};{}'.format(preload_cmd, script.name)
+                command = '{};{} {}'.format(preload_cmd, script.name, mount_dir)
                 ret_code = general_utils.pcmd(self.hostlist_clients, command, timeout=1500)
                 if 0 in ret_code:
                     return
