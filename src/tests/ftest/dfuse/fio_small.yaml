@@ -32,13 +32,13 @@ server_config:
       scm_list: ["/dev/pmem1"]
       scm_mount: /mnt/daos1
   transport_config:
-    allow_insecure: true
+    allow_insecure: True
 agent_config:
   transport_config:
-    allow_insecure: true
+    allow_insecure: True
 dmg:
   transport_config:
-    allow_insecure: true
+    allow_insecure: True
 pool:
   mode: 146
   name: daos_server
@@ -50,11 +50,11 @@ container:
   control_method: daos
   rf_properties: !mux
     rf0:
-      properties: cksum:crc16,cksum_size:16384,srv_cksum:on
+        properties: cksum:crc16,cksum_size:16384,srv_cksum:on
     rf1:
-      properties: cksum:crc16,cksum_size:16384,srv_cksum:on,rf:1
+        properties: cksum:crc16,cksum_size:16384,srv_cksum:on,rf:1
     rf2:
-      properties: cksum:crc16,cksum_size:16384,srv_cksum:on,rf:2
+        properties: cksum:crc16,cksum_size:16384,srv_cksum:on,rf:2
 fio:
   names:
     - global
@@ -65,9 +65,9 @@ fio:
     thread: 1
     group_reporting: 1
     direct_io: !mux
-      on:  # yamllint disable-line rule:truthy
+      on:
         direct: 1
-      off:  # yamllint disable-line rule:truthy
+      off:
     verify: 'crc64'
     iodepth: 16
     bs: !mux

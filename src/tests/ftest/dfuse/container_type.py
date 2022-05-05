@@ -57,7 +57,9 @@ class DfuseContainerCheck(DfuseTestBase):
 
             except TestFail as error:
                 if cont_type == "POSIX":
-                    self.fail("POSIX type container failed dfuse mount: {}".format(error))
+                    self.fail(
+                        "POSIX type container failed dfuse mount: {}".format(
+                            error))
                 self.log.info(
                     "Non-POSIX type container expected to fail dfuse mount")
 

@@ -94,8 +94,8 @@ class Cmd(DfuseTestBase):
         needles = self.params.get("needles", '/run/find_cmd/*')
         temp_dfs_path = ""
 
-        dfuses = []
-        containers = []
+        dfuses = list()
+        containers = list()
 
         self.add_pool(connect=False)
 
@@ -188,7 +188,9 @@ class Cmd(DfuseTestBase):
         def _search_needles(file_name, sample_tag, expected_res):
             self.log.info("Searching pattern: %s", file_name)
             self.log.info("Number of expecting results: %d", expected_res)
-            cmd = "find {0} -name {1} | wc -l | grep {2}".format(test_path, file_name, expected_res)
+            cmd = "find {0} -name {1} | wc -l | grep {2}".format(test_path,
+                                                                  file_name,
+                                                                  expected_res)
             profiler.run(self._run_cmd,
                          sample_tag,
                          cmd)
@@ -199,12 +201,12 @@ class Cmd(DfuseTestBase):
             self.log.info(
                 "Running sample number %d of %d", i + 1, samples)
 
-            prefix = random.randrange(containers - 1)  # nosec
-            suffix = random.randrange(needles - 1)  # nosec
+            prefix = random.randrange(containers - 1) #nosec
+            suffix = random.randrange(needles - 1) #nosec
             file_name = "t{:05d}_*_{:05d}.needle".format(prefix, suffix)
             _search_needles(file_name, "unique_file", 1)
 
-            number = random.randrange(needles - 1)  # nosec
+            number = random.randrange(needles - 1) #nosec
             file_name = "*_{:05d}.needle".format(number)
             _search_needles(file_name, "same_suffix", containers)
 
@@ -295,7 +297,7 @@ class Cmd(DfuseTestBase):
         with the prefix value.
         """
         letters = string.ascii_lowercase + string.digits
-        random_name = "".join(random.choice(letters) for _ in range(8))  # nosec
+        random_name = "".join(random.choice(letters) for _ in range(8)) #nosec
 
         return os.path.join(root, "{}{}".format(prefix, random_name))
 

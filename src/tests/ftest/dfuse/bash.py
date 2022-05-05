@@ -86,10 +86,13 @@ class Cmd(DfuseTestBase):
                             "filesize=$(stat -c%s '{}');\
                             if (( filesize != {}*{} )); then exit 1;\
                             fi".format(abs_file_path1, dd_count, dd_blocksize),
-                            "cp -r {} {}".format(abs_file_path1, abs_file_path2),
-                            "cmp --silent {} {}".format(abs_file_path1, abs_file_path2),
+                            "cp -r {} {}".format(abs_file_path1,
+                                                  abs_file_path2),
+                            "cmp --silent {} {}".format(abs_file_path1,
+                                                         abs_file_path2),
                             "rm {}".format(abs_file_path2),
-                            "mv {} {}".format(abs_file_path1, abs_file_path2),
+                            "mv {} {}".format(abs_file_path1,
+                                               abs_file_path2),
                             "ls -al {}".format(abs_file_path2),
                             "ls -al {}/.".format(abs_dir_path),
                             "ls -al {}/..".format(abs_dir_path),
