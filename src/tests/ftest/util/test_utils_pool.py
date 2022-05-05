@@ -810,8 +810,12 @@ class TestPool(TestDaosApiBase):
         return status
 
     @fail_on(CommandFailure)
-    def set_query_data(self):
+    def set_query_data(self, show_enabled=False, show_disabled=False):
         """Execute dmg pool query and store the results.
+
+        Args:
+            show_enabled (bool, optional): Display enabled ranks.
+            show_disabled (bool, optional): Display disabled ranks.
 
         Only supported with the dmg control method.
         """
@@ -827,7 +831,8 @@ class TestPool(TestDaosApiBase):
                     end_time = time() + self.pool_query_timeout.value
                 while True:
                     try:
-                        self.query_data = self.dmg.pool_query(self.identifier)
+                        self.query_data = self.dmg.pool_query(self.identifier, show_enabled,
+                                show_disabled)
                         break
                     except CommandFailure as error:
                         if end_time is not None:
