@@ -51,6 +51,7 @@ dnf -y --nodocs install \
     patchelf \
     pciutils \
     python3-devel \
+    scons \
     sg3_utils \
     sudo \
     valgrind-devel \
