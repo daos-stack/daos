@@ -467,7 +467,6 @@ pipeline {
                     steps {
                         sconsBuild parallel_build: parallelBuild(),
                                    stash_files: 'ci/test_files_to_stash.txt',
-                                   scons_exe: 'scons-3',
                                    scons_args: sconsFaultsArgs()
                     }
                     post {
@@ -501,7 +500,6 @@ pipeline {
                     steps {
                         sconsBuild parallel_build: parallelBuild(),
                                    stash_files: 'ci/test_files_to_stash.txt',
-                                   scons_exe: 'scons-3',
                                    scons_args: sconsFaultsArgs()
                     }
                     post {
@@ -679,8 +677,7 @@ pipeline {
                     }
                     steps {
                         sconsBuild coverity: "daos-stack/daos",
-                                   parallel_build: parallelBuild(),
-                                   scons_exe: 'scons-3'
+                                   parallel_build: parallelBuild()
                     }
                     post {
                         success {
@@ -870,7 +867,6 @@ pipeline {
                     }
                     steps {
                         sconsBuild parallel_build: true,
-                                   scons_exe: 'scons-3',
                                    scons_args: "PREFIX=/opt/daos TARGET_TYPE=release BUILD_TYPE=debug",
                                    build_deps: "no"
                         sh (script:"""./utils/docker_nlt.sh --class-name centos7.fault-injection fi""",
