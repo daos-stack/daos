@@ -26,7 +26,7 @@
 %endif
 
 Name:          daos
-Version:       2.1.101
+Version:       2.1.102
 Release:       3%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
@@ -562,6 +562,9 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 # No files in a shim package
 
 %changelog
+* Wed May 4 2022 Johann Lombardi <johann.lombardi@intel.com> 2.1.102-1
+- Bump version to 2.1.102
+
 * Fri Apr 22 2022 Lei Huang <lei.huang@intel.com> 2.1.101-3
 - Update to libfabric to v1.15.0rc3-1 to include critical performance patches
 
