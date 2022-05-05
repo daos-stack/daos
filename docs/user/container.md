@@ -90,7 +90,7 @@ $ daos cont create tank --label mycont1 --type POSIX --properties rf:1
 Successfully created container b396e2ca-2077-4908-9ff2-1af4b4b2fd4a
 ```
 
-Please refer to the [redundancy factor property](#Redundancy_Factor)
+Please refer to the [redundancy factor property](#redundancy-factor)
 for more information.
 
 ### Listing Containers
