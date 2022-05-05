@@ -656,7 +656,7 @@ func TestServer_CtlSvc_ResetFormatRanks(t *testing.T) {
 				tc.engineCount = maxEngines
 			}
 
-			ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 			defer cancel()
 
 			cfg := config.DefaultServer().WithEngines(
@@ -676,9 +676,9 @@ func TestServer_CtlSvc_ResetFormatRanks(t *testing.T) {
 			svc := mockControlService(t, log, cfg, nil, nil, nil)
 
 			for i, e := range svc.harness.instances {
-				srv := e.(*EngineInstance)
+				ei := e.(*EngineInstance)
 				if tc.missingSB {
-					srv._superblock = nil
+					ei._superblock = nil
 					continue
 				}
 
@@ -691,12 +691,16 @@ func TestServer_CtlSvc_ResetFormatRanks(t *testing.T) {
 				trc := &engine.TestRunnerConfig{}
 				if tc.instancesStarted {
 					trc.Running.SetTrue()
-					srv.ready.SetTrue()
+					ei.ready.SetTrue()
 				}
-				srv.runner = engine.NewTestRunner(trc, engineCfg)
-				srv.setIndex(uint32(i))
+				if !tc.startFails {
+					ei.waitFormat.SetTrue()
+				}
 
-				cfg, err := srv.storage.GetScmConfig()
+				ei.runner = engine.NewTestRunner(trc, engineCfg)
+				ei.setIndex(uint32(i))
+
+				cfg, err := ei.storage.GetScmConfig()
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -708,21 +712,16 @@ func TestServer_CtlSvc_ResetFormatRanks(t *testing.T) {
 				}
 				superblock.Rank = new(system.Rank)
 				*superblock.Rank = system.Rank(i + 1)
-				srv.setSuperblock(superblock)
-				if err := srv.WriteSuperblock(); err != nil {
+				ei.setSuperblock(superblock)
+				if err := ei.WriteSuperblock(); err != nil {
 					t.Fatal(err)
 				}
 
-				// mimic srv.run, set "ready" on startLoop rx
+				// Unblock requestStart() called from ResetFormatRanks() by reading
+				// from startRequested channel.
 				go func(s *EngineInstance, startFails bool) {
 					<-s.startRequested
-					if startFails {
-						return
-					}
-					// processing loop reaches wait for format state
-					s.waitFormat.SetTrue()
-					t.Log("wait format set to true")
-				}(srv, tc.startFails)
+				}(ei, tc.startFails)
 			}
 
 			gotResp, gotErr := svc.ResetFormatRanks(ctx, tc.req)
