@@ -154,7 +154,47 @@ Pool space info:
 Rebuild busy, 42 objs, 21 recs
 `, common.MockUUID()),
 		},
-
+		"unknown/invalid rebuild state response": {
+			pqr: &control.PoolQueryResp{
+				UUID: common.MockUUID(),
+				PoolInfo: control.PoolInfo{
+					TotalTargets:    2,
+					DisabledTargets: 1,
+					ActiveTargets:   1,
+					Leader:          42,
+					Version:         100,
+					DisabledRanks:   system.MustCreateRankSet("[0,1,3]"),
+					Rebuild: &control.PoolRebuildStatus{
+						State:   42,
+						Objects: 42,
+						Records: 21,
+					},
+					TierStats: []*control.StorageUsageStats{
+						{
+							Total: 2,
+							Free:  1,
+						},
+						{
+							Total: 2,
+							Free:  1,
+						},
+					},
+				},
+			},
+			expPrintStr: fmt.Sprintf(`
+Pool %s, ntarget=2, disabled=1, leader=42, version=100
+Pool space info:
+- Disabled targets: 0-1,3
+- Target(VOS) count:1
+- Storage tier 0 (SCM):
+  Total size: 2 B
+  Free: 1 B, min:0 B, max:0 B, mean:0 B
+- Storage tier 1 (NVMe):
+  Total size: 2 B
+  Free: 1 B, min:0 B, max:0 B, mean:0 B
+Rebuild unknown, 42 objs, 21 recs
+`, common.MockUUID()),
+		},
 		"rebuild failed": {
 			pqr: &control.PoolQueryResp{
 				UUID: common.MockUUID(),
@@ -215,16 +255,14 @@ func TestPretty_PrintPoolQueryTargetResp(t *testing.T) {
 		expPrintStr string
 	}{
 		"empty response": {
-			pqtr: &control.PoolQueryTargetResp{},
-			expPrintStr: `
-`,
+			pqtr:        &control.PoolQueryTargetResp{},
+			expPrintStr: "\n",
 		},
 		"der_nonexist response (e.g., invalid target_idx input)": {
 			pqtr: &control.PoolQueryTargetResp{
 				Status: -1005,
 			},
-			expPrintStr: `
-`,
+			expPrintStr: "\n",
 		},
 		"valid: single target (unknown, down_out)": {
 			pqtr: &control.PoolQueryTargetResp{
@@ -425,7 +463,7 @@ Target: type unknown, state drain
 						},
 					},
 					{
-						Type:  0, // FIXME: control.PoolTargetTypeUnknown
+						Type:  0,
 						State: control.PoolTargetStateUpIn,
 						Space: []*control.StorageTargetUsage{
 							{
@@ -497,6 +535,313 @@ Target: type unknown, state up_in
 - Storage tier 1 (NVMe):
   Total size: 100 GB
   Free: 90 GB
+`,
+		},
+		"invalid target state": {
+			pqtr: &control.PoolQueryTargetResp{
+				Status: 0,
+				Infos: []*control.PoolQueryTargetInfo{
+					{
+						Type:  0,
+						State: 42,
+						Space: []*control.StorageTargetUsage{
+							{
+								Total: 6000000000,
+								Free:  5000000000,
+							},
+							{
+								Total: 100000000000,
+								Free:  90000000000,
+							},
+						},
+					},
+					{
+						Type:  0,
+						State: control.PoolTargetStateUpIn,
+						Space: []*control.StorageTargetUsage{
+							{
+								Total: 6000000000,
+								Free:  5000000000,
+							},
+							{
+								Total: 100000000000,
+								Free:  90000000000,
+							},
+						},
+					},
+					{
+						Type:  0,
+						State: control.PoolTargetStateDownOut,
+						Space: []*control.StorageTargetUsage{
+							{
+								Total: 6000000000,
+								Free:  5000000000,
+							},
+							{
+								Total: 100000000000,
+								Free:  90000000000,
+							},
+						},
+					},
+					{
+						Type:  0,
+						State: control.PoolTargetStateUpIn,
+						Space: []*control.StorageTargetUsage{
+							{
+								Total: 6000000000,
+								Free:  5000000000,
+							},
+							{
+								Total: 100000000000,
+								Free:  90000000000,
+							},
+						},
+					},
+				},
+			},
+			expPrintStr: `
+Target: type unknown, state invalid
+- Storage tier 0 (SCM):
+  Total size: 6.0 GB
+  Free: 5.0 GB
+- Storage tier 1 (NVMe):
+  Total size: 100 GB
+  Free: 90 GB
+Target: type unknown, state up_in
+- Storage tier 0 (SCM):
+  Total size: 6.0 GB
+  Free: 5.0 GB
+- Storage tier 1 (NVMe):
+  Total size: 100 GB
+  Free: 90 GB
+Target: type unknown, state down_out
+- Storage tier 0 (SCM):
+  Total size: 6.0 GB
+  Free: 5.0 GB
+- Storage tier 1 (NVMe):
+  Total size: 100 GB
+  Free: 90 GB
+Target: type unknown, state up_in
+- Storage tier 0 (SCM):
+  Total size: 6.0 GB
+  Free: 5.0 GB
+- Storage tier 1 (NVMe):
+  Total size: 100 GB
+  Free: 90 GB
+`,
+		},
+		"invalid target type": {
+			pqtr: &control.PoolQueryTargetResp{
+				Status: 0,
+				Infos: []*control.PoolQueryTargetInfo{
+					{
+						Type:  42,
+						State: control.PoolTargetStateDown,
+						Space: []*control.StorageTargetUsage{
+							{
+								Total: 6000000000,
+								Free:  5000000000,
+							},
+							{
+								Total: 100000000000,
+								Free:  90000000000,
+							},
+						},
+					},
+					{
+						Type:  0,
+						State: control.PoolTargetStateUpIn,
+						Space: []*control.StorageTargetUsage{
+							{
+								Total: 6000000000,
+								Free:  5000000000,
+							},
+							{
+								Total: 100000000000,
+								Free:  90000000000,
+							},
+						},
+					},
+					{
+						Type:  0,
+						State: control.PoolTargetStateDownOut,
+						Space: []*control.StorageTargetUsage{
+							{
+								Total: 6000000000,
+								Free:  5000000000,
+							},
+							{
+								Total: 100000000000,
+								Free:  90000000000,
+							},
+						},
+					},
+					{
+						Type:  0,
+						State: control.PoolTargetStateUpIn,
+						Space: []*control.StorageTargetUsage{
+							{
+								Total: 6000000000,
+								Free:  5000000000,
+							},
+							{
+								Total: 100000000000,
+								Free:  90000000000,
+							},
+						},
+					},
+				},
+			},
+			expPrintStr: `
+Target: type invalid, state down
+- Storage tier 0 (SCM):
+  Total size: 6.0 GB
+  Free: 5.0 GB
+- Storage tier 1 (NVMe):
+  Total size: 100 GB
+  Free: 90 GB
+Target: type unknown, state up_in
+- Storage tier 0 (SCM):
+  Total size: 6.0 GB
+  Free: 5.0 GB
+- Storage tier 1 (NVMe):
+  Total size: 100 GB
+  Free: 90 GB
+Target: type unknown, state down_out
+- Storage tier 0 (SCM):
+  Total size: 6.0 GB
+  Free: 5.0 GB
+- Storage tier 1 (NVMe):
+  Total size: 100 GB
+  Free: 90 GB
+Target: type unknown, state up_in
+- Storage tier 0 (SCM):
+  Total size: 6.0 GB
+  Free: 5.0 GB
+- Storage tier 1 (NVMe):
+  Total size: 100 GB
+  Free: 90 GB
+`,
+		},
+		"three tiers; third tier unknown StorageMediaType": {
+			pqtr: &control.PoolQueryTargetResp{
+				Status: 0,
+				Infos: []*control.PoolQueryTargetInfo{
+					{
+						Type:  0,
+						State: control.PoolTargetStateDown,
+						Space: []*control.StorageTargetUsage{
+							{
+								Total: 6000000000,
+								Free:  5000000000,
+							},
+							{
+								Total: 100000000000,
+								Free:  90000000000,
+							},
+							{
+								Total: 800000000000,
+								Free:  200000000000,
+							},
+						},
+					},
+					{
+						Type:  0,
+						State: control.PoolTargetStateUpIn,
+						Space: []*control.StorageTargetUsage{
+							{
+								Total: 6000000000,
+								Free:  5000000000,
+							},
+							{
+								Total: 100000000000,
+								Free:  90000000000,
+							},
+							{
+								Total: 800000000000,
+								Free:  200000000000,
+							},
+						},
+					},
+					{
+						Type:  0,
+						State: control.PoolTargetStateDownOut,
+						Space: []*control.StorageTargetUsage{
+							{
+								Total: 6000000000,
+								Free:  5000000000,
+							},
+							{
+								Total: 100000000000,
+								Free:  90000000000,
+							},
+							{
+								Total: 800000000000,
+								Free:  200000000000,
+							},
+						},
+					},
+					{
+						Type:  0,
+						State: control.PoolTargetStateUpIn,
+						Space: []*control.StorageTargetUsage{
+							{
+								Total: 6000000000,
+								Free:  5000000000,
+							},
+							{
+								Total: 100000000000,
+								Free:  90000000000,
+							},
+							{
+								Total: 800000000000,
+								Free:  200000000000,
+							},
+						},
+					},
+				},
+			},
+			expPrintStr: `
+Target: type unknown, state down
+- Storage tier 0 (SCM):
+  Total size: 6.0 GB
+  Free: 5.0 GB
+- Storage tier 1 (NVMe):
+  Total size: 100 GB
+  Free: 90 GB
+- Storage tier 2 (unknown):
+  Total size: 800 GB
+  Free: 200 GB
+Target: type unknown, state up_in
+- Storage tier 0 (SCM):
+  Total size: 6.0 GB
+  Free: 5.0 GB
+- Storage tier 1 (NVMe):
+  Total size: 100 GB
+  Free: 90 GB
+- Storage tier 2 (unknown):
+  Total size: 800 GB
+  Free: 200 GB
+Target: type unknown, state down_out
+- Storage tier 0 (SCM):
+  Total size: 6.0 GB
+  Free: 5.0 GB
+- Storage tier 1 (NVMe):
+  Total size: 100 GB
+  Free: 90 GB
+- Storage tier 2 (unknown):
+  Total size: 800 GB
+  Free: 200 GB
+Target: type unknown, state up_in
+- Storage tier 0 (SCM):
+  Total size: 6.0 GB
+  Free: 5.0 GB
+- Storage tier 1 (NVMe):
+  Total size: 100 GB
+  Free: 90 GB
+- Storage tier 2 (unknown):
+  Total size: 800 GB
+  Free: 200 GB
 `,
 		},
 	} {

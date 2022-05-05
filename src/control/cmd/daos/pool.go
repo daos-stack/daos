@@ -286,40 +286,18 @@ type poolQueryTargetsCmd struct {
 	Targets string `long:"target-idx" description:"Comma-separated list of target idx(s) to be queried"`
 }
 
-func convertDaosSpaceInfo(in *C.struct_daos_space, mt C.uint) *mgmtpb.StorageTargetUsage {
-	if in == nil {
-		return nil
-	}
-
-	return &mgmtpb.StorageTargetUsage{
-		Total:     uint64(in.s_total[mt]),
-		Free:      uint64(in.s_free[mt]),
-		MediaType: mgmtpb.StorageMediaType(mt),
-	}
-}
-
 // For using the pretty printer that dmg uses for this target info.
-//
-// Does the same thing as ds_mgmt_drpc_pool_query_target() will do, to stuff the target info
-// into a protobuf message, then use the automatic conversion from proto to control.
-
 func convertPoolTargetInfo(ptinfo *C.daos_target_info_t) (*control.PoolQueryTargetInfo, error) {
-	pqtp := new(mgmtpb.PoolQueryTargetInfo)
-
-	pqtp.Type = mgmtpb.PoolQueryTargetInfo_TargetType(ptinfo.ta_type)
-	pqtp.State = mgmtpb.PoolQueryTargetInfo_TargetState(ptinfo.ta_state)
-	pqtp.Space = []*mgmtpb.StorageTargetUsage{
-		convertDaosSpaceInfo(&ptinfo.ta_space, C.DAOS_MEDIA_SCM),
-		convertDaosSpaceInfo(&ptinfo.ta_space, C.DAOS_MEDIA_NVME),
-	}
-
-	// Manual conversion mgmtpb -> control; convert.Types not working for some reason (type, state)
 	pqti := new(control.PoolQueryTargetInfo)
-	pqti.Type = control.PoolQueryTargetType(pqtp.Type)
-	pqti.State = control.PoolQueryTargetState(pqtp.State)
+	pqti.Type = control.PoolQueryTargetType(ptinfo.ta_type)
+	pqti.State = control.PoolQueryTargetState(ptinfo.ta_state)
 	pqti.Space = []*control.StorageTargetUsage{
-		{pqtp.Space[uint(C.DAOS_MEDIA_SCM)].Total, pqtp.Space[uint(C.DAOS_MEDIA_SCM)].Free, C.DAOS_MEDIA_SCM},
-		{pqtp.Space[uint(C.DAOS_MEDIA_NVME)].Total, pqtp.Space[uint(C.DAOS_MEDIA_NVME)].Free, C.DAOS_MEDIA_NVME},
+		{uint64(ptinfo.ta_space.s_total[C.DAOS_MEDIA_SCM]),
+			uint64(ptinfo.ta_space.s_free[C.DAOS_MEDIA_SCM]),
+			C.DAOS_MEDIA_SCM},
+		{uint64(ptinfo.ta_space.s_total[C.DAOS_MEDIA_NVME]),
+			uint64(ptinfo.ta_space.s_free[C.DAOS_MEDIA_NVME]),
+			C.DAOS_MEDIA_NVME},
 	}
 
 	return pqti, nil

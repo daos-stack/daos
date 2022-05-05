@@ -18,6 +18,17 @@ import (
 	"github.com/daos-stack/daos/src/control/system"
 )
 
+func getTierNameText(tierIdx int) string {
+	switch tierIdx {
+	case int(control.StorageMediaTypeScm):
+		return fmt.Sprintf("- Storage tier %d (SCM):", tierIdx)
+	case int(control.StorageMediaTypeNvme):
+		return fmt.Sprintf("- Storage tier %d (NVMe):", tierIdx)
+	default:
+		return fmt.Sprintf("- Storage tier %d (unknown):", tierIdx)
+	}
+}
+
 // PrintPoolQueryResponse generates a human-readable representation of the supplied
 // PoolQueryResp struct and writes it to the supplied io.Writer.
 func PrintPoolQueryResponse(pqr *control.PoolQueryResp, out io.Writer, opts ...PrintConfigOption) error {
@@ -39,16 +50,7 @@ func PrintPoolQueryResponse(pqr *control.PoolQueryResp, out io.Writer, opts ...P
 	fmt.Fprintf(w, "- Target(VOS) count:%d\n", pqr.ActiveTargets)
 	if pqr.TierStats != nil {
 		for tierIdx, tierStats := range pqr.TierStats {
-			var tierName string
-			switch tierIdx {
-			case int(control.StorageMediaTypeScm):
-				tierName = fmt.Sprintf("- Storage tier %d (SCM):", tierIdx)
-			case int(control.StorageMediaTypeNvme):
-				tierName = fmt.Sprintf("- Storage tier %d (NVMe):", tierIdx)
-			default:
-				tierName = fmt.Sprintf("- Storage tier %d (unknown):", tierIdx)
-			}
-			fmt.Fprintln(w, tierName)
+			fmt.Fprintln(w, getTierNameText(tierIdx))
 			fmt.Fprintf(w, "  Total size: %s\n", humanize.Bytes(tierStats.Total))
 			fmt.Fprintf(w, "  Free: %s, min:%s, max:%s, mean:%s\n",
 				humanize.Bytes(tierStats.Free), humanize.Bytes(tierStats.Min),
@@ -80,16 +82,7 @@ func PrintPoolQueryTargetResponse(pqtr *control.PoolQueryTargetResp, out io.Writ
 		fmt.Fprintf(w, "Target: type %s, state %s\n", pqtr.Infos[infosIdx].Type, pqtr.Infos[infosIdx].State)
 		if pqtr.Infos[infosIdx].Space != nil {
 			for tierIdx, tierUsage := range pqtr.Infos[infosIdx].Space {
-				var tierName string
-				switch tierIdx {
-				case int(control.StorageMediaTypeScm):
-					tierName = fmt.Sprintf("- Storage tier %d (SCM):", tierIdx)
-				case int(control.StorageMediaTypeNvme):
-					tierName = fmt.Sprintf("- Storage tier %d (NVMe):", tierIdx)
-				default:
-					tierName = fmt.Sprintf("- Storage tier %d (unknown):", tierIdx)
-				}
-				fmt.Fprintln(w, tierName)
+				fmt.Fprintln(w, getTierNameText(tierIdx))
 				fmt.Fprintf(w, "  Total size: %s\n", humanize.Bytes(tierUsage.Total))
 				fmt.Fprintf(w, "  Free: %s\n", humanize.Bytes(tierUsage.Free))
 			}

@@ -538,7 +538,11 @@ const (
 )
 
 func (prs PoolRebuildState) String() string {
-	return strings.ToLower(mgmtpb.PoolRebuildStatus_State_name[int32(prs)])
+	prss, ok := mgmtpb.PoolRebuildStatus_State_name[int32(prs)]
+	if !ok {
+		return "unknown"
+	}
+	return strings.ToLower(prss)
 }
 
 func (prs PoolRebuildState) MarshalJSON() ([]byte, error) {
@@ -601,7 +605,11 @@ func (smt StorageMediaType) MarshalJSON() ([]byte, error) {
 }
 
 func (smt StorageMediaType) String() string {
-	return strings.ToLower(mgmtpb.StorageMediaType_name[int32(smt)])
+	smts, ok := mgmtpb.StorageMediaType_name[int32(smt)]
+	if !ok {
+		return "unknown"
+	}
+	return strings.ToLower(smts)
 }
 
 func (pqtt PoolQueryTargetType) MarshalJSON() ([]byte, error) {
@@ -613,7 +621,11 @@ func (pqtt PoolQueryTargetType) MarshalJSON() ([]byte, error) {
 }
 
 func (ptt PoolQueryTargetType) String() string {
-	return strings.ToLower(mgmtpb.PoolQueryTargetInfo_TargetType_name[int32(ptt)])
+	ptts, ok := mgmtpb.PoolQueryTargetInfo_TargetType_name[int32(ptt)]
+	if !ok {
+		return "invalid"
+	}
+	return strings.ToLower(ptts)
 }
 
 const (
@@ -641,7 +653,11 @@ func (pqts PoolQueryTargetState) MarshalJSON() ([]byte, error) {
 }
 
 func (pts PoolQueryTargetState) String() string {
-	return strings.ToLower(mgmtpb.PoolQueryTargetInfo_TargetState_name[int32(pts)])
+	ptss, ok := mgmtpb.PoolQueryTargetInfo_TargetState_name[int32(pts)]
+	if !ok {
+		return "invalid"
+	}
+	return strings.ToLower(ptss)
 }
 
 // PoolSetPropReq contains pool set-prop parameters.
