@@ -27,7 +27,7 @@
 #include <daos/checksum.h>
 #include "daos_srv/srv_csum.h"
 #include "obj_rpc.h"
-#include "obj_internal.h"
+#include "srv_internal.h"
 
 static int
 obj_verify_bio_csum(daos_obj_id_t oid, daos_iod_t *iods,
@@ -1402,8 +1402,16 @@ obj_local_rw_internal(crt_rpc_t *rpc, struct obj_io_context *ioc,
 			}
 			iod_converted = true;
 
-			if (orw->orw_flags & ORF_EC_RECOV_FROM_PARITY)
+			if (orw->orw_flags & ORF_EC_RECOV_FROM_PARITY) {
+				if (shadows == NULL) {
+					rc = -DER_IO;
+					D_ERROR(DF_UOID" ORF_EC_RECOV_FROM_PARITY should not with "
+						"NULL shadows, "DF_RC"\n", DP_UOID(orw->orw_oid),
+						DP_RC(rc));
+					goto out;
+				}
 				fetch_flags |= VOS_OF_SKIP_FETCH;
+			}
 		}
 
 		rc = vos_fetch_begin(ioc->ioc_vos_coh, orw->orw_oid,
@@ -2559,7 +2567,7 @@ again1:
 	}
 
 again2:
-	if (orw->orw_iod_array.oia_oiods != NULL && split_req == NULL && tgt_cnt != 0) {
+	if (orw->orw_iod_array.oia_oiods != NULL && split_req == NULL) {
 		rc = obj_ec_rw_req_split(orw->orw_oid, &orw->orw_iod_array,
 					 orw->orw_nr, orw->orw_start_shard,
 					 orw->orw_tgt_max, PO_COMP_ID_ALL,
@@ -2712,8 +2720,8 @@ obj_enum_complete(crt_rpc_t *rpc, int status, int map_version,
 }
 
 static int
-obj_restore_enum_args(crt_rpc_t *rpc, struct dss_enum_arg *des,
-		      struct dss_enum_arg *src)
+obj_restore_enum_args(crt_rpc_t *rpc, struct ds_obj_enum_arg *des,
+		      struct ds_obj_enum_arg *src)
 {
 	struct obj_key_enum_out	*oeo = crt_reply_get(rpc);
 	struct obj_key_enum_in	*oei = crt_req_get(rpc);
@@ -2744,11 +2752,11 @@ obj_restore_enum_args(crt_rpc_t *rpc, struct dss_enum_arg *des,
 
 static int
 obj_local_enum(struct obj_io_context *ioc, crt_rpc_t *rpc,
-	       struct vos_iter_anchors *anchors, struct dss_enum_arg *enum_arg,
+	       struct vos_iter_anchors *anchors, struct ds_obj_enum_arg *enum_arg,
 	       daos_epoch_t *e_out)
 {
 	vos_iter_param_t	param = { 0 };
-	struct dss_enum_arg	saved_arg;
+	struct ds_obj_enum_arg	saved_arg;
 	struct obj_key_enum_in	*oei = crt_req_get(rpc);
 	struct dtx_handle	*dth = NULL;
 	uint32_t		flags = 0;
@@ -2867,7 +2875,7 @@ obj_local_enum(struct obj_io_context *ioc, crt_rpc_t *rpc,
 		goto failed;
 
 re_pack:
-	rc = dss_enum_pack(&param, type, recursive, &anchors[0], enum_arg, vos_iterate, dth);
+	rc = ds_obj_enum_pack(&param, type, recursive, &anchors[0], enum_arg, vos_iterate, dth);
 	if (obj_dtx_need_refresh(dth, rc)) {
 		rc = dtx_refresh(dth, ioc->ioc_coc);
 		if (rc == -DER_AGAIN) {
@@ -2894,7 +2902,7 @@ re_pack:
 		rc = -DER_KEY2BIG;
 	}
 
-	/* dss_enum_pack may return 1. */
+	/* ds_obj_enum_pack may return 1. */
 	rc_tmp = dtx_end(dth, ioc->ioc_coc, rc > 0 ? 0 : rc);
 	if (rc_tmp != 0)
 		rc = rc_tmp;
@@ -2970,7 +2978,7 @@ obj_enum_reply_bulk(crt_rpc_t *rpc)
 void
 ds_obj_enum_handler(crt_rpc_t *rpc)
 {
-	struct dss_enum_arg	enum_arg = { 0 };
+	struct ds_obj_enum_arg	enum_arg = { 0 };
 	struct vos_iter_anchors	*anchors = NULL;
 	struct obj_key_enum_in	*oei;
 	struct obj_key_enum_out	*oeo;

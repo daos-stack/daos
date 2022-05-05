@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2021 Intel Corporation.
+ * (C) Copyright 2016-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -30,7 +30,7 @@ _dfuse_mode_update(fuse_req_t req, struct dfuse_inode_entry *parent, mode_t *_mo
 
 	/* First check the UID, if this is different then copy the mode bits from user to group */
 	if (ctx->uid != parent->ie_stat.st_uid) {
-		DFUSE_TRA_DEBUG(parent, "create with mismatched UID, setting group perms\n");
+		DFUSE_TRA_DEBUG(parent, "create with mismatched UID, setting group perms");
 		if (mode & S_IRUSR)
 			mode |= S_IRGRP;
 		if (mode & S_IWUSR)
@@ -49,7 +49,7 @@ _dfuse_mode_update(fuse_req_t req, struct dfuse_inode_entry *parent, mode_t *_mo
 		bool have_group_match = false;
 		int i;
 
-		DFUSE_TRA_DEBUG(parent, "create with mismatched GID\n");
+		DFUSE_TRA_DEBUG(parent, "create with mismatched GID");
 
 		gcount = fuse_req_getgroups(req, START_GROUP_SIZE, glist);
 		gsize = min(2, gcount);
@@ -79,7 +79,7 @@ _dfuse_mode_update(fuse_req_t req, struct dfuse_inode_entry *parent, mode_t *_mo
 		}
 
 		if (!have_group_match) {
-			DFUSE_TRA_DEBUG(parent, "No GIDs match, setting other perms\n");
+			DFUSE_TRA_DEBUG(parent, "No GIDs match, setting other perms");
 
 			if (mode & S_IRUSR)
 				mode |= S_IROTH;
@@ -170,6 +170,7 @@ dfuse_cb_create(fuse_req_t req, struct dfuse_inode_entry *parent,
 
 	oh->doh_dfs = dfs->dfs_ns;
 	oh->doh_ie = ie;
+	oh->doh_writeable = true;
 
 	if (dfs->dfc_data_caching) {
 		if (fi->flags & O_DIRECT)
@@ -197,6 +198,8 @@ dfuse_cb_create(fuse_req_t req, struct dfuse_inode_entry *parent,
 	dfs_obj2id(ie->ie_obj, &ie->ie_oid);
 
 	dfuse_compute_inode(dfs, &ie->ie_oid, &ie->ie_stat.st_ino);
+
+	atomic_fetch_add_relaxed(&ie->ie_open_count, 1);
 
 	/* Return the new inode data, and keep the parent ref */
 	dfuse_reply_entry(fs_handle, ie, &fi_out, true, req);

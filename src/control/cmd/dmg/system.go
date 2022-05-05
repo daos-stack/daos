@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2021 Intel Corporation.
+// (C) Copyright 2019-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -8,6 +8,8 @@ package main
 
 import (
 	"context"
+	"fmt"
+	"io"
 	"strings"
 
 	"github.com/pkg/errors"
@@ -15,6 +17,8 @@ import (
 	"github.com/daos-stack/daos/src/control/cmd/dmg/pretty"
 	"github.com/daos-stack/daos/src/control/lib/control"
 	"github.com/daos-stack/daos/src/control/lib/hostlist"
+	"github.com/daos-stack/daos/src/control/lib/txtfmt"
+	"github.com/daos-stack/daos/src/control/lib/ui"
 	"github.com/daos-stack/daos/src/control/system"
 )
 
@@ -27,6 +31,9 @@ type SystemCmd struct {
 	Erase       systemEraseCmd   `command:"erase" description:"Erase system metadata prior to reformat"`
 	ListPools   PoolListCmd      `command:"list-pools" description:"List all pools in the DAOS system"`
 	Cleanup     systemCleanupCmd `command:"cleanup" description:"Clean up all resources associated with the specified machine"`
+	SetAttr     systemSetAttrCmd `command:"set-attr" description:"Set system attributes"`
+	GetAttr     systemGetAttrCmd `command:"get-attr" description:"Get system attributes"`
+	DelAttr     systemDelAttrCmd `command:"del-attr" description:"Delete system attributes"`
 }
 
 type leaderQueryCmd struct {
@@ -286,4 +293,124 @@ func (cmd *systemCleanupCmd) Execute(_ []string) (errOut error) {
 	cmd.Infof("%s", out.String())
 
 	return resp.Errors()
+}
+
+// systemSetAttrCmd represents the command to set system properties.
+type systemSetAttrCmd struct {
+	baseCmd
+	cfgCmd
+	ctlInvokerCmd
+	jsonOutputCmd
+
+	Args struct {
+		Attrs ui.SetPropertiesFlag `positional-arg-name:"system attributes to set (key:val[,key:val...])" required:"1"`
+	} `positional-args:"yes"`
+}
+
+// Execute is run when systemSetAttrCmd subcommand is activated.
+func (cmd *systemSetAttrCmd) Execute(_ []string) error {
+	req := &control.SystemSetAttrReq{
+		Attributes: cmd.Args.Attrs.ParsedProps,
+	}
+
+	err := control.SystemSetAttr(context.Background(), cmd.ctlInvoker, req)
+	if cmd.jsonOutputEnabled() {
+		return cmd.outputJSON(nil, err)
+	}
+
+	if err != nil {
+		return errors.Wrap(err, "system set-attr failed")
+	}
+	cmd.Info("system set-attr succeeded")
+
+	return nil
+}
+
+// systemGetAttrCmd represents the command to get system properties.
+type systemGetAttrCmd struct {
+	baseCmd
+	cfgCmd
+	ctlInvokerCmd
+	jsonOutputCmd
+
+	Args struct {
+		Attrs ui.GetPropertiesFlag `positional-arg-name:"system attributes to get (key[,key...])"`
+	} `positional-args:"yes"`
+}
+
+func prettyPrintAttrs(out io.Writer, props map[string]string) {
+	if len(props) == 0 {
+		fmt.Fprintln(out, "No system attributes found.")
+		return
+	}
+
+	nameTitle := "Name"
+	valueTitle := "Value"
+	table := []txtfmt.TableRow{}
+	for key, val := range props {
+		row := txtfmt.TableRow{}
+		row[nameTitle] = key
+		row[valueTitle] = val
+		table = append(table, row)
+	}
+
+	tf := txtfmt.NewTableFormatter(nameTitle, valueTitle)
+	tf.InitWriter(out)
+	tf.Format(table)
+}
+
+// Execute is run when systemGetAttrCmd subcommand is activated.
+func (cmd *systemGetAttrCmd) Execute(_ []string) error {
+	req := &control.SystemGetAttrReq{
+		Keys: cmd.Args.Attrs.ParsedProps.ToSlice(),
+	}
+
+	resp, err := control.SystemGetAttr(context.Background(), cmd.ctlInvoker, req)
+	if cmd.jsonOutputEnabled() {
+		return cmd.outputJSON(resp, err)
+	}
+
+	if err != nil {
+		return errors.Wrap(err, "system get-attr failed")
+	}
+
+	var bld strings.Builder
+	prettyPrintAttrs(&bld, resp.Attributes)
+	cmd.Infof("%s", bld.String())
+
+	return nil
+}
+
+// systemDelAttrCmd represents the command to delete system properties.
+type systemDelAttrCmd struct {
+	baseCmd
+	cfgCmd
+	ctlInvokerCmd
+	jsonOutputCmd
+
+	Args struct {
+		Attrs ui.GetPropertiesFlag `positional-arg-name:"system attributes to delete (key[,key...])" required:"1"`
+	} `positional-args:"yes"`
+}
+
+// Execute is run when systemDelAttrCmd subcommand is activated.
+func (cmd *systemDelAttrCmd) Execute(_ []string) error {
+	req := &control.SystemSetAttrReq{
+		Attributes: make(map[string]string),
+	}
+	for _, key := range cmd.Args.Attrs.ParsedProps.ToSlice() {
+		req.Attributes[key] = ""
+	}
+
+	err := control.SystemSetAttr(context.Background(), cmd.ctlInvoker, req)
+	if cmd.jsonOutputEnabled() {
+		return cmd.outputJSON(nil, err)
+	}
+
+	if err != nil {
+		return errors.Wrap(err, "system del-attr failed")
+	}
+	cmd.Info("system del-attr succeeded")
+
+	return nil
 }

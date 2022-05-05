@@ -14,7 +14,6 @@
 #include <daos/task.h>
 #include <daos_task.h>
 #include <daos_types.h>
-#include <daos_srv/vos_types.h>
 #include "obj_rpc.h"
 #include "obj_internal.h"
 
@@ -633,15 +632,15 @@ dc_obj_verify_cmp(struct dc_obj_verify_args *dova_a,
 }
 
 static int
-dc_obj_verify_ec_cb(struct dss_enum_unpack_io *io, void *arg)
+dc_obj_verify_ec_cb(struct dc_obj_enum_unpack_io *io, void *arg)
 {
 	struct dc_obj_verify_args	*dova = arg;
 	struct dc_object		*obj = obj_hdl2ptr(dova->oh);
-	d_sg_list_t			sgls[DSS_ENUM_UNPACK_MAX_IODS];
-	d_iov_t				iovs[DSS_ENUM_UNPACK_MAX_IODS] = { 0 };
-	d_sg_list_t			sgls_verify[DSS_ENUM_UNPACK_MAX_IODS];
-	d_iov_t				iovs_verify[DSS_ENUM_UNPACK_MAX_IODS] = { 0 };
-	daos_iod_t			iods[DSS_ENUM_UNPACK_MAX_IODS] = { 0 };
+	d_sg_list_t			sgls[OBJ_ENUM_UNPACK_MAX_IODS];
+	d_iov_t				iovs[OBJ_ENUM_UNPACK_MAX_IODS] = { 0 };
+	d_sg_list_t			sgls_verify[OBJ_ENUM_UNPACK_MAX_IODS];
+	d_iov_t				iovs_verify[OBJ_ENUM_UNPACK_MAX_IODS] = { 0 };
+	daos_iod_t			iods[OBJ_ENUM_UNPACK_MAX_IODS] = { 0 };
 	tse_task_t			*task;
 	tse_task_t			*verify_task;
 	uint64_t			shard = dova->current_shard;
@@ -801,8 +800,8 @@ dc_obj_verify_ec_rdg(struct dc_object *obj, struct dc_obj_verify_args *dova,
 				D_GOTO(out, rc);
 			}
 
-			rc = dss_enum_unpack(oid, dova->kds, dova->num, &dova->list_sgl,
-					     NULL, dc_obj_verify_ec_cb, dova);
+			rc = dc_obj_enum_unpack(oid, dova->kds, dova->num, &dova->list_sgl,
+						NULL, dc_obj_verify_ec_cb, dova);
 			if (rc) {
 				D_ERROR("Failed to verify ec object: "DF_RC"\n",
 					DP_RC(rc));
