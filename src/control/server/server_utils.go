@@ -221,7 +221,7 @@ func prepBdevStorage(srv *server, iommuEnabled bool) error {
 		PCIAllowList: strings.Join(srv.cfg.BdevInclude, storage.BdevPciAddrSep),
 		PCIBlockList: strings.Join(srv.cfg.BdevExclude, storage.BdevPciAddrSep),
 		DisableVFIO:  srv.cfg.DisableVFIO,
-		EnableVMD:    srv.cfg.EnableVMD && !srv.cfg.DisableVFIO && iommuEnabled,
+		EnableVMD:    !srv.cfg.DisableVMD && !srv.cfg.DisableVFIO && iommuEnabled,
 	}
 
 	if hasBdevs {
