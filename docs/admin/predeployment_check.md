@@ -98,10 +98,10 @@ Since all engines need to be able to communicate, the different network
 interfaces must be on the same subnet or you must configuring routing
 across the different subnets.
 
-### Infiniband Settings
+### Interface Settings
 
-Some special configuration is required to use librdmacm with multiple
-interfaces.
+Some special configuration is required for the `verbs` provider to use librdmacm
+with multiple interfaces, and the same configuration is required for the `tcp` provider.
 
 First, the accept_local feature must be enabled on the network interfaces
 to be used by DAOS. This can be done using the following command (<ifaces> must
