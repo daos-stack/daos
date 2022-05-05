@@ -10,7 +10,6 @@
 
 set -e
 
-dnf -y install deltarpm
 dnf -y --nodocs install \
     boost-python36-devel \
     bzip2 \
@@ -46,9 +45,7 @@ dnf -y --nodocs install \
     lz4-devel \
     make \
     maven \
-    meson \
     ndctl \
-    ninja-build \
     numactl \
     numactl-devel \
     openmpi3-devel \
@@ -57,9 +54,7 @@ dnf -y --nodocs install \
     patchelf \
     pciutils \
     python3-devel \
-    python3-distro \
     python3-pip \
-    python3-scons \
     sg3_utils \
     sudo \
     valgrind-devel \
