@@ -188,7 +188,7 @@ class DmgNetworkScanTest(TestWithServers):
         # Get provider information
         ofi_info_command = os.path.join(self.ofi_prefix, "bin", "fi_info")
         ofi_info = process.run(ofi_info_command)
-        ucx_info_command = os.path.join(os.sep, "usr", "bin", "ucx_info")
+        ucx_info_command = os.path.join(os.sep, "usr", "bin", "ucx_info -d")
         ucx_info = process.run(ucx_info_command)
         for dev in dev_names:
             dev_info = NetDev(self.hostlist_servers[-1], dev)

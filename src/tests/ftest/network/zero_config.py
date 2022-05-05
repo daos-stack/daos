@@ -167,14 +167,23 @@ class ZeroConfigTest(TestWithServers):
         log_file = "daos_racer_{}_{}.log".format(exp_iface, env)
 
         # Add FI_LOG_LEVEL to get more info on device issues
+        exp_iface_port = []
+        if "ucx" in self.server_managers[0].get_config_value("provider"):
+            exp_iface_port = [self.interfaces[exp_iface]["port"]]
         racer_env = daos_racer.get_environment(self.server_managers[0], log_file)
         racer_env["FI_LOG_LEVEL"] = "info"
         racer_env["D_LOG_MASK"] = "INFO,object=ERR,placement=ERR"
-        if "ucx" in self.server_managers[0].get_config_value("provider"):
-            # Hack to test if this works
-            racer_env["OFI_DOMAIN"] = "mlx5_0:1,mlx5_1:1"
-        else:
-            racer_env["OFI_DOMAIN"] = self.interfaces[exp_iface]["domain"]
+        racer_env["OFI_DOMAIN"] = ":".join([self.interfaces[exp_iface]["domain"]] + exp_iface_port)
+
+        # Define both interfaces when running daos_racer with UCX
+        if "ucx" in self.server_managers[0].get_config_value("provider") and \
+                len(self.interfaces) > 1:
+            if "_0" in racer_env["OFI_DOMAIN"]:
+                other = racer_env["OFI_DOMAIN"].replace("_0", "_1")
+            elif "_1":
+                other = racer_env["OFI_DOMAIN"].replace("_1", "_0")
+            racer_env["OFI_DOMAIN"] = ",".join([racer_env["OFI_DOMAIN"], other])
+
         daos_racer.set_environment(racer_env)
 
         # Run client
