@@ -774,7 +774,7 @@ dc_set_oclass(uint64_t rf_factor, int domain_nr, int target_nr,
 		grp_nr = DAOS_OBJ_GRP_MAX;
 		break;
 	case DAOS_OCH_SHD_TINY:
-		grp_nr = 4;
+		grp_nr = 1;
 		break;
 	case DAOS_OCH_SHD_REG:
 		grp_nr = max(128, target_nr * 25 / 100);

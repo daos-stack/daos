@@ -615,7 +615,7 @@ cont_create_uns_hdlr(struct cmd_args_s *ap)
 	dattr.da_oclass_id = ap->oclass;
 	dattr.da_dir_oclass_id = ap->dir_oclass;
 	dattr.da_chunk_size = ap->chunk_size;
-	//dattr.da_hints = ap->hints;
+	dattr.da_hints = ap->hints;
 	dattr.da_props = ap->props;
 
 	rc = duns_create_path(ap->pool, ap->path, &dattr);

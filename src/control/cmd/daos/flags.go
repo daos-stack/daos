@@ -241,3 +241,46 @@ func (f *ContTypeFlag) UnmarshalFlag(fv string) error {
 	f.Set = true
 	return nil
 }
+
+type ContHintsFlag struct {
+	Set   bool
+	Hints C.uint64_t
+}
+
+func (f *ContHintsFlag) UnmarshalFlag(fv string) error {
+	if fv == "" {
+		return errors.New("empty container hints")
+	}
+
+	cContHints := C.CString(fv)
+	defer freeString(cContHints)
+
+	f.Hints = 0
+
+	chints := strings.Split(fv, ",")
+	for i, chint := range chints {
+		fmt.Println(i, " => ", string(chint))
+		if strings.EqualFold(string(chint), "tiny_file") {
+			f.Hints |= C.DFS_HINT_FILE_TY
+		} else if strings.EqualFold(string(chint), "small_file") {
+			f.Hints |= C.DFS_HINT_FILE_SM
+		} else if strings.EqualFold(string(chint), "medium_file") {
+			f.Hints |= C.DFS_HINT_FILE_MD
+		} else if strings.EqualFold(string(chint), "large_file") {
+			f.Hints |= C.DFS_HINT_FILE_LG
+		} else if strings.EqualFold(string(chint), "tiny_dir") {
+			f.Hints |= C.DFS_HINT_DIR_TY
+		} else if strings.EqualFold(string(chint), "small_dir") {
+			f.Hints |= C.DFS_HINT_DIR_SM
+		} else if strings.EqualFold(string(chint), "medium_dir") {
+			f.Hints |= C.DFS_HINT_DIR_MD
+		} else if strings.EqualFold(string(chint), "large_dir") {
+			f.Hints |= C.DFS_HINT_DIR_LG
+		} else {
+			return errors.Errorf("unknown container hint %q", fv)
+		}
+	}
+
+	f.Set = true
+	return nil
+}
