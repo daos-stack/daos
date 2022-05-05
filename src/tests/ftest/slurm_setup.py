@@ -57,18 +57,10 @@ def update_config_cmdlist(args):
 
     """
     all_nodes = NodeSet("{},{}".format(str(args.control), str(args.nodes)))
-    cmd_list = [
-        "sed -i -e 's/ClusterName=cluster/ClusterName=ci_cluster/g' {}".format(
-            SLURM_CONF),
-        "sed -i -e 's/SlurmUser=slurm/SlurmUser={}/g' {}".format(
-            args.user, SLURM_CONF),
-        "sed -i -e 's/NodeName/#NodeName/g' {}".format(
-            SLURM_CONF),
-        ]
-    if args.sudo:
-        sudo = "sudo"
-    else:
-        sudo = ""
+    cmd_list = ["sed -i -e 's/ClusterName=cluster/ClusterName=ci_cluster/g' {}".format(SLURM_CONF),
+                "sed -i -e 's/SlurmUser=slurm/SlurmUser={}/g' {}".format(args.user, SLURM_CONF),
+                "sed -i -e 's/NodeName/#NodeName/g' {}".format(SLURM_CONF)]
+    sudo = "sudo" if args.sudo else ""
     # Copy the slurm*example.conf files to /etc/slurm/
     if execute_cluster_cmds(all_nodes, COPY_LIST, args.sudo) > 0:
         sys.exit(1)
@@ -163,10 +155,7 @@ def start_munge(args):
         args (Namespace): Commandline arguments
 
     """
-    if args.sudo:
-        sudo = "sudo"
-    else:
-        sudo = ""
+    sudo = "sudo" if args.sudo else ""
     all_nodes = NodeSet("{},{}".format(str(args.control), str(args.nodes)))
     # exclude the control node
     nodes = NodeSet(str(args.nodes))
@@ -231,8 +220,7 @@ def start_slurm(args):
         "chown {}. {}/ctld".format(args.user, "/var/spool/slurm"),
         "chown {}. {}".format(args.user, "/var/spool/slurmctld"),
         "chmod 775 {}".format("/var/spool/slurmctld"),
-        "rm -f /var/spool/slurmctld/clustername"
-        ]
+        "rm -f /var/spool/slurmctld/clustername"]
 
     if execute_cluster_cmds(all_nodes, cmd_list, args.sudo) > 0:
         return 1
