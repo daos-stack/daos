@@ -45,4 +45,4 @@ mkdir $test_log_dir
 # standard wildcards.
 rsync -v -dpt -z -e "ssh $SSH_KEY_ARGS" jenkins@"$NODE":/tmp/ \
       --filter="include daos*.log" --filter="include test.cov" \
-      --filter="include *_tests*.log" --filter="exclude *" "$test_log_dir/"
+      --filter="exclude *" "$test_log_dir/"
