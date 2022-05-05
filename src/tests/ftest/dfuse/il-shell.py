@@ -79,7 +79,7 @@ echo {}
             os.fchmod(script, stat.S_IRUSR | stat.S_IWUSR | stat.S_IXUSR)
 
             try:
-                command = f'{preload_cmd};{script.name}'
+                command = '{};{}'.format(preload_cmd, script.name)
                 ret_code = general_utils.pcmd(self.hostlist_clients, command, timeout=1500)
                 if 0 in ret_code:
                     return
