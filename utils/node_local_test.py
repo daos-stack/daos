@@ -27,11 +27,10 @@ import tabulate
 import threading
 import functools
 import traceback
-import configparser
-import subprocess  # nosec
+import subprocess #nosec
 import junit_xml
 import tempfile
-import pickle  # nosec
+import pickle #nosec
 import xattr
 from collections import OrderedDict
 import yaml
@@ -951,8 +950,7 @@ class DaosServer():
 
         return self.test_pool.id()
 
-
-def il_cmd(dfuse, cmd, check_read=True, check_write=True, check_fstat=True, cwd=None):
+def il_cmd(dfuse, cmd, check_read=True, check_write=True, check_fstat=True):
     """Run a command under the interception library
 
     Do not run valgrind here, not because it's not useful
@@ -970,7 +968,7 @@ def il_cmd(dfuse, cmd, check_read=True, check_write=True, check_fstat=True, cwd=
     # pylint: disable=protected-access
     my_env['DAOS_AGENT_DRPC_DIR'] = dfuse._daos.agent_dir
     my_env['D_IL_REPORT'] = '2'
-    ret = subprocess.run(cmd, env=my_env, check=False, cwd=cwd)
+    ret = subprocess.run(cmd, env=my_env, check=False)
     print('Logged il to {}'.format(log_name))
     print(ret)
 
@@ -2262,27 +2260,6 @@ class posix_tests():
 
         for fd in fds:
             fd.close()
-
-    @needs_dfuse_with_opt(caching=False)
-    def test_il_stream(self):
-        """Test git with interception library
-
-        This is looking for a bug with the streaming functions where ftell is intercepted
-        gut putc is not.
-        """
-
-        rc = il_cmd(self.dfuse, ['git', 'init'], cwd=self.dfuse.dir,
-                    check_read=False, check_fstat=False)
-        print(rc)
-        assert rc.returncode == 0, rc
-        print('File contents:')
-        git_config_file = join(self.dfuse.dir, '.git', 'config')
-        with open(git_config_file, 'r', encoding='utf-8') as fd:
-            for line in fd.readlines():
-                print(line.strip('\n'))
-        config = configparser.ConfigParser()
-        config.read(git_config_file)
-        print(config.sections())
 
     def test_cont_rw(self):
         """Test write access to another users container"""
