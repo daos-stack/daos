@@ -62,7 +62,7 @@ echo $1
 """
 
         remote_env = OrderedDict()
-        remote_env['LD_PRELOAD'] = '/usr/lib64/libioil.so'
+        remote_env['LD_PRELOAD'] = os.path.join(self.prefix, 'libioil.so')
         remote_env['D_LOG_FILE'] = '/var/tmp/daos_testing/daos-il.log'
         remote_env['DD_MASK'] = 'all'
         remote_env['DD_SUBSYS'] = 'all'
@@ -76,7 +76,7 @@ echo $1
 
         with tempfile.NamedTemporaryFile() as script:
             script.write(shell_script)
-            os.fchmod(script, stat.S_IRUSR | stat.S_IWUSR | stat.S_IXUSR)
+            os.fchmod(script.fileno(), stat.S_IRUSR | stat.S_IWUSR | stat.S_IXUSR)
 
             try:
                 command = '{};{} {}'.format(preload_cmd, script.name, mount_dir)
