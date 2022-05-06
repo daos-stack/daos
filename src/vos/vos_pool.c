@@ -882,6 +882,17 @@ vos_pool_open(const char *path, uuid_t uuid, unsigned int flags, daos_handle_t *
 	return vos_pool_open_metrics(path, uuid, flags, NULL, poh);
 }
 
+void
+vos_pool_features_set(daos_handle_t poh, uint64_t feats)
+{
+	struct vos_pool	*pool;
+
+	pool = vos_hdl2pool(poh);
+	D_ASSERT(pool != NULL);
+
+	pool->vp_feats = feats;
+}
+
 /**
  * Close a VOSP, all opened containers sharing this pool handle
  * will be revoked.
