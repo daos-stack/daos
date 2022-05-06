@@ -46,7 +46,7 @@ Assuming you are in a terminal in the repository root directory:
   - Ubuntu 20.04
 
        ```bash
-       sudo apt-get -y -qq update
+       sudo apt-get -y -qq update 
        sudo apt-get -y -qq install gcc g++ git unzip curl python3-pip
        ```
 
