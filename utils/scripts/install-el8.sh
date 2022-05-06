@@ -21,7 +21,7 @@ else
         PACKAGES="maven python39-devel"
 fi
 
-dnf --nodocs install \
+dnf -y --nodocs install \
     $PACKAGES \
     boost-python3-devel \
     bzip2 \
