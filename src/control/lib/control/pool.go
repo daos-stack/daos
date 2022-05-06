@@ -1125,6 +1125,11 @@ func GetMaxPoolSize(ctx context.Context, log logging.Logger, rpcClient UnaryInvo
 				}
 
 				nvmeRanksBytes[smdDevice.Rank] += smdDevice.AvailBytes
+				log.Debugf("Adding SMD device %s (instance %d, ctrlr %s) is usable: "+
+					"device state=%q, size=%d total=%d",
+					smdDevice.UUID, smdDevice.Rank, smdDevice.TrAddr,
+					smdDevice.NvmeState.String(), smdDevice.AvailBytes,
+					nvmeRanksBytes[smdDevice.Rank])
 			}
 		}
 		for _, nvmeRankBytes := range nvmeRanksBytes {
