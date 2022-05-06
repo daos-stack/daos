@@ -7,12 +7,11 @@
 package engine
 
 import (
+	"os"
 	"strings"
 
 	"github.com/pkg/errors"
 
-	"github.com/daos-stack/daos/src/control/lib/hardware"
-	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/server/storage"
 	"github.com/daos-stack/daos/src/control/system"
 )
@@ -169,43 +168,12 @@ func NewConfig() *Config {
 	}
 }
 
-// setAffinity ensures engine NUMA locality is assigned and valid.
-func (c *Config) setAffinity(log logging.Logger, fis *hardware.FabricInterfaceSet) (err error) {
-	var fi *hardware.FabricInterface
-	if fis != nil {
-		fi, err = fis.GetInterfaceOnOSDevice(c.Fabric.Interface, c.Fabric.Provider)
-		if err != nil {
-			return
-		}
-	}
-
-	if c.PinnedNumaNode != nil {
-		c.Fabric.NumaNodeIndex = *c.PinnedNumaNode
-		c.Storage.NumaNodeIndex = *c.PinnedNumaNode
-
-		// validate that numa node is correct for the given device
-		if fi != nil && fi.NUMANode != *c.PinnedNumaNode {
-			log.Errorf("misconfiguration: network interface %s is on NUMA "+
-				"node %d but engine is pinned to NUMA node %d", c.Fabric.Interface,
-				fi.NUMANode, *c.PinnedNumaNode)
-		}
-
-		return
-	}
-
-	if fi == nil {
-		return errors.New("pinned_numa_node unset in config and fabric info not provided")
-	}
-
-	// set engine numa node index to that of selected fabric interface
-	c.Fabric.NumaNodeIndex = fi.NUMANode
-	c.Storage.NumaNodeIndex = fi.NUMANode
-
-	return
-}
-
 // Validate ensures that the configuration meets minimum standards.
-func (c *Config) Validate(log logging.Logger, fis *hardware.FabricInterfaceSet) error {
+func (c *Config) Validate() error {
+	if c.PinnedNumaNode != nil && c.ServiceThreadCore != 0 {
+		return errors.New("cannot specify both pinned_numa_node and first_core")
+	}
+
 	if err := c.Fabric.Validate(); err != nil {
 		return errors.Wrap(err, "fabric config validation failed")
 	}
@@ -218,7 +186,7 @@ func (c *Config) Validate(log logging.Logger, fis *hardware.FabricInterfaceSet) 
 		return errors.Wrap(err, "validate engine log masks")
 	}
 
-	return errors.Wrap(c.setAffinity(log, fis), "setting numa affinity for engine")
+	return nil
 }
 
 // CmdLineArgs returns a slice of command line arguments to be
@@ -266,6 +234,26 @@ func (c *Config) HasEnvVar(name string) bool {
 		}
 	}
 	return false
+}
+
+// GetEnvVar returns the value of the given environment variable to be supplied when starting an I/O
+// engine instance.
+func (c *Config) GetEnvVar(name string) (string, error) {
+	env, err := c.CmdLineEnv()
+	if err != nil {
+		return "", err
+	}
+
+	env = mergeEnvVars(cleanEnvVars(os.Environ(), c.EnvPassThrough), env)
+
+	for _, keyPair := range c.EnvVars {
+		keyValue := strings.SplitN(keyPair, "=", 2)
+		if keyValue[0] == name {
+			return keyValue[1], nil
+		}
+	}
+
+	return "", errors.Errorf("Undefined environment variable %q", name)
 }
 
 // WithEnvVars applies the supplied list of environment
@@ -438,7 +426,7 @@ func (c *Config) WithHugePageSize(hugepagesz int) *Config {
 	return c
 }
 
-// WithPinnedNumaNode sets the NUMA node affinity for the I/O Engine instance
+// WithPinnedNumaNode sets the NUMA node affinity for the I/O Engine instance.
 func (c *Config) WithPinnedNumaNode(numa uint) *Config {
 	c.PinnedNumaNode = &numa
 	return c

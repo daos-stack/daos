@@ -302,14 +302,6 @@ enum {
 	DAOS_OO_IO_SEQ         = (1 << 5),
 };
 
-struct daos_oid_list {
-	/** Input/output number of oids */
-	uint32_t		 ol_nr;
-	uint32_t		 ol_nr_out;
-	/** OID buffer */
-	daos_obj_id_t		*ol_oids;
-};
-
 /**
  * Record
  *
@@ -360,7 +352,7 @@ typedef enum {
 typedef struct {
 	/** akey for this iod */
 	daos_key_t		iod_name;
-	/*
+	/**
 	 * Type of the value in an iod can be either a single type that is
 	 * always overwritten when updated, or it can be an array of EQUAL sized
 	 * records where the record is updated atomically. Note that an akey can
@@ -378,12 +370,12 @@ typedef struct {
 	 *  ignored.
 	 */
 	uint64_t		iod_flags;
-	/*
-	 * Number of entries in the \a iod_recxs for arrays,
+	/**
+	 * Number of entries in the #iod_recxs for arrays,
 	 * should be 1 if single value.
 	 */
 	uint32_t		iod_nr;
-	/*
+	/**
 	 * Array of extents, where each extent defines the index of the first
 	 * record in the extent and the number of records to access. If the
 	 * type of the iod is single, this is ignored.
@@ -425,6 +417,7 @@ typedef struct {
 	 * 1 for SV.
 	 */
 	uint32_t		 iom_nr_out;
+	/** I/O map flags */
 	uint32_t		 iom_flags;
 	/** Size of the single value or the record size */
 	daos_size_t		 iom_size;

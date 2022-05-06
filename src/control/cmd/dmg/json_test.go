@@ -109,6 +109,10 @@ func TestDmg_JsonOutput(t *testing.T) {
 				return // These commands query via http directly
 			case "system cleanup":
 				testArgs = append(testArgs, "hostname")
+			case "system set-attr":
+				testArgs = append(testArgs, "foo:bar")
+			case "system del-attr":
+				testArgs = append(testArgs, "foo")
 			}
 
 			// replace os.Stdout so that we can verify the generated output

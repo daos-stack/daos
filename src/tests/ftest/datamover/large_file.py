@@ -88,7 +88,7 @@ class DmvrPosixLargeFile(DataMoverTestBase):
             an external POSIX file system using dcp.
         :avocado: tags=all,full_regression
         :avocado: tags=hw,large
-        :avocado: tags=datamover,dcp
+        :avocado: tags=datamover,mfu,mfu_dcp,dfs,ior
         :avocado: tags=dm_large_file,dm_large_file_dcp
         """
         self.run_dm_large_file("DCP")
@@ -100,7 +100,7 @@ class DmvrPosixLargeFile(DataMoverTestBase):
             an external POSIX file system using daos filesystem copy.
         :avocado: tags=all,full_regression
         :avocado: tags=hw,large
-        :avocado: tags=datamover,fs_copy
+        :avocado: tags=datamover,daos_fs_copy,dfs,ior
         :avocado: tags=dm_large_file,dm_large_file_fs_copy
         """
         self.run_dm_large_file("FS_COPY")

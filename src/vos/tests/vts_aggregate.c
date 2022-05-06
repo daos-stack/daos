@@ -1033,7 +1033,7 @@ discard_13(void **state)
 	 * Generate enough amount of akeys to ensure vos_iterate()
 	 * trigger re-probe on dkey
 	 */
-	generate_akeys(arg, ds.td_oid, VOS_AGG_CREDITS_MAX + 10);
+	generate_akeys(arg, ds.td_oid, AGG_CREDS_SCAN_TIGHT + 10);
 
 	recx_tot.rx_idx = 0;
 	recx_tot.rx_nr = 20;
@@ -2767,6 +2767,96 @@ aggregate_34(void **state)
 	cleanup();
 }
 
+#define INIT_FEATS 0x8000000000073f43ULL
+D_CASSERT((INIT_FEATS & VOS_AGG_TIME_MASK) == 0);
+
+static void
+aggregate_35(void **state)
+{
+	uint64_t	feats = INIT_FEATS;
+	daos_epoch_t	epoch;
+	bool		result;
+
+	result = vos_feats_agg_time_get(feats, &epoch);
+	assert_false(result);
+
+	feats |= VOS_TF_AGG_OPT;
+	result = vos_feats_agg_time_get(feats, &epoch);
+	assert_true(result);
+	assert_int_equal(epoch, 0);
+
+	vos_feats_agg_time_update(252, &feats);
+	result = vos_feats_agg_time_get(feats, &epoch);
+	assert_true(result);
+	assert_int_equal(epoch, 252);
+	assert_int_equal(feats & INIT_FEATS, INIT_FEATS);
+
+	/** Set lower time, same answer */
+	vos_feats_agg_time_update(242, &feats);
+	result = vos_feats_agg_time_get(feats, &epoch);
+	assert_true(result);
+	assert_int_equal(epoch, 252);
+	assert_int_equal(feats & INIT_FEATS, INIT_FEATS);
+
+	/** Set higher time, new answer */
+	vos_feats_agg_time_update(342, &feats);
+	result = vos_feats_agg_time_get(feats, &epoch);
+	assert_true(result);
+	assert_int_equal(epoch, 342);
+	assert_int_equal(feats & INIT_FEATS, INIT_FEATS);
+
+	/** If upper 24-bits is set, we assume HLC */
+	vos_feats_agg_time_update(0x463abcdef00ULL, &feats);
+	result = vos_feats_agg_time_get(feats, &epoch);
+	assert_true(result);
+	/** When we set the timestamp, we round up */
+	assert_int_equal(epoch, 0x463ac000000ULL);
+	assert_int_equal(feats & INIT_FEATS, INIT_FEATS);
+
+	/** Try setting a lower time, should get same result */
+	vos_feats_agg_time_update(0x463a00def00ULL, &feats);
+	result = vos_feats_agg_time_get(feats, &epoch);
+	assert_true(result);
+	assert_int_equal(epoch, 0x463ac000000ULL);
+	assert_int_equal(feats & INIT_FEATS, INIT_FEATS);
+
+	/** Try setting a higher time, should get updated */
+	vos_feats_agg_time_update(0x463adcdef00ULL, &feats);
+	result = vos_feats_agg_time_get(feats, &epoch);
+	assert_true(result);
+	assert_int_equal(epoch, 0x463ae000000ULL);
+	assert_int_equal(feats & INIT_FEATS, INIT_FEATS);
+
+	/** Test maximum epoch (not HLC) */
+	feats = INIT_FEATS;
+	epoch = (1ULL << VOS_AGG_NR_BITS) - 1;
+	vos_feats_agg_time_update(epoch, &feats);
+	result = vos_feats_agg_time_get(feats, &epoch);
+	assert_true(result);
+	assert_int_equal(epoch, (1ULL << VOS_AGG_NR_BITS) - 1);
+	assert_false(feats & VOS_TF_AGG_HLC);
+	assert_int_equal(feats & INIT_FEATS, INIT_FEATS);
+
+	/** Test minimum HLC */
+	epoch = 1ULL << VOS_AGG_NR_BITS;
+	vos_feats_agg_time_update(epoch, &feats);
+	result = vos_feats_agg_time_get(feats, &epoch);
+	assert_true(result);
+	/** Already rounded to nearest 1/4 ms */
+	assert_int_equal(epoch, 1ULL << VOS_AGG_NR_BITS);
+	assert_true(feats & VOS_TF_AGG_HLC);
+	assert_int_equal(feats & INIT_FEATS, INIT_FEATS);
+
+	/** Test rounding */
+	epoch = (1ULL << VOS_AGG_NR_BITS) + 1;
+	vos_feats_agg_time_update(epoch, &feats);
+	result = vos_feats_agg_time_get(feats, &epoch);
+	assert_true(result);
+	assert_int_equal(epoch, (1ULL << VOS_AGG_NR_BITS) + (1ULL << VOS_AGG_NR_HLC_BITS));
+	assert_true(feats & VOS_TF_AGG_HLC);
+	assert_int_equal(feats & INIT_FEATS, INIT_FEATS);
+}
+
 static int
 agg_tst_teardown(void **state)
 {
@@ -2813,28 +2903,6 @@ static const struct CMUnitTest discard_tests[] = {
 };
 
 static const struct CMUnitTest aggregate_tests[] = {
-	{ "VOS424: Aggregate extents not fully covered by delete record",
-	  aggregate_24, NULL, agg_tst_teardown },
-	{ "VOS425: Aggregate delete of end of merge window",
-	  aggregate_25, NULL, agg_tst_teardown },
-	{ "VOS426: Consecutive removed extents",
-	  aggregate_26, NULL, agg_tst_teardown },
-	{ "VOS427: Consecutive removed extents, no logical extents",
-	  aggregate_27, NULL, agg_tst_teardown },
-	{ "VOS428: Logical extent followed by consecutive removed extents",
-	  aggregate_28, NULL, agg_tst_teardown },
-	{ "VOS429: Logical extent followed by disjoint removed extents",
-	  aggregate_29, NULL, agg_tst_teardown },
-	{ "VOS430: Removal stress test",
-	  aggregate_30, NULL, agg_tst_teardown },
-	{ "VOS431: Removal spans windows, flush with no physical records",
-	  aggregate_31, NULL, agg_tst_teardown },
-	{ "VOS432: Overlapping removals",
-	  aggregate_32, NULL, agg_tst_teardown },
-	{ "VOS433: Many small removals",
-	  aggregate_33, NULL, agg_tst_teardown },
-	{ "VOS434: Selectively merging NVMe records",
-	  aggregate_34, NULL, agg_tst_teardown },
 	{ "VOS401: Aggregate SV with confined epr",
 	  aggregate_1, NULL, agg_tst_teardown },
 	{ "VOS402: Aggregate SV with punch records",
@@ -2881,6 +2949,30 @@ static const struct CMUnitTest aggregate_tests[] = {
 	  aggregate_22, NULL, agg_tst_teardown },
 	{ "VOS423: Aggregate deleted records spanning window end",
 	  aggregate_23, NULL, agg_tst_teardown },
+	{ "VOS424: Aggregate extents not fully covered by delete record",
+	  aggregate_24, NULL, agg_tst_teardown },
+	{ "VOS425: Aggregate delete of end of merge window",
+	  aggregate_25, NULL, agg_tst_teardown },
+	{ "VOS426: Consecutive removed extents",
+	  aggregate_26, NULL, agg_tst_teardown },
+	{ "VOS427: Consecutive removed extents, no logical extents",
+	  aggregate_27, NULL, agg_tst_teardown },
+	{ "VOS428: Logical extent followed by consecutive removed extents",
+	  aggregate_28, NULL, agg_tst_teardown },
+	{ "VOS429: Logical extent followed by disjoint removed extents",
+	  aggregate_29, NULL, agg_tst_teardown },
+	{ "VOS430: Removal stress test",
+	  aggregate_30, NULL, agg_tst_teardown },
+	{ "VOS431: Removal spans windows, flush with no physical records",
+	  aggregate_31, NULL, agg_tst_teardown },
+	{ "VOS432: Overlapping removals",
+	  aggregate_32, NULL, agg_tst_teardown },
+	{ "VOS433: Many small removals",
+	  aggregate_33, NULL, agg_tst_teardown },
+	{ "VOS434: Selectively merging NVMe records",
+	  aggregate_34, NULL, agg_tst_teardown },
+	{ "VOS435: Test aggregation timestamp functions",
+	  aggregate_35, NULL, NULL },
 };
 
 int

@@ -1618,13 +1618,12 @@ dc_tx_commit_prepare(struct dc_tx *tx, tse_task_t *task)
 		if (grp_idx < 0)
 			D_GOTO(out, rc = grp_idx);
 
-		if (obj_is_ec(obj))
+		if (obj_is_ec(obj) && dcsr->dcsr_reasb != NULL)
 			bit_map = ((struct obj_reasb_req *)(dcsr->dcsr_reasb))->tgt_bitmap;
 		else
 			bit_map = NIL_BITMAP;
 
-		i = pl_select_leader(obj->cob_md.omd_id, grp_idx, obj->cob_grp_size, bit_map, NULL,
-				     NULL, obj_get_shard, obj);
+		i = obj_grp_leader_get(obj, grp_idx, tx->tx_pm_ver, bit_map);
 		if (i < 0)
 			D_GOTO(out, rc = i);
 

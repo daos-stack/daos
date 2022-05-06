@@ -45,7 +45,7 @@ dmg:
 pool:
     mode: 146
     name: daos_server
-    scm_size: 53687091200 #50GB
+    scm_size: 50GB
     control_method: dmg
 container:
     type: POSIX
@@ -59,26 +59,17 @@ ior:
   iorflags:
       flags: "-w -F -r -R -k -G 1"
   test_file: /testFile
-  repetitions: 1
   transfersize_blocksize:
-    16M:
-      transfer_size: 16777216 #16M
-  objectclass:
-    RP_2G1:
-      dfs_oclass: "RP_2G1"
-  objectdirclass:
-    RP_2G1:
-      dfs_dir_oclass: "RP_2G1"
+      nvme_transfer_size: 16777216 #16M
+  dfs_oclass: "RP_2G1"
+  dfs_dir_oclass: "RP_2G1"
 faulttests:
   pool_capacity:
     10_Percent:
       percentage: 10
-  no_of_servers: !mux
+  no_of_servers:
     single:
       count: 1
-# Skipped because of DAOS-5281
-#    Two:
-#      count: 2
   no_of_drives:
     single:
       count: 1

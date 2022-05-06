@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2021 Intel Corporation.
+ * (C) Copyright 2016-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -98,7 +98,7 @@ epoch_recovery(test_arg_t *arg, enum epoch_recovery_op op)
 	daos_epoch_t	snap;
 	int		rc;
 
-	MPI_Barrier(MPI_COMM_WORLD);
+	par_barrier(PAR_COMM_WORLD);
 
 	print_message("creating and opening container "DF_UUIDF"\n",
 		      DP_UUID(uuid));
@@ -122,13 +122,13 @@ epoch_recovery(test_arg_t *arg, enum epoch_recovery_op op)
 	/* Every rank updates timestep 2. */
 	io(UPDATE, arg, coh, oid, "timestamp 2");
 
-	MPI_Barrier(MPI_COMM_WORLD);
+	par_barrier(PAR_COMM_WORLD);
 
 	print_message("closing container\n");
 	rc = daos_cont_close(coh, NULL /* ev */);
 	assert_rc_equal(rc, 0);
 
-	MPI_Barrier(MPI_COMM_WORLD);
+	par_barrier(PAR_COMM_WORLD);
 
 	if (op == POOL_DISCONNECT) {
 		print_message("disconnecting from pool\n");
@@ -159,7 +159,7 @@ epoch_recovery(test_arg_t *arg, enum epoch_recovery_op op)
 
 	rc = daos_cont_close(coh, NULL /* ev */);
 	assert_rc_equal(rc, 0);
-	MPI_Barrier(MPI_COMM_WORLD);
+	par_barrier(PAR_COMM_WORLD);
 }
 
 static void
@@ -196,6 +196,6 @@ run_daos_epoch_recovery_test(int rank, int size)
 	rc = cmocka_run_group_tests_name("DAOS_Epoch_Recovery",
 					 epoch_recovery_tests, setup,
 					 test_teardown);
-	MPI_Barrier(MPI_COMM_WORLD);
+	par_barrier(PAR_COMM_WORLD);
 	return rc;
 }

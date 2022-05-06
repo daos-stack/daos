@@ -81,6 +81,8 @@ enum vos_pool_open_flags {
 	VOS_POF_SMALL	= (1 << 0),
 	/** Exclusive (-DER_BUSY if already opened) */
 	VOS_POF_EXCL	= (1 << 1),
+	/** Ignore the pool uuid passed into vos_pool_open */
+	VOS_POF_SKIP_UUID_CHECK = (1 << 2),
 };
 
 enum vos_oi_attr {
@@ -332,6 +334,35 @@ enum {
 	VOS_IT_MASK		= (1 << 9) - 1,
 };
 
+typedef struct {
+	union {
+		/** The object id of the entry */
+		daos_unit_oid_t	 id_oid;
+		/** The key for the entry */
+		d_iov_t		 id_key;
+	};
+	/** Conservative approximation of last aggregatable write for object or key. */
+	daos_epoch_t		 id_agg_write;
+	/** Timestamp of latest parent punch, if applicable.  Zero if there is no punch */
+	daos_epoch_t		 id_parent_punch;
+	/** Type of entry */
+	vos_iter_type_t		 id_type;
+} vos_iter_desc_t;
+
+/** Probe flags for vos_iter_probe_ex */
+enum {
+	/** Indicate that we should skip the current entry */
+	VOS_ITER_PROBE_NEXT	= (1 << 0),
+	/** Indicate that we've already invoked probe for this entry */
+	VOS_ITER_PROBE_AGAIN	= (1 << 1),
+};
+
+/**
+ * Iteration object/key filter callback
+ */
+typedef int (*vos_iter_filter_cb_t)(daos_handle_t ih, vos_iter_desc_t *desc,
+				    void *cb_arg, unsigned int *acts);
+
 /**
  * Parameters for initializing VOS iterator
  */
@@ -356,6 +387,10 @@ typedef struct {
 	daos_epoch_range_t	ip_epr;
 	/** epoch logic expression for the iterator. */
 	vos_it_epc_expr_t	ip_epc_expr;
+	/** filter callback for object/key (vos_iterate only) */
+	vos_iter_filter_cb_t	ip_filter_cb;
+	/** filter callback argument (vos_iterate only) */
+	void			*ip_filter_arg;
 	/** flags for for iterator */
 	uint32_t		ip_flags;
 } vos_iter_param_t;
@@ -458,20 +493,25 @@ typedef struct {
 typedef int (*vos_iter_cb_t)(daos_handle_t ih, vos_iter_entry_t *entry,
 			     vos_iter_type_t type, vos_iter_param_t *param,
 			     void *cb_arg, unsigned int *acts);
+
 /**
  * Actions performed in iteration callback
  */
 enum {
-	/** Yield */
-	VOS_ITER_CB_YIELD	= (1UL << 0),
+	/** No action */
+	VOS_ITER_CB_NONE	= 0,
 	/** Delete entry */
-	VOS_ITER_CB_DELETE	= (1UL << 1),
+	VOS_ITER_CB_DELETE	= (1UL << 0),
 	/** Skip entry, don't iterate into next level for current entry */
-	VOS_ITER_CB_SKIP	= (1UL << 2),
+	VOS_ITER_CB_SKIP	= (1UL << 1),
+	/** Abort the current level iterator and restart */
+	VOS_ITER_CB_RESTART	= (1UL << 2),
 	/** Abort current level iteration */
 	VOS_ITER_CB_ABORT	= (1UL << 3),
-	/** Abort the current level iterator and restart */
-	VOS_ITER_CB_RESTART	= (1UL << 4),
+	/** Yield */
+	VOS_ITER_CB_YIELD	= (1UL << 4),
+	/** Exit all levels of iterator */
+	VOS_ITER_CB_EXIT	= (1UL << 5),
 };
 
 /**

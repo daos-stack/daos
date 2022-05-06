@@ -94,6 +94,21 @@ extern uint32_t dtx_agg_thd_cnt_lo;
 #define DTX_AGG_THD_AGE_MIN	210
 #define DTX_AGG_THD_AGE_DEF	630
 
+/* There is race between DTX aggregation and DTX refresh. Consider the following scenario:
+ *
+ * The DTX leader triggers DTX commit for some DTX entry, then related DTX participants
+ * (including the leader itself) will commit the DTX entry on each own target in parallel.
+ * It is possible that the leader has already committed locally but DTX aggregation removed
+ * the committed DTX very shortly after the commit. On the other hand, on some non-leader
+ * before the local commit, someone triggers DTX refresh for such DTX on such non-leader.
+ * Unfortunately the DTX entry has already gone on the leader. Then the non-leader will
+ * get -DER_TX_UNCERTAIN, that will cause related application to fail unexpectedly.
+ *
+ * So even if the system has DRAM pressure, we still need to keep some very recent committed
+ * DTX entries to handle above race.
+ */
+#define DTX_AGG_AGE_PRESERVE	3
+
 /* The threshold for yield CPU when handle DTX RPC. */
 #define DTX_RPC_YIELD_THD	64
 
@@ -130,6 +145,7 @@ struct dtx_pool_metrics {
  */
 struct dtx_tls {
 	struct d_tm_node_t	*dt_committable;
+	uint64_t		 dt_agg_gen;
 };
 
 extern struct dss_module_key dtx_module_key;
@@ -149,7 +165,6 @@ dtx_cont_opened(struct ds_cont_child *cont)
 extern struct crt_proto_format dtx_proto_fmt;
 extern btr_ops_t dbtree_dtx_cf_ops;
 extern btr_ops_t dtx_btr_cos_ops;
-extern uint64_t dtx_agg_gen;
 
 /* dtx_common.c */
 int dtx_handle_reinit(struct dtx_handle *dth);
@@ -178,6 +193,9 @@ int dtx_refresh_internal(struct ds_cont_child *cont, int *check_count,
 			 d_list_t *abt_list, d_list_t *act_list, bool failout);
 int dtx_status_handle_one(struct ds_cont_child *cont, struct dtx_entry *dte,
 			  daos_epoch_t epoch, int *tgt_array, int *err);
+
+int dtx_leader_get(struct ds_pool *pool, struct dtx_memberships *mbs,
+		   struct pool_target **p_tgt);
 
 enum dtx_status_handle_result {
 	DSHR_NEED_COMMIT	= 1,

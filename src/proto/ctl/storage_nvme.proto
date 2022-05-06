@@ -81,6 +81,7 @@ message NvmeController {
 		uint64 avail_bytes = 6;		// blobstore clusters available bytes
 		string tr_addr = 7;		// transport address of the blobstore
 		string dev_state = 8;		// NVMe device state
+		uint64 cluster_size = 9;        // blobstore cluster size in bytes
 	}
 
 	string model = 1;	// model name

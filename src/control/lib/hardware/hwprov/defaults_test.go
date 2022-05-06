@@ -17,6 +17,7 @@ import (
 	"github.com/daos-stack/daos/src/control/lib/hardware/hwloc"
 	"github.com/daos-stack/daos/src/control/lib/hardware/libfabric"
 	"github.com/daos-stack/daos/src/control/lib/hardware/sysfs"
+	"github.com/daos-stack/daos/src/control/lib/hardware/ucx"
 	"github.com/daos-stack/daos/src/control/logging"
 )
 
@@ -68,6 +69,7 @@ func TestHwprov_DefaultFabricInterfaceProviders(t *testing.T) {
 	expResult := []hardware.FabricInterfaceProvider{
 		libfabric.NewProvider(log),
 		sysfs.NewProvider(log),
+		ucx.NewProvider(log),
 	}
 
 	result := DefaultFabricInterfaceProviders(log)
@@ -75,6 +77,7 @@ func TestHwprov_DefaultFabricInterfaceProviders(t *testing.T) {
 	if diff := cmp.Diff(expResult, result,
 		cmpopts.IgnoreUnexported(libfabric.Provider{}),
 		cmpopts.IgnoreUnexported(sysfs.Provider{}),
+		cmpopts.IgnoreUnexported(ucx.Provider{}),
 	); diff != "" {
 		t.Fatalf("(-want, +got)\n%s\n", diff)
 	}
@@ -148,6 +151,19 @@ func TestHwprov_DefaultFabricScanner(t *testing.T) {
 		),
 		common.CmpOptIgnoreFieldAnyType("log"),
 		cmpopts.IgnoreFields(hardware.FabricScanner{}, "mutex"),
+	); diff != "" {
+		t.Fatalf("(-want, +got)\n%s\n", diff)
+	}
+}
+
+func TestHwprov_DefaultNetDevStateProvider(t *testing.T) {
+	log, buf := logging.NewTestLogger(t.Name())
+	defer common.ShowBufferOnFailure(t, buf)
+
+	result := DefaultNetDevStateProvider(log)
+
+	if diff := cmp.Diff(sysfs.NewProvider(log), result,
+		cmpopts.IgnoreUnexported(sysfs.Provider{}),
 	); diff != "" {
 		t.Fatalf("(-want, +got)\n%s\n", diff)
 	}

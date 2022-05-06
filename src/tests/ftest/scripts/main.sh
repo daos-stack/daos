@@ -228,11 +228,14 @@ fi
 ulimit -n 4096
 
 launch_args="-jcrisa"
-# can only process cores on EL7 currently
-if [ "$(lsb_release -s -i)" = "CentOS" ]    ||
-   [ "$(lsb_release -s -i)" = "Rocky" ]     ||
-   [ "$(lsb_release -s -i)" = "AlmaLinux" ] ||
-   [ "$(lsb_release -s -i)" = "openSUSE" ]; then
+# processing cores is broken on EL7 currently
+id="$(lsb_release -si)"
+if { [ "$id" = "CentOS" ]                 &&
+     [[ $(lsb_release -s -r) != 7.* ]]; } ||
+   [ "$id" = "AlmaLinux" ]                ||
+   [ "$id" = "Rocky" ]                    ||
+   [ "$id" = "RedHatEnterpriseServer" ]   ||
+   [ "$id" = "openSUSE" ]; then
     launch_args+="p"
 fi
 
@@ -244,6 +247,8 @@ fi
 # now run it!
 # shellcheck disable=SC2086
 export WITH_VALGRIND
+export STAGE_NAME
+# shellcheck disable=SC2086
 if ! ./launch.py "${launch_args}" -th "${LOGS_THRESHOLD}" \
                  -ts "${TEST_NODES}" ${LAUNCH_OPT_ARGS} ${TEST_TAG_ARR[*]}; then
     rc=${PIPESTATUS[0]}

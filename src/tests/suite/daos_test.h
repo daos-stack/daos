@@ -50,7 +50,7 @@
 	} while (0)
 #endif /* FAULT_INJECTION */
 
-#include <mpi.h>
+#include <daos/dpar.h>
 #include <daos/debug.h>
 #include <daos/common.h>
 #include <daos/mgmt.h>
@@ -387,7 +387,7 @@ typedef int (*test_setup_cb_t)(void **state);
 typedef int (*test_teardown_cb_t)(void **state);
 
 bool test_runable(test_arg_t *arg, unsigned int required_tgts);
-int test_pool_get_info(test_arg_t *arg, daos_pool_info_t *pinfo);
+int test_pool_get_info(test_arg_t *arg, daos_pool_info_t *pinfo, d_rank_list_t **engine_ranks);
 int test_get_leader(test_arg_t *arg, d_rank_t *rank);
 bool test_rebuild_query(test_arg_t **args, int args_cnt);
 void test_rebuild_wait(test_arg_t **args, int args_cnt);
@@ -533,8 +533,8 @@ handle_share(daos_handle_t *hdl, int type, int rank, daos_handle_t poh,
 	}
 
 	/** broadcast size of global handle to all peers */
-	rc = MPI_Bcast(&ghdl.iov_buf_len, 1, MPI_UINT64_T, 0, MPI_COMM_WORLD);
-	assert_int_equal(rc, MPI_SUCCESS);
+	rc = par_bcast(PAR_COMM_WORLD, &ghdl.iov_buf_len, 1, PAR_UINT64, 0);
+	assert_int_equal(rc, 0);
 
 	/** allocate buffer for global pool handle */
 	D_ALLOC(ghdl.iov_buf, ghdl.iov_buf_len);
@@ -559,9 +559,8 @@ handle_share(daos_handle_t *hdl, int type, int rank, daos_handle_t poh,
 	if (rank == 0 && verbose == 1)
 		print_message("rank 0 broadcast global %s handle ...",
 			      (type == HANDLE_POOL) ? "pool" : "container");
-	rc = MPI_Bcast(ghdl.iov_buf, ghdl.iov_len, MPI_BYTE, 0,
-		       MPI_COMM_WORLD);
-	assert_int_equal(rc, MPI_SUCCESS);
+	rc = par_bcast(PAR_COMM_WORLD, ghdl.iov_buf, ghdl.iov_len, PAR_BYTE, 0);
+	assert_int_equal(rc, 0);
 	if (rank == 0 && verbose == 1)
 		print_message("success\n");
 
@@ -585,7 +584,7 @@ handle_share(daos_handle_t *hdl, int type, int rank, daos_handle_t poh,
 
 	D_FREE(ghdl.iov_buf);
 
-	MPI_Barrier(MPI_COMM_WORLD);
+	par_barrier(PAR_COMM_WORLD);
 }
 
 #define MAX_KILLS	3

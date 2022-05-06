@@ -14,8 +14,6 @@ from ior_utils import IorCommand
 from exception_utils import CommandFailure
 from job_manager_utils import get_job_manager
 from general_utils import pcmd, get_random_string
-from daos_utils import DaosCommand
-from test_utils_container import TestContainer
 
 
 class IorTestBase(DfuseTestBase):
@@ -64,23 +62,25 @@ class IorTestBase(DfuseTestBase):
         Args:
             chunk_size (str, optional): container chunk size. Defaults to None.
             properties (str, optional): additional properties to append. Defaults to None.
+        Returns:
+            TestContainer: the created container.
 
         """
-        # Get container params
-        self.container = TestContainer(
-            self.pool, daos_command=DaosCommand(self.bin))
-        self.container.get_params(self)
+        params = {}
 
-        # update container oclass
+        # Set container oclass to match ior oclass
         if self.ior_cmd.dfs_oclass:
-            self.container.oclass.update(self.ior_cmd.dfs_oclass.value)
+            params["oclass"] = self.ior_cmd.dfs_oclass.value
 
         # update container chunk size
-        if chunk_size:
-            self.container.chunk_size.update(chunk_size)
+        if chunk_size is not None:
+            params["chunk_size"] = chunk_size
+
+        # create container from params
+        self.container = self.get_container(self.pool, create=False, **params)
 
         # append container properties
-        if properties:
+        if properties is not None:
             current_properties = self.container.properties.value
             if current_properties:
                 new_properties = current_properties + "," + properties
@@ -90,6 +90,7 @@ class IorTestBase(DfuseTestBase):
 
         # create container
         self.container.create()
+        return self.container
 
     def display_pool_space(self, pool=None):
         """Display the current pool space.
@@ -466,7 +467,7 @@ class IorTestBase(DfuseTestBase):
                                        and block sizes. eg: [1M, 32M]
                                        1M is transfer size and 32M is
                                        block size in the above example.
-            flags(list): list of ior flags
+            flags(list): list of ior flags. Only the first index is used
             mount_dir(str): dfuse mount directory
         """
         results = []
@@ -474,17 +475,18 @@ class IorTestBase(DfuseTestBase):
         for oclass in obj_class:
             self.ior_cmd.dfs_oclass.update(oclass)
             for api in apis:
+                hdf5_plugin_path = None
+                intercept = None
+                flags_w = flags[0]
                 if api == "HDF5-VOL":
-                    self.ior_cmd.api.update("HDF5")
-                    hdf5_plugin_path = self.params.get(
-                        "plugin_path", '/run/hdf5_vol/*')
-                    flags_w_k = " ".join([flags[0]] + ["-k"])
-                    self.ior_cmd.flags.update(flags_w_k, "ior.flags")
-                else:
-                    # run tests for different variants
-                    self.ior_cmd.flags.update(flags[0], "ior.flags")
-                    hdf5_plugin_path = None
-                    self.ior_cmd.api.update(api)
+                    api = "HDF5"
+                    hdf5_plugin_path = self.params.get("plugin_path", '/run/hdf5_vol/*')
+                    flags_w += " -k"
+                elif api == "POSIX+IL":
+                    api = "POSIX"
+                    intercept = os.path.join(self.prefix, 'lib64', 'libioil.so')
+                self.ior_cmd.flags.update(flags_w, "ior.flags")
+                self.ior_cmd.api.update(api)
                 for test in transfer_block_size:
                     # update transfer and block size
                     self.ior_cmd.transfer_size.update(test[0])
@@ -492,8 +494,8 @@ class IorTestBase(DfuseTestBase):
                     # run ior
                     try:
                         self.run_ior_with_pool(
-                            plugin_path=hdf5_plugin_path, timeout=self.ior_timeout,
-                            mount_dir=mount_dir)
+                            intercept=intercept, plugin_path=hdf5_plugin_path,
+                            timeout=self.ior_timeout, mount_dir=mount_dir)
                         results.append(["PASS", str(self.ior_cmd)])
                     except CommandFailure:
                         results.append(["FAIL", str(self.ior_cmd)])
