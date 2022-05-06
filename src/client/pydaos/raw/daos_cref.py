@@ -45,15 +45,6 @@ class EpochRange(ctypes.Structure):
                 ("epr_hi", ctypes.c_uint64)]
 
 
-class TargetInfo(ctypes.Structure):
-    """ Represents info about a given target
-    Represents struct: daos_target_info_t"""
-    _fields_ = [("ta_type", ctypes.c_uint),
-                ("ta_state", ctypes.c_uint),
-                ("ta_perf", ctypes.c_int),
-                ("ta_space", ctypes.c_int)]
-
-
 class RebuildStatus(ctypes.Structure):
     """ Structure to represent rebuild status info
     Represents struct: daos_rebuild_status"""
@@ -80,6 +71,15 @@ class Daos_Space(ctypes.Structure):
     Represents struct: daos_space"""
     _fields_ = [("s_total", ctypes.c_uint64 * 2),
                 ("s_free", ctypes.c_uint64 * 2)]
+
+
+class TargetInfo(ctypes.Structure):
+    """ Represents info about a given target
+    Represents struct: daos_target_info_t"""
+    _fields_ = [("ta_type", ctypes.c_uint),
+                ("ta_state", ctypes.c_uint),
+                ("ta_perf", ctypes.c_int),
+                ("ta_space", Daos_Space)]
 
 
 class PoolSpace(ctypes.Structure):

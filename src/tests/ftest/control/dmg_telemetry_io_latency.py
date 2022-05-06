@@ -5,35 +5,12 @@
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 
-import re
 from ior_test_base import IorTestBase
 from telemetry_test_base import TestWithTelemetry
 from telemetry_utils import TelemetryUtils
 from test_utils_container import TestContainer
+from oclass_utils import extract_redundancy_factor
 from apricot import skipForTicket
-
-
-def get_rf(oclass):
-    """Return redundancy factor based on the oclass.
-
-    Args:
-        oclass(string): object class.
-
-    return:
-        redundancy factor(int) from object type
-    """
-    rf = 0
-    if "EC" in oclass:
-        tmp = re.findall(r'\d+', oclass)
-        if tmp:
-            rf = int(tmp[1])
-    elif "RP" in oclass:
-        tmp = re.findall(r'\d+', oclass)
-        if tmp:
-            rf = int(tmp[0]) - 1
-    else:
-        rf = 0
-    return rf
 
 
 def convert_to_number(size):
@@ -92,7 +69,7 @@ class TestWithTelemetryIOLatency(IorTestBase, TestWithTelemetry):
         # include rf based on the class
         if oclass:
             self.container[-1].oclass.update(oclass)
-            redundancy_factor = get_rf(oclass)
+            redundancy_factor = extract_redundancy_factor(oclass)
             rf = 'rf:{}'.format(str(redundancy_factor))
         properties = self.container[-1].properties.value
         cont_properties = (",").join(filter(None, [properties, rf]))

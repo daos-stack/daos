@@ -13,7 +13,7 @@
 # installed specifically.
 
 # Fedora is already on python 3.10 but Rocky has several versions available and defaults to the
-# oldest so tell it to install the latest which is 3.9
+# oldest so tell it to install the latest which is 3.9.
 
 if [ -e /etc/fedora-release ]; then
         PACKAGES="java-1.8.0-openjdk-devel maven-openjdk8 python3-devel"
@@ -67,6 +67,7 @@ dnf --nodocs install \
     patch \
     patchelf \
     sg3_utils \
+    sudo \
     valgrind-devel \
     which \
     yasm

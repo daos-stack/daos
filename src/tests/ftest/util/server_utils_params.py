@@ -108,6 +108,7 @@ class DaosServerYamlParameters(YamlParameters):
         log_dir = os.environ.get("DAOS_TEST_LOG_DIR", "/tmp")
 
         self.provider = BasicParameter(None, default_provider)
+        self.crt_timeout = BasicParameter(None, 10)
         self.hyperthreads = BasicParameter(None, False)
         self.socket_dir = BasicParameter(None, "/var/run/daos_server")
         # Auto-calculate if unset or set to zero
@@ -399,9 +400,6 @@ class DaosServerYamlParameters(YamlParameters):
 
             # global CRT_CTX_SHARE_ADDR shared with client
             self.crt_ctx_share_addr = BasicParameter(None, default_share_addr)
-
-            # global CRT_TIMEOUT shared with client
-            self.crt_timeout = BasicParameter(None, 30)
 
             # Storage definition parameters:
             #

@@ -22,7 +22,7 @@
 #include <daos_srv/daos_engine.h>
 #include <daos_srv/dtx_srv.h>
 #include "obj_rpc.h"
-#include "obj_internal.h"
+#include "srv_internal.h"
 
 struct obj_remote_cb_arg {
 	dtx_sub_comp_cb_t		comp_cb;
