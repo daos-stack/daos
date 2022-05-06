@@ -435,8 +435,13 @@ func waitFabricReady(ctx context.Context, log logging.Logger, cfg *config.Server
 		ifaces = append(ifaces, eng.Fabric.Interface)
 	}
 
+	// Skip wait if no fabric interfaces specified in config.
+	if len(ifaces) == 0 {
+		return nil
+	}
+
 	if err := hardware.WaitFabricReady(ctx, log, hardware.WaitFabricReadyParams{
-		Checker:        hwprov.DefaultFabricReadyChecker(log),
+		StateProvider:  hwprov.DefaultNetDevStateProvider(log),
 		FabricIfaces:   ifaces,
 		IterationSleep: time.Second,
 	}); err != nil {
