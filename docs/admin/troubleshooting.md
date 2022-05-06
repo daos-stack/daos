@@ -337,6 +337,7 @@ Verify if you're using Infiniband for `fabric_iface`: in the server config. The 
   # Error message or timeout after dmg system query
   $ dmg system query
   ERROR: dmg: Unable to load Certificate Data: could not load cert: stat /etc/daos/certs/admin.crt: no such file or directory
+  
   # Workaround
     # 1. Make sure the admin-host /etc/daos/daos_control.yml is correctly configured.
       # including:
