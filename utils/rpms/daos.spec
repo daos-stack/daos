@@ -3,7 +3,7 @@
 %define agent_svc_name daos_agent.service
 %define sysctl_script_name 10-daos_server.conf
 
-%global mercury_version 2.1.0~rc4-8%{?dist}
+%global mercury_version 2.1.0~rc4-9%{?dist}
 %global libfabric_version 1.15.0~rc3-1
 %global __python %{__python3}
 
@@ -27,7 +27,7 @@
 
 Name:          daos
 Version:       2.1.102
-Release:       3%{?relval}%{?dist}
+Release:       1%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       BSD-2-Clause-Patent
@@ -562,8 +562,11 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 # No files in a shim package
 
 %changelog
-* Wed May 4 2022 Johann Lombardi <johann.lombardi@intel.com> 2.1.102-1
+* Thu May 5 2022 Johann Lombardi <johann.lombardi@intel.com> 2.1.102-1
 - Bump version to 2.1.102
+
+* Wed May  4 2022 Joseph Moore <joseph.moore@intel.com> 2.1.101-4
+- Update to mercury 2.1.0.rc4-9 to enable non-unified mode in UCX
 
 * Fri Apr 22 2022 Lei Huang <lei.huang@intel.com> 2.1.101-3
 - Update to libfabric to v1.15.0rc3-1 to include critical performance patches
