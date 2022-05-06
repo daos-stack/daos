@@ -55,7 +55,7 @@
 #include <daos_srv/daos_engine.h>
 #include <daos_srv/srv_obj_ec.h>
 #include "obj_ec.h"
-#include "obj_internal.h"
+#include "srv_internal.h"
 
 #define EC_AGG_ITERATION_MAX	2048
 
