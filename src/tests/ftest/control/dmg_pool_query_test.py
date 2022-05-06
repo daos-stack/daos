@@ -68,8 +68,8 @@ class DmgPoolQueryTest(ControlTestBase, IorTestBase):
                 "total_targets", path="/run/exp_vals/*"),
             "active_targets": self.params.get(
                 "active_targets", path="/run/exp_vals/*"),
-            "total_nodes": self.params.get(
-                "total_nodes", path="/run/exp_vals/*"),
+            "total_engines": self.params.get(
+                "total_engines", path="/run/exp_vals/*"),
             "disabled_targets": self.params.get(
                 "disabled_targets", path="/run/exp_vals/*"),
             "version": self.params.get("version", path="/run/exp_vals/*"),
