@@ -536,9 +536,9 @@ func TestControl_SystemQuery(t *testing.T) {
 
 	testRS := system.MustCreateRankSet("1-23")
 	testReqRS := new(SystemQueryReq)
-	testReqRS.Ranks.ReplaceSet(testRS)
+	testReqRS.Ranks.Replace(testRS)
 	testRespRS := new(SystemQueryResp)
-	testRespRS.AbsentRanks.ReplaceSet(testRS)
+	testRespRS.AbsentRanks.Replace(testRS)
 
 	fdStrs := []string{"/one/two", "/three", "/four/five/six", ""}
 	fds := make([]*system.FaultDomain, len(fdStrs))
@@ -687,7 +687,7 @@ func TestControl_SystemQueryRespErrors(t *testing.T) {
 			ahs := hostlist.MustCreateSet(tc.absentHosts)
 			resp.AbsentHosts.ReplaceSet(ahs)
 			ars := system.MustCreateRankSet(tc.absentRanks)
-			resp.AbsentRanks.ReplaceSet(ars)
+			resp.AbsentRanks.Replace(ars)
 
 			test.CmpErr(t, tc.expErr, resp.Errors())
 		})
@@ -703,9 +703,9 @@ func TestControl_SystemStart(t *testing.T) {
 
 	testRS := system.MustCreateRankSet("1-23")
 	testReqRS := new(SystemStartReq)
-	testReqRS.Ranks.ReplaceSet(testRS)
+	testReqRS.Ranks.Replace(testRS)
 	testRespRS := new(SystemStartResp)
-	testRespRS.AbsentRanks.ReplaceSet(testRS)
+	testRespRS.AbsentRanks.Replace(testRS)
 
 	for name, tc := range map[string]struct {
 		req     *SystemStartReq
@@ -857,7 +857,7 @@ func TestControl_SystemStartRespErrors(t *testing.T) {
 			ahs := hostlist.MustCreateSet(tc.absentHosts)
 			resp.AbsentHosts.ReplaceSet(ahs)
 			ars := system.MustCreateRankSet(tc.absentRanks)
-			resp.AbsentRanks.ReplaceSet(ars)
+			resp.AbsentRanks.Replace(ars)
 			resp.Results = tc.results
 
 			test.CmpErr(t, tc.expErr, resp.Errors())
@@ -874,9 +874,9 @@ func TestControl_SystemStop(t *testing.T) {
 
 	testRS := system.MustCreateRankSet("1-23")
 	testReqRS := new(SystemStopReq)
-	testReqRS.Ranks.ReplaceSet(testRS)
+	testReqRS.Ranks.Replace(testRS)
 	testRespRS := new(SystemStopResp)
-	testRespRS.AbsentRanks.ReplaceSet(testRS)
+	testRespRS.AbsentRanks.Replace(testRS)
 
 	for name, tc := range map[string]struct {
 		req     *SystemStopReq
@@ -1028,7 +1028,7 @@ func TestControl_SystemStopRespErrors(t *testing.T) {
 			ahs := hostlist.MustCreateSet(tc.absentHosts)
 			resp.AbsentHosts.ReplaceSet(ahs)
 			ars := system.MustCreateRankSet(tc.absentRanks)
-			resp.AbsentRanks.ReplaceSet(ars)
+			resp.AbsentRanks.Replace(ars)
 			resp.Results = tc.results
 
 			test.CmpErr(t, tc.expErr, resp.Errors())

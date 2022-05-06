@@ -13,6 +13,64 @@ import (
 	"github.com/daos-stack/daos/src/control/lib/hostlist"
 )
 
+func TestHostList_NumericList(t *testing.T) {
+	uints := func(input ...uint) []uint {
+		return input
+	}
+
+	for name, tc := range map[string]struct {
+		startList   []uint
+		addList     []uint
+		delList     []uint
+		expOut      string
+		expFinalOut string
+		expCount    int
+		expErr      error
+	}{
+		"add to and delete from empty list": {
+			startList:   uints(),
+			addList:     uints(0, 2, 5),
+			expOut:      "[0,2,5]",
+			delList:     uints(2),
+			expFinalOut: "[0,5]",
+			expCount:    2,
+		},
+		"add to and delete from existing list": {
+			startList:   uints(1, 3, 4),
+			addList:     uints(0, 2, 5),
+			expOut:      "[1,3-4,0,2,5]",
+			delList:     uints(4),
+			expFinalOut: "[1,3,0,2,5]",
+			expCount:    5,
+		},
+		"delete non-existent no-op": {
+			startList:   uints(1, 3, 4),
+			expOut:      "[1,3-4]",
+			delList:     uints(5),
+			expFinalOut: "[1,3-4]",
+			expCount:    3,
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			nl := hostlist.NewNumericList(tc.startList...)
+			for _, i := range tc.addList {
+				nl.Add(i)
+			}
+			cmpOut(t, tc.expOut, nl.String())
+
+			for _, i := range tc.delList {
+				nl.Delete(i)
+			}
+			cmpOut(t, tc.expFinalOut, nl.String())
+
+			gotCount := nl.Count()
+			if gotCount != tc.expCount {
+				t.Fatalf("expected count to be %d; got %d", tc.expCount, gotCount)
+			}
+		})
+	}
+}
+
 func TestHostList_CreateNumericList(t *testing.T) {
 	for name, tc := range map[string]struct {
 		startList    string
@@ -49,6 +107,64 @@ func TestHostList_CreateNumericList(t *testing.T) {
 			gotCount := hl.Count()
 			if gotCount != tc.expUniqCount {
 				t.Fatalf("expected count to be %d; got %d", tc.expUniqCount, gotCount)
+			}
+		})
+	}
+}
+
+func TestHostList_NumericSet(t *testing.T) {
+	uints := func(input ...uint) []uint {
+		return input
+	}
+
+	for name, tc := range map[string]struct {
+		startList   []uint
+		addList     []uint
+		delList     []uint
+		expOut      string
+		expFinalOut string
+		expCount    int
+		expErr      error
+	}{
+		"add to and delete from empty set": {
+			startList:   uints(),
+			addList:     uints(0, 2, 5),
+			expOut:      "[0,2,5]",
+			delList:     uints(2),
+			expFinalOut: "[0,5]",
+			expCount:    2,
+		},
+		"add to and delete from existing set": {
+			startList:   uints(1, 3, 4),
+			addList:     uints(0, 2, 5),
+			expOut:      "[0-5]",
+			delList:     uints(4),
+			expFinalOut: "[0-3,5]",
+			expCount:    5,
+		},
+		"delete non-existent no-op": {
+			startList:   uints(1, 3, 4),
+			expOut:      "[1,3-4]",
+			delList:     uints(5),
+			expFinalOut: "[1,3-4]",
+			expCount:    3,
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			nl := hostlist.NewNumericSet(tc.startList...)
+			for _, i := range tc.addList {
+				nl.Add(i)
+			}
+			cmpOut(t, tc.expOut, nl.String())
+
+			for _, i := range tc.delList {
+				nl.Delete(i)
+			}
+			cmpOut(t, tc.expFinalOut, nl.String())
+
+			gotCount := nl.Count()
+			if gotCount != tc.expCount {
+				t.Fatalf("expected count to be %d; got %d", tc.expCount, gotCount)
 			}
 		})
 	}
