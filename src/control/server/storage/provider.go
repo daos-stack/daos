@@ -247,19 +247,24 @@ func (p *Provider) PrepareBdevs(req BdevPrepareRequest) (*BdevPrepareResponse, e
 	return resp, err
 }
 
-// HasBlockDevices returns true if provider engine storage config has configured
-// block devices.
-func (p *Provider) HasBlockDevices() bool {
+// GetBlockDevices returns the addresses of all block devices in all bdev storage tiers.
+func (p *Provider) GetBlockDevices() *BdevDeviceList {
+	bdevs := []string{}
 	for _, cfg := range p.engineStorage.Tiers.BdevConfigs() {
-		if cfg.Bdev.DeviceList.Len() > 0 {
-			return true
-		}
+		bdevs = append(bdevs, cfg.Bdev.DeviceList.Devices()...)
 	}
-	return false
+
+	p.log.Debugf("bdevs on instance %d: %v", p.engineIndex, bdevs)
+
+	return MustNewBdevDeviceList(bdevs...)
 }
 
-// BdevTierPropertiesFromConfig returns BdevTierProperties struct from given
-// TierConfig.
+// HasBlockDevices returns true if provider engine storage config has configured block devices.
+func (p *Provider) HasBlockDevices() bool {
+	return p.GetBlockDevices().Len() > 0
+}
+
+// BdevTierPropertiesFromConfig returns BdevTierProperties struct from given TierConfig.
 func BdevTierPropertiesFromConfig(cfg *TierConfig) BdevTierProperties {
 	return BdevTierProperties{
 		Class:      cfg.Class,
@@ -513,13 +518,52 @@ func (p *Provider) ScanBdevs(req BdevScanRequest) (*BdevScanResponse, error) {
 	return scanBdevs(p.log, req, &p.bdevCache, p.bdev.Scan)
 }
 
+func filterScanResp(incBdevs *BdevDeviceList, resp *BdevScanResponse) error {
+	oldCtrlrRefs := resp.Controllers
+	newCtrlrRefs := make(NvmeControllers, 0, len(oldCtrlrRefs))
+
+	for _, oldCtrlrRef := range oldCtrlrRefs {
+		addr, err := hardware.NewPCIAddress(oldCtrlrRef.PciAddr)
+		if err != nil {
+			continue // If we cannot parse the address, filter it out.
+		}
+
+		// If a VMD backing address, compare endpoint address with that in config.
+		if addr.IsVMDBackingAddress() {
+			vmdAddr, err := addr.BackingToVMDAddress()
+			if err != nil {
+				return err
+			}
+			addr = vmdAddr
+		}
+
+		if incBdevs.Contains(addr) {
+			newCtrlrRef := &NvmeController{}
+			*newCtrlrRef = *oldCtrlrRef
+			newCtrlrRefs = append(newCtrlrRefs, newCtrlrRef)
+		}
+	}
+	resp.Controllers = newCtrlrRefs
+
+	return nil
+}
+
 // SetBdevCache stores given scan response in provider bdev cache.
-func (p *Provider) SetBdevCache(resp BdevScanResponse) {
+func (p *Provider) SetBdevCache(resp BdevScanResponse) error {
 	p.Lock()
 	defer p.Unlock()
 
+	// Filter out any controllers not configured in provider's engine storage config.
+	if err := filterScanResp(p.GetBlockDevices(), &resp); err != nil {
+		return errors.Wrap(err, "filtering scan response before caching")
+	}
+
+	p.log.Debugf("setting bdev cache in storage provider for engine %d: %v", p.engineIndex,
+		resp.Controllers)
 	p.bdevCache = resp
 	p.vmdEnabled = resp.VMDEnabled
+
+	return nil
 }
 
 // WithVMDEnabled enables VMD on storage provider.
