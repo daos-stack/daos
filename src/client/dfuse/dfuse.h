@@ -214,7 +214,6 @@ struct dfuse_cont {
 	double			dfc_ndentry_timeout;
 	bool			dfc_data_caching;
 	bool			dfc_direct_io_disable;
-	pthread_mutex_t		dfs_read_mutex;
 };
 
 void
