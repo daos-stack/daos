@@ -1,3 +1,9 @@
+daos (2.1.102-1) unstable; urgency=medium
+  [ Johann Lombardi ]
+  * Bump version to 2.1.102
+
+ -- Johann Lombardi <johann.lombardi@intel.com>  Thu, 5 May 2022 15:00:00 +0800
+
 daos (2.1.101-4) unstable; urgency=medium
   [ Joseph Moore ]
   * Update UXC Mercury patch to disable unified mode

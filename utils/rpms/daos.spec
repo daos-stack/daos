@@ -26,8 +26,8 @@
 %endif
 
 Name:          daos
-Version:       2.1.101
-Release:       4%{?relval}%{?dist}
+Version:       2.1.102
+Release:       1%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       BSD-2-Clause-Patent
@@ -562,6 +562,9 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 # No files in a shim package
 
 %changelog
+* Thu May 5 2022 Johann Lombardi <johann.lombardi@intel.com> 2.1.102-1
+- Bump version to 2.1.102
+
 * Wed May  4 2022 Joseph Moore <joseph.moore@intel.com> 2.1.101-4
 - Update to mercury 2.1.0.rc4-9 to enable non-unified mode in UCX
 
