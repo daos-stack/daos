@@ -155,12 +155,14 @@ class ServerRankFailure(IorTestBase):
         # 2. Run IOR.
         ior_results = {}
         job_num = 1
-        # When the engines are killed, Mpirun gets stuck and waits forever. Use 20 sec
-        # timeout so that Mpirun is stopped after 20 sec.
+        # If we don't use timoue, when the engines are killed, Mpirun gets stuck and
+        # waits forever. If we use timeout that's too long, the daos cotainer command
+        # after the server restart will get stuck, so use 10 sec timeout, which is the
+        # same as deadlineForStonewalling in IOR.
         ior_thread = threading.Thread(
             target=self.run_ior_report_error,
             args=[ior_results, job_num, "test_file_1", self.pool, self.container,
-                  ior_namespace, 20])
+                  ior_namespace, 10])
 
         ior_thread.start()
 
@@ -195,7 +197,7 @@ class ServerRankFailure(IorTestBase):
         # 7. Verify that the container Health is HEALTHY.
         if not self.check_container_health(
                 container=self.container, expected_health="HEALTHY"):
-            errors.append("Container health isn't HEALTHY after reintegrate!")
+            errors.append("Container health isn't HEALTHY after server restart!")
 
         # 8. Run IOR and verify that it works.
         ior_results = {}

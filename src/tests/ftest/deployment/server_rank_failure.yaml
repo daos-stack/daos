@@ -58,23 +58,24 @@ ior: &ior_base
   client_processes:
     np: 1
   iorflags:
-    flags: "-k -D 10 -v -w -W"
+    flags: -k -v -w -W
     api: DFS
     # We wait for a few seconds before excluding a target. If the IOR finishes too
     # quickly, the test will not work. We use -D (deadlineForStonewalling) 10, so the
     # process ends in about 10 sec. Adjust the transfer_size - block_size combination
     # based on the system so that it takes longer than the -D value.
-    transfer_size: '512K'
-    block_size: '100G'
+    transfer_size: 512K
+    block_size: 100G
+    sw_deadline: 10
 ior_wo_rf:
   <<: *ior_base
-  dfs_oclass: "SX"
-  dfs_dir_oclass: "SX"
+  dfs_oclass: SX
+  dfs_dir_oclass: SX
 ior_with_rp:
   <<: *ior_base
-  dfs_oclass: "RP_2G1"
-  dfs_dir_oclass: "RP_2G1"
+  dfs_oclass: RP_2G1
+  dfs_dir_oclass: RP_2G1
 ior_with_ec:
   <<: *ior_base
-  dfs_oclass: "EC_2P1G1"
-  dfs_dir_oclass: "EC_2P1G1"
+  dfs_oclass: EC_2P1G1
+  dfs_dir_oclass: EC_2P1G1
