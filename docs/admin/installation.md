@@ -20,8 +20,7 @@ for suggestions related specifically to development. Contact us in our
 
 To build DAOS and its dependencies, several software packages must be installed
 on the system. This includes scons, libuuid, cmocka, ipmctl, and several other
-packages usually available on all the Linux distributions. Moreover, a Go
-version of at least 1.13 is required.
+packages usually available on all the Linux distributions.
 
 A script is provided for each Linux distribution to install the packages required, and the Docker
 install process calls out to this script as part of the install process.
