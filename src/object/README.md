@@ -41,7 +41,7 @@ array chunks under integer dkeys.
 The DAOS <b>object class</b> describes the object distribution and protection
 methods. An <b>object class</b> is represented by a unique 8-bit class ID
 defining the data protection scheme (e.g. 2-way replication or erasure code 8+2,
-see enum daos\_obj\_redun) combined with a 16-bit integer encording the number
+see enum daos\_obj\_redun) combined with a 16-bit integer encoding the number
 of groups (also called shards) over which the dkeys are distributed.
 
 The DAOS API provides some pre-defined identifiers for the most common object
