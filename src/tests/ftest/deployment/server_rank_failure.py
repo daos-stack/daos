@@ -155,8 +155,8 @@ class ServerRankFailure(IorTestBase):
         # 2. Run IOR.
         ior_results = {}
         job_num = 1
-        # If we don't use timoue, when the engines are killed, Mpirun gets stuck and
-        # waits forever. If we use timeout that's too long, the daos cotainer command
+        # If we don't use timout, when the engines are killed, Mpirun gets stuck and
+        # waits forever. If we use timeout that's too long, the daos container command
         # after the server restart will get stuck, so use 10 sec timeout, which is the
         # same as deadlineForStonewalling in IOR.
         ior_thread = threading.Thread(
