@@ -4,9 +4,13 @@
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 /**
- * This file is part of daos
+ * Unit testing for dfuse and Interception library.  This code does not interact with dfuse
+ * directly, however makes filesystem calls into libc and checks the results are as expected.
  *
- * tests/suite/dfuse_test
+ * It is also called with the Interception Library to verify that I/O calls have the expected
+ * behavior in this case as well.
+ *
+ * It uses cmocka, but not to mock any functions, only for the reporting and assert macros.
  */
 
 #include <stdarg.h>
@@ -30,6 +34,10 @@ print_usage()
 }
 
 char *test_dir;
+
+#ifndef O_PATH
+#define O_PATH 0
+#endif
 
 void
 do_openat(void **state)
@@ -102,10 +110,7 @@ do_openat(void **state)
 	assert_return_code(rc, errno);
 	assert_int_equal(stbuf.st_size, offset);
 
-	/* Write to change the size */
-
 	/* stat/fstatat */
-
 	rc = read(fd, &output_buf, 2);
 	assert_return_code(rc, errno);
 	assert_int_equal(rc, 0);

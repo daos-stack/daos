@@ -27,7 +27,7 @@
 
 Name:          daos
 Version:       2.3.100
-Release:       6%{?relval}%{?dist}
+Release:       7%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       BSD-2-Clause-Patent
@@ -555,6 +555,9 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 # No files in a shim package
 
 %changelog
+* Fri May  6 2022 Ashley Pittman <ashley.m.pittman@intel.com> 2.3.100-7
+- Add dfuse unit-test binary to call from ftest.
+
 * Wed May  4 2022 Joseph Moore <joseph.moore@intel.com> 2.3.100-6
 - Update to mercury 2.1.0.rc4-9 to enable non-unified mode in UCX
 
