@@ -621,7 +621,7 @@ degrade_ec_update(void **state)
 	ioreq_fini(&req);
 
 	print_message("test 3 - partial update only one leader alive case\n");
-	oid = daos_test_oid_gen(arg->coh, OC_EC_4P1G1, DAOS_OF_DKEY_UINT64, 0, arg->myrank);
+	oid = daos_test_oid_gen(arg->coh, OC_EC_4P1G1, DAOS_OT_DKEY_UINT64, 0, arg->myrank);
 	/* simulate shard 0's failure, then partial update [0, 4096] will need to update
 	 * data shard 0 and parity shard 4, so only the leader shard 4 alive.
 	 */

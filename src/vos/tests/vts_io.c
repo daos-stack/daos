@@ -1463,16 +1463,18 @@ gen_io(struct io_test_args *arg, int obj_nr, int dkey_nr, int sv_nr, int ev_nr, 
 
 
 	for (oidx = 0; oidx < obj_nr; oidx++) {
-		arg->oid = gen_oid(arg->ofeat);
+		arg->oid = gen_oid(arg->otype);
 		for (didx = 0; didx < dkey_nr; didx++) {
 			vts_key_gen(&dkey_buf[0], arg->dkey_size, true, arg);
-			set_iov(&dkey, &dkey_buf[0], arg->ofeat & DAOS_OF_DKEY_UINT64);
-			rex.rx_idx	= hash_key(&dkey, arg->ofeat & DAOS_OF_DKEY_UINT64);
+			set_iov(&dkey, &dkey_buf[0],
+				is_daos_obj_type_set(arg->otype, DAOS_OT_DKEY_UINT64));
+			rex.rx_idx	= hash_key(&dkey,
+				is_daos_obj_type_set(arg->otype, DAOS_OT_DKEY_UINT64));
 			iod.iod_type	= DAOS_IOD_SINGLE;
 			for (aidx = 0; aidx < sv_nr; aidx++) {
 				vts_key_gen(&akey_buf[0], arg->akey_size, false, arg);
 				set_iov(&iod.iod_name, &akey_buf[0],
-					arg->ofeat & DAOS_OF_AKEY_UINT64);
+					is_daos_obj_type_set(arg->otype, DAOS_OT_AKEY_UINT64));
 				rc = io_test_obj_update(arg, (*epoch)++, 0, &dkey, &iod, &sgl,
 							NULL, true);
 				assert_rc_equal(rc, 0);
@@ -1482,7 +1484,7 @@ gen_io(struct io_test_args *arg, int obj_nr, int dkey_nr, int sv_nr, int ev_nr, 
 			for (aidx = 0; aidx < ev_nr; aidx++) {
 				vts_key_gen(&akey_buf[0], arg->akey_size, false, arg);
 				set_iov(&iod.iod_name, &akey_buf[0],
-					arg->ofeat & DAOS_OF_AKEY_UINT64);
+					is_daos_obj_type_set(arg->otype, DAOS_OT_AKEY_UINT64));
 				rc = io_test_obj_update(arg, (*epoch)++, 0, &dkey, &iod, &sgl,
 							NULL, true);
 				assert_rc_equal(rc, 0);
