@@ -9,6 +9,7 @@ package server
 import (
 	"context"
 	"fmt"
+	"math"
 	"os"
 	"os/user"
 	"path/filepath"
@@ -24,6 +25,7 @@ import (
 	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/common/proto"
 	"github.com/daos-stack/daos/src/control/common/proto/convert"
+	"github.com/daos-stack/daos/src/control/common/proto/ctl"
 	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
 	"github.com/daos-stack/daos/src/control/drpc"
 	"github.com/daos-stack/daos/src/control/fault"
@@ -46,11 +48,21 @@ var (
 		protocmp.IgnoreFields(&ctlpb.NvmeController{}, "serial"))
 )
 
-func adjustNvmeSize(availBytes uint64) uint64 {
+func adjustNvmeSize(smdDevices []*ctl.NvmeController_SmdDevice) {
 	const targetNb uint64 = 4
 
-	unalignedMemory := availBytes % (targetNb * clusterSize)
-	return availBytes - unalignedMemory
+	availBytes := uint64(math.MaxUint64)
+	for _, dev := range smdDevices {
+		unalignedMemory := dev.AvailBytes % (targetNb * clusterSize)
+		usabledMemory := dev.AvailBytes - unalignedMemory
+		if usabledMemory < availBytes {
+			availBytes = usabledMemory
+		}
+	}
+
+	for _, dev := range smdDevices {
+		dev.AvailBytes = availBytes
+	}
 }
 
 func adjustScmSize(availBytes uint64) uint64 {
@@ -438,9 +450,7 @@ func TestServer_CtlSvc_StorageScan_PostEngineStart(t *testing.T) {
 	}
 	newCtrlrPBwMeta := func(idx int32, smdIndexes ...int32) *ctlpb.NvmeController {
 		c, _ := newCtrlrMeta(idx, smdIndexes...)
-		for _, sd := range c.GetSmdDevices() {
-			sd.AvailBytes = adjustNvmeSize(sd.AvailBytes)
-		}
+		adjustNvmeSize(c.GetSmdDevices())
 		return c
 	}
 	newSmdDevResp := func(idx int32, smdIndexes ...int32) *ctlpb.SmdDevResp {
@@ -2217,16 +2227,41 @@ func TestServer_adjustNvmeSize(t *testing.T) {
 					{
 						SmdDevices: []*ctlpb.NvmeController_SmdDevice{
 							{
+								Uuid:        "nvme0",
 								TgtIds:      []int32{0, 1, 2, 3},
 								AvailBytes:  10 * humanize.GiByte,
 								ClusterSize: clusterSize,
 								DevState:    "NORMAL",
+								Rank:        0,
 							},
 							{
-								TgtIds:      []int32{0, 1, 2},
+								Uuid:        "nvme1",
+								TgtIds:      []int32{0, 1, 2, 3},
 								AvailBytes:  10 * humanize.GiByte,
 								ClusterSize: clusterSize,
 								DevState:    "NORMAL",
+								Rank:        0,
+							},
+							{
+								TgtIds:      []int32{0, 1, 2, 3},
+								AvailBytes:  20 * humanize.GiByte,
+								ClusterSize: clusterSize,
+								DevState:    "NORMAL",
+								Rank:        0,
+							},
+							{
+								TgtIds:      []int32{0, 1, 2},
+								AvailBytes:  20 * humanize.GiByte,
+								ClusterSize: clusterSize,
+								DevState:    "NORMAL",
+								Rank:        1,
+							},
+							{
+								TgtIds:      []int32{0, 1, 2},
+								AvailBytes:  20 * humanize.GiByte,
+								ClusterSize: clusterSize,
+								DevState:    "NORMAL",
+								Rank:        1,
 							},
 						},
 					},
@@ -2235,8 +2270,42 @@ func TestServer_adjustNvmeSize(t *testing.T) {
 			output: ExpectedOutput{
 				availableBytes: []uint64{
 					8 * humanize.GiByte,
-					9 * humanize.GiByte,
+					8 * humanize.GiByte,
+					8 * humanize.GiByte,
+					18 * humanize.GiByte,
+					18 * humanize.GiByte,
 				},
+			},
+		},
+		"new": {
+			input: &ctlpb.ScanNvmeResp{
+				Ctrlrs: []*ctlpb.NvmeController{
+					{
+						SmdDevices: []*ctlpb.NvmeController_SmdDevice{
+							{
+								Uuid:        "nvme0",
+								TgtIds:      []int32{0, 1, 2, 3},
+								AvailBytes:  10 * humanize.GiByte,
+								ClusterSize: clusterSize,
+								DevState:    "NORMAL",
+							},
+							{
+								Uuid:        "nvme1",
+								TgtIds:      []int32{0, 1, 2},
+								AvailBytes:  10 * humanize.GiByte,
+								ClusterSize: clusterSize,
+								DevState:    "NEW",
+							},
+						},
+					},
+				},
+			},
+			output: ExpectedOutput{
+				availableBytes: []uint64{
+					8 * humanize.GiByte,
+					0,
+				},
+				message: "Adjusting available size of unusable SMD device",
 			},
 		},
 		"evicted": {
@@ -2303,12 +2372,14 @@ func TestServer_adjustNvmeSize(t *testing.T) {
 					{
 						SmdDevices: []*ctlpb.NvmeController_SmdDevice{
 							{
+								Uuid:        "nvme0",
 								TgtIds:      []int32{0, 1, 2, 3},
 								AvailBytes:  10 * humanize.GiByte,
 								ClusterSize: clusterSize,
 								DevState:    "NORMAL",
 							},
 							{
+								Uuid:       "nvme1",
 								TgtIds:     []int32{0, 1, 2},
 								AvailBytes: 10 * humanize.GiByte,
 								DevState:   "NORMAL",
