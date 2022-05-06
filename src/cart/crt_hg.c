@@ -12,95 +12,95 @@
 #include "mercury_util.h"
 
 /*
- * na_dict table should be in the same order of enum crt_na_type, the last one
+ * na_dict table should be in the same order of enum crt_provider_t, the last one
  * is terminator with NULL nad_str.
  */
 struct crt_na_dict crt_na_dict[] = {
 	{
-		.nad_type	= CRT_NA_SM,
+		.nad_type	= CRT_PROVIDER_SM,
 		.nad_str	= "sm",
 		.nad_contig_eps	= false,
 		.nad_port_bind  = false,
 	}, {
-		.nad_type	= CRT_NA_OFI_SOCKETS,
+		.nad_type	= CRT_PROVIDER_OFI_SOCKETS,
 		.nad_str	= "ofi+sockets",
 		.nad_alt_str	= "ofi+socket",
 		.nad_contig_eps	= true,
 		.nad_port_bind  = true,
 	}, {
-		.nad_type	= CRT_NA_OFI_VERBS_RXM,
+		.nad_type	= CRT_PROVIDER_OFI_VERBS_RXM,
 		.nad_str	= "ofi+verbs;ofi_rxm",
 		.nad_alt_str	= "ofi+verbs",
 		.nad_contig_eps	= true,
 		.nad_port_bind  = true,
 	}, {
-		.nad_type	= CRT_NA_OFI_GNI,
+		.nad_type	= CRT_PROVIDER_OFI_GNI,
 		.nad_str	= "ofi+gni",
 		.nad_contig_eps	= true,
 		.nad_port_bind  = false,
 	}, {
-		.nad_type	= CRT_NA_OFI_PSM2,
+		.nad_type	= CRT_PROVIDER_OFI_PSM2,
 		.nad_str	= "ofi+psm2",
 		.nad_contig_eps	= false,
 		.nad_port_bind  = false,
 	}, {
-		.nad_type	= CRT_NA_OFI_TCP_RXM,
+		.nad_type	= CRT_PROVIDER_OFI_TCP_RXM,
 		.nad_str	= "ofi+tcp;ofi_rxm",
 		.nad_alt_str	= "ofi+tcp",
 		.nad_contig_eps	= true,
 		.nad_port_bind  = true,
 	}, {
-		.nad_type	= CRT_NA_OFI_CXI,
+		.nad_type	= CRT_PROVIDER_OFI_CXI,
 		.nad_str	= "ofi+cxi",
 		.nad_contig_eps	= true,
 		.nad_port_bind  = false,
 	}, {
-		.nad_type	= CRT_NA_UCX_RC,
+		.nad_type	= CRT_PROVIDER_UCX_RC,
 		.nad_str	= "ucx+rc_v",
 		.nad_contig_eps	= true,
 		.nad_port_bind	= true,
 	}, {
-		.nad_type	= CRT_NA_UCX_UD,
+		.nad_type	= CRT_PROVIDER_UCX_UD,
 		.nad_str	= "ucx+ud_v",
 		.nad_contig_eps	= true,
 		.nad_port_bind	= true,
 	}, {
-		.nad_type	= CRT_NA_UCX_RC_UD,
+		.nad_type	= CRT_PROVIDER_UCX_RC_UD,
 		.nad_str	= "ucx+rc_v,ud_v",
 		.nad_contig_eps	= true,
 		.nad_port_bind	= true,
 	}, {
-		.nad_type	= CRT_NA_UCX_RC_O,
+		.nad_type	= CRT_PROVIDER_UCX_RC_O,
 		.nad_str	= "ucx+rc",
 		.nad_contig_eps	= true,
 		.nad_port_bind	= true,
 	}, {
-		.nad_type	= CRT_NA_UCX_UD_O,
+		.nad_type	= CRT_PROVIDER_UCX_UD_O,
 		.nad_str	= "ucx+ud",
 		.nad_contig_eps	= true,
 		.nad_port_bind	= true,
 	}, {
-		.nad_type	= CRT_NA_UCX_RC_UD_O,
+		.nad_type	= CRT_PROVIDER_UCX_RC_UD_O,
 		.nad_str	= "ucx+rc,ud",
 		.nad_contig_eps	= true,
 		.nad_port_bind	= true,
 	}, {
-		.nad_type	= CRT_NA_UCX_RC_X,
+		.nad_type	= CRT_PROVIDER_UCX_RC_X,
 		.nad_str	= "ucx+rc_x",
 		.nad_contig_eps	= true,
 		.nad_port_bind	= true,
 	}, {
-		.nad_type	= CRT_NA_UCX_UD_X,
+		.nad_type	= CRT_PROVIDER_UCX_UD_X,
 		.nad_str	= "ucx+ud_x",
 		.nad_contig_eps	= true,
 		.nad_port_bind	= true,
 	}, {
-		.nad_type	= CRT_NA_UCX_RC_UD_X,
+		.nad_type	= CRT_PROVIDER_UCX_RC_UD_X,
 		.nad_str	= "ucx+rc_x,ud_x",
 		.nad_contig_eps	= true,
 		.nad_port_bind	= true,
 	}, {
-		.nad_type	= CRT_NA_UCX_DC_X,
+		.nad_type	= CRT_PROVIDER_UCX_DC_X,
 		.nad_str	= "ucx+dc_x",
 		.nad_contig_eps	= true,
 		.nad_port_bind	= true,
@@ -110,7 +110,7 @@ struct crt_na_dict crt_na_dict[] = {
 };
 
 int
-crt_hg_parse_uri(const char *uri, enum crt_na_type *prov, char *addr)
+crt_hg_parse_uri(const char *uri, crt_provider_t *prov, char *addr)
 {
 	char	copy_uri[CRT_ADDR_STR_MAX_LEN];
 	char	*provider_str;
@@ -137,7 +137,7 @@ crt_hg_parse_uri(const char *uri, enum crt_na_type *prov, char *addr)
 	}
 
 	if (prov)
-		*prov = crt_prov_str_to_na_type(provider_str);
+		*prov = crt_prov_str_to_prov(provider_str);
 
 	if (addr)
 		strncpy(addr, addr_str+2, CRT_ADDR_STR_MAX_LEN - 1);
@@ -145,19 +145,19 @@ crt_hg_parse_uri(const char *uri, enum crt_na_type *prov, char *addr)
 	return 0;
 }
 
-enum crt_na_type
-crt_prov_str_to_na_type(const char *prov_str)
+crt_provider_t
+crt_prov_str_to_prov(const char *prov_str)
 {
 	int i;
 
-	for (i = 0; i < CRT_NA_COUNT; i++) {
+	for (i = 0; i < CRT_PROVIDER_COUNT; i++) {
 		if (strcmp(prov_str, crt_na_dict[i].nad_str) == 0 ||
 		    (crt_na_dict[i].nad_alt_str &&
 		     strcmp(prov_str, crt_na_dict[i].nad_alt_str) == 0))
 			return crt_na_dict[i].nad_type;
 	}
 
-	return CRT_NA_UNKNOWN;
+	return CRT_PROVIDER_UNKNOWN;
 }
 
 /**
@@ -454,7 +454,7 @@ crt_provider_ctx0_port_get(int provider)
 {
 	struct crt_prov_gdata *prov_data = crt_get_prov_gdata(provider);
 
-	return prov_data->cpg_na_ofi_config.noc_port;
+	return prov_data->cpg_na_config.noc_port;
 }
 
 static char*
@@ -462,7 +462,7 @@ crt_provider_domain_get(int provider)
 {
 	struct crt_prov_gdata *prov_data = crt_get_prov_gdata(provider);
 
-	return prov_data->cpg_na_ofi_config.noc_domain;
+	return prov_data->cpg_na_config.noc_domain;
 }
 
 char *
@@ -476,13 +476,13 @@ crt_provider_ip_str_get(int provider)
 {
 	struct crt_prov_gdata *prov_data = crt_get_prov_gdata(provider);
 
-	return prov_data->cpg_na_ofi_config.noc_ip_str;
+	return prov_data->cpg_na_config.noc_ip_str;
 }
 
 static bool
 crt_provider_is_block_mode(int provider)
 {
-	if (provider == CRT_NA_OFI_PSM2)
+	if (provider == CRT_PROVIDER_OFI_PSM2)
 		return false;
 
 	return true;
@@ -569,7 +569,7 @@ crt_get_info_string(int provider, char **string, int ctx_idx)
 	domain_str = crt_provider_domain_get(provider);
 	ip_str = crt_provider_ip_str_get(provider);
 
-	if (provider == CRT_NA_SM) {
+	if (provider == CRT_PROVIDER_SM) {
 		D_ASPRINTF(*string, "%s://", provider_str);
 		D_GOTO(out, 0);
 	}
@@ -714,13 +714,11 @@ crt_hg_class_init(int provider, int idx, hg_class_t **ret_hg_class)
 		D_GOTO(out, rc = -DER_HG);
 	}
 
-	if (crt_is_service()) {
-		rc = crt_hg_get_addr(hg_class, addr_str, &str_size);
-		if (rc != 0) {
-			D_ERROR("crt_hg_get_addr() failed, rc: %d.\n", rc);
-			HG_Finalize(hg_class);
-			D_GOTO(out, rc = -DER_HG);
-		}
+	rc = crt_hg_get_addr(hg_class, addr_str, &str_size);
+	if (rc != 0) {
+		D_ERROR("crt_hg_get_addr() failed, rc: %d.\n", rc);
+		HG_Finalize(hg_class);
+		D_GOTO(out, rc = -DER_HG);
 	}
 
 	D_DEBUG(DB_NET, "New context(idx:%d), listen address: %s.\n",

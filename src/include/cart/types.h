@@ -88,6 +88,33 @@ typedef struct crt_init_options {
 
 } crt_init_options_t;
 
+// TODO: document
+typedef enum {
+	CRT_PROVIDER_SM			= 0,
+	CRT_PROVIDER_OFI_SOCKETS	= 1,
+	CRT_PROVIDER_OFI_VERBS_RXM	= 2,
+	CRT_PROVIDER_OFI_GNI		= 3,
+	CRT_PROVIDER_OFI_PSM2		= 4,
+	CRT_PROVIDER_OFI_TCP_RXM	= 5,
+	CRT_PROVIDER_OFI_CXI		= 6,
+	CRT_PROVIDER_OFI_LAST		= CRT_PROVIDER_OFI_CXI,
+	CRT_PROVIDER_UCX_RC		= 7,
+	CRT_PROVIDER_UCX_UD		= 8,
+	CRT_PROVIDER_UCX_RC_UD		= 9,
+	CRT_PROVIDER_UCX_RC_O		= 10,
+	CRT_PROVIDER_UCX_UD_O		= 11,
+	CRT_PROVIDER_UCX_RC_UD_O	= 12,
+	CRT_PROVIDER_UCX_RC_X		= 13,
+	CRT_PROVIDER_UCX_UD_X		= 14,
+	CRT_PROVIDER_UCX_RC_UD_X	= 15,
+	CRT_PROVIDER_UCX_DC_X		= 16,
+	CRT_PROVIDER_UCX_LAST		= CRT_PROVIDER_UCX_DC_X,
+	/* Note: This entry should be the last valid one in enum */
+	CRT_PROVIDER_COUNT,
+	CRT_PROVIDER_UNKNOWN = -1,
+} crt_provider_t;
+
+
 typedef int		crt_status_t;
 /**
  * CRT uses a string as the group ID
