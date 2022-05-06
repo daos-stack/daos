@@ -163,6 +163,25 @@ fetch_repo_config() {
     return 0
 }
 
+pr_repos() {
+    if [ -n "$CI_PR_REPOS" ]; then
+        echo "$CI_PR_REPOS"
+        return 0
+    fi
+
+    echo "$COMMIT_MESSAGE" |
+             sed -ne '/^PR-repos: */s/^[^:]*: *//Ip' \
+                  -e "/^PR-repos-$DISTRO: */s/^[^:]*: *//Ip" | tr '\n' ' '
+    return 0
+}
+
+rpm_test_version() {
+    echo "$COMMIT_MESSAGE" |
+             sed -ne '/^RPM-test-version: */s/^[^:]*: *//Ip' 
+    return 0
+
+}
+
 set_local_repo() {
     local repo_server="$1"
 
@@ -173,14 +192,14 @@ set_local_repo() {
     version="$(lsb_release -sr)"
     version=${version%%.*}
     if [ "$repo_server" = "artifactory" ] &&
-        [[ $(echo "$COMMIT_MESSAGE" | sed -ne '/^PR-repos: */s/^[^:]*: *//p') = *daos@* ]] ||
-        [[ $(echo "$COMMIT_MESSAGE" |
-             sed -ne "/^PR-repos-$DISTRO: */s/^[^:]*: *//p") = *daos@* ]] ||
-        [ -z "$(echo "$COMMIT_MESSAGE" | sed -ne '/^RPM-test-version: */s/^[^:]*: *//p')" ]; then
-        # Disable the daos repo so that the Jenkins job repo is used for daos packages
+       [ -z "$(rpm_test_version)" ] &&
+       [[ $BRANCH_NAME != weekly-testing* ]]; then
+        # Disable the daos repo so that the Jenkins job repo or a PR-repos*: repo is
+        # used for daos packages
         dnf -y config-manager \
             --disable daos-stack-daos-"${DISTRO_GENERIC}"-"$version"-x86_64-stable-local-artifactory
     fi
+    dnf repolist
 }
 
 update_repos() {
