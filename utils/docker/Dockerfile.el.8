@@ -29,8 +29,6 @@ RUN set -e;                                                      \
     dnf config-manager --save --setopt=assumeyes=True;           \
     dnf config-manager --save --setopt=install_weak_deps=False;  \
     if [ ! -f /etc/fedora-release ]; then                        \
-        dnf --assumeyes --disablerepo \*epel\* install           \
-                            epel-release dnf-plugins-core;       \
         dnf --assumeyes --disablerepo \*epel\* install epel-release; \
         if [ -n "$REPO_FILE_URL" ]; then                         \
             PT_REPO=daos_ci-rocky8-powertools-artifactory;       \
