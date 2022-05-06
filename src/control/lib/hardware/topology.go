@@ -44,6 +44,21 @@ type (
 	}
 )
 
+// AsSlice returns the node map as a sorted slice of NUMANodes.
+func (nm NodeMap) AsSlice() []*NUMANode {
+	nodes := make([]*NUMANode, 0, len(nm))
+
+	for _, node := range nm {
+		nodes = append(nodes, node)
+	}
+
+	sort.Slice(nodes, func(i, j int) bool {
+		return nodes[i].ID < nodes[j].ID
+	})
+
+	return nodes
+}
+
 // DeviceName is the name of the virtual device.
 func (d *VirtualDevice) DeviceName() string {
 	if d == nil {
@@ -374,6 +389,8 @@ const (
 	DeviceTypeNetInterface
 	// DeviceTypeOFIDomain indicates an OpenFabrics domain device.
 	DeviceTypeOFIDomain
+	// DeviceTypeBlock indicates a block device.
+	DeviceTypeBlock
 )
 
 func (t DeviceType) String() string {
@@ -382,6 +399,8 @@ func (t DeviceType) String() string {
 		return "network interface"
 	case DeviceTypeOFIDomain:
 		return "OFI domain"
+	case DeviceTypeBlock:
+		return "block device"
 	}
 
 	return "unknown device type"
