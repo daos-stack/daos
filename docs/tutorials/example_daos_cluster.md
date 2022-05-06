@@ -195,7 +195,8 @@ In order to begin using the storage you must issue a *format* command.
 To format the storage run
 
 ```bash
-dmg storage format
+sudo dmg storage format
+sudo dmg system query -v
 ```
 
 To learn more see [Storage Formatting](https://docs.daos.io/latest/admin/deployment/#storage-formatting)
@@ -209,31 +210,31 @@ Now that the system has been formatted you can create a Pool.
 First check to see how much free NVMe storage you have.
 
 ```bash
-dmg storage query usage
+sudo dmg storage query usage
 ```
 
-This will return something like
+This will return storage information for the servers.
+
+The output looks similar to
 
 ```
 Hosts            SCM-Total SCM-Free SCM-Used NVMe-Total NVMe-Free NVMe-Used
 -----            --------- -------- -------- ---------- --------- ---------
-daos-server-0001 107 GB    107 GB   0 %      3.2 TB     3.2 TB    0 %
+daos-server-0001 48 GB     48 GB    0 %      1.6 TB     1.6 TB    0 %
+daos-server-0002 48 GB     48 GB    0 %      1.6 TB     1.6 TB    0 %
+daos-server-0003 48 GB     48 GB    0 %      1.6 TB     1.6 TB    0 %
+daos-server-0004 48 GB     48 GB    0 %      1.6 TB     1.6 TB    0 %
 ```
 
-> If the values in the columns are showing zeros, wait for 1-2 minutes and run the command again.
->
-> Even though the `dmg storage format` command returned immediately it can sometimes take a few minutes for the storage system to be ready.
->
-> You will know it's ready when you no longer see zeros in the output > from the `dmg storage query usage` command.
 
-In the example output above there is one server with a total of 3.2TB > of free space.
+In the example output above there are 4 servers with a total of 6.4TB of free space.
 
-With that information you know you can create a 3TB pool.
+With that information you know you can safely create a 6TB pool.
 
 Create the pool.
 
 ```bash
-dmg pool create -z 3TB -t 3 -u ${USER} --label=daos_pool
+sudo dmg pool create -z 6TB -t 3 -u ${USER} --label=daos_pool
 ```
 
 For more information about pools see

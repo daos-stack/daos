@@ -18,37 +18,53 @@ locals {
   os_project         = var.os_project != null ? var.os_project : var.project_id
   subnetwork_project = var.subnetwork_project != null ? var.subnetwork_project : var.project_id
   servers            = format("%s-[%04s-%04s]", var.instance_base_name, 1, var.number_of_instances)
+  first_server       = format("%s-%04s", var.instance_base_name, 1)
   max_aps            = var.number_of_instances > 5 ? 5 : (var.number_of_instances % 2) == 1 ? var.number_of_instances : var.number_of_instances - 1
   access_points      = formatlist("%s-%04s", var.instance_base_name, range(1, local.max_aps + 1))
   scm_size           = var.daos_scm_size
   # To get nr_hugepages value: (targets * 1Gib) / hugepagesize
-  huge_pages  = (var.daos_disk_count * 1048576) / 2048
-  targets     = var.daos_disk_count
-  crt_timeout = var.daos_crt_timeout
+  huge_pages        = (var.daos_disk_count * 1048576) / 2048
+  targets           = var.daos_disk_count
+  crt_timeout       = var.daos_crt_timeout
+  daos_ca_secret_id = basename(google_secret_manager_secret.daos_ca.id)
+  allow_insecure    = var.allow_insecure
+
   daos_server_yaml_content = templatefile(
     "${path.module}/templates/daos_server.yml.tftpl",
     {
-      access_points = local.access_points
-      nr_hugepages  = local.huge_pages
-      targets       = local.targets
-      scm_size      = local.scm_size
-      crt_timeout   = local.crt_timeout
+      access_points  = local.access_points
+      nr_hugepages   = local.huge_pages
+      targets        = local.targets
+      scm_size       = local.scm_size
+      crt_timeout    = local.crt_timeout
+      allow_insecure = local.allow_insecure
     }
   )
+
   daos_control_yaml_content = templatefile(
     "${path.module}/templates/daos_control.yml.tftpl",
     {
-      servers = [local.servers]
+      servers        = [local.servers]
+      allow_insecure = local.allow_insecure
     }
   )
+
   daos_agent_yaml_content = templatefile(
     "${path.module}/templates/daos_agent.yml.tftpl",
     {
-      access_points = local.access_points
+      access_points  = local.access_points
+      allow_insecure = local.allow_insecure
     }
   )
-  server_startup_script = file(
-  "${path.module}/templates/daos_startup_script.tftpl")
+
+  server_startup_script = templatefile(
+    "${path.module}/templates/daos_startup_script.tftpl",
+    {
+      first_server      = local.first_server
+      daos_ca_secret_id = local.daos_ca_secret_id
+      allow_insecure    = local.allow_insecure
+    }
+  )
 
   configure_daos_content = templatefile(
     "${path.module}/templates/configure_daos.tftpl",
@@ -161,4 +177,48 @@ resource "google_compute_per_instance_config" "named_instances" {
       instance_template = google_compute_instance_template.daos_sig_template.self_link
     }
   }
+}
+
+resource "google_secret_manager_secret" "daos_ca" {
+  secret_id = format("%s_ca", var.instance_base_name)
+  project   = var.project_id
+
+  replication {
+    user_managed {
+      replicas {
+        location = var.region
+      }
+    }
+  }
+}
+
+data "google_compute_default_service_account" "default" {
+  project = var.project_id
+}
+
+data "google_iam_policy" "daos_ca_secret_version_manager" {
+  binding {
+    role = "roles/secretmanager.secretVersionManager"
+    members = [
+      format("serviceAccount:%s", var.service_account.email == null ? data.google_compute_default_service_account.default.email : var.service_account.email)
+    ]
+  }
+  binding {
+    role = "roles/secretmanager.viewer"
+    members = [
+      format("serviceAccount:%s", var.service_account.email == null ? data.google_compute_default_service_account.default.email : var.service_account.email)
+    ]
+  }
+  binding {
+    role = "roles/secretmanager.secretAccessor"
+    members = [
+      format("serviceAccount:%s", var.service_account.email == null ? data.google_compute_default_service_account.default.email : var.service_account.email)
+    ]
+  }
+}
+
+resource "google_secret_manager_secret_iam_policy" "daos_ca_secret_policy" {
+  project     = var.project_id
+  secret_id   = google_secret_manager_secret.daos_ca.secret_id
+  policy_data = data.google_iam_policy.daos_ca_secret_version_manager.policy_data
 }

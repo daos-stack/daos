@@ -40,4 +40,6 @@ module "daos_client" {
   service_account     = var.client_service_account
   daos_agent_yml      = var.client_daos_agent_yml
   daos_control_yml    = var.client_daos_control_yml
+  daos_ca_secret_id   = var.daos_ca_secret_id
+  allow_insecure      = var.allow_insecure
 }

@@ -49,12 +49,17 @@ No modules.
 | [google-beta_google_compute_instance_template.daos_sig_template](https://registry.terraform.io/providers/hashicorp/google-beta/latest/docs/resources/google_compute_instance_template) | resource |
 | [google_compute_instance_group_manager.daos_sig](https://registry.terraform.io/providers/hashicorp/google/latest/docs/resources/compute_instance_group_manager) | resource |
 | [google_compute_per_instance_config.named_instances](https://registry.terraform.io/providers/hashicorp/google/latest/docs/resources/compute_per_instance_config) | resource |
+| [google_secret_manager_secret.daos_ca](https://registry.terraform.io/providers/hashicorp/google/latest/docs/resources/secret_manager_secret) | resource |
+| [google_secret_manager_secret_iam_policy.daos_ca_secret_policy](https://registry.terraform.io/providers/hashicorp/google/latest/docs/resources/secret_manager_secret_iam_policy) | resource |
+| [google_compute_default_service_account.default](https://registry.terraform.io/providers/hashicorp/google/latest/docs/data-sources/compute_default_service_account) | data source |
 | [google_compute_image.os_image](https://registry.terraform.io/providers/hashicorp/google/latest/docs/data-sources/compute_image) | data source |
+| [google_iam_policy.daos_ca_secret_version_manager](https://registry.terraform.io/providers/hashicorp/google/latest/docs/data-sources/iam_policy) | data source |
 
 ## Inputs
 
 | Name | Description | Type | Default | Required |
 |------|-------------|------|---------|:--------:|
+| <a name="input_allow_insecure"></a> [allow\_insecure](#input\_allow\_insecure) | Sets the allow\_insecure setting in the transport\_config section of the daos\_*.yml files | `bool` | `false` | no |
 | <a name="input_daos_crt_timeout"></a> [daos\_crt\_timeout](#input\_daos\_crt\_timeout) | crt\_timeout | `number` | `300` | no |
 | <a name="input_daos_disk_count"></a> [daos\_disk\_count](#input\_daos\_disk\_count) | Number of local ssd's to use | `number` | `16` | no |
 | <a name="input_daos_disk_type"></a> [daos\_disk\_type](#input\_daos\_disk\_type) | Daos disk type to use. For now only suported one is local-ssd | `string` | `"local-ssd"` | no |
@@ -74,7 +79,7 @@ No modules.
 | <a name="input_preemptible"></a> [preemptible](#input\_preemptible) | If preemptible instances | `string` | `false` | no |
 | <a name="input_project_id"></a> [project\_id](#input\_project\_id) | The GCP project to use | `string` | n/a | yes |
 | <a name="input_region"></a> [region](#input\_region) | The GCP region to create and test resources in | `string` | n/a | yes |
-| <a name="input_service_account"></a> [service\_account](#input\_service\_account) | Service account to attach to the instance. See https://www.terraform.io/docs/providers/google/r/compute_instance_template.html#service_account. | <pre>object({<br>    email  = string,<br>    scopes = set(string)<br>  })</pre> | <pre>{<br>  "email": null,<br>  "scopes": [<br>    "https://www.googleapis.com/auth/devstorage.read_only",<br>    "https://www.googleapis.com/auth/logging.write",<br>    "https://www.googleapis.com/auth/monitoring.write",<br>    "https://www.googleapis.com/auth/servicecontrol",<br>    "https://www.googleapis.com/auth/service.management.readonly",<br>    "https://www.googleapis.com/auth/trace.append"<br>  ]<br>}</pre> | no |
+| <a name="input_service_account"></a> [service\_account](#input\_service\_account) | Service account to attach to the instance. See https://www.terraform.io/docs/providers/google/r/compute_instance_template.html#service_account. | <pre>object({<br>    email  = string,<br>    scopes = set(string)<br>  })</pre> | <pre>{<br>  "email": null,<br>  "scopes": [<br>    "https://www.googleapis.com/auth/devstorage.read_only",<br>    "https://www.googleapis.com/auth/logging.write",<br>    "https://www.googleapis.com/auth/monitoring.write",<br>    "https://www.googleapis.com/auth/servicecontrol",<br>    "https://www.googleapis.com/auth/service.management.readonly",<br>    "https://www.googleapis.com/auth/trace.append",<br>    "https://www.googleapis.com/auth/cloud-platform"<br>  ]<br>}</pre> | no |
 | <a name="input_subnetwork_name"></a> [subnetwork\_name](#input\_subnetwork\_name) | Name of the GCP sub-network to use | `string` | `"default"` | no |
 | <a name="input_subnetwork_project"></a> [subnetwork\_project](#input\_subnetwork\_project) | The GCP project where the subnetwork is defined | `string` | `null` | no |
 | <a name="input_template_name"></a> [template\_name](#input\_template\_name) | MIG template name | `string` | `"daos-server"` | no |
@@ -86,7 +91,9 @@ No modules.
 |------|-------------|
 | <a name="output_access_points"></a> [access\_points](#output\_access\_points) | List of DAOS servers to use as access points |
 | <a name="output_daos_agent_yml"></a> [daos\_agent\_yml](#output\_daos\_agent\_yml) | YAML to configure the daos agent. This is typically saved in /etc/daos/daos\_agent.yml |
+| <a name="output_daos_ca_secret_id"></a> [daos\_ca\_secret\_id](#output\_daos\_ca\_secret\_id) | ID of Secret Manager secret used to store daosCA.tar.gz file generated on first DAOS server instance |
 | <a name="output_daos_client_install_script"></a> [daos\_client\_install\_script](#output\_daos\_client\_install\_script) | Script to install the DAOS client package. |
 | <a name="output_daos_config_script"></a> [daos\_config\_script](#output\_daos\_config\_script) | Script to configure the DAOS system. This will format the sytem with dmg -l and optionally create the specified pools. |
 | <a name="output_daos_control_yml"></a> [daos\_control\_yml](#output\_daos\_control\_yml) | YAML configuring DAOS control. This is typically saved in /etc/daos/daos\_control.yml |
+| <a name="output_default_service_account_email"></a> [default\_service\_account\_email](#output\_default\_service\_account\_email) | Default service account email |
 <!-- END OF PRE-COMMIT-TERRAFORM DOCS HOOK -->

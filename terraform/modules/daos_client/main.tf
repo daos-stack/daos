@@ -17,11 +17,19 @@
 locals {
   os_project         = var.os_project != null ? var.os_project : var.project_id
   subnetwork_project = var.subnetwork_project != null ? var.subnetwork_project : var.project_id
-  client_startup_script = file(
-  "${path.module}/templates/daos_startup_script.tftpl")
   # Google Virtual NIC (gVNIC) network interface
   nic_type                    = var.gvnic ? "GVNIC" : "VIRTIO_NET"
   total_egress_bandwidth_tier = var.gvnic ? "TIER_1" : "DEFAULT"
+  daos_ca_secret_id           = basename(var.daos_ca_secret_id)
+  allow_insecure              = var.allow_insecure
+
+  client_startup_script = templatefile(
+    "${path.module}/templates/daos_startup_script.tftpl",
+    {
+      daos_ca_secret_id = local.daos_ca_secret_id
+      allow_insecure    = local.allow_insecure
+    }
+  )
 }
 
 data "google_compute_image" "os_image" {

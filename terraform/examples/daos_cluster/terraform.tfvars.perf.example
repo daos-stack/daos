@@ -2,6 +2,7 @@ project_id                 = "<project_id>"
 region                     = "us-central1"
 zone                       = "us-central1-f"
 
+allow_insecure             = false
 server_machine_type        = "n2-standard-16"
 server_os_disk_size_gb     = 20
 server_daos_disk_count     = 4

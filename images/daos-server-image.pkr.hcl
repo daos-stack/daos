@@ -59,7 +59,7 @@ build {
   sources = ["source.googlecompute.daos-server-centos-7"]
 
   provisioner "shell" {
-    environment_vars = ["DAOS_REPO_BASE_URL=${var.daos_repo_base_url}", "DAOS_VERSION=${var.daos_version}", "DAOS_INSTALL_TYPE=server"]
+    environment_vars = ["DAOS_REPO_BASE_URL=${var.daos_repo_base_url}", "DAOS_VERSION=${var.daos_version}", "DAOS_INSTALL_TYPE=all"]
     execute_command  = "echo 'packer' | sudo -S env {{ .Vars }} {{ .Path }}"
     pause_before     = "5s"
     scripts          = [
@@ -68,4 +68,17 @@ build {
     ]
   }
 
+  provisioner "file" {
+    source = "./scripts/cert_gen"
+    destination = "/tmp/"
+  }
+
+  provisioner "shell" {
+    inline = [
+      "sudo mkdir -p /var/daos/",
+      "sudo mv /tmp/cert_gen /var/daos/",
+      "sudo chown -R root:root /var/daos/cert_gen",
+      "sudo chmod +x /var/daos/cert_gen/*.sh"
+    ]
+  }
 }

@@ -29,6 +29,7 @@ ID=""
 # Server and client instances
 PREEMPTIBLE_INSTANCES="true"
 SSH_USER="daos-user"
+DAOS_ALLOW_INSECURE="false"
 
 # Server(s)
 DAOS_SERVER_INSTANCE_COUNT="1"
@@ -70,6 +71,7 @@ export TF_VAR_subnetwork="default"
 export TF_VAR_subnetwork_project="${TF_VAR_project_id}"
 export TF_VAR_region="us-central1"
 export TF_VAR_zone="us-central1-f"
+export TF_VAR_allow_insecure="${DAOS_ALLOW_INSECURE}"
 # Servers
 export TF_VAR_server_preemptible=${PREEMPTIBLE_INSTANCES}
 export TF_VAR_server_number_of_instances=${DAOS_SERVER_INSTANCE_COUNT}

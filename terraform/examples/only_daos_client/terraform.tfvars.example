@@ -1,16 +1,15 @@
-project_id                 = "<project_id>"
-region                     = "us-central1"
-zone                       = "us-central1-f"
+project_id         = "<project_id>"
+region             = "us-central1"
+zone               = "us-central1-f"
+# network_name       = "default"
+# subnetwork_name    = "default"
+# subnetwork_project = "<project_id>"
 
-# network_name               = "default"
-# subnetwork_project         = "<project_id>"
-# subnetwork_name            = "default"
-
-# client_number_of_instances = 4
 client_labels              = {
   example = "only_daos_client"
 }
 
+# client_number_of_instances = 4
 # client_preemptible         = "false"
 # client_mig_name            = "daos-client"
 # client_template_name       = "daos-client"
@@ -20,11 +19,7 @@ client_labels              = {
 # client_os_project          = "<project_id>"
 # client_os_disk_type        = "pd-ssd"
 # client_os_disk_size_gb     = 20
-
-
-#
-# DAOS client yaml files
-#
+daos_ca_secret_id            = "daos-server_ca"
 
 client_daos_agent_yml = <<EOT
 #
@@ -32,10 +27,13 @@ client_daos_agent_yml = <<EOT
 #
 
 # Management server access points
-access_points: ["daos-server-0001", "daos-server-0002", "daos-server-0003"]
+access_points: ["daos-server-0001","daos-server-0002","daos-server-0003"]
 
 transport_config:
-  allow_insecure: true
+  allow_insecure: false
+  ca_cert: /etc/daos/certs/daosCA.crt
+  cert: /etc/daos/certs/agent.crt
+  key: /etc/daos/certs/agent.key
 
 EOT
 
@@ -45,8 +43,11 @@ client_daos_control_yml = <<EOT
 #
 
 # hostlist must contain the list of all DAOS servers
-hostlist: ["daos-server-[0001-0004]"]
+hostlist: ["daos-server-[0001-0004"]
 transport_config:
-  allow_insecure: true
+  allow_insecure: false
+  ca_cert: /etc/daos/certs/daosCA.crt
+  cert: /etc/daos/certs/agent.crt
+  key: /etc/daos/certs/agent.key
 
 EOT

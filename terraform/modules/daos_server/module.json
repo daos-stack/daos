@@ -3,6 +3,13 @@
   "footer": "",
   "inputs": [
     {
+      "name": "allow_insecure",
+      "type": "bool",
+      "description": "Sets the allow_insecure setting in the transport_config section of the daos_*.yml files",
+      "default": false,
+      "required": false
+    },
+    {
       "name": "daos_crt_timeout",
       "type": "number",
       "description": "crt_timeout",
@@ -147,7 +154,8 @@
           "https://www.googleapis.com/auth/monitoring.write",
           "https://www.googleapis.com/auth/servicecontrol",
           "https://www.googleapis.com/auth/service.management.readonly",
-          "https://www.googleapis.com/auth/trace.append"
+          "https://www.googleapis.com/auth/trace.append",
+          "https://www.googleapis.com/auth/cloud-platform"
         ]
       },
       "required": false
@@ -192,6 +200,10 @@
       "description": "YAML to configure the daos agent. This is typically saved in /etc/daos/daos_agent.yml"
     },
     {
+      "name": "daos_ca_secret_id",
+      "description": "ID of Secret Manager secret used to store daosCA.tar.gz file generated on first DAOS server instance"
+    },
+    {
       "name": "daos_client_install_script",
       "description": "Script to install the DAOS client package."
     },
@@ -202,6 +214,10 @@
     {
       "name": "daos_control_yml",
       "description": "YAML configuring DAOS control. This is typically saved in /etc/daos/daos_control.yml"
+    },
+    {
+      "name": "default_service_account_email",
+      "description": "Default service account email"
     }
   ],
   "providers": [
@@ -259,8 +275,44 @@
       "description": null
     },
     {
+      "type": "secret_manager_secret",
+      "name": "daos_ca",
+      "provider": "google",
+      "source": "hashicorp/google",
+      "mode": "managed",
+      "version": "latest",
+      "description": null
+    },
+    {
+      "type": "secret_manager_secret_iam_policy",
+      "name": "daos_ca_secret_policy",
+      "provider": "google",
+      "source": "hashicorp/google",
+      "mode": "managed",
+      "version": "latest",
+      "description": null
+    },
+    {
+      "type": "compute_default_service_account",
+      "name": "default",
+      "provider": "google",
+      "source": "hashicorp/google",
+      "mode": "data",
+      "version": "latest",
+      "description": null
+    },
+    {
       "type": "compute_image",
       "name": "os_image",
+      "provider": "google",
+      "source": "hashicorp/google",
+      "mode": "data",
+      "version": "latest",
+      "description": null
+    },
+    {
+      "type": "iam_policy",
+      "name": "daos_ca_secret_version_manager",
       "provider": "google",
       "source": "hashicorp/google",
       "mode": "data",

@@ -105,20 +105,20 @@ cleanup(){
 
 storage_scan() {
   log "Run DAOS storage scan"
-  dmg -i -l ${SERVER_LIST} storage scan --verbose
+  dmg -l ${SERVER_LIST} storage scan --verbose
 }
 
 format_storage() {
 
   log_section "Format DAOS storage"
-  dmg -i -l ${SERVER_LIST} storage format --reformat
+  dmg -l ${SERVER_LIST} storage format --reformat
 
   printf "%s" "Waiting for DAOS storage format to finish"
   while true
   do
-    if [[ $(dmg -i -j system query -v | grep joined | wc -l) -eq ${DAOS_SERVER_INSTANCE_COUNT} ]]; then
+    if [[ $(dmg -j system query -v | grep joined | wc -l) -eq ${DAOS_SERVER_INSTANCE_COUNT} ]]; then
       printf "\n%s\n" "DAOS storage format finished"
-      dmg -i system query -v
+      dmg system query -v
       break
     fi
     printf "%s" "."
@@ -133,10 +133,10 @@ create_pool() {
   log_section "Create pool: label=${DAOS_POOL_LABEL} size=${DAOS_POOL_SIZE}"
 
   # TODO: Don't hardcode tier-ratio to 3 (-t 3)
-  dmg -i pool create -z ${DAOS_POOL_SIZE} -t 3 -u ${USER} --label=${DAOS_POOL_LABEL}
+  dmg pool create -z ${DAOS_POOL_SIZE} -t 3 -u ${USER} --label=${DAOS_POOL_LABEL}
 
   echo "Set pool property: reclaim=disabled"
-  dmg -i pool set-prop ${DAOS_POOL_LABEL} --name=reclaim --value=disabled
+  dmg pool set-prop ${DAOS_POOL_LABEL} --name=reclaim --value=disabled
 
   echo "Pool created successfully"
   dmg pool query "${DAOS_POOL_LABEL}"

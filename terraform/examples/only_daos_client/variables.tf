@@ -46,6 +46,12 @@ variable "subnetwork_project" {
   default     = null
 }
 
+variable "allow_insecure" {
+  description = "Sets the allow_insecure setting in the transport_config section of the daos_*.yml files"
+  default     = false
+  type        = bool
+}
+
 variable "client_labels" {
   description = "Set of key/value label pairs to assign to daos-client instances"
   type        = any
@@ -136,5 +142,10 @@ variable "client_daos_agent_yml" {
 
 variable "client_daos_control_yml" {
   description = "YAML configuring DAOS control."
+  type        = string
+}
+
+variable "daos_ca_secret_id" {
+  description = "ID of Secret Manager secret used to store TLS certificates"
   type        = string
 }

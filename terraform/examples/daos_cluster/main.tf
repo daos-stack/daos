@@ -44,6 +44,7 @@ module "daos_server" {
   service_account     = var.server_service_account
   pools               = var.server_pools
   gvnic               = var.server_gvnic
+  allow_insecure      = var.allow_insecure
 }
 
 module "daos_client" {
@@ -69,4 +70,6 @@ module "daos_client" {
   daos_agent_yml      = module.daos_server.daos_agent_yml
   daos_control_yml    = module.daos_server.daos_control_yml
   gvnic               = var.client_gvnic
+  daos_ca_secret_id   = module.daos_server.daos_ca_secret_id
+  allow_insecure      = var.allow_insecure
 }

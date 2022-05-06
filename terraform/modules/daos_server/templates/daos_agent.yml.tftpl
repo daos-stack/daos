@@ -7,4 +7,9 @@
 access_points: ${jsonencode(access_points)}
 
 transport_config:
-  allow_insecure: true
+  allow_insecure: ${allow_insecure}
+  %{ if !allow_insecure }
+  ca_cert: /etc/daos/certs/daosCA.crt
+  cert: /etc/daos/certs/agent.crt
+  key: /etc/daos/certs/agent.key
+  %{ endif }

@@ -1,0 +1,50 @@
+ [ ca ]
+default_ca		= CA_daos
+
+[ CA_daos ]
+dir			= ./daosCA
+certs			= $dir/certs
+database		= $dir/index.txt
+serial			= $dir/serial.txt
+
+# Key and Certificate for the root
+certificate		= $dir/daosCA.crt
+private_key		= $dir/private/daosCA.key
+
+default_md		= sha512	# SAFE Crypto Requires SHA-512
+default_days		= 1095		# how long to certify for
+copy_extensions		= copy
+unique_subject		= no
+
+[ req ]
+prompt = no
+distinguished_name = ca_dn
+x509_extensions = ca_ext
+
+[ ca_dn ]
+organizationName 	= DAOS
+commonName		= DAOS CA
+
+[ ca_ext ]
+keyUsage = critical,digitalSignature,nonRepudiation,keyEncipherment,keyCertSign
+basicConstraints = critical,CA:true,pathlen:1
+
+[ signing_policy ]
+organizationName	= supplied
+commonName		= supplied
+
+[ signing_agent ]
+keyUsage = critical,digitalSignature,keyEncipherment
+extendedKeyUsage = clientAuth
+
+[ signing_server ]
+keyUsage = critical,digitalSignature,keyEncipherment
+extendedKeyUsage = serverAuth, clientAuth
+
+[ signing_admin ]
+keyUsage = critical,digitalSignature,keyEncipherment
+extendedKeyUsage = clientAuth
+
+[ signing_test ]
+keyUsage = critical,digitalSignature,keyEncipherment
+extendedKeyUsage = clientAuth

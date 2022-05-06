@@ -117,7 +117,8 @@ variable "service_account" {
       "https://www.googleapis.com/auth/monitoring.write",
       "https://www.googleapis.com/auth/servicecontrol",
       "https://www.googleapis.com/auth/service.management.readonly",
-    "https://www.googleapis.com/auth/trace.append"]
+      "https://www.googleapis.com/auth/trace.append",
+    "https://www.googleapis.com/auth/cloud-platform"]
   }
 }
 
@@ -139,6 +140,17 @@ variable "daos_control_yml" {
 
 variable "gvnic" {
   description = "Use Google Virtual NIC (gVNIC) network interface"
+  default     = false
+  type        = bool
+}
+
+variable "daos_ca_secret_id" {
+  description = "ID of Secret Manager secret used to store TLS certificates"
+  type        = string
+}
+
+variable "allow_insecure" {
+  description = "Sets the allow_insecure setting in the transport_config section of the daos_*.yml files"
   default     = false
   type        = bool
 }

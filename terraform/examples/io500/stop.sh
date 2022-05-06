@@ -82,3 +82,7 @@ fi
 if [[ -d "${IO500_TMP}" ]]; then
   rm -r "${IO500_TMP}"
 fi
+
+if [[ -f "${SCRIPT_DIR}/login" ]]; then
+  rm -f "${SCRIPT_DIR}/login"
+fi

@@ -3,8 +3,16 @@
 #
 
 access_points: ${jsonencode(access_points)}
+
 transport_config:
-  allow_insecure: true
+  allow_insecure: ${allow_insecure}
+  %{ if !allow_insecure }
+  client_cert_dir: /etc/daos/certs/clients
+  ca_cert: /etc/daos/certs/daosCA.crt
+  cert: /etc/daos/certs/server.crt
+  key: /etc/daos/certs/server.key
+  %{ endif }
+
 provider: ofi+tcp;ofi_rxm
 disable_vfio: true
 crt_timeout: ${crt_timeout}

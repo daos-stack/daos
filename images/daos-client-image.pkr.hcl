@@ -68,4 +68,18 @@ build {
     ]
   }
 
+  provisioner "file" {
+    source = "./scripts/cert_gen/sm_get_ca.sh"
+    destination = "/tmp/"
+  }
+
+  provisioner "shell" {
+    inline = [
+      "sudo mkdir -p /var/daos/cert_gen",
+      "sudo mv /tmp/sm_get_ca.sh /var/daos/cert_gen",
+      "sudo chown -R root:root /var/daos/cert_gen",
+      "sudo chmod +x /var/daos/cert_gen/*.sh"
+    ]
+  }
+
 }

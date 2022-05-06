@@ -212,11 +212,17 @@ install_daos() {
   if [[ "${DAOS_INSTALL_TYPE,,}" =~ ^(all|client)$ ]]; then
     echo "Install daos-client and daos-devel packages"
     yum install -y daos-client daos-devel
+    # Disable daos_agent service.
+    # It will be enabled by a startup script after the service has been configured.
+    systemctl disable daos_agent
   fi
 
   if [[ "${DAOS_INSTALL_TYPE,,}" =~ ^(all|server)$ ]]; then
     echo "Install daos-server packages"
     yum install -y daos-server
+    # Disable daos_server service.
+    # It will be enabled by a startup script after the service has been configured.
+    systemctl disable daos_server
   fi
 
   if echo "${DAOS_VERSION}" | grep -q -e '^1\..*'; then

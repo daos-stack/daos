@@ -3,6 +3,13 @@
   "footer": "",
   "inputs": [
     {
+      "name": "allow_insecure",
+      "type": "bool",
+      "description": "Sets the allow_insecure setting in the transport_config section of the daos_*.yml files",
+      "default": false,
+      "required": false
+    },
+    {
       "name": "client_daos_agent_yml",
       "type": "string",
       "description": "YAML to configure the daos agent.",
@@ -109,6 +116,13 @@
       "description": "MIG template name",
       "default": "daos-client",
       "required": false
+    },
+    {
+      "name": "daos_ca_secret_id",
+      "type": "string",
+      "description": "ID of Secret Manager secret used to store TLS certificates",
+      "default": null,
+      "required": true
     },
     {
       "name": "network_name",
