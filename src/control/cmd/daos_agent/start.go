@@ -75,13 +75,16 @@ func (cmd *startCmd) Execute(_ []string) error {
 
 	drpcServer.RegisterRPCModule(NewSecurityModule(cmd.Logger, cmd.cfg.TransportConfig))
 	drpcServer.RegisterRPCModule(&mgmtModule{
-		log:        cmd.Logger,
-		sys:        cmd.cfg.SystemName,
-		ctlInvoker: cmd.ctlInvoker,
-		attachInfo: newAttachInfoCache(cmd.Logger, aicEnabled),
-		fabricInfo: fabricCache,
-		numaGetter: hwprov.DefaultProcessNUMAProvider(cmd.Logger),
-		monitor:    procmon,
+		log:            cmd.Logger,
+		sys:            cmd.cfg.SystemName,
+		ctlInvoker:     cmd.ctlInvoker,
+		attachInfo:     newAttachInfoCache(cmd.Logger, aicEnabled),
+		fabricInfo:     fabricCache,
+		numaGetter:     hwprov.DefaultProcessNUMAProvider(cmd.Logger),
+		fabricScanner:  hwprov.DefaultFabricScanner(cmd.Logger),
+		devClassGetter: hwprov.DefaultNetDevClassProvider(cmd.Logger),
+		devStateGetter: hwprov.DefaultNetDevStateProvider(cmd.Logger),
+		monitor:        procmon,
 	})
 
 	// Cache hwloc data in context on startup, since it'll be used extensively at runtime.

@@ -2132,6 +2132,8 @@ pool_query_target_cb(tse_task_t *task, void *data)
 
 	arg->dqa_info->ta_state = out->pqio_state;
 	arg->dqa_info->ta_space = out->pqio_space;
+	D_DEBUG(DB_MD, DF_UUID": rank %u index %u state %d\n", DP_UUID(arg->dqa_pool->dp_pool),
+		arg->dqa_rank, arg->dqa_tgt_idx, arg->dqa_info->ta_state);
 
 out:
 	crt_req_decref(arg->rpc);
