@@ -469,8 +469,13 @@ func TestServer_prepBdevStorage(t *testing.T) {
 				cfg = tc.srvCfgExtra(cfg)
 			}
 
+			// ensure that the engine affinities are set.
+			if err := cfg.SetEngineAffinities(log); err != nil {
+				t.Fatal(err)
+			}
+
 			// test only with 2M hugepage size
-			if err := cfg.Validate(log, 2048, nil); err != nil {
+			if err := cfg.Validate(log, 2048); err != nil {
 				t.Fatal(err)
 			}
 
@@ -583,7 +588,7 @@ func TestServer_scanBdevStorage(t *testing.T) {
 				WithNrHugePages(tc.nrHugepages)
 
 			// test only with 2M hugepage size
-			if err := cfg.Validate(log, 2048, nil); err != nil {
+			if err := cfg.Validate(log, 2048); err != nil {
 				t.Fatal(err)
 			}
 
