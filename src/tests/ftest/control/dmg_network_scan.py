@@ -296,9 +296,13 @@ class DmgNetworkScanTest(TestWithServers):
         """
         # Get info, both these functions will return a list of NetDev objects
         dmg_info = sorted(
-            self.get_dmg_info(), key=lambda x: (x.f_iface, x.providers))
+            self.get_dmg_info(), key=lambda x: (x.device, x.provider))
         sys_info = sorted(
-            self.get_sys_info(), key=lambda x: (x.f_iface, x.providers))
+            self.get_sys_info(), key=lambda x: (x.device, x.provider))
+        # dmg_info = sorted(
+        #     self.get_dmg_info(), key=lambda x: (x.f_iface, x.providers))
+        # sys_info = sorted(
+        #     self.get_sys_info(), key=lambda x: (x.f_iface, x.providers))
 
         # Validate the output with what we expect.
         msg = "\nDmg Info:\n{} \n\nSysInfo:\n{}".format(dmg_info, sys_info)

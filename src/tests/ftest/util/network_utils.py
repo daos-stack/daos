@@ -16,7 +16,7 @@ from general_utils import run_task, display_task
 
 
 class NetworkDevice():
-    """."""
+    """A class to represent the information of a network device."""
 
     def __init__(self, host, device, ib_device, port, provider, numa):
         """Initialize the network device data object."""
