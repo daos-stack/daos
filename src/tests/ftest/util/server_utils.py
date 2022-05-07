@@ -14,7 +14,7 @@ import random
 
 from avocado import fail_on
 
-from command_utils_base import CommonConfig
+from command_utils_base import CommonConfig, BasicParameter
 from exception_utils import CommandFailure
 from command_utils import SubprocessManager
 from general_utils import pcmd, get_log_file, human_to_bytes, bytes_to_human, \
@@ -72,7 +72,8 @@ class DaosServerManager(SubprocessManager):
 
     def __init__(self, group, bin_dir,
                  svr_cert_dir, svr_config_file, dmg_cert_dir, dmg_config_file,
-                 svr_config_temp=None, dmg_config_temp=None, manager="Orterun"):
+                 svr_config_temp=None, dmg_config_temp=None, manager="Orterun",
+                 namespace="/run/server_manager/*"):
         """Initialize a DaosServerManager object.
 
         Args:
@@ -91,11 +92,12 @@ class DaosServerManager(SubprocessManager):
             manager (str, optional): the name of the JobManager class used to
                 manage the YamlCommand defined through the "job" attribute.
                 Defaults to "Orterun".
+            namespace (str): yaml namespace (path to parameters)
         """
         self.group = group
         server_command = get_server_command(
             group, svr_cert_dir, bin_dir, svr_config_file, svr_config_temp)
-        super().__init__(server_command, manager)
+        super().__init__(server_command, manager, namespace)
         self.manager.job.sub_command_override = "start"
 
         # Dmg command to access this group of servers which will be configured
@@ -123,6 +125,10 @@ class DaosServerManager(SubprocessManager):
 
         # Flag used to determine which method is used to detect that the server has started
         self.detect_start_via_dmg = False
+
+        # Parameters to set storage prepare and format timeout
+        self.storage_prepare_timeout = BasicParameter(None, 40)
+        self.storage_format_timeout = BasicParameter(None, 40)
 
     def get_params(self, test):
         """Get values for all of the command params from the yaml file.
@@ -293,7 +299,7 @@ class DaosServerManager(SubprocessManager):
             cmd.sub_command_class.sub_command_class.nvme_only.value = True
 
         self.log.info("Preparing DAOS server storage: %s", str(cmd))
-        results = run_pcmd(self._hosts, str(cmd), timeout=40)
+        results = run_pcmd(self._hosts, str(cmd), timeout=self.storage_prepare_timeout.value)
 
         # gratuitously lifted from pcmd() and get_current_state()
         result = {}
@@ -465,8 +471,9 @@ class DaosServerManager(SubprocessManager):
             pcmd(self._hosts, "; ".join(cmd_list), verbose)
 
     def restart(self, hosts, wait=False):
-        """Restart the specified servers after a stop. The servers must
-           have been previously formatted and started.
+        """Restart the specified servers after a stop.
+
+           The servers must have been previously formatted and started.
 
         Args:
             hosts (list): List of servers to restart.
@@ -481,7 +488,7 @@ class DaosServerManager(SubprocessManager):
             self.manager.run()
 
             host_ranks = self.get_host_ranks(hosts)
-            self.update_expected_states(host_ranks , ["joined"])
+            self.update_expected_states(host_ranks, ["joined"])
 
             if not wait:
                 return
@@ -512,7 +519,7 @@ class DaosServerManager(SubprocessManager):
         self.log.info("<SERVER> Formatting hosts: <%s>", self.dmg.hostlist)
         # Temporarily increasing timeout to avoid CI errors until DAOS-5764 can
         # be further investigated.
-        self.dmg.storage_format(timeout=40)
+        self.dmg.storage_format(timeout=self.storage_format_timeout.value)
 
         # Wait for all the engines to start
         self.detect_engine_start()
@@ -602,7 +609,7 @@ class DaosServerManager(SubprocessManager):
         return states.pop()
 
     def check_rank_state(self, rank, valid_state, max_checks=1):
-        """Check the state of single rank in DAOS system
+        """Check the state of single rank in DAOS system.
 
         Args:
             rankv(int): daos rank whose state need's to be checked
@@ -615,6 +622,7 @@ class DaosServerManager(SubprocessManager):
         Returns:
             bool: returns True if there is a match for checked state,
                   else False.
+
         """
         checks = 0
         while checks < max_checks:
@@ -1083,7 +1091,7 @@ class DaosServerManager(SubprocessManager):
         return params
 
     def get_daos_metrics(self, verbose=False, timeout=60):
-        """Get daos_metrics for the server
+        """Get daos_metrics for the server.
 
         Args:
             verbose (bool, optional): pass verbose to run_pcmd. Defaults to False.
@@ -1095,6 +1103,7 @@ class DaosServerManager(SubprocessManager):
                     general_utils.run_pcmd(), # engine 0
                     general_utils.run_pcmd()  # engine 1
                 ]
+
         """
         engines_per_host = self.get_config_value("engines_per_host") or 1
         engines = []

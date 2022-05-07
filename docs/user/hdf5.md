@@ -20,7 +20,7 @@ A [HDF5 DAOS connector](https://github.com/HDFGroup/vol-daos)
 is available from the HDF Group.
 
 Please refer to the [HDF5 DAOS VOL Connector Users
-Guide](https://github.com/HDFGroup/vol-daos/blob/release/2.2/docs/users_guide.pdf)
+Guide](https://github.com/HDFGroup/vol-daos/blob/master/docs/users_guide.pdf)
 for instructions on how to build and use HDF5 with this DAOS VOL connector.
 
 The presentation [Advancing HDF5's Parallel I/O for Exascale with

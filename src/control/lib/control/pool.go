@@ -403,7 +403,7 @@ type (
 	PoolInfo struct {
 		TotalTargets    uint32               `json:"total_targets"`
 		ActiveTargets   uint32               `json:"active_targets"`
-		TotalNodes      uint32               `json:"total_nodes"`
+		TotalEngines    uint32               `json:"total_engines"`
 		DisabledTargets uint32               `json:"disabled_targets"`
 		Version         uint32               `json:"version"`
 		Leader          uint32               `json:"leader"`
@@ -1125,6 +1125,11 @@ func GetMaxPoolSize(ctx context.Context, log logging.Logger, rpcClient UnaryInvo
 				}
 
 				nvmeRanksBytes[smdDevice.Rank] += smdDevice.AvailBytes
+				log.Debugf("Adding SMD device %s (instance %d, ctrlr %s) is usable: "+
+					"device state=%q, size=%d total=%d",
+					smdDevice.UUID, smdDevice.Rank, smdDevice.TrAddr,
+					smdDevice.NvmeState.String(), smdDevice.AvailBytes,
+					nvmeRanksBytes[smdDevice.Rank])
 			}
 		}
 		for _, nvmeRankBytes := range nvmeRanksBytes {

@@ -3,8 +3,8 @@
 %define agent_svc_name daos_agent.service
 %define sysctl_script_name 10-daos_server.conf
 
-%global mercury_version 2.1.0~rc4-8%{?dist}
-%global libfabric_version 1.14.0-1
+%global mercury_version 2.1.0~rc4-9%{?dist}
+%global libfabric_version 1.15.0~rc3-1
 %global __python %{__python3}
 
 %if 0%{?rhel} > 0
@@ -26,8 +26,8 @@
 %endif
 
 Name:          daos
-Version:       2.1.101
-Release:       2%{?relval}%{?dist}
+Version:       2.1.102
+Release:       1%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       BSD-2-Clause-Patent
@@ -94,7 +94,7 @@ BuildRequires: libisa-l_crypto-devel
 BuildRequires: libisal-devel
 BuildRequires: libisal_crypto-devel
 %endif
-BuildRequires: daos-raft-devel = 0.9.0-1394.gc81505f%{?dist}%{?dist}
+BuildRequires: daos-raft-devel = 0.9.1-1401.gc18bcb8%{?dist}
 BuildRequires: openssl-devel
 BuildRequires: libevent-devel
 BuildRequires: libyaml-devel
@@ -566,8 +566,17 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 # No files in a shim package
 
 %changelog
-* Fri Apr 15 2022 Phillip Henderson <phillip.henderson@intel.com> 2.1.101-2
- - Require the mercury-ucx package when built with UCX
+* Thu May 5 2022 Johann Lombardi <johann.lombardi@intel.com> 2.1.102-1
+- Bump version to 2.1.102
+
+* Wed May  4 2022 Joseph Moore <joseph.moore@intel.com> 2.1.101-4
+- Update to mercury 2.1.0.rc4-9 to enable non-unified mode in UCX
+
+* Fri Apr 22 2022 Lei Huang <lei.huang@intel.com> 2.1.101-3
+- Update to libfabric to v1.15.0rc3-1 to include critical performance patches
+
+* Thu Apr 14 2022 Li Wei <wei.g.li@intel.com> 2.1.101-2
+- Update raft to 0.9.1-1401.gc18bcb8 to fix uninitialized node IDs
 
 * Wed Apr  6 2022 Johann Lombardi <johann.lombardi@intel.com> 2.1.101-1
  - Switch version to 2.1.101

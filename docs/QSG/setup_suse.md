@@ -10,7 +10,7 @@ The purpose of this guide is to provide a user with a set of command lines to qu
 This document covers installation of the DAOS rpms on openSUSE/SLES 15.3 and updating the DAOS configuration files needed by daos servers.
 
 This guide will also describe how to use dfuse in order to take advantage of DAOS support for POSIX.
-For setup instructions on CentOS7 and EL8, refer to the [CentOS7/EL8 setup](setup_centos7_and_el8.md).
+For setup instructions on RHEL and RHEL clones, refer to the [RHEL setup](setup_rhel.md) section.
 For more details reference the DAOS administration guide:
 <https://docs.daos.io/v2.2/admin/hardware/>
 
