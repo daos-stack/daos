@@ -69,6 +69,11 @@ func DefaultFabricScanner(log logging.Logger) *hardware.FabricScanner {
 	return fs
 }
 
+// DefaultFabricReadyChecker gets the default provider for fabric readiness checking.
+func DefaultFabricReadyChecker(log logging.Logger) hardware.FabricReadyChecker {
+	return sysfs.NewProvider(log)
+}
+
 // Init loads up any dynamic libraries that need to be loaded at runtime.
 func Init(log logging.Logger) (func(), error) {
 	initFns := []func() (func(), error){
