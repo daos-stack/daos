@@ -1218,7 +1218,7 @@ __migrate_fetch_update_bulk(struct migrate_one *mrone, daos_handle_t oh,
 	}
 
 	D_DEBUG(DB_REBUILD,
-		DF_UOID" mrone %p dkey "DF_KEY" nr %d eph "DF_U64"\n",
+		DF_UOID" mrone %p dkey "DF_KEY" nr %d eph "DF_X64"\n",
 		DP_UOID(mrone->mo_oid), mrone, DP_KEY(&mrone->mo_dkey),
 		iod_num, mrone->mo_epoch);
 
@@ -1882,16 +1882,18 @@ rw_iod_pack(struct migrate_one *mrone, daos_iod_t *iod, daos_epoch_t *ephs, d_sg
 				}
 				nr++;
 			}
-			D_DEBUG(DB_REBUILD, "new recx "DF_U64"/"DF_U64"\n",
-				iod->iod_recxs[i].rx_idx, iod->iod_recxs[i].rx_nr);
+			D_DEBUG(DB_REBUILD, "new recx "DF_X64"/"DF_U64", parity_nr %d, nr %d, "
+				"start %d.\n", iod->iod_recxs[i].rx_idx, iod->iod_recxs[i].rx_nr,
+				parity_nr, nr, start);
 		}
+
 
 		if (parity_nr > 0) {
 			rc = migrate_insert_recxs_sgl(mrone->mo_iods_from_parity, NULL,
-						     &mrone->mo_iods_num_from_parity, iod,
-						     &iod->iod_recxs[start],
-						     &ephs[start], parity_nr,
-						     mrone->mo_sgls, sgl);
+						      &mrone->mo_iods_num_from_parity, iod,
+						      &iod->iod_recxs[start],
+						      &ephs[start], parity_nr,
+						      mrone->mo_sgls, sgl);
 			if (rc)
 				D_GOTO(out, rc);
 		}

@@ -83,7 +83,7 @@ Ctypes is a built-in Python module for interfacing Python with existing
 libraries written in C/C++. The Python API is built as an object-oriented
 wrapper around the DAOS libraries utilizing ctypes.
 
-Ctypes documentation can be found here <https://docs.python.org/3/library/ctypes.html>
+Ctypes documentation can be found [here](https://docs.python.org/3/library/ctypes.html).
 
 The following demonstrates a simplified example of creating a Python wrapper
 for the C function `daos_pool_tgt_exclude_out`, with each input parameter to the
@@ -176,8 +176,5 @@ self.d_log.ERROR("Something went very wrong")
 ```
 ## Go Bindings
 
-API bindings for Go[^2] are also available.
-
-[^1]: https://github.com/daos-stack/daos/blob/release/2.0/src/client/pydaos/raw/README.md
-
-[^2]: https://godoc.org/github.com/daos-stack/go-daos/pkg/daos
+API bindings for [Go](https://godoc.org/github.com/daos-stack/go-daos/pkg/daos)
+are also available.

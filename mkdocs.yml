@@ -75,8 +75,8 @@ nav:
         - 'Use Cases': 'overview/use_cases.md'
         - 'Terminology': 'overview/terminology.md'
     - Installation and Setup:
-        - 'CentOS': 'QSG/setup_centos.md'
-        - 'openSUSE': 'QSG/setup_suse.md'
+        - 'RHEL and clones': 'QSG/setup_rhel.md'
+        - 'SUSE': 'QSG/setup_suse.md'
         - 'DAOS in Docker': 'QSG/docker.md'
         - 'Build from Scratch': 'QSG/build_from_scratch.md'
         - 'Admin/Client Tools': 'QSG/tour.md'

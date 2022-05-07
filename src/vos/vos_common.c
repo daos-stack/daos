@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2021 Intel Corporation.
+ * (C) Copyright 2016-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -233,12 +233,21 @@ vos_tx_begin(struct dtx_handle *dth, struct umem_instance *umm)
 	if (dth == NULL)
 		return umem_tx_begin(umm, vos_txd_get());
 
-	if (dth->dth_local_tx_started)
+	/** Note: On successful return, dth tls gets set and will be cleared by the corresponding
+	 *        call to vos_tx_end.  This is to avoid ever keeping that set after a call to
+	 *        umem_tx_end, which may yield for bio operations.
+	 */
+
+	if (dth->dth_local_tx_started) {
+		vos_dth_set(dth);
 		return 0;
+	}
 
 	rc = umem_tx_begin(umm, vos_txd_get());
-	if (rc == 0)
+	if (rc == 0) {
 		dth->dth_local_tx_started = 1;
+		vos_dth_set(dth);
+	}
 
 	return rc;
 }
@@ -277,8 +286,10 @@ vos_tx_end(struct vos_container *cont, struct dtx_handle *dth_in,
 		goto cancel;
 
 	/* Not the last modification. */
-	if (err == 0 && dth->dth_modification_cnt > dth->dth_op_seq)
+	if (err == 0 && dth->dth_modification_cnt > dth->dth_op_seq) {
+		vos_dth_set(NULL);
 		return 0;
+	}
 
 	dth->dth_local_tx_started = 0;
 
@@ -287,6 +298,8 @@ vos_tx_end(struct vos_container *cont, struct dtx_handle *dth_in,
 
 	if (err == 0)
 		err = vos_tx_publish(dth, true);
+
+	vos_dth_set(NULL);
 
 	err = umem_tx_end(vos_cont2umm(cont), err);
 
