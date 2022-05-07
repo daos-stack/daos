@@ -51,7 +51,7 @@ source "googlecompute" "daos-client-hpc-centos-7" {
   zone                    = "${var.zone}"
   state_timeout           = "10m"
   use_internal_ip         = true
-  omit_external_ip        = true
+  omit_external_ip        = false
   use_iap                 = true
 }
 
@@ -77,8 +77,8 @@ build {
     inline = [
       "sudo mkdir -p /var/daos/cert_gen",
       "sudo mv /tmp/sm_get_ca.sh /var/daos/cert_gen",
-      "sudo chown -R root:root /var/daos/cert_gen",
-      "sudo chmod +x /var/daos/cert_gen/*.sh"
+      "sudo chmod +x /var/daos/cert_gen/*.sh",
+      "sudo chown -R root:root /var/daos/cert_gen"
     ]
   }
 
