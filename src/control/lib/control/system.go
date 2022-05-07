@@ -49,6 +49,14 @@ type sysRequest struct {
 	Hosts hostlist.HostSet
 }
 
+func (req *sysRequest) SetRanks(ranks *system.RankSet) {
+	req.Ranks.Replace(ranks)
+}
+
+func (req *sysRequest) SetHosts(hosts *hostlist.HostSet) {
+	req.Hosts.ReplaceSet(hosts)
+}
+
 type sysResponse struct {
 	AbsentRanks system.RankSet   `json:"-"`
 	AbsentHosts hostlist.HostSet `json:"-"`
@@ -64,7 +72,7 @@ func (resp *sysResponse) getAbsentHostsRanks(inHosts, inRanks string) error {
 		return err
 	}
 	resp.AbsentHosts.ReplaceSet(ahs)
-	resp.AbsentRanks.ReplaceSet(ars)
+	resp.AbsentRanks.Replace(ars)
 
 	return nil
 }
@@ -585,8 +593,19 @@ func LeaderQuery(ctx context.Context, rpcClient UnaryInvoker, req *LeaderQueryRe
 // RanksReq contains the parameters for a system ranks request.
 type RanksReq struct {
 	unaryRequest
-	Ranks string
-	Force bool
+	respReportCb HostResponseReportFn
+	Ranks        string
+	Force        bool
+}
+
+func (r *RanksReq) reportResponse(resp *HostResponse) {
+	if r.respReportCb != nil && resp != nil {
+		r.respReportCb(resp)
+	}
+}
+
+func (r *RanksReq) SetReportCb(cb HostResponseReportFn) {
+	r.respReportCb = cb
 }
 
 // RanksResp contains the response from a system ranks request.
@@ -598,6 +617,13 @@ type RanksResp struct {
 // addHostResponse is responsible for validating the given HostResponse
 // and adding its results to the RanksResp.
 func (srr *RanksResp) addHostResponse(hr *HostResponse) (err error) {
+	if hr.Error != nil {
+		if err = srr.addHostError(hr.Addr, hr.Error); err != nil {
+			return
+		}
+		return
+	}
+
 	pbResp, ok := hr.Message.(interface{ GetResults() []*sharedpb.RankResult })
 	if !ok {
 		return errors.Errorf("unable to unpack message: %+v", hr.Message)
@@ -605,10 +631,7 @@ func (srr *RanksResp) addHostResponse(hr *HostResponse) (err error) {
 
 	memberResults := make(system.MemberResults, 0)
 	if err := convert.Types(pbResp.GetResults(), &memberResults); err != nil {
-		if srr.HostErrors == nil {
-			srr.HostErrors = make(HostErrorsMap)
-		}
-		return srr.HostErrors.Add(hr.Addr, err)
+		return srr.addHostError(hr.Addr, errors.Wrap(err, "type conversion failed"))
 	}
 
 	srr.RankResults = append(srr.RankResults, memberResults...)
@@ -620,26 +643,27 @@ func (srr *RanksResp) addHostResponse(hr *HostResponse) (err error) {
 // parameter and unpacks host responses and errors into a RanksResp,
 // returning RanksResp's reference.
 func invokeRPCFanout(ctx context.Context, rpcClient UnaryInvoker, req *RanksReq) (*RanksResp, error) {
-	ur, err := rpcClient.InvokeUnaryRPC(ctx, req)
+	resps, err := rpcClient.InvokeUnaryRPCAsync(ctx, req)
 	if err != nil {
 		return nil, err
 	}
 
 	rr := new(RanksResp)
-	for _, hostResp := range ur.Responses {
-		if hostResp.Error != nil {
-			if err := rr.addHostError(hostResp.Addr, hostResp.Error); err != nil {
+	for {
+		select {
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		case hr := <-resps:
+			if hr == nil {
+				return rr, nil
+			}
+
+			req.reportResponse(hr)
+			if err := rr.addHostResponse(hr); err != nil {
 				return nil, err
 			}
-			continue
-		}
-
-		if err := rr.addHostResponse(hostResp); err != nil {
-			return nil, err
 		}
 	}
-
-	return rr, nil
 }
 
 // PrepShutdownRanks concurrently performs prep shutdown ranks across all hosts
