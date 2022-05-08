@@ -3,7 +3,7 @@
 %define agent_svc_name daos_agent.service
 %define sysctl_script_name 10-daos_server.conf
 
-%global mercury_version 2.1.0~rc4-8%{?dist}
+%global mercury_version 2.1.0~rc4-9%{?dist}
 %global libfabric_version 1.15.0~rc3-1
 %global __python %{__python3}
 
@@ -27,7 +27,7 @@
 
 Name:          daos
 Version:       2.3.100
-Release:       5%{?relval}%{?dist}
+Release:       6%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       BSD-2-Clause-Patent
@@ -554,6 +554,9 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 # No files in a shim package
 
 %changelog
+* Wed May  4 2022 Joseph Moore <joseph.moore@intel.com> 2.3.100-6
+- Update to mercury 2.1.0.rc4-9 to enable non-unified mode in UCX
+
 * Tue Apr 26 2022 Phillip Henderson <phillip.henderson@intel.com> 2.3.100-5
 - Move daos_gen_io_conf and daos_run_io_conf to daos-client-tests
 
