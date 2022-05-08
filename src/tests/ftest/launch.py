@@ -29,6 +29,10 @@ import defusedxml.ElementTree as ET
 from ClusterShell.NodeSet import NodeSet
 from ClusterShell.Task import task_self
 
+# pylint: disable=import-outside-toplevel
+sys.path.append(os.path.join(os.getcwd(), "util"))
+from network_utils import get_fastest_interface, get_common_provider
+
 # Graft some functions from xml.etree into defusedxml etree.
 ET.Element = Element
 ET.SubElement = SubElement
@@ -333,6 +337,11 @@ def get_available_interfaces(args):
         print("Error obtaining a default interface on {} from {}".format(all_hosts, net_path))
 
     print("Available interfaces on {}: {}".format(all_hosts, available_interfaces))
+
+    print("<>" * 50)
+    print("get_fastest_interface: {}".format(get_fastest_interface(all_hosts)))
+    print("<>" * 50)
+
     return available_interfaces
 
 
@@ -397,6 +406,11 @@ def set_provider_environment(interface, args):
     # Update env definitions
     os.environ["CRT_PHY_ADDR_STR"] = provider
     print("Testing with CRT_PHY_ADDR_STR={}".format(os.environ["CRT_PHY_ADDR_STR"]))
+
+    print("<>" * 50)
+    servers = NodeSet(args.test_servers)
+    print("get_common_provider: {}".format(get_common_provider(servers, interface)))
+    print("<>" * 50)
 
 
 def set_python_environment():

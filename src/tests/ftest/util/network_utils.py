@@ -133,7 +133,7 @@ def get_interface_speeds(hosts, interface, verbose=True):
 
     Args:
         hosts (NodeSet): hosts on which to detect the interface speed
-        interface (str): interface on for which to obtain the speed
+        interface (str): interface for which to obtain the speed
         verbose (bool, optional): display command details. Defaults to True.
 
     Returns:
@@ -175,7 +175,7 @@ def get_interface_numa_node(hosts, interface, verbose=True):
 
     Args:
         hosts (NodeSet): hosts on which to detect the NUMA node
-        interface (str): interface on for which to obtain the NUMA node
+        interface (str): interface for which to obtain the NUMA node
         verbose (bool, optional): display command details. Defaults to True.
 
     Returns:
@@ -212,7 +212,7 @@ def get_interface_ib_name(hosts, interface, verbose=True):
 
     Args:
         hosts (NodeSet): hosts on which to detect the InfiniBand name
-        interface (str): interface on for which to obtain the InfiniBand name
+        interface (str): interface for which to obtain the InfiniBand name
         verbose (bool, optional): display command details. Defaults to True.
 
     Returns:
@@ -355,7 +355,7 @@ def get_interface_providers(interface, provider_data):
     """Get the providers supported by this interface.
 
     Args:
-        interface (str): interface on for which to obtain the InfiniBand name
+        interface (str): interface for which to obtain the InfiniBand name
         provider_data (dict): output from get_ofi_info() or get_ucx_info()
 
     Returns:
@@ -402,7 +402,7 @@ def get_fastest_interface(hosts, verbose=True):
     log.info("Active network interface speeds on %s:", hosts)
     available_interfaces = {}
     for interface in sorted(interface_speeds):
-        print("  - {0:<8} (speed: {1:>6})".format(interface, interface_speeds[interface]))
+        log.info("  - %-8s (speed: %6s)", interface, interface_speeds[interface])
 
         # Only include the first active interface (as determined by alphabetic sort) for each speed
         if interface_speeds[interface] not in available_interfaces:
@@ -419,11 +419,45 @@ def get_fastest_interface(hosts, verbose=True):
     return interface
 
 
+def get_common_provider(hosts, interface, supported=None, verbose=True):
+    """Get the list of providers supported by the interface on every host.
+
+    Args:
+        hosts (NodeSet): hosts on which to find the provider information
+        interface (str): interface for which to obtain the providers
+        supported (list, optional): list of supported providers when if provided will limit the
+            inclusion to only those providers specified. Defaults to None.
+        verbose (bool, optional): display command details. Defaults to True.
+
+    Returns:
+        list: a list of providers supported by the interface on every host
+
+    """
+    ofi_info = get_ofi_info(hosts, supported, verbose)
+    providers = get_interface_providers(interface, ofi_info)
+
+    if not supported or "ucx" in supported:
+        ucx_info = get_ucx_info(hosts, supported, verbose)
+        for ib_name in get_interface_ib_name(hosts, interface, verbose):
+            device = ":".join([ib_name, "1"])
+            providers.update(get_interface_providers(device, ucx_info))
+
+    # Only include the providers supported by the interface on all of the hosts
+    common_providers = set()
+    for provider, node_set in providers.items():
+        if node_set == hosts:
+            common_providers.update(provider.split(","))
+
+    return list(common_providers)
+
+
 def get_network_information(hosts, supported=None, verbose=True):
     """Get the network device information on the hosts specified.
 
     Args:
         hosts (NodeSet): hosts on which to find the network information
+        supported (list, optional): list of supported providers when if provided will limit the
+            inclusion to only those providers specified. Defaults to None.
         verbose (bool, optional): display command details. Defaults to True.
 
     Returns:
