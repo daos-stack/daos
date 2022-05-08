@@ -249,6 +249,7 @@ func TestServer_CtlSvc_StopRanks(t *testing.T) {
 		instancesStopped  bool
 		instancesDontStop bool
 		req               *ctlpb.RanksReq
+		timeout           time.Duration
 		signal            os.Signal
 		signalErr         error
 		expSignalsSent    map[uint32]os.Signal
@@ -281,6 +282,7 @@ func TestServer_CtlSvc_StopRanks(t *testing.T) {
 		},
 		"instances successfully stopped": {
 			req:            &ctlpb.RanksReq{Ranks: "0-3"},
+			timeout:        time.Second,
 			expSignalsSent: map[uint32]os.Signal{0: syscall.SIGINT, 1: syscall.SIGINT},
 			expResults: []*sharedpb.RankResult{
 				{Rank: 1, State: msStopped},
@@ -289,6 +291,7 @@ func TestServer_CtlSvc_StopRanks(t *testing.T) {
 		},
 		"instances successfully stopped with force": {
 			req:            &ctlpb.RanksReq{Ranks: "0-3", Force: true},
+			timeout:        time.Second,
 			expSignalsSent: map[uint32]os.Signal{0: syscall.SIGKILL, 1: syscall.SIGKILL},
 			expResults: []*sharedpb.RankResult{
 				{Rank: 1, State: msStopped},
@@ -297,6 +300,7 @@ func TestServer_CtlSvc_StopRanks(t *testing.T) {
 		},
 		"instances not stopped in time": {
 			req:               &ctlpb.RanksReq{Ranks: "0-3"},
+			timeout:           time.Second,
 			expSignalsSent:    map[uint32]os.Signal{0: syscall.SIGINT, 1: syscall.SIGINT},
 			instancesDontStop: true,
 			expErr:            errors.New("deadline exceeded"),
@@ -333,7 +337,12 @@ func TestServer_CtlSvc_StopRanks(t *testing.T) {
 			)
 			svc := mockControlService(t, log, cfg, nil, nil, nil)
 
-			ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+			ctx := context.Background()
+			ctx, cancel := context.WithCancel(ctx)
+			if tc.timeout != time.Duration(0) {
+				t.Logf("timeout of %s being applied", tc.timeout)
+				ctx, cancel = context.WithTimeout(ctx, tc.timeout)
+			}
 			defer cancel()
 
 			ps := events.NewPubSub(ctx, log)
@@ -386,7 +395,9 @@ func TestServer_CtlSvc_StopRanks(t *testing.T) {
 				return
 			}
 
-			<-ctx.Done()
+			if tc.timeout != time.Duration(0) {
+				<-ctx.Done()
+			}
 			common.AssertEqual(t, 0, len(dispatched.rx), "number of events published")
 
 			if diff := cmp.Diff(tc.expResults, gotResp.Results, defRankCmpOpts...); diff != "" {
@@ -752,6 +763,7 @@ func TestServer_CtlSvc_StartRanks(t *testing.T) {
 		instancesStopped bool
 		startFails       bool
 		req              *ctlpb.RanksReq
+		timeout          time.Duration
 		expResults       []*sharedpb.RankResult
 		expErr           error
 	}{
@@ -773,7 +785,8 @@ func TestServer_CtlSvc_StartRanks(t *testing.T) {
 			expResults: []*sharedpb.RankResult{},
 		},
 		"instances already started": {
-			req: &ctlpb.RanksReq{Ranks: "0-3"},
+			req:     &ctlpb.RanksReq{Ranks: "0-3"},
+			timeout: time.Second,
 			expResults: []*sharedpb.RankResult{
 				{Rank: 1, State: msReady},
 				{Rank: 2, State: msReady},
@@ -781,6 +794,7 @@ func TestServer_CtlSvc_StartRanks(t *testing.T) {
 		},
 		"instances get started": {
 			req:              &ctlpb.RanksReq{Ranks: "0-3"},
+			timeout:          5 * time.Second,
 			instancesStopped: true,
 			expResults: []*sharedpb.RankResult{
 				{Rank: 1, State: msReady},
@@ -789,6 +803,7 @@ func TestServer_CtlSvc_StartRanks(t *testing.T) {
 		},
 		"instances stay stopped": {
 			req:              &ctlpb.RanksReq{Ranks: "0-3"},
+			timeout:          time.Second,
 			instancesStopped: true,
 			startFails:       true,
 			expErr:           errors.New("deadline exceeded"),
@@ -802,7 +817,12 @@ func TestServer_CtlSvc_StartRanks(t *testing.T) {
 				tc.engineCount = maxEngines
 			}
 
-			ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+			ctx := context.Background()
+			ctx, cancel := context.WithCancel(ctx)
+			if tc.timeout != time.Duration(0) {
+				t.Logf("timeout of %s being applied", tc.timeout)
+				ctx, cancel = context.WithTimeout(ctx, tc.timeout)
+			}
 			defer cancel()
 
 			cfg := config.DefaultServer().WithEngines(
@@ -833,7 +853,7 @@ func TestServer_CtlSvc_StartRanks(t *testing.T) {
 				go func(s *EngineInstance, startFails bool) {
 					<-s.startRequested
 					t.Logf("instance %d: start signal received", s.Index())
-					if startFails {
+					if startFails || !tc.instancesStopped {
 						return
 					}
 
