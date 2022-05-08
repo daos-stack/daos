@@ -6,6 +6,7 @@
 """
 # import os
 # import re
+from cmath import inf
 import socket
 
 # from avocado.utils import process
@@ -305,5 +306,12 @@ class DmgNetworkScanTest(TestWithServers):
         #     self.get_sys_info(), key=lambda x: (x.f_iface, x.providers))
 
         # Validate the output with what we expect.
+        self.log.info("-" * 100)
+        self.log.info("SYS INFO")
+        self.log.info("%s", sys_info)
+        self.log.info("-" * 100)
+        self.log.info("DMG INFO")
+        self.log.info("%s", dmg_info)
+        self.log.info("-" * 100)
         msg = "\nDmg Info:\n{} \n\nSysInfo:\n{}".format(dmg_info, sys_info)
         self.assertEqual(sys_info, dmg_info, msg)

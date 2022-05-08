@@ -171,8 +171,10 @@ class ZeroConfigTest(TestWithServers):
         racer_env["FI_LOG_LEVEL"] = "info"
         racer_env["D_LOG_MASK"] = "INFO,object=ERR,placement=ERR"
         if "ucx" in self.server_managers[0].get_config_value("provider"):
+            self.log.info("[UCX] self.interfaces: %s", self.interfaces)
             port_domains = [
-                ":".join([str(iface["domain"]), str(iface["port"])]) for iface in self.interfaces]
+                ":".join([self.interfaces[name]["domain"], self.interfaces[name]["port"]])
+                for name in self.interfaces]
             racer_env["OFI_DOMAIN"] = ",".join(port_domains)
         else:
             racer_env["OFI_DOMAIN"] = self.interfaces[exp_iface]["domain"]
@@ -227,7 +229,7 @@ class ZeroConfigTest(TestWithServers):
 
         # Get the available interfaces and their domains
         self.get_device_info()
-        exp_iface = random.choice(list(self.interfaces.keys())) #nosec
+        exp_iface = random.choice(list(self.interfaces.keys()))     # nosec
 
         # Configure the daos server
         self.setup_servers()

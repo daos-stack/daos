@@ -33,8 +33,8 @@ class NetworkDevice():
 
     def __str__(self):
         """Overwrite to display formatted devices."""
-        return "\n".join("{}: {}".format(key, getattr(self, key, "MISSING"))
-                         for key in self.__dict__)
+        settings = ["{}={}".format(key, getattr(self, key, None)) for key in self.__dict__]
+        return "NetworkDevice({})".format(", ".join(settings))
 
     def __ne__(self, other):
         """Override the default not-equal implementation."""
@@ -351,13 +351,12 @@ def get_ucx_info(hosts, supported=None, verbose=True):
     return providers
 
 
-def get_interface_providers(interface, ofi_info, ucx_info):
+def get_interface_providers(interface, provider_data):
     """Get the providers supported by this interface.
 
     Args:
         interface (str): interface on for which to obtain the InfiniBand name
-        ofi_info (dict): output from get_ofi_info()
-        ucx_info (dict): output from get_ucx_info()
+        provider_data (dict): output from get_ofi_info() or get_ucx_info()
 
     Returns:
         dict: a dictionary of comma-separated strings of providers keys and NodeSet values on which
@@ -365,12 +364,11 @@ def get_interface_providers(interface, ofi_info, ucx_info):
 
     """
     providers = {}
-    for info in (ofi_info, ucx_info):
-        if interface in info:
-            for provider, node_set in info[interface].items():
-                if provider not in providers:
-                    providers[provider] = NodeSet()
-                providers[provider].update(node_set)
+    if interface in provider_data:
+        for provider, node_set in provider_data[interface].items():
+            if provider not in providers:
+                providers[provider] = NodeSet()
+            providers[provider].update(node_set)
 
     return providers
 
@@ -444,9 +442,12 @@ def get_network_information(hosts, supported=None, verbose=True):
                 kwargs = {"host": host, "device": interface, "port": 1}
                 data_gather = {
                     "ib_device": get_interface_ib_name(node_set, interface, verbose),
-                    "provider": get_interface_providers(interface, ofi_info, ucx_info),
-                    "numa": get_interface_numa_node(node_set, interface, verbose)
+                    "provider": get_interface_providers(interface, ofi_info),
+                    "numa": get_interface_numa_node(node_set, interface, verbose),
                 }
+                for ib_name in data_gather["ib_device"]:
+                    device = ":".join([ib_name, "1"])
+                    data_gather["provider"].update(get_interface_providers(device, ucx_info))
                 for key, data in data_gather.items():
                     kwargs[key] = []
                     for item, item_node_set in data.items():
