@@ -286,7 +286,7 @@ int d_register_alt_assert(void (*alt_assert)(const int, const char*,
 
 #define D_ASSERT(e)							\
 	do {								\
-		if (e)							\
+		if (likely(e))						\
 			break;						\
 		D_FATAL("Assertion '%s' failed\n", #e);			\
 		d_log_sync();						\
@@ -297,7 +297,7 @@ int d_register_alt_assert(void (*alt_assert)(const int, const char*,
 
 #define D_ASSERTF(cond, fmt, ...)						\
 	do {									\
-		if (cond)							\
+		if (likely(cond))						\
 			break;							\
 		D_FATAL("Assertion '%s' failed: " fmt, #cond, ## __VA_ARGS__);	\
 		if (d_alt_assert != NULL)					\
