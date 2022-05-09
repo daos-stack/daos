@@ -19,6 +19,8 @@ free_filter_data(daos_filter_t **filters, uint32_t nfilters)
 			if (filters[i]->parts[j]->num_constants > 0)
 				free(filters[i]->parts[j]->constant);
 		}
+		if (filters[i]->filter_type.iov_len > 0)
+			free(filters[i]->filter_type.iov_buf);
 	}
 }
 
