@@ -240,7 +240,7 @@ server_main(d_rank_t my_rank, const char *str_port, const char *str_interface,
 	size_t			size = 0;
 	int			fd;
 	struct stat		st;
-	crt_init_options_t	init_opts;
+	crt_init_options_t	init_opts = {0};
 
 	setenv("FI_UNIVERSE_SIZE", "1024", 1);
 	setenv("D_LOG_MASK", "ERR", 1);
