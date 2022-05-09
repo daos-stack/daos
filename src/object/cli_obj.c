@@ -1127,7 +1127,8 @@ shard_open:
 	}
 
 	if (rc == 0) {
-		if (obj_op_is_ec_fetch(obj_auxi) && obj_shard->do_rebuilding) {
+		if (obj_op_is_ec_fetch(obj_auxi) && obj_shard->do_rebuilding &&
+		    !obj_auxi->spec_shard) {
 			ec_degrade = true;
 			obj_shard_close(obj_shard);
 		}
@@ -2478,7 +2479,6 @@ obj_req_is_ec_cond_fetch(struct obj_auxi_args *obj_auxi)
 	return obj_auxi->is_ec_obj && obj_is_fetch_opc(obj_auxi->opc) &&
 	       obj_req_with_cond_flags(obj_auxi->rw_args.api_args->flags);
 }
-
 
 static bool
 obj_req_is_ec_check_exist(struct obj_auxi_args *obj_auxi)
@@ -4841,7 +4841,7 @@ obj_comp_cb(tse_task_t *task, void *data)
 					obj_reasb_io_fini(obj_auxi, false);
 			}
 		} else {
-			if (obj_auxi->is_ec_obj &&
+			if (obj_auxi->is_ec_obj && obj_auxi->req_reasbed &&
 			    (task->dt_result == 0 ||
 			     task->dt_result == -DER_REC2BIG) &&
 			    obj_auxi->opc == DAOS_OBJ_RPC_FETCH) {
@@ -5194,6 +5194,7 @@ obj_cond_fetch_prep(tse_task_t *task, struct obj_auxi_args *obj_auxi)
 	daos_obj_fetch_t	*args = dc_task_get_args(task);
 	d_list_t		*task_list = &obj_auxi->shard_task_head;
 	tse_task_t		*sub_task;
+	d_sg_list_t		*sgl;
 	bool			 per_akey = args->flags & DAOS_COND_PER_AKEY;
 	uint64_t		 fetch_flags;
 	uint32_t		 i;
@@ -5202,7 +5203,7 @@ obj_cond_fetch_prep(tse_task_t *task, struct obj_auxi_args *obj_auxi)
 	if (!daos_handle_is_valid(obj_auxi->th)) {
 		D_ASSERT(!obj_auxi->tx_local);
 		D_ASSERT(!daos_handle_is_valid(args->th));
-		rc = dc_tx_local_open(obj_auxi->obj->cob_coh, DAOS_EPOCH_MAX, 0, &obj_auxi->th);
+		rc = dc_tx_local_open(obj_auxi->obj->cob_coh, 0, 0, &obj_auxi->th);
 		if (rc) {
 			D_ERROR("task %p "DF_OID" dc_tx_local_open failed "
 				DF_RC"\n", task, DP_OID(obj_auxi->obj->cob_md.omd_id),
@@ -5226,8 +5227,9 @@ obj_cond_fetch_prep(tse_task_t *task, struct obj_auxi_args *obj_auxi)
 	D_ASSERT(obj_auxi->cond_fetch_split == 0);
 	for (i = 0; i < args->nr; i++) {
 		fetch_flags = per_akey ? args->iods[i].iod_flags : args->flags;
+		sgl = args->sgls != NULL ? &args->sgls[i] : NULL;
 		rc = dc_obj_fetch_task_create(args->oh, obj_auxi->th, fetch_flags, args->dkey, 1,
-					      0, &args->iods[i], &args->sgls[i], NULL, NULL, NULL,
+					      0, &args->iods[i], sgl, NULL, NULL, NULL,
 					      NULL, tse_task2sched(task), &sub_task);
 		if (rc) {
 			D_ERROR("task %p "DF_OID" dc_obj_fetch_task_create failed, "DF_RC"\n",
@@ -5235,6 +5237,7 @@ obj_cond_fetch_prep(tse_task_t *task, struct obj_auxi_args *obj_auxi)
 			goto out;
 		}
 
+		tse_task_addref(sub_task);
 		tse_task_list_add(sub_task, task_list);
 
 		rc = dc_task_depend(task, 1, &sub_task);
@@ -5243,6 +5246,9 @@ obj_cond_fetch_prep(tse_task_t *task, struct obj_auxi_args *obj_auxi)
 				task, DP_OID(obj_auxi->obj->cob_md.omd_id), DP_RC(rc));
 			goto out;
 		}
+
+		D_DEBUG(DB_IO, DF_OID" created sub_task %p for obj task %p\n",
+			DP_OID(obj_auxi->obj->cob_md.omd_id), sub_task, task);
 	}
 
 out:
@@ -5255,7 +5261,7 @@ out:
 		rc = 1;
 	} else {
 		if (!d_list_empty(task_list))
-			tse_task_list_traverse(task_list, recov_task_abort, &rc);
+			tse_task_list_traverse(task_list, shard_task_abort, &rc);
 		task->dt_result = rc;
 	}
 	return rc;
@@ -5289,7 +5295,7 @@ dc_obj_fetch_task(tse_task_t *task)
 	obj_auxi->rw_args.api_args = args;
 	if (obj_req_with_cond_flags(args->flags)) {
 		rc = obj_cond_fetch_prep(task, obj_auxi);
-		D_ASSERT(rc <= 0 || rc == 1);
+		D_ASSERT(rc <= 1);
 		if (rc < 0)
 			D_GOTO(out_task, rc);
 		if (rc == 1)
