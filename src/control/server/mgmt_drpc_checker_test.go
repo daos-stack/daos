@@ -15,8 +15,8 @@ import (
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/testing/protocmp"
 
-	"github.com/daos-stack/daos/src/control/common"
 	srvpb "github.com/daos-stack/daos/src/control/common/proto/srv"
+	"github.com/daos-stack/daos/src/control/common/test"
 	"github.com/daos-stack/daos/src/control/drpc"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/system"
@@ -68,7 +68,7 @@ func TestSrvModule_HandleCheckerListPools(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
-			defer common.ShowBufferOnFailure(t, buf)
+			defer test.ShowBufferOnFailure(t, buf)
 
 			mod := mockSrvModule(t, log, 1)
 			if tc.notReplica {
@@ -81,7 +81,7 @@ func TestSrvModule_HandleCheckerListPools(t *testing.T) {
 
 			ctx := context.Background()
 			gotMsg, gotErr := mod.handleCheckerListPools(ctx, tc.req)
-			common.CmpErr(t, tc.expErr, gotErr)
+			test.CmpErr(t, tc.expErr, gotErr)
 			if tc.expErr != nil {
 				return
 			}
@@ -163,7 +163,7 @@ func TestSrvModule_HandleCheckerRegisterPool(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
-			defer common.ShowBufferOnFailure(t, buf)
+			defer test.ShowBufferOnFailure(t, buf)
 
 			mod := mockSrvModule(t, log, 1)
 			if tc.notReplica {
@@ -176,7 +176,7 @@ func TestSrvModule_HandleCheckerRegisterPool(t *testing.T) {
 
 			ctx := context.Background()
 			gotMsg, gotErr := mod.handleCheckerRegisterPool(ctx, tc.req)
-			common.CmpErr(t, tc.expErr, gotErr)
+			test.CmpErr(t, tc.expErr, gotErr)
 			if tc.expErr != nil {
 				return
 			}
@@ -240,7 +240,7 @@ func TestSrvModule_HandleCheckerDeregisterPool(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
-			defer common.ShowBufferOnFailure(t, buf)
+			defer test.ShowBufferOnFailure(t, buf)
 
 			mod := mockSrvModule(t, log, 1)
 			if tc.notReplica {
@@ -253,7 +253,7 @@ func TestSrvModule_HandleCheckerDeregisterPool(t *testing.T) {
 
 			ctx := context.Background()
 			gotMsg, gotErr := mod.handleCheckerDeregisterPool(ctx, tc.req)
-			common.CmpErr(t, tc.expErr, gotErr)
+			test.CmpErr(t, tc.expErr, gotErr)
 			if tc.expErr != nil {
 				return
 			}

@@ -43,6 +43,8 @@ type MgmtSvcClient interface {
 	PoolReintegrate(ctx context.Context, in *PoolReintegrateReq, opts ...grpc.CallOption) (*PoolReintegrateResp, error)
 	// PoolQuery queries a DAOS pool.
 	PoolQuery(ctx context.Context, in *PoolQueryReq, opts ...grpc.CallOption) (*PoolQueryResp, error)
+	// PoolQueryTarget queries a DAOS storage target.
+	PoolQueryTarget(ctx context.Context, in *PoolQueryTargetReq, opts ...grpc.CallOption) (*PoolQueryTargetResp, error)
 	// Set a DAOS pool property.
 	PoolSetProp(ctx context.Context, in *PoolSetPropReq, opts ...grpc.CallOption) (*PoolSetPropResp, error)
 	// Get a DAOS pool property list.
@@ -194,6 +196,15 @@ func (c *mgmtSvcClient) PoolReintegrate(ctx context.Context, in *PoolReintegrate
 func (c *mgmtSvcClient) PoolQuery(ctx context.Context, in *PoolQueryReq, opts ...grpc.CallOption) (*PoolQueryResp, error) {
 	out := new(PoolQueryResp)
 	err := c.cc.Invoke(ctx, "/mgmt.MgmtSvc/PoolQuery", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *mgmtSvcClient) PoolQueryTarget(ctx context.Context, in *PoolQueryTargetReq, opts ...grpc.CallOption) (*PoolQueryTargetResp, error) {
+	out := new(PoolQueryTargetResp)
+	err := c.cc.Invoke(ctx, "/mgmt.MgmtSvc/PoolQueryTarget", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -443,6 +454,8 @@ type MgmtSvcServer interface {
 	PoolReintegrate(context.Context, *PoolReintegrateReq) (*PoolReintegrateResp, error)
 	// PoolQuery queries a DAOS pool.
 	PoolQuery(context.Context, *PoolQueryReq) (*PoolQueryResp, error)
+	// PoolQueryTarget queries a DAOS storage target.
+	PoolQueryTarget(context.Context, *PoolQueryTargetReq) (*PoolQueryTargetResp, error)
 	// Set a DAOS pool property.
 	PoolSetProp(context.Context, *PoolSetPropReq) (*PoolSetPropResp, error)
 	// Get a DAOS pool property list.
@@ -530,6 +543,9 @@ func (UnimplementedMgmtSvcServer) PoolReintegrate(context.Context, *PoolReintegr
 }
 func (UnimplementedMgmtSvcServer) PoolQuery(context.Context, *PoolQueryReq) (*PoolQueryResp, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method PoolQuery not implemented")
+}
+func (UnimplementedMgmtSvcServer) PoolQueryTarget(context.Context, *PoolQueryTargetReq) (*PoolQueryTargetResp, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method PoolQueryTarget not implemented")
 }
 func (UnimplementedMgmtSvcServer) PoolSetProp(context.Context, *PoolSetPropReq) (*PoolSetPropResp, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method PoolSetProp not implemented")
@@ -810,6 +826,24 @@ func _MgmtSvc_PoolQuery_Handler(srv interface{}, ctx context.Context, dec func(i
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(MgmtSvcServer).PoolQuery(ctx, req.(*PoolQueryReq))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _MgmtSvc_PoolQueryTarget_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(PoolQueryTargetReq)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(MgmtSvcServer).PoolQueryTarget(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/mgmt.MgmtSvc/PoolQueryTarget",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(MgmtSvcServer).PoolQueryTarget(ctx, req.(*PoolQueryTargetReq))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -1296,6 +1330,10 @@ var MgmtSvc_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "PoolQuery",
 			Handler:    _MgmtSvc_PoolQuery_Handler,
+		},
+		{
+			MethodName: "PoolQueryTarget",
+			Handler:    _MgmtSvc_PoolQueryTarget_Handler,
 		},
 		{
 			MethodName: "PoolSetProp",

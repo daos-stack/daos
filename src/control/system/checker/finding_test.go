@@ -13,8 +13,8 @@ import (
 	"github.com/google/go-cmp/cmp"
 	"google.golang.org/protobuf/testing/protocmp"
 
-	"github.com/daos-stack/daos/src/control/common"
 	chkpb "github.com/daos-stack/daos/src/control/common/proto/chk"
+	"github.com/daos-stack/daos/src/control/common/test"
 	"github.com/daos-stack/daos/src/control/system/checker"
 )
 
@@ -31,7 +31,7 @@ func TestChecker_AnnotateFinding(t *testing.T) {
 			rpt: &chkpb.CheckReport{
 				Class:    chkpb.CheckInconsistClass_CIC_POOL_BAD_LABEL,
 				Action:   chkpb.CheckInconsistAction_CIA_INTERACT,
-				PoolUuid: common.MockUUID(),
+				PoolUuid: test.MockUUID(),
 				ActChoices: []chkpb.CheckInconsistAction{
 					chkpb.CheckInconsistAction_CIA_TRUST_MS,
 					chkpb.CheckInconsistAction_CIA_TRUST_PS,
@@ -43,17 +43,17 @@ func TestChecker_AnnotateFinding(t *testing.T) {
 				&chkpb.CheckReport{
 					Class:    chkpb.CheckInconsistClass_CIC_POOL_BAD_LABEL,
 					Action:   chkpb.CheckInconsistAction_CIA_INTERACT,
-					PoolUuid: common.MockUUID(),
+					PoolUuid: test.MockUUID(),
 					ActChoices: []chkpb.CheckInconsistAction{
 						chkpb.CheckInconsistAction_CIA_TRUST_MS,
 						chkpb.CheckInconsistAction_CIA_TRUST_PS,
 						chkpb.CheckInconsistAction_CIA_IGNORE,
 					},
 					ActDetails: []string{"ms-label", "ps-label", ""},
-					Msg:        fmt.Sprintf("The pool label for %s does not match MS", common.MockUUID()),
+					Msg:        fmt.Sprintf("The pool label for %s does not match MS", test.MockUUID()),
 					ActMsgs: []string{
-						fmt.Sprintf("Trust the MS pool entry (ms-label) for %s", common.MockUUID()),
-						fmt.Sprintf("Trust the PS pool entry (ps-label) for %s", common.MockUUID()),
+						fmt.Sprintf("Trust the MS pool entry (ms-label) for %s", test.MockUUID()),
+						fmt.Sprintf("Trust the PS pool entry (ps-label) for %s", test.MockUUID()),
 						"Ignore the pool finding",
 					},
 				}),

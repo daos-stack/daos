@@ -14,9 +14,9 @@ import (
 	"github.com/pkg/errors"
 
 	"github.com/daos-stack/daos/src/control/build"
-	"github.com/daos-stack/daos/src/control/common"
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	sharedpb "github.com/daos-stack/daos/src/control/common/proto/shared"
+	"github.com/daos-stack/daos/src/control/common/test"
 	"github.com/daos-stack/daos/src/control/lib/control"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/system"
@@ -295,7 +295,7 @@ func TestDmg_LeaderQueryCmd_Errors(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
-			defer common.ShowBufferOnFailure(t, buf)
+			defer test.ShowBufferOnFailure(t, buf)
 
 			mi := control.NewMockInvoker(log, &control.MockInvokerConfig{
 				UnaryResponse: control.MockMSResponse("10.0.0.1:10001",
@@ -308,7 +308,7 @@ func TestDmg_LeaderQueryCmd_Errors(t *testing.T) {
 			leaderQueryCmd.setConfig(tc.ctlCfg)
 
 			gotErr := leaderQueryCmd.Execute(nil)
-			common.CmpErr(t, tc.expErr, gotErr)
+			test.CmpErr(t, tc.expErr, gotErr)
 		})
 	}
 }
@@ -324,13 +324,13 @@ func TestDmg_systemQueryCmd_Errors(t *testing.T) {
 				Members: []*mgmtpb.SystemMember{
 					{
 						Rank:  1,
-						Uuid:  common.MockUUID(1),
+						Uuid:  test.MockUUID(1),
 						State: system.MemberStateReady.String(),
 						Addr:  "10.0.0.1:10001",
 					},
 					{
 						Rank:  2,
-						Uuid:  common.MockUUID(2),
+						Uuid:  test.MockUUID(2),
 						State: system.MemberStateReady.String(),
 						Addr:  "10.0.0.1:10001",
 					},
@@ -364,7 +364,7 @@ func TestDmg_systemQueryCmd_Errors(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
-			defer common.ShowBufferOnFailure(t, buf)
+			defer test.ShowBufferOnFailure(t, buf)
 
 			mi := control.NewMockInvoker(log, &control.MockInvokerConfig{
 				UnaryResponse: control.MockMSResponse("10.0.0.1:10001",
@@ -376,7 +376,7 @@ func TestDmg_systemQueryCmd_Errors(t *testing.T) {
 			queryCmd.SetLog(log)
 
 			gotErr := queryCmd.Execute(nil)
-			common.CmpErr(t, tc.expErr, gotErr)
+			test.CmpErr(t, tc.expErr, gotErr)
 		})
 	}
 }
@@ -493,7 +493,7 @@ func TestDmg_systemStartCmd_Errors(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
-			defer common.ShowBufferOnFailure(t, buf)
+			defer test.ShowBufferOnFailure(t, buf)
 
 			mi := control.NewMockInvoker(log, &control.MockInvokerConfig{
 				UnaryResponse: control.MockMSResponse("10.0.0.1:10001",
@@ -505,7 +505,7 @@ func TestDmg_systemStartCmd_Errors(t *testing.T) {
 			startCmd.SetLog(log)
 
 			gotErr := startCmd.Execute(nil)
-			common.CmpErr(t, tc.expErr, gotErr)
+			test.CmpErr(t, tc.expErr, gotErr)
 		})
 	}
 }
@@ -622,7 +622,7 @@ func TestDmg_systemStopCmd_Errors(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
-			defer common.ShowBufferOnFailure(t, buf)
+			defer test.ShowBufferOnFailure(t, buf)
 
 			mi := control.NewMockInvoker(log, &control.MockInvokerConfig{
 				UnaryResponse: control.MockMSResponse("10.0.0.1:10001",
@@ -634,7 +634,7 @@ func TestDmg_systemStopCmd_Errors(t *testing.T) {
 			stopCmd.SetLog(log)
 
 			gotErr := stopCmd.Execute(nil)
-			common.CmpErr(t, tc.expErr, gotErr)
+			test.CmpErr(t, tc.expErr, gotErr)
 		})
 	}
 }

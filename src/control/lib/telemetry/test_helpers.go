@@ -18,7 +18,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/daos-stack/daos/src/control/common"
+	"github.com/daos-stack/daos/src/control/common/test"
 	"github.com/daos-stack/daos/src/control/drpc"
 )
 
@@ -274,15 +274,15 @@ func CleanupTestMetricsProducer(t *testing.T) {
 func testMetricBasics(t *testing.T, tm *TestMetric, m Metric) {
 	t.Helper()
 
-	common.AssertEqual(t, tm.Name, m.Name(), "Name() failed")
-	common.AssertEqual(t, tm.path, m.Path(), "Path() failed")
-	common.AssertEqual(t, tm.FullPath(), m.FullPath(), "FullPath() failed")
-	common.AssertEqual(t, tm.desc, m.Desc(), "Desc() failed")
-	common.AssertEqual(t, tm.units, m.Units(), "Units() failed")
+	test.AssertEqual(t, tm.Name, m.Name(), "Name() failed")
+	test.AssertEqual(t, tm.path, m.Path(), "Path() failed")
+	test.AssertEqual(t, tm.FullPath(), m.FullPath(), "FullPath() failed")
+	test.AssertEqual(t, tm.desc, m.Desc(), "Desc() failed")
+	test.AssertEqual(t, tm.units, m.Units(), "Units() failed")
 
 	strRE, err := regexp.Compile(tm.str)
 	if err != nil {
 		t.Fatalf("invalid regex %q", tm.str)
 	}
-	common.AssertTrue(t, strRE.Match([]byte(m.String())), fmt.Sprintf("String() failed: %q", m.String()))
+	test.AssertTrue(t, strRE.Match([]byte(m.String())), fmt.Sprintf("String() failed: %q", m.String()))
 }

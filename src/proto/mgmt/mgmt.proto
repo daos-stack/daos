@@ -48,6 +48,8 @@ service MgmtSvc {
 	rpc PoolReintegrate(PoolReintegrateReq) returns (PoolReintegrateResp) {}
 	// PoolQuery queries a DAOS pool.
 	rpc PoolQuery(PoolQueryReq) returns (PoolQueryResp) {}
+	// PoolQueryTarget queries a DAOS storage target.
+	rpc PoolQueryTarget(PoolQueryTargetReq) returns (PoolQueryTargetResp) {}
 	// Set a DAOS pool property.
 	rpc PoolSetProp(PoolSetPropReq) returns (PoolSetPropResp) {}
 	// Get a DAOS pool property list.
