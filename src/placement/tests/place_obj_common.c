@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2021 Intel Corporation.
+ * (C) Copyright 2016-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -772,6 +772,10 @@ get_object_classes(daos_oclass_id_t **oclass_id_pp)
 		return -1;
 
 	length = daos_oclass_names_list(str_size, oclass_names);
+	if (length < 0) {
+		D_FREE(oclass_names);
+		return length;
+	}
 
 	for (i = 0; i < length; ++i) {
 		if (oclass_names[i] == ',')

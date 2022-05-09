@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2018-2021 Intel Corporation.
+ * (C) Copyright 2018-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -732,7 +732,8 @@ main(int argc, char **argv)
 {
 	int		rc = 0;
 
-	d_log_init();
+	rc = d_log_init();
+	D_ASSERTF(rc == 0, "d_log_init failed, rc=%d\n", rc);
 
 	rc = parse_args(argc, argv);
 	D_ASSERTF(rc == 0, "parse_args() failed. rc %d\n", rc);
