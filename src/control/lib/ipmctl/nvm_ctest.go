@@ -35,7 +35,7 @@ import (
 	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/pkg/errors"
 
-	"github.com/daos-stack/daos/src/control/common"
+	"github.com/daos-stack/daos/src/control/common/test"
 	"github.com/daos-stack/daos/src/control/logging"
 )
 
@@ -74,7 +74,7 @@ func testGetModules(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(name)
-			defer common.ShowBufferOnFailure(t, buf)
+			defer test.ShowBufferOnFailure(t, buf)
 
 			mockGetNum := func(_ logging.Logger, out *C.uint) C.int {
 				*out = tc.getNumRet
@@ -102,7 +102,7 @@ func testGetModules(t *testing.T) {
 			}
 
 			modules, err := getModules(log, mockGetNum, mockGet)
-			common.CmpErr(t, tc.expErr, err)
+			test.CmpErr(t, tc.expErr, err)
 			if tc.expErr != nil {
 				return
 			}
@@ -151,7 +151,7 @@ func testGetRegions(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(name)
-			defer common.ShowBufferOnFailure(t, buf)
+			defer test.ShowBufferOnFailure(t, buf)
 
 			mockGetNum := func(_ logging.Logger, out *C.NVM_UINT8) C.int {
 				*out = tc.getNumRet
@@ -188,7 +188,7 @@ func testGetRegions(t *testing.T) {
 			}
 
 			regions, err := getRegions(log, mockGetNum, mockGet)
-			common.CmpErr(t, tc.expErr, err)
+			test.CmpErr(t, tc.expErr, err)
 			if tc.expErr != nil {
 				return
 			}

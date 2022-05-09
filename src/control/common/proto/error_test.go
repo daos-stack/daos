@@ -14,8 +14,8 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
-	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/common/proto"
+	"github.com/daos-stack/daos/src/control/common/test"
 	"github.com/daos-stack/daos/src/control/drpc"
 	"github.com/daos-stack/daos/src/control/fault"
 	"github.com/daos-stack/daos/src/control/fault/code"
@@ -120,9 +120,9 @@ func TestProto_AnnotateError(t *testing.T) {
 
 			gotErr := proto.UnwrapError(status.Convert(aErr))
 			if tc.errExact {
-				common.AssertTrue(t, gotErr.Error() == tc.expErr.Error(), "error does not match exactly")
+				test.AssertTrue(t, gotErr.Error() == tc.expErr.Error(), "error does not match exactly")
 			} else {
-				common.CmpErr(t, tc.expErr, gotErr)
+				test.CmpErr(t, tc.expErr, gotErr)
 			}
 			if tc.expErr == nil {
 				return

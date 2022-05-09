@@ -15,7 +15,7 @@ import (
 
 	"github.com/pkg/errors"
 
-	"github.com/daos-stack/daos/src/control/common"
+	"github.com/daos-stack/daos/src/control/common/test"
 	"github.com/daos-stack/daos/src/control/logging"
 )
 
@@ -51,7 +51,7 @@ func discoverDevices(t *testing.T, log logging.Logger, mgmt NvmMgmt) []DeviceDis
 
 func TestNvmDiscovery(t *testing.T) {
 	log, buf := logging.NewTestLogger("discovery")
-	defer common.ShowBufferOnFailure(t, buf)
+	defer test.ShowBufferOnFailure(t, buf)
 
 	skipNoPerms(t)
 
@@ -64,7 +64,7 @@ func TestNvmDiscovery(t *testing.T) {
 
 func TestNvmFwInfo(t *testing.T) {
 	log, buf := logging.NewTestLogger("firmware")
-	defer common.ShowBufferOnFailure(t, buf)
+	defer test.ShowBufferOnFailure(t, buf)
 
 	skipNoPerms(t)
 
@@ -104,18 +104,18 @@ func TestNvmFwUpdate_BadFile(t *testing.T) {
 			mgmt := NvmMgmt{}
 			err := mgmt.UpdateFirmware(devUID, tt.inputPath, false)
 
-			common.CmpErr(t, tt.expErr, err)
+			test.CmpErr(t, tt.expErr, err)
 		})
 	}
 }
 
 func TestNvmFwUpdate(t *testing.T) {
 	log, buf := logging.NewTestLogger("firmware")
-	defer common.ShowBufferOnFailure(t, buf)
+	defer test.ShowBufferOnFailure(t, buf)
 
 	skipNoPerms(t)
 
-	dir, cleanup := common.CreateTestDir(t)
+	dir, cleanup := test.CreateTestDir(t)
 	defer cleanup()
 
 	// Actual DIMM will reject this junk file.
@@ -137,7 +137,7 @@ func TestNvmFwUpdate(t *testing.T) {
 		err := mgmt.UpdateFirmware(d.Uid, filename, false)
 
 		// Got down to NVM API
-		common.CmpErr(t, errors.New("update_device_fw"), err)
+		test.CmpErr(t, errors.New("update_device_fw"), err)
 		fmt.Printf("Update firmware for device %s: %v\n", d.Uid.String(), err)
 	}
 }
