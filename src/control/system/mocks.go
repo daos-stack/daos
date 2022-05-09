@@ -11,7 +11,7 @@ import (
 	"net"
 	"testing"
 
-	"github.com/daos-stack/daos/src/control/common"
+	"github.com/daos-stack/daos/src/control/common/test"
 	"github.com/daos-stack/daos/src/control/logging"
 )
 
@@ -27,7 +27,7 @@ func MockControlAddr(t *testing.T, idx uint32) *net.TCPAddr {
 // MockMember returns a system member with appropriate values.
 func MockMember(t *testing.T, idx uint32, state MemberState, info ...string) *Member {
 	addr := MockControlAddr(t, idx)
-	m := NewMember(Rank(idx), common.MockUUID(int32(idx)),
+	m := NewMember(Rank(idx), test.MockUUID(int32(idx)),
 		addr.String(), addr, state)
 	m.FabricContexts = idx
 	if len(info) > 0 {
@@ -44,7 +44,8 @@ func MockMemberResult(rank Rank, action string, err error, state MemberState) *M
 	return result
 }
 
-func MockMembership(t *testing.T, log logging.Logger, mdb memberDatabase, resolver resolveTCPFn) *Membership {
+// MockMembership returns an initialized *Membership using the given MemberStore.
+func MockMembership(t *testing.T, log logging.Logger, mdb MemberStore, resolver TCPResolver) *Membership {
 	m := NewMembership(log, mdb)
 
 	if resolver != nil {

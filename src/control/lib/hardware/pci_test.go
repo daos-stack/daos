@@ -13,7 +13,7 @@ import (
 	"github.com/google/go-cmp/cmp"
 	"github.com/pkg/errors"
 
-	"github.com/daos-stack/daos/src/control/common"
+	"github.com/daos-stack/daos/src/control/common/test"
 	"github.com/daos-stack/daos/src/control/logging"
 )
 
@@ -85,7 +85,7 @@ func TestHardware_NewPCIAddress(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			addr, err := NewPCIAddress(tc.addrStr)
-			common.CmpErr(t, tc.expErr, err)
+			test.CmpErr(t, tc.expErr, err)
 			if tc.expErr != nil {
 				return
 			}
@@ -185,7 +185,7 @@ func TestHardware_NewPCIAddressSet(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			addrSet, err := NewPCIAddressSet(tc.addrStrs...)
-			common.CmpErr(t, tc.expErr, err)
+			test.CmpErr(t, tc.expErr, err)
 			if tc.expErr != nil {
 				return
 			}
@@ -306,16 +306,16 @@ func TestHardware_PCIAddressSet_BackingToVMDAddresses(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
-			defer common.ShowBufferOnFailure(t, buf)
+			defer test.ShowBufferOnFailure(t, buf)
 
 			addrSet, gotErr := NewPCIAddressSet(tc.inAddrs...)
-			common.CmpErr(t, tc.expErr, gotErr)
+			test.CmpErr(t, tc.expErr, gotErr)
 			if tc.expErr != nil {
 				return
 			}
 
 			gotAddrs, gotErr := addrSet.BackingToVMDAddresses(log)
-			common.CmpErr(t, tc.expErr, gotErr)
+			test.CmpErr(t, tc.expErr, gotErr)
 			if tc.expErr != nil {
 				return
 			}
@@ -465,7 +465,7 @@ func TestHardware_PCIDevices_Add(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			err := tc.devices.Add(tc.newDev)
 
-			common.CmpErr(t, tc.expErr, err)
+			test.CmpErr(t, tc.expErr, err)
 			if diff := cmp.Diff(tc.expResult, tc.devices); diff != "" {
 				t.Fatalf("(-want, +got)\n%s\n", diff)
 			}
@@ -516,13 +516,13 @@ func TestHardware_PCIBus(t *testing.T) {
 				gotErr = tc.bus.AddDevice(tc.dev)
 			case "nil contains":
 				contains := tc.bus.Contains(tc.dev.PCIAddr)
-				common.AssertFalse(t, contains, "nil bus shouldn't contain anything")
+				test.AssertFalse(t, contains, "nil bus shouldn't contain anything")
 				return
 			default:
 				panic("unknown operation")
 			}
 
-			common.CmpErr(t, tc.expErr, gotErr)
+			test.CmpErr(t, tc.expErr, gotErr)
 			if tc.expErr != nil {
 				return
 			}
