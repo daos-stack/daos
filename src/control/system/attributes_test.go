@@ -12,7 +12,7 @@ import (
 	"github.com/google/go-cmp/cmp"
 	"github.com/pkg/errors"
 
-	"github.com/daos-stack/daos/src/control/common"
+	"github.com/daos-stack/daos/src/control/common/test"
 )
 
 type testAttrDb struct {
@@ -78,7 +78,7 @@ func TestSystem_SetAttributes(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			gotErr := SetAttributes(newAttrDb(nil), tc.userAttrs)
-			common.CmpErr(t, tc.expErr, gotErr)
+			test.CmpErr(t, tc.expErr, gotErr)
 			if tc.expErr != nil {
 				return
 			}
@@ -121,7 +121,7 @@ func TestSystem_GetAttributes(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			gotAttrs, gotErr := GetAttributes(attrDb, tc.attrKeys)
-			common.CmpErr(t, tc.expErr, gotErr)
+			test.CmpErr(t, tc.expErr, gotErr)
 			if tc.expErr != nil {
 				return
 			}
