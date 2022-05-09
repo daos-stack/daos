@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2021 Intel Corporation.
+// (C) Copyright 2020-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -10,7 +10,7 @@ import (
 
 	"github.com/pkg/errors"
 
-	"github.com/daos-stack/daos/src/control/common"
+	"github.com/daos-stack/daos/src/control/common/test"
 	"github.com/daos-stack/daos/src/control/drpc"
 )
 
@@ -33,7 +33,7 @@ func TestDrpc_Status(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			ds := drpc.DaosStatus(tc.in)
-			common.CmpErr(t, tc.expErr, ds)
+			test.CmpErr(t, tc.expErr, ds)
 		})
 	}
 }
@@ -47,7 +47,7 @@ func TestDrpc_Error(t *testing.T) {
 		drpc.DaosStatus(424242): "DER_UNKNOWN(424242): Unknown error code 424242",
 	} {
 		t.Run(expStr, func(t *testing.T) {
-			common.AssertEqual(t, expStr, ds.Error(), "not equal")
+			test.AssertEqual(t, expStr, ds.Error(), "not equal")
 		})
 	}
 }

@@ -18,6 +18,7 @@ import (
 
 	"github.com/daos-stack/daos/src/control/common"
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
+	"github.com/daos-stack/daos/src/control/common/test"
 	"github.com/daos-stack/daos/src/control/lib/control"
 	"github.com/daos-stack/daos/src/control/lib/hardware"
 	"github.com/daos-stack/daos/src/control/logging"
@@ -101,7 +102,7 @@ func TestAgent_mgmtModule_getAttachInfo(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
-			defer common.ShowBufferOnFailure(t, buf)
+			defer test.ShowBufferOnFailure(t, buf)
 
 			sysName := "dontcare"
 			mod := &mgmtModule{
@@ -127,7 +128,7 @@ func TestAgent_mgmtModule_getAttachInfo(t *testing.T) {
 			for _, expResp := range tc.expResps {
 				resp, err := mod.getAttachInfo(context.Background(), 0, sysName)
 
-				common.CmpErr(t, nil, err)
+				test.CmpErr(t, nil, err)
 
 				if diff := cmp.Diff(expResp, resp, cmpopts.IgnoreUnexported(mgmtpb.GetAttachInfoResp{}, mgmtpb.ClientNetHint{})); diff != "" {
 					t.Fatalf("-want, +got:\n%s", diff)
@@ -140,7 +141,7 @@ func TestAgent_mgmtModule_getAttachInfo(t *testing.T) {
 
 func TestAgent_mgmtModule_getAttachInfo_Parallel(t *testing.T) {
 	log, buf := logging.NewTestLogger(t.Name())
-	defer common.ShowBufferOnFailure(t, buf)
+	defer test.ShowBufferOnFailure(t, buf)
 
 	sysName := "dontcare"
 
@@ -237,7 +238,7 @@ func TestAgent_mgmtModule_getNUMANode(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
-			defer common.ShowBufferOnFailure(t, buf)
+			defer test.ShowBufferOnFailure(t, buf)
 
 			mod := &mgmtModule{
 				log:            log,
@@ -247,8 +248,8 @@ func TestAgent_mgmtModule_getNUMANode(t *testing.T) {
 
 			result, err := mod.getNUMANode(context.Background(), 123)
 
-			common.AssertEqual(t, tc.expResult, result, "")
-			common.CmpErr(t, tc.expErr, err)
+			test.AssertEqual(t, tc.expResult, result, "")
+			test.CmpErr(t, tc.expErr, err)
 		})
 	}
 }
@@ -333,7 +334,7 @@ func TestAgent_mgmtModule_waitFabricReady(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
-			defer common.ShowBufferOnFailure(t, buf)
+			defer test.ShowBufferOnFailure(t, buf)
 
 			if tc.netIfacesFn == nil {
 				tc.netIfacesFn = defaultNetIfaceFn
@@ -356,7 +357,7 @@ func TestAgent_mgmtModule_waitFabricReady(t *testing.T) {
 
 			err := mod.waitFabricReady(context.Background(), tc.netDevClass)
 
-			common.CmpErr(t, tc.expErr, err)
+			test.CmpErr(t, tc.expErr, err)
 			if diff := cmp.Diff(tc.expChecked, tc.devStateProv.GetStateCalled); diff != "" {
 				t.Fatalf("-want, +got:\n%s", diff)
 			}
