@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2021 Intel Corporation.
+// (C) Copyright 2019-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -16,7 +16,7 @@ import (
 
 	"github.com/pkg/errors"
 
-	"github.com/daos-stack/daos/src/control/common"
+	"github.com/daos-stack/daos/src/control/common/test"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/pbin"
 )
@@ -158,7 +158,7 @@ func TestPbin_Exec(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
-			defer common.ShowBufferOnFailure(t, buf)
+			defer test.ShowBufferOnFailure(t, buf)
 
 			os.Setenv(childModeEnvVar, childModeReqRes)
 			if tc.binPath == "" {
@@ -168,7 +168,7 @@ func TestPbin_Exec(t *testing.T) {
 			ctx := context.Background()
 			res, err := pbin.ExecReq(ctx, log, tc.binPath, tc.req)
 
-			common.CmpErr(t, tc.expErr, err)
+			test.CmpErr(t, tc.expErr, err)
 
 			if err == nil && !bytes.Equal(tc.req.Payload, res.Payload) {
 				t.Fatalf("payloads differ: %q != %q", tc.req.Payload, res.Payload)

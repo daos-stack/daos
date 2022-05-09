@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2021 Intel Corporation.
+// (C) Copyright 2021-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -13,7 +13,7 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 
-	"github.com/daos-stack/daos/src/control/common"
+	"github.com/daos-stack/daos/src/control/common/test"
 	"github.com/daos-stack/daos/src/control/lib/control"
 	"github.com/daos-stack/daos/src/control/lib/hostlist"
 	. "github.com/daos-stack/daos/src/control/system"
@@ -72,7 +72,7 @@ Ranks       Action Result
 			var bld strings.Builder
 
 			gotErr := tabulateRankGroups(&bld, tc.groups, tc.cTitles...)
-			common.ExpectError(t, gotErr, tc.expErrMsg, name)
+			test.ExpectError(t, gotErr, tc.expErrMsg, name)
 
 			if diff := cmp.Diff(strings.TrimLeft(tc.expPrintStr, "\n"), bld.String()); diff != "" {
 				t.Fatalf("unexpected format string (-want, +got):\n%s\n", diff)

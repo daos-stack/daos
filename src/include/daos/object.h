@@ -745,4 +745,49 @@ daos_recx_ep_list_dump(struct daos_recx_ep_list *lists, unsigned int nr)
 	}
 }
 
+/** Maximal number of iods (i.e., akeys) in dc_obj_enum_unpack_io.ui_iods */
+#define OBJ_ENUM_UNPACK_MAX_IODS 16
+
+/**
+ * Used by ds_obj_enum_unpack to accumulate recxs that can be stored with a single
+ * VOS update.
+ *
+ * ui_oid and ui_dkey are only filled by ds_obj_enum_unpack for certain
+ * enumeration types, as commented after each field. Callers may fill ui_oid,
+ * for instance, when the enumeration type is VOS_ITER_DKEY, to pass the object
+ * ID to the callback.
+ *
+ * ui_iods, ui_recxs_caps, and ui_sgls are arrays of the same capacity
+ * (ui_iods_cap) and length (ui_iods_len). That is, the iod in ui_iods[i] can
+ * hold at most ui_recxs_caps[i] recxs, which have their inline data described
+ * by ui_sgls[i]. ui_sgls is optional. If ui_iods[i].iod_recxs[j] has no inline
+ * data, then ui_sgls[i].sg_iovs[j] will be empty.
+ */
+struct dc_obj_enum_unpack_io {
+	daos_unit_oid_t		 ui_oid;	/**< type <= OBJ */
+	daos_key_t		 ui_dkey;	/**< type <= DKEY */
+	daos_iod_t		*ui_iods;
+	d_iov_t			 ui_csum_iov;
+	/* punched epochs per akey */
+	daos_epoch_t		*ui_akey_punch_ephs;
+	daos_epoch_t		*ui_rec_punch_ephs;
+	daos_epoch_t		**ui_recx_ephs;
+	int			 ui_iods_cap;
+	int			 ui_iods_top;
+	int			*ui_recxs_caps;
+	/* punched epoch for object */
+	daos_epoch_t		ui_obj_punch_eph;
+	/* punched epochs for dkey */
+	daos_epoch_t		ui_dkey_punch_eph;
+	d_sg_list_t		*ui_sgls;	/**< optional */
+	uint32_t		ui_version;
+	uint32_t		ui_type;
+};
+
+typedef int (*dc_obj_enum_unpack_cb_t)(struct dc_obj_enum_unpack_io *io, void *arg);
+
+int
+dc_obj_enum_unpack(daos_unit_oid_t oid, daos_key_desc_t *kds, int kds_num,
+		   d_sg_list_t *sgl, d_iov_t *csum, dc_obj_enum_unpack_cb_t cb,
+		   void *cb_arg);
 #endif /* __DD_OBJ_H__ */

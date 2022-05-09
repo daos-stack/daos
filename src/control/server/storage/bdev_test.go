@@ -10,7 +10,7 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/daos-stack/daos/src/control/common"
+	"github.com/daos-stack/daos/src/control/common/test"
 )
 
 func Test_NvmeDevState(t *testing.T) {
@@ -64,18 +64,18 @@ func Test_NvmeDevState(t *testing.T) {
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
-			common.AssertEqual(t, tc.expIsNew, tc.state.IsNew(),
+			test.AssertEqual(t, tc.expIsNew, tc.state.IsNew(),
 				"unexpected IsNew() result")
-			common.AssertEqual(t, tc.expIsNormal, tc.state.IsNormal(),
+			test.AssertEqual(t, tc.expIsNormal, tc.state.IsNormal(),
 				"unexpected IsNormal() result")
-			common.AssertEqual(t, tc.expIsFaulty, tc.state.IsFaulty(),
+			test.AssertEqual(t, tc.expIsFaulty, tc.state.IsFaulty(),
 				"unexpected IsFaulty() result")
-			common.AssertEqual(t, tc.expStr, tc.state.String(),
+			test.AssertEqual(t, tc.expStr, tc.state.String(),
 				"unexpected status string")
 
 			stateNew := NvmeDevStateFromString(tc.state.String())
 
-			common.AssertEqual(t, tc.state.String(), stateNew.String(),
+			test.AssertEqual(t, tc.state.String(), stateNew.String(),
 				fmt.Sprintf("expected string %s to yield state %s",
 					tc.state.String(), stateNew.String()))
 		})
@@ -101,8 +101,8 @@ func Test_NvmeDevStateFromString_invalid(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			state := NvmeDevStateFromString(tc.inStr)
 
-			common.AssertEqual(t, tc.expState, state, "unexpected state")
-			common.AssertEqual(t, tc.expStr, state.String(), "unexpected states string")
+			test.AssertEqual(t, tc.expState, state, "unexpected state")
+			test.AssertEqual(t, tc.expStr, state.String(), "unexpected states string")
 		})
 	}
 }
