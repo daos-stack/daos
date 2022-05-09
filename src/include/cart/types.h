@@ -88,7 +88,9 @@ typedef struct crt_init_options {
 
 } crt_init_options_t;
 
-// TODO: document
+/**
+ * Enumeration specifying providers supported by the library
+ */
 typedef enum {
 	CRT_PROVIDER_SM			= 0,
 	CRT_PROVIDER_OFI_SOCKETS	= 1,

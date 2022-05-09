@@ -44,7 +44,7 @@ rpc_handle_reply(const struct crt_cb_info *info)
 	sem_t	*sem;
 
 	D_ASSERTF(info->cci_rc == 0, "rpc response failed. rc: %d\n",
-		info->cci_rc);
+		  info->cci_rc);
 
 	sem = (sem_t *)info->cci_arg;
 	sem_post(sem);
@@ -115,7 +115,7 @@ int main(int argc, char **argv)
 
 	DBG_PRINT("------------------------------------\n");
 	DBG_PRINT("Provider: '%s' Interface: '%s'  Domain: '%s'\n",
-		arg_provider, arg_interface, arg_domain);
+		  arg_provider, arg_interface, arg_domain);
 	DBG_PRINT("Number of remote tags: %d\n", num_remote_tags);
 	DBG_PRINT("Primary_provider: %d\n", use_primary);
 	DBG_PRINT("------------------------------------\n");
@@ -137,12 +137,6 @@ int main(int argc, char **argv)
 		assert(0);
 	}
 
-//	rc = crt_group_view_create("server_grp", &grp);
-//	if (!grp || rc != 0) {
-//		D_ERROR("Failed to create group view; rc=%d\n", rc);
-//		assert(0);
-//	}
-
 	rc = crt_context_create(&crt_ctx);
 	if (rc != 0) {
 		D_ERROR("crt_context_create() failed; rc=%d\n", rc);
@@ -150,16 +144,8 @@ int main(int argc, char **argv)
 	}
 
 	rc = pthread_create(&progress_thread, 0,
-				progress_function, &crt_ctx);
+			    progress_function, &crt_ctx);
 	assert(rc == 0);
-
-#if 0
-
-	rc = crt_group_attach(SERVER_GROUP_NAME, &grp);
-	assert(rc == 0);
-
-#endif 
-
 
 	int num_servers;
 
@@ -170,9 +156,7 @@ int main(int argc, char **argv)
 
 	num_servers = 2;
 
-
-	// Parse /tmp/ files
-	//
+	/* Parse /tmp/ files for uris. servers generate those */
 	{
 		FILE	*f;
 		char	*filename;
@@ -205,16 +189,16 @@ int main(int argc, char **argv)
 			printf("pri_uri=%s\n", pri_uri0);
 			printf("sec_uri=%s\n", sec_uri0);
 
-			printf("Using %s URIs for ranks\n", (use_primary) ? "primary" : "secondary");
+			printf("Using %s URIs for ranks\n",
+			       (use_primary) ? "primary" : "secondary");
 			rc = crt_group_primary_rank_add(crt_ctx, grp, serv_rank,
-					(use_primary) ? pri_uri0 : sec_uri0);
+							(use_primary) ? pri_uri0 : sec_uri0);
 			fclose(f);
 			D_FREE(filename);
 		}
 	}
 
-	// LOAD GROUP HERE
-	//
+	/* Load group */
 	rc = crt_group_size(grp, &grp_size);
 	if (rc != 0) {
 		D_ERROR("crt_group_size() failed; rc=%d\n", rc);
@@ -248,7 +232,7 @@ int main(int argc, char **argv)
 			server_ep.ep_grp = grp;
 
 			rc = crt_req_create(crt_ctx, &server_ep,
-					RPC_PING, &rpc);
+					    RPC_PING, &rpc);
 			if (rc != 0) {
 				D_ERROR("crt_req_create() failed; rc=%d\n",
 					rc);
@@ -280,8 +264,7 @@ int main(int argc, char **argv)
 			server_ep.ep_tag = 0;
 			server_ep.ep_grp = grp;
 
-			rc = crt_req_create(crt_ctx, &server_ep, RPC_SHUTDOWN,
-					&rpc);
+			rc = crt_req_create(crt_ctx, &server_ep, RPC_SHUTDOWN, &rpc);
 			if (rc != 0) {
 				D_ERROR("crt_req_create() failed; rc=%d\n", rc);
 				assert(0);

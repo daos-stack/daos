@@ -384,7 +384,7 @@ crt_str_to_provider(const char *str_provider)
 	for (i = 0; crt_na_dict[i].nad_str != NULL; i++) {
 
 		if (!strncmp(str_provider, crt_na_dict[i].nad_str,
-			    strlen(crt_na_dict[i].nad_str) + 1) ||
+			     strlen(crt_na_dict[i].nad_str) + 1) ||
 		    (crt_na_dict[i].nad_alt_str &&
 		     !strncmp(str_provider, crt_na_dict[i].nad_alt_str, strlen(crt_na_dict[i].nad_alt_str) + 1))) {
 			provider_idx = crt_na_dict[i].nad_type;
@@ -471,6 +471,8 @@ crt_init_opt(crt_group_id_t grpid, uint32_t flags, crt_init_options_t *opt)
 	crt_provider_t	primary_provider;
 	crt_provider_t	secondary_provider;
 	crt_provider_t	tmp_prov;
+	char		*port_str, *port0, *port1;
+	char		*iface0, *iface1, *domain0, *domain1;
 	int		num_secondaries = 0;
 	int		i;
 
@@ -522,8 +524,6 @@ crt_init_opt(crt_group_id_t grpid, uint32_t flags, crt_init_options_t *opt)
 		crt_gdata.cg_auto_swim_disable =
 			(flags & CRT_FLAG_BIT_AUTO_SWIM_DISABLE) ? 1 : 0;
 
-		// __debug_dump_gdata();
-		//
 		path = getenv("CRT_ATTACH_INFO_PATH");
 		if (path != NULL && strlen(path) > 0) {
 			rc = crt_group_config_path_set(path);
@@ -570,8 +570,6 @@ crt_init_opt(crt_group_id_t grpid, uint32_t flags, crt_init_options_t *opt)
 			domain_env = interface_env;
 		}
 
-		char	*port_str;
-		char	*iface0, *iface1, *domain0, *domain1, *port0, *port1;
 
 		if (opt && opt->cio_port)
 			port_str = opt->cio_port;
@@ -701,6 +699,12 @@ unlock:
 	D_RWLOCK_UNLOCK(&crt_gdata.cg_rwlock);
 
 out:
+	D_FREE(port0);
+	D_FREE(port1);
+	D_FREE(iface0);
+	D_FREE(iface1);
+	D_FREE(domain0);
+	D_FREE(domain1);
 	if (rc != 0) {
 		D_ERROR("failed, "DF_RC"\n", DP_RC(rc));
 		d_fault_inject_fini();

@@ -711,7 +711,7 @@ crt_rank_abort(d_rank_t rank)
 
 	D_RWLOCK_RDLOCK(&crt_gdata.cg_rwlock);
 
-	//TODO: Do we need to handle secondary provs?
+	/* TODO: Do we need to handle secondary providers? */
 	ctx_list = crt_provider_get_ctx_list(crt_gdata.cg_primary_prov);
 	d_list_for_each_entry(ctx, ctx_list, cc_link) {
 		rc = 0;
