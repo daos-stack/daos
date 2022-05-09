@@ -16,7 +16,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/jessevdk/go-flags"
 
-	"github.com/daos-stack/daos/src/control/common"
+	"github.com/daos-stack/daos/src/control/common/test"
 	"github.com/daos-stack/daos/src/control/lib/ui"
 )
 
@@ -53,15 +53,15 @@ func TestUI_LabelOrUUIDFlag(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			f := ui.LabelOrUUIDFlag{}
 			gotErr := f.UnmarshalFlag(tc.arg)
-			common.CmpErr(t, tc.expErr, gotErr)
+			test.CmpErr(t, tc.expErr, gotErr)
 			if tc.expErr != nil {
 				return
 			}
 
-			common.AssertEqual(t, tc.isEmpty, f.Empty(), "unexpected Empty()")
-			common.AssertEqual(t, tc.hasUUID, f.HasUUID(), "unexpected HasUUID()")
-			common.AssertEqual(t, tc.hasLabel, f.HasLabel(), "unexpected HasLabel()")
-			common.AssertEqual(t, tc.expString, f.String(), "unexpected String()")
+			test.AssertEqual(t, tc.isEmpty, f.Empty(), "unexpected Empty()")
+			test.AssertEqual(t, tc.hasUUID, f.HasUUID(), "unexpected HasUUID()")
+			test.AssertEqual(t, tc.hasLabel, f.HasLabel(), "unexpected HasLabel()")
+			test.AssertEqual(t, tc.expString, f.String(), "unexpected String()")
 
 			if diff := cmp.Diff(tc.expFlag, &f, cmpopts.IgnoreUnexported(ui.LabelOrUUIDFlag{})); diff != "" {
 				t.Fatalf("unexpected flag value: (-want, +got)\n%s\n", diff)
@@ -116,7 +116,7 @@ func TestUI_SetPropertiesFlag_UnmarshalFlag(t *testing.T) {
 			f.SettableKeys(tc.settable...)
 
 			gotErr := f.UnmarshalFlag(tc.fv)
-			common.CmpErr(t, tc.expErr, gotErr)
+			test.CmpErr(t, tc.expErr, gotErr)
 			if tc.expErr != nil {
 				return
 			}
@@ -272,7 +272,7 @@ func TestUI_GetPropertiesFlag_UnmarshalFlag(t *testing.T) {
 			f.GettableKeys(tc.gettable...)
 
 			gotErr := f.UnmarshalFlag(tc.fv)
-			common.CmpErr(t, tc.expErr, gotErr)
+			test.CmpErr(t, tc.expErr, gotErr)
 			if tc.expErr != nil {
 				return
 			}
