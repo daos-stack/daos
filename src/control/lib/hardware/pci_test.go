@@ -555,9 +555,9 @@ func TestHardware_PCIDevice(t *testing.T) {
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
-			common.AssertEqual(t, tc.expName, tc.dev.DeviceName(), "")
-			common.AssertEqual(t, tc.expType, tc.dev.DeviceType(), "")
-			common.AssertEqual(t, tc.dev, tc.dev.PCIDevice(), "")
+			test.AssertEqual(t, tc.expName, tc.dev.DeviceName(), "")
+			test.AssertEqual(t, tc.expType, tc.dev.DeviceType(), "")
+			test.AssertEqual(t, tc.dev, tc.dev.PCIDevice(), "")
 		})
 	}
 }

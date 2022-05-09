@@ -47,9 +47,9 @@ func TestHardware_VirtualDevice(t *testing.T) {
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
-			common.AssertEqual(t, tc.expName, tc.dev.DeviceName(), "")
-			common.AssertEqual(t, tc.expType, tc.dev.DeviceType(), "")
-			common.AssertEqual(t, tc.expPCIDev, tc.dev.PCIDevice(), "")
+			test.AssertEqual(t, tc.expName, tc.dev.DeviceName(), "")
+			test.AssertEqual(t, tc.expType, tc.dev.DeviceType(), "")
+			test.AssertEqual(t, tc.expPCIDev, tc.dev.PCIDevice(), "")
 		})
 	}
 }
@@ -381,7 +381,7 @@ func TestHardware_Topology_AddVirtualDevice(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			err := tc.topo.AddVirtualDevice(tc.device)
 
-			common.CmpErr(t, tc.expErr, err)
+			test.CmpErr(t, tc.expErr, err)
 			if diff := cmp.Diff(tc.expResult, tc.topo); diff != "" {
 				t.Fatalf("(-want, +got)\n%s\n", diff)
 			}
