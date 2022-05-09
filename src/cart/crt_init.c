@@ -477,6 +477,13 @@ crt_init_opt(crt_group_id_t grpid, uint32_t flags, crt_init_options_t *opt)
 	int		i;
 
 	server = flags & CRT_FLAG_BIT_SERVER;
+	port_str = NULL;
+	port0 = NULL;
+	port1 = NULL;
+	iface0 = NULL;
+	iface1 = NULL;
+	domain0 = NULL;
+	domain1 = NULL;
 
 	/* d_log_init is reference counted */
 	rc = d_log_init();
