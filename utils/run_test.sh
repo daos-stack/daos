@@ -154,6 +154,8 @@ if [ -d "/mnt/daos" ]; then
 
     COMP="UTEST_client"
     run_test "${SL_BUILD_DIR}/src/client/api/tests/eq_tests"
+    run_test "${SL_BUILD_DIR}/src/client/api/tests/agent_tests"
+    run_test "${SL_BUILD_DIR}/src/client/api/tests/job_tests"
 
     COMP="UTEST_security"
     run_test "${SL_BUILD_DIR}/src/security/tests/cli_security_tests"
