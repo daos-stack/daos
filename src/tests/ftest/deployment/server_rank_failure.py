@@ -159,10 +159,13 @@ class ServerRankFailure(IorTestBase):
         # waits forever. If we use timeout that's too long, the daos container command
         # after the server restart will get stuck, so use 10 sec timeout, which is the
         # same as deadlineForStonewalling in IOR.
+        mpirun_timeout = self.params.get('sw_deadline', ior_namespace)
+        self.log.info(
+            "Running Mpirun-IOR with Mpirun timeout of {} sec".format(mpirun_timeout))
         ior_thread = threading.Thread(
             target=self.run_ior_report_error,
             args=[ior_results, job_num, "test_file_1", self.pool, self.container,
-                  ior_namespace, 10])
+                  ior_namespace, mpirun_timeout])
 
         ior_thread.start()
 
