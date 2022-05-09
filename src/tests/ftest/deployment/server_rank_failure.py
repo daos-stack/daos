@@ -161,7 +161,7 @@ class ServerRankFailure(IorTestBase):
         # same as deadlineForStonewalling in IOR.
         mpirun_timeout = self.params.get('sw_deadline', ior_namespace)
         self.log.info(
-            "Running Mpirun-IOR with Mpirun timeout of {} sec".format(mpirun_timeout))
+            "Running Mpirun-IOR with Mpirun timeout of %s sec", mpirun_timeout)
         ior_thread = threading.Thread(
             target=self.run_ior_report_error,
             args=[ior_results, job_num, "test_file_1", self.pool, self.container,
