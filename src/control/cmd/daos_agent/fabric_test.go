@@ -16,6 +16,7 @@ import (
 	"github.com/pkg/errors"
 
 	"github.com/daos-stack/daos/src/control/common"
+	"github.com/daos-stack/daos/src/control/common/test"
 	"github.com/daos-stack/daos/src/control/lib/hardware"
 	"github.com/daos-stack/daos/src/control/logging"
 )
@@ -24,7 +25,7 @@ var fiCmpOpt = cmpopts.IgnoreUnexported(FabricInterface{})
 
 func TestAgent_NewNUMAFabric(t *testing.T) {
 	log, buf := logging.NewTestLogger(t.Name())
-	defer common.ShowBufferOnFailure(t, buf)
+	defer test.ShowBufferOnFailure(t, buf)
 
 	result := newNUMAFabric(log)
 
@@ -60,12 +61,12 @@ func TestAgent_NUMAFabric_NumNUMANodes(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
-			defer common.ShowBufferOnFailure(t, buf)
+			defer test.ShowBufferOnFailure(t, buf)
 			if tc.nf != nil {
 				tc.nf.log = log
 			}
 
-			common.AssertEqual(t, tc.expResult, tc.nf.NumNUMANodes(), "")
+			test.AssertEqual(t, tc.expResult, tc.nf.NumNUMANodes(), "")
 		})
 	}
 }
@@ -105,12 +106,12 @@ func TestAgent_NUMAFabric_NumDevices(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
-			defer common.ShowBufferOnFailure(t, buf)
+			defer test.ShowBufferOnFailure(t, buf)
 			if tc.nf != nil {
 				tc.nf.log = log
 			}
 
-			common.AssertEqual(t, tc.expResult, tc.nf.NumDevices(tc.node), "")
+			test.AssertEqual(t, tc.expResult, tc.nf.NumDevices(tc.node), "")
 		})
 	}
 }
@@ -151,14 +152,14 @@ func TestAgent_NUMAFabric_Add(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
-			defer common.ShowBufferOnFailure(t, buf)
+			defer test.ShowBufferOnFailure(t, buf)
 			if tc.nf != nil {
 				tc.nf.log = log
 			}
 
 			err := tc.nf.Add(tc.node, tc.input)
 
-			common.CmpErr(t, tc.expErr, err)
+			test.CmpErr(t, tc.expErr, err)
 
 			if tc.nf == nil {
 				return
@@ -623,7 +624,7 @@ func TestAgent_NUMAFabric_GetDevice(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
-			defer common.ShowBufferOnFailure(t, buf)
+			defer test.ShowBufferOnFailure(t, buf)
 			if tc.nf != nil {
 				tc.nf.log = log
 				if tc.nf.getAddrInterface == nil {
@@ -641,7 +642,7 @@ func TestAgent_NUMAFabric_GetDevice(t *testing.T) {
 			var results []*FabricInterface
 			for i := 0; i < numDevices+1; i++ {
 				result, err := tc.nf.GetDevice(tc.node, tc.netDevClass, tc.provider)
-				common.CmpErr(t, tc.expErr, err)
+				test.CmpErr(t, tc.expErr, err)
 				if tc.expErr != nil {
 					return
 				}
@@ -717,7 +718,7 @@ func TestAgent_NUMAFabric_Find(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			result, err := tc.nf.Find(tc.name)
 
-			common.CmpErr(t, tc.expErr, err)
+			test.CmpErr(t, tc.expErr, err)
 			if diff := cmp.Diff(tc.expResult, result, fiCmpOpt); diff != "" {
 				t.Fatalf("-want, +got:\n%s", diff)
 			}
@@ -861,7 +862,7 @@ func TestAgent_NUMAFabricFromScan(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
-			defer common.ShowBufferOnFailure(t, buf)
+			defer test.ShowBufferOnFailure(t, buf)
 
 			result := NUMAFabricFromScan(context.TODO(), log, tc.input)
 
@@ -959,7 +960,7 @@ func TestAgent_NUMAFabricFromConfig(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
-			defer common.ShowBufferOnFailure(t, buf)
+			defer test.ShowBufferOnFailure(t, buf)
 
 			result := NUMAFabricFromConfig(log, tc.input)
 
@@ -1043,7 +1044,7 @@ func TestAgent_NUMAFabric_validateDevice(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
-			defer common.ShowBufferOnFailure(t, buf)
+			defer test.ShowBufferOnFailure(t, buf)
 
 			nf := newNUMAFabric(log)
 			nf.getAddrInterface = tc.getAddrInterface
@@ -1052,7 +1053,7 @@ func TestAgent_NUMAFabric_validateDevice(t *testing.T) {
 				Name: "not_real",
 			})
 
-			common.CmpErr(t, tc.expErr, err)
+			test.CmpErr(t, tc.expErr, err)
 		})
 	}
 }

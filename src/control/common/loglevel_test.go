@@ -9,8 +9,10 @@ package common
 import (
 	"testing"
 
-	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/pkg/errors"
+
+	. "github.com/daos-stack/daos/src/control/common/test"
+	"github.com/daos-stack/daos/src/control/logging"
 )
 
 func TestCommon_ControlLogLevel_String(t *testing.T) {
