@@ -23,6 +23,7 @@ import (
 	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	sharedpb "github.com/daos-stack/daos/src/control/common/proto/shared"
+	"github.com/daos-stack/daos/src/control/common/test"
 	"github.com/daos-stack/daos/src/control/drpc"
 	"github.com/daos-stack/daos/src/control/events"
 	"github.com/daos-stack/daos/src/control/logging"
@@ -39,7 +40,7 @@ var (
 	msStopped    = stateString(system.MemberStateStopped)
 	msErrored    = stateString(system.MemberStateErrored)
 
-	defRankCmpOpts = append(common.DefaultCmpOpts(),
+	defRankCmpOpts = append(test.DefaultCmpOpts(),
 		protocmp.IgnoreFields(&sharedpb.RankResult{}, "msg"),
 	)
 )
@@ -55,7 +56,7 @@ func mockEvtEngineDied(t *testing.T) *events.RASEvent {
 func checkUnorderedRankResults(t *testing.T, expResults, gotResults []*sharedpb.RankResult) {
 	t.Helper()
 
-	common.AssertEqual(t, len(gotResults), len(expResults), "number of rank results")
+	test.AssertEqual(t, len(gotResults), len(expResults), "number of rank results")
 	for _, exp := range expResults {
 		rank := exp.Rank
 		match := false
@@ -176,7 +177,7 @@ func TestServer_CtlSvc_PrepShutdownRanks(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
-			defer common.ShowBufferOnFailure(t, buf)
+			defer test.ShowBufferOnFailure(t, buf)
 
 			cfg := config.DefaultServer().WithEngines(
 				engine.MockConfig().WithTargetCount(1),
@@ -231,7 +232,7 @@ func TestServer_CtlSvc_PrepShutdownRanks(t *testing.T) {
 			}
 
 			gotResp, gotErr := svc.PrepShutdownRanks(ctx, tc.req)
-			common.CmpErr(t, tc.expErr, gotErr)
+			test.CmpErr(t, tc.expErr, gotErr)
 			if tc.expErr != nil {
 				return
 			}
@@ -323,7 +324,7 @@ func TestServer_CtlSvc_StopRanks(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
-			defer common.ShowBufferOnFailure(t, buf)
+			defer test.ShowBufferOnFailure(t, buf)
 
 			var signalsSent sync.Map
 
@@ -390,7 +391,7 @@ func TestServer_CtlSvc_StopRanks(t *testing.T) {
 			}
 
 			gotResp, gotErr := svc.StopRanks(ctx, tc.req)
-			common.CmpErr(t, tc.expErr, gotErr)
+			test.CmpErr(t, tc.expErr, gotErr)
 			if tc.expErr != nil {
 				return
 			}
@@ -398,7 +399,7 @@ func TestServer_CtlSvc_StopRanks(t *testing.T) {
 			if tc.timeout != time.Duration(0) {
 				<-ctx.Done()
 			}
-			common.AssertEqual(t, 0, len(dispatched.rx), "number of events published")
+			test.AssertEqual(t, 0, len(dispatched.rx), "number of events published")
 
 			if diff := cmp.Diff(tc.expResults, gotResp.Results, defRankCmpOpts...); diff != "" {
 				t.Fatalf("unexpected response (-want, +got)\n%s\n", diff)
@@ -409,7 +410,7 @@ func TestServer_CtlSvc_StopRanks(t *testing.T) {
 				numSignalsSent++
 				return true
 			})
-			common.AssertEqual(t, len(tc.expSignalsSent), numSignalsSent, "number of signals sent")
+			test.AssertEqual(t, len(tc.expSignalsSent), numSignalsSent, "number of signals sent")
 
 			for expKey, expValue := range tc.expSignalsSent {
 				value, found := signalsSent.Load(expKey)
@@ -551,7 +552,7 @@ func TestServer_CtlSvc_PingRanks(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
-			defer common.ShowBufferOnFailure(t, buf)
+			defer test.ShowBufferOnFailure(t, buf)
 
 			cfg := config.DefaultServer().WithEngines(
 				engine.MockConfig().WithTargetCount(1),
@@ -607,7 +608,7 @@ func TestServer_CtlSvc_PingRanks(t *testing.T) {
 			}
 
 			gotResp, gotErr := svc.PingRanks(ctx, tc.req)
-			common.CmpErr(t, tc.expErr, gotErr)
+			test.CmpErr(t, tc.expErr, gotErr)
 			if tc.expErr != nil {
 				return
 			}
@@ -664,7 +665,7 @@ func TestServer_CtlSvc_ResetFormatRanks(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
-			defer common.ShowBufferOnFailure(t, buf)
+			defer test.ShowBufferOnFailure(t, buf)
 
 			if tc.engineCount == 0 {
 				tc.engineCount = maxEngines
@@ -703,7 +704,7 @@ func TestServer_CtlSvc_ResetFormatRanks(t *testing.T) {
 
 				engineCfg := cfg.Engines[i]
 
-				testDir, cleanup := common.CreateTestDir(t)
+				testDir, cleanup := test.CreateTestDir(t)
 				defer cleanup()
 				engineCfg.Storage.Tiers[0].Scm.MountPoint = testDir
 
@@ -726,7 +727,7 @@ func TestServer_CtlSvc_ResetFormatRanks(t *testing.T) {
 				t.Logf("scm dir: %s", cfg.Scm.MountPoint)
 				superblock := &Superblock{
 					Version: superblockVersion,
-					UUID:    common.MockUUID(),
+					UUID:    test.MockUUID(),
 					System:  "test",
 				}
 				superblock.Rank = new(system.Rank)
@@ -744,7 +745,7 @@ func TestServer_CtlSvc_ResetFormatRanks(t *testing.T) {
 			}
 
 			gotResp, gotErr := svc.ResetFormatRanks(ctx, tc.req)
-			common.CmpErr(t, tc.expErr, gotErr)
+			test.CmpErr(t, tc.expErr, gotErr)
 			if tc.expErr != nil {
 				return
 			}
@@ -811,7 +812,7 @@ func TestServer_CtlSvc_StartRanks(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
-			defer common.ShowBufferOnFailure(t, buf)
+			defer test.ShowBufferOnFailure(t, buf)
 
 			if tc.engineCount == 0 {
 				tc.engineCount = maxEngines
@@ -870,7 +871,7 @@ func TestServer_CtlSvc_StartRanks(t *testing.T) {
 			}
 
 			gotResp, gotErr := svc.StartRanks(ctx, tc.req)
-			common.CmpErr(t, tc.expErr, gotErr)
+			test.CmpErr(t, tc.expErr, gotErr)
 			if tc.expErr != nil {
 				return
 			}
@@ -956,7 +957,7 @@ func TestServer_CtlSvc_SetEngineLogMasks(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
-			defer common.ShowBufferOnFailure(t, buf)
+			defer test.ShowBufferOnFailure(t, buf)
 
 			cfg := config.DefaultServer().WithEngines(
 				engine.MockConfig().WithTargetCount(1).WithLogMask(tc.cfgLogMask),
@@ -1009,7 +1010,7 @@ func TestServer_CtlSvc_SetEngineLogMasks(t *testing.T) {
 			}
 
 			gotResp, gotErr := svc.SetEngineLogMasks(ctx, tc.req)
-			common.CmpErr(t, tc.expErr, gotErr)
+			test.CmpErr(t, tc.expErr, gotErr)
 			if tc.expErr != nil {
 				return
 			}

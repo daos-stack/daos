@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2021 Intel Corporation.
+// (C) Copyright 2019-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -9,7 +9,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/daos-stack/daos/src/control/common"
+	"github.com/daos-stack/daos/src/control/common/test"
 	"github.com/daos-stack/daos/src/control/drpc"
 )
 
@@ -29,7 +29,7 @@ func TestDrpc_LabelIsValid(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			gotResult := drpc.LabelIsValid(tc.label)
-			common.AssertEqual(t, tc.expResult, gotResult, "unexpected label check result")
+			test.AssertEqual(t, tc.expResult, gotResult, "unexpected label check result")
 		})
 	}
 }
