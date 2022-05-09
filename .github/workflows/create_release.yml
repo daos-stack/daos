@@ -1,6 +1,6 @@
 name: Create Release
 # This workflow is triggered on pushes to the master branch of the repository.
-on:  # yamllint disable-line rule:truthy
+on:
   push:
     paths:
       - TAG

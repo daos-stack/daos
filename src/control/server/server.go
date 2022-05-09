@@ -36,16 +36,35 @@ import (
 	"github.com/daos-stack/daos/src/control/system/raft"
 )
 
-func processConfig(log logging.Logger, cfg *config.Server, fis *hardware.FabricInterfaceSet) (*system.FaultDomain, error) {
+func genFiAffFn(fis *hardware.FabricInterfaceSet) config.EngineAffinityFn {
+	return func(l logging.Logger, e *engine.Config) (uint, error) {
+		fi, err := fis.GetInterfaceOnNetDevice(e.Fabric.Interface, e.Fabric.Provider)
+		if err != nil {
+			return 0, err
+		}
+		return fi.NUMANode, nil
+	}
+}
+
+func processConfig(log logging.Logger, cfg *config.Server, fis *hardware.FabricInterfaceSet) error {
 	processFabricProvider(cfg)
 
 	hpi, err := common.GetHugePageInfo()
 	if err != nil {
-		return nil, errors.Wrapf(err, "retrieve hugepage info")
+		return errors.Wrapf(err, "retrieve hugepage info")
 	}
 
-	if err := cfg.Validate(log, hpi.PageSizeKb, fis); err != nil {
-		return nil, errors.Wrapf(err, "%s: validation failed", cfg.Path)
+	affinitySources := []config.EngineAffinityFn{
+		// TODO: Add pmem as the primary source of NUMA affinity, if available,
+		// then fall back to other sources as necessary.
+		genFiAffFn(fis),
+	}
+	if err := cfg.SetEngineAffinities(log, affinitySources...); err != nil {
+		return errors.Wrap(err, "failed to set engine affinities")
+	}
+
+	if err := cfg.Validate(log, hpi.PageSizeKb); err != nil {
+		return errors.Wrapf(err, "%s: validation failed", cfg.Path)
 	}
 
 	lookupNetIF := func(name string) (netInterface, error) {
@@ -58,27 +77,21 @@ func processConfig(log logging.Logger, cfg *config.Server, fis *hardware.FabricI
 
 	for _, ec := range cfg.Engines {
 		if err := checkFabricInterface(ec.Fabric.Interface, lookupNetIF); err != nil {
-			return nil, err
+			return err
 		}
 
 		if err := updateFabricEnvars(log, ec, fis); err != nil {
-			return nil, errors.Wrap(err, "update engine fabric envars")
+			return errors.Wrap(err, "update engine fabric envars")
 		}
 	}
 
 	cfg.SaveActiveConfig(log)
 
 	if err := setDaosHelperEnvs(cfg, os.Setenv); err != nil {
-		return nil, err
+		return err
 	}
 
-	faultDomain, err := getFaultDomain(cfg)
-	if err != nil {
-		return nil, err
-	}
-	log.Debugf("fault domain: %s", faultDomain.String())
-
-	return faultDomain, nil
+	return nil
 }
 
 func processFabricProvider(cfg *config.Server) {
@@ -437,6 +450,28 @@ func (srv *server) start(ctx context.Context, shutdown context.CancelFunc) error
 		"%s harness exited", build.ControlPlaneName)
 }
 
+func waitFabricReady(ctx context.Context, log logging.Logger, cfg *config.Server) error {
+	ifaces := make([]string, 0, len(cfg.Engines))
+	for _, eng := range cfg.Engines {
+		ifaces = append(ifaces, eng.Fabric.Interface)
+	}
+
+	// Skip wait if no fabric interfaces specified in config.
+	if len(ifaces) == 0 {
+		return nil
+	}
+
+	if err := hardware.WaitFabricReady(ctx, log, hardware.WaitFabricReadyParams{
+		StateProvider:  hwprov.DefaultNetDevStateProvider(log),
+		FabricIfaces:   ifaces,
+		IterationSleep: time.Second,
+	}); err != nil {
+		return err
+	}
+
+	return nil
+}
+
 // Start is the entry point for a daos_server instance.
 func Start(log logging.Logger, cfg *config.Server) error {
 	// Create the root context here. All contexts should inherit from this one so
@@ -450,16 +485,27 @@ func Start(log logging.Logger, cfg *config.Server) error {
 	}
 	defer hwprovFini()
 
+	if err := waitFabricReady(ctx, log, cfg); err != nil {
+		return err
+	}
+
 	scanner := hwprov.DefaultFabricScanner(log)
+
 	fiSet, err := scanner.Scan(ctx)
 	if err != nil {
 		return errors.Wrap(err, "scan fabric")
 	}
 
-	faultDomain, err := processConfig(log, cfg, fiSet)
+	err = processConfig(log, cfg, fiSet)
 	if err != nil {
 		return err
 	}
+
+	faultDomain, err := getFaultDomain(cfg)
+	if err != nil {
+		return err
+	}
+	log.Debugf("fault domain: %s", faultDomain.String())
 
 	srv, err := newServer(log, cfg, faultDomain)
 	if err != nil {
