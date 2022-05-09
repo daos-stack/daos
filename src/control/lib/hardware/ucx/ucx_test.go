@@ -15,6 +15,7 @@ import (
 	"github.com/google/go-cmp/cmp"
 
 	"github.com/daos-stack/daos/src/control/common"
+	"github.com/daos-stack/daos/src/control/common/test"
 	"github.com/daos-stack/daos/src/control/logging"
 )
 
@@ -29,7 +30,7 @@ func TestUCX_Provider_GetFabricInterfaces_Integrated(t *testing.T) {
 	// error on the normal happy path.
 
 	log, buf := logging.NewTestLogger(t.Name())
-	defer common.ShowBufferOnFailure(t, buf)
+	defer test.ShowBufferOnFailure(t, buf)
 
 	p := NewProvider(log)
 
@@ -68,7 +69,7 @@ func TestUCX_Provider_getProviderSet(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
-			defer common.ShowBufferOnFailure(t, buf)
+			defer test.ShowBufferOnFailure(t, buf)
 
 			p := NewProvider(log)
 
@@ -124,7 +125,7 @@ func TestUCX_transportToDAOSProvider(t *testing.T) {
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
-			common.AssertEqual(t, tc.exp, transportToDAOSProvider(tc.in), "")
+			test.AssertEqual(t, tc.exp, transportToDAOSProvider(tc.in), "")
 		})
 	}
 }
