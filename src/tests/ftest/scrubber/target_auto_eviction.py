@@ -6,7 +6,6 @@
 """
 import time
 from scrubber_test_base import TestWithScrubber
-from apricot import skipForTicket
 
 
 class TestWithScrubberTargetEviction(TestWithScrubber):
@@ -17,7 +16,6 @@ class TestWithScrubberTargetEviction(TestWithScrubber):
 
     :avocado: recursive
     """
-    @skipForTicket("DAOS-10377")
     def test_scrubber_ssd_auto_eviction(self):
         """JIRA ID: DAOS-7300
 
