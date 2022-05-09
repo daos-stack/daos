@@ -101,15 +101,14 @@ class CriticalIntegration(TestWithServers):
         self.log.info("rank_list: %s", rank_list)
         half_num_ranks = len(rank_list)//2
         # divide total ranks list into two halves to save time during system stop
-        sub_rank_list = [rank_list[x:x+half_num_ranks] for x in range(0, len(rank_list),
-                                                                      half_num_ranks)]
+        sub_rank_list = [rank_list[:half_num_ranks], rank_list[half_num_ranks:]]
         self.log.info("sub_rank_list: %s", sub_rank_list)
 
         # stop ranks, verify they stopped successfully and restart the stopped ranks
         since = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         for sub_list in sub_rank_list:
             ranks_to_stop = ",".join([str(rank) for rank in sub_list])
-            self.log.info("Ranks to stop: {}", ranks_to_stop)
+            self.log.info("Ranks to stop: %s", ranks_to_stop)
             dmg.system_stop(ranks=ranks_to_stop)
             for rank in sub_list:
                 if self.server_managers[0].check_rank_state(rank, "stopped", 5):
@@ -123,11 +122,13 @@ class CriticalIntegration(TestWithServers):
         # gather journalctl logs for each server host, verify system stop event was sent to logs
         results = get_journalctl(hosts=self.hostlist_servers, since=since,
                                  until=until, journalctl_type="daos_server")
-        for count, _ in enumerate(self.hostlist_servers):
-            occurence = results[count]["data"].count("cleaning engine")
-            if occurence != 2:
+        for count, host in enumerate(self.hostlist_servers):
+            occurrence = results[count]["data"].count("cleaning engine")
+            if occurrence != 2:
+                self.log.info("Occurrence %s for rank stop not as expected for host %s",
+                              occurrence, host)
                 msg = "Rank shut down message not found in journalctl! Output = {}".format(
-                    results)
+                    results[count]["data"])
                 self.fail(msg)
 
         dmg.storage_scan()
