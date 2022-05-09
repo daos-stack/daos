@@ -1,8 +1,8 @@
 """Build test suite"""
 import sys
-
 import subprocess
 import daos_build
+import compiler_setup
 
 test_cmocka_skip = """
 #include <stdarg.h>
@@ -70,10 +70,15 @@ def configure_cmocka(nenv):
 #
 def scons():
     """Execute build"""
-    Import('denv')
+    Import('denv', 'base_env')
 
     libraries = ['daos', 'dfs', 'daos_tests', 'gurt', 'cart']
     libraries += ['uuid', 'cmocka', 'pthread', 'isal', 'dpar']
+
+    dfuse_env = base_env.Clone()
+    compiler_setup.base_setup(dfuse_env)
+    dfusetest = daos_build.program(dfuse_env, File("dfuse_test.c"), LIBS='cmocka')
+    denv.Install('$PREFIX/bin/', dfusetest)
 
     denv.AppendUnique(CPPPATH=[Dir('../../client/dfs').srcnode()])
     denv.AppendUnique(CPPPATH=[Dir('../../mgmt').srcnode()])

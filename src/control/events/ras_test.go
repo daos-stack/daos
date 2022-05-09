@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2021 Intel Corporation.
+// (C) Copyright 2020-2022 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -32,12 +32,12 @@ import (
 	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/pkg/errors"
 
-	"github.com/daos-stack/daos/src/control/common"
 	sharedpb "github.com/daos-stack/daos/src/control/common/proto/shared"
+	"github.com/daos-stack/daos/src/control/common/test"
 	"github.com/daos-stack/daos/src/control/logging"
 )
 
-var defEvtCmpOpts = append(common.DefaultCmpOpts(),
+var defEvtCmpOpts = append(test.DefaultCmpOpts(),
 	cmpopts.IgnoreUnexported(RASEvent{}),
 )
 
@@ -112,7 +112,7 @@ func TestEvents_HandleClusterEvent(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
-			defer common.ShowBufferOnFailure(t, buf)
+			defer test.ShowBufferOnFailure(t, buf)
 
 			ctx := context.Background()
 
@@ -124,7 +124,7 @@ func TestEvents_HandleClusterEvent(t *testing.T) {
 			ps.Subscribe(tc.subType, tly1)
 
 			resp, err := ps.HandleClusterEvent(tc.req, tc.fwded)
-			common.CmpErr(t, tc.expErr, err)
+			test.CmpErr(t, tc.expErr, err)
 			if err != nil {
 				return
 			}
@@ -134,7 +134,7 @@ func TestEvents_HandleClusterEvent(t *testing.T) {
 			case <-tly1.finished:
 			}
 
-			common.AssertStringsEqual(t, tc.expEvtTypes, tly1.getRx(),
+			test.AssertStringsEqual(t, tc.expEvtTypes, tly1.getRx(),
 				"unexpected received events")
 
 			if diff := cmp.Diff(tc.expResp, resp, defEvtCmpOpts...); diff != "" {
