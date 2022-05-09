@@ -31,6 +31,8 @@
 #include <raft.h>
 #include <daos_srv/daos_engine.h>
 #include <daos_srv/vos.h>
+#include <daos_srv/object.h>
+#include <daos/object.h>
 #include "rdb_internal.h"
 #include "rdb_layout.h"
 
@@ -378,11 +380,11 @@ static int
 rdb_raft_pack_chunk(daos_handle_t lc, struct rdb_raft_is *is, d_iov_t *kds,
 		    d_iov_t *data, struct rdb_anchor *anchor)
 {
-	d_sg_list_t		sgl;
-	struct dss_enum_arg	arg = { 0 };
-	struct vos_iter_anchors	anchors = { 0 };
-	vos_iter_param_t	param = { 0 };
-	int			rc;
+	d_sg_list_t			sgl;
+	struct ds_obj_enum_arg		arg = { 0 };
+	struct vos_iter_anchors		anchors = { 0 };
+	vos_iter_param_t		param = { 0 };
+	int				rc;
 
 	/*
 	 * Set up the iteration for everything in the log container at
@@ -409,13 +411,13 @@ rdb_raft_pack_chunk(daos_handle_t lc, struct rdb_raft_is *is, d_iov_t *kds,
 	arg.inline_thres = 1 * 1024 * 1024;
 
 	/* Enumerate from the object level. */
-	rc = dss_enum_pack(&param, VOS_ITER_OBJ, true, &anchors, &arg,
-			   vos_iterate, NULL /* dth */);
+	rc = ds_obj_enum_pack(&param, VOS_ITER_OBJ, true, &anchors, &arg,
+			      vos_iterate, NULL /* dth */);
 	if (rc < 0)
 		return rc;
 
 	/*
-	 * Report the new anchor. When rc == 0, dss_enum_pack doesn't guarantee
+	 * Report the new anchor. When rc == 0, dc_obj_enum_pack doesn't guarantee
 	 * all the anchors to be EOF.
 	 */
 	if (rc == 0)
@@ -425,7 +427,7 @@ rdb_raft_pack_chunk(daos_handle_t lc, struct rdb_raft_is *is, d_iov_t *kds,
 				       &anchors.ia_dkey, &anchors.ia_akey,
 				       &anchors.ia_ev, &anchors.ia_sv);
 
-	/* Report the buffer lengths. data.iov_len is set by dss_enum_pack. */
+	/* Report the buffer lengths. data.iov_len is set by ds_obj_enum_pack. */
 	kds->iov_len = sizeof(*arg.kds) * arg.kds_len;
 
 	return 0;
@@ -690,7 +692,7 @@ struct rdb_raft_unpack_arg {
 };
 
 static int
-rdb_raft_exec_unpack_io(struct dss_enum_unpack_io *io, void *arg)
+rdb_raft_exec_unpack_io(struct dc_obj_enum_unpack_io *io, void *arg)
 {
 	struct rdb_raft_unpack_arg *unpack_arg = arg;
 
@@ -741,10 +743,10 @@ rdb_raft_unpack_chunk(daos_handle_t slc, d_iov_t *kds_iov, d_iov_t *data,
 	unpack_arg.eph = index;
 	unpack_arg.slc = slc;
 
-	return dss_enum_unpack(invalid_oid, kds_iov->iov_buf,
-			       kds_iov->iov_len / sizeof(daos_key_desc_t),
-			       &sgl, NULL, rdb_raft_exec_unpack_io,
-			       &unpack_arg);
+	return dc_obj_enum_unpack(invalid_oid, kds_iov->iov_buf,
+				  kds_iov->iov_len / sizeof(daos_key_desc_t),
+				  &sgl, NULL, rdb_raft_exec_unpack_io,
+				  &unpack_arg);
 }
 
 static int

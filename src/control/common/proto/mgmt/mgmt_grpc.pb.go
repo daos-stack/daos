@@ -87,6 +87,10 @@ type MgmtSvcClient interface {
 	PoolUpgrade(ctx context.Context, in *PoolUpgradeReq, opts ...grpc.CallOption) (*PoolUpgradeResp, error)
 	// FaultInjectReport injects a checker report.
 	FaultInjectReport(ctx context.Context, in *chk.CheckReport, opts ...grpc.CallOption) (*DaosResp, error)
+	// Set a system attribute or attributes.
+	SystemSetAttr(ctx context.Context, in *SystemSetAttrReq, opts ...grpc.CallOption) (*DaosResp, error)
+	// Get a system attribute or attributes.
+	SystemGetAttr(ctx context.Context, in *SystemGetAttrReq, opts ...grpc.CallOption) (*SystemGetAttrResp, error)
 }
 
 type mgmtSvcClient struct {
@@ -394,6 +398,24 @@ func (c *mgmtSvcClient) FaultInjectReport(ctx context.Context, in *chk.CheckRepo
 	return out, nil
 }
 
+func (c *mgmtSvcClient) SystemSetAttr(ctx context.Context, in *SystemSetAttrReq, opts ...grpc.CallOption) (*DaosResp, error) {
+	out := new(DaosResp)
+	err := c.cc.Invoke(ctx, "/mgmt.MgmtSvc/SystemSetAttr", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *mgmtSvcClient) SystemGetAttr(ctx context.Context, in *SystemGetAttrReq, opts ...grpc.CallOption) (*SystemGetAttrResp, error) {
+	out := new(SystemGetAttrResp)
+	err := c.cc.Invoke(ctx, "/mgmt.MgmtSvc/SystemGetAttr", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // MgmtSvcServer is the server API for MgmtSvc service.
 // All implementations must embed UnimplementedMgmtSvcServer
 // for forward compatibility
@@ -465,6 +487,10 @@ type MgmtSvcServer interface {
 	PoolUpgrade(context.Context, *PoolUpgradeReq) (*PoolUpgradeResp, error)
 	// FaultInjectReport injects a checker report.
 	FaultInjectReport(context.Context, *chk.CheckReport) (*DaosResp, error)
+	// Set a system attribute or attributes.
+	SystemSetAttr(context.Context, *SystemSetAttrReq) (*DaosResp, error)
+	// Get a system attribute or attributes.
+	SystemGetAttr(context.Context, *SystemGetAttrReq) (*SystemGetAttrResp, error)
 	mustEmbedUnimplementedMgmtSvcServer()
 }
 
@@ -570,6 +596,12 @@ func (UnimplementedMgmtSvcServer) PoolUpgrade(context.Context, *PoolUpgradeReq) 
 }
 func (UnimplementedMgmtSvcServer) FaultInjectReport(context.Context, *chk.CheckReport) (*DaosResp, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method FaultInjectReport not implemented")
+}
+func (UnimplementedMgmtSvcServer) SystemSetAttr(context.Context, *SystemSetAttrReq) (*DaosResp, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method SystemSetAttr not implemented")
+}
+func (UnimplementedMgmtSvcServer) SystemGetAttr(context.Context, *SystemGetAttrReq) (*SystemGetAttrResp, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method SystemGetAttr not implemented")
 }
 func (UnimplementedMgmtSvcServer) mustEmbedUnimplementedMgmtSvcServer() {}
 
@@ -1178,6 +1210,42 @@ func _MgmtSvc_FaultInjectReport_Handler(srv interface{}, ctx context.Context, de
 	return interceptor(ctx, in, info, handler)
 }
 
+func _MgmtSvc_SystemSetAttr_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SystemSetAttrReq)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(MgmtSvcServer).SystemSetAttr(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/mgmt.MgmtSvc/SystemSetAttr",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(MgmtSvcServer).SystemSetAttr(ctx, req.(*SystemSetAttrReq))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _MgmtSvc_SystemGetAttr_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SystemGetAttrReq)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(MgmtSvcServer).SystemGetAttr(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/mgmt.MgmtSvc/SystemGetAttr",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(MgmtSvcServer).SystemGetAttr(ctx, req.(*SystemGetAttrReq))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // MgmtSvc_ServiceDesc is the grpc.ServiceDesc for MgmtSvc service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -1316,6 +1384,14 @@ var MgmtSvc_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "FaultInjectReport",
 			Handler:    _MgmtSvc_FaultInjectReport_Handler,
+		},
+		{
+			MethodName: "SystemSetAttr",
+			Handler:    _MgmtSvc_SystemSetAttr_Handler,
+		},
+		{
+			MethodName: "SystemGetAttr",
+			Handler:    _MgmtSvc_SystemGetAttr_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

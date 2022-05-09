@@ -50,9 +50,13 @@ __set_fake_inputs(char *inputs[])
 static char *
 fake_get_input(char *buf, uint32_t buf_len)
 {
-	char *input = fake_get_input_inputs[fake_get_input_inputs_idx++];
+	char *input;
 
-	strncpy(buf, input, min(strlen(input) + 1, buf_len));
+	assert_true(fake_get_input_inputs_idx < ARRAY_SIZE(fake_get_input_inputs));
+	input = fake_get_input_inputs[fake_get_input_inputs_idx++];
+	assert_true(strlen(input) < buf_len);
+
+	strcpy(buf, input);
 	fake_get_input_called++;
 
 	return input;
@@ -61,7 +65,6 @@ fake_get_input(char *buf, uint32_t buf_len)
 static int
 __test_run_main(char *argv[])
 {
-	struct argv_parsed	parse_args = {0};
 	uint32_t		argc = 0;
 	struct ddb_io_ft ft = {
 		.ddb_print_message = fake_print_message,
@@ -79,9 +82,6 @@ __test_run_main(char *argv[])
 	}
 	if (g_verbose)
 		printf("\n");
-
-	parse_args.ap_argv = argv;
-	parse_args.ap_argc = argc;
 
 	return ddb_main(&ft, argc, argv);
 }
@@ -102,7 +102,7 @@ __assert_main_interactive_with_input(char *inputs[])
  */
 
 static void
-test_interactive_mode(void **state)
+interactive_mode_tests(void **state)
 {
 	assert_main_interactive_with_input("quit");
 	assert_int_equal(1, fake_get_input_called);
@@ -121,14 +121,13 @@ test_interactive_mode(void **state)
  *   - pool shard file is passed as argument
  */
 
-#define TEST(dsc, test) { dsc, test, NULL, NULL }
-
-static const struct CMUnitTest tests[] = {
-	TEST("Interactive mode asks for input until 'quit'", test_interactive_mode),
-};
-
+#define TEST(x) { #x, x, NULL, NULL }
 int
 ddb_main_tests()
 {
+	static const struct CMUnitTest tests[] = {
+		TEST(interactive_mode_tests),
+	};
+
 	return cmocka_run_group_tests_name("DDB CLI tests", tests, NULL, NULL);
 }

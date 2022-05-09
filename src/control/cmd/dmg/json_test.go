@@ -111,6 +111,10 @@ func TestDmg_JsonOutput(t *testing.T) {
 				testArgs = append(testArgs, "hostname")
 			case "check repair":
 				testArgs = append(testArgs, "1", "2")
+			case "system set-attr":
+				testArgs = append(testArgs, "foo:bar")
+			case "system del-attr":
+				testArgs = append(testArgs, "foo")
 			}
 
 			// replace os.Stdout so that we can verify the generated output

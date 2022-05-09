@@ -24,9 +24,19 @@ interactive shell mode. Key features that will be supported are:
 ## Current State
 
 ddb is very much in development. Currently the interactive mode and the '-R'
-option with a single command work relatively well. The only commands that are
-currently implemented are quit (for interactive mode) and 'ls' to list the
-branches of a vos file (container, objects, ...).
+option with a single command work relatively well.
+
+Status of commands:
+- quit - done for interactive mode. Not applicable for other modes
+- ls - done
+- dump_value - done
+- dump_ilog - done, but not tested real well besides simple happy paths.
+- dump_superblock - done
+- dump_dtx - done
+- rm - done
+- load - done
+- rm_ilog - not started
+- rm_dtx - not started
 
 ## Design
 
@@ -42,10 +52,10 @@ The primary layers for the application are:
 
 #### Main/Entry Point
 
-The main function which initializes daos and vos and accepts program arguments.
-It then passes those arguments to the ddb_main function which will then parse
-the arguments and options into appropriate fields within the main program
-structure.
+The main function in ddb_entry.c initializes daos and vos and accepts program
+arguments. It then passes those arguments without any parsing to the ddb_main
+function in ddb_main.c which will then parse the arguments and options into
+appropriate fields within the main program structure.
 
 #### ddb_main
 
@@ -53,15 +63,16 @@ A unit testable "main" function. It accepts the traditional argc/argv parameters
 as well as a function table to input and output functions. Unit testing is then
 able to fake the input/output to verify that command line arguments, or
 arguments in the interactive mode, run the program in the correct mode and
-execute the correct sub command. A function table is defined for the actual sub
-commands so that these can be faked out as well and the cli can be unit tested
-in isolation.
+execute the correct sub command. For the most part, ddb_main() manages the
+shell, determining if a command should be run and then the program quit (-R),
+run a sequence of commands from a file (-f), or run in interactive mode.
 
 #### ddb commands (sub commands)
 
 The implementation of the individual commands that a user can pass in. It
-receives the command options/arguments as a well defined structure (fields of
-which are set by ddb).
+receives a command's options/arguments as a well defined structure (fields of
+which are set by ddb). It interacts with a ddb/vos adapter layer for using the
+VOS api.
 
 ### ddb vos (dv_)
 

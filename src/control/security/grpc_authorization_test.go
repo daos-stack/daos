@@ -97,6 +97,8 @@ func TestSecurity_ComponentHasAccess(t *testing.T) {
 		"/mgmt.MgmtSvc/SystemCheckRepair":      {ComponentAdmin},
 		"/mgmt.MgmtSvc/FaultInjectReport":      {ComponentAdmin},
 		"/mgmt.MgmtSvc/PoolUpgrade":            {ComponentAdmin},
+		"/mgmt.MgmtSvc/SystemSetAttr":          {ComponentAdmin},
+		"/mgmt.MgmtSvc/SystemGetAttr":          {ComponentAdmin},
 		"/RaftTransport/AppendEntries":         {ComponentServer},
 		"/RaftTransport/AppendEntriesPipeline": {ComponentServer},
 		"/RaftTransport/RequestVote":           {ComponentServer},

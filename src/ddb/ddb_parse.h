@@ -28,10 +28,11 @@ int ddb_str2argv_create(const char *buf, struct argv_parsed *parse_args);
 void ddb_str2argv_free(struct argv_parsed *parse_args);
 
 /* Parse argc/argv into the program arguments/options */
-int ddb_parse_program_args(uint32_t argc, char **argv, struct program_args *pa);
+int
+ddb_parse_program_args(struct ddb_ctx *ctx, uint32_t argc, char **argv, struct program_args *pa);
 
 /* Parse a string into the parts of a vos tree path (cont, object, ...) */
-int ddb_vtp_init(const char *path, struct dv_tree_path_builder *vt_path);
+int ddb_vtp_init(daos_handle_t poh, const char *path, struct dv_tree_path_builder *vt_path);
 void ddb_vtp_fini(struct dv_tree_path_builder *vt_path);
 
 #define DDB_IDX_UNSET ((uint32_t)-1)
