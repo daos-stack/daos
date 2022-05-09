@@ -1,3 +1,9 @@
+daos (2.1.102-2) unstable; urgency=medium
+  [ Phillip Henderson ]
+  * Remove doas-*-tests-openmpi dependencies from daos-tests
+
+ -- Phillip Henderson <phillip.henderson@intel.com>  Mon, 9 May 2022 17:48:00 -0400
+
 daos (2.1.102-1) unstable; urgency=medium
   [ Johann Lombardi ]
   * Bump version to 2.1.102
