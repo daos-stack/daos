@@ -69,8 +69,8 @@ func DefaultFabricScanner(log logging.Logger) *hardware.FabricScanner {
 	return fs
 }
 
-// DefaultFabricReadyChecker gets the default provider for fabric readiness checking.
-func DefaultFabricReadyChecker(log logging.Logger) hardware.FabricReadyChecker {
+// DefaultNetDevStateProvider gets the default provider for getting the fabric interface state.
+func DefaultNetDevStateProvider(log logging.Logger) hardware.NetDevStateProvider {
 	return sysfs.NewProvider(log)
 }
 
