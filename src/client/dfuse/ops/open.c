@@ -40,6 +40,13 @@ dfuse_cb_open(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
 		fi->flags |= O_RDWR;
 	}
 
+	if ((fi->flags & FMODE_EXEC) == FMODE_EXEC) {
+		if (atomic_fetch_add_relaxed(&oh->doh_exec_calls, 1) == 0) {
+			/* TODO: Drop this on error */
+			atomic_fetch_add_relaxed(&ie->ie_exec_count, 1);
+		}
+	}
+
 	/** duplicate the file handle for the fuse handle */
 	rc = dfs_dup(ie->ie_dfs->dfs_ns, ie->ie_obj, fi->flags, &oh->doh_obj);
 	if (rc)
@@ -99,6 +106,10 @@ dfuse_cb_release(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
 	 * but the inode only tracks number of open handles with non-zero ioctl counts
 	 */
 
+#if 0
+	 if (atomic_load_relaxed(&oh->doh_exec_calls) != 0)
+		atomic_fetch_sub_relaxed(&oh->doh_ie->ie_exec_count, 1);
+#endif
 	if (atomic_load_relaxed(&oh->doh_il_calls) != 0)
 		atomic_fetch_sub_relaxed(&oh->doh_ie->ie_il_count, 1);
 	atomic_fetch_sub_relaxed(&oh->doh_ie->ie_open_count, 1);

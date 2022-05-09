@@ -94,6 +94,8 @@ struct dfuse_obj_hdl {
 
 	ATOMIC uint32_t                  doh_il_calls;
 
+	ATOMIC uint32_t                  doh_exec_calls;
+
 	/** True if caching is enabled for this file. */
 	bool				doh_caching;
 
@@ -544,6 +546,8 @@ struct dfuse_inode_entry {
 
 	/* Number of file open file descriptors using IL */
 	ATOMIC uint32_t          ie_il_count;
+
+	ATOMIC uint32_t          ie_exec_count;
 
 	/** file was truncated from 0 to a certain size */
 	bool			ie_truncated;

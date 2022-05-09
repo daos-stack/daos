@@ -314,7 +314,12 @@ void dfuse_cb_ioctl(fuse_req_t req, fuse_ino_t ino, unsigned int cmd, void *arg,
 		D_GOTO(out_err, rc = ENOTSUP);
 	}
 
-	DFUSE_TRA_DEBUG(oh, "ioctl cmd=%#x", cmd);
+	DFUSE_TRA_DEBUG(oh, "ioctl cmd=%#x exec count %d", cmd, oh->doh_ie->ie_exec_count);
+
+	if (atomic_load_relaxed(&oh->doh_ie->ie_exec_count) != 0) {
+		DFUSE_TRA_ERROR(oh, "Not allowing interception for executable");
+		D_GOTO(out_err, rc = ENOTSUP);
+	}
 
 	if (cmd == DFUSE_IOCTL_IL) {
 		if (out_bufsz < sizeof(struct dfuse_il_reply))
