@@ -706,12 +706,13 @@ unlock:
 	D_RWLOCK_UNLOCK(&crt_gdata.cg_rwlock);
 
 out:
+	/*
+	 * We don't need to free port1, iface1 and domain1 as
+	 * they occupy the same original string as port0, iface0 and domain0
+	 */
 	D_FREE(port0);
-	D_FREE(port1);
 	D_FREE(iface0);
-	D_FREE(iface1);
 	D_FREE(domain0);
-	D_FREE(domain1);
 	if (rc != 0) {
 		D_ERROR("failed, "DF_RC"\n", DP_RC(rc));
 		d_fault_inject_fini();
