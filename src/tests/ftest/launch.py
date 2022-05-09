@@ -17,11 +17,11 @@ import json
 import os
 import re
 import socket
-import subprocess  # nosec
+import subprocess #nosec
 import site
 import sys
 import time
-from xml.etree.ElementTree import Element, SubElement, tostring  # nosec
+from xml.etree.ElementTree import Element, SubElement, tostring #nosec
 import yaml
 from defusedxml import minidom
 import defusedxml.ElementTree as ET
@@ -43,7 +43,7 @@ except ImportError:
     from tempfile import mkdtemp
     from shutil import rmtree
 
-    class TemporaryDirectory():
+    class TemporaryDirectory(object):
         # pylint: disable=too-few-public-methods
         """Create a temporary directory.
 

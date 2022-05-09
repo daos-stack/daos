@@ -27,7 +27,7 @@
 
 Name:          daos
 Version:       2.3.100
-Release:       7%{?relval}%{?dist}
+Release:       8%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       BSD-2-Clause-Patent
@@ -244,6 +244,7 @@ Requires: python3-tabulate
 Requires: python3-defusedxml
 %endif
 Requires: fio
+Requires: git
 Requires: dbench
 Requires: lbzip2
 Requires: attr
@@ -553,6 +554,9 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 # No files in a shim package
 
 %changelog
+* Mon, 9 May 2022 Ashley Pittman <ashley.m.pittman@intel.com> 2.3.100-8
+- Extend dfusedaosbuild test to run in different configurations.
+
 * Fri May  6 2022 Ashley Pittman <ashley.m.pittman@intel.com> 2.3.100-7
 - Add dfuse unit-test binary to call from ftest.
 

@@ -104,7 +104,7 @@ class DaosBuild(DfuseTestBase):
         remote_env['VIRTUAL_ENV'] = '{}/venv'.format(mount_dir)
 
         if intercept:
-            remote_env['LD_PRELOAD'] = os.path.join(self.prefix, 'libioil.so')
+            remote_env['LD_PRELOAD'] = os.path.join(self.prefix, 'lib64', 'libioil.so')
             remote_env['D_LOG_FILE'] = '/var/tmp/daos_testing/daos-il.log'
             remote_env['DD_MASK'] = 'all'
             remote_env['DD_SUBSYS'] = 'all'
