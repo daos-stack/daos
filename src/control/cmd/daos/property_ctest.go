@@ -24,7 +24,7 @@ import (
 	"github.com/dustin/go-humanize"
 	"github.com/pkg/errors"
 
-	"github.com/daos-stack/daos/src/control/common"
+	"github.com/daos-stack/daos/src/control/common/test"
 )
 
 func testProperty_EcCellSize(t *testing.T) {
@@ -65,14 +65,14 @@ func testProperty_EcCellSize(t *testing.T) {
 			if err != nil {
 				t.Fatalf("Expected no error: %s", err.Error())
 			}
-			common.AssertEqual(t,
+			test.AssertEqual(t,
 				uint64(C.get_dpe_val(propEntry)),
 				tc.EntryBytes,
 				"Invalid EC Cell size")
 
 			sizeStr := propHdlrs[C.DAOS_PROP_ENTRY_EC_CELL_SZ].toString(propEntry,
 				C.DAOS_PROP_ENTRY_EC_CELL_SZ)
-			common.AssertEqual(t,
+			test.AssertEqual(t,
 				humanize.IBytes(tc.EntryBytes),
 				sizeStr,
 				"Invalid EC Cell size representation")
@@ -99,14 +99,14 @@ func testProperty_EcCellSize_Errors(t *testing.T) {
 			err := propHdlrs[C.DAOS_PROP_ENTRY_EC_CELL_SZ].nameHdlr(nil,
 				propEntry,
 				tc.SizeStr)
-			common.CmpErr(t, tc.ExpectError, err)
+			test.CmpErr(t, tc.ExpectError, err)
 		})
 	}
 
 	t.Run("Invalid Entry error message: nil entry", func(t *testing.T) {
 		sizeStr := propHdlrs[C.DAOS_PROP_ENTRY_EC_CELL_SZ].toString(nil,
 			C.DAOS_PROP_ENTRY_EC_CELL_SZ)
-		common.AssertEqual(t,
+		test.AssertEqual(t,
 			"property \""+C.DAOS_PROP_ENTRY_EC_CELL_SZ+"\" not found",
 			sizeStr,
 			"Invalid error message")
@@ -116,7 +116,7 @@ func testProperty_EcCellSize_Errors(t *testing.T) {
 		propEntry := new(C.struct_daos_prop_entry)
 		sizeStr := propHdlrs[C.DAOS_PROP_ENTRY_EC_CELL_SZ].toString(propEntry,
 			C.DAOS_PROP_ENTRY_EC_CELL_SZ)
-		common.AssertEqual(t,
+		test.AssertEqual(t,
 			"invalid size 0",
 			sizeStr,
 			"Invalid error message")
