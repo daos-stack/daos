@@ -267,6 +267,7 @@ func (cmd *poolQueryCmd) Execute(_ []string) error {
 	}
 	var ranklistPtr **C.d_rank_list_t = nil
 	var ranklist *C.d_rank_list_t = nil
+
 	if cmd.ShowEnabledRanks || cmd.ShowDisabledRanks {
 		ranklistPtr = &ranklist
 	}
@@ -285,15 +286,14 @@ func (cmd *poolQueryCmd) Execute(_ []string) error {
 	}
 
 	rc := C.daos_pool_query(cmd.cPoolHandle, ranklistPtr, &pinfo, nil, nil)
+	defer C.d_rank_list_free(ranklist)
 	if err := daosError(rc); err != nil {
-		C.d_rank_list_free(ranklist)
 		return errors.Wrapf(err,
 			"failed to query pool %s", cmd.poolUUID)
 	}
 
 	pqr, err := convertPoolInfo(&pinfo)
 	if err != nil {
-		C.d_rank_list_free(ranklist)
 		return err
 	}
 
@@ -305,7 +305,6 @@ func (cmd *poolQueryCmd) Execute(_ []string) error {
 			pqr.DisabledRanks = system.MustCreateRankSet(generateRankSet(ranklist))
 		}
 	}
-	C.d_rank_list_free(ranklist)
 
 	if cmd.jsonOutputEnabled() {
 		return cmd.outputJSON(pqr, nil)
