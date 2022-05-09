@@ -733,7 +733,7 @@ def get_test_files(test_list, args, yaml_dir, vmd_flag=False):
         test_list (list): list of test scripts to run
         args (argparse.Namespace): command line arguments for this program
         yaml_dir (str): directory in which to write the modified yaml files
-        vmd_flag (bool): PCI address list contains VMD address.
+        vmd_flag (bool): whether server hosts contains VMD drives.
 
     Returns:
         list: a list of dictionaries of each test script and yaml file; If
@@ -742,18 +742,19 @@ def get_test_files(test_list, args, yaml_dir, vmd_flag=False):
 
     """
     # Replace any placeholders in the extra yaml file, if provided
-    extra_env_vars = {}
     if args.extra_yaml:
-        args.extra_yaml, env_vars = replace_yaml_file(args.extra_yaml, args, yaml_dir, vmd_flag)
-        extra_env_vars.update(env_vars)
+        args.extra_yaml = replace_yaml_file(args.extra_yaml, args, yaml_dir, vmd_flag)
 
     test_files = [{"py": test, "yaml": None, "env": {}} for test in test_list]
     for test_file in test_files:
         base, _ = os.path.splitext(test_file["py"])
-        yaml_file, env_vars = replace_yaml_file("{}.yaml".format(base), args, yaml_dir, vmd_flag)
+        yaml_file = replace_yaml_file("{}.yaml".format(base), args, yaml_dir, vmd_flag)
         test_file["yaml"] = yaml_file
-        test_file["env"] = extra_env_vars.copy()
-        test_file["env"].update(env_vars)
+
+        # Set enable_vmd: true in the daos_server yaml if there are VMD devices on the host
+        # regardless of whether they are being specified in the server config file to avoid
+        # failures in the server start-up NVMe scan.
+        test_file["env"] = {"DAOS_ENABLE_VMD": "True" if vmd_flag else "False"}
 
         # Display the modified yaml file variants with debug
         command = ["avocado", "variants", "--mux-yaml", test_file["yaml"]]
@@ -980,12 +981,9 @@ def replace_yaml_file(yaml_file, args, yaml_dir, vmd_flag=False):
     Returns:
         str: the test yaml file; None if the yaml file contains placeholders
             w/o replacements
-        env_vars (dict): Returns environment variable dictionary. Presently,
-            returns DAOS_ENABLE_VMD: "False" or "True" dictionary.
 
     """
     replacements = {}
-    env_vars = {"DAOS_ENABLE_VMD": "False"}
 
     if args.test_servers or args.nvme or args.timeout_multiplier:
         # Find the test yaml keys and values that match the replaceable fields
@@ -1038,10 +1036,6 @@ def replace_yaml_file(yaml_file, args, yaml_dir, vmd_flag=False):
                     #   0000:81:00.0 --> 0000:12:00.0
                     value_format = "\"{}\""
                     values_to_replace = [value_format.format(item) for item in yaml_find[key]]
-                    # if VMD pci address in present under nvme_data,
-                    # set DAOS_ENABLE_VMD to True
-                    if vmd_flag is True:
-                        env_vars["DAOS_ENABLE_VMD"] = "True"
 
                 else:
                     # Timeouts - replace the entire timeout entry (key + value)
@@ -1109,7 +1103,7 @@ def replace_yaml_file(yaml_file, args, yaml_dir, vmd_flag=False):
             print(
                 "Error: Placeholders missing replacements in {}:\n  {}".format(
                     yaml_file, ", ".join(missing_replacements)))
-            return None, env_vars
+            return None
 
         # Write the modified yaml file into a temporary file.  Use the path to
         # ensure unique yaml files for tests with the same filename.
@@ -1126,7 +1120,7 @@ def replace_yaml_file(yaml_file, args, yaml_dir, vmd_flag=False):
             print(get_output(cmd, False))
 
     # Return the untouched or modified yaml file
-    return yaml_file, env_vars
+    return yaml_file
 
 
 def setup_test_directory(args, mode="all"):
@@ -1425,8 +1419,7 @@ def get_yaml_data(yaml_file):
     if os.path.isfile(yaml_file):
         with open(yaml_file, "r") as open_file:
             try:
-                file_data = open_file.read()
-                yaml_data = yaml.load(file_data, Loader=DaosLoader)
+                yaml_data = yaml.load(open_file.read(), Loader=DaosLoader)
             except yaml.YAMLError as error:
                 print("Error reading {}: {}".format(yaml_file, error))
                 sys.exit(1)

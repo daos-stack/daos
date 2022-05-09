@@ -20,6 +20,7 @@ import (
 
 	"github.com/daos-stack/daos/src/control/build"
 	"github.com/daos-stack/daos/src/control/common"
+	"github.com/daos-stack/daos/src/control/common/test"
 	"github.com/daos-stack/daos/src/control/drpc"
 )
 
@@ -59,7 +60,7 @@ func TestServer_unaryStatusInterceptor(t *testing.T) {
 				return tc.handlerResp, tc.handlerErr
 			}
 			gotResp, gotErr := unaryStatusInterceptor(context.TODO(), nil, nil, handler)
-			common.CmpErr(t, tc.expErr, gotErr)
+			test.CmpErr(t, tc.expErr, gotErr)
 			if tc.expErr != nil {
 				return
 			}
@@ -168,7 +169,7 @@ func TestServer_checkVersion(t *testing.T) {
 			}
 
 			gotErr := checkVersion(ctx, selfComp, req)
-			common.CmpErr(t, tc.expErr, gotErr)
+			test.CmpErr(t, tc.expErr, gotErr)
 		})
 	}
 }

@@ -12,7 +12,7 @@ import (
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
 
-	"github.com/daos-stack/daos/src/control/common"
+	"github.com/daos-stack/daos/src/control/common/test"
 	"github.com/daos-stack/daos/src/control/lib/hardware"
 	"github.com/daos-stack/daos/src/control/lib/hardware/hwloc"
 	"github.com/daos-stack/daos/src/control/lib/hardware/libfabric"
@@ -23,7 +23,7 @@ import (
 
 func TestHwprov_DefaultTopologyProvider(t *testing.T) {
 	log, buf := logging.NewTestLogger(t.Name())
-	defer common.ShowBufferOnFailure(t, buf)
+	defer test.ShowBufferOnFailure(t, buf)
 
 	expResult := hardware.NewTopologyFactory(
 		&hardware.WeightedTopologyProvider{
@@ -49,7 +49,7 @@ func TestHwprov_DefaultTopologyProvider(t *testing.T) {
 
 func TestHwprov_DefaultProcessNUMAProvider(t *testing.T) {
 	log, buf := logging.NewTestLogger(t.Name())
-	defer common.ShowBufferOnFailure(t, buf)
+	defer test.ShowBufferOnFailure(t, buf)
 
 	expResult := hwloc.NewProvider(log)
 
@@ -64,7 +64,7 @@ func TestHwprov_DefaultProcessNUMAProvider(t *testing.T) {
 
 func TestHwprov_DefaultFabricInterfaceProviders(t *testing.T) {
 	log, buf := logging.NewTestLogger(t.Name())
-	defer common.ShowBufferOnFailure(t, buf)
+	defer test.ShowBufferOnFailure(t, buf)
 
 	expResult := []hardware.FabricInterfaceProvider{
 		libfabric.NewProvider(log),
@@ -86,7 +86,7 @@ func TestHwprov_DefaultFabricInterfaceProviders(t *testing.T) {
 
 func TestHwprov_DefaultNetDevClassProvider(t *testing.T) {
 	log, buf := logging.NewTestLogger(t.Name())
-	defer common.ShowBufferOnFailure(t, buf)
+	defer test.ShowBufferOnFailure(t, buf)
 
 	expResult := sysfs.NewProvider(log)
 
@@ -101,7 +101,7 @@ func TestHwprov_DefaultNetDevClassProvider(t *testing.T) {
 
 func TestHwprov_DefaultFabricScannerConfig(t *testing.T) {
 	log, buf := logging.NewTestLogger(t.Name())
-	defer common.ShowBufferOnFailure(t, buf)
+	defer test.ShowBufferOnFailure(t, buf)
 
 	expResult := &hardware.FabricScannerConfig{
 		TopologyProvider:         DefaultTopologyProvider(log),
@@ -118,7 +118,7 @@ func TestHwprov_DefaultFabricScannerConfig(t *testing.T) {
 			libfabric.Provider{},
 			sysfs.Provider{},
 		),
-		common.CmpOptIgnoreFieldAnyType("log"),
+		test.CmpOptIgnoreFieldAnyType("log"),
 	); diff != "" {
 		t.Fatalf("(-want, +got)\n%s\n", diff)
 	}
@@ -126,7 +126,7 @@ func TestHwprov_DefaultFabricScannerConfig(t *testing.T) {
 
 func TestHwprov_DefaultFabricScanner(t *testing.T) {
 	log, buf := logging.NewTestLogger(t.Name())
-	defer common.ShowBufferOnFailure(t, buf)
+	defer test.ShowBufferOnFailure(t, buf)
 
 	expResult, err := hardware.NewFabricScanner(log, &hardware.FabricScannerConfig{
 		TopologyProvider:         DefaultTopologyProvider(log),
@@ -149,18 +149,18 @@ func TestHwprov_DefaultFabricScanner(t *testing.T) {
 			libfabric.Provider{},
 			sysfs.Provider{},
 		),
-		common.CmpOptIgnoreFieldAnyType("log"),
+		test.CmpOptIgnoreFieldAnyType("log"),
 		cmpopts.IgnoreFields(hardware.FabricScanner{}, "mutex"),
 	); diff != "" {
 		t.Fatalf("(-want, +got)\n%s\n", diff)
 	}
 }
 
-func TestHwprov_DefaultFabricReadyChecker(t *testing.T) {
+func TestHwprov_DefaultNetDevStateProvider(t *testing.T) {
 	log, buf := logging.NewTestLogger(t.Name())
-	defer common.ShowBufferOnFailure(t, buf)
+	defer test.ShowBufferOnFailure(t, buf)
 
-	result := DefaultFabricReadyChecker(log)
+	result := DefaultNetDevStateProvider(log)
 
 	if diff := cmp.Diff(sysfs.NewProvider(log), result,
 		cmpopts.IgnoreUnexported(sysfs.Provider{}),
