@@ -282,7 +282,6 @@ func TestServer_CtlSvc_StopRanks(t *testing.T) {
 		},
 		"instances successfully stopped": {
 			req:            &ctlpb.RanksReq{Ranks: "0-3"},
-			timeout:        time.Second,
 			expSignalsSent: map[uint32]os.Signal{0: syscall.SIGINT, 1: syscall.SIGINT},
 			expResults: []*sharedpb.RankResult{
 				{Rank: 1, State: msStopped},
@@ -291,7 +290,6 @@ func TestServer_CtlSvc_StopRanks(t *testing.T) {
 		},
 		"instances successfully stopped with force": {
 			req:            &ctlpb.RanksReq{Ranks: "0-3", Force: true},
-			timeout:        time.Second,
 			expSignalsSent: map[uint32]os.Signal{0: syscall.SIGKILL, 1: syscall.SIGKILL},
 			expResults: []*sharedpb.RankResult{
 				{Rank: 1, State: msStopped},
@@ -648,8 +646,7 @@ func TestServer_CtlSvc_ResetFormatRanks(t *testing.T) {
 			expErr:           FaultInstancesNotStopped("reset format", 1),
 		},
 		"instances reach wait format": {
-			req:     &ctlpb.RanksReq{Ranks: "0-3"},
-			timeout: 5 * time.Second,
+			req: &ctlpb.RanksReq{Ranks: "0-3"},
 			expResults: []*sharedpb.RankResult{
 				{Rank: 1, State: msWaitFormat},
 				{Rank: 2, State: msWaitFormat},
@@ -658,7 +655,7 @@ func TestServer_CtlSvc_ResetFormatRanks(t *testing.T) {
 		"instances stay stopped": {
 			req:        &ctlpb.RanksReq{Ranks: "0-3"},
 			startFails: true,
-			timeout:    500 * time.Millisecond,
+			timeout:    time.Second,
 			expErr:     errors.New("deadline exceeded"),
 		},
 	} {
@@ -785,8 +782,7 @@ func TestServer_CtlSvc_StartRanks(t *testing.T) {
 			expResults: []*sharedpb.RankResult{},
 		},
 		"instances already started": {
-			req:     &ctlpb.RanksReq{Ranks: "0-3"},
-			timeout: time.Second,
+			req: &ctlpb.RanksReq{Ranks: "0-3"},
 			expResults: []*sharedpb.RankResult{
 				{Rank: 1, State: msReady},
 				{Rank: 2, State: msReady},
@@ -794,14 +790,13 @@ func TestServer_CtlSvc_StartRanks(t *testing.T) {
 		},
 		"instances get started": {
 			req:              &ctlpb.RanksReq{Ranks: "0-3"},
-			timeout:          5 * time.Second,
 			instancesStopped: true,
 			expResults: []*sharedpb.RankResult{
 				{Rank: 1, State: msReady},
 				{Rank: 2, State: msReady},
 			},
 		},
-		"instances stay stopped": {
+		"instances not started in time": {
 			req:              &ctlpb.RanksReq{Ranks: "0-3"},
 			timeout:          time.Second,
 			instancesStopped: true,
