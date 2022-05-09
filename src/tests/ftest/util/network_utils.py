@@ -439,8 +439,9 @@ def get_common_provider(hosts, interface, supported=None, verbose=True):
     if not supported or "ucx" in supported:
         ucx_info = get_ucx_info(hosts, supported, verbose)
         for ib_name in get_interface_ib_name(hosts, interface, verbose):
-            device = ":".join([ib_name, "1"])
-            providers.update(get_interface_providers(device, ucx_info))
+            for add_on in ([], ["1"]):
+                device = ":".join([ib_name] + add_on)
+                providers.update(get_interface_providers(device, ucx_info))
 
     # Only include the providers supported by the interface on all of the hosts
     common_providers = set()
@@ -480,8 +481,9 @@ def get_network_information(hosts, supported=None, verbose=True):
                     "numa": get_interface_numa_node(node_set, interface, verbose),
                 }
                 for ib_name in data_gather["ib_device"]:
-                    device = ":".join([ib_name, "1"])
-                    data_gather["provider"].update(get_interface_providers(device, ucx_info))
+                    for add_on in ([], ["1"]):
+                        device = ":".join([ib_name] + add_on)
+                        data_gather["provider"].update(get_interface_providers(device, ucx_info))
                 for key, data in data_gather.items():
                     kwargs[key] = []
                     for item, item_node_set in data.items():

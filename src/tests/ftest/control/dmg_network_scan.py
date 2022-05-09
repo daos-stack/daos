@@ -81,6 +81,7 @@ class DmgNetworkScanTest(TestWithServers):
         for entry in get_network_information(hosts, supported):
             if entry.device.startswith("ib"):
                 sys_info.append(entry)
+                sys_info[-1].ib_device = None
                 # mapping = {"dc_mlx5": "ucx+dc_x"}
                 # dev.providers = ["ofi+" + i for i in no_dups]
         return sys_info
