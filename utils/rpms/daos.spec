@@ -554,7 +554,7 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 # No files in a shim package
 
 %changelog
-* Mon, May  9 2022 Ashley Pittman <ashley.m.pittman@intel.com> 2.3.100-8
+* Mon May  9 2022 Ashley Pittman <ashley.m.pittman@intel.com> 2.3.100-8
 - Extend dfusedaosbuild test to run in different configurations.
 
 * Fri May  6 2022 Ashley Pittman <ashley.m.pittman@intel.com> 2.3.100-7
