@@ -12,7 +12,7 @@ import (
 	"github.com/google/go-cmp/cmp"
 	"github.com/pkg/errors"
 
-	"github.com/daos-stack/daos/src/control/common"
+	"github.com/daos-stack/daos/src/control/common/test"
 	"github.com/daos-stack/daos/src/control/lib/control"
 )
 
@@ -67,11 +67,11 @@ func TestControl_PoolPropertyValue(t *testing.T) {
 			}
 
 			gotNum, gotErr := v.GetNumber()
-			common.CmpErr(t, tc.expErr, gotErr)
+			test.CmpErr(t, tc.expErr, gotErr)
 			if tc.expErr != nil {
 				return
 			}
-			common.AssertEqual(t, *tc.numVal, gotNum, "unexpected GetNumber() result")
+			test.AssertEqual(t, *tc.numVal, gotNum, "unexpected GetNumber() result")
 		})
 	}
 }
@@ -213,7 +213,7 @@ func TestControl_PoolProperties(t *testing.T) {
 				t.Fatal(err)
 			}
 			gotErr := prop.SetValue(tc.value)
-			common.CmpErr(t, tc.expErr, gotErr)
+			test.CmpErr(t, tc.expErr, gotErr)
 			if tc.expErr != nil {
 				return
 			}
