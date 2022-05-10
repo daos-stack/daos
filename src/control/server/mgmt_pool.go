@@ -18,6 +18,7 @@ import (
 
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	"github.com/daos-stack/daos/src/control/drpc"
+	"github.com/daos-stack/daos/src/control/lib/daos"
 	"github.com/daos-stack/daos/src/control/server/engine"
 	"github.com/daos-stack/daos/src/control/system"
 )
@@ -101,7 +102,7 @@ func (svc *mgmtSvc) getPoolService(id string) (*system.PoolService, error) {
 	}
 
 	if ps.State != system.PoolServiceStateReady {
-		return nil, drpc.DaosTryAgain
+		return nil, daos.TryAgain
 	}
 
 	return ps, nil
@@ -245,9 +246,9 @@ func (svc *mgmtSvc) PoolCreate(ctx context.Context, req *mgmtpb.PoolCreateReq) (
 	ps, err := svc.sysdb.FindPoolServiceByUUID(uuid)
 	if ps != nil {
 		svc.log.Debugf("found pool %s state=%s", ps.PoolUUID, ps.State)
-		resp.Status = int32(drpc.DaosAlready)
+		resp.Status = int32(daos.Already)
 		if ps.State != system.PoolServiceStateReady {
-			resp.Status = int32(drpc.DaosTryAgain)
+			resp.Status = int32(daos.TryAgain)
 			return resp, svc.checkPools(ctx, ps)
 		}
 		return resp, nil
@@ -259,7 +260,7 @@ func (svc *mgmtSvc) PoolCreate(ctx context.Context, req *mgmtpb.PoolCreateReq) (
 	labelExists := false
 	var poolLabel string
 	for _, prop := range req.GetProperties() {
-		if prop.Number != drpc.PoolPropertyLabel {
+		if prop.Number != daos.PoolPropertyLabel {
 			continue
 		}
 
@@ -390,7 +391,7 @@ func (svc *mgmtSvc) PoolCreate(ctx context.Context, req *mgmtpb.PoolCreateReq) (
 			}
 			if pdResp.GetStatus() != 0 {
 				cuErr = errors.Errorf("failed to destroy pool %s: %s",
-					req.Uuid, drpc.DaosStatus(pdResp.GetStatus()))
+					req.Uuid, daos.Status(pdResp.GetStatus()))
 			}
 		}
 
@@ -412,7 +413,7 @@ func (svc *mgmtSvc) PoolCreate(ctx context.Context, req *mgmtpb.PoolCreateReq) (
 		case errInstanceNotReady, FaultDataPlaneNotStarted:
 			// If the pool create failed because there was no available instance
 			// to service the request, signal to the client that it should try again.
-			resp.Status = int32(drpc.DaosTryAgain)
+			resp.Status = int32(daos.TryAgain)
 			return resp, nil
 		default:
 			return nil, err
@@ -540,7 +541,7 @@ func (svc *mgmtSvc) PoolDestroy(ctx context.Context, req *mgmtpb.PoolDestroyReq)
 			svc.log.Debugf("svc.PoolEvict failed\n")
 			return nil, err
 		}
-		ds := drpc.DaosStatus(evresp.Status)
+		ds := daos.Status(evresp.Status)
 		svc.log.Debugf("MgmtSvc.PoolDestroy drpc.MethodPoolEvict, evresp:%+v\n", evresp)
 
 		// If the destroy request is being forced, we should additionally zap the label
@@ -552,14 +553,14 @@ func (svc *mgmtSvc) PoolDestroy(ctx context.Context, req *mgmtpb.PoolDestroyReq)
 		// If the request is being forced, or the evict request did not fail
 		// due to the pool being busy, then transition to the destroying state
 		// and persist the update(s).
-		if req.Force || ds != drpc.DaosBusy {
+		if req.Force || ds != daos.Busy {
 			ps.State = system.PoolServiceStateDestroying
 			if err := svc.sysdb.UpdatePoolService(ps); err != nil {
 				return nil, errors.Wrapf(err, "failed to update pool %s", uuid)
 			}
 		}
 
-		if ds != drpc.DaosSuccess {
+		if ds != daos.Success {
 			svc.log.Errorf("PoolEvict (first step of destroy) failed: %s", ds)
 			resp.Status = int32(ds)
 			return resp, nil
@@ -579,10 +580,10 @@ func (svc *mgmtSvc) PoolDestroy(ctx context.Context, req *mgmtpb.PoolDestroyReq)
 
 	svc.log.Debugf("MgmtSvc.PoolDestroy dispatch, resp:%+v\n", resp)
 
-	ds := drpc.DaosStatus(resp.Status)
+	ds := daos.Status(resp.Status)
 	switch ds {
-	case drpc.DaosSuccess, drpc.DaosNotLeader, drpc.DaosNotReplica:
-		if ds == drpc.DaosNotLeader || ds == drpc.DaosNotReplica {
+	case daos.Success, daos.NotLeader, daos.NotReplica:
+		if ds == daos.NotLeader || ds == daos.NotReplica {
 			// If we're not cleaning up, then this is an error.
 			// Note: Unlikely to see !inCleanupMode (evict would have seen first?)
 			if !inCleanupMode {
@@ -590,7 +591,7 @@ func (svc *mgmtSvc) PoolDestroy(ctx context.Context, req *mgmtpb.PoolDestroyReq)
 				break
 			}
 			// Otherwise, we've done all we can to try to recover.
-			resp.Status = int32(drpc.DaosSuccess)
+			resp.Status = int32(daos.Success)
 		}
 		if err := svc.sysdb.RemovePoolService(uuid); err != nil {
 			// In rare cases, there may be a race between pool cleanup handlers.
@@ -781,7 +782,7 @@ func (svc *mgmtSvc) PoolUpgrade(ctx context.Context, req *mgmtpb.PoolUpgradeReq)
 }
 
 func (svc *mgmtSvc) updatePoolLabel(ctx context.Context, sys string, uuid uuid.UUID, prop *mgmtpb.PoolProperty) error {
-	if prop.GetNumber() != drpc.PoolPropertyLabel {
+	if prop.GetNumber() != daos.PoolPropertyLabel {
 		return errors.New("updatePoolLabel() called with non-label prop")
 	}
 	label := prop.GetStrval()
@@ -857,7 +858,7 @@ func (svc *mgmtSvc) PoolSetProp(ctx context.Context, req *mgmtpb.PoolSetPropReq)
 		// Label is a special case, in that we need to ensure that it's unique
 		// and also to update the pool service entry. Handle it first and separately
 		// so that if it fails, none of the other props are changed.
-		if prop.GetNumber() == drpc.PoolPropertyLabel {
+		if prop.GetNumber() == daos.PoolPropertyLabel {
 			if err := svc.updatePoolLabel(ctx, req.GetSys(), uuid, prop); err != nil {
 				return nil, err
 			}
