@@ -9,6 +9,7 @@
 from argparse import ArgumentParser, RawDescriptionHelpFormatter
 from collections import OrderedDict
 from datetime import datetime
+from tempfile import TemporaryDirectory
 import errno
 import json
 import os
@@ -30,8 +31,6 @@ from ClusterShell.Task import task_self
 ET.Element = Element
 ET.SubElement = SubElement
 ET.tostring = tostring
-
-from tempfile import TemporaryDirectory
 
 DEFAULT_DAOS_TEST_LOG_DIR = "/var/tmp/daos_testing"
 YAML_KEYS = OrderedDict(
@@ -90,9 +89,8 @@ def get_build_environment(args):
         dict: a dictionary of DAOS build environment variable names and values
 
     """
-    build_vars_file = os.path.join(
-        os.path.dirname(os.path.realpath(__file__)),
-        "../../.build_vars.json")
+    build_vars_file = os.path.join(os.path.dirname(os.path.realpath(__file__)),
+                                   "../../.build_vars.json")
     try:
         with open(build_vars_file) as vars_file:
             return json.load(vars_file)
@@ -105,6 +103,8 @@ def get_build_environment(args):
             if not args.list:
                 raise
             return json.loads('{{"PREFIX": "{}"}}'.format(os.getcwd()))
+    # Pylint warns about possible return types if we take this path, so ensure we do not.
+    assert False
 
 
 def get_temporary_directory(args, base_dir=None):
@@ -418,7 +418,7 @@ def run_command(cmd):
             stdout, _ = process.communicate()
             retcode = process.poll()
     except Exception as error:
-        raise RuntimeError("Error executing '{}':\n\t{}".format(" ".join(cmd), error))
+        raise RuntimeError("Error executing '{}':\n\t{}".format(" ".join(cmd), error)) from error
     if retcode:
         raise RuntimeError(
             "Error executing '{}' (rc={}):\n\tOutput:\n{}".format(" ".join(cmd), retcode, stdout))
@@ -715,12 +715,12 @@ def get_test_files(test_list, args, yaml_dir, vmd_flag=False):
     """
     # Replace any placeholders in the extra yaml file, if provided
     if args.extra_yaml:
-        args.extra_yaml = replace_yaml_file(args.extra_yaml, args, yaml_dir, vmd_flag)
+        args.extra_yaml = replace_yaml_file(args.extra_yaml, args, yaml_dir)
 
     test_files = [{"py": test, "yaml": None, "env": {}} for test in test_list]
     for test_file in test_files:
         base, _ = os.path.splitext(test_file["py"])
-        yaml_file = replace_yaml_file("{}.yaml".format(base), args, yaml_dir, vmd_flag)
+        yaml_file = replace_yaml_file("{}.yaml".format(base), args, yaml_dir)
         test_file["yaml"] = yaml_file
 
         # Set enable_vmd: true in the daos_server yaml if there are VMD devices on the host
@@ -916,7 +916,7 @@ def find_pci_address(value):
     return re.findall(pattern, str(value))
 
 
-def replace_yaml_file(yaml_file, args, yaml_dir, vmd_flag=False):
+def replace_yaml_file(yaml_file, args, yaml_dir):
     # pylint: disable=too-many-nested-blocks
     """Create a temporary test yaml file with any requested values replaced.
 
@@ -946,9 +946,6 @@ def replace_yaml_file(yaml_file, args, yaml_dir, vmd_flag=False):
         yaml_file (str): test yaml file
         args (argparse.Namespace): command line arguments for this program
         yaml_dir (str): directory in which to write the modified yaml files
-        vmd_flag (bool): PCI address includes VMD address (True)
-                         PCI address doesn't include VMD address (False).
-                         Defaults to False
 
     Returns:
         str: the test yaml file; None if the yaml file contains placeholders
