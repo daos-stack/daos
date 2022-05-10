@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2021 Intel Corporation.
+ * (C) Copyright 2016-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -28,6 +28,7 @@ daos_handle_t dc_cont_hdl2pool_hdl(daos_handle_t coh);
 struct daos_csummer *dc_cont_hdl2csummer(daos_handle_t coh);
 struct cont_props dc_cont_hdl2props(daos_handle_t coh);
 int dc_cont_hdl2redunfac(daos_handle_t coh);
+int dc_cont_get_redunc(daos_handle_t poh, daos_prop_t *prop);
 
 int dc_cont_local2global(daos_handle_t coh, d_iov_t *glob);
 int dc_cont_global2local(daos_handle_t poh, d_iov_t glob,

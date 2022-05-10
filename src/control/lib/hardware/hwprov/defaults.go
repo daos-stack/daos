@@ -13,6 +13,7 @@ import (
 	"github.com/daos-stack/daos/src/control/lib/hardware/hwloc"
 	"github.com/daos-stack/daos/src/control/lib/hardware/libfabric"
 	"github.com/daos-stack/daos/src/control/lib/hardware/sysfs"
+	"github.com/daos-stack/daos/src/control/lib/hardware/ucx"
 	"github.com/daos-stack/daos/src/control/logging"
 )
 
@@ -30,11 +31,17 @@ func DefaultTopologyProvider(log logging.Logger) hardware.TopologyProvider {
 	)
 }
 
+// DefaultProcessNUMAProvider gets the default provider for process-related NUMA info.
+func DefaultProcessNUMAProvider(log logging.Logger) hardware.ProcessNUMAProvider {
+	return hwloc.NewProvider(log)
+}
+
 // DefaultFabricInterfaceProviders returns the default fabric interface providers.
 func DefaultFabricInterfaceProviders(log logging.Logger) []hardware.FabricInterfaceProvider {
 	return []hardware.FabricInterfaceProvider{
 		libfabric.NewProvider(log),
 		sysfs.NewProvider(log),
+		ucx.NewProvider(log),
 	}
 }
 
@@ -62,14 +69,41 @@ func DefaultFabricScanner(log logging.Logger) *hardware.FabricScanner {
 	return fs
 }
 
+// DefaultNetDevStateProvider gets the default provider for getting the fabric interface state.
+func DefaultNetDevStateProvider(log logging.Logger) hardware.NetDevStateProvider {
+	return sysfs.NewProvider(log)
+}
+
 // Init loads up any dynamic libraries that need to be loaded at runtime.
 func Init(log logging.Logger) (func(), error) {
-	cleanupLibFabric, err := libfabric.Load()
-	if err != nil {
-		return nil, errors.Wrapf(err, "unable to load any fabric libraries")
+	initFns := []func() (func(), error){
+		libfabric.Load,
+		ucx.Load,
+	}
+
+	cleanupFns := make([]func(), 0)
+	numLoaded := 0
+
+	for _, loadLib := range initFns {
+		if cleanupLib, err := loadLib(); err == nil {
+			numLoaded++
+			cleanupFns = append(cleanupFns, cleanupLib)
+		} else {
+			log.Debugf("failed to load library: %s", err)
+			if !hardware.IsUnsupportedFabric(err) {
+				log.Error(err.Error())
+			}
+		}
+	}
+
+	if numLoaded == 0 {
+		return nil, errors.New("unable to load any supported fabric libraries")
 	}
 
 	return func() {
-		cleanupLibFabric()
+		// Unload libraries in reverse order
+		for i := len(cleanupFns) - 1; i >= 0; i-- {
+			cleanupFns[i]()
+		}
 	}, nil
 }

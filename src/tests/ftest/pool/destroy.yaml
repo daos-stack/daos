@@ -13,7 +13,7 @@ setup:
   start_servers_once: False
 server_config:
   name: daos_server
-timeout: 180
+timeout: 360
 pool:
   name: daos_server
   scm_size: 1G

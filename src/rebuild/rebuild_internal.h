@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2017-2021 Intel Corporation.
+ * (C) Copyright 2017-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -78,6 +78,9 @@ struct rebuild_tgt_pool_tracker {
 	 * to make sure aggregation will not cross the epoch
 	 */
 	uint64_t		rt_rebuild_fence;
+
+	/* Global dtx resync version */
+	uint32_t		rt_global_dtx_resync_version;
 	unsigned int		rt_lead_puller_running:1,
 				rt_abort:1,
 				/* re-report #rebuilt cnt per master change */
@@ -90,6 +93,7 @@ struct rebuild_tgt_pool_tracker {
 
 struct rebuild_server_status {
 	d_rank_t	rank;
+	uint32_t	dtx_resync_version;
 	uint32_t	scan_done:1,
 			pull_done:1;
 };
@@ -111,6 +115,9 @@ struct rebuild_global_pool_tracker {
 
 	/** rebuild status for each server */
 	struct rebuild_server_status *rgt_servers;
+
+	/** global resync dtx version */
+	uint32_t	rgt_dtx_resync_version;
 
 	/** number of rgt_server_status */
 	uint32_t	rgt_servers_number;
@@ -240,6 +247,8 @@ struct rebuild_iv {
 	uint64_t	riv_leader_term;
 	uint64_t	riv_stable_epoch;
 	uint32_t	riv_seconds;
+	uint32_t	riv_dtx_resyc_version;
+	uint32_t	riv_global_dtx_resyc_version;
 	unsigned int	riv_rank;
 	unsigned int	riv_master_rank;
 	unsigned int	riv_ver;
@@ -249,6 +258,7 @@ struct rebuild_iv {
 			riv_pull_done:1,
 			riv_sync:1;
 	int		riv_status;
+
 };
 
 #define DEFAULT_YIELD_FREQ	128
@@ -334,8 +344,6 @@ rebuild_global_pool_tracker_lookup(const uuid_t pool_uuid, unsigned int ver);
 int
 rebuild_global_status_update(struct rebuild_global_pool_tracker *master_rpt,
 			     struct rebuild_iv *iv);
-void
-rebuild_hang(void);
 
 int
 rebuild_notify_ras_start(uuid_t *pool, uint32_t map_ver, char *op_str);

@@ -19,6 +19,12 @@ type (
 		GetTopology(context.Context) (*Topology, error)
 	}
 
+	// ProcessNUMAProvider is an interface for getting the NUMA node associated with a
+	// process ID.
+	ProcessNUMAProvider interface {
+		GetNUMANodeIDForPID(context.Context, int32) (uint, error)
+	}
+
 	// NodeMap maps a node ID to a node.
 	NodeMap map[uint]*NUMANode
 

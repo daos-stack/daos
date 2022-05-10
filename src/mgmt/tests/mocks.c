@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2019-2021 Intel Corporation.
+ * (C) Copyright 2019-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -279,17 +279,27 @@ uuid_t			ds_mgmt_pool_query_uuid;
 daos_pool_info_t	ds_mgmt_pool_query_info_out;
 daos_pool_info_t	ds_mgmt_pool_query_info_in;
 void			*ds_mgmt_pool_query_info_ptr;
+d_rank_list_t		*ds_mgmt_pool_query_ranks_out;
+
 int
-ds_mgmt_pool_query(uuid_t pool_uuid, d_rank_list_t *svc_ranks,
+ds_mgmt_pool_query(uuid_t pool_uuid, d_rank_list_t *svc_ranks, d_rank_list_t **ranks,
 		   daos_pool_info_t *pool_info)
 {
+	/* If function is to return with an error, pool_info and ranks will not be filled. */
+	if (ds_mgmt_pool_query_return != 0)
+		return ds_mgmt_pool_query_return;
+
 	uuid_copy(ds_mgmt_pool_query_uuid, pool_uuid);
 	ds_mgmt_pool_query_info_ptr = (void *)pool_info;
 	if (pool_info != NULL) {
 		ds_mgmt_pool_query_info_in = *pool_info;
 		*pool_info = ds_mgmt_pool_query_info_out;
 	}
-	return ds_mgmt_pool_query_return;
+	if (ranks != NULL) {
+		*ranks = d_rank_list_alloc(8);		/* 0-7 ; caller must free this */
+		ds_mgmt_pool_query_ranks_out = *ranks;
+	}
+	return ds_mgmt_pool_query_return;	/* 0 */
 }
 
 void
@@ -299,6 +309,7 @@ mock_ds_mgmt_pool_query_setup(void)
 	uuid_clear(ds_mgmt_pool_query_uuid);
 	ds_mgmt_pool_query_info_ptr = NULL;
 	memset(&ds_mgmt_pool_query_info_out, 0, sizeof(daos_pool_info_t));
+	ds_mgmt_pool_query_ranks_out = NULL;
 }
 
 int	ds_mgmt_cont_set_owner_return;
@@ -493,4 +504,21 @@ int
 ds_mgmt_dev_identify(uuid_t uuid, Ctl__DevIdentifyResp *resp)
 {
 	return 0;
+}
+
+int	ds_mgmt_pool_upgrade_return;
+uuid_t  ds_mgmt_pool_upgrade_uuid;
+
+int
+ds_mgmt_pool_upgrade(uuid_t pool_uuid, d_rank_list_t *svc_ranks)
+{
+	uuid_copy(ds_mgmt_pool_upgrade_uuid, pool_uuid);
+	return ds_mgmt_pool_upgrade_return;
+}
+
+void
+mock_ds_mgmt_pool_upgrade_setup(void)
+{
+	ds_mgmt_pool_upgrade_return = 0;
+	uuid_clear(ds_mgmt_pool_upgrade_uuid);
 }

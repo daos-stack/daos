@@ -15,6 +15,42 @@ import (
 	"github.com/daos-stack/daos/src/control/logging"
 )
 
+type ctxKey string
+
+const (
+	topoKey    ctxKey = "hwlocTopology"
+	cleanupKey ctxKey = "hwlocFreeTopology"
+)
+
+// CacheContext adds a cache of the hwloc topology to the provided context.
+func CacheContext(parent context.Context, log logging.Logger) (context.Context, error) {
+	topo, cleanup, err := NewProvider(log).initTopology()
+	if err != nil {
+		return nil, err
+	}
+
+	topoCtx := context.WithValue(parent, topoKey, topo)
+	return context.WithValue(topoCtx, cleanupKey, cleanup), nil
+}
+
+// Cleanup frees the hwloc cache in the context, if any.
+func Cleanup(ctx context.Context) {
+	cleanup, ok := ctx.Value(cleanupKey).(func())
+	if !ok {
+		return
+	}
+	cleanup()
+}
+
+func topologyFromContext(ctx context.Context) (*topology, error) {
+	topo, ok := ctx.Value(topoKey).(*topology)
+	if !ok {
+		return nil, errors.New("no topology cached in context")
+	}
+
+	return topo, nil
+}
+
 // NewProvider returns a new hwloc Provider.
 func NewProvider(log logging.Logger) *Provider {
 	return &Provider{
@@ -32,7 +68,7 @@ type Provider struct {
 // GetTopology fetches a simplified hardware topology via hwloc.
 func (p *Provider) GetTopology(ctx context.Context) (*hardware.Topology, error) {
 	ch := make(chan topologyResult)
-	go p.getTopologyAsync(ch)
+	go p.getTopologyAsync(ctx, ch)
 
 	select {
 	case <-ctx.Done():
@@ -47,10 +83,10 @@ type topologyResult struct {
 	err      error
 }
 
-func (p *Provider) getTopologyAsync(ch chan topologyResult) {
+func (p *Provider) getTopologyAsync(ctx context.Context, ch chan topologyResult) {
 	p.log.Debugf("getting topology with hwloc version 0x%x", p.api.compiledVersion())
 
-	topo, cleanup, err := p.initTopology()
+	topo, cleanup, err := p.getRawTopology(ctx)
 	if err != nil {
 		ch <- topologyResult{
 			err: err,
@@ -74,15 +110,23 @@ func (p *Provider) getTopologyAsync(ch chan topologyResult) {
 	}
 }
 
+func (p *Provider) getRawTopology(ctx context.Context) (*topology, func(), error) {
+	if topo, err := topologyFromContext(ctx); err == nil {
+		// NB: If we're using the cached topology, we needn't worry about freeing it now.
+		// The caller that initialized the context will clean it up when they're done
+		// with it.
+		return topo, func() {}, nil
+	}
+
+	return p.initTopology()
+}
+
 // initTopo initializes the hwloc topology and returns it to the caller along with the topology
 // cleanup function.
 func (p *Provider) initTopology() (*topology, func(), error) {
 	if err := checkVersion(p.api); err != nil {
 		return nil, nil, err
 	}
-
-	p.api.Lock()
-	defer p.api.Unlock()
 
 	topo, cleanup, err := p.api.newTopology()
 	if err != nil {
@@ -335,4 +379,72 @@ func osDevTypeToHardwareDevType(osType int) hardware.DeviceType {
 	}
 
 	return hardware.DeviceTypeUnknown
+}
+
+type numaResult struct {
+	numaNode uint
+	err      error
+}
+
+// GetNUMANodeIDForPID fetches the NUMA node ID associated with a given process ID.
+func (p *Provider) GetNUMANodeIDForPID(ctx context.Context, pid int32) (uint, error) {
+	ch := make(chan numaResult)
+	go p.getNUMANodeIDForPIDAsync(ctx, pid, ch)
+
+	select {
+	case <-ctx.Done():
+		return 0, ctx.Err()
+	case result := <-ch:
+		return result.numaNode, result.err
+	}
+}
+
+func (p *Provider) getNUMANodeIDForPIDAsync(ctx context.Context, pid int32, ch chan numaResult) {
+	topo, cleanupTopo, err := p.getRawTopology(ctx)
+	if err != nil {
+		ch <- numaResult{err: errors.Wrap(err, "initializing topology")}
+		return
+	}
+	defer cleanupTopo()
+
+	numNUMANodes := topo.getNumObjByType(objTypeNUMANode)
+	if numNUMANodes == 0 {
+		// If there are no NUMA nodes detected, there's nothing to do here.
+		ch <- numaResult{err: hardware.ErrNoNUMANodes}
+		return
+	}
+
+	cpuSet, cleanupCPUSet, err := topo.getProcessCPUSet(pid, 0)
+	if err != nil {
+		ch <- numaResult{err: errors.Wrapf(err, "getting CPU set for PID %d", pid)}
+		return
+	}
+	defer cleanupCPUSet()
+
+	node, err := p.findNUMANodeWithCPUSet(topo, cpuSet)
+	if err != nil {
+		ch <- numaResult{err: err}
+		return
+	}
+
+	ch <- numaResult{numaNode: node}
+}
+
+func (p *Provider) findNUMANodeWithCPUSet(topo *topology, cpuSet *cpuSet) (uint, error) {
+	nodeSet, cleanupNodeSet, err := cpuSet.toNodeSet()
+	if err != nil {
+		return 0, errors.Wrap(err, "converting CPU set to NUMA node set")
+	}
+	defer cleanupNodeSet()
+
+	currentNode, err := topo.getNextObjByType(objTypeNUMANode, nil)
+	for err == nil {
+		if nodeSet.intersects(currentNode.nodeSet()) || cpuSet.intersects(currentNode.cpuSet()) {
+			return currentNode.osIndex(), nil
+		}
+
+		currentNode, err = topo.getNextObjByType(objTypeNUMANode, currentNode)
+	}
+
+	return 0, errors.Errorf("no NUMA node could be associated with CPU set")
 }

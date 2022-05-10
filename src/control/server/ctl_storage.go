@@ -28,35 +28,23 @@ type StorageControlService struct {
 	getHugePageInfo common.GetHugePageInfoFn
 }
 
-// GetScmState performs required initialization and returns current state
-// of SCM module preparation.
-func (scs *StorageControlService) GetScmState() (storage.ScmState, error) {
-	return scs.storage.Scm.GetPmemState()
-}
-
-// ScmPrepare preps locally attached modules and returns need to reboot message,
-// list of pmem device files and error directly.
-//
-// Suitable for commands invoked directly on server, not over gRPC.
+// ScmPrepare preps locally attached modules.
 func (scs *StorageControlService) ScmPrepare(req storage.ScmPrepareRequest) (*storage.ScmPrepareResponse, error) {
-	// transition to the next state in SCM preparation
-	return scs.storage.Scm.Prepare(req)
+	return scs.storage.PrepareScm(req)
 }
 
-// ScmScan scans locally attached modules, namespaces and state of DCPM config.
+// ScmScan scans locally attached modules and namespaces.
 func (scs *StorageControlService) ScmScan(req storage.ScmScanRequest) (*storage.ScmScanResponse, error) {
-	return scs.storage.Scm.Scan(req)
+	return scs.storage.ScanScm(req)
 }
 
-// NvmePrepare preps locally attached SSDs and returns error.
+// NvmePrepare preps locally attached SSDs.
 func (scs *StorageControlService) NvmePrepare(req storage.BdevPrepareRequest) (*storage.BdevPrepareResponse, error) {
-	scs.log.Debugf("calling bdev provider prepare: %+v", req)
 	return scs.storage.PrepareBdevs(req)
 }
 
 // NvmeScan scans locally attached SSDs.
 func (scs *StorageControlService) NvmeScan(req storage.BdevScanRequest) (*storage.BdevScanResponse, error) {
-	scs.log.Debugf("calling bdev provider scan: %+v", req)
 	return scs.storage.ScanBdevs(req)
 }
 
@@ -136,12 +124,12 @@ func (cs *ControlService) getScmUsage(ssr *storage.ScmScanResponse) (*storage.Sc
 			continue // skip if not running
 		}
 
-		cfg, err := ei.GetScmConfig()
+		cfg, err := ei.GetStorage().GetScmConfig()
 		if err != nil {
 			return nil, err
 		}
 
-		mount, err := ei.GetScmUsage()
+		mount, err := ei.GetStorage().GetScmUsage()
 		if err != nil {
 			return nil, err
 		}
@@ -200,7 +188,7 @@ func (cs *ControlService) scanAssignedBdevs(ctx context.Context, statsReq bool) 
 	ctrlrs := storage.NvmeControllers{}
 
 	for _, ei := range instances {
-		if !ei.HasBlockDevices() {
+		if !ei.GetStorage().HasBlockDevices() {
 			continue
 		}
 

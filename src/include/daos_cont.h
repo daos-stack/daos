@@ -12,6 +12,11 @@
 #ifndef __DAOS_CONT_H__
 #define __DAOS_CONT_H__
 
+/** Please ignore (code for back-compatibility) */
+#define daos_cont_open daos_cont_open2
+/** Please ignore (code for back-compatibility) */
+#define daos_cont_destroy daos_cont_destroy2
+
 #if defined(__cplusplus)
 extern "C" {
 #endif
@@ -32,7 +37,10 @@ extern "C" {
  */
 #define DAOS_COO_FORCE		(1U << 3)
 
+/** Number of bits in the container open mode flag, DAOS_COO_ bits */
 #define DAOS_COO_NBITS	(4)
+
+/** Mask for all of the bits in the container open mode flag, DAOS_COO_ bits */
 #define DAOS_COO_MASK	((1U << DAOS_COO_NBITS) - 1)
 
 /** Container information */
@@ -45,6 +53,7 @@ typedef struct {
 	uint32_t		ci_redun_fac;
 	/** Number of snapshots */
 	uint32_t		ci_nsnapshots;
+	/** Container information pad (not used) */
 	uint64_t		ci_pad[2];
 	/* TODO: add more members, e.g., size, # objects, uid, gid... */
 } daos_cont_info_t;
@@ -565,6 +574,7 @@ daos_cont_rollback(daos_handle_t coh, daos_epoch_t epoch, daos_event_t *ev);
 int
 daos_cont_subscribe(daos_handle_t coh, daos_epoch_t *epoch, daos_event_t *ev);
 
+/** maximum length of persistent snapshot name */
 #define DAOS_SNAPSHOT_MAX_LEN 128
 
 /**
@@ -584,6 +594,7 @@ int
 daos_cont_create_snap(daos_handle_t coh, daos_epoch_t *epoch, char *name,
 		      daos_event_t *ev);
 
+/** snapshot create flag options */
 enum daos_snapshot_opts {
 	/** create snapshot */
 	DAOS_SNAP_OPT_CR	= (1 << 0),
@@ -656,6 +667,10 @@ daos_cont_destroy_snap(daos_handle_t coh, daos_epoch_range_t epr,
  */
 int
 daos_cont_create2(daos_handle_t poh, uuid_t *uuid, daos_prop_t *cont_prop, daos_event_t *ev);
+/**
+ * Backward compatibility code.
+ * Please don't use directly
+ */
 int
 daos_cont_create1(daos_handle_t poh, const uuid_t uuid, daos_prop_t *cont_prop, daos_event_t *ev);
 

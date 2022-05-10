@@ -770,7 +770,7 @@ ilog_tree_modify(struct ilog_context *lctx, const struct ilog_id *id_in,
 	if (id_out->id_epoch <= epr->epr_hi &&
 	    id_out->id_epoch >= epr->epr_lo) {
 		visibility = ilog_status_get(lctx, id_out, DAOS_INTENT_UPDATE, true);
-		if (visibility < 0)
+		if (visibility < 0 && visibility != -DER_TX_UNCERTAIN)
 			return visibility;
 	}
 
@@ -897,7 +897,7 @@ ilog_modify(daos_handle_t loh, const struct ilog_id *id_in,
 	if (root->lr_tree.it_embedded && root->lr_id.id_epoch <= epr->epr_hi
 	    && root->lr_id.id_epoch >= epr->epr_lo) {
 		visibility = ilog_status_get(lctx, &root->lr_id, DAOS_INTENT_UPDATE, true);
-		if (visibility < 0) {
+		if (visibility < 0 && visibility != -DER_TX_UNCERTAIN) {
 			rc = visibility;
 			goto done;
 		}
@@ -1099,7 +1099,7 @@ ilog_status_refresh(struct ilog_context *lctx, uint32_t intent,
 		status = ilog_status_get(lctx, &entry.ie_id, intent,
 					 (intent == DAOS_INTENT_UPDATE ||
 					  intent == DAOS_INTENT_PUNCH) ? false : true);
-		if (status < 0) {
+		if (status < 0 && status != -DER_INPROGRESS) {
 			priv->ip_rc = status;
 			return;
 		}
@@ -1176,18 +1176,6 @@ done:
 
 	return 0;
 }
-static int
-set_entry(struct ilog_entries *entries, int i, int status)
-{
-	struct ilog_priv	*priv = ilog_ent2priv(entries);
-
-	D_ASSERT(i < NUM_EMBEDDED || i < priv->ip_alloc_size);
-	D_ASSERT(i == entries->ie_num_entries);
-	entries->ie_info[entries->ie_num_entries].ii_removed = 0;
-	entries->ie_info[entries->ie_num_entries++].ii_status = status;
-
-	return 0;
-}
 
 int
 ilog_fetch(struct umem_instance *umm, struct ilog_df *root_df,
@@ -1208,10 +1196,10 @@ ilog_fetch(struct umem_instance *umm, struct ilog_df *root_df,
 	root = (struct ilog_root *)root_df;
 
 	if (ilog_fetch_cached(umm, root, cbs, intent, entries)) {
-		if (priv->ip_rc == -DER_INPROGRESS ||
-		    priv->ip_rc == -DER_NONEXIST)
+		if (priv->ip_rc == -DER_NONEXIST)
 			return priv->ip_rc;
 		if (priv->ip_rc < 0) {
+			D_ASSERT(priv->ip_rc != -DER_INPROGRESS);
 			/* Don't cache error return codes */
 			rc = priv->ip_rc;
 			priv->ip_rc = 0;
@@ -1236,9 +1224,10 @@ ilog_fetch(struct umem_instance *umm, struct ilog_df *root_df,
 		status = ilog_status_get(lctx, id, intent,
 					 (intent == DAOS_INTENT_UPDATE ||
 					  intent == DAOS_INTENT_PUNCH) ? false : true);
-		if (status != -DER_INPROGRESS && status < 0)
+		if (status < 0 && status != -DER_INPROGRESS)
 			D_GOTO(fail, rc = status);
-		set_entry(entries, i, status);
+		entries->ie_info[entries->ie_num_entries].ii_removed = 0;
+		entries->ie_info[entries->ie_num_entries++].ii_status = status;
 	}
 
 out:

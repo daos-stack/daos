@@ -40,6 +40,7 @@ def getuid() {
                         returnStdout: true).trim()
     return cached_uid
 }
+
 pipeline {
     agent { label 'lightweight' }
 
@@ -55,6 +56,7 @@ pipeline {
         CLUSH_ARGS = "-o$SSH_KEY_ARGS"
         TEST_RPMS = cachedCommitPragma(pragma: 'RPM-test', def_val: 'true')
         COVFN_DISABLED = cachedCommitPragma(pragma: 'Skip-fnbullseye', def_val: 'true')
+        REPO_FILE_URL = repoFileUrl(env.REPO_FILE_URL)
         SCONS_FAULTS_ARGS = sconsFaultsArgs()
     }
 
@@ -94,9 +96,9 @@ pipeline {
         string(name: 'CI_CENTOS7_TARGET',
                defaultValue: '',
                description: 'Image to used for Centos 7 CI tests.  I.e. el7, el7.9, etc.')
-        string(name: 'CI_CENTOS8_TARGET',
+        string(name: 'CI_EL8_TARGET',
                defaultValue: '',
-               description: 'Image to used for Centos 8 CI tests.  I.e. el8, el8.3, etc.')
+               description: 'Image to used for EL 8 CI tests.  I.e. el8, el8.3, etc.')
         string(name: 'CI_LEAP15_TARGET',
                defaultValue: '',
                description: 'Image to use for OpenSUSE Leap CI tests.  I.e. leap15, leap15.2, etc.')
@@ -108,7 +110,7 @@ pipeline {
                      description: 'Do not build RPM packages for CentOS 7')
         booleanParam(name: 'CI_RPM_el8_NOBUILD',
                      defaultValue: false,
-                     description: 'Do not build RPM packages for CentOS 8')
+                     description: 'Do not build RPM packages for EL 8')
         booleanParam(name: 'CI_RPM_leap15_NOBUILD',
                      defaultValue: false,
                      description: 'Do not build RPM packages for Leap 15')
@@ -132,7 +134,7 @@ pipeline {
                      description: 'Enable more distros for functional CI tests')
         booleanParam(name: 'CI_FUNCTIONAL_el8_TEST',
                      defaultValue: true,
-                     description: 'Run the functional CentOS 8 CI tests' +
+                     description: 'Run the functional EL 8 CI tests' +
                                   '  Requires CI_MORE_FUNCTIONAL_PR_TESTS')
         booleanParam(name: 'CI_FUNCTIONAL_leap15_TEST',
                      defaultValue: true,
@@ -314,9 +316,9 @@ pipeline {
                         dockerfile {
                             filename 'Dockerfile.mockbuild'
                             dir 'utils/rpms/packaging'
-                            label 'docker_ce_runner'
+                            label 'docker_runner'
                             additionalBuildArgs dockerBuildArgs()
-                            args  '--group-add mock --cap-add=SYS_ADMIN --privileged=true'
+                            args  '--cap-add=SYS_ADMIN'
                         }
                     }
                     steps {
@@ -340,7 +342,7 @@ pipeline {
                         }
                     }
                 }
-                stage('Build RPM on CentOS 8') {
+                stage('Build RPM on EL 8') {
                     when {
                         beforeAgent true
                         expression { ! skipStage() }
@@ -349,9 +351,9 @@ pipeline {
                         dockerfile {
                             filename 'Dockerfile.mockbuild'
                             dir 'utils/rpms/packaging'
-                            label 'docker_ce_runner'
+                            label 'docker_runner'
                             additionalBuildArgs dockerBuildArgs()
-                            args  '--group-add mock --cap-add=SYS_ADMIN --privileged=true'
+                            args  '--cap-add=SYS_ADMIN'
                         }
                     }
                     steps {
@@ -384,9 +386,9 @@ pipeline {
                         dockerfile {
                             filename 'Dockerfile.mockbuild'
                             dir 'utils/rpms/packaging'
-                            label 'docker_ce_runner'
+                            label 'docker_runner'
                             additionalBuildArgs dockerBuildArgs()
-                            args  '--group-add mock --cap-add=SYS_ADMIN --privileged=true'
+                            args  '--cap-add=SYS_ADMIN'
                         }
                     }
                     steps {
@@ -421,7 +423,7 @@ pipeline {
                             dir 'utils/rpms/packaging'
                             label 'docker_runner'
                             additionalBuildArgs dockerBuildArgs()
-                            args  '--cap-add=SYS_ADMIN --privileged=true'
+                            args  '--cap-add=SYS_ADMIN'
                         }
                     }
                     steps {
@@ -522,6 +524,7 @@ pipeline {
                             filename 'utils/docker/Dockerfile.leap.15'
                             label 'docker_runner'
                             additionalBuildArgs dockerBuildArgs(repo_type: 'stable',
+                                                                parallel_build: true,
                                                                 deps_build: true) +
                                                 " -t ${sanitized_JOB_NAME}-leap15" +
                                                 " --build-arg COMPILER=icc"
@@ -707,7 +710,7 @@ pipeline {
                         }
                     }
                 } // stage('Functional on CentOS 7')
-                stage('Functional on CentOS 8 with Valgrind') {
+                stage('Functional on EL 8 with Valgrind') {
                     when {
                         beforeAgent true
                         expression { ! skipStage() }
@@ -725,8 +728,8 @@ pipeline {
                             functionalTestPostV2()
                         }
                     }
-                } // stage('Functional on CentOS 8 with Valgrind')
-                stage('Functional on CentOS 8') {
+                } // stage('Functional on EL 8 with Valgrind')
+                stage('Functional on EL 8') {
                     when {
                         beforeAgent true
                         expression { ! skipStage() }
@@ -744,7 +747,7 @@ pipeline {
                             functionalTestPostV2()
                         }
                     }
-                } // stage('Functional on CentOS 8')
+                } // stage('Functional on EL 8')
                 stage('Functional on Leap 15') {
                     when {
                         beforeAgent true
@@ -796,34 +799,6 @@ pipeline {
                                 daos_pkg_version: daosPackagesVersion(next_version)
                    }
                 } // stage('Test CentOS 7 RPMs')
-                stage('Test CentOS 8.3.2011 RPMs') {
-                    when {
-                        beforeAgent true
-                        expression { ! skipStage() }
-                    }
-                    agent {
-                        label params.CI_UNIT_VM1_LABEL
-                    }
-                    steps {
-                        testRpm inst_repos: daosRepos(),
-                                target: 'el8.3',
-                                daos_pkg_version: daosPackagesVersion("centos8", next_version)
-                   }
-                } // stage('Test CentOS 7 RPMs')
-                stage('Test Leap 15.2 RPMs') {
-                    when {
-                        beforeAgent true
-                        expression { ! skipStage() }
-                    }
-                    agent {
-                        label params.CI_UNIT_VM1_LABEL
-                    }
-                    steps {
-                        testRpm inst_repos: daosRepos(),
-                                target: 'leap15.2',
-                                daos_pkg_version: daosPackagesVersion(next_version)
-                   }
-                } // stage('Test Leap 15 RPMs')
                 stage('Scan CentOS 7 RPMs') {
                     when {
                         beforeAgent true
@@ -842,7 +817,7 @@ pipeline {
                         }
                     }
                 } // stage('Scan CentOS 7 RPMs')
-                stage('Scan CentOS 8 RPMs') {
+                stage('Scan EL 8 RPMs') {
                     when {
                         beforeAgent true
                         expression { ! skipStage() }
@@ -859,7 +834,7 @@ pipeline {
                             junit 'maldetect.xml'
                         }
                     }
-                } // stage('Scan CentOS 8 RPMs')
+                } // stage('Scan EL 8 RPMs')
                 stage('Scan Leap 15 RPMs') {
                     when {
                         beforeAgent true
@@ -888,6 +863,7 @@ pipeline {
                             filename 'utils/docker/Dockerfile.centos.7'
                             label 'docker_runner'
                             additionalBuildArgs dockerBuildArgs(repo_type: 'stable',
+                                                                parallel_build: true,
                                                                 deps_build: true)
                             args '--tmpfs /mnt/daos_0'
                         }

@@ -36,7 +36,7 @@ targets=(
     '.env'
 )
 
-files=$(git diff --diff-filter=AM --name-only --cached -- "${targets[@]}")
+files=${files:-$(git diff --diff-filter=AM --name-only --cached -- "${targets[@]}")}
 for file in $files; do
 	if [[ "$file" == *vendor* ]] || [[ "$file" == *pb.go ]] || \
 	   [[ "$file" == *_string.go ]] || [[ "$file" == *pb-c* ]]; then

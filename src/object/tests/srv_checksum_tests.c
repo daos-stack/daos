@@ -145,7 +145,7 @@ void fake_update_saw(char *file, int line, char *buf, size_t len)
 struct vos_fetch_test_context {
 	size_t			 nr; /** Num of bsgl.bio_iov/biov_csums pairs */
 	struct bio_sglist	 bsgl;
-	struct dcs_csum_info	*biov_csums;
+	struct dcs_ci_list	 biov_csums;
 	daos_iod_t		 iod;
 	struct daos_csummer	*csummer;
 	struct dcs_iod_csums	*iod_csum;
@@ -178,7 +178,6 @@ array_test_case_create(struct vos_fetch_test_context *ctx,
 	uint32_t	 cs;
 	size_t		 i = 0;
 	size_t		 j;
-	size_t		 c;
 	size_t		 nr;
 	uint8_t		*dummy_csums;
 
@@ -198,15 +197,14 @@ array_test_case_create(struct vos_fetch_test_context *ctx,
 	ctx->nr = nr;
 	bio_sgl_init(&ctx->bsgl, nr);
 	ctx->bsgl.bs_nr_out = nr;
-	D_ALLOC_ARRAY(ctx->biov_csums, nr);
-	assert_non_null(ctx->biov_csums);
+	assert_success(dcs_csum_info_list_init(&ctx->biov_csums, 10));
 
-	c = 0;
 	for (i = 0; i < nr; i++) {
 		struct extent_info	*l;
 		char			*data;
 		struct bio_iov		*biov;
-		struct dcs_csum_info	*info;
+		struct dcs_csum_info	 info;
+		uint8_t			 csum_buf[128];
 		size_t			 data_len;
 		size_t			 num_of_csum;
 		bio_addr_t		 addr = {0};
@@ -234,14 +232,15 @@ array_test_case_create(struct vos_fetch_test_context *ctx,
 			/** Just a rough count */
 			num_of_csum = data_len / cs + 1;
 
-			info = &ctx->biov_csums[c++];
-			D_ALLOC(info->cs_csum, csum_len * num_of_csum);
-			info->cs_buf_len = csum_len * num_of_csum;
-			info->cs_nr = num_of_csum;
-			info->cs_len = csum_len;
-			info->cs_chunksize = cs;
+			assert_true(csum_len * num_of_csum <= ARRAY_SIZE(csum_buf));
+			info.cs_csum = csum_buf;
+			info.cs_buf_len = csum_len * num_of_csum;
+			info.cs_nr = num_of_csum;
+			info.cs_len = csum_len;
+			info.cs_chunksize = cs;
 			for (j = 0; j < num_of_csum; j++)
-				ci_insert(info, j, dummy_csums, csum_len);
+				ci_insert(&info, j, dummy_csums, csum_len);
+			dcs_csum_info_save(&ctx->biov_csums, &info);
 		}
 	}
 
@@ -268,10 +267,8 @@ test_case_destroy(struct vos_fetch_test_context *ctx)
 
 		if (bio_buf)
 			D_FREE(bio_buf);
-
-		if (ctx->biov_csums[i].cs_csum)
-			D_FREE(ctx->biov_csums[i].cs_csum);
 	}
+	dcs_csum_info_list_fini(&ctx->biov_csums);
 
 	if (ctx->iod.iod_recxs)
 		D_FREE(ctx->iod.iod_recxs);
@@ -284,7 +281,7 @@ static int
 fetch_csum_verify_bsgl_with_args(struct vos_fetch_test_context *ctx)
 {
 	return ds_csum_add2iod(
-		&ctx->iod, ctx->csummer, &ctx->bsgl, ctx->biov_csums, NULL,
+		&ctx->iod, ctx->csummer, &ctx->bsgl, &ctx->biov_csums, NULL,
 		ctx->iod_csum);
 }
 
@@ -1492,6 +1489,7 @@ update_fetch_sv(void **state)
 	 * biov 'extent'
 	 */
 	struct dcs_csum_info	 from_vos_begin = {0};
+	struct dcs_ci_list	 from_vos_begin_list = {0};
 	struct dcs_csum_info	 csum_info = {0};
 	struct dcs_iod_csums	 iod_csums = {0};
 
@@ -1519,8 +1517,10 @@ update_fetch_sv(void **state)
 
 	ci_set(&from_vos_begin, &csum, sizeof(uint32_t), sizeof(uint32_t), 1,
 	       CSUM_NO_CHUNK, 1);
+	assert_success(dcs_csum_info_list_init(&from_vos_begin_list, 1));
+	dcs_csum_info_save(&from_vos_begin_list, &from_vos_begin);
 
-	ds_csum_add2iod(&iod, csummer, &bsgl, &from_vos_begin, NULL,
+	ds_csum_add2iod(&iod, csummer, &bsgl, &from_vos_begin_list, NULL,
 			&iod_csums);
 
 	assert_memory_equal(csum_info.cs_csum, from_vos_begin.cs_csum,

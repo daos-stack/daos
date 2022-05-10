@@ -19,6 +19,7 @@ import (
 	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/common/cmdutil"
 	"github.com/daos-stack/daos/src/control/fault"
+	"github.com/daos-stack/daos/src/control/lib/hardware/hwprov"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/pbin"
 )
@@ -38,11 +39,11 @@ type mainOpts struct {
 	Syslog  bool `long:"syslog" description:"Enable logging to syslog"`
 
 	// Define subcommands
-	Storage  storageCmd              `command:"storage" description:"Perform tasks related to locally-attached storage"`
-	Start    startCmd                `command:"start" description:"Start daos_server"`
-	Network  networkCmd              `command:"network" description:"Perform network device scan based on fabric provider"`
-	Version  versionCmd              `command:"version" description:"Print daos_server version"`
-	DumpTopo cmdutil.DumpTopologyCmd `command:"dump-topology" description:"Dump system topology"`
+	Storage  storageCmd             `command:"storage" description:"Perform tasks related to locally-attached storage"`
+	Start    startCmd               `command:"start" description:"Start daos_server"`
+	Network  networkCmd             `command:"network" description:"Perform network device scan based on fabric provider"`
+	Version  versionCmd             `command:"version" description:"Print daos_server version"`
+	DumpTopo hwprov.DumpTopologyCmd `command:"dump-topology" description:"Dump system topology"`
 }
 
 type versionCmd struct{}
@@ -51,18 +52,6 @@ func (cmd *versionCmd) Execute(_ []string) error {
 	fmt.Printf("%s v%s\n", build.ControlPlaneName, build.DaosVersion)
 	os.Exit(0)
 	return nil
-}
-
-type cmdLogger interface {
-	setLog(*logging.LeveledLogger)
-}
-
-type logCmd struct {
-	log *logging.LeveledLogger
-}
-
-func (c *logCmd) setLog(log *logging.LeveledLogger) {
-	c.log = log
 }
 
 func exitWithError(log *logging.LeveledLogger, err error) {
@@ -98,8 +87,8 @@ func parseOpts(args []string, opts *mainOpts, log *logging.LeveledLogger) error 
 			log.WithErrorLogger((&logging.DefaultErrorLogger{}).WithSyslogOutput())
 		}
 
-		if logCmd, ok := cmd.(cmdLogger); ok {
-			logCmd.setLog(log)
+		if logCmd, ok := cmd.(cmdutil.LogSetter); ok {
+			logCmd.SetLog(log)
 		}
 
 		if cfgCmd, ok := cmd.(cfgLoader); ok {

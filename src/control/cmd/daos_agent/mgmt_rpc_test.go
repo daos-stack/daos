@@ -8,6 +8,7 @@ package main
 
 import (
 	"context"
+	"net"
 	"sync"
 	"testing"
 
@@ -17,6 +18,7 @@ import (
 
 	"github.com/daos-stack/daos/src/control/common"
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
+	"github.com/daos-stack/daos/src/control/common/test"
 	"github.com/daos-stack/daos/src/control/lib/control"
 	"github.com/daos-stack/daos/src/control/lib/hardware"
 	"github.com/daos-stack/daos/src/control/logging"
@@ -59,12 +61,12 @@ func TestAgent_mgmtModule_getAttachInfo(t *testing.T) {
 		return result
 	}
 
-	testFI := &FabricInterface{
-		Name:        "test0",
-		Domain:      "test0",
-		NetDevClass: hardware.Ether,
-		Providers:   []string{"ofi+tcp"},
-	}
+	testFI := fabricInterfaceFromHardware(&hardware.FabricInterface{
+		Name:         "test0",
+		NetInterface: "test0",
+		DeviceClass:  hardware.Ether,
+		Providers:    common.NewStringSet("ofi+tcp"),
+	})
 
 	hintResp := func(resp *mgmtpb.GetAttachInfoResp) *mgmtpb.GetAttachInfoResp {
 		withHint := new(mgmtpb.GetAttachInfoResp)
@@ -100,7 +102,7 @@ func TestAgent_mgmtModule_getAttachInfo(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
-			defer common.ShowBufferOnFailure(t, buf)
+			defer test.ShowBufferOnFailure(t, buf)
 
 			sysName := "dontcare"
 			mod := &mgmtModule{
@@ -126,7 +128,7 @@ func TestAgent_mgmtModule_getAttachInfo(t *testing.T) {
 			for _, expResp := range tc.expResps {
 				resp, err := mod.getAttachInfo(context.Background(), 0, sysName)
 
-				common.CmpErr(t, nil, err)
+				test.CmpErr(t, nil, err)
 
 				if diff := cmp.Diff(expResp, resp, cmpopts.IgnoreUnexported(mgmtpb.GetAttachInfoResp{}, mgmtpb.ClientNetHint{})); diff != "" {
 					t.Fatalf("-want, +got:\n%s", diff)
@@ -139,7 +141,7 @@ func TestAgent_mgmtModule_getAttachInfo(t *testing.T) {
 
 func TestAgent_mgmtModule_getAttachInfo_Parallel(t *testing.T) {
 	log, buf := logging.NewTestLogger(t.Name())
-	defer common.ShowBufferOnFailure(t, buf)
+	defer test.ShowBufferOnFailure(t, buf)
 
 	sysName := "dontcare"
 
@@ -150,12 +152,12 @@ func TestAgent_mgmtModule_getAttachInfo_Parallel(t *testing.T) {
 			log: log,
 			numaMap: map[int][]*FabricInterface{
 				0: {
-					&FabricInterface{
-						Name:        "test0",
-						Domain:      "test0",
-						NetDevClass: hardware.Ether,
-						Providers:   []string{"ofi+tcp"},
-					},
+					fabricInterfaceFromHardware(&hardware.FabricInterface{
+						Name:         "test0",
+						NetInterface: "test0",
+						DeviceClass:  hardware.Ether,
+						Providers:    common.NewStringSet("ofi+tcp"),
+					}),
 				},
 			},
 		}),
@@ -194,4 +196,171 @@ func TestAgent_mgmtModule_getAttachInfo_Parallel(t *testing.T) {
 	}
 
 	wg.Wait()
+}
+
+type mockNUMAProvider struct {
+	GetNUMANodeIDForPIDResult uint
+	GetNUMANodeIDForPIDErr    error
+}
+
+func (m *mockNUMAProvider) GetNUMANodeIDForPID(_ context.Context, _ int32) (uint, error) {
+	return m.GetNUMANodeIDForPIDResult, m.GetNUMANodeIDForPIDErr
+}
+
+func TestAgent_mgmtModule_getNUMANode(t *testing.T) {
+	for name, tc := range map[string]struct {
+		useDefaultNUMA bool
+		numaGetter     hardware.ProcessNUMAProvider
+		expResult      uint
+		expErr         error
+	}{
+		"default": {
+			useDefaultNUMA: true,
+			numaGetter:     &mockNUMAProvider{GetNUMANodeIDForPIDResult: 2},
+			expResult:      0,
+		},
+		"got NUMA": {
+			numaGetter: &mockNUMAProvider{GetNUMANodeIDForPIDResult: 2},
+			expResult:  2,
+		},
+		"error": {
+			numaGetter: &mockNUMAProvider{
+				GetNUMANodeIDForPIDErr: errors.New("mock GetNUMANodeIDForPID"),
+			},
+			expErr: errors.New("mock GetNUMANodeIDForPID"),
+		},
+		"non-NUMA-aware": {
+			numaGetter: &mockNUMAProvider{
+				GetNUMANodeIDForPIDErr: hardware.ErrNoNUMANodes,
+			},
+			expResult: 0,
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(t.Name())
+			defer test.ShowBufferOnFailure(t, buf)
+
+			mod := &mgmtModule{
+				log:            log,
+				useDefaultNUMA: tc.useDefaultNUMA,
+				numaGetter:     tc.numaGetter,
+			}
+
+			result, err := mod.getNUMANode(context.Background(), 123)
+
+			test.AssertEqual(t, tc.expResult, result, "")
+			test.CmpErr(t, tc.expErr, err)
+		})
+	}
+}
+
+func TestAgent_mgmtModule_waitFabricReady(t *testing.T) {
+	defaultNetIfaceFn := func() ([]net.Interface, error) {
+		return []net.Interface{
+			{Name: "t0"},
+			{Name: "t1"},
+			{Name: "t2"},
+		}, nil
+	}
+
+	defaultDevClassProv := &hardware.MockNetDevClassProvider{
+		GetNetDevClassReturn: []hardware.MockGetNetDevClassResult{
+			{
+				ExpInput: "t0",
+				NDC:      hardware.Infiniband,
+			},
+			{
+				ExpInput: "t1",
+				NDC:      hardware.Infiniband,
+			},
+			{
+				ExpInput: "t2",
+				NDC:      hardware.Ether,
+			},
+		},
+	}
+
+	for name, tc := range map[string]struct {
+		netIfacesFn  func() ([]net.Interface, error)
+		devClassProv *hardware.MockNetDevClassProvider
+		devStateProv *hardware.MockNetDevStateProvider
+		netDevClass  hardware.NetDevClass
+		expErr       error
+		expChecked   []string
+	}{
+		"netIfaces fails": {
+			netIfacesFn: func() ([]net.Interface, error) {
+				return nil, errors.New("mock netIfaces")
+			},
+			netDevClass: hardware.Infiniband,
+			expErr:      errors.New("mock netIfaces"),
+		},
+		"GetNetDevClass fails": {
+			devClassProv: &hardware.MockNetDevClassProvider{
+				GetNetDevClassReturn: []hardware.MockGetNetDevClassResult{
+					{
+						ExpInput: "t0",
+						Err:      errors.New("mock GetNetDevClass"),
+					},
+				},
+			},
+			netDevClass: hardware.Infiniband,
+			expErr:      errors.New("mock GetNetDevClass"),
+		},
+		"GetNetDevState fails": {
+			devStateProv: &hardware.MockNetDevStateProvider{
+				GetStateReturn: []hardware.MockNetDevStateResult{
+					{Err: errors.New("mock NetDevStateProvider")},
+				},
+			},
+			netDevClass: hardware.Infiniband,
+			expErr:      errors.New("mock NetDevStateProvider"),
+			expChecked:  []string{"t0"},
+		},
+		"down devices are ignored": {
+			devStateProv: &hardware.MockNetDevStateProvider{
+				GetStateReturn: []hardware.MockNetDevStateResult{
+					{State: hardware.NetDevStateDown},
+					{State: hardware.NetDevStateReady},
+				},
+			},
+			netDevClass: hardware.Infiniband,
+			expChecked:  []string{"t0", "t1"},
+		},
+		"success": {
+			netDevClass: hardware.Infiniband,
+			expChecked:  []string{"t0", "t1"},
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(t.Name())
+			defer test.ShowBufferOnFailure(t, buf)
+
+			if tc.netIfacesFn == nil {
+				tc.netIfacesFn = defaultNetIfaceFn
+			}
+
+			if tc.devClassProv == nil {
+				tc.devClassProv = defaultDevClassProv
+			}
+
+			if tc.devStateProv == nil {
+				tc.devStateProv = &hardware.MockNetDevStateProvider{}
+			}
+
+			mod := &mgmtModule{
+				log:            log,
+				netIfaces:      tc.netIfacesFn,
+				devClassGetter: tc.devClassProv,
+				devStateGetter: tc.devStateProv,
+			}
+
+			err := mod.waitFabricReady(context.Background(), tc.netDevClass)
+
+			test.CmpErr(t, tc.expErr, err)
+			if diff := cmp.Diff(tc.expChecked, tc.devStateProv.GetStateCalled); diff != "" {
+				t.Fatalf("-want, +got:\n%s", diff)
+			}
+		})
+	}
 }

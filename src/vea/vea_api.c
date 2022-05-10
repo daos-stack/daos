@@ -13,7 +13,7 @@
 static void
 erase_md(struct umem_instance *umem, struct vea_space_df *md)
 {
-	struct umem_attr uma;
+	struct umem_attr uma = {0};
 	daos_handle_t free_btr, vec_btr;
 	int rc;
 

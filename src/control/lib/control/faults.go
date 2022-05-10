@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2021 Intel Corporation.
+// (C) Copyright 2020-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -35,6 +35,11 @@ var (
 		code.ClientFormatRunningSystem,
 		"storage format invoked on a running system",
 		"stop and erase the system, then retry the format operation",
+	)
+	FaultConfigVMDImbalance = clientFault(
+		code.ClientConfigVMDImbalance,
+		"different number of backing devices behind each engine's VMD addresses",
+		"assign an equal number of NVMe SSDs to each VMD when configuring in BIOS",
 	)
 )
 

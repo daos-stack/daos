@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2021 Intel Corporation.
+ * (C) Copyright 2021-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -29,31 +29,36 @@ ds_cont_metrics_alloc(const char *path, int tgt_id)
 	if (metrics == NULL)
 		return NULL;
 
-	rc = d_tm_add_metric(&metrics->cpm_open_count, D_TM_COUNTER,
-			     "Number of times cont_open has been called",
+	rc = d_tm_add_metric(&metrics->open_total, D_TM_COUNTER,
+			     "Total number of successful container open operations",
 			     "ops", "%s/ops/cont_open", path);
 	if (rc != 0)
-		D_ERROR("failed to add open counter: " DF_RC "\n", DP_RC(rc));
+		D_WARN("Failed to create container open counter: "DF_RC"\n", DP_RC(rc));
 
-	rc = d_tm_add_metric(&metrics->cpm_open_cont_gauge, D_TM_GAUGE,
-			     "Number of open container handles", "hdls",
-			     "%s/container_handles", path);
-	if (rc != 0)
-		D_ERROR("failed to add open cont gauge: " DF_RC "\n",
-			DP_RC(rc));
-
-	rc = d_tm_add_metric(&metrics->cpm_close_count, D_TM_COUNTER,
-			     "Number of times cont_close has been called",
+	rc = d_tm_add_metric(&metrics->close_total, D_TM_COUNTER,
+			     "Total number of successful container close operations",
 			     "ops", "%s/ops/cont_close", path);
 	if (rc != 0)
-		D_ERROR("failed to add close counter: "
-			DF_RC "\n", DP_RC(rc));
+		D_WARN("Failed to create container close counter: "DF_RC"\n", DP_RC(rc));
 
-	rc = d_tm_add_metric(&metrics->cpm_destroy_count, D_TM_COUNTER,
-			     "Number of times cont_destroy has been called",
+	rc = d_tm_add_metric(&metrics->query_total, D_TM_COUNTER,
+			     "Total number of successful container query operations",
+			     "ops", "%s/ops/cont_query", path);
+	if (rc != 0)
+		D_WARN("Failed to create container query counter: "DF_RC"\n", DP_RC(rc));
+
+	rc = d_tm_add_metric(&metrics->create_total, D_TM_COUNTER,
+			     "Total number of successful container create operations",
+			     "ops", "%s/ops/cont_create", path);
+	if (rc != 0)
+		D_WARN("Failed to create container create counter: "DF_RC"\n", DP_RC(rc));
+
+
+	rc = d_tm_add_metric(&metrics->destroy_total, D_TM_COUNTER,
+			     "Total number of successful container destroy operations",
 			     "ops", "%s/ops/cont_destroy", path);
 	if (rc != 0)
-		D_ERROR("failed to add close counter: " DF_RC "\n", DP_RC(rc));
+		D_WARN("Failed to create container destroy counter: "DF_RC"\n", DP_RC(rc));
 
 	return metrics;
 }

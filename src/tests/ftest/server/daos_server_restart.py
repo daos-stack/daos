@@ -6,7 +6,7 @@
 """
 from avocado import fail_on
 from apricot import TestWithServers
-from command_utils import CommandFailure
+from exception_utils import CommandFailure
 from server_utils import ServerFailed
 
 
@@ -20,11 +20,11 @@ class DaosServerTest(TestWithServers):
     """
     @fail_on(ServerFailed)
     @fail_on(CommandFailure)
-    def restart_daos_server(self, reformat=True):
+    def restart_daos_server(self, force=True):
         """Perform server stop and start.
 
         Args:
-            reformat (bool): always reformat storage, could be destructive.
+            force (bool): always reformat storage, could be destructive.
         """
         self.log.info("=Restart daos_server, server stop().")
         self.server_managers[0].stop()
@@ -33,7 +33,7 @@ class DaosServerTest(TestWithServers):
         self.log.info("=Restart daos_server, detect_format_ready().")
         self.server_managers[0].detect_format_ready()
         self.log.info("=Restart daos_server, dmg storage_format.")
-        self.server_managers[0].dmg.storage_format(reformat)
+        self.server_managers[0].dmg.storage_format(force)
         self.log.info("=Restart daos_server, detect_engine_start().")
         self.server_managers[0].detect_engine_start()
         self.log.info("=Restart daos_agent, stop")

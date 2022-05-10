@@ -15,7 +15,7 @@
 #include <daos/rpc.h>
 #include <daos_types.h>
 #include "obj_rpc.h"
-#include "obj_internal.h"
+#include "srv_internal.h"
 
 static inline bool
 obj_ec_is_valid_tgt(struct daos_cpd_ec_tgts *tgt_map, uint32_t map_size,
@@ -73,8 +73,6 @@ obj_ec_rw_req_split(daos_unit_oid_t oid, struct obj_iod_array *iod_array,
 	int			 count = 0;
 	int			 rc = 0;
 
-	/* minimal K/P is 2/1, so at least 1 forward targets */
-	D_ASSERT(tgt_nr >= 1);
 	D_ASSERT(oiods != NULL);
 	/* as we select the last parity node as leader, and for any update
 	 * there must be a siod (the last siod) for leader except for singv.

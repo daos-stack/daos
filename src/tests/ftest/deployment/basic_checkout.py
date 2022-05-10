@@ -8,7 +8,7 @@
 from ior_test_base import IorTestBase
 from mdtest_test_base import MdtestBase
 from data_mover_test_base import DataMoverTestBase
-from command_utils_base import CommandFailure
+from exception_utils import CommandFailure
 
 class BasicCheckout(IorTestBase, MdtestBase):
     # pylint: disable=too-few-public-methods

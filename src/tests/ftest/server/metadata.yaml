@@ -33,7 +33,7 @@ server_config:
       log_mask: DEBUG,MEM=ERR
       env_vars:
         - DAOS_MD_CAP=128
-        - DD_MASK=mgmt,md,dsms,any
+        - DD_MASK=group_metadata_only
     1:
       targets: 8
       first_core: 0
@@ -49,7 +49,7 @@ server_config:
       log_mask: DEBUG,MEM=ERR
       env_vars:
         - DAOS_MD_CAP=128
-        - DD_MASK=mgmt,md,dsms,any
+        - DD_MASK=group_metadata_only
 pool:
   name: daos_server
   svcn: 3
@@ -70,3 +70,5 @@ ior:
     F: "-r -R -G 1"
   objectclass:
     dfs_oclass: "SX"
+metadata:
+  mean_percent: 0.5

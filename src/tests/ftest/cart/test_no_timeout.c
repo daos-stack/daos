@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2018-2021 Intel Corporation.
+ * (C) Copyright 2018-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -99,7 +99,7 @@ test_run(void)
 
 	rc = crtu_wait_for_ranks(test_g.t_crt_ctx[0], grp, rank_list,
 				 test_g.t_srv_ctx_num - 1,
-				 test_g.t_srv_ctx_num, 5, 150);
+				 test_g.t_srv_ctx_num, 60, 120);
 	D_ASSERTF(rc == 0, "wait_for_ranks() failed; rc=%d\n", rc);
 
 	crt_group_size(test_g.t_remote_group, &test_g.t_remote_group_size);

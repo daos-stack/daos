@@ -7,7 +7,7 @@
 import time
 
 from avocado.core.exceptions import TestFail
-from command_utils_base import CommandFailure
+from exception_utils import CommandFailure
 from pool_test_base import PoolTestBase
 
 

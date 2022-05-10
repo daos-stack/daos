@@ -1,6 +1,6 @@
 #!/usr/bin/python3
 """
-(C) Copyright 2021 Intel Corporation.
+(C) Copyright 2021-2022 Intel Corporation.
 
 SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -22,7 +22,7 @@ class TestWithTelemetryBasic(TestWithTelemetry):
         self.container = []
         self.metrics = {
             "open_count": {},
-            "active_count": {},
+            "create_count": {},
             "close_count": {},
             "destroy_count": {}}
         self.pool_leader_host = None
@@ -33,10 +33,8 @@ class TestWithTelemetryBasic(TestWithTelemetry):
         Args:
             posix (bool): Whether or not to create a posix container
         """
-        self.container.append(self.get_container(self.pool, create=False))
-        self.container[-1].type.update(
-            "POSIX" if posix else None, "container.type")
-        self.container[-1].create()
+        self.container.append(self.get_container(self.pool, type=("POSIX" if posix else None)))
+        self.metrics["create_count"][self.pool_leader_host] += 1
         self.metrics["open_count"][self.pool_leader_host] += 1
         self.metrics["close_count"][self.pool_leader_host] += 1
         if posix:
@@ -51,7 +49,6 @@ class TestWithTelemetryBasic(TestWithTelemetry):
         """
         container.open()
         self.metrics["open_count"][self.pool_leader_host] += 1
-        self.metrics["active_count"][self.pool_leader_host] += 1
 
     def close_container(self, container):
         """Close the container and update the metrics.
@@ -61,7 +58,6 @@ class TestWithTelemetryBasic(TestWithTelemetry):
         """
         container.close()
         self.metrics["close_count"][self.pool_leader_host] += 1
-        self.metrics["active_count"][self.pool_leader_host] -= 1
 
     def destroy_container(self, container):
         """Destroy the container and update the metrics.
@@ -114,10 +110,11 @@ class TestWithTelemetryBasic(TestWithTelemetry):
 
         # Verify container telemetry metrics report 0 before container creation
         self.log.info("Before container creation")
+        data = self.telemetry.get_container_metrics()
         container_metrics = self.telemetry.get_container_metrics()
         for host, data in container_metrics.items():
             self.metrics["open_count"][host] = data["engine_pool_ops_cont_open"]
-            self.metrics["active_count"][host] = data["engine_pool_container_handles"]
+            self.metrics["create_count"][host] = data["engine_pool_ops_cont_create"]
             self.metrics["close_count"][host] = data["engine_pool_ops_cont_close"]
             self.metrics["destroy_count"][host] = data["engine_pool_ops_cont_destroy"]
 

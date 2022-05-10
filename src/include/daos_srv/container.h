@@ -38,6 +38,7 @@ int ds_cont_svc_set_prop(uuid_t pool_uuid, uuid_t cont_uuid,
 
 int ds_cont_list(uuid_t pool_uuid, struct daos_pool_cont_info **conts,
 		 uint64_t *ncont);
+int ds_cont_upgrade(uuid_t pool_uuid, struct cont_svc *svc);
 
 int ds_cont_tgt_close(uuid_t hdl_uuid);
 int ds_cont_tgt_open(uuid_t pool_uuid, uuid_t cont_hdl_uuid,
@@ -57,6 +58,7 @@ struct ds_cont_child {
 	uuid_t			 sc_pool_uuid;	/* pool UUID */
 	struct ds_pool_child	*sc_pool;
 	d_list_t		 sc_link;	/* link to spc_cont_list */
+	d_list_t		 sc_open_hdls;	/* the list of ds_cont_hdl. */
 	struct daos_csummer	*sc_csummer;
 	struct cont_props	 sc_props;
 
@@ -108,6 +110,12 @@ struct ds_cont_child {
 	 * local VOS.
 	 */
 	uint64_t		*sc_ec_query_agg_eph;
+	/**
+	 * Timestamp of last EC update, which is used by aggregation to check
+	 * if it needs to do EC aggregate.
+	 */
+	uint64_t		sc_ec_update_timestamp;
+
 	/* The objects with committable DTXs in DRAM. */
 	daos_handle_t		 sc_dtx_cos_hdl;
 	/* The DTX COS-btree. */
@@ -122,24 +130,31 @@ struct ds_cont_child {
 	uint32_t		 sc_rw_disabled:1;
 };
 
-typedef uint64_t (*agg_param_get_eph_t)(struct ds_cont_child *cont);
 struct agg_param {
 	void			*ap_data;
 	struct ds_cont_child	*ap_cont;
 	daos_epoch_t		ap_full_scan_hlc;
-	struct sched_request	*ap_req;
-	agg_param_get_eph_t	ap_max_eph_get;
-	agg_param_get_eph_t	ap_start_eph_get;
-	uint32_t		ap_vos_agg:1;
+	bool			ap_vos_agg;
 };
 
 typedef int (*cont_aggregate_cb_t)(struct ds_cont_child *cont,
 				   daos_epoch_range_t *epr, uint32_t flags,
-				   struct agg_param *param, uint64_t *msecs);
+				   struct agg_param *param);
 void
 cont_aggregate_interval(struct ds_cont_child *cont, cont_aggregate_cb_t cb,
 			struct agg_param *param);
-bool agg_rate_ctl(void *arg);
+
+/*
+ * Yield function regularly called by EC and VOS aggregation ULTs.
+ *
+ * \param[in] arg	Aggregation parameter
+ *
+ * \retval		-1:	Inform aggregation to abort current round;
+ *			 0:	Inform aggregation to run in tight mode; (less yield)
+ *			 1:	Inform aggregation to run in slack mode; (yield more often)
+ */
+int agg_rate_ctl(void *arg);
+
 /*
  * Per-thread container handle (memory) object
  *
@@ -148,6 +163,8 @@ bool agg_rate_ctl(void *arg);
  */
 struct ds_cont_hdl {
 	d_list_t		sch_entry;
+	/* link to ds_cont_child::sc_open_hdls if sch_cont is not NULL. */
+	d_list_t		sch_link;
 	uuid_t			sch_uuid;	/* of the container handle */
 	uint64_t		sch_flags;	/* user-supplied flags */
 	uint64_t		sch_sec_capas;	/* access control capas */
@@ -235,4 +252,7 @@ void ds_cont_tgt_ec_eph_query_ult(void *data);
 int ds_cont_ec_eph_insert(struct ds_pool *pool, uuid_t cont_uuid, int tgt_idx,
 			  uint64_t **epoch_p);
 int ds_cont_ec_eph_delete(struct ds_pool *pool, uuid_t cont_uuid, int tgt_idx);
+
+void ds_cont_ec_timestamp_update(struct ds_cont_child *cont);
+
 #endif /* ___DAOS_SRV_CONTAINER_H_ */

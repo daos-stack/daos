@@ -8,7 +8,7 @@ from collections import defaultdict
 import yaml
 
 from apricot import TestWithServers
-from command_utils import CommandFailure
+from exception_utils import CommandFailure
 from dmg_utils import DmgCommand
 
 
@@ -19,6 +19,7 @@ class ConfigGenerateOutput(TestWithServers):
 
     :avocado: recursive
     """
+
     def __init__(self, *args, **kwargs):
         """Initialize a ConfigGenerateOutput object."""
         super().__init__(*args, **kwargs)
@@ -481,8 +482,7 @@ class ConfigGenerateOutput(TestWithServers):
                     if not self.interface_to_providers[fabric_iface]:
                         errors.append(
                             "Unexpected fabric_iface! {}".format(fabric_iface))
-                    elif provider not in \
-                        self.interface_to_providers[fabric_iface]:
+                    elif provider not in self.interface_to_providers[fabric_iface]:
                         # Now check the provider field, e.g., ofi+tcp by
                         # checking the corresponding list in the dictionary.
                         msg = "Unexpected provider in fabric_iface! provider ="\
@@ -529,8 +529,7 @@ class ConfigGenerateOutput(TestWithServers):
                     if not self.interface_to_providers[fabric_iface]:
                         errors.append(
                             "Unexpected fabric_iface! {}".format(fabric_iface))
-                    elif provider not in \
-                        self.interface_to_providers[fabric_iface]:
+                    elif provider not in self.interface_to_providers[fabric_iface]:
                         # Now check the provider field, e.g., ofi+tcp by
                         # checking the corresponding list in the dictionary.
                         msg = "Unexpected provider in fabric_iface! provider ="\

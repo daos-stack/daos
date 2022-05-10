@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2021 Intel Corporation.
+// (C) Copyright 2019-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -18,9 +18,10 @@ import (
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	"github.com/daos-stack/daos/src/control/drpc"
 	"github.com/daos-stack/daos/src/control/events"
+	"github.com/daos-stack/daos/src/control/lib/daos"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/security"
-	"github.com/daos-stack/daos/src/control/system"
+	"github.com/daos-stack/daos/src/control/system/raft"
 )
 
 const (
@@ -30,7 +31,7 @@ const (
 type retryableDrpcReq struct {
 	proto.Message
 	RetryAfter        time.Duration
-	RetryableStatuses []drpc.DaosStatus
+	RetryableStatuses []daos.Status
 }
 
 func (rdr *retryableDrpcReq) GetMessage() proto.Message {
@@ -103,7 +104,7 @@ type drpcServerSetupReq struct {
 	sockDir string
 	engines []Engine
 	tc      *security.TransportConfig
-	sysdb   *system.Database
+	sysdb   *raft.Database
 	events  *events.PubSub
 }
 
@@ -115,7 +116,7 @@ func drpcServerSetup(ctx context.Context, req *drpcServerSetupReq) error {
 	}
 
 	sockPath := getDrpcServerSocketPath(req.sockDir)
-	drpcServer, err := drpc.NewDomainSocketServer(ctx, req.log, sockPath)
+	drpcServer, err := drpc.NewDomainSocketServer(req.log, sockPath)
 	if err != nil {
 		return errors.Wrap(err, "unable to create socket server")
 	}
@@ -125,7 +126,7 @@ func drpcServerSetup(ctx context.Context, req *drpcServerSetupReq) error {
 	drpcServer.RegisterRPCModule(newMgmtModule())
 	drpcServer.RegisterRPCModule(newSrvModule(req.log, req.sysdb, req.engines, req.events))
 
-	if err := drpcServer.Start(); err != nil {
+	if err := drpcServer.Start(ctx); err != nil {
 		return errors.Wrapf(err, "unable to start socket server on %s", sockPath)
 	}
 
@@ -234,7 +235,7 @@ func makeDrpcCall(ctx context.Context, log logging.Logger, client drpc.DomainSoc
 			if uErr := proto.Unmarshal(drpcResp.Body, dsr); uErr != nil {
 				return
 			}
-			status := drpc.DaosStatus(dsr.Status)
+			status := daos.Status(dsr.Status)
 
 			for _, retryableStatus := range rdr.RetryableStatuses {
 				if status == retryableStatus {

@@ -43,7 +43,7 @@ def get_version(env):
 
 
 API_VERSION_MAJOR = "2"
-API_VERSION_MINOR = "1"
+API_VERSION_MINOR = "3"
 API_VERSION_FIX = "0"
 API_VERSION = "{}.{}.{}".format(API_VERSION_MAJOR, API_VERSION_MINOR,
                                 API_VERSION_FIX)
@@ -348,6 +348,11 @@ def scons(): # pylint: disable=too-many-locals
         commits_file = None
 
     platform_arm = is_platform_arm()
+
+    if 'VIRTUAL_ENV' in os.environ:
+        env.PrependENVPath('PATH', os.path.join(os.environ['VIRTUAL_ENV'], 'bin'))
+        # pylint: disable=invalid-sequence-index
+        env['ENV']['VIRTUAL_ENV'] = os.environ['VIRTUAL_ENV']
 
     prereqs = PreReqComponent(env, opts, commits_file)
     if not GetOption('help') and not GetOption('clean'):

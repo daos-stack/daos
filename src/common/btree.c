@@ -320,7 +320,7 @@ btr_context_create(umem_off_t root_off, struct btr_root *root,
 static int
 btr_context_clone(struct btr_context *tcx, struct btr_context **tcx_p)
 {
-	struct umem_attr uma;
+	struct umem_attr uma = {0};
 	int		 rc;
 
 	umem_attr_get(&tcx->tc_tins.ti_umm, &uma);
@@ -431,7 +431,7 @@ void
 hkey_int_gen(d_iov_t *key,  void *hkey)
 {
 	/* Use key directory as unsigned integer in lieu of hkey */
-	D_ASSERT(key->iov_len <= sizeof(uint64_t));
+	D_ASSERT(key->iov_len == sizeof(uint64_t));
 	/* NB: This works for little endian architectures.  An
 	 * alternative would be explicit casting based on iov_len but
 	 * this is a little nicer to read.
@@ -464,6 +464,18 @@ static uint32_t
 btr_hkey_size(struct btr_context *tcx)
 {
 	return btr_hkey_size_const(btr_ops(tcx), tcx->tc_feats);
+}
+
+static inline int
+btr_verify_key(struct btr_context *tcx, d_iov_t *key)
+{
+	if (btr_is_int_key(tcx) && key->iov_len != sizeof(uint64_t)) {
+		D_ERROR("invalid integer key, expected: %lu, got: "DF_U64"\n",
+			sizeof(uint64_t), key->iov_len);
+		return -DER_INVAL;
+	}
+
+	return 0;
 }
 
 static void
@@ -1816,6 +1828,10 @@ dbtree_fetch(daos_handle_t toh, dbtree_probe_opc_t opc, uint32_t intent,
 	if (tcx == NULL)
 		return -DER_NO_HDL;
 
+	rc = btr_verify_key(tcx, key);
+	if (rc)
+		return rc;
+
 	rc = btr_probe_key(tcx, opc, intent, key);
 	switch (rc) {
 	case PROBE_RC_INPROGRESS:
@@ -1857,6 +1873,7 @@ dbtree_fetch_cur(daos_handle_t toh, d_iov_t *key_out, d_iov_t *val_out)
 	struct btr_context	*tcx;
 	struct btr_trace	*trace;
 	struct btr_node		*nd;
+	int			rc;
 
 	tcx = btr_hdl2tcx(toh);
 	if (tcx == NULL)
@@ -1864,6 +1881,10 @@ dbtree_fetch_cur(daos_handle_t toh, d_iov_t *key_out, d_iov_t *val_out)
 
 	if (btr_root_empty(tcx)) /* empty tree */
 		return -DER_NONEXIST;
+
+	rc = btr_verify_key(tcx, key_out);
+	if (rc)
+		return rc;
 
 	D_ASSERT(tcx->tc_depth > 0);
 	trace = &tcx->tc_trace[tcx->tc_depth - 1];
@@ -1903,6 +1924,10 @@ fetch_sibling(daos_handle_t toh, d_iov_t *key_out, d_iov_t *val_out, bool next, 
 	tcx = btr_hdl2tcx(toh);
 	if (tcx == NULL)
 		return -DER_NO_HDL;
+
+	rc = btr_verify_key(tcx, key_out);
+	if (rc)
+		return rc;
 
 	/* Save original trace */
 	if (!move) {
@@ -2058,6 +2083,7 @@ btr_upsert(struct btr_context *tcx, dbtree_probe_opc_t probe_opc,
 {
 	int	 rc;
 
+
 	if (probe_opc == BTR_PROBE_BYPASS)
 		rc = tcx->tc_probe_rc; /* trust previous probe... */
 	else
@@ -2145,6 +2171,10 @@ dbtree_update(daos_handle_t toh, d_iov_t *key, d_iov_t *val)
 	if (tcx == NULL)
 		return -DER_NO_HDL;
 
+	rc = btr_verify_key(tcx, key);
+	if (rc)
+		return rc;
+
 	rc = btr_tx_begin(tcx);
 	if (rc != 0)
 		return rc;
@@ -2152,6 +2182,49 @@ dbtree_update(daos_handle_t toh, d_iov_t *key, d_iov_t *val)
 	rc = btr_upsert(tcx, BTR_PROBE_EQ, DAOS_INTENT_UPDATE, key, val, NULL);
 
 	return btr_tx_end(tcx, rc);
+}
+
+/**
+ * Set the tree feats.
+ *
+ * \param root[in]	Tree root
+ * \param umm[in]	umem instance
+ * \param feats[in]	feats to set
+ *
+ * \return 0 on success
+ */
+int
+dbtree_feats_set(struct btr_root *root, struct umem_instance *umm, uint64_t feats)
+{
+	int			 rc = 0;
+
+	if (root->tr_feats == feats)
+		return 0;
+
+	if ((root->tr_feats & BTR_FEAT_MASK) != (feats & BTR_FEAT_MASK)) {
+		D_ERROR("Attempt to set internal features "DF_X64" denied\n", feats);
+		return -DER_INVAL;
+	}
+
+#ifdef DAOS_PMEM_BUILD
+	if (DAOS_ON_VALGRIND) {
+		rc = umem_tx_begin(umm, NULL);
+		if (rc != 0)
+			return rc;
+		rc = umem_tx_xadd_ptr(umm, &root->tr_feats, sizeof(root->tr_feats),
+				      POBJ_XADD_NO_SNAPSHOT);
+	}
+#endif
+
+	if (rc == 0)
+		root->tr_feats = feats;
+
+#ifdef DAOS_PMEM_BUILD
+	if (DAOS_ON_VALGRIND)
+		rc = umem_tx_end(umm, rc);
+#endif
+
+	return rc;
 }
 
 /**
@@ -2179,6 +2252,10 @@ dbtree_upsert(daos_handle_t toh, dbtree_probe_opc_t opc, uint32_t intent,
 	tcx = btr_hdl2tcx(toh);
 	if (tcx == NULL)
 		return -DER_NO_HDL;
+
+	rc = btr_verify_key(tcx, key);
+	if (rc)
+		return rc;
 
 	rc = btr_tx_begin(tcx);
 	if (rc != 0)
@@ -2981,6 +3058,10 @@ dbtree_delete(daos_handle_t toh, dbtree_probe_opc_t opc, d_iov_t *key,
 	if (tcx == NULL)
 		return -DER_NO_HDL;
 
+	rc = btr_verify_key(tcx, key);
+	if (rc)
+		return rc;
+
 	if (opc == BTR_PROBE_BYPASS)
 		goto delete;
 
@@ -3666,6 +3747,12 @@ dbtree_iter_probe(daos_handle_t ih, dbtree_probe_opc_t opc, uint32_t intent,
 	if (tcx == NULL)
 		return -DER_NO_HDL;
 
+	if (key) {
+		rc = btr_verify_key(tcx, key);
+		if (rc)
+			return rc;
+	}
+
 	itr = &tcx->tc_itr;
 	if (itr->it_state < BTR_ITR_INIT)
 		return -DER_NO_HDL;
@@ -3837,6 +3924,7 @@ dbtree_key2anchor(daos_handle_t toh, d_iov_t *key, daos_anchor_t *anchor)
 {
 	char hkey[DAOS_HKEY_MAX];
 	struct btr_context  *tcx;
+	int rc;
 
 	D_ASSERT(key != NULL);
 	D_ASSERT(anchor != NULL);
@@ -3844,6 +3932,10 @@ dbtree_key2anchor(daos_handle_t toh, d_iov_t *key, daos_anchor_t *anchor)
 	tcx = btr_hdl2tcx(toh);
 	if (tcx == NULL)
 		return -DER_NO_HDL;
+
+	rc = btr_verify_key(tcx, key);
+	if (rc)
+		return rc;
 
 	if (btr_is_direct_key(tcx)) {
 		btr_key_encode(tcx, key, anchor);
@@ -4065,7 +4157,8 @@ btr_class_init(umem_off_t root_off, struct btr_root *root,
 	if (tc->tc_feats & BTR_FEAT_SKIP_LEAF_REBAL)
 		*tree_feats |= BTR_FEAT_SKIP_LEAF_REBAL;
 
-	if ((*tree_feats & tc->tc_feats) != *tree_feats) {
+	/** Only check btree managed bits */
+	if ((*tree_feats & tc->tc_feats) != (*tree_feats & BTR_FEAT_MASK)) {
 		D_ERROR("Unsupported features "DF_X64"/"DF_X64"\n",
 			*tree_feats, tc->tc_feats);
 		return -DER_PROTO;

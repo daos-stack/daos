@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2021 Intel Corporation.
+ * (C) Copyright 2016-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -127,30 +127,6 @@ struct cmd_args_s {
 	char			*principal;	/* --principal for ACL */
 };
 
-#define ARGS_VERIFY_PUUID(ap, label, rcexpr)			\
-	do {							\
-		if (uuid_is_null((ap)->p_uuid)) {		\
-			fprintf(stderr, "pool UUID required\n");\
-			D_GOTO(label, (rcexpr));		\
-		}						\
-	} while (0)
-
-#define ARGS_VERIFY_CUUID(ap, label, rcexpr)				\
-	do {								\
-		if (uuid_is_null((ap)->c_uuid)) {			\
-			fprintf(stderr, "container UUID required\n");	\
-			D_GOTO(label, (rcexpr));			\
-		}							\
-	} while (0)
-
-#define ARGS_VERIFY_OID(ap, label, rcexpr)				\
-	do {								\
-		if (((ap)->oid.hi == 0) && ((ap)->oid.lo == 0)) {	\
-			fprintf(stderr, "object ID required\n");	\
-			D_GOTO(label, (rcexpr));			\
-		}							\
-	} while (0)
-
 #define ARGS_VERIFY_PATH_CREATE(ap, label, rcexpr)			\
 	do {								\
 		if (((ap)->type == DAOS_PROP_CO_LAYOUT_UNKNOWN)) {	\
@@ -160,38 +136,8 @@ struct cmd_args_s {
 		}							\
 	} while (0)
 
-#define ARGS_VERIFY_PATH_NON_CREATE(ap, label, rcexpr)			\
-	do {								\
-		if (((ap)->type != DAOS_PROP_CO_LAYOUT_UNKNOWN) ||	\
-		    ((ap)->oclass != OC_UNKNOWN)	||		\
-		    ((ap)->chunk_size != 0)) {				\
-			fprintf(stderr, "query by --path : do not "	\
-					"specify --type, --oclass, "	\
-					"or --chunk_size\n");		\
-			D_GOTO(label, (rcexpr));			\
-		}							\
-		if (!uuid_is_null((ap)->p_uuid)) {			\
-			fprintf(stderr, "query by --path : do not "	\
-					"specify --pool\n");		\
-			D_GOTO(label, (rcexpr));			\
-		}							\
-		if (!uuid_is_null((ap)->c_uuid)) {			\
-			fprintf(stderr, "query by --path : do not "	\
-					"specify --cont\n");		\
-			D_GOTO(label, (rcexpr));			\
-		}							\
-	} while (0)
-
 typedef int (*command_hdlr_t)(struct cmd_args_s *ap);
 
-/* Pool operations */
-int pool_query_hdlr(struct cmd_args_s *ap);
-int pool_list_containers_hdlr(struct cmd_args_s *ap);
-int pool_get_prop_hdlr(struct cmd_args_s *ap);
-int pool_set_attr_hdlr(struct cmd_args_s *ap);
-int pool_del_attr_hdlr(struct cmd_args_s *ap);
-int pool_get_attr_hdlr(struct cmd_args_s *ap);
-int pool_list_attrs_hdlr(struct cmd_args_s *ap);
 int pool_autotest_hdlr(struct cmd_args_s *ap);
 /* TODO: implement these pool op functions
  * int pool_stat_hdlr(struct cmd_args_s *ap);

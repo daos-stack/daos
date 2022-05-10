@@ -354,6 +354,7 @@ evt_iter_probe_sorted(struct evt_context *tcx, struct evt_iterator *iter,
 	rtmp.rc_ex.ex_lo = filter.fr_ex.ex_lo;
 	rtmp.rc_ex.ex_hi = filter.fr_ex.ex_hi;
 	rtmp.rc_epc = DAOS_EPOCH_MAX;
+	rtmp.rc_minor_epc = EVT_MINOR_EPC_MAX;
 
 	rc = evt_ent_array_fill(tcx, EVT_FIND_ALL, intent, &filter, &rtmp, enta);
 	if (rc == 0)

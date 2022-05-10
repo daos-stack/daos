@@ -14,7 +14,7 @@
 #include <daos/task.h>
 #include <daos/event.h>
 #include <daos/container.h>
-#include <daos_srv/daos_engine.h>
+#include <daos/object.h>
 
 #define EC_CSUM_OC	OC_EC_2P2G1
 
@@ -666,12 +666,15 @@ insert_data(const char *akey_format, const char *dkey, struct ioreq *req,
 }
 
 static int
-disabled_targets(test_arg_t *arg)
+disabled_targets(test_arg_t *arg, d_rank_list_t **affected_engines)
 {
 	int			rc;
 	daos_pool_info_t	info;
 
-	rc = daos_pool_query(arg->pool.poh, NULL, &info, NULL, NULL);
+	/* Note: (info.pi_bits & DPI_ENGINES_ENABLED) == 0, so we get a list of engines with
+	 * some (or all) of their targets disabled.
+	 */
+	rc = daos_pool_query(arg->pool.poh, affected_engines, &info, NULL, NULL);
 
 	if (rc < 0)
 		return rc;
@@ -1792,7 +1795,8 @@ rebuild_test(void **state, int chunksize, int data_len_bytes, int iod_type)
 	struct daos_obj_layout *layout2 = NULL;
 	uint32_t		 rank_to_exclude;
 	int			 rank_to_fetch;
-	uint32_t		 disabled_nr;
+	uint32_t		 disabled_nr, after_disabled_nr;
+	d_rank_list_t		*affected_engines = NULL;
 	int			 rc;
 
 	if (!test_runable(*state, 3))
@@ -1830,11 +1834,15 @@ rebuild_test(void **state, int chunksize, int data_len_bytes, int iod_type)
 
 	rank_to_exclude = layout1->ol_shards[0]->os_shard_loc[0].sd_rank;
 	print_message("Excluding rank %d\n", rank_to_exclude);
-	disabled_nr = disabled_targets(arg);
+	disabled_nr = disabled_targets(arg, NULL /* affected_engines */);
 	daos_exclude_server(arg->pool.pool_uuid, arg->group,
 			    arg->dmg_config,
 			    layout1->ol_shards[0]->os_shard_loc[0].sd_rank);
-	assert_true(disabled_nr < disabled_targets(arg));
+	after_disabled_nr = disabled_targets(arg, &affected_engines);
+	assert_true(disabled_nr < after_disabled_nr);
+	assert_true(d_rank_list_find(affected_engines, rank_to_exclude, NULL));
+	assert_int_equal(affected_engines->rl_nr, 1);
+	d_rank_list_free(affected_engines);
 
 	/** wait for rebuild */
 	test_rebuild_wait(&arg, 1);
@@ -1866,7 +1874,8 @@ rebuild_test(void **state, int chunksize, int data_len_bytes, int iod_type)
 
 	daos_reint_server(arg->pool.pool_uuid, arg->group, arg->dmg_config,
 			  rank_to_exclude);
-	assert_int_equal(disabled_nr, disabled_targets(arg));
+	after_disabled_nr = disabled_targets(arg, NULL);
+	assert_int_equal(disabled_nr, after_disabled_nr);
 	/** wait for rebuild */
 	test_rebuild_wait(&arg, 1);
 
@@ -2184,7 +2193,7 @@ tst_obj_list_obj(daos_handle_t oh, daos_epoch_range_t *epr, daos_key_t *dkey,
 }
 
 static int
-test_enum_unpack_cb(struct dss_enum_unpack_io *io, void *arg)
+test_enum_unpack_cb(struct dc_obj_enum_unpack_io *io, void *arg)
 {
 	struct daos_csummer	*csummer = NULL;
 	int			 rc;
@@ -2360,8 +2369,8 @@ test_enumerate_object(void **state)
 
 
 	unit_oid.id_pub = ctx.oid;
-	rc = dss_enum_unpack(unit_oid, kds, nr, &sgl, &csum_iov,
-			     test_enum_unpack_cb, NULL);
+	rc = dc_obj_enum_unpack(unit_oid, kds, nr, &sgl, &csum_iov,
+				test_enum_unpack_cb, NULL);
 	assert_success(rc);
 
 	/** Clean up */
@@ -2674,7 +2683,7 @@ run_daos_checksum_test(int rank, int size, int *sub_tests, int sub_tests_size)
 	int i;
 
 	if (rank != 0) {
-		MPI_Barrier(MPI_COMM_WORLD);
+		par_barrier(PAR_COMM_WORLD);
 		return 0;
 	}
 
@@ -2700,6 +2709,6 @@ run_daos_checksum_test(int rank, int size, int *sub_tests, int sub_tests_size)
 					test_teardown);
 	}
 
-	MPI_Barrier(MPI_COMM_WORLD);
+	par_barrier(PAR_COMM_WORLD);
 	return rc;
 }

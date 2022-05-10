@@ -4,7 +4,6 @@ hosts:
     test_clients:
         - client-B
 timeout: 7200
-job_manager_timeout: 700
 server_config:
     name: daos_server
     servers:
@@ -13,7 +12,6 @@ server_config:
         scm_class: dcpm
         scm_list: ["/dev/pmem0"]
         env_vars:
-            - CRT_SWIM_RPC_TIMEOUT=20
             - SWIM_PING_TIMEOUT=1800
             - SWIM_SUSPECT_TIMEOUT=16000
 pool:
@@ -26,7 +24,7 @@ container:
     type: POSIX
     control_method: daos
 dfuse:
-  mount_dir: "/tmp/daos_dfuse"
+    mount_dir: "/tmp/daos_dfuse"
 daos_vol_tests:
     testname: h5_partest_t_bigio
     client_processes: 6

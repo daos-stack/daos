@@ -97,6 +97,12 @@
 #
 #disable_srx: false
 #
+## Core Dump Filter
+## Optional filter to control which mappings are written to the core
+## dump in the event of a crash. See the following URL for more detail:
+## https://man7.org/linux/man-pages/man5/core.5.html
+#
+#core_dump_filter: 0x13
 #
 ## NVMe SSD inclusion list
 ## Immutable after running "dmg storage format".
@@ -193,12 +199,11 @@
 ##nr_hugepages: -1
 #
 #
-## Force specific debug mask for daos_server (control plane).
-## By default, just use the default debug mask used by daos_server.
-## Mask specifies minimum level of message significance to pass to logger.
-## Currently supported values are DEBUG and ERROR.
+## Set specific debug mask for daos_server (control plane).
+## The mask specifies minimum level of message significance to pass to logger.
+## Currently supported values are DISABLED, ERROR, INFO and DEBUG.
 #
-## default: DEBUG
+## default: INFO
 #control_log_mask: ERROR
 #
 #
@@ -284,7 +289,7 @@
 #  # For best performance, it is necessary that the fabric_iface of this engine
 #  # resides on the same NUMA node as the first_core.
 #  #
-#  # Optional parameter; set either this option or pinned_numa_node but not both.
+#  # Optional parameter; set either this option non-zero or pinned_numa_node but not both.
 #
 #  first_core: 0
 #
@@ -416,7 +421,7 @@
 #  #
 #  # Optional parameter; set either this option or first_core, but not both.
 #
-#  pinned_numa_node: 1
+#  #pinned_numa_node: 1
 #
 #  # Offset of the first core to be used for I/O service threads (targets).
 #  # Immutable after running "dmg storage format".
@@ -424,7 +429,7 @@
 #  # For best performance, it is necessary that the fabric_iface of this engine
 #  # resides on the same NUMA node as the first_core.
 #  #
-#  # Optional parameter; set either this option or pinned_numa_node but not both.
+#  # Optional parameter; set either this option non-zero or pinned_numa_node but not both.
 #
 #  first_core: 22
 #

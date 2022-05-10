@@ -1191,6 +1191,139 @@ ci_buf2uint64(const uint8_t *buf, uint16_t len)
 	return 0;
 }
 
+static int
+dcs_csum_info_list_resize(struct dcs_ci_list *list, daos_size_t number_of_bytes_needed)
+{
+	uint8_t			*new_allocation;
+	uint32_t		 i;
+	uint32_t		 new_buf_size;
+
+	new_buf_size = (list->dcl_buf_size + number_of_bytes_needed) * 2;
+	D_REALLOC(new_allocation, list->dcl_csum_infos, list->dcl_buf_size, new_buf_size);
+
+	if (new_allocation == NULL)
+		return -DER_NOMEM;
+	list->dcl_csum_infos = new_allocation;
+	list->dcl_buf_size = new_buf_size;
+
+	/* need to rewire the csum buffers */
+	for (i = 0; i < list->dcl_csum_infos_nr; i++) {
+		struct dcs_csum_info *dst = dcs_csum_info_get(list, i);
+
+		dst->cs_csum = ((uint8_t *)dst) + sizeof(struct dcs_csum_info);
+	}
+
+	return 0;
+}
+
+static inline bool
+list_has_enough_space(struct dcs_ci_list *list, struct dcs_csum_info *info,
+		      daos_size_t *size_needed)
+{
+	*size_needed = sizeof(struct dcs_csum_info) + ci_csums_len(*info);
+
+	return list->dcl_buf_used + *size_needed <= list->dcl_buf_size;
+}
+
+static inline void
+copy_csum_info(struct dcs_csum_info *dst, struct dcs_csum_info *src)
+{
+	/* copy everything, then will update the csum buffer */
+	*dst = *src;
+	/*
+	 * For a csum_info list, the csum will always be stored just after the csum_info.
+	 * It is assumed that enough memory has been allocated to perform this copy.
+	 */
+	dst->cs_csum = ((uint8_t *)dst) + sizeof(struct dcs_csum_info);
+	memcpy(dst->cs_csum, src->cs_csum, dst->cs_buf_len);
+}
+
+static struct dcs_csum_info *
+csum_info_get_local(struct dcs_ci_list *list, uint32_t idx, bool check_idx)
+{
+	struct dcs_csum_info	*result;
+	int			 i;
+
+	idx += list->dcl_csum_offset;
+	if (check_idx && idx >= list->dcl_csum_infos_nr)
+		return NULL;
+
+	result = (struct dcs_csum_info *) &list->dcl_csum_infos[0];
+	for (i = 0; i < idx; i++)
+		result = (struct dcs_csum_info *)(((uint8_t *)result) +
+						  sizeof(struct dcs_csum_info) +
+						  ci_csums_len(*result));
+
+	return result;
+}
+
+static struct dcs_csum_info *
+dcs_csum_info_get_next(struct dcs_ci_list *list)
+{
+	return csum_info_get_local(list, list->dcl_csum_infos_nr, false);
+}
+
+struct dcs_csum_info *
+dcs_csum_info_get(struct dcs_ci_list *list, uint32_t idx)
+{
+	D_ASSERT(list);
+
+	return csum_info_get_local(list, idx, true);
+}
+
+int
+dcs_csum_info_list_init(struct dcs_ci_list *list, uint32_t nr)
+{
+	/* An initial size. Using 8 extra bytes for csum storage, but the
+	 * buffer will grow as needed.
+	 */
+	daos_size_t initial_size = (sizeof(struct dcs_csum_info) + 8) * nr;
+
+	D_ASSERT(list);
+
+	memset(list, 0, sizeof(*list));
+	if (nr == 0)
+		return 0;
+
+	list->dcl_buf_size = initial_size;
+	D_ALLOC(list->dcl_csum_infos, list->dcl_buf_size);
+	if (list->dcl_csum_infos == NULL)
+		return -DER_NOMEM;
+
+	return 0;
+}
+
+void
+dcs_csum_info_list_fini(struct dcs_ci_list *list)
+{
+	D_FREE(list->dcl_csum_infos);
+	list->dcl_buf_size = 0;
+	list->dcl_csum_infos_nr = 0;
+	list->dcl_buf_used = 0;
+}
+
+int
+dcs_csum_info_save(struct dcs_ci_list *list, struct dcs_csum_info *info)
+{
+	daos_size_t		 size_needed;
+	struct dcs_csum_info	*dst;
+	int			 rc;
+
+	if (!list_has_enough_space(list, info, &size_needed)) {
+		rc = dcs_csum_info_list_resize(list, size_needed);
+		if (rc != 0)
+			return rc;
+	}
+
+	dst = dcs_csum_info_get_next(list);
+	copy_csum_info(dst, info);
+
+	list->dcl_csum_infos_nr++;
+	list->dcl_buf_used += size_needed;
+
+	return 0;
+}
+
 /** helper for printing csum as a 64bit value */
 uint64_t
 ci2csum(struct dcs_csum_info ci)

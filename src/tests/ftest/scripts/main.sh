@@ -68,6 +68,9 @@ unset OFI_INTERFACE
 # shellcheck disable=SC2153
 export D_LOG_FILE="$TEST_TAG_DIR/daos.log"
 
+# The dmg pool destroy can take up to 3 minutes to timeout.  To help ensure
+# that the avocado test tearDown method is run long enough to account for this
+# use a 240 second timeout when running tearDown after the test has timed out.
 mkdir -p ~/.config/avocado/
 cat <<EOF > ~/.config/avocado/avocado.conf
 [datadir.paths]
@@ -78,7 +81,7 @@ data_dir = $logs_prefix/ftest/avocado/data
 loglevel = DEBUG
 
 [runner.timeout]
-process_died = 60
+process_died = 240
 
 [sysinfo.collectibles]
 files = \$HOME/.config/avocado/sysinfo/files
@@ -225,10 +228,15 @@ fi
 ulimit -n 4096
 
 launch_args="-jcrisa"
-# can only process cores on EL7 currently
-if [ "$(lsb_release -s -i)" = "CentOS" ] ||
-   [ "$(lsb_release -s -i)" = "openSUSE" ]; then
-    launch_args="-jcrispa"
+# processing cores is broken on EL7 currently
+id="$(lsb_release -si)"
+if { [ "$id" = "CentOS" ]                 &&
+     [[ $(lsb_release -s -r) != 7.* ]]; } ||
+   [ "$id" = "AlmaLinux" ]                ||
+   [ "$id" = "Rocky" ]                    ||
+   [ "$id" = "RedHatEnterpriseServer" ]   ||
+   [ "$id" = "openSUSE" ]; then
+    launch_args+="p"
 fi
 
 # Clean stale job results
@@ -239,6 +247,8 @@ fi
 # now run it!
 # shellcheck disable=SC2086
 export WITH_VALGRIND
+export STAGE_NAME
+# shellcheck disable=SC2086
 if ! ./launch.py "${launch_args}" -th "${LOGS_THRESHOLD}" \
                  -ts "${TEST_NODES}" ${LAUNCH_OPT_ARGS} ${TEST_TAG_ARR[*]}; then
     rc=${PIPESTATUS[0]}

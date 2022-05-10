@@ -13,6 +13,7 @@ import (
 
 	"github.com/daos-stack/daos/src/control/common"
 	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
+	"github.com/daos-stack/daos/src/control/common/test"
 	"github.com/daos-stack/daos/src/control/lib/hardware"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/server/config"
@@ -30,11 +31,11 @@ func TestServer_ControlService_fabricInterfaceSetToNetworkScanResp(t *testing.T)
 		"single interface": {
 			fis: hardware.NewFabricInterfaceSet(
 				&hardware.FabricInterface{
-					Name:        "fi0",
-					OSDevice:    "net0",
-					Providers:   common.NewStringSet("p1"),
-					NUMANode:    1,
-					DeviceClass: hardware.Infiniband,
+					Name:         "fi0",
+					NetInterface: "net0",
+					Providers:    common.NewStringSet("p1"),
+					NUMANode:     1,
+					DeviceClass:  hardware.Infiniband,
 				},
 			),
 			expResult: &ctlpb.NetworkScanResp{
@@ -51,11 +52,11 @@ func TestServer_ControlService_fabricInterfaceSetToNetworkScanResp(t *testing.T)
 		"multi provider": {
 			fis: hardware.NewFabricInterfaceSet(
 				&hardware.FabricInterface{
-					Name:        "fi0",
-					OSDevice:    "net0",
-					Providers:   common.NewStringSet("p1", "p2"),
-					NUMANode:    1,
-					DeviceClass: hardware.Infiniband,
+					Name:         "fi0",
+					NetInterface: "net0",
+					Providers:    common.NewStringSet("p1", "p2"),
+					NUMANode:     1,
+					DeviceClass:  hardware.Infiniband,
 				},
 			),
 			expResult: &ctlpb.NetworkScanResp{
@@ -78,18 +79,18 @@ func TestServer_ControlService_fabricInterfaceSetToNetworkScanResp(t *testing.T)
 		"multi interface": {
 			fis: hardware.NewFabricInterfaceSet(
 				&hardware.FabricInterface{
-					Name:        "fi0",
-					OSDevice:    "net0",
-					Providers:   common.NewStringSet("p1"),
-					NUMANode:    0,
-					DeviceClass: hardware.Infiniband,
+					Name:         "fi0",
+					NetInterface: "net0",
+					Providers:    common.NewStringSet("p1"),
+					NUMANode:     0,
+					DeviceClass:  hardware.Infiniband,
 				},
 				&hardware.FabricInterface{
-					Name:        "fi1",
-					OSDevice:    "net1",
-					Providers:   common.NewStringSet("p1", "p2"),
-					NUMANode:    1,
-					DeviceClass: hardware.Infiniband,
+					Name:         "fi1",
+					NetInterface: "net1",
+					Providers:    common.NewStringSet("p1", "p2"),
+					NUMANode:     1,
+					DeviceClass:  hardware.Infiniband,
 				},
 			),
 			expResult: &ctlpb.NetworkScanResp{
@@ -118,13 +119,13 @@ func TestServer_ControlService_fabricInterfaceSetToNetworkScanResp(t *testing.T)
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
-			defer common.ShowBufferOnFailure(t, buf)
+			defer test.ShowBufferOnFailure(t, buf)
 
 			cs := mockControlService(t, log, config.DefaultServer(), nil, nil, nil)
 
 			result := cs.fabricInterfaceSetToNetworkScanResp(tc.fis, tc.provider)
 
-			if diff := cmp.Diff(tc.expResult, result, common.DefaultCmpOpts()...); diff != "" {
+			if diff := cmp.Diff(tc.expResult, result, test.DefaultCmpOpts()...); diff != "" {
 				t.Fatalf("(-want, +got)\n%s\n", diff)
 			}
 		})

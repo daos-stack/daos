@@ -14,7 +14,7 @@ import random
 from filecmp import cmp
 from apricot import TestWithServers
 from general_utils import run_command, DaosTestError
-from command_utils_base import CommandFailure
+from exception_utils import CommandFailure
 import slurm_utils
 from ClusterShell.NodeSet import NodeSet
 from getpass import getuser
@@ -66,6 +66,7 @@ class SoakTestBase(TestWithServers):
         self.initial_resv_file = None
         self.resv_cont = None
         self.mpi_module = None
+        self.sudo_cmd = None
 
     def setUp(self):
         """Define test setup to be done."""
@@ -148,10 +149,10 @@ class SoakTestBase(TestWithServers):
             try:
                 reserved_file_copy(self, final_resv_file, self.pool[0], self.resv_cont)
             except CommandFailure:
-                self.soak_errors.append("<<FAILED: Soak reserved container read failed>>")
+                errors.append("<<FAILED: Soak reserved container read failed>>")
 
             if not cmp(self.initial_resv_file, final_resv_file):
-                self.soak_errors.append("<<FAILED: Data verification error on reserved pool"
+                errors.append("<<FAILED: Data verification error on reserved pool"
                                         " after SOAK completed>>")
 
             for file in [self.initial_resv_file, final_resv_file]:
@@ -162,7 +163,10 @@ class SoakTestBase(TestWithServers):
         # display final metrics
         run_metrics_check(self, prefix="final")
         # Gather server logs
-        get_daos_server_logs(self)
+        try:
+            get_daos_server_logs(self)
+        except SoakTestError as error:
+            errors.append("<<FAILED: Failed to gather server logs {}>>".format(error))
         # Gather journalctl logs
         hosts = list(set(self.hostlist_servers))
         since = time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(self.start_time))
@@ -170,9 +174,13 @@ class SoakTestBase(TestWithServers):
         for journalctl_type in ["kernel", "daos_server"]:
             get_journalctl(self, hosts, since, until, journalctl_type, logging=True)
         # Gather client daos logs with resource manager
-        get_remote_dir(
-            self, self.base_test_dir, self.outputsoak_dir, self.hostlist_clients,
-            shared_dir=self.sharedsoak_dir, rm_remote=False, append="/daos_logs-")
+        try:
+            get_remote_dir(
+                self, self.base_test_dir, self.outputsoak_dir, self.hostlist_clients,
+                shared_dir=self.sharedsoak_dir, rm_remote=False, append="/daos_logs-")
+        except SoakTestError as error:
+            errors.append(
+                "<<FAILED: Failed to copy remote logs - {}>>".format(error))
 
         if self.all_failed_harassers:
             errors.extend(self.all_failed_harassers)
@@ -526,6 +534,7 @@ class SoakTestBase(TestWithServers):
         self.check_errors = []
         self.used = []
         self.mpi_module = self.params.get("mpi_module", "/run/*", default="mpi/mpich-x86_64")
+        enable_sudo = self.params.get("enable_sudo", "/run/*", default=True)
         test_to = self.params.get("test_timeout", test_param + "*")
         self.test_name = self.params.get("name", test_param + "*")
         single_test_pool = self.params.get(
@@ -534,6 +543,7 @@ class SoakTestBase(TestWithServers):
         job_list = self.params.get("joblist", test_param + "*")
         resv_bytes = self.params.get("resv_bytes", test_param + "*", 500000000)
         ignore_soak_errors = self.params.get("ignore_soak_errors", test_param + "*", False)
+        self.sudo_cmd = "sudo" if enable_sudo else ""
         if harassers:
             run_harasser = True
             self.log.info("<< Initial harasser list = %s>>", harassers)
