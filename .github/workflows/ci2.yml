@@ -67,6 +67,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
+        arch: [X64, ARM64]
         distro: [rocky, fedora, leap.15]
         compiler: [clang, gcc]
         include:
