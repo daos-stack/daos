@@ -27,7 +27,7 @@
 
 Name:          daos
 Version:       2.3.100
-Release:       7%{?relval}%{?dist}
+Release:       8%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       BSD-2-Clause-Patent
@@ -226,7 +226,7 @@ This is the package needed to run a DAOS client
 
 %package tests
 Summary: The entire DAOS test suite
-Requires: %{name}-client-tests-openmpi%{?_isa} = %{version}-%{release}
+Requires: %{name}-client-tests%{?_isa} = %{version}-%{release}
 
 %description tests
 This is the package is a metapackage to install all of the test packages
@@ -555,6 +555,9 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 # No files in a shim package
 
 %changelog
+* Tue May 10 2022 Phillip Henderson <phillip.henderson@intel.com> 2.1.102-8
+- Remove doas-client-tests-openmpi dependency from daos-tests
+
 * Fri May  6 2022 Ashley Pittman <ashley.m.pittman@intel.com> 2.3.100-7
 - Add dfuse unit-test binary to call from ftest.
 
