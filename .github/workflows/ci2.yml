@@ -139,8 +139,7 @@ jobs:
       matrix:
         compiler: [clang, gcc]
         include:
-          - arch: aarch64
-            distro: fedora_latest
+          - distro: fedora_arm
             base: el.8
     env:
       DEPS_JOBS: 10
