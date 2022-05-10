@@ -555,7 +555,7 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 # No files in a shim package
 
 %changelog
-* Tue May 10 2022 Phillip Henderson <phillip.henderson@intel.com> 2.1.102-8
+* Tue May 10 2022 Phillip Henderson <phillip.henderson@intel.com> 2.3.100-8
 - Remove doas-client-tests-openmpi dependency from daos-tests
 
 * Fri May  6 2022 Ashley Pittman <ashley.m.pittman@intel.com> 2.3.100-7
