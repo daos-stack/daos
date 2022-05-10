@@ -103,7 +103,7 @@ class DaosBuild(DfuseTestBase):
 
         remote_env = OrderedDict()
         remote_env['PATH'] = '{}:$PATH'.format(os.path.join(mount_dir, 'venv', 'bin'))
-        remote_env['VIRTUAL_ENV'] = '{}/venv'.format(os.path.join(mount_dir, 'venv'))
+        remote_env['VIRTUAL_ENV'] = os.path.join(mount_dir, 'venv')
 
         if intercept:
             remote_env['LD_PRELOAD'] = os.path.join(self.prefix, 'lib64', 'libioil.so')
