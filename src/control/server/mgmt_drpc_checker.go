@@ -14,6 +14,7 @@ import (
 
 	srvpb "github.com/daos-stack/daos/src/control/common/proto/srv"
 	"github.com/daos-stack/daos/src/control/drpc"
+	"github.com/daos-stack/daos/src/control/lib/daos"
 	"github.com/daos-stack/daos/src/control/system"
 	"github.com/daos-stack/daos/src/control/system/checker"
 )
@@ -35,7 +36,7 @@ func (mod *srvModule) handleCheckerListPools(_ context.Context, reqb []byte) (ou
 	pools, err := mod.poolDB.PoolServiceList(true)
 	if err != nil {
 		mod.log.Errorf("failed to list pools: %s", err)
-		resp.Status = int32(drpc.DaosMiscError)
+		resp.Status = int32(daos.MiscError)
 		return
 	}
 
@@ -66,27 +67,27 @@ func (mod *srvModule) handleCheckerRegisterPool(_ context.Context, reqb []byte) 
 	uuid, err := uuid.Parse(req.Uuid)
 	if err != nil {
 		mod.log.Errorf("invalid pool UUID %q: %s", req.Uuid, err)
-		resp.Status = int32(drpc.DaosInvalidInput)
+		resp.Status = int32(daos.InvalidInput)
 		return
 	}
-	if !drpc.LabelIsValid(req.Label) {
+	if !daos.LabelIsValid(req.Label) {
 		mod.log.Errorf("bad pool label %q", req.Label)
-		resp.Status = int32(drpc.DaosInvalidInput)
+		resp.Status = int32(daos.InvalidInput)
 		return
 	}
 	if len(req.Svcreps) == 0 {
 		mod.log.Errorf("pool %q has zero svcreps", req.Uuid)
-		resp.Status = int32(drpc.DaosInvalidInput)
+		resp.Status = int32(daos.InvalidInput)
 		return
 	}
 	if _, err := mod.poolDB.FindPoolServiceByUUID(uuid); err == nil {
 		mod.log.Errorf("pool with uuid %q already exists", req.Uuid)
-		resp.Status = int32(drpc.DaosExists)
+		resp.Status = int32(daos.Exists)
 		return
 	}
 	if _, err := mod.poolDB.FindPoolServiceByLabel(req.Label); err == nil {
 		mod.log.Errorf("pool with label %q already exists", req.Label)
-		resp.Status = int32(drpc.DaosExists)
+		resp.Status = int32(daos.Exists)
 		return
 	}
 
@@ -99,7 +100,7 @@ func (mod *srvModule) handleCheckerRegisterPool(_ context.Context, reqb []byte) 
 
 	if err := mod.poolDB.AddPoolService(ps); err != nil {
 		mod.log.Errorf("failed to register pool: %s", err)
-		resp.Status = int32(drpc.DaosMiscError)
+		resp.Status = int32(daos.MiscError)
 		return
 	}
 
@@ -122,24 +123,24 @@ func (mod *srvModule) handleCheckerDeregisterPool(_ context.Context, reqb []byte
 	uuid, err := uuid.Parse(req.Uuid)
 	if err != nil {
 		mod.log.Errorf("invalid pool UUID %q: %s", req.Uuid, err)
-		resp.Status = int32(drpc.DaosInvalidInput)
+		resp.Status = int32(daos.InvalidInput)
 		return
 	}
 
 	if _, err := mod.poolDB.FindPoolServiceByUUID(uuid); err != nil {
 		if system.IsPoolNotFound(err) {
 			mod.log.Errorf("pool with uuid %q does not exist", req.Uuid)
-			resp.Status = int32(drpc.DaosNonexistant)
+			resp.Status = int32(daos.Nonexistent)
 		} else {
 			mod.log.Errorf("failed to check pool uuid: %s", err)
-			resp.Status = int32(drpc.DaosMiscError)
+			resp.Status = int32(daos.MiscError)
 		}
 		return
 	}
 
 	if err := mod.poolDB.RemovePoolService(uuid); err != nil {
 		mod.log.Errorf("failed to remove pool: %s", err)
-		resp.Status = int32(drpc.DaosMiscError)
+		resp.Status = int32(daos.MiscError)
 		return
 	}
 
@@ -162,7 +163,7 @@ func (mod *srvModule) handleCheckerReport(_ context.Context, reqb []byte) (out [
 	finding := checker.AnnotateFinding(checker.NewFinding(req.Report))
 	if err := mod.checkerDB.AddCheckerFinding(finding); err != nil {
 		mod.log.Errorf("failed to add checker finding %+v: %s", finding, err)
-		resp.Status = int32(drpc.DaosMiscError)
+		resp.Status = int32(daos.MiscError)
 		return
 	}
 

@@ -18,6 +18,7 @@ import (
 	srvpb "github.com/daos-stack/daos/src/control/common/proto/srv"
 	"github.com/daos-stack/daos/src/control/common/test"
 	"github.com/daos-stack/daos/src/control/drpc"
+	"github.com/daos-stack/daos/src/control/lib/daos"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/system"
 	"github.com/daos-stack/daos/src/control/system/raft"
@@ -52,7 +53,7 @@ func TestSrvModule_HandleCheckerListPools(t *testing.T) {
 		},
 		"not replica": {
 			notReplica: true,
-			expResp:    &srvpb.CheckListPoolResp{Status: int32(drpc.DaosMiscError)},
+			expResp:    &srvpb.CheckListPoolResp{Status: int32(daos.MiscError)},
 		},
 		"success": {
 			expResp: &srvpb.CheckListPoolResp{
@@ -130,31 +131,31 @@ func TestSrvModule_HandleCheckerRegisterPool(t *testing.T) {
 		"not replica": {
 			req:        makeReqBytes(newUUID, "new", []system.Rank{0}),
 			notReplica: true,
-			expResp:    &srvpb.CheckRegPoolResp{Status: int32(drpc.DaosMiscError)},
+			expResp:    &srvpb.CheckRegPoolResp{Status: int32(daos.MiscError)},
 		},
 		"bad uuid": {
 			req:     makeReqBytes("ow", "new", []system.Rank{0}),
-			expResp: &srvpb.CheckRegPoolResp{Status: int32(drpc.DaosInvalidInput)},
+			expResp: &srvpb.CheckRegPoolResp{Status: int32(daos.InvalidInput)},
 		},
 		"bad label": {
 			req:     makeReqBytes(newUUID, newUUID, []system.Rank{0}),
-			expResp: &srvpb.CheckRegPoolResp{Status: int32(drpc.DaosInvalidInput)},
+			expResp: &srvpb.CheckRegPoolResp{Status: int32(daos.InvalidInput)},
 		},
 		"empty label": {
 			req:     makeReqBytes(newUUID, "", []system.Rank{0}),
-			expResp: &srvpb.CheckRegPoolResp{Status: int32(drpc.DaosInvalidInput)},
+			expResp: &srvpb.CheckRegPoolResp{Status: int32(daos.InvalidInput)},
 		},
 		"zero svcreps": {
 			req:     makeReqBytes(newUUID, "new", []system.Rank{}),
-			expResp: &srvpb.CheckRegPoolResp{Status: int32(drpc.DaosInvalidInput)},
+			expResp: &srvpb.CheckRegPoolResp{Status: int32(daos.InvalidInput)},
 		},
 		"duplicate uuid": {
 			req:     makeReqBytes(existingPool.PoolUUID.String(), "new", []system.Rank{0}),
-			expResp: &srvpb.CheckRegPoolResp{Status: int32(drpc.DaosExists)},
+			expResp: &srvpb.CheckRegPoolResp{Status: int32(daos.Exists)},
 		},
 		"duplicate label": {
 			req:     makeReqBytes(newUUID, existingPool.PoolLabel, []system.Rank{0}),
-			expResp: &srvpb.CheckRegPoolResp{Status: int32(drpc.DaosExists)},
+			expResp: &srvpb.CheckRegPoolResp{Status: int32(daos.Exists)},
 		},
 		"success": {
 			req:     makeReqBytes(newUUID, "new", []system.Rank{0}),
@@ -223,15 +224,15 @@ func TestSrvModule_HandleCheckerDeregisterPool(t *testing.T) {
 		"not replica": {
 			req:        makeReqBytes(existingPool.PoolUUID.String()),
 			notReplica: true,
-			expResp:    &srvpb.CheckDeregPoolResp{Status: int32(drpc.DaosMiscError)},
+			expResp:    &srvpb.CheckDeregPoolResp{Status: int32(daos.MiscError)},
 		},
 		"bad uuid": {
 			req:     makeReqBytes("ow"),
-			expResp: &srvpb.CheckDeregPoolResp{Status: int32(drpc.DaosInvalidInput)},
+			expResp: &srvpb.CheckDeregPoolResp{Status: int32(daos.InvalidInput)},
 		},
 		"unknown uuid": {
 			req:     makeReqBytes(unkUUID),
-			expResp: &srvpb.CheckDeregPoolResp{Status: int32(drpc.DaosNonexistant)},
+			expResp: &srvpb.CheckDeregPoolResp{Status: int32(daos.Nonexistent)},
 		},
 		"success": {
 			req:     makeReqBytes(existingPool.PoolUUID.String()),

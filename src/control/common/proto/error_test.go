@@ -16,9 +16,9 @@ import (
 
 	"github.com/daos-stack/daos/src/control/common/proto"
 	"github.com/daos-stack/daos/src/control/common/test"
-	"github.com/daos-stack/daos/src/control/drpc"
 	"github.com/daos-stack/daos/src/control/fault"
 	"github.com/daos-stack/daos/src/control/fault/code"
+	"github.com/daos-stack/daos/src/control/lib/daos"
 	"github.com/daos-stack/daos/src/control/system"
 )
 
@@ -69,7 +69,7 @@ func TestProto_AnnotateError(t *testing.T) {
 		Description: "Description",
 		Resolution:  "Resolution",
 	}
-	testStatus := drpc.DaosInvalidInput
+	testStatus := daos.InvalidInput
 	testNotReplica := &system.ErrNotReplica{
 		Replicas: []string{"a", "b", "c"},
 	}
