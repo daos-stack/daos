@@ -38,29 +38,33 @@ def get_data_parity_number(log, oclass):
 
 
 def check_aggregation_status(pool, quick_check=True, attempt=20):
-    """EC Aggregation triggered status.
+    """Check whether aggregation has started, determined by an increase in free space.
+
     Args:
-        pool(object): pool object to get the query.
-        quick_check(bool): Return immediately when Aggregation starts for any storage type.
-        attempt(int): Number of attempts to do pool query at interval of 5 seconds.
+        pool (object): pool object to get the query.
+        quick_check (bool, optional): Return as soon as Aggregation starts for any storage type.
+        attempt (int, optional): Number of attempts to do pool query at interval of 5 seconds.
                       default is 20 attempts.
-    return:
-        result(dic): Storage Aggregation stats SCM/NVMe True/False.
+
+    Returns:
+        dict: Storage Aggregation stats SCM/NVMe True/False.
     """
     agg_status = {'scm': False, 'nvme': False}
     pool.connect()
-    initial_usage = pool.pool_percentage_used()
+    cur_free_space = pool.pool_percentage_used()
+    pool.log.info("initial pool_percentage during Aggregation = {}".format(cur_free_space))
 
-    for _tmp in range(attempt):
-        current_usage = pool.pool_percentage_used()
-        print("pool_percentage during Aggregation = {}".format(current_usage))
+    for _ in range(attempt):
+        new_free_space = pool.pool_percentage_used()
+        pool.log.info("pool_percentage during Aggregation = {}".format(new_free_space))
         for storage_type in ['scm', 'nvme']:
-            if current_usage[storage_type] > initial_usage[storage_type]:
-                print("Aggregation Started for {}.....".format(storage_type))
+            if new_free_space[storage_type] > cur_free_space[storage_type]:
+                pool.log.info("Aggregation Started for {}.....".format(storage_type))
                 agg_status[storage_type] = True
                 # Return immediately once aggregation starts for quick check
                 if quick_check:
                     return agg_status
+        cur_free_space = new_free_space
         time.sleep(5)
     return agg_status
 
@@ -465,8 +469,6 @@ class ErasureCodeFio(FioBase):
         """Initialize a FioBase object."""
         super().__init__(*args, **kwargs)
         self.server_count = None
-        self.set_online_rebuild = False
-        self.rank_to_kill = None
 
     def setUp(self):
         """Set up each test case."""
@@ -503,14 +505,20 @@ class ErasureCodeFio(FioBase):
             self.execute_fio(stop_dfuse=False)
             if results is not None:
                 results.put("PASS")
-        except (CommandFailure, DaosApiError, DaosTestError):
+        except (CommandFailure, DaosApiError, DaosTestError) as error:
             if results is not None:
-                results.put("FAIL")
+                results.put("FAIL - {}".format(error))
                 raise
 
-    def start_online_fio(self):
-        """Run Fio operation with thread in background. Trigger the server failure while Fio is
-        running
+    def start_online_fio(self, kill_ranks=None, kill_time=30):
+        """Run Fio operation in the background and optionally trigger a server failure.
+
+        Args:
+            kill_ranks (list, optional): ranks to kill after starting Fio.
+                Default is None, which kills no ranks.
+            kill_time (int, optional): how long to sleep before killing ranks.
+                Default is 30.
+
         """
         # Create the Fio run thread
         job = threading.Thread(target=self.write_single_fio_dataset,
@@ -520,18 +528,15 @@ class ErasureCodeFio(FioBase):
         job.start()
 
         # Kill the server rank while IO operation in progress
-        if self.set_online_rebuild:
-            time.sleep(30)
-            # Kill the server rank
-            if self.rank_to_kill is not None:
-                self.server_managers[0].stop_ranks([self.rank_to_kill],
-                                                   self.d_log,
-                                                   force=True)
+        if kill_ranks:
+            time.sleep(kill_time)
+            self.server_managers[0].stop_ranks(kill_ranks, self.d_log, force=True)
 
         # Wait to finish the thread
         job.join()
 
         # Verify the queue result and make sure test has no failure
         while not self.out_queue.empty():
-            if self.out_queue.get() == "FAIL":
-                self.fail("FAIL")
+            out = self.out_queue.get()
+            if 'FAIL' in out:
+                self.fail(out)
