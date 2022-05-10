@@ -12,6 +12,8 @@
 #include <string.h>
 #include <errno.h>
 #include <fcntl.h>
+#include <unistd.h>
+#include <sys/syscall.h>
 
 #include <sys/time.h>
 #include <sys/resource.h>
@@ -41,6 +43,9 @@ struct ioil_pool {
 struct ioil_global {
 	pthread_mutex_t	iog_lock;
 	d_list_t	iog_pools_head;
+
+	pid_t           iog_init_tid;
+
 	bool		iog_initialized;
 	bool		iog_no_daos;
 	bool		iog_daos_init;
@@ -300,6 +305,8 @@ ioil_init(void)
 
 	DFUSE_TRA_ROOT(&ioil_iog, "il");
 
+	ioil_iog.iog_init_tid = syscall(SYS_gettid);
+
 	/* Get maximum number of file descriptors */
 	rc = getrlimit(RLIMIT_NOFILE, &rlimit);
 	if (rc != 0) {
@@ -352,6 +359,12 @@ ioil_fini(void)
 	struct ioil_pool *pool, *pnext;
 	struct ioil_cont *cont, *cnext;
 	int rc;
+	pid_t             tid = syscall(SYS_gettid);
+
+	if (tid != ioil_iog.iog_init_tid) {
+		DFUSE_TRA_ERROR(&ioil_iog, "Ignoring destructor from alternate thread");
+		return;
+	}
 
 	ioil_iog.iog_initialized = false;
 
