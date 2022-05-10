@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2020-2021 Intel Corporation.
+ * (C) Copyright 2020-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -84,9 +84,13 @@ struct hash_ft crc16_algo = {
 static int
 crc32_init(void **daos_mhash_ctx)
 {
+#ifdef CSUM_NO_OP
+	*daos_mhash_ctx = 0;
+#else
 	D_ALLOC(*daos_mhash_ctx, sizeof(uint32_t));
 	if (*daos_mhash_ctx == NULL)
 		return -DER_NOMEM;
+#endif
 
 	return 0;
 }
@@ -94,9 +98,13 @@ crc32_init(void **daos_mhash_ctx)
 static int
 crc32_reset(void *daos_mhash_ctx)
 {
+#ifdef CSUM_NO_OP
+	daos_mhash_ctx = 0;
+#else
 	uint32_t *crc32 = daos_mhash_ctx;
 
 	*crc32 = 0;
+#endif
 
 	return 0;
 }
@@ -104,24 +112,34 @@ crc32_reset(void *daos_mhash_ctx)
 static void
 crc32_destroy(void *daos_mhash_ctx)
 {
+#ifdef CSUM_NO_OP
+#else
 	D_FREE(daos_mhash_ctx);
+#endif
 }
 
 static int
 crc32_update(void *daos_mhash_ctx, uint8_t *buf, size_t buf_len)
 {
+#ifdef CSUM_NO_OP
+	/* no op */
+#else
 	uint32_t *crc32 = (uint32_t *)daos_mhash_ctx;
-
-	*crc32 = crc32_iscsi(buf, (int) buf_len, *crc32);
+	crc32_iscsi(buf, (int) buf_len, *crc32);
+#endif
 	return 0;
 }
 
 static int
 crc32_finish(void *daos_mhash_ctx, uint8_t *buf, size_t buf_len)
 {
+#ifdef CSUM_NO_OP
+	*((uint32_t *)buf) = 0;
+#else
 	uint32_t *crc32 = (uint32_t *)daos_mhash_ctx;
 
 	*((uint32_t *)buf) = *crc32;
+#endif
 
 	return 0;
 }

@@ -342,6 +342,34 @@ typedef enum {
 	DAOS_IOD_ARRAY		= 2,
 } daos_iod_type_t;
 
+#ifdef EMBEDDED_CSUM
+struct dcs_csum_info {
+	/** number of checksums stored in buffer */
+	uint32_t	 cs_nr;
+	/** type of checksum */
+	uint16_t	 cs_type;
+	/** length of each checksum in bytes */
+	uint16_t	 cs_len;
+	/** length of entire buffer (cs_csum). buf_len can be larger than
+	*  nr * len, but never smaller
+	*/
+	uint32_t	 cs_buf_len;
+	/** bytes of data each checksum verifies (if value type is array) */
+	uint32_t	 cs_chunksize;
+	/** buffer to store the checksums */
+	uint8_t		cs_csum[64];
+};
+
+struct dcs_iod_csums {
+	/** akey checksum */
+	struct dcs_csum_info	 ic_akey;
+	/** csum for the data. will be 1 for each recx for arrays */
+	struct dcs_csum_info	*ic_data;
+	/** number of dcs_csum_info in ic_data. should be 1 for SV */
+	uint32_t		 ic_nr;
+};
+#endif
+
 /**
  * An I/O descriptor is a list of extents (effectively records associated with
  * contiguous array indices) to update/fetch in a particular array identified by
@@ -379,6 +407,12 @@ typedef struct {
 	 * type of the iod is single, this is ignored.
 	 */
 	daos_recx_t		*iod_recxs;
+#ifdef EMBEDDED_CSUM
+	struct dcs_iod_csums	iod_csums;
+#endif
+#ifdef  USE_IOD_BUFFER_INSTEAD_OF_ALLOC
+	uint8_t			 iod_buf[100];
+#endif
 } daos_iod_t;
 
 /**

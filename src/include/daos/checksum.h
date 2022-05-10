@@ -10,6 +10,7 @@
 #include <daos_types.h>
 #include <daos_obj.h>
 #include <daos_prop.h>
+#include <daos/common.h>
 
 #include <daos/multihash.h>
 
@@ -47,7 +48,7 @@
  * DAOS Checksummer
  * -----------------------------------------------------------
  */
-
+#ifndef EMBEDDED_CSUM
 struct dcs_csum_info {
 	/** buffer to store the checksums */
 	uint8_t		*cs_csum;
@@ -73,6 +74,7 @@ struct dcs_iod_csums {
 	/** number of dcs_csum_info in ic_data. should be 1 for SV */
 	uint32_t		 ic_nr;
 };
+#endif
 
 /** Single value layout info for checksum */
 struct dcs_layout {
@@ -149,9 +151,15 @@ daos_csummer_init(struct daos_csummer **obj, struct hash_ft *ft,
  *
  * @return		0 for success, or an error code
  */
-int
+
+static inline int
 daos_csummer_init_with_type(struct daos_csummer **obj, enum DAOS_HASH_TYPE type,
-			    size_t chunk_bytes, bool srv_verify);
+			    size_t chunk_bytes, bool srv_verify)
+{
+	return daos_csummer_init(obj, daos_mhash_type2algo(type), chunk_bytes,
+				 srv_verify);
+}
+
 
 /**
  * Initialize the daos_csummer using container properties
@@ -175,40 +183,102 @@ int
 daos_csummer_csum_init_with_packed(struct daos_csummer **csummer,
 				   const d_iov_t *csums_iov);
 
+/** Determine if the checksums is configured. */
+static inline bool
+daos_csummer_initialized(struct daos_csummer *obj)
+{
+	return obj != NULL && obj->dcs_algo != NULL;
+}
+
+
 /**
  * Initialize a daos_csummer as a copy of an existing daos_csummer
  * @param obj		daos_csummer to be copied.
  *
  * @return		Allocated daos_csummer, or NULL if not enough memory.
  */
-struct daos_csummer *
-daos_csummer_copy(const struct daos_csummer *obj);
+static inline struct daos_csummer *
+daos_csummer_copy(const struct daos_csummer *obj)
+{
+	struct daos_csummer *result = NULL;
+
+	daos_csummer_init(&result, obj->dcs_algo,
+			  obj->dcs_chunk_size, obj->dcs_srv_verify);
+
+	return result;
+}
 
 /** Destroy the daos_csummer */
-void
-daos_csummer_destroy(struct daos_csummer **obj);
+static inline void
+daos_csummer_destroy(struct daos_csummer **obj)
+{
+	struct daos_csummer *csummer = *obj;
+
+	if (!*obj)
+		return;
+
+	if (csummer->dcs_algo->cf_destroy)
+		csummer->dcs_algo->cf_destroy(csummer->dcs_ctx);
+	D_MUTEX_DESTROY(&csummer->dcs_lock);
+	D_FREE(csummer);
+	*obj = NULL;
+}
 
 /** Get the checksum length from the configured csummer. */
-uint16_t
-daos_csummer_get_csum_len(struct daos_csummer *obj);
-
-/** Determine if the checksums is configured. */
-bool
-daos_csummer_initialized(struct daos_csummer *obj);
+static inline uint16_t
+daos_csummer_get_csum_len(struct daos_csummer *obj)
+{
+	if (!daos_csummer_initialized(obj))
+		return 0;
+	if (obj->dcs_algo->cf_get_size)
+		return obj->dcs_algo->cf_get_size(obj->dcs_ctx);
+	return obj->dcs_algo->cf_hash_len;
+}
 
 /** Get an integer representing the csum type the csummer is configured with */
-uint16_t
-daos_csummer_get_type(struct daos_csummer *obj);
+static inline uint16_t
+daos_csummer_get_type(struct daos_csummer *obj)
+{
+	if (daos_csummer_initialized(obj))
+		return obj->dcs_algo->cf_type;
+	return 0;
+}
 
-uint32_t
-daos_csummer_get_chunksize(struct daos_csummer *obj);
+static inline uint32_t
+daos_csummer_get_chunksize(struct daos_csummer *obj)
+{
+	if (daos_csummer_initialized(obj))
+		return obj->dcs_chunk_size;
+	return 0;
+}
+
+/** get appropriate chunksize for the record size */
+static inline daos_off_t
+csum_record_chunksize(daos_off_t default_chunksize, daos_off_t rec_size)
+{
+	D_ASSERT(rec_size > 0 && default_chunksize > 0);
+
+	if (rec_size == 1)
+		return default_chunksize;
+
+	if (rec_size > default_chunksize)
+		return rec_size;
+	return (default_chunksize / rec_size) * rec_size;
+}
 
 /** Get an appropriate chunksize (based on configured chunksize) for a
  * record in bytes. Appropriate means that the chunksize should not be larger
  * than record size and that records should evenly divide into chunk size.
  */
-uint32_t
-daos_csummer_get_rec_chunksize(struct daos_csummer *obj, uint64_t rec_size);
+
+static inline uint32_t
+daos_csummer_get_rec_chunksize(struct daos_csummer *obj, uint64_t rec_size)
+{
+	if (daos_csummer_initialized(obj))
+		return csum_record_chunksize(obj->dcs_chunk_size, rec_size);
+	return 0;
+}
+
 
 bool
 daos_csummer_get_srv_verify(struct daos_csummer *obj);
@@ -419,9 +489,15 @@ daos_csummer_free_ic(struct daos_csummer *obj,
 		     struct dcs_iod_csums **p_cds);
 
 /** Destroy the csum infos allocated by daos_csummer_calc_key */
-void
-daos_csummer_free_ci(struct daos_csummer *obj,
-		     struct dcs_csum_info **p_cis);
+static void inline
+daos_csummer_free_ci(struct daos_csummer *obj, struct dcs_csum_info **p_cis)
+{
+	if (!(daos_csummer_initialized(obj) && *p_cis))
+		return;
+#ifndef  USE_IOD_BUFFER_INSTEAD_OF_ALLOC
+	D_FREE((*p_cis));
+#endif
+}
 
 /**
  * -----------------------------------------------------------------------------
@@ -581,10 +657,6 @@ daos_off_t
 csum_chunk_align_floor(daos_off_t off, size_t chunksize);
 daos_off_t
 csum_chunk_align_ceiling(daos_off_t off, size_t chunksize);
-
-/** get appropriate chunksize for the record size */
-daos_off_t
-csum_record_chunksize(daos_off_t default_chunksize, daos_off_t rec_size);
 
 /** Represents a chunk, extent, or some calculated alignment for a range
  */

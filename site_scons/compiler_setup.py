@@ -9,7 +9,7 @@ DESIRED_FLAGS = ['-Wno-gnu-designator',
                  '-Wno-gnu-zero-variadic-macro-arguments',
                  '-Wno-tautological-constant-out-of-range-compare',
                  '-Wno-unused-command-line-argument',
-                 '-Wframe-larger-than=4096']
+                 '-Wframe-larger-than=5096']
 
 # Compiler flags to prevent optimizing out security checks
 DESIRED_FLAGS.extend(['-fno-strict-overflow', '-fno-delete-null-pointer-checks',
@@ -54,9 +54,28 @@ def base_setup(env, prereqs=None):
 
     env.AppendIfSupported(CCFLAGS=DESIRED_FLAGS)
 
+    # client side only
+    env.AppendUnique(CPPDEFINES='IGNORE_obj_csum_fetch')
+    env.AppendUnique(CPPDEFINES='IGNORE_obj_csum_update')
+    env.AppendUnique(CPPDEFINES='IGNORE_dc_rw_cb_csum_verify')
+    env.AppendUnique(CPPDEFINES='NO_COPY')
+
+    # server side only
+    # env.AppendUnique(CPPDEFINES='IGNORE_ds_csum_add2iod')
+
+    # common
+    env.AppendUnique(CPPDEFINES='CSUM_NO_OP')
+    env.AppendUnique(CPPDEFINES='USE_IOD_BUFFER_INSTEAD_OF_ALLOC')
+    env.AppendUnique(CPPDEFINES='NO_KEY_CSUMS')
+    # env.AppendUnique(CPPDEFINES='IGNORE_calc_csum_sv')
+    # env.AppendUnique(CPPDEFINES='SKIP_ALLOC_POINTER_STUFF')
+    # env.AppendUnique(CPPDEFINES='IGNORE_daos_csummer_calc_iods')
+    # env.AppendUnique(CPPDEFINES='IGNORE_daos_csummer_calc_key')
+    # env.AppendUnique(CPPDEFINES='IGNORE_daos_csummer_verify_iod')
+
     if build_type == 'debug':
         if compiler == 'gcc':
-            env.AppendUnique(CCFLAGS=['-Og'])
+            env.AppendUnique(CCFLAGS=['-O0'])
         else:
             env.AppendUnique(CCFLAGS=['-O0'])
     else:

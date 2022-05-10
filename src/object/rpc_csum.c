@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2020-2021 Intel Corporation.
+ * (C) Copyright 2020-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -62,9 +62,7 @@ proc_struct_dcs_csum_info_adv(crt_proc_t proc, crt_proc_op_t proc_op,
 		return 0;
 
 	if (ENCODING(proc_op)) {
-		rc = crt_proc_memcpy(proc, proc_op,
-				     csum->cs_csum + idx * csum->cs_len,
-				     buf_len);
+		rc = crt_proc_memcpy(proc, proc_op, csum->cs_csum + idx * csum->cs_len, buf_len);
 		if (unlikely(rc))
 			return rc;
 	}
@@ -74,8 +72,7 @@ proc_struct_dcs_csum_info_adv(crt_proc_t proc, crt_proc_op_t proc_op,
 		if (csum->cs_csum == NULL)
 			return -DER_NOMEM;
 
-		rc = crt_proc_memcpy(proc, proc_op,
-				     csum->cs_csum, csum->cs_buf_len);
+		rc = crt_proc_memcpy(proc, proc_op, csum->cs_csum, csum->cs_buf_len);
 		if (unlikely(rc)) {
 			D_FREE(csum->cs_csum);
 			return rc;

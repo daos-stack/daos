@@ -665,7 +665,9 @@ ds_csum_add2iod(daos_iod_t *iod, struct daos_csummer *csummer, struct bio_sglist
 {
 	if (biov_csums_used != NULL)
 		*biov_csums_used = 0;
-
+#ifdef IGNORE_ds_csum_add2iod
+	return 0;
+#endif
 	if (!(daos_csummer_initialized(csummer) && bsgl))
 		return 0;
 

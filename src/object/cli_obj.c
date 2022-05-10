@@ -4616,6 +4616,10 @@ obj_csum_update(struct dc_object *obj, daos_obj_update_t *args,
 	struct dcs_iod_csums	*iod_csums = NULL;
 	int			 rc;
 
+#ifdef DIGNORE_obj_csum_update
+	return 0;
+#endif
+
 	D_DEBUG(DB_CSUM, DF_C_OID_DKEY " UPDATE - csummer: %p, "
 			 "csum_type: %d, csum_enabled: %s\n",
 		DP_C_OID_DKEY(obj->cob_md.omd_id, args->dkey),
@@ -4636,9 +4640,13 @@ obj_csum_update(struct dc_object *obj, daos_obj_update_t *args,
 	/** Used to do actual checksum calculations. This prevents conflicts
 	 * between tasks
 	 */
+#ifdef NO_COPY
+	csummer_copy = csummer;
+#else
 	csummer_copy = daos_csummer_copy(csummer);
 	if (csummer_copy == NULL)
 		return -DER_NOMEM;
+#endif
 
 	/** Calc 'd' key checksum */
 	rc = daos_csummer_calc_key(csummer_copy, args->dkey, &dkey_csum);
@@ -4658,7 +4666,9 @@ obj_csum_update(struct dc_object *obj, daos_obj_update_t *args,
 		D_ERROR("daos_csummer_calc_iods error: "DF_RC"\n", DP_RC(rc));
 		return rc;
 	}
+#ifndef NO_COPY
 	daos_csummer_destroy(&csummer_copy);
+#endif
 
 	/** fault injection - corrupt data and/or keys after calculating
 	 * checksum - simulates corruption over network
@@ -4686,8 +4696,11 @@ obj_csum_fetch(const struct dc_object *obj, daos_obj_fetch_t *args,
 	struct dcs_iod_csums	*iod_csums = NULL;
 	int			 rc;
 
-	if (!daos_csummer_initialized(csummer) ||
-	    csummer->dcs_skip_data_verify)
+#ifdef IGNORE_obj_csum_fetch
+	return 0;
+#endif
+
+	if (!daos_csummer_initialized(csummer) || csummer->dcs_skip_data_verify)
 		/** csummer might be initialized by dedup, but checksum
 		 * feature is turned off ...
 		 */
@@ -4701,9 +4714,13 @@ obj_csum_fetch(const struct dc_object *obj, daos_obj_fetch_t *args,
 	/** Used to do actual checksum calculations. This prevents conflicts
 	 * between tasks
 	 */
+#ifdef NO_COPY
+	csummer_copy = csummer;
+#else
 	csummer_copy = daos_csummer_copy(csummer);
 	if (csummer_copy == NULL)
 		return -DER_NOMEM;
+#endif
 
 	/** dkey */
 	rc = daos_csummer_calc_key(csummer_copy, args->dkey, &dkey_csum);
@@ -4723,8 +4740,9 @@ obj_csum_fetch(const struct dc_object *obj, daos_obj_fetch_t *args,
 		daos_csummer_destroy(&csummer_copy);
 		return rc;
 	}
-
+#ifndef NO_COPY
 	daos_csummer_destroy(&csummer_copy);
+#endif
 
 	/**
 	 * fault injection - corrupt keys after calculating checksum -

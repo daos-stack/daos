@@ -190,7 +190,9 @@ obj_rw_reply(crt_rpc_t *rpc, int status, uint64_t epoch,
 		}
 
 		if (orwo->orw_iod_csums.ca_arrays != NULL) {
+#ifndef  USE_IOD_BUFFER_INSTEAD_OF_ALLOC
 			D_FREE(orwo->orw_iod_csums.ca_arrays);
+#endif
 			orwo->orw_iod_csums.ca_count = 0;
 		}
 
@@ -871,6 +873,9 @@ csum_verify_keys(struct daos_csummer *csummer, daos_key_t *dkey,
 	if (!daos_csummer_initialized(csummer) || csummer->dcs_skip_key_verify)
 		return 0;
 
+#ifdef NO_KEY_CSUMS
+	return 0;
+#endif
 	if (!DAOS_FAIL_CHECK(DAOS_VC_DIFF_DKEY)) {
 		/**
 		 * with DAOS_VC_DIFF_DKEY, the dkey will be corrupt on purpose

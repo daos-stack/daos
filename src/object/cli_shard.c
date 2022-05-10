@@ -260,6 +260,10 @@ dc_rw_cb_csum_verify(const struct rw_cb_args *rw_args)
 	int			 i;
 	int			 rc = 0;
 
+#ifdef IGNORE_dc_rw_cb_csum_verify
+	return 0;
+#endif
+
 	csummer = dc_cont_hdl2csummer(rw_args->coh);
 	if (!daos_csummer_initialized(csummer) || csummer->dcs_skip_data_verify)
 		return 0;
@@ -284,9 +288,13 @@ dc_rw_cb_csum_verify(const struct rw_cb_args *rw_args)
 	/** Used to do actual checksum calculations. This prevents conflicts
 	 * between tasks
 	 */
+#ifdef NO_COPY
+	csummer_copy = csummer;
+#else
 	csummer_copy = daos_csummer_copy(csummer);
 	if (csummer_copy == NULL)
 		return -DER_NOMEM;
+#endif
 
 	/** fault injection - corrupt data after getting from server and before
 	 * verifying on client - simulates corruption over network
@@ -404,7 +412,11 @@ dc_rw_cb_csum_verify(const struct rw_cb_args *rw_args)
 
 		rw_args_store_csum(rw_args, iod_csum);
 	}
+
+#ifndef NO_COPY
 	daos_csummer_destroy(&csummer_copy);
+#endif
+
 
 	return rc;
 }
