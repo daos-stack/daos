@@ -123,8 +123,9 @@ class CriticalIntegration(TestWithServers):
         # gather journalctl logs for each server host, verify system stop event was sent to logs
         results = get_journalctl(hosts=self.hostlist_servers, since=since,
                                  until=until, journalctl_type="daos_server")
+        str_to_match = "daos_engine exited: process exited with 0"
         for count, host in enumerate(self.hostlist_servers):
-            occurrence = results[count]["data"].count("cleaning engine")
+            occurrence = results[count]["data"].count(str_to_match)
             if occurrence != 2:
                 self.log.info("Occurrence %s for rank stop not as expected for host %s",
                               occurrence, host)
