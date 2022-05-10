@@ -90,7 +90,7 @@ out:
  * \param[out]	clue	pool clue
  */
 void
-ds_pool_glance(uuid_t uuid, enum ds_pool_dir dir, struct ds_pool_clue *clue)
+ds_pool_clue_init(uuid_t uuid, enum ds_pool_dir dir, struct ds_pool_clue *clue)
 {
 	char	       *path;
 	struct stat	st;
@@ -150,7 +150,7 @@ out:
 }
 
 /**
- * Finalize \a clue that was initialized by ds_pool_glance.
+ * Finalize \a clue that was initialized by ds_pool_clue_init.
  *
  * \param[in,out]	clue	pool clue
  */
@@ -165,10 +165,10 @@ ds_pool_clue_fini(struct ds_pool_clue *clue)
 
 /* Argument for glance_at_one */
 struct glance_arg {
-	ds_pool_scan_filter_t	ga_filter;
-	void		       *ga_filter_arg;
-	enum ds_pool_dir	ga_dir;
-	struct ds_pool_clues	ga_clues;
+	ds_pool_clues_init_filter_t	ga_filter;
+	void			       *ga_filter_arg;
+	enum ds_pool_dir		ga_dir;
+	struct ds_pool_clues		ga_clues;
 };
 
 static int
@@ -198,7 +198,7 @@ glance_at_one(uuid_t uuid, void *varg)
 		clues->pcs_cap = new_cap;
 	}
 
-	ds_pool_glance(uuid, arg->ga_dir, &clues->pcs_array[clues->pcs_len]);
+	ds_pool_clue_init(uuid, arg->ga_dir, &clues->pcs_array[clues->pcs_len]);
 	clues->pcs_len++;
 
 out:
@@ -207,7 +207,7 @@ out:
 }
 
 /**
- * Finalize \a clues that was initialized by ds_pool_scan.
+ * Finalize \a clues that was initialized by ds_pool_clues_init.
  *
  * \param[in,out]	clues	pool clues
  */
@@ -223,17 +223,19 @@ ds_pool_clues_fini(struct ds_pool_clues *clues)
 }
 
 /**
- * Glance at every local pool for which \a filter returns 0. If \a filter is
- * NULL, all local pools will be glanced at. Must be called on the system
- * xstream when all local pools are stopped. If successfully initialized, \a
- * clues must be finalized with ds_pool_clues_fini eventually.
+ * Scan local pools and glance at (i.e., call ds_pool_clue_init on) those for
+ * which \a filter returns 0. If \a filter is NULL, all local pools will be
+ * glanced at. Must be called on the system xstream when all local pools are
+ * stopped. If successfully initialized, \a clues must be finalized with
+ * ds_pool_clues_fini eventually.
  *
  * \param[in]	filter		optional filter callback
  * \param[in]	filter_arg	optional argument for \a filter
  * \param[out]	clues_out	pool clues
  */
 int
-ds_pool_scan(ds_pool_scan_filter_t filter, void *filter_arg, struct ds_pool_clues *clues_out)
+ds_pool_clues_init(ds_pool_clues_init_filter_t filter, void *filter_arg,
+		   struct ds_pool_clues *clues_out)
 {
 	struct glance_arg	arg = {0};
 	int			rc;

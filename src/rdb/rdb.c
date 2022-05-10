@@ -532,7 +532,11 @@ rdb_glance(struct rdb_storage *storage, struct rdb_clue *clue)
 
 	clue->bcl_term = term;
 	clue->bcl_vote = vote;
-	clue->bcl_self = dss_self_rank(); /* should be stored persistently in the future */
+	/*
+	 * In the future, the self node ID might differ from the rank and need
+	 * to be stored persistently.
+	 */
+	clue->bcl_self = dss_self_rank();
 	clue->bcl_last_index = last_index;
 	clue->bcl_last_term = last_term;
 	clue->bcl_base_index = db->d_lc_record.dlr_base;

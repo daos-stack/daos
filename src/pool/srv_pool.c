@@ -1310,7 +1310,7 @@ read_db_for_stepping_up(struct pool_svc *svc, struct pool_buf **map_buf_out,
 	struct rdb_tx		tx;
 	struct pool_buf	       *map_buf;
 	uint32_t		map_version;
-	daos_prop_t	       *prop;
+	daos_prop_t	       *prop = NULL;
 	int			rc;
 
 	rc = rdb_tx_begin(svc->ps_rsvc.s_db, svc->ps_rsvc.s_term, &tx);

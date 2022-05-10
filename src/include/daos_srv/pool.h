@@ -332,7 +332,7 @@ struct ds_pool_clue {
 	struct ds_pool_svc_clue	       *pc_svc_clue;
 };
 
-void ds_pool_glance(uuid_t uuid, enum ds_pool_dir dir, struct ds_pool_clue *clue);
+void ds_pool_clue_init(uuid_t uuid, enum ds_pool_dir dir, struct ds_pool_clue *clue);
 void ds_pool_clue_fini(struct ds_pool_clue *clue);
 
 /** Array of ds_pool_clue objects */
@@ -346,9 +346,10 @@ struct ds_pool_clues {
  * If this callback returns 0, the pool with \a uuid will be glanced at;
  * otherwise, the pool with \a uuid will be skipped.
  */
-typedef int (*ds_pool_scan_filter_t)(uuid_t uuid, void *arg);
+typedef int (*ds_pool_clues_init_filter_t)(uuid_t uuid, void *arg);
 
-int ds_pool_scan(ds_pool_scan_filter_t filter, void *filter_arg, struct ds_pool_clues *clues_out);
+int ds_pool_clues_init(ds_pool_clues_init_filter_t filter, void *filter_arg,
+		       struct ds_pool_clues *clues_out);
 void ds_pool_clues_fini(struct ds_pool_clues *clues);
 void ds_pool_clues_print(struct ds_pool_clues *clues);
 
