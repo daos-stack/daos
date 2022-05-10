@@ -145,7 +145,8 @@ def build_misc():
     except SCons.Warnings.MissingSConscriptWarning as _warn:
         print("Missing doc/man/SConscript...")
 
-def scons(): # pylint: disable=too-many-locals
+
+def scons():  # pylint: disable=too-many-locals,too-many-branches
     """Execute build"""
     if COMMAND_LINE_TARGETS == ['release']:
         try:
