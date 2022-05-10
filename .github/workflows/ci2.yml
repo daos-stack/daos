@@ -67,7 +67,6 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        arch: [X64, ARM64]
         distro: [rocky, fedora, leap.15]
         compiler: [clang, gcc]
         include:
@@ -129,6 +128,75 @@ jobs:
         run: docker build . --file utils/docker/Dockerfile.${{ matrix.base }}
                             --build-arg DEPS_JOBS
                             --build-arg BASE_DISTRO
+                            --build-arg DAOS_JAVA_BUILD=no
+                            --build-arg DAOS_BUILD_TYPE=dev
+                            --build-arg COMPILER
+  Build ARM:
+    name: Build DAOS client on ARM
+    runs-on: ubuntu-20.04
+    strategy:
+      fail-fast: false
+      matrix:
+        compiler: [clang, gcc]
+        include:
+          - arch: aarch64
+            distro: fedora_latest
+            base: el.8
+    env:
+      DEPS_JOBS: 10
+      BASE_DISTRO: ${{ matrix.distro }}
+      DOCKER_BASE: ${{ matrix.base }}
+      COMPILER: ${{ matrix.compiler }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v2
+        with:
+          arch: ${{ matrix.arch }}
+          distro: ${{ matrix.distro }}
+          submodules: true
+          fetch-depth: 500
+          ref: ${{ github.event.pull_request.head.sha }}
+      - name: Setup git hash
+        run: ./ci/gha_helper.py
+        id: commit-hash
+      - name: Fetch docker images from cache.
+        uses: satackey/action-docker-layer-caching@v0.0.11
+        continue-on-error: true
+        with:
+          key: ${{ steps.commit-hash.outputs.key }}
+          restore-keys: |
+            ${{ steps.commit-hash.outputs.restore }}
+            ${{ steps.commit-hash.outputs.restore_prev }}
+          skip-save: true
+      - name: Build in docker.
+        run: docker build . --file utils/docker/Dockerfile.${{ matrix.base }}
+                            --build-arg DEPS_JOBS
+                            --build-arg BASE_DISTRO
+                            --build-arg DAOS_JAVA_BUILD=no
+                            --build-arg TARGET=client
+                            --build-arg COMPILER
+                            --build-arg DAOS_KEEP_SRC=yes
+                            --tag build-image
+      - name: Build Java in docker.
+        run: docker build . --file utils/docker/Dockerfile.${{ matrix.base }}
+                            --build-arg DEPS_JOBS
+                            --build-arg BASE_DISTRO
+                            --build-arg TARGET=client
+                            --build-arg DAOS_JAVA_BUILD=yes
+                            --build-arg COMPILER
+      - name: Build debug in docker.
+        run: docker build . --file utils/docker/Dockerfile.${{ matrix.base }}
+                            --build-arg DEPS_JOBS
+                            --build-arg BASE_DISTRO
+                            --build-arg TARGET=client
+                            --build-arg DAOS_JAVA_BUILD=no
+                            --build-arg DAOS_BUILD_TYPE=debug
+                            --build-arg COMPILER
+      - name: Build devel in docker.
+        run: docker build . --file utils/docker/Dockerfile.${{ matrix.base }}
+                            --build-arg DEPS_JOBS
+                            --build-arg BASE_DISTRO
+                            --build-arg TARGET=client
                             --build-arg DAOS_JAVA_BUILD=no
                             --build-arg DAOS_BUILD_TYPE=dev
                             --build-arg COMPILER
