@@ -16,6 +16,7 @@ import (
 	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
 	"github.com/daos-stack/daos/src/control/common/test"
 	"github.com/daos-stack/daos/src/control/drpc"
+	"github.com/daos-stack/daos/src/control/lib/daos"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/server/config"
 	"github.com/daos-stack/daos/src/control/server/engine"
@@ -112,12 +113,12 @@ func TestServer_CtlSvc_SmdQuery(t *testing.T) {
 					},
 					{
 						Message: &ctlpb.DevStateResp{
-							Status: int32(drpc.DaosInvalidInput),
+							Status: int32(daos.InvalidInput),
 						},
 					},
 				},
 			},
-			expErr: drpc.DaosInvalidInput,
+			expErr: daos.InvalidInput,
 		},
 		"identify": {
 			req: &ctlpb.SmdQueryReq{
@@ -272,12 +273,12 @@ func TestServer_CtlSvc_SmdQuery(t *testing.T) {
 				0: {
 					{
 						Message: &ctlpb.SmdPoolResp{
-							Status: int32(drpc.DaosBusy),
+							Status: int32(daos.Busy),
 						},
 					},
 				},
 			},
-			expErr: drpc.DaosBusy,
+			expErr: daos.Busy,
 		},
 		"list-devices": {
 			req: &ctlpb.SmdQueryReq{
@@ -568,12 +569,12 @@ func TestServer_CtlSvc_SmdQuery(t *testing.T) {
 				0: {
 					{
 						Message: &ctlpb.SmdDevResp{
-							Status: int32(drpc.DaosBusy),
+							Status: int32(daos.Busy),
 						},
 					},
 				},
 			},
-			expErr: drpc.DaosBusy,
+			expErr: daos.Busy,
 		},
 		"device-health": {
 			req: &ctlpb.SmdQueryReq{
@@ -719,12 +720,12 @@ func TestServer_CtlSvc_SmdQuery(t *testing.T) {
 					},
 					{
 						Message: &ctlpb.BioHealthResp{
-							Status: int32(drpc.DaosFreeMemError),
+							Status: int32(daos.FreeMemError),
 						},
 					},
 				},
 			},
-			expErr: drpc.DaosFreeMemError,
+			expErr: daos.FreeMemError,
 		},
 		"target-health": {
 			req: &ctlpb.SmdQueryReq{
