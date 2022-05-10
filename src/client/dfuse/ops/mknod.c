@@ -43,8 +43,8 @@ dfuse_cb_mknod(fuse_req_t req, struct dfuse_inode_entry *parent, const char *nam
 
 	dfs_obj2id(ie->ie_obj, &ie->ie_oid);
 
-	ie->ie_stat.st_ino = dfuse_compute_inode(ie->ie_dfs, &ie->ie_oid,
-						 S_ISDIR(ie->ie_stat.st_mode));
+	ie->ie_stat.st_ino =
+	    dfuse_compute_inode(ie->ie_dfs, &ie->ie_oid, S_ISDIR(ie->ie_stat.st_mode));
 
 	/* Return the new inode data, and keep the parent ref */
 	dfuse_reply_entry(fs_handle, ie, NULL, true, req);

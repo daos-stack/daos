@@ -259,8 +259,8 @@ dfuse_cb_lookup(fuse_req_t req, struct dfuse_inode_entry *parent,
 
 	dfs_obj2id(ie->ie_obj, &ie->ie_oid);
 
-	ie->ie_stat.st_ino = dfuse_compute_inode(ie->ie_dfs, &ie->ie_oid,
-						 S_ISDIR(ie->ie_stat.st_mode));
+	ie->ie_stat.st_ino =
+	    dfuse_compute_inode(ie->ie_dfs, &ie->ie_oid, S_ISDIR(ie->ie_stat.st_mode));
 
 	if (S_ISDIR(ie->ie_stat.st_mode) && attr_len) {
 		rc = check_for_uns_ep(fs_handle, ie, out, attr_len);

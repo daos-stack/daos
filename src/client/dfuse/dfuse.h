@@ -566,8 +566,8 @@ struct dfuse_inode_entry {
 static inline ino_t
 dfuse_compute_inode(struct dfuse_cont *dfs, daos_obj_id_t *oid, bool dir)
 {
-	uint64_t	hi;
-	ino_t		ino;
+	uint64_t hi;
+	ino_t    ino;
 
 	hi = (oid->hi & (-1ULL >> 32)) | (dfs->dfs_ino << 48);
 

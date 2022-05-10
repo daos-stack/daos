@@ -22,7 +22,7 @@ dfuse_oid_moved(struct dfuse_projection_info *fs_handle, daos_obj_id_t *oid,
 	struct dfuse_inode_entry	*ie;
 	d_list_t			*rlink;
 	int				rc;
-	ino_t				ino;
+	ino_t                            ino;
 
 	ino = dfuse_compute_inode(parent->ie_dfs, oid, false);
 

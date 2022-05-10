@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2021 Intel Corporation.
+ * (C) Copyright 2016-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -23,7 +23,7 @@
 /**
  * Hash table keeps and prints extra debugging information
  */
-#define D_HASH_DEBUG	1
+#define D_HASH_DEBUG 1
 
 struct d_hash_table;
 

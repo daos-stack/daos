@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2021 Intel Corporation.
+ * (C) Copyright 2016-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -994,16 +994,16 @@ void
 d_hash_table_debug(struct d_hash_table *htable)
 {
 #if D_HASH_DEBUG
-	uint32_t		 nr = 1U << htable->ht_bits;
-	uint32_t		 idx;
+	uint32_t nr = 1U << htable->ht_bits;
+	uint32_t idx;
 
 	D_DEBUG(DB_TRACE, "max nr: %d, cur nr: %d, max_dep: %d\n",
 		htable->ht_nr_max, htable->ht_nr, htable->ht_dep_max);
 
 	for (idx = 0; idx < nr; idx++)
 		if (htable->ht_buckets[idx].hb_dep > 0)
-			D_DEBUG(DB_TRACE, "Bucket: %d depth: %d\n",
-				idx, htable->ht_buckets[idx].hb_dep);
+			D_DEBUG(DB_TRACE, "Bucket: %d depth: %d\n", idx,
+				htable->ht_buckets[idx].hb_dep);
 
 #endif
 }

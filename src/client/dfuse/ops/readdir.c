@@ -365,8 +365,8 @@ dfuse_cb_readdir(fuse_req_t req, struct dfuse_obj_hdl *oh,
 
 			dfs_obj2id(obj, &oid);
 
-			stbuf.st_ino = dfuse_compute_inode(oh->doh_ie->ie_dfs, &oid,
-							   S_ISDIR(stbuf.st_mode));
+			stbuf.st_ino =
+			    dfuse_compute_inode(oh->doh_ie->ie_dfs, &oid, S_ISDIR(stbuf.st_mode));
 
 			if (plus) {
 				struct fuse_entry_param	entry = {0};
