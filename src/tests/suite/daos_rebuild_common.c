@@ -894,6 +894,7 @@ reintegrate_inflight_io(void *data)
 		daos_recx_t recx;
 		char	buf[DATA_SIZE];
 
+		req.iod_type = DAOS_IOD_SINGLE;
 		sprintf(key, "d_inflight_%d", i);
 		insert_single(key, "a_key", 0, "data", strlen("data") + 1,
 			      DAOS_TX_NONE, &req);
@@ -902,6 +903,7 @@ reintegrate_inflight_io(void *data)
 		recx.rx_idx = 0;
 		recx.rx_nr = DATA_SIZE;
 		memset(buf, 'a' + i, DATA_SIZE);
+		req.iod_type = DAOS_IOD_ARRAY;
 		insert_recxs(key, "a_key_1M", 1, DAOS_TX_NONE, &recx, 1,
 			     buf, DATA_SIZE, &req);
 
@@ -920,6 +922,64 @@ reintegrate_inflight_io(void *data)
 	if (arg->myrank == 0)
 		daos_debug_set_params(arg->group, -1, DMG_KEY_FAIL_LOC, 0, 0,
 				      NULL);
+	return 0;
+}
+
+int
+reintegrate_inflight_io_verify(void *data)
+{
+	test_arg_t	*arg = data;
+	daos_obj_id_t	oid;
+	char		single_data[LARGE_SINGLE_VALUE_SIZE];
+	char		verify_single_data[LARGE_SINGLE_VALUE_SIZE];
+	char		*buf;
+	char		*verify_buf;
+	struct ioreq	req;
+	int		i;
+
+	buf = malloc(DATA_SIZE);
+	verify_buf = malloc(DATA_SIZE);
+	oid = *(daos_obj_id_t *)arg->rebuild_cb_arg;
+	ioreq_init(&req, arg->coh, oid, DAOS_IOD_ARRAY, arg);
+	for (i = 0; i < 5; i++) {
+		char	key[64];
+		daos_recx_t recx;
+
+		sprintf(key, "d_inflight_%d", i);
+		memset(buf, 0, DATA_SIZE);
+		req.iod_type = DAOS_IOD_SINGLE;
+		lookup_single(key, "a_key", 0, buf, strlen("data") + 1,
+			      DAOS_TX_NONE, &req);
+		assert_memory_equal(buf, "data", strlen("data"));
+
+		sprintf(key, "d_inflight_1M_%d", i);
+		recx.rx_idx = 0;
+		recx.rx_nr = DATA_SIZE;
+		memset(verify_buf, 'a' + i, DATA_SIZE);
+		memset(buf, 0, DATA_SIZE);
+		req.iod_type = DAOS_IOD_ARRAY;
+		lookup_recxs(key, "a_key_1M", 1, DAOS_TX_NONE, &recx, 1,
+			     buf, DATA_SIZE, &req);
+		assert_memory_equal(buf, verify_buf, DATA_SIZE);
+
+		req.iod_type = DAOS_IOD_SINGLE;
+		memset(verify_single_data, 'a' + i, LARGE_SINGLE_VALUE_SIZE);
+		memset(single_data, 0, LARGE_SINGLE_VALUE_SIZE);
+		sprintf(key, "d_inflight_single_small_%d", i);
+		lookup_single(key, "a_key", 0, single_data,
+			      SMALL_SINGLE_VALUE_SIZE, DAOS_TX_NONE, &req);
+		assert_memory_equal(single_data, verify_single_data, SMALL_SINGLE_VALUE_SIZE);
+
+		sprintf(key, "d_inflight_single_large_%d",  i);
+		memset(single_data, 0, LARGE_SINGLE_VALUE_SIZE);
+		lookup_single(key, "a_key", 0, single_data,
+			      LARGE_SINGLE_VALUE_SIZE, DAOS_TX_NONE, &req);
+		assert_memory_equal(single_data, verify_single_data, LARGE_SINGLE_VALUE_SIZE);
+
+	}
+	ioreq_fini(&req);
+	free(buf);
+	free(verify_buf);
 	return 0;
 }
 

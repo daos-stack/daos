@@ -57,6 +57,8 @@ drain_dkeys(void **state)
 			      DAOS_TX_NONE, &req);
 	}
 
+	arg->rebuild_cb = reintegrate_inflight_io;
+	arg->rebuild_cb_arg = &oid;
 	drain_single_pool_target(arg, ranks_to_kill[0], tgt, false);
 
 	for (i = 0; i < KEY_NR; i++) {
@@ -72,6 +74,8 @@ drain_dkeys(void **state)
 		/** Verify data consistency */
 		assert_string_equal(buf, "data");
 	}
+
+	reintegrate_inflight_io_verify(arg);
 	ioreq_fini(&req);
 }
 
@@ -104,6 +108,8 @@ drain_akeys(void **state)
 			      DAOS_TX_NONE, &req);
 	}
 
+	arg->rebuild_cb = reintegrate_inflight_io;
+	arg->rebuild_cb_arg = &oid;
 	drain_single_pool_target(arg, ranks_to_kill[0], tgt, false);
 	for (i = 0; i < KEY_NR; i++) {
 		char akey[32] = {0};
@@ -118,6 +124,7 @@ drain_akeys(void **state)
 		/** Verify data consistency */
 		assert_string_equal(buf, "data");
 	}
+	reintegrate_inflight_io_verify(arg);
 
 	ioreq_fini(&req);
 }
@@ -154,6 +161,8 @@ drain_indexes(void **state)
 	}
 
 	/* Drain rank 1 */
+	arg->rebuild_cb = reintegrate_inflight_io;
+	arg->rebuild_cb_arg = &oid;
 	drain_single_pool_target(arg, ranks_to_kill[0], tgt, false);
 	for (i = 0; i < KEY_NR; i++) {
 		char	key[32] = {0};
@@ -170,6 +179,7 @@ drain_indexes(void **state)
 		}
 	}
 
+	reintegrate_inflight_io_verify(arg);
 	ioreq_fini(&req);
 }
 
@@ -210,6 +220,8 @@ drain_snap_update_keys(void **state)
 		insert_single("dkey", akey, 0, "data", 1, DAOS_TX_NONE, &req);
 	}
 
+	arg->rebuild_cb = reintegrate_inflight_io;
+	arg->rebuild_cb_arg = &oid;
 	drain_single_pool_target(arg, ranks_to_kill[0], tgt, false);
 
 	for (i = 0; i < 5; i++) {
@@ -234,13 +246,15 @@ drain_snap_update_keys(void **state)
 	number = 10;
 	memset(&anchor, 0, sizeof(anchor));
 	enumerate_dkey(DAOS_TX_NONE, &number, kds, &anchor, buf, buf_len, &req);
-	assert_int_equal(number, 6);
+	assert_int_equal(number, 10);
 
 	number = 10;
 	memset(&anchor, 0, sizeof(anchor));
 	enumerate_akey(DAOS_TX_NONE, "dkey", &number, kds, &anchor,
 		       buf, buf_len, &req);
 	assert_int_equal(number, 5);
+
+	reintegrate_inflight_io_verify(arg);
 
 	ioreq_fini(&req);
 }
@@ -296,6 +310,8 @@ drain_snap_punch_keys(void **state)
 		punch_akey("dkey", akey, DAOS_TX_NONE, &req);
 	}
 
+	arg->rebuild_cb = reintegrate_inflight_io;
+	arg->rebuild_cb_arg = &oid;
 	drain_single_pool_target(arg, ranks_to_kill[0], tgt, false);
 
 	for (i = 0; i < 5; i++) {
@@ -321,13 +337,14 @@ drain_snap_punch_keys(void **state)
 	memset(&anchor, 0, sizeof(anchor));
 	enumerate_dkey(DAOS_TX_NONE, &number, kds, &anchor, buf,
 		       buf_len, &req);
-	assert_int_equal(number, 1);
+	assert_int_equal(number, 10);
 
 	number = 10;
 	memset(&anchor, 0, sizeof(anchor));
 	enumerate_akey(DAOS_TX_NONE, "dkey", &number, kds, &anchor,
 		       buf, buf_len, &req);
 	assert_int_equal(number, 5);
+	reintegrate_inflight_io_verify(arg);
 
 	ioreq_fini(&req);
 }
@@ -370,6 +387,8 @@ drain_multiple(void **state)
 		}
 	}
 
+	arg->rebuild_cb = reintegrate_inflight_io;
+	arg->rebuild_cb_arg = &oid;
 	drain_single_pool_target(arg, ranks_to_kill[0], tgt, false);
 	for (i = 0; i < 10; i++) {
 		char	dkey[32] = {0};
@@ -391,6 +410,7 @@ drain_multiple(void **state)
 			}
 		}
 	}
+	reintegrate_inflight_io_verify(arg);
 
 	ioreq_fini(&req);
 }
@@ -427,6 +447,8 @@ drain_large_rec(void **state)
 			      &req);
 	}
 
+	arg->rebuild_cb = reintegrate_inflight_io;
+	arg->rebuild_cb_arg = &oid;
 	drain_single_pool_target(arg, ranks_to_kill[0], tgt, false);
 	memset(v_buffer, 'a', 5000);
 	for (i = 0; i < KEY_NR; i++) {
@@ -438,6 +460,8 @@ drain_large_rec(void **state)
 			      &req);
 		assert_memory_equal(v_buffer, buffer, 5000);
 	}
+
+	reintegrate_inflight_io_verify(arg);
 
 	ioreq_fini(&req);
 }
@@ -461,9 +485,12 @@ drain_objects(void **state)
 	}
 
 	rebuild_io(arg, oids, OBJ_NR);
+	arg->rebuild_cb = reintegrate_inflight_io;
+	arg->rebuild_cb_arg = &oids[0];
 	drain_single_pool_target(arg, ranks_to_kill[0], tgt, false);
 
 	rebuild_io_validate(arg, oids, OBJ_NR);
+	reintegrate_inflight_io_verify(arg);
 }
 
 /** create a new pool/container for each test */
@@ -478,11 +505,11 @@ static const struct CMUnitTest drain_tests[] = {
 	 drain_multiple, rebuild_small_sub_setup, test_teardown},
 	{"DRAIN5: drain large rec single index",
 	 drain_large_rec, rebuild_small_sub_setup, test_teardown},
-	{"DRAIN7: drain keys with multiple snapshots",
+	{"DRAIN6: drain keys with multiple snapshots",
 	 drain_snap_update_keys, rebuild_small_sub_setup, test_teardown},
-	{"DRAIN8: drain keys/punch with multiple snapshots",
+	{"DRAIN7: drain keys/punch with multiple snapshots",
 	 drain_snap_punch_keys, rebuild_small_sub_setup, test_teardown},
-	{"DRAIN9: drain multiple objects",
+	{"DRAIN8: drain multiple objects",
 	 drain_objects, rebuild_sub_setup, test_teardown},
 };
 
