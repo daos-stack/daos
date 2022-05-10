@@ -296,6 +296,45 @@ dss_rpc_hdlr(crt_context_t *ctx, void *hdlr_arg,
 	return sched_req_enqueue(dx, &attr, real_rpc_hdlr, rpc);
 }
 
+static int
+secondary_rpc_hdlr(crt_context_t *ctx, void *hdlr_arg, void (*real_rpc_hdlr)(void *), void *arg)
+{
+	struct dss_xstream	*primary_dx;
+	crt_rpc_t		*rpc = (crt_rpc_t *)hdlr_arg;
+	uint32_t		 tag;
+	int			 xs_id, rc;
+
+	D_DEBUG(DB_TRACE, "Received secondary RPC, opc: %#x\n", rpc->cr_opc);
+
+	rc = crt_req_dst_tag_get(rpc, &tag);
+	if (rc) {
+		D_ERROR("Failed to get tag from RPC, "DF_RC"\n", DP_RC(rc));
+		return rc;
+	}
+
+	/* The RPC dest tag must be SYS0 or a VOS target */
+	if (tag == 0) {
+		xs_id = 0;
+	} else if (tag >= DAOS_TGT0_OFFSET && tag < DAOS_IO_CTX_ID(dss_tgt_nr)) {
+		xs_id = DSS_MAIN_XS_ID(tag - DAOS_TGT0_OFFSET);
+	} else {
+		D_ERROR("Invalid tag:%u from secondary RPC\n", tag);
+		return -DER_INVAL;
+	}
+
+	primary_dx = dss_get_xstream(xs_id);
+	if (primary_dx == NULL) {
+		D_ERROR("Failed to get primary xstream:%u\n", xs_id);
+		return -DER_INVAL;
+	}
+
+	/*
+	 * Given that the secondary RPC isn't common use case, ignore the CPU apportioning
+	 * policy and kickoff the RPC processing on primary xstream immediately.
+	 */
+	return sched_create_thread(primary_dx, real_rpc_hdlr, rpc, ABT_THREAD_ATTR_NULL, NULL, 0);
+}
+
 static void
 dss_nvme_poll_ult(void *args)
 {
@@ -462,10 +501,7 @@ dss_srv_handler(void *arg)
 
 	xs_type = xs_id2type(dx->dx_xs_id);
 	if (xs_type == DSS_XS_SEC) {
-		/* TODO: Create secondary cart context and register secondary RPC handler */
-		D_ASSERTF(0, "Secondary cart context isn't supported\n");
-#if 0
-		rc = crt_context_create_seconary(&dmi->dmi_ctxt);
+		rc = crt_context_create_secondary(&dmi->dmi_ctx, 0);
 		if (rc != 0) {
 			D_ERROR("Failed to create secondary crt ctxt: "DF_RC"\n", DP_RC(rc));
 			goto tls_fini;
@@ -489,7 +525,6 @@ dss_srv_handler(void *arg)
 			rc = -DER_INVAL;
 			goto crt_destroy;
 		}
-#endif
 	} else if (dx->dx_comm) {
 		/* create private transport context */
 		rc = crt_context_create(&dmi->dmi_ctx);
