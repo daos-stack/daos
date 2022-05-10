@@ -131,7 +131,7 @@ jobs:
                             --build-arg DAOS_JAVA_BUILD=no
                             --build-arg DAOS_BUILD_TYPE=dev
                             --build-arg COMPILER
-  Build ARM:
+  Build-ARM:
     name: Build DAOS client on ARM
     runs-on: ubuntu-20.04
     strategy:
