@@ -518,43 +518,13 @@ func (p *Provider) ScanBdevs(req BdevScanRequest) (*BdevScanResponse, error) {
 	return scanBdevs(p.log, req, &p.bdevCache, p.bdev.Scan)
 }
 
-func filterScanResp(incBdevs *BdevDeviceList, resp *BdevScanResponse) error {
-	oldCtrlrRefs := resp.Controllers
-	newCtrlrRefs := make(NvmeControllers, 0, len(oldCtrlrRefs))
-
-	for _, oldCtrlrRef := range oldCtrlrRefs {
-		addr, err := hardware.NewPCIAddress(oldCtrlrRef.PciAddr)
-		if err != nil {
-			continue // If we cannot parse the address, filter it out.
-		}
-
-		// If a VMD backing address, compare endpoint address with that in config.
-		if addr.IsVMDBackingAddress() {
-			vmdAddr, err := addr.BackingToVMDAddress()
-			if err != nil {
-				return err
-			}
-			addr = vmdAddr
-		}
-
-		if incBdevs.Contains(addr) {
-			newCtrlrRef := &NvmeController{}
-			*newCtrlrRef = *oldCtrlrRef
-			newCtrlrRefs = append(newCtrlrRefs, newCtrlrRef)
-		}
-	}
-	resp.Controllers = newCtrlrRefs
-
-	return nil
-}
-
 // SetBdevCache stores given scan response in provider bdev cache.
 func (p *Provider) SetBdevCache(resp BdevScanResponse) error {
 	p.Lock()
 	defer p.Unlock()
 
 	// Filter out any controllers not configured in provider's engine storage config.
-	if err := filterScanResp(p.GetBlockDevices(), &resp); err != nil {
+	if err := filterBdevScanResponse(p.GetBlockDevices(), &resp); err != nil {
 		return errors.Wrap(err, "filtering scan response before caching")
 	}
 

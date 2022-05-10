@@ -21,6 +21,9 @@ import (
 	"github.com/daos-stack/daos/src/control/server/storage"
 )
 
+// getVMD returns VMD endpoint address when provided string is a VMD backing device PCI address.
+// If the input string is not a VMD backing device PCI address, nil is returned and if not a valid
+// PCI address or address conversion fails, an error is returned.
 func getVMD(inAddr string) (*hardware.PCIAddress, error) {
 	addr, err := hardware.NewPCIAddress(inAddr)
 	if err != nil {
