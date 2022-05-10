@@ -14,6 +14,7 @@ from avocado import skip
 from dfuse_test_base import DfuseTestBase
 from exception_utils import CommandFailure
 
+
 def skip_on_centos7():
     """Decorator to allow selective skipping of test"""
     dist = distro.linux_distribution()
@@ -25,6 +26,7 @@ def skip_on_centos7():
             return func(*args, **kwargs)
         return wrapper
     return _do
+
 
 class DaosBuild(DfuseTestBase):
     # pylint: disable=too-many-ancestors,too-few-public-methods
@@ -100,8 +102,8 @@ class DaosBuild(DfuseTestBase):
         intercept = self.params.get('use_intercept', '/run/intercept/*', default=False)
 
         remote_env = OrderedDict()
-        remote_env['PATH'] = '{}/venv/bin:$PATH'.format(mount_dir)
-        remote_env['VIRTUAL_ENV'] = '{}/venv'.format(mount_dir)
+        remote_env['PATH'] = '{}:$PATH'.format(os.path.join(mount_dir, 'venv', 'bin'))
+        remote_env['VIRTUAL_ENV'] = '{}/venv'.format(os.path.join(mount_dir, 'venv'))
 
         if intercept:
             remote_env['LD_PRELOAD'] = os.path.join(self.prefix, 'lib64', 'libioil.so')
