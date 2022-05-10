@@ -588,4 +588,3 @@ rdb_scm_left(struct rdb *db, daos_size_t *scm_left_outp)
 
 	return 0;
 }
-

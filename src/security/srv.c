@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2019-2021 Intel Corporation.
+ * (C) Copyright 2019-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -44,6 +44,7 @@ struct dss_module security_module =  {
 	.sm_name	= "security",
 	.sm_mod_id	= DAOS_SEC_MODULE,
 	.sm_ver		= DAOS_SEC_VERSION,
+	.sm_proto_count	= 1,
 	.sm_init	= init,
 	.sm_fini	= fini,
 	.sm_setup	= NULL,

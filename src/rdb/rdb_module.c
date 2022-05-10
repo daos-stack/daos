@@ -70,6 +70,7 @@ struct dss_module rdb_module = {
 	.sm_name	= "rdb",
 	.sm_mod_id	= DAOS_RDB_MODULE,
 	.sm_ver		= DAOS_RDB_VERSION,
+	.sm_proto_count	= 1,
 	.sm_init	= rdb_module_init,
 	.sm_fini	= rdb_module_fini,
 	.sm_proto_fmt	= &rdb_proto_fmt,

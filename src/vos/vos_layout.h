@@ -147,8 +147,14 @@ struct vos_dtx_cmt_ent_df {
 	struct dtx_id			dce_xid;
 	/** The epoch# for the DTX. */
 	daos_epoch_t			dce_epoch;
-	/** The time of the DTX being handled on the server. */
-	daos_epoch_t			dce_handle_time;
+	/**
+	 * The time of the DTX being committed on the server.
+	 *
+	 * XXX: in the future, this field will be moved into
+	 *	vos_dtx_blob_df to shrink each committed DTX
+	 *	entry size.
+	 */
+	daos_epoch_t			dce_cmt_time;
 };
 
 /** Active DTX entry on-disk layout in both SCM and DRAM. */

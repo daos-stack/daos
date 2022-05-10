@@ -107,9 +107,10 @@ typedef enum {
 	DAOS_OPC_ARRAY_PUNCH,
 	DAOS_OPC_ARRAY_GET_SIZE,
 	DAOS_OPC_ARRAY_SET_SIZE,
+	DAOS_OPC_ARRAY_STAT,
 
 	/** KV APIs */
-	DAOS_OPC_KV_OPEN = 69,
+	DAOS_OPC_KV_OPEN = 70,
 	DAOS_OPC_KV_CLOSE,
 	DAOS_OPC_KV_DESTROY,
 	DAOS_OPC_KV_GET,
@@ -643,6 +644,8 @@ typedef struct {
 	daos_recx_t		*recx;
 	/** Operation flags. */
 	uint64_t		flags;
+	/** [out]: optional - Max epoch value */
+	daos_epoch_t		*max_epoch;
 } daos_obj_query_key_t;
 
 /** Object fetch/update args */
@@ -859,6 +862,16 @@ typedef struct {
 	/** Returned array size in number of records. */
 	daos_size_t		*size;
 } daos_array_get_size_t;
+
+/** Array stat args */
+typedef struct {
+	/** Array open handle. */
+	daos_handle_t		oh;
+	/** Transaction open handle. */
+	daos_handle_t		th;
+	/** Returned array stat info */
+	daos_array_stbuf_t	*stbuf;
+} daos_array_stat_t;
 
 /** Array set size args */
 typedef struct {

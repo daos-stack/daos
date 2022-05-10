@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2017-2021 Intel Corporation.
+ * (C) Copyright 2017-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -173,6 +173,7 @@ ds_iv_ns_get(struct ds_iv_ns *ns)
 void
 ds_iv_ns_put(struct ds_iv_ns *ns)
 {
+	D_ASSERT(ns->iv_refcount > 0);
 	ns->iv_refcount--;
 	D_DEBUG(DB_TRACE, DF_UUID" ns ref %u\n",
 		DP_UUID(ns->iv_pool_uuid), ns->iv_refcount);
@@ -986,12 +987,14 @@ iv_op_internal(struct ds_iv_ns *ns, struct ds_iv_key *key_iv,
 				  0, ds_iv_done, &cb_info);
 		break;
 	case IV_UPDATE:
+		D_ASSERT(sync != NULL);
 		rc = crt_iv_update(ns->iv_ns, class->iv_cart_class_id,
 				   (crt_iv_key_t *)&key_iov, 0,
 				   (d_sg_list_t *)value, shortcut,
 				   *sync, ds_iv_done, &cb_info);
 		break;
 	case IV_INVALIDATE:
+		D_ASSERT(sync != NULL);
 		rc = crt_iv_invalidate(ns->iv_ns, class->iv_cart_class_id,
 				       (crt_iv_key_t *)&key_iov, 0, 0, *sync,
 				       ds_iv_done, &cb_info);

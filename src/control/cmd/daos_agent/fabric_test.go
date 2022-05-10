@@ -16,6 +16,7 @@ import (
 	"github.com/pkg/errors"
 
 	"github.com/daos-stack/daos/src/control/common"
+	"github.com/daos-stack/daos/src/control/common/test"
 	"github.com/daos-stack/daos/src/control/lib/hardware"
 	"github.com/daos-stack/daos/src/control/logging"
 )
@@ -24,7 +25,7 @@ var fiCmpOpt = cmpopts.IgnoreUnexported(FabricInterface{})
 
 func TestAgent_NewNUMAFabric(t *testing.T) {
 	log, buf := logging.NewTestLogger(t.Name())
-	defer common.ShowBufferOnFailure(t, buf)
+	defer test.ShowBufferOnFailure(t, buf)
 
 	result := newNUMAFabric(log)
 
@@ -60,12 +61,12 @@ func TestAgent_NUMAFabric_NumNUMANodes(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
-			defer common.ShowBufferOnFailure(t, buf)
+			defer test.ShowBufferOnFailure(t, buf)
 			if tc.nf != nil {
 				tc.nf.log = log
 			}
 
-			common.AssertEqual(t, tc.expResult, tc.nf.NumNUMANodes(), "")
+			test.AssertEqual(t, tc.expResult, tc.nf.NumNUMANodes(), "")
 		})
 	}
 }
@@ -105,12 +106,12 @@ func TestAgent_NUMAFabric_NumDevices(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
-			defer common.ShowBufferOnFailure(t, buf)
+			defer test.ShowBufferOnFailure(t, buf)
 			if tc.nf != nil {
 				tc.nf.log = log
 			}
 
-			common.AssertEqual(t, tc.expResult, tc.nf.NumDevices(tc.node), "")
+			test.AssertEqual(t, tc.expResult, tc.nf.NumDevices(tc.node), "")
 		})
 	}
 }
@@ -151,14 +152,14 @@ func TestAgent_NUMAFabric_Add(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
-			defer common.ShowBufferOnFailure(t, buf)
+			defer test.ShowBufferOnFailure(t, buf)
 			if tc.nf != nil {
 				tc.nf.log = log
 			}
 
 			err := tc.nf.Add(tc.node, tc.input)
 
-			common.CmpErr(t, tc.expErr, err)
+			test.CmpErr(t, tc.expErr, err)
 
 			if tc.nf == nil {
 				return
@@ -363,6 +364,10 @@ func TestAgent_NUMAFabric_GetDevice(t *testing.T) {
 					Name:        "t1",
 					NetDevClass: hardware.Infiniband,
 				},
+				{
+					Name:        "t1",
+					NetDevClass: hardware.Infiniband,
+				},
 			},
 		},
 		"type not found on NUMA node": {
@@ -431,7 +436,7 @@ func TestAgent_NUMAFabric_GetDevice(t *testing.T) {
 				},
 			},
 		},
-		"load balancing": {
+		"load balancing on NUMA node": {
 			provider: "ofi+sockets",
 			nf: &NUMAFabric{
 				numaMap: map[int][]*FabricInterface{
@@ -461,6 +466,57 @@ func TestAgent_NUMAFabric_GetDevice(t *testing.T) {
 				},
 			},
 			node:        0,
+			netDevClass: hardware.Ether,
+			expResults: []*FabricInterface{
+				{
+					Name:        "t2",
+					NetDevClass: hardware.Ether,
+				},
+				{
+					Name:        "t3",
+					NetDevClass: hardware.Ether,
+				},
+				{
+					Name:        "t1",
+					NetDevClass: hardware.Ether,
+				},
+				{
+					Name:        "t2",
+					NetDevClass: hardware.Ether,
+				},
+			},
+		},
+		"load balancing amongst NUMA nodes": {
+			provider: "ofi+sockets",
+			nf: &NUMAFabric{
+				numaMap: map[int][]*FabricInterface{
+					0: {
+						fabricInterfaceFromHardware(&hardware.FabricInterface{
+							NetInterface: "t1",
+							Name:         "t1",
+							DeviceClass:  hardware.Ether,
+							Providers:    common.NewStringSet("ofi+sockets"),
+						}),
+					},
+					1: {
+						fabricInterfaceFromHardware(&hardware.FabricInterface{
+							NetInterface: "t2",
+							Name:         "t2",
+							DeviceClass:  hardware.Ether,
+							Providers:    common.NewStringSet("ofi+sockets"),
+						}),
+					},
+					2: {
+						fabricInterfaceFromHardware(&hardware.FabricInterface{
+							NetInterface: "t3",
+							Name:         "t3",
+							DeviceClass:  hardware.Ether,
+							Providers:    common.NewStringSet("ofi+sockets"),
+						}),
+					},
+				},
+			},
+			node:        3,
 			netDevClass: hardware.Ether,
 			expResults: []*FabricInterface{
 				{
@@ -590,7 +646,7 @@ func TestAgent_NUMAFabric_GetDevice(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
-			defer common.ShowBufferOnFailure(t, buf)
+			defer test.ShowBufferOnFailure(t, buf)
 			if tc.nf != nil {
 				tc.nf.log = log
 				if tc.nf.getAddrInterface == nil {
@@ -598,10 +654,17 @@ func TestAgent_NUMAFabric_GetDevice(t *testing.T) {
 				}
 			}
 
+			numDevices := tc.nf.NumDevices(tc.node)
+			if numDevices == 0 && tc.nf != nil {
+				for numa := range tc.nf.numaMap {
+					numDevices += tc.nf.NumDevices(numa)
+				}
+			}
+
 			var results []*FabricInterface
-			for i := 0; i < tc.nf.NumDevices(tc.node)+1; i++ {
+			for i := 0; i < numDevices+1; i++ {
 				result, err := tc.nf.GetDevice(tc.node, tc.netDevClass, tc.provider)
-				common.CmpErr(t, tc.expErr, err)
+				test.CmpErr(t, tc.expErr, err)
 				if tc.expErr != nil {
 					return
 				}
@@ -677,7 +740,7 @@ func TestAgent_NUMAFabric_Find(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			result, err := tc.nf.Find(tc.name)
 
-			common.CmpErr(t, tc.expErr, err)
+			test.CmpErr(t, tc.expErr, err)
 			if diff := cmp.Diff(tc.expResult, result, fiCmpOpt); diff != "" {
 				t.Fatalf("-want, +got:\n%s", diff)
 			}
@@ -687,13 +750,11 @@ func TestAgent_NUMAFabric_Find(t *testing.T) {
 
 func TestAgent_NUMAFabricFromScan(t *testing.T) {
 	for name, tc := range map[string]struct {
-		input               *hardware.FabricInterfaceSet
-		expResult           map[int][]*FabricInterface
-		possibleDefaultNUMA []int
+		input     *hardware.FabricInterfaceSet
+		expResult map[int][]*FabricInterface
 	}{
 		"no devices in scan": {
-			expResult:           map[int][]*FabricInterface{},
-			possibleDefaultNUMA: []int{0},
+			expResult: map[int][]*FabricInterface{},
 		},
 		"include lo": {
 			input: hardware.NewFabricInterfaceSet(
@@ -726,7 +787,6 @@ func TestAgent_NUMAFabricFromScan(t *testing.T) {
 					},
 				},
 			},
-			possibleDefaultNUMA: []int{1},
 		},
 		"multiple devices": {
 			input: hardware.NewFabricInterfaceSet(
@@ -773,7 +833,6 @@ func TestAgent_NUMAFabricFromScan(t *testing.T) {
 					},
 				},
 			},
-			possibleDefaultNUMA: []int{0, 1},
 		},
 		"multiple providers per device": {
 			input: hardware.NewFabricInterfaceSet(
@@ -821,28 +880,16 @@ func TestAgent_NUMAFabricFromScan(t *testing.T) {
 					},
 				},
 			},
-			possibleDefaultNUMA: []int{0, 1},
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
-			defer common.ShowBufferOnFailure(t, buf)
+			defer test.ShowBufferOnFailure(t, buf)
 
 			result := NUMAFabricFromScan(context.TODO(), log, tc.input)
 
 			if diff := cmp.Diff(tc.expResult, result.numaMap, fiCmpOpt); diff != "" {
 				t.Fatalf("-want, +got:\n%s", diff)
-			}
-
-			defaultNumaOK := false
-			for _, numa := range tc.possibleDefaultNUMA {
-				if numa == result.defaultNumaNode {
-					defaultNumaOK = true
-				}
-			}
-
-			if !defaultNumaOK {
-				t.Fatalf("default NUMA node %d (expected in list: %+v)", result.defaultNumaNode, tc.possibleDefaultNUMA)
 			}
 		})
 	}
@@ -850,13 +897,11 @@ func TestAgent_NUMAFabricFromScan(t *testing.T) {
 
 func TestAgent_NUMAFabricFromConfig(t *testing.T) {
 	for name, tc := range map[string]struct {
-		input               []*NUMAFabricConfig
-		expResult           map[int][]*FabricInterface
-		possibleDefaultNUMA []int
+		input     []*NUMAFabricConfig
+		expResult map[int][]*FabricInterface
 	}{
 		"empty input": {
-			expResult:           map[int][]*FabricInterface{},
-			possibleDefaultNUMA: []int{0},
+			expResult: map[int][]*FabricInterface{},
 		},
 		"no devices on NUMA node": {
 			input: []*NUMAFabricConfig{
@@ -865,8 +910,7 @@ func TestAgent_NUMAFabricFromConfig(t *testing.T) {
 					Interfaces: []*FabricInterfaceConfig{},
 				},
 			},
-			expResult:           map[int][]*FabricInterface{},
-			possibleDefaultNUMA: []int{0},
+			expResult: map[int][]*FabricInterface{},
 		},
 		"single NUMA node": {
 			input: []*NUMAFabricConfig{
@@ -889,7 +933,6 @@ func TestAgent_NUMAFabricFromConfig(t *testing.T) {
 					},
 				},
 			},
-			possibleDefaultNUMA: []int{1},
 		},
 		"multiple devices": {
 			input: []*NUMAFabricConfig{
@@ -935,28 +978,16 @@ func TestAgent_NUMAFabricFromConfig(t *testing.T) {
 					},
 				},
 			},
-			possibleDefaultNUMA: []int{0, 1},
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
-			defer common.ShowBufferOnFailure(t, buf)
+			defer test.ShowBufferOnFailure(t, buf)
 
 			result := NUMAFabricFromConfig(log, tc.input)
 
 			if diff := cmp.Diff(tc.expResult, result.numaMap, fiCmpOpt); diff != "" {
 				t.Fatalf("-want, +got:\n%s", diff)
-			}
-
-			defaultNumaOK := false
-			for _, numa := range tc.possibleDefaultNUMA {
-				if numa == result.defaultNumaNode {
-					defaultNumaOK = true
-				}
-			}
-
-			if !defaultNumaOK {
-				t.Fatalf("default NUMA node %d (expected in list: %+v)", result.defaultNumaNode, tc.possibleDefaultNUMA)
 			}
 		})
 	}
@@ -1035,7 +1066,7 @@ func TestAgent_NUMAFabric_validateDevice(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
-			defer common.ShowBufferOnFailure(t, buf)
+			defer test.ShowBufferOnFailure(t, buf)
 
 			nf := newNUMAFabric(log)
 			nf.getAddrInterface = tc.getAddrInterface
@@ -1044,7 +1075,7 @@ func TestAgent_NUMAFabric_validateDevice(t *testing.T) {
 				Name: "not_real",
 			})
 
-			common.CmpErr(t, tc.expErr, err)
+			test.CmpErr(t, tc.expErr, err)
 		})
 	}
 }

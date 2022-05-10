@@ -277,7 +277,7 @@ func (svc *mgmtSvc) join(ctx context.Context, req *batchJoinRequest) *batchJoinR
 			member.Rank, req.peerAddr, member.FabricURI)
 	} else {
 		svc.log.Debugf("updated system member: rank %d, uri %s, %s->%s",
-			member.Rank, member.FabricURI, joinResponse.PrevState, member.State())
+			member.Rank, member.FabricURI, joinResponse.PrevState, member.State)
 	}
 
 	resp := &batchJoinResponse{
@@ -968,4 +968,40 @@ func (svc *mgmtSvc) SystemCleanup(ctx context.Context, req *mgmtpb.SystemCleanup
 	svc.log.Debugf("Responding to SystemCleanup RPC: %+v", resp)
 
 	return resp, nil
+}
+
+// SystemSetAttr sets system-level attributes.
+func (svc *mgmtSvc) SystemSetAttr(ctx context.Context, req *mgmtpb.SystemSetAttrReq) (_ *mgmtpb.DaosResp, err error) {
+	if err := svc.checkLeaderRequest(req); err != nil {
+		return nil, err
+	}
+	svc.log.Debugf("Received SystemSetAttr RPC: %+v", req)
+	defer func() {
+		svc.log.Debugf("Responding to SystemSetAttr RPC: (%v)", err)
+	}()
+
+	if err := system.SetAttributes(svc.sysdb, req.GetAttributes()); err != nil {
+		return nil, err
+	}
+
+	return &mgmtpb.DaosResp{}, nil
+}
+
+// SystemGetAttr gets system-level attributes.
+func (svc *mgmtSvc) SystemGetAttr(ctx context.Context, req *mgmtpb.SystemGetAttrReq) (resp *mgmtpb.SystemGetAttrResp, err error) {
+	if err := svc.checkReplicaRequest(req); err != nil {
+		return nil, err
+	}
+	svc.log.Debugf("Received SystemGetAttr RPC: %+v", req)
+	defer func() {
+		svc.log.Debugf("Responding to SystemGetAttr RPC: %+v (%v)", resp, err)
+	}()
+
+	props, err := system.GetAttributes(svc.sysdb, req.GetKeys())
+	if err != nil {
+		return nil, err
+	}
+
+	resp = &mgmtpb.SystemGetAttrResp{Attributes: props}
+	return
 }
