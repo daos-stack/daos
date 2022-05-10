@@ -1,4 +1,4 @@
-daos (2.1.100-8) unstable; urgency=medium
+daos (2.3.100-8) unstable; urgency=medium
   [ Phillip Henderson ]
   * Remove doas-client-tests-openmpi dependency from daos-tests
 
