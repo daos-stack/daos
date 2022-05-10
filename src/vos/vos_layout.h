@@ -90,7 +90,7 @@ enum vos_gc_type {
 /** Lowest supported durable format version */
 #define POOL_DF_VER_1				23
 /** Current durable format version */
-#define POOL_DF_VERSION				POOL_DF_VER_1
+#define POOL_DF_VERSION				24
 
 /**
  * Durable format for VOS pool
