@@ -9,6 +9,4 @@ usr/bin/srv_checksum_tests
 usr/bin/vos_tests
 usr/bin/vea_stress
 usr/bin/vos_perf
-usr/bin/daos_run_io_conf
 usr/bin/obj_ctl
-usr/bin/daos_gen_io_conf

@@ -40,6 +40,7 @@ def getuid() {
                         returnStdout: true).trim()
     return cached_uid
 }
+
 pipeline {
     agent { label 'lightweight' }
 
@@ -55,6 +56,7 @@ pipeline {
         CLUSH_ARGS = "-o$SSH_KEY_ARGS"
         TEST_RPMS = cachedCommitPragma(pragma: 'RPM-test', def_val: 'true')
         COVFN_DISABLED = cachedCommitPragma(pragma: 'Skip-fnbullseye', def_val: 'true')
+        REPO_FILE_URL = repoFileUrl(env.REPO_FILE_URL)
         SCONS_FAULTS_ARGS = sconsFaultsArgs()
     }
 
@@ -218,16 +220,10 @@ pipeline {
                         checkPatch user: GITHUB_USER_USR,
                                    password: GITHUB_USER_PSW,
                                    ignored_files: "src/control/vendor/*:" +
-                                                  "src/include/daos/*.pb-c.h:" +
-                                                  "src/common/*.pb-c.[ch]:" +
-                                                  "src/mgmt/*.pb-c.[ch]:" +
-                                                  "src/engine/*.pb-c.[ch]:" +
-                                                  "src/security/*.pb-c.[ch]:" +
+                                                  "*.pb-c.[ch]:" +
                                                   "src/client/java/daos-java/src/main/java/io/daos/dfs/uns/*:" +
                                                   "src/client/java/daos-java/src/main/java/io/daos/obj/attr/*:" +
                                                   "src/client/java/daos-java/src/main/native/include/daos_jni_common.h:" +
-                                                  "src/client/java/daos-java/src/main/native/*.pb-c.[ch]:" +
-                                                  "src/client/java/daos-java/src/main/native/include/*.pb-c.[ch]:" +
                                                   "*.crt:" +
                                                   "*.pem:" +
                                                   "*_test.go:" +
@@ -316,7 +312,7 @@ pipeline {
                             dir 'utils/rpms/packaging'
                             label 'docker_runner'
                             additionalBuildArgs dockerBuildArgs()
-                            args  '--group-add mock --cap-add=SYS_ADMIN --privileged=true'
+                            args  '--cap-add=SYS_ADMIN'
                         }
                     }
                     steps {
@@ -351,7 +347,7 @@ pipeline {
                             dir 'utils/rpms/packaging'
                             label 'docker_runner'
                             additionalBuildArgs dockerBuildArgs()
-                            args  '--group-add mock --cap-add=SYS_ADMIN --privileged=true'
+                            args  '--cap-add=SYS_ADMIN'
                         }
                     }
                     steps {
@@ -386,7 +382,7 @@ pipeline {
                             dir 'utils/rpms/packaging'
                             label 'docker_runner'
                             additionalBuildArgs dockerBuildArgs()
-                            args  '--group-add mock --cap-add=SYS_ADMIN --privileged=true'
+                            args  '--cap-add=SYS_ADMIN'
                         }
                     }
                     steps {
@@ -421,7 +417,7 @@ pipeline {
                             dir 'utils/rpms/packaging'
                             label 'docker_runner'
                             additionalBuildArgs dockerBuildArgs()
-                            args  '--cap-add=SYS_ADMIN --privileged=true'
+                            args  '--cap-add=SYS_ADMIN'
                         }
                     }
                     steps {

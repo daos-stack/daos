@@ -987,12 +987,14 @@ iv_op_internal(struct ds_iv_ns *ns, struct ds_iv_key *key_iv,
 				  0, ds_iv_done, &cb_info);
 		break;
 	case IV_UPDATE:
+		D_ASSERT(sync != NULL);
 		rc = crt_iv_update(ns->iv_ns, class->iv_cart_class_id,
 				   (crt_iv_key_t *)&key_iov, 0,
 				   (d_sg_list_t *)value, shortcut,
 				   *sync, ds_iv_done, &cb_info);
 		break;
 	case IV_INVALIDATE:
+		D_ASSERT(sync != NULL);
 		rc = crt_iv_invalidate(ns->iv_ns, class->iv_cart_class_id,
 				       (crt_iv_key_t *)&key_iov, 0, 0, *sync,
 				       ds_iv_done, &cb_info);
