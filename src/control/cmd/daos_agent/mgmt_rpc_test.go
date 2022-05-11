@@ -61,18 +61,18 @@ func TestAgent_mgmtModule_getAttachInfo(t *testing.T) {
 		return result
 	}
 
-	testFI := fabricInterfaceFromHardware(&hardware.FabricInterface{
-		Name:         "test0",
-		NetInterface: "test0",
-		DeviceClass:  hardware.Ether,
-		Providers:    common.NewStringSet("ofi+tcp"),
+	testFI := fabricInterfacesFromHardware(&hardware.FabricInterface{
+		Name:          "test0",
+		NetInterfaces: common.NewStringSet("test0"),
+		DeviceClass:   hardware.Ether,
+		Providers:     common.NewStringSet("ofi+tcp"),
 	})
 
 	hintResp := func(resp *mgmtpb.GetAttachInfoResp) *mgmtpb.GetAttachInfoResp {
 		withHint := new(mgmtpb.GetAttachInfoResp)
 		*withHint = *testResps[0]
-		withHint.ClientNetHint.Interface = testFI.Name
-		withHint.ClientNetHint.Domain = testFI.Name
+		withHint.ClientNetHint.Interface = testFI[0].Name
+		withHint.ClientNetHint.Domain = testFI[0].Name
 
 		return withHint
 	}
@@ -111,9 +111,7 @@ func TestAgent_mgmtModule_getAttachInfo(t *testing.T) {
 				fabricInfo: newTestFabricCache(t, log, &NUMAFabric{
 					log: log,
 					numaMap: map[int][]*FabricInterface{
-						0: {
-							testFI,
-						},
+						0: testFI,
 					},
 				}),
 				attachInfo: newAttachInfoCache(log, !tc.cacheDisabled),
@@ -151,14 +149,12 @@ func TestAgent_mgmtModule_getAttachInfo_Parallel(t *testing.T) {
 		fabricInfo: newTestFabricCache(t, log, &NUMAFabric{
 			log: log,
 			numaMap: map[int][]*FabricInterface{
-				0: {
-					fabricInterfaceFromHardware(&hardware.FabricInterface{
-						Name:         "test0",
-						NetInterface: "test0",
-						DeviceClass:  hardware.Ether,
-						Providers:    common.NewStringSet("ofi+tcp"),
-					}),
-				},
+				0: fabricInterfacesFromHardware(&hardware.FabricInterface{
+					Name:          "test0",
+					NetInterfaces: common.NewStringSet("test0"),
+					DeviceClass:   hardware.Ether,
+					Providers:     common.NewStringSet("ofi+tcp"),
+				}),
 			},
 		}),
 		attachInfo: newAttachInfoCache(log, true),

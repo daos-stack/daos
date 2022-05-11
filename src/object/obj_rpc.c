@@ -541,9 +541,7 @@ static int
 crt_proc_struct_daos_shard_tgt(crt_proc_t proc, crt_proc_op_t proc_op,
 			       struct daos_shard_tgt *p)
 {
-	/* st_ec_tgt need not pack */
-	return crt_proc_memcpy(proc, proc_op,
-			       p, sizeof(*p) - sizeof(p->st_ec_tgt));
+	return crt_proc_memcpy(proc, proc_op, p, sizeof(*p));
 }
 
 /* For compounded RPC. */
