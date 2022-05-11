@@ -43,6 +43,19 @@ func TestHostList_NumericList(t *testing.T) {
 			expFinalOut: "[1,3,0,2,5]",
 			expCount:    5,
 		},
+		"add dupes": {
+			addList:     uints(1, 1, 1),
+			expOut:      "[1,1,1]",
+			expFinalOut: "[1,1,1]",
+			expCount:    3,
+		},
+		"delete one dupe": {
+			startList:   uints(1, 1, 1),
+			expOut:      "[1,1,1]",
+			delList:     uints(1),
+			expFinalOut: "[1,1]",
+			expCount:    2,
+		},
 		"delete non-existent no-op": {
 			startList:   uints(1, 3, 4),
 			expOut:      "[1,3-4]",
@@ -148,6 +161,13 @@ func TestHostList_NumericSet(t *testing.T) {
 			delList:     uints(5),
 			expFinalOut: "[1,3-4]",
 			expCount:    3,
+		},
+		"test dupes": {
+			startList:   uints(1, 1, 1),
+			addList:     uints(1, 1, 1),
+			expOut:      "1",
+			expFinalOut: "1",
+			expCount:    1,
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
