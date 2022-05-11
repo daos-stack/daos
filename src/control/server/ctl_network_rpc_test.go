@@ -31,11 +31,11 @@ func TestServer_ControlService_fabricInterfaceSetToNetworkScanResp(t *testing.T)
 		"single interface": {
 			fis: hardware.NewFabricInterfaceSet(
 				&hardware.FabricInterface{
-					Name:         "fi0",
-					NetInterface: "net0",
-					Providers:    common.NewStringSet("p1"),
-					NUMANode:     1,
-					DeviceClass:  hardware.Infiniband,
+					Name:          "fi0",
+					NetInterfaces: common.NewStringSet("net0"),
+					Providers:     common.NewStringSet("p1"),
+					NUMANode:      1,
+					DeviceClass:   hardware.Infiniband,
 				},
 			),
 			expResult: &ctlpb.NetworkScanResp{
@@ -52,11 +52,11 @@ func TestServer_ControlService_fabricInterfaceSetToNetworkScanResp(t *testing.T)
 		"multi provider": {
 			fis: hardware.NewFabricInterfaceSet(
 				&hardware.FabricInterface{
-					Name:         "fi0",
-					NetInterface: "net0",
-					Providers:    common.NewStringSet("p1", "p2"),
-					NUMANode:     1,
-					DeviceClass:  hardware.Infiniband,
+					Name:          "fi0",
+					NetInterfaces: common.NewStringSet("net0"),
+					Providers:     common.NewStringSet("p1", "p2"),
+					NUMANode:      1,
+					DeviceClass:   hardware.Infiniband,
 				},
 			),
 			expResult: &ctlpb.NetworkScanResp{
@@ -79,18 +79,18 @@ func TestServer_ControlService_fabricInterfaceSetToNetworkScanResp(t *testing.T)
 		"multi interface": {
 			fis: hardware.NewFabricInterfaceSet(
 				&hardware.FabricInterface{
-					Name:         "fi0",
-					NetInterface: "net0",
-					Providers:    common.NewStringSet("p1"),
-					NUMANode:     0,
-					DeviceClass:  hardware.Infiniband,
+					Name:          "fi0",
+					NetInterfaces: common.NewStringSet("net0"),
+					Providers:     common.NewStringSet("p1"),
+					NUMANode:      0,
+					DeviceClass:   hardware.Infiniband,
 				},
 				&hardware.FabricInterface{
-					Name:         "fi1",
-					NetInterface: "net1",
-					Providers:    common.NewStringSet("p1", "p2"),
-					NUMANode:     1,
-					DeviceClass:  hardware.Infiniband,
+					Name:          "fi1",
+					NetInterfaces: common.NewStringSet("net1"),
+					Providers:     common.NewStringSet("p1", "p2"),
+					NUMANode:      1,
+					DeviceClass:   hardware.Infiniband,
 				},
 			),
 			expResult: &ctlpb.NetworkScanResp{
