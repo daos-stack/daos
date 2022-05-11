@@ -4,6 +4,7 @@ name: daos_server           # sys group daos_server
 access_points: ['example']  # management service leader (bootstrap)
 # port: 10001               # control listen port, default 10001
 provider: ofi+tcp
+nr_hugepages: -1 # disable the use of hugepages when NVMe is not being used
 control_log_mask: DEBUG
 control_log_file: /tmp/daos_server.log
 
@@ -48,21 +49,15 @@ engines:
       # - CRT_CTX_SHARE_ADDR=1
       # - CRT_CTX_NUM=8
 
-    # Storage definitions
-
-    # When scm_class is set to ram, tmpfs will be used to emulate SCM.
-    # The size of ram is specified by scm_size in GB units.
-    scm_mount: /mnt/daos0
-    scm_class: ram
-    scm_size: 1
-
-    # When scm_class is set to dcpm, scm_list is the list of device paths for
-    # PMem namespaces (currently only one per engine supported).
-    # scm_class: dcpm
-    # scm_list: [/dev/pmem0]
-
-    # If using NVMe SSD (will write /mnt/daos/daos_nvme.conf and start I/O
-    # engine with -n <path>)
-    bdev_class: nvme
-    bdev_list: []
-    bdev_busid_range: ""
+    # Storage definitions (one per tier)
+    storage:
+      -
+        # When scm_class is set to ram, tmpfs will be used to emulate SCM.
+        # The size of ram is specified by scm_size in GB units.
+        class: ram
+        scm_size: 8
+        scm_mount: /mnt/daos
+      -
+        # If no NVMe devices are specified in config file, no NVMe will be used.
+        class: nvme
+        bdev_list: []
