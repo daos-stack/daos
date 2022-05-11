@@ -358,6 +358,7 @@ err_out:
 static int pool_create_fill_resp(Mgmt__PoolCreateResp *resp, uuid_t uuid, d_rank_list_t *svc_ranks)
 {
 	int			rc = 0;
+	int			index;
 	d_rank_list_t	       *enabled_ranks = NULL;
 	daos_pool_info_t	pool_info = { .pi_bits = DPI_ENGINES_ENABLED | DPI_SPACE };
 
@@ -384,8 +385,9 @@ static int pool_create_fill_resp(Mgmt__PoolCreateResp *resp, uuid_t uuid, d_rank
 		D_GOTO(out, rc);
 	}
 
-	D_ASSERT(pool_info.pi_space.ps_space.s_total[DAOS_MEDIA_SCM] % resp->n_tgt_ranks == 0);
-	D_ASSERT(pool_info.pi_space.ps_space.s_total[DAOS_MEDIA_NVME] % resp->n_tgt_ranks == 0);
+	for (index = 0; index < DAOS_MEDIA_MAX; ++index) {
+		D_ASSERT(pool_info.pi_space.ps_space.s_total[index] % resp->n_tgt_ranks == 0);
+	}
 	D_ALLOC_ARRAY(resp->tier_bytes, DAOS_MEDIA_MAX);
 	if (resp->tier_bytes == NULL) {
 		rc = -DER_NOMEM;
@@ -393,14 +395,13 @@ static int pool_create_fill_resp(Mgmt__PoolCreateResp *resp, uuid_t uuid, d_rank
 		D_GOTO(out, rc);
 	}
 	resp->n_tier_bytes = DAOS_MEDIA_MAX;
-	resp->tier_bytes[DAOS_MEDIA_SCM] =
-		pool_info.pi_space.ps_space.s_total[DAOS_MEDIA_SCM] / resp->n_tgt_ranks;
-	resp->tier_bytes[DAOS_MEDIA_NVME] =
-		pool_info.pi_space.ps_space.s_total[DAOS_MEDIA_NVME] / resp->n_tgt_ranks;
+	for (index = 0; index < DAOS_MEDIA_MAX; ++index) {
+		resp->tier_bytes[index] =
+			pool_info.pi_space.ps_space.s_total[index] / resp->n_tgt_ranks;
+	}
 
 out:
 	d_rank_list_free(enabled_ranks);
-	d_rank_list_free(svc_ranks);
 	return rc;
 }
 
@@ -484,7 +485,8 @@ ds_mgmt_drpc_pool_create(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 		goto out;
 	}
 
-	pool_create_fill_resp(&resp, pool_uuid, svc);
+	rc = pool_create_fill_resp(&resp, pool_uuid, svc);
+	d_rank_list_free(svc);
 
 out:
 	resp.status = rc;
