@@ -17,6 +17,8 @@ import (
 )
 
 func TestFaults(t *testing.T) {
+	var nilFault *fault.Fault
+
 	for _, tc := range []struct {
 		name        string
 		testErr     error
@@ -27,6 +29,12 @@ func TestFaults(t *testing.T) {
 		{
 			name:        "nil error",
 			testErr:     nil,
+			expFaultRes: "unknown: code = 0 resolution = \"no known resolution\"",
+		},
+		{
+			name:        "nil Fault",
+			testErr:     nilFault,
+			expFaultStr: "(nil)",
 			expFaultRes: "unknown: code = 0 resolution = \"no known resolution\"",
 		},
 		{
