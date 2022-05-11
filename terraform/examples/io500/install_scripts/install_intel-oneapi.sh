@@ -57,7 +57,7 @@ EOF
   rpm --import https://yum.repos.intel.com/intel-gpg-keys/GPG-PUB-KEY-INTEL-SW-PRODUCTS.PUB
 
   # Install Intel OneAPI MPI
-  yum install -y intel-oneapi-mpi intel-oneapi-mpi-devel
+  yum install -y intel-oneapi-mpi-2021.5.1 intel-oneapi-mpi-devel-2021.5.1
 }
 
 main() {
