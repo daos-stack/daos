@@ -196,8 +196,8 @@ pool_svc_rdb_path_common(const uuid_t pool_uuid, const char *suffix)
 }
 
 /* Return a pool service RDB path. */
-static char *
-pool_svc_rdb_path(const uuid_t pool_uuid)
+char *
+ds_pool_svc_rdb_path(const uuid_t pool_uuid)
 {
 	return pool_svc_rdb_path_common(pool_uuid, "");
 }
@@ -785,7 +785,7 @@ pool_svc_locate_cb(d_iov_t *id, char **path)
 
 	if (id->iov_len != sizeof(uuid_t))
 		return -DER_INVAL;
-	s = pool_svc_rdb_path(id->iov_buf);
+	s = ds_pool_svc_rdb_path(id->iov_buf);
 	if (s == NULL)
 		return -DER_NOMEM;
 	*path = s;
@@ -1174,40 +1174,44 @@ primary_group_initialized(void)
 }
 
 /*
- * Read the DB for map_buf, map_version, and prop. Callers are responsible for
- * freeing *map_buf and *prop.
+ * Check the layout versions and read the pool map. If the DB is empty, return
+ * positive error number DER_UNINIT. If the return value is 0, the caller is
+ * responsible for freeing *map_buf_out with D_FREE eventually.
  */
-static int
-read_db_for_stepping_up(struct pool_svc *svc, struct pool_buf **map_buf,
-			uint32_t *map_version, daos_prop_t **prop)
+int
+ds_pool_svc_load(struct rdb_tx *tx, uuid_t uuid, rdb_path_t *root, struct pool_buf **map_buf_out,
+		 uint32_t *map_version_out)
 {
-	struct rdb_tx	tx;
-	d_iov_t		value;
-	bool		version_exists = false;
-	uint32_t	version, global_version;
-	int		rc;
+	uuid_t			uuid_tmp;
+	d_iov_t			value;
+	bool			version_exists = false;
+	uint32_t		version;
+	uint32_t		global_version;
+	struct pool_buf	       *map_buf;
+	uint32_t		map_version;
+	int			rc;
 
-	rc = rdb_tx_begin(svc->ps_rsvc.s_db, svc->ps_rsvc.s_term, &tx);
-	if (rc != 0)
-		goto out;
-	ABT_rwlock_rdlock(svc->ps_lock);
+	/*
+	 * For the ds_notify_ras_eventf calls below, use a copy to avoid
+	 * casting the uuid pointer.
+	 */
+	uuid_copy(uuid_tmp, uuid);
 
 	/* Check the layout version. */
 	d_iov_set(&value, &version, sizeof(version));
-	rc = rdb_tx_lookup(&tx, &svc->ps_root, &ds_pool_prop_version, &value);
+	rc = rdb_tx_lookup(tx, root, &ds_pool_prop_version, &value);
 	if (rc == -DER_NONEXIST) {
 		/*
 		 * This DB may be new or incompatible. Check the existence of
 		 * the pool map to find out which is the case. (See the
 		 * references to version_exists below.)
 		 */
-		D_DEBUG(DB_MD, DF_UUID": no layout version\n",
-			DP_UUID(svc->ps_uuid));
+		D_DEBUG(DB_MD, DF_UUID": no layout version\n", DP_UUID(uuid));
 		goto check_map;
 	} else if (rc != 0) {
 		D_ERROR(DF_UUID": failed to look up layout version: "DF_RC"\n",
-			DP_UUID(svc->ps_uuid), DP_RC(rc));
-		goto out_lock;
+			DP_UUID(uuid), DP_RC(rc));
+		goto out;
 	}
 	version_exists = true;
 	if (version < DS_POOL_MD_VERSION_LOW || version > DS_POOL_MD_VERSION) {
@@ -1215,7 +1219,7 @@ read_db_for_stepping_up(struct pool_svc *svc, struct pool_buf **map_buf,
 				     RAS_SEV_ERROR, NULL /* hwid */,
 				     NULL /* rank */, NULL /* inc */,
 				     NULL /* jobid */,
-				     &svc->ps_uuid, NULL /* cont */,
+				     &uuid_tmp, NULL /* cont */,
 				     NULL /* objid */, NULL /* ctlop */,
 				     NULL /* data */,
 				     "incompatible layout version: %u not in "
@@ -1223,11 +1227,11 @@ read_db_for_stepping_up(struct pool_svc *svc, struct pool_buf **map_buf,
 				     DS_POOL_MD_VERSION_LOW,
 				     DS_POOL_MD_VERSION);
 		rc = -DER_DF_INCOMPT;
-		goto out_lock;
+		goto out;
 	}
 
 check_map:
-	rc = read_map_buf(&tx, &svc->ps_root, map_buf, map_version);
+	rc = read_map_buf(tx, root, &map_buf, &map_version);
 	if (rc != 0) {
 		if (rc == -DER_NONEXIST && !version_exists) {
 			/*
@@ -1235,14 +1239,13 @@ check_map:
 			 * exists, then the pool map must also exist;
 			 * otherwise, it is an error.
 			 */
-			D_DEBUG(DB_MD, DF_UUID": new db\n",
-				DP_UUID(svc->ps_uuid));
-			rc = +DER_UNINIT;
+			D_DEBUG(DB_MD, DF_UUID": new db\n", DP_UUID(uuid));
+			rc = DER_UNINIT; /* positive error number */
 		} else {
-			D_ERROR(DF_UUID": failed to read pool map buffer: "DF_RC
-				"\n", DP_UUID(svc->ps_uuid), DP_RC(rc));
+			D_ERROR(DF_UUID": failed to read pool map buffer: "DF_RC"\n",
+				DP_UUID(uuid), DP_RC(rc));
 		}
-		goto out_lock;
+		goto out;
 	}
 	if (!version_exists) {
 		/* This DB is not new and uses a layout that lacks a version. */
@@ -1250,20 +1253,22 @@ check_map:
 				     RAS_SEV_ERROR, NULL /* hwid */,
 				     NULL /* rank */, NULL /* inc */,
 				     NULL /* jobid */,
-				     &svc->ps_uuid, NULL /* cont */,
+				     &uuid_tmp, NULL /* cont */,
 				     NULL /* objid */, NULL /* ctlop */,
 				     NULL /* data */,
 				     "incompatible layout version");
 		rc = -DER_DF_INCOMPT;
-		goto out_lock;
+		goto out_map_buf;
 	}
 
 	d_iov_set(&value, &global_version, sizeof(global_version));
-	rc = rdb_tx_lookup(&tx, &svc->ps_root, &ds_pool_prop_global_version, &value);
-	if (rc == -DER_NONEXIST)
+	rc = rdb_tx_lookup(tx, root, &ds_pool_prop_global_version, &value);
+	if (rc == -DER_NONEXIST) {
 		global_version = 0;
-	else if (rc)
-		goto out_lock;
+		rc = 0;
+	} else if (rc != 0) {
+		goto out_map_buf;
+	}
 
 	/**
 	 * downgrading the DAOS software of an upgraded pool report
@@ -1274,21 +1279,64 @@ check_map:
 				     RAS_SEV_ERROR, NULL /* hwid */,
 				     NULL /* rank */, NULL /* inc */,
 				     NULL /* jobid */,
-				     &svc->ps_uuid, NULL /* cont */,
+				     &uuid_tmp, NULL /* cont */,
 				     NULL /* objid */, NULL /* ctlop */,
 				     NULL /* data */,
 				     "incompatible layout version: %u larger than "
 				     "%u", global_version,
 				     DS_POOL_GLOBAL_VERSION);
 		rc = -DER_DF_INCOMPT;
-		goto out_lock;
+		goto out_map_buf;
 	}
 
-	rc = pool_prop_read(&tx, svc, DAOS_PO_QUERY_PROP_ALL, prop);
+	D_ASSERTF(rc == 0, DF_RC"\n", DP_RC(rc));
+	*map_buf_out = map_buf;
+	*map_version_out = map_version;
+out_map_buf:
 	if (rc != 0)
-		D_ERROR(DF_UUID": cannot get access data for pool: "DF_RC"\n",
-			DP_UUID(svc->ps_uuid), DP_RC(rc));
+		D_FREE(map_buf);
+out:
+	return rc;
+}
 
+/*
+ * Read the DB for map_buf, map_version, and prop. If the return value is 0,
+ * the caller is responsible for freeing *map_buf_out and *prop_out eventually.
+ */
+static int
+read_db_for_stepping_up(struct pool_svc *svc, struct pool_buf **map_buf_out,
+			uint32_t *map_version_out, daos_prop_t **prop_out)
+{
+	struct rdb_tx		tx;
+	struct pool_buf	       *map_buf;
+	uint32_t		map_version;
+	daos_prop_t	       *prop = NULL;
+	int			rc;
+
+	rc = rdb_tx_begin(svc->ps_rsvc.s_db, svc->ps_rsvc.s_term, &tx);
+	if (rc != 0)
+		goto out;
+	ABT_rwlock_rdlock(svc->ps_lock);
+
+	rc = ds_pool_svc_load(&tx, svc->ps_uuid, &svc->ps_root, &map_buf, &map_version);
+	if (rc != 0)
+		goto out_lock;
+
+	rc = pool_prop_read(&tx, svc, DAOS_PO_QUERY_PROP_ALL, &prop);
+	if (rc != 0) {
+		D_ERROR(DF_UUID": failed to read pool properties: "DF_RC"\n",
+			DP_UUID(svc->ps_uuid), DP_RC(rc));
+		daos_prop_free(prop);
+		goto out_map_buf;
+	}
+
+	D_ASSERTF(rc == 0, DF_RC"\n", DP_RC(rc));
+	*map_buf_out = map_buf;
+	*map_version_out = map_version;
+	*prop_out = prop;
+out_map_buf:
+	if (rc != 0)
+		D_FREE(map_buf);
 out_lock:
 	ABT_rwlock_unlock(svc->ps_lock);
 	rdb_tx_end(&tx);
@@ -1355,7 +1403,6 @@ pool_svc_check_node_status(struct pool_svc *svc)
 	return rc;
 }
 
-/* up */
 static int
 pool_svc_step_up_cb(struct ds_rsvc *rsvc)
 {
@@ -1623,7 +1670,7 @@ start_one(uuid_t uuid, void *varg)
 	 * Check if an RDB file exists, to avoid unnecessary error messages
 	 * from the ds_rsvc_start() call.
 	 */
-	path = pool_svc_rdb_path(uuid);
+	path = ds_pool_svc_rdb_path(uuid);
 	if (path == NULL) {
 		D_ERROR(DF_UUID": failed to allocate rdb path\n",
 			DP_UUID(uuid));

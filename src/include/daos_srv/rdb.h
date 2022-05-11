@@ -115,6 +115,27 @@ struct rdb_storage;
 
 struct rdb_cbs;
 
+/**
+ * Database clue returned by rdb_glance
+ *
+ * Since most fields expose raft/rdb internals that are not required for normal
+ * RDB usage, we will not attempt to explain them fully here.
+ */
+struct rdb_clue {
+	/* Raft clue */
+	uint64_t	bcl_term;	/**< term */
+	int		bcl_vote;	/**< vote */
+	d_rank_t	bcl_self;	/**< self rank */
+	uint64_t	bcl_last_index;	/**< index of last entry */
+	uint64_t	bcl_last_term;	/**< term of last entry */
+	uint64_t	bcl_base_index;	/**< index of base (i.e., snapshot) */
+	uint64_t	bcl_base_term;	/**< term of base (i.e., snapshot) */
+	d_rank_list_t  *bcl_replicas;	/**< replicas at last index */
+
+	/* Database clue */
+	uint64_t	bcl_oid_next;	/**< next OID */
+};
+
 /** Database storage methods */
 int rdb_create(const char *path, const uuid_t uuid, size_t size, const d_rank_list_t *replicas,
 	       struct rdb_cbs *cbs, void *arg, struct rdb_storage **storagep);
@@ -122,6 +143,7 @@ int rdb_open(const char *path, const uuid_t uuid, struct rdb_cbs *cbs, void *arg
 	     struct rdb_storage **storagep);
 void rdb_close(struct rdb_storage *storage);
 int rdb_destroy(const char *path, const uuid_t uuid);
+int rdb_glance(struct rdb_storage *storage, struct rdb_clue *clue);
 
 /** Database (opaque) */
 struct rdb;

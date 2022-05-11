@@ -242,14 +242,14 @@ ds_mgmt_tgt_pool_iterate(int (*cb)(uuid_t uuid, void *arg), void *arg)
 	return common_pool_iterate(dss_storage_path, cb, arg);
 }
 
-static int
-newborn_pool_iterate(int (*cb)(uuid_t uuid, void *arg), void *arg)
+int
+ds_mgmt_newborn_pool_iterate(int (*cb)(uuid_t uuid, void *arg), void *arg)
 {
 	return common_pool_iterate(newborns_path, cb, arg);
 }
 
-static int
-zombie_pool_iterate(int (*cb)(uuid_t uuid, void *arg), void *arg)
+int
+ds_mgmt_zombie_pool_iterate(int (*cb)(uuid_t uuid, void *arg), void *arg)
 {
 	return common_pool_iterate(zombies_path, cb, arg);
 }
@@ -318,7 +318,7 @@ cleanup_leftover_pools(bool zombie_only)
 
 	D_INIT_LIST_HEAD(&dead_list);
 
-	rc = zombie_pool_iterate(cleanup_leftover_cb, &dead_list);
+	rc = ds_mgmt_zombie_pool_iterate(cleanup_leftover_cb, &dead_list);
 	if (rc)
 		D_ERROR("failed to delete SPDK blobs for ZOMBIES pools: "
 			"%d, will try again\n", rc);
@@ -327,7 +327,7 @@ cleanup_leftover_pools(bool zombie_only)
 	if (zombie_only)
 		return;
 
-	rc = newborn_pool_iterate(cleanup_leftover_cb, &dead_list);
+	rc = ds_mgmt_newborn_pool_iterate(cleanup_leftover_cb, &dead_list);
 	if (rc)
 		D_ERROR("failed to delete SPDK blobs for NEWBORNS pools: "
 			"%d, will try again\n", rc);

@@ -117,6 +117,9 @@ struct pool_map_refresh_ult_arg {
  */
 void ds_pool_rsvc_class_register(void);
 void ds_pool_rsvc_class_unregister(void);
+char *ds_pool_svc_rdb_path(const uuid_t pool_uuid);
+int ds_pool_svc_load(struct rdb_tx *tx, uuid_t uuid, rdb_path_t *root,
+		     struct pool_buf **map_buf_out, uint32_t *map_version_out);
 int ds_pool_start_all(void);
 int ds_pool_stop_all(void);
 void ds_pool_create_handler(crt_rpc_t *rpc);
