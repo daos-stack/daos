@@ -77,8 +77,8 @@ build {
     inline = [
       "sudo mkdir -p /var/daos/",
       "sudo mv /tmp/cert_gen /var/daos/",
-      "sudo chmod +x /var/daos/cert_gen/*.sh",
-      "sudo chown -R root:root /var/daos/cert_gen"
+      "sudo chown -R root:root /var/daos/cert_gen",
+      "sudo chmod +x /var/daos/cert_gen/*.sh"
     ]
   }
 }

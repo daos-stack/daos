@@ -144,13 +144,13 @@ variable "gvnic" {
   type        = bool
 }
 
-variable "daos_ca_secret_id" {
-  description = "ID of Secret Manager secret used to store TLS certificates"
-  type        = string
-}
-
 variable "allow_insecure" {
   description = "Sets the allow_insecure setting in the transport_config section of the daos_*.yml files"
   default     = false
   type        = bool
+}
+
+variable "certs_install_script_content" {
+  description = "Script to install certificates for DAOS secure transport"
+  type        = string
 }

@@ -90,8 +90,8 @@ No modules.
 | Name | Description |
 |------|-------------|
 | <a name="output_access_points"></a> [access\_points](#output\_access\_points) | List of DAOS servers to use as access points |
+| <a name="output_certs_install_script_content"></a> [certs\_install\_script\_content](#output\_certs\_install\_script\_content) | Script to install certificates for DAOS secure transport |
 | <a name="output_daos_agent_yml"></a> [daos\_agent\_yml](#output\_daos\_agent\_yml) | YAML to configure the daos agent. This is typically saved in /etc/daos/daos\_agent.yml |
-| <a name="output_daos_ca_secret_id"></a> [daos\_ca\_secret\_id](#output\_daos\_ca\_secret\_id) | ID of Secret Manager secret used to store daosCA.tar.gz file generated on first DAOS server instance |
 | <a name="output_daos_client_install_script"></a> [daos\_client\_install\_script](#output\_daos\_client\_install\_script) | Script to install the DAOS client package. |
 | <a name="output_daos_config_script"></a> [daos\_config\_script](#output\_daos\_config\_script) | Script to configure the DAOS system. This will format the sytem with dmg -l and optionally create the specified pools. |
 | <a name="output_daos_control_yml"></a> [daos\_control\_yml](#output\_daos\_control\_yml) | YAML configuring DAOS control. This is typically saved in /etc/daos/daos\_control.yml |

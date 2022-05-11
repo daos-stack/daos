@@ -29,6 +29,10 @@ locals {
   daos_ca_secret_id = basename(google_secret_manager_secret.daos_ca.id)
   allow_insecure    = var.allow_insecure
 
+  # Google Virtual NIC (gVNIC) network interface
+  nic_type                    = var.gvnic ? "GVNIC" : "VIRTIO_NET"
+  total_egress_bandwidth_tier = var.gvnic ? "TIER_1" : "DEFAULT"
+
   daos_server_yaml_content = templatefile(
     "${path.module}/templates/daos_server.yml.tftpl",
     {
@@ -57,14 +61,15 @@ locals {
     }
   )
 
-  server_startup_script = templatefile(
-    "${path.module}/templates/daos_startup_script.tftpl",
+  certs_install_script_content = templatefile(
+    "${path.module}/templates/certs_install.sh.tftpl",
     {
-      first_server      = local.first_server
       daos_ca_secret_id = local.daos_ca_secret_id
-      allow_insecure    = local.allow_insecure
     }
   )
+
+  daos_client_install_script_content = file(
+  "${path.module}/scripts/client_install.sh")
 
   configure_daos_content = templatefile(
     "${path.module}/templates/configure_daos.tftpl",
@@ -74,12 +79,14 @@ locals {
     }
   )
 
-  daos_client_install_script_content = file(
-  "${path.module}/scripts/daos_client_install_script.sh")
-
-  # Google Virtual NIC (gVNIC) network interface
-  nic_type                    = var.gvnic ? "GVNIC" : "VIRTIO_NET"
-  total_egress_bandwidth_tier = var.gvnic ? "TIER_1" : "DEFAULT"
+  server_startup_script = templatefile(
+    "${path.module}/templates/daos_startup_script.tftpl",
+    {
+      first_server      = local.first_server
+      daos_ca_secret_id = local.daos_ca_secret_id
+      allow_insecure    = local.allow_insecure
+    }
+  )
 }
 
 data "google_compute_image" "os_image" {
@@ -163,14 +170,15 @@ resource "google_compute_per_instance_config" "named_instances" {
   name                   = format("%s-%04d", var.instance_base_name, sum([count.index, 1]))
   preserved_state {
     metadata = {
-      inst_type                 = "daos-server"
-      enable-oslogin            = "true"
-      inst_nr                   = var.number_of_instances
-      inst_base_name            = var.instance_base_name
-      daos_server_yaml_content  = local.daos_server_yaml_content
-      daos_control_yaml_content = local.daos_control_yaml_content
-      daos_agent_yaml_content   = local.daos_agent_yaml_content
-      startup-script            = local.server_startup_script
+      inst_type                    = "daos-server"
+      enable-oslogin               = "true"
+      inst_nr                      = var.number_of_instances
+      inst_base_name               = var.instance_base_name
+      daos_server_yaml_content     = local.daos_server_yaml_content
+      daos_control_yaml_content    = local.daos_control_yaml_content
+      daos_agent_yaml_content      = local.daos_agent_yaml_content
+      certs_install_script_content = local.certs_install_script_content
+      startup-script               = local.server_startup_script
       # Adding a reference to the instance template used causes the stateful instance to update
       # if the instance template changes. Otherwise there is no explicit dependency and template
       # changes may not occur on the stateful instance

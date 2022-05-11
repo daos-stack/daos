@@ -18,16 +18,15 @@ locals {
   os_project         = var.os_project != null ? var.os_project : var.project_id
   subnetwork_project = var.subnetwork_project != null ? var.subnetwork_project : var.project_id
   # Google Virtual NIC (gVNIC) network interface
-  nic_type                    = var.gvnic ? "GVNIC" : "VIRTIO_NET"
-  total_egress_bandwidth_tier = var.gvnic ? "TIER_1" : "DEFAULT"
-  daos_ca_secret_id           = basename(var.daos_ca_secret_id)
-  allow_insecure              = var.allow_insecure
+  nic_type                     = var.gvnic ? "GVNIC" : "VIRTIO_NET"
+  total_egress_bandwidth_tier  = var.gvnic ? "TIER_1" : "DEFAULT"
+  allow_insecure               = var.allow_insecure
+  certs_install_script_content = var.certs_install_script_content
 
   client_startup_script = templatefile(
     "${path.module}/templates/daos_startup_script.tftpl",
     {
-      daos_ca_secret_id = local.daos_ca_secret_id
-      allow_insecure    = local.allow_insecure
+      allow_insecure = local.allow_insecure
     }
   )
 }
@@ -102,11 +101,12 @@ resource "google_compute_per_instance_config" "named_instances" {
   name                   = format("%s-%04d", var.instance_base_name, sum([count.index, 1]))
   preserved_state {
     metadata = {
-      inst_type                 = "daos-client"
-      enable-oslogin            = "true"
-      daos_control_yaml_content = var.daos_control_yml
-      daos_agent_yaml_content   = var.daos_agent_yml
-      startup-script            = local.client_startup_script
+      inst_type                    = "daos-client"
+      enable-oslogin               = "true"
+      daos_control_yaml_content    = var.daos_control_yml
+      daos_agent_yaml_content      = var.daos_agent_yml
+      certs_install_script_content = local.certs_install_script_content
+      startup-script               = local.client_startup_script
       # Adding a reference to the instance template used causes the stateful instance to update
       # if the instance template changes. Otherwise there is no explicit dependency and template
       # changes may not occur on the stateful instance

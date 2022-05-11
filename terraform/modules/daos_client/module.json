@@ -10,16 +10,16 @@
       "required": false
     },
     {
-      "name": "daos_agent_yml",
+      "name": "certs_install_script_content",
       "type": "string",
-      "description": "YAML to configure the daos agent.",
+      "description": "Script to install certificates for DAOS secure transport",
       "default": null,
       "required": true
     },
     {
-      "name": "daos_ca_secret_id",
+      "name": "daos_agent_yml",
       "type": "string",
-      "description": "ID of Secret Manager secret used to store TLS certificates",
+      "description": "YAML to configure the daos agent.",
       "default": null,
       "required": true
     },

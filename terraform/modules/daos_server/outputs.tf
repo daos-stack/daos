@@ -43,9 +43,9 @@ output "daos_client_install_script" {
   value       = local.daos_client_install_script_content
 }
 
-output "daos_ca_secret_id" {
-  description = "ID of Secret Manager secret used to store daosCA.tar.gz file generated on first DAOS server instance"
-  value       = google_secret_manager_secret.daos_ca.name
+output "certs_install_script_content" {
+  description = "Script to install certificates for DAOS secure transport"
+  value       = local.certs_install_script_content
 }
 
 output "default_service_account_email" {

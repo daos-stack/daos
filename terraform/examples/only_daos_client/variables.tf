@@ -145,7 +145,7 @@ variable "client_daos_control_yml" {
   type        = string
 }
 
-variable "daos_ca_secret_id" {
-  description = "ID of Secret Manager secret used to store TLS certificates"
+variable "certs_install_script_content" {
+  description = "Content of script that installs DAOS certificates"
   type        = string
 }

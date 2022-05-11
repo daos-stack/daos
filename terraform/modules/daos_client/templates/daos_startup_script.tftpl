@@ -1,8 +1,6 @@
 #!/bin/bash
 
 METADATA_URL="http://metadata.google.internal/computeMetadata/v1/instance/attributes"
-DAOS_CONFIG_DIR="/etc/daos"
-DAOS_DIR="/var/daos"
 
 fetch_attr()
 {
@@ -14,17 +12,19 @@ echo "BEGIN: DAOS Client Startup Script"
 
 systemctl stop daos_agent
 
-# Create agent config files from metadata
-mkdir -p "$${DAOS_CONFIG_DIR}"
-cd "$${DAOS_CONFIG_DIR}"
-fetch_attr "daos_control_yaml_content" > daos_control.yml
-fetch_attr "daos_agent_yaml_content" > daos_agent.yml
-chown -R daos_agent:daos_agent /etc/daos/
-
 %{ if !allow_insecure }
-# Get certs from Secret Manager and deploy them
-$${DAOS_DIR}/cert_gen/sm_get_ca.sh "${daos_ca_secret_id}" "client"
+# Install certificates
+mkdir -p /var/daos/cert_gen
+fetch_attr "certs_install_script_content" > /var/daos/cert_gen/certs_install.sh
+chmod +x /var/daos/cert_gen/certs_install.sh
+/var/daos/cert_gen/certs_install.sh client
 %{ endif }
+
+# Create agent config files from metadata
+mkdir -p /etc/daos
+fetch_attr "daos_control_yaml_content" > /etc/daos/daos_control.yml
+fetch_attr "daos_agent_yaml_content" > /etc/daos/daos_agent.yml
+chown -R daos_agent:daos_agent /etc/daos/
 
 systemctl enable daos_agent
 systemctl start daos_agent

@@ -196,12 +196,12 @@
       "description": "List of DAOS servers to use as access points"
     },
     {
-      "name": "daos_agent_yml",
-      "description": "YAML to configure the daos agent. This is typically saved in /etc/daos/daos_agent.yml"
+      "name": "certs_install_script_content",
+      "description": "Script to install certificates for DAOS secure transport"
     },
     {
-      "name": "daos_ca_secret_id",
-      "description": "ID of Secret Manager secret used to store daosCA.tar.gz file generated on first DAOS server instance"
+      "name": "daos_agent_yml",
+      "description": "YAML to configure the daos agent. This is typically saved in /etc/daos/daos_agent.yml"
     },
     {
       "name": "daos_client_install_script",

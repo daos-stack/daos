@@ -2,9 +2,6 @@
 
 METADATA_URL="http://metadata.google.internal/computeMetadata/v1/instance/attributes"
 DAOS_SERVER_SYSTEMD_FILE="/usr/lib/systemd/system/daos_server.service"
-DAOS_CONFIG_DIR="/etc/daos"
-DAOS_DIR="/var/daos"
-DAOS_MOUNT_DIR="$${DAOS_DIR}"
 FIRST_DAOS_SERVER_HOSTNAME="${first_server}"
 
 fetch_attr()
@@ -17,36 +14,46 @@ echo "BEGIN: DAOS Server Startup Script"
 
 systemctl stop daos_server
 
+# Create directory for engine logs and tmpfs mount point
+mkdir -p /var/daos
+
+%{ if !allow_insecure }
+# Install certificates
+if [[ "$${HOSTNAME}" == "$${FIRST_DAOS_SERVER_HOSTNAME}" ]]; then
+  if [[ ! -f /var/daos/cert_gen/gen_certificates.sh ]]; then
+    echo "ERROR! File not found: /var/daos/cert_gen/gen_certificates.sh"
+    exit 1
+  fi
+  echo "Generating certificates"
+  /var/daos/cert_gen/gen_certificates.sh /var/daos
+  pushd /var/daos
+  tar -cvzf /var/daos/daosCA.tar.gz ./daosCA
+  gcloud secrets versions add ${daos_ca_secret_id} --data-file=/var/daos/daosCA.tar.gz
+  rm -f /var/daos/daosCA.tar.gz
+  popd
+fi
+echo "Installing certificates"
+fetch_attr "certs_install_script_content" > /var/daos/cert_gen/certs_install.sh
+chmod +x /var/daos/cert_gen/certs_install.sh
+/var/daos/cert_gen/certs_install.sh server
+%{ endif }
+
 # Create server config files from metadata
-mkdir -p "$${DAOS_CONFIG_DIR}"
-cd "$${DAOS_CONFIG_DIR}"
+mkdir -p /etc/daos
+cd /etc/daos
 fetch_attr "daos_server_yaml_content" > daos_server.yml
 fetch_attr "daos_control_yaml_content" > daos_control.yml
 fetch_attr "daos_agent_yaml_content" > daos_agent.yml
-chown -R root:root /etc/daos
-
-# Create directory for engine logs and tmpfs mount point
-mkdir -p "$${DAOS_MOUNT_DIR}"
 
 # Modify systemd script for GCP
 # GCP does not support VFIO so daos_server must run as root
 sed -i "s/User=daos_server/User=root/; s/Group=daos_server/Group=root/" $${DAOS_SERVER_SYSTEMD_FILE}
 
-if [[ "$${HOSTNAME}" == "$${FIRST_DAOS_SERVER_HOSTNAME}" ]]; then
-  # Only run on the first DAOS server instance
-  echo "Running startup script on first DAOS server"
-  %{ if !allow_insecure }
-  # Generate CA and certs. Store in Secret Manager.
-  $${DAOS_DIR}/cert_gen/sm_set_ca.sh "${daos_ca_secret_id}"
-  %{ endif }
-fi
-
-%{ if !allow_insecure ~}
-# Get certs from Secret Manager and deploy them
-$${DAOS_DIR}/cert_gen/sm_get_ca.sh "${daos_ca_secret_id}" "server"
-%{ endif ~}
-
+# Enable and start services
 systemctl enable daos_server
 systemctl start daos_server
+
+systemctl enable daos_agent
+systemctl start daos_agent
 
 echo "END: DAOS Server Startup Script"

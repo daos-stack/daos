@@ -56,8 +56,8 @@ No modules.
 | Name | Description | Type | Default | Required |
 |------|-------------|------|---------|:--------:|
 | <a name="input_allow_insecure"></a> [allow\_insecure](#input\_allow\_insecure) | Sets the allow\_insecure setting in the transport\_config section of the daos\_*.yml files | `bool` | `false` | no |
+| <a name="input_certs_install_script_content"></a> [certs\_install\_script\_content](#input\_certs\_install\_script\_content) | Script to install certificates for DAOS secure transport | `string` | n/a | yes |
 | <a name="input_daos_agent_yml"></a> [daos\_agent\_yml](#input\_daos\_agent\_yml) | YAML to configure the daos agent. | `string` | n/a | yes |
-| <a name="input_daos_ca_secret_id"></a> [daos\_ca\_secret\_id](#input\_daos\_ca\_secret\_id) | ID of Secret Manager secret used to store TLS certificates | `string` | n/a | yes |
 | <a name="input_daos_control_yml"></a> [daos\_control\_yml](#input\_daos\_control\_yml) | YAML configuring DAOS control. | `string` | n/a | yes |
 | <a name="input_gvnic"></a> [gvnic](#input\_gvnic) | Use Google Virtual NIC (gVNIC) network interface | `bool` | `false` | no |
 | <a name="input_instance_base_name"></a> [instance\_base\_name](#input\_instance\_base\_name) | MIG instance base names to use | `string` | `"daos-client"` | no |
