@@ -513,6 +513,27 @@ func (d *PCIDevice) String() string {
 	return fmt.Sprintf("%s %s (%s)%s", &d.PCIAddr, d.Name, d.Type, speedStr)
 }
 
+// DeviceName returns the system name of the PCI device.
+func (d *PCIDevice) DeviceName() string {
+	if d == nil {
+		return ""
+	}
+	return d.Name
+}
+
+// DeviceType returns the type of PCI device.
+func (d *PCIDevice) DeviceType() DeviceType {
+	if d == nil {
+		return DeviceTypeUnknown
+	}
+	return d.Type
+}
+
+// PCIDevice returns a pointer to itself.
+func (d *PCIDevice) PCIDevice() *PCIDevice {
+	return d
+}
+
 func (d PCIDevices) MarshalJSON() ([]byte, error) {
 	strMap := make(map[string][]*PCIDevice)
 	for k, v := range d {
