@@ -4,7 +4,6 @@ name: daos_server           # sys group daos_server
 access_points: ['example']  # management service leader (bootstrap)
 # port: 10001               # control listen port, default 10001
 provider: ofi+tcp
-nr_hugepages: -1 # disable the use of hugepages when NVMe is not being used
 control_log_mask: DEBUG
 control_log_file: /tmp/daos_server.log
 
