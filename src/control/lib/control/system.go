@@ -54,7 +54,7 @@ func (req *sysRequest) SetRanks(ranks *system.RankSet) {
 }
 
 func (req *sysRequest) SetHosts(hosts *hostlist.HostSet) {
-	req.Hosts.ReplaceSet(hosts)
+	req.Hosts.Replace(hosts)
 }
 
 type sysResponse struct {
@@ -71,7 +71,7 @@ func (resp *sysResponse) getAbsentHostsRanks(inHosts, inRanks string) error {
 	if err != nil {
 		return err
 	}
-	resp.AbsentHosts.ReplaceSet(ahs)
+	resp.AbsentHosts.Replace(ahs)
 	resp.AbsentRanks.Replace(ars)
 
 	return nil
