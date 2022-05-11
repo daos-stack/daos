@@ -50,6 +50,7 @@ VMD
 acl
 akey
 akeys
+amongst
 api
 arg
 argobots
@@ -71,6 +72,7 @@ buf
 bullseye
 bw
 bytearray
+cancelled
 checksum
 chmod
 clush
@@ -104,6 +106,7 @@ debuginfo
 defusedxml
 dependances
 deps
+dereference
 deregister
 deserialize
 deserializing
@@ -129,12 +132,15 @@ environ
 epcrange
 ethernet
 ethernet
+fchmod
 filename
 filesystem
 findcmd
 fini
 fio
+fpp
 fs
+fstat
 ftest
 fuseblk
 gcc
@@ -196,9 +202,11 @@ metadata
 middleware
 mkdir
 mnt
+mountpoint
 mpi
 mpicc
 mpich
+mpirun
 msg
 msgs
 mst
@@ -236,6 +244,7 @@ perf
 pid
 pids
 pkgconfig
+pkill
 poh
 posix
 postfix
@@ -258,6 +267,7 @@ rc
 rdb
 realloc
 redistributions
+refactor
 repo
 resizeable
 rf
@@ -268,6 +278,7 @@ rpc
 runtime
 rw
 sandybridge
+sbatch
 sbin
 scancel
 scm
@@ -275,6 +286,7 @@ scons
 sharedctypes
 slurm
 slurmctl
+squeue
 src
 srun
 ssd
@@ -289,16 +301,19 @@ su
 subcommand
 subdir
 subdirectories
+subdirectory
 sublicense
 submodules
 subprocess
 subtest
 sudo
 superblock
+superblocks
 svc
 symlink
 symlinks
 sys
+systemctl
 systemd
 tcp
 teardown
@@ -307,6 +322,7 @@ testdata
 testname
 testrunner
 tgt
+timestamp
 timestamps
 tmpfs
 traceback
@@ -319,10 +335,14 @@ txt
 udp
 uid
 uint
+umount
 unicode
 unittest
 unlink
+unlinked
+unmount
 unwritable
+uri
 url
 username
 ushort

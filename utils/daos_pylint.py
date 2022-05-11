@@ -11,6 +11,7 @@ import sys
 # Test against python 3.6 as this is what CentOS 7.9 is using.
 MIN_PY_VER = '3.6'
 
+
 def parse_file(target_file):
     """Main program"""
 
@@ -57,6 +58,7 @@ def parse_file(target_file):
     for (mtype, count) in symbols.most_common():
         print(f'{mtype}:{count}')
 
+
 def run_git_files():
     """Run pylint on contents of 'git ls-files'"""
 
@@ -68,6 +70,7 @@ def run_git_files():
             continue
         py_files.append(file)
     parse_file(py_files)
+
 
 def run_input_file():
     """Run from a input file"""
@@ -88,6 +91,7 @@ def run_input_file():
 #                parse_file(py_files)
 #                py_files = []
 #    parse_file(py_files)
+
 
 def main():
     """Main program"""

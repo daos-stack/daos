@@ -49,7 +49,7 @@ disable=locally-disabled,locally-enabled,star-args,wrong-import-order,
 [SPELLING]
 spelling-dict=en_US
 spelling-private-dict-file=words.dict
-spelling-ignore-comment-directives=fmt: on,fmt: off,noqa:,noqa,nosec,isort:skip,mypy:,:avocado:
+spelling-store-unknown-words=true
 
 [FORMAT]
 max-line-length=100
