@@ -22,24 +22,15 @@ import (
 )
 
 // getVMD returns VMD endpoint address when provided string is a VMD backing device PCI address.
-// If the input string is not a VMD backing device PCI address, nil is returned and if not a valid
-// PCI address or address conversion fails, an error is returned.
+// If the input string is not a VMD backing device PCI address, hardware.ErrNotVMDBackingAddress
+// is returned.
 func getVMD(inAddr string) (*hardware.PCIAddress, error) {
 	addr, err := hardware.NewPCIAddress(inAddr)
 	if err != nil {
 		return nil, errors.Wrap(err, "controller pci address invalid")
 	}
 
-	if !addr.IsVMDBackingAddress() {
-		return nil, nil
-	}
-
-	vmdAddr, err := addr.BackingToVMDAddress()
-	if err != nil {
-		return nil, err
-	}
-
-	return vmdAddr, nil
+	return addr.BackingToVMDAddress()
 }
 
 // mapVMDToBackingDevs stores found vmd backing device details under vmd address key.
@@ -49,10 +40,10 @@ func mapVMDToBackingDevs(foundCtrlrs storage.NvmeControllers) (map[string]storag
 	for _, ctrlr := range foundCtrlrs {
 		vmdAddr, err := getVMD(ctrlr.PciAddr)
 		if err != nil {
+			if err == hardware.ErrNotVMDBackingAddress {
+				continue
+			}
 			return nil, err
-		}
-		if vmdAddr == nil {
-			continue // not a backing device address
 		}
 
 		if _, exists := vmds[vmdAddr.String()]; !exists {
@@ -73,10 +64,10 @@ func mapVMDToBackingAddrs(foundCtrlrs storage.NvmeControllers) (map[string]*hard
 	for _, ctrlr := range foundCtrlrs {
 		vmdAddr, err := getVMD(ctrlr.PciAddr)
 		if err != nil {
+			if err == hardware.ErrNotVMDBackingAddress {
+				continue
+			}
 			return nil, err
-		}
-		if vmdAddr == nil {
-			continue // not a backing device address
 		}
 
 		if _, exists := vmds[vmdAddr.String()]; !exists {
