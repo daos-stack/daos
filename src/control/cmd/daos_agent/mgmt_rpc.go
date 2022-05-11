@@ -20,6 +20,7 @@ import (
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	"github.com/daos-stack/daos/src/control/drpc"
 	"github.com/daos-stack/daos/src/control/lib/control"
+	"github.com/daos-stack/daos/src/control/lib/daos"
 	"github.com/daos-stack/daos/src/control/lib/hardware"
 	"github.com/daos-stack/daos/src/control/logging"
 )
@@ -108,7 +109,7 @@ func (mod *mgmtModule) handleGetAttachInfo(ctx context.Context, reqb []byte, pid
 	// system name indicates such, and hence skip the check.
 	if pbReq.Sys != "" && pbReq.Sys != mod.sys {
 		mod.log.Errorf("GetAttachInfo: %s: unknown system name", pbReq.Sys)
-		respb, err := proto.Marshal(&mgmtpb.GetAttachInfoResp{Status: int32(drpc.DaosInvalidInput)})
+		respb, err := proto.Marshal(&mgmtpb.GetAttachInfoResp{Status: int32(daos.InvalidInput)})
 		if err != nil {
 			return nil, drpc.MarshalingFailure()
 		}

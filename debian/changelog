@@ -1,3 +1,9 @@
+daos (2.3.100-7) unstable; urgency=medium
+  [ Ashley Pittman ]
+  * Add dfuse unit-test binary to call from ftest.
+
+ -- Ashley Pittman <ashley.m.pittman@intel.com>  Fri, 6 May 2022 09:03:00 -0100
+
 daos (2.3.100-6) unstable; urgency=medium
   [ Joseph Moore ]
   * Update UXC Mercury patch to disable unified mode
