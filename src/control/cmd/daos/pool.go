@@ -17,10 +17,12 @@ import (
 
 	"github.com/daos-stack/daos/src/control/build"
 	"github.com/daos-stack/daos/src/control/cmd/dmg/pretty"
+	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/common/proto/convert"
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	"github.com/daos-stack/daos/src/control/lib/control"
 	"github.com/daos-stack/daos/src/control/lib/ui"
+	"github.com/daos-stack/daos/src/control/system"
 )
 
 /*
@@ -153,17 +155,20 @@ func (cmd *poolBaseCmd) getAttr(name string) (*attribute, error) {
 }
 
 type poolCmd struct {
-	Query     poolQueryCmd     `command:"query" description:"query pool info"`
-	ListConts containerListCmd `command:"list-containers" alias:"list-cont" description:"list all containers in pool"`
-	ListAttrs poolListAttrsCmd `command:"list-attr" alias:"list-attrs" alias:"lsattr" description:"list pool user-defined attributes"`
-	GetAttr   poolGetAttrCmd   `command:"get-attr" alias:"getattr" description:"get pool user-defined attribute"`
-	SetAttr   poolSetAttrCmd   `command:"set-attr" alias:"setattr" description:"set pool user-defined attribute"`
-	DelAttr   poolDelAttrCmd   `command:"del-attr" alias:"delattr" description:"delete pool user-defined attribute"`
-	AutoTest  poolAutoTestCmd  `command:"autotest" description:"verify setup with smoke tests"`
+	Query        poolQueryCmd        `command:"query" description:"query pool info"`
+	QueryTargets poolQueryTargetsCmd `command:"query-targets" description:"query pool target info"`
+	ListConts    containerListCmd    `command:"list-containers" alias:"list-cont" description:"list all containers in pool"`
+	ListAttrs    poolListAttrsCmd    `command:"list-attr" alias:"list-attrs" alias:"lsattr" description:"list pool user-defined attributes"`
+	GetAttr      poolGetAttrCmd      `command:"get-attr" alias:"getattr" description:"get pool user-defined attribute"`
+	SetAttr      poolSetAttrCmd      `command:"set-attr" alias:"setattr" description:"set pool user-defined attribute"`
+	DelAttr      poolDelAttrCmd      `command:"del-attr" alias:"delattr" description:"delete pool user-defined attribute"`
+	AutoTest     poolAutoTestCmd     `command:"autotest" description:"verify setup with smoke tests"`
 }
 
 type poolQueryCmd struct {
 	poolBaseCmd
+	ShowEnabledRanks  bool `short:"e" long:"show-enabled" description:"Show engine unique identifiers (ranks) which are enabled"`
+	ShowDisabledRanks bool `short:"b" long:"show-disabled" description:"Show engine unique identifiers (ranks) which are disabled"`
 }
 
 func convertPoolSpaceInfo(in *C.struct_daos_pool_space, mt C.uint) *mgmtpb.StorageUsageStats {
@@ -172,11 +177,12 @@ func convertPoolSpaceInfo(in *C.struct_daos_pool_space, mt C.uint) *mgmtpb.Stora
 	}
 
 	return &mgmtpb.StorageUsageStats{
-		Total: uint64(in.ps_space.s_total[mt]),
-		Free:  uint64(in.ps_space.s_free[mt]),
-		Min:   uint64(in.ps_free_min[mt]),
-		Max:   uint64(in.ps_free_max[mt]),
-		Mean:  uint64(in.ps_free_mean[mt]),
+		Total:     uint64(in.ps_space.s_total[mt]),
+		Free:      uint64(in.ps_space.s_free[mt]),
+		Min:       uint64(in.ps_free_min[mt]),
+		Max:       uint64(in.ps_free_max[mt]),
+		Mean:      uint64(in.ps_free_mean[mt]),
+		MediaType: mgmtpb.StorageMediaType(mt),
 	}
 }
 
@@ -241,7 +247,34 @@ const (
 	dpiQueryAll     = C.uint64_t(^uint64(0)) // DPI_ALL is -1
 )
 
+func generateRankSet(ranklist *C.d_rank_list_t) string {
+	if ranklist.rl_nr == 0 {
+		return ""
+	}
+	ranks := uintptr(unsafe.Pointer(ranklist.rl_ranks))
+	const size = unsafe.Sizeof(uint32(0))
+	rankset := "["
+	for i := 0; i < int(ranklist.rl_nr); i++ {
+		if i > 0 {
+			rankset += ","
+		}
+		rankset += fmt.Sprint(*(*uint32)(unsafe.Pointer(ranks + uintptr(i)*size)))
+	}
+	rankset += "]"
+	return rankset
+}
+
 func (cmd *poolQueryCmd) Execute(_ []string) error {
+	if cmd.ShowEnabledRanks && cmd.ShowDisabledRanks {
+		return errors.New("show-enabled and show-disabled can't be used at the same time.")
+	}
+	var ranklistPtr **C.d_rank_list_t = nil
+	var ranklist *C.d_rank_list_t = nil
+
+	if cmd.ShowEnabledRanks || cmd.ShowDisabledRanks {
+		ranklistPtr = &ranklist
+	}
+
 	cleanup, err := cmd.resolveAndConnect(C.DAOS_PC_RO, nil)
 	if err != nil {
 		return err
@@ -251,7 +284,12 @@ func (cmd *poolQueryCmd) Execute(_ []string) error {
 	pinfo := C.daos_pool_info_t{
 		pi_bits: dpiQueryAll,
 	}
-	rc := C.daos_pool_query(cmd.cPoolHandle, nil, &pinfo, nil, nil)
+	if cmd.ShowDisabledRanks {
+		pinfo.pi_bits &= C.uint64_t(^(uint64(C.DPI_ENGINES_ENABLED)))
+	}
+
+	rc := C.daos_pool_query(cmd.cPoolHandle, ranklistPtr, &pinfo, nil, nil)
+	defer C.d_rank_list_free(ranklist)
 	if err := daosError(rc); err != nil {
 		return errors.Wrapf(err,
 			"failed to query pool %s", cmd.poolUUID)
@@ -262,12 +300,89 @@ func (cmd *poolQueryCmd) Execute(_ []string) error {
 		return err
 	}
 
+	if ranklistPtr != nil {
+		if cmd.ShowEnabledRanks {
+			pqr.EnabledRanks = system.MustCreateRankSet(generateRankSet(ranklist))
+		}
+		if cmd.ShowDisabledRanks {
+			pqr.DisabledRanks = system.MustCreateRankSet(generateRankSet(ranklist))
+		}
+	}
+
 	if cmd.jsonOutputEnabled() {
 		return cmd.outputJSON(pqr, nil)
 	}
 
 	var bld strings.Builder
 	if err := pretty.PrintPoolQueryResponse(pqr, &bld); err != nil {
+		return err
+	}
+
+	cmd.Info(bld.String())
+
+	return nil
+}
+
+type poolQueryTargetsCmd struct {
+	poolBaseCmd
+
+	Rank    uint32 `long:"rank" required:"1" description:"Engine rank of the targets to be queried"`
+	Targets string `long:"target-idx" description:"Comma-separated list of target idx(s) to be queried"`
+}
+
+// For using the pretty printer that dmg uses for this target info.
+func convertPoolTargetInfo(ptinfo *C.daos_target_info_t) (*control.PoolQueryTargetInfo, error) {
+	pqti := new(control.PoolQueryTargetInfo)
+	pqti.Type = control.PoolQueryTargetType(ptinfo.ta_type)
+	pqti.State = control.PoolQueryTargetState(ptinfo.ta_state)
+	pqti.Space = []*control.StorageTargetUsage{
+		{uint64(ptinfo.ta_space.s_total[C.DAOS_MEDIA_SCM]),
+			uint64(ptinfo.ta_space.s_free[C.DAOS_MEDIA_SCM]),
+			C.DAOS_MEDIA_SCM},
+		{uint64(ptinfo.ta_space.s_total[C.DAOS_MEDIA_NVME]),
+			uint64(ptinfo.ta_space.s_free[C.DAOS_MEDIA_NVME]),
+			C.DAOS_MEDIA_NVME},
+	}
+
+	return pqti, nil
+}
+
+func (cmd *poolQueryTargetsCmd) Execute(_ []string) error {
+	cleanup, err := cmd.resolveAndConnect(C.DAOS_PC_RO, nil)
+	if err != nil {
+		return err
+	}
+	defer cleanup()
+
+	var idxList []uint32
+	if err = common.ParseNumberList(cmd.Targets, &idxList); err != nil {
+		return errors.WithMessage(err, "parsing target list")
+	}
+
+	infoResp := new(control.PoolQueryTargetResp)
+	ptInfo := new(C.daos_target_info_t)
+	var rc C.int
+
+	for tgt := 0; tgt < len(idxList); tgt++ {
+		rc = C.daos_pool_query_target(cmd.cPoolHandle, C.uint32_t(idxList[tgt]), C.uint32_t(cmd.Rank), ptInfo, nil)
+		if err := daosError(rc); err != nil {
+			return errors.Wrapf(err,
+				"failed to query pool %s rank:target %d:%d", cmd.poolUUID, cmd.Rank, idxList[tgt])
+		}
+
+		tgtInfo, err := convertPoolTargetInfo(ptInfo)
+		infoResp.Infos = append(infoResp.Infos, tgtInfo)
+		if err != nil {
+			return err
+		}
+	}
+
+	if cmd.jsonOutputEnabled() {
+		return cmd.outputJSON(infoResp, nil)
+	}
+
+	var bld strings.Builder
+	if err := pretty.PrintPoolQueryTargetResponse(infoResp, &bld); err != nil {
 		return err
 	}
 

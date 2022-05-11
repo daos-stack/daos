@@ -18,6 +18,7 @@ import (
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	"github.com/daos-stack/daos/src/control/drpc"
 	"github.com/daos-stack/daos/src/control/events"
+	"github.com/daos-stack/daos/src/control/lib/daos"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/security"
 	"github.com/daos-stack/daos/src/control/system/raft"
@@ -30,7 +31,7 @@ const (
 type retryableDrpcReq struct {
 	proto.Message
 	RetryAfter        time.Duration
-	RetryableStatuses []drpc.DaosStatus
+	RetryableStatuses []daos.Status
 }
 
 func (rdr *retryableDrpcReq) GetMessage() proto.Message {
@@ -234,7 +235,7 @@ func makeDrpcCall(ctx context.Context, log logging.Logger, client drpc.DomainSoc
 			if uErr := proto.Unmarshal(drpcResp.Body, dsr); uErr != nil {
 				return
 			}
-			status := drpc.DaosStatus(dsr.Status)
+			status := daos.Status(dsr.Status)
 
 			for _, retryableStatus := range rdr.RetryableStatuses {
 				if status == retryableStatus {

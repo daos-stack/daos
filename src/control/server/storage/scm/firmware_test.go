@@ -12,7 +12,7 @@ import (
 	"github.com/google/go-cmp/cmp"
 	"github.com/pkg/errors"
 
-	"github.com/daos-stack/daos/src/control/common"
+	"github.com/daos-stack/daos/src/control/common/test"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/server/storage"
 )
@@ -226,13 +226,13 @@ func TestProvider_QueryFirmware(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
-			defer common.ShowBufferOnFailure(t, buf)
+			defer test.ShowBufferOnFailure(t, buf)
 
 			p := NewMockProvider(log, tc.backendCfg, nil)
 
 			res, err := p.QueryFirmware(tc.input)
 
-			common.CmpErr(t, tc.expErr, err)
+			test.CmpErr(t, tc.expErr, err)
 			if diff := cmp.Diff(tc.expRes, res); diff != "" {
 				t.Fatalf("unexpected response (-want, +got):\n%s\n", diff)
 			}
@@ -434,13 +434,13 @@ func TestProvider_UpdateFirmware(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
-			defer common.ShowBufferOnFailure(t, buf)
+			defer test.ShowBufferOnFailure(t, buf)
 
 			p := NewMockProvider(log, tc.backendCfg, nil)
 
 			res, err := p.UpdateFirmware(tc.input)
 
-			common.CmpErr(t, tc.expErr, err)
+			test.CmpErr(t, tc.expErr, err)
 
 			if diff := cmp.Diff(tc.expRes, res); diff != "" {
 				t.Fatalf("unexpected response (-want, +got):\n%s\n", diff)
