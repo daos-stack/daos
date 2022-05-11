@@ -457,6 +457,7 @@ migrate_pool_tls_lookup_create(struct ds_pool *pool, int version,
 
 	entry = daos_prop_entry_get(prop, DAOS_PROP_PO_SVC_LIST);
 	D_ASSERT(entry != NULL);
+	arg.svc_list = (d_rank_list_t *)entry->dpe_val_ptr;
 	arg.global_version = 0;
 	entry = daos_prop_entry_get(prop, DAOS_PROP_PO_GLOBAL_VERSION);
 	if (entry != NULL)
@@ -468,7 +469,6 @@ migrate_pool_tls_lookup_create(struct ds_pool *pool, int version,
 	arg.version = version;
 	arg.opc = opc;
 	arg.max_eph = max_eph;
-	arg.svc_list = (d_rank_list_t *)entry->dpe_val_ptr;
 
 	rc = dss_task_collective(migrate_pool_tls_create_one, &arg, 0);
 	if (rc != 0) {
