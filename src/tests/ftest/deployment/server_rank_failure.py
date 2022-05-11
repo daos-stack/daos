@@ -53,6 +53,9 @@ class ServerRankFailure(IorTestBase):
             mpi_type="mpich", timeout=timeout)
         manager.assign_hosts(
             self.hostlist_clients, self.workdir, self.hostfile_clients_slots)
+        ppn = self.params.get("ppn", '/run/ior/client_processes/*')
+        manager.ppn.update(ppn, 'mpirun.ppn')
+        manager.processes.update(None, 'mpirun.np')
 
         # Run the command.
         try:
@@ -126,7 +129,7 @@ class ServerRankFailure(IorTestBase):
         self.log.info(ior_results)
         if not ior_results[job_num][0]:
             ior_error = ior_results[job_num][1]
-            errors.append("Error found in second IOR run! {}".format(ior_error))
+            errors.append("Error found in IOR job {}! {}".format(job_num, ior_error))
 
     def verify_rank_failure(self, ior_namespace, container_namespace):
         """Verify engine failure can be recovered by restarting daos_server.
@@ -195,7 +198,8 @@ class ServerRankFailure(IorTestBase):
         output = self.get_dmg_command().system_query()
         for member in output["response"]["members"]:
             if member["state"] != "joined":
-                errors.append("Server rank {} state isn't joined!".format(member["rank"]))
+                errors.append(
+                    "Server rank {} state isn't joined!".format(member["rank"]))
 
         # 7. Verify that the container Health is HEALTHY.
         if not self.check_container_health(
@@ -203,7 +207,7 @@ class ServerRankFailure(IorTestBase):
             errors.append("Container health isn't HEALTHY after server restart!")
 
         # 8. Run IOR and verify that it works.
-        ior_results = {}
+        job_num = 2
         self.run_ior_report_error(
             job_num=job_num, results=ior_results, file_name="test_file_2",
             pool=self.pool, container=self.container, namespace=ior_namespace)
@@ -362,7 +366,7 @@ class ServerRankFailure(IorTestBase):
             self.get_container(pool=self.pool, namespace="/run/container_wo_rf/*"))
 
         # Run IOR and verify that it works.
-        ior_results = {}
+        job_num = 2
         self.run_ior_report_error(
             job_num=job_num, results=ior_results, file_name="test_file_2",
             pool=self.pool, container=self.container[1], namespace=ior_namespace)

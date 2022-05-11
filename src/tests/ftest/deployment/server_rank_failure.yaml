@@ -43,7 +43,7 @@ pool_size_ratio_80:
   size: 80%
   control_method: dmg
 pool_size_value:
-  size: 50G
+  size: 500G
   control_method: dmg
 
 container_wo_rf:
@@ -56,7 +56,7 @@ container_with_rf:
 
 ior: &ior_base
   client_processes:
-    np: 1
+    ppn: 4
   iorflags:
     flags: -k -v -w -W
     api: DFS
@@ -65,7 +65,8 @@ ior: &ior_base
     # process ends in about 10 sec. Adjust the transfer_size - block_size combination
     # based on the system so that it takes longer than the -D value.
     transfer_size: 512K
-    block_size: 100G
+    # Total size is block_size * ppn.
+    block_size: 50G
     sw_deadline: 10
 ior_wo_rf:
   <<: *ior_base
