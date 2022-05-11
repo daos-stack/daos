@@ -30,5 +30,6 @@ RUN python3 -m pip --no-cache-dir install --upgrade pip && \
 RUN echo "::endgroup::"
 
 COPY --chown=daos_server:daos_server . .
-RUN mv utils/words.dict .
+RUN cp utils/words.dict .
 RUN ./utils/daos_pylint.py from-file
+RUN cat words.dict

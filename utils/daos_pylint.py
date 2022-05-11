@@ -5,7 +5,7 @@ from pylint.lint import Run
 from pylint.reporters.collecting_reporter import CollectingReporter
 from pylint.lint import pylinter
 from collections import Counter
-import subprocess
+import subprocess  # nosec
 import sys
 
 # Test against python 3.6 as this is what CentOS 7.9 is using.
