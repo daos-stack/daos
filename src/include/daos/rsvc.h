@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2017-2021 Intel Corporation.
+ * (C) Copyright 2017-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -34,6 +34,7 @@ struct rsvc_client {
 	uint64_t	sc_leader_term;
 	int		sc_leader_index;	/* in sc_ranks */
 	int		sc_next;		/* in sc_ranks */
+	int		sc_tried;
 };
 
 /** Return code of rsvc_client_complete_rpc() */

@@ -54,6 +54,7 @@ rsvc_client_init(struct rsvc_client *client, const d_rank_list_t *ranks)
 	}
 	rsvc_client_reset_leader(client);
 	client->sc_next = 0;
+	client->sc_tried = 0;
 	return 0;
 }
 
@@ -83,10 +84,14 @@ rsvc_client_choose(struct rsvc_client *client, crt_endpoint_t *ep)
 	D_DEBUG(DB_MD, DF_CLI"\n", DP_CLI(client));
 	if (client->sc_leader_known && client->sc_leader_aliveness > 0) {
 		chosen = client->sc_leader_index;
+	} else if (client->sc_tried >= client->sc_ranks->rl_nr) {
+		D_DEBUG(DB_MD, "All replica tried\n");
+		return -DER_NO_SERVICE;
 	} else if (client->sc_ranks->rl_nr > 0) {
 		chosen = client->sc_next;
 		/* The hintless search is a round robin of all replicas. */
 		client->sc_next++;
+		client->sc_tried++;
 		client->sc_next %= client->sc_ranks->rl_nr;
 	}
 
