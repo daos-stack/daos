@@ -43,7 +43,7 @@ def get_version(env):
 
 
 API_VERSION_MAJOR = "2"
-API_VERSION_MINOR = "2"
+API_VERSION_MINOR = "3"
 API_VERSION_FIX = "0"
 API_VERSION = "{}.{}.{}".format(API_VERSION_MAJOR, API_VERSION_MINOR,
                                 API_VERSION_FIX)
