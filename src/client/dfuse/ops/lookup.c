@@ -16,11 +16,11 @@ dfuse_reply_entry2(struct dfuse_projection_info *fs_handle, struct dfuse_inode_e
 		   struct fuse_file_info *fi_out, bool is_new, fuse_req_t req,
 		   struct dfuse_inode_entry *parent)
 {
-	struct fuse_entry_param	entry = {0};
-	d_list_t		*rlink;
-	ino_t			wipe_parent = 0;
-	char			wipe_name[NAME_MAX + 1];
-	int			rc;
+	struct fuse_entry_param  entry = {0};
+	d_list_t                *rlink;
+	ino_t                    wipe_parent = 0;
+	char                     wipe_name[NAME_MAX + 1];
+	int                      rc;
 	bool                     dropped = false;
 
 	D_ASSERT(ie->ie_parent);
@@ -31,8 +31,8 @@ dfuse_reply_entry2(struct dfuse_projection_info *fs_handle, struct dfuse_inode_e
 	entry.attr = ie->ie_stat;
 	entry.generation = 1;
 	entry.ino = entry.attr.st_ino;
-	DFUSE_TRA_DEBUG(ie, "Inserting inode %#lx mode 0%o",
-			entry.ino, ie->ie_stat.st_mode);
+	DFUSE_TRA_DEBUG(ie, "Inserting inode %#lx mode 0%o", entry.ino,
+	ie->ie_stat.st_mode);
 
 	if (is_new) {
 		/* Insert a new entry into the hash table, this can only fail of the exclusive
