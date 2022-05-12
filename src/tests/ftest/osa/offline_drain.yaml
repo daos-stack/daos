@@ -73,7 +73,7 @@ ior:
       slots: 48
     test_file: /testFile
     repetitions: 1
-    dfs_destroy: False
+    dfs_destroy: false
     iorflags:
       write_flags: "-w -F -k -G 1"
       read_flags: "-F -r -R -k -G 1"

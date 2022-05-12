@@ -21,7 +21,6 @@ import (
 	"google.golang.org/protobuf/reflect/protoreflect"
 	"google.golang.org/protobuf/runtime/protoimpl"
 
-	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/common/proto/convert"
 	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
@@ -525,7 +524,8 @@ func MockFormatResp(t *testing.T, mfc MockFormatConf) *StorageFormatResp {
 
 		for j := 0; j < mfc.ScmPerHost; j++ {
 			if _, failed := mfc.ScmFailures[j]; failed {
-				if err := hem.Add(hostName, errors.Errorf("/mnt/%d format failed", j+1)); err != nil {
+				err := hem.Add(hostName, errors.Errorf("/mnt/%d format failed", j+1))
+				if err != nil {
 					t.Fatal(err)
 				}
 				continue
@@ -538,7 +538,8 @@ func MockFormatResp(t *testing.T, mfc MockFormatConf) *StorageFormatResp {
 
 		for j := 0; j < mfc.NvmePerHost; j++ {
 			if _, failed := mfc.NvmeFailures[j]; failed {
-				if err := hem.Add(hostName, errors.Errorf("NVMe device %d format failed", j+1)); err != nil {
+				err := hem.Add(hostName, errors.Errorf("NVMe device %d format failed", j+1))
+				if err != nil {
 					t.Fatal(err)
 				}
 				continue
@@ -574,6 +575,7 @@ type (
 	MockStorageConfig struct {
 		TotalBytes uint64
 		AvailBytes uint64
+		NvmeState  *storage.NvmeDevState
 	}
 
 	MockScmConfig struct {
@@ -592,6 +594,15 @@ type (
 	}
 )
 
+// temp copy from common/test to avoid polluting lib/control with test deps
+func mockUUID(idx ...int32) string {
+	if len(idx) == 0 {
+		idx = []int32{0}
+	}
+
+	return fmt.Sprintf("%08d-%04d-%04d-%04d-%012d", idx, idx, idx, idx, idx)
+}
+
 func MockStorageScanResp(t *testing.T,
 	mockScmConfigArray []MockScmConfig,
 	mockNvmeConfigArray []MockNvmeConfig) *ctlpb.StorageScanResp {
@@ -603,7 +614,7 @@ func MockStorageScanResp(t *testing.T,
 	scmNamespaces := make(storage.ScmNamespaces, 0, len(mockScmConfigArray))
 	for index, mockScmConfig := range mockScmConfigArray {
 		scmNamespace := &storage.ScmNamespace{
-			UUID:        common.MockUUID(int32(index)),
+			UUID:        mockUUID(int32(index)),
 			BlockDevice: fmt.Sprintf("pmem%d", index),
 			Name:        fmt.Sprintf("namespace%d.0", index),
 			NumaNode:    uint32(index),
@@ -630,6 +641,9 @@ func MockStorageScanResp(t *testing.T,
 		smdDevice := nvmeController.SmdDevices[0]
 		smdDevice.AvailBytes = mockNvmeConfig.AvailBytes
 		smdDevice.TotalBytes = mockNvmeConfig.TotalBytes
+		if mockNvmeConfig.NvmeState != nil {
+			smdDevice.NvmeState = *mockNvmeConfig.NvmeState
+		}
 		smdDevice.Rank = mockNvmeConfig.Rank
 		nvmeControllers = append(nvmeControllers, nvmeController)
 	}
@@ -660,7 +674,7 @@ type MockPoolRespConfig struct {
 
 func MockPoolCreateResp(t *testing.T, config *MockPoolRespConfig) *mgmtpb.PoolCreateResp {
 	poolCreateResp := &PoolCreateResp{
-		UUID:      common.MockUUID(),
+		UUID:      mockUUID(),
 		SvcReps:   mockRanks(config.Ranks),
 		TgtRanks:  mockRanks(config.Ranks),
 		TierBytes: []uint64{config.ScmBytes, config.NvmeBytes},

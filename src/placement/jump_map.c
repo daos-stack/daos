@@ -1146,9 +1146,9 @@ out:
  * \param[in]   md              Metadata describing the object.
  * \param[in]   shard_md        Metadata describing how the shards.
  * \param[in]   rebuild_ver     Current Rebuild version
- * \param[out]   tgt_rank       The rank of the targets that need to be rebuild
- *                              will be stored in this array to be passed out
- *                              (this is allocated by the caller)
+ * \param[out]   tgt_rank       The engine rank of the targets that need to be
+ *                              rebuilt will be stored in this array to be passed
+ *                              out (this is allocated by the caller)
  * \param[out]   shard_id       The shard IDs of the shards that need to be
  *                              rebuilt (This is allocated by the caller)
  * \param[in]   array_size      The max size of the passed in arrays to store

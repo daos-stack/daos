@@ -12,7 +12,7 @@ import (
 	"github.com/google/go-cmp/cmp"
 	"github.com/pkg/errors"
 
-	"github.com/daos-stack/daos/src/control/common"
+	"github.com/daos-stack/daos/src/control/common/test"
 	"github.com/daos-stack/daos/src/control/lib/control"
 )
 
@@ -67,11 +67,11 @@ func TestControl_PoolPropertyValue(t *testing.T) {
 			}
 
 			gotNum, gotErr := v.GetNumber()
-			common.CmpErr(t, tc.expErr, gotErr)
+			test.CmpErr(t, tc.expErr, gotErr)
 			if tc.expErr != nil {
 				return
 			}
-			common.AssertEqual(t, *tc.numVal, gotNum, "unexpected GetNumber() result")
+			test.AssertEqual(t, *tc.numVal, gotNum, "unexpected GetNumber() result")
 		})
 	}
 }
@@ -129,6 +129,17 @@ func TestControl_PoolProperties(t *testing.T) {
 			value:  "wat",
 			expErr: errors.New("invalid"),
 		},
+		"rf-valid": {
+			name:    "rf",
+			value:   "1",
+			expStr:  "rf:1",
+			expJson: []byte(`{"name":"rf","description":"Pool redundancy factor","value":1}`),
+		},
+		"rf-invalid": {
+			name:   "rf",
+			value:  "100",
+			expErr: errors.New("invalid"),
+		},
 		"space_rb-valid": {
 			name:    "space_rb",
 			value:   "25",
@@ -162,6 +173,28 @@ func TestControl_PoolProperties(t *testing.T) {
 			value:  "wat",
 			expErr: errors.New("invalid"),
 		},
+		"ec_pda-valid": {
+			name:    "ec_pda",
+			value:   "1",
+			expStr:  "ec_pda:1",
+			expJson: []byte(`{"name":"ec_pda","description":"Performance domain affinity level of EC","value":1}`),
+		},
+		"ec_pda-invalid": {
+			name:   "ec_pda",
+			value:  "-1",
+			expErr: errors.New("invalid"),
+		},
+		"rp_pda-valid": {
+			name:    "rp_pda",
+			value:   "2",
+			expStr:  "rp_pda:2",
+			expJson: []byte(`{"name":"rp_pda","description":"Performance domain affinity level of RP","value":2}`),
+		},
+		"rp_pda-invalid": {
+			name:   "rp_pda",
+			value:  "-1",
+			expErr: errors.New("invalid"),
+		},
 		"policy-valid": {
 			name:    "policy",
 			value:   "type=io_size",
@@ -180,7 +213,7 @@ func TestControl_PoolProperties(t *testing.T) {
 				t.Fatal(err)
 			}
 			gotErr := prop.SetValue(tc.value)
-			common.CmpErr(t, tc.expErr, gotErr)
+			test.CmpErr(t, tc.expErr, gotErr)
 			if tc.expErr != nil {
 				return
 			}

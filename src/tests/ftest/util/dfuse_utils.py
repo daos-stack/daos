@@ -7,7 +7,8 @@
 
 import time
 
-from command_utils_base import CommandFailure, FormattedParameter
+from command_utils_base import FormattedParameter
+from exception_utils import CommandFailure
 from command_utils import ExecutableCommand
 from ClusterShell.NodeSet import NodeSet
 from general_utils import check_file_exists, pcmd

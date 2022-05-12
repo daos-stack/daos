@@ -2,6 +2,8 @@ hosts:
    test_servers:
       - server-A
       - server-B
+timeouts:
+   test_null_ptrs: 240
 server_config:
    name: daos_server
 pool:

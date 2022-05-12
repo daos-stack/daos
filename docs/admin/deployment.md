@@ -25,7 +25,7 @@ following steps:
 
 - [Format](#storage-formatting) the DAOS system
 
-- [Set up and start the agent](#agent-startup) on the client nodes
+- [Set up and start the agent](#agent-setup) on the client nodes
 
 - [Validate](#system-validation) that the DAOS system is operational
 
@@ -398,9 +398,8 @@ read by BIOS.
 PMem preparation can be performed with `daos_server storage prepare --scm-only`.
 
 The first time the command is run, the SCM interleaved regions will be created
-as resource allocations on any available PMem modules (one region per NUMA
-node/socket). The regions are activated after BIOS reads the new resource
-allocations.
+as resource allocations on any available PMem modules (one region per socket).
+The regions are activated after BIOS reads the new resource allocations.
 Upon completion, the storage prepare command will prompt the admin to reboot
 the storage node(s) in order for the BIOS to activate the new storage
 allocations.
@@ -417,27 +416,61 @@ Example usage:
 - `clush -w wolf-[118-121,130-133] reboot`
 
 - `clush -w wolf-[118-121,130-133] daos_server storage prepare --scm-only`
-  after running, PMem devices (/dev/pmemX namespaces created on the new SCM
+  after running, PMem namespaces (/dev/pmemX block devices created on the new SCM
   regions) should be available on each of the hosts.
 
 On the second run, one namespace per region is created, and each namespace may
-take up to a few minutes to create. Details of the pmem devices will be
+take up to a few minutes to create. Details of the PMem namespaces will be
 displayed in JSON format on command completion.
 
-Upon successful creation of the pmem devices, the Intel(R) Optane(TM)
+Upon successful creation of the PMem namespaces, the Intel(R) Optane(TM)
 persistent memory is configured and one can move on to the next step.
 
-If required, the pmem devices can be destroyed with the command
+If required, the PMem namespaces can be destroyed with the command
 `daos_server storage prepare --scm-only --reset`.
 
 All namespaces are disabled and destroyed. The SCM regions are removed by
 resetting modules into "MemoryMode" through resource allocations.
 
 Note that undefined behavior may result if the namespaces/pmem kernel
-devices are mounted before running reset (as per the printed warning).
+block devices are mounted when running reset (as per the printed warning).
 
 A subsequent reboot is required for BIOS to read the new resource
 allocations.
+
+#### Multiple PMem namespaces per socket (Experimental)
+
+By default the `daos_server storage prepare --scm-only` command will create one PMem namespace on
+each PMem region. A single PMem AppDirect region will be created for each NUMA node (typically one
+NUMA node per CPU socket) in interleaved mode (which indicates that all PMem modules attached
+to a particular socket will be used in a single set/region). Therefore by default on a dual-socket
+platform, two regions and two namespaces will be created.
+
+Multiple PMem namespaces can be created on a single region (one per socket) by specifying a value
+of 1-8 in `(-S|--scm-ns-per-socket)` commandline option for `daos_server storage prepare --scm-only`
+subcommand.
+
+Example usage:
+
+```bash
+$ daos_server storage prepare -s -f -S 4
+Prepare locally-attached SCM...
+Memory allocation goals for PMem will be changed and namespaces modified, this may be a destructive
+operation. Please ensure namespaces are unmounted and locally attached PMem modules are not in use.
+Please be patient as it may take several minutes and subsequent reboot maybe required.
+SCM Namespace Socket ID Capacity
+------------- --------- --------
+pmem0         0         796 GB
+pmem0.1       0         796 GB
+pmem0.2       0         796 GB
+pmem0.3       0         796 GB
+pmem1         1         796 GB
+pmem1.1       1         796 GB
+pmem1.2       1         796 GB
+pmem1.3       1         796 GB
+```
+!!! note
+    This feature is in a beta phase and not supported in production deployments.
 
 ### Storage Discovery and Selection
 
@@ -721,7 +754,7 @@ To illustrate, assume a cluster with homogeneous hardware configurations that
 returns the following from scan for each host:
 
 ```bash
-[daos@wolf-72 daos_m]$ dmg -l wolf-7[1-2] -i storage scan --verbose
+[daos@wolf-72 daos_m]$ dmg -l wolf-7[1-2] storage scan --verbose
 -------
 wolf-7[1-2]
 -------
@@ -960,7 +993,7 @@ and waits for a `dmg storage format` call to be issued from the management tool.
 This remote call will trigger the formatting of the locally attached storage on
 the host for use with DAOS using the parameters defined in the server config file.
 
-`dmg -i -l <host>[,...] storage format` will normally be run on a login
+`dmg -l <host>[,...] storage format` will normally be run on a login
 node specifying a hostlist (`-l <host>[,...]`) of storage nodes with SCM/PMem
 modules and NVMe SSDs installed and prepared.
 
@@ -968,7 +1001,7 @@ Upon successful format, DAOS Control Servers will start DAOS I/O engines that
 have been specified in the server config file.
 
 Successful start-up is indicated by the following on stdout:
-`DAOS I/O Engine (v0.8.0) process 433456 started on rank 1 with 8 target, 2 helper XS per target, firstcore 0, host wolf-72.wolf.hpdd.intel.com.`
+`DAOS I/O Engine (v2.0.1) process 433456 started on rank 1 with 8 target, 2 helper XS, firstcore 0, host wolf-72.wolf.hpdd.intel.com.`
 
 ### SCM Format
 
@@ -1015,64 +1048,67 @@ the necessary DAOS metadata indicating that the server has been formatted.
 When starting, `daos_server` will skip `maintenance mode` and attempt to start
 I/O engines if valid DAOS metadata is found in `scm_mount`.
 
+
 ## Agent Setup
 
-This section addresses how to configure the DAOS agents on the storage
-nodes before starting it.
+This section addresses how to configure the DAOS Agents on the client nodes.
+
+### Agent User and Group Setup
+
+The `daos_agent` daemon runs as an unprivileged user process,
+with the username `daos_agent` and group name `daos_agent`.
+If those IDs do not exist at the time the `daos-client` RPM is installed,
+they will be created during the RPM installation.  Refer to
+[User and Group Management](https://docs.daos.io/v2.0/admin/predeployment_check/#user-and-group-management)
+for details.
 
 ### Agent Certificate Generation
 
-The DAOS security framework relies on certificates to authenticate
-administrators. The security infrastructure is currently under
-development and will be delivered in DAOS v1.0. Initial support for certificates
-has been added to DAOS and can be disabled either via the command line or in the
-DAOS Agent configuration file. Currently, the easiest way to disable certificate
-support is to pass the -i flag to `daos_agent`.
+The DAOS security framework relies on SSL certificates to authenticate
+the DAOS daemon processes, as well as the DAOS administrators who run the
+`dmg` command.
+Refer to [Certificate Generation](https://docs.daos.io/v2.0/admin/deployment/?h=gen_#certificate-configuration)
+for details on creating the necessary certificates.
+
+!!! note
+    It is possible to disable the use of certificates for testing purposes.
+    This should *never* be done in production environments.
+    Running in insecure mode will allow arbitrary un-authenticated user processes
+    to access and potentially damage the DAOS storage.
 
 ### Agent Configuration File
 
 The `daos_agent` configuration file is parsed when starting the
 `daos_agent` process. The configuration file location can be specified
-on the command line (`daos_agent -h` for usage) or default location
-(`install/etc/daos_agent.yml`). If installed from rpms the default location is
-(`/etc/daos/daos_agent.yml`).
+on the command line with the `-o` option (see `daos_agent -h` for usage help).
+Otherwise, the default location `/etc/daos/daos_agent.yml` will be used.
+When running `daos_agent` under systemd control, the default location
+is used unless the `ExecStart` line in the `daos_agent.service` file is
+modified to include the `-o` option.
 
-Parameter descriptions are specified in
-[`daos_agent.yml`](https://github.com/daos-stack/daos/blob/master/utils/config/daos_agent.yml).
+Parameter descriptions are specified in the sample
+[daos\_agent.yml](https://github.com/daos-stack/daos/blob/master/utils/config/daos_agent.yml)
+file, which will also get installed into `/etc/daos/daos_agent.yml`
+during the installation of the daos-client RPM.
 
 Any option supplied to `daos_agent` as a command line option or flag will take
 precedence over equivalent configuration file parameter.
 
-For convenience, active parsed config values are written to a temporary file
-for reference, and the location will be written to the log.
-
 The following section lists the format, options, defaults, and descriptions
 available in the configuration file.
 
-The example configuration file lists the default empty configuration listing
-all the options (living documentation of the config file).
-Live examples are available
-[here](https://github.com/daos-stack/daos/tree/master/utils/config).
-
-The location of this configuration file is determined by first checking
-for the path specified through the `-o` option of the `daos_agent` command
-line, if not set then `/etc/daos/daos_agent.yml` is used.
-
-Refer to the example configuration file
-[`daos_agent.yml`](https://github.com/daos-stack/daos/blob/master/utils/config/daos_agent.yml)
-for latest information and examples.
 
 #### Defining fabric interfaces manually
 
-By default, the DAOS agent automatically detects all fabric interfaces on the
+By default, the DAOS Agent automatically detects all fabric interfaces on the
 client node. It selects an appropriate one for DAOS I/O based on the NUMA node
 of the client request and the interface type preferences reported by the DAOS
 management service.
 
-If the DAOS agent does not detect the fabric interfaces correctly, the
-administrator may define them manually in the agent configuration. They must be
-organized by NUMA node. If using the verbs provider, the interface domain is
-also required.
+If the DAOS Agent does not detect the fabric interfaces correctly,
+the administrator may define them manually in the Agent configuration file.
+These `fabric_iface` entries must be organized by NUMA node.
+If using the verbs provider, the interface domain is also required.
 
 Example:
 ```
@@ -1099,51 +1135,46 @@ fabric_ifaces:
 
 ### Agent Startup
 
-DAOS Agent is a standalone application to be run on each compute node.
-It can be configured to use secure communications (default) or can be allowed
-to communicate with the control plane over unencrypted channels. The following
-example shows `daos_agent` being configured to operate in insecure mode due to
-incomplete integration of certificate support as of the 0.6 release and
-configured to use a non-default agent configuration file.
+The DAOS Agent is a standalone application to be run on each client node.
+By default, the DAOS Agent will be run as a systemd service.
+The DAOS Agent unit file is installed in the correct location
+(`/usr/lib/systemd/system/daos_agent.service`) during RPM installation.
 
-To start the DAOS Agent from the command line, run:
-
-```bash
-$ daos_agent -i -o <'path to agent configuration file/daos_agent.yml'> &
-```
-
-Alternatively, the DAOS Agent can be started as a systemd service. The DAOS Agent
-unit file is installed in the correct location when installing from RPMs.
-If you want to run the DAOS Agent without certificates (not recommended in production
-deployments), you need to add the `-i` option to the systemd `ExecStart` invocation
-(see below).
-
-If you wish to use systemd with a development build, you must copy the service
-file from `utils/systemd` to `/usr/lib/systemd/system`. Once the file is copied
-modify the ExecStart line to point to your in tree `daos_agent` binary.
-
-`ExecStart=/usr/bin/daos_agent -i -o <'path to agent configuration file/daos_agent.yml'>`
-
-Once the service file is installed, you can start `daos_agent`
-with the following commands:
+After the RPM installation, and after the Agent configuration file has
+been created, the following commands will enable the DAOS Agent to be
+started at the next reboot, will start it immediately,
+and will check the status of the Agent after being started:
 
 ```bash
-$ sudo systemctl daemon-reload
 $ sudo systemctl enable daos_agent.service
-$ sudo systemctl start daos_agent.service
-```
-
-To check the component status use:
-
-```bash
+$ sudo systemctl start  daos_agent.service
 $ sudo systemctl status daos_agent.service
 ```
 
-If DAOS Agent failed to start check the logs with:
+If the DAOS Agent fails to start, check the systemd logs for errors:
 
 ```bash
 $ sudo journalctl --unit daos_agent.service
 ```
+
+#### Starting the DAOS Agent with a non-default configuration
+
+To start the DAOS Agent from the command line, for example to run with a
+non-default configuration file, run:
+
+```bash
+$ daos_agent -o <'path to agent configuration file/daos_agent.yml'> &
+```
+
+If you wish to use systemd with a development build, you must copy the Agent service
+file from `utils/systemd/` to `/usr/lib/systemd/system/`.
+Then modify the `ExecStart` line to point to your Agent configuration file:
+
+`ExecStart=/usr/bin/daos_agent -o <'path to agent configuration file/daos_agent.yml'>`
+
+Once the service file is installed and `systemctl daemon-reload` has been run to
+reload the configuration, the `daos_agent` can be started through systemd
+as shown above.
 
 #### Disable Agent Cache (Optional)
 
@@ -1153,10 +1184,10 @@ stale system information being retained across reformats of a system. The DAOS
 Agent normally caches a map of rank-to-fabric URI lookups as well as client network
 configuration data in order to reduce the number of management RPCs required to
 start an application. When this information becomes stale, the Agent must be
-restarted in order to repopulate the cache with new information. Alternatively,
-the caching mechanism may be disabled, with the tradeoff that each application
-launch will invoke management RPCs in order to obtain system connection
-information.
+restarted in order to repopulate the cache with new information.
+Alternatively, the caching mechanism may be disabled, with the tradeoff that
+each application launch will invoke management RPCs in order to obtain system
+connection information.
 
 To disable the DAOS Agent caching mechanism, set the following environment
 variable before starting the `daos_agent` process:
@@ -1168,6 +1199,7 @@ the `[Service]` section before reloading systemd and restarting the
 `daos_agent` service:
 
 `Environment=DAOS_AGENT_DISABLE_CACHE=true`
+
 
 [^1]: https://github.com/intel/ipmctl
 

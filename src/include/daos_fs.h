@@ -48,9 +48,13 @@ typedef struct dfs dfs_t;
  * Reserve bit 3 in the access flags for dfs_mount() - bits 1 and 2 are used
  * for read / write access (O_RDONLY, O_RDRW).
  */
-#define DFS_BALANCED	4 /** DFS operations using a DTX */
-#define DFS_RELAXED	0 /** DFS operations do not use a DTX (default mode). */
+/** DFS container balanced consistency mode. DFS operations using a DTX */
+#define DFS_BALANCED	4
+/** DFS container relaxed consistency mode. DFS operations do not use a DTX (default mode) */
+#define DFS_RELAXED	0
+/** read-only access */
 #define DFS_RDONLY	O_RDONLY
+/** read/write access */
 #define DFS_RDWR	O_RDWR
 
 /** struct holding attributes for a DFS container */
@@ -63,7 +67,7 @@ typedef struct {
 	daos_oclass_id_t	da_oclass_id;
 	/** DAOS properties on the DFS container */
 	daos_prop_t		*da_props;
-	/*
+	/**
 	 * Consistency mode for the DFS container: DFS_RELAXED, DFS_BALANCED.
 	 * If set to 0 or more generally not set to balanced explicitly, relaxed
 	 * mode will be used. In the future, Balanced mode will be the default.
@@ -79,6 +83,7 @@ typedef struct {
 	daos_range_t	       *iod_rgs;
 } dfs_iod_t;
 
+/** DFS object information */
 typedef struct {
 	/** object class */
 	daos_oclass_id_t	doi_oclass_id;
@@ -211,6 +216,52 @@ dfs_mount(daos_handle_t poh, daos_handle_t coh, int flags, dfs_t **dfs);
  */
 int
 dfs_umount(dfs_t *dfs);
+
+/**
+ * Retrieve the open pool handle on the DFS mount. This is refcounted internally and must be
+ * released with dfs_pool_put().
+ *
+ * \param[in]	dfs	Pointer to the mounted file system.
+ * \param[out]	poh	Open pool handle.
+ *
+ * \return		0 on success, errno code on failure.
+ */
+int
+dfs_pool_get(dfs_t *dfs, daos_handle_t *poh);
+
+/**
+ * Release refcount of pool handle taken by dfs_pool_get().
+ *
+ * \param[in]	dfs	Pointer to the mounted file system.
+ * \param[out]	poh	Pool handle that was returned from dfs_pool_get().
+ *
+ * \return		0 on success, errno code on failure.
+ */
+int
+dfs_pool_put(dfs_t *dfs, daos_handle_t poh);
+
+/**
+ * Retrieve the open cont handle on the DFS mount. This is refcounted internally and must be
+ * released with dfs_cont_put().
+ *
+ * \param[in]	dfs	Pointer to the mounted file system.
+ * \param[out]	coh	Open cont handle.
+ *
+ * \return		0 on success, errno code on failure.
+ */
+int
+dfs_cont_get(dfs_t *dfs, daos_handle_t *coh);
+
+/**
+ * Release refcount of cont handle taken by dfs_cont_get().
+ *
+ * \param[in]	dfs	Pointer to the mounted file system.
+ * \param[out]	coh	Cont handle that was returned from dfs_cont_get().
+ *
+ * \return		0 on success, errno code on failure.
+ */
+int
+dfs_cont_put(dfs_t *dfs, daos_handle_t coh);
 
 /**
  * Query attributes of a DFS mount.

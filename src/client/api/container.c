@@ -7,6 +7,7 @@
 
 #include <daos/container.h>
 #include <daos/task.h>
+#include <daos/pool.h>
 #include "client_internal.h"
 #include "task_internal.h"
 
@@ -22,7 +23,47 @@ daos_cont_global2local(daos_handle_t poh, d_iov_t glob, daos_handle_t *coh)
 	return dc_cont_global2local(poh, glob, coh);
 }
 
-/** 
+static int
+cont_inherit_redunc_fac(daos_handle_t poh, daos_prop_t *cont_prop,
+			daos_prop_t **merged_prop)
+{
+	struct daos_prop_entry	*entry;
+	daos_prop_t		*redunc_prop;
+	int			rf, rc = 0;
+
+	*merged_prop = NULL;
+	/* redunc factor specified, no need inherit from pool */
+	entry = daos_prop_entry_get(cont_prop, DAOS_PROP_CO_REDUN_FAC);
+	if (entry)
+		return 0;
+
+	rf = dc_pool_get_redunc(poh);
+	if (rf < 0)
+		return rf;
+
+	redunc_prop = daos_prop_alloc(1);
+	if (redunc_prop == NULL) {
+		D_ERROR("failed to allocate redunc_prop\n");
+		return -DER_NOMEM;
+	}
+	redunc_prop->dpp_entries[0].dpe_type = DAOS_PROP_CO_REDUN_FAC;
+	redunc_prop->dpp_entries[0].dpe_val = rf;
+
+	if (cont_prop) {
+		*merged_prop = daos_prop_merge(cont_prop, redunc_prop);
+		daos_prop_free(redunc_prop);
+		if (*merged_prop == NULL) {
+			D_ERROR("failed to merge cont_prop and redunc_prop\n");
+			rc = -DER_NOMEM;
+		}
+	} else {
+		*merged_prop = redunc_prop;
+	}
+
+	return rc;
+}
+
+/**
  * Real latest & greatest implementation of container create.
  * Used by anyone including the daos_cont.h header file.
  */
@@ -33,6 +74,7 @@ daos_cont_create(daos_handle_t poh, uuid_t *cuuid, daos_prop_t *cont_prop,
 	daos_cont_create_t	*args;
 	tse_task_t		*task;
 	int			 rc;
+	daos_prop_t		*merged_props = NULL;
 
 	DAOS_API_ARG_ASSERT(*args, CONT_CREATE);
 
@@ -41,17 +83,28 @@ daos_cont_create(daos_handle_t poh, uuid_t *cuuid, daos_prop_t *cont_prop,
 		return -DER_INVAL;
 	}
 
-	rc = dc_task_create(dc_cont_create, NULL, ev, &task);
+	rc = cont_inherit_redunc_fac(poh, cont_prop, &merged_props);
 	if (rc)
 		return rc;
+
+	rc = dc_task_create(dc_cont_create, NULL, ev, &task);
+	if (rc) {
+		if (merged_props)
+			daos_prop_free(merged_props);
+		return rc;
+	}
 
 	args = dc_task_get_args(task);
 	args->poh	= poh;
 	uuid_clear(args->uuid);
-	args->prop	= cont_prop;
+	args->prop	= merged_props ? merged_props : cont_prop;
 	args->cuuid	= cuuid;
 
-	return dc_task_schedule(task, true);
+	rc = dc_task_schedule(task, true);
+	if (merged_props)
+		daos_prop_free(merged_props);
+
+	return rc;
 }
 
 int
@@ -129,10 +182,11 @@ daos_cont_open(daos_handle_t poh, const char *cont, unsigned int flags,
 	return dc_task_schedule(task, true);
 }
 
+#undef daos_cont_open
 int
-daos_cont_open2(daos_handle_t poh, const char *cont, unsigned int flags,
-		daos_handle_t *coh, daos_cont_info_t *info, daos_event_t *ev)
-		__attribute__ ((weak, alias("daos_cont_open")));
+daos_cont_open(daos_handle_t poh, const char *cont, unsigned int flags,
+	       daos_handle_t *coh, daos_cont_info_t *info, daos_event_t *ev)
+	       __attribute__ ((weak, alias("daos_cont_open2")));
 
 int
 daos_cont_close(daos_handle_t coh, daos_event_t *ev)
@@ -180,10 +234,11 @@ daos_cont_destroy(daos_handle_t poh, const char *cont, int force,
 	return dc_task_schedule(task, true);
 }
 
+#undef daos_cont_destroy
 int
-daos_cont_destroy2(daos_handle_t poh, const char *cont, int force,
-		   daos_event_t *ev)
-		   __attribute__ ((weak, alias("daos_cont_destroy")));
+daos_cont_destroy(daos_handle_t poh, const char *cont, int force,
+		  daos_event_t *ev)
+		  __attribute__ ((weak, alias("daos_cont_destroy2")));
 
 int
 daos_cont_query(daos_handle_t coh, daos_cont_info_t *info,

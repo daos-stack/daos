@@ -31,13 +31,6 @@
    socketcall.sendto(msg)
    ...
    fun:send
-   ...
-   fun:sock_pe_progress_thread
-}
-{
-   <insert_a_suppression_name_here>
-   Memcheck:Addr8
-   fun:runtime.asyncPreempt
 }
 {
    <insert_a_suppression_name_here>
@@ -47,47 +40,6 @@
 }
 {
    <insert_a_suppression_name_here>
-   Memcheck:Addr16
-   fun:runtime.asyncPreempt
-}
-{
-   <insert_a_suppression_name_here>
-   Memcheck:Cond
-   ...
-   fun:runtime.copystack
-}
-{
-   <insert_a_suppression_name_here>
-   Memcheck:Cond
-   ...
-   fun:runtime.gcDrain
-}
-{
-   <insert_a_suppression_name_here>
-   Memcheck:Value8
-   ...
-   fun:runtime.gcDrain
-}
-{
-   <insert_a_suppression_name_here>
-   Memcheck:Addr4
-   ...
-   fun:runtime.copystack
-}
-{
-   <insert_a_suppression_name_here>
-   Memcheck:Addr8
-   ...
-   fun:runtime.copystack
-}
-{
-   <insert_a_suppression_name_here>
-   Memcheck:Addr8
-   ...
-   fun:runtime.gentraceback
-}
-{
-   <insert_a_suppression_name_here>
    Memcheck:Addr8
    ...
    fun:bufio.(*Reader).*
@@ -103,11 +55,6 @@
    Memcheck:Addr1
    ...
    fun:bufio.(*Reader).*
-}
-{
-   <insert_a_suppression_name_here>
-   Memcheck:Addr8
-   fun:runtime.deferreturn
 }
 {
    <insert_a_suppression_name_here>
@@ -116,8 +63,13 @@
 }
 {
    <insert_a_suppression_name_here>
+   Memcheck:Addr1
+   fun:bytes.*
+}
+{
+   <insert_a_suppression_name_here>
    Memcheck:Addr8
-   fun:runtime.raceread
+   fun:bytes.*
 }
 {
    <insert_a_suppression_name_here>
@@ -136,11 +88,6 @@
 }
 {
    <insert_a_suppression_name_here>
-   Memcheck:Addr8
-   fun:indexbytebody
-}
-{
-   <insert_a_suppression_name_here>
    Memcheck:Addr1
    fun:strings.(*Builder).*
 }
@@ -151,65 +98,238 @@
 }
 {
    <insert_a_suppression_name_here>
-   Memcheck:Addr1
-   fun:runtime.(*mheap).allo*
-}
-{
-   <insert_a_suppression_name_here>
-   Memcheck:Addr8
-   fun:runtime.(*mheap).allo*
-}
-{
-   <insert_a_suppression_name_here>
-   Memcheck:Addr8
-   fun:runtime.systemstack
+   Memcheck:Cond
+   ...
+   fun:runtime.*
 }
 {
    <insert_a_suppression_name_here>
    Memcheck:Addr1
+   ...
+   fun:runtime.*
+}
+{
+   <insert_a_suppression_name_here>
+   Memcheck:Addr2
+   ...
    fun:runtime.*
 }
 {
    <insert_a_suppression_name_here>
    Memcheck:Addr4
+   ...
    fun:runtime.*
 }
 {
    <insert_a_suppression_name_here>
    Memcheck:Addr8
+   ...
    fun:runtime.*
 }
 {
    <insert_a_suppression_name_here>
    Memcheck:Addr16
+   ...
    fun:runtime.*
 }
 {
    <insert_a_suppression_name_here>
    Memcheck:Addr32
-   fun:indexbytebody
+   ...
+   fun:runtime.*
 }
 {
    <insert_a_suppression_name_here>
-   Memcheck:Addr1
+   Memcheck:Value8
    ...
-   fun:main.createWriteStream.*
+   fun:runtime.*
+}
+{
+   Go conditional
+   Memcheck:Cond
+   src:*.go
+}
+{
+   Go addr1
+   Memcheck:Addr1
+   src:*.go
+}
+{
+   Go addr 2
+   Memcheck:Addr2
+   src:*.go
+}
+{
+   Go addr 4
+   Memcheck:Addr4
+   src:*.go
+}
+{
+   Go addr 8
+   Memcheck:Addr8
+   src:*.go
+}
+{
+   Go addr 16
+   Memcheck:Addr16
+   src:*.go
+}
+{
+   Go addr 32
+   Memcheck:Addr32
+   src:*.go
+}
+{
+   Ga value 8
+   Memcheck:Value8
+   src:*.go
 }
 {
    <insert_a_suppression_name_here>
    Memcheck:Addr8
    ...
-   fun:main.createWriteStream.*
+   fun:internal*
+}
+{
+   <insert_a_suppression_name_here>
+   Memcheck:Addr8
+   ...
+   fun:math.*
+}
+{
+   <insert_a_suppression_name_here>
+   Memcheck:Addr1
+   ...
+   fun:regexp*
 }
 {
    <insert_a_suppression_name_here>
    Memcheck:Addr2
-   fun:runtime.memmove
+   ...
+   fun:regexp*
+}
+{
+   <insert_a_suppression_name_here>
+   Memcheck:Addr4
+   ...
+   fun:regexp*
+}
+{
+   <insert_a_suppression_name_here>
+   Memcheck:Addr8
+   ...
+   fun:regexp*
 }
 {
    <insert_a_suppression_name_here>
    Memcheck:Addr16
-   fun:runtime.memmove
+   ...
+   fun:regexp*
+}
+{
+   <insert_a_suppression_name_here>
+   Memcheck:Addr8
+   ...
+   fun:sort.*
+}
+{
+   <insert_a_suppression_name_here>
+   Memcheck:Addr1
+   ...
+   fun:encoding/*
+}
+{
+   <insert_a_suppression_name_here>
+   Memcheck:Addr8
+   ...
+   fun:encoding/*
+}
+{
+   <insert_a_suppression_name_here>
+   Memcheck:Addr16
+   ...
+   fun:encoding/*
+}
+{
+   <insert_a_suppression_name_here>
+   Memcheck:Addr1
+   ...
+   fun:hash/*
+}
+{
+   <insert_a_suppression_name_here>
+   Memcheck:Addr4
+   ...
+   fun:hash/*
+}
+{
+   <insert_a_suppression_name_here>
+   Memcheck:Addr16
+   ...
+   fun:hash/*
+}
+{
+   <insert_a_suppression_name_here>
+   Memcheck:Value8
+   ...
+   fun:hash/*
+}
+{
+   <insert_a_suppression_name_here>
+   Memcheck:Addr1
+   ...
+   fun:compress/*
+}
+{
+   <insert_a_suppression_name_here>
+   Memcheck:Addr8
+   ...
+   fun:compress/*
+}
+{
+   <insert_a_suppression_name_here>
+   Memcheck:Addr8
+   ...
+   fun:sync.*
+}
+{
+   <insert_a_suppression_name_here>
+   Memcheck:Addr16
+   ...
+   fun:sync.*
+}
+{
+   <insert_a_suppression_name_here>
+   Memcheck:Addr16
+   fun:aeshash*
+}
+{
+   <insert_a_suppression_name_here>
+   Memcheck:Addr8
+   fun:memeqbody
+}
+{
+   <insert_a_suppression_name_here>
+   Memcheck:Cond
+   fun:memeqbody
+}
+{
+   <insert_a_suppression_name_here>
+   Memcheck:Addr1
+   ...
+   fun:main.*
+}
+{
+   <insert_a_suppression_name_here>
+   Memcheck:Addr8
+   ...
+   fun:main.*
+}
+{
+   <insert_a_suppression_name_here>
+   Memcheck:Addr16
+   ...
+   fun:main.*
 }
 {
    <insert_a_suppression_name_here>
@@ -218,48 +338,111 @@
 }
 {
    <insert_a_suppression_name_here>
+   Memcheck:Addr1
+   ...
+   fun:github.com/*
+}
+{
+   <insert_a_suppression_name_here>
+   Memcheck:Addr4
+   ...
+   fun:github.com/*
+}
+{
+   <insert_a_suppression_name_here>
    Memcheck:Addr8
-   fun:github.com/daos-stack/daos/*
+   ...
+   fun:github.com/*
+}
+{
+   <insert_a_suppression_name_here>
+   Memcheck:Addr16
+   ...
+   fun:github.com/*
 }
 {
    <insert_a_suppression_name_here>
    Memcheck:Cond
+   ...
+   fun:*golang.org/*
+}
+{
+   <insert_a_suppression_name_here>
+   Memcheck:Addr1
+   ...
+   fun:*golang.org/*
+}
+{
+   <insert_a_suppression_name_here>
+   Memcheck:Addr4
+   ...
+   fun:*golang.org/*
+}
+{
+   <insert_a_suppression_name_here>
+   Memcheck:Addr8
+   ...
+   fun:*golang.org/*
+}
+{
+   <insert_a_suppression_name_here>
+   Memcheck:Addr16
+   ...
+   fun:*golang.org/*
+}
+{
+   <insert_a_suppression_name_here>
+   Memcheck:Value8
+   ...
+   fun:*golang.org/*
+}
+{
+   <insert_a_suppression_name_here>
+   Memcheck:Addr8
+   fun:reflect.*
+}
+{
+   <insert_a_suppression_name_here>
+   Memcheck:Addr16
+   fun:reflect.*
+}
+{
+   <insert_a_suppression_name_here>
+   Memcheck:Addr8
+   fun:unicode/utf8*
+}
+{
+   <insert_a_suppression_name_here>
+   Memcheck:Addr8
+   fun:strconv.Unquote
+}
+{
+   <insert_a_suppression_name_here>
+   Memcheck:Addr8
+   fun:racecall
+}
+{
+   <insert_a_suppression_name_here>
+   Memcheck:Cond
+   fun:racecalladdr
+}
+{
+   <insert_a_suppression_name_here>
+   Memcheck:Addr8
+   ...
+   fun:indexbytebody
+}
+{
+   <insert_a_suppression_name_here>
+   Memcheck:Addr32
+   ...
    fun:indexbytebody
 }
 {
    <insert_a_suppression_name_here>
    Memcheck:Cond
-   fun:runtime.(*mspan).sweep
-}
-{
-   <insert_a_suppression_name_here>
-   Memcheck:Cond
-   fun:runtime.(*mcentral).cacheSpan
-}
-{
-   <insert_a_suppression_name_here>
-   Memcheck:Cond
-   fun:runtime.(*mcache).*
-}
-{
-   <insert_a_suppression_name_here>
-   Memcheck:Cond
-   fun:runtime.mallocgc
-}
-{
-   <insert_a_suppression_name_here>
-   Memcheck:Cond
-   fun:runtime.deductSweepCredit
-}
-{
-   <insert_a_suppression_name_here>
-   Memcheck:Addr1
-   fun:*protobuf*
-}
-{
-   <insert_a_suppression_name_here>
-   Memcheck:Addr8
-   fun:*protobuf*
+   ...
+   fun:indexbytebody
 }
 {
    FI leak 8
@@ -292,24 +475,19 @@
    fun:_dl_allocate_tls
    fun:pthread_create*
    ...
-   fun:sock_domain
-   fun:fi_domain
-   fun:na_ofi_domain_open
    fun:na_ofi_initialize
    fun:NA_Initialize_opt
    fun:hg_core_init
    fun:HG_Core_init_opt
    fun:HG_Init_opt
    fun:crt_hg_class_init
-   fun:crt_hg_ctx_init
 }
 {
    Tcp provider with ofi rxm
    Memcheck:Param
    sendmsg(msg.msg_iov[1])
-   obj:*
+   ...
    fun:ofi_bsock_sendv
    ...
    fun:fi_tsend
-   ...
 }

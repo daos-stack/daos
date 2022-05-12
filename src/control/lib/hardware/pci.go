@@ -188,7 +188,7 @@ func NewPCIAddress(addr string) (*PCIAddress, error) {
 	}, nil
 }
 
-// MustNewPCIAddressSet creates a new PCIAddressSet from input string,
+// MustNewPCIAddress creates a new PCIAddress from input string,
 // which must be valid, otherwise a panic will occur.
 func MustNewPCIAddress(addr string) *PCIAddress {
 	pa, err := NewPCIAddress(addr)
@@ -294,6 +294,10 @@ func (pas *PCIAddressSet) Strings() []string {
 
 // Strings returns PCI addresses as string of joined space separated strings.
 func (pas *PCIAddressSet) String() string {
+	if pas == nil {
+		return ""
+	}
+
 	return strings.Join(pas.Strings(), bdevPciAddrSep)
 }
 
@@ -348,6 +352,21 @@ func (pas *PCIAddressSet) Difference(in *PCIAddressSet) *PCIAddressSet {
 	return difference
 }
 
+// HasVMD returns true if any of the addresses in set is for a VMD backing device.
+func (pas *PCIAddressSet) HasVMD() bool {
+	if pas == nil {
+		return false
+	}
+
+	for _, inAddr := range pas.Addresses() {
+		if inAddr.IsVMDBackingAddress() {
+			return true
+		}
+	}
+
+	return false
+}
+
 // BackingToVMDAddresses converts all VMD backing device PCI addresses (with the VMD address
 // encoded in the domain component of the PCI address) in set back to the PCI address of the VMD
 // e.g. [5d0505:01:00.0, 5d0505:03:00.0] -> [0000:5d:05.5].
@@ -384,12 +403,23 @@ func (pas *PCIAddressSet) BackingToVMDAddresses(log logging.Logger) (*PCIAddress
 
 // NewPCIAddressSet takes a variable number of strings and attempts to create an address set.
 func NewPCIAddressSet(addrs ...string) (*PCIAddressSet, error) {
-	al := &PCIAddressSet{}
-	if err := al.AddStrings(addrs...); err != nil {
+	as := &PCIAddressSet{}
+	if err := as.AddStrings(addrs...); err != nil {
 		return nil, err
 	}
 
-	return al, nil
+	return as, nil
+}
+
+// MustNewPCIAddressSet creates a new PCIAddressSet from input strings,
+// which must be valid, otherwise a panic will occur.
+func MustNewPCIAddressSet(addrs ...string) *PCIAddressSet {
+	as, err := NewPCIAddressSet(addrs...)
+	if err != nil {
+		panic(err)
+	}
+
+	return as
 }
 
 // NewPCIAddressSetFromString takes a space-separated string and attempts to create an address set.
@@ -481,6 +511,27 @@ func (d *PCIDevice) String() string {
 		speedStr = fmt.Sprintf(" @ %.2f GB/s", d.LinkSpeed)
 	}
 	return fmt.Sprintf("%s %s (%s)%s", &d.PCIAddr, d.Name, d.Type, speedStr)
+}
+
+// DeviceName returns the system name of the PCI device.
+func (d *PCIDevice) DeviceName() string {
+	if d == nil {
+		return ""
+	}
+	return d.Name
+}
+
+// DeviceType returns the type of PCI device.
+func (d *PCIDevice) DeviceType() DeviceType {
+	if d == nil {
+		return DeviceTypeUnknown
+	}
+	return d.Type
+}
+
+// PCIDevice returns a pointer to itself.
+func (d *PCIDevice) PCIDevice() *PCIDevice {
+	return d
 }
 
 func (d PCIDevices) MarshalJSON() ([]byte, error) {

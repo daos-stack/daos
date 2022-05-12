@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2021 Intel Corporation.
+// (C) Copyright 2019-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -22,7 +22,7 @@ type mockModule struct {
 	IDValue            ModuleID
 }
 
-func (m *mockModule) HandleCall(session *Session, method Method, input []byte) ([]byte, error) {
+func (m *mockModule) HandleCall(_ context.Context, session *Session, method Method, input []byte) ([]byte, error) {
 	return m.HandleCallResponse, m.HandleCallErr
 }
 

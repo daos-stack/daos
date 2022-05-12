@@ -9,6 +9,7 @@ package server
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/pkg/errors"
 	"golang.org/x/sys/unix"
@@ -38,7 +39,7 @@ func (ei *EngineInstance) newMntRet(mountPoint string, inErr error) *ctlpb.ScmMo
 func (ei *EngineInstance) newCret(pciAddr string, inErr error) *ctlpb.NvmeControllerResult {
 	var info string
 	if pciAddr == "" {
-		pciAddr = "<nil>"
+		pciAddr = storage.NilBdevAddress
 	}
 	if inErr != nil && fault.HasResolution(inErr) {
 		info = fault.ShowResolutionFor(inErr)
@@ -49,12 +50,20 @@ func (ei *EngineInstance) newCret(pciAddr string, inErr error) *ctlpb.NvmeContro
 	}
 }
 
+func (ei *EngineInstance) logDuration(msg string, start time.Time) {
+	ei.log.Infof("%v: %v\n", msg, time.Since(start))
+}
+
 // scmFormat will return either successful result or error.
 func (ei *EngineInstance) scmFormat(force bool) (*ctlpb.ScmMountResult, error) {
 	cfg, err := ei.storage.GetScmConfig()
 	if err != nil {
 		return nil, err
 	}
+
+	defer ei.logDuration(track(fmt.Sprintf(
+		"Format of SCM storage for %s instance %d (reformat: %t)", build.DataPlaneName,
+		ei.Index(), force)))
 
 	err = ei.storage.FormatScm(force)
 	if err != nil {
@@ -65,37 +74,34 @@ func (ei *EngineInstance) scmFormat(force bool) (*ctlpb.ScmMountResult, error) {
 }
 
 func (ei *EngineInstance) bdevFormat() (results proto.NvmeControllerResults) {
-	ei.log.Debugf("instance %d: calling into storage provider to format tiers", ei.Index())
+	defer ei.logDuration(track(fmt.Sprintf(
+		"Format of NVMe storage for %s instance %d", build.DataPlaneName, ei.Index())))
 
 	for _, tr := range ei.storage.FormatBdevTiers() {
 		if tr.Error != nil {
 			results = append(results, ei.newCret(fmt.Sprintf("tier %d", tr.Tier), tr.Error))
 			continue
 		}
-		for dev, status := range tr.Result.DeviceResponses {
+		for devAddr, status := range tr.Result.DeviceResponses {
+			ei.log.Debugf("instance %d: tier %d: device fmt of %s, status %+v",
+				ei.Index(), tr.Tier, devAddr, status)
+
 			// TODO DAOS-5828: passing status.Error directly triggers segfault
 			var err error
 			if status.Error != nil {
 				err = status.Error
 			}
-			results = append(results, ei.newCret(dev, err))
+			results = append(results, ei.newCret(devAddr, err))
 		}
 	}
 
 	return
 }
 
-func (ei *EngineInstance) bdevWriteNvmeConfig(ctx context.Context) error {
-	return ei.storage.WriteNvmeConfig(ctx, ei.log)
-}
-
 // StorageFormatSCM performs format on SCM and identifies if superblock needs
 // writing.
 func (ei *EngineInstance) StorageFormatSCM(ctx context.Context, force bool) (mResult *ctlpb.ScmMountResult) {
 	engineIdx := ei.Index()
-
-	ei.log.Infof("Formatting scm storage for %s instance %d (reformat: %t)",
-		build.DataPlaneName, engineIdx, force)
 
 	var scmErr error
 	cfg, err := ei.storage.GetScmConfig()
@@ -145,16 +151,8 @@ func (ei *EngineInstance) StorageFormatNVMe() (cResults proto.NvmeControllerResu
 	}
 
 	if needsSuperblock {
-		ei.log.Infof("Formatting nvme storage for %s instance %d", build.DataPlaneName,
-			ei.Index())
 		cResults = ei.bdevFormat()
 	}
 
 	return
-}
-
-// StorageWriteNvmeConfig writes output NVMe config file used to allocate devices to be used by an
-// engine process.
-func (ei *EngineInstance) StorageWriteNvmeConfig(ctx context.Context) error {
-	return ei.bdevWriteNvmeConfig(ctx)
 }

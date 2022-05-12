@@ -19,6 +19,7 @@ import (
 	"github.com/google/go-cmp/cmp/cmpopts"
 
 	"github.com/daos-stack/daos/src/control/common"
+	"github.com/daos-stack/daos/src/control/common/test"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/security"
 	"github.com/daos-stack/daos/src/control/server/config"
@@ -237,11 +238,11 @@ func TestStartOptions(t *testing.T) {
 	} {
 		t.Run(desc, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
-			defer common.ShowBufferOnFailure(t, buf)
+			defer test.ShowBufferOnFailure(t, buf)
 
 			var gotConfig *config.Server
 			var opts mainOpts
-			opts.Start.start = func(log *logging.LeveledLogger, cfg *config.Server) error {
+			opts.Start.start = func(log logging.Logger, cfg *config.Server) error {
 				gotConfig = cfg
 				return nil
 			}
@@ -310,7 +311,7 @@ func TestStartLoggingOptions(t *testing.T) {
 			log := logging.NewCombinedLogger(t.Name(), &logBuf)
 
 			var opts mainOpts
-			opts.Start.start = func(log *logging.LeveledLogger, cfg *config.Server) error {
+			opts.Start.start = func(log logging.Logger, cfg *config.Server) error {
 				return nil
 			}
 			opts.Start.config = genMinimalConfig()
@@ -350,7 +351,7 @@ func TestStartLoggingConfiguration(t *testing.T) {
 		},
 		"Debug": {
 			configFn: func(cfg *config.Server) *config.Server {
-				return cfg.WithControlLogMask(config.ControlLogLevelDebug)
+				return cfg.WithControlLogMask(common.ControlLogLevelDebug)
 			},
 			logFnName: "Debug",
 			input:     "hello",
@@ -358,7 +359,7 @@ func TestStartLoggingConfiguration(t *testing.T) {
 		},
 		"Error": {
 			configFn: func(cfg *config.Server) *config.Server {
-				return cfg.WithControlLogMask(config.ControlLogLevelError)
+				return cfg.WithControlLogMask(common.ControlLogLevelError)
 			},
 			logFnName: "Info",
 			input:     "hello",
@@ -370,7 +371,7 @@ func TestStartLoggingConfiguration(t *testing.T) {
 			log := logging.NewCombinedLogger(t.Name(), &logBuf)
 
 			var opts mainOpts
-			opts.Start.start = func(log *logging.LeveledLogger, cfg *config.Server) error {
+			opts.Start.start = func(log logging.Logger, cfg *config.Server) error {
 				return nil
 			}
 			opts.Start.config = tc.configFn(genMinimalConfig())

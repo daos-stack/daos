@@ -162,7 +162,7 @@ class OSAOfflineReintegration(OSAUtils, ServerFillUp):
                         continue
                     output = self.dmg_command.pool_reintegrate(self.pool.uuid,
                                                                rank[val])
-                self.print_and_assert_on_rebuild_failure(output)
+                self.print_and_assert_on_rebuild_failure(output, timeout=15)
 
                 pver_reint = self.get_pool_version()
                 self.log.info("Pool Version after reintegrate %d", pver_reint)

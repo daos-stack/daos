@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2018-2021 Intel Corporation.
+// (C) Copyright 2018-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -54,7 +54,7 @@ func runDrpcServer(log logging.Logger) error {
 	ctx, shutdown := context.WithCancel(context.Background())
 	defer shutdown()
 
-	drpcServer, err := drpc.NewDomainSocketServer(ctx, log, *unixSocket)
+	drpcServer, err := drpc.NewDomainSocketServer(log, *unixSocket)
 	if err != nil {
 		return errors.Wrap(err, "creating socket server")
 	}
@@ -62,17 +62,12 @@ func runDrpcServer(log logging.Logger) error {
 	module := &hello.HelloModule{}
 	drpcServer.RegisterRPCModule(module)
 
-	err = drpcServer.Start()
+	err = drpcServer.Start(ctx)
 	if err != nil {
 		return errors.Wrapf(
 			err, "starting socket server on %s", *unixSocket)
 	}
 
-	// Anonymous goroutine to wait on the signals channel and tell the
-	// program to finish when it receives a signal. Since we only notify on
-	// SIGINT and SIGTERM we should only catch this on a kill or ctrl+c
-	// The syntax looks odd but <- Channel means wait on any input on the
-	// channel.
 	go func() {
 		<-signals
 		finish <- true

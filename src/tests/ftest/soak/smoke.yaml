@@ -11,6 +11,8 @@ hosts:
     # client_reservation: daos-test
 orterun:
     allow_run_as_root: True
+mpi_module: mpi/mpich-x86_64
+enable_sudo: True
 # This timeout must be longer than the test_timeout param (+15minutes)
 # 24 Min test
 timeout: 30M

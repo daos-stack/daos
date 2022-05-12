@@ -8,7 +8,7 @@
 from general_utils import run_command, DaosTestError
 from ior_test_base import IorTestBase
 from apricot import TestWithServers
-from command_utils_base import CommandFailure
+from exception_utils import CommandFailure
 
 
 class CriticalIntegration(TestWithServers):

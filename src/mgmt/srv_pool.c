@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2021 Intel Corporation.
+ * (C) Copyright 2016-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -416,6 +416,13 @@ ds_mgmt_pool_list_cont(uuid_t uuid, d_rank_list_t *svc_ranks,
  * Calls into the pool svc to query a pool by UUID.
  *
  * \param[in]		pool_uuid	UUID of the pool
+ * \param[in]		svc_ranks	Ranks of pool svc replicas.
+ * \param[out]		ranks		Optional, returned storage ranks in this pool.
+ *					If #pool_info is NULL, engines with disabled targets.
+ *					If #pool_info is passed, engines with enabled or disabled
+ *					targets according to #pi_bits (DPI_ENGINES_ENABLED bit).
+ *					Note: ranks may be empty (i.e., *ranks->rl_nr may be 0).
+ *					The caller must free the list with d_rank_list_free().
  * \param[in][out]	pool_info	Query results
  *
  * \return		0		Success
@@ -423,7 +430,7 @@ ds_mgmt_pool_list_cont(uuid_t uuid, d_rank_list_t *svc_ranks,
  *			Negative value	Other error
  */
 int
-ds_mgmt_pool_query(uuid_t pool_uuid, d_rank_list_t *svc_ranks,
+ds_mgmt_pool_query(uuid_t pool_uuid, d_rank_list_t *svc_ranks, d_rank_list_t **ranks,
 		   daos_pool_info_t *pool_info)
 {
 	if (pool_info == NULL) {
@@ -433,7 +440,7 @@ ds_mgmt_pool_query(uuid_t pool_uuid, d_rank_list_t *svc_ranks,
 
 	D_DEBUG(DB_MGMT, "Querying pool "DF_UUID"\n", DP_UUID(pool_uuid));
 
-	return ds_pool_svc_query(pool_uuid, svc_ranks, pool_info);
+	return ds_pool_svc_query(pool_uuid, svc_ranks, ranks, pool_info);
 }
 
 static int
@@ -575,6 +582,14 @@ ds_mgmt_pool_set_prop(uuid_t pool_uuid, d_rank_list_t *svc_ranks,
 
 out:
 	return rc;
+}
+
+int ds_mgmt_pool_upgrade(uuid_t pool_uuid, d_rank_list_t *svc_ranks)
+{
+	D_DEBUG(DB_MGMT, "Upgrading pool "DF_UUID"\n",
+		DP_UUID(pool_uuid));
+
+	return ds_pool_svc_upgrade(pool_uuid, svc_ranks);
 }
 
 int

@@ -6,14 +6,11 @@
 """
 
 
-import threading
 import time
-
 from mdtest_test_base import MdtestBase
 
 
 # pylint: disable=too-few-public-methods,too-many-ancestors
-# pylint: disable=attribute-defined-outside-init
 class RbldWidelyStriped(MdtestBase):
     """Rebuild test cases featuring mdtest.
 
@@ -47,12 +44,12 @@ class RbldWidelyStriped(MdtestBase):
 
         :avocado: tags=all,full_regression
         :avocado: tags=hw,large
-        :avocado: tags=rebuild,widelystriped
+        :avocado: tags=rebuild
+        :avocado: tags=rebuild_widely_striped
         """
         # set params
         targets = self.params.get("targets", "/run/server_config/*")
-        rank = self.params.get("rank_to_kill", "/run/testparams/*")
-        self.dmg = self.get_dmg_command()
+        ranks_to_kill = self.params.get("ranks_to_kill", "/run/testparams/*")
 
         # create pool
         self.add_pool(connect=False)
@@ -68,7 +65,7 @@ class RbldWidelyStriped(MdtestBase):
             "Invalid pool information detected before rebuild")
 
         self.assertTrue(
-            self.pool.check_rebuild_status(rs_errno=0, rs_done=1,
+            self.pool.check_rebuild_status(rs_errno=0, rs_state=1,
                                            rs_obj_nr=0, rs_rec_nr=0),
             "Invalid pool rebuild info detected before rebuild")
 
@@ -77,33 +74,38 @@ class RbldWidelyStriped(MdtestBase):
         # start 1st mdtest run and let it complete
         self.execute_mdtest()
         # Kill rank[6] and wait for rebuild to complete
-        self.server_managers[0].stop_ranks([rank[0]], self.d_log, force=True)
+        self.server_managers[0].stop_ranks(ranks_to_kill[0], self.d_log, force=True)
         self.pool.wait_for_rebuild(False, interval=1)
 
         # create 2nd container
         self.add_container(self.pool)
-        # start 2nd mdtest job
-        thread = threading.Thread(target=self.execute_mdtest)
-        thread.start()
-        time.sleep(3)
 
-        # Kill rank[5] in the middle of mdtest run and
-        # wait for rebuild to complete
-        self.server_managers[0].stop_ranks([rank[1]], self.d_log, force=True)
+        # start 2nd mdtest job in the background
+        self.subprocess = True
+        self.execute_mdtest()
+
+        # Kill rank[5] in the middle of mdtest run and wait for rebuild to complete
+        time.sleep(3)
+        self.server_managers[0].stop_ranks(ranks_to_kill[1], self.d_log, force=True)
         self.pool.wait_for_rebuild(False, interval=1)
-        # wait for mdtest to complete
-        thread.join()
+
+        # wait for mdtest to complete successfully
+        mdtest_returncode = self.job_manager.process.wait()
+        if mdtest_returncode != 0:
+            self.fail("mdtest failed")
 
         # create 3rd container
         self.add_container(self.pool)
 
-        # start 3rd mdtest job
-        thread = threading.Thread(target=self.execute_mdtest)
-        thread.start()
-        time.sleep(3)
+        # start 3rd mdtest job in the background
+        self.execute_mdtest()
 
-        # Kill 2 server ranks [3,4]
-        self.server_managers[0].stop_ranks(rank[2], self.d_log, force=True)
+        # Kill 2 server ranks [3,4] during mdtest and wait for rebuild to complete
+        time.sleep(3)
+        self.server_managers[0].stop_ranks(ranks_to_kill[2], self.d_log, force=True)
         self.pool.wait_for_rebuild(False, interval=1)
-        # wait for mdtest to complete
-        thread.join()
+
+        # wait for mdtest to complete successfully
+        mdtest_returncode = self.job_manager.process.wait()
+        if mdtest_returncode != 0:
+            self.fail("mdtest failed")

@@ -15,7 +15,7 @@ import (
 	"github.com/pkg/errors"
 	"gopkg.in/yaml.v2"
 
-	"github.com/daos-stack/daos/src/control/common"
+	"github.com/daos-stack/daos/src/control/common/test"
 	"github.com/daos-stack/daos/src/control/lib/control"
 	"github.com/daos-stack/daos/src/control/server/config"
 	"github.com/daos-stack/daos/src/control/server/engine"
@@ -170,6 +170,7 @@ control_log_file: /tmp/daos_server.log
 helper_log_file: ""
 firmware_helper_log_file: ""
 fault_path: ""
+core_dump_filter: 19
 name: daos_server
 socket_dir: /var/run/daos_server
 provider: ofi+verbs
@@ -200,7 +201,7 @@ hyperthreads: false
 						WithScmMountPoint("/mnt/daos0"),
 					storage.NewTierConfig().
 						WithStorageClass(storage.ClassNvme.String()).
-						WithBdevDeviceList(common.MockPCIAddrs(0, 1, 2, 3)...),
+						WithBdevDeviceList(test.MockPCIAddrs(0, 1, 2, 3)...),
 				).
 				WithStorageConfigOutputPath("/mnt/daos0/daos_nvme.conf").
 				WithStorageVosEnv("NVME").
@@ -221,7 +222,7 @@ hyperthreads: false
 						WithScmMountPoint("/mnt/daos1"),
 					storage.NewTierConfig().
 						WithStorageClass(storage.ClassNvme.String()).
-						WithBdevDeviceList(common.MockPCIAddrs(4, 5, 6)...),
+						WithBdevDeviceList(test.MockPCIAddrs(4, 5, 6)...),
 				).
 				WithStorageConfigOutputPath("/mnt/daos1/daos_nvme.conf").
 				WithStorageVosEnv("NVME").

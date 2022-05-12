@@ -3,7 +3,7 @@ hosts:
     - server-A
     - server-B
 test_clients:
-    - client-D
+  - client-D
 # If we define the server under test_servers, launch.py will convert it to the
 # actual server name passed into --test_servers. If above test_servers is hosts,
 # it'll be used as one of the servers at test startup time, so use something
@@ -11,8 +11,8 @@ test_clients:
 extra_servers:
   test_servers:
     - server-C
-timeout: 1000
-skip_add_log_msg: True
+timeout: 1200
+skip_add_log_msg: true
 server_config:
   name: daos_server
   engines_per_host: 2
@@ -54,7 +54,7 @@ pool:
   control_method: dmg
 container:
   properties:
-    enable_checksum: True
+    enable_checksum: true
 test_sequence:
   dmg_cmd_test:
   # Rank list, target_list, Pass/Fail Condition
@@ -70,4 +70,3 @@ test_sequence:
     - ["0", "1,2", "Pass"]
     - ["4", "0,2", "Pass"]
     - ["5", "1,2", "Pass"]
-

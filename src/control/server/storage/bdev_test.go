@@ -10,7 +10,7 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/daos-stack/daos/src/control/common"
+	"github.com/daos-stack/daos/src/control/common/test"
 )
 
 func Test_NvmeDevState(t *testing.T) {
@@ -64,29 +64,45 @@ func Test_NvmeDevState(t *testing.T) {
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
-			common.AssertEqual(t, tc.expIsNew, tc.state.IsNew(),
+			test.AssertEqual(t, tc.expIsNew, tc.state.IsNew(),
 				"unexpected IsNew() result")
-			common.AssertEqual(t, tc.expIsNormal, tc.state.IsNormal(),
+			test.AssertEqual(t, tc.expIsNormal, tc.state.IsNormal(),
 				"unexpected IsNormal() result")
-			common.AssertEqual(t, tc.expIsFaulty, tc.state.IsFaulty(),
+			test.AssertEqual(t, tc.expIsFaulty, tc.state.IsFaulty(),
 				"unexpected IsFaulty() result")
-			common.AssertEqual(t, tc.expStr, tc.state.StatusString(),
+			test.AssertEqual(t, tc.expStr, tc.state.String(),
 				"unexpected status string")
 
-			stateNew, err := NvmeDevStateFromString(tc.state.StatusString())
-			if err != nil {
-				t.Fatal(err)
-			}
+			stateNew := NvmeDevStateFromString(tc.state.String())
 
-			common.AssertEqual(t, tc.state.StatusString(), stateNew.StatusString(),
+			test.AssertEqual(t, tc.state.String(), stateNew.String(),
 				fmt.Sprintf("expected string %s to yield state %s",
-					tc.state.StatusString(), stateNew.StatusString()))
+					tc.state.String(), stateNew.String()))
 		})
 	}
 }
 
 func Test_NvmeDevStateFromString_invalid(t *testing.T) {
-	if _, err := NvmeDevStateFromString("BAR"); err == nil {
-		t.Fatal("should fail")
+	for name, tc := range map[string]struct {
+		inStr    string
+		expState NvmeDevState
+		expStr   string
+	}{
+		"empty string": {
+			expState: NvmeStateUnknown,
+			expStr:   "UNKNOWN",
+		},
+		"unrecognized string": {
+			inStr:    "BAD",
+			expState: NvmeStateUnknown,
+			expStr:   "UNKNOWN",
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			state := NvmeDevStateFromString(tc.inStr)
+
+			test.AssertEqual(t, tc.expState, state, "unexpected state")
+			test.AssertEqual(t, tc.expStr, state.String(), "unexpected states string")
+		})
 	}
 }

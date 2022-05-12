@@ -125,7 +125,7 @@ load_vec_entry(daos_handle_t ih, d_iov_t *key, d_iov_t *val, void *arg)
 int
 load_space_info(struct vea_space_info *vsi)
 {
-	struct umem_attr uma;
+	struct umem_attr uma = {0};
 	int rc;
 
 	D_ASSERT(vsi->vsi_umem != NULL);

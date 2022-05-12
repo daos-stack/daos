@@ -25,9 +25,9 @@
  * @return
  */
 int
-ds_csum_add2iod(daos_iod_t *iod, struct daos_csummer *csummer,
-		struct bio_sglist *bsgl, struct dcs_csum_info *biov_csums,
-		size_t *biov_csums_used, struct dcs_iod_csums *iod_csums);
+ds_csum_add2iod(daos_iod_t *iod, struct daos_csummer *csummer, struct bio_sglist *bsgl,
+		struct dcs_ci_list *biov_csums, size_t *biov_csums_used,
+		struct dcs_iod_csums *iod_csums);
 
 /**
  * Allocate the memory for and populate the IO Maps structure. This structure is used to identify

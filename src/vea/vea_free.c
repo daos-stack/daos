@@ -505,7 +505,6 @@ migrate_end_cb(void *data, bool noop)
 		if (vsi->vsi_unmap_ctxt.vnc_unmap != NULL) {
 			D_ALLOC_PTR(vue);
 			if (vue == NULL) {
-				rc = -DER_NOMEM;
 				break;
 			}
 

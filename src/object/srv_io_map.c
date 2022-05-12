@@ -5,7 +5,7 @@
  */
 
 #include <daos_srv/bio.h>
-#include "obj_internal.h"
+#include "srv_internal.h"
 
 static void
 map_add_recx(daos_iom_t *map, const struct bio_iov *biov, uint64_t rec_idx)
@@ -28,6 +28,8 @@ ds_iom_create(struct bio_desc *biod, daos_iod_t *iods, uint32_t iods_nr, uint32_
 	uint64_t		 rec_idx;
 	uint32_t		 bsgl_iov_idx;
 	struct bio_sglist	*bsgl;
+
+	D_ASSERT(p_maps);
 
 	D_ALLOC_ARRAY(maps, iods_nr);
 	if (maps == NULL)
@@ -86,8 +88,7 @@ ds_iom_create(struct bio_desc *biod, daos_iod_t *iods, uint32_t iods_nr, uint32_
 		if (flags & ORF_CREATE_MAP_DETAIL)
 			map->iom_flags = DAOS_IOMF_DETAIL;
 	}
-	if (p_maps != NULL)
-		*p_maps = maps;
+	*p_maps = maps;
 
 	return 0;
 }

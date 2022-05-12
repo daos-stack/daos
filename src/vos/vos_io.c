@@ -36,9 +36,7 @@ struct vos_io_context {
 	struct bio_desc		*ic_biod;
 	struct vos_ts_set	*ic_ts_set;
 	/** Checksums for bio_iovs in \ic_biod */
-	struct dcs_csum_info	*ic_biov_csums;
-	uint32_t		 ic_biov_csums_at;
-	uint32_t		 ic_biov_csums_nr;
+	struct dcs_ci_list	 ic_csum_list;
 	/** current dkey info */
 	struct vos_ilog_info	 ic_dkey_info;
 	/** current akey info */
@@ -77,6 +75,7 @@ struct vos_io_context {
 				 ic_check_existence:1,
 				 ic_remove:1,
 				 ic_skip_fetch:1,
+				 ic_agg_needed:1,
 				 ic_ec:1; /**< see VOS_OF_EC */
 	/**
 	 * Input shadow recx lists, one for each iod. Now only used for degraded
@@ -581,7 +580,7 @@ vos_ioc_destroy(struct vos_io_context *ioc, bool evict)
 	if (ioc->ic_biod != NULL)
 		bio_iod_free(ioc->ic_biod);
 
-	D_FREE(ioc->ic_biov_csums);
+	dcs_csum_info_list_fini(&ioc->ic_csum_list);
 
 	if (ioc->ic_obj)
 		vos_obj_release(vos_obj_cache_current(), ioc->ic_obj, evict);
@@ -637,6 +636,7 @@ vos_ioc_create(daos_handle_t coh, daos_unit_oid_t oid, bool read_only,
 	ioc->ic_dedup = ((vos_flags & VOS_OF_DEDUP) != 0);
 	ioc->ic_dedup_verify = ((vos_flags & VOS_OF_DEDUP_VERIFY) != 0);
 	ioc->ic_skip_fetch = ((vos_flags & VOS_OF_SKIP_FETCH) != 0);
+	ioc->ic_agg_needed = 0; /** Will be set if we detect a need for aggregation */
 	ioc->ic_dedup_th = dedup_th;
 	if (vos_flags & VOS_OF_FETCH_CHECK_EXISTENCE)
 		ioc->ic_read_ts_only = ioc->ic_check_existence = 1;
@@ -697,13 +697,9 @@ vos_ioc_create(daos_handle_t coh, daos_unit_oid_t oid, bool read_only,
 		goto error;
 	}
 
-	ioc->ic_biov_csums_nr = 1;
-	ioc->ic_biov_csums_at = 0;
-	D_ALLOC_ARRAY(ioc->ic_biov_csums, ioc->ic_biov_csums_nr);
-	if (ioc->ic_biov_csums == NULL) {
-		rc = -DER_NOMEM;
+	rc = dcs_csum_info_list_init(&ioc->ic_csum_list, iod_nr);
+	if (rc != 0)
 		goto error;
-	}
 
 	for (i = 0; i < iod_nr; i++) {
 		int iov_nr = iods[i].iod_nr;
@@ -769,55 +765,22 @@ iod_fetch(struct vos_io_context *ioc, struct bio_iov *biov)
 	return 0;
 }
 
-static int
-bsgl_csums_resize(struct vos_io_context *ioc)
-{
-	struct dcs_csum_info *csums = ioc->ic_biov_csums;
-	uint32_t	 dcb_nr = ioc->ic_biov_csums_nr;
-
-	if (ioc->ic_biov_csums_at == dcb_nr - 1) {
-		struct dcs_csum_info *new_infos;
-		uint32_t	 new_nr = dcb_nr * 2;
-
-		D_REALLOC_ARRAY(new_infos, csums, dcb_nr, new_nr);
-		if (new_infos == NULL)
-			return -DER_NOMEM;
-
-		ioc->ic_biov_csums = new_infos;
-		ioc->ic_biov_csums_nr = new_nr;
-	}
-
-	return 0;
-}
-
 /** Save the checksum to a list that can be retrieved later */
 static int
 save_csum(struct vos_io_context *ioc, struct dcs_csum_info *csum_info,
 	  struct evt_entry *entry, daos_size_t rec_size)
 {
-	struct dcs_csum_info	*saved_csum_info;
-	int			 rc;
+	struct dcs_csum_info ci_duplicate;
 
 	if (ioc->ic_size_fetch)
 		return 0;
 
-	rc = bsgl_csums_resize(ioc);
-	if (rc != 0)
-		return rc;
+	if (entry == NULL)
+		return dcs_csum_info_save(&ioc->ic_csum_list, csum_info);
 
-	/**
-	 * it's expected that the csum the csum_info points to is in memory
-	 * that will persist until fetch is complete ... so memcpy isn't needed
-	 */
-	saved_csum_info = &ioc->ic_biov_csums[ioc->ic_biov_csums_at];
-	*saved_csum_info = *csum_info;
-	if (entry != NULL)
-		evt_entry_csum_update(&entry->en_ext, &entry->en_sel_ext,
-				      saved_csum_info, rec_size);
-
-	ioc->ic_biov_csums_at++;
-
-	return 0;
+	ci_duplicate = *csum_info;
+	evt_entry_csum_update(&entry->en_ext, &entry->en_sel_ext, &ci_duplicate, rec_size);
+	return dcs_csum_info_save(&ioc->ic_csum_list, &ci_duplicate);
 }
 
 /** Fetch the single value within the specified epoch range of an key */
@@ -1238,7 +1201,9 @@ akey_fetch(struct vos_io_context *ioc, daos_handle_t ak_toh)
 
 	rc = key_tree_prepare(ioc->ic_obj, ak_toh,
 			      VOS_BTR_AKEY, &iod->iod_name, flags,
-			      DAOS_INTENT_DEFAULT, &krec, &toh, ioc->ic_ts_set);
+			      DAOS_INTENT_DEFAULT, &krec,
+			      (ioc->ic_check_existence || ioc->ic_read_ts_only) ? NULL : &toh,
+			      ioc->ic_ts_set);
 
 	if (stop_check(ioc, VOS_OF_COND_AKEY_FETCH, iod, &rc, true)) {
 		if (rc == 0 && !ioc->ic_read_ts_only)
@@ -1660,6 +1625,62 @@ akey_update_recx(daos_handle_t toh, uint32_t pm_ver, daos_recx_t *recx,
 }
 
 static int
+vos_evt_mark_agg(struct umem_instance *umm, struct evt_root *root, daos_epoch_t epoch)
+{
+	uint64_t	feats;
+
+	feats = evt_feats_get(root);
+
+	vos_feats_agg_time_update(epoch, &feats);
+
+	return evt_feats_set(root, umm, feats);
+}
+
+static int
+vos_btr_mark_agg(struct umem_instance *umm, struct btr_root *root, daos_epoch_t epoch)
+{
+	uint64_t	feats;
+
+	feats = dbtree_feats_get(root);
+
+	vos_feats_agg_time_update(epoch, &feats);
+
+	return dbtree_feats_set(root, umm, feats);
+}
+
+int
+vos_key_mark_agg(struct umem_instance *umm, struct vos_krec_df *krec, daos_epoch_t epoch)
+{
+	if (krec->kr_bmap & KREC_BF_BTR)
+		return vos_btr_mark_agg(umm, &krec->kr_btr, epoch);
+
+	return vos_evt_mark_agg(umm, &krec->kr_evt, epoch);
+}
+
+int
+vos_mark_agg(struct umem_instance *umm, struct btr_root *dkey_root, struct btr_root *obj_root,
+	     daos_epoch_t epoch)
+{
+	int	rc;
+
+	rc = vos_btr_mark_agg(umm, dkey_root, epoch);
+	if (rc == 0)
+		rc = vos_btr_mark_agg(umm, obj_root, epoch);
+
+	return rc;
+}
+
+static int
+vos_ioc_mark_agg(struct vos_io_context *ioc)
+{
+	if (!ioc->ic_agg_needed)
+		return 0;
+
+	return vos_mark_agg(vos_ioc2umm(ioc), &ioc->ic_obj->obj_df->vo_tree,
+			    &ioc->ic_cont->vc_cont_df->cd_obj_root, ioc->ic_epr.epr_hi);
+}
+
+static int
 akey_update(struct vos_io_context *ioc, uint32_t pm_ver, daos_handle_t ak_toh,
 	    uint16_t minor_epc)
 {
@@ -1685,10 +1706,15 @@ akey_update(struct vos_io_context *ioc, uint32_t pm_ver, daos_handle_t ak_toh,
 	rc = key_tree_prepare(obj, ak_toh, VOS_BTR_AKEY,
 			      &iod->iod_name, flags, DAOS_INTENT_UPDATE,
 			      &krec, &toh, ioc->ic_ts_set);
-	if (rc != 0) {
+	if (rc < 0) {
 		D_ERROR("akey "DF_KEY" update, key_tree_prepare failed, "DF_RC"\n",
 			DP_KEY(&iod->iod_name), DP_RC(rc));
 		return rc;
+	}
+
+	if (rc == 1) {
+		rc = 0;
+		ioc->ic_agg_needed = 1;
 	}
 
 	if (ioc->ic_ts_set) {
@@ -1760,9 +1786,13 @@ akey_update(struct vos_io_context *ioc, uint32_t pm_ver, daos_handle_t ak_toh,
 		rc = akey_update_recx(toh, pm_ver, &iod->iod_recxs[i],
 				      recx_csum, iod->iod_size, ioc,
 				      minor_epc);
+		if (rc == 1) {
+			ioc->ic_agg_needed = 1;
+			rc = 0;
+		}
 		if (rc != 0) {
-			D_ERROR("akey "DF_KEY" update, akey_update_recx failed, "DF_RC"\n",
-				DP_KEY(&iod->iod_name), DP_RC(rc));
+			VOS_TX_LOG_FAIL(rc, "akey "DF_KEY" update, akey_update_recx failed, "
+					DF_RC"\n", DP_KEY(&iod->iod_name), DP_RC(rc));
 			goto out;
 		}
 	}
@@ -1770,6 +1800,9 @@ akey_update(struct vos_io_context *ioc, uint32_t pm_ver, daos_handle_t ak_toh,
 out:
 	if (daos_handle_is_valid(toh))
 		key_tree_release(toh, is_array);
+
+	if (rc == 0 && ioc->ic_agg_needed)
+		rc = vos_key_mark_agg(vos_ioc2umm(ioc), krec, ioc->ic_epr.epr_hi);
 
 	return rc;
 }
@@ -1840,6 +1873,9 @@ out:
 release:
 	key_tree_release(ak_toh, false);
 
+	if (rc == 0 && ioc->ic_agg_needed)
+		rc = vos_key_mark_agg(vos_ioc2umm(ioc), krec, ioc->ic_epr.epr_hi);
+
 	return rc;
 }
 
@@ -1877,23 +1913,6 @@ vos_reserve_scm(struct vos_container *cont, struct vos_rsrvd_scm *rsrvd_scm,
 		umoff = umem_alloc(vos_cont2umm(cont), size);
 	}
 
-	if (UMOFF_IS_NULL(umoff)) {
-		daos_size_t scm_used, scm_active;
-		int rc;
-
-		rc = pmemobj_ctl_get(vos_cont2pool(cont)->vp_umm.umm_pool,
-				     "stats.heap.run_allocated", &scm_used);
-		if (rc)
-			goto out;
-		rc = pmemobj_ctl_get(vos_cont2pool(cont)->vp_umm.umm_pool,
-				     "stats.heap.run_active", &scm_active);
-		if (rc)
-			goto out;
-		D_ERROR("Reserve "DF_U64" from SCM failed, run_allocated: "
-			""DF_U64", run_active: "DF_U64"\n",
-			size, scm_used, scm_active);
-	}
-out:
 	return umoff;
 }
 
@@ -1932,7 +1951,8 @@ static int
 reserve_space(struct vos_io_context *ioc, uint16_t media, daos_size_t size,
 	      uint64_t *off)
 {
-	int	rc;
+	uint64_t	now;
+	int		rc;
 
 	if (media == DAOS_MEDIA_SCM) {
 		umem_off_t	umoff;
@@ -1944,16 +1964,35 @@ reserve_space(struct vos_io_context *ioc, uint16_t media, daos_size_t size,
 			*off = umoff;
 			return 0;
 		}
-		D_ERROR("Reserve "DF_U64" from SCM failed.\n", size);
+
+		now = daos_gettime_coarse();
+		if (now - ioc->ic_cont->vc_io_nospc_ts > VOS_NOSPC_ERROR_INTVL) {
+			daos_size_t	scm_used = 0, scm_active = 0;
+
+			rc = pmemobj_ctl_get(vos_cont2pool(ioc->ic_cont)->vp_umm.umm_pool,
+					     "stats.heap.run_allocated", &scm_used);
+
+			rc = pmemobj_ctl_get(vos_cont2pool(ioc->ic_cont)->vp_umm.umm_pool,
+					     "stats.heap.run_active", &scm_active);
+
+			D_ERROR("Reserve "DF_U64" from SCM failed, run_allocated: "
+				""DF_U64", run_active: "DF_U64"\n", size, scm_used, scm_active);
+			ioc->ic_cont->vc_io_nospc_ts = now;
+		}
 		return -DER_NOSPACE;
 	}
 
 	D_ASSERT(media == DAOS_MEDIA_NVME);
-	rc = vos_reserve_blocks(ioc->ic_cont, &ioc->ic_blk_exts, size,
-				VOS_IOS_GENERIC, off);
-	if (rc)
-		D_ERROR("Reserve "DF_U64" from NVMe failed. "DF_RC"\n",
-			size, DP_RC(rc));
+	rc = vos_reserve_blocks(ioc->ic_cont, &ioc->ic_blk_exts, size, VOS_IOS_GENERIC, off);
+	if (rc == -DER_NOSPACE) {
+		now = daos_gettime_coarse();
+		if (now - ioc->ic_cont->vc_io_nospc_ts > VOS_NOSPC_ERROR_INTVL) {
+			D_ERROR("Reserve "DF_U64" from NVMe failed. "DF_RC"\n", size, DP_RC(rc));
+			ioc->ic_cont->vc_io_nospc_ts = now;
+		}
+	} else if (rc) {
+		D_ERROR("Reserve "DF_U64" from NVMe failed. "DF_RC"\n", size, DP_RC(rc));
+	}
 	return rc;
 }
 
@@ -2248,8 +2287,6 @@ vos_update_end(daos_handle_t ioh, uint32_t pm_ver, daos_key_t *dkey, int err,
 
 	tx_started = true;
 
-	vos_dth_set(dth);
-
 	/* Commit the CoS DTXs via the IO PMDK transaction. */
 	if (dtx_is_valid_handle(dth) && dth->dth_dti_cos_count > 0 &&
 	    !dth->dth_cos_done) {
@@ -2309,6 +2346,9 @@ abort:
 			ioc->ic_obj->obj_df->vo_max_write = ioc->ic_epr.epr_hi;
 	}
 
+	if (err == 0)
+		err = vos_ioc_mark_agg(ioc);
+
 	err = vos_tx_end(ioc->ic_cont, dth, &ioc->ic_rsrvd_scm,
 			 &ioc->ic_blk_exts, tx_started, err);
 	if (err == 0) {
@@ -2343,7 +2383,6 @@ abort:
 	D_FREE(daes);
 	D_FREE(dces);
 	vos_ioc_destroy(ioc, err != 0);
-	vos_dth_set(NULL);
 
 	return err;
 }
@@ -2444,12 +2483,12 @@ vos_ioh2desc(daos_handle_t ioh)
 	return ioc->ic_biod;
 }
 
-struct dcs_csum_info *
+struct dcs_ci_list *
 vos_ioh2ci(daos_handle_t ioh)
 {
 	struct vos_io_context *ioc = vos_ioh2ioc(ioh);
 
-	return ioc->ic_biov_csums;
+	return &ioc->ic_csum_list;
 }
 
 uint32_t
@@ -2457,7 +2496,7 @@ vos_ioh2ci_nr(daos_handle_t ioh)
 {
 	struct vos_io_context *ioc = vos_ioh2ioc(ioh);
 
-	return ioc->ic_biov_csums_at;
+	return ioc->ic_csum_list.dcl_csum_infos_nr;
 }
 
 struct bio_sglist *

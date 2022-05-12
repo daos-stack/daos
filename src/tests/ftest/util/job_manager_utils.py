@@ -15,10 +15,62 @@ from ClusterShell.NodeSet import NodeSet
 
 from command_utils import ExecutableCommand, SystemctlCommand
 from command_utils_base import FormattedParameter, EnvironmentVariables
-from command_utils_base import CommandFailure
+from exception_utils import CommandFailure, MPILoadError
 from env_modules import load_mpi
-from general_utils import pcmd, stop_processes, run_pcmd
+from general_utils import pcmd, stop_processes, run_pcmd, get_job_manager_class
 from write_host_file import write_host_file
+
+
+def get_job_manager(test, class_name=None, job=None, subprocess=None, mpi_type=None, timeout=None,
+                    namespace="/run/job_manager/*", class_name_default="Mpirun"):
+    """Get a JobManager object.
+
+    Create a JobManager class using either:
+        - the provided arguments
+        - the test yaml arguments (if no arguments are provided)
+        - default values (if no arguments are provided and there are no test yaml entries)
+
+    Args:
+        test (Test): avocado Test object
+        class_name (str, optional): JobManager class name. Defaults to None.
+        job (ExecutableCommand, optional): command object to manage. Defaults to None.
+        subprocess (bool, optional): whether the command is run as a subprocess. Defaults to False.
+        mpi_type (str, optional): MPI type to use with the Mpirun class only. Defaults to "openmpi".
+        timeout (int, optional): job manager timeout. Defaults to None.
+        namespace (str, optional): location of yaml parameters used to define unset inputs. Defaults
+            to "/run/job_manager/*".
+        class_name_default (str, optional): default class_name to use when. Defaults to "Mpirun".
+
+    Returns:
+        JobManager: a JobManager class, e.g. Orterun, Mpirun, Srun, etc.
+
+    """
+    job_manager = None
+    if class_name is None:
+        class_name = test.params.get("class_name", namespace, default=class_name_default)
+    if subprocess is None:
+        subprocess = test.params.get("subprocess", namespace, default=False)
+    if mpi_type is None:
+        mpi_type_default = "mpich" if class_name == "Mpirun" else "openmpi"
+        mpi_type = test.params.get("mpi_type", namespace, default=mpi_type_default)
+    if timeout is None:
+        timeout = test.params.get(
+            test.get_test_name(), namespace.replace("*", "manager_timeout/*"), None)
+        if timeout is None:
+            timeout = test.params.get("timeout", namespace, None)
+
+    # Setup a job manager command for running the test command
+    if class_name is not None:
+        job_manager = get_job_manager_class(class_name, job, subprocess, mpi_type)
+        job_manager.timeout = timeout
+        if mpi_type == "openmpi":
+            job_manager.tmpdir_base.update(test.test_dir, "tmpdir_base")
+        if isinstance(test.job_manager, list):
+            test.job_manager.append(job_manager)
+        else:
+            test.job_manager = job_manager
+
+    return job_manager
 
 
 class JobManager(ExecutableCommand):
@@ -210,7 +262,7 @@ class JobManager(ExecutableCommand):
 class Orterun(JobManager):
     """A class for the orterun job manager command."""
 
-    def __init__(self, job, subprocess=False):
+    def __init__(self, job, subprocess=False, mpi_type="openmpi"):
         """Create a Orterun object.
 
         Args:
@@ -218,8 +270,8 @@ class Orterun(JobManager):
             subprocess (bool, optional): whether the command is run as a
                 subprocess. Defaults to False.
         """
-        if not load_mpi("openmpi"):
-            raise CommandFailure("Failed to load openmpi")
+        if not load_mpi(mpi_type):
+            raise MPILoadError(mpi_type)
 
         path = os.path.dirname(find_executable("orterun"))
         super().__init__("/run/orterun/*", "orterun", job, path, subprocess)
@@ -247,6 +299,7 @@ class Orterun(JobManager):
         self.ompi_server = FormattedParameter("--ompi-server {}", None)
         self.working_dir = FormattedParameter("-wdir {}", None)
         self.tmpdir_base = FormattedParameter("--mca orte_tmpdir_base {}", None)
+        self.mpi_type = mpi_type
 
     def assign_hosts(self, hosts, path=None, slots=None):
         """Assign the hosts to use with the command (--hostfile).
@@ -311,8 +364,8 @@ class Orterun(JobManager):
             CommandFailure: if there is an error running the command
 
         """
-        if not load_mpi("openmpi"):
-            raise CommandFailure("Failed to load openmpi")
+        if not load_mpi(self.mpi_type):
+            raise MPILoadError(self.mpi_type)
 
         return super().run()
 
@@ -320,7 +373,7 @@ class Orterun(JobManager):
 class Mpirun(JobManager):
     """A class for the mpirun job manager command."""
 
-    def __init__(self, job, subprocess=False, mpitype="openmpi"):
+    def __init__(self, job, subprocess=False, mpi_type="openmpi"):
         """Create a Mpirun object.
 
         Args:
@@ -328,14 +381,14 @@ class Mpirun(JobManager):
             subprocess (bool, optional): whether the command is run as a
                 subprocess. Defaults to False.
         """
-        if not load_mpi(mpitype):
-            raise CommandFailure("Failed to load {}".format(mpitype))
+        if not load_mpi(mpi_type):
+            raise MPILoadError(mpi_type)
 
         path = os.path.dirname(find_executable("mpirun"))
         super().__init__("/run/mpirun", "mpirun", job, path, subprocess)
 
         mca_default = None
-        if mpitype == "openmpi":
+        if mpi_type == "openmpi":
             # Default mca values to avoid queue pair errors w/ OpenMPI
             mca_default = {
                 "btl_openib_warn_default_gid_prefix": "0",
@@ -349,11 +402,14 @@ class Mpirun(JobManager):
         self.processes = FormattedParameter("-np {}", 1)
         self.ppn = FormattedParameter("-ppn {}", None)
         self.envlist = FormattedParameter("-envlist {}", None)
-        self.genv = FormattedParameter("-genv {}", None)
+        if mpi_type == "openmpi":
+            self.genv = FormattedParameter("-x {}", None)
+        else:
+            self.genv = FormattedParameter("-genv {}", None)
         self.mca = FormattedParameter("--mca {}", mca_default)
         self.working_dir = FormattedParameter("-wdir {}", None)
         self.tmpdir_base = FormattedParameter("--mca orte_tmpdir_base {}", None)
-        self.mpitype = mpitype
+        self.mpi_type = mpi_type
 
     def assign_hosts(self, hosts, path=None, slots=None):
         """Assign the hosts to use with the command (-f).
@@ -376,7 +432,7 @@ class Mpirun(JobManager):
         Args:
             processes (int): number of processes per node
         """
-        self.processes.value = processes
+        self.processes.update(processes, "mpirun.np")
 
     def assign_environment(self, env_vars, append=False):
         """Assign or add environment variables to the command.
@@ -390,10 +446,10 @@ class Mpirun(JobManager):
         # Pass the environment variables via the process.run method env argument
         if append and self.env is not None:
             # Update the existing dictionary with the new values
-            self.env.update(env_vars)
+            self.genv.update(env_vars.get_list())
         else:
             # Overwrite/create the dictionary of environment variables
-            self.env = EnvironmentVariables(env_vars)
+            self.genv.update((EnvironmentVariables(env_vars)).get_list())
 
     def assign_environment_default(self, env_vars):
         """Assign the default environment variables for the command.
@@ -402,7 +458,7 @@ class Mpirun(JobManager):
             env_vars (EnvironmentVariables): the environment variables to
                 assign as the default
         """
-        self.envlist.update_default(env_vars.get_list())
+        self.genv.update_default(env_vars.get_list())
 
     def run(self):
         """Run the mpirun command.
@@ -411,8 +467,8 @@ class Mpirun(JobManager):
             CommandFailure: if there is an error running the command
 
         """
-        if not load_mpi(self.mpitype):
-            raise CommandFailure("Failed to load {}".format(self.mpitype))
+        if not load_mpi(self.mpi_type):
+            raise MPILoadError(self.mpi_type)
 
         return super().run()
 
@@ -689,8 +745,8 @@ class Systemctl(JobManager):
         if 255 in result:
             raise CommandFailure(
                 "Timeout detected running '{}' with a {}s timeout on {}".format(
-                    self.__str__(), self.timeout, NodeSet.fromlist(result[255]))
-                )
+                    self.__str__(), self.timeout, NodeSet.fromlist(result[255])))
+
         if 0 not in result or len(result) > 1:
             failed = []
             for item, value in list(result.items()):

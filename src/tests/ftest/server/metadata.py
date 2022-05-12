@@ -1,6 +1,6 @@
 #!/usr/bin/python3
 """
-  (C) Copyright 2019-2021 Intel Corporation.
+  (C) Copyright 2019-2022 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -13,8 +13,8 @@ from avocado.core.exceptions import TestFail
 
 from apricot import TestWithServers
 from ior_utils import IorCommand
-from command_utils_base import CommandFailure
-from job_manager_utils import Orterun
+from exception_utils import CommandFailure
+from job_manager_utils import get_job_manager
 from thread_manager import ThreadManager
 
 
@@ -66,7 +66,7 @@ class ObjectMetadata(TestWithServers):
     """
 
     # Minimum number of containers that should be able to be created
-    CREATED_CONTAINERS_MIN = 3000
+    CREATED_CONTAINERS_MIN = 2900
 
     # Number of created containers that should not be possible
     CREATED_CONTAINERS_LIMIT = 3500
@@ -303,42 +303,50 @@ class ObjectMetadata(TestWithServers):
         """
         self.create_pool()
         self.container = []
+        mean_cont_cnt = 0
+        percent_cont = self.params.get("mean_percent", "/run/metadata/*")
 
         test_failed = False
         containers_created = []
         for loop in range(10):
             self.log.info("Container Create Iteration %d / 9", loop)
+            # The test will encounter ENOSPACE (-1007) while creating
+            # containers.
             if not self.create_all_containers():
                 self.log.error("Errors during create iteration %d/9", loop)
-                test_failed = True
 
             containers_created.append(len(self.container))
-
+            # We should make sure containers which are created should
+            # be destroyed without issues. Here we have to check for
+            # any container destroy errors.
             self.log.info("Container Remove Iteration %d / 9", loop)
             if not self.destroy_all_containers():
                 self.log.error("Errors during remove iteration %d/9", loop)
                 test_failed = True
+        # Calculate the mean container count
+        mean_cont_cnt = sum(containers_created) / len(containers_created)
+        percent_from_mean = int(mean_cont_cnt * (percent_cont / 100))
+        self.log.info(
+            "Mean number of containers created in %s loops: %s",
+            len(containers_created), mean_cont_cnt)
+        self.log.info(
+            "Max variation in number of containers from %s%% from mean: %s",
+            percent_cont, percent_from_mean)
 
         self.log.info("Summary")
         self.log.info("  Loop  Containers Created  Variation")
         self.log.info("  ----  ------------------  ---------")
-        sequential_negative_count = 0
         for loop, quantity in enumerate(containers_created):
             variation = 0
             if loop > 0:
-                # Variations in the number of containers created is expected,
-                # but make sure the number does not decrease more than 3 times
-                # in a row.
-                variation = quantity - containers_created[loop - 1]
-                if variation < 0:
-                    sequential_negative_count += 1
-                    if sequential_negative_count > 2:
-                        test_failed = True
-                        variation = \
-                            "{}  **FAIL: {} sequential decreases".format(
-                                variation, sequential_negative_count)
-                else:
-                    sequential_negative_count = 0
+                # Variation in the number of containers created
+                # should be less than %x from mean containers created
+                variation = abs(mean_cont_cnt - containers_created[loop - 1])
+                if variation > percent_from_mean:
+                    test_failed = True
+                    variation = \
+                        "{}  **FAIL: {} variation failure from mean".format(
+                            variation, percent_from_mean)
             self.log.info("  %-4d  %-18d  %s", loop + 1, quantity, variation)
 
         if test_failed:
@@ -389,7 +397,8 @@ class ObjectMetadata(TestWithServers):
                     "F", "/run/ior/ior{}flags/".format(operation))
 
                 # Define the job manager for the IOR command
-                self.ior_managers.append(Orterun(ior_cmd))
+                self.ior_managers.append(
+                    get_job_manager(self, "Orterun", ior_cmd, mpi_type="openmpi"))
                 env = ior_cmd.get_default_env(str(self.ior_managers[-1]))
                 self.ior_managers[-1].assign_hosts(self.hostlist_clients, self.workdir, None)
                 self.ior_managers[-1].assign_processes(processes)

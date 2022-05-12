@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2019-2021 Intel Corporation.
+ * (C) Copyright 2019-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -64,6 +64,8 @@ struct vos_ilog_info {
 	daos_epoch_t		 ii_uncertain_create;
 	/** The entity has no valid log entries */
 	bool			 ii_empty;
+	/** All data is contained within specified epoch range */
+	bool			 ii_full_scan;
 };
 
 /** Initialize the incarnation log globals */
@@ -205,6 +207,21 @@ int
 vos_ilog_aggregate(daos_handle_t coh, struct ilog_df *ilog, const daos_epoch_range_t *epr,
 		   bool discard, bool inprogress, const struct vos_punch_record *parent_punch,
 		   struct vos_ilog_info *info);
+
+/** Check if the ilog can be discarded.  This will only return true if the ilog is punched at the
+ *  specified epoch and there are no creation stamps outside of the range
+ *
+ * \param	coh[IN]		container handle
+ * \param	ilog[IN]	Incarnation log
+ * \param	epr[IN]		Aggregation range
+ * \param	punched[IN]	Highest epoch where parent is punched
+ * \param	info[IN]	Incarnation log info
+ *
+ * \return	true if fully punched, false otherwise
+ */
+bool
+vos_ilog_is_punched(daos_handle_t coh, struct ilog_df *ilog, const daos_epoch_range_t *epr,
+		    const struct vos_punch_record *parent_punch, struct vos_ilog_info *info);
 
 /* #define ILOG_TRACE */
 #ifdef ILOG_TRACE

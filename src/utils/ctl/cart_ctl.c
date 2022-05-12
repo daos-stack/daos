@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2018-2021 Intel Corporation.
+ * (C) Copyright 2018-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -588,7 +588,14 @@ ctl_init()
 	d_rank_t		*ranks_to_send = NULL;
 	d_rank_list_t		*rank_list = NULL;
 	int			 num_ranks;
+	int			 wait_time = 60;
+	int			 total_wait = 150;
 	int			 rc = 0;
+
+	if (D_ON_VALGRIND) {
+		wait_time *= 3;
+		total_wait *= 3;
+	}
 
 	if (ctl_gdata.cg_save_cfg) {
 		rc = crt_group_config_path_set(ctl_gdata.cg_cfg_path);
@@ -604,15 +611,10 @@ ctl_init()
 	rc = sem_init(&ctl_gdata.cg_num_reply, 0, 0);
 	D_ASSERTF(rc == 0, "Could not initialize semaphore. rc %d\n", rc);
 
-	/* waiting to sync with the following parameters
-	 * 0 - tag 0
-	 * 1 - total ctx
-	 * 5 - ping timeout
-	 * 150 - total timeout
-	 */
 	if (!ctl_gdata.cg_no_wait_for_ranks) {
 		rc = crtu_wait_for_ranks(ctl_gdata.cg_crt_ctx, grp, rank_list,
-					 0, 1, 5, 150);
+					 0 /* tag */, 1 /* num contexts to query */,
+					 wait_time, total_wait);
 		if (rc != 0) {
 			D_ERROR("wait_for_ranks() failed; rc=%d\n", rc);
 			D_GOTO(out, rc);
@@ -689,7 +691,7 @@ ctl_init()
 			D_GOTO(out, rc);
 		}
 
-		rc = crtu_sem_timedwait(&ctl_gdata.cg_num_reply, 61, __LINE__);
+		rc = crtu_sem_timedwait(&ctl_gdata.cg_num_reply, wait_time, __LINE__);
 		if (rc != 0) {
 			D_ERROR("crtu_sem_timedwait failed, rc = %d\n", rc);
 			D_GOTO(out, rc);
@@ -732,7 +734,8 @@ main(int argc, char **argv)
 {
 	int		rc = 0;
 
-	d_log_init();
+	rc = d_log_init();
+	D_ASSERTF(rc == 0, "d_log_init failed, rc=%d\n", rc);
 
 	rc = parse_args(argc, argv);
 	D_ASSERTF(rc == 0, "parse_args() failed. rc %d\n", rc);

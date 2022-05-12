@@ -10,7 +10,6 @@ import (
 	"context"
 	"os"
 	"sync"
-	"time"
 
 	"github.com/pkg/errors"
 	"google.golang.org/protobuf/proto"
@@ -24,11 +23,6 @@ import (
 	"github.com/daos-stack/daos/src/control/server/config"
 	"github.com/daos-stack/daos/src/control/server/storage"
 	"github.com/daos-stack/daos/src/control/system"
-)
-
-const (
-	rankReqTimeout   = 30 * time.Second
-	rankStartTimeout = 2 * rankReqTimeout
 )
 
 // Engine defines an interface to be implemented by engine instances.
@@ -52,14 +46,10 @@ type Engine interface {
 	// These methods should probably be refactored out into functions that
 	// accept the engine instance as a parameter.
 	GetBioHealth(context.Context, *ctlpb.BioHealthReq) (*ctlpb.BioHealthResp, error)
-	GetScmConfig() (*storage.TierConfig, error)
-	GetScmUsage() (*storage.ScmMountPoint, error)
-	HasBlockDevices() bool
 	ScanBdevTiers() ([]storage.BdevTierScanResult, error)
 	ListSmdDevices(context.Context, *ctlpb.SmdDevReq) (*ctlpb.SmdDevResp, error)
 	StorageFormatSCM(context.Context, bool) *ctlpb.ScmMountResult
 	StorageFormatNVMe() commonpb.NvmeControllerResults
-	StorageWriteNvmeConfig(context.Context) error
 
 	// This is a more reasonable surface that will be easier to maintain and test.
 	CallDrpc(context.Context, drpc.Method, proto.Message) (*drpc.Response, error)
@@ -75,27 +65,24 @@ type Engine interface {
 	Stop(os.Signal) error
 	OnInstanceExit(...onInstanceExitFn)
 	OnReady(...onReadyFn)
+	GetStorage() *storage.Provider
 }
 
 // EngineHarness is responsible for managing Engine instances.
 type EngineHarness struct {
 	sync.RWMutex
-	log              logging.Logger
-	instances        []Engine
-	started          atm.Bool
-	rankReqTimeout   time.Duration
-	rankStartTimeout time.Duration
-	faultDomain      *system.FaultDomain
-	onDrpcFailure    []func(context.Context, error)
+	log           logging.Logger
+	instances     []Engine
+	started       atm.Bool
+	faultDomain   *system.FaultDomain
+	onDrpcFailure []func(context.Context, error)
 }
 
 // NewEngineHarness returns an initialized *EngineHarness.
 func NewEngineHarness(log logging.Logger) *EngineHarness {
 	return &EngineHarness{
-		log:              log,
-		instances:        make([]Engine, 0),
-		rankReqTimeout:   rankReqTimeout,
-		rankStartTimeout: rankStartTimeout,
+		log:       log,
+		instances: make([]Engine, 0),
 	}
 }
 

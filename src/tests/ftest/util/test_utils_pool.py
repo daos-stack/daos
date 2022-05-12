@@ -11,10 +11,10 @@ import json
 
 from test_utils_base import TestDaosApiBase, LabelGenerator
 from avocado import fail_on
-from command_utils import BasicParameter, CommandFailure
+from command_utils import BasicParameter
+from exception_utils import CommandFailure
 from pydaos.raw import (DaosApiError, DaosPool, c_uuid_to_str, daos_cref)
-from general_utils import check_pool_files, DaosTestError, run_command
-from env_modules import load_mpi
+from general_utils import check_pool_files, DaosTestError
 from server_utils_base import ServerFailed, AutosizeCancel
 from dmg_utils import DmgCommand
 
@@ -24,7 +24,7 @@ class TestPool(TestDaosApiBase):
     """A class for functional testing of DaosPools objects."""
 
     def __init__(self, context, dmg_command, cb_handler=None,
-                 label_generator=None, crt_timeout=None):
+                 label_generator=None):
         # pylint: disable=unused-argument
         """Initialize a TestPool object.
 
@@ -42,10 +42,8 @@ class TestPool(TestDaosApiBase):
                 There's a link between label_generator and label. If the label
                 is used as it is, i.e., not None, label_generator must be
                 provided in order to call create(). Defaults to None.
-            crt_timeout (str, optional): value to use for the CRT_TIMEOUT when running pydaos
-                commands. Defaults to None.
         """
-        super().__init__("/run/pool/*", cb_handler, crt_timeout)
+        super().__init__("/run/pool/*", cb_handler)
         self.context = context
         self.uid = os.geteuid()
         self.gid = os.getegid()
@@ -498,7 +496,7 @@ class TestPool(TestDaosApiBase):
         for key in ("ps_ntargets", "ps_padding"):
             val = locals()[key]
             if val is not None:
-                checks.append(key, getattr(self.info.pi_space, key), val)
+                checks.append((key, getattr(self.info.pi_space, key), val))
         return self._check_info(checks)
 
     def check_pool_daos_space(self, s_total=None, s_free=None):
@@ -535,7 +533,7 @@ class TestPool(TestDaosApiBase):
         return self._check_info(checks)
 
     def check_rebuild_status(self, rs_version=None, rs_seconds=None,
-                             rs_errno=None, rs_done=None, rs_padding32=None,
+                             rs_errno=None, rs_state=None, rs_padding32=None,
                              rs_fail_rank=None, rs_toberb_obj_nr=None,
                              rs_obj_nr=None, rs_rec_nr=None, rs_size=None):
         # pylint: disable=unused-argument
@@ -551,7 +549,7 @@ class TestPool(TestDaosApiBase):
             rs_version (int, optional): rebuild version. Defaults to None.
             rs_seconds (int, optional): rebuild seconds. Defaults to None.
             rs_errno (int, optional): rebuild error number. Defaults to None.
-            rs_done (int, optional): rebuild done flag. Defaults to None.
+            rs_state (int, optional): rebuild state flag. Defaults to None.
             rs_padding32 (int, optional): padding. Defaults to None.
             rs_fail_rank (int, optional): rebuild fail target. Defaults to None.
             rs_toberb_obj_nr (int, optional): number of objects to be rebuilt.
@@ -590,7 +588,7 @@ class TestPool(TestDaosApiBase):
 
         if self.control_method.value == self.USE_API:
             self.display_pool_rebuild_status()
-            status = self.info.pi_rebuild_st.rs_done == 1
+            status = self.info.pi_rebuild_st.rs_state == 2
         elif self.control_method.value == self.USE_DMG:
             self.set_query_data()
             self.log.info(
@@ -643,7 +641,6 @@ class TestPool(TestDaosApiBase):
         expected_states = ["busy", "done"] if to_start else ["done"]
 
         start = time()
-        # while self.rebuild_complete() == to_start:
         while self.get_rebuild_state() not in expected_states:
             self.log.info(
                 "  Rebuild %s ...",
@@ -685,35 +682,6 @@ class TestPool(TestDaosApiBase):
 
         """
         return check_pool_files(self.log, hosts, self.uuid.lower())
-
-    def write_file(self, orterun, processes, hostfile, size, timeout=60):
-        """Write a file to the pool.
-
-        Args:
-            orterun (str): full path to the orterun command
-            processes (int): number of processes to launch
-            hosts (list): list of clients from which to write the file
-            size (int): size of the file to create in bytes
-            timeout (int, optional): number of seconds before timing out the
-                command. Defaults to 60 seconds.
-
-        Returns:
-            process.CmdResult: command execution result
-
-        """
-        self.log.info("Writing %s bytes to pool %s", size, self.uuid)
-        env = {
-            "DAOS_POOL": self.uuid,
-            "PYTHONPATH": os.getenv("PYTHONPATH", "")
-        }
-        if not load_mpi("openmpi"):
-            raise CommandFailure("Failed to load openmpi")
-
-        current_path = os.path.dirname(os.path.abspath(__file__))
-        command = "{} --np {} --hostfile {} {} {} testfile".format(
-            orterun, processes, hostfile,
-            os.path.join(current_path, "write_some_data.py"), size)
-        return run_command(command, timeout, True, env=env)
 
     def get_pool_daos_space(self):
         """Get the pool info daos space attributes as a dictionary.
@@ -785,7 +753,7 @@ class TestPool(TestDaosApiBase):
         """
         self.get_info()
         keys = (
-            "rs_version", "rs_padding32", "rs_errno", "rs_done",
+            "rs_version", "rs_padding32", "rs_errno", "rs_state",
             "rs_toberb_obj_nr", "rs_obj_nr", "rs_rec_nr")
         return {key: getattr(self.info.pi_rebuild_st, key) for key in keys}
 
@@ -940,3 +908,20 @@ class TestPool(TestDaosApiBase):
                 pool=self.identifier, acl_file=self.acl_file.value)
         else:
             self.log.error("self.acl_file isn't defined!")
+
+    def measure_rebuild_time(self, operation, interval=1):
+        """Measure rebuild time.
+
+        This method is mainly for debugging purpose. We'll analyze the output when we
+        realize that rebuild is taking too long.
+
+        Args:
+            operation (str): Type of operation to print in the log.
+            interval (int): Interval (sec) to call pool query to check the rebuild status.
+                Defaults to 1.
+        """
+        start = float(time())
+        self.wait_for_rebuild(to_start=True, interval=interval)
+        self.wait_for_rebuild(to_start=False, interval=interval)
+        duration = float(time()) - start
+        self.log.info("%s duration: %.1f sec", operation, duration)

@@ -13,9 +13,10 @@ import (
 	"github.com/google/go-cmp/cmp"
 	"github.com/pkg/errors"
 
-	"github.com/daos-stack/daos/src/control/common"
 	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
+	"github.com/daos-stack/daos/src/control/common/test"
 	"github.com/daos-stack/daos/src/control/drpc"
+	"github.com/daos-stack/daos/src/control/lib/daos"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/server/config"
 	"github.com/daos-stack/daos/src/control/server/engine"
@@ -24,22 +25,22 @@ import (
 )
 
 func TestServer_CtlSvc_SmdQuery(t *testing.T) {
-	stateUnplugged := storage.NvmeDevState(0).StatusString()
-	stateNew := storage.MockNvmeStateNew.StatusString()
-	stateNormal := storage.MockNvmeStateNormal.StatusString()
-	stateFaulty := storage.MockNvmeStateEvicted.StatusString()
-	stateIdentify := storage.MockNvmeStateIdentify.StatusString()
+	stateUnplugged := storage.NvmeDevState(0).String()
+	stateNew := storage.MockNvmeStateNew.String()
+	stateNormal := storage.MockNvmeStateNormal.String()
+	stateFaulty := storage.MockNvmeStateEvicted.String()
+	stateIdentify := storage.MockNvmeStateIdentify.String()
 
 	pbNormDev := &ctlpb.SmdDevResp_Device{
-		Uuid:     common.MockUUID(),
+		Uuid:     test.MockUUID(),
 		DevState: stateNormal,
 	}
 	pbFaultyQueryDev := &ctlpb.SmdQueryResp_Device{
-		Uuid:     common.MockUUID(),
+		Uuid:     test.MockUUID(),
 		DevState: stateFaulty,
 	}
 	pbIdentifyQueryDev := &ctlpb.SmdQueryResp_Device{
-		Uuid:     common.MockUUID(),
+		Uuid:     test.MockUUID(),
 		DevState: stateIdentify,
 	}
 
@@ -73,7 +74,7 @@ func TestServer_CtlSvc_SmdQuery(t *testing.T) {
 		"set-faulty": {
 			req: &ctlpb.SmdQueryReq{
 				SetFaulty: true,
-				Uuid:      common.MockUUID(),
+				Uuid:      test.MockUUID(),
 			},
 			drpcResps: map[int][]*mockDrpcResponse{
 				0: {
@@ -84,7 +85,7 @@ func TestServer_CtlSvc_SmdQuery(t *testing.T) {
 					},
 					{
 						Message: &ctlpb.DevStateResp{
-							DevUuid:  common.MockUUID(),
+							DevUuid:  test.MockUUID(),
 							DevState: stateFaulty,
 						},
 					},
@@ -101,7 +102,7 @@ func TestServer_CtlSvc_SmdQuery(t *testing.T) {
 		"set-faulty; DAOS Failure": {
 			req: &ctlpb.SmdQueryReq{
 				SetFaulty: true,
-				Uuid:      common.MockUUID(),
+				Uuid:      test.MockUUID(),
 			},
 			drpcResps: map[int][]*mockDrpcResponse{
 				0: {
@@ -112,17 +113,17 @@ func TestServer_CtlSvc_SmdQuery(t *testing.T) {
 					},
 					{
 						Message: &ctlpb.DevStateResp{
-							Status: int32(drpc.DaosInvalidInput),
+							Status: int32(daos.InvalidInput),
 						},
 					},
 				},
 			},
-			expErr: drpc.DaosInvalidInput,
+			expErr: daos.InvalidInput,
 		},
 		"identify": {
 			req: &ctlpb.SmdQueryReq{
 				Identify: true,
-				Uuid:     common.MockUUID(),
+				Uuid:     test.MockUUID(),
 			},
 			drpcResps: map[int][]*mockDrpcResponse{
 				0: {
@@ -133,7 +134,7 @@ func TestServer_CtlSvc_SmdQuery(t *testing.T) {
 					},
 					{
 						Message: &ctlpb.DevStateResp{
-							DevUuid:  common.MockUUID(),
+							DevUuid:  test.MockUUID(),
 							DevState: stateIdentify,
 						},
 					},
@@ -158,7 +159,7 @@ func TestServer_CtlSvc_SmdQuery(t *testing.T) {
 						Message: &ctlpb.SmdPoolResp{
 							Pools: []*ctlpb.SmdPoolResp_Pool{
 								{
-									Uuid: common.MockUUID(),
+									Uuid: test.MockUUID(),
 								},
 							},
 						},
@@ -170,7 +171,7 @@ func TestServer_CtlSvc_SmdQuery(t *testing.T) {
 					{
 						Pools: []*ctlpb.SmdQueryResp_Pool{
 							{
-								Uuid: common.MockUUID(),
+								Uuid: test.MockUUID(),
 							},
 						},
 					},
@@ -188,7 +189,7 @@ func TestServer_CtlSvc_SmdQuery(t *testing.T) {
 						Message: &ctlpb.SmdPoolResp{
 							Pools: []*ctlpb.SmdPoolResp_Pool{
 								{
-									Uuid: common.MockUUID(0),
+									Uuid: test.MockUUID(0),
 								},
 							},
 						},
@@ -199,7 +200,7 @@ func TestServer_CtlSvc_SmdQuery(t *testing.T) {
 						Message: &ctlpb.SmdPoolResp{
 							Pools: []*ctlpb.SmdPoolResp_Pool{
 								{
-									Uuid: common.MockUUID(1),
+									Uuid: test.MockUUID(1),
 								},
 							},
 						},
@@ -212,7 +213,7 @@ func TestServer_CtlSvc_SmdQuery(t *testing.T) {
 						Rank: 1,
 						Pools: []*ctlpb.SmdQueryResp_Pool{
 							{
-								Uuid: common.MockUUID(1),
+								Uuid: test.MockUUID(1),
 							},
 						},
 					},
@@ -223,7 +224,7 @@ func TestServer_CtlSvc_SmdQuery(t *testing.T) {
 			req: &ctlpb.SmdQueryReq{
 				OmitDevices: true,
 				Rank:        uint32(system.NilRank),
-				Uuid:        common.MockUUID(1),
+				Uuid:        test.MockUUID(1),
 			},
 			drpcResps: map[int][]*mockDrpcResponse{
 				0: {
@@ -231,7 +232,7 @@ func TestServer_CtlSvc_SmdQuery(t *testing.T) {
 						Message: &ctlpb.SmdPoolResp{
 							Pools: []*ctlpb.SmdPoolResp_Pool{
 								{
-									Uuid: common.MockUUID(0),
+									Uuid: test.MockUUID(0),
 								},
 							},
 						},
@@ -242,7 +243,7 @@ func TestServer_CtlSvc_SmdQuery(t *testing.T) {
 						Message: &ctlpb.SmdPoolResp{
 							Pools: []*ctlpb.SmdPoolResp_Pool{
 								{
-									Uuid: common.MockUUID(1),
+									Uuid: test.MockUUID(1),
 								},
 							},
 						},
@@ -256,7 +257,7 @@ func TestServer_CtlSvc_SmdQuery(t *testing.T) {
 						Rank: 1,
 						Pools: []*ctlpb.SmdQueryResp_Pool{
 							{
-								Uuid: common.MockUUID(1),
+								Uuid: test.MockUUID(1),
 							},
 						},
 					},
@@ -272,12 +273,12 @@ func TestServer_CtlSvc_SmdQuery(t *testing.T) {
 				0: {
 					{
 						Message: &ctlpb.SmdPoolResp{
-							Status: int32(drpc.DaosBusy),
+							Status: int32(daos.Busy),
 						},
 					},
 				},
 			},
-			expErr: drpc.DaosBusy,
+			expErr: daos.Busy,
 		},
 		"list-devices": {
 			req: &ctlpb.SmdQueryReq{
@@ -290,13 +291,13 @@ func TestServer_CtlSvc_SmdQuery(t *testing.T) {
 						Message: &ctlpb.SmdDevResp{
 							Devices: []*ctlpb.SmdDevResp_Device{
 								{
-									Uuid:     common.MockUUID(0),
+									Uuid:     test.MockUUID(0),
 									TrAddr:   "0000:8a:00.0",
 									TgtIds:   []int32{0, 1, 2},
 									DevState: stateNormal,
 								},
 								{
-									Uuid:     common.MockUUID(1),
+									Uuid:     test.MockUUID(1),
 									TrAddr:   "0000:80:00.0",
 									TgtIds:   []int32{3, 4, 5},
 									DevState: stateFaulty,
@@ -310,13 +311,13 @@ func TestServer_CtlSvc_SmdQuery(t *testing.T) {
 						Message: &ctlpb.SmdDevResp{
 							Devices: []*ctlpb.SmdDevResp_Device{
 								{
-									Uuid:     common.MockUUID(2),
+									Uuid:     test.MockUUID(2),
 									TrAddr:   "0000:da:00.0",
 									TgtIds:   []int32{0, 1, 2},
 									DevState: stateUnplugged,
 								},
 								{
-									Uuid:     common.MockUUID(3),
+									Uuid:     test.MockUUID(3),
 									TrAddr:   "0000:db:00.0",
 									TgtIds:   []int32{3, 4, 5},
 									DevState: stateIdentify,
@@ -331,13 +332,13 @@ func TestServer_CtlSvc_SmdQuery(t *testing.T) {
 					{
 						Devices: []*ctlpb.SmdQueryResp_Device{
 							{
-								Uuid:     common.MockUUID(0),
+								Uuid:     test.MockUUID(0),
 								TrAddr:   "0000:8a:00.0",
 								TgtIds:   []int32{0, 1, 2},
 								DevState: stateNormal,
 							},
 							{
-								Uuid:     common.MockUUID(1),
+								Uuid:     test.MockUUID(1),
 								TrAddr:   "0000:80:00.0",
 								TgtIds:   []int32{3, 4, 5},
 								DevState: stateFaulty,
@@ -348,13 +349,13 @@ func TestServer_CtlSvc_SmdQuery(t *testing.T) {
 					{
 						Devices: []*ctlpb.SmdQueryResp_Device{
 							{
-								Uuid:     common.MockUUID(2),
+								Uuid:     test.MockUUID(2),
 								TrAddr:   "0000:da:00.0",
 								TgtIds:   []int32{0, 1, 2},
 								DevState: stateUnplugged,
 							},
 							{
-								Uuid:     common.MockUUID(3),
+								Uuid:     test.MockUUID(3),
 								TrAddr:   "0000:db:00.0",
 								TgtIds:   []int32{3, 4, 5},
 								DevState: stateIdentify,
@@ -376,22 +377,29 @@ func TestServer_CtlSvc_SmdQuery(t *testing.T) {
 						Message: &ctlpb.SmdDevResp{
 							Devices: []*ctlpb.SmdDevResp_Device{
 								{
-									Uuid:   common.MockUUID(0),
+									Uuid:   test.MockUUID(0),
 									TrAddr: "0000:8a:00.0",
 									TgtIds: []int32{0, 1, 2},
-								},
-								{
-									Uuid:     common.MockUUID(1),
-									TrAddr:   "0000:80:00.0",
-									TgtIds:   []int32{3, 4, 5},
-									DevState: stateFaulty,
 								},
 							},
 						},
 					},
 				},
 			},
-			expErr: errors.New("invalid nvme dev status"),
+			expResp: &ctlpb.SmdQueryResp{
+				Ranks: []*ctlpb.SmdQueryResp_RankResp{
+					{
+						Devices: []*ctlpb.SmdQueryResp_Device{
+							{
+								Uuid:   test.MockUUID(0),
+								TrAddr: "0000:8a:00.0",
+								TgtIds: []int32{0, 1, 2},
+							},
+						},
+						Rank: uint32(0),
+					},
+				},
+			},
 		},
 		"list-devices; show only faulty": {
 			req: &ctlpb.SmdQueryReq{
@@ -405,13 +413,13 @@ func TestServer_CtlSvc_SmdQuery(t *testing.T) {
 						Message: &ctlpb.SmdDevResp{
 							Devices: []*ctlpb.SmdDevResp_Device{
 								{
-									Uuid:     common.MockUUID(0),
+									Uuid:     test.MockUUID(0),
 									TrAddr:   "0000:8a:00.0",
 									TgtIds:   []int32{0, 1, 2},
 									DevState: stateNormal,
 								},
 								{
-									Uuid:     common.MockUUID(1),
+									Uuid:     test.MockUUID(1),
 									TrAddr:   "0000:8b:00.0",
 									TgtIds:   []int32{3, 4, 5},
 									DevState: stateFaulty,
@@ -425,13 +433,13 @@ func TestServer_CtlSvc_SmdQuery(t *testing.T) {
 						Message: &ctlpb.SmdDevResp{
 							Devices: []*ctlpb.SmdDevResp_Device{
 								{
-									Uuid:     common.MockUUID(2),
+									Uuid:     test.MockUUID(2),
 									TrAddr:   "0000:da:00.0",
 									TgtIds:   []int32{0, 1, 2},
 									DevState: stateUnplugged,
 								},
 								{
-									Uuid:     common.MockUUID(3),
+									Uuid:     test.MockUUID(3),
 									TrAddr:   "0000:db:00.0",
 									TgtIds:   []int32{3, 4, 5},
 									DevState: stateIdentify,
@@ -446,7 +454,7 @@ func TestServer_CtlSvc_SmdQuery(t *testing.T) {
 					{
 						Devices: []*ctlpb.SmdQueryResp_Device{
 							{
-								Uuid:     common.MockUUID(1),
+								Uuid:     test.MockUUID(1),
 								TrAddr:   "0000:8b:00.0",
 								TgtIds:   []int32{3, 4, 5},
 								DevState: stateFaulty,
@@ -471,7 +479,7 @@ func TestServer_CtlSvc_SmdQuery(t *testing.T) {
 						Message: &ctlpb.SmdDevResp{
 							Devices: []*ctlpb.SmdDevResp_Device{
 								{
-									Uuid:     common.MockUUID(0),
+									Uuid:     test.MockUUID(0),
 									DevState: stateFaulty,
 								},
 							},
@@ -483,7 +491,7 @@ func TestServer_CtlSvc_SmdQuery(t *testing.T) {
 						Message: &ctlpb.SmdDevResp{
 							Devices: []*ctlpb.SmdDevResp_Device{
 								{
-									Uuid:     common.MockUUID(1),
+									Uuid:     test.MockUUID(1),
 									DevState: stateNormal,
 								},
 							},
@@ -497,7 +505,7 @@ func TestServer_CtlSvc_SmdQuery(t *testing.T) {
 						Rank: 1,
 						Devices: []*ctlpb.SmdQueryResp_Device{
 							{
-								Uuid:     common.MockUUID(1),
+								Uuid:     test.MockUUID(1),
 								DevState: stateNormal,
 							},
 						},
@@ -509,7 +517,7 @@ func TestServer_CtlSvc_SmdQuery(t *testing.T) {
 			req: &ctlpb.SmdQueryReq{
 				OmitPools: true,
 				Rank:      uint32(system.NilRank),
-				Uuid:      common.MockUUID(1),
+				Uuid:      test.MockUUID(1),
 			},
 			drpcResps: map[int][]*mockDrpcResponse{
 				0: {
@@ -517,7 +525,7 @@ func TestServer_CtlSvc_SmdQuery(t *testing.T) {
 						Message: &ctlpb.SmdDevResp{
 							Devices: []*ctlpb.SmdDevResp_Device{
 								{
-									Uuid:     common.MockUUID(0),
+									Uuid:     test.MockUUID(0),
 									DevState: stateNormal,
 								},
 							},
@@ -529,7 +537,7 @@ func TestServer_CtlSvc_SmdQuery(t *testing.T) {
 						Message: &ctlpb.SmdDevResp{
 							Devices: []*ctlpb.SmdDevResp_Device{
 								{
-									Uuid:     common.MockUUID(1),
+									Uuid:     test.MockUUID(1),
 									DevState: stateFaulty,
 								},
 							},
@@ -544,7 +552,7 @@ func TestServer_CtlSvc_SmdQuery(t *testing.T) {
 						Rank: 1,
 						Devices: []*ctlpb.SmdQueryResp_Device{
 							{
-								Uuid:     common.MockUUID(1),
+								Uuid:     test.MockUUID(1),
 								DevState: stateFaulty,
 							},
 						},
@@ -561,18 +569,18 @@ func TestServer_CtlSvc_SmdQuery(t *testing.T) {
 				0: {
 					{
 						Message: &ctlpb.SmdDevResp{
-							Status: int32(drpc.DaosBusy),
+							Status: int32(daos.Busy),
 						},
 					},
 				},
 			},
-			expErr: drpc.DaosBusy,
+			expErr: daos.Busy,
 		},
 		"device-health": {
 			req: &ctlpb.SmdQueryReq{
 				OmitPools:        true,
 				Rank:             uint32(system.NilRank),
-				Uuid:             common.MockUUID(1),
+				Uuid:             test.MockUUID(1),
 				IncludeBioHealth: true,
 			},
 			drpcResps: map[int][]*mockDrpcResponse{
@@ -581,7 +589,7 @@ func TestServer_CtlSvc_SmdQuery(t *testing.T) {
 						Message: &ctlpb.SmdDevResp{
 							Devices: []*ctlpb.SmdDevResp_Device{
 								{
-									Uuid: common.MockUUID(0),
+									Uuid: test.MockUUID(0),
 								},
 							},
 						},
@@ -592,7 +600,7 @@ func TestServer_CtlSvc_SmdQuery(t *testing.T) {
 						Message: &ctlpb.SmdDevResp{
 							Devices: []*ctlpb.SmdDevResp_Device{
 								{
-									Uuid:     common.MockUUID(1),
+									Uuid:     test.MockUUID(1),
 									DevState: stateFaulty,
 								},
 							},
@@ -613,7 +621,7 @@ func TestServer_CtlSvc_SmdQuery(t *testing.T) {
 						Rank: 1,
 						Devices: []*ctlpb.SmdQueryResp_Device{
 							{
-								Uuid:     common.MockUUID(1),
+								Uuid:     test.MockUUID(1),
 								DevState: stateFaulty,
 								Health: &ctlpb.BioHealthResp{
 									Temperature: 1000000,
@@ -629,7 +637,7 @@ func TestServer_CtlSvc_SmdQuery(t *testing.T) {
 			req: &ctlpb.SmdQueryReq{
 				OmitPools:        true,
 				Rank:             uint32(system.NilRank),
-				Uuid:             common.MockUUID(1),
+				Uuid:             test.MockUUID(1),
 				IncludeBioHealth: true,
 			},
 			drpcResps: map[int][]*mockDrpcResponse{
@@ -638,7 +646,7 @@ func TestServer_CtlSvc_SmdQuery(t *testing.T) {
 						Message: &ctlpb.SmdDevResp{
 							Devices: []*ctlpb.SmdDevResp_Device{
 								{
-									Uuid:     common.MockUUID(0),
+									Uuid:     test.MockUUID(0),
 									DevState: stateNew,
 								},
 							},
@@ -650,7 +658,7 @@ func TestServer_CtlSvc_SmdQuery(t *testing.T) {
 						Message: &ctlpb.SmdDevResp{
 							Devices: []*ctlpb.SmdDevResp_Device{
 								{
-									Uuid:     common.MockUUID(1),
+									Uuid:     test.MockUUID(1),
 									DevState: stateNew,
 								},
 							},
@@ -671,8 +679,8 @@ func TestServer_CtlSvc_SmdQuery(t *testing.T) {
 						Rank: 1,
 						Devices: []*ctlpb.SmdQueryResp_Device{
 							{
-								Uuid:     common.MockUUID(1),
-								DevState: storage.MockNvmeStateNew.StatusString(),
+								Uuid:     test.MockUUID(1),
+								DevState: storage.MockNvmeStateNew.String(),
 							},
 						},
 					},
@@ -683,7 +691,7 @@ func TestServer_CtlSvc_SmdQuery(t *testing.T) {
 			req: &ctlpb.SmdQueryReq{
 				OmitPools:        true,
 				Rank:             uint32(system.NilRank),
-				Uuid:             common.MockUUID(1),
+				Uuid:             test.MockUUID(1),
 				IncludeBioHealth: true,
 			},
 			drpcResps: map[int][]*mockDrpcResponse{
@@ -692,7 +700,7 @@ func TestServer_CtlSvc_SmdQuery(t *testing.T) {
 						Message: &ctlpb.SmdDevResp{
 							Devices: []*ctlpb.SmdDevResp_Device{
 								{
-									Uuid:     common.MockUUID(0),
+									Uuid:     test.MockUUID(0),
 									DevState: stateFaulty,
 								},
 							},
@@ -704,7 +712,7 @@ func TestServer_CtlSvc_SmdQuery(t *testing.T) {
 						Message: &ctlpb.SmdDevResp{
 							Devices: []*ctlpb.SmdDevResp_Device{
 								{
-									Uuid:     common.MockUUID(1),
+									Uuid:     test.MockUUID(1),
 									DevState: stateFaulty,
 								},
 							},
@@ -712,12 +720,12 @@ func TestServer_CtlSvc_SmdQuery(t *testing.T) {
 					},
 					{
 						Message: &ctlpb.BioHealthResp{
-							Status: int32(drpc.DaosFreeMemError),
+							Status: int32(daos.FreeMemError),
 						},
 					},
 				},
 			},
-			expErr: drpc.DaosFreeMemError,
+			expErr: daos.FreeMemError,
 		},
 		"target-health": {
 			req: &ctlpb.SmdQueryReq{
@@ -732,7 +740,7 @@ func TestServer_CtlSvc_SmdQuery(t *testing.T) {
 						Message: &ctlpb.SmdDevResp{
 							Devices: []*ctlpb.SmdDevResp_Device{
 								{
-									Uuid:     common.MockUUID(0),
+									Uuid:     test.MockUUID(0),
 									DevState: stateFaulty,
 								},
 							},
@@ -744,7 +752,7 @@ func TestServer_CtlSvc_SmdQuery(t *testing.T) {
 						Message: &ctlpb.SmdDevResp{
 							Devices: []*ctlpb.SmdDevResp_Device{
 								{
-									Uuid:     common.MockUUID(1),
+									Uuid:     test.MockUUID(1),
 									TgtIds:   []int32{0},
 									DevState: stateFaulty,
 								},
@@ -765,7 +773,7 @@ func TestServer_CtlSvc_SmdQuery(t *testing.T) {
 						Rank: 1,
 						Devices: []*ctlpb.SmdQueryResp_Device{
 							{
-								Uuid:     common.MockUUID(1),
+								Uuid:     test.MockUUID(1),
 								TgtIds:   []int32{0},
 								DevState: stateFaulty,
 								Health: &ctlpb.BioHealthResp{
@@ -791,7 +799,7 @@ func TestServer_CtlSvc_SmdQuery(t *testing.T) {
 						Message: &ctlpb.SmdDevResp{
 							Devices: []*ctlpb.SmdDevResp_Device{
 								{
-									Uuid:     common.MockUUID(0),
+									Uuid:     test.MockUUID(0),
 									DevState: stateNormal,
 								},
 							},
@@ -813,7 +821,7 @@ func TestServer_CtlSvc_SmdQuery(t *testing.T) {
 		"ambiguous UUID": {
 			req: &ctlpb.SmdQueryReq{
 				Rank: uint32(system.NilRank),
-				Uuid: common.MockUUID(),
+				Uuid: test.MockUUID(),
 			},
 			expErr: errors.New("ambiguous"),
 		},
@@ -830,7 +838,7 @@ func TestServer_CtlSvc_SmdQuery(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
-			defer common.ShowBufferOnFailure(t, buf)
+			defer test.ShowBufferOnFailure(t, buf)
 
 			engineCount := len(tc.drpcResps)
 			if engineCount == 0 {
@@ -867,12 +875,12 @@ func TestServer_CtlSvc_SmdQuery(t *testing.T) {
 			}
 
 			gotResp, gotErr := svc.SmdQuery(context.TODO(), tc.req)
-			common.CmpErr(t, tc.expErr, gotErr)
+			test.CmpErr(t, tc.expErr, gotErr)
 			if tc.expErr != nil {
 				return
 			}
 
-			if diff := cmp.Diff(tc.expResp, gotResp, common.DefaultCmpOpts()...); diff != "" {
+			if diff := cmp.Diff(tc.expResp, gotResp, test.DefaultCmpOpts()...); diff != "" {
 				t.Fatalf("unexpected response (-want, +got)\n%s\n", diff)
 			}
 		})

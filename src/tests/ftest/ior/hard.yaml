@@ -66,4 +66,3 @@ ior:
       dfs_oclass: "EC_8P2GX"
   sw_wearout: 1
   sw_status_file: "/var/tmp/daos_testing/stoneWallingStatusFile"
-

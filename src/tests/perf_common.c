@@ -271,12 +271,12 @@ dkey_update_or_fetch(enum ts_op_type op_type, daos_key_t *dkey, daos_epoch_t *ep
 		D_ASSERT(ts_indices != NULL);
 	}
 
-	for (i = 0; i < ts_akey_p_dkey; i++) {
+	for (i = 0; i < param->pa_akey_nr; i++) {
 		akey_idx = i;
-		if (!ts_const_akey)
+		if (ts_const_akey)
 			akey_idx = 0;
-		for (j = 0; j < ts_recx_p_akey; j++) {
-			for (k = 0; k < ts_obj_p_cont; k++) {
+		for (j = 0; j < param->pa_recx_nr; j++) {
+			for (k = 0; k < param->pa_obj_nr; k++) {
 				rc = akey_update_or_fetch(k, op_type, dkey,
 							  &ts_akeys[akey_idx], epoch, j,
 							  param);
@@ -325,7 +325,7 @@ objects_update(struct pf_param *param)
 	if (dts_is_async(&ts_ctx))
 		TS_TIME_START(&param->pa_duration, start);
 
-	for (i = 0; i < ts_dkey_p_obj; i++) {
+	for (i = 0; i < param->pa_dkey_nr; i++) {
 		rc = dkey_update_or_fetch(TS_DO_UPDATE, &ts_dkeys[i], &epoch,
 					  param);
 		if (rc)
@@ -353,7 +353,7 @@ objects_fetch(struct pf_param *param)
 	if (dts_is_async(&ts_ctx))
 		TS_TIME_START(&param->pa_duration, start);
 
-	for (i = 0; i < ts_dkey_p_obj; i++) {
+	for (i = 0; i < param->pa_dkey_nr; i++) {
 		rc = dkey_update_or_fetch(TS_DO_FETCH, &ts_dkeys[i], &epoch,
 					  param);
 		if (rc != 0)
@@ -446,6 +446,38 @@ pf_parse_rw_cb(char *str, struct pf_param *param, char **strp)
 	default:
 		str++;
 		break;
+	case 'O':
+		str++;
+		if (*str != PARAM_ASSIGN)
+			return -1;
+		param->pa_obj_nr = strtol(&str[1], &str, 0);
+		if (param->pa_obj_nr > ts_obj_p_cont)
+			return -1;
+		break;
+	case 'D':
+		str++;
+		if (*str != PARAM_ASSIGN)
+			return -1;
+		param->pa_dkey_nr = strtol(&str[1], &str, 0);
+		if (param->pa_dkey_nr > ts_dkey_p_obj)
+			return -1;
+		break;
+	case 'a':
+		str++;
+		if (*str != PARAM_ASSIGN)
+			return -1;
+		param->pa_akey_nr = strtol(&str[1], &str, 0);
+		if (param->pa_akey_nr > ts_akey_p_dkey)
+			return -1;
+		break;
+	case 'n':
+		str++;
+		if (*str != PARAM_ASSIGN)
+			return -1;
+		param->pa_recx_nr = strtol(&str[1], &str, 0);
+		if (param->pa_recx_nr > ts_recx_p_akey)
+			return -1;
+		break;
 	case 'd':
 		param->pa_rw.dkey_flag = true;
 		str++;
@@ -524,7 +556,7 @@ pause_test(char *name)
 			break;
 	}
 	if (ts_ctx.tsc_mpi_size > 1)
-		MPI_Barrier(MPI_COMM_WORLD);
+		par_barrier(PAR_COMM_WORLD);
 }
 
 static int
@@ -540,8 +572,17 @@ run_one(struct pf_test *ts, struct pf_param *param)
 	if (param->pa_iteration == 0)
 		param->pa_iteration = 1;
 
-	fprintf(stdout, "Running %s test (iteration=%d)\n",
+	fprintf(stdout, "Running %s test (iteration=%d",
 		ts->ts_name, param->pa_iteration);
+	if (param->pa_obj_nr != ts_obj_p_cont)
+		fprintf(stdout, ", objects=%d", param->pa_obj_nr);
+	if (param->pa_dkey_nr != ts_dkey_p_obj)
+		fprintf(stdout, ", dkeys=%d", param->pa_dkey_nr);
+	if (param->pa_akey_nr != ts_akey_p_dkey)
+		fprintf(stdout, ", akeys=%d", param->pa_akey_nr);
+	if (param->pa_recx_nr != ts_recx_p_akey)
+		fprintf(stdout, ", recx=%d", param->pa_recx_nr);
+	fprintf(stdout, ")\n");
 
 	start = daos_get_ntime();
 
@@ -558,7 +599,7 @@ run_one(struct pf_test *ts, struct pf_param *param)
 	if (ts_ctx.tsc_mpi_size > 1) {
 		int	rc_g = 0;
 
-		MPI_Allreduce(&rc, &rc_g, 1, MPI_INT, MPI_MIN, MPI_COMM_WORLD);
+		par_allreduce(PAR_COMM_WORLD, &rc, &rc_g, 1, PAR_INT, PAR_MIN);
 		rc = rc_g;
 	}
 
@@ -593,6 +634,12 @@ run_commands(char *cmds, struct pf_test pf_tests[])
 				D_PRINT("Running test=%s\n", ts->ts_name);
 
 			memset(&param, 0, sizeof(param));
+
+			param.pa_obj_nr = ts_obj_p_cont;
+			param.pa_dkey_nr = ts_dkey_p_obj;
+			param.pa_akey_nr = ts_akey_p_dkey;
+			param.pa_recx_nr = ts_recx_p_akey;
+
 			/* parse private parameters of the test */
 			rc = ts->ts_parse(cmds, &param, &cmds);
 			if (rc) {
@@ -645,10 +692,8 @@ show_result(struct pf_param *param, uint64_t start, uint64_t end,
 	double		duration_sum;
 
 	if (ts_ctx.tsc_mpi_size > 1) {
-		MPI_Reduce(&start, &first_start, 1, MPI_UINT64_T,
-			   MPI_MIN, 0, MPI_COMM_WORLD);
-		MPI_Reduce(&end, &last_end, 1, MPI_UINT64_T,
-			   MPI_MAX, 0, MPI_COMM_WORLD);
+		par_reduce(PAR_COMM_WORLD, &start, &first_start, 1, PAR_UINT64, PAR_MIN, 0);
+		par_reduce(PAR_COMM_WORLD, &end, &last_end, 1, PAR_UINT64, PAR_MAX, 0);
 		agg_duration = (last_end - first_start) /
 			       (1000.0 * 1000 * 1000);
 	} else {
@@ -658,12 +703,12 @@ show_result(struct pf_param *param, uint64_t start, uint64_t end,
 	/* nano sec to sec */
 
 	if (ts_ctx.tsc_mpi_size > 1) {
-		MPI_Reduce(&param->pa_duration, &duration_max, 1, MPI_DOUBLE,
-			   MPI_MAX, 0, MPI_COMM_WORLD);
-		MPI_Reduce(&param->pa_duration, &duration_min, 1, MPI_DOUBLE,
-			   MPI_MIN, 0, MPI_COMM_WORLD);
-		MPI_Reduce(&param->pa_duration, &duration_sum, 1, MPI_DOUBLE,
-			   MPI_SUM, 0, MPI_COMM_WORLD);
+		par_reduce(PAR_COMM_WORLD, &param->pa_duration, &duration_max, 1, PAR_DOUBLE,
+			   PAR_MAX, 0);
+		par_reduce(PAR_COMM_WORLD, &param->pa_duration, &duration_min, 1, PAR_DOUBLE,
+			   PAR_MIN, 0);
+		par_reduce(PAR_COMM_WORLD, &param->pa_duration, &duration_sum, 1, PAR_DOUBLE,
+			   PAR_SUM, 0);
 	} else {
 		duration_max = duration_min =
 		duration_sum = param->pa_duration;
@@ -678,19 +723,20 @@ show_result(struct pf_param *param, uint64_t start, uint64_t end,
 
 		if (strcmp(test_name, "QUERY") == 0) {
 			total = ts_ctx.tsc_mpi_size * param->pa_iteration *
-				ts_obj_p_cont;
+				param->pa_obj_nr;
 		} else if (strcmp(test_name, "AGGREGATE") == 0 ||
-			   strcmp(test_name, "DISCARD") == 0) {
+			   strcmp(test_name, "DISCARD") == 0 ||
+			   strcmp(test_name, "GARBAGE COLLECTION") == 0) {
 			total = ts_ctx.tsc_mpi_size * param->pa_iteration;
 		} else if (strcmp(test_name, "PUNCH") == 0) {
-			total = ts_ctx.tsc_mpi_size * param->pa_iteration * ts_obj_p_cont;
+			total = ts_ctx.tsc_mpi_size * param->pa_iteration * param->pa_obj_nr;
 			if (param->pa_rw.dkey_flag)
-				total *= ts_dkey_p_obj;
+				total *= param->pa_dkey_nr;
 		} else {
 			show_bw = true;
 			total = ts_ctx.tsc_mpi_size * param->pa_iteration *
-				ts_obj_p_cont * ts_dkey_p_obj *
-				ts_akey_p_dkey * ts_recx_p_akey;
+				param->pa_obj_nr * param->pa_dkey_nr *
+				param->pa_akey_nr * param->pa_recx_nr;
 		}
 
 		rate = total / agg_duration;

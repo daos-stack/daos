@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2019-2021 Intel Corporation.
+ * (C) Copyright 2019-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -22,7 +22,7 @@ set_fail_loc(test_arg_t *arg, d_rank_t rank, uint64_t tgtidx,
 	if (arg->myrank == 0)
 		daos_debug_set_params(arg->group, rank, DMG_KEY_FAIL_LOC,
 				     fail_loc, tgtidx, NULL);
-	MPI_Barrier(MPI_COMM_WORLD);
+	par_barrier(PAR_COMM_WORLD);
 }
 
 static void
@@ -30,7 +30,7 @@ reset_fail_loc(test_arg_t *arg)
 {
 	if (arg->myrank == 0)
 		daos_fail_loc_reset();
-	MPI_Barrier(MPI_COMM_WORLD);
+	par_barrier(PAR_COMM_WORLD);
 }
 
 static bool
@@ -41,7 +41,7 @@ is_nvme_enabled(test_arg_t *arg)
 	int			 rc;
 
 	pinfo.pi_bits = DPI_ALL;
-	rc = test_pool_get_info(arg, &pinfo);
+	rc = test_pool_get_info(arg, &pinfo, NULL /* engine_ranks */);
 	assert_rc_equal(rc, 0);
 
 	return ps->ps_free_min[DAOS_MEDIA_NVME] != 0;
@@ -244,7 +244,7 @@ nvme_fault_reaction(void **state, int mode)
 	print_message("Waiting for rebuild done...\n");
 	if (arg->myrank == 0)
 		test_rebuild_wait(&arg, 1);
-	MPI_Barrier(MPI_COMM_WORLD);
+	par_barrier(PAR_COMM_WORLD);
 
 	print_message("Waiting for faulty reaction done...\n");
 	/**
@@ -780,7 +780,7 @@ run_daos_nvme_recov_test(int rank, int size, int *sub_tests,
 {
 	int rc = 0;
 
-	MPI_Barrier(MPI_COMM_WORLD);
+	par_barrier(PAR_COMM_WORLD);
 	if (sub_tests_size == 0) {
 		sub_tests_size = ARRAY_SIZE(nvme_recov_tests);
 		sub_tests = NULL;
@@ -791,7 +791,7 @@ run_daos_nvme_recov_test(int rank, int size, int *sub_tests,
 				sub_tests_size, nvme_recov_test_setup,
 				test_teardown);
 
-	MPI_Barrier(MPI_COMM_WORLD);
+	par_barrier(PAR_COMM_WORLD);
 
 	return rc;
 }

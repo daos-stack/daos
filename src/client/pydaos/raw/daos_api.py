@@ -217,9 +217,29 @@ class DaosPool():
         thread.start()
         return None
 
-    def target_query(self, tgt):
+    def target_query(self, tgt, rank, cb_func=None):
         """Query information of storage targets within a DAOS pool."""
-        raise NotImplementedError("Target_query not yet implemented in C API.")
+        self.target_info = daos_cref.TargetInfo()
+        func = self.context.get_function('query-target')
+
+        if cb_func is None:
+            ret = func(self.handle, tgt, rank, ctypes.byref(self.target_info),
+                       None)
+            if ret != 0:
+                raise DaosApiError("Pool query returned non-zero. RC: {0}"
+                                   .format(ret))
+            return self.target_info
+
+        event = daos_cref.DaosEvent()
+        params = [self.handle, tgt, rank, ctypes.byref(self.target_info), event]
+        thread = threading.Thread(target=daos_cref.AsyncWorker1,
+                                  args=(func,
+                                        params,
+                                        self.context,
+                                        cb_func,
+                                        self))
+        thread.start()
+        return None
 
     def set_svc(self, rank):
         """Set svc.
@@ -331,11 +351,14 @@ class DaosPool():
         """Retrieve a list of user-defined pool attribute values.
 
         Args:
-            attr_names:         list of attributes to retrieve
-            poh [Optional]:     Pool Handle if you really want to override it
-            cb_func[Optional]:  To run API in Asynchronous mode.
+            attr_names (list): list of attributes to retrieve
+            poh (ctypes.c_uint64, optional): Pool Handle if you really want to override it
+            cb_func (CallbackHandler, optional): To run API in Asynchronous mode.
+
         return:
-            Requested Attributes as a dictionary.
+            dict/tuple: Requested Attributes as a dictionary for synchronous and tuple
+                for asynchronous mode.
+
         """
         if not attr_names:
             raise DaosApiError("Attribute list should not be blank")
@@ -362,25 +385,29 @@ class DaosPool():
             if ret != 0:
                 raise DaosApiError("Pool Get Attribute returned non-zero. "
                                    "RC: {0}".format(ret))
-        else:
-            event = daos_cref.DaosEvent()
-            params = [self.handle, no_of_att, ctypes.byref(attr_names_c),
-                      ctypes.byref(buff), sizes, event]
-            thread = threading.Thread(target=daos_cref.AsyncWorker1,
-                                      args=(func,
-                                            params,
-                                            self.context,
-                                            cb_func,
-                                            self))
-            thread.start()
 
-        results = {}
-        i = 0
-        for attr in attr_names:
-            results[attr] = buff[i][:sizes[i]]
-            i += 1
+            # Construct the results dictionary from buff and sizes set in the function
+            # call.
+            results = {}
+            i = 0
+            for attr in attr_names:
+                results[attr] = buff[i][:sizes[i]]
+                i += 1
+            return results
 
-        return results
+        # Asynchronous mode.
+        event = daos_cref.DaosEvent()
+        params = [self.handle, no_of_att, ctypes.byref(attr_names_c), ctypes.byref(buff),
+                  sizes, event]
+        thread = threading.Thread(
+            target=daos_cref.AsyncWorker1, args=(
+                func, params, self.context, cb_func, self))
+        thread.start()
+
+        # Return buff and sizes because at this point, the values aren't set. The
+        # caller should wait with the callback handler. When the wait is over, obtain
+        # the name and value from buff and sizes as in synchronous mode.
+        return (buff, sizes)
 
     # pylint: disable=unused-private-member
     @staticmethod
@@ -1995,14 +2022,21 @@ class DaosContainer():
         return local_handle
 
     def list_attr(self, coh=None, cb_func=None):
-        """Retrieve a list of user-defined container attribute values.
+        """Retrieve a list of user-defined container attribute names.
 
         Args:
-            coh [Optional]:     Container Handler.
-            cb_func[Optional]:  To run API in Asynchronous mode.
+            coh(ctypes.c_uint64): Container Handle. Defaults to None.
+            cb_func(CallbackHandler, optional): To run API in Asynchronous mode. Defaults
+                to None.
+
         return:
-            total_size[int]: Total aggregate size of attributes names.
-            buffer[String]: Complete aggregated attributes names.
+            tuple: Size and name(s).
+                total_size[int]: Total aggregate size of attributes names.
+                buffer[String]: Complete aggregated attributes names.
+                Size in async mode is one more than the sync mode. e.g.,
+                buff = b'Name1\x00Name2\x00\x00'
+                Async is 13 (10 characters and 3 "\x00"s), but sync is 12.
+
         """
         if coh is not None:
             self.coh = coh
@@ -2012,7 +2046,7 @@ class DaosContainer():
         # if it's not passed as a dictionary.
         sbuf = ctypes.create_string_buffer(100).raw
         t_size = ctypes.pointer(ctypes.c_size_t(100))
-        ret = func(self.coh, sbuf, t_size)
+        ret = func(self.coh, sbuf, t_size, None)
         if ret != 0:
             raise DaosApiError("Container list-cont-attr returned non-zero. "
                                "RC: {0}".format(ret))
@@ -2038,6 +2072,7 @@ class DaosContainer():
                                             cb_func,
                                             self))
             thread.start()
+
         return total_size[0], buff
 
     def set_attr(self, data, coh=None, cb_func=None):
@@ -2090,15 +2125,20 @@ class DaosContainer():
             thread.start()
 
     def get_attr(self, attr_names, coh=None, cb_func=None):
-        """Retrieve a list of user-defined container attribute values.
+        """Get container attribute value(s) from given attr_names.
 
         Note the presumption that no value is larger than 100 chars.
+
         Args:
-            attr_names[Required]:     Attribute name list
-            coh [Optional]:     Container Handler
-            cb_func[Optional]:  To run API in Asynchronous mode.
+            attr_names(list): Attribute name list
+            coh(ctypes.c_uint64): Container Handle. Defaults to None.
+            cb_func(CallbackHandler, optional): To run API in Asynchronous mode. Defaults
+                to None.
+
         return:
-            dictionary containing the requested attributes as key:value pairs.
+            dict/tuple: Requested Attributes as a dictionary for synchronous and tuple
+                for asynchronous mode.
+
         """
         if not attr_names:
             raise DaosApiError("Attribute names should not be empty")
@@ -2125,25 +2165,28 @@ class DaosContainer():
             if ret != 0:
                 raise DaosApiError("Container Get Attribute returned non-zero "
                                    "RC: {0}".format(ret))
-        else:
-            event = daos_cref.DaosEvent()
-            params = [self.coh, no_of_att, ctypes.byref(attr_names_c),
-                      ctypes.byref(buff), sizes, event]
-            thread = threading.Thread(target=daos_cref.AsyncWorker1,
-                                      args=(func,
-                                            params,
-                                            self.context,
-                                            cb_func,
-                                            self))
-            thread.start()
 
-        results = {}
-        i = 0
-        for attr in attr_names:
-            results[attr] = buff[i][:sizes[i]]
-            i += 1
+            # Construct the results dictionary from buff and sizes set in the function
+            # call.
+            results = {}
+            i = 0
+            for attr in attr_names:
+                results[attr] = buff[i][:sizes[i]]
+                i += 1
+            return results
 
-        return results
+        event = daos_cref.DaosEvent()
+        params = [self.coh, no_of_att, ctypes.byref(attr_names_c), ctypes.byref(buff),
+                  sizes, event]
+        thread = threading.Thread(
+            target=daos_cref.AsyncWorker1, args=(
+                func, params, self.context, cb_func, self))
+        thread.start()
+
+        # Return buff and sizes because at this point, the values aren't set. The
+        # caller should wait with the callback handler. When the wait is over, construct
+        # the results dictionary as in synchronous mode.
+        return (buff, sizes)
 
     def aggregate(self, coh, epoch, cb_func=None):
         """Aggregate the container epochs.

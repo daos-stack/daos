@@ -26,10 +26,10 @@ timeouts:
     test_daos_capability: 104
     test_daos_epoch_recovery: 104
     test_daos_md_replication: 104
-    test_daos_rebuild_simple: 900
+    test_daos_rebuild_simple: 1500
     test_daos_drain_simple: 500
     test_daos_extend_simple: 500
-    test_daos_oid_allocator: 320
+    test_daos_oid_allocator: 640
     test_daos_checksum: 500
     test_daos_rebuild_ec: 3600
     test_daos_aggregate_ec: 200
@@ -56,8 +56,9 @@ server_config:
       scm_mount: /mnt/daos0
       log_mask: DEBUG,MEM=ERR
       env_vars:
-        - DD_MASK=mgmt,io,md,epc,rebuild
+        - DD_MASK=mgmt,io,md,epc,rebuild,any
         - D_LOG_FILE_APPEND_PID=1
+        - D_LOG_FLUSH=DEBUG
     1:
       pinned_numa_node: 1
       nr_xs_helpers: 1
@@ -71,8 +72,9 @@ server_config:
       scm_mount: /mnt/daos1
       log_mask: DEBUG,MEM=ERR
       env_vars:
-        - DD_MASK=mgmt,io,md,epc,rebuild
+        - DD_MASK=mgmt,io,md,epc,rebuild,any
         - D_LOG_FILE_APPEND_PID=1
+        - D_LOG_FLUSH=DEBUG
   transport_config:
     allow_insecure: True
 agent_config:

@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2021 Intel Corporation.
+ * (C) Copyright 2016-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -33,16 +33,22 @@ typedef struct {
 	daos_size_t		arr_nr;
 	/** Array of ranges; each range defines a starting index and length. */
 	daos_range_t	       *arr_rgs;
-	/*
-	 * On read only: return the number of records that are short fetched
-	 * from the largest dkey(s). This helps for checking for short reads. If
-	 * this values is not zero, then a short read is possible and should be
-	 * checked with daos_array_get_size() compared with the indexes being
-	 * read.
+	/** (on read only) the number of records that are short fetched from the largest dkey(s).
+	 * Helps for checking short reads. If nonzero, a short read is possible and should be
+	 * checked with daos_array_get_size() compared with the indexes being read.
 	 */
 	daos_size_t		arr_nr_short_read;
+	/** (on read only) the number of records that were actually read from the array */
 	daos_size_t		arr_nr_read;
 } daos_array_iod_t;
+
+/** DAOS array stat (size, modification time) information */
+typedef struct {
+	/** Array size (in records) */
+	daos_size_t	st_size;
+	/** Max epoch of array modification (mtime) */
+	daos_epoch_t	st_max_epoch;
+} daos_array_stbuf_t;
 
 /**
  * Convenience function to generate a DAOS Array object ID by encoding the private DAOS bits of the
@@ -313,8 +319,26 @@ daos_array_write(daos_handle_t oh, daos_handle_t th, daos_array_iod_t *iod,
  *			-DER_UNREACH	Network is unreachable
  */
 int
-daos_array_get_size(daos_handle_t oh, daos_handle_t th, daos_size_t *size,
-		    daos_event_t *ev);
+daos_array_get_size(daos_handle_t oh, daos_handle_t th, daos_size_t *size, daos_event_t *ev);
+
+/**
+ * Stat array to retrieve size and mtime.
+ *
+ * \param[in]	oh	Array object open handle.
+ * \param[in]	th	Transaction handle.
+ * \param[out]	stbuf	Returned stat info.
+ * \param[in]	ev	Completion event, it is optional and can be NULL.
+ *			Function will run in blocking mode if \a ev is NULL.
+ *
+ * \return		These values will be returned by \a ev::ev_error in
+ *			non-blocking mode:
+ *			0		Success
+ *			-DER_NO_HDL	Invalid object open handle
+ *			-DER_INVAL	Invalid parameter
+ *			-DER_UNREACH	Network is unreachable
+ */
+int
+daos_array_stat(daos_handle_t oh, daos_handle_t th, daos_array_stbuf_t *stbuf, daos_event_t *ev);
 
 /**
  * Set the array size (truncate) in records. If array is shrinking, we punch

@@ -404,7 +404,7 @@ static int
 ut_setup(struct vea_ut_args *test_args)
 {
 	daos_size_t pool_size = (50 << 20); /* 50MB */
-	struct umem_attr uma;
+	struct umem_attr uma = {0};
 	PMEMoid root;
 	void *root_addr;
 	int rc, i;
