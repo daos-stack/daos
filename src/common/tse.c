@@ -642,7 +642,7 @@ tse_task_post_process(tse_task_t *task)
 		D_FREE(tlink);
 
 		/* propagate dep task's failure */
-		if (task_tmp->dt_result == 0)
+		if (task_tmp->dt_result == 0 && !dtp_tmp->dtp_no_propagate)
 			task_tmp->dt_result = task->dt_result;
 
 		/* see if the dependent task is ready to be scheduled */
@@ -909,7 +909,7 @@ tse_task_add_dependent(tse_task_t *task, tse_task_t *dep)
 	if (tlink == NULL)
 		return -DER_NOMEM;
 
-	D_DEBUG(DB_TRACE, "Add dependent %p ---> %p\n", dep_dtp, dtp);
+	D_DEBUG(DB_TRACE, "Add dependent %p ---> %p\n", dep, task);
 
 	D_MUTEX_LOCK(&dtp->dtp_sched->dsp_lock);
 
@@ -1313,4 +1313,12 @@ tse_task_list_traverse(d_list_t *head, tse_task_cb_t cb, void *arg)
 	}
 
 	return ret;
+}
+
+void
+tse_disable_propagate(tse_task_t *task)
+{
+	struct tse_task_private  *dtp = tse_task2priv(task);
+
+	dtp->dtp_no_propagate = 1;
 }

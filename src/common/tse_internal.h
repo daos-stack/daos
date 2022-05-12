@@ -55,7 +55,9 @@ struct tse_task_private {
 					 dtp_completing:1,
 					/* task is in running state */
 					 dtp_running:1,
-					 dtp_dep_cnt:29;
+					/* Don't propagate err-code from dependent tasks */
+					 dtp_no_propagate:1,
+					 dtp_dep_cnt:28;
 	/* refcount of the task */
 	uint32_t			 dtp_refcnt;
 	/**

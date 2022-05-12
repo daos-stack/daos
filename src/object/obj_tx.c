@@ -785,6 +785,7 @@ dc_tx_get_epoch(tse_task_t *task, daos_handle_t th, struct dtx_epoch *epoch)
 		 * already choosing it. We'll "wait" for that "epoch task" to
 		 * complete.
 		 */
+		tse_disable_propagate(task);
 		D_DEBUG(DB_IO, DF_X64"/%p: waiting for epoch task %p\n",
 			th.cookie, task, tx->tx_epoch_task);
 		rc = tse_task_register_deps(task, 1, &tx->tx_epoch_task);
