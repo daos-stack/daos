@@ -48,6 +48,17 @@ struct chk_query_target {
 	struct chk_time		cqt_time;
 };
 
+struct chk_query_pool_shard {
+	uuid_t			 cqps_uuid;
+	uint32_t		 cqps_status;
+	uint32_t		 cqps_phase;
+	struct chk_statistics	 cqps_statistics;
+	struct chk_time		 cqps_time;
+	uint32_t		 cqps_rank;
+	uint32_t		 cqps_target_nr;
+	struct chk_query_target	*cqps_targets;
+};
+
 typedef int (*chk_query_cb_t)(void *buf, struct chk_query_target *cqt);
 
 typedef int (*chk_prop_cb_t)(void *buf, struct chk_policy *policies);

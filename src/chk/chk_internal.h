@@ -28,23 +28,136 @@
  * These are for daos_rpc::dr_opc and DAOS_RPC_OPCODE(opc, ...) rather than
  * crt_req_create(..., opc, ...). See daos/rpc.h.
  */
-#define DAOS_CHK_VERSION 1
+#define DAOS_CHK_VERSION	1
 
 #define CHK_PROTO_SRV_RPC_LIST									\
-	X(CHK_START,	0,	&CQF_chk_start,	ds_chk_start_hdlr,	NULL,	"chk_start")	\
-	X(CHK_STOP,	0,	&CQF_chk_stop,	ds_chk_stop_hdlr,	NULL,	"chk_stop")	\
-	X(CHK_QUERY,	0,	&CQF_chk_query,	ds_chk_query_hdlr,	NULL,	"chk_query")	\
-	X(CHK_ACT,	0,	&CQF_chk_act,	ds_chk_act_hdlr,	NULL,	"chk_act")
+	X(CHK_START,										\
+		0,	&CQF_chk_start,		ds_chk_start_hdlr,	&chk_start_co_ops),	\
+	X(CHK_STOP,										\
+		0,	&CQF_chk_stop,		ds_chk_stop_hdlr,	&chk_stop_co_ops),	\
+	X(CHK_QUERY,										\
+		0,	&CQF_chk_query,		ds_chk_query_hdlr,	&chk_query_co_ops),	\
+	X(CHK_MARK,										\
+		0,	&CQF_chk_mark,		ds_chk_mark_hdlr,	&chk_mark_co_ops),	\
+	X(CHK_ACT,										\
+		0,	&CQF_chk_act,		ds_chk_act_hdlr,	&chk_act_co_ops),	\
+	X(CHK_REPORT,										\
+		0,	&CQF_chk_report,	ds_chk_report_hdlr,	NULL),			\
+	X(CHK_REJOIN,										\
+		0,	&CQF_chk_rejoin,	ds_chk_rejoin_hdlr,	NULL)
 
 /* Define for RPC enum population below */
-#define X(a, b, c, d, e, f) a,
+#define X(a, b, c, d, e) a
 
 enum chk_rpc_opc {
-	CHK_PROTO_SRV_RPC_LIST
+	CHK_PROTO_SRV_RPC_LIST,
 	CHK_PROTO_SRV_RPC_COUNT,
 };
 
 #undef X
+
+/* check start in/out */
+#define DAOS_ISEQ_CHK_START							\
+	((uint64_t)		(csi_gen)		CRT_VAR)		\
+	((uint32_t)		(csi_flags)		CRT_VAR)		\
+	((int32_t)		(csi_phase)		CRT_VAR)		\
+	((d_rank_t)		(csi_leader_rank)	CRT_VAR)		\
+	((uint32_t)		(csi_padding)		CRT_VAR)		\
+	((d_rank_t)		(csi_ranks)		CRT_ARRAY)		\
+	((struct chk_policy)	(csi_policies)		CRT_ARRAY)		\
+	((uuid_t)		(csi_uuids)		CRT_ARRAY)
+
+#define DAOS_OSEQ_CHK_START							\
+	((int32_t)		(cso_status)		CRT_VAR)		\
+	((d_rank_t)		(cso_rank)		CRT_VAR)		\
+	((uint32_t)		(cso_phase)		CRT_VAR)		\
+	((uint32_t)		(cso_padding)		CRT_VAR)		\
+	((struct ds_pool_clue)	(cso_clues)		CRT_ARRAY)
+
+CRT_RPC_DECLARE(chk_start, DAOS_ISEQ_CHK_START, DAOS_OSEQ_CHK_START);
+
+/* check stop in/out */
+#define DAOS_ISEQ_CHK_STOP							\
+	((uint64_t)		(csi_gen)		CRT_VAR)		\
+	((uuid_t)		(csi_uuids)		CRT_ARRAY)
+
+#define DAOS_OSEQ_CHK_STOP							\
+	((int32_t)		(cso_status)		CRT_VAR)		\
+	((d_rank_t)		(cso_rank)		CRT_VAR)
+
+CRT_RPC_DECLARE(chk_stop, DAOS_ISEQ_CHK_STOP, DAOS_OSEQ_CHK_STOP);
+
+/* check query in/out */
+#define DAOS_ISEQ_CHK_QUERY							\
+	((uint64_t)		(cqi_gen)		CRT_VAR)		\
+	((uuid_t)		(cqi_uuids)		CRT_ARRAY)
+
+#define DAOS_OSEQ_CHK_QUERY							\
+	((int32_t)			(cqo_status)	CRT_VAR)		\
+	((int32_t)			(cqo_padding)	CRT_VAR)		\
+	((struct chk_query_pool_shard)	(cqo_shards)	CRT_ARRAY)
+
+CRT_RPC_DECLARE(chk_query, DAOS_ISEQ_CHK_QUERY, DAOS_OSEQ_CHK_QUERY);
+
+/* check mark in/out */
+#define DAOS_ISEQ_CHK_MARK							\
+	((uint64_t)		(cmi_gen)		CRT_VAR)		\
+	((d_rank_t)		(cmi_rank)		CRT_VAR)		\
+	((uint32_t)		(cmi_version)		CRT_VAR)
+
+#define DAOS_OSEQ_CHK_MARK							\
+	((int32_t)		(cmo_status)		CRT_VAR)
+
+CRT_RPC_DECLARE(chk_mark, DAOS_ISEQ_CHK_MARK, DAOS_OSEQ_CHK_MARK);
+
+/* check act in/out */
+#define DAOS_ISEQ_CHK_ACT							\
+	((uint64_t)		(cai_gen)		CRT_VAR)		\
+	((uint64_t)		(cai_seq)		CRT_VAR)		\
+	((uint32_t)		(cai_cla)		CRT_VAR)		\
+	((uint32_t)		(cai_act)		CRT_VAR)		\
+	((uint32_t)		(cai_flags)		CRT_VAR)
+
+#define DAOS_OSEQ_CHK_ACT							\
+	((int32_t)		(cao_status)		CRT_VAR)
+
+CRT_RPC_DECLARE(chk_act, DAOS_ISEQ_CHK_ACT, DAOS_OSEQ_CHK_ACT);
+
+/* check report in/out */
+#define DAOS_ISEQ_CHK_REPORT							\
+	((uint64_t)		(cri_gen)		CRT_VAR)		\
+	((uint32_t)		(cri_ics_class)		CRT_VAR)		\
+	((uint32_t)		(cri_ics_action)	CRT_VAR)		\
+	((int32_t)		(cri_ics_result)	CRT_VAR)		\
+	((d_rank_t)		(cri_rank)		CRT_VAR)		\
+	((uint32_t)		(cri_target)		CRT_VAR)		\
+	((uint32_t)		(cri_padding)		CRT_VAR)		\
+	((uuid_t)		(cri_pool)		CRT_VAR)		\
+	((uuid_t)		(cri_cont)		CRT_VAR)		\
+	((daos_unit_oid_t)	(cri_obj)		CRT_VAR)		\
+	((daos_key_t)		(cri_dkey)		CRT_VAR)		\
+	((daos_key_t)		(cri_akey)		CRT_VAR)		\
+	((d_string_t)		(cri_msg)		CRT_VAR)		\
+	((uint32_t)		(cri_options)		CRT_ARRAY)		\
+	((d_sg_list_t)		(cri_details)		CRT_ARRAY)
+
+#define DAOS_OSEQ_CHK_REPORT							\
+	((int32_t)		(cro_status)		CRT_VAR)		\
+	((int32_t)		(cro_padding)		CRT_VAR)		\
+	((uint64_t)		(cro_seq)		CRT_VAR)
+
+CRT_RPC_DECLARE(chk_report, DAOS_ISEQ_CHK_REPORT, DAOS_OSEQ_CHK_REPORT);
+
+/* check rejoin in/out */
+#define DAOS_ISEQ_CHK_REJOIN							\
+	((uint64_t)		(cri_gen)		CRT_VAR)		\
+	((d_rank_t)		(cri_rank)		CRT_VAR)		\
+	((d_rank_t)		(cri_phase)		CRT_VAR)
+
+#define DAOS_OSEQ_CHK_REJOIN							\
+	((int32_t)		(cro_status)		CRT_VAR)
+
+CRT_RPC_DECLARE(chk_rejoin, DAOS_ISEQ_CHK_REJOIN, DAOS_OSEQ_CHK_REJOIN);
 
 /* dkey for check DB under sys_db */
 #define CHK_DB_TABLE		"chk"
@@ -65,12 +178,19 @@ enum chk_rpc_opc {
 #define CHK_BK_MAGIC_ENGINE	0xe6f703db
 #define CHK_BK_MAGIC_POOL	0xe6f703dc
 
+#define CHK_DUMMY_POOL		"00000000-0000-0000-0000-000020220531"
+
 /*
  * XXX: Please be careful when change CHK__CHECK_INCONSIST_CLASS__CIC_UNKNOWN
  *	to avoid hole is the struct chk_property.
  */
 #define CHK_POLICY_MAX		(CHK__CHECK_INCONSIST_CLASS__CIC_UNKNOWN + 1)
 #define CHK_POOLS_MAX		(1 << 6)
+
+enum chk_act_flags {
+	/* The action is applicable to the same kind of inconssitency. */
+	CAF_FOR_ALL	= 1,
+};
 
 /*
  * Each check instance has a unique leader engine that uses key "chk/leader" under its local
@@ -124,6 +244,42 @@ struct chk_property {
 	/* How many ranks (ever or should) take part in the check instance. */
 	uint32_t			cp_rank_nr;
 };
+
+typedef int (*chk_co_rpc_cb_t)(void *args, uint32_t rank, uint32_t phase, int result,
+			       void *data, uint32_t nr);
+
+extern struct crt_proto_format	chk_proto_fmt;
+
+extern struct crt_corpc_ops	chk_start_co_ops;
+extern struct crt_corpc_ops	chk_stop_co_ops;
+extern struct crt_corpc_ops	chk_query_co_ops;
+extern struct crt_corpc_ops	chk_mark_co_ops;
+extern struct crt_corpc_ops	chk_act_co_ops;
+
+/* chk_rpc.c */
+
+int chk_start_remote(d_rank_list_t *rank_list, uint64_t gen, uint32_t rank_nr, d_rank_t *ranks,
+		     uint32_t policy_nr, struct chk_policy **policies, uint32_t pool_nr,
+		     uuid_t pools[], uint32_t flags, int32_t phase, d_rank_t leader,
+		     chk_co_rpc_cb_t start_cb, void *args);
+
+int chk_stop_remote(d_rank_list_t *rank_list, uint64_t gen, uint32_t pool_nr, uuid_t pools[],
+		    chk_co_rpc_cb_t stop_cb, void *args);
+
+int chk_query_remote(d_rank_list_t *rank_list, uint64_t gen, uint32_t pool_nr, uuid_t pools[],
+		     chk_co_rpc_cb_t query_cb, void *args);
+
+int chk_mark_remote(d_rank_list_t *rank_list, uint64_t gen, d_rank_t rank, uint32_t version);
+
+int chk_act_remote(d_rank_list_t *rank_list, uint64_t gen, uint64_t seq, uint32_t cla,
+		   uint32_t act, d_rank_t rank, bool for_all);
+
+int chk_report_remote(d_rank_t leader, uint64_t gen, uint32_t cla, uint32_t act, int32_t result,
+		      d_rank_t rank, uint32_t target, char *pool, char *cont, daos_unit_oid_t *obj,
+		      daos_key_t *dkey, daos_key_t *akey, char *msg, uint32_t option_nr,
+		      uint32_t *options, uint32_t detail_nr, d_sg_list_t *details, uint64_t *seq);
+
+int chk_rejoin_remote(d_rank_t leader, uint64_t gen, d_rank_t rank, uint32_t phase);
 
 /* chk_vos.c */
 
