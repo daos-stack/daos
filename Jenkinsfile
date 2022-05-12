@@ -13,7 +13,6 @@
 // To use a test branch (i.e. PR) until it lands to master
 // I.e. for testing library changes
 //@Library(value="pipeline-lib@your_branch") _
-@Library(value="pipeline-lib@DAOS-10535") _
 
 // For master, this is just some wildly high number
 next_version = "1000"
@@ -702,7 +701,7 @@ pipeline {
                     }
                     steps {
                         functionalTest inst_repos: daosRepos(),
-                                       inst_rpms: functionalPackages(1, next_version),
+                                       inst_rpms: functionalPackages(1, next_version, "{client,server}-tests-openmpi"),
                                        test_function: 'runTestFunctionalV2'
                     }
                     post {
@@ -721,7 +720,7 @@ pipeline {
                     }
                     steps {
                         functionalTest inst_repos: daosRepos(),
-                                       inst_rpms: functionalPackages(1, next_version),
+                                       inst_rpms: functionalPackages(1, next_version, "{client,server}-tests-openmpi"),
                                        test_function: 'runTestFunctionalV2'
                     }
                     post {
@@ -740,7 +739,7 @@ pipeline {
                     }
                     steps {
                         functionalTest inst_repos: daosRepos(),
-                                       inst_rpms: functionalPackages(1, next_version),
+                                       inst_rpms: functionalPackages(1, next_version, "{client,server}-tests-openmpi"),
                                        test_function: 'runTestFunctionalV2'
                     }
                     post {
@@ -759,7 +758,7 @@ pipeline {
                     }
                     steps {
                         functionalTest inst_repos: daosRepos(),
-                                       inst_rpms: functionalPackages(1, next_version),
+                                       inst_rpms: functionalPackages(1, next_version, "{client,server}-tests-openmpi"),
                                        test_function: 'runTestFunctionalV2'
                     }
                     post {
@@ -778,7 +777,7 @@ pipeline {
                     }
                     steps {
                         functionalTest inst_repos: daosRepos(),
-                                       inst_rpms: functionalPackages(1, next_version),
+                                       inst_rpms: functionalPackages(1, next_version, "{client,server}-tests-openmpi"),
                                        test_function: 'runTestFunctionalV2'
                     }
                     post {
@@ -912,7 +911,7 @@ pipeline {
             }
             steps {
                 storagePrepTest inst_repos: daosRepos(),
-                                inst_rpms: functionalPackages(1, next_version)
+                                inst_rpms: functionalPackages(1, next_version, "{client,server}-tests-openmpi")
             }
         } // stage('Test Storage Prep')
         stage('Test Hardware') {
@@ -932,7 +931,7 @@ pipeline {
                     }
                     steps {
                         functionalTest inst_repos: daosRepos(),
-                                       inst_rpms: functionalPackages(1, next_version),
+                                       inst_rpms: functionalPackages(1, next_version, "{client,server}-tests-openmpi"),
                                        test_function: 'runTestFunctionalV2'
                     }
                     post {
@@ -952,7 +951,7 @@ pipeline {
                     }
                     steps {
                         functionalTest inst_repos: daosRepos(),
-                                       inst_rpms: functionalPackages(1, next_version),
+                                       inst_rpms: functionalPackages(1, next_version, "{client,server}-tests-openmpi"),
                                        test_function: 'runTestFunctionalV2'
                    }
                     post {
@@ -972,7 +971,7 @@ pipeline {
                     }
                     steps {
                         functionalTest inst_repos: daosRepos(),
-                                       inst_rpms: functionalPackages(1, next_version),
+                                       inst_rpms: functionalPackages(1, next_version, "{client,server}-tests-openmpi"),
                                        test_function: 'runTestFunctionalV2'
                     }
                     post {
