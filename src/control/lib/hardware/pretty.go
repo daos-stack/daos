@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2021 Intel Corporation.
+// (C) Copyright 2021-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -41,6 +41,17 @@ func PrintTopology(t *Topology, output io.Writer) error {
 		fmt.Fprintf(ew, "  PCI buses:\n")
 		for _, bus := range numaNode.PCIBuses {
 			fmt.Fprintf(ew, "    %s\n", bus)
+		}
+	}
+
+	if len(t.VirtualDevices) > 0 {
+		fmt.Fprintln(ew, "Virtual Devices")
+
+		for _, dev := range t.VirtualDevices {
+			fmt.Fprintf(ew, "  %s (%s)\n", dev.Name, dev.Type)
+			if dev.BackingDevice != nil {
+				fmt.Fprintf(ew, "    backed by: %s\n", dev.BackingDevice)
+			}
 		}
 	}
 
