@@ -34,13 +34,13 @@ func PrintTopology(t *Topology, output io.Writer) error {
 		fmt.Fprintf(ew, "  PCI buses:\n")
 		for _, bus := range numaNode.PCIBuses {
 			fmt.Fprintf(ew, "    %s\n", bus)
-			for addr, devs := range numaNode.PCIDevices {
+			for _, addr := range numaNode.PCIDevices.Keys() {
 				if !bus.Contains(addr) {
 					continue
 				}
 
-				fmt.Fprintf(ew, "      %s\n", &addr)
-				for _, dev := range devs {
+				fmt.Fprintf(ew, "      %s\n", addr)
+				for _, dev := range numaNode.PCIDevices.Get(addr) {
 					fmt.Fprintf(ew, "        %s\n", dev)
 				}
 			}

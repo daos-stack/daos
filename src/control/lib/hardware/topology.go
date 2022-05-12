@@ -359,7 +359,7 @@ func (n *NUMANode) AddDevice(dev *PCIDevice) error {
 	n.PCIDevices.Add(dev)
 
 	for _, bus := range n.PCIBuses {
-		if bus.Contains(dev.PCIAddr) {
+		if bus.Contains(&dev.PCIAddr) {
 			return bus.AddDevice(dev)
 		}
 	}

@@ -161,10 +161,10 @@ NUMA Node 2
   CPU cores: 8-15
   PCI buses:
     0000:[00-0f]
-      0000:01:01.1
-        0000:01:01.1 test2-net (network interface) @ 2.50 GB/s
       0000:00:1f.2
         0000:00:1f.2 test2-block (block device)
+      0000:01:01.1
+        0000:01:01.1 test2-net (network interface) @ 2.50 GB/s
 `,
 		},
 	} {
