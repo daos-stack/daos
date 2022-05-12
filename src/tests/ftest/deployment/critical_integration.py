@@ -112,7 +112,7 @@ class CriticalIntegration(TestWithServers):
             dmg.system_stop(ranks=ranks_to_stop)
             for rank in sub_list:
                 if (self.server_managers[0].check_rank_state(rank, "stopped", 5) or
-                    self.server_managers[0].check_rank_state(rank, "excluded", 5)):
+                        self.server_managers[0].check_rank_state(rank, "excluded", 5)):
                     dmg.system_start(ranks=rank)
                     if not self.server_managers[0].check_rank_state(rank, "joined", 5):
                         self.fail("Rank {} failed to restart".format(rank))
