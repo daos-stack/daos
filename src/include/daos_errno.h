@@ -273,6 +273,9 @@ extern "C" {
 		Retry with other target)				\
 	ACTION(DER_NOTSUPPORTED,	(DER_ERR_DAOS_BASE + 37),	\
 	       Operation not supported)					\
+	/** Cannot resume former DAOS check instance. */		\
+	ACTION(DER_NOT_RESUME,		(DER_ERR_DAOS_BASE + 38),	\
+	       Cannot resume former DAOS check instance)		\
 
 /** Defines the gurt error codes */
 #define D_FOREACH_ERR_RANGE(ACTION)	\

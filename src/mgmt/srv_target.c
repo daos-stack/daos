@@ -70,42 +70,6 @@ static d_hash_table_ops_t pooltgts_hops = {
 	.hop_key_cmp		= pooltgts_cmp_keys,
 };
 
-static int
-path_gen(const uuid_t pool_uuid, const char *dir, const char *fname, int *idx,
-	 char **fpath)
-{
-	int	 size;
-	int	 off;
-
-	/** *fpath = dir + "/" + pool_uuid + "/" + fname + idx */
-
-	/** DAOS_UUID_STR_SIZE includes the trailing '\0' */
-	size = strlen(dir) + 1 /* "/" */ + DAOS_UUID_STR_SIZE;
-	if (fname != NULL || idx != NULL)
-		size += 1 /* "/" */;
-	if (fname)
-		size += strlen(fname);
-	if (idx)
-		size += snprintf(NULL, 0, "%d", *idx);
-
-	D_ALLOC(*fpath, size);
-	if (*fpath == NULL)
-		return -DER_NOMEM;
-
-	off = sprintf(*fpath, "%s", dir);
-	off += sprintf(*fpath + off, "/");
-	uuid_unparse_lower(pool_uuid, *fpath + off);
-	off += DAOS_UUID_STR_SIZE - 1;
-	if (fname != NULL || idx != NULL)
-		off += sprintf(*fpath + off, "/");
-	if (fname)
-		off += sprintf(*fpath + off, "%s", fname);
-	if (idx)
-		sprintf(*fpath + off, "%d", *idx);
-
-	return 0;
-}
-
 static inline int
 dir_fsync(const char *path)
 {

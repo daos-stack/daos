@@ -128,6 +128,12 @@ typedef struct {
 
 typedef d_iov_t daos_key_t;
 
+static inline bool
+daos_key_is_null(daos_key_t key)
+{
+	return key.iov_buf_len == 0 || key.iov_buf == NULL;
+}
+
 /**
  * Event and event queue
  */

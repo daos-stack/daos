@@ -146,6 +146,10 @@ ds_pool_clue_init(uuid_t uuid, enum ds_pool_dir dir, struct ds_pool_clue *clue)
 out_path:
 	D_FREE(path);
 out:
+	if (clue->pc_svc_clue != NULL)
+		rc = 1;
+	else
+		D_ASSERT(rc <= 0);
 	clue->pc_rc = rc;
 }
 
@@ -157,7 +161,7 @@ out:
 void
 ds_pool_clue_fini(struct ds_pool_clue *clue)
 {
-	if (clue->pc_rc == 0 && clue->pc_svc_clue != NULL) {
+	if (clue->pc_svc_clue != NULL) {
 		d_rank_list_free(clue->pc_svc_clue->psc_db_clue.bcl_replicas);
 		D_FREE(clue->pc_svc_clue);
 	}

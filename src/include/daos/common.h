@@ -900,6 +900,7 @@ int crt_proc_daos_prop_t(crt_proc_t proc, crt_proc_op_t proc_op,
 			 daos_prop_t **data);
 int crt_proc_struct_daos_acl(crt_proc_t proc, crt_proc_op_t proc_op,
 			     struct daos_acl **data);
+int crt_proc_d_sg_list_t(crt_proc_t proc, crt_proc_op_t proc_op, d_sg_list_t *p);
 
 bool daos_prop_valid(daos_prop_t *prop, bool pool, bool input);
 daos_prop_t *daos_prop_dup(daos_prop_t *prop, bool pool, bool input);
@@ -910,6 +911,7 @@ int daos_prop_entry_copy(struct daos_prop_entry *entry,
 			 struct daos_prop_entry *entry_dup);
 daos_recx_t *daos_recx_alloc(uint32_t nr);
 void daos_recx_free(daos_recx_t *recx);
+int path_gen(const uuid_t pool_uuid, const char *dir, const char *fname, int *idx, char **fpath);
 
 static inline void
 daos_parse_ctype(const char *string, daos_cont_layout_t *type)

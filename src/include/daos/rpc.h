@@ -91,6 +91,8 @@ enum daos_rpc_type {
 	DAOS_REQ_SWIM,
 	/** Per VOS target request */
 	DAOS_REQ_TGT,
+	/** The DAOS check request handled by cart, send/recv by tag 0. */
+	DAOS_REQ_CHK,
 };
 
 /** DAOS_TGT0_OFFSET is target 0's cart context offset */
@@ -124,6 +126,7 @@ daos_rpc_tag(int req_type, int tgt_idx)
 	case DAOS_REQ_REBUILD:
 	case DAOS_REQ_IV:
 	case DAOS_REQ_BCAST:
+	case DAOS_REQ_CHK:
 		return 0;
 	default:
 		D_ASSERTF(0, "bad req_type %d.\n", req_type);

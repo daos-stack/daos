@@ -1,3 +1,4 @@
+# pylint: disable=consider-using-f-string
 """Build management server module"""
 import daos_build
 
@@ -38,7 +39,7 @@ def scons():
                                    'srv_pool.c', 'srv_system.c',
                                    'srv_target.c', 'srv_query.c',
                                    'srv_drpc.c', 'srv_util.c',
-                                   'srv_container.c'], install_off='../..')
+                                   'srv_container.c', 'srv_chk.c'], install_off='../..')
     senv.Install('$PREFIX/lib64/daos_srv', mgmt_srv)
 
     denv = senv
