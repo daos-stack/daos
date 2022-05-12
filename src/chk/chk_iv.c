@@ -15,13 +15,6 @@
 #include "chk_internal.h"
 
 static int
-chk_leader_notify(uint64_t gen, d_rank_t rank, uint32_t phase, uint32_t status)
-{
-	/* XXX: to be implemented in subsequent patch. */
-	return 0;
-}
-
-static int
 chk_engine_notify(uint64_t gen, d_rank_t rank, uint32_t phase, uint32_t status)
 {
 	/* XXX: to be implemented in subsequent patch. */

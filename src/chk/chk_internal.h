@@ -412,6 +412,24 @@ int chk_iv_init(void);
 
 int chk_iv_fini(void);
 
+/* chk_leader.c */
+
+int chk_leader_report(uint64_t gen, uint32_t cla, uint32_t act, int32_t result, d_rank_t rank,
+		      uint32_t target, uuid_t *pool, uuid_t *cont, daos_unit_oid_t *obj,
+		      daos_key_t *dkey, daos_key_t *akey, char *msg, uint32_t option_nr,
+		      uint32_t *options, uint32_t detail_nr, d_sg_list_t *details, bool local,
+		      uint64_t *seq);
+
+int chk_leader_notify(uint64_t gen, d_rank_t rank, uint32_t phase, uint32_t status);
+
+int chk_leader_rejoin(uint64_t gen, d_rank_t rank, uint32_t phase);
+
+void chk_leader_pause(void);
+
+int chk_leader_init(void);
+
+void chk_leader_fini(void);
+
 /* chk_rpc.c */
 
 int chk_start_remote(d_rank_list_t *rank_list, uint64_t gen, uint32_t rank_nr, d_rank_t *ranks,
@@ -474,5 +492,59 @@ int chk_traverse_pools(sys_db_trav_cb_t cb, void *args);
 void chk_vos_init(void);
 
 void chk_vos_fini(void);
+
+static inline bool
+chk_rank_in_list(d_rank_list_t *rlist, d_rank_t rank)
+{
+	int	i;
+	bool	found = false;
+
+	/* XXX: if the rank list is sorted, then we can search more efficiently. */
+
+	for (i = 0; i < rlist->rl_nr; i++) {
+		if (rlist->rl_ranks[i] == rank) {
+			found = true;
+			break;
+		}
+	}
+
+	return found;
+}
+
+static inline bool
+chk_remove_rank_from_list(d_rank_list_t *rlist, d_rank_t rank)
+{
+	int	i;
+	bool	found = false;
+
+	/* XXX: if the rank list is sorted, then we can search more efficiently. */
+
+	for (i = 0; i < rlist->rl_nr; i++) {
+		if (rlist->rl_ranks[i] == rank) {
+			found = true;
+			rlist->rl_nr--;
+			/* The leader rank will always be in the rank list. */
+			D_ASSERT(rlist->rl_nr > 0);
+
+			if (i < rlist->rl_nr)
+				memmove(&rlist->rl_ranks[i], &rlist->rl_ranks[i + 1],
+					rlist->rl_nr - i);
+			break;
+		}
+	}
+
+	return found;
+}
+
+static inline void
+chk_query_free(struct chk_query_pool_shard *shards, uint32_t shard_nr)
+{
+	int	i;
+
+	for (i = 0; i < shard_nr; i++)
+		D_FREE(shards[i].cqps_targets);
+
+	D_FREE(shards);
+}
 
 #endif /* __CHK_INTERNAL_H__ */
