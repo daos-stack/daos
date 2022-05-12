@@ -28,12 +28,12 @@ dfuse: !mux
     mount_dir: "/tmp/daos_dfuse"
     disable_wb_cache: true
     name: "metadata"
-  nocache:
+  # nocache:
     # !filter-only : "/run/intercept/off"  # yamllint disable-line rule:colons
-    mount_dir: "/tmp/daos_dfuse/"
-    disable_wb_cache: true
-    disable_caching: true
-    name: "nocache"
+  #  mount_dir: "/tmp/daos_dfuse/"
+  #  disable_wb_cache: true
+  #  disable_caching: true
+  #  name: "nocache"
 intercept: !mux
   off:
     use_intercept: false
