@@ -99,6 +99,12 @@ static bool dss_check_mode;
 /* stream used to dump ABT infos and ULTs stacks */
 static FILE *abt_infos;
 
+bool
+engine_in_check(void)
+{
+	return dss_check_mode;
+}
+
 d_rank_t
 dss_self_rank(void)
 {
@@ -721,9 +727,11 @@ server_init(int argc, char *argv[])
 		goto exit_init_state;
 	D_INFO("Modules successfully set up\n");
 
-	rc = crt_register_event_cb(dss_crt_event_cb, NULL);
-	if (rc)
-		D_GOTO(exit_init_state, rc);
+	if (!dss_check_mode) {
+		rc = crt_register_event_cb(dss_crt_event_cb, NULL);
+		if (rc != 0)
+			D_GOTO(exit_init_state, rc);
+	}
 
 	rc = crt_register_hlc_error_cb(dss_crt_hlc_error_cb, NULL);
 	if (rc)
@@ -788,7 +796,8 @@ server_fini(bool force)
 	 * xstreams won't start shutting down until we call dss_srv_fini below.
 	 */
 	dss_srv_set_shutting_down();
-	crt_unregister_event_cb(dss_crt_event_cb, NULL);
+	if (!dss_check_mode)
+		crt_unregister_event_cb(dss_crt_event_cb, NULL);
 	D_INFO("unregister event callbacks done\n");
 	/*
 	 * Cleaning up modules needs to create ULTs on other xstreams; must be

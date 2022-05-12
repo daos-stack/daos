@@ -1,3 +1,4 @@
+# pylint: disable=consider-using-f-string
 """Build chk library"""
 import daos_build
 
@@ -19,8 +20,9 @@ def scons():
 
     # chk
     chk = daos_build.library(denv, 'chk',
-                             [chk_pb, 'chk_srv.c', 'chk_common.c'],
-                             install_off="../..")
+                             [chk_pb, 'chk_srv.c', 'chk_common.c', 'chk_vos.c',
+                              'chk_rpc.c', 'chk_upcall.c', 'chk_iv.c', 'chk_leader.c',
+                              'chk_engine.c'], install_off="../..")
     denv.Install('$PREFIX/lib64/daos_srv', chk)
 
 if __name__ == "SCons.Script":
