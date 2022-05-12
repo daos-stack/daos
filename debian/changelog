@@ -1,6 +1,7 @@
 daos (2.3.100-8) unstable; urgency=medium
   [ Phillip Henderson ]
   * Remove doas-client-tests-openmpi dependency from daos-tests
+  * Add daos-tests-internal package
 
  -- Phillip Henderson <phillip.henderson@intel.com>  Mon, 10 May 2022 10:53:00 -0400
 
