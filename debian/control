@@ -102,7 +102,7 @@ Package: daos-tests-internal
 Architecture: any
 Multi-Arch: same
 Depends: daos-tests (= ${binary:Version}),
-         daos-client-tests-openmpi (= ${binary:Version})
+         daos-client-tests-openmpi (= ${binary:Version}),
          daos-server-tests-openmpi (= ${binary:Version})
 Description: This is the package is a metapackage to install all of the internal test packages
  .
