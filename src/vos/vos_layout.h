@@ -94,7 +94,7 @@ enum vos_gc_type {
  *  version but doesn't update the durable format.  If both the durable format
  *  and global version remain as currently set, the optimization is disabled.
  *  This enables the user to continue using the pool with the older version unless
- *  they have explicitely upgraded it.
+ *  they have explicitly upgraded it.
  */
 #define POOL_DF_AGG_OPT				24
 /** Current durable format version */
