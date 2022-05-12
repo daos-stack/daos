@@ -796,7 +796,7 @@ pipeline {
                     }
                     steps {
                         testRpm inst_repos: daosRepos(),
-                                daos_pkg_version: daosPackagesVersion(next_version, add_daos_pkgs)
+                                daos_pkg_version: daosPackagesVersion(next_version)
                    }
                 } // stage('Test CentOS 7 RPMs')
                 stage('Scan CentOS 7 RPMs') {
@@ -809,7 +809,7 @@ pipeline {
                     }
                     steps {
                         scanRpms inst_repos: daosRepos(),
-                                 daos_pkg_version: daosPackagesVersion(next_version, add_daos_pkgs)
+                                 daos_pkg_version: daosPackagesVersion(next_version)
                     }
                     post {
                         always {
@@ -827,7 +827,7 @@ pipeline {
                     }
                     steps {
                         scanRpms inst_repos: daosRepos(),
-                                 daos_pkg_version: daosPackagesVersion(next_version, add_daos_pkgs)
+                                 daos_pkg_version: daosPackagesVersion(next_version)
                     }
                     post {
                         always {
@@ -845,7 +845,7 @@ pipeline {
                     }
                     steps {
                         scanRpms inst_repos: daosRepos(),
-                                 daos_pkg_version: daosPackagesVersion(next_version, add_daos_pkgs)
+                                 daos_pkg_version: daosPackagesVersion(next_version)
                     }
                     post {
                         always {
