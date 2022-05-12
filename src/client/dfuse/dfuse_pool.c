@@ -11,9 +11,8 @@
 #include "daos_security.h"
 
 /* Lookup a pool */
-void
-dfuse_pool_lookup(fuse_req_t req, struct dfuse_inode_entry *parent,
-		  const char *name)
+bool
+dfuse_pool_lookup(fuse_req_t req, struct dfuse_inode_entry *parent, const char *name)
 {
 	struct dfuse_projection_info	*fs_handle = fuse_req_userdata(req);
 	struct dfuse_inode_entry	*ie = NULL;
@@ -44,7 +43,7 @@ dfuse_pool_lookup(fuse_req_t req, struct dfuse_inode_entry *parent,
 
 		DFUSE_TRA_DEBUG(parent, "Invalid pool uuid '%s'", name);
 		DFUSE_REPLY_ENTRY(parent, req, entry);
-		return;
+		return false;
 	}
 
 	DFUSE_TRA_DEBUG(parent, "Lookup of "DF_UUID,
@@ -79,7 +78,7 @@ dfuse_pool_lookup(fuse_req_t req, struct dfuse_inode_entry *parent,
 		entry.generation = 1;
 		entry.ino = entry.attr.st_ino;
 		DFUSE_REPLY_ENTRY(ie, req, entry);
-		return;
+		return false;
 	}
 
 	D_ALLOC_PTR(ie);
@@ -140,7 +139,7 @@ dfuse_pool_lookup(fuse_req_t req, struct dfuse_inode_entry *parent,
 
 	dfuse_reply_entry(fs_handle, ie, NULL, true, req);
 
-	return;
+	return false;
 decref:
 	d_hash_rec_decref(&fs_handle->dpi_pool_table, &dfp->dfp_entry);
 	D_FREE(ie);
@@ -154,4 +153,5 @@ err:
 	} else {
 		DFUSE_REPLY_ERR_RAW(parent, req, rc);
 	}
+	return false;
 }

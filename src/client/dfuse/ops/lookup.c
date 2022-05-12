@@ -11,18 +11,17 @@
 
 char *duns_xattr_name = DUNS_XATTR_NAME;
 
-void
-dfuse_reply_entry(struct dfuse_projection_info *fs_handle,
-		  struct dfuse_inode_entry *ie,
-		  struct fuse_file_info *fi_out,
-		  bool is_new,
-		  fuse_req_t req)
+bool
+dfuse_reply_entry2(struct dfuse_projection_info *fs_handle, struct dfuse_inode_entry *ie,
+		   struct fuse_file_info *fi_out, bool is_new, fuse_req_t req,
+		   struct dfuse_inode_entry *parent)
 {
 	struct fuse_entry_param	entry = {0};
 	d_list_t		*rlink;
 	ino_t			wipe_parent = 0;
 	char			wipe_name[NAME_MAX + 1];
 	int			rc;
+	bool                     dropped = false;
 
 	D_ASSERT(ie->ie_parent);
 	D_ASSERT(ie->ie_dfs);
@@ -133,23 +132,36 @@ dfuse_reply_entry(struct dfuse_projection_info *fs_handle,
 		entry.attr_timeout = ie->ie_dfs->dfc_attr_timeout;
 	}
 
+	if (parent) {
+		d_hash_rec_decref_ro(&fs_handle->dpi_iet, &parent->ie_htl);
+		dropped = true;
+	}
+
 	if (fi_out)
 		DFUSE_REPLY_CREATE(ie, req, entry, fi_out);
 	else
 		DFUSE_REPLY_ENTRY(ie, req, entry);
 
 	if (wipe_parent == 0)
-		return;
+		return dropped;
 
 	rc = fuse_lowlevel_notify_inval_entry(fs_handle->dpi_info->di_session, wipe_parent,
 					      wipe_name, strnlen(wipe_name, NAME_MAX));
 	if (rc && rc != -ENOENT)
 		DFUSE_TRA_ERROR(ie, "inval_entry returned %d: %s", rc, strerror(-rc));
 
-	return;
+	return dropped;
 out_err:
 	DFUSE_REPLY_ERR_RAW(fs_handle, req, rc);
 	dfs_release(ie->ie_obj);
+	return false;
+}
+
+void
+dfuse_reply_entry(struct dfuse_projection_info *fs_handle, struct dfuse_inode_entry *ie,
+		  struct fuse_file_info *fi_out, bool is_new, fuse_req_t req)
+{
+	dfuse_reply_entry2(fs_handle, ie, fi_out, is_new, req, NULL);
 }
 
 /* Check for and set a unified namespace entry point.
@@ -228,9 +240,8 @@ out_err:
 	return rc;
 }
 
-void
-dfuse_cb_lookup(fuse_req_t req, struct dfuse_inode_entry *parent,
-		const char *name)
+bool
+dfuse_cb_lookup(fuse_req_t req, struct dfuse_inode_entry *parent, const char *name)
 {
 	struct dfuse_projection_info	*fs_handle = fuse_req_userdata(req);
 	struct dfuse_inode_entry	*ie;
@@ -279,8 +290,7 @@ dfuse_cb_lookup(fuse_req_t req, struct dfuse_inode_entry *parent,
 			D_GOTO(out_release, rc);
 	}
 
-	dfuse_reply_entry(fs_handle, ie, NULL, false, req);
-	return;
+	return dfuse_reply_entry2(fs_handle, ie, NULL, false, req, parent);
 
 out_release:
 	dfs_release(ie->ie_obj);
@@ -295,4 +305,5 @@ out:
 	} else {
 		DFUSE_REPLY_ERR_RAW(parent, req, rc);
 	}
+	return false;
 }

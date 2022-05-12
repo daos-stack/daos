@@ -10,7 +10,7 @@
 #include "daos_api.h"
 
 /* Lookup a container within a pool */
-void
+bool
 dfuse_cont_lookup(fuse_req_t req, struct dfuse_inode_entry *parent, const char *name)
 {
 	struct dfuse_projection_info	*fs_handle = fuse_req_userdata(req);
@@ -36,7 +36,7 @@ dfuse_cont_lookup(fuse_req_t req, struct dfuse_inode_entry *parent, const char *
 
 		DFUSE_TRA_DEBUG(parent, "Invalid container uuid '%s'", name);
 		DFUSE_REPLY_ENTRY(parent, req, entry);
-		return;
+		return false;
 	}
 
 	DFUSE_TRA_DEBUG(parent, "Lookup of "DF_UUID, DP_UUID(cont));
@@ -74,7 +74,7 @@ dfuse_cont_lookup(fuse_req_t req, struct dfuse_inode_entry *parent, const char *
 		entry.generation = 1;
 		entry.ino = entry.attr.st_ino;
 		DFUSE_REPLY_ENTRY(ie, req, entry);
-		return;
+		return false;
 	}
 
 	D_ALLOC_PTR(ie);
@@ -101,7 +101,7 @@ dfuse_cont_lookup(fuse_req_t req, struct dfuse_inode_entry *parent, const char *
 	dfs_obj2id(ie->ie_obj, &ie->ie_oid);
 
 	dfuse_reply_entry(fs_handle, ie, NULL, true, req);
-	return;
+	return false;
 close:
 	D_FREE(ie);
 decref:
@@ -115,4 +115,5 @@ err:
 	} else {
 		DFUSE_REPLY_ERR_RAW(parent, req, rc);
 	}
+	return false;
 }

@@ -112,8 +112,7 @@ struct dfuse_inode_ops {
 	void (*getattr)(fuse_req_t req, struct dfuse_inode_entry *inode);
 	void (*setattr)(fuse_req_t req, struct dfuse_inode_entry *inode,
 			struct stat *attr, int to_set);
-	void (*lookup)(fuse_req_t req, struct dfuse_inode_entry *parent,
-		       const char *name);
+	bool (*lookup)(fuse_req_t req, struct dfuse_inode_entry *parent, const char *name);
 	void (*mknod)(fuse_req_t req, struct dfuse_inode_entry *parent,
 		      const char *name, mode_t mode);
 	void (*opendir)(fuse_req_t req, struct dfuse_inode_entry *inode,
@@ -590,7 +589,7 @@ dfuse_ie_close(struct dfuse_projection_info *, struct dfuse_inode_entry *);
 
 /* ops/...c */
 
-void
+bool
 dfuse_cb_lookup(fuse_req_t, struct dfuse_inode_entry *, const char *);
 
 void
@@ -700,17 +699,15 @@ dfuse_oid_unlinked(struct dfuse_projection_info *fs_handle, fuse_req_t req, daos
 		   struct dfuse_inode_entry *parent, const char *name);
 
 /* dfuse_cont.c */
-void
-dfuse_cont_lookup(fuse_req_t req, struct dfuse_inode_entry *parent,
-		  const char *name);
+bool
+dfuse_cont_lookup(fuse_req_t req, struct dfuse_inode_entry *parent, const char *name);
 
 void
 dfuse_cont_mknod(fuse_req_t req, struct dfuse_inode_entry *parent,
 		 const char *name, mode_t mode);
 
 /* dfuse_pool.c */
-void
-dfuse_pool_lookup(fuse_req_t req, struct dfuse_inode_entry *parent,
-		  const char *name);
+bool
+dfuse_pool_lookup(fuse_req_t req, struct dfuse_inode_entry *parent, const char *name);
 
 #endif /* __DFUSE_H__ */

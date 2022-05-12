@@ -376,8 +376,8 @@ d_list_t *d_hash_rec_find_insert(struct d_hash_table *htable,
  * \param[in] link		The link chain of the record being moved
  */
 void
-	  d_hash_rec_promote(struct d_hash_table *htable, const void *key, unsigned int ksize,
-			     d_list_t *link);
+     d_hash_rec_promote(struct d_hash_table *htable, const void *key, unsigned int ksize,
+			d_list_t *link);
 
 /**
  * Insert a new key and its record chain \p link into the hash table. The hash
@@ -481,6 +481,17 @@ void d_hash_rec_addref(struct d_hash_table *htable, d_list_t *link);
  * \param[in] link		Chain link of the hash record
  */
 void d_hash_rec_decref(struct d_hash_table *htable, d_list_t *link);
+
+/**
+ * Decrease the refcount of the record.
+ * Will assert if hop_decref() returns true, to be used where at least one reference is known to
+ * remain.
+ *
+ * \param[in] htable		Pointer to the hash table
+ * \param[in] link		Chain link of the hash record
+ */
+void
+	  d_hash_rec_decref_ro(struct d_hash_table *htable, d_list_t *link);
 
 /**
  * Decrease the refcount of the record by count.
