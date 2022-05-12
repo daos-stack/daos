@@ -34,7 +34,6 @@ struct rsvc_client {
 	uint64_t	sc_leader_term;
 	int		sc_leader_index;	/* in sc_ranks */
 	int		sc_next;		/* in sc_ranks */
-	int		sc_tried;
 };
 
 /** Return code of rsvc_client_complete_rpc() */
