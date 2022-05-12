@@ -232,6 +232,15 @@ Requires: %{name}-server-tests%{?_isa} = %{version}-%{release}
 %description tests
 This is the package is a metapackage to install all of the test packages
 
+%package tests-internal
+Summary: The entire DAOS internal test suite
+Requires: %{name}-tests%{?_isa} = %{version}-%{release}
+Requires: %{name}-client-tests-openmpi%{?_isa} = %{version}-%{release}
+Requires: %{name}-server-tests-openmpi%{?_isa} = %{version}-%{release}
+
+%description tests-internal
+This is the package is a metapackage to install all of the internal test packages
+
 %package client-tests
 Summary: The DAOS test suite
 Requires: %{name}-client%{?_isa} = %{version}-%{release}
@@ -564,6 +573,7 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %changelog
 * Mon May 9 2022 Phillip Henderson <phillip.henderson@intel.com> 2.1.102-2
 - Remove doas-*-tests-openmpi dependencies from daos-tests
+- Add the daos-tests-internal package
 
 * Thu May 5 2022 Johann Lombardi <johann.lombardi@intel.com> 2.1.102-1
 - Bump version to 2.1.102

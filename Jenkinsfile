@@ -13,12 +13,10 @@
 // To use a test branch (i.e. PR) until it lands to master
 // I.e. for testing library changes
 //@Library(value="pipeline-lib@your_branch") _
+@Library(value="pipeline-lib@DAOS-10535") _
 
 // For master, this is just some wildly high number
 next_version = "2.3.0"
-
-// Additional daos RPM packages required for functional tests
-add_daos_pkgs = ",-client-tests-openmpi,-server-tests-openmpi"
 
 // Don't define this as a type or it loses it's global scope
 target_branch = env.CHANGE_TARGET ? env.CHANGE_TARGET : env.BRANCH_NAME
@@ -701,7 +699,7 @@ pipeline {
                     }
                     steps {
                         functionalTest inst_repos: daosRepos(),
-                                       inst_rpms: functionalPackages(1, next_version, add_daos_pkgs),
+                                       inst_rpms: functionalPackages(1, next_version),
                                        test_function: 'runTestFunctionalV2'
                     }
                     post {
@@ -720,7 +718,7 @@ pipeline {
                     }
                     steps {
                         functionalTest inst_repos: daosRepos(),
-                                       inst_rpms: functionalPackages(1, next_version, add_daos_pkgs),
+                                       inst_rpms: functionalPackages(1, next_version),
                                        test_function: 'runTestFunctionalV2'
                     }
                     post {
@@ -739,7 +737,7 @@ pipeline {
                     }
                     steps {
                         functionalTest inst_repos: daosRepos(),
-                                       inst_rpms: functionalPackages(1, next_version, add_daos_pkgs),
+                                       inst_rpms: functionalPackages(1, next_version),
                                        test_function: 'runTestFunctionalV2'
                     }
                     post {
@@ -758,7 +756,7 @@ pipeline {
                     }
                     steps {
                         functionalTest inst_repos: daosRepos(),
-                                       inst_rpms: functionalPackages(1, next_version, add_daos_pkgs),
+                                       inst_rpms: functionalPackages(1, next_version),
                                        test_function: 'runTestFunctionalV2'
                     }
                     post {
@@ -777,7 +775,7 @@ pipeline {
                     }
                     steps {
                         functionalTest inst_repos: daosRepos(),
-                                       inst_rpms: functionalPackages(1, next_version, add_daos_pkgs),
+                                       inst_rpms: functionalPackages(1, next_version),
                                        test_function: 'runTestFunctionalV2'
                     }
                     post {
@@ -911,7 +909,7 @@ pipeline {
             }
             steps {
                 storagePrepTest inst_repos: daosRepos(),
-                                inst_rpms: functionalPackages(1, next_version, add_daos_pkgs)
+                                inst_rpms: functionalPackages(1, next_version)
             }
         } // stage('Test Storage Prep')
         stage('Test Hardware') {
@@ -931,7 +929,7 @@ pipeline {
                     }
                     steps {
                         functionalTest inst_repos: daosRepos(),
-                                       inst_rpms: functionalPackages(1, next_version, add_daos_pkgs),
+                                       inst_rpms: functionalPackages(1, next_version),
                                        test_function: 'runTestFunctionalV2'
                     }
                     post {
@@ -951,7 +949,7 @@ pipeline {
                     }
                     steps {
                         functionalTest inst_repos: daosRepos(),
-                                       inst_rpms: functionalPackages(1, next_version, add_daos_pkgs),
+                                       inst_rpms: functionalPackages(1, next_version),
                                        test_function: 'runTestFunctionalV2'
                    }
                     post {
@@ -971,7 +969,7 @@ pipeline {
                     }
                     steps {
                         functionalTest inst_repos: daosRepos(),
-                                       inst_rpms: functionalPackages(1, next_version, add_daos_pkgs),
+                                       inst_rpms: functionalPackages(1, next_version),
                                        test_function: 'runTestFunctionalV2'
                     }
                     post {
