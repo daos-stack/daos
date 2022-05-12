@@ -440,7 +440,7 @@ bool obj_csum_dedup_candidate(struct cont_props *props, daos_iod_t *iods,
 			      uint32_t iod_nr);
 
 int obj_grp_leader_get(struct dc_object *obj, int grp_idx,
-		       unsigned int map_ver, uint8_t *bit_map);
+		       unsigned int map_ver, bool has_condition, uint8_t *bit_map);
 #define obj_shard_close(shard)	dc_obj_shard_close(shard)
 int obj_recx_ec_daos2shard(struct daos_oclass_attr *oca, int shard, daos_recx_t **recxs_p,
 			   daos_epoch_t **recx_ephs_p, unsigned int *iod_nr);
@@ -470,7 +470,7 @@ obj_retry_error(int err)
 	       err == -DER_INPROGRESS || err == -DER_GRPVER ||
 	       err == -DER_EXCLUDED || err == -DER_CSUM ||
 	       err == -DER_TX_BUSY || err == -DER_TX_UNCERTAIN ||
-	       err == -DER_SHARDS_OVERLAP ||
+	       err == -DER_NEED_TX ||
 	       daos_crt_network_error(err);
 }
 
