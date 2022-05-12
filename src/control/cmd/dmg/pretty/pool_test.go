@@ -15,7 +15,7 @@ import (
 	"github.com/dustin/go-humanize"
 	"github.com/google/go-cmp/cmp"
 
-	"github.com/daos-stack/daos/src/control/common"
+	"github.com/daos-stack/daos/src/control/common/test"
 	"github.com/daos-stack/daos/src/control/lib/control"
 	"github.com/daos-stack/daos/src/control/system"
 )
@@ -35,7 +35,7 @@ Pool space info:
 		},
 		"normal response": {
 			pqr: &control.PoolQueryResp{
-				UUID: common.MockUUID(),
+				UUID: test.MockUUID(),
 				PoolInfo: control.PoolInfo{
 					TotalTargets:    2,
 					DisabledTargets: 1,
@@ -70,11 +70,11 @@ Pool space info:
   Total size: 2 B
   Free: 1 B, min:0 B, max:0 B, mean:0 B
 Rebuild busy, 42 objs, 21 recs
-`, common.MockUUID()),
+`, test.MockUUID()),
 		},
 		"normal response; enabled ranks": {
 			pqr: &control.PoolQueryResp{
-				UUID: common.MockUUID(),
+				UUID: test.MockUUID(),
 				PoolInfo: control.PoolInfo{
 					TotalTargets:    2,
 					DisabledTargets: 1,
@@ -111,11 +111,11 @@ Pool space info:
   Total size: 2 B
   Free: 1 B, min:0 B, max:0 B, mean:0 B
 Rebuild busy, 42 objs, 21 recs
-`, common.MockUUID()),
+`, test.MockUUID()),
 		},
 		"normal response; disabled ranks": {
 			pqr: &control.PoolQueryResp{
-				UUID: common.MockUUID(),
+				UUID: test.MockUUID(),
 				PoolInfo: control.PoolInfo{
 					TotalTargets:    2,
 					DisabledTargets: 1,
@@ -152,12 +152,52 @@ Pool space info:
   Total size: 2 B
   Free: 1 B, min:0 B, max:0 B, mean:0 B
 Rebuild busy, 42 objs, 21 recs
-`, common.MockUUID()),
+`, test.MockUUID()),
 		},
-
+		"unknown/invalid rebuild state response": {
+			pqr: &control.PoolQueryResp{
+				UUID: test.MockUUID(),
+				PoolInfo: control.PoolInfo{
+					TotalTargets:    2,
+					DisabledTargets: 1,
+					ActiveTargets:   1,
+					Leader:          42,
+					Version:         100,
+					DisabledRanks:   system.MustCreateRankSet("[0,1,3]"),
+					Rebuild: &control.PoolRebuildStatus{
+						State:   42,
+						Objects: 42,
+						Records: 21,
+					},
+					TierStats: []*control.StorageUsageStats{
+						{
+							Total: 2,
+							Free:  1,
+						},
+						{
+							Total: 2,
+							Free:  1,
+						},
+					},
+				},
+			},
+			expPrintStr: fmt.Sprintf(`
+Pool %s, ntarget=2, disabled=1, leader=42, version=100
+Pool space info:
+- Disabled targets: 0-1,3
+- Target(VOS) count:1
+- Storage tier 0 (SCM):
+  Total size: 2 B
+  Free: 1 B, min:0 B, max:0 B, mean:0 B
+- Storage tier 1 (NVMe):
+  Total size: 2 B
+  Free: 1 B, min:0 B, max:0 B, mean:0 B
+Rebuild unknown, 42 objs, 21 recs
+`, test.MockUUID()),
+		},
 		"rebuild failed": {
 			pqr: &control.PoolQueryResp{
-				UUID: common.MockUUID(),
+				UUID: test.MockUUID(),
 				PoolInfo: control.PoolInfo{
 					TotalTargets:    2,
 					DisabledTargets: 1,
@@ -193,12 +233,621 @@ Pool space info:
   Total size: 2 B
   Free: 1 B, min:0 B, max:0 B, mean:0 B
 Rebuild failed, rc=0, status=2
-`, common.MockUUID()),
+`, test.MockUUID()),
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			var bld strings.Builder
 			if err := PrintPoolQueryResponse(tc.pqr, &bld); err != nil {
+				t.Fatal(err)
+			}
+
+			if diff := cmp.Diff(strings.TrimLeft(tc.expPrintStr, "\n"), bld.String()); diff != "" {
+				t.Fatalf("unexpected format string (-want, +got):\n%s\n", diff)
+			}
+		})
+	}
+}
+
+func TestPretty_PrintPoolQueryTargetResp(t *testing.T) {
+	for name, tc := range map[string]struct {
+		pqtr        *control.PoolQueryTargetResp
+		expPrintStr string
+	}{
+		"empty response": {
+			pqtr:        &control.PoolQueryTargetResp{},
+			expPrintStr: "\n",
+		},
+		"der_nonexist response (e.g., invalid target_idx input)": {
+			pqtr: &control.PoolQueryTargetResp{
+				Status: -1005,
+			},
+			expPrintStr: "\n",
+		},
+		"valid: single target (unknown, down_out)": {
+			pqtr: &control.PoolQueryTargetResp{
+				Status: 0,
+				Infos: []*control.PoolQueryTargetInfo{
+					{
+						Type:  0,
+						State: control.PoolTargetStateDownOut,
+						Space: []*control.StorageTargetUsage{
+							{
+								Total: 6000000000,
+								Free:  5000000000,
+							},
+							{
+								Total: 100000000000,
+								Free:  90000000000,
+							},
+						},
+					},
+				},
+			},
+			expPrintStr: `
+Target: type unknown, state down_out
+- Storage tier 0 (SCM):
+  Total size: 6.0 GB
+  Free: 5.0 GB
+- Storage tier 1 (NVMe):
+  Total size: 100 GB
+  Free: 90 GB
+`,
+		},
+		"valid: single target (unknown, down)": {
+			pqtr: &control.PoolQueryTargetResp{
+				Status: 0,
+				Infos: []*control.PoolQueryTargetInfo{
+					{
+						Type:  0,
+						State: control.PoolTargetStateDown,
+						Space: []*control.StorageTargetUsage{
+							{
+								Total: 6000000000,
+								Free:  5000000000,
+							},
+							{
+								Total: 100000000000,
+								Free:  90000000000,
+							},
+						},
+					},
+				},
+			},
+			expPrintStr: `
+Target: type unknown, state down
+- Storage tier 0 (SCM):
+  Total size: 6.0 GB
+  Free: 5.0 GB
+- Storage tier 1 (NVMe):
+  Total size: 100 GB
+  Free: 90 GB
+`,
+		},
+		"valid: single target (unknown, up)": {
+			pqtr: &control.PoolQueryTargetResp{
+				Status: 0,
+				Infos: []*control.PoolQueryTargetInfo{
+					{
+						Type:  0,
+						State: control.PoolTargetStateUp,
+						Space: []*control.StorageTargetUsage{
+							{
+								Total: 6000000000,
+								Free:  5000000000,
+							},
+							{
+								Total: 100000000000,
+								Free:  90000000000,
+							},
+						},
+					},
+				},
+			},
+			expPrintStr: `
+Target: type unknown, state up
+- Storage tier 0 (SCM):
+  Total size: 6.0 GB
+  Free: 5.0 GB
+- Storage tier 1 (NVMe):
+  Total size: 100 GB
+  Free: 90 GB
+`,
+		},
+		"valid: single target (unknown, up_in)": {
+			pqtr: &control.PoolQueryTargetResp{
+				Status: 0,
+				Infos: []*control.PoolQueryTargetInfo{
+					{
+						Type:  0,
+						State: control.PoolTargetStateUpIn,
+						Space: []*control.StorageTargetUsage{
+							{
+								Total: 6000000000,
+								Free:  5000000000,
+							},
+							{
+								Total: 100000000000,
+								Free:  90000000000,
+							},
+						},
+					},
+				},
+			},
+			expPrintStr: `
+Target: type unknown, state up_in
+- Storage tier 0 (SCM):
+  Total size: 6.0 GB
+  Free: 5.0 GB
+- Storage tier 1 (NVMe):
+  Total size: 100 GB
+  Free: 90 GB
+`,
+		},
+		"valid: single target (unknown, new)": {
+			pqtr: &control.PoolQueryTargetResp{
+				Status: 0,
+				Infos: []*control.PoolQueryTargetInfo{
+					{
+						Type:  0,
+						State: control.PoolTargetStateNew,
+						Space: []*control.StorageTargetUsage{
+							{
+								Total: 6000000000,
+								Free:  5000000000,
+							},
+							{
+								Total: 100000000000,
+								Free:  90000000000,
+							},
+						},
+					},
+				},
+			},
+			expPrintStr: `
+Target: type unknown, state new
+- Storage tier 0 (SCM):
+  Total size: 6.0 GB
+  Free: 5.0 GB
+- Storage tier 1 (NVMe):
+  Total size: 100 GB
+  Free: 90 GB
+`,
+		},
+		"valid: single target (unknown, drain)": {
+			pqtr: &control.PoolQueryTargetResp{
+				Status: 0,
+				Infos: []*control.PoolQueryTargetInfo{
+					{
+						Type:  0,
+						State: control.PoolTargetStateDrain,
+						Space: []*control.StorageTargetUsage{
+							{
+								Total: 6000000000,
+								Free:  5000000000,
+							},
+							{
+								Total: 100000000000,
+								Free:  90000000000,
+							},
+						},
+					},
+				},
+			},
+			expPrintStr: `
+Target: type unknown, state drain
+- Storage tier 0 (SCM):
+  Total size: 6.0 GB
+  Free: 5.0 GB
+- Storage tier 1 (NVMe):
+  Total size: 100 GB
+  Free: 90 GB
+`,
+		},
+		"valid: multiple target (mixed statuses exclude 2 targets in progress)": {
+			pqtr: &control.PoolQueryTargetResp{
+				Status: 0,
+				Infos: []*control.PoolQueryTargetInfo{
+					{
+						Type:  0,
+						State: control.PoolTargetStateDown,
+						Space: []*control.StorageTargetUsage{
+							{
+								Total: 6000000000,
+								Free:  5000000000,
+							},
+							{
+								Total: 100000000000,
+								Free:  90000000000,
+							},
+						},
+					},
+					{
+						Type:  0,
+						State: control.PoolTargetStateUpIn,
+						Space: []*control.StorageTargetUsage{
+							{
+								Total: 6000000000,
+								Free:  5000000000,
+							},
+							{
+								Total: 100000000000,
+								Free:  90000000000,
+							},
+						},
+					},
+					{
+						Type:  0,
+						State: control.PoolTargetStateDownOut,
+						Space: []*control.StorageTargetUsage{
+							{
+								Total: 6000000000,
+								Free:  5000000000,
+							},
+							{
+								Total: 100000000000,
+								Free:  90000000000,
+							},
+						},
+					},
+					{
+						Type:  0,
+						State: control.PoolTargetStateUpIn,
+						Space: []*control.StorageTargetUsage{
+							{
+								Total: 6000000000,
+								Free:  5000000000,
+							},
+							{
+								Total: 100000000000,
+								Free:  90000000000,
+							},
+						},
+					},
+				},
+			},
+			expPrintStr: `
+Target: type unknown, state down
+- Storage tier 0 (SCM):
+  Total size: 6.0 GB
+  Free: 5.0 GB
+- Storage tier 1 (NVMe):
+  Total size: 100 GB
+  Free: 90 GB
+Target: type unknown, state up_in
+- Storage tier 0 (SCM):
+  Total size: 6.0 GB
+  Free: 5.0 GB
+- Storage tier 1 (NVMe):
+  Total size: 100 GB
+  Free: 90 GB
+Target: type unknown, state down_out
+- Storage tier 0 (SCM):
+  Total size: 6.0 GB
+  Free: 5.0 GB
+- Storage tier 1 (NVMe):
+  Total size: 100 GB
+  Free: 90 GB
+Target: type unknown, state up_in
+- Storage tier 0 (SCM):
+  Total size: 6.0 GB
+  Free: 5.0 GB
+- Storage tier 1 (NVMe):
+  Total size: 100 GB
+  Free: 90 GB
+`,
+		},
+		"invalid target state": {
+			pqtr: &control.PoolQueryTargetResp{
+				Status: 0,
+				Infos: []*control.PoolQueryTargetInfo{
+					{
+						Type:  0,
+						State: 42,
+						Space: []*control.StorageTargetUsage{
+							{
+								Total: 6000000000,
+								Free:  5000000000,
+							},
+							{
+								Total: 100000000000,
+								Free:  90000000000,
+							},
+						},
+					},
+					{
+						Type:  0,
+						State: control.PoolTargetStateUpIn,
+						Space: []*control.StorageTargetUsage{
+							{
+								Total: 6000000000,
+								Free:  5000000000,
+							},
+							{
+								Total: 100000000000,
+								Free:  90000000000,
+							},
+						},
+					},
+					{
+						Type:  0,
+						State: control.PoolTargetStateDownOut,
+						Space: []*control.StorageTargetUsage{
+							{
+								Total: 6000000000,
+								Free:  5000000000,
+							},
+							{
+								Total: 100000000000,
+								Free:  90000000000,
+							},
+						},
+					},
+					{
+						Type:  0,
+						State: control.PoolTargetStateUpIn,
+						Space: []*control.StorageTargetUsage{
+							{
+								Total: 6000000000,
+								Free:  5000000000,
+							},
+							{
+								Total: 100000000000,
+								Free:  90000000000,
+							},
+						},
+					},
+				},
+			},
+			expPrintStr: `
+Target: type unknown, state invalid
+- Storage tier 0 (SCM):
+  Total size: 6.0 GB
+  Free: 5.0 GB
+- Storage tier 1 (NVMe):
+  Total size: 100 GB
+  Free: 90 GB
+Target: type unknown, state up_in
+- Storage tier 0 (SCM):
+  Total size: 6.0 GB
+  Free: 5.0 GB
+- Storage tier 1 (NVMe):
+  Total size: 100 GB
+  Free: 90 GB
+Target: type unknown, state down_out
+- Storage tier 0 (SCM):
+  Total size: 6.0 GB
+  Free: 5.0 GB
+- Storage tier 1 (NVMe):
+  Total size: 100 GB
+  Free: 90 GB
+Target: type unknown, state up_in
+- Storage tier 0 (SCM):
+  Total size: 6.0 GB
+  Free: 5.0 GB
+- Storage tier 1 (NVMe):
+  Total size: 100 GB
+  Free: 90 GB
+`,
+		},
+		"invalid target type": {
+			pqtr: &control.PoolQueryTargetResp{
+				Status: 0,
+				Infos: []*control.PoolQueryTargetInfo{
+					{
+						Type:  42,
+						State: control.PoolTargetStateDown,
+						Space: []*control.StorageTargetUsage{
+							{
+								Total: 6000000000,
+								Free:  5000000000,
+							},
+							{
+								Total: 100000000000,
+								Free:  90000000000,
+							},
+						},
+					},
+					{
+						Type:  0,
+						State: control.PoolTargetStateUpIn,
+						Space: []*control.StorageTargetUsage{
+							{
+								Total: 6000000000,
+								Free:  5000000000,
+							},
+							{
+								Total: 100000000000,
+								Free:  90000000000,
+							},
+						},
+					},
+					{
+						Type:  0,
+						State: control.PoolTargetStateDownOut,
+						Space: []*control.StorageTargetUsage{
+							{
+								Total: 6000000000,
+								Free:  5000000000,
+							},
+							{
+								Total: 100000000000,
+								Free:  90000000000,
+							},
+						},
+					},
+					{
+						Type:  0,
+						State: control.PoolTargetStateUpIn,
+						Space: []*control.StorageTargetUsage{
+							{
+								Total: 6000000000,
+								Free:  5000000000,
+							},
+							{
+								Total: 100000000000,
+								Free:  90000000000,
+							},
+						},
+					},
+				},
+			},
+			expPrintStr: `
+Target: type invalid, state down
+- Storage tier 0 (SCM):
+  Total size: 6.0 GB
+  Free: 5.0 GB
+- Storage tier 1 (NVMe):
+  Total size: 100 GB
+  Free: 90 GB
+Target: type unknown, state up_in
+- Storage tier 0 (SCM):
+  Total size: 6.0 GB
+  Free: 5.0 GB
+- Storage tier 1 (NVMe):
+  Total size: 100 GB
+  Free: 90 GB
+Target: type unknown, state down_out
+- Storage tier 0 (SCM):
+  Total size: 6.0 GB
+  Free: 5.0 GB
+- Storage tier 1 (NVMe):
+  Total size: 100 GB
+  Free: 90 GB
+Target: type unknown, state up_in
+- Storage tier 0 (SCM):
+  Total size: 6.0 GB
+  Free: 5.0 GB
+- Storage tier 1 (NVMe):
+  Total size: 100 GB
+  Free: 90 GB
+`,
+		},
+		"three tiers; third tier unknown StorageMediaType": {
+			pqtr: &control.PoolQueryTargetResp{
+				Status: 0,
+				Infos: []*control.PoolQueryTargetInfo{
+					{
+						Type:  0,
+						State: control.PoolTargetStateDown,
+						Space: []*control.StorageTargetUsage{
+							{
+								Total: 6000000000,
+								Free:  5000000000,
+							},
+							{
+								Total: 100000000000,
+								Free:  90000000000,
+							},
+							{
+								Total: 800000000000,
+								Free:  200000000000,
+							},
+						},
+					},
+					{
+						Type:  0,
+						State: control.PoolTargetStateUpIn,
+						Space: []*control.StorageTargetUsage{
+							{
+								Total: 6000000000,
+								Free:  5000000000,
+							},
+							{
+								Total: 100000000000,
+								Free:  90000000000,
+							},
+							{
+								Total: 800000000000,
+								Free:  200000000000,
+							},
+						},
+					},
+					{
+						Type:  0,
+						State: control.PoolTargetStateDownOut,
+						Space: []*control.StorageTargetUsage{
+							{
+								Total: 6000000000,
+								Free:  5000000000,
+							},
+							{
+								Total: 100000000000,
+								Free:  90000000000,
+							},
+							{
+								Total: 800000000000,
+								Free:  200000000000,
+							},
+						},
+					},
+					{
+						Type:  0,
+						State: control.PoolTargetStateUpIn,
+						Space: []*control.StorageTargetUsage{
+							{
+								Total: 6000000000,
+								Free:  5000000000,
+							},
+							{
+								Total: 100000000000,
+								Free:  90000000000,
+							},
+							{
+								Total: 800000000000,
+								Free:  200000000000,
+							},
+						},
+					},
+				},
+			},
+			expPrintStr: `
+Target: type unknown, state down
+- Storage tier 0 (SCM):
+  Total size: 6.0 GB
+  Free: 5.0 GB
+- Storage tier 1 (NVMe):
+  Total size: 100 GB
+  Free: 90 GB
+- Storage tier 2 (unknown):
+  Total size: 800 GB
+  Free: 200 GB
+Target: type unknown, state up_in
+- Storage tier 0 (SCM):
+  Total size: 6.0 GB
+  Free: 5.0 GB
+- Storage tier 1 (NVMe):
+  Total size: 100 GB
+  Free: 90 GB
+- Storage tier 2 (unknown):
+  Total size: 800 GB
+  Free: 200 GB
+Target: type unknown, state down_out
+- Storage tier 0 (SCM):
+  Total size: 6.0 GB
+  Free: 5.0 GB
+- Storage tier 1 (NVMe):
+  Total size: 100 GB
+  Free: 90 GB
+- Storage tier 2 (unknown):
+  Total size: 800 GB
+  Free: 200 GB
+Target: type unknown, state up_in
+- Storage tier 0 (SCM):
+  Total size: 6.0 GB
+  Free: 5.0 GB
+- Storage tier 1 (NVMe):
+  Total size: 100 GB
+  Free: 90 GB
+- Storage tier 2 (unknown):
+  Total size: 800 GB
+  Free: 200 GB
+`,
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			var bld strings.Builder
+			if err := PrintPoolQueryTargetResponse(tc.pqtr, &bld); err != nil {
 				t.Fatal(err)
 			}
 
@@ -228,7 +877,7 @@ func TestPretty_PrintPoolCreateResp(t *testing.T) {
 		},
 		"basic": {
 			pcr: &control.PoolCreateResp{
-				UUID:     common.MockUUID(),
+				UUID:     test.MockUUID(),
 				SvcReps:  mockRanks(0, 1, 2),
 				TgtRanks: mockRanks(0, 1, 2, 3),
 				TierBytes: []uint64{
@@ -246,11 +895,11 @@ Pool created with 5.66%%,94.34%% storage tier ratio
   Storage tier 0 (SCM) : 2.4 GB (600 MB / rank)              
   Storage tier 1 (NVMe): 40 GB (10 GB / rank)                
 
-`, common.MockUUID()),
+`, test.MockUUID()),
 		},
 		"no nvme": {
 			pcr: &control.PoolCreateResp{
-				UUID:     common.MockUUID(),
+				UUID:     test.MockUUID(),
 				SvcReps:  mockRanks(0, 1, 2),
 				TgtRanks: mockRanks(0, 1, 2, 3),
 				TierBytes: []uint64{
@@ -266,13 +915,13 @@ Pool created with 100.00%% storage tier ratio
   Total Size           : 2.4 GB                              
   Storage tier 0 (SCM) : 2.4 GB (600 MB / rank)              
 
-`, common.MockUUID()),
+`, test.MockUUID()),
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			var bld strings.Builder
 			gotErr := PrintPoolCreateResponse(tc.pcr, &bld)
-			common.CmpErr(t, tc.expErr, gotErr)
+			test.CmpErr(t, tc.expErr, gotErr)
 			if tc.expErr != nil {
 				return
 			}
@@ -316,7 +965,7 @@ no pools in system
 			resp: &control.ListPoolsResp{
 				Pools: []*control.Pool{
 					{
-						UUID:            common.MockUUID(1),
+						UUID:            test.MockUUID(1),
 						ServiceReplicas: []system.Rank{0, 1, 2},
 						State:           system.PoolServiceStateReady.String(),
 					},
@@ -344,14 +993,14 @@ Pool     Size State Used Imbalance Disabled
 			resp: &control.ListPoolsResp{
 				Pools: []*control.Pool{
 					{
-						UUID:            common.MockUUID(1),
+						UUID:            test.MockUUID(1),
 						ServiceReplicas: []system.Rank{0, 1, 2},
 						Usage:           exampleUsage,
 						TargetsTotal:    16,
 						TargetsDisabled: 0,
 					},
 					{
-						UUID:            common.MockUUID(2),
+						UUID:            test.MockUUID(2),
 						Label:           "one",
 						ServiceReplicas: []system.Rank{3, 4, 5},
 						Usage:           exampleUsage[1:],
@@ -366,7 +1015,7 @@ Pool     Size State Used Imbalance Disabled
 			resp: &control.ListPoolsResp{
 				Pools: []*control.Pool{
 					{
-						UUID:            common.MockUUID(1),
+						UUID:            test.MockUUID(1),
 						ServiceReplicas: []system.Rank{0, 1, 2},
 						Usage:           exampleUsage,
 						TargetsTotal:    16,
@@ -375,7 +1024,7 @@ Pool     Size State Used Imbalance Disabled
 					},
 					{
 						Label:           "two",
-						UUID:            common.MockUUID(2),
+						UUID:            test.MockUUID(2),
 						ServiceReplicas: []system.Rank{3, 4, 5},
 						Usage:           exampleUsage,
 						TargetsTotal:    64,
@@ -397,7 +1046,7 @@ two      6.0 TB Ready 83%  12%       8/64
 				Pools: []*control.Pool{
 					{
 						Label:           "one",
-						UUID:            common.MockUUID(1),
+						UUID:            test.MockUUID(1),
 						ServiceReplicas: []system.Rank{0, 1, 2},
 						Usage:           exampleUsage,
 						TargetsTotal:    16,
@@ -406,7 +1055,7 @@ two      6.0 TB Ready 83%  12%       8/64
 					},
 					{
 						Label:           "two",
-						UUID:            common.MockUUID(2),
+						UUID:            test.MockUUID(2),
 						ServiceReplicas: []system.Rank{3, 4, 5},
 						Usage: []*control.PoolTierUsage{
 							exampleUsage[0],
@@ -431,7 +1080,7 @@ two  100 GB Ready 80%  12%       8/64
 				Pools: []*control.Pool{
 					{
 						Label:           "one",
-						UUID:            common.MockUUID(1),
+						UUID:            test.MockUUID(1),
 						ServiceReplicas: []system.Rank{0, 1, 2},
 						Usage:           exampleUsage,
 						TargetsTotal:    16,
@@ -440,7 +1089,7 @@ two  100 GB Ready 80%  12%       8/64
 					},
 					{
 						Label:           "two",
-						UUID:            common.MockUUID(2),
+						UUID:            test.MockUUID(2),
 						ServiceReplicas: []system.Rank{3, 4, 5},
 						QueryErrorMsg:   "stats unavailable",
 					},
@@ -460,7 +1109,7 @@ one  6.0 TB Ready 83%  12%       0/16
 				Pools: []*control.Pool{
 					{
 						Label:           "one",
-						UUID:            common.MockUUID(1),
+						UUID:            test.MockUUID(1),
 						ServiceReplicas: []system.Rank{0, 1, 2},
 						Usage:           exampleUsage,
 						TargetsTotal:    16,
@@ -468,13 +1117,13 @@ one  6.0 TB Ready 83%  12%       0/16
 						State:           system.PoolServiceStateReady.String(),
 					},
 					{
-						UUID:            common.MockUUID(2),
+						UUID:            test.MockUUID(2),
 						ServiceReplicas: []system.Rank{3, 4, 5},
 						QueryErrorMsg:   "stats unavailable",
 					},
 					{
 						Label:           "three",
-						UUID:            common.MockUUID(3),
+						UUID:            test.MockUUID(3),
 						ServiceReplicas: []system.Rank{3, 4, 5},
 						QueryStatusMsg:  "DER_UNINIT",
 					},
@@ -501,7 +1150,7 @@ no pools in system
 			resp: &control.ListPoolsResp{
 				Pools: []*control.Pool{
 					{
-						UUID:            common.MockUUID(1),
+						UUID:            test.MockUUID(1),
 						Usage:           exampleUsage,
 						TargetsTotal:    16,
 						TargetsDisabled: 0,
@@ -522,7 +1171,7 @@ Label UUID                                 State SvcReps SCM Size SCM Used SCM I
 				Pools: []*control.Pool{
 					{
 						Label:           "one",
-						UUID:            common.MockUUID(1),
+						UUID:            test.MockUUID(1),
 						ServiceReplicas: []system.Rank{0, 1, 2},
 						Usage:           exampleUsage,
 						TargetsTotal:    16,
@@ -531,7 +1180,7 @@ Label UUID                                 State SvcReps SCM Size SCM Used SCM I
 					},
 					{
 						Label:           "two",
-						UUID:            common.MockUUID(2),
+						UUID:            test.MockUUID(2),
 						ServiceReplicas: []system.Rank{3, 4, 5},
 						Usage:           exampleUsage,
 						TargetsTotal:    64,
@@ -556,7 +1205,7 @@ two   00000002-0002-0002-0002-000000000002 Destroying [3-5]   100 GB   80 GB    
 			// pass the same io writer to standard and error stream
 			// parameters to mimic combined output seen on terminal
 			err := PrintListPoolsResponse(&bld, &bld, tc.resp, tc.verbose)
-			common.CmpErr(t, tc.expErr, err)
+			test.CmpErr(t, tc.expErr, err)
 			if tc.expErr != nil {
 				return
 			}

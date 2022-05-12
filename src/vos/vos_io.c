@@ -1201,7 +1201,9 @@ akey_fetch(struct vos_io_context *ioc, daos_handle_t ak_toh)
 
 	rc = key_tree_prepare(ioc->ic_obj, ak_toh,
 			      VOS_BTR_AKEY, &iod->iod_name, flags,
-			      DAOS_INTENT_DEFAULT, &krec, &toh, ioc->ic_ts_set);
+			      DAOS_INTENT_DEFAULT, &krec,
+			      (ioc->ic_check_existence || ioc->ic_read_ts_only) ? NULL : &toh,
+			      ioc->ic_ts_set);
 
 	if (stop_check(ioc, VOS_OF_COND_AKEY_FETCH, iod, &rc, true)) {
 		if (rc == 0 && !ioc->ic_read_ts_only)
@@ -2285,8 +2287,6 @@ vos_update_end(daos_handle_t ioh, uint32_t pm_ver, daos_key_t *dkey, int err,
 
 	tx_started = true;
 
-	vos_dth_set(dth);
-
 	/* Commit the CoS DTXs via the IO PMDK transaction. */
 	if (dtx_is_valid_handle(dth) && dth->dth_dti_cos_count > 0 &&
 	    !dth->dth_cos_done) {
@@ -2383,7 +2383,6 @@ abort:
 	D_FREE(daes);
 	D_FREE(dces);
 	vos_ioc_destroy(ioc, err != 0);
-	vos_dth_set(NULL);
 
 	return err;
 }

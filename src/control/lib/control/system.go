@@ -24,7 +24,7 @@ import (
 	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	sharedpb "github.com/daos-stack/daos/src/control/common/proto/shared"
-	"github.com/daos-stack/daos/src/control/drpc"
+	"github.com/daos-stack/daos/src/control/lib/daos"
 	"github.com/daos-stack/daos/src/control/lib/hostlist"
 	"github.com/daos-stack/daos/src/control/system"
 )
@@ -773,7 +773,7 @@ func (scr *SystemCleanupResp) Errors() error {
 	out := new(strings.Builder)
 
 	for _, r := range scr.Results {
-		if r.Status != int32(drpc.DaosSuccess) {
+		if r.Status != int32(daos.Success) {
 			fmt.Fprintf(out, "%s\n", r.Msg)
 		}
 	}
@@ -810,5 +810,79 @@ func SystemCleanup(ctx context.Context, rpcClient UnaryInvoker, req *SystemClean
 	}
 
 	resp := new(SystemCleanupResp)
+	return resp, convertMSResponse(ur, resp)
+}
+
+// SystemSetAttrReq contains the inputs for the system set-attr request.
+type SystemSetAttrReq struct {
+	unaryRequest
+	msRequest
+
+	Attributes map[string]string
+}
+
+// SystemSetAttr sets system properties.
+func SystemSetAttr(ctx context.Context, rpcClient UnaryInvoker, req *SystemSetAttrReq) error {
+	if req == nil {
+		return errors.Errorf("nil %T request", req)
+	}
+	if len(req.Attributes) == 0 {
+		return errors.New("attributes cannot be empty")
+	}
+
+	pbReq := &mgmtpb.SystemSetAttrReq{
+		Sys:        req.getSystem(rpcClient),
+		Attributes: req.Attributes,
+	}
+	req.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
+		return mgmtpb.NewMgmtSvcClient(conn).SystemSetAttr(ctx, pbReq)
+	})
+	rpcClient.Debugf("DAOS SystemSetAttr request: %+v", pbReq)
+
+	ur, err := rpcClient.InvokeUnaryRPC(ctx, req)
+	if err != nil {
+		return err
+	}
+	_, err = ur.getMSResponse()
+
+	return err
+}
+
+type (
+	// SystemGetAttrReq contains the inputs for the system get-attr request.
+	SystemGetAttrReq struct {
+		unaryRequest
+		msRequest
+
+		Keys []string
+	}
+
+	// SystemGetAttrResp contains the request response.
+	SystemGetAttrResp struct {
+		Attributes map[string]string `json:"attributes"`
+	}
+)
+
+// SystemGetAttr gets system attributes.
+func SystemGetAttr(ctx context.Context, rpcClient UnaryInvoker, req *SystemGetAttrReq) (*SystemGetAttrResp, error) {
+	if req == nil {
+		return nil, errors.Errorf("nil %T request", req)
+	}
+
+	pbReq := &mgmtpb.SystemGetAttrReq{
+		Sys:  req.getSystem(rpcClient),
+		Keys: req.Keys,
+	}
+	req.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
+		return mgmtpb.NewMgmtSvcClient(conn).SystemGetAttr(ctx, pbReq)
+	})
+	rpcClient.Debugf("DAOS SystemGetAttr request: %+v", pbReq)
+
+	ur, err := rpcClient.InvokeUnaryRPC(ctx, req)
+	if err != nil {
+		return nil, err
+	}
+
+	resp := new(SystemGetAttrResp)
 	return resp, convertMSResponse(ur, resp)
 }

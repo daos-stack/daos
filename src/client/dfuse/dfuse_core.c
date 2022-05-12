@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2021 Intel Corporation.
+ * (C) Copyright 2016-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -1005,13 +1005,16 @@ dfuse_ie_close(struct dfuse_projection_info *fs_handle,
 	       struct dfuse_inode_entry *ie)
 {
 	int	rc;
-	int	ref = atomic_load_relaxed(&ie->ie_ref);
+	int	ref;
 
+	ref = atomic_load_relaxed(&ie->ie_ref);
 	DFUSE_TRA_DEBUG(ie,
 			"closing, inode %#lx ref %u, name '%s', parent %#lx",
 			ie->ie_stat.st_ino, ref, ie->ie_name, ie->ie_parent);
 
 	D_ASSERT(ref == 0);
+	D_ASSERT(atomic_load_relaxed(&ie->ie_il_count) == 0);
+	D_ASSERT(atomic_load_relaxed(&ie->ie_open_count) == 0);
 
 	if (ie->ie_obj) {
 		rc = dfs_release(ie->ie_obj);

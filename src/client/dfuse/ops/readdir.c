@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2019-2021 Intel Corporation.
+ * (C) Copyright 2019-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -112,11 +112,13 @@ create_entry(struct dfuse_projection_info *fs_handle,
 
 	dfs_obj2id(ie->ie_obj, &ie->ie_oid);
 
-	entry->attr_timeout = parent->ie_dfs->dfc_attr_timeout;
-	if (S_ISDIR(ie->ie_stat.st_mode))
-		entry->entry_timeout = parent->ie_dfs->dfc_dentry_dir_timeout;
-	else
-		entry->entry_timeout = parent->ie_dfs->dfc_dentry_timeout;
+	if ((atomic_load_relaxed(&ie->ie_il_count)) == 0) {
+		entry->attr_timeout = parent->ie_dfs->dfc_attr_timeout;
+		if (S_ISDIR(ie->ie_stat.st_mode))
+			entry->entry_timeout = parent->ie_dfs->dfc_dentry_dir_timeout;
+		else
+			entry->entry_timeout = parent->ie_dfs->dfc_dentry_timeout;
+	}
 
 	ie->ie_parent = parent->ie_stat.st_ino;
 	ie->ie_dfs = parent->ie_dfs;

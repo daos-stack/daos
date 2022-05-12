@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2021 Intel Corporation.
+ * (C) Copyright 2016-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -26,14 +26,6 @@ dfuse_reply_entry(struct dfuse_projection_info *fs_handle,
 
 	D_ASSERT(ie->ie_parent);
 	D_ASSERT(ie->ie_dfs);
-
-	if (S_ISDIR(ie->ie_stat.st_mode))
-		entry.entry_timeout = ie->ie_dfs->dfc_dentry_dir_timeout;
-	else
-		entry.entry_timeout = ie->ie_dfs->dfc_dentry_timeout;
-
-	/* Set the attr caching attributes of this entry */
-	entry.attr_timeout = ie->ie_dfs->dfc_attr_timeout;
 
 	ie->ie_root = (ie->ie_stat.st_ino == ie->ie_dfs->dfs_ino);
 
@@ -119,6 +111,19 @@ dfuse_reply_entry(struct dfuse_projection_info *fs_handle,
 		atomic_fetch_sub_relaxed(&ie->ie_ref, 1);
 		dfuse_ie_close(fs_handle, ie);
 		ie = inode;
+	}
+
+	/* Set the attr caching attributes of this entry.  The lookup may have resulted in a
+	 * already known inode for while the interception library is already in use so check
+	 * this and disable caching in this case.
+	 */
+	if ((atomic_load_relaxed(&ie->ie_il_count)) == 0) {
+		if (S_ISDIR(ie->ie_stat.st_mode))
+			entry.entry_timeout = ie->ie_dfs->dfc_dentry_dir_timeout;
+		else
+			entry.entry_timeout = ie->ie_dfs->dfc_dentry_timeout;
+
+		entry.attr_timeout = ie->ie_dfs->dfc_attr_timeout;
 	}
 
 	if (fi_out)
