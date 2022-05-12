@@ -91,12 +91,12 @@ static const ProtobufCFieldDescriptor chk__check_report__field_descriptors[16] =
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
   {
-    "repaired",
+    "result",
     4,
     PROTOBUF_C_LABEL_NONE,
-    PROTOBUF_C_TYPE_BOOL,
+    PROTOBUF_C_TYPE_INT32,
     0,   /* quantifier_offset */
-    offsetof(Chk__CheckReport, repaired),
+    offsetof(Chk__CheckReport, result),
     NULL,
     NULL,
     0,             /* flags */
@@ -260,7 +260,7 @@ static const unsigned chk__check_report__field_indices_by_name[] = {
   8,   /* field[8] = objid */
   6,   /* field[6] = pool_uuid */
   4,   /* field[4] = rank */
-  3,   /* field[3] = repaired */
+  3,   /* field[3] = result */
   0,   /* field[0] = seq */
   5,   /* field[5] = target */
   11,   /* field[11] = timestamp */
@@ -445,7 +445,7 @@ static const ProtobufCEnumValue chk__check_inst_status__enum_values_by_number[7]
   { "CIS_STOPPED", "CHK__CHECK_INST_STATUS__CIS_STOPPED", 3 },
   { "CIS_FAILED", "CHK__CHECK_INST_STATUS__CIS_FAILED", 4 },
   { "CIS_PAUSED", "CHK__CHECK_INST_STATUS__CIS_PAUSED", 5 },
-  { "CIS_CRASHED", "CHK__CHECK_INST_STATUS__CIS_CRASHED", 6 },
+  { "CIS_IMPLICATED", "CHK__CHECK_INST_STATUS__CIS_IMPLICATED", 6 },
 };
 static const ProtobufCIntRange chk__check_inst_status__value_ranges[] = {
 {0, 0},{0, 7}
@@ -453,8 +453,8 @@ static const ProtobufCIntRange chk__check_inst_status__value_ranges[] = {
 static const ProtobufCEnumValueIndex chk__check_inst_status__enum_values_by_name[7] =
 {
   { "CIS_COMPLETED", 2 },
-  { "CIS_CRASHED", 6 },
   { "CIS_FAILED", 4 },
+  { "CIS_IMPLICATED", 6 },
   { "CIS_INIT", 0 },
   { "CIS_PAUSED", 5 },
   { "CIS_RUNNING", 1 },
@@ -475,7 +475,7 @@ const ProtobufCEnumDescriptor chk__check_inst_status__descriptor =
   chk__check_inst_status__value_ranges,
   NULL,NULL,NULL,NULL   /* reserved[1234] */
 };
-static const ProtobufCEnumValue chk__check_pool_status__enum_values_by_number[6] =
+static const ProtobufCEnumValue chk__check_pool_status__enum_values_by_number[8] =
 {
   { "CPS_UNCHECKED", "CHK__CHECK_POOL_STATUS__CPS_UNCHECKED", 0 },
   { "CPS_CHECKING", "CHK__CHECK_POOL_STATUS__CPS_CHECKING", 1 },
@@ -483,17 +483,21 @@ static const ProtobufCEnumValue chk__check_pool_status__enum_values_by_number[6]
   { "CPS_FAILED", "CHK__CHECK_POOL_STATUS__CPS_FAILED", 3 },
   { "CPS_PAUSED", "CHK__CHECK_POOL_STATUS__CPS_PAUSED", 4 },
   { "CPS_PENDING", "CHK__CHECK_POOL_STATUS__CPS_PENDING", 5 },
+  { "CPS_STOPPED", "CHK__CHECK_POOL_STATUS__CPS_STOPPED", 6 },
+  { "CPS_IMPLICATED", "CHK__CHECK_POOL_STATUS__CPS_IMPLICATED", 7 },
 };
 static const ProtobufCIntRange chk__check_pool_status__value_ranges[] = {
-{0, 0},{0, 6}
+{0, 0},{0, 8}
 };
-static const ProtobufCEnumValueIndex chk__check_pool_status__enum_values_by_name[6] =
+static const ProtobufCEnumValueIndex chk__check_pool_status__enum_values_by_name[8] =
 {
   { "CPS_CHECKED", 2 },
   { "CPS_CHECKING", 1 },
   { "CPS_FAILED", 3 },
+  { "CPS_IMPLICATED", 7 },
   { "CPS_PAUSED", 4 },
   { "CPS_PENDING", 5 },
+  { "CPS_STOPPED", 6 },
   { "CPS_UNCHECKED", 0 },
 };
 const ProtobufCEnumDescriptor chk__check_pool_status__descriptor =
@@ -503,9 +507,9 @@ const ProtobufCEnumDescriptor chk__check_pool_status__descriptor =
   "CheckPoolStatus",
   "Chk__CheckPoolStatus",
   "chk",
-  6,
+  8,
   chk__check_pool_status__enum_values_by_number,
-  6,
+  8,
   chk__check_pool_status__enum_values_by_name,
   1,
   chk__check_pool_status__value_ranges,
