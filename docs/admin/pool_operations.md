@@ -71,11 +71,11 @@ This created a pool with UUID 8a05bf3a-a088-4a77-bb9f-df989fce7cc8,
 with pool service redundancy enabled by default
 (pool service replicas on ranks 1-3).
 
-If no redundancy is desired, use --nsvc=1 in order to specify that only
+If no redundancy is desired, use `--nsvc=1` in order to specify that only
 a single pool service replica should be created.
 
-The -t option allows defining the ratio between SCM and NVMe SSD space.
-The default value is 6%, which means the space provided after --size
+The `-t` option allows defining the ratio between SCM and NVMe SSD space.
+The default value is 6%, which means the space provided after `--size`
 will be distributed as follows:
 - 6% is allocated on SCM (i.e., 3GB in the example above)
 - 94% is allocated on NVMe SSD (i.e., 47GB in the example above)
