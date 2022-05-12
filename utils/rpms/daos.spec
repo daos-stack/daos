@@ -236,7 +236,7 @@ Summary: The entire internal DAOS test suite
 Requires: %{name}-tests%{?_isa} = %{version}-%{release}
 Requires: %{name}-client-tests-openmpi%{?_isa} = %{version}-%{release}
 
-%description tests
+%description tests-internal
 This is the package is a metapackage to install all of the internal test packages
 
 %package client-tests
