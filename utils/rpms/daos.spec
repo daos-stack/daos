@@ -231,6 +231,14 @@ Requires: %{name}-client-tests%{?_isa} = %{version}-%{release}
 %description tests
 This is the package is a metapackage to install all of the test packages
 
+%package tests-internal
+Summary: The entire internal DAOS test suite
+Requires: %{name}-tests%{?_isa} = %{version}-%{release}
+Requires: %{name}-client-tests-openmpi%{?_isa} = %{version}-%{release}
+
+%description tests
+This is the package is a metapackage to install all of the internal test packages
+
 %package client-tests
 Summary: The DAOS test suite
 Requires: %{name}-client%{?_isa} = %{version}-%{release}
@@ -557,6 +565,7 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %changelog
 * Tue May 10 2022 Phillip Henderson <phillip.henderson@intel.com> 2.3.100-8
 - Remove doas-client-tests-openmpi dependency from daos-tests
+- Add daos-tests-internal package
 
 * Fri May  6 2022 Ashley Pittman <ashley.m.pittman@intel.com> 2.3.100-7
 - Add dfuse unit-test binary to call from ftest.

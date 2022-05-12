@@ -97,6 +97,15 @@ Description: This is the package is a metapackage to install all of the test pac
  .
  This package contains tests
 
+Package: daos-tests-internal
+Architecture: any
+Multi-Arch: same
+Depends: daos-tests (= ${binary:Version})
+Depends: daos-client-tests-openmpi (= ${binary:Version})
+Description: This is the package is a metapackage to install all of the internal test packages
+ .
+ This package contains tests
+
 Package: daos-client-tests
 Architecture: any
 Multi-Arch: same
