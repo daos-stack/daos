@@ -7,6 +7,8 @@
 #define D_LOGFAC	DD_FAC(chk)
 
 #include <daos/rpc.h>
+#include <daos/btree.h>
+#include <daos/btree_class.h>
 #include <daos_srv/daos_chk.h>
 #include <daos_srv/daos_engine.h>
 
@@ -52,8 +54,21 @@ ds_chk_init(void)
 {
 	int	rc;
 
+	rc = dbtree_class_register(DBTREE_CLASS_CHK_POOL, 0, &chk_pool_ops);
+	if (rc != 0)
+		goto out;
+
+	rc = dbtree_class_register(DBTREE_CLASS_CHK_RANK, 0, &chk_rank_ops);
+	if (rc != 0)
+		goto out;
+
+	rc = dbtree_class_register(DBTREE_CLASS_CHK_PA, 0, &chk_pending_ops);
+	if (rc != 0)
+		goto out;
+
 	rc = chk_iv_init();
 
+out:
 	return rc;
 }
 
