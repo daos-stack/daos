@@ -15,30 +15,37 @@ struct chk_policy {
 	uint32_t		cp_action;
 };
 
-/* Check query result for the pool (all ranks) or pool shard (per target). */
-struct chk_query_pool {
-	uuid_t			cqp_uuid;
-	char			cqp_label[DAOS_PROP_MAX_LABEL_BUF_LEN];
-	uint32_t		cqp_status;
-	uint32_t		cqp_phase;
-	uint32_t		cqp_total;
-	uint32_t		cqp_repaired;
-	uint32_t		cqp_ignored;
-	uint32_t		cqp_failed;
-	uint64_t		cqp_start_time;
+/* Time information on related component: system, pool or target. */
+struct chk_time {
+	/* The time of check instance being started on the component. */
+	uint64_t		ct_start_time;
 	union {
-		uint64_t	cqp_remain_time;
-		uint64_t	cqp_stop_time;
+		/* The time of the check instance completed, failed or stopped on the component. */
+		uint64_t	ct_stop_time;
+		/* The estimated remaining time to complete the check on the component. */
+		uint64_t	ct_left_time;
 	};
 };
 
-/* Check query result for the target including all the pool shards on this target. */
+/* Inconsistency statistics on related component: system, pool or target. */
+struct chk_statistics {
+	/* The count of total found inconsistency on the component. */
+	uint64_t		cs_total;
+	/* The count of repaired inconsistency on the component. */
+	uint64_t		cs_repaired;
+	/* The count of ignored inconsistency on the component. */
+	uint64_t		cs_ignored;
+	/* The count of fail to repaired inconsistency on the component. */
+	uint64_t		cs_failed;
+};
+
 struct chk_query_target {
-	d_rank_t		dqt_rank;
-	uint32_t		dqt_tgt;
-	uint32_t		dqt_status;
-	uint32_t		dqt_cnt;
-	struct chk_query_pool	dqt_shards[0];
+	d_rank_t		cqt_rank;
+	uint32_t		cqt_tgt;
+	uint32_t		cqt_ins_status;
+	uint32_t		cqt_padding;
+	struct chk_statistics	cqt_statistics;
+	struct chk_time		cqt_time;
 };
 
 typedef int (*chk_query_cb_t)(void *buf, struct chk_query_target *cqt);
