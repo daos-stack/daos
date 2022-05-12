@@ -59,6 +59,12 @@ struct chk_query_pool_shard {
 	struct chk_query_target	*cqps_targets;
 };
 
+struct chk_list_pool {
+	uuid_t			 clp_uuid;
+	char			*clp_label;
+	d_rank_list_t		*clp_svcreps;
+};
+
 typedef int (*chk_query_cb_t)(void *buf, struct chk_query_target *cqt);
 
 typedef int (*chk_prop_cb_t)(void *buf, struct chk_policy *policies);
