@@ -3,7 +3,7 @@
 # site_scons/site_tools/extra/extra.py
 BasedOnStyle: LLVM
 IndentWidth: 8
-UseTab: ForContinuationAndIndentation
+UseTab: Never
 BreakBeforeBraces: Linux
 AllowShortIfStatementsOnASingleLine: false
 IndentCaseLabels: false
@@ -17,7 +17,7 @@ AlwaysBreakAfterReturnType: All
 IndentGotoLabels: false
 AlignConsecutiveDeclarations: AcrossEmptyLinesAndComments
 AlignConsecutiveMacros: AcrossEmptyLinesAndComments
-AlignConsecutiveAssignments: AcrossEmptyLinesAndComments
+AlignConsecutiveAssignments: Consecutive
 AlignConsecutiveBitFields: AcrossEmptyLinesAndComments
 SpaceBeforeParens: ControlStatementsExceptForEachMacros
 KeepEmptyLinesAtTheStartOfBlocks: false
