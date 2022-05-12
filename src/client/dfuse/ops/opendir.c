@@ -32,11 +32,11 @@ dfuse_cb_opendir(fuse_req_t req, struct dfuse_inode_entry *ie, struct fuse_file_
 
 #if HAVE_CACHE_READDIR
 	if (ie->ie_dfs->dfc_dentry_timeout > 0) {
-		struct dfuse_projection_info	*fs_handle = fuse_req_userdata(req);
+		struct dfuse_projection_info *fs_handle = fuse_req_userdata(req);
 
 		DFUSE_TRA_INFO(ie, "Caching readdir");
 		fi_out.cache_readdir = 1;
-		fi_out.keep_cache = 1;
+		fi_out.keep_cache    = 1;
 
 		/* If there are open directory handles already then save this opendir request and
 		 * reply to it later after the closedir has completed.
@@ -68,10 +68,10 @@ void
 dfuse_cb_releasedir(fuse_req_t req, struct dfuse_inode_entry *ino, struct fuse_file_info *fi)
 {
 #if HAVE_CACHE_READDIR
-	struct dfuse_projection_info	*fs_handle = fuse_req_userdata(req);
+	struct dfuse_projection_info *fs_handle = fuse_req_userdata(req);
 #endif
-	struct dfuse_obj_hdl		*oh = (struct dfuse_obj_hdl *)fi->fh;
-	int				rc;
+	struct dfuse_obj_hdl *oh = (struct dfuse_obj_hdl *)fi->fh;
+	int                   rc;
 	struct dfuse_obj_hdl *oh = (struct dfuse_obj_hdl *)fi->fh;
 	int                   rc;
 
@@ -93,11 +93,11 @@ dfuse_cb_releasedir(fuse_req_t req, struct dfuse_inode_entry *ino, struct fuse_f
 #if HAVE_CACHE_READDIR
 	D_MUTEX_LOCK(&fs_handle->dpi_op_lock);
 	if (oh->doh_ie->ie_odir) {
-		struct dfuse_obj_hdl	*qoh, *next;
-		struct fuse_file_info	fi_out = {0};
+		struct dfuse_obj_hdl *qoh, *next;
+		struct fuse_file_info fi_out = {0};
 
 		fi_out.cache_readdir = 1;
-		fi_out.keep_cache = 1;
+		fi_out.keep_cache    = 1;
 		d_list_for_each_entry_safe(qoh, next, &oh->doh_ie->ie_odir_list, doh_dir_list) {
 			DFUSE_TRA_WARNING(oh, "Late opendir reply");
 			fi_out.fh = (uint64_t)qoh;
