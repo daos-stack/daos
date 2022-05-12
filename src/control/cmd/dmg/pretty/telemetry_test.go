@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2021 Intel Corporation.
+// (C) Copyright 2021-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -11,7 +11,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/daos-stack/daos/src/control/common"
+	"github.com/daos-stack/daos/src/control/common/test"
 	"github.com/daos-stack/daos/src/control/lib/control"
 )
 
@@ -90,14 +90,14 @@ funny_hats    Counter Hilarious headwear
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
-			writer := &common.MockWriter{
+			writer := &test.MockWriter{
 				WriteErr: tc.writeErr,
 			}
 
 			err := PrintMetricsListResp(writer, tc.resp)
 
-			common.CmpErr(t, tc.expErr, err)
-			common.AssertEqual(t, strings.TrimLeft(tc.expOutput, "\n"), writer.GetWritten(), "")
+			test.CmpErr(t, tc.expErr, err)
+			test.AssertEqual(t, strings.TrimLeft(tc.expOutput, "\n"), writer.GetWritten(), "")
 		})
 	}
 }
@@ -429,14 +429,14 @@ func TestPretty_PrintMetricsQueryResp(t *testing.T) {
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
-			writer := &common.MockWriter{
+			writer := &test.MockWriter{
 				WriteErr: tc.writeErr,
 			}
 
 			err := PrintMetricsQueryResp(writer, tc.resp)
 
-			common.CmpErr(t, tc.expErr, err)
-			common.AssertEqual(t, strings.TrimLeft(tc.expOutput, "\n"), writer.GetWritten(), "")
+			test.CmpErr(t, tc.expErr, err)
+			test.AssertEqual(t, strings.TrimLeft(tc.expOutput, "\n"), writer.GetWritten(), "")
 		})
 	}
 }

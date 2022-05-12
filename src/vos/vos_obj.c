@@ -426,7 +426,6 @@ vos_obj_punch(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 	D_DEBUG(DB_IO, "Punch "DF_UOID", epoch "DF_X64"\n",
 		DP_UOID(oid), epr.epr_hi);
 
-	vos_dth_set(dth);
 	cont = vos_hdl2cont(coh);
 
 	if (dtx_is_valid_handle(dth)) {
@@ -551,7 +550,6 @@ reset:
 	D_FREE(daes);
 	D_FREE(dces);
 	vos_ts_set_free(ts_set);
-	vos_dth_set(NULL);
 
 	return rc;
 }
@@ -791,6 +789,7 @@ key_iter_fetch(struct vos_obj_iter *oiter, vos_iter_entry_t *ent,
 	vos_iter_desc_t		 desc;
 	struct vos_rec_bundle	 rbund;
 	struct vos_krec_df	*krec;
+	struct dtx_handle	*dth;
 	uint64_t		 feats;
 	uint32_t		 ts_type;
 	unsigned int		 acts;
@@ -824,9 +823,14 @@ key_iter_fetch(struct vos_obj_iter *oiter, vos_iter_entry_t *ent,
 
 		acts = 0;
 		start_seq = vos_sched_seq();
+		dth = vos_dth_get();
+		if (dth != NULL)
+			vos_dth_set(NULL);
 		rc = oiter->it_iter.it_filter_cb(vos_iter2hdl(&oiter->it_iter), &desc,
 						 oiter->it_iter.it_filter_arg,
 						 &acts);
+		if (dth != NULL)
+			vos_dth_set(dth);
 		if (rc != 0)
 			return rc;
 		if (start_seq != vos_sched_seq())

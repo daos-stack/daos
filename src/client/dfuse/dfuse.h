@@ -74,9 +74,7 @@ struct dfuse_readdir_entry {
 	off_t	dre_next_offset;
 };
 
-/** what is returned as the handle for fuse fuse_file_info on
- * create/open/opendir
- */
+/** what is returned as the handle for fuse fuse_file_info on create/open/opendir */
 struct dfuse_obj_hdl {
 	/** pointer to dfs_t */
 	dfs_t				*doh_dfs;
@@ -84,9 +82,6 @@ struct dfuse_obj_hdl {
 	dfs_obj_t			*doh_obj;
 	/** the inode entry for the file */
 	struct dfuse_inode_entry	*doh_ie;
-
-	/** True if caching is enabled for this file. */
-	bool				doh_caching;
 
 	/* Below here is only used for directories */
 	/** an anchor to track listing in readdir */
@@ -100,6 +95,14 @@ struct dfuse_obj_hdl {
 	uint32_t			doh_dre_last_index;
 	/** Next value from anchor */
 	uint32_t			doh_anchor_index;
+
+	ATOMIC uint32_t                  doh_il_calls;
+
+	/** True if caching is enabled for this file. */
+	bool				doh_caching;
+
+	/* True if the file handle is writeable - used for cache invalidation */
+	bool                             doh_writeable;
 };
 
 struct dfuse_inode_ops {
@@ -372,13 +375,15 @@ struct fuse_lowlevel_ops dfuse_ops;
 #define DFUSE_REPLY_ATTR(ie, req, attr)					\
 	do {								\
 		int __rc;						\
+		double timeout = 0;					\
+		if (atomic_load_relaxed(&(ie)->ie_il_count) == 0)	\
+			timeout = (ie)->ie_dfs->dfc_attr_timeout;	\
 		DFUSE_TRA_DEBUG(ie,					\
 				"Returning attr inode %#lx mode %#o size %zi",	\
 				(attr)->st_ino,				\
 				(attr)->st_mode,			\
 				(attr)->st_size);			\
-		__rc = fuse_reply_attr(req, attr,			\
-				(ie)->ie_dfs->dfc_attr_timeout);	\
+		__rc = fuse_reply_attr(req, attr, timeout);		\
 		if (__rc != 0)						\
 			DFUSE_TRA_ERROR(ie,				\
 					"fuse_reply_attr returned %d:%s", \
@@ -529,14 +534,20 @@ struct dfuse_inode_entry {
 	 */
 	d_list_t		ie_htl;
 
+	/** written region for truncated files (i.e. ie_truncated set) */
+	size_t                   ie_start_off;
+	size_t                   ie_end_off;
+
 	/** Reference counting for the inode.
 	 * Used by the hash table callbacks
 	 */
 	ATOMIC uint		ie_ref;
 
-	/** written region for truncated files (i.e. ie_truncated set) */
-	size_t			ie_start_off;
-	size_t			ie_end_off;
+	/* Number of open file descriptors for this inode */
+	ATOMIC uint32_t          ie_open_count;
+
+	/* Number of file open file descriptors using IL */
+	ATOMIC uint32_t          ie_il_count;
 
 	/** file was truncated from 0 to a certain size */
 	bool			ie_truncated;
@@ -545,7 +556,7 @@ struct dfuse_inode_entry {
 	bool			ie_root;
 
 	/** File has been unlinked from daos */
-	bool			ie_unlinked;
+	bool                     ie_unlinked;
 };
 
 /* Generate the inode to use for this dfs object.  This is generating a single

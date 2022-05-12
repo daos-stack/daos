@@ -13,9 +13,6 @@ import (
 	"github.com/pkg/errors"
 )
 
-// ErrNoNUMANodes indicates that the system can't detect any NUMA nodes.
-var ErrNoNUMANodes = errors.New("no NUMA nodes detected")
-
 type (
 	// TopologyProvider is an interface for acquiring a system topology.
 	TopologyProvider interface {
@@ -31,16 +28,59 @@ type (
 	// NodeMap maps a node ID to a node.
 	NodeMap map[uint]*NUMANode
 
-	// Topology is a hierarchy of hardware devices grouped under NUMA nodes.
-	Topology struct {
-		// NUMANodes is the set of NUMA nodes mapped by their ID.
-		NUMANodes NodeMap `json:"numa_nodes"`
+	// Device is the interface for a system device.
+	Device interface {
+		DeviceName() string
+		DeviceType() DeviceType
+		PCIDevice() *PCIDevice
+	}
+
+	// VirtualDevice represents a system device that is created virtually in software, and may
+	// have a real PCI hardware device associated with it.
+	VirtualDevice struct {
+		Name          string
+		Type          DeviceType
+		BackingDevice *PCIDevice
 	}
 )
 
+// DeviceName is the name of the virtual device.
+func (d *VirtualDevice) DeviceName() string {
+	if d == nil {
+		return ""
+	}
+	return d.Name
+}
+
+// DeviceType is the type of the virtual device.
+func (d *VirtualDevice) DeviceType() DeviceType {
+	if d == nil {
+		return DeviceTypeUnknown
+	}
+	return d.Type
+}
+
+// PCIDevice is the hardware device associated with the virtual device, if any.
+func (d *VirtualDevice) PCIDevice() *PCIDevice {
+	if d == nil {
+		return nil
+	}
+	return d.BackingDevice
+}
+
+// Topology is a hierarchy of hardware devices grouped under NUMA nodes.
+type Topology struct {
+	// NUMANodes is the set of NUMA nodes mapped by their ID.
+	NUMANodes NodeMap `json:"numa_nodes"`
+
+	// VirtualDevices is a set of virtual devices created in software that may have a
+	// hardware backing device.
+	VirtualDevices []*VirtualDevice
+}
+
 // AllDevices returns a map of all system Devices sorted by their name.
-func (t *Topology) AllDevices() map[string]*PCIDevice {
-	devsByName := make(map[string]*PCIDevice)
+func (t *Topology) AllDevices() map[string]Device {
+	devsByName := make(map[string]Device)
 	if t == nil {
 		return devsByName
 	}
@@ -52,6 +92,11 @@ func (t *Topology) AllDevices() map[string]*PCIDevice {
 			}
 		}
 	}
+
+	for _, v := range t.VirtualDevices {
+		devsByName[v.Name] = v
+	}
+
 	return devsByName
 }
 
@@ -102,6 +147,20 @@ func (t *Topology) AddDevice(numaID uint, device *PCIDevice) error {
 
 	numa.AddDevice(device)
 
+	return nil
+}
+
+// AddVirtualDevice adds a virtual device not associated with a NUMA node to the topology.
+func (t *Topology) AddVirtualDevice(device *VirtualDevice) error {
+	if t == nil {
+		return errors.New("nil Topology")
+	}
+
+	if device == nil {
+		return errors.New("nil VirtualDevice")
+	}
+
+	t.VirtualDevices = append(t.VirtualDevices, device)
 	return nil
 }
 
@@ -185,6 +244,62 @@ func (t *Topology) Merge(newTopo *Topology) error {
 			}
 		}
 	}
+	return t.mergeVirtualDevices(newTopo)
+}
+
+func (t *Topology) mergeVirtualDevices(newTopo *Topology) error {
+	curDevices := t.AllDevices()
+
+	for _, newVirt := range newTopo.VirtualDevices {
+		if curDev, found := curDevices[newVirt.Name]; found {
+			curVirt, ok := curDev.(*VirtualDevice)
+			if !ok {
+				return errors.Errorf("virtual device %q has same name as a hardware device", newVirt.Name)
+			}
+
+			if newVirt.Type != DeviceTypeUnknown {
+				curVirt.Type = newVirt.Type
+			}
+
+			if err := mergeBackingDev(curDevices, curVirt, newVirt); err != nil {
+				return err
+			}
+			continue
+		}
+
+		// Create a new virtual device
+		toAdd := &VirtualDevice{
+			Name: newVirt.Name,
+			Type: newVirt.Type,
+		}
+		if err := mergeBackingDev(curDevices, toAdd, newVirt); err != nil {
+			return err
+		}
+		t.AddVirtualDevice(toAdd)
+	}
+
+	return nil
+}
+
+func mergeBackingDev(allDevices map[string]Device, curVirt, newVirt *VirtualDevice) error {
+	if newVirt.BackingDevice == nil {
+		return nil
+	}
+
+	backingDev, found := allDevices[newVirt.BackingDevice.Name]
+	if !found {
+		return errors.Errorf("backing device %q for virtual device %q does not exist in merged topology",
+			newVirt.BackingDevice.Name, newVirt.Name)
+	}
+
+	pciDev, ok := backingDev.(*PCIDevice)
+	if !ok {
+		return errors.Errorf("backing device %q for virtual device %q is not a PCI device",
+			newVirt.BackingDevice.Name, newVirt.Name)
+	}
+
+	curVirt.BackingDevice = pciDev
+
 	return nil
 }
 
