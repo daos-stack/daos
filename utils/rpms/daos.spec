@@ -524,6 +524,9 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %files tests
 # No files in a meta-package
 
+%files tests-internal
+# No files in a meta-package
+
 %changelog
 * Thu May 12 2022 Phillip Henderson <phillip.henderson@intel.com> 2.0.2-5
 - Add daos-tests-internal package
