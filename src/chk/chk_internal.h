@@ -245,6 +245,14 @@ struct chk_property {
 	uint32_t			cp_rank_nr;
 };
 
+struct chk_iv {
+	uint64_t		 ci_gen;
+	d_rank_t		 ci_rank;
+	uint32_t		 ci_phase;
+	uint32_t		 ci_status;
+	uint32_t		 ci_to_leader:1;
+};
+
 typedef int (*chk_co_rpc_cb_t)(void *args, uint32_t rank, uint32_t phase, int result,
 			       void *data, uint32_t nr);
 
@@ -255,6 +263,14 @@ extern struct crt_corpc_ops	chk_stop_co_ops;
 extern struct crt_corpc_ops	chk_query_co_ops;
 extern struct crt_corpc_ops	chk_mark_co_ops;
 extern struct crt_corpc_ops	chk_act_co_ops;
+
+/* chk_iv.c */
+
+int chk_iv_update(void *ns, struct chk_iv *iv, uint32_t shortcut, uint32_t sync_mode, bool retry);
+
+int chk_iv_init(void);
+
+int chk_iv_fini(void);
 
 /* chk_rpc.c */
 
