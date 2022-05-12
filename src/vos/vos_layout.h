@@ -89,8 +89,16 @@ enum vos_gc_type {
 
 /** Lowest supported durable format version */
 #define POOL_DF_VER_1				23
+/** Minimum pool version for built-in aggregation optimization. Otherwise,
+ *  the optimization can only be enabled by a pool upgrade which sets the global
+ *  version but doesn't update the durable format.  If both the durable format
+ *  and global version remain as currently set, the optimization is disabled.
+ *  This enables the user to continue using the pool with the older version unless
+ *  they have explicitely upgraded it.
+ */
+#define POOL_DF_AGG_OPT				24
 /** Current durable format version */
-#define POOL_DF_VERSION				24
+#define POOL_DF_VERSION				POOL_DF_AGG_OPT
 
 /**
  * Durable format for VOS pool

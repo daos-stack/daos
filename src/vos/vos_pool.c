@@ -768,8 +768,8 @@ pool_open(PMEMobjpool *ph, struct vos_pool_df *pool_df, unsigned int flags, void
 	pool->vp_opened = 1;
 	pool->vp_excl = !!(flags & VOS_POF_EXCL);
 	pool->vp_small = !!(flags & VOS_POF_SMALL);
-	if (pool_df->pd_version >= 24)
-		pool->vp_feats = VOS_POOL_FEAT_AGG_OPT;
+	if (pool_df->pd_version >= POOL_DF_AGG_OPT)
+		pool->vp_feats |= VOS_POOL_FEAT_AGG_OPT;
 
 	vos_space_sys_init(pool);
 	/* Ensure GC is triggered after server restart */
