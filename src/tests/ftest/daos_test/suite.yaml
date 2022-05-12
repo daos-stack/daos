@@ -60,6 +60,7 @@ server_config:
         - D_LOG_FILE_APPEND_PID=1
         - D_LOG_FLUSH=DEBUG
         - FI_LOG_LEVEL=warn
+        - D_LOG_STDERR_IN_LOG=1
     1:
       pinned_numa_node: 1
       nr_xs_helpers: 1
@@ -77,6 +78,7 @@ server_config:
         - D_LOG_FILE_APPEND_PID=1
         - D_LOG_FLUSH=DEBUG
         - FI_LOG_LEVEL=warn
+        - D_LOG_STDERR_IN_LOG=1
   transport_config:
     allow_insecure: True
 agent_config:
