@@ -152,16 +152,6 @@ variable "server_preemptible" {
   type        = string
 }
 
-variable "server_pools" {
-  description = "If provided, this module will generate a script to create a list of pools. pool attributes have to be specified in a format acceptable by [dmg](https://docs.daos.io/v2.0/admin/pool_operations/) and daos."
-  default     = []
-  type = list(object({
-    pool_name  = string
-    pool_size  = string
-    containers = list(string)
-    })
-  )
-}
 
 variable "server_daos_scm_size" {
   description = "scm_size"
@@ -179,6 +169,17 @@ variable "server_gvnic" {
   description = "Use Google Virtual NIC (gVNIC) network interface on DAOS servers"
   default     = false
   type        = bool
+}
+
+variable "server_pools" {
+  description = "If provided, this module will generate a script to create a list of pools. pool attributes have to be specified in a format acceptable by [dmg](https://docs.daos.io/v2.0/admin/pool_operations/) and daos."
+  default     = []
+  type = list(object({
+    pool_name  = string
+    pool_size  = string
+    containers = list(string)
+    })
+  )
 }
 
 variable "client_labels" {

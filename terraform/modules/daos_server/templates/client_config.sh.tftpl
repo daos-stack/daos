@@ -1,0 +1,13 @@
+#!/bin/bash
+
+set -x
+
+echo "BEGIN: DAOS client config"
+
+${certs_install_content}
+
+# Setup DAOS agent
+systemctl start daos_agent
+systemctl enable daos_agent
+
+echo "END: DAOS client config"

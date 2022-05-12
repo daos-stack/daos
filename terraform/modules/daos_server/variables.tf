@@ -142,17 +142,6 @@ variable "preemptible" {
   type        = string
 }
 
-variable "pools" {
-  description = "If provided, this module will generate a script to create a list of pools. pool attributes have to be specified in a format acceptable by [dmg](https://docs.daos.io/v2.0/admin/pool_operations/) and daos."
-  default     = []
-  type = list(object({
-    pool_name  = string
-    pool_size  = string
-    containers = list(string)
-    })
-  )
-}
-
 variable "daos_scm_size" {
   description = "scm_size"
   default     = 200
@@ -175,4 +164,15 @@ variable "allow_insecure" {
   description = "Sets the allow_insecure setting in the transport_config section of the daos_*.yml files"
   default     = false
   type        = bool
+}
+
+variable "pools" {
+  description = "If provided, this module will generate a script to create a list of pools. pool attributes have to be specified in a format acceptable by [dmg](https://docs.daos.io/v2.0/admin/pool_operations/) and daos."
+  default     = []
+  type = list(object({
+    pool_name  = string
+    pool_size  = string
+    containers = list(string)
+    })
+  )
 }

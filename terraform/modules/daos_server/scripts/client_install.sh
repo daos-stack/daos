@@ -43,11 +43,30 @@ case ${OS_VERSION_ID} in
     ;;
 esac
 
+if ! rpm -qa | grep -q "epel-release"; then
+  yum install -y epel-release
+fi
+
+if [ ! -f $(which wget) ];then
+  yum -y install wget
+fi
+
 echo "Adding DAOS v${DAOS_VERSION} packages repo"
 curl -s --output /etc/yum.repos.d/daos_packages.repo "https://packages.daos.io/v${DAOS_VERSION}/${DAOS_OS_VERSION}/packages/x86_64/daos_packages.repo"
 
 echo "Installing daos-client and daos-devel packages"
 yum install -y daos-client daos-devel
-systemctl enable daos_agent
+# Disable daos_agent service.
+# It will be enabled by a startup script after the service has been configured.
+systemctl disable daos_agent
+
+if [[ ${DAOS_VERSION%%.*} == "2" ]]; then
+  log "Downgrading libfabric to v1.12 - see https://daosio.atlassian.net/browse/DAOS-9883"
+  wget https://packages.daos.io/v1.2/CentOS7/packages/x86_64/libfabric-1.12.0-1.el7.x86_64.rpm
+  rpm -i --force ./libfabric-1.12.0-1.el7.x86_64.rpm
+  rpm --erase --nodeps  libfabric-1.14.0
+  echo "exclude=libfabric" >> /etc/yum.repos.d/daos_packages.repo
+  rm -f ./libfabric-1.12.0-1.el7.x86_64.rpm
+fi
 
 echo "END: DAOS Client Installation"

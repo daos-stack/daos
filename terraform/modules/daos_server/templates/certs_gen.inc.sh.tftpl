@@ -1,0 +1,20 @@
+%{ if !allow_insecure }
+echo "BEGIN: DAOS certificate generation"
+
+# Install certificates
+if [[ "$${HOSTNAME,,}" == "$${FIRST_DAOS_SERVER_HOSTNAME,,}" ]]; then
+  if [[ ! -f /var/daos/cert_gen/gen_certificates.sh ]]; then
+    echo "ERROR! File not found: /var/daos/cert_gen/gen_certificates.sh"
+    exit 1
+  fi
+  echo "Generating DAOS certificates"
+  /var/daos/cert_gen/gen_certificates.sh /var/daos
+  pushd /var/daos
+  tar -cvzf /var/daos/daosCA.tar.gz ./daosCA
+  gcloud secrets versions add ${daos_ca_secret_id} --data-file=/var/daos/daosCA.tar.gz
+  rm -f /var/daos/daosCA.tar.gz
+  popd
+fi
+
+echo "END: DAOS certificate generation"
+%{ endif }

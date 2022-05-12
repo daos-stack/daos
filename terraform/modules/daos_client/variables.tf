@@ -128,6 +128,12 @@ variable "preemptible" {
   type        = string
 }
 
+variable "gvnic" {
+  description = "Use Google Virtual NIC (gVNIC) network interface"
+  default     = false
+  type        = bool
+}
+
 variable "daos_agent_yml" {
   description = "YAML to configure the daos agent."
   type        = string
@@ -138,19 +144,7 @@ variable "daos_control_yml" {
   type        = string
 }
 
-variable "gvnic" {
-  description = "Use Google Virtual NIC (gVNIC) network interface"
-  default     = false
-  type        = bool
-}
-
-variable "allow_insecure" {
-  description = "Sets the allow_insecure setting in the transport_config section of the daos_*.yml files"
-  default     = false
-  type        = bool
-}
-
-variable "certs_install_script_content" {
-  description = "Script to install certificates for DAOS secure transport"
+variable "certs_install_content" {
+  description = "DAOS certificate installation code to be included in the client startup script"
   type        = string
 }

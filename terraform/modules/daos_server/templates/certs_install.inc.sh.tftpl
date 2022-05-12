@@ -1,16 +1,8 @@
-#!/bin/bash
+%{ if !allow_insecure }
+echo "BEGIN: DAOS certificate installation"
 
-set -e
-trap 'echo "An unexpected error occurred. Exiting."' ERR
-
-INSTALL_TYPE="$${INSTALL_TYPE:-$1}"  # client or server
-SECRET_NAME="${daos_ca_secret_id}"    # Name of secret that was created by Terraform
-SCRIPT_NAME=$(basename "$0")
-
-if [[ -z "$${INSTALL_TYPE}" ]]; then
-  echo "ERROR: Install type [client|server] must be passed as the second parameter. Exiting..."
-  exit 1
-fi
+DAOS_CLIENT_INSTALLED=$(if rpm -q --quiet daos-client;then echo true;else echo false;fi)
+DAOS_SERVER_INSTALLED=$(if rpm -q --quiet daos-server;then echo true;else echo false;fi)
 
 get_ca_from_sm() {
   # Get the daosCA.tar.gz file from Secret Manager
@@ -27,25 +19,25 @@ get_ca_from_sm() {
   # If the secret is not found in max_secret_wait_time, then exit.
   max_secret_wait_time="5 mins"
   endtime=$(date -ud "$${max_secret_wait_time}" +%s)
-  until gcloud secrets versions list "$${SECRET_NAME}" \
+  until gcloud secrets versions list "${daos_ca_secret_id}" \
     --filter="NAME:1" \
     --format="value('name')" \
     --verbosity=none | grep -q 1
   do
     if [[ $(date -u +%s) -ge $${endtime} ]]; then
-      echo "ERROR: Secret '$${SECRET_NAME}' not found after checking for $${max_secret_wait_time}"
+      echo "ERROR: Secret '${daos_ca_secret_id}' not found after checking for $${max_secret_wait_time}"
       exit 1
     fi
-    echo "Checking for secret: $${SECRET_NAME}"
+    echo "Checking for secret: ${daos_ca_secret_id}"
     sleep 5
   done
 
-  echo "Found secret: $${SECRET_NAME}"
-  echo "Saving '$${SECRET_NAME}' data to /var/daos/daosCA.tar.gz"
+  echo "Found secret: ${daos_ca_secret_id}"
+  echo "Saving '${daos_ca_secret_id}' data to /var/daos/daosCA.tar.gz"
 
   # Always get version 1 of the secret. There should not be other versions.
   mkdir -p /var/daos
-  gcloud secrets versions access 1 --secret="$${SECRET_NAME}" \
+  gcloud secrets versions access 1 --secret="${daos_ca_secret_id}" \
     --format "value(payload.data.decode(base64).encode(base64))" \
     | base64 --decode > "/var/daos/daosCA.tar.gz"
 
@@ -65,9 +57,7 @@ get_ca_from_sm() {
   fi
 }
 
-echo "BEGIN: $${SCRIPT_NAME}"
-
-cd "/var/daos"
+cd /var/daos
 
 # Only get the /var/daos/daosCA from Secret Manager
 # when the /var/daos/daosCA directory doesn't exist.
@@ -82,10 +72,10 @@ fi
 rm -rf /etc/daos/certs
 mkdir -p /etc/daos/certs
 
-echo "Copying certs and setting permissions on $${INSTALL_TYPE,,} instance"
+echo "Copying certs and setting permissions"
 
 # CLIENT CERTS
-if [[ "$${INSTALL_TYPE,,}" == "client" ]]; then
+if [[ "$${DAOS_CLIENT_INSTALLED}" == "true" ]]; then
   cp /var/daos/daosCA/certs/daosCA.crt /etc/daos/certs/
   cp /var/daos/daosCA/certs/agent.* /etc/daos/certs/
   chown -R daos_agent:daos_agent /etc/daos/certs
@@ -95,7 +85,10 @@ if [[ "$${INSTALL_TYPE,,}" == "client" ]]; then
 fi
 
 # SERVER CERTS
-if [[ "$${INSTALL_TYPE,,}" == "server" ]]; then
+# if the daos-client and daos-server is installed we assume we are on a daos
+# server instance and in that case the permissions for the daos_agent certs
+# will be modified
+if [[ "$${DAOS_SERVER_INSTALLED}" == "true" ]]; then
   # On GCP daos_server runs as root because instances don't have IOMMU
   # So server certs and keys should be owned by root
   cp /var/daos/daosCA/certs/daosCA.crt /etc/daos/certs/
@@ -106,32 +99,21 @@ if [[ "$${INSTALL_TYPE,,}" == "server" ]]; then
   cp "/var/daos/daosCA/certs/agent.crt" /etc/daos/certs/clients
 
   chown -R root:root /etc/daos/certs
+  chown daos_agent:daos_agent /etc/daos/certs/agent.*
+
   chmod 0755 /etc/daos/certs
   chmod 0755 /etc/daos/certs/clients
-
-  # Since the daos_agent is also running on the server instances the
-  # agent certs must exist in /etc/daos/certs/ and be owned by the daos_agent
-  # user
-  cp /var/daos/daosCA/certs/agent.* /etc/daos/certs/
-  chown daos_agent:daos_agent /etc/daos/certs/agent.*
 
   chmod 0644 /etc/daos/certs/*.crt
   chmod 0600 /etc/daos/certs/*.key
   chmod 0644 /etc/daos/certs/clients/*
-
 fi
 
-#
-# ADMIN CERTS ON CLIENTS AND SERVERS
-#
-
-# As of 2022-05-05 dmg requires mode 0700 admin.key
-# Odd that its not 0600
-# dmg must run as root
+# INSTALL ADMIN CERTS ON CLIENTS AND SERVERS
 cp /var/daos/daosCA/certs/admin.* /etc/daos/certs/
-
 chown root:root /etc/daos/certs/admin.*
 chmod 0644 /etc/daos/certs/admin.crt
+# dmg requires 0700 admin.key
 chmod 0700 /etc/daos/certs/admin.key
 
 # Remove the CA dir now that the certs have been copied to /etc/daos/certs
@@ -139,4 +121,5 @@ if [[ -d "/var/daos/daosCA" ]]; then
   rm -rf "/var/daos/daosCA"
 fi
 
-echo "END: $${SCRIPT_NAME}"
+echo "END: DAOS certificate installation"
+%{ endif }

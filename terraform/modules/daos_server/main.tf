@@ -61,30 +61,38 @@ locals {
     }
   )
 
-  certs_install_script_content = templatefile(
-    "${path.module}/templates/certs_install.sh.tftpl",
+  certs_gen_content = templatefile(
+    "${path.module}/templates/certs_gen.inc.sh.tftpl",
     {
+      allow_insecure    = local.allow_insecure
       daos_ca_secret_id = local.daos_ca_secret_id
     }
   )
 
-  daos_client_install_script_content = file(
+  certs_install_content = templatefile(
+    "${path.module}/templates/certs_install.inc.sh.tftpl",
+    {
+      allow_insecure    = local.allow_insecure
+      daos_ca_secret_id = local.daos_ca_secret_id
+    }
+  )
+
+  client_install_script_content = file(
   "${path.module}/scripts/client_install.sh")
 
-  configure_daos_content = templatefile(
-    "${path.module}/templates/configure_daos.tftpl",
+  client_config_script_content = templatefile(
+    "${path.module}/templates/client_config.sh.tftpl",
     {
-      servers = local.servers
-      pools   = var.pools
+      certs_install_content = local.certs_install_content
     }
   )
 
-  server_startup_script = templatefile(
-    "${path.module}/templates/daos_startup_script.tftpl",
+  startup_script = templatefile(
+    "${path.module}/templates/startup_script.tftpl",
     {
-      first_server      = local.first_server
-      daos_ca_secret_id = local.daos_ca_secret_id
-      allow_insecure    = local.allow_insecure
+      first_server          = local.first_server
+      certs_gen_content     = local.certs_gen_content
+      certs_install_content = local.certs_install_content
     }
   )
 }
@@ -170,15 +178,14 @@ resource "google_compute_per_instance_config" "named_instances" {
   name                   = format("%s-%04d", var.instance_base_name, sum([count.index, 1]))
   preserved_state {
     metadata = {
-      inst_type                    = "daos-server"
-      enable-oslogin               = "true"
-      inst_nr                      = var.number_of_instances
-      inst_base_name               = var.instance_base_name
-      daos_server_yaml_content     = local.daos_server_yaml_content
-      daos_control_yaml_content    = local.daos_control_yaml_content
-      daos_agent_yaml_content      = local.daos_agent_yaml_content
-      certs_install_script_content = local.certs_install_script_content
-      startup-script               = local.server_startup_script
+      inst_type                 = "daos-server"
+      enable-oslogin            = "true"
+      inst_nr                   = var.number_of_instances
+      inst_base_name            = var.instance_base_name
+      daos_server_yaml_content  = local.daos_server_yaml_content
+      daos_control_yaml_content = local.daos_control_yaml_content
+      daos_agent_yaml_content   = local.daos_agent_yaml_content
+      startup-script            = local.startup_script
       # Adding a reference to the instance template used causes the stateful instance to update
       # if the instance template changes. Otherwise there is no explicit dependency and template
       # changes may not occur on the stateful instance

@@ -17,26 +17,8 @@ systemctl stop daos_server
 # Create directory for engine logs and tmpfs mount point
 mkdir -p /var/daos
 
-%{ if !allow_insecure }
-# Install certificates
-if [[ "$${HOSTNAME}" == "$${FIRST_DAOS_SERVER_HOSTNAME}" ]]; then
-  if [[ ! -f /var/daos/cert_gen/gen_certificates.sh ]]; then
-    echo "ERROR! File not found: /var/daos/cert_gen/gen_certificates.sh"
-    exit 1
-  fi
-  echo "Generating certificates"
-  /var/daos/cert_gen/gen_certificates.sh /var/daos
-  pushd /var/daos
-  tar -cvzf /var/daos/daosCA.tar.gz ./daosCA
-  gcloud secrets versions add ${daos_ca_secret_id} --data-file=/var/daos/daosCA.tar.gz
-  rm -f /var/daos/daosCA.tar.gz
-  popd
-fi
-echo "Installing certificates"
-fetch_attr "certs_install_script_content" > /var/daos/cert_gen/certs_install.sh
-chmod +x /var/daos/cert_gen/certs_install.sh
-/var/daos/cert_gen/certs_install.sh server
-%{ endif }
+${certs_gen_content}
+${certs_install_content}
 
 # Create server config files from metadata
 mkdir -p /etc/daos

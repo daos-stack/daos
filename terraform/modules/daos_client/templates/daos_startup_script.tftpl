@@ -12,13 +12,7 @@ echo "BEGIN: DAOS Client Startup Script"
 
 systemctl stop daos_agent
 
-%{ if !allow_insecure }
-# Install certificates
-mkdir -p /var/daos/cert_gen
-fetch_attr "certs_install_script_content" > /var/daos/cert_gen/certs_install.sh
-chmod +x /var/daos/cert_gen/certs_install.sh
-/var/daos/cert_gen/certs_install.sh client
-%{ endif }
+${certs_install_content}
 
 # Create agent config files from metadata
 mkdir -p /etc/daos
