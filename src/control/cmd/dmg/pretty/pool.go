@@ -18,6 +18,17 @@ import (
 	"github.com/daos-stack/daos/src/control/system"
 )
 
+func getTierNameText(tierIdx int) string {
+	switch tierIdx {
+	case int(control.StorageMediaTypeScm):
+		return fmt.Sprintf("- Storage tier %d (SCM):", tierIdx)
+	case int(control.StorageMediaTypeNvme):
+		return fmt.Sprintf("- Storage tier %d (NVMe):", tierIdx)
+	default:
+		return fmt.Sprintf("- Storage tier %d (unknown):", tierIdx)
+	}
+}
+
 // PrintPoolQueryResponse generates a human-readable representation of the supplied
 // PoolQueryResp struct and writes it to the supplied io.Writer.
 func PrintPoolQueryResponse(pqr *control.PoolQueryResp, out io.Writer, opts ...PrintConfigOption) error {
@@ -39,13 +50,7 @@ func PrintPoolQueryResponse(pqr *control.PoolQueryResp, out io.Writer, opts ...P
 	fmt.Fprintf(w, "- Target(VOS) count:%d\n", pqr.ActiveTargets)
 	if pqr.TierStats != nil {
 		for tierIdx, tierStats := range pqr.TierStats {
-			var tierName string
-			if tierIdx == 0 {
-				tierName = "- Storage tier 0 (SCM):"
-			} else {
-				tierName = fmt.Sprintf("- Storage tier %d (NVMe):", tierIdx)
-			}
-			fmt.Fprintln(w, tierName)
+			fmt.Fprintln(w, getTierNameText(tierIdx))
 			fmt.Fprintf(w, "  Total size: %s\n", humanize.Bytes(tierStats.Total))
 			fmt.Fprintf(w, "  Free: %s, min:%s, max:%s, mean:%s\n",
 				humanize.Bytes(tierStats.Free), humanize.Bytes(tierStats.Min),
@@ -58,6 +63,29 @@ func PrintPoolQueryResponse(pqr *control.PoolQueryResp, out io.Writer, opts ...P
 				pqr.Rebuild.State, pqr.Rebuild.Objects, pqr.Rebuild.Records)
 		} else {
 			fmt.Fprintf(w, "Rebuild failed, rc=%d, status=%d\n", pqr.Status, pqr.Rebuild.Status)
+		}
+	}
+
+	return w.Err
+}
+
+// PrintPoolQueryTargetResponse generates a human-readable representation of the supplied
+// PoolQueryTargetResp struct and writes it to the supplied io.Writer.
+func PrintPoolQueryTargetResponse(pqtr *control.PoolQueryTargetResp, out io.Writer, opts ...PrintConfigOption) error {
+	if pqtr == nil {
+		return errors.Errorf("nil %T", pqtr)
+	}
+	w := txtfmt.NewErrWriter(out)
+
+	// Maintain output compatibility with the `daos pool query-targets` output.
+	for infosIdx := range pqtr.Infos {
+		fmt.Fprintf(w, "Target: type %s, state %s\n", pqtr.Infos[infosIdx].Type, pqtr.Infos[infosIdx].State)
+		if pqtr.Infos[infosIdx].Space != nil {
+			for tierIdx, tierUsage := range pqtr.Infos[infosIdx].Space {
+				fmt.Fprintln(w, getTierNameText(tierIdx))
+				fmt.Fprintf(w, "  Total size: %s\n", humanize.Bytes(tierUsage.Total))
+				fmt.Fprintf(w, "  Free: %s\n", humanize.Bytes(tierUsage.Free))
+			}
 		}
 	}
 

@@ -1365,7 +1365,6 @@ def get_journalctl(hosts, since, until, journalctl_type):
     command = ("sudo /usr/bin/journalctl --system -t {} --since=\"{}\" "
                "--until=\"{}\"".format(journalctl_type, since, until))
     err = "Error gathering system log events"
-    results = get_host_data(
-        hosts=hosts, command=command, text="journalctl", error=err)
+    results = get_host_data(hosts=hosts, command=command, text="journalctl", error=err)
 
     return results

@@ -24,7 +24,7 @@ import (
 	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	sharedpb "github.com/daos-stack/daos/src/control/common/proto/shared"
-	"github.com/daos-stack/daos/src/control/drpc"
+	"github.com/daos-stack/daos/src/control/lib/daos"
 	"github.com/daos-stack/daos/src/control/lib/hostlist"
 	"github.com/daos-stack/daos/src/control/system"
 )
@@ -773,7 +773,7 @@ func (scr *SystemCleanupResp) Errors() error {
 	out := new(strings.Builder)
 
 	for _, r := range scr.Results {
-		if r.Status != int32(drpc.DaosSuccess) {
+		if r.Status != int32(daos.Success) {
 			fmt.Fprintf(out, "%s\n", r.Msg)
 		}
 	}

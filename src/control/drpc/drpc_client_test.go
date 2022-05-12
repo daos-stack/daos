@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2021 Intel Corporation.
+// (C) Copyright 2019-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -11,10 +11,9 @@ import (
 	"net"
 	"testing"
 
+	"github.com/daos-stack/daos/src/control/common/test"
 	"github.com/pkg/errors"
 	"google.golang.org/protobuf/proto"
-
-	"github.com/daos-stack/daos/src/control/common"
 )
 
 // testSockPath is an arbitrary path string to use for testing. These tests
@@ -69,9 +68,9 @@ func TestNewClientConnection(t *testing.T) {
 		t.Fatal("Expected a real client")
 		return
 	}
-	common.AssertEqual(t, client.socketPath, testSockPath,
+	test.AssertEqual(t, client.socketPath, testSockPath,
 		"Should match the path we passed in")
-	common.AssertFalse(t, client.IsConnected(), "Shouldn't be connected yet")
+	test.AssertFalse(t, client.IsConnected(), "Shouldn't be connected yet")
 
 	// Dialer should be the private implementation type
 	_ = client.dialer.(*clientDialer)
@@ -84,13 +83,13 @@ func TestClient_Connect_Success(t *testing.T) {
 
 	err := client.Connect()
 
-	common.AssertTrue(t, err == nil, "Expected no error")
-	common.AssertTrue(t, client.IsConnected(), "Should be connected")
-	common.AssertEqual(t, client.conn, dialer.OutputConn,
+	test.AssertTrue(t, err == nil, "Expected no error")
+	test.AssertTrue(t, client.IsConnected(), "Should be connected")
+	test.AssertEqual(t, client.conn, dialer.OutputConn,
 		"Expected conn returned from the mock dialer")
-	common.AssertEqual(t, dialer.InputSockPath, testSockPath,
+	test.AssertEqual(t, dialer.InputSockPath, testSockPath,
 		"Should be using passed-in socket path")
-	common.AssertEqual(t, client.sequence, int64(0),
+	test.AssertEqual(t, client.sequence, int64(0),
 		"Expected sequence number to have been reset")
 }
 
@@ -101,9 +100,9 @@ func TestClient_Connect_Error(t *testing.T) {
 
 	err := client.Connect()
 
-	common.CmpErr(t, dialer.OutputErr, err)
-	common.AssertFalse(t, client.IsConnected(), "Should not be connected")
-	common.AssertTrue(t, client.conn == nil, "Expected no connection")
+	test.CmpErr(t, dialer.OutputErr, err)
+	test.AssertFalse(t, client.IsConnected(), "Should not be connected")
+	test.AssertTrue(t, client.conn == nil, "Expected no connection")
 }
 
 func TestClient_Connect_AlreadyConnected(t *testing.T) {
@@ -113,10 +112,10 @@ func TestClient_Connect_AlreadyConnected(t *testing.T) {
 
 	err := client.Connect()
 
-	common.AssertTrue(t, err == nil, "Expected no error")
-	common.AssertEqual(t, client.conn, originalConn,
+	test.AssertTrue(t, err == nil, "Expected no error")
+	test.AssertEqual(t, client.conn, originalConn,
 		"Connection should be unchanged")
-	common.AssertEqual(t, dialer.DialCallCount, 0,
+	test.AssertEqual(t, dialer.DialCallCount, 0,
 		"Should not have tried to connect")
 }
 
@@ -126,10 +125,10 @@ func TestClient_Close_Success(t *testing.T) {
 
 	err := client.Close()
 
-	common.AssertTrue(t, err == nil, "Expected no error")
-	common.AssertEqual(t, conn.CloseCallCount, 1,
+	test.AssertTrue(t, err == nil, "Expected no error")
+	test.AssertEqual(t, conn.CloseCallCount, 1,
 		"Expected conn.Close() to be called")
-	common.AssertFalse(t, client.IsConnected(), "Should not be connected")
+	test.AssertFalse(t, client.IsConnected(), "Should not be connected")
 }
 
 func TestClient_Close_Error(t *testing.T) {
@@ -139,10 +138,10 @@ func TestClient_Close_Error(t *testing.T) {
 
 	err := client.Close()
 
-	common.CmpErr(t, conn.CloseOutputError, err)
-	common.AssertEqual(t, conn.CloseCallCount, 1,
+	test.CmpErr(t, conn.CloseOutputError, err)
+	test.AssertEqual(t, conn.CloseCallCount, 1,
 		"Expected conn.Close() to be called")
-	common.AssertTrue(t, client.IsConnected(),
+	test.AssertTrue(t, client.IsConnected(),
 		"Should have left the connection alone")
 }
 
@@ -152,8 +151,8 @@ func TestClient_Close_NotConnected(t *testing.T) {
 	err := client.Close()
 
 	// Effectively a no-op, but no point reporting failure on a double close
-	common.AssertTrue(t, err == nil, "Should report success")
-	common.AssertFalse(t, client.IsConnected(), "Should not be connected")
+	test.AssertTrue(t, err == nil, "Should report success")
+	test.AssertFalse(t, client.IsConnected(), "Should not be connected")
 }
 
 func TestClient_SendMsg_NilInput(t *testing.T) {
@@ -162,21 +161,21 @@ func TestClient_SendMsg_NilInput(t *testing.T) {
 
 	response, err := client.SendMsg(nil)
 
-	common.AssertTrue(t, response == nil, "Expected no response")
-	common.ExpectError(t, err, "invalid dRPC call", "Expect error on nil input")
+	test.AssertTrue(t, response == nil, "Expected no response")
+	test.ExpectError(t, err, "invalid dRPC call", "Expect error on nil input")
 }
 
 func marshallCallToBytes(t *testing.T, call *Call) []byte {
 	t.Helper()
 	callBytes, protoErr := proto.Marshal(call)
-	common.AssertTrue(t, protoErr == nil, "Failed to marshal Call to bytes")
+	test.AssertTrue(t, protoErr == nil, "Failed to marshal Call to bytes")
 	return callBytes
 }
 
 func marshallResponseToBytes(t *testing.T, resp *Response) []byte {
 	t.Helper()
 	respBytes, protoErr := proto.Marshal(resp)
-	common.AssertTrue(t, protoErr == nil, "Failed to marshal Response to bytes")
+	test.AssertTrue(t, protoErr == nil, "Failed to marshal Response to bytes")
 	return respBytes
 }
 
@@ -209,22 +208,22 @@ func TestClient_SendMsg_Success(t *testing.T) {
 
 	response, err := client.SendMsg(call)
 
-	common.AssertTrue(t, err == nil, "Expected no error")
+	test.AssertTrue(t, err == nil, "Expected no error")
 	if response == nil {
 		t.Fatal("Expected a real response")
 		return
 	}
-	common.AssertEqual(t, response.Sequence, expectedResp.Sequence,
+	test.AssertEqual(t, response.Sequence, expectedResp.Sequence,
 		"Response should match expected")
-	common.AssertEqual(t, response.Status, expectedResp.Status,
+	test.AssertEqual(t, response.Status, expectedResp.Status,
 		"Response should match expected")
-	common.AssertEqual(t, response.Body, expectedResp.Body,
+	test.AssertEqual(t, response.Body, expectedResp.Body,
 		"Response should match expected")
-	common.AssertEqual(t, conn.WriteInputBytes, callBytes,
+	test.AssertEqual(t, conn.WriteInputBytes, callBytes,
 		"Expected call to be marshalled and passed to write")
-	common.AssertTrue(t, conn.ReadInputBytes != nil,
+	test.AssertTrue(t, conn.ReadInputBytes != nil,
 		"Expected read called with buffer")
-	common.AssertEqual(t, conn.ReadInputBytes, expectedRespBytes,
+	test.AssertEqual(t, conn.ReadInputBytes, expectedRespBytes,
 		"Marshalled response should be copied into the buffer")
 }
 
@@ -233,8 +232,8 @@ func TestClient_SendMsg_NotConnected(t *testing.T) {
 
 	response, err := client.SendMsg(newTestCall())
 
-	common.AssertTrue(t, response == nil, "Expected no response")
-	common.ExpectError(t, err, "dRPC not connected",
+	test.AssertTrue(t, response == nil, "Expected no response")
+	test.ExpectError(t, err, "dRPC not connected",
 		"Expected error for unconnected client")
 }
 
@@ -247,8 +246,8 @@ func TestClient_SendMsg_WriteError(t *testing.T) {
 
 	response, err := client.SendMsg(call)
 
-	common.AssertTrue(t, response == nil, "Expected no response")
-	common.CmpErr(t, conn.WriteOutputError, err)
+	test.AssertTrue(t, response == nil, "Expected no response")
+	test.CmpErr(t, conn.WriteOutputError, err)
 }
 
 func TestClient_SendMsg_ReadError(t *testing.T) {
@@ -263,8 +262,8 @@ func TestClient_SendMsg_ReadError(t *testing.T) {
 
 	response, err := client.SendMsg(call)
 
-	common.AssertTrue(t, response == nil, "Expected no response")
-	common.CmpErr(t, conn.ReadOutputError, err)
+	test.AssertTrue(t, response == nil, "Expected no response")
+	test.CmpErr(t, conn.ReadOutputError, err)
 }
 
 func TestClient_SendMsg_UnmarshalResponseFailure(t *testing.T) {
@@ -284,6 +283,6 @@ func TestClient_SendMsg_UnmarshalResponseFailure(t *testing.T) {
 	response, err := client.SendMsg(call)
 
 	expectedErr := errors.New("failed to unmarshal dRPC response")
-	common.AssertTrue(t, response == nil, "Expected no response")
-	common.CmpErr(t, expectedErr, err)
+	test.AssertTrue(t, response == nil, "Expected no response")
+	test.CmpErr(t, expectedErr, err)
 }

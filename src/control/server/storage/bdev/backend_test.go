@@ -23,7 +23,7 @@ import (
 	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/pkg/errors"
 
-	"github.com/daos-stack/daos/src/control/common"
+	"github.com/daos-stack/daos/src/control/common/test"
 	"github.com/daos-stack/daos/src/control/lib/hardware"
 	"github.com/daos-stack/daos/src/control/lib/spdk"
 	"github.com/daos-stack/daos/src/control/logging"
@@ -43,7 +43,7 @@ func addrListFromStrings(addrs ...string) *hardware.PCIAddressSet {
 func mockAddrList(idxs ...int) *hardware.PCIAddressSet {
 	var addrs []string
 	for _, idx := range idxs {
-		addrs = append(addrs, common.MockPCIAddr(int32(idx)))
+		addrs = append(addrs, test.MockPCIAddr(int32(idx)))
 	}
 	return addrListFromStrings(addrs...)
 }
@@ -169,7 +169,7 @@ func TestBackend_groomDiscoveredBdevs(t *testing.T) {
 			}
 
 			gotCtrlrs, gotErr := groomDiscoveredBdevs(reqAddrs, tc.inCtrlrs, tc.vmdEnabled)
-			common.CmpErr(t, tc.expErr, gotErr)
+			test.CmpErr(t, tc.expErr, gotErr)
 			if gotErr != nil {
 				return
 			}
@@ -235,7 +235,7 @@ func TestBackend_Scan(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(name)
-			defer common.ShowBufferOnFailure(t, buf)
+			defer test.ShowBufferOnFailure(t, buf)
 
 			mei := &spdk.MockEnvImpl{Cfg: tc.mec}
 			sr, _ := mockScriptRunner(t, log, nil)
@@ -249,7 +249,7 @@ func TestBackend_Scan(t *testing.T) {
 			}
 
 			gotResp, gotErr := b.Scan(tc.req)
-			common.CmpErr(t, tc.expErr, gotErr)
+			test.CmpErr(t, tc.expErr, gotErr)
 			if gotErr != nil {
 				return
 			}
@@ -257,9 +257,9 @@ func TestBackend_Scan(t *testing.T) {
 			if diff := cmp.Diff(tc.expResp, gotResp, defCmpOpts()...); diff != "" {
 				t.Fatalf("\nunexpected output (-want, +got):\n%s\n", diff)
 			}
-			common.AssertEqual(t, 1, len(mei.InitCalls), "unexpected number of spdk init calls")
+			test.AssertEqual(t, 1, len(mei.InitCalls), "unexpected number of spdk init calls")
 			// TODO: re-enable when tanabarr/control-spdk-fini-after-init change
-			//common.AssertEqual(t, 1, len(mei.FiniCalls), "unexpected number of spdk fini calls")
+			//test.AssertEqual(t, 1, len(mei.FiniCalls), "unexpected number of spdk fini calls")
 		})
 	}
 }
@@ -269,7 +269,7 @@ func TestBackend_Format(t *testing.T) {
 	pci2 := storage.MockNvmeController(2).PciAddr
 	pci3 := storage.MockNvmeController(3).PciAddr
 
-	testDir, clean := common.CreateTestDir(t)
+	testDir, clean := test.CreateTestDir(t)
 	defer clean()
 
 	for name, tc := range map[string]struct {
@@ -550,7 +550,7 @@ func TestBackend_Format(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(name)
-			defer common.ShowBufferOnFailure(t, buf)
+			defer test.ShowBufferOnFailure(t, buf)
 
 			mei := &spdk.MockEnvImpl{Cfg: tc.mec}
 			sr, _ := mockScriptRunner(t, log, nil)
@@ -568,7 +568,7 @@ func TestBackend_Format(t *testing.T) {
 			tc.req.OwnerGID = os.Getegid()
 
 			gotResp, gotErr := b.Format(tc.req)
-			common.CmpErr(t, tc.expErr, gotErr)
+			test.CmpErr(t, tc.expErr, gotErr)
 			if gotErr != nil {
 				return
 			}
@@ -590,7 +590,7 @@ func TestBackend_Format(t *testing.T) {
 					t.Fatalf("\nunexpected output (-want, +got):\n%s\n", diff)
 				}
 				// TODO: re-enable when tanabarr/control-spdk-fini-after-init change
-				//common.AssertEqual(t, 1, len(mei.FiniCalls),
+				//test.AssertEqual(t, 1, len(mei.FiniCalls),
 				//	"unexpected number of spdk fini calls")
 			}
 		})
@@ -612,7 +612,7 @@ func TestBackend_writeNvmeConfig(t *testing.T) {
 					},
 					{
 						Class:      storage.ClassNvme,
-						DeviceList: storage.MustNewBdevDeviceList(common.MockPCIAddr(1)),
+						DeviceList: storage.MustNewBdevDeviceList(test.MockPCIAddr(1)),
 					},
 				},
 			},
@@ -623,7 +623,7 @@ func TestBackend_writeNvmeConfig(t *testing.T) {
 					},
 					{
 						Class:      storage.ClassNvme,
-						DeviceList: storage.MustNewBdevDeviceList(common.MockPCIAddr(1)),
+						DeviceList: storage.MustNewBdevDeviceList(test.MockPCIAddr(1)),
 					},
 				},
 			},
@@ -636,7 +636,7 @@ func TestBackend_writeNvmeConfig(t *testing.T) {
 					},
 					{
 						Class:      storage.ClassNvme,
-						DeviceList: storage.MustNewBdevDeviceList(common.MockPCIAddr(1)),
+						DeviceList: storage.MustNewBdevDeviceList(test.MockPCIAddr(1)),
 					},
 				},
 			},
@@ -648,7 +648,7 @@ func TestBackend_writeNvmeConfig(t *testing.T) {
 					},
 					{
 						Class:      storage.ClassNvme,
-						DeviceList: storage.MustNewBdevDeviceList(common.MockPCIAddr(1)),
+						DeviceList: storage.MustNewBdevDeviceList(test.MockPCIAddr(1)),
 					},
 				},
 			},
@@ -686,7 +686,7 @@ func TestBackend_writeNvmeConfig(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(name)
-			defer common.ShowBufferOnFailure(t, buf)
+			defer test.ShowBufferOnFailure(t, buf)
 
 			sr, _ := mockScriptRunner(t, log, nil)
 			b := newBackend(log, sr)
@@ -703,7 +703,7 @@ func TestBackend_writeNvmeConfig(t *testing.T) {
 			if diff := cmp.Diff(tc.expCall, gotCall, defCmpOpts()...); diff != "" {
 				t.Fatalf("\nunexpected request made (-want, +got):\n%s\n", diff)
 			}
-			common.CmpErr(t, tc.expErr, gotErr)
+			test.CmpErr(t, tc.expErr, gotErr)
 			if gotErr != nil {
 				return
 			}
@@ -742,12 +742,12 @@ func TestBackend_Update(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(name)
-			defer common.ShowBufferOnFailure(t, buf)
+			defer test.ShowBufferOnFailure(t, buf)
 
 			b := backendWithMockBinding(log, tc.mec, tc.mnc)
 
 			gotErr := b.UpdateFirmware(tc.pciAddr, "/some/path", 0)
-			common.CmpErr(t, tc.expErr, gotErr)
+			test.CmpErr(t, tc.expErr, gotErr)
 		})
 	}
 }
@@ -910,12 +910,12 @@ func TestBackend_hugePageWalkFn(t *testing.T) {
 			testFn := hugePageWalkFunc(testDir, tc.prefix, tc.tgtUID, removeFn, &count)
 			for _, ti := range tc.testInputs {
 				gotErr := testFn(ti.path, ti.info, ti.err)
-				common.CmpErr(t, ti.expErr, gotErr)
+				test.CmpErr(t, ti.expErr, gotErr)
 			}
 			if diff := cmp.Diff(tc.expRemoved, removedFiles); diff != "" {
 				t.Fatalf("unexpected remove result (-want, +got):\n%s\n", diff)
 			}
-			common.AssertEqual(t, tc.expCount, count, "unexpected remove count")
+			test.AssertEqual(t, tc.expCount, count, "unexpected remove count")
 		})
 	}
 }
@@ -1356,7 +1356,7 @@ func TestBackend_Prepare(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(name)
-			defer common.ShowBufferOnFailure(t, buf)
+			defer test.ShowBufferOnFailure(t, buf)
 
 			sss, calls := mockScriptRunner(t, log, tc.mbc)
 			b := newBackend(log, sss)
@@ -1389,7 +1389,7 @@ func TestBackend_Prepare(t *testing.T) {
 					t.Fatalf("\nunexpected prepare response (-want, +got):\n%s\n", diff)
 				}
 			}
-			common.CmpErr(t, tc.expErr, gotErr)
+			test.CmpErr(t, tc.expErr, gotErr)
 
 			if len(tc.expScriptCalls) != len(*calls) {
 				t.Fatalf("\nunmatched number of calls (-want, +got):\n%s\n",
@@ -1405,7 +1405,7 @@ func TestBackend_Prepare(t *testing.T) {
 					t.Fatalf("\nunexpected cmd env (-want, +got):\n%s\n", diff)
 				}
 			}
-			common.AssertEqual(t, tc.expHpCleanCall, hpCleanCall, "unexpected clean hugepages call")
+			test.AssertEqual(t, tc.expHpCleanCall, hpCleanCall, "unexpected clean hugepages call")
 		})
 	}
 }
