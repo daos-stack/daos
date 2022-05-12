@@ -13,9 +13,10 @@ from ior_utils import IorCommand
 from general_utils import report_errors, stop_processes
 from command_utils_base import CommandFailure
 from job_manager_utils import get_job_manager
+from telemetry_test_base import TestWithTelemetry
 
 
-class ServerRankFailure(IorTestBase):
+class ServerRankFailure(IorTestBase, TestWithTelemetry):
     # pylint: disable=too-many-ancestors
     """Test class Description: Verify server rank, or engine, failure is properly handled
     and recovered.
@@ -131,19 +132,52 @@ class ServerRankFailure(IorTestBase):
             ior_error = ior_results[job_num][1]
             errors.append("Error found in IOR job {}! {}".format(job_num, ior_error))
 
+    def get_io_inflow(self, engine_kill_host):
+        """Get the IO inflow into the ranks of the engine_kill_host.
+
+        Args:
+            engine_kill_host (str): Host where we're interested in the IO inflow.
+
+        Returns:
+            dict: Keys are the two ranks and values are the total IO from all targets in
+                the rank.
+
+        """
+        ranks_to_io = {}
+        metrics = "engine_pool_ops_fetch"
+        metrics_out = self.telemetry.get_pool_metrics([metrics])
+
+        ranks_to_targets = metrics_out[metrics][engine_kill_host]
+        for rank in ranks_to_targets:
+            target_to_value = ranks_to_targets[rank]
+            total_rank_io = 0
+            for value in target_to_value.values():
+                total_rank_io += value
+            ranks_to_io[rank] = total_rank_io
+
+        return ranks_to_io
+
     def verify_rank_failure(self, ior_namespace, container_namespace):
         """Verify engine failure can be recovered by restarting daos_server.
 
         1. Create a pool and a container. Create a container with or without redundancy
         factor based on container_namespace.
-        2. Run IOR with given object class.
-        3. While IOR is running, kill daos_engine processes from one of the nodes to
+        2. Get the amount of IO inflow to the ranks we'll kill engine on. We expect both
+        to be 0.
+        3. Run IOR with given object class (IO experiment run).
+        4. Get the amount of IO inflow again. Both ranks should get some data. This step
+        is to verify that the ranks where we'll kill engine will receive IO. We assume
+        that this result will hold in every subsequent IOR runs. If the ranks don't get
+        any data, fail the test. We'll need to come up with some workaround.
+        5. Verify that we got some IO inflow.
+        6. Run IOR with given object class (Main test run).
+        7. While IOR is running, kill daos_engine processes from one of the nodes to
         simulate a node failure. (Two engines per node.)
-        4. Verify that IOR failed.
-        5. Restart daos_server service on the two nodes.
-        6. Verify the system status by calling dmg system query.
-        7. Verify that the container Health is HEALTHY.
-        8. Run IOR to the same container and verify that it works.
+        8. Verify that IOR failed.
+        9. Restart daos_server service on the two nodes.
+        10. Verify the system status by calling dmg system query.
+        11. Verify that the container Health is HEALTHY.
+        12. Run IOR to the same container and verify that it works.
 
         Args:
             ior_namespace (str): Yaml namespace that defines the object class used for
@@ -155,9 +189,36 @@ class ServerRankFailure(IorTestBase):
         self.add_pool(namespace="/run/pool_size_ratio_80/*")
         self.add_container(pool=self.pool, namespace=container_namespace)
 
-        # 2. Run IOR.
+        # 2. Get the amount of IO inflow to the ranks we'll kill engine on.
+        engine_kill_host = self.hostlist_servers[1]
+        ranks_to_io_before = self.get_io_inflow(engine_kill_host=engine_kill_host)
+        self.log.info("ranks_to_io_before = %s", ranks_to_io_before)
+
+        # 3. Run IOR with given object class (IO experiment run).
         ior_results = {}
+        errors = []
         job_num = 1
+        self.run_ior_report_error(
+            job_num=job_num, results=ior_results, file_name="test_file_1",
+            pool=self.pool, container=self.container, namespace=ior_namespace)
+        # Verify just in case.
+        self.verify_ior_worked(ior_results=ior_results, job_num=job_num, errors=errors)
+
+        # 4. Get the amount of IO inflow again. Both ranks should get some data.
+        ranks_to_io_after = self.get_io_inflow(engine_kill_host=engine_kill_host)
+        self.log.info("ranks_to_io_after = %s", ranks_to_io_after)
+
+        # 5. Verify that we got some IO inflow.
+        for rank in ranks_to_io_before:
+            io_before = ranks_to_io_before[rank]
+            io_after = ranks_to_io_after[rank]
+            if io_after <= io_before:
+                msg = ("No IO inflow was observed on rank {}! "
+                       "Before = {}; After = {}".format(rank, io_before, io_after))
+                errors.append(msg)
+
+        # 6. Run IOR with given object class (Main test run).
+        job_num = 2
         # If we don't use timeout, when the engines are killed, Mpirun gets stuck and
         # waits forever. If we use timeout that's too long, the daos container command
         # after the server restart will get stuck, so use 10 sec timeout, which is the
@@ -167,7 +228,7 @@ class ServerRankFailure(IorTestBase):
             "Running Mpirun-IOR with Mpirun timeout of %s sec", mpirun_timeout)
         ior_thread = threading.Thread(
             target=self.run_ior_report_error,
-            args=[ior_results, job_num, "test_file_1", self.pool, self.container,
+            args=[ior_results, job_num, "test_file_2", self.pool, self.container,
                   ior_namespace, mpirun_timeout])
 
         ior_thread.start()
@@ -176,43 +237,42 @@ class ServerRankFailure(IorTestBase):
         self.log.info("Waiting 5 sec for IOR to start writing data...")
         time.sleep(5)
 
-        # 3. While IOR is running, kill daos_engine from two of the ranks.
+        # 7. While IOR is running, kill daos_engine from two of the ranks.
         # Arbitrarily select node index, say index 1.
-        self.kill_engine(engine_kill_host=self.hostlist_servers[1])
+        self.kill_engine(engine_kill_host=engine_kill_host)
 
         # Wait for IOR to complete.
         ior_thread.join()
 
-        # 4. Verify that IOR failed.
-        errors = []
-        self.log.info("----- IOR results 1 -----")
+        # 8. Verify that IOR failed.
+        self.log.info("----- IOR results 2 -----")
         self.log.info(ior_results)
         if job_num not in ior_results or ior_results[job_num][0]:
             errors.append("First IOR didn't fail as expected!")
 
-        # 5. Restart daos_servers. It's not easy to restart only on the host where the
+        # 9. Restart daos_servers. It's not easy to restart only on the host where the
         # engines were killed, so just restart all.
         self.restart_all_servers()
 
-        # 6. Verify the system status by calling dmg system query.
+        # 10. Verify the system status by calling dmg system query.
         output = self.get_dmg_command().system_query()
         for member in output["response"]["members"]:
             if member["state"] != "joined":
                 errors.append(
                     "Server rank {} state isn't joined!".format(member["rank"]))
 
-        # 7. Verify that the container Health is HEALTHY.
+        # 11. Verify that the container Health is HEALTHY.
         if not self.check_container_health(
                 container=self.container, expected_health="HEALTHY"):
             errors.append("Container health isn't HEALTHY after server restart!")
 
-        # 8. Run IOR and verify that it works.
-        job_num = 2
+        # 12. Run IOR and verify that it works.
+        job_num = 3
         self.run_ior_report_error(
-            job_num=job_num, results=ior_results, file_name="test_file_2",
+            job_num=job_num, results=ior_results, file_name="test_file_3",
             pool=self.pool, container=self.container, namespace=ior_namespace)
 
-        self.log.info("----- IOR results 2 -----")
+        self.log.info("----- IOR results 3 -----")
         self.verify_ior_worked(ior_results=ior_results, job_num=job_num, errors=errors)
 
         self.log.info("########## Errors ##########")
@@ -247,21 +307,6 @@ class ServerRankFailure(IorTestBase):
         """
         self.verify_rank_failure(
             ior_namespace="/run/ior_with_rp/*",
-            container_namespace="/run/container_with_rf/*")
-
-    def test_rank_failure_with_ec(self):
-        """Jira ID: DAOS-10002.
-
-        Test rank failure with redundancy factor and EC_2P1G1 object class. See
-        verify_rank_failure() for test steps.
-
-        :avocado: tags=all,full_regression
-        :avocado: tags=hw,medium,ib2
-        :avocado: tags=deployment,rank_failure
-        :avocado: tags=rank_failure_with_ec
-        """
-        self.verify_rank_failure(
-            ior_namespace="/run/ior_with_ec/*",
             container_namespace="/run/container_with_rf/*")
 
     def test_rank_failure_isolation(self):
