@@ -459,6 +459,8 @@ def get_common_provider(hosts, interface, supported=None, verbose=True):
     """
     ofi_info = get_ofi_info(hosts, supported, verbose)
     providers = get_interface_providers(interface, ofi_info)
+    for ib_name in get_interface_ib_name(hosts, interface, verbose):
+        providers.update(get_interface_providers(ib_name, ofi_info))
 
     if not supported or "ucx" in supported:
         ucx_info = get_ucx_info(hosts, supported, verbose)
