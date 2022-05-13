@@ -582,7 +582,7 @@ degrade_ec_update(void **state)
 	if (!test_runable(arg, 6) || (arg->srv_ntgts / arg->srv_nnodes) < 2)
 		return;
 
-	print_message("test 1 - DER_SHARDS_OVERLAP case\n");
+	print_message("test 1 - DER_NEED_TX case\n");
 	data = (char *)malloc(TEST_EC_STRIPE_SIZE);
 	assert_true(data != NULL);
 	oid = daos_test_oid_gen(arg->coh, OC_EC_4P2G2, DAOS_OT_DKEY_UINT64, 0, arg->myrank);

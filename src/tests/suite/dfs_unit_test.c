@@ -22,6 +22,7 @@ dfs_test_mount(void **state)
 	uuid_t			cuuid;
 	daos_cont_info_t	co_info;
 	daos_handle_t		coh;
+	daos_handle_t		poh_tmp, coh_tmp;
 	dfs_t			*dfs;
 	int			rc;
 
@@ -125,6 +126,26 @@ dfs_test_mount(void **state)
 	assert_rc_equal(rc, 0);
 	rc = dfs_mount(arg->pool.poh, coh, O_RDWR, &dfs);
 	assert_int_equal(rc, 0);
+
+	/** get/put poh and coh */
+	print_message("Testing dfs_pool/cont_get/put\n");
+	rc = dfs_pool_get(dfs, &poh_tmp);
+	assert_int_equal(rc, 0);
+	assert_int_equal(poh_tmp.cookie, arg->pool.poh.cookie);
+	/** try to umount now, should fail */
+	rc = dfs_umount(dfs);
+	assert_int_equal(rc, EBUSY);
+	rc = dfs_pool_put(dfs, poh_tmp);
+	assert_int_equal(rc, 0);
+	rc = dfs_cont_get(dfs, &coh_tmp);
+	assert_int_equal(rc, 0);
+	assert_int_equal(coh_tmp.cookie, coh.cookie);
+	/** try to umount now, should fail */
+	rc = dfs_umount(dfs);
+	assert_int_equal(rc, EBUSY);
+	rc = dfs_cont_put(dfs, coh_tmp);
+	assert_int_equal(rc, 0);
+
 	rc = dfs_umount(dfs);
 	assert_int_equal(rc, 0);
 	rc = daos_cont_close(coh, NULL);
