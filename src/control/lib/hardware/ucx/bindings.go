@@ -12,6 +12,18 @@ package ucx
 #include <assert.h>
 #include <stdlib.h>
 #include <uct/api/uct.h>
+#include <ucs/debug/debug.h>
+
+void
+call_ucs_debug_disable_signal(void *fn, int signum)
+{
+	void (*disable)(int);
+
+	assert(fn != NULL);
+	disable = fn;
+
+	disable(signum);
+}
 
 uct_component_h
 get_component_from_list(uct_component_h *components, uint idx)
@@ -180,6 +192,7 @@ import "C"
 
 import (
 	"fmt"
+	"syscall"
 	"unsafe"
 
 	"github.com/pkg/errors"
@@ -189,6 +202,16 @@ import (
 
 // Load dynamically loads the UCX libraries and provides a method to unload them.
 func Load() (func(), error) {
+	ucsHdl, err := openUCS()
+	if err != nil {
+		return nil, err
+	}
+	defer ucsHdl.Close()
+
+	if err := ucsDisableSignal(ucsHdl, syscall.SIGSEGV); err != nil {
+		return nil, errors.Wrap(err, "disabling UCX signal handling")
+	}
+
 	hdl, err := openUCT()
 	if err != nil {
 		return nil, err
@@ -200,6 +223,19 @@ func Load() (func(), error) {
 
 func openUCT() (*dlopen.LibHandle, error) {
 	return dlopen.GetHandle([]string{"libuct.so"})
+}
+
+func openUCS() (*dlopen.LibHandle, error) {
+	return dlopen.GetHandle([]string{"libucs.so"})
+}
+
+func ucsDisableSignal(hdl *dlopen.LibHandle, sig syscall.Signal) error {
+	fn, err := getLibFuncPtr(hdl, "ucs_debug_disable_signal")
+	if err != nil {
+		return err
+	}
+	C.call_ucs_debug_disable_signal(fn, C.int(sig))
+	return nil
 }
 
 func getLibFuncPtr(hdl *dlopen.LibHandle, fnName string) (unsafe.Pointer, error) {
