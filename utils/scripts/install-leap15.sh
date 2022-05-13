@@ -10,9 +10,7 @@
 
 set -e
 
-zypper --non-interactive --gpg-auto-import-keys --no-gpg-checks ref
-zypper --non-interactive update
-zypper --non-interactive install \
+dnf -y --nodocs install \
     boost-devel \
     bzip2 \
     curl \
@@ -64,7 +62,7 @@ zypper --non-interactive install \
     python3-tabulate \
     scons \
     sg3_utils \
+    sudo \
     valgrind-devel \
     which \
     yasm
-zypper clean --all

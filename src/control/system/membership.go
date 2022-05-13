@@ -24,7 +24,6 @@ import (
 	"github.com/daos-stack/daos/src/control/logging"
 )
 
-// resolveTCPFn is a type alias for the net.ResolveTCPAddr function signature.
 type resolveTCPFn func(string, string) (*net.TCPAddr, error)
 
 // Membership tracks details of system members.
