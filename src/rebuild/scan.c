@@ -869,9 +869,9 @@ rebuild_tgt_scan_handler(crt_rpc_t *rpc)
 	rsi = crt_req_get(rpc);
 	D_ASSERT(rsi != NULL);
 
-	D_DEBUG(DB_REBUILD, "%d scan rebuild for "DF_UUID" ver %d\n",
+	D_DEBUG(DB_REBUILD, "%d scan rebuild for "DF_UUID" ver %d gen %u\n",
 		dss_get_module_info()->dmi_tgt_id, DP_UUID(rsi->rsi_pool_uuid),
-		rsi->rsi_rebuild_ver);
+		rsi->rsi_rebuild_ver, rsi->rsi_rebuild_gen);
 
 	/* If PS leader has been changed, and rebuild version is also increased
 	 * due to adding new failure targets for rebuild, let's abort previous
@@ -889,7 +889,7 @@ rebuild_tgt_scan_handler(crt_rpc_t *rpc)
 	}
 
 	/* check if the rebuild is already started */
-	rpt = rpt_lookup(rsi->rsi_pool_uuid, rsi->rsi_rebuild_ver);
+	rpt = rpt_lookup(rsi->rsi_pool_uuid, rsi->rsi_rebuild_ver, rsi->rsi_rebuild_gen);
 	if (rpt != NULL) {
 		if (rpt->rt_global_done) {
 			D_WARN("the previous rebuild "DF_UUID"/%d"
@@ -932,8 +932,8 @@ rebuild_tgt_scan_handler(crt_rpc_t *rpc)
 			/* If this is the old leader, then also stop the rebuild
 			 * tracking ULT.
 			 */
-			ds_rebuild_leader_stop(rsi->rsi_pool_uuid,
-					       rsi->rsi_rebuild_ver);
+			ds_rebuild_leader_stop(rsi->rsi_pool_uuid, rsi->rsi_rebuild_ver,
+					       rsi->rsi_rebuild_gen);
 		}
 
 		rpt->rt_leader_term = rsi->rsi_leader_term;
