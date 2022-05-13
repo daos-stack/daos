@@ -1,4 +1,4 @@
-#!/usr/bin/python
+#!/usr/bin/python3
 """
   (C) Copyright 2022 Intel Corporation.
 
@@ -50,7 +50,7 @@ class NetworkDevice():
             if not status:
                 break
             try:
-                status &= getattr(self, key) == getattr(other, key)
+                status &= str(getattr(self, key)) == str(getattr(other, key))
             except AttributeError:
                 status = False
         return status
