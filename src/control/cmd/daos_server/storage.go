@@ -87,7 +87,15 @@ func (cmd *storagePrepareCmd) prepNvme(prep nvmePrepFn, iommuEnabled bool) error
 		PCIBlockList:  cmd.PCIBlockList,
 		Reset_:        cmd.Reset,
 		DisableVFIO:   cmd.DisableVFIO,
-		EnableVMD:     !cmd.DisableVFIO && iommuEnabled, // vmd will be prepared if available
+	}
+
+	switch {
+	case cmd.DisableVFIO:
+		cmd.Info("VMD not enabled because VFIO disabled in command options")
+	case !iommuEnabled:
+		cmd.Info("VMD not enabled because IOMMU disabled on system")
+	default:
+		req.EnableVMD = true
 	}
 
 	cmd.Debugf("request parameters: %+v", req)
