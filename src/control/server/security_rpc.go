@@ -15,6 +15,7 @@ import (
 	"google.golang.org/protobuf/proto"
 
 	"github.com/daos-stack/daos/src/control/drpc"
+	"github.com/daos-stack/daos/src/control/lib/daos"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/security"
 	"github.com/daos-stack/daos/src/control/security/auth"
@@ -44,7 +45,7 @@ func (m *SecurityModule) processValidateCredentials(body []byte) ([]byte, error)
 	cred := req.Cred
 	if cred == nil || cred.GetToken() == nil || cred.GetVerifier() == nil {
 		m.log.Error("malformed credential")
-		return m.validateRespWithStatus(drpc.DaosInvalidInput)
+		return m.validateRespWithStatus(daos.InvalidInput)
 	}
 
 	var key crypto.PublicKey
@@ -56,7 +57,7 @@ func (m *SecurityModule) processValidateCredentials(body []byte) ([]byte, error)
 		cert, err := security.LoadCertificate(certPath)
 		if err != nil {
 			m.log.Errorf("loading certificate %s failed: %v", certPath, err)
-			return m.validateRespWithStatus(drpc.DaosBadPath)
+			return m.validateRespWithStatus(daos.BadPath)
 		}
 		key = cert.PublicKey
 	}
@@ -65,7 +66,7 @@ func (m *SecurityModule) processValidateCredentials(body []byte) ([]byte, error)
 	err = auth.VerifyToken(key, cred.GetToken(), cred.GetVerifier().GetData())
 	if err != nil {
 		m.log.Errorf("cred verification failed: %v", err)
-		return m.validateRespWithStatus(drpc.DaosNoPermission)
+		return m.validateRespWithStatus(daos.NoPermission)
 	}
 
 	resp := &auth.ValidateCredResp{Token: cred.Token}
@@ -76,7 +77,7 @@ func (m *SecurityModule) processValidateCredentials(body []byte) ([]byte, error)
 	return responseBytes, nil
 }
 
-func (m *SecurityModule) validateRespWithStatus(status drpc.DaosStatus) ([]byte, error) {
+func (m *SecurityModule) validateRespWithStatus(status daos.Status) ([]byte, error) {
 	return drpc.Marshal(&auth.ValidateCredResp{Status: int32(status)})
 }
 
