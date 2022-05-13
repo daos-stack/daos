@@ -269,6 +269,8 @@ extern "C" {
 	/** Retry with other target, an internal error code used in EC deg-fetch. */ \
 	ACTION(DER_TGT_RETRY,		(DER_ERR_DAOS_BASE + 36),	\
 		Retry with other target)				\
+	ACTION(DER_NO_SERVICE,		(DER_ERR_DAOS_BASE + 38),	\
+	       No Service available)					\
 
 /** Defines the gurt error codes */
 #define D_FOREACH_ERR_RANGE(ACTION)	\
