@@ -24,6 +24,8 @@ const (
 	vmdDomainLen = 6
 )
 
+var ErrNotVMDBackingAddress = errors.New("not a vmd backing device address")
+
 // parsePCIAddress returns separated components of BDF format PCI address.
 func parsePCIAddress(addr string) (dom, bus, dev, fun uint64, err error) {
 	parts := strings.Split(addr, ":")
@@ -89,7 +91,7 @@ func (pa *PCIAddress) BackingToVMDAddress() (*PCIAddress, error) {
 		return nil, errors.New("PCIAddress is nil")
 	}
 	if !pa.IsVMDBackingAddress() {
-		return nil, errors.New("not a vmd backing device address")
+		return nil, ErrNotVMDBackingAddress
 
 	}
 

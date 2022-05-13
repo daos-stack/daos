@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2021 Intel Corporation.
+// (C) Copyright 2019-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -410,6 +410,41 @@ type (
 		Results []NVMeDeviceFirmwareUpdateResult
 	}
 )
+
+// filterBdevScanResponse removes controllers that are not in the input list from the scan response.
+// As the response contains controller references which may be shared elsewhere, copy them to avoid
+// accessing the same references in multiple code paths.
+func filterBdevScanResponse(incBdevs []string, resp *BdevScanResponse) error {
+	oldCtrlrRefs := resp.Controllers
+	newCtrlrRefs := make(NvmeControllers, 0, len(oldCtrlrRefs))
+
+	for _, oldCtrlrRef := range oldCtrlrRefs {
+		addr, err := common.NewPCIAddress(oldCtrlrRef.PciAddr)
+		if err != nil {
+			continue // If we cannot parse the address, leave it out.
+		}
+
+		if addr.IsVMDBackingAddress() {
+			vmdAddr, err := addr.BackingToVMDAddress()
+			if err != nil {
+				return errors.Wrap(err, "converting pci address of vmd backing device")
+			}
+			// If addr is a VMD backing address, use the VMD endpoint instead as that is the
+			// address that will be in the config.
+			addr = vmdAddr
+		}
+
+		// Retain controller details if address is in config.
+		if common.Includes(incBdevs, addr.String()) {
+			newCtrlrRef := &NvmeController{}
+			*newCtrlrRef = *oldCtrlrRef
+			newCtrlrRefs = append(newCtrlrRefs, newCtrlrRef)
+		}
+	}
+	resp.Controllers = newCtrlrRefs
+
+	return nil
+}
 
 type BdevForwarder struct {
 	BdevAdminForwarder

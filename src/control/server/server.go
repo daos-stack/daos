@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2018-2021 Intel Corporation.
+// (C) Copyright 2018-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -266,7 +266,9 @@ func (srv *server) addEngines(ctx context.Context) error {
 			return err
 		}
 
-		engine.storage.SetBdevCache(*nvmeScanResp)
+		if err := engine.storage.SetBdevCache(*nvmeScanResp); err != nil {
+			return errors.Wrap(err, "setting engine storage bdev cache")
+		}
 
 		registerEngineEventCallbacks(engine, srv.hostname, srv.pubSub, &allStarted)
 
