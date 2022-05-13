@@ -28,6 +28,8 @@ const (
 	PCIAddrBusBitSize = 8
 )
 
+var ErrNotVMDBackingAddress = errors.New("not a vmd backing device address")
+
 // parseVMDAddress returns the domain string interpreted as the VMD address.
 func parseVMDAddress(addr string) (*PCIAddress, error) {
 	if len(addr) != vmdDomainLen {
@@ -165,8 +167,7 @@ func (pa *PCIAddress) BackingToVMDAddress() (*PCIAddress, error) {
 		return nil, errors.New("PCIAddress is nil")
 	}
 	if !pa.IsVMDBackingAddress() {
-		return nil, errors.New("not a vmd backing device address")
-
+		return nil, ErrNotVMDBackingAddress
 	}
 
 	return pa.VMDAddr, nil
