@@ -4,6 +4,7 @@ set -o pipefail
 
 VERSION=0.1
 CWD="$(realpath $(dirname $0))"
+declare -A VALID_CMDS=([install]=true [update]=true)
 
 DAOS_INSTALL_DIR="{{ daos_runtime_dir }}/install"
 DAOS_SOURCE_DIR="{{ daos_source_dir }}"
@@ -138,8 +139,9 @@ do
 	esac
 done
 
-[[ $1 ]] || fatal "Command not defined: install, update"
+[[ $1 ]] || fatal "Command not defined: use install or update"
 CMD="$1"
+[[ ${VALID_CMDS[$CMD]} == true ]] || fatal "Invalid command \"$CMD\": use install or update"
 
 check_cmds $SCONS_EXE
 

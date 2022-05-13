@@ -1,14 +1,6 @@
 # Ansible scripts for deploying a DAOS development node
 # yamllint disable rule:line-length
 
-# Needed by ftest
-- name: Setup DAOS server node
-  import_tasks: daos_servers.yml
-
-# Needed by ftest
-- name: Setup DAOS client node
-  import_tasks: daos_clients.yml
-
 - name: Checking required variables
   fail:
     msg: "Variable '{{ item }}' is not defined"
@@ -16,6 +8,41 @@
   loop:
     - daos_runtime_dir
     - daos_source_dir
+
+- name: Client DAOS configuration
+  import_tasks: daos_clients.yml
+
+- name: Add DAOS server groups
+  remote_user: root
+  group:
+    name: "{{ item }}"
+    state: present
+    system: true
+  loop:
+    - daos_metrics
+    - daos_server
+
+- name: Add DAOS server user
+  remote_user: root
+  user:
+    name: daos_server
+    state: present
+    system: true
+    shell: /sbin/nologin
+    create_home: false
+    group: daos_server
+    groups:
+      - daos_metrics
+      - daos_daemons
+
+- name: Create client certificate daos-server configuration file tree
+  remote_user: root
+  file:
+    path: /etc/daos/certs/clients
+    state: directory
+    owner: daos_server
+    group: daos_server
+    mode: 0700
 
 - name: Install dependencies packages
   include_tasks: "{{ item }}"

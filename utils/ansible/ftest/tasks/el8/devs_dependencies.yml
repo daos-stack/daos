@@ -1,11 +1,11 @@
-# Install base dependencies of a development node
+# Install dependencies of a development node
 
-- name: Install dnf builddep plugin
+- name: Install rpms missing development dependencies
   remote_user: root
   dnf:
     state: latest
     update_cache: true
-    name: dnf-plugins-core
+    name: "{{ daos_base_deps.rpms + daos_dev_deps.rpms }}"
 
 - name: Install DAOS building dependencies
   remote_user: root
@@ -17,11 +17,8 @@
   become: true
   changed_when: '"Nothing to do" not in dnf_result.stdout'
 
-- name: Install common debug tools
+- name: Install python development dependencies
   remote_user: root
-  dnf:
-    state: latest
-    update_cache: true
-    name:
-      - tree
-      - gdb
+  pip:
+    state: present
+    name: "{{ daos_dev_deps.pips }}"

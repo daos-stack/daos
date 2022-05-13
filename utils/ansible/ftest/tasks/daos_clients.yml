@@ -48,7 +48,7 @@
     mode: '0644'
     backup: true
 
-- name: Create base DAOS agent configuration file tree
+- name: Create base agent configuration file tree
   remote_user: root
   file:
     path: "{{ item }}"

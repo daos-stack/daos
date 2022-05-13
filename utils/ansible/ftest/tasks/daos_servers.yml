@@ -55,7 +55,7 @@
     mode: '0644'
     backup: true
 
-- name: Create base daos-server configuration file tree
+- name: Create base DAOS configuration file tree
   remote_user: root
   file:
     path: "{{ item }}"
