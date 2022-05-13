@@ -4,10 +4,7 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
-import socket
-
 from apricot import TestWithServers
-from ClusterShell.NodeSet import NodeSet
 
 from network_utils import get_network_information, get_dmg_network_information, SUPPORTED_PROVIDERS
 
@@ -24,20 +21,7 @@ class DmgNetworkScanTest(TestWithServers):
     def __init__(self, *args, **kwargs):
         """Initialize a DmgNetworkScanTest object."""
         super().__init__(*args, **kwargs)
-        self.start_agents_once = False
-        self.start_servers_once = False
         self.setup_start_agents = False
-        self.setup_start_servers = False
-
-    def setUp(self):
-        """Set up each test case."""
-        super().setUp()
-
-        # Run the dmg command locally, unset config to run locally
-        self.hostlist_servers = socket.gethostname().split(".")[0].split(",")
-        self.access_points = self.hostlist_servers[:1]
-        self.start_servers()
-        self.dmg = self.get_dmg_command()
 
     def get_sys_info(self):
         """Get the system device information.
@@ -46,11 +30,9 @@ class DmgNetworkScanTest(TestWithServers):
             list: list of NetworkDevice objects.
 
         """
-        localhost = socket.gethostname().split(".")[0]
         server_provider = self.server_managers[0].get_config_value("provider")
-        hosts = NodeSet(localhost)
         sys_info = []
-        for entry in get_network_information(hosts, SUPPORTED_PROVIDERS):
+        for entry in get_network_information(self.hostlist_servers, SUPPORTED_PROVIDERS):
             if entry.device.startswith("ib") and server_provider in entry.provider:
                 sys_info.append(entry)
                 sys_info[-1].ib_device = None
@@ -63,7 +45,8 @@ class DmgNetworkScanTest(TestWithServers):
             list: list of NetworkDevice objects.
 
         """
-        return get_dmg_network_information(self.dmg.network_scan())
+        dmg = self.get_dmg_command()
+        return get_dmg_network_information(dmg.network_scan())
 
     def test_dmg_network_scan_basic(self):
         """JIRA ID: DAOS-2516
