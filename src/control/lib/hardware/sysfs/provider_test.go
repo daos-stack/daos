@@ -19,13 +19,14 @@ import (
 	"github.com/google/go-cmp/cmp"
 
 	"github.com/daos-stack/daos/src/control/common"
+	"github.com/daos-stack/daos/src/control/common/test"
 	"github.com/daos-stack/daos/src/control/lib/hardware"
 	"github.com/daos-stack/daos/src/control/logging"
 )
 
 func TestSysfs_NewProvider(t *testing.T) {
 	log, buf := logging.NewTestLogger(t.Name())
-	defer common.ShowBufferOnFailure(t, buf)
+	defer test.ShowBufferOnFailure(t, buf)
 
 	p := NewProvider(log)
 
@@ -33,7 +34,7 @@ func TestSysfs_NewProvider(t *testing.T) {
 		t.Fatal("nil provider returned")
 	}
 
-	common.AssertEqual(t, "/sys", p.root, "")
+	test.AssertEqual(t, "/sys", p.root, "")
 }
 
 func setupTestNetDevClasses(t *testing.T, root string, devClasses map[string]uint32) {
@@ -77,7 +78,7 @@ func setupTestNetDevOperStates(t *testing.T, root string, devStates map[string]s
 }
 
 func TestSysfs_Provider_GetNetDevClass(t *testing.T) {
-	testDir, cleanupTestDir := common.CreateTestDir(t)
+	testDir, cleanupTestDir := test.CreateTestDir(t)
 	defer cleanupTestDir()
 
 	devs := map[string]uint32{
@@ -110,15 +111,15 @@ func TestSysfs_Provider_GetNetDevClass(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(name)
-			defer common.ShowBufferOnFailure(t, buf)
+			defer test.ShowBufferOnFailure(t, buf)
 
 			p := NewProvider(log)
 			p.root = testDir
 
 			result, err := p.GetNetDevClass(tc.in)
 
-			common.CmpErr(t, tc.expErr, err)
-			common.AssertEqual(t, tc.expResult, result, "")
+			test.CmpErr(t, tc.expErr, err)
+			test.AssertEqual(t, tc.expResult, result, "")
 		})
 	}
 }
@@ -482,9 +483,9 @@ func TestProvider_GetTopology(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(name)
-			defer common.ShowBufferOnFailure(t, buf)
+			defer test.ShowBufferOnFailure(t, buf)
 
-			testDir, cleanupTestDir := common.CreateTestDir(t)
+			testDir, cleanupTestDir := test.CreateTestDir(t)
 			defer cleanupTestDir()
 
 			if tc.setup == nil {
@@ -502,7 +503,7 @@ func TestProvider_GetTopology(t *testing.T) {
 
 			result, err := tc.p.GetTopology(context.Background())
 
-			common.CmpErr(t, tc.expErr, err)
+			test.CmpErr(t, tc.expErr, err)
 
 			if diff := cmp.Diff(tc.expResult, result); diff != "" {
 				t.Errorf("(-want, +got)\n%s\n", diff)
@@ -552,9 +553,9 @@ func TestSysfs_Provider_GetFabricInterfaces(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(name)
-			defer common.ShowBufferOnFailure(t, buf)
+			defer test.ShowBufferOnFailure(t, buf)
 
-			testDir, cleanupTestDir := common.CreateTestDir(t)
+			testDir, cleanupTestDir := test.CreateTestDir(t)
 			defer cleanupTestDir()
 
 			if tc.setup == nil {
@@ -571,7 +572,7 @@ func TestSysfs_Provider_GetFabricInterfaces(t *testing.T) {
 
 			result, err := tc.p.GetFabricInterfaces(context.Background())
 
-			common.CmpErr(t, tc.expErr, err)
+			test.CmpErr(t, tc.expErr, err)
 
 			if diff := cmp.Diff(tc.expResult, result,
 				cmp.AllowUnexported(hardware.FabricInterfaceSet{}),
@@ -977,9 +978,9 @@ func TestSysfs_Provider_GetNetDevState(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(name)
-			defer common.ShowBufferOnFailure(t, buf)
+			defer test.ShowBufferOnFailure(t, buf)
 
-			testDir, cleanupTestDir := common.CreateTestDir(t)
+			testDir, cleanupTestDir := test.CreateTestDir(t)
 			defer cleanupTestDir()
 
 			if tc.p != nil {
@@ -996,8 +997,8 @@ func TestSysfs_Provider_GetNetDevState(t *testing.T) {
 
 			state, err := tc.p.GetNetDevState(tc.iface)
 
-			common.CmpErr(t, tc.expErr, err)
-			common.AssertEqual(t, tc.expState, state, "")
+			test.CmpErr(t, tc.expErr, err)
+			test.AssertEqual(t, tc.expState, state, "")
 		})
 	}
 }
@@ -1041,12 +1042,12 @@ func TestSysfs_Provider_ibStateToNetDevState(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(name)
-			defer common.ShowBufferOnFailure(t, buf)
+			defer test.ShowBufferOnFailure(t, buf)
 
 			p := &Provider{log: log}
 			result := p.ibStateToNetDevState(tc.input)
 
-			common.AssertEqual(t, tc.expResult, result, "")
+			test.AssertEqual(t, tc.expResult, result, "")
 		})
 	}
 }
@@ -1113,7 +1114,7 @@ func TestSysfs_condenseNetDevState(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			result := condenseNetDevState(tc.input)
 
-			common.AssertEqual(t, tc.expResult, result, "")
+			test.AssertEqual(t, tc.expResult, result, "")
 		})
 	}
 }

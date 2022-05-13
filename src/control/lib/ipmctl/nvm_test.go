@@ -15,7 +15,7 @@ import (
 
 	"github.com/pkg/errors"
 
-	"github.com/daos-stack/daos/src/control/common"
+	"github.com/daos-stack/daos/src/control/common/test"
 )
 
 // NVM API calls will fail if not run as root. We should just skip the tests.
@@ -97,7 +97,7 @@ func TestNvmFwUpdate_BadFile(t *testing.T) {
 			mgmt := NvmMgmt{}
 			err := mgmt.UpdateFirmware(devUID, tt.inputPath, false)
 
-			common.CmpErr(t, tt.expErr, err)
+			test.CmpErr(t, tt.expErr, err)
 		})
 	}
 }
@@ -105,7 +105,7 @@ func TestNvmFwUpdate_BadFile(t *testing.T) {
 func TestNvmFwUpdate(t *testing.T) {
 	skipNoPerms(t)
 
-	dir, cleanup := common.CreateTestDir(t)
+	dir, cleanup := test.CreateTestDir(t)
 	defer cleanup()
 
 	// Actual DIMM will reject this junk file.
@@ -127,7 +127,7 @@ func TestNvmFwUpdate(t *testing.T) {
 		err := mgmt.UpdateFirmware(d.Uid, filename, false)
 
 		// Got down to NVM API
-		common.CmpErr(t, errors.New("update_device_fw"), err)
+		test.CmpErr(t, errors.New("update_device_fw"), err)
 		fmt.Printf("Update firmware for device %s: %v\n", d.Uid.String(), err)
 	}
 }
