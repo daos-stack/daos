@@ -8,7 +8,6 @@ package main
 
 import (
 	"fmt"
-	"io/ioutil"
 	"os"
 	"os/user"
 	"strings"
@@ -19,13 +18,12 @@ import (
 	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/common/cmdutil"
 	commands "github.com/daos-stack/daos/src/control/common/storage"
+	"github.com/daos-stack/daos/src/control/lib/hardware/sysfs"
 	"github.com/daos-stack/daos/src/control/pbin"
 	"github.com/daos-stack/daos/src/control/server"
 	"github.com/daos-stack/daos/src/control/server/config"
 	"github.com/daos-stack/daos/src/control/server/storage"
 )
-
-const iommuPath = "/sys/class/iommu"
 
 type storageCmd struct {
 	Prepare storagePrepareCmd `command:"prepare" description:"Prepare SCM and NVMe storage attached to remote servers."`
@@ -48,17 +46,6 @@ func (es *errs) add(err error) error {
 	*es = append(*es, err)
 
 	return nil
-}
-
-func iommuDetected() bool {
-	// Simple test for now -- if the path exists and contains
-	// DMAR entries, we assume that's good enough.
-	dmars, err := ioutil.ReadDir(iommuPath)
-	if err != nil {
-		return false
-	}
-
-	return len(dmars) > 0
 }
 
 type nvmePrepFn func(storage.BdevPrepareRequest) (*storage.BdevPrepareResponse, error)
@@ -222,7 +209,12 @@ func (cmd *storagePrepareCmd) Execute(args []string) error {
 
 	scanErrors := make(errs, 0, 2)
 
-	if err := cmd.prepNvme(cmd.scs.NvmePrepare, iommuDetected()); err != nil {
+	iommuEnabled, err := sysfs.NewProvider(cmd).IsIOMMUEnabled()
+	if err != nil {
+		return err
+	}
+
+	if err := cmd.prepNvme(cmd.scs.NvmePrepare, iommuEnabled); err != nil {
 		scanErrors.add(err)
 	}
 

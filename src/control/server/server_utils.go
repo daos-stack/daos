@@ -9,7 +9,6 @@ package server
 import (
 	"context"
 	"fmt"
-	"io/ioutil"
 	"net"
 	"os"
 	"path/filepath"
@@ -40,10 +39,7 @@ type netListenFn func(string, string) (net.Listener, error)
 // resolveTCPFn is a type alias for the net.ResolveTCPAddr function signature.
 type resolveTCPFn func(string, string) (*net.TCPAddr, error)
 
-const (
-	iommuPath            = "/sys/class/iommu"
-	scanMinHugePageCount = 128
-)
+const scanMinHugePageCount = 128
 
 func engineCfgGetBdevs(engineCfg *engine.Config) *storage.BdevDeviceList {
 	bdevs := []string{}
@@ -106,17 +102,6 @@ func writeCoreDumpFilter(log logging.Logger, path string, filter uint8) error {
 
 	_, err = f.WriteString(fmt.Sprintf("0x%x\n", filter))
 	return err
-}
-
-func iommuDetected() bool {
-	// Simple test for now -- if the path exists and contains
-	// DMAR entries, we assume that's good enough.
-	dmars, err := ioutil.ReadDir(iommuPath)
-	if err != nil {
-		return false
-	}
-
-	return len(dmars) > 0
 }
 
 func createListener(ctlPort int, resolver resolveTCPFn, listener netListenFn) (*net.TCPAddr, net.Listener, error) {

@@ -27,6 +27,7 @@ import (
 	"github.com/daos-stack/daos/src/control/lib/control"
 	"github.com/daos-stack/daos/src/control/lib/hardware"
 	"github.com/daos-stack/daos/src/control/lib/hardware/hwprov"
+	"github.com/daos-stack/daos/src/control/lib/hardware/sysfs"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/security"
 	"github.com/daos-stack/daos/src/control/server/config"
@@ -284,8 +285,13 @@ func (srv *server) addEngines(ctx context.Context) error {
 	var allStarted sync.WaitGroup
 	registerTelemetryCallbacks(ctx, srv)
 
+	iommuEnabled, err := sysfs.NewProvider(srv.log).IsIOMMUEnabled()
+	if err != nil {
+		return err
+	}
+
 	// Allocate hugepages and rebind NVMe devices to userspace drivers.
-	if err := prepBdevStorage(srv, iommuDetected()); err != nil {
+	if err := prepBdevStorage(srv, iommuEnabled); err != nil {
 		return err
 	}
 

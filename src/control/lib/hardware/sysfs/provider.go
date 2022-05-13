@@ -475,3 +475,17 @@ func condenseNetDevState(states []hardware.NetDevState) hardware.NetDevState {
 
 	return condensed
 }
+
+// IsIOMMUEnabled checks whether IOMMU is enabled by interrogating files in sysfs and implements
+// the IOMMUDetector interface on sysfs provider.
+func (s *Provider) IsIOMMUEnabled() (bool, error) {
+	if s == nil {
+		return false, errors.New("sysfs provider is nil")
+	}
+
+	// Simple test for now -- if the path exists and contains
+	// DMAR entries, we assume that's good enough.
+	dmars, err := ioutil.ReadDir(s.sysPath("class", "iommu"))
+
+	return err == nil && len(dmars) > 0, nil
+}
