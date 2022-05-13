@@ -11,8 +11,11 @@ import re
 
 from ClusterShell.NodeSet import NodeSet
 
-# from exception_utils import HeterogeneousOutputError
+from exception_utils import CommandFailure
 from general_utils import run_task, display_task
+
+SUPPORTED_PROVIDERS = (
+    "ofi+sockets", "ofi+tcp", "ofi+tcp;ofi_rxm", "ofi+verbs", "ofi+verbs;ofi_rxm", "ucx+dc_x")
 
 
 class NetworkDevice():
@@ -279,11 +282,21 @@ def get_ofi_info(hosts, supported=None, verbose=True):
                     provider.pop(0)
                     domain = list(data.pop(0))
                     domain.pop(0)
+
+                    # A provider and domain must be specified
+                    if not provider or not domain:
+                        continue
+
+                    # Add 'ofi+' to the provider
+                    provider = ["+".join(["ofi", item]) for item in provider]
+
                     # Only include supported providers if a supported list is provided
-                    if provider and domain and (not supported or provider[0] in supported):
-                        if domain[0] not in interface_providers:
-                            interface_providers[domain[0]] = set()
-                        interface_providers[domain[0]].update(provider)
+                    if supported and provider[0] not in supported:
+                        continue
+
+                    if domain[0] not in interface_providers:
+                        interface_providers[domain[0]] = set()
+                    interface_providers[domain[0]].update(provider)
 
             for interface, provider_set in interface_providers.items():
                 if interface not in providers:
@@ -334,11 +347,22 @@ def get_ucx_info(hosts, supported=None, verbose=True):
                     transport.pop(0)
                     device = list(data.pop(0))
                     device.pop(0)
+
+                    # A transport and device must be specified
+                    if not transport or not device:
+                        continue
+
+                    # Add 'ucx+' to the provider and replace 'mlx[0-9]' with 'x'
+                    transport = [
+                        "+".join(["ucx", re.sub(r"mlx[0-9]+", "x", item)]) for item in transport]
+
                     # Only include supported providers if a supported list is provided
-                    if transport and device and (not supported or transport[0] in supported):
-                        if device[0] not in interface_providers:
-                            interface_providers[device[0]] = set()
-                        interface_providers[device[0]].update(transport)
+                    if supported and transport[0] not in supported:
+                        continue
+
+                    if device[0] not in interface_providers:
+                        interface_providers[device[0]] = set()
+                    interface_providers[device[0]].update(transport)
 
             for interface, provider_set in interface_providers.items():
                 if interface not in providers:
@@ -498,5 +522,36 @@ def get_network_information(hosts, supported=None, verbose=True):
                     these_kwargs = kwargs.copy()
                     these_kwargs["provider"] = item
                     network_devices.append(NetworkDevice(**these_kwargs))
+
+    return network_devices
+
+
+def get_dmg_network_information(dmg_network_scan):
+    """Get the network device information from the dmg network scan output.
+
+    Args:
+        dmg_network_scan (dict): the dmg network scan json command output
+
+    Raises:
+        CommandFailure: if there was an error processing the dmg network scan output
+
+    Returns:
+        list: a list of NetworkDevice objects identifying the network devices on each host
+
+    """
+    network_devices = []
+
+    try:
+        for host_fabric in dmg_network_scan["response"]["HostFabrics"].values():
+            for host in NodeSet(host_fabric["HostSet"].split(":")[0]):
+                for interface in host_fabric["HostFabric"]["Interfaces"]:
+                    network_devices.append(
+                        NetworkDevice(
+                            host, interface["Device"], None, 1, interface["Provider"],
+                            interface["NumaNode"])
+                    )
+    except KeyError as error:
+        raise CommandFailure(
+            "Error processing dmg network scan json output: {}".format(dmg_network_scan)) from error
 
     return network_devices
