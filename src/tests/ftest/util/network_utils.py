@@ -272,7 +272,7 @@ def get_ofi_info(hosts, supported=None, verbose=True):
             nodeset = NodeSet.fromlist(nodelist)
 
             # Find all the provider and domain pairings. The fi_info output reports these on
-            # separate lines when processing the re matches ensure each domain is preceeded by a
+            # separate lines when processing the re matches ensure each domain is preceded by a
             # provider.
             interface_providers = {}
             data = re.findall(r"(provider|domain):\s+([A-Za-z0-9;_+]+)", "\n".join(output_lines))
@@ -337,7 +337,7 @@ def get_ucx_info(hosts, supported=None, verbose=True):
             nodeset = NodeSet.fromlist(nodelist)
 
             # Find all the transport, device, and type pairings. The ucx_info output reports these
-            # on separate lines so when processing the re matches ensure each device is preceeded by
+            # on separate lines so when processing the re matches ensure each device is preceded by
             # a provider.
             interface_providers = {}
             data = re.findall(r"(Transport|Device):\s+([A-Za-z0-9;_+]+)", "\n".join(output_lines))
@@ -459,6 +459,8 @@ def get_common_provider(hosts, interface, supported=None, verbose=True):
     """
     ofi_info = get_ofi_info(hosts, supported, verbose)
     providers = get_interface_providers(interface, ofi_info)
+    for ib_name in get_interface_ib_name(hosts, interface, verbose):
+        providers.update(get_interface_providers(ib_name, ofi_info))
 
     if not supported or "ucx" in supported:
         ucx_info = get_ucx_info(hosts, supported, verbose)
