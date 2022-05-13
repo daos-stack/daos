@@ -47,6 +47,7 @@ struct ds_pool {
 	uint32_t		sp_ec_pda;
 	/* Performance Domain Affinity Level of replicated object */
 	uint32_t		sp_rp_pda;
+	uint32_t		sp_global_version;
 	crt_group_t	       *sp_group;
 	struct policy_desc_t	sp_policy_desc;	/* tiering policy descriptor */
 	ABT_mutex		sp_mutex;

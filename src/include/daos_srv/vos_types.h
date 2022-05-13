@@ -259,6 +259,11 @@ enum {
 	VOS_OF_EC			= (1 << 19),
 };
 
+enum {
+	/** Aggregation optimization is enabled for this pool */
+	VOS_POOL_FEAT_AGG_OPT	= (1 << 0),
+};
+
 /** Mask for any conditionals passed to to the fetch */
 #define VOS_COND_FETCH_MASK	\
 	(VOS_OF_COND_AKEY_FETCH | VOS_OF_COND_DKEY_FETCH)

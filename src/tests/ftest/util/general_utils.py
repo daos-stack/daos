@@ -1345,3 +1345,26 @@ def get_primary_group(user=None):
         user = getuser()
     gid = pwd.getpwnam(user).pw_gid
     return grp.getgrgid(gid).gr_name
+
+
+def get_journalctl(hosts, since, until, journalctl_type):
+    """Run the journalctl on the hosts.
+
+    Args:
+        hosts (list): List of hosts to run journalctl.
+        since (str): Start time to search the log.
+        until (str): End time to search the log.
+        journalctl_type (str): String to search in the log. -t param for journalctl.
+
+    Returns:
+        list: a list of dictionaries containing the following key/value pairs:
+            "hosts": NodeSet containing the hosts with this data
+            "data":  data requested for the group of hosts
+
+    """
+    command = ("sudo /usr/bin/journalctl --system -t {} --since=\"{}\" "
+               "--until=\"{}\"".format(journalctl_type, since, until))
+    err = "Error gathering system log events"
+    results = get_host_data(hosts=hosts, command=command, text="journalctl", error=err)
+
+    return results
