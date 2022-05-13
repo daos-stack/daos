@@ -106,10 +106,19 @@ dc_obj_init(void)
 	}
 
 	oproto->ep.ep_grp = sys->sy_group;
-	rc = rsvc_client_choose(&oproto->cli, &oproto->ep);
-	if (rc) {
-		D_ERROR("rsvc_client_choose() failed: "DF_RC"\n", DP_RC(rc));
-		D_GOTO(out_rsvc, rc);
+
+	if (0) {
+		rc = rsvc_client_choose(&oproto->cli, &oproto->ep);
+		if (rc) {
+			D_ERROR("rsvc_client_choose() failed: "DF_RC"\n", DP_RC(rc));
+			D_GOTO(out_rsvc, rc);
+		}
+	} else {
+		int num_ranks;
+
+		oproto->ep.ep_tag = 0;
+		num_ranks = dc_mgmt_net_get_num_srv_ranks();
+		oproto->ep.ep_rank = rand() % num_ranks;
 	}
 
 	rc = crt_proto_query_with_ctx(&oproto->ep, obj_proto_fmt_0.cpf_base, ver_array, 2, query_cb,
