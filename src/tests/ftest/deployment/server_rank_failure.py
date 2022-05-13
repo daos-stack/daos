@@ -190,10 +190,9 @@ class ServerRankFailure(IorTestBase, TestWithTelemetry):
             for rank, agg in rank_to_agg.items():
                 rank_to_agg_after[rank] = agg
                 rank_to_agg_before[rank] = agg_metrics_before[host][rank]
+                rank_to_agg_diff[rank] =\
+                    rank_to_agg_after[rank] - rank_to_agg_before[rank]
                 rank_to_host[rank] = host
-
-        for rank, agg_after in rank_to_agg_after.items():
-            rank_to_agg_diff[rank] = agg_after - rank_to_agg_before[rank]
 
         # Ascending order sorted by agg.
         rank_agg_diffs = sorted(rank_to_agg_diff.items(), key=lambda x: x[1])
