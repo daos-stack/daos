@@ -75,7 +75,7 @@ No modules.
 | <a name="input_os_disk_type"></a> [os\_disk\_type](#input\_os\_disk\_type) | OS disk type ie. pd-ssd, pd-standard | `string` | `"pd-ssd"` | no |
 | <a name="input_os_family"></a> [os\_family](#input\_os\_family) | OS GCP image family | `string` | `"daos-server-centos-7"` | no |
 | <a name="input_os_project"></a> [os\_project](#input\_os\_project) | OS GCP image project name. Defaults to project\_id if null. | `string` | `null` | no |
-| <a name="input_pools"></a> [pools](#input\_pools) | If provided, this module will generate a script to create a list of pools. pool attributes have to be specified in a format acceptable by [dmg](https://docs.daos.io/v2.0/admin/pool_operations/) and daos. | <pre>list(object({<br>    pool_name  = string<br>    pool_size  = string<br>    containers = list(string)<br>    })<br>  )</pre> | `[]` | no |
+| <a name="input_pools"></a> [pools](#input\_pools) | List of pools and containers to be created | <pre>list(object({<br>    name       = string<br>    size       = string<br>    tier_ratio = number<br>    acls       = list(string)<br>    properties = map(string)<br>    containers = list(object({<br>      name            = string<br>      type            = string<br>      acls            = list(string)<br>      properties      = map(string)<br>      user_attributes = map(any)<br>    }))<br>  }))</pre> | `[]` | no |
 | <a name="input_preemptible"></a> [preemptible](#input\_preemptible) | If preemptible instances | `string` | `false` | no |
 | <a name="input_project_id"></a> [project\_id](#input\_project\_id) | The GCP project to use | `string` | n/a | yes |
 | <a name="input_region"></a> [region](#input\_region) | The GCP region to create and test resources in | `string` | n/a | yes |
@@ -90,10 +90,10 @@ No modules.
 | Name | Description |
 |------|-------------|
 | <a name="output_access_points"></a> [access\_points](#output\_access\_points) | List of DAOS servers to use as access points |
-| <a name="output_certs_install_script_content"></a> [certs\_install\_script\_content](#output\_certs\_install\_script\_content) | Script to install certificates for DAOS secure transport |
+| <a name="output_certs_install_content"></a> [certs\_install\_content](#output\_certs\_install\_content) | Cert installation content to include in the daos\_client startup script |
 | <a name="output_daos_agent_yml"></a> [daos\_agent\_yml](#output\_daos\_agent\_yml) | YAML to configure the daos agent. This is typically saved in /etc/daos/daos\_agent.yml |
+| <a name="output_daos_client_config_script"></a> [daos\_client\_config\_script](#output\_daos\_client\_config\_script) | Script to configure the DAOS system. This will format the sytem with dmg -l and optionally create the specified pools. |
 | <a name="output_daos_client_install_script"></a> [daos\_client\_install\_script](#output\_daos\_client\_install\_script) | Script to install the DAOS client package. |
-| <a name="output_daos_config_script"></a> [daos\_config\_script](#output\_daos\_config\_script) | Script to configure the DAOS system. This will format the sytem with dmg -l and optionally create the specified pools. |
 | <a name="output_daos_control_yml"></a> [daos\_control\_yml](#output\_daos\_control\_yml) | YAML configuring DAOS control. This is typically saved in /etc/daos/daos\_control.yml |
-| <a name="output_default_service_account_email"></a> [default\_service\_account\_email](#output\_default\_service\_account\_email) | Default service account email |
+| <a name="output_daos_pools"></a> [daos\_pools](#output\_daos\_pools) | Specification of pools and containers to create |
 <!-- END OF PRE-COMMIT-TERRAFORM DOCS HOOK -->

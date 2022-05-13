@@ -522,7 +522,7 @@ To run the IO500 benchmark:
    ./login
 
 2. Run IO500
-   ~/run_io500-sc21.sh
+   ./run_io500-sc21.sh
 
 EOF
 }

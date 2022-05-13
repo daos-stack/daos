@@ -163,7 +163,7 @@
     {
       "name": "server_gvnic",
       "type": "bool",
-      "description": "Use Google Virtual NIC (gVNIC) network interface on DAOS servers",
+      "description": "Use Google Virtual NIC (gVNIC) network interface",
       "default": false,
       "required": false
     },
@@ -232,8 +232,8 @@
     },
     {
       "name": "server_pools",
-      "type": "list(object({\n    pool_name  = string\n    pool_size  = string\n    containers = list(string)\n    })\n  )",
-      "description": "If provided, this module will generate a script to create a list of pools. pool attributes have to be specified in a format acceptable by [dmg](https://docs.daos.io/v2.0/admin/pool_operations/) and daos.",
+      "type": "list(object({\n    name       = string\n    size       = string\n    tier_ratio = number\n    acls       = list(string)\n    properties = map(string)\n    containers = list(object({\n      name            = string\n      type            = string\n      acls            = list(string)\n      properties      = map(string)\n      user_attributes = map(any)\n    }))\n  }))",
+      "description": "List of pools and containers to be created",
       "default": [],
       "required": false
     },
@@ -305,7 +305,12 @@
       "description": null
     }
   ],
-  "outputs": [],
+  "outputs": [
+    {
+      "name": "daos_pools",
+      "description": "Specification of pools and containers to create"
+    }
+  ],
   "providers": [],
   "requirements": [
     {

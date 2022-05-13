@@ -3,16 +3,9 @@
   "footer": "",
   "inputs": [
     {
-      "name": "allow_insecure",
-      "type": "bool",
-      "description": "Sets the allow_insecure setting in the transport_config section of the daos_*.yml files",
-      "default": false,
-      "required": false
-    },
-    {
-      "name": "certs_install_script_content",
+      "name": "certs_install_content",
       "type": "string",
-      "description": "Script to install certificates for DAOS secure transport",
+      "description": "DAOS certificate installation code to be included in the client startup script",
       "default": null,
       "required": true
     },

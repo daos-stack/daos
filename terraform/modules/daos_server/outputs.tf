@@ -46,3 +46,8 @@ output "certs_install_content" {
   description = "Cert installation content to include in the daos_client startup script"
   value       = local.certs_install_content
 }
+
+output "daos_pools" {
+  description = "Specification of pools and containers to create"
+  value       = local.pools
+}

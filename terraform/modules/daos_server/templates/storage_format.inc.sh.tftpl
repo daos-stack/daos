@@ -1,0 +1,13 @@
+if [[ "$${HOSTNAME,,}" == "$${FIRST_DAOS_SERVER_HOSTNAME,,}" ]]; then
+  # Wait for servers to start
+  until dmg network scan | grep --fixed-strings "${servers}"
+  do
+    sleep 5
+  done
+  echo "All DAOS Servers started"
+
+  echo "BEGIN: Storage format"
+  dmg storage format
+  dmg system query -v
+  echo "END: Storage format"
+fi

@@ -1,0 +1,42 @@
+%{ if length(pools) != 0 }
+echo "BEGIN: DAOS pool and container creation from definition in 'pool' variable"
+
+if [[ "$${HOSTNAME,,}" == "$${FIRST_DAOS_SERVER_HOSTNAME,,}" ]]; then
+  %{for pool in pools}
+  dmg pool create \
+    --size=${pool.size} \
+    --tier-ratio="${pool.tier_ratio}" \
+    %{~ if length(pool.properties) != 0 ~}
+    --properties="%{~ for idx, pprop_key in keys(pool.properties) ~}
+        ${~ pprop_key}:${pool.properties[pprop_key]}%{~ if idx != length(pool.properties)-1 ~},%{~ endif ~}%{~ endfor ~}" \
+      %{~ endif ~}
+    "${pool.name}"
+
+    %{~ for acl in pool.acls ~}
+  dmg pool update-acl --entry "${acl}" "${pool.name}"
+    %{~ endfor ~}
+
+    %{~ for container in pool.containers ~}
+  daos container create \
+    --type ${container.type} \
+      %{~ if length(container.properties) != 0 ~}
+    --properties="%{~ for idx, cprop_key in keys(container.properties) ~}
+        ${~ cprop_key}:${container.properties[cprop_key]}%{~ if idx != length(container.properties)-1 ~},%{~ endif ~}%{~ endfor ~}" \
+      %{~ endif ~}
+    "${pool.name}" \
+    --label "${container.name}"
+
+      %{~ for acl in container.acls ~}
+  daos cont update-acl "${pool.name}" "${container.name}" --entry "${acl}"
+      %{~ endfor ~}
+
+      %{~ for attr_key, attr_value in container.user_attributes ~}
+  daos cont set-attr "${pool.name}" "${container.name}" "${attr_key}" "${attr_value}"
+      %{~ endfor ~}
+    %{~ endfor ~}
+  %{~endfor ~}
+
+fi
+
+echo "END: DAOS pool and container creation from definition in 'pool' variable"
+%{~ endif ~}

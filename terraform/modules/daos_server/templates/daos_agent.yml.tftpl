@@ -13,3 +13,9 @@ transport_config:
   cert: /etc/daos/certs/agent.crt
   key: /etc/daos/certs/agent.key
   %{ endif }
+
+fabric_ifaces:
+- numa_node: 0
+  devices:
+  - iface: eth0
+    domain: eth0

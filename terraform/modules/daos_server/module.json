@@ -116,8 +116,8 @@
     },
     {
       "name": "pools",
-      "type": "list(object({\n    pool_name  = string\n    pool_size  = string\n    containers = list(string)\n    })\n  )",
-      "description": "If provided, this module will generate a script to create a list of pools. pool attributes have to be specified in a format acceptable by [dmg](https://docs.daos.io/v2.0/admin/pool_operations/) and daos.",
+      "type": "list(object({\n    name       = string\n    size       = string\n    tier_ratio = number\n    acls       = list(string)\n    properties = map(string)\n    containers = list(object({\n      name            = string\n      type            = string\n      acls            = list(string)\n      properties      = map(string)\n      user_attributes = map(any)\n    }))\n  }))",
+      "description": "List of pools and containers to be created",
       "default": [],
       "required": false
     },
@@ -196,28 +196,28 @@
       "description": "List of DAOS servers to use as access points"
     },
     {
-      "name": "certs_install_script_content",
-      "description": "Script to install certificates for DAOS secure transport"
+      "name": "certs_install_content",
+      "description": "Cert installation content to include in the daos_client startup script"
     },
     {
       "name": "daos_agent_yml",
       "description": "YAML to configure the daos agent. This is typically saved in /etc/daos/daos_agent.yml"
     },
     {
-      "name": "daos_client_install_script",
-      "description": "Script to install the DAOS client package."
+      "name": "daos_client_config_script",
+      "description": "Script to configure the DAOS system. This will format the sytem with dmg -l and optionally create the specified pools."
     },
     {
-      "name": "daos_config_script",
-      "description": "Script to configure the DAOS system. This will format the sytem with dmg -l and optionally create the specified pools."
+      "name": "daos_client_install_script",
+      "description": "Script to install the DAOS client package."
     },
     {
       "name": "daos_control_yml",
       "description": "YAML configuring DAOS control. This is typically saved in /etc/daos/daos_control.yml"
     },
     {
-      "name": "default_service_account_email",
-      "description": "Default service account email"
+      "name": "daos_pools",
+      "description": "Specification of pools and containers to create"
     }
   ],
   "providers": [

@@ -17,7 +17,7 @@
 locals {
   os_project         = var.os_project != null ? var.os_project : var.project_id
   subnetwork_project = var.subnetwork_project != null ? var.subnetwork_project : var.project_id
-  servers            = format("%s-[%04s-%04s]", var.instance_base_name, 1, var.number_of_instances)
+  servers            = var.number_of_instances == 1 ? local.first_server : format("%s-[%04s-%04s]", var.instance_base_name, 1, var.number_of_instances)
   first_server       = format("%s-%04s", var.instance_base_name, 1)
   max_aps            = var.number_of_instances > 5 ? 5 : (var.number_of_instances % 2) == 1 ? var.number_of_instances : var.number_of_instances - 1
   access_points      = formatlist("%s-%04s", var.instance_base_name, range(1, local.max_aps + 1))
@@ -28,6 +28,7 @@ locals {
   crt_timeout       = var.daos_crt_timeout
   daos_ca_secret_id = basename(google_secret_manager_secret.daos_ca.id)
   allow_insecure    = var.allow_insecure
+  pools             = var.pools
 
   # Google Virtual NIC (gVNIC) network interface
   nic_type                    = var.gvnic ? "GVNIC" : "VIRTIO_NET"
@@ -87,12 +88,29 @@ locals {
     }
   )
 
+  storage_format_content = templatefile(
+    "${path.module}/templates/storage_format.inc.sh.tftpl",
+    {
+      servers = local.servers
+    }
+  )
+
+  pool_cont_create_content = templatefile(
+    "${path.module}/templates/pool_cont_create.inc.sh.tftpl",
+    {
+      servers = local.servers
+      pools   = local.pools
+    }
+  )
+
   startup_script = templatefile(
     "${path.module}/templates/startup_script.tftpl",
     {
-      first_server          = local.first_server
-      certs_gen_content     = local.certs_gen_content
-      certs_install_content = local.certs_install_content
+      first_server             = local.first_server
+      certs_gen_content        = local.certs_gen_content
+      certs_install_content    = local.certs_install_content
+      storage_format_content   = local.storage_format_content
+      pool_cont_create_content = local.pool_cont_create_content
     }
   )
 }

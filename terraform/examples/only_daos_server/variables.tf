@@ -152,14 +152,22 @@ variable "server_preemptible" {
 }
 
 variable "server_pools" {
-  description = "If provided, this module will generate a script to create a list of pools. pool attributes have to be specified in a format acceptable by [dmg](https://docs.daos.io/v2.0/admin/pool_operations/) and daos."
+  description = "List of pools and containers to be created"
   default     = []
   type = list(object({
-    pool_name  = string
-    pool_size  = string
-    containers = list(string)
-    })
-  )
+    name       = string
+    size       = string
+    tier_ratio = number
+    acls       = list(string)
+    properties = map(any)
+    containers = list(object({
+      name            = string
+      type            = string
+      acls            = list(string)
+      properties      = map(any)
+      user_attributes = map(any)
+    }))
+  }))
 }
 
 variable "server_daos_scm_size" {

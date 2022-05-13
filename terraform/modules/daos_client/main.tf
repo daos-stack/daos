@@ -18,9 +18,9 @@ locals {
   os_project         = var.os_project != null ? var.os_project : var.project_id
   subnetwork_project = var.subnetwork_project != null ? var.subnetwork_project : var.project_id
   # Google Virtual NIC (gVNIC) network interface
-  nic_type                     = var.gvnic ? "GVNIC" : "VIRTIO_NET"
-  total_egress_bandwidth_tier  = var.gvnic ? "TIER_1" : "DEFAULT"
-  certs_install_content        = var.certs_install_content
+  nic_type                    = var.gvnic ? "GVNIC" : "VIRTIO_NET"
+  total_egress_bandwidth_tier = var.gvnic ? "TIER_1" : "DEFAULT"
+  certs_install_content       = var.certs_install_content
 
   startup_script = templatefile(
     "${path.module}/templates/daos_startup_script.tftpl",
@@ -100,11 +100,11 @@ resource "google_compute_per_instance_config" "named_instances" {
   name                   = format("%s-%04d", var.instance_base_name, sum([count.index, 1]))
   preserved_state {
     metadata = {
-      inst_type                    = "daos-client"
-      enable-oslogin               = "true"
-      daos_control_yaml_content    = var.daos_control_yml
-      daos_agent_yaml_content      = var.daos_agent_yml
-      startup-script               = local.startup_script
+      inst_type                 = "daos-client"
+      enable-oslogin            = "true"
+      daos_control_yaml_content = var.daos_control_yml
+      daos_agent_yaml_content   = var.daos_agent_yml
+      startup-script            = local.startup_script
       # Adding a reference to the instance template used causes the stateful instance to update
       # if the instance template changes. Otherwise there is no explicit dependency and template
       # changes may not occur on the stateful instance
