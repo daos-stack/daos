@@ -19,7 +19,7 @@ import (
 	"github.com/pkg/errors"
 	"gopkg.in/yaml.v2"
 
-	"github.com/daos-stack/daos/src/control/common"
+	"github.com/daos-stack/daos/src/control/common/test"
 	"github.com/daos-stack/daos/src/control/server/storage"
 )
 
@@ -160,18 +160,18 @@ func TestConfig_GetEnvVar(t *testing.T) {
 			value, err := cfg.GetEnvVar(tc.key)
 
 			if err != nil {
-				common.AssertTrue(t, tc.expErr != nil,
+				test.AssertTrue(t, tc.expErr != nil,
 					fmt.Sprintf("Unexpected error %q", err))
-				common.CmpErr(t, tc.expErr, err)
-				common.AssertEqual(t, value, "",
+				test.CmpErr(t, tc.expErr, err)
+				test.AssertEqual(t, value, "",
 					fmt.Sprintf("Unexpected value %q for key %q",
 						tc.key, value))
 				return
 			}
 
-			common.AssertTrue(t, tc.expErr == nil,
+			test.AssertTrue(t, tc.expErr == nil,
 				fmt.Sprintf("Expected error %q", tc.expErr))
-			common.AssertEqual(t, value, tc.expValue, "Invalid value returned")
+			test.AssertEqual(t, value, tc.expValue, "Invalid value returned")
 		})
 	}
 }
@@ -343,7 +343,7 @@ func TestConfig_ScmValidation(t *testing.T) {
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
-			common.CmpErr(t, tc.expErr, tc.cfg.Validate())
+			test.CmpErr(t, tc.expErr, tc.cfg.Validate())
 		})
 	}
 }
@@ -390,7 +390,7 @@ func TestConfig_BdevValidation(t *testing.T) {
 				WithStorage(
 					storage.NewTierConfig().
 						WithStorageClass("nvme").
-						WithBdevDeviceList(common.MockPCIAddr(1), common.MockPCIAddr(2)),
+						WithBdevDeviceList(test.MockPCIAddr(1), test.MockPCIAddr(2)),
 				),
 		},
 		"nvme class; duplicate pci address": {
@@ -398,7 +398,7 @@ func TestConfig_BdevValidation(t *testing.T) {
 				WithStorage(
 					storage.NewTierConfig().
 						WithStorageClass("nvme").
-						WithBdevDeviceList(common.MockPCIAddr(1), common.MockPCIAddr(1)),
+						WithBdevDeviceList(test.MockPCIAddr(1), test.MockPCIAddr(1)),
 				),
 			expErr: errors.New("bdev_list"),
 		},
@@ -407,7 +407,7 @@ func TestConfig_BdevValidation(t *testing.T) {
 				WithStorage(
 					storage.NewTierConfig().
 						WithStorageClass("nvme").
-						WithBdevDeviceList(common.MockPCIAddr(1), "0000:00:00"),
+						WithBdevDeviceList(test.MockPCIAddr(1), "0000:00:00"),
 				),
 			expErr: errors.New("valid PCI addresses"),
 		},
@@ -468,7 +468,7 @@ func TestConfig_BdevValidation(t *testing.T) {
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
-			common.CmpErr(t, tc.expErr, tc.cfg.Validate())
+			test.CmpErr(t, tc.expErr, tc.cfg.Validate())
 			if tc.expErr != nil {
 				return
 			}
@@ -478,14 +478,14 @@ func TestConfig_BdevValidation(t *testing.T) {
 				if tc.expCls == "" {
 					tc.expCls = storage.ClassNvme // default if unset
 				}
-				common.AssertEqual(t, tc.expCls,
+				test.AssertEqual(t, tc.expCls,
 					tc.cfg.Storage.Tiers.BdevConfigs()[0].Class,
 					"unexpected bdev class")
 
 				ecp = filepath.Join(tc.cfg.Storage.Tiers.ScmConfigs()[0].Scm.MountPoint,
 					storage.BdevOutConfName)
 			}
-			common.AssertEqual(t, ecp, tc.cfg.Storage.ConfigOutputPath,
+			test.AssertEqual(t, ecp, tc.cfg.Storage.ConfigOutputPath,
 				"unexpected config path")
 		})
 	}
@@ -522,7 +522,7 @@ func TestConfig_Validation(t *testing.T) {
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
-			common.CmpErr(t, tc.expErr, tc.cfg.Validate())
+			test.CmpErr(t, tc.expErr, tc.cfg.Validate())
 		})
 	}
 }
@@ -564,7 +564,7 @@ func TestConfig_FabricValidation(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			gotErr := tc.cfg.Validate()
-			common.CmpErr(t, tc.expErr, gotErr)
+			test.CmpErr(t, tc.expErr, gotErr)
 		})
 	}
 }

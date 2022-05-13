@@ -23,7 +23,7 @@ import (
 
 	"github.com/daos-stack/daos/src/control/common/proto/convert"
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
-	"github.com/daos-stack/daos/src/control/drpc"
+	"github.com/daos-stack/daos/src/control/lib/daos"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/security/auth"
 	"github.com/daos-stack/daos/src/control/system"
@@ -34,7 +34,7 @@ const (
 	// request can take before being timed out.
 	PoolCreateTimeout = 10 * time.Minute // be generous for large pools
 	// DefaultPoolTimeout is the default timeout for a pool request.
-	DefaultPoolTimeout = drpc.DefaultCartTimeout * 3
+	DefaultPoolTimeout = daos.DefaultCartTimeout * 3
 )
 
 // checkUUID is a helper function for validating that the supplied
@@ -194,12 +194,12 @@ func (r *poolRequest) canRetry(reqErr error, try uint) bool {
 
 	// Otherwise, apply a default retry test to all pool requests.
 	switch e := reqErr.(type) {
-	case drpc.DaosStatus:
+	case daos.Status:
 		switch e {
 		// These pool errors can be retried.
-		case drpc.DaosTimedOut, drpc.DaosGroupVersionMismatch,
-			drpc.DaosTryAgain, drpc.DaosOutOfGroup, drpc.DaosUnreachable,
-			drpc.DaosExcluded:
+		case daos.TimedOut, daos.GroupVersionMismatch,
+			daos.TryAgain, daos.OutOfGroup, daos.Unreachable,
+			daos.Excluded:
 			return true
 		default:
 			return false
@@ -1132,7 +1132,7 @@ func ListPools(ctx context.Context, rpcClient UnaryInvoker, req *ListPoolsReq) (
 			continue
 		}
 		if resp.Status != 0 {
-			p.QueryStatusMsg = drpc.DaosStatus(resp.Status).Error()
+			p.QueryStatusMsg = daos.Status(resp.Status).Error()
 			if p.QueryStatusMsg == "" {
 				p.QueryStatusMsg = "unknown error"
 			}

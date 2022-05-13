@@ -20,7 +20,7 @@ import (
 	"github.com/daos-stack/daos/src/control/common/proto/convert"
 	"github.com/daos-stack/daos/src/control/common/proto/ctl"
 	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
-	"github.com/daos-stack/daos/src/control/drpc"
+	"github.com/daos-stack/daos/src/control/lib/daos"
 	"github.com/daos-stack/daos/src/control/server/engine"
 	"github.com/daos-stack/daos/src/control/server/storage"
 )
@@ -239,11 +239,11 @@ func (c *ControlService) getMetadataCapacity(mountPoint string) (uint64, error) 
 		return 0, errors.Errorf("unknown SCM mount point %s", mountPoint)
 	}
 
-	mdCapStr, err := engineCfg.GetEnvVar(drpc.DaosMdCapEnv)
+	mdCapStr, err := engineCfg.GetEnvVar(daos.DaosMdCapEnv)
 	if err != nil {
 		c.log.Debugf("using default metadata capacity with SCM %s: %s (%d Bytes)", mountPoint,
-			humanize.Bytes(drpc.DefaultDaosMdCapSize), drpc.DefaultDaosMdCapSize)
-		return uint64(drpc.DefaultDaosMdCapSize), nil
+			humanize.Bytes(daos.DefaultDaosMdCapSize), daos.DefaultDaosMdCapSize)
+		return uint64(daos.DefaultDaosMdCapSize), nil
 	}
 
 	mdCap, err := strconv.ParseUint(mdCapStr, 10, 64)
