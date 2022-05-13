@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2021 Intel Corporation.
+// (C) Copyright 2021-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -10,6 +10,7 @@ import (
 	"context"
 	"fmt"
 	"net"
+	"sort"
 	"strings"
 	"sync"
 
@@ -75,7 +76,7 @@ type NUMAFabric struct {
 
 	// current device idx to use on each NUMA node
 	currentNumaDevIdx map[int]int
-	defaultNumaNode   int
+	currentNUMANode   int
 
 	getAddrInterface func(name string) (addrFI, error)
 }
@@ -247,18 +248,29 @@ func (n *NUMAFabric) getNextDevice(numaNode int) *FabricInterface {
 }
 
 func (n *NUMAFabric) findOnAnyNUMA(netDevClass uint32, provider string) (*FabricInterface, error) {
-	numNodes := n.getNumNUMANodes()
+	nodes := n.getNUMANodes()
+	numNodes := len(nodes)
+
 	for i := 0; i < numNodes; i++ {
-		numa := (n.defaultNumaNode + i) % numNodes
-		fi, err := n.getDeviceFromNUMA(numa, netDevClass, provider)
+		n.currentNUMANode = (n.currentNUMANode + 1) % numNodes
+		fi, err := n.getDeviceFromNUMA(nodes[n.currentNUMANode], netDevClass, provider)
 		if err == nil {
 			// Start the search on this node next time
-			n.defaultNumaNode = numa
-			n.log.Debugf("Suitable fabric interface %q found on NUMA node %d", fi.Name, numa)
+			n.log.Debugf("Suitable fabric interface %q found on NUMA node %d", fi.Name,
+				nodes[n.currentNUMANode])
 			return fi, nil
 		}
 	}
 	return nil, FabricNotFoundErr(netDevClass)
+}
+
+func (n *NUMAFabric) getNUMANodes() []int {
+	keys := make([]int, 0)
+	for k := range n.numaMap {
+		keys = append(keys, k)
+	}
+	sort.Ints(keys)
+	return keys
 }
 
 // getNextDevIndex is a simple round-robin load balancing scheme
@@ -276,14 +288,6 @@ func (n *NUMAFabric) getNextDevIndex(numaNode int) int {
 
 	// Unreachable -- callers looping on n.getNumDevices()
 	panic(fmt.Sprintf("no fabric interfaces on NUMA node %d", numaNode))
-}
-
-func (n *NUMAFabric) setDefaultNUMANode() {
-	for numa := range n.numaMap {
-		n.defaultNumaNode = numa
-		n.log.Debugf("The default NUMA node is: %d", numa)
-		break
-	}
 }
 
 func newNUMAFabric(log logging.Logger) *NUMAFabric {
@@ -327,8 +331,6 @@ func NUMAFabricFromScan(ctx context.Context, log logging.Logger, scan []*netdete
 			newIF.Name, newIF.Domain, numa, fabric.NumDevices(numa)-1)
 	}
 
-	fabric.setDefaultNUMANode()
-
 	if fabric.NumNUMANodes() == 0 {
 		log.Info("No network devices detected in fabric scan\n")
 	}
@@ -351,7 +353,6 @@ func NUMAFabricFromConfig(log logging.Logger, cfg []*NUMAFabricConfig) *NUMAFabr
 				})
 		}
 	}
-	fabric.setDefaultNUMANode()
 
 	return fabric
 }

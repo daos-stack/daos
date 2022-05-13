@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2021 Intel Corporation.
+// (C) Copyright 2021-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -392,7 +392,7 @@ func TestAgent_NUMAFabric_GetDevice(t *testing.T) {
 							NetDevClass: netdetect.Infiniband,
 						},
 					},
-					1: {
+					3: {
 						{
 							Name:        "t2",
 							NetDevClass: netdetect.Ether,
@@ -400,16 +400,16 @@ func TestAgent_NUMAFabric_GetDevice(t *testing.T) {
 					},
 				},
 			},
-			node:        1,
-			netDevClass: netdetect.Infiniband,
+			node:        0,
+			netDevClass: netdetect.Ether,
 			expResults: []*FabricInterface{
 				{
-					Name:        "t1",
-					NetDevClass: netdetect.Infiniband,
+					Name:        "t2",
+					NetDevClass: netdetect.Ether,
 				},
 				{
-					Name:        "t1",
-					NetDevClass: netdetect.Infiniband,
+					Name:        "t2",
+					NetDevClass: netdetect.Ether,
 				},
 			},
 		},
@@ -894,17 +894,6 @@ func TestAgent_NUMAFabricFromScan(t *testing.T) {
 			if diff := cmp.Diff(tc.expResult, result.numaMap); diff != "" {
 				t.Fatalf("-want, +got:\n%s", diff)
 			}
-
-			defaultNumaOK := false
-			for _, numa := range tc.possibleDefaultNUMA {
-				if numa == result.defaultNumaNode {
-					defaultNumaOK = true
-				}
-			}
-
-			if !defaultNumaOK {
-				t.Fatalf("default NUMA node %d (expected in list: %+v)", result.defaultNumaNode, tc.possibleDefaultNUMA)
-			}
 		})
 	}
 }
@@ -1007,17 +996,6 @@ func TestAgent_NUMAFabricFromConfig(t *testing.T) {
 
 			if diff := cmp.Diff(tc.expResult, result.numaMap); diff != "" {
 				t.Fatalf("-want, +got:\n%s", diff)
-			}
-
-			defaultNumaOK := false
-			for _, numa := range tc.possibleDefaultNUMA {
-				if numa == result.defaultNumaNode {
-					defaultNumaOK = true
-				}
-			}
-
-			if !defaultNumaOK {
-				t.Fatalf("default NUMA node %d (expected in list: %+v)", result.defaultNumaNode, tc.possibleDefaultNUMA)
 			}
 		})
 	}
