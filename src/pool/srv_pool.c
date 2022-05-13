@@ -74,6 +74,18 @@ struct pool_svc {
 	struct pool_svc_events	ps_events;
 };
 
+/* Pool service failed to start */
+struct pool_svc_failed {
+	uuid_t			psf_uuid;	/* pool UUID */
+	int			psf_error;	/* error number */
+	d_list_t		psf_link;	/* link to global list */
+};
+
+/** serialize operations on pool_svc_failed_list */
+static pthread_rwlock_t		psfl_rwlock = PTHREAD_RWLOCK_INITIALIZER;
+/* tracking failed pool service */
+D_LIST_HEAD(pool_svc_failed_list);
+
 static bool pool_disable_exclude = false;
 static int pool_prop_read(struct rdb_tx *tx, const struct pool_svc *svc,
 			  uint64_t bits, daos_prop_t **prop_out);
@@ -1553,6 +1565,13 @@ pool_svc_lookup(uuid_t uuid, struct pool_svc **svcp)
 	d_iov_t	id;
 	int		rc;
 
+	rc = ds_pool_failed_lookup(uuid);
+	if (rc) {
+		D_ERROR(DF_UUID": failed to start: "DF_RC"\n",
+			DP_UUID(uuid), DP_RC(rc));
+		return -DER_NO_SERVICE;
+	}
+
 	d_iov_set(&id, uuid, sizeof(uuid_t));
 	rc = ds_rsvc_lookup(DS_RSVC_CLASS_POOL, &id, &rsvc);
 	if (rc != 0)
@@ -1568,6 +1587,13 @@ pool_svc_lookup_leader(uuid_t uuid, struct pool_svc **svcp,
 	struct ds_rsvc *rsvc;
 	d_iov_t	id;
 	int		rc;
+
+	rc = ds_pool_failed_lookup(uuid);
+	if (rc) {
+		D_ERROR(DF_UUID": failed to start: "DF_RC"\n",
+			DP_UUID(uuid), DP_RC(rc));
+		return -DER_NO_SERVICE;
+	}
 
 	d_iov_set(&id, uuid, sizeof(uuid_t));
 	rc = ds_rsvc_lookup_leader(DS_RSVC_CLASS_POOL, &id, &rsvc, hint);
@@ -1598,6 +1624,69 @@ ds_pool_cont_svc_lookup_leader(uuid_t pool_uuid, struct cont_svc **svcp,
 	return 0;
 }
 
+int ds_pool_failed_add(uuid_t uuid, int rc)
+{
+	struct pool_svc_failed	*psf;
+	int ret = 0;
+
+	if (rc == 0)
+		return 0;
+
+	D_RWLOCK_WRLOCK(&psfl_rwlock);
+	d_list_for_each_entry(psf, &pool_svc_failed_list, psf_link) {
+		if (uuid_compare(psf->psf_uuid, uuid) == 0) {
+			ret = 0;
+			goto out;
+		}
+	}
+
+	D_ALLOC_PTR(psf);
+	if (psf == NULL) {
+		ret = -DER_NOMEM;
+		goto out;
+	}
+
+	uuid_copy(psf->psf_uuid, uuid);
+	psf->psf_error = rc;
+	d_list_add_tail(&psf->psf_link, &pool_svc_failed_list);
+	D_RWLOCK_UNLOCK(&psfl_rwlock);
+out:
+	return ret;
+}
+
+void ds_pool_failed_remove(uuid_t uuid)
+{
+	struct pool_svc_failed	*psf;
+	struct pool_svc_failed	*tmp;
+
+	D_RWLOCK_WRLOCK(&psfl_rwlock);
+	d_list_for_each_entry_safe(psf, tmp, &pool_svc_failed_list, psf_link) {
+		if (uuid_compare(psf->psf_uuid, uuid) == 0) {
+			d_list_del_init(&psf->psf_link);
+			D_FREE(psf);
+			break;
+		}
+	}
+	D_RWLOCK_UNLOCK(&psfl_rwlock);
+}
+
+/* return error if failed pool found, otherwise 0 is returned */
+int ds_pool_failed_lookup(uuid_t uuid)
+{
+	struct pool_svc_failed	*psf;
+
+	D_RWLOCK_RDLOCK(&psfl_rwlock);
+	d_list_for_each_entry(psf, &pool_svc_failed_list, psf_link) {
+		if (uuid_compare(psf->psf_uuid, uuid) == 0) {
+			D_RWLOCK_UNLOCK(&psfl_rwlock);
+			return psf->psf_error;
+		}
+	}
+	D_RWLOCK_UNLOCK(&psfl_rwlock);
+
+	return 0;
+}
+
 /*
  * Try to start the pool. If a pool service RDB exists, start it. Continue the
  * iteration upon errors as other pools may still be able to work.
@@ -1616,6 +1705,7 @@ start_one(uuid_t uuid, void *varg)
 	if (rc != 0) {
 		D_ERROR(DF_UUID": failed to start pool: %d\n", DP_UUID(uuid),
 			rc);
+		ds_pool_failed_add(uuid, rc);
 		return 0;
 	}
 
