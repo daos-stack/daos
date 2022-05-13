@@ -9,8 +9,9 @@ package hardware
 import (
 	"testing"
 
-	"github.com/daos-stack/daos/src/control/common"
 	"github.com/pkg/errors"
+
+	"github.com/daos-stack/daos/src/control/common/test"
 )
 
 func TestHardware_IsUnsupportedFabric(t *testing.T) {
@@ -28,7 +29,7 @@ func TestHardware_IsUnsupportedFabric(t *testing.T) {
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
-			common.AssertEqual(t, tc.expResult, IsUnsupportedFabric(tc.err), "")
+			test.AssertEqual(t, tc.expResult, IsUnsupportedFabric(tc.err), "")
 		})
 	}
 }
@@ -48,7 +49,7 @@ func TestHardware_IsProviderNotOnDevice(t *testing.T) {
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
-			common.AssertEqual(t, tc.expResult, IsProviderNotOnDevice(tc.err), "")
+			test.AssertEqual(t, tc.expResult, IsProviderNotOnDevice(tc.err), "")
 		})
 	}
 }

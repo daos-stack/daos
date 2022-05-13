@@ -14,7 +14,7 @@ import (
 	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/pkg/errors"
 
-	"github.com/daos-stack/daos/src/control/common"
+	"github.com/daos-stack/daos/src/control/common/test"
 )
 
 func TestHardware_Topology_AllDevices(t *testing.T) {
@@ -124,7 +124,7 @@ func TestTopology_NumNUMANodes(t *testing.T) {
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
-			common.AssertEqual(t, tc.expResult, tc.topo.NumNUMANodes(), "")
+			test.AssertEqual(t, tc.expResult, tc.topo.NumNUMANodes(), "")
 		})
 	}
 }
@@ -165,7 +165,7 @@ func TestTopology_NumCoresPerNUMA(t *testing.T) {
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
-			common.AssertEqual(t, tc.expResult, tc.topo.NumCoresPerNUMA(), "")
+			test.AssertEqual(t, tc.expResult, tc.topo.NumCoresPerNUMA(), "")
 		})
 	}
 }
@@ -243,7 +243,7 @@ func TestHardware_Topology_AddDevice(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			err := tc.topo.AddDevice(tc.numaNode, tc.device)
 
-			common.CmpErr(t, tc.expErr, err)
+			test.CmpErr(t, tc.expErr, err)
 			if diff := cmp.Diff(tc.expResult, tc.topo); diff != "" {
 				t.Fatalf("(-want, +got)\n%s\n", diff)
 			}
@@ -495,8 +495,8 @@ func TestHardware_Topology_Merge(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			err := tc.topo.Merge(tc.input)
 
-			common.CmpErr(t, tc.expErr, err)
-			if diff := cmp.Diff(tc.expResult, tc.topo, common.CmpOptIgnoreFieldAnyType("NUMANode")); diff != "" {
+			test.CmpErr(t, tc.expErr, err)
+			if diff := cmp.Diff(tc.expResult, tc.topo, test.CmpOptIgnoreFieldAnyType("NUMANode")); diff != "" {
 				t.Fatalf("(-want, +got)\n%s\n", diff)
 			}
 		})
@@ -526,7 +526,7 @@ func TestHardware_DeviceType_String(t *testing.T) {
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
-			common.AssertEqual(t, tc.expResult, tc.devType.String(), "")
+			test.AssertEqual(t, tc.expResult, tc.devType.String(), "")
 		})
 	}
 }
@@ -604,7 +604,7 @@ func TestHardware_NewTopologyFactory(t *testing.T) {
 
 			if diff := cmp.Diff(tc.expResult, result,
 				cmp.AllowUnexported(TopologyFactory{}),
-				common.CmpOptEquateErrorMessages(),
+				test.CmpOptEquateErrorMessages(),
 			); diff != "" {
 				t.Fatalf("(-want, +got)\n%s\n", diff)
 			}
@@ -722,7 +722,7 @@ func TestHardware_TopologyFactory_GetTopology(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			result, err := tc.tf.GetTopology(context.Background())
 
-			common.CmpErr(t, tc.expErr, err)
+			test.CmpErr(t, tc.expErr, err)
 			if diff := cmp.Diff(tc.expResult, result); diff != "" {
 				t.Fatalf("(-want, +got)\n%s\n", diff)
 			}
