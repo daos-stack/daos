@@ -1,5 +1,14 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
+# pylint: disable=no-name-in-module
+# pylint: disable=import-error
+# pylint: disable=broad-except
+"""
+  (C) Copyright 2018-2022 Intel Corporation.
+
+  SPDX-License-Identifier: BSD-2-Clause-Patent
+"""
+
 
 __copyright__ = """
 (C) Copyright 2018-2022 Intel Corporation.
@@ -63,7 +72,12 @@ __HUGEPAGES_STATE_PATTERN__ = re.compile(r"(\[madvise\])|(\[always\])")
 __HUGEPAGES_SYSCTL_PATTERN = re.compile(r"^vm\.nr_hugepages\s*=\s*(?P<size>\d+)$")
 
 def is_huge_pages_enabled():
-    with open(r'/sys/kernel/mm/transparent_hugepage/enabled', 'r') as fd:
+    """Check if huge pages are enabled
+
+    Returns:
+        bool: true iff huge pages are enabled
+    """
+    with open(r'/sys/kernel/mm/transparent_hugepage/enabled', 'r', encoding="utf8") as fd:
         line = fd.read()
         return __HUGEPAGES_STATE_PATTERN__.match(line)
 
@@ -84,11 +98,11 @@ def main():
 
     if not is_huge_pages_enabled():
         try:
-            with open(r"/sys/kernel/mm/transparent_hugepage/enabled", 'w') as fd:
+            with open(r"/sys/kernel/mm/transparent_hugepage/enabled", 'w', encoding="utf8") as fd:
                 fd.write('madvise')
         except Exception as ex:
             module.fail_json(elapsed=(datetime.datetime.utcnow() - start_time).seconds,
-                    msg='Huge Pages could not be enabled: {}'.format(ex))
+                    msg=f"Huge Pages could not be enabled: {ex}")
         if not is_huge_pages_enabled():
             module.fail_json(elapsed=(datetime.datetime.utcnow() - start_time).seconds,
                     msg="Huge Pages could not be enabled")
@@ -97,40 +111,40 @@ def main():
             stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=3)
     if cp.returncode != 0:
         module.fail_json(elapsed=(datetime.datetime.utcnow() - start_time).seconds,
-                msg="Size of Huge Pages could not be read: {}".format(cp.stderr.decode('ascii')))
+                msg=f"Size of Huge Pages could not be read: {cp.stderr.decode('ascii')}")
 
     hugepages_current_size = 0
     stdout_str = cp.stdout.decode('ascii')
     m = __HUGEPAGES_SYSCTL_PATTERN.match(stdout_str)
     if m is None:
         module.fail_json(elapsed=(datetime.datetime.utcnow() - start_time).seconds,
-                msg="Invalid size of huge pages from sysctl: {}".format(stdout_str))
+                msg=f"Invalid size of huge pages from sysctl: {stdout_str}")
     hugepages_current_size = int(m.groupdict()['size'])
 
     if hugepages_size != hugepages_current_size:
         if check_mode:
             module.fail_json(elapsed=(datetime.datetime.utcnow() - start_time).seconds,
-                    msg="Invalid size of huge pages: {}".format(hugepages_current_size))
+                    msg=f"Invalid size of huge pages: {hugepages_current_size}")
 
-        cp = subprocess.run([r'sysctl', 'vm.nr_hugepages={}'.format(hugepages_size)],
+        cp = subprocess.run([r'sysctl', f"vm.nr_hugepages={hugepages_size}"],
             stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, timeout=3)
         if cp.returncode != 0:
             module.fail_json(elapsed=(datetime.datetime.utcnow() - start_time).seconds,
-                    msg="Size of Huge Pages could not be dynamically set: "
-                    "{}".format(cp.stderr.decode('ascii')))
+                    msg=f"Size of Huge Pages could not be dynamically set: "
+                    "{cp.stderr.decode('ascii')}")
 
         try:
-            with open(r"/etc/sysctl.d/50-hugepages.conf", "w") as fd:
-                fd.write('vm.nr_hugepages={}'.format(hugepages_size))
+            with open(r"/etc/sysctl.d/50-hugepages.conf", "w", encoding="utf8") as fd:
+                fd.write(f"vm.nr_hugepages={hugepages_size}")
         except Exception as ex:
             module.fail_json(elapsed=(datetime.datetime.utcnow() - start_time).seconds,
-                    msg="Setup of Huge Pages size at boot could not be defined: "
-                    "{}".format(cp.stderr.decode('ascii')))
+                    msg=f"Setup of Huge Pages size at boot could not be defined: "
+                    "{cp.stderr.decode('ascii')}")
         cp = subprocess.run([r'sysctl', '-p'], stderr=subprocess.PIPE, timeout=3)
         if cp.returncode != 0:
             module.fail_json(elapsed=(datetime.datetime.utcnow() - start_time).seconds,
-                    msg="Setup of Huge Pages size at boot could not be applied: "
-                    "{}".format(cp.stderr))
+                    msg=f"Setup of Huge Pages size at boot could not be applied: "
+                    "{cp.stderr.decode('ascii')}")
 
         module.exit_json(changed=True,
                          elapsed=(datetime.datetime.utcnow() - start_time).seconds)
