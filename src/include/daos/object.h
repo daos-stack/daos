@@ -174,6 +174,12 @@ struct daos_obj_layout {
  * update DAOS_OBJ_REPL_MAX obj with some target failed case.
  */
 #define DAOS_TGT_IGNORE		((d_rank_t)-1)
+
+enum daos_tgt_flags {
+	/* When leader forward IO RPC to non-leaders, delay the target until the others replied. */
+	DTF_DELAY_FORWARD	= (1 << 0),
+};
+
 /** to identify each obj shard's target */
 struct daos_shard_tgt {
 	uint32_t		st_rank;	/* rank of the shard */
@@ -181,8 +187,9 @@ struct daos_shard_tgt {
 	uint32_t		st_shard_id;	/* shard id */
 	uint32_t		st_tgt_id;	/* target id */
 	uint16_t		st_tgt_idx;	/* target xstream index */
-	/* target idx for EC obj, only used for client */
-	uint16_t		st_ec_tgt;
+	/* Target idx for EC obj, only used for client, consider OBJ_EC_MAX_M, 8-bits is enough. */
+	uint8_t			st_ec_tgt;
+	uint8_t			st_flags;	/* see daos_tgt_flags */
 };
 
 static inline bool
