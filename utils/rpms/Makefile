@@ -1,6 +1,7 @@
 NAME    := daos
 SRC_EXT := gz
 SOURCE   = $(NAME)-$(VERSION).tar.$(SRC_EXT)
+TOPDIR  := $(abspath $(dir $(firstword $(MAKEFILE_LIST)))/../..)
 
 #https://github.com/rpm-software-management/mock/issues/384
 MOCK_OPTIONS := --disablerepo=sclo*
