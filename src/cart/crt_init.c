@@ -713,6 +713,7 @@ out:
 	D_FREE(port0);
 	D_FREE(iface0);
 	D_FREE(domain0);
+	D_FREE(provider0);
 	if (rc != 0) {
 		D_ERROR("failed, "DF_RC"\n", DP_RC(rc));
 		d_fault_inject_fini();
