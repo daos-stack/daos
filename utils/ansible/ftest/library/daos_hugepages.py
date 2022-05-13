@@ -64,7 +64,7 @@ elapsed:
 import os
 import re
 import datetime
-import subprocess
+import subprocess # nosec B404
 
 from ansible.module_utils.basic import AnsibleModule
 

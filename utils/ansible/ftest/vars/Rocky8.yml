@@ -1,4 +1,5 @@
 # Set of variables for Rocky 8
+# yamllint disable rule:line-length
 
 daos_openmpi_module_path: /usr/share/modulefiles/mpi/openmpi-x86_64
 
