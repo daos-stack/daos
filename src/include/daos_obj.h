@@ -93,10 +93,8 @@ enum daos_otype_t {
 
 	/** Byte Array with no metadata (eg DFS/POSIX) */
 	DAOS_OT_ARRAY_BYTE	= 13,
-	/** reserved: 1-level flat KV store */
-	DAOS_OT_KV_FLAT		= 14,
 
-	DAOS_OT_MAX		= 14,
+	DAOS_OT_MAX		= 13,
 
 	/**
 	 * reserved: Multi Dimensional Array
