@@ -265,3 +265,27 @@ class TestWithTelemetry(TestWithServers):
                     total += value
 
         return total
+
+    def get_aggregate_metrics(self, metrics=None):
+        """"Get aggregate metrics data.
+
+        Args:
+            metrics (list, optional): list of specific pool metrics to aggregate.
+                Defaults to None.
+
+        Returns:
+            dict: mapping of metrics to hosts to ranks to aggregate values.
+                I.e., {metric: {host: {rank: sum}}}
+
+        """
+        agg = {}
+        telemetry_data = self.telemetry.get_pool_metrics(metrics)
+
+        for metric, metric_data in telemetry_data.items():
+            agg[metric] = {}
+            for host, host_data in metric_data.items():
+                agg[metric][host] = {}
+                for rank, rank_data in host_data.items():
+                    agg[metric][host][rank] = sum(rank_data.values())
+
+        return agg

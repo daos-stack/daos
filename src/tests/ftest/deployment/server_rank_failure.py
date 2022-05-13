@@ -54,7 +54,7 @@ class ServerRankFailure(IorTestBase, TestWithTelemetry):
             mpi_type="mpich", timeout=timeout)
         manager.assign_hosts(
             self.hostlist_clients, self.workdir, self.hostfile_clients_slots)
-        ppn = self.params.get("ppn", '/run/ior/client_processes/*')
+        ppn = self.params.get("ppn", namespace)
         manager.ppn.update(ppn, 'mpirun.ppn')
         manager.processes.update(None, 'mpirun.np')
 
@@ -132,47 +132,20 @@ class ServerRankFailure(IorTestBase, TestWithTelemetry):
             ior_error = ior_results[job_num][1]
             errors.append("Error found in IOR job {}! {}".format(job_num, ior_error))
 
-    def get_io_inflow(self, engine_kill_host):
-        """Get the IO inflow into the ranks of the engine_kill_host.
-
-        Args:
-            engine_kill_host (str): Host where we're interested in the IO inflow.
-
-        Returns:
-            dict: Keys are the two ranks and values are the total IO from all targets in
-                the rank.
-
-        """
-        ranks_to_io = {}
-        metrics = "engine_pool_ops_fetch"
-        metrics_out = self.telemetry.get_pool_metrics([metrics])
-
-        ranks_to_targets = metrics_out[metrics][engine_kill_host]
-        for rank in ranks_to_targets:
-            target_to_value = ranks_to_targets[rank]
-            total_rank_io = 0
-            for value in target_to_value.values():
-                total_rank_io += value
-            ranks_to_io[rank] = total_rank_io
-
-        return ranks_to_io
-
     def verify_rank_failure(self, ior_namespace, container_namespace):
         """Verify engine failure can be recovered by restarting daos_server.
 
         1. Create a pool and a container. Create a container with or without redundancy
         factor based on container_namespace.
-        2. Get the amount of IO inflow to the ranks we'll kill engine on. We expect both
-        to be 0.
+        2. Get the amount of IO inflow to each rank. We expect them to be 0.
         3. Run IOR with given object class (IO experiment run).
-        4. Get the amount of IO inflow again. Both ranks should get some data. This step
-        is to verify that the ranks where we'll kill engine will receive IO. We assume
-        that this result will hold in every subsequent IOR runs. If the ranks don't get
-        any data, fail the test. We'll need to come up with some workaround.
-        5. Verify that we got some IO inflow.
+        4. Get the amount of IO inflow again.
+        5. Get the rank with the largest amount of inflow. Find out its hostname. We'll
+        kill engines here. If we use replication, some ranks receive more data than
+        others. e.g., With RP_2G1, two ranks get most of the data.
         6. Run IOR with given object class (Main test run).
-        7. While IOR is running, kill daos_engine processes from one of the nodes to
-        simulate a node failure. (Two engines per node.)
+        7. While IOR is running, kill daos_engine processes from the node to simulate a
+        node failure. (Two engines per node.)
         8. Verify that IOR failed.
         9. Restart daos_server service on the two nodes.
         10. Verify the system status by calling dmg system query.
@@ -189,10 +162,10 @@ class ServerRankFailure(IorTestBase, TestWithTelemetry):
         self.add_pool(namespace="/run/pool_size_ratio_80/*")
         self.add_container(pool=self.pool, namespace=container_namespace)
 
-        # 2. Get the amount of IO inflow to the ranks we'll kill engine on.
-        engine_kill_host = self.hostlist_servers[1]
-        ranks_to_io_before = self.get_io_inflow(engine_kill_host=engine_kill_host)
-        self.log.info("ranks_to_io_before = %s", ranks_to_io_before)
+        # 2. Get the amount of IO inflow to each rank.
+        metric = "engine_pool_ops_fetch"
+        agg_metrics_before = self.get_aggregate_metrics(metrics=[metric])[metric]
+        self.log.info("agg_metrics_before = %s", agg_metrics_before)
 
         # 3. Run IOR with given object class (IO experiment run).
         ior_results = {}
@@ -204,18 +177,29 @@ class ServerRankFailure(IorTestBase, TestWithTelemetry):
         # Verify just in case.
         self.verify_ior_worked(ior_results=ior_results, job_num=job_num, errors=errors)
 
-        # 4. Get the amount of IO inflow again. Both ranks should get some data.
-        ranks_to_io_after = self.get_io_inflow(engine_kill_host=engine_kill_host)
-        self.log.info("ranks_to_io_after = %s", ranks_to_io_after)
+        # 4. Get the amount of IO inflow again.
+        agg_metrics_after = self.get_aggregate_metrics(metrics=[metric])[metric]
+        self.log.info("agg_metrics_after = %s", agg_metrics_after)
 
-        # 5. Verify that we got some IO inflow.
-        for rank in ranks_to_io_before:
-            io_before = ranks_to_io_before[rank]
-            io_after = ranks_to_io_after[rank]
-            if io_after <= io_before:
-                msg = ("No IO inflow was observed on rank {}! "
-                       "Before = {}; After = {}".format(rank, io_before, io_after))
-                errors.append(msg)
+        # 5. Get the rank with the largest amount of inflow. Find out its hostname.
+        rank_to_host = {}
+        rank_to_agg_before = {}
+        rank_to_agg_after = {}
+        rank_to_agg_diff = {}
+        for host, rank_to_agg in agg_metrics_after.items():
+            for rank, agg in rank_to_agg.items():
+                rank_to_agg_after[rank] = agg
+                rank_to_agg_before[rank] = agg_metrics_before[host][rank]
+                rank_to_host[rank] = host
+
+        for rank, agg_after in rank_to_agg_after.items():
+            rank_to_agg_diff[rank] = agg_after - rank_to_agg_before[rank]
+
+        # Ascending order sorted by agg.
+        rank_agg_diffs = sorted(rank_to_agg_diff.items(), key=lambda x: x[1])
+        self.log.info("rank_agg_diffs = %s", rank_agg_diffs)
+        engine_kill_host = rank_to_host[rank_agg_diffs[-1][0]]
+        self.log.info("engine_kill_host = %s", engine_kill_host)
 
         # 6. Run IOR with given object class (Main test run).
         job_num = 2
@@ -245,7 +229,7 @@ class ServerRankFailure(IorTestBase, TestWithTelemetry):
         ior_thread.join()
 
         # 8. Verify that IOR failed.
-        self.log.info("----- IOR results 2 -----")
+        self.log.info("----- IOR results %d -----", job_num)
         self.log.info(ior_results)
         if job_num not in ior_results or ior_results[job_num][0]:
             errors.append("First IOR didn't fail as expected!")
@@ -272,7 +256,7 @@ class ServerRankFailure(IorTestBase, TestWithTelemetry):
             job_num=job_num, results=ior_results, file_name="test_file_3",
             pool=self.pool, container=self.container, namespace=ior_namespace)
 
-        self.log.info("----- IOR results 3 -----")
+        self.log.info("----- IOR results %d -----", job_num)
         self.verify_ior_worked(ior_results=ior_results, job_num=job_num, errors=errors)
 
         self.log.info("########## Errors ##########")
@@ -307,6 +291,19 @@ class ServerRankFailure(IorTestBase, TestWithTelemetry):
         """
         self.verify_rank_failure(
             ior_namespace="/run/ior_with_rp/*",
+            container_namespace="/run/container_with_rf/*")
+
+    def test_rank_failure_with_ec(self):
+        """Jira ID: DAOS-10002.
+        Test rank failure with redundancy factor and EC_2P1G1 object class. See
+        verify_rank_failure() for test steps.
+        :avocado: tags=all,full_regression
+        :avocado: tags=hw,medium,ib2
+        :avocado: tags=deployment,rank_failure
+        :avocado: tags=rank_failure_with_ec
+        """
+        self.verify_rank_failure(
+            ior_namespace="/run/ior_with_ec/*",
             container_namespace="/run/container_with_rf/*")
 
     def test_rank_failure_isolation(self):
