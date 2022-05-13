@@ -212,7 +212,7 @@ func (pas *PCIAddressSet) Equals(other *PCIAddressSet) bool {
 
 // Contains returns true if provided address is already in set.
 func (pas *PCIAddressSet) Contains(a *PCIAddress) bool {
-	if pas == nil {
+	if pas == nil || a == nil {
 		return false
 	}
 
@@ -221,6 +221,10 @@ func (pas *PCIAddressSet) Contains(a *PCIAddress) bool {
 }
 
 func (pas *PCIAddressSet) add(a *PCIAddress) {
+	if a == nil {
+		return
+	}
+
 	if pas.addrMap == nil {
 		pas.addrMap = make(map[string]*PCIAddress)
 	}
@@ -464,7 +468,7 @@ func (b *PCIBus) AddDevice(dev *PCIDevice) error {
 	if b == nil || dev == nil {
 		return errors.New("bus or device is nil")
 	}
-	if !b.Contains(dev.PCIAddr) {
+	if !b.Contains(&dev.PCIAddr) {
 		return fmt.Errorf("device %s is not on bus %s", &dev.PCIAddr, b)
 	}
 	if b.PCIDevices == nil {
@@ -478,8 +482,8 @@ func (b *PCIBus) AddDevice(dev *PCIDevice) error {
 }
 
 // Contains returns true if the given PCI address is contained within the bus.
-func (b *PCIBus) Contains(addr PCIAddress) bool {
-	if b == nil {
+func (b *PCIBus) Contains(addr *PCIAddress) bool {
+	if b == nil || addr == nil {
 		return false
 	}
 
@@ -566,4 +570,17 @@ func (d PCIDevices) Keys() []*PCIAddress {
 		}
 	}
 	return set.Addresses()
+}
+
+// Get returns the devices for the given PCI address.
+func (d PCIDevices) Get(addr *PCIAddress) []*PCIDevice {
+	if d == nil || addr == nil {
+		return nil
+	}
+
+	if devs, found := d[*addr]; found {
+		return devs
+	}
+
+	return nil
 }

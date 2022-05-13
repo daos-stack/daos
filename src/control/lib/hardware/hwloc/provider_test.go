@@ -129,6 +129,11 @@ func TestHwlocProvider_GetTopology_Samples(t *testing.T) {
 									Type:    hardware.DeviceTypeOFIDomain,
 									PCIAddr: *hardware.MustNewPCIAddress("0000:3d:00.1"),
 								},
+								{
+									Name:    "sda",
+									Type:    hardware.DeviceTypeBlock,
+									PCIAddr: *hardware.MustNewPCIAddress("0000:00:11.5"),
+								},
 							},
 						),
 					1: hardware.MockNUMANode(1, 24, 24),
@@ -179,6 +184,11 @@ func TestHwlocProvider_GetTopology_Samples(t *testing.T) {
 									Name:    "i40iw0",
 									Type:    hardware.DeviceTypeOFIDomain,
 									PCIAddr: *hardware.MustNewPCIAddress("0000:3d:00.1"),
+								},
+								{
+									Name:    "sda",
+									Type:    hardware.DeviceTypeBlock,
+									PCIAddr: *hardware.MustNewPCIAddress("0000:00:11.5"),
 								},
 							},
 						),
@@ -251,6 +261,16 @@ func TestHwlocProvider_GetTopology_Samples(t *testing.T) {
 									Type:    hardware.DeviceTypeNetInterface,
 									PCIAddr: *hardware.MustNewPCIAddress("0000:06:00.0"),
 								},
+								{
+									Name:    "sda",
+									Type:    hardware.DeviceTypeBlock,
+									PCIAddr: *hardware.MustNewPCIAddress("0000:00:1f.2"),
+								},
+								{
+									Name:    "sdb",
+									Type:    hardware.DeviceTypeBlock,
+									PCIAddr: *hardware.MustNewPCIAddress("0000:00:1f.2"),
+								},
 							},
 						),
 					1: hardware.MockNUMANode(1, 8, 8).
@@ -304,6 +324,16 @@ func TestHwlocProvider_GetTopology_Samples(t *testing.T) {
 										Name:    "hfi1_0",
 										Type:    hardware.DeviceTypeOFIDomain,
 										PCIAddr: *hardware.MustNewPCIAddress("0000:18:00.0"),
+									},
+									{
+										Name:    "sda",
+										Type:    hardware.DeviceTypeBlock,
+										PCIAddr: *hardware.MustNewPCIAddress("0000:00:1f.2"),
+									},
+									{
+										Name:    "sr0",
+										Type:    hardware.DeviceTypeBlock,
+										PCIAddr: *hardware.MustNewPCIAddress("0000:00:1f.2"),
 									},
 								},
 							)
