@@ -357,7 +357,7 @@ def run_pcmd(hosts, command, verbose=True, timeout=None, expect_rc=0):
     task = run_task(list(hosts), command, timeout)
 
     # Get the exit status of each host
-    host_exit_status = {host: None for host in hosts}
+    host_exit_status = {str(host): None for host in hosts}
     for exit_status, host_list in task.iter_retcodes():
         for host in host_list:
             host_exit_status[host] = exit_status
