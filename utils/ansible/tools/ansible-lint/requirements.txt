@@ -1,6 +1,0 @@
-# pip requirements file allowing to use ansible scripts
-#
-# Example of usage:
-# pip install -r requirements.txt
-
-ansible-lint

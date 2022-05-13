@@ -1,10 +1,10 @@
 #!/bin/bash
-# shellcheck disable
+# shellcheck=disable
 
 set -o pipefail
 
 VERSION=0.1
-CWD="$(realpath $(dirname $0))"
+CWD="$(realpath "$(dirname $0)")"
 
 DAOS_INSTALL_DIR="{{ daos_runtime_dir }}/install"
 DAOS_SOURCE_DIR="{{ daos_source_dir }}"
