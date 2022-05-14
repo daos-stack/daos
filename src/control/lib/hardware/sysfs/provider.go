@@ -486,6 +486,9 @@ func (s *Provider) IsIOMMUEnabled() (bool, error) {
 	// Simple test for now -- if the path exists and contains
 	// DMAR entries, we assume that's good enough.
 	dmars, err := ioutil.ReadDir(s.sysPath("class", "iommu"))
+	if err != nil && !os.IsNotExist(err) {
+		return false, err
+	}
 
 	return err == nil && len(dmars) > 0, nil
 }

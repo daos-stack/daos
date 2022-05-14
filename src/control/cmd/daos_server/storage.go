@@ -18,7 +18,7 @@ import (
 	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/common/cmdutil"
 	commands "github.com/daos-stack/daos/src/control/common/storage"
-	"github.com/daos-stack/daos/src/control/lib/hardware/sysfs"
+	"github.com/daos-stack/daos/src/control/lib/hardware/hwprov"
 	"github.com/daos-stack/daos/src/control/pbin"
 	"github.com/daos-stack/daos/src/control/server"
 	"github.com/daos-stack/daos/src/control/server/config"
@@ -217,7 +217,7 @@ func (cmd *storagePrepareCmd) Execute(args []string) error {
 
 	scanErrors := make(errs, 0, 2)
 
-	iommuEnabled, err := sysfs.NewProvider(cmd).IsIOMMUEnabled()
+	iommuEnabled, err := hwprov.DefaultIOMMUDetector(cmd).IsIOMMUEnabled()
 	if err != nil {
 		return err
 	}
