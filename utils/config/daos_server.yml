@@ -70,10 +70,15 @@
 #
 ## Network provider
 #
-## Force a specific libfabric provider to be used by all the engines.
-## The default provider depends on the interfaces that will be auto-detected:
-##  ofi+verbs;ofi_rxm for Infiniband/RoCE and
-##  ofi+sockets for non-RDMA-capable Ethernet.
+## Set the network provider to be used by all the engines.
+## There is no default - run "daos_server network scan" to list the
+## providers that are supported on the fabric interfaces. Examples:
+##
+##   ofi+verbs;ofi_rxm  for libfabric with Infiniband/RoCE
+##   ofi+tcp;ofi_rxm    for libfabric with non-RDMA-capable fabrics
+##
+## (Starting with DAOS 2.2, ofi_rxm will be automatically added to the
+## libfabric verbs and tcp providers, if not explicitly specified.)
 #
 #provider: ofi+verbs;ofi_rxm
 #
