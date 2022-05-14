@@ -23,7 +23,7 @@ fi
 SCONS_ARGS="${SCONS_FAULTS_ARGS}"
 
 : "${CHROOT_NAME:='centos+epel-7-x86_64'}"
-: "${TARGET:='centos7'}"
+: "${TARGET:='el8'}"
 
 : "${COVFN_DISABLED:=true}"
 if $COVFN_DISABLED; then

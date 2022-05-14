@@ -12,8 +12,8 @@ if [ -e "${ci_envs}" ]; then
   source "${ci_envs}"
 fi
 
-: "${CHROOT_NAME:=epel-7-x86_64}"
-: "${TARGET:=centos7}"
+: "${CHROOT_NAME:=epel-8-x86_64}"
+: "${TARGET:=el8}"
 
 artdir="${PWD}/artifacts/${TARGET}"
 

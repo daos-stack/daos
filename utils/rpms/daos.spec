@@ -34,12 +34,8 @@ License:       BSD-2-Clause-Patent
 URL:           https//github.com/daos-stack/daos
 Source0:       %{name}-%{version}.tar.gz
 Source1:       bz-1955184_find-requires
-%if (0%{?rhel} >= 7)
 %if (0%{?rhel} >= 8)
 BuildRequires: python3-scons >= 2.4
-%else
-BuildRequires: python36-scons >= 2.4
-%endif
 %else
 BuildRequires: scons >= 2.4
 %endif
@@ -62,11 +58,7 @@ BuildRequires: bullseye
 %if (0%{?rhel} >= 7)
 BuildRequires: argobots-devel >= 1.1
 BuildRequires: json-c-devel
-%if (0%{?rhel} >= 8)
 BuildRequires: boost-python3-devel
-%else
-BuildRequires: boost-python36-devel
-%endif
 %else
 BuildRequires: libabt-devel >= 1.0rc1
 BuildRequires: libjson-c-devel
@@ -108,11 +100,7 @@ BuildRequires: CUnit-devel
 # needed to retrieve PMM region info through control-plane
 BuildRequires: libipmctl-devel
 BuildRequires: python36-devel
-%if (0%{?rhel} >= 8)
 BuildRequires: python3-distro
-%else
-BuildRequires: python36-distro
-%endif
 BuildRequires: Lmod
 %else
 %if (0%{?suse_version} >= 1315)
@@ -234,15 +222,9 @@ This is the package is a metapackage to install all of the test packages
 %package client-tests
 Summary: The DAOS test suite
 Requires: %{name}-client%{?_isa} = %{version}-%{release}
-%if (0%{?rhel} >= 7) && (0%{?rhel} < 8)
-Requires: python36-distro
-Requires: python36-tabulate
-Requires: python36-defusedxml
-%else
 Requires: python3-distro
 Requires: python3-tabulate
 Requires: python3-defusedxml
-%endif
 Requires: fio
 Requires: meson
 Requires: python3-pyelftools
@@ -361,13 +343,8 @@ echo "%{_libdir}/daos_srv" > %{buildroot}/%{_sysconfdir}/ld.so.conf.d/daos.conf
 mkdir -p %{buildroot}/%{_sysctldir}
 install -m 644 utils/rpms/%{sysctl_script_name} %{buildroot}/%{_sysctldir}
 mkdir -p %{buildroot}/%{_unitdir}
-%if (0%{?rhel} == 7)
-install -m 644 utils/systemd/%{server_svc_name}.pre230 %{buildroot}/%{_unitdir}/%{server_svc_name}
-install -m 644 utils/systemd/%{agent_svc_name}.pre230 %{buildroot}/%{_unitdir}/%{agent_svc_name}
-%else
 install -m 644 utils/systemd/%{server_svc_name} %{buildroot}/%{_unitdir}
 install -m 644 utils/systemd/%{agent_svc_name} %{buildroot}/%{_unitdir}
-%endif
 mkdir -p %{buildroot}/%{conf_dir}/certs/clients
 mv %{buildroot}/%{conf_dir}/bash_completion.d %{buildroot}/%{_sysconfdir}
 

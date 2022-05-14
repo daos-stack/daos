@@ -33,7 +33,7 @@ fi
 my_project="daos"
 
 my_art_dir="artifact/artifacts"
-my_distro="centos7"
+my_distro="el8"
 my_artifact="${my_distro}.zip"
 my_prefix="${my_branch}_"
 

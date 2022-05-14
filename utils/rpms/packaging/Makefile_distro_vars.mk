@@ -22,19 +22,10 @@ DOCKER   := podman
 SPECTOOL := spectool
 # a Fedora-based mock builder
 # derive the the values of:
-# VERSION_ID (i.e. 7)
-# DISTRO_ID (i.e. el7)
-# DISTRO_BASE (i.e. EL_7)
+# VERSION_ID (i.e. 8)
+# DISTRO_ID (i.e. el8)
+# DISTRO_BASE (i.e. EL_8)
 # from the CHROOT_NAME
-ifeq ($(patsubst %epel-7-x86_64,,$(lastword $(subst +, ,$(CHROOT_NAME)))),)
-DIST            := $(shell rpm $(COMMON_RPM_ARGS) --eval %{?dist})
-VERSION_ID      := 7
-DISTRO_ID       := el7
-DISTRO_BASE     := EL_7
-DISTRO_VERSION  ?= $(VERSION_ID)
-ORIG_TARGET_VER := 7
-SED_EXPR        := 1s/$(DIST)//p
-endif
 ifeq ($(patsubst %epel-8-x86_64,,$(lastword $(subst +, ,$(CHROOT_NAME)))),)
 DIST            := $(shell rpm $(COMMON_RPM_ARGS) --eval %{?dist})
 VERSION_ID      := 8

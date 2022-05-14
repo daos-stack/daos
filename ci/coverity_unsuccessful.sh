@@ -13,7 +13,7 @@ if [ -e "${ci_envs}" ]; then
   source "${ci_envs}"
 fi
 
-: "${TARGET:='centos7'}"
+: "${TARGET:='el8'}"
 
 if [ -f "config${arch:-}.log" ]; then
   mv "config${arch}.log" "coverity/config.log-${TARGET}-cov"

@@ -39,16 +39,9 @@ building those tests.
 Scripts to install all the required packages are provided for each supported
 distribution.
 
-### EL (including CentOS)
+### RHEL and Clones
 
-On CentOS7, please run the following command from the DAOS tree as root or via
-sudo.
-
-```bash
-$ ./utils/scripts/install-centos7.sh
-```
-
-For EL8, the following script must be used instead:
+For RHEL8-compatible distributions, the following script must be run:
 
 ```bash
 $ ./utils/scripts/install-el8.sh

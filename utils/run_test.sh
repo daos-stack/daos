@@ -5,7 +5,7 @@
 #  runs the tests at a time, as the tests use the same
 #  mount point.  For now, there actually isn't much
 #  contention, however, because /mnt/daos on the jenkins nodes
-#  is subdivided into /mnt/daos/el7; /mnt/daos/sles12sp3;
+#  is subdivided into /mnt/daos/el8; /mnt/daos/sles12sp3;
 #  /mnt/daos/ubuntu1404; and /mnt/daos/ubuntu1604
 #  These are mapped into /mnt/daos in the docker containers
 #  for the corresponding Jenkins distro builder. This "magic"

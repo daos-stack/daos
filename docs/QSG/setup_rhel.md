@@ -1,10 +1,7 @@
 # DAOS Set-Up on RHEL and Clones
 
-
 The following instructions detail how to install, set up and start DAOS servers and clients on two or more nodes.
-This document includes instructions for EL8 and CentOS 7.
-The process is identical for CentOS Linux 7 and EL 8,
-except for the location of the DAOS RPM repository.
+This document includes instructions for RHEL8-compatible distributions. This includes Rocky Linux and AlmaLinux.
 For setup instructions on OpenSuse, refer to
 [OpenSuse setup](setup_suse.md).
 
@@ -63,14 +60,7 @@ of the daos-client RPM and the server nodes require the installation of the
 daos-server RPM.
 
 1. Configure access to the [DAOS package repository](https://packages.daos.io/v2.0/),
-   using the subdirectory that matches the EL/CentOS version of the nodes:
-
-	**For CentOS7:**
-
-		pdsh -w $ALL_NODES 'sudo wget -O /etc/yum.repos.d/daos-packages.repo https://packages.daos.io/v2.0/CentOS7/packages/x86_64/daos_packages.repo'
-
-
-	**For EL8:**
+   using the subdirectory as follows:
 
 		pdsh -w $ALL_NODES 'sudo wget -O /etc/yum.repos.d/daos-packages.repo https://packages.daos.io/v2.0/EL8/packages/x86_64/daos_packages.repo'
 

@@ -13,11 +13,7 @@ elif [[ $distro = el* ]] || [[ $distro = centos* ]] ||
     pyver="3"
     prefix=""
 
-    if [[ $distro = el7* ]] || [[ $distro = centos7* ]]; then
-        pyver="36"
-        openmpi="openmpi3"
-        prefix="--exclude ompi"
-    elif [[ $distro = leap15* ]]; then
+    if [[ $distro = leap15* ]]; then
         openmpi="openmpi3"
     fi
 
