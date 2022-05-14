@@ -43,7 +43,7 @@ cont_inherit_redunc_fac(daos_handle_t poh, daos_prop_t *cont_prop,
 
 	redunc_prop = daos_prop_alloc(1);
 	if (redunc_prop == NULL) {
-		D_ERROR("failed to allocate redunc_prop\n");
+//		D_ERROR("failed to allocate redunc_prop\n");
 		return -DER_NOMEM;
 	}
 	redunc_prop->dpp_entries[0].dpe_type = DAOS_PROP_CO_REDUN_FAC;
@@ -53,7 +53,7 @@ cont_inherit_redunc_fac(daos_handle_t poh, daos_prop_t *cont_prop,
 		*merged_prop = daos_prop_merge(cont_prop, redunc_prop);
 		daos_prop_free(redunc_prop);
 		if (*merged_prop == NULL) {
-			D_ERROR("failed to merge cont_prop and redunc_prop\n");
+//			D_ERROR("failed to merge cont_prop and redunc_prop\n");
 			rc = -DER_NOMEM;
 		}
 	} else {
@@ -111,7 +111,7 @@ int
 daos_cont_create2(daos_handle_t poh, uuid_t *cuuid, daos_prop_t *cont_prop,
 		  daos_event_t *ev)
 		  __attribute__ ((weak, alias("daos_cont_create")));
-		  
+
 int
 daos_cont_create_with_label(daos_handle_t poh, const char *label,
 			    daos_prop_t *cont_prop, uuid_t *uuid,

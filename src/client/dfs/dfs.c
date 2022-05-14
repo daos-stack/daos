@@ -1381,7 +1381,7 @@ dfs_get_sb_layout(daos_key_t *dkey, daos_iod_t *iods[], int *akey_count,
  */
 int
 dfs_cont_create(daos_handle_t poh, uuid_t *cuuid, dfs_attr_t *attr,
-		    daos_handle_t *_coh, dfs_t **_dfs)
+		daos_handle_t *_coh, dfs_t **_dfs)
 {
 	daos_handle_t		coh, super_oh;
 	struct dfs_entry	entry = {0};
