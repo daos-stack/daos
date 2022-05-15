@@ -306,7 +306,9 @@ func (srv *server) addEngines(ctx context.Context) error {
 			return errors.Wrap(err, "creating engine instances")
 		}
 
-		engine.storage.SetBdevCache(*nvmeScanResp)
+		if err := engine.storage.SetBdevCache(*nvmeScanResp); err != nil {
+			return errors.Wrap(err, "setting engine storage bdev cache")
+		}
 
 		registerEngineEventCallbacks(srv, engine, &allStarted)
 

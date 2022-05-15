@@ -16,6 +16,7 @@ import (
 
 	"github.com/daos-stack/daos/src/control/common/test"
 	"github.com/daos-stack/daos/src/control/drpc"
+	"github.com/daos-stack/daos/src/control/lib/daos"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/security"
 	"github.com/daos-stack/daos/src/control/security/auth"
@@ -144,7 +145,7 @@ func TestAgentSecurityModule_RequestCreds_NotConnected(t *testing.T) {
 		t.Errorf("Expected no error, got %+v", err)
 	}
 
-	expectCredResp(t, respBytes, int32(drpc.DaosMiscError), false)
+	expectCredResp(t, respBytes, int32(daos.MiscError), false)
 }
 
 func TestAgentSecurityModule_RequestCreds_BadConfig(t *testing.T) {
@@ -163,7 +164,7 @@ func TestAgentSecurityModule_RequestCreds_BadConfig(t *testing.T) {
 		t.Errorf("Expected no error, got %+v", err)
 	}
 
-	expectCredResp(t, respBytes, int32(drpc.DaosInvalidInput), false)
+	expectCredResp(t, respBytes, int32(daos.InvalidInput), false)
 }
 
 func TestAgentSecurityModule_RequestCreds_BadUid(t *testing.T) {
@@ -185,5 +186,5 @@ func TestAgentSecurityModule_RequestCreds_BadUid(t *testing.T) {
 		t.Errorf("Expected no error, got %+v", err)
 	}
 
-	expectCredResp(t, respBytes, int32(drpc.DaosMiscError), false)
+	expectCredResp(t, respBytes, int32(daos.MiscError), false)
 }
