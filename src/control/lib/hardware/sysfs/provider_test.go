@@ -1097,14 +1097,10 @@ func TestSysfs_condenseNetDevState(t *testing.T) {
 	}
 }
 
-func setupTestIsIOMMUEnabled(t *testing.T, root string, createDMARDir bool) {
+func setupTestIsIOMMUEnabled(t *testing.T, root string, extraDirs ...string) {
 	t.Helper()
 
-	dirs := []string{root, "class", "iommu"}
-
-	if createDMARDir {
-		dirs = append(dirs, "dmar0")
-	}
+	dirs := append([]string{root}, extraDirs...)
 
 	path := filepath.Join(dirs...)
 	os.MkdirAll(path, 0755)
@@ -1113,7 +1109,7 @@ func setupTestIsIOMMUEnabled(t *testing.T, root string, createDMARDir bool) {
 func TestSysfs_Provider_IsIOMMUEnabled(t *testing.T) {
 	for name, tc := range map[string]struct {
 		nilProvider bool
-		createDMARs bool
+		extraDirs   []string
 		expResult   bool
 		expErr      error
 	}{
@@ -1121,11 +1117,16 @@ func TestSysfs_Provider_IsIOMMUEnabled(t *testing.T) {
 			nilProvider: true,
 			expErr:      errors.New("provider is nil"),
 		},
-		"iommu enabled": {
-			createDMARs: true,
-			expResult:   true,
+		"missing iommu dir": {
+			extraDirs: []string{"class"},
 		},
-		"iommu disabled": {},
+		"iommu disabled": {
+			extraDirs: []string{"class", "iommu"},
+		},
+		"iommu enabled": {
+			extraDirs: []string{"class", "iommu", "dmar0"},
+			expResult: true,
+		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			testDir, cleanupTestDir := test.CreateTestDir(t)
@@ -1138,7 +1139,7 @@ func TestSysfs_Provider_IsIOMMUEnabled(t *testing.T) {
 			if !tc.nilProvider {
 				p = NewProvider(log)
 				p.root = testDir
-				setupTestIsIOMMUEnabled(t, testDir, tc.createDMARs)
+				setupTestIsIOMMUEnabled(t, testDir, tc.extraDirs...)
 			}
 
 			result, err := p.IsIOMMUEnabled()
