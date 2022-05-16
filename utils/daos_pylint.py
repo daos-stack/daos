@@ -7,9 +7,7 @@ from pylint.lint import pylinter
 from collections import Counter
 import subprocess  # nosec
 import sys
-
-# Test against python 3.6 as this is what CentOS 7.9 is using.
-MIN_PY_VER = '3.6'
+import sl.check_script
 
 
 def parse_file(target_file):
@@ -17,13 +15,17 @@ def parse_file(target_file):
 
     rep = CollectingReporter()
 
+    wrapper = None
+
     if isinstance(target_file, list):
         target = list(target_file)
         target.extend(['--jobs', '100'])
+    elif target_file.endswith('SConstruct') or target_file.endswith('SConscript'):
+        wrapper = sl.check_script.WrapScript(target_file)
+        target = [wrapper.wrap_file]
     else:
         target = [target_file]
 
-    target.extend(['--py-version', MIN_PY_VER])
     target.extend(['--persistent', 'n'])
 
     results = Run(target, reporter=rep, do_exit=False)
@@ -39,8 +41,12 @@ def parse_file(target_file):
             if ":avocado:" in msg.msg:
                 continue
 
-        vals['path'] = msg.path
-        vals['line'] = msg.line
+        if wrapper:
+            vals['path'] = target_file
+            vals['line'] = wrapper.convert_line(msg.line)
+        else:
+            vals['path'] = msg.path
+            vals['line'] = msg.line
         vals['column'] = msg.column
         vals['message-id'] = msg.msg_id
         vals['message'] = msg.msg
@@ -79,9 +85,16 @@ def run_input_file():
     with open('utils/to-check') as fd:
         for file in fd.readlines():
             file = file.strip()
-            if not file.endswith('.py'):
-                continue
             if file.startswith('src/control/vendor/'):
+                continue
+            match = False
+            if file.endswith('.py'):
+                match = True
+            if file.endswith('SConstruct'):
+                match = True
+            if file.endswith('SConscript'):
+                match = True
+            if not match:
                 continue
 #            print(file)
             parse_file(file)

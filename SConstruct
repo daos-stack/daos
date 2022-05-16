@@ -6,7 +6,6 @@ import subprocess
 import time
 import errno
 import SCons.Warnings
-from SCons.Script import BUILD_TARGETS
 
 if sys.version_info.major < 3:
     print(""""Python 2.7 is no longer supported in the DAOS build.
@@ -55,7 +54,7 @@ def update_rpm_version(version, tag):
     release = 0
     for line_num, line in enumerate(spec):
         if line.startswith("Version:"):
-            current_version = line[line.rfind(' ')+1:].rstrip()
+            current_version = line[line.rfind(' ') + 1:].rstrip()
             if version < current_version:
                 print("You cannot create a new version ({}) lower than the RPM "
                       "spec file has currently ({})".format(version,
@@ -89,10 +88,10 @@ def update_rpm_version(version, tag):
             spec.insert(line_num + 1,
                         "- Version bump up to {}\n".format(tag))
             spec.insert(line_num + 1,
-                        u'* {} {} - {}-{}\n'.format(date_str,
-                                                    packager,
-                                                    version,
-                                                    release))
+                        '* {} {} - {}-{}\n'.format(date_str,
+                                                   packager,
+                                                   version,
+                                                   release))
             break
     open("utils/rpms/daos.spec", "w").writelines(spec)
 
