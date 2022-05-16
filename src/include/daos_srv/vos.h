@@ -289,6 +289,14 @@ int
 vos_pool_open(const char *path, uuid_t uuid, unsigned int flags,
 	      daos_handle_t *poh);
 
+/** Enable any version specific features on the pool
+ *
+ * \param poh	[IN]	Container open handle
+ * \param feats	[IN]	Features to enable
+ */
+void
+vos_pool_features_set(daos_handle_t poh, uint64_t feats);
+
 /**
  * Extended vos_pool_open() with an additional 'metrics' parameter to VOS telemetry.
  */

@@ -1,0 +1,236 @@
+#!/bin/bash
+# shellcheck disable=SC1000-SC9999
+
+set -o pipefail
+
+VERSION=0.1
+CWD="$(realpath "$(dirname $0)")"
+
+DAOS_INSTALL_DIR="{{ daos_runtime_dir }}/install"
+DAOS_SOURCE_DIR="{{ daos_source_dir }}"
+{% if daos_ofi_interface is defined %}
+OFI_INTERFACE="{{ daos_ofi_interface }}"
+{% endif %}
+SERVERS_LIST="{{ groups["daos_servers"] | join(',') }}"
+{% if "daos_clients" in groups and groups["daos_clients"] | length > 0 %}
+CLIENTS_LIST="{{ groups["daos_clients"] | join(',') }}"
+{% endif %}
+MODULE_OPENMPI_PATH="{{daos_openmpi_module_path }}"
+
+PYTHON_EXE=python3
+CLUSH_EXE=clush
+MODULE_EXE=module
+
+ANSI_COLOR_BLACK=30
+ANSI_COLOR_RED=31
+ANSI_COLOR_GREEN=32
+ANSI_COLOR_YELLOW=33
+ANSI_COLOR_BLUE=34
+ANSI_COLOR_MAGENTA=35
+ANSI_COLOR_CYAN=36
+ANSI_COLOR_WHITE=37
+ANSI_COLOR_BRIGHT_BLACK=90
+ANSI_COLOR_BRIGHT_RED=91
+ANSI_COLOR_BRIGHT_GREEN=92
+ANSI_COLOR_BRIGHT_YELLOW=93
+ANSI_COLOR_BRIGHT_BLUE=94
+ANSI_COLOR_BRIGHT_MAGENTA=95
+ANSI_COLOR_BRIGHT_CYAN=96
+ANSI_COLOR_BRIGHT_WHITE=97
+
+TRACE_LEVEL_QUIET=-1
+TRACE_LEVEL_STANDARD=0
+TRACE_LEVEL_VERBOSE=1
+TRACE_LEVEL_DEBUG=2
+TRACE_LEVEL=$TRACE_LEVEL_STANDARD
+
+function debug
+{
+	if [[ $TRACE_LEVEL -ge $TRACE_LEVEL_DEBUG ]]
+	then
+		echo -e "[\e[${ANSI_COLOR_GREEN}mDEBUG  \e[00m] $@"
+	fi
+}
+
+
+function info
+{
+	if [[ $TRACE_LEVEL -ge $TRACE_LEVEL_VERBOSE ]]
+	then
+		echo -e "[\e[${ANSI_COLOR_CYAN}mINFO   \e[00m] $@"
+	fi
+}
+
+function warning
+{
+	if [[ $TRACE_LEVEL -ge $TRACE_LEVEL_STANDARD ]]
+	then
+		echo -e "[\e[${ANSI_COLOR_YELLOW}mWARNING\e[00m] $@" 1>&2
+	fi
+}
+
+function error
+{
+	if [[ $TRACE_LEVEL -ge $TRACE_LEVEL_STANDARD ]]
+	then
+		echo -e "[\e[${ANSI_COLOR_BRIGHT_RED}mERROR  \e[00m] $@" 1>&2
+	fi
+}
+
+function fatal
+{
+	if [[ $TRACE_LEVEL -ge $TRACE_LEVEL_STANDARD ]]
+	then
+		echo -e "[\e[${ANSI_COLOR_RED}mFATAL  \e[00m] $@" 1>&2
+	fi
+	exit 1
+}
+
+function check_cmds
+{
+	for cmd in $@
+	do
+		{ hash $cmd > "/dev/null" 2>&1 ; } || { fatal "$cmd command not installed" ; }
+	done
+}
+
+function usage
+{
+	cat <<- EOF
+		usage: daos-launch.sh [OPTIONS] [-- ARGS]
+
+		Launch DAOS avocado functional tests
+
+		Options:
+		   -s, --start-cleanup      cleanup platform before starting tests
+		   -e, --end-cleanup        cleanup platform after running the tests
+		   -h, --help               show this help message and exit
+		   -V, --version            show version number
+		   -q, --quiet              quiet mode
+		   -v, --verbose            verbose mode
+		   -D, --debug              debug mode
+	EOF
+}
+
+function run
+{
+	if [[ $TRACE_LEVEL -ge $TRACE_LEVEL_STANDARD ]]
+	then
+		"$@"
+	else
+		"$@" &> /dev/null
+	fi
+}
+
+function cleanup
+{
+
+{% if "daos_clients" in groups and groups["daos_clients"] | length > 0 %}
+	info "Clean up of clients $CLIENTS_LIST"
+	$CLUSH_EXE -l root -w $CLIENTS_LIST sudo systemctl stop daos_agent
+	$CLUSH_EXE -l root -w $CLIENTS_LIST rm -rf /var/run/daos_agent
+	$CLUSH_EXE -l root -w $CLIENTS_LIST mkdir -p /var/run/daos_agent
+{% endif %}
+
+	info "Clean up of servers $SERVERS_LIST"
+	$CLUSH_EXE -l root -w $SERVERS_LIST sudo systemctl stop daos_server
+	$CLUSH_EXE -l root -w $SERVERS_LIST rm -rf /var/run/daos_server
+	$CLUSH_EXE -l root -w $SERVERS_LIST mkdir -p /var/run/daos_server
+
+	info "Stopping all DAOS processes"
+{% if "daos_clients" in groups and groups["daos_clients"] | length > 0 %}
+	CLUSH_NODESET="-w $SERVERS_LIST -w $CLIENTS_LIST"
+{% else %}
+	CLUSH_NODESET="-w $SERVERS_LIST"
+{% endif %}
+	$CLUSH_EXE -l root $CLUSH_NODESET 'bash -c "killall -q -9 avocado orterun mpirun orted daos_server daos_io_server daos_agent || true"'
+
+	info "Cleaning mount points of servers"
+	for host in {{ groups["daos_servers"] | join(' ') }}
+	do
+		for index in {0..3}
+		do
+			mountpoint="/mnt/daos$index"
+			if ssh root@$host mountpoint -q "$mountpoint" ; then
+				info "Cleaning mount points $mountpoint of host $host"
+				ssh root@$host rm -fr /mnt/daos0/*
+				ssh root@$host umount /mnt/daos0
+			fi
+		done
+
+		for index in {0..1}
+		do
+			bdev="/dev/pmem$index"
+			if ssh root@$host test -b "$bdev" ; then
+				info "Cleaning persistent memory $bdev of host $host"
+				ssh root@$host wipefs -a "$bdev"
+			fi
+		done
+	done
+
+	info "Cleaning huge pages"
+	$CLUSH_EXE -l root -w $SERVERS_LIST ipcrm --all=shm
+	$CLUSH_EXE -l root -w $SERVERS_LIST /bin/rm -f "/dev/hugepages/spdk_*"
+}
+
+{% raw %}
+opts=()
+args=()
+for item in "$@" ; do
+	if [[ ${#args} -eq 0 && "$item" != "--" ]] ; then
+		[[ ${item::1} == "-" ]] || fatal "unrecognized option \"$item\""
+		opts+=("$item")
+	else
+		args+=("$item")
+	fi
+done
+args=("${args[@]:1}")
+{% endraw %}
+
+OPTIONS=$(getopt -o "sehVvDq" --long "start-cleanup,end-cleanup,help,version,verbose,debug,quiet" -- "${opts[@]}") || exit 1
+eval set -- "$OPTIONS"
+while true
+do
+	case "$1" in
+		-s|--start-cleanup) START_CLEANUP=true ; shift 1;;
+		-e|--end-cleanup) END_CLEANUP=true ; shift 1;;
+		-h|--help) usage ; exit 0;;
+		-V|--version) echo "daos-launch.sh version=$VERSION" ; exit 0 ;;
+		-v|--verbose) TRACE_LEVEL=$TRACE_LEVEL_VERBOSE ; shift 1 ;;
+		-D|--debug) TRACE_LEVEL=$TRACE_LEVEL_DEBUG ; set -x ; shift 1 ;;
+		-q|--quiet) TRACE_LEVEL=$TRACE_LEVEL_QUIET ; shift 1 ;;
+		--) shift ; break ;;
+		*) fatal "unrecognized option" ;;
+	esac
+done
+
+check_cmds $PYTHON_EXE $CLUSH_EXE $MODULE_EXE
+
+if [[ -n $START_CLEANUP ]] ; then
+	cleanup
+fi
+
+info "Setting simulation environment"
+export PYTHONPATH="$DAOS_INSTALL_DIR/lib64/python3.6/site-packages:$DAOS_INSTALL_DIR/lib/daos/TESTING/ftest/util"
+cd "$DAOS_SOURCE_DIR/utils/sl"
+source setup_local.sh build_vars-Linux.sh
+$MODULE_EXE load /etc/modulefiles/mpi/mlnx_openmpi-x86_64
+
+info "Parametrization of the simulation"
+cd "$DAOS_INSTALL_DIR/lib/daos/TESTING/ftest"
+{% if "daos_clients" in groups and groups["daos_clients"] | length > 0 %}
+common_opts="-card --test_servers=$SERVERS_LIST --test_clients=$CLIENTS_LIST"
+{% else %}
+common_opts="-card --test_servers=$SERVERS_LIST"
+{% endif %}
+
+info "Starting functional test simulation"
+{% if daos_ofi_interface is defined %}
+env OFI_INTERFACE=$OFI_INTERFACE $PYTHON_EXE launch.py $common_opts "${args[@]}"
+{% else %}
+$PYTHON_EXE launch.py $common_opts "${args[@]}"
+{% endif %}
+
+if [[ -n $END_CLEANUP ]] ; then
+	cleanup
+fi
