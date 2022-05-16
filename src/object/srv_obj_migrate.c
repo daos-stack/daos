@@ -360,6 +360,7 @@ struct migrate_pool_tls_create_arg {
 	uuid_t  co_hdl_uuid;
 	d_rank_list_t *svc_list;
 	uint64_t max_eph;
+	uint64_t global_version;
 	int	version;
 	uint32_t opc;
 };
@@ -400,6 +401,7 @@ migrate_pool_tls_create_one(void *data)
 	uuid_copy(pool_tls->mpt_pool_uuid, arg->pool_uuid);
 	uuid_copy(pool_tls->mpt_poh_uuid, arg->pool_hdl_uuid);
 	uuid_copy(pool_tls->mpt_coh_uuid, arg->co_hdl_uuid);
+	pool_tls->mpt_global_version = arg->global_version;
 	pool_tls->mpt_version = arg->version;
 	pool_tls->mpt_rec_count = 0;
 	pool_tls->mpt_obj_count = 0;
@@ -455,6 +457,11 @@ migrate_pool_tls_lookup_create(struct ds_pool *pool, int version,
 
 	entry = daos_prop_entry_get(prop, DAOS_PROP_PO_SVC_LIST);
 	D_ASSERT(entry != NULL);
+	arg.svc_list = (d_rank_list_t *)entry->dpe_val_ptr;
+	arg.global_version = 0;
+	entry = daos_prop_entry_get(prop, DAOS_PROP_PO_GLOBAL_VERSION);
+	if (entry != NULL)
+		arg.global_version = entry->dpe_val;
 
 	uuid_copy(arg.pool_uuid, pool->sp_uuid);
 	uuid_copy(arg.pool_hdl_uuid, pool_hdl_uuid);
@@ -462,7 +469,7 @@ migrate_pool_tls_lookup_create(struct ds_pool *pool, int version,
 	arg.version = version;
 	arg.opc = opc;
 	arg.max_eph = max_eph;
-	arg.svc_list = (d_rank_list_t *)entry->dpe_val_ptr;
+
 	rc = dss_task_collective(migrate_pool_tls_create_one, &arg, 0);
 	if (rc != 0) {
 		D_ERROR(DF_UUID": failed to create migrate tls: "DF_RC"\n",
@@ -1392,6 +1399,9 @@ migrate_get_cont_child(struct migrate_pool_tls *tls, uuid_t cont_uuid,
 			return rc;
 		}
 	}
+
+	if (tls->mpt_global_version >= 1)
+		vos_pool_features_set(cont_child->sc_pool->spc_hdl, VOS_POOL_FEAT_AGG_OPT);
 
 	*cont_p = cont_child;
 	return rc;
