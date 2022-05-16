@@ -137,7 +137,7 @@ def install_go_bin(denv, gosrc, libs, name, install_name):
                   get_build_tags(denv), build_bin, install_src))
     # Use the intermediate build location in order to play nicely
     # with --install-sandbox.
-    denv.Requires(build_bin, [gurt_lib, common])
+    denv.Requires(build_bin, [common])
     denv.InstallAs(install_bin, build_bin)
     return install_bin
 # pylint: enable=too-many-arguments

@@ -362,7 +362,7 @@ ioil_fini(void)
 	pid_t             tid = syscall(SYS_gettid);
 
 	if (tid != ioil_iog.iog_init_tid) {
-		DFUSE_TRA_ERROR(&ioil_iog, "Ignoring destructor from alternate thread");
+		DFUSE_TRA_INFO(&ioil_iog, "Ignoring destructor from alternate thread");
 		return;
 	}
 

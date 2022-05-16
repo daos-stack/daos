@@ -24,12 +24,12 @@ dfuse: !mux
     disable_wb_cache: true
     name: "writethrough"
   # metadata:
-  #  # !filter-only : "/run/intercept/off"  # yamllint disable-line rule:colons
+  #  !filter-only : "/run/intercept/off"  # yamllint disable-line rule:colons
   #  mount_dir: "/tmp/daos_dfuse"
   #  disable_wb_cache: true
   #  name: "metadata"
   nocache:
-    !filter-only : "/run/intercept/off"  # yamllint disable-line rule:colons
+    # !filter-only : "/run/intercept/off"  # yamllint disable-line rule:colons
     mount_dir: "/tmp/daos_dfuse/"
     disable_wb_cache: true
     disable_caching: true
