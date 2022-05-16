@@ -6,6 +6,7 @@ import subprocess
 import time
 import errno
 import SCons.Warnings
+from SCons.Script import COMMAND_LINE_TARGETS
 
 if sys.version_info.major < 3:
     print(""""Python 2.7 is no longer supported in the DAOS build.

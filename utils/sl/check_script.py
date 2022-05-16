@@ -33,14 +33,17 @@ from distutils.spawn import find_executable
 class WrapScript():
     """Create a wrapper for a scons file and maintain a line mapping"""
 
-    def __init__(self, fname):
+    def __init__(self, fname, output='script'):
 
         self.line_map = {}
-        self.wrap_file = 'script'
+        self.wrap_file = output
 
-        with open('script', 'w', encoding='utf-8') as outfile:
+        with open(self.wrap_file, 'w', encoding='utf-8') as outfile:
             with open(fname, 'r', encoding='utf-8') as infile:
                 self._read_files(infile, outfile)
+
+    def __del__(self):
+        os.unlink(self.wrap_file)
 
     def _read_files(self, infile, outfile):
         old_lineno = 1
@@ -146,7 +149,6 @@ from SCons.Variables import * # pylint: disable=import-outside-toplevel,wildcard
 
     def fix_log(self, log_file, fname):
         """Get the line number"""
-        os.unlink("script")
         log_file.seek(0)
         output = tempfile.TemporaryFile(mode='w+', encoding='utf-8')
         for line in log_file.readlines():

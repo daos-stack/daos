@@ -12,7 +12,6 @@ import sl.check_script
 
 def parse_file(target_file):
     """Main program"""
-
     rep = CollectingReporter()
 
     wrapper = None
@@ -21,13 +20,12 @@ def parse_file(target_file):
         target = list(target_file)
         target.extend(['--jobs', '100'])
     elif target_file.endswith('SConstruct') or target_file.endswith('SConscript'):
-        wrapper = sl.check_script.WrapScript(target_file)
+        wrapper = sl.check_script.WrapScript(target_file, output=f'{target_file}.pycheck')
         target = [wrapper.wrap_file]
     else:
         target = [target_file]
 
     target.extend(['--persistent', 'n'])
-
     results = Run(target, reporter=rep, do_exit=False)
 
     types = Counter()
@@ -120,9 +118,10 @@ def main():
             return
         parse_file(sys.argv[1])
     else:
+        parse_file('SConstruct')
+        parse_file('src/SConscript')
         parse_file('utils/node_local_test.py')
         parse_file('ci/gha_helper.py')
-        parse_file('SConstruct')
 
 
 if __name__ == "__main__":
