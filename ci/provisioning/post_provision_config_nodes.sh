@@ -107,7 +107,7 @@ rm -f  /etc/yum/vars/releasever
 # and catted to the remote node along with this script
 post_provision_config_nodes
 
-# Woraround to enable binding devices back to nvme or vfio-pci after they are unbound from vfio-pci
+# Workaround to enable binding devices back to nvme or vfio-pci after they are unbound from vfio-pci
 # to nvme.  Sometimes the device gets unbound from vfio-pci, but it is not removed the iommu group
 # for that device and future bindings to the device do not work, resulting in messages like, "NVMe
 # SSD [xxxx:xx:xx.x] not found" when starting daos engines.
