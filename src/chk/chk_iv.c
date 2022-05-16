@@ -15,14 +15,6 @@
 #include "chk_internal.h"
 
 static int
-chk_engine_notify(uint64_t gen, uuid_t uuid, d_rank_t rank, uint32_t phase,
-		  uint32_t status, bool remove_pool)
-{
-	/* XXX: to be implemented in subsequent patch. */
-	return 0;
-}
-
-static int
 chk_iv_alloc_internal(d_sg_list_t *sgl)
 {
 	int	rc;
