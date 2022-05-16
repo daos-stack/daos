@@ -246,7 +246,7 @@ func (c *Config) GetEnvVar(name string) (string, error) {
 
 	env = mergeEnvVars(cleanEnvVars(os.Environ(), c.EnvPassThrough), env)
 
-	for _, keyPair := range c.EnvVars {
+	for _, keyPair := range mergeEnvVars(c.EnvVars, env) {
 		keyValue := strings.SplitN(keyPair, "=", 2)
 		if keyValue[0] == name {
 			return keyValue[1], nil
@@ -438,20 +438,14 @@ func (c *Config) WithStorageAccelEngine(name string) *Config {
 	return c
 }
 
-// WithStorageAccelOptMove sets the acceleration move option for the I/O Engine instance.
-func (c *Config) WithStorageAccelOptMove(b bool) *Config {
-	c.Storage.AccelProps.AccelOptMove = b
+// WithStorageAccelOpts sets the acceleration option string slice for the I/O Engine instance.
+func (c *Config) WithStorageAccelOpts(opts ...string) *Config {
+	c.Storage.AccelProps.AccelOpts = opts
 	return c
 }
 
-// WithStorageAccelOptCRC sets the acceleration CRC option for the I/O Engine instance.
-func (c *Config) WithStorageAccelOptCRC(b bool) *Config {
-	c.Storage.AccelProps.AccelOptCRC = b
-	return c
-}
-
-// WithStorageAccelOpts sets the acceleration option bit mask for the I/O Engine instance.
-func (c *Config) WithStorageAccelOpts(mask uint16) *Config {
-	c.Storage.AccelProps.AccelOpts = mask
+// WithStorageAccelOptMask sets the acceleration option bit mask for the I/O Engine instance.
+func (c *Config) WithStorageAccelOptMask(mask uint16) *Config {
+	c.Storage.AccelProps.AccelOptMask = mask
 	return c
 }

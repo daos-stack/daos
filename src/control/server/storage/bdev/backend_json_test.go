@@ -23,6 +23,13 @@ import (
 	"github.com/daos-stack/daos/src/control/server/storage"
 )
 
+const (
+	mockAccelOptMaskAllSet = 0b11
+	mockAccelEngineSPDK    = "spdk"
+)
+
+var mockAccelOptsAllSet = []string{"move", "crc"}
+
 // TestBackend_newSpdkConfig verifies config parameters for bdev get
 // converted into config content that can be consumed by spdk.
 func TestBackend_newSpdkConfig(t *testing.T) {
@@ -66,8 +73,7 @@ func TestBackend_newSpdkConfig(t *testing.T) {
 		busidRange         string
 		vosEnv             string
 		accelEngine        string
-		accelOptCRC        bool
-		accelOptMove       bool
+		accelOptMask       uint16
 		expExtraSubsystems []*SpdkSubsystem
 		expBdevCfgs        []*SpdkSubsystemConfig
 		expDaosCfgs        []*DaosConfig
@@ -170,19 +176,16 @@ func TestBackend_newSpdkConfig(t *testing.T) {
 		},
 		"multiple controllers; acceleration set to spdk; move and crc opts specified": {
 			class:        storage.ClassNvme,
-			devList:      []string{common.MockPCIAddr(1), common.MockPCIAddr(2)},
-			accelEngine:  "spdk",
-			accelOptCRC:  true,
-			accelOptMove: true,
+			devList:      []string{test.MockPCIAddr(1), test.MockPCIAddr(2)},
+			accelEngine:  mockAccelEngineSPDK,
+			accelOptMask: mockAccelOptMaskAllSet,
 			expBdevCfgs:  multiCtrlrConfs(),
 			expDaosCfgs: []*DaosConfig{
 				{
 					Method: storage.ConfSetAccelProps,
 					Params: AccelPropsParams{
-						AccelEngine:  "spdk",
-						AccelOptMove: true,
-						AccelOptCRC:  true,
-						AccelOpts:    0b11, // verify bitmask calculated on Validate()
+						AccelEngine:  mockAccelEngineSPDK,
+						AccelOptMask: mockAccelOptMaskAllSet,
 					},
 				},
 			},
@@ -224,8 +227,7 @@ func TestBackend_newSpdkConfig(t *testing.T) {
 				WithStorageEnableHotplug(tc.enableHotplug).
 				WithPinnedNumaNode(0).
 				WithStorageAccelEngine(tc.accelEngine).
-				WithStorageAccelOptCRC(tc.accelOptCRC).
-				WithStorageAccelOptMove(tc.accelOptMove)
+				WithStorageAccelOptMask(tc.accelOptMask)
 
 			gotValidateErr := engineConfig.Validate() // populate output path
 			test.CmpErr(t, tc.expValidateErr, gotValidateErr)

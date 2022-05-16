@@ -95,8 +95,7 @@ func TestBackend_writeJSONFile(t *testing.T) {
 		enableHotplug     bool
 		hotplugBusidRange string
 		accelEngine       string
-		accelOptCRC       bool
-		accelOptMove      bool
+		accelOpts         []string
 		accelOptMask      uint16
 		expErr            error
 		expOut            string
@@ -512,10 +511,10 @@ func TestBackend_writeJSONFile(t *testing.T) {
 					DeviceList: storage.MustNewBdevDeviceList(common.MockPCIAddrs(1)...),
 				},
 			},
-			accelEngine:  "spdk",
-			accelOptCRC:  true, // verify only mask is included in JSON, not individual flags
-			accelOptMove: true,
-			accelOptMask: 0b11,
+			accelEngine: "spdk",
+			// verify only mask is included in JSON, not individual flags
+			accelOpts:    mockAccelOptsAllSet,
+			accelOptMask: mockAccelOptMaskAllSet,
 			expOut: `
 {
   "daos_data": {
@@ -596,9 +595,8 @@ func TestBackend_writeJSONFile(t *testing.T) {
 				WithStorageConfigOutputPath(cfgOutputPath).
 				WithStorageEnableHotplug(tc.enableHotplug).
 				WithStorageAccelEngine(tc.accelEngine).
-				WithStorageAccelOptCRC(tc.accelOptCRC).
-				WithStorageAccelOptMove(tc.accelOptMove).
-				WithStorageAccelOpts(tc.accelOptMask)
+				WithStorageAccelOpts(tc.accelOpts...).
+				WithStorageAccelOptMask(tc.accelOptMask)
 
 			req, err := storage.BdevWriteConfigRequestFromConfig(context.TODO(), log,
 				&engineConfig.Storage, tc.enableVmd, storage.MockGetTopology)

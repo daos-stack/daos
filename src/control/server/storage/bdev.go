@@ -49,50 +49,68 @@ const (
 	ConfSetAccelProps            = C.NVME_CONF_SET_ACCEL_PROPS
 )
 
-// AccelEngineNative is the default acceleration engine setting.
-const AccelEngineNative = C.NVME_ACCEL_NATIVE
-
 // validateAccelProps validates the provided accceleration properties.
 func validateAccelProps(props *AccelProps) error {
 	if props == nil {
 		return errors.New("nil AccelProps")
 	}
+
 	// Apply default if "accel_engine" unset in config.
 	if props.AccelEngine == "" {
-		props.AccelEngine = AccelEngineNative
-	}
-	// No acceleration if setting is "native" (default).
-	if props.AccelEngine == AccelEngineNative {
-		props.AccelOptMove = false
-		props.AccelOptCRC = false
-		props.AccelOpts = 0
-
-		return nil
+		props.AccelEngine = C.NVME_ACCEL_NONE
 	}
 
-	var result C.bool
-	cStr := C.CString(props.AccelEngine)
-	defer C.free(unsafe.Pointer(cStr))
-
-	// Check provided engine setting string is supported.
-	rc := C.nvme_conf_validate_accel_engine(cStr, &result)
-	if rc != 0 {
-		return errors.Errorf("nvme_conf_validate_accel_engine returned rc: %d", rc)
-	}
-	if result != C.bool(true) {
-		return FaultBdevAccelEngineUnknown(props.AccelEngine)
+	switch props.AccelEngine {
+	case C.NVME_ACCEL_NONE, C.NVME_ACCEL_SPDK, C.NVME_ACCEL_DML:
+	default:
+		return FaultBdevAccelEngineUnknown(props.AccelEngine, C.NVME_ACCEL_SPDK, C.NVME_ACCEL_DML)
 	}
 
-	var flags C.uint16_t
-	move := C.bool(props.AccelOptMove)
-	crc := C.bool(props.AccelOptCRC)
+	return nil
+}
 
-	// Set bitmask of enabled optional acceleration capabilities from individual flags.
-	rc = C.nvme_conf_get_accel_optmask(move, crc, &flags)
-	if rc != 0 {
-		return errors.Errorf("nvme_conf_get_accel_optmask returned rc: %d", rc)
+type optFlagMap map[string]uint16
+
+func (aosf optFlagMap) keys() []string {
+	keys := make([]string, len(aosf))
+	for k := range aosf {
+		keys = append(keys, k)
 	}
-	props.AccelOpts = uint16(flags)
+
+	return keys
+}
+
+var accelOptStr2Flag = optFlagMap{
+	"move": C.NVME_ACCEL_FLAG_MOVE,
+	"crc":  C.NVME_ACCEL_FLAG_CRC,
+}
+
+// setAccelOptMask converts acceleration option strings into a bitmask.
+func setAccelOptMask(props *AccelProps) error {
+	if props == nil {
+		return errors.New("nil AccelProps")
+	}
+
+	props.AccelOptMask = 0
+
+	switch props.AccelEngine {
+	case C.NVME_ACCEL_NONE:
+		props.AccelOpts = nil
+	case C.NVME_ACCEL_SPDK, C.NVME_ACCEL_DML:
+		if len(props.AccelOpts) == 0 {
+			// If no option list specified, enable all.
+			props.AccelOpts = []string{"move", "crc"}
+		}
+		for _, opt := range props.AccelOpts {
+			flag, exists := accelOptStr2Flag[opt]
+			if !exists {
+				return FaultBdevAccelOptionUnknown(opt, accelOptStr2Flag.keys()...)
+			}
+			props.AccelOptMask |= flag
+		}
+	default:
+		return FaultBdevAccelEngineUnknown(props.AccelEngine, C.NVME_ACCEL_SPDK, C.NVME_ACCEL_DML)
+	}
 
 	return nil
 }
