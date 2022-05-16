@@ -145,7 +145,8 @@ def build_misc():
     except SCons.Warnings.MissingSConscriptWarning as _warn:
         print("Missing doc/man/SConscript...")
 
-def scons(): # pylint: disable=too-many-locals
+
+def scons():  # pylint: disable=too-many-locals,too-many-branches
     """Execute build"""
     if COMMAND_LINE_TARGETS == ['release']:
         try:
@@ -339,6 +340,17 @@ def scons(): # pylint: disable=too-many-locals
         Exit(0)
 
     env = Environment(TOOLS=['extra', 'default', 'textfile'])
+
+    # Scons strips out the environment, however to be able to build daos using the interception
+    # library we need to add a few things back in.
+    if 'LD_PRELOAD' in os.environ:
+        # pylint: disable=invalid-sequence-index
+        env['ENV']['LD_PRELOAD'] = os.environ['LD_PRELOAD']
+
+        for key in ['D_LOG_FILE', 'DAOS_AGENT_DRPC_DIR', 'D_LOG_MASK', 'DD_MASK', 'DD_SUBSYS']:
+            value = os.environ.get(key, None)
+            if value is not None:
+                env['ENV'][key] = value
 
     opts_file = os.path.join(Dir('#').abspath, 'daos.conf')
     opts = Variables(opts_file)
