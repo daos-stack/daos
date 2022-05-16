@@ -348,7 +348,7 @@ compare_logs(uint64_t x_last_term, uint64_t x_last_index,
  * of one PS, and report if this PS requires catastrophic recovery or not.
  *
  * \param[in]	clues		pool clues for one PS
- * \param[out]	advice_out	when the return value is 1, the index of the
+ * \param[out]	advice_out	when the return value is >0, the index of the
  *				advised replica in \a clues to rebootstrap the
  *				PS from
  *
