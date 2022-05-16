@@ -351,7 +351,7 @@ crt_plugin_fini(void)
 static void
 __split_arg(char *s_arg_to_split, char **first_arg, char **second_arg)
 {
-	char	*save_ptr;
+	char	*save_ptr = NULL;
 	char	*arg_to_split;
 
 	D_ASSERT(first_arg != NULL);
