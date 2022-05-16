@@ -522,3 +522,42 @@ mock_ds_mgmt_pool_upgrade_setup(void)
 	ds_mgmt_pool_upgrade_return = 0;
 	uuid_clear(ds_mgmt_pool_upgrade_uuid);
 }
+
+int
+ds_mgmt_check_start(uint32_t rank_nr, d_rank_t *ranks, uint32_t policy_nr,
+		    struct chk_policy **policies, uint32_t pool_nr, uuid_t pools[],
+		    uint32_t flags, int32_t phase)
+{
+	return 0;
+}
+
+int
+ds_mgmt_check_stop(uint32_t pool_nr, uuid_t pools[])
+{
+	return 0;
+}
+
+int
+ds_mgmt_check_query(uint32_t pool_nr, uuid_t pools[], chk_query_head_cb_t head_cb,
+		    chk_query_pool_cb_t pool_cb, void *buf)
+{
+	return 0;
+}
+
+int
+ds_mgmt_check_prop(chk_prop_cb_t prop_cb, void *buf)
+{
+	return 0;
+}
+
+int
+ds_mgmt_check_act(uint64_t seq, uint32_t act, bool for_all)
+{
+	return 0;
+}
+
+bool
+ds_mgmt_check_enabled(void)
+{
+	return true;
+}
