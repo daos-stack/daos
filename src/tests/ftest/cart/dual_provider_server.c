@@ -190,21 +190,23 @@ int main(int argc, char **argv)
 	}
 
 	if (num_primary_ctx > NUM_PRIMARY_CTX_MAX) {
-		printf("Error: Exceeded max alllowed %d for primary ctx\n", NUM_PRIMARY_CTX_MAX);
+		printf("Error: Exceeded max alllowed %d for primary ctx\n",
+		       NUM_PRIMARY_CTX_MAX);
 		return -1;
 	}
 
 	if (num_secondary_ctx > NUM_SECONDARY_CTX_MAX) {
-		printf("Error: Exceeded max alllowed %d for secondary ctx\n", NUM_SECONDARY_CTX_MAX);
+		printf("Error: Exceeded max alllowed %d for secondary ctx\n",
+		       NUM_SECONDARY_CTX_MAX);
 		return -1;
 	}
 
 	printf("----------------------------------------\n");
 	printf("My_rank: %d\n", g_my_rank);
 	printf("Provider0: '%s' Interface0: '%s' Domain0: '%s' #ctx: %d\n",
-		provider0, iface0, domain0, num_primary_ctx);
+	       provider0, iface0, domain0, num_primary_ctx);
 	printf("Provider1: '%s' Interface1: '%s' Domain1: '%s' #ctx: %d\n",
-		provider1, iface1, domain1, num_secondary_ctx);
+	       provider1, iface1, domain1, num_secondary_ctx);
 	printf("File to transfer: '%s'\n",
 	       arg_mmap_file ? arg_mmap_file : "none");
 	printf("----------------------------------------\n\n");
@@ -223,8 +225,8 @@ int main(int argc, char **argv)
 	init_opts.cio_domain = saved_domain;
 
 	rc = crt_init_opt(SERVER_GROUP_NAME,
-			CRT_FLAG_BIT_SERVER | CRT_FLAG_BIT_AUTO_SWIM_DISABLE,
-			&init_opts);
+			  CRT_FLAG_BIT_SERVER | CRT_FLAG_BIT_AUTO_SWIM_DISABLE,
+			  &init_opts);
 	if (rc != 0) {
 		D_ERROR("crt_init() failed; rc=%d\n", rc);
 		error_exit();
@@ -245,10 +247,8 @@ int main(int argc, char **argv)
 		printf("Primary context[%d] uri=%s\n", i, uri);
 
 		rc = pthread_create(&primary_progress_thread[i], 0, progress_fn, &primary_ctx[i]);
-		if (rc != 0) {
+		if (rc != 0)
 			error_exit();
-		}
-
 	}
 
 	for (i = 0;  i< num_secondary_ctx; i++) {
@@ -265,8 +265,8 @@ int main(int argc, char **argv)
 		}
 		printf("Secondary context[%d] uri=%s\n", i, uri);
 
-
-		rc = pthread_create(&secondary_progress_thread[i], 0, progress_fn, &secondary_ctx[i]);
+		rc = pthread_create(&secondary_progress_thread[i], 0,
+				    progress_fn, &secondary_ctx[i]);
 		if (rc != 0) {
 			error_exit();
 		}
@@ -310,7 +310,7 @@ int main(int argc, char **argv)
 
 			DBG_PRINT("Rank=%d uri='%s'\n", parsed_rank, parsed_addr);
 			rc = crt_group_primary_rank_add(primary_ctx[0], grp,
-						parsed_rank, parsed_addr);
+							parsed_rank, parsed_addr);
 
 			if (rc != 0) {
 				D_ERROR("Failed to add %d %s; rc=%d\n",
@@ -329,7 +329,8 @@ int main(int argc, char **argv)
 	if (rc)
 		error_exit();
 
-	DBG_PRINT("self_rank=%d uri=%s file=%s group_size=%d\n", g_my_rank, my_uri, env_group_cfg, grp_size);
+	DBG_PRINT("self_rank=%d uri=%s file=%s group_size=%d\n",
+		  g_my_rank, my_uri, env_group_cfg, grp_size);
 
 	D_FREE(my_uri);
 

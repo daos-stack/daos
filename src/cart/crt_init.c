@@ -364,6 +364,12 @@ __split_arg(char *s_arg_to_split, char **first_arg, char **second_arg)
 	}
 
 	D_STRNDUP(arg_to_split, s_arg_to_split, 255);
+	if (!arg_to_split) {
+		*first_arg = NULL;
+		*second_arg = NULL;
+		return;
+	}
+
 	*first_arg = 0;
 	*second_arg = 0;
 

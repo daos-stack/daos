@@ -127,7 +127,7 @@ handler_ping(crt_rpc_t *rpc)
 	ctx = rpc->cr_ctx;
 
 	DBG_PRINT("RPC arived on a %s context\n",
-		crt_context_is_primary(ctx) ? "primary" : "secondary");
+		  crt_context_is_primary(ctx) ? "primary" : "secondary");
 #if 1
 	if (g_my_rank == 100002) {
 		struct crt_bulk_desc	bulk_desc;
@@ -160,12 +160,11 @@ handler_ping(crt_rpc_t *rpc)
 		bulk_desc.bd_local_off = 0;
 		bulk_desc.bd_len = input->size2;
 		rc = crt_bulk_bind_transfer(&bulk_desc, bulk_transfer_done_cb,
-				       dst, NULL);
+					    dst, NULL);
 		if (rc != 0) {
 			D_ERROR("transfer failed; rc=%d\n", rc);
 			error_exit();
 		}
-		
 	}
 #endif
 
@@ -181,7 +180,7 @@ static int
 handler_shutdown(crt_rpc_t *rpc)
 {
 	crt_reply_send(rpc);
-	
+
 	do_shutdown = 1;
 	return 0;
 }
