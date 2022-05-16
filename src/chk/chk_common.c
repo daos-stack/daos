@@ -132,6 +132,8 @@ chk_pool_free(struct btr_instance *tins, struct btr_record *rec, void *args)
 		D_FREE(cps);
 	}
 
+	D_FREE(cpr->cpr_clues.pcs_array);
+
 	if (val_iov != 0)
 		d_iov_set(val_iov, cpr, sizeof(*cpr));
 	else
