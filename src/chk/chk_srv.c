@@ -50,13 +50,17 @@ ds_chk_rejoin_hdlr(crt_rpc_t *rpc)
 static int
 ds_chk_init(void)
 {
-	return 0;
+	int	rc;
+
+	rc = chk_iv_init();
+
+	return rc;
 }
 
 static int
 ds_chk_fini(void)
 {
-	return 0;
+	return chk_iv_fini();
 }
 
 static int
