@@ -14,6 +14,7 @@
 // To use a test branch (i.e. PR) until it lands to master
 // I.e. for testing library changes
 //@Library(value="pipeline-lib@your_branch") _
+@Library(value="pipeline-lib@DAOS-9989") _
 
 // Should try to figure this out automatically
 /* groovylint-disable-next-line CompileStatic, VariableName */
@@ -69,52 +70,73 @@ pipeline {
                description: 'Priority of this build.  DO NOT USE WITHOUT PERMISSION.')
         string(name: 'TestTag',
                defaultValue: 'full_regression',
-               description: 'Test-tag to use for the weekly stages of this run (i.e. pr, daily_regression, full_regression, etc.)')
-        string(name: 'TestTagDailyTCP',
+               description: 'Test-tag to use for the weekly Functional Hardware Small/Medium/Large stages of this run (i.e. pr, daily_regression, full_regression, etc.)')
+        string(name: 'TestTagTCP',
                defaultValue: 'pr daily_regression',
-               description: 'Test-tag to use for the daily TCP stages of this run (i.e. pr, daily_regression, full_regression, etc.)')
-        string(name: 'TestTagDailyUCX',
+               description: 'Test-tag to use for the Functional Hardware Small/Medium/Large TCP stages of this run (i.e. pr, daily_regression, full_regression, etc.)')
+        string(name: 'TestTagUCX',
                defaultValue: 'pr daily_regression',
-               description: 'Test-tag to use for the daily UCX stages of this run (i.e. pr, daily_regression, full_regression, etc.)')
-        string(name: 'LaunchArgsDailyTCP',
-               defaultValue: '--nvme=auto:-3DNAND --provider=ofi+tcp',
-               description: 'Launch.py arguments to use in the HW daily TCP stages of this run')
-        string(name: 'LaunchArgsDailyUCX',
-               defaultValue: '--nvme=auto:-3DNAND --provider=ucx+dc_x',
-               description: 'Launch.py arguments to use in the HW daily UCX stages of this run')
+               description: 'Test-tag to use for the Functional Hardware Small/Medium/Large UCX stages of this run (i.e. pr, daily_regression, full_regression, etc.)')
         string(name: 'BaseBranch',
                defaultValue: base_branch,
                description: 'The base branch to run weekly-testing against (i.e. master, or a PR\'s branch)')
+        booleanParam(name: 'CI_small_TEST',
+                     defaultValue: true,
+                     description: 'Run the Small Cluster CI tests')
+        booleanParam(name: 'CI_medium_TEST',
+                     defaultValue: true,
+                     description: 'Run the Medium Cluster CI tests')
+        booleanParam(name: 'CI_large_TEST',
+                     defaultValue: true,
+                     description: 'Run the Large Cluster CI tests')
+        booleanParam(name: 'CI_FUNCTIONAL_HARDWARE_SMALL_TCP',
+                     defaultValue: true,
+                     description: 'Run the CI Functional Hardware Small TCP test stage')
+        booleanParam(name: 'CI_FUNCTIONAL_HARDWARE_MEDIUM_TCP',
+                     defaultValue: true,
+                     description: 'Run the CI Functional Hardware Medium TCP test stage')
+        booleanParam(name: 'CI_FUNCTIONAL_HARDWARE_LARGE_TCP',
+                     defaultValue: true,
+                     description: 'Run the CI Functional Hardware Large TCP test stage')
+        booleanParam(name: 'CI_FUNCTIONAL_HARDWARE_SMALL_UCX',
+                     defaultValue: false,
+                     description: 'Run the CI Functional Hardware Small UCX test stage')
+        booleanParam(name: 'CI_FUNCTIONAL_HARDWARE_MEDIUM_UCX',
+                     defaultValue: false,
+                     description: 'Run the CI Functional Hardware Medium UCX test stage')
+        booleanParam(name: 'CI_FUNCTIONAL_HARDWARE_LARGE_UCX',
+                     defaultValue: false,
+                     description: 'Run the CI Functional Hardware Large UCX test stage')
         string(name: 'CI_FUNCTIONAL_VM9_LABEL',
                defaultValue: 'ci_vm9',
                description: 'Label to use for 9 VM functional tests')
         string(name: 'CI_NVME_3_LABEL',
                defaultValue: 'ci_nvme3',
-               description: 'Label to use for 3 node NVMe tests')
+               description: 'Label to use for 3 node Functional Hardware Small stage')
         string(name: 'CI_NVME_5_LABEL',
                defaultValue: 'ci_nvme5',
-               description: 'Label to use for 5 node NVMe tests')
+               description: 'Label to use for 5 node Functional Hardware Medium stage')
         string(name: 'CI_NVME_9_LABEL',
                defaultValue: 'ci_nvme9',
-               description: 'Label to use for 9 node NVMe tests')
-        string(name: 'CI_HW_SMALL_DAILY_TCP_LABEL',
+               description: 'Label to use for 9 node Functional Hardware Large stage')
+        string(name: 'CI_HW_SMALL_TCP_LABEL',
                defaultValue: 'ci_nvme3',
-               description: 'Label to use for 3 node HW Small Daily TCP tests')
-        string(name: 'CI_HW_MEDIUM_DAILY_TCP_LABEL',
+               description: 'Label to use for 3 node Functional Hardware Small TCP stage')
+        string(name: 'CI_HW_MEDIUM_TCP_LABEL',
                defaultValue: 'ci_nvme5',
-               description: 'Label to use for 5 node HW Medium Daily TCP tests')
-        string(name: 'CI_HW_LARGE_DAILY_TCP_LABEL',
+               description: 'Label to use for 5 node Functional Hardware Medium TCP stage')
+        string(name: 'CI_HW_LARGE_TCP_LABEL',
                defaultValue: 'ci_nvme9',
-               description: 'Label to use for 9 node HW Large Daily TCP tests')
-        string(name: 'CI_HW_SMALL_DAILY_UCX_LABEL',
+               description: 'Label to use for 9 node Functional Hardware Large TCP stage')
+        string(name: 'CI_HW_SMALL_UCX_LABEL',
                defaultValue: 'ci_nvme3',
-               description: 'Label to use for 3 node HW Small Daily UCX tests')
-        string(name: 'CI_HW_MEDIUM_DAILY_UCX_LABEL',
+               description: 'Label to use for 3 node Functional Hardware Small UCX stage')
+        string(name: 'CI_HW_MEDIUM_UCX_LABEL',
                defaultValue: 'ci_nvme5',
-               description: 'Label to use for 5 node HW Medium Daily UCX tests')
-        string(name: 'CI_HW_LARGE_DAILY_UCX_LABEL',
+               description: 'Label to use for 5 node Functional Hardware Medium UCX stage')
+        string(name: 'CI_HW_LARGE_UCX_LABEL',
                defaultValue: 'ci_nvme9',
-               description: 'Label to use for 9 node HW Large Daily UCX tests')
+               description: 'Label to use for 9 node Functional Hardware Large UCX stage')
     }
 
     stages {
@@ -302,14 +324,14 @@ pipeline {
                         }
                     }
                 } // stage('Functional_Hardware_Large')
-                stage('Functional Hardware Small Daily TCP') {
+                stage('Functional Hardware Small TCP') {
                     when {
                         beforeAgent true
                         expression { !skipStage() }
                     }
                     agent {
                         // 2 node cluster with 1 IB/node + 1 test control node
-                        label params.CI_HW_SMALL_DAILY_TCP_LABEL
+                        label params.CI_HW_SMALL_TCP_LABEL
                     }
                     steps {
                         // Need to get back onto base_branch for ci/
@@ -318,8 +340,8 @@ pipeline {
                                     withSubmodules: true
                         functionalTest inst_repos: daosRepos(),
                                        inst_rpms: functionalPackages(1, next_version),
-                                       test_tag: params.TestTagDailyTCP,
-                                       ftest_arg: params.LaunchArgsDailyTCP,
+                                       test_tag: params.TestTagTCP,
+                                       ftest_arg: '--nvme=auto:-3DNAND --provider=ofi+tcp',
                                        test_function: 'runTestFunctionalV2'
                     }
                     post {
@@ -327,15 +349,15 @@ pipeline {
                             functionalTestPostV2()
                         }
                     }
-                } // stage('Functional Hardware Small Daily TCP')
-                stage('Functional Hardware Medium Daily TCP') {
+                } // stage('Functional Hardware Small TCP')
+                stage('Functional Hardware Medium TCP') {
                     when {
                         beforeAgent true
                         expression { !skipStage() }
                     }
                     agent {
                         // 4 node cluster with 2 IB/node + 1 test control node
-                        label params.CI_HW_MEDIUM_DAILY_TCP_LABEL
+                        label params.CI_HW_MEDIUM_TCP_LABEL
                     }
                     steps {
                         // Need to get back onto base_branch for ci/
@@ -344,8 +366,8 @@ pipeline {
                                     withSubmodules: true
                         functionalTest inst_repos: daosRepos(),
                                        inst_rpms: functionalPackages(1, next_version),
-                                       test_tag: params.TestTagDailyTCP,
-                                       ftest_arg: params.LaunchArgsDailyTCP,
+                                       test_tag: params.TestTagTCP,
+                                       ftest_arg: '--nvme=auto:-3DNAND --provider=ofi+tcp',
                                        test_function: 'runTestFunctionalV2'
                     }
                     post {
@@ -353,15 +375,15 @@ pipeline {
                             functionalTestPostV2()
                         }
                     }
-                } // stage('Functional Hardware Medium Daily TCP')
-                stage('Functional Hardware Large Daily TCP') {
+                } // stage('Functional Hardware Medium TCP')
+                stage('Functional Hardware Large TCP') {
                     when {
                         beforeAgent true
                         expression { !skipStage() }
                     }
                     agent {
                         // 8+ node cluster with 1 IB/node + 1 test control node
-                        label params.CI_HW_LARGE_DAILY_TCP_LABEL
+                        label params.CI_HW_LARGE_TCP_LABEL
                     }
                     steps {
                         // Need to get back onto base_branch for ci/
@@ -370,8 +392,8 @@ pipeline {
                                     withSubmodules: true
                         functionalTest inst_repos: daosRepos(),
                                        inst_rpms: functionalPackages(1, next_version),
-                                       test_tag: params.TestTagDailyTCP,
-                                       ftest_arg: params.LaunchArgsDailyTCP,
+                                       test_tag: params.TestTagTCP,
+                                       ftest_arg: '--nvme=auto:-3DNAND --provider=ofi+tcp',
                                        test_function: 'runTestFunctionalV2'
                     }
                     post {
@@ -379,15 +401,15 @@ pipeline {
                             functionalTestPostV2()
                         }
                     }
-                } // stage('Functional Hardware Large Daily TCP')
-                stage('Functional Hardware Small Daily UCX') {
+                } // stage('Functional Hardware Large TCP')
+                stage('Functional Hardware Small UCX') {
                     when {
                         beforeAgent true
                         expression { !skipStage() }
                     }
                     agent {
                         // 2 node cluster with 1 IB/node + 1 test control node
-                        label params.CI_HW_SMALL_DAILY_UCX_LABEL
+                        label params.CI_HW_SMALL_UCX_LABEL
                     }
                     steps {
                         // Need to get back onto base_branch for ci/
@@ -395,9 +417,9 @@ pipeline {
                                     branch: env.BaseBranch,
                                     withSubmodules: true
                         functionalTest inst_repos: daosRepos(),
-                                       inst_rpms: functionalPackages(1, next_version),
-                                       test_tag: params.TestTagDailyUCX,
-                                       ftest_arg: params.LaunchArgsDailyUCX,
+                                       inst_rpms: functionalPackages(1, next_version) + "mercury-ucx",
+                                       test_tag: params.TestTagUCX,
+                                       ftest_arg: '--nvme=auto:-3DNAND --provider=ucx+dc_x',
                                        test_function: 'runTestFunctionalV2'
                     }
                     post {
@@ -405,15 +427,15 @@ pipeline {
                             functionalTestPostV2()
                         }
                     }
-                } // stage('Functional Hardware Small Daily UCX')
-                stage('Functional Hardware Medium Daily UCX') {
+                } // stage('Functional Hardware Small UCX')
+                stage('Functional Hardware Medium UCX') {
                     when {
                         beforeAgent true
                         expression { !skipStage() }
                     }
                     agent {
                         // 4 node cluster with 2 IB/node + 1 test control node
-                        label params.CI_HW_MEDIUM_DAILY_UCX_LABEL
+                        label params.CI_HW_MEDIUM_UCX_LABEL
                     }
                     steps {
                         // Need to get back onto base_branch for ci/
@@ -421,9 +443,9 @@ pipeline {
                                     branch: env.BaseBranch,
                                     withSubmodules: true
                         functionalTest inst_repos: daosRepos(),
-                                       inst_rpms: functionalPackages(1, next_version),
-                                       test_tag: params.TestTagDailyUCX,
-                                       ftest_arg: params.LaunchArgsDailyUCX,
+                                       inst_rpms: functionalPackages(1, next_version) + "mercury-ucx",
+                                       test_tag: params.TestTagUCX,
+                                       ftest_arg: '--nvme=auto:-3DNAND --provider=ucx+dc_x',
                                        test_function: 'runTestFunctionalV2'
                     }
                     post {
@@ -431,15 +453,15 @@ pipeline {
                             functionalTestPostV2()
                         }
                     }
-                } // stage('Functional Hardware Medium Daily UCX')
-                stage('Functional Hardware Large Daily UCX') {
+                } // stage('Functional Hardware Medium UCX')
+                stage('Functional Hardware Large UCX') {
                     when {
                         beforeAgent true
                         expression { !skipStage() }
                     }
                     agent {
                         // 8+ node cluster with 1 IB/node + 1 test control node
-                        label params.CI_HW_LARGE_DAILY_UCX_LABEL
+                        label params.CI_HW_LARGE_UCX_LABEL
                     }
                     steps {
                         // Need to get back onto base_branch for ci/
@@ -447,9 +469,9 @@ pipeline {
                                     branch: env.BaseBranch,
                                     withSubmodules: true
                         functionalTest inst_repos: daosRepos(),
-                                       inst_rpms: functionalPackages(1, next_version),
-                                       test_tag: params.TestTagDailyUCX,
-                                       ftest_arg: params.LaunchArgsDailyUCX,
+                                       inst_rpms: functionalPackages(1, next_version) + "mercury-ucx",
+                                       test_tag: params.TestTagUCX,
+                                       ftest_arg: '--nvme=auto:-3DNAND --provider=ucx+dc_x',
                                        test_function: 'runTestFunctionalV2'
                     }
                     post {
@@ -457,7 +479,7 @@ pipeline {
                             functionalTestPostV2()
                         }
                     }
-                } // stage('Functional Hardware Large Daily UCX')
+                } // stage('Functional Hardware Large UCX')
             } // parallel
         } // stage('Test')
     } //stages
