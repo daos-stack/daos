@@ -64,14 +64,13 @@ class DaosBuild(DfuseTestBase):
 
         # How long to cache things for, if caching is enabled.
         cache_time = '30m'
-        build_time = 240
+        build_time = 15
 
         if cache_mode == 'writeback':
             cont_attrs['dfuse-data-cache'] = 'on'
             cont_attrs['dfuse-attr-time'] = cache_time
             cont_attrs['dfuse-dentry-time'] = cache_time
             cont_attrs['dfuse-ndentry-time'] = cache_time
-            build_time = 15
         elif cache_mode == 'writethrough':
             cont_attrs['dfuse-data-cache'] = 'on'
             cont_attrs['dfuse-attr-time'] = cache_time
@@ -83,6 +82,7 @@ class DaosBuild(DfuseTestBase):
             cont_attrs['dfuse-dentry-time'] = cache_time
             cont_attrs['dfuse-ndentry-time'] = cache_time
         elif cache_mode == 'nocache':
+            build_time = 150
             cont_attrs['dfuse-data-cache'] = 'off'
             cont_attrs['dfuse-attr-time'] = '0'
             cont_attrs['dfuse-dentry-time'] = '0'
@@ -120,7 +120,6 @@ class DaosBuild(DfuseTestBase):
                 'git clone https://github.com/daos-stack/daos.git {}'.format(build_dir),
                 'git -C {} submodule init'.format(build_dir),
                 'git -C {} submodule update'.format(build_dir),
-                'git -C {} checkout dfuse-il-tid'.format(build_dir),
                 'python3 -m pip install pip --upgrade',
                 'python3 -m pip install -r {}/requirements.txt'.format(build_dir),
                 'scons -C {} --jobs 50 build --build-deps=yes'.format(build_dir)]
