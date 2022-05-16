@@ -517,22 +517,20 @@ out:
 }
 
 static void
-rebuild_status_notify(struct rebuild_global_pool_tracker *rgt, struct ds_pool *pool, int op)
+rebuild_leader_status_notify(struct rebuild_global_pool_tracker *rgt, struct ds_pool *pool,
+			     int op, unsigned int rank)
 {
 	struct rebuild_iv	iv = { 0 };
 	int			rc;
 
 	uuid_copy(iv.riv_pool_uuid, rgt->rgt_pool_uuid);
+	iv.riv_rank		= rank;
 	iv.riv_master_rank	= pool->sp_iv_ns->iv_master_rank;
 	iv.riv_ver		= rgt->rgt_rebuild_ver;
 	iv.riv_global_scan_done = is_rebuild_global_scan_done(rgt);
 	iv.riv_global_done	= rgt->rgt_abort || is_rebuild_global_done(rgt);
 	iv.riv_leader_term	= rgt->rgt_leader_term;
 	iv.riv_rebuild_gen	= rgt->rgt_rebuild_gen;
-	iv.riv_toberb_obj_count = rgt->rgt_status.rs_toberb_obj_nr;
-	iv.riv_obj_count	= rgt->rgt_status.rs_obj_nr;
-	iv.riv_rec_count	= rgt->rgt_status.rs_rec_nr;
-	iv.riv_size		= rgt->rgt_status.rs_size;
 	iv.riv_seconds          = rgt->rgt_status.rs_seconds;
 	iv.riv_stable_epoch	= rgt->rgt_stable_epoch;
 	iv.riv_global_dtx_resyc_version = rebuild_get_global_dtx_resync_ver(rgt);
@@ -625,7 +623,7 @@ rebuild_leader_status_check(struct ds_pool *pool, uint32_t map_ver, uint32_t op,
 
 		if (!rgt->rgt_abort && !is_rebuild_global_done(rgt) &&
 		    myrank == pool->sp_iv_ns->iv_master_rank)
-			rebuild_status_notify(rgt, pool, op);
+			rebuild_leader_status_notify(rgt, pool, op, myrank);
 
 		/* query the current rebuild status */
 		if (is_rebuild_global_done(rgt))
@@ -1271,7 +1269,7 @@ iv_stop:
 			D_GOTO(try_reschedule, rc);
 		}
 
-		rebuild_status_notify(rgt, pool, task->dst_rebuild_op);
+		rebuild_leader_status_notify(rgt, pool, task->dst_rebuild_op, myrank);
 	}
 
 try_reschedule:
