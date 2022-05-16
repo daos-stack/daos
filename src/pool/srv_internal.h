@@ -209,10 +209,4 @@ int ds_pool_metrics_count(void);
 int ds_pool_metrics_start(struct ds_pool *pool);
 void ds_pool_metrics_stop(struct ds_pool *pool);
 
-/*
- * srv_pool_check.c
- */
-void ds_pool_test_compare_logs(void);
-void ds_pool_test_check_svc_clues(void);
-
 #endif /* __POOL_SRV_INTERNAL_H__ */

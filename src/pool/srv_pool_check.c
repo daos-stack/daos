@@ -347,14 +347,14 @@ compare_logs(uint64_t x_last_term, uint64_t x_last_index,
  * Analyze \a clues, which must be nonempty and comprise clues about replicas
  * of one PS, and report if this PS requires catastrophic recovery or not.
  *
- * \param[in]	clues		pool clues
- * \param[out]	advice_out	when the return value is 0, the index of the
+ * \param[in]	clues		pool clues for one PS
+ * \param[out]	advice_out	when the return value is 1, the index of the
  *				advised replica in \a clues to rebootstrap the
  *				PS from
  *
  * \return	0	this PS does not require catastrophic recovery
- *		>0	this PS is advised to rebootstrap from the replica at
- *			index \a *advice_out in \a clues
+ *		>0	the caller is advised to rebootstrap this PS from the
+ *			replica at index \a *advice_out in \a clues
  */
 int
 ds_pool_check_svc_clues(struct ds_pool_clues *clues, int *advice_out)
@@ -394,7 +394,7 @@ ds_pool_check_svc_clues(struct ds_pool_clues *clues, int *advice_out)
 		 * number of votes this replica can get.
 		 */
 		for (j = 0; j < db_clue->bcl_replicas->rl_nr; j++) {
-			struct rdb_clue	       *c = &svc_clue->psc_db_clue;
+			struct rdb_clue	       *c;
 			int			k;
 
 			/*
@@ -404,6 +404,7 @@ ds_pool_check_svc_clues(struct ds_pool_clues *clues, int *advice_out)
 			k = ds_pool_clues_find_rank(clues, db_clue->bcl_replicas->rl_ranks[j]);
 			if (k < 0)
 				continue;
+			c = &clues->pcs_array[k].pc_svc_clue->psc_db_clue;
 
 			/*
 			 * Since terms will grow as replicas communicate with
@@ -456,6 +457,7 @@ ds_pool_check_svc_clues(struct ds_pool_clues *clues, int *advice_out)
 	return 1;
 }
 
+#if 0 /* TODO: Adapt these tests to some new test framework. */
 /* Test compare_logs. */
 void
 ds_pool_test_compare_logs(void)
@@ -519,6 +521,7 @@ ds_pool_test_check_svc_clues(void)
 
 		rc = ds_pool_check_svc_clues(&clues, &advice);
 		D_ASSERTF(rc == 0, DF_RC"\n", DP_RC(rc));
+		D_ASSERTF(advice == -1, "%d\n", advice);
 	}
 
 	/*
@@ -580,6 +583,7 @@ ds_pool_test_check_svc_clues(void)
 
 		rc = ds_pool_check_svc_clues(&clues, &advice);
 		D_ASSERTF(rc == 0, DF_RC"\n", DP_RC(rc));
+		D_ASSERTF(advice == -1, "%d\n", advice);
 	}
 
 	/* Test an incomplete but sufficient set of replicas that do not require CR. */
@@ -613,6 +617,55 @@ ds_pool_test_check_svc_clues(void)
 
 		rc = ds_pool_check_svc_clues(&clues, &advice);
 		D_ASSERTF(rc == 0, DF_RC"\n", DP_RC(rc));
+		D_ASSERTF(advice == -1, "%d\n", advice);
+	}
+
+	/*
+	 * Test a complete (for at least one replica) but insufficient set of
+	 * replicas that require CR.
+	 */
+	{
+		const int		n = 3;
+		struct ds_pool_clues	clues = {
+			.pcs_array	= test_clues,
+			.pcs_len	= n,
+			.pcs_cap	= n
+		};
+		d_rank_list_t		replicas_0;
+		d_rank_list_t		replicas_1;
+		d_rank_list_t		replicas_2;
+		int			advice = -1;
+
+		D_ASSERT(n <= ARRAY_SIZE(test_ranks));
+
+		/* Unable to get votes from {1, 2} in {0, 1, 2}. */
+		replicas_0.rl_ranks = test_ranks;
+		replicas_0.rl_nr = n;
+		test_svc_clues[0].psc_db_clue.bcl_replicas = &replicas_0;
+		test_svc_clues[0].psc_db_clue.bcl_last_index = 9;
+		test_svc_clues[0].psc_db_clue.bcl_last_term = 1;
+		test_svc_clues[0].psc_map_version = 1;
+
+		/* Unable to get votes from {2} in {1, 2}. */
+		replicas_1.rl_ranks = &test_ranks[1];
+		replicas_1.rl_nr = n - 1;
+		test_svc_clues[1].psc_db_clue.bcl_replicas = &replicas_1;
+		test_svc_clues[1].psc_db_clue.bcl_last_index = 10;
+		test_svc_clues[1].psc_db_clue.bcl_last_term = 1;
+		test_svc_clues[1].psc_map_version = 1;
+
+		/* Unable to get votes from absent {3} in {2, 3}. */
+		D_ASSERT(ARRAY_SIZE(test_ranks) >= 4);
+		replicas_2.rl_ranks = &test_ranks[2];
+		replicas_2.rl_nr = 2;
+		test_svc_clues[2].psc_db_clue.bcl_replicas = &replicas_2;
+		test_svc_clues[2].psc_db_clue.bcl_last_index = 11;
+		test_svc_clues[2].psc_db_clue.bcl_last_term = 1;
+		test_svc_clues[2].psc_map_version = 1;
+
+		rc = ds_pool_check_svc_clues(&clues, &advice);
+		D_ASSERTF(rc > 0, DF_RC"\n", DP_RC(rc));
+		D_ASSERTF(advice == 2, "%d\n", advice);
 	}
 
 	/* Test an insufficient set of replicas that require CR: case 1. */
@@ -721,3 +774,4 @@ ds_pool_test_check_svc_clues(void)
 		D_ASSERTF(advice == 1, "%d\n", advice);
 	}
 }
+#endif
