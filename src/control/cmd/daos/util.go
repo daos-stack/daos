@@ -190,10 +190,13 @@ func freeCmdArgs(ap *C.struct_cmd_args_s) {
 	if ap.props != nil {
 		C.daos_prop_free(ap.props)
 	}
+
+	C.free(unsafe.Pointer(ap))
 }
 
 func allocCmdArgs(log logging.Logger) (ap *C.struct_cmd_args_s, cleanFn func(), err error) {
-	ap = &C.struct_cmd_args_s{}
+	// allocate the struct using C memory to avoid any issues with Go GC
+	ap = (*C.struct_cmd_args_s)(C.calloc(1, C.sizeof_struct_cmd_args_s))
 	C.init_op_vals(ap)
 	ap.sysname = C.CString(build.DefaultSystemName)
 
