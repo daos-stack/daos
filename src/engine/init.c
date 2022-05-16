@@ -586,7 +586,7 @@ server_init(int argc, char *argv[])
 	gethostname(dss_hostname, DSS_HOSTNAME_MAX_LEN);
 
 	daos_debug_set_id_cb(server_id_cb);
-	rc = daos_internal_debug_init(DAOS_LOG_DEFAULT, DLOG_INFO);
+	rc = daos_debug_init_ex(DAOS_LOG_DEFAULT, DLOG_INFO);
 	if (rc != 0)
 		return rc;
 

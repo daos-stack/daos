@@ -87,7 +87,7 @@ int  daos_debug_init(char *logfile);
  * need this unnecessary internal API since Go can't see log masks due to
  * no C pre-processor macro support
  */
-int  daos_internal_debug_init(char *logfile, d_dbug_t logmask);
+int  daos_debug_init_ex(char *logfile, d_dbug_t logmask);
 void daos_debug_set_id_cb(d_log_id_cb_t id_cb);
 /** finalize the debug system */
 void daos_debug_fini(void);
