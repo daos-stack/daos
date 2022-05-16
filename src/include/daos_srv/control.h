@@ -54,17 +54,13 @@ dpdk_cli_override_opts;
 #define NVME_CONF_SET_ACCEL_PROPS	"accel_props"
 
 /** Supported acceleration engine settings */
-#define NVME_ACCEL_NATIVE	"native"
+#define NVME_ACCEL_NONE		"none"
 #define NVME_ACCEL_SPDK		"spdk"
 #define NVME_ACCEL_DML		"dml"
 
-/* Can support up to 16 flags for acceleration engine optional capabilities */
-enum NVME_ACCEL_FLAG {
-	/* The accelerator should support "Move" calculations */
-	NVME_ACCEL_FLAG_MOVE = (1 << 0),
-	/* The accelerator should support "CRC" calculations */
-	NVME_ACCEL_FLAG_CRC = (1 << 1),
-};
+/** Acceleration engine optional capabilities */
+#define NVME_ACCEL_FLAG_MOVE	(1 << 0)
+#define NVME_ACCEL_FLAG_CRC	(1 << 1)
 
 static inline char *
 nvme_state2str(int state)
@@ -183,53 +179,4 @@ struct nvme_stats {
  * \return		Zero on success, negative value on error
  */
 int copy_ascii(char *dst, size_t dst_sz, const void *src, size_t src_sz);
-
-/**
- * Check acceleration engine setting is valid.
- *
- * \param[in]  in	input acceleration engine string buffer
- * \param[out] result	true if input matches a known setting, false otherwise
- *
- * \return		non-zero on error, zero otherwise
- */
-static inline int
-nvme_conf_validate_accel_engine(char *in, bool *result)
-{
-	if (!in)
-		return -DER_INVAL;
-	if (!result)
-		return -DER_INVAL;
-
-	*result = 0;
-
-	if (STR_EQ(in, NVME_ACCEL_NATIVE) || STR_EQ(in, NVME_ACCEL_SPDK) || STR_EQ(in, NVME_ACCEL_DML))
-		(*result) = 1;
-
-	return 0;
-}
-
-/**
- * Return bitmask of enabled acceleration capabilities.
- *
- * \param[in]  move	bool indicating MOVE capability is enabled
- * \param[in]  crc	bool indicating CRC capability is enabled
- * \param[out] opt_mask	uint16_t bitmask of enabled capabilities
- *
- * \return		non-zero on error, zero otherwise
- */
-static inline int
-nvme_conf_get_accel_optmask(bool move, bool crc, uint16_t *opt_mask)
-{
-	if (!opt_mask)
-		return -DER_INVAL;
-
-	*opt_mask = 0;
-
-	if (move)
-		SET_FLAG(*opt_mask, NVME_ACCEL_FLAG_MOVE);
-	if (crc)
-		SET_FLAG(*opt_mask, NVME_ACCEL_FLAG_CRC);
-
-	return 0;
-}
 #endif /** __CONTROL_H_ */

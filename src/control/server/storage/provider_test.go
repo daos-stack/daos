@@ -19,6 +19,11 @@ import (
 	"github.com/daos-stack/daos/src/control/logging"
 )
 
+const (
+	mockAccelOptMaskAllSet = 0b11
+	mockAccelEngineSPDK    = "spdk"
+)
+
 // defBdevCmpOpts returns a default set of cmp option suitable for this package
 func defBdevCmpOpts() []cmp.Option {
 	return []cmp.Option{
@@ -273,8 +278,8 @@ func Test_BdevWriteRequestFromConfig(t *testing.T) {
 					NewTierConfig().WithStorageClass(ClassNvme.String()),
 				},
 				AccelProps: AccelProps{
-					AccelEngine: "spdk",
-					AccelOpts:   0b11,
+					AccelEngine:  mockAccelEngineSPDK,
+					AccelOptMask: mockAccelOptMaskAllSet,
 				},
 			},
 			getTopoFn: MockGetTopology,
@@ -286,8 +291,8 @@ func Test_BdevWriteRequestFromConfig(t *testing.T) {
 				},
 				Hostname: hostname,
 				AccelProps: AccelProps{
-					AccelEngine: "spdk",
-					AccelOpts:   0b11,
+					AccelEngine:  mockAccelEngineSPDK,
+					AccelOptMask: mockAccelOptMaskAllSet,
 				},
 			},
 		},

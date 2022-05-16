@@ -20,6 +20,10 @@ import (
 	"github.com/daos-stack/daos/src/control/lib/hardware"
 )
 
+const mockAccelEngineNone = "none"
+
+var mockAccelOptsAllSet = []string{"move", "crc"}
+
 func defConfigCmpOpts() cmp.Options {
 	return cmp.Options{
 		cmp.Comparer(func(x, y *BdevDeviceList) bool {
@@ -277,6 +281,93 @@ func TestStorage_parsePCIBusRange(t *testing.T) {
 
 			test.AssertEqual(t, tc.expBegin, begin, "bad beginning limit")
 			test.AssertEqual(t, tc.expEnd, end, "bad ending limit")
+		})
+	}
+}
+
+//func (ap *AccelPropsT) UnmarshalYAML(unmarshal func(interface{}) error) error {
+//	type AccelPropsDefault AccelPropsT
+//	var defaults = AccelPropsDefault{
+//		AccelEngine: "none",
+//	}
+//
+//	out := defaults
+//	err := unmarshal(&out)
+//	*ap = AccelPropsT(out)
+//
+//	return err
+//}
+
+func TestStorage_AccelProps_FromYAML(t *testing.T) {
+	for name, tc := range map[string]struct {
+		input    string
+		expProps AccelProps
+		expErr   error
+	}{
+		"acceleration section missing": {
+			input:    "",
+			expProps: AccelProps{},
+		},
+		"acceleration section empty": {
+			input:    "acceleration:\n",
+			expProps: AccelProps{},
+		},
+		"engine unset": {
+			input:    "acceleration:\n  engine:\n",
+			expProps: AccelProps{},
+		},
+		"engine set empty": {
+			input:    "acceleration:\n  engine: \"\"\n",
+			expProps: AccelProps{},
+		},
+		"set engine": {
+			input: "acceleration:\n  engine: \"spdk\"\n",
+			expProps: AccelProps{
+				AccelEngine:  mockAccelEngineSPDK,
+				AccelOpts:    mockAccelOptsAllSet,
+				AccelOptMask: mockAccelOptMaskAllSet,
+			},
+		},
+		"set options; missing engine": {
+			input: "acceleration:\n  options:\n    - move\n    - crc\n",
+			expProps: AccelProps{
+				AccelEngine: mockAccelEngineNone,
+			},
+		},
+		//		"valid pci addresses": {
+		//			input: `["0000:81:00.0","0000:82:00.0"]`,
+		//			expList: &BdevDeviceList{
+		//				PCIAddressSet: func() hardware.PCIAddressSet {
+		//					set, err := hardware.NewPCIAddressSetFromString("0000:81:00.0 0000:82:00.0")
+		//					if err != nil {
+		//						panic(err)
+		//					}
+		//					return *set
+		//				}(),
+		//			},
+		//		},
+		//		"non-pci devices": {
+		//			input: `["/dev/block0","/dev/block1"]`,
+		//			expList: &BdevDeviceList{
+		//				stringBdevSet: common.NewStringSet("/dev/block0", "/dev/block1"),
+		//			},
+		//		},
+		//		"mixed pci and non-pci devices": {
+		//			input:  `["/dev/block0", "0000:81:00.0"]`,
+		//			expErr: errors.New("mix"),
+		//		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			cfg := new(Config)
+			err := yaml.Unmarshal([]byte(tc.input), cfg)
+			test.CmpErr(t, tc.expErr, err)
+			if tc.expErr != nil {
+				return
+			}
+
+			if diff := cmp.Diff(tc.expProps, cfg.AccelProps, defConfigCmpOpts()...); diff != "" {
+				t.Fatalf("bad props (-want +got):\n%s", diff)
+			}
 		})
 	}
 }

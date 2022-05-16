@@ -35,7 +35,15 @@ const (
 	verbsExample     = "../../../../utils/config/examples/daos_server_verbs.yml"
 	defaultConfig    = "../../../../utils/config/daos_server.yml"
 	legacyConfig     = "../../../../utils/config/examples/daos_server_unittests.yml"
+
+	mockAccelOptMaskAllSet = 0b11
+	mockAccelOptMaskCRCSet = 0b10
+	mockAccelEngineDML     = "dml"
+	mockAccelEngineSPDK    = "spdk"
+	mockAccelOptCRC        = "crc"
 )
+
+var mockAccelOptsAllSet = []string{"move", "crc"}
 
 var (
 	defConfigCmpOpts = []cmp.Option{
@@ -247,9 +255,8 @@ func TestServerConfig_Constructed(t *testing.T) {
 			WithLogFile("/tmp/daos_engine.0.log").
 			WithLogMask("WARN").
 			WithStorageEnableHotplug(true).
-			WithStorageAccelEngine("spdk").
-			WithStorageAccelOptMove(true).
-			WithStorageAccelOptCRC(true),
+			WithStorageAccelEngine(mockAccelEngineSPDK).
+			WithStorageAccelOpts(mockAccelOptsAllSet...),
 		engine.MockConfig().
 			WithSystemName("daos_server").
 			WithSocketDir("./.daos/daos_server").
@@ -277,8 +284,8 @@ func TestServerConfig_Constructed(t *testing.T) {
 			WithLogFile("/tmp/daos_engine.1.log").
 			WithLogMask("WARN").
 			WithStorageEnableHotplug(true).
-			WithStorageAccelEngine("dml").
-			WithStorageAccelOptCRC(true),
+			WithStorageAccelEngine(mockAccelEngineDML).
+			WithStorageAccelOpts(mockAccelOptCRC),
 	}
 	constructed.Path = testFile // just to avoid failing the cmp
 
@@ -700,8 +707,8 @@ func TestServerConfig_Validation(t *testing.T) {
 							WithStorageClass("nvme").
 							WithBdevDeviceList("0000:81:00.0"),
 					).
-					WithStorageAccelEngine("spdk").
-					WithStorageAccelOptCRC(true),
+					WithStorageAccelEngine(mockAccelEngineSPDK).
+					WithStorageAccelOpts(mockAccelOptCRC),
 				)
 			},
 			expConfig: baseCfg().
@@ -719,9 +726,10 @@ func TestServerConfig_Validation(t *testing.T) {
 					).
 					WithStorageConfigOutputPath("/foo/daos_nvme.conf").
 					WithStorageVosEnv("NVME").
+					WithStorageAccelEngine(mockAccelEngineSPDK).
+					WithStorageAccelOpts(mockAccelOptCRC).
 					WithStorageAccelEngine("spdk").
-					WithStorageAccelOptCRC(true).
-					WithStorageAccelOpts(0b10),
+					WithStorageAccelOptMask(mockAccelOptMaskCRCSet),
 				),
 		},
 	} {

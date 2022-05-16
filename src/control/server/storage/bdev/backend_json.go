@@ -257,6 +257,31 @@ func (sc *SpdkConfig) WithBdevConfigs(log logging.Logger, req *storage.BdevWrite
 	return sc
 }
 
+// Add hotplug bus-ID range to DAOS config data for use by non-SPDK consumers in
+// engine e.g. BIO or VOS.
+func hotplugPropSet(req *storage.BdevWriteConfigRequest, data *DaosData) {
+	data.Configs = append(data.Configs, &DaosConfig{
+		Method: storage.ConfSetHotplugBusidRange,
+		Params: HotplugBusidRangeParams{
+			Begin: req.HotplugBusidBegin,
+			End:   req.HotplugBusidEnd,
+		},
+	})
+}
+
+// Add acceleration engine properties to DAOS config data if non-native implementation
+// has been selected in config file.
+func accelPropSet(req *storage.BdevWriteConfigRequest, data *DaosData) {
+	props := req.AccelProps
+	// Add config if acceleration options have been selected.
+	if props.AccelOptMask != 0 {
+		data.Configs = append(data.Configs, &DaosConfig{
+			Method: storage.ConfSetAccelProps,
+			Params: AccelPropsParams(props),
+		})
+	}
+}
+
 func newSpdkConfig(log logging.Logger, req *storage.BdevWriteConfigRequest) (*SpdkConfig, error) {
 	sc := defaultSpdkConfig()
 
@@ -275,7 +300,6 @@ func newSpdkConfig(log logging.Logger, req *storage.BdevWriteConfigRequest) (*Sp
 			if ss.Name != "bdev" {
 				continue
 			}
-
 			for _, bsc := range ss.Configs {
 				if bsc.Method == storage.ConfBdevNvmeSetHotplug {
 					bsc.Params = NvmeSetHotplugParams{
@@ -283,36 +307,17 @@ func newSpdkConfig(log logging.Logger, req *storage.BdevWriteConfigRequest) (*Sp
 						PeriodUsec: uint64(hotplugPeriod.Microseconds()),
 					}
 					found = true
-
 					break
 				}
 			}
-
 			if found {
 				break
 			}
 		}
-
-		// Add hotplug bus-ID range to DAOS config data for use by non-SPDK consumers in
-		// engine e.g. BIO or VOS.
-		sc.DaosData.Configs = append(sc.DaosData.Configs, &DaosConfig{
-			Method: storage.ConfSetHotplugBusidRange,
-			Params: HotplugBusidRangeParams{
-				Begin: req.HotplugBusidBegin,
-				End:   req.HotplugBusidEnd,
-			},
-		})
+		hotplugPropSet(req, sc.DaosData)
 	}
 
-	// Add acceleration engine properties to DAOS config data if non-native implementation
-	// has been selected in config file.
-	props := req.AccelProps
-	if props.AccelEngine != "" && props.AccelEngine != storage.AccelEngineNative {
-		sc.DaosData.Configs = append(sc.DaosData.Configs, &DaosConfig{
-			Method: storage.ConfSetAccelProps,
-			Params: AccelPropsParams(props),
-		})
-	}
+	accelPropSet(req, sc.DaosData)
 
 	return sc.WithBdevConfigs(log, req), nil
 }

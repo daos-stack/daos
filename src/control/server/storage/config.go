@@ -571,10 +571,33 @@ func parsePCIBusRange(numRange string, bitSize int) (uint8, uint8, error) {
 // AccelProps can be used to select acceleration engine and capabilities.
 // Type is used both in YAML server config and JSON NVMe config files.
 type AccelProps struct {
-	AccelEngine  string `yaml:"accel_engine,omitempty" json:"accel_engine"`
-	AccelOptMove bool   `yaml:"accel_opt_move,omitempty" json:"-"`
-	AccelOptCRC  bool   `yaml:"accel_opt_crc,omitempty" json:"-"`
-	AccelOpts    uint16 `yaml:"-" json:"accel_opts"` // Bitmask of optional capabilities.
+	AccelEngine  string   `yaml:"engine,omitempty" json:"accel_engine"`
+	AccelOpts    []string `yaml:"options,omitempty" json:"-"`
+	AccelOptMask uint16   `yaml:"-" json:"accel_opts"` // Bitmask of optional capabilities.
+}
+
+func (ap *AccelProps) UnmarshalYAML(unmarshal func(interface{}) error) error {
+	type AccelPropsDefault AccelProps
+	var tmp = AccelPropsDefault{
+		AccelEngine: "none",
+	}
+
+	if err := unmarshal(&tmp); err != nil {
+		return err
+	}
+	out := AccelProps(tmp)
+
+	if err := validateAccelProps(&out); err != nil {
+		return err
+	}
+
+	if err := setAccelOptMask(&out); err != nil {
+		return err
+	}
+
+	*ap = out
+
+	return nil
 }
 
 type Config struct {
@@ -583,7 +606,7 @@ type Config struct {
 	VosEnv           string      `yaml:"-" cmdEnv:"VOS_BDEV_CLASS"`
 	EnableHotplug    bool        `yaml:"-"`
 	NumaNodeIndex    uint        `yaml:"-"`
-	AccelProps       AccelProps  `yaml:",inline,omitempty"`
+	AccelProps       AccelProps  `yaml:"acceleration"`
 }
 
 func (c *Config) Validate() error {
@@ -605,10 +628,6 @@ func (c *Config) Validate() error {
 
 	if len(scmCfgs) == 0 {
 		return errors.New("missing scm storage tier in config")
-	}
-
-	if err := validateAccelProps(&c.AccelProps); err != nil {
-		return err
 	}
 
 	// set persistent location for engine bdev config file to be consumed by provider

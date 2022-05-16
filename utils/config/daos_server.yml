@@ -324,23 +324,27 @@
 #  # Empty by default. Values should be supplied without encapsulating quotes.
 #
 #  env_vars:
-#      - CRT_TIMEOUT=30
+#    - CRT_TIMEOUT=30
 #
 #  # Specify accelerator engine setting (experimental).
-#  # Options are:
+#
+#  # Acceleration engine options are:
+#  # - "none" do not use an acceleration engine. (default)
 #  # - "spdk" to assigned management of hardware/software acceleration to SPDK.
 #  # - "dml" te set DML as accelerator engine.
-#  # - "native" to use the current system accelerator engine implementation.
 #
-#  # default: native
-#  accel_engine: spdk
+#  # Optional capability settings are:
+#  # - "move" to enable acceleration of MOVE instructions.
+#  # - "crc" to enable acceleration of CRC instructions.
 #
-#  # Specify acceleration optional capabilities (experimental).
-#  # Optional capability settings are ignored if accel_engine set to "native".
+#  # If acceleration engine setting is "none" (or unset) then optional capabilities are all set to
+#  # false. If set to "spdk" or "dml" then optional capabilities are set to "true" by default.
 #
-#  # defaults: false
-#  accel_opt_move: true
-#  accel_opt_crc: true
+#  acceleration:
+#    engine: spdk
+#    options:
+#      - move
+#      - crc
 #
 #  storage:
 #  -
@@ -482,15 +486,24 @@
 #  env_vars:
 #      - CRT_TIMEOUT=100
 #
-#  # default: native
-#  accel_engine: dml
+#  # Specify accelerator engine setting (experimental).
 #
-#  # Specify acceleration optional capabilities (experimental).
-#  # Optional capability settings are ignored if accel_engine set to "native".
+#  # Acceleration engine options are:
+#  # - "none" do not use an acceleration engine. (default)
+#  # - "spdk" to assigned management of hardware/software acceleration to SPDK.
+#  # - "dml" te set DML as accelerator engine.
 #
-#  # defaults: false
-#  accel_opt_move: false
-#  accel_opt_crc: true
+#  # Optional capability settings are:
+#  # - "move" to enable acceleration of MOVE instructions.
+#  # - "crc" to enable acceleration of CRC instructions.
+#
+#  # If acceleration engine setting is "none" (or unset) then optional capabilities are all set to
+#  # false. If set to "spdk" or "dml" then optional capabilities are set to "true" by default.
+#
+#  acceleration:
+#    engine: dml
+#    options:
+#      - crc
 #
 #  storage:
 #  -

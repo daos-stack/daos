@@ -13,7 +13,7 @@
 #include <spdk/nvmf_spec.h>
 #include "bio_internal.h"
 
-/* JSON tags should match encodecoding logic in src/control/server/storage/bdev/backend_json.go */
+/* JSON tags should match encode/decode logic in src/control/server/storage/bdev/backend_json.go */
 
 struct
 json_config_ctx {
