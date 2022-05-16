@@ -301,7 +301,7 @@ func (p *Provider) getPCIDevsPerNUMANode(topo *topology, nodes hardware.NodeMap)
 		var addr *hardware.PCIAddress
 		var linkSpeed float64
 		switch osDevType {
-		case osDevTypeNetwork, osDevTypeOpenFabrics:
+		case osDevTypeBlock, osDevTypeNetwork, osDevTypeOpenFabrics:
 			if pciDev, err := osDev.getAncestorByType(objTypePCIDevice); err == nil {
 				addr, err = pciDev.pciAddr()
 				if err != nil {
@@ -312,8 +312,9 @@ func (p *Provider) getPCIDevsPerNUMANode(topo *topology, nodes hardware.NodeMap)
 					return err
 				}
 			} else {
-				// unexpected - network devices should be on the PCI bus
+				// unexpected - these devices should be on the PCI bus
 				p.log.Error(err.Error())
+				continue
 			}
 		default:
 			continue
@@ -376,6 +377,8 @@ func osDevTypeToHardwareDevType(osType int) hardware.DeviceType {
 		return hardware.DeviceTypeNetInterface
 	case osDevTypeOpenFabrics:
 		return hardware.DeviceTypeOFIDomain
+	case osDevTypeBlock:
+		return hardware.DeviceTypeBlock
 	}
 
 	return hardware.DeviceTypeUnknown

@@ -315,7 +315,7 @@ key_punch(struct vos_object *obj, daos_epoch_t epoch, daos_epoch_t bound,
 	if (rc != 1) {
 		/** key_tree_punch will handle dkey flags if punch is propagated */
 		if (rc == 0)
-			rc = vos_key_mark_agg(vos_cont2umm(obj->obj_cont), krec, epoch);
+			rc = vos_key_mark_agg(obj->obj_cont, krec, epoch);
 		goto out;
 	}
 	/** else propagate the punch */
@@ -504,7 +504,7 @@ vos_obj_punch(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 			}
 
 			if (rc == 0)
-				rc = vos_mark_agg(vos_cont2umm(cont), &obj->obj_df->vo_tree,
+				rc = vos_mark_agg(cont, &obj->obj_df->vo_tree,
 						  &cont->vc_cont_df->cd_obj_root, epoch);
 
 			vos_obj_release(vos_obj_cache_current(), obj, rc != 0);
