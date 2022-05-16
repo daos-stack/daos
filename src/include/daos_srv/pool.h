@@ -327,14 +327,16 @@ enum ds_pool_dir {
  *
  * Pool shard and service replica (if applicable) info gathered when glancing
  * at a pool. The pc_uuid, pc_dir, and pc_rc fields are always valid; the
- * pc_svc_clue field is valid only if pc_rc is zero.
+ * pc_svc_clue field is valid only if pc_rc is positive value.
  */
 struct ds_pool_clue {
 	uuid_t				pc_uuid;
 	d_rank_t			pc_rank;
 	enum ds_pool_dir		pc_dir;
 	int				pc_rc;
+	uint32_t			pc_label_len;
 	struct ds_pool_svc_clue	       *pc_svc_clue;
+	char			       *pc_label;
 };
 
 void ds_pool_clue_init(uuid_t uuid, enum ds_pool_dir dir, struct ds_pool_clue *clue);

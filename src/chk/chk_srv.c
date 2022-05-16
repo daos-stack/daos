@@ -28,7 +28,22 @@ ds_chk_query_hdlr(crt_rpc_t *rpc)
 }
 
 static void
+ds_chk_mark_hdlr(crt_rpc_t *rpc)
+{
+}
+
+static void
 ds_chk_act_hdlr(crt_rpc_t *rpc)
+{
+}
+
+static void
+ds_chk_report_hdlr(crt_rpc_t *rpc)
+{
+}
+
+static void
+ds_chk_rejoin_hdlr(crt_rpc_t *rpc)
 {
 }
 
@@ -61,15 +76,15 @@ ds_chk_cleanup(void)
 	return 0;
 }
 
-#define X(a, b, c, d, e, f)	\
+#define X(a, b, c, d, e)	\
 {				\
 	.dr_opc       = a,	\
 	.dr_hdlr      = d,	\
 	.dr_corpc_ops = e,	\
-},
+}
 
 static struct daos_rpc_handler chk_handlers[] = {
-	CHK_PROTO_SRV_RPC_LIST
+	CHK_PROTO_SRV_RPC_LIST,
 };
 
 #undef X
@@ -82,6 +97,8 @@ struct dss_module chk_module = {
 	.sm_fini		= ds_chk_fini,
 	.sm_setup		= ds_chk_setup,
 	.sm_cleanup		= ds_chk_cleanup,
+	.sm_proto_count		= 1,
+	.sm_proto_fmt		= &chk_proto_fmt,
 	.sm_cli_count		= 0,
 	.sm_handlers		= chk_handlers,
 };
