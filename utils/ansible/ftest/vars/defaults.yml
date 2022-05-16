@@ -1,0 +1,4 @@
+# Install dependencies of a developmene node
+
+daos_avocado_version_default: 2.4.3
+daos_avocado_framework_version_default: 82.1
