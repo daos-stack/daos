@@ -11,6 +11,9 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"path/filepath"
+	"reflect"
+	"runtime"
 	"strings"
 	"time"
 
@@ -28,6 +31,7 @@ import (
 	"github.com/daos-stack/daos/src/control/drpc"
 	"github.com/daos-stack/daos/src/control/events"
 	"github.com/daos-stack/daos/src/control/lib/control"
+	"github.com/daos-stack/daos/src/control/lib/daos"
 	"github.com/daos-stack/daos/src/control/lib/hostlist"
 	"github.com/daos-stack/daos/src/control/system"
 )
@@ -372,7 +376,7 @@ func (svc *mgmtSvc) doGroupUpdate(ctx context.Context, forced bool) error {
 	}
 
 	if resp.GetStatus() != 0 {
-		return drpc.DaosStatus(resp.GetStatus())
+		return daos.Status(resp.GetStatus())
 	}
 	return nil
 }
@@ -520,6 +524,27 @@ func (svc *mgmtSvc) rpcFanout(ctx context.Context, req *fanoutRequest, resp *fan
 	ranksReq := &control.RanksReq{
 		Ranks: req.Ranks.String(), Force: req.Force,
 	}
+
+	funcName := func(i interface{}) string {
+		return filepath.Base(runtime.FuncForPC(reflect.ValueOf(i).Pointer()).Name())
+	}
+
+	waiting := system.RankSetFromRanks(req.Ranks.Ranks())
+	finished := system.MustCreateRankSet("")
+	ranksReq.SetReportCb(func(hr *control.HostResponse) {
+		rs, ok := hr.Message.(interface{ GetResults() []*sharedpb.RankResult })
+		if !ok {
+			svc.log.Errorf("unexpected message type in HostResponse: %T", hr.Message)
+			return
+		}
+
+		for _, rr := range rs.GetResults() {
+			waiting.Delete(system.Rank(rr.Rank))
+			finished.Add(system.Rank(rr.Rank))
+		}
+
+		svc.log.Infof("%s: finished: %s; waiting: %s", funcName(req.Method), finished, waiting)
+	})
 
 	// Not strictly necessary but helps with debugging.
 	dl, ok := ctx.Deadline()
@@ -947,12 +972,12 @@ func (svc *mgmtSvc) SystemCleanup(ctx context.Context, req *mgmtpb.SystemCleanup
 
 		res := &mgmtpb.PoolEvictResp{}
 		if err = proto.Unmarshal(dresp.Body, res); err != nil {
-			res.Status = int32(drpc.DaosIOInvalid)
+			res.Status = int32(daos.IOInvalid)
 			errmsg = errors.Wrap(err, "unmarshal PoolEvict response").Error()
 			res.Count = 0
 		}
 
-		if res.Status != int32(drpc.DaosSuccess) {
+		if res.Status != int32(daos.Success) {
 			errmsg = fmt.Sprintf("Unable to clean up handles for machine %s on pool %s", evictReq.Machine, evictReq.Id)
 		}
 

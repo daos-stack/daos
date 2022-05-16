@@ -84,24 +84,37 @@ func (s *Provider) GetTopology(ctx context.Context) (*hardware.Topology, error) 
 
 	topo := &hardware.Topology{}
 
-	// For now we only fetch network devices from sysfs.
-	for _, subsystem := range netSubsystems {
-		if err := s.addDevices(topo, subsystem); err != nil {
+	for _, subsystem := range s.topologySubsystems() {
+		if err := s.addPCIDevices(topo, subsystem); err != nil {
 			return nil, err
 		}
+	}
+
+	if err := s.addVirtualNetDevices(topo); err != nil {
+		return nil, err
 	}
 
 	return topo, nil
 }
 
-func (s *Provider) addDevices(topo *hardware.Topology, subsystem string) error {
-	err := filepath.Walk(s.sysPath("class", subsystem), func(path string, fi os.FileInfo, err error) error {
+func (s *Provider) topologySubsystems() []string {
+	// For now we only fetch network devices from sysfs.
+	return netSubsystems
+}
+
+func (s *Provider) addPCIDevices(topo *hardware.Topology, subsystem string) error {
+	subsysRoot := s.sysPath("class", subsystem)
+	err := filepath.Walk(subsysRoot, func(path string, fi os.FileInfo, err error) error {
 		if fi == nil {
 			return nil
 		}
 
 		if err != nil {
 			return err
+		}
+
+		if path == subsysRoot {
+			return nil
 		}
 
 		var dev *hardware.PCIDevice
@@ -200,6 +213,63 @@ func (s *Provider) getPCIAddress(path string) (*hardware.PCIAddress, error) {
 	}
 
 	return nil, errors.Errorf("unable to parse PCI address from %q", path)
+}
+
+func (s *Provider) addVirtualNetDevices(topo *hardware.Topology) error {
+	virtualDevices := make([]*hardware.VirtualDevice, 0)
+	addedDevices := topo.AllDevices()
+
+	netPath := s.sysPath("devices", "virtual", "net")
+	netIfaces, err := ioutil.ReadDir(netPath)
+	if err != nil {
+		s.log.Debugf("unable to read any virtual net interfaces: %s", err.Error())
+		return nil
+	}
+
+	for _, iface := range netIfaces {
+		ifacePath := filepath.Join(netPath, iface.Name())
+
+		ifaceFiles, err := ioutil.ReadDir(ifacePath)
+		if err != nil {
+			s.log.Debugf("unable to read contents of %s", ifacePath)
+			continue
+		}
+
+		virt := &hardware.VirtualDevice{
+			Name: iface.Name(),
+			Type: hardware.DeviceTypeNetInterface,
+		}
+
+		for _, f := range ifaceFiles {
+			// NB: For now we only look one level below for a link to a physical device.
+			// In theory a virtual interface could be backed by another virtual
+			// interface, which is backed by another, and so on until we reach a
+			// physical one. For now we would consider such devices not to be hardware
+			// backed.
+			if strings.HasPrefix(f.Name(), "lower_") {
+				path, err := filepath.EvalSymlinks(filepath.Join(ifacePath, f.Name()))
+				if err != nil {
+					s.log.Error(err.Error())
+					continue
+				}
+
+				pciDev, found := addedDevices[filepath.Base(path)]
+				if found {
+					s.log.Debugf("virtual device %q has physical backing device %q", iface.Name(), pciDev.DeviceName())
+					virt.BackingDevice = pciDev.PCIDevice()
+				}
+			}
+		}
+
+		s.log.Debugf("adding virtual device at %q", ifacePath)
+		virtualDevices = append(virtualDevices, virt)
+	}
+
+	if len(virtualDevices) > 0 {
+		topo.VirtualDevices = virtualDevices
+	}
+
+	return nil
 }
 
 // GetFabricInterfaces harvests fabric interfaces from sysfs.

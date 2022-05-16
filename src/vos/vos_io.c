@@ -1201,7 +1201,9 @@ akey_fetch(struct vos_io_context *ioc, daos_handle_t ak_toh)
 
 	rc = key_tree_prepare(ioc->ic_obj, ak_toh,
 			      VOS_BTR_AKEY, &iod->iod_name, flags,
-			      DAOS_INTENT_DEFAULT, &krec, &toh, ioc->ic_ts_set);
+			      DAOS_INTENT_DEFAULT, &krec,
+			      (ioc->ic_check_existence || ioc->ic_read_ts_only) ? NULL : &toh,
+			      ioc->ic_ts_set);
 
 	if (stop_check(ioc, VOS_OF_COND_AKEY_FETCH, iod, &rc, true)) {
 		if (rc == 0 && !ioc->ic_read_ts_only)
@@ -1647,8 +1649,14 @@ vos_btr_mark_agg(struct umem_instance *umm, struct btr_root *root, daos_epoch_t 
 }
 
 int
-vos_key_mark_agg(struct umem_instance *umm, struct vos_krec_df *krec, daos_epoch_t epoch)
+vos_key_mark_agg(struct vos_container *cont, struct vos_krec_df *krec, daos_epoch_t epoch)
 {
+	struct umem_instance	*umm;
+
+	if ((cont->vc_pool->vp_feats & VOS_POOL_FEAT_AGG_OPT) == 0)
+		return 0;
+
+	umm = vos_cont2umm(cont);
 	if (krec->kr_bmap & KREC_BF_BTR)
 		return vos_btr_mark_agg(umm, &krec->kr_btr, epoch);
 
@@ -1656,11 +1664,16 @@ vos_key_mark_agg(struct umem_instance *umm, struct vos_krec_df *krec, daos_epoch
 }
 
 int
-vos_mark_agg(struct umem_instance *umm, struct btr_root *dkey_root, struct btr_root *obj_root,
+vos_mark_agg(struct vos_container *cont, struct btr_root *dkey_root, struct btr_root *obj_root,
 	     daos_epoch_t epoch)
 {
-	int	rc;
+	struct umem_instance	*umm;
+	int			 rc;
 
+	if ((cont->vc_pool->vp_feats & VOS_POOL_FEAT_AGG_OPT) == 0)
+		return 0;
+
+	umm = vos_cont2umm(cont);
 	rc = vos_btr_mark_agg(umm, dkey_root, epoch);
 	if (rc == 0)
 		rc = vos_btr_mark_agg(umm, obj_root, epoch);
@@ -1674,7 +1687,7 @@ vos_ioc_mark_agg(struct vos_io_context *ioc)
 	if (!ioc->ic_agg_needed)
 		return 0;
 
-	return vos_mark_agg(vos_ioc2umm(ioc), &ioc->ic_obj->obj_df->vo_tree,
+	return vos_mark_agg(ioc->ic_cont, &ioc->ic_obj->obj_df->vo_tree,
 			    &ioc->ic_cont->vc_cont_df->cd_obj_root, ioc->ic_epr.epr_hi);
 }
 
@@ -1800,7 +1813,7 @@ out:
 		key_tree_release(toh, is_array);
 
 	if (rc == 0 && ioc->ic_agg_needed)
-		rc = vos_key_mark_agg(vos_ioc2umm(ioc), krec, ioc->ic_epr.epr_hi);
+		rc = vos_key_mark_agg(ioc->ic_cont, krec, ioc->ic_epr.epr_hi);
 
 	return rc;
 }
@@ -1872,7 +1885,7 @@ release:
 	key_tree_release(ak_toh, false);
 
 	if (rc == 0 && ioc->ic_agg_needed)
-		rc = vos_key_mark_agg(vos_ioc2umm(ioc), krec, ioc->ic_epr.epr_hi);
+		rc = vos_key_mark_agg(ioc->ic_cont, krec, ioc->ic_epr.epr_hi);
 
 	return rc;
 }
