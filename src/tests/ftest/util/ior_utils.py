@@ -35,9 +35,13 @@ class IorCommand(ExecutableCommand):
         >>> mpirun.run()
     """
 
-    def __init__(self):
-        """Create an IorCommand object."""
-        super().__init__("/run/ior/*", "ior")
+    def __init__(self, namespace="/run/ior/*"):
+        """Create an IorCommand object.
+
+        Args:
+            namespace (str, optional): path to yaml parameters. Defaults to "/run/ior/*".
+        """
+        super().__init__(namespace, "ior")
 
         # Flags
         self.flags = FormattedParameter("{}")
