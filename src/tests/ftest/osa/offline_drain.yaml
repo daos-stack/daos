@@ -120,4 +120,4 @@ test_ranks:
   rank_list: ["2","5"]
 pool_capacity:
   pool_fillup: 10
-  pool_test_oclass: RP_2GX
+  pool_test_oclass: RP_3GX

@@ -120,6 +120,5 @@ snapshot:
   test_with_snapshot: True
 pool_capacity:
   pool_fillup: 10
-  pool_test_oclass: RP_2GX
+  pool_test_oclass: RP_3GX
   pool_test_repetitions: 1
-
