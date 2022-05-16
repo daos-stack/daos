@@ -211,6 +211,8 @@ CRT_RPC_DECLARE(chk_rejoin, DAOS_ISEQ_CHK_REJOIN, DAOS_OSEQ_CHK_REJOIN);
 
 #define CHK_DUMMY_POOL		"00000000-0000-0000-0000-000020220531"
 
+#define CHK_BTREE_ORDER		16
+
 /*
  * XXX: Please be careful when change CHK__CHECK_INCONSIST_CLASS__CIC_UNKNOWN
  *	to avoid hole is the struct chk_property.
@@ -220,6 +222,8 @@ CRT_RPC_DECLARE(chk_rejoin, DAOS_ISEQ_CHK_REJOIN, DAOS_OSEQ_CHK_REJOIN);
 
 typedef int (*chk_co_rpc_cb_t)(void *args, uint32_t rank, uint32_t phase, int result,
 			       void *data, uint32_t nr);
+
+typedef void (*chk_pool_free_data_t)(void *data);
 
 enum chk_act_flags {
 	/* The action is applicable to the same kind of inconssitency. */
@@ -279,6 +283,66 @@ struct chk_property {
 	uint32_t			cp_rank_nr;
 };
 
+/*
+ * XXX: For each check instance, there are one leader instance and 1 ~ N engine instances.
+ *	For each rank, there can be at most one leader instance and one engine instance.
+ *
+ *	Currently, we do not support to run multiple check instances in the system (even
+ *	if they are on different ranks sets) at the same time. If multiple pools need to
+ *	be checked, then please either specify their uuids together (or not specify pool
+ *	option, then check all pools by default) via single "dmg check" command, or wait
+ *	one check instance done and then start next.
+ */
+struct chk_instance {
+	struct chk_bookmark	 ci_bk;
+	struct chk_property	 ci_prop;
+	/*
+	 * For leader, ci_{btr,hdl,list} trace the ranks (engines) that still run check.
+	 * For engine, they trace the local pools that are still in checking or pending.
+	 */
+	union {
+		struct btr_root	 ci_rank_btr;
+		struct btr_root	 ci_pool_btr;
+	};
+	union {
+		daos_handle_t	 ci_rank_hdl;
+		daos_handle_t	 ci_pool_hdl;
+	};
+	union {
+		d_list_t	 ci_rank_list;
+		d_list_t	 ci_pool_list;
+	};
+
+	struct btr_root		 ci_pending_btr;
+	daos_handle_t		 ci_pending_hdl;
+	d_list_t		 ci_pending_list;
+
+	/* The slowest phase for the failed pool or rank. */
+	uint32_t		 ci_slowest_fail_phase;
+
+	uint32_t		 ci_iv_id;
+	struct ds_iv_ns		*ci_iv_ns;
+	crt_group_t		*ci_iv_group;
+
+	d_rank_list_t		*ci_ranks;
+
+	ABT_thread		 ci_sched;
+	ABT_rwlock		 ci_abt_lock;
+	ABT_mutex		 ci_abt_mutex;
+	ABT_cond		 ci_abt_cond;
+
+	/* Generator for report event, pending repair actions, and so on. Only for leader. */
+	uint64_t		 ci_seq;
+
+	uint32_t		 ci_all_pools:1, /* Check all pools or not. */
+				 ci_is_leader:1,
+				 ci_sched_running:1,
+				 ci_starting:1,
+				 ci_stopping:1,
+				 ci_started:1,
+				 ci_implicated:1;
+};
+
 struct chk_iv {
 	uint64_t		 ci_gen;
 	uuid_t			 ci_uuid;
@@ -289,6 +353,47 @@ struct chk_iv {
 				 ci_remove_pool:1;
 };
 
+/* Check engine uses it to trace pools. Query logic uses it to organize the result. */
+struct chk_pool_shard {
+	/* Link into chk_pool_rec::cpr_shard_list. */
+	d_list_t		 cps_link;
+	d_rank_t		 cps_rank;
+	void			*cps_data;
+	chk_pool_free_data_t	 cps_free_cb;
+};
+
+/* Check engine uses it to trace pools. Query logic uses it to organize the result. */
+struct chk_pool_rec {
+	/* Link into chk_instance::ci_pool_list. */
+	d_list_t		 cpr_link;
+	/* The list of chk_pool_shard. */
+	d_list_t		 cpr_shard_list;
+	uint32_t		 cpr_shard_nr;
+	uint32_t		 cpr_started:1,
+				 cpr_stop:1;
+	uint32_t		 cpr_phase;
+	uuid_t			 cpr_uuid;
+	ABT_thread		 cpr_thread;
+	struct chk_bookmark	 cpr_bk;
+	struct chk_instance	*cpr_ins;
+};
+
+struct chk_pending_rec {
+	/* Link into chk_instance::ci_pending_list. */
+	d_list_t		 cpr_ins_link;
+	/* Link into chk_rank_rec::crr_pending_list. */
+	d_list_t		 cpr_rank_link;
+	uint64_t		 cpr_seq;
+	d_rank_t		 cpr_rank;
+	uint32_t		 cpr_class;
+	uint32_t		 cpr_action;
+	uint32_t		 cpr_busy:1,
+				 cpr_exiting:1,
+				 cpr_on_leader:1;
+	ABT_mutex		 cpr_mutex;
+	ABT_cond		 cpr_cond;
+};
+
 extern struct crt_proto_format	chk_proto_fmt;
 
 extern struct crt_corpc_ops	chk_start_co_ops;
@@ -296,6 +401,45 @@ extern struct crt_corpc_ops	chk_stop_co_ops;
 extern struct crt_corpc_ops	chk_query_co_ops;
 extern struct crt_corpc_ops	chk_mark_co_ops;
 extern struct crt_corpc_ops	chk_act_co_ops;
+
+extern btr_ops_t		chk_pool_ops;
+extern btr_ops_t		chk_pending_ops;
+extern btr_ops_t		chk_rank_ops;
+
+/* chk_common.c */
+
+void chk_ranks_dump(uint32_t rank_nr, d_rank_t *ranks);
+
+void chk_ranks_dump_by_bitmap(uint32_t rank_nr, uint32_t max, uint8_t *bitmap);
+
+void chk_pools_dump(uint32_t pool_nr, uuid_t pools[]);
+
+int chk_bitmap2ranklist(uint32_t rank_nr, d_rank_t max_rank, uint8_t *bitmap,
+			d_rank_list_t **rlist);
+
+void chk_stop_sched(struct chk_instance *ins);
+
+int chk_prop_prepare(uint32_t rank_nr, d_rank_t *ranks, uint32_t policy_nr,
+		     struct chk_policy **policies, uint32_t pool_nr, uuid_t pools[],
+		     uint32_t flags, int phase, d_rank_t leader,
+		     struct chk_property *prop, d_rank_list_t **rlist);
+
+int chk_pool_add_shard(daos_handle_t hdl, d_list_t *head, uuid_t uuid, d_rank_t rank,
+		       uint32_t phase, struct chk_bookmark *bk, struct chk_instance *ins,
+		       uint32_t *shard_nr, void *data, chk_pool_free_data_t free_cb);
+
+int chk_pool_del_shard(daos_handle_t hdl, uuid_t pool, d_rank_t rank);
+
+int chk_pending_add(struct chk_instance *ins, d_list_t *rank_head, uint64_t seq,
+		    uint32_t rank, uint32_t cla, struct chk_pending_rec **cpr);
+
+int chk_pending_del(struct chk_instance *ins, uint64_t seq, struct chk_pending_rec **cpr);
+
+void chk_pending_destroy(struct chk_pending_rec *cpr);
+
+int chk_ins_init(struct chk_instance *ins);
+
+void chk_ins_fini(struct chk_instance *ins);
 
 /* chk_iv.c */
 
