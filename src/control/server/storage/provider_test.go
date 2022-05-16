@@ -15,7 +15,7 @@ import (
 	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/pkg/errors"
 
-	"github.com/daos-stack/daos/src/control/common"
+	"github.com/daos-stack/daos/src/control/common/test"
 	"github.com/daos-stack/daos/src/control/logging"
 )
 
@@ -103,14 +103,14 @@ func Test_scanBdevs(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(name)
-			defer common.ShowBufferOnFailure(t, buf)
+			defer test.ShowBufferOnFailure(t, buf)
 
 			scanFn := func(r BdevScanRequest) (*BdevScanResponse, error) {
 				return tc.scanResp, tc.scanErr
 			}
 
 			gotResp, gotErr := scanBdevs(log, tc.scanReq, tc.cache, scanFn)
-			common.CmpErr(t, tc.expErr, gotErr)
+			test.CmpErr(t, tc.expErr, gotErr)
 			if gotErr != nil {
 				return
 			}
@@ -294,11 +294,11 @@ func Test_BdevWriteRequestFromConfig(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(name)
-			defer common.ShowBufferOnFailure(t, buf)
+			defer test.ShowBufferOnFailure(t, buf)
 
 			gotReq, gotErr := BdevWriteConfigRequestFromConfig(context.TODO(), log, tc.cfg,
 				tc.vmdEnabled, tc.getTopoFn)
-			common.CmpErr(t, tc.expErr, gotErr)
+			test.CmpErr(t, tc.expErr, gotErr)
 			if gotErr != nil {
 				return
 			}

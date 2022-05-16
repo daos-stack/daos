@@ -247,19 +247,24 @@ func (p *Provider) PrepareBdevs(req BdevPrepareRequest) (*BdevPrepareResponse, e
 	return resp, err
 }
 
-// HasBlockDevices returns true if provider engine storage config has configured
-// block devices.
-func (p *Provider) HasBlockDevices() bool {
+// GetBlockDevices returns the addresses of all block devices in all bdev storage tiers.
+func (p *Provider) GetBlockDevices() *BdevDeviceList {
+	bdevs := []string{}
 	for _, cfg := range p.engineStorage.Tiers.BdevConfigs() {
-		if cfg.Bdev.DeviceList.Len() > 0 {
-			return true
-		}
+		bdevs = append(bdevs, cfg.Bdev.DeviceList.Devices()...)
 	}
-	return false
+
+	p.log.Debugf("bdevs on instance %d: %v", p.engineIndex, bdevs)
+
+	return MustNewBdevDeviceList(bdevs...)
 }
 
-// BdevTierPropertiesFromConfig returns BdevTierProperties struct from given
-// TierConfig.
+// HasBlockDevices returns true if provider engine storage config has configured block devices.
+func (p *Provider) HasBlockDevices() bool {
+	return p.GetBlockDevices().Len() > 0
+}
+
+// BdevTierPropertiesFromConfig returns BdevTierProperties struct from given TierConfig.
 func BdevTierPropertiesFromConfig(cfg *TierConfig) BdevTierProperties {
 	return BdevTierProperties{
 		Class:      cfg.Class,
@@ -518,12 +523,21 @@ func (p *Provider) ScanBdevs(req BdevScanRequest) (*BdevScanResponse, error) {
 }
 
 // SetBdevCache stores given scan response in provider bdev cache.
-func (p *Provider) SetBdevCache(resp BdevScanResponse) {
+func (p *Provider) SetBdevCache(resp BdevScanResponse) error {
 	p.Lock()
 	defer p.Unlock()
 
+	// Filter out any controllers not configured in provider's engine storage config.
+	if err := filterBdevScanResponse(p.GetBlockDevices(), &resp); err != nil {
+		return errors.Wrap(err, "filtering scan response before caching")
+	}
+
+	p.log.Debugf("setting bdev cache in storage provider for engine %d: %v", p.engineIndex,
+		resp.Controllers)
 	p.bdevCache = resp
 	p.vmdEnabled = resp.VMDEnabled
+
+	return nil
 }
 
 // WithVMDEnabled enables VMD on storage provider.

@@ -17,7 +17,7 @@ import (
 	"github.com/google/go-cmp/cmp"
 	"github.com/pkg/errors"
 
-	"github.com/daos-stack/daos/src/control/common"
+	"github.com/daos-stack/daos/src/control/common/test"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/server/engine"
 	"github.com/daos-stack/daos/src/control/server/storage"
@@ -38,7 +38,7 @@ func TestBackend_newSpdkConfig(t *testing.T) {
 					Params: NvmeAttachControllerParams{
 						TransportType:    "PCIe",
 						DeviceName:       fmt.Sprintf("Nvme_%s_0_%d", host, tierID),
-						TransportAddress: common.MockPCIAddr(1),
+						TransportAddress: test.MockPCIAddr(1),
 					},
 				},
 				{
@@ -46,7 +46,7 @@ func TestBackend_newSpdkConfig(t *testing.T) {
 					Params: NvmeAttachControllerParams{
 						TransportType:    "PCIe",
 						DeviceName:       fmt.Sprintf("Nvme_%s_1_%d", host, tierID),
-						TransportAddress: common.MockPCIAddr(2),
+						TransportAddress: test.MockPCIAddr(2),
 					},
 				},
 			}...)
@@ -81,13 +81,13 @@ func TestBackend_newSpdkConfig(t *testing.T) {
 		},
 		"multiple controllers": {
 			class:       storage.ClassNvme,
-			devList:     []string{common.MockPCIAddr(1), common.MockPCIAddr(2)},
+			devList:     []string{test.MockPCIAddr(1), test.MockPCIAddr(2)},
 			expBdevCfgs: multiCtrlrConfs(),
 		},
 		"multiple controllers; vmd enabled": {
 			class:       storage.ClassNvme,
 			enableVmd:   true,
-			devList:     []string{common.MockPCIAddr(1), common.MockPCIAddr(2)},
+			devList:     []string{test.MockPCIAddr(1), test.MockPCIAddr(2)},
 			expBdevCfgs: multiCtrlrConfs(),
 			expExtraSubsystems: []*SpdkSubsystem{
 				{
@@ -103,7 +103,7 @@ func TestBackend_newSpdkConfig(t *testing.T) {
 		},
 		"multiple controllers; hotplug enabled; bus-id range specified": {
 			class:         storage.ClassNvme,
-			devList:       []string{common.MockPCIAddr(1), common.MockPCIAddr(2)},
+			devList:       []string{test.MockPCIAddr(1), test.MockPCIAddr(2)},
 			enableHotplug: true,
 			busidRange:    "0x8a-0x8f",
 			expBdevCfgs:   hotplugConfs,
@@ -170,7 +170,7 @@ func TestBackend_newSpdkConfig(t *testing.T) {
 		},
 		"multiple controllers; acceleration set to spdk; move and crc opts specified": {
 			class:        storage.ClassNvme,
-			devList:      []string{common.MockPCIAddr(1), common.MockPCIAddr(2)},
+			devList:      []string{test.MockPCIAddr(1), test.MockPCIAddr(2)},
 			accelEngine:  "spdk",
 			accelOptCRC:  true,
 			accelOptMove: true,
@@ -192,7 +192,7 @@ func TestBackend_newSpdkConfig(t *testing.T) {
 	for name, tc := range tests {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
-			defer common.ShowBufferOnFailure(t, buf)
+			defer test.ShowBufferOnFailure(t, buf)
 
 			cfg := &storage.TierConfig{
 				Tier:  tierID,
@@ -227,8 +227,8 @@ func TestBackend_newSpdkConfig(t *testing.T) {
 				WithStorageAccelOptCRC(tc.accelOptCRC).
 				WithStorageAccelOptMove(tc.accelOptMove)
 
-			gotValidateErr := engineConfig.Validate(log, nil) // populate output path
-			common.CmpErr(t, tc.expValidateErr, gotValidateErr)
+			gotValidateErr := engineConfig.Validate() // populate output path
+			test.CmpErr(t, tc.expValidateErr, gotValidateErr)
 			if tc.expValidateErr != nil {
 				return
 			}
@@ -237,7 +237,7 @@ func TestBackend_newSpdkConfig(t *testing.T) {
 				&engineConfig.Storage, tc.enableVmd, storage.MockGetTopology)
 
 			gotCfg, gotErr := newSpdkConfig(log, writeReq)
-			common.CmpErr(t, tc.expErr, gotErr)
+			test.CmpErr(t, tc.expErr, gotErr)
 			if tc.expErr != nil {
 				return
 			}

@@ -21,8 +21,8 @@ import (
 	"github.com/pkg/errors"
 	"google.golang.org/protobuf/proto"
 
-	"github.com/daos-stack/daos/src/control/common"
-	. "github.com/daos-stack/daos/src/control/common"
+	"github.com/daos-stack/daos/src/control/common/test"
+	. "github.com/daos-stack/daos/src/control/common/test"
 	"github.com/daos-stack/daos/src/control/drpc"
 	"github.com/daos-stack/daos/src/control/lib/atm"
 	"github.com/daos-stack/daos/src/control/lib/control"
@@ -545,7 +545,7 @@ func TestServer_Harness_CallDrpc(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(name)
-			defer common.ShowBufferOnFailure(t, buf)
+			defer test.ShowBufferOnFailure(t, buf)
 
 			h := NewEngineHarness(log)
 			for _, mic := range tc.mics {
@@ -585,8 +585,8 @@ func TestServer_Harness_CallDrpc(t *testing.T) {
 			}
 
 			_, gotErr := h.CallDrpc(ctx, tc.method, tc.body)
-			common.CmpErr(t, tc.expErr, gotErr)
-			common.AssertEqual(t, db.shutdown, tc.expShutdown, "unexpected shutdown state")
+			test.CmpErr(t, tc.expErr, gotErr)
+			test.AssertEqual(t, db.shutdown, tc.expShutdown, "unexpected shutdown state")
 		})
 	}
 }
