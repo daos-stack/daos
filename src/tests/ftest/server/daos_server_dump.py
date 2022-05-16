@@ -71,8 +71,6 @@ class DaosServerDumpTest(TestWithServers):
                 "No daos_engine processes found on {}".format(
                     str(ret_codes[0])))
 
-        self.log.info("Test passed!")
-
     def test_daos_server_dump_on_error(self):
         """JIRA ID: DAOS-1452.
 
