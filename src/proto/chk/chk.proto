@@ -146,7 +146,7 @@ enum CheckInstStatus {
 	CIS_STOPPED = 3; // DAOS check has been explicitly stopped, do not allow to rejoin.
 	CIS_FAILED = 4; // DAOS check auto stopped for some unrecoverable failure, do not rejoin.
 	CIS_PAUSED = 5; // DAOS check has been paused because engine exit, allow to rejoin.
-	CIS_CRASHED = 6; // Engine crashed during DAOS check scan, allow to rejoin.
+	CIS_IMPLICATED = 6; // Check on the engine exit for other engine failure, do not rejoin.
 }
 
 // The pool status for DAOS check.
@@ -155,8 +155,10 @@ enum CheckPoolStatus {
 	CPS_CHECKING = 1; // The pool is being checked.
 	CPS_CHECKED = 2; // DAOS check has successfully completed all the passes on this pool.
 	CPS_FAILED = 3; // DAOS check could not be completed due to some unrecoverable failure.
-	CPS_PAUSED = 4; // Checking the pool has been put on hold or stopped.
+	CPS_PAUSED = 4; // Checking the pool has been paused because engine exit.
 	CPS_PENDING = 5; // Waiting for the decision from the admin.
+	CPS_STOPPED = 6; // DAOS check on the pool has been stopped explicitly.
+	CPS_IMPLICATED = 7; // Check on the pool is stopped because of other pool or engine failure.
 }
 
 // DAOS check engine scan phases.
@@ -193,7 +195,11 @@ message CheckReport {
         uint64 seq = 1; // DAOS Check event sequence, unique for the instance.
         CheckInconsistClass class = 2; // Inconsistency class
         CheckInconsistAction action = 3; // The action taken to repair the inconsistency
-        bool repaired = 4; // Repaired or not, meaningless if the action is CIA_INTERACT.
+        // Repair result: zero is for repaired successfully.
+        //		  negative value if failed to repair.
+        //		  positive value is for CIA_IGNORE or dryrun mode.
+        // It is meaningless if the action is CIA_INTERACT.
+        int32 result = 4;
         uint32 rank = 5; // Inconsistency happened on which rank if applicable.
         uint32 target = 6; // Inconsistency happened on which target in the rank if applicable.
         string pool_uuid = 7; // The consistency is in which pool if applicable.
