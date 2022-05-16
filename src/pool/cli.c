@@ -2861,3 +2861,18 @@ out_task:
 	tse_task_complete(task, rc);
 	return rc;
 }
+
+int dc_pool_get_redunc(daos_handle_t poh)
+{
+	int			rf;
+	struct dc_pool          *pool;
+
+	pool = dc_hdl2pool(poh);
+	if (pool == NULL)
+		return -DER_NO_HDL;
+
+	rf = pool->dp_rf;
+	dc_pool_put(pool);
+
+	return rf;
+}

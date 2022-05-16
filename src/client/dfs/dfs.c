@@ -1390,7 +1390,6 @@ dfs_cont_create_int(daos_handle_t poh, uuid_t *cuuid, bool uuid_is_set, uuid_t i
 	struct daos_prop_co_roots roots;
 	int			rc;
 	struct daos_prop_entry  *dpe;
-	struct dc_pool          *pool;
 
 	if (cuuid == NULL)
 		return EINVAL;
@@ -1437,17 +1436,17 @@ dfs_cont_create_int(daos_handle_t poh, uuid_t *cuuid, bool uuid_is_set, uuid_t i
 		dattr.da_chunk_size = DFS_DEFAULT_CHUNK_SIZE;
 	}
 
-	pool = dc_hdl2pool(poh);
-	if (pool == NULL)
-		D_GOTO(err_prop, rc = daos_der2errno(DER_NO_HDL));
-
 	/** check if RF factor is set on property */
 	dpe = daos_prop_entry_get(prop, DAOS_PROP_CO_REDUN_FAC);
-	if (!dpe)
-		rf_factor = pool->dp_rf;
-	else
+	if (!dpe) {
+		rc = dc_pool_get_redunc(poh);
+		if (rc < 0)
+			D_GOTO(err_prop, rc = daos_der2errno(rc));
+
+		rf_factor = rc;
+	} else {
 		rf_factor = dpe->dpe_val;
-	dc_pool_put(pool);
+	}
 
 	/* select oclass and generate SB OID */
 	roots.cr_oids[0].lo = RESERVED_LO;
