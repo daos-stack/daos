@@ -20,7 +20,7 @@ import (
 	"github.com/jessevdk/go-flags"
 	"github.com/pkg/errors"
 
-	"github.com/daos-stack/daos/src/control/drpc"
+	"github.com/daos-stack/daos/src/control/lib/daos"
 	"github.com/daos-stack/daos/src/control/lib/txtfmt"
 	"github.com/daos-stack/daos/src/control/lib/ui"
 	"github.com/daos-stack/daos/src/control/logging"
@@ -334,7 +334,7 @@ func (cmd *containerCreateCmd) Execute(_ []string) (err error) {
 	var ci *containerInfo
 	ci, err = cmd.queryContainer()
 	if err != nil {
-		if errors.Cause(err) != drpc.DaosNoPermission {
+		if errors.Cause(err) != daos.NoPermission {
 			return errors.Wrapf(err, "failed to query new container %s", co_id)
 		}
 
@@ -1043,7 +1043,7 @@ func (cmd *containerGetPropCmd) Execute(args []string) error {
 
 	if len(cmd.Properties.names) == len(propHdlrs) {
 		aclProps, cleanupAcl, err := getContAcl(cmd.cContHandle)
-		if err != nil && err != drpc.DaosNoPermission {
+		if err != nil && err != daos.NoPermission {
 			return errors.Wrapf(err,
 				"failed to query ACL for container %s",
 				cmd.ContainerID())

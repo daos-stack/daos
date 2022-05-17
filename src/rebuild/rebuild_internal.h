@@ -33,6 +33,9 @@ struct rebuild_tgt_pool_tracker {
 	/** the current version being rebuilt, only used by leader */
 	uint32_t		rt_rebuild_ver;
 
+	/* rebuild generation, will increase for each re-schedule */
+	uint32_t		rt_rebuild_gen;
+
 	/** the current rebuild operation */
 	daos_rebuild_opc_t	rt_rebuild_op;
 
@@ -110,11 +113,11 @@ struct rebuild_global_pool_tracker {
 	/* the pool uuid */
 	uuid_t		rgt_pool_uuid;
 
-	/** the current version being rebuilt */
-	uint32_t	rgt_rebuild_ver;
-
 	/** rebuild status for each server */
 	struct rebuild_server_status *rgt_servers;
+
+	/** the current version being rebuilt */
+	uint32_t	rgt_rebuild_ver;
 
 	/** global resync dtx version */
 	uint32_t	rgt_dtx_resync_version;
@@ -122,6 +125,7 @@ struct rebuild_global_pool_tracker {
 	/** number of rgt_server_status */
 	uint32_t	rgt_servers_number;
 
+	uint32_t	rgt_rebuild_gen;
 	/* The term of the current rebuild leader */
 	uint64_t	rgt_leader_term;
 
@@ -198,6 +202,7 @@ struct rebuild_task {
 	daos_rebuild_opc_t		dst_rebuild_op;
 	uint64_t			dst_schedule_time;
 	uint32_t			dst_map_ver;
+	uint32_t			dst_rebuild_gen;
 };
 
 /* Per pool structure in TLS to check pool rebuild status
@@ -252,6 +257,7 @@ struct rebuild_iv {
 	unsigned int	riv_rank;
 	unsigned int	riv_master_rank;
 	unsigned int	riv_ver;
+	unsigned int	riv_rebuild_gen;
 	uint32_t	riv_global_done:1,
 			riv_global_scan_done:1,
 			riv_scan_done:1,
@@ -330,7 +336,7 @@ int
 rebuilt_btr_destroy(daos_handle_t btr_hdl);
 
 struct rebuild_tgt_pool_tracker *
-rpt_lookup(uuid_t pool_uuid, unsigned int ver);
+rpt_lookup(uuid_t pool_uuid, unsigned int ver, uint32_t gen);
 
 void
 rgt_get(struct rebuild_global_pool_tracker *rgt);
@@ -339,7 +345,7 @@ void
 rgt_put(struct rebuild_global_pool_tracker *rgt);
 
 struct rebuild_global_pool_tracker *
-rebuild_global_pool_tracker_lookup(const uuid_t pool_uuid, unsigned int ver);
+rebuild_global_pool_tracker_lookup(const uuid_t pool_uuid, unsigned int ver, unsigned int gen);
 
 int
 rebuild_global_status_update(struct rebuild_global_pool_tracker *master_rpt,
