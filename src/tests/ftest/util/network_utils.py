@@ -45,14 +45,14 @@ class NetworkDevice():
 
     def __eq__(self, other):
         """Override the default implementation to compare devices."""
-        status = isinstance(other, NetworkDevice)
+        status = True
+        if not isinstance(other, NetworkDevice):
+            return False
         for key in self.__dict__:
-            if not status:
-                break
             try:
-                status &= getattr(self, key) == getattr(other, key)
+                status &= str(getattr(self, key)) == str(getattr(other, key))
             except AttributeError:
-                status = False
+                return False
         return status
 
     @property
@@ -499,31 +499,32 @@ def get_network_information(hosts, supported=None, verbose=True):
     interfaces = get_active_network_interfaces(hosts, verbose)
     for host in hosts:
         for interface, node_set in interfaces.items():
-            if host in node_set:
-                kwargs = {"host": host, "device": interface, "port": 1}
-                data_gather = {
-                    "ib_device": get_interface_ib_name(node_set, interface, verbose),
-                    "provider": get_interface_providers(interface, ofi_info),
-                    "numa": get_interface_numa_node(node_set, interface, verbose),
-                }
-                for ib_name in data_gather["ib_device"]:
-                    for add_on in ([], ["1"]):
-                        device = ":".join([ib_name] + add_on)
-                        data_gather["provider"].update(get_interface_providers(device, ucx_info))
-                for key, data in data_gather.items():
-                    kwargs[key] = []
-                    for item, item_node_set in data.items():
-                        if node_set == item_node_set:
-                            kwargs[key].append(item)
-                    if kwargs[key]:
-                        kwargs[key] = ",".join([str(item) for item in kwargs[key]])
-                    else:
-                        kwargs[key] = None
+            if host not in node_set:
+                continue
+            kwargs = {"host": host, "device": interface, "port": 1}
+            data_gather = {
+                "ib_device": get_interface_ib_name(node_set, interface, verbose),
+                "provider": get_interface_providers(interface, ofi_info),
+                "numa": get_interface_numa_node(node_set, interface, verbose),
+            }
+            for ib_name in data_gather["ib_device"]:
+                for add_on in ([], ["1"]):
+                    device = ":".join([ib_name] + add_on)
+                    data_gather["provider"].update(get_interface_providers(device, ucx_info))
+            for key, data in data_gather.items():
+                kwargs[key] = []
+                for item, item_node_set in data.items():
+                    if node_set == item_node_set:
+                        kwargs[key].append(item)
+                if kwargs[key]:
+                    kwargs[key] = ",".join([str(item) for item in kwargs[key]])
+                else:
+                    kwargs[key] = None
 
-                for item in kwargs["provider"].split(","):
-                    these_kwargs = kwargs.copy()
-                    these_kwargs["provider"] = item
-                    network_devices.append(NetworkDevice(**these_kwargs))
+            for item in kwargs["provider"].split(","):
+                these_kwargs = kwargs.copy()
+                these_kwargs["provider"] = item
+                network_devices.append(NetworkDevice(**these_kwargs))
 
     return network_devices
 

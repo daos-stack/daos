@@ -32,10 +32,12 @@ class DmgNetworkScanTest(TestWithServers):
         """
         server_provider = self.server_managers[0].get_config_value("provider")
         sys_info = []
+        self.log.debug("Searching for system devices w/ device=ib*, provider=%s:", server_provider)
         for entry in get_network_information(self.hostlist_servers, SUPPORTED_PROVIDERS):
+            self.log.debug("  - %s", entry)
             if entry.device.startswith("ib") and server_provider in entry.provider:
+                entry.ib_device = None
                 sys_info.append(entry)
-                sys_info[-1].ib_device = None
         return sys_info
 
     def get_dmg_info(self):
@@ -56,7 +58,8 @@ class DmgNetworkScanTest(TestWithServers):
 
         :avocado: tags=all,daily_regression
         :avocado: tags=hw,small
-        :avocado: tags=dmg,network_scan,basic
+        :avocado: tags=dmg,control
+        :avocado: tags=network_scan,basic,test_dmg_network_scan_basic
         """
         # Get info, both these functions will return a list of NetDev objects
         dmg_info = sorted(
