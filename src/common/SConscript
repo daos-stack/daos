@@ -28,6 +28,8 @@ def build_daos_common(env, client, prereqs):
 
     common = daos_build.library(denv, libname, COMMON_FILES, LIBS=common_libs)
     denv.Install('$PREFIX/lib64/', common)
+    return common
+
 
 def build_dpar(env):
     """Build libdts library"""
@@ -46,6 +48,7 @@ def build_dpar(env):
 
     mpi_lib = daos_build.library(denv, 'libdpar_mpi', ['dpar_mpi.c'])
     denv.Install('$PREFIX/lib64/', mpi_lib)
+
 
 def build_dts_library(env, prereqs):
     """Build libdts library"""
@@ -69,6 +72,7 @@ def build_dts_library(env, prereqs):
                                  LIBS=libraries)
     denv.Install('$PREFIX/lib64/', dts_lib)
 
+
 def scons():
     """Execute build"""
     Import('env', 'base_env', 'prereqs')
@@ -90,7 +94,8 @@ def scons():
     denv = env.Clone(LIBS=[])
     prereqs.require(denv, 'isal', 'isal_crypto', 'protobufc')
     denv.AppendUnique(LIBS=['cart', 'gurt', 'lz4'])
-    build_daos_common(denv, True, prereqs)
+    common = build_daos_common(denv, True, prereqs)
+    Export('common')
 
     control_tgts = [File('control.c')]
     Export('control_tgts')
@@ -120,6 +125,7 @@ def scons():
 
     build_dpar(base_env)
     build_dts_library(base_env, prereqs)
+
 
 if __name__ == "SCons.Script":
     scons()
