@@ -147,7 +147,7 @@ get_vos_structure_sizes_yaml(int alloc_overhead, struct d_string_buffer_t *buf,
 	if (rc) {
 		goto exit_0;
 	}
-	rc = vos_self_init(vos_path);
+	rc = vos_self_init(vos_path, false);
 	if (rc) {
 		goto exit_1;
 	}
