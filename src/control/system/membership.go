@@ -24,10 +24,10 @@ import (
 	"github.com/daos-stack/daos/src/control/logging"
 )
 
-// resolveTCPFn is a type alias for the net.ResolveTCPAddr function signature.
-type resolveTCPFn func(string, string) (*net.TCPAddr, error)
+// TCPResolver is a type alias for the net.ResolveTCPAddr function signature.
+type TCPResolver func(string, string) (*net.TCPAddr, error)
 
-type memberDatabase interface {
+type MemberStore interface {
 	MemberCount(...MemberState) (int, error)
 	MemberRanks(...MemberState) ([]Rank, error)
 	FindMemberByRank(rank Rank) (*Member, error)
@@ -44,12 +44,12 @@ type memberDatabase interface {
 type Membership struct {
 	sync.RWMutex
 	log        logging.Logger
-	db         memberDatabase
-	resolveTCP resolveTCPFn
+	db         MemberStore
+	resolveTCP TCPResolver
 }
 
 // NewMembership returns a reference to a new DAOS system membership.
-func NewMembership(log logging.Logger, mdb memberDatabase) *Membership {
+func NewMembership(log logging.Logger, mdb MemberStore) *Membership {
 	return &Membership{
 		db:         mdb,
 		log:        log,
@@ -58,7 +58,7 @@ func NewMembership(log logging.Logger, mdb memberDatabase) *Membership {
 }
 
 // WithTCPResolver adds a resolveTCPFn to the membership structure.
-func (m *Membership) WithTCPResolver(resolver resolveTCPFn) *Membership {
+func (m *Membership) WithTCPResolver(resolver TCPResolver) *Membership {
 	m.resolveTCP = resolver
 
 	return m
