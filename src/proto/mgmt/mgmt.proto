@@ -46,6 +46,8 @@ service MgmtSvc {
 	rpc PoolReintegrate(PoolReintegrateReq) returns (PoolReintegrateResp) {}
 	// PoolQuery queries a DAOS pool.
 	rpc PoolQuery(PoolQueryReq) returns (PoolQueryResp) {}
+	// PoolQueryTarget queries a DAOS storage target.
+	rpc PoolQueryTarget(PoolQueryTargetReq) returns (PoolQueryTargetResp) {}
 	// Set a DAOS pool property.
 	rpc PoolSetProp(PoolSetPropReq) returns (PoolSetPropResp) {}
 	// Get a DAOS pool property list.
@@ -78,4 +80,8 @@ service MgmtSvc {
 	rpc SystemCleanup(SystemCleanupReq) returns(SystemCleanupResp){}
 	// PoolUpgrade queries a DAOS pool.
 	rpc PoolUpgrade(PoolUpgradeReq) returns (PoolUpgradeResp) {}
+	// Set a system attribute or attributes.
+	rpc SystemSetAttr(SystemSetAttrReq) returns (DaosResp) {}
+	// Get a system attribute or attributes.
+	rpc SystemGetAttr(SystemGetAttrReq) returns (SystemGetAttrResp) {}
 }

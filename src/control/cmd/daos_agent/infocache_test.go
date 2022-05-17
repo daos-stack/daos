@@ -16,6 +16,7 @@ import (
 
 	"github.com/daos-stack/daos/src/control/common"
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
+	"github.com/daos-stack/daos/src/control/common/test"
 	"github.com/daos-stack/daos/src/control/lib/atm"
 	"github.com/daos-stack/daos/src/control/lib/hardware"
 	"github.com/daos-stack/daos/src/control/logging"
@@ -34,7 +35,7 @@ func TestAgent_newAttachInfoCache(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
-			defer common.ShowBufferOnFailure(t, buf)
+			defer test.ShowBufferOnFailure(t, buf)
 
 			cache := newAttachInfoCache(log, tc.enabled)
 
@@ -42,9 +43,9 @@ func TestAgent_newAttachInfoCache(t *testing.T) {
 				t.Fatal("expected non-nil cache")
 			}
 
-			common.AssertEqual(t, log, cache.log, "")
-			common.AssertEqual(t, tc.enabled, cache.isEnabled(), "isEnabled()")
-			common.AssertFalse(t, cache.isCached(), "default state is uncached")
+			test.AssertEqual(t, log, cache.log, "")
+			test.AssertEqual(t, tc.enabled, cache.isEnabled(), "isEnabled()")
+			test.AssertFalse(t, cache.isCached(), "default state is uncached")
 		})
 	}
 }
@@ -101,8 +102,8 @@ func TestAgent_attachInfoCache_Get(t *testing.T) {
 			sysName := "snekSezSyss"
 			remoteInvoked := atm.NewBool(false)
 			getFn := func(_ context.Context, node int, name string) (*mgmtpb.GetAttachInfoResp, error) {
-				common.AssertEqual(t, numaNode, node, "node was not supplied")
-				common.AssertEqual(t, sysName, name, "name was not supplied")
+				test.AssertEqual(t, numaNode, node, "node was not supplied")
+				test.AssertEqual(t, sysName, name, "name was not supplied")
 
 				remoteInvoked.SetTrue()
 				if tc.remoteErr {
@@ -112,16 +113,16 @@ func TestAgent_attachInfoCache_Get(t *testing.T) {
 			}
 
 			cachedResp, gotErr := tc.aic.Get(context.Background(), numaNode, sysName, getFn)
-			common.CmpErr(t, tc.expErr, gotErr)
+			test.CmpErr(t, tc.expErr, gotErr)
 			if tc.expErr != nil {
 				return
 			}
-			if diff := cmp.Diff(srvResp, cachedResp, common.DefaultCmpOpts()...); diff != "" {
+			if diff := cmp.Diff(srvResp, cachedResp, test.DefaultCmpOpts()...); diff != "" {
 				t.Fatalf("-want, +got:\n%s", diff)
 			}
 
-			common.AssertEqual(t, tc.expCached, tc.aic.isCached(), "cache state")
-			common.AssertEqual(t, tc.expRemote, remoteInvoked.Load(), "remote invoked")
+			test.AssertEqual(t, tc.expCached, tc.aic.isCached(), "cache state")
+			test.AssertEqual(t, tc.expRemote, remoteInvoked.Load(), "remote invoked")
 		})
 	}
 }
@@ -137,7 +138,7 @@ func TestAgent_newLocalFabricCache(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
-			defer common.ShowBufferOnFailure(t, buf)
+			defer test.ShowBufferOnFailure(t, buf)
 
 			cache := newLocalFabricCache(log, tc.enabled)
 
@@ -145,9 +146,9 @@ func TestAgent_newLocalFabricCache(t *testing.T) {
 				t.Fatal("expected non-nil cache")
 			}
 
-			common.AssertEqual(t, log, cache.log, "")
-			common.AssertFalse(t, cache.IsCached(), "default state is uncached")
-			common.AssertEqual(t, tc.enabled, cache.IsEnabled(), "")
+			test.AssertEqual(t, log, cache.log, "")
+			test.AssertFalse(t, cache.IsCached(), "default state is uncached")
+			test.AssertEqual(t, tc.enabled, cache.IsEnabled(), "")
 		})
 	}
 }
@@ -184,7 +185,7 @@ func TestAgent_localFabricCache_IsEnabled(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			enabled := tc.fic.IsEnabled()
 
-			common.AssertEqual(t, tc.expEnabled, enabled, "IsEnabled()")
+			test.AssertEqual(t, tc.expEnabled, enabled, "IsEnabled()")
 		})
 	}
 }
@@ -211,32 +212,32 @@ func TestAgent_localFabricCache_CacheScan(t *testing.T) {
 			lfc: newLocalFabricCache(nil, true),
 			input: hardware.NewFabricInterfaceSet(
 				&hardware.FabricInterface{
-					Providers:    common.NewStringSet("ofi+sockets"),
-					Name:         "test0",
-					NetInterface: "os_test0",
-					NUMANode:     1,
-					DeviceClass:  hardware.Ether,
+					Providers:     common.NewStringSet("ofi+sockets"),
+					Name:          "test0",
+					NetInterfaces: common.NewStringSet("os_test0"),
+					NUMANode:      1,
+					DeviceClass:   hardware.Ether,
 				},
 				&hardware.FabricInterface{
-					Providers:    common.NewStringSet("ofi+verbs"),
-					Name:         "test1",
-					NetInterface: "os_test1",
-					NUMANode:     0,
-					DeviceClass:  hardware.Infiniband,
+					Providers:     common.NewStringSet("ofi+verbs"),
+					Name:          "test1",
+					NetInterfaces: common.NewStringSet("os_test1"),
+					NUMANode:      0,
+					DeviceClass:   hardware.Infiniband,
 				},
 				&hardware.FabricInterface{
-					Providers:    common.NewStringSet("ofi+sockets"),
-					Name:         "test2",
-					NetInterface: "os_test2",
-					NUMANode:     0,
-					DeviceClass:  hardware.Ether,
+					Providers:     common.NewStringSet("ofi+sockets"),
+					Name:          "test2",
+					NetInterfaces: common.NewStringSet("os_test2"),
+					NUMANode:      0,
+					DeviceClass:   hardware.Ether,
 				},
 				&hardware.FabricInterface{
-					Providers:    common.NewStringSet("ofi+sockets"),
-					Name:         "lo",
-					NetInterface: "lo",
-					NUMANode:     0,
-					DeviceClass:  hardware.Loopback,
+					Providers:     common.NewStringSet("ofi+sockets"),
+					Name:          "lo",
+					NetInterfaces: common.NewStringSet("lo"),
+					NUMANode:      0,
+					DeviceClass:   hardware.Loopback,
 				},
 			),
 			expCached: true,
@@ -248,11 +249,11 @@ func TestAgent_localFabricCache_CacheScan(t *testing.T) {
 							Name:        "lo",
 							NetDevClass: hardware.Loopback,
 							hw: &hardware.FabricInterface{
-								Providers:    common.NewStringSet("ofi+sockets"),
-								Name:         "lo",
-								NetInterface: "lo",
-								NUMANode:     0,
-								DeviceClass:  hardware.Loopback,
+								Providers:     common.NewStringSet("ofi+sockets"),
+								Name:          "lo",
+								NetInterfaces: common.NewStringSet("lo"),
+								NUMANode:      0,
+								DeviceClass:   hardware.Loopback,
 							},
 						},
 						{
@@ -260,11 +261,11 @@ func TestAgent_localFabricCache_CacheScan(t *testing.T) {
 							Domain:      "test1",
 							NetDevClass: hardware.Infiniband,
 							hw: &hardware.FabricInterface{
-								Providers:    common.NewStringSet("ofi+verbs"),
-								Name:         "test1",
-								NetInterface: "os_test1",
-								NUMANode:     0,
-								DeviceClass:  hardware.Infiniband,
+								Providers:     common.NewStringSet("ofi+verbs"),
+								Name:          "test1",
+								NetInterfaces: common.NewStringSet("os_test1"),
+								NUMANode:      0,
+								DeviceClass:   hardware.Infiniband,
 							},
 						},
 						{
@@ -272,11 +273,11 @@ func TestAgent_localFabricCache_CacheScan(t *testing.T) {
 							Domain:      "test2",
 							NetDevClass: hardware.Ether,
 							hw: &hardware.FabricInterface{
-								Providers:    common.NewStringSet("ofi+sockets"),
-								Name:         "test2",
-								NetInterface: "os_test2",
-								NUMANode:     0,
-								DeviceClass:  hardware.Ether,
+								Providers:     common.NewStringSet("ofi+sockets"),
+								Name:          "test2",
+								NetInterfaces: common.NewStringSet("os_test2"),
+								NUMANode:      0,
+								DeviceClass:   hardware.Ether,
 							},
 						},
 					},
@@ -286,11 +287,11 @@ func TestAgent_localFabricCache_CacheScan(t *testing.T) {
 							Domain:      "test0",
 							NetDevClass: hardware.Ether,
 							hw: &hardware.FabricInterface{
-								Providers:    common.NewStringSet("ofi+sockets"),
-								Name:         "test0",
-								NetInterface: "os_test0",
-								NUMANode:     1,
-								DeviceClass:  hardware.Ether,
+								Providers:     common.NewStringSet("ofi+sockets"),
+								Name:          "test0",
+								NetInterfaces: common.NewStringSet("os_test0"),
+								NUMANode:      1,
+								DeviceClass:   hardware.Ether,
 							},
 						},
 					},
@@ -300,7 +301,7 @@ func TestAgent_localFabricCache_CacheScan(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
-			defer common.ShowBufferOnFailure(t, buf)
+			defer test.ShowBufferOnFailure(t, buf)
 
 			if tc.lfc != nil {
 				tc.lfc.log = log
@@ -308,7 +309,7 @@ func TestAgent_localFabricCache_CacheScan(t *testing.T) {
 
 			tc.lfc.CacheScan(context.TODO(), tc.input)
 
-			common.AssertEqual(t, tc.expCached, tc.lfc.IsCached(), "IsCached()")
+			test.AssertEqual(t, tc.expCached, tc.lfc.IsCached(), "IsCached()")
 
 			if tc.lfc == nil {
 				return
@@ -369,7 +370,7 @@ func TestAgent_localFabricCache_Cache(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
-			defer common.ShowBufferOnFailure(t, buf)
+			defer test.ShowBufferOnFailure(t, buf)
 
 			if tc.lfc != nil {
 				tc.lfc.log = log
@@ -377,7 +378,7 @@ func TestAgent_localFabricCache_Cache(t *testing.T) {
 
 			tc.lfc.Cache(context.TODO(), tc.input)
 
-			common.AssertEqual(t, tc.expCached, tc.lfc.IsCached(), "IsCached()")
+			test.AssertEqual(t, tc.expCached, tc.lfc.IsCached(), "IsCached()")
 
 			if tc.lfc == nil {
 				return
@@ -402,51 +403,51 @@ func TestAgent_localFabricCache_GetDevice(t *testing.T) {
 	populatedCache := &NUMAFabric{
 		numaMap: map[int][]*FabricInterface{
 			0: {
-				fabricInterfaceFromHardware(&hardware.FabricInterface{
-					NetInterface: "test1",
-					DeviceClass:  hardware.Infiniband,
-					Name:         "test1_alias",
-					Providers:    common.NewStringSet("ofi+verbs"),
-				}),
-				fabricInterfaceFromHardware(&hardware.FabricInterface{
-					NetInterface: "test2",
-					DeviceClass:  hardware.Ether,
-					Name:         "test2_alias",
-					Providers:    common.NewStringSet("ofi+sockets"),
-				}),
+				fabricInterfacesFromHardware(&hardware.FabricInterface{
+					NetInterfaces: common.NewStringSet("test1"),
+					DeviceClass:   hardware.Infiniband,
+					Name:          "test1_alias",
+					Providers:     common.NewStringSet("ofi+verbs"),
+				})[0],
+				fabricInterfacesFromHardware(&hardware.FabricInterface{
+					NetInterfaces: common.NewStringSet("test2"),
+					DeviceClass:   hardware.Ether,
+					Name:          "test2_alias",
+					Providers:     common.NewStringSet("ofi+sockets"),
+				})[0],
 			},
 			1: {
-				fabricInterfaceFromHardware(&hardware.FabricInterface{
-					NetInterface: "test3",
-					DeviceClass:  hardware.Infiniband,
-					Name:         "test3_alias",
-					Providers:    common.NewStringSet("ofi+verbs"),
-				}),
-				fabricInterfaceFromHardware(&hardware.FabricInterface{
-					NetInterface: "test4",
-					DeviceClass:  hardware.Infiniband,
-					Name:         "test4_alias",
-					Providers:    common.NewStringSet("ofi+verbs"),
-				}),
-				fabricInterfaceFromHardware(&hardware.FabricInterface{
-					NetInterface: "test5",
-					DeviceClass:  hardware.Ether,
-					Name:         "test5_alias",
-					Providers:    common.NewStringSet("ofi+sockets"),
-				}),
+				fabricInterfacesFromHardware(&hardware.FabricInterface{
+					NetInterfaces: common.NewStringSet("test3"),
+					DeviceClass:   hardware.Infiniband,
+					Name:          "test3_alias",
+					Providers:     common.NewStringSet("ofi+verbs"),
+				})[0],
+				fabricInterfacesFromHardware(&hardware.FabricInterface{
+					NetInterfaces: common.NewStringSet("test4"),
+					DeviceClass:   hardware.Infiniband,
+					Name:          "test4_alias",
+					Providers:     common.NewStringSet("ofi+verbs"),
+				})[0],
+				fabricInterfacesFromHardware(&hardware.FabricInterface{
+					NetInterfaces: common.NewStringSet("test5"),
+					DeviceClass:   hardware.Ether,
+					Name:          "test5_alias",
+					Providers:     common.NewStringSet("ofi+sockets"),
+				})[0],
 			},
 			2: {
-				fabricInterfaceFromHardware(&hardware.FabricInterface{
-					NetInterface: "test6",
-					DeviceClass:  hardware.Ether,
-					Providers:    common.NewStringSet("ofi+sockets"),
-				}),
-				fabricInterfaceFromHardware(&hardware.FabricInterface{
-					NetInterface: "test7",
-					DeviceClass:  hardware.Ether,
-					Name:         "test7_alias",
-					Providers:    common.NewStringSet("ofi+sockets", "ofi+verbs"),
-				}),
+				fabricInterfacesFromHardware(&hardware.FabricInterface{
+					NetInterfaces: common.NewStringSet("test6"),
+					DeviceClass:   hardware.Ether,
+					Providers:     common.NewStringSet("ofi+sockets"),
+				})[0],
+				fabricInterfacesFromHardware(&hardware.FabricInterface{
+					NetInterfaces: common.NewStringSet("test7"),
+					DeviceClass:   hardware.Ether,
+					Name:          "test7_alias",
+					Providers:     common.NewStringSet("ofi+sockets", "ofi+verbs"),
+				})[0],
 			},
 		},
 	}
@@ -498,7 +499,7 @@ func TestAgent_localFabricCache_GetDevice(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
-			defer common.ShowBufferOnFailure(t, buf)
+			defer test.ShowBufferOnFailure(t, buf)
 
 			if tc.lfc != nil {
 				tc.lfc.log = log
@@ -509,7 +510,7 @@ func TestAgent_localFabricCache_GetDevice(t *testing.T) {
 
 			dev, err := tc.lfc.GetDevice(tc.params)
 
-			common.CmpErr(t, tc.expErr, err)
+			test.CmpErr(t, tc.expErr, err)
 			if diff := cmp.Diff(tc.expDevice, dev, cmpopts.IgnoreUnexported(FabricInterface{})); diff != "" {
 				t.Fatalf("-want, +got:\n%s", diff)
 			}

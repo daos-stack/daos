@@ -23,7 +23,7 @@ import (
 
 	"github.com/daos-stack/daos/src/control/common/proto/convert"
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
-	"github.com/daos-stack/daos/src/control/drpc"
+	"github.com/daos-stack/daos/src/control/lib/daos"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/security/auth"
 	"github.com/daos-stack/daos/src/control/system"
@@ -34,7 +34,7 @@ const (
 	// request can take before being timed out.
 	PoolCreateTimeout = 10 * time.Minute // be generous for large pools
 	// DefaultPoolTimeout is the default timeout for a pool request.
-	DefaultPoolTimeout = drpc.DefaultCartTimeout * 3
+	DefaultPoolTimeout = daos.DefaultCartTimeout * 3
 )
 
 // checkUUID is a helper function for validating that the supplied
@@ -194,12 +194,12 @@ func (r *poolRequest) canRetry(reqErr error, try uint) bool {
 
 	// Otherwise, apply a default retry test to all pool requests.
 	switch e := reqErr.(type) {
-	case drpc.DaosStatus:
+	case daos.Status:
 		switch e {
 		// These pool errors can be retried.
-		case drpc.DaosTimedOut, drpc.DaosGroupVersionMismatch,
-			drpc.DaosTryAgain, drpc.DaosOutOfGroup, drpc.DaosUnreachable,
-			drpc.DaosExcluded:
+		case daos.TimedOut, daos.GroupVersionMismatch,
+			daos.TryAgain, daos.OutOfGroup, daos.Unreachable,
+			daos.Excluded:
 			return true
 		default:
 			return false
@@ -380,12 +380,12 @@ type (
 
 	// StorageUsageStats represents DAOS storage usage statistics.
 	StorageUsageStats struct {
-		Total     uint64 `json:"total"`
-		Free      uint64 `json:"free"`
-		Min       uint64 `json:"min"`
-		Max       uint64 `json:"max"`
-		Mean      uint64 `json:"mean"`
-		MediaType string `json:"media_type"`
+		Total     uint64           `json:"total"`
+		Free      uint64           `json:"free"`
+		Min       uint64           `json:"min"`
+		Max       uint64           `json:"max"`
+		Mean      uint64           `json:"mean"`
+		MediaType StorageMediaType `json:"media_type"`
 	}
 
 	// PoolRebuildState indicates the current state of the pool rebuild process.
@@ -419,6 +419,46 @@ type (
 		UUID   string `json:"uuid"`
 		PoolInfo
 	}
+
+	// PoolQueryTargetReq contains parameters for a pool query target request
+	PoolQueryTargetReq struct {
+		poolRequest
+		ID      string
+		Rank    system.Rank
+		Targets []uint32
+	}
+
+	StorageMediaType int32
+
+	// StorageTargetUsage represents DAOS target storage usage
+	StorageTargetUsage struct {
+		Total     uint64           `json:"total"`
+		Free      uint64           `json:"free"`
+		MediaType StorageMediaType `json:"media_type"`
+	}
+
+	PoolQueryTargetType  int32
+	PoolQueryTargetState int32
+
+	// PoolQueryTargetInfo contains information about a single target
+	PoolQueryTargetInfo struct {
+		Type  PoolQueryTargetType  `json:"target_type"`
+		State PoolQueryTargetState `json:"target_state"`
+		Space []*StorageTargetUsage
+	}
+
+	// PoolQueryTargetResp contains a pool query target response
+	PoolQueryTargetResp struct {
+		Status int32 `json:"status"`
+		Infos  []*PoolQueryTargetInfo
+	}
+)
+
+const (
+	// StorageMediaTypeScm indicates that the media is storage class (persistent) memory
+	StorageMediaTypeScm StorageMediaType = iota
+	// StorageMediaTypeNvme indicates that the media is NVMe SSD
+	StorageMediaTypeNvme
 )
 
 func (pqr *PoolQueryResp) MarshalJSON() ([]byte, error) {
@@ -488,31 +528,6 @@ func (pqr *PoolQueryResp) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
-func (sus *StorageUsageStats) UnmarshalJSON(data []byte) error {
-	type fromJSON StorageUsageStats
-	from := &struct {
-		MediaType uint32 `json:"media_type"`
-		*fromJSON
-	}{
-		fromJSON: (*fromJSON)(sus),
-	}
-
-	if err := json.Unmarshal(data, from); err != nil {
-		return err
-	}
-
-	switch from.MediaType {
-	case drpc.MediaTypeScm:
-		sus.MediaType = "scm"
-	case drpc.MediaTypeNvme:
-		sus.MediaType = "nvme"
-	default:
-		sus.MediaType = "unknown"
-	}
-
-	return nil
-}
-
 const (
 	// PoolRebuildStateIdle indicates that the rebuild process is idle.
 	PoolRebuildStateIdle PoolRebuildState = iota
@@ -523,7 +538,11 @@ const (
 )
 
 func (prs PoolRebuildState) String() string {
-	return strings.ToLower(mgmtpb.PoolRebuildStatus_State_name[int32(prs)])
+	prss, ok := mgmtpb.PoolRebuildStatus_State_name[int32(prs)]
+	if !ok {
+		return "unknown"
+	}
+	return strings.ToLower(prss)
 }
 
 func (prs PoolRebuildState) MarshalJSON() ([]byte, error) {
@@ -575,6 +594,70 @@ func PoolQuery(ctx context.Context, rpcClient UnaryInvoker, req *PoolQueryReq) (
 
 	pqr := new(PoolQueryResp)
 	return pqr, convertMSResponse(ur, pqr)
+}
+
+func (smt StorageMediaType) MarshalJSON() ([]byte, error) {
+	typeStr, ok := mgmtpb.StorageMediaType_name[int32(smt)]
+	if !ok {
+		return nil, errors.Errorf("invalid storage media type %d", smt)
+	}
+	return []byte(`"` + strings.ToLower(typeStr) + `"`), nil
+}
+
+func (smt StorageMediaType) String() string {
+	smts, ok := mgmtpb.StorageMediaType_name[int32(smt)]
+	if !ok {
+		return "unknown"
+	}
+	return strings.ToLower(smts)
+}
+
+func (pqtt PoolQueryTargetType) MarshalJSON() ([]byte, error) {
+	typeStr, ok := mgmtpb.PoolQueryTargetInfo_TargetType_name[int32(pqtt)]
+	if !ok {
+		return nil, errors.Errorf("invalid target type %d", pqtt)
+	}
+	return []byte(`"` + strings.ToLower(typeStr) + `"`), nil
+}
+
+func (ptt PoolQueryTargetType) String() string {
+	ptts, ok := mgmtpb.PoolQueryTargetInfo_TargetType_name[int32(ptt)]
+	if !ok {
+		return "invalid"
+	}
+	return strings.ToLower(ptts)
+}
+
+const (
+	PoolTargetStateUnknown PoolQueryTargetState = iota
+	// PoolTargetStateDownOut indicates the target is not available
+	PoolTargetStateDownOut
+	// PoolTargetStateDown indicates the target is not available, may need rebuild
+	PoolTargetStateDown
+	// PoolTargetStateUp indicates the target is up
+	PoolTargetStateUp
+	// PoolTargetStateUpIn indicates the target is up and running
+	PoolTargetStateUpIn
+	// PoolTargetStateNew indicates the target is in an intermediate state (pool map change)
+	PoolTargetStateNew
+	// PoolTargetStateDrain indicates the target is being drained
+	PoolTargetStateDrain
+)
+
+func (pqts PoolQueryTargetState) MarshalJSON() ([]byte, error) {
+	stateStr, ok := mgmtpb.PoolQueryTargetInfo_TargetState_name[int32(pqts)]
+	if !ok {
+		return nil, errors.Errorf("invalid target state %d", pqts)
+	}
+	return []byte(`"` + strings.ToLower(stateStr) + `"`), nil
+}
+
+func (pts PoolQueryTargetState) String() string {
+	ptss, ok := mgmtpb.PoolQueryTargetInfo_TargetState_name[int32(pts)]
+	if !ok {
+		return "invalid"
+	}
+	return strings.ToLower(ptss)
 }
 
 // PoolSetPropReq contains pool set-prop parameters.
@@ -1049,7 +1132,7 @@ func ListPools(ctx context.Context, rpcClient UnaryInvoker, req *ListPoolsReq) (
 			continue
 		}
 		if resp.Status != 0 {
-			p.QueryStatusMsg = drpc.DaosStatus(resp.Status).Error()
+			p.QueryStatusMsg = daos.Status(resp.Status).Error()
 			if p.QueryStatusMsg == "" {
 				p.QueryStatusMsg = "unknown error"
 			}

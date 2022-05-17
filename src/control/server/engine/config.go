@@ -14,8 +14,6 @@ import (
 
 	"github.com/pkg/errors"
 
-	"github.com/daos-stack/daos/src/control/lib/hardware"
-	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/server/storage"
 	"github.com/daos-stack/daos/src/control/system"
 )
@@ -170,6 +168,9 @@ func (fc *FabricConfig) setNumSecondaryEndpoints(other []int) {
 // Validate ensures that the configuration meets minimum standards.
 func (fc *FabricConfig) Validate() error {
 	numProv := fc.GetNumProviders()
+	if numProv == 0 {
+		return errors.New("provider not set")
+	}
 
 	interfaces, err := fc.GetInterfaces()
 	if err != nil {
@@ -310,53 +311,12 @@ func NewConfig() *Config {
 	}
 }
 
-// setAffinity ensures engine NUMA locality is assigned and valid.
-func (c *Config) setAffinity(log logging.Logger, fis *hardware.FabricInterfaceSet) error {
-	iface, err := c.Fabric.GetPrimaryInterface()
-	if err != nil {
-		return err
-	}
-
-	var fi *hardware.FabricInterface
-	if fis != nil {
-		provider, err := c.Fabric.GetPrimaryProvider()
-		if err != nil {
-			return err
-		}
-
-		fi, err = fis.GetInterfaceOnNetDevice(iface, provider)
-		if err != nil {
-			return err
-		}
-	}
-
-	if c.PinnedNumaNode != nil {
-		c.Fabric.NumaNodeIndex = *c.PinnedNumaNode
-		c.Storage.NumaNodeIndex = *c.PinnedNumaNode
-
-		// validate that numa node is correct for the given device
-		if fi != nil && fi.NUMANode != *c.PinnedNumaNode {
-			log.Errorf("misconfiguration: network interface %s is on NUMA "+
-				"node %d but engine is pinned to NUMA node %d", iface,
-				fi.NUMANode, *c.PinnedNumaNode)
-		}
-
-		return nil
-	}
-
-	if fi == nil {
-		return errors.New("pinned_numa_node unset in config and fabric info not provided")
-	}
-
-	// set engine numa node index to that of selected fabric interface
-	c.Fabric.NumaNodeIndex = fi.NUMANode
-	c.Storage.NumaNodeIndex = fi.NUMANode
-
-	return nil
-}
-
 // Validate ensures that the configuration meets minimum standards.
-func (c *Config) Validate(log logging.Logger, fis *hardware.FabricInterfaceSet) error {
+func (c *Config) Validate() error {
+	if c.PinnedNumaNode != nil && c.ServiceThreadCore != 0 {
+		return errors.New("cannot specify both pinned_numa_node and first_core")
+	}
+
 	if err := c.Fabric.Validate(); err != nil {
 		return errors.Wrap(err, "fabric config validation failed")
 	}
@@ -369,7 +329,7 @@ func (c *Config) Validate(log logging.Logger, fis *hardware.FabricInterfaceSet) 
 		return errors.Wrap(err, "validate engine log masks")
 	}
 
-	return errors.Wrap(c.setAffinity(log, fis), "setting numa affinity for engine")
+	return nil
 }
 
 // CmdLineArgs returns a slice of command line arguments to be
@@ -615,7 +575,7 @@ func (c *Config) WithHugePageSize(hugepagesz int) *Config {
 	return c
 }
 
-// WithPinnedNumaNode sets the NUMA node affinity for the I/O Engine instance
+// WithPinnedNumaNode sets the NUMA node affinity for the I/O Engine instance.
 func (c *Config) WithPinnedNumaNode(numa uint) *Config {
 	c.PinnedNumaNode = &numa
 	return c

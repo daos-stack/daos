@@ -104,3 +104,21 @@ message SystemCleanupResp {
 	}
 	repeated CleanupResult results = 1; // Results and Status for individual pools that are cleanedup.
 }
+
+// SystemSetAttrReq contains a request to set one or more system properties.
+message SystemSetAttrReq {
+	string sys = 1;
+	map<string, string> attributes = 2;
+}
+
+// SystemAttrGetReq contains a request to get one or more attributes by key. If
+// no keys are supplied, all attributes are returned in the response.
+message SystemGetAttrReq {
+	string sys = 1;
+	repeated string keys = 2;
+}
+
+// SystemAttrGetResp contains a list of attribute key/value pairs.
+message SystemGetAttrResp {
+	map<string, string> attributes = 1;
+}

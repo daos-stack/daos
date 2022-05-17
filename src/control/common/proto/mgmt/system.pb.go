@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2021 Intel Corporation.
+// (C) Copyright 2019-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -766,6 +766,167 @@ func (x *SystemCleanupResp) GetResults() []*SystemCleanupResp_CleanupResult {
 	return nil
 }
 
+// SystemSetAttrReq contains a request to set one or more system properties.
+type SystemSetAttrReq struct {
+	state         protoimpl.MessageState
+	sizeCache     protoimpl.SizeCache
+	unknownFields protoimpl.UnknownFields
+
+	Sys        string            `protobuf:"bytes,1,opt,name=sys,proto3" json:"sys,omitempty"`
+	Attributes map[string]string `protobuf:"bytes,2,rep,name=attributes,proto3" json:"attributes,omitempty" protobuf_key:"bytes,1,opt,name=key,proto3" protobuf_val:"bytes,2,opt,name=value,proto3"`
+}
+
+func (x *SystemSetAttrReq) Reset() {
+	*x = SystemSetAttrReq{}
+	if protoimpl.UnsafeEnabled {
+		mi := &file_mgmt_system_proto_msgTypes[11]
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		ms.StoreMessageInfo(mi)
+	}
+}
+
+func (x *SystemSetAttrReq) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SystemSetAttrReq) ProtoMessage() {}
+
+func (x *SystemSetAttrReq) ProtoReflect() protoreflect.Message {
+	mi := &file_mgmt_system_proto_msgTypes[11]
+	if protoimpl.UnsafeEnabled && x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SystemSetAttrReq.ProtoReflect.Descriptor instead.
+func (*SystemSetAttrReq) Descriptor() ([]byte, []int) {
+	return file_mgmt_system_proto_rawDescGZIP(), []int{11}
+}
+
+func (x *SystemSetAttrReq) GetSys() string {
+	if x != nil {
+		return x.Sys
+	}
+	return ""
+}
+
+func (x *SystemSetAttrReq) GetAttributes() map[string]string {
+	if x != nil {
+		return x.Attributes
+	}
+	return nil
+}
+
+// SystemAttrGetReq contains a request to get one or more attributes by key. If
+// no keys are supplied, all attributes are returned in the response.
+type SystemGetAttrReq struct {
+	state         protoimpl.MessageState
+	sizeCache     protoimpl.SizeCache
+	unknownFields protoimpl.UnknownFields
+
+	Sys  string   `protobuf:"bytes,1,opt,name=sys,proto3" json:"sys,omitempty"`
+	Keys []string `protobuf:"bytes,2,rep,name=keys,proto3" json:"keys,omitempty"`
+}
+
+func (x *SystemGetAttrReq) Reset() {
+	*x = SystemGetAttrReq{}
+	if protoimpl.UnsafeEnabled {
+		mi := &file_mgmt_system_proto_msgTypes[12]
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		ms.StoreMessageInfo(mi)
+	}
+}
+
+func (x *SystemGetAttrReq) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SystemGetAttrReq) ProtoMessage() {}
+
+func (x *SystemGetAttrReq) ProtoReflect() protoreflect.Message {
+	mi := &file_mgmt_system_proto_msgTypes[12]
+	if protoimpl.UnsafeEnabled && x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SystemGetAttrReq.ProtoReflect.Descriptor instead.
+func (*SystemGetAttrReq) Descriptor() ([]byte, []int) {
+	return file_mgmt_system_proto_rawDescGZIP(), []int{12}
+}
+
+func (x *SystemGetAttrReq) GetSys() string {
+	if x != nil {
+		return x.Sys
+	}
+	return ""
+}
+
+func (x *SystemGetAttrReq) GetKeys() []string {
+	if x != nil {
+		return x.Keys
+	}
+	return nil
+}
+
+// SystemAttrGetResp contains a list of attribute key/value pairs.
+type SystemGetAttrResp struct {
+	state         protoimpl.MessageState
+	sizeCache     protoimpl.SizeCache
+	unknownFields protoimpl.UnknownFields
+
+	Attributes map[string]string `protobuf:"bytes,1,rep,name=attributes,proto3" json:"attributes,omitempty" protobuf_key:"bytes,1,opt,name=key,proto3" protobuf_val:"bytes,2,opt,name=value,proto3"`
+}
+
+func (x *SystemGetAttrResp) Reset() {
+	*x = SystemGetAttrResp{}
+	if protoimpl.UnsafeEnabled {
+		mi := &file_mgmt_system_proto_msgTypes[13]
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		ms.StoreMessageInfo(mi)
+	}
+}
+
+func (x *SystemGetAttrResp) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SystemGetAttrResp) ProtoMessage() {}
+
+func (x *SystemGetAttrResp) ProtoReflect() protoreflect.Message {
+	mi := &file_mgmt_system_proto_msgTypes[13]
+	if protoimpl.UnsafeEnabled && x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SystemGetAttrResp.ProtoReflect.Descriptor instead.
+func (*SystemGetAttrResp) Descriptor() ([]byte, []int) {
+	return file_mgmt_system_proto_rawDescGZIP(), []int{13}
+}
+
+func (x *SystemGetAttrResp) GetAttributes() map[string]string {
+	if x != nil {
+		return x.Attributes
+	}
+	return nil
+}
+
 type SystemCleanupResp_CleanupResult struct {
 	state         protoimpl.MessageState
 	sizeCache     protoimpl.SizeCache
@@ -780,7 +941,7 @@ type SystemCleanupResp_CleanupResult struct {
 func (x *SystemCleanupResp_CleanupResult) Reset() {
 	*x = SystemCleanupResp_CleanupResult{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_mgmt_system_proto_msgTypes[11]
+		mi := &file_mgmt_system_proto_msgTypes[14]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -793,7 +954,7 @@ func (x *SystemCleanupResp_CleanupResult) String() string {
 func (*SystemCleanupResp_CleanupResult) ProtoMessage() {}
 
 func (x *SystemCleanupResp_CleanupResult) ProtoReflect() protoreflect.Message {
-	mi := &file_mgmt_system_proto_msgTypes[11]
+	mi := &file_mgmt_system_proto_msgTypes[14]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -930,11 +1091,36 @@ var file_mgmt_system_proto_rawDesc = []byte{
 	0x67, 0x18, 0x02, 0x20, 0x01, 0x28, 0x09, 0x52, 0x03, 0x6d, 0x73, 0x67, 0x12, 0x17, 0x0a, 0x07,
 	0x70, 0x6f, 0x6f, 0x6c, 0x5f, 0x69, 0x64, 0x18, 0x03, 0x20, 0x01, 0x28, 0x09, 0x52, 0x06, 0x70,
 	0x6f, 0x6f, 0x6c, 0x49, 0x64, 0x12, 0x14, 0x0a, 0x05, 0x63, 0x6f, 0x75, 0x6e, 0x74, 0x18, 0x04,
-	0x20, 0x01, 0x28, 0x0d, 0x52, 0x05, 0x63, 0x6f, 0x75, 0x6e, 0x74, 0x42, 0x3a, 0x5a, 0x38, 0x67,
-	0x69, 0x74, 0x68, 0x75, 0x62, 0x2e, 0x63, 0x6f, 0x6d, 0x2f, 0x64, 0x61, 0x6f, 0x73, 0x2d, 0x73,
-	0x74, 0x61, 0x63, 0x6b, 0x2f, 0x64, 0x61, 0x6f, 0x73, 0x2f, 0x73, 0x72, 0x63, 0x2f, 0x63, 0x6f,
-	0x6e, 0x74, 0x72, 0x6f, 0x6c, 0x2f, 0x63, 0x6f, 0x6d, 0x6d, 0x6f, 0x6e, 0x2f, 0x70, 0x72, 0x6f,
-	0x74, 0x6f, 0x2f, 0x6d, 0x67, 0x6d, 0x74, 0x62, 0x06, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x33,
+	0x20, 0x01, 0x28, 0x0d, 0x52, 0x05, 0x63, 0x6f, 0x75, 0x6e, 0x74, 0x22, 0xab, 0x01, 0x0a, 0x10,
+	0x53, 0x79, 0x73, 0x74, 0x65, 0x6d, 0x53, 0x65, 0x74, 0x41, 0x74, 0x74, 0x72, 0x52, 0x65, 0x71,
+	0x12, 0x10, 0x0a, 0x03, 0x73, 0x79, 0x73, 0x18, 0x01, 0x20, 0x01, 0x28, 0x09, 0x52, 0x03, 0x73,
+	0x79, 0x73, 0x12, 0x46, 0x0a, 0x0a, 0x61, 0x74, 0x74, 0x72, 0x69, 0x62, 0x75, 0x74, 0x65, 0x73,
+	0x18, 0x02, 0x20, 0x03, 0x28, 0x0b, 0x32, 0x26, 0x2e, 0x6d, 0x67, 0x6d, 0x74, 0x2e, 0x53, 0x79,
+	0x73, 0x74, 0x65, 0x6d, 0x53, 0x65, 0x74, 0x41, 0x74, 0x74, 0x72, 0x52, 0x65, 0x71, 0x2e, 0x41,
+	0x74, 0x74, 0x72, 0x69, 0x62, 0x75, 0x74, 0x65, 0x73, 0x45, 0x6e, 0x74, 0x72, 0x79, 0x52, 0x0a,
+	0x61, 0x74, 0x74, 0x72, 0x69, 0x62, 0x75, 0x74, 0x65, 0x73, 0x1a, 0x3d, 0x0a, 0x0f, 0x41, 0x74,
+	0x74, 0x72, 0x69, 0x62, 0x75, 0x74, 0x65, 0x73, 0x45, 0x6e, 0x74, 0x72, 0x79, 0x12, 0x10, 0x0a,
+	0x03, 0x6b, 0x65, 0x79, 0x18, 0x01, 0x20, 0x01, 0x28, 0x09, 0x52, 0x03, 0x6b, 0x65, 0x79, 0x12,
+	0x14, 0x0a, 0x05, 0x76, 0x61, 0x6c, 0x75, 0x65, 0x18, 0x02, 0x20, 0x01, 0x28, 0x09, 0x52, 0x05,
+	0x76, 0x61, 0x6c, 0x75, 0x65, 0x3a, 0x02, 0x38, 0x01, 0x22, 0x38, 0x0a, 0x10, 0x53, 0x79, 0x73,
+	0x74, 0x65, 0x6d, 0x47, 0x65, 0x74, 0x41, 0x74, 0x74, 0x72, 0x52, 0x65, 0x71, 0x12, 0x10, 0x0a,
+	0x03, 0x73, 0x79, 0x73, 0x18, 0x01, 0x20, 0x01, 0x28, 0x09, 0x52, 0x03, 0x73, 0x79, 0x73, 0x12,
+	0x12, 0x0a, 0x04, 0x6b, 0x65, 0x79, 0x73, 0x18, 0x02, 0x20, 0x03, 0x28, 0x09, 0x52, 0x04, 0x6b,
+	0x65, 0x79, 0x73, 0x22, 0x9b, 0x01, 0x0a, 0x11, 0x53, 0x79, 0x73, 0x74, 0x65, 0x6d, 0x47, 0x65,
+	0x74, 0x41, 0x74, 0x74, 0x72, 0x52, 0x65, 0x73, 0x70, 0x12, 0x47, 0x0a, 0x0a, 0x61, 0x74, 0x74,
+	0x72, 0x69, 0x62, 0x75, 0x74, 0x65, 0x73, 0x18, 0x01, 0x20, 0x03, 0x28, 0x0b, 0x32, 0x27, 0x2e,
+	0x6d, 0x67, 0x6d, 0x74, 0x2e, 0x53, 0x79, 0x73, 0x74, 0x65, 0x6d, 0x47, 0x65, 0x74, 0x41, 0x74,
+	0x74, 0x72, 0x52, 0x65, 0x73, 0x70, 0x2e, 0x41, 0x74, 0x74, 0x72, 0x69, 0x62, 0x75, 0x74, 0x65,
+	0x73, 0x45, 0x6e, 0x74, 0x72, 0x79, 0x52, 0x0a, 0x61, 0x74, 0x74, 0x72, 0x69, 0x62, 0x75, 0x74,
+	0x65, 0x73, 0x1a, 0x3d, 0x0a, 0x0f, 0x41, 0x74, 0x74, 0x72, 0x69, 0x62, 0x75, 0x74, 0x65, 0x73,
+	0x45, 0x6e, 0x74, 0x72, 0x79, 0x12, 0x10, 0x0a, 0x03, 0x6b, 0x65, 0x79, 0x18, 0x01, 0x20, 0x01,
+	0x28, 0x09, 0x52, 0x03, 0x6b, 0x65, 0x79, 0x12, 0x14, 0x0a, 0x05, 0x76, 0x61, 0x6c, 0x75, 0x65,
+	0x18, 0x02, 0x20, 0x01, 0x28, 0x09, 0x52, 0x05, 0x76, 0x61, 0x6c, 0x75, 0x65, 0x3a, 0x02, 0x38,
+	0x01, 0x42, 0x3a, 0x5a, 0x38, 0x67, 0x69, 0x74, 0x68, 0x75, 0x62, 0x2e, 0x63, 0x6f, 0x6d, 0x2f,
+	0x64, 0x61, 0x6f, 0x73, 0x2d, 0x73, 0x74, 0x61, 0x63, 0x6b, 0x2f, 0x64, 0x61, 0x6f, 0x73, 0x2f,
+	0x73, 0x72, 0x63, 0x2f, 0x63, 0x6f, 0x6e, 0x74, 0x72, 0x6f, 0x6c, 0x2f, 0x63, 0x6f, 0x6d, 0x6d,
+	0x6f, 0x6e, 0x2f, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x2f, 0x6d, 0x67, 0x6d, 0x74, 0x62, 0x06, 0x70,
+	0x72, 0x6f, 0x74, 0x6f, 0x33,
 }
 
 var (
@@ -949,7 +1135,7 @@ func file_mgmt_system_proto_rawDescGZIP() []byte {
 	return file_mgmt_system_proto_rawDescData
 }
 
-var file_mgmt_system_proto_msgTypes = make([]protoimpl.MessageInfo, 12)
+var file_mgmt_system_proto_msgTypes = make([]protoimpl.MessageInfo, 17)
 var file_mgmt_system_proto_goTypes = []interface{}{
 	(*SystemMember)(nil),                    // 0: mgmt.SystemMember
 	(*SystemStopReq)(nil),                   // 1: mgmt.SystemStopReq
@@ -962,20 +1148,27 @@ var file_mgmt_system_proto_goTypes = []interface{}{
 	(*SystemEraseResp)(nil),                 // 8: mgmt.SystemEraseResp
 	(*SystemCleanupReq)(nil),                // 9: mgmt.SystemCleanupReq
 	(*SystemCleanupResp)(nil),               // 10: mgmt.SystemCleanupResp
-	(*SystemCleanupResp_CleanupResult)(nil), // 11: mgmt.SystemCleanupResp.CleanupResult
-	(*shared.RankResult)(nil),               // 12: shared.RankResult
+	(*SystemSetAttrReq)(nil),                // 11: mgmt.SystemSetAttrReq
+	(*SystemGetAttrReq)(nil),                // 12: mgmt.SystemGetAttrReq
+	(*SystemGetAttrResp)(nil),               // 13: mgmt.SystemGetAttrResp
+	(*SystemCleanupResp_CleanupResult)(nil), // 14: mgmt.SystemCleanupResp.CleanupResult
+	nil,                                     // 15: mgmt.SystemSetAttrReq.AttributesEntry
+	nil,                                     // 16: mgmt.SystemGetAttrResp.AttributesEntry
+	(*shared.RankResult)(nil),               // 17: shared.RankResult
 }
 var file_mgmt_system_proto_depIdxs = []int32{
-	12, // 0: mgmt.SystemStopResp.results:type_name -> shared.RankResult
-	12, // 1: mgmt.SystemStartResp.results:type_name -> shared.RankResult
+	17, // 0: mgmt.SystemStopResp.results:type_name -> shared.RankResult
+	17, // 1: mgmt.SystemStartResp.results:type_name -> shared.RankResult
 	0,  // 2: mgmt.SystemQueryResp.members:type_name -> mgmt.SystemMember
-	12, // 3: mgmt.SystemEraseResp.results:type_name -> shared.RankResult
-	11, // 4: mgmt.SystemCleanupResp.results:type_name -> mgmt.SystemCleanupResp.CleanupResult
-	5,  // [5:5] is the sub-list for method output_type
-	5,  // [5:5] is the sub-list for method input_type
-	5,  // [5:5] is the sub-list for extension type_name
-	5,  // [5:5] is the sub-list for extension extendee
-	0,  // [0:5] is the sub-list for field type_name
+	17, // 3: mgmt.SystemEraseResp.results:type_name -> shared.RankResult
+	14, // 4: mgmt.SystemCleanupResp.results:type_name -> mgmt.SystemCleanupResp.CleanupResult
+	15, // 5: mgmt.SystemSetAttrReq.attributes:type_name -> mgmt.SystemSetAttrReq.AttributesEntry
+	16, // 6: mgmt.SystemGetAttrResp.attributes:type_name -> mgmt.SystemGetAttrResp.AttributesEntry
+	7,  // [7:7] is the sub-list for method output_type
+	7,  // [7:7] is the sub-list for method input_type
+	7,  // [7:7] is the sub-list for extension type_name
+	7,  // [7:7] is the sub-list for extension extendee
+	0,  // [0:7] is the sub-list for field type_name
 }
 
 func init() { file_mgmt_system_proto_init() }
@@ -1117,6 +1310,42 @@ func file_mgmt_system_proto_init() {
 			}
 		}
 		file_mgmt_system_proto_msgTypes[11].Exporter = func(v interface{}, i int) interface{} {
+			switch v := v.(*SystemSetAttrReq); i {
+			case 0:
+				return &v.state
+			case 1:
+				return &v.sizeCache
+			case 2:
+				return &v.unknownFields
+			default:
+				return nil
+			}
+		}
+		file_mgmt_system_proto_msgTypes[12].Exporter = func(v interface{}, i int) interface{} {
+			switch v := v.(*SystemGetAttrReq); i {
+			case 0:
+				return &v.state
+			case 1:
+				return &v.sizeCache
+			case 2:
+				return &v.unknownFields
+			default:
+				return nil
+			}
+		}
+		file_mgmt_system_proto_msgTypes[13].Exporter = func(v interface{}, i int) interface{} {
+			switch v := v.(*SystemGetAttrResp); i {
+			case 0:
+				return &v.state
+			case 1:
+				return &v.sizeCache
+			case 2:
+				return &v.unknownFields
+			default:
+				return nil
+			}
+		}
+		file_mgmt_system_proto_msgTypes[14].Exporter = func(v interface{}, i int) interface{} {
 			switch v := v.(*SystemCleanupResp_CleanupResult); i {
 			case 0:
 				return &v.state
@@ -1135,7 +1364,7 @@ func file_mgmt_system_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: file_mgmt_system_proto_rawDesc,
 			NumEnums:      0,
-			NumMessages:   12,
+			NumMessages:   17,
 			NumExtensions: 0,
 			NumServices:   0,
 		},
