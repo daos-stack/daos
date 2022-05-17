@@ -327,6 +327,66 @@ func TestHardware_PCIAddressSet_BackingToVMDAddresses(t *testing.T) {
 	}
 }
 
+func TestHardware_PCIDevices_Get(t *testing.T) {
+	testDevs := PCIDevices{
+		*MustNewPCIAddress("0000:01:01.1"): []*PCIDevice{
+			mockPCIDevice("test0", 0, 1, 1, 1).withType(DeviceTypeNetInterface),
+			mockPCIDevice("test1", 0, 1, 1, 1).withType(DeviceTypeOFIDomain),
+		},
+		*MustNewPCIAddress("0000:01:02.1"): []*PCIDevice{
+			mockPCIDevice("test2", 0, 1, 2, 1).withType(DeviceTypeNetInterface),
+			mockPCIDevice("test3", 0, 1, 2, 1),
+		},
+		*MustNewPCIAddress("0000:01:03.1"): []*PCIDevice{},
+	}
+
+	for name, tc := range map[string]struct {
+		devices PCIDevices
+		getKey  *PCIAddress
+		expDevs []*PCIDevice
+	}{
+		"nil devs, nil key": {
+			expDevs: nil,
+		},
+		"nil key": {
+			devices: testDevs,
+			getKey:  nil,
+			expDevs: nil,
+		},
+		"empty devs": {
+			devices: PCIDevices{},
+			getKey:  MustNewPCIAddress("0000:80:00.0"),
+			expDevs: nil,
+		},
+		"bad key": {
+			devices: testDevs,
+			getKey:  MustNewPCIAddress("0000:80:00.0"),
+			expDevs: nil,
+		},
+		"good key": {
+			devices: testDevs,
+			getKey:  MustNewPCIAddress("0000:01:02.1"),
+			expDevs: []*PCIDevice{
+				mockPCIDevice("test2", 0, 1, 2, 1).withType(DeviceTypeNetInterface),
+				mockPCIDevice("test3", 0, 1, 2, 1),
+			},
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			result := tc.devices.Keys()
+			resultStr := make([]string, len(result))
+			for i, key := range result {
+				resultStr[i] = key.String()
+			}
+			gotDevs := tc.devices.Get(tc.getKey)
+
+			if diff := cmp.Diff(tc.expDevs, gotDevs); diff != "" {
+				t.Fatalf("unexpected devices (-want, +got)\n%s\n", diff)
+			}
+		})
+	}
+}
+
 func TestHardware_PCIDevices_Keys(t *testing.T) {
 	for name, tc := range map[string]struct {
 		devices   PCIDevices
@@ -515,7 +575,7 @@ func TestHardware_PCIBus(t *testing.T) {
 			case "add":
 				gotErr = tc.bus.AddDevice(tc.dev)
 			case "nil contains":
-				contains := tc.bus.Contains(tc.dev.PCIAddr)
+				contains := tc.bus.Contains(&tc.dev.PCIAddr)
 				test.AssertFalse(t, contains, "nil bus shouldn't contain anything")
 				return
 			default:

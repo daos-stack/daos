@@ -22,17 +22,18 @@ engines:
       - FI_SOCKETS_MAX_CONN_RETRY=1
       - FI_SOCKETS_CONN_TIMEOUT=2000
 
-    # Storage definitions
-
-    # When scm_class is set to ram, tmpfs will be used to emulate SCM.
-    # The size of ram is specified by scm_size in GB units.
-    scm_mount: /mnt/daos  # map to -s /mnt/daos
-    scm_class: ram
-    scm_size: 4
-
-    # When bdev_class is set to file, Linux AIO will be used to emulate NVMe.
-    # The size of file that will be created is specified by bdev_size in GB units.
-    # The location of the files that will be created is specified in bdev_list.
-    bdev_class: file
-    bdev_size: 16
-    bdev_list: [/tmp/daos-bdev]
+    # Storage definitions (one per tier)
+    storage:
+      -
+        # When scm_class is set to ram, tmpfs will be used to emulate SCM.
+        # The size of ram is specified by scm_size in GB units.
+        class: ram
+        scm_size: 8
+        scm_mount: /mnt/daos
+      -
+        # When bdev_class is set to file, Linux AIO will be used to emulate NVMe.
+        # The size of file that will be created is specified by bdev_size in GB units.
+        # The location of the files that will be created is specified in bdev_list.
+        class: file
+        bdev_size: 16
+        bdev_list: [/tmp/daos-bdev]
