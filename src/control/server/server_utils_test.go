@@ -224,8 +224,7 @@ func TestServer_prepBdevStorage(t *testing.T) {
 	}
 	username := usrCurrent.Username
 	if username == "root" {
-		t.Log("Skip prepBdevStorage tests when run with root user")
-		return
+		t.Fatal("prepBdevStorage tests cannot be run as root user")
 	}
 
 	// basic engine configs populated enough to complete validation
@@ -255,18 +254,35 @@ func TestServer_prepBdevStorage(t *testing.T) {
 		getHpiErr       error
 		hugePagesFree   int
 		bmbc            *bdev.MockBackendConfig
+		overrideUser    string
 		expPrepErr      error
 		expPrepCall     *storage.BdevPrepareRequest
 		expMemChkErr    error
 		expMemSize      int
 		expHugePageSize int
 	}{
-		"vfio disabled": {
+		"vfio disabled; non-root user": {
 			srvCfgExtra: func(sc *config.Server) *config.Server {
 				return sc.WithDisableVFIO(true).
-					WithEngines(nvmeEngine(0), nvmeEngine(1))
+					WithEngines(nvmeEngine(0))
 			},
 			expPrepErr: FaultVfioDisabled,
+		},
+		"vfio disabled; root user": {
+			srvCfgExtra: func(sc *config.Server) *config.Server {
+				return sc.WithDisableVFIO(true).
+					WithEngines(nvmeEngine(0))
+			},
+			overrideUser:  "root",
+			hugePagesFree: 8192,
+			expPrepCall: &storage.BdevPrepareRequest{
+				HugePageCount: 8194,
+				HugeNodes:     "0",
+				TargetUser:    "root",
+				DisableVFIO:   true,
+			},
+			expMemSize:      16384,
+			expHugePageSize: 2,
 		},
 		"iommu disabled": {
 			iommuDisabled: true,
@@ -274,6 +290,21 @@ func TestServer_prepBdevStorage(t *testing.T) {
 				return sc.WithEngines(nvmeEngine(0), nvmeEngine(1))
 			},
 			expPrepErr: FaultIommuDisabled,
+		},
+		"iommu disabled; root user": {
+			iommuDisabled: true,
+			srvCfgExtra: func(sc *config.Server) *config.Server {
+				return sc.WithEngines(nvmeEngine(0))
+			},
+			overrideUser:  "root",
+			hugePagesFree: 8192,
+			expPrepCall: &storage.BdevPrepareRequest{
+				HugePageCount: 8194,
+				HugeNodes:     "0",
+				TargetUser:    "root",
+			},
+			expMemSize:      16384,
+			expHugePageSize: 2,
 		},
 		"no bdevs configured; -1 hugepages requested": {
 			srvCfgExtra: func(sc *config.Server) *config.Server {
@@ -495,6 +526,10 @@ func TestServer_prepBdevStorage(t *testing.T) {
 					scm.NewProvider(log, scm.NewMockBackend(nil), sp),
 					mbp),
 				srvCfg: cfg,
+			}
+
+			if tc.overrideUser != "" {
+				srv.runningUser = &user.User{Username: tc.overrideUser}
 			}
 
 			gotErr := prepBdevStorage(srv, !tc.iommuDisabled)
