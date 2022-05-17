@@ -14,7 +14,7 @@
 
 Name:          daos
 Version:       2.0.2
-Release:       4%{?relval}%{?dist}
+Release:       5%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       BSD-2-Clause-Patent
@@ -74,6 +74,7 @@ BuildRequires: protobuf-c-devel
 BuildRequires: lz4-devel
 %endif
 BuildRequires: spdk-devel >= 21.07
+BuildRequires: spdk-devel < 22
 %if (0%{?rhel} >= 7)
 BuildRequires: libisa-l-devel
 BuildRequires: libisa-l_crypto-devel
@@ -152,6 +153,7 @@ to optimize performance and cost.
 Summary: The DAOS server
 Requires: %{name}%{?_isa} = %{version}-%{release}
 Requires: spdk-tools >= 21.07
+Requires: spdk-tools < 22
 Requires: ndctl
 # needed to set PMem configuration goals in BIOS through control-plane
 %if (0%{?suse_version} >= 1500)
@@ -516,6 +518,9 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 # No files in a meta-package
 
 %changelog
+* Tue May 17 2022 Tom Nabarro <tom.nabarro@intel.com> 2.0.2-5
+- Restrict spdk version to less than v22
+
 * Wed Apr 20 2022 Lei Huang <lei.huang@intel.com> 2.0.2-4
 - Update libfabric to v1.15.0rc3-1 with critical performance patches
 
