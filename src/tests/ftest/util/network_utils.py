@@ -36,8 +36,8 @@ class NetworkDevice():
 
     def __str__(self):
         """Overwrite to display formatted devices."""
-        settings = ["{}={}".format(key, getattr(self, key, None)) for key in self.__dict__]
-        return "NetworkDevice({})".format(", ".join(settings))
+        settings = [f"{key}={getattr(self, key, None)}" for key in self.__dict__]
+        return f"NetworkDevice({', '.join(settings)})"
 
     def __ne__(self, other):
         """Override the default not-equal implementation."""
@@ -81,8 +81,7 @@ def get_active_network_interfaces(hosts, verbose=True):
     """
     net_path = os.path.join(os.path.sep, "sys", "class", "net")
     operstate = os.path.join(net_path, "*", "operstate")
-    command = " | ".join(
-        ["grep -l 'up' {}".format(operstate), "grep -Ev '/(lo|bonding_masters)/'", "sort"])
+    command = " | ".join([f"grep -l 'up' {operstate}", "grep -Ev '/(lo|bonding_masters)/'", "sort"])
     task = run_task(hosts, command, verbose=verbose)
     if verbose:
         display_task(task)
@@ -144,7 +143,7 @@ def get_interface_speeds(hosts, interface, verbose=True):
 
     """
     net_path = os.path.join(os.path.sep, "sys", "class", "net")
-    command = "cat {}".format(os.path.join(net_path, interface, "speed"))
+    command = f"cat {os.path.join(net_path, interface, 'speed')}"
     task = run_task(hosts, command, verbose=verbose)
     if verbose:
         display_task(task)
@@ -186,7 +185,7 @@ def get_interface_numa_node(hosts, interface, verbose=True):
 
     """
     net_path = os.path.join(os.path.sep, "sys", "class", "net")
-    command = "cat {}".format(os.path.join(net_path, interface, "device", "numa_node"))
+    command = f"cat {os.path.join(net_path, interface, 'device', 'numa_node')}"
     task = run_task(hosts, command, verbose=verbose)
     if verbose:
         display_task(task)
@@ -223,7 +222,7 @@ def get_interface_ib_name(hosts, interface, verbose=True):
 
     """
     net_path = os.path.join(os.path.sep, "sys", "class", "net")
-    command = "ls -1 {}".format(os.path.join(net_path, interface, "device", "infiniband"))
+    command = f"ls -1 {os.path.join(net_path, interface, 'device', 'infiniband')}"
     task = run_task(hosts, command, verbose=verbose)
     if verbose:
         display_task(task)
@@ -555,6 +554,6 @@ def get_dmg_network_information(dmg_network_scan):
                     )
     except KeyError as error:
         raise CommandFailure(
-            "Error processing dmg network scan json output: {}".format(dmg_network_scan)) from error
+            f"Error processing dmg network scan json output: {dmg_network_scan}") from error
 
     return network_devices

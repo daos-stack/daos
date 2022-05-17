@@ -348,29 +348,29 @@ def check_task(task, logger=None):
             lines = list(output.splitlines())
             if len(lines) > 1:
                 # Print the sub-header for multiple lines of output
-                check_task_log("    {}: rc={}, output:".format(node_set, code))
+                check_task_log(f"    {node_set}: rc={code}, output:")
             for number, line in enumerate(lines):
                 if isinstance(line, bytes):
                     line = line.decode("utf-8")
                 if len(lines) == 1:
                     # Print the sub-header and line for one line of output
-                    check_task_log("    {}: rc={}, output: {}".format(node_set, code, line))
+                    check_task_log(f"    {node_set}: rc={code}, output: {line}")
                     continue
                 try:
-                    check_task_log("      {}".format(line))
+                    check_task_log(f"      {line}")
                 except IOError:
                     # DAOS-5781 Jenkins doesn't like receiving large amounts of data in a short
                     # space of time so catch this and retry.
                     check_task_log(
-                        "*** DAOS-5781: Handling IOError detected while processing line {}/{} with "
-                        "retry ***".format(*number + 1, len(lines)))
+                        "*** DAOS-5781: Handling IOError detected while processing line " +
+                        f"{number + 1}/{len(lines)} with retry ***")
                     time.sleep(5)
-                    check_task_log("      {}".format(line))
+                    check_task_log(f"      {line}")
 
     # List any hosts that timed out
     timed_out = [str(hosts) for hosts in task.iter_keys_timeout()]
     if timed_out:
-        check_task_log("    {}: timeout detected".format(NodeSet.fromlist(timed_out)))
+        check_task_log(f"    {NodeSet.fromlist(timed_out)}: timeout detected")
 
     # Determine if the command completed successfully across all the hosts
     return len(results) == 1 and 0 in results

@@ -74,5 +74,5 @@ class DmgNetworkScanTest(TestWithServers):
             for entry in info:
                 self.log.info("  %s", entry)
         self.log.info("-" * 100)
-        msg = "\nDmg Info:\n{} \n\nSysInfo:\n{}".format(dmg_info, sys_info)
+        msg = f"\nDmg Info:\n{dmg_info} \n\nSysInfo:\n{sys_info}"
         self.assertEqual(sys_info, dmg_info, msg)
