@@ -205,6 +205,8 @@ struct vos_pool {
 	struct umem_instance	vp_umm;
 	/** Size of pool file */
 	uint64_t		vp_size;
+	/** Features enabled for this pool */
+	uint64_t		vp_feats;
 	/** btr handle for the container table */
 	daos_handle_t		vp_cont_th;
 	/** GC statistics of this pool */
@@ -1484,7 +1486,7 @@ recx_csum_len(daos_recx_t *recx, struct dcs_csum_info *csum,
 
 /** Mark that the object and container need aggregation.
  *
- * \param[in] umm	umem instance
+ * \param[in] cont	VOS container
  * \param[in] dkey_root	Root of dkey tree (marked for object)
  * \param[in] obj_root	Root of object tree (marked for container)
  * \param[in] epoch	Epoch of aggregatable update
@@ -1492,19 +1494,19 @@ recx_csum_len(daos_recx_t *recx, struct dcs_csum_info *csum,
  * \return 0 on success, error otherwise
  */
 int
-vos_mark_agg(struct umem_instance *umm, struct btr_root *dkey_root, struct btr_root *obj_root,
+vos_mark_agg(struct vos_container *cont, struct btr_root *dkey_root, struct btr_root *obj_root,
 	     daos_epoch_t epoch);
 
 /** Mark that the key needs aggregation.
  *
- * \param[in] umm	umem instance
+ * \param[in] cont	VOS container
  * \param[in] krec	The key's record
  * \param[in] epoch	Epoch of aggregatable update
  *
  * \return 0 on success, error otherwise
  */
 int
-vos_key_mark_agg(struct umem_instance *umm, struct vos_krec_df *krec, daos_epoch_t epoch);
+vos_key_mark_agg(struct vos_container *cont, struct vos_krec_df *krec, daos_epoch_t epoch);
 
 static inline bool
 vos_anchor_is_zero(daos_anchor_t *anchor)

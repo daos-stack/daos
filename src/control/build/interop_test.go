@@ -13,7 +13,7 @@ import (
 	"github.com/pkg/errors"
 
 	"github.com/daos-stack/daos/src/control/build"
-	"github.com/daos-stack/daos/src/control/common"
+	"github.com/daos-stack/daos/src/control/common/test"
 )
 
 func testComponent(t *testing.T, comp string, ver string) *build.VersionedComponent {
@@ -54,7 +54,7 @@ func TestBuild_NewVersionedComponent(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			vc, err := build.NewVersionedComponent(build.Component(tc.component), tc.version)
-			common.CmpErr(t, tc.expErr, err)
+			test.CmpErr(t, tc.expErr, err)
 			if tc.expErr != nil {
 				return
 			}
@@ -145,7 +145,7 @@ func TestBuild_CheckCompatibility(t *testing.T) {
 			} else {
 				gotErr = build.CheckCompatibility(tc.a, tc.b)
 			}
-			common.CmpErr(t, tc.expErr, gotErr)
+			test.CmpErr(t, tc.expErr, gotErr)
 		})
 	}
 }

@@ -696,5 +696,9 @@ func genConfig(log logging.Logger, newEngineCfg newEngineCfgFn, accessPoints []s
 		WithNrHugePages(reqHugePages).
 		WithEnableVMD(sd.vmdEnabled)
 
-	return cfg, cfg.Validate(log, sd.hugePageSize, nil)
+	if err := cfg.SetEngineAffinities(log); err != nil {
+		return nil, errors.Wrap(err, "setting engine affinities")
+	}
+
+	return cfg, cfg.Validate(log, sd.hugePageSize)
 }

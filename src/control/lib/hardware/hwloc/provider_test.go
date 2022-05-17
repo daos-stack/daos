@@ -17,14 +17,14 @@ import (
 	"github.com/google/go-cmp/cmp"
 	"github.com/pkg/errors"
 
-	"github.com/daos-stack/daos/src/control/common"
+	"github.com/daos-stack/daos/src/control/common/test"
 	"github.com/daos-stack/daos/src/control/lib/hardware"
 	"github.com/daos-stack/daos/src/control/logging"
 )
 
 func TestHwloc_CacheContext(t *testing.T) {
 	log, buf := logging.NewTestLogger(t.Name())
-	defer common.ShowBufferOnFailure(t, buf)
+	defer test.ShowBufferOnFailure(t, buf)
 
 	ctx, err := CacheContext(context.Background(), log)
 	if err != nil {
@@ -71,7 +71,7 @@ func TestHwloc_Cleanup(t *testing.T) {
 			cleanupCalled = 0
 
 			Cleanup(tc.ctx)
-			common.AssertEqual(t, tc.expCleanupCalled, cleanupCalled, "")
+			test.AssertEqual(t, tc.expCleanupCalled, cleanupCalled, "")
 		})
 	}
 }
@@ -129,6 +129,11 @@ func TestHwlocProvider_GetTopology_Samples(t *testing.T) {
 									Type:    hardware.DeviceTypeOFIDomain,
 									PCIAddr: *hardware.MustNewPCIAddress("0000:3d:00.1"),
 								},
+								{
+									Name:    "sda",
+									Type:    hardware.DeviceTypeBlock,
+									PCIAddr: *hardware.MustNewPCIAddress("0000:00:11.5"),
+								},
 							},
 						),
 					1: hardware.MockNUMANode(1, 24, 24),
@@ -179,6 +184,11 @@ func TestHwlocProvider_GetTopology_Samples(t *testing.T) {
 									Name:    "i40iw0",
 									Type:    hardware.DeviceTypeOFIDomain,
 									PCIAddr: *hardware.MustNewPCIAddress("0000:3d:00.1"),
+								},
+								{
+									Name:    "sda",
+									Type:    hardware.DeviceTypeBlock,
+									PCIAddr: *hardware.MustNewPCIAddress("0000:00:11.5"),
 								},
 							},
 						),
@@ -251,6 +261,16 @@ func TestHwlocProvider_GetTopology_Samples(t *testing.T) {
 									Type:    hardware.DeviceTypeNetInterface,
 									PCIAddr: *hardware.MustNewPCIAddress("0000:06:00.0"),
 								},
+								{
+									Name:    "sda",
+									Type:    hardware.DeviceTypeBlock,
+									PCIAddr: *hardware.MustNewPCIAddress("0000:00:1f.2"),
+								},
+								{
+									Name:    "sdb",
+									Type:    hardware.DeviceTypeBlock,
+									PCIAddr: *hardware.MustNewPCIAddress("0000:00:1f.2"),
+								},
 							},
 						),
 					1: hardware.MockNUMANode(1, 8, 8).
@@ -305,6 +325,16 @@ func TestHwlocProvider_GetTopology_Samples(t *testing.T) {
 										Type:    hardware.DeviceTypeOFIDomain,
 										PCIAddr: *hardware.MustNewPCIAddress("0000:18:00.0"),
 									},
+									{
+										Name:    "sda",
+										Type:    hardware.DeviceTypeBlock,
+										PCIAddr: *hardware.MustNewPCIAddress("0000:00:1f.2"),
+									},
+									{
+										Name:    "sr0",
+										Type:    hardware.DeviceTypeBlock,
+										PCIAddr: *hardware.MustNewPCIAddress("0000:00:1f.2"),
+									},
 								},
 							)
 						return node
@@ -315,10 +345,10 @@ func TestHwlocProvider_GetTopology_Samples(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(name)
-			defer common.ShowBufferOnFailure(t, buf)
+			defer test.ShowBufferOnFailure(t, buf)
 
 			_, err := os.Stat(tc.hwlocXMLFile)
-			common.AssertEqual(t, err, nil, "unable to read hwloc XML file")
+			test.AssertEqual(t, err, nil, "unable to read hwloc XML file")
 			os.Setenv("HWLOC_XMLFILE", tc.hwlocXMLFile)
 			defer os.Unsetenv("HWLOC_XMLFILE")
 
@@ -341,7 +371,7 @@ func TestHwlocProvider_GetTopology_Samples(t *testing.T) {
 
 func TestHwloc_Provider_GetNUMANodeForPID_Parallel(t *testing.T) {
 	log, buf := logging.NewTestLogger(t.Name())
-	defer common.ShowBufferOnFailure(t, buf)
+	defer test.ShowBufferOnFailure(t, buf)
 
 	runTest_GetNUMANodeForPID_Parallel(t, context.Background(), log)
 }
@@ -381,7 +411,7 @@ func runTest_GetNUMANodeForPID_Parallel(t *testing.T, parent context.Context, lo
 
 func TestHwloc_Provider_GetNUMANodeForPID_Parallel_CachedCtx(t *testing.T) {
 	log, buf := logging.NewTestLogger(t.Name())
-	defer common.ShowBufferOnFailure(t, buf)
+	defer test.ShowBufferOnFailure(t, buf)
 
 	cachedCtx, err := CacheContext(context.Background(), log)
 	if err != nil {
@@ -397,7 +427,7 @@ func TestHwloc_Provider_findNUMANodeWithCPUSet(t *testing.T) {
 	hwlocXMLFile := filepath.Join(filepath.Dir(filename), "testdata", "boro-84.xml")
 
 	_, err := os.Stat(hwlocXMLFile)
-	common.AssertEqual(t, err, nil, "unable to read hwloc XML file")
+	test.AssertEqual(t, err, nil, "unable to read hwloc XML file")
 	os.Setenv("HWLOC_XMLFILE", hwlocXMLFile)
 	defer os.Unsetenv("HWLOC_XMLFILE")
 
@@ -443,7 +473,7 @@ func TestHwloc_Provider_findNUMANodeWithCPUSet(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(name)
-			defer common.ShowBufferOnFailure(t, buf)
+			defer test.ShowBufferOnFailure(t, buf)
 
 			provider.log = log
 
@@ -452,8 +482,8 @@ func TestHwloc_Provider_findNUMANodeWithCPUSet(t *testing.T) {
 
 			result, err := provider.findNUMANodeWithCPUSet(testTopo, cpuIn)
 
-			common.CmpErr(t, tc.expErr, err)
-			common.AssertEqual(t, tc.expResult, result, "")
+			test.CmpErr(t, tc.expErr, err)
+			test.AssertEqual(t, tc.expResult, result, "")
 		})
 
 	}

@@ -8,6 +8,8 @@ package main
 
 import (
 	"net"
+	"sync"
+	"time"
 
 	"github.com/pkg/errors"
 	"golang.org/x/net/context"
@@ -18,8 +20,8 @@ import (
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	"github.com/daos-stack/daos/src/control/drpc"
 	"github.com/daos-stack/daos/src/control/lib/control"
+	"github.com/daos-stack/daos/src/control/lib/daos"
 	"github.com/daos-stack/daos/src/control/lib/hardware"
-	"github.com/daos-stack/daos/src/control/lib/hardware/hwprov"
 	"github.com/daos-stack/daos/src/control/logging"
 )
 
@@ -27,6 +29,8 @@ import (
 // Management Service proxy, handling dRPCs sent by libdaos by forwarding them
 // to MS.
 type mgmtModule struct {
+	attachInfoMutex sync.RWMutex
+
 	log            logging.Logger
 	sys            string
 	ctlInvoker     control.Invoker
@@ -34,7 +38,12 @@ type mgmtModule struct {
 	fabricInfo     *localFabricCache
 	monitor        *procMon
 	useDefaultNUMA bool
+
 	numaGetter     hardware.ProcessNUMAProvider
+	devClassGetter hardware.NetDevClassProvider
+	devStateGetter hardware.NetDevStateProvider
+	fabricScanner  *hardware.FabricScanner
+	netIfaces      func() ([]net.Interface, error)
 }
 
 func (mod *mgmtModule) HandleCall(ctx context.Context, session *drpc.Session, method drpc.Method, req []byte) ([]byte, error) {
@@ -100,7 +109,7 @@ func (mod *mgmtModule) handleGetAttachInfo(ctx context.Context, reqb []byte, pid
 	// system name indicates such, and hence skip the check.
 	if pbReq.Sys != "" && pbReq.Sys != mod.sys {
 		mod.log.Errorf("GetAttachInfo: %s: unknown system name", pbReq.Sys)
-		respb, err := proto.Marshal(&mgmtpb.GetAttachInfoResp{Status: int32(drpc.DaosInvalidInput)})
+		respb, err := proto.Marshal(&mgmtpb.GetAttachInfoResp{Status: int32(daos.InvalidInput)})
 		if err != nil {
 			return nil, drpc.MarshalingFailure()
 		}
@@ -195,13 +204,18 @@ func (mod *mgmtModule) getAttachInfoRemote(ctx context.Context, numaNode int, sy
 }
 
 func (mod *mgmtModule) getFabricInterface(ctx context.Context, numaNode int, netDevClass hardware.NetDevClass, provider string) (*FabricInterface, error) {
+	mod.attachInfoMutex.Lock()
+	defer mod.attachInfoMutex.Unlock()
+
 	if mod.fabricInfo.IsCached() {
 		return mod.fabricInfo.GetDevice(numaNode, netDevClass, provider)
 	}
 
-	scanner := hwprov.DefaultFabricScanner(mod.log)
+	if err := mod.waitFabricReady(ctx, netDevClass); err != nil {
+		return nil, err
+	}
 
-	result, err := scanner.Scan(ctx)
+	result, err := mod.fabricScanner.Scan(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -209,6 +223,34 @@ func (mod *mgmtModule) getFabricInterface(ctx context.Context, numaNode int, net
 	mod.fabricInfo.CacheScan(ctx, result)
 
 	return mod.fabricInfo.GetDevice(numaNode, netDevClass, provider)
+}
+
+func (mod *mgmtModule) waitFabricReady(ctx context.Context, netDevClass hardware.NetDevClass) error {
+	if mod.netIfaces == nil {
+		mod.netIfaces = net.Interfaces
+	}
+	ifaces, err := mod.netIfaces()
+	if err != nil {
+		return err
+	}
+
+	var needIfaces []string
+	for _, iface := range ifaces {
+		devClass, err := mod.devClassGetter.GetNetDevClass(iface.Name)
+		if err != nil {
+			return err
+		}
+		if devClass == netDevClass {
+			needIfaces = append(needIfaces, iface.Name)
+		}
+	}
+
+	return hardware.WaitFabricReady(ctx, mod.log, hardware.WaitFabricReadyParams{
+		StateProvider:  mod.devStateGetter,
+		FabricIfaces:   needIfaces,
+		IgnoreUnusable: true,
+		IterationSleep: time.Second,
+	})
 }
 
 func (mod *mgmtModule) handleNotifyPoolConnect(ctx context.Context, reqb []byte, pid int32) error {

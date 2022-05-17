@@ -99,7 +99,7 @@ cont_inherit_redunc_fac(daos_handle_t poh, daos_prop_t *cont_prop,
 	if (cont_prop) {
 		*merged_prop = daos_prop_merge(cont_prop, redunc_prop);
 		daos_prop_free(redunc_prop);
-		if (merged_prop == NULL) {
+		if (*merged_prop == NULL) {
 			D_ERROR("failed to merge cont_prop and redunc_prop\n");
 			rc = -DER_NOMEM;
 		}
@@ -135,8 +135,11 @@ daos_cont_create2(daos_handle_t poh, uuid_t *cuuid, daos_prop_t *cont_prop,
 		return rc;
 
 	rc = dc_task_create(dc_cont_create, NULL, ev, &task);
-	if (rc)
+	if (rc) {
+		if (merged_props)
+			daos_prop_free(merged_props);
 		return rc;
+	}
 
 	args = dc_task_get_args(task);
 	args->poh	= poh;
