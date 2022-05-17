@@ -218,7 +218,7 @@ vos_dtx_cache_reset(daos_handle_t coh, bool force);
  * \return		Zero on success, negative value if error
  */
 int
-vos_self_init(const char *db_path);
+vos_self_init(const char *db_path, bool use_sys_db, int tgt_id);
 
 /**
  * Finalize the environment for a VOS instance
@@ -1184,7 +1184,9 @@ struct sys_db *vos_db_get(void);
  * System DB is KV store that can support insert/delete/traverse
  * See \a sys_db for more details.
  */
-int  vos_db_init(const char *db_path, const char *db_name, bool self_mode);
+int vos_db_init(const char *db_path);
+int vos_db_init_ex(const char *db_path, const char *db_name, bool force_create,
+		   bool destroy_db_on_fini);
 void vos_db_fini(void);
 
 #endif /* __VOS_API_H */

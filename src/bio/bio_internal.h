@@ -346,13 +346,14 @@ struct bio_blobstore {
 /* Per-xstream NVMe context */
 struct bio_xs_context {
 	int			 bxc_tgt_id;
-	unsigned int		 bxc_blob_rw;	/* inflight blob read/write */
+	unsigned int		 bxc_blob_rw;		/* inflight blob read/write */
 	struct spdk_thread	*bxc_thread;
 	struct bio_blobstore	*bxc_blobstore;
 	struct spdk_io_channel	*bxc_io_channel;
 	struct bio_dma_buffer	*bxc_dma_buf;
 	d_list_t		 bxc_io_ctxts;
-	unsigned int		 bxc_ready:1;	/* xstream setup finished */
+	unsigned int		 bxc_ready:1,		/* xstream setup finished */
+				 bxc_self_polling;	/* for standalone VOS */
 };
 
 /* Per VOS instance I/O context */

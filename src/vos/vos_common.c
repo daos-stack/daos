@@ -678,7 +678,7 @@ vos_self_nvme_fini(void)
 #define VOS_NVME_NR_TARGET	1
 
 static int
-vos_self_nvme_init()
+vos_self_nvme_init(uint32_t tgt_id)
 {
 	int rc;
 	int fd;
@@ -706,7 +706,7 @@ vos_self_nvme_init()
 		return rc;
 
 	self_mode.self_nvme_init = true;
-	rc = bio_xsctxt_alloc(&self_mode.self_xs_ctxt, -1 /* Self poll */);
+	rc = bio_xsctxt_alloc(&self_mode.self_xs_ctxt, tgt_id, true);
 	return rc;
 }
 
@@ -742,7 +742,7 @@ vos_self_fini(void)
 }
 
 int
-vos_self_init(const char *db_path)
+vos_self_init(const char *db_path, bool use_sys_db, int tgt_id)
 {
 	char	*evt_mode;
 	int	 rc = 0;
@@ -773,11 +773,15 @@ vos_self_init(const char *db_path)
 	if (rc)
 		D_GOTO(failed, rc);
 
-	rc = vos_db_init(db_path, "self_db", true);
+	if (use_sys_db)
+		rc = vos_db_init(db_path);
+	else
+		rc = vos_db_init_ex(db_path, "self_db", true, true);
 	if (rc)
 		D_GOTO(failed, rc);
 
-	rc = vos_self_nvme_init();
+	/* [todo-ryon]: how to get actual target id?? */
+	rc = vos_self_nvme_init(1);
 	if (rc)
 		D_GOTO(failed, rc);
 
