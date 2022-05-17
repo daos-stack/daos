@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2021 Intel Corporation.
+// (C) Copyright 2020-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -36,6 +36,10 @@ type (
 	// HostResponseChan defines a channel of *HostResponse items returned
 	// from asynchronous unary RPC invokers.
 	HostResponseChan chan *HostResponse
+
+	// HostResponseReport defines the function signature for a callback
+	// invoked when a host response is received.
+	HostResponseReportFn func(*HostResponse)
 )
 
 // HostErrorsResp is a response type containing a HostErrorsMap.

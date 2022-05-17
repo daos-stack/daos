@@ -10,6 +10,7 @@ import (
 	"context"
 	"fmt"
 	"net"
+	"sort"
 	"sync"
 
 	"github.com/pkg/errors"
@@ -237,16 +238,27 @@ func (n *NUMAFabric) getNextDevice(numaNode int) *FabricInterface {
 }
 
 func (n *NUMAFabric) findOnAnyNUMA(netDevClass hardware.NetDevClass, provider string) (*FabricInterface, error) {
-	numNodes := n.getNumNUMANodes()
+	nodes := n.getNUMANodes()
+	numNodes := len(nodes)
+
 	for i := 0; i < numNodes; i++ {
 		n.currentNUMANode = (n.currentNUMANode + 1) % numNodes
-		fi, err := n.getDeviceFromNUMA(n.currentNUMANode, netDevClass, provider)
+		fi, err := n.getDeviceFromNUMA(nodes[n.currentNUMANode], netDevClass, provider)
 		if err == nil {
 			n.log.Debugf("Suitable fabric interface %q found on NUMA node %d", fi.Name, n.currentNUMANode)
 			return fi, nil
 		}
 	}
 	return nil, FabricNotFoundErr(netDevClass)
+}
+
+func (n *NUMAFabric) getNUMANodes() []int {
+	keys := make([]int, 0)
+	for k := range n.numaMap {
+		keys = append(keys, k)
+	}
+	sort.Ints(keys)
+	return keys
 }
 
 // getNextDevIndex is a simple round-robin load balancing scheme
