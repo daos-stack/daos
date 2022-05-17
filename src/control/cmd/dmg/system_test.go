@@ -18,27 +18,37 @@ import (
 	sharedpb "github.com/daos-stack/daos/src/control/common/proto/shared"
 	"github.com/daos-stack/daos/src/control/common/test"
 	"github.com/daos-stack/daos/src/control/lib/control"
+	"github.com/daos-stack/daos/src/control/lib/hostlist"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/system"
 )
 
 func TestDmg_SystemCommands(t *testing.T) {
-	defSysName := build.DefaultSystemName + "-" + build.DaosVersion
-	startReqWithRanks := func(ranks string) *control.SystemStartReq {
-		return &control.SystemStartReq{
-			SystemStartReq: mgmtpb.SystemStartReq{
-				Sys:   defSysName,
-				Ranks: ranks,
-			},
+	withSys := func(req control.UnaryRequest, sys ...string) control.UnaryRequest {
+		if len(sys) == 0 {
+			sys = append(sys, build.DefaultSystemName+"-"+build.DaosVersion)
 		}
+
+		switch unwrapped := req.(type) {
+		case *control.SystemStartReq:
+			unwrapped.SystemStartReq.Sys = sys[0]
+		}
+
+		return req
 	}
-	startReqWithHosts := func(hosts string) *control.SystemStartReq {
-		return &control.SystemStartReq{
-			SystemStartReq: mgmtpb.SystemStartReq{
-				Sys:   defSysName,
-				Hosts: hosts,
-			},
+	withRanks := func(req control.UnaryRequest, ranks ...system.Rank) control.UnaryRequest {
+		if rs, ok := req.(interface{ SetRanks(*system.RankSet) }); ok {
+			rs.SetRanks(system.RankSetFromRanks(ranks))
 		}
+
+		return req
+	}
+	withHosts := func(req control.UnaryRequest, hosts ...string) control.UnaryRequest {
+		if rs, ok := req.(interface{ SetHosts(*hostlist.HostSet) }); ok {
+			rs.SetHosts(hostlist.MustCreateSet(strings.Join(hosts, ",")))
+		}
+
+		return req
 	}
 
 	runCmdTests(t, []cmdTest{
@@ -54,7 +64,7 @@ func TestDmg_SystemCommands(t *testing.T) {
 			"system query with single rank",
 			"system query --ranks 0",
 			strings.Join([]string{
-				`*control.SystemQueryReq-{"Sys":"","HostList":null,"Ranks":"0","Hosts":"","FailOnUnavailable":false}`,
+				printRequest(t, withRanks(&control.SystemQueryReq{}, 0)),
 			}, " "),
 			nil,
 		},
@@ -62,7 +72,7 @@ func TestDmg_SystemCommands(t *testing.T) {
 			"system query with multiple ranks",
 			"system query --ranks 0,2,4-8",
 			strings.Join([]string{
-				`*control.SystemQueryReq-{"Sys":"","HostList":null,"Ranks":"[0,2,4-8]","Hosts":"","FailOnUnavailable":false}`,
+				printRequest(t, withRanks(&control.SystemQueryReq{}, 0, 2, 4, 5, 6, 7, 8)),
 			}, " "),
 			nil,
 		},
@@ -76,7 +86,7 @@ func TestDmg_SystemCommands(t *testing.T) {
 			"system query with single host",
 			"system query --rank-hosts foo-0",
 			strings.Join([]string{
-				`*control.SystemQueryReq-{"Sys":"","HostList":null,"Ranks":"","Hosts":"foo-0","FailOnUnavailable":false}`,
+				printRequest(t, withHosts(&control.SystemQueryReq{}, "foo-0")),
 			}, " "),
 			nil,
 		},
@@ -84,7 +94,7 @@ func TestDmg_SystemCommands(t *testing.T) {
 			"system query with multiple hosts",
 			"system query --rank-hosts bar9,foo-[0-100]",
 			strings.Join([]string{
-				`*control.SystemQueryReq-{"Sys":"","HostList":null,"Ranks":"","Hosts":"bar9,foo-[0-100]","FailOnUnavailable":false}`,
+				printRequest(t, withHosts(&control.SystemQueryReq{}, "foo-[0-100]", "bar9")),
 			}, " "),
 			nil,
 		},
@@ -128,7 +138,7 @@ func TestDmg_SystemCommands(t *testing.T) {
 			"system stop with single rank",
 			"system stop --ranks 0",
 			strings.Join([]string{
-				`*control.SystemStopReq-{"Sys":"","HostList":null,"Ranks":"0","Hosts":"","Force":false}`,
+				printRequest(t, withRanks(&control.SystemStopReq{}, 0)),
 			}, " "),
 			nil,
 		},
@@ -136,7 +146,7 @@ func TestDmg_SystemCommands(t *testing.T) {
 			"system stop with multiple ranks",
 			"system stop --ranks 0,1,4",
 			strings.Join([]string{
-				`*control.SystemStopReq-{"Sys":"","HostList":null,"Ranks":"[0-1,4]","Hosts":"","Force":false}`,
+				printRequest(t, withRanks(&control.SystemStopReq{}, 0, 1, 4)),
 			}, " "),
 			nil,
 		},
@@ -144,7 +154,7 @@ func TestDmg_SystemCommands(t *testing.T) {
 			"system stop with multiple hosts",
 			"system stop --rank-hosts bar9,foo-[0-100]",
 			strings.Join([]string{
-				`*control.SystemStopReq-{"Sys":"","HostList":null,"Ranks":"","Hosts":"bar9,foo-[0-100]","Force":false}`,
+				printRequest(t, withHosts(&control.SystemStopReq{}, "foo-[0-100]", "bar9")),
 			}, " "),
 			nil,
 		},
@@ -164,7 +174,7 @@ func TestDmg_SystemCommands(t *testing.T) {
 			"system start with no arguments",
 			"system start",
 			strings.Join([]string{
-				printRequest(t, startReqWithRanks("")),
+				printRequest(t, withRanks(withSys(&control.SystemStartReq{}))),
 			}, " "),
 			nil,
 		},
@@ -172,7 +182,7 @@ func TestDmg_SystemCommands(t *testing.T) {
 			"system start with single rank",
 			"system start --ranks 0",
 			strings.Join([]string{
-				printRequest(t, startReqWithRanks("0")),
+				printRequest(t, withRanks(withSys(&control.SystemStartReq{}), 0)),
 			}, " "),
 			nil,
 		},
@@ -180,7 +190,7 @@ func TestDmg_SystemCommands(t *testing.T) {
 			"system start with multiple ranks",
 			"system start --ranks 0,1,4",
 			strings.Join([]string{
-				printRequest(t, startReqWithRanks("0-1,4")),
+				printRequest(t, withRanks(withSys(&control.SystemStartReq{}), 0, 1, 4)),
 			}, " "),
 			nil,
 		},
@@ -188,7 +198,7 @@ func TestDmg_SystemCommands(t *testing.T) {
 			"system start with multiple hosts",
 			"system start --rank-hosts bar9,foo-[0-100]",
 			strings.Join([]string{
-				printRequest(t, startReqWithHosts("bar9,foo-[0-100]")),
+				printRequest(t, withHosts(withSys(&control.SystemStartReq{}), "foo-[0-100]", "bar9")),
 			}, " "),
 			nil,
 		},
