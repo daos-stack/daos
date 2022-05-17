@@ -530,15 +530,15 @@ func TestControl_getResetRankErrors(t *testing.T) {
 func TestControl_SystemQuery(t *testing.T) {
 	testHS := hostlist.MustCreateSet("foo-[1-23]")
 	testReqHS := new(SystemQueryReq)
-	testReqHS.Hosts.ReplaceSet(testHS)
+	testReqHS.Hosts.Replace(testHS)
 	testRespHS := new(SystemQueryResp)
-	testRespHS.AbsentHosts.ReplaceSet(testHS)
+	testRespHS.AbsentHosts.Replace(testHS)
 
 	testRS := system.MustCreateRankSet("1-23")
 	testReqRS := new(SystemQueryReq)
-	testReqRS.Ranks.ReplaceSet(testRS)
+	testReqRS.Ranks.Replace(testRS)
 	testRespRS := new(SystemQueryResp)
-	testRespRS.AbsentRanks.ReplaceSet(testRS)
+	testRespRS.AbsentRanks.Replace(testRS)
 
 	fdStrs := []string{"/one/two", "/three", "/four/five/six", ""}
 	fds := make([]*system.FaultDomain, len(fdStrs))
@@ -685,9 +685,9 @@ func TestControl_SystemQueryRespErrors(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			resp := new(SystemQueryResp)
 			ahs := hostlist.MustCreateSet(tc.absentHosts)
-			resp.AbsentHosts.ReplaceSet(ahs)
+			resp.AbsentHosts.Replace(ahs)
 			ars := system.MustCreateRankSet(tc.absentRanks)
-			resp.AbsentRanks.ReplaceSet(ars)
+			resp.AbsentRanks.Replace(ars)
 
 			test.CmpErr(t, tc.expErr, resp.Errors())
 		})
@@ -697,15 +697,15 @@ func TestControl_SystemQueryRespErrors(t *testing.T) {
 func TestControl_SystemStart(t *testing.T) {
 	testHS := hostlist.MustCreateSet("foo-[1-23]")
 	testReqHS := new(SystemStartReq)
-	testReqHS.Hosts.ReplaceSet(testHS)
+	testReqHS.Hosts.Replace(testHS)
 	testRespHS := new(SystemStartResp)
-	testRespHS.AbsentHosts.ReplaceSet(testHS)
+	testRespHS.AbsentHosts.Replace(testHS)
 
 	testRS := system.MustCreateRankSet("1-23")
 	testReqRS := new(SystemStartReq)
-	testReqRS.Ranks.ReplaceSet(testRS)
+	testReqRS.Ranks.Replace(testRS)
 	testRespRS := new(SystemStartResp)
-	testRespRS.AbsentRanks.ReplaceSet(testRS)
+	testRespRS.AbsentRanks.Replace(testRS)
 
 	for name, tc := range map[string]struct {
 		req     *SystemStartReq
@@ -855,9 +855,9 @@ func TestControl_SystemStartRespErrors(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			resp := new(SystemStartResp)
 			ahs := hostlist.MustCreateSet(tc.absentHosts)
-			resp.AbsentHosts.ReplaceSet(ahs)
+			resp.AbsentHosts.Replace(ahs)
 			ars := system.MustCreateRankSet(tc.absentRanks)
-			resp.AbsentRanks.ReplaceSet(ars)
+			resp.AbsentRanks.Replace(ars)
 			resp.Results = tc.results
 
 			test.CmpErr(t, tc.expErr, resp.Errors())
@@ -868,15 +868,15 @@ func TestControl_SystemStartRespErrors(t *testing.T) {
 func TestControl_SystemStop(t *testing.T) {
 	testHS := hostlist.MustCreateSet("foo-[1-23]")
 	testReqHS := new(SystemStopReq)
-	testReqHS.Hosts.ReplaceSet(testHS)
+	testReqHS.Hosts.Replace(testHS)
 	testRespHS := new(SystemStopResp)
-	testRespHS.AbsentHosts.ReplaceSet(testHS)
+	testRespHS.AbsentHosts.Replace(testHS)
 
 	testRS := system.MustCreateRankSet("1-23")
 	testReqRS := new(SystemStopReq)
-	testReqRS.Ranks.ReplaceSet(testRS)
+	testReqRS.Ranks.Replace(testRS)
 	testRespRS := new(SystemStopResp)
-	testRespRS.AbsentRanks.ReplaceSet(testRS)
+	testRespRS.AbsentRanks.Replace(testRS)
 
 	for name, tc := range map[string]struct {
 		req     *SystemStopReq
@@ -1026,9 +1026,9 @@ func TestControl_SystemStopRespErrors(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			resp := new(SystemStopResp)
 			ahs := hostlist.MustCreateSet(tc.absentHosts)
-			resp.AbsentHosts.ReplaceSet(ahs)
+			resp.AbsentHosts.Replace(ahs)
 			ars := system.MustCreateRankSet(tc.absentRanks)
-			resp.AbsentRanks.ReplaceSet(ars)
+			resp.AbsentRanks.Replace(ars)
 			resp.Results = tc.results
 
 			test.CmpErr(t, tc.expErr, resp.Errors())

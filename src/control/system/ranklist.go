@@ -9,20 +9,20 @@ package system
 import (
 	"bytes"
 	"fmt"
+	"math/bits"
 	"sort"
 	"strings"
-	"sync"
 
 	"github.com/pkg/errors"
 
-	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/lib/hostlist"
 )
 
-// RankSet implements a set of unique ranks in a condensed format.
-type RankSet struct {
-	sync.RWMutex
-	hostlist.HostSet
+func init() {
+	// Can't imagine where this would be true, but better safe than sorry...
+	if bits.UintSize < 32 {
+		panic("uint on this system is not large enough to hold a Rank")
+	}
 }
 
 func fixBrackets(stringRanks string, remove bool) string {
@@ -40,6 +40,98 @@ func fixBrackets(stringRanks string, remove bool) string {
 	return stringRanks
 }
 
+// RankSet implements a set of unique ranks in a condensed format.
+type RankSet struct {
+	ns *hostlist.NumericSet
+}
+
+// NewRankSet returns an initialized RankSet.
+func NewRankSet() *RankSet {
+	return &RankSet{ns: hostlist.NewNumericSet()}
+}
+
+func (rs *RankSet) String() string {
+	if rs == nil || rs.ns == nil {
+		return ""
+	}
+	return fixBrackets(rs.ns.String(), true)
+}
+
+// RangedString returns a ranged string representation of the RankSet.
+func (rs *RankSet) RangedString() string {
+	if rs == nil || rs.ns == nil {
+		return ""
+	}
+	return rs.ns.RangedString()
+}
+
+// Count returns the number of ranks in the set.
+func (rs *RankSet) Count() int {
+	if rs == nil || rs.ns == nil {
+		return 0
+	}
+	return rs.ns.Count()
+}
+
+// Merge merge the supplied RankSet into the receiver.
+func (rs *RankSet) Merge(other *RankSet) {
+	if rs == nil || other == nil {
+		return
+	}
+
+	if rs.ns == nil {
+		rs.ns = other.ns
+		return
+	}
+
+	rs.ns.Merge(other.ns)
+}
+
+// Replace replaces the contents of the receiver with the supplied RankSet.
+func (rs *RankSet) Replace(other *RankSet) {
+	if rs == nil || other == nil {
+		return
+	}
+
+	if rs.ns == nil {
+		rs.ns = other.ns
+		return
+	}
+
+	rs.ns.Replace(other.ns)
+}
+
+// Add adds rank to an existing RankSet.
+func (rs *RankSet) Add(rank Rank) {
+	if rs.ns == nil {
+		rs.ns = hostlist.NewNumericSet()
+	}
+	rs.ns.Add(uint(rank))
+}
+
+// Delete removes the specified rank from the RankSet.
+func (rs *RankSet) Delete(rank Rank) {
+	if rs.ns == nil {
+		return
+	}
+	rs.ns.Delete(uint(rank))
+}
+
+// Ranks returns a slice of Rank from a RankSet.
+func (rs *RankSet) Ranks() (out []Rank) {
+	out = make([]Rank, 0, rs.Count())
+
+	if rs.ns == nil {
+		return
+	}
+
+	for _, rVal := range rs.ns.Slice() {
+		out = append(out, Rank(rVal))
+	}
+
+	return
+}
+
 // MustCreateRankSet is like CreateRankSet but will panic on error.
 func MustCreateRankSet(stringRanks string) *RankSet {
 	rs, err := CreateRankSet(stringRanks)
@@ -52,9 +144,7 @@ func MustCreateRankSet(stringRanks string) *RankSet {
 // CreateRankSet creates a new HostList with ranks rather than hostnames from the
 // supplied string representation.
 func CreateRankSet(stringRanks string) (*RankSet, error) {
-	rs := &RankSet{
-		HostSet: *hostlist.MustCreateSet(""),
-	}
+	rs := NewRankSet()
 
 	if len(stringRanks) < 1 {
 		return rs, nil
@@ -63,81 +153,24 @@ func CreateRankSet(stringRanks string) (*RankSet, error) {
 	stringRanks = fixBrackets(stringRanks, false)
 
 	// add enclosing brackets to input so CreateSet works without hostnames
-	hs, err := hostlist.CreateNumericSet(stringRanks)
+	ns, err := hostlist.CreateNumericSet(stringRanks)
 	if err != nil {
 		return nil, err
 	}
-	rs.HostSet.ReplaceSet(hs)
+	rs.ns.Merge(ns)
 
 	return rs, nil
 }
 
 // RankSetFromRanks returns a RankSet created from the supplied Rank slice.
 func RankSetFromRanks(ranks RankList) *RankSet {
-	rs := &RankSet{
-		HostSet: *hostlist.MustCreateSet(""),
-	}
+	rs := NewRankSet()
 
-	if len(ranks) < 1 {
-		return rs
+	for _, r := range ranks {
+		rs.Add(r)
 	}
-
-	sr := fixBrackets(ranks.String(), false)
-	hs, err := hostlist.CreateNumericSet(sr)
-	if err != nil {
-		// Any error with numeric ranks is going to be something bad.
-		panic(err)
-	}
-	rs.HostSet.ReplaceSet(hs)
 
 	return rs
-}
-
-// Add adds rank to an existing RankSet.
-func (rs *RankSet) Add(rank Rank) {
-	rs.RLock()
-	defer rs.RUnlock()
-
-	var stringRanks string
-	if rs.HostSet.Count() > 0 {
-		stringRanks = fixBrackets(rs.HostSet.String(), true)
-		stringRanks += ","
-	}
-	stringRanks += rank.String()
-
-	newHS, err := hostlist.CreateNumericSet(fixBrackets(stringRanks, false))
-	if err != nil {
-		// if we trip this, something is seriously wrong
-		panic(fmt.Sprintf("internal error: %s", err))
-	}
-
-	rs.HostSet.ReplaceSet(newHS)
-}
-
-// ReplaceSet replaces the contents of this set with the supplied RankSet.
-func (rs *RankSet) ReplaceSet(other *RankSet) {
-	if other == nil {
-		return
-	}
-
-	rs.HostSet.ReplaceSet(&other.HostSet)
-}
-
-func (rs *RankSet) String() string {
-	return fixBrackets(rs.HostSet.String(), true)
-}
-
-// Ranks returns a slice of Rank from a RankSet.
-func (rs *RankSet) Ranks() []Rank {
-	var ranks []uint32
-	if err := common.ParseNumberList(
-		fixBrackets(rs.HostSet.DerangedString(), true),
-		&ranks); err != nil {
-		// if we trip this, something is seriously wrong
-		panic(fmt.Sprintf("internal error: %s", err))
-	}
-
-	return RanksFromUint32(ranks)
 }
 
 // ParseRanks takes a string representation of a list of ranks e.g. 1-4,6 and
