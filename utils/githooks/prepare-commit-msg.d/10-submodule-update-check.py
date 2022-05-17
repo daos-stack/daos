@@ -29,16 +29,16 @@ def submodule_check(modname, msg_file):
                 modified = modified | (match.group('name') == modname)
 
         if not rebasing() and modified:
-            with open(msg_file, 'r') as f:
+            with open(msg_file, 'r', encoding='utf-8') as f:
                 lines = f.readlines()
 
-            message = '# WARNING *** This patch modifies the {0} reference.  ' \
-                      'Are you sure this is intended? *** WARNING'.format(modname)
+            message = f'# WARNING *** This patch modifies the {modname} reference.  ' \
+                      'Are you sure this is intended? *** WARNING'
 
             if lines[0] != message:
                 lines = [message, "\n", "\n"] + lines
 
-            with open(msg_file, 'w') as f:
+            with open(msg_file, 'w', encoding='utf-8') as f:
                 f.writelines(lines)
 
 
