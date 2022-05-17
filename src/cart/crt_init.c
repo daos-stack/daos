@@ -605,6 +605,11 @@ crt_init_opt(crt_group_id_t grpid, uint32_t flags, crt_init_options_t *opt)
 		__split_arg(interface_env, &iface0, &iface1);
 		__split_arg(domain_env, &domain0, &domain1);
 		__split_arg(port_str, &port0, &port1);
+		if (iface0 == NULL || domain0 == NULL || port0 == NULL) {
+			D_ERROR("Incorrect configuration: %s %s %s\n",
+				iface0, domain0, port0);
+			D_GOTO(out, rc = -DER_INVAL);
+		}
 
 		prov_data_init(&crt_gdata.cg_prov_gdata[primary_provider],
 			       primary_provider, true, opt);
