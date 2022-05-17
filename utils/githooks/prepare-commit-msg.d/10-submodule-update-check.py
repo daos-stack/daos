@@ -6,6 +6,7 @@ import sys
 
 modified_re = re.compile(r'^(?:M|A)(\s+)(?P<name>.*)')
 
+
 def rebasing():
     """Determines if the current operation is a rebase"""
     with subprocess.Popen(["git", "branch"],
@@ -14,6 +15,7 @@ def rebasing():
 
         stdout = process.communicate()[0].decode()
         return stdout.split('\n', maxsplit=1)[0].startswith("* (no branch, rebasing")
+
 
 def submodule_check(modname, msg_file):
     """Determines if a submodule has been updated"""

@@ -1,9 +1,6 @@
 #!/bin/bash
 
 # A git hook to validate and correct the copyright date in source files.
-if [ -n "${NO_PRE_COMMIT:=""}" ]; then
-	exit 0
-fi
 
 regex='(^[[:blank:]]*[\*/]*.*)((Copyright[[:blank:]]*)([0-9]{4})(-([0-9]{4}))?)([[:blank:]]*(Intel.*$))'
 year=$(date +%Y)
