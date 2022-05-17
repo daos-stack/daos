@@ -1308,6 +1308,12 @@ out:
 	return rc;
 }
 
+int
+ds_pool_svc_rf_to_nreplicas(int svc_rf)
+{
+	return svc_rf * 2 + 1;
+}
+
 /*
  * There might be some rank status inconsistency, let's check and
  * fix it.
@@ -1367,7 +1373,6 @@ pool_svc_check_node_status(struct pool_svc *svc)
 	return rc;
 }
 
-/* up */
 static int
 pool_svc_step_up_cb(struct ds_rsvc *rsvc)
 {
@@ -4767,65 +4772,66 @@ out:
 	return rc;
 }
 
-static int
-replace_failed_replicas(struct pool_svc *svc, struct pool_map *map)
+static void
+pool_svc_reconfigure_replicas(struct pool_svc *svc, struct pool_map *map)
 {
-	d_rank_list_t	*old, *new, *current, failed, replacement;
+	d_rank_list_t	*current;
+	d_rank_list_t	*to_add;
+	d_rank_list_t	*to_remove;
+	d_rank_list_t	*new;
 	int              rc;
 
 	rc = rdb_get_ranks(svc->ps_rsvc.s_db, &current);
-	if (rc != 0)
-		goto out;
-
-	rc = daos_rank_list_dup(&old, current);
-	if (rc != 0)
-		goto out_cur;
-
-	rc = ds_pool_check_failed_replicas(map, current, &failed, &replacement);
 	if (rc != 0) {
-		D_DEBUG(DB_MD, DF_UUID": cannot replace failed replicas: "
-			""DF_RC"\n", DP_UUID(svc->ps_uuid), DP_RC(rc));
-		goto out_old;
+		D_ERROR(DF_UUID": failed to get pool service replica ranks: "DF_RC"\n",
+			DP_UUID(svc->ps_uuid), DP_RC(rc));
+		return;
 	}
 
-	if (failed.rl_nr < 1)
-		goto out_old;
-	if (replacement.rl_nr > 0)
-		ds_rsvc_add_replicas_s(&svc->ps_rsvc, &replacement,
-				       ds_rsvc_get_md_cap());
-	ds_rsvc_remove_replicas_s(&svc->ps_rsvc, &failed, false /* stop */);
-	/** `replacement.rl_ranks` is not allocated and shouldn't be freed **/
-	D_FREE(failed.rl_ranks);
+	rc = ds_pool_plan_svc_reconfs(-1 /* svc_rf */, map, current, &to_add, &to_remove);
+	if (rc != 0) {
+		D_ERROR(DF_UUID": cannot plan pool service reconfigurations: "DF_RC"\n",
+			DP_UUID(svc->ps_uuid), DP_RC(rc));
+		goto out_cur;
+	}
+
+	D_DEBUG(DB_MD, DF_UUID": current=%u to_add=%u to_remove=%u\n", DP_UUID(svc->ps_uuid),
+		current->rl_nr, to_add->rl_nr, to_remove->rl_nr);
+
+	/*
+	 * Ignore the two return values here. If the "add" calls returns an
+	 * error, we continue to make the "remove" call, because to_remove
+	 * either comprises unnecessary (in which case to_add is empty) or DOWN
+	 * replicas. If any of the two calls returns an error, we still need to
+	 * report any chances to the MS.
+	 */
+	if (to_add->rl_nr > 0)
+		ds_rsvc_add_replicas_s(&svc->ps_rsvc, to_add, ds_rsvc_get_md_cap());
+	if (to_remove->rl_nr > 0)
+		ds_rsvc_remove_replicas_s(&svc->ps_rsvc, to_remove, false /* stop */);
 
 	if (rdb_get_ranks(svc->ps_rsvc.s_db, &new) == 0) {
-		daos_rank_list_sort(current);
-		daos_rank_list_sort(old);
-		daos_rank_list_sort(new);
+		d_rank_list_sort(current);
+		d_rank_list_sort(new);
 
-		if (!daos_rank_list_identical(current, new)) {
-			D_DEBUG(DB_MD, DF_UUID": failed to update replicas\n",
-				DP_UUID(svc->ps_uuid));
-		} else if (!daos_rank_list_identical(new, old)) {
+		if (!d_rank_list_identical(new, current)) {
 			/*
 			 * Send RAS event to control-plane over dRPC to indicate
 			 * change in pool service replicas.
 			 */
 			rc = ds_notify_pool_svc_update(&svc->ps_uuid, new);
 			if (rc != 0)
-				D_DEBUG(DB_MD, DF_UUID": replica update notify "
-					"failure: "DF_RC"\n",
+				D_ERROR(DF_UUID": replica update notify failure: "DF_RC"\n",
 					DP_UUID(svc->ps_uuid), DP_RC(rc));
 		}
 
 		d_rank_list_free(new);
 	}
 
-out_old:
-	d_rank_list_free(old);
+	d_rank_list_free(to_remove);
+	d_rank_list_free(to_add);
 out_cur:
 	d_rank_list_free(current);
-out:
-	return rc;
 }
 
 static int pool_find_all_targets_by_addr(struct pool_map *map,
@@ -4960,7 +4966,7 @@ pool_svc_update_map_internal(struct pool_svc *svc, unsigned int opc,
 
 	ds_rsvc_request_map_dist(&svc->ps_rsvc);
 
-	replace_failed_replicas(svc, map);
+	pool_svc_reconfigure_replicas(svc, map);
 
 out_map_buf:
 	pool_buf_free(map_buf);

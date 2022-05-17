@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2021 Intel Corporation.
+ * (C) Copyright 2016-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -277,93 +277,139 @@ out:
 	return rc;
 }
 
-#define SWAP_RANKS(ranks, i, j)					\
-	do {							\
-		d_rank_t r = ranks->rl_ranks[i];		\
-								\
-		ranks->rl_ranks[i] = ranks->rl_ranks[j];	\
-		ranks->rl_ranks[j] = r;				\
-	} while (0)
-
-/*
- * Find failed ranks in `replicas` and copy to a new list `failed`
- * Replace the failed ranks with ranks which are up and running.
- * `alt` points to the subset of `replicas` containing replacements.
+/**
+ * Plan a round of pool service (PS) reconfigurations based on the PS
+ * redundancy factor (RF), the pool map, and the current PS membership. The caller
+ * is responsible for freeing *to_add_out and *to_remove_out with
+ * d_rank_list_free.
+ *
+ * We try to achieve the PS RF by putting available ranks to *to_add_out. If
+ * there are not enough ranks, we try to achieve an odd number of replicas.
+ *
+ * [Temporary] If \a svc_rf is negative, a default value (see the
+ * implementation) is used instead---a temporary policy before we come up with
+ * a way to determine a more accurate value based on data redundancy factors.
+ * Related, if there are an even number of replicas that are more than enough
+ * for the PS redundancy factor, one of them will be in *to_remove_out, even if
+ * the resulting odd number of replicas are still more than enough for the PS
+ * redundancy factor.
+ *
+ * \param[in]	svc_rf		PS redundancy factor
+ * \param[in]	map		pool map
+ * \param[in]	replicas	current PS membership
+ * \param[out]	to_add_out	PS replicas to add
+ * \param[out]	to_remove_out	PS replicas to remove
  */
 int
-ds_pool_check_failed_replicas(struct pool_map *map, d_rank_list_t *replicas,
-			      d_rank_list_t *failed, d_rank_list_t *alt)
+ds_pool_plan_svc_reconfs(int svc_rf, struct pool_map *map, d_rank_list_t *replicas,
+			 d_rank_list_t **to_add_out, d_rank_list_t **to_remove_out)
 {
+	const int		 svc_rf_default = 2;
 	struct pool_domain	*nodes = NULL;
 	int			 nnodes;
-	int			 nfailed;
-	int			 nreplaced;
-	int			 idx;
+	int			 objective;
+	d_rank_list_t		*to_keep = NULL;
+	d_rank_list_t		*to_add = NULL;
+	d_rank_list_t		*to_remove = NULL;
 	int			 i;
 	int			 rc;
 
+	if (svc_rf < 0)
+		svc_rf = svc_rf_default;
+
 	nnodes = pool_map_find_nodes(map, PO_COMP_ID_ALL, &nodes);
-	if (nnodes == 0) {
-		D_ERROR("no nodes in pool map\n");
-		return -DER_IO;
+	D_ASSERTF(nnodes > 0, "pool_map_find_nodes: %d\n", nnodes);
+
+	to_keep = d_rank_list_alloc(0);
+	to_add = d_rank_list_alloc(0);
+	to_remove = d_rank_list_alloc(0);
+	if (to_keep == NULL || to_add == NULL || to_remove == NULL) {
+		rc = -DER_NOMEM;
+		goto out;
 	}
 
-	/**
-	 * Move all ranks in the list of replicas which are marked as DOWN
-	 * in the pool map to the end of the list.
-	 **/
-	for (i = 0, nfailed = 0; i < nnodes; i++) {
-		if (!map_ranks_include(MAP_RANKS_DOWN,
-				       nodes[i].do_comp.co_status))
-			continue;
-		if (!daos_rank_list_find(replicas,
-					 nodes[i].do_comp.co_rank, &idx))
-			continue;
-		if (idx < replicas->rl_nr - (nfailed + 1))
-			SWAP_RANKS(replicas, idx,
-				   replicas->rl_nr - (nfailed + 1));
-		++nfailed;
+	/*
+	 * Fill to_keep and to_remove with all UP and DOWN replicas,
+	 * respectively.
+	 */
+	for (i = 0; i < replicas->rl_nr; i++) {
+		d_rank_list_t  *list;
+		int		j;
+
+		for (j = 0; j < nnodes; j++)
+			if (nodes[j].do_comp.co_rank == replicas->rl_ranks[i])
+				break;
+		if (j == nnodes) /* not found (hypothetical) */
+			list = to_remove;
+		else if (map_ranks_include(MAP_RANKS_DOWN, nodes[j].do_comp.co_status)) /* DOWN */
+			list = to_remove;
+		else /* UP */
+			list = to_keep;
+		rc = d_rank_list_append(list, replicas->rl_ranks[i]);
+		if (rc != 0)
+			goto out;
 	}
 
-	failed->rl_nr = 0;
-	failed->rl_ranks = NULL;
+	/* Compare the UP replicas with the objective. */
+	objective = ds_pool_svc_rf_to_nreplicas(svc_rf);
+	D_ASSERT(to_keep->rl_nr > 0);
+	D_ASSERTF(to_add->rl_nr == 0, "to_add->rl_nr: %u\n", to_add->rl_nr);
+	if (to_keep->rl_nr < objective) {
+		/* More replicas needed. Add new ranks to to_add. */
+		for (i = 0; i < nnodes; i++) {
+			if (!map_ranks_include(MAP_RANKS_UP, nodes[i].do_comp.co_status))
+				continue;
+			/* May be found in replicas but never in to_add. */
+			if (d_rank_list_find(replicas, nodes[i].do_comp.co_rank, NULL /* idx */))
+				continue;
+			rc = d_rank_list_append(to_add, nodes[i].do_comp.co_rank);
+			if (rc != 0)
+				goto out;
+			if (to_add->rl_nr + to_keep->rl_nr == objective)
+				break;
+		}
+		if ((to_add->rl_nr + to_keep->rl_nr) % 2 == 0) {
+			/*
+			 * Not enough engines available, for the objective is
+			 * odd. Do with what we have, but avoid using an even
+			 * number of replicas, which are inefficient.
+			 */
+			if (to_add->rl_nr > 0) {
+				to_add->rl_nr--;
+			} else {
+				d_rank_t victim = to_keep->rl_ranks[to_keep->rl_nr - 1];
 
-	if (nfailed == 0) {
-		alt->rl_nr = 0;
-		alt->rl_ranks = NULL;
-		return 0;
+				rc = d_rank_list_append(to_remove, victim);
+				if (rc != 0)
+					goto out;
+				to_keep->rl_nr--;
+			}
+		}
+	} else if (to_keep->rl_nr > objective) {
+		/*
+		 * Too many replicas---perhaps, since we may be using
+		 * svc_rf_default. Hence, we don't reduce to the objective, but
+		 * merely ensure an odd number of replicas instead.
+		 */
+		if (to_keep->rl_nr % 2 == 0) {
+			rc = d_rank_list_append(to_remove, to_keep->rl_ranks[to_keep->rl_nr - 1]);
+			if (rc != 0)
+				goto out;
+			to_keep->rl_nr--;
+		}
 	}
 
-	/** Make `alt` point to failed subset towards the end **/
-	alt->rl_nr = nfailed;
-	alt->rl_ranks = replicas->rl_ranks + (replicas->rl_nr - nfailed);
-
-	/** Copy failed ranks to make room for replacements **/
-	rc = daos_rank_list_copy(failed, alt);
-	if (rc != 0)
-		return rc;
-
-	/**
-	 * For replacements, search all ranks which are marked as UP
-	 * in the pool map and not present in the list of replicas.
-	 **/
-	for (i = 0, nreplaced = 0; i < nnodes && nreplaced < nfailed; i++) {
-		if (!map_ranks_include(MAP_RANKS_UP,
-				       nodes[i].do_comp.co_status))
-			continue;
-		if (daos_rank_list_find(replicas,
-					nodes[i].do_comp.co_rank, &idx))
-			continue;
-		alt->rl_ranks[nreplaced++] = nodes[i].do_comp.co_rank;
+	rc = 0;
+out:
+	if (rc == 0) {
+		*to_add_out = to_add;
+		*to_remove_out = to_remove;
+	} else {
+		d_rank_list_free(to_remove);
+		d_rank_list_free(to_add);
 	}
-
-	if (nreplaced < nfailed) {
-		D_WARN("Not enough ranks available; Failed %d, Replacements %d",
-			nfailed, nreplaced);
-		alt->rl_nr = nreplaced;
-		replicas->rl_nr -= (nfailed - nreplaced);
-	}
-	return 0;
+	d_rank_list_free(to_keep);
+	return rc;
 }
 
 /** The caller are responsible for freeing the ranks */

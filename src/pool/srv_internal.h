@@ -119,6 +119,7 @@ void ds_pool_rsvc_class_register(void);
 void ds_pool_rsvc_class_unregister(void);
 int ds_pool_start_all(void);
 int ds_pool_stop_all(void);
+int ds_pool_svc_rf_to_nreplicas(int svc_rf);
 void ds_pool_create_handler(crt_rpc_t *rpc);
 void ds_pool_connect_handler(crt_rpc_t *rpc);
 void ds_pool_disconnect_handler(crt_rpc_t *rpc);
@@ -162,8 +163,8 @@ void ds_pool_tgt_query_map_handler(crt_rpc_t *rpc);
 /*
  * srv_util.c
  */
-int ds_pool_check_failed_replicas(struct pool_map *map, d_rank_list_t *replicas,
-				  d_rank_list_t *failed, d_rank_list_t *alt);
+int ds_pool_plan_svc_reconfs(int svc_rf, struct pool_map *map, d_rank_list_t *replicas,
+			     d_rank_list_t **to_add_out, d_rank_list_t **to_remove_out);
 int ds_pool_transfer_map_buf(struct pool_buf *map_buf, uint32_t map_version,
 			     crt_rpc_t *rpc, crt_bulk_t remote_bulk,
 			     uint32_t *required_buf_size);
