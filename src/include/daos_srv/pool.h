@@ -353,4 +353,6 @@ int ds_pool_clues_init(ds_pool_clues_init_filter_t filter, void *filter_arg,
 void ds_pool_clues_fini(struct ds_pool_clues *clues);
 void ds_pool_clues_print(struct ds_pool_clues *clues);
 
+int ds_pool_check_svc_clues(struct ds_pool_clues *clues, int *advice_out);
+
 #endif /* __DAOS_SRV_POOL_H__ */
