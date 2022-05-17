@@ -1203,6 +1203,6 @@ ds_iv_invalidate(struct ds_iv_ns *ns, struct ds_iv_key *key,
 	iv_sync.ivs_event = CRT_IV_SYNC_EVENT_NOTIFY;
 	iv_sync.ivs_mode = sync_mode;
 	iv_sync.ivs_flags = sync_flags;
-
+	key->eph = crt_hlc_get();
 	return iv_op(ns, key, NULL, &iv_sync, shortcut, retry, IV_INVALIDATE);
 }
