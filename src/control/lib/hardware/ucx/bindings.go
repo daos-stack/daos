@@ -12,7 +12,6 @@ package ucx
 #include <assert.h>
 #include <stdlib.h>
 #include <uct/api/uct.h>
-#include <ucs/debug/debug.h>
 
 void
 call_ucs_debug_disable_signal(void *fn, int signum)
