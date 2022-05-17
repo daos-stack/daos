@@ -1472,7 +1472,7 @@ out:
 		D_FREE(map_buf);
 	if (prop != NULL)
 		daos_prop_free(prop);
-	if (rc)
+	if (rc < 0)
 		ds_pool_failed_add(svc->ps_uuid, rc);
 	return rc;
 }
