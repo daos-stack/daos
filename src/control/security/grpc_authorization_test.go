@@ -12,9 +12,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/daos-stack/daos/src/control/common"
 	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
+	"github.com/daos-stack/daos/src/control/common/test"
 )
 
 func TestSecurity_CommonNameToComponent(t *testing.T) {
@@ -123,9 +123,9 @@ func TestSecurity_ComponentHasAccess(t *testing.T) {
 		t.Run(methodName, func(t *testing.T) {
 			for _, comp := range allComponents {
 				if inList(comp, correctComponent) {
-					common.AssertTrue(t, comp.HasAccess(method), fmt.Sprintf("%s should have access to %s but does not", comp, methodName))
+					test.AssertTrue(t, comp.HasAccess(method), fmt.Sprintf("%s should have access to %s but does not", comp, methodName))
 				} else {
-					common.AssertFalse(t, comp.HasAccess(method), fmt.Sprintf("%s should not have access to %s but does", comp, methodName))
+					test.AssertFalse(t, comp.HasAccess(method), fmt.Sprintf("%s should not have access to %s but does", comp, methodName))
 				}
 			}
 		})
