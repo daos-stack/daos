@@ -3519,6 +3519,21 @@ upgrade_cont_cb(daos_handle_t ih, d_iov_t *key, d_iov_t *val, void *varg)
 	if (rc)
 		goto out;
 
+	global_ver = DS_POOL_GLOBAL_VERSION;
+	rc = rdb_tx_update(ap->tx, &cont->c_prop,
+			   &ds_cont_prop_cont_global_version, &value);
+	if (rc) {
+		D_ERROR("failed to upgrade container global version pool/cont: "DF_CONTF"\n",
+			DP_CONT(ap->pool_uuid, cont_uuid));
+		goto out;
+	}
+	upgraded = true;
+	entry = daos_prop_entry_get(prop, DAOS_PROP_CO_GLOBAL_VERSION);
+	D_ASSERT(entry != NULL);
+	D_ASSERT(daos_prop_is_set(entry) == false);
+	entry->dpe_flags &= ~DAOS_PROP_ENTRY_NOT_SET;
+	entry->dpe_val = global_ver;
+
 	d_iov_set(&value, &pda, sizeof(pda));
 	rc = rdb_tx_lookup(ap->tx, &cont->c_prop,
 			   &ds_cont_prop_ec_pda, &value);
