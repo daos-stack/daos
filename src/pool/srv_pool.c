@@ -1393,10 +1393,8 @@ pool_svc_step_up_cb(struct ds_rsvc *rsvc)
 	 * one RPC must have been done, so the primary group must have been
 	 * initialized at this point.)
 	 */
-	if (!primary_group_initialized()) {
-		rc = -DER_GRPVER;
-		goto out;
-	}
+	if (!primary_group_initialized())
+		return -DER_GRPVER;
 
 	rc = read_db_for_stepping_up(svc, &map_buf, &map_version, &prop);
 	if (rc != 0)
@@ -1474,6 +1472,8 @@ out:
 		D_FREE(map_buf);
 	if (prop != NULL)
 		daos_prop_free(prop);
+	if (rc)
+		ds_pool_failed_add(svc->ps_uuid, rc);
 	return rc;
 }
 
@@ -1564,13 +1564,6 @@ pool_svc_lookup(uuid_t uuid, struct pool_svc **svcp)
 	struct ds_rsvc *rsvc;
 	d_iov_t	id;
 	int		rc;
-
-	rc = ds_pool_failed_lookup(uuid);
-	if (rc) {
-		D_ERROR(DF_UUID": failed to start: "DF_RC"\n",
-			DP_UUID(uuid), DP_RC(rc));
-		return -DER_NO_SERVICE;
-	}
 
 	d_iov_set(&id, uuid, sizeof(uuid_t));
 	rc = ds_rsvc_lookup(DS_RSVC_CLASS_POOL, &id, &rsvc);
