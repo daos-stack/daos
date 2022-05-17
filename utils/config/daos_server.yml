@@ -75,7 +75,12 @@
 ## providers that are supported on the fabric interfaces. Examples:
 ##
 ##   ofi+verbs;ofi_rxm  for libfabric with Infiniband/RoCE
+##   ofi+sockets        for libfabric with non-RDMA-capable fabrics
 ##   ofi+tcp;ofi_rxm    for libfabric with non-RDMA-capable fabrics
+##
+## (In DAOS 2.0, the supported non-RDMA provier is ofi+sockets;
+## the ofi+tcp provider has not been fully tested with DAOS 2.0.
+## Starting with DAOS 2.2, ofi+tcp is the supported non-RDMA provider.)
 ##
 ## (Starting with DAOS 2.2, ofi_rxm will be automatically added to the
 ## libfabric verbs and tcp providers, if not explicitly specified.)
