@@ -41,27 +41,27 @@ func TestHardware_FabricInterface_String(t *testing.T) {
 		},
 		"with net interface": {
 			fi: &FabricInterface{
-				Name:         "test0",
-				NetInterface: "os_test0",
-				Providers:    common.NewStringSet("p1", "p2"),
+				Name:          "test0",
+				NetInterfaces: common.NewStringSet("os_test0"),
+				Providers:     common.NewStringSet("p1", "p2"),
 			},
 			expResult: "test0 (interface: os_test0) (providers: p1, p2)",
 		},
 		"different OS name": {
 			fi: &FabricInterface{
-				Name:         "test0:1",
-				OSName:       "test0",
-				NetInterface: "os_test0",
-				Providers:    common.NewStringSet("p1", "p2"),
+				Name:          "test0:1",
+				OSName:        "test0",
+				NetInterfaces: common.NewStringSet("os_test0"),
+				Providers:     common.NewStringSet("p1", "p2"),
 			},
 			expResult: "test0:1 (OS name: test0) (interface: os_test0) (providers: p1, p2)",
 		},
 		"OS name": {
 			fi: &FabricInterface{
-				Name:         "test0",
-				OSName:       "test0",
-				NetInterface: "os_test0",
-				Providers:    common.NewStringSet("p1", "p2"),
+				Name:          "test0",
+				OSName:        "test0",
+				NetInterfaces: common.NewStringSet("os_test0"),
+				Providers:     common.NewStringSet("p1", "p2"),
 			},
 			expResult: "test0 (interface: os_test0) (providers: p1, p2)",
 		},
@@ -179,48 +179,48 @@ func TestHardware_NewFabricInterfaceSet(t *testing.T) {
 		"input added": {
 			input: []*FabricInterface{
 				{
-					Name:         "test0",
-					NetInterface: "os_test0",
+					Name:          "test0",
+					NetInterfaces: common.NewStringSet("os_test0"),
 				},
 				{
-					Name:         "test1",
-					NetInterface: "os_test1",
+					Name:          "test1",
+					NetInterfaces: common.NewStringSet("os_test1"),
 				},
 				{
-					Name:         "os_test1",
-					NetInterface: "os_test1",
+					Name:          "os_test1",
+					NetInterfaces: common.NewStringSet("os_test1"),
 				},
 			},
 			expResult: &FabricInterfaceSet{
 				byName: fabricInterfaceMap{
 					"test0": {
-						Name:         "test0",
-						NetInterface: "os_test0",
+						Name:          "test0",
+						NetInterfaces: common.NewStringSet("os_test0"),
 					},
 					"test1": {
-						Name:         "test1",
-						NetInterface: "os_test1",
+						Name:          "test1",
+						NetInterfaces: common.NewStringSet("os_test1"),
 					},
 					"os_test1": {
-						Name:         "os_test1",
-						NetInterface: "os_test1",
+						Name:          "os_test1",
+						NetInterfaces: common.NewStringSet("os_test1"),
 					},
 				},
 				byNetDev: map[string]fabricInterfaceMap{
 					"os_test0": {
 						"test0": {
-							Name:         "test0",
-							NetInterface: "os_test0",
+							Name:          "test0",
+							NetInterfaces: common.NewStringSet("os_test0"),
 						},
 					},
 					"os_test1": {
 						"test1": {
-							Name:         "test1",
-							NetInterface: "os_test1",
+							Name:          "test1",
+							NetInterfaces: common.NewStringSet("os_test1"),
 						},
 						"os_test1": {
-							Name:         "os_test1",
-							NetInterface: "os_test1",
+							Name:          "os_test1",
+							NetInterfaces: common.NewStringSet("os_test1"),
 						},
 					},
 				},
@@ -254,24 +254,24 @@ func TestHardware_FabricInterfaceSet_Names(t *testing.T) {
 		"one": {
 			fis: NewFabricInterfaceSet(
 				&FabricInterface{
-					Name:         "test0",
-					NetInterface: "os_test0",
+					Name:          "test0",
+					NetInterfaces: common.NewStringSet("os_test0"),
 				}),
 			expResult: []string{"test0"},
 		},
 		"multiple": {
 			fis: NewFabricInterfaceSet(
 				&FabricInterface{
-					Name:         "test0",
-					NetInterface: "os_test0",
+					Name:          "test0",
+					NetInterfaces: common.NewStringSet("os_test0"),
 				},
 				&FabricInterface{
-					Name:         "test1",
-					NetInterface: "os_test1",
+					Name:          "test1",
+					NetInterfaces: common.NewStringSet("os_test1"),
 				},
 				&FabricInterface{
-					Name:         "test2",
-					NetInterface: "os_test2",
+					Name:          "test2",
+					NetInterfaces: common.NewStringSet("os_test2"),
 				}),
 			expResult: []string{"test0", "test1", "test2"},
 		},
@@ -302,40 +302,40 @@ func TestHardware_FabricInterfaceSet_NetDevices(t *testing.T) {
 		"one": {
 			fis: NewFabricInterfaceSet(
 				&FabricInterface{
-					Name:         "test0",
-					NetInterface: "os_test0",
+					Name:          "test0",
+					NetInterfaces: common.NewStringSet("os_test0"),
 				}),
 			expResult: []string{"os_test0"},
 		},
 		"multiple": {
 			fis: NewFabricInterfaceSet(
 				&FabricInterface{
-					Name:         "test0",
-					NetInterface: "os_test0",
+					Name:          "test0",
+					NetInterfaces: common.NewStringSet("os_test0"),
 				},
 				&FabricInterface{
-					Name:         "test1",
-					NetInterface: "os_test1",
+					Name:          "test1",
+					NetInterfaces: common.NewStringSet("os_test1"),
 				},
 				&FabricInterface{
-					Name:         "test2",
-					NetInterface: "os_test2",
+					Name:          "test2",
+					NetInterfaces: common.NewStringSet("os_test2"),
 				}),
 			expResult: []string{"os_test0", "os_test1", "os_test2"},
 		},
 		"same net device": {
 			fis: NewFabricInterfaceSet(
 				&FabricInterface{
-					Name:         "test0",
-					NetInterface: "os_test0",
+					Name:          "test0",
+					NetInterfaces: common.NewStringSet("os_test0"),
 				},
 				&FabricInterface{
-					Name:         "test1",
-					NetInterface: "os_test0",
+					Name:          "test1",
+					NetInterfaces: common.NewStringSet("os_test0"),
 				},
 				&FabricInterface{
-					Name:         "test2",
-					NetInterface: "os_test0",
+					Name:          "test2",
+					NetInterfaces: common.NewStringSet("os_test0"),
 				}),
 			expResult: []string{"os_test0"},
 		},
@@ -372,85 +372,85 @@ func TestHardware_FabricInterfaceSet_Update(t *testing.T) {
 		"add to empty set": {
 			fis: NewFabricInterfaceSet(),
 			input: &FabricInterface{
-				Name:         "one",
-				NetInterface: "dev1",
+				Name:          "one",
+				NetInterfaces: common.NewStringSet("dev1"),
 			},
 			expResult: NewFabricInterfaceSet(
 				&FabricInterface{
-					Name:         "one",
-					NetInterface: "dev1",
+					Name:          "one",
+					NetInterfaces: common.NewStringSet("dev1"),
 				},
 			),
 		},
 		"add": {
 			fis: NewFabricInterfaceSet(
 				&FabricInterface{
-					Name:         "one",
-					NetInterface: "dev1",
+					Name:          "one",
+					NetInterfaces: common.NewStringSet("dev1"),
 				},
 				&FabricInterface{
-					Name:         "two",
-					NetInterface: "dev2",
+					Name:          "two",
+					NetInterfaces: common.NewStringSet("dev2"),
 				},
 			),
 			input: &FabricInterface{
-				Name:         "three",
-				NetInterface: "dev3",
+				Name:          "three",
+				NetInterfaces: common.NewStringSet("dev3"),
 			},
 			expResult: NewFabricInterfaceSet(
 				&FabricInterface{
-					Name:         "one",
-					NetInterface: "dev1",
+					Name:          "one",
+					NetInterfaces: common.NewStringSet("dev1"),
 				},
 				&FabricInterface{
-					Name:         "two",
-					NetInterface: "dev2",
+					Name:          "two",
+					NetInterfaces: common.NewStringSet("dev2"),
 				},
 				&FabricInterface{
-					Name:         "three",
-					NetInterface: "dev3",
+					Name:          "three",
+					NetInterfaces: common.NewStringSet("dev3"),
 				},
 			),
 		},
 		"update": {
 			fis: NewFabricInterfaceSet(
 				&FabricInterface{
-					Name:         "one",
-					NetInterface: "dev1",
+					Name:          "one",
+					NetInterfaces: common.NewStringSet("dev1"),
 				},
 				&FabricInterface{
-					Name:         "two",
-					NetInterface: "dev2",
+					Name:          "two",
+					NetInterfaces: common.NewStringSet("dev2"),
 				},
 			),
 			input: &FabricInterface{
-				Name:         "two",
-				NetInterface: "dev2",
-				DeviceClass:  Ether,
-				NUMANode:     1,
-				Providers:    common.NewStringSet("p1", "p2"),
+				Name:          "two",
+				NetInterfaces: common.NewStringSet("dev2"),
+				DeviceClass:   Ether,
+				NUMANode:      1,
+				Providers:     common.NewStringSet("p1", "p2"),
 			},
 			expResult: NewFabricInterfaceSet(
 				&FabricInterface{
-					Name:         "one",
-					NetInterface: "dev1",
+					Name:          "one",
+					NetInterfaces: common.NewStringSet("dev1"),
 				},
 				&FabricInterface{
-					Name:         "two",
-					NetInterface: "dev2",
-					DeviceClass:  Ether,
-					NUMANode:     1,
-					Providers:    common.NewStringSet("p1", "p2"),
+					Name:          "two",
+					NetInterfaces: common.NewStringSet("dev2"),
+					DeviceClass:   Ether,
+					NUMANode:      1,
+					Providers:     common.NewStringSet("p1", "p2"),
 				},
 			),
 		},
 		"can't override nonzero": {
 			fis: NewFabricInterfaceSet(
 				&FabricInterface{
-					Name:         "one",
-					NetInterface: "dev1",
-					DeviceClass:  Ether,
-					NUMANode:     2,
+					Name:          "one",
+					NetInterfaces: common.NewStringSet("dev1"),
+					DeviceClass:   Ether,
+					NUMANode:      2,
 				},
 			),
 			input: &FabricInterface{
@@ -458,64 +458,64 @@ func TestHardware_FabricInterfaceSet_Update(t *testing.T) {
 			},
 			expResult: NewFabricInterfaceSet(
 				&FabricInterface{
-					Name:         "one",
-					NetInterface: "dev1",
-					DeviceClass:  Ether,
-					NUMANode:     2,
+					Name:          "one",
+					NetInterfaces: common.NewStringSet("dev1"),
+					DeviceClass:   Ether,
+					NUMANode:      2,
 				},
 			),
 		},
 		"add to providers": {
 			fis: NewFabricInterfaceSet(
 				&FabricInterface{
-					Name:         "one",
-					NetInterface: "dev1",
-					DeviceClass:  Ether,
-					NUMANode:     2,
-					Providers:    common.NewStringSet("p0", "p1"),
+					Name:          "one",
+					NetInterfaces: common.NewStringSet("dev1"),
+					DeviceClass:   Ether,
+					NUMANode:      2,
+					Providers:     common.NewStringSet("p0", "p1"),
 				},
 			),
 			input: &FabricInterface{
-				Name:         "one",
-				NetInterface: "dev1",
-				DeviceClass:  Ether,
-				NUMANode:     2,
-				Providers:    common.NewStringSet("p2", "p3"),
+				Name:          "one",
+				NetInterfaces: common.NewStringSet("dev1"),
+				DeviceClass:   Ether,
+				NUMANode:      2,
+				Providers:     common.NewStringSet("p2", "p3"),
 			},
 			expResult: NewFabricInterfaceSet(
 				&FabricInterface{
-					Name:         "one",
-					NetInterface: "dev1",
-					DeviceClass:  Ether,
-					NUMANode:     2,
-					Providers:    common.NewStringSet("p0", "p1", "p2", "p3"),
+					Name:          "one",
+					NetInterfaces: common.NewStringSet("dev1"),
+					DeviceClass:   Ether,
+					NUMANode:      2,
+					Providers:     common.NewStringSet("p0", "p1", "p2", "p3"),
 				},
 			),
 		},
 		"add duplicate providers": {
 			fis: NewFabricInterfaceSet(
 				&FabricInterface{
-					Name:         "one",
-					NetInterface: "dev1",
-					DeviceClass:  Ether,
-					NUMANode:     2,
-					Providers:    common.NewStringSet("p0", "p1"),
+					Name:          "one",
+					NetInterfaces: common.NewStringSet("dev1"),
+					DeviceClass:   Ether,
+					NUMANode:      2,
+					Providers:     common.NewStringSet("p0", "p1"),
 				},
 			),
 			input: &FabricInterface{
-				Name:         "one",
-				NetInterface: "dev1",
-				DeviceClass:  Ether,
-				NUMANode:     2,
-				Providers:    common.NewStringSet("p1", "p2"),
+				Name:          "one",
+				NetInterfaces: common.NewStringSet("dev1"),
+				DeviceClass:   Ether,
+				NUMANode:      2,
+				Providers:     common.NewStringSet("p1", "p2"),
 			},
 			expResult: NewFabricInterfaceSet(
 				&FabricInterface{
-					Name:         "one",
-					NetInterface: "dev1",
-					DeviceClass:  Ether,
-					NUMANode:     2,
-					Providers:    common.NewStringSet("p0", "p1", "p2"),
+					Name:          "one",
+					NetInterfaces: common.NewStringSet("dev1"),
+					DeviceClass:   Ether,
+					NUMANode:      2,
+					Providers:     common.NewStringSet("p0", "p1", "p2"),
 				},
 			),
 		},
@@ -549,42 +549,42 @@ func TestHardware_FabricInterfaceSet_Remove(t *testing.T) {
 		"not found": {
 			fis: NewFabricInterfaceSet(
 				&FabricInterface{
-					Name:         "fi0",
-					NetInterface: "net0",
+					Name:          "fi0",
+					NetInterfaces: common.NewStringSet("net0"),
 				},
 			),
 			input: "fi1",
 			expResult: NewFabricInterfaceSet(
 				&FabricInterface{
-					Name:         "fi0",
-					NetInterface: "net0",
+					Name:          "fi0",
+					NetInterfaces: common.NewStringSet("net0"),
 				},
 			),
 		},
 		"removed": {
 			fis: NewFabricInterfaceSet(
 				&FabricInterface{
-					Name:         "fi0",
-					NetInterface: "net0",
+					Name:          "fi0",
+					NetInterfaces: common.NewStringSet("net0"),
 				},
 				&FabricInterface{
-					Name:         "fi1",
-					NetInterface: "net0",
+					Name:          "fi1",
+					NetInterfaces: common.NewStringSet("net0"),
 				},
 			),
 			input: "fi1",
 			expResult: NewFabricInterfaceSet(
 				&FabricInterface{
-					Name:         "fi0",
-					NetInterface: "net0",
+					Name:          "fi0",
+					NetInterfaces: common.NewStringSet("net0"),
 				},
 			),
 		},
 		"remove only item": {
 			fis: NewFabricInterfaceSet(
 				&FabricInterface{
-					Name:         "fi0",
-					NetInterface: "net0",
+					Name:          "fi0",
+					NetInterfaces: common.NewStringSet("net0"),
 				},
 			),
 			input:     "fi0",
@@ -626,16 +626,16 @@ func TestHardware_FabricInterfaceSet_GetInterface(t *testing.T) {
 		"not found": {
 			fis: NewFabricInterfaceSet(
 				&FabricInterface{
-					Name:         "test0",
-					NetInterface: "os_test0",
+					Name:          "test0",
+					NetInterfaces: common.NewStringSet("os_test0"),
 				},
 				&FabricInterface{
-					Name:         "test1",
-					NetInterface: "os_test1",
+					Name:          "test1",
+					NetInterfaces: common.NewStringSet("os_test1"),
 				},
 				&FabricInterface{
-					Name:         "test2",
-					NetInterface: "os_test2",
+					Name:          "test2",
+					NetInterfaces: common.NewStringSet("os_test2"),
 				},
 			),
 			name:   "test10",
@@ -644,22 +644,22 @@ func TestHardware_FabricInterfaceSet_GetInterface(t *testing.T) {
 		"success": {
 			fis: NewFabricInterfaceSet(
 				&FabricInterface{
-					Name:         "test0",
-					NetInterface: "os_test0",
+					Name:          "test0",
+					NetInterfaces: common.NewStringSet("os_test0"),
 				},
 				&FabricInterface{
-					Name:         "test1",
-					NetInterface: "os_test1",
+					Name:          "test1",
+					NetInterfaces: common.NewStringSet("os_test1"),
 				},
 				&FabricInterface{
-					Name:         "test2",
-					NetInterface: "os_test2",
+					Name:          "test2",
+					NetInterfaces: common.NewStringSet("os_test2"),
 				},
 			),
 			name: "test1",
 			expResult: &FabricInterface{
-				Name:         "test1",
-				NetInterface: "os_test1",
+				Name:          "test1",
+				NetInterfaces: common.NewStringSet("os_test1"),
 			},
 		},
 	} {
@@ -700,12 +700,12 @@ func TestHardware_FabricInterfaceSet_GetInterfaceOnNetDevice(t *testing.T) {
 		"net device not found": {
 			fis: NewFabricInterfaceSet(
 				&FabricInterface{
-					Name:         "test0",
-					NetInterface: "os_test0",
+					Name:          "test0",
+					NetInterfaces: common.NewStringSet("os_test0"),
 				},
 				&FabricInterface{
-					Name:         "test1",
-					NetInterface: "os_test1",
+					Name:          "test1",
+					NetInterfaces: common.NewStringSet("os_test1"),
 				},
 			),
 			netDev:   "notfound",
@@ -715,19 +715,19 @@ func TestHardware_FabricInterfaceSet_GetInterfaceOnNetDevice(t *testing.T) {
 		"provider not found on device": {
 			fis: NewFabricInterfaceSet(
 				&FabricInterface{
-					Name:         "test0",
-					NetInterface: "os_test0",
-					Providers:    common.NewStringSet("p1", "p2"),
+					Name:          "test0",
+					NetInterfaces: common.NewStringSet("os_test0"),
+					Providers:     common.NewStringSet("p1", "p2"),
 				},
 				&FabricInterface{
-					Name:         "test1",
-					NetInterface: "os_test0",
-					Providers:    common.NewStringSet("p3"),
+					Name:          "test1",
+					NetInterfaces: common.NewStringSet("os_test0"),
+					Providers:     common.NewStringSet("p3"),
 				},
 				&FabricInterface{
-					Name:         "test2",
-					NetInterface: "os_test2",
-					Providers:    common.NewStringSet("p4"),
+					Name:          "test2",
+					NetInterfaces: common.NewStringSet("os_test2"),
+					Providers:     common.NewStringSet("p4"),
 				},
 			),
 			netDev:   "os_test0",
@@ -737,71 +737,71 @@ func TestHardware_FabricInterfaceSet_GetInterfaceOnNetDevice(t *testing.T) {
 		"success": {
 			fis: NewFabricInterfaceSet(
 				&FabricInterface{
-					Name:         "test0",
-					NetInterface: "os_test0",
-					Providers:    common.NewStringSet("p1", "p2"),
+					Name:          "test0",
+					NetInterfaces: common.NewStringSet("os_test0"),
+					Providers:     common.NewStringSet("p1", "p2"),
 				},
 				&FabricInterface{
-					Name:         "test1",
-					NetInterface: "os_test0",
-					Providers:    common.NewStringSet("p3"),
+					Name:          "test1",
+					NetInterfaces: common.NewStringSet("os_test0"),
+					Providers:     common.NewStringSet("p3"),
 				},
 				&FabricInterface{
-					Name:         "test2",
-					NetInterface: "os_test2",
-					Providers:    common.NewStringSet("p4"),
+					Name:          "test2",
+					NetInterfaces: common.NewStringSet("os_test2"),
+					Providers:     common.NewStringSet("p4"),
 				},
 			),
 			netDev:   "os_test0",
 			provider: "p3",
 			expResult: &FabricInterface{
-				Name:         "test1",
-				NetInterface: "os_test0",
-				Providers:    common.NewStringSet("p3"),
+				Name:          "test1",
+				NetInterfaces: common.NewStringSet("os_test0"),
+				Providers:     common.NewStringSet("p3"),
 			},
 		},
 		"provider helper specified, success": {
 			fis: NewFabricInterfaceSet(
 				&FabricInterface{
-					Name:         "test0",
-					NetInterface: "os_test0",
-					Providers:    common.NewStringSet("p1", "p2", "p3"),
+					Name:          "test0",
+					NetInterfaces: common.NewStringSet("os_test0"),
+					Providers:     common.NewStringSet("p1", "p2", "p3"),
 				},
 				&FabricInterface{
-					Name:         "test1",
-					NetInterface: "os_test0",
-					Providers:    common.NewStringSet("p3;h1"),
+					Name:          "test1",
+					NetInterfaces: common.NewStringSet("os_test0"),
+					Providers:     common.NewStringSet("p3;h1"),
 				},
 				&FabricInterface{
-					Name:         "test2",
-					NetInterface: "os_test2",
-					Providers:    common.NewStringSet("p4"),
+					Name:          "test2",
+					NetInterfaces: common.NewStringSet("os_test2"),
+					Providers:     common.NewStringSet("p4"),
 				},
 			),
 			netDev:   "os_test0",
 			provider: "p3;h1",
 			expResult: &FabricInterface{
-				Name:         "test1",
-				NetInterface: "os_test0",
-				Providers:    common.NewStringSet("p3;h1"),
+				Name:          "test1",
+				NetInterfaces: common.NewStringSet("os_test0"),
+				Providers:     common.NewStringSet("p3;h1"),
 			},
 		},
 		"provider helper specified, not found": {
 			fis: NewFabricInterfaceSet(
 				&FabricInterface{
-					Name:         "test0",
-					NetInterface: "os_test0",
-					Providers:    common.NewStringSet("p1", "p2"),
+					Name:          "test0",
+					NetInterfaces: common.NewStringSet("os_test0"),
+					Providers:     common.NewStringSet("p1", "p2"),
 				},
 				&FabricInterface{
-					Name:         "test1",
-					NetInterface: "os_test0",
-					Providers:    common.NewStringSet("p3;h1", "p3"),
+					Name:          "test1",
+					NetInterfaces: common.NewStringSet("os_test0"),
+					Providers:     common.NewStringSet("p3;h1", "p3"),
 				},
 				&FabricInterface{
-					Name:         "test2",
-					NetInterface: "os_test2",
-					Providers:    common.NewStringSet("p4"),
+					Name:          "test2",
+					NetInterfaces: common.NewStringSet("os_test2"),
+					Providers:     common.NewStringSet("p4"),
 				},
 			),
 			netDev:   "os_test0",
@@ -1018,8 +1018,8 @@ func TestHardware_FabricScanner_Scan(t *testing.T) {
 
 	testFis := NewFabricInterfaceSet(
 		&FabricInterface{
-			Name:         "test01",
-			NetInterface: "os_test01",
+			Name:          "test01",
+			NetInterfaces: common.NewStringSet("os_test01"),
 		},
 	)
 
@@ -1113,8 +1113,8 @@ func TestHardware_FabricScanner_Scan(t *testing.T) {
 			// we ignore the error in this case
 			expResult: NewFabricInterfaceSet(
 				&FabricInterface{
-					Name:         "test01",
-					NetInterface: "os_test01",
+					Name:          "test01",
+					NetInterfaces: common.NewStringSet("os_test01"),
 				},
 			),
 		},
@@ -1139,9 +1139,9 @@ func TestHardware_FabricScanner_Scan(t *testing.T) {
 			},
 			expResult: NewFabricInterfaceSet(
 				&FabricInterface{
-					Name:         "test01",
-					NetInterface: "os_test01",
-					DeviceClass:  Ether,
+					Name:          "test01",
+					NetInterfaces: common.NewStringSet("os_test01"),
+					DeviceClass:   Ether,
 				},
 			),
 		},
@@ -1167,9 +1167,9 @@ func TestHardware_FabricScanner_Scan(t *testing.T) {
 			cacheTopology: testTopo,
 			expResult: NewFabricInterfaceSet(
 				&FabricInterface{
-					Name:         "test01",
-					NetInterface: "os_test01",
-					DeviceClass:  Ether,
+					Name:          "test01",
+					NetInterfaces: common.NewStringSet("os_test01"),
+					DeviceClass:   Ether,
 				},
 			),
 		},
@@ -1473,6 +1473,22 @@ func TestHardware_NetDeviceBuilder_BuildPart(t *testing.T) {
 		},
 	}
 
+	testTopo.VirtualDevices = []*VirtualDevice{
+		{
+			Name: "virt0",
+			Type: DeviceTypeNetInterface,
+		},
+		{
+			Name:          "net2.100",
+			Type:          DeviceTypeNetInterface,
+			BackingDevice: testTopo.AllDevices()["net2"].(*PCIDevice),
+		},
+		{
+			Name: "lo",
+			Type: DeviceTypeNetInterface,
+		},
+	}
+
 	for name, tc := range map[string]struct {
 		builder   *NetworkDeviceBuilder
 		set       *FabricInterfaceSet
@@ -1527,8 +1543,22 @@ func TestHardware_NetDeviceBuilder_BuildPart(t *testing.T) {
 			),
 			expResult: NewFabricInterfaceSet(
 				&FabricInterface{
-					Name:         "net1",
-					NetInterface: "net1",
+					Name:          "net1",
+					NetInterfaces: common.NewStringSet("net1"),
+				},
+			),
+		},
+		"virtual net device": {
+			builder: newNetworkDeviceBuilder(nil, testTopo),
+			set: NewFabricInterfaceSet(
+				&FabricInterface{
+					Name: "virt0",
+				},
+			),
+			expResult: NewFabricInterfaceSet(
+				&FabricInterface{
+					Name:          "virt0",
+					NetInterfaces: common.NewStringSet("virt0"),
 				},
 			),
 		},
@@ -1541,8 +1571,22 @@ func TestHardware_NetDeviceBuilder_BuildPart(t *testing.T) {
 			),
 			expResult: NewFabricInterfaceSet(
 				&FabricInterface{
-					Name:         "ofi0",
-					NetInterface: "net0",
+					Name:          "ofi0",
+					NetInterfaces: common.NewStringSet("net0"),
+				},
+			),
+		},
+		"OFI domain with virtual net device": {
+			builder: newNetworkDeviceBuilder(nil, testTopo),
+			set: NewFabricInterfaceSet(
+				&FabricInterface{
+					Name: "ofi2",
+				},
+			),
+			expResult: NewFabricInterfaceSet(
+				&FabricInterface{
+					Name:          "ofi2",
+					NetInterfaces: common.NewStringSet("net2", "net2.100"),
 				},
 			),
 		},
@@ -1556,9 +1600,9 @@ func TestHardware_NetDeviceBuilder_BuildPart(t *testing.T) {
 			),
 			expResult: NewFabricInterfaceSet(
 				&FabricInterface{
-					Name:         "ofi0:1",
-					OSName:       "ofi0",
-					NetInterface: "net0",
+					Name:          "ofi0:1",
+					OSName:        "ofi0",
+					NetInterfaces: common.NewStringSet("net0"),
 				},
 			),
 		},
@@ -1572,9 +1616,9 @@ func TestHardware_NetDeviceBuilder_BuildPart(t *testing.T) {
 			),
 			expResult: NewFabricInterfaceSet(
 				&FabricInterface{
-					Name:         "lo",
-					NetInterface: "lo",
-					DeviceClass:  Loopback,
+					Name:          "lo",
+					NetInterfaces: common.NewStringSet("lo"),
+					DeviceClass:   Loopback,
 				},
 			),
 		},
@@ -1587,12 +1631,12 @@ func TestHardware_NetDeviceBuilder_BuildPart(t *testing.T) {
 			),
 			expResult: NewFabricInterfaceSet(
 				&FabricInterface{
-					Name:         "lo",
-					NetInterface: "lo",
+					Name:          "lo",
+					NetInterfaces: common.NewStringSet("lo"),
 				},
 			),
 		},
-		"multiple": {
+		"multiple FIs": {
 			builder: newNetworkDeviceBuilder(nil, testTopo),
 			set: NewFabricInterfaceSet(
 				&FabricInterface{
@@ -1613,24 +1657,24 @@ func TestHardware_NetDeviceBuilder_BuildPart(t *testing.T) {
 			),
 			expResult: NewFabricInterfaceSet(
 				&FabricInterface{
-					Name:         "ofi0",
-					NetInterface: "net0",
+					Name:          "ofi0",
+					NetInterfaces: common.NewStringSet("net0"),
 				},
 				&FabricInterface{
-					Name:         "net0",
-					NetInterface: "net0",
+					Name:          "net0",
+					NetInterfaces: common.NewStringSet("net0"),
 				},
 				&FabricInterface{
-					Name:         "net1",
-					NetInterface: "net1",
+					Name:          "net1",
+					NetInterfaces: common.NewStringSet("net1"),
 				},
 				&FabricInterface{
-					Name:         "ofi2",
-					NetInterface: "net2",
+					Name:          "ofi2",
+					NetInterfaces: common.NewStringSet("net2", "net2.100"),
 				},
 				&FabricInterface{
-					Name:         "net2",
-					NetInterface: "net2",
+					Name:          "net2",
+					NetInterfaces: common.NewStringSet("net2"),
 				},
 			),
 		},
@@ -1857,33 +1901,33 @@ func TestHardware_NetDevClassBuilder_BuildPart(t *testing.T) {
 			),
 			set: NewFabricInterfaceSet(
 				&FabricInterface{
-					Name:         "net1",
-					NetInterface: "net1",
+					Name:          "net1",
+					NetInterfaces: common.NewStringSet("net1"),
 				},
 				&FabricInterface{
-					Name:         "ofi2",
-					NetInterface: "net2",
+					Name:          "ofi2",
+					NetInterfaces: common.NewStringSet("net2"),
 				},
 				&FabricInterface{
-					Name:         "net2",
-					NetInterface: "net2",
+					Name:          "net2",
+					NetInterfaces: common.NewStringSet("net2"),
 				},
 			),
 			expResult: NewFabricInterfaceSet(
 				&FabricInterface{
-					Name:         "net1",
-					NetInterface: "net1",
-					DeviceClass:  Ether,
+					Name:          "net1",
+					NetInterfaces: common.NewStringSet("net1"),
+					DeviceClass:   Ether,
 				},
 				&FabricInterface{
-					Name:         "ofi2",
-					NetInterface: "net2",
-					DeviceClass:  Infiniband,
+					Name:          "ofi2",
+					NetInterfaces: common.NewStringSet("net2"),
+					DeviceClass:   Infiniband,
 				},
 				&FabricInterface{
-					Name:         "net2",
-					NetInterface: "net2",
-					DeviceClass:  Infiniband,
+					Name:          "net2",
+					NetInterfaces: common.NewStringSet("net2"),
+					DeviceClass:   Infiniband,
 				},
 			),
 		},
@@ -1908,32 +1952,32 @@ func TestHardware_NetDevClassBuilder_BuildPart(t *testing.T) {
 			),
 			set: NewFabricInterfaceSet(
 				&FabricInterface{
-					Name:         "net1",
-					NetInterface: "net1",
+					Name:          "net1",
+					NetInterfaces: common.NewStringSet("net1"),
 				},
 				&FabricInterface{
-					Name:         "ofi2",
-					NetInterface: "net2",
+					Name:          "ofi2",
+					NetInterfaces: common.NewStringSet("net2"),
 				},
 				&FabricInterface{
-					Name:         "net2",
-					NetInterface: "net2",
+					Name:          "net2",
+					NetInterfaces: common.NewStringSet("net2"),
 				},
 			),
 			expResult: NewFabricInterfaceSet(
 				&FabricInterface{
-					Name:         "net1",
-					NetInterface: "net1",
+					Name:          "net1",
+					NetInterfaces: common.NewStringSet("net1"),
 				},
 				&FabricInterface{
-					Name:         "ofi2",
-					NetInterface: "net2",
-					DeviceClass:  Infiniband,
+					Name:          "ofi2",
+					NetInterfaces: common.NewStringSet("net2"),
+					DeviceClass:   Infiniband,
 				},
 				&FabricInterface{
-					Name:         "net2",
-					NetInterface: "net2",
-					DeviceClass:  Infiniband,
+					Name:          "net2",
+					NetInterfaces: common.NewStringSet("net2"),
+					DeviceClass:   Infiniband,
 				},
 			),
 		},

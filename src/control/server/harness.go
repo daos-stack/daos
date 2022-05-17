@@ -10,7 +10,6 @@ import (
 	"context"
 	"os"
 	"sync"
-	"time"
 
 	"github.com/pkg/errors"
 	"google.golang.org/protobuf/proto"
@@ -24,11 +23,6 @@ import (
 	"github.com/daos-stack/daos/src/control/server/config"
 	"github.com/daos-stack/daos/src/control/server/storage"
 	"github.com/daos-stack/daos/src/control/system"
-)
-
-const (
-	rankReqTimeout   = 30 * time.Second
-	rankStartTimeout = 2 * rankReqTimeout
 )
 
 // Engine defines an interface to be implemented by engine instances.
@@ -77,22 +71,18 @@ type Engine interface {
 // EngineHarness is responsible for managing Engine instances.
 type EngineHarness struct {
 	sync.RWMutex
-	log              logging.Logger
-	instances        []Engine
-	started          atm.Bool
-	rankReqTimeout   time.Duration
-	rankStartTimeout time.Duration
-	faultDomain      *system.FaultDomain
-	onDrpcFailure    []func(context.Context, error)
+	log           logging.Logger
+	instances     []Engine
+	started       atm.Bool
+	faultDomain   *system.FaultDomain
+	onDrpcFailure []func(context.Context, error)
 }
 
 // NewEngineHarness returns an initialized *EngineHarness.
 func NewEngineHarness(log logging.Logger) *EngineHarness {
 	return &EngineHarness{
-		log:              log,
-		instances:        make([]Engine, 0),
-		rankReqTimeout:   rankReqTimeout,
-		rankStartTimeout: rankStartTimeout,
+		log:       log,
+		instances: make([]Engine, 0),
 	}
 }
 

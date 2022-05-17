@@ -179,6 +179,28 @@ func setupNUMANode(t *testing.T, devPath, numaStr string) {
 
 func TestProvider_GetTopology(t *testing.T) {
 	validPCIAddr := "0000:02:00.0"
+	testTopo := &hardware.Topology{
+		NUMANodes: hardware.NodeMap{
+			2: hardware.MockNUMANode(2, 0).
+				WithDevices([]*hardware.PCIDevice{
+					{
+						Name:    "cxi0",
+						Type:    hardware.DeviceTypeOFIDomain,
+						PCIAddr: *hardware.MustNewPCIAddress(validPCIAddr),
+					},
+					{
+						Name:    "mlx0",
+						Type:    hardware.DeviceTypeOFIDomain,
+						PCIAddr: *hardware.MustNewPCIAddress(validPCIAddr),
+					},
+					{
+						Name:    "net0",
+						Type:    hardware.DeviceTypeNetInterface,
+						PCIAddr: *hardware.MustNewPCIAddress(validPCIAddr),
+					},
+				}),
+		},
+	}
 
 	for name, tc := range map[string]struct {
 		setup     func(*testing.T, string)
@@ -229,7 +251,7 @@ func TestProvider_GetTopology(t *testing.T) {
 					name  string
 				}{
 					{class: "net", name: "net0"},
-					{class: "infiniband", name: "ib0"},
+					{class: "infiniband", name: "mlx0"},
 					{class: "cxi", name: "cxi0"},
 				} {
 					path := setupPCIDev(t, root, validPCIAddr, dev.class, dev.name)
@@ -237,29 +259,8 @@ func TestProvider_GetTopology(t *testing.T) {
 					setupNUMANode(t, path, "2\n")
 				}
 			},
-			p: &Provider{},
-			expResult: &hardware.Topology{
-				NUMANodes: hardware.NodeMap{
-					2: hardware.MockNUMANode(2, 0).
-						WithDevices([]*hardware.PCIDevice{
-							{
-								Name:    "cxi0",
-								Type:    hardware.DeviceTypeOFIDomain,
-								PCIAddr: *hardware.MustNewPCIAddress(validPCIAddr),
-							},
-							{
-								Name:    "ib0",
-								Type:    hardware.DeviceTypeOFIDomain,
-								PCIAddr: *hardware.MustNewPCIAddress(validPCIAddr),
-							},
-							{
-								Name:    "net0",
-								Type:    hardware.DeviceTypeNetInterface,
-								PCIAddr: *hardware.MustNewPCIAddress(validPCIAddr),
-							},
-						}),
-				},
-			},
+			p:         &Provider{},
+			expResult: testTopo,
 		},
 		"exclude non-specified classes": {
 			setup: func(t *testing.T, root string) {
@@ -280,31 +281,10 @@ func TestProvider_GetTopology(t *testing.T) {
 					setupNUMANode(t, path, "2\n")
 				}
 			},
-			p: &Provider{},
-			expResult: &hardware.Topology{
-				NUMANodes: hardware.NodeMap{
-					2: hardware.MockNUMANode(2, 0).
-						WithDevices([]*hardware.PCIDevice{
-							{
-								Name:    "cxi0",
-								Type:    hardware.DeviceTypeOFIDomain,
-								PCIAddr: *hardware.MustNewPCIAddress(validPCIAddr),
-							},
-							{
-								Name:    "mlx0",
-								Type:    hardware.DeviceTypeOFIDomain,
-								PCIAddr: *hardware.MustNewPCIAddress(validPCIAddr),
-							},
-							{
-								Name:    "net0",
-								Type:    hardware.DeviceTypeNetInterface,
-								PCIAddr: *hardware.MustNewPCIAddress(validPCIAddr),
-							},
-						}),
-				},
-			},
+			p:         &Provider{},
+			expResult: testTopo,
 		},
-		"virtual device": {
+		"virtual devices": {
 			setup: func(t *testing.T, root string) {
 				for _, dev := range []struct {
 					class string
@@ -319,43 +299,41 @@ func TestProvider_GetTopology(t *testing.T) {
 					setupNUMANode(t, path, "2\n")
 				}
 
-				virtPath := filepath.Join(root, "devices", "virtual", "net", "virt_net0")
+				// Virtual device with a physical device backing it
+				virtPath1 := filepath.Join(root, "devices", "virtual", "net", "virt_net0")
+				if err := os.MkdirAll(virtPath1, 0755); err != nil {
+					t.Fatal(err)
+				}
+
+				backingDevPath := filepath.Join(root, "class", "net", "net0")
+				if err := os.Symlink(backingDevPath, filepath.Join(virtPath1, "lower_net0")); err != nil {
+					t.Fatal(err)
+				}
+
+				setupClassLink(t, root, "net", virtPath1)
+
+				// Virtual device with no physical device
+				virtPath := filepath.Join(root, "devices", "virtual", "net", "virt0")
 				if err := os.MkdirAll(virtPath, 0755); err != nil {
 					t.Fatal(err)
 				}
 
-				if err := os.Symlink(getPCIPath(root, validPCIAddr), filepath.Join(virtPath, "device")); err != nil {
-					t.Fatal(err)
-				}
-
 				setupClassLink(t, root, "net", virtPath)
+
 			},
 			p: &Provider{},
 			expResult: &hardware.Topology{
-				NUMANodes: hardware.NodeMap{
-					2: hardware.MockNUMANode(2, 0).
-						WithDevices([]*hardware.PCIDevice{
-							{
-								Name:    "cxi0",
-								Type:    hardware.DeviceTypeOFIDomain,
-								PCIAddr: *hardware.MustNewPCIAddress(validPCIAddr),
-							},
-							{
-								Name:    "mlx0",
-								Type:    hardware.DeviceTypeOFIDomain,
-								PCIAddr: *hardware.MustNewPCIAddress(validPCIAddr),
-							},
-							{
-								Name:    "net0",
-								Type:    hardware.DeviceTypeNetInterface,
-								PCIAddr: *hardware.MustNewPCIAddress(validPCIAddr),
-							},
-							{
-								Name:    "virt_net0",
-								Type:    hardware.DeviceTypeNetInterface,
-								PCIAddr: *hardware.MustNewPCIAddress(validPCIAddr),
-							},
-						}),
+				NUMANodes: testTopo.NUMANodes,
+				VirtualDevices: []*hardware.VirtualDevice{
+					{
+						Name: "virt0",
+						Type: hardware.DeviceTypeNetInterface,
+					},
+					{
+						Name:          "virt_net0",
+						Type:          hardware.DeviceTypeNetInterface,
+						BackingDevice: testTopo.AllDevices()["net0"].(*hardware.PCIDevice),
+					},
 				},
 			},
 		},
@@ -1114,6 +1092,59 @@ func TestSysfs_condenseNetDevState(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			result := condenseNetDevState(tc.input)
 
+			test.AssertEqual(t, tc.expResult, result, "")
+		})
+	}
+}
+
+func setupTestIsIOMMUEnabled(t *testing.T, root string, extraDirs ...string) {
+	t.Helper()
+
+	dirs := append([]string{root}, extraDirs...)
+
+	path := filepath.Join(dirs...)
+	os.MkdirAll(path, 0755)
+}
+
+func TestSysfs_Provider_IsIOMMUEnabled(t *testing.T) {
+	for name, tc := range map[string]struct {
+		nilProvider bool
+		extraDirs   []string
+		expResult   bool
+		expErr      error
+	}{
+		"nil provider": {
+			nilProvider: true,
+			expErr:      errors.New("provider is nil"),
+		},
+		"missing iommu dir": {
+			extraDirs: []string{"class"},
+		},
+		"iommu disabled": {
+			extraDirs: []string{"class", "iommu"},
+		},
+		"iommu enabled": {
+			extraDirs: []string{"class", "iommu", "dmar0"},
+			expResult: true,
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			testDir, cleanupTestDir := test.CreateTestDir(t)
+			defer cleanupTestDir()
+
+			log, buf := logging.NewTestLogger(name)
+			defer test.ShowBufferOnFailure(t, buf)
+
+			var p *Provider
+			if !tc.nilProvider {
+				p = NewProvider(log)
+				p.root = testDir
+				setupTestIsIOMMUEnabled(t, testDir, tc.extraDirs...)
+			}
+
+			result, err := p.IsIOMMUEnabled()
+
+			test.CmpErr(t, tc.expErr, err)
 			test.AssertEqual(t, tc.expResult, result, "")
 		})
 	}

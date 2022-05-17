@@ -224,8 +224,7 @@ func TestServer_prepBdevStorage(t *testing.T) {
 	}
 	username := usrCurrent.Username
 	if username == "root" {
-		t.Log("Skip prepBdevStorage tests when run with root user")
-		return
+		t.Fatal("prepBdevStorage tests cannot be run as root user")
 	}
 
 	// basic engine configs populated enough to complete validation
@@ -255,18 +254,35 @@ func TestServer_prepBdevStorage(t *testing.T) {
 		getHpiErr       error
 		hugePagesFree   int
 		bmbc            *bdev.MockBackendConfig
+		overrideUser    string
 		expPrepErr      error
 		expPrepCall     *storage.BdevPrepareRequest
 		expMemChkErr    error
 		expMemSize      int
 		expHugePageSize int
 	}{
-		"vfio disabled": {
+		"vfio disabled; non-root user": {
 			srvCfgExtra: func(sc *config.Server) *config.Server {
 				return sc.WithDisableVFIO(true).
-					WithEngines(nvmeEngine(0), nvmeEngine(1))
+					WithEngines(nvmeEngine(0))
 			},
 			expPrepErr: FaultVfioDisabled,
+		},
+		"vfio disabled; root user": {
+			srvCfgExtra: func(sc *config.Server) *config.Server {
+				return sc.WithDisableVFIO(true).
+					WithEngines(nvmeEngine(0))
+			},
+			overrideUser:  "root",
+			hugePagesFree: 8192,
+			expPrepCall: &storage.BdevPrepareRequest{
+				HugePageCount: 8194,
+				HugeNodes:     "0",
+				TargetUser:    "root",
+				DisableVFIO:   true,
+			},
+			expMemSize:      16384,
+			expHugePageSize: 2,
 		},
 		"iommu disabled": {
 			iommuDisabled: true,
@@ -274,6 +290,21 @@ func TestServer_prepBdevStorage(t *testing.T) {
 				return sc.WithEngines(nvmeEngine(0), nvmeEngine(1))
 			},
 			expPrepErr: FaultIommuDisabled,
+		},
+		"iommu disabled; root user": {
+			iommuDisabled: true,
+			srvCfgExtra: func(sc *config.Server) *config.Server {
+				return sc.WithEngines(nvmeEngine(0))
+			},
+			overrideUser:  "root",
+			hugePagesFree: 8192,
+			expPrepCall: &storage.BdevPrepareRequest{
+				HugePageCount: 8194,
+				HugeNodes:     "0",
+				TargetUser:    "root",
+			},
+			expMemSize:      16384,
+			expHugePageSize: 2,
 		},
 		"no bdevs configured; -1 hugepages requested": {
 			srvCfgExtra: func(sc *config.Server) *config.Server {
@@ -497,6 +528,10 @@ func TestServer_prepBdevStorage(t *testing.T) {
 				srvCfg: cfg,
 			}
 
+			if tc.overrideUser != "" {
+				srv.runningUser = &user.User{Username: tc.overrideUser}
+			}
+
 			gotErr := prepBdevStorage(srv, !tc.iommuDisabled)
 
 			mbb.RLock()
@@ -678,30 +713,30 @@ func TestServer_getNetDevClass(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			fis := hardware.NewFabricInterfaceSet(
 				&hardware.FabricInterface{
-					Name:         "eth0",
-					NetInterface: "eth0",
-					DeviceClass:  hardware.Ether,
-					Providers:    common.NewStringSet("test"),
+					Name:          "eth0",
+					NetInterfaces: common.NewStringSet("eth0"),
+					DeviceClass:   hardware.Ether,
+					Providers:     common.NewStringSet("test"),
 				},
 				&hardware.FabricInterface{
-					Name:         "eth1",
-					NetInterface: "eth1",
-					DeviceClass:  hardware.Ether,
-					NUMANode:     1,
-					Providers:    common.NewStringSet("test"),
+					Name:          "eth1",
+					NetInterfaces: common.NewStringSet("eth1"),
+					DeviceClass:   hardware.Ether,
+					NUMANode:      1,
+					Providers:     common.NewStringSet("test"),
 				},
 				&hardware.FabricInterface{
-					Name:         "ib0",
-					NetInterface: "ib0",
-					DeviceClass:  hardware.Infiniband,
-					Providers:    common.NewStringSet("test"),
+					Name:          "ib0",
+					NetInterfaces: common.NewStringSet("ib0"),
+					DeviceClass:   hardware.Infiniband,
+					Providers:     common.NewStringSet("test"),
 				},
 				&hardware.FabricInterface{
-					Name:         "ib1",
-					NetInterface: "ib1",
-					DeviceClass:  hardware.Infiniband,
-					NUMANode:     1,
-					Providers:    common.NewStringSet("test"),
+					Name:          "ib1",
+					NetInterfaces: common.NewStringSet("ib1"),
+					DeviceClass:   hardware.Infiniband,
+					NUMANode:      1,
+					Providers:     common.NewStringSet("test"),
 				},
 			)
 

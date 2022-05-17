@@ -5,7 +5,9 @@
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 
-from general_utils import run_command, DaosTestError
+from datetime import datetime
+
+from general_utils import run_command, DaosTestError, get_journalctl
 from ior_test_base import IorTestBase
 from apricot import TestWithServers
 from exception_utils import CommandFailure
@@ -97,13 +99,39 @@ class CriticalIntegration(TestWithServers):
         dmg = self.get_dmg_command()
         rank_list = self.server_managers[0].get_host_ranks(self.hostlist_servers)
         self.log.info("rank_list: %s", rank_list)
-        for rank in rank_list:
-            dmg.system_stop(ranks=rank)
-            if self.server_managers[0].check_rank_state(rank, "stopped", 5):
-                dmg.system_start(ranks=rank)
-                if not self.server_managers[0].check_rank_state(rank, "joined", 5):
-                    self.fail("Rank {} failed to restart".format(rank))
-            else:
-                self.fail("Rank {} failed to stop".format(rank))
+        half_num_ranks = len(rank_list)//2
+        # divide total ranks list into two halves to save time during system stop
+        sub_rank_list = [rank_list[:half_num_ranks], rank_list[half_num_ranks:]]
+        self.log.info("sub_rank_list: %s", sub_rank_list)
+
+        # stop ranks, verify they stopped successfully and restart the stopped ranks
+        since = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        for sub_list in sub_rank_list:
+            ranks_to_stop = ",".join([str(rank) for rank in sub_list])
+            self.log.info("Ranks to stop: %s", ranks_to_stop)
+            dmg.system_stop(ranks=ranks_to_stop)
+            for rank in sub_list:
+                if (self.server_managers[0].check_rank_state(rank, "stopped", 5) or
+                        self.server_managers[0].check_rank_state(rank, "excluded", 5)):
+                    dmg.system_start(ranks=rank)
+                    if not self.server_managers[0].check_rank_state(rank, "joined", 5):
+                        self.fail("Rank {} failed to restart".format(rank))
+                else:
+                    self.fail("Rank {} failed to stop".format(rank))
+        until = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+
+        # gather journalctl logs for each server host, verify system stop event was sent to logs
+        results = get_journalctl(hosts=self.hostlist_servers, since=since,
+                                 until=until, journalctl_type="daos_server")
+        str_to_match = "daos_engine exited: process exited with 0"
+        for count, host in enumerate(self.hostlist_servers):
+            occurrence = results[count]["data"].count(str_to_match)
+            if occurrence != 2:
+                self.log.info("Occurrence %s for rank stop not as expected for host %s",
+                              occurrence, host)
+                msg = "Rank shut down message not found in journalctl! Output = {}".format(
+                    results[count]["data"])
+                self.fail(msg)
+
         dmg.storage_scan()
         dmg.network_scan()
