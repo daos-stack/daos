@@ -61,6 +61,7 @@ class DaosBuild(DfuseTestBase):
         cont_attrs = OrderedDict()
 
         cache_mode = self.params.get('name', '/run/dfuse/*')
+        intercept = self.params.get('use_intercept', '/run/intercept/*', default=False)
 
         # How long to cache things for, if caching is enabled.
         cache_time = '30m'
@@ -76,13 +77,15 @@ class DaosBuild(DfuseTestBase):
             cont_attrs['dfuse-attr-time'] = cache_time
             cont_attrs['dfuse-dentry-time'] = cache_time
             cont_attrs['dfuse-ndentry-time'] = cache_time
+            if intercept:
+                build_time = 120
         elif cache_mode == 'metadata':
             cont_attrs['dfuse-data-cache'] = 'off'
             cont_attrs['dfuse-attr-time'] = cache_time
             cont_attrs['dfuse-dentry-time'] = cache_time
             cont_attrs['dfuse-ndentry-time'] = cache_time
         elif cache_mode == 'nocache':
-            build_time = 150
+            build_time = 210
             cont_attrs['dfuse-data-cache'] = 'off'
             cont_attrs['dfuse-attr-time'] = '0'
             cont_attrs['dfuse-dentry-time'] = '0'
@@ -98,8 +101,6 @@ class DaosBuild(DfuseTestBase):
 
         mount_dir = self.dfuse.mount_dir.value
         build_dir = os.path.join(mount_dir, 'daos')
-
-        intercept = self.params.get('use_intercept', '/run/intercept/*', default=False)
 
         remote_env = OrderedDict()
         remote_env['PATH'] = '{}:$PATH'.format(os.path.join(mount_dir, 'venv', 'bin'))
