@@ -1604,7 +1604,7 @@ def archive_files(description, destination, hosts, source_files, args,
             command.append("-t \"{}\"".format(args.logs_threshold))
         if args.verbose > 1:
             command.append("-v")
-        task = get_remote_output(hosts, " ".join(command), 900)
+        task = get_remote_output(hosts, " ".join(command), args.archive_timeout)
 
         # Determine if the command completed successfully across all the hosts
         cmd_description = "archive_files command for {}".format(description)
@@ -2333,6 +2333,12 @@ def main():
         "-a", "--archive",
         action="store_true",
         help="archive host log files in the avocado job-results directory")
+    parser.add_argument(
+        "-at", "--archive_timeout",
+        action="store",
+        default=1200,
+        type=int,
+        help="timeout (in seconds) to use when archiving host log files")
     parser.add_argument(
         "-c", "--clean",
         action="store_true",
