@@ -337,7 +337,7 @@ pipeline {
                         }
                     }
                 }
-                stage('Build RPM on EL 8.4') {
+                stage('Build RPM on EL 8') {
                     when {
                         beforeAgent true
                         expression { ! skipStage() }
