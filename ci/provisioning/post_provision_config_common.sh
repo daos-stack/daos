@@ -27,25 +27,32 @@ fi
 id=$(lsb_release -si)
 release=$(lsb_release -sr)
 # shellcheck disable=SC2034
+EXCLUDE_UPGRADE=mercury,daos,daos-\*
+if rpm -qa | grep mlnx; then
+    # packages not to allow upgrading if MLNX OFED is installed
+    EXCLUDE_UPGRADE+=,openmpi,\*mlnx\*
+fi
 case "$id" in
     CentOS|Rocky|AlmaLinux|RedHatEnterpriseServer)
         if [ "${release%%.*}" = 7 ]; then
             DISTRO_NAME=centos${release%%.*}
+            EXCLUDE_UPGRADE+=,fuse
         else
             DISTRO_NAME=el${release%%.*}
+            EXCLUDE_UPGRADE+=,dpdk
         fi
         REPOS_DIR=/etc/yum.repos.d
         DISTRO_GENERIC=el
+        # shellcheck disable=SC2034
         LSB_RELEASE=redhat-lsb-core
-        EXCLUDE_UPGRADE=fuse,mercury,daos,daos-\*
-        if [ "${release%%.*}" = 8 ]; then
-            EXCLUDE_UPGRADE=dpdk,$EXCLUDE_UPGRADE
-        fi
         ;;
     openSUSE)
+        # shellcheck disable=SC2034
         DISTRO_NAME=leap${release%%.*}
+        # shellcheck disable=SC2034
         DISTRO_GENERIC=sl
+        # shellcheck disable=SC2034
         REPOS_DIR=/etc/dnf/repos.d
-        EXCLUDE_UPGRADE=fuse,fuse-libs,fuse-devel,mercury,daos,daos-\*
+        EXCLUDE_UPGRADE+=,fuse,fuse-libs,fuse-devel
         ;;
 esac
