@@ -23,6 +23,7 @@ type StoragePrepareNvmeCmd struct {
 	PCIBlockList string `long:"pci-block-list" description:"Whitespace separated list of PCI devices (by address) to be ignored when unbinding devices from Kernel driver to be used with SPDK (default is no PCI devices)."`
 	NrHugepages  int    `short:"p" long:"hugepages" description:"Number of hugepages to allocate for use by SPDK (default 1024)"`
 	TargetUser   string `short:"u" long:"target-user" description:"User that will own hugepage mountpoint directory and vfio groups."`
+	DisableVFIO  bool   `long:"disable-vfio" description:"Force SPDK to use the UIO driver for NVMe device access"`
 }
 
 type StoragePrepareScmCmd struct {
@@ -60,4 +61,14 @@ func (cmd *StoragePrepareCmd) Warn(log logging.Logger) error {
 	}
 
 	return nil
+}
+
+func (cmd *StoragePrepareCmd) WithDisableVFIO(b bool) *StoragePrepareCmd {
+	cmd.DisableVFIO = b
+	return cmd
+}
+
+func (cmd *StoragePrepareCmd) WithTargetUser(u string) *StoragePrepareCmd {
+	cmd.TargetUser = u
+	return cmd
 }
