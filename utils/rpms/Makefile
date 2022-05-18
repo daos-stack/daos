@@ -3,7 +3,7 @@ SRC_EXT := gz
 SOURCE   = $(NAME)-$(VERSION).tar.$(SRC_EXT)
 TOPDIR  := $(abspath $(dir $(firstword $(MAKEFILE_LIST)))/../..)
 
-DISTRO_VERSION_EL8 := 8.5
+DISTRO_VERSION_EL8 := 8.4
 
 #https://github.com/rpm-software-management/mock/issues/384
 MOCK_OPTIONS := --disablerepo=sclo*
