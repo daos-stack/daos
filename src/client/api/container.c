@@ -53,8 +53,8 @@ cont_inherit_redunc_fac(daos_handle_t poh, daos_prop_t *cont_prop,
 		*merged_prop = daos_prop_merge(cont_prop, redunc_prop);
 		daos_prop_free(redunc_prop);
 		if (*merged_prop == NULL) {
-			D_ERROR("failed to merge cont_prop and redunc_prop "DF_RC"\n", DP_RC(-DER_NOMEM));
 			rc = -DER_NOMEM;
+			D_ERROR("failed to merge cont_prop and redunc_prop "DF_RC"\n", DP_RC(rc));
 		}
 	} else {
 		*merged_prop = redunc_prop;
