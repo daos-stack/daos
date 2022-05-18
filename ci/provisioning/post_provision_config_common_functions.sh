@@ -177,7 +177,7 @@ pr_repos() {
 
 rpm_test_version() {
     echo "$COMMIT_MESSAGE" |
-             sed -ne '/^RPM-test-version: */s/^[^:]*: *//Ip' 
+             sed -ne '/^RPM-test-version: */s/^[^:]*: *//Ip'
     return 0
 
 }
