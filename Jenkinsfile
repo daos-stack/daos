@@ -313,8 +313,8 @@ pipeline {
                     }
                     agent {
                         dockerfile {
-                            filename 'Dockerfile.mockbuild'
-                            dir 'utils/rpms/packaging'
+                            filename 'packaging/Dockerfile.mockbuild'
+                            dir 'utils/rpms'
                             label 'docker_runner'
                             additionalBuildArgs dockerBuildArgs()
                             args  '--cap-add=SYS_ADMIN'
@@ -341,15 +341,15 @@ pipeline {
                         }
                     }
                 }
-                stage('Build RPM on EL 8') {
+                stage('Build RPM on EL 8.5') {
                     when {
                         beforeAgent true
                         expression { ! skipStage() }
                     }
                     agent {
                         dockerfile {
-                            filename 'Dockerfile.mockbuild'
-                            dir 'utils/rpms/packaging'
+                            filename 'packaging/Dockerfile.mockbuild'
+                            dir 'utils/rpms'
                             label 'docker_runner'
                             additionalBuildArgs dockerBuildArgs()
                             args  '--cap-add=SYS_ADMIN'
@@ -383,8 +383,8 @@ pipeline {
                     }
                     agent {
                         dockerfile {
-                            filename 'Dockerfile.mockbuild'
-                            dir 'utils/rpms/packaging'
+                            filename 'packaging/Dockerfile.mockbuild'
+                            dir 'utils/rpms'
                             label 'docker_runner'
                             additionalBuildArgs dockerBuildArgs()
                             args  '--cap-add=SYS_ADMIN'
@@ -418,8 +418,8 @@ pipeline {
                     }
                     agent {
                         dockerfile {
-                            filename 'Dockerfile.ubuntu.20.04'
-                            dir 'utils/rpms/packaging'
+                            filename 'packaging/Dockerfile.ubuntu.20.04'
+                            dir 'utils/rpms'
                             label 'docker_runner'
                             additionalBuildArgs dockerBuildArgs()
                             args  '--cap-add=SYS_ADMIN'
@@ -798,6 +798,20 @@ pipeline {
                                 daos_pkg_version: daosPackagesVersion(next_version)
                    }
                 } // stage('Test CentOS 7 RPMs')
+                stage('Test EL 8.5 RPMs') {
+                    when {
+                        beforeAgent true
+                        expression { ! skipStage() }
+                    }
+                    agent {
+                        label params.CI_UNIT_VM1_LABEL
+                    }
+                    steps {
+                        testRpm inst_repos: daosRepos(),
+                                target: 'el8.5',
+                                daos_pkg_version: daosPackagesVersion("el8", next_version)
+                   }
+                } // stage('Test EL 8.5 RPMs')
                 stage('Scan CentOS 7 RPMs') {
                     when {
                         beforeAgent true

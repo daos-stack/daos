@@ -678,30 +678,30 @@ func TestServer_getNetDevClass(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			fis := hardware.NewFabricInterfaceSet(
 				&hardware.FabricInterface{
-					Name:         "eth0",
-					NetInterface: "eth0",
-					DeviceClass:  hardware.Ether,
-					Providers:    common.NewStringSet("test"),
+					Name:          "eth0",
+					NetInterfaces: common.NewStringSet("eth0"),
+					DeviceClass:   hardware.Ether,
+					Providers:     common.NewStringSet("test"),
 				},
 				&hardware.FabricInterface{
-					Name:         "eth1",
-					NetInterface: "eth1",
-					DeviceClass:  hardware.Ether,
-					NUMANode:     1,
-					Providers:    common.NewStringSet("test"),
+					Name:          "eth1",
+					NetInterfaces: common.NewStringSet("eth1"),
+					DeviceClass:   hardware.Ether,
+					NUMANode:      1,
+					Providers:     common.NewStringSet("test"),
 				},
 				&hardware.FabricInterface{
-					Name:         "ib0",
-					NetInterface: "ib0",
-					DeviceClass:  hardware.Infiniband,
-					Providers:    common.NewStringSet("test"),
+					Name:          "ib0",
+					NetInterfaces: common.NewStringSet("ib0"),
+					DeviceClass:   hardware.Infiniband,
+					Providers:     common.NewStringSet("test"),
 				},
 				&hardware.FabricInterface{
-					Name:         "ib1",
-					NetInterface: "ib1",
-					DeviceClass:  hardware.Infiniband,
-					NUMANode:     1,
-					Providers:    common.NewStringSet("test"),
+					Name:          "ib1",
+					NetInterfaces: common.NewStringSet("ib1"),
+					DeviceClass:   hardware.Infiniband,
+					NUMANode:      1,
+					Providers:     common.NewStringSet("test"),
 				},
 			)
 
