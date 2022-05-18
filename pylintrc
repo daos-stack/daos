@@ -1,17 +1,20 @@
 # Requirements for pylint checking in DAOS.
 
 # Wrapper script for pylint that does the following:
+# Mostly working:
 #  Wraps scons commands and adjusts report line numbers
 #  Sets python-path or similar
 #  Runs in parallel across whole tree
 #  Supports minimum python version
 #  Supports venv
 #  Can be used by atom.io live
+# In progress:
 #  Can be used in Jenkins to report regressions
 #  Can output github stype warnings
 #  Can be used as a commit-hook
 #  flake8 style --diff option
 #  Autodetect if spelling is going to work.
+#  Set python-path based on module path.
 
 # Modes:
 # Jenkins:
@@ -25,7 +28,6 @@
 #  Runs against single-file, but restricted in output format.
 # Direct:
 #  Summary mode?
-
 
 [MASTER]
 extension-pkg-allow-list=xattr
@@ -41,11 +43,11 @@ init-hook=import sys
 py-version=3.6
 
 [BASIC]
-good-names=rc,ret
+good-names=rc,ret,fd
 
 [MESSAGES CONTROL]
 disable=locally-disabled,locally-enabled,star-args,wrong-import-order,
-        unused-wildcard-import,invalid-name,global-statement,bad-option-value,
+        global-statement,bad-option-value,
         wrong-import-position,C0209,W1514,consider-using-f-string,modified-iterating-list,
         duplicate-code
 

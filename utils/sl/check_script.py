@@ -38,6 +38,7 @@ class WrapScript():
         self.line_map = {}
         self.wrap_file = output
 
+        # TODO: Use a NamedTemporaryFile here.
         with open(self.wrap_file, 'w', encoding='utf-8') as outfile:
             with open(fname, 'r', encoding='utf-8') as infile:
                 self._read_files(infile, outfile)
@@ -49,6 +50,10 @@ class WrapScript():
         old_lineno = 1
         new_lineno = 1
         scons_header = False
+
+        def _remap_count():
+            for iline in range(new_lineno, new_lineno + added):
+                self.line_map[iline] = old_lineno
 
         for line in infile.readlines():
             outfile.write(line)
@@ -65,7 +70,9 @@ class WrapScript():
                 for var in match.group(2).split():
                     newvar = var.strip("\",     '")
                     variables.append(newvar)
-                new_lineno += self.write_variables(outfile, match.group(1), variables)
+                added = self.write_variables(outfile, match.group(1), variables)
+                _remap_count()
+                new_lineno += added
 
             match = re.search(r'^(\s*)Export\(.(.*).\)', line)
             if not match:
@@ -78,22 +85,28 @@ class WrapScript():
                 for var in match.group(2).split():
                     newvar = var.strip("\",     '")
                     variables.append(newvar)
-                new_lineno += self.read_variables(outfile, match.group(1), variables)
+                added = self.read_variables(outfile, match.group(1), variables)
+                _remap_count()
+                new_lineno += added
 
             if not scons_header:
-                if re.search(r"^\"\"\"", line):
+                # Insert out header after the first blank line.
+                # TODO: This should just indent at the start of the file, or the first
+                # non-docstring line.  Some files (src/bin/smd...) use a docstring on the first
+                # line and a function call on the second which breaks most simple logic here.
+                # Luckily flake8 will warn on that so maybe an acceptable cost.
+                if line.strip() == '':
+                    added = self.write_header(outfile)
+                    _remap_count()
+                    new_lineno += added
                     scons_header = True
-                elif not re.search(r'^#', line):
-                    scons_header = True
-                if scons_header:
-                    new_lineno += self.write_header(outfile)
 
     @staticmethod
     def read_variables(outfile, prefix, variables):
         """Add code to define fake variables for pylint"""
         newlines = 0
         for variable in variables:
-            outfile.write('# pylint: disable-next=invalid-name,consider-using-f-string\n')
+            outfile.write('# pylint: disable-next=consider-using-f-string\n')
             outfile.write(f"{prefix}print('%s' % str({variable}))\n")
             newlines += 2
         return newlines
@@ -101,18 +114,13 @@ class WrapScript():
     @staticmethod
     def write_variables(outfile, prefix, variables):
         """Add code to define fake variables for pylint"""
-        newlines = 4
-        outfile.write("# pylint: disable=invalid-name\n")
-        outfile.write("# pylint: disable=import-outside-toplevel\n")
+        newlines = 0
 
         for variable in variables:
             if variable.upper() == 'PREREQS':
-                newlines += 4
-                outfile.write("%sfrom prereq_tools import PreReqComponent\n" % prefix)
-                outfile.write("%sscons_temp_env = DefaultEnvironment()\n" % prefix)
-                outfile.write("%sscons_temp_opts = Variables()\n" % prefix)
-                outfile.write("%s%s = PreReqComponent(scons_temp_env, "
-                              "scons_temp_opts)\n" % (prefix, variable))
+                newlines += 1
+# pylint: disable-next=line-too-long
+                outfile.write(f'{prefix}{variable} = PreReqComponent(DefaultEnvironment(), Variables())\n')  # noqa: E501
                 variables.remove(variable)
         for variable in variables:
             if "ENV" in variable.upper():
@@ -131,17 +139,21 @@ class WrapScript():
                 newlines += 1
                 outfile.write("%s%s = None\n" % (prefix, variable))
 
-        outfile.write("# pylint: enable=invalid-name\n")
-        outfile.write("# pylint: enable=import-outside-toplevel\n")
         return newlines
 
     @staticmethod
     def write_header(outfile):
         """write the header"""
-        outfile.write("""# Autoinserted wrapper header
-from SCons.Script import * # pylint: disable=import-outside-toplevel,wildcard-import
-from SCons.Variables import * # pylint: disable=import-outside-toplevel,wildcard-import\n""")
-        return 3
+
+        # Always import PreReqComponent here, but it'll only be used in some cases.  This causes
+        # errors in the toplevel SConstruct which are suppressed, the alternative would be to do
+        # two passes and only add the include if needed later.
+        outfile.write("""# pylint: disable-next=unused-wildcard-import,wildcard-import
+from SCons.Script import * # pylint: disable=import-outside-toplevel
+# pylint: disable-next=import-outside-toplevel,unused-wildcard-import,wildcard-import
+from SCons.Variables import *
+from prereq_tools import PreReqComponent\n""")
+        return 5
 
     def convert_line(self, line):
         """Convert from a line number in the report to a line number in the input file"""

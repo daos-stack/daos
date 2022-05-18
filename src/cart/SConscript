@@ -1,18 +1,15 @@
-#!python
-# (C) Copyright 2016-2021 Intel Corporation.
+# (C) Copyright 2016-2022 Intel Corporation.
 #
 # SPDX-License-Identifier: BSD-2-Clause-Patent
 #
 """Build CaRT components"""
 
 import os
-import sys
 import daos_build
-# pylint: disable=no-name-in-module
-# pylint: disable=import-error
-# pylint: disable=ungrouped-imports
 import SCons.Action
 
+import sys
+import argparse
 HEADERS = ['api.h', 'iv.h', 'types.h', 'swim.h']
 
 SRC = ['crt_bulk.c', 'crt_context.c', 'crt_corpc.c',

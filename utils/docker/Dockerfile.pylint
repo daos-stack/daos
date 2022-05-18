@@ -31,5 +31,5 @@ RUN echo "::endgroup::"
 
 COPY --chown=daos_server:daos_server . .
 RUN cp utils/words.dict .
-RUN ./utils/daos_pylint.py from-file
+RUN ./utils/daos_pylint.py --from-file=utils/to-check
 RUN cat words.dict

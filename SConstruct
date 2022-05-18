@@ -23,6 +23,8 @@ try:
 except NameError:
     pass
 
+# pylint: disable=reimported,ungrouped-imports
+
 import daos_build
 import compiler_setup
 from prereq_tools import PreReqComponent

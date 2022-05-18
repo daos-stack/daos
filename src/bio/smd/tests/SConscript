@@ -1,4 +1,5 @@
 """Build versioned extent allocator tests"""
+
 import daos_build
 
 def scons():
