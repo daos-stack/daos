@@ -28,6 +28,8 @@ const (
 	PCIAddrBusBitSize = 8
 )
 
+var ErrNotVMDBackingAddress = errors.New("not a vmd backing device address")
+
 // parseVMDAddress returns the domain string interpreted as the VMD address.
 func parseVMDAddress(addr string) (*PCIAddress, error) {
 	if len(addr) != vmdDomainLen {
@@ -165,8 +167,7 @@ func (pa *PCIAddress) BackingToVMDAddress() (*PCIAddress, error) {
 		return nil, errors.New("PCIAddress is nil")
 	}
 	if !pa.IsVMDBackingAddress() {
-		return nil, errors.New("not a vmd backing device address")
-
+		return nil, ErrNotVMDBackingAddress
 	}
 
 	return pa.VMDAddr, nil
@@ -511,6 +512,27 @@ func (d *PCIDevice) String() string {
 		speedStr = fmt.Sprintf(" @ %.2f GB/s", d.LinkSpeed)
 	}
 	return fmt.Sprintf("%s %s (%s)%s", &d.PCIAddr, d.Name, d.Type, speedStr)
+}
+
+// DeviceName returns the system name of the PCI device.
+func (d *PCIDevice) DeviceName() string {
+	if d == nil {
+		return ""
+	}
+	return d.Name
+}
+
+// DeviceType returns the type of PCI device.
+func (d *PCIDevice) DeviceType() DeviceType {
+	if d == nil {
+		return DeviceTypeUnknown
+	}
+	return d.Type
+}
+
+// PCIDevice returns a pointer to itself.
+func (d *PCIDevice) PCIDevice() *PCIDevice {
+	return d
 }
 
 func (d PCIDevices) MarshalJSON() ([]byte, error) {
