@@ -23,4 +23,5 @@
 class FindPathDirs(_env):
     """Fake FindPathDirs"""
 
+
 __all__ = ['FindPathDirs']

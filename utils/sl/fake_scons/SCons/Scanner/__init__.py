@@ -20,10 +20,13 @@
 """Fake scons environment shutting up pylint on SCons files"""
 
 # pylint: disable=too-few-public-methods
-class FindPathDirs(_env):
+def FindPathDirs(_env):
     """Fake FindPathDirs"""
 
-class Scanner(*args, **kw):
+
+def Scanner(*_args, **_kw):
     """fake module init"""
+    return ""
+
 
 __all__ = ['FindPathDirs', 'Scanner']

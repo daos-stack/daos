@@ -24,4 +24,5 @@ def find_file(_fname, _paths):
     """Fake find_file"""
     return ""
 
+
 __all__ = ['find_file']

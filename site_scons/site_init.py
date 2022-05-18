@@ -19,6 +19,7 @@ def c_scan(node, _env, path):
         results.append(result)
     return results
 
+
 cscan = Scanner(c_scan, path_function=FindPathDirs('CPPPATH'))
 
 SourceFileScanner.add_scanner('.cpp', cscan)
