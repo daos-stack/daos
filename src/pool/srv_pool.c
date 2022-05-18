@@ -1351,6 +1351,8 @@ out:
 		daos_prop_free(prop);
 	if (rc < 0)
 		ds_pool_failed_add(svc->ps_uuid, rc);
+	else if (rc == 0)
+		ds_pool_failed_remove(svc->ps_uuid);
 	return rc;
 }
 
