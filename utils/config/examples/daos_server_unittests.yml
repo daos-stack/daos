@@ -48,21 +48,15 @@ engines:
       # - CRT_CTX_SHARE_ADDR=1
       # - CRT_CTX_NUM=8
 
-    # Storage definitions
+    # Legacy style storage definitions (support for this style will be removed in future)
 
     # When scm_class is set to ram, tmpfs will be used to emulate SCM.
     # The size of ram is specified by scm_size in GB units.
-    scm_mount: /mnt/daos0
     scm_class: ram
-    scm_size: 1
+    scm_size: 8
+    scm_mount: /mnt/daos
 
-    # When scm_class is set to dcpm, scm_list is the list of device paths for
-    # PMem namespaces (currently only one per engine supported).
-    # scm_class: dcpm
-    # scm_list: [/dev/pmem0]
-
-    # If using NVMe SSD (will write /mnt/daos/daos_nvme.conf and start I/O
-    # engine with -n <path>)
+    # If no NVMe devices are specified in config file, no NVMe will be used.
     bdev_class: nvme
     bdev_list: []
     bdev_busid_range: ""
