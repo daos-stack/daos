@@ -44,6 +44,7 @@ resource "google_compute_instance_template" "daos_sig_template" {
   project        = var.project_id
   region         = var.region
   labels         = var.labels
+  count          = var.number_of_instances > 0 ? 1 : 0
 
   disk {
     source_image = data.google_compute_image.os_image.self_link
@@ -81,9 +82,9 @@ resource "google_compute_instance_template" "daos_sig_template" {
 resource "google_compute_instance_group_manager" "daos_sig" {
   description = "Stateful Instance group for DAOS clients"
   name        = var.mig_name
-
+  count       = var.number_of_instances > 0 ? 1 : 0
   version {
-    instance_template = google_compute_instance_template.daos_sig_template.self_link
+    instance_template = google_compute_instance_template.daos_sig_template[0].self_link
   }
 
   base_instance_name = var.instance_base_name
@@ -95,7 +96,7 @@ resource "google_compute_instance_group_manager" "daos_sig" {
 resource "google_compute_per_instance_config" "named_instances" {
   zone                   = var.zone
   project                = var.project_id
-  instance_group_manager = google_compute_instance_group_manager.daos_sig.name
+  instance_group_manager = google_compute_instance_group_manager.daos_sig[0].name
   count                  = var.number_of_instances
   name                   = format("%s-%04d", var.instance_base_name, sum([count.index, 1]))
   preserved_state {
@@ -108,7 +109,7 @@ resource "google_compute_per_instance_config" "named_instances" {
       # Adding a reference to the instance template used causes the stateful instance to update
       # if the instance template changes. Otherwise there is no explicit dependency and template
       # changes may not occur on the stateful instance
-      instance_template = google_compute_instance_template.daos_sig_template.self_link
+      instance_template = google_compute_instance_template.daos_sig_template[0].self_link
     }
   }
 }
