@@ -63,7 +63,8 @@ def scons():
     if not prereqs.test_requested():
         return
 
-    libs_client = ['daos', 'daos_common', 'gurt', 'm', 'cart', 'uuid', 'cmocka', 'daos_tests']
+    libs_client = ['daos', 'daos_common', 'gurt', 'm', 'cart', 'uuid', 'cmocka', 'daos_tests',
+                   'dfs']
 
     denv = base_env.Clone()
     # Add runtime paths for daos libraries

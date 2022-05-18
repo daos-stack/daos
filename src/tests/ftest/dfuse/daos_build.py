@@ -80,6 +80,7 @@ class DaosBuild(DfuseTestBase):
             if intercept:
                 build_time = 120
         elif cache_mode == 'metadata':
+            build_time = 210
             cont_attrs['dfuse-data-cache'] = 'off'
             cont_attrs['dfuse-attr-time'] = cache_time
             cont_attrs['dfuse-dentry-time'] = cache_time
