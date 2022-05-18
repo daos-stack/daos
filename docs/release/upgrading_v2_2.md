@@ -1,6 +1,5 @@
 # Upgrading to DAOS Version 2.2
 
-
 ## Upgrading DAOS from Version 2.2.x to Version 2.2.y
 
 Upgrading DAOS from one 2.2.x fix level to a newer 2.2.y fix level is
@@ -18,12 +17,11 @@ The recommended procedure for the upgrade is:
 - Perform the RPM update to the new DAOS fix level.
 - Start the `daos_server` daemons.
 - Validate that all engines have started successfully,
-  for example using `dmg system query -v`.
+  For example, use `dmg system query -v`.
 - Start the `daos_agent` daemons.
 
 DAOS fix levels include all previous fix levels. So it is possible to update
 from Version 2.2.0 to Version 2.2.2 without updating to Version 2.2.1 first.
-
 
 ## Upgrading DAOS from Version 2.0 to Version 2.2
 
@@ -43,7 +41,7 @@ The recommended procedure for the upgrade is:
 - Perform the RPM update to the new DAOS fix level.
 - Start the `daos_server` daemons.
 - Validate that all engines have started successfully,
-  for example using `dmg system query -v`.
+  For example, use `dmg system query -v`.
 - Start the `daos_agent` daemons.
 
 DAOS fix levels include all previous fix levels. So it is possible to update
@@ -56,17 +54,16 @@ on CentOS Linux 8 need to be reinstalled with a supported EL8 operating system
 (Rocky Linux 8.5/8.6 or RHEL 8.5/8.6) in order to use DAOS Version 2.2.
 
 The process of reinstalling a DAOS server's EL8 operating system while maintaining
-the data on PMem and NVMe has not been validated, and is not supported.
+the data on PMem and NVMe has not been validated and is not supported.
 This implies that the upgrade to DAOS Version 2.2 in those environments is essentially
-a new installation, without maintaining the data in DAOS pools and containers.
+a new installation without maintaining the data in DAOS pools and containers.
 Please refer to the
 [Upgrading to DAOS Version 2.0](https://docs.daos.io/v2.0/release/upgrading_to_v2_0/)
-document for further information on how to save existing user data before the update.
-
+document for further information on saving existing user data before the update.
 
 ## Upgrading DAOS from Version 1.x to Version 2.2
 
-Note that there is **no** backwards compatibility of DAOS Version 2.x with
+Note that there is **no** backward compatibility of DAOS Version 2.x with
 DAOS Version 1.y, so an upgrade from DAOS Version 1.0 or 1.2 to
 DAOS Version 2.2 is essentially a new installation. Please refer to the
 [Upgrading to DAOS Version 2.0](https://docs.daos.io/v2.0/release/upgrading_to_v2_0/)

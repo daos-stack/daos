@@ -7,10 +7,9 @@ includes a chapter on MPI-IO.
 [ROMIO](https://www.mcs.anl.gov/projects/romio/) is a well-known
 implementation of MPI-IO and is included in many MPI implementations.
 DAOS provides its own MPI-IO ROMIO ADIO driver.
-This driver has been merged in the upstream MPICH repository, see the
+This driver has been merged into the upstream MPICH repository. See the
 [adio/ad\_daos](https://github.com/pmodels/mpich/tree/main/src/mpi/romio/adio/ad_daos)
 section in the MPICH git repository for details.
-
 
 ## Supported MPI Version
 
@@ -23,8 +22,8 @@ It is included in mpich-3.4.1 (released Jan 2021) and in
 !!! note
     Starting with DAOS 1.2, the `--svc` parameter (number of service replicas)
     is no longer needed, and the DAOS API has been changed accordingly.
-    Patches have been contributed to MPICH that detect the DAOS API version
-    to gracefully handle this change. MPICH 3.4.2 includes those changes,
+    Patches have been contributed to MPICH that detects the DAOS API version
+    To handle this change gracefully. MPICH 3.4.2 includes those changes,
     and works out of the box with DAOS 2.0.
     MPICH 3.4.1 does not include those changes. Please check the latest commits
     [here](https://github.com/pmodels/mpich/commits/main?author=mchaarawi)
@@ -50,8 +49,8 @@ make -j8; make install
 
 This assumes that DAOS is installed into the `/usr` tree, which is the case for
 the DAOS RPM installation. Other configure options can be added, modified, or
-removed as needed, like the network communicatio device, fortran support,
-etc. For those, please consule the mpich user guide.
+removed as needed, like the network communication devices, Fortran support,
+etc. For those, please consult the mpich user guide.
 
 Set the `PATH` and `LD_LIBRARY_PATH` to where you want to build your client
 apps or libs that use MPI to the path of the installed MPICH.
@@ -63,18 +62,19 @@ includes DAOS support since the
 [2019.8 release](https://software.intel.com/content/www/us/en/develop/articles/intel-mpi-library-release-notes-linux.html).
 
 Note that Intel MPI uses `libfabric` and includes it as part of the Intel MPI installation:
-* 2019.8 and 2019.9 includes `libfabric-1.10.1-impi`
-* 2021.1, 2021.2 and 2021.3 includes `libfabric-1.12.1-impi`
+
+- 2019.8 and 2019.9 include` libfabric-1.10.1-impi`
+- 2021.1, 2021.2 and 2021.3 includes `libfabric-1.12.1-impi`
 
 Care must be taken to ensure that the version of libfabric that is used
 is at a level that includes the patches that are critical for DAOS.
 DAOS 1.0.1 includes `libfabric-1.9.0`, DAOS 1.2 includes `libfabric-1.12`,
 and DAOS 2.0 includes `libfabric-1.14`.
 
-To use DAOS with Intel MPI, the `libfabric` that is supplied by DAOS
+To use DAOS with Intel MPI, the `libfabric` that DAOS supplies
 (and that is installed into `/usr/lib64` by default) must be used.
 Intel MPI provides a mechanism to indicate that the Intel MPI version of
-`libfabric` should **not** be used, by setting this variable **before**
+`libfabric` should **not** be used by setting this variable **before**
 loading the Intel MPI environment:
 
 ```bash
@@ -89,7 +89,7 @@ system library search path back as the first path in the library search path:
 export LD_LIBRARY_PATH="/usr/lib64/:$LD_LIBRARY_PATH"
 ```
 
-There are other environment variables that need to be set on the client side to
+Other environment variables need to be set on the client-side to
 ensure proper functionality with the DAOS MPIIO driver, including:
 
 ```bash
@@ -109,7 +109,6 @@ it will likely pick up DAOS support in an upcoming release.
 Since its MPI-IO implementation is based on ROMIO,
 it will likely pick up DAOS support in an upcoming release.
 
-
 ## Testing MPI-IO with DAOS
 
 Build any client (HDF5, ior, mpi test suites) normally with the mpicc command
@@ -123,11 +122,12 @@ container uuids/labels.
 
 Create a container with a path on dfuse or lustre, or any file system that supports extended
 attributes:
+
 ```bash
 daos cont create mypool --label mycont --path=/mnt/dfuse/ --type POSIX
 ```
 
-Then using that path, one can start creating files using the DAOS MPIIO driver by just appending
+Then using that path, one can start creating files using the DAOS MPIIO driver by appending
 `daos:` to the filename/path. For example:
 `daos:/mnt/dfuse/file`
 `daos:/mnt/dfuse/dir1/file`
@@ -136,10 +136,13 @@ Then using that path, one can start creating files using the DAOS MPIIO driver b
 
 Another way to use the DAOS MPIIO driver is using an environment variable to set the prefix itself
 for the file:
+
 ```bash
 export DAOS_UNS_PREFIX="path"
 ```
+
 That prefix path can be:
+
 1. The UNS prefix if that exists (similar to the UNS mode above): /mnt/dfuse
 2. A direct path using the pool and container label (or uuid): daos://pool/container/
 
@@ -149,14 +152,14 @@ would pass `daos:/dir1/file' to MPI_File_open().
 
 ### Using Pool and Container Environment Variables
 
-This mode is meant just for quick testing to use the MPIIO DAOS driver bypassing the UNS and setting
-direct access with pool and container environment variables. At the client side, the following
+This mode is just for quick testing to use the MPIIO DAOS driver bypassing the UNS and setting
+direct access with pool and container environment variables. On the client-side, the following
 environment variables need to be set:
 `export DAOS_POOL={uuid/label}; export DAOS_CONT={uuid/label}; export DAOS_BYPASS_DUNS=1`.
-The user still need to append the `daos:` prefix to the file being passed to MPI_File_open().
+The user still needs to append the `daos:` prefix to the file passed to MPI_File_open().
 
 ## Known limitations
 
 Limitations of the current implementation include:
 
--   No support for MPI file atomicity, preallocate, or shared file pointers.
+- No support for MPI file atomicity, preallocate, or shared file pointers.

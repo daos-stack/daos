@@ -7,46 +7,40 @@ in which DAOS containers will be represented through the Lustre namespace.
 
 The current state of work can be summarized as follows :
 
--   DAOS integration with Lustre uses the Lustre foreign file/dir feature
+- DAOS integration with Lustre uses the Lustre foreign file/dir feature
     (from LU-11376 and associated patches).
-
--   Each time a DAOS POSIX container is created using the `daos` utility and its
+- Each time a DAOS POSIX container is created using the `daos` utility and its
     '--path' UNS option, a Lustre foreign file/dir of 'symlink' type is
     created with a specific LOV/LMV EA content that will allow the
     DAOS pool and containers UUIDs to be stored.
-
--   The Lustre Client patch for LU-12682 adds DAOS specific support to the Lustre
+- The Lustre Client patch for LU-12682 adds DAOS-specific support to the Lustre
     foreign file/dir feature. It allows for the foreign file/dir of `symlink` type
     to be presented and act as an `<absolute-prefix>/<pool-uuid>/<container-uuid>`
     symlink to the Linux Kernel/VFS.
-
--   The `<absolute-prefix>` can be specified as the new `foreign_symlink=<absolute-prefix>`
+- The `<absolute-prefix>` can be specified as the new `foreign_symlink=<absolute-prefix>`
     Lustre Client mount option, or also through the new `llite.*.foreign_symlink_prefix`
     Lustre dynamic tuneable. Both `<pool-uuid>` and `<container-uuid>` are
     extracted from foreign file/dir LOV/LMV EA.
-
--   To allow for symlink resolution and transparent access to the DAOS
+- To allow for symlink resolution and transparent access to the DAOS
     container content, it is expected that a DFuse/DFS instance/mount of
     DAOS Server root exists on `<absolute-prefix>`, presenting all served
     pools/containers as `<pool-uuid>/<container-uuid>` relative paths.
-
--   `daos` foreign support is enabled at mount time with the `symlink=` option
+- `daos` foreign support is enabled at mount time with the `symlink=` option
     present or dynamically, through the `llite.*.daos_enable` setting.
 
 ### Building and using a DAOS-aware Lustre version
 
 As indicated before, a Lustre Client patch (for LU-12682) has been developed
-    to allow for the application's transparent access to the DAOS container's data
-    from a Lustre foreign file/dir.
+    to allow for the application's transparent access to the DAOS container's
+    data from a Lustre foreign file/dir.
 
-This patch can be found at https://review.whamcloud.com/35856 and has
-    been landed onto master but is still not integrated with an official
-    Lustre version. This patch must be applied on top of the selected Lustre
-    version's source tree.
+This [patch](https://review.whamcloud.com/35856) has been landed onto master
+    but is still not integrated with an official Lustre version. This patch
+    must be applied on top of the selected Lustre version's source tree.
 
 After any conflicts are resolved, Lustre must be built and
-    the generated RPMs installed on client nodes by following the instructions at
-    https://wiki.whamcloud.com/display/PUB/Building+Lustre+from+Source.
+    the generated RPMs are installed on client nodes by following the
+    [Build Lustrefrom source](https://wiki.whamcloud.com/display/PUB/Building+Lustre+from+Source.)
 
 The Lustre client mount command must use the new
     `foreign_symlink=<absolute_path>` option to set the prefix to be used in
@@ -61,14 +55,14 @@ The Lustre client mount command must use the new
 
 To allow non-root/admin users to use the llapi_set_dirstripe()
     API (like the `daos cont create` command with `--path` option), or the
-    `lfs setdirstripe` command, the Lustre MDS servers configuration must
+    `lfs setdirstripe` command, the Lustre MDS server’s configuration must
     be modified accordingly by running the
     `lctl set_param mdt/*/enable_remote_dir_gid=-1` command.
 
  Additionally, there is a feature available to provide a customized format
     of LOV/LMV EAs, apart from the default `<pool-UUID>/<cont-UUID>`, through the
     `llite/*/foreign_symlink_upcall` tunable. This provides the path
-    of a user-land upcall, that will indicate  where to extract
+    of a user-land up call that will indicate  where to extract
     `<pool-UUID>` and `<cont-UUID>` in the LOV/LMV EAs, using a series of [pos, len]
     tuples and constant strings. `lustre/utils/l_foreign_symlink.c` is a helper
     example in the Lustre source code.
@@ -88,7 +82,7 @@ The POSIX data mover was released with DAOS v1.2 and supports data migration
 to/from a POSIX filesystem. Parallel data migration is available through
 mpiFileUtils, which contains a DAOS backend. Serial data migration is supported
 through the daos filesystem copy utility. The first version of the data mover
-tool that contains support for HDF5 containers is scheduled for release in DAOS
+tool supporting HDF5 containers is scheduled for release in DAOS
 v2.2.
 
 ### Container Parking
@@ -99,7 +93,6 @@ POSIX filesystem. This transformation is agnostic to the data model and
 container type and retains most DAOS internal metadata. The serialized file(s)
 are written to a POSIX filesystem in an HDF5 file format. A preview of the
 serialization and deserialization tools is available in DAOS v2.0 through
-mpiFileUtils, and they will be officially released in DAOS v2.2.
+mpiFileUtils and they will be officially released in DAOS v2.2.
 
-More details and instructions on data mover usage can be found at:
-https://github.com/daos-stack/daos/blob/release/2.2/docs/user/datamover.md
+For more details and instructions, see the [data mover GitHub Repo](https://github.com/daos-stack/daos/blob/release/2.2/docs/user/datamover.md)

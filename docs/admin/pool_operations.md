@@ -1,4 +1,4 @@
-# Pool Operations
+# DAOS Pool Operations
 
 A DAOS pool is a storage reservation that can span any storage nodes in a
 DAOS system and is managed by the administrator. The amount of space allocated
@@ -12,25 +12,26 @@ management interface or the `dmg` utility.
 A DAOS pool can be created and destroyed through the `dmg` utility.
 
 To create a pool labeled `tank`:
+
 ```bash
-$ dmg pool create --size=<N>TB tank
+dmg pool create --size=<N>TB tank
 ```
 
 This command creates a pool labeled `tank` distributed across the DAOS servers
-with a target size on each server that is comprised of N * 0.94 TB of NVMe storage
-and N * 0.06 TB (i.e., 6% of NVMe) of SCM storage. The default SCM:NVMe ratio
-may be adjusted at pool creation time as described below.
+with a target size on each server comprised of N *0.94 TB of NVMe storage
+and N* 0.06 TB (i.e., 6% of NVMe) of SCM storage. As described below, the default SCM: NVMe ratio
+may be adjusted at pool creation time.
 
 The UUID allocated to the newly created pool is printed to stdout
 as well as the pool service replica ranks.
 
 !!! note
-    The --scm-size and --nvme-size options still exist, but should be
+    The --scm-size and --nvme-size options still exist but should be
     considered deprecated and will likely be removed in a future release.
 
 The label must consist of alphanumeric characters, colon (':'), period ('.'),
 hyphen ('-') or underscore ('\_'). The maximum length is set to 127 characters.
-Labels that can be parsed as UUID (e.g. 123e4567-e89b-12d3-a456-426614174000)
+Labels that can be parsed as UUID (e.g., 123e4567-e89b-12d3-a456-426614174000)
 are forbidden.
 
 ```bash
@@ -57,7 +58,7 @@ The typical output of this command is as follows:
 ```bash
 $ dmg pool create --size 50GB tank
 Creating DAOS pool with automatic storage allocation: 50 GB NVMe + 6.00% SCM
-Pool created with 6.00% SCM/NVMe ratio
+Pool created with a 6.00% SCM/NVMe ratio
 -----------------------------------------
   UUID                 : 8a05bf3a-a088-4a77-bb9f-df989fce7cc8
   Service Ranks        : [1-3]
@@ -71,18 +72,19 @@ This created a pool with UUID 8a05bf3a-a088-4a77-bb9f-df989fce7cc8,
 with pool service redundancy enabled by default
 (pool service replicas on ranks 1-3).
 
-If no redundancy is desired, use --nsvc=1 in order to specify that only
+If no redundancy is desired, use --nsvc=1 to specify that only
 a single pool service replica should be created.
 
-The -t option allows defining the ratio between SCM and NVMe SSD space.
+The -t option allows defining the SCM and NVMe SSD space ratio.
 The default value is 6%, which means the space provided after --size
 will be distributed as follows:
+
 - 6% is allocated on SCM (i.e., 3GB in the example above)
 - 94% is allocated on NVMe SSD (i.e., 47GB in the example above)
 
 Note that it is difficult to determine the usable space by the user, and
-currently we cannot provide the precise value. The usable space depends not only
-on pool size, but also on number of targets, target size, object class,
+Currently, we cannot provide a precise value. The usable space depends not only
+on pool size, but also the number of targets, target size, object class,
 storage redundancy factor, etc.
 
 ### Listing Pools
@@ -98,16 +100,17 @@ tank     47 GB  0%   0%        0/32
 
 This returns a table of pool labels (or UUIDs if no label was specified)
 with the following information for each pool:
+
 - the total pool size
 - the percentage of used space (i.e., 100 * used space  / total space)
-- the imbalance percentage indicating whether data distribution across
-  the difference storage nodes is well balanced. 0% means that there is
-  no imbalance and 100% means that out-of-space errors might be returned
+- the imbalance percentage indicates whether data distribution across
+  the different storage nodes is well balanced. 0% means that there is
+  no imbalance, and 100% means that out-of-space errors might be returned
   by some storage nodes while space is still available on others.
 - the number of disabled targets (0 here) and the number of targets that
-  the pool was originally configured with (total).
+  the pool was initially configured with (total).
 
-The --verbose option provides more detailed information including the
+The --verbose option provides more detailed information, including the
 number of service replicas, the full UUIDs and space distribution
 between SCM and NVMe for each pool:
 
@@ -138,7 +141,7 @@ is integrated into the dmg utility.
 To query a pool labeled `tank`:
 
 ```bash
-$ dmg pool query tank
+dmg pool query tank
 ```
 
 The label can be replaced with the pool UUID.
@@ -158,7 +161,7 @@ Below is the output for a pool created with SCM space only.
     Rebuild done, 10 objs, 1026 recs
 ```
 
-The total and free sizes are the sum across all the targets whereas
+The total and free sizes are the sums across all the targets whereas
 min/max/mean gives information about individual targets. A min value
 close to 0 means that one target is running out of space.
 
@@ -246,7 +249,7 @@ Self-healing policy (self_heal) exclude
 Rebuild space ratio (space_rb)  0%
 ```
 
-Some properties can be modified after pool creation via the `set-prop` option.
+After pool creation, some properties can be modified via the `set-prop` option.
 
 ```bash
 $ dmg pool set-prop tank2 reclaim:lazy
@@ -263,16 +266,18 @@ Reclaim strategy (reclaim) lazy
 
 DAOS is a versioned object store that tags every I/O with an epoch number.
 This versioning mechanism is the baseline for multi-version concurrency control and
-snapshot support. Over time, unused versions need to be reclaimed in order to
-release storage space and also simplify the metadata index. This process is
+snapshot support. Over time, unused versions need to be reclaimed to
+release storage space and simplify the metadata index. This process is
 called aggregation.
 
-The reclaim property defines what strategy to use to reclaimed unused version.
+The reclaim property defines what strategy to use to reclaim unused versions.
 Three options are supported:
 
-* "lazy"     : Trigger aggregation only when there is no IO activities or SCM free space is under pressure (default strategy)
-* "time"     : Trigger aggregation regularly despite of IO activities.
-* "disabled" : Never trigger aggregation. The system will eventually run out of space even if data is being deleted.
+|Option|Description|
+|---|---|
+|lazy|Trigger aggregation, only when there are no IO activities or SCM free space, is under pressure (default strategy)|
+|time|Trigger aggregation regularly despite IO activities.|
+|disabled|Never trigger aggregation. The system will eventually run out of space even if data is not deleted.|
 
 ### Self-healing Policy (self\_heal)
 
@@ -284,14 +289,14 @@ Two options are supported: "exclude" (default strategy) and "rebuild".
 ### Reserved Space for Rebuilds (space\_rb)
 
 This property defines the percentage of total space reserved on each storage
-node for self-healing purpose. The reserved space cannot be consumed by
+node for self-healing purposes. The reserved space cannot be consumed by
 applications. Valid values are 0% to 100%, the default is 0%.
 When setting this property, specifying the percentage symbol is optional:
 `space_rb:2%` and `space_rb:2` both specify two percent of storage capacity.
 
 ### Default EC Cell Size (ec\_cell\_sz)
 
-This property defines the default erasure code cell size inherited to DAOS
+This property defines the default erasure code cell size inherited from DAOS
 containers. The EC cell size can be between 1kiB and 1GiB,
 although it should typically be set to a value between 32kiB and 1MiB.
 The default is 1MiB.
@@ -309,18 +314,14 @@ credentials.
 
 Access-controlled client pool accesses include:
 
-* Connecting to the pool.
+- Connecting to the pool.
+- Querying the pool
+- Creating containers in the pool.
+- Deleting containers in the pool.
 
-* Querying the pool.
+This is reflected in the set of supported [pool permissions](https://docs.daos.io/v2.2/overview/security/#permissions).
 
-* Creating containers in the pool.
-
-* Deleting containers in the pool.
-
-This is reflected in the set of supported
-[pool permissions](https://docs.daos.io/v2.2/overview/security/#permissions).
-
-A user must be able to connect to the pool in order to access any containers
+A user must be able to connect to the pool to access any containers
 inside, regardless of their permissions on those containers.
 
 ### Ownership
@@ -334,7 +335,7 @@ be explicitly defined by an administrator in the pool ACL.
 To create a pool with a custom ACL:
 
 ```bash
-$ dmg pool create --size <size> --acl-file <path> <pool_label>
+dmg pool create --size <size> --acl-file <path> <pool_label>
 ```
 
 The ACL file format is detailed in [here](https://docs.daos.io/v2.2/overview/security/#acl-file).
@@ -344,7 +345,7 @@ The ACL file format is detailed in [here](https://docs.daos.io/v2.2/overview/sec
 To view a pool's ACL:
 
 ```bash
-$ dmg pool get-acl --outfile=<path> <pool_label>
+dmg pool get-acl --outfile=<path> <pool_label>
 ```
 
 The output is in the same string format used in the ACL file during creation,
@@ -372,7 +373,7 @@ noted above for container creation.
 To replace a pool's ACL with a new ACL:
 
 ```bash
-$ dmg pool overwrite-acl --acl-file <path> <pool_label>
+dmg pool overwrite-acl --acl-file <path> <pool_label>
 ```
 
 #### Adding and Updating ACEs
@@ -380,13 +381,13 @@ $ dmg pool overwrite-acl --acl-file <path> <pool_label>
 To add or update multiple entries in an existing pool ACL:
 
 ```bash
-$ dmg pool update-acl --acl-file <path> <pool_label>
+dmg pool update-acl --acl-file <path> <pool_label>
 ```
 
 To add or update a single entry in an existing pool ACL:
 
 ```bash
-$ dmg pool update-acl --entry <ACE> <pool_label>
+dmg pool update-acl --entry <ACE> <pool_label>
 ```
 
 If there is no existing entry for the principal in the ACL, the new entry is
@@ -412,19 +413,19 @@ A:G:GROUP@:rw
 To delete an entry for a given principal in an existing pool ACL:
 
 ```bash
-$ dmg pool delete-acl --principal <principal> <pool_label>
+dmg pool delete-acl --principal <principal> <pool_label>
 ```
 
-The principal corresponds to the principal portion of an ACE that was
+The principle corresponds to the principal portion of an ACE that was
 set during pool creation or a previous pool ACL operation. For the delete
-operation, the principal argument must be formatted as follows:
+the operation, the principal argument must be formatted as follows:
 
-* Named user: `u:username@`
-* Named group: `g:groupname@`
-* Special principals: `OWNER@`, `GROUP@`, and `EVERYONE@`
+- Named user: `u:username@`
+- Named group: `g:groupname@`
+- Special principals: `OWNER@`, `GROUP@`, and `EVERYONE@`
 
-The entry for that principal will be completely removed. This does not always
-mean that the principal will have no access. Rather, their access to the pool
+The entry for that principal will be removed entirely. This does not always
+mean that the principal will have no access. Instead, their access to the pool
 will be decided based on the remaining ACL rules.
 
 ## Pool Modifications
@@ -444,26 +445,26 @@ surviving engine.
 !!! note
     The rebuild process may consume many resources on each engine and
     is thus throttled to reduce the impact on application performance. This
-    current logic relies on CPU cycles on the storage nodes. By default, the
+    current logic relies on CPU cycles on the storage nodes. By default,, the
     rebuild process is configured to consume up to 30% of the CPU cycles,
     leaving the other 70% for regular I/O operations.
 
 ### Manual Exclusion
 
 An operator can exclude one or more engines or targets from a specific DAOS pool
-using the rank the target resides, as well as the target idx on that rank.
+using the rank the target resides and the target idx on that rank.
 If a target idx list is not provided, all targets on the rank will be excluded.
 
 To exclude a target from a pool:
 
 ```bash
-$ dmg pool exclude --rank=${rank} --target-idx=${idx1},${idx2},${idx3} <pool_label>
+ dmg pool exclude --rank=${rank} --target-idx=${idx1},${idx2},${idx3} <pool_label>
 ```
 
-The pool target exclude command accepts 2 parameters:
+The pool target exclude command accepts two parameters:
 
-* The engine rank of the target(s) to be excluded.
-* The target Indices of the targets to be excluded from that rank (optional).
+- The engine rank of the target(s) to be excluded.
+- The target Indices of the targets to be excluded from that rank (optional).
 
 Upon successful manual exclusion, the self-healing mechanism will be triggered
 to restore redundancy on the remaining engines/targets.
@@ -477,19 +478,19 @@ A pool drain operation initiates rebuild without excluding the designated engine
 or target until after the rebuild is complete.
 This allows the drained entity to continue to perform I/O while the rebuild
 operation is ongoing. Drain additionally enables non-replicated data to be
-rebuilt onto another target whereas in a conventional failure scenario non-replicated
+rebuilt onto another target, whereas in a conventional failure scenario non-replicated
 data would not be integrated into a rebuild and would be lost.
 
 To drain a target from a pool:
 
 ```bash
-$ dmg pool drain --rank=${rank} --target-idx=${idx1},${idx2},${idx3} $DAOS_POOL
+dmg pool drain --rank=${rank} --target-idx=${idx1},${idx2},${idx3} $DAOS_POOL
 ```
 
-The pool target drain command accepts 2 parameters:
+The pool target drain command accepts two parameters:
 
-* The engine rank of the target(s) to be drained.
-* The target Indices of the targets to be drained from that rank (optional).
+- The engine rank of the target(s) to be drained.
+- The target Indices of the targets to be drained from that rank (optional).
 
 ### Reintegration
 
@@ -497,22 +498,22 @@ After an engine failure and exclusion, an operator can fix the underlying issue
 and reintegrate the affected engines or targets to restore the pool to its
 original state.
 The operator can either reintegrate specific targets for an engine rank by
-supplying a target idx list, or reintegrate an entire rank by omitting the list.
+supplying a target idx list or reintegrating an entire rank by omitting the list.
 
+```bash
+dmg pool reintegrate $DAOS_POOL --rank=${rank} --target-idx=${idx1},${idx2},${idx3}
 ```
-$ dmg pool reintegrate $DAOS_POOL --rank=${rank} --target-idx=${idx1},${idx2},${idx3}
-```
 
-The pool reintegrate command accepts 3 parameters:
+The pool reintegrate command accepts three parameters:
 
-* The label or UUID of the pool that the targets will be reintegrated into.
-* The engine rank of the affected targets.
-* The target indices of the targets to be reintegrated on that rank (optional).
+- The label or UUID of the pool that the targets will be reintegrated into.
+- The engine rank of the affected targets.
+- The target indices of the targets to be reintegrated on that rank (optional).
 
-When rebuild is triggered it will list the operations and their related engines/targets
+When the rebuild is triggered, it will list the operations and their related engines/targets
 by their engine rank and target index.
 
-```
+```bash
 Target (rank 5 idx 0) is down.
 Target (rank 5 idx 1) is down.
 ...
@@ -522,12 +523,12 @@ Target (rank 5 idx 1) is down.
 
 These should be the same values used when reintegrating the targets.
 
-```
-$ dmg pool reintegrate $DAOS_POOL --rank=5 --target-idx=0,1
+```bash
+dmg pool reintegrate $DAOS_POOL --rank=5 --target-idx=0,1
 ```
 
 !!! warning
-    While dmg pool query and list show how many targets are disabled for each
+    While the dmg pool query and list show how many targets are disabled for each
     pool, there is currently no way to list the targets that have actually
     been disabled. As a result, it is recommended for now to try to reintegrate
     all engine ranks one after the other via `for i in seq $NR_RANKs; do dmg
@@ -541,7 +542,7 @@ $ dmg pool reintegrate $DAOS_POOL --rank=5 --target-idx=0,1
 Full Support for online target addition and automatic space rebalancing is
 planned for a future release and will be documented here once available.
 
-Until then the following command(s) are placeholders and offer limited
+Until then, the following command(s) are placeholders and offer limited
 functionality related to Online Server Addition/Rebalancing operations.
 
 An operator can choose to extend a pool to include ranks not currently in the
@@ -549,11 +550,11 @@ pool.
 This will automatically trigger a server rebalance operation where objects
 within the extended pool will be rebalanced across the new storage.
 
-```
-$ dmg pool extend $DAOS_POOL --ranks=${rank1},${rank2}...
+```bash
+dmg pool extend $DAOS_POOL --ranks=${rank1},${rank2}...
 ```
 
-The pool extend command accepts one required parameter which is a comma
+The pool extend command accepts one required parameter, which is a comma
 separated list of engine ranks to include in the pool.
 
 The pool rebalance operation will work most efficiently when the pool is
@@ -569,7 +570,7 @@ without adding new ones) is currently not supported and is under consideration.
 
 A DAOS pool is instantiated on each target by a set of pmemobj files
 managed by PMDK and SPDK blobs on SSDs. Tools to verify and repair this
-persistent data is scheduled for DAOS v2.4 and will be documented here
+persistent data are scheduled for DAOS v2.4 and will be documented here
 once available.
 
 Meanwhile, PMDK provides a recovery tool (i.e., pmempool check) to verify
@@ -587,12 +588,13 @@ user and/or group.
 To change the owner user:
 
 ```bash
-$ dmg cont set-owner --pool <UUID> --cont <UUID> --user <owner-user>
+dmg cont set-owner --pool <UUID> --cont <UUID> --user <owner-user>
 ```
+
 To change the owner group:
 
 ```bash
-$ dmg cont set-owner --pool <UUID> --cont <UUID> --group <owner-group>
+dmg cont set-owner --pool <UUID> --cont <UUID> --group <owner-group>
 ```
 
 The user and group names are case sensitive and must be formatted as

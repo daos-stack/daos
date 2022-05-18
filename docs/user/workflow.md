@@ -2,23 +2,18 @@
 
 ## Use Cases
 
-A DAOS pool is a persistent storage reservation that is allocated to a
+A DAOS pool is a persistent storage reservation allocated to a
 project or specific job. Pools are allocated, shrunk, grown and destroyed by
 the administrators.
 
 The typical workflow consists of:
 
-* New project members meet and define storage requirements including space,
-bandwidth, IOPS & data protection needs.
+- New project members meet and define storage requirements, including space, bandwidth, IOPS & data protection needs.
+- Administrators collect those requirements, create a pool for the new project and set relevant ACL to grant access to project members.
+- Administrators notify the project members that the pool has been created and provide the pool label to the users.
 
-* Administrators collect those requirements, create a pool for the new
-project and set relevant ACL to grant access to project members.
-
-* Administrators notify the project members that the pool has been created and
-provide the pool label to the users.
-
-Users can then create containers (i.e. datasets or buckets) in their pool.
-Containers will share the pool space and have their own ACL to be managed by
+Users can then create containers (i.e., datasets or buckets) in their pool.
+Containers will share the pool space and have their ACL to be managed by
 the container owner.
 
 Since pool creation is relatively fast, it is also possible to integrate it
@@ -35,7 +30,7 @@ command-line interface for users to interact with their pool and containers.
 It supports a `-j` option to generate a parseable json output.
 
 The `daos` utility follows the same syntax as `dmg` (reserved for administrator)
-and takes a resource (e.g. pool, container, filesystem) and a command (e.g.
+and takes a resource (e.g., pool, container, filesystem) and a command (e.g.
 query, create, destroy) plus a set of command-specific options.
 
 ```bash
@@ -68,7 +63,7 @@ Available commands:
 
 ### Access Validation
 
-To validate the pool can be successfully accessed prior to running
+To validate the pool can be successfully accessed before running
 applications, the daos pool autotest suite can be executed.
 
 To run it against a pool labeled `tank`, run the following command:
@@ -98,7 +93,7 @@ All steps passed.
 
 !!! note
     The command is executed in a development environment,
-    performance differences will vary, based on your system.
+    performance differences will vary based on your system.
 
 !!! warning
     Smaller pools may show DER_NOSPACE(-1007): 'No space
@@ -125,7 +120,7 @@ Rebuild idle, 0 objs, 0 recs
 ```
 
 In addition to the space information, details on the pool rebuild status and
-number of targets is also provided.
+A number of targets are also provided.
 
 This information can also be retrieved programmatically via the
 `daos_pool_query()` function of the libdaos library and python equivalent.
@@ -158,6 +153,6 @@ Attributes for pool 004abf7c-26c8-4cba-9059-8b3be39161fc:
   No attributes found.
 ```
 
-Pool attributes can be manipulaged programmatically via the
+Pool attributes can be manipulated programmatically via the
 `daos_pool_[get|get|list|del]_attr()` functions exported by the libdaos library
 and python equivalent (see PyDAOS).

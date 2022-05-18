@@ -8,9 +8,8 @@ Create Second container:
 # Create Second container
 $ daos container create --pool $DAOS_POOL --type POSIX --label cont2
 Successfully created container 158469db-70d2-4a5d-aac9-3c06cbfa7459
-```
-
 export DAOS_CONT2=<cont uuid>
+```
 
 Pool Query before copy:
 
@@ -205,7 +204,6 @@ $ mpirun -hostfile /path/to/hostfile -np 16 /path/to/mpifileutils/install/bin/dc
 [2021-04-30T01:22:37] Rate: 457.513 MiB/s (161197834240 bytes in 336.013 seconds)
 ```
 
-
 Pool Query to verify data was copied (free space should reduce):
 
 ```sh
@@ -222,8 +220,6 @@ Pool space info:
   Free: 338 GB, min:5.2 GB, max:5.4 GB, mean:5.3 GB
 Rebuild idle, 0 objs, 0 recs
 ```
-
-
 
 Move data from DAOS container to POSIX directory:
 
@@ -268,10 +264,10 @@ $ mpirun -hostfile /path/to/hostfile -np 16 dcp --bufsize 64MB --chunksize 128MB
 [2021-04-30T01:32:17] Rate: 423.118 MiB/s (161197834240 bytes in 363.327 seconds)
 ```
 
-
 Pool Query to very data was copied:
 
-```
+```sh
+
 $ dmg pool query --pool $DAOS_POOL
 
 Pool b22220ea-740d-46bc-84ad-35ed3a28aa31, ntarget=64, disabled=0, leader=1, version=1
@@ -285,7 +281,6 @@ Pool space info:
   Free: 176 GB, min:2.6 GB, max:3.0 GB, mean:2.8 GB
 Rebuild idle, 0 objs, 0 recs
 ```
-
 
 Check data inside the POSIX directories:
 
@@ -302,18 +297,16 @@ ls -latr /tmp/daos_dfuse/daos_container_copy
 drwxr-xr-x 1 standan standan 64 Apr 30 01:26 daos_dfuse
 ```
 
-
 For more details on datamover, reference
 [DAOS Support](https://github.com/hpc/mpifileutils/DAOS-Support.md)
 on the mpifileutils website.
-
 
 ## Clean Up
 
 Remove one of the copy created using datamover
 
 ```sh
-$ rm -rf /tmp/daos_dfuse/daos_container_copy
+rm -rf /tmp/daos_dfuse/daos_container_copy
 ```
 
 Remove dfuse mountpoint:
@@ -359,14 +352,12 @@ Pool UUID                            Svc Replicas
 b22220ea-740d-46bc-84ad-35ed3a28aa31 [1-3]
 ```
 
-
 Destroy Pool:
 
 ```sh
 # destroy pool
 $ dmg pool destroy --pool $DAOS_POOL
 ```
-
 
 Stop Agents:
 

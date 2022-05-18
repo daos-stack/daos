@@ -101,8 +101,8 @@ when a massively distributed job is run on the datacenter.
 A pool connection is revoked when the original process that issued
 the connection request disconnects from the pool.
 
-
 <a id="4.1.3"></a>
+
 ## DAOS Container
 
 A container represents an object address space inside a pool and is
@@ -131,8 +131,8 @@ Each object class is assigned a unique identifier and is associated with
 a given schema at the pool level. A new object class can be defined at any
 time with a configurable schema, which is then immutable after creation
 (or at least until all objects belonging to the class have been destroyed).
-For convenience, several object classes that are expected to be the most 
-commonly used will be predefined by default when the pool is created, 
+For convenience, several object classes that are expected to be the most
+commonly used will be predefined by default when the pool is created,
 as shown in the <a href="#t4.2">table</a> below.
 
 <a id="t4.2"></a>
@@ -157,8 +157,10 @@ scalable object ID allocator is provided in the DAOS API. The object ID to
 be stored by the application is the full 128-bit address, which is for single
 use only and can be associated with only a single object schema.
 
-**DAOS Object ID Structure**
+## DAOS Object ID Structure
+
 <pre>
+
 ```
 <---------------------------------- 128 bits ---------------------------------->
 --------------------------------------------------------------------------------
@@ -190,14 +192,15 @@ other peer application processes via the container `local2global()` and
 `global2local()` operations.
 
 <a id="4.1.4"></a>
+
 ## DAOS Object
 
 To avoid scaling problems and overhead common to a traditional storage system,
 DAOS objects are intentionally simple. No default object metadata beyond the
-type and schema is provided. This means that the system does not maintain
+type and schema is provided. The system does not maintain
 time, size, owner, permissions or even track openers.
-To achieve high availability and horizontal scalability, many object schemas
-(replication/erasure code, static/dynamic striping, and others) are provided.
+Many object schemas
+(replication/erasure code, static/dynamic striping, and others) are provided to achieve high availability and horizontal scalability.
 The schema framework is flexible and easily expandable to allow for new custom
 schema types in the future. The layout is generated algorithmically on object
 open from the object identifier and the pool map. End-to-end integrity is
@@ -206,20 +209,16 @@ and storage.
 
 A DAOS object can be accessed through different APIs:
 
--    **Multi-level key-array** API is the native object interface with locality
+- **Multi-level key-array** API is the native object interface with locality
      feature. The key is split into a distribution (dkey) and an
-     attribute (akey) key. Both the dkey and akey can be of variable
+     attribute (akey) key. Both keys can be variable
      length and type (a string, an integer or even a complex data
      structure). All entries under the same dkey are guaranteed to be
      collocated on the same target. The value associated with akey can be
-     either a single variable-length value that cannot be partially overwritten,
-     or an array of fixed-length values.
+     either a single variable-length value or an array of fixed-length values.
      Both the akeys and dkeys support enumeration.
-
--    **Key-value** API provides a simple key and variable-length value
+- **Key-value** API provides a simple key and variable-length value
      interface. It supports the traditional put, get, remove and list operations.
-
--    **Array API** implements a one-dimensional array of fixed-size elements
+- **Array API** implements a one-dimensional array of fixed-size elements
      addressed by a 64-bit offset. A DAOS array supports arbitrary extent read,
      write and punch operations.
-

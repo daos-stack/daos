@@ -1,15 +1,15 @@
 # Pre-deployment Checklist
 
-This section covers the preliminary setup required on the compute and
+This section covers the preliminary setup steps required on the compute and
 storage nodes before deploying DAOS.
 
 ## Enable IOMMU
 
-In order to run the DAOS server as a non-root user with NVMe devices, the hardware
+To run the DAOS server as a non-root user with NVMe devices, the hardware
 must support virtualized device access, and it must be enabled in the system BIOS.
 On Intel® systems, this capability is named Intel® Virtualization Technology for
 Directed I/O (VT-d). Once enabled in BIOS, IOMMU support must also be enabled in
-the Linux kernel. Exact details depend on the distribution, but the following
+the Linux kernel. The exact details depend on the distribution, but the following
 example should be illustrative:
 
 ```bash
@@ -23,8 +23,8 @@ GRUB_CMDLINE_LINUX_DEFAULT="intel_iommu=on"
 # the bootloader:
 $ sudo grub2-mkconfig --output=/boot/grub2/grub.cfg
 
-# if the command completed with no errors, reboot the system
-# in order to make the changes take effect
+# if the command is completed with no errors, reboot the system
+# to make the changes take effect
 $ sudo reboot
 ```
 
@@ -34,18 +34,16 @@ $ sudo reboot
     but note that this will require running daos_server as root.
 
 !!! warning
-    If VFIO is not enabled on RHEL 8.x and derivatives, you will run into the issue described in:
-    https://github.com/spdk/spdk/issues/1153
-
+    If VFIO is not enabled on RHEL 8.x and derivatives, you will run into the issue described in [spdk issue #1153](
+    https://github.com/spdk/spdk/issues/1153)
     The problem manifests with the following signature in the kernel logs:
 
-    ```
-    [82734.333834] genirq: Threaded irq requested with handler=NULL and !ONESHOT for irq 113
-    [82734.341761] uio_pci_generic: probe of 0000:18:00.0 failed with error -22
-    ```
-
-    As a consequence, the use of VFIO on these distributions is a requirement
-    since UIO is not supported.
+  ```bash
+  [82734.333834] genirq: Threaded irq requested with handler=NULL and !ONESHOT for irq 113
+  [82734.341761] uio_pci_generic: probe of 0000:18:00.0 failed with error -22
+  As a consequence, the use of VFIO on these distributions is a requirement
+  since UIO is not supported.
+  ```
 
 ## Time Synchronization
 
@@ -57,11 +55,14 @@ any other equivalent protocol.
 
 ### DAOS User/Groups on the Servers
 
-The `daos_server` and `daos_engine` processes run under a non-privileged userid `daos_server`.
-If that user does not exist at the time the `daos-server` RPM is installed, the user will be
-created as part of the RPM installation. A group `daos-server` will also be created as its
-primary group, as well as two additional groups `daos_metrics` and `daos_daemons` to which
-the `daos_server` user will be added.
+As part of the `daos-server` RPM Install, several users and groups are required and will be created if they don’t already exist.
+
+- `daos-server` will also be created as its primary group
+- `daos_metrics` secondary group
+- `daos_daemons` secondary group
+- `daos_server`  non-privileged user
+
+Note: The `daos_server` and `daos_engine` processes run under the `daos_server` userid.
 
 If there are site-specific rules for the creation of users and groups, it is advisable to
 create these users and groups following the site-specific conventions _before_ installing the
@@ -69,11 +70,13 @@ create these users and groups following the site-specific conventions _before_ i
 
 ### DAOS User/Groups on the Clients
 
-The `daos_agent` process runs under a non-privileged userid `daos_agent`.
-If that user does not exist at the time the `daos-client` RPM is installed, the user will be
-created as part of the RPM installation. A group `daos-agent` will also be created as its
-primary group, as well as an additional group `daos_daemons` to which the `daos_agent` user
-will be added.
+As part of the `daos-client RPM Install, several users and groups are required and will be created if they don’t already exist.
+
+- `daos-agent` will also be created as its primary group
+- `daos_daemons` secondary group
+- `daos_agent` non-privileged user, member of daos_daemons
+
+Note: The `daos_agent` process runs under a non-privileged userid `daos_agent`.
 
 If there are site-specific rules for the creation of users and groups, it is advisable to
 create these users and groups following the site-specific conventions _before_ installing the
@@ -84,7 +87,7 @@ create these users and groups following the site-specific conventions _before_ i
 DAOS ACLs for pools and containers store the actual user and group names (instead of numeric
 IDs). Therefore the servers do not need access to a synchronized user/group database.
 The DAOS Agent (running on the client nodes) is responsible for resolving a user's
-UID/GID to user/group names, which are then added to a signed credential and sent to
+UID/GID to user/group names are then added to a signed credential and sent to
 the DAOS storage nodes.
 
 ## Multi-rail/NIC Setup
@@ -95,7 +98,7 @@ multiple engine instances.
 ### Subnet
 
 Since all engines need to be able to communicate, the different network
-interfaces must be on the same subnet or you must configuring routing
+interfaces must be on the same subnet, or you must configure routing
 across the different subnets.
 
 ### Interface Settings
@@ -104,40 +107,40 @@ Some special configuration is required for the `verbs` provider to use librdmacm
 with multiple interfaces, and the same configuration is required for the `tcp` provider.
 
 First, the accept_local feature must be enabled on the network interfaces
-to be used by DAOS. This can be done using the following command (<ifaces> must
+used by DAOS. This can be done using the following command (`<ifaces>` must
 be replaced with the interface names):
 
-```
-$ sudo sysctl -w net.ipv4.conf.all.accept_local=1
+```bash
+sudo sysctl -w net.ipv4.conf.all.accept_local=1
 ```
 
 Second, Linux must be configured to only send ARP replies on the interface
 targeted in the ARP request. This is configured via the arp_ignore parameter.
 This should be set to 2 if all the IPoIB interfaces on the client and storage
-nodes are in the same logical subnet (e.g. ib0 == 10.0.0.27, ib1 == 10.0.1.27,
+nodes are in the same logical subnet (e.g., ib0 == 10.0.0.27, ib1 == 10.0.1.27,
 prefix=16).
 
-```
-$ sysctl -w net.ipv4.conf.all.arp_ignore=2
+```bash
+sysctl -w net.ipv4.conf.all.arp_ignore=2
 ```
 
-If separate logical subnets are used (e.g. prefix = 24), then the value must be
+If separate logical subnets are used (e.g., prefix = 24), then the value must be
 set to 1.
 
-```
-$ sysctl -w net.ipv4.conf.all.arp_ignore=1
+```bash
+sysctl -w net.ipv4.conf.all.arp_ignore=1
 ```
 
-Finally, the rp_filter is set to 1 by default on several distributions (e.g. on
-CentOS 7 and EL 8) and should be set to either 0 or 2, with 2 being more secure. This is
+Finally, the rp_filter is set to 1 by default on several distributions (e.g., on
+CentOS 7 and EL 8) should be set to either 0 or 2, with two more secure. This is
 true even if the configuration uses a single logical subnet.
 
-```
-$ sysctl -w net.ipv4.conf.<ifaces>.rp_filter=2
+```bash
+sysctl -w net.ipv4.conf.<ifaces>.rp_filter=2
 ```
 
 All those parameters can be made persistent in /etc/sysctl.conf by adding a new
-sysctl file under /usr/lib/sysctl.d (e.g. /usr/lib/sysctl.d/95-daos-net.conf)
+sysctl file under /usr/lib/sysctl.d (e.g., /usr/lib/sysctl.d/95-daos-net.conf)
 with all the relevant settings.
 
 For more information, please refer to the [librdmacm documentation](https://github.com/linux-rdma/rdma-core/blob/release/2.2/Documentation/librdmacm.md)
@@ -153,14 +156,16 @@ DAOS uses a series of Unix Domain Sockets to communicate between its
 various components. On modern Linux systems, Unix Domain Sockets are
 typically stored under /run or /var/run (usually a symlink to /run) and
 are a mounted tmpfs file system. There are several methods for ensuring
-the necessary directories are setup.
+the necessary directories are set up.
 
 A sign that this step may have been missed is when starting daos_server
 or daos_agent, you may see the message:
+
 ```bash
 $ mkdir /var/run/daos_server: permission denied
 Unable to create socket directory: /var/run/daos_server
 ```
+
 #### Non-default Directory
 
 By default, daos_server and daos_agent will use the directories
@@ -168,12 +173,12 @@ By default, daos_server and daos_agent will use the directories
 the default location that daos_server uses for its runtime directory,
 uncomment and set the socket_dir configuration value in /etc/daos/daos_server.yml.
 For the daos_agent, either uncomment and set the runtime_dir configuration value in
-/etc/daos/daos_agent.yml or a location can be passed on the command line using
+/etc/daos/daos_agent.yml. Alternatively, a location can be passed on the command line using
 the --runtime_dir flag (`daos_agent -d /tmp/daos_agent`).
 
 !!! warning
     Do not change these when running under `systemd` control.
-    If these directories need to be changed, insure they match the
+    If these directories need to be changed, ensure they match the
     RuntimeDirectory setting in the /usr/lib/systemd/system/daos_agent.service
     and /usr/lib/systemd/system/daos_server.service configuration files.
     The socket directories will be created and removed by `systemd` when the
@@ -185,16 +190,19 @@ Files and directories created in /run and /var/run only survive until
 the next reboot. These directories are required for subsequent runs;
 therefore, if reboots are infrequent, an easy solution
 while still utilizing the default locations is to create the
-required directories manually. To do this execute the following commands.
+required directories manually. To do this, execute the following commands.
 
 daos_server:
+
 ```bash
 $ mkdir /var/run/daos_server
 $ chmod 0755 /var/run/daos_server
 $ chown user:user /var/run/daos_server (where user is the user you
     will run daos_server as)
 ```
+
 daos_agent:
+
 ```bash
 $ mkdir /var/run/daos_agent
 $ chmod 0755 /var/run/daos_agent
@@ -204,7 +212,7 @@ $ chown user:user /var/run/daos_agent (where user is the user you
 
 #### Default Directory (persistent)
 
-The following steps are not necessary if DAOS is installed from rpms.
+The following steps are not necessary if DAOS is installed from RPMs.
 
 If the server hosting `daos_server` or `daos_agent` will be rebooted often,
 systemd provides a persistent mechanism for creating the required
@@ -213,20 +221,17 @@ time the system is provisioned and requires a reboot to take effect.
 
 To tell systemd to create the necessary directories for DAOS:
 
--   Copy the file utils/systemd/daosfiles.conf to /etc/tmpfiles.d\
+- Copy the file utils/systemd/daosfiles.conf to /etc/tmpfiles.d\
     cp utils/systemd/daosfiles.conf /etc/tmpfiles.d
-
--   Modify the copied file to change the user and group fields
-    (currently daos) to the user daos will be run as
-
--   Reboot the system, and the directories will be created automatically
+- Modify the copied file to change the user and group fields
+    (currently daos) to the user that DAOS will be run as
+- Reboot the system, and the directories will be created automatically
     on all subsequent reboots.
 
 ### Privileged Helper
 
 DAOS employs a privileged helper binary (`daos_admin`) to perform tasks
 that require elevated privileges on behalf of `daos_server`.
-
 
 When DAOS is installed from RPM, the `daos_admin` helper is automatically installed
 to the correct location with the correct permissions. The RPM creates a "daos_server"
@@ -236,7 +241,7 @@ from `daos_server`.
 For non-RPM installations, there are two supported scenarios:
 
 1. `daos_server` is run as root, which means that `daos_admin` is also invoked as root,
-and therefore no additional setup is necessary.
+and therefore, no additional setup is necessary.
 2. `daos_server` is run as a non-root user, which means that `daos_admin` must be
 manually installed and configured.
 
@@ -261,7 +266,7 @@ $ sudo ln -s $daospath/include \
 
 !!! note
     The RPM installation is preferred for production scenarios. Manual
-    installation is most appropriate for development and predeployment
+    installation is most appropriate for development and pre-deployment
     proof-of-concept scenarios.
 
 ### Memory Lock Limits
@@ -284,10 +289,10 @@ Note that values set in `/etc/security/limits.conf` are ignored by services
 launched by systemd.
 
 For non-RPM installations where `daos_server` is launched directly from the
-commandline (including source builds), limits should be adjusted in
+command-line (including source builds), limits should be adjusted in
 `/etc/security/limits.conf` as per
-[this article](https://access.redhat.com/solutions/61334) (which is a RHEL
-specific document but the instructions apply to most Linux distributions).
+[this article](https://access.redhat.com/solutions/61334) (which is an RHEL
+specific document, but the instructions apply to most Linux distributions).
 
 ## Socket receive buffer size
 
@@ -316,18 +321,20 @@ using any of the methods described in
 
 ## Optimize NVMe SSD Block Size
 
-DAOS server performs NVMe I/O in 4K granularity so in order to avoid alignment
-issues it is beneficial to format the SSDs that will be used with a 4K block size.
+DAOS server performs NVMe I/O in 4K granularity, so in order to avoid alignment
+issues it is beneficial to format the SSDs used with a 4K block size.
 
-First the SSDs need to be bound to a user-space driver to be usable with SPDK, to do
+First, the SSDs must be bound to a user-space driver to be usable with SPDK. To do
 this, use the SPDK setup script.
 
 `setup.sh` script is provided by SPDK and will be found in the following locations:
+
 - `/usr/share/spdk/scripts/setup.sh` if DAOS-maintained spdk-tools-21.07 (or greater) RPM
 is installed
 - `<daos_src>/install/share/spdk/scripts/setup.sh` after build from DAOS source
 
 Bind the SSDs with the following commands:
+
 ```bash
 $ sudo /usr/share/spdk/scripts/setup.sh
 0000:01:00.0 (8086 0953): nvme -> vfio-pci
@@ -338,14 +345,16 @@ able to use with DPDK and VFIO if run as user "daos".
 To change this, please adjust limits.conf memlock limit for user "daos".
 ```
 
-Now the SSDs can be accessed by SPDK we can use the `spdk_nvme_manage` tool to format
+Now the SSDs can be accessed by SPDK; we can use the `spdk_nvme_manage` tool to format
 the SSDs with a 4K block size.
 
 `spdk_nvme_manage` tool is provided by SPDK and will be found in the following locations:
+
 - `/usr/bin/spdk_nvme_manage` if DAOS-maintained spdk-21.07-10 (or greater) RPM is installed
 - `<daos_src>/install/prereq/release/spdk/bin/spdk_nvme_manage` after build from DAOS source
 
 Choose to format a SSD, use option "6" for formatting:
+
 ```bash
 $ sudo /usr/bin/spdk_nvme_manage
 NVMe Management Options
@@ -360,18 +369,20 @@ NVMe Management Options
 6
 ```
 
-Available SSDs will then be listed and you will be prompted to select one.
+Available SSDs will then be listed, and you will be prompted to select one.
 
 Select the SSD to format, enter PCI Address "01:00.00":
+
 ```bash
 0000:01:00.00 INTEL SSDPEDMD800G4 CVFT45050002800CGN 0
 Please Input PCI Address(domain:bus:dev.func):
 01:00.00
 ```
 
-Erase settings will be displayed and you will be prompted to select one.
+Erase settings will be displayed, and you will be prompted to select one.
 
 Erase the SSD using option "0":
+
 ```bash
 Please Input Secure Erase Setting:
 0: No secure erase operation requested
@@ -380,9 +391,10 @@ Please Input Secure Erase Setting:
 0
 ```
 
-Supported LBA formats will then be displayed and you will be prompted to select one.
+Supported LBA formats will then be displayed, and you will be prompted to select one.
 
-Format the SSD into 4KB block size using option "3".
+Format the SSD into 4KB block size using the option "3".
+
 ```bash
 Supported LBA formats:
 0: 512 data bytes
@@ -392,25 +404,27 @@ Supported LBA formats:
 4: 4096 data bytes + 8 metadata bytes
 5: 4096 data bytes + 64 metadata bytes
 6: 4096 data bytes + 128 metadata bytes
-Please input LBA format index (0 - 6):
+Please input the LBA format index (0 - 6):
 3
 ```
 
-A warning will be displayed and you will be prompted to confirm format action.
+A warning will be displayed, and you will be prompted to confirm the format action.
 
 Confirm format request by entering "Y":
+
 ```bash
 Warning: use this utility at your own risk.
-This command will format your namespace and all data will be lost.
+This command will format your namespace, and all data will be lost.
 This command may take several minutes to complete,
 so do not interrupt the utility until it completes.
 Press 'Y' to continue with the format operation.
 Y
 ```
 
-Format will now proceed and a reset notice will be displayed for the given SSD.
+The format will proceed, and a reset notice will be displayed for the given SSD.
 
-Format is complete if you see something like the following:
+The format is complete if you see something like the following:
+
 ```bash
 [2022-01-04 12:56:30.075104] nvme_ctrlr.c:1414:nvme_ctrlr_reset: *NOTICE*: [0000:01:00.0] resetting
 controller
@@ -418,9 +432,10 @@ press Enter to display cmd menu ...
 <enter>
 ```
 
-Once formats has completed, verify LBA format has been applied as expected.
+Once formats have been completed, verify LBA format has been applied as expected.
 
 Choose to list SSD controller details, use option "1":
+
 ```bash
 NVMe Management Options
 [1: list controllers]
@@ -434,9 +449,10 @@ NVMe Management Options
 1
 ```
 
-Controller details should show new "Current LBA Format".
+Controller details should show the new "Current LBA Format".
 
 Verify "Current LBA Format" is set to "LBA Format #03":
+
 ```bash
 =====================================================
 NVMe Controller:        0000:01:00.00
@@ -468,4 +484,4 @@ Current LBA Format:          LBA Format #03
 
 Displayed details for controller show LBA format is now "#03".
 
-Perform the above process for all SSDs that will be used by DAOS.
+Perform the above process for all SSDs that DAOS will use.

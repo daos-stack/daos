@@ -26,10 +26,10 @@ version of at least 1.10 is required.
 An exhaustive list of packages for each supported Linux distribution is
 maintained in the Docker files and/or their helpers (please click on the link):
 
--    [CentOS 7](https://github.com/daos-stack/daos/blob/release/2.2/utils/docker/Dockerfile.centos.7#L19-L79)
--    [EL 8](https://github.com/daos-stack/daos/blob/release/2.2/utils/scripts/install-el8.sh#L12-L69)
--    [openSUSE Leap 15](https://github.com/daos-stack/daos/blob/release/2.2/utils/docker/Dockerfile.leap.15#L36-L85)
--    [Ubuntu 20.04](https://github.com/daos-stack/daos/blob/release/2.2/1.2/utils/docker/Dockerfile.ubuntu.20.04#L14-L22)
+- [CentOS 7](https://github.com/daos-stack/daos/blob/release/2.2/utils/docker/Dockerfile.centos.7#L19-L79)
+- [EL 8](https://github.com/daos-stack/daos/blob/release/2.2/utils/scripts/install-el8.sh#L12-L69)
+- [openSUSE Leap 15](https://github.com/daos-stack/daos/blob/release/2.2/utils/docker/Dockerfile.leap.15#L36-L85)
+- [Ubuntu 20.04](https://github.com/daos-stack/daos/blob/release/2.2/1.2/utils/docker/Dockerfile.ubuntu.20.04#L14-L22)
 
 The command lines to install the required packages can be extracted from
 the Docker files by removing the "RUN" command, which is specific to Docker.
@@ -47,7 +47,7 @@ The DAOS repository is hosted on [GitHub](https://github.com/daos-stack/daos).
 To checkout the latest development version, simply run:
 
 ```bash
-$ git clone --recurse-submodules https://github.com/daos-stack/daos.git
+git clone --recurse-submodules https://github.com/daos-stack/daos.git
 ```
 
 This command clones the DAOS git repository (path referred as ${daospath}
@@ -59,7 +59,7 @@ If all the software dependencies listed previously are already satisfied, then
 type the following command in the top source directory to build the DAOS stack:
 
 ```bash
-$ scons-3 --config=force install
+scons-3 --config=force install
 ```
 
 If you are a developer of DAOS, we recommend following the instructions in the
@@ -70,7 +70,7 @@ Otherwise, the missing dependencies can be built automatically by invoking scons
 with the following parameters:
 
 ```bash
-$ scons-3 --config=force --build-deps=yes install
+scons-3 --config=force --build-deps=yes install
 ```
 
 By default, DAOS and its dependencies are installed under ${daospath}/install.
@@ -89,8 +89,8 @@ files in the installation path. This step is not required if standard locations
 (e.g. /bin, /sbin, /usr/lib, ...) are used.
 
 ```bash
-$ export CPATH=${daospath}/install/include/:$CPATH
-$ export PATH=${daospath}/install/bin/:${daospath}/install/sbin:$PATH
+export CPATH=${daospath}/install/include/:$CPATH
+export PATH=${daospath}/install/bin/:${daospath}/install/sbin:$PATH
 ```
 
 If using bash, PATH can be set up for you after a build by sourcing the script
@@ -119,7 +119,7 @@ $ docker build https://github.com/daos-stack/daos.git#release/2.2 \
 or from a local tree:
 
 ```bash
-$ docker build  . -f utils/docker/Dockerfile.centos.7 -t daos
+docker build  . -f utils/docker/Dockerfile.centos.7 -t daos
 ```
 
 This creates a CentOS 7 image, fetches the latest DAOS version from GitHub,
@@ -133,7 +133,7 @@ Once the image created, one can start a container that will eventually run
 the DAOS service:
 
 ```bash
-$ docker run -it -d --privileged --cap-add=ALL --name server -v /dev:/dev daos
+docker run -it -d --privileged --cap-add=ALL --name server -v /dev:/dev daos
 ```
 
 !!! note
@@ -155,7 +155,7 @@ uses 4GB of DRAM to emulate persistent memory and 16GB of bulk storage under
 The DAOS service can be started in the docker container as follows:
 
 ```bash
-$ docker exec server daos_server start \
+docker exec server daos_server start \
         -o /home/daos/daos/utils/config/examples/daos_server_local.yml
 ```
 
@@ -166,11 +166,11 @@ Once started, the DAOS server waits for the administrator to format the system.
 This can be triggered in a different shell, using the following command:
 
 ```bash
-$ docker exec server dmg -i storage format
+docker exec server dmg -i storage format
 ```
 
 Upon successful completion of the format, the storage engine is started, and pools
 can be created using the daos admin tool (see next section).
 
 For more advanced configurations involving SCM, SSD or a real fabric, please
-refer to the next section.
+refer to the next section

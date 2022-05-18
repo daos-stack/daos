@@ -8,7 +8,7 @@
 |ACID|Atomicity, consistency, isolation, durability|
 |BIO|Blob I/O|
 |CART|Collective and RPC Transport|
-|CGO|Go tools that enable creation of Go packages that call C code|
+|CGO|Go tools that enable the creation of Go packages that call C code|
 |CN|Compute Node|
 |COTS|Commercial off-the-shelf|
 |CPU|Central Processing Unit|
@@ -32,7 +32,7 @@
 |[OFI](https://ofiwg.github.io/libfabric/)|Open Fabrics Interface|
 |OS|Operating System|
 |PM|Persistent Memory|
-|[PMDK](https://pmem.io/pmdk/)|Persistent Memory Devevelopment Kit|
+|[PMDK](https://pmem.io/pmdk/)|Persistent Memory Development Kit|
 |[RAFT](https://raft.github.io/)|Raft is a consensus algorithm used to distribute state transitions among DAOS server nodes.|
 |RAS|Reliability, Availability & Serviceability|
 |RDB|Replicated Database, containing pool metadata and maintained across DAOS servers using the Raft algorithm.|
