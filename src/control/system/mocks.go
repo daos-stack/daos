@@ -15,6 +15,7 @@ import (
 	"github.com/hashicorp/raft"
 
 	"github.com/daos-stack/daos/src/control/common"
+	"github.com/daos-stack/daos/src/control/common/test"
 	"github.com/daos-stack/daos/src/control/logging"
 )
 
@@ -30,7 +31,7 @@ func mockControlAddr(t *testing.T, idx uint32) *net.TCPAddr {
 // MockMember returns a system member with appropriate values.
 func MockMember(t *testing.T, idx uint32, state MemberState, info ...string) *Member {
 	addr := mockControlAddr(t, idx)
-	m := NewMember(Rank(idx), common.MockUUID(int32(idx)),
+	m := NewMember(Rank(idx), test.MockUUID(int32(idx)),
 		addr.String(), addr, state)
 	m.FabricContexts = idx
 	if len(info) > 0 {
@@ -174,7 +175,7 @@ func MockDatabase(t *testing.T, log logging.Logger) *Database {
 func TestDatabase(t *testing.T, log logging.Logger, replicas ...*net.TCPAddr) (*Database, func()) {
 	t.Helper()
 
-	testDir, cleanup := common.CreateTestDir(t)
+	testDir, cleanup := test.CreateTestDir(t)
 
 	if len(replicas) == 0 {
 		replicas = append(replicas, common.LocalhostCtrlAddr())

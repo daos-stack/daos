@@ -18,7 +18,7 @@ import (
 	"github.com/google/go-cmp/cmp"
 	"github.com/pkg/errors"
 
-	"github.com/daos-stack/daos/src/control/common"
+	"github.com/daos-stack/daos/src/control/common/test"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/server/engine"
 	"github.com/daos-stack/daos/src/control/server/storage"
@@ -55,9 +55,9 @@ func TestBackend_createEmptyFile(t *testing.T) {
 	for name, tc := range tests {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
-			defer common.ShowBufferOnFailure(t, buf)
+			defer test.ShowBufferOnFailure(t, buf)
 
-			testDir, clean := common.CreateTestDir(t)
+			testDir, clean := test.CreateTestDir(t)
 			defer clean()
 
 			if !tc.pathImmutable {
@@ -65,7 +65,7 @@ func TestBackend_createEmptyFile(t *testing.T) {
 			}
 
 			gotErr := createEmptyFile(log, tc.path, tc.size)
-			common.CmpErr(t, tc.expErr, gotErr)
+			test.CmpErr(t, tc.expErr, gotErr)
 			if tc.expErr != nil {
 				return
 			}
@@ -102,7 +102,7 @@ func TestBackend_writeJSONFile(t *testing.T) {
 				Tier:  tierID,
 				Class: storage.ClassNvme,
 				Bdev: storage.BdevConfig{
-					DeviceList: storage.MustNewBdevDeviceList(common.MockPCIAddrs(1)...),
+					DeviceList: storage.MustNewBdevDeviceList(test.MockPCIAddrs(1)...),
 				},
 			},
 			expOut: `
@@ -157,7 +157,7 @@ func TestBackend_writeJSONFile(t *testing.T) {
 				Tier:  tierID,
 				Class: storage.ClassNvme,
 				Bdev: storage.BdevConfig{
-					DeviceList: storage.MustNewBdevDeviceList(common.MockPCIAddrs(1, 2)...),
+					DeviceList: storage.MustNewBdevDeviceList(test.MockPCIAddrs(1, 2)...),
 				},
 			},
 			expOut: `
@@ -220,7 +220,7 @@ func TestBackend_writeJSONFile(t *testing.T) {
 				Tier:  tierID,
 				Class: storage.ClassNvme,
 				Bdev: storage.BdevConfig{
-					DeviceList: storage.MustNewBdevDeviceList(common.MockPCIAddrs(1, 2)...),
+					DeviceList: storage.MustNewBdevDeviceList(test.MockPCIAddrs(1, 2)...),
 					BusidRange: storage.MustNewBdevBusRange("0x80-0x8f"),
 				},
 			},
@@ -294,7 +294,7 @@ func TestBackend_writeJSONFile(t *testing.T) {
 				Tier:  tierID,
 				Class: storage.ClassNvme,
 				Bdev: storage.BdevConfig{
-					DeviceList: storage.MustNewBdevDeviceList(common.MockPCIAddrs(1, 2)...),
+					DeviceList: storage.MustNewBdevDeviceList(test.MockPCIAddrs(1, 2)...),
 					BusidRange: storage.MustNewBdevBusRange("0x80-0x8f"),
 				},
 			},
@@ -367,7 +367,7 @@ func TestBackend_writeJSONFile(t *testing.T) {
 				Tier:  tierID,
 				Class: storage.ClassNvme,
 				Bdev: storage.BdevConfig{
-					DeviceList: storage.MustNewBdevDeviceList(common.MockPCIAddrs(1, 2)...),
+					DeviceList: storage.MustNewBdevDeviceList(test.MockPCIAddrs(1, 2)...),
 				},
 			},
 			enableHotplug: true,
@@ -449,9 +449,9 @@ func TestBackend_writeJSONFile(t *testing.T) {
 	for name, tc := range tests {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
-			defer common.ShowBufferOnFailure(t, buf)
+			defer test.ShowBufferOnFailure(t, buf)
 
-			testDir, clean := common.CreateTestDir(t)
+			testDir, clean := test.CreateTestDir(t)
 			defer clean()
 
 			cfgOutputPath := filepath.Join(testDir, "outfile")
@@ -476,7 +476,7 @@ func TestBackend_writeJSONFile(t *testing.T) {
 			}
 
 			gotErr := writeJsonConfig(log, &req)
-			common.CmpErr(t, tc.expErr, gotErr)
+			test.CmpErr(t, tc.expErr, gotErr)
 			if tc.expErr != nil {
 				return
 			}

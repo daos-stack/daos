@@ -4,9 +4,10 @@
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
 
-package common
+package test
 
 import (
+	"bufio"
 	"fmt"
 	"io/ioutil"
 	"net"
@@ -130,6 +131,32 @@ func CmpErr(t *testing.T, want, got error) {
 	}
 }
 
+// SplitFile separates file content into contiguous sections separated by
+// a blank line.
+func SplitFile(path string) (sections [][]string, err error) {
+	file, err := os.Open(path)
+	if err != nil {
+		return
+	}
+	defer file.Close()
+
+	scanner := bufio.NewScanner(file)
+	var lines []string
+	for scanner.Scan() {
+		if scanner.Text() == "" {
+			sections = append(sections, lines)
+			lines = make([]string, 0)
+		} else {
+			lines = append(lines, scanner.Text())
+		}
+	}
+	if len(lines) > 0 {
+		sections = append(sections, lines)
+	}
+
+	return
+}
+
 // LoadTestFiles reads inputs and outputs from file and do basic sanity checks.
 // Both files contain entries of multiple lines separated by blank line.
 // Return inputs and outputs, both of which are slices of string slices.
@@ -162,14 +189,6 @@ func ShowBufferOnFailure(t *testing.T, buf fmt.Stringer) {
 	if t.Failed() {
 		fmt.Printf("captured log output:\n%s", buf.String())
 	}
-}
-
-// BoolAsInt converts a bool to an int.
-func BoolAsInt(b bool) int {
-	if b {
-		return 1
-	}
-	return 0
 }
 
 // DefaultCmpOpts gets default go-cmp comparison options for tests.

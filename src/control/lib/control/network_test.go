@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2021 Intel Corporation.
+// (C) Copyright 2020-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -13,9 +13,9 @@ import (
 	"github.com/google/go-cmp/cmp"
 	"github.com/pkg/errors"
 
-	"github.com/daos-stack/daos/src/control/common"
 	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
+	"github.com/daos-stack/daos/src/control/common/test"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/system"
 )
@@ -254,7 +254,7 @@ func TestControl_NetworkScan(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
-			defer common.ShowBufferOnFailure(t, buf)
+			defer test.ShowBufferOnFailure(t, buf)
 
 			mic := tc.mic
 			if mic == nil {
@@ -265,7 +265,7 @@ func TestControl_NetworkScan(t *testing.T) {
 			mi := NewMockInvoker(log, mic)
 
 			gotResp, gotErr := NetworkScan(ctx, mi, &NetworkScanReq{})
-			common.CmpErr(t, tc.expErr, gotErr)
+			test.CmpErr(t, tc.expErr, gotErr)
 			if tc.expErr != nil {
 				return
 			}
@@ -358,7 +358,7 @@ func TestControl_GetAttachInfo(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
-			defer common.ShowBufferOnFailure(t, buf)
+			defer test.ShowBufferOnFailure(t, buf)
 
 			mic := tc.mic
 			if mic == nil {
@@ -369,7 +369,7 @@ func TestControl_GetAttachInfo(t *testing.T) {
 			mi := NewMockInvoker(log, mic)
 
 			gotResp, gotErr := GetAttachInfo(ctx, mi, tc.req)
-			common.CmpErr(t, tc.expErr, gotErr)
+			test.CmpErr(t, tc.expErr, gotErr)
 			if tc.expErr != nil {
 				return
 			}

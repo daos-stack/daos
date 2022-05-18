@@ -8,9 +8,12 @@ package storage
 
 import (
 	"fmt"
+	"strings"
 	"testing"
 
-	"github.com/daos-stack/daos/src/control/common"
+	"github.com/google/go-cmp/cmp"
+
+	"github.com/daos-stack/daos/src/control/common/test"
 )
 
 func Test_NvmeDevState(t *testing.T) {
@@ -64,18 +67,18 @@ func Test_NvmeDevState(t *testing.T) {
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
-			common.AssertEqual(t, tc.expIsNew, tc.state.IsNew(),
+			test.AssertEqual(t, tc.expIsNew, tc.state.IsNew(),
 				"unexpected IsNew() result")
-			common.AssertEqual(t, tc.expIsNormal, tc.state.IsNormal(),
+			test.AssertEqual(t, tc.expIsNormal, tc.state.IsNormal(),
 				"unexpected IsNormal() result")
-			common.AssertEqual(t, tc.expIsFaulty, tc.state.IsFaulty(),
+			test.AssertEqual(t, tc.expIsFaulty, tc.state.IsFaulty(),
 				"unexpected IsFaulty() result")
-			common.AssertEqual(t, tc.expStr, tc.state.String(),
+			test.AssertEqual(t, tc.expStr, tc.state.String(),
 				"unexpected status string")
 
 			stateNew := NvmeDevStateFromString(tc.state.String())
 
-			common.AssertEqual(t, tc.state.String(), stateNew.String(),
+			test.AssertEqual(t, tc.state.String(), stateNew.String(),
 				fmt.Sprintf("expected string %s to yield state %s",
 					tc.state.String(), stateNew.String()))
 		})
@@ -101,8 +104,79 @@ func Test_NvmeDevStateFromString_invalid(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			state := NvmeDevStateFromString(tc.inStr)
 
-			common.AssertEqual(t, tc.expState, state, "unexpected state")
-			common.AssertEqual(t, tc.expStr, state.String(), "unexpected states string")
+			test.AssertEqual(t, tc.expState, state, "unexpected state")
+			test.AssertEqual(t, tc.expStr, state.String(), "unexpected states string")
+		})
+	}
+}
+
+func Test_filterBdevScanResponse(t *testing.T) {
+	const (
+		vmdAddr1         = "0000:5d:05.5"
+		vmdBackingAddr1a = "5d0505:01:00.0"
+		vmdBackingAddr1b = "5d0505:03:00.0"
+		vmdAddr2         = "0000:7d:05.5"
+		vmdBackingAddr2a = "7d0505:01:00.0"
+		vmdBackingAddr2b = "7d0505:03:00.0"
+	)
+	ctrlrsFromPCIAddrs := func(addrs ...string) (ncs NvmeControllers) {
+		for _, addr := range addrs {
+			ncs = append(ncs, &NvmeController{PciAddr: addr})
+		}
+		return
+	}
+
+	for name, tc := range map[string]struct {
+		addrs    []string
+		scanResp *BdevScanResponse
+		expAddrs []string
+		expErr   error
+	}{
+		"two vmd endpoints; one filtered out": {
+			addrs: []string{vmdAddr2},
+			scanResp: &BdevScanResponse{
+				Controllers: ctrlrsFromPCIAddrs(vmdBackingAddr1a, vmdBackingAddr1b,
+					vmdBackingAddr2a, vmdBackingAddr2b),
+			},
+			expAddrs: []string{vmdBackingAddr2a, vmdBackingAddr2b},
+		},
+		"two ssds; one filtered out": {
+			addrs: []string{"0000:81:00.0"},
+			scanResp: &BdevScanResponse{
+				Controllers: ctrlrsFromPCIAddrs("0000:81:00.0", "0000:de:00.0"),
+			},
+			expAddrs: []string{"0000:81:00.0"},
+		},
+		"two aio kdev paths; both filtered out": {
+			addrs: []string{"/dev/sda"},
+			scanResp: &BdevScanResponse{
+				Controllers: ctrlrsFromPCIAddrs("/dev/sda", "/dev/sdb"),
+			},
+			expAddrs: []string{},
+		},
+		"bad address; filtered out": {
+			addrs: []string{"0000:81:00.0"},
+			scanResp: &BdevScanResponse{
+				Controllers: ctrlrsFromPCIAddrs("0000:81.00.0"),
+			},
+			expAddrs: []string{},
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			bdl := new(BdevDeviceList)
+			if err := bdl.fromStrings(tc.addrs); err != nil {
+				t.Fatal(err)
+			}
+			gotErr := filterBdevScanResponse(bdl, tc.scanResp)
+			test.CmpErr(t, tc.expErr, gotErr)
+			if gotErr != nil {
+				return
+			}
+
+			expAddrStr := strings.Join(tc.expAddrs, ", ")
+			if diff := cmp.Diff(expAddrStr, tc.scanResp.Controllers.String()); diff != "" {
+				t.Fatalf("unexpected output addresses (-want, +got):\n%s\n", diff)
+			}
 		})
 	}
 }
