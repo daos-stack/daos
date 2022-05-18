@@ -605,9 +605,8 @@ crt_init_opt(crt_group_id_t grpid, uint32_t flags, crt_init_options_t *opt)
 		__split_arg(interface_env, &iface0, &iface1);
 		__split_arg(domain_env, &domain0, &domain1);
 		__split_arg(port_str, &port0, &port1);
-		if (iface0 == NULL || domain0 == NULL || port0 == NULL) {
-			D_ERROR("Incorrect configuration: %s %s %s\n",
-				iface0, domain0, port0);
+		if (iface0 == NULL) {
+			D_ERROR("Empty interface specified\n");
 			D_GOTO(out, rc = -DER_INVAL);
 		}
 
@@ -994,9 +993,11 @@ crt_na_config_init(crt_provider_t provider, const char *interface,
 	if (!na_cfg->noc_interface)
 		D_GOTO(out, rc = -DER_NOMEM);
 
-	D_STRNDUP(na_cfg->noc_domain, domain, 64);
-	if (!na_cfg->noc_domain)
-		D_GOTO(out, rc = -DER_NOMEM);
+	if (domain) {
+		D_STRNDUP(na_cfg->noc_domain, domain, 64);
+		if (!na_cfg->noc_domain)
+			D_GOTO(out, rc = -DER_NOMEM);
+	}
 
 	crt_na_fill_ip_addr(na_cfg);
 	if (crt_is_service() && port_str != NULL && strlen(port_str) > 0) {
