@@ -6,22 +6,41 @@
 """
 
 from datetime import datetime
+from ClusterShell.NodeSet import NodeSet
 
 from general_utils import run_command, DaosTestError, get_journalctl
 from ior_test_base import IorTestBase
-from apricot import TestWithServers
 from exception_utils import CommandFailure
 
+# Imports need to be split or python fails to import
+from apricot import TestWithServers
+from apricot import TestWithoutServers
 
-class CriticalIntegration(TestWithServers):
+
+#TO-DO
+#Provision all daos nodes using provisioning tool provided by HPCM
+
+
+class CriticalIntegrationWithoutServers(TestWithoutServers):
     """Test Class Description: Verify the basic integration of
                                the server nodes with available
                                framework and amongst themselves.
     :avocado: recursive
     """
 
-    #TO-DO
-    #Provision all daos nodes using provisioning tool provided by HPCM
+    def __init__(self, *args, **kwargs):
+        """Initialize a CriticalIntegrationWithoutServers object."""
+        super().__init__(*args, **kwargs)
+        self.hostlist_servers = NodeSet()
+        self.hostlist_clients = NodeSet()
+
+    def setUp(self):
+        """Set up CriticalIntegrationWithoutServers."""
+        super().setUp()
+        self.hostlist_servers = list(self.get_hosts_from_yaml(
+            "test_servers", "server_partition", "server_reservation", "/run/hosts/*"))
+        self.hostlist_clients = list(self.get_hosts_from_yaml(
+            "test_clients", "server_partition", "server_reservation", "/run/hosts/*"))
 
     def test_passwdlessssh_versioncheck(self):
         # pylint: disable=protected-access
@@ -86,6 +105,14 @@ class CriticalIntegration(TestWithServers):
             self.log.info("Clients: %s", dmg_version_list)
             self.log.info("servers: %s", daos_server_version_list)
             self.fail()
+
+
+class CriticalIntegrationWithServers(TestWithServers):
+    """Test Class Description: Verify the basic integration of
+                               the server nodes with available
+                               framework and amongst themselves.
+    :avocado: recursive
+    """
 
     def test_ras(self):
         """
