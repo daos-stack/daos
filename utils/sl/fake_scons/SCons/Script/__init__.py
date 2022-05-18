@@ -28,6 +28,9 @@ import copy
 # pylint: disable=too-few-public-methods
 # pylint: disable=unused-argument
 
+def SourceFileScanner(*_args, **_kw):
+    """Fake SourceFileScanner"""
+
 class SConscript():
     """Fake SConscript"""
 
@@ -426,6 +429,7 @@ __all__ = ['DefaultEnvironment',
            'Builder',
            'AddOption',
            'VariantDir',
+           'SourceFileScanner',
            'COMMAND_LINE_TARGETS',
            'BUILD_TARGETS',
            'DEFAULT_TARGETS']
