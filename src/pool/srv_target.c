@@ -1519,7 +1519,7 @@ ds_pool_tgt_query_map_handler(crt_rpc_t *rpc)
 {
 	struct pool_tgt_query_map_in   *in = crt_req_get(rpc);
 	struct pool_tgt_query_map_out  *out = crt_reply_get(rpc);
-	struct ds_pool_hdl	       *hdl;
+	struct ds_pool_hdl	       *hdl = NULL;
 	struct ds_pool		       *pool;
 	struct pool_buf		       *buf;
 	unsigned int			version;
@@ -1528,14 +1528,24 @@ ds_pool_tgt_query_map_handler(crt_rpc_t *rpc)
 	D_DEBUG(DB_TRACE, DF_UUID": handling rpc %p\n",
 		DP_UUID(in->tmi_op.pi_uuid), rpc);
 
-	hdl = ds_pool_hdl_lookup(in->tmi_op.pi_hdl);
-	if (hdl == NULL) {
-		rc = -DER_NO_HDL;
-		goto out;
+	if (daos_rpc_from_client(rpc) &&
+	    !is_pool_from_srv(in->tmi_op.pi_uuid, in->tmi_op.pi_hdl)) {
+		hdl = ds_pool_hdl_lookup(in->tmi_op.pi_hdl);
+		if (hdl == NULL) {
+			rc = -DER_NO_HDL;
+			goto out;
+		}
+		pool = hdl->sph_pool;
+	} else if (!daos_rpc_from_client(rpc) &&
+		   is_pool_from_srv(in->tmi_op.pi_uuid, in->tmi_op.pi_hdl)) {
+		pool = ds_pool_lookup(in->tmi_op.pi_uuid);
+		if (pool == NULL)
+			D_GOTO(out, rc = -DER_NO_HDL);
+	} else {
+		D_GOTO(out, rc = -DER_PROTO);
 	}
 
 	/* Inefficient; better invent some zero-copy IV APIs. */
-	pool = hdl->sph_pool;
 	ABT_rwlock_rdlock(pool->sp_lock);
 	version = (pool->sp_map == NULL ? 0 : pool_map_get_version(pool->sp_map));
 	if (version <= in->tmi_map_version) {
@@ -1554,7 +1564,10 @@ ds_pool_tgt_query_map_handler(crt_rpc_t *rpc)
 	D_FREE(buf);
 out_hdl:
 	out->tmo_op.po_map_version = version;
-	ds_pool_hdl_put(hdl);
+	if (hdl != NULL)
+		ds_pool_hdl_put(hdl);
+	else if (pool != NULL)
+		ds_pool_put(pool);
 out:
 	out->tmo_op.po_rc = rc;
 	D_DEBUG(DB_TRACE, DF_UUID": replying rpc %p: "DF_RC"\n",
