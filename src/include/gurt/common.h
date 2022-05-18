@@ -27,7 +27,6 @@
 #include <stdio.h>
 #include <pthread.h>
 #include <byteswap.h>
-#include <daos_errno.h>
 #ifdef D_HAS_VALGRIND
 #include <valgrind/valgrind.h>
 #define D_ON_VALGRIND RUNNING_ON_VALGRIND
