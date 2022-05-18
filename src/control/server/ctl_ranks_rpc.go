@@ -9,7 +9,6 @@ package server
 import (
 	"context"
 	"fmt"
-	"os"
 	"strings"
 	"syscall"
 	"time"
@@ -352,19 +351,13 @@ func (svc *ControlService) StartRanks(ctx context.Context, req *ctlpb.RanksReq) 
 	}
 	svc.log.Debugf("CtlSvc.StartRanks dispatch, req:%+v\n", req)
 
-	// FIXME: Quick hack to convey desired checker status to
-	// launched instances.
-	if req.Checker {
-		os.Setenv("DAOS_ENGINE_CHECKER", "1")
-	} else {
-		os.Unsetenv("DAOS_ENGINE_CHECKER")
-	}
-
 	instances, err := svc.harness.FilterInstancesByRankSet(req.GetRanks())
 	if err != nil {
 		return nil, err
 	}
 	for _, srv := range instances {
+		srv.SetCheckerMode(req.CheckMode)
+
 		if srv.IsStarted() {
 			continue
 		}

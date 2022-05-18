@@ -188,4 +188,6 @@ const (
 const (
 	SystemCheckerUnknown Code = iota + 1000
 	SystemCheckerInvalidMemberStates
+	SystemCheckerNotEnabled
+	SystemCheckerEnabled
 )

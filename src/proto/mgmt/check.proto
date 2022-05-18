@@ -24,6 +24,14 @@ message CheckInconsistPolicy {
 	chk.CheckInconsistAction inconsist_act = 2; // See CheckInconsistAction.
 }
 
+message CheckEnableReq {
+	string sys = 1;
+}
+
+message CheckDisableReq {
+	string sys = 1;
+}
+
 // For 'dmg check start'.
 message CheckStartReq {
 	string sys = 1; // DAOS system identifier.

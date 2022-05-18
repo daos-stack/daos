@@ -91,6 +91,8 @@ func TestSecurity_ComponentHasAccess(t *testing.T) {
 		"/mgmt.MgmtSvc/ListContainers":         {ComponentAdmin},
 		"/mgmt.MgmtSvc/ContSetOwner":           {ComponentAdmin},
 		"/mgmt.MgmtSvc/SystemCleanup":          {ComponentAdmin},
+		"/mgmt.MgmtSvc/SystemCheckEnable":      {ComponentAdmin},
+		"/mgmt.MgmtSvc/SystemCheckDisable":     {ComponentAdmin},
 		"/mgmt.MgmtSvc/SystemCheckStart":       {ComponentAdmin},
 		"/mgmt.MgmtSvc/SystemCheckStop":        {ComponentAdmin},
 		"/mgmt.MgmtSvc/SystemCheckQuery":       {ComponentAdmin},

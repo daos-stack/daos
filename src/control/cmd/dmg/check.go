@@ -21,11 +21,13 @@ import (
 )
 
 type checkCmdRoot struct {
-	Start  checkStartCmd  `command:"start" description:"Start a system check"`
-	Stop   checkStopCmd   `command:"stop" description:"Stop a system check"`
-	Query  checkQueryCmd  `command:"query" description:"Query a system check"`
-	Prop   checkPropCmd   `command:"prop" description:"Get system check properties"`
-	Repair checkRepairCmd `command:"repair" description:"Repair a reported system check problem"`
+	Enable  checkEnableCmd  `command:"enable" description:"Enable system checker"`
+	Disable checkDisableCmd `command:"disable" description:"Disable system checker"`
+	Start   checkStartCmd   `command:"start" description:"Start a system check"`
+	Stop    checkStopCmd    `command:"stop" description:"Stop a system check"`
+	Query   checkQueryCmd   `command:"query" description:"Query a system check"`
+	Prop    checkPropCmd    `command:"prop" description:"Get system check properties"`
+	Repair  checkRepairCmd  `command:"repair" description:"Repair a reported system check problem"`
 }
 
 type poolIDSet []PoolID
@@ -53,6 +55,24 @@ type checkCmdBase struct {
 
 func (c *checkCmdBase) Execute(_ []string) error {
 	return errors.New("not implemented")
+}
+
+type checkEnableCmd struct {
+	checkCmdBase
+}
+
+func (cmd *checkEnableCmd) Execute([]string) error {
+	req := new(control.SystemCheckEnableReq)
+	return control.SystemCheckEnable(context.Background(), cmd.ctlInvoker, req)
+}
+
+type checkDisableCmd struct {
+	checkCmdBase
+}
+
+func (cmd *checkDisableCmd) Execute([]string) error {
+	req := new(control.SystemCheckDisableReq)
+	return control.SystemCheckDisable(context.Background(), cmd.ctlInvoker, req)
 }
 
 type checkStartCmd struct {

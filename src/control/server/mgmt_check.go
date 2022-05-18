@@ -12,14 +12,73 @@ import (
 	"github.com/pkg/errors"
 	"google.golang.org/protobuf/proto"
 
+	"github.com/daos-stack/daos/src/control/common"
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	"github.com/daos-stack/daos/src/control/drpc"
+	"github.com/daos-stack/daos/src/control/lib/daos"
 	"github.com/daos-stack/daos/src/control/system"
+	"github.com/daos-stack/daos/src/control/system/checker"
 )
 
+const (
+	checkerEnabledKey = "checker_enabled"
+)
+
+func (svc *mgmtSvc) enableChecker() error {
+	if err := system.SetMgmtProperty(svc.sysdb, checkerEnabledKey, "true"); err != nil {
+		return errors.Wrap(err, "failed to enable checker")
+	}
+	return nil
+}
+
+func (svc *mgmtSvc) disableChecker() error {
+	if err := system.SetMgmtProperty(svc.sysdb, checkerEnabledKey, "false"); err != nil {
+		return errors.Wrap(err, "failed to disable checker")
+	}
+	return nil
+}
+
+func (svc *mgmtSvc) checkerIsEnabled() bool {
+	value, err := system.GetMgmtProperty(svc.sysdb, checkerEnabledKey)
+	if err != nil {
+		svc.log.Errorf("failed to get checker enabled value: %s", err)
+		return false
+	}
+	return value == "true"
+}
+
+// checkerRequest is a wrapper around a request that is made on behalf of
+// the checker or is otherwise allowed to be made while the checker is enabled.
+type checkerRequest struct {
+	proto.Message
+}
+
+func wrapCheckerReq(req proto.Message) proto.Message {
+	if common.InterfaceIsNil(req) {
+		return nil
+	}
+	return &checkerRequest{req}
+}
+
+func (svc *mgmtSvc) unwrapCheckerReq(req proto.Message) (proto.Message, error) {
+	cr, ok := req.(*checkerRequest)
+	if ok {
+		return cr.Message, nil
+	}
+
+	if svc.checkerIsEnabled() {
+		return nil, checker.FaultCheckerEnabled
+	}
+
+	return req, nil
+}
+
 func (svc *mgmtSvc) makeCheckerCall(ctx context.Context, method drpc.Method, req proto.Message) (*drpc.Response, error) {
-	if err := svc.checkLeaderRequest(req); err != nil {
+	if err := svc.checkLeaderRequest(wrapCheckerReq(req)); err != nil {
 		return nil, err
+	}
+	if !svc.checkerIsEnabled() {
+		return nil, checker.FaultCheckerNotEnabled
 	}
 
 	if err := svc.checkMemberStates(
@@ -65,6 +124,74 @@ func (svc *mgmtSvc) makePoolCheckerCall(ctx context.Context, method drpc.Method,
 	}
 
 	return svc.makeCheckerCall(ctx, method, req)
+}
+
+func (svc *mgmtSvc) restartSystemRanks(ctx context.Context, sys string) error {
+	// Forcibly stop all of the ranks in the system.
+	// NB: If a clean shutdown is desired, then the normal
+	// system stop flow should be used first. This is a final
+	// hammer to make sure that everything's stopped.
+	stopReq := &mgmtpb.SystemStopReq{
+		Sys:   sys,
+		Force: true,
+	}
+	if _, err := svc.SystemStop(ctx, stopReq); err != nil {
+		return errors.Wrap(err, "failed to stop all ranks")
+	}
+
+	// Finally, restart all of the ranks so that they join in
+	// checker mode.
+	startReq := &mgmtpb.SystemStartReq{
+		Sys:       sys,
+		CheckMode: svc.checkerIsEnabled(),
+	}
+	if _, err := svc.SystemStart(ctx, startReq); err != nil {
+		return errors.Wrap(err, "failed to start all ranks")
+	}
+
+	return nil
+}
+
+func (svc *mgmtSvc) SystemCheckEnable(ctx context.Context, req *mgmtpb.CheckEnableReq) (resp *mgmtpb.DaosResp, err error) {
+	defer func() {
+		svc.log.Debugf("Responding to SystemCheckEnable RPC: %s (%+v)", mgmtpb.Debug(resp), err)
+	}()
+	svc.log.Debugf("Received SystemCheckEnable RPC: %+v", req)
+
+	if svc.checkerIsEnabled() {
+		return &mgmtpb.DaosResp{Status: int32(daos.Already)}, nil
+	}
+
+	if err := svc.enableChecker(); err != nil {
+		return nil, err
+	}
+
+	if err := svc.restartSystemRanks(ctx, req.Sys); err != nil {
+		return nil, err
+	}
+
+	return &mgmtpb.DaosResp{}, nil
+}
+
+func (svc *mgmtSvc) SystemCheckDisable(ctx context.Context, req *mgmtpb.CheckDisableReq) (resp *mgmtpb.DaosResp, err error) {
+	defer func() {
+		svc.log.Debugf("Responding to SystemCheckDisable RPC: %s (%+v)", mgmtpb.Debug(resp), err)
+	}()
+	svc.log.Debugf("Received SystemCheckDisable RPC: %+v", req)
+
+	if !svc.checkerIsEnabled() {
+		return &mgmtpb.DaosResp{Status: int32(daos.Already)}, nil
+	}
+
+	if err := svc.disableChecker(); err != nil {
+		return nil, err
+	}
+
+	if err := svc.restartSystemRanks(ctx, req.Sys); err != nil {
+		return nil, err
+	}
+
+	return &mgmtpb.DaosResp{}, nil
 }
 
 func (svc *mgmtSvc) SystemCheckStart(ctx context.Context, req *mgmtpb.CheckStartReq) (resp *mgmtpb.CheckStartResp, err error) {
