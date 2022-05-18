@@ -186,8 +186,8 @@ CRT_RPC_DECLARE(pool_create, DAOS_ISEQ_POOL_CREATE, DAOS_OSEQ_POOL_CREATE)
 	/* only set on -DER_TRUNC */				 \
 	((uint32_t)		(pco_map_buf_size)	CRT_VAR) \
 	((uint32_t)		(pco_redun_fac)		CRT_VAR) \
-	((uint32_t)	       (pco_current_global_ver)	CRT_VAR) \
-	((uint32_t)		(pco_latest_global_ver)	CRT_VAR)
+	((uint32_t)		(pco_pool_layout_ver)	CRT_VAR) \
+	((uint32_t)	       (pco_upgrade_layout_ver)	CRT_VAR)
 
 CRT_RPC_DECLARE(pool_connect, DAOS_ISEQ_POOL_CONNECT, DAOS_OSEQ_POOL_CONNECT)
 
@@ -212,8 +212,8 @@ CRT_RPC_DECLARE(pool_disconnect, DAOS_ISEQ_POOL_DISCONNECT,
 	((struct daos_rebuild_status) (pqo_rebuild_st)	CRT_RAW) \
 	/* only set on -DER_TRUNC */				 \
 	((uint32_t)		(pqo_map_buf_size)	CRT_VAR) \
-	((uint32_t)		(pqo_latest_global_ver) CRT_VAR) \
-	((uint32_t)	(pqo_current_global_ver)	CRT_VAR)
+	((uint32_t)		(pqo_pool_layout_ver)	CRT_VAR) \
+	((uint32_t)	       (pqo_upgrade_layout_ver)	CRT_VAR)
 
 CRT_RPC_DECLARE(pool_query, DAOS_ISEQ_POOL_QUERY, DAOS_OSEQ_POOL_QUERY)
 
@@ -471,7 +471,7 @@ pool_query_reply_to_info(uuid_t pool_uuid, struct pool_buf *map_buf,
 			 uint32_t map_version, uint32_t leader_rank,
 			 struct daos_pool_space *ps,
 			 struct daos_rebuild_status *rs,
-			 uint32_t cur_global_ver, uint32_t lat_global_ver,
+			 uint32_t pool_layout_ver, uint32_t upgrade_layout_ver,
 			 daos_pool_info_t *info);
 
 int list_cont_bulk_create(crt_context_t ctx, crt_bulk_t *bulk,

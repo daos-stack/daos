@@ -3373,24 +3373,24 @@ static const ProtobufCFieldDescriptor mgmt__pool_query_resp__field_descriptors[1
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
   {
-    "current_global_version",
+    "pool_layout_ver",
     15,
     PROTOBUF_C_LABEL_NONE,
     PROTOBUF_C_TYPE_UINT32,
     0,   /* quantifier_offset */
-    offsetof(Mgmt__PoolQueryResp, current_global_version),
+    offsetof(Mgmt__PoolQueryResp, pool_layout_ver),
     NULL,
     NULL,
     0,             /* flags */
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
   {
-    "latest_global_version",
+    "upgrade_layout_ver",
     16,
     PROTOBUF_C_LABEL_NONE,
     PROTOBUF_C_TYPE_UINT32,
     0,   /* quantifier_offset */
-    offsetof(Mgmt__PoolQueryResp, latest_global_version),
+    offsetof(Mgmt__PoolQueryResp, upgrade_layout_ver),
     NULL,
     NULL,
     0,             /* flags */
@@ -3399,18 +3399,18 @@ static const ProtobufCFieldDescriptor mgmt__pool_query_resp__field_descriptors[1
 };
 static const unsigned mgmt__pool_query_resp__field_indices_by_name[] = {
   4,   /* field[4] = active_targets */
-  13,   /* field[13] = current_global_version */
   11,   /* field[11] = disabled_ranks */
   5,   /* field[5] = disabled_targets */
   10,   /* field[10] = enabled_ranks */
   2,   /* field[2] = label */
-  14,   /* field[14] = latest_global_version */
   9,   /* field[9] = leader */
+  13,   /* field[13] = pool_layout_ver */
   6,   /* field[6] = rebuild */
   0,   /* field[0] = status */
   7,   /* field[7] = tier_stats */
   12,   /* field[12] = total_engines */
   3,   /* field[3] = total_targets */
+  14,   /* field[14] = upgrade_layout_ver */
   1,   /* field[1] = uuid */
   8,   /* field[8] = version */
 };

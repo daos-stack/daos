@@ -2313,8 +2313,8 @@ ds_pool_connect_handler(crt_rpc_t *rpc)
 	global_ver_entry = daos_prop_entry_get(prop, DAOS_PROP_PO_GLOBAL_VERSION);
 	D_ASSERT(global_ver_entry != NULL);
 	global_ver = global_ver_entry->dpe_val;
-	out->pco_current_global_ver = global_ver;
-	out->pco_latest_global_ver = DS_POOL_GLOBAL_VERSION;
+	out->pco_pool_layout_ver = global_ver;
+	out->pco_upgrade_layout_ver = DS_POOL_GLOBAL_VERSION;
 
 	rf_entry = daos_prop_entry_get(prop, DAOS_PROP_PO_REDUN_FAC);
 	D_ASSERT(rf_entry != NULL);
@@ -3006,7 +3006,7 @@ ds_pool_query_handler(crt_rpc_t *rpc)
 
 	entry = daos_prop_entry_get(prop, DAOS_PROP_PO_GLOBAL_VERSION);
 	D_ASSERT(entry != NULL);
-	out->pqo_current_global_ver = entry->dpe_val;
+	out->pqo_pool_layout_ver = entry->dpe_val;
 	daos_prop_free(prop);
 	prop = NULL;
 
@@ -3015,7 +3015,7 @@ ds_pool_query_handler(crt_rpc_t *rpc)
 	if (rc != 0)
 		D_GOTO(out_lock, rc);
 	out->pqo_prop = prop;
-	out->pqo_latest_global_ver = DS_POOL_GLOBAL_VERSION;
+	out->pqo_upgrade_layout_ver = DS_POOL_GLOBAL_VERSION;
 
 	if (unlikely(DAOS_FAIL_CHECK(DAOS_FORCE_PROP_VERIFY) && prop != NULL)) {
 		daos_prop_t		*iv_prop = NULL;
@@ -3431,8 +3431,8 @@ realloc:
 
 	rc = process_query_result(ranks, pool_info, pool_uuid,
 				  out->pqo_op.po_map_version, out->pqo_op.po_hint.sh_rank,
-				  &out->pqo_space, out->pqo_current_global_ver,
-				  out->pqo_latest_global_ver, &out->pqo_rebuild_st,
+				  &out->pqo_space, out->pqo_pool_layout_ver,
+				  out->pqo_upgrade_layout_ver, &out->pqo_rebuild_st,
 				  map_buf);
 	if (rc != 0)
 		D_ERROR(DF_UUID": failed to process pool query results, "DF_RC"\n",

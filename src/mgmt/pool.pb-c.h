@@ -791,11 +791,11 @@ struct  Mgmt__PoolQueryResp
   /*
    * current pool global version
    */
-  uint32_t current_global_version;
+  uint32_t pool_layout_ver;
   /*
-   * latest pool global version
+   * latest pool global version to upgrade
    */
-  uint32_t latest_global_version;
+  uint32_t upgrade_layout_ver;
 };
 #define MGMT__POOL_QUERY_RESP__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&mgmt__pool_query_resp__descriptor) \

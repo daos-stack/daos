@@ -184,9 +184,9 @@ typedef struct {
 	/** rebuild status */
 	struct daos_rebuild_status	pi_rebuild_st;
 	/** Current pool global version */
-	uint32_t			pi_current_global_ver;
-	/** Latest pool global version */
-	uint32_t			pi_latest_global_ver;
+	uint32_t			pi_pool_layout_ver;
+	/** Latest pool global version to upgrade*/
+	uint32_t			pi_upgrade_layout_ver;
 } daos_pool_info_t;
 
 /** DAOS pool container information */

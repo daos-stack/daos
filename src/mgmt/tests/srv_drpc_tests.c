@@ -1243,8 +1243,8 @@ init_test_pool_info(daos_pool_info_t *pool_info)
 	/* Values are arbitrary, just want to see that they are copied over */
 	pool_info->pi_ntargets = 100;
 	pool_info->pi_ndisabled = 36;
-	pool_info->pi_current_global_ver = 1;
-	pool_info->pi_latest_global_ver = 2;
+	pool_info->pi_pool_layout_ver = 1;
+	pool_info->pi_upgrade_layout_ver = 2;
 
 	pool_info->pi_space.ps_ntargets = 51;
 
@@ -1314,10 +1314,10 @@ expect_query_resp_with_info(daos_pool_info_t *exp_info,
 	assert_int_equal(pq_resp->disabled_targets, exp_info->pi_ndisabled);
 	assert_int_equal(pq_resp->active_targets,
 			 exp_info->pi_space.ps_ntargets);
-	assert_int_equal(pq_resp->current_global_version,
-			 exp_info->pi_current_global_ver);
-	assert_int_equal(pq_resp->latest_global_version,
-			 exp_info->pi_latest_global_ver);
+	assert_int_equal(pq_resp->pool_layout_ver,
+			 exp_info->pi_pool_layout_ver);
+	assert_int_equal(pq_resp->upgrade_layout_ver,
+			 exp_info->pi_upgrade_layout_ver);
 
 	assert_int_equal(pq_resp->n_tier_stats, DAOS_MEDIA_MAX);
 	assert_non_null(pq_resp->tier_stats[DAOS_MEDIA_SCM]);

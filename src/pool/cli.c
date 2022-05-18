@@ -323,7 +323,7 @@ err:
 static int
 process_query_reply(struct dc_pool *pool, struct pool_buf *map_buf,
 		    uint32_t map_version, uint32_t leader_rank,
-		    uint32_t cur_global_ver, uint32_t lat_global_ver,
+		    uint32_t pool_layout_ver, uint32_t upgrade_layout_ver,
 		    struct daos_pool_space *ps, struct daos_rebuild_status *rs,
 		    d_rank_list_t **ranks, daos_pool_info_t *info,
 		    daos_prop_t *prop_req, daos_prop_t *prop_reply,
@@ -382,8 +382,8 @@ out_unlock:
 
 	if (info != NULL && rc == 0)
 		pool_query_reply_to_info(pool->dp_pool, map_buf, map_version,
-					 leader_rank, ps, rs, cur_global_ver,
-					 lat_global_ver, info);
+					 leader_rank, ps, rs, pool_layout_ver,
+					 upgrade_layout_ver, info);
 
 	return rc;
 }
@@ -469,8 +469,8 @@ pool_connect_cp(tse_task_t *task, void *data)
 
 	rc = process_query_reply(pool, map_buf, pco->pco_op.po_map_version,
 				 pco->pco_op.po_hint.sh_rank,
-				 pco->pco_current_global_ver,
-				 pco->pco_latest_global_ver,
+				 pco->pco_pool_layout_ver,
+				 pco->pco_upgrade_layout_ver,
 				 &pco->pco_space, &pco->pco_rebuild_st,
 				 NULL /* tgts */, info, NULL, NULL, true);
 	if (rc != 0) {
@@ -1376,8 +1376,8 @@ pool_query_cb(tse_task_t *task, void *data)
 	rc = process_query_reply(arg->dqa_pool, map_buf,
 				 out->pqo_op.po_map_version,
 				 out->pqo_op.po_hint.sh_rank,
-				 out->pqo_current_global_ver,
-				 out->pqo_latest_global_ver,
+				 out->pqo_pool_layout_ver,
+				 out->pqo_upgrade_layout_ver,
 				 &out->pqo_space, &out->pqo_rebuild_st,
 				 ranks_arg, arg->dqa_info,
 				 arg->dqa_prop, out->pqo_prop, false);

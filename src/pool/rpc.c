@@ -239,19 +239,19 @@ pool_query_reply_to_info(uuid_t pool_uuid, struct pool_buf *map_buf,
 			 uint32_t map_version, uint32_t leader_rank,
 			 struct daos_pool_space *ps,
 			 struct daos_rebuild_status *rs,
-			 uint32_t cur_global_ver, uint32_t lat_global_ver,
+			 uint32_t pool_layout_ver, uint32_t upgrade_layout_ver,
 			 daos_pool_info_t *info)
 {
 	D_ASSERT(ps != NULL);
 	D_ASSERT(rs != NULL);
 
 	uuid_copy(info->pi_uuid, pool_uuid);
-	info->pi_ntargets	= map_buf->pb_target_nr;
-	info->pi_nnodes		= map_buf->pb_node_nr;
-	info->pi_map_ver	= map_version;
-	info->pi_leader		= leader_rank;
-	info->pi_latest_global_ver = lat_global_ver;
-	info->pi_current_global_ver = cur_global_ver;
+	info->pi_ntargets		= map_buf->pb_target_nr;
+	info->pi_nnodes			= map_buf->pb_node_nr;
+	info->pi_map_ver		= map_version;
+	info->pi_leader			= leader_rank;
+	info->pi_upgrade_layout_ver	= upgrade_layout_ver;
+	info->pi_pool_layout_ver	= pool_layout_ver;
 	if (info->pi_bits & DPI_SPACE)
 		info->pi_space		= *ps;
 	if (info->pi_bits & DPI_REBUILD_STATUS)
