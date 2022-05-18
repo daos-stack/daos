@@ -4,7 +4,7 @@
 %define sysctl_script_name 10-daos_server.conf
 
 %global mercury_version 2.1.0~rc4-9%{?dist}
-%global libfabric_version 1.15.0~rc3-1
+%global libfabric_version 1.15.1-1
 %global __python %{__python3}
 
 %if 0%{?rhel} > 0
@@ -27,7 +27,7 @@
 
 Name:          daos
 Version:       2.3.100
-Release:       8%{?relval}%{?dist}
+Release:       9%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       BSD-2-Clause-Patent
@@ -554,6 +554,9 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 # No files in a shim package
 
 %changelog
+* Wed May 18 2022 Lei Huang <lei.huang@intel.com> 2.3.100-9
+- Update to libfabric to v1.15.1-1 to include critical performance patches
+
 * Mon May  9 2022 Ashley Pittman <ashley.m.pittman@intel.com> 2.3.100-8
 - Extend dfusedaosbuild test to run in different configurations.
 
