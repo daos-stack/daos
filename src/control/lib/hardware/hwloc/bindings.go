@@ -234,6 +234,7 @@ const (
 	objTypeNUMANode  = C.HWLOC_OBJ_NUMANODE
 	objTypeCore      = C.HWLOC_OBJ_CORE
 
+	osDevTypeBlock       = C.HWLOC_OBJ_OSDEV_BLOCK
 	osDevTypeNetwork     = C.HWLOC_OBJ_OSDEV_NETWORK
 	osDevTypeOpenFabrics = C.HWLOC_OBJ_OSDEV_OPENFABRICS
 

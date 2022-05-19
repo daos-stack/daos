@@ -24,8 +24,8 @@ import (
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	"github.com/daos-stack/daos/src/control/common/test"
 	. "github.com/daos-stack/daos/src/control/common/test"
-	"github.com/daos-stack/daos/src/control/drpc"
 	"github.com/daos-stack/daos/src/control/lib/control"
+	"github.com/daos-stack/daos/src/control/lib/daos"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/system"
 )
@@ -935,7 +935,7 @@ func TestDmg_PoolListCmd_Errors(t *testing.T) {
 				},
 			},
 			queryResp: &mgmtpb.PoolQueryResp{
-				Status: int32(drpc.DaosNotInit),
+				Status: int32(daos.NotInit),
 			},
 			expErr: errors.New("Query on pool \"00000001\" unsuccessful, status: \"DER_UNINIT"),
 		},

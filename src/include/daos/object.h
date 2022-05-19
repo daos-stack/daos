@@ -174,6 +174,12 @@ struct daos_obj_layout {
  * update DAOS_OBJ_REPL_MAX obj with some target failed case.
  */
 #define DAOS_TGT_IGNORE		((d_rank_t)-1)
+
+enum daos_tgt_flags {
+	/* When leader forward IO RPC to non-leaders, delay the target until the others replied. */
+	DTF_DELAY_FORWARD	= (1 << 0),
+};
+
 /** to identify each obj shard's target */
 struct daos_shard_tgt {
 	uint32_t		st_rank;	/* rank of the shard */
@@ -181,8 +187,9 @@ struct daos_shard_tgt {
 	uint32_t		st_shard_id;	/* shard id */
 	uint32_t		st_tgt_id;	/* target id */
 	uint16_t		st_tgt_idx;	/* target xstream index */
-	/* target idx for EC obj, only used for client */
-	uint16_t		st_ec_tgt;
+	/* Target idx for EC obj, only used for client, consider OBJ_EC_MAX_M, 8-bits is enough. */
+	uint8_t			st_ec_tgt;
+	uint8_t			st_flags;	/* see daos_tgt_flags */
 };
 
 static inline bool
@@ -229,7 +236,7 @@ unsigned int daos_oclass_grp_nr(struct daos_oclass_attr *oc_attr,
 int daos_oclass_fit_max(daos_oclass_id_t oc_id, int domain_nr, int target_nr,
 			enum daos_obj_redun *ord, uint32_t *nr);
 bool daos_oclass_is_valid(daos_oclass_id_t oc_id);
-daos_oclass_id_t daos_obj_get_oclass(daos_handle_t coh, daos_ofeat_t ofeats,
+daos_oclass_id_t daos_obj_get_oclass(daos_handle_t coh, enum daos_otype_t type,
 				   daos_oclass_hints_t hints, uint32_t args);
 
 /** bits for the specified rank */
@@ -323,37 +330,37 @@ daos_oid_is_oit(daos_obj_id_t oid)
 	return daos_obj_id2type(oid) == DAOS_OT_OIT;
 }
 
-/**
- * For backward compatibility purpose
- */
-static inline enum daos_otype_t
-daos_obj_feat2type(daos_ofeat_t feat)
+static inline int
+is_daos_obj_type_set(enum daos_otype_t type, enum daos_otype_t sub_type)
 {
-	if (feat == (DAOS_OF_AKEY_UINT64 | DAOS_OF_DKEY_UINT64))
-		return DAOS_OT_MULTI_UINT64;
-	else if (feat == DAOS_OF_AKEY_UINT64)
-		return DAOS_OT_AKEY_UINT64;
-	else if (feat == DAOS_OF_DKEY_UINT64)
-		return DAOS_OT_DKEY_UINT64;
-	else if (feat == DAOS_OF_DKEY_LEXICAL)
-		return DAOS_OT_DKEY_LEXICAL;
-	else if (feat == DAOS_OF_AKEY_LEXICAL)
-		return DAOS_OT_AKEY_LEXICAL;
-	else if (feat == (DAOS_OF_DKEY_LEXICAL | DAOS_OF_AKEY_LEXICAL))
-		return DAOS_OT_MULTI_LEXICAL;
-	else if (feat == (DAOS_OF_DKEY_UINT64 | DAOS_OF_KV_FLAT | DAOS_OF_ARRAY))
-		return DAOS_OT_ARRAY;
-	else if (feat == (DAOS_OF_DKEY_UINT64 | DAOS_OF_KV_FLAT | DAOS_OF_ARRAY_BYTE))
-		return DAOS_OT_ARRAY_BYTE;
-	else if (feat == (DAOS_OF_DKEY_UINT64 | DAOS_OF_KV_FLAT))
-		return DAOS_OT_ARRAY_ATTR;
-	else if (feat == DAOS_OF_KV_FLAT)
-		return DAOS_OT_KV_HASHED;
-	else if (feat == (DAOS_OF_KV_FLAT | DAOS_OF_DKEY_LEXICAL))
-		return DAOS_OT_KV_LEXICAL;
+	int is_type_set = 0;
 
-	/** default */
-	return DAOS_OT_MULTI_HASHED;
+	switch (sub_type) {
+	case DAOS_OT_AKEY_UINT64:
+		if ((type == DAOS_OT_MULTI_UINT64) || (type == DAOS_OT_AKEY_UINT64))
+			is_type_set = DAOS_OT_AKEY_UINT64;
+		break;
+	case DAOS_OT_DKEY_UINT64:
+		if ((type == DAOS_OT_MULTI_UINT64) || (type == DAOS_OT_DKEY_UINT64) ||
+		    (type == DAOS_OT_ARRAY) || (type == DAOS_OT_ARRAY_BYTE) ||
+		    (type == DAOS_OT_ARRAY_ATTR))
+			is_type_set = DAOS_OT_DKEY_UINT64;
+		break;
+	case DAOS_OT_AKEY_LEXICAL:
+		if ((type == DAOS_OT_AKEY_LEXICAL) || (type == DAOS_OT_MULTI_LEXICAL))
+			is_type_set = DAOS_OT_AKEY_LEXICAL;
+		break;
+	case DAOS_OT_DKEY_LEXICAL:
+		if ((type == DAOS_OT_DKEY_LEXICAL) || (type == DAOS_OT_MULTI_LEXICAL) ||
+		    (type == DAOS_OT_KV_LEXICAL))
+			is_type_set = DAOS_OT_DKEY_LEXICAL;
+		break;
+	default:
+		D_ERROR("Unexpected parameter.\n");
+		break;
+	}
+
+	return is_type_set;
 }
 
 /*

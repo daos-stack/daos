@@ -14,7 +14,7 @@
 #include <daos/btree.h>
 #include <daos_types.h>
 #include <daos_srv/vos.h>
-#include <daos_api.h> /* For ofeat bits */
+#include <daos_api.h> /* For otype bits */
 #include <daos/checksum.h>
 #include "vos_internal.h"
 #include "vos_ts.h"
