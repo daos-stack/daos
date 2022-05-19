@@ -197,6 +197,23 @@ pipeline {
                 }
             }
         }
+        stage('Check PR') {
+            when { changeRequest() }
+            steps {
+                catchError(stageResult: 'UNSTABLE', buildResult: 'SUCCESS',
+                           message: "PR did not get committed with required git hooks.  Please see utils/githooks/README.md.") {
+                    sh 'if ! ' + cachedCommitPragma('Required-githooks', 'false') + '''; then
+                           echo "PR did not get committed with required git hooks.  Please see utils/githooks/README.md."
+                           exit 1
+                        fi'''
+                }
+            }
+            post {
+                unsuccessful {
+                    echo "PR did not get committed with required git hooks.  Please see utils/githooks/README.md."
+                }
+            }
+        }
         stage('Cancel Previous Builds') {
             when { changeRequest() }
             steps {
