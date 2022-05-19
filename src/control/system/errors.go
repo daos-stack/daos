@@ -263,3 +263,20 @@ func ErrPoolUUIDNotFound(u uuid.UUID) *ErrPoolNotFound {
 func ErrPoolLabelNotFound(l string) *ErrPoolNotFound {
 	return &ErrPoolNotFound{byLabel: &l}
 }
+
+type errSystemAttrNotFound struct {
+	key string
+}
+
+func (err *errSystemAttrNotFound) Error() string {
+	return fmt.Sprintf("unable to find system attribute with key %q", err.key)
+}
+
+func ErrSystemAttrNotFound(key string) *errSystemAttrNotFound {
+	return &errSystemAttrNotFound{key: key}
+}
+
+func IsErrSystemAttrNotFound(err error) bool {
+	_, ok := errors.Cause(err).(*errSystemAttrNotFound)
+	return ok
+}
