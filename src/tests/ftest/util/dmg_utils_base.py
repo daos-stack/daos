@@ -28,7 +28,7 @@ class DmgCommandBase(YamlCommand):
         super().__init__("/run/dmg/*", "dmg", path, yaml_cfg)
 
         # If running dmg on remote hosts, this list needs to include those hosts
-        self.temporary_file_hosts = NodeSet(gethostname().split(".")[0:1])
+        self.temporary_file_hosts = NodeSet(gethostname().split(".")[0])
 
         # If specified use the configuration file from the YamlParameters object
         default_yaml_file = None

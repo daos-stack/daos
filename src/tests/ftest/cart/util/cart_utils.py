@@ -7,7 +7,7 @@
 import time
 import os
 import shlex
-import subprocess #nosec
+import subprocess   # nosec
 import logging
 import cart_logparse
 import cart_logtest
@@ -16,6 +16,8 @@ import re
 import glob
 
 from apricot import TestWithoutServers
+from ClusterShell.NodeSet import NodeSet
+
 from general_utils import stop_processes
 from write_host_file import write_host_file
 from job_manager_utils import Orterun
@@ -156,7 +158,7 @@ class CartTest(TestWithoutServers):
     def cleanup_processes(self):
         """Clean up cart processes, in case avocado/apricot does not."""
         error_list = []
-        localhost = socket.gethostname().split(".")[0:1]
+        localhost = NodeSet(socket.gethostname().split(".")[0])
         processes = r"'\<(crt_launch|orterun)\>'"
         retry_count = 0
         while retry_count < 2:
