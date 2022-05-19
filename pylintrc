@@ -46,10 +46,8 @@ py-version=3.6
 good-names=rc,ret,fd
 
 [MESSAGES CONTROL]
-disable=locally-disabled,locally-enabled,star-args,wrong-import-order,
-        global-statement,bad-option-value,
-        wrong-import-position,C0209,W1514,consider-using-f-string,modified-iterating-list,
-        duplicate-code
+disable=locally-disabled,locally-enabled,star-args,global-statement,bad-option-value,
+        wrong-import-position,modified-iterating-list,duplicate-code
 
 #[SPELLING]
 #spelling-dict=en_US

@@ -5,6 +5,8 @@ on:
     paths:
       - '**/*.py'
       - .github/workflows/pylint.yml
+      - SConstruct
+      - '**/SConscript'
 
 jobs:
 
