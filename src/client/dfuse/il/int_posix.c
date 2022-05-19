@@ -239,6 +239,11 @@ pwrite_rpc(struct fd_entry *entry, const char *buff, size_t len, off_t offset)
 	if (counter < ioil_iog.iog_report_count)
 		fprintf(stderr, "[libioil] Intercepting write of size %zi\n", len);
 
+	if (!entry->fd_written) {
+		/* Call ioctl to evict data */
+		entry->fd_written = true;
+	}
+
 	/* Just get rpc working then work out how to really do this */
 	bytes_written = ioil_do_writex(buff, len, offset, entry,
 				       &errcode);
@@ -261,6 +266,11 @@ pwritev_rpc(struct fd_entry *entry, const struct iovec *iov, int count,
 
 	if (counter < ioil_iog.iog_report_count)
 		fprintf(stderr, "[libioil] Intercepting write\n");
+
+	if (!entry->fd_written) {
+		/* Call ioctl to evict data */
+		entry->fd_written = true;
+	}
 
 	/* Just get rpc working then work out how to really do this */
 	bytes_written = ioil_do_pwritev(iov, count, offset, entry,
@@ -790,7 +800,7 @@ get_file:
 	if ((il_reply.fir_flags & DFUSE_IOCTL_FLAGS_MCACHE) == 0)
 		entry->fd_fstat = true;
 
-	DFUSE_LOG_INFO("Flags are %#lx %d", il_reply.fir_flags, entry->fd_fstat);
+	DFUSE_LOG_DEBUG("Flags are %#lx %d", il_reply.fir_flags, entry->fd_fstat);
 
 	/* Now open the file object to allow read/write */
 	rc = fetch_dfs_obj_handle(fd, entry);

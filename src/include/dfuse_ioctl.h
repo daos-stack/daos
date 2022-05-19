@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2017-2021 Intel Corporation.
+ * (C) Copyright 2017-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -26,6 +26,11 @@
 #define DFUSE_IOCTL_REPLY_SIZE (DFUSE_IOCTL_REPLY_BASE + 6)
 #define DFUSE_IOCTL_REPLY_DSIZE (DFUSE_IOCTL_REPLY_BASE + 7)
 #define DFUSE_IOCTL_REPLY_PFILE (DFUSE_IOCTL_REPLY_BASE + 8)
+
+/* TODO: What value to offset base by. */
+/* Notify dfuse that file has been written to externally, disable all caching until file is
+* next closed */
+#define DFUSE_IOCTL_START_WRITE (DFUSE_IOCTL_REPLY_BASE + 20)
 
 /** Metadada caching is enabled for this file */
 #define DFUSE_IOCTL_FLAGS_MCACHE (0x1)

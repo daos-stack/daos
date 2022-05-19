@@ -10,6 +10,7 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <unistd.h>
+#include <daos_types.h>
 
 #include "daos_fs.h"
 
@@ -37,6 +38,7 @@ struct fd_entry {
 	int               fd_flags;
 	int               fd_status;
 	bool              fd_fstat;
+	bool              fd_written;
 };
 
 ssize_t

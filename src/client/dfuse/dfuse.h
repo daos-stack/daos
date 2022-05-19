@@ -543,6 +543,9 @@ struct dfuse_inode_entry {
 	/* Number of file open file descriptors using IL */
 	ATOMIC uint32_t          ie_il_count;
 
+	/* Number of file open file descriptors using IL and doing write */
+	ATOMIC uint32_t          ie_il_wcount;
+
 	/** file was truncated from 0 to a certain size */
 	bool			ie_truncated;
 
