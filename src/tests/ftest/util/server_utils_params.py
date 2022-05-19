@@ -329,7 +329,8 @@ class DaosServerYamlParameters(YamlParameters):
         REQUIRED_ENV_VARS = {
             "common": [
                 "D_LOG_FILE_APPEND_PID=1",
-                "COVFILE=/tmp/test.cov"],
+                "COVFILE=/tmp/test.cov",
+                "DAOS_SCHED_WATCHDOG_ALL=1"],
             "ofi+tcp": [
                 "SWIM_PING_TIMEOUT=10"],
             "ofi+verbs": [
