@@ -26,6 +26,9 @@ DSA_REPO_var="DAOS_STACK_${DISTRO}_APPSTREAM_REPO"
 
 retry_cmd 300 clush -B -S -l root -w "$NODESTRING" -c ci_key* --dest=/tmp/
 
+# shellcheck disable=SC2001
+sanitized_commit_message="$(echo "$COMMIT_MESSAGE" | sed -e 's/\(["\$]\)/\\\1/g')"
+
 if ! retry_cmd 2400 clush -B -S -l root -w "$NODESTRING" \
            "export PS4='$PS4'
            MY_UID=$(id -u)
@@ -44,7 +47,7 @@ if ! retry_cmd 2400 clush -B -S -l root -w "$NODESTRING" \
            BUILD_URL=\"${BUILD_URL}\"
            STAGE_NAME=\"${STAGE_NAME}\"
            OPERATIONS_EMAIL=\"${OPERATIONS_EMAIL}\"
-           COMMIT_MESSAGE=\"${COMMIT_MESSAGE-}\"
+           COMMIT_MESSAGE=\"$sanitized_commit_message\"
            REPO_FILE_URL=\"$REPO_FILE_URL\"
            ARTIFACTORY_URL=\"${ARTIFACTORY_URL:-}\"
            BRANCH_NAME=\"${BRANCH_NAME:-}\"
