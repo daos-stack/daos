@@ -768,6 +768,8 @@ pool_open(PMEMobjpool *ph, struct vos_pool_df *pool_df, uuid_t uuid,
 	pool->vp_opened = 1;
 	pool->vp_excl = !!(flags & VOS_POF_EXCL);
 	pool->vp_small = !!(flags & VOS_POF_SMALL);
+	if (pool_df->pd_version >= POOL_DF_AGG_OPT)
+		pool->vp_feats |= VOS_POOL_FEAT_AGG_OPT;
 
 	vos_space_sys_init(pool);
 	/* Ensure GC is triggered after server restart */
@@ -877,6 +879,17 @@ int
 vos_pool_open(const char *path, uuid_t uuid, unsigned int flags, daos_handle_t *poh)
 {
 	return vos_pool_open_metrics(path, uuid, flags, NULL, poh);
+}
+
+void
+vos_pool_features_set(daos_handle_t poh, uint64_t feats)
+{
+	struct vos_pool	*pool;
+
+	pool = vos_hdl2pool(poh);
+	D_ASSERT(pool != NULL);
+
+	pool->vp_feats |= feats;
 }
 
 /**
