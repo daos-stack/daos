@@ -63,8 +63,7 @@ gpgcheck=False\n" >> /etc/yum.repos.d/$repo:$branch:$build_number.repo;   \
 # libatomic should be in this list, but can not for now due to CI
 # post provisioning issue.
 # *** Keep these in as much alphbetical order as possible ***
-RUN dnf -y install deltarpm && \
-    dnf -y upgrade && \
+RUN dnf -y upgrade && \
     dnf -y install \
         boost-python36-devel \
         bzip2 \
