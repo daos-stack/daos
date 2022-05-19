@@ -20,7 +20,7 @@ targets=(
     '*.yaml'
 )
 
-files=${files:=$(git diff --diff-filter=ACMRTUXB --name-only --cached -- "${targets[@]}")}
+files=${files:-$(git diff --diff-filter=ACMRTUXB --name-only --cached -- "${targets[@]}")}
 if [ -n "$files" ]; then
     # shellcheck disable=SC2086
     yamllint --strict $files
