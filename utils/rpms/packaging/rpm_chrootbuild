@@ -11,9 +11,14 @@ ln -sf /etc/mock/logging.ini "$mock_config_dir/"
 
 cp "$original_cfg_file" "$cfg_file"
 
-if [ "${CHROOT_NAME}" == "epel-8-x86_64" ]; then
-    echo -e "config_opts['module_enable'] = ['javapackages-tools:201801']" \
-        >> "$cfg_file"
+if [[ $CHROOT_NAME == *epel-8-x86_64 ]]; then
+    cat <<EOF >> "$cfg_file"
+config_opts['module_setup_commands'] = [
+  ('enable', 'javapackages-tools:201801'),
+  ('disable',  'go-toolset')
+]
+EOF
+
 fi
 
 # shellcheck disable=SC2153
@@ -78,7 +83,10 @@ enabled=1\n" >> "$cfg_file"
 done
 echo "\"\"\"" >> "$cfg_file"
 
+if [ -n "$DISTRO_VERSION" ]; then
+    releasever_opt=("--config-opts=releasever=$DISTRO_VERSION")
+fi
 # shellcheck disable=SC2086
-eval mock --configdir "$mock_config_dir" -r "${CHROOT_NAME}" \
-     ${repo_dels[*]} ${repo_adds[*]} --disablerepo=\*-debug* \
-     $MOCK_OPTIONS $RPM_BUILD_OPTIONS "$TARGET"
+eval mock --configdir "$mock_config_dir" -r "${CHROOT_NAME}"           \
+     ${repo_dels[*]} ${repo_adds[*]} --disablerepo=\*-debug*           \
+     "${releasever_opt[@]}" $MOCK_OPTIONS $RPM_BUILD_OPTIONS "$TARGET"
