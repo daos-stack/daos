@@ -38,6 +38,8 @@ def scons():
 
     libraries = ['daos_common', 'daos', 'uuid', 'gurt']
 
+    base_env.AppendUnique(LIBPATH=[Dir('.')])
+
     dfs_src = ['dfs.c', 'dfs_sys.c', 'dfs_internal.c']
     dfs = daos_build.library(denv, 'dfs', dfs_src, LIBS=libraries)
     denv.Install('$PREFIX/lib64/', dfs)
