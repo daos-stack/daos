@@ -16,8 +16,8 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 
-	"github.com/daos-stack/daos/src/control/common"
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
+	"github.com/daos-stack/daos/src/control/common/test"
 	"github.com/daos-stack/daos/src/control/lib/control"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/system"
@@ -159,6 +159,10 @@ func (bci *bridgeConnInvoker) InvokeUnaryRPC(ctx context.Context, uReq control.U
 		resp = control.MockMSResponse("", nil, &mgmtpb.PoolExtendResp{})
 	case *control.PoolReintegrateReq:
 		resp = control.MockMSResponse("", nil, &mgmtpb.PoolReintegrateResp{})
+	case *control.SystemSetAttrReq:
+		resp = control.MockMSResponse("", nil, &mgmtpb.DaosResp{})
+	case *control.SystemGetAttrReq:
+		resp = control.MockMSResponse("", nil, &mgmtpb.SystemGetAttrResp{})
 	}
 
 	return resp, nil
@@ -171,7 +175,7 @@ func runCmdTests(t *testing.T, cmdTests []cmdTest) {
 		t.Run(st.name, func(t *testing.T) {
 			t.Helper()
 			log, buf := logging.NewTestLogger(t.Name())
-			defer common.ShowBufferOnFailure(t, buf)
+			defer test.ShowBufferOnFailure(t, buf)
 
 			ctlClient := control.DefaultMockInvoker(log)
 			conn := newTestConn(t)
@@ -202,7 +206,7 @@ func runCmdTests(t *testing.T, cmdTests []cmdTest) {
 
 func TestBadCommand(t *testing.T) {
 	log, buf := logging.NewTestLogger(t.Name())
-	defer common.ShowBufferOnFailure(t, buf)
+	defer test.ShowBufferOnFailure(t, buf)
 
 	var opts cliOptions
 	err := parseOpts([]string{"foo"}, &opts, nil, log)
@@ -211,7 +215,7 @@ func TestBadCommand(t *testing.T) {
 
 func TestNoCommand(t *testing.T) {
 	log, buf := logging.NewTestLogger(t.Name())
-	defer common.ShowBufferOnFailure(t, buf)
+	defer test.ShowBufferOnFailure(t, buf)
 
 	var opts cliOptions
 	err := parseOpts([]string{}, &opts, nil, log)

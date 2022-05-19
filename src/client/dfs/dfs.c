@@ -142,8 +142,12 @@ struct dfs {
 	int			amode;
 	/** Open pool handle of the DFS mount */
 	daos_handle_t		poh;
+	/** refcount on pool handle that through the DFS API */
+	uint32_t		poh_refcount;
 	/** Open container handle of the DFS mount */
 	daos_handle_t		coh;
+	/** refcount on cont handle that through the DFS API */
+	uint32_t		coh_refcount;
 	/** Object ID reserved for this DFS (see oid_gen below) */
 	daos_obj_id_t		oid;
 	/** superblock object OID */
@@ -1980,13 +1984,97 @@ dfs_umount(dfs_t *dfs)
 		return EINVAL;
 	}
 
+	D_MUTEX_LOCK(&dfs->lock);
+	if (dfs->poh_refcount != 0) {
+		D_ERROR("Pool open handle refcount not 0\n");
+		D_MUTEX_UNLOCK(&dfs->lock);
+		return EBUSY;
+	}
+	if (dfs->coh_refcount != 0) {
+		D_ERROR("Cont open handle refcount not 0\n");
+		D_MUTEX_UNLOCK(&dfs->lock);
+		return EBUSY;
+	}
+	D_MUTEX_UNLOCK(&dfs->lock);
+
 	daos_obj_close(dfs->root.oh, NULL);
 	daos_obj_close(dfs->super_oh, NULL);
 
 	D_FREE(dfs->prefix);
-
 	D_MUTEX_DESTROY(&dfs->lock);
 	D_FREE(dfs);
+
+	return 0;
+}
+
+int
+dfs_pool_get(dfs_t *dfs, daos_handle_t *poh)
+{
+	if (dfs == NULL || !dfs->mounted)
+		return EINVAL;
+
+	D_MUTEX_LOCK(&dfs->lock);
+	dfs->poh_refcount++;
+	D_MUTEX_UNLOCK(&dfs->lock);
+
+	*poh = dfs->poh;
+	return 0;
+}
+
+int
+dfs_pool_put(dfs_t *dfs, daos_handle_t poh)
+{
+	if (dfs == NULL || !dfs->mounted)
+		return EINVAL;
+	if (poh.cookie != dfs->poh.cookie) {
+		D_ERROR("Pool handle is not the same as the DFS Mount handle\n");
+		return EINVAL;
+	}
+
+	D_MUTEX_LOCK(&dfs->lock);
+	if (dfs->poh_refcount <= 0) {
+		D_ERROR("Invalid pool handle refcount\n");
+		D_MUTEX_UNLOCK(&dfs->lock);
+		return EINVAL;
+	}
+	dfs->poh_refcount--;
+	D_MUTEX_UNLOCK(&dfs->lock);
+
+	return 0;
+}
+
+int
+dfs_cont_get(dfs_t *dfs, daos_handle_t *coh)
+{
+	if (dfs == NULL || !dfs->mounted)
+		return EINVAL;
+
+	D_MUTEX_LOCK(&dfs->lock);
+	dfs->coh_refcount++;
+	D_MUTEX_UNLOCK(&dfs->lock);
+
+	*coh = dfs->coh;
+	return 0;
+}
+
+int
+dfs_cont_put(dfs_t *dfs, daos_handle_t coh)
+{
+	if (dfs == NULL || !dfs->mounted)
+		return EINVAL;
+	if (coh.cookie != dfs->coh.cookie) {
+		D_ERROR("Cont handle is not the same as the DFS Mount handle\n");
+		return EINVAL;
+	}
+
+	D_MUTEX_LOCK(&dfs->lock);
+	if (dfs->coh_refcount <= 0) {
+		D_ERROR("Invalid cont handle refcount\n");
+		D_MUTEX_UNLOCK(&dfs->lock);
+		return EINVAL;
+	}
+	dfs->coh_refcount--;
+	D_MUTEX_UNLOCK(&dfs->lock);
 
 	return 0;
 }
@@ -2080,7 +2168,7 @@ dfs_local2global(dfs_t *dfs, d_iov_t *glob)
 		return daos_der2errno(rc);
 
 	if (glob->iov_buf_len < glob_buf_size) {
-		D_DEBUG(DF_DSMC, "Larger glob buffer needed ("DF_U64" bytes "
+		D_DEBUG(DB_ANY, "Larger glob buffer needed ("DF_U64" bytes "
 			"provided, "DF_U64" required).\n", glob->iov_buf_len,
 			glob_buf_size);
 		glob->iov_buf_len = glob_buf_size;
@@ -3729,7 +3817,7 @@ dfs_obj_local2global(dfs_t *dfs, dfs_obj_t *obj, d_iov_t *glob)
 		return daos_der2errno(rc);
 
 	if (glob->iov_buf_len < glob_buf_size) {
-		D_DEBUG(DF_DSMC, "Larger glob buffer needed ("DF_U64" bytes "
+		D_DEBUG(DB_ANY, "Larger glob buffer needed ("DF_U64" bytes "
 			"provided, "DF_U64" required).\n", glob->iov_buf_len,
 			glob_buf_size);
 		glob->iov_buf_len = glob_buf_size;

@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2021 Intel Corporation.
+// (C) Copyright 2021-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -22,7 +22,7 @@ import (
 	"github.com/prometheus/common/expfmt"
 	"google.golang.org/protobuf/proto"
 
-	"github.com/daos-stack/daos/src/control/common"
+	"github.com/daos-stack/daos/src/control/common/test"
 )
 
 func newTestMetricFamily(name string, help string, mType pclient.MetricType) *pclient.MetricFamily {
@@ -152,14 +152,14 @@ func TestControl_scrapeMetrics(t *testing.T) {
 	}{
 		"check scrape params": {
 			scrapeFn: func(_ context.Context, url *url.URL, getter httpGetFn, timeout time.Duration) ([]byte, error) {
-				common.AssertEqual(t, testURL.Scheme, url.Scheme, "")
-				common.AssertEqual(t, testURL.Host, url.Host, "")
-				common.AssertEqual(t, testURL.Path, url.Path, "")
+				test.AssertEqual(t, testURL.Scheme, url.Scheme, "")
+				test.AssertEqual(t, testURL.Host, url.Host, "")
+				test.AssertEqual(t, testURL.Path, url.Path, "")
 
 				if getter == nil {
 					t.Fatal("http getter was not set")
 				}
-				common.AssertEqual(t, httpReqTimeout, timeout, "")
+				test.AssertEqual(t, httpReqTimeout, timeout, "")
 				return nil, nil
 			},
 			expResult: pbMetricMap{},
@@ -197,7 +197,7 @@ func TestControl_scrapeMetrics(t *testing.T) {
 
 			result, err := scrapeMetrics(context.TODO(), req)
 
-			common.CmpErr(t, tc.expErr, err)
+			test.CmpErr(t, tc.expErr, err)
 			if diff := cmp.Diff(tc.expResult, result); diff != "" {
 				t.Fatalf("unexpected response (-want, +got):\n%s\n", diff)
 			}
@@ -290,7 +290,7 @@ func TestControl_MetricsList(t *testing.T) {
 
 			resp, err := MetricsList(context.TODO(), tc.req)
 
-			common.CmpErr(t, tc.expErr, err)
+			test.CmpErr(t, tc.expErr, err)
 			if diff := cmp.Diff(tc.expResp, resp); diff != "" {
 				t.Fatalf("unexpected response (-want, +got):\n%s\n", diff)
 			}
@@ -406,7 +406,7 @@ func TestControl_getMetricFromPrometheus(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			result, err := getMetricFromPrometheus(tc.input, tc.inputType)
 
-			common.CmpErr(t, tc.expErr, err)
+			test.CmpErr(t, tc.expErr, err)
 			if diff := cmp.Diff(tc.expResult, result); diff != "" {
 				t.Fatalf("unexpected result (-want, +got):\n%s\n", diff)
 			}
@@ -574,7 +574,7 @@ func TestControl_MetricsQuery(t *testing.T) {
 
 			resp, err := MetricsQuery(context.TODO(), tc.req)
 
-			common.CmpErr(t, tc.expErr, err)
+			test.CmpErr(t, tc.expErr, err)
 			if diff := cmp.Diff(tc.expResp, resp); diff != "" {
 				t.Fatalf("unexpected response (-want, +got):\n%s\n", diff)
 			}
@@ -695,7 +695,7 @@ func TestControl_metricTypeFromString(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			gotType := metricTypeFromString(tc.input)
 
-			common.AssertEqual(t, tc.expType, gotType, "")
+			test.AssertEqual(t, tc.expType, gotType, "")
 		})
 	}
 }

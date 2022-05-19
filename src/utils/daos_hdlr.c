@@ -989,7 +989,7 @@ fs_copy_file(struct cmd_args_s *ap,
 	     const char *dst_path)
 {
 	int src_flags		= O_RDONLY;
-	int dst_flags		= O_CREAT | O_WRONLY;
+	int dst_flags		= O_CREAT | O_TRUNC | O_WRONLY;
 	mode_t tmp_mode_file	= S_IRUSR | S_IWUSR;
 	int rc;
 	uint64_t file_length	= src_stat->st_size;
@@ -1698,7 +1698,7 @@ dm_serialize_cont_md(struct cmd_args_s *ap, struct dm_args *ca, daos_prop_t *pro
 	char	**names = NULL;
 	void	**buffers = NULL;
 	size_t	*sizes = NULL;
-	void	*handle;
+	void	*handle = NULL;
 	int (*daos_cont_serialize_md)(char *, daos_prop_t *props, int, char **, char **, size_t *);
 
 	/* Get all user attributes if any exist */
@@ -1732,7 +1732,7 @@ dm_deserialize_cont_md(struct cmd_args_s *ap, struct dm_args *ca, char *preserve
 		       daos_prop_t **props)
 {
 	int		rc = 0;
-	void		*handle;
+	void		*handle = NULL;
 	int (*daos_cont_deserialize_props)(daos_handle_t, char *, daos_prop_t **props, uint64_t *);
 
 	handle = dlopen(LIBSERIALIZE, RTLD_NOW);
@@ -1760,7 +1760,7 @@ dm_deserialize_cont_attrs(struct cmd_args_s *ap, struct dm_args *ca, char *prese
 	char		**names = NULL;
 	void		**buffers = NULL;
 	size_t		*sizes = NULL;
-	void		*handle;
+	void		*handle = NULL;
 	int (*daos_cont_deserialize_attrs)(char *, uint64_t *, char ***, void ***, size_t **);
 
 	handle = dlopen(LIBSERIALIZE, RTLD_NOW);

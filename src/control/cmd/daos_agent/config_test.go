@@ -14,17 +14,18 @@ import (
 	"github.com/pkg/errors"
 
 	"github.com/daos-stack/daos/src/control/common"
+	"github.com/daos-stack/daos/src/control/common/test"
 	"github.com/daos-stack/daos/src/control/security"
 )
 
 func TestAgent_LoadConfig(t *testing.T) {
-	dir, cleanup := common.CreateTestDir(t)
+	dir, cleanup := test.CreateTestDir(t)
 	defer cleanup()
 
-	junkFile := common.CreateTestFile(t, dir, "One ring to rule them all\n")
-	emptyFile := common.CreateTestFile(t, dir, "")
+	junkFile := test.CreateTestFile(t, dir, "One ring to rule them all\n")
+	emptyFile := test.CreateTestFile(t, dir, "")
 
-	withoutOptCfg := common.CreateTestFile(t, dir, `
+	withoutOptCfg := test.CreateTestFile(t, dir, `
 name: shire
 access_points: ["one:10001", "two:10001"]
 port: 4242
@@ -34,13 +35,14 @@ transport_config:
   allow_insecure: true
 `)
 
-	optCfg := common.CreateTestFile(t, dir, `
+	optCfg := test.CreateTestFile(t, dir, `
 name: shire
 access_points: ["one:10001", "two:10001"]
 port: 4242
 runtime_dir: /tmp/runtime
 log_file: /home/frodo/logfile
 control_log_mask: debug
+disable_caching: true
 transport_config:
   allow_insecure: true
 fabric_ifaces:
@@ -64,7 +66,7 @@ fabric_ifaces:
      domain: mlx5_3
 `)
 
-	badLogMaskCfg := common.CreateTestFile(t, dir, `
+	badLogMaskCfg := test.CreateTestFile(t, dir, `
 name: shire
 access_points: ["one:10001", "two:10001"]
 port: 4242
@@ -123,6 +125,7 @@ transport_config:
 				RuntimeDir:   "/tmp/runtime",
 				LogFile:      "/home/frodo/logfile",
 				LogLevel:     common.ControlLogLevelDebug,
+				DisableCache: true,
 				TransportConfig: &security.TransportConfig{
 					AllowInsecure:     true,
 					CertificateConfig: DefaultConfig().TransportConfig.CertificateConfig,
@@ -161,7 +164,7 @@ transport_config:
 		t.Run(name, func(t *testing.T) {
 			result, err := LoadConfig(tc.path)
 
-			common.CmpErr(t, tc.expErr, err)
+			test.CmpErr(t, tc.expErr, err)
 			if diff := cmp.Diff(tc.expResult, result, cmpopts.IgnoreUnexported(security.CertificateConfig{})); diff != "" {
 				t.Fatalf("(want-, got+):\n%s", diff)
 			}

@@ -7,7 +7,9 @@
 # pylint: disable=too-many-lines
 
 from logging import getLogger
+import grp
 import os
+import pwd
 import re
 import random
 import string
@@ -667,8 +669,57 @@ def convert_list(value, separator=","):
     return separator.join([str(item) for item in value])
 
 
-def stop_processes(hosts, pattern, verbose=True, timeout=60, added_filter=None,
-                   dump_ult_stacks=False):
+def dump_engines_stacks(hosts, verbose=True, timeout=60, added_filter=None):
+    """Signal the engines on each hosts to generate their ULT stacks dump.
+
+    Args:
+        hosts (list): hosts on which to signal the engines
+        verbose (bool, optional): display command output. Defaults to True.
+        timeout (int, optional): command timeout in seconds. Defaults to 60
+            seconds.
+        added_filter (str, optional): negative filter to better identify
+            engines.
+
+
+    Returns:
+        dict: a dictionary of return codes keys and accompanying NodeSet
+            values indicating which hosts yielded the return code.
+            Return code keys:
+                0   No engine matched the criteria / No engine signaled.
+                1   One or more engine matched the criteria and a signal was
+                    sent.
+
+    """
+    result = {}
+    log = getLogger()
+    log.info("Dumping ULT stacks of engines on %s", hosts)
+
+    if added_filter:
+        ps_cmd = "/usr/bin/ps xa | grep daos_engine | grep -vE {}".format(
+            added_filter)
+    else:
+        ps_cmd = "/usr/bin/pgrep --list-full daos_engine"
+
+    if hosts is not None:
+        commands = [
+            "rc=0",
+            "if " + ps_cmd,
+            "then rc=1",
+            "sudo pkill --signal USR2 daos_engine",
+            # leave some time for ABT info/stacks dump to complete.
+            # at this time there is no way to know when Argobots ULTs stacks
+            # has completed, see DAOS-1452/DAOS-9942.
+            "sleep 30",
+            "fi",
+            "exit $rc",
+        ]
+        result = pcmd(hosts, "; ".join(commands), verbose, timeout,
+                      None)
+
+    return result
+
+
+def stop_processes(hosts, pattern, verbose=True, timeout=60, added_filter=None):
     """Stop the processes on each hosts that match the pattern.
 
     Args:
@@ -679,8 +730,6 @@ def stop_processes(hosts, pattern, verbose=True, timeout=60, added_filter=None,
             seconds.
         added_filter (str, optional): negative filter to better identify
             processes.
-        dump_ult_stacks (bool, optional): whether SIGUSR2 should be sent before
-            any other sigs, to dump all ULTs stacks of servers.
 
 
     Returns:
@@ -694,11 +743,7 @@ def stop_processes(hosts, pattern, verbose=True, timeout=60, added_filter=None,
     """
     result = {}
     log = getLogger()
-    if dump_ult_stacks is True:
-        log.info("First dumping ULT stacks, then Killing any processes on %s "
-                 "that match: %s", hosts, pattern)
-    else:
-        log.info("Killing any processes on %s that match: %s", hosts, pattern)
+    log.info("Killing any processes on %s that match: %s", hosts, pattern)
 
     if added_filter:
         ps_cmd = "/usr/bin/ps xa | grep -E {} | grep -vE {}".format(
@@ -707,22 +752,7 @@ def stop_processes(hosts, pattern, verbose=True, timeout=60, added_filter=None,
         ps_cmd = "/usr/bin/pgrep --list-full {}".format(pattern)
 
     if hosts is not None:
-        if dump_ult_stacks is True and "daos_engine" in pattern:
-            commands_part1 = [
-                "rc=0",
-                "if " + ps_cmd,
-                "then rc=1",
-                "sudo pkill --signal USR2 {}".format(pattern),
-                # leave time for ABT info/stacks dump vs xstream/pool/ULT number
-                "sleep 20",
-                "fi",
-                "exit $rc",
-            ]
-            result = pcmd(hosts, "; ".join(commands_part1), verbose, timeout,
-                          None)
-
-        # in case dump of ULT stacks is still running it may be interrupted
-        commands_part2 = [
+        commands = [
             "rc=0",
             "if " + ps_cmd,
             "then rc=1",
@@ -738,7 +768,7 @@ def stop_processes(hosts, pattern, verbose=True, timeout=60, added_filter=None,
             "fi",
             "exit $rc",
         ]
-        result = pcmd(hosts, "; ".join(commands_part2), verbose, timeout, None)
+        result = pcmd(hosts, "; ".join(commands), verbose, timeout, None)
     return result
 
 
@@ -1146,7 +1176,7 @@ def distribute_files(hosts, source, destination, mkdir=True, timeout=60,
         # If requested update the ownership of the destination file
         if owner is not None and result.exit_status == 0:
             change_file_owner(
-                hosts, destination, owner, owner, timeout=timeout,
+                hosts, destination, owner, get_primary_group(owner), timeout=timeout,
                 verbose=verbose, raise_exception=raise_exception, sudo=sudo)
     return result
 
@@ -1299,3 +1329,42 @@ def percent_change(val1, val2):
     if val1 and val2:
         return (float(val2) - float(val1)) / float(val1)
     return 0.0
+
+
+def get_primary_group(user=None):
+    """Get the name of the user's primary group.
+
+    Args:
+        user (str, optional): the user account name. Defaults to None, which uses the current user.
+
+    Returns:
+        str: the primary group name
+
+    """
+    if user is None:
+        user = getuser()
+    gid = pwd.getpwnam(user).pw_gid
+    return grp.getgrgid(gid).gr_name
+
+
+def get_journalctl(hosts, since, until, journalctl_type):
+    """Run the journalctl on the hosts.
+
+    Args:
+        hosts (list): List of hosts to run journalctl.
+        since (str): Start time to search the log.
+        until (str): End time to search the log.
+        journalctl_type (str): String to search in the log. -t param for journalctl.
+
+    Returns:
+        list: a list of dictionaries containing the following key/value pairs:
+            "hosts": NodeSet containing the hosts with this data
+            "data":  data requested for the group of hosts
+
+    """
+    command = ("sudo /usr/bin/journalctl --system -t {} --since=\"{}\" "
+               "--until=\"{}\"".format(journalctl_type, since, until))
+    err = "Error gathering system log events"
+    results = get_host_data(hosts=hosts, command=command, text="journalctl", error=err)
+
+    return results

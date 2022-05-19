@@ -21,7 +21,8 @@ import (
 	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/pkg/errors"
 
-	. "github.com/daos-stack/daos/src/control/common"
+	"github.com/daos-stack/daos/src/control/common"
+	. "github.com/daos-stack/daos/src/control/common/test"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/security"
 	"github.com/daos-stack/daos/src/control/server/engine"
@@ -30,7 +31,7 @@ import (
 
 const (
 	sConfigUncomment = "daos_server_uncomment.yml"
-	socketsExample   = "../../../../utils/config/examples/daos_server_sockets.yml"
+	tcpExample       = "../../../../utils/config/examples/daos_server_tcp.yml"
 	verbsExample     = "../../../../utils/config/examples/daos_server_verbs.yml"
 	defaultConfig    = "../../../../utils/config/daos_server.yml"
 	legacyConfig     = "../../../../utils/config/examples/daos_server_unittests.yml"
@@ -50,7 +51,7 @@ var (
 		}),
 	}
 
-	defHugePageInfo = &HugePageInfo{
+	defHugePageInfo = &common.HugePageInfo{
 		PageSizeKb: 2048,
 	}
 )
@@ -120,7 +121,7 @@ func TestServerConfig_MarshalUnmarshal(t *testing.T) {
 		expErr error
 	}{
 		"uncommented default config": {inPath: "uncommentedDefault"},
-		"socket example config":      {inPath: socketsExample},
+		"socket example config":      {inPath: tcpExample},
 		"verbs example config":       {inPath: verbsExample},
 		"default empty config":       {inPath: defaultConfig},
 		"nonexistent config": {
@@ -145,7 +146,7 @@ func TestServerConfig_MarshalUnmarshal(t *testing.T) {
 			configA.Path = tt.inPath
 			err := configA.Load()
 			if err == nil {
-				err = configA.Validate(log, defHugePageInfo.PageSizeKb, nil)
+				err = configA.Validate(log, defHugePageInfo.PageSizeKb)
 			}
 
 			CmpErr(t, tt.expErr, err)
@@ -164,7 +165,7 @@ func TestServerConfig_MarshalUnmarshal(t *testing.T) {
 
 			err = configB.Load()
 			if err == nil {
-				err = configB.Validate(log, defHugePageInfo.PageSizeKb, nil)
+				err = configB.Validate(log, defHugePageInfo.PageSizeKb)
 			}
 
 			if err != nil {
@@ -201,7 +202,7 @@ func TestServerConfig_Constructed(t *testing.T) {
 		WithDisableVFIO(true).   // vfio enabled by default
 		WithEnableVMD(true).     // vmd disabled by default
 		WithEnableHotplug(true). // hotplug disabled by default
-		WithControlLogMask(ControlLogLevelError).
+		WithControlLogMask(common.ControlLogLevelError).
 		WithControlLogFile("/tmp/daos_server.log").
 		WithHelperLogFile("/tmp/daos_admin.log").
 		WithFirmwareHelperLogFile("/tmp/daos_firmware.log").
@@ -263,13 +264,11 @@ func TestServerConfig_Constructed(t *testing.T) {
 					WithBdevDeviceList("/tmp/daos-bdev1", "/tmp/daos-bdev2").
 					WithBdevFileSize(16),
 			).
-			WithPinnedNumaNode(1).
 			WithFabricInterface("ib1").
 			WithFabricInterfacePort(20000).
 			WithFabricProvider("ofi+verbs").
 			WithCrtCtxShareAddr(0).
 			WithCrtTimeout(30).
-			WithPinnedNumaNode(1).
 			WithBypassHealthChk(&bypass).
 			WithEnvVars("CRT_TIMEOUT=100").
 			WithLogFile("/tmp/daos_engine.1.log").
@@ -754,7 +753,7 @@ func TestServerConfig_Validation(t *testing.T) {
 			// Apply extra config test case
 			dupe := tt.extraConfig(baseCfg())
 
-			CmpErr(t, tt.expErr, dupe.Validate(log, defHugePageInfo.PageSizeKb, nil))
+			CmpErr(t, tt.expErr, dupe.Validate(log, defHugePageInfo.PageSizeKb))
 			if tt.expErr != nil || tt.expConfig == nil {
 				return
 			}
@@ -862,7 +861,7 @@ func TestServerConfig_Parsing(t *testing.T) {
 
 		lcp := strings.Split(legacyConfig, "/")
 		testLegacyConfigFile := filepath.Join(testDir, lcp[len(lcp)-1])
-		if err := CopyFile(legacyConfig, testLegacyConfigFile); err != nil {
+		if err := common.CopyFile(legacyConfig, testLegacyConfigFile); err != nil {
 			return nil, err
 		}
 
@@ -944,7 +943,7 @@ func TestServerConfig_Parsing(t *testing.T) {
 		},
 		"legacy storage; no bdev_list": {
 			legacyStorage: true,
-			inTxt:         "  bdev_list: []",
+			inTxt:         "    bdev_list: []",
 			outTxt:        "",
 			expCheck: func(c *Server) error {
 				nr := len(c.Engines[0].Storage.Tiers)
@@ -956,7 +955,7 @@ func TestServerConfig_Parsing(t *testing.T) {
 		},
 		"legacy storage; no bdev_class": {
 			legacyStorage: true,
-			inTxt:         "  bdev_class: nvme",
+			inTxt:         "    bdev_class: nvme",
 			outTxt:        "",
 			expCheck: func(c *Server) error {
 				nr := len(c.Engines[0].Storage.Tiers)
@@ -968,8 +967,8 @@ func TestServerConfig_Parsing(t *testing.T) {
 		},
 		"legacy storage; non-empty bdev_list": {
 			legacyStorage: true,
-			inTxt:         "  bdev_list: []",
-			outTxt:        "  bdev_list: [0000:80:00.0]",
+			inTxt:         "    bdev_list: []",
+			outTxt:        "    bdev_list: [0000:80:00.0]",
 			expCheck: func(c *Server) error {
 				nr := len(c.Engines[0].Storage.Tiers)
 				if nr != 2 {
@@ -981,10 +980,10 @@ func TestServerConfig_Parsing(t *testing.T) {
 		"legacy storage; non-empty bdev_busid_range": {
 			legacyStorage: true,
 			inTxtList: []string{
-				"  bdev_list: []", "  bdev_busid_range: \"\"",
+				"    bdev_list: []", "    bdev_busid_range: \"\"",
 			},
 			outTxtList: []string{
-				"  bdev_list: [0000:80:00.0]", "  bdev_busid_range: \"0x00-0x80\"",
+				"    bdev_list: [0000:80:00.0]", "    bdev_busid_range: \"0x00-0x80\"",
 			},
 			expCheck: func(c *Server) error {
 				nr := len(c.Engines[0].Storage.Tiers)
@@ -1035,7 +1034,7 @@ func TestServerConfig_Parsing(t *testing.T) {
 			}
 			config = tt.extraConfig(config)
 
-			CmpErr(t, tt.expValidateErr, config.Validate(log, defHugePageInfo.PageSizeKb, nil))
+			CmpErr(t, tt.expValidateErr, config.Validate(log, defHugePageInfo.PageSizeKb))
 
 			if tt.expCheck != nil {
 				if err := tt.expCheck(config); err != nil {
@@ -1238,7 +1237,7 @@ func TestServerConfig_DuplicateValues(t *testing.T) {
 				WithFabricProvider("test").
 				WithEngines(tc.configA, tc.configB)
 
-			gotErr := conf.Validate(log, defHugePageInfo.PageSizeKb, nil)
+			gotErr := conf.Validate(log, defHugePageInfo.PageSizeKb)
 			CmpErr(t, tc.expErr, gotErr)
 		})
 	}
@@ -1273,6 +1272,334 @@ func TestServerConfig_SaveActiveConfig(t *testing.T) {
 
 			AssertTrue(t, strings.Contains(buf.String(), tc.expLogOut),
 				fmt.Sprintf("expected %q in %q", tc.expLogOut, buf.String()))
+		})
+	}
+}
+
+func TestConfig_detectEngineAffinity(t *testing.T) {
+	genAffFn := func(node uint, err error) EngineAffinityFn {
+		return func(logging.Logger, *engine.Config) (uint, error) {
+			return node, err
+		}
+	}
+
+	for name, tc := range map[string]struct {
+		cfg         *engine.Config
+		affSrcSet   []EngineAffinityFn
+		expErr      error
+		expDetected uint
+	}{
+		"first source misses; second hits": {
+			cfg: engine.MockConfig(),
+			affSrcSet: []EngineAffinityFn{
+				genAffFn(0, ErrNoAffinityDetected),
+				genAffFn(1, nil),
+			},
+			expDetected: 1,
+		},
+		"first source hits": {
+			cfg: engine.MockConfig(),
+			affSrcSet: []EngineAffinityFn{
+				genAffFn(1, nil),
+				genAffFn(2, nil),
+			},
+			expDetected: 1,
+		},
+		"first source errors": {
+			cfg: engine.MockConfig(),
+			affSrcSet: []EngineAffinityFn{
+				genAffFn(1, errors.New("fatal")),
+				genAffFn(2, nil),
+			},
+			expErr: errors.New("fatal"),
+		},
+		"no sources hit": {
+			cfg: engine.MockConfig(),
+			affSrcSet: []EngineAffinityFn{
+				genAffFn(1, ErrNoAffinityDetected),
+				genAffFn(2, ErrNoAffinityDetected),
+			},
+			expErr: ErrNoAffinityDetected,
+		},
+		"no sources defined": {
+			cfg:    engine.MockConfig(),
+			expErr: ErrNoAffinityDetected,
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(t.Name())
+			defer ShowBufferOnFailure(t, buf)
+
+			detected, err := detectEngineAffinity(log, tc.cfg, tc.affSrcSet...)
+			CmpErr(t, tc.expErr, err)
+			if tc.expErr != nil {
+				return
+			}
+
+			AssertEqual(t, tc.expDetected, detected,
+				"unexpected detected numa node")
+		})
+	}
+}
+
+func TestConfig_setEngineAffinity(t *testing.T) {
+	for name, tc := range map[string]struct {
+		cfg     *engine.Config
+		setNUMA uint
+		expErr  error
+		expNUMA uint
+	}{
+		"pinned_numa_node set in config overrides detected affinity": {
+			cfg: engine.MockConfig().
+				WithPinnedNumaNode(2).
+				WithFabricInterface("ib1").
+				WithFabricProvider("ofi+verbs"),
+			setNUMA: 1,
+			expNUMA: 2,
+		},
+		"pinned_numa_node not set in config; detected affinity used": {
+			cfg: engine.MockConfig().
+				WithFabricInterface("ib1").
+				WithFabricProvider("ofi+verbs"),
+			setNUMA: 1,
+			expNUMA: 1,
+		},
+		"pinned_numa_node and first_core set": {
+			cfg: engine.MockConfig().
+				WithPinnedNumaNode(2).
+				WithServiceThreadCore(1).
+				WithFabricInterface("ib1").
+				WithFabricProvider("ofi+verbs"),
+			expErr: errors.New("cannot set both"),
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(t.Name())
+			defer ShowBufferOnFailure(t, buf)
+
+			err := setEngineAffinity(log, tc.cfg, tc.setNUMA)
+			CmpErr(t, tc.expErr, err)
+			if tc.expErr != nil {
+				return
+			}
+
+			AssertEqual(t, tc.expNUMA, *tc.cfg.PinnedNumaNode,
+				"unexpected pinned numa node")
+			AssertEqual(t, tc.expNUMA, tc.cfg.Fabric.NumaNodeIndex,
+				"unexpected numa node in fabric config")
+			AssertEqual(t, tc.expNUMA, tc.cfg.Storage.NumaNodeIndex,
+				"unexpected numa node in storage config")
+		})
+	}
+}
+
+func TestConfig_SetEngineAffinities(t *testing.T) {
+	baseSrvCfg := func() *Server {
+		return DefaultServer()
+	}
+	genAffFn := func(iface string, node uint) EngineAffinityFn {
+		return func(_ logging.Logger, cfg *engine.Config) (uint, error) {
+			if iface == cfg.Fabric.Interface {
+				return node, nil
+			}
+			return 0, ErrNoAffinityDetected
+		}
+	}
+
+	for name, tc := range map[string]struct {
+		cfg         *Server
+		affSrcSet   []EngineAffinityFn
+		expNumaSet  []int
+		expFabNumas []int
+		expErr      error
+	}{
+		"no affinity detected (default NUMA nodes)": {
+			cfg: baseSrvCfg().
+				WithEngines(
+					engine.MockConfig().
+						WithFabricInterface("ib0").
+						WithFabricProvider("ofi+verbs"),
+					engine.MockConfig().
+						WithFabricInterface("ib1").
+						WithFabricProvider("ofi+verbs"),
+				),
+			expNumaSet: []int{0, 0},
+		},
+		"engines have first_core set; NUMA nodes should not be set": {
+			cfg: baseSrvCfg().
+				WithEngines(
+					engine.MockConfig().
+						WithFabricInterface("ib0").
+						WithFabricProvider("ofi+verbs").
+						WithServiceThreadCore(1),
+					engine.MockConfig().
+						WithFabricInterface("ib1").
+						WithFabricProvider("ofi+verbs").
+						WithServiceThreadCore(2),
+				),
+			expNumaSet: []int{-1, -1},
+		},
+		"single engine with pinned_numa_node set": {
+			cfg: baseSrvCfg().
+				WithEngines(
+					engine.MockConfig().
+						WithFabricInterface("ib0").
+						WithFabricProvider("ofi+verbs").
+						WithPinnedNumaNode(1),
+				),
+			expNumaSet: []int{1},
+		},
+		"single engine without pinned_numa_node set and no detected affinity": {
+			cfg: baseSrvCfg().
+				WithEngines(
+					engine.MockConfig().
+						WithFabricInterface("ib0").
+						WithFabricProvider("ofi+verbs"),
+				),
+			expNumaSet: []int{-1},
+		},
+		"single engine without pinned_numa_node set and affinity detected as != 0": {
+			cfg: baseSrvCfg().
+				WithEngines(
+					engine.MockConfig().
+						WithFabricInterface("ib0").
+						WithFabricProvider("ofi+verbs"),
+				),
+			affSrcSet: []EngineAffinityFn{
+				genAffFn("ib0", 1),
+			},
+			expNumaSet: []int{1},
+		},
+		"single engine without pinned_numa_node set and affinity detected as 0": {
+			cfg: baseSrvCfg().
+				WithEngines(
+					engine.MockConfig().
+						WithFabricInterface("ib0").
+						WithFabricProvider("ofi+verbs"),
+				),
+			affSrcSet: []EngineAffinityFn{
+				genAffFn("ib0", 0),
+			},
+			expNumaSet: []int{-1},
+		},
+		"multi engine without pinned_numa_node set and affinity for both detected as 0": {
+			cfg: baseSrvCfg().
+				WithEngines(
+					engine.MockConfig().
+						WithFabricInterface("ib0").
+						WithFabricProvider("ofi+verbs"),
+					engine.MockConfig().
+						WithFabricInterface("ib1").
+						WithFabricProvider("ofi+verbs"),
+				),
+			affSrcSet: []EngineAffinityFn{
+				genAffFn("ib0", 0),
+				genAffFn("ib1", 0),
+			},
+			expNumaSet: []int{0, 0},
+		},
+		"multi engine without pinned_numa_node set": {
+			cfg: baseSrvCfg().
+				WithEngines(
+					engine.MockConfig().
+						WithFabricInterface("ib0").
+						WithFabricProvider("ofi+verbs"),
+					engine.MockConfig().
+						WithFabricInterface("ib1").
+						WithFabricProvider("ofi+verbs"),
+				),
+			affSrcSet: []EngineAffinityFn{
+				genAffFn("ib0", 1),
+				genAffFn("ib1", 2),
+			},
+			expNumaSet: []int{1, 2},
+		},
+		"multi engine with pinned_numa_node set matching detected affinities": {
+			cfg: baseSrvCfg().
+				WithEngines(
+					engine.MockConfig().
+						WithPinnedNumaNode(1).
+						WithFabricInterface("ib0").
+						WithFabricProvider("ofi+verbs"),
+					engine.MockConfig().
+						WithPinnedNumaNode(2).
+						WithFabricInterface("ib1").
+						WithFabricProvider("ofi+verbs"),
+				),
+			affSrcSet: []EngineAffinityFn{
+				genAffFn("ib0", 1),
+				genAffFn("ib1", 2),
+			},
+			expNumaSet: []int{1, 2},
+		},
+		"multi engine with pinned_numa_node set overriding detected affinities": {
+			cfg: baseSrvCfg().
+				WithEngines(
+					engine.MockConfig().
+						WithPinnedNumaNode(2).
+						WithFabricInterface("ib0").
+						WithFabricProvider("ofi+verbs"),
+					engine.MockConfig().
+						WithPinnedNumaNode(1).
+						WithFabricInterface("ib1").
+						WithFabricProvider("ofi+verbs"),
+				),
+			affSrcSet: []EngineAffinityFn{
+				genAffFn("ib0", 1),
+				genAffFn("ib1", 2),
+			},
+			expNumaSet: []int{2, 1},
+		},
+		"multi engine with first_core set; detected affinities take precedence": {
+			cfg: baseSrvCfg().
+				WithEngines(
+					engine.MockConfig().
+						WithServiceThreadCore(1).
+						WithFabricInterface("ib0").
+						WithFabricProvider("ofi+verbs"),
+					engine.MockConfig().
+						WithServiceThreadCore(25).
+						WithFabricInterface("ib1").
+						WithFabricProvider("ofi+verbs"),
+				),
+			affSrcSet: []EngineAffinityFn{
+				genAffFn("ib0", 1),
+				genAffFn("ib1", 2),
+			},
+			expNumaSet:  []int{-1, -1}, // PinnedNumaNode should not be set
+			expFabNumas: []int{1, 2},
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			gotNumaSet := make([]int, 0, len(tc.expNumaSet))
+			fabNumaSet := make([]int, 0, len(tc.expFabNumas))
+
+			log, buf := logging.NewTestLogger(t.Name())
+			defer ShowBufferOnFailure(t, buf)
+
+			gotErr := tc.cfg.SetEngineAffinities(log, tc.affSrcSet...)
+			CmpErr(t, tc.expErr, gotErr)
+			if tc.expErr != nil {
+				return
+			}
+
+			for _, engine := range tc.cfg.Engines {
+				fabNumaSet = append(fabNumaSet, int(engine.Fabric.NumaNodeIndex))
+				if engine.PinnedNumaNode == nil {
+					gotNumaSet = append(gotNumaSet, -1)
+					continue
+				}
+				gotNumaSet = append(gotNumaSet, int(*engine.PinnedNumaNode))
+			}
+
+			if diff := cmp.Diff(tc.expNumaSet, gotNumaSet); diff != "" {
+				t.Errorf("unexpected engine numa node set (-want +got):\n%s", diff)
+			}
+			if tc.expFabNumas != nil {
+				if diff := cmp.Diff(tc.expFabNumas, fabNumaSet); diff != "" {
+					t.Errorf("unexpected fabric numa node set (-want +got):\n%s", diff)
+				}
+			}
 		})
 	}
 }

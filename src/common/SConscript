@@ -28,23 +28,36 @@ def build_daos_common(env, client, prereqs):
 
     common = daos_build.library(denv, libname, COMMON_FILES, LIBS=common_libs)
     denv.Install('$PREFIX/lib64/', common)
+    return common
 
-def build_dts_library(env):
+
+def build_dpar(env):
     """Build libdts library"""
-    Import('prereqs')
+
+    serial_lib = daos_build.library(env, 'libdpar', ['dpar_stub.c'], LIBS=['pthread', 'dl'])
+    env.Install('$PREFIX/lib64/', serial_lib)
+
+    denv = env.Clone()
+
+    if not GetOption('help') and not GetOption('clean'):
+        mpi = daos_build.configure_mpi(denv, [])
+        if mpi is None:
+            print("\nSkipping compilation for libdpar_mpi as no MPI is found")
+            print("Install and load mpich or openmpi\n")
+            return
+
+    mpi_lib = daos_build.library(denv, 'libdpar_mpi', ['dpar_mpi.c'])
+    denv.Install('$PREFIX/lib64/', mpi_lib)
+
+
+def build_dts_library(env, prereqs):
+    """Build libdts library"""
 
     denv = env.Clone()
 
     prereqs.require(denv, 'argobots', 'protobufc')
 
-    if not GetOption('help') and not GetOption('clean'):
-        mpi = daos_build.configure_mpi(denv, [])
-        if mpi is None:
-            print("\nSkipping compilation for tests that need MPI")
-            print("Install and load mpich or openmpi\n")
-            return
-
-    libraries = ['cmocka', 'daos', 'daos_tests']
+    libraries = ['cmocka', 'daos', 'daos_tests', 'dpar']
 
     # Add runtime paths for daos libraries
     denv.AppendUnique(LIBPATH=["../client/api"])
@@ -58,6 +71,7 @@ def build_dts_library(env):
     dts_lib = daos_build.library(denv, 'libdts', ['credit.c', 'dts.c'],
                                  LIBS=libraries)
     denv.Install('$PREFIX/lib64/', dts_lib)
+
 
 def scons():
     """Execute build"""
@@ -80,7 +94,8 @@ def scons():
     denv = env.Clone(LIBS=[])
     prereqs.require(denv, 'isal', 'isal_crypto', 'protobufc')
     denv.AppendUnique(LIBS=['cart', 'gurt', 'lz4'])
-    build_daos_common(denv, True, prereqs)
+    common = build_daos_common(denv, True, prereqs)
+    Export('common')
 
     control_tgts = [File('control.c')]
     Export('control_tgts')
@@ -108,7 +123,9 @@ def scons():
     prereqs.require(tenv, 'pmdk')
     SConscript('tests/SConscript', exports='tenv')
 
-    build_dts_library(base_env)
+    build_dpar(base_env)
+    build_dts_library(base_env, prereqs)
+
 
 if __name__ == "SCons.Script":
     scons()

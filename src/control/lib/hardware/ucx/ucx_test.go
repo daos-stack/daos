@@ -15,6 +15,7 @@ import (
 	"github.com/google/go-cmp/cmp"
 
 	"github.com/daos-stack/daos/src/control/common"
+	"github.com/daos-stack/daos/src/control/common/test"
 	"github.com/daos-stack/daos/src/control/logging"
 )
 
@@ -29,7 +30,7 @@ func TestUCX_Provider_GetFabricInterfaces_Integrated(t *testing.T) {
 	// error on the normal happy path.
 
 	log, buf := logging.NewTestLogger(t.Name())
-	defer common.ShowBufferOnFailure(t, buf)
+	defer test.ShowBufferOnFailure(t, buf)
 
 	p := NewProvider(log)
 
@@ -51,7 +52,7 @@ func TestUCX_Provider_getProviderSet(t *testing.T) {
 	}{
 		"dc": {
 			in:     "dc_mlx5",
-			expSet: common.NewStringSet("ucx+dc"),
+			expSet: common.NewStringSet("ucx+dc_x", "ucx+dc"),
 		},
 		"tcp": {
 			in:     "tcp",
@@ -68,7 +69,7 @@ func TestUCX_Provider_getProviderSet(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
-			defer common.ShowBufferOnFailure(t, buf)
+			defer test.ShowBufferOnFailure(t, buf)
 
 			p := NewProvider(log)
 
@@ -102,8 +103,12 @@ func TestUCX_transportToDAOSProvider(t *testing.T) {
 			in:  "ud_mlx5",
 			exp: "ucx+ud_x",
 		},
+		"dc_mlx5": {
+			in:  "dc_mlx5",
+			exp: "ucx+dc_x",
+		},
 		"dc": {
-			in:  "dc_something",
+			in:  "dc",
 			exp: "ucx+dc",
 		},
 		"tcp": {
@@ -120,7 +125,7 @@ func TestUCX_transportToDAOSProvider(t *testing.T) {
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
-			common.AssertEqual(t, tc.exp, transportToDAOSProvider(tc.in), "")
+			test.AssertEqual(t, tc.exp, transportToDAOSProvider(tc.in), "")
 		})
 	}
 }

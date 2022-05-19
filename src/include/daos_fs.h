@@ -218,6 +218,52 @@ int
 dfs_umount(dfs_t *dfs);
 
 /**
+ * Retrieve the open pool handle on the DFS mount. This is refcounted internally and must be
+ * released with dfs_pool_put().
+ *
+ * \param[in]	dfs	Pointer to the mounted file system.
+ * \param[out]	poh	Open pool handle.
+ *
+ * \return		0 on success, errno code on failure.
+ */
+int
+dfs_pool_get(dfs_t *dfs, daos_handle_t *poh);
+
+/**
+ * Release refcount of pool handle taken by dfs_pool_get().
+ *
+ * \param[in]	dfs	Pointer to the mounted file system.
+ * \param[out]	poh	Pool handle that was returned from dfs_pool_get().
+ *
+ * \return		0 on success, errno code on failure.
+ */
+int
+dfs_pool_put(dfs_t *dfs, daos_handle_t poh);
+
+/**
+ * Retrieve the open cont handle on the DFS mount. This is refcounted internally and must be
+ * released with dfs_cont_put().
+ *
+ * \param[in]	dfs	Pointer to the mounted file system.
+ * \param[out]	coh	Open cont handle.
+ *
+ * \return		0 on success, errno code on failure.
+ */
+int
+dfs_cont_get(dfs_t *dfs, daos_handle_t *coh);
+
+/**
+ * Release refcount of cont handle taken by dfs_cont_get().
+ *
+ * \param[in]	dfs	Pointer to the mounted file system.
+ * \param[out]	coh	Cont handle that was returned from dfs_cont_get().
+ *
+ * \return		0 on success, errno code on failure.
+ */
+int
+dfs_cont_put(dfs_t *dfs, daos_handle_t coh);
+
+/**
  * Query attributes of a DFS mount.
  *
  * \param[in]	dfs	Pointer to the mounted file system.
@@ -1060,7 +1106,6 @@ dfs_cont_create_cpp(daos_handle_t poh, const uuid_t cuuid, dfs_attr_t *attr, dao
 		}							\
 		_ret;							\
 	})
-
 
 #endif /* __cplusplus */
 #endif /* __DAOS_FS_H__ */

@@ -238,22 +238,19 @@ class DmgCommand(DmgCommandBase):
         # }
         return self._get_json_result(("storage", "scan"), verbose=verbose)
 
-    def storage_format(self, reformat=False, timeout=30, verbose=False,
-                       force=False):
+    def storage_format(self, force=False, timeout=30, verbose=False):
         """Get the result of the dmg storage format command.
 
         Args:
-            reformat (bool): always reformat storage, could be destructive.
+            force (bool): force storage format on a host, stopping any
+                running engines (CAUTION: destructive operation).
                 This will create control-plane related metadata i.e. superblock
                 file and reformat if the storage media is available and
-                formattable.
+                formattable.  Defaults to False
             timeout: seconds after which the format is considered a failure and
                 times out.
             verbose (bool): show results of each SCM & NVMe device format
                 operation.
-            force (bool, optional): force storage format on a host, stopping any
-                running engines (CAUTION: destructive operation). Defaults to
-                False.
 
         Returns:
             CmdResult: an avocado CmdResult object containing the dmg command
@@ -266,8 +263,7 @@ class DmgCommand(DmgCommandBase):
         saved_timeout = self.timeout
         self.timeout = timeout
         self._get_result(
-            ("storage", "format"), reformat=reformat, verbose=verbose,
-            force=force)
+            ("storage", "format"), force=force, verbose=verbose)
         self.timeout = saved_timeout
         return self.result
 
@@ -537,11 +533,13 @@ class DmgCommand(DmgCommandBase):
 
         return data
 
-    def pool_query(self, pool):
+    def pool_query(self, pool, show_enabled=False, show_disabled=False):
         """Query a pool with the dmg command.
 
         Args:
             uuid (str): Pool UUID to query.
+            show_enabled (bool, optional): Display enabled ranks.
+            show_disabled (bool, optional): Display disabled ranks.
 
         Raises:
             CommandFailure: if the dmg pool query command fails.
@@ -557,7 +555,7 @@ class DmgCommand(DmgCommandBase):
         #         "uuid": "EDAE0965-7A6E-48BD-A71C-A29F199C679F",
         #         "total_targets": 8,
         #         "active_targets": 8,
-        #         "total_nodes": 1,
+        #         "total_engines": 1,
         #         "disabled_targets": 0,
         #         "version": 1,
         #         "leader": 0,
@@ -580,12 +578,15 @@ class DmgCommand(DmgCommandBase):
         #             "min": 3999993856,
         #             "max": 3999993856,
         #             "mean": 3999993856
-        #         }
+        #         },
+        #         "enabled_ranks": None,
+        #         "disabled_ranks": None
         #     },
         #     "error": null,
         #     "status": 0
         # }
-        return self._get_json_result(("pool", "query"), pool=pool)
+        return self._get_json_result(("pool", "query"), pool=pool,
+                show_enabled=show_enabled, show_disabled=show_disabled)
 
     def pool_destroy(self, pool, force=True):
         """Destroy a pool with the dmg command.
