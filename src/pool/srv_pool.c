@@ -1200,6 +1200,7 @@ read_db_for_stepping_up(struct pool_svc *svc, struct pool_buf **map_buf,
 			DP_UUID(svc->ps_uuid), DP_RC(rc));
 		goto out_lock;
 	}
+	version_exists = true;
 
 	/**
 	 * downgrading the DAOS software of an upgraded pool report
@@ -1219,7 +1220,6 @@ read_db_for_stepping_up(struct pool_svc *svc, struct pool_buf **map_buf,
 		rc = -DER_DF_INCOMPT;
 		goto out_lock;
 	}
-	version_exists = true;
 
 check_map:
 	rc = read_map_buf(&tx, &svc->ps_root, map_buf, map_version);
@@ -1239,6 +1239,10 @@ check_map:
 		}
 		goto out_lock;
 	}
+
+	if (!version_exists)
+		/* This could also be a 1.x pool, which we assume nobody cares. */
+		D_DEBUG(DB_MD, DF_UUID": assuming 2.0\n", DP_UUID(svc->ps_uuid));
 
 	rc = pool_prop_read(&tx, svc, DAOS_PO_QUERY_PROP_ALL, prop);
 	if (rc != 0)
