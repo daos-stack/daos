@@ -11,6 +11,7 @@ from collections import OrderedDict
 class NotTag(Exception):
     """Nothing"""
 
+# TODO: Call get_tag_kv function from main and check https: links.
 
 def main():
     """Run the check"""
@@ -47,7 +48,7 @@ def main():
             continue
         (raw_key, value) = line.split(':', maxsplit=1)
         key = raw_key.strip()
-        if key in ('Date', 'Author', 'Signed-off-by', 'Merge', 'Co-authored-by'):
+        if key in ('Date', 'Author', 'Signed-off-by', 'Merge', 'Co-authored-by', 'https'):
             continue
         if ' ' in key:
             continue

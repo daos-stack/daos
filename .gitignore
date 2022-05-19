@@ -58,4 +58,3 @@ src/client/java/daos-java/src/main/native/include/io_daos_dfs_DaosFsClient.h
 src/client/java/hadoop-daos/target/
 src/client/java/daos-java/build/
 docs/doxygen/
-utils/githooks/*.d/user*

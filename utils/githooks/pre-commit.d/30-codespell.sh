@@ -35,13 +35,17 @@ else
     fi
 fi
 
-echo "Checking against branch ${TARGET}"
+echo "Checking spelling against branch ${TARGET}"
 
 # In a per-commit hook.
 mfiles=$(git diff-index --cached --name-only "$TARGET")
 for file in $mfiles
 do
-#    git reset $file
-    codespell -w --ignore-words ci/codespell.ignores --builtin clear,rare,informal,names,en-GB_to_en-US --skip *.png,*.PNG,*.pyc,src/rdb/raft/*,src/control/vendor/*,RSA.golden,utils/rpms/* $file
-    git add $file
+        # Handle missing/removed files or files which exist on target but not the branch.
+        if [ -f "$file" ]
+        then
+                # git reset $file
+                codespell -w --ignore-words ci/codespell.ignores --builtin clear,rare,informal,names,en-GB_to_en-US --skip *.png,*.PNG,*.pyc,src/rdb/raft/*,src/control/vendor/*,RSA.golden,utils/rpms/* $file
+                git add $file
+        fi
 done
