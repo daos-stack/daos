@@ -31,6 +31,8 @@ class FileTypeList():
             return
         if not file.endswith('.py'):
             return
+        if file.startswith('src/control/vendor'):
+            return
 
         # If files are in a subdir under ftest then they need to by treated differently.
         if file.startswith('src/tests/ftest/'):
@@ -83,7 +85,7 @@ def parse_file(args, target_file, ftest=False, scons=False):
 
     if isinstance(target_file, list):
         target = list(target_file)
-        target.extend(['--jobs', str(len(target_file))])
+        target.extend(['--jobs', str(min(len(target_file), 20))])
     elif scons:
         wrapper = sl.check_script.WrapScript(target_file, output=f'{target_file}.pycheck')
         target = [wrapper.wrap_file]
