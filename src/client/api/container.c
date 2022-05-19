@@ -83,9 +83,11 @@ daos_cont_create(daos_handle_t poh, uuid_t *cuuid, daos_prop_t *cont_prop,
 		return -DER_INVAL;
 	}
 
-	rc = cont_inherit_redunc_fac(poh, cont_prop, &merged_props);
-	if (rc)
-		return rc;
+	if (cont_prop) {
+		rc = cont_inherit_redunc_fac(poh, cont_prop, &merged_props);
+		if (rc)
+			return rc;
+	}
 
 	rc = dc_task_create(dc_cont_create, NULL, ev, &task);
 	if (rc) {

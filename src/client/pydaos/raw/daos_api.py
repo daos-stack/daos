@@ -1568,9 +1568,9 @@ class DaosContainer():
         # create synchronously, if its there then run it in a thread
         if cb_func is None:
             if self.cont_prop is None:
-                ret = func(self.poh, self.uuid, None, None)
+                ret = func(self.poh, ctypes.byref(self.uuid), None, None)
             else:
-                ret = func(self.poh, self.uuid, ctypes.byref(self.cont_prop),
+                ret = func(self.poh, ctypes.byref(self.uuid), ctypes.byref(self.cont_prop),
                            None)
             if ret != 0:
                 self.uuid = (ctypes.c_ubyte * 1)(0)
@@ -1580,9 +1580,9 @@ class DaosContainer():
         else:
             event = daos_cref.DaosEvent()
             if self.cont_prop is None:
-                params = [self.poh, self.uuid, None, event]
+                params = [self.poh, ctypes.byref(self.uuid), None, event]
             else:
-                params = [self.poh, self.uuid, ctypes.byref(self.cont_prop),
+                params = [self.poh, ctypes.byref(self.uuid), ctypes.byref(self.cont_prop),
                           None, event]
             thread = threading.Thread(target=daos_cref.AsyncWorker1,
                                       args=(func,
