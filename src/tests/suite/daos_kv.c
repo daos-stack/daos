@@ -95,7 +95,7 @@ simple_put_get_flags(void **state, bool is_old_flag)
 
 	oid = dts_oid_gen(arg->myrank);
 	if (is_old_flag)
-		daos_obj_generate_oid(arg->coh, &oid, DAOS_OF_KV_FLAT,
+		daos_obj_generate_oid(arg->coh, &oid, DAOS_OT_KV_HASHED,
 				      OC_SX, 0, 0);
 	else
 		daos_obj_generate_oid(arg->coh, &oid, type, OC_SX, 0, 0);
