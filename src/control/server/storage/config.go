@@ -610,7 +610,7 @@ type Config struct {
 	VosEnv           string      `yaml:"-" cmdEnv:"VOS_BDEV_CLASS"`
 	EnableHotplug    bool        `yaml:"-"`
 	NumaNodeIndex    uint        `yaml:"-"`
-	AccelProps       AccelProps  `yaml:"acceleration"`
+	AccelProps       AccelProps  `yaml:"acceleration,omitempty"`
 }
 
 func (c *Config) Validate() error {
