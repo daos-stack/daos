@@ -79,7 +79,7 @@ class DmgPoolEvictTest(TestWithServers):
         # upper case since we use upper case in object.
         uuids_cmd = []
         for uuid_label in data["response"]:
-            uuids_cmd.append(uuid_label["UUID"].upper())
+            uuids_cmd.append(uuid_label["uuid"].upper())
         uuids_obj = []
         for cont in self.container[1:]:
             uuids_obj.append(cont.uuid)
