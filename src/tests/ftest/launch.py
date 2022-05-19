@@ -17,11 +17,11 @@ import json
 import os
 import re
 import socket
-import subprocess #nosec
+import subprocess   # nosec
 import site
 import sys
 import time
-from xml.etree.ElementTree import Element, SubElement, tostring #nosec
+from xml.etree.ElementTree import Element, SubElement, tostring     # nosec
 import yaml
 from defusedxml import minidom
 import defusedxml.ElementTree as ET
@@ -82,6 +82,7 @@ PROVIDER_KEYS = OrderedDict(
     [
         ("cxi", "ofi+cxi"),
         ("verbs", "ofi+verbs"),
+        ("ucx", "ucx+dc_x"),
         ("tcp", "ofi+tcp"),
     ]
 )
@@ -346,7 +347,10 @@ def set_provider_environment(interface, args):
         interface (str): the current interface being used.
     """
     # Use the detected provider if one is not set
-    provider = os.environ.get("CRT_PHY_ADDR_STR")
+    if args.provider:
+        provider = args.provider
+    else:
+        provider = os.environ.get("CRT_PHY_ADDR_STR")
     if provider is None:
         print("Detecting provider for {} - CRT_PHY_ADDR_STR not set".format(interface))
 
@@ -750,11 +754,6 @@ def get_test_files(test_list, args, yaml_dir, vmd_flag=False):
         base, _ = os.path.splitext(test_file["py"])
         yaml_file = replace_yaml_file("{}.yaml".format(base), args, yaml_dir, vmd_flag)
         test_file["yaml"] = yaml_file
-
-        # Set enable_vmd: true in the daos_server yaml if there are VMD devices on the host
-        # regardless of whether they are being specified in the server config file to avoid
-        # failures in the server start-up NVMe scan.
-        test_file["env"] = {"DAOS_ENABLE_VMD": "True" if vmd_flag else "False"}
 
         # Display the modified yaml file variants with debug
         command = ["avocado", "variants", "--mux-yaml", test_file["yaml"]]
@@ -2400,6 +2399,14 @@ def main():
         "-p", "--process_cores",
         action="store_true",
         help="process core files from tests")
+    parser.add_argument(
+        "-pr", "--provider",
+        action="store",
+        choices=[None] + list(PROVIDER_KEYS.values()),
+        default=None,
+        type=str,
+        help="default provider to use in the test daos_server config file, e.g. {}".format(
+            ", ".join(list(PROVIDER_KEYS.values()))))
     parser.add_argument(
         "-r", "--rename",
         action="store_true",

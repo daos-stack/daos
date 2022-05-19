@@ -71,7 +71,7 @@ struct io_test_args {
 	const char		*dkey;
 	const char		*akey;
 	void			*custom;
-	int			 ofeat;
+	enum daos_otype_t 	 otype;
 	int			 akey_size;
 	int			 dkey_size;
 	int			 co_create_step;
@@ -90,9 +90,9 @@ struct vts_counter {
 };
 
 daos_epoch_t		gen_rand_epoch(void);
-daos_unit_oid_t		gen_oid(daos_ofeat_t ofeats);
+daos_unit_oid_t		gen_oid(enum daos_otype_t type);
 void			reset_oid_stable(uint32_t seed);
-daos_unit_oid_t		gen_oid_stable(daos_ofeat_t ofeats);
+daos_unit_oid_t		gen_oid_stable(enum daos_otype_t type);
 void			inc_cntr(unsigned long op_flags);
 void			test_args_reset(struct io_test_args *args,
 					uint64_t pool_size);

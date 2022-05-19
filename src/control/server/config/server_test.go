@@ -31,7 +31,7 @@ import (
 
 const (
 	sConfigUncomment = "daos_server_uncomment.yml"
-	socketsExample   = "../../../../utils/config/examples/daos_server_sockets.yml"
+	tcpExample       = "../../../../utils/config/examples/daos_server_tcp.yml"
 	verbsExample     = "../../../../utils/config/examples/daos_server_verbs.yml"
 	defaultConfig    = "../../../../utils/config/daos_server.yml"
 	legacyConfig     = "../../../../utils/config/examples/daos_server_unittests.yml"
@@ -129,7 +129,7 @@ func TestServerConfig_MarshalUnmarshal(t *testing.T) {
 		expErr error
 	}{
 		"uncommented default config": {inPath: "uncommentedDefault"},
-		"socket example config":      {inPath: socketsExample},
+		"socket example config":      {inPath: tcpExample},
 		"verbs example config":       {inPath: verbsExample},
 		"default empty config":       {inPath: defaultConfig},
 		"nonexistent config": {
@@ -208,7 +208,7 @@ func TestServerConfig_Constructed(t *testing.T) {
 		WithBdevInclude("0000:81:00.1", "0000:81:00.2", "0000:81:00.3").
 		WithBdevExclude("0000:81:00.1").
 		WithDisableVFIO(true).   // vfio enabled by default
-		WithEnableVMD(true).     // vmd disabled by default
+		WithDisableVMD(true).    // vmd enabled by default
 		WithEnableHotplug(true). // hotplug disabled by default
 		WithControlLogMask(common.ControlLogLevelError).
 		WithControlLogFile("/tmp/daos_server.log").

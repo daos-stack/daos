@@ -94,7 +94,7 @@ daos_array_generate_oid(daos_handle_t coh, daos_obj_id_t *oid, bool add_attr, da
  * The metadata of the array is stored under a special AKEY in DKEY 0. This means that this is a
  * generic array object with it's metadata tracked in the DAOS object. The feat bits in the oid must
  * set DAOS_OT_ARRAY,DAOS_OT_ARRAY_ATTR or DAOS_OT_ARRAY_BYTE. If the feat bits does not set
- * DAOS_OF_ARRAY, the user would be responsible for remembering the array metadata since DAOS will
+ * DAOS_OT_ARRAY, the user would be responsible for remembering the array metadata since DAOS will
  * not store those, and should not call this API since nothing will be written to the array
  * object. daos_array_open_with_attrs() can be used to get an array OH in that case to access with
  * the Array APIs.
@@ -131,8 +131,7 @@ daos_array_create(daos_handle_t coh, daos_obj_id_t oid, daos_handle_t th,
  *
  * \param[in]	coh	Container open handle.
  * \param[in]	oid	Object ID. It is required that the feat for dkey type
- *			be set to DAOS_OF_KV_FLAT | DAOS_OF_DKEY_UINT64 |
- *			DAOS_OF_ARRAY.
+ *			be set to DAOS_OT_ARRAY.
  * \param[in]	th	Transaction handle.
  * \param[in]	mode	Open mode: DAOS_OO_RO/RW
  * \param[out]	cell_size
