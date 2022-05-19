@@ -144,12 +144,12 @@ vts_dtx_prep_update(struct io_test_args *args,
 	memset(rex, 0, sizeof(*rex));
 
 	args->ta_flags = TF_ZERO_COPY;
-	args->ofeat = DAOS_OF_DKEY_UINT64 | DAOS_OF_AKEY_UINT64;
+	args->otype = DAOS_OT_MULTI_UINT64;
 
 	*epoch = crt_hlc_get();
 
 	vts_key_gen(dkey_buf, args->dkey_size, true, args);
-	set_iov(dkey, dkey_buf, args->ofeat & DAOS_OF_DKEY_UINT64);
+	set_iov(dkey, dkey_buf, is_daos_obj_type_set(args->otype, DAOS_OT_DKEY_UINT64));
 	*dkey_hash = d_hash_murmur64((const unsigned char *)dkey_buf,
 				      args->dkey_size, 5731);
 
@@ -160,10 +160,10 @@ vts_dtx_prep_update(struct io_test_args *args,
 	sgl->sg_nr = 1;
 
 	d_iov_set(dkey_iov, dkey_buf, args->dkey_size);
-	rex->rx_idx = hash_key(dkey_iov, args->ofeat & DAOS_OF_DKEY_UINT64);
+	rex->rx_idx = hash_key(dkey_iov, is_daos_obj_type_set(args->otype, DAOS_OT_DKEY_UINT64));
 
 	vts_key_gen(akey_buf, args->akey_size, false, args);
-	set_iov(akey, akey_buf, args->ofeat & DAOS_OF_AKEY_UINT64);
+	set_iov(akey, akey_buf, is_daos_obj_type_set(args->otype, DAOS_OT_AKEY_UINT64));
 
 	iod->iod_name = *akey;
 	if (ext) {
