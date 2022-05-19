@@ -21,6 +21,7 @@ import (
 )
 
 func TestPretty_PrintPoolQueryResp(t *testing.T) {
+	backtickStr := "`" + "dmg pool upgrade" + "`"
 	for name, tc := range map[string]struct {
 		pqr         *control.PoolQueryResp
 		expPrintStr string
@@ -63,7 +64,7 @@ Pool space info:
 			},
 			expPrintStr: fmt.Sprintf(`
 Pool %s, ntarget=2, disabled=1, leader=42, version=100
-Pool layout out of date (1 < 2) -- see `dmg pool upgrade` for details.
+Pool layout out of date (1 < 2) -- see `+backtickStr+` for details.
 Pool space info:
 - Target(VOS) count:1
 - Storage tier 0 (SCM):
@@ -106,7 +107,7 @@ Rebuild busy, 42 objs, 21 recs
 			},
 			expPrintStr: fmt.Sprintf(`
 Pool %s, ntarget=2, disabled=1, leader=42, version=100
-Pool layout out of date (1 < 2) -- see dmg pool upgrade for details.
+Pool layout out of date (1 < 2) -- see `+backtickStr+` for details.
 Pool space info:
 - Enabled targets: 0-2
 - Target(VOS) count:1
@@ -150,7 +151,7 @@ Rebuild busy, 42 objs, 21 recs
 			},
 			expPrintStr: fmt.Sprintf(`
 Pool %s, ntarget=2, disabled=1, leader=42, version=100
-Pool layout out of date (1 < 2) -- see dmg pool upgrade for details.
+Pool layout out of date (1 < 2) -- see `+backtickStr+` for details.
 Pool space info:
 - Disabled targets: 0-1,3
 - Target(VOS) count:1
@@ -194,7 +195,7 @@ Rebuild busy, 42 objs, 21 recs
 			},
 			expPrintStr: fmt.Sprintf(`
 Pool %s, ntarget=2, disabled=1, leader=42, version=100
-Pool layout out of date (1 < 2) -- see dmg pool upgrade for details.
+Pool layout out of date (1 < 2) -- see `+backtickStr+` for details.
 Pool space info:
 - Disabled targets: 0-1,3
 - Target(VOS) count:1
@@ -238,7 +239,7 @@ Rebuild unknown, 42 objs, 21 recs
 			},
 			expPrintStr: fmt.Sprintf(`
 Pool %s, ntarget=2, disabled=1, leader=42, version=100
-Pool layout out of date (1 < 2) -- see dmg pool upgrade for details.
+Pool layout out of date (1 < 2) -- see `+backtickStr+` for details.
 Pool space info:
 - Target(VOS) count:1
 - Storage tier 0 (SCM):
