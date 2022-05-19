@@ -48,7 +48,7 @@ class DfuseTestBase(TestWithServers):
         """Create a DfuseCommand object and use it to start Dfuse.
 
         Args:
-            hosts (list): list of hosts on which to start Dfuse
+            hosts (NodeSet): hosts on which to start Dfuse
             pool (TestPool, optional): pool to use with Dfuse
             container (TestContainer, optional): container to use with Dfuse
             mount_dir (str, optional): updated mount dir name. Defaults to None.
@@ -73,7 +73,7 @@ class DfuseTestBase(TestWithServers):
         except CommandFailure as error:
             self.log.error(
                 "Dfuse command %s failed on hosts %s", str(self.dfuse),
-                str(NodeSet.fromlist(self.dfuse.hosts)), exc_info=error)
+                self.dfuse.hosts, exc_info=error)
             self.fail("Test was expected to pass but it failed.")
 
     def stop_dfuse(self):

@@ -1,6 +1,6 @@
 #!/usr/bin/python
 """
-  (C) Copyright 2020-2021 Intel Corporation.
+  (C) Copyright 2020-2022 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -464,7 +464,7 @@ class MacsioCommand(ExecutableCommand):
 
         Args:
             results (CmdResult): macsio command execution result
-            hosts (list): list of hosts on which the macsio output files exist
+            hosts (NodeSet): hosts on which the macsio output files exist
 
         Returns:
             bool: status of the macsio command results

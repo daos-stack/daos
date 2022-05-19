@@ -187,7 +187,7 @@ class DaosServerManager(SubprocessManager):
             self._hosts, self.manager.command)
 
         # Create the daos_server yaml file
-        self.manager.job.temporary_file_hosts = self._hosts
+        self.manager.job.temporary_file_hosts = self._hosts.copy()
         self.manager.job.create_yaml_file()
 
         # Copy certificates

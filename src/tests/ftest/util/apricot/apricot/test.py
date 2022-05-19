@@ -675,9 +675,9 @@ class TestWithServers(TestWithoutServers):
         # List common test directory contents before running the test
         self.log.info("-" * 100)
         self.log.debug("Common test directory (%s) contents:", self.test_dir)
-        hosts = list(self.hostlist_servers)
+        hosts = self.hostlist_servers.copy()
         if self.hostlist_clients:
-            hosts.extend(self.hostlist_clients)
+            hosts.add(self.hostlist_clients)
         # Copy the fault injection files to the hosts.
         self.fault_injection.copy_fault_files(hosts)
         lines = get_file_listing(hosts, self.test_dir).stdout_text.splitlines()
@@ -688,9 +688,9 @@ class TestWithServers(TestWithoutServers):
             # Kill commands left running on the hosts (from a previous test)
             # before starting any tests.  Currently only handles 'orterun'
             # processes, but can be expanded.
-            hosts = list(self.hostlist_servers)
+            hosts = self.hostlist_servers.copy()
             if self.hostlist_clients:
-                hosts.extend(self.hostlist_clients)
+                hosts.add(self.hostlist_clients)
             self.log.info("-" * 100)
             self.stop_leftover_processes(["orterun", "mpirun"], hosts)
 
@@ -1110,7 +1110,7 @@ class TestWithServers(TestWithoutServers):
         Args:
             name (str): manager name
             manager (SubprocessManager): the daos agent/server process manager
-            hosts (list): list of hosts on which to start the daos agent/server
+            hosts (NodeSet): hosts on which to start the daos agent/server
             slots (int): number of slots per engine to define in the hostfile
             access_points (list, optional): list of access point hosts. Defaults
                 to None which uses self.access_points.
@@ -1268,9 +1268,9 @@ class TestWithServers(TestWithoutServers):
 
         """
         errors = []
-        hosts = list(self.hostlist_servers)
+        hosts = self.hostlist_servers.copy()
         if self.hostlist_clients:
-            hosts.extend(self.hostlist_clients)
+            hosts.add(self.hostlist_clients)
         all_hosts = include_local_host(hosts)
         self.log.info(
             "Removing temporary test files in %s from %s",

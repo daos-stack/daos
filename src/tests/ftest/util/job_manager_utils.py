@@ -147,7 +147,7 @@ class JobManager(ExecutableCommand):
         Set the appropriate command line parameter with the specified value.
 
         Args:
-            hosts (list): list of hosts to specify on the command line
+            hosts (NodeSet): hosts to specify on the command line
             path (str, optional): path to use when specifying the hosts through
                 a hostfile. Defaults to None.
             slots (int, optional): number of slots per host to specify in the
@@ -305,12 +305,12 @@ class Orterun(JobManager):
         """Assign the hosts to use with the command (--hostfile).
 
         Args:
-            hosts (list): list of hosts to specify in the hostfile
+            hosts (NodeSet): hosts to specify in the hostfile
             path (str, optional): hostfile path. Defaults to None.
             slots (int, optional): number of slots per host to specify in the
                 hostfile. Defaults to None.
         """
-        self._hosts = hosts
+        self._hosts = hosts.copy()
         kwargs = {"hostlist": self._hosts, "slots": slots}
         if path is not None:
             kwargs["path"] = path
@@ -415,12 +415,12 @@ class Mpirun(JobManager):
         """Assign the hosts to use with the command (-f).
 
         Args:
-            hosts (list): list of hosts to specify in the hostfile
+            hosts (NodeSet): hosts to specify in the hostfile
             path (str, optional): hostfile path. Defaults to None.
             slots (int, optional): number of slots per host to specify in the
                 hostfile. Defaults to None.
         """
-        self._hosts = hosts
+        self._hosts = hosts.copy()
         kwargs = {"hostlist": self._hosts, "slots": slots}
         if path is not None:
             kwargs["path"] = path
@@ -505,12 +505,12 @@ class Srun(JobManager):
         """Assign the hosts to use with the command (-f).
 
         Args:
-            hosts (list): list of hosts to specify in the hostfile
+            hosts (NodeSet): hosts to specify in the hostfile
             path (str, optional): hostfile path. Defaults to None.
             slots (int, optional): number of slots per host to specify in the
                 hostfile. Defaults to None.
         """
-        self._hosts = hosts
+        self._hosts = hosts.copy()
         kwargs = {"hostlist": self._hosts, "slots": None}
         if path is not None:
             kwargs["path"] = path
@@ -680,13 +680,13 @@ class Systemctl(JobManager):
         Set the appropriate command line parameter with the specified value.
 
         Args:
-            hosts (list): list of hosts to specify on the command line
+            hosts (NodeSet): hosts to specify on the command line
             path (str, optional): path to use when specifying the hosts through
                 a hostfile. Defaults to None. Not used.
             slots (int, optional): number of slots per host to specify in the
                 optional hostfile. Defaults to None. Not used.
         """
-        self._hosts = NodeSet.fromlist(hosts)
+        self._hosts = hosts.copy()
 
     def assign_environment(self, env_vars, append=False):
         """Assign or add environment variables to the command.
@@ -915,7 +915,7 @@ class Systemctl(JobManager):
             time, respectively.
 
         Args:
-            hosts (list): list of hosts from which to gather log data.
+            hosts (NodeSet): hosts from which to gather log data.
             since (str): show log entries from this date.
             until (str, optional): show log entries up to this date. Defaults
                 to None, in which case it is not utilized.
@@ -1107,7 +1107,7 @@ class Systemctl(JobManager):
         """Display the journalctl log data since detecting server start.
 
         Args:
-            hosts (list, optional): list of hosts from which to display the
+            hosts (NodeSet, optional): hosts from which to display the
                 journalctl log data. Defaults to None which will log the
                 journalctl log data from all of the hosts.
         """

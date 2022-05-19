@@ -113,7 +113,7 @@ class Dfuse(DfuseCommand):
             "nodirectory": NodeSet()
         }
         if not nodes:
-            nodes = NodeSet.fromlist(self.hosts)
+            nodes = self.hosts.copy()
         check_mounted = NodeSet()
 
         # Detect which hosts have mount point directories defined
@@ -209,7 +209,7 @@ class Dfuse(DfuseCommand):
         dir_exists, clean_nodes = check_file_exists(
             self.hosts, self.mount_dir.value, directory=True)
         if dir_exists:
-            target_nodes = list(self.hosts)
+            target_nodes = self.hosts.copy()
             if clean_nodes:
                 target_nodes.remove(clean_nodes)
 
@@ -352,7 +352,7 @@ class Dfuse(DfuseCommand):
         """
         # Include all hosts when stopping to ensure all mount points in any
         # state are properly removed
-        self.running_hosts.add(NodeSet.fromlist(self.hosts))
+        self.running_hosts.add(self.hosts)
 
         self.log.info(
             "Stopping dfuse at %s on %s",

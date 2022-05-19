@@ -922,7 +922,7 @@ class YamlCommand(SubProcessCommand):
         specified by the YamlParameters.filename.
 
         Args:
-            hosts (list): hosts to which to copy the configuration file.
+            hosts (NodeSet): hosts to which to copy the configuration file.
 
         Raises:
             CommandFailure: if there is an error copying the configuration file
@@ -1003,8 +1003,8 @@ class SubprocessManager(ObjectWithParameters):
         self.manager = get_job_manager_class(manager, command, True)
         self._id = self.manager.job.command.replace("daos_", "")
 
-        # Define the list of hosts that will execute the daos command
-        self._hosts = []
+        # Define the hosts that will execute the daos command
+        self._hosts = NodeSet()
 
         # The socket directory verification is not required with systemctl
         self._verify_socket_dir = manager != "Systemctl"
@@ -1049,7 +1049,7 @@ class SubprocessManager(ObjectWithParameters):
         """Set the hosts used to execute the daos command.
 
         Args:
-            value (tuple): a tuple of a list of hosts, a path in which to create
+            value (tuple): a tuple of a NodeSet of hosts, a path in which to create
                 the hostfile, and a number of slots to specify per host in the
                 hostfile (can be None)
         """
@@ -1061,11 +1061,11 @@ class SubprocessManager(ObjectWithParameters):
         Defined as a private method to enable overriding the setter method.
 
         Args:
-            hosts (list): list of hosts on which to run the command
+            hosts (NodeSet): list of hosts on which to run the command
             path (str): path in which to create the hostfile
             slots (int): number of slots per host to specify in the hostfile
         """
-        self._hosts = list(hosts)
+        self._hosts = hosts.copy()
         self.manager.assign_hosts(self._hosts, path, slots)
         self.manager.assign_processes(len(self._hosts))
 
@@ -1094,7 +1094,7 @@ class SubprocessManager(ObjectWithParameters):
 
         """
         # Create the yaml file for the daos command
-        self.manager.job.temporary_file_hosts = self._hosts
+        self.manager.job.temporary_file_hosts = self._hosts.copy()
         self.manager.job.create_yaml_file()
 
         # Start the daos command
@@ -1242,7 +1242,7 @@ class SubprocessManager(ObjectWithParameters):
 
         """
         status = {"expected": True, "restart": False}
-        show_log_hosts = []
+        show_log_hosts = NodeSet()
 
         # Get the current state of each job process
         current_states = self.get_current_state()
@@ -1257,7 +1257,7 @@ class SubprocessManager(ObjectWithParameters):
         self.log.info(
             "<%s> Verifying %s states: group=%s, hosts=%s",
             self._id.upper(), self._id, self.get_config_value("name"),
-            NodeSet.fromlist(self._hosts))
+            self._hosts)
         if current_states and self._expected_states:
             log_format = "  %-4s  %-15s  %-36s  %-22s  %-14s  %s"
             self.log.info(
@@ -1293,10 +1293,8 @@ class SubprocessManager(ObjectWithParameters):
 
                 # Keep track of any server in the errored state or in an
                 # unexpected state in order to display its log
-                if (current in self._states["errored"] or
-                        current not in expected):
-                    if current_host not in show_log_hosts:
-                        show_log_hosts.append(current_host)
+                if (current in self._states["errored"] or current not in expected):
+                    show_log_hosts.add(current_host)
 
                 self.log.info(
                     log_format, rank, current_host,
