@@ -96,6 +96,10 @@ def parse_file(args, target_file, ftest=False, scons=False):
         target.extend(['--disable', 'consider-using-f-string'])
 
     target.extend(['--persistent', 'n'])
+
+    if args.rcfile:
+        target.extend(['--rcfile', args.rcfile])
+
     results = Run(target, reporter=rep, do_exit=False)
 
     types = Counter()
