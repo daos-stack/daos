@@ -924,8 +924,8 @@ struct ilog_cb_args {
 };
 
 static int
-dkey_ilog_cb(daos_handle_t ih, vos_iter_entry_t *entry, vos_iter_type_t type,
-	     vos_iter_param_t *param, void *cb_arg, unsigned int *acts)
+key_ilog_cb(daos_handle_t ih, vos_iter_entry_t *entry, vos_iter_type_t type,
+	    vos_iter_param_t *param, void *cb_arg, unsigned int *acts)
 {
 	struct vos_iterator	*iter = vos_hdl2iter(ih);
 	struct vos_obj_iter	*oiter = vos_iter2oiter(iter);
@@ -938,7 +938,7 @@ dkey_ilog_cb(daos_handle_t ih, vos_iter_entry_t *entry, vos_iter_type_t type,
 	daos_handle_t		 coh = param->ip_hdl;
 	struct ilog_entries	 entries = {0};
 
-	D_ASSERT(type == VOS_ITER_DKEY);
+	D_ASSERT(type == VOS_ITER_DKEY || type == VOS_ITER_AKEY);
 	if (!daos_key_match(&entry->ie_key, args->key))
 		return 0;
 
@@ -963,12 +963,13 @@ dkey_ilog_cb(daos_handle_t ih, vos_iter_entry_t *entry, vos_iter_type_t type,
 }
 
 int
-dv_get_dkey_ilog_entries(daos_handle_t coh, daos_unit_oid_t oid, daos_key_t *dkey,
-			 dv_dump_ilog_entry cb, void *cb_args)
+dv_get_key_ilog_entries(daos_handle_t coh, daos_unit_oid_t oid, daos_key_t *dkey, daos_key_t *akey,
+			dv_dump_ilog_entry cb, void *cb_args)
 {
 	vos_iter_param_t	param = {0};
 	struct vos_iter_anchors anchors = {0};
 	struct ilog_cb_args	args = {0};
+	vos_iter_type_t		type = VOS_ITER_DKEY;
 
 	D_ASSERT(cb);
 
@@ -979,16 +980,23 @@ dv_get_dkey_ilog_entries(daos_handle_t coh, daos_unit_oid_t oid, daos_key_t *dke
 	param.ip_hdl = coh;
 	param.ip_oid = oid;
 	param.ip_epr.epr_hi = DAOS_EPOCH_MAX;
+	param.ip_dkey = *dkey;
 	args.key = dkey;
 	args.cb = cb;
 	args.cb_args = cb_args;
 
-	return ddb_vos_iterate(&param, VOS_ITER_DKEY, false, &anchors, dkey_ilog_cb, &args);
+	if (akey != NULL) {
+		param.ip_akey = *akey;
+		args.key = akey;
+		type = VOS_ITER_AKEY;
+	}
+
+	return ddb_vos_iterate(&param, type, false, &anchors, key_ilog_cb, &args);
 }
 
 static int
-process_dkey_ilog_cb(daos_handle_t ih, vos_iter_entry_t *entry, vos_iter_type_t type,
-		     vos_iter_param_t *param, void *cb_arg, unsigned int *acts)
+process_key_ilog_cb(daos_handle_t ih, vos_iter_entry_t *entry, vos_iter_type_t type,
+		    vos_iter_param_t *param, void *cb_arg, unsigned int *acts)
 {
 	struct vos_iterator	*iter = vos_hdl2iter(ih);
 	struct vos_obj_iter	*oiter = vos_iter2oiter(iter);
@@ -997,7 +1005,7 @@ process_dkey_ilog_cb(daos_handle_t ih, vos_iter_entry_t *entry, vos_iter_type_t 
 	daos_handle_t		 coh = param->ip_hdl;
 	int			 rc;
 
-	D_ASSERT(type == VOS_ITER_DKEY);
+	D_ASSERT(type == VOS_ITER_DKEY || type == VOS_ITER_AKEY);
 	if (!daos_key_match(&entry->ie_key, args->key))
 		return 0;
 
@@ -1010,12 +1018,13 @@ process_dkey_ilog_cb(daos_handle_t ih, vos_iter_entry_t *entry, vos_iter_type_t 
 }
 
 int
-dv_process_dkey_ilog_entries(daos_handle_t coh, daos_unit_oid_t oid, daos_key_t *dkey,
-			     enum ddb_ilog_op op)
+dv_process_key_ilog_entries(daos_handle_t coh, daos_unit_oid_t oid, daos_key_t *dkey,
+			    daos_key_t *akey, enum ddb_ilog_op op)
 {
 	vos_iter_param_t	param = {0};
 	struct vos_iter_anchors anchors = {0};
 	struct ilog_cb_args	args = {0};
+	vos_iter_type_t		type = VOS_ITER_DKEY;
 
 	if (daos_handle_is_inval(coh) || daos_unit_oid_is_null(oid) ||
 	    dkey == NULL || dkey->iov_len == 0 || (op != DDB_ILOG_OP_ABORT &&
@@ -1029,10 +1038,16 @@ dv_process_dkey_ilog_entries(daos_handle_t coh, daos_unit_oid_t oid, daos_key_t 
 	param.ip_hdl = coh;
 	param.ip_oid = oid;
 	param.ip_epr.epr_hi = DAOS_EPOCH_MAX;
+	param.ip_dkey = *dkey;
 	args.key = dkey;
 	args.op = op;
+	if (akey != NULL) {
+		args.key = akey;
+		type = VOS_ITER_AKEY;
+		param.ip_akey = *akey;
+	}
 
-	return ddb_vos_iterate(&param, VOS_ITER_DKEY, false, &anchors, process_dkey_ilog_cb, &args);
+	return ddb_vos_iterate(&param, type, false, &anchors, process_key_ilog_cb, &args);
 
 	return 0;
 }
@@ -1055,10 +1070,7 @@ committed_dtx_cb(daos_handle_t ih, d_iov_t *key, d_iov_t *val, void *cb_arg)
 	struct vos_dtx_cmt_ent		*ent = val->iov_buf;
 	int				 rc;
 
-	uuid_copy(entry.ddtx_uuid, ent->dce_base.dce_xid.dti_uuid);
-	entry.ddtx_reindex = ent->dce_reindex;
-	entry.ddtx_exist = ent->dce_exist;
-	entry.ddtx_invalid = ent->dce_invalid;
+	entry.ddtx_id = ent->dce_base.dce_xid;
 	entry.ddtx_cmt_time = ent->dce_base.dce_cmt_time;
 	entry.ddtx_epoch = ent->dce_base.dce_epoch;
 
@@ -1075,15 +1087,7 @@ active_dtx_cb(daos_handle_t ih, d_iov_t *key, d_iov_t *val, void *cb_arg)
 	struct vos_dtx_act_ent		*ent = val->iov_buf;
 	int				 rc;
 
-	uuid_copy(entry.ddtx_uuid, ent->dae_base.dae_xid.dti_uuid);
-	entry.ddtx_id_hlc = ent->dae_base.dae_xid.dti_hlc;
-	entry.ddtx_oid_cnt = ent->dae_oid_cnt;
-	entry.ddtx_start_time = ent->dae_start_time;
-	entry.ddtx_committable = ent->dae_committable;
-	entry.ddtx_committed = ent->dae_committed;
-	entry.ddtx_aborted = ent->dae_aborted;
-	entry.ddtx_maybe_shared = ent->dae_maybe_shared;
-	entry.ddtx_prepared = ent->dae_prepared;
+	entry.ddtx_id = ent->dae_base.dae_xid;
 	entry.ddtx_epoch = ent->dae_base.dae_epoch;
 	entry.ddtx_grp_cnt = ent->dae_base.dae_grp_cnt;
 	entry.ddtx_ver = ent->dae_base.dae_ver;
@@ -1113,8 +1117,13 @@ dv_committed_dtx(daos_handle_t coh, dv_committed_dtx_handler handler_cb, void *h
 
 	cont = vos_hdl2cont(coh);
 
-	/* Must reindex before can iterate the committed table */
-	rc = vos_dtx_cmt_reindex(coh, &hint);
+	/*
+	 * Must reindex before can iterate the committed table. Each reindex only reindex entries
+	 * within one block, so must loop until all are done (rc == 1)
+	 */
+	do {
+		rc = vos_dtx_cmt_reindex(coh, &hint);
+	} while (rc >= 0 && rc != 1);
 	if (rc < 0)
 		return rc;
 
@@ -1315,9 +1324,132 @@ done:
 	return rc;
 }
 
+/*
+ * Delete dtx committed entries. Returns number of entries deleted.
+ * On error will return value < 0
+ */
+static int
+dtx_cmt_entry_delete(daos_handle_t coh)
+{
+	struct vos_container		*cont;
+	struct vos_cont_df		*cont_df;
+	struct umem_instance		*umm;
+	struct vos_dtx_blob_df		*dbd;
+	struct vos_dtx_blob_df		*next;
+	uint64_t			 epoch;
+	umem_off_t			 dbd_off;
+	uint32_t			 delete_count = 0;
+	int				 rc;
+	int				 i;
+
+	cont = vos_hdl2cont(coh);
+	D_ASSERT(cont != NULL);
+
+	cont_df = cont->vc_cont_df;
+	dbd_off = cont_df->cd_dtx_committed_head;
+	umm = vos_cont2umm(cont);
+	epoch = cont_df->cd_newest_aggregated;
+
+	dbd = umem_off2ptr(umm, dbd_off);
+	if (dbd == NULL || dbd->dbd_count == 0)
+		return 0;
+
+	rc = umem_tx_begin(umm, NULL);
+	if (rc != 0) {
+		D_ERROR("Failed to TX begin "UMOFF_PF": "DF_RC"\n", UMOFF_P(dbd_off), DP_RC(rc));
+		return rc;
+	}
+
+	for (i = 0; i < dbd->dbd_count; i++) {
+		struct vos_dtx_cmt_ent_df	*dce_df;
+		d_iov_t				 kiov;
+
+		dce_df = &dbd->dbd_committed_data[i];
+		if (epoch < dce_df->dce_epoch)
+			epoch = dce_df->dce_epoch;
+		d_iov_set(&kiov, &dce_df->dce_xid, sizeof(dce_df->dce_xid));
+		rc = dbtree_delete(cont->vc_dtx_committed_hdl, BTR_PROBE_EQ,
+				   &kiov, NULL);
+		if (rc != 0 && rc != -DER_NONEXIST) {
+			D_ERROR("Failed to remove entry "UMOFF_PF": "DF_RC"\n",
+				UMOFF_P(dbd_off), DP_RC(rc));
+			goto out;
+		}
+	}
+	delete_count = i;
+
+	if (epoch != cont_df->cd_newest_aggregated) {
+		rc = umem_tx_add_ptr(umm, &cont_df->cd_newest_aggregated,
+				     sizeof(cont_df->cd_newest_aggregated));
+		if (rc != 0) {
+			D_ERROR("Failed to refresh epoch "UMOFF_PF": "DF_RC"\n",
+				UMOFF_P(dbd_off), DP_RC(rc));
+			goto out;
+		}
+
+		cont_df->cd_newest_aggregated = epoch;
+	}
+
+	next = umem_off2ptr(umm, dbd->dbd_next);
+	if (next == NULL) {
+		/* The last blob for committed DTX blob. */
+		D_ASSERT(cont_df->cd_dtx_committed_tail == cont_df->cd_dtx_committed_head);
+
+		rc = umem_tx_add_ptr(umm, &cont_df->cd_dtx_committed_tail,
+				     sizeof(cont_df->cd_dtx_committed_tail));
+		if (rc != 0) {
+			D_ERROR("Failed to update tail "UMOFF_PF": "DF_RC"\n",
+				UMOFF_P(dbd_off), DP_RC(rc));
+			goto out;
+		}
+
+		cont_df->cd_dtx_committed_tail = UMOFF_NULL;
+	} else {
+		rc = umem_tx_add_ptr(umm, &next->dbd_prev,
+				     sizeof(next->dbd_prev));
+		if (rc != 0) {
+			D_ERROR("Failed to update prev "UMOFF_PF": "DF_RC"\n",
+				UMOFF_P(dbd_off), DP_RC(rc));
+			goto out;
+		}
+
+		next->dbd_prev = UMOFF_NULL;
+	}
+
+	rc = umem_tx_add_ptr(umm, &cont_df->cd_dtx_committed_head,
+			     sizeof(cont_df->cd_dtx_committed_head));
+	if (rc != 0) {
+		D_ERROR("Failed to update head "UMOFF_PF": "DF_RC"\n", UMOFF_P(dbd_off), DP_RC(rc));
+		goto out;
+	}
+
+	cont_df->cd_dtx_committed_head = dbd->dbd_next;
+	rc = umem_free(umm, dbd_off);
+
+out:
+	rc = umem_tx_end(umm, rc);
+	if (rc != 0) {
+		D_ERROR("Failed to delete DTX committed entries "UMOFF_PF": "
+				DF_RC"\n", UMOFF_P(dbd_off), DP_RC(rc));
+		return rc;
+	}
+
+	return delete_count;
+}
+
 int
 dv_clear_committed_table(daos_handle_t coh)
 {
-	/* Aggregation essentially purges the committed DTXs.  */
-	return vos_dtx_aggregate(coh);
+	uint32_t	delete_count = 0;
+	int		rc;
+
+	do {
+		rc = dtx_cmt_entry_delete(coh);
+		if (rc > 0)
+			delete_count += rc;
+	} while (rc > 0);
+
+	if (rc < 0)
+		return rc;
+	return delete_count;
 }

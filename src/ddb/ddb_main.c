@@ -67,14 +67,14 @@ run_cmd(struct ddb_ctx *ctx, struct argv_parsed *parse_args)
 	case DDB_CMD_LOAD:
 		rc = ddb_run_load(ctx, &info.dci_cmd_option.dci_load);
 		break;
-	case DDB_CMD_PROCESS_ILOG:
-		rc = ddb_run_process_ilog(ctx, &info.dci_cmd_option.dci_process_ilog);
+	case DDB_CMD_COMMIT_ILOG:
+		rc = ddb_run_commit_ilog(ctx, &info.dci_cmd_option.dci_commit_ilog);
 		break;
 	case DDB_CMD_RM_ILOG:
 		rc = ddb_run_rm_ilog(ctx, &info.dci_cmd_option.dci_rm_ilog);
 		break;
-	case DDB_CMD_CLEAR_DTX:
-		rc = ddb_run_clear_dtx(ctx, &info.dci_cmd_option.dci_clear_dtx);
+	case DDB_CMD_CLEAR_CMT_DTX:
+		rc = ddb_run_clear_cmt_dtx(ctx, &info.dci_cmd_option.dci_clear_cmt_dtx);
 		break;
 	}
 

@@ -625,13 +625,21 @@ get_dkey_ilog_tests(void **state)
 
 	assert_success(vos_cont_open(tctx->dvt_poh, g_uuids[0], &coh));
 
-	assert_rc_equal(-DER_INVAL, dv_get_dkey_ilog_entries(DAOS_HDL_INVAL, null_oid, NULL,
-							     fake_dump_ilog_entry, NULL));
+	assert_rc_equal(-DER_INVAL, dv_get_key_ilog_entries(DAOS_HDL_INVAL, null_oid, NULL, NULL,
+							    fake_dump_ilog_entry, NULL));
 
 	fake_dump_ilog_entry_called = 0;
-	assert_success(dv_get_dkey_ilog_entries(coh, g_oids[1], &g_dkeys[0], fake_dump_ilog_entry,
-						NULL));
+	assert_success(dv_get_key_ilog_entries(coh, g_oids[1], &g_dkeys[0], NULL,
+					       fake_dump_ilog_entry,
+					       NULL));
 	assert_int_equal(1, fake_dump_ilog_entry_called);
+
+	fake_dump_ilog_entry_called = 0;
+	assert_success(dv_get_key_ilog_entries(coh, g_oids[1], &g_dkeys[0], &g_akeys[0],
+					       fake_dump_ilog_entry,
+					       NULL));
+	assert_int_equal(1, fake_dump_ilog_entry_called);
+	fake_dump_ilog_entry_called = 0;
 
 	vos_cont_close(coh);
 }
@@ -643,17 +651,36 @@ abort_dkey_ilog_tests(void **state)
 	daos_handle_t		 coh;
 	daos_unit_oid_t		 null_oid = {0};
 
-	assert_success(vos_cont_open(tctx->dvt_poh, g_uuids[0], &coh));
+	assert_success(vos_cont_open(tctx->dvt_poh, g_uuids[1], &coh));
 
-	assert_rc_equal(-DER_INVAL, dv_process_dkey_ilog_entries(DAOS_HDL_INVAL, null_oid, NULL,
-								 DDB_ILOG_OP_UNKNOWN));
+	assert_invalid(dv_process_key_ilog_entries(DAOS_HDL_INVAL, null_oid, NULL, NULL,
+						   DDB_ILOG_OP_UNKNOWN));
 
-	assert_success(dv_process_dkey_ilog_entries(coh, g_oids[0], &g_dkeys[0],
-						    DDB_ILOG_OP_ABORT));
+
+	/* akey */
+	assert_success(dv_get_key_ilog_entries(coh, g_oids[0], &g_dkeys[0], &g_akeys[0],
+					       fake_dump_ilog_entry, NULL));
+	assert_int_equal(1, fake_dump_ilog_entry_called);
+
+	assert_success(dv_process_key_ilog_entries(coh, g_oids[0], &g_dkeys[0], &g_akeys[0],
+						   DDB_ILOG_OP_ABORT));
 
 	fake_dump_ilog_entry_called = 0;
-	assert_success(dv_get_dkey_ilog_entries(coh, g_oids[0], &g_dkeys[0], fake_dump_ilog_entry,
-						NULL));
+	assert_success(dv_get_key_ilog_entries(coh, g_oids[0], &g_dkeys[0], &g_akeys[0],
+					       fake_dump_ilog_entry, NULL));
+	assert_int_equal(0, fake_dump_ilog_entry_called);
+
+	/* dkey */
+	assert_success(dv_get_key_ilog_entries(coh, g_oids[0], &g_dkeys[0], NULL,
+					       fake_dump_ilog_entry, NULL));
+	assert_int_equal(1, fake_dump_ilog_entry_called);
+
+	assert_success(dv_process_key_ilog_entries(coh, g_oids[0], &g_dkeys[0], NULL,
+						   DDB_ILOG_OP_ABORT));
+
+	fake_dump_ilog_entry_called = 0;
+	assert_success(dv_get_key_ilog_entries(coh, g_oids[0], &g_dkeys[0], NULL,
+					       fake_dump_ilog_entry, NULL));
 	assert_int_equal(0, fake_dump_ilog_entry_called);
 
 	vos_cont_close(coh);

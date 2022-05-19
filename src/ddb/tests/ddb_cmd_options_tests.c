@@ -149,17 +149,17 @@ dump_ilog_options_parsing(void **state)
 }
 
 static void
-process_ilog_options_parsing(void **state)
+commit_ilog_options_parsing(void **state)
 {
 	struct ddb_cmd_info	 info = {0};
-	struct process_ilog_options	*options = &info.dci_cmd_option.dci_process_ilog;
+	struct commit_ilog_options	*options = &info.dci_cmd_option.dci_commit_ilog;
 
 	/* test invalid arguments and options */
-	test_run_inval_cmd("process_ilog", "path", "extra"); /* too many argument */
-	test_run_inval_cmd("process_ilog", "-z"); /* invalid option */
+	test_run_inval_cmd("commit_ilog", "path", "extra"); /* too many argument */
+	test_run_inval_cmd("commit_ilog", "-z"); /* invalid option */
 
 	/* test all arguments */
-	test_run_cmd(&info, "process_ilog", "path");
+	test_run_cmd(&info, "commit_ilog", "path");
 	assert_non_null(options->path);
 
 }
@@ -204,17 +204,17 @@ dump_dtx_options_parsing(void **state)
 }
 
 static void
-clear_dtx_options_parsing(void **state)
+clear_cmt_dtx_options_parsing(void **state)
 {
 	struct ddb_cmd_info	 info = {0};
-	struct clear_dtx_options	*options = &info.dci_cmd_option.dci_clear_dtx;
+	struct clear_cmt_dtx_options	*options = &info.dci_cmd_option.dci_clear_cmt_dtx;
 
 	/* test invalid arguments and options */
-	test_run_inval_cmd("clear_dtx", "path", "extra"); /* too many argument */
-	test_run_inval_cmd("clear_dtx", "-z"); /* invalid option */
+	test_run_inval_cmd("clear_cmt_dtx", "path", "extra"); /* too many argument */
+	test_run_inval_cmd("clear_cmt_dtx", "-z"); /* invalid option */
 
 	/* test all arguments */
-	test_run_cmd(&info, "clear_dtx", "path");
+	test_run_cmd(&info, "clear_cmt_dtx", "path");
 	assert_non_null(options->path);
 }
 
@@ -233,10 +233,10 @@ ddb_cmd_options_tests_run()
 		TEST(rm_options_parsing),
 		TEST(load_options_parsing),
 		TEST(dump_ilog_options_parsing),
-		TEST(process_ilog_options_parsing),
+		TEST(commit_ilog_options_parsing),
 		TEST(rm_ilog_options_parsing),
 		TEST(dump_dtx_options_parsing),
-		TEST(clear_dtx_options_parsing),
+		TEST(clear_cmt_dtx_options_parsing),
 	};
 
 	return cmocka_run_group_tests_name("DDB commands option parsing tests", tests,

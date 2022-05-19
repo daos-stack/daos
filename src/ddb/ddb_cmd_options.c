@@ -18,14 +18,15 @@
 #define COMMAND_NAME_RM "rm"
 #define COMMAND_NAME_LOAD "load"
 #define COMMAND_NAME_DUMP_ILOG "dump_ilog"
-#define COMMAND_NAME_PROCESS_ILOG "process_ilog"
+#define COMMAND_NAME_COMMIT_ILOG "commit_ilog"
 #define COMMAND_NAME_RM_ILOG "rm_ilog"
 #define COMMAND_NAME_DUMP_DTX "dump_dtx"
-#define COMMAND_NAME_CLEAR_DTX "clear_dtx"
+#define COMMAND_NAME_CLEAR_CMT_DTX "clear_cmt_dtx"
 
 /* Parse command line options for the 'ls' command */
 static int
-ls_option_parse(struct ddb_ctx *ctx, struct ls_options *cmd_args, struct argv_parsed *argc_v)
+ls_option_parse(struct ddb_ctx *ctx, struct ls_options *cmd_args,
+		struct argv_parsed *argc_v)
 {
 	char		 *options_short = "r";
 	int		  index = 0, opt;
@@ -128,7 +129,8 @@ dump_value_option_parse(struct ddb_ctx *ctx, struct dump_value_options *cmd_args
 
 /* Parse command line options for the 'rm' command */
 static int
-rm_option_parse(struct ddb_ctx *ctx, struct rm_options *cmd_args, struct argv_parsed *argc_v)
+rm_option_parse(struct ddb_ctx *ctx, struct rm_options *cmd_args,
+		struct argv_parsed *argc_v)
 {
 	char		 *options_short = "";
 	int		  index = 0, opt;
@@ -175,7 +177,8 @@ rm_option_parse(struct ddb_ctx *ctx, struct rm_options *cmd_args, struct argv_pa
 
 /* Parse command line options for the 'load' command */
 static int
-load_option_parse(struct ddb_ctx *ctx, struct load_options *cmd_args, struct argv_parsed *argc_v)
+load_option_parse(struct ddb_ctx *ctx, struct load_options *cmd_args,
+		  struct argv_parsed *argc_v)
 {
 	char		 *options_short = "";
 	int		  index = 0, opt;
@@ -282,10 +285,10 @@ dump_ilog_option_parse(struct ddb_ctx *ctx, struct dump_ilog_options *cmd_args,
 	return 0;
 }
 
-/* Parse command line options for the 'process_ilog' command */
+/* Parse command line options for the 'commit_ilog' command */
 static int
-process_ilog_option_parse(struct ddb_ctx *ctx, struct process_ilog_options *cmd_args,
-			  struct argv_parsed *argc_v)
+commit_ilog_option_parse(struct ddb_ctx *ctx, struct commit_ilog_options *cmd_args,
+			 struct argv_parsed *argc_v)
 {
 	char		 *options_short = "";
 	int		  index = 0, opt;
@@ -312,7 +315,7 @@ process_ilog_option_parse(struct ddb_ctx *ctx, struct process_ilog_options *cmd_
 	index = optind;
 
 	D_ASSERT(argc > index);
-	D_ASSERT(same(argv[index], COMMAND_NAME_PROCESS_ILOG));
+	D_ASSERT(same(argv[index], COMMAND_NAME_COMMIT_ILOG));
 	index++;
 	if (argc - index > 0) {
 		cmd_args->path = argv[index];
@@ -434,10 +437,10 @@ dump_dtx_option_parse(struct ddb_ctx *ctx, struct dump_dtx_options *cmd_args,
 	return 0;
 }
 
-/* Parse command line options for the 'clear_dtx' command */
+/* Parse command line options for the 'clear_cmt_dtx' command */
 static int
-clear_dtx_option_parse(struct ddb_ctx *ctx, struct clear_dtx_options *cmd_args,
-		       struct argv_parsed *argc_v)
+clear_cmt_dtx_option_parse(struct ddb_ctx *ctx, struct clear_cmt_dtx_options *cmd_args,
+			   struct argv_parsed *argc_v)
 {
 	char		 *options_short = "";
 	int		  index = 0, opt;
@@ -464,7 +467,7 @@ clear_dtx_option_parse(struct ddb_ctx *ctx, struct clear_dtx_options *cmd_args,
 	index = optind;
 
 	D_ASSERT(argc > index);
-	D_ASSERT(same(argv[index], COMMAND_NAME_CLEAR_DTX));
+	D_ASSERT(same(argv[index], COMMAND_NAME_CLEAR_CMT_DTX));
 	index++;
 	if (argc - index > 0) {
 		cmd_args->path = argv[index];
@@ -519,10 +522,9 @@ ddb_parse_cmd_args(struct ddb_ctx *ctx, struct argv_parsed *parsed, struct ddb_c
 		info->dci_cmd = DDB_CMD_DUMP_ILOG;
 		return dump_ilog_option_parse(ctx, &info->dci_cmd_option.dci_dump_ilog, parsed);
 	}
-	if (same(cmd, COMMAND_NAME_PROCESS_ILOG)) {
-		info->dci_cmd = DDB_CMD_PROCESS_ILOG;
-		return process_ilog_option_parse(ctx, &info->dci_cmd_option.dci_process_ilog,
-						 parsed);
+	if (same(cmd, COMMAND_NAME_COMMIT_ILOG)) {
+		info->dci_cmd = DDB_CMD_COMMIT_ILOG;
+		return commit_ilog_option_parse(ctx, &info->dci_cmd_option.dci_commit_ilog, parsed);
 	}
 	if (same(cmd, COMMAND_NAME_RM_ILOG)) {
 		info->dci_cmd = DDB_CMD_RM_ILOG;
@@ -532,9 +534,10 @@ ddb_parse_cmd_args(struct ddb_ctx *ctx, struct argv_parsed *parsed, struct ddb_c
 		info->dci_cmd = DDB_CMD_DUMP_DTX;
 		return dump_dtx_option_parse(ctx, &info->dci_cmd_option.dci_dump_dtx, parsed);
 	}
-	if (same(cmd, COMMAND_NAME_CLEAR_DTX)) {
-		info->dci_cmd = DDB_CMD_CLEAR_DTX;
-		return clear_dtx_option_parse(ctx, &info->dci_cmd_option.dci_clear_dtx, parsed);
+	if (same(cmd, COMMAND_NAME_CLEAR_CMT_DTX)) {
+		info->dci_cmd = DDB_CMD_CLEAR_CMT_DTX;
+		return clear_cmt_dtx_option_parse(ctx, &info->dci_cmd_option.dci_clear_cmt_dtx,
+						  parsed);
 	}
 
 	return -DER_INVAL;
@@ -552,20 +555,19 @@ ddb_run_help(struct ddb_ctx *ctx)
 	ddb_print(ctx, "\nOptions:\n");
 	ddb_print(ctx, "   -R, --run_cmd\n");
 
-	ddb_print(ctx, "\nCommands:\n");
-	ddb_print(ctx, "   help\t\t\tShow this help message\n");
-	ddb_print(ctx, "   quit\t\t\tExit interactive mode\n");
-	ddb_print(ctx, "   ls\t\t\tList the containers, objects, dkeys, akeys, "
-		       "or value depending\n");
-	ddb_print(ctx, "   dump_superblock\tDump the pool superblock information\n");
-	ddb_print(ctx, "   dump_value\t\tDump a value to a file\n");
-	ddb_print(ctx, "   rm\t\t\tRemove a branch of the VOS tree\n");
-	ddb_print(ctx, "   load\t\t\tLoad an updated or new value\n");
-	ddb_print(ctx, "   dump_ilog\t\tDump the ilog\n");
-	ddb_print(ctx, "   process_ilog\t\tProcess the ilog\n");
-	ddb_print(ctx, "   rm_ilog\t\tRemove all the ilog entries\n");
-	ddb_print(ctx, "   dump_dtx\t\tDump the dtx tables\n");
-	ddb_print(ctx, "   clear_dtx\t\tClear the dtx committed table\n");
+	ddb_print(ctx, "Commands:\n");
+	ddb_print(ctx, "   help              Show this help message\n");
+	ddb_print(ctx, "   quit              Quit interactive mode\n");
+	ddb_print(ctx, "   ls                List containers, objects, dkeys, akeys, and values\n");
+	ddb_print(ctx, "   dump_superblock   Dump the pool superblock information\n");
+	ddb_print(ctx, "   dump_value        Dump a value to a file\n");
+	ddb_print(ctx, "   rm                Remove a branch of the VOS tree\n");
+	ddb_print(ctx, "   load              Load an updated or new value\n");
+	ddb_print(ctx, "   dump_ilog         Dump the ilog\n");
+	ddb_print(ctx, "   commit_ilog       Process the ilog\n");
+	ddb_print(ctx, "   rm_ilog           Remove all the ilog entries\n");
+	ddb_print(ctx, "   dump_dtx          Dump the dtx tables\n");
+	ddb_print(ctx, "   clear_cmt_dtx     Clear the dtx committed table\n");
 
 	return 0;
 }

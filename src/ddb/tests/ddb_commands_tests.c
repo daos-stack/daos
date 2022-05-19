@@ -144,8 +144,9 @@ dump_ilog_cmd_tests(void **state)
 	assert_success(ddb_run_dump_ilog(&ctx, &opt));
 	assert_true(dvt_fake_print_called);
 
+	/* Dump akey ilog */
 	opt.path = "[0]/[0]/[0]/[0]";
-	assert_invalid(ddb_run_dump_ilog(&ctx, &opt));
+	assert_success(ddb_run_dump_ilog(&ctx, &opt));
 }
 
 static void
@@ -293,27 +294,27 @@ rm_ilog_cmd_tests(void **state)
 static void
 process_ilog_cmd_tests(void **state)
 {
-	struct process_ilog_options opt = {0};
+	struct commit_ilog_options opt = {0};
 
-	assert_invalid(ddb_run_process_ilog(&g_ctx, &opt));
+	assert_invalid(ddb_run_commit_ilog(&g_ctx, &opt));
 	opt.path = "[0]"; /* just container ... bad */
-	assert_invalid(ddb_run_process_ilog(&g_ctx, &opt));
+	assert_invalid(ddb_run_commit_ilog(&g_ctx, &opt));
 
 	opt.path = "[1]/[0]"; /* object */
-	assert_success(ddb_run_process_ilog(&g_ctx, &opt));
+	assert_success(ddb_run_commit_ilog(&g_ctx, &opt));
 	opt.path = "[2]/[0]/[0]"; /* dkey */
-	assert_success(ddb_run_process_ilog(&g_ctx, &opt));
+	assert_success(ddb_run_commit_ilog(&g_ctx, &opt));
 }
 
 static void
-clear_dtx_cmd_tests(void **state)
+clear_cmt_dtx_cmd_tests(void **state)
 {
-	struct clear_dtx_options opt = {0};
+	struct clear_cmt_dtx_options opt = {0};
 
-	assert_invalid(ddb_run_clear_dtx(&g_ctx, &opt));
+	assert_invalid(ddb_run_clear_cmt_dtx(&g_ctx, &opt));
 
 	opt.path = "[0]";
-	assert_success(ddb_run_clear_dtx(&g_ctx, &opt));
+	assert_success(ddb_run_clear_cmt_dtx(&g_ctx, &opt));
 }
 
 /*
@@ -367,7 +368,7 @@ dvc_tests_run()
 		TEST(load_cmd_tests),
 		TEST(rm_ilog_cmd_tests),
 		TEST(process_ilog_cmd_tests),
-		TEST(clear_dtx_cmd_tests),
+		TEST(clear_cmt_dtx_cmd_tests),
 	};
 
 	return cmocka_run_group_tests_name("DDB commands tests", tests,

@@ -134,36 +134,23 @@ int dv_get_obj_ilog_entries(daos_handle_t coh, daos_unit_oid_t oid, dv_dump_ilog
 			    void *cb_args);
 int dv_process_obj_ilog_entries(daos_handle_t coh, daos_unit_oid_t oid, enum ddb_ilog_op op);
 
-int dv_get_dkey_ilog_entries(daos_handle_t coh, daos_unit_oid_t oid, daos_key_t *dkey,
-			     dv_dump_ilog_entry cb, void *cb_args);
+int
+dv_get_key_ilog_entries(daos_handle_t coh, daos_unit_oid_t oid, daos_key_t *dkey, daos_key_t *akey,
+			dv_dump_ilog_entry cb, void *cb_args);
 
-int dv_process_dkey_ilog_entries(daos_handle_t coh, daos_unit_oid_t oid, daos_key_t *dkey,
-				 enum ddb_ilog_op op);
+int dv_process_key_ilog_entries(daos_handle_t coh, daos_unit_oid_t oid, daos_key_t *dkey,
+				daos_key_t *akey, enum ddb_ilog_op op);
 
 struct dv_dtx_committed_entry {
-	uuid_t		ddtx_uuid;
-	bool		ddtx_reindex;
-	bool		ddtx_exist;
-	bool		ddtx_invalid;
+	struct dtx_id	ddtx_id;
 	daos_epoch_t	ddtx_cmt_time;
 	daos_epoch_t	ddtx_epoch;
 };
 
 struct dv_dtx_active_entry {
-	uuid_t		ddtx_uuid;
-	uint64_t	ddtx_id_hlc;
-	bool		ddtx_reindex;
-	bool		ddtx_exist;
-	bool		ddtx_invalid;
+	struct dtx_id	ddtx_id;
 	daos_epoch_t	ddtx_handle_time;
 	daos_epoch_t	ddtx_epoch;
-	uint32_t	ddtx_oid_cnt;
-	daos_epoch_t	ddtx_start_time;
-	uint32_t	ddtx_committable;
-	uint32_t	ddtx_committed;
-	uint32_t	ddtx_aborted;
-	uint32_t	ddtx_maybe_shared;
-	uint32_t	ddtx_prepared;
 	uint32_t	ddtx_grp_cnt;
 	uint32_t	ddtx_ver;
 	uint32_t	ddtx_rec_cnt;

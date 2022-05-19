@@ -10,7 +10,6 @@
 enum ddb_cmd {
 	DDB_CMD_UNKNOWN = 0,
 	DDB_CMD_HELP = 1,
-
 	DDB_CMD_QUIT = 2,
 	DDB_CMD_LS = 3,
 	DDB_CMD_DUMP_SUPERBLOCK = 4,
@@ -18,10 +17,10 @@ enum ddb_cmd {
 	DDB_CMD_RM = 6,
 	DDB_CMD_LOAD = 7,
 	DDB_CMD_DUMP_ILOG = 8,
-	DDB_CMD_PROCESS_ILOG = 9,
+	DDB_CMD_COMMIT_ILOG = 9,
 	DDB_CMD_RM_ILOG = 10,
 	DDB_CMD_DUMP_DTX = 11,
-	DDB_CMD_CLEAR_DTX = 12,
+	DDB_CMD_CLEAR_CMT_DTX = 12,
 };
 
 /* option and argument structures for commands that need them */
@@ -49,7 +48,7 @@ struct dump_ilog_options {
 	char *path;
 };
 
-struct process_ilog_options {
+struct commit_ilog_options {
 	char *path;
 };
 
@@ -63,7 +62,7 @@ struct dump_dtx_options {
 	char *path;
 };
 
-struct clear_dtx_options {
+struct clear_cmt_dtx_options {
 	char *path;
 };
 
@@ -75,10 +74,10 @@ struct ddb_cmd_info {
 		struct rm_options dci_rm;
 		struct load_options dci_load;
 		struct dump_ilog_options dci_dump_ilog;
-		struct process_ilog_options dci_process_ilog;
+		struct commit_ilog_options dci_commit_ilog;
 		struct rm_ilog_options dci_rm_ilog;
 		struct dump_dtx_options dci_dump_dtx;
-		struct clear_dtx_options dci_clear_dtx;
+		struct clear_cmt_dtx_options dci_clear_cmt_dtx;
 	} dci_cmd_option;
 };
 
@@ -93,9 +92,9 @@ int ddb_run_dump_value(struct ddb_ctx *ctx, struct dump_value_options *opt);
 int ddb_run_rm(struct ddb_ctx *ctx, struct rm_options *opt);
 int ddb_run_load(struct ddb_ctx *ctx, struct load_options *opt);
 int ddb_run_dump_ilog(struct ddb_ctx *ctx, struct dump_ilog_options *opt);
-int ddb_run_process_ilog(struct ddb_ctx *ctx, struct process_ilog_options *opt);
+int ddb_run_commit_ilog(struct ddb_ctx *ctx, struct commit_ilog_options *opt);
 int ddb_run_rm_ilog(struct ddb_ctx *ctx, struct rm_ilog_options *opt);
 int ddb_run_dump_dtx(struct ddb_ctx *ctx, struct dump_dtx_options *opt);
-int ddb_run_clear_dtx(struct ddb_ctx *ctx, struct clear_dtx_options *opt);
+int ddb_run_clear_cmt_dtx(struct ddb_ctx *ctx, struct clear_cmt_dtx_options *opt);
 
 #endif /* __DDB_RUN_CMDS_H */

@@ -173,29 +173,16 @@ ddb_print_ilog_entry(struct ddb_ctx *ctx, struct ddb_ilog_entry *entry)
 void
 ddb_print_dtx_committed(struct ddb_ctx *ctx, struct dv_dtx_committed_entry *entry)
 {
-	ddb_printf(ctx, "UUID: "DF_UUIDF"\n", DP_UUID(entry->ddtx_uuid));
+	ddb_printf(ctx, "ID: "DF_DTI"\n", DP_DTI(&entry->ddtx_id));
 	ddb_printf(ctx, "\tEpoch: "DF_U64"\n", entry->ddtx_epoch);
-	ddb_printf(ctx, "\tExist: "DF_BOOL"\n", DP_BOOL(entry->ddtx_exist));
-	ddb_printf(ctx, "\tInvalid: "DF_BOOL"\n", DP_BOOL(entry->ddtx_invalid));
 }
 
 void
 ddb_print_dtx_active(struct ddb_ctx *ctx, struct dv_dtx_active_entry *entry)
 {
-	ddb_printf(ctx, "UUID: "DF_UUIDF"\n", DP_UUID(entry->ddtx_uuid));
-	ddb_printf(ctx, "\tID HLC: "DF_U64"\n", entry->ddtx_id_hlc);
+	ddb_printf(ctx, "ID: "DF_DTI"\n", DP_DTI(&entry->ddtx_id));
 	ddb_printf(ctx, "\tEpoch: "DF_U64"\n", entry->ddtx_epoch);
-	ddb_printf(ctx, "\tExist: "DF_BOOL"\n", DP_BOOL(entry->ddtx_exist));
-	ddb_printf(ctx, "\tInvalid: "DF_BOOL"\n", DP_BOOL(entry->ddtx_invalid));
-	ddb_printf(ctx, "\tReindex: "DF_BOOL"\n", DP_BOOL(entry->ddtx_reindex));
 	ddb_printf(ctx, "\tHandle Time: "DF_U64"\n", entry->ddtx_handle_time);
-	ddb_printf(ctx, "\tOid Cnt: %d\n", entry->ddtx_oid_cnt);
-	ddb_printf(ctx, "\tStart Time: "DF_U64"\n", entry->ddtx_start_time);
-	ddb_printf(ctx, "\tCommittable: "DF_BOOL"\n", DP_BOOL(entry->ddtx_committable));
-	ddb_printf(ctx, "\tCommitted: "DF_BOOL"\n", DP_BOOL(entry->ddtx_committed));
-	ddb_printf(ctx, "\tAborted: "DF_BOOL"\n", DP_BOOL(entry->ddtx_aborted));
-	ddb_printf(ctx, "\tMaybe Shared: "DF_BOOL"\n", DP_BOOL(entry->ddtx_maybe_shared));
-	ddb_printf(ctx, "\tPrepared: "DF_BOOL"\n", DP_BOOL(entry->ddtx_prepared));
 	ddb_printf(ctx, "\tGrp Cnt: %d\n", entry->ddtx_grp_cnt);
 	ddb_printf(ctx, "\tVer: %d\n", entry->ddtx_ver);
 	ddb_printf(ctx, "\tRec Cnt: %d\n", entry->ddtx_rec_cnt);
