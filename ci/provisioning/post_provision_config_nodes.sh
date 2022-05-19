@@ -100,7 +100,7 @@ echo "jenkins ALL=(ALL) NOPASSWD: ALL" > /etc/sudoers.d/jenkins
 
 # pin the release
 # shellcheck disable=SC2154
-echo "$release" > /etc/dnf/vars/release
+echo "$release" > /etc/dnf/vars/releasever
 
 # defined in ci/functional/post_provision_config_nodes_<distro>.sh
 # and catted to the remote node along with this script
