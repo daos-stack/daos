@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2018-2021 Intel Corporation.
+// (C) Copyright 2018-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -129,4 +129,13 @@ func HasResolution(raw error) bool {
 func IsFault(raw error) bool {
 	_, ok := errors.Cause(raw).(*Fault)
 	return ok
+}
+
+// IsFaultCode indicates whether or not the error is a Fault with the given code.
+func IsFaultCode(raw error, faultCode code.Code) bool {
+	errFault, ok := errors.Cause(raw).(*Fault)
+	if !ok {
+		return false
+	}
+	return errFault.Code == faultCode
 }
