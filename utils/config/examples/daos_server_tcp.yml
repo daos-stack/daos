@@ -39,6 +39,9 @@ engines:
       - FI_SOCKETS_MAX_CONN_RETRY=1
       - FI_SOCKETS_CONN_TIMEOUT=2000
 
+    acceleration:
+      engine: "none"
+
     # Storage definitions (one per tier)
     storage:
       -
@@ -69,6 +72,9 @@ engines:
     env_vars:                 # influence DAOS I/O Engine behavior by setting env variables
       - FI_SOCKETS_MAX_CONN_RETRY=1
       - FI_SOCKETS_CONN_TIMEOUT=2000
+
+    acceleration:
+      engine: "none"
 
     storage:
       -

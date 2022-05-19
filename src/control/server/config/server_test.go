@@ -129,7 +129,7 @@ func TestServerConfig_MarshalUnmarshal(t *testing.T) {
 		expErr error
 	}{
 		"uncommented default config": {inPath: "uncommentedDefault"},
-		"socket example config":      {inPath: tcpExample},
+		"tcp example config":         {inPath: tcpExample},
 		"verbs example config":       {inPath: verbsExample},
 		"default empty config":       {inPath: defaultConfig},
 		"nonexistent config": {
@@ -256,7 +256,8 @@ func TestServerConfig_Constructed(t *testing.T) {
 			WithLogMask("INFO").
 			WithStorageEnableHotplug(true).
 			WithStorageAccelEngine(mockAccelEngineSPDK).
-			WithStorageAccelOpts(mockAccelOptsAllSet...),
+			WithStorageAccelOpts(mockAccelOptsAllSet...).
+			WithStorageAccelOptMask(mockAccelOptMaskAllSet),
 		engine.MockConfig().
 			WithSystemName("daos_server").
 			WithSocketDir("./.daos/daos_server").
@@ -285,7 +286,8 @@ func TestServerConfig_Constructed(t *testing.T) {
 			WithLogMask("INFO").
 			WithStorageEnableHotplug(true).
 			WithStorageAccelEngine(mockAccelEngineDML).
-			WithStorageAccelOpts(mockAccelOptCRC),
+			WithStorageAccelOpts(mockAccelOptCRC).
+			WithStorageAccelOptMask(mockAccelOptMaskCRCSet),
 	}
 	constructed.Path = testFile // just to avoid failing the cmp
 
@@ -693,43 +695,6 @@ func TestServerConfig_Validation(t *testing.T) {
 							WithScmRamdiskSize(1).
 							WithScmMountPoint("/foo"),
 					),
-				),
-		},
-		"acceleration set to spdk; crc opt enabled": {
-			extraConfig: func(c *Server) *Server {
-				return c.WithEngines(defaultEngineCfg().
-					WithStorage(
-						storage.NewTierConfig().
-							WithStorageClass("ram").
-							WithScmRamdiskSize(1).
-							WithScmMountPoint("/foo"),
-						storage.NewTierConfig().
-							WithStorageClass("nvme").
-							WithBdevDeviceList("0000:81:00.0"),
-					).
-					WithStorageAccelEngine(mockAccelEngineSPDK).
-					WithStorageAccelOpts(mockAccelOptCRC),
-				)
-			},
-			expConfig: baseCfg().
-				WithAccessPoints("hostname1:10001").
-				WithNrHugePages(4096).
-				WithEngines(defaultEngineCfg().
-					WithStorage(
-						storage.NewTierConfig().
-							WithStorageClass("ram").
-							WithScmRamdiskSize(1).
-							WithScmMountPoint("/foo"),
-						storage.NewTierConfig().
-							WithStorageClass("nvme").
-							WithBdevDeviceList("0000:81:00.0"),
-					).
-					WithStorageConfigOutputPath("/foo/daos_nvme.conf").
-					WithStorageVosEnv("NVME").
-					WithStorageAccelEngine(mockAccelEngineSPDK).
-					WithStorageAccelOpts(mockAccelOptCRC).
-					WithStorageAccelEngine("spdk").
-					WithStorageAccelOptMask(mockAccelOptMaskCRCSet),
 				),
 		},
 	} {

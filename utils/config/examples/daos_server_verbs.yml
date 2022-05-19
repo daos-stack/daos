@@ -34,6 +34,9 @@ engines:
     log_mask: ERR
     log_file: /tmp/daos_engine.0.log
 
+    acceleration:
+      engine: "none"
+
     # Storage definitions (one per tier)
     storage:
       -
@@ -55,6 +58,9 @@ engines:
     fabric_iface_port: 32416
     log_mask: ERR
     log_file: /tmp/daos_engine.1.log
+
+    acceleration:
+      engine: "none"
 
     storage:
       -

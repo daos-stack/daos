@@ -20,9 +20,16 @@ import (
 	"github.com/daos-stack/daos/src/control/lib/hardware"
 )
 
-const mockAccelEngineNone = "none"
+const (
+	mockAccelEngineNone    = "none"
+	mockAccelEngineDML     = "dml"
+	mockAccelOptMaskCRCSet = 0b10
+)
 
-var mockAccelOptsAllSet = []string{"move", "crc"}
+var (
+	mockAccelOptsAllSet = []string{"move", "crc"}
+	mockAccelOptsCRCSet = []string{"crc"}
+)
 
 func defConfigCmpOpts() cmp.Options {
 	return cmp.Options{
@@ -323,19 +330,6 @@ func TestStorage_parsePCIBusRange(t *testing.T) {
 	}
 }
 
-//func (ap *AccelPropsT) UnmarshalYAML(unmarshal func(interface{}) error) error {
-//	type AccelPropsDefault AccelPropsT
-//	var defaults = AccelPropsDefault{
-//		AccelEngine: "none",
-//	}
-//
-//	out := defaults
-//	err := unmarshal(&out)
-//	*ap = AccelPropsT(out)
-//
-//	return err
-//}
-
 func TestStorage_AccelProps_FromYAML(t *testing.T) {
 	for name, tc := range map[string]struct {
 		input    string
@@ -351,12 +345,16 @@ func TestStorage_AccelProps_FromYAML(t *testing.T) {
 			expProps: AccelProps{},
 		},
 		"engine unset": {
-			input:    "acceleration:\n  engine:\n",
-			expProps: AccelProps{},
+			input: "acceleration:\n  engine:\n",
+			expProps: AccelProps{
+				AccelEngine: mockAccelEngineNone,
+			},
 		},
 		"engine set empty": {
-			input:    "acceleration:\n  engine: \"\"\n",
-			expProps: AccelProps{},
+			input: "acceleration:\n  engine: \"\"\n",
+			expProps: AccelProps{
+				AccelEngine: mockAccelEngineNone,
+			},
 		},
 		"set engine": {
 			input: "acceleration:\n  engine: \"spdk\"\n",
@@ -372,28 +370,22 @@ func TestStorage_AccelProps_FromYAML(t *testing.T) {
 				AccelEngine: mockAccelEngineNone,
 			},
 		},
-		//		"valid pci addresses": {
-		//			input: `["0000:81:00.0","0000:82:00.0"]`,
-		//			expList: &BdevDeviceList{
-		//				PCIAddressSet: func() hardware.PCIAddressSet {
-		//					set, err := hardware.NewPCIAddressSetFromString("0000:81:00.0 0000:82:00.0")
-		//					if err != nil {
-		//						panic(err)
-		//					}
-		//					return *set
-		//				}(),
-		//			},
-		//		},
-		//		"non-pci devices": {
-		//			input: `["/dev/block0","/dev/block1"]`,
-		//			expList: &BdevDeviceList{
-		//				stringBdevSet: common.NewStringSet("/dev/block0", "/dev/block1"),
-		//			},
-		//		},
-		//		"mixed pci and non-pci devices": {
-		//			input:  `["/dev/block0", "0000:81:00.0"]`,
-		//			expErr: errors.New("mix"),
-		//		},
+		"set engine; set options": {
+			input: "acceleration:\n  engine: \"dml\"\n  options:\n    - crc\n",
+			expProps: AccelProps{
+				AccelEngine:  mockAccelEngineDML,
+				AccelOpts:    mockAccelOptsCRCSet,
+				AccelOptMask: mockAccelOptMaskCRCSet,
+			},
+		},
+		"unrecognized engine": {
+			input:  "acceleration:\n  engine: \"foo\"\n",
+			expErr: errors.New("unknown acceleration engine"),
+		},
+		"unrecognized option": {
+			input:  "acceleration:\n  engine: \"dml\"\n  options:\n    - bar\n",
+			expErr: errors.New("unknown acceleration option"),
+		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			cfg := new(Config)
