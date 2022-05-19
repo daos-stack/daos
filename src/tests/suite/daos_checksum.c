@@ -14,7 +14,7 @@
 #include <daos/task.h>
 #include <daos/event.h>
 #include <daos/container.h>
-#include <daos_srv/daos_engine.h>
+#include <daos/object.h>
 
 #define EC_CSUM_OC	OC_EC_2P2G1
 
@@ -2193,7 +2193,7 @@ tst_obj_list_obj(daos_handle_t oh, daos_epoch_range_t *epr, daos_key_t *dkey,
 }
 
 static int
-test_enum_unpack_cb(struct dss_enum_unpack_io *io, void *arg)
+test_enum_unpack_cb(struct dc_obj_enum_unpack_io *io, void *arg)
 {
 	struct daos_csummer	*csummer = NULL;
 	int			 rc;
@@ -2369,8 +2369,8 @@ test_enumerate_object(void **state)
 
 
 	unit_oid.id_pub = ctx.oid;
-	rc = dss_enum_unpack(unit_oid, kds, nr, &sgl, &csum_iov,
-			     test_enum_unpack_cb, NULL);
+	rc = dc_obj_enum_unpack(unit_oid, kds, nr, &sgl, &csum_iov,
+				test_enum_unpack_cb, NULL);
 	assert_success(rc);
 
 	/** Clean up */

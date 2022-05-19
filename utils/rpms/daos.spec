@@ -3,8 +3,8 @@
 %define agent_svc_name daos_agent.service
 %define sysctl_script_name 10-daos_server.conf
 
-%global mercury_version 2.1.0~rc4-8%{?dist}
-%global libfabric_version 1.14.0-1
+%global mercury_version 2.1.0~rc4-9%{?dist}
+%global libfabric_version 1.15.0~rc3-1
 %global __python %{__python3}
 
 %if 0%{?rhel} > 0
@@ -27,7 +27,7 @@
 
 Name:          daos
 Version:       2.3.100
-Release:       2%{?relval}%{?dist}
+Release:       8%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       BSD-2-Clause-Patent
@@ -94,7 +94,7 @@ BuildRequires: libisa-l_crypto-devel
 BuildRequires: libisal-devel
 BuildRequires: libisal_crypto-devel
 %endif
-BuildRequires: daos-raft-devel = 0.9.0-1394.gc81505f%{?dist}%{?dist}
+BuildRequires: daos-raft-devel = 0.9.1-1401.gc18bcb8%{?dist}
 BuildRequires: openssl-devel
 BuildRequires: libevent-devel
 BuildRequires: libyaml-devel
@@ -244,8 +244,7 @@ Requires: python3-tabulate
 Requires: python3-defusedxml
 %endif
 Requires: fio
-Requires: meson
-Requires: python3-pyelftools
+Requires: git
 Requires: dbench
 Requires: lbzip2
 Requires: attr
@@ -497,6 +496,7 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %{_bindir}/agent_tests
 %{_bindir}/drpc_engine_test
 %{_bindir}/drpc_test
+%{_bindir}/dfuse_test
 %{_bindir}/eq_tests
 %{_bindir}/job_tests
 %{_bindir}/security_test
@@ -511,6 +511,8 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %{_bindir}/daos_test
 %{_bindir}/dfs_test
 %{_bindir}/jobtest
+%{_bindir}/daos_gen_io_conf
+%{_bindir}/daos_run_io_conf
 %{_libdir}/libdts.so
 %{_libdir}/libdpar.so
 
@@ -528,8 +530,6 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %{_bindir}/vea_ut
 %{_bindir}/vos_tests
 %{_bindir}/vea_stress
-%{_bindir}/daos_gen_io_conf
-%{_bindir}/daos_run_io_conf
 %{_bindir}/obj_ctl
 %{_bindir}/vos_perf
 
@@ -554,6 +554,24 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 # No files in a shim package
 
 %changelog
+* Mon May  9 2022 Ashley Pittman <ashley.m.pittman@intel.com> 2.3.100-8
+- Extend dfusedaosbuild test to run in different configurations.
+
+* Fri May  6 2022 Ashley Pittman <ashley.m.pittman@intel.com> 2.3.100-7
+- Add dfuse unit-test binary to call from ftest.
+
+* Wed May  4 2022 Joseph Moore <joseph.moore@intel.com> 2.3.100-6
+- Update to mercury 2.1.0.rc4-9 to enable non-unified mode in UCX
+
+* Tue Apr 26 2022 Phillip Henderson <phillip.henderson@intel.com> 2.3.100-5
+- Move daos_gen_io_conf and daos_run_io_conf to daos-client-tests
+
+* Wed Apr 20 2022 Lei Huang <lei.huang@intel.com> 2.3.100-4
+- Update to libfabric to v1.15.0rc3-1 to include critical performance patches
+
+* Tue Apr 12 2022 Li Wei <wei.g.li@intel.com> 2.3.100-3
+- Update raft to 0.9.1-1401.gc18bcb8 to fix uninitialized node IDs
+
 * Wed Apr 6 2022 Jeff Olivier <jeffrey.v.olivier@intel.com> 2.3.100-2
 - Remove direct MPI dependency from most of tests
 

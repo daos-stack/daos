@@ -89,8 +89,16 @@ enum vos_gc_type {
 
 /** Lowest supported durable format version */
 #define POOL_DF_VER_1				23
+/** Minimum pool version for built-in aggregation optimization. Otherwise,
+ *  the optimization can only be enabled by a pool upgrade which sets the global
+ *  version but doesn't update the durable format.  If both the durable format
+ *  and global version remain as currently set, the optimization is disabled.
+ *  This enables the user to continue using the pool with the older version unless
+ *  they have explicitly upgraded it.
+ */
+#define POOL_DF_AGG_OPT				24
 /** Current durable format version */
-#define POOL_DF_VERSION				POOL_DF_VER_1
+#define POOL_DF_VERSION				POOL_DF_AGG_OPT
 
 /**
  * Durable format for VOS pool
@@ -147,8 +155,14 @@ struct vos_dtx_cmt_ent_df {
 	struct dtx_id			dce_xid;
 	/** The epoch# for the DTX. */
 	daos_epoch_t			dce_epoch;
-	/** The time of the DTX being handled on the server. */
-	daos_epoch_t			dce_handle_time;
+	/**
+	 * The time of the DTX being committed on the server.
+	 *
+	 * XXX: in the future, this field will be moved into
+	 *	vos_dtx_blob_df to shrink each committed DTX
+	 *	entry size.
+	 */
+	daos_epoch_t			dce_cmt_time;
 };
 
 /** Active DTX entry on-disk layout in both SCM and DRAM. */

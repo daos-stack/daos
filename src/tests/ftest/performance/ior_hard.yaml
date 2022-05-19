@@ -21,7 +21,7 @@ server_config:
           fabric_iface: ib0
           fabric_iface_port: 31317
           log_file: daos_server0.log
-          log_mask: INFO
+          log_mask: ERR
           bdev_class: nvme
           bdev_list: ["aaaa:aa:aa.a"]
           scm_class: dcpm
@@ -33,7 +33,7 @@ server_config:
           fabric_iface: ib1
           fabric_iface_port: 31417
           log_file: daos_server1.log
-          log_mask: INFO
+          log_mask: ERR
           bdev_class: nvme
           bdev_list: ["bbbb:bb:bb.b"]
           scm_class: dcpm
@@ -42,14 +42,15 @@ server_config:
 pool:
   mode: 146
   name: daos_server
-  size: 90%
+  size: 95%
   control_method: dmg
+  properties: ec_cell_sz:128KiB
 container:
   type: POSIX
   control_method: daos
 ior: &ior_base
   client_processes:
-    ppn: 8
+    ppn: 32
   write_flags: "-w -C -e -g -G 27 -k -Q 1 -v"
   read_flags: "-r -R -C -e -g -G 27 -k -Q 1 -v"
   transfer_size: '47008'
@@ -68,7 +69,7 @@ ior_dfs_ec_16p2gx:
   <<: *ior_base
   api: DFS
   dfs_oclass: EC_16P2GX
-  dfs_chunk: 7521280 # 16 * 47008
+  dfs_chunk: 2115360 # Multiple of 47008 and at least 128KiB * 16
   transfer_size: 47008
 ior_dfuse_sx:
   <<: *ior_base
@@ -80,7 +81,7 @@ ior_dfuse_ec_16p2gx:
   <<: *ior_base
   api: POSIX
   dfs_oclass: EC_16P2GX # dfs params are translated to container params
-  dfs_chunk: 7521280 # 16 * 47008
+  dfs_chunk: 2115360 ## Multiple of 47008 and at least 128KiB * 16
   transfer_size: 47008
 dfuse:
   mount_dir: "/tmp/daos_dfuse"

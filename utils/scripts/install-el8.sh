@@ -7,8 +7,9 @@
 # interactively then these two commands can be used to set dnf into automatic mode.
 # dnf --assumeyes install dnf-plugins-core
 # dnf config-manager --save --setopt=assumeyes=True
+set -e
 
-dnf --nodocs install \
+dnf -y --nodocs install \
     boost-python3-devel \
     bzip2 \
     clang \
@@ -57,6 +58,7 @@ dnf --nodocs install \
     python3-devel \
     python3-pip \
     sg3_utils \
+    sudo \
     valgrind-devel \
     which \
     yasm
@@ -66,7 +68,7 @@ dnf --nodocs install \
 # installed specifically.
 
 if [ -e /etc/fedora-release ]; then
-        dnf install java-1.8.0-openjdk-devel maven-openjdk8
+        dnf -y install java-1.8.0-openjdk-devel maven-openjdk8
 else
-        dnf install maven
+        dnf -y install maven
 fi
