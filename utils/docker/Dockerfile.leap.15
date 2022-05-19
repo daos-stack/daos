@@ -6,45 +6,32 @@
 #
 
 # Pull base image
-FROM opensuse/leap:15.2
+FROM opensuse/leap:15.3
 LABEL maintainer="daos@daos.groups.io"
 
 # Intermittent cache-bust.  Used to reduce load on the actual CACHEBUST later.
 ARG CB0
 
-# If a local distro repository is supplied, then we should use it
-# and disable using the distro repositories that can be mirrored.
-# The Docker image starts out with the DISTRO provided GPG keys
-# on the disk, but not installed.  These must be installed before
-# adding any repo that needs GPG keys but does not provide meta
-# data for installing those keys.
-ARG REPO_URL
-ARG REPO_DISTRO
-RUN if [ -n "${REPO_DISTRO}" ]; then                                           \
-      rm -f /etc/zypp/repos.d/*.repo &&                                        \
-      zypper --non-interactive addrepo --gpgcheck-allow-unsigned-repo          \
-            ${REPO_URL}${REPO_DISTRO}/ daos-stack-distro-group-repo &&         \
-      zypper --non-interactive modifyrepo --gpgcheck-allow-unsigned-repo       \
-             daos-stack-distro-group-repo &&                                   \
-      zypper clean --all;                                                      \
-    fi
-
-# If a local DAOS repository is supplied, then we should use it
-# This is mainly for quickbuilds
-ARG REPO_DAOS
-RUN if [ -n "$REPO_DAOS" ]; then                                \
-      zypper --non-interactive addrepo --gpgcheck-allow-unsigned-repo          \
-             ${REPO_URL}${REPO_DAOS} daos-stack-daos-group-repo &&             \
-      zypper --non-interactive modifyrepo --no-gpgcheck                        \
-             daos-stack-daos-group-repo &&                                     \
-      zypper addlock --repo daos-stack-daos-group-repo                         \
-             'fuse<3' 'libfuse-devel<3' 'fuse-libs<3'                          \
-             'fuse-debuginfo<3' 'ompi' &&                                      \
-      zypper clean --all;                                                      \
-    fi
-# Allow packages to change vendors
-RUN echo "solver.allowVendorChange = true" >> /etc/zypp/zypp.conf
-
+# Use local repo server if present
+ARG REPO_FILE_URL
+RUN set -e;                                                      \
+    if [ -n "$REPO_FILE_URL" ]; then                             \
+        zypper --non-interactive install curl;                   \
+        mkdir -p /etc/dnf/repos.d &&                             \
+        cd /etc/dnf/repos.d/ &&                                  \
+        curl -k -f -o daos_ci-leap15-artifactory.repo.tmp        \
+             "$REPO_FILE_URL"daos_ci-leap15-artifactory.repo &&  \
+        for file in *.repo; do                                   \
+            true > $file;                                        \
+        done;                                                    \
+        mv daos_ci-leap15-artifactory.repo{.tmp,};               \
+    fi;                                                          \
+    zypper --non-interactive install dnf dnf-plugins-core &&     \
+    cd /etc/zypp/repos.d/ &&                                     \
+    for file in *.repo; do                                       \
+        sed -e '/type=NONE/d' < $file > /etc/dnf/repos.d/$file;  \
+    done;                                                        \
+    zypper --non-interactive clean --all
 ARG JENKINS_URL
 ARG REPOS
 RUN for repo in $REPOS; do                                                                                 \
@@ -58,9 +45,14 @@ RUN for repo in $REPOS; do                                                      
                 branch="${branch%:*}";                                                                     \
             fi;                                                                                            \
         fi;                                                                                                \
-        zypper --non-interactive addrepo --no-gpgcheck                                                     \
-               ${JENKINS_URL}job/daos-stack/job/$repo/job/$branch/$build_number/artifact/artifacts/leap15/ \
-               $repo:$branch:$build_number;                                                                \
+        echo -e "[$repo:$branch:$build_number]\n\
+name=$repo:$branch:$build_number\n\
+baseurl=${JENKINS_URL}job/daos-stack/job/$repo/job/$branch/$build_number/artifact/artifacts/leap15/\n\
+enabled=1\n\
+gpgcheck=False\n" >> /etc/dnf/repos.d/$repo:$branch:$build_number.repo;   \
+        cat /etc/dnf/repos.d/$repo:$branch:$build_number.repo; \
+        dnf -y repolist; \
+        dnf --disablerepo=\* --enablerepo=$repo:$branch:$build_number makecache; \
     done
 
 # Install OS updates and package.  Include basic tools and daos dependencies
@@ -69,9 +61,8 @@ RUN for repo in $REPOS; do                                                      
 # Switch to dnf as it seems a bit faster.
 # libatomic should be in this list, but can not for now due to CI
 # post provisioning issue.
-RUN zypper --non-interactive --gpg-auto-import-keys --no-gpg-checks ref && \
-    zypper --non-interactive update && \
-    zypper --non-interactive install \
+RUN dnf -y upgrade && \
+    dnf -y install \
         boost-devel \
         curl \
         clang \
@@ -126,7 +117,7 @@ RUN zypper --non-interactive --gpg-auto-import-keys --no-gpg-checks ref && \
         valgrind-devel \
         which \
         yasm && \
-    zypper clean --all
+    dnf clean all
 
 # Monkey-patch MODULEPATH
 RUN if ! grep MODULEPATH=.*/usr/share/modules /etc/profile.d/lmod.sh; then \
@@ -151,14 +142,16 @@ RUN mkdir -p /opt/daos /mnt/daos /var/run/daos_server /var/run/daos_agent &&   \
     chown daos_server.daos_server /opt/daos /mnt/daos /var/run/daos_server &&  \
     chown daos_agent.daos_agent /var/run/daos_agent
 
+ENV PATH=/home/daos/.local/bin:$PATH
+
 ARG QUICKBUILD=false
 ARG QUICKBUILD_DEPS
-RUN if $QUICKBUILD; then                                                       \
-        zypper --non-interactive --gpg-auto-import-keys --no-gpg-checks ref;   \
-        echo "Installing: $QUICKBUILD_DEPS";                                   \
-        echo "$QUICKBUILD_DEPS" | sed -e '/^$/d' | tr '\n' '\0' |              \
-              xargs -0 zypper --non-interactive install;                       \
-        zypper clean --all;                                                    \
+
+RUN if $QUICKBUILD; then                                          \
+        echo "Installing: $QUICKBUILD_DEPS";                      \
+        echo "$QUICKBUILD_DEPS" | sed -e '/^$/d' | tr '\n' '\0' | \
+          xargs -0 dnf -y install;                                \
+        dnf -y clean all;                                         \
     fi
 
 RUN zypper addlock fuse fuse-libs fuse-devel \
@@ -185,20 +178,23 @@ ARG DAOS_TARGET_TYPE=release
 # src hasn't changed then this won't do anything, but if it has then we want to
 # ensure that latest dependencies are used.
 USER root:root
-RUN [ "$DAOS_DEPS_BUILD" != "yes" ] || \
-    { zypper --non-interactive --gpg-auto-import-keys --no-gpg-checks ref && \
-      zypper --non-interactive update && \
-      zypper clean --all; }
+RUN [ "$DAOS_DEPS_BUILD" != "yes" ] || {                                                  \
+        dnf -y upgrade                                                                    \
+            --exclude=fuse,fuse-libs,fuse-devel,libraft0,raft-devel,mercury,mercury-devel \
+        dnf -y clean all;                                                                 \
+    }
 USER daos_server:daos_server
 
 ARG DEPS_JOBS=1
 
-RUN [ "$DAOS_DEPS_BUILD" != "yes" ] || \
-    { scons --build-deps=yes --jobs $DEPS_JOBS PREFIX=/opt/daos \
-      TARGET_TYPE=$DAOS_TARGET_TYPE --deps-only && \
-    ([ "$DAOS_KEEP_BUILD" != "no" ] || /bin/rm -rf build *.gz); }
+RUN [ "$DAOS_DEPS_BUILD" != "yes" ] || {                            \
+        scons --build-deps=yes --jobs $DEPS_JOBS PREFIX=/opt/daos   \
+              TARGET_TYPE=$DAOS_TARGET_TYPE --deps-only &&          \
+        ([ "$DAOS_KEEP_BUILD" != "no" ] || /bin/rm -rf build *.gz); \
+    }
 USER root:root
 
+# select compiler to use
 # Load the COMPILER arg early, and optionally install the Intel compiler
 # Do this before the CACHEBUST to make best use of cache as this is a big
 # download, and make it optional on the value of COMPILER for the same
@@ -208,17 +204,21 @@ USER root:root
 # below in the general update section.  Only install the compilers at
 # ~900Mb rather than the entire stack at ~3Gb download.
 ARG COMPILER=gcc
-RUN [ "$COMPILER" != "icc" ] || \
-    { zypper --non-interactive addrepo https://yum.repos.intel.com/oneapi oneAPI && \
-      zypper --non-interactive --gpg-auto-import-keys update --repo oneAPI && \
-      zypper --non-interactive install --repo oneAPI --name intel-oneapi-compiler-dpcpp-cpp && \
-      zypper clean --all; }
+RUN if [ "$COMPILER" = "icc" ]; then                                                                     \
+        if [ -z "$REPO_FILE_URL" ] || true; then                                                         \
+            rpm --import https://yum.repos.intel.com/intel-gpg-keys/GPG-PUB-KEY-INTEL-SW-PRODUCTS.PUB && \
+            dnf -y config-manager --add-repo https://yum.repos.intel.com/oneapi oneAPI;                  \
+        fi;                                                                                              \
+        dnf -y install intel-oneapi-compiler-dpcpp-cpp &&                                                \
+        dnf -y clean all;                                                                                \
+    fi
 
-# force an upgrade to get any newly built RPMs
+# force an upgrade to get any newly built RPMs, but only if CACHEBUST is set.
 ARG CACHEBUST
-RUN zypper --non-interactive --gpg-auto-import-keys --no-gpg-checks ref && \
-    zypper --non-interactive update && \
-    zypper clean --all
+RUN [ -z "$CACHEBUST" ] || {                                                                            \
+        dnf -y upgrade --exclude=fuse,fuse-libs,fuse-devel,libraft0,raft-devel,mercury,mercury-devel && \
+        dnf -y clean all;                                                                               \
+    }
 USER daos_server:daos_server
 
 # Set a label.  This is useful for searching for DAOS images, but is also used
@@ -234,7 +234,6 @@ USER root:root
 RUN chown -R daos_server.daos_server /home/daos/daos/
 USER daos_server:daos_server
 
-# select compiler to use
 ARG JOBS=$DEPS_JOBS
 ARG DAOS_BUILD_TYPE=$DAOS_TARGET_TYPE
 ARG DAOS_BUILD=$DAOS_DEPS_BUILD
