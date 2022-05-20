@@ -1,11 +1,13 @@
 #!/usr/bin/python
 """
-  (C) Copyright 2018-2021 Intel Corporation.
+  (C) Copyright 2018-2022 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
+
 import numpy as np
-from mpi4py import MPI
+from mpi4py import MPI  # pylint: disable=import-error
+
 
 class DaosFile():
     """ Daos I/O is at the research stage, this class provides an abstract
@@ -53,6 +55,7 @@ class DaosFile():
         """ done with the file """
         self.mpifile.Close()
 
+
 if __name__ == "__main__":
     # this is a unit test driver for this code
 
@@ -73,7 +76,7 @@ if __name__ == "__main__":
     fh.read_at(89000000, rdata)
 
     # double check a couple values
-    if not rdata == (89000000 % 256):
+    if rdata != (89000000 % 256):
         print("expecting {0} but value is {1}".format((89000000 % 256), rdata))
 
     fh.close()

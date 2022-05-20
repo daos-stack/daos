@@ -9,8 +9,6 @@ from pylint.lint import Run
 from pylint.reporters.collecting_reporter import CollectingReporter
 from pylint.lint import pylinter
 import sl.check_script
-# Atom uses %p/venv/bin/pylint
-# %p/site_scons:%p/utils/sl/fake_scons:%p/src/test/ftest/util
 
 
 class FileTypeList():
@@ -85,6 +83,8 @@ def parse_file(args, target_file, ftest=False, scons=False):
 
     wrapper = None
 
+    init_hook = None
+
     if isinstance(target_file, list):
         target = list(target_file)
         target.extend(['--jobs', str(min(len(target_file), 20))])
@@ -93,13 +93,23 @@ def parse_file(args, target_file, ftest=False, scons=False):
         target = [wrapper.wrap_file]
         # Do not warn on module name for SConstruct files, we don't get to pick their name.
         target.extend(['--disable', 'invalid-name'])
+        init_hook = """import sys
+sys.path.append('site_scons')
+sys.path.insert(0, 'utils/sl/fake_scons')"""
     else:
         target = [target_file]
 
     if ftest:
         target.extend(['--disable', 'consider-using-f-string'])
+        init_hook = """import sys
+sys.path.append('src/tests/ftest/util/apricot')
+sys.path.append('src/tests/ftest/cart/util/')
+sys.path.append('src/tests/ftest/util')
+sys.path.append('src/tests/ftest')"""
 
     target.extend(['--persistent', 'n'])
+    if init_hook:
+        target.extend(['--init-hook', init_hook])
 
     if args.rcfile:
         target.extend(['--rcfile', args.rcfile])

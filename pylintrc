@@ -32,13 +32,6 @@
 [MASTER]
 extension-pkg-allow-list=xattr
 persistent=no
-init-hook=import sys
-        sys.path.append('src/tests/ftest/util/apricot')
-        sys.path.append('src/tests/ftest/cart/util/')
-        sys.path.append('src/tests/ftest/util')
-        sys.path.append('src/tests/ftest')
-        sys.path.append('site_scons')
-        sys.path.insert(0, 'utils/sl/fake_scons')
 
 py-version=3.6
 
@@ -52,7 +45,7 @@ disable=locally-disabled,locally-enabled,star-args,global-statement,bad-option-v
 [SPELLING]
 spelling-dict=en_US
 spelling-private-dict-file=utils/words.dict
-#spelling-store-unknown-words=true
+spelling-store-unknown-words=true
 
 [FORMAT]
 max-line-length=100
