@@ -289,6 +289,14 @@ int
 vos_pool_open(const char *path, uuid_t uuid, unsigned int flags,
 	      daos_handle_t *poh);
 
+/** Enable any version specific features on the pool
+ *
+ * \param poh	[IN]	Container open handle
+ * \param feats	[IN]	Features to enable
+ */
+void
+vos_pool_features_set(daos_handle_t poh, uint64_t feats);
+
 /**
  * Extended vos_pool_open() with an additional 'metrics' parameter to VOS telemetry.
  */
@@ -1097,14 +1105,14 @@ vos_obj_query_key(daos_handle_t coh, daos_unit_oid_t oid, uint32_t flags,
  *
  *  \param alloc_overhead[IN]	Expected allocation overhead
  *  \param tclass[IN]		The type of tree to query
- *  \param ofeat[IN]		Relevant object features
+ *  \param otype[IN]		Relevant object features
  *  \param ovhd[IN,OUT]		Returned overheads
  *
  *  \return 0 on success, error otherwise.
  */
 int
 vos_tree_get_overhead(int alloc_overhead, enum VOS_TREE_CLASS tclass,
-		      uint64_t ofeat, struct daos_tree_overhead *ovhd);
+		      uint64_t otype, struct daos_tree_overhead *ovhd);
 
 /** Return the size of the pool metadata in persistent memory on-disk format */
 int

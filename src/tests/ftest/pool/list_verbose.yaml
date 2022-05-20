@@ -50,6 +50,5 @@ ior:
   test_file: test_file_1
   transfer_size: 1M
   dfs_chunk: 1048576
-  dfs_dir_oclass: S1
   dfs_oclass: S1
   dfs_group: daos_server
