@@ -26,7 +26,7 @@ Build-Depends: debhelper (>= 10),
                libcunit1-dev,
                golang-go,
                libboost-dev,
-               libspdk-dev,
+               libspdk-dev (>=21.07), libspdk-dev (<<22)
                libipmctl-dev,
                libraft-dev (= 0.9.1-1401.gc18bcb8),
                python3-tabulate,
