@@ -33,6 +33,8 @@ class FileTypeList():
             return
         if file.startswith('src/control/vendor'):
             return
+        if file.startswith('src/vos/storage_estimator'):
+            return
 
         # If files are in a subdir under ftest then they need to by treated differently.
         if file.startswith('src/tests/ftest/'):
