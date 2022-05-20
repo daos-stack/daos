@@ -1,6 +1,8 @@
 """Build DAOS utilities"""
+
 import daos_build
 Import('env', 'base_env', 'prereqs')
+
 
 def scons():
     """Execute build"""
@@ -41,6 +43,7 @@ def scons():
     libs += ['daos_cmd_hdlrs']
 
     Export('daos_hdlrs_lib')
+
 
 if __name__ == "SCons.Script":
     scons()
