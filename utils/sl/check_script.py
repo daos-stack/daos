@@ -152,7 +152,7 @@ class WrapScript():
 from SCons.Script import * # pylint: disable=import-outside-toplevel
 # pylint: disable-next=import-outside-toplevel,unused-wildcard-import,wildcard-import
 from SCons.Variables import *
-from prereq_tools import PreReqComponent\n""")
+from prereq_tools import PreReqComponent # pylint: disable=unused-import\n""")
         return 5
 
     def convert_line(self, line):
