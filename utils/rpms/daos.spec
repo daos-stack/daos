@@ -175,8 +175,7 @@ to optimize performance and cost.
 %package server
 Summary: The DAOS server
 Requires: %{name}%{?_isa} = %{version}-%{release}
-Requires: spdk-tools >= 21.07
-Requires: spdk-tools < 22
+Requires: spdk-tools >= 21.07, spdk-tools < 22
 Requires: ndctl
 # needed to set PMem configuration goals in BIOS through control-plane
 %if (0%{?suse_version} >= 1500)
