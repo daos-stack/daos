@@ -58,7 +58,6 @@ gpgcheck=False\n" >> /etc/yum.repos.d/$repo:$branch:$build_number.repo;   \
 
 # Install OS updates and package.  Include basic tools and daos dependencies
 COPY ./utils/scripts/install-centos7.sh /tmp/install.sh
-# Why is this hanging?
 RUN chmod +x /tmp/install.sh && dnf -y upgrade && /tmp/install.sh && dnf -y clean all && \
     rm -f /tmp/install.sh
 
