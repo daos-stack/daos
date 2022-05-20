@@ -8,8 +8,6 @@ import os
 import daos_build
 import SCons.Action
 
-import sys
-import argparse
 HEADERS = ['api.h', 'iv.h', 'types.h', 'swim.h']
 
 SRC = ['crt_bulk.c', 'crt_context.c', 'crt_corpc.c',
@@ -18,6 +16,7 @@ SRC = ['crt_bulk.c', 'crt_context.c', 'crt_corpc.c',
        'crt_rpc.c', 'crt_self_test_client.c', 'crt_self_test_service.c',
        'crt_swim.c', 'crt_tree.c', 'crt_tree_flat.c', 'crt_tree_kary.c',
        'crt_tree_knomial.c', 'crt_hlc.c', 'crt_hlct.c']
+
 
 # pylint: disable=unused-argument
 def macro_expand(target, source, env):

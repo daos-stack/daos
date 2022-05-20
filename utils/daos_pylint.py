@@ -70,6 +70,8 @@ def is_scons_file(filename):
         return True
     if filename.endswith('SConscript'):
         return True
+    if filename == 'site_scons/site_tools/protoc/__init__.py':
+        return True
     # TODO: Some files here do, some don't.
     # if filename.startswith('site_scons'):
     #    return True
@@ -135,10 +137,10 @@ def parse_file(args, target_file, ftest=False, scons=False):
         if args.format == 'github':
             if msg.category in ('convention', 'refactor'):
                 continue
+            if msg.category == 'warning':
+                continue
             # pylint: disable-next=line-too-long,consider-using-f-string
             print('::{category} file={path},line={line},col={column},::{symbol}, {msg}'.format(**vals))  # noqa: E501
-            # pylint: disable-next=line-too-long,consider-using-f-string
-            print(':{category} file={path},line={line},col={column},::{symbol}, {msg}'.format(**vals))  # noqa: E501
 
         types[msg.category] += 1
         symbols[msg.symbol] += 1
