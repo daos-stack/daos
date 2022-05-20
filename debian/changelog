@@ -4,6 +4,13 @@ daos (2.1.102-3) unstable; urgency=medium
 
  -- Lei Huang <lei.huang@intel.com>  Wed, 18 May 2022 17:00:00 -0500
 
+daos (2.1.102-2) unstable; urgency=medium
+  [ Phillip Henderson ]
+  * Remove doas-*-tests-openmpi dependencies from daos-tests
+  * Add daos-tests-internal package
+
+ -- Phillip Henderson <phillip.henderson@intel.com>  Mon, 9 May 2022 17:48:00 -0400
+
 daos (2.1.102-1) unstable; urgency=medium
   [ Johann Lombardi ]
   * Bump version to 2.1.102
