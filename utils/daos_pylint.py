@@ -131,7 +131,10 @@ def parse_file(args, target_file, ftest=False, scons=False):
         vals['category'] = msg.category
 
         if args.format == 'github':
-            print('::{category} file={file},line={line},:: {msg_id}, {msg}'.format(**vals))
+            if msg.category in ('convention', 'refactor'):
+                continue
+            # pylint: disable-next=line-too-long
+            print('::{category} file={path},line={line},col={column}::{symbol}, {msg}'.format(**vals))  # noqa: E501
         else:
             print(args.msg_template.format(**vals))
 

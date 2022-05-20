@@ -47,7 +47,7 @@ good-names=rc,ret,fd
 
 [MESSAGES CONTROL]
 disable=locally-disabled,locally-enabled,star-args,global-statement,bad-option-value,
-        wrong-import-position,modified-iterating-list,duplicate-code
+        wrong-import-position,modified-iterating-list,duplicate-code,unspecified-encoding
 
 #[SPELLING]
 #spelling-dict=en_US
