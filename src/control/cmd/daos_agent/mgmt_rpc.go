@@ -19,6 +19,8 @@ import (
 	"github.com/daos-stack/daos/src/control/common/proto/convert"
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	"github.com/daos-stack/daos/src/control/drpc"
+	"github.com/daos-stack/daos/src/control/fault"
+	"github.com/daos-stack/daos/src/control/fault/code"
 	"github.com/daos-stack/daos/src/control/lib/control"
 	"github.com/daos-stack/daos/src/control/lib/daos"
 	"github.com/daos-stack/daos/src/control/lib/hardware"
@@ -125,7 +127,9 @@ func (mod *mgmtModule) handleGetAttachInfo(ctx context.Context, reqb []byte, pid
 	mod.log.Debugf("client process NUMA node %d", numaNode)
 
 	resp, err := mod.getAttachInfo(ctx, int(numaNode), pbReq.Sys)
-	if err != nil {
+	if fault.IsFaultCode(err, code.ServerWrongSystem) {
+		resp = &mgmtpb.GetAttachInfoResp{Status: int32(daos.ControlIncompatible)}
+	} else if err != nil {
 		return nil, err
 	}
 
