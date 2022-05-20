@@ -329,8 +329,7 @@ class DaosServerYamlParameters(YamlParameters):
         REQUIRED_ENV_VARS = {
             "common": [
                 "D_LOG_FILE_APPEND_PID=1",
-                "COVFILE=/tmp/test.cov",
-                "DAOS_SCHED_WATCHDOG_ALL=1"],
+                "COVFILE=/tmp/test.cov"],
             "ofi+tcp": [
                 "SWIM_PING_TIMEOUT=10"],
             "ofi+verbs": [
@@ -391,6 +390,7 @@ class DaosServerYamlParameters(YamlParameters):
                 "ABT_ENV_MAX_NUM_XSTREAMS=100",
                 "ABT_MAX_NUM_XSTREAMS=100",
                 "DAOS_MD_CAP=1024",
+                "DAOS_SCHED_WATCHDOG_ALL=1",
                 "DD_MASK=mgmt,io,md,epc,rebuild",
             ]
             default_env_vars.extend(self.REQUIRED_ENV_VARS["common"])
