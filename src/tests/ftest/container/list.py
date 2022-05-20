@@ -46,7 +46,7 @@ class ListContainerTest(TestWithServers):
         data = self.daos_cmd.container_list(pool=pool_uuid)
         actual_uuids = []
         for uuid_label in data["response"]:
-            actual_uuids.append(uuid_label["UUID"])
+            actual_uuids.append(uuid_label["uuid"])
         actual_uuids.sort()
 
         self.assertEqual(expected_uuids, actual_uuids)

@@ -1,0 +1,24 @@
+# Install dependencies of a development node
+
+- name: Install rpms missing development dependencies
+  remote_user: root
+  dnf:
+    state: latest
+    update_cache: true
+    name: "{{ daos_base_deps.rpms + daos_dev_deps.rpms }}"
+
+- name: Install DAOS building dependencies
+  remote_user: root
+  command:
+    dnf builddep -y "{{ playbook_dir }}/file/daos.spec"
+  args:
+    warn: false
+  register: dnf_result
+  become: true
+  changed_when: '"Nothing to do" not in dnf_result.stdout'
+
+- name: Install python development dependencies
+  remote_user: root
+  pip:
+    state: present
+    name: "{{ daos_dev_deps.pips }}"
