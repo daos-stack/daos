@@ -197,6 +197,23 @@ pipeline {
                 }
             }
         }
+        stage('Check PR') {
+            when { changeRequest() }
+            steps {
+                catchError(stageResult: 'UNSTABLE', buildResult: 'SUCCESS',
+                           message: "PR did not get committed with required git hooks.  Please see utils/githooks/README.md.") {
+                    sh 'if ! ' + cachedCommitPragma('Required-githooks', 'false') + '''; then
+                           echo "PR did not get committed with required git hooks.  Please see utils/githooks/README.md."
+                           exit 1
+                        fi'''
+                }
+            }
+            post {
+                unsuccessful {
+                    echo "PR did not get committed with required git hooks.  Please see utils/githooks/README.md."
+                }
+            }
+        }
         stage('Cancel Previous Builds') {
             when { changeRequest() }
             steps {
@@ -467,7 +484,6 @@ pipeline {
                     steps {
                         sconsBuild parallel_build: parallelBuild(),
                                    stash_files: 'ci/test_files_to_stash.txt',
-                                   scons_exe: 'scons-3',
                                    scons_args: sconsFaultsArgs()
                     }
                     post {
@@ -501,7 +517,6 @@ pipeline {
                     steps {
                         sconsBuild parallel_build: parallelBuild(),
                                    stash_files: 'ci/test_files_to_stash.txt',
-                                   scons_exe: 'scons-3',
                                    scons_args: sconsFaultsArgs()
                     }
                     post {
@@ -679,8 +694,7 @@ pipeline {
                     }
                     steps {
                         sconsBuild coverity: "daos-stack/daos",
-                                   parallel_build: parallelBuild(),
-                                   scons_exe: 'scons-3'
+                                   parallel_build: parallelBuild()
                     }
                     post {
                         success {
@@ -870,7 +884,6 @@ pipeline {
                     }
                     steps {
                         sconsBuild parallel_build: true,
-                                   scons_exe: 'scons-3',
                                    scons_args: "PREFIX=/opt/daos TARGET_TYPE=release BUILD_TYPE=debug",
                                    build_deps: "no"
                         sh (script:"""./utils/docker_nlt.sh --class-name centos7.fault-injection fi""",
