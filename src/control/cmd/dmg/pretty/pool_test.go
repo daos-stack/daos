@@ -988,9 +988,9 @@ no pools in system
 				},
 			},
 			expPrintStr: `
-Pool     Size State Used Imbalance Disabled Upgrade 
-----     ---- ----- ---- --------- -------- ------- 
-00000001 0 B  Ready 0%   0%        0/0      0->0    
+Pool     Size State Used Imbalance Disabled 
+----     ---- ----- ---- --------- -------- 
+00000001 0 B  Ready 0%   0%        0/0      
 
 `,
 		},
@@ -1059,9 +1059,9 @@ Pool     Size State Used Imbalance Disabled Upgrade
 			},
 			expPrintStr: `
 Pool     Size   State Used Imbalance Disabled Upgrade? 
-----     ----   ----- ---- --------- -------- ------- 
-00000001 6.0 TB Ready 83%  12%       0/16     1->2    
-two      6.0 TB Ready 83%  12%       8/64     1->2    
+----     ----   ----- ---- --------- -------- -------- 
+00000001 6.0 TB Ready 83%  12%       0/16     1->2     
+two      6.0 TB Ready 83%  12%       8/64     1->2     
 
 `,
 		},
@@ -1096,10 +1096,10 @@ two      6.0 TB Ready 83%  12%       8/64     1->2
 				},
 			},
 			expPrintStr: `
-Pool Size   State Used Imbalance Disabled Upgrade?  
+Pool Size   State Used Imbalance Disabled Upgrade? 
 ---- ----   ----- ---- --------- -------- -------- 
-one  6.0 TB Ready 83%  12%       0/16     1->2    
-two  100 GB Ready 80%  12%       8/64     2->2    
+one  6.0 TB Ready 83%  12%       0/16     1->2     
+two  100 GB Ready 80%  12%       8/64     None     
 
 `,
 		},
@@ -1130,7 +1130,7 @@ Query on pool "two" unsuccessful, error: "stats unavailable"
 
 Pool Size   State Used Imbalance Disabled Upgrade? 
 ---- ----   ----- ---- --------- -------- -------- 
-one  6.0 TB Ready 83%  12%       0/16     1->2    
+one  6.0 TB Ready 83%  12%       0/16     1->2     
 
 `,
 		},
@@ -1194,7 +1194,7 @@ no pools in system
 			},
 			verbose: true,
 			expPrintStr: `
-Label UUID                                 State SvcReps SCM Size SCM Used SCM Imbalance NVME Size NVME Used NVME Imbalance Disabled Upgrade?
+Label UUID                                 State SvcReps SCM Size SCM Used SCM Imbalance NVME Size NVME Used NVME Imbalance Disabled Upgrade? 
 ----- ----                                 ----- ------- -------- -------- ------------- --------- --------- -------------- -------- -------- 
 -     00000001-0001-0001-0001-000000000001 Ready N/A     100 GB   80 GB    12%           6.0 TB    5.0 TB    1%             0/16     1->2     
 
