@@ -31,9 +31,9 @@ print_usage()
 	print_message("Use one of these opt(s) for specific test\n");
 	print_message("vos_tests -p|--pool_tests\n");
 	print_message("vos_tests -c|--container_tests\n");
-	print_message("vos_tests -i|--io_tests <ofeat>\n");
-	print_message("ofeats = DAOS_OF_DKEY_UINT64, DAOS_OF_DKEY_LEXICAL\n");
-	print_message("%8s DAOS_OF_AKEY_UINT64, DAOS_OF_AKEY_LEXICAL\n", " ");
+	print_message("vos_tests -i|--io_tests <otype>\n");
+	print_message("otypes = DAOS_OT_DKEY_UINT64, DAOS_OT_DKEY_LEXICAL\n");
+	print_message("%8s DAOS_OT_AKEY_UINT64, DAOS_OT_AKEY_LEXICAL\n", " ");
 	print_message("vos_tests -d |--discard-tests\n");
 	print_message("vos_tests -a |--aggregate-tests\n");
 	print_message("vos_tests -X|--dtx_tests\n");
@@ -52,18 +52,14 @@ print_usage()
 	print_message("  --force_no_zero_copy\n");
 }
 
-static int dkey_feats[] = {
-	0,	/* regular opaque key */
-	DAOS_OF_DKEY_UINT64,
-	DAOS_OF_DKEY_LEXICAL,
-	-1,
-};
-
-static int akey_feats[] = {
-	0,	/* regular opaque key */
-	DAOS_OF_AKEY_UINT64,
-	DAOS_OF_AKEY_LEXICAL,
-	-1,
+static int type_list[] = {
+	0,
+	DAOS_OT_AKEY_UINT64,
+	DAOS_OT_AKEY_LEXICAL,
+	DAOS_OT_DKEY_UINT64,
+	DAOS_OT_DKEY_LEXICAL,
+	DAOS_OT_MULTI_UINT64,
+	DAOS_OT_MULTI_LEXICAL
 };
 
 static inline int
@@ -72,9 +68,7 @@ run_all_tests(int keys, bool nest_iterators)
 	const char	*it;
 	char		 cfg_desc_io[DTS_CFG_MAX];
 	int		 failed = 0;
-	int		 feats;
 	int		 i;
-	int		 j;
 
 	if (!nest_iterators) {
 		dts_create_config(cfg_desc_io, "keys=%d", keys);
@@ -101,12 +95,8 @@ run_all_tests(int keys, bool nest_iterators)
 	}
 	dts_create_config(cfg_desc_io, "keys=%d iterator=%s", keys, it);
 
-	for (i = 0; dkey_feats[i] >= 0; i++) {
-		for (j = 0; akey_feats[j] >= 0; j++) {
-			feats = dkey_feats[i] | akey_feats[j];
-			failed += run_io_test(feats, keys, nest_iterators,
-					      cfg_desc_io);
-		}
+	for (i = 0; i < (sizeof(type_list) / sizeof(int)); i++) {
+		failed += run_io_test(type_list[i], keys, nest_iterators, cfg_desc_io);
 	}
 
 	return failed;
@@ -119,7 +109,7 @@ main(int argc, char **argv)
 	int	nr_failed = 0;
 	int	opt = 0;
 	int	index = 0;
-	int	ofeats;
+	int	otypes;
 	int	keys;
 	bool	nest_iterators = false;
 	const char *short_options = "apcdglzni:mXA:S:hf:e:tC";
@@ -233,8 +223,8 @@ main(int argc, char **argv)
 			nest_iterators = true;
 			break;
 		case 'i':
-			ofeats = strtol(optarg, NULL, 16);
-			nr_failed += run_io_test(ofeats, 0,
+			otypes = strtol(optarg, NULL, 16);
+			nr_failed += run_io_test(otypes, 0,
 						 nest_iterators,
 						 "");
 			test_run = true;
