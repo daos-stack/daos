@@ -72,11 +72,9 @@ def is_scons_file(filename):
         return True
     if filename.endswith('SConscript'):
         return True
+    # There may be more files needed here, but just this one is reporting errors for now.
     if filename == 'site_scons/site_tools/protoc/__init__.py':
         return True
-    # TODO: Some files here do, some don't.
-    # if filename.startswith('site_scons'):
-    #    return True
     return False
 
 
@@ -214,6 +212,7 @@ def main():
     except ImportError:
         spellings = False
 
+    print(f'Spellings are {spellings}')
     args = parser.parse_args()
 
     args.spellings = spellings

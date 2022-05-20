@@ -51,8 +51,8 @@ disable=locally-disabled,locally-enabled,star-args,global-statement,bad-option-v
 
 [SPELLING]
 spelling-dict=en_US
-spelling-private-dict-file=words.dict
-spelling-store-unknown-words=true
+spelling-private-dict-file=utils/words.dict
+#spelling-store-unknown-words=true
 
 [FORMAT]
 max-line-length=100
