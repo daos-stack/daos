@@ -341,7 +341,7 @@ class Test(avocadoTest):
             float: number of seconds since the start of the test
 
         """
-        return time.time() - self.time_start
+        return time() - self.time_start
 
     def get_remaining_time(self):
         """Get the remaining time before the test timeout will expire.
