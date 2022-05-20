@@ -1,3 +1,9 @@
+daos (2.0.2-5) unstable; urgency=medium
+  [ Tom Nabarro ]
+  * Restrict SPDK version to less than 22
+
+ -- Tom Nabarro <tom.nabarro@intel.com> Fri, 20 May 2022 16:42:54
+
 daos (2.0.2-4) unstable; urgency=medium
   [ Lei Huang ]
   * Update libfabric to v1.15.0rc3-1 with critical performance patches
