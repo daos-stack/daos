@@ -37,10 +37,10 @@ class CriticalIntegrationWithoutServers(TestWithoutServers):
     def setUp(self):
         """Set up CriticalIntegrationWithoutServers."""
         super().setUp()
-        self.hostlist_servers = list(self.get_hosts_from_yaml(
-            "test_servers", "server_partition", "server_reservation", "/run/hosts/*"))
-        self.hostlist_clients = list(self.get_hosts_from_yaml(
-            "test_clients", "server_partition", "server_reservation", "/run/hosts/*"))
+        self.hostlist_servers = self.get_hosts_from_yaml(
+            "test_servers", "server_partition", "server_reservation", "/run/hosts/*")
+        self.hostlist_clients = self.get_hosts_from_yaml(
+            "test_clients", "server_partition", "server_reservation", "/run/hosts/*")
 
     def test_passwdlessssh_versioncheck(self):
         # pylint: disable=protected-access
@@ -56,14 +56,14 @@ class CriticalIntegrationWithoutServers(TestWithoutServers):
         check_remote_root_access = self.params.get("check_remote_root_access", "/run/*")
         daos_server_version_list = []
         dmg_version_list = []
-        failed_nodes = []
+        failed_nodes = NodeSet()
         for host in self.hostlist_servers:
             daos_server_cmd = ("ssh -oNumberOfPasswordPrompts=0 {}"
                                " 'daos_server version'".format(host))
             remote_root_access = ("ssh -oNumberOfPasswordPrompts=0 root@{}"
                                   " 'echo hello'".format(host))
             command_for_inter_node = ("clush --nostdin -S -w {}"
-                                      " 'echo hello'".format(','.join(self.hostlist_servers)))
+                                      " 'echo hello'".format(str(self.hostlist_servers)))
             try:
                 out = run_command(daos_server_cmd)
                 daos_server_version_list.append(out.stdout.split(b' ')[3])
@@ -72,7 +72,7 @@ class CriticalIntegrationWithoutServers(TestWithoutServers):
                 IorTestBase._execute_command(self, command_for_inter_node, hosts=[host])
             except (DaosTestError, CommandFailure) as error:
                 self.log.error("Error: %s", error)
-                failed_nodes.append(host)
+                failed_nodes.add(host)
         if failed_nodes:
             self.fail("SSH check failed on the following nodes.\n {}".format(failed_nodes))
 
