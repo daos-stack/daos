@@ -780,8 +780,7 @@ vos_self_init(const char *db_path, bool use_sys_db, int tgt_id)
 	if (rc)
 		D_GOTO(failed, rc);
 
-	/* [todo-ryon]: how to get actual target id?? */
-	rc = vos_self_nvme_init(1);
+	rc = vos_self_nvme_init(tgt_id);
 	if (rc)
 		D_GOTO(failed, rc);
 
