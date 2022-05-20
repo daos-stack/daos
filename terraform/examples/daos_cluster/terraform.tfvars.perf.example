@@ -29,7 +29,9 @@ server_daos_scm_size       = 45
 #   {
 #     name       = "pool1",
 #     size       = "1TB",
-#     tier_ratio = 3
+#     tier_ratio = 3,
+#     user = "root@",
+#     group = "root@",
 #     acls = [
 #       "A::OWNER@:rwdtTaAo",
 #       "A:G:GROUP@:rwtT",
@@ -42,6 +44,8 @@ server_daos_scm_size       = 45
 #       {
 #         name = "container1",
 #         type = "POSIX",
+#         user = "root@",
+#         group = "root@",
 #         acls = [
 #           "A::OWNER@:rwdtTaAo",
 #           "A:G:GROUP@:rwtT",

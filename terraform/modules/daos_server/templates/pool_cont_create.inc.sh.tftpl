@@ -6,6 +6,8 @@ if [[ "$${HOSTNAME,,}" == "$${FIRST_DAOS_SERVER_HOSTNAME,,}" ]]; then
   dmg pool create \
     --size=${pool.size} \
     --tier-ratio="${pool.tier_ratio}" \
+    --user="${pool.user}" \
+    --group="${pool.group}" \
     %{~ if length(pool.properties) != 0 ~}
     --properties="%{~ for idx, pprop_key in keys(pool.properties) ~}
         ${~ pprop_key}:${pool.properties[pprop_key]}%{~ if idx != length(pool.properties)-1 ~},%{~ endif ~}%{~ endfor ~}" \
@@ -33,6 +35,7 @@ if [[ "$${HOSTNAME,,}" == "$${FIRST_DAOS_SERVER_HOSTNAME,,}" ]]; then
       %{~ for attr_key, attr_value in container.user_attributes ~}
   daos cont set-attr "${pool.name}" "${container.name}" "${attr_key}" "${attr_value}"
       %{~ endfor ~}
+  daos cont set-owner "${pool.name}" "${container.name}" --user="${container.user}" --group="${container.group}"
     %{~ endfor ~}
   %{~endfor ~}
 
