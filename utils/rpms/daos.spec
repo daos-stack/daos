@@ -27,7 +27,7 @@
 
 Name:          daos
 Version:       2.1.102
-Release:       2%{?relval}%{?dist}
+Release:       3%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       BSD-2-Clause-Patent
@@ -228,11 +228,20 @@ This is the package needed to run a DAOS client
 
 %package tests
 Summary: The entire DAOS test suite
-Requires: %{name}-client-tests-openmpi%{?_isa} = %{version}-%{release}
-Requires: %{name}-server-tests-openmpi%{?_isa} = %{version}-%{release}
+Requires: %{name}-client-tests%{?_isa} = %{version}-%{release}
+Requires: %{name}-server-tests%{?_isa} = %{version}-%{release}
 
 %description tests
 This is the package is a metapackage to install all of the test packages
+
+%package tests-internal
+Summary: The entire DAOS internal test suite
+Requires: %{name}-tests%{?_isa} = %{version}-%{release}
+Requires: %{name}-client-tests-openmpi%{?_isa} = %{version}-%{release}
+Requires: %{name}-server-tests-openmpi%{?_isa} = %{version}-%{release}
+
+%description tests-internal
+This is the package is a metapackage to install all of the internal test packages
 
 %package client-tests
 Summary: The DAOS test suite
@@ -560,12 +569,19 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %files tests
 # No files in a meta-package
 
+%files tests-internal
+# No files in a meta-package
+
 %files mofed-shim
 # No files in a shim package
 
 %changelog
-* Tue May 17 2022 Tom Nabarro <tom.nabarro@intel.com> 2.1.102-2
+* Fri May 20 2022 Tom Nabarro <tom.nabarro@intel.com> 2.1.102-3
 - Restrict SPDK version to less than 22
+
+* Mon May 9 2022 Phillip Henderson <phillip.henderson@intel.com> 2.1.102-2
+- Remove doas-*-tests-openmpi dependencies from daos-tests
+- Add the daos-tests-internal package
 
 * Thu May 5 2022 Johann Lombardi <johann.lombardi@intel.com> 2.1.102-1
 - Bump version to 2.1.102
