@@ -274,6 +274,162 @@ chk_leader_find_slowest(struct chk_instance *ins)
 	return phase;
 }
 
+/*
+ * Initialize and construct clues_out from cpr. The caller is responsible for
+ * freeing clues->pcs_array with D_FREE, but the borrowed
+ * clues->pcs_array->pc_svc_clue must not be freed.
+ */
+static int
+chk_leader_build_pool_clues(struct chk_pool_rec *cpr, struct ds_pool_clues *clues_out)
+{
+	struct ds_pool_clues	 clues;
+	struct chk_pool_shard	*cps;
+
+	clues.pcs_cap = 4;
+	D_ALLOC_ARRAY(clues.pcs_array, clues.pcs_cap);
+	if (clues.pcs_array == NULL)
+		return -DER_NOMEM;
+	clues.pcs_len = 0;
+
+	d_list_for_each_entry(cps, &cpr->cpr_shard_list, cps_link) {
+		struct ds_pool_svc_clue	*svc_clue = cps->cps_data;
+		struct ds_pool_clue	*clue;
+
+		if (svc_clue == NULL)
+			continue;
+
+		if (clues.pcs_len + 1 == clues.pcs_cap) {
+			struct ds_pool_clue	*array;
+			int			 cap = clues.pcs_cap * 2;
+
+			D_REALLOC_ARRAY(array, clues.pcs_array, clues.pcs_cap, cap);
+			if (array == NULL) {
+				D_FREE(clues.pcs_array);
+				return -DER_NOMEM;
+			}
+			clues.pcs_array = array;
+			clues.pcs_cap = cap;
+		}
+
+		clue = &clues.pcs_array[clues.pcs_len];
+		uuid_copy(clue->pc_uuid, cpr->cpr_uuid);
+		clue->pc_rank = cps->cps_rank;
+		clue->pc_dir = DS_POOL_DIR_NORMAL; /* no info, but unused */
+		clue->pc_rc = 0;
+		clue->pc_padding = 0;
+		clue->pc_svc_clue = svc_clue; /* borrowed */
+		clues.pcs_len++;
+	}
+
+	*clues_out = clues;
+	return 0;
+}
+
+/*
+ * Start clues->pcs_array[chosen] in the dictating mode after destroying all
+ * other replicas. (We could also quarantee the other replicas and destroy them
+ * only after we are sure that the chosen replica is working.)
+ */
+static int
+chk_leader_reset_pool_svc(struct ds_pool_clues *clues, int chosen)
+{
+	d_rank_t	*ranks;
+	d_rank_list_t	 rank_list;
+	d_iov_t		 psid;
+	int		 i;
+	int		 j;
+	int		 rc;
+
+	D_ASSERT(chosen >= 0 && clues->pcs_len > chosen);
+	d_iov_set(&psid, clues->pcs_array[0].pc_uuid, sizeof(uuid_t));
+
+	D_ALLOC_ARRAY(ranks, clues->pcs_len);
+	if (ranks == NULL) {
+		rc = -DER_NOMEM;
+		goto out;
+	}
+
+	/* Build a list of all ranks except for the chosen one. */
+	j = 0;
+	for (i = 0; i < clues->pcs_len; i++) {
+		if (i == chosen)
+			continue;
+		ranks[j] = clues->pcs_array[i].pc_rank;
+		j++;
+	}
+	rank_list.rl_ranks = ranks;
+	rank_list.rl_nr = j;
+
+	rc = ds_rsvc_dist_stop(DS_RSVC_CLASS_POOL, &psid, &rank_list, NULL /* excluded */,
+			       true /* destroy */);
+	if (rc != 0) {
+		D_ERROR(DF_UUID": failed to destroy other pool service replicas: "DF_RC"\n",
+			DP_UUID(psid.iov_buf), DP_RC(rc));
+		goto out_ranks;
+	}
+
+	/* Build a list of only the chosen rank. */
+	rank_list.rl_ranks[0] = clues->pcs_array[chosen].pc_rank;
+	rank_list.rl_nr = 1;
+
+#if 0 /* unsatisfied dependency */
+	rc = ds_rsvc_dist_start(DS_RSVC_CLASS_POOL, &psid, &rank_list, DS_RSVC_DICTATE,
+				false /* bootstrap */, 0 /* size */);
+#else
+	rc = 0;
+#endif
+	if (rc != 0)
+		D_ERROR(DF_UUID": failed to reset pool service on rank %u: "DF_RC"\n",
+			DP_UUID(psid.iov_buf), rank_list.rl_ranks[0], DP_RC(rc));
+
+out_ranks:
+	D_FREE(ranks);
+out:
+	return rc;
+}
+
+static int
+chk_leader_handle_pool_svc(daos_handle_t ih, d_iov_t *key, d_iov_t *val, void *arg)
+{
+	struct chk_pool_rec	*cpr = val->iov_buf;
+	struct ds_pool_clues	 clues;
+	int			 advice;
+	int			 rc;
+
+	D_ASSERT(val->iov_len == sizeof(*cpr));
+
+	rc = chk_leader_build_pool_clues(cpr, &clues);
+	if (rc != 0)
+		goto out;
+	if (clues.pcs_len == 0) {
+		D_DEBUG(DB_MGMT, DF_UUID": no PS replicas\n", DP_UUID(cpr->cpr_uuid));
+		/* XXX: Should we record this problem in cpr somehow? */
+		goto out_array;
+	}
+
+	rc = ds_pool_check_svc_clues(&clues, &advice);
+	D_ASSERTF(rc >= 0, "ds_pool_check_svc_clues: %d\n", rc);
+	if (rc == 0) {
+		D_DEBUG(DB_MGMT, DF_UUID": PS okay\n", DP_UUID(cpr->cpr_uuid));
+		goto out_array;
+	}
+
+	/*
+	 * Always follow the advice for the moment; may support other options
+	 * in the future.
+	 */
+	rc = chk_leader_reset_pool_svc(&clues, advice);
+	/*
+	 * XXX: Should we record any remote error in cpr somehow and continue
+	 * processing other pool services?
+	 */
+
+out_array:
+	D_FREE(clues.pcs_array);
+out:
+	return rc;
+}
+
 static int
 chk_leader_handle_pools(struct chk_sched_args *csa)
 {
@@ -288,7 +444,13 @@ chk_leader_handle_pools(struct chk_sched_args *csa)
 		goto out;
 	}
 
-	/* TBD: elect the proper PS replica with Liwei's patch. */
+	/* Handle the pool services. */
+	rc = dbtree_iterate(csa->csa_hdl, DAOS_INTENT_DEFAULT, false /* backward */,
+			    chk_leader_handle_pool_svc, NULL /* arg */);
+	if (rc != 0)
+		goto out;
+
+	/* TODO: Handle the pools, by comparing against clp. */
 
 out:
 	ds_chk_free_pool_list(clp, clp_nr);
