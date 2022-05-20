@@ -561,7 +561,7 @@ class TestPool(TestDaosApiBase):
         nvme_fs = 0
         start = time()
         scm_index, nvme_index = 0, 1
-        while time() - start < timeout:
+        while time() - start < timeout and not done:
             sleep(1)
             checks = []
             self.get_info()
@@ -572,13 +572,11 @@ class TestPool(TestDaosApiBase):
             if expected_nvme is not None:
                 checks.append(("nvme", nvme_fs, expected_nvme))
             done = self._check_info(checks)
-            if done:
-                break
 
         if not done:
-            self.log.error(
-                "Pool Free space did not match: actual=%s,%s expected=%s,%s",
-                scm_fs, nvme_fs, expected_scm, expected_nvme)
+            raise DaosTestError(
+                "Pool Free space did not match: actual={},{} expected={},{}".format(
+                scm_fs, nvme_fs, expected_scm, expected_nvme))
 
         return done
 

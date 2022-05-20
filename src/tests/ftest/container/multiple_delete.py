@@ -61,7 +61,11 @@ class MultipleContainerDelete(IorTestBase):
         self.log.info("SCM = %d, SSD = %d", final_scm_fs, final_ssd_fs)
 
         self.log.info("Verifying SSD space is recovered")
-        self.assertTrue(self.pool.check_free_space(expected_nvme=initial_ssd_fs))
+        try:
+            self.pool.check_free_space(expected_nvme=initial_ssd_fs)
+        except DaosTestError as error:
+            self.fail("SSD space is not recovered after 50 "
+                      "create-write-destroy iterations {}".format(error))
 
         self.log.info("Verifying SCM space is recovered")
         self.log.info("%d == %d", final_scm_fs, initial_scm_fs)
