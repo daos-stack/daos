@@ -10,13 +10,7 @@
 #include <daos_srv/daos_chk.h>
 #include <daos_srv/daos_engine.h>
 
-#include "chk.pb-c.h"
 #include "chk_internal.h"
-
-static bool
-ds_chk_need_rejoin(void) {
-	return true;
-}
 
 static void
 ds_chk_start_hdlr(crt_rpc_t *rpc)
@@ -53,19 +47,8 @@ ds_chk_fini(void)
 static int
 ds_chk_setup(void)
 {
-	int	rc;
-
-	/* TBD: open log. */
-
-	if (ds_chk_need_rejoin()) {
-		rc = chk_rejoin();
-		/* Rejoin check may fail, that is normal. Because former check instance may has
-		 * already been stopped or exited, or current rank may miss some critical phase
-		 * or has been excluded. Just some warning message without stopping the engine.
-		 */
-		if (rc != 0)
-			D_WARN("Cannot rejoin CHECK: "DF_RC"\n", DP_RC(rc));
-	}
+	/* Do NOT move chk_vos_init into ds_chk_init, because sys_db is not ready at that time. */
+	chk_vos_init();
 
 	return 0;
 }
@@ -73,9 +56,7 @@ ds_chk_setup(void)
 static int
 ds_chk_cleanup(void)
 {
-	chk_pause();
-
-	/* TBD: close log. */
+	chk_vos_fini();
 
 	return 0;
 }
