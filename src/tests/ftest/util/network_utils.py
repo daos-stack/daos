@@ -14,8 +14,7 @@ from ClusterShell.NodeSet import NodeSet
 from exception_utils import CommandFailure
 from general_utils import run_task, display_task
 
-SUPPORTED_PROVIDERS = (
-    "ofi+sockets", "ofi+tcp", "ofi+tcp;ofi_rxm", "ofi+verbs", "ofi+verbs;ofi_rxm", "ucx+dc_x")
+SUPPORTED_PROVIDERS = ("ofi+sockets", "ofi+tcp;ofi_rxm", "ofi+verbs;ofi_rxm", "ucx+dc_x")
 
 
 class NetworkDevice():
