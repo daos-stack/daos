@@ -273,6 +273,8 @@ extern "C" {
 		Retry with other target)				\
 	ACTION(DER_NOTSUPPORTED,	(DER_ERR_DAOS_BASE + 37),	\
 	       Operation not supported)					\
+	ACTION(DER_CONTROL_INCOMPAT,	(DER_ERR_DAOS_BASE + 38),	\
+	       One or more control plane components are incompatible)	\
 
 /** Defines the gurt error codes */
 #define D_FOREACH_ERR_RANGE(ACTION)	\
