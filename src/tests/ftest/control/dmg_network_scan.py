@@ -32,9 +32,7 @@ class DmgNetworkScanTest(TestWithServers):
         """
         server_provider = self.server_managers[0].get_config_value("provider")
         sys_info = []
-        self.log.debug("Searching for system devices w/ device=ib*, provider=%s:", server_provider)
         for entry in get_network_information(self.hostlist_servers, SUPPORTED_PROVIDERS):
-            self.log.debug("  - %s", entry)
             if entry.device.startswith("ib") and server_provider in entry.provider:
                 entry.ib_device = None
                 sys_info.append(entry)

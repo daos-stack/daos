@@ -509,6 +509,7 @@ def get_network_information(hosts, supported=None, verbose=True):
             for ib_name in data_gather["ib_device"]:
                 for add_on in ([], ["1"]):
                     device = ":".join([ib_name] + add_on)
+                    data_gather["provider"].update(get_interface_providers(device, ofi_info))
                     data_gather["provider"].update(get_interface_providers(device, ucx_info))
             for key, data in data_gather.items():
                 kwargs[key] = []
