@@ -14,8 +14,7 @@ from ClusterShell.NodeSet import NodeSet
 from exception_utils import CommandFailure
 from general_utils import run_task, display_task
 
-SUPPORTED_PROVIDERS = (
-    "ofi+sockets", "ofi+tcp", "ofi+tcp;ofi_rxm", "ofi+verbs", "ofi+verbs;ofi_rxm", "ucx+dc_x")
+SUPPORTED_PROVIDERS = ("ofi+sockets", "ofi+tcp;ofi_rxm", "ofi+verbs;ofi_rxm", "ucx+dc_x")
 
 
 class NetworkDevice():
@@ -36,8 +35,8 @@ class NetworkDevice():
 
     def __str__(self):
         """Overwrite to display formatted devices."""
-        settings = ["{}={}".format(key, getattr(self, key, None)) for key in self.__dict__]
-        return "NetworkDevice({})".format(", ".join(settings))
+        settings = [f"{key}={getattr(self, key, None)}" for key in self.__dict__]
+        return f"NetworkDevice({', '.join(settings)})"
 
     def __ne__(self, other):
         """Override the default not-equal implementation."""
@@ -45,14 +44,14 @@ class NetworkDevice():
 
     def __eq__(self, other):
         """Override the default implementation to compare devices."""
-        status = isinstance(other, NetworkDevice)
+        status = True
+        if not isinstance(other, NetworkDevice):
+            return False
         for key in self.__dict__:
-            if not status:
-                break
             try:
                 status &= str(getattr(self, key)) == str(getattr(other, key))
             except AttributeError:
-                status = False
+                return False
         return status
 
     @property
@@ -81,8 +80,7 @@ def get_active_network_interfaces(hosts, verbose=True):
     """
     net_path = os.path.join(os.path.sep, "sys", "class", "net")
     operstate = os.path.join(net_path, "*", "operstate")
-    command = " | ".join(
-        ["grep -l 'up' {}".format(operstate), "grep -Ev '/(lo|bonding_masters)/'", "sort"])
+    command = " | ".join([f"grep -l 'up' {operstate}", "grep -Ev '/(lo|bonding_masters)/'", "sort"])
     task = run_task(hosts, command, verbose=verbose)
     if verbose:
         display_task(task)
@@ -144,7 +142,7 @@ def get_interface_speeds(hosts, interface, verbose=True):
 
     """
     net_path = os.path.join(os.path.sep, "sys", "class", "net")
-    command = "cat {}".format(os.path.join(net_path, interface, "speed"))
+    command = f"cat {os.path.join(net_path, interface, 'speed')}"
     task = run_task(hosts, command, verbose=verbose)
     if verbose:
         display_task(task)
@@ -186,7 +184,7 @@ def get_interface_numa_node(hosts, interface, verbose=True):
 
     """
     net_path = os.path.join(os.path.sep, "sys", "class", "net")
-    command = "cat {}".format(os.path.join(net_path, interface, "device", "numa_node"))
+    command = f"cat {os.path.join(net_path, interface, 'device', 'numa_node')}"
     task = run_task(hosts, command, verbose=verbose)
     if verbose:
         display_task(task)
@@ -223,7 +221,7 @@ def get_interface_ib_name(hosts, interface, verbose=True):
 
     """
     net_path = os.path.join(os.path.sep, "sys", "class", "net")
-    command = "ls -1 {}".format(os.path.join(net_path, interface, "device", "infiniband"))
+    command = f"ls -1 {os.path.join(net_path, interface, 'device', 'infiniband')}"
     task = run_task(hosts, command, verbose=verbose)
     if verbose:
         display_task(task)
@@ -272,7 +270,7 @@ def get_ofi_info(hosts, supported=None, verbose=True):
             nodeset = NodeSet.fromlist(nodelist)
 
             # Find all the provider and domain pairings. The fi_info output reports these on
-            # separate lines when processing the re matches ensure each domain is preceeded by a
+            # separate lines when processing the re matches ensure each domain is preceded by a
             # provider.
             interface_providers = {}
             data = re.findall(r"(provider|domain):\s+([A-Za-z0-9;_+]+)", "\n".join(output_lines))
@@ -337,7 +335,7 @@ def get_ucx_info(hosts, supported=None, verbose=True):
             nodeset = NodeSet.fromlist(nodelist)
 
             # Find all the transport, device, and type pairings. The ucx_info output reports these
-            # on separate lines so when processing the re matches ensure each device is preceeded by
+            # on separate lines so when processing the re matches ensure each device is preceded by
             # a provider.
             interface_providers = {}
             data = re.findall(r"(Transport|Device):\s+([A-Za-z0-9;_+]+)", "\n".join(output_lines))
@@ -499,31 +497,33 @@ def get_network_information(hosts, supported=None, verbose=True):
     interfaces = get_active_network_interfaces(hosts, verbose)
     for host in hosts:
         for interface, node_set in interfaces.items():
-            if host in node_set:
-                kwargs = {"host": host, "device": interface, "port": 1}
-                data_gather = {
-                    "ib_device": get_interface_ib_name(node_set, interface, verbose),
-                    "provider": get_interface_providers(interface, ofi_info),
-                    "numa": get_interface_numa_node(node_set, interface, verbose),
-                }
-                for ib_name in data_gather["ib_device"]:
-                    for add_on in ([], ["1"]):
-                        device = ":".join([ib_name] + add_on)
-                        data_gather["provider"].update(get_interface_providers(device, ucx_info))
-                for key, data in data_gather.items():
-                    kwargs[key] = []
-                    for item, item_node_set in data.items():
-                        if node_set == item_node_set:
-                            kwargs[key].append(item)
-                    if kwargs[key]:
-                        kwargs[key] = ",".join([str(item) for item in kwargs[key]])
-                    else:
-                        kwargs[key] = None
+            if host not in node_set:
+                continue
+            kwargs = {"host": host, "device": interface, "port": 1}
+            data_gather = {
+                "ib_device": get_interface_ib_name(node_set, interface, verbose),
+                "provider": get_interface_providers(interface, ofi_info),
+                "numa": get_interface_numa_node(node_set, interface, verbose),
+            }
+            for ib_name in data_gather["ib_device"]:
+                for add_on in ([], ["1"]):
+                    device = ":".join([ib_name] + add_on)
+                    data_gather["provider"].update(get_interface_providers(device, ofi_info))
+                    data_gather["provider"].update(get_interface_providers(device, ucx_info))
+            for key, data in data_gather.items():
+                kwargs[key] = []
+                for item, item_node_set in data.items():
+                    if node_set == item_node_set:
+                        kwargs[key].append(item)
+                if kwargs[key]:
+                    kwargs[key] = ",".join([str(item) for item in kwargs[key]])
+                else:
+                    kwargs[key] = None
 
-                for item in kwargs["provider"].split(","):
-                    these_kwargs = kwargs.copy()
-                    these_kwargs["provider"] = item
-                    network_devices.append(NetworkDevice(**these_kwargs))
+            for item in kwargs["provider"].split(","):
+                these_kwargs = kwargs.copy()
+                these_kwargs["provider"] = item
+                network_devices.append(NetworkDevice(**these_kwargs))
 
     return network_devices
 
@@ -554,6 +554,6 @@ def get_dmg_network_information(dmg_network_scan):
                     )
     except KeyError as error:
         raise CommandFailure(
-            "Error processing dmg network scan json output: {}".format(dmg_network_scan)) from error
+            f"Error processing dmg network scan json output: {dmg_network_scan}") from error
 
     return network_devices

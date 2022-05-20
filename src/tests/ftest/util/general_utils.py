@@ -323,9 +323,7 @@ def check_task(task, logger=None):
         task (Task): a ClusterShell.Task.Task object for the executed command
 
     Returns:
-        tuple:
-            bool: if the command returned an 0 exit status on every host
-            str: Summary of the task output
+        bool: if the command returned an 0 exit status on every host
 
     """
     def check_task_log(message):
@@ -347,7 +345,6 @@ def check_task(task, logger=None):
             output_data = [["<NONE>", results[code]]]
         for output, o_hosts in output_data:
             node_set = NodeSet.fromlist(o_hosts)
-            lines = []
             lines = list(output.splitlines())
             if len(lines) > 1:
                 # Print the sub-header for multiple lines of output
