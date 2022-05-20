@@ -796,50 +796,31 @@ out:
 }
 
 static void
-rdbt_destroy_replica_handler(crt_rpc_t *rpc)
-{
-	struct rdbt_destroy_replica_out	*out = crt_reply_get(rpc);
-	d_rank_t			 rank;
-	int				 rc;
-
-	MUST(crt_group_rank(NULL /* grp */, &rank));
-	D_WARN("destroying replica on rank %u\n", rank);
-
-	rc = ds_rsvc_stop(DS_RSVC_CLASS_TEST, &test_svc_id, true /* destroy */);
-
-	D_WARN("rpc reply from rank %u: rc=%d\n", rank, rc);
-	out->reo_rc = rc;
-	crt_reply_send(rpc);
-}
-
-static void
 rdbt_dictate_handler(crt_rpc_t *rpc)
 {
 	struct ds_rsvc		*rsvc;
 	uuid_t			 db_uuid;
+	struct rdbt_dictate_in	*in = crt_req_get(rpc);
 	struct rdbt_dictate_out	*out = crt_reply_get(rpc);
-	d_rank_t		 rank;
-	int			 rc;
+	d_rank_list_t		*ranks;
 
-	MUST(crt_group_rank(NULL /* grp */, &rank));
-	D_WARN("calling dictate on rank %u\n", rank);
+	D_WARN("calling dictate on rank %u\n", dss_self_rank());
 
-	rc = ds_rsvc_lookup(DS_RSVC_CLASS_TEST, &test_svc_id, &rsvc);
-	if (rc != 0)
-		goto out;
+	MUST(ds_rsvc_lookup(DS_RSVC_CLASS_TEST, &test_svc_id, &rsvc));
 	uuid_copy(db_uuid, rsvc->s_db_uuid);
 	ds_rsvc_put(rsvc);
 
-	rc = ds_rsvc_stop(DS_RSVC_CLASS_TEST, &test_svc_id, false /* destroy */);
-	if (rc != 0)
-		goto out;
+	MUST(d_rank_list_dup(&ranks, in->rti_ranks));
+	MUST(d_rank_list_del(ranks, in->rti_rank));
+	MUST(ds_rsvc_dist_stop(DS_RSVC_CLASS_TEST, &test_svc_id, ranks, NULL, true));
 
-	rc = ds_rsvc_start(DS_RSVC_CLASS_TEST, &test_svc_id, db_uuid, DS_RSVC_DICTATE,
-			   0 /* size */, NULL /* replicas */, NULL /* arg */);
+	ranks->rl_ranks[0] = in->rti_rank;
+	ranks->rl_nr = 1;
+	MUST(ds_rsvc_dist_start(DS_RSVC_CLASS_TEST, &test_svc_id, db_uuid, ranks, DS_RSVC_DICTATE,
+				false /* bootstrap */, 0 /* size */));
 
-out:
-	D_WARN("rpc reply from rank %u: rc=%d\n", rank, rc);
-	out->rto_rc = rc;
+	d_rank_list_free(ranks);
+	out->rto_rc = 0;
 	crt_reply_send(rpc);
 }
 

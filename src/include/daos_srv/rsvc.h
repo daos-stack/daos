@@ -133,9 +133,9 @@ int ds_rsvc_stop(enum ds_rsvc_class_id class, d_iov_t *id, bool destroy);
 int ds_rsvc_stop_all(enum ds_rsvc_class_id class);
 int ds_rsvc_stop_leader(enum ds_rsvc_class_id class, d_iov_t *id,
 			struct rsvc_hint *hint);
-int ds_rsvc_dist_start(enum ds_rsvc_class_id class, d_iov_t *id,
-		       const uuid_t dbid, const d_rank_list_t *ranks,
-		       bool create, bool bootstrap, size_t size);
+int ds_rsvc_dist_start(enum ds_rsvc_class_id class, d_iov_t *id, const uuid_t dbid,
+		       const d_rank_list_t *ranks, enum ds_rsvc_start_mode mode, bool bootstrap,
+		       size_t size);
 int ds_rsvc_dist_stop(enum ds_rsvc_class_id class, d_iov_t *id,
 		      const d_rank_list_t *ranks, d_rank_list_t *excluded,
 		      bool destroy);

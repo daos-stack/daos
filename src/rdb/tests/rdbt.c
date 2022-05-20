@@ -511,29 +511,17 @@ restore_initial_replicas(crt_group_t *grp, uint32_t nranks,
 }
 
 static int
-destroy_replica(crt_group_t *grp, d_rank_t rank)
-{
-	crt_rpc_t			*rpc;
-	struct rdbt_destroy_replica_out	*out;
-	int				 rc;
-
-	rpc = create_rpc(RDBT_DESTROY_REPLICA, grp, rank);
-	rc = invoke_rpc(rpc);
-	D_ASSERTF(rc == 0, "%d\n", rc);
-	out = crt_reply_get(rpc);
-	rc = out->reo_rc;
-	destroy_rpc(rpc);
-	return rc;
-}
-
-static int
-dictate(crt_group_t *grp, d_rank_t rank)
+dictate(crt_group_t *grp, d_rank_t rank, d_rank_t chosen_rank, d_rank_list_t *replicas)
 {
 	crt_rpc_t		*rpc;
+	struct rdbt_dictate_in	*in;
 	struct rdbt_dictate_out	*out;
 	int			 rc;
 
 	rpc = create_rpc(RDBT_DICTATE, grp, rank);
+	in = crt_req_get(rpc);
+	in->rti_ranks = replicas;
+	in->rti_rank = chosen_rank;
 	rc = invoke_rpc(rpc);
 	D_ASSERTF(rc == 0, "%d\n", rc);
 	out = crt_reply_get(rpc);
@@ -1183,7 +1171,7 @@ testm_dictate(crt_group_t *grp, uint32_t nranks, uint32_t nreplicas, uint64_t ke
 {
 	int			rc;
 	d_rank_t		ldr_rank;
-	d_rank_t		rank;
+	d_rank_list_t	       *ranks;
 	uint64_t		term;
 	uint64_t		val_out = 0;
 	struct rsvc_hint	h;
@@ -1214,22 +1202,15 @@ testm_dictate(crt_group_t *grp, uint32_t nranks, uint32_t nreplicas, uint64_t ke
 		return -1;
 	}
 
-	/* The leader dictates; others stop. */
-	for (rank = 0; rank < nreplicas; rank++) {
-		if (rank == ldr_rank) {
-			rc = dictate(grp, rank);
-			if (rc) {
-				fprintf(stderr, "FAIL: failed to dictate: "DF_RC"\n", DP_RC(rc));
-				return rc;
-			}
-		} else {
-			rc = destroy_replica(grp, rank);
-			if (rc) {
-				fprintf(stderr, "ERR: cannot stop RDB on rank %u: "DF_RC"\n", rank,
-					DP_RC(rc));
-				return rc;
-			}
-		}
+	ranks = d_rank_list_alloc(nreplicas);
+	if (ranks == NULL)
+		return -DER_NOMEM;
+
+	rc = dictate(grp, (ldr_rank + 1) % nranks, ldr_rank, ranks);
+	d_rank_list_free(ranks);
+	if (rc) {
+		fprintf(stderr, "FAIL: failed to dictate: "DF_RC"\n", DP_RC(rc));
+		return rc;
 	}
 
 	for (i = 0; i < 20; i++) {

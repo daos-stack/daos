@@ -47,9 +47,6 @@
 	X(RDBT_START_ELECTION,						\
 		0, &CQF_rdbt_start_election,				\
 		rdbt_start_election_handler, NULL),			\
-	X(RDBT_DESTROY_REPLICA,						\
-		0, &CQF_rdbt_destroy_replica,				\
-		rdbt_destroy_replica_handler, NULL),			\
 	X(RDBT_DICTATE,							\
 		0, &CQF_rdbt_dictate,					\
 		rdbt_dictate_handler, NULL)
@@ -173,17 +170,11 @@ CRT_RPC_DECLARE(rdbt_replicas_stop, DAOS_ISEQ_RDBT_STARTSTOP,
 CRT_RPC_DECLARE(rdbt_start_election, DAOS_ISEQ_RDBT_START_ELECTION,
 		DAOS_OSEQ_RDBT_START_ELECTION)
 
-#define DAOS_ISEQ_RDBT_DESTROY_REPLICA /* input fields (none) */
+#define DAOS_ISEQ_RDBT_DICTATE /* input fields */		\
+	((d_rank_list_t)	(rti_ranks)		CRT_PTR)\
+	((int32_t)		(rti_rank)		CRT_VAR)\
 
-#define DAOS_OSEQ_RDBT_DESTROY_REPLICA /* output fields */	\
-	((int32_t)		(reo_rc)		CRT_VAR)
-
-CRT_RPC_DECLARE(rdbt_destroy_replica, DAOS_ISEQ_RDBT_DESTROY_REPLICA,
-		DAOS_OSEQ_RDBT_DESTROY_REPLICA)
-
-#define DAOS_ISEQ_RDBT_DICTATE /* input fields (none) */
-
-#define DAOS_OSEQ_RDBT_DICTATE /* output fields */	\
+#define DAOS_OSEQ_RDBT_DICTATE /* output fields */		\
 	((int32_t)		(rto_rc)		CRT_VAR)
 
 CRT_RPC_DECLARE(rdbt_dictate, DAOS_ISEQ_RDBT_DICTATE,
