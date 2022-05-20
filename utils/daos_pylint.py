@@ -117,6 +117,8 @@ def parse_file(args, target_file, ftest=False, scons=False):
         if msg.msg_id in ('C0401', 'C0402'):
             if ":avocado:" in msg.msg:
                 continue
+        if msg.msg_id == 'E0401' and 'pydaos.raw' in msg.msg:
+            continue
 
         if wrapper:
             vals['path'] = target_file
@@ -203,7 +205,18 @@ def main():
     # File list, zero or more.
     parser.add_argument('files', nargs='*')
 
+    spellings = True
+    try:
+        # pylint: disable-next=import-outside-toplevel,unused-import
+        import enchant  # noqa: F401
+    except ModuleNotFoundError:
+        spellings = False
+    except ImportError:
+        spellings = False
+
     args = parser.parse_args()
+
+    args.spellings = spellings
 
     if args.git:
         run_git_files(args, )
