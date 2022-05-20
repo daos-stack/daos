@@ -1,5 +1,4 @@
 """Install DAOS Storage Estimador"""
-import sys
 
 def install_storage_estimator_module(env, lib_prefix):
     """Install Storage Estimador module for the specified python version"""
@@ -8,30 +7,28 @@ def install_storage_estimator_module(env, lib_prefix):
         return
 
     denv = env.Clone()
-    version = "{}.{}".format(
-        sys.version_info.major, sys.version_info.minor)
-    if sys.version_info.major == 3:
-        install_path = lib_prefix + "/python"
-        install_path += version + "/site-packages/storage_estimator"
+    version = f'{sys.version_info.major}.{sys.version_info.minor}'
+    install_path = lib_prefix + "/python"
+    install_path += version + "/site-packages/storage_estimator"
 
-        denv.Install(install_path, "common/vos_structures.py")
-        denv.Install(install_path, "common/__init__.py")
-        denv.Install(install_path, "common/dfs_sb.py")
-        denv.Install(install_path, "common/vos_size.py")
-        denv.Install(install_path, "common/explorer.py")
-        denv.Install(install_path, "common/parse_csv.py")
-        denv.Install(install_path, "common/util.py")
-    else:
-        raise Exception("Unsupported python version %s" % version)
+    denv.Install(install_path, "common/vos_structures.py")
+    denv.Install(install_path, "common/__init__.py")
+    denv.Install(install_path, "common/dfs_sb.py")
+    denv.Install(install_path, "common/vos_size.py")
+    denv.Install(install_path, "common/explorer.py")
+    denv.Install(install_path, "common/parse_csv.py")
+    denv.Install(install_path, "common/util.py")
+
 
 def scons():
     """Execute build"""
-    Import('env', 'prereqs')
+    Import('env')
 
     denv = env.Clone()
     denv.Install("$PREFIX/bin/", "daos_storage_estimator.py")
 
     install_storage_estimator_module(env, '$PREFIX/lib64/')
+
 
 if __name__ == "SCons.Script":
     scons()

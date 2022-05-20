@@ -20,8 +20,8 @@
 # SOFTWARE.
 # -*- coding: utf-8 -*-
 
-import SCons.Builder
 import os
+import SCons.Builder
 
 
 class ToolProtocWarning(SCons.Warnings.Warning):
@@ -70,24 +70,24 @@ def _detect(env):
 
     try:
         # pylint: disable=unused-import,import-outside-toplevel
-        import grpc_tools.protoc # noqa: F401
+        import grpc_tools.protoc  # noqa: F401
         grpc_tools_found = True
     except ImportError:
         grpc_tools_found = False
 
     if protoc_found and protoc_gen_go_found and grpc_tools_found:
         return True
-    else:
-        if not protoc_found:
-            raise SCons.Errors.StopError(ProtocCompilerNotFound,
-                                         "Could not detect protoc compiler")
-        if not protoc_gen_go_found:
-            raise SCons.Errors.StopError(GoProtocCompilerNotFound,
-                                         "Could not detect protoc-gen-go")
-        if not grpc_tools_found:
-            raise SCons.Errors.StopError(PythonGRPCCompilerNotFound,
-                                         "grpc_tools.protoc python module is not installed")
-        return None
+    if not protoc_found:
+        raise SCons.Errors.StopError(ProtocCompilerNotFound,
+                                     "Could not detect protoc compiler")
+    if not protoc_gen_go_found:
+        raise SCons.Errors.StopError(GoProtocCompilerNotFound,
+                                     "Could not detect protoc-gen-go")
+    if not grpc_tools_found:
+        raise SCons.Errors.StopError(PythonGRPCCompilerNotFound,
+                                     "grpc_tools.protoc python module is not installed")
+    return None
+
 
 def run_python(_source, _target, env, _for_signature):
     actions = []

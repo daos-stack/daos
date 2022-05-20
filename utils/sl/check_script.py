@@ -53,7 +53,7 @@ class WrapScript():
 
         def _remap_count():
             for iline in range(new_lineno, new_lineno + added):
-                self.line_map[iline] = old_lineno
+                self.line_map[iline] = old_lineno - 1
 
         for line in infile.readlines():
             outfile.write(line)

@@ -1,7 +1,7 @@
 """Build tests"""
 import daos_build
-import os
 import compiler_setup
+
 
 def build_tests(prereqs, env, client_libs):
     """build the tests"""
@@ -79,9 +79,9 @@ def scons():
             print("Install and load mpich or openmpi\n")
             return
 
-
     daos_build.program(denv, 'simple_array', 'simple_array.c', LIBS=libs_client)
     daos_build.program(denv, 'simple_obj', 'simple_obj.c', LIBS=libs_client)
+
 
 if __name__ == "SCons.Script":
     scons()

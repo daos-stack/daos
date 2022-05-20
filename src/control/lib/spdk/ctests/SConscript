@@ -1,7 +1,8 @@
 """Build go-spdk bindings C tests"""
 from __future__ import print_function
-import daos_build
 import os
+import daos_build
+
 
 def scons():
     """Execute build"""
@@ -41,6 +42,7 @@ def scons():
         print(look_path, " missing, skipping nvme_control_ut build")
 
     config.Finish()
+
 
 if __name__ == "SCons.Script":
     scons()

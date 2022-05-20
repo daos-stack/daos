@@ -4,7 +4,6 @@
 from collections import Counter
 import subprocess  # nosec
 import argparse
-import os
 from pylint.lint import Run
 from pylint.reporters.collecting_reporter import CollectingReporter
 from pylint.lint import pylinter
@@ -36,9 +35,8 @@ class FileTypeList():
 
         # If files are in a subdir under ftest then they need to by treated differently.
         if file.startswith('src/tests/ftest/'):
-            if os.path.dirname(file) != 'src/tests/ftest':
-                self.ftest_files.append(file)
-                return
+            self.ftest_files.append(file)
+            return
         self.files.append(file)
 
     def __str__(self):
@@ -105,7 +103,8 @@ sys.path.insert(0, 'utils/sl/fake_scons')"""
 sys.path.append('src/tests/ftest/util/apricot')
 sys.path.append('src/tests/ftest/cart/util/')
 sys.path.append('src/tests/ftest/util')
-sys.path.append('src/tests/ftest')"""
+sys.path.append('src/tests/ftest')
+sys.path.append('site_scons')"""
 
     target.extend(['--persistent', 'n'])
     if init_hook:
@@ -125,7 +124,11 @@ sys.path.append('src/tests/ftest')"""
         if msg.msg_id in ('C0401', 'C0402'):
             if ":avocado:" in msg.msg:
                 continue
+        # pydaos.raw is only importable once built.
         if msg.msg_id == 'E0401' and 'pydaos.raw' in msg.msg:
+            continue
+        # Inserting code can cause wrong-module-order.
+        if scons and msg.msg_id == 'C0411' and 'from SCons.Script import' in msg.msg:
             continue
 
         if wrapper:
