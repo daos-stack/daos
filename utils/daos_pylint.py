@@ -136,7 +136,9 @@ def parse_file(args, target_file, ftest=False, scons=False):
             if msg.category in ('convention', 'refactor'):
                 continue
             # pylint: disable-next=line-too-long,consider-using-f-string
-            print('::{category} file={path},line={line},col={column}::{symbol}, {msg}'.format(**vals))  # noqa: E501
+            print('::{category} file={path},line={line},col={column},::{symbol}, {msg}'.format(**vals))  # noqa: E501
+            # pylint: disable-next=line-too-long,consider-using-f-string
+            print(':{category} file={path},line={line},col={column},::{symbol}, {msg}'.format(**vals))  # noqa: E501
 
         types[msg.category] += 1
         symbols[msg.symbol] += 1
