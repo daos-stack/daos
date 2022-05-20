@@ -16,7 +16,9 @@ jobs:
           ref: ${{ github.event.pull_request.head.sha }}
       - name: Install python
         run: python3 -m pip install --requirement requirements.txt
-      - name: Start
-        run: ./utils/daos_pylint.py --git --format github
       - name: Install enchant
         run: sudo apt-get update && sudo apt-get -y install enchant
+      - name: Start
+        run: ./utils/daos_pylint.py --git --format github
+      - name: diff
+        run: git diff

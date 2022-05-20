@@ -49,10 +49,10 @@ good-names=rc,ret,fd
 disable=locally-disabled,locally-enabled,star-args,global-statement,bad-option-value,
         wrong-import-position,modified-iterating-list,duplicate-code,unspecified-encoding
 
-#[SPELLING]
-#spelling-dict=en_US
-#spelling-private-dict-file=words.dict
-#spelling-store-unknown-words=true
+[SPELLING]
+spelling-dict=en_US
+spelling-private-dict-file=words.dict
+spelling-store-unknown-words=true
 
 [FORMAT]
 max-line-length=100
