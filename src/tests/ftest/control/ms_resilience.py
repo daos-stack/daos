@@ -4,11 +4,15 @@
 
 SPDX-License-Identifier: BSD-2-Clause-Patent
 """
-from apricot import TestWithServers
-from general_utils import stop_processes
 import random
 import socket
 import time
+
+from apricot import TestWithServers
+from ClusterShell.NodeSet import NodeSet
+
+from general_utils import stop_processes
+
 
 def get_hostname(host_addr):
     """Get the hostname of a host.
@@ -26,6 +30,7 @@ def get_hostname(host_addr):
     fqdn, _, _ = socket.gethostbyaddr(host_addr.split(":")[0])
     return fqdn.split(".")[0]
 
+
 class ManagementServiceResilience(TestWithServers):
     """Test Class Description:
     Verify that expected MS functionality is retained in various
@@ -41,7 +46,7 @@ class ManagementServiceResilience(TestWithServers):
     """
 
     def __init__(self, *args, **kwargs):
-        """Inititialize a ManagementServiceResilience object."""
+        """Initialize a ManagementServiceResilience object."""
         super().__init__(*args, **kwargs)
         self.setup_start_servers = False
         self.start_servers_once = False
@@ -70,8 +75,7 @@ class ManagementServiceResilience(TestWithServers):
         self.log.info("*** creating pool")
         self.pool.create()
 
-        self.log.info("Pool UUID %s on server group: %s",
-                        self.pool.uuid, self.server_group)
+        self.log.info("Pool UUID %s on server group: %s", self.pool.uuid, self.server_group)
         # Verify that the pool persisted.
         while not self.find_pool(self.pool.uuid):
             # Occasionally the pool may not be found
@@ -97,8 +101,7 @@ class ManagementServiceResilience(TestWithServers):
         """Verify the leader of the MS is in the replicas.
 
         Args:
-            replicas (list): list of hostnames representing the access points
-                for the MS.
+            replicas (NodeSet): hostnames representing the access points for the MS.
 
         Returns:
             str: address of the MS leader.
@@ -107,8 +110,7 @@ class ManagementServiceResilience(TestWithServers):
         l_hostname = self.get_leader()
         start = time.time()
         while l_hostname not in replicas and (time.time() - start) < self.L_QUERY_TIMER:
-            self.log.info("Current leader: <%s>; "
-                            "waiting for new leader to step up", l_hostname)
+            self.log.info("Current leader: <%s>; waiting for new leader to step up", l_hostname)
             time.sleep(1)
             l_hostname = self.get_leader()
 
@@ -146,8 +148,7 @@ class ManagementServiceResilience(TestWithServers):
                     dead_list.append(hostnames[member["addr"]])
 
             if len(dead_list) != len(kill_list):
-                self.log.info("*** waiting for %d dead servers to be marked dead",
-                                len(kill_list))
+                self.log.info("*** waiting for %d dead servers to be marked dead", len(kill_list))
                 continue
 
             for hostname in kill_list:
@@ -159,18 +160,18 @@ class ManagementServiceResilience(TestWithServers):
             return
 
     def launch_servers(self, resilience_num):
-        """Setup and start the daos_servers.
+        """Set up and start the daos_servers.
 
         Args:
             resilience_num (int): minimum amount of MS replicas to achieve
                 resiliency.
 
         Returns:
-            list: list of access point hosts where MS has been started.
+            NodeSet: access point hosts where MS has been started.
 
         """
         self.log.info("*** launching %d servers", resilience_num)
-        replicas = random.sample(list(self.hostlist_servers), resilience_num)
+        replicas = NodeSet.fromlist(random.sample(list(self.hostlist_servers), resilience_num))
         server_groups = {
             self.server_group:
                 {
@@ -193,32 +194,31 @@ class ManagementServiceResilience(TestWithServers):
         """Kill a subset of servers in order to simulate failures.
 
         Args:
-          leader (str): hostname of current leader.
-          replicas (list): list of replica hostnames.
-          N (int): Number of hosts (including leader) to stop.
+            leader (str): hostname of current leader.
+            replicas (NodeSet): replica hostnames.
+            N (int): Number of hosts (including leader) to stop.
 
         Returns:
-          kill_list: list of hosts that were stopped.
+            NodeSet: hosts that were stopped.
 
         """
-        kill_list = set(random.sample(replicas, N))
+        kill_list = NodeSet.fromlist(random.sample(replicas, N))
         if leader not in kill_list:
-            kill_list.pop()
+            kill_list.remove(kill_list[-1])
             kill_list.add(leader)
         self.log.info("*** stopping leader (%s) + %d others", leader, N-1)
-        stop_processes(kill_list,
-                       self.server_managers[0].manager.job.command_regex)
+        stop_processes(kill_list, self.server_managers[0].manager.job.command_regex)
 
         kill_ranks = self.server_managers[0].get_host_ranks(kill_list)
         self.assertGreaterEqual(len(kill_ranks), len(kill_list),
-            "Unable to obtain expected ranks for {}".format(kill_list))
+                                "Unable to obtain expected ranks for {}".format(kill_list))
         self.server_managers[0].update_expected_states(
             kill_ranks, ["stopped", "excluded"])
 
         return kill_list
 
     def verify_retained_quorum(self, N):
-        """Verify 2N+1 resiliency
+        """Verify 2N+1 resiliency.
 
         This method will launch 2 * N + 1 servers, stop the MS leader
         plus just enough replicas to retain quorum, then verify that

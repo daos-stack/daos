@@ -89,7 +89,7 @@ class DestroyTests(TestWithServers):
         """Validate the creation of a pool on the specified list of hosts.
 
         Args:
-            hosts (list): hosts running servers serving the pool
+            hosts (NodeSet): hosts running servers serving the pool
         """
         # Create a pool
         self.log.info("Create a pool")
@@ -107,7 +107,7 @@ class DestroyTests(TestWithServers):
         """Validate a pool destroy.
 
         Args:
-            hosts (list): hosts running servers serving the pool
+            hosts (NodeSet): hosts running servers serving the pool
             case (str): pool description message
             exception_expected (bool, optional): is an exception expected to be
                 raised when destroying the pool. Defaults to False.
@@ -169,7 +169,7 @@ class DestroyTests(TestWithServers):
         :avocado: tags=pool,pool_destroy
         :avocado: tags=pool_destroy_single
         """
-        hostlist_servers = list(self.hostlist_servers)[:1]
+        hostlist_servers = self.hostlist_servers[:1]
         setid = self.params.get("setname", '/run/setnames/validsetname/')
 
         # Attempt to destroy a pool
@@ -183,7 +183,7 @@ class DestroyTests(TestWithServers):
         :avocado: tags=pool,pool_destroy
         :avocado: tags=pool_destroy_multi
         """
-        hostlist_servers = list(self.hostlist_servers)[:2]
+        hostlist_servers = self.hostlist_servers[:2]
         setid = self.params.get("setname", '/run/setnames/validsetname/')
 
         # Attempt to destroy a pool
@@ -200,7 +200,7 @@ class DestroyTests(TestWithServers):
         :avocado: tags=pool,pool_destroy
         :avocado: tags=pool_destroy_single_loop
         """
-        hostlist_servers = list(self.hostlist_servers)[:1]
+        hostlist_servers = self.hostlist_servers[:1]
 
         # Start servers
         self.start_servers(self.get_group(self.server_group, hostlist_servers))
@@ -225,7 +225,7 @@ class DestroyTests(TestWithServers):
         :avocado: tags=pool,pool_destroy
         :avocado: tags=pool_destroy_multi_loop
         """
-        hostlist_servers = list(self.hostlist_servers)[:6]
+        hostlist_servers = self.hostlist_servers[:6]
 
         # Start servers
         self.start_servers(self.get_group(self.server_group, hostlist_servers))
@@ -250,7 +250,7 @@ class DestroyTests(TestWithServers):
         :avocado: tags=pool,pool_destroy
         :avocado: tags=pool_destroy_invalid_uuid
         """
-        hostlist_servers = list(self.hostlist_servers)[:1]
+        hostlist_servers = self.hostlist_servers[:1]
         setid = self.params.get("setname", '/run/setnames/validsetname/')
 
         # Start servers
@@ -285,7 +285,7 @@ class DestroyTests(TestWithServers):
         :avocado: tags=pool,pool_destroy
         :avocado: tags=pool_destroy_invalid_label
         """
-        hostlist_servers = list(self.hostlist_servers)[:1]
+        hostlist_servers = self.hostlist_servers[:1]
         setid = self.params.get("setname", '/run/setnames/validsetname/')
 
         # Start servers
@@ -358,10 +358,10 @@ class DestroyTests(TestWithServers):
 
         # Prepare server group info with corresponding dmg config file.
         group_info_a = self.get_group_info(
-            hosts=[self.hostlist_servers[0]], dmg_config_file=dmg_config_file_a,
+            hosts=self.hostlist_servers[0:1], dmg_config_file=dmg_config_file_a,
             dmg_config_temp=dmg_config_temp_a)
         group_info_b = self.get_group_info(
-            hosts=[self.hostlist_servers[1]], dmg_config_file=dmg_config_file_b,
+            hosts=self.hostlist_servers[1:2], dmg_config_file=dmg_config_file_b,
             dmg_config_temp=dmg_config_temp_b)
 
         # Put everything into a dictionary and start server a and b.
@@ -390,21 +390,21 @@ class DestroyTests(TestWithServers):
         # of the group name mismatch.
         case_c = "Pool is in a, hostlist is a, and name is b."
         self.validate_pool_destroy(
-            hosts=[self.hostlist_servers[0]], case=case_c,
+            hosts=self.hostlist_servers[0:1], case=case_c,
             exception_expected=True, new_dmg=dmg_c)
 
         # Try destroying the pool in server a with the dmg that uses
         # daos_control_b.yml. Should fail because the pool doesn't exist in b.
         case_b = "Pool is in a, hostlist is b, and name is b."
         self.validate_pool_destroy(
-            hosts=[self.hostlist_servers[0]], case=case_b,
+            hosts=self.hostlist_servers[0:1], case=case_b,
             exception_expected=True, new_dmg=self.server_managers[1].dmg)
 
         # Try destroying the pool in server a with the dmg that uses
         # daos_control_a.yml. Should pass.
         case_a = "Pool is in a, hostlist is a, and name is a."
         self.validate_pool_destroy(
-            hosts=[self.hostlist_servers[0]], case=case_a,
+            hosts=self.hostlist_servers[0:1], case=case_a,
             exception_expected=False, new_dmg=self.server_managers[0].dmg)
 
     def test_destroy_connected(self):
@@ -418,7 +418,7 @@ class DestroyTests(TestWithServers):
         :avocado: tags=pool,pool_destroy
         :avocado: tags=pool_destroy_connected
         """
-        hostlist_servers = list(self.hostlist_servers)[:1]
+        hostlist_servers = self.hostlist_servers[0:1]
 
         # Start servers
         self.start_servers(self.get_group(self.server_group, hostlist_servers))
@@ -468,7 +468,7 @@ class DestroyTests(TestWithServers):
         :avocado: tags=pool,pool_destroy
         :avocado: tags=pool_force_destroy_connected
         """
-        hostlist_servers = list(self.hostlist_servers)[:1]
+        hostlist_servers = self.hostlist_servers[0:1]
 
         # Start servers
         self.start_servers(self.get_group(self.server_group, hostlist_servers))

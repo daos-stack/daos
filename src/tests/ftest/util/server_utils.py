@@ -894,7 +894,7 @@ class DaosServerManager(SubprocessManager):
         """Get the list of ranks for the specified hosts.
 
         Args:
-            hosts (list): a list of host names.
+            hosts (NodeSet): host from which to get ranks.
 
         Returns:
             list: a list of integer ranks matching the hosts provided

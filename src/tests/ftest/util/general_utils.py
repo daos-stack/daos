@@ -630,7 +630,7 @@ def check_pool_files(log, hosts, uuid):
 
     Args:
         log (logging): logging object used to display messages
-        hosts (list): list of hosts
+        hosts (NodeSet): list of hosts
         uuid (str): uuid file name to look for in /mnt/daos.
 
     Returns:
@@ -639,7 +639,7 @@ def check_pool_files(log, hosts, uuid):
 
     """
     status = True
-    log.info("Checking for pool data on %s", NodeSet.fromlist(hosts))
+    log.info("Checking for pool data on %s", hosts)
     pool_files = [uuid, "superblock"]
     for filename in ["/mnt/daos/{}".format(item) for item in pool_files]:
         result = check_file_exists(hosts, filename)

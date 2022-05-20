@@ -681,7 +681,7 @@ class TestPool(TestDaosApiBase):
         """Check if pool files exist on the specified list of hosts.
 
         Args:
-            hosts (list): list of hosts
+            hosts (NodeSet): hosts on which to check files
 
         Returns:
             bool: True if the files for this pool exist on each host; False
