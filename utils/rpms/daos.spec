@@ -3,7 +3,7 @@
 %define agent_svc_name daos_agent.service
 %define sysctl_script_name 10-daos_server.conf
 
-%global mercury_version 2.1.0~rc4-9%{?dist}
+%global mercury_version 2.2.0~rc1-1%{?dist}
 %global libfabric_version 1.15.0~rc3-1
 %global __python %{__python3}
 
@@ -27,7 +27,7 @@
 
 Name:          daos
 Version:       2.3.100
-Release:       8%{?relval}%{?dist}
+Release:       9%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       BSD-2-Clause-Patent
