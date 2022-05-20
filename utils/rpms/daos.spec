@@ -86,8 +86,7 @@ BuildRequires: liblz4-devel
 BuildRequires: protobuf-c-devel
 BuildRequires: lz4-devel
 %endif
-BuildRequires: spdk-devel >= 21.07
-BuildRequires: spdk-devel < 22
+BuildRequires: spdk-devel >= 21.07, spdk-devel < 22
 %if (0%{?rhel} >= 7)
 BuildRequires: libisa-l-devel
 BuildRequires: libisa-l_crypto-devel
