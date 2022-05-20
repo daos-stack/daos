@@ -15,7 +15,7 @@ jobs:
         with:
           ref: ${{ github.event.pull_request.head.sha }}
       - name: Install python
-        run: python3 -m pip --requirement requirements.txt
+        run: python3 -m pip install --requirement requirements.txt
       - name: Start
         run: ./utils/daos_pylint.py --help
       - name: Get file-list
