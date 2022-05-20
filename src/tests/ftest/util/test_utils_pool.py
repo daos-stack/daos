@@ -88,6 +88,9 @@ class TestPool(TestDaosApiBase):
 
         self.query_data = []
 
+        self.scm_per_rank = None
+        self.nvme_per_rank = None
+
     def get_params(self, test):
         """Get values for all of the command params from the yaml file.
 
@@ -265,6 +268,10 @@ class TestPool(TestDaosApiBase):
             # Set UUID and attached to the DaosPool object
             self.uuid = data["uuid"]
             self.pool.attached = 1
+
+            # Set effective size of mediums per rank
+            self.scm_per_rank = data["scm_per_rank"]
+            self.nvme_per_rank = data["nvme_per_rank"]
 
         # Set the TestPool attributes for the created pool
         if self.pool.attached:
@@ -846,8 +853,12 @@ class TestPool(TestDaosApiBase):
         return status
 
     @fail_on(CommandFailure)
-    def set_query_data(self):
+    def set_query_data(self, show_enabled=False, show_disabled=False):
         """Execute dmg pool query and store the results.
+
+        Args:
+            show_enabled (bool, optional): Display enabled ranks.
+            show_disabled (bool, optional): Display disabled ranks.
 
         Only supported with the dmg control method.
         """
@@ -863,7 +874,8 @@ class TestPool(TestDaosApiBase):
                     end_time = time() + self.pool_query_timeout.value
                 while True:
                     try:
-                        self.query_data = self.dmg.pool_query(self.identifier)
+                        self.query_data = self.dmg.pool_query(self.identifier, show_enabled,
+                                show_disabled)
                         break
                     except CommandFailure as error:
                         if end_time is not None:

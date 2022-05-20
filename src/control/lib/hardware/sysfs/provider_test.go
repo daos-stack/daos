@@ -19,13 +19,14 @@ import (
 	"github.com/google/go-cmp/cmp"
 
 	"github.com/daos-stack/daos/src/control/common"
+	"github.com/daos-stack/daos/src/control/common/test"
 	"github.com/daos-stack/daos/src/control/lib/hardware"
 	"github.com/daos-stack/daos/src/control/logging"
 )
 
 func TestSysfs_NewProvider(t *testing.T) {
 	log, buf := logging.NewTestLogger(t.Name())
-	defer common.ShowBufferOnFailure(t, buf)
+	defer test.ShowBufferOnFailure(t, buf)
 
 	p := NewProvider(log)
 
@@ -33,7 +34,7 @@ func TestSysfs_NewProvider(t *testing.T) {
 		t.Fatal("nil provider returned")
 	}
 
-	common.AssertEqual(t, "/sys", p.root, "")
+	test.AssertEqual(t, "/sys", p.root, "")
 }
 
 func setupTestNetDevClasses(t *testing.T, root string, devClasses map[string]uint32) {
@@ -56,8 +57,28 @@ func setupTestNetDevClasses(t *testing.T, root string, devClasses map[string]uin
 	}
 }
 
+func setupTestNetDevOperStates(t *testing.T, root string, devStates map[string]string) {
+	t.Helper()
+
+	for dev, state := range devStates {
+		path := filepath.Join(root, "class", "net", dev)
+		os.MkdirAll(path, 0755)
+
+		f, err := os.Create(filepath.Join(path, "operstate"))
+		if err != nil {
+			t.Fatal(err.Error())
+		}
+
+		_, err = f.WriteString(fmt.Sprintf("%s\n", state))
+		f.Close()
+		if err != nil {
+			t.Fatal(err.Error())
+		}
+	}
+}
+
 func TestSysfs_Provider_GetNetDevClass(t *testing.T) {
-	testDir, cleanupTestDir := common.CreateTestDir(t)
+	testDir, cleanupTestDir := test.CreateTestDir(t)
 	defer cleanupTestDir()
 
 	devs := map[string]uint32{
@@ -90,15 +111,15 @@ func TestSysfs_Provider_GetNetDevClass(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(name)
-			defer common.ShowBufferOnFailure(t, buf)
+			defer test.ShowBufferOnFailure(t, buf)
 
 			p := NewProvider(log)
 			p.root = testDir
 
 			result, err := p.GetNetDevClass(tc.in)
 
-			common.CmpErr(t, tc.expErr, err)
-			common.AssertEqual(t, tc.expResult, result, "")
+			test.CmpErr(t, tc.expErr, err)
+			test.AssertEqual(t, tc.expResult, result, "")
 		})
 	}
 }
@@ -158,6 +179,28 @@ func setupNUMANode(t *testing.T, devPath, numaStr string) {
 
 func TestProvider_GetTopology(t *testing.T) {
 	validPCIAddr := "0000:02:00.0"
+	testTopo := &hardware.Topology{
+		NUMANodes: hardware.NodeMap{
+			2: hardware.MockNUMANode(2, 0).
+				WithDevices([]*hardware.PCIDevice{
+					{
+						Name:    "cxi0",
+						Type:    hardware.DeviceTypeOFIDomain,
+						PCIAddr: *hardware.MustNewPCIAddress(validPCIAddr),
+					},
+					{
+						Name:    "mlx0",
+						Type:    hardware.DeviceTypeOFIDomain,
+						PCIAddr: *hardware.MustNewPCIAddress(validPCIAddr),
+					},
+					{
+						Name:    "net0",
+						Type:    hardware.DeviceTypeNetInterface,
+						PCIAddr: *hardware.MustNewPCIAddress(validPCIAddr),
+					},
+				}),
+		},
+	}
 
 	for name, tc := range map[string]struct {
 		setup     func(*testing.T, string)
@@ -208,7 +251,7 @@ func TestProvider_GetTopology(t *testing.T) {
 					name  string
 				}{
 					{class: "net", name: "net0"},
-					{class: "infiniband", name: "ib0"},
+					{class: "infiniband", name: "mlx0"},
 					{class: "cxi", name: "cxi0"},
 				} {
 					path := setupPCIDev(t, root, validPCIAddr, dev.class, dev.name)
@@ -216,29 +259,8 @@ func TestProvider_GetTopology(t *testing.T) {
 					setupNUMANode(t, path, "2\n")
 				}
 			},
-			p: &Provider{},
-			expResult: &hardware.Topology{
-				NUMANodes: hardware.NodeMap{
-					2: hardware.MockNUMANode(2, 0).
-						WithDevices([]*hardware.PCIDevice{
-							{
-								Name:    "cxi0",
-								Type:    hardware.DeviceTypeOFIDomain,
-								PCIAddr: *hardware.MustNewPCIAddress(validPCIAddr),
-							},
-							{
-								Name:    "ib0",
-								Type:    hardware.DeviceTypeOFIDomain,
-								PCIAddr: *hardware.MustNewPCIAddress(validPCIAddr),
-							},
-							{
-								Name:    "net0",
-								Type:    hardware.DeviceTypeNetInterface,
-								PCIAddr: *hardware.MustNewPCIAddress(validPCIAddr),
-							},
-						}),
-				},
-			},
+			p:         &Provider{},
+			expResult: testTopo,
 		},
 		"exclude non-specified classes": {
 			setup: func(t *testing.T, root string) {
@@ -259,31 +281,10 @@ func TestProvider_GetTopology(t *testing.T) {
 					setupNUMANode(t, path, "2\n")
 				}
 			},
-			p: &Provider{},
-			expResult: &hardware.Topology{
-				NUMANodes: hardware.NodeMap{
-					2: hardware.MockNUMANode(2, 0).
-						WithDevices([]*hardware.PCIDevice{
-							{
-								Name:    "cxi0",
-								Type:    hardware.DeviceTypeOFIDomain,
-								PCIAddr: *hardware.MustNewPCIAddress(validPCIAddr),
-							},
-							{
-								Name:    "mlx0",
-								Type:    hardware.DeviceTypeOFIDomain,
-								PCIAddr: *hardware.MustNewPCIAddress(validPCIAddr),
-							},
-							{
-								Name:    "net0",
-								Type:    hardware.DeviceTypeNetInterface,
-								PCIAddr: *hardware.MustNewPCIAddress(validPCIAddr),
-							},
-						}),
-				},
-			},
+			p:         &Provider{},
+			expResult: testTopo,
 		},
-		"virtual device": {
+		"virtual devices": {
 			setup: func(t *testing.T, root string) {
 				for _, dev := range []struct {
 					class string
@@ -298,43 +299,41 @@ func TestProvider_GetTopology(t *testing.T) {
 					setupNUMANode(t, path, "2\n")
 				}
 
-				virtPath := filepath.Join(root, "devices", "virtual", "net", "virt_net0")
+				// Virtual device with a physical device backing it
+				virtPath1 := filepath.Join(root, "devices", "virtual", "net", "virt_net0")
+				if err := os.MkdirAll(virtPath1, 0755); err != nil {
+					t.Fatal(err)
+				}
+
+				backingDevPath := filepath.Join(root, "class", "net", "net0")
+				if err := os.Symlink(backingDevPath, filepath.Join(virtPath1, "lower_net0")); err != nil {
+					t.Fatal(err)
+				}
+
+				setupClassLink(t, root, "net", virtPath1)
+
+				// Virtual device with no physical device
+				virtPath := filepath.Join(root, "devices", "virtual", "net", "virt0")
 				if err := os.MkdirAll(virtPath, 0755); err != nil {
 					t.Fatal(err)
 				}
 
-				if err := os.Symlink(getPCIPath(root, validPCIAddr), filepath.Join(virtPath, "device")); err != nil {
-					t.Fatal(err)
-				}
-
 				setupClassLink(t, root, "net", virtPath)
+
 			},
 			p: &Provider{},
 			expResult: &hardware.Topology{
-				NUMANodes: hardware.NodeMap{
-					2: hardware.MockNUMANode(2, 0).
-						WithDevices([]*hardware.PCIDevice{
-							{
-								Name:    "cxi0",
-								Type:    hardware.DeviceTypeOFIDomain,
-								PCIAddr: *hardware.MustNewPCIAddress(validPCIAddr),
-							},
-							{
-								Name:    "mlx0",
-								Type:    hardware.DeviceTypeOFIDomain,
-								PCIAddr: *hardware.MustNewPCIAddress(validPCIAddr),
-							},
-							{
-								Name:    "net0",
-								Type:    hardware.DeviceTypeNetInterface,
-								PCIAddr: *hardware.MustNewPCIAddress(validPCIAddr),
-							},
-							{
-								Name:    "virt_net0",
-								Type:    hardware.DeviceTypeNetInterface,
-								PCIAddr: *hardware.MustNewPCIAddress(validPCIAddr),
-							},
-						}),
+				NUMANodes: testTopo.NUMANodes,
+				VirtualDevices: []*hardware.VirtualDevice{
+					{
+						Name: "virt0",
+						Type: hardware.DeviceTypeNetInterface,
+					},
+					{
+						Name:          "virt_net0",
+						Type:          hardware.DeviceTypeNetInterface,
+						BackingDevice: testTopo.AllDevices()["net0"].(*hardware.PCIDevice),
+					},
 				},
 			},
 		},
@@ -462,9 +461,9 @@ func TestProvider_GetTopology(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(name)
-			defer common.ShowBufferOnFailure(t, buf)
+			defer test.ShowBufferOnFailure(t, buf)
 
-			testDir, cleanupTestDir := common.CreateTestDir(t)
+			testDir, cleanupTestDir := test.CreateTestDir(t)
 			defer cleanupTestDir()
 
 			if tc.setup == nil {
@@ -482,7 +481,7 @@ func TestProvider_GetTopology(t *testing.T) {
 
 			result, err := tc.p.GetTopology(context.Background())
 
-			common.CmpErr(t, tc.expErr, err)
+			test.CmpErr(t, tc.expErr, err)
 
 			if diff := cmp.Diff(tc.expResult, result); diff != "" {
 				t.Errorf("(-want, +got)\n%s\n", diff)
@@ -532,9 +531,9 @@ func TestSysfs_Provider_GetFabricInterfaces(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(name)
-			defer common.ShowBufferOnFailure(t, buf)
+			defer test.ShowBufferOnFailure(t, buf)
 
-			testDir, cleanupTestDir := common.CreateTestDir(t)
+			testDir, cleanupTestDir := test.CreateTestDir(t)
 			defer cleanupTestDir()
 
 			if tc.setup == nil {
@@ -551,7 +550,7 @@ func TestSysfs_Provider_GetFabricInterfaces(t *testing.T) {
 
 			result, err := tc.p.GetFabricInterfaces(context.Background())
 
-			common.CmpErr(t, tc.expErr, err)
+			test.CmpErr(t, tc.expErr, err)
 
 			if diff := cmp.Diff(tc.expResult, result,
 				cmp.AllowUnexported(hardware.FabricInterfaceSet{}),
@@ -562,7 +561,7 @@ func TestSysfs_Provider_GetFabricInterfaces(t *testing.T) {
 	}
 }
 
-func TestSysfs_Provider_CheckFabricReady(t *testing.T) {
+func TestSysfs_Provider_GetNetDevState(t *testing.T) {
 	setupNet := func(t *testing.T, root string) {
 		t.Helper()
 
@@ -571,6 +570,7 @@ func TestSysfs_Provider_CheckFabricReady(t *testing.T) {
 
 		setupTestNetDevClasses(t, root, map[string]uint32{
 			"net0": uint32(hardware.Ether),
+			"lo":   uint32(hardware.Loopback),
 		})
 	}
 
@@ -623,10 +623,11 @@ func TestSysfs_Provider_CheckFabricReady(t *testing.T) {
 	}
 
 	for name, tc := range map[string]struct {
-		setup  func(*testing.T, string)
-		p      *Provider
-		iface  string
-		expErr error
+		setup    func(*testing.T, string)
+		p        *Provider
+		iface    string
+		expState hardware.NetDevState
+		expErr   error
 	}{
 		"nil": {
 			iface:  "ib0",
@@ -641,10 +642,112 @@ func TestSysfs_Provider_CheckFabricReady(t *testing.T) {
 			iface:  "fake",
 			expErr: errors.New("can't determine device class"),
 		},
-		"not infiniband": {
-			setup: setupNet,
-			p:     &Provider{},
-			iface: "net0",
+		"net no operstate": {
+			setup: func(t *testing.T, root string) {
+				setupNet(t, root)
+			},
+			p:      &Provider{},
+			iface:  "net0",
+			expErr: errors.New("failed to get \"net0\" operational state"),
+		},
+		"net ready": {
+			setup: func(t *testing.T, root string) {
+				setupNet(t, root)
+				setupTestNetDevOperStates(t, root, map[string]string{
+					"net0": "up",
+				})
+			},
+			p:        &Provider{},
+			iface:    "net0",
+			expState: hardware.NetDevStateReady,
+		},
+		"net down": {
+			setup: func(t *testing.T, root string) {
+				setupNet(t, root)
+				setupTestNetDevOperStates(t, root, map[string]string{
+					"net0": "down",
+				})
+			},
+			p:        &Provider{},
+			iface:    "net0",
+			expState: hardware.NetDevStateDown,
+		},
+		"net lowerlayerdown": {
+			setup: func(t *testing.T, root string) {
+				setupNet(t, root)
+				setupTestNetDevOperStates(t, root, map[string]string{
+					"net0": "lowerlayerdown",
+				})
+			},
+			p:        &Provider{},
+			iface:    "net0",
+			expState: hardware.NetDevStateDown,
+		},
+		"net notpresent": {
+			setup: func(t *testing.T, root string) {
+				setupNet(t, root)
+				setupTestNetDevOperStates(t, root, map[string]string{
+					"net0": "notpresent",
+				})
+			},
+			p:        &Provider{},
+			iface:    "net0",
+			expState: hardware.NetDevStateDown,
+		},
+		"net testing": {
+			setup: func(t *testing.T, root string) {
+				setupNet(t, root)
+				setupTestNetDevOperStates(t, root, map[string]string{
+					"net0": "testing",
+				})
+			},
+			p:        &Provider{},
+			iface:    "net0",
+			expState: hardware.NetDevStateNotReady,
+		},
+		"net dormant": {
+			setup: func(t *testing.T, root string) {
+				setupNet(t, root)
+				setupTestNetDevOperStates(t, root, map[string]string{
+					"net0": "dormant",
+				})
+			},
+			p:        &Provider{},
+			iface:    "net0",
+			expState: hardware.NetDevStateNotReady,
+		},
+		"net unknown": {
+			setup: func(t *testing.T, root string) {
+				setupNet(t, root)
+				setupTestNetDevOperStates(t, root, map[string]string{
+					"net0": "unknown",
+				})
+			},
+			p:        &Provider{},
+			iface:    "net0",
+			expState: hardware.NetDevStateUnknown,
+		},
+		"net operstate case-insensitive": {
+			setup: func(t *testing.T, root string) {
+				setupNet(t, root)
+				setupTestNetDevOperStates(t, root, map[string]string{
+					"net0": "UP",
+				})
+			},
+			p:        &Provider{},
+			iface:    "net0",
+			expState: hardware.NetDevStateReady,
+		},
+		"loopback unknown is ready": {
+			setup: func(t *testing.T, root string) {
+				setupNet(t, root)
+				setupTestNetDevOperStates(t, root, map[string]string{
+					"lo": "unknown",
+				})
+			},
+			p:        &Provider{},
+			iface:    "lo",
+			expState: hardware.NetDevStateReady,
 		},
 		"no IB dir": {
 			setup: func(t *testing.T, root string) {
@@ -666,9 +769,9 @@ func TestSysfs_Provider_CheckFabricReady(t *testing.T) {
 					"ib0": uint32(hardware.Infiniband),
 				})
 			},
-			p:      &Provider{},
-			iface:  "ib0",
-			expErr: hardware.ErrFabricNotReady("ib0"),
+			p:        &Provider{},
+			iface:    "ib0",
+			expState: hardware.NetDevStateUnknown,
 		},
 		"no port info": {
 			setup: func(t *testing.T, root string) {
@@ -700,11 +803,11 @@ func TestSysfs_Provider_CheckFabricReady(t *testing.T) {
 					1: "garbage",
 				})
 			},
-			p:      &Provider{},
-			iface:  "ib0",
-			expErr: hardware.ErrFabricNotReady("ib0"),
+			p:        &Provider{},
+			iface:    "ib0",
+			expState: hardware.NetDevStateUnknown,
 		},
-		"port not ready": {
+		"port down": {
 			setup: func(t *testing.T, root string) {
 				t.Helper()
 
@@ -714,22 +817,38 @@ func TestSysfs_Provider_CheckFabricReady(t *testing.T) {
 					1: "1: DOWN",
 				})
 			},
-			p:      &Provider{},
-			iface:  "ib0",
-			expErr: hardware.ErrFabricNotReady("ib0"),
+			p:        &Provider{},
+			iface:    "ib0",
+			expState: hardware.NetDevStateDown,
 		},
-		"success": {
-			p:     &Provider{},
-			iface: "ib0",
+		"port not ready": {
+			setup: func(t *testing.T, root string) {
+				t.Helper()
+
+				ibPath := setupIBDevPath(t, root, "ib0", "mlx0")
+
+				setupIBPorts(t, ibPath, map[int]string{
+					1: "2: INITIALIZING",
+				})
+			},
+			p:        &Provider{},
+			iface:    "ib0",
+			expState: hardware.NetDevStateNotReady,
 		},
-		"all devs not ready": {
+		"ready": {
+			p:        &Provider{},
+			iface:    "ib0",
+			expState: hardware.NetDevStateReady,
+		},
+		"one dev not ready": {
 			setup: func(t *testing.T, root string) {
 				t.Helper()
 
 				for dev, state := range map[string]string{
 					"mlx0_0": "1: DOWN",
 					"mlx0_1": "0: UNKNOWN",
-					"mlx0_2": "2: INITIALIZING",
+					"mlx0_2": "4: ACTIVE",
+					"mlx0_3": "3: ARMED",
 				} {
 					ibPath := setupIBDevPath(t, root, "ib0", dev)
 
@@ -738,11 +857,11 @@ func TestSysfs_Provider_CheckFabricReady(t *testing.T) {
 					})
 				}
 			},
-			p:      &Provider{},
-			iface:  "ib0",
-			expErr: hardware.ErrFabricNotReady("ib0"),
+			p:        &Provider{},
+			iface:    "ib0",
+			expState: hardware.NetDevStateNotReady,
 		},
-		"one of many devs up": {
+		"one IB dev up, others down/unknown": {
 			setup: func(t *testing.T, root string) {
 				t.Helper()
 
@@ -758,27 +877,50 @@ func TestSysfs_Provider_CheckFabricReady(t *testing.T) {
 					})
 				}
 			},
-			p:     &Provider{},
-			iface: "ib0",
+			p:        &Provider{},
+			iface:    "ib0",
+			expState: hardware.NetDevStateReady,
 		},
-		"all ports not ready": {
+		"all IB devs down or unknown": {
 			setup: func(t *testing.T, root string) {
 				t.Helper()
 
-				ibPath := setupIBDevPath(t, root, "ib0", "mlx0")
+				for dev, state := range map[string]string{
+					"mlx0_0": "1: DOWN",
+					"mlx0_1": "0: UNKNOWN",
+					"mlx0_2": "0: UNKNOWN",
+				} {
+					ibPath := setupIBDevPath(t, root, "ib0", dev)
 
-				setupIBPorts(t, ibPath, map[int]string{
-					1: "1: DOWN",
-					2: "0: UNKNOWN",
-					3: "1: DOWN",
-					4: "2: INITIALIZING",
-				})
+					setupIBPorts(t, ibPath, map[int]string{
+						1: state,
+					})
+				}
 			},
-			p:      &Provider{},
-			iface:  "ib0",
-			expErr: hardware.ErrFabricNotReady("ib0"),
+			p:        &Provider{},
+			iface:    "ib0",
+			expState: hardware.NetDevStateDown,
 		},
-		"at least one port up": {
+		"all IB devs unknown": {
+			setup: func(t *testing.T, root string) {
+				t.Helper()
+
+				for dev, state := range map[string]string{
+					"mlx0_1": "0: UNKNOWN",
+					"mlx0_2": "0: UNKNOWN",
+				} {
+					ibPath := setupIBDevPath(t, root, "ib0", dev)
+
+					setupIBPorts(t, ibPath, map[int]string{
+						1: state,
+					})
+				}
+			},
+			p:        &Provider{},
+			iface:    "ib0",
+			expState: hardware.NetDevStateUnknown,
+		},
+		"at least one IB port not ready": {
 			setup: func(t *testing.T, root string) {
 				t.Helper()
 
@@ -791,15 +933,32 @@ func TestSysfs_Provider_CheckFabricReady(t *testing.T) {
 					4: "2: INITIALIZING",
 				})
 			},
-			p:     &Provider{},
-			iface: "ib0",
+			p:        &Provider{},
+			iface:    "ib0",
+			expState: hardware.NetDevStateNotReady,
+		},
+		"one IB port active, others down/unknown": {
+			setup: func(t *testing.T, root string) {
+				t.Helper()
+
+				ibPath := setupIBDevPath(t, root, "ib0", "mlx0")
+
+				setupIBPorts(t, ibPath, map[int]string{
+					1: "1: DOWN",
+					2: "0: UNKNOWN",
+					3: "4: ACTIVE",
+				})
+			},
+			p:        &Provider{},
+			iface:    "ib0",
+			expState: hardware.NetDevStateReady,
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(name)
-			defer common.ShowBufferOnFailure(t, buf)
+			defer test.ShowBufferOnFailure(t, buf)
 
-			testDir, cleanupTestDir := common.CreateTestDir(t)
+			testDir, cleanupTestDir := test.CreateTestDir(t)
 			defer cleanupTestDir()
 
 			if tc.p != nil {
@@ -814,9 +973,179 @@ func TestSysfs_Provider_CheckFabricReady(t *testing.T) {
 			}
 			tc.setup(t, testDir)
 
-			err := tc.p.CheckFabricReady(tc.iface)
+			state, err := tc.p.GetNetDevState(tc.iface)
 
-			common.CmpErr(t, tc.expErr, err)
+			test.CmpErr(t, tc.expErr, err)
+			test.AssertEqual(t, tc.expState, state, "")
+		})
+	}
+}
+
+func TestSysfs_Provider_ibStateToNetDevState(t *testing.T) {
+	for name, tc := range map[string]struct {
+		input     string
+		expResult hardware.NetDevState
+	}{
+		"empty": {
+			expResult: hardware.NetDevStateUnknown,
+		},
+		"garbage": {
+			input:     "trash",
+			expResult: hardware.NetDevStateUnknown,
+		},
+		"unknown": {
+			input:     "0: UNKNOWN",
+			expResult: hardware.NetDevStateUnknown,
+		},
+		"down": {
+			input:     "1: DOWN",
+			expResult: hardware.NetDevStateDown,
+		},
+		"init": {
+			input:     "2: INITIALIZING",
+			expResult: hardware.NetDevStateNotReady,
+		},
+		"armed": {
+			input:     "3: ARMED",
+			expResult: hardware.NetDevStateNotReady,
+		},
+		"active": {
+			input:     "4: ACTIVE",
+			expResult: hardware.NetDevStateReady,
+		},
+		"bad enum": {
+			input:     "1234: something",
+			expResult: hardware.NetDevStateUnknown,
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(name)
+			defer test.ShowBufferOnFailure(t, buf)
+
+			p := &Provider{log: log}
+			result := p.ibStateToNetDevState(tc.input)
+
+			test.AssertEqual(t, tc.expResult, result, "")
+		})
+	}
+}
+
+func TestSysfs_condenseNetDevState(t *testing.T) {
+	for name, tc := range map[string]struct {
+		input     []hardware.NetDevState
+		expResult hardware.NetDevState
+	}{
+		"nil": {
+			expResult: hardware.NetDevStateUnknown,
+		},
+		"empty": {
+			input:     []hardware.NetDevState{},
+			expResult: hardware.NetDevStateUnknown,
+		},
+		"unknown": {
+			input:     []hardware.NetDevState{hardware.NetDevStateUnknown},
+			expResult: hardware.NetDevStateUnknown,
+		},
+		"down": {
+			input:     []hardware.NetDevState{hardware.NetDevStateDown},
+			expResult: hardware.NetDevStateDown,
+		},
+		"not ready": {
+			input:     []hardware.NetDevState{hardware.NetDevStateNotReady},
+			expResult: hardware.NetDevStateNotReady,
+		},
+		"ready": {
+			input:     []hardware.NetDevState{hardware.NetDevStateReady},
+			expResult: hardware.NetDevStateReady,
+		},
+		"down overrides unknown": {
+			input: []hardware.NetDevState{
+				hardware.NetDevStateUnknown,
+				hardware.NetDevStateDown,
+				hardware.NetDevStateUnknown,
+			},
+			expResult: hardware.NetDevStateDown,
+		},
+		"ready overrides down/unknown": {
+			input: []hardware.NetDevState{
+				hardware.NetDevStateUnknown,
+				hardware.NetDevStateDown,
+				hardware.NetDevStateReady,
+				hardware.NetDevStateUnknown,
+				hardware.NetDevStateDown,
+			},
+			expResult: hardware.NetDevStateReady,
+		},
+		"not ready overrides all": {
+			input: []hardware.NetDevState{
+				hardware.NetDevStateUnknown,
+				hardware.NetDevStateDown,
+				hardware.NetDevStateReady,
+				hardware.NetDevStateNotReady,
+				hardware.NetDevStateUnknown,
+				hardware.NetDevStateDown,
+				hardware.NetDevStateReady,
+			},
+			expResult: hardware.NetDevStateNotReady,
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			result := condenseNetDevState(tc.input)
+
+			test.AssertEqual(t, tc.expResult, result, "")
+		})
+	}
+}
+
+func setupTestIsIOMMUEnabled(t *testing.T, root string, extraDirs ...string) {
+	t.Helper()
+
+	dirs := append([]string{root}, extraDirs...)
+
+	path := filepath.Join(dirs...)
+	os.MkdirAll(path, 0755)
+}
+
+func TestSysfs_Provider_IsIOMMUEnabled(t *testing.T) {
+	for name, tc := range map[string]struct {
+		nilProvider bool
+		extraDirs   []string
+		expResult   bool
+		expErr      error
+	}{
+		"nil provider": {
+			nilProvider: true,
+			expErr:      errors.New("provider is nil"),
+		},
+		"missing iommu dir": {
+			extraDirs: []string{"class"},
+		},
+		"iommu disabled": {
+			extraDirs: []string{"class", "iommu"},
+		},
+		"iommu enabled": {
+			extraDirs: []string{"class", "iommu", "dmar0"},
+			expResult: true,
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			testDir, cleanupTestDir := test.CreateTestDir(t)
+			defer cleanupTestDir()
+
+			log, buf := logging.NewTestLogger(name)
+			defer test.ShowBufferOnFailure(t, buf)
+
+			var p *Provider
+			if !tc.nilProvider {
+				p = NewProvider(log)
+				p.root = testDir
+				setupTestIsIOMMUEnabled(t, testDir, tc.extraDirs...)
+			}
+
+			result, err := p.IsIOMMUEnabled()
+
+			test.CmpErr(t, tc.expErr, err)
+			test.AssertEqual(t, tc.expResult, result, "")
 		})
 	}
 }

@@ -13,7 +13,6 @@
 #include "srv_layout.h"
 
 /* Root KVS */
-RDB_STRING_KEY(ds_cont_prop_, version);
 RDB_STRING_KEY(ds_cont_prop_, cuuids);
 RDB_STRING_KEY(ds_cont_prop_, conts);
 RDB_STRING_KEY(ds_cont_prop_, cont_handles);
@@ -225,7 +224,8 @@ ds_cont_prop_default_init(void)
 			"Initializing default ACL cont prop\n");
 		entry2->dpe_val_ptr = ds_sec_alloc_default_daos_cont_acl();
 		if (entry2->dpe_val_ptr == NULL) {
-			D_FREE(entry1->dpe_val_ptr);
+			if (entry1 != NULL)
+				D_FREE(entry1->dpe_val_ptr);
 			return -DER_NOMEM;
 		}
 	}
