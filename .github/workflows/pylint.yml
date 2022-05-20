@@ -8,7 +8,7 @@ jobs:
 
   pylint:
     name: Run pylint with spell checking
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-20.04
     steps:
       - name: Checkout code
         uses: actions/checkout@v2
@@ -17,7 +17,7 @@ jobs:
       - name: Install python
         run: python3 -m pip install --requirement requirements.txt
       - name: Start
-        run: ./utils/daos_pylint.py --help
+        run: ./utils/daos_pylint.py --git --format github
       - name: Get file-list
         run: git ls-files > utils/to-check
       - name: Run

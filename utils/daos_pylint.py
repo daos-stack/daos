@@ -130,7 +130,10 @@ def parse_file(args, target_file, ftest=False, scons=False):
         vals['msg_id'] = msg.msg_id
         vals['category'] = msg.category
 
-        print(args.msg_template.format(**vals))
+        if args.format == 'github':
+            print('::{category} file={file},line={line},:: {msg_id}, {msg}'.format(**vals))
+        else:
+            print(args.msg_template.format(**vals))
 
         types[msg.category] += 1
         symbols[msg.symbol] += 1
@@ -184,6 +187,9 @@ def main():
     parser.add_argument('--reports', choices=['y', 'n'], default='y')
     parser.add_argument('--output-format', choices=['text'])
     parser.add_argument('--rcfile')
+
+    # A --format github option as yamllint uses.
+    parser.add_argument('--format', choices=['text', 'github'], default='text')
 
     # File list, zero or more.
     parser.add_argument('files', nargs='*')
