@@ -1082,3 +1082,4 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 
 * Wed Apr 03 2019 Brian J. Murrell <brian.murrell@intel.com>
 - initial package
+
