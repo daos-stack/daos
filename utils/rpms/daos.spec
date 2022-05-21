@@ -14,7 +14,7 @@
 
 Name:          daos
 Version:       2.0.2
-Release:       5%{?relval}%{?dist}
+Release:       6%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       BSD-2-Clause-Patent
@@ -207,6 +207,15 @@ Requires: %{name}-server-tests%{?_isa} = %{version}-%{release}
 
 %description tests
 This is the package is a metapackage to install all of the test packages
+
+%package tests-internal
+Summary: The entire DAOS internal test suite
+Requires: %{name}-tests%{?_isa} = %{version}-%{release}
+Requires: %{name}-client-tests-openmpi%{?_isa} = %{version}-%{release}
+Requires: %{name}-server-tests-openmpi%{?_isa} = %{version}-%{release}
+
+%description tests-internal
+This is the package is a metapackage to install all of the internal test packages
 
 %package client-tests
 Summary: The DAOS test suite
@@ -515,9 +524,15 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %files tests
 # No files in a meta-package
 
+%files tests-internal
+# No files in a meta-package
+
 %changelog
-* Tue May 17 2022 Tom Nabarro <tom.nabarro@intel.com> 2.0.2-5
+* Tue May 17 2022 Tom Nabarro <tom.nabarro@intel.com> 2.0.2-6
 - Restrict spdk version to less than v22
+
+* Thu May 12 2022 Phillip Henderson <phillip.henderson@intel.com> 2.0.2-5
+- Add daos-tests-internal package
 
 * Wed Apr 20 2022 Lei Huang <lei.huang@intel.com> 2.0.2-4
 - Update libfabric to v1.15.0rc3-1 with critical performance patches
