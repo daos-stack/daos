@@ -176,7 +176,9 @@ def define_mercury(reqs):
                 libs=['opa'],
                 package='openpa-devel' if inst(reqs, 'openpa') else None)
 
-    reqs.define('ucx', libs=['ucp'])
+    reqs.define('ucx',
+                libs=['ucp', 'uct'],
+                headers=['uct/api/uct.h'])
 
     mercury_build = ['cmake',
                      '-DMERCURY_USE_CHECKSUMS=OFF',
@@ -196,7 +198,7 @@ def define_mercury(reqs):
     else:
         mercury_build.append('-DMERCURY_ENABLE_DEBUG=OFF')
 
-    if reqs.get_env('UCX'):
+    if reqs.check_component('ucx'):
         mercury_build.extend(['-DNA_USE_UCX=ON',
                               '-DUCX_INCLUDE_DIR=/usr/include',
                               '-DUCP_LIBRARY=/usr/lib64/libucp.so',
