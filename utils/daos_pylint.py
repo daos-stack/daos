@@ -28,13 +28,13 @@ class FileTypeList():
             return
         if not file.endswith('.py'):
             return
-        if file.startswith('src/control/vendor'):
+        if 'src/control/vendor' in file:
             return
-        if file.startswith('src/vos/storage_estimator'):
+        if 'src/vos/storage_estimator' in file:
             return
 
         # If files are in a subdir under ftest then they need to by treated differently.
-        if file.startswith('src/tests/ftest/'):
+        if 'src/tests/ftest/' in file:
             self.ftest_files.append(file)
             return
         self.files.append(file)
