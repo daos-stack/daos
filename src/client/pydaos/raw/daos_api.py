@@ -2361,7 +2361,7 @@ class DaosContext():
             'destroy-tx':      self.libdaos.daos_tx_abort,
             'disconnect-pool': self.libdaos.daos_pool_disconnect,
             'fetch-obj':       self.libdaos.daos_obj_fetch,
-            'generate-oid':    self.libdaos.daos_obj_generate_oid2,
+            'generate-oid':    self.libdaos.daos_obj_generate_oid,
             'get-cont-attr':   self.libdaos.daos_cont_get_attr,
             'get-pool-attr':   self.libdaos.daos_pool_get_attr,
             'get-layout':      self.libdaos.daos_obj_layout_get,
