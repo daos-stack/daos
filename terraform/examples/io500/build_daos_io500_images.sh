@@ -40,7 +40,7 @@ INSTALL_SCRIPTS=(
 install_devtools.sh
 install_intel-oneapi.sh
 install_mpifileutils.sh
-install_io500-sc21.sh
+install_io500-isc22.sh
 )
 
 # Reverse the INSTALL_SCRIPTS array

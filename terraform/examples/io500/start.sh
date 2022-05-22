@@ -451,7 +451,8 @@ copy_files_to_first_client() {
     "${HOSTS_SERVERS_FILE}" \
     "${HOSTS_ALL_FILE}" \
     ${SCRIPT_DIR}/clean_storage.sh \
-    ${SCRIPT_DIR}/run_io500-sc21.sh \
+    ${SCRIPT_DIR}/run_io500-isc22.sh \
+    ${SCRIPT_DIR}/io500-isc22.config-template.daos-rf0.ini \
     "${FIRST_CLIENT_IP}:~/"
 
   ssh -q -F "${SSH_CONFIG_FILE}" ${FIRST_CLIENT_IP} \
@@ -522,7 +523,7 @@ To run the IO500 benchmark:
    ./login
 
 2. Run IO500
-   ./run_io500-sc21.sh
+   ./run_io500-isc22.sh
 
 EOF
 }
