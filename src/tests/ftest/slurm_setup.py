@@ -5,6 +5,7 @@
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 
+# pylint: disable=import-error,no-name-in-module
 
 import argparse
 import getpass

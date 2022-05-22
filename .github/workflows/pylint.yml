@@ -22,3 +22,5 @@ jobs:
         run: ./utils/daos_pylint.py --git --format github
       - name: diff
         run: git diff
+      - name: about
+        run: python --version
