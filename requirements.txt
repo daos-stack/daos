@@ -11,9 +11,9 @@ tabulate
 wheel
 pylint
 numpy
-avocado-framework
-avocado-framework-plugin-result-html
-avocado-framework-plugin-varianter-yaml-to-mux
+avocado-framework<70
+avocado-framework-plugin-result-html<70
+avocado-framework-plugin-varianter-yaml-to-mux<70
 clustershell
 jira
 paramiko
