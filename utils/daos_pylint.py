@@ -23,6 +23,19 @@ class FileTypeList():
 
     def add(self, file):
         """Add a filename to the correct list"""
+
+        def is_scons_file(filename):
+            """Returns true if file is used by Scons and needs annotations"""
+
+            if filename == 'SConstruct':
+                return True
+            if filename.endswith('SConscript'):
+                return True
+            # There may be more files needed here, but just this one is reporting errors.
+            if filename.endswith('site_scons/site_tools/protoc/__init__.py'):
+                return True
+            return False
+
         if is_scons_file(file):
             self.scons_files.append(file)
             return
@@ -61,19 +74,6 @@ class FileTypeList():
                 parse_file(args, file, scons=True)
 
 
-def is_scons_file(filename):
-    """Returns true if file is used by Scons and needs annotations"""
-
-    if filename == 'SConstruct':
-        return True
-    if filename.endswith('SConscript'):
-        return True
-    # There may be more files needed here, but just this one is reporting errors for now.
-    if filename == 'site_scons/site_tools/protoc/__init__.py':
-        return True
-    return False
-
-
 def parse_file(args, target_file, ftest=False, scons=False):
     """Main program"""
 
@@ -104,6 +104,7 @@ sys.path.append('src/tests/ftest')
 sys.path.append('src/tests/ftest/util/apricot')
 sys.path.append('src/tests/ftest/cart/util/')
 sys.path.append('src/tests/ftest/util')
+sys.path.append('src/client')
 sys.path.append('site_scons')"""
 
     target.extend(['--persistent', 'n'])
@@ -124,9 +125,6 @@ sys.path.append('site_scons')"""
         if msg.msg_id in ('C0401', 'C0402'):
             if ":avocado:" in msg.msg:
                 continue
-        # pydaos.raw is only importable once built.
-        if msg.msg_id == 'E0401' and 'pydaos.raw' in msg.msg:
-            continue
         # Inserting code can cause wrong-module-order.
         if scons and msg.msg_id == 'C0411' and 'from SCons.Script import' in msg.msg:
             continue

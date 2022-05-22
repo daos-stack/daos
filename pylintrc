@@ -40,10 +40,9 @@ good-names=rc,ret,fd
 disable=locally-disabled,locally-enabled,star-args,global-statement,bad-option-value,
         wrong-import-position,modified-iterating-list,duplicate-code,unspecified-encoding
 
-#[SPELLING]
-#spelling-dict=en_US
-#spelling-private-dict-file=utils/words.dict
-#spelling-store-unknown-words=true
+[SPELLING]
+spelling-dict=en_US
+spelling-private-dict-file=utils/words.dict
 
 [FORMAT]
 max-line-length=100
