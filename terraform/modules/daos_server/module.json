@@ -116,7 +116,7 @@
     },
     {
       "name": "pools",
-      "type": "list(object({\n    name       = string\n    size       = string\n    tier_ratio = number\n    acls       = list(string)\n    properties = map(string)\n    containers = list(object({\n      name            = string\n      type            = string\n      acls            = list(string)\n      properties      = map(string)\n      user_attributes = map(any)\n    }))\n  }))",
+      "type": "list(object({\n    name       = string\n    size       = string\n    tier_ratio = number\n    user       = string\n    group      = string\n    acls       = list(string)\n    properties = map(any)\n    containers = list(object({\n      name            = string\n      type            = string\n      user            = string\n      group           = string\n      acls            = list(string)\n      properties      = map(any)\n      user_attributes = map(any)\n    }))\n  }))",
       "description": "List of pools and containers to be created",
       "default": [],
       "required": false

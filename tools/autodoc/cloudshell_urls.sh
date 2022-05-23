@@ -20,7 +20,7 @@
 #   This script will update "Open in Google Cloud Shell" in all *.md files.
 #   Before merging from the develop branch to main run
 #
-#     ./cloudshell_urls.sh main
+#     ./cloudshell_urls.sh -b main -r https://github.com/daos-stack/google-cloud-daos
 #
 
 set -e

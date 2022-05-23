@@ -1,4 +1,4 @@
-# DAOS GCP Full Cluster Example
+# DAOS Cluster Example
 
 ## Overview
 
@@ -6,26 +6,19 @@ In this tutorial you will
 
 1. Use Terraform to deploy a DAOS cluster using the example configuration in  ```terraform/examples/daos_cluster```
 2. Perform the following DAOS administration tasks
-   - Format Storage
-   - Create a Pool
-   - Create a Container
-   - Mount the storage on the clients
+   - Create a pool
+   - Create a container
+   - Mount the container
 3. Copy files to DAOS mounted storage
 4. Tear down the DAOS cluster deployment
 
 Click on **Start**
 
-## Setup and Requirements
+## Pre-Deployment Steps
 
-Before continuing, it is assumed that you have completed the following steps in your GCP project.
+Before continuing, it is assumed that you have completed the pre-deployment steps in your GCP project.
 
-1. Set defaults for Google Cloud CLI (```gcloud```) in Cloud Shell
-2. Create a Packer image in your GCP project
-3. Build DAOS Server and Client images with Packer in Cloud Build
-
-If you have not yet completed these steps, you can open a tutorial in Cloud Shell that will guide you through each step.
-
-If you are not sure if you have completed these steps run
+If you are not sure if you have completed the pre-deployment steps run
 
 ```bash
 gcloud compute images list --filter="name:daos" --format="value(name)"
@@ -36,14 +29,14 @@ If you see `daos-server-*` and `daos-client-*` images, click **Next** to continu
 Otherwise, run another tutorial that walks you though the steps listed above.
 
 ```bash
-teachme docs/tutorials/daosgcp_setup.md
+teachme docs/tutorials/pre-deployment.md
 ```
 
 ## The daos_cluster example
 
-The example Terraform configuration in [terraform/examples/daos_cluster](https://github.com/daos-stack/google-cloud-daos/tree/main/terraform/examples/daos_cluster) demonstrates how the [DAOS Terraform Modules](https://github.com/daos-stack/google-cloud-daos/tree/main/terraform/modules) can be used in your own Terraform code.
+The [terraform/examples/daos_cluster](https://github.com/daos-stack/google-cloud-daos/tree/main/terraform/examples/daos_cluster) Terraform configuration demonstrates how the DAOS Terraform Modules in [terraform/modules](https://github.com/daos-stack/google-cloud-daos/tree/main/terraform/modules) can be used in your own Terraform configurations.
 
-Change into the example directory now
+Change into the `daos_cluster` example directory now
 
 ```bash
 cd terraform/examples/daos_cluster
@@ -55,19 +48,18 @@ Click **Next** to continue
 
 ## Create a `terraform.tfvars` file
 
-You need to create a `terraform.tfvars` file that contains variable values for Terraform.
-
-There are many variables to configure DAOS server and client configurations. Changes to certain variable values often require corresponding changes in other variable values. Depending on your use case this can become a complex topic.
+Create a `terraform.tfvars` file that contains variable values for Terraform.
 
 To simplify the task of setting the proper variable values for a working DAOS cluster, there are example tfvars files that can be copied to create a  `terraform.tfvars` file.
 
-Select one of the example files to copy to `terraform.tfvars`.
+You will need to select one of the example files to copy to `terraform.tfvars`.
 
-The example tfvars files are:
+The example tfvars files are
 
 1. `terraform.tfvars.tco.example`
 
-   16 DAOS Clients, 4 DAOS Servers with 16 375GB NVMe SSDs per server.
+   - 16 DAOS Clients
+   - 4 DAOS Servers with 16x375GB NVMe SSDs per server
 
    To use this configuration run
    ```bash
@@ -76,7 +68,8 @@ The example tfvars files are:
 
 2. `terraform.tfvars.perf.example`
 
-   16 DAOS Clients, 4 DAOS Servers with 4 375GB NVMe SSDs per server.
+   - 16 DAOS Clients
+   - 4 DAOS Servers with 4x375GB NVMe SSDs per server
 
    To use this configuration run
    ```bash
@@ -87,11 +80,7 @@ Click **Next** to continue
 
 ## Modify `terraform.tfvars`
 
-Now that you have created a `terraform.tfvars` file, there is one change that needs to be made in the file.
-
-You need to replace the `<project_id>` placeholder with your project id.
-
-To replace the `<project_id>` placeholder run
+Replace the `<project_id>` placeholder `terraform.tfvars` file by running
 
 ```bash
 PROJECT_ID=$(gcloud config list --format 'value(core.project)')
@@ -130,7 +119,7 @@ The variable values are set in `terrafrom.tfvars`.
 
 Click **Next** to continue
 
-## Run Terraform to Deploy the DAOS cluster
+## Deploy the DAOS cluster
 
 You can now deploy a DAOS cluster using the `terraform/examples/daos_cluster` example configuration.
 
@@ -152,7 +141,7 @@ Execute the actions in the plan.
 terraform apply -input=false tfplan
 ```
 
-List the instances that were created.
+**List the instances**
 
 Terraform will create 2 [managed instance groups (MIGs)](https://cloud.google.com/compute/docs/instance-groups) that will create the DAOS server and client instances.
 
@@ -161,20 +150,14 @@ It may take some time for the instances to become available.
 To see the list of instances run
 
 ```bash
-gcloud compute instances list --filter="name ~ daos.*" --format="value(name,INTERNAL_IP)"
+gcloud compute instances list \
+  --filter="name ~ daos.*" \
+  --format="value(name,INTERNAL_IP)"
 ```
 
 Click **Next** to continue
 
-## Prepare storage
-
-When the DAOS server and client instances are deployed the DAOS services are started but the DAOS storage is not ready to use yet.
-
-There are a few administrative tasks that must be performed before the DAOS storage can be used.
-
-The DAOS Management Tool (`dmg`) is installed on all DAOS client instances and can be used to perform administrative tasks.
-
-You can use `dmg` on any of the DAOS client instances.
+## Log Into First Client
 
 Log into the first DAOS client instance
 
@@ -186,34 +169,27 @@ If you are prompted to create an SSH key pair for gcloud, follow the prompts.
 
 Click **Next** to continue
 
-## Storage Format
+## Create a Pool
 
-When the DAOS server instances are created the `daos_server` service will be started but will be in "maintenance mode".
+The DAOS Management Tool `dmg` is meant to be used by administrators to manage the DAOS storage system and pools.
 
-In order to begin using the storage you must issue a *format* command.
+You will need to run `dmg` with `sudo`.
 
-To format the storage run
+Check to make sure that the DAOS storage system is ready
 
 ```bash
-sudo dmg storage format
 sudo dmg system query -v
 ```
 
-To learn more see [Storage Formatting](https://docs.daos.io/latest/admin/deployment/#storage-formatting)
+You should see 4 servers with a state of *Joined*
 
-Click **Next** to continue
+<br>
 
-## Create pool
-
-Now that the system has been formatted you can create a Pool.
-
-First check to see how much free NVMe storage you have.
+View free NVMe storage
 
 ```bash
 sudo dmg storage query usage
 ```
-
-This will return storage information for the servers.
 
 The output looks similar to
 
@@ -226,60 +202,101 @@ daos-server-0003 48 GB     48 GB    0 %      1.6 TB     1.6 TB    0 %
 daos-server-0004 48 GB     48 GB    0 %      1.6 TB     1.6 TB    0 %
 ```
 
-
 In the example output above there are 4 servers with a total of 6.4TB of free space.
 
-With that information you know you can safely create a 6TB pool.
-
-Create the pool.
+Create a pool named `pool1` that uses all available space.
 
 ```bash
-sudo dmg pool create -z 6TB -t 3 -u ${USER} --label=daos_pool
+sudo dmg pool create -z 6.4TB -t 3 --label=pool1
 ```
 
-For more information about pools see
+View the ACLs on *pool1*
 
-- [https://docs.daos.io/latest/overview/storage/#daos-pool](https://docs.daos.io/latest/overview/storage/#daos-pool)
-- [https://docs.daos.io/latest/admin/pool_operations/](https://docs.daos.io/latest/admin/pool_operations/)
+```bash
+sudo dmg pool get-acl pool1
+```
+
+```text
+# Owner: root@
+# Owner Group: root@
+# Entries:
+A::OWNER@:rw
+A:G:GROUP@:rw
+```
+
+Here we see that root owns the pool.
+
+Add an [ACE](https://docs.daos.io/v2.0/admin/pool_operations/#adding-and-updating-aces) that will allow any user to create a container in the pool
+
+```bash
+sudo dmg pool update-acl -e A::EVERYONE@:rcta pool1
+```
 
 Click **Next** to continue
 
-### Create container
+### Create a Container
 
-Now that a pool has been created, create a container in that pool
+Create a container named `cont1` in the `pool1` pool.
 
 ```bash
-daos container create --type=POSIX --properties=rf:0 --label=daos_cont daos_pool
+daos container create \
+  --type=POSIX \
+  --properties=rf:0 \
+  --label=cont1 pool1
 ```
-
-For more information about containers see [https://docs.daos.io/latest/overview/storage/#daos-container](https://docs.daos.io/latest/overview/storage/#daos-container)
 
 Click **Next** to continue
 
-## Mount container
+## Mount the Container
 
-The container now needs to be mounted.
-
-To mount the container run
+Create a mount point and mount the `cont1` container
 
 ```bash
-MOUNT_DIR="/tmp/daos_test1"
+MOUNT_DIR="${HOME}/daos/cont1"
 mkdir -p "${MOUNT_DIR}"
-dfuse --singlethread --pool=daos_pool --container=daos_cont --mountpoint="${MOUNT_DIR}"
+dfuse --singlethread \
+  --pool=pool1 \
+  --container=cont1 \
+  --mountpoint="${MOUNT_DIR}"
+```
+
+Verify that the container is mounted
+
+```bash
 df -h -t fuse.daos
 ```
 
-Your DAOS storage is now ready!
+Click **Next** to continue
 
-You can now store files in `/tmp/daos_test1`
+## Use DAOS Storage
+
+The `cont1` container is now mounted on `${HOME}/daos/cont1`
+
+Create a 20GiB file which will be stored in the DAOS filesystem.
+
+```bash
+pushd ${HOME}/daos/cont1
+time LD_PRELOAD=/usr/lib64/libioil.so \
+dd if=/dev/zero of=./test20GiB.img iflag=fullblock bs=1G count=20
+```
 
 Click **Next** to continue
 
-## Shutting it down
+## Unmount the Container
 
-If you are still logged into the first DAOS client instance, log out now.
+Unmount the container before logging out of the daos-client-0001 instance.
 
-To shut down the DAOS cluster run
+```bash
+popd
+fusermount -u ${HOME}/daos/cont1
+logout
+```
+
+Click **Next** to continue
+
+## Shut Down the DAOS Cluster
+
+Destroy all resources created by Terraform
 
 ```bash
 terraform destroy
@@ -293,14 +310,15 @@ Click **Next** to continue
 
 You have completed a DAOS cluster deployment on GCP!
 
-In this tutorial you used the Terraform example configuration in `terraform/examples/daos_cluster` to deploy a DAOS cluster.
+The following steps were performed in this tutorial:
 
-You then performed the following administration tasks:
+1. Used the Terraform example configuration in `terraform/examples/daos_cluster` to deploy a DAOS cluster.
+2. Created a container
+3. Mounted the container
+3. Stored a large file in the container
+4. Unmounted the container
+5. Used terraform to destroy all resources that were created
 
-1. Formatted storage
-2. Created a pool
-3. Created a container
-4. Mounted the container
 
 What's next?
 

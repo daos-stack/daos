@@ -184,8 +184,8 @@ variable "server_pools" {
     containers = list(object({
       name            = string
       type            = string
-      user       = string
-      group      = string
+      user            = string
+      group           = string
       acls            = list(string)
       properties      = map(any)
       user_attributes = map(any)
