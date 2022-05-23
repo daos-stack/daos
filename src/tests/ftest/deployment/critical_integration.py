@@ -77,9 +77,8 @@ class CriticalIntegration(TestWithServers):
         result_client_server = daos_server_version_list[0][1:] == dmg_version_list[0]
 
         # libfabric version check
-        all_nodes = self.hostlist_servers + self.hostlist_clients
-        all_nodes = list(dict.fromkeys(all_nodes))
-        list_all_nodes = ",".join(all_nodes)
+        all_nodes = self.hostlist_servers | self.hostlist_clients
+        list_all_nodes = str(all_nodes)
         libfabric_version_cmd = "clush -S -b -w {} {}/bin/fi_info \
                                 --version".format(list_all_nodes, libfabric_path)
         libfabric_output = run_command(libfabric_version_cmd)
@@ -127,15 +126,18 @@ class CriticalIntegration(TestWithServers):
         for sub_list in sub_rank_list:
             ranks_to_stop = ",".join([str(rank) for rank in sub_list])
             self.log.info("Ranks to stop: %s", ranks_to_stop)
+            # stop ranks and verify if they stopped
             dmg.system_stop(ranks=ranks_to_stop)
             for rank in sub_list:
-                if (self.server_managers[0].check_rank_state(rank, "stopped", 5) or
-                        self.server_managers[0].check_rank_state(rank, "excluded", 5)):
-                    dmg.system_start(ranks=rank)
-                    if not self.server_managers[0].check_rank_state(rank, "joined", 5):
-                        self.fail("Rank {} failed to restart".format(rank))
-                else:
+                if (not(self.server_managers[0].check_rank_state(rank, "stopped", 5) or
+                        self.server_managers[0].check_rank_state(rank, "excluded", 5))):
                     self.fail("Rank {} failed to stop".format(rank))
+            # restart stopped ranks and verify if they are joined
+            dmg.system_start(ranks=ranks_to_stop)
+            for rank in sub_list:
+                if not self.server_managers[0].check_rank_state(rank, "joined", 5):
+                    self.fail("Rank {} failed to restart".format(rank))
+
         until = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
 
         # gather journalctl logs for each server host, verify system stop event was sent to logs
