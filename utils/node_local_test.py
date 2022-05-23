@@ -1860,23 +1860,15 @@ class posix_tests():
                 assert False
             except PermissionError:
                 pass
-            except OSError as e:
-                if e.errno != errno.ENOTSUP:
+            except OSError as error:
+                if error.errno != errno.ENOTSUP:
                     raise
 
-            # Chgrp to another group which this process is in, will work for the default group, but
-            # should fail for all others.
+            # Chgrp to another group which this process is in, should work for all groups.
             groups = os.getgroups()
             print(groups)
             for group in groups:
-                try:
-                    os.chown(fd.fileno(), -1, group)
-                    assert group == os.getgid()
-                except OSError as e:
-                    print(e)
-                    if e.errno != errno.ENOTSUP:
-                        raise
-                    assert group != os.getgid()
+                os.chown(fd.fileno(), -1, group)
 
     @needs_dfuse
     def test_symlink_broken(self):
