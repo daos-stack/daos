@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/sh -e
 
 # Install OS updates and package.  Include basic tools and daos dependencies
 # that come from the core repo.
@@ -8,9 +8,7 @@
 # post provisioning issue.
 # *** Keep these in as much alphbetical order as possible ***
 
-set -e
-
-dnf -y --nodocs install \
+dnf --nodocs install \
     boost-devel \
     bzip2 \
     curl \
@@ -45,21 +43,12 @@ dnf -y --nodocs install \
     lua-lmod \
     make \
     maven \
-    meson \
     numactl \
-    ninja \
     openmpi3-devel \
     patch \
     patchelf \
     pciutils \
-    python3-defusedxml \
     python3-devel \
-    python3-distro \
-    python3-junit-xml \
-    python3-pyxattr  \
-    python3-PyYAML \
-    python3-pyelftools \
-    python3-tabulate \
     scons \
     sg3_utils \
     sudo \
