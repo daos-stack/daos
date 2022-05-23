@@ -16,6 +16,8 @@
 #define daos_cont_open daos_cont_open2
 /** Please ignore (code for back-compatibility) */
 #define daos_cont_destroy daos_cont_destroy2
+/** Please ignore (code for back-compatibility) */
+#define daos_cont_create daos_cont_create2
 
 #if defined(__cplusplus)
 extern "C" {

@@ -43,10 +43,8 @@ class DmvrDstCreate(DataMoverTestBase):
             Create pool1.
             Create POSIX cont1 in pool1.
             Create small dataset in cont1.
-            Copy cont1 to a new cont in pool1, with a supplied UUID.
             Copy cont1 to a new cont in pool1, without a supplied UUID.
             Create pool2.
-            Copy cont1 to a new cont in pool2, with a supplied UUID.
             Copy cont1 to a new cont in pool2, without a supplied UUID.
             For each copy, very container properties and user attributes.
             Repeat, but with container type Unknown.

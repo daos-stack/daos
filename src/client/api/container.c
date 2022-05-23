@@ -109,10 +109,11 @@ daos_cont_create(daos_handle_t poh, uuid_t *cuuid, daos_prop_t *cont_prop,
 	return rc;
 }
 
+#undef daos_cont_create
 int
-daos_cont_create2(daos_handle_t poh, uuid_t *cuuid, daos_prop_t *cont_prop,
+daos_cont_create(daos_handle_t poh, uuid_t *cuuid, daos_prop_t *cont_prop,
 		  daos_event_t *ev)
-		  __attribute__ ((weak, alias("daos_cont_create")));
+		  __attribute__ ((weak, alias("daos_cont_create2")));
 
 int
 daos_cont_create_with_label(daos_handle_t poh, const char *label,
