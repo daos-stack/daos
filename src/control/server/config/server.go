@@ -46,7 +46,7 @@ type Server struct {
 	BdevInclude         []string               `yaml:"bdev_include,omitempty"`
 	BdevExclude         []string               `yaml:"bdev_exclude,omitempty"`
 	DisableVFIO         bool                   `yaml:"disable_vfio"`
-	DisableVMD          bool                   `yaml:"disable_vmd"`
+	EnableVMD           bool                   `yaml:"enable_vmd"`
 	EnableHotplug       bool                   `yaml:"enable_hotplug"`
 	NrHugepages         int                    `yaml:"nr_hugepages"` // total for all engines
 	ControlLogMask      common.ControlLogLevel `yaml:"control_log_mask"`
@@ -222,10 +222,10 @@ func (cfg *Server) WithDisableVFIO(disabled bool) *Server {
 	return cfg
 }
 
-// WithDisableVMD can be used to set the state of VMD functionality,
-// if disabled then VMD devices will not be used if they exist.
-func (cfg *Server) WithDisableVMD(disable bool) *Server {
-	cfg.DisableVMD = disable
+// WithEnableVMD can be used to set the state of VMD functionality,
+// if enabled then VMD devices will be used if they exist.
+func (cfg *Server) WithEnableVMD(enable bool) *Server {
+	cfg.EnableVMD = enable
 	return cfg
 }
 
@@ -295,6 +295,7 @@ func DefaultServer() *Server {
 		Hyperthreads:    false,
 		Path:            defaultConfigPath,
 		ControlLogMask:  common.ControlLogLevel(logging.LogLevelInfo),
+		EnableVMD:       false, // disabled by default
 		EnableHotplug:   false, // disabled by default
 		// https://man7.org/linux/man-pages/man5/core.5.html
 		CoreDumpFilter: 0b00010011, // private, shared, ELF
@@ -421,7 +422,7 @@ func (cfg *Server) Validate(log logging.Logger, hugePageSize int) (err error) {
 	}
 
 	log.Debugf("vfio=%v hotplug=%v vmd=%v requested in config", !cfg.DisableVFIO,
-		cfg.EnableHotplug, !cfg.DisableVMD)
+		cfg.EnableHotplug, cfg.EnableVMD)
 
 	// Update access point addresses with control port if port is not supplied.
 	newAPs := make([]string, 0, len(cfg.AccessPoints))
