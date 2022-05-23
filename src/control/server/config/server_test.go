@@ -35,15 +35,7 @@ const (
 	verbsExample     = "../../../../utils/config/examples/daos_server_verbs.yml"
 	defaultConfig    = "../../../../utils/config/daos_server.yml"
 	legacyConfig     = "../../../../utils/config/examples/daos_server_unittests.yml"
-
-	mockAccelOptMaskAllSet = 0b11
-	mockAccelOptMaskCRCSet = 0b10
-	mockAccelEngineDML     = "dml"
-	mockAccelEngineSPDK    = "spdk"
-	mockAccelOptCRC        = "crc"
 )
-
-var mockAccelOptsAllSet = []string{"move", "crc"}
 
 var (
 	defConfigCmpOpts = []cmp.Option{
@@ -255,9 +247,9 @@ func TestServerConfig_Constructed(t *testing.T) {
 			WithLogFile("/tmp/daos_engine.0.log").
 			WithLogMask("WARN").
 			WithStorageEnableHotplug(true).
-			WithStorageAccelEngine(mockAccelEngineSPDK).
-			WithStorageAccelOpts(mockAccelOptsAllSet...).
-			WithStorageAccelOptMask(mockAccelOptMaskAllSet),
+			WithStorageAccelEngine(storage.AccelEngineSPDK).
+			WithStorageAccelOpts(storage.AccelOptCRC, storage.AccelOptMove).
+			WithStorageAccelOptMask(storage.AccelOptCRCFlag | storage.AccelOptMoveFlag),
 		engine.MockConfig().
 			WithSystemName("daos_server").
 			WithSocketDir("./.daos/daos_server").
@@ -285,9 +277,9 @@ func TestServerConfig_Constructed(t *testing.T) {
 			WithLogFile("/tmp/daos_engine.1.log").
 			WithLogMask("WARN").
 			WithStorageEnableHotplug(true).
-			WithStorageAccelEngine(mockAccelEngineDML).
-			WithStorageAccelOpts(mockAccelOptCRC).
-			WithStorageAccelOptMask(mockAccelOptMaskCRCSet),
+			WithStorageAccelEngine(storage.AccelEngineDML).
+			WithStorageAccelOpts(storage.AccelOptCRC).
+			WithStorageAccelOptMask(storage.AccelOptCRCFlag),
 	}
 	constructed.Path = testFile // just to avoid failing the cmp
 

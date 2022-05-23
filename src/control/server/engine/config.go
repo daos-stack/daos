@@ -434,18 +434,18 @@ func (c *Config) WithPinnedNumaNode(numa uint) *Config {
 
 // WithStorageAccelEngine sets the acceleration engine setting for the I/O Engine instance.
 func (c *Config) WithStorageAccelEngine(name string) *Config {
-	c.Storage.AccelProps.AccelEngine = name
+	c.Storage.AccelProps.Engine = name
 	return c
 }
 
 // WithStorageAccelOpts sets the acceleration option string slice for the I/O Engine instance.
 func (c *Config) WithStorageAccelOpts(opts ...string) *Config {
-	c.Storage.AccelProps.AccelOpts = opts
+	c.Storage.AccelProps.Options = opts
 	return c
 }
 
 // WithStorageAccelOptMask sets the acceleration option bit mask for the I/O Engine instance.
 func (c *Config) WithStorageAccelOptMask(mask uint16) *Config {
-	c.Storage.AccelProps.AccelOptMask = mask
+	c.Storage.AccelProps.OptMask = mask
 	return c
 }

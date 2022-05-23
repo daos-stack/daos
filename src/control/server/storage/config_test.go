@@ -20,17 +20,6 @@ import (
 	"github.com/daos-stack/daos/src/control/lib/hardware"
 )
 
-const (
-	mockAccelEngineNone    = "none"
-	mockAccelEngineDML     = "dml"
-	mockAccelOptMaskCRCSet = 0b10
-)
-
-var (
-	mockAccelOptsAllSet = []string{"move", "crc"}
-	mockAccelOptsCRCSet = []string{"crc"}
-)
-
 func defConfigCmpOpts() cmp.Options {
 	return cmp.Options{
 		cmp.Comparer(func(x, y *BdevDeviceList) bool {
@@ -330,7 +319,53 @@ func TestStorage_parsePCIBusRange(t *testing.T) {
 	}
 }
 
+func TestStorage_AccelOptMaskFromStrings(t *testing.T) {
+	for name, tc := range map[string]struct {
+		input   []string
+		expMask uint16
+		expErr  error
+	}{
+		"no opts": {},
+		"crc opt": {
+			input:   []string{AccelOptCRC},
+			expMask: AccelOptCRCFlag,
+		},
+		"move opt": {
+			input:   []string{AccelOptMove},
+			expMask: AccelOptMoveFlag,
+		},
+		"all opts": {
+			input:   []string{AccelOptCRC, AccelOptMove},
+			expMask: AccelOptCRCFlag | AccelOptMoveFlag,
+		},
+		"bad opt": {
+			input:  []string{AccelOptCRC, "foo"},
+			expErr: errors.New("unknown acceleration option"),
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			mask, err := AccelOptMaskFromStrings(tc.input...)
+			test.CmpErr(t, tc.expErr, err)
+			if tc.expErr != nil {
+				return
+			}
+
+			if diff := cmp.Diff(tc.expMask, mask); diff != "" {
+				t.Fatalf("bad mask (-want +got):\n%s", diff)
+			}
+		})
+	}
+}
+
 func TestStorage_AccelProps_FromYAML(t *testing.T) {
+	getOptMask := func(ss ...string) uint16 {
+		mask, err := AccelOptMaskFromStrings(ss...)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return mask
+	}
+
 	for name, tc := range map[string]struct {
 		input    string
 		expProps AccelProps
@@ -347,35 +382,35 @@ func TestStorage_AccelProps_FromYAML(t *testing.T) {
 		"engine unset": {
 			input: "acceleration:\n  engine:\n",
 			expProps: AccelProps{
-				AccelEngine: mockAccelEngineNone,
+				Engine: AccelEngineNone,
 			},
 		},
 		"engine set empty": {
 			input: "acceleration:\n  engine: \"\"\n",
 			expProps: AccelProps{
-				AccelEngine: mockAccelEngineNone,
+				Engine: AccelEngineNone,
 			},
 		},
 		"set engine": {
 			input: "acceleration:\n  engine: \"spdk\"\n",
 			expProps: AccelProps{
-				AccelEngine:  mockAccelEngineSPDK,
-				AccelOpts:    mockAccelOptsAllSet,
-				AccelOptMask: mockAccelOptMaskAllSet,
+				Engine:  AccelEngineSPDK,
+				Options: []string{AccelOptCRC, AccelOptMove},
+				OptMask: getOptMask(AccelOptCRC, AccelOptMove),
 			},
 		},
 		"set options; missing engine": {
 			input: "acceleration:\n  options:\n    - move\n    - crc\n",
 			expProps: AccelProps{
-				AccelEngine: mockAccelEngineNone,
+				Engine: AccelEngineNone,
 			},
 		},
 		"set engine; set options": {
 			input: "acceleration:\n  engine: \"dml\"\n  options:\n    - crc\n",
 			expProps: AccelProps{
-				AccelEngine:  mockAccelEngineDML,
-				AccelOpts:    mockAccelOptsCRCSet,
-				AccelOptMask: mockAccelOptMaskCRCSet,
+				Engine:  AccelEngineDML,
+				Options: []string{AccelOptCRC},
+				OptMask: getOptMask(AccelOptCRC),
 			},
 		},
 		"unrecognized engine": {

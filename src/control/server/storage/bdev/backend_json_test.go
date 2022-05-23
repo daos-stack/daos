@@ -23,13 +23,6 @@ import (
 	"github.com/daos-stack/daos/src/control/server/storage"
 )
 
-const (
-	mockAccelOptMaskAllSet = 0b11
-	mockAccelEngineSPDK    = "spdk"
-)
-
-var mockAccelOptsAllSet = []string{"move", "crc"}
-
 // TestBackend_newSpdkConfig verifies config parameters for bdev get
 // converted into config content that can be consumed by spdk.
 func TestBackend_newSpdkConfig(t *testing.T) {
@@ -177,15 +170,15 @@ func TestBackend_newSpdkConfig(t *testing.T) {
 		"multiple controllers; acceleration set to spdk; move and crc opts specified": {
 			class:        storage.ClassNvme,
 			devList:      []string{test.MockPCIAddr(1), test.MockPCIAddr(2)},
-			accelEngine:  mockAccelEngineSPDK,
-			accelOptMask: mockAccelOptMaskAllSet,
+			accelEngine:  storage.AccelEngineSPDK,
+			accelOptMask: storage.AccelOptCRCFlag | storage.AccelOptMoveFlag,
 			expBdevCfgs:  multiCtrlrConfs(),
 			expDaosCfgs: []*DaosConfig{
 				{
 					Method: storage.ConfSetAccelProps,
 					Params: AccelPropsParams{
-						AccelEngine:  mockAccelEngineSPDK,
-						AccelOptMask: mockAccelOptMaskAllSet,
+						Engine:  storage.AccelEngineSPDK,
+						OptMask: storage.AccelOptCRCFlag | storage.AccelOptMoveFlag,
 					},
 				},
 			},

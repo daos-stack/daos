@@ -513,8 +513,8 @@ func TestBackend_writeJSONFile(t *testing.T) {
 			},
 			accelEngine: "spdk",
 			// verify only mask is included in JSON, not individual flags
-			accelOpts:    mockAccelOptsAllSet,
-			accelOptMask: mockAccelOptMaskAllSet,
+			accelOpts:    []string{storage.AccelOptCRC, storage.AccelOptMove},
+			accelOptMask: storage.AccelOptCRCFlag | storage.AccelOptMoveFlag,
 			expOut: `
 {
   "daos_data": {
