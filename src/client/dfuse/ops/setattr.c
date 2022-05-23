@@ -8,8 +8,7 @@
 #include "dfuse.h"
 
 void
-dfuse_cb_setattr(fuse_req_t req, struct dfuse_inode_entry *ie,
-		 struct stat *attr, int to_set)
+dfuse_cb_setattr(fuse_req_t req, struct dfuse_inode_entry *ie, struct stat *attr, int to_set)
 {
 	int dfs_flags = 0;
 	int rc;
@@ -36,37 +35,39 @@ dfuse_cb_setattr(fuse_req_t req, struct dfuse_inode_entry *ie,
 		return;
 	}
 
-	if (to_set & (FUSE_SET_ATTR_UID | FUSE_SET_ATTR_GID)) {
+	if (to_set & (FUSE_SET_ATTR_GID | FUSE_SET_ATTR_UID)) {
+		/* Fuse will sometimes call chown to self and we used to ignore this but with
+		 * kernel caching we can't tell if the in-memory copy is up-to-date so always
+		 * send to the server although in some cases it might end up being a noop
+		 */
 		DFUSE_TRA_DEBUG(ie, "uid flags %#x uid %d gid %d",
 				(to_set & (FUSE_SET_ATTR_UID | FUSE_SET_ATTR_GID)),
 				attr->st_uid, attr->st_gid);
 
-		if (((to_set & FUSE_SET_ATTR_UID) && ie->ie_stat.st_uid != attr->st_uid) ||
-			((to_set & FUSE_SET_ATTR_GID) && ie->ie_stat.st_gid != attr->st_gid)) {
-			DFUSE_TRA_INFO(ie, "File uid/gid support not enabled");
-			D_GOTO(err, rc = ENOTSUP);
-		}
+		if (to_set & FUSE_SET_ATTR_UID)
+			dfs_flags |= DFS_SET_ATTR_UID;
+
+		if (to_set & FUSE_SET_ATTR_GID)
+			dfs_flags |= DFS_SET_ATTR_GID;
+
 		to_set &= ~(FUSE_SET_ATTR_UID | FUSE_SET_ATTR_GID);
 	}
 
 	if (to_set & FUSE_SET_ATTR_MODE) {
-		DFUSE_TRA_DEBUG(ie, "mode %#o %#o",
-				attr->st_mode, ie->ie_stat.st_mode);
+		DFUSE_TRA_DEBUG(ie, "mode %#o %#o", attr->st_mode, ie->ie_stat.st_mode);
 
 		to_set &= ~FUSE_SET_ATTR_MODE;
 		dfs_flags |= DFS_SET_ATTR_MODE;
 	}
 
 	if (to_set & FUSE_SET_ATTR_ATIME) {
-		DFUSE_TRA_DEBUG(ie, "atime %#lx",
-				attr->st_atime);
+		DFUSE_TRA_DEBUG(ie, "atime %#lx", attr->st_atime);
 		to_set &= ~(FUSE_SET_ATTR_ATIME | FUSE_SET_ATTR_ATIME_NOW);
 		dfs_flags |= DFS_SET_ATTR_ATIME;
 	}
 
 	if (to_set & FUSE_SET_ATTR_MTIME) {
-		DFUSE_TRA_DEBUG(ie, "mtime %#lx",
-				attr->st_mtime);
+		DFUSE_TRA_DEBUG(ie, "mtime %#lx", attr->st_mtime);
 		to_set &= ~(FUSE_SET_ATTR_MTIME | FUSE_SET_ATTR_MTIME_NOW);
 		dfs_flags |= DFS_SET_ATTR_MTIME;
 	}

@@ -56,6 +56,7 @@ dnf --nodocs install \
     python3-pip \
     sg3_utils \
     sudo \
+    systemd \
     valgrind-devel \
     which \
     yasm
