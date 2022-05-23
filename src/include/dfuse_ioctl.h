@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2017-2021 Intel Corporation.
+ * (C) Copyright 2017-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -27,6 +27,8 @@
 #define DFUSE_IOCTL_REPLY_DSIZE (DFUSE_IOCTL_REPLY_BASE + 7)
 #define DFUSE_IOCTL_REPLY_PFILE (DFUSE_IOCTL_REPLY_BASE + 8)
 
+#define DFUSE_IOCTL_R_DFUSE_USER (DFUSE_IOCTL_REPLY_BASE + 9)
+
 /** Metadada caching is enabled for this file */
 #define DFUSE_IOCTL_FLAGS_MCACHE (0x1)
 
@@ -53,6 +55,11 @@ struct dfuse_hsd_reply {
 	size_t		fsr_dobj_size;
 };
 
+struct dfuse_user_reply {
+	uid_t uid;
+	gid_t gid;
+};
+
 /* Defines the IOCTL command to get the object ID for a open file */
 #define DFUSE_IOCTL_IL ((int)_IOR(DFUSE_IOCTL_TYPE, DFUSE_IOCTL_REPLY_CORE, \
 				  struct dfuse_il_reply))
@@ -67,5 +74,9 @@ struct dfuse_hsd_reply {
 #define DFUSE_IOCTL_IL_DSIZE ((int)_IOR(DFUSE_IOCTL_TYPE,		\
 				       DFUSE_IOCTL_REPLY_DSIZE,		\
 				       struct dfuse_hsd_reply))
+
+/* Return the user running dfuse */
+#define DFUSE_IOCTL_DFUSE_USER                                                                     \
+	((int)_IOR(DFUSE_IOCTL_TYPE, DFUSE_IOCTL_R_DFUSE_USER, struct dfuse_user_reply))
 
 #endif /* __DFUSE_IOCTL_H__ */

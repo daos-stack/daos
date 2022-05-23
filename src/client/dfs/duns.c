@@ -26,6 +26,7 @@
 #endif
 #include <daos/common.h>
 #include <daos/object.h>
+#include "dfuse_ioctl.h"
 #include "daos_types.h"
 #include "daos.h"
 #include "daos_fs.h"
@@ -662,27 +663,24 @@ err:
 }
 
 static int
-duns_set_fuse_acl(const char *path, daos_handle_t coh)
+duns_set_fuse_acl(struct dfuse_user_reply *dur, daos_handle_t coh)
 {
 	int		 rc = 0;
 	struct daos_acl *acl;
 	struct daos_ace *ace;
-	struct stat	 stbuf = {};
 	int		 uid;
 	char		*name;
 
-	rc = stat(path, &stbuf);
-	if (rc == -1)
-		return errno;
-
 	uid = geteuid();
 
-	if (uid == stbuf.st_uid) {
+	D_ERROR("Uids are %d %d\n", uid, dur->uid);
+
+	if (uid == dur->uid) {
 		D_DEBUG(DB_TRACE, "Same user, returning\n");
 		return 0;
 	}
 
-	rc = daos_acl_uid_to_principal(stbuf.st_uid, &name);
+	rc = daos_acl_uid_to_principal(dur->uid, &name);
 	if (rc != 0)
 		return rc;
 
@@ -693,7 +691,8 @@ duns_set_fuse_acl(const char *path, daos_handle_t coh)
 	}
 
 	ace->dae_access_types = DAOS_ACL_ACCESS_ALLOW;
-	ace->dae_allow_perms  = DAOS_ACL_PERM_READ | DAOS_ACL_PERM_WRITE | DAOS_ACL_PERM_GET_PROP;
+	ace->dae_allow_perms  = DAOS_ACL_PERM_READ | DAOS_ACL_PERM_WRITE | DAOS_ACL_PERM_GET_PROP |
+			       DAOS_ACL_PERM_GET_ACL;
 
 	acl = daos_acl_create(&ace, 1);
 	if (acl == NULL)
@@ -714,7 +713,7 @@ out_name:
 
 static int
 create_cont(daos_handle_t poh, struct duns_attr_t *attrp, bool create_with_label,
-	    bool backend_dfuse, const char *path)
+	    struct dfuse_user_reply *dur)
 {
 	int rc;
 
@@ -723,8 +722,10 @@ create_cont(daos_handle_t poh, struct duns_attr_t *attrp, bool create_with_label
 		daos_handle_t  coh;
 		daos_handle_t *ch = NULL;
 
-		if (backend_dfuse)
+		if (dur)
 			ch = &coh;
+
+		D_ERROR("Making container %p\n", dur);
 
 		/** TODO: set Lustre FID here. */
 		dfs_attr.da_id = 0;
@@ -738,8 +739,8 @@ create_cont(daos_handle_t poh, struct duns_attr_t *attrp, bool create_with_label
 			rc = dfs_cont_create(poh, attrp->da_cuuid, &dfs_attr, ch, NULL);
 		else
 			rc = dfs_cont_create(poh, &attrp->da_cuuid, &dfs_attr, ch, NULL);
-		if (rc == -DER_SUCCESS && backend_dfuse) {
-			rc = duns_set_fuse_acl(path, coh);
+		if (rc == -DER_SUCCESS && dur) {
+			rc = duns_set_fuse_acl(dur, coh);
 			daos_cont_close(coh, NULL);
 		}
 	} else {
@@ -803,7 +804,7 @@ duns_create_lustre_path(daos_handle_t poh, daos_pool_info_t info, const char *pa
 	daos_oclass_id2name(attrp->da_oclass_id, oclass);
 
 	/* create container */
-	rc = create_cont(poh, attrp, false, false, NULL);
+	rc = create_cont(poh, attrp, false, NULL);
 	if (rc) {
 		D_ERROR("Failed to create container (%s)\n", strerror(rc));
 		D_GOTO(err, rc);
@@ -864,6 +865,7 @@ duns_create_path(daos_handle_t poh, const char *path, struct duns_attr_t *attrp)
 	bool			pool_only;
 	size_t			path_len;
 	int			rc, rc2;
+	struct dfuse_user_reply dur = {};
 
 	if (path == NULL) {
 		D_ERROR("Invalid path\n");
@@ -889,9 +891,9 @@ duns_create_path(daos_handle_t poh, const char *path, struct duns_attr_t *attrp)
 		}
 
 		if (daos_label_is_valid(attrp->da_cont))
-			rc = create_cont(poh, attrp, true, false, NULL);
+			rc = create_cont(poh, attrp, true, NULL);
 		else
-			rc = create_cont(poh, attrp, false, false, NULL);
+			rc = create_cont(poh, attrp, false, NULL);
 		if (rc)
 			D_ERROR("Failed to create container (%d)\n", rc);
 		return rc;
@@ -926,14 +928,31 @@ duns_create_path(daos_handle_t poh, const char *path, struct duns_attr_t *attrp)
 		if (rc == -1) {
 			int err = errno;
 
-			D_ERROR("Failed to statfs dir %s: %s\n", dirp, strerror(errno));
+			D_ERROR("Failed to statfs dir %s: %s\n", dirp, strerror(err));
 			D_FREE(dir);
 			return err;
 		}
-		D_FREE(dir);
 
-		if (fs.f_type == FUSE_SUPER_MAGIC)
+		if (fs.f_type == FUSE_SUPER_MAGIC) {
+			int fd;
+
+			fd = open(dir, O_RDONLY | O_DIRECTORY | O_NOFOLLOW);
+			if (fd == -1)
+				return errno;
+
+			rc = ioctl(fd, DFUSE_IOCTL_DFUSE_USER, &dur);
+			if (rc == -1) {
+				int err = errno;
+
+				D_ERROR("Dfuse ioctl failed %s: %s\n", dirp, strerror(err));
+				D_FREE(dir);
+				return err;
+			}
 			backend_dfuse = true;
+			close(fd);
+		}
+
+		D_FREE(dir);
 
 #ifdef LUSTRE_INCLUDE
 		if (fs.f_type == LL_SUPER_MAGIC) {
@@ -1006,7 +1025,7 @@ duns_create_path(daos_handle_t poh, const char *path, struct duns_attr_t *attrp)
 	daos_unparse_ctype(attrp->da_type, type);
 
 	/** Create container */
-	rc = create_cont(poh, attrp, false, backend_dfuse, path);
+	rc = create_cont(poh, attrp, false, &dur);
 	if (rc) {
 		D_ERROR("Failed to create container (%s)\n", strerror(rc));
 		D_GOTO(err_link, rc);
