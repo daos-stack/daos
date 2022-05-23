@@ -37,5 +37,5 @@ server_config:
           scm_mount: /mnt/daos1
 check_remote_root_access: False
 # this is needed as on aurora cluster we use libfabric provided
-# by HPE, which does not recide in regular location.
+# by HPE, which does not reside in regular location.
 libfabric_path: "/usr/bin/"

@@ -105,7 +105,6 @@ class CriticalIntegration(TestWithServers):
             self.log.info("Libfabric Version Output: %s", libfabric_output.stdout)
             self.fail()
 
-
     def test_ras(self):
         """
         Test Description: Verify RAS event on all server nodes from testrunner.
