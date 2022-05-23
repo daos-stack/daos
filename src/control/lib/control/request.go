@@ -62,6 +62,10 @@ type (
 		getTimeout() time.Duration
 	}
 
+	hostResponseReporter interface {
+		reportResponse(*HostResponse)
+	}
+
 	// UnaryRequest defines an interface to be implemented by
 	// unary request types (1 response to 1 request).
 	UnaryRequest interface {

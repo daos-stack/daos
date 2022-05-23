@@ -176,6 +176,7 @@ dfuse_cb_create(fuse_req_t req, struct dfuse_inode_entry *parent,
 
 	oh->doh_dfs = dfs->dfs_ns;
 	oh->doh_ie = ie;
+	oh->doh_writeable = true;
 
 	if (dfs->dfc_data_caching) {
 		if (fi->flags & O_DIRECT)
@@ -203,6 +204,8 @@ dfuse_cb_create(fuse_req_t req, struct dfuse_inode_entry *parent,
 	dfs_obj2id(ie->ie_obj, &ie->ie_oid);
 
 	dfuse_compute_inode(dfs, &ie->ie_oid, &ie->ie_stat.st_ino);
+
+	atomic_fetch_add_relaxed(&ie->ie_open_count, 1);
 
 	/* Return the new inode data, and keep the parent ref */
 	dfuse_reply_entry(fs_handle, ie, &fi_out, true, req);

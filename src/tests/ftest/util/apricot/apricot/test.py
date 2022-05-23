@@ -10,7 +10,7 @@ from ast import literal_eval
 import os
 import json
 import re
-import time
+from time import sleep, time
 
 from avocado import fail_on, skip, TestFail
 from avocado import Test as avocadoTest
@@ -130,6 +130,11 @@ class Test(avocadoTest):
         self.ofi_prefix = None
         self.cancel_file = os.path.join(os.sep, "scratch",
                                         "CI-skip-list-master")
+
+        # Current CI stage name
+        self._stage_name = os.environ.get("STAGE_NAME", None)
+        if self._stage_name is None:
+            self.log.info("Unable to get CI stage name: 'STAGE_NAME' not set")
 
     def setUp(self):
         """Set up each test case."""
@@ -257,6 +262,10 @@ class Test(avocadoTest):
                     value = data.pop(0)
                     if name == "test_method_name":
                         skip_variant &= self.get_test_name() == value
+                    elif name == "stage_name":
+                        if self._stage_name is None:
+                            self.log.info("Skip variant cannot be verified: %s=%s", name, value)
+                        skip_variant &= self._stage_name == value
                     else:
                         skip_variant &= self.params.get(name) == value
                 except IndexError:
@@ -332,7 +341,7 @@ class Test(avocadoTest):
             float: number of seconds since the start of the test
 
         """
-        return time.time() - self.time_start
+        return time() - self.time_start
 
     def get_remaining_time(self):
         """Get the remaining time before the test timeout will expire.
@@ -476,6 +485,46 @@ class TestWithoutServers(Test):
                 "Stopping any of the following commands left running on %s: %s",
                 hosts, ",".join(processes))
             stop_processes(hosts, "'({})'".format("|".join(processes)))
+
+    def check_pool_free_space(self, pool, expected_scm=None, expected_nvme=None,
+                              timeout=30):
+        """Check pool free space with expected value.
+        Args:
+            pool (TestPool): The pool for which to check free space.
+            expected_scm (int, optional): pool expected SCM free space.
+            expected_nvme (int, optional): pool expected NVME free space.
+            timeout(int, optional): time to fail test if it could not match
+                expected values.
+        Note:
+            Arguments may also be provided as a string with a number preceded
+            by '<', '<=', '>', or '>=' for other comparisons besides the
+            default '=='.
+        """
+        if not expected_scm and not expected_nvme:
+            self.fail("at least one space parameter must be specified")
+        done = False
+        scm_fs = 0
+        nvme_fs = 0
+        start = time()
+        scm_index, nvme_index = 0, 1
+        while time() - start < timeout:
+            sleep(1)
+            checks = []
+            pool.get_info()
+            scm_fs = pool.info.pi_space.ps_space.s_free[scm_index]
+            nvme_fs = pool.info.pi_space.ps_space.s_free[nvme_index]
+            if expected_scm is not None:
+                checks.append(("scm", scm_fs, expected_scm))
+            if expected_nvme is not None:
+                checks.append(("nvme", nvme_fs, expected_nvme))
+            done = pool._check_info(checks)
+            if done:
+                break
+
+        if not done:
+            self.fail(
+                "Pool Free space did not match: actual={},{} expected={},{}".format(
+                    scm_fs, nvme_fs, expected_scm, expected_nvme))
 
 
 class TestWithServers(TestWithoutServers):
