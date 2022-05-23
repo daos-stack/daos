@@ -555,7 +555,7 @@ class DmgCommand(DmgCommandBase):
         #         "uuid": "EDAE0965-7A6E-48BD-A71C-A29F199C679F",
         #         "total_targets": 8,
         #         "active_targets": 8,
-        #         "total_nodes": 1,
+        #         "total_engines": 1,
         #         "disabled_targets": 0,
         #         "version": 1,
         #         "leader": 0,

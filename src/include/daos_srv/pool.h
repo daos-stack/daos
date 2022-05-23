@@ -47,6 +47,7 @@ struct ds_pool {
 	uint32_t		sp_ec_pda;
 	/* Performance Domain Affinity Level of replicated object */
 	uint32_t		sp_rp_pda;
+	uint32_t		sp_global_version;
 	crt_group_t	       *sp_group;
 	struct policy_desc_t	sp_policy_desc;	/* tiering policy descriptor */
 	ABT_mutex		sp_mutex;
@@ -192,6 +193,10 @@ int ds_pool_svc_query(uuid_t pool_uuid, d_rank_list_t *ps_ranks, d_rank_list_t *
 int ds_pool_prop_fetch(struct ds_pool *pool, unsigned int bit,
 		       daos_prop_t **prop_out);
 int ds_pool_svc_upgrade(uuid_t pool_uuid, d_rank_list_t *ranks);
+int ds_pool_failed_add(uuid_t uuid, int rc);
+void ds_pool_failed_remove(uuid_t uuid);
+int ds_pool_failed_lookup(uuid_t uuid);
+
 /*
  * Called by dmg on the pool service leader to list all pool handles of a pool.
  * Upon successful completion, "buf" returns an array of handle UUIDs if its

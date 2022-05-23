@@ -10,7 +10,7 @@ hosts:
         - server-C
   test_clients:
     - client-A
-timeout: 500
+timeout: 600
 setup:
   start_servers_once: False
 server_config:
