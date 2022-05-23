@@ -177,6 +177,9 @@ resource "google_compute_instance_template" "daos_sig_template" {
 resource "google_compute_instance_group_manager" "daos_sig" {
   description = "Stateful Instance group for DAOS servers"
   name        = var.mig_name
+  depends_on  = [
+    google_secret_manager_secret.daos_ca
+  ]
 
   version {
     instance_template = google_compute_instance_template.daos_sig_template.self_link
