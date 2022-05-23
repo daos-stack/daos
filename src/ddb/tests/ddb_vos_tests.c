@@ -840,7 +840,7 @@ clear_committed_table(void **state)
 
 	dvt_vos_insert_2_records_with_dtx(coh);
 
-	assert_success(dv_clear_committed_table(coh));
+	assert_int_equal(1, dv_clear_committed_table(coh));
 
 	entry_handler_called = 0;
 	dv_committed_dtx(coh, committed_entry_handler, NULL);
