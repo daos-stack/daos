@@ -1,4 +1,4 @@
-#!/bin/sh -e
+#!/bin/sh
 
 # Install OS updates and package.  Include basic tools and daos dependencies
 # that come from the core repo.
@@ -8,7 +8,10 @@
 # post provisioning issue.
 # *** Keep these in as much alphbetical order as possible ***
 
-dnf --nodocs install \
+set -e
+
+dnf -y install deltarpm
+dnf -y --nodocs install \
     boost-python36-devel \
     bzip2 \
     clang-analyzer \
@@ -43,7 +46,9 @@ dnf --nodocs install \
     lz4-devel \
     make \
     maven \
+    meson \
     ndctl \
+    ninja-build \
     numactl \
     numactl-devel \
     openmpi3-devel \
@@ -51,8 +56,15 @@ dnf --nodocs install \
     patch \
     patchelf \
     pciutils \
-    python3-devel \
     python3-pip \
+    python36-defusedxml \
+    python36-devel \
+    python36-distro \
+    python36-junit_xml \
+    python36-tabulate \
+    python36-pyxattr \
+    python36-PyYAML \
+    python36-scons \
     sg3_utils \
     sudo \
     valgrind-devel \

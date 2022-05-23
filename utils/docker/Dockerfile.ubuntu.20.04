@@ -6,8 +6,7 @@
 #
 
 # Pull base image
-ARG BASE_DISTRO=ubuntu:20.04
-FROM $BASE_DISTRO
+FROM ubuntu:20.04
 LABEL maintainer="daos@daos.groups.io"
 
 # Intermittent cache-bust.  Used to reduce load on the actual CACHEBUST later.
@@ -42,20 +41,9 @@ RUN mkdir -p /opt/daos /mnt/daos /var/run/daos_server /var/run/daos_agent /home/
     chown -R daos_server.daos_server /opt/daos /mnt/daos /var/run/daos_server /home/daos &&  \
     chown daos_agent.daos_agent /var/run/daos_agent
 
-USER daos_server:daos_server
-
-# Setup a python venv so that python packages can be installed locally.
-RUN python3 -m venv /home/daos/venv
-ENV PATH=/home/daos/venv/bin:$PATH
-ENV VIRTUAL_ENV=/home/daos/venv/
-
-# Install latest versions of python tools.
-# wheel is needed first to avoid a warning when installing pyyaml.
-COPY requirements.txt .
-RUN python3 -m pip --no-cache-dir install --upgrade pip && \
-    python3 -m pip --no-cache-dir install wheel && \
-    python3 -m pip --no-cache-dir install -r requirements.txt
-
+# The COPY command has a --chown option but it's not well supported so copy as
+# root then run a chown command which is frustrating as the copy can take a few
+# seconds.
 WORKDIR /home/daos/pre
 COPY --chown=daos_server:daos_server SConstruct .
 COPY --chown=daos_server:daos_server site_scons site_scons
