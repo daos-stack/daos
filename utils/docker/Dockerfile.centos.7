@@ -33,7 +33,7 @@ RUN set -e;                                                      \
     if [ -n "$REPO_FILE_URL" ]; then                             \
         dnf --quiet config-manager --disable epel;               \
     fi;                                                          \
-    dnf clean all
+    dnf clean all && dnf upgrade
 
 ARG JENKINS_URL
 ARG REPOS
@@ -60,7 +60,7 @@ gpgcheck=False\n" >> /etc/yum.repos.d/$repo:$branch:$build_number.repo;   \
 
 # Install OS updates and package.  Include basic tools and daos dependencies
 COPY ./utils/scripts/install-centos7.sh /tmp/install.sh
-RUN chmod +x /tmp/install.sh && dnf upgrade && /tmp/install.sh && dnf clean all && \
+RUN chmod +x /tmp/install.sh && /tmp/install.sh && dnf clean all && \
     rm -f /tmp/install.sh
 
 ARG UID=1000
