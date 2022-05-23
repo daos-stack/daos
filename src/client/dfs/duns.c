@@ -664,11 +664,11 @@ err:
 static int
 duns_set_fuse_acl(const char *path, daos_handle_t coh)
 {
-	int		rc = 0;
-	struct daos_acl	*acl;
-	struct daos_ace	*ace;
-	struct stat	stbuf = {};
-	int		uid;
+	int		 rc = 0;
+	struct daos_acl *acl;
+	struct daos_ace *ace;
+	struct stat	 stbuf = {};
+	int		 uid;
 	char		*name;
 
 	rc = stat(path, &stbuf);
@@ -693,16 +693,15 @@ duns_set_fuse_acl(const char *path, daos_handle_t coh)
 	}
 
 	ace->dae_access_types = DAOS_ACL_ACCESS_ALLOW;
-	ace->dae_allow_perms = DAOS_ACL_PERM_READ | DAOS_ACL_PERM_WRITE | DAOS_ACL_PERM_GET_PROP;
+	ace->dae_allow_perms  = DAOS_ACL_PERM_READ | DAOS_ACL_PERM_WRITE | DAOS_ACL_PERM_GET_PROP;
 
 	acl = daos_acl_create(&ace, 1);
 	if (acl == NULL)
 		D_GOTO(out_ace, rc = EIO);
 
 	rc = daos_cont_update_acl(coh, acl, NULL);
-	if (rc) {
-		D_ERROR("daos_cont_update_acl() failed, "DF_RC"\n", DP_RC(rc));
-	}
+	if (rc)
+		D_ERROR("daos_cont_update_acl() failed, " DF_RC "\n", DP_RC(rc));
 
 	daos_acl_free(acl);
 
@@ -714,18 +713,15 @@ out_name:
 }
 
 static int
-create_cont(daos_handle_t poh,
-	    struct duns_attr_t *attrp,
-	    bool create_with_label,
-	    bool backend_dfuse,
-	    const char *path)
+create_cont(daos_handle_t poh, struct duns_attr_t *attrp, bool create_with_label,
+	    bool backend_dfuse, const char *path)
 {
 	int rc;
 
 	if (attrp->da_type == DAOS_PROP_CO_LAYOUT_POSIX) {
-		dfs_attr_t	dfs_attr = {};
-		daos_handle_t	coh;
-		daos_handle_t	*ch = NULL;
+		dfs_attr_t     dfs_attr = {};
+		daos_handle_t  coh;
+		daos_handle_t *ch = NULL;
 
 		if (backend_dfuse)
 			ch = &coh;
@@ -1017,7 +1013,8 @@ duns_create_path(daos_handle_t poh, const char *path, struct duns_attr_t *attrp)
 	}
 
 	/** store the daos attributes in the path xattr */
-	len = snprintf(str, DUNS_MAX_XATTR_LEN, DUNS_XATTR_FMT, type, attrp->da_pool, attrp->da_cont);
+	len =
+	    snprintf(str, DUNS_MAX_XATTR_LEN, DUNS_XATTR_FMT, type, attrp->da_pool, attrp->da_cont);
 	if (len < 0) {
 		D_ERROR("Failed to create xattr value\n");
 		D_GOTO(err_cont, rc = EINVAL);
