@@ -35,20 +35,12 @@ import (
 	. "github.com/daos-stack/daos/src/control/system"
 )
 
-func waitForLeadership(ctx context.Context, t *testing.T, db *Database, gained bool, timeout time.Duration) {
+func waitForLeadership(ctx context.Context, t *testing.T, db *Database, gained bool) {
 	t.Helper()
-	timer := time.NewTimer(timeout)
 	for {
 		select {
 		case <-ctx.Done():
 			t.Fatal(ctx.Err())
-			return
-		case <-timer.C:
-			state := "gained"
-			if !gained {
-				state = "lost"
-			}
-			t.Fatalf("leadership was not %s before timeout", state)
 			return
 		default:
 			if db.IsLeader() == gained {
@@ -144,9 +136,9 @@ func TestSystem_Database_LeadershipCallbacks(t *testing.T) {
 		return nil
 	})
 
-	waitForLeadership(ctx, t, db, true, 30*time.Second)
+	waitForLeadership(ctx, t, db, true)
 	dbCancel()
-	waitForLeadership(ctx, t, db, false, 30*time.Second)
+	waitForLeadership(ctx, t, db, false)
 
 	if atomic.LoadUint32(&onGainedCalled) != 1 {
 		t.Fatal("OnLeadershipGained callbacks didn't execute")
