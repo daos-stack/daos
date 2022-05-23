@@ -20,6 +20,12 @@ import (
 	"github.com/daos-stack/daos/src/control/lib/hardware"
 )
 
+/*
+#include "stdlib.h"
+#include "daos_srv/control.h"
+*/
+import "C"
+
 const (
 	// MinNVMeStorage defines the minimum per-target allocation
 	// that may be requested. Requests with smaller amounts will
@@ -38,6 +44,17 @@ const (
 	BdevOutConfName = "daos_nvme.conf"
 
 	maxScmDeviceLen = 1
+)
+
+// Acceleration related constants for engine setting and optional capabilities.
+const (
+	AccelEngineNone  = C.NVME_ACCEL_NONE
+	AccelEngineSPDK  = C.NVME_ACCEL_SPDK
+	AccelEngineDML   = C.NVME_ACCEL_DML
+	AccelOptMove     = "move"
+	AccelOptCRC      = "crc"
+	AccelOptMoveFlag = C.NVME_ACCEL_FLAG_MOVE
+	AccelOptCRCFlag  = C.NVME_ACCEL_FLAG_CRC
 )
 
 // Class indicates a specific type of storage.
@@ -575,15 +592,96 @@ func parsePCIBusRange(numRange string, bitSize int) (uint8, uint8, error) {
 // AccelProps can be used to select acceleration engine and capabilities.
 // Type is used both in YAML server config and JSON NVMe config files.
 type AccelProps struct {
-	AccelEngine  string   `yaml:"engine,omitempty" json:"accel_engine"`
-	AccelOpts    []string `yaml:"options,omitempty" json:"-"`
-	AccelOptMask uint16   `yaml:"-" json:"accel_opts"` // Bitmask of optional capabilities.
+	Engine  string   `yaml:"engine,omitempty" json:"accel_engine"`
+	Options []string `yaml:"options,omitempty" json:"-"`
+	OptMask uint16   `yaml:"-" json:"accel_opts"` // Bitmask of optional capabilities.
+}
+
+// validate the provided accceleration properties.
+func (ap *AccelProps) validate() error {
+	if ap == nil {
+		return errors.New("nil AccelProps")
+	}
+
+	// Apply default if "accel_engine" unset in config.
+	if ap.Engine == "" {
+		ap.Engine = C.NVME_ACCEL_NONE
+	}
+
+	switch ap.Engine {
+	case C.NVME_ACCEL_NONE, C.NVME_ACCEL_SPDK, C.NVME_ACCEL_DML:
+	default:
+		return FaultBdevAccelEngineUnknown(ap.Engine, C.NVME_ACCEL_SPDK, C.NVME_ACCEL_DML)
+	}
+
+	return nil
+}
+
+type optFlagMap map[string]uint16
+
+func (aosf optFlagMap) keys() []string {
+	keys := common.NewStringSet()
+	for k := range aosf {
+		keys.Add(k)
+	}
+
+	return keys.ToSlice()
+}
+
+var accelOptStr2Flag = optFlagMap{
+	AccelOptMove: AccelOptMoveFlag,
+	AccelOptCRC:  AccelOptCRCFlag,
+}
+
+// AccelOptMaskFromStrings converts slice of acceleration capability option strings into a bitmask.
+func AccelOptMaskFromStrings(opts ...string) (uint16, error) {
+	var optMask uint16
+
+	for _, opt := range opts {
+		flag, exists := accelOptStr2Flag[opt]
+		if !exists {
+			return 0, FaultBdevAccelOptionUnknown(opt, accelOptStr2Flag.keys()...)
+		}
+		optMask |= flag
+	}
+
+	return optMask, nil
+}
+
+// setOptMask converts acceleration option strings into a bitmask.
+func (ap *AccelProps) setOptMask() error {
+	if ap == nil {
+		return errors.New("nil AccelProps")
+	}
+
+	switch ap.Engine {
+	case C.NVME_ACCEL_NONE:
+		ap.Options = nil
+	case C.NVME_ACCEL_SPDK, C.NVME_ACCEL_DML:
+		if len(ap.Options) == 0 {
+			// If no option list specified, enable all.
+			ap.Options = accelOptStr2Flag.keys()
+		}
+		optMask, err := AccelOptMaskFromStrings(ap.Options...)
+		if err != nil {
+			return err
+		}
+		ap.OptMask = optMask
+	default:
+		return FaultBdevAccelEngineUnknown(ap.Engine, C.NVME_ACCEL_SPDK, C.NVME_ACCEL_DML)
+	}
+
+	return nil
 }
 
 func (ap *AccelProps) UnmarshalYAML(unmarshal func(interface{}) error) error {
+	if ap == nil {
+		return errors.New("nil AccelProps")
+	}
+
 	type AccelPropsDefault AccelProps
 	var tmp = AccelPropsDefault{
-		AccelEngine: "none",
+		Engine: C.NVME_ACCEL_NONE,
 	}
 
 	if err := unmarshal(&tmp); err != nil {
@@ -591,11 +689,11 @@ func (ap *AccelProps) UnmarshalYAML(unmarshal func(interface{}) error) error {
 	}
 	out := AccelProps(tmp)
 
-	if err := validateAccelProps(&out); err != nil {
+	if err := out.validate(); err != nil {
 		return err
 	}
 
-	if err := setAccelOptMask(&out); err != nil {
+	if err := out.setOptMask(); err != nil {
 		return err
 	}
 
