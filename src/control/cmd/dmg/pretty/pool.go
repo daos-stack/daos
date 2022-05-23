@@ -176,34 +176,22 @@ func poolListCreateRow(pool *control.Pool, upgrade bool) txtfmt.TableRow {
 			imbalance = pool.Usage[ti].Imbalance
 		}
 	}
-	var row txtfmt.TableRow
+	row := txtfmt.TableRow{
+		"Pool":      pool.GetName(),
+		"Size":      fmt.Sprintf("%s", humanize.Bytes(size)),
+		"State":     pool.State,
+		"Used":      fmt.Sprintf("%d%%", used),
+		"Imbalance": fmt.Sprintf("%d%%", imbalance),
+		"Disabled":  fmt.Sprintf("%d/%d", pool.TargetsDisabled, pool.TargetsTotal),
+	}
 
-	if upgrade == true {
-		var upgradeString string
+	if upgrade {
+		upgradeString := "None"
 
 		if pool.PoolLayoutVer != pool.UpgradeLayoutVer {
 			upgradeString = fmt.Sprintf("%d->%d", pool.PoolLayoutVer, pool.UpgradeLayoutVer)
-		} else {
-			upgradeString = "None"
 		}
-		row = txtfmt.TableRow{
-			"Pool":      pool.GetName(),
-			"Size":      fmt.Sprintf("%s", humanize.Bytes(size)),
-			"State":     pool.State,
-			"Used":      fmt.Sprintf("%d%%", used),
-			"Imbalance": fmt.Sprintf("%d%%", imbalance),
-			"Disabled":  fmt.Sprintf("%d/%d", pool.TargetsDisabled, pool.TargetsTotal),
-			"Upgrade?":  upgradeString,
-		}
-	} else {
-		row = txtfmt.TableRow{
-			"Pool":      pool.GetName(),
-			"Size":      fmt.Sprintf("%s", humanize.Bytes(size)),
-			"State":     pool.State,
-			"Used":      fmt.Sprintf("%d%%", used),
-			"Imbalance": fmt.Sprintf("%d%%", imbalance),
-			"Disabled":  fmt.Sprintf("%d/%d", pool.TargetsDisabled, pool.TargetsTotal),
-		}
+		row["Upgrade?"] = upgradeString
 	}
 
 	return row
@@ -214,7 +202,7 @@ func printListPoolsResp(out io.Writer, resp *control.ListPoolsResp) error {
 		fmt.Fprintln(out, "no pools in system")
 		return nil
 	}
-	var upgrade bool = false
+	upgrade := false
 	for _, pool := range resp.Pools {
 		if pool.HasErrors() {
 			continue
@@ -225,7 +213,7 @@ func printListPoolsResp(out io.Writer, resp *control.ListPoolsResp) error {
 	}
 
 	titles := []string{"Pool", "Size", "State", "Used", "Imbalance", "Disabled"}
-	if upgrade == true {
+	if upgrade {
 		titles = append(titles, "Upgrade?")
 	}
 	formatter := txtfmt.NewTableFormatter(titles...)
@@ -263,12 +251,9 @@ func poolListCreateRowVerbose(pool *control.Pool) txtfmt.TableRow {
 		svcReps = formatRanks(rl)
 	}
 
-	var upgrade string
-
+	upgrade := "None"
 	if pool.PoolLayoutVer != pool.UpgradeLayoutVer {
 		upgrade = fmt.Sprintf("%d->%d", pool.PoolLayoutVer, pool.UpgradeLayoutVer)
-	} else {
-		upgrade = "None"
 	}
 
 	row := txtfmt.TableRow{
