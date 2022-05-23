@@ -19,7 +19,7 @@ RUN if [ -n "$REPO_FILE_URL" ]; then                            \
     fi
 
 # Install basic tools
-RUN dnf -y install mock make \
+RUN dnf -y install mock make                                        \
                    rpm-build createrepo rpmlint redhat-lsb-core git \
                    python-srpm-macros rpmdevtools
 
@@ -37,3 +37,11 @@ RUN usermod -a -G mock $USER
 ARG CACHEBUST
 RUN dnf -y upgrade && \
     dnf clean all
+
+# Monkey-patch rpmlint until a new release is made with
+# https://github.com/rpm-software-management/rpmlint/pull/795 in it
+COPY packaging/rpmlint--ignore-unused-rpmlintrc.patch .
+RUN (cd $(python3 -c 'import site; print(site.getsitepackages()[-1])') &&                    \
+     patch -p1 &&                                                                            \
+     rm -f rpmlint/__pycache__/{cli,lint}.*.pyc) < rpmlint--ignore-unused-rpmlintrc.patch && \
+    rm -f  rpmlint--ignore-unused-rpmlintrc.patch

@@ -31,6 +31,44 @@ func defConfigCmpOpts() cmp.Options {
 	}
 }
 
+func TestStorage_BdevDeviceList_Devices(t *testing.T) {
+	for name, tc := range map[string]struct {
+		list      *BdevDeviceList
+		expResult []string
+	}{
+		"nil": {
+			expResult: []string{},
+		},
+		"empty": {
+			list:      &BdevDeviceList{},
+			expResult: []string{},
+		},
+		"string set": {
+			list: &BdevDeviceList{
+				stringBdevSet: common.NewStringSet("one", "two"),
+			},
+			expResult: []string{"one", "two"},
+		},
+		"PCI addresses": {
+			list: &BdevDeviceList{
+				PCIAddressSet: *hardware.MustNewPCIAddressSet(
+					"0000:01:01.0",
+					"0000:02:02.0",
+				),
+			},
+			expResult: []string{"0000:01:01.0", "0000:02:02.0"},
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			result := tc.list.Devices()
+
+			if diff := cmp.Diff(tc.expResult, result); diff != "" {
+				t.Fatalf("(-want +got):\n%s", diff)
+			}
+		})
+	}
+}
+
 func TestStorage_BdevDeviceList(t *testing.T) {
 	for name, tc := range map[string]struct {
 		devices    []string
