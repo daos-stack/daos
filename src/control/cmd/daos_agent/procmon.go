@@ -12,10 +12,16 @@ import (
 	"os"
 	"time"
 
+	"github.com/daos-stack/daos/src/control/common"
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	"github.com/daos-stack/daos/src/control/drpc"
 	"github.com/daos-stack/daos/src/control/lib/control"
 	"github.com/daos-stack/daos/src/control/logging"
+)
+
+const (
+	// Agent-internal methods not linked to engine handlers.
+	flushAllHandles drpc.MgmtMethod = drpc.MgmtMethod(^uint32(0) >> 1)
 )
 
 type procMonRequest struct {
@@ -27,6 +33,10 @@ type procMonRequest struct {
 	poolUUID string
 	// The UUID of the pool handle associated with this request
 	poolHandleUUID string
+	// If the request should be blocking, the caller should
+	// supply a channel to be closed when the request is
+	// complete.
+	doneChan chan struct{}
 }
 
 type procMonResponse struct {
@@ -36,12 +46,21 @@ type procMonResponse struct {
 	err error
 }
 
+type poolHandleMap map[string]common.StringSet
+
+func (phm poolHandleMap) add(poolUUID, handleUUID string) {
+	if _, found := phm[poolUUID]; !found {
+		phm[poolUUID] = common.NewStringSet()
+	}
+	phm[poolUUID].Add(handleUUID)
+}
+
 type procInfo struct {
 	log       logging.Logger
 	pid       int32
 	cancelCtx func()
 	response  chan *procMonResponse
-	handles   map[string]map[string]struct{}
+	handles   poolHandleMap
 }
 
 func checkProcPidExists(pid int32) error {
@@ -144,6 +163,21 @@ func (p *procMon) NotifyExit(ctx context.Context, Pid int32) {
 	p.submitRequest(ctx, req)
 }
 
+// FlushAllHandles submits a request to flush (evict and remove) all known
+// open pool handles for local DAOS client processes. Blocks until the
+// request has been completely processed.
+func (p *procMon) FlushAllHandles(ctx context.Context) {
+	p.log.Info("Flushing all open local pool handles")
+
+	done := make(chan struct{})
+	p.submitRequest(ctx, &procMonRequest{
+		action:   flushAllHandles,
+		doneChan: done,
+	})
+
+	<-done
+}
+
 func (p *procMon) submitRequest(ctx context.Context, request *procMonRequest) {
 	select {
 	case <-ctx.Done():
@@ -163,19 +197,14 @@ func (p *procMon) handleNotifyPoolConnect(ctx context.Context, request *procMonR
 			pid:       request.pid,
 			cancelCtx: cancel,
 			response:  p.response,
-			handles:   make(map[string]map[string]struct{}),
+			handles:   make(poolHandleMap),
 		}
 
 		p.procs[request.pid] = info
 		go info.monitorProcess(child)
 	}
 
-	_, found = info.handles[request.poolUUID]
-	if !found {
-		info.handles[request.poolUUID] = make(map[string]struct{})
-	}
-	info.handles[request.poolUUID][request.poolHandleUUID] = struct{}{}
-
+	info.handles.add(request.poolUUID, request.poolHandleUUID)
 }
 
 func (p *procMon) handleNotifyPoolDisconnect(request *procMonRequest) {
@@ -203,14 +232,6 @@ func (p *procMon) handleNotifyPoolDisconnect(request *procMonRequest) {
 
 }
 
-func handleMapToList(handleMap map[string]struct{}) []string {
-	list := make([]string, 0, len(handleMap))
-	for uuid := range handleMap {
-		list = append(list, uuid)
-	}
-	return list
-}
-
 // A process will leak handles when it either dies illegally or exits without
 // calling daos_pool_disconnect on the handles it has open. This will be called
 // if we detect a process terminating without disconnect, or if during
@@ -223,7 +244,7 @@ func (p *procMon) cleanupLeakedHandles(ctx context.Context, info *procInfo) {
 	for poolUUID, element := range info.handles {
 		p.log.Debugf("Cleaning up %d leaked handles from Pool UUID: %s\n", len(element), poolUUID)
 
-		handles := handleMapToList(info.handles[poolUUID])
+		handles := info.handles[poolUUID].ToSlice()
 		req := &control.PoolEvictReq{ID: poolUUID, Handles: handles}
 		req.SetSystem(p.systemName)
 
@@ -246,6 +267,25 @@ func (p *procMon) handleNotifyExit(ctx context.Context, request *procMonRequest)
 	}
 }
 
+func (p *procMon) flushAllHandles(ctx context.Context) {
+	// create a single map of open handles to reduce the number of RPCs
+	allPoolHandles := make(poolHandleMap)
+
+	for _, info := range p.procs {
+		for pool, handles := range info.handles {
+			for handle := range handles {
+				allPoolHandles.add(pool, handle)
+			}
+		}
+
+		// NB: This is best-effort cleanup, so if something fails we can't
+		// retry it.
+		delete(p.procs, info.pid)
+	}
+
+	p.cleanupLeakedHandles(ctx, &procInfo{handles: allPoolHandles})
+}
+
 func (p *procMon) handleRequests(ctx context.Context) {
 	for {
 		select {
@@ -259,8 +299,14 @@ func (p *procMon) handleRequests(ctx context.Context) {
 				p.handleNotifyPoolDisconnect(request)
 			case drpc.MethodNotifyExit:
 				p.handleNotifyExit(ctx, request)
+			case flushAllHandles:
+				p.flushAllHandles(ctx)
 			default:
 				p.log.Debugf("Received request with invalid action type %s", request.action)
+			}
+
+			if request.doneChan != nil {
+				close(request.doneChan)
 			}
 		case resp := <-p.response:
 			p.log.Debugf("Received response from Process %d, terminated with %s", resp.pid, resp.err)
