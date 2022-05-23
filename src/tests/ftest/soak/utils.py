@@ -28,6 +28,7 @@ from ClusterShell.NodeSet import NodeSet
 from avocado.core.exceptions import TestFail
 from pydaos.raw import DaosSnapshot, DaosApiError
 from macsio_util import MacsioCommand
+from oclass_utils import extract_redundancy_factor
 
 H_LOCK = threading.Lock()
 
@@ -83,36 +84,13 @@ def add_containers(self, pool, oclass=None, path="/run/container/*"):
     # include rf based on the class
     if oclass:
         self.container[-1].oclass.update(oclass)
-        redundancy_factor = get_rf(oclass)
+        redundancy_factor = extract_redundancy_factor(oclass)
         rf = 'rf:{}'.format(str(redundancy_factor))
     properties = self.container[-1].properties.value
     cont_properties = (",").join(filter(None, [properties, rf]))
     if cont_properties is not None:
         self.container[-1].properties.update(cont_properties)
     self.container[-1].create()
-
-
-def get_rf(oclass):
-    """Return redundancy factor based on the oclass.
-
-    Args:
-        oclass(string): object class.
-
-    return:
-        redundancy factor(int) from object type
-    """
-    rf = 0
-    if "EC" in oclass:
-        tmp = re.findall(r'\d+', oclass)
-        if tmp:
-            rf = int(tmp[1])
-    elif "RP" in oclass:
-        tmp = re.findall(r'\d+', oclass)
-        if tmp:
-            rf = int(tmp[0]) - 1
-    else:
-        rf = 0
-    return rf
 
 
 def reserved_file_copy(self, file, pool, container, num_bytes=None, cmd="read"):
@@ -185,7 +163,10 @@ def get_remote_dir(self, source_dir, dest_dir, host_list, shared_dir=None,
             try:
                 run_command(command, timeout=30)
             except DaosTestError as error:
-                raise SoakTestError("<<FAILED: job logs failed to copy>>") from error
+                raise SoakTestError(
+                    "<<FAILED: Soak logfiles not copied from shared area>>: {}".format(
+                        shared_dir_tmp)) from error
+
     else:
         # copy the remote dir on all client nodes to a shared directory
         command = "/usr/bin/rsync -avtr --min-size=1B {0} {1}/..".format(
@@ -202,7 +183,10 @@ def get_remote_dir(self, source_dir, dest_dir, host_list, shared_dir=None,
             try:
                 run_command(command, timeout=30)
             except DaosTestError as error:
-                raise SoakTestError("<<FAILED: job logs failed to copy>>") from error
+                raise SoakTestError(
+                    "<<FAILED: Soak logfiles not copied from shared area>>: {}".format(
+                        directory)) from error
+
     if rm_remote:
         # remove the remote soak logs for this pass
         command = "/usr/bin/rm -rf {0}".format(source_dir)
@@ -211,10 +195,10 @@ def get_remote_dir(self, source_dir, dest_dir, host_list, shared_dir=None,
         for directory in [source_dir, shared_dir]:
             command = "/usr/bin/rm -rf {0}".format(directory)
             try:
-                run_command(command)
+                run_command(command, timeout=30)
             except DaosTestError as error:
                 raise SoakTestError(
-                    "<<FAILED: job logs failed to delete>>") from error
+                    "<<FAILED: Soak logfiles removal failed>>: {}".format(directory)) from error
 
 
 def write_logfile(data, name, destination):
@@ -288,8 +272,8 @@ def get_journalctl(self, hosts, since, until, journalctl_type, logging=False):
             "data":  data requested for the group of hosts
 
     """
-    command = "sudo /usr/bin/journalctl --system -t {} --since=\"{}\" --until=\"{}\"".format(
-        journalctl_type, since, until)
+    command = "{} /usr/bin/journalctl --system -t {} --since=\"{}\" --until=\"{}\"".format(
+        self.sudo_cmd, journalctl_type, since, until)
     err = "Error gathering system log events"
     results = get_host_data(hosts, command, "journalctl", err)
     name = "journalctl_{}.log".format(journalctl_type)
@@ -317,7 +301,11 @@ def get_daos_server_logs(self):
             commands = ["scp {}:/var/tmp/daos_testing/daos*.log.* {}".format(host, daos_dir),
                         "scp {}:/var/tmp/daos_testing/daos*.log {}".format(host, daos_dir)]
             for command in commands:
-                run_command(command, timeout=120)
+                try:
+                    run_command(command, timeout=30)
+                except DaosTestError as error:
+                    raise SoakTestError(
+                        "<<FAILED: daos logs file from {} not copied>>".format(host)) from error
 
 
 def run_monitor_check(self):
@@ -331,8 +319,7 @@ def run_monitor_check(self):
     hosts = self.hostlist_servers
     if monitor_cmds:
         for cmd in monitor_cmds:
-            command = "sudo {}".format(cmd)
-            pcmd(hosts, command, timeout=30)
+            pcmd(hosts, cmd, timeout=30)
 
 
 def run_metrics_check(self, logging=True, prefix=None):
@@ -352,7 +339,7 @@ def run_metrics_check(self, logging=True, prefix=None):
             if prefix:
                 name = prefix + "_metrics_{}.csv".format(engine)
             destination = self.outputsoak_dir
-            daos_metrics = "sudo daos_metrics -S {} --csv".format(engine)
+            daos_metrics = "{} daos_metrics -S {} --csv".format(self.sudo_cmd, engine)
             self.log.info("Running %s", daos_metrics)
             results = run_pcmd(hosts=self.hostlist_servers,
                                command=daos_metrics,
@@ -803,7 +790,7 @@ def cleanup_dfuse(self):
     """
     cmd = [
         "/usr/bin/bash -c 'for pid in $(pgrep dfuse)",
-        "do sudo kill $pid",
+        "do kill $pid",
         "done'"]
     cmd2 = [
         "/usr/bin/bash -c 'for dir in $(find /tmp/daos_dfuse/)",
@@ -1051,7 +1038,7 @@ def create_mdtest_cmdline(self, job_spec, pool, ppn, nodesperjob):
                         mdtest_cmd.dfs_dir_oclass.update(oclass)
                         if "EC" in oclass:
                             # oclass_dir can not be EC must be RP based on rf
-                            rf = get_rf(oclass)
+                            rf = extract_redundancy_factor(oclass)
                             if rf >= 2:
                                 mdtest_cmd.dfs_dir_oclass.update("RP_3G1")
                             elif rf == 1:
@@ -1096,7 +1083,7 @@ def create_mdtest_cmdline(self, job_spec, pool, ppn, nodesperjob):
     return commands
 
 
-def create_racer_cmdline(self, job_spec, pool):
+def create_racer_cmdline(self, job_spec):
     """Create the srun cmdline to run daos_racer.
 
     Args:
@@ -1107,13 +1094,15 @@ def create_racer_cmdline(self, job_spec, pool):
 
     """
     commands = []
-    add_containers(self, pool, "SX")
+    #daos_racer needs its own pool; does not run using jobs pool
+    add_pools(self, ["pool_racer"])
+    add_containers(self, self.pool[-1], "SX")
     racer_namespace = os.path.join(os.sep, "run", job_spec, "*")
     daos_racer = DaosRacerCommand(
         self.bin, self.hostlist_clients[0])
     daos_racer.namespace = racer_namespace
     daos_racer.get_params(self)
-    daos_racer.pool_uuid.update(pool.uuid)
+    daos_racer.pool_uuid.update(self.pool[-1].uuid)
     daos_racer.cont_uuid.update(self.container[-1].uuid)
     racer_log = os.path.join(
         self.soaktest_dir,

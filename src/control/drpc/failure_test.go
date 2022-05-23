@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2021 Intel Corporation.
+// (C) Copyright 2019-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -11,7 +11,7 @@ import (
 
 	"github.com/pkg/errors"
 
-	"github.com/daos-stack/daos/src/control/common"
+	"github.com/daos-stack/daos/src/control/common/test"
 )
 
 func TestNewFailure(t *testing.T) {
@@ -59,8 +59,8 @@ func TestNewFailure(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			f := NewFailure(tt.status)
 
-			common.AssertEqual(t, f.GetStatus(), tt.status, name)
-			common.AssertEqual(t, f.Error(), tt.expectedMessage, name)
+			test.AssertEqual(t, f.GetStatus(), tt.status, name)
+			test.AssertEqual(t, f.Error(), tt.expectedMessage, name)
 		})
 	}
 }
@@ -69,8 +69,8 @@ func TestNewFailureWithMessage(t *testing.T) {
 	expectedMessage := "a custom message"
 	f := NewFailureWithMessage(expectedMessage)
 
-	common.AssertEqual(t, f.Error(), expectedMessage, "didn't get the custom message")
-	common.AssertEqual(t, f.GetStatus(), Status_FAILURE, "expected a generic failure")
+	test.AssertEqual(t, f.Error(), expectedMessage, "didn't get the custom message")
+	test.AssertEqual(t, f.GetStatus(), Status_FAILURE, "expected a generic failure")
 }
 
 func TestErrorToStatus(t *testing.T) {
@@ -122,7 +122,7 @@ func TestErrorToStatus(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			status := ErrorToStatus(tt.err)
 
-			common.AssertEqual(t, status, tt.expectedStatus, name)
+			test.AssertEqual(t, status, tt.expectedStatus, name)
 		})
 	}
 }
@@ -156,7 +156,7 @@ func TestFailureCreationMethods(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			failure := tt.function()
 
-			common.AssertEqual(t, failure.GetStatus(), tt.expectedStatus, name)
+			test.AssertEqual(t, failure.GetStatus(), tt.expectedStatus, name)
 		})
 	}
 }

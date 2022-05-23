@@ -1,6 +1,6 @@
 #!/usr/bin/python3
 """
-  (C) Copyright 2018-2021 Intel Corporation.
+  (C) Copyright 2018-2022 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -69,6 +69,7 @@ class ListVerboseTest(IorTestBase):
             "targets_disabled": targets_disabled,
             "query_error_msg": "",
             "query_status_msg": "",
+            "state": "Ready",
             "usage": [
             {
                 "tier_name": "SCM",
@@ -238,8 +239,9 @@ class ListVerboseTest(IorTestBase):
         11. Verify that the list is empty.
 
         :avocado: tags=all,full_regression
-        :avocado: tags=hw,medium,ib2
-        :avocado: tags=pool,list_verbose,list_verbose_basic
+        :avocado: tags=hw,medium
+        :avocado: tags=pool
+        :avocado: tags=list_verbose,list_verbose_basic
         """
         self.maxDiff = None
         self.pool = []
@@ -382,8 +384,9 @@ class ListVerboseTest(IorTestBase):
         10. Repeat above steps with SCM-only pool.
 
         :avocado: tags=all,full_regression
-        :avocado: tags=hw,medium,ib2
-        :avocado: tags=pool,list_verbose,list_verbose_imbalance
+        :avocado: tags=hw,medium
+        :avocado: tags=pool
+        :avocado: tags=list_verbose,list_verbose_imbalance
         """
         errors = []
         self.log.debug("---------- NVME test ----------")
@@ -392,5 +395,4 @@ class ListVerboseTest(IorTestBase):
         errors.extend(self.verify_used_imbalance("SCM"))
 
         if errors:
-            self.fail("\n----- Errors detected! -----\n{}".format(
-                "\n".join(errors)))
+            self.fail("\n----- Errors detected! -----\n{}".format("\n".join(errors)))

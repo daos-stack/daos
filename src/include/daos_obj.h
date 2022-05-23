@@ -6,6 +6,8 @@
 #ifndef __DAOS_OBJ_H__
 #define __DAOS_OBJ_H__
 
+#define daos_obj_generate_oid daos_obj_generate_oid2
+
 #if defined(__cplusplus)
 extern "C" {
 #endif
@@ -93,6 +95,7 @@ enum daos_otype_t {
 	DAOS_OT_ARRAY_BYTE	= 13,
 
 	DAOS_OT_MAX		= 13,
+
 	/**
 	 * reserved: Multi Dimensional Array
 	 * DAOS_OT_ARRAY_MD	= 64,
@@ -1126,86 +1129,7 @@ int
 daos_oit_list(daos_handle_t oh, daos_obj_id_t *oids, uint32_t *oids_nr,
 	      daos_anchor_t *anchor, daos_event_t *ev);
 
-/**
- * Backward compatibility code.
- * Please don't use directly
- */
-typedef uint16_t daos_ofeat_t;
-int
-daos_obj_generate_oid1(daos_handle_t coh, daos_obj_id_t *oid,
-		       daos_ofeat_t type, daos_oclass_id_t cid,
-		       daos_oclass_hints_t hints, uint32_t args);
-int
-daos_obj_generate_oid2(daos_handle_t coh, daos_obj_id_t *oid,
-		       enum daos_otype_t type, daos_oclass_id_t cid,
-		       daos_oclass_hints_t hints, uint32_t args);
-
-/** DKEY keys not hashed and sorted numerically.   Keys are accepted
- *  in client's byte order and DAOS is responsible for correct behavior
- */
-#define	DAOS_OF_DKEY_UINT64	((daos_ofeat_t)(1 << 0))
-/** DKEY keys not hashed and sorted lexically */
-#define DAOS_OF_DKEY_LEXICAL	((daos_ofeat_t)(1 << 1))
-/** AKEY keys not hashed and sorted numerically.   Keys are accepted
- *  in client's byte order and DAOS is responsible for correct behavior
- */
-#define DAOS_OF_AKEY_UINT64	((daos_ofeat_t)(1 << 2))
-/** AKEY keys not hashed and sorted lexically */
-#define DAOS_OF_AKEY_LEXICAL	((daos_ofeat_t)(1 << 3))
-/** reserved: 1-level flat KV store */
-#define DAOS_OF_KV_FLAT		((daos_ofeat_t)(1 << 4))
-/** reserved: 1D Array with metadata stored in the DAOS object */
-#define DAOS_OF_ARRAY		((daos_ofeat_t)(1 << 5))
-/** reserved: Multi Dimensional Array */
-#define DAOS_OF_ARRAY_MD	((daos_ofeat_t)(1 << 6))
-/** reserved: Byte Array with no metadata (eg DFS/POSIX) */
-#define DAOS_OF_ARRAY_BYTE	((daos_ofeat_t)(1 << 7))
-/**
- * benchmark-only feature bit, I/O is a network echo, no data is going
- * to be stored/returned
- *
- * NB: this is the last feature bits.
- */
-#define DAOS_OF_ECHO		((daos_ofeat_t)(1 << 15))
-/** Mask for convenience (16-bit) */
-#define DAOS_OF_MASK		((daos_ofeat_t)((1 << 16) - 1))
-
 #if defined(__cplusplus)
 }
-#define daos_obj_generate_oid daos_obj_generate_oid_cpp
-static inline int
-daos_obj_generate_oid_cpp(daos_handle_t coh, daos_obj_id_t *oid,
-			  enum daos_otype_t type, daos_oclass_id_t cid,
-			  daos_oclass_hints_t hints, uint32_t args)
-{
-	return daos_obj_generate_oid2(coh, oid, type, cid, hints, args);
-}
-static inline int
-daos_obj_generate_oid_cpp(daos_handle_t coh, daos_obj_id_t *oid,
-			  daos_ofeat_t feat, daos_oclass_id_t cid,
-			  daos_oclass_hints_t hints, uint32_t args)
-{
-	return daos_obj_generate_oid1(coh, oid, feat, cid, hints, args);
-}
-#else
-/**
- * for backward compatility, support old api where the type was a set of feature
- * flags
- */
-#define daos_obj_generate_oid(coh, oid, type, ...)			\
-	({								\
-		int _ret;						\
-		if (__builtin_types_compatible_p(__typeof__(type),	\
-						 daos_ofeat_t)) {	\
-			_ret = daos_obj_generate_oid((coh), (oid),	\
-						     (type),		\
-						     __VA_ARGS__);	\
-		} else {						\
-			_ret = daos_obj_generate_oid2((coh), (oid),	\
-						      (type),		\
-						      __VA_ARGS__);	\
-		}							\
-		_ret;							\
-	})
 #endif /* __cplusplus */
 #endif /* __DAOS_OBJ_H__ */

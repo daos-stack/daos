@@ -73,6 +73,11 @@ pool_reserved:
     scm_size: 3GB
     nvme_size: 50GB
     control_method: dmg
+pool_racer:
+    name: daos_server
+    scm_size: 3GB
+    nvme_size: 10GB
+    control_method: dmg
 container:
     type: POSIX
     properties: cksum:crc16,cksum_size:16384,srv_cksum:on

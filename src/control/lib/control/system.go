@@ -24,7 +24,7 @@ import (
 	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	sharedpb "github.com/daos-stack/daos/src/control/common/proto/shared"
-	"github.com/daos-stack/daos/src/control/drpc"
+	"github.com/daos-stack/daos/src/control/lib/daos"
 	"github.com/daos-stack/daos/src/control/lib/hostlist"
 	"github.com/daos-stack/daos/src/control/system"
 )
@@ -49,6 +49,14 @@ type sysRequest struct {
 	Hosts hostlist.HostSet
 }
 
+func (req *sysRequest) SetRanks(ranks *system.RankSet) {
+	req.Ranks.Replace(ranks)
+}
+
+func (req *sysRequest) SetHosts(hosts *hostlist.HostSet) {
+	req.Hosts.Replace(hosts)
+}
+
 type sysResponse struct {
 	AbsentRanks system.RankSet   `json:"-"`
 	AbsentHosts hostlist.HostSet `json:"-"`
@@ -63,8 +71,8 @@ func (resp *sysResponse) getAbsentHostsRanks(inHosts, inRanks string) error {
 	if err != nil {
 		return err
 	}
-	resp.AbsentHosts.ReplaceSet(ahs)
-	resp.AbsentRanks.ReplaceSet(ars)
+	resp.AbsentHosts.Replace(ahs)
+	resp.AbsentRanks.Replace(ars)
 
 	return nil
 }
@@ -585,8 +593,19 @@ func LeaderQuery(ctx context.Context, rpcClient UnaryInvoker, req *LeaderQueryRe
 // RanksReq contains the parameters for a system ranks request.
 type RanksReq struct {
 	unaryRequest
-	Ranks string
-	Force bool
+	respReportCb HostResponseReportFn
+	Ranks        string
+	Force        bool
+}
+
+func (r *RanksReq) reportResponse(resp *HostResponse) {
+	if r.respReportCb != nil && resp != nil {
+		r.respReportCb(resp)
+	}
+}
+
+func (r *RanksReq) SetReportCb(cb HostResponseReportFn) {
+	r.respReportCb = cb
 }
 
 // RanksResp contains the response from a system ranks request.
@@ -598,6 +617,13 @@ type RanksResp struct {
 // addHostResponse is responsible for validating the given HostResponse
 // and adding its results to the RanksResp.
 func (srr *RanksResp) addHostResponse(hr *HostResponse) (err error) {
+	if hr.Error != nil {
+		if err = srr.addHostError(hr.Addr, hr.Error); err != nil {
+			return
+		}
+		return
+	}
+
 	pbResp, ok := hr.Message.(interface{ GetResults() []*sharedpb.RankResult })
 	if !ok {
 		return errors.Errorf("unable to unpack message: %+v", hr.Message)
@@ -605,10 +631,7 @@ func (srr *RanksResp) addHostResponse(hr *HostResponse) (err error) {
 
 	memberResults := make(system.MemberResults, 0)
 	if err := convert.Types(pbResp.GetResults(), &memberResults); err != nil {
-		if srr.HostErrors == nil {
-			srr.HostErrors = make(HostErrorsMap)
-		}
-		return srr.HostErrors.Add(hr.Addr, err)
+		return srr.addHostError(hr.Addr, errors.Wrap(err, "type conversion failed"))
 	}
 
 	srr.RankResults = append(srr.RankResults, memberResults...)
@@ -620,26 +643,27 @@ func (srr *RanksResp) addHostResponse(hr *HostResponse) (err error) {
 // parameter and unpacks host responses and errors into a RanksResp,
 // returning RanksResp's reference.
 func invokeRPCFanout(ctx context.Context, rpcClient UnaryInvoker, req *RanksReq) (*RanksResp, error) {
-	ur, err := rpcClient.InvokeUnaryRPC(ctx, req)
+	resps, err := rpcClient.InvokeUnaryRPCAsync(ctx, req)
 	if err != nil {
 		return nil, err
 	}
 
 	rr := new(RanksResp)
-	for _, hostResp := range ur.Responses {
-		if hostResp.Error != nil {
-			if err := rr.addHostError(hostResp.Addr, hostResp.Error); err != nil {
+	for {
+		select {
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		case hr := <-resps:
+			if hr == nil {
+				return rr, nil
+			}
+
+			req.reportResponse(hr)
+			if err := rr.addHostResponse(hr); err != nil {
 				return nil, err
 			}
-			continue
-		}
-
-		if err := rr.addHostResponse(hostResp); err != nil {
-			return nil, err
 		}
 	}
-
-	return rr, nil
 }
 
 // PrepShutdownRanks concurrently performs prep shutdown ranks across all hosts
@@ -773,7 +797,7 @@ func (scr *SystemCleanupResp) Errors() error {
 	out := new(strings.Builder)
 
 	for _, r := range scr.Results {
-		if r.Status != int32(drpc.DaosSuccess) {
+		if r.Status != int32(daos.Success) {
 			fmt.Fprintf(out, "%s\n", r.Msg)
 		}
 	}
@@ -810,5 +834,79 @@ func SystemCleanup(ctx context.Context, rpcClient UnaryInvoker, req *SystemClean
 	}
 
 	resp := new(SystemCleanupResp)
+	return resp, convertMSResponse(ur, resp)
+}
+
+// SystemSetAttrReq contains the inputs for the system set-attr request.
+type SystemSetAttrReq struct {
+	unaryRequest
+	msRequest
+
+	Attributes map[string]string
+}
+
+// SystemSetAttr sets system properties.
+func SystemSetAttr(ctx context.Context, rpcClient UnaryInvoker, req *SystemSetAttrReq) error {
+	if req == nil {
+		return errors.Errorf("nil %T request", req)
+	}
+	if len(req.Attributes) == 0 {
+		return errors.New("attributes cannot be empty")
+	}
+
+	pbReq := &mgmtpb.SystemSetAttrReq{
+		Sys:        req.getSystem(rpcClient),
+		Attributes: req.Attributes,
+	}
+	req.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
+		return mgmtpb.NewMgmtSvcClient(conn).SystemSetAttr(ctx, pbReq)
+	})
+	rpcClient.Debugf("DAOS SystemSetAttr request: %+v", pbReq)
+
+	ur, err := rpcClient.InvokeUnaryRPC(ctx, req)
+	if err != nil {
+		return err
+	}
+	_, err = ur.getMSResponse()
+
+	return err
+}
+
+type (
+	// SystemGetAttrReq contains the inputs for the system get-attr request.
+	SystemGetAttrReq struct {
+		unaryRequest
+		msRequest
+
+		Keys []string
+	}
+
+	// SystemGetAttrResp contains the request response.
+	SystemGetAttrResp struct {
+		Attributes map[string]string `json:"attributes"`
+	}
+)
+
+// SystemGetAttr gets system attributes.
+func SystemGetAttr(ctx context.Context, rpcClient UnaryInvoker, req *SystemGetAttrReq) (*SystemGetAttrResp, error) {
+	if req == nil {
+		return nil, errors.Errorf("nil %T request", req)
+	}
+
+	pbReq := &mgmtpb.SystemGetAttrReq{
+		Sys:  req.getSystem(rpcClient),
+		Keys: req.Keys,
+	}
+	req.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
+		return mgmtpb.NewMgmtSvcClient(conn).SystemGetAttr(ctx, pbReq)
+	})
+	rpcClient.Debugf("DAOS SystemGetAttr request: %+v", pbReq)
+
+	ur, err := rpcClient.InvokeUnaryRPC(ctx, req)
+	if err != nil {
+		return nil, err
+	}
+
+	resp := new(SystemGetAttrResp)
 	return resp, convertMSResponse(ur, resp)
 }

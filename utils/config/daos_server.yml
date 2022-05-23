@@ -136,13 +136,16 @@
 #disable_vfio: true
 #
 #
-## Enable VMD Usage
+## Disable VMD Usage
 #
-## The use of Intel Volume Management Devices can be optionally enabled.
-## VMD needs to be available and configured in the system BIOS before use.
+## VMD (Intel Volume Management Devices) is enabled by default but can be
+## optionally disabled in which case VMD backing devices will not be visible.
+#
+## VMD needs to be available and configured in the system BIOS before it
+## can be used. The main use case for VMD is managing NVMe SSD LED activity.
 #
 ## default: false
-#enable_vmd: true
+#disable_vmd: true
 #
 #
 ## Enable NVMe SSD Hotplug
@@ -199,12 +202,11 @@
 ##nr_hugepages: -1
 #
 #
-## Force specific debug mask for daos_server (control plane).
-## By default, just use the default debug mask used by daos_server.
-## Mask specifies minimum level of message significance to pass to logger.
-## Currently supported values are DEBUG and ERROR.
+## Set specific debug mask for daos_server (control plane).
+## The mask specifies minimum level of message significance to pass to logger.
+## Currently supported values are DISABLED, ERROR, INFO and DEBUG.
 #
-## default: DEBUG
+## default: INFO
 #control_log_mask: ERROR
 #
 #
@@ -290,7 +292,7 @@
 #  # For best performance, it is necessary that the fabric_iface of this engine
 #  # resides on the same NUMA node as the first_core.
 #  #
-#  # Optional parameter; set either this option or pinned_numa_node but not both.
+#  # Optional parameter; set either this option non-zero or pinned_numa_node but not both.
 #
 #  first_core: 0
 #
@@ -422,7 +424,7 @@
 #  #
 #  # Optional parameter; set either this option or first_core, but not both.
 #
-#  pinned_numa_node: 1
+#  #pinned_numa_node: 1
 #
 #  # Offset of the first core to be used for I/O service threads (targets).
 #  # Immutable after running "dmg storage format".
@@ -430,7 +432,7 @@
 #  # For best performance, it is necessary that the fabric_iface of this engine
 #  # resides on the same NUMA node as the first_core.
 #  #
-#  # Optional parameter; set either this option or pinned_numa_node but not both.
+#  # Optional parameter; set either this option non-zero or pinned_numa_node but not both.
 #
 #  first_core: 22
 #
