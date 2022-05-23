@@ -80,6 +80,21 @@ pipeline {
         string(name: 'BaseBranch',
                defaultValue: base_branch,
                description: 'The base branch to run weekly-testing against (i.e. master, or a PR\'s branch)')
+        string(name: 'CI_RPM_TEST_VERSION',
+               defaultValue: '',
+               description: 'Package version to use instead of building. example: 1.3.103-1, 1.2-2')
+        booleanParam(name: 'CI_FUNCTIONAL_el7_TEST',
+                     defaultValue: true,
+                     description: 'Run the functional CentOS 7 CI tests')
+        booleanParam(name: 'CI_FUNCTIONAL_el8_TEST',
+                     defaultValue: true,
+                     description: 'Run the functional EL 8 CI tests')
+        booleanParam(name: 'CI_FUNCTIONAL_leap15_TEST',
+                     defaultValue: true,
+                     description: 'Run the functional OpenSUSE Leap 15 CI tests')
+        booleanParam(name: 'CI_FUNCTIONAL_ubuntu20_TEST',
+                     defaultValue: false,
+                     description: 'Run the functional Ubuntu 20 CI tests')
         booleanParam(name: 'CI_small_TEST',
                      defaultValue: true,
                      description: 'Run the Small Cluster CI tests')
