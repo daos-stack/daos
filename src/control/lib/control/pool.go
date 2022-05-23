@@ -707,12 +707,16 @@ func convertPoolTargetInfo(pbInfo *mgmtpb.PoolQueryTargetInfo) (*PoolQueryTarget
 	pqti.Type = PoolQueryTargetType(pbInfo.Type)
 	pqti.State = PoolQueryTargetState(pbInfo.State)
 	pqti.Space = []*StorageTargetUsage{
-		{uint64(pbInfo.Space[StorageMediaTypeScm].Total),
-			uint64(pbInfo.Space[StorageMediaTypeScm].Free),
-			StorageMediaTypeScm},
-		{uint64(pbInfo.Space[StorageMediaTypeNvme].Total),
-			uint64(pbInfo.Space[StorageMediaTypeNvme].Free),
-			StorageMediaTypeNvme},
+		{
+			Total:     uint64(pbInfo.Space[StorageMediaTypeScm].Total),
+			Free:      uint64(pbInfo.Space[StorageMediaTypeScm].Free),
+			MediaType: StorageMediaTypeScm,
+		},
+		{
+			Total:     uint64(pbInfo.Space[StorageMediaTypeNvme].Total),
+			Free:      uint64(pbInfo.Space[StorageMediaTypeNvme].Free),
+			MediaType: StorageMediaTypeNvme,
+		},
 	}
 
 	return pqti, nil

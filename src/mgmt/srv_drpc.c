@@ -1820,8 +1820,6 @@ ds_mgmt_drpc_pool_query_targets(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 
 	D_INFO("Received request to query DAOS pool %s, %zu targets\n", req->id, req->n_targets);
 
-	/* resp.infos, n_infos are NULL/0 */
-
 	if (uuid_parse(req->id, uuid) != 0) {
 		D_ERROR("Failed to parse pool uuid %s\n", req->id);
 		D_GOTO(out, rc = -DER_INVAL);
@@ -1849,7 +1847,7 @@ ds_mgmt_drpc_pool_query_targets(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 		D_GOTO(out_infos, rc = -DER_NOMEM);
 	resp.n_infos = req->n_targets;
 
-	/* array of Mgmt__PooolQueryTargetInfo so we don't have to allocate individually */
+	/* array of Mgmt__PoolQueryTargetInfo so we don't have to allocate individually */
 	D_ALLOC_ARRAY(resp_infos, req->n_targets);
 	if (resp_infos == NULL)
 		D_GOTO(out_infos, rc = -DER_NOMEM);
