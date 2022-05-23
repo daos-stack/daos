@@ -5,6 +5,7 @@
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 from ior_test_base import IorTestBase
+from general_utils import DaosTestError
 
 
 class MultipleContainerDelete(IorTestBase):
