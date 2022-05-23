@@ -248,7 +248,7 @@ func TestServerConfig_Constructed(t *testing.T) {
 			WithLogMask("INFO").
 			WithStorageEnableHotplug(true).
 			WithStorageAccelEngine(storage.AccelEngineSPDK).
-			WithStorageAccelOpts(storage.AccelOptCRC, storage.AccelOptMove).
+			WithStorageAccelOpts(storage.AccelOptMove, storage.AccelOptCRC).
 			WithStorageAccelOptMask(storage.AccelOptCRCFlag | storage.AccelOptMoveFlag),
 		engine.MockConfig().
 			WithSystemName("daos_server").
