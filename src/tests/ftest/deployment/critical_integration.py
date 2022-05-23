@@ -35,6 +35,7 @@ class CriticalIntegration(TestWithServers):
         """
 
         check_remote_root_access = self.params.get("check_remote_root_access", "/run/*")
+        libfabric_path = self.params.get("libfabric_path", "/run/*")
         daos_server_version_list = []
         dmg_version_list = []
         failed_nodes = []
@@ -75,17 +76,35 @@ class CriticalIntegration(TestWithServers):
         result_dmg = dmg_version_list.count(dmg_version_list[0]) == len(dmg_version_list)
         result_client_server = daos_server_version_list[0][1:] == dmg_version_list[0]
 
-        if (result_daos_server and result_dmg and result_client_server):
+        # libfabric version check
+        all_nodes = self.hostlist_servers + self.hostlist_clients
+        all_nodes = list(dict.fromkeys(all_nodes))
+        list_all_nodes = ",".join(all_nodes)
+        libfabric_version_cmd = "clush -S -b -w {} {}/bin/fi_info \
+                                --version".format(list_all_nodes, libfabric_path)
+        libfabric_output = run_command(libfabric_version_cmd)
+        same_libfab_nodes = libfabric_output.stdout.split(b'\n')[1].split(b'(')[1][:-1]
+        libfabric_version = libfabric_output.stdout.split(b'\n')[3].split(b' ')[1]
+
+        result_libfabric_version = int(same_libfab_nodes.decode("utf-8")) == len(all_nodes)
+
+        if (result_daos_server and result_dmg and result_client_server
+                and result_libfabric_version):
             self.log.info("All servers have same daos version")
             self.log.info("All clients have same daos version")
             self.log.info("Servers and Clients have same daos version")
+            self.log.info("Servers and Clients have same libfabric version")
             self.log.info("Clients: %s", dmg_version_list)
             self.log.info("servers: %s", daos_server_version_list)
+            self.log.info("Libfabric Version on Servers and Clients: %s", libfabric_version)
         else:
-            self.log.info("Not all servers and clients have same daos version")
+            self.log.info("Not all servers and clients have either same daos version or \
+                          libfabric version")
             self.log.info("Clients: %s", dmg_version_list)
             self.log.info("servers: %s", daos_server_version_list)
+            self.log.info("Libfabric Version Output: %s", libfabric_output.stdout)
             self.fail()
+
 
     def test_ras(self):
         """
