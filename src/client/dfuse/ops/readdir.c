@@ -124,7 +124,8 @@ create_entry(struct dfuse_projection_info *fs_handle,
 	if (S_ISDIR(ie->ie_stat.st_mode) && attr_len) {
 		rc = check_for_uns_ep(fs_handle, ie, attr, attr_len);
 		if (rc != 0) {
-			DFUSE_TRA_WARNING(ie, "check_for_uns_ep() returned %d, ignoring", rc);
+			DFUSE_TRA_WARNING(ie, "check_for_uns_ep() returned %d,"
+					" ignoring", rc);
 			rc = 0;
 		}
 		entry->attr.st_mode = ie->ie_stat.st_mode;
