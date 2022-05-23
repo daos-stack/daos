@@ -33,7 +33,7 @@ RUN set -e;                                                      \
     if [ -n "$REPO_FILE_URL" ]; then                             \
         dnf --quiet config-manager --disable epel;               \
     fi;                                                          \
-    dnf clean all && dnf upgrade
+    dnf upgrade && dnf clean all
 
 ARG JENKINS_URL
 ARG REPOS
