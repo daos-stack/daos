@@ -17,6 +17,7 @@ class DestroyTests(TestWithServers):
 
     :avocado: recursive
     """
+
     def get_group(self, name, hosts):
         """Get the server group dictionary.
 
@@ -25,7 +26,7 @@ class DestroyTests(TestWithServers):
 
         Args:
             name (str): the server group name
-            hosts (list): list of hosts to include in the server group
+            hosts (NodeSet): hosts to include in the server group
 
         Returns:
             dict: the the server group argument for the start_servers()
@@ -40,7 +41,7 @@ class DestroyTests(TestWithServers):
         """Get the server group information.
 
         Args:
-            hosts (list): list of hosts
+            hosts (NodeSet): hosts to include in the server group
             svr_config_file (str, optional): daos_server configuration file name
                 and path. Defaults to None.
             dmg_config_file (str, optional): dmg configuration file name and
@@ -59,7 +60,7 @@ class DestroyTests(TestWithServers):
         """
         return {
             "hosts": hosts,
-            "access_points": hosts[:1],
+            "access_points": list(hosts[:1]),
             "svr_config_file": svr_config_file,
             "dmg_config_file": dmg_config_file,
             "svr_config_temp": svr_config_temp,
@@ -70,7 +71,7 @@ class DestroyTests(TestWithServers):
         """Execute the pool destroy test.
 
         Args:
-            hosts (list): hosts running servers serving the pool
+            hosts (NodeSet): hosts running servers serving the pool
             group_name (str): server group name
             case (str): pool description message
             exception_expected (bool, optional): is an exception expected to be
@@ -170,10 +171,10 @@ class DestroyTests(TestWithServers):
         :avocado: tags=pool_destroy_single
         """
         hostlist_servers = self.hostlist_servers[:1]
-        setid = self.params.get("setname", '/run/setnames/validsetname/')
+        set_id = self.params.get("setname", '/run/setnames/validsetname/')
 
         # Attempt to destroy a pool
-        self.execute_test(hostlist_servers, setid, "with a single server")
+        self.execute_test(hostlist_servers, set_id, "with a single server")
 
     def test_destroy_multi(self):
         """Test destroying a pool created on two servers.
@@ -184,10 +185,10 @@ class DestroyTests(TestWithServers):
         :avocado: tags=pool_destroy_multi
         """
         hostlist_servers = self.hostlist_servers[:2]
-        setid = self.params.get("setname", '/run/setnames/validsetname/')
+        set_id = self.params.get("setname", '/run/setnames/validsetname/')
 
         # Attempt to destroy a pool
-        self.execute_test(hostlist_servers, setid, "with multiple servers")
+        self.execute_test(hostlist_servers, set_id, "with multiple servers")
 
     def test_destroy_single_loop(self):
         """Destroy and recreate pool multiple times.
@@ -251,10 +252,10 @@ class DestroyTests(TestWithServers):
         :avocado: tags=pool_destroy_invalid_uuid
         """
         hostlist_servers = self.hostlist_servers[:1]
-        setid = self.params.get("setname", '/run/setnames/validsetname/')
+        set_id = self.params.get("setname", '/run/setnames/validsetname/')
 
         # Start servers
-        self.start_servers(self.get_group(setid, hostlist_servers))
+        self.start_servers(self.get_group(set_id, hostlist_servers))
 
         # Create a pool
         self.validate_pool_creation(hostlist_servers)
@@ -286,10 +287,10 @@ class DestroyTests(TestWithServers):
         :avocado: tags=pool_destroy_invalid_label
         """
         hostlist_servers = self.hostlist_servers[:1]
-        setid = self.params.get("setname", '/run/setnames/validsetname/')
+        set_id = self.params.get("setname", '/run/setnames/validsetname/')
 
         # Start servers
-        self.start_servers(self.get_group(setid, hostlist_servers))
+        self.start_servers(self.get_group(set_id, hostlist_servers))
 
         # Create a pool
         self.validate_pool_creation(hostlist_servers)

@@ -176,7 +176,7 @@ class ManagementServiceResilience(TestWithServers):
             self.server_group:
                 {
                     "hosts": self.hostlist_servers,
-                    "access_points": replicas,
+                    "access_points": list(replicas),
                     "svr_config_file": None,
                     "dmg_config_file": None,
                     "svr_config_temp": None,

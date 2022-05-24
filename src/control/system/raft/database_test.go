@@ -708,7 +708,7 @@ func TestSystem_Database_SystemAttrs(t *testing.T) {
 			db.data.System.Attributes = tc.startAttrs
 			db.SetSystemAttrs(tc.attrsUpdate)
 
-			gotAttrs, gotErr := db.GetSystemAttrs(tc.searchKeys)
+			gotAttrs, gotErr := db.GetSystemAttrs(tc.searchKeys, nil)
 			test.CmpErr(t, tc.expErr, gotErr)
 			if tc.expErr != nil {
 				return
