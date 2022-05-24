@@ -713,8 +713,7 @@ led_device_action(void *ctx, struct spdk_pci_device *pci_device)
 	if (!opts->all_devices) {
 		if (spdk_pci_addr_compare(&opts->pci_addr, &pci_device->addr) != 0)
 			return;
-		else
-			opts->finished = true;
+		opts->finished = true;
 	}
 
 	rc = spdk_pci_addr_fmt(addr_buf, sizeof(addr_buf), &pci_device->addr);
@@ -735,31 +734,31 @@ led_device_action(void *ctx, struct spdk_pci_device *pci_device)
 	D_DEBUG(DB_MGMT, "LED on %s: %s\n", addr_buf, g_led_states[cur_led_state]);
 
 	switch (opts->action) {
-		case LED_ACTION_GET:
+	case LED_ACTION_GET:
+		opts->led_state = cur_led_state;
+		return;
+
+	case LED_ACTION_SET:
+		D_DEBUG(DB_MGMT, "Setting VMD device %s LED state to %s\n", addr_buf,
+			g_led_states[opts->led_state]);
+		break;
+
+	case LED_ACTION_RESET:
+		/* If the current state of a device is FAULTY we do not want to reset */
+		if (cur_led_state == SPDK_VMD_LED_STATE_FAULT) {
+			D_DEBUG(DB_MGMT, "ignoring LED reset on %s as state is %s\n",
+				addr_buf, g_led_states[cur_led_state]);
 			opts->led_state = cur_led_state;
 			return;
+		}
+		D_DEBUG(DB_MGMT, "Resetting VMD device %s LED state to %s\n", addr_buf,
+			g_led_states[opts->led_state]);
+		break;
 
-		case LED_ACTION_SET:
-			D_DEBUG(DB_MGMT, "Setting VMD device %s LED state to %s\n", addr_buf,
-				g_led_states[opts->led_state]);
-			break;
-
-		case LED_ACTION_RESET:
-			/* If the current state of a device is FAULTY we do not want to reset */
-			if (cur_led_state == SPDK_VMD_LED_STATE_FAULT) {
-				D_DEBUG(DB_MGMT, "ignoring LED reset on %s as state is %s\n",
-					addr_buf, g_led_states[cur_led_state]);
-				opts->led_state = cur_led_state;
-				return;
-			}
-			D_DEBUG(DB_MGMT, "Resetting VMD device %s LED state to %s\n", addr_buf,
-				g_led_states[opts->led_state]);
-			break;
-
-		default:
-			D_ERROR("Unrecognized LED action requested\n");
-			opts->status = -DER_INVAL;
-			return;
+	default:
+		D_ERROR("Unrecognized LED action requested\n");
+		opts->status = -DER_INVAL;
+		return;
 	}
 
 	if (cur_led_state == opts->led_state) {
