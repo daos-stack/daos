@@ -484,6 +484,44 @@ class TestWithoutServers(Test):
                 hosts, ",".join(processes))
             stop_processes(hosts, "'({})'".format("|".join(processes)))
 
+    def get_hosts_from_yaml(self, yaml_key, partition_key, reservation_key, namespace):
+        """Get a NodeSet for the hosts to use in the test.
+        Args:
+            yaml_key (str): test yaml key used to obtain the set of hosts to test
+            partition_key (str): test yaml key used to obtain the host partition name
+            reservation_key (str): test yaml key used to obtain the host reservation name
+            namespace (str): test yaml path to the keys
+        Returns:
+            NodeSet: the set of hosts to test obtained from the test yaml
+        """
+        reservation_default = os.environ.get("_".join(["DAOS", reservation_key.upper()]), None)
+
+        # Collect any host information from the test yaml
+        host_data = self.params.get(yaml_key, namespace)
+        partition = self.params.get(partition_key, namespace)
+        reservation = self.params.get(reservation_key, namespace, reservation_default)
+        if partition is not None and host_data is not None:
+            self.fail(
+                "Specifying both a '{}' partition and '{}' set of hosts is not supported!".format(
+                    partition_key, yaml_key))
+
+        if partition is not None and host_data is None:
+            # If a partition is provided instead of a set of hosts get the set of hosts from the
+            # partition information
+            setattr(self, partition_key, partition)
+            setattr(self, reservation_key, reservation)
+            slurm_nodes = get_partition_hosts(partition, reservation)
+            if not slurm_nodes:
+                self.fail(
+                    "No valid nodes in {} partition with {} reservation".format(
+                        partition, reservation))
+            host_data = slurm_nodes
+
+        # Convert the set of hosts from slurm or the yaml file into a NodeSet
+        if isinstance(host_data, (list, tuple)):
+            return NodeSet.fromlist(host_data)
+        return NodeSet(host_data)
+
     def check_pool_free_space(self, pool, expected_scm=None, expected_nvme=None,
                               timeout=30):
         """Check pool free space with expected value.
