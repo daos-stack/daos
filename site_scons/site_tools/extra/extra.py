@@ -88,8 +88,7 @@ def _preprocess_emitter(source, target, env):
                 continue
             if mod != "":
                 prefix = prefix + "_" + mod
-            newtarget = os.path.join(dirname, '{}{}_pp.{}'.format(prefix, base, ext))
-            print("newtarget = %s\n" % newtarget)
+            newtarget = os.path.join(dirname, '{}{}_pp{}'.format(prefix, base, ext))
             target.append(newtarget)
     return target, source
 
