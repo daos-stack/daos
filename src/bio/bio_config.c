@@ -719,7 +719,7 @@ get_accel_props(const char *nvme_conf)
 {
 	struct json_config_ctx	*ctx;
 	struct spdk_json_val	*daos_data;
-	struct config_entry	 cfg = {};
+	struct config_entry	 cfg = { 0 };
 	int			 rc = 0;
 
 	D_ASSERT(nvme_conf != NULL);

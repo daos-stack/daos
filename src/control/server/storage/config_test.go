@@ -319,38 +319,50 @@ func TestStorage_parsePCIBusRange(t *testing.T) {
 	}
 }
 
-func TestStorage_AccelOptMaskFromStrings(t *testing.T) {
+func TestStorage_AccelProps_setOptMask(t *testing.T) {
 	for name, tc := range map[string]struct {
-		input   []string
-		expMask uint16
-		expErr  error
+		accelEngine string
+		optStrs     []string
+		expMask     uint16
+		expErr      error
 	}{
-		"no opts": {},
-		"crc opt": {
-			input:   []string{AccelOptCRC},
-			expMask: AccelOptCRCFlag,
+		"empty engine setting": {
+			expErr: errors.New("unknown acceleration engine"),
 		},
-		"move opt": {
-			input:   []string{AccelOptMove},
-			expMask: AccelOptMoveFlag,
+		"no engine set": {
+			accelEngine: AccelEngineNone,
+			optStrs:     []string{AccelOptCRC},
+		},
+		"no opts": {
+			accelEngine: AccelEngineSPDK,
+			expMask:     AccelOptCRCFlag | AccelOptMoveFlag,
 		},
 		"all opts": {
-			input:   []string{AccelOptCRC, AccelOptMove},
-			expMask: AccelOptCRCFlag | AccelOptMoveFlag,
+			accelEngine: AccelEngineDML,
+			optStrs:     []string{AccelOptCRC, AccelOptMove},
+			expMask:     AccelOptCRCFlag | AccelOptMoveFlag,
+		},
+		"single opt": {
+			accelEngine: AccelEngineDML,
+			optStrs:     []string{AccelOptCRC},
+			expMask:     AccelOptCRCFlag,
 		},
 		"bad opt": {
-			input:  []string{AccelOptCRC, "foo"},
-			expErr: errors.New("unknown acceleration option"),
+			accelEngine: AccelEngineSPDK,
+			optStrs:     []string{AccelOptCRC, "foo"},
+			expErr:      errors.New("unknown acceleration option"),
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
-			mask, err := AccelOptMaskFromStrings(tc.input...)
+			ap := &AccelProps{Engine: tc.accelEngine}
+
+			err := ap.setOptMask(tc.optStrs...)
 			test.CmpErr(t, tc.expErr, err)
 			if tc.expErr != nil {
 				return
 			}
 
-			if diff := cmp.Diff(tc.expMask, mask); diff != "" {
+			if diff := cmp.Diff(tc.expMask, ap.OptMask); diff != "" {
 				t.Fatalf("bad mask (-want +got):\n%s", diff)
 			}
 		})
@@ -358,67 +370,95 @@ func TestStorage_AccelOptMaskFromStrings(t *testing.T) {
 }
 
 func TestStorage_AccelProps_FromYAML(t *testing.T) {
-	getOptMask := func(ss ...string) uint16 {
-		mask, err := AccelOptMaskFromStrings(ss...)
-		if err != nil {
-			t.Fatal(err)
-		}
-		return mask
-	}
-
 	for name, tc := range map[string]struct {
 		input    string
 		expProps AccelProps
 		expErr   error
 	}{
 		"acceleration section missing": {
-			input:    "",
-			expProps: AccelProps{},
+			input: ``,
 		},
 		"acceleration section empty": {
-			input:    "acceleration:\n",
-			expProps: AccelProps{},
+			input: `
+acceleration:
+`,
 		},
 		"engine unset": {
-			input: "acceleration:\n  engine:\n",
-			expProps: AccelProps{
-				Engine: AccelEngineNone,
-			},
+			input: `
+acceleration:
+  engine:
+`,
+			expErr: errors.New("unknown acceleration engine"),
 		},
 		"engine set empty": {
-			input: "acceleration:\n  engine: \"\"\n",
-			expProps: AccelProps{
-				Engine: AccelEngineNone,
-			},
+			input: `
+acceleration:
+  engine: ""
+`,
+			expErr: errors.New("unknown acceleration engine"),
 		},
-		"set engine": {
-			input: "acceleration:\n  engine: \"spdk\"\n",
+		"engine set; default opts": {
+			input: `
+acceleration:
+  engine: spdk
+`,
 			expProps: AccelProps{
 				Engine:  AccelEngineSPDK,
-				Options: []string{AccelOptCRC, AccelOptMove},
-				OptMask: getOptMask(AccelOptCRC, AccelOptMove),
+				OptMask: AccelOptCRCFlag | AccelOptMoveFlag,
 			},
 		},
-		"set options; missing engine": {
-			input: "acceleration:\n  options:\n    - move\n    - crc\n",
+		"engine unset; opts set": {
+			input: `
+acceleration:
+  options:
+  - move
+  - crc
+`,
 			expProps: AccelProps{
 				Engine: AccelEngineNone,
 			},
 		},
-		"set engine; set options": {
-			input: "acceleration:\n  engine: \"dml\"\n  options:\n    - crc\n",
+		"engine set; opts set": {
+			input: `
+acceleration:
+  engine: dml
+  options:
+  - crc
+`,
 			expProps: AccelProps{
 				Engine:  AccelEngineDML,
 				Options: []string{AccelOptCRC},
-				OptMask: getOptMask(AccelOptCRC),
+				OptMask: AccelOptCRCFlag,
+			},
+		},
+		"engine set; opts all set": {
+			input: `
+acceleration:
+  engine: spdk
+  options:
+  - crc
+  - move
+`,
+			expProps: AccelProps{
+				Engine:  AccelEngineSPDK,
+				Options: []string{AccelOptCRC, AccelOptMove},
+				OptMask: AccelOptCRCFlag | AccelOptMoveFlag,
 			},
 		},
 		"unrecognized engine": {
-			input:  "acceleration:\n  engine: \"foo\"\n",
+			input: `
+acceleration:
+  engine: foo
+`,
 			expErr: errors.New("unknown acceleration engine"),
 		},
 		"unrecognized option": {
-			input:  "acceleration:\n  engine: \"dml\"\n  options:\n    - bar\n",
+			input: `
+acceleration:
+  engine: dml
+  options:
+  - bar
+`,
 			expErr: errors.New("unknown acceleration option"),
 		},
 	} {
@@ -432,6 +472,64 @@ func TestStorage_AccelProps_FromYAML(t *testing.T) {
 
 			if diff := cmp.Diff(tc.expProps, cfg.AccelProps, defConfigCmpOpts()...); diff != "" {
 				t.Fatalf("bad props (-want +got):\n%s", diff)
+			}
+		})
+	}
+}
+
+func TestStorage_AccelProps_ToYAML(t *testing.T) {
+	for name, tc := range map[string]struct {
+		props  AccelProps
+		expOut string
+		expErr error
+	}{
+		"nil props": {
+			expOut: `
+storage: []
+`,
+		},
+		"empty props": {
+			expOut: `
+storage: []
+`,
+		},
+		"engine set": {
+			props: AccelProps{Engine: AccelEngineNone},
+			expOut: `
+storage: []
+acceleration:
+  engine: none
+`,
+		},
+		"engine set; default opts": {
+			props: AccelProps{
+				Engine:  AccelEngineSPDK,
+				Options: []string{AccelOptCRC, AccelOptMove},
+				OptMask: AccelOptCRCFlag | AccelOptMoveFlag,
+			},
+			expOut: `
+storage: []
+acceleration:
+  engine: spdk
+  options:
+  - crc
+  - move
+`,
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			cfg := &Config{
+				AccelProps: tc.props,
+			}
+
+			bytes, err := yaml.Marshal(cfg)
+			test.CmpErr(t, tc.expErr, err)
+			if tc.expErr != nil {
+				return
+			}
+
+			if diff := cmp.Diff(strings.TrimLeft(tc.expOut, "\n"), string(bytes), defConfigCmpOpts()...); diff != "" {
+				t.Fatalf("bad yaml output (-want +got):\n%s", diff)
 			}
 		})
 	}

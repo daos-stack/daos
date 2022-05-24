@@ -438,14 +438,9 @@ func (c *Config) WithStorageAccelEngine(name string) *Config {
 	return c
 }
 
-// WithStorageAccelOpts sets the acceleration option string slice for the I/O Engine instance.
-func (c *Config) WithStorageAccelOpts(opts ...string) *Config {
-	c.Storage.AccelProps.Options = opts
-	return c
-}
-
-// WithStorageAccelOptMask sets the acceleration option bit mask for the I/O Engine instance.
+// WithStorageAccelOptMask sets the acceleration optional capability bit mask for the I/O Engine
+// instance.
 func (c *Config) WithStorageAccelOptMask(mask uint16) *Config {
-	c.Storage.AccelProps.OptMask = mask
+	c.Storage.AccelProps.UpdateOptMask(mask)
 	return c
 }

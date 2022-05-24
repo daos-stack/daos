@@ -8,6 +8,7 @@ package config
 
 import (
 	"bufio"
+	"encoding/json"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -154,9 +155,21 @@ func TestServerConfig_MarshalUnmarshal(t *testing.T) {
 				return
 			}
 
+			configAPretty, err := json.MarshalIndent(configA, "", "  ")
+			if err != nil {
+				t.Fatal(err)
+			}
+			t.Logf("config A loaded from %s: %+v", tt.inPath, string(configAPretty))
+
 			if err := configA.SaveToFile(testFile); err != nil {
 				t.Fatal(err)
 			}
+
+			bytes, err := ioutil.ReadFile(testFile)
+			if err != nil {
+				t.Fatal(errors.WithMessage(err, "reading file"))
+			}
+			t.Logf("config saved loaded from %s: %+v", testFile, string(bytes))
 
 			configB := DefaultServer()
 			if err := configB.SetPath(testFile); err != nil {
@@ -171,6 +184,12 @@ func TestServerConfig_MarshalUnmarshal(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
+
+			configBPretty, err := json.MarshalIndent(configB, "", "  ")
+			if err != nil {
+				t.Fatal(err)
+			}
+			t.Logf("config B loaded from %s: %+v", testFile, string(configBPretty))
 
 			if diff := cmp.Diff(configA, configB, defConfigCmpOpts...); diff != "" {
 				t.Fatalf("(-want, +got): %s", diff)
@@ -248,7 +267,6 @@ func TestServerConfig_Constructed(t *testing.T) {
 			WithLogMask("INFO").
 			WithStorageEnableHotplug(true).
 			WithStorageAccelEngine(storage.AccelEngineSPDK).
-			WithStorageAccelOpts(storage.AccelOptMove, storage.AccelOptCRC).
 			WithStorageAccelOptMask(storage.AccelOptCRCFlag | storage.AccelOptMoveFlag),
 		engine.MockConfig().
 			WithSystemName("daos_server").
@@ -278,7 +296,6 @@ func TestServerConfig_Constructed(t *testing.T) {
 			WithLogMask("INFO").
 			WithStorageEnableHotplug(true).
 			WithStorageAccelEngine(storage.AccelEngineDML).
-			WithStorageAccelOpts(storage.AccelOptCRC).
 			WithStorageAccelOptMask(storage.AccelOptCRCFlag),
 	}
 	constructed.Path = testFile // just to avoid failing the cmp

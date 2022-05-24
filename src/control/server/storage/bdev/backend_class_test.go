@@ -95,7 +95,6 @@ func TestBackend_writeJSONFile(t *testing.T) {
 		enableHotplug     bool
 		hotplugBusidRange string
 		accelEngine       string
-		accelOpts         []string
 		accelOptMask      uint16
 		expErr            error
 		expOut            string
@@ -511,9 +510,7 @@ func TestBackend_writeJSONFile(t *testing.T) {
 					DeviceList: storage.MustNewBdevDeviceList(test.MockPCIAddrs(1)...),
 				},
 			},
-			accelEngine: "spdk",
-			// verify only mask is included in JSON, not individual flags
-			accelOpts:    []string{storage.AccelOptCRC, storage.AccelOptMove},
+			accelEngine:  "spdk",
 			accelOptMask: storage.AccelOptCRCFlag | storage.AccelOptMoveFlag,
 			expOut: `
 {
@@ -595,7 +592,6 @@ func TestBackend_writeJSONFile(t *testing.T) {
 				WithStorageConfigOutputPath(cfgOutputPath).
 				WithStorageEnableHotplug(tc.enableHotplug).
 				WithStorageAccelEngine(tc.accelEngine).
-				WithStorageAccelOpts(tc.accelOpts...).
 				WithStorageAccelOptMask(tc.accelOptMask)
 
 			req, err := storage.BdevWriteConfigRequestFromConfig(context.TODO(), log,
