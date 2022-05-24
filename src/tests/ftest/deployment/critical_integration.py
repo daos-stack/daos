@@ -97,8 +97,8 @@ class CriticalIntegrationWithoutServers(TestWithoutServers):
 
         # libfabric version check
         all_nodes = self.hostlist_servers | self.hostlist_clients
-        libfabric_version_cmd = "clush -S -b -w {} {}/fi_info \
-                                --version".format(all_nodes, libfabric_path)
+        libfabric_version_cmd = "clush -S -b -w {} {}/fi_info --version".format(
+            all_nodes, libfabric_path)
         libfabric_output = run_command(libfabric_version_cmd)
         same_libfab_nodes = libfabric_output.stdout_text.split('\n')[1].split('(')[1][:-1]
         libfabric_version = libfabric_output.stdout_text.split('\n')[3].split(' ')[1]
