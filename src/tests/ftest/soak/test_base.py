@@ -634,7 +634,7 @@ class SoakTestBase(TestWithServers):
             self.container = []
             # Remove the test pools from self.pool; preserving reserved pool
             if not single_test_pool:
-                self.soak_errors.extend(self.destroy_pools(self.pool[1]))
+                self.soak_errors.extend(self.destroy_pools(self.pool[1:]))
                 self.pool = [self.pool[0]]
             self.log.info(
                 "Current pools: %s",

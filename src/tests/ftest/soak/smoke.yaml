@@ -65,6 +65,11 @@ pool_reserved:
     scm_size: 3GB
     nvme_size: 50GB
     control_method: dmg
+pool_racer:
+    name: daos_server
+    scm_size: 3GB
+    nvme_size: 10GB
+    control_method: dmg
 container:
     type: POSIX
     properties: cksum:crc16,cksum_size:16384,srv_cksum:on
@@ -227,6 +232,32 @@ mdtest_smoke:
     dfs_destroy: False
     dfuse:
         mount_dir: "/tmp/daos_dfuse/mdtest/"
+        disable_caching: True
+macsio_smoke:
+    job_timeout: 10
+    nodesperjob:
+        - 1
+    taskspernode:
+        - 1
+    api:
+        - HDF5
+        - HDF5-VOL
+    interface: hdf5
+    parallel_file_mode: SIF 1
+    filebase: daos
+    units_prefix_system: decimal
+    part_size: 10M
+    avg_num_parts: 2.5
+    num_dumps: 2
+    debug_level: 1
+    oclass:
+        - "EC_2P1GX"
+        # - "EC_4P1G1"
+        # - "EC_4P2GX"
+        # - "EC_8P2G1"
+        # - "EC_16P2GX"
+    dfuse:
+        mount_dir: "/tmp/daos_dfuse/macsio/"
         disable_caching: True
 hdf5_vol:
     plugin_path: "/usr/lib64/mpich/lib"
