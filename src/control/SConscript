@@ -41,7 +41,7 @@ def is_firmware_mgmt_build(benv):
 
 def is_ucx_build(benv):
     "Check whether this build has UCX enabled."
-    return benv["UCX"] == 1
+    return prereqs.check_component('ucx')
 
 def get_build_tags(benv):
     "Get custom go build tags."
