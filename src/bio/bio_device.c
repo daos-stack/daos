@@ -861,7 +861,7 @@ skip_led_str:
 		D_ERROR("Setting LED state failed (rc: %d)\n", opts.status);
 		D_GOTO(free_traddr, rc = opts.status);
 	}
-	if (!opts.finished) {
+	if (!opts.all_devices && !opts.finished) {
 		D_ERROR("Device with address %s could not be found\n", b_info.bdi_traddr);
 		D_GOTO(free_traddr, rc = opts.status);
 	}
