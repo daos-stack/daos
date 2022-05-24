@@ -13,7 +13,7 @@ def build_shim_module():
     Import('base_env')
 
     new_env = base_env.Clone()
-    new_env.ParseConfig(f'pkg-config --cflags --libs python-{version}')
+    new_env.ParseConfig('pkg-config --cflags --libs python3')
 
     new_env.Replace(LIBS=['daos', 'duns'])
     new_env.AppendUnique(LIBPATH=[Dir('../dfs')])
