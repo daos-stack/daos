@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2021 Intel Corporation.
+ * (C) Copyright 2016-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -269,6 +269,13 @@ extern "C" {
 	/** Retry with other target, an internal error code used in EC deg-fetch. */ \
 	ACTION(DER_TGT_RETRY,		(DER_ERR_DAOS_BASE + 36),	\
 		Retry with other target)				\
+	ACTION(DER_NOTSUPPORTED,	(DER_ERR_DAOS_BASE + 37),	\
+	       Operation not supported)					\
+	ACTION(DER_CONTROL_INCOMPAT,	(DER_ERR_DAOS_BASE + 38),	\
+	       One or more control plane components are incompatible)	\
+	/** No service available */					\
+	ACTION(DER_NO_SERVICE,		(DER_ERR_DAOS_BASE + 39),	\
+	       No service available)
 
 /** Defines the gurt error codes */
 #define D_FOREACH_ERR_RANGE(ACTION)	\
