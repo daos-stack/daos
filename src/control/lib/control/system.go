@@ -856,7 +856,7 @@ type SystemSetAttrReq struct {
 	Attributes map[string]string
 }
 
-// SystemSetAttr sets system properties.
+// SystemSetAttr sets system attributes.
 func SystemSetAttr(ctx context.Context, rpcClient UnaryInvoker, req *SystemSetAttrReq) error {
 	if req == nil {
 		return errors.Errorf("nil %T request", req)
@@ -920,4 +920,115 @@ func SystemGetAttr(ctx context.Context, rpcClient UnaryInvoker, req *SystemGetAt
 
 	resp := new(SystemGetAttrResp)
 	return resp, convertMSResponse(ur, resp)
+}
+
+// SystemSetPropReq contains the inputs for the system set-prop request.
+type SystemSetPropReq struct {
+	unaryRequest
+	msRequest
+
+	Properties map[daos.SystemPropertyKey]daos.SystemPropertyValue
+}
+
+// SystemSetProp sets system properties.
+func SystemSetProp(ctx context.Context, rpcClient UnaryInvoker, req *SystemSetPropReq) error {
+	if req == nil {
+		return errors.Errorf("nil %T request", req)
+	}
+	if len(req.Properties) == 0 {
+		return errors.New("properties cannot be empty")
+	}
+
+	pbReq := &mgmtpb.SystemSetPropReq{
+		Sys:        req.getSystem(rpcClient),
+		Properties: make(map[string]string),
+	}
+	for k, v := range req.Properties {
+		pbReq.Properties[k.String()] = v.String()
+	}
+	req.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
+		return mgmtpb.NewMgmtSvcClient(conn).SystemSetProp(ctx, pbReq)
+	})
+	rpcClient.Debugf("DAOS SystemSetProp request: %+v", pbReq)
+
+	ur, err := rpcClient.InvokeUnaryRPC(ctx, req)
+	if err != nil {
+		return err
+	}
+	_, err = ur.getMSResponse()
+
+	return err
+}
+
+type (
+	// SystemGetPropReq contains the inputs for the system get-attr request.
+	SystemGetPropReq struct {
+		unaryRequest
+		msRequest
+
+		Keys []daos.SystemPropertyKey
+	}
+
+	// SystemGetPropResp contains the request response.
+	SystemGetPropResp struct {
+		Properties []*daos.SystemProperty `json:"properties"`
+	}
+)
+
+// SystemGetProp gets system attributes.
+func SystemGetProp(ctx context.Context, rpcClient UnaryInvoker, req *SystemGetPropReq) (*SystemGetPropResp, error) {
+	if req == nil {
+		return nil, errors.Errorf("nil %T request", req)
+	}
+
+	pbReq := &mgmtpb.SystemGetPropReq{
+		Sys: req.getSystem(rpcClient),
+	}
+	for _, k := range req.Keys {
+		pbReq.Keys = append(pbReq.Keys, k.String())
+	}
+	req.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
+		return mgmtpb.NewMgmtSvcClient(conn).SystemGetProp(ctx, pbReq)
+	})
+	rpcClient.Debugf("DAOS SystemGetProp request: %+v", pbReq)
+
+	ur, err := rpcClient.InvokeUnaryRPC(ctx, req)
+	if err != nil {
+		return nil, err
+	}
+
+	msg, err := ur.getMSResponse()
+	if err != nil {
+		return nil, err
+	}
+
+	pbResp, ok := msg.(*mgmtpb.SystemGetPropResp)
+	if !ok {
+		return nil, errors.Errorf("unexpected response type: %T", msg)
+	}
+
+	sysProps := daos.SystemProperties()
+	resp := new(SystemGetPropResp)
+	for k, v := range pbResp.Properties {
+		prop, ok := sysProps.Get(k)
+		if !ok {
+			rpcClient.Debugf("skipping unknown system property: %s", k)
+			continue
+		}
+
+		switch pv := prop.Value.(type) {
+		case *daos.CompPropVal:
+			// Convert this to a simple string so that we're
+			// displaying the server-computed value.
+			prop.Value = daos.NewStringPropVal(v)
+		default:
+			if err := pv.Handler(v); err != nil {
+				return nil, errors.Wrapf(err, "failed to parse system property %s", k)
+			}
+		}
+
+		resp.Properties = append(resp.Properties, prop)
+	}
+
+	return resp, nil
 }

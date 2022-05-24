@@ -19,7 +19,7 @@ type (
 	// SysAttrGetter defines an interface to be implemented by
 	// something that can get system properties.
 	SysAttrGetter interface {
-		GetSystemAttrs(keys []string) (map[string]string, error)
+		GetSystemAttrs(keys []string, filterFn func(string) bool) (map[string]string, error)
 	}
 )
 
@@ -37,17 +37,18 @@ func SetAttributes(db SysAttrSetter, attrs map[string]string) error {
 
 // getAttributes returns the system attributes for the supplied keys.
 func getAttributes(db SysAttrGetter, keys []string, toUser bool) (map[string]string, error) {
-	attrs, err := db.GetSystemAttrs(keys)
-	if err != nil {
-		return nil, err
-	}
-
-	if toUser {
-		for k := range attrs {
-			if isReservedKey(k) {
-				delete(attrs, k)
+	genFilter := func() func(string) bool {
+		if toUser {
+			return func(k string) bool {
+				return isReservedKey(k)
 			}
 		}
+		return func(string) bool { return false }
+	}
+
+	attrs, err := db.GetSystemAttrs(keys, genFilter())
+	if err != nil {
+		return nil, err
 	}
 
 	return attrs, nil

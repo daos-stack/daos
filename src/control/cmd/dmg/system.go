@@ -12,10 +12,12 @@ import (
 	"io"
 	"strings"
 
+	"github.com/jessevdk/go-flags"
 	"github.com/pkg/errors"
 
 	"github.com/daos-stack/daos/src/control/cmd/dmg/pretty"
 	"github.com/daos-stack/daos/src/control/lib/control"
+	"github.com/daos-stack/daos/src/control/lib/daos"
 	"github.com/daos-stack/daos/src/control/lib/hostlist"
 	"github.com/daos-stack/daos/src/control/lib/txtfmt"
 	"github.com/daos-stack/daos/src/control/lib/ui"
@@ -34,6 +36,8 @@ type SystemCmd struct {
 	SetAttr     systemSetAttrCmd `command:"set-attr" description:"Set system attributes"`
 	GetAttr     systemGetAttrCmd `command:"get-attr" description:"Get system attributes"`
 	DelAttr     systemDelAttrCmd `command:"del-attr" description:"Delete system attributes"`
+	SetProp     systemSetPropCmd `command:"set-prop" description:"Set system properties"`
+	GetProp     systemGetPropCmd `command:"get-prop" description:"Get system properties"`
 }
 
 type leaderQueryCmd struct {
@@ -303,7 +307,7 @@ func (cmd *systemCleanupCmd) Execute(_ []string) (errOut error) {
 	return resp.Errors()
 }
 
-// systemSetAttrCmd represents the command to set system properties.
+// systemSetAttrCmd represents the command to set system attributes.
 type systemSetAttrCmd struct {
 	baseCmd
 	cfgCmd
@@ -334,7 +338,7 @@ func (cmd *systemSetAttrCmd) Execute(_ []string) error {
 	return nil
 }
 
-// systemGetAttrCmd represents the command to get system properties.
+// systemGetAttrCmd represents the command to get system attributes.
 type systemGetAttrCmd struct {
 	baseCmd
 	cfgCmd
@@ -346,8 +350,8 @@ type systemGetAttrCmd struct {
 	} `positional-args:"yes"`
 }
 
-func prettyPrintAttrs(out io.Writer, props map[string]string) {
-	if len(props) == 0 {
+func prettyPrintAttrs(out io.Writer, attrs map[string]string) {
+	if len(attrs) == 0 {
 		fmt.Fprintln(out, "No system attributes found.")
 		return
 	}
@@ -355,7 +359,7 @@ func prettyPrintAttrs(out io.Writer, props map[string]string) {
 	nameTitle := "Name"
 	valueTitle := "Value"
 	table := []txtfmt.TableRow{}
-	for key, val := range props {
+	for key, val := range attrs {
 		row := txtfmt.TableRow{}
 		row[nameTitle] = key
 		row[valueTitle] = val
@@ -389,7 +393,7 @@ func (cmd *systemGetAttrCmd) Execute(_ []string) error {
 	return nil
 }
 
-// systemDelAttrCmd represents the command to delete system properties.
+// systemDelAttrCmd represents the command to delete system attributes.
 type systemDelAttrCmd struct {
 	baseCmd
 	cfgCmd
@@ -419,6 +423,178 @@ func (cmd *systemDelAttrCmd) Execute(_ []string) error {
 		return errors.Wrap(err, "system del-attr failed")
 	}
 	cmd.Info("system del-attr succeeded")
+
+	return nil
+}
+
+type systemSetPropsFlag struct {
+	ui.SetPropertiesFlag
+	SystemProps daos.SystemPropertyMap
+	ParsedProps map[daos.SystemPropertyKey]daos.SystemPropertyValue
+}
+
+func (f *systemSetPropsFlag) UnmarshalFlag(fv string) error {
+	err := f.SetPropertiesFlag.UnmarshalFlag(fv)
+	if err != nil {
+		return err
+	}
+
+	if f.SystemProps == nil {
+		f.SystemProps = daos.SystemProperties()
+	}
+	f.ParsedProps = make(map[daos.SystemPropertyKey]daos.SystemPropertyValue)
+
+	for k, v := range f.SetPropertiesFlag.ParsedProps {
+		if prop, ok := f.SystemProps.Get(k); ok {
+			if err := prop.Value.Handler(v); err != nil {
+				return errors.Wrapf(err, "invalid system property value for %s", k)
+			}
+			f.ParsedProps[prop.Key] = prop.Value
+		} else {
+			return errors.Errorf("invalid system property key: %s", k)
+		}
+	}
+
+	return nil
+}
+
+func (f *systemSetPropsFlag) Complete(match string) []flags.Completion {
+	if f.SystemProps == nil {
+		f.SystemProps = daos.SystemProperties()
+	}
+
+	comps := make(ui.CompletionMap)
+	for _, prop := range f.SystemProps {
+		comps[prop.Key.String()] = prop.Value.Choices()
+	}
+	f.SetCompletions(comps)
+
+	return f.SetPropertiesFlag.Complete(match)
+}
+
+// systemSetPropCmd represents the command to set system properties.
+type systemSetPropCmd struct {
+	baseCmd
+	cfgCmd
+	ctlInvokerCmd
+	jsonOutputCmd
+
+	Args struct {
+		Props systemSetPropsFlag `positional-arg-name:"system properties to set (key:val[,key:val...])" required:"1"`
+	} `positional-args:"yes"`
+}
+
+// Execute is run when systemSetPropCmd subcommand is activated.
+func (cmd *systemSetPropCmd) Execute(_ []string) error {
+	req := &control.SystemSetPropReq{
+		Properties: cmd.Args.Props.ParsedProps,
+	}
+
+	err := control.SystemSetProp(context.Background(), cmd.ctlInvoker, req)
+	if cmd.jsonOutputEnabled() {
+		return cmd.outputJSON(nil, err)
+	}
+
+	if err != nil {
+		return errors.Wrap(err, "system set-prop failed")
+	}
+	cmd.Info("system set-prop succeeded")
+
+	return nil
+}
+
+type systemGetPropsFlag struct {
+	ui.GetPropertiesFlag
+	SystemProps daos.SystemPropertyMap
+	ParsedProps []daos.SystemPropertyKey
+}
+
+func (f *systemGetPropsFlag) UnmarshalFlag(fv string) error {
+	err := f.GetPropertiesFlag.UnmarshalFlag(fv)
+	if err != nil {
+		return err
+	}
+
+	if f.SystemProps == nil {
+		f.SystemProps = daos.SystemProperties()
+	}
+
+	for _, k := range f.GetPropertiesFlag.ParsedProps.ToSlice() {
+		if prop, ok := f.SystemProps.Get(k); ok {
+			f.ParsedProps = append(f.ParsedProps, prop.Key)
+		} else {
+			return errors.Errorf("invalid system property key: %s", k)
+		}
+	}
+
+	return nil
+}
+
+func (f *systemGetPropsFlag) Complete(match string) []flags.Completion {
+	if f.SystemProps == nil {
+		f.SystemProps = daos.SystemProperties()
+	}
+
+	comps := make(ui.CompletionMap)
+	for _, prop := range f.SystemProps {
+		comps[prop.Key.String()] = prop.Value.Choices()
+	}
+	f.SetCompletions(comps)
+
+	return f.GetPropertiesFlag.Complete(match)
+}
+
+// systemGetPropCmd represents the command to get system properties.
+type systemGetPropCmd struct {
+	baseCmd
+	cfgCmd
+	ctlInvokerCmd
+	jsonOutputCmd
+
+	Args struct {
+		Props systemGetPropsFlag `positional-arg-name:"system properties to get (key[,key...])"`
+	} `positional-args:"yes"`
+}
+
+func prettyPrintSysProps(out io.Writer, props []*daos.SystemProperty) {
+	if len(props) == 0 {
+		fmt.Fprintln(out, "No system properties found.")
+		return
+	}
+
+	nameTitle := "Name"
+	valueTitle := "Value"
+	table := []txtfmt.TableRow{}
+	for _, prop := range props {
+		row := txtfmt.TableRow{}
+		row[nameTitle] = fmt.Sprintf("%s (%s)", prop.Description, prop.Key)
+		row[valueTitle] = prop.Value.String()
+		table = append(table, row)
+	}
+
+	tf := txtfmt.NewTableFormatter(nameTitle, valueTitle)
+	tf.InitWriter(out)
+	tf.Format(table)
+}
+
+// Execute is run when systemGetPropCmd subcommand is activated.
+func (cmd *systemGetPropCmd) Execute(_ []string) error {
+	req := &control.SystemGetPropReq{
+		Keys: cmd.Args.Props.ParsedProps,
+	}
+
+	resp, err := control.SystemGetProp(context.Background(), cmd.ctlInvoker, req)
+	if cmd.jsonOutputEnabled() {
+		return cmd.outputJSON(resp.Properties, err)
+	}
+
+	if err != nil {
+		return errors.Wrap(err, "system get-attr failed")
+	}
+
+	var bld strings.Builder
+	prettyPrintSysProps(&bld, resp.Properties)
+	cmd.Infof("%s", bld.String())
 
 	return nil
 }

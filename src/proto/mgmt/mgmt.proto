@@ -98,4 +98,8 @@ service MgmtSvc {
 	rpc SystemSetAttr(SystemSetAttrReq) returns (DaosResp) {}
 	// Get a system attribute or attributes.
 	rpc SystemGetAttr(SystemGetAttrReq) returns (SystemGetAttrResp) {}
+	// Set a system property or properties.
+	rpc SystemSetProp(SystemSetPropReq) returns (DaosResp) {}
+	// Get a system property or properties.
+	rpc SystemGetProp(SystemGetPropReq) returns (SystemGetPropResp) {}
 }
