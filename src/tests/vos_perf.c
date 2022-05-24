@@ -549,7 +549,7 @@ pf_query(struct pf_test *ts, struct pf_param *param)
 {
 	int rc;
 
-	if ((ts_flags & DAOS_OF_DKEY_UINT64) == 0) {
+	if (ts_flags != DAOS_OT_DKEY_UINT64) {
 		fprintf(stderr, "Integer dkeys required for query test (-i)\n");
 		return -1;
 	}
@@ -802,7 +802,7 @@ main(int argc, char **argv)
 			ts_zero_copy = true;
 			break;
 		case 'i':
-			ts_flags |= DAOS_OF_DKEY_UINT64;
+			ts_flags = DAOS_OT_DKEY_UINT64;
 			ts_dkey_prefix = NULL;
 			break;
 		case 'I':
