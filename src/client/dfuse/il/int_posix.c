@@ -43,9 +43,7 @@ struct ioil_pool {
 struct ioil_global {
 	pthread_mutex_t	iog_lock;
 	d_list_t	iog_pools_head;
-
 	pid_t           iog_init_tid;
-
 	bool		iog_initialized;
 	bool		iog_no_daos;
 	bool		iog_daos_init;
@@ -358,7 +356,7 @@ ioil_fini(void)
 {
 	struct ioil_pool *pool, *pnext;
 	struct ioil_cont *cont, *cnext;
-	int rc;
+	int               rc;
 	pid_t             tid = syscall(SYS_gettid);
 
 	if (tid != ioil_iog.iog_init_tid) {

@@ -398,6 +398,10 @@ func (bdl *BdevDeviceList) Equals(other *BdevDeviceList) bool {
 
 // Devices returns a slice of strings representing the block device addresses.
 func (bdl *BdevDeviceList) Devices() []string {
+	if bdl == nil {
+		return []string{}
+	}
+
 	if bdl.PCIAddressSet.Len() == 0 {
 		return bdl.stringBdevSet.ToSlice()
 	}
