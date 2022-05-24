@@ -63,7 +63,7 @@ class CriticalIntegrationWithoutServers(TestWithoutServers):
                                " 'daos_server version'".format(host))
             remote_root_access = ("ssh -oNumberOfPasswordPrompts=0 root@{}"
                                   " 'echo hello'".format(host))
-            command_for_inter_node = ("clush --nostdin -S -w {}"
+            command_for_inter_node = ("clush --nostdin -S -b -w {}"
                                       " 'echo hello'".format(str(self.hostlist_servers)))
             try:
                 out = run_command(daos_server_cmd)
@@ -97,14 +97,13 @@ class CriticalIntegrationWithoutServers(TestWithoutServers):
 
         # libfabric version check
         all_nodes = self.hostlist_servers | self.hostlist_clients
-        list_all_nodes = str(all_nodes)
-        libfabric_version_cmd = "clush -S -b -w {} {}/bin/fi_info \
-                                --version".format(list_all_nodes, libfabric_path)
+        libfabric_version_cmd = "clush -S -b -w {} {}/fi_info \
+                                --version".format(all_nodes, libfabric_path)
         libfabric_output = run_command(libfabric_version_cmd)
-        same_libfab_nodes = libfabric_output.stdout.split(b'\n')[1].split(b'(')[1][:-1]
-        libfabric_version = libfabric_output.stdout.split(b'\n')[3].split(b' ')[1]
+        same_libfab_nodes = libfabric_output.stdout_text.split('\n')[1].split('(')[1][:-1]
+        libfabric_version = libfabric_output.stdout_text.split('\n')[3].split(' ')[1]
 
-        result_libfabric_version = int(same_libfab_nodes.decode("utf-8")) == len(all_nodes)
+        result_libfabric_version = int(same_libfab_nodes) == len(all_nodes)
 
         if (result_daos_server and result_dmg and result_client_server
                 and result_libfabric_version):
