@@ -88,8 +88,8 @@ def _preprocess_emitter(source, target, env):
                 continue
             if mod != "":
                 prefix = prefix + "_" + mod
-            newtarget = os.path.join(dirname, '{}{}_pp{}'.format(prefix, base, ext))
-            target.append(newtarget)
+        newtarget = os.path.join(dirname, '{}{}_pp{}'.format(prefix, base, ext))
+        target.append(newtarget)
     return target, source
 
 def generate(env):
@@ -100,8 +100,7 @@ def generate(env):
     generator = lambda source, target, env, for_signature: _pp_gen(source, target, env, indent)
 
     # Only handle C for now
-    preprocess = Builder(generator=generator, suffix="_pp.c",
-                         emitter=_preprocess_emitter, src_suffix=".c")
+    preprocess = Builder(generator=generator, emitter=_preprocess_emitter)
 
     env.Append(BUILDERS={"Preprocess":preprocess})
 
