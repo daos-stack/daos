@@ -725,8 +725,6 @@ create_cont(daos_handle_t poh, struct duns_attr_t *attrp, bool create_with_label
 		if (dur)
 			ch = &coh;
 
-		D_ERROR("Making container %p\n", dur);
-
 		/** TODO: set Lustre FID here. */
 		dfs_attr.da_id = 0;
 		dfs_attr.da_oclass_id = attrp->da_oclass_id;
@@ -937,10 +935,15 @@ duns_create_path(daos_handle_t poh, const char *path, struct duns_attr_t *attrp)
 			int fd;
 
 			fd = open(dir, O_RDONLY | O_DIRECTORY | O_NOFOLLOW);
-			if (fd == -1)
-				return errno;
+			if (fd == -1) {
+				int err = errno;
+
+				D_FREE(dir);
+				return err;
+			}
 
 			rc = ioctl(fd, DFUSE_IOCTL_DFUSE_USER, &dur);
+			close(fd);
 			if (rc == -1) {
 				int err = errno;
 
@@ -949,7 +952,6 @@ duns_create_path(daos_handle_t poh, const char *path, struct duns_attr_t *attrp)
 				return err;
 			}
 			backend_dfuse = true;
-			close(fd);
 		}
 
 		D_FREE(dir);
@@ -1025,7 +1027,7 @@ duns_create_path(daos_handle_t poh, const char *path, struct duns_attr_t *attrp)
 	daos_unparse_ctype(attrp->da_type, type);
 
 	/** Create container */
-	rc = create_cont(poh, attrp, false, &dur);
+	rc = create_cont(poh, attrp, false, backend_dfuse ? &dur : NULL);
 	if (rc) {
 		D_ERROR("Failed to create container (%s)\n", strerror(rc));
 		D_GOTO(err_link, rc);
