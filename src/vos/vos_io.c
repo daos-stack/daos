@@ -606,7 +606,7 @@ vos_ioc_create(daos_handle_t coh, daos_unit_oid_t oid, bool read_only,
 	struct bio_io_context	*bioc;
 	daos_epoch_t		 bound;
 	uint64_t		 cflags = 0;
-	int			 i, rc;
+	int			 i, rc, tot_iov_nr = 0;
 
 	if (iod_nr == 0 &&
 	    !(vos_flags &
@@ -717,11 +717,22 @@ vos_ioc_create(daos_handle_t coh, daos_unit_oid_t oid, bool read_only,
 		if (ioc->ic_size_fetch)
 			continue;
 
+		tot_iov_nr += iov_nr;
+		/* Generate an error message when there are too many IOVs for single IOD */
+		if (iov_nr >= 1024)
+			D_ERROR("%d IOVs in single IOD (%s RPC)\n",
+				iov_nr, ioc->ic_update ? "UPDATE" : "FETCH");
+
 		bsgl = bio_iod_sgl(ioc->ic_biod, i);
 		rc = bio_sgl_init(bsgl, iov_nr);
 		if (rc != 0)
 			goto error;
 	}
+
+	/* Generate an error message when too many IOVs for single RPC */
+	if (tot_iov_nr >= 1024)
+		D_ERROR("%d IOVs in %u IODs of single RPC (%s RPC)\n",
+			tot_iov_nr, iod_nr, ioc->ic_update ? "UPDATE" : "FETCH");
 
 	*ioc_pp = ioc;
 	return 0;

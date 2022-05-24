@@ -1106,6 +1106,11 @@ bio_iod_prep(struct bio_desc *biod, unsigned int type, void *bulk_ctxt,
 	}
 retry:
 	rc = iterate_biov(biod, arg ? bulk_map_one : dma_map_one, arg);
+	/* Generate an error message when there are too many IOVs */
+	if (biod->bd_bulk_cnt >= 1024)
+		D_ERROR("IOD(%p) type:%d used too many bulk hdls. %u/%u\n",
+			biod, biod->bd_type, biod->bd_bulk_max, biod->bd_bulk_cnt);
+
 	if (rc) {
 		/*
 		 * To avoid deadlock, held buffers need be released
