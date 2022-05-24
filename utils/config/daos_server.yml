@@ -316,7 +316,7 @@
 #  # Mask specifies minimum level of message significance to pass to logger.
 #
 #  # default: ERR
-#  log_mask: WARN
+#  log_mask: INFO
 #
 #  # Force specific path for DAOS debug logs.
 #
@@ -456,7 +456,7 @@
 #  # Mask specifies minimum level of message significance to pass to logger.
 #
 #  # default: ERR
-#  log_mask: WARN
+#  log_mask: INFO
 #
 #  # Force specific path for DAOS debug logs.
 #
