@@ -107,7 +107,7 @@ with the following information for each pool:
 - the number of disabled targets (0 here) and the number of targets that
   the pool was originally configured with (total).
 
-The --verbose option provides more detailed information including the
+The `--verbose` option provides more detailed information including the
 number of service replicas, the full UUIDs and space distribution
 between SCM and NVMe for each pool:
 
