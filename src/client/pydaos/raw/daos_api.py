@@ -13,7 +13,6 @@ from .. import pydaos_shim
 
 import ctypes
 import threading
-import uuid
 import os
 import inspect
 import sys
