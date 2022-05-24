@@ -10,6 +10,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"path/filepath"
+	"sort"
 	"strconv"
 	"strings"
 
@@ -572,32 +573,12 @@ func parsePCIBusRange(numRange string, bitSize int) (uint8, uint8, error) {
 	return uint8(begin), uint8(end), nil
 }
 
-// AccelProps can be used to select acceleration engine and capabilities.
-// Type is used both in YAML server config and JSON NVMe config files.
+// AccelProps struct describes acceleration engine setting and optional capabilities expressed
+// as a bit mask. AccelProps is used both in YAML server config and JSON NVMe config files.
 type AccelProps struct {
 	Engine  string   `yaml:"engine,omitempty" json:"accel_engine"`
 	Options []string `yaml:"options,omitempty" json:"-"`
-	OptMask uint16   `yaml:"-" json:"accel_opts"` // Bitmask of optional capabilities.
-}
-
-// validate the provided accceleration properties.
-func (ap *AccelProps) validate() error {
-	if ap == nil {
-		return errors.New("nil AccelProps")
-	}
-
-	// Apply default if "accel_engine" unset in config.
-	if ap.Engine == "" {
-		ap.Engine = AccelEngineNone
-	}
-
-	switch ap.Engine {
-	case AccelEngineNone, AccelEngineSPDK, AccelEngineDML:
-	default:
-		return FaultBdevAccelEngineUnknown(ap.Engine, AccelEngineSPDK, AccelEngineDML)
-	}
-
-	return nil
+	OptMask uint16   `yaml:"-" json:"accel_opts"`
 }
 
 type optFlagMap map[string]uint16
@@ -612,27 +593,12 @@ func (aosf optFlagMap) keys() []string {
 }
 
 var accelOptStr2Flag = optFlagMap{
-	AccelOptMove: AccelOptMoveFlag,
 	AccelOptCRC:  AccelOptCRCFlag,
+	AccelOptMove: AccelOptMoveFlag,
 }
 
-// AccelOptMaskFromStrings converts slice of acceleration capability option strings into a bitmask.
-func AccelOptMaskFromStrings(opts ...string) (uint16, error) {
-	var optMask uint16
-
-	for _, opt := range opts {
-		flag, exists := accelOptStr2Flag[opt]
-		if !exists {
-			return 0, FaultBdevAccelOptionUnknown(opt, accelOptStr2Flag.keys()...)
-		}
-		optMask |= flag
-	}
-
-	return optMask, nil
-}
-
-// setOptMask converts acceleration option strings into a bitmask.
-func (ap *AccelProps) setOptMask() error {
+// Convert acceleration option strings into a bitmask.
+func (ap *AccelProps) setOptMask(opts ...string) error {
 	if ap == nil {
 		return errors.New("nil AccelProps")
 	}
@@ -640,16 +606,22 @@ func (ap *AccelProps) setOptMask() error {
 	switch ap.Engine {
 	case AccelEngineNone:
 		ap.Options = nil
+		ap.OptMask = 0
 	case AccelEngineSPDK, AccelEngineDML:
-		if len(ap.Options) == 0 {
-			// If no option list specified, enable all.
-			ap.Options = accelOptStr2Flag.keys()
+		// If no option list specified, enable all.
+		if len(opts) == 0 {
+			opts = accelOptStr2Flag.keys()
+		} else {
+			sort.Strings(opts)
 		}
-		optMask, err := AccelOptMaskFromStrings(ap.Options...)
-		if err != nil {
-			return err
+
+		for _, opt := range opts {
+			if flag, exists := accelOptStr2Flag[opt]; !exists {
+				return FaultBdevAccelOptionUnknown(opt, accelOptStr2Flag.keys()...)
+			} else {
+				ap.OptMask |= flag
+			}
 		}
-		ap.OptMask = optMask
 	default:
 		return FaultBdevAccelEngineUnknown(ap.Engine, AccelEngineSPDK, AccelEngineDML)
 	}
@@ -657,9 +629,37 @@ func (ap *AccelProps) setOptMask() error {
 	return nil
 }
 
-func (ap *AccelProps) UnmarshalYAML(unmarshal func(interface{}) error) error {
+func (ap *AccelProps) setOpts(mask uint16) {
+	if ap == nil {
+		return
+	}
+
+	ap.Options = nil
+
+	for _, str := range accelOptStr2Flag.keys() {
+		if mask&accelOptStr2Flag[str] != 0 {
+			ap.Options = append(ap.Options, str)
+		}
+	}
+}
+
+func (ap *AccelProps) UpdateOptMask(mask uint16) error {
 	if ap == nil {
 		return errors.New("nil AccelProps")
+	}
+
+	ap.setOpts(mask)
+
+	if err := ap.setOptMask(ap.Options...); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (ap *AccelProps) UnmarshalYAML(unmarshal func(interface{}) error) error {
+	if ap == nil {
+		return nil
 	}
 
 	type AccelPropsDefault AccelProps
@@ -672,11 +672,28 @@ func (ap *AccelProps) UnmarshalYAML(unmarshal func(interface{}) error) error {
 	}
 	out := AccelProps(tmp)
 
-	if err := out.validate(); err != nil {
-		return err
-	}
+	//	if err := out.validate(); err != nil {
+	//		return err
+	//	}
+	//
+	//	if err := out.setOptMask(); err != nil {
+	//		return err
+	//	}
+	//
+	//	*ap = out
+	//	tmp := &AccelProps{
+	//		Engine: AccelEngineNone,
+	//	}
+	//
+	//	if err := unmarshal(tmp); err != nil {
+	//		return err
+	//	}
+	//
+	//	//	out := AccelProps{
+	//	//		Engine: tmp.Engine,
+	//	//	}
 
-	if err := out.setOptMask(); err != nil {
+	if err := out.setOptMask(out.Options...); err != nil {
 		return err
 	}
 
@@ -684,6 +701,31 @@ func (ap *AccelProps) UnmarshalYAML(unmarshal func(interface{}) error) error {
 
 	return nil
 }
+
+//func (ap *AccelProps) MarshalYAML() (interface{}, error) {
+//	fmt.Printf("marshalling\n")
+//	if ap == nil {
+//		return []byte("<nil>"), nil
+//	}
+//
+//	if ap.Engine == "" {
+//		ap.Engine = AccelEngineNone
+//		ap.OptMask = 0
+//	}
+//
+//	bytes, err := yaml.Marshal(&struct {
+//		Engine  string   `yaml:"engine"`
+//		Options []string `yaml:"options"`
+//	}{
+//		Engine:  ap.Engine,
+//		Options: ap.getOptsFromMask(),
+//	})
+//	if err != nil {
+//		return nil, err
+//	}
+//
+//	return string(bytes), nil
+//}
 
 type Config struct {
 	Tiers            TierConfigs `yaml:"storage" cmdLongFlag:"--storage_tiers,nonzero" cmdShortFlag:"-T,nonzero"`
@@ -736,6 +778,10 @@ func (c *Config) Validate() error {
 	}
 
 	c.VosEnv = "NVME"
+
+	//	if c.AccelProps == nil {
+	//		c.AccelProps = &AccelProps{}
+	//	}
 
 	return nil
 }

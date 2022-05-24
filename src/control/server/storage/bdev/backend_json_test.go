@@ -178,6 +178,7 @@ func TestBackend_newSpdkConfig(t *testing.T) {
 					Method: storage.ConfSetAccelProps,
 					Params: AccelPropsParams{
 						Engine:  storage.AccelEngineSPDK,
+						Options: []string{"crc", "move"},
 						OptMask: storage.AccelOptCRCFlag | storage.AccelOptMoveFlag,
 					},
 				},

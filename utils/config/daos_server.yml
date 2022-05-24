@@ -334,26 +334,6 @@
 #  env_vars:
 #    - CRT_TIMEOUT=30
 #
-#  # Specify accelerator engine setting (experimental).
-#
-#  # Acceleration engine options are:
-#  # - "none" do not use an acceleration engine. (default)
-#  # - "spdk" to assigned management of hardware/software acceleration to SPDK.
-#  # - "dml" te set DML as accelerator engine.
-#
-#  # Optional capability settings are:
-#  # - "move" to enable acceleration of MOVE instructions.
-#  # - "crc" to enable acceleration of CRC instructions.
-#
-#  # If acceleration engine setting is "none" (or unset) then optional capabilities are all set to
-#  # false. If set to "spdk" or "dml" then optional capabilities are set to "true" by default.
-#
-#  acceleration:
-#    engine: spdk
-#    options:
-#      - move
-#      - crc
-#
 #  storage:
 #  -
 #    # Define a pre-configured mountpoint for storage class memory to be used
@@ -405,7 +385,29 @@
 #    # will not be processed by this engine. Empty or unset range signifies allow all.
 #    bdev_busid_range: 0x80-0x8f
 #    #bdev_busid_range: 128-143
-
+#
+#
+#  # Specify accelerator engine setting (experimental).
+#
+#  # Acceleration engine options are:
+#  # - "none" do not use an acceleration engine. (default)
+#  # - "spdk" to assigned management of hardware/software acceleration to SPDK.
+#  # - "dml" te set DML as accelerator engine.
+#
+#  # Optional capability settings are:
+#  # - "move" to enable acceleration of MOVE instructions.
+#  # - "crc" to enable acceleration of CRC instructions.
+#
+#  # If acceleration engine setting is "none" (or unset) then optional capabilities are all set to
+#  # false. If set to "spdk" or "dml" then optional capabilities are set to "true" by default.
+#
+#  acceleration:
+#    engine: spdk
+#    options:
+#    - move
+#    - crc
+#
+#
 #-
 #  # Rank to be assigned as identifier for this engine.
 #  # Immutable after running "dmg storage format".
@@ -494,25 +496,6 @@
 #  env_vars:
 #      - CRT_TIMEOUT=100
 #
-#  # Specify accelerator engine setting (experimental).
-#
-#  # Acceleration engine options are:
-#  # - "none" do not use an acceleration engine. (default)
-#  # - "spdk" to assigned management of hardware/software acceleration to SPDK.
-#  # - "dml" te set DML as accelerator engine.
-#
-#  # Optional capability settings are:
-#  # - "move" to enable acceleration of MOVE instructions.
-#  # - "crc" to enable acceleration of CRC instructions.
-#
-#  # If acceleration engine setting is "none" (or unset) then optional capabilities are all set to
-#  # false. If set to "spdk" or "dml" then optional capabilities are set to "true" by default.
-#
-#  acceleration:
-#    engine: dml
-#    options:
-#      - crc
-#
 #  storage:
 #  -
 #    # Define a pre-configured mountpoint for storage class memory to be used
@@ -571,3 +554,23 @@
 #    # will not be processed by this engine. Empty or unset range signifies allow all.
 #    #bdev_busid_range: 0xd0-0xdf
 #    #bdev_busid_range: 208-223
+#
+#
+#  # Specify accelerator engine setting (experimental).
+#
+#  # Acceleration engine options are:
+#  # - "none" do not use an acceleration engine. (default)
+#  # - "spdk" to assigned management of hardware/software acceleration to SPDK.
+#  # - "dml" te set DML as accelerator engine.
+#
+#  # Optional capability settings are:
+#  # - "move" to enable acceleration of MOVE instructions.
+#  # - "crc" to enable acceleration of CRC instructions.
+#
+#  # If acceleration engine setting is "none" (or unset) then optional capabilities are all set to
+#  # false. If set to "spdk" or "dml" then optional capabilities are set to "true" by default.
+#
+#  acceleration:
+#    engine: dml
+#    options:
+#    - crc

@@ -130,7 +130,6 @@ func Test_BdevWriteRequestFromConfig(t *testing.T) {
 	mockScmTier := NewTierConfig().WithStorageClass(ClassDcpm.String()).
 		WithScmMountPoint("/mnt/daos0").
 		WithScmDeviceList("/dev/pmem0")
-	accelOptMaskAllSet, _ := AccelOptMaskFromStrings(AccelOptMove, AccelOptCRC)
 
 	for name, tc := range map[string]struct {
 		cfg        *Config
@@ -275,7 +274,7 @@ func Test_BdevWriteRequestFromConfig(t *testing.T) {
 				},
 				AccelProps: AccelProps{
 					Engine:  AccelEngineSPDK,
-					OptMask: accelOptMaskAllSet,
+					OptMask: AccelOptCRCFlag | AccelOptMoveFlag,
 				},
 			},
 			getTopoFn: MockGetTopology,
@@ -288,7 +287,7 @@ func Test_BdevWriteRequestFromConfig(t *testing.T) {
 				Hostname: hostname,
 				AccelProps: AccelProps{
 					Engine:  AccelEngineSPDK,
-					OptMask: accelOptMaskAllSet,
+					OptMask: AccelOptCRCFlag | AccelOptMoveFlag,
 				},
 			},
 		},
