@@ -711,10 +711,10 @@ led_device_action(void *ctx, struct spdk_pci_device *pci_device)
 	}
 
 	if (!opts->all_devices) {
-	    if (spdk_pci_addr_compare(&opts->pci_addr, &pci_device->addr) != 0)
-		return;
-	    else
-		opts->finished = true;
+		if (spdk_pci_addr_compare(&opts->pci_addr, &pci_device->addr) != 0)
+			return;
+		else
+			opts->finished = true;
 	}
 
 	rc = spdk_pci_addr_fmt(addr_buf, sizeof(addr_buf), &pci_device->addr);
@@ -734,8 +734,7 @@ led_device_action(void *ctx, struct spdk_pci_device *pci_device)
 
 	D_DEBUG(DB_MGMT, "LED on %s: %s\n", addr_buf, g_led_states[cur_led_state]);
 
-	switch (opts->action)
-	{
+	switch (opts->action) {
 		case LED_ACTION_GET:
 			opts->led_state = cur_led_state;
 			return;
