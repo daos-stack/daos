@@ -20,12 +20,6 @@ import (
 	"github.com/daos-stack/daos/src/control/lib/hardware"
 )
 
-/*
-#include "stdlib.h"
-#include "daos_srv/control.h"
-*/
-import "C"
-
 const (
 	// MinNVMeStorage defines the minimum per-target allocation
 	// that may be requested. Requests with smaller amounts will
@@ -44,17 +38,6 @@ const (
 	BdevOutConfName = "daos_nvme.conf"
 
 	maxScmDeviceLen = 1
-)
-
-// Acceleration related constants for engine setting and optional capabilities.
-const (
-	AccelEngineNone  = C.NVME_ACCEL_NONE
-	AccelEngineSPDK  = C.NVME_ACCEL_SPDK
-	AccelEngineDML   = C.NVME_ACCEL_DML
-	AccelOptMove     = "move"
-	AccelOptCRC      = "crc"
-	AccelOptMoveFlag = C.NVME_ACCEL_FLAG_MOVE
-	AccelOptCRCFlag  = C.NVME_ACCEL_FLAG_CRC
 )
 
 // Class indicates a specific type of storage.
@@ -605,13 +588,13 @@ func (ap *AccelProps) validate() error {
 
 	// Apply default if "accel_engine" unset in config.
 	if ap.Engine == "" {
-		ap.Engine = C.NVME_ACCEL_NONE
+		ap.Engine = AccelEngineNone
 	}
 
 	switch ap.Engine {
-	case C.NVME_ACCEL_NONE, C.NVME_ACCEL_SPDK, C.NVME_ACCEL_DML:
+	case AccelEngineNone, AccelEngineSPDK, AccelEngineDML:
 	default:
-		return FaultBdevAccelEngineUnknown(ap.Engine, C.NVME_ACCEL_SPDK, C.NVME_ACCEL_DML)
+		return FaultBdevAccelEngineUnknown(ap.Engine, AccelEngineSPDK, AccelEngineDML)
 	}
 
 	return nil
@@ -655,9 +638,9 @@ func (ap *AccelProps) setOptMask() error {
 	}
 
 	switch ap.Engine {
-	case C.NVME_ACCEL_NONE:
+	case AccelEngineNone:
 		ap.Options = nil
-	case C.NVME_ACCEL_SPDK, C.NVME_ACCEL_DML:
+	case AccelEngineSPDK, AccelEngineDML:
 		if len(ap.Options) == 0 {
 			// If no option list specified, enable all.
 			ap.Options = accelOptStr2Flag.keys()
@@ -668,7 +651,7 @@ func (ap *AccelProps) setOptMask() error {
 		}
 		ap.OptMask = optMask
 	default:
-		return FaultBdevAccelEngineUnknown(ap.Engine, C.NVME_ACCEL_SPDK, C.NVME_ACCEL_DML)
+		return FaultBdevAccelEngineUnknown(ap.Engine, AccelEngineSPDK, AccelEngineDML)
 	}
 
 	return nil
@@ -681,7 +664,7 @@ func (ap *AccelProps) UnmarshalYAML(unmarshal func(interface{}) error) error {
 
 	type AccelPropsDefault AccelProps
 	var tmp = AccelPropsDefault{
-		Engine: C.NVME_ACCEL_NONE,
+		Engine: AccelEngineNone,
 	}
 
 	if err := unmarshal(&tmp); err != nil {
