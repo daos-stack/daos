@@ -68,6 +68,11 @@ func (mod *mgmtModule) HandleCall(ctx context.Context, session *drpc.Session, me
 		return nil, err
 	}
 
+	if agentIsShuttingDown(ctx) {
+		mod.log.Errorf("agent is shutting down, dropping %s", method)
+		return nil, drpc.NewFailureWithMessage("agent is shutting down")
+	}
+
 	switch method {
 	case drpc.MethodGetAttachInfo:
 		return mod.handleGetAttachInfo(ctx, req, cred.Pid)
