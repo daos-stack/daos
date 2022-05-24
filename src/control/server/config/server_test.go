@@ -245,7 +245,7 @@ func TestServerConfig_Constructed(t *testing.T) {
 			WithBypassHealthChk(&bypass).
 			WithEnvVars("CRT_TIMEOUT=30").
 			WithLogFile("/tmp/daos_engine.0.log").
-			WithLogMask("WARN").
+			WithLogMask("INFO").
 			WithStorageEnableHotplug(true).
 			WithStorageAccelEngine(storage.AccelEngineSPDK).
 			WithStorageAccelOpts(storage.AccelOptMove, storage.AccelOptCRC).
@@ -275,7 +275,7 @@ func TestServerConfig_Constructed(t *testing.T) {
 			WithBypassHealthChk(&bypass).
 			WithEnvVars("CRT_TIMEOUT=100").
 			WithLogFile("/tmp/daos_engine.1.log").
-			WithLogMask("WARN").
+			WithLogMask("INFO").
 			WithStorageEnableHotplug(true).
 			WithStorageAccelEngine(storage.AccelEngineDML).
 			WithStorageAccelOpts(storage.AccelOptCRC).
