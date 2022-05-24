@@ -3477,7 +3477,7 @@ upgrade_cont_cb(daos_handle_t ih, d_iov_t *key, d_iov_t *val, void *varg)
 	uint64_t			 pda;
 	int				 rc;
 	bool				 upgraded = false;
-	uint32_t			 global_ver;
+	uint32_t			 global_ver = 0;
 	daos_prop_t			*prop = NULL;
 	struct daos_prop_entry		*entry;
 	(void)val;
