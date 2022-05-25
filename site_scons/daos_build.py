@@ -1,20 +1,22 @@
 """Common DAOS build functions"""
+import os
+
 from SCons.Subst import Literal
 from SCons.Script import Dir
 from SCons.Script import GetOption
 from SCons.Script import WhereIs
 from env_modules import load_mpi
 import compiler_setup
-import os
 
-# pylint: disable=too-few-public-methods
+
 class DaosLiteral(Literal):
     """A wrapper for a Literal."""
+    # pylint: disable=too-few-public-methods
 
     def __hash__(self):
         """Workaround for missing hash function"""
         return hash(self.lstr)
-# pylint: enable=too-few-public-methods
+
 
 def add_rpaths(env, install_off, set_cgo_ld, is_bin):
     """Add relative rpath entries"""
@@ -59,6 +61,7 @@ def add_rpaths(env, install_off, set_cgo_ld, is_bin):
                           env.subst("$_LIBDIRFLAGS " "$_RPATH"),
                           sep=" ")
 
+
 def add_build_rpath(env, pathin="."):
     """Add a build directory with -Wl,-rpath-link"""
     path = Dir(pathin).path
@@ -69,12 +72,14 @@ def add_build_rpath(env, pathin="."):
     # the dependencies
     env.AppendENVPath("LD_LIBRARY_PATH", path)
 
+
 def library(env, *args, **kwargs):
     """build SharedLibrary with relative RPATH"""
     denv = env.Clone()
     denv.Replace(RPATH=[])
     add_rpaths(denv, kwargs.get('install_off', '..'), False, False)
     return denv.SharedLibrary(*args, **kwargs)
+
 
 def program(env, *args, **kwargs):
     """build Program with relative RPATH"""
@@ -83,12 +88,14 @@ def program(env, *args, **kwargs):
     add_rpaths(denv, kwargs.get('install_off', '..'), False, True)
     return denv.Program(*args, **kwargs)
 
+
 def test(env, *args, **kwargs):
     """build Program with fixed RPATH"""
     denv = env.Clone()
     denv.Replace(RPATH=[])
     add_rpaths(denv, kwargs.get("install_off", None), False, True)
     return denv.Program(*args, **kwargs)
+
 
 def install(env, subdir, files):
     """install file to the subdir"""

@@ -369,11 +369,6 @@ def scons():  # pylint: disable=too-many-locals,too-many-branches
         env['ENV']['VIRTUAL_ENV'] = os.environ['VIRTUAL_ENV']
 
     prereqs = PreReqComponent(env, opts, commits_file)
-    if not GetOption('help') and not GetOption('clean'):
-        mpicc = WhereIs('mpicc')
-        if mpicc:
-            env.PrependENVPath('PATH', os.path.dirname(mpicc))
-
     build_prefix = prereqs.get_src_build_dir()
     prereqs.init_build_targets(build_prefix)
     prereqs.load_defaults(platform_arm)
@@ -389,8 +384,7 @@ def scons():  # pylint: disable=too-many-locals,too-many-branches
     prereqs.add_opts(('GO_BIN', 'Full path to go binary', None))
     opts.Save(opts_file, env)
 
-    res = GetOption('deps_only')
-    if res:
+    if GetOption('deps_only'):
         print('Exiting because deps-only was set')
         Exit(0)
 
