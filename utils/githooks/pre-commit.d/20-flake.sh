@@ -48,4 +48,7 @@ else
 
     echo "Checking against branch ${TARGET}"
     git diff $TARGET... -u | flake8 --diff
+
+    echo "Checking scons code against branch ${TARGET}"
+    git diff $TARGET... -u | flake8 --config .flake8-scons --diff
 fi
