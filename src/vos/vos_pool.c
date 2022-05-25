@@ -253,15 +253,15 @@ vos_blob_format_cb(void *cb_data, struct umem_instance *umem)
  * Unmap (TRIM) the extent being freed
  */
 static int
-vos_blob_unmap_cb(uint64_t off, uint64_t cnt, void *data)
+vos_blob_unmap_cb(d_sg_list_t *unmap_sgl, uint32_t blk_sz, void *data)
 {
 	struct bio_io_context	*ioctxt = data;
 	int			 rc;
 
 	/* unmap unused pages for NVMe media to perform more efficiently */
-	rc = bio_blob_unmap(ioctxt, off, cnt);
+	rc = bio_blob_unmap_sgl(ioctxt, unmap_sgl, blk_sz);
 	if (rc)
-		D_ERROR("Failed to unmap blob\n");
+		D_ERROR("Blob unmap SGL failed. "DF_RC"\n", DP_RC(rc));
 
 	return rc;
 }
@@ -742,6 +742,7 @@ pool_open(PMEMobjpool *ph, struct vos_pool_df *pool_df, uuid_t uuid,
 		/* set unmap callback fp */
 		unmap_ctxt.vnc_unmap = vos_blob_unmap_cb;
 		unmap_ctxt.vnc_data = pool->vp_io_ctxt;
+		unmap_ctxt.vnc_ext_flush = flags & VOS_POF_EXTERNAL_FLUSH;
 		rc = vea_load(&pool->vp_umm, vos_txd_get(), &pool_df->pd_vea_df,
 			      &unmap_ctxt, vea_metrics, &pool->vp_vea_info);
 		if (rc) {

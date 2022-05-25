@@ -532,6 +532,17 @@ int bio_ioctxt_close(struct bio_io_context *ctxt, bool skip_blob);
  */
 int bio_blob_unmap(struct bio_io_context *ctxt, uint64_t off, uint64_t len);
 
+/*
+ * Unmap (TRIM) a SGL consists of freed extents.
+ *
+ * \param[IN] ctxt	I/O context
+ * \param[IN] unmap_sgl	The SGL to be unmapped (offset & length are in blocks)
+ * \param[IN] blk_sz	Block size
+ *
+ * \returns		Zero on success, negative value on error
+ */
+int bio_blob_unmap_sgl(struct bio_io_context *ctxt, d_sg_list_t *unmap_sgl, uint32_t blk_sz);
+
 /**
  * Write to per VOS instance blob.
  *
