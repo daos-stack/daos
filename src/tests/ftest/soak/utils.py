@@ -19,7 +19,8 @@ from data_mover_utils import FsCopy
 from dfuse_utils import Dfuse
 from job_manager_utils import Srun, Mpirun
 from general_utils import get_host_data, get_random_string, \
-    run_command, DaosTestError, pcmd, get_random_bytes, run_pcmd
+    run_command, DaosTestError, pcmd, get_random_bytes, \
+    run_pcmd, convert_list
 from command_utils_base import EnvironmentVariables
 import slurm_utils
 from daos_utils import DaosCommand
@@ -27,6 +28,7 @@ from test_utils_container import TestContainer
 from ClusterShell.NodeSet import NodeSet
 from avocado.core.exceptions import TestFail
 from pydaos.raw import DaosSnapshot, DaosApiError
+from macsio_util import MacsioCommand
 from oclass_utils import extract_redundancy_factor
 
 H_LOCK = threading.Lock()
@@ -916,6 +918,75 @@ def create_ior_cmdline(self, job_spec, pool, ppn, nodesperjob):
     return commands
 
 
+def create_macsio_cmdline(self, job_spec, pool, ppn, nodesperjob):
+    """Create an MACsio cmdline to run in slurm batch.
+
+    Args:
+
+        self (obj): soak obj
+        job_spec (str):   macsio job in yaml to run
+        pool (obj):       TestPool obj
+        ppn(int):         number of tasks to run on each node
+        nodesperjob(int): number of nodes per job
+
+    Returns:
+        cmd: cmdline string
+
+    """
+    commands = []
+    macsio_params = os.path.join(os.sep, "run", job_spec, "*")
+    oclass_list = self.params.get("oclass", macsio_params)
+    api_list = self.params.get("api", macsio_params)
+    plugin_path = self.params.get("plugin_path", "/run/hdf5_vol/")
+    # update macsio cmdline for each additional MACsio obj
+    for api in api_list:
+        for o_type in oclass_list:
+            add_containers(self, pool, o_type)
+            macsio = MacsioCommand()
+            macsio.namespace = macsio_params
+            macsio.get_params(self)
+            macsio.daos_pool = pool.uuid
+            macsio.daos_svcl = convert_list(pool.svc_ranks)
+            macsio.daos_cont = self.container[-1].uuid
+            log_name = "{}_{}_{}_{}_{}_{}".format(
+                job_spec, api, o_type, nodesperjob * ppn, nodesperjob, ppn)
+            daos_log = os.path.join(
+                self.soaktest_dir, self.test_name +
+                "_" + log_name + "_`hostname -s`_${SLURM_JOB_ID}_daos.log")
+            macsio_log = os.path.join(
+                self.soaktest_dir, self.test_name +
+                "_" + log_name + "_`hostname -s`_${SLURM_JOB_ID}_macsio-log.log")
+            macsio_timing_log = os.path.join(
+                self.soaktest_dir, self.test_name +
+                "_" + log_name + "_`hostname -s`_${SLURM_JOB_ID}_macsio-timing.log")
+            macsio.log_file_name.update(macsio_log)
+            macsio.timings_file_name.update(macsio_timing_log)
+            env = macsio.get_environment("mpirun", log_file=daos_log)
+            sbatch_cmds = ["module purge", "module load {}".format(self.mpi_module)]
+            mpirun_cmd = Mpirun(macsio, mpi_type=self.mpi_module)
+            mpirun_cmd.assign_processes(nodesperjob * ppn)
+            if api in ["HDF5-VOL"]:
+                # include dfuse cmdlines
+                dfuse, dfuse_start_cmdlist = start_dfuse(
+                    self, pool, self.container[-1], name=log_name, job_spec=job_spec)
+                sbatch_cmds.extend(dfuse_start_cmdlist)
+                # add envs for HDF5-VOL
+                env["HDF5_VOL_CONNECTOR"] = "daos"
+                env["HDF5_PLUGIN_PATH"] = "{}".format(plugin_path)
+                mpirun_cmd.working_dir.update(dfuse.mount_dir.value)
+            mpirun_cmd.assign_environment(env, True)
+            mpirun_cmd.ppn.update(ppn)
+            sbatch_cmds.append(str(mpirun_cmd))
+            sbatch_cmds.append("status=$?")
+            if api in ["HDF5-VOL"]:
+                sbatch_cmds.extend(stop_dfuse(dfuse, vol=True))
+            commands.append([sbatch_cmds, log_name])
+            self.log.info("<<MACSio cmdlines>>:")
+            for cmd in sbatch_cmds:
+                self.log.info("%s", cmd)
+    return commands
+
+
 def create_mdtest_cmdline(self, job_spec, pool, ppn, nodesperjob):
     """Create an MDTEST cmdline to run in slurm batch.
 
@@ -1022,11 +1093,16 @@ def create_racer_cmdline(self, job_spec):
 
     """
     commands = []
+    #daos_racer needs its own pool; does not run using jobs pool
+    add_pools(self, ["pool_racer"])
+    add_containers(self, self.pool[-1], "SX")
     racer_namespace = os.path.join(os.sep, "run", job_spec, "*")
     daos_racer = DaosRacerCommand(
-        self.bin, self.hostlist_clients[0], self.dmg_command)
+        self.bin, self.hostlist_clients[0])
     daos_racer.namespace = racer_namespace
     daos_racer.get_params(self)
+    daos_racer.pool_uuid.update(self.pool[-1].uuid)
+    daos_racer.cont_uuid.update(self.container[-1].uuid)
     racer_log = os.path.join(
         self.soaktest_dir,
         self.test_name + "_" + job_spec + "_`hostname -s`_"
