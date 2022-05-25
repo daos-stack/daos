@@ -65,20 +65,20 @@ def scons():
         conf.Finish()
 
     for header in HEADERS:
-        header_node = env.File("include/%s" % header)
-        env.Install(os.path.join('$PREFIX', 'include'), header_node)
+        header_file = "include/%s" % header
+        env.Install(os.path.join('$PREFIX', 'include'), header_file)
     if prereqs.server_requested():
         for header in HEADERS_SRV:
-            header_node = env.File("include/daos_srv/%s" % header)
-            env.Install(os.path.join('$PREFIX', 'include', 'daos_srv'), header_node)
+            header_file = "include/daos_srv/%s" % header
+            env.Install(os.path.join('$PREFIX', 'include', 'daos_srv'), header_file)
     for header in HEADERS_GURT:
-        header_node = env.File("include/gurt/%s" % header)
-        check_header(env, header_node)
-        env.Install(os.path.join('$PREFIX', 'include', 'gurt'), header_node)
+        header_file = "include/gurt/%s" % header
+        check_header(env, header_file)
+        env.Install(os.path.join('$PREFIX', 'include', 'gurt'), header_file)
     for header in HEADERS_CART:
-        header_node = env.File("include/cart/%s" % header)
-        check_header(env, header_node)
-        env.Install(os.path.join('$PREFIX', 'include', 'cart'), header_node)
+        header_file = "include/cart/%s" % header
+        check_header(env, header_file)
+        env.Install(os.path.join('$PREFIX', 'include', 'cart'), header_file)
     check_header(env, 'include/daos.h')
 
     env.Append(CCFLAGS=['-DCART_VERSION=\\"' + CART_VERSION + '\\"'])
