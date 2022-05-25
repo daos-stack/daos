@@ -218,7 +218,9 @@ vos_dtx_cache_reset(daos_handle_t coh, bool force);
  * \return		Zero on success, negative value if error
  */
 int
-vos_self_init(const char *db_path, bool use_sys_db);
+vos_self_init(const char *db_path, bool use_sys_db, uint32_t tgt_id);
+
+int vos_self_init_ext(const char *db_path, bool use_sys_db, uint32_t tgt_id, bool nvme_init);
 
 /**
  * Finalize the environment for a VOS instance

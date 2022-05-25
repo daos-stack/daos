@@ -202,6 +202,7 @@ ddb_test_pool_setup(struct dt_vos_pool_ctx *tctx)
 	uint64_t		 size = (1ULL << 30);
 	struct stat		 st = {0};
 	char			*pool_uuid = "12345678-1234-1234-1234-123456789012";
+	daos_size_t		 nvme_size = 1<<30;
 
 	if (strlen(tctx->dvt_pmem_file) == 0) {
 		char dir[64] = {0};
@@ -233,8 +234,7 @@ ddb_test_pool_setup(struct dt_vos_pool_ctx *tctx)
 		close(tctx->dvt_fd);
 		return rc;
 	}
-
-	rc = vos_pool_create(tctx->dvt_pmem_file, tctx->dvt_pool_uuid, 0, 0, 0, NULL);
+	rc = vos_pool_create(tctx->dvt_pmem_file, tctx->dvt_pool_uuid, 0, nvme_size, 0, NULL);
 	if (rc) {
 		close(tctx->dvt_fd);
 		return rc;
@@ -568,7 +568,7 @@ int main(int argc, char *argv[])
 	rc = ddb_init();
 	if (rc != 0)
 		return -rc;
-	rc = vos_self_init("/mnt/daos");
+	rc = vos_self_init("/mnt/daos", false, 0);
 	if (rc != 0) {
 		fprintf(stderr, "Unable to initialize VOS: "DF_RC"\n", DP_RC(rc));
 		ddb_fini();
@@ -603,5 +603,9 @@ int main(int argc, char *argv[])
 done:
 	vos_self_fini();
 	ddb_fini();
+	if (rc > 0)
+		printf("%d test(s) failed!\n", rc);
+	else
+		printf("All tests successful!\n");
 	return rc;
 }

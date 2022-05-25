@@ -78,7 +78,27 @@ ls_options_parsing(void **state)
 	test_run_cmd(&info, "ls", "-r", "path");
 	assert_non_null(options->path);
 	assert_true(options->recursive);
+}
 
+static void
+open_options_parsing(void **state)
+{
+	struct ddb_cmd_info	 info = {0};
+	struct open_options	*options = &info.dci_cmd_option.dci_open;
+
+	/* test invalid arguments and options */
+	test_run_inval_cmd("open", "vos_pool_shard", "extra"); /* too many argument */
+	test_run_inval_cmd("open", "-z"); /* invalid option */
+
+	/* test all arguments */
+	test_run_cmd(&info, "open", "vos_pool_shard");
+	assert_non_null(options->vos_pool_shard);
+	assert_false(options->write_mode);
+
+	/* test all options and arguments */
+	test_run_cmd(&info, "open", "-w", "vos_pool_shard");
+	assert_non_null(options->vos_pool_shard);
+	assert_true(options->write_mode);
 }
 
 static void
@@ -95,7 +115,6 @@ dump_value_options_parsing(void **state)
 	test_run_cmd(&info, "dump_value", "path", "dst");
 	assert_non_null(options->path);
 	assert_non_null(options->dst);
-
 }
 
 static void
@@ -111,7 +130,6 @@ rm_options_parsing(void **state)
 	/* test all arguments */
 	test_run_cmd(&info, "rm", "path");
 	assert_non_null(options->path);
-
 }
 
 static void
@@ -129,7 +147,6 @@ load_options_parsing(void **state)
 	assert_non_null(options->src);
 	assert_non_null(options->dst);
 	assert_non_null(options->epoch);
-
 }
 
 static void
@@ -145,7 +162,6 @@ dump_ilog_options_parsing(void **state)
 	/* test all arguments */
 	test_run_cmd(&info, "dump_ilog", "path");
 	assert_non_null(options->path);
-
 }
 
 static void
@@ -161,7 +177,6 @@ process_ilog_options_parsing(void **state)
 	/* test all arguments */
 	test_run_cmd(&info, "process_ilog", "path");
 	assert_non_null(options->path);
-
 }
 
 static void
@@ -177,7 +192,6 @@ rm_ilog_options_parsing(void **state)
 	/* test all arguments */
 	test_run_cmd(&info, "rm_ilog", "path");
 	assert_non_null(options->path);
-
 }
 
 static void
@@ -229,6 +243,7 @@ ddb_cmd_options_tests_run()
 {
 	static const struct CMUnitTest tests[] = {
 		TEST(ls_options_parsing),
+		TEST(open_options_parsing),
 		TEST(dump_value_options_parsing),
 		TEST(rm_options_parsing),
 		TEST(load_options_parsing),

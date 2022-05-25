@@ -11,6 +11,57 @@
 #include "ddb_parse.h"
 
 int
+vos_path_parse(const char *path, struct vos_file_parts *vos_file_parts)
+{
+	uint32_t	 path_len = strlen(path) + 1;
+	char		*path_copy;
+	char		*tok;
+	int		 rc = -DER_INVAL;
+
+	D_ASSERT(path != NULL && vos_file_parts != NULL);
+
+	D_ALLOC(path_copy, path_len);
+	strcpy(path_copy, path);
+
+	tok = strtok(path_copy, "/");
+	while (tok != NULL && rc != 0) {
+		rc = uuid_parse(tok, vos_file_parts->vf_pool_uuid);
+		if (!SUCCESS(rc)) {
+			strcat(vos_file_parts->vf_db_path, "/");
+			strcat(vos_file_parts->vf_db_path, tok);
+		}
+		tok = strtok(NULL, "/");
+	}
+
+	if (rc != 0 || tok == NULL) {
+		D_ERROR("Incomplete path: %s\n", path);
+		D_GOTO(done, rc = -DER_INVAL);
+	}
+
+	strncpy(vos_file_parts->vf_vos_file, tok, ARRAY_SIZE(vos_file_parts->vf_vos_file));
+
+	/*
+	 * file name should be vos-N ... split on "-"
+	 * If not, might be test, just assume target of 0
+	 */
+	strtok(tok, "-");
+	tok = strtok(NULL, "-");
+	if (tok != NULL) {
+		D_WARN("vos file name not in correct format: %s\n", vos_file_parts->vf_vos_file);
+		vos_file_parts->vf_target_idx = atoi(tok);
+	}
+
+done:
+	if (!SUCCESS(rc)) {
+		/* Reset to if not valid */
+		memset(vos_file_parts, 0, sizeof(*vos_file_parts));
+	}
+	D_FREE(path_copy);
+	return rc;
+}
+
+
+int
 ddb_str2argv_create(const char *buf, struct argv_parsed *parse_args)
 {
 	wordexp_t *we;

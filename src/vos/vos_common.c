@@ -745,7 +745,7 @@ vos_self_fini(void)
 }
 
 int
-vos_self_init(const char *db_path, bool use_sys_db)
+vos_self_init_ext(const char *db_path, bool use_sys_db, uint32_t tgt_id, bool nvme_init)
 {
 	char	*evt_mode;
 	int	 rc = 0;
@@ -783,10 +783,11 @@ vos_self_init(const char *db_path, bool use_sys_db)
 	if (rc)
 		D_GOTO(failed, rc);
 
-	/* [todo-ryon]: how to get actual target id?? */
-	rc = vos_self_nvme_init(db_path, 1);
-	if (rc)
-		D_GOTO(failed, rc);
+	if (nvme_init) {
+		rc = vos_self_nvme_init(db_path, tgt_id);
+		if (rc)
+			D_GOTO(failed, rc);
+	}
 
 	evt_mode = getenv("DAOS_EVTREE_MODE");
 	if (evt_mode) {
@@ -818,4 +819,9 @@ failed:
 	vos_self_fini_locked();
 	D_MUTEX_UNLOCK(&self_mode.self_lock);
 	return rc;
+}
+int
+vos_self_init(const char *db_path, bool use_sys_db, uint32_t tgt_id)
+{
+	return vos_self_init_ext(db_path, use_sys_db, tgt_id, true);
 }
