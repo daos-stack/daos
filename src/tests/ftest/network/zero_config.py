@@ -171,7 +171,6 @@ class ZeroConfigTest(TestWithServers):
         racer_env["FI_LOG_LEVEL"] = "info"
         racer_env["D_LOG_MASK"] = "INFO,object=ERR,placement=ERR"
         if "ucx" in self.server_managers[0].get_config_value("provider"):
-            self.log.info("[UCX] self.interfaces: %s", self.interfaces)
             port_domains = [
                 ":".join([iface["domain"], iface["port"]]) for iface in self.interfaces.values()]
             racer_env["OFI_DOMAIN"] = ",".join(port_domains)

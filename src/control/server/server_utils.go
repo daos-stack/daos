@@ -220,7 +220,15 @@ func prepBdevStorage(srv *server, iommuEnabled bool) error {
 		PCIAllowList: strings.Join(srv.cfg.BdevInclude, storage.BdevPciAddrSep),
 		PCIBlockList: strings.Join(srv.cfg.BdevExclude, storage.BdevPciAddrSep),
 		DisableVFIO:  srv.cfg.DisableVFIO,
-		EnableVMD:    srv.cfg.EnableVMD && !srv.cfg.DisableVFIO && iommuEnabled,
+	}
+
+	switch {
+	case !srv.cfg.DisableVMD && srv.cfg.DisableVFIO:
+		srv.log.Info("VMD not enabled because VFIO disabled in config")
+	case !srv.cfg.DisableVMD && !iommuEnabled:
+		srv.log.Info("VMD not enabled because IOMMU disabled on system")
+	default:
+		prepReq.EnableVMD = !srv.cfg.DisableVMD
 	}
 
 	if hasBdevs {

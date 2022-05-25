@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2021 Intel Corporation.
+// (C) Copyright 2019-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -14,9 +14,9 @@ import (
 	"github.com/google/go-cmp/cmp"
 	"github.com/pkg/errors"
 
-	"github.com/daos-stack/daos/src/control/common"
-	. "github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/common/proto"
+	"github.com/daos-stack/daos/src/control/common/test"
+	. "github.com/daos-stack/daos/src/control/common/test"
 	"github.com/daos-stack/daos/src/control/lib/ipmctl"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/server/storage"
@@ -528,7 +528,7 @@ func TestIpmctl_Discover(t *testing.T) {
 
 			result, err := cr.Discover()
 
-			common.CmpErr(t, tc.expErr, err)
+			test.CmpErr(t, tc.expErr, err)
 			if diff := cmp.Diff(tc.expResult, result); diff != "" {
 				t.Errorf("wrong firmware info (-want, +got):\n%s\n", diff)
 			}
@@ -638,7 +638,7 @@ func TestIpmctl_GetFirmwareStatus(t *testing.T) {
 
 			result, err := cr.GetFirmwareStatus(tc.inputUID)
 
-			common.CmpErr(t, tc.expErr, err)
+			test.CmpErr(t, tc.expErr, err)
 			if diff := cmp.Diff(tc.expResult, result); diff != "" {
 				t.Errorf("wrong firmware info (-want, +got):\n%s\n", diff)
 			}
@@ -678,7 +678,7 @@ func TestIpmctl_UpdateFirmware(t *testing.T) {
 
 			err := cr.UpdateFirmware(tc.inputUID, "/dont/care")
 
-			common.CmpErr(t, tc.expErr, err)
+			test.CmpErr(t, tc.expErr, err)
 		})
 	}
 }

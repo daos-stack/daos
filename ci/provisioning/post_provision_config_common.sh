@@ -2,97 +2,57 @@
 
 set -eux
 
-: "${DAOS_STACK_RETRY_DELAY_SECONDS:=60}"
-: "${DAOS_STACK_RETRY_COUNT:=3}"
-: "${DAOS_STACK_MONITOR_SECONDS:=600}"
-: "${BUILD_URL:=Not_in_jenkins}"
-: "${STAGE_NAME:=Unknown_Stage}"
-: "${OPERATIONS_EMAIL:=$USER@localhost}"
+repo_server_pragma=$(echo "$COMMIT_MESSAGE" | sed -ne '/^Repo-servers: */s/.*: *//p')
+if [ -n "$repo_server_pragma" ]; then
+    IFS=" " read -r -a repo_servers <<< "$repo_server_pragma"
+else
+    # default is artifactory
+    # shellcheck disable=SC2034
+    repo_servers=('artifactory' 'nexus')
+fi
 
-send_mail() {
-    local subject="$1"
-    local message="$2"
-    set +x
-    {
-        echo "Build: $BUILD_URL"
-        echo "Stage: $STAGE_NAME"
-        echo "Host:  $HOSTNAME"
-        echo ""
-        echo -e "$message"
-    } 2>&1 | mail -s "$subject" -r "$HOSTNAME"@intel.com "$OPERATIONS_EMAIL"
-    set -x
-}
+# Use a daos-do/repo-files PR if specified
+repo_files_pr=$(echo "$COMMIT_MESSAGE" | sed -ne '/^Repo-files-PR: */s/.*: *//p')
+if [ -n "$repo_files_pr" ]; then
+    build_number="lastSuccessfulBuild"
+    branch="$repo_files_pr"
+    if [[ $branch = *:* ]]; then
+        build_number="${branch#*:}"
+        branch="${branch%:*}"
+    fi
+    # shellcheck disable=SC2034
+    REPO_FILE_URL="${JENKINS_URL:-https://build.hpdd.intel.com/}job/daos-do/job/repo-files/job/$branch/$build_number/artifact/"
+fi
 
-monitor_cmd() {
-    local threshold="$1"
-    shift
-    local duration=0
-    local start="$SECONDS"
-    if ! time "$@"; then
-        return "${PIPESTATUS[0]}"
-    fi
-    ((duration = SECONDS - start))
-    if [ "$duration" -gt "$threshold" ]; then
-        send_mail "Command exceeded ${threshold}s in $STAGE_NAME" \
-                    "Command:  $*\nReal time: $duration"
-    fi
-    return 0
-}
-
-retry_cmd() {
-    local monitor_threshold="$1"
-    shift
-    local attempt=0
-    local rc=0
-    while [ $attempt -lt "${RETRY_COUNT:-$DAOS_STACK_RETRY_COUNT}" ]; do
-        if monitor_cmd "$monitor_threshold" "$@"; then
-            # Command succeeded, return with success
-            if [ $attempt -gt 0 ]; then
-                send_mail "Command retry successful in $STAGE_NAME after $attempt attempts" \
-                          "Command:  $*\nAttempts: $attempt\nStatus:   $rc"
-            fi
-            return 0
+id=$(lsb_release -si)
+release=$(lsb_release -sr)
+# shellcheck disable=SC2034
+EXCLUDE_UPGRADE=mercury,daos,daos-\*
+if rpm -qa | grep mlnx; then
+    # packages not to allow upgrading if MLNX OFED is installed
+    EXCLUDE_UPGRADE+=,openmpi,\*mlnx\*
+fi
+case "$id" in
+    CentOS|Rocky|AlmaLinux|RedHatEnterpriseServer)
+        if [ "${release%%.*}" = 7 ]; then
+            DISTRO_NAME=centos${release%%.*}
+            EXCLUDE_UPGRADE+=,fuse
+        else
+            DISTRO_NAME=el${release%%.*}
+            EXCLUDE_UPGRADE+=,dpdk
         fi
-        # Command failed, retry
-        rc=${PIPESTATUS[0]}
-        (( attempt++ )) || true
-        if [ "$attempt" -gt 0 ]; then
-            sleep "${RETRY_DELAY_SECONDS:-$DAOS_STACK_RETRY_DELAY_SECONDS}"
-        fi
-    done
-    if [ "$rc" -ne 0 ]; then
-        send_mail "Command retry failed in $STAGE_NAME after $attempt attempts" \
-                  "Command:  $*\nAttempts: $attempt\nStatus:   $rc"
-    fi
-    return 1
-}
-
-timeout_cmd() {
-    local timeout="$1"
-    shift
-    local attempt=0
-    local rc=1
-    while [ $attempt -lt "${RETRY_COUNT:-$DAOS_STACK_RETRY_COUNT}" ]; do
-        if monitor_cmd "$DAOS_STACK_MONITOR_SECONDS" timeout "$timeout" "$@"; then
-            # Command succeeded, return with success
-            if [ $attempt -gt 0 ]; then
-                send_mail "Command timeout successful in $STAGE_NAME after $attempt attempts" \
-                          "Command:  $*\nAttempts: $attempt\nStatus:   $rc"
-            fi
-            return 0
-        fi
-        rc=${PIPESTATUS[0]}
-        if [ "$rc" = "124" ]; then
-            # Command timed out, try again
-            (( attempt++ )) || true
-            continue
-        fi
-        # Command failed for something other than timeout
-        break
-    done
-    if [ "$rc" -ne 0 ]; then
-        send_mail "Command timeout failed in $STAGE_NAME after $attempt attempts" \
-                  "Command:  $*\nAttempts: $attempt\nStatus:   $rc"
-    fi
-    return "$rc"
-}
+        REPOS_DIR=/etc/yum.repos.d
+        DISTRO_GENERIC=el
+        # shellcheck disable=SC2034
+        LSB_RELEASE=redhat-lsb-core
+        ;;
+    openSUSE)
+        # shellcheck disable=SC2034
+        DISTRO_NAME=leap${release%%.*}
+        # shellcheck disable=SC2034
+        DISTRO_GENERIC=sl
+        # shellcheck disable=SC2034
+        REPOS_DIR=/etc/dnf/repos.d
+        EXCLUDE_UPGRADE+=,fuse,fuse-libs,fuse-devel
+        ;;
+esac

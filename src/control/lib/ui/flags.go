@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2021 Intel Corporation.
+// (C) Copyright 2021-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -25,8 +25,8 @@ var (
 // LabelOrUUIDFlag is used to hold a pool or container ID supplied
 // via command-line-argument.
 type LabelOrUUIDFlag struct {
-	UUID  uuid.UUID
-	Label string
+	UUID  uuid.UUID `json:"uuid"`
+	Label string    `json:"label"`
 }
 
 // Empty returns true if neither UUID or Label were set.
