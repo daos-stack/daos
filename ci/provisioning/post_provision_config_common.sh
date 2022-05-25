@@ -30,7 +30,7 @@ release=$(lsb_release -sr)
 EXCLUDE_UPGRADE=mercury,daos,daos-\*
 if rpm -qa | grep mlnx; then
     # packages not to allow upgrading if MLNX OFED is installed
-    EXCLUDE_UPGRADE+=,openmpi,\*mlnx\*
+    EXCLUDE_UPGRADE+=,openmpi,\*mlnx\*,\*ucx\*
 fi
 case "$id" in
     CentOS|Rocky|AlmaLinux|RedHatEnterpriseServer)
