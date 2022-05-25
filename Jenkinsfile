@@ -716,7 +716,7 @@ pipeline {
                     }
                     steps {
                         functionalTest inst_repos: daosRepos(),
-                                       inst_rpms: functionalPackages(1, next_version),
+                                       inst_rpms: functionalPackages(1, next_version, "client-tests-openmpi"),
                                        test_function: 'runTestFunctionalV2'
                     }
                     post {
@@ -735,7 +735,7 @@ pipeline {
                     }
                     steps {
                         functionalTest inst_repos: daosRepos(),
-                                       inst_rpms: functionalPackages(1, next_version),
+                                       inst_rpms: functionalPackages(1, next_version, "client-tests-openmpi"),
                                        test_function: 'runTestFunctionalV2'
                     }
                     post {
@@ -754,7 +754,7 @@ pipeline {
                     }
                     steps {
                         functionalTest inst_repos: daosRepos(),
-                                       inst_rpms: functionalPackages(1, next_version),
+                                       inst_rpms: functionalPackages(1, next_version, "client-tests-openmpi"),
                                        test_function: 'runTestFunctionalV2'
                     }
                     post {
@@ -773,7 +773,7 @@ pipeline {
                     }
                     steps {
                         functionalTest inst_repos: daosRepos(),
-                                       inst_rpms: functionalPackages(1, next_version),
+                                       inst_rpms: functionalPackages(1, next_version, "client-tests-openmpi"),
                                        test_function: 'runTestFunctionalV2'
                     }
                     post {
@@ -792,7 +792,7 @@ pipeline {
                     }
                     steps {
                         functionalTest inst_repos: daosRepos(),
-                                       inst_rpms: functionalPackages(1, next_version),
+                                       inst_rpms: functionalPackages(1, next_version, "client-tests-openmpi"),
                                        test_function: 'runTestFunctionalV2'
                     }
                     post {
@@ -925,7 +925,7 @@ pipeline {
             }
             steps {
                 storagePrepTest inst_repos: daosRepos(),
-                                inst_rpms: functionalPackages(1, next_version)
+                                inst_rpms: functionalPackages(1, next_version, "client-tests-openmpi")
             }
         } // stage('Test Storage Prep')
         stage('Test Hardware') {
@@ -945,7 +945,7 @@ pipeline {
                     }
                     steps {
                         functionalTest inst_repos: daosRepos(),
-                                       inst_rpms: functionalPackages(1, next_version),
+                                       inst_rpms: functionalPackages(1, next_version, "client-tests-openmpi"),
                                        test_function: 'runTestFunctionalV2'
                     }
                     post {
@@ -965,7 +965,7 @@ pipeline {
                     }
                     steps {
                         functionalTest inst_repos: daosRepos(),
-                                       inst_rpms: functionalPackages(1, next_version),
+                                       inst_rpms: functionalPackages(1, next_version, "client-tests-openmpi"),
                                        test_function: 'runTestFunctionalV2'
                    }
                     post {
@@ -985,7 +985,7 @@ pipeline {
                     }
                     steps {
                         functionalTest inst_repos: daosRepos(),
-                                       inst_rpms: functionalPackages(1, next_version),
+                                       inst_rpms: functionalPackages(1, next_version, "client-tests-openmpi"),
                                        test_function: 'runTestFunctionalV2'
                     }
                     post {
