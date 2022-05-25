@@ -116,9 +116,9 @@ daos_dmg_json_pipe(const char *dmg_cmd, const char *dmg_config_file,
 	int			pc_rc, rc = 0;
 
 	if (dmg_config_file == NULL)
-		D_ASPRINTF(cmd_base, "dmg -j -i %s ", dmg_cmd);
+		D_ASPRINTF(cmd_base, "dmg -j -i %s 2>&1", dmg_cmd);
 	else
-		D_ASPRINTF(cmd_base, "dmg -j -o %s %s ",
+		D_ASPRINTF(cmd_base, "dmg -j -o %s %s 2>&1",
 			   dmg_config_file, dmg_cmd);
 	if (cmd_base == NULL)
 		return -DER_NOMEM;
@@ -130,7 +130,7 @@ daos_dmg_json_pipe(const char *dmg_cmd, const char *dmg_config_file,
 	D_DEBUG(DB_TEST, "running %s\n", cmd_str);
 	fp = popen(cmd_str, "r");
 	if (!fp) {
-		D_ERROR("failed to invoke %s\n", cmd_str);
+		D_ERROR("failed to invoke '%s', errno=%d (%s)\n", cmd_str, errno, strerror(errno));
 		D_GOTO(out, rc = -DER_IO);
 	}
 
@@ -148,7 +148,7 @@ daos_dmg_json_pipe(const char *dmg_cmd, const char *dmg_config_file,
 			size = total + JSON_CHUNK_SIZE + 1;
 
 			if (size >= JSON_MAX_INPUT) {
-				D_ERROR("JSON input too large\n");
+				D_ERROR("JSON input too large (size=%lu)\n", size);
 				D_GOTO(out_jbuf, rc = -DER_REC2BIG);
 			}
 
@@ -165,11 +165,17 @@ daos_dmg_json_pipe(const char *dmg_cmd, const char *dmg_config_file,
 		total += n;
 	}
 
+	if (total == 0) {
+		D_ERROR("dmg output is empty\n");
+		D_GOTO(out_jbuf, rc = -DER_INVAL);
+	}
+
 	D_REALLOC(temp, jbuf, total, total + 1);
 	if (temp == NULL)
 		D_GOTO(out_jbuf, rc = -DER_NOMEM);
 	jbuf = temp;
 	jbuf[total] = '\0';
+	D_DEBUG(DB_TEST, "dmg output=\"%s\"\n", jbuf);
 
 	tok = json_tokener_new_ex(parse_depth);
 	if (tok == NULL)
@@ -181,7 +187,7 @@ daos_dmg_json_pipe(const char *dmg_cmd, const char *dmg_config_file,
 		int fail_off = json_tokener_get_parse_end(tok);
 		char *aterr = &jbuf[fail_off];
 
-		D_ERROR("failed to parse JSON at offset %d: %s %c\n",
+		D_ERROR("failed to parse JSON at offset %d: %s (failed character: %c)\n",
 			fail_off, json_tokener_error_desc(jerr), aterr[0]);
 		D_GOTO(out_tokener, rc = -DER_INVAL);
 	}
