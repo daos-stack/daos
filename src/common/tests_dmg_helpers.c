@@ -91,6 +91,16 @@ cmd_string(const char *cmd_base, char *args[], int argcount)
 		old = size;
 	}
 
+	/* Tack on stderr redirect */
+	size += 6;
+	D_REALLOC(tmp, cmd_str, old, size);
+	if (tmp == NULL) {
+		D_FREE(cmd_str);
+		return NULL;
+	}
+	strncat(tmp, " 2>&1", size);
+	cmd_str = tmp;
+
 	return cmd_str;
 }
 
@@ -116,9 +126,9 @@ daos_dmg_json_pipe(const char *dmg_cmd, const char *dmg_config_file,
 	int			pc_rc, rc = 0;
 
 	if (dmg_config_file == NULL)
-		D_ASPRINTF(cmd_base, "dmg -j -i %s 2>&1", dmg_cmd);
+		D_ASPRINTF(cmd_base, "dmg -j -i %s ", dmg_cmd);
 	else
-		D_ASPRINTF(cmd_base, "dmg -j -o %s %s 2>&1",
+		D_ASPRINTF(cmd_base, "dmg -j -o %s %s ",
 			   dmg_config_file, dmg_cmd);
 	if (cmd_base == NULL)
 		return -DER_NOMEM;
