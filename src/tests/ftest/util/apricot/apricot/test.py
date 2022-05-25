@@ -486,6 +486,84 @@ class TestWithoutServers(Test):
                 hosts, ",".join(processes))
             stop_processes(hosts, "'({})'".format("|".join(processes)))
 
+    def get_hosts_from_yaml(self, yaml_key, partition_key, reservation_key, namespace):
+        """Get a NodeSet for the hosts to use in the test.
+        Args:
+            yaml_key (str): test yaml key used to obtain the set of hosts to test
+            partition_key (str): test yaml key used to obtain the host partition name
+            reservation_key (str): test yaml key used to obtain the host reservation name
+            namespace (str): test yaml path to the keys
+        Returns:
+            NodeSet: the set of hosts to test obtained from the test yaml
+        """
+        reservation_default = os.environ.get("_".join(["DAOS", reservation_key.upper()]), None)
+
+        # Collect any host information from the test yaml
+        host_data = self.params.get(yaml_key, namespace)
+        partition = self.params.get(partition_key, namespace)
+        reservation = self.params.get(reservation_key, namespace, reservation_default)
+        if partition is not None and host_data is not None:
+            self.fail(
+                "Specifying both a '{}' partition and '{}' set of hosts is not supported!".format(
+                    partition_key, yaml_key))
+
+        if partition is not None and host_data is None:
+            # If a partition is provided instead of a set of hosts get the set of hosts from the
+            # partition information
+            setattr(self, partition_key, partition)
+            setattr(self, reservation_key, reservation)
+            slurm_nodes = get_partition_hosts(partition, reservation)
+            if not slurm_nodes:
+                self.fail(
+                    "No valid nodes in {} partition with {} reservation".format(
+                        partition, reservation))
+            host_data = slurm_nodes
+
+        # Convert the set of hosts from slurm or the yaml file into a NodeSet
+        if isinstance(host_data, (list, tuple)):
+            return NodeSet.fromlist(host_data)
+        return NodeSet(host_data)
+
+    def check_pool_free_space(self, pool, expected_scm=None, expected_nvme=None,
+                              timeout=30):
+        """Check pool free space with expected value.
+        Args:
+            pool (TestPool): The pool for which to check free space.
+            expected_scm (int, optional): pool expected SCM free space.
+            expected_nvme (int, optional): pool expected NVME free space.
+            timeout(int, optional): time to fail test if it could not match
+                expected values.
+        Note:
+            Arguments may also be provided as a string with a number preceded
+            by '<', '<=', '>', or '>=' for other comparisons besides the
+            default '=='.
+        """
+        if not expected_scm and not expected_nvme:
+            self.fail("at least one space parameter must be specified")
+        done = False
+        scm_fs = 0
+        nvme_fs = 0
+        start = time()
+        scm_index, nvme_index = 0, 1
+        while time() - start < timeout:
+            sleep(1)
+            checks = []
+            pool.get_info()
+            scm_fs = pool.info.pi_space.ps_space.s_free[scm_index]
+            nvme_fs = pool.info.pi_space.ps_space.s_free[nvme_index]
+            if expected_scm is not None:
+                checks.append(("scm", scm_fs, expected_scm))
+            if expected_nvme is not None:
+                checks.append(("nvme", nvme_fs, expected_nvme))
+            done = pool._check_info(checks)
+            if done:
+                break
+
+        if not done:
+            self.fail(
+                "Pool Free space did not match: actual={},{} expected={},{}".format(
+                    scm_fs, nvme_fs, expected_scm, expected_nvme))
+
 
 class TestWithServers(TestWithoutServers):
     # pylint: disable=too-many-public-methods,too-many-instance-attributes
