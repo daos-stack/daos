@@ -10,7 +10,7 @@ from ast import literal_eval
 import os
 import json
 import re
-from time import time
+from time import sleep, time
 
 from avocado import fail_on, skip, TestFail
 from avocado import Test as avocadoTest
