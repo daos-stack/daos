@@ -48,6 +48,21 @@ API_VERSION_FIX = "0"
 API_VERSION = "{}.{}.{}".format(API_VERSION_MAJOR, API_VERSION_MINOR,
                                 API_VERSION_FIX)
 
+def get_packager():
+    """ Get the packager name and e-mail address """
+    cmd = 'rpmdev-packager'
+    try:
+        pkg_st = subprocess.Popen(cmd, stdout=subprocess.PIPE) # nosec
+        return pkg_st.communicate()[0].strip().decode('UTF-8')
+    except OSError:
+        print("You need to have the rpmdev-packager tool (from the "
+              "rpmdevtools RPM on EL7) in order to make releases.\n\n"
+              "Additionally, you should define %packager in "
+              "~/.rpmmacros as such:\n"
+              "%packager	John A. Doe <john.doe@intel.com>"
+              "so that package changelog entries are well defined")
+        return None
+
 def update_rpm_version(version, tag):
     """ Update the version (and release) in the RPM specfile """
     spec = open("utils/rpms/daos.spec", "r").readlines()
@@ -72,17 +87,8 @@ def update_rpm_version(version, tag):
             spec[line_num] = "Release:       {}%{{?relval}}%{{?dist}}\n".\
                              format(release)
         if line == "%changelog\n":
-            cmd = 'rpmdev-packager'
-            try:
-                pkg_st = subprocess.Popen(cmd, stdout=subprocess.PIPE) # nosec
-                packager = pkg_st.communicate()[0].strip().decode('UTF-8')
-            except OSError:
-                print("You need to have the rpmdev-packager tool (from the "
-                      "rpmdevtools RPM on EL7) in order to make releases.\n\n"
-                      "Additionally, you should define %packager in "
-                      "~/.rpmmacros as such:\n"
-                      "%packager	John A. Doe <john.doe@intel.com>"
-                      "so that package changelog entries are well defined")
+            packager = get_packager()
+            if not packager:
                 return False
             date_str = time.strftime('%a %b %d %Y', time.gmtime())
             spec.insert(line_num + 1, "\n")
@@ -95,6 +101,30 @@ def update_rpm_version(version, tag):
                                                     release))
             break
     open("utils/rpms/daos.spec", "w").writelines(spec)
+
+    return True
+
+def update_debian_version(version, tag):
+    """ Update the version (and release) in the Debian changelog """
+    # pylint: disable=import-outside-toplevel
+    import email.utils
+    import debian.changelog
+    # pylint: enable=import-outside-toplevel
+
+    packager = get_packager()
+    if not packager:
+        return False
+
+    with open("debian/changelog", "r+") as ch_fh:
+        ch = debian.changelog.Changelog(ch_fh)
+        ch.new_block(package='daos', version=version + "-1", distributions='unstable',
+                     urgency='medium', author=packager,
+                     date=email.utils.formatdate())
+        ch.add_change("  [{}]\n  * Version bump up to "
+                      "{}".format(packager[0:packager.find('<')], tag))
+        ch_fh.seek(0)
+        ch_fh.write(str(ch))
+        ch_fh.truncate()
 
     return True
 
@@ -168,12 +198,14 @@ def scons():  # pylint: disable=too-many-locals,too-many-branches
         variables.Add('ORG_NAME', 'The GitHub project to do the release on.',
                       'daos-stack')
         variables.Add('REMOTE_NAME', 'The remoten name release on.', 'origin')
+        variables.Add('PUSH_PR', 'Whether to push the PR', True)
 
         env = Environment(variables=variables)
 
         org_name = env['ORG_NAME']
         remote_name = env['REMOTE_NAME']
         base_branch = env['RELEASE_BASE']
+        push_pr = env['PUSH_PR']
 
         try:
             tag = env['RELEASE']
@@ -181,9 +213,15 @@ def scons():  # pylint: disable=too-many-locals,too-many-branches
             print("Usage: scons RELEASE=x.y.z release")
             Exit(1)
 
+        version = ""
+        package_version = ""
         dash = tag.find('-')    # pylint: disable=no-member
         if dash > 0:
             version = tag[0:dash]
+            if tag[dash+1:dash+3] == "rc":
+                package_version = version
+            else:
+                package_version = tag.replace("-", "~", 1)
         else:
             print("** Final releases should be made on GitHub directly "
                   "using a previous pre-release such as a release candidate.\n")
@@ -195,6 +233,7 @@ def scons():  # pylint: disable=too-many-locals,too-many-branches
                 Exit(1)
 
             version = tag
+            package_version = tag
 
         try:
             token = yaml.safe_load(open(os.path.join(os.path.expanduser("~"),
@@ -210,7 +249,7 @@ def scons():  # pylint: disable=too-many-locals,too-many-branches
 
         # create a branch for the PR
         branch = 'create-release-{}'.format(tag)
-        print("Creating a branch for the PR...")
+        print("Creating branch {} for the PR...".format(branch))
         repo = pygit2.Repository('.git')
         try:
             base_ref = repo.lookup_reference(
@@ -240,7 +279,13 @@ def scons():  # pylint: disable=too-many-locals,too-many-branches
         repo.checkout(repo.lookup_branch(branch))
 
         print("Updating the RPM specfile...")
-        if not update_rpm_version(version, tag):
+        if not update_rpm_version(package_version, tag):
+            print("Branch has been left in the created state.  You will have "
+                  "to clean it up manually.")
+            Exit(1)
+
+        print("Updating the Debian changelog...")
+        if not update_debian_version(package_version, tag):
             print("Branch has been left in the created state.  You will have "
                   "to clean it up manually.")
             Exit(1)
@@ -265,6 +310,7 @@ def scons():  # pylint: disable=too-many-locals,too-many-branches
                                                   repo.default_signature.email)
         # pylint: enable=no-member
         index.add("utils/rpms/daos.spec")
+        index.add("debian/changelog")
         index.add("VERSION")
         index.add("TAG")
         index.write()
@@ -301,39 +347,43 @@ def scons():  # pylint: disable=too-many-locals,too-many-branches
                                     "ssh-agent?")
                 return None
 
-        # and push it
-        print("Pushing the changes to GitHub...")
-        remote = repo.remotes[remote_name]
-        # pylint: disable=no-member
-        try:
-            remote.push(['refs/heads/{}'.format(branch)],
-                        callbacks=MyCallbacks())
-        except pygit2.GitError as excpt:
-            print("Error pushing branch: {}".format(excpt))
-            Exit(1)
-        # pylint: enable=no-member
-
-        print("Creating the PR...")
-        # now create a PR for it
-        gh_context = github.Github(token)
-        try:
-            org = gh_context.get_organization(org_name)
-            repo = org.get_repo('daos')
-        except github.UnknownObjectException:
-            # maybe not an organization
-            repo = gh_context.get_repo('{}/daos'.format(org_name))
-        new_pr = repo.create_pull(title=summary, body="", base=base_branch,
-                                  head="{}:{}".format(org_name, branch))
-
-        print("Successfully created PR#{0} for this version "
-              "update:\n"
-              "https://github.com/{1}/daos/pull/{0}/".format(new_pr.number,
-                                                             org_name))
-
-        print("Self-assigning the PR...")
-        # self-assign the PR
-        new_pr.as_issue().add_to_assignees(
-            gh_context.get_user(gh_context.get_user().login))
+        if push_pr == True:
+            # and push it
+            print("Pushing the changes to GitHub...")
+            remote = repo.remotes[remote_name]
+            # pylint: disable=no-member
+            try:
+                remote.push(['refs/heads/{}'.format(branch)],
+                            callbacks=MyCallbacks())
+            except pygit2.GitError as excpt:
+                print("Error pushing branch: {}".format(excpt))
+                Exit(1)
+            # pylint: enable=no-member
+  
+            print("Creating the PR...")
+            # now create a PR for it
+            gh_context = github.Github(token)
+            try:
+                org = gh_context.get_organization(org_name)
+                repo = org.get_repo('daos')
+            except github.UnknownObjectException:
+                # maybe not an organization
+                repo = gh_context.get_repo('{}/daos'.format(org_name))
+            new_pr = repo.create_pull(title=summary, body="", base=base_branch,
+                                      head="{}:{}".format(org_name, branch))
+  
+            print("Successfully created PR#{0} for this version "
+                  "update:\n"
+                  "https://github.com/{1}/daos/pull/{0}/".format(new_pr.number,
+                                                                 org_name))
+  
+            print("Self-assigning the PR...")
+            # self-assign the PR
+            new_pr.as_issue().add_to_assignees(
+                gh_context.get_user(gh_context.get_user().login))
+        else:
+            print("PR has NOT been pushed.  You will need to push it "
+                  "yourself.")
 
         print("Done.")
 
