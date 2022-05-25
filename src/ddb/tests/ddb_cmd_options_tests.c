@@ -65,102 +65,158 @@ ls_options_parsing(void **state)
 	struct ddb_cmd_info	 info = {0};
 	struct ls_options	*options = &info.dci_cmd_option.dci_ls;
 
-	test_run_inval_cmd("ls", "path", "invalid_argument"); /* invalid argument */
+	/* test invalid arguments and options */
+	test_run_inval_cmd("ls", "path", "extra"); /* too many argument */
 	test_run_inval_cmd("ls", "-z"); /* invalid option */
 
-	test_run_cmd(&info, "ls");
-	assert_false(options->recursive);
-	assert_null(options->path);
-
-	test_run_cmd(&info, "ls", "-r");
-	assert_true(options->recursive);
-	assert_null(options->path);
-
-	test_run_cmd(&info, "ls", "/[0]/[0]");
-	assert_false(options->recursive);
+	/* test all arguments */
+	test_run_cmd(&info, "ls", "path");
 	assert_non_null(options->path);
-	assert_string_equal("/[0]/[0]", options->path);
+	assert_false(options->recursive);
+
+	/* test all options and arguments */
+	test_run_cmd(&info, "ls", "-r", "path");
+	assert_non_null(options->path);
+	assert_true(options->recursive);
+
 }
 
 static void
-value_dump_options_parsing(void **state)
+dump_value_options_parsing(void **state)
 {
-	struct ddb_cmd_info		 info = {0};
+	struct ddb_cmd_info	 info = {0};
 	struct dump_value_options	*options = &info.dci_cmd_option.dci_dump_value;
 
-	test_run_inval_cmd("dump_value"); /* no path to dump */
-	test_run_inval_cmd("dump_value", "this/is/a/path"); /* no destination path to dump to */
+	/* test invalid arguments and options */
+	test_run_inval_cmd("dump_value", "path", "dst", "extra"); /* too many argument */
+	test_run_inval_cmd("dump_value", "-z"); /* invalid option */
 
-	test_run_cmd(&info, "dump_value", "this/is/a/path", "/this/is/a/destination");
-	assert_string_equal("this/is/a/path", options->path);
-	assert_string_equal("/this/is/a/destination", options->dst);
+	/* test all arguments */
+	test_run_cmd(&info, "dump_value", "path", "dst");
+	assert_non_null(options->path);
+	assert_non_null(options->dst);
+
 }
 
 static void
-ilog_dump_parsing(void **state)
+rm_options_parsing(void **state)
 {
-	struct ddb_cmd_info		 info = {0};
+	struct ddb_cmd_info	 info = {0};
+	struct rm_options	*options = &info.dci_cmd_option.dci_rm;
+
+	/* test invalid arguments and options */
+	test_run_inval_cmd("rm", "path", "extra"); /* too many argument */
+	test_run_inval_cmd("rm", "-z"); /* invalid option */
+
+	/* test all arguments */
+	test_run_cmd(&info, "rm", "path");
+	assert_non_null(options->path);
+
+}
+
+static void
+load_options_parsing(void **state)
+{
+	struct ddb_cmd_info	 info = {0};
+	struct load_options	*options = &info.dci_cmd_option.dci_load;
+
+	/* test invalid arguments and options */
+	test_run_inval_cmd("load", "src", "dst", "epoch", "extra"); /* too many argument */
+	test_run_inval_cmd("load", "-z"); /* invalid option */
+
+	/* test all arguments */
+	test_run_cmd(&info, "load", "src", "dst", "epoch");
+	assert_non_null(options->src);
+	assert_non_null(options->dst);
+	assert_non_null(options->epoch);
+
+}
+
+static void
+dump_ilog_options_parsing(void **state)
+{
+	struct ddb_cmd_info	 info = {0};
 	struct dump_ilog_options	*options = &info.dci_cmd_option.dci_dump_ilog;
 
-	test_run_inval_cmd("dump_ilog"); /* no path to dump */
+	/* test invalid arguments and options */
+	test_run_inval_cmd("dump_ilog", "path", "extra"); /* too many argument */
+	test_run_inval_cmd("dump_ilog", "-z"); /* invalid option */
 
-	test_run_cmd(&info, "dump_ilog", "this/is/a/path");
-	assert_string_equal("this/is/a/path", options->path);
+	/* test all arguments */
+	test_run_cmd(&info, "dump_ilog", "path");
+	assert_non_null(options->path);
+
 }
 
 static void
-dtx_dump_parsing(void **state)
+commit_ilog_options_parsing(void **state)
 {
-	struct ddb_cmd_info		 info = {0};
-	struct dump_dtx_options		*options = &info.dci_cmd_option.dci_dump_dtx;
+	struct ddb_cmd_info	 info = {0};
+	struct commit_ilog_options	*options = &info.dci_cmd_option.dci_commit_ilog;
 
-	test_run_inval_cmd("dump_dtx"); /* no path to dump */
-	test_run_inval_cmd("dump_dtx", "path", "-a", "-t");
+	/* test invalid arguments and options */
+	test_run_inval_cmd("commit_ilog", "path", "extra"); /* too many argument */
+	test_run_inval_cmd("commit_ilog", "-z"); /* invalid option */
 
+	/* test all arguments */
+	test_run_cmd(&info, "commit_ilog", "path");
+	assert_non_null(options->path);
+
+}
+
+static void
+rm_ilog_options_parsing(void **state)
+{
+	struct ddb_cmd_info	 info = {0};
+	struct rm_ilog_options	*options = &info.dci_cmd_option.dci_rm_ilog;
+
+	/* test invalid arguments and options */
+	test_run_inval_cmd("rm_ilog", "path", "extra"); /* too many argument */
+	test_run_inval_cmd("rm_ilog", "-z"); /* invalid option */
+
+	/* test all arguments */
+	test_run_cmd(&info, "rm_ilog", "path");
+	assert_non_null(options->path);
+
+}
+
+static void
+dump_dtx_options_parsing(void **state)
+{
+	struct ddb_cmd_info	 info = {0};
+	struct dump_dtx_options	*options = &info.dci_cmd_option.dci_dump_dtx;
+
+	/* test invalid arguments and options */
+	test_run_inval_cmd("dump_dtx", "path", "extra"); /* too many argument */
+	test_run_inval_cmd("dump_dtx", "-z"); /* invalid option */
+
+	/* test all arguments */
 	test_run_cmd(&info, "dump_dtx", "path");
-	assert_int_equal(DDB_CMD_DUMP_DTX, info.dci_cmd);
-	assert_string_equal("path", options->path);
+	assert_non_null(options->path);
 	assert_false(options->active);
 	assert_false(options->committed);
 
-	test_run_cmd(&info, "dump_dtx", "path", "-a", "-c");
-	assert_string_equal("path", options->path);
-	assert_true(options->active);
-	assert_true(options->committed);
-
-	test_run_cmd(&info, "dump_dtx", "path", "-ac");
-	assert_string_equal("path", options->path);
+	/* test all options and arguments */
+	test_run_cmd(&info, "dump_dtx", "-a", "-c", "path");
+	assert_non_null(options->path);
 	assert_true(options->active);
 	assert_true(options->committed);
 }
 
 static void
-rm_parsing(void **state)
+clear_cmt_dtx_options_parsing(void **state)
 {
-	struct ddb_cmd_info		 info = {0};
-	struct rm_options		*options = &info.dci_cmd_option.dci_rm;
+	struct ddb_cmd_info	 info = {0};
+	struct clear_cmt_dtx_options	*options = &info.dci_cmd_option.dci_clear_cmt_dtx;
 
-	test_run_inval_cmd("rm"); /* no path to dump */
+	/* test invalid arguments and options */
+	test_run_inval_cmd("clear_cmt_dtx", "path", "extra"); /* too many argument */
+	test_run_inval_cmd("clear_cmt_dtx", "-z"); /* invalid option */
 
-	test_run_cmd(&info, "rm", "path");
-	assert_string_equal("path", options->path);
+	/* test all arguments */
+	test_run_cmd(&info, "clear_cmt_dtx", "path");
+	assert_non_null(options->path);
 }
-
-static void
-load_parsing(void **state)
-{
-	struct ddb_cmd_info		 info = {0};
-	struct load_options		*options = &info.dci_cmd_option.dci_load;
-
-	test_run_inval_cmd("load"); /* no file path to load or destination to load it to */
-	test_run_inval_cmd("load", "only_one_path"); /* no destination to load it to */
-
-	test_run_cmd(&info, "load", "src", "dst", "1");
-	assert_string_equal("src", options->src);
-	assert_string_equal("dst", options->dst);
-	assert_string_equal("1", options->epoch);
-}
-
 
 /*
  * -----------------------------------------------
@@ -173,12 +229,16 @@ ddb_cmd_options_tests_run()
 {
 	static const struct CMUnitTest tests[] = {
 		TEST(ls_options_parsing),
-		TEST(value_dump_options_parsing),
-		TEST(ilog_dump_parsing),
-		TEST(dtx_dump_parsing),
-		TEST(rm_parsing),
-		TEST(load_parsing),
+		TEST(dump_value_options_parsing),
+		TEST(rm_options_parsing),
+		TEST(load_options_parsing),
+		TEST(dump_ilog_options_parsing),
+		TEST(commit_ilog_options_parsing),
+		TEST(rm_ilog_options_parsing),
+		TEST(dump_dtx_options_parsing),
+		TEST(clear_cmt_dtx_options_parsing),
 	};
+
 	return cmocka_run_group_tests_name("DDB commands option parsing tests", tests,
 					   NULL, NULL);
 }

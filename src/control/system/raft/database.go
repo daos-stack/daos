@@ -988,7 +988,7 @@ func (db *Database) SetSystemAttrs(props map[string]string) error {
 }
 
 // GetSystemAttrs returns a copy of the system properties map.
-func (db *Database) GetSystemAttrs(keys []string) (map[string]string, error) {
+func (db *Database) GetSystemAttrs(keys []string, filterFn func(string) bool) (map[string]string, error) {
 	if err := db.CheckReplica(); err != nil {
 		return nil, err
 	}
@@ -999,6 +999,9 @@ func (db *Database) GetSystemAttrs(keys []string) (map[string]string, error) {
 	out := make(map[string]string)
 	if len(keys) == 0 {
 		for k, v := range db.data.System.Attributes {
+			if filterFn != nil && filterFn(k) {
+				continue
+			}
 			out[k] = v
 		}
 		return out, nil
@@ -1006,6 +1009,9 @@ func (db *Database) GetSystemAttrs(keys []string) (map[string]string, error) {
 
 	for _, k := range keys {
 		if v, found := db.data.System.Attributes[k]; found {
+			if filterFn != nil && filterFn(k) {
+				continue
+			}
 			out[k] = v
 			continue
 		}
