@@ -139,7 +139,6 @@ RUN [ "$DAOS_DEPS_BUILD" != "yes" ] || {                                        
         dnf upgrade --exclude=spdk,spdk-devel,dpdk-devel,dpdk,mercury-devel,mercury && \
         dnf clean all;                                                                 \
     }
-RUN dnf install mpich-devel
 USER daos_server:daos_server
 
 ARG DEPS_JOBS=1
@@ -174,8 +173,6 @@ ARG COMPILER=gcc
 ARG JOBS=$DEPS_JOBS
 ARG DAOS_BUILD_TYPE=$DAOS_TARGET_TYPE
 ARG DAOS_BUILD=$DAOS_DEPS_BUILD
-
-ENV PATH=/usr/lib64/mpich/bin:$PATH
 
 # Build DAOS
 RUN [ "$DAOS_BUILD" != "yes" ] || {                                        \
