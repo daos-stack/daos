@@ -452,8 +452,9 @@ class DaosPool():
 
         containers = []
         for cont in data['response']:
-            containers.append(DaosCont(cont['UUID'], cont['Label']))
+            containers.append(DaosCont(cont['uuid'], cont['label']))
         return containers
+
 
 class DaosCont():
     """Class to store data about daos containers"""
