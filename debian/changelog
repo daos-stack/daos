@@ -1,4 +1,4 @@
-daos (2.3.100-9) unstable; urgency=medium
+daos (2.3.100-10) unstable; urgency=medium
   [ Lei Huang ]
   * Update libfabric to v1.15.1-1 to include critical performance patches
 
