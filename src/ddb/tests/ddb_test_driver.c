@@ -507,6 +507,7 @@ create_test_vos_file()
 {
 	struct dt_vos_pool_ctx	tctx = {0};
 	daos_handle_t		poh;
+	daos_handle_t		coh;
 	int			conts = 2;
 	int			objs = 5;
 	int			dkeys = 5;
@@ -520,6 +521,11 @@ create_test_vos_file()
 	}
 	assert_success(vos_pool_open(tctx.dvt_pmem_file, tctx.dvt_pool_uuid, 0, &poh));
 	dvt_insert_data(poh, conts, objs, dkeys, akeys);
+
+	assert_success(vos_cont_open(poh, g_uuids[0], &coh));
+	dvt_vos_insert_2_records_with_dtx(coh);
+	vos_cont_close(coh);
+
 	vos_pool_close(poh);
 
 	close(tctx.dvt_fd);
@@ -574,8 +580,10 @@ int main(int argc, char *argv[])
 	setup_global_arrays();
 
 	if (args.dtda_create_vos_file) {
-		create_test_vos_file();
-	} else {
+		rc = create_test_vos_file();
+		goto done;
+	}
+
 #define RUN_TEST_SUIT(c, func)\
 	do {if (char_in_tests(c, test_suites, ARRAY_SIZE(test_suites))) \
 		rc += func(); } while (0)
@@ -591,8 +599,8 @@ int main(int argc, char *argv[])
 		RUN_TEST_SUIT('d', dvc_tests_run);
 		RUN_TEST_SUIT('e', ddb_main_tests);
 		RUN_TEST_SUIT('f', ddb_commands_print_tests_run);
-	}
 
+done:
 	vos_self_fini();
 	ddb_fini();
 	return rc;

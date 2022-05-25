@@ -34,12 +34,11 @@ print_object_test(void **state)
 	obj.ddbo_oid.lo = 1;
 	obj.ddbo_oid.hi = 10;
 	obj.ddbo_nr_grps = 2;
-	strcpy(obj.ddbo_obj_class_name, "TEST CLASS");
 	strcpy(obj.ddbo_otype_str, "TEST TYPE");
 
 	ddb_print_obj(&ctx, &obj, 1);
 
-	assert_str_exact("\t[2] '10.1' (class: TEST CLASS, type: TEST TYPE, groups: 2)\n");
+	assert_str_exact("\t[2] '10.1' (type: TEST TYPE, groups: 2)\n");
 }
 
 static void set_key_buf(struct ddb_key	*key, uint32_t len)
@@ -231,29 +230,19 @@ print_ilog_test(void **state)
 
 	ddb_print_ilog_entry(&ctx, &ilog);
 
-	assert_str_exact("Index: 1\n"
-			 "Status: TEST STATUS (1)\n"
-			 "Epoch: 1234567890\n"
-			 "Txn ID: 2\n");
+	assert_str("Index: 1\n");
+	assert_str("Status: TEST STATUS (1)\n");
+	assert_str("Epoch: 1234567890\n");
+	assert_str("Txn ID: 2\n");
 }
 
 static void
 print_dtx_active(void **state)
 {
 	struct dv_dtx_active_entry entry = {
-		.ddtx_uuid = {0x12, 0x34, 0x56, 0x78, 0x9a, 0xbc},
-		.ddtx_reindex = false,
-		.ddtx_exist = true,
-		.ddtx_invalid = false,
+		.ddtx_id = {.dti_uuid = {0x12, 0x34, 0x56, 0x78, 0x9a, 0xbc}, .dti_hlc = 0x1234},
 		.ddtx_handle_time = 12345690,
 		.ddtx_epoch = 99,
-		.ddtx_oid_cnt = 1,
-		.ddtx_start_time = 489387371,
-		.ddtx_committable = true,
-		.ddtx_committed = false,
-		.ddtx_aborted = false,
-		.ddtx_maybe_shared = true,
-		.ddtx_prepared = true,
 		.ddtx_grp_cnt = 3,
 		.ddtx_ver = 1,
 		.ddtx_rec_cnt = 1,
@@ -264,19 +253,9 @@ print_dtx_active(void **state)
 
 	ddb_print_dtx_active(&ctx, &entry);
 
-	assert_str("UUID: 12345678-9abc-0000-0000-000000000000\n");
+	assert_str("ID: 12345678.1234\n");
 	assert_str("Epoch: 99\n");
-	assert_str("Exist: true\n");
-	assert_str("Invalid: false\n");
-	assert_str("Reindex: false\n");
 	assert_str("Handle Time: 12345690\n");
-	assert_str("Oid Cnt: 1\n");
-	assert_str("Start Time: 489387371\n");
-	assert_str("Committable: true\n");
-	assert_str("Committed: false\n");
-	assert_str("Aborted: false\n");
-	assert_str("Maybe Shared: true\n");
-	assert_str("Prepared: true\n");
 	assert_str("Grp Cnt: 3\n");
 	assert_str("Ver: 1\n");
 	assert_str("Rec Cnt: 1\n");
@@ -290,17 +269,13 @@ print_dtx_committed(void **state)
 {
 	struct dv_dtx_committed_entry entry = {
 		.ddtx_epoch = 1234,
-		.ddtx_exist = true,
-		.ddtx_invalid = false,
-		.ddtx_uuid = {0x12, 0x34, 0x56, 0x78, 0x9a, 0xbc},
+		.ddtx_id = {.dti_uuid = {0x12, 0x34, 0x56, 0x78, 0x9a, 0xbc}, .dti_hlc = 0x1234},
 	};
 
 	ddb_print_dtx_committed(&ctx, &entry);
 
-	assert_str("UUID: 12345678-9abc-0000-0000-000000000000\n");
+	assert_str("ID: 12345678.1234\n");
 	assert_str("Epoch: 1234\n");
-	assert_str("Exist: true\n");
-	assert_str("Invalid: false\n");
 }
 
 static int
