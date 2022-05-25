@@ -142,17 +142,16 @@ sys.path.append('site_scons')"""
         vals['msg_id'] = msg.msg_id
         vals['category'] = msg.category
 
-        category = msg.category
         # The build/scons code is mostly clean, so only allow f-string warnings.
         if scons and msg.symbol != 'consider-using-f-string':
-            category = 'error'
+            vals['category'] = 'error'
 
         print(args.msg_template.format(**vals))
 
         if args.format == 'github':
-            if category in ('convention', 'refactor'):
+            if vals['category'] in ('convention', 'refactor'):
                 continue
-            if category == 'warning':
+            if vals['category'] == 'warning':
                 continue
             # pylint: disable-next=line-too-long,consider-using-f-string
             print('::{category} file={path},line={line},col={column},::{symbol}, {msg}'.format(**vals))  # noqa: E501

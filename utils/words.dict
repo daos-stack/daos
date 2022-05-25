@@ -14,6 +14,7 @@ FPP
 FPP
 FS
 GHA
+Gopath
 Haswell
 IOF
 IOR
@@ -93,6 +94,7 @@ config
 configs
 cp
 creat
+crt
 ctl
 ctype
 ctypes
@@ -293,6 +295,7 @@ rpath
 rpaths
 rpc
 rpms
+rsvc
 runtime
 rw
 sandybridge
