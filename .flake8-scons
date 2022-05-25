@@ -1,7 +1,6 @@
-# Flake8 config file for the DAOS project.
+# Flake8 config file scons files in the DAOS project.  This is invoked by the flake githook.
 #
-# This does not disable any checks so is stronger than the github-actions checks
-# which have to allow for existing code.
+# Disable checks that play badly with scons Import/Export only.
 [flake8]
 exclude =
     .git,
@@ -12,7 +11,6 @@ exclude =
     venv,
     build,
     install
-#filename=*.py, */SConscript, SConstruct
 filename=*/SConscript, SConstruct
 max-line-length: 100
 ignore=F821,F841
