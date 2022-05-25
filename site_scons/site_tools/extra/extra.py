@@ -107,6 +107,8 @@ def generate(env):
 
     indent = _find_indent()
 
+    # In order to pass the indent function to the generator and only execute _find_indent
+    # once, we create a lambda function to wrap our own that takes indent as argument.
     pp_generator = lambda source, target, env, for_signature: _pp_gen(source, target, env,  # noqa
                                                                       indent)  # noqa
 
