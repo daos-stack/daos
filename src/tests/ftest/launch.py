@@ -751,11 +751,6 @@ def get_test_files(test_list, args, yaml_dir, vmd_flag=False):
         yaml_file = replace_yaml_file("{}.yaml".format(base), args, yaml_dir, vmd_flag)
         test_file["yaml"] = yaml_file
 
-        # Set enable_vmd: true in the daos_server yaml if there are VMD devices on the host
-        # regardless of whether they are being specified in the server config file to avoid
-        # failures in the server start-up NVMe scan.
-        test_file["env"] = {"DAOS_ENABLE_VMD": "True" if vmd_flag else "False"}
-
         # Display the modified yaml file variants with debug
         command = ["avocado", "variants", "--mux-yaml", test_file["yaml"]]
         if args.extra_yaml:
