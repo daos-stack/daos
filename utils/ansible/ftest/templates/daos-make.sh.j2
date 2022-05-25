@@ -152,7 +152,7 @@ info "Mount of home partition"
 {% if "daos_clients" in groups and groups["daos_clients"] | length > 0 %}
 run $CLUSH_EXE -l root -w $CLIENTS_LIST -w $SERVERS_LIST  mountpoint "$HOME"
 {% else %}
-run $CLUSH_EXE -w $SERVERS_LIST ldcondig mountpoint "$HOME"
+run $CLUSH_EXE -w $SERVERS_LIST mountpoint "$HOME"
 {% endif %}
 
 for dir in "$DAOS_INSTALL_DIR" "$DAOS_SOURCE_DIR/build"
