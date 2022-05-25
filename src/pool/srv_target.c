@@ -1527,6 +1527,8 @@ ds_pool_tgt_query_map_handler(crt_rpc_t *rpc)
 
 		hdl = ds_pool_hdl_lookup(in->tmi_op.pi_hdl);
 		if (hdl == NULL) {
+			D_ERROR(DF_UUID": cannot find pool handle "DF_UUID"\n",
+				DP_UUID(in->tmi_op.pi_uuid), DP_UUID(in->tmi_op.pi_hdl));
 			rc = -DER_NO_HDL;
 			goto out;
 		}
