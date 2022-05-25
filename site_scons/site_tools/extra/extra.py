@@ -92,17 +92,38 @@ def _preprocess_emitter(source, target, env):
         target.append(newtarget)
     return target, source
 
+
+def _ch_generator(source, target, env, for_signature):
+    """generate commands for check header builder"""
+    action = ["$CCCOM"]
+    return action
+
+
+def _ch_emitter(source, target, env):
+    """generate target list for check header builder"""
+    target = []
+    for src in source:
+        (base, ext) = os.path.splitext(src.abspath)
+        target.append("{}_check_header$OBJSUFFIX".format(base))
+    return target, source
+
+
 def generate(env):
     """Setup the our custom tools"""
 
     indent = _find_indent()
 
-    generator = lambda source, target, env, for_signature: _pp_gen(source, target, env, indent)
+    pp_generator = lambda source, target, env, for_signature: _pp_gen(source, target, env,  # noqa
+                                                                      indent)  # noqa
 
     # Only handle C for now
-    preprocess = Builder(generator=generator, emitter=_preprocess_emitter)
+    preprocess = Builder(generator=pp_generator, emitter=_preprocess_emitter)
+    # Workaround for SCons issue #2757.   Avoid using Configure for internal headers
+    check_header = Builder(generator=_ch_generator, emitter=_ch_emitter)
 
-    env.Append(BUILDERS={"Preprocess":preprocess})
+    env.Append(BUILDERS={"Preprocess": preprocess})
+    env.Append(BUILDERS={"CheckHeader": check_header})
+
 
 def exists(_env):
     """assert existence of tool"""

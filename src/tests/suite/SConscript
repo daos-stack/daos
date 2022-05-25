@@ -117,11 +117,11 @@ def scons():
 
     denv.Install('$PREFIX/bin/', daostest)
     denv.Install('$PREFIX/bin/', dfstest)
-    denv.Install('$PREFIX/bin/io_conf', Glob('io_conf/daos_io_conf_1'))
-    denv.Install('$PREFIX/bin/io_conf', Glob('io_conf/daos_io_conf_2'))
-    denv.Install('$PREFIX/bin/io_conf', Glob('io_conf/daos_io_conf_3'))
-    denv.Install('$PREFIX/bin/io_conf', Glob('io_conf/daos_io_conf_4'))
-    denv.Install('$PREFIX/bin/io_conf', Glob('io_conf/daos_io_conf_5'))
+    denv.Install('$PREFIX/bin/io_conf', 'io_conf/daos_io_conf_1')
+    denv.Install('$PREFIX/bin/io_conf', 'io_conf/daos_io_conf_2')
+    denv.Install('$PREFIX/bin/io_conf', 'io_conf/daos_io_conf_3')
+    denv.Install('$PREFIX/bin/io_conf', 'io_conf/daos_io_conf_4')
+    denv.Install('$PREFIX/bin/io_conf', 'io_conf/daos_io_conf_5')
     SConscript('io_conf/SConscript', exports='denv')
 
 if __name__ == "SCons.Script":
