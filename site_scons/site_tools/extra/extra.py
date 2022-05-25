@@ -93,7 +93,7 @@ def _preprocess_emitter(source, target, env):
     return target, source
 
 
-def _ch_emitter(source, target, _env):
+def _ch_emitter(source, target, **_kw):
     """generate target list for check header builder"""
     target = []
     for src in source:
