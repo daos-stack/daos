@@ -966,8 +966,8 @@ crt_rpc_handler_common(hg_handle_t hg_hdl)
 		D_ASSERT(opc_info->coi_crf->crf_size_in == rpc_pub->cr_input_size);
 		/* corresponding to HG_Free_input in crt_hg_req_destroy */
 		rc = crt_hg_unpack_body(rpc_priv, proc);
+		rpc_priv->crp_input_got = 1;
 		if (rc == 0) {
-			rpc_priv->crp_input_got = 1;
 			rpc_pub->cr_ep.ep_grp = NULL;
 			/* TODO lookup by rpc_priv->crp_req_hdr.cch_grp_id */
 		} else {
@@ -1190,8 +1190,8 @@ crt_hg_req_send_cb(const struct hg_cb_info *hg_cbinfo)
 			/* HG_Free_output in crt_hg_req_destroy */
 			hg_ret = HG_Get_output(hg_cbinfo->info.forward.handle,
 					       &rpc_pub->cr_output);
+			rpc_priv->crp_output_got = 1;
 			if (hg_ret == HG_SUCCESS) {
-				rpc_priv->crp_output_got = 1;
 				rc = rpc_priv->crp_reply_hdr.cch_rc;
 			} else {
 				if (hg_ret != HG_NOMEM) {
