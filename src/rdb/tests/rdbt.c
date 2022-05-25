@@ -1167,17 +1167,90 @@ testm_disruptive_membership(crt_group_t *grp, uint32_t nranks,
 }
 
 static int
+testm_dictate_internal(crt_group_t *grp, uint32_t nranks, uint32_t nreplicas, uint64_t key,
+		       uint64_t val, d_rank_t chosen_rank, d_rank_t exec_rank)
+{
+	d_rank_list_t	       *ranks;
+	d_rank_t		ldr_rank;
+	d_rank_t		rank;
+	struct rsvc_hint	h;
+	int			i;
+	int			rc;
+
+	printf("INFO: chosen_rank=%u exec_rank=%u\n", chosen_rank, exec_rank);
+
+	ranks = d_rank_list_alloc(nreplicas);
+	if (ranks == NULL)
+		return -DER_NOMEM;
+
+	rc = dictate(grp, exec_rank, chosen_rank, ranks);
+	d_rank_list_free(ranks);
+	if (rc) {
+		fprintf(stderr, "FAIL: failed to dictate: "DF_RC"\n", DP_RC(rc));
+		return rc;
+	}
+	ldr_rank = chosen_rank;
+
+	printf("INFO: waiting for rank %u\n", ldr_rank);
+	for (i = 0; i < 20; i++) {
+		rc = rdbt_ping_rank(grp, ldr_rank, &h);
+		if (rc != -DER_NOTLEADER)
+			break;
+		sleep(1);
+	}
+	if (rc != 0) {
+		fprintf(stderr, "FAIL: no leader after dictating: "DF_RC"\n", DP_RC(rc));
+		return rc;
+	}
+
+	printf("INFO: restoring original replicas\n");
+	for (rank = 0; rank < nreplicas; rank++) {
+		if (rank == ldr_rank)
+			continue;
+		rc = rdbt_add_replica_rank(grp, ldr_rank, rank, &h);
+		if (rc) {
+			fprintf(stderr, "FAIL: add back replica rank %u RPC to leader %u: "
+				DF_RC", hint:(r=%u, t="DF_U64"\n", rank, ldr_rank,
+				DP_RC(rc), h.sh_rank, h.sh_term);
+			return rc;
+		}
+	}
+
+	printf("INFO: sleeping 10 s for the restored replicas to catch up\n");
+	sleep(10);
+
+	printf("INFO: lookup all replicas\n");
+	for (rank = 0; rank < nreplicas; rank++) {
+		const int	NO_UPDATE = 0;
+		uint64_t	val_out = 0;
+
+		rc = rdbt_test_rank(grp, rank, NO_UPDATE, RDBT_MEMBER_NOOP,
+				    key, val, &val_out, &h);
+		if (rc) {
+			fprintf(stderr, "FAIL: lookup RDB failed via RPC to leader "
+				"rank %u: "DF_RC", hint:(r=%u, t="DF_U64"\n",
+				ldr_rank, DP_RC(rc), h.sh_rank, h.sh_term);
+			return rc;
+		}
+		if (val_out != val) {
+			fprintf(stderr, "FAIL: lookup val="DF_U64" expect "DF_U64"\n", val_out,
+				val);
+			return -1;
+		}
+	}
+
+	return 0;
+}
+
+static int
 testm_dictate(crt_group_t *grp, uint32_t nranks, uint32_t nreplicas, uint64_t key, uint64_t val)
 {
 	int			rc;
 	d_rank_t		ldr_rank;
-	d_rank_list_t	       *ranks;
 	uint64_t		term;
 	uint64_t		val_out = 0;
-	struct rsvc_hint	h;
-	const int		NO_UPDATE = 0;
 	const int		UPDATE = 1;
-	int			i;
+	struct rsvc_hint	h;
 
 	printf("\n==== TEST: RDB update, destroy majority, dictate, and lookup\n");
 
@@ -1202,41 +1275,26 @@ testm_dictate(crt_group_t *grp, uint32_t nranks, uint32_t nreplicas, uint64_t ke
 		return -1;
 	}
 
-	ranks = d_rank_list_alloc(nreplicas);
-	if (ranks == NULL)
-		return -DER_NOMEM;
+	rc = testm_dictate_internal(grp, nranks, nreplicas, key, val,
+				    ldr_rank /* chosen_rank */,
+				    (ldr_rank + 1) % nreplicas /* exec_rank */);
+	if (rc)
+		return rc;
 
-	rc = dictate(grp, (ldr_rank + 1) % nranks, ldr_rank, ranks);
-	d_rank_list_free(ranks);
+	rc = rdbt_find_leader(grp, nranks, nreplicas, &ldr_rank, &term);
 	if (rc) {
-		fprintf(stderr, "FAIL: failed to dictate: "DF_RC"\n", DP_RC(rc));
+		fprintf(stderr, "ERR: RDB find leader failed\n");
 		return rc;
 	}
+	printf("INFO: RDB discovered leader rank %u, term="DF_U64"\n",
+	       ldr_rank, term);
 
-	for (i = 0; i < 20; i++) {
-		rc = rdbt_ping_rank(grp, ldr_rank, &h);
-		if (rc != -DER_NOTLEADER)
-			break;
-		sleep(1);
-	}
-	if (rc != 0) {
-		fprintf(stderr, "FAIL: no leader after dictating: "DF_RC"\n", DP_RC(rc));
+	rc = testm_dictate_internal(grp, nranks, nreplicas, key, val,
+				    (ldr_rank + 1) % nreplicas /* chosen_rank */,
+				    ldr_rank /* exec_rank */);
+	if (rc)
 		return rc;
-	}
 
-	val_out = 0;
-	rc = rdbt_test_rank(grp, ldr_rank, NO_UPDATE, RDBT_MEMBER_NOOP,
-			    key, val, &val_out, &h);
-	if (rc) {
-		fprintf(stderr, "FAIL: lookup RDB failed via RPC to leader "
-			       "rank %u: "DF_RC", hint:(r=%u, t="DF_U64"\n",
-			       ldr_rank, DP_RC(rc), h.sh_rank, h.sh_term);
-		return rc;
-	}
-	if (val_out != val) {
-		fprintf(stderr, "FAIL: lookup val="DF_U64" expect "DF_U64"\n", val_out, val);
-		return -1;
-	}
 	printf("====== PASS: dictate\n");
 
 	return 0;

@@ -879,14 +879,24 @@ ds_rsvc_start(enum ds_rsvc_class_id class, d_iov_t *id, uuid_t db_uuid,
 	entry = d_hash_rec_find(&rsvc_hash, id->iov_buf, id->iov_len);
 	if (entry != NULL) {
 		svc = rsvc_obj(entry);
-		D_DEBUG(DB_MD, "%s: found: stop=%d\n", svc->s_name,
-			svc->s_stop);
-		if (svc->s_stop)
-			rc = -DER_CANCELED;
-		else
-			rc = -DER_ALREADY;
-		ds_rsvc_put(svc);
-		goto out;
+		D_DEBUG(DB_MD, "%s: found: stop=%d\n", svc->s_name, svc->s_stop);
+		if (mode == DS_RSVC_DICTATE && !svc->s_stop) {
+			/*
+			 * If we need to dictate, and the service is not
+			 * stopping, then stop it, which should not fail in
+			 * this case, and continue.
+			 */
+			rc = ds_rsvc_stop(class, id, false /* destroy */);
+			D_ASSERTF(rc == 0, DF_RC"\n", DP_RC(rc));
+			ds_rsvc_put(svc);
+		} else {
+			if (svc->s_stop)
+				rc = -DER_CANCELED;
+			else
+				rc = -DER_ALREADY;
+			ds_rsvc_put(svc);
+			goto out;
+		}
 	}
 
 	rc = start(class, id, db_uuid, mode, size, replicas, arg, &svc);
@@ -975,7 +985,6 @@ ds_rsvc_stop(enum ds_rsvc_class_id class, d_iov_t *id, bool destroy)
 	int			 rc;
 
 	D_ASSERT(dss_get_module_info()->dmi_xs_id == 0);
-
 	rc = ds_rsvc_lookup(class, id, &svc);
 	if (rc != 0) {
 		if (rc != -DER_NOTREPLICA && destroy) {
@@ -991,13 +1000,8 @@ ds_rsvc_stop(enum ds_rsvc_class_id class, d_iov_t *id, bool destroy)
 		}
 		return 0;
 	}
-
-	rc = stop(svc, destroy);
-	if (rc == -DER_CANCELED)
-		return rc;
-
 	d_hash_rec_delete_at(&rsvc_hash, &svc->s_entry);
-	return rc;
+	return stop(svc, destroy);
 }
 
 struct stop_ult {
@@ -1100,8 +1104,8 @@ ds_rsvc_add_replicas_s(struct ds_rsvc *svc, d_rank_list_t *ranks, size_t size)
 {
 	int	rc;
 
-	rc = ds_rsvc_dist_start(svc->s_class, &svc->s_id, svc->s_db_uuid, ranks,
-				true /* create */, false /* bootstrap */, size);
+	rc = ds_rsvc_dist_start(svc->s_class, &svc->s_id, svc->s_db_uuid, ranks, DS_RSVC_CREATE,
+				false /* bootstrap */, size);
 
 	/* TODO: Attempt to only add replicas that were successfully started */
 	if (rc != 0)

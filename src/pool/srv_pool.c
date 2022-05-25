@@ -671,7 +671,7 @@ ds_pool_svc_create(const uuid_t pool_uuid, int ntargets, const char *group,
 		D_GOTO(out, rc);
 
 	d_iov_set(&psid, (void *)pool_uuid, sizeof(uuid_t));
-	rc = ds_rsvc_dist_start(DS_RSVC_CLASS_POOL, &psid, pool_uuid, ranks, true /* create */,
+	rc = ds_rsvc_dist_start(DS_RSVC_CLASS_POOL, &psid, pool_uuid, ranks, DS_RSVC_CREATE,
 				true /* bootstrap */, ds_rsvc_get_md_cap());
 	if (rc != 0)
 		D_GOTO(out_ranks, rc);

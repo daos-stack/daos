@@ -606,9 +606,8 @@ rdbt_init_handler(crt_rpc_t *rpc)
 	for (ri = 0; ri < ranks->rl_nr; ri++)
 		D_WARN("ranks[%u]=%u\n", ri, ranks->rl_ranks[ri]);
 
-	MUST(ds_rsvc_dist_start(DS_RSVC_CLASS_TEST, &test_svc_id, in->tii_uuid,
-				ranks, true /* create */, true /* bootstrap */,
-				DB_CAP));
+	MUST(ds_rsvc_dist_start(DS_RSVC_CLASS_TEST, &test_svc_id, in->tii_uuid, ranks,
+				DS_RSVC_CREATE, true /* bootstrap */, DB_CAP));
 	crt_reply_send(rpc);
 }
 

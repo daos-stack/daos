@@ -2326,6 +2326,11 @@ rdb_raft_load_lc(struct rdb *db)
 			DP_RC(rc));
 		goto err;
 	}
+	if (uuid_is_null(db->d_slc_record.dlr_uuid)) {
+		D_DEBUG(DB_MD, DF_DB": null SLC record\n", DP_DB(db));
+		db->d_slc = DAOS_HDL_INVAL;
+		goto load_snapshot;
+	}
 	rc = vos_cont_open(db->d_pool, db->d_slc_record.dlr_uuid, &db->d_slc);
 	if (rc == -DER_NONEXIST) {
 		D_DEBUG(DB_MD, DF_DB": dangling SLC record: "DF_UUID"\n",
@@ -2468,6 +2473,10 @@ rdb_raft_discard_slc(struct rdb *db)
 	} else if (rc != 0) {
 		D_ERROR(DF_DB": failed to look up SLC: "DF_RC"\n", DP_DB(db), DP_RC(rc));
 		return rc;
+	}
+	if (uuid_is_null(slc_record.dlr_uuid)) {
+		D_DEBUG(DB_MD, DF_DB": null SLC record\n", DP_DB(db));
+		return 0;
 	}
 
 	return rdb_raft_destroy_lc(db->d_pool, db->d_mc, &rdb_mc_slc, slc_record.dlr_uuid,
