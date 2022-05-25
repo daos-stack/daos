@@ -209,12 +209,12 @@ func prepBdevStorage(srv *server, iommuEnabled bool) error {
 	}
 
 	switch {
-	case srv.cfg.EnableVMD && srv.cfg.DisableVFIO:
+	case !srv.cfg.DisableVMD && srv.cfg.DisableVFIO:
 		srv.log.Info("VMD not enabled because VFIO disabled in config")
-	case srv.cfg.EnableVMD && !iommuEnabled:
+	case !srv.cfg.DisableVMD && !iommuEnabled:
 		srv.log.Info("VMD not enabled because IOMMU disabled on system")
 	default:
-		prepReq.EnableVMD = srv.cfg.EnableVMD
+		prepReq.EnableVMD = !srv.cfg.DisableVMD
 	}
 
 	if hasBdevs {

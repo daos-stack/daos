@@ -6,22 +6,41 @@
 """
 
 from datetime import datetime
+from ClusterShell.NodeSet import NodeSet
 
 from general_utils import run_command, DaosTestError, get_journalctl
 from ior_test_base import IorTestBase
-from apricot import TestWithServers
 from exception_utils import CommandFailure
 
+# Imports need to be split or python fails to import
+from apricot import TestWithServers
+from apricot import TestWithoutServers
 
-class CriticalIntegration(TestWithServers):
+
+#TO-DO
+#Provision all daos nodes using provisioning tool provided by HPCM
+
+
+class CriticalIntegrationWithoutServers(TestWithoutServers):
     """Test Class Description: Verify the basic integration of
                                the server nodes with available
                                framework and amongst themselves.
     :avocado: recursive
     """
 
-    #TO-DO
-    #Provision all daos nodes using provisioning tool provided by HPCM
+    def __init__(self, *args, **kwargs):
+        """Initialize a CriticalIntegrationWithoutServers object."""
+        super().__init__(*args, **kwargs)
+        self.hostlist_servers = NodeSet()
+        self.hostlist_clients = NodeSet()
+
+    def setUp(self):
+        """Set up CriticalIntegrationWithoutServers."""
+        super().setUp()
+        self.hostlist_servers = self.get_hosts_from_yaml(
+            "test_servers", "server_partition", "server_reservation", "/run/hosts/*")
+        self.hostlist_clients = self.get_hosts_from_yaml(
+            "test_clients", "server_partition", "server_reservation", "/run/hosts/*")
 
     def test_passwdlessssh_versioncheck(self):
         # pylint: disable=protected-access
@@ -37,14 +56,14 @@ class CriticalIntegration(TestWithServers):
         check_remote_root_access = self.params.get("check_remote_root_access", "/run/*")
         daos_server_version_list = []
         dmg_version_list = []
-        failed_nodes = []
+        failed_nodes = NodeSet()
         for host in self.hostlist_servers:
             daos_server_cmd = ("ssh -oNumberOfPasswordPrompts=0 {}"
                                " 'daos_server version'".format(host))
             remote_root_access = ("ssh -oNumberOfPasswordPrompts=0 root@{}"
                                   " 'echo hello'".format(host))
             command_for_inter_node = ("clush --nostdin -S -w {}"
-                                      " 'echo hello'".format(','.join(self.hostlist_servers)))
+                                      " 'echo hello'".format(str(self.hostlist_servers)))
             try:
                 out = run_command(daos_server_cmd)
                 daos_server_version_list.append(out.stdout.split(b' ')[3])
@@ -53,7 +72,7 @@ class CriticalIntegration(TestWithServers):
                 IorTestBase._execute_command(self, command_for_inter_node, hosts=[host])
             except (DaosTestError, CommandFailure) as error:
                 self.log.error("Error: %s", error)
-                failed_nodes.append(host)
+                failed_nodes.add(host)
         if failed_nodes:
             self.fail("SSH check failed on the following nodes.\n {}".format(failed_nodes))
 
@@ -86,6 +105,14 @@ class CriticalIntegration(TestWithServers):
             self.log.info("Clients: %s", dmg_version_list)
             self.log.info("servers: %s", daos_server_version_list)
             self.fail()
+
+
+class CriticalIntegrationWithServers(TestWithServers):
+    """Test Class Description: Verify the basic integration of
+                               the server nodes with available
+                               framework and amongst themselves.
+    :avocado: recursive
+    """
 
     def test_ras(self):
         """
