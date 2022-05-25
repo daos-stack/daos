@@ -58,7 +58,6 @@ eq_test_1()
 {
 	struct daos_event	*ep;
 	struct daos_event	ev;
-	struct daos_event	abort_ev;
 	daos_handle_t		eqh;
 	int			rc;
 
@@ -79,14 +78,6 @@ eq_test_1()
 
 	daos_event_complete(&ev, 0);
 
-	rc = daos_event_init(&abort_ev, eqh, NULL);
-	D_ASSERT(rc == 0);
-
-	rc = daos_event_launch(&abort_ev);
-	D_ASSERT(rc == 0);
-
-	daos_event_abort(&abort_ev);
-
 	print_message("Destroy non-empty EQ\n");
 	rc = daos_eq_destroy(eqh, 0);
 	if (rc != -DER_BUSY) {
@@ -100,7 +91,6 @@ eq_test_1()
 		goto out;
 	}
 	daos_event_fini(&ev);
-	daos_event_fini(&abort_ev);
 
 	print_message("Destroy empty EQ\n");
 	rc = daos_eq_destroy(eqh, 0);
