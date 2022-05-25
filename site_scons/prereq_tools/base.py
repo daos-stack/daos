@@ -906,11 +906,11 @@ class PreReqComponent():
                         ['$CVS', '--add', '!**/src/placement/ring_map.c'],
                         ['$CVS', '--add', '!**/src/common/tests_dmg_helpers.c'],
                         ['$CVS', '--add', '!**/src/common/tests_lib.c'],
-                        ['$CVS', '--add', '!**/src/bio/smd/tests'],
-                        ['$CVS', '--add', '!**/src/client/api/tests'],
-                        ['$CVS', '--add', '!**/src/client/dfuse/test'],
-                        ['$CVS', '--add', '!**/src/gurt/examples'],
-                        ['$CVS', '--add', '!**/src/utils/crt_launch']
+                        ['$CVS', '--add', '!**/src/bio/smd/tests/'],
+                        ['$CVS', '--add', '!**/src/client/api/tests/'],
+                        ['$CVS', '--add', '!**/src/client/dfuse/test/'],
+                        ['$CVS', '--add', '!**/src/gurt/examples/'],
+                        ['$CVS', '--add', '!**/src/utils/crt_launch/']
                         ]
             if not RUNNER.run_commands(commands):
                 raise BuildFailure("cov01")
