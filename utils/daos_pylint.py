@@ -46,7 +46,7 @@ class FileTypeList():
         if 'src/vos/storage_estimator' in file:
             return
 
-        # If files are in a subdir under ftest then they need to by treated differently.
+        # If files are in a subdir under ftest then they need to be treated differently.
         if 'src/tests/ftest/' in file:
             self.ftest_files.append(file)
             return
@@ -78,11 +78,8 @@ def parse_file(args, target_file, ftest=False, scons=False):
     """Main program"""
 
     rep = CollectingReporter()
-
     wrapper = None
-
     init_hook = None
-
     if isinstance(target_file, list):
         target = list(target_file)
         target.extend(['--jobs', str(min(len(target_file), 20))])

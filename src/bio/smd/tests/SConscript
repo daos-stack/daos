@@ -2,6 +2,7 @@
 
 import daos_build
 
+
 def scons():
     """Execute build"""
     Import('denv', 'prereqs')
@@ -16,6 +17,7 @@ def scons():
     tenv.AppendUnique(LIBPATH=['..'])
     smd_ut = daos_build.test(tenv, 'smd_ut', 'smd_ut.c', LIBS=libraries)
     tenv.Install('$PREFIX/bin/', smd_ut)
+
 
 if __name__ == "SCons.Script":
     scons()

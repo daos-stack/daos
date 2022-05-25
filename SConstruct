@@ -6,6 +6,10 @@ import subprocess
 import time
 import errno
 import SCons.Warnings
+import daos_build
+import compiler_setup
+from prereq_tools import PreReqComponent
+import stack_analyzer
 
 if sys.version_info.major < 3:
     print(""""Python 2.7 is no longer supported in the DAOS build.
@@ -21,13 +25,6 @@ try:
     input = raw_input  # pylint: disable=redefined-builtin
 except NameError:
     pass
-
-# pylint: disable=reimported,ungrouped-imports
-
-import daos_build
-import compiler_setup
-from prereq_tools import PreReqComponent
-import stack_analyzer
 
 
 def get_version(env):
