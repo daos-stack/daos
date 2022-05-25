@@ -85,7 +85,7 @@ class CriticalIntegrationWithoutServers(TestWithoutServers):
                 dmg_version_list.append(out.stdout.split(b' ')[2])
             except DaosTestError as error:
                 self.log.error("Error: %s", error)
-                failed_nodes.append(host)
+                failed_nodes.add(host)
         if failed_nodes:
             self.fail("SSH check for client nodes failed.\n {}".format(failed_nodes))
 
