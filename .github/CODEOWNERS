@@ -28,5 +28,10 @@ docs/ @daos-stack/doc-watchers
 #src/include/*.h @daos-stack/doc-watchers
 *.md @daos-stack/doc-watchers
 
+# dev-build-watchers: Files affecting local builds (e.g. SCons)
+SConstruct @daos-stack/dev-build-watchers
+SConscript @daos-stack/dev-build-watchers
+site_scons/ @daos-stack/dev-build-watchers
+
 # ftest-watchers: files affecting functional tests
 src/tests/ftest @daos-stack/ftest-watchers
