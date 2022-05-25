@@ -26,7 +26,8 @@ def generate_daos_version_header(env):
           '@TMPL_PKG_MAJOR@': env['DAOS_VERSION_MAJOR'],
           '@TMPL_PKG_MINOR@': env['DAOS_VERSION_MINOR'],
           '@TMPL_PKG_FIX@': env['DAOS_VERSION_FIX'],
-          '@Template for @' : ""}
+           '@Template for @' : ""}
+
     out = env.Substfile(tmpl_hdr_in, SUBST_DICT=sd)
     print("generated daos version header file: {}".format(out[0].abspath))
 
