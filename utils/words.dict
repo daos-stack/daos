@@ -3,6 +3,7 @@ ACL
 APs
 BW
 Broadwell
+CGO
 DArray
 DDict
 DFS
@@ -16,6 +17,7 @@ GHA
 Haswell
 IOF
 IOR
+ISA
 KVM
 Lustre
 MPI
@@ -44,6 +46,7 @@ Skylake
 SubProcess
 Subdirectories
 Testcase
+UCX
 UNS
 Uncomment
 VMD
@@ -118,6 +121,7 @@ dir
 distro
 dkey
 dkeys
+dll
 dmg
 doneapi
 dpdk
@@ -181,6 +185,7 @@ junit
 kds
 kv
 kwargs
+ldflags
 len
 libaio
 libdaos
@@ -204,6 +209,7 @@ mca
 mdtest
 memcheck
 metadata
+mgmt
 middleware
 mkdir
 mnt
@@ -250,6 +256,8 @@ pid
 pids
 pkgconfig
 pkill
+pmdk
+pmem
 poh
 posix
 postfix
@@ -274,6 +282,7 @@ rc
 rdb
 rdbt
 realloc
+recurse
 redistributions
 refactor
 repo
@@ -283,6 +292,7 @@ romio
 rpath
 rpaths
 rpc
+rpms
 runtime
 rw
 sandybridge
@@ -294,6 +304,7 @@ scons
 sharedctypes
 slurm
 slurmctl
+spdk
 squeue
 src
 srun
@@ -355,9 +366,12 @@ url
 username
 ushort
 usr
+utest
+util
 uuid
 uuidstr
 valgrind
+vendored
 ver
 versioned
 vm
