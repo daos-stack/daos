@@ -17,7 +17,6 @@ HEADERS_GURT = ['dlog.h', 'debug.h', 'common.h', 'hash.h', 'list.h',
 CART_VERSION = "4.9.0"
 
 
-
 def generate_daos_version_header(env):
     """Generate daos_version.h from a template file"""
 
@@ -31,6 +30,7 @@ def generate_daos_version_header(env):
           '@Template for @': ""}
     out = env.Substfile(tmpl_hdr_in, SUBST_DICT=sd)
     print("generated daos version header file: {}".format(out[0].abspath))
+
 
 def scons():
     """Execute build"""
