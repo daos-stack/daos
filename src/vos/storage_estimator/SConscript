@@ -1,8 +1,9 @@
-"""Install DAOS Storage Estimador"""
+"""Install DAOS Storage Estimator"""
 import sys
 
+
 def install_storage_estimator_module(env, lib_prefix):
-    """Install Storage Estimador module for the specified python version"""
+    """Install Storage Estimator module for the specified python version"""
 
     if GetOption("help"):
         return

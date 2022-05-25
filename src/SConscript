@@ -35,7 +35,7 @@ def scons():
 
     Import('env', 'base_env', 'prereqs')
 
-    # For Common library (tse.h)
+    # For Common library and headers.
     env.AppendUnique(CPPPATH=[Dir('include/daos').srcnode()])
     env.Install(os.path.join('$PREFIX', 'include/daos'), 'include/daos/tse.h')
 

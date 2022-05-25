@@ -50,6 +50,7 @@ VMD
 acl
 akey
 akeys
+allocator
 amongst
 api
 arg
@@ -120,6 +121,7 @@ dkeys
 dmg
 doneapi
 dpdk
+drpc
 dst
 dsync
 dtx
@@ -182,7 +184,10 @@ kwargs
 len
 libaio
 libdaos
+libdts
+libduns
 libfabric
+libgurt
 libs
 libvirt
 llnl
@@ -254,6 +259,8 @@ prebuilding
 prebuilt
 prepend
 prepended
+preprocess
+preprocessed
 preprocessor
 prereqs
 proc
@@ -265,6 +272,7 @@ pydaos
 ranklist
 rc
 rdb
+rdbt
 realloc
 redistributions
 refactor

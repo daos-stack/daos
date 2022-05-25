@@ -145,12 +145,17 @@ sys.path.append('site_scons')"""
         vals['msg_id'] = msg.msg_id
         vals['category'] = msg.category
 
+        category = msg.category
+        # The build/scons code is mostly clean, so only allow spellings or f-string warnings.
+        if scons and msg.msg_id not in ('C0401', 'C0402', 'C0209'):
+            category = 'error'
+
         print(args.msg_template.format(**vals))
 
         if args.format == 'github':
-            if msg.category in ('convention', 'refactor'):
+            if category in ('convention', 'refactor'):
                 continue
-            if msg.category == 'warning':
+            if category == 'warning':
                 continue
             # pylint: disable-next=line-too-long,consider-using-f-string
             print('::{category} file={path},line={line},col={column},::{symbol}, {msg}'.format(**vals))  # noqa: E501
