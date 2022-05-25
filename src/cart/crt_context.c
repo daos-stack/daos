@@ -200,7 +200,9 @@ crt_context_uri_get(crt_context_t crt_ctx, char **uri)
 	}
 
 	ctx = crt_ctx;
-	*uri = ctx->cc_self_uri;
+	D_STRNDUP(*uri, ctx->cc_self_uri, CRT_ADDR_STR_MAX_LEN);
+	if (*uri == NULL)
+		return DER_NOMEM;
 
 	return DER_SUCCESS;
 }
@@ -316,7 +318,7 @@ crt_context_provider_create(crt_context_t *crt_ctx, crt_provider_t provider, boo
 			D_GOTO(out, rc);
 		}
 
-		if (provider == CRT_PROVIDER_OFI_SOCKETS || provider == CRT_PROVIDER_OFI_TCP_RXM) {
+		if (provider == CRT_PROV_OFI_SOCKETS || provider == CRT_PROV_OFI_TCP_RXM) {
 			struct crt_grp_priv	*grp_priv = crt_gdata.cg_grp->gg_primary_grp;
 			struct crt_swim_membs	*csm = &grp_priv->gp_membs_swim;
 
@@ -366,7 +368,7 @@ crt_context_create_secondary(crt_context_t *crt_ctx, int idx)
 
 	/* TODO: Use idx later to ref other providers */
 	sec_prov = crt_gdata.cg_secondary_provs[0];
-	if (sec_prov == CRT_PROVIDER_UNKNOWN) {
+	if (sec_prov == CRT_PROV_UNKNOWN) {
 		D_ERROR("Unknown secondary provider\n");
 		return -DER_INVAL;
 	}

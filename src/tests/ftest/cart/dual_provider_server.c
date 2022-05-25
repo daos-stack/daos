@@ -251,7 +251,7 @@ int main(int argc, char **argv)
 			error_exit();
 	}
 
-	for (i = 0;  i< num_secondary_ctx; i++) {
+	for (i = 0;  i < num_secondary_ctx; i++) {
 		rc = crt_context_create_secondary(&secondary_ctx[i], 0);
 		if (rc != 0) {
 			D_ERROR("Context %d creation failed; rc=%d\n", i, rc);

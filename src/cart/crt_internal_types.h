@@ -69,7 +69,7 @@ struct crt_gdata {
 	int			*cg_secondary_provs;
 
 	/** Provider specific data */
-	struct crt_prov_gdata	cg_prov_gdata[CRT_PROVIDER_COUNT];
+	struct crt_prov_gdata	cg_prov_gdata[CRT_PROV_COUNT];
 
 	/** global timeout value (second) for all RPCs */
 	uint32_t		cg_timeout;

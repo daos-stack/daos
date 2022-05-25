@@ -410,7 +410,7 @@ grp_li_uri_set(struct crt_lookup_item *li, int tag, const char *uri)
 		if (crt_provider_is_contig_ep(provider)) {
 			if (crt_provider_is_port_based(provider)) {
 				rc = generate_port_based_uris(provider, base_addr, tag, ui);
-			} else if (provider == CRT_PROVIDER_OFI_CXI) {
+			} else if (provider == CRT_PROV_OFI_CXI) {
 				rc = generate_cxi_uris(provider, base_addr, tag, ui);
 			} else {
 				D_ERROR("Unknown provider %d for uri='%s'\n", provider, uri);

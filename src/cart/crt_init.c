@@ -23,7 +23,7 @@ dump_envariables(void)
 {
 	int	i;
 	char	*val;
-	char	*envars[] = {"CRT_PROVIDER", "CRT_INTERFACE", "CRT_DOMAIN", "CRT_PORT",
+	char	*envars[] = {"D_PROVIDER", "D_INTERFACE", "D_DOMAIN", "D_PORT",
 		"CRT_PHY_ADDR_STR", "D_LOG_STDERR_IN_LOG",
 		"D_LOG_FILE", "D_LOG_FILE_APPEND_PID", "D_LOG_MASK", "DD_MASK",
 		"DD_STDERR", "DD_SUBSYS", "CRT_TIMEOUT", "CRT_ATTACH_INFO_PATH",
@@ -182,7 +182,7 @@ static int data_init(int server, crt_init_options_t *opt)
 
 	crt_gdata.cg_refcount = 0;
 	crt_gdata.cg_inited = 0;
-	crt_gdata.cg_primary_prov = CRT_PROVIDER_OFI_SOCKETS;
+	crt_gdata.cg_primary_prov = CRT_PROV_OFI_SOCKETS;
 
 	d_srand(d_timeus_secdiff(0) + getpid());
 	start_rpcid = ((uint64_t)d_rand()) << 32;
@@ -381,7 +381,7 @@ __split_arg(char *s_arg_to_split, char **first_arg, char **second_arg)
 int
 crt_str_to_provider(const char *str_provider)
 {
-	int	provider_idx = CRT_PROVIDER_UNKNOWN;
+	int	provider_idx = CRT_PROV_UNKNOWN;
 	int	i;
 
 	if (str_provider == NULL)
@@ -392,7 +392,8 @@ crt_str_to_provider(const char *str_provider)
 		if (!strncmp(str_provider, crt_na_dict[i].nad_str,
 			     strlen(crt_na_dict[i].nad_str) + 1) ||
 		    (crt_na_dict[i].nad_alt_str &&
-		     !strncmp(str_provider, crt_na_dict[i].nad_alt_str, strlen(crt_na_dict[i].nad_alt_str) + 1))) {
+		     !strncmp(str_provider, crt_na_dict[i].nad_alt_str,
+			      strlen(crt_na_dict[i].nad_alt_str) + 1))) {
 			provider_idx = crt_na_dict[i].nad_type;
 			break;
 		}
@@ -431,16 +432,16 @@ prov_settings_apply(crt_provider_t prov, crt_init_options_t *opt)
 	int	rc = 0;
 
 	/* rxm and verbs providers only works with regular EP */
-	if ((prov == CRT_PROVIDER_OFI_VERBS_RXM ||
-	     prov == CRT_PROVIDER_OFI_TCP_RXM) &&
+	if ((prov == CRT_PROV_OFI_VERBS_RXM ||
+	     prov == CRT_PROV_OFI_TCP_RXM) &&
 	    crt_provider_is_sep(prov)) {
 		D_WARN("set CRT_CTX_SHARE_ADDR as 1 is invalid "
 		       "for current provider, ignoring it.\n");
 		crt_provider_set_sep(prov, false);
 	}
 
-	if (prov == CRT_PROVIDER_OFI_VERBS_RXM ||
-	    prov == CRT_PROVIDER_OFI_TCP_RXM) {
+	if (prov == CRT_PROV_OFI_VERBS_RXM ||
+	    prov == CRT_PROV_OFI_TCP_RXM) {
 
 		srx_env = getenv("FI_OFI_RXM_USE_SRX");
 		if (srx_env == NULL) {
@@ -450,7 +451,7 @@ prov_settings_apply(crt_provider_t prov, crt_init_options_t *opt)
 	}
 
 	/* Print notice that "ofi+psm2" will be deprecated*/
-	if (prov == CRT_PROVIDER_OFI_PSM2) {
+	if (prov == CRT_PROV_OFI_PSM2) {
 		D_WARN("\"ofi+psm2\" will be deprecated soon.\n");
 		setenv("FI_PSM2_NAME_SERVER", "1", true);
 		D_DEBUG(DB_ALL, "Setting FI_PSM2_NAME_SERVER to 1\n");
@@ -553,7 +554,7 @@ crt_init_opt(crt_group_id_t grpid, uint32_t flags, crt_init_options_t *opt)
 		else {
 			provider_env = getenv(CRT_PHY_ADDR_ENV);
 
-			tmp = getenv("CRT_PROVIDER");
+			tmp = getenv("D_PROVIDER");
 			if (tmp)
 				provider_env = tmp;
 		}
@@ -563,7 +564,7 @@ crt_init_opt(crt_group_id_t grpid, uint32_t flags, crt_init_options_t *opt)
 		else {
 			interface_env = getenv("OFI_INTERFACE");
 
-			tmp = getenv("CRT_INTERFACE");
+			tmp = getenv("D_INTERFACE");
 			if (tmp)
 				interface_env = tmp;
 		}
@@ -573,7 +574,7 @@ crt_init_opt(crt_group_id_t grpid, uint32_t flags, crt_init_options_t *opt)
 		else {
 			domain_env = getenv("OFI_DOMAIN");
 
-			tmp = getenv("CRT_DOMAIN");
+			tmp = getenv("D_DOMAIN");
 			if (tmp)
 				domain_env = tmp;
 		}
@@ -589,7 +590,7 @@ crt_init_opt(crt_group_id_t grpid, uint32_t flags, crt_init_options_t *opt)
 		else {
 			port_str = getenv("OFI_PORT");
 
-			tmp = getenv("CRT_PORT");
+			tmp = getenv("D_PORT");
 			if (tmp)
 				port_str = tmp;
 		}
@@ -598,7 +599,7 @@ crt_init_opt(crt_group_id_t grpid, uint32_t flags, crt_init_options_t *opt)
 		primary_provider = crt_str_to_provider(provider_str0);
 		secondary_provider = crt_str_to_provider(provider_str1);
 
-		if (primary_provider == CRT_PROVIDER_UNKNOWN) {
+		if (primary_provider == CRT_PROV_UNKNOWN) {
 			D_ERROR("Requested provider %s not found\n", provider_env);
 			D_GOTO(out, rc = -DER_NONEXIST);
 		}
@@ -621,7 +622,7 @@ crt_init_opt(crt_group_id_t grpid, uint32_t flags, crt_init_options_t *opt)
 			D_GOTO(out, rc);
 		}
 
-		if (secondary_provider != CRT_PROVIDER_UNKNOWN) {
+		if (secondary_provider != CRT_PROV_UNKNOWN) {
 			num_secondaries = 1;
 
 			if (port1 == NULL || port1[0] == '\0') {
@@ -985,7 +986,7 @@ crt_na_config_init(crt_provider_t provider, const char *interface,
 	int				rc = 0;
 	int				port = -1;
 
-	if (provider == CRT_PROVIDER_SM)
+	if (provider == CRT_PROV_SM)
 		return 0;
 
 	na_cfg = &crt_gdata.cg_prov_gdata[provider].cpg_na_config;
@@ -1006,16 +1007,16 @@ crt_na_config_init(crt_provider_t provider, const char *interface,
 		} else {
 			port = atoi(port_str);
 
-			if (provider == CRT_PROVIDER_OFI_SOCKETS ||
-			    provider == CRT_PROVIDER_OFI_VERBS_RXM ||
-			    provider == CRT_PROVIDER_OFI_TCP_RXM)
+			if (provider == CRT_PROV_OFI_SOCKETS ||
+			    provider == CRT_PROV_OFI_VERBS_RXM ||
+			    provider == CRT_PROV_OFI_TCP_RXM)
 				crt_port_range_verify(port);
 
-			if (provider == CRT_PROVIDER_OFI_PSM2)
+			if (provider == CRT_PROV_OFI_PSM2)
 				port = (uint16_t)port << 8;
 			D_DEBUG(DB_ALL, "OFI_PORT %d, using it as service port.\n", port);
 		}
-	} else if (provider == CRT_PROVIDER_OFI_PSM2) {
+	} else if (provider == CRT_PROV_OFI_PSM2) {
 		rc = crt_get_port_psm2(&port);
 		if (rc != 0) {
 			D_ERROR("crt_get_port failed, rc: %d.\n", rc);

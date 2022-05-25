@@ -128,7 +128,8 @@ handler_ping(crt_rpc_t *rpc)
 
 	DBG_PRINT("RPC arived on a %s context\n",
 		  crt_context_is_primary(ctx) ? "primary" : "secondary");
-#if 1
+
+	/* TODO: Change this to rank == 2 when bulk support is added */
 	if (g_my_rank == 100002) {
 		struct crt_bulk_desc	bulk_desc;
 		crt_bulk_t		dst_bulk;
@@ -166,7 +167,6 @@ handler_ping(crt_rpc_t *rpc)
 			error_exit();
 		}
 	}
-#endif
 
 	rc = crt_reply_send(rpc);
 	if (rc)

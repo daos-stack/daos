@@ -42,15 +42,15 @@ static inline bool
 crt_provider_is_ucx(crt_provider_t prov)
 {
 
-	return (prov >= CRT_PROVIDER_UCX_RC) &&
-	       (prov <= CRT_PROVIDER_UCX_LAST);
+	return (prov >= CRT_PROV_UCX_RC) &&
+	       (prov <= CRT_PROV_UCX_LAST);
 }
 
 static inline bool
 crt_provider_is_ofi(crt_provider_t prov)
 {
-	return (prov >= CRT_PROVIDER_OFI_SOCKETS) &&
-	       (prov <= CRT_PROVIDER_OFI_LAST);
+	return (prov >= CRT_PROV_OFI_SOCKETS) &&
+	       (prov <= CRT_PROV_OFI_LAST);
 }
 
 struct crt_na_dict {
