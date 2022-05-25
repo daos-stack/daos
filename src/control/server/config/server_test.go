@@ -200,7 +200,7 @@ func TestServerConfig_Constructed(t *testing.T) {
 		WithBdevInclude("0000:81:00.1", "0000:81:00.2", "0000:81:00.3").
 		WithBdevExclude("0000:81:00.1").
 		WithDisableVFIO(true).   // vfio enabled by default
-		WithEnableVMD(true).     // vmd disabled by default
+		WithDisableVMD(true).    // vmd enabled by default
 		WithEnableHotplug(true). // hotplug disabled by default
 		WithControlLogMask(common.ControlLogLevelError).
 		WithControlLogFile("/tmp/daos_server.log").
@@ -209,7 +209,7 @@ func TestServerConfig_Constructed(t *testing.T) {
 		WithTelemetryPort(9191).
 		WithSystemName("daos_server").
 		WithSocketDir("./.daos/daos_server").
-		WithFabricProvider("ofi+verbs").
+		WithFabricProvider("ofi+verbs;ofi_rxm").
 		WithCrtCtxShareAddr(0).
 		WithCrtTimeout(30).
 		WithAccessPoints("hostname1").
@@ -238,14 +238,14 @@ func TestServerConfig_Constructed(t *testing.T) {
 			).
 			WithFabricInterface("ib0").
 			WithFabricInterfacePort(20000).
-			WithFabricProvider("ofi+verbs").
+			WithFabricProvider("ofi+verbs;ofi_rxm").
 			WithCrtCtxShareAddr(0).
 			WithCrtTimeout(30).
 			WithPinnedNumaNode(0).
 			WithBypassHealthChk(&bypass).
 			WithEnvVars("CRT_TIMEOUT=30").
 			WithLogFile("/tmp/daos_engine.0.log").
-			WithLogMask("WARN").
+			WithLogMask("INFO").
 			WithStorageEnableHotplug(true),
 		engine.MockConfig().
 			WithSystemName("daos_server").
@@ -266,13 +266,13 @@ func TestServerConfig_Constructed(t *testing.T) {
 			).
 			WithFabricInterface("ib1").
 			WithFabricInterfacePort(20000).
-			WithFabricProvider("ofi+verbs").
+			WithFabricProvider("ofi+verbs;ofi_rxm").
 			WithCrtCtxShareAddr(0).
 			WithCrtTimeout(30).
 			WithBypassHealthChk(&bypass).
 			WithEnvVars("CRT_TIMEOUT=100").
 			WithLogFile("/tmp/daos_engine.1.log").
-			WithLogMask("WARN").
+			WithLogMask("INFO").
 			WithStorageEnableHotplug(true),
 	}
 	constructed.Path = testFile // just to avoid failing the cmp

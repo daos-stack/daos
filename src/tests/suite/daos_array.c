@@ -85,7 +85,7 @@ simple_array_mgmt(void **state)
 	assert_rc_equal(rc, -DER_INVAL);
 
 	/** create the array with LEXICAL DKEY, should FAIL */
-	oid = daos_test_oid_gen(arg->coh, OC_SX, DAOS_OF_DKEY_LEXICAL, 0,
+	oid = daos_test_oid_gen(arg->coh, OC_SX, DAOS_OT_DKEY_LEXICAL, 0,
 			  arg->myrank);
 	rc = daos_array_create(arg->coh, oid, DAOS_TX_NONE, 4, chunk_size,
 			       &oh, NULL);
