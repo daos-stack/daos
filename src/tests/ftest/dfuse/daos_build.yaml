@@ -8,7 +8,7 @@ timeout: 10800
 server_config:
   name: daos_server
 pool:
-  size: 5GiB
+  size: 20GiB
   control_method: dmg
 container:
   type: POSIX
@@ -22,12 +22,13 @@ dfuse: !mux
     mount_dir: "/tmp/daos_dfuse/"
     disable_wb_cache: true
     name: "writethrough"
-  # metadata:
-  #  !filter-only : "/run/intercept/off"  # yamllint disable-line rule:colons
-  #  mount_dir: "/tmp/daos_dfuse"
-  #  disable_wb_cache: true
-  #  name: "metadata"
+  metadata:
+    !filter-only : "/run/intercept/off"  # yamllint disable-line rule:colons
+    mount_dir: "/tmp/daos_dfuse"
+    disable_wb_cache: true
+    name: "metadata"
   nocache:
+    !filter-only : "/run/intercept/off"  # yamllint disable-line rule:colons
     mount_dir: "/tmp/daos_dfuse/"
     disable_wb_cache: true
     disable_caching: true
