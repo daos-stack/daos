@@ -134,14 +134,17 @@ def set_defaults(env, daos_version):
 def build_misc(build_prefix):
     """Build miscellaneous items"""
     # install the configuration files
-    SConscript('{}/utils/config/SConscript'.format(build_prefix))
+    SConscript('utils/config/SConscript', variant_dir="{}/utils/config".format(build_prefix),
+               duplicate=0)
 
     # install certificate generation files
-    SConscript('{}/utils/certs/SConscript'.format(build_prefix))
+    SConscript('utils/certs/SConscript', variant_dir="{}/utils/certs".format(build_prefix),
+               duplicate=0)
 
     # install man pages
     try:
-        SConscript('{}/doc/man/SConscript'.format(build_prefix), must_exist=0)
+        SConscript('doc/man/SConscript', variant_dir="{}/doc/man".format(build_prefix),
+                   must_exist=0, duplicate=0)
     except SCons.Warnings.MissingSConscriptWarning as _warn:
         print("Missing doc/man/SConscript...")
 
@@ -410,8 +413,7 @@ def scons():  # pylint: disable=too-many-locals,too-many-branches
     Export('platform_arm', 'conf_dir')
 
     # generate targets in specific build dir to avoid polluting the source code
-    VariantDir(build_prefix, '.', duplicate=0)
-    SConscript('{}/src/SConscript'.format(build_prefix))
+    SConscript('src/SConscript', variant_dir="{}/src".format(build_prefix), duplicate=0)
 
     buildinfo = prereqs.get_build_info()
     buildinfo.gen_script('.build_vars.sh')
@@ -429,7 +431,7 @@ def scons():  # pylint: disable=too-many-locals,too-many-branches
 
     if prereqs.client_requested():
         api_version = env.Command("%s/API_VERSION" % build_prefix,
-                                  "%s/SConstruct" % build_prefix,
+                                  "SConstruct",
                                   "echo %s > $TARGET" % (API_VERSION))
         env.Install("$PREFIX/lib64/daos", api_version)
     env.Install(conf_dir + '/bash_completion.d', ['utils/completion/daos.bash'])
