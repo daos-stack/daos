@@ -4,6 +4,13 @@ daos (2.3.100-9) unstable; urgency=medium
 
  -- Lei Huang <lei.huang@intel.com> Wed, 18 May 2022 16:30:00 -0500
 
+daos (2.3.100-9) unstable; urgency=medium
+  [ Phillip Henderson ]
+  * Remove doas-client-tests-openmpi dependency from daos-tests
+  * Add daos-tests-internal package
+
+ -- Phillip Henderson <phillip.henderson@intel.com>  Tue, 17 May 2022 12:43:00 -0400
+
 daos (2.3.100-8) unstable; urgency=medium
   [ Ashley Pittman ]
   * Extend dfusedaosbuild test to run in different configurations.
