@@ -1400,7 +1400,7 @@ cont_agg_eph_leader_ult(void *arg)
 	while (!dss_ult_exiting(svc->cs_ec_leader_ephs_req)) {
 		d_rank_list_t		fail_ranks = { 0 };
 
-		rc = map_ranks_init(pool->sp_map, MAP_RANKS_DOWN,
+		rc = map_ranks_init(pool->sp_map, PO_COMP_ST_DOWNOUT | PO_COMP_ST_DOWN,
 				    &fail_ranks);
 		if (rc) {
 			D_ERROR(DF_UUID": ranks init failed: %d\n",
