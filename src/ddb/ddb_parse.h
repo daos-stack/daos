@@ -18,7 +18,7 @@ struct program_args {
 	char *pa_cmd_file;
 	char *pa_r_cmd_run;
 	char *pa_pool_path;
-	char *pa_pool_uuid;
+	bool  pa_write_mode;
 };
 
 /* Parse a string into an array of words with the count of words */

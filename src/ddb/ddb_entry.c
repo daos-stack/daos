@@ -89,6 +89,32 @@ file_exists(const char *path)
 	return access(path, F_OK) == 0;
 }
 
+static int
+get_lines(const char *path, ddb_io_line_cb line_cb, void *cb_args)
+{
+	FILE	*f;
+	char	*line = NULL;
+	uint64_t len = 0;
+	uint64_t read;
+	int	 rc = 0;
+
+	f = fopen(path, "r");
+	if (f == NULL) {
+		rc = daos_errno2der(errno);
+		print_error("Unable to open path '%s': "DF_RC"\n", path, DP_RC(rc));
+		return rc;
+	}
+
+	while ((read = getline(&line, &len, f)) != -1 && rc == 0)
+		rc = line_cb(cb_args, line, read);
+
+	fclose(f);
+	if (line)
+		free(line);
+
+	return rc;
+}
+
 int main(int argc, char *argv[])
 {
 	int rc;
@@ -99,7 +125,8 @@ int main(int argc, char *argv[])
 		.ddb_write_file = write_file,
 		.ddb_read_file = read_file,
 		.ddb_get_file_size = get_file_size,
-		.ddb_get_file_exists = file_exists
+		.ddb_get_file_exists = file_exists,
+		.ddb_get_lines = get_lines,
 	};
 
 	rc = ddb_init();

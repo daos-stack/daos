@@ -56,9 +56,6 @@ ls_option_parse(struct ddb_ctx *ctx, struct ls_options *cmd_args,
 
 	index = optind;
 
-	D_ASSERT(argc > index);
-	D_ASSERT(same(argv[index], COMMAND_NAME_LS));
-	index++;
 	if (argc - index > 0) {
 		cmd_args->path = argv[index];
 		index++;
@@ -101,9 +98,6 @@ dump_value_option_parse(struct ddb_ctx *ctx, struct dump_value_options *cmd_args
 
 	index = optind;
 
-	D_ASSERT(argc > index);
-	D_ASSERT(same(argv[index], COMMAND_NAME_DUMP_VALUE));
-	index++;
 	if (argc - index > 0) {
 		cmd_args->path = argv[index];
 		index++;
@@ -156,9 +150,6 @@ rm_option_parse(struct ddb_ctx *ctx, struct rm_options *cmd_args,
 
 	index = optind;
 
-	D_ASSERT(argc > index);
-	D_ASSERT(same(argv[index], COMMAND_NAME_RM));
-	index++;
 	if (argc - index > 0) {
 		cmd_args->path = argv[index];
 		index++;
@@ -204,9 +195,6 @@ load_option_parse(struct ddb_ctx *ctx, struct load_options *cmd_args,
 
 	index = optind;
 
-	D_ASSERT(argc > index);
-	D_ASSERT(same(argv[index], COMMAND_NAME_LOAD));
-	index++;
 	if (argc - index > 0) {
 		cmd_args->src = argv[index];
 		index++;
@@ -266,9 +254,6 @@ dump_ilog_option_parse(struct ddb_ctx *ctx, struct dump_ilog_options *cmd_args,
 
 	index = optind;
 
-	D_ASSERT(argc > index);
-	D_ASSERT(same(argv[index], COMMAND_NAME_DUMP_ILOG));
-	index++;
 	if (argc - index > 0) {
 		cmd_args->path = argv[index];
 		index++;
@@ -314,9 +299,6 @@ commit_ilog_option_parse(struct ddb_ctx *ctx, struct commit_ilog_options *cmd_ar
 
 	index = optind;
 
-	D_ASSERT(argc > index);
-	D_ASSERT(same(argv[index], COMMAND_NAME_COMMIT_ILOG));
-	index++;
 	if (argc - index > 0) {
 		cmd_args->path = argv[index];
 		index++;
@@ -362,9 +344,6 @@ rm_ilog_option_parse(struct ddb_ctx *ctx, struct rm_ilog_options *cmd_args,
 
 	index = optind;
 
-	D_ASSERT(argc > index);
-	D_ASSERT(same(argv[index], COMMAND_NAME_RM_ILOG));
-	index++;
 	if (argc - index > 0) {
 		cmd_args->path = argv[index];
 		index++;
@@ -418,9 +397,6 @@ dump_dtx_option_parse(struct ddb_ctx *ctx, struct dump_dtx_options *cmd_args,
 
 	index = optind;
 
-	D_ASSERT(argc > index);
-	D_ASSERT(same(argv[index], COMMAND_NAME_DUMP_DTX));
-	index++;
 	if (argc - index > 0) {
 		cmd_args->path = argv[index];
 		index++;
@@ -466,9 +442,6 @@ clear_cmt_dtx_option_parse(struct ddb_ctx *ctx, struct clear_cmt_dtx_options *cm
 
 	index = optind;
 
-	D_ASSERT(argc > index);
-	D_ASSERT(same(argv[index], COMMAND_NAME_CLEAR_CMT_DTX));
-	index++;
 	if (argc - index > 0) {
 		cmd_args->path = argv[index];
 		index++;
@@ -488,8 +461,9 @@ clear_cmt_dtx_option_parse(struct ddb_ctx *ctx, struct clear_cmt_dtx_options *cm
 int
 ddb_parse_cmd_args(struct ddb_ctx *ctx, struct argv_parsed *parsed, struct ddb_cmd_info *info)
 {
-	char *cmd = parsed->ap_argv[1];
+	char *cmd = parsed->ap_argv[0];
 
+	D_ASSERT(cmd != NULL);
 	if (same(cmd, COMMAND_NAME_HELP)) {
 		info->dci_cmd = DDB_CMD_HELP;
 		return 0;

@@ -47,17 +47,16 @@ ddb_parse_program_args(struct ddb_ctx *ctx, uint32_t argc, char **argv, struct p
 		{ "write_mode", no_argument, NULL,	'w' },
 		{ "run_cmd", required_argument, NULL,	'R' },
 		{ "cmd_file", required_argument, NULL,	'f' },
-		{ "pool", required_argument, NULL,	'p' },
 		{ NULL }
 	};
 	int		index = 0, opt;
 
 	optind = 1;
 	opterr = 0;
-	while ((opt = getopt_long(argc, argv,
-				  "wR:f:p:", program_options, &index)) != -1) {
+	while ((opt = getopt_long(argc, argv, "wR:f:", program_options, &index)) != -1) {
 		switch (opt) {
 		case 'w':
+			pa->pa_write_mode = true;
 			break;
 		case 'R':
 			pa->pa_r_cmd_run = optarg;
@@ -65,11 +64,8 @@ ddb_parse_program_args(struct ddb_ctx *ctx, uint32_t argc, char **argv, struct p
 		case 'f':
 			pa->pa_cmd_file = optarg;
 			break;
-		case 'p':
-			pa->pa_pool_uuid = optarg;
-			break;
 		case '?':
-			ddb_errorf(ctx, "'%c' is unknown\n", optopt);
+			ddb_errorf(ctx, "'%c'(0x%x) is unknown\n", optopt, optopt);
 			return -DER_INVAL;
 		default:
 			return -DER_INVAL;
