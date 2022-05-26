@@ -156,6 +156,7 @@ int rdb_raft_open(struct rdb *db);
 int rdb_raft_start(struct rdb *db);
 void rdb_raft_stop(struct rdb *db);
 void rdb_raft_close(struct rdb *db);
+int rdb_raft_dictate(struct rdb *db);
 void rdb_raft_resign(struct rdb *db, uint64_t term);
 int rdb_raft_campaign(struct rdb *db);
 int rdb_raft_verify_leadership(struct rdb *db);

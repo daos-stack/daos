@@ -655,6 +655,21 @@ ds_rsvc_request_map_dist(struct ds_rsvc *svc)
 	ABT_cond_broadcast(svc->s_map_dist_cv);
 }
 
+static char *
+start_mode_str(enum ds_rsvc_start_mode mode)
+{
+	switch (mode) {
+	case DS_RSVC_START:
+		return "start";
+	case DS_RSVC_CREATE:
+		return "create";
+	case DS_RSVC_DICTATE:
+		return "dictate";
+	default:
+		return "unknown";
+	}
+}
+
 static bool
 nominated(d_rank_list_t *replicas, uuid_t db_uuid)
 {
@@ -685,7 +700,7 @@ self_only(d_rank_list_t *replicas)
 }
 
 static int
-start(enum ds_rsvc_class_id class, d_iov_t *id, uuid_t db_uuid, bool create,
+start(enum ds_rsvc_class_id class, d_iov_t *id, uuid_t db_uuid, enum ds_rsvc_start_mode mode,
       size_t size, d_rank_list_t *replicas, void *arg, struct ds_rsvc **svcp)
 {
 	struct rdb_storage     *storage;
@@ -697,13 +712,19 @@ start(enum ds_rsvc_class_id class, d_iov_t *id, uuid_t db_uuid, bool create,
 		goto err;
 	svc->s_ref++;
 
-	if (create)
+	if (mode == DS_RSVC_CREATE)
 		rc = rdb_create(svc->s_db_path, svc->s_db_uuid, size, replicas, &rsvc_rdb_cbs, svc,
 				&storage);
 	else
 		rc = rdb_open(svc->s_db_path, svc->s_db_uuid, &rsvc_rdb_cbs, svc, &storage);
 	if (rc != 0)
 		goto err_svc;
+
+	if (mode == DS_RSVC_DICTATE) {
+		rc = rdb_dictate(storage);
+		if (rc != 0)
+			goto err_storage;
+	}
 
 	rc = rdb_start(storage, &svc->s_db);
 	if (rc != 0)
@@ -715,7 +736,7 @@ start(enum ds_rsvc_class_id class, d_iov_t *id, uuid_t db_uuid, bool create,
 	 * we are the "nominated" replica, start a campaign without waiting for
 	 * the election timeout.
 	 */
-	if (create && nominated(replicas, svc->s_db_uuid)) {
+	if (mode == DS_RSVC_CREATE && nominated(replicas, svc->s_db_uuid)) {
 		/* Give others a chance to get ready for voting. */
 		dss_sleep(1 /* ms */);
 		rc = rdb_campaign(svc->s_db);
@@ -723,7 +744,7 @@ start(enum ds_rsvc_class_id class, d_iov_t *id, uuid_t db_uuid, bool create,
 			goto err_db;
 	}
 
-	if (create && self_only(replicas) &&
+	if (mode == DS_RSVC_CREATE && self_only(replicas) &&
 	    rsvc_class(class)->sc_bootstrap != NULL) {
 		rc = bootstrap_self(svc, arg);
 		if (rc != 0)
@@ -737,7 +758,7 @@ err_db:
 	rdb_stop(svc->s_db, &storage);
 err_storage:
 	rdb_close(storage);
-	if (create)
+	if (mode == DS_RSVC_CREATE)
 		rdb_destroy(svc->s_db_path, svc->s_db_uuid);
 err_svc:
 	svc->s_ref--;
@@ -829,15 +850,15 @@ ds_rsvc_stop_nodb(enum ds_rsvc_class_id class, d_iov_t *id)
 }
 
 /**
- * Start a replicated service. If \a create is false, all remaining input
- * parameters are ignored; otherwise, create the replica first. If \a replicas
- * is NULL, all remaining input parameters are ignored; otherwise, bootstrap
- * the replicated service.
+ * Start a replicated service. If \a mode is not DS_RSVC_CREATE, all remaining
+ * input parameters are ignored; otherwise, create the replica first. If \a
+ * replicas is NULL, all remaining input parameters are ignored; otherwise,
+ * bootstrap the replicated service.
  *
  * \param[in]	class		replicated service class
  * \param[in]	id		replicated service ID
  * \param[in]	db_uuid		DB UUID
- * \param[in]	create		whether to create the replica before starting
+ * \param[in]	mode		mode of starting the replicated service
  * \param[in]	size		replica size in bytes
  * \param[in]	replicas	optional initial membership
  * \param[in]	arg		argument for cbs.sc_bootstrap
@@ -847,7 +868,7 @@ ds_rsvc_stop_nodb(enum ds_rsvc_class_id class, d_iov_t *id)
  */
 int
 ds_rsvc_start(enum ds_rsvc_class_id class, d_iov_t *id, uuid_t db_uuid,
-	      bool create, size_t size, d_rank_list_t *replicas, void *arg)
+	      enum ds_rsvc_start_mode mode, size_t size, d_rank_list_t *replicas, void *arg)
 {
 	struct ds_rsvc		*svc = NULL;
 	d_list_t		*entry;
@@ -858,17 +879,27 @@ ds_rsvc_start(enum ds_rsvc_class_id class, d_iov_t *id, uuid_t db_uuid,
 	entry = d_hash_rec_find(&rsvc_hash, id->iov_buf, id->iov_len);
 	if (entry != NULL) {
 		svc = rsvc_obj(entry);
-		D_DEBUG(DB_MD, "%s: found: stop=%d\n", svc->s_name,
-			svc->s_stop);
-		if (svc->s_stop)
-			rc = -DER_CANCELED;
-		else
-			rc = -DER_ALREADY;
-		ds_rsvc_put(svc);
-		goto out;
+		D_DEBUG(DB_MD, "%s: found: stop=%d\n", svc->s_name, svc->s_stop);
+		if (mode == DS_RSVC_DICTATE && !svc->s_stop) {
+			/*
+			 * If we need to dictate, and the service is not
+			 * stopping, then stop it, which should not fail in
+			 * this case, and continue.
+			 */
+			rc = ds_rsvc_stop(class, id, false /* destroy */);
+			D_ASSERTF(rc == 0, DF_RC"\n", DP_RC(rc));
+			ds_rsvc_put(svc);
+		} else {
+			if (svc->s_stop)
+				rc = -DER_CANCELED;
+			else
+				rc = -DER_ALREADY;
+			ds_rsvc_put(svc);
+			goto out;
+		}
 	}
 
-	rc = start(class, id, db_uuid, create, size, replicas, arg, &svc);
+	rc = start(class, id, db_uuid, mode, size, replicas, arg, &svc);
 	if (rc != 0)
 		goto out;
 
@@ -876,17 +907,30 @@ ds_rsvc_start(enum ds_rsvc_class_id class, d_iov_t *id, uuid_t db_uuid,
 			       &svc->s_entry, true /* exclusive */);
 	if (rc != 0) {
 		D_DEBUG(DB_MD, "%s: insert: "DF_RC"\n", svc->s_name, DP_RC(rc));
-		stop(svc, create /* destroy */);
+		stop(svc, mode == DS_RSVC_CREATE /* destroy */);
 		goto out;
 	}
 
 	D_DEBUG(DB_MD, "%s: started replicated service\n", svc->s_name);
 	ds_rsvc_put(svc);
 out:
-	if (rc != 0 && rc != -DER_ALREADY && !(create && rc == -DER_EXIST))
-		D_ERROR("Failed to start replicated service: "DF_RC"\n",
-			DP_RC(rc));
+	if (rc != 0 && rc != -DER_ALREADY && !(mode == DS_RSVC_CREATE && rc == -DER_EXIST))
+		D_ERROR("Failed to start replicated service: "DF_RC"\n", DP_RC(rc));
 	return rc;
+}
+
+static int
+remove_path(char *path)
+{
+	int rc;
+
+	rc = remove(path);
+	if (rc != 0) {
+		rc = errno;
+		D_CDEBUG(rc == ENOENT, DB_MD, DLOG_ERR, "failed to remove %s: %d\n", path, rc);
+		return daos_errno2der(rc);
+	}
+	return 0;
 }
 
 static int
@@ -917,7 +961,7 @@ stop(struct ds_rsvc *svc, bool destroy)
 		ABT_cond_wait(svc->s_state_cv, svc->s_mutex);
 
 	if (destroy)
-		rc = remove(svc->s_db_path);
+		rc = remove_path(svc->s_db_path);
 
 	ABT_mutex_unlock(svc->s_mutex);
 	ds_rsvc_put(svc);
@@ -925,14 +969,13 @@ stop(struct ds_rsvc *svc, bool destroy)
 }
 
 /**
- * Stop a replicated service. If destroy is false, all remaining parameters are
- * ignored; otherwise, destroy the service afterward.
+ * Stop a replicated service. If destroy is true, destroy the service
+ * afterward.
  *
  * \param[in]	class		replicated service class
  * \param[in]	id		replicated service ID
  * \param[in]	destroy		whether to destroy the replica after stopping
  *
- * \retval -DER_ALREADY		replicated service already stopped
  * \retval -DER_CANCELED	replicated service stopping
  */
 int
@@ -943,8 +986,20 @@ ds_rsvc_stop(enum ds_rsvc_class_id class, d_iov_t *id, bool destroy)
 
 	D_ASSERT(dss_get_module_info()->dmi_xs_id == 0);
 	rc = ds_rsvc_lookup(class, id, &svc);
-	if (rc != 0)
-		return -DER_ALREADY;
+	if (rc != 0) {
+		if (rc != -DER_NOTREPLICA && destroy) {
+			char *path;
+
+			rc = rsvc_class(class)->sc_locate(&svc->s_id, &path);
+			if (rc != 0)
+				return rc;
+			rc = remove_path(path);
+			D_FREE(path);
+			if (rc != 0 && rc != -DER_NONEXIST)
+				return rc;
+		}
+		return 0;
+	}
 	d_hash_rec_delete_at(&rsvc_hash, &svc->s_entry);
 	return stop(svc, destroy);
 }
@@ -1049,8 +1104,8 @@ ds_rsvc_add_replicas_s(struct ds_rsvc *svc, d_rank_list_t *ranks, size_t size)
 {
 	int	rc;
 
-	rc = ds_rsvc_dist_start(svc->s_class, &svc->s_id, svc->s_db_uuid, ranks,
-				true /* create */, false /* bootstrap */, size);
+	rc = ds_rsvc_dist_start(svc->s_class, &svc->s_id, svc->s_db_uuid, ranks, DS_RSVC_CREATE,
+				false /* bootstrap */, size);
 
 	/* TODO: Attempt to only add replicas that were successfully started */
 	if (rc != 0)
@@ -1121,8 +1176,7 @@ ds_rsvc_remove_replicas(enum ds_rsvc_class_id class, d_iov_t *id,
 /*************************** Distributed Operations ***************************/
 
 enum rdb_start_flag {
-	RDB_AF_CREATE		= 0x1,
-	RDB_AF_BOOTSTRAP	= 0x2
+	RDB_AF_BOOTSTRAP	= 0x1,
 };
 
 enum rdb_stop_flag {
@@ -1152,21 +1206,22 @@ bcast_create(crt_opcode_t opc, bool filter_invert, d_rank_list_t *filter_ranks,
 }
 
 /**
- * Perform a distributed create, if \a create is true, and start operation on
- * all replicas of a database with \a dbid spanning \a ranks. This method can
- * be called on any rank. If \a create is false, \a ranks may be NULL.
+ * Perform a distributed start operation in \a mode on all replicas of a
+ * database with \a dbid spanning \a ranks. This method can be called on any
+ * rank. If \a mode is DS_RSVC_START, \a ranks may be NULL. If \a mode is
+ * DS_RSVC_DICTATE, \a ranks must comprise one and only one rank.
  *
  * \param[in]	class		replicated service class
  * \param[in]	id		replicated service ID
  * \param[in]	dbid		database UUID
  * \param[in]	ranks		list of replica ranks
- * \param[in]	create		create replicas first
- * \param[in]	bootstrap	start with an initial list of replicas
- * \param[in]	size		size of each replica in bytes if \a create
+ * \param[in]	mode		mode of starting the replicated service
+ * \param[in]	bootstrap	create with an initial list of replicas if \a mode is DS_RSVC_CREATE
+ * \param[in]	size		size of each replica in bytes if \a mode is DS_RSVC_CREATE
  */
 int
 ds_rsvc_dist_start(enum ds_rsvc_class_id class, d_iov_t *id, const uuid_t dbid,
-		   const d_rank_list_t *ranks, bool create, bool bootstrap,
+		   const d_rank_list_t *ranks, enum ds_rsvc_start_mode mode, bool bootstrap,
 		   size_t size)
 {
 	crt_rpc_t		*rpc;
@@ -1175,8 +1230,8 @@ ds_rsvc_dist_start(enum ds_rsvc_class_id class, d_iov_t *id, const uuid_t dbid,
 	int			 rc;
 
 	D_ASSERT(!bootstrap || ranks != NULL);
-	D_DEBUG(DB_MD, DF_UUID": %s DB\n",
-		DP_UUID(dbid), create ? "creating" : "starting");
+	D_ASSERT(mode != DS_RSVC_DICTATE || ranks->rl_nr == 1);
+	D_DEBUG(DB_MD, DF_UUID": %s DB\n", DP_UUID(dbid), start_mode_str(mode));
 
 	rc = bcast_create(RSVC_START, ranks != NULL /* filter_invert */,
 			  (d_rank_list_t *)ranks, &rpc);
@@ -1188,9 +1243,8 @@ ds_rsvc_dist_start(enum ds_rsvc_class_id class, d_iov_t *id, const uuid_t dbid,
 	if (rc != 0)
 		goto out_rpc;
 	uuid_copy(in->sai_db_uuid, dbid);
-	if (create)
-		in->sai_flags |= RDB_AF_CREATE;
-	if (bootstrap)
+	in->sai_mode = mode;
+	if (mode == DS_RSVC_CREATE && bootstrap)
 		in->sai_flags |= RDB_AF_BOOTSTRAP;
 	in->sai_size = size;
 	in->sai_ranks = (d_rank_list_t *)ranks;
@@ -1202,10 +1256,10 @@ ds_rsvc_dist_start(enum ds_rsvc_class_id class, d_iov_t *id, const uuid_t dbid,
 	out = crt_reply_get(rpc);
 	rc = out->sao_rc;
 	if (rc != 0) {
-		D_ERROR(DF_UUID": failed to start%s %d replicas: "DF_RC"\n",
-			DP_UUID(dbid), create ? "/create" : "", rc,
-			DP_RC(out->sao_rc_errval));
-		ds_rsvc_dist_stop(class, id, ranks, NULL, create);
+		D_ERROR(DF_UUID": failed to %s %d replicas: "DF_RC"\n", DP_UUID(dbid),
+			start_mode_str(mode), rc, DP_RC(out->sao_rc_errval));
+		if (ranks == NULL || ranks->rl_nr > 1)
+			ds_rsvc_dist_stop(class, id, ranks, NULL, mode == DS_RSVC_CREATE);
 		rc = out->sao_rc_errval;
 	}
 
@@ -1222,7 +1276,6 @@ ds_rsvc_start_handler(crt_rpc_t *rpc)
 {
 	struct rsvc_start_in	*in = crt_req_get(rpc);
 	struct rsvc_start_out	*out = crt_reply_get(rpc);
-	bool			 create = in->sai_flags & RDB_AF_CREATE;
 	bool			 bootstrap = in->sai_flags & RDB_AF_BOOTSTRAP;
 	int			 rc;
 
@@ -1231,9 +1284,14 @@ ds_rsvc_start_handler(crt_rpc_t *rpc)
 		goto out;
 	}
 
-	rc = ds_rsvc_start(in->sai_class, &in->sai_svc_id, in->sai_db_uuid,
-			   create, in->sai_size,
-			   bootstrap ? in->sai_ranks : NULL, NULL /* arg */);
+	if (in->sai_mode == DS_RSVC_DICTATE &&
+	    (in->sai_ranks == NULL || in->sai_ranks->rl_nr != 1)) {
+		rc = -DER_PROTO;
+		goto out;
+	}
+
+	rc = ds_rsvc_start(in->sai_class, &in->sai_svc_id, in->sai_db_uuid, in->sai_mode,
+			   in->sai_size, bootstrap ? in->sai_ranks : NULL, NULL /* arg */);
 	if (rc == -DER_ALREADY)
 		rc = 0;
 
@@ -1333,8 +1391,6 @@ ds_rsvc_stop_handler(crt_rpc_t *rpc)
 
 	rc = ds_rsvc_stop(in->soi_class, &in->soi_svc_id,
 			  in->soi_flags & RDB_OF_DESTROY);
-	if (rc == -DER_ALREADY)
-		rc = 0;
 	out->soo_rc = (rc == 0 ? 0 : 1);
 	crt_reply_send(rpc);
 }

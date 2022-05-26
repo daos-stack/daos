@@ -683,7 +683,7 @@ ds_pool_svc_create(const uuid_t pool_uuid, int ntargets, const char *group,
 		D_GOTO(out, rc);
 
 	d_iov_set(&psid, (void *)pool_uuid, sizeof(uuid_t));
-	rc = ds_rsvc_dist_start(DS_RSVC_CLASS_POOL, &psid, pool_uuid, ranks, true /* create */,
+	rc = ds_rsvc_dist_start(DS_RSVC_CLASS_POOL, &psid, pool_uuid, ranks, DS_RSVC_CREATE,
 				true /* bootstrap */, ds_rsvc_get_md_cap());
 	if (rc != 0)
 		D_GOTO(out_ranks, rc);
@@ -1771,7 +1771,7 @@ start_one(uuid_t uuid, void *varg)
 	}
 
 	d_iov_set(&id, uuid, sizeof(uuid_t));
-	ds_rsvc_start(DS_RSVC_CLASS_POOL, &id, uuid, false /* create */, 0 /* size */,
+	ds_rsvc_start(DS_RSVC_CLASS_POOL, &id, uuid, DS_RSVC_START /* mode */, 0 /* size */,
 		      NULL /* replicas */, NULL /* arg */);
 	return 0;
 }
