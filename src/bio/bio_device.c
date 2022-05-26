@@ -9,6 +9,7 @@
 #include <spdk/thread.h>
 #include "bio_internal.h"
 #include <daos_srv/smd.h>
+#include <spdk/string.h>
 #include <spdk/likely.h>
 #include <spdk/env.h>
 #include <spdk/vmd.h>
@@ -536,7 +537,7 @@ fill_in_traddr(struct bio_dev_info *b_info, char *dev_name)
 
 	rc = spdk_bdev_dump_info_json(bdev, json);
 	if (rc != 0) {
-		D_ERROR("Failed to dump config from SPDK bdev (%s)\n", spdk_strerr(-rc));
+		D_ERROR("Failed to dump config from SPDK bdev (%s)\n", spdk_strerror(-rc));
 		rc = daos_errno2der(-rc);
 	}
 
@@ -706,7 +707,7 @@ led_device_action(void *ctx, struct spdk_pci_device *pci_device)
 
 	if (strcmp(spdk_pci_device_get_type(pci_device), "vmd") != 0) {
 		D_ERROR("Found unexpected non-VMD device type\n");
-		opts->status = -DER_INVAL;
+		opts->status = -DER_NOTAPPLICABLE;
 		return;
 	}
 
@@ -718,8 +719,8 @@ led_device_action(void *ctx, struct spdk_pci_device *pci_device)
 
 	rc = spdk_pci_addr_fmt(addr_buf, sizeof(addr_buf), &pci_device->addr);
 	if (rc != 0) {
-		D_ERROR("Failed to format VMD's PCI address (%s)\n", spdk_strerr(-rc));
-		opts->status = -DER_INVAL;
+		D_ERROR("Failed to format VMD's PCI address (%s)\n", spdk_strerror(-rc));
+		opts->status = -DER_OP_FAILED;
 		return;
 	}
 
@@ -727,8 +728,8 @@ led_device_action(void *ctx, struct spdk_pci_device *pci_device)
 	rc = spdk_vmd_get_led_state(pci_device, &cur_led_state);
 	if (spdk_unlikely(rc != 0)) {
 		D_ERROR("Failed to retrieve the state of the LED on %s (%s)\n", addr_buf,
-			spdk_strerr(-rc));
-		opts->status = -DER_INVAL;
+			spdk_strerror(-rc));
+		opts->status = -DER_OP_FAILED;
 		return;
 	}
 
@@ -772,15 +773,15 @@ led_device_action(void *ctx, struct spdk_pci_device *pci_device)
 	rc = spdk_vmd_set_led_state(pci_device, opts->led_state);
 	if (spdk_unlikely(rc != 0)) {
 		D_ERROR("Failed to set the VMD LED state on %s (%s)\n", addr_buf,
-			spdk_strerr(-rc));
-		opts->status = -DER_NOSYS;
+			spdk_strerror(-rc));
+		opts->status = -DER_OP_FAILED;
 		return;
 	}
 
 	rc = spdk_vmd_get_led_state(pci_device, &cur_led_state);
 	if (rc != 0) {
-		D_ERROR("Failed to get the VMD LED state (%s)\n", spdk_strerr(-rc));
-		opts->status = -DER_NOSYS;
+		D_ERROR("Failed to get the VMD LED state (%s)\n", spdk_strerror(-rc));
+		opts->status = -DER_OP_NOT_VERIFIED;
 		return;
 	}
 
@@ -788,7 +789,7 @@ led_device_action(void *ctx, struct spdk_pci_device *pci_device)
 	if (cur_led_state != opts->led_state) {
 		D_ERROR("Unexpected LED state on %s, want %s got %s\n", addr_buf,
 			g_led_states[opts->led_state], g_led_states[cur_led_state]);
-		opts->status = -DER_INVAL;
+		opts->status = -DER_OP_UNEXP_RESULT;
 	}
 }
 
@@ -841,19 +842,19 @@ bio_set_led_state(struct bio_xs_context *xs_ctxt, uuid_t dev_uuid,
 skip_led_str:
 	if (opts.led_state == SPDK_VMD_LED_STATE_UNKNOWN) {
 		D_ERROR("LED state is not valid or supported\n");
-		return -DER_INVAL;
+		return -DER_OP_UNEXP_RESULT;
 	}
 
 	rc = fill_in_traddr(&b_info, bio_dev->bb_name);
 	if (rc != 0) {
 		D_ERROR("Unable to get traddr for device %s\n", bio_dev->bb_name);
-		return -DER_INVAL;
+		return -DER_OP_FAILED;
 	}
 
 	rc = spdk_pci_addr_parse(&opts.pci_addr, b_info.bdi_traddr);
 	if (rc != 0) {
 		D_ERROR("Unable to parse PCI address for device %s (%s)\n", b_info.bdi_traddr,
-			spdk_strerr(-rc));
+			spdk_strerror(-rc));
 		D_GOTO(free_traddr, rc = -DER_INVAL);
 	}
 
