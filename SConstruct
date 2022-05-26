@@ -134,17 +134,20 @@ def set_defaults(env, daos_version):
 def build_misc(build_prefix):
     """Build miscellaneous items"""
     # install the configuration files
-    path = os.path.join(build_prefix, 'utils', 'config')
-    SConscript('utils/config/SConscript', variant_dir=path, duplicate=0)
+    common = os.path.join('utils', 'config')
+    path = os.path.join(build_prefix, common)
+    SConscript(os.path.join(common, 'SConscript'), variant_dir=path, duplicate=0)
 
     # install certificate generation files
-    path = os.path.join(build_prefix, 'utils', 'certs')
-    SConscript('utils/certs/SConscript', variant_dir=path, duplicate=0)
+    common = os.path.join('utils', 'certs')
+    path = os.path.join(build_prefix, common)
+    SConscript(os.path.join(common, 'SConscript'), variant_dir=path, duplicate=0)
 
     # install man pages
     try:
-        path = os.path.join(build_prefix, 'doc', 'man')
-        SConscript('doc/man/SConscript', variant_dir=path, must_exist=0, duplicate=0)
+        common = os.path.join('doc', 'man')
+        path = os.path.join(build_prefix, common)
+        SConscript(os.path.join(common, 'SConscript'), variant_dir=path, must_exist=0, duplicate=0)
     except SCons.Warnings.MissingSConscriptWarning as _warn:
         print("Missing doc/man/SConscript...")
 
@@ -414,7 +417,7 @@ def scons():  # pylint: disable=too-many-locals,too-many-branches
 
     # generate targets in specific build dir to avoid polluting the source code
     path = os.path.join(build_prefix, 'src')
-    SConscript('src/SConscript', variant_dir=path, duplicate=0)
+    SConscript(os.path.join('src', 'SConscript'), variant_dir=path, duplicate=0)
 
     buildinfo = prereqs.get_build_info()
     buildinfo.gen_script('.build_vars.sh')
