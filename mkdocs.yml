@@ -59,6 +59,7 @@ nav:
         - 'Community Wiki': 'https://wiki.daos.io/'
         - 'Community Roadmap': 'https://wiki.daos.io/spaces/DC/pages/4836661105/Roadmap'
         - 'Community Mailing list': 'https://daos.groups.io/g/daos'
+        - 'DAOS in the Cloud': 'cloud/index.md'
         - 'Issue tracker': 'https://jira.daos.io/'
     - Release Information:
         - 'Release Notes v2.2': 'release/release_notes.md'
@@ -78,6 +79,7 @@ nav:
         - 'RHEL and clones': 'QSG/setup_rhel.md'
         - 'SUSE': 'QSG/setup_suse.md'
         - 'DAOS in Docker': 'QSG/docker.md'
+        - 'DAOS in the Cloud': 'QSG/cloud.md'
         - 'Build from Scratch': 'QSG/build_from_scratch.md'
         - 'Admin/Client Tools': 'QSG/tour.md'
     - Administration Guide:
