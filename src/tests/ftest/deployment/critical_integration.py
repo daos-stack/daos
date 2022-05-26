@@ -6,22 +6,41 @@
 """
 
 from datetime import datetime
+from ClusterShell.NodeSet import NodeSet
 
 from general_utils import run_command, DaosTestError, get_journalctl
 from ior_test_base import IorTestBase
-from apricot import TestWithServers
 from exception_utils import CommandFailure
 
+# Imports need to be split or python fails to import
+from apricot import TestWithServers
+from apricot import TestWithoutServers
 
-class CriticalIntegration(TestWithServers):
+
+#TO-DO
+#Provision all daos nodes using provisioning tool provided by HPCM
+
+
+class CriticalIntegrationWithoutServers(TestWithoutServers):
     """Test Class Description: Verify the basic integration of
                                the server nodes with available
                                framework and amongst themselves.
     :avocado: recursive
     """
 
-    #TO-DO
-    #Provision all daos nodes using provisioning tool provided by HPCM
+    def __init__(self, *args, **kwargs):
+        """Initialize a CriticalIntegrationWithoutServers object."""
+        super().__init__(*args, **kwargs)
+        self.hostlist_servers = NodeSet()
+        self.hostlist_clients = NodeSet()
+
+    def setUp(self):
+        """Set up CriticalIntegrationWithoutServers."""
+        super().setUp()
+        self.hostlist_servers = self.get_hosts_from_yaml(
+            "test_servers", "server_partition", "server_reservation", "/run/hosts/*")
+        self.hostlist_clients = self.get_hosts_from_yaml(
+            "test_clients", "server_partition", "server_reservation", "/run/hosts/*")
 
     def test_passwdlessssh_versioncheck(self):
         # pylint: disable=protected-access
@@ -35,16 +54,17 @@ class CriticalIntegration(TestWithServers):
         """
 
         check_remote_root_access = self.params.get("check_remote_root_access", "/run/*")
+        libfabric_path = self.params.get("libfabric_path", "/run/*")
         daos_server_version_list = []
         dmg_version_list = []
-        failed_nodes = []
+        failed_nodes = NodeSet()
         for host in self.hostlist_servers:
             daos_server_cmd = ("ssh -oNumberOfPasswordPrompts=0 {}"
                                " 'daos_server version'".format(host))
             remote_root_access = ("ssh -oNumberOfPasswordPrompts=0 root@{}"
                                   " 'echo hello'".format(host))
-            command_for_inter_node = ("clush --nostdin -S -w {}"
-                                      " 'echo hello'".format(','.join(self.hostlist_servers)))
+            command_for_inter_node = ("clush --nostdin -S -b -w {}"
+                                      " 'echo hello'".format(str(self.hostlist_servers)))
             try:
                 out = run_command(daos_server_cmd)
                 daos_server_version_list.append(out.stdout.split(b' ')[3])
@@ -53,7 +73,7 @@ class CriticalIntegration(TestWithServers):
                 IorTestBase._execute_command(self, command_for_inter_node, hosts=[host])
             except (DaosTestError, CommandFailure) as error:
                 self.log.error("Error: %s", error)
-                failed_nodes.append(host)
+                failed_nodes.add(host)
         if failed_nodes:
             self.fail("SSH check failed on the following nodes.\n {}".format(failed_nodes))
 
@@ -75,17 +95,40 @@ class CriticalIntegration(TestWithServers):
         result_dmg = dmg_version_list.count(dmg_version_list[0]) == len(dmg_version_list)
         result_client_server = daos_server_version_list[0][1:] == dmg_version_list[0]
 
-        if (result_daos_server and result_dmg and result_client_server):
+        # libfabric version check
+        all_nodes = self.hostlist_servers | self.hostlist_clients
+        libfabric_version_cmd = "clush -S -b -w {} {}/fi_info --version".format(
+            all_nodes, libfabric_path)
+        libfabric_output = run_command(libfabric_version_cmd)
+        same_libfab_nodes = libfabric_output.stdout_text.split('\n')[1].split('(')[1][:-1]
+        libfabric_version = libfabric_output.stdout_text.split('\n')[3].split(' ')[1]
+
+        result_libfabric_version = int(same_libfab_nodes) == len(all_nodes)
+
+        if (result_daos_server and result_dmg and result_client_server
+                and result_libfabric_version):
             self.log.info("All servers have same daos version")
             self.log.info("All clients have same daos version")
             self.log.info("Servers and Clients have same daos version")
+            self.log.info("Servers and Clients have same libfabric version")
             self.log.info("Clients: %s", dmg_version_list)
             self.log.info("servers: %s", daos_server_version_list)
+            self.log.info("Libfabric Version on Servers and Clients: %s", libfabric_version)
         else:
-            self.log.info("Not all servers and clients have same daos version")
+            self.log.info("Not all servers and clients have either same daos version or \
+                          libfabric version")
             self.log.info("Clients: %s", dmg_version_list)
             self.log.info("servers: %s", daos_server_version_list)
+            self.log.info("Libfabric Version Output: %s", libfabric_output.stdout)
             self.fail()
+
+
+class CriticalIntegrationWithServers(TestWithServers):
+    """Test Class Description: Verify the basic integration of
+                               the server nodes with available
+                               framework and amongst themselves.
+    :avocado: recursive
+    """
 
     def test_ras(self):
         """
@@ -109,15 +152,18 @@ class CriticalIntegration(TestWithServers):
         for sub_list in sub_rank_list:
             ranks_to_stop = ",".join([str(rank) for rank in sub_list])
             self.log.info("Ranks to stop: %s", ranks_to_stop)
+            # stop ranks and verify if they stopped
             dmg.system_stop(ranks=ranks_to_stop)
             for rank in sub_list:
-                if (self.server_managers[0].check_rank_state(rank, "stopped", 5) or
-                        self.server_managers[0].check_rank_state(rank, "excluded", 5)):
-                    dmg.system_start(ranks=rank)
-                    if not self.server_managers[0].check_rank_state(rank, "joined", 5):
-                        self.fail("Rank {} failed to restart".format(rank))
-                else:
+                if (not(self.server_managers[0].check_rank_state(rank, "stopped", 5) or
+                        self.server_managers[0].check_rank_state(rank, "excluded", 5))):
                     self.fail("Rank {} failed to stop".format(rank))
+            # restart stopped ranks and verify if they are joined
+            dmg.system_start(ranks=ranks_to_stop)
+            for rank in sub_list:
+                if not self.server_managers[0].check_rank_state(rank, "joined", 5):
+                    self.fail("Rank {} failed to restart".format(rank))
+
         until = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
 
         # gather journalctl logs for each server host, verify system stop event was sent to logs
