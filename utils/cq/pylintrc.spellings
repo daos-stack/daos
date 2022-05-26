@@ -1,32 +1,3 @@
-# Requirements for pylint checking in DAOS.
-
-# Wrapper script for pylint that does the following:
-# Mostly working:
-#  Wraps scons commands and adjusts report line numbers
-#  Sets python-path or similar
-#  Runs in parallel across whole tree
-#  Supports minimum python version
-#  Supports venv
-#  Can be used by atom.io live
-#  Outputs directly to github annotations
-# In progress:
-#  Can be used in Jenkins to report regressions
-#  Can be used as a commit-hook
-#  flake8 style --diff option
-#  Autodetect if spelling is going to work.
-
-# Modes:
-# Jenkins:
-#  Runs against whole tree, produces warnings-ng style output for everything, and Jenkins warns
-#   on regressions.
-# GHA:
-#  Runs against whole tree with some warnings.
-# Commit-hook:
-#  Runs against whole tree with some warnings, and against diff with others.
-# Editor:
-#  Runs against single-file, but restricted in output format.
-# Direct:
-
 [MASTER]
 extension-pkg-allow-list=xattr
 persistent=no
@@ -42,7 +13,7 @@ disable=locally-disabled,locally-enabled,star-args,global-statement,bad-option-v
 
 [SPELLING]
 spelling-dict=en_US
-spelling-private-dict-file=utils/words.dict
+spelling-private-dict-file=utils/cq/words.dict
 
 [FORMAT]
 max-line-length=100

@@ -25,35 +25,29 @@ import re
 import os
 import sys
 import argparse
-import subprocess  # nosec
+import subprocess #nosec
 import tempfile
+import errno
+#pylint: disable=import-error
+#pylint: disable=no-name-in-module
 from distutils.spawn import find_executable
-
+#pylint: enable=import-error
+#pylint: enable=no-name-in-module
+#pylint: disable=consider-using-with
 
 class WrapScript():
     """Create a wrapper for a scons file and maintain a line mapping"""
 
-    def __init__(self, fname, output='script'):
-
-        self.line_map = {}
-        self.wrap_file = output
-
-        # TODO: Use a NamedTemporaryFile here.
-        with open(self.wrap_file, 'w', encoding='utf-8') as outfile:
-            with open(fname, 'r', encoding='utf-8') as infile:
-                self._read_files(infile, outfile)
-
-    def __del__(self):
-        os.unlink(self.wrap_file)
-
-    def _read_files(self, infile, outfile):
+    def __init__(self, fname):
         old_lineno = 1
         new_lineno = 1
-        scons_header = False
 
-        def _remap_count():
-            for iline in range(new_lineno, new_lineno + added):
-                self.line_map[iline] = old_lineno - 1
+        self.line_map = {}
+
+        outfile = open("script", "w")
+        infile = open(fname, "r")
+
+        scons_header = False
 
         for line in infile.readlines():
             outfile.write(line)
@@ -70,9 +64,8 @@ class WrapScript():
                 for var in match.group(2).split():
                     newvar = var.strip("\",     '")
                     variables.append(newvar)
-                added = self.write_variables(outfile, match.group(1), variables)
-                _remap_count()
-                new_lineno += added
+                new_lineno += self.write_variables(outfile, match.group(1),
+                                                   variables)
 
             match = re.search(r'^(\s*)Export\(.(.*).\)', line)
             if not match:
@@ -85,47 +78,51 @@ class WrapScript():
                 for var in match.group(2).split():
                     newvar = var.strip("\",     '")
                     variables.append(newvar)
-                added = self.read_variables(outfile, match.group(1), variables)
-                _remap_count()
-                new_lineno += added
+                new_lineno += self.read_variables(outfile, match.group(1),
+                                                  variables)
 
             if not scons_header:
-                # Insert out header after the first blank line.
-                # TODO: This should just indent at the start of the file, or the first
-                # non-docstring line.  Some files (src/bin/smd...) use a docstring on the first
-                # line and a function call on the second which breaks most simple logic here.
-                # Luckily flake8 will warn on that so maybe an acceptable cost.
-                if line.strip() == '':
-                    added = self.write_header(outfile)
-                    _remap_count()
-                    new_lineno += added
+                if re.search(r"^\"\"\"", line):
                     scons_header = True
+                elif not re.search(r'^#', line):
+                    scons_header = True
+                if scons_header:
+                    new_lineno += self.write_header(outfile)
 
     @staticmethod
     def read_variables(outfile, prefix, variables):
         """Add code to define fake variables for pylint"""
-        newlines = 0
+        newlines = 2
+        outfile.write("# pylint: disable=invalid-name\n")
         for variable in variables:
-            outfile.write('# pylint: disable-next=consider-using-f-string\n')
-            outfile.write(f"{prefix}print('%s' % str({variable}))\n")
-            newlines += 2
+            outfile.write("%sprint(\"%%s\" %% str(%s))\n" % (prefix, variable))
+            newlines += 1
+        outfile.write("# pylint: enable=invalid-name\n")
         return newlines
 
     @staticmethod
     def write_variables(outfile, prefix, variables):
         """Add code to define fake variables for pylint"""
-        newlines = 0
+        newlines = 4
+        outfile.write("# pylint: disable=invalid-name\n")
+        outfile.write("# pylint: disable=import-outside-toplevel\n")
 
         for variable in variables:
             if variable.upper() == 'PREREQS':
-                newlines += 1
-# pylint: disable-next=line-too-long
-                outfile.write(f'{prefix}{variable} = PreReqComponent(DefaultEnvironment(), Variables())\n')  # noqa: E501
+                newlines += 4
+                outfile.write("%sfrom prereq_tools import PreReqComponent\n"
+                              % prefix)
+                outfile.write("%sscons_temp_env = DefaultEnvironment()\n"
+                              % prefix)
+                outfile.write("%sscons_temp_opts = Variables()\n" % prefix)
+                outfile.write("%s%s = PreReqComponent(scons_temp_env, "
+                              "scons_temp_opts)\n" % (prefix, variable))
                 variables.remove(variable)
         for variable in variables:
             if "ENV" in variable.upper():
                 newlines += 1
-                outfile.write("%s%s = DefaultEnvironment()\n" % (prefix, variable))
+                outfile.write("%s%s = DefaultEnvironment()\n" % (prefix,
+                                                                 variable))
             elif "OPTS" in variable.upper():
                 newlines += 1
                 outfile.write("%s%s = Variables()\n" % (prefix, variable))
@@ -139,47 +136,50 @@ class WrapScript():
                 newlines += 1
                 outfile.write("%s%s = None\n" % (prefix, variable))
 
+        outfile.write("# pylint: enable=invalid-name\n")
+        outfile.write("# pylint: enable=import-outside-toplevel\n")
         return newlines
 
     @staticmethod
     def write_header(outfile):
         """write the header"""
-
-        # Always import PreReqComponent here, but it'll only be used in some cases.  This causes
-        # errors in the toplevel SConstruct which are suppressed, the alternative would be to do
-        # two passes and only add the include if needed later.
-        outfile.write("""# pylint: disable-next=unused-wildcard-import,wildcard-import
-from SCons.Script import * # pylint: disable=import-outside-toplevel
-# pylint: disable-next=import-outside-toplevel,unused-wildcard-import,wildcard-import
+        outfile.write("""# pylint: disable=wildcard-import
+# pylint: disable=import-outside-toplevel
+from __future__ import print_function
+from SCons.Script import *
 from SCons.Variables import *
-from prereq_tools import PreReqComponent # pylint: disable=unused-import\n""")
-        return 5
-
-    def convert_line(self, line):
-        """Convert from a line number in the report to a line number in the input file"""
-        return self.line_map[line]
+# pylint: enable=wildcard-import
+# pylint: enable=import-outside-toplevel\n""")
+        return 7
 
     def fix_log(self, log_file, fname):
         """Get the line number"""
+        os.unlink("script")
         log_file.seek(0)
-        output = tempfile.TemporaryFile(mode='w+', encoding='utf-8')
+        try:
+            output = tempfile.TemporaryFile(mode='w+', encoding='utf-8')
+        except TypeError:
+            output = tempfile.TemporaryFile()
         for line in log_file.readlines():
             match = re.search(r":(\d+):", line)
             if match:
                 lineno = int(match.group(1))
-                if int(lineno) in self.line_map:
-                    line = line.replace(str(lineno), str(self.line_map[lineno]), 1)
+                if int(lineno) in self.line_map.keys():
+                    line = line.replace(str(lineno),
+                                        str(self.line_map[lineno]),
+                                        1)
             match = re.search("^(.*)Module script(.*)$", line)
             if match:
-                line = "%sModule %s%s\n" % (match.group(1), fname, match.group(2))
+                line = "%sModule %s%s\n" % (match.group(1),
+                                            fname,
+                                            match.group(2))
             output.write(line)
         return output
-
 
 def parse_report(log_file):
     """Create the report"""
     log_file.seek(0)
-    with open('pylint.log', 'a', encoding='utf-8') as pylint:
+    with open("pylint.log", "a") as pylint:
         for line in log_file.readlines():
             if re.search("rated", line):
                 sys.stdout.write(line)
@@ -189,24 +189,23 @@ def parse_report(log_file):
             else:
                 sys.stdout.write(line)
 
-
 def create_rc(src_name):
     """Create a temporary rc file with python path set"""
     root = os.path.dirname(os.path.realpath(__file__))
     src_path = os.path.join(root, src_name)
     name = os.path.join(root, "tmp_%s" % src_name)
-    with open(name, 'w', encoding='utf-8') as tmp:
+    with open(name, "w") as tmp:
         tmp.write("[MASTER]\n")
         tmp.write("init-hook='import sys; ")
         tmp.write("sys.path.insert(0, \"%s/fake_scons\"); " % root)
         tmp.write("sys.path.insert(0, \"%s/../../site_scons\")'\n" % root)
-        with open(src_path, 'r', encoding='utf-8') as src:
+        with open(src_path, "r") as src:
             for line in src.readlines():
                 tmp.write(line)
 
     return name
 
-
+#pylint: disable=too-many-branches
 def check_script(fname, *args, **kw):
     """Check a python script for errors"""
     tmp_fname = fname
@@ -221,33 +220,44 @@ def check_script(fname, *args, **kw):
         pylint_path = "{path}"
 
     # Python 2 checking is no longer supported
-    pycmd = find_executable('pylint')
-    if pycmd is None:
-        pycmd = find_executable('pylint-3')
-        if pycmd is None:
-            print("Required pylint isn't installed on this machine")
-            return
-
+    pycmd = find_executable("pylint-3")
     rc_file = "tmp_pylint3.rc"
+    if pycmd is None:
+        print("Required pylint isn't installed on this machine")
+        return
+
     rc_dir = os.path.dirname(os.path.realpath(__file__))
 
-    cmd = pycmd.split() + list(args) + \
-        ["--rcfile=%s/%s" % (rc_dir, rc_file),
-         "--unsafe-load-any-extension=y",
-         "--msg-template",
-         "{C}: %s:{line}: pylint-{symbol}: {msg}" % pylint_path, tmp_fname]
+    cmd = pycmd.split() + \
+          list(args) + \
+          ["--rcfile=%s/%s" % (rc_dir, rc_file),
+           "--unsafe-load-any-extension=y",
+           "--msg-template",
+           "{C}: %s:{line}: pylint-{symbol}: {msg}" % pylint_path,
+           tmp_fname]
 
-    log_file = tempfile.TemporaryFile(mode='w+', encoding='utf-8')
+    if os.environ.get("DEBUG_CHECK_SCRIPT", 0):
+        print(" ".join(cmd))
+
+    try:
+        log_file = tempfile.TemporaryFile(mode='w+', encoding='utf-8')
+    except TypeError:
+        log_file = tempfile.TemporaryFile()
 
     try:
         subprocess.check_call(cmd, stdout=log_file)
+    except OSError as exception:
+        if exception.errno == errno.ENOENT:
+            print("pylint could not be found")
+            return
+        raise
     except subprocess.CalledProcessError:
         pass
 
     if wrap:
         log_file = wrapper.fix_log(log_file, fname)
     parse_report(log_file)
-
+#pylint: enable=too-many-branches
 
 def main():
     """Run the actual code in a function"""

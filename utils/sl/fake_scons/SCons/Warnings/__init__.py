@@ -33,5 +33,6 @@ class MissingSConscriptWarning(Exception):
     """Fake MissingSConscriptWarning"""
 
 
+# pylint: disable-next=redefined-builtin
 class Warning():
     """Fake Warning"""
