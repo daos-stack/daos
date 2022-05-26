@@ -356,8 +356,6 @@ def scons():  # pylint: disable=too-many-locals,too-many-branches
         env['ENV']['VIRTUAL_ENV'] = os.environ['VIRTUAL_ENV']
 
     prereqs = PreReqComponent(env, opts, commits_file)
-    if not GetOption('help') and not GetOption('clean'):
-        daos_build.load_mpi_path(env)
     build_prefix = prereqs.get_src_build_dir()
     prereqs.init_build_targets(build_prefix)
     prereqs.load_defaults(platform_arm)
@@ -373,8 +371,7 @@ def scons():  # pylint: disable=too-many-locals,too-many-branches
     prereqs.add_opts(('GO_BIN', 'Full path to go binary', None))
     opts.Save(opts_file, env)
 
-    res = GetOption('deps_only')
-    if res:
+    if GetOption('deps_only'):
         print('Exiting because deps-only was set')
         Exit(0)
 
@@ -387,7 +384,16 @@ def scons():  # pylint: disable=too-many-locals,too-many-branches
 
     base_env = env.Clone()
 
+    base_env_mpi = env.Clone()
+
     compiler_setup.base_setup(env, prereqs=prereqs)
+
+    if not GetOption('help') and not GetOption('clean'):
+        mpi = daos_build.configure_mpi(base_env_mpi)
+        if not mpi:
+            print("\nSkipping compilation for tests that need MPI")
+            print("Install and load mpich or openmpi\n")
+            base_env_mpi = None
 
     args = GetOption('analyze_stack')
     if args is not None:
@@ -395,7 +401,7 @@ def scons():  # pylint: disable=too-many-locals,too-many-branches
         analyzer.analyze_on_exit()
 
     # Export() is handled specially by pylint so do not merge these two lines.
-    Export('daos_version', 'API_VERSION', 'env', 'base_env', 'prereqs')
+    Export('daos_version', 'API_VERSION', 'env', 'base_env', 'base_env_mpi', 'prereqs')
     Export('platform_arm', 'conf_dir')
 
     # generate targets in specific build dir to avoid polluting the source code

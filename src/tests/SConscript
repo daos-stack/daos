@@ -12,6 +12,15 @@ def build_tests(prereqs, env, client_libs):
                    'pthread', 'dts', 'dpar']
     libs_client = client_libs + ['pthread', 'dts', 'dpar']
 
+    denv.AppendUnique(CPPPATH=[Dir('suite').srcnode()])
+    denv.AppendUnique(CPPPATH=[Dir('../mgmt').srcnode()])
+    denv.AppendUnique(LIBPATH=[Dir('../vos')])
+    denv.AppendUnique(LIBPATH=[Dir('../bio')])
+    denv.AppendUnique(LIBPATH=[Dir('../gurt')])
+    denv.AppendUnique(LIBPATH=[Dir('../cart')])
+    denv.AppendUnique(LIBPATH=[Dir('../common')])
+    denv.AppendUnique(LIBPATH=[Dir('../client/api')])
+
     prereqs.require(denv, 'argobots', 'hwloc', 'protobufc', 'pmdk', 'isal')
 
     daos_racer = daos_build.program(denv, 'daos_racer',
@@ -58,7 +67,7 @@ def build_tests(prereqs, env, client_libs):
 
 def scons():
     """Execute build"""
-    Import('base_env', 'prereqs')
+    Import('base_env', 'base_env_mpi', 'prereqs')
 
     if not prereqs.test_requested():
         return
@@ -72,12 +81,9 @@ def scons():
     denv.AppendUnique(CPPPATH=[Dir('../mgmt').srcnode()])
     build_tests(prereqs, denv, libs_client)
 
-    if not GetOption('help') and not GetOption('clean'):
-        mpi = daos_build.configure_mpi(denv, libs_client)
-        if mpi is None:
-            print("\nSkipping compilation for tests that need MPI")
-            print("Install and load mpich or openmpi\n")
-            return
+    if not base_env_mpi:
+        return
+    denv = base_env_mpi.Clone()
 
     daos_build.program(denv, 'simple_array', 'simple_array.c', LIBS=libs_client)
     daos_build.program(denv, 'simple_obj', 'simple_obj.c', LIBS=libs_client)

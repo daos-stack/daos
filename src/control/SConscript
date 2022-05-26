@@ -9,7 +9,7 @@ from os import urandom
 from binascii import b2a_hex
 import daos_build
 
-Import('env', 'prereqs', 'daos_version', 'conf_dir', 'gurt_lib', 'cart_lib', 'common')
+Import('env', 'prereqs', 'daos_version', 'conf_dir', 'gurt_lib', 'cart_lib', 'client_common')
 
 GO_COMPILER = 'go'
 MIN_GO_VERSION = '1.12.0'
@@ -132,7 +132,7 @@ def install_go_bin(denv, gosrc, libs, name, install_name):
                   get_build_tags(denv), build_bin, install_src))
     # Use the intermediate build location in order to play nicely
     # with --install-sandbox.
-    denv.Requires(build_bin, [common])
+    denv.Requires(build_bin, [client_common])
     denv.InstallAs(install_bin, build_bin)
     return install_bin
 # pylint: enable=too-many-arguments
