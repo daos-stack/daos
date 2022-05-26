@@ -452,7 +452,7 @@ int bio_nvme_ctl(unsigned int cmd, void *arg);
  *
  * \returns		Zero on success, negative value on error
  */
-int bio_xsctxt_alloc(struct bio_xs_context **pctxt, int tgt_id);
+int bio_xsctxt_alloc(struct bio_xs_context **pctxt, int tgt_id, bool self_polling);
 
 /*
  * Finalize per-xstream NVMe context and SPDK env.
