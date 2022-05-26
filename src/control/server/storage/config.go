@@ -643,6 +643,8 @@ func (ap *AccelProps) setOpts(mask uint16) {
 	}
 }
 
+// UpdateOptMask takes a optional capability bit mask and updates AccelProps OptMask and Options
+// fields.
 func (ap *AccelProps) UpdateOptMask(mask uint16) error {
 	if ap == nil {
 		return errors.New("nil AccelProps")
@@ -672,27 +674,6 @@ func (ap *AccelProps) UnmarshalYAML(unmarshal func(interface{}) error) error {
 	}
 	out := AccelProps(tmp)
 
-	//	if err := out.validate(); err != nil {
-	//		return err
-	//	}
-	//
-	//	if err := out.setOptMask(); err != nil {
-	//		return err
-	//	}
-	//
-	//	*ap = out
-	//	tmp := &AccelProps{
-	//		Engine: AccelEngineNone,
-	//	}
-	//
-	//	if err := unmarshal(tmp); err != nil {
-	//		return err
-	//	}
-	//
-	//	//	out := AccelProps{
-	//	//		Engine: tmp.Engine,
-	//	//	}
-
 	if err := out.setOptMask(out.Options...); err != nil {
 		return err
 	}
@@ -701,31 +682,6 @@ func (ap *AccelProps) UnmarshalYAML(unmarshal func(interface{}) error) error {
 
 	return nil
 }
-
-//func (ap *AccelProps) MarshalYAML() (interface{}, error) {
-//	fmt.Printf("marshalling\n")
-//	if ap == nil {
-//		return []byte("<nil>"), nil
-//	}
-//
-//	if ap.Engine == "" {
-//		ap.Engine = AccelEngineNone
-//		ap.OptMask = 0
-//	}
-//
-//	bytes, err := yaml.Marshal(&struct {
-//		Engine  string   `yaml:"engine"`
-//		Options []string `yaml:"options"`
-//	}{
-//		Engine:  ap.Engine,
-//		Options: ap.getOptsFromMask(),
-//	})
-//	if err != nil {
-//		return nil, err
-//	}
-//
-//	return string(bytes), nil
-//}
 
 type Config struct {
 	Tiers            TierConfigs `yaml:"storage" cmdLongFlag:"--storage_tiers,nonzero" cmdShortFlag:"-T,nonzero"`
@@ -778,10 +734,6 @@ func (c *Config) Validate() error {
 	}
 
 	c.VosEnv = "NVME"
-
-	//	if c.AccelProps == nil {
-	//		c.AccelProps = &AccelProps{}
-	//	}
 
 	return nil
 }
