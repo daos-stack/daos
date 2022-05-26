@@ -1983,6 +1983,13 @@ obj_ioc_begin(daos_obj_id_t oid, uint32_t rpc_map_ver, uuid_t pool_uuid,
 	if (rc != 0)
 		return rc;
 
+	if (obj_is_modification_opc(opc) && (flags & ORF_REINTEGRATING_IO) &&
+	    ioc->ioc_coc->sc_pool->spc_pool->sp_need_discard &&
+	    ioc->ioc_coc->sc_pool->spc_discard_done == 0) {
+		D_ERROR("reintegrating "DF_UUID" retry.\n", DP_UUID(pool_uuid));
+		D_GOTO(failed, rc = -DER_UPDATE_AGAIN);
+	}
+
 	rc = obj_capa_check(ioc->ioc_coh, obj_is_modification_opc(opc),
 			    obj_is_ec_agg_opc(opc) ||
 			    (flags & ORF_FOR_MIGRATION) ||
@@ -4633,6 +4640,13 @@ ds_obj_cpd_handler(crt_rpc_t *rpc)
 				opc_get(rpc->cr_opc), &ioc);
 	if (rc != 0)
 		goto reply;
+
+	if ((oci->oci_flags & ORF_REINTEGRATING_IO) &&
+	    ioc.ioc_coc->sc_pool->spc_pool->sp_need_discard &&
+	    ioc.ioc_coc->sc_pool->spc_rebuild_fence == 0) {
+		D_ERROR("reintegrating "DF_UUID" retry.\n", DP_UUID(oci->oci_pool_uuid));
+		D_GOTO(reply, rc = -DER_UPDATE_AGAIN);
+	}
 
 	if (!leader) {
 		if (tx_count != 1 || oci->oci_sub_reqs.ca_count != 1 ||

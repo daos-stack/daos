@@ -132,8 +132,11 @@
 	X(POOL_UPGRADE,							\
 		0, &CQF_pool_upgrade,					\
 		ds_pool_upgrade_handler,				\
+		NULL),							\
+	X(POOL_TGT_DISCARD,						\
+		0, &CQF_pool_tgt_discard,				\
+		ds_pool_tgt_discard_handler,				\
 		NULL)
-
 /* Define for RPC enum population below */
 #define X(a, b, c, d, e) a
 
@@ -444,6 +447,16 @@ CRT_RPC_DECLARE(pool_upgrade, DAOS_ISEQ_POOL_UPGRADE, DAOS_OSEQ_POOL_UPGRADE)
 
 CRT_RPC_DECLARE(pool_tgt_query_map, DAOS_ISEQ_POOL_TGT_QUERY_MAP,
 		DAOS_OSEQ_POOL_TGT_QUERY_MAP)
+
+#define DAOS_ISEQ_POOL_TGT_DISCARD /* input fields */		 \
+	((uuid_t)		(ptdi_uuid)		CRT_VAR) \
+	((struct pool_target_addr) (ptdi_addrs)		CRT_ARRAY)
+
+#define DAOS_OSEQ_POOL_TGT_DISCARD /* output fields */		\
+	((int32_t)		(ptdo_rc)		CRT_VAR)
+
+CRT_RPC_DECLARE(pool_tgt_discard, DAOS_ISEQ_POOL_TGT_DISCARD,
+		DAOS_OSEQ_POOL_TGT_DISCARD)
 
 static inline int
 pool_req_create(crt_context_t crt_ctx, crt_endpoint_t *tgt_ep, crt_opcode_t opc,

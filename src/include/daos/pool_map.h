@@ -156,6 +156,10 @@ pool_target_addr_list_append(struct pool_target_addr_list *dst_list,
 void
 pool_target_addr_list_free(struct pool_target_addr_list *list);
 
+bool
+pool_target_addr_found(struct pool_target_addr_list *addr_list,
+		       struct pool_target_addr *tgt);
+
 struct pool_target_id {
 	uint32_t	pti_id;
 };

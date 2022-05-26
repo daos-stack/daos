@@ -76,7 +76,8 @@ struct dc_tx {
 	uint64_t		 tx_flags;
 	uint32_t		 tx_fixed_epoch:1, /** epoch is specified. */
 				 tx_retry:1, /** Retry the commit RPC. */
-				 tx_set_resend:1; /** Set 'resend' flag. */
+				 tx_set_resend:1, /** Set 'resend' flag. */
+				 tx_reintegrating:1;
 	/** Transaction status (OPEN, COMMITTED, etc.), see dc_tx_status. */
 	enum dc_tx_status	 tx_status;
 	/** The rank for the server on which the TX leader resides. */
@@ -935,7 +936,7 @@ dc_tx_commit_cb(tse_task_t *task, void *data)
 	}
 
 	/* Need to restart the TX with newer epoch. */
-	if (rc == -DER_TX_RESTART || rc == -DER_STALE) {
+	if (rc == -DER_TX_RESTART || rc == -DER_STALE || rc == -DER_UPDATE_AGAIN) {
 		tx->tx_set_resend = 1;
 		tx->tx_status = TX_FAILED;
 
@@ -1209,6 +1210,8 @@ dc_tx_classify_common(struct dc_tx *tx, struct daos_cpd_sub_req *dcsr,
 		if (rc != 0)
 			goto out;
 
+		if (shard->do_reintegrating)
+			tx->tx_reintegrating = 1;
 		/* XXX: It is possible that more than one shards locate on the
 		 *	same DAOS target under OSA mode, then the "idx" may be
 		 *	not equal to "shard->do_shard".
@@ -1829,6 +1832,8 @@ dc_tx_commit_trigger(tse_task_t *task, struct dc_tx *tx, daos_tx_commit_t *args)
 	uuid_copy(oci->oci_pool_uuid, tx->tx_pool->dp_pool);
 	oci->oci_map_ver = tx->tx_pm_ver;
 	oci->oci_flags = ORF_CPD_LEADER | (tx->tx_set_resend ? ORF_RESEND : 0);
+	if (tx->tx_reintegrating)
+		oci->oci_flags |= ORF_REINTEGRATING_IO;
 
 	oci->oci_sub_heads.ca_arrays = &tx->tx_head;
 	oci->oci_sub_heads.ca_count = 1;

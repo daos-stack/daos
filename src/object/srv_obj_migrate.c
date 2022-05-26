@@ -2576,65 +2576,6 @@ migrate_obj_punch(struct iter_obj_arg *arg)
 			       arg->tgt_idx, MIGRATE_STACK_SIZE);
 }
 
-/* Destroys an object prior to migration. Called exactly once per object ID per
- * container on the appropriate VOS target xstream.
- */
-static int
-destroy_existing_obj(struct migrate_pool_tls *tls, unsigned int tgt_idx,
-		     daos_unit_oid_t *oid, uuid_t cont_uuid)
-{
-	struct ds_cont_child *cont = NULL;
-	daos_epoch_range_t   epr;
-	int rc;
-
-	rc = migrate_get_cont_child(tls, cont_uuid, &cont);
-	if (rc != 0 || cont == NULL)
-		return rc;
-
-	if (rc != 0) {
-		D_ERROR("Failed to open cont to clear obj before migrate; pool="
-			DF_UUID" cont="DF_UUID"\n",
-			DP_UUID(tls->mpt_pool_uuid), DP_UUID(cont_uuid));
-		return rc;
-	}
-
-	/* Wait until container aggregation are stopped */
-	while ((cont->sc_ec_agg_active || cont->sc_vos_agg_active) &&
-	       !tls->mpt_fini && !cont->sc_stopping) {
-		D_DEBUG(DB_REBUILD, "wait for "DF_UUID"/"DF_UUID"/%u vos aggregation"
-			" to be inactive\n", DP_UUID(tls->mpt_pool_uuid),
-			DP_UUID(cont_uuid), tls->mpt_version);
-		dss_sleep(2 * 1000);
-	}
-
-	if (tls->mpt_fini || cont->sc_stopping) {
-		D_DEBUG(DB_REBUILD, DF_UUID "container migration is aborted.\n",
-			DP_UUID(cont_uuid));
-		ds_cont_child_put(cont);
-		return 0;
-	}
-
-	epr.epr_hi = tls->mpt_max_eph;
-	epr.epr_lo = 0;
-	rc = vos_discard(cont->sc_hdl, oid, &epr, NULL, NULL);
-	if (rc != 0) {
-		D_ERROR("Migrate failed to destroy object prior to "
-			"reintegration: pool/object "DF_UUID"/"DF_UOID
-			" rc: "DF_RC"\n", DP_UUID(tls->mpt_pool_uuid),
-			DP_UOID(*oid), DP_RC(rc));
-		ds_cont_child_put(cont);
-		return rc;
-	}
-
-	D_DEBUG(DB_REBUILD, "destroyed pool/object "DF_UUID"/"DF_UOID
-		" before reintegration\n",
-		DP_UUID(tls->mpt_pool_uuid), DP_UOID(*oid));
-
-	ds_cont_child_put(cont);
-
-	return DER_SUCCESS;
-}
-
 /**
  * This ULT manages migration one object ID for one container. It does not do
  * the data migration itself - instead it iterates akeys/dkeys as a client and
@@ -2664,21 +2605,16 @@ migrate_obj_ult(void *data)
 		D_GOTO(free_notls, rc = 0);
 	}
 
-	if (tls->mpt_opc == RB_OP_REINT) {
-		/* Destroy this object ID locally prior to migration */
-		rc = destroy_existing_obj(tls, arg->tgt_idx, &arg->oid,
-					  arg->cont_uuid);
-		if (rc) {
-			/* Something went wrong trying to destroy this object.
-			 * Since destroying objects prior to migration is
-			 * currently only used for reintegration, it makes sense
-			 * to fail the reintegration operation at this point
-			 * rather than proceeding and potentially losing data
-			 */
-			D_ERROR("destroy_existing_obj failed: "DF_RC"\n",
-				DP_RC(rc));
-			D_GOTO(free, rc);
-		}
+	/* Only reintegrating targets/pool needs to discard the object,
+	 * if sp_need_discard is 0, either the target does not need to
+	 * discard, or discard has been done. spc_discard_done means
+	 * discarding has been done in the current VOS target.
+	 */
+	while (tls->mpt_pool->spc_pool->sp_need_discard &&
+	       !tls->mpt_pool->spc_discard_done) {
+		D_DEBUG(DB_REBUILD, DF_UUID" wait for discard to finish.\n",
+			DP_UUID(arg->pool_uuid));
+		dss_sleep(2 * 1000);
 	}
 
 	for (i = 0; i < arg->snap_cnt; i++) {

@@ -277,7 +277,10 @@ extern "C" {
 	       One or more control plane components are incompatible)	\
 	/** No service available */					\
 	ACTION(DER_NO_SERVICE,		(DER_ERR_DAOS_BASE + 39),	\
-	       No service available)
+	       No service available)					\
+	/** Re-update again */						\
+	ACTION(DER_UPDATE_AGAIN,	(DER_ERR_DAOS_BASE + 40),	\
+	       update again)						\
 
 /** Defines the gurt error codes */
 #define D_FOREACH_ERR_RANGE(ACTION)	\
