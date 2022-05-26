@@ -25,6 +25,7 @@ try:
     input = raw_input  # pylint: disable=redefined-builtin
 except NameError:
     pass
+# pylint: disable=reimported,ungrouped-imports
 
 
 def get_version(env):
