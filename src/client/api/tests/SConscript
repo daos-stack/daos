@@ -1,6 +1,7 @@
 """Build client tests"""
 import daos_build
 
+
 def scons():
     """Execute build"""
     Import('denv')
@@ -16,6 +17,7 @@ def scons():
                                       'pthread', 'cmocka'])
 
     denv.Install('$PREFIX/bin/', [eq_tests, agent_tests, job_tests])
+
 
 if __name__ == "SCons.Script":
     scons()

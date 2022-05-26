@@ -6,6 +6,7 @@
 
 import daos_build
 
+
 def scons():
     """Execute build"""
     Import('env')
@@ -19,6 +20,7 @@ def scons():
     daos_build.test(unit_env, 'telemetry_consumer_example',
                     ['telem_consumer_example.c'],
                     LIBS=['gurt'])
+
 
 if __name__ == "SCons.Script":
     scons()

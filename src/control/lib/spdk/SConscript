@@ -11,7 +11,7 @@ def scons():
     senv = denv.Clone()
     prereqs.require(senv, 'pmdk', 'spdk', 'ofi', 'hwloc')
     if senv["CC"] == 'icx':
-        #Avoid need to link Intel libraries in go build
+        # Avoid need to link Intel libraries in go build
         senv["CC"] = "gcc"
 
     senv.AppendUnique(CPPPATH=[join(Dir('.').srcnode().abspath, "include")])

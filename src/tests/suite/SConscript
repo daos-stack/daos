@@ -15,11 +15,11 @@ test(void **state) { skip(); }
 
 int main(int argc, char **argv)
 {
-	const struct CMUnitTest tests[] = {
-		cmocka_unit_test(test),
-		cmocka_unit_test(test),
-	};
-	return cmocka_run_group_tests(tests, NULL, NULL);
+  const struct CMUnitTest tests[] = {
+    cmocka_unit_test(test),
+    cmocka_unit_test(test),
+  };
+  return cmocka_run_group_tests(tests, NULL, NULL);
 }
 """
 
@@ -67,7 +67,8 @@ def configure_cmocka(nenv):
         print("libcmocka with broken skip(), using workaround (DAOS-1093).")
     return conf.Finish()
 #pylint: enable=no-member
-#
+
+
 def scons():
     """Execute build"""
     Import('denv', 'base_env')
