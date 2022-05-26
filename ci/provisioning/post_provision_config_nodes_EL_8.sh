@@ -16,7 +16,7 @@ distro_custom() {
                    clustershell
 
     # New Rocky images don't have debuginfo baked into them
-    if ! dnf --enablerepo=\*-debuginfo repolist 2>/dev/null | grep -e -debuginfofoo; then
+    if ! dnf --enablerepo=\*-debuginfo repolist 2>/dev/null | grep -e -debuginfo; then
         if [ "$(lsb_release -s -i)" = "Rocky" ]; then
             # Need to remove the upstream [debuginfo] repos
             # But need to have the files present so that re-installation is blocked

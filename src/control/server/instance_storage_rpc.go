@@ -9,6 +9,7 @@ package server
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/pkg/errors"
 	"golang.org/x/sys/unix"
@@ -49,12 +50,20 @@ func (ei *EngineInstance) newCret(pciAddr string, inErr error) *ctlpb.NvmeContro
 	}
 }
 
+func (ei *EngineInstance) logDuration(msg string, start time.Time) {
+	ei.log.Infof("%v: %v\n", msg, time.Since(start))
+}
+
 // scmFormat will return either successful result or error.
 func (ei *EngineInstance) scmFormat(force bool) (*ctlpb.ScmMountResult, error) {
 	cfg, err := ei.storage.GetScmConfig()
 	if err != nil {
 		return nil, err
 	}
+
+	defer ei.logDuration(track(fmt.Sprintf(
+		"Format of SCM storage for %s instance %d (reformat: %t)", build.DataPlaneName,
+		ei.Index(), force)))
 
 	err = ei.storage.FormatScm(force)
 	if err != nil {
@@ -65,6 +74,9 @@ func (ei *EngineInstance) scmFormat(force bool) (*ctlpb.ScmMountResult, error) {
 }
 
 func (ei *EngineInstance) bdevFormat() (results proto.NvmeControllerResults) {
+	defer ei.logDuration(track(fmt.Sprintf(
+		"Format of NVMe storage for %s instance %d", build.DataPlaneName, ei.Index())))
+
 	for _, tr := range ei.storage.FormatBdevTiers() {
 		if tr.Error != nil {
 			results = append(results, ei.newCret(fmt.Sprintf("tier %d", tr.Tier), tr.Error))
@@ -90,9 +102,6 @@ func (ei *EngineInstance) bdevFormat() (results proto.NvmeControllerResults) {
 // writing.
 func (ei *EngineInstance) StorageFormatSCM(ctx context.Context, force bool) (mResult *ctlpb.ScmMountResult) {
 	engineIdx := ei.Index()
-
-	ei.log.Infof("Formatting scm storage for %s instance %d (reformat: %t)",
-		build.DataPlaneName, engineIdx, force)
 
 	var scmErr error
 	cfg, err := ei.storage.GetScmConfig()
@@ -142,8 +151,6 @@ func (ei *EngineInstance) StorageFormatNVMe() (cResults proto.NvmeControllerResu
 	}
 
 	if needsSuperblock {
-		ei.log.Infof("Formatting nvme storage for %s instance %d", build.DataPlaneName,
-			ei.Index())
 		cResults = ei.bdevFormat()
 	}
 

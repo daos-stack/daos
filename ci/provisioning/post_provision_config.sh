@@ -47,6 +47,8 @@ if ! retry_cmd 2400 clush -B -S -l root -w "$NODESTRING" \
            COMMIT_MESSAGE=\"${COMMIT_MESSAGE-}\"
            REPO_FILE_URL=\"$REPO_FILE_URL\"
            ARTIFACTORY_URL=\"${ARTIFACTORY_URL:-}\"
+           BRANCH_NAME=\"${BRANCH_NAME:-}\"
+           CHANGE_BRANCH=\"${CHANGE_BRANCH:-}\"
            $(cat ci/stacktrace.sh)
            $(cat ci/junit.sh)
            $(cat ci/provisioning/post_provision_config_common_functions.sh)

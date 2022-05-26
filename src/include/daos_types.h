@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2015-2021 Intel Corporation.
+ * (C) Copyright 2015-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -135,9 +135,9 @@ typedef d_iov_t daos_key_t;
 typedef struct daos_event {
 	/** return code of non-blocking operation */
 	int			ev_error;
-	/** Internal use, please do not modify */
+	/** Internal use - 152 + 8 bytes pad for pthread_mutex_t size difference on __aarch64__ */
 	struct {
-		uint64_t	space[19];
+		uint64_t	space[20];
 	}			ev_private;
 	/** Used for debugging */
 	uint64_t		ev_debug;

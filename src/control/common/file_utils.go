@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2021 Intel Corporation.
+// (C) Copyright 2019-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -7,7 +7,6 @@
 package common
 
 import (
-	"bufio"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -46,32 +45,6 @@ func GetFilePaths(dir string, ext string) ([]string, error) {
 		}
 	}
 	return matchingFiles, nil
-}
-
-// SplitFile separates file content into contiguous sections separated by
-// a blank line.
-func SplitFile(path string) (sections [][]string, err error) {
-	file, err := os.Open(path)
-	if err != nil {
-		return
-	}
-	defer file.Close()
-
-	scanner := bufio.NewScanner(file)
-	var lines []string
-	for scanner.Scan() {
-		if scanner.Text() == "" {
-			sections = append(sections, lines)
-			lines = make([]string, 0)
-		} else {
-			lines = append(lines, scanner.Text())
-		}
-	}
-	if len(lines) > 0 {
-		sections = append(sections, lines)
-	}
-
-	return
 }
 
 // TruncFile overrides existing or creates new file with default options

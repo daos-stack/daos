@@ -786,8 +786,10 @@ get_object_classes(daos_oclass_id_t **oclass_id_pp)
 		return -1;
 
 	length = daos_oclass_names_list(str_size, oclass_names);
-	if (length < 0)
+	if (length < 0) {
+		D_FREE(oclass_names);
 		return length;
+	}
 
 	for (i = 0; i < length; ++i) {
 		if (oclass_names[i] == ',')
