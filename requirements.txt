@@ -9,16 +9,6 @@ pyyaml
 scons        # Works around a bug in scons on EL 8.
 tabulate
 wheel
-pylint
-numpy
-# 94.0 is reporting a couple of errors so stick on 93.
-avocado-framework<94
-avocado-framework-plugin-result-html<94
-avocado-framework-plugin-varianter-yaml-to-mux<94
-clustershell
-jira
-paramiko
-pyenchant
 
 # EL8 distribution version of meson will pick up the wrong python so upgrade meson, however latest
 #  release of meson will not build spdk to bind it to a previous version.

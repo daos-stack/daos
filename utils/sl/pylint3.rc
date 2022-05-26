@@ -1,7 +1,7 @@
 [MESSAGES CONTROL]
 disable=locally-disabled,locally-enabled,star-args,wrong-import-order,
         unused-wildcard-import,invalid-name,global-statement,bad-option-value,
-        wrong-import-position,consider-using-f-string,unspecified-encoding
+        wrong-import-position,consider-using-f-string
 
 [FORMAT]
 max-line-length=100
@@ -18,3 +18,4 @@ notes=FIXME,XXX,TODO
 
 [REPORTS]
 reports=no
+

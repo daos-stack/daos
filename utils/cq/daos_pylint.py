@@ -1,13 +1,14 @@
 #!/usr/bin/env python3
 """Wrapper script for calling pylint"""
 
+import os
 from collections import Counter
 import subprocess  # nosec
 import argparse
 from pylint.lint import Run
 from pylint.reporters.collecting_reporter import CollectingReporter
 from pylint.lint import pylinter
-import sl.check_script
+import check_script
 
 
 class FileTypeList():
@@ -84,7 +85,7 @@ def parse_file(args, target_file, ftest=False, scons=False):
         target = list(target_file)
         target.extend(['--jobs', str(min(len(target_file), 20))])
     elif scons:
-        wrapper = sl.check_script.WrapScript(target_file, output=f'{target_file}.pycheck')
+        wrapper = check_script.WrapScript(target_file, output=f'{target_file}.pycheck')
         target = [wrapper.wrap_file]
         # Do not warn on module name for SConstruct files, we don't get to pick their name.
         target.extend(['--disable', 'invalid-name'])
@@ -146,6 +147,9 @@ sys.path.append('site_scons')"""
         if scons and msg.symbol != 'consider-using-f-string':
             vals['category'] = 'error'
 
+        types[vals['category']] += 1
+        symbols[msg.symbol] += 1
+
         print(args.msg_template.format(**vals))
 
         if args.format == 'github':
@@ -155,9 +159,6 @@ sys.path.append('site_scons')"""
                 continue
             # pylint: disable-next=line-too-long,consider-using-f-string
             print('::{category} file={path},line={line},col={column},::{symbol}, {msg}'.format(**vals))  # noqa: E501
-
-        types[msg.category] += 1
-        symbols[msg.symbol] += 1
 
     if not types or args.reports == 'n':
         return
@@ -202,19 +203,6 @@ def main():
     parser.add_argument('--git', action='store_true')
     parser.add_argument('--from-file')
 
-    # Args that atom uses.
-    parser.add_argument('--msg-template',
-                        default='{path}:{line}:{column}: {message-id}: {message} ({symbol})')
-    parser.add_argument('--reports', choices=['y', 'n'], default='y')
-    parser.add_argument('--output-format', choices=['text'])
-    parser.add_argument('--rcfile')
-
-    # A --format github option as yamllint uses.
-    parser.add_argument('--format', choices=['text', 'github'], default='text')
-
-    # File list, zero or more.
-    parser.add_argument('files', nargs='*')
-
     spellings = True
     try:
         # pylint: disable-next=import-outside-toplevel,unused-import
@@ -224,10 +212,25 @@ def main():
     except ImportError:
         spellings = False
 
-    print(f'Spellings are {spellings}')
-    args = parser.parse_args()
+    if spellings:
+        rcfile = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'pylintrc.spellings')
+    else:
+        rcfile = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'pylintrc')
 
-    args.spellings = spellings
+    # Args that atom uses.
+    parser.add_argument('--msg-template',
+                        default='{path}:{line}:{column}: {message-id}: {message} ({symbol})')
+    parser.add_argument('--reports', choices=['y', 'n'], default='y')
+    parser.add_argument('--output-format', choices=['text'])
+    parser.add_argument('--rcfile', default=rcfile)
+
+    # A --format github option as yamllint uses.
+    parser.add_argument('--format', choices=['text', 'github'], default='text')
+
+    # File list, zero or more.
+    parser.add_argument('files', nargs='*')
+
+    args = parser.parse_args()
 
     if args.git:
         run_git_files(args, )

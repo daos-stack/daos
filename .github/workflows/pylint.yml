@@ -1,25 +1,24 @@
 name: Pylint
 
-# Always run on Pull Requests as we want to make this check mandatory.
+# Always run on Pull Requests as then this check can be makred as required.  It takes less than
+# three minutes to run and we can probably decrease this over time as well.
 on:
   pull_request:
 
 jobs:
   pylint:
-    name: Run pylint with spell checking
+    name: Run pylint
     runs-on: ubuntu-20.04
     steps:
       - name: Checkout code
         uses: actions/checkout@v2
         with:
           ref: ${{ github.event.pull_request.head.sha }}
-      - name: Install python
+      - name: Install core python packages
         run: python3 -m pip install --requirement requirements.txt
+      - name: Install extra python packages
+        run: python3 -m pip install --requirement utils/cq/requirements.txt
       - name: Install enchant
         run: sudo apt-get update && sudo apt-get -y install enchant
       - name: Start
-        run: ./utils/daos_pylint.py --git --format github
-      - name: diff
-        run: git diff
-      - name: about
-        run: python --version
+        run: ./utils/cq/daos_pylint.py --git --format github
