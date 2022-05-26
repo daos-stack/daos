@@ -2,32 +2,25 @@
 
 set -uex
 
-sudo yum -y install \
-  daos{,-{client,server,tests,debuginfo,devel}}-"${DAOS_PKG_VERSION}"
-
-lmd_src="maldet-current"
-lmd_tarball="maldetect-current.tar.gz"
-rm -rf "/var/tmp/${lmd_src}"
-mkdir -p "/var/tmp/${lmd_src}"
-tar -C "/var/tmp/${lmd_src}" --strip-components=1 -xf "/var/tmp/${lmd_tarball}"
-pushd "/var/tmp/${lmd_src}"
-  sudo ./install.sh
-popd
-sudo /usr/local/sbin/maldet --update-sigs
-
-fc_conf="/etc/freshclam.conf"
-if ! sudo grep -q 'ScriptedUpdates no' "$fc_conf"; then
-  sudo -E bash -c "echo \"ScriptedUpdates no\" >> \"$fc_conf\""
+source /etc/os-release
+: "${ID_LIKE:=unknown}"
+: "${ID:=unknown}"
+version="${VERSION_ID%%.*}"
+if [[ $ID_LIKE == *rhel* ]]; then
+  distro=el
 fi
-: "${JOB_URL:=${JENKINS_URL}job/clamav_daily_update/}"
-if ! sudo grep -q "$JENKINS_URL" "$fc_conf"; then
-  clam_url="${JOB_URL}lastSuccessfulBuild/artifact/download/clam"
-  sudo -E bash -c "echo \"PrivateMirror ${clam_url}\" >> \"$fc_conf\""
+if [[ $ID == *leap* ]]; then
+  distro=leap
 fi
-sudo freshclam
-rm -f /var/tmp/clamscan.out
-rm "/var/tmp/${lmd_tarball}"
-rm -rf "/var/tmp/${lmd_src}"
+
+if command -v dnf; then
+  sudo dnf -y install \
+    daos{,-{client,server,tests,debuginfo,devel}}-"${DAOS_PKG_VERSION}"
+elif command -v apt-get; then
+  distro=ubuntu
+  echo "Ubuntu not implemented yet."
+fi
+
 sudo clamscan -d /usr/local/maldetect/sigs/rfxn.ndb    \
               -d /usr/local/maldetect/sigs/rfxn.hdb -r \
               --exclude-dir=/.snapshots                \
@@ -39,15 +32,16 @@ sudo clamscan -d /usr/local/maldetect/sigs/rfxn.ndb    \
               --exclude-dir=/dev                       \
               --exclude-dir=/scratch                   \
               --infected / | tee /var/tmp/clamscan.out
-rm -f /var/tmp/maldetect.xml
+malxml="maldetect_$distro$version.xml"
+rm -f "$malxml"
 if grep 'Infected files: 0$' /var/tmp/clamscan.out; then
-  cat << EOF_GOOD > /var/tmp/maldetect.xml
+  cat << EOF_GOOD > "$malxml"
 <testsuite skip="0" failures="0" errors="0" tests="1" name="Malware_Scan">
   <testcase name="Malware_scan" classname="ClamAV"/>
 </testsuite>
 EOF_GOOD
 else
-  cat << EOF_BAD > /var/tmp/maldetect.xml
+  cat << EOF_BAD > "$malxml"
 <testsuite skip="0" failures="1" errors="0" tests="1" name="Malware_Scan">
   <testcase name="Malware_scan" classname="ClamAV">
     <failure message="Malware Detected" type="error">

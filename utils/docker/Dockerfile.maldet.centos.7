@@ -152,51 +152,11 @@ RUN [ -z "$CACHEBUST" ] || {                                                    
         dnf upgrade --exclude=spdk,spdk-devel,dpdk-devel,dpdk,mercury-devel,mercury && \
         dnf clean all;                                                                 \
     }
-USER daos_server:daos_server
-
-# Set a label.  This is useful for searching for DAOS images, but is also used
-# in github-actions to prune elements of the dockerfile below this point.
-LABEL DAOS=true
-
-WORKDIR /home/daos/daos/
-COPY --chown=daos_server:daos_server VERSION LICENSE ftest.sh SConstruct ./
-COPY --chown=daos_server:daos_server site_scons site_scons
-COPY --chown=daos_server:daos_server utils utils
-COPY --chown=daos_server:daos_server src src
-
-# select compiler to use
-ARG COMPILER=gcc
-ARG JOBS=$DEPS_JOBS
-ARG DAOS_BUILD_TYPE=$DAOS_TARGET_TYPE
-ARG DAOS_BUILD=$DAOS_DEPS_BUILD
-
-# Build DAOS
-RUN [ "$DAOS_BUILD" != "yes" ] || {                                          \
-        scons --jobs $JOBS install PREFIX=/opt/daos COMPILER=$COMPILER       \
-                BUILD_TYPE=$DAOS_BUILD_TYPE TARGET_TYPE=$DAOS_TARGET_TYPE && \
-        ([ "$DAOS_KEEP_BUILD" != "no" ] || /bin/rm -rf build) &&             \
-        go clean -cache &&                                                   \
-        cp -r utils/config/examples /opt/daos;                               \
-    }
-
-# Set environment variables
-ENV PATH=/opt/daos/bin:$PATH
-ENV FI_SOCKETS_MAX_CONN_RETRY=1
-
-# Build java and hadoop bindings
-WORKDIR /home/daos/daos/src/client/java
-
-ARG DAOS_JAVA_BUILD=$DAOS_BUILD
-
-RUN [ "$DAOS_JAVA_BUILD" != "yes" ] || {                                                      \
-        mkdir /home/daos/.m2 &&                                                               \
-        cp /home/daos/daos/utils/scripts/maven-settings.xml.in /home/daos/.m2/settings.xml && \
-        mvn clean install -T 1C                                                               \
-            -B -Dorg.slf4j.simpleLogger.log.org.apache.maven.cli.transfer.Slf4jMavenTransferListener=warn \
-            -DskipITs -Dgpg.skip -Ddaos.install.path=/opt/daos;                               \
-    }
-WORKDIR /home/daos
 
 ARG DAOS_KEEP_SRC=no
 # Remove local copy
 RUN [ "$DAOS_KEEP_SRC" != "no" ] || rm -rf /home/daos/*
+
+ARG BUILD_URL
+COPY ci/rpm/install_maldet.sh /tmp/install_maldet.sh
+RUN /tmp/install_maldet.sh

@@ -1,4 +1,7 @@
 #!/usr/bin/groovy
+// groovylint-disable DuplicateMapLiteral, DuplicateNumberLiteral
+// groovylint-disable DuplicateStringLiteral, NestedBlockDepth
+
 /* Copyright 2019-2022 Intel Corporation
  * All rights reserved.
  *
@@ -819,15 +822,30 @@ pipeline {
                         expression { ! skipStage() }
                     }
                     agent {
-                        label params.CI_UNIT_VM1_LABEL
+                        dockerfile {
+                            filename 'utils/docker/Dockerfile.maldet.centos.7'
+                            label 'docker_runner'
+                            additionalBuildArgs dockerBuildArgs() +
+                                                " -t ${sanitized_JOB_NAME}-centos7 " +
+                                                ' --build-arg REPOS="' + prRepos() + '"' +
+                                                ' --build-arg BUILD_URL="' + env.BUILD_URL + '"'
+                        }
                     }
                     steps {
-                        scanRpms inst_repos: daosRepos(),
-                                 daos_pkg_version: daosPackagesVersion(next_version)
+                          // scanRpms inst_repos: daosRepos(),
+                          //       daos_pkg_version: daosPackagesVersion(next_version)
+                        runTest script: 'export DAOS_PKG_VERSION=' +
+                                        daosPackagesVersion(next_version) + '\n' +
+                                        'ci/rpm/scan_daos_maldet.sh',
+                                junit_files: 'maldetect_el7.xml',
+                                failure_artifacts: env.STAGE_NAME,
+                                ignore_failure: false,
+                                description: env.STAGE_NAME,
+                                context: 'test' + env.STAGE_NAME
                     }
                     post {
                         always {
-                            junit 'maldetect.xml'
+                            junit 'maldetect_el7.xml'
                         }
                     }
                 } // stage('Scan CentOS 7 RPMs')
@@ -837,15 +855,28 @@ pipeline {
                         expression { ! skipStage() }
                     }
                     agent {
-                        label params.CI_UNIT_VM1_LABEL
+                        dockerfile {
+                            filename 'utils/docker/Dockerfile.maldet.el.8'
+                            label 'docker_runner'
+                            additionalBuildArgs dockerBuildArgs() +
+                                                " -t ${sanitized_JOB_NAME}-el8 " +
+                                                ' --build-arg REPOS="' + prRepos() + '"' +
+                                                ' --build-arg BUILD_URL="' + env.BUILD_URL + '"'
+                        }
                     }
                     steps {
-                        scanRpms inst_repos: daosRepos(),
-                                 daos_pkg_version: daosPackagesVersion(next_version)
+                        runTest script: 'export DAOS_PKG_VERSION=' +
+                                        daosPackagesVersion(next_version) + '\n' +
+                                        'ci/rpm/scan_daos_maldet.sh',
+                                junit_files: 'maldetect_el8.xml',
+                                failure_artifacts: env.STAGE_NAME,
+                                ignore_failure: false,
+                                description: env.STAGE_NAME,
+                                context: 'test' + env.STAGE_NAME
                     }
                     post {
                         always {
-                            junit 'maldetect.xml'
+                            junit 'maldetect_el8.xml'
                         }
                     }
                 } // stage('Scan EL 8 RPMs')
@@ -855,15 +886,29 @@ pipeline {
                         expression { ! skipStage() }
                     }
                     agent {
-                        label params.CI_UNIT_VM1_LABEL
+                        dockerfile {
+                            filename 'utils/docker/Dockerfile.maldet.leap.15'
+                            label 'docker_runner'
+                            additionalBuildArgs dockerBuildArgs() +
+                                                " -t ${sanitized_JOB_NAME}-leap15 " +
+                                                ' --build-arg REPOS="' + prRepos() + '"' +
+                                                ' --build-arg BUILD_URL="' + env.BUILD_URL + '"'
+                        }
                     }
                     steps {
-                        scanRpms inst_repos: daosRepos(),
-                                 daos_pkg_version: daosPackagesVersion(next_version)
+                        runTest script: 'export DAOS_PKG_VERSION=' +
+                                        daosPackagesVersion(next_version) + '\n' +
+                                        'ci/rpm/scan_daos_maldet.sh',
+                              junit_files: 'maldetect_leap15.xml',
+                              failure_artifacts: env.STAGE_NAME,
+                              ignore_failure: false,
+                              description: env.STAGE_NAME,
+                              context: 'test' + env.STAGE_NAME
+
                     }
                     post {
                         always {
-                            junit 'maldetect.xml'
+                            junit 'maldetect_leap15.xml'
                         }
                     }
                 } // stage('Scan Leap 15 RPMs')

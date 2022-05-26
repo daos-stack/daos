@@ -1,12 +1,13 @@
 # Copyright 2018-2022 Intel Corporation
 # All rights reserved.
 #
-# 'recipe' for Docker to build an image of CentOS 7 based
+# 'recipe' for Docker to build an image of EL 8 based
 # environment for building the DAOS project.
 #
 
 # Pull base image
-FROM centos:centos7
+ARG BASE_DISTRO=rockylinux/rockylinux:8
+FROM $BASE_DISTRO
 LABEL maintainer="daos@daos.groups.io"
 
 # Intermittent cache-bust.  Used to reduce load on the actual CACHEBUST later.
@@ -17,21 +18,24 @@ ARG REPO_FILE_URL
 RUN set -e;                                                      \
     if [ -n "$REPO_FILE_URL" ]; then                             \
         cd /etc/yum.repos.d/ &&                                  \
-        curl -k -f -o daos_ci-centos7-artifactory.repo.tmp       \
-             "$REPO_FILE_URL"daos_ci-centos7-artifactory.repo && \
+        curl -k -f -o daos_ci-el8-artifactory.repo.tmp           \
+             "$REPO_FILE_URL"daos_ci-el8-artifactory.repo &&     \
         for file in *.repo; do                                   \
             true > $file;                                        \
         done;                                                    \
-        mv daos_ci-centos7-artifactory.repo{.tmp,};              \
+        mv daos_ci-el8-artifactory.repo{.tmp,};                  \
     fi;                                                          \
-    yum --assumeyes install dnf;                                 \
-    yum clean all;                                               \
-    dnf --assumeyes --disablerepo \*epel\* install               \
-                        epel-release dnf-plugins-core;           \
+    dnf --assumeyes --disablerepo \*epel\* install dnf-plugins-core;     \
     dnf config-manager --save --setopt=assumeyes=True;           \
     dnf config-manager --save --setopt=install_weak_deps=False;  \
-    if [ -n "$REPO_FILE_URL" ]; then                             \
-        dnf --quiet config-manager --disable epel;               \
+    if [ ! -f /etc/fedora-release ]; then                        \
+        dnf --assumeyes --disablerepo \*epel\* install epel-release; \
+        if [ -n "$REPO_FILE_URL" ]; then                         \
+            PT_REPO=daos_ci-rocky8-powertools-artifactory;       \
+        else                                                     \
+            PT_REPO=powertools;                                  \
+        fi;                                                      \
+        dnf config-manager --enable $PT_REPO;                    \
     fi;                                                          \
     dnf clean all
 
@@ -50,7 +54,7 @@ RUN for repo in $REPOS; do                                                \
         fi;                                                               \
         echo -e "[$repo:$branch:$build_number]\n\
 name=$repo:$branch:$build_number\n\
-baseurl=${JENKINS_URL}job/daos-stack/job/$repo/job/$branch/$build_number/artifact/artifacts/centos7/\n\
+baseurl=${JENKINS_URL}job/daos-stack/job/$repo/job/$branch/$build_number/artifact/artifacts/el8/\n\
 enabled=1\n\
 gpgcheck=False\n" >> /etc/yum.repos.d/$repo:$branch:$build_number.repo;   \
         cat /etc/yum.repos.d/$repo:$branch:$build_number.repo; \
@@ -59,7 +63,7 @@ gpgcheck=False\n" >> /etc/yum.repos.d/$repo:$branch:$build_number.repo;   \
     done
 
 # Install OS updates and package.  Include basic tools and daos dependencies
-COPY ./utils/scripts/install-centos7.sh /tmp/install.sh
+COPY ./utils/scripts/install-el8.sh /tmp/install.sh
 RUN chmod +x /tmp/install.sh && dnf upgrade && /tmp/install.sh && dnf clean all && \
     rm -f /tmp/install.sh
 
@@ -104,16 +108,19 @@ RUN if [ "x$BULLSEYE" != "x" ]; then \
       rm -rf bullseye; \
     fi
 
+USER daos_server:daos_server
 
-# Do not setup a python venv on CentOS 7 as Jenkins builds do not honor PATH, so install as root
-# instead.  Install latest versions of python tools.
+# Setup a python venv so that python packages can be installed locally.
+RUN python3 -m venv /home/daos/venv
+ENV PATH=/home/daos/venv/bin:$PATH
+ENV VIRTUAL_ENV=/home/daos/venv/
+
+# Install latest versions of python tools.
 # wheel is needed first to avoid a warning when installing pyyaml.
 COPY requirements.txt .
 RUN python3 -m pip --no-cache-dir install --upgrade pip && \
     python3 -m pip --no-cache-dir install wheel && \
-    python3 -m pip --no-cache-dir --disable-pip-version-check install --requirement requirements.txt
-
-USER daos_server:daos_server
+    python3 -m pip --no-cache-dir install -r requirements.txt
 
 WORKDIR /home/daos/pre
 COPY --chown=daos_server:daos_server SConstruct .
@@ -141,7 +148,7 @@ ARG DEPS_JOBS=1
 
 RUN [ "$DAOS_DEPS_BUILD" != "yes" ] || {                            \
         scons --build-deps=yes --jobs $DEPS_JOBS PREFIX=/opt/daos   \
-                TARGET_TYPE=$DAOS_TARGET_TYPE --deps-only &&        \
+              TARGET_TYPE=$DAOS_TARGET_TYPE --deps-only &&          \
         ([ "$DAOS_KEEP_BUILD" != "no" ] || /bin/rm -rf build *.gz); \
     }
 USER root:root
@@ -152,51 +159,11 @@ RUN [ -z "$CACHEBUST" ] || {                                                    
         dnf upgrade --exclude=spdk,spdk-devel,dpdk-devel,dpdk,mercury-devel,mercury && \
         dnf clean all;                                                                 \
     }
-USER daos_server:daos_server
-
-# Set a label.  This is useful for searching for DAOS images, but is also used
-# in github-actions to prune elements of the dockerfile below this point.
-LABEL DAOS=true
-
-WORKDIR /home/daos/daos/
-COPY --chown=daos_server:daos_server VERSION LICENSE ftest.sh SConstruct ./
-COPY --chown=daos_server:daos_server site_scons site_scons
-COPY --chown=daos_server:daos_server utils utils
-COPY --chown=daos_server:daos_server src src
-
-# select compiler to use
-ARG COMPILER=gcc
-ARG JOBS=$DEPS_JOBS
-ARG DAOS_BUILD_TYPE=$DAOS_TARGET_TYPE
-ARG DAOS_BUILD=$DAOS_DEPS_BUILD
-
-# Build DAOS
-RUN [ "$DAOS_BUILD" != "yes" ] || {                                          \
-        scons --jobs $JOBS install PREFIX=/opt/daos COMPILER=$COMPILER       \
-                BUILD_TYPE=$DAOS_BUILD_TYPE TARGET_TYPE=$DAOS_TARGET_TYPE && \
-        ([ "$DAOS_KEEP_BUILD" != "no" ] || /bin/rm -rf build) &&             \
-        go clean -cache &&                                                   \
-        cp -r utils/config/examples /opt/daos;                               \
-    }
-
-# Set environment variables
-ENV PATH=/opt/daos/bin:$PATH
-ENV FI_SOCKETS_MAX_CONN_RETRY=1
-
-# Build java and hadoop bindings
-WORKDIR /home/daos/daos/src/client/java
-
-ARG DAOS_JAVA_BUILD=$DAOS_BUILD
-
-RUN [ "$DAOS_JAVA_BUILD" != "yes" ] || {                                                      \
-        mkdir /home/daos/.m2 &&                                                               \
-        cp /home/daos/daos/utils/scripts/maven-settings.xml.in /home/daos/.m2/settings.xml && \
-        mvn clean install -T 1C                                                               \
-            -B -Dorg.slf4j.simpleLogger.log.org.apache.maven.cli.transfer.Slf4jMavenTransferListener=warn \
-            -DskipITs -Dgpg.skip -Ddaos.install.path=/opt/daos;                               \
-    }
-WORKDIR /home/daos
 
 ARG DAOS_KEEP_SRC=no
 # Remove local copy
 RUN [ "$DAOS_KEEP_SRC" != "no" ] || rm -rf /home/daos/*
+
+ARG BUILD_URL
+COPY ci/rpm/install_maldet.sh /tmp/install_maldet.sh
+RUN /tmp/install_maldet.sh
