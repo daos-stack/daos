@@ -2,7 +2,7 @@
 
 import os
 
-HEADERS = ['daos.h', 'daos_api.h', 'daos_types.h', 'daos_errno.h', 'daos_kv.h',
+HEADERS = ['daos_api.h', 'daos_types.h', 'daos_errno.h', 'daos_kv.h',
            'daos_event.h', 'daos_mgmt.h', 'daos_types.h', 'daos_array.h',
            'daos_task.h', 'daos_fs.h', 'daos_uns.h', 'daos_security.h',
            'daos_prop.h', 'daos_obj_class.h', 'daos_obj.h', 'daos_pool.h',
@@ -32,10 +32,13 @@ def generate_daos_version_header(env):
     out = env.Substfile(tmpl_hdr_in, SUBST_DICT=sd)
     print("generated daos version header file: {}".format(out[0].abspath))
 
-def check_header(env, header):
-    """Check a header file"""
+def check_install_header(env, header):
+    """Runs a builder to ensure the header can standalone compile and installs it"""
     result = env.CheckHeader(header)
+    # Ensure the target, actually gets built since none of these targets
+    # get installed.
     Default(result)
+    env.Install(os.path.join('$PREFIX', os.path.dirname(header)), header)
 
 def scons():
     """Execute build"""
@@ -55,7 +58,6 @@ def scons():
     generate_daos_version_header(env)
 
     if not env.GetOption('clean') and not env.GetOption('help'):
-        print("Checking local headers can be included")
         config_env = env.Clone()
         conf = Configure(config_env)
         # Detect if we have explicit_bzero
@@ -73,13 +75,11 @@ def scons():
             env.Install(os.path.join('$PREFIX', 'include', 'daos_srv'), header_file)
     for header in HEADERS_GURT:
         header_file = "include/gurt/%s" % header
-        check_header(env, header_file)
-        env.Install(os.path.join('$PREFIX', 'include', 'gurt'), header_file)
+        check_install_header(env, header_file)
     for header in HEADERS_CART:
         header_file = "include/cart/%s" % header
-        check_header(env, header_file)
-        env.Install(os.path.join('$PREFIX', 'include', 'cart'), header_file)
-    check_header(env, 'include/daos.h')
+        check_install_header(env, header_file)
+    check_install_header(env, 'include/daos.h')
 
     env.Append(CCFLAGS=['-DCART_VERSION=\\"' + CART_VERSION + '\\"'])
     env.AppendUnique(CPPPATH=[Dir('cart/test/utest').srcnode()])
