@@ -43,7 +43,7 @@ def check_install_header(env, header):
 def scons():
     """Execute build"""
 
-    Import('env', 'base_env', 'prereqs')
+    Import('env', 'base_env', 'base_env_mpi', 'prereqs')
 
     # For Common library (tse.h)
     env.AppendUnique(CPPPATH=[Dir('include/daos').srcnode()])
@@ -55,6 +55,9 @@ def scons():
     env.AppendUnique(CPPPATH=[Dir('include')])
     base_env.AppendUnique(CPPPATH=[Dir('include').srcnode()])
     base_env.AppendUnique(CPPPATH=[Dir('include')])
+    if base_env_mpi:
+        base_env_mpi.AppendUnique(CPPPATH=[Dir('include').srcnode()])
+        base_env_mpi.AppendUnique(CPPPATH=[Dir('include')])
     generate_daos_version_header(env)
 
     if not env.GetOption('clean') and not env.GetOption('help'):
@@ -74,15 +77,12 @@ def scons():
             header_file = os.path.join('include', 'daos_srv', header)
             env.Install(os.path.join('$PREFIX', 'include', 'daos_srv'), header_file)
     for header in HEADERS_GURT:
-        header_file = os.path.join('include', 'gurt', header)
-        check_install_header(env, header_file)
+        check_install_header(env, os.path.join('include', 'gurt', header))
     for header in HEADERS_CART:
-        header_file = os.path.join('include', 'cart', header)
-        check_install_header(env, header_file)
+        check_install_header(env, os.path.join('include', 'cart', header))
     check_install_header(env, 'include/daos.h')
 
     env.Append(CCFLAGS=['-DCART_VERSION=\\"' + CART_VERSION + '\\"'])
-    env.AppendUnique(CPPPATH=[Dir('cart/test/utest').srcnode()])
     Export('env', 'CART_VERSION')
 
     SConscript('gurt/SConscript')

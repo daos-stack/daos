@@ -58,12 +58,9 @@ def scons():
     SConscript('swim/SConscript')
     Default('swim')
 
-    Import('env', 'prereqs', 'swim_targets', 'gurt_lib', 'CART_VERSION')
-    Import('conf_dir', 'base_env')
+    Import('env', 'prereqs', 'swim_targets', 'gurt_lib', 'CART_VERSION', 'conf_dir')
 
-    daos_build.add_build_rpath(base_env)
     daos_build.add_build_rpath(env)
-    base_env.AppendUnique(LIBPATH=[Dir('.')])
 
     env.Alias('install', '$PREFIX')
 
