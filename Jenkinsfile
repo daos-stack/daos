@@ -352,8 +352,6 @@ pipeline {
                                     withSubmodules: true
                         functionalTest inst_repos: daosRepos(),
                                        inst_rpms: functionalPackages(1, next_version, "tests-internal"),
-                                       test_tag: params.TestTagTCP,
-                                       ftest_arg: '--nvme=auto:-3DNAND --provider=ofi+tcp',
                                        test_function: 'runTestFunctionalV2'
                     }
                     post {
@@ -378,8 +376,6 @@ pipeline {
                                     withSubmodules: true
                         functionalTest inst_repos: daosRepos(),
                                        inst_rpms: functionalPackages(1, next_version, "tests-internal"),
-                                       test_tag: params.TestTagTCP,
-                                       ftest_arg: '--nvme=auto:-3DNAND --provider=ofi+tcp',
                                        test_function: 'runTestFunctionalV2'
                     }
                     post {
@@ -404,8 +400,6 @@ pipeline {
                                     withSubmodules: true
                         functionalTest inst_repos: daosRepos(),
                                        inst_rpms: functionalPackages(1, next_version, "tests-internal"),
-                                       test_tag: params.TestTagTCP,
-                                       ftest_arg: '--nvme=auto:-3DNAND --provider=ofi+tcp',
                                        test_function: 'runTestFunctionalV2'
                     }
                     post {
@@ -430,8 +424,6 @@ pipeline {
                                     withSubmodules: true
                         functionalTest inst_repos: daosRepos(),
                                        inst_rpms: functionalPackages(1, next_version, "tests-internal") + "mercury-ucx",
-                                       test_tag: params.TestTagUCX,
-                                       ftest_arg: '--nvme=auto:-3DNAND --provider=ucx+dc_x',
                                        test_function: 'runTestFunctionalV2'
                     }
                     post {
@@ -456,8 +448,6 @@ pipeline {
                                     withSubmodules: true
                         functionalTest inst_repos: daosRepos(),
                                        inst_rpms: functionalPackages(1, next_version, "tests-internal") + "mercury-ucx",
-                                       test_tag: params.TestTagUCX,
-                                       ftest_arg: '--nvme=auto:-3DNAND --provider=ucx+dc_x',
                                        test_function: 'runTestFunctionalV2'
                     }
                     post {
@@ -482,8 +472,6 @@ pipeline {
                                     withSubmodules: true
                         functionalTest inst_repos: daosRepos(),
                                        inst_rpms: functionalPackages(1, next_version, "tests-internal") + "mercury-ucx",
-                                       test_tag: params.TestTagUCX,
-                                       ftest_arg: '--nvme=auto:-3DNAND --provider=ucx+dc_x',
                                        test_function: 'runTestFunctionalV2'
                     }
                     post {
