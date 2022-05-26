@@ -115,7 +115,7 @@ ds_mgmt_drpc_set_log_masks(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 		return;
 	}
 
-	/* Response status (rc) is populated with SUCCESS (0) on init */
+	/* Response status is populated with SUCCESS (0) on init */
 	ctl__set_log_masks_resp__init(&resp);
 
 	/* This assumes req->masks is a null terminated string */
@@ -180,8 +180,7 @@ ds_mgmt_drpc_group_update(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	int			 rc, i;
 
 	/* Unpack the inner request from the drpc call body */
-	req = mgmt__group_update_req__unpack(
-		&alloc.alloc, drpc_req->body.len, drpc_req->body.data);
+	req = mgmt__group_update_req__unpack(&alloc.alloc, drpc_req->body.len, drpc_req->body.data);
 
 	if (alloc.oom || req == NULL) {
 		drpc_resp->status = DRPC__STATUS__FAILED_UNMARSHAL_PAYLOAD;
@@ -356,6 +355,56 @@ err_out:
 	return rc;
 }
 
+static int pool_create_fill_resp(Mgmt__PoolCreateResp *resp, uuid_t uuid, d_rank_list_t *svc_ranks)
+{
+	int			rc = 0;
+	int			index;
+	d_rank_list_t	       *enabled_ranks = NULL;
+	daos_pool_info_t	pool_info = { .pi_bits = DPI_ENGINES_ENABLED | DPI_SPACE };
+
+	D_ASSERT(svc_ranks != NULL);
+	D_ASSERT(svc_ranks->rl_nr > 0);
+
+	rc = rank_list_to_uint32_array(svc_ranks, &resp->svc_reps, &resp->n_svc_reps);
+	if (rc != 0) {
+		D_ERROR("Failed to convert svc rank list: rc=%d\n", rc);
+		D_GOTO(out, rc);
+	}
+
+	D_DEBUG(DB_MGMT, "%d service replicas\n", svc_ranks->rl_nr);
+
+	rc = ds_mgmt_pool_query(uuid, svc_ranks, &enabled_ranks, &pool_info);
+	if (rc != 0) {
+		D_ERROR("Failed to query created pool: rc=%d\n", rc);
+		D_GOTO(out, rc);
+	}
+
+	rc = rank_list_to_uint32_array(enabled_ranks, &resp->tgt_ranks, &resp->n_tgt_ranks);
+	if (rc != 0) {
+		D_ERROR("Failed to convert enabled target rank list: rc=%d\n", rc);
+		D_GOTO(out, rc);
+	}
+
+	for (index = 0; index < DAOS_MEDIA_MAX; ++index) {
+		D_ASSERT(pool_info.pi_space.ps_space.s_total[index] % resp->n_tgt_ranks == 0);
+	}
+	D_ALLOC_ARRAY(resp->tier_bytes, DAOS_MEDIA_MAX);
+	if (resp->tier_bytes == NULL) {
+		rc = -DER_NOMEM;
+		D_ERROR("Failed to allocate memory for tiers size: rc=%d\n", rc);
+		D_GOTO(out, rc);
+	}
+	resp->n_tier_bytes = DAOS_MEDIA_MAX;
+	for (index = 0; index < DAOS_MEDIA_MAX; ++index) {
+		resp->tier_bytes[index] =
+			pool_info.pi_space.ps_space.s_total[index] / resp->n_tgt_ranks;
+	}
+
+out:
+	d_rank_list_free(enabled_ranks);
+	return rc;
+}
+
 void
 ds_mgmt_drpc_pool_create(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 {
@@ -436,16 +485,9 @@ ds_mgmt_drpc_pool_create(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 		goto out;
 	}
 
-	D_ASSERT(svc->rl_nr > 0);
-
-	rc = rank_list_to_uint32_array(svc, &resp.svc_reps, &resp.n_svc_reps);
-	if (rc != 0)
-		D_GOTO(out_svc, rc);
-
-	D_DEBUG(DB_MGMT, "%d service replicas\n", svc->rl_nr);
-
-out_svc:
+	rc = pool_create_fill_resp(&resp, pool_uuid, svc);
 	d_rank_list_free(svc);
+
 out:
 	resp.status = rc;
 	len = mgmt__pool_create_resp__get_packed_size(&resp);
@@ -465,6 +507,8 @@ out:
 	if (targets != NULL)
 		d_rank_list_free(targets);
 
+	D_FREE(resp.tier_bytes);
+	D_FREE(resp.tgt_ranks);
 	D_FREE(resp.svc_reps);
 }
 
@@ -1699,7 +1743,7 @@ ds_mgmt_drpc_pool_query(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	resp.total_targets = pool_info.pi_ntargets;
 	resp.disabled_targets = pool_info.pi_ndisabled;
 	resp.active_targets = pool_info.pi_space.ps_ntargets;
-	resp.total_nodes = pool_info.pi_nnodes;
+	resp.total_engines = pool_info.pi_nnodes;
 	resp.leader = pool_info.pi_leader;
 	resp.version = pool_info.pi_map_ver;
 	resp.enabled_ranks = (req->include_enabled_ranks) ? range_list_str : "";
@@ -1762,9 +1806,7 @@ ds_mgmt_drpc_smd_list_devs(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	int			 rc = 0;
 
 	/* Unpack the inner request from the drpc call body */
-	req = ctl__smd_dev_req__unpack(&alloc.alloc,
-					drpc_req->body.len,
-					drpc_req->body.data);
+	req = ctl__smd_dev_req__unpack(&alloc.alloc, drpc_req->body.len, drpc_req->body.data);
 
 	if (alloc.oom || req == NULL) {
 		drpc_resp->status = DRPC__STATUS__FAILED_UNMARSHAL_PAYLOAD;
@@ -1837,9 +1879,7 @@ ds_mgmt_drpc_smd_list_pools(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	int			 rc = 0;
 
 	/* Unpack the inner request from the drpc call body */
-	req = ctl__smd_pool_req__unpack(&alloc.alloc,
-					 drpc_req->body.len,
-					 drpc_req->body.data);
+	req = ctl__smd_pool_req__unpack(&alloc.alloc, drpc_req->body.len, drpc_req->body.data);
 
 	if (alloc.oom || req == NULL) {
 		drpc_resp->status = DRPC__STATUS__FAILED_UNMARSHAL_PAYLOAD;
@@ -1911,9 +1951,7 @@ ds_mgmt_drpc_bio_health_query(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	int			 rc = 0;
 
 	/* Unpack the inner request from the drpc call body */
-	req = ctl__bio_health_req__unpack(&alloc.alloc,
-					   drpc_req->body.len,
-					   drpc_req->body.data);
+	req = ctl__bio_health_req__unpack(&alloc.alloc, drpc_req->body.len, drpc_req->body.data);
 
 	if (alloc.oom || req == NULL) {
 		drpc_resp->status = DRPC__STATUS__FAILED_UNMARSHAL_PAYLOAD;
@@ -2039,9 +2077,7 @@ ds_mgmt_drpc_dev_state_query(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	int			 rc = 0;
 
 	/* Unpack the inner request from the drpc call body */
-	req = ctl__dev_state_req__unpack(&alloc.alloc,
-					  drpc_req->body.len,
-					  drpc_req->body.data);
+	req = ctl__dev_state_req__unpack(&alloc.alloc, drpc_req->body.len, drpc_req->body.data);
 
 	if (alloc.oom || req == NULL) {
 		drpc_resp->status = DRPC__STATUS__FAILURE;
@@ -2114,9 +2150,7 @@ ds_mgmt_drpc_dev_set_faulty(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	int			 rc = 0;
 
 	/* Unpack the inner request from the drpc call body */
-	req = ctl__dev_state_req__unpack(&alloc.alloc,
-					  drpc_req->body.len,
-					  drpc_req->body.data);
+	req = ctl__dev_state_req__unpack(&alloc.alloc, drpc_req->body.len, drpc_req->body.data);
 
 	if (alloc.oom || req == NULL) {
 		drpc_resp->status = DRPC__STATUS__FAILURE;
@@ -2190,9 +2224,7 @@ ds_mgmt_drpc_dev_replace(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	int			 rc = 0;
 
 	/* Unpack the inner request from the drpc call body */
-	req = ctl__dev_replace_req__unpack(&alloc.alloc,
-					    drpc_req->body.len,
-					    drpc_req->body.data);
+	req = ctl__dev_replace_req__unpack(&alloc.alloc, drpc_req->body.len, drpc_req->body.data);
 
 	if (alloc.oom || req == NULL) {
 		drpc_resp->status = DRPC__STATUS__FAILURE;
@@ -2284,9 +2316,7 @@ ds_mgmt_drpc_dev_identify(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	int			 rc = 0;
 
 	/* Unpack the inner request from the drpc call body */
-	req = ctl__dev_identify_req__unpack(&alloc.alloc,
-					     drpc_req->body.len,
-					     drpc_req->body.data);
+	req = ctl__dev_identify_req__unpack(&alloc.alloc, drpc_req->body.len, drpc_req->body.data);
 
 	if (alloc.oom || req == NULL) {
 		drpc_resp->status = DRPC__STATUS__FAILURE;

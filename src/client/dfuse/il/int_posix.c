@@ -12,6 +12,8 @@
 #include <string.h>
 #include <errno.h>
 #include <fcntl.h>
+#include <unistd.h>
+#include <sys/syscall.h>
 
 #include <sys/time.h>
 #include <sys/resource.h>
@@ -41,6 +43,7 @@ struct ioil_pool {
 struct ioil_global {
 	pthread_mutex_t	iog_lock;
 	d_list_t	iog_pools_head;
+	pid_t           iog_init_tid;
 	bool		iog_initialized;
 	bool		iog_no_daos;
 	bool		iog_daos_init;
@@ -300,6 +303,8 @@ ioil_init(void)
 
 	DFUSE_TRA_ROOT(&ioil_iog, "il");
 
+	ioil_iog.iog_init_tid = syscall(SYS_gettid);
+
 	/* Get maximum number of file descriptors */
 	rc = getrlimit(RLIMIT_NOFILE, &rlimit);
 	if (rc != 0) {
@@ -351,7 +356,13 @@ ioil_fini(void)
 {
 	struct ioil_pool *pool, *pnext;
 	struct ioil_cont *cont, *cnext;
-	int rc;
+	int               rc;
+	pid_t             tid = syscall(SYS_gettid);
+
+	if (tid != ioil_iog.iog_init_tid) {
+		DFUSE_TRA_INFO(&ioil_iog, "Ignoring destructor from alternate thread");
+		return;
+	}
 
 	ioil_iog.iog_initialized = false;
 
@@ -1467,6 +1478,33 @@ dfuse_mmap(void *address, size_t length, int prot, int flags, int fd,
 	}
 
 	return __real_mmap(address, length, prot, flags, fd, offset);
+}
+
+DFUSE_PUBLIC int
+dfuse_ftruncate(int fd, off_t length)
+{
+	struct fd_entry *entry;
+	int              rc;
+
+	rc = vector_get(&fd_table, fd, &entry);
+	if (rc != 0)
+		goto do_real_ftruncate;
+
+	DFUSE_LOG_DEBUG("ftuncate(fd=%d) intercepted, bypass=%s offset %#lx", fd,
+			bypass_status[entry->fd_status], length);
+
+	rc = dfs_punch(entry->fd_cont->ioc_dfs, entry->fd_dfsoh, length, DFS_MAX_FSIZE);
+
+	vector_decref(&fd_table, entry);
+
+	if (rc == -DER_SUCCESS)
+		return 0;
+
+	errno = rc;
+	return -1;
+
+do_real_ftruncate:
+	return __real_ftruncate(fd, length);
 }
 
 DFUSE_PUBLIC int

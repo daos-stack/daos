@@ -217,9 +217,29 @@ class DaosPool():
         thread.start()
         return None
 
-    def target_query(self, tgt):
+    def target_query(self, tgt, rank, cb_func=None):
         """Query information of storage targets within a DAOS pool."""
-        raise NotImplementedError("Target_query not yet implemented in C API.")
+        self.target_info = daos_cref.TargetInfo()
+        func = self.context.get_function('query-target')
+
+        if cb_func is None:
+            ret = func(self.handle, tgt, rank, ctypes.byref(self.target_info),
+                       None)
+            if ret != 0:
+                raise DaosApiError("Pool query returned non-zero. RC: {0}"
+                                   .format(ret))
+            return self.target_info
+
+        event = daos_cref.DaosEvent()
+        params = [self.handle, tgt, rank, ctypes.byref(self.target_info), event]
+        thread = threading.Thread(target=daos_cref.AsyncWorker1,
+                                  args=(func,
+                                        params,
+                                        self.context,
+                                        cb_func,
+                                        self))
+        thread.start()
+        return None
 
     def set_svc(self, rank):
         """Set svc.
@@ -2347,7 +2367,7 @@ class DaosContext():
             'destroy-tx':      self.libdaos.daos_tx_abort,
             'disconnect-pool': self.libdaos.daos_pool_disconnect,
             'fetch-obj':       self.libdaos.daos_obj_fetch,
-            'generate-oid':    self.libdaos.daos_obj_generate_oid2,
+            'generate-oid':    self.libdaos.daos_obj_generate_oid,
             'get-cont-attr':   self.libdaos.daos_cont_get_attr,
             'get-pool-attr':   self.libdaos.daos_pool_get_attr,
             'get-layout':      self.libdaos.daos_obj_layout_get,

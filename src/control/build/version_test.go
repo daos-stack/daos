@@ -12,7 +12,7 @@ import (
 	"github.com/pkg/errors"
 
 	"github.com/daos-stack/daos/src/control/build"
-	"github.com/daos-stack/daos/src/control/common"
+	"github.com/daos-stack/daos/src/control/common/test"
 )
 
 func TestBuild_NewVersion(t *testing.T) {
@@ -64,7 +64,7 @@ func TestBuild_NewVersion(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			gotVer, gotErr := build.NewVersion(tc.input)
-			common.CmpErr(t, tc.expErr, gotErr)
+			test.CmpErr(t, tc.expErr, gotErr)
 			if tc.expErr != nil {
 				return
 			}

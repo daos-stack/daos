@@ -128,6 +128,7 @@ def define_mercury(reqs):
                  '--prefix=$OFI_PREFIX',
                  '--disable-efa',
                  '--disable-psm3',
+                 '--disable-opx',
                  '--without-gdrcopy']
     if reqs.target_type == 'debug':
         ofi_build.append('--enable-debug')
@@ -156,7 +157,9 @@ def define_mercury(reqs):
                 package='libfabric-devel' if inst(reqs, 'ofi') else None,
                 patch_rpath=['lib'])
 
-    reqs.define('ucx', libs=['ucp'])
+    reqs.define('ucx',
+                libs=['ucp', 'uct'],
+                headers=['uct/api/uct.h'])
 
     mercury_build = ['cmake',
                      '-DMERCURY_USE_CHECKSUMS=OFF',
@@ -175,7 +178,7 @@ def define_mercury(reqs):
     else:
         mercury_build.append('-DMERCURY_ENABLE_DEBUG=OFF')
 
-    if reqs.get_env('UCX'):
+    if reqs.check_component('ucx'):
         mercury_build.extend(['-DNA_USE_UCX=ON',
                               '-DUCX_INCLUDE_DIR=/usr/include',
                               '-DUCP_LIBRARY=/usr/lib64/libucp.so',
