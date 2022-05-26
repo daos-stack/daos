@@ -98,7 +98,7 @@ def _ch_emitter(source, target, **_kw):
     target = []
     for src in source:
         (base, _ext) = os.path.splitext(src.abspath)
-        target.append("{}_check_header$OBJSUFFIX".format(base))
+        target.append(f"{base}_check_header$OBJSUFFIX")
     return target, source
 
 

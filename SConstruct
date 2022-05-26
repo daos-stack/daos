@@ -435,8 +435,7 @@ def scons():  # pylint: disable=too-many-locals,too-many-branches
 
     if prereqs.client_requested():
         api_version = env.Command(os.path.join(build_prefix, 'API_VERSION'),
-                                  "SConstruct",
-                                  "echo %s > $TARGET" % (API_VERSION))
+                                  "SConstruct", f"echo {API_VERSION} > $TARGET")
         env.Install("$PREFIX/lib64/daos", api_version)
     env.Install(conf_dir + '/bash_completion.d', ['utils/completion/daos.bash'])
 

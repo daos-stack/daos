@@ -67,17 +67,17 @@ def scons():
         conf.Finish()
 
     for header in HEADERS:
-        header_file = "include/%s" % header
+        header_file = os.path.join('include', header)
         env.Install(os.path.join('$PREFIX', 'include'), header_file)
     if prereqs.server_requested():
         for header in HEADERS_SRV:
-            header_file = "include/daos_srv/%s" % header
+            header_file = os.path.join('include', 'daos_srv', header)
             env.Install(os.path.join('$PREFIX', 'include', 'daos_srv'), header_file)
     for header in HEADERS_GURT:
-        header_file = "include/gurt/%s" % header
+        header_file = os.path.join('include', 'gurt', header)
         check_install_header(env, header_file)
     for header in HEADERS_CART:
-        header_file = "include/cart/%s" % header
+        header_file = os.path.join('include', 'cart', header)
         check_install_header(env, header_file)
     check_install_header(env, 'include/daos.h')
 
