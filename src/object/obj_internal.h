@@ -380,7 +380,8 @@ struct obj_auxi_args {
 					 sub_anchors:1,
 					 ec_degrade_fetch:1,
 					 tx_convert:1,
-					 cond_modify:1;
+					 cond_modify:1,
+					 reintegrating:1;
 	/* request flags. currently only: ORF_RESEND */
 	uint32_t			 flags;
 	uint32_t			 specified_shard;
@@ -588,7 +589,7 @@ obj_retry_error(int err)
 	       err == -DER_EXCLUDED || err == -DER_CSUM ||
 	       err == -DER_TX_BUSY || err == -DER_TX_UNCERTAIN ||
 	       err == -DER_NEED_TX || err == -DER_NOTLEADER ||
-	       daos_crt_network_error(err);
+	       err == -DER_UPDATE_AGAIN || daos_crt_network_error(err);
 }
 
 static inline daos_handle_t

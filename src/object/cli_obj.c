@@ -988,6 +988,8 @@ obj_shard_tgts_query(struct dc_object *obj, uint32_t map_ver, uint32_t shard,
 	shard_tgt->st_tgt_idx	= obj_shard->do_target_idx;
 	if (obj_auxi->cond_modify && (obj_shard->do_rebuilding || obj_shard->do_reintegrating))
 		shard_tgt->st_flags |= DTF_DELAY_FORWARD;
+	if (obj_shard->do_reintegrating)
+		obj_auxi->reintegrating = 1;
 	rc = obj_shard2tgtid(obj, shard, map_ver, &shard_tgt->st_tgt_id);
 close:
 	obj_shard_close(obj_shard);
@@ -4376,6 +4378,7 @@ obj_task_init_common(tse_task_t *task, int opc, uint32_t map_ver,
 	obj_auxi->th = th;
 	obj_auxi->obj = obj;
 	obj_auxi->dkey_hash = 0;
+	obj_auxi->reintegrating = 0;
 	shard_task_list_init(obj_auxi);
 	if (obj_is_ec(obj))
 		obj_auxi->is_ec_obj = 1;

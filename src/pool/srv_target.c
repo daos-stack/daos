@@ -1563,3 +1563,201 @@ out:
 		DP_UUID(in->tmi_op.pi_uuid), rpc, DP_RC(out->tmo_op.po_rc));
 	crt_reply_send(rpc);
 }
+
+struct tgt_discard_arg{
+	uuid_t			     pool_uuid;
+	uint64_t		     epoch;
+	struct pool_target_addr_list tgt_list;
+};
+
+struct child_discard_arg{
+	struct tgt_discard_arg	*tgt_discard;
+	uuid_t			cont_uuid;
+};
+
+static struct tgt_discard_arg*
+tgt_discard_arg_alloc(struct pool_target_addr_list *tgt_list)
+{
+	struct tgt_discard_arg	*arg;
+	int			i;
+	int			rc;
+
+	D_ALLOC_PTR(arg);
+	if (arg == NULL)
+		return NULL;
+
+	rc = pool_target_addr_list_alloc(tgt_list->pta_number, &arg->tgt_list);
+	if (rc != 0) {
+		D_FREE_PTR(arg);
+		return NULL;
+	}
+
+	for (i = 0; i < tgt_list->pta_number; i++) {
+		arg->tgt_list.pta_addrs[i].pta_rank = tgt_list->pta_addrs[i].pta_rank;
+		arg->tgt_list.pta_addrs[i].pta_target = tgt_list->pta_addrs[i].pta_target;
+	}
+
+	return arg;
+}
+
+static void
+tgt_discard_arg_free(struct tgt_discard_arg *arg)
+{
+	pool_target_addr_list_free(&arg->tgt_list);
+	D_FREE_PTR(arg);
+}
+
+static int
+obj_discard_cb(daos_handle_t ch, vos_iter_entry_t *ent,
+	       vos_iter_type_t type, vos_iter_param_t *param,
+	       void *data, unsigned *acts)
+{
+	struct child_discard_arg	*arg = data;
+	daos_epoch_range_t		epr;
+	int				rc;
+
+	epr.epr_hi = arg->tgt_discard->epoch;
+	epr.epr_lo = 0;
+	rc = vos_discard(param->ip_hdl, &ent->ie_oid, &epr, NULL, NULL);
+	if (rc != 0)
+		D_ERROR("discard object pool/object "DF_UUID"/"DF_UOID" rc: "DF_RC"\n",
+			DP_UUID(arg->tgt_discard->pool_uuid), DP_UOID(ent->ie_oid),
+			DP_RC(rc));
+	return rc;
+}
+
+/** vos_iter_cb_t */
+static int
+cont_discard_cb(daos_handle_t ih, vos_iter_entry_t *entry,
+		vos_iter_type_t type, vos_iter_param_t *iter_param,
+		void *cb_arg, unsigned int *acts)
+{
+	struct child_discard_arg *arg = cb_arg;
+	struct ds_cont_child	*cont = NULL;
+	vos_iter_param_t	param = { 0 };
+	struct vos_iter_anchors	anchor = { 0 };
+	daos_handle_t		coh;
+	int			rc;
+
+	D_ASSERT(type == VOS_ITER_COUUID);
+	if (uuid_compare(arg->cont_uuid, entry->ie_couuid) == 0) {
+		D_DEBUG(DB_REBUILD, DF_UUID" already discard\n",
+			DP_UUID(arg->cont_uuid));
+		return 0;
+	}
+
+	rc = ds_cont_child_lookup(arg->tgt_discard->pool_uuid, entry->ie_couuid,
+				  &cont);
+	if (rc != DER_SUCCESS) {
+		D_ERROR("Lookup container '"DF_UUIDF"' failed: "DF_RC"\n",
+			DP_UUID(entry->ie_couuid), DP_RC(rc));
+		return rc;
+	}
+
+	rc = vos_cont_open(iter_param->ip_hdl, entry->ie_couuid, &coh);
+	if (rc != 0) {
+		D_ERROR("Open container "DF_UUID" failed: "DF_RC"\n",
+			DP_UUID(entry->ie_couuid), DP_RC(rc));
+		D_GOTO(put, rc);
+	}
+
+	param.ip_hdl = coh;
+	param.ip_epr.epr_lo = 0;
+	param.ip_epr.epr_hi = arg->tgt_discard->epoch;
+	uuid_copy(arg->cont_uuid, entry->ie_couuid);
+
+	rc = vos_iterate(&param, VOS_ITER_OBJ, false, &anchor, obj_discard_cb, NULL,
+			 arg, NULL);
+	vos_cont_close(coh);
+	D_DEBUG(DB_TRACE, DF_UUID"/"DF_UUID" discard cont done: "DF_RC"\n",
+		DP_UUID(arg->tgt_discard->pool_uuid), DP_UUID(entry->ie_couuid),
+		DP_RC(rc));
+
+put:
+	ds_cont_child_put(cont);
+	return rc;
+}
+
+static int
+pool_child_discard(void *data)
+{
+	struct tgt_discard_arg	*arg = data;
+	struct child_discard_arg cont_arg;
+	struct ds_pool_child	*child;
+	vos_iter_param_t	param = { 0 };
+	struct vos_iter_anchors	anchor = { 0 };
+	struct pool_target_addr addr;
+	uint32_t		myrank;
+	int			rc;
+
+	crt_group_rank(NULL, &myrank);
+	addr.pta_rank = myrank;
+	addr.pta_target = dss_get_module_info()->dmi_tgt_id;
+	if (!pool_target_addr_found(&arg->tgt_list, &addr))
+		return 0;
+
+	D_DEBUG(DB_MD, DF_UUID" discard %u/%u\n", DP_UUID(arg->pool_uuid),
+		myrank, addr.pta_target);
+
+	child = ds_pool_child_lookup(arg->pool_uuid);
+	D_ASSERT(child != NULL);
+	param.ip_hdl = child->spc_hdl;
+
+	cont_arg.tgt_discard = arg;
+	rc = vos_iterate(&param, VOS_ITER_COUUID, false, &anchor,
+			 cont_discard_cb, NULL, &cont_arg, NULL);
+
+	child->spc_discard_done = 1;
+
+	ds_pool_child_put(child);
+
+	return rc;
+}
+
+/* Discard the objects by epoch in this pool */
+static void
+ds_pool_tgt_discard_ult(void *data)
+{
+	struct tgt_discard_arg	*arg = data;
+	int			rc;
+
+	/* If discard failed, let's still go ahead, since reintegration might
+	 * still succeed, though it might leave some garbage on the reintegration
+	 * target, the future scrub tool might fix it. XXX
+	 */
+	rc = dss_thread_collective(pool_child_discard, arg, DSS_ULT_DEEP_STACK);
+	if (rc)
+		D_ERROR("collective discard "DF_UUID": %d\n",
+			DP_UUID(arg->pool_uuid), rc);
+
+	D_DEBUG(DB_REBUILD, "rebuild scan collective "DF_UUID" done.\n",
+		DP_UUID(arg->pool_uuid));
+	tgt_discard_arg_free(arg);
+}
+
+void
+ds_pool_tgt_discard_handler(crt_rpc_t *rpc)
+{
+	struct pool_tgt_discard_in	*in = crt_req_get(rpc);
+	struct pool_tgt_discard_out	*out = crt_reply_get(rpc);
+	struct pool_target_addr_list	pta_list;
+	struct tgt_discard_arg		*arg = NULL;
+	int				rc;
+
+	pta_list.pta_number = in->ptdi_addrs.ca_count;
+	pta_list.pta_addrs = in->ptdi_addrs.ca_arrays;
+	arg = tgt_discard_arg_alloc(&pta_list);
+	if (arg == NULL)
+		D_GOTO(out, rc = -DER_NOMEM);
+
+	uuid_copy(arg->pool_uuid, in->ptdi_uuid);
+	arg->epoch = DAOS_EPOCH_MAX;
+	rc = dss_ult_create(ds_pool_tgt_discard_ult, arg, DSS_XS_SYS, 0, 0, NULL);
+out:
+	out->ptdo_rc = rc;
+	D_DEBUG(DB_MD, DF_UUID": replying rpc "DF_RC"\n", DP_UUID(in->ptdi_uuid),
+		DP_RC(rc));
+	crt_reply_send(rpc);
+	if (rc != 0 && arg != NULL)
+		tgt_discard_arg_free(arg);
+}

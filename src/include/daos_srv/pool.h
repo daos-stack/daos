@@ -69,7 +69,6 @@ struct ds_pool {
 	uuid_t			sp_srv_pool_hdl;
 	uint32_t		sp_stopping:1,
 				sp_fetch_hdls:1;
-
 	int			sp_reintegrating;
 	/** path to ephemeral metrics */
 	char			sp_path[D_TM_MAX_NAME_LEN];
@@ -137,6 +136,7 @@ struct ds_pool_child {
 	int		spc_ref;
 	ABT_eventual	spc_ref_eventual;
 
+	uint64_t	spc_discard_done:1;
 	/**
 	 * Per-pool per-module metrics, see ${modname}_pool_metrics for the
 	 * actual structure. Initialized only for modules that specified a
@@ -276,6 +276,7 @@ int dsc_pool_open(uuid_t pool_uuid, uuid_t pool_hdl_uuid,
 		       struct pool_map *map, d_rank_list_t *svc_list,
 		       daos_handle_t *ph);
 int dsc_pool_close(daos_handle_t ph);
+int ds_pool_tgt_discard(uuid_t pool_uuid, uint64_t epoch);
 
 /**
  * Verify if pool status satisfy Redundancy Factor requirement, by checking

@@ -3003,10 +3003,12 @@ pool_target_addr_equal(struct pool_target_addr *addr1,
 		       struct pool_target_addr *addr2)
 {
 	return addr1->pta_rank == addr2->pta_rank &&
-	       addr1->pta_target == addr2->pta_target;
+	       (addr1->pta_target == addr2->pta_target ||
+		addr1->pta_target == (uint32_t)(-1) ||
+		addr2->pta_target == (uint32_t)(-1));
 }
 
-static bool
+bool
 pool_target_addr_found(struct pool_target_addr_list *addr_list,
 		       struct pool_target_addr *tgt)
 {

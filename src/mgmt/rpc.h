@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2021 Intel Corporation.
+ * (C) Copyright 2016-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -18,7 +18,7 @@
  * These are for daos_rpc::dr_opc and DAOS_RPC_OPCODE(opc, ...) rather than
  * crt_req_create(..., opc, ...). See daos_rpc.h.
  */
-#define DAOS_MGMT_VERSION 2
+#define DAOS_MGMT_VERSION 3
 /* LIST of internal RPCS in form of:
  * OPCODE, flags, FMT, handler, corpc_hdlr,
  */
@@ -147,7 +147,8 @@ CRT_RPC_DECLARE(mgmt_pool_find, DAOS_ISEQ_MGMT_POOL_FIND,
 	((uuid_t)		(tc_pool_uuid)		CRT_VAR) \
 	((d_string_t)		(tc_tgt_dev)		CRT_VAR) \
 	((daos_size_t)		(tc_scm_size)		CRT_VAR) \
-	((daos_size_t)		(tc_nvme_size)		CRT_VAR)
+	((daos_size_t)		(tc_nvme_size)		CRT_VAR) \
+	((uint64_t)		(tc_discard_epoch)	CRT_VAR)
 
 #define DAOS_OSEQ_MGMT_TGT_CREATE /* output fields */		   \
 	((d_rank_t)		(tc_ranks)		CRT_ARRAY) \
