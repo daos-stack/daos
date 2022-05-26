@@ -3,7 +3,6 @@
 import daos_build
 
 
-
 def scons():
     """Execute build"""
 
