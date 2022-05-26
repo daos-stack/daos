@@ -86,7 +86,7 @@ class Dfuse(DfuseCommand):
         super().__init__("/run/dfuse/*", "dfuse")
 
         # set params
-        self.hosts = hosts
+        self.hosts = hosts.copy()
         self.tmp = tmp
         self.running_hosts = NodeSet()
 
@@ -260,7 +260,7 @@ class Dfuse(DfuseCommand):
             CommandFailure: In case dfuse run command fails
 
         """
-        self.log.info('Starting dfuse at %s', self.mount_dir.value)
+        self.log.info('Starting dfuse at %s on %s', self.mount_dir.value, str(self.hosts))
 
         # A log file must be defined to ensure logs are captured
         if "D_LOG_FILE" not in self.env:

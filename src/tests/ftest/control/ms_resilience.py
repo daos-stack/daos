@@ -125,7 +125,7 @@ class ManagementServiceResilience(TestWithServers):
         """Verify that the expected list of killed servers are marked dead.
 
         Args:
-            kill_list (list): list of hostnames of servers to verify are dead.
+            kill_list (NodeSet): hostnames of servers to verify are dead.
 
         Returns:
             None
@@ -202,7 +202,7 @@ class ManagementServiceResilience(TestWithServers):
             NodeSet: hosts that were stopped.
 
         """
-        kill_list = NodeSet.fromlist(random.sample(replicas, N))
+        kill_list = NodeSet.fromlist(random.sample(list(replicas), N))
         if leader not in kill_list:
             kill_list.remove(kill_list[-1])
             kill_list.add(leader)
@@ -235,7 +235,7 @@ class ManagementServiceResilience(TestWithServers):
 
         # Next, verify that one of the replicas has stepped up as
         # the new leader.
-        survivors = [x for x in replicas if x not in kill_list]
+        survivors = replicas.difference(kill_list)
         self.verify_leader(survivors)
         self.get_dmg_command().hostlist = self.hostlist_servers
 

@@ -5,9 +5,9 @@
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 from logging import getLogger
-
 import os
 import random
+
 
 def write_host_file(hostlist, path='/tmp', slots=1):
     """Write out a hostfile suitable for orterun.
@@ -25,15 +25,14 @@ def write_host_file(hostlist, path='/tmp', slots=1):
         str: the full path of the written hostfile
 
     """
-
     log = getLogger()
-    unique = random.randint(1, 100000) #nosec
+    unique = random.randint(1, 100000)  # nosec
 
     if not os.path.exists(path):
         os.makedirs(path)
     hostfile = os.path.join(path, "".join(["hostfile", str(unique)]))
 
-    if hostlist is None:
+    if not hostlist:
         raise ValueError("host list parameter must be provided.")
 
     log.info(

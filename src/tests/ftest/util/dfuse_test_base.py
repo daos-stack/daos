@@ -27,7 +27,7 @@ class DfuseTestBase(TestWithServers):
         """Setup Test Case"""
         super().setUp()
         # using localhost as client if client list is empty
-        if self.hostlist_clients is None:
+        if not self.hostlist_clients:
             self.hostlist_clients = agu.include_local_host(None)
 
     def stop_job_managers(self):

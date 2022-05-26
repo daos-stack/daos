@@ -41,7 +41,7 @@ class DaosCoreBase(TestWithServers):
 
         # if no client specified update self.hostlist_clients to local host
         # and create a new self.hostfile_clients.
-        if self.hostlist_clients is None:
+        if not self.hostlist_clients:
             self.hostlist_clients = include_local_host(self.hostlist_clients)
             self.hostfile_clients = write_host_file.write_host_file(
                 self.hostlist_clients, self.workdir, None)

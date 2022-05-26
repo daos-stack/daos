@@ -1,11 +1,26 @@
 #!/usr/bin/python
 """
-  (C) Copyright 2020-2021 Intel Corporation.
+  (C) Copyright 2020-2022 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
-from logging import DEBUG, INFO, WARNING, ERROR
+from logging import DEBUG, INFO, WARNING, ERROR, StreamHandler, Formatter, basicConfig, getLogger
 import sys
+
+
+def get_console_logger():
+    """Get a console logger.
+
+    Returns:
+        logger: logger for console messages
+
+    """
+    log_format = "%(asctime)s - %(levelname)-5s - %(funcName)-30s: %(message)s"
+    console = StreamHandler()
+    console.setLevel(DEBUG)
+    console.setFormatter(Formatter(log_format))
+    basicConfig(format=log_format, datefmt=r"%Y/%m/%d %I:%M:%S", level=DEBUG, handlers=[console])
+    return getLogger()
 
 
 class TestLogger():
