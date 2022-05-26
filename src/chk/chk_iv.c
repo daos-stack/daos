@@ -6,6 +6,7 @@
 
 #define D_LOGFAC	DD_FAC(chk)
 
+#include <daos/debug.h>
 #include <gurt/list.h>
 #include <gurt/debug.h>
 #include <cart/iv.h>
