@@ -10,6 +10,7 @@ import daos_build
 import compiler_setup
 from prereq_tools import PreReqComponent
 import stack_analyzer
+# pylint: disable=reimported,ungrouped-imports
 
 if sys.version_info.major < 3:
     print(""""Python 2.7 is no longer supported in the DAOS build.
@@ -25,7 +26,6 @@ try:
     input = raw_input  # pylint: disable=redefined-builtin
 except NameError:
     pass
-# pylint: disable=reimported,ungrouped-imports
 
 
 def get_version(env):
