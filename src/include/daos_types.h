@@ -161,7 +161,7 @@ typedef enum {
 	DAOS_EVS_READY,
 	DAOS_EVS_RUNNING,
 	DAOS_EVS_COMPLETED,
-	DAOS_EVS_ABORTED,
+	DAOS_EVS_ABORTING,
 } daos_ev_status_t;
 
 /**
