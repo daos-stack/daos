@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2021 Intel Corporation.
+// (C) Copyright 2019-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -14,6 +14,8 @@ import (
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
+
+	. "github.com/daos-stack/daos/src/control/common/test"
 )
 
 func TestUtils_ResolvePath(t *testing.T) {

@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2021 Intel Corporation.
+// (C) Copyright 2019-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -146,4 +146,6 @@ const (
 	DaosNotReplica DaosStatus = -C.DER_NOTREPLICA
 	// DaosChecksumError indicates a checksum error
 	DaosChecksumError DaosStatus = -C.DER_CSUM
+	// ControlIncompatible indicates that one or more control plane components are incompatible
+	DaosControlIncompatible Status = -C.DER_CONTROL_INCOMPAT
 )

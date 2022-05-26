@@ -776,6 +776,8 @@ ds_pool_stop(uuid_t uuid)
 {
 	struct ds_pool *pool;
 
+	ds_pool_failed_remove(uuid);
+
 	pool = ds_pool_lookup(uuid);
 	if (pool == NULL)
 		return;
@@ -793,7 +795,7 @@ ds_pool_stop(uuid_t uuid)
 	ds_pool_tgt_ec_eph_query_abort(pool);
 	pool_fetch_hdls_ult_abort(pool);
 
-	ds_rebuild_abort(pool->sp_uuid, -1);
+	ds_rebuild_abort(pool->sp_uuid, -1, -1);
 	ds_migrate_stop(pool, -1);
 	ds_pool_put(pool); /* held by ds_pool_start */
 	ds_pool_put(pool);
@@ -1469,6 +1471,7 @@ update_vos_prop_on_targets(void *in)
 	struct ds_pool_child		*child = NULL;
 	struct policy_desc_t		policy_desc = {0};
 	int				ret = 0;
+	uint64_t			features = 0;
 
 	child = ds_pool_child_lookup(pool->sp_uuid);
 	if (child == NULL)
@@ -1476,6 +1479,10 @@ update_vos_prop_on_targets(void *in)
 
 	policy_desc = pool->sp_policy_desc;
 	ret = vos_pool_ctl(child->spc_hdl, VOS_PO_CTL_SET_POLICY, &policy_desc);
+
+	if (pool->sp_global_version >= 1)
+		features = VOS_POOL_FEAT_AGG_OPT;
+	vos_pool_features_set(child->spc_hdl, features);
 	ds_pool_child_put(child);
 
 	return ret;
@@ -1488,6 +1495,7 @@ ds_pool_tgt_prop_update(struct ds_pool *pool, struct pool_iv_prop *iv_prop)
 
 	D_ASSERT(dss_get_module_info()->dmi_xs_id == 0);
 	pool->sp_ec_cell_sz = iv_prop->pip_ec_cell_sz;
+	pool->sp_global_version = iv_prop->pip_global_version;
 	pool->sp_reclaim = iv_prop->pip_reclaim;
 	pool->sp_redun_fac = iv_prop->pip_redun_fac;
 	pool->sp_ec_pda = iv_prop->pip_ec_pda;

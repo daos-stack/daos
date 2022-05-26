@@ -1675,7 +1675,7 @@ ds_mgmt_drpc_pool_query(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	if (svc_ranks == NULL)
 		D_GOTO(out, rc = -DER_NOMEM);
 
-	/* TODO: Enabled and disabled engines should be retrieve both if needed */
+	/* TODO (DAOS-10250) Enabled and disabled engines should be retrieve both if needed */
 	pool_info.pi_bits = req->include_enabled_ranks ? DPI_ALL : (DPI_ALL & ~DPI_ENGINES_ENABLED);
 	rc = ds_mgmt_pool_query(uuid, svc_ranks, &ranks, &pool_info);
 	if (rc != 0) {
@@ -1699,7 +1699,7 @@ ds_mgmt_drpc_pool_query(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	resp.total_targets = pool_info.pi_ntargets;
 	resp.disabled_targets = pool_info.pi_ndisabled;
 	resp.active_targets = pool_info.pi_space.ps_ntargets;
-	resp.total_nodes = pool_info.pi_nnodes;
+	resp.total_engines = pool_info.pi_nnodes;
 	resp.leader = pool_info.pi_leader;
 	resp.version = pool_info.pi_map_ver;
 	resp.enabled_ranks = (req->include_enabled_ranks) ? range_list_str : "";

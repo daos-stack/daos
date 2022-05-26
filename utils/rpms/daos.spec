@@ -3,7 +3,7 @@
 %define agent_svc_name daos_agent.service
 %define sysctl_script_name 10-daos_server.conf
 
-%global mercury_version 2.1.0~rc4-8%{?dist}
+%global mercury_version 2.1.0~rc4-9%{?dist}
 %global libfabric_version 1.15.0~rc3-1
 %global __python %{__python3}
 
@@ -26,8 +26,8 @@
 %endif
 
 Name:          daos
-Version:       2.1.101
-Release:       3%{?relval}%{?dist}
+Version:       2.1.102
+Release:       2%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       BSD-2-Clause-Patent
@@ -226,11 +226,20 @@ This is the package needed to run a DAOS client
 
 %package tests
 Summary: The entire DAOS test suite
-Requires: %{name}-client-tests-openmpi%{?_isa} = %{version}-%{release}
-Requires: %{name}-server-tests-openmpi%{?_isa} = %{version}-%{release}
+Requires: %{name}-client-tests%{?_isa} = %{version}-%{release}
+Requires: %{name}-server-tests%{?_isa} = %{version}-%{release}
 
 %description tests
 This is the package is a metapackage to install all of the test packages
+
+%package tests-internal
+Summary: The entire DAOS internal test suite
+Requires: %{name}-tests%{?_isa} = %{version}-%{release}
+Requires: %{name}-client-tests-openmpi%{?_isa} = %{version}-%{release}
+Requires: %{name}-server-tests-openmpi%{?_isa} = %{version}-%{release}
+
+%description tests-internal
+This is the package is a metapackage to install all of the internal test packages
 
 %package client-tests
 Summary: The DAOS test suite
@@ -558,10 +567,23 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %files tests
 # No files in a meta-package
 
+%files tests-internal
+# No files in a meta-package
+
 %files mofed-shim
 # No files in a shim package
 
 %changelog
+* Mon May 9 2022 Phillip Henderson <phillip.henderson@intel.com> 2.1.102-2
+- Remove doas-*-tests-openmpi dependencies from daos-tests
+- Add the daos-tests-internal package
+
+* Thu May 5 2022 Johann Lombardi <johann.lombardi@intel.com> 2.1.102-1
+- Bump version to 2.1.102
+
+* Wed May  4 2022 Joseph Moore <joseph.moore@intel.com> 2.1.101-4
+- Update to mercury 2.1.0.rc4-9 to enable non-unified mode in UCX
+
 * Fri Apr 22 2022 Lei Huang <lei.huang@intel.com> 2.1.101-3
 - Update to libfabric to v1.15.0rc3-1 to include critical performance patches
 
