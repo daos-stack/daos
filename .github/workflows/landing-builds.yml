@@ -34,20 +34,20 @@ jobs:
       fail-fast: false
       max-parallel: 1
       matrix:
-        distro: [ubuntu.20.04, rocky, fedora, leap.15]
+        distro: [ubuntu, rocky, fedora, leap.15]
         include:
-          - distro: ubuntu.20.04
+          - distro: ubuntu
             base: ubuntu.20.04
-            with: ubuntu:20.04
+            with: ubuntu:22.04
           - distro: rocky
             base: el.8
             with: rockylinux/rockylinux:8
           - distro: fedora
             base: el.8
-            with: fedora:35
+            with: fedora:36
           - distro: leap.15
             base: leap.15
-            with: opensuse/leap:15.3
+            with: opensuse/leap:15.4
     env:
       DEPS_JOBS: 10
       BASE_DISTRO: ${{ matrix.with }}
@@ -85,10 +85,15 @@ jobs:
     runs-on: ubuntu-20.04
     strategy:
       matrix:
-        distro: [ubuntu.20.04]
+        distro: [ubuntu]
+        include:
+          - distro: ubuntu
+            base: ubuntu.20.04
+            with: ubuntu:22.04
     env:
       DEPS_JOBS: 10
-      BASE_DISTRO: ${{ matrix.distro }}
+      BASE_DISTRO: ${{ matrix.with }}
+      DOCKER_BASE: ${{ matrix.base }}
       COMPILER: clang
     steps:
       - name: Checkout code
@@ -108,9 +113,10 @@ jobs:
             ${{ steps.commit-hash.outputs.restore_prev }}
           skip-save: true
       - name: Update dependencies in image.
-        run: docker build . --file utils/docker/Dockerfile.${{ matrix.distro }}
+        run: docker build . --file utils/docker/Dockerfile.${{ matrix.base }}
                             --build-arg DAOS_BUILD=no
                             --build-arg DEPS_JOBS
+                            --build-arg BASE_DISTRO
                             --build-arg DAOS_KEEP_SRC=yes
                             --tag build-image
       - name: Build and Test
@@ -141,16 +147,16 @@ jobs:
         include:
           - distro: ubuntu.20.04
             base: ubuntu.20.04
-            with: ubuntu:20.04
+            with: ubuntu:22.04
           - distro: rocky
             base: el.8
             with: rockylinux/rockylinux:8
           - distro: fedora
             base: el.8
-            with: fedora:35
+            with: fedora:36
           - distro: leap.15
             base: leap.15
-            with: opensuse/leap:15.3
+            with: opensuse/leap:15.4
     env:
       DEPS_JOBS: 10
       BASE_DISTRO: ${{ matrix.with }}
@@ -213,11 +219,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        distro: [centos.7, alma]
+        distro: [alma]
         include:
-          - distro: centos.7
-            base: centos.7
-            with: centos.7
           - distro: alma
             base: el.8
             with: almalinux:8
