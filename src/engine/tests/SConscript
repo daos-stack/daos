@@ -1,6 +1,5 @@
 """Build daos engine tests"""
 import daos_build
-import compiler_setup
 
 def scons():
     """Execute build"""

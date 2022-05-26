@@ -1042,7 +1042,7 @@ dma_rw(struct bio_desc *biod)
 			nvme_rw(biod, rg);
 	}
 
-	if (xs_ctxt->bxc_tgt_id == -1) {
+	if (xs_ctxt->bxc_self_polling) {
 		D_DEBUG(DB_IO, "Self poll completion\n");
 		xs_poll_completion(xs_ctxt, &biod->bd_inflights, 0);
 	} else {

@@ -147,6 +147,9 @@ process_drpc_request(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	case DRPC_METHOD_MGMT_POOL_QUERY:
 		ds_mgmt_drpc_pool_query(drpc_req, drpc_resp);
 		break;
+	case DRPC_METHOD_MGMT_POOL_QUERY_TARGETS:
+		ds_mgmt_drpc_pool_query_targets(drpc_req, drpc_resp);
+		break;
 	case DRPC_METHOD_MGMT_CONT_SET_OWNER:
 		ds_mgmt_drpc_cont_set_owner(drpc_req, drpc_resp);
 		break;
