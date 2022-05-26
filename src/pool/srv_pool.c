@@ -1168,7 +1168,6 @@ static void
 fini_svc_pool(struct pool_svc *svc)
 {
 	D_ASSERT(svc->ps_pool != NULL);
-	ds_pool_iv_ns_update(svc->ps_pool, -1 /* master_rank */);
 	ds_pool_put(svc->ps_pool);
 	svc->ps_pool = NULL;
 }
@@ -5978,7 +5977,10 @@ ds_pool_ranks_get_handler(crt_rpc_t *rpc)
 	if (daos_rpc_from_client(rpc))
 		D_GOTO(out, rc = -DER_INVAL);
 
-	rc = ds_pool_get_ranks(in->prgi_op.pi_uuid, MAP_RANKS_UP, &out_ranks);
+	/* Get available ranks */
+	rc = ds_pool_get_ranks(in->prgi_op.pi_uuid,
+			       PO_COMP_ST_UP | PO_COMP_ST_UPIN | PO_COMP_ST_DRAIN | PO_COMP_ST_NEW,
+			       &out_ranks);
 	if (rc != 0) {
 		D_ERROR(DF_UUID ": get ranks failed, " DF_RC "\n",
 			DP_UUID(in->prgi_op.pi_uuid), DP_RC(rc));
@@ -6473,4 +6475,3 @@ ds_pool_target_status_check(struct ds_pool *pool, uint32_t id, uint8_t matched_s
 
 	return target->ta_comp.co_status == matched_status ? 1 : 0;
 }
-
