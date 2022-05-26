@@ -11,12 +11,15 @@ I/O, advanced data protection with self-healing, end-to-end data
 integrity, fine-grained data control, and elastic storage, to optimize
 performance and cost.
 
-The included document versions are associated with DAOS v2.2 (development),
-and may also describe features that are currently under development for the
-next DAOS release.
+In addition to on-prem deployments, DAOS is available as part of
+cloud offerings. More information on cloud deployments is available
+in the [DAOS in the Cloud](./cloud/) section.
+
+The included document versions are associated with DAOS v2.3.
+They may also describe features that are currently under development
+for a future DAOS release. Those features will be clearly marked as such.
 
 !!! warning
     DAOS v2.3 is the (unstable) master branch for DAOS v2.4 development.
     Use at your own risk. Please consider the [latest](../latest/)
     stable DAOS release for production deployments.
-
