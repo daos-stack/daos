@@ -105,10 +105,7 @@ rm -f  /etc/yum/vars/releasever
 
 # defined in ci/functional/post_provision_config_nodes_<distro>.sh
 # and catted to the remote node along with this script
-if ! post_provision_config_nodes; then
-    rc=${PIPESTATUS[0]}
-    exit "$rc"
-fi
+post_provision_config_nodes
 
 # Workaround to enable binding devices back to nvme or vfio-pci after they are unbound from vfio-pci
 # to nvme.  Sometimes the device gets unbound from vfio-pci, but it is not removed the iommu group

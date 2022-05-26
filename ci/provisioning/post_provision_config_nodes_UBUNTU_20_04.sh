@@ -43,7 +43,7 @@ post_provision_config_nodes() {
             rc=${PIPESTATUS[0]}
             if [ $rc -ne 100 ]; then
                 echo "Error $rc removing $INST_RPMS"
-                return $rc
+                exit $rc
             fi
         fi
     fi
@@ -60,7 +60,7 @@ post_provision_config_nodes() {
             echo "---- $file ----"
             cat "$file"
         done
-        return "$rc"
+        exit "$rc"
     fi
 
     # temporary hack until Python 3 is supported by Functional testing
@@ -69,6 +69,4 @@ post_provision_config_nodes() {
 
     # change the default shell to bash -- we write a lot of bash
     chsh -s /bin/bash
-
-    return 0
 }

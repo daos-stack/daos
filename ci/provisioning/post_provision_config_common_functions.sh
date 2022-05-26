@@ -300,7 +300,7 @@ post_provision_config_nodes() {
             if ! RETRY_COUNT=4 retry_dnf 360 install $INST_RPMS; then
                 rc=${PIPESTATUS[0]}
                 dump_repos
-                return "$rc"
+                exit "$rc"
             fi
         fi
     fi
@@ -313,7 +313,7 @@ post_provision_config_nodes() {
     # shellcheck disable=SC2154
     if ! RETRY_COUNT=4 retry_dnf 600 upgrade --exclude "$EXCLUDE_UPGRADE"; then
         dump_repos
-        return 1
+        exit 1
     fi
 
     lsb_release -a
@@ -323,5 +323,5 @@ post_provision_config_nodes() {
     fi
     cat /etc/os-release
 
-    return 0
+    exit 0
 }
