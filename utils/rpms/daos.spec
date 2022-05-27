@@ -27,7 +27,7 @@
 
 Name:          daos
 Version:       2.3.100
-Release:       9%{?relval}%{?dist}
+Release:       10%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       BSD-2-Clause-Patent
@@ -144,6 +144,7 @@ BuildRequires: libpsm_infinipath1
 %endif
 %endif
 %if 0%{ucx} > 0
+%global ucx_opt INCLUDE=ucx
 %if (0%{?suse_version} > 0)
 BuildRequires: libucp-devel
 BuildRequires: libucs-devel
@@ -335,6 +336,7 @@ This is the package that bridges the difference between the MOFED openmpi
 %{scons_exe} %{?_smp_mflags} \
       --config=force         \
       --no-rpath             \
+      %{?ucx_opt}            \
       USE_INSTALLED=all      \
       FIRMWARE_MGMT=yes      \
       CONF_DIR=%{conf_dir}   \
@@ -353,6 +355,7 @@ mv test.cov{,-build}
       --install-sandbox=%{buildroot}  \
       %{buildroot}%{_prefix}          \
       %{buildroot}%{conf_dir}         \
+      %{?ucx_opt}                     \
       USE_INSTALLED=all               \
       FIRMWARE_MGMT=yes               \
       CONF_DIR=%{conf_dir}            \
@@ -565,6 +568,9 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 # No files in a shim package
 
 %changelog
+* Fri May 27 2022 Jeff Olivier <jeffrey.v.olivier@intel.com> 2.3.100-10
+- Add INCLUDE=ucx optional option
+
 * Tue May 17 2022 Phillip Henderson <phillip.henderson@intel.com> 2.3.100-9
 - Remove doas-client-tests-openmpi dependency from daos-tests
 - Add daos-tests-internal package
