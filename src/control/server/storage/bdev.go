@@ -51,13 +51,14 @@ const (
 
 // Acceleration related constants for engine setting and optional capabilities.
 const (
-	AccelEngineNone  = C.NVME_ACCEL_NONE
-	AccelEngineSPDK  = C.NVME_ACCEL_SPDK
-	AccelEngineDML   = C.NVME_ACCEL_DML
-	AccelOptMove     = "move"
-	AccelOptCRC      = "crc"
-	AccelOptMoveFlag = C.NVME_ACCEL_FLAG_MOVE
-	AccelOptCRCFlag  = C.NVME_ACCEL_FLAG_CRC
+	AccelEngineNone                = C.NVME_ACCEL_NONE
+	AccelEngineNative              = "native"
+	AccelEngineSPDK                = C.NVME_ACCEL_SPDK
+	AccelEngineDML                 = C.NVME_ACCEL_DML
+	AccelOptMove                   = "move"
+	AccelOptCRC                    = "crc"
+	AccelOptMoveFlag  AccelOptFlag = C.NVME_ACCEL_FLAG_MOVE
+	AccelOptCRCFlag   AccelOptFlag = C.NVME_ACCEL_FLAG_CRC
 )
 
 // NvmeDevState represents the health state of NVMe device as reported by DAOS engine BIO module.

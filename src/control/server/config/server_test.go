@@ -266,8 +266,7 @@ func TestServerConfig_Constructed(t *testing.T) {
 			WithLogFile("/tmp/daos_engine.0.log").
 			WithLogMask("INFO").
 			WithStorageEnableHotplug(true).
-			WithStorageAccelEngine(storage.AccelEngineSPDK).
-			WithStorageAccelOptMask(storage.AccelOptCRCFlag | storage.AccelOptMoveFlag),
+			WithStorageAccelProps(storage.AccelEngineSPDK, storage.AccelOptCRC, storage.AccelOptMove),
 		engine.MockConfig().
 			WithSystemName("daos_server").
 			WithSocketDir("./.daos/daos_server").
@@ -295,8 +294,7 @@ func TestServerConfig_Constructed(t *testing.T) {
 			WithLogFile("/tmp/daos_engine.1.log").
 			WithLogMask("INFO").
 			WithStorageEnableHotplug(true).
-			WithStorageAccelEngine(storage.AccelEngineDML).
-			WithStorageAccelOptMask(storage.AccelOptCRCFlag),
+			WithStorageAccelProps(storage.AccelEngineDML, storage.AccelOptCRC),
 	}
 	constructed.Path = testFile // just to avoid failing the cmp
 
@@ -331,7 +329,7 @@ func TestServerConfig_Validation(t *testing.T) {
 			WithFabricInterface("eth0").
 			WithTargetCount(8).
 			WithPinnedNumaNode(0).
-			WithStorageAccelEngine("native")
+			WithStorageAccelProps("native")
 	}
 	noopExtra := func(c *Server) *Server { return c }
 

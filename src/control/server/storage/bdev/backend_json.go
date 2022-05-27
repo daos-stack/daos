@@ -274,7 +274,7 @@ func hotplugPropSet(req *storage.BdevWriteConfigRequest, data *DaosData) {
 func accelPropSet(req *storage.BdevWriteConfigRequest, data *DaosData) {
 	props := req.AccelProps
 	// Add config if acceleration options have been selected.
-	if props.OptMask != 0 {
+	if props.Options != 0 {
 		data.Configs = append(data.Configs, &DaosConfig{
 			Method: storage.ConfSetAccelProps,
 			Params: AccelPropsParams(props),

@@ -95,7 +95,7 @@ func TestBackend_writeJSONFile(t *testing.T) {
 		enableHotplug     bool
 		hotplugBusidRange string
 		accelEngine       string
-		accelOptMask      uint16
+		accelOptMask      storage.AccelOptFlag
 		expErr            error
 		expOut            string
 	}{
@@ -590,9 +590,13 @@ func TestBackend_writeJSONFile(t *testing.T) {
 					&tc.confIn,
 				).
 				WithStorageConfigOutputPath(cfgOutputPath).
-				WithStorageEnableHotplug(tc.enableHotplug).
-				WithStorageAccelEngine(tc.accelEngine).
-				WithStorageAccelOptMask(tc.accelOptMask)
+				WithStorageEnableHotplug(tc.enableHotplug)
+
+			if tc.accelEngine != "" {
+				if err := engineConfig.Storage.AccelProps.Set(tc.accelEngine, tc.accelOptMask.ToStrings()...); err != nil {
+					t.Fatal(err)
+				}
+			}
 
 			req, err := storage.BdevWriteConfigRequestFromConfig(context.TODO(), log,
 				&engineConfig.Storage, tc.enableVmd, storage.MockGetTopology)

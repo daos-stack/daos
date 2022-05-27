@@ -274,7 +274,7 @@ func Test_BdevWriteRequestFromConfig(t *testing.T) {
 				},
 				AccelProps: AccelProps{
 					Engine:  AccelEngineSPDK,
-					OptMask: AccelOptCRCFlag | AccelOptMoveFlag,
+					Options: AccelOptCRCFlag | AccelOptMoveFlag,
 				},
 			},
 			getTopoFn: MockGetTopology,
@@ -287,7 +287,7 @@ func Test_BdevWriteRequestFromConfig(t *testing.T) {
 				Hostname: hostname,
 				AccelProps: AccelProps{
 					Engine:  AccelEngineSPDK,
-					OptMask: AccelOptCRCFlag | AccelOptMoveFlag,
+					Options: AccelOptCRCFlag | AccelOptMoveFlag,
 				},
 			},
 		},

@@ -66,7 +66,7 @@ func TestBackend_newSpdkConfig(t *testing.T) {
 		busidRange         string
 		vosEnv             string
 		accelEngine        string
-		accelOptMask       uint16
+		accelOptions       []string
 		expExtraSubsystems []*SpdkSubsystem
 		expBdevCfgs        []*SpdkSubsystemConfig
 		expDaosCfgs        []*DaosConfig
@@ -171,15 +171,14 @@ func TestBackend_newSpdkConfig(t *testing.T) {
 			class:        storage.ClassNvme,
 			devList:      []string{test.MockPCIAddr(1), test.MockPCIAddr(2)},
 			accelEngine:  storage.AccelEngineSPDK,
-			accelOptMask: storage.AccelOptCRCFlag | storage.AccelOptMoveFlag,
+			accelOptions: []string{storage.AccelOptCRC, storage.AccelOptMove},
 			expBdevCfgs:  multiCtrlrConfs(),
 			expDaosCfgs: []*DaosConfig{
 				{
 					Method: storage.ConfSetAccelProps,
 					Params: AccelPropsParams{
 						Engine:  storage.AccelEngineSPDK,
-						Options: []string{"crc", "move"},
-						OptMask: storage.AccelOptCRCFlag | storage.AccelOptMoveFlag,
+						Options: storage.AccelOptCRCFlag | storage.AccelOptMoveFlag,
 					},
 				},
 			},
@@ -219,9 +218,13 @@ func TestBackend_newSpdkConfig(t *testing.T) {
 					cfg,
 				).
 				WithStorageEnableHotplug(tc.enableHotplug).
-				WithPinnedNumaNode(0).
-				WithStorageAccelEngine(tc.accelEngine).
-				WithStorageAccelOptMask(tc.accelOptMask)
+				WithPinnedNumaNode(0)
+
+			if tc.accelEngine != "" {
+				if err := engineConfig.Storage.AccelProps.Set(tc.accelEngine, tc.accelOptions...); err != nil {
+					t.Fatal(err)
+				}
+			}
 
 			gotValidateErr := engineConfig.Validate() // populate output path
 			test.CmpErr(t, tc.expValidateErr, gotValidateErr)
