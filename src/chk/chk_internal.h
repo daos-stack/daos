@@ -460,6 +460,35 @@ int chk_ins_init(struct chk_instance *ins);
 
 void chk_ins_fini(struct chk_instance *ins);
 
+/* chk_engine.c */
+
+int chk_engine_start(uint64_t gen, uint32_t rank_nr, d_rank_t *ranks,
+		     uint32_t policy_nr, struct chk_policy **policies, uint32_t pool_nr,
+		     uuid_t pools[], uint32_t flags, int32_t exp_phase, d_rank_t leader,
+		     uint32_t *cur_phase, struct ds_pool_clues *clues);
+
+int chk_engine_stop(uint64_t gen, uint32_t pool_nr, uuid_t pools[]);
+
+int chk_engine_query(uint64_t gen, uint32_t pool_nr, uuid_t pools[],
+		     uint32_t *shard_nr, struct chk_query_pool_shard **shards);
+
+int chk_engine_mark_rank_dead(uint64_t gen, d_rank_t rank, uint32_t version);
+
+int chk_engine_act(uint64_t gen, uint64_t seq, uint32_t cla, uint32_t act, uint32_t flags);
+
+int chk_engine_report(struct chk_report_unit *cru, int *decision);
+
+int chk_engine_notify(uint64_t gen, uuid_t uuid, d_rank_t rank, uint32_t phase,
+		      uint32_t status, bool remove_pool);
+
+void chk_engine_rejoin(void);
+
+void chk_engine_pause(void);
+
+int chk_engine_init(void);
+
+void chk_engine_fini(void);
+
 /* chk_iv.c */
 
 int chk_iv_update(void *ns, struct chk_iv *iv, uint32_t shortcut, uint32_t sync_mode, bool retry);
