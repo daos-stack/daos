@@ -568,7 +568,7 @@ int main(int argc, char *argv[])
 	rc = ddb_init();
 	if (rc != 0)
 		return -rc;
-	rc = vos_self_init("/mnt/daos");
+	rc = vos_self_init("/mnt/daos", false, 0);
 	if (rc != 0) {
 		fprintf(stderr, "Unable to initialize VOS: "DF_RC"\n", DP_RC(rc));
 		ddb_fini();
