@@ -82,6 +82,8 @@ struct rebuild_tgt_pool_tracker {
 	 */
 	uint64_t		rt_rebuild_fence;
 
+	uint32_t		rt_leader_rank;
+
 	/* Global dtx resync version */
 	uint32_t		rt_global_dtx_resync_version;
 	unsigned int		rt_lead_puller_running:1,
@@ -126,6 +128,7 @@ struct rebuild_global_pool_tracker {
 	uint32_t	rgt_servers_number;
 
 	uint32_t	rgt_rebuild_gen;
+
 	/* The term of the current rebuild leader */
 	uint64_t	rgt_leader_term;
 
@@ -203,6 +206,7 @@ struct rebuild_task {
 	uint64_t			dst_schedule_time;
 	uint32_t			dst_map_ver;
 	uint32_t			dst_rebuild_gen;
+	uint32_t			dst_max_ver;
 };
 
 /* Per pool structure in TLS to check pool rebuild status
@@ -215,6 +219,8 @@ struct rebuild_pool_tls {
 	uint64_t	rebuild_pool_obj_count;
 	uint64_t	rebuild_pool_reclaim_obj_count;
 	unsigned int	rebuild_pool_ver;
+	uint32_t	rebuild_pool_gen;
+	uint64_t	rebuild_pool_leader_term;
 	int		rebuild_pool_status;
 	unsigned int	rebuild_pool_scanning:1,
 			rebuild_pool_scan_done:1;
@@ -280,7 +286,7 @@ void rpt_get(struct rebuild_tgt_pool_tracker *rpt);
 void rpt_put(struct rebuild_tgt_pool_tracker *rpt);
 
 struct rebuild_pool_tls *
-rebuild_pool_tls_lookup(uuid_t pool_uuid, unsigned int ver);
+rebuild_pool_tls_lookup(uuid_t pool_uuid, unsigned int ver, uint32_t gen);
 
 struct pool_map *rebuild_pool_map_get(struct ds_pool *pool);
 void rebuild_pool_map_put(struct pool_map *map);
@@ -356,4 +362,7 @@ rebuild_notify_ras_start(uuid_t *pool, uint32_t map_ver, char *op_str);
 
 int
 rebuild_notify_ras_end(uuid_t *pool, uint32_t map_ver, char *op_str, int op_rc);
+
+void rebuild_leader_stop(const uuid_t pool_uuid, unsigned int version,
+			 uint32_t rebuild_gen, uint64_t term);
 #endif /* __REBUILD_INTERNAL_H_ */

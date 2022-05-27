@@ -186,12 +186,11 @@ rebuild_iv_ent_refresh(struct ds_iv_entry *entry, struct ds_iv_key *key,
 			return 0;
 		}
 
-		D_DEBUG(DB_REBUILD, DF_UUID"/%u/%u rebuild status gsd/gd %d/%d"
-			" stable eph "DF_U64" resync ver %u\n",
+		D_DEBUG(DB_REBUILD, DF_UUID"/%u/%u/"DF_U64" gsd/gd/stable/ver %d/%d/"DF_X64"/%u\n",
 			DP_UUID(src_iv->riv_pool_uuid), src_iv->riv_ver,
-			src_iv->riv_rebuild_gen, dst_iv->riv_global_scan_done,
-			dst_iv->riv_global_done, dst_iv->riv_stable_epoch,
-			dst_iv->riv_global_dtx_resyc_version);
+			src_iv->riv_rebuild_gen, src_iv->riv_leader_term,
+			dst_iv->riv_global_scan_done, dst_iv->riv_global_done,
+			dst_iv->riv_stable_epoch, dst_iv->riv_global_dtx_resyc_version);
 
 		if (rpt->rt_stable_epoch == 0)
 			rpt->rt_stable_epoch = dst_iv->riv_stable_epoch;
