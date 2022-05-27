@@ -1,3 +1,9 @@
+daos (2.1.102-3) unstable; urgency=medium
+  [ Tom Nabarro ]
+  * Restrict SPDK version to less than 22
+
+ -- Tom Nabarro <tom.nabarro@intel.com> Fri, 20 May 2022 16:42:54 -0100
+
 daos (2.1.102-2) unstable; urgency=medium
   [ Phillip Henderson ]
   * Remove doas-*-tests-openmpi dependencies from daos-tests
