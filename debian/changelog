@@ -1,8 +1,14 @@
-daos (2.0.2-6) unstable; urgency=medium
+daos (2.0.2-7) unstable; urgency=medium
   [ Lei Huang ]
   * Update libfabric to v1.15.1-1 with critical performance patches
 
- -- Lei Huang <lei.huang@intel.com>  Wed, 18 May 2022 16:50:00 -0500
+ -- Lei Huang <lei.huang@intel.com>  Fri, 27 May 2022 10:50:00 -0500
+
+daos (2.0.2-6) unstable; urgency=medium
+  [ Tom Nabarro ]
+  * Restrict SPDK version to less than 22
+
+ -- Tom Nabarro <tom.nabarro@intel.com> Fri, 20 May 2022 16:42:54
 
 daos (2.0.2-5) unstable; urgency=medium
   [ Phillip Henderson ]
