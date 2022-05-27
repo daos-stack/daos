@@ -3,7 +3,7 @@
 %define agent_svc_name daos_agent.service
 
 %global mercury_version 2.1.0~rc4-4%{?dist}
-%global libfabric_version 1.15.0~rc3-1
+%global libfabric_version 1.15.1-1
 %global __python %{__python3}
 
 %if (0%{?rhel} >= 8)
@@ -14,7 +14,7 @@
 
 Name:          daos
 Version:       2.0.2
-Release:       6%{?relval}%{?dist}
+Release:       7%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       BSD-2-Clause-Patent
@@ -528,6 +528,9 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 # No files in a meta-package
 
 %changelog
+* Fri May 27 2022 Lei Huang <lei.huang@intel.com> 2.0.2-7
+- Update libfabric to v1.15.1-1 with critical performance patches
+
 * Tue May 17 2022 Tom Nabarro <tom.nabarro@intel.com> 2.0.2-6
 - Restrict spdk version to less than v22
 
