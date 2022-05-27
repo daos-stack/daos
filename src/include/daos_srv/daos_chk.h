@@ -65,20 +65,25 @@ struct chk_list_pool {
 	d_rank_list_t		*clp_svcreps;
 };
 
-typedef int (*chk_query_cb_t)(void *buf, struct chk_query_target *cqt);
+typedef int (*chk_query_head_cb_t)(uint32_t ins_status, uint32_t ins_phase,
+				   struct chk_statistics *inconsistency, struct chk_time *time,
+				   size_t n_pools, void *buf);
 
-typedef int (*chk_prop_cb_t)(void *buf, struct chk_policy *policies);
+typedef int (*chk_query_pool_cb_t)(struct chk_query_pool_shard *shard, uint32_t idx, void *buf);
 
-int chk_start(d_rank_list_t *ranks, struct chk_policy *policies, uuid_t *pools,
-	      int pool_cnt, uint32_t flags);
+typedef int (*chk_prop_cb_t)(void *buf, struct chk_policy **policies, int cnt, uint32_t flags);
 
-int chk_stop(uuid_t *pools, int pool_cnt);
+int chk_leader_start(uint32_t rank_nr, d_rank_t *ranks, uint32_t policy_nr,
+		     struct chk_policy **policies, uint32_t pool_nr, uuid_t pools[],
+		     uint32_t flags, int32_t phase);
 
-int chk_query(uuid_t *pools, int pool_cnt, chk_query_cb_t query_cb,
-	      struct chk_query_target *cqt, void *buf);
+int chk_leader_stop(uint32_t pool_nr, uuid_t pools[]);
 
-int chk_prop(uint32_t *flags, chk_prop_cb_t prop_cb, struct chk_policy *policy, void *buf);
+int chk_leader_query(uint32_t pool_nr, uuid_t pools[], chk_query_head_cb_t head_cb,
+		     chk_query_pool_cb_t pool_cb, void *buf);
 
-int chk_act(uint64_t seq, uint32_t act, bool for_all);
+int chk_leader_prop(chk_prop_cb_t prop_cb, void *buf);
+
+int chk_leader_act(uint64_t seq, uint32_t act, bool for_all);
 
 #endif /* __DAOS_CHK_H__ */

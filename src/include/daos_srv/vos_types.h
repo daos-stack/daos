@@ -11,6 +11,7 @@
 #include <daos_pool.h>
 #include <daos_srv/bio.h>
 #include <daos_srv/vea.h>
+#include <daos_srv/daos_chk.h>
 #include <daos/object.h>
 #include <daos/dtx.h>
 #include <daos/checksum.h>
@@ -135,6 +136,14 @@ typedef struct {
 	struct vos_pool_space	pif_space;
 	/** garbage collector statistics */
 	struct vos_gc_stat	pif_gc_stat;
+	/** DAOS check phase on the pool shard. */
+	uint32_t		pif_chk_phase;
+	/** DAOS check instance status on the pool shard. */
+	uint32_t		pif_chk_status;
+	/** Inconsistency information for DAOS check on the pool shard. */
+	struct chk_statistics	pif_chk_statistics;
+	/** Time information for DAOS check on the pool shard. */
+	struct chk_time		pif_chk_time;
 	/** TODO */
 } vos_pool_info_t;
 
