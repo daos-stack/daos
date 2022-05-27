@@ -13,8 +13,8 @@
 %endif
 
 Name:          daos
-Version:       2.0.2
-Release:       7%{?relval}%{?dist}
+Version:       2.0.3
+Release:       1%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       BSD-2-Clause-Patent
@@ -528,6 +528,9 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 # No files in a meta-package
 
 %changelog
+* Fri May 27 2022 Johann Lombardi <johann.lombardi@intel.com> 2.0.3-1
+- Version bump to 2.0.3 (rc1)
+
 * Fri May 27 2022 Lei Huang <lei.huang@intel.com> 2.0.2-7
 - Update libfabric to v1.15.1-1 with critical performance patches
 
