@@ -9,7 +9,6 @@ package raft
 import (
 	"bytes"
 	"encoding/json"
-	"io"
 	"io/ioutil"
 	"os"
 	"path/filepath"
@@ -355,7 +354,7 @@ func GetSnapshotInfo(log logging.Logger, cfg *DatabaseConfig) ([]*SnapshotDetail
 		}
 		defer data.Close()
 
-		buf, err := io.ReadAll(data)
+		buf, err := ioutil.ReadAll(data)
 		if err != nil {
 			return nil, errors.Wrapf(err, "failed to read snapshot %s", snap.ID)
 		}
