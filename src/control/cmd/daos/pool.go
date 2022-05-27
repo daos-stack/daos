@@ -230,8 +230,6 @@ func convertPoolInfo(pinfo *C.daos_pool_info_t) (*control.PoolQueryResp, error) 
 	pqp.TotalEngines = uint32(pinfo.pi_nnodes)
 	pqp.Leader = uint32(pinfo.pi_leader)
 	pqp.Version = uint32(pinfo.pi_map_ver)
-	pqp.PoolLayoutVer = uint32(pinfo.pi_pool_layout_ver)
-	pqp.UpgradeLayoutVer = uint32(pinfo.pi_upgrade_layout_ver)
 
 	pqp.TierStats = []*mgmtpb.StorageUsageStats{
 		convertPoolSpaceInfo(&pinfo.pi_space, C.DAOS_MEDIA_SCM),

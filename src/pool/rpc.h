@@ -470,9 +470,7 @@ void
 pool_query_reply_to_info(uuid_t pool_uuid, struct pool_buf *map_buf,
 			 uint32_t map_version, uint32_t leader_rank,
 			 struct daos_pool_space *ps,
-			 struct daos_rebuild_status *rs,
-			 uint32_t pool_layout_ver, uint32_t upgrade_layout_ver,
-			 daos_pool_info_t *info);
+			 struct daos_rebuild_status *rs, daos_pool_info_t *info);
 
 int list_cont_bulk_create(crt_context_t ctx, crt_bulk_t *bulk,
 			  struct daos_pool_cont_info *buf, daos_size_t ncont);

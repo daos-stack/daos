@@ -183,10 +183,6 @@ typedef struct {
 	struct daos_pool_space		pi_space;
 	/** rebuild status */
 	struct daos_rebuild_status	pi_rebuild_st;
-	/** Current pool global version */
-	uint32_t			pi_pool_layout_ver;
-	/** Latest pool global version to upgrade*/
-	uint32_t			pi_upgrade_layout_ver;
 } daos_pool_info_t;
 
 /** DAOS pool container information */

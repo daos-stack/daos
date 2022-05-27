@@ -361,6 +361,8 @@ static int pool_create_fill_resp(Mgmt__PoolCreateResp *resp, uuid_t uuid, d_rank
 	int			index;
 	d_rank_list_t	       *enabled_ranks = NULL;
 	daos_pool_info_t	pool_info = { .pi_bits = DPI_ENGINES_ENABLED | DPI_SPACE };
+	uint32_t		pool_layout_ver;
+	uint32_t		pool_upgrade_layout_ver;
 
 	D_ASSERT(svc_ranks != NULL);
 	D_ASSERT(svc_ranks->rl_nr > 0);
@@ -373,7 +375,8 @@ static int pool_create_fill_resp(Mgmt__PoolCreateResp *resp, uuid_t uuid, d_rank
 
 	D_DEBUG(DB_MGMT, "%d service replicas\n", svc_ranks->rl_nr);
 
-	rc = ds_mgmt_pool_query(uuid, svc_ranks, &enabled_ranks, &pool_info);
+	rc = ds_mgmt_pool_query(uuid, svc_ranks, &enabled_ranks, &pool_info, &pool_layout_ver,
+				&pool_upgrade_layout_ver);
 	if (rc != 0) {
 		D_ERROR("Failed to query created pool: rc=%d\n", rc);
 		D_GOTO(out, rc);
@@ -1721,7 +1724,8 @@ ds_mgmt_drpc_pool_query(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 
 	/* TODO (DAOS-10250) Enabled and disabled engines should be retrieve both if needed */
 	pool_info.pi_bits = req->include_enabled_ranks ? DPI_ALL : (DPI_ALL & ~DPI_ENGINES_ENABLED);
-	rc = ds_mgmt_pool_query(uuid, svc_ranks, &ranks, &pool_info);
+	rc = ds_mgmt_pool_query(uuid, svc_ranks, &ranks, &pool_info, &resp.pool_layout_ver,
+				&resp.upgrade_layout_ver);
 	if (rc != 0) {
 		D_ERROR("Failed to query the pool, rc=%d\n", rc);
 		goto out_svc_ranks;
@@ -1748,8 +1752,6 @@ ds_mgmt_drpc_pool_query(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	resp.version = pool_info.pi_map_ver;
 	resp.enabled_ranks = (req->include_enabled_ranks) ? range_list_str : "";
 	resp.disabled_ranks = (req->include_disabled_ranks) ? range_list_str : "";
-	resp.pool_layout_ver = pool_info.pi_pool_layout_ver;
-	resp.upgrade_layout_ver = pool_info.pi_upgrade_layout_ver;
 
 	D_ALLOC_ARRAY(resp.tier_stats, DAOS_MEDIA_MAX);
 	if (resp.tier_stats == NULL) {

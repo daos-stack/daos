@@ -3379,7 +3379,6 @@ out:
 static int
 process_query_result(d_rank_list_t **ranks, daos_pool_info_t *info, uuid_t pool_uuid,
 		     uint32_t map_version, uint32_t leader_rank, struct daos_pool_space *ps,
-		     uint32_t cur_global_ver, uint32_t lat_global_ver,
 		     struct daos_rebuild_status *rs, struct pool_buf *map_buf)
 {
 	struct pool_map	       *map;
@@ -3414,8 +3413,7 @@ process_query_result(d_rank_list_t **ranks, daos_pool_info_t *info, uuid_t pool_
 			DP_UUID(pool_uuid), (*ranks)->rl_nr, get_enabled ? "ENABLED" : "DISABLED");
 	}
 
-	pool_query_reply_to_info(pool_uuid, map_buf, map_version, leader_rank,
-				 ps, rs, cur_global_ver, lat_global_ver, info);
+	pool_query_reply_to_info(pool_uuid, map_buf, map_version, leader_rank, ps, rs, info);
 
 out:
 	pool_map_decref(map);
@@ -3434,6 +3432,8 @@ out:
  *				Note: ranks may be empty (i.e., *ranks->rl_nr may be 0).
  *				The caller must free the list with d_rank_list_free().
  * \param[out]	pool_info	Results of the pool query
+ * \param[out]	pool_layout_ver	Results of the current pool global version
+ * \param[out]	pool_upgrade_layout_ver Results of the target latest pool global version
  *
  * \return	0		Success
  *		-DER_INVAL	Invalid input
@@ -3441,7 +3441,8 @@ out:
  */
 int
 ds_pool_svc_query(uuid_t pool_uuid, d_rank_list_t *ps_ranks, d_rank_list_t **ranks,
-		  daos_pool_info_t *pool_info)
+		  daos_pool_info_t *pool_info, uint32_t *pool_layout_ver,
+		  uint32_t *upgrade_layout_ver)
 {
 	int			rc;
 	struct rsvc_client	client;
@@ -3516,9 +3517,11 @@ realloc:
 
 	rc = process_query_result(ranks, pool_info, pool_uuid,
 				  out->pqo_op.po_map_version, out->pqo_op.po_hint.sh_rank,
-				  &out->pqo_space, out->pqo_pool_layout_ver,
-				  out->pqo_upgrade_layout_ver, &out->pqo_rebuild_st,
-				  map_buf);
+				  &out->pqo_space, &out->pqo_rebuild_st, map_buf);
+	if (pool_layout_ver)
+		*pool_layout_ver = out->pqo_pool_layout_ver;
+	if (upgrade_layout_ver)
+		*upgrade_layout_ver = out->pqo_upgrade_layout_ver;
 	if (rc != 0)
 		D_ERROR(DF_UUID": failed to process pool query results, "DF_RC"\n",
 			DP_UUID(pool_uuid), DP_RC(rc));
