@@ -277,7 +277,10 @@ extern "C" {
 	       One or more control plane components are incompatible)	\
 	/** No service available */					\
 	ACTION(DER_NO_SERVICE,		(DER_ERR_DAOS_BASE + 39),	\
-	       No service available)
+	       No service available)					\
+	/** Cannot resume former DAOS check instance. */		\
+	ACTION(DER_NOT_RESUME,		(DER_ERR_DAOS_BASE + 40),	\
+	       Cannot resume former DAOS check instance)		\
 
 /** Defines the gurt error codes */
 #define D_FOREACH_ERR_RANGE(ACTION)	\

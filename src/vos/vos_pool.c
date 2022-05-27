@@ -944,6 +944,10 @@ vos_pool_query(daos_handle_t poh, vos_pool_info_t *pinfo)
 	D_ASSERT(pinfo != NULL);
 	pinfo->pif_cont_nr = pool_df->pd_cont_nr;
 	pinfo->pif_gc_stat = pool->vp_gc_stat;
+	pinfo->pif_chk_phase = pool_df->pd_chk_phase;
+	pinfo->pif_chk_status = pool_df->pd_chk_status;
+	pinfo->pif_chk_statistics = pool_df->pd_chk_statistics;
+	pinfo->pif_chk_time = pool_df->pd_chk_time;
 
 	rc = vos_space_query(pool, &pinfo->pif_space, true);
 	if (rc)

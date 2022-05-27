@@ -254,6 +254,74 @@ ds_mgmt_zombie_pool_iterate(int (*cb)(uuid_t uuid, void *arg), void *arg)
 	return common_pool_iterate(zombies_path, cb, arg);
 }
 
+static int
+ds_mgmt_pool_exist_internal(uuid_t uuid, const char *dir, const char *fname, int *idx, char **out)
+{
+	char	*path = NULL;
+	int	 rc;
+
+	rc = path_gen(uuid, dss_storage_path, fname, idx, &path);
+	if (rc != 0)
+		goto out;
+
+	rc = access(path, F_OK);
+	if (rc >= 0)
+		D_GOTO(out, rc = 1);
+
+	if (errno == ENOENT)
+		D_GOTO(out, rc = 0);
+
+	D_ERROR("Failed to check existence for "DF_UUID" with name %s, idx %d: "DF_RC"\n",
+		DP_UUID(uuid), fname != NULL ? fname : "<null>", idx != NULL ? *idx : -1,
+		DP_RC(rc));
+
+out:
+	if (rc > 0 && out != NULL)
+		*out = path;
+	else
+		D_FREE(path);
+	return rc;
+}
+
+int
+ds_mgmt_pool_exist(uuid_t uuid)
+{
+	int	rc;
+
+	rc = ds_mgmt_pool_exist_internal(uuid, dss_storage_path, NULL, NULL, NULL);
+	if (rc != 0)
+		goto out;
+
+	rc = ds_mgmt_pool_exist_internal(uuid, newborns_path, NULL, NULL, NULL);
+	if (rc != 0)
+		goto out;
+
+	rc = ds_mgmt_pool_exist_internal(uuid, zombies_path, NULL, NULL, NULL);
+
+out:
+	return rc;
+}
+
+int
+ds_mgmt_pool_shard_exist(uuid_t uuid, char **path)
+{
+	int	tid = dss_get_module_info()->dmi_tgt_id;
+	int	rc;
+
+	rc = ds_mgmt_pool_exist_internal(uuid, dss_storage_path, VOS_FILE, &tid, path);
+	if (rc != 0)
+		goto out;
+
+	rc = ds_mgmt_pool_exist_internal(uuid, newborns_path, VOS_FILE, &tid, path);
+	if (rc != 0)
+		goto out;
+
+	rc = ds_mgmt_pool_exist_internal(uuid, zombies_path, VOS_FILE, &tid, path);
+
+out:
+	return rc;
+}
+
 struct dead_pool {
 	d_list_t	dp_link;
 	uuid_t		dp_uuid;
