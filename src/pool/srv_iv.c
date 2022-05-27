@@ -873,6 +873,16 @@ pool_iv_ent_refresh(struct ds_iv_entry *entry, struct ds_iv_key *key,
 		D_GOTO(out_put, rc = 0);
 	}
 
+	if (entry->iv_key.eph > key->eph && key->eph != 0) {
+		/* If incoming key/eph is older than the current entry/key, then it means
+		 * incoming update request is stale, especially for LAZY/asynchronous/retry
+		 * cases, see iv_op().
+		 */
+		D_DEBUG(DB_MD, "current entry eph "DF_U64" > "DF_U64"\n",
+			entry->iv_key.eph, key->eph);
+		D_GOTO(out_put, rc);
+	}
+
 	if (src == NULL) {
 		rc = pool_iv_ent_invalid(entry, key);
 		D_GOTO(out_put, rc);
@@ -1060,6 +1070,7 @@ pool_iv_update(void *ns, int class_id, uuid_t key_uuid,
 
 	memset(&key, 0, sizeof(key));
 	key.class_id = class_id;
+	key.eph = crt_hlc_get();
 	pool_key = (struct pool_iv_key *)key.key_buf;
 	pool_key->pik_entry_size = pool_iv_len;
 	uuid_copy(pool_key->pik_uuid, key_uuid);

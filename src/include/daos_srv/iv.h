@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2017-2021 Intel Corporation.
+ * (C) Copyright 2017-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -74,6 +74,7 @@ struct ds_iv_class {
 struct ds_iv_key {
 	d_rank_t	rank;
 	int		class_id;
+	daos_epoch_t	eph;
 	char		key_buf[IV_KEY_BUF_SIZE];
 };
 
