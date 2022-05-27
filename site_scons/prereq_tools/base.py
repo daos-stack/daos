@@ -1496,10 +1496,8 @@ class _Component():
             print("Would check for missing build targets")
             return True
 
-        if self.parse_config(env, "--cflags"):
-            if self.__check_only:
-                env.SetOption('no_exec', True)
-            return True
+        # No need to fail here if we can't find the config, it may not always be generated
+        self.parse_config(env, "--cflags")
 
         if GetOption('help'):
             return True

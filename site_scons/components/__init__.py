@@ -174,12 +174,15 @@ def define_mercury(reqs):
                 package='openpa-devel' if inst(reqs, 'openpa') else None)
 
     ucx_configure = ['./configure', '--disable-assertions', '--disable-params-check', '--enable-mt',
-                     '--without-go', '--without-java', '--prefix=$UCX_PREFIX']
+                     '--without-go', '--without-java', '--prefix=$UCX_PREFIX',
+                     '--libdir=$UCX_PREFIX/lib64', '--enable-cma', '--without-cuda',
+                     '--without-gdrcopy', '--with-verbs', '--without-knem', '--with-rdmacm',
+                     '--without-rocm', '--without-xpmem', '--without-fuse3', '--without-ugni']
 
     if reqs.target_type == 'debug':
-        ucx_configure.append('--enable-debug')
+        ucx_configure.extend(['--enable-debug'])
     else:
-        ucx_configure.append('--disable-debug')
+        ucx_configure.extend(['--disable-debug', '--disable-logging'])
 
     reqs.define('ucx',
                 retriever=GitRepoRetriever('https://github.com/openucx/ucx.git'),
@@ -190,8 +193,8 @@ def define_mercury(reqs):
                           ucx_configure,
                           ['make'],
                           ['make', 'install'],
-                          ['mkdir', '-p', '$UCX_PREFIX/lib/pkgconfig'],
-                          ['cp', 'ucx.pc', '$UCX_PREFIX/lib/pkgconfig']],
+                          ['mkdir', '-p', '$UCX_PREFIX/lib64/pkgconfig'],
+                          ['install', '-c', '-m 644', 'ucx.pc', '$UCX_PREFIX/lib64/pkgconfig']],
                 package='ucx-devel' if inst(reqs, 'ucx') else None)
 
     mercury_build = ['cmake',
