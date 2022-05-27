@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2021 Intel Corporation.
+ * (C) Copyright 2016-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -97,5 +97,20 @@ extern btr_ops_t dbtree_recx_ops;
  * The key is dtx_cos_key: oid + dkey_hash
  */
 #define DBTREE_CLASS_DTX_COS (DBTREE_DSM_BEGIN + 7)
+
+/**
+ * DAOS check pool tree, the key is pool uuid
+ */
+#define DBTREE_CLASS_CHK_POOL (DBTREE_DSM_BEGIN + 8)
+
+/**
+ * DAOS check rank tree, the key is rank ID
+ */
+#define DBTREE_CLASS_CHK_RANK (DBTREE_DSM_BEGIN + 9)
+
+/**
+ * DAOS check pending action tree, the key is 64-bit sequence
+ */
+#define DBTREE_CLASS_CHK_PA (DBTREE_DSM_BEGIN + 10)
 
 #endif /* __DAOS_SRV_BTREE_CLASS_H__ */

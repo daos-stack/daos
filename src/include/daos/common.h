@@ -900,6 +900,7 @@ int crt_proc_daos_prop_t(crt_proc_t proc, crt_proc_op_t proc_op,
 			 daos_prop_t **data);
 int crt_proc_struct_daos_acl(crt_proc_t proc, crt_proc_op_t proc_op,
 			     struct daos_acl **data);
+int crt_proc_d_sg_list_t(crt_proc_t proc, crt_proc_op_t proc_op, d_sg_list_t *p);
 
 bool daos_prop_valid(daos_prop_t *prop, bool pool, bool input);
 daos_prop_t *daos_prop_dup(daos_prop_t *prop, bool pool, bool input);
