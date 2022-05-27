@@ -983,10 +983,15 @@ struct  Mgmt__PoolQueryTargetReq
    */
   size_t n_targets;
   uint32_t *targets;
+  /*
+   * List of pool service ranks
+   */
+  size_t n_svc_ranks;
+  uint32_t *svc_ranks;
 };
 #define MGMT__POOL_QUERY_TARGET_REQ__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&mgmt__pool_query_target_req__descriptor) \
-    , (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, 0, 0,NULL }
+    , (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, 0, 0,NULL, 0,NULL }
 
 
 /*

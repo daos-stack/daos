@@ -598,6 +598,47 @@ func PoolQuery(ctx context.Context, rpcClient UnaryInvoker, req *PoolQueryReq) (
 	return pqr, convertMSResponse(ur, pqr)
 }
 
+// PoolQueryTargets performs a pool query targets operation on a DAOS Management Server instance,
+// for the specified pool ID, pool engine rank, and target indices.
+func PoolQueryTargets(ctx context.Context, rpcClient UnaryInvoker, req *PoolQueryTargetReq) (*PoolQueryTargetResp, error) {
+	req.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
+		return mgmtpb.NewMgmtSvcClient(conn).PoolQueryTarget(ctx, &mgmtpb.PoolQueryTargetReq{
+			Sys:     req.getSystem(rpcClient),
+			Id:      req.ID,
+			Rank:    uint32(req.Rank),
+			Targets: req.Targets,
+		})
+	})
+
+	rpcClient.Debugf("Query DAOS pool targets request: %v\n", req)
+	ur, err := rpcClient.InvokeUnaryRPC(ctx, req)
+	if err != nil {
+		return nil, err
+	}
+
+	pqtr := new(PoolQueryTargetResp)
+
+	msResp, err := ur.getMSResponse()
+	if err != nil {
+		return nil, err
+	}
+
+	pbResp, ok := msResp.(*mgmtpb.PoolQueryTargetResp)
+	if !ok {
+		return nil, errors.New("unable to extract PoolQueryTargetResp from MS response")
+	}
+
+	pqtr.Status = pbResp.Status
+	for tgt := 0; tgt < len(pbResp.Infos); tgt++ {
+		tgtInfo, err := convertPoolTargetInfo(pbResp.Infos[tgt])
+		if err != nil {
+			return nil, err
+		}
+		pqtr.Infos = append(pqtr.Infos, tgtInfo)
+	}
+	return pqtr, nil
+}
+
 func (smt StorageMediaType) MarshalJSON() ([]byte, error) {
 	typeStr, ok := mgmtpb.StorageMediaType_name[int32(smt)]
 	if !ok {
@@ -660,6 +701,27 @@ func (pts PoolQueryTargetState) String() string {
 		return "invalid"
 	}
 	return strings.ToLower(ptss)
+}
+
+// For using the pretty printer that dmg uses for this target info.
+func convertPoolTargetInfo(pbInfo *mgmtpb.PoolQueryTargetInfo) (*PoolQueryTargetInfo, error) {
+	pqti := new(PoolQueryTargetInfo)
+	pqti.Type = PoolQueryTargetType(pbInfo.Type)
+	pqti.State = PoolQueryTargetState(pbInfo.State)
+	pqti.Space = []*StorageTargetUsage{
+		{
+			Total:     uint64(pbInfo.Space[StorageMediaTypeScm].Total),
+			Free:      uint64(pbInfo.Space[StorageMediaTypeScm].Free),
+			MediaType: StorageMediaTypeScm,
+		},
+		{
+			Total:     uint64(pbInfo.Space[StorageMediaTypeNvme].Total),
+			Free:      uint64(pbInfo.Space[StorageMediaTypeNvme].Free),
+			MediaType: StorageMediaTypeNvme,
+		},
+	}
+
+	return pqti, nil
 }
 
 // PoolSetPropReq contains pool set-prop parameters.

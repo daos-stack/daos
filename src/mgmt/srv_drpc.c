@@ -1797,6 +1797,121 @@ out:
 }
 
 void
+ds_mgmt_drpc_pool_query_targets(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
+{
+	struct drpc_alloc		alloc = PROTO_ALLOCATOR_INIT(alloc);
+	int				rc = 0;
+	Mgmt__PoolQueryTargetReq	*req;
+	Mgmt__PoolQueryTargetResp	resp = MGMT__POOL_QUERY_TARGET_RESP__INIT;
+	uint32_t			i;
+	uuid_t				uuid;
+	d_rank_list_t			*svc_ranks;
+	d_rank_list_t			*tgts;
+	size_t				len;
+	uint8_t				*body;
+	daos_target_info_t		*infos = NULL;
+	Mgmt__PoolQueryTargetInfo	*resp_infos = NULL;
+
+	req = mgmt__pool_query_target_req__unpack(&alloc.alloc, drpc_req->body.len,
+						  drpc_req->body.data);
+	if (alloc.oom || req == NULL) {
+		D_ERROR("Failed to unpack pool query targets req\n");
+		drpc_resp->status = DRPC__STATUS__FAILED_UNMARSHAL_PAYLOAD;
+		return;
+	}
+
+	D_INFO("Received request to query DAOS pool %s, %zu targets\n", req->id, req->n_targets);
+
+	if (uuid_parse(req->id, uuid) != 0) {
+		D_ERROR("Failed to parse pool uuid %s\n", req->id);
+		D_GOTO(out, rc = -DER_INVAL);
+	}
+
+	svc_ranks = uint32_array_to_rank_list(req->svc_ranks, req->n_svc_ranks);
+	if (svc_ranks == NULL)
+		D_GOTO(out, rc = -DER_NOMEM);
+
+	tgts = uint32_array_to_rank_list(req->targets, req->n_targets);
+	if (tgts == NULL)
+		D_GOTO(out_ranks, rc = -DER_NOMEM);
+
+	rc = ds_mgmt_pool_query_targets(uuid, svc_ranks, req->rank, tgts, &infos);
+	if (rc != 0) {
+		D_ERROR("ds_mgmt_pool_query_targets() failed, pool %s rank %u, "DF_RC"\n",
+			req->id, req->rank, DP_RC(rc));
+		goto out_tgts;
+	}
+
+	/* Populate the response */
+	/* array of pointers to Mgmt__PoolQueryTargetInfo */
+	D_ALLOC_ARRAY(resp.infos, req->n_targets);
+	if (resp.infos == NULL)
+		D_GOTO(out_infos, rc = -DER_NOMEM);
+	resp.n_infos = req->n_targets;
+
+	/* array of Mgmt__PoolQueryTargetInfo so we don't have to allocate individually */
+	D_ALLOC_ARRAY(resp_infos, req->n_targets);
+	if (resp_infos == NULL)
+		D_GOTO(out_infos, rc = -DER_NOMEM);
+
+	for (i = 0; i < req->n_targets; i++) {
+		int				j;
+		Mgmt__StorageTargetUsage	*space;
+
+		resp.infos[i] = &resp_infos[i];
+		mgmt__pool_query_target_info__init(resp.infos[i]);
+
+		resp.infos[i]->type = (Mgmt__PoolQueryTargetInfo__TargetType) infos[i].ta_type;
+		resp.infos[i]->state = (Mgmt__PoolQueryTargetInfo__TargetState) infos[i].ta_state;
+		D_ALLOC_ARRAY(resp.infos[i]->space, DAOS_MEDIA_MAX);
+		if (resp.infos[i]->space == NULL)
+			D_GOTO(out_infos, rc = -DER_NOMEM);
+		resp.infos[i]->n_space = DAOS_MEDIA_MAX;
+
+		D_ALLOC_ARRAY(space, DAOS_MEDIA_MAX);
+		if (space == NULL)
+			D_GOTO(out_infos, rc = -DER_NOMEM);
+
+		for (j = 0; j < DAOS_MEDIA_MAX; j++) {
+			resp.infos[i]->space[j] = &space[j];
+			mgmt__storage_target_usage__init(resp.infos[i]->space[j]);
+
+			resp.infos[i]->space[j]->total = infos[i].ta_space.s_total[j];
+			resp.infos[i]->space[j]->free = infos[i].ta_space.s_free[j];
+			resp.infos[i]->space[j]->media_type = j;
+		}
+	}
+
+out_infos:
+	D_FREE(infos);
+out_tgts:
+	d_rank_list_free(tgts);
+out_ranks:
+	d_rank_list_free(svc_ranks);
+out:
+	resp.status = rc;
+
+	len = mgmt__pool_query_target_resp__get_packed_size(&resp);
+	D_ALLOC(body, len);
+	if (body == NULL) {
+		drpc_resp->status = DRPC__STATUS__FAILED_MARSHAL;
+	} else {
+		mgmt__pool_query_target_resp__pack(&resp, body);
+		drpc_resp->body.len = len;
+		drpc_resp->body.data = body;
+	}
+
+	mgmt__pool_query_target_req__free_unpacked(req, &alloc.alloc);
+
+	for (i = 0; i < resp.n_infos; i++) {
+		D_FREE(resp.infos[i]->space[0]);
+		D_FREE(resp.infos[i]->space);
+	}
+	D_FREE(resp.infos);
+	D_FREE(resp_infos);
+}
+
+void
 ds_mgmt_drpc_smd_list_devs(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 {
 	struct drpc_alloc	alloc = PROTO_ALLOCATOR_INIT(alloc);

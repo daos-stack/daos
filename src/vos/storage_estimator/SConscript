@@ -26,7 +26,7 @@ def install_storage_estimator_module(env, lib_prefix):
 
 def scons():
     """Execute build"""
-    Import('env', 'prereqs')
+    Import('env')
 
     denv = env.Clone()
     denv.Install("$PREFIX/bin/", "daos_storage_estimator.py")

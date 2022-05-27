@@ -2337,10 +2337,11 @@ type PoolQueryTargetReq struct {
 	sizeCache     protoimpl.SizeCache
 	unknownFields protoimpl.UnknownFields
 
-	Sys     string   `protobuf:"bytes,1,opt,name=sys,proto3" json:"sys,omitempty"`                 // DAOS system identifier
-	Id      string   `protobuf:"bytes,2,opt,name=id,proto3" json:"id,omitempty"`                   // Pool label or UUID
-	Rank    uint32   `protobuf:"varint,3,opt,name=rank,proto3" json:"rank,omitempty"`              // Engine rank with targets to query
-	Targets []uint32 `protobuf:"varint,4,rep,packed,name=targets,proto3" json:"targets,omitempty"` // indices of targets to be queried
+	Sys      string   `protobuf:"bytes,1,opt,name=sys,proto3" json:"sys,omitempty"`                                   // DAOS system identifier
+	Id       string   `protobuf:"bytes,2,opt,name=id,proto3" json:"id,omitempty"`                                     // Pool label or UUID
+	Rank     uint32   `protobuf:"varint,3,opt,name=rank,proto3" json:"rank,omitempty"`                                // Engine rank with targets to query
+	Targets  []uint32 `protobuf:"varint,4,rep,packed,name=targets,proto3" json:"targets,omitempty"`                   // indices of targets to be queried
+	SvcRanks []uint32 `protobuf:"varint,5,rep,packed,name=svc_ranks,json=svcRanks,proto3" json:"svc_ranks,omitempty"` // List of pool service ranks
 }
 
 func (x *PoolQueryTargetReq) Reset() {
@@ -2399,6 +2400,13 @@ func (x *PoolQueryTargetReq) GetRank() uint32 {
 func (x *PoolQueryTargetReq) GetTargets() []uint32 {
 	if x != nil {
 		return x.Targets
+	}
+	return nil
+}
+
+func (x *PoolQueryTargetReq) GetSvcRanks() []uint32 {
+	if x != nil {
+		return x.SvcRanks
 	}
 	return nil
 }
