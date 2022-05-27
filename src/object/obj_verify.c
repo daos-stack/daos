@@ -701,8 +701,9 @@ dc_obj_verify_ec_cb(struct dc_obj_enum_unpack_io *io, void *arg)
 
 	/* Fetch by specific shard */
 	rc = dc_obj_fetch_task_create(dova->oh, dova->th, 0, &io->ui_dkey, idx,
-				      0, iods, sgls, NULL, &shard, NULL, NULL, NULL,
-				      &task);
+				      0, iods, sgls, NULL,
+				      iods[0].iod_type == DAOS_IOD_SINGLE ? NULL : &shard,
+				      NULL, NULL, NULL, &task);
 	if (rc != 0) {
 		D_ERROR(DF_OID" sgl num %u shard "DF_U64"\n",
 			DP_OID(obj->cob_md.omd_id), idx, shard);
@@ -719,8 +720,8 @@ dc_obj_verify_ec_cb(struct dc_obj_enum_unpack_io *io, void *arg)
 
 	daos_fail_loc_set(DAOS_OBJ_FORCE_DEGRADE | DAOS_FAIL_ONCE);
 	rc = dc_obj_fetch_task_create(dova->oh, dova->th, 0, &io->ui_dkey, idx,
-				      0, iods, sgls_verify, NULL, &shard, NULL, NULL,
-				      NULL, &verify_task);
+				      0, iods, sgls_verify, NULL, &shard,
+				      NULL, NULL, NULL, &verify_task);
 	if (rc != 0) {
 		D_ERROR(DF_OID" sgl num %u shard "DF_U64"\n",
 			DP_OID(obj->cob_md.omd_id), idx, shard);
