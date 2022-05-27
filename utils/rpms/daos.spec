@@ -14,7 +14,7 @@
 
 Name:          daos
 Version:       2.0.2
-Release:       5%{?relval}%{?dist}
+Release:       6%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       BSD-2-Clause-Patent
@@ -73,7 +73,7 @@ BuildRequires: liblz4-devel
 BuildRequires: protobuf-c-devel
 BuildRequires: lz4-devel
 %endif
-BuildRequires: spdk-devel >= 21.07
+BuildRequires: spdk-devel >= 21.07, spdk-devel < 22
 %if (0%{?rhel} >= 7)
 BuildRequires: libisa-l-devel
 BuildRequires: libisa-l_crypto-devel
@@ -151,7 +151,7 @@ to optimize performance and cost.
 %package server
 Summary: The DAOS server
 Requires: %{name}%{?_isa} = %{version}-%{release}
-Requires: spdk-tools >= 21.07
+Requires: spdk-tools >= 21.07, spdk-tools < 22
 Requires: ndctl
 # needed to set PMem configuration goals in BIOS through control-plane
 %if (0%{?suse_version} >= 1500)
@@ -528,6 +528,9 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 # No files in a meta-package
 
 %changelog
+* Tue May 17 2022 Tom Nabarro <tom.nabarro@intel.com> 2.0.2-6
+- Restrict spdk version to less than v22
+
 * Thu May 12 2022 Phillip Henderson <phillip.henderson@intel.com> 2.0.2-5
 - Add daos-tests-internal package
 
