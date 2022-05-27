@@ -68,7 +68,7 @@ ddb_vos_pool_open(char *path, daos_handle_t *poh)
 	 * VOS files must be under /mnt/daos directory. This is a current limitation and
 	 * will change in the future
 	 */
-	rc = vos_self_init(pool_base);
+	rc = vos_self_init(pool_base, true, 0);
 	if (!SUCCESS(rc))
 		return rc;
 
