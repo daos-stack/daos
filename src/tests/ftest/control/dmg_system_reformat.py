@@ -51,6 +51,8 @@ class DmgSystemReformatTest(PoolTestBase):
                 self.get_dmg_command().result.stderr_text))
 
         # Remove pools
+        for pool in self.pool:
+            self.unregister_cleanup(**pool.get_cleanup_entry(self))
         self.pool = []
 
         # Perform a dmg system erase to allow the dmg storage format to succeed

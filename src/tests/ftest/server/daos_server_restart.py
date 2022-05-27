@@ -34,6 +34,8 @@ class DaosServerTest(TestWithServers):
         self.server_managers[0].detect_format_ready()
         self.log.info("=Restart daos_server, dmg storage_format.")
         self.server_managers[0].dmg.storage_format(force)
+        for pool in self.pool:
+            self.unregister_cleanup(**pool.get_cleanup_entry(self))
         self.log.info("=Restart daos_server, detect_engine_start().")
         self.server_managers[0].detect_engine_start()
         self.log.info("=Restart daos_agent, stop")
@@ -107,7 +109,6 @@ class DaosServerTest(TestWithServers):
         self.log.info("(5)Verify after server restarted.")
         self.verify_pool_list()
 
-        self.pool = None
         self.container = None
 
     def test_engine_restart(self):
