@@ -46,6 +46,12 @@ run_cmd(struct ddb_ctx *ctx, struct argv_parsed *parse_args)
 	case DDB_CMD_QUIT:
 		rc = ddb_run_quit(ctx);
 		break;
+	case DDB_CMD_OPEN:
+		rc = ddb_run_open(ctx, &info.dci_cmd_option.dci_open);
+		break;
+	case DDB_CMD_CLOSE:
+		rc = ddb_run_close(ctx);
+		break;
 	case DDB_CMD_LS:
 		rc = ddb_run_ls(ctx, &info.dci_cmd_option.dci_ls);
 		break;
@@ -75,6 +81,9 @@ run_cmd(struct ddb_ctx *ctx, struct argv_parsed *parse_args)
 		break;
 	case DDB_CMD_CLEAR_CMT_DTX:
 		rc = ddb_run_clear_cmt_dtx(ctx, &info.dci_cmd_option.dci_clear_cmt_dtx);
+		break;
+	case DDB_CMD_SMD_SYNC:
+		rc = ddb_run_smd_sync(ctx);
 		break;
 	}
 

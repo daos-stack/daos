@@ -50,6 +50,29 @@ assert_parsed_fail(const char *str)
  * -----------------------------------------------
  */
 
+#define assert_invalid_f_path(path, parts) assert_invalid(vos_path_parse(path, &parts))
+#define assert_f_path(path, parts) assert_success(vos_path_parse(path, &parts))
+
+static void
+vos_file_parts_tests(void **state)
+{
+	struct vos_file_parts parts = {0};
+	uuid_t expected_uuid;
+
+	uuid_parse("12345678-1234-1234-1234-123456789012", expected_uuid);
+
+	assert_invalid_f_path("", parts);
+	assert_invalid_f_path("/mnt/daos", parts);
+	assert_invalid_f_path("/mnt/daos/12345678-1234-1234-1234-123456789012", parts);
+
+	assert_f_path("/mnt/daos/12345678-1234-1234-1234-123456789012/vos-1", parts);
+
+	assert_string_equal("/mnt/daos", parts.vf_db_path);
+	assert_uuid_equal(expected_uuid, parts.vf_pool_uuid);
+	assert_string_equal("vos-1", parts.vf_vos_file);
+	assert_int_equal(1, parts.vf_target_idx);
+}
+
 static void
 string_to_argv_tests(void **state)
 {
@@ -308,6 +331,7 @@ int
 ddb_parse_tests_run()
 {
 	static const struct CMUnitTest tests[] = {
+		TEST(vos_file_parts_tests),
 		TEST(string_to_argv_tests),
 		TEST(parse_args_tests),
 		TEST(vos_path_parse_tests),

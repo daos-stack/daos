@@ -20,6 +20,25 @@ ddb_run_quit(struct ddb_ctx *ctx)
 	return 0;
 }
 
+int
+ddb_run_open(struct ddb_ctx *ctx, struct open_options *opt)
+{
+	return ddb_vos_pool_open(opt->vos_pool_shard, &ctx->dc_poh);
+}
+
+int ddb_run_close(struct ddb_ctx *ctx)
+{
+	int rc;
+
+	if (daos_handle_is_inval(ctx->dc_poh))
+		return 0;
+
+	rc = ddb_vos_pool_close(ctx->dc_poh);
+	ctx->dc_poh = DAOS_HDL_INVAL;
+
+	return rc;
+}
+
 struct ls_ctx {
 	struct ddb_ctx	*ctx;
 	bool		 has_cont;
@@ -568,5 +587,32 @@ ddb_run_clear_cmt_dtx(struct ddb_ctx *ctx, struct clear_cmt_dtx_options *opt)
 done:
 	ddb_vtp_fini(&vtpb);
 	dv_cont_close(&coh);
+	return rc;
+}
+
+static int
+sync_smd_cb(void *cb_args, uuid_t pool_id, uint32_t vos_id, uint64_t blob_id, daos_size_t blob_size)
+{
+	struct ddb_ctx *ctx = cb_args;
+
+	ddb_printf(ctx, "Sync Info - pool: "DF_UUIDF", target id: %d, blob id: %lu, "
+		   "blob_size: %lu\n", DP_UUID(pool_id),
+		   vos_id, blob_id, blob_size);
+
+	return 0;
+}
+
+int
+ddb_run_smd_sync(struct ddb_ctx *ctx)
+{
+	int rc;
+
+	if (daos_handle_is_valid(ctx->dc_poh)) {
+		ddb_print(ctx, "Close pool connection before attempting to sync smd\n");
+		return -DER_INVAL;
+	}
+
+	rc = dv_sync_smd(sync_smd_cb, ctx);
+	ddb_print(ctx, "Done\n");
 	return rc;
 }

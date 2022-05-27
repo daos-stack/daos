@@ -15,6 +15,8 @@
 #include <spdk/bdev.h>
 #include <spdk/thread.h>
 
+#define BIO_BLOB_HDR_MAGIC	(0xb0b51ed5)
+
 #define BIO_DMA_PAGE_SHIFT	12	/* 4K */
 #define BIO_DMA_PAGE_SZ		(1UL << BIO_DMA_PAGE_SHIFT)
 #define BIO_XS_CNT_MAX		48	/* Max VOS xstreams per blobstore */
