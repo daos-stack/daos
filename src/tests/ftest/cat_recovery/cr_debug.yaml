@@ -1,0 +1,30 @@
+hosts:
+  test_servers:
+    - server-A
+
+timeout: 1800
+
+server_config:
+  name: daos_server
+  servers:
+    targets: 1
+
+pool:
+  control_method: dmg
+  scm_size: 1G
+
+container_wo_rf:
+  type: POSIX
+  control_method: daos
+
+ior: &ior_base
+  # client_processes:
+  #   ppn: 4
+  iorflags:
+    flags: -k -D 10 -v -w -W
+    api: DFS
+    transfer_size: 512K
+    block_size: 1G
+ior_wo_rf:
+  <<: *ior_base
+  dfs_oclass: SX
