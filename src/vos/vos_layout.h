@@ -19,6 +19,7 @@
 #include <daos_srv/bio.h>
 #include <daos_srv/vea.h>
 #include <daos_srv/dtx_srv.h>
+#include <daos_srv/daos_chk.h>
 #include "ilog.h"
 
 /**
@@ -135,6 +136,16 @@ struct vos_pool_df {
 	struct vea_space_df			pd_vea_df;
 	/** GC bins for container/object/dkey... */
 	struct vos_gc_bin_df			pd_gc_bins[GC_MAX];
+	/** DAOS check phase. */
+	uint32_t				pd_chk_phase;
+	/** DAOS check instance status. */
+	uint32_t				pd_chk_status;
+	/**
+	 * The inconsistency statistics during the phases range [CSP_DTX_RESYNC, OSP_AGGREGATION]
+	 * for the pool shard on the target.
+	 */
+	struct chk_statistics			pd_chk_statistics;
+	struct chk_time				pd_chk_time;
 };
 
 /**

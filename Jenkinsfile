@@ -244,7 +244,6 @@ pipeline {
                                    password: GITHUB_USER_PSW,
                                    ignored_files: "src/control/vendor/*:" +
                                                   "*.pb-c.[ch]:" +
-                                                  "src/chk/chk_internal.h:" +
                                                   "src/client/java/daos-java/src/main/java/io/daos/dfs/uns/*:" +
                                                   "src/client/java/daos-java/src/main/java/io/daos/obj/attr/*:" +
                                                   "src/client/java/daos-java/src/main/native/include/daos_jni_common.h:" +
