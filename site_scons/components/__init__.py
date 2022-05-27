@@ -67,7 +67,7 @@ class installed_comps():
 
 def include(reqs, name, use_value, exclude_value):
     """Return True if in include list"""
-    if set([name, 'all']).intersection(set(reqs.include)):
+    if reqs.included(name):
         print("Including %s optional component from build" % name)
         return use_value
     print("Excluding %s optional component from build" % name)
@@ -173,9 +173,26 @@ def define_mercury(reqs):
                 libs=['opa'],
                 package='openpa-devel' if inst(reqs, 'openpa') else None)
 
+    ucx_configure = ['./configure', '--disable-assertions', '--disable-params-check', '--enable-mt',
+                     '--without-go', '--without-java', '--prefix=$UCX_PREFIX']
+
+    if reqs.target_type == 'debug':
+        ucx_configure.append('--enable-debug')
+    else:
+        ucx_configure.append('--disable-debug')
+
     reqs.define('ucx',
+                retriever=GitRepoRetriever('https://github.com/openucx/ucx.git'),
                 libs=['ucp', 'uct'],
-                headers=['uct/api/uct.h'])
+                headers=['uct/api/uct.h'],
+                pkgconfig='ucx',
+                commands=[['./autogen.sh'],
+                          ucx_configure,
+                          ['make'],
+                          ['make', 'install'],
+                          ['mkdir', '-p', '$UCX_PREFIX/lib/pkgconfig'],
+                          ['cp', 'ucx.pc', '$UCX_PREFIX/lib/pkgconfig']],
+                package='ucx-devel' if inst(reqs, 'ucx') else None)
 
     mercury_build = ['cmake',
                      '-DMERCURY_USE_CHECKSUMS=OFF',
@@ -195,13 +212,8 @@ def define_mercury(reqs):
     else:
         mercury_build.append('-DMERCURY_ENABLE_DEBUG=OFF')
 
-    if reqs.check_component('ucx'):
-        mercury_build.extend(['-DNA_USE_UCX=ON',
-                              '-DUCX_INCLUDE_DIR=/usr/include',
-                              '-DUCP_LIBRARY=/usr/lib64/libucp.so',
-                              '-DUCS_LIBRARY=/usr/lib64/libucs.so',
-                              '-DUCT_LIBRARY=/usr/lib64/libuct.so'])
-        libs.append('ucx')
+    mercury_build.extend(include(reqs, 'ucx', ['-DNA_USE_UCX=ON'], ['-DNA_USE_UCX=OFF']))
+    libs.extend(include(reqs, 'ucx', ['ucx'], []))
 
     mercury_build.append(check(reqs,
                                'openpa',
