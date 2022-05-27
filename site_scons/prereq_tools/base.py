@@ -269,10 +269,7 @@ class Runner():
         if not self.env:
             raise Exception("PreReqComponent not initialized")
         retval = True
-        if env is not None:
-            passed_env = env
-        else:
-            passed_env = self.env
+        passed_env = env or self.env
 
         if subdir:
             print('Running commands in {}'.format(subdir))
