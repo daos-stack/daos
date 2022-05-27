@@ -209,11 +209,9 @@ out_jbuf:
 out_pclose:
 	pc_rc = pclose(fp);
 	if (pc_rc != 0) {
-		int err = errno;
-
-		D_ERROR("%s exited with errno %d (%s)\n", cmd_str, err, strerror(err));
+		D_ERROR("%s exited with error %d\n", cmd_str, pc_rc & 0xFF);
 		if (rc == 0)
-			rc = daos_errno2der(err);
+			rc = -DER_MISC;
 	}
 out:
 	D_FREE(cmd_str);

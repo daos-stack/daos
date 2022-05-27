@@ -1165,11 +1165,12 @@ get_server_config(char *host, char *server_config_file)
 }
 
 int verify_server_log_mask(char *host, char *server_config_file,
-			   char *log_mask){
+			   char *log_mask) {
 	char	command[256];
 	size_t	len = 0;
 	size_t	read;
 	char	*line = NULL;
+	int	rc = 0;
 
 	snprintf(command, sizeof(command),
 		 "ssh %s cat %s", host, server_config_file);
@@ -1185,14 +1186,17 @@ int verify_server_log_mask(char *host, char *server_config_file,
 				print_message(
 					"Expected log_mask = %s, Found %s\n ",
 					log_mask, line);
-				return -DER_INVAL;
+				D_GOTO(out, rc = -DER_INVAL);
 			}
 		}
+
+		D_FREE(line);
 	}
 
+out:
 	pclose(fp);
-	free(line);
-	return 0;
+	D_FREE(line);
+	return rc;
 }
 
 int get_log_file(char *host, char *server_config_file,
@@ -1248,6 +1252,7 @@ int verify_state_in_log(char *host, char *log_file, char *state)
 			if (strstr(line, state) != NULL) {
 				print_message("Found state %s in Log file %s\n",
 					      state, pch);
+				pclose(fp);
 				goto out;
 			}
 		}
