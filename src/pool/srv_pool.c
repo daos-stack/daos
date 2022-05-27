@@ -3471,6 +3471,99 @@ out:
 }
 
 /**
+ * Query pool target information without holding a pool handle.
+ *
+ * \param[in]	pool_uuid	UUID of the pool
+ * \param[in]	ps_ranks	Ranks of pool svc replicas
+ * \param[in]	rank		Pool storage engine rank
+ * \param[in]	tgt_idx		Target index within the pool storage engine
+ * \param[out]	ti		Target information (state, storage capacity and usage)
+ *
+ * \return	0		Success
+ *		-DER_INVAL	Invalid input
+ *		Negative value	Other error
+ */
+int
+ds_pool_svc_query_target(uuid_t pool_uuid, d_rank_list_t *ps_ranks, d_rank_t rank,
+			 uint32_t tgt_idx, daos_target_info_t *ti)
+{
+	int				rc;
+	struct rsvc_client		client;
+	crt_endpoint_t			ep;
+	struct dss_module_info		*info = dss_get_module_info();
+	crt_rpc_t			*rpc;
+	int				i;
+	struct pool_query_info_in	*in;
+	struct pool_query_info_out	*out;
+
+	if (ti == NULL)
+		D_GOTO(out, rc = -DER_INVAL);
+
+	D_DEBUG(DB_MGMT, DF_UUID": Querying pool target %u\n", DP_UUID(pool_uuid), tgt_idx);
+
+	rc = rsvc_client_init(&client, ps_ranks);
+	if (rc != 0)
+		goto out;
+
+rechoose:
+	ep.ep_grp = NULL; /* primary group */
+	rc = rsvc_client_choose(&client, &ep);
+	if (rc != 0) {
+		D_ERROR(DF_UUID": cannot find pool service: "DF_RC"\n",
+			DP_UUID(pool_uuid), DP_RC(rc));
+		goto out_client;
+	}
+
+	rc = pool_req_create(info->dmi_ctx, &ep, POOL_QUERY_INFO, &rpc);
+	if (rc != 0) {
+		D_ERROR(DF_UUID": failed to create pool query target rpc, "DF_RC"\n",
+			DP_UUID(pool_uuid), DP_RC(rc));
+		goto out_client;
+	}
+
+	in = crt_req_get(rpc);
+	uuid_copy(in->pqii_op.pi_uuid, pool_uuid);
+	uuid_clear(in->pqii_op.pi_hdl);
+	in->pqii_rank = rank;
+	in->pqii_tgt = tgt_idx;
+
+	rc = dss_rpc_send(rpc);
+	out = crt_reply_get(rpc);
+	D_ASSERT(out != NULL);
+
+	rc = pool_rsvc_client_complete_rpc(&client, &ep, rc, &out->pqio_op);
+	if (rc == RSVC_CLIENT_RECHOOSE) {
+		crt_req_decref(rpc);
+		dss_sleep(RECHOOSE_SLEEP_MS);
+		goto rechoose;
+	}
+
+	rc = out->pqio_op.po_rc;
+	if (rc != 0) {
+		D_ERROR(DF_UUID": failed to query pool rank %u target %u "DF_RC"\n",
+			DP_UUID(pool_uuid), rank, tgt_idx, DP_RC(rc));
+		goto out_rpc;
+	}
+
+	D_DEBUG(DB_MGMT, DF_UUID": Successfully queried pool rank %u target %u\n",
+		DP_UUID(pool_uuid), rank, tgt_idx);
+
+	ti->ta_type = DAOS_TP_UNKNOWN;
+	ti->ta_state = out->pqio_state;
+	for (i = 0; i < DAOS_MEDIA_MAX; i++) {
+		ti->ta_space.s_total[i] = out->pqio_space.s_total[i];
+		ti->ta_space.s_free[i] = out->pqio_space.s_free[i];
+	}
+
+out_rpc:
+	crt_req_decref(rpc);
+out_client:
+	rsvc_client_fini(&client);
+out:
+	return rc;
+}
+
+/**
  * Query a pool's properties without having a handle for the pool
  */
 void
