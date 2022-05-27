@@ -432,15 +432,9 @@ func (c *Config) WithPinnedNumaNode(numa uint) *Config {
 	return c
 }
 
-// WithStorageAccelEngine sets the acceleration engine setting for the I/O Engine instance.
-func (c *Config) WithStorageAccelEngine(name string) *Config {
+// WithStorageAccelProps sets the acceleration properties for the I/O Engine instance.
+func (c *Config) WithStorageAccelProps(name string, mask storage.AccelOptionBits) *Config {
 	c.Storage.AccelProps.Engine = name
-	return c
-}
-
-// WithStorageAccelOptMask sets the acceleration optional capability bit mask for the I/O Engine
-// instance.
-func (c *Config) WithStorageAccelOptMask(mask uint16) *Config {
-	c.Storage.AccelProps.UpdateOptMask(mask)
+	c.Storage.AccelProps.Options = mask
 	return c
 }

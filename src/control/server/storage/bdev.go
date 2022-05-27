@@ -54,8 +54,6 @@ const (
 	AccelEngineNone  = C.NVME_ACCEL_NONE
 	AccelEngineSPDK  = C.NVME_ACCEL_SPDK
 	AccelEngineDML   = C.NVME_ACCEL_DML
-	AccelOptMove     = "move"
-	AccelOptCRC      = "crc"
 	AccelOptMoveFlag = C.NVME_ACCEL_FLAG_MOVE
 	AccelOptCRCFlag  = C.NVME_ACCEL_FLAG_CRC
 )

@@ -319,56 +319,6 @@ func TestStorage_parsePCIBusRange(t *testing.T) {
 	}
 }
 
-func TestStorage_AccelProps_setOptMask(t *testing.T) {
-	for name, tc := range map[string]struct {
-		accelEngine string
-		optStrs     []string
-		expMask     uint16
-		expErr      error
-	}{
-		"empty engine setting": {
-			expErr: errors.New("unknown acceleration engine"),
-		},
-		"no engine set": {
-			accelEngine: AccelEngineNone,
-			optStrs:     []string{AccelOptCRC},
-		},
-		"no opts": {
-			accelEngine: AccelEngineSPDK,
-			expMask:     AccelOptCRCFlag | AccelOptMoveFlag,
-		},
-		"all opts": {
-			accelEngine: AccelEngineDML,
-			optStrs:     []string{AccelOptCRC, AccelOptMove},
-			expMask:     AccelOptCRCFlag | AccelOptMoveFlag,
-		},
-		"single opt": {
-			accelEngine: AccelEngineDML,
-			optStrs:     []string{AccelOptCRC},
-			expMask:     AccelOptCRCFlag,
-		},
-		"bad opt": {
-			accelEngine: AccelEngineSPDK,
-			optStrs:     []string{AccelOptCRC, "foo"},
-			expErr:      errors.New("unknown acceleration option"),
-		},
-	} {
-		t.Run(name, func(t *testing.T) {
-			ap := &AccelProps{Engine: tc.accelEngine}
-
-			err := ap.setOptMask(tc.optStrs...)
-			test.CmpErr(t, tc.expErr, err)
-			if tc.expErr != nil {
-				return
-			}
-
-			if diff := cmp.Diff(tc.expMask, ap.OptMask); diff != "" {
-				t.Fatalf("bad mask (-want +got):\n%s", diff)
-			}
-		})
-	}
-}
-
 func TestStorage_AccelProps_FromYAML(t *testing.T) {
 	for name, tc := range map[string]struct {
 		input    string
@@ -404,7 +354,7 @@ acceleration:
 `,
 			expProps: AccelProps{
 				Engine:  AccelEngineSPDK,
-				OptMask: AccelOptCRCFlag | AccelOptMoveFlag,
+				Options: AccelOptCRCFlag | AccelOptMoveFlag,
 			},
 		},
 		"engine unset; opts set": {
@@ -427,8 +377,7 @@ acceleration:
 `,
 			expProps: AccelProps{
 				Engine:  AccelEngineDML,
-				Options: []string{AccelOptCRC},
-				OptMask: AccelOptCRCFlag,
+				Options: AccelOptCRCFlag,
 			},
 		},
 		"engine set; opts all set": {
@@ -441,14 +390,13 @@ acceleration:
 `,
 			expProps: AccelProps{
 				Engine:  AccelEngineSPDK,
-				Options: []string{AccelOptCRC, AccelOptMove},
-				OptMask: AccelOptCRCFlag | AccelOptMoveFlag,
+				Options: AccelOptCRCFlag | AccelOptMoveFlag,
 			},
 		},
 		"unrecognized engine": {
 			input: `
 acceleration:
-  engine: foo
+  engine: native
 `,
 			expErr: errors.New("unknown acceleration engine"),
 		},
@@ -504,8 +452,7 @@ acceleration:
 		"engine set; default opts": {
 			props: AccelProps{
 				Engine:  AccelEngineSPDK,
-				Options: []string{AccelOptCRC, AccelOptMove},
-				OptMask: AccelOptCRCFlag | AccelOptMoveFlag,
+				Options: AccelOptCRCFlag | AccelOptMoveFlag,
 			},
 			expOut: `
 storage: []

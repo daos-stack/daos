@@ -95,7 +95,7 @@ func TestBackend_writeJSONFile(t *testing.T) {
 		enableHotplug     bool
 		hotplugBusidRange string
 		accelEngine       string
-		accelOptMask      uint16
+		accelOptMask      storage.AccelOptionBits
 		expErr            error
 		expOut            string
 	}{
@@ -446,7 +446,7 @@ func TestBackend_writeJSONFile(t *testing.T) {
 }
 `,
 		},
-		"nvme; single controller; acceleration set to native; move and crc opts specified": {
+		"nvme; single controller; acceleration set to none; move and crc opts specified": {
 			confIn: storage.TierConfig{
 				Tier:  tierID,
 				Class: storage.ClassNvme,
@@ -454,7 +454,8 @@ func TestBackend_writeJSONFile(t *testing.T) {
 					DeviceList: storage.MustNewBdevDeviceList(common.MockPCIAddrs(1)...),
 				},
 			},
-			accelEngine: "native", // verify default native acceleration setting ignored
+			// Verify default "none" acceleration setting is ignored.
+			accelEngine: storage.AccelEngineNone,
 			expOut: `
 {
   "daos_data": {
@@ -510,7 +511,7 @@ func TestBackend_writeJSONFile(t *testing.T) {
 					DeviceList: storage.MustNewBdevDeviceList(common.MockPCIAddrs(1)...),
 				},
 			},
-			accelEngine:  "spdk",
+			accelEngine:  storage.AccelEngineSPDK,
 			accelOptMask: storage.AccelOptCRCFlag | storage.AccelOptMoveFlag,
 			expOut: `
 {
@@ -591,8 +592,7 @@ func TestBackend_writeJSONFile(t *testing.T) {
 				).
 				WithStorageConfigOutputPath(cfgOutputPath).
 				WithStorageEnableHotplug(tc.enableHotplug).
-				WithStorageAccelEngine(tc.accelEngine).
-				WithStorageAccelOptMask(tc.accelOptMask)
+				WithStorageAccelProps(tc.accelEngine, tc.accelOptMask)
 
 			req, err := storage.BdevWriteConfigRequestFromConfig(context.TODO(), log,
 				&engineConfig.Storage, tc.enableVmd, storage.MockGetTopology)
