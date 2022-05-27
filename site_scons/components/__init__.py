@@ -194,7 +194,7 @@ def define_mercury(reqs):
                           ['make'],
                           ['make', 'install'],
                           ['mkdir', '-p', '$UCX_PREFIX/lib64/pkgconfig'],
-                          ['install', '-c', '-m 644', 'ucx.pc', '$UCX_PREFIX/lib64/pkgconfig']],
+                          ['cp', 'ucx.pc', '$UCX_PREFIX/lib64/pkgconfig']],
                 package='ucx-devel' if inst(reqs, 'ucx') else None)
 
     mercury_build = ['cmake',

@@ -269,10 +269,8 @@ class Runner():
         if not self.env:
             raise Exception("PreReqComponent not initialized")
         retval = True
-        if env is not None:
-            passed_env = env
-        else:
-            passed_env = self.env
+
+        passed_env = env or self.env
 
         if subdir:
             print('Running commands in {}'.format(subdir))
@@ -1145,6 +1143,8 @@ class PreReqComponent():
                     changes = True
                 else:
                     self.modify_prefix(comp_def, env)
+                # If we get here, just set the environment again, new directories may be present
+                comp_def.set_environment(env, needed_libs)
             except Exception as error:
                 # Save the exception in case the component is requested again
                 self.__errors[comp] = error
