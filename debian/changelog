@@ -1,3 +1,9 @@
+daos (2.0.3-1) unstable; urgency=medium
+  [ Johann Lombardi ]
+  * Version bump to 2.0.3 (rc1)
+
+ -- Johann Lombardi <johann.lombardi@intel.com>  Fri, 27 May 2022 20:00:00 -0100
+
 daos (2.0.2-7) unstable; urgency=medium
   [ Lei Huang ]
   * Update libfabric to v1.15.1-1 with critical performance patches
