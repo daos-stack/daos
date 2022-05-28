@@ -113,7 +113,7 @@ ENV PATH=/home/daos/venv/bin:$PATH
 ENV VIRTUAL_ENV=/home/daos/venv/
 
 RUN python3 -m pip --no-cache-dir install --upgrade pip && \
-    python3 -m pip --no-cache-dir install distro scons meson==0.59.4
+    python3 -m pip --no-cache-dir install distro scons pyelftools meson==0.59.4
 
 WORKDIR /home/daos/pre
 COPY --chown=daos_server:daos_server SConstruct .

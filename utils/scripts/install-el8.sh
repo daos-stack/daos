@@ -56,10 +56,8 @@ dnf -y --nodocs install \
     patchelf \
     python3-defusedxml \
     python3-devel \
-    python3-distro \
     python3-junit_xml \
     python3-pip \
-    python3-pyelftools \
     python3-pyxattr \
     python3-tabulate \
     python3-yaml \
