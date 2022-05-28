@@ -46,7 +46,6 @@ dnf -y --nodocs install \
     Lmod \
     lz4-devel \
     make \
-    meson \
     ndctl \
     ninja-build \
     numactl \

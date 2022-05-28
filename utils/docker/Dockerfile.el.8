@@ -107,8 +107,13 @@ RUN if [ "x$BULLSEYE" != "x" ]; then \
 
 USER daos_server:daos_server
 
-# Install scons from pip to avoid dependency cycle bug.
-RUN python3 -m pip --no-cache-dir --disable-pip-version-check install --user scons
+# Setup a python venv so that python packages can be installed locally.
+RUN python3 -m venv /home/daos/venv
+ENV PATH=/home/daos/venv/bin:$PATH
+ENV VIRTUAL_ENV=/home/daos/venv/
+
+RUN python3 -m pip --no-cache-dir install --upgrade pip && \
+    python3 -m pip --no-cache-dir install scons meson==0.59.4
 
 WORKDIR /home/daos/pre
 COPY --chown=daos_server:daos_server SConstruct .
