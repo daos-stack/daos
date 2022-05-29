@@ -192,7 +192,7 @@ extend_objects(void **state)
 	daos_obj_id_t	oids[OBJ_NR];
 	int		i;
 
-	if (!test_runable(arg, 4))
+	if (!test_runable(arg, 3))
 		return;
 
 	for (i = 0; i < OBJ_NR; i++) {
@@ -210,8 +210,7 @@ extend_objects(void **state)
 	for (i = 0; i < OBJ_NR; i++) {
 		char buffer[16];
 
-		oids[i] = daos_test_oid_gen(arg->coh, DAOS_OC_TINY_RW, 0,
-					    0, arg->myrank);
+		oids[i] = daos_test_oid_gen(arg->coh, OC_S1, 0, 0, arg->myrank);
 		ioreq_init(&req, arg->coh, oids[i], DAOS_IOD_ARRAY, arg);
 		memset(buffer, 0, 16);
 		lookup_single("dkey", "akey", 0, buffer, 16,

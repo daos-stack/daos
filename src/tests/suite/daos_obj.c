@@ -187,6 +187,7 @@ ioreq_iod_recxs_set(struct ioreq *req, int idx, daos_size_t size,
 		iod->iod_recxs = recxs;
 	} else {
 		iod->iod_nr = 1;
+		iod->iod_recxs = NULL;
 	}
 }
 
