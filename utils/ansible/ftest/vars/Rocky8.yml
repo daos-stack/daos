@@ -1,0 +1,54 @@
+# Set of variables for Rocky 8
+# yamllint disable rule:line-length
+
+daos_openmpi_module_path: /usr/share/modulefiles/mpi/openmpi-x86_64
+
+daos_base_deps:
+  rpms:
+    - bash
+    - gdb
+    - glibc
+    - platform-python
+    - python36
+    - tree
+    - systemd
+
+daos_dev_deps:
+  rpms:
+    - createrepo
+    - dnf-plugins-core
+    - meson
+    - python3-clustershell
+    - rpmdevtools
+    - rpm-build
+  pips:
+    - "avocado=={{ daos_avocado_version | default(daos_avocado_version_default) }}"
+    - "avocado-framework=={{ daos_avocado_framework_version | default(daos_avocado_framework_version_default) }}"
+    - "avocado-framework-plugin-glib=={{ daos_avocado_framework_version | default(daos_avocado_framework_version_default) }}"
+    - "avocado-framework-plugin-golang=={{ daos_avocado_framework_version | default(daos_avocado_framework_version_default) }}"
+    - "avocado-framework-plugin-loader-yaml=={{ daos_avocado_framework_version | default(daos_avocado_framework_version_default) }}"
+    - "avocado-framework-plugin-result-html=={{ daos_avocado_framework_version | default(daos_avocado_framework_version_default) }}"
+    - "avocado-framework-plugin-result-upload=={{ daos_avocado_framework_version | default(daos_avocado_framework_version_default) }}"
+    - "avocado-framework-plugin-varianter-yaml-to-mux=={{ daos_avocado_framework_version | default(daos_avocado_framework_version_default) }}"
+
+daos_client_deps:
+  rpms:
+    - compat-hwloc1
+    - fuse3
+    - fuse3-libs
+    - libuuid
+    - lz4-libs
+    - systemd
+
+daos_server_deps:
+  rpms:
+    - compat-hwloc1
+    - dpdk
+    - ipmctl
+    - libipmctl
+    - libpmemobj
+    - libuuid
+    - lz4-libs
+    - ndctl
+    - numactl-libs
+    - spdk-tools
