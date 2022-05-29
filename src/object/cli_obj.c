@@ -968,16 +968,8 @@ obj_shard_tgts_query(struct dc_object *obj, uint32_t map_ver, uint32_t shard,
 	D_DEBUG(DB_TRACE, DF_OID" query shard %u\n",
 		DP_OID(obj->cob_md.omd_id), shard);
 	rc = obj_shard_open(obj, shard, map_ver, &obj_shard);
-	/* Disable inflight I/O during reintegration for the moment */
-	if (rc == 0 &&
-	    obj_auxi->opc == DAOS_OBJ_RPC_UPDATE && obj_shard->do_reintegrating) {
-		D_ERROR(DF_OID" shard is being reintegrated: %d\n",
-			DP_OID(obj->cob_md.omd_id), -DER_IO);
-		D_GOTO(close, rc = -DER_IO);
-	}
-
 	if (rc != 0) {
-		D_ERROR(DF_OID" obj_shard_open %u, rc "DF_RC".\n",
+		D_DEBUG(DB_IO, DF_OID" obj_shard_open %u, rc "DF_RC".\n",
 			DP_OID(obj->cob_md.omd_id), shard, DP_RC(rc));
 		D_GOTO(out, rc);
 	}
