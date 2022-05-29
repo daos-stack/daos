@@ -125,7 +125,7 @@ ds_obj_remote_update(struct dtx_leader_handle *dlh, void *data, int idx,
 	orw = crt_req_get(req);
 	*orw = *orw_parent;
 	if (split_req != NULL) {
-		tgt_idx = shard_tgt->st_shard;
+		tgt_idx = shard_tgt->st_shard_id;
 		tgt_oiod = obj_ec_tgt_oiod_get(split_req->osr_tgt_oiods,
 					       dlh->dlh_normal_sub_cnt + dlh->dlh_delay_sub_cnt + 1,
 					       tgt_idx - obj_exec_arg->start);
@@ -356,7 +356,7 @@ ds_obj_cpd_clone_reqs(struct daos_shard_tgt *tgt, struct daos_cpd_disp_ent *dcde
 
 				oiod = obj_ec_tgt_oiod_get(split->osr_tgt_oiods,
 						dcsr_parent[idx].dcsr_ec_tgt_nr,
-						dcri_parent->dcri_shard_off -
+						dcri_parent->dcri_shard_id -
 						dcu_parent->dcu_start_shard);
 				D_ASSERT(oiod != NULL);
 
