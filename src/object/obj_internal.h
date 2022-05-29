@@ -571,7 +571,7 @@ obj_ec_encode_buf(daos_obj_id_t oid, struct daos_oclass_attr *oca,
 		  unsigned char *p_bufs[]);
 
 int
-obj_ec_parity_alive(daos_handle_t oh, uint64_t dkey_hash, uint32_t map_ver);
+obj_ec_parity_alive(daos_handle_t oh, uint64_t dkey_hash);
 
 static inline struct pl_obj_shard*
 obj_get_shard(void *data, int idx)
