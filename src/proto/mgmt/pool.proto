@@ -274,6 +274,7 @@ message PoolQueryTargetReq {
 	string id = 2;	// Pool label or UUID
 	uint32 rank = 3; // Engine rank with targets to query
 	repeated uint32 targets = 4; // indices of targets to be queried
+	repeated uint32 svc_ranks = 5; // List of pool service ranks
 }
 
 // StorageTargetUsage represent's a target's capacity and usage
