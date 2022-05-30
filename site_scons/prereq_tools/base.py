@@ -33,7 +33,6 @@ import os
 import traceback
 import hashlib
 import time
-import sys
 import errno
 import shutil
 from build_info import BuildInfo
@@ -57,17 +56,9 @@ from SCons.Errors import UserError
 # pylint: enable=import-error
 from prereq_tools import mocked_tests
 import subprocess  # nosec
-try:
-    from subprocess import DEVNULL  # nosec
-except ImportError:
-    DEVNULL = open(os.devnull, "wb")
 import tarfile
 import copy
-if sys.version_info < (3, 0):
-    # pylint: disable=import-error
-    import ConfigParser
-else:
-    import configparser as ConfigParser
+import configparser
 
 
 class DownloadFailure(Exception):
@@ -309,8 +300,9 @@ def default_libpath():
         print('No dpkg-architecture found in path.')
         return []
     try:
+        # pylint: disable=consider-using-with
         pipe = subprocess.Popen([dpkgarchitecture, '-qDEB_HOST_MULTIARCH'],
-                                stdout=subprocess.PIPE, stderr=DEVNULL)
+                                stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
         (stdo, _) = pipe.communicate()
         if pipe.returncode == 0:
             archpath = stdo.decode().strip()
@@ -501,12 +493,15 @@ class WebRetriever():
 def check_flag_helper(context, compiler, ext, flag):
     """Helper function to allow checking for compiler flags"""
     if compiler in ["icc", "icpc"]:
-        flags = ["-diag-error=10006", "-diag-error=10148",
-                 "-Werror-all", flag]
+        flags = ["-diag-error=10006", "-diag-error=10148", "-Werror-all", flag]
         # bug in older scons, need CFLAGS to exist, -O2 is default.
         context.env.Replace(CFLAGS=['-O2'])
     elif compiler in ["gcc", "g++"]:
         # remove -no- for test
+        # There is a issue here when mpicc is a wrapper around gcc, in that we can pass -Wno-
+        # options to the compiler even if it doesn't understand them but.  This would be tricky
+        # to fix gcc only complains about unknown -Wno- warning options if the compile Fails
+        # for other reasons anyway.
         test_flag = flag.replace("-Wno-", "-W")
         flags = ["-Werror", test_flag]
     else:
@@ -537,17 +532,18 @@ def check_flags(env, config, key, value):
     if GetOption('help') or GetOption('clean'):
         return
     checked = []
+    cxx = env.get('CXX')
     for flag in value:
         if flag in checked:
             continue
         insert = False
         if key == "CCFLAGS":
-            if config.CheckFlag(flag) and config.CheckFlagCC(flag):
+            if config.CheckFlag(flag) and (cxx is None or config.CheckFlagCC(flag)):
                 insert = True
         elif key == "CFLAGS":
             if config.CheckFlag(flag):
                 insert = True
-        elif config.CheckFlagCC(flag):
+        elif cxx is not None and config.CheckFlagCC(flag):
             insert = True
         if insert:
             env.AppendUnique(**{key: [flag]})
@@ -707,7 +703,6 @@ class PreReqComponent():
                        'Specifies name of pkg-config to load for MPI', None))
         self.add_opts(BoolVariable('FIRMWARE_MGMT',
                                    'Build in device firmware management.', 0))
-        self.add_opts(BoolVariable('UCX', 'Build UCX support.', 0))
         self.add_opts(PathVariable('PREFIX', 'Installation path', install_dir,
                                    PathVariable.PathIsDirCreate),
                       PathVariable('GOPATH',
@@ -722,7 +717,7 @@ class PreReqComponent():
 
         self.config_file = config_file
         if config_file is not None:
-            self.configs = ConfigParser.ConfigParser()
+            self.configs = configparser.ConfigParser()
             self.configs.read(config_file)
 
         self.installed = env.subst("$USE_INSTALLED").split(",")

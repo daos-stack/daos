@@ -6,7 +6,7 @@ import subprocess
 import time
 import errno
 import SCons.Warnings
-from SCons.Script import BUILD_TARGETS
+from SCons.Script import WhereIs
 
 if sys.version_info.major < 3:
     print(""""Python 2.7 is no longer supported in the DAOS build.
@@ -50,7 +50,7 @@ API_VERSION = "{}.{}.{}".format(API_VERSION_MAJOR, API_VERSION_MINOR,
 
 def update_rpm_version(version, tag):
     """ Update the version (and release) in the RPM specfile """
-    spec = open("utils/rpms/daos.spec", "r").readlines()
+    spec = open("utils/rpms/daos.spec", "r").readlines()  # pylint: disable=consider-using-with
     current_version = 0
     release = 0
     for line_num, line in enumerate(spec):
@@ -74,7 +74,8 @@ def update_rpm_version(version, tag):
         if line == "%changelog\n":
             cmd = 'rpmdev-packager'
             try:
-                pkg_st = subprocess.Popen(cmd, stdout=subprocess.PIPE) # nosec
+                # pylint: disable=consider-using-with
+                pkg_st = subprocess.Popen(cmd, stdout=subprocess.PIPE)  # nosec
                 packager = pkg_st.communicate()[0].strip().decode('UTF-8')
             except OSError:
                 print("You need to have the rpmdev-packager tool (from the "
@@ -89,12 +90,12 @@ def update_rpm_version(version, tag):
             spec.insert(line_num + 1,
                         "- Version bump up to {}\n".format(tag))
             spec.insert(line_num + 1,
-                        u'* {} {} - {}-{}\n'.format(date_str,
-                                                    packager,
-                                                    version,
-                                                    release))
+                        '* {} {} - {}-{}\n'.format(date_str,
+                                                   packager,
+                                                   version,
+                                                   release))
             break
-    open("utils/rpms/daos.spec", "w").writelines(spec)
+    open("utils/rpms/daos.spec", "w").writelines(spec)  # pylint: disable=consider-using-with
 
     return True
 
@@ -145,7 +146,8 @@ def build_misc():
     except SCons.Warnings.MissingSConscriptWarning as _warn:
         print("Missing doc/man/SConscript...")
 
-def scons(): # pylint: disable=too-many-locals
+
+def scons():  # pylint: disable=too-many-locals,too-many-branches
     """Execute build"""
     if COMMAND_LINE_TARGETS == ['release']:
         try:
@@ -196,6 +198,7 @@ def scons(): # pylint: disable=too-many-locals
             version = tag
 
         try:
+            # pylint: disable=consider-using-with
             token = yaml.safe_load(open(os.path.join(os.path.expanduser("~"),
                                                      ".config", "hub"), 'r')
                                   )['github.com'][0]['oauth_token']
@@ -340,6 +343,17 @@ def scons(): # pylint: disable=too-many-locals
 
     env = Environment(TOOLS=['extra', 'default', 'textfile'])
 
+    # Scons strips out the environment, however to be able to build daos using the interception
+    # library we need to add a few things back in.
+    if 'LD_PRELOAD' in os.environ:
+        # pylint: disable=invalid-sequence-index
+        env['ENV']['LD_PRELOAD'] = os.environ['LD_PRELOAD']
+
+        for key in ['D_LOG_FILE', 'DAOS_AGENT_DRPC_DIR', 'D_LOG_MASK', 'DD_MASK', 'DD_SUBSYS']:
+            value = os.environ.get(key, None)
+            if value is not None:
+                env['ENV'][key] = value
+
     opts_file = os.path.join(Dir('#').abspath, 'daos.conf')
     opts = Variables(opts_file)
 
@@ -355,8 +369,6 @@ def scons(): # pylint: disable=too-many-locals
         env['ENV']['VIRTUAL_ENV'] = os.environ['VIRTUAL_ENV']
 
     prereqs = PreReqComponent(env, opts, commits_file)
-    if not GetOption('help') and not GetOption('clean'):
-        daos_build.load_mpi_path(env)
     build_prefix = prereqs.get_src_build_dir()
     prereqs.init_build_targets(build_prefix)
     prereqs.load_defaults(platform_arm)
@@ -372,8 +384,7 @@ def scons(): # pylint: disable=too-many-locals
     prereqs.add_opts(('GO_BIN', 'Full path to go binary', None))
     opts.Save(opts_file, env)
 
-    res = GetOption('deps_only')
-    if res:
+    if GetOption('deps_only'):
         print('Exiting because deps-only was set')
         Exit(0)
 
@@ -386,7 +397,16 @@ def scons(): # pylint: disable=too-many-locals
 
     base_env = env.Clone()
 
+    base_env_mpi = env.Clone()
+
     compiler_setup.base_setup(env, prereqs=prereqs)
+
+    if not GetOption('help') and not GetOption('clean'):
+        mpi = daos_build.configure_mpi(base_env_mpi)
+        if not mpi:
+            print("\nSkipping compilation for tests that need MPI")
+            print("Install and load mpich or openmpi\n")
+            base_env_mpi = None
 
     args = GetOption('analyze_stack')
     if args is not None:
@@ -394,7 +414,7 @@ def scons(): # pylint: disable=too-many-locals
         analyzer.analyze_on_exit()
 
     # Export() is handled specially by pylint so do not merge these two lines.
-    Export('daos_version', 'API_VERSION', 'env', 'base_env', 'prereqs')
+    Export('daos_version', 'API_VERSION', 'env', 'base_env', 'base_env_mpi', 'prereqs')
     Export('platform_arm', 'conf_dir')
 
     # generate targets in specific build dir to avoid polluting the source code

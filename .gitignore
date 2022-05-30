@@ -60,3 +60,4 @@ src/client/java/daos-java/build/
 docs/doxygen/
 venv
 .yamllint
+utils/githooks/*.d/*-user-*

@@ -431,11 +431,6 @@ func (svc *mgmtSvc) PoolCreate(ctx context.Context, req *mgmtpb.PoolCreateReq) (
 
 		return resp, nil
 	}
-	// let the caller know what was actually created
-	resp.TgtRanks = req.GetRanks()
-	resp.TierBytes = make([]uint64, 2)
-	resp.TierBytes[0] = req.Tierbytes[0]
-	resp.TierBytes[1] = req.Tierbytes[1]
 
 	ps.Replicas = system.RanksFromUint32(resp.GetSvcReps())
 	ps.State = system.PoolServiceStateReady
@@ -755,6 +750,28 @@ func (svc *mgmtSvc) PoolQuery(ctx context.Context, req *mgmtpb.PoolQueryReq) (*m
 	}
 
 	svc.log.Debugf("MgmtSvc.PoolQuery dispatch, resp:%+v\n", resp)
+
+	return resp, nil
+}
+
+// PoolQueryTarget forwards a pool query targets request to the I/O Engine.
+func (svc *mgmtSvc) PoolQueryTarget(ctx context.Context, req *mgmtpb.PoolQueryTargetReq) (*mgmtpb.PoolQueryTargetResp, error) {
+	if err := svc.checkReplicaRequest(req); err != nil {
+		return nil, err
+	}
+	svc.log.Debugf("MgmtSvc.PoolQueryTarget dispatch, req:%+v\n", req)
+
+	dresp, err := svc.makePoolServiceCall(ctx, drpc.MethodPoolQueryTarget, req)
+	if err != nil {
+		return nil, err
+	}
+
+	resp := &mgmtpb.PoolQueryTargetResp{}
+	if err = proto.Unmarshal(dresp.Body, resp); err != nil {
+		return nil, errors.Wrap(err, "unmarshal PoolQueryTarget response")
+	}
+
+	svc.log.Debugf("MgmtSvc.PoolQueryTarget dispatch, resp:%+v\n", resp)
 
 	return resp, nil
 }
