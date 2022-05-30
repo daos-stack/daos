@@ -213,6 +213,10 @@ func ConfigureComponents(log logging.Logger, dbCfg *DatabaseConfig) (*RaftCompon
 func (db *Database) ConfigureTransport(srv *grpc.Server, dialOpts ...grpc.DialOption) error {
 	repAddr, err := db.cfg.LocalReplicaAddr()
 	if err != nil {
+		// no-op if the system is not configured as a MS replica.
+		if system.IsNotReplica(err) {
+			return nil
+		}
 		return err
 	}
 
