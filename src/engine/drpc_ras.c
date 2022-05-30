@@ -394,7 +394,7 @@ ds_chk_listpool_upcall(struct chk_list_pool **clp)
 	}
 
 	respb = srv__check_list_pool_resp__unpack(&alloc.alloc, dresp->body.len, dresp->body.data);
-	if (alloc.oom || respb)
+	if (alloc.oom || respb == NULL)
 		D_GOTO(out_dresp, rc = -DER_NOMEM);
 
 	if (respb->status != 0)

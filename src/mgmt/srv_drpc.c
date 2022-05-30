@@ -2572,27 +2572,530 @@ out:
 	mgmt__cont_set_owner_req__free_unpacked(req, &alloc.alloc);
 }
 
+/*
+ * XXX: It is the control plane to choose the check leader and rank list.
+ *	There are some requirements for the rank list:
+ *	1. There are no repeated ranks in the list.
+ *	2. It is better to sort ranks in the list that will much speedup searching rank in the list.
+ */
 void
 ds_mgmt_drpc_check_start(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 {
+	struct drpc_alloc	 alloc = PROTO_ALLOCATOR_INIT(alloc);
+	Mgmt__CheckStartReq	*req = NULL;
+	Mgmt__CheckStartResp	 resp = MGMT__CHECK_START_RESP__INIT;
+	uuid_t			*pools = NULL;
+	uint8_t			*body;
+	size_t			 len;
+	int			 rc = 0;
+	int			 i;
+
+	if (!ds_mgmt_check_enabled()) {
+		D_ERROR("Not in check mode\n");
+		drpc_resp->status = DRPC__STATUS__UNKNOWN_MODULE;
+		return;
+	}
+
+	req = mgmt__check_start_req__unpack(&alloc.alloc, drpc_req->body.len, drpc_req->body.data);
+	if (alloc.oom || req == NULL) {
+		D_ERROR("Failed to unpack req (start check)\n");
+		drpc_resp->status = DRPC__STATUS__FAILED_UNMARSHAL_PAYLOAD;
+		return;
+	}
+
+	D_INFO("Received request to start check\n");
+
+	if (req->n_uuids != 0) {
+		D_ALLOC_ARRAY(pools, req->n_uuids);
+		if (pools == NULL)
+			D_GOTO(rep, rc = -DER_NOMEM);
+
+		for (i = 0; i < req->n_uuids; i++) {
+			rc = uuid_parse(req->uuids[i], pools[i]);
+			if (rc != 0) {
+				D_ERROR("Failed to parse uuid %s: %d\n", req->uuids[i], rc);
+				D_GOTO(rep, rc);
+			}
+		}
+	}
+
+	/* XXX: support to check to the specified phase in the future. */
+
+	rc = ds_mgmt_check_start(req->n_ranks, req->ranks, req->n_policies,
+				 req->policies, req->n_uuids, pools, req->flags, -1 /* phase */);
+	if (rc != 0)
+		D_ERROR("Failed to start check: "DF_RC"\n", DP_RC(rc));
+
+rep:
+	resp.status = rc;
+	len = mgmt__check_start_resp__get_packed_size(&resp);
+	D_ALLOC(body, len);
+	if (body == NULL) {
+		D_ERROR("Failed to allocate response body (start check)\n");
+		drpc_resp->status = DRPC__STATUS__FAILED_MARSHAL;
+	} else {
+		mgmt__check_start_resp__pack(&resp, body);
+		drpc_resp->body.len = len;
+		drpc_resp->body.data = body;
+	}
+
+	D_FREE(pools);
+	mgmt__check_start_req__free_unpacked(req, &alloc.alloc);
 }
 
+/*
+ * It is the control plane's duty to guarantee that if the check leader is still available,
+ * then the CHK_STOP dRPC needs to be sent to the check leader.
+ */
 void
 ds_mgmt_drpc_check_stop(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 {
+	struct drpc_alloc	 alloc = PROTO_ALLOCATOR_INIT(alloc);
+	Mgmt__CheckStopReq	*req = NULL;
+	Mgmt__CheckStopResp	 resp = MGMT__CHECK_STOP_RESP__INIT;
+	uuid_t			*pools = NULL;
+	uint8_t			*body;
+	size_t			 len;
+	int			 rc = 0;
+	int			 i;
+
+	if (!ds_mgmt_check_enabled()) {
+		D_ERROR("Not in check mode\n");
+		drpc_resp->status = DRPC__STATUS__UNKNOWN_MODULE;
+		return;
+	}
+
+	req = mgmt__check_stop_req__unpack(&alloc.alloc, drpc_req->body.len, drpc_req->body.data);
+	if (alloc.oom || req == NULL) {
+		D_ERROR("Failed to unpack req (stop check)\n");
+		drpc_resp->status = DRPC__STATUS__FAILED_UNMARSHAL_PAYLOAD;
+		return;
+	}
+
+	D_INFO("Received request to stop check\n");
+
+	if (req->n_uuids != 0) {
+		D_ALLOC_ARRAY(pools, req->n_uuids);
+		if (pools == NULL)
+			D_GOTO(rep, rc = -DER_NOMEM);
+
+		for (i = 0; i < req->n_uuids; i++) {
+			rc = uuid_parse(req->uuids[i], pools[i]);
+			if (rc != 0) {
+				D_ERROR("Failed to parse uuid %s: %d\n", req->uuids[i], rc);
+				D_GOTO(rep, rc);
+			}
+		}
+	}
+
+	rc = ds_mgmt_check_stop(req->n_uuids, pools);
+	if (rc != 0)
+		D_ERROR("Failed to stop check: "DF_RC"\n", DP_RC(rc));
+
+rep:
+	resp.status = rc;
+	len = mgmt__check_stop_resp__get_packed_size(&resp);
+	D_ALLOC(body, len);
+	if (body == NULL) {
+		D_ERROR("Failed to allocate response body (stop check)\n");
+		drpc_resp->status = DRPC__STATUS__FAILED_MARSHAL;
+	} else {
+		mgmt__check_stop_resp__pack(&resp, body);
+		drpc_resp->body.len = len;
+		drpc_resp->body.data = body;
+	}
+
+	D_FREE(pools);
+	mgmt__check_stop_req__free_unpacked(req, &alloc.alloc);
 }
 
+static void
+ds_chk_query_free(Mgmt__CheckQueryResp *resp)
+{
+	Mgmt__CheckQueryPool	*pool;
+	Mgmt__CheckQueryTarget	*target;
+	int			 i;
+	int			 j;
+
+	D_FREE(resp->inconsistency);
+	D_FREE(resp->time);
+
+	if (resp->pools != NULL) {
+		for (i = 0; i < resp->n_pools; i++) {
+			pool = resp->pools[i];
+			if (pool == NULL)
+				break;
+
+			D_FREE(pool->uuid);
+			D_FREE(pool->inconsistency);
+			D_FREE(pool->time);
+			if (pool->targets != NULL) {
+				for (j = 0; j < pool->n_targets; j++) {
+					target = pool->targets[j];
+					if (target == NULL)
+						break;
+
+					D_FREE(target->inconsistency);
+					D_FREE(target->time);
+
+					D_FREE(target);
+				}
+
+				D_FREE(pool->targets);
+			}
+
+			D_FREE(pool);
+		}
+
+		D_FREE(resp->pools);
+	}
+}
+
+static int
+ds_chk_copy_inconsistency(Mgmt__CheckQueryInconsist **dst, struct chk_statistics *src)
+{
+	int	rc = 0;
+
+	D_ALLOC_PTR(*dst);
+	if (*dst == NULL)
+		D_GOTO(out, rc = -DER_NOMEM);
+
+	mgmt__check_query_inconsist__init(*dst);
+	(*dst)->total = src->cs_total;
+	(*dst)->repaired = src->cs_repaired;
+	(*dst)->ignored = src->cs_ignored;
+	(*dst)->failed = src->cs_failed;
+
+out:
+	return rc;
+}
+
+static int
+ds_chk_copy_time(Mgmt__CheckQueryTime **dst, struct chk_time *src)
+{
+	int	rc = 0;
+
+	D_ALLOC_PTR(*dst);
+	if (*dst == NULL)
+		D_GOTO(out, rc = -DER_NOMEM);
+
+	mgmt__check_query_time__init(*dst);
+	(*dst)->start_time = src->ct_start_time;
+	(*dst)->misc_time = src->ct_stop_time;
+
+out:
+	return rc;
+}
+
+static int
+ds_chk_query_head_cb(uint32_t ins_status, uint32_t ins_phase, struct chk_statistics *inconsistency,
+		     struct chk_time *time, size_t n_pools, void *buf)
+{
+	Mgmt__CheckQueryResp	*resp = buf;
+	int			  rc = 0;
+
+	resp->ins_status = ins_status;
+	resp->ins_phase = ins_phase;
+
+	rc = ds_chk_copy_inconsistency(&resp->inconsistency, inconsistency);
+	if (resp->inconsistency == NULL)
+		D_GOTO(out, rc = -DER_NOMEM);
+
+	rc = ds_chk_copy_time(&resp->time, time);
+	if (resp->time == NULL)
+		D_GOTO(out, rc = -DER_NOMEM);
+
+	D_ALLOC_ARRAY(resp->pools, n_pools);
+	if (resp->pools == NULL)
+		D_GOTO(out, rc = -DER_NOMEM);
+
+	resp->n_pools = n_pools;
+
+out:
+	if (rc != 0)
+		ds_chk_query_free(resp);
+
+	return rc;
+}
+
+static int
+ds_chk_query_pool_cb(struct chk_query_pool_shard *shard, uint32_t idx, void *buf)
+{
+	Mgmt__CheckQueryResp	*resp = buf;
+	Mgmt__CheckQueryPool	*pool;
+	Mgmt__CheckQueryTarget	*target;
+	int			 rc;
+	int			 i;
+
+	D_ALLOC_PTR(pool);
+	if (pool == NULL)
+		D_GOTO(out, rc = -DER_NOMEM);
+
+	mgmt__check_query_pool__init(pool);
+	resp->pools[idx] = pool;
+	D_ASPRINTF(pool->uuid, DF_UUIDF, DP_UUID(shard->cqps_uuid));
+	if (pool->uuid == NULL)
+		D_GOTO(out, rc = -DER_NOMEM);
+
+	pool->status = shard->cqps_status;
+	pool->phase = shard->cqps_phase;
+	rc = ds_chk_copy_inconsistency(&pool->inconsistency, &shard->cqps_statistics);
+	if (pool->inconsistency == NULL)
+		D_GOTO(out, rc = -DER_NOMEM);
+
+	rc = ds_chk_copy_time(&pool->time, &shard->cqps_time);
+	if (pool->time == NULL)
+		D_GOTO(out, rc = -DER_NOMEM);
+
+	D_ALLOC_ARRAY(pool->targets, shard->cqps_target_nr);
+	if (pool->targets == NULL)
+		D_GOTO(out, rc = -DER_NOMEM);
+
+	pool->n_targets = shard->cqps_target_nr;
+	for (i = 0; i < shard->cqps_target_nr; i++) {
+		D_ALLOC_PTR(target);
+		if (target == NULL)
+			D_GOTO(out, rc = -DER_NOMEM);
+
+		mgmt__check_query_target__init(target);
+		pool->targets[i] = target;
+		target->rank = shard->cqps_targets[i].cqt_rank;
+		target->target = shard->cqps_targets[i].cqt_tgt;
+		target->status = shard->cqps_targets[i].cqt_ins_status;
+		rc = ds_chk_copy_inconsistency(&target->inconsistency,
+					       &shard->cqps_targets[i].cqt_statistics);
+		if (target->inconsistency == NULL)
+			D_GOTO(out, rc = -DER_NOMEM);
+
+		rc = ds_chk_copy_time(&target->time, &shard->cqps_targets[i].cqt_time);
+		if (target->time == NULL)
+			D_GOTO(out, rc = -DER_NOMEM);
+	}
+
+out:
+	if (rc != 0)
+		ds_chk_query_free(resp);
+
+	return rc;
+}
+
+/*
+ * XXX: One pool may have M pool shards on M daos engines. Each of them has each own status and
+ *	summary in the qurey result. They have the same UUID and contiguous each other. Control
+ *	plane can decide how to show them to the admin based on the qurey option.
+ *
+ *	Similarly, each pool shard may have N vos target on the engine. Then there will be M * N
+ *	vos targets for the whole pool. Each of them has each own check summary in qurey result.
+ *	It is the control plane's duty to re-organize related result before showing to the admin.
+ *
+ *	If some required pool is absence in the qurey result, then means that it does not exist.
+ *
+ *	On the other hand, it is the control plane's duty to guarantee that if the check leader
+ *	is still available, the CHK_QUERY dRPC needs to be sent to the check leader. Otherwise,
+ *	the query result may be not inaccurate.
+ */
 void
 ds_mgmt_drpc_check_query(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 {
+	struct drpc_alloc		 alloc = PROTO_ALLOCATOR_INIT(alloc);
+	Mgmt__CheckQueryReq		*req = NULL;
+	Mgmt__CheckQueryResp		 resp = MGMT__CHECK_QUERY_RESP__INIT;
+	uuid_t				*pools = NULL;
+	uint8_t				*body;
+	size_t				 len;
+	int				 rc = 0;
+	int				 i;
+
+	if (!ds_mgmt_check_enabled()) {
+		D_ERROR("Not in check mode\n");
+		drpc_resp->status = DRPC__STATUS__UNKNOWN_MODULE;
+		return;
+	}
+
+	req = mgmt__check_query_req__unpack(&alloc.alloc, drpc_req->body.len, drpc_req->body.data);
+	if (alloc.oom || req == NULL) {
+		D_ERROR("Failed to unpack req (query check)\n");
+		drpc_resp->status = DRPC__STATUS__FAILED_UNMARSHAL_PAYLOAD;
+		return;
+	}
+
+	D_INFO("Received request to query check\n");
+
+	if (req->n_uuids != 0) {
+		D_ALLOC_ARRAY(pools, req->n_uuids);
+		if (pools == NULL)
+			D_GOTO(rep, rc = -DER_NOMEM);
+
+		for (i = 0; i < req->n_uuids; i++) {
+			rc = uuid_parse(req->uuids[i], pools[i]);
+			if (rc != 0) {
+				D_ERROR("Failed to parse uuid %s: %d\n", req->uuids[i], rc);
+				D_GOTO(rep, rc);
+			}
+		}
+	}
+
+	rc = ds_mgmt_check_query(req->n_uuids, pools, ds_chk_query_head_cb,
+				 ds_chk_query_pool_cb, &resp);
+	if (rc != 0)
+		D_ERROR("Failed to query check: "DF_RC"\n", DP_RC(rc));
+
+rep:
+	resp.req_status = rc;
+	len = mgmt__check_query_resp__get_packed_size(&resp);
+	D_ALLOC(body, len);
+	if (body == NULL) {
+		D_ERROR("Failed to allocate response body (query check)\n");
+		drpc_resp->status = DRPC__STATUS__FAILED_MARSHAL;
+	} else {
+		mgmt__check_query_resp__pack(&resp, body);
+		drpc_resp->body.len = len;
+		drpc_resp->body.data = body;
+	}
+
+	D_FREE(pools);
+	ds_chk_query_free(&resp);
+	mgmt__check_query_req__free_unpacked(req, &alloc.alloc);
 }
 
+static void
+ds_chk_prob_free(Mgmt__CheckInconsistPolicy **policies, uint32_t policy_nr)
+{
+	int	i;
+
+	if (policies != NULL) {
+		for (i = 0; i < policy_nr; i++)
+			D_FREE(policies[i]);
+		D_FREE(policies);
+	}
+}
+
+static int
+ds_chk_prop_cb(void *buf, struct chk_policy *policies, int cnt, uint32_t flags)
+{
+	Mgmt__CheckInconsistPolicy	**ply = NULL;
+	Mgmt__CheckPropResp		 *resp = buf;
+	int				  rc = 0;
+	int				  i = 0;
+
+	D_ALLOC_ARRAY(ply, cnt);
+	if (ply == NULL)
+		return -DER_NOMEM;
+
+	for (i = 0; i < cnt; i++) {
+		D_ALLOC(ply[i], sizeof(*ply[i]));
+		if (ply[i] == NULL)
+			D_GOTO(out, rc = -DER_NOMEM);
+
+		mgmt__check_inconsist_policy__init(ply[i]);
+		ply[i]->inconsist_cas = policies[i].cp_class;
+		ply[i]->inconsist_act = policies[i].cp_action;
+	}
+
+
+out:
+	if (rc != 0) {
+		ds_chk_prob_free(ply, i);
+	} else {
+		resp->policies = ply;
+		resp->n_policies = cnt;
+		resp->flags = flags;
+	}
+
+	return rc;
+}
+
+/*
+ * CHK_PROP dRPC can be sent to any engine that participates in the check.
+ */
 void
 ds_mgmt_drpc_check_prop(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 {
+	struct drpc_alloc		 alloc = PROTO_ALLOCATOR_INIT(alloc);
+	Mgmt__CheckPropReq		*req = NULL;
+	Mgmt__CheckPropResp		 resp = MGMT__CHECK_PROP_RESP__INIT;
+	uint8_t				*body;
+	size_t				 len;
+	int				 rc = 0;
+
+	if (!ds_mgmt_check_enabled()) {
+		D_ERROR("Not in check mode\n");
+		drpc_resp->status = DRPC__STATUS__UNKNOWN_MODULE;
+		return;
+	}
+
+	req = mgmt__check_prop_req__unpack(&alloc.alloc, drpc_req->body.len, drpc_req->body.data);
+	if (alloc.oom || req == NULL) {
+		D_ERROR("Failed to unpack req (get property for check)\n");
+		drpc_resp->status = DRPC__STATUS__FAILED_UNMARSHAL_PAYLOAD;
+		return;
+	}
+
+	D_INFO("Received request to get property for check\n");
+
+	rc = ds_mgmt_check_prop(ds_chk_prop_cb, &resp);
+	if (rc != 0)
+		D_ERROR("Failed to set get property for check: "DF_RC"\n", DP_RC(rc));
+
+	resp.status = rc;
+	len = mgmt__check_prop_resp__get_packed_size(&resp);
+	D_ALLOC(body, len);
+	if (body == NULL) {
+		D_ERROR("Failed to allocate response body (get property for check)\n");
+		drpc_resp->status = DRPC__STATUS__FAILED_MARSHAL;
+	} else {
+		mgmt__check_prop_resp__pack(&resp, body);
+		drpc_resp->body.len = len;
+		drpc_resp->body.data = body;
+	}
+
+	ds_chk_prob_free(resp.policies, resp.n_policies);
+	mgmt__check_prop_req__free_unpacked(req, &alloc.alloc);
 }
 
+/*
+ * CHK_ACT dRPC only can be sent to the check leader.
+ */
 void
 ds_mgmt_drpc_check_act(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 {
+	struct drpc_alloc	 alloc = PROTO_ALLOCATOR_INIT(alloc);
+	Mgmt__CheckActReq	*req = NULL;
+	Mgmt__CheckActResp	 resp = MGMT__CHECK_ACT_RESP__INIT;
+	uint8_t			*body;
+	size_t			 len;
+	int			 rc = 0;
+
+	if (!ds_mgmt_check_enabled()) {
+		D_ERROR("Not in check mode\n");
+		drpc_resp->status = DRPC__STATUS__UNKNOWN_MODULE;
+		return;
+	}
+
+	req = mgmt__check_act_req__unpack(&alloc.alloc, drpc_req->body.len, drpc_req->body.data);
+	if (alloc.oom || req == NULL) {
+		D_ERROR("Failed to unpack req (set action for check)\n");
+		drpc_resp->status = DRPC__STATUS__FAILED_UNMARSHAL_PAYLOAD;
+		return;
+	}
+
+	D_INFO("Received request to set action for check\n");
+
+	rc = ds_mgmt_check_act(req->seq, req->act, req->for_all);
+	if (rc != 0)
+		D_ERROR("Failed to set action for check: "DF_RC"\n", DP_RC(rc));
+
+	resp.status = rc;
+	len = mgmt__check_act_resp__get_packed_size(&resp);
+	D_ALLOC(body, len);
+	if (body == NULL) {
+		D_ERROR("Failed to allocate response body (set action for check)\n");
+		drpc_resp->status = DRPC__STATUS__FAILED_MARSHAL;
+	} else {
+		mgmt__check_act_resp__pack(&resp, body);
+		drpc_resp->body.len = len;
+		drpc_resp->body.data = body;
+	}
+
+	mgmt__check_act_req__free_unpacked(req, &alloc.alloc);
 }

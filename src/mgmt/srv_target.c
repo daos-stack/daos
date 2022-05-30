@@ -303,7 +303,7 @@ out:
 }
 
 int
-ds_mgmt_pool_shard_exist(uuid_t uuid, char **path)
+ds_mgmt_tgt_pool_exist(uuid_t uuid, char **path)
 {
 	int	tid = dss_get_module_info()->dmi_tgt_id;
 	int	rc;

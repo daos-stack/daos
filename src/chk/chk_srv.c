@@ -24,8 +24,7 @@ ds_chk_start_hdlr(crt_rpc_t *rpc)
 	int			 rc;
 
 	rc = chk_engine_start(csi->csi_gen, csi->csi_ranks.ca_count, csi->csi_ranks.ca_arrays,
-			      csi->csi_policies.ca_count,
-			      (struct chk_policy **)csi->csi_policies.ca_arrays,
+			      csi->csi_policies.ca_count, csi->csi_policies.ca_arrays,
 			      csi->csi_uuids.ca_count, csi->csi_uuids.ca_arrays,
 			      csi->csi_flags, csi->csi_phase, csi->csi_leader_rank, &phase, &clues);
 
@@ -38,7 +37,14 @@ ds_chk_start_hdlr(crt_rpc_t *rpc)
 	if (rc != 0)
 		D_ERROR("Failed to reply check start: "DF_RC"\n", DP_RC(rc));
 
-	ds_pool_clues_fini(&clues);
+	/*
+	 * XXX: If the check engine and the check are on the same rank, we will not go through
+	 *	CRT proc function that will copy the clues into related RPC reply buffer. Then
+	 *	has to keep the clues for a while until the check leader completed aggregating
+	 *	the result for this engine. And then the check leader will release the clues.
+	 */
+	if (cso->cso_status < 0 || !chk_is_on_leader(csi->csi_gen, csi->csi_leader_rank, true))
+		ds_pool_clues_fini(&clues);
 }
 
 static void
@@ -83,7 +89,14 @@ ds_chk_query_hdlr(crt_rpc_t *rpc)
 	if (rc != 0)
 		D_ERROR("Failed to reply check query: "DF_RC"\n", DP_RC(rc));
 
-	chk_query_free(shards, shard_nr);
+	/*
+	 * XXX: If the check engine and the check are on the same rank, we will not go through
+	 *	CRT proc function that will copy the shards into related RPC reply buffer. Then
+	 *	has to keep the shards for a while until the check leader completed aggregating
+	 *	the result for this engine. And then the check leader will release the shards.
+	 */
+	if (cqo->cqo_status < 0 || !chk_is_on_leader(cqi->cqi_gen, -1, false))
+		chk_query_free(shards, shard_nr);
 }
 
 static void

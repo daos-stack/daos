@@ -21,9 +21,11 @@
 #include <daos_srv/rdb.h>
 #include <daos_srv/rsvc.h>
 #include <daos_srv/smd.h>
+#include <daos_srv/daos_chk.h>
 #include <daos_security.h>
 #include <daos_prop.h>
 
+#include "check.pb-c.h"
 #include "svc.pb-c.h"
 #include "smd.pb-c.h"
 #include "rpc.h"
@@ -107,6 +109,17 @@ int ds_mgmt_pool_query_targets(uuid_t pool_uuid, d_rank_list_t *svc_ranks, d_ran
 int ds_mgmt_cont_set_owner(uuid_t pool_uuid, d_rank_list_t *svc_ranks,
 			   uuid_t cont_uuid, const char *user,
 			   const char *group);
+
+/** srv_chk.c */
+int ds_mgmt_check_start(uint32_t rank_nr, d_rank_t *ranks, uint32_t policy_nr,
+			Mgmt__CheckInconsistPolicy **policies, uint32_t pool_nr, uuid_t pools[],
+			uint32_t flags, int32_t phase);
+int ds_mgmt_check_stop(uint32_t pool_nr, uuid_t pools[]);
+int ds_mgmt_check_query(uint32_t pool_nr, uuid_t pools[], chk_query_head_cb_t head_cb,
+			chk_query_pool_cb_t pool_cb, void *buf);
+int ds_mgmt_check_prop(chk_prop_cb_t prop_cb, void *buf);
+int ds_mgmt_check_act(uint64_t seq, uint32_t act, bool for_all);
+bool ds_mgmt_check_enabled(void);
 
 /** srv_query.c */
 

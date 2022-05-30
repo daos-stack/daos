@@ -167,7 +167,7 @@ chk_bk_fetch_pool(struct chk_bookmark *cbk, uuid_t uuid)
 	uuid_unparse_lower(uuid, uuid_str);
 	rc = chk_db_fetch(uuid_str, strlen(uuid_str), cbk, sizeof(*cbk));
 	if (rc != 0 && rc != -DER_NONEXIST)
-		D_ERROR("Failed to fetch pool "DF_UUID" bookmark on rank %u: "DF_RC"\n",
+		D_ERROR("Failed to fetch pool "DF_UUIDF" bookmark on rank %u: "DF_RC"\n",
 			DP_UUID(uuid), dss_self_rank(), DP_RC(rc));
 
 	return rc;
@@ -182,7 +182,7 @@ chk_bk_update_pool(struct chk_bookmark *cbk, uuid_t uuid)
 	uuid_unparse_lower(uuid, uuid_str);
 	rc = chk_db_update(uuid_str, strlen(uuid_str), cbk, sizeof(*cbk));
 	if (rc != 0)
-		D_ERROR("Failed to update pool "DF_UUID" bookmark on rank %u: "DF_RC"\n",
+		D_ERROR("Failed to update pool "DF_UUIDF" bookmark on rank %u: "DF_RC"\n",
 			DP_UUID(uuid), dss_self_rank(), DP_RC(rc));
 
 	return rc;
@@ -197,7 +197,7 @@ chk_bk_delete_pool(uuid_t uuid)
 	uuid_unparse_lower(uuid, uuid_str);
 	rc = chk_db_delete(uuid_str, strlen(uuid_str));
 	if (rc != 0)
-		D_ERROR("Failed to delete pool "DF_UUID" bookmark on rank %u: "DF_RC"\n",
+		D_ERROR("Failed to delete pool "DF_UUIDF" bookmark on rank %u: "DF_RC"\n",
 			DP_UUID(uuid), dss_self_rank(), DP_RC(rc));
 
 	return rc;

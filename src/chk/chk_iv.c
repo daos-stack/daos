@@ -6,6 +6,7 @@
 
 #define D_LOGFAC	DD_FAC(chk)
 
+#include <daos/debug.h>
 #include <gurt/list.h>
 #include <gurt/debug.h>
 #include <cart/iv.h>
@@ -17,22 +18,23 @@
 static int
 chk_iv_alloc_internal(d_sg_list_t *sgl)
 {
-	int	rc;
+	int	rc = 0;
 
 	rc = d_sgl_init(sgl, 1);
 	if (rc != 0)
-		return rc;
+		goto out;
 
 	D_ALLOC(sgl->sg_iovs[0].iov_buf, sizeof(struct chk_iv));
 	if (sgl->sg_iovs[0].iov_buf == NULL) {
 		d_sgl_fini(sgl, true);
-		return -DER_NOMEM;
+		D_GOTO(out, rc = -DER_NOMEM);
 	}
 
 	sgl->sg_iovs[0].iov_buf_len = sizeof(struct chk_iv);
 	sgl->sg_iovs[0].iov_len = sizeof(struct chk_iv);
 
-	return 0;
+out:
+	return rc;
 }
 
 static int
@@ -84,42 +86,41 @@ chk_iv_ent_update(struct ds_iv_entry *entry, struct ds_iv_key *key,
 {
 	struct chk_iv	*dst_iv = entry->iv_value.sg_iovs[0].iov_buf;
 	struct chk_iv	*src_iv = src->sg_iovs[0].iov_buf;
-	int		 rc = 0;
+	int		 rc;
 
-	/*
-	 * When check leader (IV master) tirgger chk_iv_update, it will set ci_to_leader as 0,
-	 * then chk_iv_ent_update() for any IV message from leader will get -DER_IVCB_FORWARD.
-	 */
-	if (!src_iv->ci_to_leader)
-		D_GOTO(out, rc = -DER_IVCB_FORWARD);
+	if (src_iv->ci_rank == dss_self_rank()) {
+		if (src_iv->ci_to_leader) {
+			/*
+			 * XXX: The case of the check engine sending IV message to the check leader
+			 *	on the same rank has already been handled via chk_iv_update().
+			 */
+			D_ASSERT(!chk_is_on_leader(src_iv->ci_gen, -1, false));
 
-	if (dst_iv->ci_gen == 0)
-		goto update;
+			/* Trigger RPC to the leader via returning -DER_IVCB_FORWARD. */
+			rc = -DER_IVCB_FORWARD;
+		} else {
+			/*
+			 * If it is message to engine, then it must be triggered by leader.
+			 * Return zero that will trigger IV_SYNC to other check engines.
+			 */
+			D_ASSERT(chk_is_on_leader(src_iv->ci_gen, -1, false));
 
-	if (unlikely(dst_iv->ci_gen != src_iv->ci_gen)) {
-		D_WARN("Receive invalid update IV message: "DF_X64" vs "DF_X64"\n",
-		       dst_iv->ci_gen, src_iv->ci_gen);
-		goto out;
+			rc = 0;
+		}
+	} else if (src_iv->ci_to_leader) {
+		*dst_iv = *src_iv;
+		rc = chk_leader_notify(dst_iv->ci_gen, dst_iv->ci_rank, dst_iv->ci_phase,
+				       dst_iv->ci_status);
+	} else {
+		/*
+		 * We got an IV SYNC (refresh) RPC from some engine. But because the engine
+		 * always set CRT_IV_SHORTCUT_TO_ROOT for sync, then this should not happen.
+		 */
+		D_ERROR("Got invalid IV SYNC with gen "DF_X64", rank %u, phase %u, status %d\n",
+			src_iv->ci_gen, src_iv->ci_rank, src_iv->ci_phase, src_iv->ci_status);
+		rc = -DER_IO;
 	}
 
-	/* Old IV update message. */
-	if (dst_iv->ci_phase > src_iv->ci_phase)
-		goto out;
-
-update:
-	dst_iv->ci_gen = src_iv->ci_gen;
-	dst_iv->ci_rank = src_iv->ci_rank;
-	dst_iv->ci_phase = src_iv->ci_phase;
-	dst_iv->ci_status = src_iv->ci_status;
-
-	rc = chk_leader_notify(dst_iv->ci_gen, dst_iv->ci_rank, dst_iv->ci_phase,
-			       dst_iv->ci_status);
-
-	D_CDEBUG(rc != 0, DLOG_ERR, DLOG_INFO,
-		 "Handled CHK IV update with gen "DF_X64", rank %u, phase %u, status %d: "DF_RC"\n",
-		 src_iv->ci_gen, src_iv->ci_rank, src_iv->ci_phase, src_iv->ci_status, DP_RC(rc));
-
-out:
 	return rc;
 }
 
@@ -130,40 +131,12 @@ chk_iv_ent_refresh(struct ds_iv_entry *entry, struct ds_iv_key *key,
 {
 	struct chk_iv	*dst_iv = entry->iv_value.sg_iovs[0].iov_buf;
 	struct chk_iv	*src_iv = src->sg_iovs[0].iov_buf;
-	int		 rc = 0;
 
 	D_ASSERT(src_iv->ci_to_leader == 0);
 
-	if (dst_iv->ci_gen == 0)
-		goto refresh;
-
-	if (unlikely(dst_iv->ci_gen != src_iv->ci_gen)) {
-		D_WARN("Receive invalid refresh IV message: "DF_X64" vs "DF_X64"\n",
-		       dst_iv->ci_gen, src_iv->ci_gen);
-		goto out;
-	}
-
-	/* Repeated or old IV refresh message. */
-	if (dst_iv->ci_status >= src_iv->ci_status)
-		goto out;
-
-refresh:
-	dst_iv->ci_gen = src_iv->ci_gen;
-	uuid_copy(dst_iv->ci_uuid, src_iv->ci_uuid);
-	dst_iv->ci_rank = src_iv->ci_rank;
-	dst_iv->ci_phase = src_iv->ci_phase;
-	dst_iv->ci_status = src_iv->ci_status;
-	dst_iv->ci_remove_pool = src_iv->ci_remove_pool;
-
-	rc = chk_engine_notify(dst_iv->ci_gen, dst_iv->ci_uuid, dst_iv->ci_rank, dst_iv->ci_phase,
-			       dst_iv->ci_status, dst_iv->ci_remove_pool ? true : false);
-
-	D_CDEBUG(rc != 0, DLOG_ERR, DLOG_INFO,
-		 "Handled CHK IV refresh with gen "DF_X64", phase %u, status %d: "DF_RC"\n",
-		 src_iv->ci_gen, src_iv->ci_phase, src_iv->ci_status, DP_RC(rc));
-
-out:
-	return rc;
+	*dst_iv = *src_iv;
+	return chk_engine_notify(dst_iv->ci_gen, dst_iv->ci_uuid, dst_iv->ci_rank, dst_iv->ci_phase,
+				 dst_iv->ci_status, dst_iv->ci_remove_pool ? true : false);
 }
 
 static int
@@ -192,16 +165,26 @@ chk_iv_update(void *ns, struct chk_iv *iv, uint32_t shortcut, uint32_t sync_mode
 	int			rc;
 
 	iv->ci_rank = dss_self_rank();
-	iov.iov_buf = iv;
-	iov.iov_len = sizeof(*iv);
-	iov.iov_buf_len = sizeof(*iv);
-	sgl.sg_nr = 1;
-	sgl.sg_nr_out = 0;
-	sgl.sg_iovs = &iov;
 
-	memset(&key, 0, sizeof(key));
-	key.class_id = IV_CHK;
-	rc = ds_iv_update(ns, &key, &sgl, shortcut, sync_mode, 0, retry);
+	if (chk_is_on_leader(iv->ci_gen, -1, false) && iv->ci_to_leader) {
+		/*
+		 * XXX: It is the check engine sends IV message to the check leader on
+		 *	the same rank. Then directly notify the check leader without RPC.
+		 */
+		rc = chk_leader_notify(iv->ci_gen, iv->ci_rank, iv->ci_phase, iv->ci_status);
+	} else {
+		iov.iov_buf = iv;
+		iov.iov_len = sizeof(*iv);
+		iov.iov_buf_len = sizeof(*iv);
+		sgl.sg_nr = 1;
+		sgl.sg_nr_out = 0;
+		sgl.sg_iovs = &iov;
+
+		memset(&key, 0, sizeof(key));
+		key.class_id = IV_CHK;
+		rc = ds_iv_update(ns, &key, &sgl, shortcut, sync_mode, 0, retry);
+	}
+
 	if (rc != 0)
 		D_ERROR("CHK iv update failed: "DF_RC"\n", DP_RC(rc));
 

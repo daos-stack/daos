@@ -843,4 +843,6 @@ enum dss_drpc_call_flag {
 int dss_drpc_call(int32_t module, int32_t method, void *req, size_t req_size,
 		  unsigned int flags, Drpc__Response **resp);
 
+bool engine_in_check(void);
+
 #endif /* __DSS_API_H__ */

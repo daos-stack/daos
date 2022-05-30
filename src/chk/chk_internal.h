@@ -16,6 +16,8 @@
 #include <daos/rpc.h>
 #include <daos/btree.h>
 #include <daos/object.h>
+#include <daos_srv/iv.h>
+#include <daos_srv/rsvc.h>
 #include <daos_srv/pool.h>
 #include <daos_srv/daos_chk.h>
 #include <daos_srv/daos_engine.h>
@@ -74,7 +76,7 @@ enum chk_rpc_opc {
 	((int32_t)		(cso_status)		CRT_VAR)		\
 	((d_rank_t)		(cso_rank)		CRT_VAR)		\
 	((uint32_t)		(cso_phase)		CRT_VAR)		\
-	((uint32_t)		(cso_padding)		CRT_VAR)		\
+	((int32_t)		(cso_child_status)	CRT_VAR)		\
 	((struct ds_pool_clue)	(cso_clues)		CRT_ARRAY)
 
 CRT_RPC_DECLARE(chk_start, DAOS_ISEQ_CHK_START, DAOS_OSEQ_CHK_START);
@@ -89,6 +91,7 @@ CRT_RPC_DECLARE(chk_start, DAOS_ISEQ_CHK_START, DAOS_OSEQ_CHK_START);
 
 #define DAOS_OSEQ_CHK_STOP							\
 	((int32_t)		(cso_status)		CRT_VAR)		\
+	((int32_t)		(cso_child_status)	CRT_VAR)		\
 	((d_rank_t)		(cso_rank)		CRT_VAR)
 
 CRT_RPC_DECLARE(chk_stop, DAOS_ISEQ_CHK_STOP, DAOS_OSEQ_CHK_STOP);
@@ -102,9 +105,9 @@ CRT_RPC_DECLARE(chk_stop, DAOS_ISEQ_CHK_STOP, DAOS_OSEQ_CHK_STOP);
 	((uuid_t)		(cqi_uuids)		CRT_ARRAY)
 
 #define DAOS_OSEQ_CHK_QUERY							\
-	((int32_t)			(cqo_status)	CRT_VAR)		\
-	((uint32_t)			(cqo_padding)	CRT_VAR)		\
-	((struct chk_query_pool_shard)	(cqo_shards)	CRT_ARRAY)
+	((int32_t)			(cqo_status)		CRT_VAR)	\
+	((uint32_t)			(cqo_child_status)	CRT_VAR)	\
+	((struct chk_query_pool_shard)	(cqo_shards)		CRT_ARRAY)
 
 CRT_RPC_DECLARE(chk_query, DAOS_ISEQ_CHK_QUERY, DAOS_OSEQ_CHK_QUERY);
 
@@ -210,6 +213,7 @@ CRT_RPC_DECLARE(chk_rejoin, DAOS_ISEQ_CHK_REJOIN, DAOS_OSEQ_CHK_REJOIN);
 #define CHK_BK_MAGIC_POOL	0xe6f703dc
 
 #define CHK_DUMMY_POOL		"00000000-0000-0000-0000-000020220531"
+#define CHK_INVAL_PHASE		(uint32_t)(-1)
 
 #define CHK_BTREE_ORDER		16
 
@@ -370,8 +374,9 @@ struct chk_pool_rec {
 	d_list_t		 cpr_shard_list;
 	uint32_t		 cpr_shard_nr;
 	uint32_t		 cpr_started:1,
-				 cpr_stop:1;
-	uint32_t		 cpr_phase;
+				 cpr_stop:1,
+				 cpr_done:1;
+	int			 cpr_refs;
 	uuid_t			 cpr_uuid;
 	ABT_thread		 cpr_thread;
 	struct chk_bookmark	 cpr_bk;
@@ -429,22 +434,17 @@ extern btr_ops_t		chk_rank_ops;
 
 void chk_ranks_dump(uint32_t rank_nr, d_rank_t *ranks);
 
-void chk_ranks_dump_by_bitmap(uint32_t rank_nr, uint32_t max, uint8_t *bitmap);
-
 void chk_pools_dump(uint32_t pool_nr, uuid_t pools[]);
-
-int chk_bitmap2ranklist(uint32_t rank_nr, d_rank_t max_rank, uint8_t *bitmap,
-			d_rank_list_t **rlist);
 
 void chk_stop_sched(struct chk_instance *ins);
 
 int chk_prop_prepare(uint32_t rank_nr, d_rank_t *ranks, uint32_t policy_nr,
-		     struct chk_policy **policies, uint32_t pool_nr, uuid_t pools[],
+		     struct chk_policy *policies, uint32_t pool_nr, uuid_t pools[],
 		     uint32_t flags, int phase, d_rank_t leader,
 		     struct chk_property *prop, d_rank_list_t **rlist);
 
 int chk_pool_add_shard(daos_handle_t hdl, d_list_t *head, uuid_t uuid, d_rank_t rank,
-		       uint32_t phase, struct chk_bookmark *bk, struct chk_instance *ins,
+		       struct chk_bookmark *bk, struct chk_instance *ins,
 		       uint32_t *shard_nr, void *data, chk_pool_free_data_t free_cb);
 
 int chk_pool_del_shard(daos_handle_t hdl, uuid_t pool, d_rank_t rank);
@@ -463,7 +463,7 @@ void chk_ins_fini(struct chk_instance *ins);
 /* chk_engine.c */
 
 int chk_engine_start(uint64_t gen, uint32_t rank_nr, d_rank_t *ranks,
-		     uint32_t policy_nr, struct chk_policy **policies, uint32_t pool_nr,
+		     uint32_t policy_nr, struct chk_policy *policies, uint32_t pool_nr,
 		     uuid_t pools[], uint32_t flags, int32_t exp_phase, d_rank_t leader,
 		     uint32_t *cur_phase, struct ds_pool_clues *clues);
 
@@ -499,6 +499,10 @@ int chk_iv_fini(void);
 
 /* chk_leader.c */
 
+bool chk_is_on_leader(uint64_t gen, d_rank_t leader, bool known_leader);
+
+struct ds_iv_ns *chk_leader_get_iv_ns(void);
+
 int chk_leader_report(struct chk_report_unit *cru, uint64_t *seq, int *decision);
 
 int chk_leader_notify(uint64_t gen, d_rank_t rank, uint32_t phase, uint32_t status);
@@ -514,7 +518,7 @@ void chk_leader_fini(void);
 /* chk_rpc.c */
 
 int chk_start_remote(d_rank_list_t *rank_list, uint64_t gen, uint32_t rank_nr, d_rank_t *ranks,
-		     uint32_t policy_nr, struct chk_policy **policies, uint32_t pool_nr,
+		     uint32_t policy_nr, struct chk_policy *policies, uint32_t pool_nr,
 		     uuid_t pools[], uint32_t flags, int32_t phase, d_rank_t leader,
 		     chk_co_rpc_cb_t start_cb, void *args);
 
@@ -619,6 +623,33 @@ chk_remove_rank_from_list(d_rank_list_t *rlist, d_rank_t rank)
 }
 
 static inline void
+chk_destroy_tree(daos_handle_t *toh, struct btr_root *root)
+{
+	int	rc;
+
+	if (daos_handle_is_valid(*toh)) {
+		rc = dbtree_destroy(*toh, NULL);
+		if (rc != 0)
+			D_ERROR("Failed to destroy the tree: "DF_RC"\n", DP_RC(rc));
+
+		/*
+		 * Reset the tree even if failed to destroy, that may cause DRAM leak,
+		 * but it will not prevent next check instance running.
+		 */
+		*toh = DAOS_HDL_INVAL;
+		memset(root, 0, sizeof(*root));
+	}
+}
+
+static inline void
+chk_destroy_pending_tree(struct chk_instance *ins)
+{
+	ABT_rwlock_wrlock(ins->ci_abt_lock);
+	chk_destroy_tree(&ins->ci_pending_hdl, &ins->ci_pending_btr);
+	ABT_rwlock_unlock(ins->ci_abt_lock);
+}
+
+static inline void
 chk_query_free(struct chk_query_pool_shard *shards, uint32_t shard_nr)
 {
 	int	i;
@@ -627,6 +658,81 @@ chk_query_free(struct chk_query_pool_shard *shards, uint32_t shard_nr)
 		D_FREE(shards[i].cqps_targets);
 
 	D_FREE(shards);
+}
+
+static inline void
+chk_iv_ns_cleanup(struct ds_iv_ns **ns)
+{
+	if (*ns != NULL) {
+		ds_iv_ns_cleanup(*ns);
+		ds_iv_ns_put(*ns);
+		*ns = NULL;
+	}
+}
+
+static inline void
+chk_fini_clues(struct ds_pool_clue *clue, int nr, d_rank_t rank)
+{
+	struct ds_pool_clues	clues;
+
+	if (rank == dss_self_rank()) {
+		clues.pcs_array = clue;
+		clues.pcs_len = nr;
+		ds_pool_clues_fini(&clues);
+	}
+}
+
+static inline void
+chk_fini_shards(struct chk_query_pool_shard *shards, int nr)
+{
+	if (nr != 0 && shards[0].cqps_rank == dss_self_rank())
+		chk_query_free(shards, nr);
+}
+
+static inline void
+chk_pool_get(struct chk_pool_rec *cpr)
+{
+	cpr->cpr_refs++;
+}
+
+static inline void
+chk_pool_put(struct chk_pool_rec *cpr)
+{
+	/* XXX: before being destroyed, keep it in the list. */
+	D_ASSERT(!d_list_empty(&cpr->cpr_link));
+
+	if (--(cpr->cpr_refs) == 0) {
+		d_list_del(&cpr->cpr_link);
+		D_ASSERT(cpr->cpr_thread == ABT_THREAD_NULL);
+		D_ASSERT(cpr->cpr_started == 0);
+		D_FREE(cpr);
+	}
+}
+
+static inline void
+chk_pool_shutdown(struct chk_pool_rec *cpr)
+{
+	d_iov_t		psid;
+
+	D_ASSERT(cpr->cpr_refs > 0);
+
+	if (cpr->cpr_started) {
+		d_iov_set(&psid, cpr->cpr_uuid, sizeof(uuid_t));
+		ds_rsvc_stop(DS_RSVC_CLASS_POOL, &psid, false);
+		ds_pool_stop(cpr->cpr_uuid);
+		cpr->cpr_started = 0;
+	}
+}
+
+static inline void
+chk_pool_wait(struct chk_pool_rec *cpr)
+{
+	D_ASSERT(cpr->cpr_refs > 0);
+
+	if (cpr->cpr_thread != ABT_THREAD_NULL) {
+		cpr->cpr_stop = 1;
+		ABT_thread_free(&cpr->cpr_thread);
+	}
 }
 
 #endif /* __CHK_INTERNAL_H__ */

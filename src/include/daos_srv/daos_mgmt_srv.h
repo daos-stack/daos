@@ -32,6 +32,6 @@ ds_mgmt_zombie_pool_iterate(int (*cb)(uuid_t uuid, void *arg), void *arg);
 int
 ds_mgmt_pool_exist(uuid_t uuid);
 int
-ds_mgmt_pool_shard_exist(uuid_t uuid, char **path);
+ds_mgmt_tgt_pool_exist(uuid_t uuid, char **path);
 
 #endif /* __MGMT_SRV_H__ */
