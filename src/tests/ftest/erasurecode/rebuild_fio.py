@@ -65,6 +65,7 @@ class EcodFioRebuild(ErasureCodeFio):
             # Read and verify the original data.
             self.fio_cmd.run()
 
+    @skipForTicket("DAOS-8870")
     def test_ec_online_rebuild_fio(self):
         """Jira ID: DAOS-7320.
 
