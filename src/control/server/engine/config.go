@@ -246,7 +246,7 @@ func (c *Config) GetEnvVar(name string) (string, error) {
 
 	env = mergeEnvVars(cleanEnvVars(os.Environ(), c.EnvPassThrough), env)
 
-	for _, keyPair := range mergeEnvVars(c.EnvVars, env) {
+	for _, keyPair := range c.EnvVars {
 		keyValue := strings.SplitN(keyPair, "=", 2)
 		if keyValue[0] == name {
 			return keyValue[1], nil

@@ -593,7 +593,7 @@ func (obs AccelOptionBits) toStrings() []string {
 // fromStrings generates bit-set referenced by the function receiver from the option names provided.
 func (obs *AccelOptionBits) fromStrings(opts ...string) error {
 	if obs == nil {
-		obs = new(AccelOptionBits)
+		return errors.New("fromStrings() called on nil AccelOptionBits")
 	}
 
 	for _, opt := range opts {
@@ -650,7 +650,7 @@ var accelOptStr2Flag = optFlagMap{
 
 func (ap *AccelProps) UnmarshalYAML(unmarshal func(interface{}) error) error {
 	if ap == nil {
-		return nil
+		return errors.New("attempt to unmarshal nil AccelProps")
 	}
 
 	type AccelPropsDefault AccelProps
