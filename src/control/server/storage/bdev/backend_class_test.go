@@ -451,11 +451,12 @@ func TestBackend_writeJSONFile(t *testing.T) {
 				Tier:  tierID,
 				Class: storage.ClassNvme,
 				Bdev: storage.BdevConfig{
-					DeviceList: storage.MustNewBdevDeviceList(common.MockPCIAddrs(1)...),
+					DeviceList: storage.MustNewBdevDeviceList(test.MockPCIAddrs(1)...),
 				},
 			},
 			// Verify default "none" acceleration setting is ignored.
-			accelEngine: storage.AccelEngineNone,
+			accelEngine:  storage.AccelEngineNone,
+			accelOptMask: storage.AccelOptCRCFlag | storage.AccelOptMoveFlag,
 			expOut: `
 {
   "daos_data": {
@@ -508,7 +509,7 @@ func TestBackend_writeJSONFile(t *testing.T) {
 				Tier:  tierID,
 				Class: storage.ClassNvme,
 				Bdev: storage.BdevConfig{
-					DeviceList: storage.MustNewBdevDeviceList(common.MockPCIAddrs(1)...),
+					DeviceList: storage.MustNewBdevDeviceList(test.MockPCIAddrs(1)...),
 				},
 			},
 			accelEngine:  storage.AccelEngineSPDK,
@@ -600,7 +601,7 @@ func TestBackend_writeJSONFile(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			gotErr := writeJsonConfig(log, &req)
+			gotErr := writeJsonConfig(log, req)
 			test.CmpErr(t, tc.expErr, gotErr)
 			if tc.expErr != nil {
 				return
