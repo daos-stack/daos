@@ -31,20 +31,16 @@ def build_daos_common(env, client, prereqs):
     return common
 
 
-def build_dpar(env):
+def build_dpar(env, mpi_env):
     """Build libdts library"""
 
     serial_lib = daos_build.library(env, 'libdpar', ['dpar_stub.c'], LIBS=['pthread', 'dl'])
     env.Install('$PREFIX/lib64/', serial_lib)
 
-    denv = env.Clone()
+    if mpi_env is None:
+        return
 
-    if not GetOption('help') and not GetOption('clean'):
-        mpi = daos_build.configure_mpi(denv, [])
-        if mpi is None:
-            print("\nSkipping compilation for libdpar_mpi as no MPI is found")
-            print("Install and load mpich or openmpi\n")
-            return
+    denv = mpi_env.Clone()
 
     mpi_lib = daos_build.library(denv, 'libdpar_mpi', ['dpar_mpi.c'])
     denv.Install('$PREFIX/lib64/', mpi_lib)
@@ -60,22 +56,23 @@ def build_dts_library(env, prereqs):
     libraries = ['cmocka', 'daos', 'daos_tests', 'dpar']
 
     # Add runtime paths for daos libraries
-    denv.AppendUnique(LIBPATH=["../client/api"])
-    denv.AppendUnique(CPPPATH=["../tests/suite"])
-    denv.AppendUnique(CPPPATH=["../mgmt"])
+    denv.AppendUnique(LIBPATH=[Dir('../client/api')])
+    denv.AppendUnique(LIBPATH=[Dir('../common')])
+    denv.AppendUnique(CPPPATH=[Dir('../tests/suite').srcnode()])
+    denv.AppendUnique(CPPPATH=[Dir('../mgmt').srcnode()])
+    denv.AppendUnique(CPPPATH=[Dir('../include').srcnode()])
 
     denv.Replace(SHOBJPREFIX='mpi_')
     mpi_cmd_parser = denv.SharedObject(['cmd_parser.c'])
     Export('mpi_cmd_parser')
 
-    dts_lib = daos_build.library(denv, 'libdts', ['credit.c', 'dts.c'],
-                                 LIBS=libraries)
+    dts_lib = daos_build.library(denv, 'libdts', ['credit.c', 'dts.c'], LIBS=libraries)
     denv.Install('$PREFIX/lib64/', dts_lib)
 
 
 def scons():
     """Execute build"""
-    Import('env', 'base_env', 'prereqs')
+    Import('env', 'base_env', 'base_env_mpi', 'prereqs')
 
     env.AppendUnique(LIBPATH=[Dir('.')])
     base_env.AppendUnique(LIBPATH=[Dir('.')])
@@ -94,8 +91,8 @@ def scons():
     denv = env.Clone(LIBS=[])
     prereqs.require(denv, 'isal', 'isal_crypto', 'protobufc')
     denv.AppendUnique(LIBS=['cart', 'gurt', 'lz4'])
-    common = build_daos_common(denv, True, prereqs)
-    Export('common')
+    client_common = build_daos_common(denv, True, prereqs)
+    Export('client_common')
 
     control_tgts = [File('control.c')]
     Export('control_tgts')
@@ -123,7 +120,7 @@ def scons():
     prereqs.require(tenv, 'pmdk')
     SConscript('tests/SConscript', exports='tenv')
 
-    build_dpar(base_env)
+    build_dpar(base_env, base_env_mpi)
     build_dts_library(base_env, prereqs)
 
 
