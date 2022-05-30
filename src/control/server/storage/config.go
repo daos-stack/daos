@@ -586,6 +586,7 @@ func (obs AccelOptionBits) toStrings() []string {
 			opts.Add(str)
 		}
 	}
+
 	return opts.ToSlice()
 }
 
@@ -615,7 +616,13 @@ func (obs *AccelOptionBits) UnmarshalYAML(unmarshal func(interface{}) error) err
 	if err := unmarshal(&opts); err != nil {
 		return err
 	}
+
 	return obs.fromStrings(opts...)
+}
+
+// IsEmpty returns true if no options have been set.
+func (obs *AccelOptionBits) IsEmpty() bool {
+	return obs == nil || *obs == 0
 }
 
 // AccelProps struct describes acceleration engine setting and optional capabilities expressed
@@ -632,6 +639,7 @@ func (aosf optFlagMap) keys() []string {
 	for k := range aosf {
 		keys.Add(k)
 	}
+
 	return keys.ToSlice()
 }
 
