@@ -199,20 +199,20 @@ class NetworkFailureTest(IorTestBase):
         # time.sleep(20)
 
         # 5. Restart DAOS with dmg.
-        self.log.debug("Wait for 5 sec for the network to come back up")
+        self.log.info("Wait for 5 sec for the network to come back up")
         time.sleep(5)
         dmg_cmd = self.get_dmg_command()
         # For debugging.
         dmg_cmd.system_query()
-        self.log.debug("Call dmg system stop")
+        self.log.info("Call dmg system stop")
         dmg_cmd.system_stop()
-        self.log.debug("Call dmg system start")
+        self.log.info("Call dmg system start")
         dmg_cmd.system_start()
 
         # 6. Call dmg pool query -b to find the disabled ranks.
         output = dmg_cmd.pool_query(pool=self.pool.identifier, show_disabled=True)
         disabled_ranks = output["response"]["disabled_ranks"]
-        self.log.debug("## Disabled ranks = %s", disabled_ranks)
+        self.log.info("Disabled ranks = %s", disabled_ranks)
 
         # 7. Call dmg pool reintegrate one rank at a time to enable all ranks.
         for disabled_rank in disabled_ranks:
