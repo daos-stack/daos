@@ -776,6 +776,8 @@ ds_pool_stop(uuid_t uuid)
 {
 	struct ds_pool *pool;
 
+	ds_pool_failed_remove(uuid);
+
 	pool = ds_pool_lookup(uuid);
 	if (pool == NULL)
 		return;
@@ -793,7 +795,7 @@ ds_pool_stop(uuid_t uuid)
 	ds_pool_tgt_ec_eph_query_abort(pool);
 	pool_fetch_hdls_ult_abort(pool);
 
-	ds_rebuild_abort(pool->sp_uuid, -1);
+	ds_rebuild_abort(pool->sp_uuid, -1, -1);
 	ds_migrate_stop(pool, -1);
 	ds_pool_put(pool); /* held by ds_pool_start */
 	ds_pool_put(pool);
