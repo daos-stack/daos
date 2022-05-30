@@ -78,7 +78,7 @@ class NetworkFailureTest(IorTestBase):
             self.log.info("--- IOR command %d end ---", job_num)
         except CommandFailure as error:
             self.log.info("--- IOR command %d failed ---", job_num)
-            results[job_num] = [False, "IOR failed: {}".format(error)]
+            results[job_num] = [False, f"IOR failed: {error}"]
 
     @staticmethod
     def check_container_health(container, expected_health):
@@ -108,7 +108,7 @@ class NetworkFailureTest(IorTestBase):
         self.log.info(ior_results[job_num])
         if not ior_results[job_num][0]:
             ior_error = ior_results[job_num][1]
-            errors.append("Error found in second IOR run! {}".format(ior_error))
+            errors.append(f"Error found in second IOR run! {ior_error}")
 
     def update_network_interface(self, interface, state, host, errors=None):
         """Bring back or tear down the given network interface.
@@ -124,7 +124,7 @@ class NetworkFailureTest(IorTestBase):
         results = run_pcmd(hosts=[host], command=command)
         self.log.info("%s output = %s", command, results)
         if errors is not None and results[0]["exit_status"] != 0:
-            errors.append("{} didn't return 0!".format(command))
+            errors.append(f"{command} didn't return 0!")
 
     def verify_network_failure(self, ior_namespace, container_namespace):
         """Verify network failure can be recovered without intervention in DAOS side.
@@ -173,7 +173,7 @@ class NetworkFailureTest(IorTestBase):
             errors=errors)
 
         # Aurora
-        # command = "sudo ip link set {} {}".format(self.interface, "down")
+        # command = f"sudo ip link set {self.interface} down"
         # self.log.debug("## Call %s on %s", command, self.network_down_host)
         # time.sleep(20)
 
@@ -194,7 +194,7 @@ class NetworkFailureTest(IorTestBase):
             errors=errors)
 
         # Aurora
-        # command = "sudo ip link set {} {}".format(self.interface, "up")
+        # command = f"sudo ip link set {self.interface} up"
         # self.log.debug("## Call %s on %s", command, self.network_down_host)
         # time.sleep(20)
 
