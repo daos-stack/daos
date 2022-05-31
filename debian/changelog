@@ -1,8 +1,14 @@
-daos (2.3.100-10) unstable; urgency=medium
+daos (2.3.100-11) unstable; urgency=medium
   [ Jeff Olivier ]
   * Add UCX to rpm build
 
  -- Jeff Olivier <jeffrey.v.olivier@intel.com>  Mon, 31 May 2022 08:41:00 -0400
+
+daos (2.3.100-10) unstable; urgency=medium
+  [ Lei Huang ]
+  * Update libfabric to v1.15.1-1 to include critical performance patches
+
+ -- Lei Huang <lei.huang@intel.com> Wed, 18 May 2022 16:30:00 -0500
 
 daos (2.3.100-9) unstable; urgency=medium
   [ Phillip Henderson ]

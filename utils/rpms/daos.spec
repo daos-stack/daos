@@ -4,7 +4,7 @@
 %define sysctl_script_name 10-daos_server.conf
 
 %global mercury_version 2.1.0~rc4-9%{?dist}
-%global libfabric_version 1.15.0~rc3-1
+%global libfabric_version 1.15.1-1
 %global __python %{__python3}
 
 %if 0%{?rhel} > 0
@@ -27,7 +27,7 @@
 
 Name:          daos
 Version:       2.3.100
-Release:       10%{?relval}%{?dist}
+Release:       11%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       BSD-2-Clause-Patent
@@ -568,8 +568,11 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 # No files in a shim package
 
 %changelog
-* Fri May 27 2022 Jeff Olivier <jeffrey.v.olivier@intel.com> 2.3.100-10
+* Mon May 31 2022 Jeff Olivier <jeffrey.v.olivier@intel.com> 2.3.100-11
 - Add INCLUDE=ucx optional option
+
+* Wed May 18 2022 Lei Huang <lei.huang@intel.com> 2.3.100-10
+- Update to libfabric to v1.15.1-1 to include critical performance patches
 
 * Tue May 17 2022 Phillip Henderson <phillip.henderson@intel.com> 2.3.100-9
 - Remove doas-client-tests-openmpi dependency from daos-tests
