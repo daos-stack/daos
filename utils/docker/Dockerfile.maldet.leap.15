@@ -1,8 +1,7 @@
 # Copyright 2018-2022 Intel Corporation
 # All rights reserved.
 #
-# 'recipe' for Docker to build an image of Leap based
-# environment for building the DAOS project.
+# 'recipe' for Docker to build an environent scan DAOS for malware.
 #
 
 # Pull base image
@@ -88,80 +87,14 @@ RUN mkdir -p /opt/daos /mnt/daos /var/run/daos_server /var/run/daos_agent /home/
     chown -R daos_server.daos_server /opt/daos /mnt/daos /var/run/daos_server /home/daos &&  \
     chown daos_agent.daos_agent /var/run/daos_agent
 
-ARG QUICKBUILD=false
-ARG QUICKBUILD_DEPS
-
-RUN if $QUICKBUILD; then                                          \
-        echo "Installing: $QUICKBUILD_DEPS";                      \
-        echo "$QUICKBUILD_DEPS" | sed -e '/^$/d' | tr '\n' '\0' | \
-          xargs -0 dnf install;                                   \
-        dnf clean all;                                            \
-    fi
-
-USER daos_server:daos_server
-
-# Setup a python venv so that python packages can be installed locally.
-RUN python3 -m venv /home/daos/venv
-ENV PATH=/home/daos/venv/bin:$PATH
-ENV VIRTUAL_ENV=/home/daos/venv/
-
-# Install latest versions of python tools.
-# wheel is needed first to avoid a warning when installing pyyaml.
-COPY requirements.txt .
-RUN python3 -m pip --no-cache-dir install --upgrade pip && \
-    python3 -m pip --no-cache-dir install wheel && \
-    python3 -m pip --no-cache-dir install -r requirements.txt
-
-WORKDIR /home/daos/pre
-COPY --chown=daos_server:daos_server SConstruct .
-COPY --chown=daos_server:daos_server site_scons site_scons
-COPY --chown=daos_server:daos_server utils/build.config utils/
-
-# Control what to build.  By default Dockerfiles build everything to allow for
-# ease-of-use for users, however in CI everything is turned off and then
-# selectively enabled.  Turning off any step disables all future steps.
-ARG DAOS_DEPS_BUILD=yes
-ARG DAOS_KEEP_BUILD=no
-ARG DAOS_TARGET_TYPE=release
-
-# Now do an update to ensure software is up to date for the deps build.  If the
+# Now do an update to ensure software is up to date for install.  If the
 # src hasn't changed then this won't do anything, but if it has then we want to
 # ensure that latest dependencies are used.
-USER root:root
-RUN [ "$DAOS_DEPS_BUILD" != "yes" ] || {                                                  \
+RUN {                                                                                     \
         dnf upgrade                                                                       \
             --exclude=fuse,fuse-libs,fuse-devel,libraft0,raft-devel,mercury,mercury-devel \
         dnf clean all;                                                                    \
     }
-USER daos_server:daos_server
-
-ARG DEPS_JOBS=1
-
-RUN [ "$DAOS_DEPS_BUILD" != "yes" ] || {                            \
-        scons --build-deps=yes --jobs $DEPS_JOBS PREFIX=/opt/daos   \
-              TARGET_TYPE=$DAOS_TARGET_TYPE --deps-only &&          \
-        ([ "$DAOS_KEEP_BUILD" != "no" ] || /bin/rm -rf build *.gz); \
-    }
-USER root:root
-
-# select compiler to use
-# Load the COMPILER arg early, and optionally install the Intel compiler
-# Do this before the CACHEBUST to make best use of cache as this is a big
-# download, and make it optional on the value of COMPILER for the same
-# reason.  Tell zypper to only consider the oneAPI repo here using the
-# discouraged --repo flag, however this prevents an update of the entire
-# upstream package list which would be immediately discarded, then reloaded
-# below in the general update section.  Only install the compilers at
-# ~900Mb rather than the entire stack at ~3Gb download.
-ARG COMPILER=gcc
-RUN if [ "$COMPILER" = "icc" ]; then                                                                     \
-        if [ -z "$REPO_FILE_URL" ] || true; then                                                         \
-            rpm --import https://yum.repos.intel.com/intel-gpg-keys/GPG-PUB-KEY-INTEL-SW-PRODUCTS.PUB && \
-            dnf config-manager --add-repo https://yum.repos.intel.com/oneapi oneAPI;                     \
-        fi;                                                                                              \
-        dnf install intel-oneapi-compiler-dpcpp-cpp &&                                                   \
-        dnf clean all;                                                                                   \
-    fi
 
 # force an upgrade to get any newly built RPMs, but only if CACHEBUST is set.
 ARG CACHEBUST
@@ -170,10 +103,7 @@ RUN [ -z "$CACHEBUST" ] || {                                                    
         dnf clean all;                                                                               \
     }
 
-ARG DAOS_KEEP_SRC=no
-# Remove local copy
-RUN [ "$DAOS_KEEP_SRC" != "no" ] || rm -rf /home/daos/*
-
 ARG BUILD_URL
 COPY ci/rpm/install_maldet.sh /tmp/install_maldet.sh
+COPY ci/rpm/distro_info.sh /tmp/distro_info.sh
 RUN /tmp/install_maldet.sh

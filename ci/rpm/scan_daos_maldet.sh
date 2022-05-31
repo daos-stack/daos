@@ -2,22 +2,15 @@
 
 set -uex
 
-source /etc/os-release
-: "${ID_LIKE:=unknown}"
-: "${ID:=unknown}"
-version="${VERSION_ID%%.*}"
-if [[ $ID_LIKE == *rhel* ]]; then
-  distro=el
-fi
-if [[ $ID == *leap* ]]; then
-  distro=leap
-fi
+mydir="$(cd "$(dirname "${BASH_SOURCE[0]}")" >/dev/null 2>&1 && pwd)"
+# at some point we want to use: shellcheck source=ci/rpm/daos_info.sh
+# shellcheck disable=SC1091
+source "$mydir/daos_info.sh"
 
 if command -v dnf; then
   sudo dnf -y install \
     daos{,-{client,server,tests,debuginfo,devel}}-"${DAOS_PKG_VERSION}"
 elif command -v apt-get; then
-  distro=ubuntu
   echo "Ubuntu not implemented yet."
 fi
 
@@ -32,7 +25,7 @@ sudo clamscan -d /usr/local/maldetect/sigs/rfxn.ndb    \
               --exclude-dir=/dev                       \
               --exclude-dir=/scratch                   \
               --infected / | tee /var/tmp/clamscan.out
-malxml="maldetect_$distro$version.xml"
+malxml="maldetect_$PUBLIC_DISTRO$MAJOR_VERSION.xml"
 rm -f "$malxml"
 if grep 'Infected files: 0$' /var/tmp/clamscan.out; then
   cat << EOF_GOOD > "$malxml"

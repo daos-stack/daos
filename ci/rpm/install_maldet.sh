@@ -2,27 +2,16 @@
 
 set -uex
 
-source /etc/os-release
-: "${ID_LIKE:=unknown}"
-: "${ID:=unknown}"
-version="${VERSION_ID%%.*}"
-if [[ $ID_LIKE == *rhel* ]]; then
-  if [ "$version" -eq 7 ]; then
-    distro=centos
-  else
-    distro=el
-  fi
-fi
-if [[ $ID == *leap* ]]; then
-  distro=leap
-fi
-
+mydir="$(cd "$(dirname "${BASH_SOURCE[0]}")" >/dev/null 2>&1 && pwd)"
+# at some point we want to use: shellcheck source=ci/rpm/daos_info.sh
+# shellcheck disable=SC1091
+source "$mydir/daos_info.sh"
 
 : "{BUILD_URL:=}"
 if command -v dnf; then
   dnf --assumeyes install clamav clamav-devel
   if [ -n "${BUILD_URL}" ]; then
-    repo_url="${BUILD_URL}artifact/artifacts/${distro}${version}/"
+    repo_url="${BUILD_URL}artifact/artifacts/${PUBLIC_DISTRO}${MAJOR_VERSION}/"
     dnf --assumeyes config-manager --add-repo="$repo_url"
     repo="${repo_url#*://}"
     repo="${repo//%/}"
