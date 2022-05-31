@@ -138,6 +138,7 @@ BuildRequires: libucs-devel
 BuildRequires: libuct-devel
 %else
 BuildRequires: ucx-devel
+BuildRequires: librdmacm-devel
 %endif
 
 Requires: protobuf-c
