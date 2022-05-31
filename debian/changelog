@@ -1,8 +1,16 @@
-daos (2.3.100-10) unstable; urgency=medium
+daos (2.3.100-11) unstable; urgency=medium
+
   [ Tom Nabarro ]
   * Update SPDK dependency requirement to greater than or equal to 22.01.1.
 
- -- Tom Nabarro <Tom Nabarro <tom.nabarro@intel.com>  Tue, 24 May 2022 12:43:00 -0400
+ -- Tom Nabarro <Tom Nabarro <tom.nabarro@intel.com>  Tue, 31 May 2022 12:43:00 -0400
+
+daos (2.3.100-10) unstable; urgency=medium
+  [ Lei Huang ]
+  * Update libfabric to v1.15.1-1 to include critical performance patches
+
+ -- Lei Huang <lei.huang@intel.com> Wed, 18 May 2022 16:30:00 -0500
+
 daos (2.3.100-9) unstable; urgency=medium
   [ Phillip Henderson ]
   * Remove doas-client-tests-openmpi dependency from daos-tests
