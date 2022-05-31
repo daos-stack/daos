@@ -210,10 +210,12 @@ if [[ -n $START_CLEANUP ]] ; then
 	cleanup
 fi
 
+set -e
+
 info "Setting simulation environment"
 export PYTHONPATH="$DAOS_INSTALL_DIR/lib64/python3.6/site-packages:$DAOS_INSTALL_DIR/lib/daos/TESTING/ftest/util"
 cd "$DAOS_SOURCE_DIR/utils/sl"
-source setup_local.sh build_vars-Linux.sh
+source setup_local.sh
 $MODULE_EXE load /etc/modulefiles/mpi/mlnx_openmpi-x86_64
 
 info "Parametrization of the simulation"
@@ -230,6 +232,8 @@ env OFI_INTERFACE=$OFI_INTERFACE $PYTHON_EXE launch.py $common_opts "${args[@]}"
 {% else %}
 $PYTHON_EXE launch.py $common_opts "${args[@]}"
 {% endif %}
+
+set +e
 
 if [[ -n $END_CLEANUP ]] ; then
 	cleanup

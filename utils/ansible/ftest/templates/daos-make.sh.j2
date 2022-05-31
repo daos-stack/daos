@@ -186,6 +186,9 @@ if ! run env MPI_PKG=any "$SCONS_EXE" BUILD_TYPE=debug PREFIX="$DAOS_INSTALL_DIR
 	fatal "DAOS could not be properly build and/or installed"
 fi
 
+info "Finalizing DAOS development environment setup"
+run cp -a -f "$DAOS_SOURCE_DIR/.build_vars.sh" "$DAOS_SOURCE_DIR/utils/sl/.build_vars-$(uname -s).sh"
+
 info "Finalizing spdk install"
 for item in $(find "$DAOS_INSTALL_DIR/share/daos" -type f)
 do
