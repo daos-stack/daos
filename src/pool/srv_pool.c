@@ -1445,8 +1445,6 @@ pool_svc_step_down_cb(struct ds_rsvc *rsvc)
 	d_rank_t		rank;
 	int			rc;
 
-	ds_pool_iv_srv_hdl_invalidate(svc->ps_pool);
-
 	fini_events(svc);
 	ds_cont_svc_step_down(svc->ps_cont_svc);
 	fini_svc_pool(svc);
