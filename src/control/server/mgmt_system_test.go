@@ -450,7 +450,11 @@ func mockMember(t *testing.T, r, a int32, s string) *system.Member {
 	}
 	uri := fmt.Sprintf("tcp://%s", addr)
 
-	m := system.NewMember(system.Rank(r), test.MockUUID(r), uri, addr, state).WithFaultDomain(fd)
+	m, err := system.NewMember(system.Rank(r), test.MockUUID(r), uri, addr, state)
+	if err != nil {
+		t.Fatal(err)
+	}
+
 	m.FabricContexts = uint32(r)
 	m.FaultDomain = fd
 	m.Incarnation = uint64(r)
@@ -468,7 +472,6 @@ func checkMembers(t *testing.T, exp system.Members, ms *system.Membership) {
 			t.Fatal(err)
 		}
 		cmpOpts := append(test.DefaultCmpOpts(),
-			cmpopts.IgnoreUnexported(system.Member{}),
 			cmpopts.EquateApproxTime(time.Second),
 		)
 		if diff := cmp.Diff(em, am, cmpOpts...); diff != "" {
@@ -482,8 +485,6 @@ func checkMemberResults(t *testing.T, exp, got system.MemberResults) {
 
 	less := func(x, y *system.MemberResult) bool { return x.Rank < y.Rank }
 	cmpOpts := append(test.DefaultCmpOpts(),
-		cmpopts.IgnoreUnexported(system.MemberResult{}),
-		cmpopts.EquateApproxTime(time.Second),
 		cmpopts.SortSlices(less),
 	)
 	if diff := cmp.Diff(exp, got, cmpOpts...); diff != "" {

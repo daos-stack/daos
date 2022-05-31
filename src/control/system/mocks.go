@@ -27,8 +27,11 @@ func MockControlAddr(t *testing.T, idx uint32) *net.TCPAddr {
 // MockMember returns a system member with appropriate values.
 func MockMember(t *testing.T, idx uint32, state MemberState, info ...string) *Member {
 	addr := MockControlAddr(t, idx)
-	m := NewMember(Rank(idx), test.MockUUID(int32(idx)),
+	m, err := NewMember(Rank(idx), test.MockUUID(int32(idx)),
 		addr.String(), addr, state)
+	if err != nil {
+		t.Fatal(err)
+	}
 	m.FabricContexts = idx
 	if len(info) > 0 {
 		m.Info = info[0]

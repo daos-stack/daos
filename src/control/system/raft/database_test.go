@@ -31,7 +31,6 @@ import (
 	"github.com/daos-stack/daos/src/control/common/test"
 	"github.com/daos-stack/daos/src/control/events"
 	"github.com/daos-stack/daos/src/control/logging"
-	"github.com/daos-stack/daos/src/control/system"
 	. "github.com/daos-stack/daos/src/control/system"
 )
 
@@ -571,9 +570,13 @@ func TestSystem_Database_memberRaftOps(t *testing.T) {
 	}
 }
 
-func testMemberWithFaultDomain(rank Rank, fd *FaultDomain) *Member {
-	return NewMember(rank, uuid.New().String(), "dontcare", &net.TCPAddr{},
-		MemberStateJoined).WithFaultDomain(fd)
+func testMemberWithFaultDomain(t *testing.T, rank Rank, fd *FaultDomain) *Member {
+	m, err := NewMember(rank, uuid.New().String(), "dontcare", &net.TCPAddr{},
+		MemberStateJoined)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return m.WithFaultDomain(fd)
 }
 
 func TestSystem_Database_memberFaultDomain(t *testing.T) {
@@ -597,7 +600,7 @@ func TestSystem_Database_memberFaultDomain(t *testing.T) {
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
-			m := testMemberWithFaultDomain(tc.rank, tc.faultDomain)
+			m := testMemberWithFaultDomain(t, tc.rank, tc.faultDomain)
 
 			result := MemberFaultDomain(m)
 
@@ -642,18 +645,6 @@ func TestSystem_Database_FaultDomainTree(t *testing.T) {
 	}
 }
 
-func raftUpdateSystemAttrs(t *testing.T, db *Database, attrs map[string]string) {
-	t.Helper()
-	data, err := createRaftUpdate(raftOpUpdateSystemAttrs, attrs)
-	if err != nil {
-		t.Fatal(err)
-	}
-	rl := &raft.Log{
-		Data: data,
-	}
-	(*fsm)(db).Apply(rl)
-}
-
 func TestSystem_Database_SystemAttrs(t *testing.T) {
 	for name, tc := range map[string]struct {
 		startAttrs  map[string]string
@@ -682,7 +673,7 @@ func TestSystem_Database_SystemAttrs(t *testing.T) {
 			attrsUpdate: map[string]string{"foo": "bar"},
 			expAttrs:    map[string]string{"foo": "bar"},
 			searchKeys:  []string{"whoops"},
-			expErr:      system.ErrSystemAttrNotFound("whoops"),
+			expErr:      ErrSystemAttrNotFound("whoops"),
 		},
 		"get good key": {
 			startAttrs:  map[string]string{"foo": "bar", "baz": "qux"},
@@ -891,6 +882,10 @@ func TestSystem_Database_GroupMap(t *testing.T) {
 
 		return members
 	}
+	memberWithNoURI, err := NewMember(2, test.MockUUID(2), "", MockControlAddr(t, 2), MemberStateJoined)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	for name, tc := range map[string]struct {
 		members     []*Member
@@ -943,7 +938,7 @@ func TestSystem_Database_GroupMap(t *testing.T) {
 		},
 		"unset fabric URI skipped": {
 			members: append([]*Member{
-				NewMember(2, test.MockUUID(2), "", MockControlAddr(t, 2), MemberStateJoined),
+				memberWithNoURI,
 			}, membersWithStates(MemberStateJoined)...),
 			expGroupMap: &GroupMap{
 				Version: 2,

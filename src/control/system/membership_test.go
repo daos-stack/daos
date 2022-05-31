@@ -51,6 +51,18 @@ func populateMembership(t *testing.T, log logging.Logger, members ...*Member) *M
 	return ms
 }
 
+func mockStoppedRankOnHost1(t *testing.T, rID int32) *Member {
+	addr1, err := net.ResolveTCPAddr("tcp", "127.0.0.1:10001")
+	if err != nil {
+		t.Fatal(err)
+	}
+	m, err := NewMember(Rank(rID), MockUUID(rID), "", addr1, MemberStateStopped)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return m
+}
+
 func TestSystem_Membership_Get(t *testing.T) {
 	for name, tc := range map[string]struct {
 		memberToAdd *Member
@@ -244,15 +256,11 @@ func TestSystem_Membership_Add(t *testing.T) {
 }
 
 func TestSystem_Membership_HostRanks(t *testing.T) {
-	addr1, err := net.ResolveTCPAddr("tcp", "127.0.0.1:10001")
-	if err != nil {
-		t.Fatal(err)
-	}
 	members := Members{
 		MockMember(t, 1, MemberStateJoined),
 		MockMember(t, 2, MemberStateStopped),
 		MockMember(t, 3, MemberStateExcluded),
-		NewMember(Rank(4), MockUUID(4), addr1.String(), addr1, MemberStateStopped), // second host rank
+		mockStoppedRankOnHost1(t, 4),
 	}
 
 	for name, tc := range map[string]struct {
@@ -335,16 +343,12 @@ func TestSystem_Membership_HostRanks(t *testing.T) {
 }
 
 func TestSystem_Membership_CheckRanklist(t *testing.T) {
-	addr1, err := net.ResolveTCPAddr("tcp", "127.0.0.1:10001")
-	if err != nil {
-		t.Fatal(err)
-	}
 	members := Members{
 		MockMember(t, 0, MemberStateJoined),
 		MockMember(t, 1, MemberStateJoined),
 		MockMember(t, 2, MemberStateStopped),
 		MockMember(t, 3, MemberStateExcluded),
-		NewMember(Rank(4), MockUUID(4), "", addr1, MemberStateStopped), // second host rank
+		mockStoppedRankOnHost1(t, 4),
 	}
 
 	for name, tc := range map[string]struct {
@@ -424,17 +428,13 @@ func mockResolveFn(netString string, address string) (*net.TCPAddr, error) {
 }
 
 func TestSystem_Membership_CheckHostlist(t *testing.T) {
-	addr1, err := net.ResolveTCPAddr("tcp", "127.0.0.1:10001")
-	if err != nil {
-		t.Fatal(err)
-	}
 	members := Members{
 		MockMember(t, 1, MemberStateJoined),
 		MockMember(t, 2, MemberStateStopped),
 		MockMember(t, 3, MemberStateExcluded),
 		MockMember(t, 4, MemberStateJoined),
 		MockMember(t, 5, MemberStateJoined),
-		NewMember(Rank(6), MockUUID(6), "", addr1, MemberStateStopped), // second host rank
+		mockStoppedRankOnHost1(t, 6),
 	}
 
 	for name, tc := range map[string]struct {

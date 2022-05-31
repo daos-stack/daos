@@ -8,6 +8,7 @@ package control
 
 import (
 	"context"
+	"net"
 	"testing"
 	"time"
 
@@ -546,6 +547,14 @@ func TestControl_SystemQuery(t *testing.T) {
 		fds[i] = system.MustCreateFaultDomainFromString(fdStrs[i])
 	}
 
+	mustNewMember := func(t *testing.T, r system.Rank, uuidStr, uri string, a *net.TCPAddr, s system.MemberState) *system.Member {
+		m, err := system.NewMember(r, uuidStr, uri, a, s)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return m
+	}
+
 	for name, tc := range map[string]struct {
 		req     *SystemQueryReq
 		uErr    error
@@ -621,10 +630,10 @@ func TestControl_SystemQuery(t *testing.T) {
 			),
 			expResp: &SystemQueryResp{
 				Members: system.Members{
-					system.NewMember(1, test.MockUUID(1), "", test.MockHostAddr(1), system.MemberStateReady).WithFaultDomain(fds[1]),
-					system.NewMember(2, test.MockUUID(2), "", test.MockHostAddr(1), system.MemberStateReady).WithFaultDomain(fds[2]),
-					system.NewMember(0, test.MockUUID(0), "", test.MockHostAddr(2), system.MemberStateStopped).WithFaultDomain(fds[0]),
-					system.NewMember(3, test.MockUUID(3), "", test.MockHostAddr(2), system.MemberStateStopped).WithFaultDomain(fds[3]),
+					mustNewMember(t, 1, test.MockUUID(1), "", test.MockHostAddr(1), system.MemberStateReady).WithFaultDomain(fds[1]),
+					mustNewMember(t, 2, test.MockUUID(2), "", test.MockHostAddr(1), system.MemberStateReady).WithFaultDomain(fds[2]),
+					mustNewMember(t, 0, test.MockUUID(0), "", test.MockHostAddr(2), system.MemberStateStopped).WithFaultDomain(fds[0]),
+					mustNewMember(t, 3, test.MockUUID(3), "", test.MockHostAddr(2), system.MemberStateStopped).WithFaultDomain(fds[3]),
 				},
 			},
 		},
