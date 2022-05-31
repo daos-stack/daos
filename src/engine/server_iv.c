@@ -841,11 +841,20 @@ ds_iv_ns_leader_stop(struct ds_iv_ns *ns)
 }
 
 void
-ds_iv_ns_stop(struct ds_iv_ns *ns)
+ds_iv_ns_cleanup(struct ds_iv_ns *ns)
 {
 	struct ds_iv_entry *entry;
 	struct ds_iv_entry *tmp;
 
+	d_list_for_each_entry_safe(entry, tmp, &ns->iv_entry_list, iv_link) {
+		d_list_del(&entry->iv_link);
+		iv_entry_free(entry);
+	}
+}
+
+void
+ds_iv_ns_stop(struct ds_iv_ns *ns)
+{
 	ns->iv_stop = 1;
 	ds_iv_ns_put(ns);
 	if (ns->iv_refcount > 1) {
@@ -859,10 +868,7 @@ ds_iv_ns_stop(struct ds_iv_ns *ns)
 			DP_UUID(ns->iv_pool_uuid));
 	}
 
-	d_list_for_each_entry_safe(entry, tmp, &ns->iv_entry_list, iv_link) {
-		d_list_del(&entry->iv_link);
-		iv_entry_free(entry);
-	}
+	ds_iv_ns_cleanup(ns);
 
 	D_INFO(DF_UUID" ns stopped\n", DP_UUID(ns->iv_pool_uuid));
 }

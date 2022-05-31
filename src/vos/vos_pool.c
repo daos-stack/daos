@@ -816,7 +816,8 @@ vos_pool_open_metrics(const char *path, uuid_t uuid, unsigned int flags, void *m
 				vos_pool_decref(pool);
 				return -DER_BUSY;
 			}
-			if ((flags & VOS_POF_EXCL) || pool->vp_excl) {
+			if (!(flags & VOS_POF_FOR_CHECK_QUERY) &&
+			    ((flags & VOS_POF_EXCL) || pool->vp_excl)) {
 				vos_pool_decref(pool);
 				return -DER_BUSY;
 			}
@@ -933,6 +934,7 @@ vos_pool_query(daos_handle_t poh, vos_pool_info_t *pinfo)
 {
 	struct vos_pool		*pool;
 	struct vos_pool_df	*pool_df;
+	struct chk_pool_info	*cpi;
 	int			 rc;
 
 	pool = vos_hdl2pool(poh);
@@ -944,10 +946,12 @@ vos_pool_query(daos_handle_t poh, vos_pool_info_t *pinfo)
 	D_ASSERT(pinfo != NULL);
 	pinfo->pif_cont_nr = pool_df->pd_cont_nr;
 	pinfo->pif_gc_stat = pool->vp_gc_stat;
-	pinfo->pif_chk_phase = pool_df->pd_chk_phase;
-	pinfo->pif_chk_status = pool_df->pd_chk_status;
-	pinfo->pif_chk_statistics = pool_df->pd_chk_statistics;
-	pinfo->pif_chk_time = pool_df->pd_chk_time;
+
+	cpi = umem_off2ptr(&pool->vp_umm, pool_df->pd_chk);
+	if (cpi != NULL)
+		pinfo->pif_chk = *cpi;
+	else
+		memset(&pinfo->pif_chk, 0, sizeof(pinfo->pif_chk));
 
 	rc = vos_space_query(pool, &pinfo->pif_space, true);
 	if (rc)

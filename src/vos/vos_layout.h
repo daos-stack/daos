@@ -19,7 +19,6 @@
 #include <daos_srv/bio.h>
 #include <daos_srv/vea.h>
 #include <daos_srv/dtx_srv.h>
-#include <daos_srv/daos_chk.h>
 #include "ilog.h"
 
 /**
@@ -97,7 +96,7 @@ enum vos_gc_type {
  *  This enables the user to continue using the pool with the older version unless
  *  they have explicitly upgraded it.
  */
-#define POOL_DF_AGG_OPT				24
+#define POOL_DF_AGG_OPT				25
 /** Current durable format version */
 #define POOL_DF_VERSION				POOL_DF_AGG_OPT
 
@@ -118,7 +117,12 @@ struct vos_pool_df {
 	 * a new format, containers with old format can be attached at here.
 	 */
 	uint64_t				pd_reserv_upgrade;
-	/** Reserved for future usage */
+	/**
+	 * Offset to area for DAOS check related information (chk_pool_info) for this pool.
+	 * The chk_pool_info::cpi_statistics contains the inconsistency statistics during
+	 * the phases range [CSP_DTX_RESYNC, OSP_AGGREGATION] for the pool shard on the target.
+	 */
+	umem_off_t				pd_chk;
 	uint64_t				pd_reserv;
 	/** Unique PoolID for each VOS pool assigned on creation */
 	uuid_t					pd_id;
@@ -136,16 +140,6 @@ struct vos_pool_df {
 	struct vea_space_df			pd_vea_df;
 	/** GC bins for container/object/dkey... */
 	struct vos_gc_bin_df			pd_gc_bins[GC_MAX];
-	/** DAOS check phase. */
-	uint32_t				pd_chk_phase;
-	/** DAOS check instance status. */
-	uint32_t				pd_chk_status;
-	/**
-	 * The inconsistency statistics during the phases range [CSP_DTX_RESYNC, OSP_AGGREGATION]
-	 * for the pool shard on the target.
-	 */
-	struct chk_statistics			pd_chk_statistics;
-	struct chk_time				pd_chk_time;
 };
 
 /**

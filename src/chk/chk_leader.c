@@ -134,48 +134,25 @@ out:
 static int
 chk_rank_free(struct btr_instance *tins, struct btr_record *rec, void *args)
 {
+	d_iov_t			*val_iov = args;
 	struct chk_rank_rec	*crr;
-	struct chk_pending_rec	*cpr;
-	struct chk_pending_rec	*tmp;
-	struct chk_instance	*ins;
-	d_iov_t			 kiov;
-	uint64_t		 seq;
-	int			 rc = 0;
-	int			 rc1 = 0;
 
 	crr = (struct chk_rank_rec *)umem_off2ptr(&tins->ti_umm, rec->rec_off);
 	rec->rec_off = UMOFF_NULL;
-	ins = crr->crr_ins;
+	d_list_del_init(&crr->crr_link);
 
-	ABT_rwlock_wrlock(ins->ci_abt_lock);
-	/* Cleanup all pending records belong to this rank. */
-	d_list_for_each_entry_safe(cpr, tmp, &crr->crr_pending_list, cpr_rank_link) {
-		ABT_mutex_lock(cpr->cpr_mutex);
-		if (cpr->cpr_busy) {
-			cpr->cpr_exiting = 1;
-			ABT_cond_broadcast(cpr->cpr_cond);
-			ABT_mutex_unlock(cpr->cpr_mutex);
-		} else {
-			ABT_mutex_unlock(cpr->cpr_mutex);
-			/* Copy the seq to avoid accessing free DRAM after dbtree_delete. */
-			seq = cpr->cpr_seq;
-			d_iov_set(&kiov, &seq, sizeof(cpr->cpr_seq));
-			rc1 = dbtree_delete(ins->ci_pending_hdl, BTR_PROBE_EQ, &kiov, NULL);
-			if (unlikely(rc1 != 0)) {
-				D_ERROR("Failed to remove pending rec for rank %u, seq "
-					DF_X64", gen "DF_X64": "DF_RC"\n",
-					crr->crr_rank, seq, ins->ci_bk.cb_gen, DP_RC(rc1));
-				if (rc == 0)
-					rc = rc1;
-			}
-		}
+	if (val_iov != NULL) {
+		d_iov_set(val_iov, crr, sizeof(*crr));
+	} else {
+		/*
+		 * XXX: This only happens when destroy the rank tree. At that time,
+		 *	the pending records tree has already been destroyed firstly.
+		 */
+		D_ASSERT(d_list_empty(&crr->crr_pending_list));
+		D_FREE(crr);
 	}
-	ABT_rwlock_unlock(ins->ci_abt_lock);
 
-	d_list_del(&crr->crr_link);
-	D_FREE(crr);
-
-	return rc;
+	return 0;
 }
 
 static int
@@ -214,6 +191,101 @@ btr_ops_t chk_rank_ops = {
 	.to_rec_update  = chk_rank_update,
 };
 
+bool
+chk_is_on_leader(uint64_t gen, d_rank_t leader, bool known_leader)
+{
+	if (!known_leader)
+		leader = chk_leader->ci_prop.cp_leader;
+
+	return chk_leader->ci_bk.cb_gen == gen && leader == dss_self_rank();
+}
+
+struct ds_iv_ns *
+chk_leader_get_iv_ns(void)
+{
+	struct chk_instance	*ins = chk_leader;
+	struct ds_iv_ns		*ns = ins->ci_iv_ns;
+
+	if (ns != NULL)
+		ds_iv_ns_get(ns);
+
+	return ns;
+}
+
+static int
+chk_rank_del(struct chk_instance *ins, d_rank_t rank)
+{
+	struct chk_rank_rec	*crr;
+	struct chk_pending_rec	*cpr;
+	struct chk_pending_rec	*tmp;
+	d_iov_t			 riov;
+	d_iov_t			 kiov;
+	int			 rc;
+	int			 rc1;
+
+	d_iov_set(&riov, NULL, 0);
+	d_iov_set(&kiov, &rank, sizeof(rank));
+	rc = dbtree_delete(ins->ci_rank_hdl, BTR_PROBE_EQ, &kiov, &riov);
+	if (rc != 0)
+		D_GOTO(out, rc = ((rc == -DER_NONEXIST  || rc == -DER_NO_HDL) ? 0 : rc));
+
+	crr = (struct chk_rank_rec *)riov.iov_buf;
+	if (d_list_empty(&crr->crr_pending_list))
+		goto out;
+
+	/* Cleanup all pending records belong to this rank. */
+	ABT_rwlock_wrlock(ins->ci_abt_lock);
+	d_list_for_each_entry_safe(cpr, tmp, &crr->crr_pending_list, cpr_rank_link) {
+		d_iov_set(&riov, NULL, 0);
+		d_iov_set(&kiov, &cpr->cpr_seq, sizeof(cpr->cpr_seq));
+		rc1 = dbtree_delete(ins->ci_pending_hdl, BTR_PROBE_EQ, &kiov, &riov);
+		if (rc1 != 0) {
+			D_ASSERT(rc1 != -DER_NONEXIST);
+
+			D_ERROR(DF_LEADER" failed to remove pending rec for rank %u, seq "
+				DF_X64": "DF_RC"\n",
+				DP_LEADER(ins), crr->crr_rank, cpr->cpr_seq, DP_RC(rc1));
+
+			if (rc == 0)
+				rc = rc1;
+
+			/* XXX: continue even if there is DRAM leak. */
+			continue;
+		}
+
+		D_ASSERT(cpr == riov.iov_buf);
+
+		ABT_mutex_lock(cpr->cpr_mutex);
+		if (cpr->cpr_busy) {
+			/*
+			 * Notify the owner who is blocked on the pending record
+			 * and will release the pending record after using it.
+			 */
+			cpr->cpr_exiting = 1;
+			ABT_cond_broadcast(cpr->cpr_cond);
+			ABT_mutex_unlock(cpr->cpr_mutex);
+		} else {
+			ABT_mutex_unlock(cpr->cpr_mutex);
+			chk_pending_destroy(cpr);
+		}
+	}
+	ABT_rwlock_unlock(ins->ci_abt_lock);
+
+out:
+	return rc;
+}
+
+static inline void
+chk_destroy_rank_tree(struct chk_instance *ins)
+{
+	/*
+	 * Because the pending reocrd is attached some rank record, then destroy
+	 * the pending records tree before destroying the rank records tree.
+	 */
+	chk_destroy_pending_tree(ins);
+	chk_destroy_tree(&ins->ci_rank_hdl, &ins->ci_rank_btr);
+}
+
 static void
 chk_leader_exit(struct chk_instance *ins, uint32_t status, bool bcast)
 {
@@ -235,17 +307,7 @@ chk_leader_exit(struct chk_instance *ins, uint32_t status, bool bcast)
 				DF_RC"\n", DP_LEADER(ins), status, DP_RC(rc));
 	}
 
-	ABT_rwlock_wrlock(ins->ci_abt_lock);
-	rc = dbtree_destroy(ins->ci_pending_hdl, NULL);
-	ABT_rwlock_unlock(ins->ci_abt_lock);
-	if (rc != 0)
-		D_ERROR(DF_LEADER" failed to destroy pending record tree, status %u: "DF_RC"\n",
-			DP_LEADER(ins), status, DP_RC(rc));
-
-	rc = dbtree_destroy(ins->ci_rank_hdl, NULL);
-	if (rc != 0)
-		D_ERROR(DF_LEADER" failed to destroy rank tree, status %u: "DF_RC"\n",
-			DP_LEADER(ins), status, DP_RC(rc));
+	chk_destroy_rank_tree(ins);
 
 	if (cbk->cb_ins_status == CHK__CHECK_INST_STATUS__CIS_RUNNING) {
 		cbk->cb_ins_status = status;
@@ -261,15 +323,9 @@ static uint32_t
 chk_leader_find_slowest(struct chk_instance *ins)
 {
 	uint32_t		 phase = CHK__CHECK_SCAN_PHASE__DSP_DONE;
-	uint32_t		 base = ins->ci_bk.cb_phase;
 	struct chk_rank_rec	*crr;
 
 	d_list_for_each_entry(crr, &ins->ci_rank_list, crr_link) {
-		if (crr->crr_phase <= base) {
-			phase = crr->crr_phase;
-			break;
-		}
-
 		if (crr->crr_phase < phase)
 			phase = crr->crr_phase;
 	}
@@ -305,12 +361,19 @@ chk_leader_sched(void *args)
 	int			 rc = 0;
 	bool			 bcast = false;
 
+	D_INFO(DF_LEADER" start at the phase %u\n", DP_LEADER(ins), cbk->cb_phase);
+
 	ABT_mutex_lock(ins->ci_abt_mutex);
 
 again:
 	if (!ins->ci_sched_running) {
 		ABT_mutex_unlock(ins->ci_abt_mutex);
 		D_GOTO(out, rc = 0);
+	}
+
+	if (d_list_empty(&ins->ci_rank_list)) {
+		ABT_mutex_unlock(ins->ci_abt_mutex);
+		D_GOTO(out, rc = 1);
 	}
 
 	if (ins->ci_started) {
@@ -341,14 +404,14 @@ handle:
 		/* Synchronously notify the engines to move ahead. */
 		rc = chk_iv_update(ins->ci_iv_ns, &iv, CRT_IV_SHORTCUT_NONE,
 				   CRT_IV_SYNC_EAGER, true);
-		if (rc != 0) {
-			D_ERROR(DF_LEADER" failed to notify the engines to move phase to %u: "
-				DF_RC"\n",
-				DP_LEADER(ins), CHK__CHECK_SCAN_PHASE__CSP_POOL_MBS, DP_RC(rc));
 
+		D_CDEBUG(rc != 0, DLOG_ERR, DLOG_INFO,
+			 DF_LEADER" notify the engines to move phase to %u: "DF_RC"\n",
+			 DP_LEADER(ins), CHK__CHECK_SCAN_PHASE__CSP_POOL_LIST, DP_RC(rc));
+
+		if (rc != 0)
 			/* Have to failout since cannot drive the check to go ahead. */
 			D_GOTO(out, bcast = false);
-		}
 
 		/*
 		 * XXX: Update the bookmark after successfully notify the check engines.
@@ -372,14 +435,14 @@ handle:
 		/* Synchronously notify the engines to move ahead. */
 		rc = chk_iv_update(ins->ci_iv_ns, &iv, CRT_IV_SHORTCUT_NONE,
 				   CRT_IV_SYNC_EAGER, true);
-		if (rc != 0) {
-			D_ERROR(DF_LEADER" failed to notify the engines to move phase to %u: "
-				DF_RC"\n",
-				DP_LEADER(ins), CHK__CHECK_SCAN_PHASE__CSP_POOL_MBS, DP_RC(rc));
 
+		D_CDEBUG(rc != 0, DLOG_ERR, DLOG_INFO,
+			 DF_LEADER" notify the engines to move phase to %u: "DF_RC"\n",
+			 DP_LEADER(ins), CHK__CHECK_SCAN_PHASE__CSP_POOL_MBS, DP_RC(rc));
+
+		if (rc != 0)
 			/* Have to failout since cannot drive the check to go ahead. */
 			D_GOTO(out, bcast = false);
-		}
 
 		/*
 		 * XXX: Update the bookmark after successfully notify the check engines.
@@ -397,6 +460,9 @@ handle:
 		/* Someone wants to stop the check. */
 		if (!ins->ci_sched_running)
 			D_GOTO(out, rc = 0);
+
+		if (d_list_empty(&ins->ci_rank_list))
+			D_GOTO(out, rc = 1);
 
 		/*
 		 * TBD: The leader may need to detect engines' status/phase actively, otherwise
@@ -418,10 +484,11 @@ handle:
 out:
 	if (rc > 0) {
 		/* If some engine(s) failed during the start, then mark the instance as 'failed'. */
-		if (ins->ci_slowest_fail_phase != CHK__CHECK_SCAN_PHASE__CSP_PREPARE)
+		if (ins->ci_slowest_fail_phase != CHK_INVAL_PHASE)
 			status = CHK__CHECK_INST_STATUS__CIS_FAILED;
 		else
 			status = CHK__CHECK_INST_STATUS__CIS_COMPLETED;
+		cbk->cb_phase = CHK__CHECK_SCAN_PHASE__DSP_DONE;
 	} else if (rc == 0) {
 		if (ins->ci_implicated)
 			status = CHK__CHECK_INST_STATUS__CIS_IMPLICATED;
@@ -436,12 +503,15 @@ out:
 	chk_leader_exit(ins, status, bcast);
 	chk_csa_put(csa);
 
-	D_INFO(DF_LEADER" exit at the phase %u: "DF_RC"\n", DP_LEADER(ins), cbk->cb_phase, DP_RC(rc));
+	D_INFO(DF_LEADER" exit at the phase %u: "DF_RC"\n",
+	       DP_LEADER(ins), cbk->cb_phase, DP_RC(rc));
+
+	ins->ci_sched_running = 0;
 }
 
 static int
 chk_leader_start_prepare(struct chk_instance *ins, uint32_t rank_nr, d_rank_t *ranks,
-			 uint32_t policy_nr, struct chk_policy **policies,
+			 uint32_t policy_nr, struct chk_policy *policies,
 			 uint32_t pool_nr, uuid_t pools[], int phase,
 			 uint32_t *flags, d_rank_list_t **rlist)
 {
@@ -545,6 +615,7 @@ init:
 			      *flags, phase, dss_self_rank(), prop, rlist);
 	if (rc == 0 && *flags & CHK__CHECK_FLAG__CF_RESET) {
 		/* New generation for reset case. */
+		ins->ci_slowest_fail_phase = CHK_INVAL_PHASE;
 		cbk->cb_gen = crt_hlc_get();
 		cbk->cb_phase = CHK__CHECK_SCAN_PHASE__CSP_PREPARE;
 		memset(&cbk->cb_statistics, 0, sizeof(cbk->cb_statistics));
@@ -626,7 +697,6 @@ chk_leader_start_cb(void *args, uint32_t rank, uint32_t phase, int result, void 
 	struct chk_sched_args	*csa = args;
 	struct ds_pool_clue	*clues = data;
 	struct ds_pool_clue	*clue;
-	d_iov_t			 kiov;
 	int			 rc = 0;
 	int			 i;
 
@@ -634,8 +704,7 @@ chk_leader_start_cb(void *args, uint32_t rank, uint32_t phase, int result, void 
 
 	/* The engine has completed the check, remove it from the rank list. */
 	if (result > 0) {
-		d_iov_set(&kiov, &rank, sizeof(d_rank_t));
-		rc = dbtree_delete(csa->csa_ins->ci_rank_hdl, BTR_PROBE_EQ, &kiov, NULL);
+		rc = chk_rank_del(csa->csa_ins, rank);
 		goto out;
 	}
 
@@ -649,7 +718,7 @@ chk_leader_start_cb(void *args, uint32_t rank, uint32_t phase, int result, void 
 			goto out;
 
 		rc = chk_pool_add_shard(csa->csa_hdl, &csa->csa_list, clue->pc_uuid,
-					clue->pc_rank, 0, NULL, csa->csa_ins, NULL,
+					clue->pc_rank, NULL, csa->csa_ins, NULL,
 					clue, chk_leader_free_clue);
 		if (rc != 0) {
 			chk_leader_free_clue(clue);
@@ -658,6 +727,12 @@ chk_leader_start_cb(void *args, uint32_t rank, uint32_t phase, int result, void 
 	}
 
 out:
+	/*
+	 * XXX: The check engine and the check leader are on the same rank,
+	 *	release the buffer for clues. See ds_chk_start_hdlr for detail.
+	 */
+	chk_fini_clues(clues, nr, rank);
+
 	if (rc != 0)
 		D_ERROR(DF_LEADER" failed to handle start CB with ranks %u phase %d, result %d: "
 			DF_RC"\n", DP_LEADER(csa->csa_ins), rank, phase, result, DP_RC(rc));
@@ -667,7 +742,7 @@ out:
 
 int
 chk_leader_start(uint32_t rank_nr, d_rank_t *ranks,
-		 uint32_t policy_nr, struct chk_policy **policies,
+		 uint32_t policy_nr, struct chk_policy *policies,
 		 uint32_t pool_nr, uuid_t pools[], uint32_t flags, int32_t phase)
 {
 	struct chk_instance	*ins = chk_leader;
@@ -676,9 +751,11 @@ chk_leader_start(uint32_t rank_nr, d_rank_t *ranks,
 	d_rank_list_t		*rank_list = ins->ci_ranks;
 	struct chk_sched_args	*csa = NULL;
 	struct chk_rank_bundle	 rbund = { 0 };
-	d_rank_t		 myrank = dss_self_rank();
+	struct umem_attr	 uma = { 0 };
 	d_iov_t			 riov;
 	d_iov_t			 kiov;
+	uuid_t			 dummy_pool;
+	d_rank_t		 myrank = dss_self_rank();
 	int			 rc;
 	int			 i;
 
@@ -699,15 +776,14 @@ chk_leader_start(uint32_t rank_nr, d_rank_t *ranks,
 	D_ASSERT(rank_list != NULL);
 	D_ASSERT(d_list_empty(&ins->ci_rank_list));
 	D_ASSERT(d_list_empty(&ins->ci_pending_list));
-	D_ASSERT(ins->ci_sched == ABT_THREAD_NULL);
+
+	if (ins->ci_sched != ABT_THREAD_NULL)
+		ABT_thread_free(&ins->ci_sched);
 
 	d_rank_list_free(ins->ci_ranks);
 	ins->ci_ranks = rank_list;
 
-	if (ins->ci_iv_ns != NULL) {
-		ds_iv_ns_put(ins->ci_iv_ns);
-		ins->ci_iv_ns = NULL;
-	}
+	chk_iv_ns_cleanup(&ins->ci_iv_ns);
 
 	if (ins->ci_iv_group != NULL) {
 		crt_group_secondary_destroy(ins->ci_iv_group);
@@ -718,12 +794,24 @@ chk_leader_start(uint32_t rank_nr, d_rank_t *ranks,
 	if (rc != 0)
 		goto out_prep;
 
-	rc = ds_iv_ns_create(dss_get_module_info()->dmi_ctx, (unsigned char *)CHK_DUMMY_POOL,
-			     ins->ci_iv_group, &ins->ci_iv_id, &ins->ci_iv_ns);
+	uuid_parse(CHK_DUMMY_POOL, dummy_pool);
+	rc = ds_iv_ns_create(dss_get_module_info()->dmi_ctx, dummy_pool, ins->ci_iv_group,
+			     &ins->ci_iv_id, &ins->ci_iv_ns);
 	if (rc != 0)
 		goto out_group;
 
 	ds_iv_ns_update(ins->ci_iv_ns, myrank);
+	uma.uma_id = UMEM_CLASS_VMEM;
+
+	rc = dbtree_create_inplace(DBTREE_CLASS_CHK_RANK, 0, CHK_BTREE_ORDER, &uma,
+				   &ins->ci_rank_btr, &ins->ci_rank_hdl);
+	if (rc != 0)
+		goto out_iv;
+
+	rc = dbtree_create_inplace(DBTREE_CLASS_CHK_PA, 0, CHK_BTREE_ORDER, &uma,
+				   &ins->ci_pending_btr, &ins->ci_pending_hdl);
+	if (rc != 0)
+		goto out_tree;
 
 	for (i = 0; i < rank_list->rl_nr; i++) {
 		rbund.crb_rank = rank_list->rl_ranks[i];
@@ -735,7 +823,7 @@ chk_leader_start(uint32_t rank_nr, d_rank_t *ranks,
 		rc = dbtree_upsert(ins->ci_rank_hdl, BTR_PROBE_EQ, DAOS_INTENT_UPDATE,
 				   &kiov, &riov, NULL);
 		if (rc != 0)
-			goto out_rank;
+			goto out_tree;
 	}
 
 	/* Always refresh the start time. */
@@ -745,7 +833,7 @@ chk_leader_start(uint32_t rank_nr, d_rank_t *ranks,
 	cbk->cb_ins_status = CHK__CHECK_INST_STATUS__CIS_RUNNING;
 	rc = chk_bk_update_leader(cbk);
 	if (rc != 0)
-		goto out_rank;
+		goto out_tree;
 
 	csa = chk_csa_alloc(ins);
 	if (csa == NULL)
@@ -788,11 +876,10 @@ out_bk:
 		cbk->cb_ins_status = CHK__CHECK_INST_STATUS__CIS_FAILED;
 		chk_bk_update_leader(cbk);
 	}
-out_rank:
-	dbtree_destroy(ins->ci_rank_hdl, NULL);
-	ins->ci_rank_hdl = DAOS_HDL_INVAL;
-	ds_iv_ns_put(ins->ci_iv_ns);
-	ins->ci_iv_ns = NULL;
+out_tree:
+	chk_destroy_rank_tree(ins);
+out_iv:
+	chk_iv_ns_cleanup(&ins->ci_iv_ns);
 out_group:
 	crt_group_secondary_destroy(ins->ci_iv_group);
 	ins->ci_iv_group = NULL;
@@ -828,14 +915,12 @@ static int
 chk_leader_stop_cb(void *args, uint32_t rank, uint32_t phase, int result, void *data, uint32_t nr)
 {
 	struct chk_instance	*ins = args;
-	d_iov_t			 kiov;
 	int			 rc;
 
 	D_ASSERTF(result > 0, "Unexpected result for stop CB %d\n", result);
 
 	/* The engine has stop on the rank, remove it from the rank list. */
-	d_iov_set(&kiov, &rank, sizeof(d_rank_t));
-	rc = dbtree_delete(ins->ci_rank_hdl, BTR_PROBE_EQ, &kiov, NULL);
+	rc = chk_rank_del(ins, rank);
 	if (rc != 0)
 		D_ERROR(DF_LEADER" failed to handle stop CB with ranks %u: "DF_RC"\n",
 			DP_LEADER(ins), rank, DP_RC(rc));
@@ -849,7 +934,6 @@ chk_leader_stop(uint32_t pool_nr, uuid_t pools[])
 	struct chk_instance	*ins = chk_leader;
 	struct chk_property	*prop = &ins->ci_prop;
 	struct chk_bookmark	*cbk = &ins->ci_bk;
-	d_rank_list_t		*ranks = NULL;
 	int			 rc = 0;
 
 	if (ins->ci_starting)
@@ -889,7 +973,7 @@ chk_leader_stop(uint32_t pool_nr, uuid_t pools[])
 			D_GOTO(out, rc = -DER_NOTLEADER);
 	}
 
-	rc = chk_stop_remote(ranks, cbk->cb_gen, pool_nr, pools, chk_leader_stop_cb, ins);
+	rc = chk_stop_remote(ins->ci_ranks, cbk->cb_gen, pool_nr, pools, chk_leader_stop_cb, ins);
 	if (rc != 0)
 		goto out;
 
@@ -977,9 +1061,8 @@ chk_leader_query_cb(void *args, uint32_t rank, uint32_t phase, int result, void 
 			goto out;
 
 		rc = chk_pool_add_shard(csa->csa_hdl, &csa->csa_list, shard->cqps_uuid,
-					shard->cqps_rank, shard->cqps_phase, NULL,
-					csa->csa_ins, &csa->csa_count, shard,
-					chk_leader_free_shard);
+					shard->cqps_rank, NULL, csa->csa_ins, &csa->csa_count,
+					shard, chk_leader_free_shard);
 		if (rc != 0) {
 			chk_leader_free_shard(shard);
 			goto out;
@@ -987,6 +1070,12 @@ chk_leader_query_cb(void *args, uint32_t rank, uint32_t phase, int result, void 
 	}
 
 out:
+	/*
+	 * XXX: The check engine and the check leader are on the same rank,
+	 *	release the buffer for shards. See ds_chk_query_hdlr for detail.
+	 */
+	chk_fini_shards(shards, nr);
+
 	if (rc != 0)
 		D_ERROR(DF_LEADER" failed to handle query CB with ranks %u phase %d, result %d: "
 			DF_RC"\n", DP_LEADER(csa->csa_ins), rank, phase, result, DP_RC(rc));
@@ -1062,7 +1151,7 @@ chk_leader_prop(chk_prop_cb_t prop_cb, void *buf)
 {
 	struct chk_property	*prop = &chk_leader->ci_prop;
 
-	return prop_cb(buf, (struct chk_policy **)&prop->cp_policies,
+	return prop_cb(buf, (struct chk_policy *)prop->cp_policies,
 		       CHK_POLICY_MAX - 1, prop->cp_flags);
 }
 
@@ -1073,7 +1162,6 @@ chk_leader_mark_rank_dead(d_rank_t rank, uint64_t incarnation, enum crt_event_so
 	struct chk_instance	*ins = chk_leader;
 	struct chk_property	*prop = &ins->ci_prop;
 	struct chk_bookmark	*cbk = &ins->ci_bk;
-	d_iov_t			 kiov;
 	uint32_t		 version = cbk->cb_gen - prop->cp_rank_nr - 1;
 	int			 rc = 0;
 
@@ -1099,8 +1187,7 @@ chk_leader_mark_rank_dead(d_rank_t rank, uint64_t incarnation, enum crt_event_so
 	if (rc != 0)
 		goto out;
 
-	d_iov_set(&kiov, &rank, sizeof(rank));
-	rc = dbtree_delete(ins->ci_rank_hdl, BTR_PROBE_EQ, &kiov, NULL);
+	rc = chk_rank_del(ins, rank);
 	if (rc != 0)
 		goto out;
 
@@ -1289,8 +1376,7 @@ chk_leader_notify(uint64_t gen, d_rank_t rank, uint32_t phase, uint32_t status)
 
 		d_iov_set(&riov, &rbund, sizeof(rbund));
 		d_iov_set(&kiov, &rank, sizeof(rank));
-		rc = dbtree_upsert(ins->ci_rank_hdl, BTR_PROBE_EQ, DAOS_INTENT_UPDATE,
-				   &kiov, &riov, NULL);
+		rc = dbtree_update(ins->ci_rank_hdl, &kiov, &riov);
 		break;
 	case CHK__CHECK_INST_STATUS__CIS_COMPLETED:
 		/*
@@ -1301,17 +1387,13 @@ chk_leader_notify(uint64_t gen, d_rank_t rank, uint32_t phase, uint32_t status)
 			     phase != CHK__CHECK_SCAN_PHASE__DSP_DONE))
 			D_GOTO(out, rc = -DER_INVAL);
 
-		d_iov_set(&kiov, &rank, sizeof(rank));
-		rc = dbtree_delete(ins->ci_pending_hdl, BTR_PROBE_EQ, &kiov, NULL);
-		if (rc == -DER_NONEXIST)
-			rc = 0;
+		rc = chk_rank_del(ins, rank);
 		break;
 	case CHK__CHECK_INST_STATUS__CIS_FAILED:
 		if (ins->ci_slowest_fail_phase > phase)
 			ins->ci_slowest_fail_phase = phase;
 
-		d_iov_set(&kiov, &rank, sizeof(rank));
-		rc = dbtree_delete(ins->ci_pending_hdl, BTR_PROBE_EQ, &kiov, NULL);
+		rc = chk_rank_del(ins, rank);
 		if (rc != 0 || !(prop->cp_flags & CHK__CHECK_FLAG__CF_FAILOUT))
 			D_GOTO(out, rc = (rc == -DER_NONEXIST ? 0 : rc));
 
@@ -1324,10 +1406,9 @@ chk_leader_notify(uint64_t gen, d_rank_t rank, uint32_t phase, uint32_t status)
 	}
 
 out:
-	if (rc != -DER_NOTAPPLICABLE)
-		D_CDEBUG(rc != 0, DLOG_ERR, DLOG_INFO,
-			 DF_LEADER" handle notification from rank %u, phase %u, status %u: "
-			 DF_RC"\n", DP_LEADER(ins), rank, phase, status, DP_RC(rc));
+	D_CDEBUG(rc != 0 && rc != -DER_NOTAPPLICABLE, DLOG_ERR, DLOG_INFO,
+		 DF_LEADER" handle notification from rank %u, phase %u, status %u: "
+		 DF_RC"\n", DP_LEADER(ins), rank, phase, status, DP_RC(rc));
 
 	return (rc == 0 || rc == -DER_NOTAPPLICABLE) ? 0 : rc;
 }
@@ -1383,7 +1464,7 @@ chk_leader_init(void)
 	chk_leader->ci_is_leader = 1;
 	rc = chk_ins_init(chk_leader);
 	if (rc != 0)
-		goto free;
+		goto fini;
 
 	/*
 	 * XXX: DAOS global consistency check depends on all related engines' local
@@ -1401,7 +1482,7 @@ chk_leader_init(void)
 	if (rc != 0)
 		goto fini;
 
-	if (unlikely(cbk->cb_magic != CHK_BK_MAGIC_LEADER)) {
+	if (cbk->cb_magic != 0 && cbk->cb_magic != CHK_BK_MAGIC_LEADER) {
 		D_ERROR("Hit corrupted leader bookmark on rank %u: %u vs %u\n",
 			dss_self_rank(), cbk->cb_magic, CHK_BK_MAGIC_LEADER);
 		D_GOTO(fini, rc = -DER_IO);
@@ -1422,8 +1503,7 @@ chk_leader_init(void)
 
 fini:
 	chk_ins_fini(chk_leader);
-free:
-	D_FREE(chk_leader);
+	chk_leader = NULL;
 out:
 	return rc;
 }

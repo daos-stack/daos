@@ -56,14 +56,14 @@ chk_start_aggregator(crt_rpc_t *source, crt_rpc_t *result, void *priv)
 		D_ERROR("Failed to check start with gen "DF_X64": "DF_RC"\n",
 			in_source->csi_gen, DP_RC(out_source->cso_status));
 
-		if (out_result->cso_status == 0)
-			out_result->cso_status = out_source->cso_status;
+		if (out_result->cso_child_status == 0)
+			out_result->cso_child_status = out_source->cso_status;
 	} else {
 		rc = ccrp->cb(ccrp->args, out_source->cso_rank, out_source->cso_phase,
-			      out_source->cso_status, out_result->cso_clues.ca_arrays,
-			      out_result->cso_clues.ca_count);
-		if (rc != 0 && out_result->cso_status == 0)
-			out_result->cso_status = rc;
+			      out_source->cso_status, out_source->cso_clues.ca_arrays,
+			      out_source->cso_clues.ca_count);
+		if (rc != 0 && out_result->cso_child_status == 0)
+			out_result->cso_child_status = rc;
 	}
 
 	return 0;
@@ -82,12 +82,12 @@ chk_stop_aggregator(crt_rpc_t *source, crt_rpc_t *result, void *priv)
 		D_ERROR("Failed to check stop with gen "DF_X64": "DF_RC"\n",
 			in_source->csi_gen, DP_RC(out_source->cso_status));
 
-		if (out_result->cso_status == 0)
-			out_result->cso_status = out_source->cso_status;
-	} else if (ccrp->cb != NULL && out_source->cso_status > 0) {
+		if (out_result->cso_child_status == 0)
+			out_result->cso_child_status = out_source->cso_status;
+	} else if (out_source->cso_status > 0) {
 		rc = ccrp->cb(ccrp->args, out_source->cso_rank, 0, out_source->cso_status, NULL, 0);
-		if (rc != 0 && out_result->cso_status == 0)
-			out_result->cso_status = rc;
+		if (rc != 0 && out_result->cso_child_status == 0)
+			out_result->cso_child_status = rc;
 	}
 
 	return 0;
@@ -106,13 +106,13 @@ chk_query_aggregator(crt_rpc_t *source, crt_rpc_t *result, void *priv)
 		D_ERROR("Failed to check query rank dead with gen "DF_X64": "DF_RC"\n",
 			in_source->cqi_gen, DP_RC(out_source->cqo_status));
 
-		if (out_result->cqo_status == 0)
-			out_result->cqo_status = out_source->cqo_status;
+		if (out_result->cqo_child_status == 0)
+			out_result->cqo_child_status = out_source->cqo_status;
 	} else {
 		rc = ccrp->cb(ccrp->args, 0, 0, out_source->cqo_status,
-			      out_result->cqo_shards.ca_arrays, out_result->cqo_shards.ca_count);
-		if (rc != 0 && out_result->cqo_status == 0)
-			out_result->cqo_status = rc;
+			      out_source->cqo_shards.ca_arrays, out_source->cqo_shards.ca_count);
+		if (rc != 0 && out_result->cqo_child_status == 0)
+			out_result->cqo_child_status = rc;
 	}
 
 	return 0;
@@ -183,13 +183,10 @@ static inline int
 chk_co_rpc_prepare(d_rank_list_t *rank_list, crt_opcode_t opc, struct chk_co_rpc_priv *priv,
 		   crt_rpc_t **req)
 {
-	int	topo;
-
-	topo = crt_tree_topo(CRT_TREE_KNOMIAL, 32);
-	opc = DAOS_RPC_OPCODE(opc, DAOS_CHK_MODULE, DAOS_CHK_VERSION);
-
-	return crt_corpc_req_create(dss_get_module_info()->dmi_ctx, NULL, rank_list, opc,
-				    NULL, priv, CRT_RPC_FLAG_FILTER_INVERT, topo, req);
+	return crt_corpc_req_create(dss_get_module_info()->dmi_ctx, NULL, rank_list,
+				    DAOS_RPC_OPCODE(opc, DAOS_CHK_MODULE, DAOS_CHK_VERSION),
+				    NULL, priv, CRT_RPC_FLAG_FILTER_INVERT,
+				    crt_tree_topo(CRT_TREE_KNOMIAL, 32), req);
 }
 
 static inline int
@@ -207,7 +204,7 @@ chk_sg_rpc_prepare(d_rank_t rank, crt_opcode_t opc, crt_rpc_t **req)
 
 int
 chk_start_remote(d_rank_list_t *rank_list, uint64_t gen, uint32_t rank_nr, d_rank_t *ranks,
-		 uint32_t policy_nr, struct chk_policy **policies, uint32_t pool_nr,
+		 uint32_t policy_nr, struct chk_policy *policies, uint32_t pool_nr,
 		 uuid_t pools[], uint32_t flags, int32_t phase, d_rank_t leader,
 		 chk_co_rpc_cb_t start_cb, void *args)
 {
@@ -231,7 +228,7 @@ chk_start_remote(d_rank_list_t *rank_list, uint64_t gen, uint32_t rank_nr, d_ran
 	csi->csi_ranks.ca_count = rank_nr;
 	csi->csi_ranks.ca_arrays = ranks;
 	csi->csi_policies.ca_count = policy_nr;
-	csi->csi_policies.ca_arrays = (void *)policies;
+	csi->csi_policies.ca_arrays = policies;
 	csi->csi_uuids.ca_count = pool_nr;
 	csi->csi_uuids.ca_arrays = pools;
 
@@ -240,7 +237,28 @@ chk_start_remote(d_rank_list_t *rank_list, uint64_t gen, uint32_t rank_nr, d_ran
 		goto out;
 
 	cso = crt_reply_get(req);
-	rc = cso->cso_status;
+	if (cso->cso_child_status != 0) {
+		rc = cso->cso_child_status;
+
+		/*
+		 * XXX: The check engine and the check leader are on the same rank,
+		 *	release the buffer for clues. See ds_chk_start_hdlr for detail.
+		 */
+		if (cso->cso_status >= 0)
+			chk_fini_clues(cso->cso_clues.ca_arrays, cso->cso_clues.ca_count,
+				       cso->cso_rank);
+	} else {
+		rc = cso->cso_status;
+
+		/*
+		 * XXX: The aggregator only aggregates the results from other check
+		 *	engines, does not include the check engine on the same rank
+		 *	as the check leader resides. Let's aggregate it here.
+		 */
+		if (rc >= 0)
+			rc = start_cb(args, cso->cso_rank, cso->cso_phase, cso->cso_status,
+				      cso->cso_clues.ca_arrays, cso->cso_clues.ca_count);
+	}
 
 out:
 	if (req != NULL) {
@@ -283,7 +301,19 @@ chk_stop_remote(d_rank_list_t *rank_list, uint64_t gen, uint32_t pool_nr, uuid_t
 		goto out;
 
 	cso = crt_reply_get(req);
-	rc = cso->cso_status;
+	if (cso->cso_child_status != 0) {
+		rc = cso->cso_child_status;
+	} else {
+		rc = cso->cso_status;
+
+		/*
+		 * XXX: The aggregator only aggregates the results from other check
+		 *	engines, does not include the check engine on the same rank
+		 *	as the check leader resides. Let's aggregate it here.
+		 */
+		if (rc > 0)
+			rc = stop_cb(args, cso->cso_rank, 0, cso->cso_status, NULL, 0);
+	}
 
 out:
 	if (req != NULL)
@@ -322,7 +352,27 @@ chk_query_remote(d_rank_list_t *rank_list, uint64_t gen, uint32_t pool_nr, uuid_
 		goto out;
 
 	cqo = crt_reply_get(req);
-	rc = cqo->cqo_status;
+	if (cqo->cqo_child_status != 0) {
+		rc = cqo->cqo_child_status;
+
+		/*
+		 * XXX: The check engine and the check leader are on the same rank,
+		 *	release the buffer for shards. See ds_chk_query_hdlr for detail.
+		 */
+		if (cqo->cqo_status == 0)
+			chk_fini_shards(cqo->cqo_shards.ca_arrays, cqo->cqo_shards.ca_count);
+	} else {
+		rc = cqo->cqo_status;
+
+		/*
+		 * XXX: The aggregator only aggregates the results from other check
+		 *	engines, does not include the check engine on the same rank
+		 *	as the check leader resides. Let's aggregate it here.
+		 */
+		if (rc == 0)
+			rc = query_cb(args, 0, 0, cqo->cqo_status, cqo->cqo_shards.ca_arrays,
+				      cqo->cqo_shards.ca_count);
+	}
 
 out:
 	if (req != NULL)
