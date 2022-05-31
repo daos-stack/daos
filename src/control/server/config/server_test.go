@@ -1048,8 +1048,8 @@ func TestServerConfig_Parsing(t *testing.T) {
 			if tt.expParseErr != nil {
 				return
 			}
+
 			config = tt.extraConfig(config)
-			fmt.Printf("XXX %s: %v\n", name, config.DisableHugepages)
 			CmpErr(t, tt.expValidateErr, config.Validate(log, defHugePageInfo.PageSizeKb))
 
 			if tt.expCheck != nil {
