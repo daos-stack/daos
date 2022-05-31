@@ -229,8 +229,6 @@ out:
  * \param[in]		leader_rank	Pool leader rank
  * \param[in]		ps		Pool space
  * \param[in]		rs		Rebuild status
- * \param[in]		cur_global_ver	Pool current global version
- * \param[in]		lat_global_ver	Pool latest global version
  * @param[in][out]	info		Pool info - pass in with pi_bits set
  *					Returned populated with inputs
  */

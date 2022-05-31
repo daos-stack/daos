@@ -3423,17 +3423,17 @@ out:
 /**
  * Query the pool without holding a pool handle.
  *
- * \param[in]	pool_uuid	UUID of the pool
- * \param[in]	ps_ranks	Ranks of pool svc replicas
- * \param[out]	ranks		Optional, returned storage ranks in this pool.
- *				If #pool_info is NULL, engines with disabled targets.
- *				If #pool_info is passed, engines with enabled or disabled
- *				targets according to #pi_bits (DPI_ENGINES_ENABLED bit).
- *				Note: ranks may be empty (i.e., *ranks->rl_nr may be 0).
- *				The caller must free the list with d_rank_list_free().
- * \param[out]	pool_info	Results of the pool query
- * \param[out]	pool_layout_ver	Results of the current pool global version
- * \param[out]	pool_upgrade_layout_ver Results of the target latest pool global version
+ * \param[in]	pool_uuid		UUID of the pool
+ * \param[in]	ps_ranks		Ranks of pool svc replicas
+ * \param[out]	ranks			Optional, returned storage ranks in this pool.
+ *					If #pool_info is NULL, engines with disabled targets.
+ *					If #pool_info is passed, engines with enabled or disabled
+ *					targets according to #pi_bits (DPI_ENGINES_ENABLED bit).
+ *					Note: ranks may be empty (i.e., *ranks->rl_nr may be 0).
+ *					The caller must free the list with d_rank_list_free().
+ * \param[out]	pool_info		Results of the pool query
+ * \param[out]	pool_layout_ver		Results of the current pool global version
+ * \param[out]	pool_upgrade_layout_ver	Results of the target latest pool global version
  *
  * \return	0		Success
  *		-DER_INVAL	Invalid input

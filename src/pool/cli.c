@@ -374,6 +374,16 @@ process_query_reply(struct dc_pool *pool, struct pool_buf *map_buf,
 
 out_unlock:
 	pool_map_decref(map); /* NB: protected by pool::dp_map_lock */
+	/* Cache redun factor */
+	if (rc == 0 && !pool->dp_rf_valid) {
+		struct daos_prop_entry	*entry;
+
+		entry = daos_prop_entry_get(prop_reply, DAOS_PROP_PO_REDUN_FAC);
+		if (entry) {
+			pool->dp_rf = entry->dpe_val;
+			pool->dp_rf_valid = 1;
+		}
+	}
 	D_RWLOCK_UNLOCK(&pool->dp_map_lock);
 
 	if (prop_req != NULL && rc == 0)
@@ -463,7 +473,6 @@ pool_connect_cp(tse_task_t *task, void *data)
 		D_ERROR("failed to connect to pool: "DF_RC"\n", DP_RC(rc));
 		D_GOTO(out, rc);
 	}
-	pool->dp_rf = pco->pco_redun_fac;
 
 	rc = process_query_reply(pool, map_buf, pco->pco_op.po_map_version,
 				 pco->pco_op.po_hint.sh_rank,
@@ -2858,15 +2867,38 @@ out_task:
 
 int dc_pool_get_redunc(daos_handle_t poh)
 {
+	struct daos_prop_entry	*entry;
+	daos_prop_t		*prop_query;
 	int			rf;
-	struct dc_pool          *pool;
+	struct dc_pool		*pool = dc_hdl2pool(poh);
 
-	pool = dc_hdl2pool(poh);
 	if (pool == NULL)
 		return -DER_NO_HDL;
 
-	rf = pool->dp_rf;
+	D_RWLOCK_RDLOCK(&pool->dp_map_lock);
+	if (pool->dp_rf_valid) {
+		rf = pool->dp_rf;
+		D_RWLOCK_UNLOCK(&pool->dp_map_lock);
+		dc_pool_put(pool);
+		return rf;
+	}
+	D_RWLOCK_UNLOCK(&pool->dp_map_lock);
 	dc_pool_put(pool);
+
+	prop_query = daos_prop_alloc(1);
+	if (prop_query == NULL)
+		return -DER_NOMEM;
+
+	prop_query->dpp_entries[0].dpe_type = DAOS_PROP_PO_REDUN_FAC;
+	rf = daos_pool_query(poh, NULL, NULL, prop_query, NULL);
+	if (rf) {
+		daos_prop_free(prop_query);
+		return rf;
+	}
+	entry = daos_prop_entry_get(prop_query, DAOS_PROP_PO_REDUN_FAC);
+	D_ASSERT(entry != NULL);
+	rf = entry->dpe_val;
+	daos_prop_free(prop_query);
 
 	return rf;
 }

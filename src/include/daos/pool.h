@@ -78,7 +78,8 @@ struct dc_pool {
 	/* highest known pool map version */
 	uint32_t		dp_map_version_known;
 	uint32_t		dp_disconnecting:1,
-				dp_slave:1; /* generated via g2l */
+				dp_slave:1, /* generated via g2l */
+				dp_rf_valid:1;
 	/* required/allocated pool map size */
 	size_t			dp_map_sz;
 

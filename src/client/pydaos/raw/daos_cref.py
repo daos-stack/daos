@@ -104,8 +104,7 @@ class PoolInfo(ctypes.Structure):
                 ("pi_leader", ctypes.c_uint32),
                 ("pi_bits", ctypes.c_uint64),
                 ("pi_space", PoolSpace),
-                ("pi_rebuild_st", RebuildStatus),
-		]
+                ("pi_rebuild_st", RebuildStatus)]
 
 
 class DaosPropertyEntry(ctypes.Structure):
