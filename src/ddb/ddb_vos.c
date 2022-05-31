@@ -1437,12 +1437,10 @@ sync_cb(struct bio_blob_hdr *hdr, void *cb_args)
 	uint8_t			*pool_id = hdr->bbh_pool;
 	struct smd_pool_info	*pool_info = NULL;
 	daos_size_t		 blob_size;
-	uint64_t		 blob_id;
+	struct dv_sync_cb_args	*args = cb_args;
 	int			 rc;
 
-	D_ASSERT(cb_args != NULL);
-	struct dv_sync_cb_args *args = cb_args;
-
+	D_ASSERT(args != NULL);
 
 	rc = smd_pool_get_info(pool_id, &pool_info);
 	if (!SUCCESS(rc)) {
@@ -1458,15 +1456,12 @@ sync_cb(struct bio_blob_hdr *hdr, void *cb_args)
 	blob_size = pool_info->spi_blob_sz;
 	smd_pool_free_info(pool_info);
 
-	/* Delete the target first if it exists */
-	rc = smd_pool_get_blob(pool_id, hdr->bbh_vos_id, &blob_id);
-	if (rc != DER_NONEXIST) {
-		rc = smd_pool_del_tgt(pool_id, hdr->bbh_vos_id);
-		if (!SUCCESS(rc)) {
-			/* Ignore error for now */
-			D_WARN("delete target failed: "DF_RC"\n", DP_RC(rc));
-			rc = 0;
-		}
+	/* Try to delete the target first */
+	rc = smd_pool_del_tgt(pool_id, hdr->bbh_vos_id);
+	if (!SUCCESS(rc)) {
+		/* Ignore error for now ... might not exist*/
+		D_WARN("delete target failed: "DF_RC"\n", DP_RC(rc));
+		rc = 0;
 	}
 
 	rc = smd_pool_add_tgt(pool_id, hdr->bbh_vos_id, hdr->bbh_blob_id, blob_size);

@@ -613,6 +613,6 @@ ddb_run_smd_sync(struct ddb_ctx *ctx)
 	}
 
 	rc = dv_sync_smd(sync_smd_cb, ctx);
-	ddb_print(ctx, "Done\n");
+	ddb_printf(ctx, "Done: "DF_RC"\n", DP_RC(rc));
 	return rc;
 }

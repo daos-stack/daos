@@ -111,6 +111,7 @@ read_complete_cb(void *cb_arg, int bs_errno)
 	int			 rc;
 
 	if (bs_errno) {
+		spdk_blob_close(ctx->dsc_blob, close_blob_cb, ctx);
 		bs_unload_spdk_error(ctx, "Error in read completion", bs_errno);
 		return;
 	}

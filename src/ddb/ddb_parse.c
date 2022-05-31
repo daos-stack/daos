@@ -21,6 +21,8 @@ vos_path_parse(const char *path, struct vos_file_parts *vos_file_parts)
 	D_ASSERT(path != NULL && vos_file_parts != NULL);
 
 	D_ALLOC(path_copy, path_len);
+	if (path_copy == NULL)
+		return -DER_NOMEM;
 	strcpy(path_copy, path);
 
 	tok = strtok(path_copy, "/");
