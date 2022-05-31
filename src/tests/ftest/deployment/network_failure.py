@@ -243,7 +243,7 @@ class NetworkFailureTest(IorTestBase):
         self.log.info("############################")
 
     def test_network_failure_wo_rf(self):
-        """Jira ID: DAOS-10003.
+        """Jira ID: DAOS-10003
 
         Test rank failure without redundancy factor and SX object class. See
         verify_rank_failure() for test steps.
@@ -258,7 +258,7 @@ class NetworkFailureTest(IorTestBase):
             container_namespace="/run/container_wo_rf/*")
 
     def test_network_failure_with_rp(self):
-        """Jira ID: DAOS-10002.
+        """Jira ID: DAOS-10003
 
         Test rank failure with redundancy factor and RP_2G1 object class. See
         verify_rank_failure() for test steps.
@@ -273,7 +273,7 @@ class NetworkFailureTest(IorTestBase):
             container_namespace="/run/container_with_rf/*")
 
     def test_network_failure_with_ec(self):
-        """Jira ID: DAOS-10002.
+        """Jira ID: DAOS-10003
 
         Test rank failure with redundancy factor and EC_2P1G1 object class. See
         verify_rank_failure() for test steps.
@@ -288,7 +288,7 @@ class NetworkFailureTest(IorTestBase):
             container_namespace="/run/container_with_rf/*")
 
     def test_network_failure_isolation(self):
-        """Jira ID: DAOS-10003.
+        """Jira ID: DAOS-10003
 
         Verify that network failure in a node where pool isn't created doesn't affect the
         connection.
