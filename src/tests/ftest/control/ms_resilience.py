@@ -21,14 +21,14 @@ def get_hostname(host_addr):
         host_addr (str): address to resolve into hostname.
 
     Returns:
-        str: hostname of the host.
+        NodeSet: hostname of the host.
 
     """
     if not host_addr:
-        return None
+        return NodeSet()
 
     fqdn, _, _ = socket.gethostbyaddr(host_addr.split(":")[0])
-    return fqdn.split(".")[0]
+    return NodeSet(fqdn.split(".")[0])
 
 
 class ManagementServiceResilience(TestWithServers):
@@ -89,7 +89,7 @@ class ManagementServiceResilience(TestWithServers):
         """Fetch the current system leader.
 
         Returns:
-            str: hostname of the MS leader, or None
+            NodeSet: hostname of the MS leader, or None
 
         """
         sys_leader_info = self.get_dmg_command().system_leader_query()
@@ -104,7 +104,7 @@ class ManagementServiceResilience(TestWithServers):
             replicas (NodeSet): hostnames representing the access points for the MS.
 
         Returns:
-            str: address of the MS leader.
+            NodeSet: hostname of the MS leader.
 
         """
         l_hostname = self.get_leader()
@@ -135,17 +135,17 @@ class ManagementServiceResilience(TestWithServers):
 
         while True:
             time.sleep(1)
-            dead_list = []
+            dead_list = NodeSet()
             members = self.get_dmg_command().system_query()["response"]["members"]
             for member in members:
                 if member["addr"] not in hostnames:
                     hostname = get_hostname(member["addr"])
-                    if hostname is None:
+                    if not hostname:
                         self.fail("Unable to resolve {} to hostname".format(member["addr"]))
                     hostnames[member["addr"]] = hostname
 
                 if member["state"] == "excluded":
-                    dead_list.append(hostnames[member["addr"]])
+                    dead_list.add(hostnames[member["addr"]])
 
             if len(dead_list) != len(kill_list):
                 self.log.info("*** waiting for %d dead servers to be marked dead", len(kill_list))
@@ -194,7 +194,7 @@ class ManagementServiceResilience(TestWithServers):
         """Kill a subset of servers in order to simulate failures.
 
         Args:
-            leader (str): hostname of current leader.
+            leader (NodeSet): hostname of current leader.
             replicas (NodeSet): replica hostnames.
             N (int): Number of hosts (including leader) to stop.
 

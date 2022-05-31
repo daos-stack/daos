@@ -156,13 +156,13 @@ def auto_detect_devices(host_list, device_type, length, device_filter=None):
         # Verify each server host has the same VMD PCI addresses
         output_data = list(task.iter_buffers())
         if len(output_data) > 1:
-            log.error("ERROR: Non-homogeneous {} PCI addresses.".format(device_type))
+            log.error("ERROR: Non-homogeneous %s PCI addresses.", device_type)
         elif len(output_data) == 1:
             # Get the devices from the successful, homogeneous command output
             output_str = "\n".join([line.decode("utf-8") for line in output_data[0][0]])
             devices = find_pci_address(output_str)
     else:
-        log.error("ERROR: Issuing command '{}'".format(command))
+        log.error("ERROR: Issuing command '%s'", command)
 
     return devices
 
@@ -190,7 +190,7 @@ def get_vmd_address_backed_nvme(host_list, vmd_disks, vmd_controllers):
 
     # Verify the command was successful on each server host
     if not display_task(task):
-        log.error("ERROR: Issuing command '{}'".format(command))
+        log.error("ERROR: Issuing command '%s'", command)
     else:
         # Verify each server host has the same NVMe devices behind the same VMD addresses.
         output_data = list(task.iter_buffers())
@@ -374,9 +374,9 @@ def replace_yaml_entries(yaml_file, args):
             user_values[key] = None
 
     # Assign replacement values for the test yaml entries to be replaced
-    log.info("Detecting replacements for {} in {}".format(yaml_keys, yaml_file))
-    log.info("  Found values: {}".format(yaml_find))
-    log.info("  User values:  {}".format(dict(user_values)))
+    log.info("Detecting replacements for %s in %s", yaml_keys, yaml_file)
+    log.info("  Found values: %s", yaml_find)
+    log.info("  User values:  %s", dict(user_values))
 
     return ""
 
@@ -467,7 +467,7 @@ def main():
     add_arguments_verbose(parser)
     parser.add_argument("files", nargs="*", type=str, help="yaml files to modify")
     args = parser.parse_args()
-    log.debug("Arguments: {}".format(args))
+    log.debug("Arguments: %s", args)
 
     # Convert host specifications into NodeSets
     args.test_servers = NodeSet(args.test_servers)
