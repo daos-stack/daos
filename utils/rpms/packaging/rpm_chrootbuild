@@ -18,8 +18,20 @@ config_opts['module_setup_commands'] = [
   ('disable',  'go-toolset')
 ]
 EOF
-
 fi
+
+# Use dnf on CentOS 7
+if [[ $CHROOT_NAME == *epel-7-x86_64 ]]; then
+    MOCK_OPTIONS="--dnf --no-bootstrap-chroot${MOCK_OPTIONS:+ }$MOCK_OPTIONS"
+fi
+
+# Allow BR: foo-devel < 1.2 to work when foo-devel-1.3 is actually available
+cat <<EOF >> "$cfg_file"
+config_opts['dnf.conf'] += """
+[main]
+best=0
+"""
+EOF
 
 # shellcheck disable=SC2153
 repo_adds=()
