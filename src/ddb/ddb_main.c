@@ -123,7 +123,7 @@ ddb_main(struct ddb_io_ft *io_ft, int argc, char *argv[])
 		D_GOTO(done, rc);
 
 	if (str_has_value(pa.pa_pool_path)) {
-		rc = ddb_vos_pool_open(pa.pa_pool_path, &ctx.dc_poh);
+		rc = dv_pool_open(pa.pa_pool_path, &ctx.dc_poh);
 		if (!SUCCESS(rc))
 			D_GOTO(done, rc);
 	}
@@ -133,7 +133,7 @@ ddb_main(struct ddb_io_ft *io_ft, int argc, char *argv[])
 		snprintf(buf, buf_len, "%s %s", argv[0], pa.pa_r_cmd_run);
 		rc = ddb_str2argv_create(buf, &parse_args);
 		if (!SUCCESS(rc)) {
-			ddb_vos_pool_close(ctx.dc_poh);
+			dv_pool_close(ctx.dc_poh);
 			D_GOTO(done, rc);
 		}
 
