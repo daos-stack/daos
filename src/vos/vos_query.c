@@ -473,13 +473,12 @@ out:
 }
 
 static int
-query_recx(struct open_query *query, daos_recx_t *recxs)
+query_recx(struct open_query *query, daos_recx_t *recx)
 {
 	if (!(query->qt_flags & VOS_GET_RECX_EC))
-		return query_normal_recx(query, &recxs[0]);
+		return query_normal_recx(query, recx);
 
-	memset(&recxs[1], 0, sizeof(recxs[1]) * 2);
-	return query_ec_recx(query, &recxs[0]);
+	return query_ec_recx(query, recx);
 }
 
 static int
