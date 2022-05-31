@@ -154,6 +154,16 @@ func (r *PoolQueryReq) SetUUID(id uuid.UUID) {
 }
 
 // SetSvcRanks sets the request's Pool Service Ranks.
+func (r *PoolQueryTargetReq) SetSvcRanks(rl []uint32) {
+	r.SvcRanks = rl
+}
+
+// SetUUID sets the request's ID to a UUID.
+func (r *PoolQueryTargetReq) SetUUID(id uuid.UUID) {
+	r.Id = id.String()
+}
+
+// SetSvcRanks sets the request's Pool Service Ranks.
 func (r *GetACLReq) SetSvcRanks(rl []uint32) {
 	r.SvcRanks = rl
 }
