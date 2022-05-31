@@ -69,7 +69,7 @@ fini_ranks:
 /**
  * Destroy the pool on specified storage ranks
  */
-static int
+int
 ds_mgmt_tgt_pool_destroy(uuid_t pool_uuid, d_rank_list_t *ranks)
 {
 	int				 rc;

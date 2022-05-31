@@ -123,7 +123,6 @@ struct vos_pool_df {
 	 * the phases range [CSP_DTX_RESYNC, OSP_AGGREGATION] for the pool shard on the target.
 	 */
 	umem_off_t				pd_chk;
-	uint64_t				pd_reserv;
 	/** Unique PoolID for each VOS pool assigned on creation */
 	uuid_t					pd_id;
 	/** Total space in bytes on SCM */

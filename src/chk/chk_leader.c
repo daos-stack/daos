@@ -11,7 +11,9 @@
 #include <daos/btree.h>
 #include <daos/btree_class.h>
 #include <daos_srv/daos_engine.h>
+#include <daos_srv/daos_mgmt_srv.h>
 #include <daos_srv/daos_chk.h>
+#include <daos_srv/rsvc.h>
 #include <daos_srv/vos.h>
 #include <daos_srv/iv.h>
 
@@ -333,20 +335,1036 @@ chk_leader_find_slowest(struct chk_instance *ins)
 	return phase;
 }
 
-static int
-chk_leader_handle_pools_p1(struct chk_sched_args *csa)
+static void
+chk_leader_post_repair(struct chk_instance *ins, uuid_t uuid, int *result, bool update, bool notify)
 {
-	/* TBD: merge with Liwei's patch. */
+	struct chk_bookmark	*cbk = &ins->ci_bk;
+	struct chk_iv		 iv = { 0 };
+	int			 rc;
 
-	return 0;
+	/*
+	 * If the operation failed and 'failout' is set, then do nothing here.
+	 * chk_leader_exit will handle all the IV and bookmark related things.
+	 */
+	if (*result == 0 || !(ins->ci_prop.cp_flags & CHK__CHECK_FLAG__CF_FAILOUT)) {
+		if (notify) {
+			iv.ci_gen = cbk->cb_gen;
+			uuid_copy(iv.ci_uuid, uuid);
+			iv.ci_phase = cbk->cb_phase;
+			if (*result != 0)
+				iv.ci_status = CHK__CHECK_INST_STATUS__CIS_FAILED;
+			else
+				iv.ci_status = CHK__CHECK_INST_STATUS__CIS_IMPLICATED;
+			iv.ci_remove_pool = 1;
+
+			/* Synchronously notify the engines that check on the pool got failure. */
+			rc = chk_iv_update(ins->ci_iv_ns, &iv, CRT_IV_SHORTCUT_NONE,
+					   CRT_IV_SYNC_EAGER, true);
+			if (rc != 0)
+				D_ERROR(DF_LEADER" failed to notify the engines that "
+					"the pool "DF_UUIDF" got failure: "DF_RC"\n",
+					DP_LEADER(ins), DP_UUID(uuid), DP_RC(rc));
+		}
+
+		if (update)
+			chk_bk_update_leader(cbk);
+
+		*result = 0;
+	}
+}
+
+static d_rank_list_t *
+chk_leader_cpr2ranklist(struct chk_pool_rec *cpr, bool svc)
+{
+	struct chk_pool_shard	*cps;
+	struct ds_pool_clue	*clue;
+	d_rank_list_t		*ranks;
+	int			 i = 0;
+
+	ranks = d_rank_list_alloc(cpr->cpr_shard_nr);
+	if (ranks != NULL) {
+		d_list_for_each_entry(cps, &cpr->cpr_shard_list, cps_link) {
+			if (svc) {
+				clue = cps->cps_data;
+				if (clue == NULL || clue->pc_rc <= 0 || clue->pc_svc_clue == NULL)
+					continue;
+			}
+			ranks->rl_ranks[i++] = cps->cps_rank;
+		}
+
+		ranks->rl_nr = i;
+	}
+
+	return ranks;
+}
+
+static bool
+chk_pool_in_zombie(struct chk_pool_rec *cpr)
+{
+	struct chk_pool_shard	*cps;
+	struct ds_pool_clue	*clue;
+	bool			 found = false;
+
+	d_list_for_each_entry(cps, &cpr->cpr_shard_list, cps_link) {
+		clue = cps->cps_data;
+		if (clue->pc_dir == DS_POOL_DIR_ZOMBIE) {
+			found = true;
+			break;
+		}
+	}
+
+	return found;
 }
 
 static int
-chk_leader_handle_pools_p2(struct chk_sched_args *csa)
+chk_leader_destroy_pool(struct chk_pool_rec *cpr, uint64_t seq, bool dereg)
 {
-	/* TBD: merge with Liwei's patch. */
+	d_rank_list_t	*ranks = NULL;
+	int		 rc = 0;
 
-	return 0;
+	/*
+	 * XXX: Firstly, deregister from MS. If it is successful but we failed to destroy
+	 *	related pool target(s) in subsequent steps, then the pool becomes orphan.
+	 *	It may cause some space leak, but will not cause correctness issue. That
+	 *	will be handled when run DAOS check next time.
+	 */
+	if (dereg) {
+		rc = ds_chk_deregpool_upcall(seq, cpr->cpr_uuid);
+		if (rc != 0)
+			goto out;
+	}
+
+	ranks = chk_leader_cpr2ranklist(cpr, false);
+	if (ranks == NULL)
+		D_GOTO(out, rc = -DER_NOMEM);
+
+	rc = ds_mgmt_tgt_pool_destroy(cpr->cpr_uuid, ranks);
+	d_rank_list_free(ranks);
+
+out:
+	return rc;
+}
+
+static struct ds_pool_clue *
+chk_leader_locate_pool_clue(struct chk_pool_rec *cpr)
+{
+	struct chk_pool_shard	*cps;
+	struct ds_pool_clue	*clue = NULL;
+	int			 i = 0;
+
+	D_ASSERT(cpr->cpr_advice >= 0);
+	D_ASSERT(cpr->cpr_advice < cpr->cpr_shard_nr);
+
+	d_list_for_each_entry(cps, &cpr->cpr_shard_list, cps_link) {
+		clue = cps->cps_data;
+		if (clue == NULL || clue->pc_rc <= 0 || clue->pc_svc_clue == NULL)
+			continue;
+
+		if (i++ == cpr->cpr_advice)
+			break;
+	}
+
+	return clue;
+}
+
+/*
+ * Initialize and construct clues_out from cpr. The caller is responsible for freeing
+ * clues->pcs_array with D_FREE, but the borrowed clues->pcs_array->pc_svc_clue must not be freed.
+ */
+static int
+chk_leader_build_pool_clues(struct chk_pool_rec *cpr)
+{
+	struct chk_instance	*ins = cpr->cpr_ins;
+	struct chk_pool_shard	*cps;
+	struct ds_pool_clue	*clue;
+	struct ds_pool_clues	 clues;
+	int			 rc = 0;
+
+	clues.pcs_cap = 4;
+	clues.pcs_len = 0;
+
+	D_ALLOC_ARRAY(clues.pcs_array, clues.pcs_cap);
+	if (clues.pcs_array == NULL)
+		D_GOTO(out, rc = -DER_NOMEM);
+
+	d_list_for_each_entry(cps, &cpr->cpr_shard_list, cps_link) {
+		clue = cps->cps_data;
+		if (clue == NULL || clue->pc_rc <= 0 || clue->pc_svc_clue == NULL)
+			continue;
+
+		if (clues.pcs_len == clues.pcs_cap) {
+			D_REALLOC_ARRAY(clue, clues.pcs_array, clues.pcs_cap, clues.pcs_cap << 1);
+			if (clue == NULL) {
+				D_FREE(clues.pcs_array);
+				D_GOTO(out, rc = -DER_NOMEM);
+			}
+
+			clues.pcs_array = clue;
+			clues.pcs_cap <<= 1;
+			clue = cps->cps_data;
+		}
+
+		memcpy(&clues.pcs_array[clues.pcs_len++], clue, sizeof(*clue));
+	}
+
+	memcpy(&cpr->cpr_clues, &clues, sizeof(cpr->cpr_clues));
+
+out:
+	if (rc != 0) {
+		D_ERROR(DF_LEADER" failed to build pool service clues for "DF_UUIDF": "DF_RC"\n",
+			DP_LEADER(ins), DP_UUID(cpr->cpr_uuid), DP_RC(rc));
+		/*
+		 * We do not know whether the pool is inconsistency or not. But since we cannot
+		 * parse the pool clues, then have to skip it. Notify the check engines.
+		 */
+		cpr->cpr_skip = 1;
+		chk_leader_post_repair(ins, cpr->cpr_uuid, &rc, false, true);
+	}
+
+	return rc;
+}
+
+/* Only keep the chosen PS replica, and destroy all others. */
+static int
+chk_leader_reset_pool_svc(struct chk_pool_rec *cpr)
+{
+	struct ds_pool_clues	*clues = &cpr->cpr_clues;
+	struct chk_instance	*ins = cpr->cpr_ins;
+	struct chk_bookmark	*cbk = &ins->ci_bk;
+	d_rank_t		*ranks;
+	d_rank_list_t		 rank_list;
+	d_iov_t			 psid;
+	int			 chosen = cpr->cpr_advice;
+	int			 i;
+	int			 j;
+	int			 rc;
+
+	D_ASSERT(chosen >= 0 && clues->pcs_len > chosen);
+
+	D_ALLOC_ARRAY(ranks, clues->pcs_len);
+	if (ranks == NULL)
+		D_GOTO(out, rc = -DER_NOMEM);
+
+	/* Build a list of all ranks except for the chosen one. */
+	for (i = 0, j = 0; i < clues->pcs_len; i++) {
+		if (i != chosen)
+			ranks[j++] = clues->pcs_array[i].pc_rank;
+	}
+
+	rank_list.rl_ranks = ranks;
+	rank_list.rl_nr = j;
+
+	d_iov_set(&psid, cpr->cpr_uuid, sizeof(uuid_t));
+	rc = ds_rsvc_dist_stop(DS_RSVC_CLASS_POOL, &psid, &rank_list, NULL /* excluded */,
+			       true /* destroy */);
+	D_FREE(ranks);
+
+out:
+	if (rc != 0) {
+		D_ERROR(DF_LEADER" failed to destroy other pool service replicas for "DF_UUIDF
+			": "DF_RC"\n", DP_LEADER(ins), DP_UUID(cpr->cpr_uuid), DP_RC(rc));
+
+		cbk->cb_statistics.cs_failed++;
+		cpr->cpr_skip = 1;
+	}
+
+	return rc;
+}
+
+static int
+chk_leader_dangling_pool(struct chk_instance *ins, uuid_t uuid)
+{
+	struct chk_property		*prop = &ins->ci_prop;
+	struct chk_bookmark		*cbk = &ins->ci_bk;
+	struct chk_report_unit		 cru;
+	Chk__CheckInconsistClass	 cla;
+	Chk__CheckInconsistAction	 act;
+	uint64_t			 seq = 0;
+	uint32_t			 options[2];
+	uint32_t			 option_nr = 0;
+	int				 decision = -1;
+	int				 result = 0;
+	int				 rc = 0;
+
+	cla = CHK__CHECK_INCONSIST_CLASS__CIC_POOL_NONEXIST_ON_ENGINE;
+	act = prop->cp_policies[cla];
+	cbk->cb_statistics.cs_total++;
+
+	switch (act) {
+	case CHK__CHECK_INCONSIST_ACTION__CIA_DEFAULT:
+		/*
+		 * Default action is to de-register the dangling pool from MS.
+		 *
+		 * Fall through.
+		 */
+	case CHK__CHECK_INCONSIST_ACTION__CIA_DISCARD:
+		/* Fall through. */
+	case CHK__CHECK_INCONSIST_ACTION__CIA_TRUST_PS:
+		seq = ++(ins->ci_seq);
+		if (prop->cp_flags & CHK__CHECK_FLAG__CF_DRYRUN) {
+			cbk->cb_statistics.cs_repaired++;
+		} else {
+			result = ds_chk_deregpool_upcall(seq, uuid);
+			if (result != 0)
+				cbk->cb_statistics.cs_failed++;
+			else
+				cbk->cb_statistics.cs_repaired++;
+		}
+		break;
+	case CHK__CHECK_INCONSIST_ACTION__CIA_IGNORE:
+		/* Report the inconsistency without repair. */
+		cbk->cb_statistics.cs_ignored++;
+		break;
+	default:
+		/*
+		 * If the specified action is not applicable to the inconsistency,
+		 * then switch to interaction mode for the decision from admin.
+		 *
+		 * Fall through.
+		 */
+	case CHK__CHECK_INCONSIST_ACTION__CIA_INTERACT:
+		options[0] = CHK__CHECK_INCONSIST_ACTION__CIA_DISCARD;
+		options[1] = CHK__CHECK_INCONSIST_ACTION__CIA_IGNORE;
+		option_nr = 2;
+		break;
+	}
+
+report:
+	cru.cru_gen = cbk->cb_gen;
+	cru.cru_cla = cla;
+	cru.cru_act = option_nr != 0 ? CHK__CHECK_INCONSIST_ACTION__CIA_INTERACT : act;
+	cru.cru_target = 0;
+	cru.cru_rank = dss_self_rank();
+	cru.cru_option_nr = option_nr;
+	cru.cru_detail_nr = 0;
+	cru.cru_pool = (uuid_t *)&uuid;
+	cru.cru_cont = NULL;
+	cru.cru_obj = NULL;
+	cru.cru_dkey = NULL;
+	cru.cru_akey = NULL;
+	cru.cru_msg = "Check leader detects dangling pool";
+	cru.cru_options = options;
+	cru.cru_details = NULL;
+	cru.cru_result = result;
+
+	rc = chk_leader_report(&cru, &seq, &decision);
+
+	D_CDEBUG(result != 0 || rc != 0, DLOG_ERR, DLOG_INFO,
+		 DF_LEADER" detects dangling pool "DF_UUIDF", action %u (%s), seq "
+		 DF_X64", handle_rc %d, report_rc %d, decision %d\n",
+		 DP_LEADER(ins), DP_UUID(uuid), act, option_nr ? "need interact" : "no interact",
+		 seq, result, rc, decision);
+
+	if (rc != 0 && option_nr > 0) {
+		cbk->cb_statistics.cs_failed++;
+		result = rc;
+	}
+
+	if (result != 0 || option_nr == 0)
+		goto out;
+
+	option_nr = 0;
+
+	switch (decision) {
+	default:
+		D_ERROR(DF_LEADER" got invalid decision %d for dangling pool "
+			DF_UUIDF" with seq "DF_X64". Ignore the inconsistency.\n",
+			DP_LEADER(ins), decision, DP_UUID(uuid), seq);
+		/*
+		 * Invalid option, ignore the inconsistency.
+		 *
+		 * Fall through.
+		 */
+	case CHK__CHECK_INCONSIST_ACTION__CIA_IGNORE:
+		act = CHK__CHECK_INCONSIST_ACTION__CIA_IGNORE;
+		cbk->cb_statistics.cs_ignored++;
+		break;
+	case CHK__CHECK_INCONSIST_ACTION__CIA_DISCARD:
+		act = CHK__CHECK_INCONSIST_ACTION__CIA_DISCARD;
+		if (prop->cp_flags & CHK__CHECK_FLAG__CF_DRYRUN) {
+			cbk->cb_statistics.cs_repaired++;
+		} else {
+			result = ds_chk_deregpool_upcall(seq, uuid);
+			if (result != 0)
+				cbk->cb_statistics.cs_failed++;
+			else
+				cbk->cb_statistics.cs_repaired++;
+		}
+		break;
+	}
+
+	goto report;
+
+out:
+	chk_leader_post_repair(ins, uuid, &result, true, false);
+
+	return result;
+}
+
+static int
+chk_leader_orphan_pool(struct chk_pool_rec *cpr)
+{
+	struct chk_instance		*ins = cpr->cpr_ins;
+	struct chk_property		*prop = &ins->ci_prop;
+	struct chk_bookmark		*cbk = &ins->ci_bk;
+	struct ds_pool_clue		*clue;
+	struct chk_report_unit		 cru;
+	Chk__CheckInconsistClass	 cla;
+	Chk__CheckInconsistAction	 act;
+	uint64_t			 seq = 0;
+	uint32_t			 options[3];
+	uint32_t			 option_nr = 0;
+	int				 decision = -1;
+	int				 result = 0;
+	int				 rc = 0;
+
+	D_ASSERT(cpr->cpr_advice >= 0);
+
+	cla = CHK__CHECK_INCONSIST_CLASS__CIC_POOL_NONEXIST_ON_MS;
+	act = prop->cp_policies[cla];
+	cbk->cb_statistics.cs_total++;
+
+	switch (act) {
+	case CHK__CHECK_INCONSIST_ACTION__CIA_DEFAULT:
+		/*
+		 * If the pool service still can start, then the default action is to register
+		 * the orphan pool to MS; otherwise, it is suggested to destroy the orphan pool.
+		 *
+		 * Fall through.
+		 */
+	case CHK__CHECK_INCONSIST_ACTION__CIA_READD:
+		/* Fall through. */
+	case CHK__CHECK_INCONSIST_ACTION__CIA_TRUST_PS:
+		/*
+		 * If some pool shard is in zombie directory, then it is quite possible that the
+		 * pool was in destroying before the corruption. It is suggested to continue the
+		 * destroying of the orphan pool.
+		 */
+		if (chk_pool_in_zombie(cpr))
+			goto interact;
+
+		seq = ++(ins->ci_seq);
+		if (prop->cp_flags & CHK__CHECK_FLAG__CF_DRYRUN) {
+			cbk->cb_statistics.cs_repaired++;
+			cpr->cpr_exist_on_ms = 1;
+		} else {
+			clue = chk_leader_locate_pool_clue(cpr);
+			result = ds_chk_regpool_upcall(seq, cpr->cpr_uuid, clue->pc_label,
+						       clue->pc_svc_clue->psc_db_clue.bcl_replicas);
+			if (result != 0) {
+				cbk->cb_statistics.cs_failed++;
+				/* Skip the pool if failed to register to MS. */
+				cpr->cpr_skip = 1;
+			} else {
+				cbk->cb_statistics.cs_repaired++;
+				cpr->cpr_exist_on_ms = 1;
+			}
+		}
+		break;
+	case CHK__CHECK_INCONSIST_ACTION__CIA_DISCARD:
+		/* Fall through. */
+	case CHK__CHECK_INCONSIST_ACTION__CIA_TRUST_MS:
+		seq = ++(ins->ci_seq);
+		if (prop->cp_flags & CHK__CHECK_FLAG__CF_DRYRUN) {
+			cbk->cb_statistics.cs_repaired++;
+		} else {
+			result = chk_leader_destroy_pool(cpr, seq, false);
+			if (result != 0)
+				cbk->cb_statistics.cs_failed++;
+			else
+				cbk->cb_statistics.cs_repaired++;
+		}
+		/*
+		 * If want to destroy the orphan pool, then skip subsequent check in spite of
+		 * whether it is destroyed successfully or not.
+		 */
+		cpr->cpr_skip = 1;
+		break;
+	case CHK__CHECK_INCONSIST_ACTION__CIA_IGNORE:
+		/* Report the inconsistency without repair. */
+		cbk->cb_statistics.cs_ignored++;
+		/* If ignore the orphan pool, then skip subsequent check. */
+		cpr->cpr_skip = 1;
+		break;
+	default:
+		/*
+		 * If the specified action is not applicable to the inconsistency,
+		 * then switch to interaction mode for the decision from admin.
+		 *
+		 * Fall through.
+		 */
+	case CHK__CHECK_INCONSIST_ACTION__CIA_INTERACT:
+
+interact:
+		options[0] = CHK__CHECK_INCONSIST_ACTION__CIA_READD;
+		options[1] = CHK__CHECK_INCONSIST_ACTION__CIA_DISCARD;
+		options[2] = CHK__CHECK_INCONSIST_ACTION__CIA_IGNORE;
+		option_nr = 3;
+		break;
+	}
+
+report:
+	cru.cru_gen = cbk->cb_gen;
+	cru.cru_cla = cla;
+	cru.cru_act = option_nr != 0 ? CHK__CHECK_INCONSIST_ACTION__CIA_INTERACT : act;
+	cru.cru_target = 0;
+	cru.cru_rank = dss_self_rank();
+	cru.cru_option_nr = option_nr;
+	cru.cru_detail_nr = 0;
+	cru.cru_pool = (uuid_t *)&cpr->cpr_uuid;
+	cru.cru_cont = NULL;
+	cru.cru_obj = NULL;
+	cru.cru_dkey = NULL;
+	cru.cru_akey = NULL;
+	cru.cru_msg = "Check leader detects orphan pool";
+	cru.cru_options = options;
+	cru.cru_details = NULL;
+	cru.cru_result = result;
+
+	rc = chk_leader_report(&cru, &seq, &decision);
+
+	D_CDEBUG(result != 0 || rc != 0, DLOG_ERR, DLOG_INFO,
+		 DF_LEADER" detects orphan pool "DF_UUIDF", action %u (%s), seq "
+		 DF_X64", advice %d, handle_rc %d, report_rc %d, decision %d\n", DP_LEADER(ins),
+		 DP_UUID(cpr->cpr_uuid), act, option_nr ? "need interact" : "no interact",
+		 seq, cpr->cpr_advice, result, rc, decision);
+
+	if (rc != 0 && option_nr > 0) {
+		cbk->cb_statistics.cs_failed++;
+		/* Skip the orphan if failed to interact with admin for further action. */
+		cpr->cpr_skip = 1;
+		result = rc;
+	}
+
+	if (result != 0 || option_nr == 0)
+		goto out;
+
+	option_nr = 0;
+
+	switch (decision) {
+	default:
+
+ignore:
+		D_ERROR(DF_LEADER" got invalid decision %d for orphan pool "
+			DF_UUIDF" with seq "DF_X64". Ignore the inconsistency.\n",
+			DP_LEADER(ins), decision, DP_UUID(cpr->cpr_uuid), seq);
+		/*
+		 * Invalid option, ignore the inconsistency.
+		 *
+		 * Fall through.
+		 */
+	case CHK__CHECK_INCONSIST_ACTION__CIA_IGNORE:
+		act = CHK__CHECK_INCONSIST_ACTION__CIA_IGNORE;
+		cbk->cb_statistics.cs_ignored++;
+		/* If ignore the orphan pool, then skip subsequent check. */
+		cpr->cpr_skip = 1;
+		break;
+	case CHK__CHECK_INCONSIST_ACTION__CIA_DISCARD:
+		act = CHK__CHECK_INCONSIST_ACTION__CIA_DISCARD;
+		if (prop->cp_flags & CHK__CHECK_FLAG__CF_DRYRUN) {
+			cbk->cb_statistics.cs_repaired++;
+		} else {
+			result = chk_leader_destroy_pool(cpr, seq, false);
+			if (result != 0)
+				cbk->cb_statistics.cs_failed++;
+			else
+				cbk->cb_statistics.cs_repaired++;
+		}
+		/*
+		 * If want to destroy the orphan pool, then skip subsequent check in spite of
+		 * whether it is destroyed successfully or not.
+		 */
+		cpr->cpr_skip = 1;
+		break;
+	case CHK__CHECK_INCONSIST_ACTION__CIA_READD:
+		if (chk_pool_in_zombie(cpr))
+			goto ignore;
+
+		act = CHK__CHECK_INCONSIST_ACTION__CIA_READD;
+		if (prop->cp_flags & CHK__CHECK_FLAG__CF_DRYRUN) {
+			cbk->cb_statistics.cs_repaired++;
+			cpr->cpr_exist_on_ms = 1;
+		} else {
+			clue = chk_leader_locate_pool_clue(cpr);
+			result = ds_chk_regpool_upcall(seq, cpr->cpr_uuid, clue->pc_label,
+						       clue->pc_svc_clue->psc_db_clue.bcl_replicas);
+			if (result != 0) {
+				cbk->cb_statistics.cs_failed++;
+				/* Skip the pool if failed to register to MS. */
+				cpr->cpr_skip = 1;
+			} else {
+				cbk->cb_statistics.cs_repaired++;
+				cpr->cpr_exist_on_ms = 1;
+			}
+		}
+		break;
+	}
+
+	goto report;
+
+out:
+	/*
+	 * If the orphan pool is ignored (in spite of because it is required or failed
+	 * to fix related inconsistency), then notify check engines to remove related
+	 * pool record and bookmark.
+	 */
+	chk_leader_post_repair(ins, cpr->cpr_uuid, &result, true, cpr->cpr_skip ? true : false);
+
+	return result;
+}
+
+static int
+chk_leader_no_quorum_pool(struct chk_pool_rec *cpr)
+{
+	struct chk_instance		*ins = cpr->cpr_ins;
+	struct chk_property		*prop = &ins->ci_prop;
+	struct chk_bookmark		*cbk = &ins->ci_bk;
+	d_rank_list_t			*ranks = NULL;
+	struct ds_pool_clue		*clue;
+	char				*strs[3];
+	char				 suggested[128] = { 0 };
+	d_iov_t				 iovs[3];
+	d_sg_list_t			 sgl;
+	d_sg_list_t			*details = NULL;
+	struct chk_report_unit		 cru;
+	Chk__CheckInconsistClass	 cla;
+	Chk__CheckInconsistAction	 act;
+	uint64_t			 seq = 0;
+	uint32_t			 options[3];
+	uint32_t			 option_nr = 0;
+	uint32_t			 detail_nr = 0;
+	int				 decision = -1;
+	int				 result = 0;
+	int				 rc = 0;
+
+	cla = CHK__CHECK_INCONSIST_CLASS__CIC_POOL_LESS_SVC_WITHOUT_QUORUM;
+	act = prop->cp_policies[cla];
+	cbk->cb_statistics.cs_total++;
+
+	if (cpr->cpr_advice < 0) {
+		switch (act) {
+		case CHK__CHECK_INCONSIST_ACTION__CIA_DEFAULT:
+		/*
+		 * Destroy the corrupted pool by default.
+		 *
+		 * Fall through.
+		 */
+		case CHK__CHECK_INCONSIST_ACTION__CIA_DISCARD:
+			seq = ++(ins->ci_seq);
+			if (prop->cp_flags & CHK__CHECK_FLAG__CF_DRYRUN) {
+				cbk->cb_statistics.cs_repaired++;
+			} else {
+				result = chk_leader_destroy_pool(cpr, seq, true);
+				if (result != 0)
+					cbk->cb_statistics.cs_failed++;
+				else
+					cbk->cb_statistics.cs_repaired++;
+			}
+			/*
+			 * If want to destroy the pool, then skip subsequent check in spite of
+			 * whether it is destroyed successfully or not.
+			 */
+			cpr->cpr_skip = 1;
+			break;
+		case CHK__CHECK_INCONSIST_ACTION__CIA_IGNORE:
+			/* Report the inconsistency without repair. */
+			cbk->cb_statistics.cs_ignored++;
+			/* If ignore the corrupted pool, then skip subsequent check. */
+			cpr->cpr_skip = 1;
+			break;
+		default:
+			/*
+			 * If the specified action is not applicable to the inconsistency,
+			 * then switch to interaction mode for the decision from admin.
+			 *
+			 * Fall through.
+			 */
+		case CHK__CHECK_INCONSIST_ACTION__CIA_INTERACT:
+			options[0] = CHK__CHECK_INCONSIST_ACTION__CIA_DISCARD;
+			options[1] = CHK__CHECK_INCONSIST_ACTION__CIA_IGNORE;
+			option_nr = 2;
+			break;
+		}
+	} else {
+		switch (act) {
+		case CHK__CHECK_INCONSIST_ACTION__CIA_DEFAULT:
+		/*
+		 * If we can start some PS under DICTATE mode, then do it by default.
+		 *
+		 * Fall through.
+		 */
+		case CHK__CHECK_INCONSIST_ACTION__CIA_TRUST_PS:
+			seq = ++(ins->ci_seq);
+			if (prop->cp_flags & CHK__CHECK_FLAG__CF_DRYRUN) {
+				cbk->cb_statistics.cs_repaired++;
+				/*
+				 * Under dryrun mode, we cannot start the PS with DICTATE
+				 * mode, then have to skip it.
+				 */
+				cpr->cpr_skip = 1;
+				goto report;
+			}
+
+			result = chk_leader_reset_pool_svc(cpr);
+			if (result != 0 || cpr->cpr_exist_on_ms)
+				goto report;
+
+			clue = chk_leader_locate_pool_clue(cpr);
+			result = ds_chk_regpool_upcall(seq, cpr->cpr_uuid, clue->pc_label, ranks);
+			if (result != 0) {
+				cbk->cb_statistics.cs_failed++;
+				/* Skip the pool if failed to register to MS. */
+				cpr->cpr_skip = 1;
+			}
+			/*
+			 * XXX: For result == 0 case, it still cannot be regarded as repaired.
+			 *	We need to start the PS under DICTATE mode in subsequent step.
+			 */
+			break;
+		case CHK__CHECK_INCONSIST_ACTION__CIA_DISCARD:
+			seq = ++(ins->ci_seq);
+			if (prop->cp_flags & CHK__CHECK_FLAG__CF_DRYRUN) {
+				cbk->cb_statistics.cs_repaired++;
+			} else {
+				result = chk_leader_destroy_pool(cpr, seq, true);
+				if (result != 0)
+					cbk->cb_statistics.cs_failed++;
+				else
+					cbk->cb_statistics.cs_repaired++;
+			}
+			/*
+			 * If want to destroy the pool, then skip subsequent check in spite of
+			 * whether it is destroyed successfully or not.
+			 */
+			cpr->cpr_skip = 1;
+			break;
+		case CHK__CHECK_INCONSIST_ACTION__CIA_IGNORE:
+			/* Report the inconsistency without repair. */
+			cbk->cb_statistics.cs_ignored++;
+			/* If ignore the corrupted pool, then skip subsequent check. */
+			cpr->cpr_skip = 1;
+			break;
+		default:
+			/*
+			 * If the specified action is not applicable to the inconsistency,
+			 * then switch to interaction mode for the decision from admin.
+			 *
+			 * Fall through.
+			 */
+		case CHK__CHECK_INCONSIST_ACTION__CIA_INTERACT:
+			options[0] = CHK__CHECK_INCONSIST_ACTION__CIA_TRUST_PS;
+			options[1] = CHK__CHECK_INCONSIST_ACTION__CIA_DISCARD;
+			options[2] = CHK__CHECK_INCONSIST_ACTION__CIA_IGNORE;
+			option_nr = 3;
+
+			clue = chk_leader_locate_pool_clue(cpr);
+			snprintf(suggested, 127,
+				 "Start pool service under DICTATE mode from rank %d [suggested]",
+				 clue->pc_rank);
+			strs[0] = suggested;
+			strs[1] = "Destroy the corrupted pool from related engines.";
+			strs[2] = "Keep the corrupted pool on related engines, repair nothing.";
+
+			d_iov_set(&iovs[0], strs[0], strlen(strs[0]));
+			d_iov_set(&iovs[1], strs[1], strlen(strs[1]));
+			d_iov_set(&iovs[2], strs[2], strlen(strs[2]));
+
+			sgl.sg_nr = 3;
+			sgl.sg_nr_out = 0;
+			sgl.sg_iovs = iovs;
+
+			details = &sgl;
+			detail_nr = 1;
+			break;
+		}
+	}
+
+report:
+	cru.cru_gen = cbk->cb_gen;
+	cru.cru_cla = cla;
+	cru.cru_act = option_nr != 0 ? CHK__CHECK_INCONSIST_ACTION__CIA_INTERACT : act;
+	cru.cru_target = 0;
+	cru.cru_rank = dss_self_rank();
+	cru.cru_option_nr = option_nr;
+	cru.cru_detail_nr = detail_nr;
+	cru.cru_pool = (uuid_t *)&cpr->cpr_uuid;
+	cru.cru_cont = NULL;
+	cru.cru_obj = NULL;
+	cru.cru_dkey = NULL;
+	cru.cru_akey = NULL;
+	cru.cru_msg = "Check leader detects corrupted pool without quorum";
+	cru.cru_options = options;
+	cru.cru_details = details;
+	cru.cru_result = result;
+
+	rc = chk_leader_report(&cru, &seq, &decision);
+
+	D_CDEBUG(result != 0 || rc != 0, DLOG_ERR, DLOG_INFO,
+		 DF_LEADER" detects corrupted pool "DF_UUIDF", action %u (%s), seq "
+		 DF_X64", advice %d, handle_rc %d, report_rc %d, decision %d\n", DP_LEADER(ins),
+		 DP_UUID(cpr->cpr_uuid), act, option_nr ? "need interact" : "no interact",
+		 seq, cpr->cpr_advice, result, rc, decision);
+
+	if (rc != 0 && option_nr > 0) {
+		cbk->cb_statistics.cs_failed++;
+		/* Skip the corrupted if failed to interact with admin for further action. */
+		cpr->cpr_skip = 1;
+		result = rc;
+	}
+
+	if (result != 0 || option_nr == 0)
+		goto out;
+
+	option_nr = 0;
+
+	switch (decision) {
+	default:
+
+ignore:
+		D_ERROR(DF_LEADER" got invalid decision %d for corrupted pool "
+			DF_UUIDF" with seq "DF_X64". Ignore the inconsistency.\n",
+			DP_LEADER(ins), decision, DP_UUID(cpr->cpr_uuid), seq);
+		/*
+		 * Invalid option, ignore the inconsistency.
+		 *
+		 * Fall through.
+		 */
+	case CHK__CHECK_INCONSIST_ACTION__CIA_IGNORE:
+		act = CHK__CHECK_INCONSIST_ACTION__CIA_IGNORE;
+		cbk->cb_statistics.cs_ignored++;
+		/* If ignore the corrupted pool, then skip subsequent check. */
+		cpr->cpr_skip = 1;
+		break;
+	case CHK__CHECK_INCONSIST_ACTION__CIA_DISCARD:
+		act = CHK__CHECK_INCONSIST_ACTION__CIA_DISCARD;
+		if (prop->cp_flags & CHK__CHECK_FLAG__CF_DRYRUN) {
+			cbk->cb_statistics.cs_repaired++;
+		} else {
+			result = chk_leader_destroy_pool(cpr, seq, true);
+			if (result != 0)
+				cbk->cb_statistics.cs_failed++;
+		}
+		/*
+		 * If want to destroy the corrupted pool, then skip subsequent check in spite of
+		 * whether it is destroyed successfully or not.
+		 */
+		cpr->cpr_skip = 1;
+		break;
+	case CHK__CHECK_INCONSIST_ACTION__CIA_TRUST_PS:
+		if (unlikely(cpr->cpr_advice < 0))
+			goto ignore;
+
+		act = CHK__CHECK_INCONSIST_ACTION__CIA_TRUST_PS;
+		if (prop->cp_flags & CHK__CHECK_FLAG__CF_DRYRUN) {
+			cbk->cb_statistics.cs_repaired++;
+		} else {
+			clue = chk_leader_locate_pool_clue(cpr);
+			result = ds_chk_regpool_upcall(seq, cpr->cpr_uuid, clue->pc_label, ranks);
+			if (result != 0) {
+				cbk->cb_statistics.cs_failed++;
+				/* Skip the pool if failed to register to MS. */
+				cpr->cpr_skip = 1;
+			}
+			/*
+			 * XXX: For result == 0 case, it still cannot be regarded as repaired.
+			 *	We need to start the PS under DICTATE mode in subsequent step.
+			 */
+		}
+		break;
+	}
+
+	goto report;
+
+out:
+	/*
+	 * If the corrupted pool is ignored (in spite of because it is required or failed
+	 * to fix related inconsistency), then notify check engines to remove related
+	 * pool record and bookmark.
+	 */
+	chk_leader_post_repair(ins, cpr->cpr_uuid, &result, true, cpr->cpr_skip ? true : false);
+	d_rank_list_free(ranks);
+
+	return result;
+}
+
+/* Collect pool svc clues, and try to choose the available replica. */
+static int
+chk_leader_handle_pool_clues(struct chk_pool_rec *cpr)
+{
+	struct ds_pool_clues	*clues;
+	int			 rc;
+
+	rc = chk_leader_build_pool_clues(cpr);
+	if (rc != 0)
+		goto out;
+
+	clues = &cpr->cpr_clues;
+	D_ASSERTF(clues->pcs_len >= 0, "Got invalid clues: %d\n", clues->pcs_len);
+
+	if (clues->pcs_len > 0) {
+		rc = ds_pool_check_svc_clues(clues, &cpr->cpr_advice);
+		if (rc == 0) {
+			cpr->cpr_healthy = 1;
+			goto out;
+		}
+	} else {
+		cpr->cpr_advice = -1;
+	}
+
+	rc = chk_leader_no_quorum_pool(cpr);
+
+out:
+	return rc;
+}
+
+static int
+chk_leader_start_pool_svc(struct chk_pool_rec *cpr)
+{
+	struct chk_instance	*ins = cpr->cpr_ins;
+	struct chk_bookmark	*cbk = &ins->ci_bk;
+	struct ds_pool_clue	*clue;
+	d_rank_list_t		*ranks = NULL;
+	d_iov_t			 psid;
+	int			 rc = 0;
+
+	D_ASSERT(cpr->cpr_advice >= 0);
+
+	d_iov_set(&psid, cpr->cpr_uuid, sizeof(uuid_t));
+	if (cpr->cpr_healthy) {
+		/*
+		 * If the pool has quorum for pool service, then even if some replicas are lost,
+		 * it is still not regarded as 'inconsistency'. The raft mechanism will recover
+		 * the other pool service replicas automatically.
+		 */
+		ranks = chk_leader_cpr2ranklist(cpr, true);
+		if (ranks == NULL)
+			D_GOTO(out, rc = -DER_NOMEM);
+	} else {
+		/*
+		 * We cannot start the pool service via regular quorum, but we can start it under
+		 * DS_RSVC_DICTATE mode.
+		 */
+		ranks = d_rank_list_alloc(1);
+		if (ranks == NULL)
+			D_GOTO(out, rc = -DER_NOMEM);
+
+		clue = chk_leader_locate_pool_clue(cpr);
+		ranks->rl_ranks[0] = clue->pc_rank;
+	}
+
+	rc = ds_rsvc_dist_start(DS_RSVC_CLASS_POOL, &psid, cpr->cpr_uuid, ranks,
+				cpr->cpr_healthy ? DS_RSVC_START : DS_RSVC_DICTATE,
+				false /* bootstrap */, 0 /* size */);
+
+out:
+	d_rank_list_free(ranks);
+	if (rc != 0) {
+		D_ERROR(DF_LEADER" failed to start pool service (%s) for "DF_UUIDF" at replica %d, "
+			"skip it: "DF_RC"\n",
+			DP_LEADER(ins), cpr->cpr_healthy ? "healthy" : "unhealthy",
+			DP_UUID(cpr->cpr_uuid), cpr->cpr_advice, DP_RC(rc));
+
+		cpr->cpr_skip = 1;
+		if (!cpr->cpr_healthy)
+			cbk->cb_statistics.cs_failed++;
+		chk_leader_post_repair(ins, cpr->cpr_uuid, &rc, !cpr->cpr_healthy, true);
+	} else if (!cpr->cpr_healthy) {
+		cbk->cb_statistics.cs_repaired++;
+		chk_leader_post_repair(ins, cpr->cpr_uuid, &rc, true, false);
+	}
+
+	return rc;
+}
+
+static int
+chk_leader_handle_pools_list(struct chk_sched_args *csa)
+{
+	struct chk_property		*prop = &csa->csa_ins->ci_prop;
+	struct chk_list_pool		*clp = NULL;
+	struct chk_pool_rec		*cpr;
+	struct chk_pool_rec		*tmp;
+	d_iov_t				 riov;
+	d_iov_t				 kiov;
+	int				 clp_nr;
+	int				 rc = 0;
+	int				 i;
+
+	clp_nr = ds_chk_listpool_upcall(&clp);
+	if (clp_nr < 0) {
+		rc = clp_nr;
+		clp_nr = 0;
+		goto out;
+	}
+
+	/* Firstly, handle dangling pool(s) based on the comparison between engines and MS. */
+	for (i = 0; i < clp_nr; i++) {
+		d_iov_set(&riov, NULL, 0);
+		d_iov_set(&kiov, &clp[i].clp_uuid, sizeof(uuid_t));
+		rc = dbtree_lookup(csa->csa_hdl, &kiov, &riov);
+		if (rc == 0) {
+			cpr = (struct chk_pool_rec *)riov.iov_buf;
+			/*
+			 * As for whether pool service replicas and pool label match MS or not,
+			 * they will be handled in subsequent pass.
+			 */
+			cpr->cpr_exist_on_ms = 1;
+			continue;
+		}
+
+		if (rc == -DER_NONEXIST) {
+			rc = chk_leader_dangling_pool(csa->csa_ins, clp[i].clp_uuid);
+			if (rc != 0)
+				goto out;
+		}
+
+		D_ERROR("Failed to verify pool "DF_UUIDF" existence with %s: "DF_RC"\n",
+			DP_UUID(clp[i].clp_uuid), (prop->cp_flags &
+			CHK__CHECK_FLAG__CF_FAILOUT) ? "failout" : "continue", DP_RC(rc));
+
+		if (prop->cp_flags & CHK__CHECK_FLAG__CF_FAILOUT)
+			goto out;
+	}
+
+	rc = 0;
+
+	d_list_for_each_entry_safe(cpr, tmp, &csa->csa_list, cpr_link) {
+		rc = chk_leader_handle_pool_clues(cpr);
+		if (rc != 0)
+			goto out;
+
+		if (!cpr->cpr_exist_on_ms && !cpr->cpr_skip) {
+			rc = chk_leader_orphan_pool(cpr);
+			if (rc != 0)
+				goto out;
+		}
+	}
+
+out:
+	ds_chk_free_pool_list(clp, clp_nr);
+
+	if (rc != 0)
+		D_ERROR(DF_LEADER" failed to handle pools list: "DF_RC"\n",
+			DP_LEADER(csa->csa_ins), DP_RC(rc));
+
+	return rc;
+}
+
+static int
+chk_leader_handle_pools_svc(struct chk_sched_args *csa)
+{
+	struct chk_pool_rec	*cpr;
+	struct chk_pool_rec	*tmp;
+	int			 rc = 0;
+
+	d_list_for_each_entry_safe(cpr, tmp, &csa->csa_list, cpr_link) {
+		if (!cpr->cpr_skip) {
+			rc = chk_leader_start_pool_svc(cpr);
+			if (rc != 0)
+				break;
+		}
+	}
+
+	return rc;
 }
 
 static void
@@ -393,7 +1411,7 @@ handle:
 	}
 
 	if (cbk->cb_phase == CHK__CHECK_SCAN_PHASE__CSP_PREPARE) {
-		rc = chk_leader_handle_pools_p1(csa);
+		rc = chk_leader_handle_pools_list(csa);
 		if (rc != 0)
 			D_GOTO(out, bcast = true);
 
@@ -424,7 +1442,7 @@ handle:
 	}
 
 	if (cbk->cb_phase == CHK__CHECK_SCAN_PHASE__CSP_POOL_LIST) {
-		rc = chk_leader_handle_pools_p2(csa);
+		rc = chk_leader_handle_pools_svc(csa);
 		if (rc != 0)
 			D_GOTO(out, bcast = true);
 

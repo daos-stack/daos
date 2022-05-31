@@ -31,11 +31,7 @@
 
 #define MAX_MODULE_OPTIONS	64
 #define MODULE_LIST	"vos,rdb,rsvc,security,mgmt,dtx,pool,cont,obj,rebuild"
-#define MODS_CHK_BASE	"vos,rdb,rsvc,chk,mgmt"
-#define MODS_CHK_POOL	MODS_CHK_BASE",pool"
-#define MODS_CHK_CONT	MODS_CHK_POOL",cont"
-#define MODS_CHK_OBJ	MODS_CHK_CONT",dtx,obj"
-#define MODS_CHK_RBD	MODS_CHK_OBJ",rebuild"
+#define MODS_LIST_CHK	"vos,rdb,rsvc,chk,security,mgmt,dtx,pool,cont,obj,rebuild"
 
 /** List of modules to load */
 static char		modules[MAX_MODULE_OPTIONS + 1];
@@ -1015,7 +1011,7 @@ parse(int argc, char **argv)
 				printf("'-c|--modules' option is ignored under check mode\n");
 				spec_mod = false;
 			}
-			snprintf(modules, sizeof(modules), "%s", MODS_CHK_BASE);
+			snprintf(modules, sizeof(modules), "%s", MODS_LIST_CHK);
 			break;
 		default:
 			usage(argv[0], stderr);
