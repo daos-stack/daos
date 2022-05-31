@@ -10,32 +10,57 @@ import (
 	"fmt"
 	"net"
 	"testing"
+	"time"
+
+	"github.com/google/uuid"
 
 	"github.com/daos-stack/daos/src/control/common/test"
 	"github.com/daos-stack/daos/src/control/logging"
 )
 
 func MockControlAddr(t *testing.T, idx uint32) *net.TCPAddr {
+	t.Helper()
+
 	addr, err := net.ResolveTCPAddr("tcp",
 		fmt.Sprintf("127.0.0.%d:10001", idx))
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	return addr
+}
+
+// MockMemberFullSpec returns a reference to a new member struct.
+func MockMemberFullSpec(t *testing.T, rank Rank, uuidStr, uri string, addr *net.TCPAddr, state MemberState) *Member {
+	t.Helper()
+
+	newUUID, err := uuid.Parse(uuidStr)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	return &Member{
+		Rank:        rank,
+		UUID:        newUUID,
+		FabricURI:   uri,
+		Addr:        addr,
+		State:       state,
+		FaultDomain: MustCreateFaultDomain(),
+		LastUpdate:  time.Now(),
+	}
 }
 
 // MockMember returns a system member with appropriate values.
 func MockMember(t *testing.T, idx uint32, state MemberState, info ...string) *Member {
+	t.Helper()
+
 	addr := MockControlAddr(t, idx)
-	m, err := NewMember(Rank(idx), test.MockUUID(int32(idx)),
-		addr.String(), addr, state)
-	if err != nil {
-		t.Fatal(err)
-	}
+	m := MockMemberFullSpec(t, Rank(idx), test.MockUUID(int32(idx)), addr.String(), addr, state)
 	m.FabricContexts = idx
 	if len(info) > 0 {
 		m.Info = info[0]
 	}
+
 	return m
 }
 
@@ -49,6 +74,8 @@ func MockMemberResult(rank Rank, action string, err error, state MemberState) *M
 
 // MockMembership returns an initialized *Membership using the given MemberStore.
 func MockMembership(t *testing.T, log logging.Logger, mdb MemberStore, resolver TCPResolver) *Membership {
+	t.Helper()
+
 	m := NewMembership(log, mdb)
 
 	if resolver != nil {

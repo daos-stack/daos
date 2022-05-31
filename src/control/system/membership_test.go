@@ -56,11 +56,7 @@ func mockStoppedRankOnHost1(t *testing.T, rID int32) *Member {
 	if err != nil {
 		t.Fatal(err)
 	}
-	m, err := NewMember(Rank(rID), MockUUID(rID), "", addr1, MemberStateStopped)
-	if err != nil {
-		t.Fatal(err)
-	}
-	return m
+	return MockMemberFullSpec(t, Rank(rID), MockUUID(rID), "", addr1, MemberStateStopped)
 }
 
 func TestSystem_Membership_Get(t *testing.T) {

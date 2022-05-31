@@ -526,7 +526,7 @@ func removeDuplicateResults(log logging.Logger, resp *fanoutResponse) {
 		rID := res.Rank.Uint32()
 		if extant, existing := seenResults[rID]; !existing {
 			seenResults[rID] = res
-		} else if !res.Equals(res) {
+		} else if !extant.Equals(res) {
 			log.Errorf("nonidentical result for same rank: %+v != %+v", *extant, *res)
 		}
 	}

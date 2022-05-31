@@ -450,11 +450,7 @@ func mockMember(t *testing.T, r, a int32, s string) *system.Member {
 	}
 	uri := fmt.Sprintf("tcp://%s", addr)
 
-	m, err := system.NewMember(system.Rank(r), test.MockUUID(r), uri, addr, state)
-	if err != nil {
-		t.Fatal(err)
-	}
-
+	m := system.MockMemberFullSpec(t, system.Rank(r), test.MockUUID(r), uri, addr, state)
 	m.FabricContexts = uint32(r)
 	m.FaultDomain = fd
 	m.Incarnation = uint64(r)

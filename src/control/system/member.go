@@ -248,24 +248,6 @@ func (sm *Member) WithFaultDomain(fd *FaultDomain) *Member {
 	return sm
 }
 
-// NewMember returns a reference to a new member struct.
-func NewMember(rank Rank, uuidStr, uri string, addr *net.TCPAddr, state MemberState) (*Member, error) {
-	newUUID, err := uuid.Parse(uuidStr)
-	if err != nil {
-		return nil, err
-	}
-
-	return &Member{
-		Rank:        rank,
-		UUID:        newUUID,
-		FabricURI:   uri,
-		Addr:        addr,
-		State:       state,
-		FaultDomain: MustCreateFaultDomain(),
-		LastUpdate:  time.Now(),
-	}, nil
-}
-
 // Members is a type alias for a slice of member references
 type Members []*Member
 

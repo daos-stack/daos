@@ -570,15 +570,6 @@ func TestSystem_Database_memberRaftOps(t *testing.T) {
 	}
 }
 
-func testMemberWithFaultDomain(t *testing.T, rank Rank, fd *FaultDomain) *Member {
-	m, err := NewMember(rank, uuid.New().String(), "dontcare", &net.TCPAddr{},
-		MemberStateJoined)
-	if err != nil {
-		t.Fatal(err)
-	}
-	return m.WithFaultDomain(fd)
-}
-
 func TestSystem_Database_memberFaultDomain(t *testing.T) {
 	for name, tc := range map[string]struct {
 		rank        Rank
@@ -600,8 +591,8 @@ func TestSystem_Database_memberFaultDomain(t *testing.T) {
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
-			m := testMemberWithFaultDomain(t, tc.rank, tc.faultDomain)
-
+			m := MockMemberFullSpec(t, tc.rank, uuid.New().String(), "dontcare", &net.TCPAddr{},
+				MemberStateJoined).WithFaultDomain(tc.faultDomain)
 			result := MemberFaultDomain(m)
 
 			if diff := cmp.Diff(tc.expResult, result); diff != "" {
@@ -882,10 +873,8 @@ func TestSystem_Database_GroupMap(t *testing.T) {
 
 		return members
 	}
-	memberWithNoURI, err := NewMember(2, test.MockUUID(2), "", MockControlAddr(t, 2), MemberStateJoined)
-	if err != nil {
-		t.Fatal(err)
-	}
+	memberWithNoURI := MockMemberFullSpec(t, 2, test.MockUUID(2), "", MockControlAddr(t, 2),
+		MemberStateJoined)
 
 	for name, tc := range map[string]struct {
 		members     []*Member
