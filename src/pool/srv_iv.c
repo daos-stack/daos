@@ -815,6 +815,8 @@ ds_pool_iv_refresh_hdl(struct ds_pool *pool, struct pool_iv_hdl *pih)
 				 pih->pih_cont_hdl) == 0)
 			return 0;
 		ds_cont_tgt_close(pool->sp_srv_cont_hdl);
+		uuid_clear(pool->sp_srv_cont_hdl);
+		uuid_clear(pool->sp_srv_pool_hdl);
 	}
 
 	rc = ds_cont_tgt_open(pool->sp_uuid, pih->pih_cont_hdl, NULL, 0,
@@ -845,6 +847,7 @@ pool_iv_ent_invalid(struct ds_iv_entry *entry, struct ds_iv_key *key)
 			ds_cont_tgt_close(iv_entry->piv_hdl.pih_cont_hdl);
 			uuid_clear(pool->sp_srv_cont_hdl);
 			uuid_clear(pool->sp_srv_pool_hdl);
+			uuid_clear(iv_entry->piv_hdl.pih_cont_hdl);
 			ds_pool_put(pool);
 			return 0;
 		}
