@@ -1442,7 +1442,6 @@ dfs_cont_create_int(daos_handle_t poh, uuid_t *cuuid, bool uuid_is_set, uuid_t i
 		rc = dc_pool_get_redunc(poh);
 		if (rc < 0)
 			D_GOTO(err_prop, rc = daos_der2errno(rc));
-
 		rf_factor = rc;
 	} else {
 		rf_factor = dpe->dpe_val;
