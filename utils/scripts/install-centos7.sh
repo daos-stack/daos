@@ -36,6 +36,7 @@ dnf --nodocs install \
     libiscsi-devel \
     libtool \
     libtool-ltdl-devel \
+    librdmacm-devel \
     libunwind-devel \
     libuuid-devel \
     libyaml-devel \
