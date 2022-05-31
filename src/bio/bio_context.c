@@ -10,8 +10,6 @@
 #include "bio_internal.h"
 #include "smd/smd_internal.h"
 
-#define BIO_BLOB_HDR_MAGIC	(0xb0b51ed5)
-
 struct blob_cp_arg {
 	spdk_blob_id		 bca_id;
 	struct spdk_blob	*bca_blob;

@@ -11,12 +11,26 @@ def scons():
     denv = env.Clone()
 
     libs = ['vos', 'daos_common_pmem', 'abt', 'gurt', 'uuid', 'bio']
+    # spdk libraries
+    libs += ['spdk_event', 'spdk_log']
+    libs += ['spdk_bdev', 'spdk_blob', 'spdk_blob_bdev', 'spdk_json']
+    libs += ['spdk_nvme', 'spdk_init', 'spdk_thread', 'spdk_log']
+    libs += ['spdk_env_dpdk', 'spdk_thread', 'spdk_bdev', 'rte_mempool']
+    libs += ['rte_mempool_ring', 'rte_bus_pci', 'rte_pci', 'rte_ring']
+    libs += ['rte_mbuf', 'rte_eal', 'rte_kvargs', 'spdk_bdev_aio']
+    libs += ['spdk_bdev_nvme', 'spdk_blob', 'spdk_nvme', 'spdk_util']
+    libs += ['spdk_json', 'spdk_jsonrpc', 'spdk_rpc', 'spdk_trace']
+    libs += ['spdk_sock', 'spdk_log', 'spdk_notify', 'spdk_blob_bdev']
+    libs += ['spdk_vmd', 'spdk_event_bdev', 'spdk_init', 'rte_power']
+
+
     src = ['ddb_cmd_options.c',
            'ddb_commands.c',
            'ddb_main.c',
            'ddb_parse.c',
            'ddb_printer.c',
-           'ddb_vos.c']
+           'ddb_vos.c',
+           'ddb_spdk.c']
 
     ddblib = denv.StaticObject(src)
     Export('ddblib')
@@ -31,8 +45,12 @@ def scons():
     # knowledge of it.
     denv.AppendUnique(CPPPATH=[Dir('../vos/').srcnode()])
     denv.AppendUnique(CPPPATH=[Dir('../vos/')])
+    # Also need some internal knowledge of bio to read the bio header from the
+    # blob stores
+    denv.AppendUnique(CPPPATH=[Dir('../bio/').srcnode()])
+    denv.AppendUnique(CPPPATH=[Dir('../bio/')])
 
-    prereqs.require(denv, 'argobots', 'protobufc', 'pmdk')
+    prereqs.require(denv, 'argobots', 'protobufc', 'pmdk', 'spdk')
 
     ddb = daos_build.program(denv, 'ddb', ['ddb_entry.c', ddblib], LIBS=libs)
 

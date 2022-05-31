@@ -9,72 +9,44 @@
 #include <daos_srv/vos.h>
 #include <gurt/debug.h>
 #include <vos_internal.h>
+#include <daos_srv/smd.h>
 #include "ddb_common.h"
 #include "ddb_parse.h"
 #include "ddb_vos.h"
+#include "ddb_spdk.h"
 
 #define ddb_vos_iterate(param, iter_type, recursive, anchors, cb, args) \
 				vos_iterate(param, iter_type, recursive, \
 						anchors, cb, NULL, args, NULL)
 
-static int
-vos_path_parse(const char *path, uuid_t pool_uuid,
-	       char *pool_base, uint32_t pool_base_len)
-{
-	uint32_t	path_len = strlen(path);
-	char		uuid_test_str[DAOS_UUID_STR_SIZE];
-	int		path_idx, sub_path_idx;
-
-	D_ASSERT(path != NULL && pool_base != NULL);
-
-	for (path_idx = 0, sub_path_idx = 0; path_idx < path_len; path_idx++) {
-		if (path[path_idx] == '/') {
-			uuid_test_str[sub_path_idx] = '\0';
-			if (uuid_parse(uuid_test_str, pool_uuid) == 0) {
-				uint32_t src_pool_base_len = path_idx - sub_path_idx;
-
-				if (src_pool_base_len > pool_base_len) {
-					D_ERROR("The path's pool base is too long.\n");
-					return -DER_INVAL;
-				}
-
-				strncpy(pool_base, path, src_pool_base_len);
-				pool_base[src_pool_base_len + 1] = '\0';
-				return 0;
-			}
-			/* start on the next dir */
-			sub_path_idx = 0;
-		} else {
-			if (sub_path_idx <= DAOS_UUID_STR_SIZE)
-				uuid_test_str[sub_path_idx++] = path[path_idx];
-		}
-	}
-
-	return -DER_INVAL;
-}
-
 int
 ddb_vos_pool_open(char *path, daos_handle_t *poh)
 {
-	char		pool_base[64];
-	uuid_t		pool_uuid = {0};
-	uint32_t	flags = 0; /* Will need to be a flag to ignore uuid check */
-	int		rc;
+	struct vos_file_parts	path_parts = {0};
+	uint32_t		flags = 0; /* Will need to be a flag to ignore uuid check */
+	int			rc;
 
-	rc = vos_path_parse(path, pool_uuid, pool_base, ARRAY_SIZE(pool_base));
-	if (!SUCCESS(rc))
-		return rc;
 	/*
-	 * VOS files must be under /mnt/daos directory. This is a current limitation and
-	 * will change in the future
+	 * Currently the vos file is required to be in the same path daos_engine created it in.
+	 * This is so that the sys_db file exists and the pool uuid and target id can be obtained
+	 * from the path. It should be considered in the future how to get these from another
+	 * source.
 	 */
-	rc = vos_self_init(pool_base, true, 0);
+	rc = vos_path_parse(path, &path_parts);
 	if (!SUCCESS(rc))
 		return rc;
 
-	rc = vos_pool_open(path, pool_uuid, flags, poh);
-	if (!SUCCESS(rc))
+	rc = vos_self_init(path_parts.vf_db_path, true, path_parts.vf_target_idx);
+	if (!SUCCESS(rc)) {
+		D_ERROR("Failed to initialize VOS: "DF_RC"\n", DP_RC(rc));
+		return rc;
+	}
+
+	rc = vos_pool_open(path, path_parts.vf_pool_uuid, flags, poh);
+	if (!SUCCESS(rc)) {
+		D_ERROR("Failed to open pool: "DF_RC"\n", DP_RC(rc));
 		vos_self_fini();
+	}
 
 	return rc;
 }
@@ -1452,4 +1424,95 @@ dv_clear_committed_table(daos_handle_t coh)
 	if (rc < 0)
 		return rc;
 	return delete_count;
+}
+
+struct dv_sync_cb_args {
+	dv_smd_sync_complete	 sync_complete_cb;
+	void			*sync_cb_args;
+};
+
+static int
+sync_cb(struct bio_blob_hdr *hdr, void *cb_args)
+{
+	uint8_t			*pool_id = hdr->bbh_pool;
+	struct smd_pool_info	*pool_info = NULL;
+	daos_size_t		 blob_size;
+	struct dv_sync_cb_args	*args = cb_args;
+	int			 rc;
+
+	D_ASSERT(args != NULL);
+
+	rc = smd_pool_get_info(pool_id, &pool_info);
+	if (!SUCCESS(rc)) {
+		D_ERROR("Failed to get smd pool info: "DF_RC"\n", DP_RC(rc));
+		return rc;
+	}
+
+	/*
+	 * Currently, use the pool's already configured blob size. In the future will need to
+	 * make it more robust and use info from spdk blob's cluster, page size, etc to get
+	 * blob size
+	 */
+	blob_size = pool_info->spi_blob_sz;
+	smd_pool_free_info(pool_info);
+
+	/* Try to delete the target first */
+	rc = smd_pool_del_tgt(pool_id, hdr->bbh_vos_id);
+	if (!SUCCESS(rc)) {
+		/* Ignore error for now ... might not exist*/
+		D_WARN("delete target failed: "DF_RC"\n", DP_RC(rc));
+		rc = 0;
+	}
+
+	rc = smd_pool_add_tgt(pool_id, hdr->bbh_vos_id, hdr->bbh_blob_id, blob_size);
+	if (!SUCCESS(rc)) {
+		D_ERROR("add target failed: "DF_RC"\n", DP_RC(rc));
+		return rc;
+	}
+
+	if (args->sync_complete_cb) {
+		rc = args->sync_complete_cb(args->sync_cb_args, pool_id, hdr->bbh_vos_id,
+					    hdr->bbh_blob_id, blob_size);
+	}
+
+	return rc;
+}
+
+int
+dv_sync_smd(dv_smd_sync_complete complete_cb, void *cb_args)
+{
+	struct dv_sync_cb_args	 sync_cb_args = {0};
+	char			*nvme_conf;
+	char			*db_path;
+	int			 rc;
+
+	/*
+	 * Current limitation is that the only single engine is supported
+	 * which puts the paths here ... (this will be changed in the future)
+	 */
+	nvme_conf = "/mnt/daos/daos_nvme.conf";
+	db_path = "/mnt/daos";
+
+	/* don't initialize NVMe within VOS. Will happen in ddb_spdk module */
+	rc = vos_self_init_ext(db_path, true, 0, false);
+
+	if (!SUCCESS(rc)) {
+		D_ERROR("VOS failed to initialize: "DF_RC"\n", DP_RC(rc));
+		return rc;
+	}
+
+	rc = smd_init(vos_db_get());
+	if (!SUCCESS(rc)) {
+		D_ERROR("SMD failed to initialize: "DF_RC"\n", DP_RC(rc));
+		return rc;
+	}
+
+	sync_cb_args.sync_complete_cb = complete_cb;
+	sync_cb_args.sync_cb_args = cb_args;
+	rc = ddbs_for_each_bio_blob_hdr(nvme_conf, sync_cb, &sync_cb_args);
+
+	smd_fini();
+	vos_db_fini();
+
+	return rc;
 }

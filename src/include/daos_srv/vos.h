@@ -220,6 +220,9 @@ vos_dtx_cache_reset(daos_handle_t coh, bool force);
 int
 vos_self_init(const char *db_path, bool use_sys_db, int tgt_id);
 
+int
+vos_self_init_ext(const char *db_path, bool use_sys_db, int tgt_id, bool nvme_init);
+
 /**
  * Finalize the environment for a VOS instance
  * Must be called for clean up at the end of using a vos instance
