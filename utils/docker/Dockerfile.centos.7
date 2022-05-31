@@ -33,7 +33,8 @@ RUN set -e;                                                      \
     if [ -n "$REPO_FILE_URL" ]; then                             \
         dnf --quiet config-manager --disable epel;               \
     fi;                                                          \
-    dnf clean all
+    dnf -y update epel-release;                                  \
+    dnf -y clean all
 
 ARG JENKINS_URL
 ARG REPOS
@@ -54,8 +55,6 @@ baseurl=${JENKINS_URL}job/daos-stack/job/$repo/job/$branch/$build_number/artifac
 enabled=1\n\
 gpgcheck=False\n" >> /etc/yum.repos.d/$repo:$branch:$build_number.repo;   \
         cat /etc/yum.repos.d/$repo:$branch:$build_number.repo; \
-        dnf repolist; \
-        dnf --disablerepo=\* --enablerepo=$repo:$branch:$build_number makecache; \
     done
 
 # Install OS updates and package.  Include basic tools and daos dependencies
