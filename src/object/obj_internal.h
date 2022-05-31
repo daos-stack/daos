@@ -375,7 +375,8 @@ struct obj_auxi_args {
 					 cond_modify:1,
 					 /* conf_fetch split to multiple sub-tasks */
 					 cond_fetch_split:1,
-					 reintegrating:1;
+					 reintegrating:1,
+					 rebuilding:1;
 	/* request flags. currently only: ORF_RESEND */
 	uint32_t			 flags;
 	uint32_t			 specified_shard;
