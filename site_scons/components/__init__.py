@@ -208,15 +208,13 @@ def define_mercury(reqs):
                      '-DNA_USE_OFI=ON',
                      '-DBUILD_DOCUMENTATION=OFF',
                      '-DBUILD_SHARED_LIBS=ON',
+                     '-DNA_USE_UCX=ON',
                      '../mercury']
 
     if reqs.target_type == 'debug':
         mercury_build.append('-DMERCURY_ENABLE_DEBUG=ON')
     else:
         mercury_build.append('-DMERCURY_ENABLE_DEBUG=OFF')
-
-    mercury_build.extend(include(reqs, 'ucx', ['-DNA_USE_UCX=ON'], ['-DNA_USE_UCX=OFF']))
-    libs.extend(include(reqs, 'ucx', ['ucx'], []))
 
     mercury_build.append(check(reqs,
                                'openpa',
@@ -236,7 +234,7 @@ def define_mercury(reqs):
                           ['make', 'install']],
                 libs=['mercury', 'na', 'mercury_util'],
                 pkgconfig='mercury',
-                requires=[atomic, 'boost', 'ofi'] + libs,
+                requires=[atomic, 'boost', 'ofi', 'ucx'] + libs,
                 out_of_src_build=True,
                 package='mercury-devel' if inst(reqs, 'mercury') else None,
                 patch_rpath=['lib'])

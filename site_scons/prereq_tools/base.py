@@ -60,7 +60,7 @@ import tarfile
 import copy
 import configparser
 
-OPTIONAL_COMPS = ['psm2', 'ucx']
+OPTIONAL_COMPS = ['psm2']
 
 
 class DownloadFailure(Exception):
