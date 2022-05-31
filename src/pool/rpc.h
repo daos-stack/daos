@@ -184,9 +184,7 @@ CRT_RPC_DECLARE(pool_create, DAOS_ISEQ_POOL_CREATE, DAOS_OSEQ_POOL_CREATE)
 	((struct daos_pool_space) (pco_space)		CRT_RAW) \
 	((struct daos_rebuild_status) (pco_rebuild_st)	CRT_RAW) \
 	/* only set on -DER_TRUNC */				 \
-	((uint32_t)		(pco_map_buf_size)	CRT_VAR) \
-	((uint32_t)		(pco_pool_layout_ver)	CRT_VAR) \
-	((uint32_t)	       (pco_upgrade_layout_ver)	CRT_VAR)
+	((uint32_t)		(pco_map_buf_size)	CRT_VAR)
 
 CRT_RPC_DECLARE(pool_connect, DAOS_ISEQ_POOL_CONNECT, DAOS_OSEQ_POOL_CONNECT)
 

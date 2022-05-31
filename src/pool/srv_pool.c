@@ -2397,8 +2397,6 @@ ds_pool_connect_handler(crt_rpc_t *rpc)
 	global_ver_entry = daos_prop_entry_get(prop, DAOS_PROP_PO_GLOBAL_VERSION);
 	D_ASSERT(global_ver_entry != NULL);
 	global_ver = global_ver_entry->dpe_val;
-	out->pco_pool_layout_ver = global_ver;
-	out->pco_upgrade_layout_ver = DS_POOL_GLOBAL_VERSION;
 
 	/*
 	 * Security capabilities determine the access control policy on this
