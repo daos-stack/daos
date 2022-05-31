@@ -20,6 +20,7 @@ class DmgSystemReformatTest(PoolTestBase):
 
     :avocado: recursive
     """
+
     def test_dmg_system_reformat(self):
         """
         JIRA ID: DAOS-5415
@@ -50,9 +51,9 @@ class DmgSystemReformatTest(PoolTestBase):
             self.fail("Detected issues performing a system stop: {}".format(
                 self.get_dmg_command().result.stderr_text))
 
-        # Remove pools
+        # Remove pools and disable removing pools that about to be removed by formatting
         for pool in self.pool:
-            self.unregister_cleanup(**pool.get_cleanup_entry(self))
+            pool.skip_cleanup()
         self.pool = []
 
         # Perform a dmg system erase to allow the dmg storage format to succeed

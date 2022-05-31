@@ -50,7 +50,7 @@ def add_pool(test, namespace=POOL_NAMESPACE, create=True, connect=True, index=0,
     # Add a step to remove this pool when the test completes and ensure their is enough time for the
     # pool destroy to be attempted - accounting for a possible dmg command timeout
     test.increment_timeout(200)
-    test.register_cleanup(**pool.get_cleanup_entry(test))
+    test.register_cleanup("method": remove_pool, "test": test, "pool": self)
 
     return pool
 
@@ -284,14 +284,13 @@ class TestPool(TestDaosApiBase):
             raise TypeError("Invalid 'dmg' object type: {}".format(type(value)))
         self._dmg = value
 
-    def get_cleanup_entry(self, test):
-        """Get the test cleanup entry for this TestPool object.
+    def skip_cleanup(self):
+        """Prevent pool from being removed during cleanup.
 
-        Returns:
-            dict: test._cleanup_methods entry for this pool
-
+        Useful for corner case tests where the pool no longer exists due to a storage format.
         """
-        return {"method": remove_pool, "kwargs": {"test": test, "pool": self}}
+        self.connected = False
+        self.attached = False
 
     @fail_on(CommandFailure)
     @fail_on(DaosApiError)

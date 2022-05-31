@@ -431,17 +431,6 @@ class Test(avocadoTest):
         kwargs_str = ", ".join(["=".join([str(key), str(value)]) for key, value in kwargs.items()])
         self.log.debug("Register: Adding calling %s(%s) during tearDown()", method, kwargs_str)
 
-    def unregister_cleanup(self, method, **kwargs):
-        """Remove the matching method call from the list of cleanup methods to run in tearDown().
-
-        Args:
-            method (str): method to call with the kwargs
-        """
-        try:
-            self._cleanup_methods.remove({"method": method, "kwargs": kwargs})
-        except ValueError:
-            self.log.debug("Unable to remove cleanup entry: %s", kwargs)
-
     def increment_timeout(self, increment):
         """Increase the avocado runner timeout configuration settings by the provided value.
 
