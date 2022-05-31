@@ -1874,6 +1874,7 @@ obj_ec_recov_cb(tse_task_t *task, struct dc_object *obj,
 	uint32_t			 extra_flags, i;
 	int				 rc;
 
+	D_INIT_LIST_HEAD(&task_list);
 	rc = obj_ec_recov_prep(&obj_auxi->reasb_req, obj->cob_md.omd_id,
 			       args->iods, args->nr);
 	if (rc) {
@@ -1884,7 +1885,6 @@ obj_ec_recov_cb(tse_task_t *task, struct dc_object *obj,
 
 	D_ASSERT(fail_info->efi_recov_ntasks > 0 &&
 		 fail_info->efi_recov_tasks != NULL);
-	D_INIT_LIST_HEAD(&task_list);
 	for (i = 0; i < fail_info->efi_recov_ntasks; i++) {
 		recov_task = &fail_info->efi_recov_tasks[i];
 		/* Set client hlc as recovery epoch only for the case that

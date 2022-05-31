@@ -3576,8 +3576,6 @@ ds_obj_query_key_handler(crt_rpc_t *rpc, bool return_epoch)
 	uint32_t			 query_flags;
 	unsigned int			 cell_size = 0;
 	uint64_t			 stripe_size = 0;
-	daos_recx_t			 ec_recx[3] = {0};
-	daos_recx_t			*query_recx;
 	int				 rc;
 
 	okqi = crt_req_get(rpc);
@@ -3619,26 +3617,18 @@ ds_obj_query_key_handler(crt_rpc_t *rpc, bool return_epoch)
 		goto failed;
 
 	query_flags = okqi->okqi_api_flags;
-	if ((okqi->okqi_flags & ORF_EC) &&
-	    (okqi->okqi_api_flags & DAOS_GET_RECX)) {
+	if ((okqi->okqi_flags & ORF_EC) && (okqi->okqi_api_flags & DAOS_GET_RECX)) {
 		query_flags |= VOS_GET_RECX_EC;
-		query_recx = ec_recx;
 		cell_size = obj_ec_cell_rec_nr(&ioc.ioc_oca);
 		stripe_size = obj_ec_stripe_rec_nr(&ioc.ioc_oca);
-	} else {
-		query_recx = &okqo->okqo_recx;
 	}
 
 re_query:
 	rc = vos_obj_query_key(ioc.ioc_vos_coh, okqi->okqi_oid, query_flags,
-			       okqi->okqi_epoch, dkey, akey, query_recx,
+			       okqi->okqi_epoch, dkey, akey, &okqo->okqo_recx,
 			       return_epoch ? &okqo->okqo_max_epoch : NULL,
 			       cell_size, stripe_size, dth);
-	if (rc == 0 && (query_flags & VOS_GET_RECX_EC)) {
-		okqo->okqo_recx = ec_recx[0];
-		okqo->okqo_recx_parity = ec_recx[1];
-		okqo->okqo_recx_punched = ec_recx[2];
-	} else if (obj_dtx_need_refresh(dth, rc)) {
+	if (obj_dtx_need_refresh(dth, rc)) {
 		rc = dtx_refresh(dth, ioc.ioc_coc);
 		if (rc == -DER_AGAIN)
 			goto re_query;
