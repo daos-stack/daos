@@ -407,7 +407,7 @@ ds_pool_check_svc_clues(struct ds_pool_clues *clues, int *advice_out)
 		struct ds_pool_clue *clue = &clues->pcs_array[i];
 
 		D_ASSERT(uuid_compare(uuid, clue->pc_uuid) == 0);
-		D_ASSERTF(clue->pc_rc >= 0, DF_RC"\n", DP_RC(clue->pc_rc));
+		D_ASSERTF(clue->pc_rc > 0, DF_RC"\n", DP_RC(clue->pc_rc));
 		D_ASSERT(clue->pc_svc_clue != NULL);
 	}
 

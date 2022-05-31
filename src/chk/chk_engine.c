@@ -156,7 +156,7 @@ chk_engine_exit(struct chk_instance *ins, uint32_t ins_status, uint32_t pool_sta
 		iv.ci_status = ins_status;
 		iv.ci_to_leader = 1;
 
-		/* Synchronously notify the leader that check instance exit on the engine. */
+		/* Notify the leader that check instance exit on the engine. */
 		rc = chk_iv_update(ins->ci_iv_ns, &iv, CRT_IV_SHORTCUT_TO_ROOT,
 				   CRT_IV_SYNC_NONE, true);
 		if (rc != 0)
@@ -1592,7 +1592,7 @@ out:
 		iv.ci_status = cbk->cb_ins_status;
 		iv.ci_to_leader = 1;
 
-		/* Synchronously notify the leader that check instance exit on the engine. */
+		/* Notify the leader that check instance exit on the engine. */
 		rc = chk_iv_update(ins->ci_iv_ns, &iv, CRT_IV_SHORTCUT_TO_ROOT,
 				   CRT_IV_SYNC_NONE, true);
 		if (rc != 0)

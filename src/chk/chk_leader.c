@@ -386,7 +386,7 @@ chk_leader_cpr2ranklist(struct chk_pool_rec *cpr, bool svc)
 		d_list_for_each_entry(cps, &cpr->cpr_shard_list, cps_link) {
 			if (svc) {
 				clue = cps->cps_data;
-				if (clue == NULL || clue->pc_svc_clue == NULL)
+				if (clue == NULL || clue->pc_rc <= 0 || clue->pc_svc_clue == NULL)
 					continue;
 			}
 			ranks->rl_ranks[i++] = cps->cps_rank;
@@ -457,7 +457,7 @@ chk_leader_locate_pool_clue(struct chk_pool_rec *cpr)
 
 	d_list_for_each_entry(cps, &cpr->cpr_shard_list, cps_link) {
 		clue = cps->cps_data;
-		if (clue == NULL || clue->pc_svc_clue == NULL)
+		if (clue == NULL || clue->pc_rc <= 0 || clue->pc_svc_clue == NULL)
 			continue;
 
 		if (i++ == cpr->cpr_advice)
@@ -489,7 +489,7 @@ chk_leader_build_pool_clues(struct chk_pool_rec *cpr)
 
 	d_list_for_each_entry(cps, &cpr->cpr_shard_list, cps_link) {
 		clue = cps->cps_data;
-		if (clue == NULL || clue->pc_svc_clue == NULL)
+		if (clue == NULL || clue->pc_rc <= 0 || clue->pc_svc_clue == NULL)
 			continue;
 
 		if (clues.pcs_len == clues.pcs_cap) {
