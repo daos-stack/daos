@@ -97,6 +97,16 @@
    fun:na_ofi_check_protocol
 }
 {
+   OpenMPI initialize leaks memalign
+   Memcheck:Leak
+   match-leak-kinds: all
+   ...
+   fun:memalign
+   ...
+   fun:ompi_mpi_init
+   ...
+}
+{
    OpenMPI initialize leaks
    Memcheck:Leak
    match-leak-kinds: all
