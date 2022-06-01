@@ -117,6 +117,7 @@ struct dv_tree_path {
 	daos_key_t	vtp_dkey;
 	daos_key_t	vtp_akey;
 	daos_recx_t	vtp_recx;
+	bool		vtp_is_recx;
 };
 
 /* Is used while parsing user input for building the vos tree path. The builder can use branch
@@ -133,15 +134,22 @@ struct dv_tree_path_builder {
 	uint8_t			*vtp_dkey_buf;
 	uint8_t			*vtp_akey_buf;
 
+	/* Used during the verification process */
+	uint32_t		 vtp_current_idx;
 	/*
 	 * A user can pass an index of the path part. These indexes will be used to complete
 	 * the path parts.
 	 */
 	uint32_t		 vtp_cont_idx;
+	bool			 vtp_cont_verified;
 	uint32_t		 vtp_oid_idx;
+	bool			 vtp_oid_verified;
 	uint32_t		 vtp_dkey_idx;
+	bool			 vtp_dkey_verified;
 	uint32_t		 vtp_akey_idx;
+	bool			 vtp_akey_verified;
 	uint32_t		 vtp_recx_idx;
+	bool			 vtp_recx_verified;
 };
 
 static inline bool
@@ -167,6 +175,12 @@ static inline bool
 dv_has_akey(struct dv_tree_path *vtp)
 {
 	return vtp->vtp_akey.iov_len > 0;
+}
+
+static inline bool
+dv_has_recx(struct dv_tree_path *vtp)
+{
+	return vtp->vtp_recx.rx_nr > 0;
 }
 
 static inline bool

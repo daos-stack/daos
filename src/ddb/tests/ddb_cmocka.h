@@ -54,5 +54,6 @@
 	} while (0)
 
 #define assert_invalid(x) assert_rc_equal(-DER_INVAL, (x))
+#define assert_nonexist(x) assert_rc_equal(-DER_NONEXIST, (x))
 
 #endif /* DAOS_DDB_CMOCKA_H */
