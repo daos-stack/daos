@@ -368,12 +368,14 @@ ds_pool_plan_svc_reconfs(int svc_rf, struct pool_map *map, d_rank_list_t *replic
 			if (to_add->rl_nr + to_keep->rl_nr == objective)
 				break;
 		}
+		/*
+		 * We may have too few engines for the objective. Settle for
+		 * what we have, but avoid using an even number of replicas,
+		 * which is inefficient. On the other hand, if we have reached
+		 * the objective---an odd number---the following condition must
+		 * be false.
+		 */
 		if ((to_add->rl_nr + to_keep->rl_nr) % 2 == 0) {
-			/*
-			 * Not enough engines available, for the objective is
-			 * odd. Do with what we have, but avoid using an even
-			 * number of replicas, which are inefficient.
-			 */
 			if (to_add->rl_nr > 0) {
 				to_add->rl_nr--;
 			} else {
@@ -387,9 +389,12 @@ ds_pool_plan_svc_reconfs(int svc_rf, struct pool_map *map, d_rank_list_t *replic
 		}
 	} else if (to_keep->rl_nr > objective) {
 		/*
-		 * Too many replicas---perhaps, since we may be using
-		 * svc_rf_default. Hence, we don't reduce to the objective, but
-		 * merely ensure an odd number of replicas instead.
+		 * Too many replicas. Since the objective may be based on
+		 * svc_rf_default (see [Temporary] in the function
+		 * documentation), do not reduce the number of replicas to the
+		 * objective. If the number of replicas is even, however,
+		 * remove a replica to make the number odd, because an even
+		 * number is inefficient.
 		 */
 		if (to_keep->rl_nr % 2 == 0) {
 			rc = d_rank_list_append(to_remove, to_keep->rl_ranks[to_keep->rl_nr - 1]);

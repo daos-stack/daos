@@ -1311,6 +1311,7 @@ out:
 int
 ds_pool_svc_rf_to_nreplicas(int svc_rf)
 {
+	D_ASSERTF(svc_rf >= 0 && svc_rf < INT_MAX / 2, "%d out of range\n", svc_rf);
 	return svc_rf * 2 + 1;
 }
 
