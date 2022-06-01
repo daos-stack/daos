@@ -78,14 +78,8 @@ class ContainerDestroyTest(TestWithServers):
         else:
             poh = self.pool.pool.handle
 
-        # Update container UUID used during destroy based on the variant.
-        if change_uuid:
-            con_uuid = uuid.uuid4()
-        else:
-            con_uuid = uuid.UUID(self.container.uuid)
-
         try:
-            self.container.container.destroy(force=force, poh=poh, con_uuid=con_uuid)
+            self.container.container.destroy(force=force, poh=poh)
             passed = True
         except DaosApiError:
             self.log.info(traceback.format_exc())
@@ -96,10 +90,6 @@ class ContainerDestroyTest(TestWithServers):
             # here before getting to tearDown. To do so, set uuid and poh in the
             # DaosContainer instance. Then call destroy on the TestContainer instance.
             self.container.container.poh = self.pool.pool.handle
-            con_uuid = uuid.UUID(self.container.uuid)
-            # Use conversion.c_uuid() to set the correct UUID into uuid.
-            conversion.c_uuid(con_uuid, self.container.container.uuid)
-
             self.container.destroy()
 
         if expected_result == 'PASS' and not passed:

@@ -1598,9 +1598,6 @@ class DaosContainer():
             self.poh = poh
         if self.uuid is None:
             raise DaosApiError("Fail to destroy a container with uuid as none.")
-
-        if self.uuid is None:
-            raise DaosApiError("Container uuid is None.")
         uuid_str = self.get_uuid_str()
 
         c_force = ctypes.c_uint(force)
