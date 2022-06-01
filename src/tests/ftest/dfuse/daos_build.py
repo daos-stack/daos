@@ -46,7 +46,7 @@ class DaosBuild(DfuseTestBase):
             Create Posix container
             Mount dfuse
             Checkout and build DAOS sources.
-        :avocado: tags=all,daily_regression
+        :avocado: tags=all,full_regression
         :avocado: tags=vm
         :avocado: tags=daosio,dfuse
         :avocado: tags=dfusedaosbuild
@@ -80,7 +80,6 @@ class DaosBuild(DfuseTestBase):
             if intercept:
                 build_time = 120
         elif cache_mode == 'metadata':
-            build_time = 210
             cont_attrs['dfuse-data-cache'] = 'off'
             cont_attrs['dfuse-attr-time'] = cache_time
             cont_attrs['dfuse-dentry-time'] = cache_time
@@ -118,6 +117,8 @@ class DaosBuild(DfuseTestBase):
 
         preload_cmd = ';'.join(envs)
 
+        # Run the deps build in parallel for speed/coverage however the daos build itself does
+        # not yet work, so run this part in serial.
         cmds = ['python3 -m venv {}/venv'.format(mount_dir),
                 'git clone https://github.com/daos-stack/daos.git {}'.format(build_dir),
                 'git -C {} submodule init'.format(build_dir),
