@@ -201,7 +201,6 @@ class PoolCreateAllHwTests(PoolCreateAllTestBase):
                             "Invalid size of SMD available: want={} got={}".format(
                                 smd_avail_bytes,
                                 smd_device["avail_bytes"]))
-                    smd_avail_bytes = min(smd_avail_bytes, smd_device["avail_bytes"])
 
     def test_two_pools(self):
         """Test the creation of two pools with 50% and 100% of the available storage
