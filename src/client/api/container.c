@@ -23,53 +23,6 @@ daos_cont_global2local(daos_handle_t poh, d_iov_t glob, daos_handle_t *coh)
 	return dc_cont_global2local(poh, glob, coh);
 }
 
-/** Disable backward compat code */
-#undef daos_cont_create
-
-/**
- * Kept for backward ABI compatibility when a UUID is provided by the caller
- */
-int
-daos_cont_create(daos_handle_t poh, uuid_t *cuuid, daos_prop_t *cont_prop, daos_event_t *ev)
-{
-	daos_cont_create_t	*args;
-	tse_task_t		*task;
-	const unsigned char	*uuid = (const unsigned char *) cuuid;
-	int			 rc;
-
-	DAOS_API_ARG_ASSERT(*args, CONT_CREATE);
-	if (!daos_uuid_valid(uuid))
-		return -DER_INVAL;
-
-	if (cont_prop != NULL && !daos_prop_valid(cont_prop, false, true)) {
-		D_ERROR("Invalid container properties.\n");
-		return -DER_INVAL;
-	}
-
-	rc = dc_task_create(dc_cont_create, NULL, ev, &task);
-	if (rc)
-		return rc;
-
-	args = dc_task_get_args(task);
-	args->poh	= poh;
-	uuid_copy((unsigned char *)args->uuid, uuid);
-	args->prop	= cont_prop;
-	args->cuuid	= NULL;
-
-	return dc_task_schedule(task, true);
-}
-
-/**
- * Create version that requires uuid to be passed in
- */
-int
-daos_cont_create1(daos_handle_t poh, const uuid_t cuuid, daos_prop_t *cont_prop, daos_event_t *ev)
-{
-	uuid_t *u = (uuid_t *)((unsigned char *)cuuid);
-
-	return daos_cont_create(poh, u, cont_prop, ev);
-}
-
 static int
 cont_inherit_redunc_fac(daos_handle_t poh, daos_prop_t *cont_prop,
 			daos_prop_t **merged_prop)
@@ -90,7 +43,7 @@ cont_inherit_redunc_fac(daos_handle_t poh, daos_prop_t *cont_prop,
 
 	redunc_prop = daos_prop_alloc(1);
 	if (redunc_prop == NULL) {
-		D_ERROR("failed to allocate redunc_prop\n");
+		D_ERROR("failed to allocate redunc_prop "DF_RC"\n", DP_RC(-DER_NOMEM));
 		return -DER_NOMEM;
 	}
 	redunc_prop->dpp_entries[0].dpe_type = DAOS_PROP_CO_REDUN_FAC;
@@ -100,8 +53,8 @@ cont_inherit_redunc_fac(daos_handle_t poh, daos_prop_t *cont_prop,
 		*merged_prop = daos_prop_merge(cont_prop, redunc_prop);
 		daos_prop_free(redunc_prop);
 		if (*merged_prop == NULL) {
-			D_ERROR("failed to merge cont_prop and redunc_prop\n");
 			rc = -DER_NOMEM;
+			D_ERROR("failed to merge cont_prop and redunc_prop "DF_RC"\n", DP_RC(rc));
 		}
 	} else {
 		*merged_prop = redunc_prop;
@@ -115,8 +68,8 @@ cont_inherit_redunc_fac(daos_handle_t poh, daos_prop_t *cont_prop,
  * Used by anyone including the daos_cont.h header file.
  */
 int
-daos_cont_create2(daos_handle_t poh, uuid_t *cuuid, daos_prop_t *cont_prop,
-		  daos_event_t *ev)
+daos_cont_create(daos_handle_t poh, uuid_t *cuuid, daos_prop_t *cont_prop,
+		 daos_event_t *ev)
 {
 	daos_cont_create_t	*args;
 	tse_task_t		*task;
@@ -130,9 +83,11 @@ daos_cont_create2(daos_handle_t poh, uuid_t *cuuid, daos_prop_t *cont_prop,
 		return -DER_INVAL;
 	}
 
-	rc = cont_inherit_redunc_fac(poh, cont_prop, &merged_props);
-	if (rc)
-		return rc;
+	if (cont_prop) {
+		rc = cont_inherit_redunc_fac(poh, cont_prop, &merged_props);
+		if (rc)
+			return rc;
+	}
 
 	rc = dc_task_create(dc_cont_create, NULL, ev, &task);
 	if (rc) {
@@ -153,6 +108,12 @@ daos_cont_create2(daos_handle_t poh, uuid_t *cuuid, daos_prop_t *cont_prop,
 
 	return rc;
 }
+
+#undef daos_cont_create
+int
+daos_cont_create(daos_handle_t poh, uuid_t *cuuid, daos_prop_t *cont_prop,
+		 daos_event_t *ev)
+		 __attribute__ ((weak, alias("daos_cont_create2")));
 
 int
 daos_cont_create_with_label(daos_handle_t poh, const char *label,
@@ -182,7 +143,7 @@ daos_cont_create_with_label(daos_handle_t poh, const char *label,
 		}
 	}
 
-	rc = daos_cont_create2(poh, uuid, merged_props ? merged_props : label_prop, ev);
+	rc = daos_cont_create(poh, uuid, merged_props ? merged_props : label_prop, ev);
 	if (rc != 0) {
 		D_ERROR("daos_cont_create label=%s failed, "DF_RC"\n", label, DP_RC(rc));
 		goto out_merged_props;
