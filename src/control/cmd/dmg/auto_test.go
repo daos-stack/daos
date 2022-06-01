@@ -162,7 +162,7 @@ engines:
   fabric_iface_port: "32416"
   pinned_numa_node: 1
 disable_vfio: false
-enable_vmd: false
+disable_vmd: false
 enable_hotplug: false
 nr_hugepages: 6144
 control_log_mask: INFO

@@ -27,7 +27,8 @@ class NvmeHealth(ServerFillUp):
 
         :avocado: tags=all,full_regression
         :avocado: tags=hw,medium
-        :avocado: tags=nvme,ib2,nvme_health
+        :avocado: tags=nvme
+        :avocado: tags=nvme_health
         """
         # pylint: disable=attribute-defined-outside-init
         # pylint: disable=too-many-branches
@@ -59,8 +60,7 @@ class NvmeHealth(ServerFillUp):
         # List all pools
         self.dmg.set_sub_command("storage")
         self.dmg.sub_command_class.set_sub_command("query")
-        self.dmg.sub_command_class.sub_command_class.set_sub_command(
-            "list-pools")
+        self.dmg.sub_command_class.sub_command_class.set_sub_command("list-pools")
         for host in self.hostlist_servers:
             self.dmg.hostlist = host
             try:
