@@ -1078,7 +1078,7 @@ ds_rsvc_add_replicas(enum ds_rsvc_class_id class, d_iov_t *id,
 		return rc;
 	rc = ds_rsvc_add_replicas_s(svc, ranks, size);
 	ds_rsvc_set_hint(svc, hint);
-	put_leader(svc);
+	ds_rsvc_put_leader(svc);
 	return rc;
 }
 
@@ -1114,7 +1114,7 @@ ds_rsvc_remove_replicas(enum ds_rsvc_class_id class, d_iov_t *id,
 		return rc;
 	rc = ds_rsvc_remove_replicas_s(svc, ranks, stop);
 	ds_rsvc_set_hint(svc, hint);
-	put_leader(svc);
+	ds_rsvc_put_leader(svc);
 	return rc;
 }
 
