@@ -339,7 +339,7 @@ class GitRepoRetriever():
                     command.extend(['--directory', patches[patch]])
                 command.append(patch)
                 if not RUNNER.run_commands([command], subdir=subdir):
-                    return
+                    raise DownloadFailure(self.url, subdir)
 
     def update_submodules(self, subdir):
         """ update the git submodules """
@@ -402,7 +402,7 @@ build with random upstream changes.
         if not RUNNER.run_commands(command, subdir=subdir):
             raise DownloadFailure(self.url, subdir)
         # Now apply any patches specified
-        self.apply_patches(subdir, kw.get("patches", None))
+        self.apply_patches(subdir, kw.get("patches", {}))
         self.update_submodules(subdir)
 
 
@@ -1364,7 +1364,7 @@ class _Component():
         patchnum = 1
         patchstr = self.prereqs.get_config("patch_versions", self.name)
         if patchstr is None:
-            return []
+            return {}
         patches = {}
         patch_strs = patchstr.split(",")
         for raw in patch_strs:
