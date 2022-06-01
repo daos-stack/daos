@@ -176,8 +176,8 @@ def define_mercury(reqs):
     ucx_configure = ['./configure', '--disable-assertions', '--disable-params-check', '--enable-mt',
                      '--without-go', '--without-java', '--prefix=$UCX_PREFIX',
                      '--libdir=$UCX_PREFIX/lib64', '--enable-cma', '--without-cuda',
-                     '--without-gdrcopy', '--with-verbs', '--without-knem', '--with-rdmacm',
-                     '--without-rocm', '--without-xpmem', '--without-fuse3', '--without-ugni']
+                     '--without-gdrcopy', '--with-verbs', '--without-knem', '--without-rocm',
+                     '--without-xpmem', '--without-fuse3', '--without-ugni']
 
     if reqs.target_type == 'debug':
         ucx_configure.extend(['--enable-debug'])
