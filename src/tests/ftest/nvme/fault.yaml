@@ -5,7 +5,7 @@ hosts:
   test_clients:
     - client-C
     - client-D
-timeout: 7200
+timeout: 3600
 server_config:
   engines_per_host: 2
   name: daos_server
@@ -52,27 +52,16 @@ container:
     control_method: daos
     properties: rf:1
 ior:
-  api: "DFS"
+  api: DFS
   client_processes:
     np: 16
   dfs_destroy: False
-  iorflags:
-      flags: "-w -F -r -R -k -G 1"
+  flags: "-w -F -r -R -k -G 1"
   test_file: /testFile
   transfersize_blocksize:
       nvme_transfer_size: 16777216 #16M
-  dfs_oclass: "RP_2G1"
-  dfs_dir_oclass: "RP_2G1"
+  dfs_oclass: RP_2G1
 faulttests:
-  pool_capacity:
-    10_Percent:
-      percentage: 10
-  no_of_servers:
-    single:
-      count: 1
-  no_of_drives:
-    single:
-      count: 1
-  no_of_pools:
-    single:
-      count: 1
+  pool_capacity: 15
+  no_of_servers: 1
+  no_of_drives: 1

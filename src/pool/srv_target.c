@@ -776,6 +776,8 @@ ds_pool_stop(uuid_t uuid)
 {
 	struct ds_pool *pool;
 
+	ds_pool_failed_remove(uuid);
+
 	pool = ds_pool_lookup(uuid);
 	if (pool == NULL)
 		return;
