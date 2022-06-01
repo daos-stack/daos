@@ -1644,8 +1644,8 @@ int ds_pool_failed_add(uuid_t uuid, int rc)
 	uuid_copy(psf->psf_uuid, uuid);
 	psf->psf_error = rc;
 	d_list_add_tail(&psf->psf_link, &pool_svc_failed_list);
-	D_RWLOCK_UNLOCK(&psfl_rwlock);
 out:
+	D_RWLOCK_UNLOCK(&psfl_rwlock);
 	return ret;
 }
 
