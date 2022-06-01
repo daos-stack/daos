@@ -8,8 +8,6 @@ import os
 import daos_build
 import SCons.Action
 
-HEADERS = ['api.h', 'iv.h', 'types.h', 'swim.h']
-
 SRC = ['crt_bulk.c', 'crt_context.c', 'crt_corpc.c',
        'crt_ctl.c', 'crt_debug.c', 'crt_group.c', 'crt_hg.c', 'crt_hg_proc.c',
        'crt_init.c', 'crt_iv.c', 'crt_register.c',
@@ -65,10 +63,6 @@ def scons():
     # There is probably a better way to do this but let's get it linking first
     env.AppendUnique(LIBPATH=[Dir('.')])
     env.AppendUnique(CPPPATH=[Dir('.').srcnode()])
-    env.AppendUnique(CPPPATH=[Dir('include').srcnode()])
-    for header in HEADERS:
-        env.Install(os.path.join('$PREFIX', 'include', 'cart'),
-                    os.path.join('../include', 'cart', header))
 
     prereqs.require(env, 'mercury', headers_only=True)
 
@@ -96,22 +90,6 @@ def scons():
 
     Default(cart_lib)
     Export('cart_lib', 'cart_targets')
-
-    if not env.GetOption('clean') and not env.GetOption('help'):
-
-        print("Checking local headers can be included")
-        broken_includes = False
-        config_env = env.Clone()
-        config = Configure(config_env)
-        for header in HEADERS:
-            if not config.CheckHeader(os.path.join('cart', header)):
-                broken_includes = True
-        config.Finish()
-
-        if broken_includes:
-            print("Broken local header files, cannot continue")
-            Exit(2)
-
     Export('env', 'prereqs')
 
     env.Install(conf_dir, ['utils/memcheck-cart.supp',

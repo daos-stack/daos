@@ -136,17 +136,23 @@ def set_defaults(env, daos_version):
     env.Append(CCFLAGS=['-DAPI_VERSION=\\"' + API_VERSION + '\\"'])
 
 
-def build_misc():
+def build_misc(build_prefix):
     """Build miscellaneous items"""
     # install the configuration files
-    SConscript('utils/config/SConscript')
+    common = os.path.join('utils', 'config')
+    path = os.path.join(build_prefix, common)
+    SConscript(os.path.join(common, 'SConscript'), variant_dir=path, duplicate=0)
 
     # install certificate generation files
-    SConscript('utils/certs/SConscript')
+    common = os.path.join('utils', 'certs')
+    path = os.path.join(build_prefix, common)
+    SConscript(os.path.join(common, 'SConscript'), variant_dir=path, duplicate=0)
 
     # install man pages
     try:
-        SConscript('doc/man/SConscript', must_exist=0)
+        common = os.path.join('doc', 'man')
+        path = os.path.join(build_prefix, common)
+        SConscript(os.path.join(common, 'SConscript'), variant_dir=path, must_exist=0, duplicate=0)
     except SCons.Warnings.MissingSConscriptWarning as _warn:
         print("Missing doc/man/SConscript...")
 
@@ -405,8 +411,8 @@ def scons():  # pylint: disable=too-many-locals,too-many-branches
     Export('platform_arm', 'conf_dir')
 
     # generate targets in specific build dir to avoid polluting the source code
-    VariantDir(build_prefix, '.', duplicate=0)
-    SConscript('{}/src/SConscript'.format(build_prefix))
+    path = os.path.join(build_prefix, 'src')
+    SConscript(os.path.join('src', 'SConscript'), variant_dir=path, duplicate=0)
 
     buildinfo = prereqs.get_build_info()
     buildinfo.gen_script('.build_vars.sh')
@@ -423,13 +429,12 @@ def scons():  # pylint: disable=too-many-locals,too-many-branches
     env.Install("$PREFIX/lib64/daos", "VERSION")
 
     if prereqs.client_requested():
-        api_version = env.Command("%s/API_VERSION" % build_prefix,
-                                  "%s/SConstruct" % build_prefix,
-                                  "echo %s > $TARGET" % (API_VERSION))
+        api_version = env.Command(os.path.join(build_prefix, 'API_VERSION'),
+                                  "SConstruct", f"echo {API_VERSION} > $TARGET")
         env.Install("$PREFIX/lib64/daos", api_version)
     env.Install(conf_dir + '/bash_completion.d', ['utils/completion/daos.bash'])
 
-    build_misc()
+    build_misc(build_prefix)
 
     Default(build_prefix)
 
