@@ -7,12 +7,10 @@ LIBDAOS_SRC = ['agent.c', 'array.c', 'container.c', 'event.c', 'init.c', 'job.c'
 
 def scons():
     """Execute build"""
-    Import('env', 'base_env', 'API_VERSION', 'prereqs', 'common')
+    Import('env', 'API_VERSION', 'prereqs', 'client_common')
 
-    daos_build.add_build_rpath(base_env)
     daos_build.add_build_rpath(env)
     env.AppendUnique(LIBPATH=[Dir('.')])
-    base_env.AppendUnique(LIBPATH=[Dir('.')])
     denv = env.Clone()
     prereqs.require(denv, 'protobufc')
     libdaos_tgts = denv.SharedObject(LIBDAOS_SRC)
@@ -26,7 +24,7 @@ def scons():
         libdaos = daos_build.library(env, 'daos', libdaos_tgts,
                                      SHLIBVERSION=API_VERSION,
                                      LIBS=['daos_common'])
-        env.Requires(libdaos, [common])
+        env.Requires(libdaos, [client_common])
         if hasattr(env, 'InstallVersionedLib'):
             env.InstallVersionedLib('$PREFIX/lib64/', libdaos, SHLIBVERSION=API_VERSION)
         else:

@@ -317,7 +317,7 @@ func (cfg *Server) Load() error {
 			"parameters and may be out of date, see server config examples")
 	}
 
-	// propagate top-level settings to server configs
+	// propagate top-level settings to engine configs
 	for i := range cfg.Engines {
 		cfg.updateServerConfig(&cfg.Engines[i])
 	}
