@@ -177,7 +177,7 @@ crt_context_provider_create(crt_context_t *crt_ctx, int provider)
 {
 	struct crt_context	*ctx = NULL;
 	int			rc = 0;
-	na_size_t		uri_len = CRT_ADDR_STR_MAX_LEN;
+	size_t			uri_len = CRT_ADDR_STR_MAX_LEN;
 	bool			sep_mode;
 	int			cur_ctx_num;
 	int			max_ctx_num;
