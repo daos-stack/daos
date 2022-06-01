@@ -401,9 +401,9 @@ build with random upstream changes.
         command = [['git', 'reset', '--hard', 'HEAD']]
         if not RUNNER.run_commands(command, subdir=subdir):
             raise DownloadFailure(self.url, subdir)
+        self.update_submodules(subdir)
         # Now apply any patches specified
         self.apply_patches(subdir, kw.get("patches", {}))
-        self.update_submodules(subdir)
 
 
 class WebRetriever():
