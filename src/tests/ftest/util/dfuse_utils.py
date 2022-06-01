@@ -82,7 +82,11 @@ class Dfuse(DfuseCommand):
     """Class defining an object of type DfuseCommand."""
 
     def __init__(self, hosts, tmp):
-        """Create a dfuse object."""
+        """Create a dfuse object.
+
+        Args:
+            hosts (NodeSet): hosts on which to run dfuse
+        """
         super().__init__("/run/dfuse/*", "dfuse")
 
         # set params

@@ -4,8 +4,7 @@
 
 SPDX-License-Identifier: BSD-2-Clause-Patent
 """
-import agent_utils as agu
-from ClusterShell.NodeSet import NodeSet
+from agent_utils import include_local_host
 
 from apricot import TestWithServers
 from exception_utils import CommandFailure
@@ -24,11 +23,11 @@ class DfuseTestBase(TestWithServers):
         self.dfuse = None
 
     def setUp(self):
-        """Setup Test Case"""
+        """Set up the test case."""
         super().setUp()
         # using localhost as client if client list is empty
         if not self.hostlist_clients:
-            self.hostlist_clients = agu.include_local_host(None)
+            self.hostlist_clients = include_local_host(None)
 
     def stop_job_managers(self):
         """Stop the test job manager followed by dfuse.

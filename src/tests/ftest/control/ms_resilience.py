@@ -101,7 +101,7 @@ class ManagementServiceResilience(TestWithServers):
         """Verify the leader of the MS is in the replicas.
 
         Args:
-            replicas (NodeSet): hostnames representing the access points for the MS.
+            replicas (NodeSet): host names representing the access points for the MS.
 
         Returns:
             NodeSet: hostname of the MS leader.
@@ -109,7 +109,7 @@ class ManagementServiceResilience(TestWithServers):
         """
         l_hostname = self.get_leader()
         start = time.time()
-        while l_hostname not in replicas and (time.time() - start) < self.L_QUERY_TIMER:
+        while not l_hostname.issubset(replicas) and (time.time() - start) < self.L_QUERY_TIMER:
             self.log.info("Current leader: <%s>; waiting for new leader to step up", l_hostname)
             time.sleep(1)
             l_hostname = self.get_leader()
@@ -203,10 +203,10 @@ class ManagementServiceResilience(TestWithServers):
 
         """
         kill_list = NodeSet.fromlist(random.sample(list(replicas), N))
-        if leader not in kill_list:
+        if not leader.issubset(kill_list):
             kill_list.remove(kill_list[-1])
             kill_list.add(leader)
-        self.log.info("*** stopping leader (%s) + %d others", leader, N-1)
+        self.log.info("*** stopping leader (%s) + %d others: %s", leader, N-1, kill_list)
         stop_processes(kill_list, self.server_managers[0].manager.job.command_regex)
 
         kill_ranks = self.server_managers[0].get_host_ranks(kill_list)
