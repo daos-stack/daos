@@ -50,7 +50,7 @@ def add_pool(test, namespace=POOL_NAMESPACE, create=True, connect=True, index=0,
     # Add a step to remove this pool when the test completes and ensure their is enough time for the
     # pool destroy to be attempted - accounting for a possible dmg command timeout
     test.increment_timeout(200)
-    test.register_cleanup("method": remove_pool, "test": test, "pool": self)
+    test.register_cleanup(remove_pool, test=test, pool=pool)
 
     return pool
 
