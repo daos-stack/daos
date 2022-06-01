@@ -14,12 +14,8 @@ pool:
 uuids: !mux
    perfect:
      uuid:
-       - 0cf3086e-daa3-44a7-a5d4-cba9d639bf19
+       - VALID
        - PASS
-   broken:
-     uuid:
-       - NULLPTR
-       - FAIL
 poolhandle: !mux
    goodone:
        handle: VALID

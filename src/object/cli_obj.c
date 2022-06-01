@@ -1874,6 +1874,7 @@ obj_ec_recov_cb(tse_task_t *task, struct dc_object *obj,
 	uint32_t			 extra_flags, i;
 	int				 rc;
 
+	D_INIT_LIST_HEAD(&task_list);
 	rc = obj_ec_recov_prep(&obj_auxi->reasb_req, obj->cob_md.omd_id,
 			       args->iods, args->nr);
 	if (rc) {
@@ -1884,7 +1885,6 @@ obj_ec_recov_cb(tse_task_t *task, struct dc_object *obj,
 
 	D_ASSERT(fail_info->efi_recov_ntasks > 0 &&
 		 fail_info->efi_recov_tasks != NULL);
-	D_INIT_LIST_HEAD(&task_list);
 	for (i = 0; i < fail_info->efi_recov_ntasks; i++) {
 		recov_task = &fail_info->efi_recov_tasks[i];
 		/* Set client hlc as recovery epoch only for the case that
@@ -6345,39 +6345,12 @@ daos_dc_obj2id(void *ptr, daos_obj_id_t *id)
 	*id = obj->cob_md.omd_id;
 }
 
-/** Disable backward compat code */
-#undef daos_obj_generate_oid
-
-int
-daos_obj_generate_oid(daos_handle_t coh, daos_obj_id_t *oid,
-		      enum daos_otype_t in, daos_oclass_id_t cid,
-		      daos_oclass_hints_t hints, uint32_t args)
-{
-	daos_ofeat_t	feat = (daos_ofeat_t)in;
-
-	D_WARN("daos_ofeat_t(DAOS_OF_XXX) will be deprecated soon, "
-		"please use enum daos_otype_t(DAOS_OT_XXX) instead!\n");
-	return daos_obj_generate_oid2(coh, oid, daos_obj_feat2type(feat), cid, hints, args);
-}
-
-/**
- * Create version that uses the deprecated daos_ofeat_t
- */
-int
-daos_obj_generate_oid1(daos_handle_t coh, daos_obj_id_t *oid,
-		       daos_ofeat_t feat, daos_oclass_id_t cid,
-		       daos_oclass_hints_t hints, uint32_t args)
-{
-	return daos_obj_generate_oid(coh, oid, (enum daos_otype_t)feat, cid,
-				     hints, args);
-}
-
 /**
  * Real latest & greatest implementation of container create.
  * Used by anyone including the daos_obj.h header file.
  */
 int
-daos_obj_generate_oid2(daos_handle_t coh, daos_obj_id_t *oid,
+daos_obj_generate_oid(daos_handle_t coh, daos_obj_id_t *oid,
 		       enum daos_otype_t type, daos_oclass_id_t cid,
 		       daos_oclass_hints_t hints, uint32_t args)
 {
@@ -6426,6 +6399,14 @@ daos_obj_generate_oid2(daos_handle_t coh, daos_obj_id_t *oid,
 	return rc;
 }
 
+#undef daos_obj_generate_oid
+
+int
+daos_obj_generate_oid(daos_handle_t coh, daos_obj_id_t *oid,
+		       enum daos_otype_t type, daos_oclass_id_t cid,
+		       daos_oclass_hints_t hints, uint32_t args)
+		       __attribute__ ((weak, alias("daos_obj_generate_oid2")));
+
 int
 daos_obj_generate_oid_by_rf(daos_handle_t poh, uint64_t rf_factor,
 			    daos_obj_id_t *oid, enum daos_otype_t type,
@@ -6464,7 +6445,7 @@ daos_obj_generate_oid_by_rf(daos_handle_t poh, uint64_t rf_factor,
 }
 
 daos_oclass_id_t
-daos_obj_get_oclass(daos_handle_t coh, daos_ofeat_t ofeats,
+daos_obj_get_oclass(daos_handle_t coh, enum daos_otype_t type,
 		    daos_oclass_hints_t hints, uint32_t args)
 {
 	daos_handle_t		poh;
@@ -6474,7 +6455,6 @@ daos_obj_get_oclass(daos_handle_t coh, daos_ofeat_t ofeats,
 	int			rc;
 	enum daos_obj_redun	ord;
 	uint32_t		nr_grp;
-	enum daos_otype_t	type = daos_obj_feat2type(ofeats);
 
 	/** select the oclass */
 	poh = dc_cont_hdl2pool_hdl(coh);
