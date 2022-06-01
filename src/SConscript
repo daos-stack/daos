@@ -33,6 +33,7 @@ def generate_daos_version_header(env):
     out = env.Substfile(tmpl_hdr_in, SUBST_DICT=sd)
     print("generated daos version header file: {}".format(out[0].abspath))
 
+
 def check_install_header(env, header):
     """Runs a builder to ensure the header can standalone compile and installs it"""
     result = env.CheckHeader(header)
@@ -40,6 +41,7 @@ def check_install_header(env, header):
     # get installed.
     Default(result)
     env.Install(os.path.join('$PREFIX', os.path.dirname(header)), header)
+
 
 def scons():
     """Execute build"""

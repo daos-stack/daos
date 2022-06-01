@@ -3,6 +3,7 @@
 
 FILES = ['vea_alloc.c', 'vea_api.c', 'vea_free.c', 'vea_hint.c', 'vea_init.c', 'vea_util.c']
 
+
 def scons():
     """Execute build"""
     Import('env', 'prereqs')
