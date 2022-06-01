@@ -75,21 +75,12 @@ def remove_pool(test, pool):
         exit_status_exception = pool.dmg.exit_status_exception
         pool.dmg.exit_status_exception = True
 
-    # Only disconnect a pool that has been connected by the test
-    if not hasattr(pool, "connected") or pool.connected:
-        try:
-            pool.disconnect()
-        except (DaosApiError, TestFail) as error:
-            test.test_log.info("  {}".format(error))
-            error_list.append("Error disconnecting pool {}: {}".format(pool.identifier, error))
-
-    # Only destroy a pool that has been created by the test
-    if not hasattr(pool, "attached") or pool.attached:
-        try:
-            pool.destroy(1)
-        except (DaosApiError, TestFail) as error:
-            test.test_log.info("  {}".format(error))
-            error_list.append("Error destroying pool {}: {}".format(pool.identifier, error))
+    # Attempt to destroy the pool
+    try:
+        pool.destroy(force=1, disconnect=1)
+    except (DaosApiError, TestFail) as error:
+        test.test_log.info("  {}".format(error))
+        error_list.append("Error destroying pool {}: {}".format(pool.identifier, error))
 
     # Restore raising exceptions for any failed command
     if exit_status_exception is False:
@@ -290,7 +281,8 @@ class TestPool(TestDaosApiBase):
         Useful for corner case tests where the pool no longer exists due to a storage format.
         """
         self.connected = False
-        self.attached = False
+        if self.pool:
+            self.pool.attached = False
 
     @fail_on(CommandFailure)
     @fail_on(DaosApiError)
