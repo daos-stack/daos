@@ -130,9 +130,9 @@ typedef d_iov_t daos_key_t;
 
 typedef struct daos_event {
 	int			ev_error;
-	/** Internal use, please do not modify */
+	/** Internal use - 152 + 8 bytes pad for pthread_mutex_t size difference on __aarch64__ */
 	struct {
-		uint64_t	space[19];
+		uint64_t	space[20];
 	}			ev_private;
 	/** Used for debugging */
 	uint64_t		ev_debug;
