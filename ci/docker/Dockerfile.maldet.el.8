@@ -5,7 +5,8 @@
 #
 
 # Pull base image
-FROM centos:centos7
+ARG BASE_DISTRO=rockylinux/rockylinux:8
+FROM $BASE_DISTRO
 LABEL maintainer="daos@daos.groups.io"
 
 # Intermittent cache-bust.  Used to reduce load on the actual CACHEBUST later.
@@ -16,21 +17,25 @@ ARG REPO_FILE_URL
 RUN set -e;                                                      \
     if [ -n "$REPO_FILE_URL" ]; then                             \
         cd /etc/yum.repos.d/ &&                                  \
-        curl -k -f -o daos_ci-centos7-artifactory.repo.tmp       \
-             "$REPO_FILE_URL"daos_ci-centos7-artifactory.repo && \
+        curl -k -f -o daos_ci-el8-artifactory.repo.tmp           \
+             "$REPO_FILE_URL"daos_ci-el8-artifactory.repo &&     \
         for file in *.repo; do                                   \
             true > $file;                                        \
         done;                                                    \
-        mv daos_ci-centos7-artifactory.repo{.tmp,};              \
+        mv daos_ci-el8-artifactory.repo{.tmp,};                  \
     fi;                                                          \
-    yum --assumeyes install dnf;                                 \
-    yum clean all;                                               \
-    dnf --assumeyes --disablerepo \*epel\* install               \
-                        epel-release dnf-plugins-core;           \
+    dnf --assumeyes --disablerepo \*epel\* install dnf-plugins-core;     \
     dnf config-manager --save --setopt=assumeyes=True;           \
     dnf config-manager --save --setopt=install_weak_deps=False;  \
-    if [ -n "$REPO_FILE_URL" ]; then                             \
-        dnf --quiet config-manager --disable epel;               \
+    if [ ! -f /etc/fedora-release ]; then                        \
+        dnf --disablerepo \*epel\* install epel-release;         \
+        dnf install epel-release;                                \
+        if [ -n "$REPO_FILE_URL" ]; then                         \
+            PT_REPO=daos_ci-rocky8-powertools-artifactory;       \
+        else                                                     \
+            PT_REPO=powertools;                                  \
+        fi;                                                      \
+        dnf config-manager --enable $PT_REPO;                    \
     fi;                                                          \
     dnf clean all
 
@@ -49,17 +54,19 @@ RUN for repo in $REPOS; do                                                \
         fi;                                                               \
         echo -e "[$repo:$branch:$build_number]\n\
 name=$repo:$branch:$build_number\n\
-baseurl=${JENKINS_URL}job/daos-stack/job/$repo/job/$branch/$build_number/artifact/artifacts/centos7/\n\
+baseurl=${JENKINS_URL}job/daos-stack/job/$repo/job/$branch/$build_number/artifact/artifacts/el8/\n\
 enabled=1\n\
 gpgcheck=False\n" >> /etc/yum.repos.d/$repo:$branch:$build_number.repo;   \
         cat /etc/yum.repos.d/$repo:$branch:$build_number.repo; \
-        dnf repolist; \
-        dnf --disablerepo=\* --enablerepo=$repo:$branch:$build_number makecache; \
     done
 
 # Install OS updates and package.  Include basic tools and daos dependencies
-COPY ./utils/scripts/install-centos7.sh /tmp/install.sh
-RUN chmod +x /tmp/install.sh && dnf upgrade && /tmp/install.sh && dnf clean all && \
+COPY ./ci/rpm/install-base-el8.sh /tmp/install.sh
+RUN chmod +x /tmp/install.sh && dnf upgrade &&           \
+    if [ -n "$REPO_FILE_URL" ]; then                     \
+        dnf config-manager --disablerepo \*epel\* ;      \
+    fi &&                                                \
+    /tmp/install.sh && dnf clean all &&                  \
     rm -f /tmp/install.sh
 
 ARG UID=1000
@@ -67,24 +74,21 @@ ARG UID=1000
 # Add DAOS users
 RUN useradd --no-log-init --uid $UID --user-group --create-home --shell /bin/bash \
             --home /home/daos daos_server
-RUN echo "daos_server:daos_server" | chpasswd
-RUN useradd --no-log-init --user-group --create-home --shell /bin/bash daos_agent
-RUN echo "daos_agent:daos_agent" | chpasswd
 RUN echo "daos_server ALL=(root) NOPASSWD: ALL" >> /etc/sudoers.d/daos_sudo_setup; \
     chmod 0440 /etc/sudoers.d/daos_sudo_setup;                                     \
     visudo -c;                                                                     \
     sudo -l -U daos_server
 
-# Create directory for DAOS backend storage
-RUN mkdir -p /opt/daos /mnt/daos /var/run/daos_server /var/run/daos_agent /home/daos/pre /home/daos/daos &&   \
-    chown -R daos_server.daos_server /opt/daos /mnt/daos /var/run/daos_server /home/daos &&  \
-    chown daos_agent.daos_agent /var/run/daos_agent
-
 # Now do an update to ensure software is up to date for install.  If the
 # src hasn't changed then this won't do anything, but if it has then we want to
 # ensure that latest dependencies are used.
+# This first run caches a bit so that the next uncached run below has less
+# to do.
 RUN {                                                                                  \
         dnf upgrade --exclude=spdk,spdk-devel,dpdk-devel,dpdk,mercury-devel,mercury && \
+        if [ -n "$REPO_FILE_URL" ]; then                                               \
+            dnf config-manager --disablerepo \*epel\* ;                                \
+        fi;                                                                            \
         dnf clean all;                                                                 \
     }
 
@@ -92,6 +96,9 @@ RUN {                                                                           
 ARG CACHEBUST
 RUN [ -z "$CACHEBUST" ] || {                                                           \
         dnf upgrade --exclude=spdk,spdk-devel,dpdk-devel,dpdk,mercury-devel,mercury && \
+        if [ -n "$REPO_FILE_URL" ]; then                                               \
+            dnf config-manager --disablerepo \*epel\*;                                 \
+        fi &&                                                                          \
         dnf clean all;                                                                 \
     }
 

@@ -14,6 +14,7 @@ LABEL maintainer="daos@daos.groups.io"
 ARG CB0
 
 # Use local repo server if present
+# installs/upgrades of epel-release can re-enable the distro repos for epel.
 ARG REPO_FILE_URL
 RUN set -e;                                                      \
     if [ -n "$REPO_FILE_URL" ]; then                             \
@@ -29,9 +30,11 @@ RUN set -e;                                                      \
     dnf config-manager --save --setopt=assumeyes=True;           \
     dnf config-manager --save --setopt=install_weak_deps=False;  \
     if [ ! -f /etc/fedora-release ]; then                        \
-        dnf --assumeyes --disablerepo \*epel\* install epel-release; \
+        dnf --disablerepo \*epel\* install epel-release;         \
+        dnf install epel-release;                                \
         if [ -n "$REPO_FILE_URL" ]; then                         \
             PT_REPO=daos_ci-rocky8-powertools-artifactory;       \
+            dnf config-manager --disablerepo \*epel\*;           \
         else                                                     \
             PT_REPO=powertools;                                  \
         fi;                                                      \
@@ -58,13 +61,15 @@ baseurl=${JENKINS_URL}job/daos-stack/job/$repo/job/$branch/$build_number/artifac
 enabled=1\n\
 gpgcheck=False\n" >> /etc/yum.repos.d/$repo:$branch:$build_number.repo;   \
         cat /etc/yum.repos.d/$repo:$branch:$build_number.repo; \
-        dnf repolist; \
-        dnf --disablerepo=\* --enablerepo=$repo:$branch:$build_number makecache; \
     done
 
 # Install OS updates and package.  Include basic tools and daos dependencies
 COPY ./utils/scripts/install-el8.sh /tmp/install.sh
-RUN chmod +x /tmp/install.sh && dnf upgrade && /tmp/install.sh && dnf clean all && \
+RUN chmod +x /tmp/install.sh && dnf upgrade &&           \
+    if [ -n "$REPO_FILE_URL" ]; then                     \
+        dnf config-manager --disablerepo \*epel\* ;      \
+    fi &&                                                \
+    /tmp/install.sh && dnf clean all &&                  \
     rm -f /tmp/install.sh
 
 ARG UID=1000
@@ -140,6 +145,9 @@ ARG DAOS_TARGET_TYPE=release
 USER root:root
 RUN [ "$DAOS_DEPS_BUILD" != "yes" ] || {                                               \
         dnf upgrade --exclude=spdk,spdk-devel,dpdk-devel,dpdk,mercury-devel,mercury && \
+        if [ -n "$REPO_FILE_URL" ]; then                                               \
+            dnf config-manager --disablerepo \*epel\*;                                 \
+        fi &&                                                                          \
         dnf clean all;                                                                 \
     }
 USER daos_server:daos_server
@@ -157,6 +165,9 @@ USER root:root
 ARG CACHEBUST
 RUN [ -z "$CACHEBUST" ] || {                                                           \
         dnf upgrade --exclude=spdk,spdk-devel,dpdk-devel,dpdk,mercury-devel,mercury && \
+        if [ -n "$REPO_FILE_URL" ]; then                                               \
+            dnf config-manager --disablerepo \*epel\*;                                 \
+        fi &&                                                                          \
         dnf clean all;                                                                 \
     }
 USER daos_server:daos_server

@@ -1,6 +1,8 @@
 #!/bin/bash
-
 set -uex
+
+# Script intended to be sourced to provide normalized names to allow
+# other scripts to work for more than one distro.
 
 source /etc/os-release
 : "${ID_LIKE:=unknown}"

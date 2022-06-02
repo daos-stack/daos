@@ -5,8 +5,7 @@
 #
 
 # Pull base image
-ARG BASE_DISTRO=rockylinux/rockylinux:8
-FROM $BASE_DISTRO
+FROM centos:centos7
 LABEL maintainer="daos@daos.groups.io"
 
 # Intermittent cache-bust.  Used to reduce load on the actual CACHEBUST later.
@@ -17,25 +16,23 @@ ARG REPO_FILE_URL
 RUN set -e;                                                      \
     if [ -n "$REPO_FILE_URL" ]; then                             \
         cd /etc/yum.repos.d/ &&                                  \
-        curl -k -f -o daos_ci-el8-artifactory.repo.tmp           \
-             "$REPO_FILE_URL"daos_ci-el8-artifactory.repo &&     \
+        curl -k -f -o daos_ci-centos7-artifactory.repo.tmp       \
+             "$REPO_FILE_URL"daos_ci-centos7-artifactory.repo && \
         for file in *.repo; do                                   \
             true > $file;                                        \
         done;                                                    \
-        mv daos_ci-el8-artifactory.repo{.tmp,};                  \
+        mv daos_ci-centos7-artifactory.repo{.tmp,};              \
     fi;                                                          \
-    dnf --assumeyes --disablerepo \*epel\* install dnf-plugins-core;     \
+    yum --assumeyes install dnf;                                 \
+    yum clean all;                                               \
+    dnf --assumeyes --disablerepo \*epel\* install               \
+                        epel-release dnf-plugins-core;           \
     dnf config-manager --save --setopt=assumeyes=True;           \
     dnf config-manager --save --setopt=install_weak_deps=False;  \
-    if [ ! -f /etc/fedora-release ]; then                        \
-        dnf --assumeyes --disablerepo \*epel\* install epel-release; \
-        if [ -n "$REPO_FILE_URL" ]; then                         \
-            PT_REPO=daos_ci-rocky8-powertools-artifactory;       \
-        else                                                     \
-            PT_REPO=powertools;                                  \
-        fi;                                                      \
-        dnf config-manager --enable $PT_REPO;                    \
+    if [ -n "$REPO_FILE_URL" ]; then                             \
+        dnf --quiet config-manager --disable epel;               \
     fi;                                                          \
+    dnf update epel-release;                                     \
     dnf clean all
 
 ARG JENKINS_URL
@@ -53,7 +50,7 @@ RUN for repo in $REPOS; do                                                \
         fi;                                                               \
         echo -e "[$repo:$branch:$build_number]\n\
 name=$repo:$branch:$build_number\n\
-baseurl=${JENKINS_URL}job/daos-stack/job/$repo/job/$branch/$build_number/artifact/artifacts/el8/\n\
+baseurl=${JENKINS_URL}job/daos-stack/job/$repo/job/$branch/$build_number/artifact/artifacts/centos7/\n\
 enabled=1\n\
 gpgcheck=False\n" >> /etc/yum.repos.d/$repo:$branch:$build_number.repo;   \
         cat /etc/yum.repos.d/$repo:$branch:$build_number.repo; \
@@ -62,7 +59,8 @@ gpgcheck=False\n" >> /etc/yum.repos.d/$repo:$branch:$build_number.repo;   \
     done
 
 # Install OS updates and package.  Include basic tools and daos dependencies
-COPY ./utils/scripts/install-el8.sh /tmp/install.sh
+
+COPY ./ci/rpm/install-base-centos7.sh /tmp/install.sh
 RUN chmod +x /tmp/install.sh && dnf upgrade && /tmp/install.sh && dnf clean all && \
     rm -f /tmp/install.sh
 
@@ -71,18 +69,10 @@ ARG UID=1000
 # Add DAOS users
 RUN useradd --no-log-init --uid $UID --user-group --create-home --shell /bin/bash \
             --home /home/daos daos_server
-RUN echo "daos_server:daos_server" | chpasswd
-RUN useradd --no-log-init --user-group --create-home --shell /bin/bash daos_agent
-RUN echo "daos_agent:daos_agent" | chpasswd
 RUN echo "daos_server ALL=(root) NOPASSWD: ALL" >> /etc/sudoers.d/daos_sudo_setup; \
     chmod 0440 /etc/sudoers.d/daos_sudo_setup;                                     \
     visudo -c;                                                                     \
     sudo -l -U daos_server
-
-# Create directory for DAOS backend storage
-RUN mkdir -p /opt/daos /mnt/daos /var/run/daos_server /var/run/daos_agent /home/daos/pre /home/daos/daos &&   \
-    chown -R daos_server.daos_server /opt/daos /mnt/daos /var/run/daos_server /home/daos &&  \
-    chown daos_agent.daos_agent /var/run/daos_agent
 
 # Now do an update to ensure software is up to date for install.  If the
 # src hasn't changed then this won't do anything, but if it has then we want to
@@ -100,6 +90,6 @@ RUN [ -z "$CACHEBUST" ] || {                                                    
     }
 
 ARG BUILD_URL
-COPY ci/rpm/install_maldet.sh /tmp/install_maldet.sh
 COPY ci/rpm/distro_info.sh /tmp/distro_info.sh
+COPY ci/rpm/install_maldet.sh /tmp/install_maldet.sh
 RUN /tmp/install_maldet.sh

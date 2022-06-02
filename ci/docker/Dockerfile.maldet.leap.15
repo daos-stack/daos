@@ -54,13 +54,20 @@ baseurl=${JENKINS_URL}job/daos-stack/job/$repo/job/$branch/$build_number/artifac
 enabled=1\n\
 gpgcheck=False\n" >> /etc/dnf/repos.d/$repo:$branch:$build_number.repo;   \
         cat /etc/dnf/repos.d/$repo:$branch:$build_number.repo; \
-        dnf repolist; \
-        dnf --disablerepo=\* --enablerepo=$repo:$branch:$build_number makecache; \
     done
 
 # Install OS updates and package.  Include basic tools and daos dependencies
-COPY ./utils/scripts/install-leap15.sh /tmp/install.sh
-RUN chmod +x /tmp/install.sh && dnf upgrade && /tmp/install.sh && dnf clean all && \
+COPY ./ci/rpm/install-leap15.sh /tmp/install.sh
+RUN chmod +x /tmp/install.sh && dnf upgrade &&          \
+    if [ -n "$REPO_FILE_URL" ]; then                    \
+        cd /etc/dnf/repos.d/ &&                         \
+        mv daos_ci-leap15-artifactory.tmp{.repo,};      \
+        for file in *.repo; do                          \
+            true > $file;                               \
+            done;                                       \
+            mv daos_ci-leap15-artifactory.repo{.tmp,};  \
+        fi &&                                           \
+    /tmp/install.sh && dnf clean all &&                 \
     rm -f /tmp/install.sh
 RUN if ! grep MODULEPATH=.*/usr/share/modules /etc/profile.d/lmod.sh; then \
         sed -e '/MODULEPATH=/s/$/:\/usr\/share\/modules/'                  \
@@ -74,33 +81,43 @@ ARG UID=1000
 # Add DAOS users
 RUN useradd --no-log-init --uid $UID --user-group --create-home --shell /bin/bash \
             --home /home/daos daos_server
-RUN echo "daos_server:daos_server" | chpasswd
-RUN useradd --no-log-init --user-group --create-home --shell /bin/bash daos_agent
-RUN echo "daos_agent:daos_agent" | chpasswd
 RUN echo "daos_server ALL=(root) NOPASSWD: ALL" >> /etc/sudoers.d/daos_sudo_setup; \
     chmod 0440 /etc/sudoers.d/daos_sudo_setup;                                     \
     visudo -c;                                                                     \
     sudo -l -U daos_server
 
-# Create directory for DAOS backend storage
-RUN mkdir -p /opt/daos /mnt/daos /var/run/daos_server /var/run/daos_agent /home/daos/pre /home/daos/daos &&   \
-    chown -R daos_server.daos_server /opt/daos /mnt/daos /var/run/daos_server /home/daos &&  \
-    chown daos_agent.daos_agent /var/run/daos_agent
-
 # Now do an update to ensure software is up to date for install.  If the
 # src hasn't changed then this won't do anything, but if it has then we want to
 # ensure that latest dependencies are used.
-RUN {                                                                                     \
-        dnf upgrade                                                                       \
-            --exclude=fuse,fuse-libs,fuse-devel,libraft0,raft-devel,mercury,mercury-devel \
-        dnf clean all;                                                                    \
+# note that the upgrade can re-enable some local distros.
+RUN {                                                                                        \
+        dnf upgrade                                                                          \
+            --exclude=fuse,fuse-libs,fuse-devel,libraft0,raft-devel,mercury,mercury-devel && \
+        if [ -n "$REPO_FILE_URL" ]; then                                                     \
+            cd /etc/dnf/repos.d/ &&                                                          \
+            mv daos_ci-leap15-artifactory.tmp{.repo,};                                       \
+            for file in *.repo; do                                                           \
+                true > $file;                                                                \
+            done;                                                                            \
+            mv daos_ci-leap15-artifactory.repo{.tmp,};                                       \
+        fi &&                                                                                \
+        dnf clean all;                                                                       \
     }
 
 # force an upgrade to get any newly built RPMs, but only if CACHEBUST is set.
 ARG CACHEBUST
 RUN [ -z "$CACHEBUST" ] || {                                                                         \
-        dnf upgrade --exclude=fuse,fuse-libs,fuse-devel,libraft0,raft-devel,mercury,mercury-devel && \
-        dnf clean all;                                                                               \
+        dnf upgrade 
+            --exclude=fuse,fuse-libs,fuse-devel,libraft0,raft-devel,mercury,mercury-devel && \
+        if [ -n "$REPO_FILE_URL" ]; then                                                     \
+            cd /etc/dnf/repos.d/ &&                                                          \
+            mv daos_ci-leap15-artifactory.tmp{.repo,};                                       \
+            for file in *.repo; do                                                           \
+                true > $file;                                                                \
+            done;                                                                            \
+            mv daos_ci-leap15-artifactory.repo{.tmp,};                                       \
+        fi &&                                                                                \
+        dnf clean all;                                                                       \
     }
 
 ARG BUILD_URL

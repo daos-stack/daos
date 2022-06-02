@@ -12,6 +12,10 @@ if command -v dnf; then
     daos{,-{client,server,tests,debuginfo,devel}}-"${DAOS_PKG_VERSION}"
 elif command -v apt-get; then
   echo "Ubuntu not implemented yet."
+  exit 1
+else
+  echo "Unknown distribution."
+  exit 1
 fi
 
 sudo clamscan -d /usr/local/maldetect/sigs/rfxn.ndb    \
