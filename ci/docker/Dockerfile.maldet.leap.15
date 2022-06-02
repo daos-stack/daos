@@ -18,7 +18,7 @@ RUN set -e;                                                      \
     if [ -n "$REPO_FILE_URL" ]; then                             \
         zypper mr --all --disable;                               \
         zypper addrepo                                           \
-          "${REPO_FILE_URL%/*/}"/opensuse-15.3-oss-x86_64-proxy/ \
+          "${REPO_FILE_URL%/*/}"/opensuse-proxy/distribution/leap/15.3/repo/oss \
           opensuse_oss_proxy;                                    \
         zypper --non-interactive install curl;                   \
         mkdir -p /etc/zypp/repos.d &&                            \
@@ -30,7 +30,8 @@ RUN set -e;                                                      \
         done;                                                    \
         mv daos_ci-leap15-artifactory.repo{.tmp,};               \
     fi;                                                          \
-    zypper --non-interactive install dnf dnf-plugins-core &&     \
+    zypper --non-interactive --gpg-auto-import-keys install      \
+        dnf dnf-plugins-core &&                                  \
     mkdir -p /etc/dnf/repos.d &&                                 \
     cd /etc/zypp/repos.d/ &&                                     \
     for file in *.repo; do                                       \
@@ -101,8 +102,8 @@ RUN echo "daos_server ALL=(root) NOPASSWD: ALL" >> /etc/sudoers.d/daos_sudo_setu
 
 # force an upgrade to get any newly built RPMs, but only if CACHEBUST is set.
 ARG CACHEBUST
-RUN [ -z "$CACHEBUST" ] || {                                                                         \
-        dnf upgrade 
+RUN [ -z "$CACHEBUST" ] || {                                                                 \
+        dnf upgrade                                                                          \
             --exclude=fuse,fuse-libs,fuse-devel,libraft0,raft-devel,mercury,mercury-devel && \
         if [ -n "$REPO_FILE_URL" ]; then                                                     \
             cd /etc/dnf/repos.d/ &&                                                          \
