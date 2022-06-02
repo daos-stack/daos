@@ -16,7 +16,7 @@ ARG CB0
 ARG REPO_FILE_URL
 RUN set -e;                                                      \
     if [ -n "$REPO_FILE_URL" ]; then                             \
-        zypper mr --disable='*';                                 \
+        zypper mr --all --disable;                               \
         zypper addrepo                                           \
           "$REPO_FILE_URL"opensuse-15.3-oss-x86_64-proxy         \
           opensuse_oss_proxy;                                    \
