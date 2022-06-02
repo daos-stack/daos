@@ -344,8 +344,8 @@ class GitRepoRetriever():
                 print("Applying patch %s" % (patch))
                 subdir_option = ""
                 if patches[patch] is not None:
-                    subdir_option = "--directory %s" % patches[patch]
-                commands = ['git apply %s %s' % (subdir_option, patch)]
+                    subdir_option = f"--directory {patches[patch]}"
+                commands = [f'git apply {subdir_option} {patch}']
                 if not RUNNER.run_commands(commands, subdir=subdir):
                     raise DownloadFailure(self.url, subdir)
 
