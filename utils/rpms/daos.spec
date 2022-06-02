@@ -4,7 +4,7 @@
 %define sysctl_script_name 10-daos_server.conf
 
 %global mercury_version 2.1.0~rc4-9%{?dist}
-%global libfabric_version 1.15.0~rc3-1
+%global libfabric_version 1.15.1-1
 %global __python %{__python3}
 
 %if 0%{?rhel} > 0
@@ -27,7 +27,7 @@
 
 Name:          daos
 Version:       2.1.102
-Release:       2%{?relval}%{?dist}
+Release:       4%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       BSD-2-Clause-Patent
@@ -86,7 +86,7 @@ BuildRequires: liblz4-devel
 BuildRequires: protobuf-c-devel
 BuildRequires: lz4-devel
 %endif
-BuildRequires: spdk-devel >= 21.07
+BuildRequires: spdk-devel >= 21.07, spdk-devel < 22
 %if (0%{?rhel} >= 7)
 BuildRequires: libisa-l-devel
 BuildRequires: libisa-l_crypto-devel
@@ -175,7 +175,7 @@ to optimize performance and cost.
 %package server
 Summary: The DAOS server
 Requires: %{name}%{?_isa} = %{version}-%{release}
-Requires: spdk-tools >= 21.07
+Requires: spdk-tools >= 21.07, spdk-tools < 22
 Requires: ndctl
 # needed to set PMem configuration goals in BIOS through control-plane
 %if (0%{?suse_version} >= 1500)
@@ -574,6 +574,12 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 # No files in a shim package
 
 %changelog
+* Fri May 27 2022 Lei Huang <lei.huang@intel.com> 2.1.102-4
+- Update libfabric to v1.15.1-1 to include critical performance patches
+
+* Fri May 20 2022 Tom Nabarro <tom.nabarro@intel.com> 2.1.102-3
+- Restrict SPDK version to less than 22
+
 * Mon May 9 2022 Phillip Henderson <phillip.henderson@intel.com> 2.1.102-2
 - Remove doas-*-tests-openmpi dependencies from daos-tests
 - Add the daos-tests-internal package
