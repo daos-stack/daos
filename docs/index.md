@@ -11,8 +11,8 @@ I/O, advanced data protection with self-healing, end-to-end data
 integrity, fine-grained data control, and elastic storage, to optimize
 performance and cost.
 
-In addition to on-prem deployments, DAOS is available as part of
-cloud offerings. More information on cloud deployments is available
+In addition to on-prem deployments, DAOS can be deployed in cloud
+environments. More information on cloud deployments is available
 in the [DAOS in the Cloud](./cloud/) section.
 
 The included document versions are associated with DAOS v2.3.
