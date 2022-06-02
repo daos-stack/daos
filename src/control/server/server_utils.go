@@ -103,19 +103,68 @@ func writeCoreDumpFilter(log logging.Logger, path string, filter uint8) error {
 	return err
 }
 
-func createListener(ctlPort int, resolver resolveTCPFn, listener netListenFn) (*net.TCPAddr, net.Listener, error) {
-	ctlAddr, err := resolver("tcp", fmt.Sprintf("0.0.0.0:%d", ctlPort))
+func getNetInterfaceAddrs(ifaceName string) ([]net.Addr, error) {
+	iface, err := net.InterfaceByName(ifaceName)
 	if err != nil {
-		return nil, nil, errors.Wrap(err, "unable to resolve daos_server control address")
+		return nil, err
 	}
 
+	return iface.Addrs()
+}
+
+type ctlAddrParams struct {
+	iface         string
+	port          int
+	getIfaceAddrs func(string) ([]net.Addr, error)
+	resolveAddr   resolveTCPFn
+}
+
+func getControlAddr(params ctlAddrParams) (*net.TCPAddr, error) {
+	ipStr := "0.0.0.0"
+	if params.iface != "" {
+		addrs, err := params.getIfaceAddrs(params.iface)
+		if err != nil {
+			return nil, errors.Wrap(err, "getting interface addresses")
+		}
+
+		var found bool
+		for _, addr := range addrs {
+			switch t := addr.(type) {
+			case *net.IPNet:
+				// FIXME: At the moment the control plane makes some assumptions
+				// about the address being IPv4.
+				if ip4 := t.IP.To4(); ip4 != nil {
+					ipStr = ip4.String()
+					found = true
+				}
+			}
+
+			if found {
+				break
+			}
+		}
+
+		if !found {
+			return nil, errors.Errorf("no usable IPv4 addresses found on interface %s", params.iface)
+		}
+	}
+
+	ctlAddr, err := params.resolveAddr("tcp", fmt.Sprintf("[%s]:%d", ipStr, params.port))
+	if err != nil {
+		return nil, errors.Wrap(err, "resolving control address")
+	}
+
+	return ctlAddr, nil
+}
+
+func createListener(ctlAddr *net.TCPAddr, listener netListenFn) (net.Listener, error) {
 	// Create and start listener on management network.
-	lis, err := listener("tcp4", ctlAddr.String())
+	lis, err := listener("tcp4", fmt.Sprintf("0.0.0.0:%d", ctlAddr.Port))
 	if err != nil {
-		return nil, nil, errors.Wrap(err, "unable to listen on management interface")
+		return nil, errors.Wrap(err, "unable to listen on management interface")
 	}
 
-	return ctlAddr, lis, nil
+	return lis, nil
 }
 
 // updateFabricEnvars adjusts the engine fabric configuration.

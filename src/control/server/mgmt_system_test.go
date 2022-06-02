@@ -392,19 +392,26 @@ func TestServer_MgmtSvc_getPeerListenAddr(t *testing.T) {
 	}{
 		"no peer": {
 			ctx:    context.Background(),
+			addr:   "0.0.0.0:1234",
 			expErr: errors.New("peer details not found in context"),
 		},
-		"bad input address": {
+		"no input address": {
 			ctx:    peer.NewContext(context.Background(), &peer.Peer{Addr: defaultAddr}),
 			expErr: errors.New("get listening port: missing port in address"),
 		},
 		"non tcp address": {
 			ctx:    peer.NewContext(context.Background(), &peer.Peer{Addr: ipAddr}),
+			addr:   "0.0.0.0:1234",
 			expErr: errors.New("peer address (127.0.0.1) not tcp"),
 		},
 		"normal operation": {
 			ctx:     peer.NewContext(context.Background(), &peer.Peer{Addr: defaultAddr}),
 			addr:    "0.0.0.0:15001",
+			expAddr: combinedAddr,
+		},
+		"specific addr": {
+			ctx:     peer.NewContext(context.Background(), &peer.Peer{Addr: defaultAddr}),
+			addr:    combinedAddr.String(),
 			expAddr: combinedAddr,
 		},
 	} {

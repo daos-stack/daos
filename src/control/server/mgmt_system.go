@@ -114,8 +114,19 @@ func (svc *mgmtSvc) LeaderQuery(ctx context.Context, req *mgmtpb.LeaderQueryReq)
 	return resp, nil
 }
 
-// getPeerListenAddr combines peer ip from supplied context with input port.
+// getPeerListenAddr provides the resolved TCP address where the peer server is listening.
 func getPeerListenAddr(ctx context.Context, listenAddrStr string) (*net.TCPAddr, error) {
+	ipAddr, portStr, err := net.SplitHostPort(listenAddrStr)
+	if err != nil {
+		return nil, errors.Wrap(err, "get listening port")
+	}
+
+	if ipAddr != "0.0.0.0" {
+		// If the peer gave us an explicit IP address, just use it.
+		return net.ResolveTCPAddr("tcp", listenAddrStr)
+	}
+
+	// If we got 0.0.0.0, we may be able to harvest the remote IP from the context.
 	p, ok := peer.FromContext(ctx)
 	if !ok {
 		return nil, errors.New("peer details not found in context")
@@ -124,12 +135,6 @@ func getPeerListenAddr(ctx context.Context, listenAddrStr string) (*net.TCPAddr,
 	tcpAddr, ok := p.Addr.(*net.TCPAddr)
 	if !ok {
 		return nil, errors.Errorf("peer address (%s) not tcp", p.Addr)
-	}
-
-	// what port is the input address listening on?
-	_, portStr, err := net.SplitHostPort(listenAddrStr)
-	if err != nil {
-		return nil, errors.Wrap(err, "get listening port")
 	}
 
 	// resolve combined IP/port address
