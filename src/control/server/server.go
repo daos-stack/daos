@@ -256,7 +256,17 @@ func (srv *server) setCoreDumpFilter() error {
 func (srv *server) initNetwork() error {
 	defer srv.logDuration(track("time to init network"))
 
-	ctlAddr, listener, err := createListener(srv.cfg.ControlPort, net.ResolveTCPAddr, net.Listen)
+	ctlAddr, err := getControlAddr(ctlAddrParams{
+		iface:         srv.cfg.ControlInterface,
+		port:          srv.cfg.ControlPort,
+		getIfaceAddrs: getNetInterfaceAddrs,
+		resolveAddr:   net.ResolveTCPAddr,
+	})
+	if err != nil {
+		return err
+	}
+
+	listener, err := createListener(ctlAddr, net.Listen)
 	if err != nil {
 		return err
 	}

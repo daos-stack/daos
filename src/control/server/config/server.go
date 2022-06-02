@@ -38,8 +38,9 @@ const (
 // See utils/config/daos_server.yml for parameter descriptions.
 type Server struct {
 	// control-specific
-	ControlPort     int                       `yaml:"port"`
-	TransportConfig *security.TransportConfig `yaml:"transport_config"`
+	ControlInterface string                    `yaml:"control_iface"`
+	ControlPort      int                       `yaml:"port"`
+	TransportConfig  *security.TransportConfig `yaml:"transport_config"`
 	// Detect outdated "servers" config, to direct users to change their config file
 	Servers             []*engine.Config       `yaml:"servers,omitempty"`
 	Engines             []*engine.Config       `yaml:"engines"`
@@ -176,6 +177,12 @@ func (cfg *Server) WithEngines(engineList ...*engine.Config) *Server {
 // WithAccessPoints sets the access point list.
 func (cfg *Server) WithAccessPoints(aps ...string) *Server {
 	cfg.AccessPoints = aps
+	return cfg
+}
+
+// WithControlPort sets the network interface for control plane communications.
+func (cfg *Server) WithControlInterface(iface string) *Server {
+	cfg.ControlInterface = iface
 	return cfg
 }
 
@@ -427,6 +434,10 @@ func (cfg *Server) Validate(log logging.Logger, hugePageSize int) (err error) {
 			"\"engines\" instead")
 	}
 
+	if err := cfg.validateControlIface(log); err != nil {
+		return err
+	}
+
 	log.Debugf("vfio=%v hotplug=%v vmd=%v requested in config", !cfg.DisableVFIO,
 		cfg.EnableHotplug, !cfg.DisableVMD)
 
@@ -566,6 +577,20 @@ func (cfg *Server) Validate(log logging.Logger, hugePageSize int) (err error) {
 		if err := cfg.validateMultiServerConfig(log); err != nil {
 			return err
 		}
+	}
+
+	return nil
+}
+
+func (cfg *Server) validateControlIface(log logging.Logger) error {
+	if cfg.ControlInterface == "" {
+		return nil
+	}
+
+	_, err := net.InterfaceByName(cfg.ControlInterface)
+	if err != nil {
+		log.Errorf("unable to find network interface %q: %s", err.Error())
+		return FaultConfigBadControlIface(cfg.ControlInterface)
 	}
 
 	return nil

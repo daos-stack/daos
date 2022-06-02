@@ -83,6 +83,13 @@
 #provider: ofi+verbs;ofi_rxm
 #
 #
+## Control plane network interface
+## Use a specific network interface for communications with this control plane
+## server.
+#
+#control_iface: eth0
+#
+#
 ## CART: Whether to enable share address in the network stack
 ## (also known as scalable endpoint)
 ## parameters shared with client.

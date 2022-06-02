@@ -116,7 +116,8 @@ func TestAuto_ConfigWrite(t *testing.T) {
 		defaultEngineLogFile  = "/tmp/daos_engine"
 		defaultControlLogFile = "/tmp/daos_server.log"
 
-		expOut = `port: 10001
+		expOut = `control_iface: ""
+port: 10001
 transport_config:
   allow_insecure: false
   client_cert_dir: /etc/daos/certs/clients

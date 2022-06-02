@@ -13,6 +13,7 @@ import (
 	"io"
 	"io/ioutil"
 	"math"
+	"net"
 	"os"
 	"path/filepath"
 	"strings"
@@ -223,6 +224,7 @@ func TestServerConfig_Constructed(t *testing.T) {
 		WithEnableHotplug(true). // hotplug disabled by default
 		WithControlLogMask(common.ControlLogLevelError).
 		WithControlLogFile("/tmp/daos_server.log").
+		WithControlInterface("eth0").
 		WithHelperLogFile("/tmp/daos_admin.log").
 		WithFirmwareHelperLogFile("/tmp/daos_firmware.log").
 		WithTelemetryPort(9191).
@@ -470,6 +472,24 @@ func TestServerConfig_Validation(t *testing.T) {
 				return c.WithTelemetryPort(-123)
 			},
 			expErr: FaultConfigBadTelemetryPort,
+		},
+		"bad control interface": {
+			extraConfig: func(c *Server) *Server {
+				return c.WithControlInterface("junk")
+			},
+			expErr: FaultConfigBadControlIface("junk"),
+		},
+		"good control interface": {
+			extraConfig: func(c *Server) *Server {
+				ifaces, err := net.Interfaces()
+				if err != nil {
+					t.Fatalf(err.Error())
+				}
+				if len(ifaces) == 0 {
+					t.Fatal("no network interfaces for test")
+				}
+				return c.WithControlInterface(ifaces[0].Name)
+			},
 		},
 		"different number of ssds": {
 			extraConfig: func(c *Server) *Server {
