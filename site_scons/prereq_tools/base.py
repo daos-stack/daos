@@ -340,9 +340,12 @@ class GitRepoRetriever():
     def apply_patches(self, subdir, patches):
         """ git-apply a certain hash """
         if patches is not None:
-            for patch in patches:
+            for patch in patches.keys():
                 print("Applying patch %s" % (patch))
-                commands = ['git apply %s' % (patch)]
+                subdir_option = ""
+                if patches[patch] is not None:
+                    subdir_option = "--directory %s" % patches[patch]
+                commands = ['git apply %s %s' % (subdir_option, patch)]
                 if not RUNNER.run_commands(commands, subdir=subdir):
                     raise DownloadFailure(self.url, subdir)
 
@@ -391,9 +394,13 @@ build with random upstream changes.
             self.commit_sha = passed_commit_sha
             self.checkout_commit(subdir)
 
-        # Now apply any patches specified
-        self.apply_patches(subdir, kw.get("patches", None))
+        # reset patched diff
+        command = ["git reset --hard HEAD"]
+        if not RUNNER.run_commands(command, subdir=subdir):
+            raise DownloadFailure(self.url, subdir)
         self.update_submodules(subdir)
+        # Now apply any patches specified
+        self.apply_patches(subdir, kw.get("patches", {}))
 
 class WebRetriever():
     """Identify a location from where to download a source package"""
@@ -1368,22 +1375,27 @@ class _Component():
         patchnum = 1
         patchstr = self.prereqs.get_config("patch_versions", self.name)
         if patchstr is None:
-            return []
-        patches = []
+            return {}
+        patches = {}
         patch_strs = patchstr.split(",")
         for raw in patch_strs:
+            patch_subdir = None
+            if "^" in raw:
+                (patch_subdir, raw) = raw.split('^')
             if "https://" not in raw:
-                patches.append(raw)
+                patches[raw] = patch_subdir
                 continue
             patch_name = "%s_patch_%03d" % (self.name, patchnum)
             patch_path = os.path.join(self.patch_path, patch_name)
             patchnum += 1
+            if os.path.exists(patch_path):
+                continue
             command = ['rm -f %s' % patch_path,
                        'curl -sSfL --retry 10 --retry-max-time 60 -o %s %s'
                        % (patch_path, raw)]
             if not RUNNER.run_commands(command):
                 raise BuildFailure(raw)
-            patches.append(patch_path)
+            patches[patch_path] = patch_subdir
         return patches
 
     def get(self):
