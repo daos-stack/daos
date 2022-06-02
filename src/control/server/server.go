@@ -248,10 +248,9 @@ func (srv *server) initNetwork() error {
 	defer srv.logDuration(track("time to init network"))
 
 	ctlAddr, err := getControlAddr(ctlAddrParams{
-		iface:         srv.cfg.ControlInterface,
-		port:          srv.cfg.ControlPort,
-		getIfaceAddrs: getNetInterfaceAddrs,
-		resolveAddr:   net.ResolveTCPAddr,
+		port:           srv.cfg.ControlPort,
+		replicaAddrSrc: srv.sysdb,
+		resolveAddr:    net.ResolveTCPAddr,
 	})
 	if err != nil {
 		return err

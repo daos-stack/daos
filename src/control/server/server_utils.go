@@ -103,50 +103,21 @@ func writeCoreDumpFilter(log logging.Logger, path string, filter uint8) error {
 	return err
 }
 
-func getNetInterfaceAddrs(ifaceName string) ([]net.Addr, error) {
-	iface, err := net.InterfaceByName(ifaceName)
-	if err != nil {
-		return nil, err
-	}
-
-	return iface.Addrs()
+type replicaAddrGetter interface {
+	ReplicaAddr() (*net.TCPAddr, error)
 }
 
 type ctlAddrParams struct {
-	iface         string
-	port          int
-	getIfaceAddrs func(string) ([]net.Addr, error)
-	resolveAddr   resolveTCPFn
+	port           int
+	replicaAddrSrc replicaAddrGetter
+	resolveAddr    resolveTCPFn
 }
 
 func getControlAddr(params ctlAddrParams) (*net.TCPAddr, error) {
 	ipStr := "0.0.0.0"
-	if params.iface != "" {
-		addrs, err := params.getIfaceAddrs(params.iface)
-		if err != nil {
-			return nil, errors.Wrap(err, "getting interface addresses")
-		}
 
-		var found bool
-		for _, addr := range addrs {
-			switch t := addr.(type) {
-			case *net.IPNet:
-				// FIXME: At the moment the control plane makes some assumptions
-				// about the address being IPv4.
-				if ip4 := t.IP.To4(); ip4 != nil {
-					ipStr = ip4.String()
-					found = true
-				}
-			}
-
-			if found {
-				break
-			}
-		}
-
-		if !found {
-			return nil, errors.Errorf("no usable IPv4 addresses found on interface %s", params.iface)
-		}
+	if repAddr, err := params.replicaAddrSrc.ReplicaAddr(); err == nil {
+		ipStr = repAddr.IP.String()
 	}
 
 	ctlAddr, err := params.resolveAddr("tcp", fmt.Sprintf("[%s]:%d", ipStr, params.port))

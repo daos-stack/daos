@@ -4,7 +4,7 @@
 %define sysctl_script_name 10-daos_server.conf
 
 %global mercury_version 2.2.0~rc3-1%{?dist}
-%global libfabric_version 1.15.1-1
+%global libfabric_version 1.14.0-1
 %global __python %{__python3}
 
 %if (0%{?rhel} >= 8)

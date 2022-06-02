@@ -759,6 +759,15 @@ func TestServer_getNetDevClass(t *testing.T) {
 	}
 }
 
+type mockReplicaAddrSrc struct {
+	replicaAddrResult *net.TCPAddr
+	replicaAddrErr    error
+}
+
+func (m *mockReplicaAddrSrc) ReplicaAddr() (*net.TCPAddr, error) {
+	return m.replicaAddrResult, m.replicaAddrErr
+}
+
 func TestServerUtils_getControlAddr(t *testing.T) {
 	testTCPAddr := &net.TCPAddr{
 		IP:   net.ParseIP("127.0.0.1"),
@@ -770,12 +779,29 @@ func TestServerUtils_getControlAddr(t *testing.T) {
 		expAddr *net.TCPAddr
 		expErr  error
 	}{
-		"success (no iface)": {
+		"success (not a replica)": {
 			params: ctlAddrParams{
 				port: testTCPAddr.Port,
+				replicaAddrSrc: &mockReplicaAddrSrc{
+					replicaAddrErr: errors.New("not a replica"),
+				},
 				resolveAddr: func(net, addr string) (*net.TCPAddr, error) {
 					test.AssertEqual(t, "tcp", net, "")
 					test.AssertEqual(t, "[0.0.0.0]:1234", addr, "")
+					return testTCPAddr, nil
+				},
+			},
+			expAddr: testTCPAddr,
+		},
+		"success (replica)": {
+			params: ctlAddrParams{
+				port: testTCPAddr.Port,
+				replicaAddrSrc: &mockReplicaAddrSrc{
+					replicaAddrResult: testTCPAddr,
+				},
+				resolveAddr: func(net, addr string) (*net.TCPAddr, error) {
+					test.AssertEqual(t, "tcp", net, "")
+					test.AssertEqual(t, "[127.0.0.1]:1234", addr, "")
 					return testTCPAddr, nil
 				},
 			},
@@ -789,54 +815,17 @@ func TestServerUtils_getControlAddr(t *testing.T) {
 			},
 			expErr: errors.New("mock resolve"),
 		},
-		"get iface addrs fails": {
-			params: ctlAddrParams{
-				iface: "net0",
-				port:  1234,
-				getIfaceAddrs: func(_ string) ([]net.Addr, error) {
-					return nil, errors.New("mock getIfaceAddrs")
-				},
-			},
-			expErr: errors.New("mock getIfaceAddrs"),
-		},
-		"iface addrs not usable": {
-			params: ctlAddrParams{
-				iface: "net0",
-				port:  1234,
-				getIfaceAddrs: func(_ string) ([]net.Addr, error) {
-					return []net.Addr{
-						&net.IPNet{
-							IP: net.ParseIP("::1"), // IPv6
-						},
-						&net.UnixAddr{}, // unsupported type
-					}, nil
-				},
-			},
-			expErr: errors.New("no usable IPv4 addresses"),
-		},
-		"success with iface": {
-			params: ctlAddrParams{
-				iface: "net0",
-				port:  1234,
-				getIfaceAddrs: func(iface string) ([]net.Addr, error) {
-					test.AssertEqual(t, "net0", iface, "")
-					return []net.Addr{
-						&net.IPNet{
-							IP: net.ParseIP("::1"), // IPv6
-						},
-						&net.IPNet{
-							IP: testTCPAddr.IP,
-						},
-					}, nil
-				},
-			},
-			expAddr: testTCPAddr,
-		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			if tc.params.resolveAddr == nil {
 				tc.params.resolveAddr = func(_, _ string) (*net.TCPAddr, error) {
 					return testTCPAddr, nil
+				}
+			}
+
+			if tc.params.replicaAddrSrc == nil {
+				tc.params.replicaAddrSrc = &mockReplicaAddrSrc{
+					replicaAddrErr: errors.New("not a replica"),
 				}
 			}
 
