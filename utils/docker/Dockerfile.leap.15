@@ -33,7 +33,6 @@ RUN set -e;                                                      \
             true > $file;                                        \
         done;                                                    \
         mv daos_ci-leap15-artifactory.repo{.tmp,};               \
-        ls -l; \
     fi;                                                          \
     zypper --non-interactive --gpg-auto-import-keys install      \
         dnf dnf-plugins-core &&                                  \
@@ -201,18 +200,18 @@ RUN if [ "$COMPILER" = "icc" ]; then                                            
 # force an upgrade to get any newly built RPMs, but only if CACHEBUST is set.
 # The dnf upgrade can add or re-enable distro repositories.
 ARG CACHEBUST
-RUN [ -z "$CACHEBUST" ] || {                                                                         \
-        dnf upgrade                                                                       \
-          -exclude=fuse,fuse-libs,fuse-devel,libraft0,raft-devel,mercury,mercury-devel && \
-        if [ -n "$REPO_FILE_URL" ]; then                                                  \
-            cd /etc/dnf/repos.d/ &&                                                       \
-            mv daos_ci-leap15-artifactory.repo{,.tmp};                                    \
-            for file in *.repo; do                                                        \
-                true > $file;                                                             \
-            done;                                                                         \
-            mv daos_ci-leap15-artifactory.repo{.tmp,};                                    \
-        fi &&                                                                             \
-        dnf clean all;                                                                    \
+RUN [ -z "$CACHEBUST" ] || {                                                               \
+        dnf upgrade                                                                        \
+          --exclude=fuse,fuse-libs,fuse-devel,libraft0,raft-devel,mercury,mercury-devel && \
+        if [ -n "$REPO_FILE_URL" ]; then                                                   \
+            cd /etc/dnf/repos.d/ &&                                                        \
+            mv daos_ci-leap15-artifactory.repo{,.tmp};                                     \
+            for file in *.repo; do                                                         \
+                true > $file;                                                              \
+            done;                                                                          \
+            mv daos_ci-leap15-artifactory.repo{.tmp,};                                     \
+        fi &&                                                                              \
+        dnf clean all;                                                                     \
     }
 USER daos_server:daos_server
 
