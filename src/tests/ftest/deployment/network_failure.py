@@ -126,6 +126,19 @@ class NetworkFailureTest(IorTestBase):
         if errors is not None and results[0]["exit_status"] != 0:
             errors.append(f"{command} didn't return 0!")
 
+    def create_ip_to_host(self):
+        """Create a dictionary of IP address to hostname of the server nodes.
+        """
+        ip_to_host = {}
+        command = "sudo hostname -i"
+        results = run_pcmd(hosts=self.hostlist_servers, command=command)
+        self.log.info("hostname -i results = %s", results)
+
+        for result in results:
+            ip_to_host[result["stdout"][0]] = str(result["hosts"])
+
+        return ip_to_host
+
     def verify_network_failure(self, ior_namespace, container_namespace):
         """Verify network failure can be recovered without intervention in DAOS side.
 
@@ -315,29 +328,30 @@ class NetworkFailureTest(IorTestBase):
         # 1. Determine the two ranks to create the pool and an interface to take down.
         # We'll create a pool on rank 0 and the other rank that's on the same node. Find
         # hostname of rank 0.
-        rank_0_host = None
+        rank_0_ip = None
         output = self.get_dmg_command().system_query()
         members = output["response"]["members"]
         for member in members:
             if member["rank"] == 0:
-                rank_0_host = member["addr"].split(":")[0]
+                rank_0_ip = member["addr"].split(":")[0]
                 break
-        self.log.info("rank 0 host = %s", rank_0_host)
+        self.log.info("rank 0 IP = %s", rank_0_ip)
 
         # Find the other rank that's on the same node as in rank 0. Call it rank_r.
         rank_r = None
         for member in members:
-            if member["addr"].split(":")[0] == rank_0_host and member["rank"] != 0:
+            if member["addr"].split(":")[0] == rank_0_ip and member["rank"] != 0:
                 rank_r = member["rank"]
                 break
         self.log.info("rank_r = %s", rank_r)
 
-        # Find the hostname that's different from rank_0_host. We'll take down the
+        # Find the hostname that's different from rank_0_ip. We'll take down the
         # interface on it.
+        ip_to_host = self.create_ip_to_host()
         for member in members:
-            host = member["addr"].split(":")[0]
-            if rank_0_host != host:
-                self.network_down_host = host
+            ip_addr = member["addr"].split(":")[0]
+            if rank_0_ip != ip_addr:
+                self.network_down_host = ip_to_host[ip_addr]
                 break
         self.log.info("network_down_host = %s", self.network_down_host)
 
