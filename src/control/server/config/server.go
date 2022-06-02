@@ -309,7 +309,7 @@ func (cfg *Server) Load() error {
 
 	bytes, err := ioutil.ReadFile(cfg.Path)
 	if err != nil {
-		return errors.WithMessagef(err, "reading file %q", cfg.Path)
+		return errors.WithMessage(err, "reading file")
 	}
 
 	if err = yaml.UnmarshalStrict(bytes, cfg); err != nil {
