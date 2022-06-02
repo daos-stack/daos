@@ -14,8 +14,11 @@ LABEL maintainer="daos@daos.groups.io"
 ARG CB0
 
 # Use local repo server if present
+# if a local repo server is present and the distro repo server can not
+# be reached, have to bootstrap in an environment to get curl installed
+# to then install the pre-built repo file.
 ARG REPO_FILE_URL
-RUN set -ex;                                                      \
+RUN set -e;                                                      \
     if [ -n "$REPO_FILE_URL" ]; then                             \
         zypper mr --all --disable;                               \
         zypper addrepo                                           \
@@ -157,7 +160,7 @@ RUN [ "$DAOS_DEPS_BUILD" != "yes" ] || {                                        
             --exclude=fuse,fuse-libs,fuse-devel,libraft0,raft-devel,mercury,mercury-devel && \
         if [ -n "$REPO_FILE_URL" ]; then                                                     \
             cd /etc/dnf/repos.d/ &&                                                          \
-            mv daos_ci-leap15-artifactory.tmp{.repo,};                                       \
+            mv daos_ci-leap15-artifactory.repo{,.tmp};                                       \
             for file in *.repo; do                                                           \
                 true > $file;                                                                \
             done;                                                                            \

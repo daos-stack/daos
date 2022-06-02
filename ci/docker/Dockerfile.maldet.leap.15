@@ -13,6 +13,9 @@ LABEL maintainer="daos@daos.groups.io"
 ARG CB0
 
 # Use local repo server if present
+# if a local repo server is present and the distro repo server can not
+# be reached, have to bootstrap in an environment to get curl installed
+# to then install the pre-built repo file.
 ARG REPO_FILE_URL
 RUN set -e;                                                      \
     if [ -n "$REPO_FILE_URL" ]; then                             \
