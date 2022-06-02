@@ -42,7 +42,7 @@ RUN set -e;                                                      \
             true > $file;                                        \
         done;                                                    \
         mv daos_ci-leap15-artifactory.repo{.tmp,};               \
-    fi;                                                          \
+    fi
 
 ARG JENKINS_URL
 ARG REPOS
