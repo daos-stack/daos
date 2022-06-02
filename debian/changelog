@@ -1,8 +1,14 @@
-daos (2.3.100-11) unstable; urgency=medium
+daos (2.3.100-12) unstable; urgency=medium
   [ Jeff Olivier ]
   * Make ucx required for build on all platforms
 
- -- Lei Huang <lei.huang@intel.com> Wed, 18 May 2022 16:30:00 -0500
+ -- Jeff Olivier <jeffrey.v.olivier@intel.com> Thu, 02 Jun 2022 16:30:00 -0500
+
+daos (2.3.100-11) unstable; urgency=medium
+  [ Michael MacDonald ]
+  * Move dmg to new daos-admin package
+
+ -- Michael MacDonald <mjmac.macdonald@intel.com>  Wed, 01 Jun 2022 13:58:03 -0000
 
 daos (2.3.100-10) unstable; urgency=medium
   [ Lei Huang ]
