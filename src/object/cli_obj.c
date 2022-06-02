@@ -2417,18 +2417,6 @@ out:
 	return rc;
 }
 
-static int
-shard_task_abort(tse_task_t *task, void *arg)
-{
-	int	rc = *((int *)arg);
-
-	tse_task_list_del(task);
-	tse_task_decref(task);
-	tse_task_complete(task, rc);
-
-	return 0;
-}
-
 static void
 shard_auxi_set_param(struct shard_auxi_args *shard_arg, uint32_t map_ver,
 		     uint32_t shard, uint32_t tgt_id, struct dtx_epoch *epoch,

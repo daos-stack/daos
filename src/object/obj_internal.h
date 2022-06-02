@@ -600,6 +600,18 @@ obj_ptr2hdl(struct dc_object *obj)
 	return oh;
 }
 
+static inline int
+shard_task_abort(tse_task_t *task, void *arg)
+{
+	int	rc = *((int *)arg);
+
+	tse_task_list_del(task);
+	tse_task_decref(task);
+	tse_task_complete(task, rc);
+
+	return 0;
+}
+
 static inline void
 dc_io_epoch_set(struct dtx_epoch *epoch)
 {
