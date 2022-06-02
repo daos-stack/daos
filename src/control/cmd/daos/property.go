@@ -112,7 +112,7 @@ var propHdlrs = propHdlrMap{
 				return propNotFound(name)
 			}
 			if C.get_dpe_str(e) == nil {
-				return labelNotSetStr
+				return ""
 			}
 			return strValStringer(e, name)
 		},
@@ -598,7 +598,6 @@ var propHdlrs = propHdlrMap{
 const (
 	maxNameLen     = 20 // arbitrary; came from C code
 	maxValueLen    = C.DAOS_PROP_LABEL_MAX_LEN
-	labelNotSetStr = "container_label_not_set"
 )
 
 type entryHdlr func(*propHdlr, *C.struct_daos_prop_entry, string) error
@@ -1103,6 +1102,8 @@ func printProperties(out io.Writer, header string, props ...*property) {
 			if len(titles) == 1 {
 				titles = append(titles, valueTitle)
 			}
+		} else {
+			row[valueTitle] = " "
 		}
 		table = append(table, row)
 	}

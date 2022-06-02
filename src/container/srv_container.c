@@ -764,9 +764,11 @@ cont_create(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
 	D_ASSERT(def_lbl_ent != NULL);
 	lbl_ent = daos_prop_entry_get(prop_dup, DAOS_PROP_CO_LABEL);
 	D_ASSERT(lbl_ent != NULL);
-	if (strncmp(def_lbl_ent->dpe_str, lbl_ent->dpe_str,
-		    DAOS_PROP_LABEL_MAX_LEN)) {
-		lbl = lbl_ent->dpe_str;
+	if (lbl_ent->dpe_str) {
+		if (strncmp(def_lbl_ent->dpe_str, lbl_ent->dpe_str,
+			    DAOS_PROP_LABEL_MAX_LEN)) {
+			lbl = lbl_ent->dpe_str;
+		}
 	}
 
 	/* Check if a container with this UUID and label already exists */
@@ -2124,18 +2126,23 @@ cont_prop_read(struct rdb_tx *tx, struct cont *cont, uint64_t bits,
 				   &value);
 		if (rc != 0)
 			D_GOTO(out, rc);
-		if (value.iov_len > DAOS_PROP_LABEL_MAX_LEN) {
-			D_ERROR("bad label length %zu (> %d).\n", value.iov_len,
-				DAOS_PROP_LABEL_MAX_LEN);
-			D_GOTO(out, rc = -DER_NOMEM);
+		if (strncmp(value.iov_buf, DEFAULT_CONT_LABEL,
+			    strnlen(DEFAULT_CONT_LABEL, DAOS_PROP_LABEL_MAX_LEN))) {
+			if (value.iov_len > DAOS_PROP_LABEL_MAX_LEN) {
+				D_ERROR("bad label length %zu (> %d).\n", value.iov_len,
+					DAOS_PROP_LABEL_MAX_LEN);
+				D_GOTO(out, rc = -DER_NOMEM);
+			}
+			D_ASSERT(idx < nr);
+			prop->dpp_entries[idx].dpe_type = DAOS_PROP_CO_LABEL;
+			D_STRNDUP(prop->dpp_entries[idx].dpe_str, value.iov_buf,
+				  value.iov_len);
+			if (prop->dpp_entries[idx].dpe_str == NULL)
+				D_GOTO(out, rc = -DER_NOMEM);
+			idx++;
+		} else {
+			prop->dpp_nr--;
 		}
-		D_ASSERT(idx < nr);
-		prop->dpp_entries[idx].dpe_type = DAOS_PROP_CO_LABEL;
-		D_STRNDUP(prop->dpp_entries[idx].dpe_str, value.iov_buf,
-			  value.iov_len);
-		if (prop->dpp_entries[idx].dpe_str == NULL)
-			D_GOTO(out, rc = -DER_NOMEM);
-		idx++;
 	}
 	if (bits & DAOS_CO_QUERY_PROP_LAYOUT_TYPE) {
 		d_iov_set(&value, &val, sizeof(val));
@@ -3381,9 +3388,13 @@ enum_cont_cb(daos_handle_t ih, d_iov_t *key, d_iov_t *val, void *varg)
 			DP_CONT(ap->pool_uuid, cont_uuid), DP_RC(rc));
 		return rc;
 	}
-	strncpy(cinfo->pci_label, prop->dpp_entries[0].dpe_str,
-		DAOS_PROP_LABEL_MAX_LEN);
-	cinfo->pci_label[DAOS_PROP_LABEL_MAX_LEN] = '\0';
+	if (prop->dpp_entries[0].dpe_str) {
+		strncpy(cinfo->pci_label, prop->dpp_entries[0].dpe_str,
+			DAOS_PROP_LABEL_MAX_LEN);
+		cinfo->pci_label[DAOS_PROP_LABEL_MAX_LEN] = '\0';
+	} else {
+		cinfo->pci_label[0] = '\0';
+	}
 
 	daos_prop_free(prop);
 	return 0;
