@@ -117,7 +117,6 @@ class OSAOnlineDrain(OSAUtils):
             output = self.daos_command.container_check(**kwargs)
             self.log.info(output)
 
-    @skipForTicket("DAOS-7289")
     def test_osa_online_drain(self):
         """Test ID: DAOS-4750
         Test Description: Validate Online drain with checksum
@@ -131,7 +130,6 @@ class OSAOnlineDrain(OSAUtils):
         self.log.info("Online Drain : With Checksum")
         self.run_online_drain_test(1)
 
-    @skipForTicket("DAOS-7289")
     def test_osa_online_drain_no_csum(self):
         """Test ID: DAOS-6909
         Test Description: Validate Online drain without enabling

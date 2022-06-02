@@ -155,7 +155,6 @@ class OSAOnlineExtend(OSAUtils):
             output = self.daos_command.container_check(**kwargs)
             self.log.info(output)
 
-    @skipForTicket("DAOS-7195,DAOS-7955")
     def test_osa_online_extend(self):
         """Test ID: DAOS-4751
         Test Description: Validate Online extend with checksum
@@ -169,7 +168,6 @@ class OSAOnlineExtend(OSAUtils):
         self.log.info("Online Extend : With Checksum")
         self.run_online_extend_test(1)
 
-    @skipForTicket("DAOS-7195,DAOS-7955")
     def test_osa_online_extend_without_checksum(self):
         """Test ID: DAOS-6645
         Test Description: Validate Online extend without checksum enabled.
