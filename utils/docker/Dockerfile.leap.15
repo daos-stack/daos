@@ -22,8 +22,8 @@ RUN set -e;                                                      \
           "${REPO_FILE_URL%/*/}"/opensuse-15.3-oss-x86_64-proxy/ \
           temp_opensuse_oss_proxy;                               \
         zypper --non-interactive install curl;                   \
-        mkdir -p /etc/dnf/repos.d &&                             \
-        cd /etc/dnf/repos.d/ &&                                  \
+        mkdir -p /etc/zypp/repos.d &&                            \
+        cd /etc/zypp/repos.d/ &&                                 \
         curl -k -f -o daos_ci-leap15-artifactory.repo.tmp        \
              "$REPO_FILE_URL"daos_ci-leap15-artifactory.repo &&  \
         for file in *.repo; do                                   \
@@ -32,6 +32,7 @@ RUN set -e;                                                      \
         mv daos_ci-leap15-artifactory.repo{.tmp,};               \
     fi;                                                          \
     zypper --non-interactive install dnf dnf-plugins-core &&     \
+    mkdir -p /etc/dnf/repos.d &&                                 \
     cd /etc/zypp/repos.d/ &&                                     \
     for file in *.repo; do                                       \
         sed -e '/type=NONE/d' < $file > /etc/dnf/repos.d/$file;  \
