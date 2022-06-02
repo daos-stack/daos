@@ -41,7 +41,7 @@ RUN set -e;                                                      \
     dnf config-manager --save --setopt=install_weak_deps=False;  \
     if [ -n "$REPO_FILE_URL" ]; then                             \
         cd /etc/dnf/repos.d/ &&                                  \
-        mv daos_ci-leap15-artifactory.tmp{.repo,};               \
+        mv daos_ci-leap15-artifactory.repo{,.tmp};               \
         for file in *.repo; do                                   \
             true > $file;                                        \
         done;                                                    \
@@ -74,7 +74,7 @@ COPY ./ci/rpm/install-leap15.sh /tmp/install.sh
 RUN chmod +x /tmp/install.sh && dnf upgrade &&          \
     if [ -n "$REPO_FILE_URL" ]; then                    \
         cd /etc/dnf/repos.d/ &&                         \
-        mv daos_ci-leap15-artifactory.tmp{.repo,};      \
+        mv daos_ci-leap15-artifactory.repo{,.tmp};      \
         for file in *.repo; do                          \
             true > $file;                               \
             done;                                       \
@@ -106,7 +106,7 @@ RUN [ -z "$CACHEBUST" ] || {                                                    
             --exclude=fuse,fuse-libs,fuse-devel,libraft0,raft-devel,mercury,mercury-devel && \
         if [ -n "$REPO_FILE_URL" ]; then                                                     \
             cd /etc/dnf/repos.d/ &&                                                          \
-            mv daos_ci-leap15-artifactory.tmp{.repo,};                                       \
+            mv daos_ci-leap15-artifactory.repo{,.tmp};                                       \
             for file in *.repo; do                                                           \
                 true > $file;                                                                \
             done;                                                                            \
