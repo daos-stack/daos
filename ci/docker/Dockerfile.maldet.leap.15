@@ -18,7 +18,7 @@ RUN set -e;                                                      \
     if [ -n "$REPO_FILE_URL" ]; then                             \
         zypper mr --all --disable;                               \
         zypper addrepo                                           \
-          "$REPO_FILE_URL"opensuse-15.3-oss-x86_64-proxy/        \
+          "${REPO_FILE_URL%*/*/}"opensuse-15.3-oss-x86_64-proxy/ \
           opensuse_oss_proxy;                                    \
         zypper --non-interactive install curl;                   \
         mkdir -p /etc/dnf/repos.d &&                             \
