@@ -999,6 +999,7 @@ class PreReqComponent():
     Keyword arguments:
         libs -- A list of libraries to add to dependent components
         libs_cc -- Optional CC command to test libs with.
+        functions -- A list of expected functions
         headers -- A list of expected headers
         pkgconfig -- name of pkgconfig to load for installation check
         requires -- A list of names of required component definitions
@@ -1308,6 +1309,7 @@ class _Component():
     Keyword arguments:
         libs -- A list of libraries to add to dependent components
         libs_cc -- Optional compiler for testing libs
+        functions -- A list of expected functions
         headers -- A list of expected headers
         requires -- A list of names of required component definitions
         commands -- A list of commands to run to build the component
@@ -1340,6 +1342,7 @@ class _Component():
         self.progs = kw.get("progs", [])
         self.libs = kw.get("libs", [])
         self.libs_cc = kw.get("libs_cc", None)
+        self.functions = kw.get("functions", None)
         self.config_cb = kw.get("config_cb", None)
         self.required_libs = kw.get("required_libs", [])
         self.required_progs = kw.get("required_progs", [])
