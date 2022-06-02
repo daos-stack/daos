@@ -11,11 +11,15 @@ timeouts:
   test_recycle_pools: 320
 server_config:
   name: daos_server
+  crt_timeout: 20
   servers:
     0:
       scm_class: ram
       scm_mount: /mnt/daos
       scm_size: 8
+      log_mask: DEBUG,MEM=ERR
+      env_vars:
+        - DD_MASK=group_metadata
 pool:
   name: daos_server
   control_method: dmg

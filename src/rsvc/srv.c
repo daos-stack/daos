@@ -702,12 +702,18 @@ start(enum ds_rsvc_class_id class, d_iov_t *id, uuid_t db_uuid, bool create,
 				&storage);
 	else
 		rc = rdb_open(svc->s_db_path, svc->s_db_uuid, &rsvc_rdb_cbs, svc, &storage);
-	if (rc != 0)
+	if (rc != 0) {
+		D_ERROR("%s: failed to %s rdb path %s - "DF_RC"\n", svc->s_name,
+			create ? "create" : "open", svc->s_db_path, DP_RC(rc));
 		goto err_svc;
+	}
 
 	rc = rdb_start(storage, &svc->s_db);
-	if (rc != 0)
+	if (rc != 0) {
+		D_ERROR("%s: failed to start db at rdb path %s - "DF_RC"\n", svc->s_name,
+			svc->s_db_path, DP_RC(rc));
 		goto err_storage;
+	}
 
 	/*
 	 * If creating a replica with an initial membership, we are
@@ -719,26 +725,34 @@ start(enum ds_rsvc_class_id class, d_iov_t *id, uuid_t db_uuid, bool create,
 		/* Give others a chance to get ready for voting. */
 		dss_sleep(1 /* ms */);
 		rc = rdb_campaign(svc->s_db);
-		if (rc != 0)
+		if (rc != 0) {
+			D_ERROR("%s: failed to campaign - "DF_RC"\n", svc->s_name, DP_RC(rc));
 			goto err_db;
+		}
 	}
 
 	if (create && self_only(replicas) &&
 	    rsvc_class(class)->sc_bootstrap != NULL) {
 		rc = bootstrap_self(svc, arg);
-		if (rc != 0)
+		if (rc != 0) {
+			D_ERROR("%s: bootstrap_self() - "DF_RC"\n", svc->s_name, DP_RC(rc));
 			goto err_db;
+		}
 	}
 
 	*svcp = svc;
 	return 0;
 
 err_db:
+	D_ERROR("%s: stopping db due to error\n", svc->s_name);
 	rdb_stop(svc->s_db, &storage);
 err_storage:
+	D_ERROR("%s: closing db due to error\n", svc->s_name);
 	rdb_close(storage);
-	if (create)
+	if (create) {
+		D_ERROR("%s: destroying created db due to error\n", svc->s_name);
 		rdb_destroy(svc->s_db_path, svc->s_db_uuid);
+	}
 err_svc:
 	svc->s_ref--;
 	fini_free(svc);
@@ -916,11 +930,35 @@ stop(struct ds_rsvc *svc, bool destroy)
 	while (svc->s_state != DS_RSVC_DOWN)
 		ABT_cond_wait(svc->s_state_cv, svc->s_mutex);
 
-	if (destroy)
+	if (destroy) {
 		rc = remove(svc->s_db_path);
+		if (rc) {
+			FILE *fp = NULL;
+			const char *cmd = "/bin/ls -lR /mnt/daos 2>&1";
+
+			D_ERROR("%s: failed to remove rdb path: %s - %d (%s)\n", svc->s_name,
+				svc->s_db_path, errno, strerror(errno));
+
+			fp = popen(cmd, "r");
+			if (fp) {
+				char *logline = NULL;
+				size_t logline_len;
+
+				while (getline(&logline, &logline_len, fp) != -1) {
+					D_ERROR("%s\n", logline);
+				}
+				if (pclose(fp))
+					D_ERROR("%s: failed to close command pipe: %d (%s)\n",
+						svc->s_name, errno, strerror(errno));
+			}
+		} else {
+			D_DEBUG(DB_MD, "%s: removed rdb path: %s\n", svc->s_name, svc->s_db_path);
+		}
+	}
 
 	ABT_mutex_unlock(svc->s_mutex);
 	ds_rsvc_put(svc);
+	D_DEBUG(DB_MD, "%s: %ssuccessfully stopped\n", svc->s_name, rc ? "UN" : "");
 	return rc;
 }
 
