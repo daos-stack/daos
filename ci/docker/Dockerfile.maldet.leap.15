@@ -86,24 +86,6 @@ RUN echo "daos_server ALL=(root) NOPASSWD: ALL" >> /etc/sudoers.d/daos_sudo_setu
     visudo -c;                                                                     \
     sudo -l -U daos_server
 
-# Now do an update to ensure software is up to date for install.  If the
-# src hasn't changed then this won't do anything, but if it has then we want to
-# ensure that latest dependencies are used.
-# note that the upgrade can re-enable some local distros.
-RUN {                                                                                        \
-        dnf upgrade                                                                          \
-            --exclude=fuse,fuse-libs,fuse-devel,libraft0,raft-devel,mercury,mercury-devel && \
-        if [ -n "$REPO_FILE_URL" ]; then                                                     \
-            cd /etc/dnf/repos.d/ &&                                                          \
-            mv daos_ci-leap15-artifactory.tmp{.repo,};                                       \
-            for file in *.repo; do                                                           \
-                true > $file;                                                                \
-            done;                                                                            \
-            mv daos_ci-leap15-artifactory.repo{.tmp,};                                       \
-        fi &&                                                                                \
-        dnf clean all;                                                                       \
-    }
-
 # force an upgrade to get any newly built RPMs, but only if CACHEBUST is set.
 ARG CACHEBUST
 RUN [ -z "$CACHEBUST" ] || {                                                                         \
