@@ -282,8 +282,13 @@ func (srv *server) addEngines(ctx context.Context) error {
 	var allStarted sync.WaitGroup
 	registerTelemetryCallbacks(ctx, srv)
 
+	iommuEnabled, err := hwprov.DefaultIOMMUDetector(srv.log).IsIOMMUEnabled()
+	if err != nil {
+		return err
+	}
+
 	// Allocate hugepages and rebind NVMe devices to userspace drivers.
-	if err := prepBdevStorage(srv, iommuDetected()); err != nil {
+	if err := prepBdevStorage(srv, iommuEnabled); err != nil {
 		return err
 	}
 
