@@ -1009,10 +1009,10 @@ func TestServerConfig_Parsing(t *testing.T) {
 		"legacy storage; non-empty bdev_list; hugepages disabled": {
 			legacyStorage: true,
 			inTxtList: []string{
-				"    bdev_list: []", "telemetry_port: 9191",
+				"  bdev_list: []", "telemetry_port: 9191",
 			},
 			outTxtList: []string{
-				"    bdev_list: [0000:80:00.0]", "disable_hugepages: true",
+				"  bdev_list: [0000:80:00.0]", "disable_hugepages: true",
 			},
 			expValidateErr: FaultConfigHugepagesDisabled,
 		},
