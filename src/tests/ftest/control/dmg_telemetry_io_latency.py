@@ -10,7 +10,6 @@ from ior_test_base import IorTestBase
 from telemetry_test_base import TestWithTelemetry
 from telemetry_utils import TelemetryUtils
 from test_utils_container import TestContainer
-from apricot import skipForTicket
 
 
 def get_rf(oclass):
@@ -514,7 +513,6 @@ class TestWithTelemetryIOLatency(IorTestBase, TestWithTelemetry):
         if errors:
             self.fail("Test FAILED")
 
-    @skipForTicket("DAOS-9031")
     def test_ior_latency_telmetry_metrics(self):
         """JIRA ID: DAOS-8624.
 
