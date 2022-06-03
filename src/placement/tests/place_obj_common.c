@@ -774,7 +774,7 @@ get_object_classes(daos_oclass_id_t **oclass_id_pp)
 	length = daos_oclass_names_list(str_size, oclass_names);
 	if (length != -1) {
 		D_FREE(oclass_names);
-		return length;
+		return -1;
 	}
 
 	for (i = 0; i < length; ++i) {
