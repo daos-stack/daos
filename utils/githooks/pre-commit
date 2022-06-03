@@ -1,6 +1,10 @@
 #!/bin/bash
 set -eu
 
+if [ -n "${NO_PRE_COMMIT:=""}" ]; then
+    exit 0
+fi
+
 run-parts() {
     local dir="$1"
     shift

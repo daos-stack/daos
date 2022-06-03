@@ -1,6 +1,10 @@
 #!/bin/bash
 set -eu
 
+if [ -n "${NO_PREPARE_COMMIT_MSG:=""}" ]; then
+    exit 0
+fi
+
 run-parts() {
     local dir="$1"
     shift

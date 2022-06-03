@@ -1,5 +1,11 @@
 #!/bin/bash
 
+# Don't mess with an empty commit message
+if [[ $(grep -v '^[[:space:]]*#' "$1" | wc -c | cut -f1 -d' ') == "0" ]]; then
+    exit 0
+fi
+
 if ! grep 'Required-githooks: true' "$1"; then
     echo 'Required-githooks: true' >> "$1"
 fi
+
