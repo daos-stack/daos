@@ -350,67 +350,45 @@ out:
 static int
 dtx_init(void)
 {
-	const char	*str;
-	int		 rc;
+	int	rc;
 
-	str = getenv("DTX_AGG_THD_CNT");
-	if (str != NULL) {
-		dtx_agg_thd_cnt_up = atoi(str);
-		if (dtx_agg_thd_cnt_up < DTX_AGG_THD_CNT_MIN ||
-		    dtx_agg_thd_cnt_up > DTX_AGG_THD_CNT_MAX) {
-			D_WARN("Invalid DTX aggregation count threshold %d, "
-			       "the valid range is [%d, %d], use the "
-			       "default value %d\n",
-			       dtx_agg_thd_cnt_up, DTX_AGG_THD_CNT_MIN,
-			       DTX_AGG_THD_CNT_MAX, DTX_AGG_THD_CNT_DEF);
-			dtx_agg_thd_cnt_up = DTX_AGG_THD_CNT_DEF;
-		}
-	} else {
+	dtx_agg_thd_cnt_up = DTX_AGG_THD_CNT_DEF;
+	d_getenv_int("DAOS_DTX_AGG_THD_CNT", &dtx_agg_thd_cnt_up);
+	if (dtx_agg_thd_cnt_up < DTX_AGG_THD_CNT_MIN || dtx_agg_thd_cnt_up > DTX_AGG_THD_CNT_MAX) {
+		D_WARN("Invalid DTX aggregation count threshold %u, the valid range is [%u, %u], "
+		       "use the default value %u\n", dtx_agg_thd_cnt_up, DTX_AGG_THD_CNT_MIN,
+		       DTX_AGG_THD_CNT_MAX, DTX_AGG_THD_CNT_DEF);
 		dtx_agg_thd_cnt_up = DTX_AGG_THD_CNT_DEF;
 	}
 
 	dtx_agg_thd_cnt_lo = dtx_agg_thd_cnt_up * 6 / 7;
+	D_INFO("Set DTX aggregation count threshold as %u (entries)\n", dtx_agg_thd_cnt_up);
 
-	D_INFO("Set DTX aggregation count threshold as %d (entries)\n",
-	       dtx_agg_thd_cnt_up);
-
-	str = getenv("DTX_AGG_THD_AGE");
-	if (str != NULL) {
-		dtx_agg_thd_age_up = atoi(str);
-		if (dtx_agg_thd_age_up < DTX_AGG_THD_AGE_MIN ||
-		    dtx_agg_thd_age_up > DTX_AGG_THD_AGE_MAX) {
-			D_WARN("Invalid DTX aggregation age threshold %d, "
-			       "the valid range is [%d, %d], use the "
-			       "default value %d\n",
-			       dtx_agg_thd_age_up, DTX_AGG_THD_AGE_MIN,
-			       DTX_AGG_THD_AGE_MAX, DTX_AGG_THD_AGE_DEF);
-			dtx_agg_thd_age_up = DTX_AGG_THD_AGE_DEF;
-		}
-	} else {
+	dtx_agg_thd_age_up = DTX_AGG_THD_AGE_DEF;
+	d_getenv_int("DAOS_DTX_AGG_THD_AGE", &dtx_agg_thd_age_up);
+	if (dtx_agg_thd_age_up < DTX_AGG_THD_AGE_MIN || dtx_agg_thd_age_up > DTX_AGG_THD_AGE_MAX) {
+		D_WARN("Invalid DTX aggregation age threshold %u, the valid range is [%u, %u], "
+		       "use the default value %u\n", dtx_agg_thd_age_up, DTX_AGG_THD_AGE_MIN,
+		       DTX_AGG_THD_AGE_MAX, DTX_AGG_THD_AGE_DEF);
 		dtx_agg_thd_age_up = DTX_AGG_THD_AGE_DEF;
 	}
 
 	dtx_agg_thd_age_lo = dtx_agg_thd_age_up - 30;
+	D_INFO("Set DTX aggregation time threshold as %u (seconds)\n", dtx_agg_thd_age_up);
 
-	D_INFO("Set DTX aggregation time threshold as %d (seconds)\n",
-	       dtx_agg_thd_age_up);
-
-	str = getenv("DTX_RPC_HELPER_THD");
-	if (str != NULL) {
-		dtx_rpc_helper_thd = atoi(str);
-		if (dtx_rpc_helper_thd == 0) {
-			dtx_rpc_helper_thd = DTX_RPC_HELPER_THD_MAX;
-		} else if (dtx_rpc_helper_thd < DTX_RPC_HELPER_THD_MIN) {
-			D_WARN("Invalid DTX RPC helper threshold %u, the valid range is "
-			       "[%u, unlimited), 0 is for unlimited, use the default value %u\n",
-			       dtx_rpc_helper_thd, DTX_RPC_HELPER_THD_MIN, DTX_RPC_HELPER_THD_DEF);
-			dtx_rpc_helper_thd = DTX_RPC_HELPER_THD_DEF;
-		}
-	} else {
+	dtx_rpc_helper_thd = DTX_RPC_HELPER_THD_DEF;
+	d_getenv_int("DAOS_DTX_RPC_HELPER_THD", &dtx_rpc_helper_thd);
+	if (dtx_rpc_helper_thd < DTX_RPC_HELPER_THD_MIN) {
+		D_WARN("Invalid DTX RPC helper threshold %u, the valid range is [%u, unlimited), "
+		       "use the default value %u\n",
+		       dtx_rpc_helper_thd, DTX_RPC_HELPER_THD_MIN, DTX_RPC_HELPER_THD_DEF);
 		dtx_rpc_helper_thd = DTX_RPC_HELPER_THD_DEF;
 	}
-
 	D_INFO("Set DTX RPC helper threshold as %u\n", dtx_rpc_helper_thd);
+
+	dtx_batched_ult_max = DTX_BATCHED_ULT_DEF;
+	d_getenv_int("DAOS_DTX_BATCHED_ULT_MAX", &dtx_batched_ult_max);
+	D_INFO("Set the max count of DTX batched commit ULTs as %d\n", dtx_batched_ult_max);
 
 	rc = dbtree_class_register(DBTREE_CLASS_DTX_CF,
 				   BTR_FEAT_UINT_KEY | BTR_FEAT_DYNAMIC_ROOT,
