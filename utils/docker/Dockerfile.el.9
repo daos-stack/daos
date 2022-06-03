@@ -25,8 +25,7 @@ RUN set -e;                                                      \
         done;                                                    \
         mv daos_ci-el9-artifactory.repo{.tmp,};                  \
     fi;                                                          \
-    dnf --assumeyes --disablerepo \*epel\* install epel-release  \
-                                               dnf-plugins-core; \
+    dnf --assumeyes install epel-release dnf-plugins-core;       \
     dnf config-manager --save --setopt=assumeyes=True;           \
     dnf config-manager --save --setopt=install_weak_deps=False;  \
     if [ -n "$REPO_FILE_URL" ]; then                             \
