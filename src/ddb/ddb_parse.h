@@ -21,6 +21,16 @@ struct program_args {
 	bool  pa_write_mode;
 };
 
+struct vos_file_parts {
+	char		vf_db_path[64];
+	uuid_t		vf_pool_uuid;
+	char		vf_vos_file[16];
+	uint32_t	vf_target_idx;
+};
+
+/* Parse a path to a VOS file to get needed parts for initializing vos */
+int vos_path_parse(const char *path, struct vos_file_parts *vos_file_parts);
+
 /* Parse a string into an array of words with the count of words */
 int ddb_str2argv_create(const char *buf, struct argv_parsed *parse_args);
 

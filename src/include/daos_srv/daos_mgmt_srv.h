@@ -33,5 +33,7 @@ int
 ds_mgmt_pool_exist(uuid_t uuid);
 int
 ds_mgmt_tgt_pool_exist(uuid_t uuid, char **path);
+int
+ds_mgmt_tgt_pool_destroy(uuid_t pool_uuid, d_rank_list_t *ranks);
 
 #endif /* __MGMT_SRV_H__ */

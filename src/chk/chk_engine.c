@@ -69,7 +69,7 @@ chk_destroy_pool_tree(struct chk_instance *ins)
 	 * Once the pool record is deleted from the tree, the initial reference held when
 	 * created will be released: if it is current ULT delete the record from the tree,
 	 * then it will be via chk_pool_free()->chk_pool_put(). Otherwise, if it has been
-	 * deleted from the tree by others, then related logic wii call chk_pool_put().
+	 * deleted from the tree by others, then related logic will call chk_pool_put().
 	 */
 	chk_destroy_tree(&ins->ci_pool_hdl, &ins->ci_pool_btr);
 
@@ -156,7 +156,7 @@ chk_engine_exit(struct chk_instance *ins, uint32_t ins_status, uint32_t pool_sta
 		iv.ci_status = ins_status;
 		iv.ci_to_leader = 1;
 
-		/* Synchronously notify the leader that check instance exit on the engine. */
+		/* Notify the leader that check instance exit on the engine. */
 		rc = chk_iv_update(ins->ci_iv_ns, &iv, CRT_IV_SHORTCUT_TO_ROOT,
 				   CRT_IV_SYNC_NONE, true);
 		if (rc != 0)
@@ -1592,7 +1592,7 @@ out:
 		iv.ci_status = cbk->cb_ins_status;
 		iv.ci_to_leader = 1;
 
-		/* Synchronously notify the leader that check instance exit on the engine. */
+		/* Notify the leader that check instance exit on the engine. */
 		rc = chk_iv_update(ins->ci_iv_ns, &iv, CRT_IV_SHORTCUT_TO_ROOT,
 				   CRT_IV_SYNC_NONE, true);
 		if (rc != 0)

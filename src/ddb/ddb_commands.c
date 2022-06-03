@@ -20,6 +20,25 @@ ddb_run_quit(struct ddb_ctx *ctx)
 	return 0;
 }
 
+int
+ddb_run_open(struct ddb_ctx *ctx, struct open_options *opt)
+{
+	return dv_pool_open(opt->vos_pool_shard, &ctx->dc_poh);
+}
+
+int ddb_run_close(struct ddb_ctx *ctx)
+{
+	int rc;
+
+	if (daos_handle_is_inval(ctx->dc_poh))
+		return 0;
+
+	rc = dv_pool_close(ctx->dc_poh);
+	ctx->dc_poh = DAOS_HDL_INVAL;
+
+	return rc;
+}
+
 struct ls_ctx {
 	struct ddb_ctx	*ctx;
 	bool		 has_cont;
@@ -40,7 +59,7 @@ init_path(daos_handle_t poh, char *path, struct dv_tree_path_builder *vtp)
 	if (!SUCCESS(rc))
 		return rc;
 
-	rc = dv_path_update_from_indexes(vtp);
+	rc = dv_path_verify(vtp);
 	if (!SUCCESS(rc))
 		return rc;
 	return 0;
@@ -399,7 +418,7 @@ ddb_run_rm(struct ddb_ctx *ctx, struct rm_options *opt)
 int
 ddb_run_load(struct ddb_ctx *ctx, struct load_options *opt)
 {
-	struct dv_tree_path_builder	vtpb;
+	struct dv_tree_path_builder	pb;
 	d_iov_t				iov = {0};
 	size_t				file_size;
 	uint32_t			epoch;
@@ -416,7 +435,12 @@ ddb_run_load(struct ddb_ctx *ctx, struct load_options *opt)
 		return -DER_INVAL;
 	}
 
-	rc = init_path(ctx->dc_poh, opt->dst, &vtpb);
+	rc = init_path(ctx->dc_poh, opt->dst, &pb);
+	if (rc == -DER_NONEXIST) {
+		/* It's okay that the path doesn't exist as long as the container does */
+		if (pb.vtp_cont_verified)
+			rc = 0;
+	}
 
 	if (!SUCCESS(rc)) {
 		ddb_error(ctx, "Invalid VOS path\n");
@@ -424,12 +448,12 @@ ddb_run_load(struct ddb_ctx *ctx, struct load_options *opt)
 	}
 
 
-	if (!dvp_is_complete(&vtpb.vtp_path)) {
+	if (!dvp_is_complete(&pb.vtp_path)) {
 		ddb_error(ctx, "Invalid path");
 		D_GOTO(done, rc = -DER_INVAL);
 	}
 
-	vtp_print(ctx, &vtpb.vtp_path, true);
+	vtp_print(ctx, &pb.vtp_path, true);
 
 	if (!ctx->dc_io_ft.ddb_get_file_exists(opt->src)) {
 		ddb_errorf(ctx, "Unable to access '%s'\n", opt->src);
@@ -454,7 +478,7 @@ ddb_run_load(struct ddb_ctx *ctx, struct load_options *opt)
 		return -DER_UNKNOWN;
 	}
 
-	rc = dv_update(ctx->dc_poh, &vtpb.vtp_path, &iov, epoch);
+	rc = dv_update(ctx->dc_poh, &pb.vtp_path, &iov, epoch);
 	if (!SUCCESS(rc)) {
 		ddb_errorf(ctx, "Unable to update path: "DF_RC"\n", DP_RC(rc));
 		D_GOTO(done, rc);
@@ -462,7 +486,7 @@ ddb_run_load(struct ddb_ctx *ctx, struct load_options *opt)
 
 done:
 	daos_iov_free(&iov);
-	ddb_vtp_fini(&vtpb);
+	ddb_vtp_fini(&pb);
 
 	if (SUCCESS(rc))
 		ddb_printf(ctx, "Successfully loaded file '%s'\n", opt->src);
@@ -570,5 +594,32 @@ ddb_run_clear_cmt_dtx(struct ddb_ctx *ctx, struct clear_cmt_dtx_options *opt)
 done:
 	ddb_vtp_fini(&vtpb);
 	dv_cont_close(&coh);
+	return rc;
+}
+
+static int
+sync_smd_cb(void *cb_args, uuid_t pool_id, uint32_t vos_id, uint64_t blob_id, daos_size_t blob_size)
+{
+	struct ddb_ctx *ctx = cb_args;
+
+	ddb_printf(ctx, "Sync Info - pool: "DF_UUIDF", target id: %d, blob id: %lu, "
+		   "blob_size: %lu\n", DP_UUID(pool_id),
+		   vos_id, blob_id, blob_size);
+
+	return 0;
+}
+
+int
+ddb_run_smd_sync(struct ddb_ctx *ctx)
+{
+	int rc;
+
+	if (daos_handle_is_valid(ctx->dc_poh)) {
+		ddb_print(ctx, "Close pool connection before attempting to sync smd\n");
+		return -DER_INVAL;
+	}
+
+	rc = dv_sync_smd(sync_smd_cb, ctx);
+	ddb_printf(ctx, "Done: "DF_RC"\n", DP_RC(rc));
 	return rc;
 }

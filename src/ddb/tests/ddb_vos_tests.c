@@ -8,6 +8,7 @@
 #include <ddb_vos.h>
 #include <ddb_common.h>
 #include <daos_srv/vos.h>
+#include <ddb_parse.h>
 #include "ddb_cmocka.h"
 #include "ddb_test_driver.h"
 
@@ -111,22 +112,21 @@ static struct vos_tree_handlers fake_handlers = {
 		} \
 	} while (0)
 
-#define assert_ddb_iterate(poh, cont_uuid, oid, dkey, akey, recursive, expected_cont, \
+#define assert_ddb_iterate(poh, cont_uuid, oid, dkey, akey, is_recx, recursive, expected_cont, \
 			   expected_obj, expected_dkey, expected_akey, \
 			   expected_sv, expected_array) \
 	assert_success(__assert_ddb_iterate(poh, cont_uuid, oid, dkey, \
-	akey, recursive, expected_cont, expected_obj, \
+	akey, is_recx, recursive, expected_cont, expected_obj, \
 	expected_dkey, expected_akey, expected_sv, expected_array))
 static int
 __assert_ddb_iterate(daos_handle_t poh, uuid_t *cont_uuid, daos_unit_oid_t *oid, daos_key_t *dkey,
-		     daos_key_t *akey, _Bool recursive, uint32_t expected_cont,
+		     daos_key_t *akey, bool is_recx, bool recursive, uint32_t expected_cont,
 		     uint32_t expected_obj, uint32_t expected_dkey, uint32_t expected_akey,
 		     uint32_t expected_sv, uint32_t expected_array)
 {
 	int			i;
 	int			rc = 0;
 	struct dv_tree_path	path = {0};
-
 
 	if (cont_uuid)
 		uuid_copy(path.vtp_cont, *cont_uuid);
@@ -136,6 +136,7 @@ __assert_ddb_iterate(daos_handle_t poh, uuid_t *cont_uuid, daos_unit_oid_t *oid,
 		path.vtp_dkey = *dkey;
 	if (akey)
 		path.vtp_akey = *akey;
+	path.vtp_is_recx = is_recx;
 
 
 	assert_success(dv_iterate(poh, &path, recursive, &fake_handlers,
@@ -182,11 +183,11 @@ open_pool_test(void **state)
 	daos_handle_t		 poh;
 	struct dt_vos_pool_ctx	*tctx = *state;
 
-	assert_rc_equal(-DER_INVAL, ddb_vos_pool_open("/bad/path", &poh));
+	assert_rc_equal(-DER_INVAL, dv_pool_open("/bad/path", &poh));
 
-	assert_success(ddb_vos_pool_open(tctx->dvt_pmem_file, &poh));
+	assert_success(dv_pool_open(tctx->dvt_pmem_file, &poh));
 
-	assert_success(ddb_vos_pool_close(poh));
+	assert_success(dv_pool_close(poh));
 }
 
 static void
@@ -196,29 +197,33 @@ list_items_test(void **state)
 	daos_handle_t		 poh = tctx->dvt_poh;
 
 	/* list containers */
-	assert_ddb_iterate(poh, NULL, NULL, NULL, NULL, false, 10, 0, 0, 0, 0, 0);
-	assert_ddb_iterate(poh, NULL, NULL, NULL, NULL, true,
+	assert_ddb_iterate(poh, NULL, NULL, NULL, NULL, false, false,
+			   10, 0, 0, 0, 0, 0);
+	assert_ddb_iterate(poh, NULL, NULL, NULL, NULL, false, true,
 			   10, 100, 1000, 10000, 5000, 5000);
 
 	/* list objects of a container */
-	assert_ddb_iterate(poh, &g_uuids[0], NULL, NULL, NULL, false, 0, 10, 0, 0, 0, 0);
-	assert_ddb_iterate(poh, &g_uuids[0], NULL, NULL, NULL, true,
+	assert_ddb_iterate(poh, &g_uuids[0], NULL, NULL, NULL, false, false,
+			   0, 10, 0, 0, 0, 0);
+	assert_ddb_iterate(poh, &g_uuids[0], NULL, NULL, NULL, false, true,
 			   0, 10, 100, 1000, 500, 500);
 
 	/* list dkeys of an object */
-	assert_ddb_iterate(poh, &g_uuids[0], &g_oids[0], NULL, NULL, false, 0, 0, 10, 0, 0, 0);
-	assert_ddb_iterate(poh, &g_uuids[0], &g_oids[0], NULL, NULL, true, 0, 0, 10, 100, 50, 50);
+	assert_ddb_iterate(poh, &g_uuids[0], &g_oids[0], NULL, NULL, false, false,
+			   0, 0, 10, 0, 0, 0);
+	assert_ddb_iterate(poh, &g_uuids[0], &g_oids[0], NULL, NULL, false, true,
+			   0, 0, 10, 100, 50, 50);
 
 	/* list akeys of a dkey */
-	assert_ddb_iterate(poh, &g_uuids[0], &g_oids[0], &g_dkeys[0], NULL, false,
+	assert_ddb_iterate(poh, &g_uuids[0], &g_oids[0], &g_dkeys[0], NULL, false, false,
 			   0, 0, 0, 10, 0, 0);
-	assert_ddb_iterate(poh, &g_uuids[0], &g_oids[0], &g_dkeys[0], NULL, true,
+	assert_ddb_iterate(poh, &g_uuids[0], &g_oids[0], &g_dkeys[0], NULL, false, true,
 			   0, 0, 0, 10, 5, 5);
 
 	/* list values in akeys */
-	assert_ddb_iterate(poh, &g_uuids[0], &g_oids[0], &g_dkeys[0], &g_akeys[0], false,
+	assert_ddb_iterate(poh, &g_uuids[0], &g_oids[0], &g_dkeys[0], &g_akeys[0], true, false,
 			   0, 0, 0, 0, 0, 1);
-	assert_ddb_iterate(poh, &g_uuids[0], &g_oids[0], &g_dkeys[0], &g_akeys[1], true,
+	assert_ddb_iterate(poh, &g_uuids[0], &g_oids[0], &g_dkeys[0], &g_akeys[1], false, true,
 			   0, 0, 0, 0, 1, 0);
 }
 
@@ -366,23 +371,72 @@ get_recx_from_idx_tests(void **state)
 	vos_cont_close(coh);
 }
 
-static void
-update_path_with_values_from_index_tests(void **state)
+static void pb_reset(struct dv_tree_path_builder *pb)
 {
-	struct dt_vos_pool_ctx	*tctx = *state;
+	daos_handle_t poh = pb->vtp_poh;
 
-	struct dv_tree_path_builder vt_path = {0};
+	memset(pb, 0, sizeof(*pb));
+	pb->vtp_poh = poh;
+	ddb_vos_tree_path_setup(pb);
+}
 
-	vt_path.vtp_poh = tctx->dvt_poh;
+static void
+verify_path_tests(void **state)
+{
+	struct dt_vos_pool_ctx		*tctx = *state;
+	struct dv_tree_path_builder	 pb = {0};
+
+	pb.vtp_poh = tctx->dvt_poh;
 	/* Because all path part indexes are 0, should update the path with the first */
-	dv_path_update_from_indexes(&vt_path);
+	assert_success(dv_path_verify(&pb));
 
-	assert_uuid_equal(g_uuids[0], vt_path.vtp_path.vtp_cont);
-	assert_oid_equal(g_oids[0].id_pub, vt_path.vtp_path.vtp_oid.id_pub);
-	assert_key_equal(g_dkeys[0], vt_path.vtp_path.vtp_dkey);
-	assert_key_equal(g_akeys[0], vt_path.vtp_path.vtp_akey);
-	assert_int_equal(9, vt_path.vtp_path.vtp_recx.rx_idx);
-	assert_int_equal(10, vt_path.vtp_path.vtp_recx.rx_nr);
+	assert_uuid_equal(g_uuids[0], pb.vtp_path.vtp_cont);
+	assert_oid_equal(g_oids[0].id_pub, pb.vtp_path.vtp_oid.id_pub);
+	assert_key_equal(g_dkeys[0], pb.vtp_path.vtp_dkey);
+	assert_key_equal(g_akeys[0], pb.vtp_path.vtp_akey);
+	assert_int_equal(9, pb.vtp_path.vtp_recx.rx_idx);
+	assert_int_equal(10, pb.vtp_path.vtp_recx.rx_nr);
+
+	/* container is invalid */
+	pb_reset(&pb);
+	uuid_parse(g_invalid_uuid_str, pb.vtp_path.vtp_cont);
+	assert_nonexist(dv_path_verify(&pb));
+
+	/* object id is invalid */
+	pb_reset(&pb);
+	pb.vtp_cont_idx = 0;
+	pb.vtp_path.vtp_oid.id_pub.hi = 99;
+	pb.vtp_path.vtp_oid.id_pub.lo = 01;
+	assert_nonexist(dv_path_verify(&pb));
+
+	/* dkey is invalid */
+	pb_reset(&pb);
+	pb.vtp_cont_idx = 0;
+	pb.vtp_oid_idx = 0;
+	pb.vtp_path.vtp_dkey = g_invalid_key;
+	assert_nonexist(dv_path_verify(&pb));
+
+	/* akey is invalid */
+	pb_reset(&pb);
+	pb.vtp_cont_idx = 0;
+	pb.vtp_oid_idx = 0;
+	pb.vtp_dkey_idx = 0;
+	pb.vtp_path.vtp_akey = g_invalid_key;
+	assert_nonexist(dv_path_verify(&pb));
+
+	/* recx is invalid */
+	pb_reset(&pb);
+	pb.vtp_cont_idx = 0;
+	pb.vtp_oid_idx = 0;
+	pb.vtp_dkey_idx = 0;
+	pb.vtp_akey_idx = 0;
+	pb.vtp_path.vtp_recx = g_invalid_recx;
+	assert_nonexist(dv_path_verify(&pb));
+
+	/* multiple invalid */
+	pb_reset(&pb);
+	pb.vtp_cont_idx = 0;
+
 }
 
 static void
@@ -394,19 +448,19 @@ idx_in_path_must_be_valid_tests(void **state)
 
 	vt_path.vtp_poh = tctx->dvt_poh;
 	vt_path.vtp_cont_idx = 999;
-	assert_rc_equal(-DER_NONEXIST, dv_path_update_from_indexes(&vt_path));
+	assert_rc_equal(-DER_NONEXIST, dv_path_verify(&vt_path));
 	vt_path.vtp_cont_idx = 0;
 
 	vt_path.vtp_oid_idx = 999;
-	assert_rc_equal(-DER_NONEXIST, dv_path_update_from_indexes(&vt_path));
+	assert_rc_equal(-DER_NONEXIST, dv_path_verify(&vt_path));
 	vt_path.vtp_oid_idx = 0;
 
 	vt_path.vtp_dkey_idx = 999;
-	assert_rc_equal(-DER_NONEXIST, dv_path_update_from_indexes(&vt_path));
+	assert_rc_equal(-DER_NONEXIST, dv_path_verify(&vt_path));
 	vt_path.vtp_dkey_idx = 0;
 
 	vt_path.vtp_akey_idx = 999;
-	assert_rc_equal(-DER_NONEXIST, dv_path_update_from_indexes(&vt_path));
+	assert_rc_equal(-DER_NONEXIST, dv_path_verify(&vt_path));
 	vt_path.vtp_akey_idx = 0;
 }
 
@@ -945,7 +999,7 @@ dv_test_setup(void **state)
 {
 	struct dt_vos_pool_ctx *tctx = *state;
 
-	assert_success(ddb_vos_pool_open(tctx->dvt_pmem_file, &tctx->dvt_poh));
+	assert_success(dv_pool_open(tctx->dvt_pmem_file, &tctx->dvt_poh));
 	return 0;
 }
 
@@ -954,7 +1008,7 @@ dv_test_teardown(void **state)
 {
 	struct dt_vos_pool_ctx *tctx = *state;
 
-	assert_success(ddb_vos_pool_close(tctx->dvt_poh));
+	assert_success(dv_pool_close(tctx->dvt_poh));
 	return 0;
 }
 
@@ -972,7 +1026,7 @@ const struct CMUnitTest dv_test_cases[] = {
 	TEST(get_dkey_from_idx_tests),
 	TEST(get_akey_from_idx_tests),
 	TEST(get_recx_from_idx_tests),
-	TEST(update_path_with_values_from_index_tests),
+	TEST(verify_path_tests),
 	TEST(idx_in_path_must_be_valid_tests),
 	TEST(path_must_be_valid_tests),
 	TEST(get_value_tests),

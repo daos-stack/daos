@@ -375,12 +375,18 @@ struct chk_pool_rec {
 	uint32_t		 cpr_shard_nr;
 	uint32_t		 cpr_started:1,
 				 cpr_stop:1,
-				 cpr_done:1;
-	int			 cpr_refs;
+				 cpr_done:1,
+				 cpr_skip:1,
+				 cpr_healthy:1,
+				 cpr_exist_on_ms:1;
+	int			 cpr_advice;
+	uint32_t		 cpr_phase;
 	uuid_t			 cpr_uuid;
 	ABT_thread		 cpr_thread;
+	struct ds_pool_clues	 cpr_clues;
 	struct chk_bookmark	 cpr_bk;
 	struct chk_instance	*cpr_ins;
+	int			 cpr_refs;
 };
 
 struct chk_pending_rec {

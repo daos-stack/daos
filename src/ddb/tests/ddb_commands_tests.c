@@ -267,7 +267,7 @@ load_cmd_tests(void **state)
 
 	/* Can't use index for a new path */
 	opt.dst = "/[0]/[0]/[0]/[9999]";
-	assert_rc_equal(-DER_NONEXIST, ddb_run_load(&g_ctx, &opt));
+	assert_rc_equal(-DER_INVAL, ddb_run_load(&g_ctx, &opt));
 
 	/* can't create new container */
 	sprintf(buf, "%s/"DF_OID"/'dkey_new'/'akey_new'", g_invalid_uuid_str,

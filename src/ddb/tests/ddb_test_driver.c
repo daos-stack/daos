@@ -605,5 +605,9 @@ int main(int argc, char *argv[])
 done:
 	vos_self_fini();
 	ddb_fini();
+	if (rc > 0)
+		printf("%d test(s) failed!\n", rc);
+	else
+		printf("All tests successful!\n");
 	return rc;
 }
