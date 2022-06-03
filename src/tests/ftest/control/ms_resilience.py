@@ -108,11 +108,16 @@ class ManagementServiceResilience(TestWithServers):
 
         """
         l_hostname = self.get_leader()
+        self.log.debug("<<<verify_leader>>> replicas                       = %s", replicas)
+        self.log.debug("<<<verify_leader>>> l_hostname                     = %s", l_hostname)
+        self.log.debug("<<<verify_leader>>> l_hostname.issubset(replicas)  = %s", l_hostname.issubset(replicas))
         start = time.time()
         while not l_hostname.issubset(replicas) and (time.time() - start) < self.L_QUERY_TIMER:
             self.log.info("Current leader: <%s>; waiting for new leader to step up", l_hostname)
             time.sleep(1)
             l_hostname = self.get_leader()
+            self.log.debug("<<<verify_leader>>> l_hostname                     = %s", l_hostname)
+            self.log.debug("<<<verify_leader>>> l_hostname.issubset(replicas)  = %s", l_hostname.issubset(replicas))
 
         elapsed = time.time() - start
         if not l_hostname:
@@ -227,15 +232,19 @@ class ManagementServiceResilience(TestWithServers):
         a new pool.
         """
         replicas = self.launch_servers((2 * N) + 1)
+        self.log.debug("<<<verify_retained_quorum>>> replicas  = %s", replicas)
         leader = self.verify_leader(replicas)
+        self.log.debug("<<<verify_retained_quorum>>> leader    = %s", leader)
 
         # First, kill the leader plus just enough other replicas to
         # push up to the edge of quorum loss.
         kill_list = self.kill_servers(leader, replicas, N)
+        self.log.debug("<<<verify_retained_quorum>>> kill_list = %s", kill_list)
 
         # Next, verify that one of the replicas has stepped up as
         # the new leader.
         survivors = replicas.difference(kill_list)
+        self.log.debug("<<<verify_retained_quorum>>> survivors = %s", survivors)
         self.verify_leader(survivors)
         self.get_dmg_command().hostlist = self.hostlist_servers
 

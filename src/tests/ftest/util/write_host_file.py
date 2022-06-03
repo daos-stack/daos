@@ -8,12 +8,14 @@ from logging import getLogger
 import os
 import random
 
+from ClusterShell.NodeSet import NodeSet
+
 
 def write_host_file(hostlist, path='/tmp', slots=1):
     """Write out a hostfile suitable for orterun.
 
     Args:
-        hostlist (list): list of hosts to write to the hostfile
+        hostlist (NodeSet): hosts to write to the hostfile
         path (str, optional): where to write the hostfile. Defaults to '/tmp'.
         slots (int, optional): slots per host to specify in the hostfile.
             Defaults to 1.
@@ -34,6 +36,8 @@ def write_host_file(hostlist, path='/tmp', slots=1):
 
     if not hostlist:
         raise ValueError("host list parameter must be provided.")
+    if isinstance(hostlist, list):
+        hostlist = NodeSet.fromlist(hostlist)
 
     log.info(
         "Writing hostfile:\n  hosts: %s\n  slots: %s\n  file:  %s",
