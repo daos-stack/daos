@@ -4,7 +4,7 @@ hosts:
   test_servers:
     - server-A
     - server-B
-timeout: 3600
+timeout: 3601
 server_config:
   name: daos_server
 pool:
