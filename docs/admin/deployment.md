@@ -495,8 +495,8 @@ network.
 NVMe SSDs need to be made accessible first by running `daos_server storage prepare --nvme-only`.
 The default way for DAOS to access NVMe storage is through SPDK via the VFIO user-space driver.
 To use an alternative driver with SPDK, set `--disable-vfio` in the storage prepare command to
-fallback to using UIO user-space driver with SPDK instead. The option is only effective when
-IOMMU and VFIO are enabled on the host.
+fallback to using UIO user-space driver with SPDK instead.
+If IOMMU and VFIO are not enabled in the BIOS, the alternative driver will be used by default.
 
 The output will be equivalent running `dmg storage scan --verbose` remotely.
 
@@ -754,9 +754,9 @@ For class == "nvme", the following parameters should be populated:
 - `bdev_list` should be populated with NVMe PCI addresses.
 
 The default way for DAOS to access NVMe storage is through SPDK via the VFIO user-space driver.
-To use an alternative driver with SPDK, set `disable-vfio: true` in the global section of the config
-file to fallback to using UIO user-space driver with SPDK instead. The option is only effective when
-IOMMU and VFIO are enabled on the host.
+To use an alternative driver with SPDK, set `disable-vfio: true` in the global section of the
+server config file to fallback to using UIO user-space driver with SPDK instead.
+If IOMMU and VFIO are not enabled in the BIOS, the alternative driver will be used by default.
 
 If VMD is enabled on a host, its usage will be enabled by default meaning that the `bdev_list`
 device addresses will be interpreted as VMD endpoints and storage scan will report the details of
