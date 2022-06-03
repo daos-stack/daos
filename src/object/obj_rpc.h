@@ -158,7 +158,7 @@ enum obj_rpc_flags {
 	ORF_CPD_LEADER		= (1 << 9),
 	/* Bulk data transfer for CPD RPC. */
 	ORF_CPD_BULK		= (1 << 10),
-	/* Contain EC split req, only used on CPD leader locally. */
+	/* Contain EC split req, only used on CPD leader locally. Obsolete - DAOS-10348. */
 	ORF_HAS_EC_SPLIT	= (1 << 11),
 	/* Checking the existence of the object/key. */
 	ORF_CHECK_EXISTENCE	= (1 << 12),
