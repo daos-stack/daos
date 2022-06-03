@@ -33,6 +33,7 @@ import (
 	"github.com/daos-stack/daos/src/control/lib/control"
 	"github.com/daos-stack/daos/src/control/lib/daos"
 	"github.com/daos-stack/daos/src/control/lib/hostlist"
+	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/system"
 	"github.com/daos-stack/daos/src/control/system/raft"
 )
@@ -520,6 +521,49 @@ func (svc *mgmtSvc) resolveRanks(hosts, ranks string) (hitRS, missRS *system.Ran
 	return
 }
 
+// synthesise "Stopped" rank results for any harness host errors
+func addUnresponsiveResults(log logging.Logger, hostRanks map[string][]system.Rank, rr *control.RanksResp, resp *fanoutResponse) {
+	for _, hes := range rr.HostErrors {
+		for _, addr := range strings.Split(hes.HostSet.DerangedString(), ",") {
+			for _, rank := range hostRanks[addr] {
+				resp.Results = append(resp.Results,
+					&system.MemberResult{
+						Rank: rank, Msg: hes.HostError.Error(),
+						State: system.MemberStateUnresponsive,
+					})
+			}
+			log.Debugf("harness %s (ranks %v) host error: %s", addr, hostRanks[addr],
+				hes.HostError)
+		}
+	}
+}
+
+// Remove any duplicate results from response.
+func removeDuplicateResults(log logging.Logger, resp *fanoutResponse) {
+	seenResults := make(map[uint32]*system.MemberResult)
+	for _, res := range resp.Results {
+		if res == nil {
+			continue
+		}
+		rID := res.Rank.Uint32()
+		if extant, existing := seenResults[rID]; !existing {
+			seenResults[rID] = res
+		} else if !extant.Equals(res) {
+			log.Errorf("nonidentical result for same rank: %+v != %+v", *extant, *res)
+		}
+	}
+
+	if len(seenResults) == len(resp.Results) {
+		return
+	}
+
+	newResults := make(system.MemberResults, 0, len(seenResults))
+	for _, res := range seenResults {
+		newResults = append(newResults, res)
+	}
+	resp.Results = newResults
+}
+
 // rpcFanout sends requests to ranks in list on their respective host
 // addresses through functions implementing UnaryInvoker.
 //
@@ -571,7 +615,7 @@ func (svc *mgmtSvc) rpcFanout(ctx context.Context, req *fanoutRequest, resp *fan
 	// Not strictly necessary but helps with debugging.
 	dl, ok := ctx.Deadline()
 	if ok {
-		ranksReq.SetTimeout(dl.Sub(time.Now()))
+		ranksReq.SetTimeout(time.Until(dl))
 	}
 
 	ranksReq.SetHostList(svc.membership.HostList(req.Ranks))
@@ -582,21 +626,9 @@ func (svc *mgmtSvc) rpcFanout(ctx context.Context, req *fanoutRequest, resp *fan
 
 	resp.Results = ranksResp.RankResults
 
-	// synthesise "Stopped" rank results for any harness host errors
-	hostRanks := svc.membership.HostRanks(req.Ranks)
-	for _, hes := range ranksResp.HostErrors {
-		for _, addr := range strings.Split(hes.HostSet.DerangedString(), ",") {
-			for _, rank := range hostRanks[addr] {
-				resp.Results = append(resp.Results,
-					&system.MemberResult{
-						Rank: rank, Msg: hes.HostError.Error(),
-						State: system.MemberStateUnresponsive,
-					})
-			}
-			svc.log.Debugf("harness %s (ranks %v) host error: %s",
-				addr, hostRanks[addr], hes.HostError)
-		}
-	}
+	addUnresponsiveResults(svc.log, svc.membership.HostRanks(req.Ranks), ranksResp, resp)
+
+	removeDuplicateResults(svc.log, resp)
 
 	if len(resp.Results) != req.Ranks.Count() {
 		svc.log.Debugf("expected %d results, got %d",

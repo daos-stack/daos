@@ -580,3 +580,10 @@ func (c *Config) WithPinnedNumaNode(numa uint) *Config {
 	c.PinnedNumaNode = &numa
 	return c
 }
+
+// WithStorageAccelProps sets the acceleration properties for the I/O Engine instance.
+func (c *Config) WithStorageAccelProps(name string, mask storage.AccelOptionBits) *Config {
+	c.Storage.AccelProps.Engine = name
+	c.Storage.AccelProps.Options = mask
+	return c
+}
