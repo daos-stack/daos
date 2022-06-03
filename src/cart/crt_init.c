@@ -357,10 +357,11 @@ __split_arg(char *s_arg_to_split, char **first_arg, char **second_arg)
 	D_ASSERT(first_arg != NULL);
 	D_ASSERT(second_arg != NULL);
 
+	/* no-op, not an error case */
 	if (s_arg_to_split == NULL) {
 		*first_arg = NULL;
 		*second_arg = NULL;
-		return -DER_INVAL;
+		return DER_SUCCESS;
 	}
 
 	D_STRNDUP(arg_to_split, s_arg_to_split, 255);
@@ -618,6 +619,7 @@ crt_init_opt(crt_group_id_t grpid, uint32_t flags, crt_init_options_t *opt)
 		rc = __split_arg(port_str, &port0, &port1);
 		if (rc != 0)
 			D_GOTO(out, rc);
+
 		if (iface0 == NULL) {
 			D_ERROR("Empty interface specified\n");
 			D_GOTO(out, rc = -DER_INVAL);
