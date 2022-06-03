@@ -1345,7 +1345,7 @@ class _Component():
         self.progs = kw.get("progs", [])
         self.libs = kw.get("libs", [])
         self.libs_cc = kw.get("libs_cc", None)
-        self.functions = kw.get("functions", None)
+        self.functions = kw.get("functions", {})
         self.config_cb = kw.get("config_cb", None)
         self.required_libs = kw.get("required_libs", [])
         self.required_progs = kw.get("required_progs", [])
@@ -1541,6 +1541,11 @@ class _Component():
                 env.Replace(**args)
                 env.Replace(CC=self.libs_cc)
             result = config.CheckLib(lib)
+            if result:
+                for function in self.functions.get(lib, []):
+                    result = config.CheckFunc(function)
+                    if not result:
+                        break
             env.Replace(CC=old_cc)
             if not result:
                 config.Finish()
