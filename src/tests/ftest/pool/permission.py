@@ -22,64 +22,6 @@ class Permission(TestWithServers):
     :avocado: recursive
     """
 
-    # Cancel any tests with tickets already assigned
-    CANCEL_FOR_TICKET = [
-        ["DAOS-3442", "mode", 73],
-        ["DAOS-3442", "mode", 146, "perm", 0],
-        ["DAOS-3442", "mode", 146, "perm", 2],
-        ["DAOS-3442", "mode", 292],
-    ]
-
-    def test_connect_permission(self):
-        """Test ID: DAOS-???.
-
-        Test Description:
-            Test pool connections with specific permissions.
-
-        :avocado: tags=all,daily_regression,
-        :avocado: tags=pool,permission,connect_permission
-        """
-        # parameter used in pool create
-        createmode = self.params.get("mode", '/run/createtests/createmode/*/')
-
-        # parameter used for pool connect
-        permissions = self.params.get("perm", '/run/createtests/permissions/*')
-
-        if createmode == 73:
-            expected_result = RESULT_FAIL
-        if createmode == 511 and permissions == 0:
-            expected_result = RESULT_PASS
-        elif createmode in [146, 511] and permissions == 1:
-            expected_result = RESULT_PASS
-        elif createmode in [292, 511] and permissions == 2:
-            expected_result = RESULT_PASS
-        else:
-            expected_result = RESULT_FAIL
-
-        # initialize a python pool object then create the underlying
-        # daos storage
-        self.add_pool(create=False)
-        self.test_log.debug("Pool initialization successful")
-        self.pool.mode.value = createmode
-        self.pool.create()
-        self.test_log.debug("Pool Creation successful")
-
-        try:
-            self.pool.connect(1 << permissions)
-            self.test_log.debug("Pool Connect successful")
-
-            if expected_result == RESULT_FAIL:
-                self.fail(
-                    "Test was expected to fail at pool.connect, but it " +
-                    "passed.\n")
-
-        except TestFail as excep:
-            self.log.error(str(excep))
-            if expected_result == RESULT_PASS:
-                self.fail(
-                    "Test was expected to pass but it failed at " +
-                    "pool.connect.\n")
-
     def test_file_modification(self):
         """Test ID: DAOS-???.
 
@@ -90,40 +32,24 @@ class Permission(TestWithServers):
         :avocado: tags=all,daily_regression
         :avocado: tags=pool,permission,file_modification
         """
-        # parameters used in pool create
-        createmode = self.params.get("mode", '/run/createtests/createmode/*/')
-
-        if createmode == 73:
-            expected_result = RESULT_FAIL
-        elif createmode in [146, 511]:
-            permissions = 1
-            expected_result = RESULT_PASS
-        elif createmode == 292:
-            permissions = 2
-            expected_result = RESULT_PASS
+        # parameter used for pool connect
+        permissions = self.params.get("perm", '/run/createtests/permissions/*')
+        expected_result = self.params.get("exp_result", '/run/createtests/permissions/*')
 
         # initialize a python pool object then create the underlying
         # daos storage
         self.add_pool(create=False)
         self.test_log.debug("Pool initialization successful")
-        self.pool.mode.value = createmode
         self.pool.create()
         self.test_log.debug("Pool Creation successful")
-
         try:
             self.pool.connect(1 << permissions)
             self.test_log.debug("Pool Connect successful")
-            if expected_result == RESULT_FAIL:
-                self.fail(
-                    "Test was expected to fail at pool.connect but it " +
-                    "passed.\n")
         except TestFail as excep:
             self.log.error(str(excep))
             if expected_result == RESULT_PASS:
                 self.fail(
-                    "Test was expected to pass but it failed at " +
-                    "pool.connect.\n")
-
+                    "#Test was expected to pass but it failed at pool.connect.\n")
         try:
             self.container = DaosContainer(self.context)
             self.test_log.debug("Container initialization successful")
@@ -146,10 +72,12 @@ class Permission(TestWithServers):
                 self.fail(
                     "Test was expected to fail at container operations " +
                     "but it passed.\n")
-
+            else:
+                self.test_log.debug("Test Passed.")
         except DaosApiError as excep:
             self.log.error(str(excep))
             if expected_result == RESULT_PASS:
                 self.fail(
-                    "Test was expected to pass but it failed at container " +
-                    "operations.\n")
+                    "#Test was expected to pass but it failed at container operations.\n")
+            else:
+                self.test_log.debug("Test expected failed in container create, r/w. Test Passed.")
