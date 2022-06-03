@@ -823,7 +823,7 @@ pipeline {
                     }
                     agent {
                         dockerfile {
-                            filename 'utils/docker/Dockerfile.maldet.centos.7'
+                            filename 'ci/docker/Dockerfile.maldet.centos.7'
                             label 'docker_runner'
                             additionalBuildArgs dockerBuildArgs() +
                                                 " -t ${sanitized_JOB_NAME}-centos7 " +
@@ -856,7 +856,7 @@ pipeline {
                     }
                     agent {
                         dockerfile {
-                            filename 'utils/docker/Dockerfile.maldet.el.8'
+                            filename 'ci/docker/Dockerfile.maldet.el.8'
                             label 'docker_runner'
                             additionalBuildArgs dockerBuildArgs() +
                                                 " -t ${sanitized_JOB_NAME}-el8 " +
@@ -887,7 +887,7 @@ pipeline {
                     }
                     agent {
                         dockerfile {
-                            filename 'utils/docker/Dockerfile.maldet.leap.15'
+                            filename 'ci/docker/Dockerfile.maldet.leap.15'
                             label 'docker_runner'
                             additionalBuildArgs dockerBuildArgs() +
                                                 " -t ${sanitized_JOB_NAME}-leap15 " +

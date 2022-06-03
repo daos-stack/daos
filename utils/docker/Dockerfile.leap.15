@@ -41,7 +41,6 @@ RUN set -e;                                                      \
     for file in *.repo; do                                       \
         sed -e '/type=NONE/d' < $file > /etc/dnf/repos.d/$file;  \
     done;                                                        \
-    ls -l; \
     zypper --non-interactive clean --all;                        \
     dnf config-manager --save --setopt=assumeyes=True;           \
     dnf config-manager --save --setopt=install_weak_deps=False;  \
