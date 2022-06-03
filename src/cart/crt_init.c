@@ -348,7 +348,7 @@ crt_plugin_fini(void)
 	D_MUTEX_DESTROY(&crt_plugin_gdata.cpg_mutex);
 }
 
-static void
+static int
 __split_arg(char *s_arg_to_split, char **first_arg, char **second_arg)
 {
 	char	*save_ptr = NULL;
@@ -360,14 +360,14 @@ __split_arg(char *s_arg_to_split, char **first_arg, char **second_arg)
 	if (s_arg_to_split == NULL) {
 		*first_arg = NULL;
 		*second_arg = NULL;
-		return;
+		return -DER_INVAL;
 	}
 
 	D_STRNDUP(arg_to_split, s_arg_to_split, 255);
 	if (!arg_to_split) {
 		*first_arg = NULL;
 		*second_arg = NULL;
-		return;
+		return -DER_NOMEM;
 	}
 
 	*first_arg = 0;
@@ -375,6 +375,8 @@ __split_arg(char *s_arg_to_split, char **first_arg, char **second_arg)
 
 	*first_arg = strtok_r(arg_to_split, ",", &save_ptr);
 	*second_arg = save_ptr;
+
+	return DER_SUCCESS;
 }
 
 
@@ -595,7 +597,10 @@ crt_init_opt(crt_group_id_t grpid, uint32_t flags, crt_init_options_t *opt)
 				port_str = tmp;
 		}
 
-		__split_arg(provider_env, &provider_str0, &provider_str1);
+		rc = __split_arg(provider_env, &provider_str0, &provider_str1);
+		if (rc != 0)
+			D_GOTO(out, rc);
+
 		primary_provider = crt_str_to_provider(provider_str0);
 		secondary_provider = crt_str_to_provider(provider_str1);
 
@@ -603,9 +608,16 @@ crt_init_opt(crt_group_id_t grpid, uint32_t flags, crt_init_options_t *opt)
 			D_ERROR("Requested provider %s not found\n", provider_env);
 			D_GOTO(out, rc = -DER_NONEXIST);
 		}
-		__split_arg(interface_env, &iface0, &iface1);
-		__split_arg(domain_env, &domain0, &domain1);
-		__split_arg(port_str, &port0, &port1);
+
+		rc = __split_arg(interface_env, &iface0, &iface1);
+		if (rc != 0)
+			D_GOTO(out, rc);
+		rc = __split_arg(domain_env, &domain0, &domain1);
+		if (rc != 0)
+			D_GOTO(out, rc);
+		rc = __split_arg(port_str, &port0, &port1);
+		if (rc != 0)
+			D_GOTO(out, rc);
 		if (iface0 == NULL) {
 			D_ERROR("Empty interface specified\n");
 			D_GOTO(out, rc = -DER_INVAL);
