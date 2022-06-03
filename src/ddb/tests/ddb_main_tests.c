@@ -199,6 +199,13 @@ run_many_commands_with_option_f_tests(void **state)
 	assert_main(tctx->dvt_pmem_file, "-f", "file_path");
 	assert_int_equal(1, dvt_fake_get_lines_called);
 
+	/* Lines with just whitespace are ignored */
+	dvt_fake_get_file_exists_result = true;
+	dvt_fake_get_lines_called = 0;
+	set_fake_inputs("ls", "\t   \t \t\n", "dump_superblock", "\n");
+	assert_main(tctx->dvt_pmem_file, "-f", "file_path");
+	assert_int_equal(1, dvt_fake_get_lines_called);
+
 	/* commands that modify tree must have '-w' also */
 	dvt_fake_get_file_exists_result = true;
 	set_fake_inputs("ls", "rm [0]");

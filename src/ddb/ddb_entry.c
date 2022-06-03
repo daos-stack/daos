@@ -105,12 +105,21 @@ get_lines(const char *path, ddb_io_line_cb line_cb, void *cb_args)
 		return rc;
 	}
 
-	while ((read = getline(&line, &len, f)) != -1 && rc == 0)
+	while ((read = getline(&line, &len, f)) != -1) {
 		rc = line_cb(cb_args, line, read);
+		if (!SUCCESS(rc)) {
+			print_error("Issue with line '%s': "DF_RC"\n", line, DP_RC(rc));
+			break;
+		}
+	}
+
+	rc = daos_errno2der(errno);
+	if (!SUCCESS(rc))
+		print_error("Error reading line from file '%s': "DF_RC"\n", path, DP_RC(rc));
 
 	fclose(f);
 	if (line)
-		free(line);
+		D_FREE(line);
 
 	return rc;
 }

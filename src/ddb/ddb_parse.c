@@ -104,7 +104,7 @@ ddb_parse_program_args(struct ddb_ctx *ctx, uint32_t argc, char **argv, struct p
 	};
 	int		index = 0, opt;
 
-	optind = 1;
+	optind = 0; /* Reinitialize getopt */
 	opterr = 0;
 	while ((opt = getopt_long(argc, argv, "wR:f:", program_options, &index)) != -1) {
 		switch (opt) {
@@ -119,7 +119,6 @@ ddb_parse_program_args(struct ddb_ctx *ctx, uint32_t argc, char **argv, struct p
 			break;
 		case '?':
 			ddb_errorf(ctx, "'%c'(0x%x) is unknown\n", optopt, optopt);
-			return -DER_INVAL;
 		default:
 			return -DER_INVAL;
 		}

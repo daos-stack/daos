@@ -50,7 +50,7 @@ __test_run_cmd(struct ddb_cmd_info *info, char *argv[])
 	parse_args.ap_argv = argv;
 	parse_args.ap_argc = argc;
 
-	rc = ddb_parse_cmd_args(&ctx, &parse_args, info);
+	rc = ddb_parse_cmd_args(&ctx, parse_args.ap_argc, parse_args.ap_argv, info);
 
 	if (!SUCCESS(rc))
 		return rc;

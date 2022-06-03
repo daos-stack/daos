@@ -475,7 +475,7 @@ ddb_run_load(struct ddb_ctx *ctx, struct load_options *opt)
 		D_GOTO(done, rc);
 	} else if (!(rc == iov.iov_buf_len && rc == iov.iov_len)) {
 		D_ERROR("Bytes read from file does not match results from get file size\n");
-		return -DER_UNKNOWN;
+		D_GOTO(done, rc = -DER_UNKNOWN);
 	}
 
 	rc = dv_update(ctx->dc_poh, &pb.vtp_path, &iov, epoch);

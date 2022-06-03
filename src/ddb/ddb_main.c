@@ -29,23 +29,29 @@ ddb_fini()
 }
 
 static int
-run_cmd(struct ddb_ctx *ctx, char *cmd_str, bool write_mode)
+run_cmd(struct ddb_ctx *ctx, const char *cmd_str, bool write_mode)
 {
-	struct argv_parsed	parse_args = {0};
-	struct ddb_cmd_info	info = {0};
-	int			rc;
+	struct argv_parsed	 parse_args = {0};
+	struct ddb_cmd_info	 info = {0};
+	int			 rc;
+	char			*cmd_copy = strdup(cmd_str);
 
 	/* Remove newline if needed */
-	if (cmd_str[strlen(cmd_str) - 1] == '\n')
-		cmd_str[strlen(cmd_str) - 1] = '\0';
+	if (cmd_copy[strlen(cmd_copy) - 1] == '\n')
+		cmd_copy[strlen(cmd_copy) - 1] = '\0';
 
-	rc = ddb_str2argv_create(cmd_str, &parse_args);
+	rc = ddb_str2argv_create(cmd_copy, &parse_args);
 	if (!SUCCESS(rc))
-		return rc;
+		D_GOTO(done, rc);
 
-	rc = ddb_parse_cmd_args(ctx, &parse_args, &info);
+	if (parse_args.ap_argc == 0) {
+		D_ERROR("Nothing parsed\n");
+		return -DER_INVAL;
+	}
+
+	rc = ddb_parse_cmd_args(ctx, parse_args.ap_argc, parse_args.ap_argv, &info);
 	if (!SUCCESS(rc))
-		return rc;
+		D_GOTO(done, rc);
 
 	switch (info.dci_cmd) {
 	case DDB_CMD_UNKNOWN:
@@ -78,6 +84,7 @@ run_cmd(struct ddb_ctx *ctx, char *cmd_str, bool write_mode)
 		rc = ddb_run_dump_value(ctx, &info.dci_cmd_option.dci_dump_value);
 		break;
 	case DDB_CMD_RM:
+		/* The 'rm' command deletes branches of the tree */
 		if (!write_mode) {
 			ddb_print(ctx, error_msg_write_mode_only);
 			rc = -DER_INVAL;
@@ -89,6 +96,10 @@ run_cmd(struct ddb_ctx *ctx, char *cmd_str, bool write_mode)
 		rc = ddb_run_dump_dtx(ctx, &info.dci_cmd_option.dci_dump_dtx);
 		break;
 	case DDB_CMD_LOAD:
+		/*
+		 * The load command loads alters the tree by modifying an existing value or
+		 * creating a new one.
+		 */
 		if (!write_mode) {
 			ddb_print(ctx, error_msg_write_mode_only);
 			rc = -DER_INVAL;
@@ -103,6 +114,9 @@ run_cmd(struct ddb_ctx *ctx, char *cmd_str, bool write_mode)
 		rc = ddb_run_rm_ilog(ctx, &info.dci_cmd_option.dci_rm_ilog);
 		break;
 	case DDB_CMD_CLEAR_CMT_DTX:
+		/*
+		 * The clear_cmt_dtx command removes dtx entries.
+		 */
 		if (!write_mode) {
 			ddb_print(ctx, error_msg_write_mode_only);
 			rc = -DER_INVAL;
@@ -114,10 +128,23 @@ run_cmd(struct ddb_ctx *ctx, char *cmd_str, bool write_mode)
 		rc = ddb_run_smd_sync(ctx);
 		break;
 	}
-
+done:
 	ddb_str2argv_free(&parse_args);
+	D_FREE(cmd_copy);
 
 	return rc;
+}
+
+static bool
+all_whitespace(const char *str, uint32_t str_len)
+{
+	int i;
+
+	for (i = 0; i < str_len; i++) {
+		if (!isspace(str[i]))
+			return false;
+	}
+	return true;
 }
 
 static int
@@ -126,7 +153,8 @@ process_line_cb(void *cb_args, char *line, uint32_t line_len)
 	struct ddb_ctx *ctx = cb_args;
 
 	ddb_printf(ctx, "Command: %s", line);
-	if (line_len <= 1) /* It's okay to only have a '\n', but don't try to run a command */
+	/* ignore empty lines */
+	if (all_whitespace(line, line_len))
 		return 0;
 	return run_cmd(ctx, line, ctx->dc_write_mode);
 }
@@ -195,7 +223,7 @@ ddb_main(struct ddb_io_ft *io_ft, int argc, char *argv[])
 
 done:
 	if (daos_handle_is_valid(ctx.dc_poh)) {
-		int tmp_rc = ddb_vos_pool_close(ctx.dc_poh);
+		int tmp_rc = dv_pool_close(ctx.dc_poh);
 
 		if (rc == 0)
 			rc = tmp_rc;
