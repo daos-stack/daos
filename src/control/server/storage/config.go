@@ -38,6 +38,9 @@ const (
 	BdevOutConfName = "daos_nvme.conf"
 
 	maxScmDeviceLen = 1
+
+	accelOptMoveName = "move"
+	accelOptCRCName  = "crc"
 )
 
 // Class indicates a specific type of storage.
@@ -572,12 +575,120 @@ func parsePCIBusRange(numRange string, bitSize int) (uint8, uint8, error) {
 	return uint8(begin), uint8(end), nil
 }
 
+// AccelOptionBits is a type alias representing optional capabilities as a bit-set.
+type AccelOptionBits uint16
+
+// toStrings returns a slice of option names that have been set.
+func (obs AccelOptionBits) toStrings() []string {
+	opts := common.NewStringSet()
+	for str, flag := range accelOptStr2Flag {
+		if obs&flag == flag {
+			opts.Add(str)
+		}
+	}
+
+	return opts.ToSlice()
+}
+
+// fromStrings generates bit-set referenced by the function receiver from the option names provided.
+func (obs *AccelOptionBits) fromStrings(opts ...string) error {
+	if obs == nil {
+		return errors.New("fromStrings() called on nil AccelOptionBits")
+	}
+
+	for _, opt := range opts {
+		flag, exists := accelOptStr2Flag[opt]
+		if !exists {
+			return FaultBdevAccelOptionUnknown(opt, accelOptStr2Flag.keys()...)
+		}
+		*obs |= flag
+	}
+
+	return nil
+}
+
+func (obs AccelOptionBits) MarshalYAML() (interface{}, error) {
+	return obs.toStrings(), nil
+}
+
+func (obs *AccelOptionBits) UnmarshalYAML(unmarshal func(interface{}) error) error {
+	var opts []string
+	if err := unmarshal(&opts); err != nil {
+		return err
+	}
+
+	return obs.fromStrings(opts...)
+}
+
+// IsEmpty returns true if no options have been set.
+func (obs *AccelOptionBits) IsEmpty() bool {
+	return obs == nil || *obs == 0
+}
+
+// AccelProps struct describes acceleration engine setting and optional capabilities expressed
+// as a bit mask. AccelProps is used both in YAML server config and JSON NVMe config files.
+type AccelProps struct {
+	Engine  string          `yaml:"engine,omitempty" json:"accel_engine"`
+	Options AccelOptionBits `yaml:"options,omitempty" json:"accel_opts"`
+}
+
+type optFlagMap map[string]AccelOptionBits
+
+func (aosf optFlagMap) keys() []string {
+	keys := common.NewStringSet()
+	for k := range aosf {
+		keys.Add(k)
+	}
+
+	return keys.ToSlice()
+}
+
+var accelOptStr2Flag = optFlagMap{
+	accelOptCRCName:  AccelOptCRCFlag,
+	accelOptMoveName: AccelOptMoveFlag,
+}
+
+func (ap *AccelProps) UnmarshalYAML(unmarshal func(interface{}) error) error {
+	if ap == nil {
+		return errors.New("attempt to unmarshal nil AccelProps")
+	}
+
+	type AccelPropsDefault AccelProps
+	tmp := AccelPropsDefault{
+		Engine: AccelEngineNone,
+	}
+
+	if err := unmarshal(&tmp); err != nil {
+		return err
+	}
+	out := AccelProps(tmp)
+
+	switch out.Engine {
+	case AccelEngineNone:
+		out.Options = 0
+	case AccelEngineSPDK, AccelEngineDML:
+		if out.Options == 0 {
+			// If no options have been specified, all capabilities should be enabled.
+			if err := out.Options.fromStrings(accelOptStr2Flag.keys()...); err != nil {
+				return err
+			}
+		}
+	default:
+		return FaultBdevAccelEngineUnknown(ap.Engine, AccelEngineSPDK, AccelEngineDML)
+	}
+
+	*ap = out
+
+	return nil
+}
+
 type Config struct {
 	Tiers            TierConfigs `yaml:"storage" cmdLongFlag:"--storage_tiers,nonzero" cmdShortFlag:"-T,nonzero"`
 	ConfigOutputPath string      `yaml:"-" cmdLongFlag:"--nvme" cmdShortFlag:"-n"`
 	VosEnv           string      `yaml:"-" cmdEnv:"VOS_BDEV_CLASS"`
 	EnableHotplug    bool        `yaml:"-"`
 	NumaNodeIndex    uint        `yaml:"-"`
+	AccelProps       AccelProps  `yaml:"acceleration,omitempty"`
 }
 
 func (c *Config) Validate() error {
