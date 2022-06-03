@@ -191,7 +191,7 @@ rebuild_iv_ent_refresh(struct ds_iv_entry *entry, struct ds_iv_key *key,
 			DP_UUID(src_iv->riv_pool_uuid), src_iv->riv_ver,
 			src_iv->riv_rebuild_gen, dst_iv->riv_global_scan_done,
 			dst_iv->riv_global_done, dst_iv->riv_stable_epoch,
-			dst_iv->riv_dtx_resyc_version);
+			dst_iv->riv_global_dtx_resyc_version);
 
 		if (rpt->rt_stable_epoch == 0)
 			rpt->rt_stable_epoch = dst_iv->riv_stable_epoch;
