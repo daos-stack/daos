@@ -5,7 +5,7 @@ Maintainer: daos-stack <daos@daos.groups.io>
 Build-Depends: debhelper (>= 10),
                dh-python,
                libcmocka-dev,
-               libfabric-dev (>= 1.15.1-1),
+               libfabric-dev (>= 1.14.0-1),
                libhwloc-dev,
                libopenmpi-dev,
                libssl-dev,
