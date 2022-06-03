@@ -449,7 +449,7 @@ func mockMember(t *testing.T, r, a int32, s string) *system.Member {
 	}
 	uri := fmt.Sprintf("tcp://%s", addr)
 
-	m := system.NewMember(system.Rank(r), test.MockUUID(r), uri, addr, state).WithFaultDomain(fd)
+	m := system.MockMemberFullSpec(t, system.Rank(r), test.MockUUID(r), uri, addr, state)
 	m.FabricContexts = uint32(r)
 	m.FaultDomain = fd
 	m.Incarnation = uint64(r)
@@ -460,8 +460,7 @@ func mockMember(t *testing.T, r, a int32, s string) *system.Member {
 func checkMembers(t *testing.T, exp system.Members, ms *system.Membership) {
 	t.Helper()
 
-	test.AssertEqual(t, len(exp), len(ms.Members(nil)),
-		"unexpected number of members")
+	test.AssertEqual(t, len(exp), len(ms.Members(nil)), "unexpected number of members")
 	for _, em := range exp {
 		am, err := ms.Get(em.Rank)
 		if err != nil {
@@ -473,14 +472,37 @@ func checkMembers(t *testing.T, exp system.Members, ms *system.Membership) {
 			t.Fatalf("unexpected member state for rank %d (-want, +got)\n%s\n", em.Rank, diff)
 		}
 
-		cmpOpts := []cmp.Option{
+		cmpOpts := append(test.DefaultCmpOpts(),
 			cmpopts.IgnoreUnexported(system.Member{}),
 			cmpopts.EquateApproxTime(time.Second),
-		}
+		)
 		if diff := cmp.Diff(em, am, cmpOpts...); diff != "" {
 			t.Fatalf("unexpected members (-want, +got)\n%s\n", diff)
 		}
+	}
+}
 
+func checkMemberResults(t *testing.T, exp, got system.MemberResults) {
+	t.Helper()
+
+	less := func(x, y *system.MemberResult) bool { return x.Rank < y.Rank }
+	cmpOpts := append(test.DefaultCmpOpts(),
+		cmpopts.SortSlices(less),
+	)
+	if diff := cmp.Diff(exp, got, cmpOpts...); diff != "" {
+		t.Fatalf("unexpected member results (-want, +got)\n%s\n", diff)
+	}
+}
+
+func checkRankResults(t *testing.T, exp, got []*sharedpb.RankResult) {
+	t.Helper()
+
+	less := func(x, y *sharedpb.RankResult) bool { return x.Rank < y.Rank }
+	cmpOpts := append(test.DefaultCmpOpts(),
+		cmpopts.SortSlices(less),
+	)
+	if diff := cmp.Diff(exp, got, cmpOpts...); diff != "" {
+		t.Fatalf("unexpected rank results (-want, +got)\n%s\n", diff)
 	}
 }
 
@@ -857,6 +879,84 @@ func TestServer_MgmtSvc_rpcFanout(t *testing.T) {
 			expRanks:       "0-5",
 			expAbsentHosts: "10.0.0.5",
 		},
+		// Test case relates to DAOS-10660. Ranks 0 & 3 joined via different interfaces but
+		// reside on the same host so a duplicate set of stop results is received.
+		"filtered ranks; duplicate rank results": {
+			sysReq: &mgmtpb.SystemStopReq{Ranks: "0-3"},
+			members: system.Members{
+				mockMember(t, 0, 1, "joined"),
+				mockMember(t, 1, 3, "joined"),
+				mockMember(t, 2, 3, "joined"),
+				mockMember(t, 3, 2, "joined"),
+				mockMember(t, 4, 4, "joined"),
+				mockMember(t, 5, 4, "joined"),
+				mockMember(t, 6, 5, "joined"),
+				mockMember(t, 7, 5, "joined"),
+			},
+			mResps: []*control.HostResponse{
+				{
+					Addr: test.MockHostAddr(1).String(),
+					Message: &mgmtpb.SystemStopResp{
+						Results: []*sharedpb.RankResult{
+							{Rank: 0, State: stateString(system.MemberStateStopped)},
+							{Rank: 3, State: stateString(system.MemberStateStopped)},
+						},
+					},
+				},
+				{
+					Addr: test.MockHostAddr(2).String(),
+					Message: &mgmtpb.SystemStopResp{
+						Results: []*sharedpb.RankResult{
+							{Rank: 0, State: stateString(system.MemberStateStopped)},
+							{Rank: 3, State: stateString(system.MemberStateStopped)},
+						},
+					},
+				},
+				{
+					Addr: test.MockHostAddr(3).String(),
+					Message: &mgmtpb.SystemStopResp{
+						Results: []*sharedpb.RankResult{
+							{Rank: 1, State: stateString(system.MemberStateStopped)},
+							{Rank: 2, State: stateString(system.MemberStateStopped)},
+						},
+					},
+				},
+			},
+			expFanReq: &fanoutRequest{
+				Method: control.StopRanks,
+				Ranks:  system.MustCreateRankSet("0-3"),
+			},
+			// Verifies de-duplication of rank results.
+			expResults: system.MemberResults{
+				{
+					Rank: 0, Addr: test.MockHostAddr(1).String(),
+					State: system.MemberStateStopped,
+				},
+				{
+					Rank: 1, Addr: test.MockHostAddr(3).String(),
+					State: system.MemberStateStopped,
+				},
+				{
+					Rank: 2, Addr: test.MockHostAddr(3).String(),
+					State: system.MemberStateStopped,
+				},
+				{
+					Rank: 3, Addr: test.MockHostAddr(2).String(),
+					State: system.MemberStateStopped,
+				},
+			},
+			expMembers: system.Members{
+				mockMember(t, 0, 1, "stopped"),
+				mockMember(t, 1, 3, "stopped"),
+				mockMember(t, 2, 3, "stopped"),
+				mockMember(t, 3, 2, "stopped"),
+				mockMember(t, 4, 4, "joined"),
+				mockMember(t, 5, 4, "joined"),
+				mockMember(t, 6, 5, "joined"),
+				mockMember(t, 7, 5, "joined"),
+			},
+			expRanks: "0-3",
+		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
@@ -878,6 +978,8 @@ func TestServer_MgmtSvc_rpcFanout(t *testing.T) {
 			switch tc.sysReq.(type) {
 			case *mgmtpb.SystemStartReq:
 				gotFanReq.Method = control.StartRanks
+			case *mgmtpb.SystemStopReq:
+				gotFanReq.Method = control.StopRanks
 			default:
 				gotFanReq.Method = control.PingRanks
 			}
@@ -909,14 +1011,7 @@ func TestServer_MgmtSvc_rpcFanout(t *testing.T) {
 				return
 			}
 
-			cmpOpts = []cmp.Option{
-				cmpopts.IgnoreUnexported(system.MemberResult{}, system.Member{}),
-				cmpopts.EquateApproxTime(time.Second),
-			}
-			if diff := cmp.Diff(tc.expResults, gotResp.Results, cmpOpts...); diff != "" {
-				t.Logf("unexpected results (-want, +got)\n%s\n", diff) // prints on err
-			}
-			test.AssertEqual(t, tc.expResults, gotResp.Results, name)
+			checkMemberResults(t, tc.expResults, gotResp.Results)
 			checkMembers(t, tc.expMembers, svc.membership)
 			if diff := cmp.Diff(tc.expRanks, gotRankSet.String(), test.DefaultCmpOpts()...); diff != "" {
 				t.Fatalf("unexpected ranks (-want, +got)\n%s\n", diff) // prints on err
@@ -1279,13 +1374,7 @@ func TestServer_MgmtSvc_SystemStart(t *testing.T) {
 				return
 			}
 
-			cmpOpts := append(test.DefaultCmpOpts(),
-				protocmp.IgnoreFields(&mgmtpb.SystemMember{}, "last_update"),
-			)
-			if diff := cmp.Diff(tc.expResults, gotResp.Results, cmpOpts...); diff != "" {
-				t.Logf("unexpected results (-want, +got)\n%s\n", diff) // prints on err
-			}
-			test.AssertEqual(t, tc.expResults, gotResp.Results, name)
+			checkRankResults(t, tc.expResults, gotResp.Results)
 			checkMembers(t, tc.expMembers, svc.membership)
 			test.AssertEqual(t, tc.expAbsentHosts, gotResp.Absenthosts, "absent hosts")
 			test.AssertEqual(t, tc.expAbsentRanks, gotResp.Absentranks, "absent ranks")
@@ -1474,13 +1563,7 @@ func TestServer_MgmtSvc_SystemStop(t *testing.T) {
 				return
 			}
 
-			cmpOpts := append(test.DefaultCmpOpts(),
-				protocmp.IgnoreFields(&mgmtpb.SystemMember{}, "last_update"),
-			)
-			if diff := cmp.Diff(tc.expResults, gotResp.Results, cmpOpts...); diff != "" {
-				t.Logf("unexpected results (-want, +got)\n%s\n", diff) // prints on err
-			}
-			test.AssertEqual(t, tc.expResults, gotResp.Results, name)
+			checkRankResults(t, tc.expResults, gotResp.Results)
 			checkMembers(t, tc.expMembers, svc.membership)
 			test.AssertEqual(t, tc.expAbsentHosts, gotResp.Absenthosts, "absent hosts")
 			test.AssertEqual(t, tc.expAbsentRanks, gotResp.Absentranks, "absent ranks")
@@ -1607,13 +1690,7 @@ func TestServer_MgmtSvc_SystemErase(t *testing.T) {
 				return
 			}
 
-			cmpOpts := append(test.DefaultCmpOpts(),
-				protocmp.IgnoreFields(&mgmtpb.SystemMember{}, "last_update"),
-			)
-			if diff := cmp.Diff(tc.expResults, gotResp.Results, cmpOpts...); diff != "" {
-				t.Logf("unexpected results (-want, +got)\n%s\n", diff) // prints on err
-			}
-			test.AssertEqual(t, tc.expResults, gotResp.Results, name)
+			checkRankResults(t, tc.expResults, gotResp.Results)
 			checkMembers(t, tc.expMembers, svc.membership)
 		})
 	}
