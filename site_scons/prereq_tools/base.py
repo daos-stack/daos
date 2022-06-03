@@ -1345,7 +1345,7 @@ class _Component():
         self.progs = kw.get("progs", [])
         self.libs = kw.get("libs", [])
         self.libs_cc = kw.get("libs_cc", None)
-        self.functions = kw.get("functions", [])
+        self.functions = kw.get("functions", {})
         self.config_cb = kw.get("config_cb", None)
         self.required_libs = kw.get("required_libs", [])
         self.required_progs = kw.get("required_progs", [])
@@ -1548,13 +1548,17 @@ class _Component():
                     env.SetOption('no_exec', True)
                 return True
 
-        for function in self.functions:
-            result = config.CheckFunc(function)
-            if not result:
-                config.Finish()
-                if self.__check_only:
-                    env.SetOption('no_exec', True)
-                return True
+        for lib, functions in self.functions.items():
+            saved_env = config.env.Clone()
+            config.env.AppendUnique(LIBS=[lib])
+            for function in functions:
+                result = config.CheckFunc(function)
+                if not result:
+                    config.Finish()
+                    if self.__check_only:
+                        env.SetOption('no_exec', True)
+                    return True
+            config.env = saved_env
 
         config.Finish()
         self.targets_found = True

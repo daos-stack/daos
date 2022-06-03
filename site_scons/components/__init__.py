@@ -186,8 +186,8 @@ def define_mercury(reqs):
 
     reqs.define('ucx',
                 retriever=GitRepoRetriever('https://github.com/openucx/ucx.git'),
-                libs=['ucp', 'uct'],
-                functions=['ucs_debug_disable_signal'],
+                libs=['ucs', 'ucp', 'uct'],
+                functions={'ucs': ['ucs_debug_disable_signal']},
                 headers=['uct/api/uct.h'],
                 pkgconfig='ucx',
                 commands=[['./autogen.sh'],
