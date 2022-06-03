@@ -144,7 +144,7 @@ daos_debug_set_id_cb(d_log_id_cb_t cb)
 
 /** Initialize debug system */
 int
-daos_debug_init(char *logfile)
+daos_debug_init_ex(char *logfile, d_dbug_t logmask)
 {
 	int	flags = DLOG_FLV_FAC | DLOG_FLV_LOGPID | DLOG_FLV_TAG;
 	int	rc;
@@ -163,7 +163,7 @@ daos_debug_init(char *logfile)
 		logfile = NULL;
 	}
 
-	rc = d_log_init_adv("DAOS", logfile, flags, DLOG_ERR, DLOG_CRIT,
+	rc = d_log_init_adv("DAOS", logfile, flags, logmask, DLOG_CRIT,
 			    log_id_cb);
 	if (rc != 0) {
 		D_PRINT_ERR("Failed to init DAOS debug log: "DF_RC"\n",
@@ -225,6 +225,12 @@ daos_debug_init(char *logfile)
 failed_unlock:
 	D_MUTEX_UNLOCK(&dd_lock);
 	return rc;
+}
+
+int daos_debug_init(char *logfile)
+{
+	/* for client side, by default use ERR level */
+	return daos_debug_init_ex(logfile, DLOG_ERR);
 }
 
 static __thread char thread_uuid_str_buf[DF_UUID_MAX][DAOS_UUID_STR_SIZE];
