@@ -705,10 +705,16 @@ gc_reclaim_pool(struct vos_pool *pool, int *credits, bool *empty_ret)
 		return 0;
 	}
 
+	/* take an extra ref to avoid concurrent container destroy/free */
+	if (cont != NULL)
+		vos_cont_addref(cont);
+
 	rc = umem_tx_begin(&pool->vp_umm, NULL);
 	if (rc) {
 		D_ERROR("Failed to start transacton for "DF_UUID": %s\n",
 			DP_UUID(pool->vp_id), d_errstr(rc));
+		if (cont != NULL)
+			vos_cont_decref(cont);
 		return rc;
 	}
 
@@ -727,13 +733,19 @@ gc_reclaim_pool(struct vos_pool *pool, int *credits, bool *empty_ret)
 				if (gc->gc_type == GC_OBJ) { /* top level GC */
 					D_DEBUG(DB_TRACE, "container %p objects"
 						" reclaimed\n", cont);
+					vos_cont_decref(cont);
 					cont = gc_get_container(pool);
+					/* take a ref on new cont */
+					if (cont != NULL)
+						vos_cont_addref(cont);
 					gc = &gc_table[0]; /* reset to akey */
 					continue;
 				}
 			} else if (gc->gc_type == GC_CONT) { /* top level GC */
 				D_DEBUG(DB_TRACE, "Nothing to reclaim\n");
 				*empty_ret = true;
+				if (cont != NULL)
+					vos_cont_decref(cont);
 				cont = NULL;
 				break;
 			}
@@ -794,6 +806,10 @@ gc_reclaim_pool(struct vos_pool *pool, int *credits, bool *empty_ret)
 		 */
 		d_list_add_tail(&cont->vc_gc_link, &pool->vp_gc_cont);
 	}
+
+	/* hopefully if last ref cont_free() will dequeue it */
+	if (cont != NULL)
+		vos_cont_decref(cont);
 
 	return rc;
 }
