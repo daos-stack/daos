@@ -33,7 +33,7 @@ class NetworkFailureTest(IorTestBase):
         if self.test_env == "ci":
             self.log.debug("Call ip link set before tearDown.")
             if self.network_down_host:
-                self.update_network_interface(
+                update_network_interface(
                     interface=self.interface, state="up", host=self.network_down_host)
 
         super().tearDown()
@@ -149,7 +149,7 @@ class NetworkFailureTest(IorTestBase):
 
         if self.test_env == "ci":
             # wolf
-            self.update_network_interface(
+            update_network_interface(
                 interface=self.interface, state="down", host=self.network_down_host,
                 errors=errors)
         else:
@@ -171,7 +171,7 @@ class NetworkFailureTest(IorTestBase):
         # 4. Bring up the network interface.
         if self.test_env == "ci":
             # wolf
-            self.update_network_interface(
+            update_network_interface(
                 interface=self.interface, state="up", host=self.network_down_host,
                 errors=errors)
         else:
@@ -345,7 +345,7 @@ class NetworkFailureTest(IorTestBase):
 
         # wolf
         if self.test_env == "ci":
-            self.update_network_interface(
+            update_network_interface(
                 interface=self.interface, state="down", host=self.network_down_host,
                 errors=errors)
         else:
@@ -384,7 +384,7 @@ class NetworkFailureTest(IorTestBase):
         # 9. Bring up the network interface.
         if self.test_env == "ci":
             # wolf
-            self.update_network_interface(
+            update_network_interface(
                 interface=self.interface, state="up", host=self.network_down_host,
                 errors=errors)
         else:
