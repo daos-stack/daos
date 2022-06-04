@@ -43,6 +43,7 @@ type mainOpts struct {
 	Start    startCmd               `command:"start" description:"Start daos_server"`
 	Network  networkCmd             `command:"network" description:"Perform network device scan based on fabric provider"`
 	Version  versionCmd             `command:"version" description:"Print daos_server version"`
+	MgmtSvc  msCmdRoot              `command:"ms" description:"Perform tasks related to management service replicas"`
 	DumpTopo hwprov.DumpTopologyCmd `command:"dump-topology" description:"Dump system topology"`
 }
 

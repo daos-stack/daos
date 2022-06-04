@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2021 Intel Corporation.
+ * (C) Copyright 2016-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -29,5 +29,11 @@ int
 ds_mgmt_newborn_pool_iterate(int (*cb)(uuid_t uuid, void *arg), void *arg);
 int
 ds_mgmt_zombie_pool_iterate(int (*cb)(uuid_t uuid, void *arg), void *arg);
+int
+ds_mgmt_pool_exist(uuid_t uuid);
+int
+ds_mgmt_tgt_pool_exist(uuid_t uuid, char **path);
+int
+ds_mgmt_tgt_pool_destroy(uuid_t pool_uuid, d_rank_list_t *ranks);
 
 #endif /* __MGMT_SRV_H__ */

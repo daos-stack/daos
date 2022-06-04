@@ -21,6 +21,7 @@
 #include "../acl.pb-c.h"
 #include "../pool.pb-c.h"
 #include "../cont.pb-c.h"
+#include "../check.pb-c.h"
 #include "../svc.pb-c.h"
 #include "../server.pb-c.h"
 #include "../drpc_internal.h"
@@ -113,6 +114,11 @@ test_mgmt_drpc_handlers_bad_call_payload(void **state)
 	expect_failure_for_bad_call_payload(ds_mgmt_drpc_pool_set_prop);
 	expect_failure_for_bad_call_payload(ds_mgmt_drpc_cont_set_owner);
 	expect_failure_for_bad_call_payload(ds_mgmt_drpc_pool_upgrade);
+	expect_failure_for_bad_call_payload(ds_mgmt_drpc_check_start);
+	expect_failure_for_bad_call_payload(ds_mgmt_drpc_check_stop);
+	expect_failure_for_bad_call_payload(ds_mgmt_drpc_check_query);
+	expect_failure_for_bad_call_payload(ds_mgmt_drpc_check_prop);
+	expect_failure_for_bad_call_payload(ds_mgmt_drpc_check_act);
 }
 
 static daos_prop_t *
@@ -2562,6 +2568,51 @@ test_drpc_pool_upgrade_success(void **state)
 	D_FREE(resp.body.data);
 }
 
+/*
+ * dRPC check start tests
+ */
+
+static void
+test_drpc_check_start_success(void **state)
+{
+}
+
+/*
+ * dRPC check stop tests
+ */
+
+static void
+test_drpc_check_stop_success(void **state)
+{
+}
+
+/*
+ * dRPC check query tests
+ */
+
+static void
+test_drpc_check_query_success(void **state)
+{
+}
+
+/*
+ * dRPC check prop tests
+ */
+
+static void
+test_drpc_check_prop_success(void **state)
+{
+}
+
+/*
+ * dRPC check act tests
+ */
+
+static void
+test_drpc_check_act_success(void **state)
+{
+}
+
 #define ACL_TEST(x)	cmocka_unit_test_setup_teardown(x, \
 						drpc_pool_acl_setup, \
 						drpc_pool_acl_teardown)
@@ -2613,6 +2664,16 @@ test_drpc_pool_upgrade_success(void **state)
 #define CONT_SET_OWNER_TEST(x) cmocka_unit_test_setup_teardown(x, \
 						drpc_cont_set_owner_setup, \
 						drpc_cont_set_owner_teardown)
+
+#define CHECK_START_TEST(x)	cmocka_unit_test(x)
+
+#define CHECK_STOP_TEST(x)	cmocka_unit_test(x)
+
+#define CHECK_QUERY_TEST(x)	cmocka_unit_test(x)
+
+#define CHECK_PROP_TEST(x)	cmocka_unit_test(x)
+
+#define CHECK_ACT_TEST(x)	cmocka_unit_test(x)
 
 int
 main(void)
@@ -2678,6 +2739,11 @@ main(void)
 		POOL_UPGRADE_TEST(test_drpc_pool_upgrade_bad_uuid),
 		POOL_UPGRADE_TEST(test_drpc_pool_upgrade_mgmt_svc_fails),
 		POOL_UPGRADE_TEST(test_drpc_pool_upgrade_success),
+		CHECK_START_TEST(test_drpc_check_start_success),
+		CHECK_STOP_TEST(test_drpc_check_stop_success),
+		CHECK_QUERY_TEST(test_drpc_check_query_success),
+		CHECK_PROP_TEST(test_drpc_check_prop_success),
+		CHECK_ACT_TEST(test_drpc_check_act_success),
 	};
 
 	return cmocka_run_group_tests_name("mgmt_srv_drpc", tests, NULL, NULL);

@@ -21,13 +21,14 @@
 #include "srv_layout.h"
 
 static int
-pool_svc_glance(uuid_t uuid, char *path, struct ds_pool_svc_clue *clue_out)
+pool_glance(uuid_t uuid, char *path, struct ds_pool_clue *clue_out)
 {
 	struct rdb_storage     *storage;
 	struct ds_pool_svc_clue	clue;
 	struct rdb_tx		tx;
 	rdb_path_t		root;
 	struct pool_buf	       *map_buf;
+	d_iov_t			value;
 	int			rc;
 
 	D_ASSERT(dss_get_module_info()->dmi_xs_id == 0);
@@ -56,16 +57,43 @@ pool_svc_glance(uuid_t uuid, char *path, struct ds_pool_svc_clue *clue_out)
 	if (rc != 0)
 		goto out_root;
 
+	d_iov_set(&value, NULL, 0);
+	rc = rdb_tx_lookup(&tx, &root, &ds_pool_prop_label, &value);
+	if (rc == 0) {
+		if (value.iov_len > DAOS_PROP_LABEL_MAX_LEN) {
+			/* Hit local data corruption. */
+			D_ERROR("Bad label length for pool "DF_UUID "%zu (> %d).\n",
+				DP_UUID(uuid), value.iov_len, DAOS_PROP_LABEL_MAX_LEN);
+			D_GOTO(out_root, rc = -DER_IO);
+		}
+
+		D_ALLOC(clue_out->pc_label, value.iov_len + 1);
+		if (clue_out->pc_label == NULL)
+			D_GOTO(out_root, rc = -DER_NOMEM);
+
+		clue_out->pc_label_len = value.iov_len;
+		memcpy(clue_out->pc_label, value.iov_buf, value.iov_len);
+	} else if (rc == -DER_NONEXIST) {
+		clue_out->pc_label_len = 0;
+	} else {
+		goto out_root;
+	}
+
 	rc = ds_pool_svc_load(&tx, uuid, &root, &map_buf, &clue.psc_map_version);
 	if (rc == DER_UNINIT) {
 		clue.psc_map_version = 0;
 		rc = 0;
 	} else if (rc != 0) {
-		goto out_root;
+		goto out_label;
 	}
 
-	*clue_out = clue;
+	memcpy(clue_out->pc_svc_clue, &clue, sizeof(clue));
 	D_FREE(map_buf);
+out_label:
+	if (rc != 0) {
+		D_FREE(clue_out->pc_label);
+		clue_out->pc_label_len = 0;
+	}
 out_root:
 	rdb_path_fini(&root);
 out_tx:
@@ -136,7 +164,7 @@ ds_pool_clue_init(uuid_t uuid, enum ds_pool_dir dir, struct ds_pool_clue *clue)
 		goto out_path;
 	}
 
-	rc = pool_svc_glance(uuid, path, clue->pc_svc_clue);
+	rc = pool_glance(uuid, path, clue);
 	if (rc != 0) {
 		D_ERROR(DF_UUID": failed to glance pool service: "DF_RC"\n", DP_UUID(uuid),
 			DP_RC(rc));
@@ -146,6 +174,10 @@ ds_pool_clue_init(uuid_t uuid, enum ds_pool_dir dir, struct ds_pool_clue *clue)
 out_path:
 	D_FREE(path);
 out:
+	if (clue->pc_svc_clue != NULL)
+		rc = 1;
+	else
+		D_ASSERT(rc <= 0);
 	clue->pc_rc = rc;
 }
 
@@ -157,10 +189,11 @@ out:
 void
 ds_pool_clue_fini(struct ds_pool_clue *clue)
 {
-	if (clue->pc_rc == 0 && clue->pc_svc_clue != NULL) {
+	if (clue->pc_svc_clue != NULL) {
 		d_rank_list_free(clue->pc_svc_clue->psc_db_clue.bcl_replicas);
 		D_FREE(clue->pc_svc_clue);
 	}
+	D_FREE(clue->pc_label);
 }
 
 /* Argument for glance_at_one */
@@ -350,7 +383,8 @@ compare_logs(uint64_t x_last_term, uint64_t x_last_index,
  * \param[in]	clues		pool clues for one PS
  * \param[out]	advice_out	when the return value is >0, the index of the
  *				advised replica in \a clues to rebootstrap the
- *				PS from
+ *				PS from. For return zero case, it is the index
+ *				of the replica that can be PS leader candidate.
  *
  * \return	0	this PS does not require catastrophic recovery
  *		>0	the caller is advised to rebootstrap this PS from the
@@ -373,7 +407,7 @@ ds_pool_check_svc_clues(struct ds_pool_clues *clues, int *advice_out)
 		struct ds_pool_clue *clue = &clues->pcs_array[i];
 
 		D_ASSERT(uuid_compare(uuid, clue->pc_uuid) == 0);
-		D_ASSERTF(clue->pc_rc == 0, DF_RC"\n", DP_RC(clue->pc_rc));
+		D_ASSERTF(clue->pc_rc > 0, DF_RC"\n", DP_RC(clue->pc_rc));
 		D_ASSERT(clue->pc_svc_clue != NULL);
 	}
 
@@ -420,8 +454,11 @@ ds_pool_check_svc_clues(struct ds_pool_clues *clues, int *advice_out)
 		D_DEBUG(DB_MD, DF_UUID": rank %u: %d/%u votes\n", DP_UUID(uuid),
 			db_clue->bcl_self, n_votes, db_clue->bcl_replicas->rl_nr);
 
-		if (n_votes > db_clue->bcl_replicas->rl_nr / 2)
+		if (n_votes > db_clue->bcl_replicas->rl_nr / 2) {
+			/* XXX: Replica @i can be as PS leader candidate. */
+			*advice_out = i;
 			return 0;
+		}
 	}
 
 	/*

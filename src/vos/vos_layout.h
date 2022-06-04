@@ -96,7 +96,7 @@ enum vos_gc_type {
  *  This enables the user to continue using the pool with the older version unless
  *  they have explicitly upgraded it.
  */
-#define POOL_DF_AGG_OPT				24
+#define POOL_DF_AGG_OPT				25
 /** Current durable format version */
 #define POOL_DF_VERSION				POOL_DF_AGG_OPT
 
@@ -117,8 +117,12 @@ struct vos_pool_df {
 	 * a new format, containers with old format can be attached at here.
 	 */
 	uint64_t				pd_reserv_upgrade;
-	/** Reserved for future usage */
-	uint64_t				pd_reserv;
+	/**
+	 * Offset to area for DAOS check related information (chk_pool_info) for this pool.
+	 * The chk_pool_info::cpi_statistics contains the inconsistency statistics during
+	 * the phases range [CSP_DTX_RESYNC, OSP_AGGREGATION] for the pool shard on the target.
+	 */
+	umem_off_t				pd_chk;
 	/** Unique PoolID for each VOS pool assigned on creation */
 	uuid_t					pd_id;
 	/** Total space in bytes on SCM */

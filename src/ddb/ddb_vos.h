@@ -41,8 +41,8 @@ struct ddb_array {
 };
 
 /* Open and close a pool for a ddb_ctx */
-int ddb_vos_pool_open(char *path, daos_handle_t *poh);
-int ddb_vos_pool_close(daos_handle_t poh);
+int dv_pool_open(char *path, daos_handle_t *poh);
+int dv_pool_close(daos_handle_t poh);
 
 /* Open and close a cont for a ddb_ctx */
 int dv_cont_open(daos_handle_t poh, uuid_t uuid, daos_handle_t *coh);
@@ -87,12 +87,14 @@ int dv_get_recx(daos_handle_t coh, daos_unit_oid_t uoid, daos_key_t *dkey, daos_
 		uint32_t idx, daos_recx_t *recx);
 
 /**
- * Update the tree path within the builder with any indexes that the builder was set with.
+ * Verify and update the tree path within the builder. For any indexes set in the builder, will
+ * try to find and update appropriate path parts. If the path part is already set, will
+ * verify that it exists.
  * @param ctx		application context
- * @param vt_path	The path builder structure.
- * @return		0 if successful, else error.
+ * @param pb		The path builder structure
+ * @return		0 if successful, else error
  */
-int dv_path_update_from_indexes(struct dv_tree_path_builder *vt_path);
+int dv_path_verify(struct dv_tree_path_builder *pb);
 
 struct ddb_superblock {
 	uuid_t		dsb_id;
@@ -164,6 +166,11 @@ int dv_committed_dtx(daos_handle_t coh, dv_committed_dtx_handler handler_cb, voi
 typedef int (*dv_active_dtx_handler)(struct dv_dtx_active_entry *entry, void *cb_arg);
 int dv_active_dtx(daos_handle_t coh, dv_active_dtx_handler handler_cb, void *handler_arg);
 int dv_clear_committed_table(daos_handle_t coh);
+
+/* Sync the smd table with information saved in blobs */
+typedef int (*dv_smd_sync_complete)(void *cb_args, uuid_t pool_id, uint32_t vos_id,
+				    uint64_t blob_id, daos_size_t blob_size);
+int dv_sync_smd(dv_smd_sync_complete complete_cb, void *cb_args);
 
 int dv_delete(daos_handle_t poh, struct dv_tree_path *vtp);
 int dv_update(daos_handle_t poh, struct dv_tree_path *vtp, d_iov_t *iov, daos_epoch_t epoch);

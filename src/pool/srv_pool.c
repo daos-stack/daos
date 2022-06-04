@@ -1063,11 +1063,13 @@ init_events(struct pool_svc *svc)
 	D_ASSERT(d_list_empty(&events->pse_queue));
 	D_ASSERT(events->pse_handler == ABT_THREAD_NULL);
 
-	rc = crt_register_event_cb(ds_pool_crt_event_cb, svc);
-	if (rc != 0) {
-		D_ERROR(DF_UUID": failed to register event callback: "DF_RC"\n",
-			DP_UUID(svc->ps_uuid), DP_RC(rc));
-		goto err;
+	if (!engine_in_check()) {
+		rc = crt_register_event_cb(ds_pool_crt_event_cb, svc);
+		if (rc != 0) {
+			D_ERROR(DF_UUID": failed to register event callback: "DF_RC"\n",
+				DP_UUID(svc->ps_uuid), DP_RC(rc));
+			goto err;
+		}
 	}
 
 	/*
@@ -1092,7 +1094,8 @@ init_events(struct pool_svc *svc)
 	return 0;
 
 err_cb:
-	crt_unregister_event_cb(ds_pool_crt_event_cb, svc);
+	if (!engine_in_check())
+		crt_unregister_event_cb(ds_pool_crt_event_cb, svc);
 	discard_events(&events->pse_queue);
 err:
 	return rc;
@@ -1106,7 +1109,8 @@ fini_events(struct pool_svc *svc)
 
 	D_ASSERT(events->pse_handler != ABT_THREAD_NULL);
 
-	crt_unregister_event_cb(ds_pool_crt_event_cb, svc);
+	if (!engine_in_check())
+		crt_unregister_event_cb(ds_pool_crt_event_cb, svc);
 
 	ABT_mutex_lock(events->pse_mutex);
 	events->pse_stop = true;
