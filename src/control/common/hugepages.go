@@ -105,7 +105,7 @@ func GetHugePageInfo() (*HugePageInfo, error) {
 // requested for the given number of targets.
 func CalcMinHugePages(hugePageSizeKb int, numTargets int) (int, error) {
 	if numTargets < 1 {
-		return 0, errors.New("numTargets must be >= 1")
+		return 0, errors.New("numTargets must be > 0")
 	}
 
 	hugepageSizeBytes := hugePageSizeKb << 10 // KiB to B

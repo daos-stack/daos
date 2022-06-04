@@ -307,9 +307,9 @@ func TestServer_prepBdevStorage(t *testing.T) {
 			expMemSize:      16384,
 			expHugePageSize: 2,
 		},
-		"no bdevs configured; -1 hugepages requested": {
+		"no bdevs configured; hugepages disabled": {
 			srvCfgExtra: func(sc *config.Server) *config.Server {
-				return sc.WithNrHugePages(-1).
+				return sc.WithDisableHugePages(true).
 					WithEngines(scmEngine(0), scmEngine(1))
 			},
 		},
@@ -589,9 +589,9 @@ func TestServer_prepBdevStorage(t *testing.T) {
 // also be covered.
 func TestServer_scanBdevStorage(t *testing.T) {
 	for name, tc := range map[string]struct {
-		nrHugepages int
-		bmbc        *bdev.MockBackendConfig
-		expErr      error
+		disableHugepages bool
+		bmbc             *bdev.MockBackendConfig
+		expErr           error
 	}{
 		"spdk fails init": {
 			bmbc: &bdev.MockBackendConfig{
@@ -613,7 +613,7 @@ func TestServer_scanBdevStorage(t *testing.T) {
 			},
 		},
 		"hugepages disabled": {
-			nrHugepages: -1,
+			disableHugepages: true,
 			bmbc: &bdev.MockBackendConfig{
 				ScanErr: errors.New("spdk failed"),
 			},
@@ -624,7 +624,7 @@ func TestServer_scanBdevStorage(t *testing.T) {
 			defer test.ShowBufferOnFailure(t, buf)
 
 			cfg := config.DefaultServer().WithFabricProvider("ofi+verbs").
-				WithNrHugePages(tc.nrHugepages)
+				WithDisableHugePages(tc.disableHugepages)
 
 			// test only with 2M hugepage size
 			if err := cfg.Validate(log, 2048); err != nil {
