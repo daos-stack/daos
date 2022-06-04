@@ -359,7 +359,10 @@ enum {
  */
 enum {
 	DAOS_PROP_CO_REDUN_MIN	= 1,
-	DAOS_PROP_CO_REDUN_RANK	= 1, /** hard-coded */
+	/* server rank (engine) level */
+	DAOS_PROP_CO_REDUN_RANK	= 1,
+	/* server node level */
+	DAOS_PROP_CO_REDUN_NODE	= 2,
 	DAOS_PROP_CO_REDUN_MAX	= 254,
 };
 

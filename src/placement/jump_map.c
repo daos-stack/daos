@@ -151,6 +151,7 @@ jm_obj_placement_get(struct pl_jump_map *jmap, struct daos_obj_md *md,
 	struct pool_domain      *root;
 	daos_obj_id_t           oid;
 	int                     rc;
+	uint32_t		dom_nr;
 	uint32_t		nr_grps;
 
 	/* Get the Object ID and the Object class */
@@ -167,7 +168,17 @@ jm_obj_placement_get(struct pl_jump_map *jmap, struct daos_obj_md *md,
 				  PO_COMP_ID_ALL, &root);
 	D_ASSERT(rc == 1);
 
-	rc = op_get_grp_size(jmap->jmp_domain_nr, &jmop->jmop_grp_size, oid);
+	if (md->omd_fdom_lvl == 0 || md->omd_fdom_lvl == jmap->jmp_redundant_dom) {
+		dom_nr = jmap->jmp_domain_nr;
+	} else {
+		D_ASSERT(md->omd_fdom_lvl == PO_COMP_TP_RANK ||
+			 md->omd_fdom_lvl == PO_COMP_TP_NODE);
+		rc = pool_map_find_domain(jmap->jmp_map.pl_poolmap, md->omd_fdom_lvl,
+					  PO_COMP_ID_ALL, NULL);
+		D_ASSERT(rc > 0);
+		dom_nr = rc;
+	}
+	rc = op_get_grp_size(dom_nr, &jmop->jmop_grp_size, oid);
 	if (rc)
 		return rc;
 
