@@ -559,7 +559,7 @@ def get_dmg_network_information(dmg_network_scan):
     return network_devices
 
 
-def update_network_interface(self, interface, state, host, errors=None):
+def update_network_interface(interface, state, host, errors=None):
     """Turn on or off the given network interface.
 
     Args:
@@ -571,6 +571,5 @@ def update_network_interface(self, interface, state, host, errors=None):
     """
     command = "sudo ip link set {} {}".format(interface, state)
     results = run_pcmd(hosts=[host], command=command)
-    self.log.info("%s output = %s", command, results)
     if errors is not None and results[0]["exit_status"] != 0:
         errors.append(f"{command} didn't return 0!")
