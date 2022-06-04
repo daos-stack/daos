@@ -452,8 +452,9 @@ class DaosPool():
 
         containers = []
         for cont in data['response']:
-            containers.append(DaosCont(cont['UUID'], cont['Label']))
+            containers.append(DaosCont(cont['uuid'], cont['label']))
         return containers
+
 
 class DaosCont():
     """Class to store data about daos containers"""
@@ -1397,7 +1398,6 @@ def run_daos_cmd(conf,
 
 def create_cont(conf,
                 pool=None,
-                cont=None,
                 ctype=None,
                 label=None,
                 path=None,
@@ -1419,9 +1419,6 @@ def create_cont(conf,
 
     if ctype:
         cmd.extend(['--type', ctype])
-
-    if cont:
-        cmd.extend(['--cont', cont])
 
     def _create_cont():
         """Helper function for create_cont"""
@@ -2494,9 +2491,8 @@ class posix_tests():
 
         # Create a new container within it using UNS
         uns_path = join(dfuse.dir, 'ep0')
-        uns_container = str(uuid.uuid4())
         print('Inserting entry point')
-        create_cont(conf, pool=pool, cont=uns_container, path=uns_path)
+        uns_container = create_cont(conf, pool=pool, path=uns_path)
         print(os.stat(uns_path))
         print(os.listdir(dfuse.dir))
 
@@ -2521,11 +2517,9 @@ class posix_tests():
         uns_path = join(dfuse.dir, pool, container, 'ep0', 'ep')
         second_path = join(dfuse.dir, pool, uns_container)
 
-        uns_container_2 = str(uuid.uuid4())
-
         # Make a link within the new container.
         print('Inserting entry point')
-        create_cont(conf, pool=pool, cont=uns_container_2, path=uns_path)
+        uns_container_2 = create_cont(conf, pool=pool, path=uns_path)
 
         # List the root container again.
         print(os.listdir(join(dfuse.dir, pool, container)))
@@ -2602,9 +2596,8 @@ class posix_tests():
 
         # Create a new container within it using UNS
         uns_path = join(dfuse.dir, 'ep1')
-        uns_container = str(uuid.uuid4())
         print('Inserting entry point')
-        create_cont(conf, pool=pool, cont=uns_container, path=uns_path)
+        uns_container = create_cont(conf, pool=pool, path=uns_path)
 
         print(os.stat(uns_path))
         print(os.listdir(dfuse.dir))
@@ -2754,17 +2747,18 @@ class posix_tests():
 
         # Now create a container uuid and do an object based copy.
         # The daos command will create the target container on demand.
-        container = str(uuid.uuid4())
         cmd = ['container',
                'clone',
                '--src',
                'daos://{}/{}'.format(self.pool.uuid, self.container),
                '--dst',
-               'daos://{}/{}'.format(self.pool.uuid, container)]
+               'daos://{}/'.format(self.pool.uuid)]
         rc = run_daos_cmd(self.conf, cmd)
         print(rc)
         assert rc.returncode == 0
-        destroy_container(self.conf, self.pool.id(), container)
+        lineresult = rc.stdout.decode('utf-8').splitlines()
+        assert len(lineresult) == 2
+        destroy_container(self.conf, self.pool.id(), lineresult[1][-36:])
 
 class nlt_stdout_wrapper():
     """Class for capturing stdout from threads"""

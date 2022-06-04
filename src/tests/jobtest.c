@@ -271,7 +271,7 @@ main(int argc, char **argv)
 				uuid_generate(c_uuid);
 				printf("Creating container using handle %" PRIu64 "\n",
 				       pool_handles[i][j].cookie);
-				rc = daos_cont_create(pool_handles[i][j], c_uuid, NULL, NULL);
+				rc = daos_cont_create(pool_handles[i][j], &c_uuid, NULL, NULL);
 				if (rc != 0) {
 					printf("Unable to create container using handle"
 					       " %" PRIu64 " rc: %d\n",

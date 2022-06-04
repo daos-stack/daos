@@ -331,6 +331,17 @@ func (mr *MemberResult) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
+// Equals returns true if dereferenced structs share the same field values.
+func (mr *MemberResult) Equals(other *MemberResult) bool {
+	if mr == nil {
+		return false
+	}
+	if other == nil {
+		return false
+	}
+	return *mr == *other
+}
+
 // NewMemberResult returns a reference to a new member result struct.
 //
 // Host address and action fields are not always used so not populated here.

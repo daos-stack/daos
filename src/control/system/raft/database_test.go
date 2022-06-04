@@ -31,24 +31,15 @@ import (
 	"github.com/daos-stack/daos/src/control/common/test"
 	"github.com/daos-stack/daos/src/control/events"
 	"github.com/daos-stack/daos/src/control/logging"
-	"github.com/daos-stack/daos/src/control/system"
 	. "github.com/daos-stack/daos/src/control/system"
 )
 
-func waitForLeadership(ctx context.Context, t *testing.T, db *Database, gained bool, timeout time.Duration) {
+func waitForLeadership(ctx context.Context, t *testing.T, db *Database, gained bool) {
 	t.Helper()
-	timer := time.NewTimer(timeout)
 	for {
 		select {
 		case <-ctx.Done():
 			t.Fatal(ctx.Err())
-			return
-		case <-timer.C:
-			state := "gained"
-			if !gained {
-				state = "lost"
-			}
-			t.Fatalf("leadership was not %s before timeout", state)
 			return
 		default:
 			if db.IsLeader() == gained {
@@ -119,7 +110,7 @@ func TestSystem_Database_filterMembers(t *testing.T) {
 	}
 }
 
-func TestSystem_Database_Cancel(t *testing.T) {
+func TestSystem_Database_LeadershipCallbacks(t *testing.T) {
 	localhost := common.LocalhostCtrlAddr()
 	log, buf := logging.NewTestLogger(t.Name())
 	defer test.ShowBufferOnFailure(t, buf)
@@ -144,9 +135,9 @@ func TestSystem_Database_Cancel(t *testing.T) {
 		return nil
 	})
 
-	waitForLeadership(ctx, t, db, true, 15*time.Second)
+	waitForLeadership(ctx, t, db, true)
 	dbCancel()
-	waitForLeadership(ctx, t, db, false, 15*time.Second)
+	waitForLeadership(ctx, t, db, false)
 
 	if atomic.LoadUint32(&onGainedCalled) != 1 {
 		t.Fatal("OnLeadershipGained callbacks didn't execute")
@@ -579,11 +570,6 @@ func TestSystem_Database_memberRaftOps(t *testing.T) {
 	}
 }
 
-func testMemberWithFaultDomain(rank Rank, fd *FaultDomain) *Member {
-	return NewMember(rank, uuid.New().String(), []string{"dontcare"}, &net.TCPAddr{},
-		MemberStateJoined).WithFaultDomain(fd)
-}
-
 func TestSystem_Database_memberFaultDomain(t *testing.T) {
 	for name, tc := range map[string]struct {
 		rank        Rank
@@ -605,8 +591,8 @@ func TestSystem_Database_memberFaultDomain(t *testing.T) {
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
-			m := testMemberWithFaultDomain(tc.rank, tc.faultDomain)
-
+			m := MockMemberFullSpec(t, tc.rank, uuid.New().String(), "dontcare", &net.TCPAddr{},
+				MemberStateJoined).WithFaultDomain(tc.faultDomain)
 			result := MemberFaultDomain(m)
 
 			if diff := cmp.Diff(tc.expResult, result); diff != "" {
@@ -650,18 +636,6 @@ func TestSystem_Database_FaultDomainTree(t *testing.T) {
 	}
 }
 
-func raftUpdateSystemAttrs(t *testing.T, db *Database, attrs map[string]string) {
-	t.Helper()
-	data, err := createRaftUpdate(raftOpUpdateSystemAttrs, attrs)
-	if err != nil {
-		t.Fatal(err)
-	}
-	rl := &raft.Log{
-		Data: data,
-	}
-	(*fsm)(db).Apply(rl)
-}
-
 func TestSystem_Database_SystemAttrs(t *testing.T) {
 	for name, tc := range map[string]struct {
 		startAttrs  map[string]string
@@ -690,7 +664,7 @@ func TestSystem_Database_SystemAttrs(t *testing.T) {
 			attrsUpdate: map[string]string{"foo": "bar"},
 			expAttrs:    map[string]string{"foo": "bar"},
 			searchKeys:  []string{"whoops"},
-			expErr:      system.ErrSystemAttrNotFound("whoops"),
+			expErr:      ErrSystemAttrNotFound("whoops"),
 		},
 		"get good key": {
 			startAttrs:  map[string]string{"foo": "bar", "baz": "qux"},
@@ -899,6 +873,8 @@ func TestSystem_Database_GroupMap(t *testing.T) {
 
 		return members
 	}
+	memberWithNoURI := MockMemberFullSpec(t, 2, test.MockUUID(2), "", MockControlAddr(t, 2),
+		MemberStateJoined)
 
 	for name, tc := range map[string]struct {
 		members     []*Member
@@ -951,7 +927,7 @@ func TestSystem_Database_GroupMap(t *testing.T) {
 		},
 		"unset fabric URI skipped": {
 			members: append([]*Member{
-				NewMember(2, test.MockUUID(2), []string{}, MockControlAddr(t, 2), MemberStateJoined),
+				memberWithNoURI,
 			}, membersWithStates(MemberStateJoined)...),
 			expGroupMap: &GroupMap{
 				Version: 2,

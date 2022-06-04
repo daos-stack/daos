@@ -806,24 +806,24 @@ direct_out:
 	return rc;
 }
 
-static inline na_bool_t is_integer_str(const char *str)
+static inline bool is_integer_str(char *str)
 {
 	const char *p;
 
 	p = str;
 	if (p == NULL || strlen(p) == 0)
-		return NA_FALSE;
+		return false;
 
 	while (*p != '\0') {
 		if (*p <= '9' && *p >= '0') {
 			p++;
 			continue;
 		} else {
-			return NA_FALSE;
+			return false;
 		}
 	}
 
-	return NA_TRUE;
+	return true;
 }
 
 static inline int

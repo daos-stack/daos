@@ -224,8 +224,8 @@ func prepBdevStorage(srv *server, iommuEnabled bool) error {
 				return FaultIommuDisabled
 			}
 		}
-	} else if srv.cfg.NrHugepages < 0 {
-		srv.log.Debugf("skip nvme prepare as no bdevs in cfg and nr_hugepages: -1 in config")
+	} else if srv.cfg.DisableHugepages {
+		srv.log.Debugf("skip nvme prepare as no bdevs in cfg and disable_hugepages: true in config")
 		return nil
 	}
 
@@ -293,7 +293,7 @@ func prepBdevStorage(srv *server, iommuEnabled bool) error {
 func scanBdevStorage(srv *server) (*storage.BdevScanResponse, error) {
 	defer srv.logDuration(track("time to scan bdev storage"))
 
-	if srv.cfg.NrHugepages < 0 {
+	if srv.cfg.DisableHugepages {
 		srv.log.Debugf("skip nvme scan as hugepages have been disabled in config")
 		return &storage.BdevScanResponse{}, nil
 	}
@@ -490,7 +490,7 @@ func registerFollowerSubscriptions(srv *server) {
 }
 
 // registerLeaderSubscriptions stops forwarding events to MS and instead starts
-// handling received forwardede(and local) events.
+// handling received forwarded (and local) events.
 func registerLeaderSubscriptions(srv *server) {
 	srv.pubSub.Reset()
 	srv.pubSub.Subscribe(events.RASTypeAny, srv.evtLogger)
@@ -513,6 +513,11 @@ func registerLeaderSubscriptions(srv *server) {
 				}
 			}
 		}))
+
+	// Add a debounce to throttle multiple SWIM Rank Dead events for the same rank/incarnation.
+	srv.pubSub.Debounce(events.RASSwimRankDead, 0, func(ev *events.RASEvent) string {
+		return strconv.FormatUint(uint64(ev.Rank), 10) + ":" + strconv.FormatUint(ev.Incarnation, 10)
+	})
 }
 
 func getGrpcOpts(cfgTransport *security.TransportConfig) ([]grpc.ServerOption, error) {
