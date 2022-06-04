@@ -52,8 +52,7 @@ dump_opt(crt_init_options_t *opt)
 }
 
 static int
-crt_na_config_init(crt_provider_t provider, const char *interface,
-		   const char *domain, const char *port);
+crt_na_config_init(crt_provider_t provider, char *interface, char *domain, char *port);
 
 /* Workaround for CART-890 */
 static void
@@ -993,8 +992,7 @@ out:
 }
 
 static int
-crt_na_config_init(crt_provider_t provider, const char *interface,
-		   const char *domain, const char *port_str)
+crt_na_config_init(crt_provider_t provider, char *interface, char *domain, char *port_str)
 {
 	struct crt_na_config		*na_cfg;
 	int				rc = 0;
