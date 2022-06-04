@@ -12,6 +12,7 @@ from ior_utils import IorCommand
 from general_utils import report_errors, run_pcmd
 from command_utils_base import CommandFailure
 from job_manager_utils import get_job_manager
+from network_utils import update_network_interface
 
 
 class NetworkFailureTest(IorTestBase):
@@ -21,17 +22,20 @@ class NetworkFailureTest(IorTestBase):
     :avocado: recursive
     """
     def __init__(self, *args, **kwargs):
-        """Store the info needed in tearDown."""
+        """Store the info used during the test and the tearDown."""
         super().__init__(*args, **kwargs)
         self.network_down_host = None
         self.interface = None
+        self.test_env = self.params.get("test_environment", "/run/*")
 
     def tearDown(self):
         """Bring ib0 back up in case the test crashed in the middle."""
-        self.log.debug("Call ip link set before tearDown.")
-        if self.network_down_host:
-            self.update_network_interface(
-                interface=self.interface, state="up", host=self.network_down_host)
+        if self.test_env == "ci":
+            self.log.debug("Call ip link set before tearDown.")
+            if self.network_down_host:
+                self.update_network_interface(
+                    interface=self.interface, state="up", host=self.network_down_host)
+
         super().tearDown()
 
     def run_ior_report_error(self, results, job_num, file_name, pool, container,
@@ -80,23 +84,6 @@ class NetworkFailureTest(IorTestBase):
             self.log.info("--- IOR command %d failed ---", job_num)
             results[job_num] = [False, f"IOR failed: {error}"]
 
-    @staticmethod
-    def check_container_health(container, expected_health):
-        """Check container property's Health field by calling daos container get-prop.
-
-        Args:
-            container (TestContainer): Container to call get-prop.
-            expected_health (str): Expected value in the Health field.
-
-        Returns:
-            bool: True if expected_health matches the one obtained from get-prop.
-
-        """
-        output = container.get_prop(properties=["status"])
-        actual_health = output["response"][0]["value"]
-
-        return actual_health == expected_health
-
     def verify_ior_worked(self, ior_results, job_num, errors):
         """Verify that the IOR worked.
 
@@ -110,34 +97,14 @@ class NetworkFailureTest(IorTestBase):
             ior_error = ior_results[job_num][1]
             errors.append(f"Error found in second IOR run! {ior_error}")
 
-    def update_network_interface(self, interface, state, host, errors=None):
-        """Bring back or tear down the given network interface.
-
-        Args:
-            interface (str): Interface name such as ib0.
-            state (str): "up" or "down".
-            host (str): Host to update the interface.
-            errors (list): List to store the error message, if the command fails.
-                Defaults to None.
-        """
-        command = "sudo ip link set {} {}".format(interface, state)
-        results = run_pcmd(hosts=[host], command=command)
-        self.log.info("%s output = %s", command, results)
-        if errors is not None and results[0]["exit_status"] != 0:
-            errors.append(f"{command} didn't return 0!")
-
     def create_ip_to_host(self):
         """Create a dictionary of IP address to hostname of the server nodes.
         """
-        ip_to_host = {}
-        command = "sudo hostname -i"
+        command = "hostname -i"
         results = run_pcmd(hosts=self.hostlist_servers, command=command)
         self.log.info("hostname -i results = %s", results)
 
-        for result in results:
-            ip_to_host[result["stdout"][0]] = str(result["hosts"])
-
-        return ip_to_host
+        return {result["stdout"][0]: str(result["hosts"]) for result in results}
 
     def verify_network_failure(self, ior_namespace, container_namespace):
         """Verify network failure can be recovered without intervention in DAOS side.
@@ -180,15 +147,16 @@ class NetworkFailureTest(IorTestBase):
             "fabric_iface", "/run/server_config/servers/0/*")
         self.log.info("interface to update = %s", self.interface)
 
-        # wolf
-        self.update_network_interface(
-            interface=self.interface, state="down", host=self.network_down_host,
-            errors=errors)
-
-        # Aurora
-        # command = f"sudo ip link set {self.interface} down"
-        # self.log.debug("## Call %s on %s", command, self.network_down_host)
-        # time.sleep(20)
+        if self.test_env == "ci":
+            # wolf
+            self.update_network_interface(
+                interface=self.interface, state="down", host=self.network_down_host,
+                errors=errors)
+        else:
+            # Aurora
+            command = f"sudo ip link set {self.interface} down"
+            self.log.debug("## Call %s on %s", command, self.network_down_host)
+            time.sleep(20)
 
         # 3. Run IOR with given object class. It should fail.
         job_num = 1
@@ -201,15 +169,16 @@ class NetworkFailureTest(IorTestBase):
         self.log.info(ior_results)
 
         # 4. Bring up the network interface.
-        # wolf
-        self.update_network_interface(
-            interface=self.interface, state="up", host=self.network_down_host,
-            errors=errors)
-
-        # Aurora
-        # command = f"sudo ip link set {self.interface} up"
-        # self.log.debug("## Call %s on %s", command, self.network_down_host)
-        # time.sleep(20)
+        if self.test_env == "ci":
+            # wolf
+            self.update_network_interface(
+                interface=self.interface, state="up", host=self.network_down_host,
+                errors=errors)
+        else:
+            # Aurora. Manually run the command.
+            command = f"sudo ip link set {self.interface} up"
+            self.log.debug("## Call %s on %s", command, self.network_down_host)
+            time.sleep(20)
 
         # 5. Restart DAOS with dmg.
         self.log.info("Wait for 5 sec for the network to come back up")
@@ -347,6 +316,9 @@ class NetworkFailureTest(IorTestBase):
 
         # Find the hostname that's different from rank_0_ip. We'll take down the
         # interface on it.
+        # dmg system query output gives IP address, but run_pcmd doesn't work with IP in
+        # CI. In addition, in Aurora, it's easier to determine where to run the ip link
+        # command if we know the hostname, so create the IP - hostname mapping.
         ip_to_host = self.create_ip_to_host()
         for member in members:
             ip_addr = member["addr"].split(":")[0]
@@ -372,14 +344,15 @@ class NetworkFailureTest(IorTestBase):
             "fabric_iface", "/run/server_config/servers/0/*")
 
         # wolf
-        self.update_network_interface(
-            interface=self.interface, state="down", host=self.network_down_host,
-            errors=errors)
-
-        # Aurora
-        # command = "sudo ip link set {} {}".format(self.interface, "down")
-        # self.log.debug("## Call %s on %s", command, self.network_down_host)
-        # time.sleep(20)
+        if self.test_env == "ci":
+            self.update_network_interface(
+                interface=self.interface, state="down", host=self.network_down_host,
+                errors=errors)
+        else:
+            # Aurora. Manually run the command.
+            command = "sudo ip link set {} {}".format(self.interface, "down")
+            self.log.debug("## Call %s on %s", command, self.network_down_host)
+            time.sleep(20)
 
         # 5. Run IOR with oclass SX.
         ior_results = {}
@@ -393,8 +366,7 @@ class NetworkFailureTest(IorTestBase):
         self.verify_ior_worked(ior_results=ior_results, job_num=job_num, errors=errors)
 
         # 7. Verify that the container Health is HEALTHY.
-        if not self.check_container_health(
-                container=self.container[0], expected_health="HEALTHY"):
+        if not self.container[0].verify_health(expected_health="HEALTHY"):
             errors.append(
                 "Container health isn't HEALTHY after taking ib0 down!")
 
@@ -410,15 +382,16 @@ class NetworkFailureTest(IorTestBase):
         self.verify_ior_worked(ior_results=ior_results, job_num=job_num, errors=errors)
 
         # 9. Bring up the network interface.
-        # wolf
-        self.update_network_interface(
-            interface=self.interface, state="up", host=self.network_down_host,
-            errors=errors)
-
-        # Aurora
-        # command = "sudo ip link set {} {}".format(self.interface, "up")
-        # self.log.debug("## Call %s on %s", command, self.network_down_host)
-        # time.sleep(20)
+        if self.test_env == "ci":
+            # wolf
+            self.update_network_interface(
+                interface=self.interface, state="up", host=self.network_down_host,
+                errors=errors)
+        else:
+            # Aurora
+            command = "sudo ip link set {} {}".format(self.interface, "up")
+            self.log.debug("## Call %s on %s", command, self.network_down_host)
+            time.sleep(20)
 
         self.log.info("########## Errors ##########")
         report_errors(test=self, errors=errors)

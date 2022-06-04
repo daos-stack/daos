@@ -57,11 +57,10 @@ container_with_rf:
 ior: &ior_base
   client_processes:
     np: 1
-  iorflags:
-    flags: -k -v -w -W
-    api: DFS
-    transfer_size: 1G
-    block_size: 5G
+  flags: -k -v -w -W
+  api: DFS
+  transfer_size: 1G
+  block_size: 5G
 ior_wo_rf:
   <<: *ior_base
   dfs_oclass: SX
@@ -71,3 +70,6 @@ ior_with_rp:
 ior_with_ec:
   <<: *ior_base
   dfs_oclass: EC_2P1G1
+
+# Use ci or aurora.
+test_environment: ci

@@ -12,7 +12,7 @@ import re
 from ClusterShell.NodeSet import NodeSet
 
 from exception_utils import CommandFailure
-from general_utils import run_task, display_task
+from general_utils import run_task, display_task, run_pcmd
 
 SUPPORTED_PROVIDERS = ("ofi+sockets", "ofi+tcp;ofi_rxm", "ofi+verbs;ofi_rxm", "ucx+dc_x")
 
@@ -557,3 +557,20 @@ def get_dmg_network_information(dmg_network_scan):
             f"Error processing dmg network scan json output: {dmg_network_scan}") from error
 
     return network_devices
+
+
+def update_network_interface(self, interface, state, host, errors=None):
+    """Turn on or off the given network interface.
+
+    Args:
+        interface (str): Interface name such as ib0.
+        state (str): "up" or "down".
+        host (str): Host to update the interface.
+        errors (list): List to store the error message, if the command fails.
+            Defaults to None.
+    """
+    command = "sudo ip link set {} {}".format(interface, state)
+    results = run_pcmd(hosts=[host], command=command)
+    self.log.info("%s output = %s", command, results)
+    if errors is not None and results[0]["exit_status"] != 0:
+        errors.append(f"{command} didn't return 0!")
