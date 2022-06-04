@@ -1,3 +1,9 @@
+daos (2.0.3-3) unstable; urgency=medium
+  [ Johann Lombardi ]
+  * Version bump to 2.0.3 (rc3)
+
+ -- Johann Lombardi <johann.lombardi@intel.com>  Sat, 04 Jun 2022 09:00:00 -0100
+
 daos (2.0.3-2) unstable; urgency=medium
   [ Johann Lombardi ]
   * Version bump to 2.0.3 (rc2)
