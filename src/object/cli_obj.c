@@ -96,10 +96,6 @@ struct obj_auxi_args {
 					 deg_fetch:1,
 					 /* conf_fetch split to multiple sub-tasks */
 					 cond_fetch_split:1,
-					 /* cond_fetch got exist from one shard */
-					 cond_fetch_exist:1,
-					 /* wait check exist task's completion */
-					 wait_check_exist:1,
 					 /* local TX created by dc_tx_local_open() */
 					 tx_local:1;
 	/* request flags. currently only: ORF_RESEND */
@@ -1127,6 +1123,11 @@ shard_open:
 	}
 
 	if (rc == 0) {
+		/* spec_shard flag only used for testing purpose, in some test cases for example
+		 * degrade_ec_partial_update_agg() it exclude a shard and then verify an extend
+		 * exist/non-exist on that shard (ec_agg_check_replica_on_parity), for those case
+		 * should not go to ec_degrade mode.
+		 */
 		if (obj_op_is_ec_fetch(obj_auxi) && obj_shard->do_rebuilding &&
 		    !obj_auxi->spec_shard) {
 			ec_degrade = true;
@@ -2063,52 +2064,6 @@ out:
 		task->dt_result = rc;
 		tse_task_list_traverse(&task_list, recov_task_abort, &rc);
 		D_ERROR("task %p "DF_OID" EC recovery failed "DF_RC"\n",
-			task, DP_OID(obj->cob_md.omd_id), DP_RC(rc));
-	}
-	return rc;
-}
-
-static int
-obj_ec_check_exist(tse_task_t *task, struct dc_object *obj, struct obj_auxi_args *obj_auxi)
-{
-	daos_obj_fetch_t		*args = dc_task_get_args(task);
-	tse_task_t			*check_task;
-	int				 rc;
-
-	rc = dc_obj_fetch_task_create(args->oh, obj_auxi->th, args->flags, args->dkey, args->nr,
-				      DIOF_CHECK_EXISTENCE, args->iods, NULL, NULL, NULL, NULL,
-				      NULL, tse_task2sched(task), &check_task);
-	if (rc) {
-		D_ERROR("task %p "DF_OID" dc_obj_fetch_task_create failed "DF_RC"\n",
-			task, DP_OID(obj->cob_md.omd_id), DP_RC(rc));
-		goto out;
-	}
-
-	rc = dc_task_depend(task, 1, &check_task);
-	if (rc) {
-		D_ERROR("task %p "DF_OID" dc_task_depend failed "DF_RC"\n",
-			task, DP_OID(obj->cob_md.omd_id), DP_RC(rc));
-		goto out;
-	}
-
-	rc = dc_task_resched(task);
-	if (rc != 0) {
-		D_ERROR("task %p "DF_OID" dc_task_resched failed "DF_RC"\n",
-			task, DP_OID(obj->cob_md.omd_id), DP_RC(rc));
-		goto out;
-	}
-
-out:
-	if (rc == 0) {
-		obj_auxi->wait_check_exist = 1;
-		D_DEBUG(DB_IO, "scheduling EC check exist task %p for IO task %p.\n",
-			check_task, task);
-		tse_task_schedule(check_task, false);
-	} else {
-		if (check_task != NULL)
-			tse_task_complete(check_task, rc);
-		task->dt_result = rc;
-		D_ERROR("task %p "DF_OID" EC check exist failed "DF_RC"\n",
 			task, DP_OID(obj->cob_md.omd_id), DP_RC(rc));
 	}
 	return rc;
@@ -3448,6 +3403,7 @@ struct comp_iter_arg {
 	d_list_t	*merged_list;
 	int		merge_nr;
 	daos_off_t	merge_sgl_off;
+	bool		cond_fetch_exist; /* cond_fetch got exist from one shard */
 	bool		retry;
 };
 
@@ -3849,10 +3805,10 @@ obj_shard_comp_cb(tse_task_t *task, struct shard_auxi_args *shard_auxi,
 		if (obj_auxi->map_ver_reply < shard_auxi->map_ver)
 			obj_auxi->map_ver_reply = shard_auxi->map_ver;
 		if (obj_req_is_ec_cond_fetch(obj_auxi)) {
-			obj_auxi->cond_fetch_exist = 1;
+			iter_arg->cond_fetch_exist = true;
 			if (obj_auxi->result == -DER_NONEXIST)
 				obj_auxi->result = 0;
-			D_DEBUG(DB_IO, "shard %d EC cond_fetch returned 0 - exist.\n",
+			D_DEBUG(DB_IO, "shard %d EC cond_fetch replied 0 - exist.\n",
 				shard_auxi->shard);
 		}
 	} else if (obj_retry_error(ret)) {
@@ -3866,9 +3822,9 @@ obj_shard_comp_cb(tse_task_t *task, struct shard_auxi_args *shard_auxi,
 		if (obj_auxi->result == 0 || obj_retry_error(obj_auxi->result))
 			obj_auxi->result = ret;
 	} else if (ret == -DER_NONEXIST && obj_req_is_ec_cond_fetch(obj_auxi)) {
-		D_DEBUG(DB_IO, "shard %d EC cond_fetch returned -DER_NONEXIST.\n",
+		D_DEBUG(DB_IO, "shard %d EC cond_fetch replied -DER_NONEXIST.\n",
 			shard_auxi->shard);
-		if (obj_auxi->result == 0 && !obj_auxi->cond_fetch_exist)
+		if (obj_auxi->result == 0 && !iter_arg->cond_fetch_exist)
 			obj_auxi->result = ret;
 		ret = 0;
 	} else {
@@ -4683,6 +4639,20 @@ obj_comp_cb(tse_task_t *task, void *data)
 		obj_auxi->ec_in_recov = 0;
 		obj_reasb_io_fini(obj_auxi, true);
 		D_DEBUG(DB_IO, DF_OID" EC fetch again.\n", DP_OID(obj->cob_md.omd_id));
+	} else if (obj_req_is_ec_cond_fetch(obj_auxi) && task->dt_result == -DER_NONEXIST &&
+		   !obj_auxi->deg_fetch && !obj_auxi->cond_fetch_split) {
+		daos_obj_fetch_t *args = dc_task_get_args(task);
+
+		if (!(args->extra_flags & DIOF_CHECK_EXISTENCE) &&
+		    !obj_ec_req_sent2_all_data_tgts(obj_auxi)) {
+			/* retry the original task to check existence */
+			args->iods = obj_auxi->reasb_req.orr_uiods;
+			args->sgls = obj_auxi->reasb_req.orr_usgls;
+			obj_reasb_req_fini(&obj_auxi->reasb_req, obj_auxi->iod_nr);
+			obj_auxi->req_reasbed = 0;
+			args->extra_flags |= DIOF_CHECK_EXISTENCE;
+			obj_auxi->io_retry = 1;
+		}
 	}
 
 	if (!obj_auxi->io_retry && task->dt_result == 0 &&
@@ -4714,7 +4684,6 @@ obj_comp_cb(tse_task_t *task, void *data)
 	if (!io_task_reinited) {
 		struct obj_ec_fail_info	*fail_info;
 		bool new_tgt_fail = false;
-		bool ec_check_exist = false;
 		d_list_t *head = &obj_auxi->shard_task_head;
 
 		switch (obj_auxi->opc) {
@@ -4742,15 +4711,8 @@ obj_comp_cb(tse_task_t *task, void *data)
 			 * can destroy now
 			 */
 			obj_rw_csum_destroy(obj, obj_auxi);
-
-			if (obj_req_is_ec_cond_fetch(obj_auxi) && task->dt_result == -DER_NONEXIST
-			    && !obj_auxi->deg_fetch && !(args->extra_flags & DIOF_CHECK_EXISTENCE)
-			    && !obj_auxi->cond_fetch_split && !obj_auxi->wait_check_exist
-			    && !obj_ec_req_sent2_all_data_tgts(obj_auxi))
-				ec_check_exist = true;
-
 			if (daos_handle_is_valid(obj_auxi->th) && !obj_auxi->tx_local &&
-			    !(args->extra_flags & DIOF_CHECK_EXISTENCE) && !ec_check_exist &&
+			    !(args->extra_flags & DIOF_CHECK_EXISTENCE) &&
 				 (task->dt_result == 0 ||
 				  task->dt_result == -DER_NONEXIST)) {
 				obj_addref(obj);
@@ -4797,15 +4759,6 @@ obj_comp_cb(tse_task_t *task, void *data)
 				obj_auxi_list_fini(obj_auxi);
 			tse_task_list_traverse(head, shard_task_remove, NULL);
 			D_ASSERT(d_list_empty(head));
-		}
-
-		if (ec_check_exist) {
-			task->dt_result = 0;
-			obj_bulk_fini(obj_auxi);
-			rc = obj_ec_check_exist(task, obj, obj_auxi);
-			if (rc)
-				obj_reasb_io_fini(obj_auxi, false);
-			goto out;
 		}
 
 		fail_info = obj_auxi->reasb_req.orr_fail;
@@ -4858,7 +4811,6 @@ obj_comp_cb(tse_task_t *task, void *data)
 		}
 	}
 
-out:
 	obj_decref(obj);
 	return 0;
 }
@@ -5309,7 +5261,7 @@ dc_obj_fetch_task(tse_task_t *task)
 		if ((args->extra_flags & DIOF_EC_RECOV_SNAP) != 0)
 			obj_auxi->reasb_req.orr_recov_snap = 1;
 	}
-	if (obj_auxi->ec_wait_recov || obj_auxi->wait_check_exist)
+	if (obj_auxi->ec_wait_recov)
 		goto out_task;
 
 	if (args->extra_flags & DIOF_FOR_MIGRATION) {
