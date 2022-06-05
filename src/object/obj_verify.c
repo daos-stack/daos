@@ -645,18 +645,16 @@ dc_obj_verify_ec_cb(struct dc_obj_enum_unpack_io *io, void *arg)
 	tse_task_t			*verify_task;
 	uint64_t			shard = dova->current_shard;
 	int				nr = io->ui_iods_top + 1;
+	uint32_t			tgt_off;
 	int				i;
 	int				idx = 0;
 	int				rc;
 
 	D_ASSERT(obj != NULL);
-	if (!dova->ec_parity_rotate)
-		io->ui_dkey_hash = 0;
-
+	tgt_off = obj_ec_shard_off(obj, io->ui_dkey_hash, io->ui_oid.id_shard);
 	D_DEBUG(DB_TRACE, "compare "DF_KEY" nr %d shard "DF_U64" dkey_hash "DF_U64
-		"start EC "DF_U64"\n", DP_KEY(&io->ui_dkey), nr, shard, io->ui_dkey_hash,
-		obj_ec_shard_off(io->ui_dkey_hash, obj_get_oca(obj), io->ui_oid.id_shard));
-	if (nr == 0 || is_ec_parity_shard(io->ui_oid.id_shard, io->ui_dkey_hash, obj_get_oca(obj)))
+		"tgt off %u\n", DP_KEY(&io->ui_dkey), nr, shard, io->ui_dkey_hash, tgt_off);
+	if (nr == 0 || is_ec_parity_shard_by_tgt_off(tgt_off, obj_get_oca(obj)))
 		return 0;
 
 	for (i = 0; i < nr; i++) {
@@ -689,9 +687,8 @@ dc_obj_verify_ec_cb(struct dc_obj_enum_unpack_io *io, void *arg)
 		sgls_verify[idx].sg_nr_out = 1;
 		sgls_verify[idx].sg_iovs = &iovs_verify[idx];
 		if (iod->iod_type == DAOS_IOD_ARRAY) {
-			rc = obj_recx_ec2_daos(obj_get_oca(obj), io->ui_dkey_hash,
-					       io->ui_oid.id_shard, &iod->iod_recxs,
-					       NULL, &iod->iod_nr, true);
+			rc = obj_recx_ec2_daos(obj_get_oca(obj), tgt_off, &iod->iod_recxs, NULL,
+					       &iod->iod_nr, true);
 			if (rc != 0)
 				D_GOTO(out, rc);
 		}

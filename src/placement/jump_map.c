@@ -1057,6 +1057,7 @@ jump_map_query(struct pl_map *map, struct pl_map_attr *attr)
  *
  * \param[in]   map             A reference to the placement map being used to
  *                              place the object shard.
+ * \param[in]   layout_gl_version layout global version.
  * \param[in]   md              The object metadata which contains data about
  *                              the object being placed such as the object ID.
  * \param[in]   mode		mode of daos_obj_open(DAOS_OO_RO, DAOS_OO_RW etc).
@@ -1071,9 +1072,8 @@ jump_map_query(struct pl_map *map, struct pl_map_attr *attr)
  *                              successfully.
  */
 static int
-jump_map_obj_place(struct pl_map *map, struct daos_obj_md *md,
-		   unsigned int mode, uint32_t rebuild_version,
-		   struct daos_obj_shard_md *shard_md,
+jump_map_obj_place(struct pl_map *map, uint32_t layout_gl_version, struct daos_obj_md *md,
+		   unsigned int mode, uint32_t rebuild_version, struct daos_obj_shard_md *shard_md,
 		   struct pl_obj_layout **layout_pp)
 {
 	struct pl_jump_map	*jmap;
@@ -1172,6 +1172,7 @@ out:
  * \param[in]   map             The placement map to be used to generate the
  *                              placement layouts and to calculate rebuild
  *                              targets.
+ * \param[in]	gl_layout_ver	global layout version from pool/container.
  * \param[in]   md              Metadata describing the object.
  * \param[in]   shard_md        Metadata describing how the shards.
  * \param[in]   rebuild_ver     Current Rebuild version
@@ -1187,10 +1188,9 @@ out:
  *                              another target, Or 0 if none need to be rebuilt.
  */
 static int
-jump_map_obj_find_rebuild(struct pl_map *map, struct daos_obj_md *md,
-			  struct daos_obj_shard_md *shard_md,
-			  uint32_t rebuild_ver, uint32_t *tgt_id,
-			  uint32_t *shard_idx, unsigned int array_size)
+jump_map_obj_find_rebuild(struct pl_map *map, uint32_t gl_layout_ver, struct daos_obj_md *md,
+			  struct daos_obj_shard_md *shard_md, uint32_t rebuild_ver,
+			  uint32_t *tgt_id, uint32_t *shard_idx, unsigned int array_size)
 {
 	struct pl_jump_map              *jmap;
 	struct pl_obj_layout            *layout;
@@ -1237,11 +1237,9 @@ out:
 }
 
 static int
-jump_map_obj_find_reint(struct pl_map *map, struct daos_obj_md *md,
-			struct daos_obj_shard_md *shard_md,
-			uint32_t reint_ver,
-			uint32_t *tgt_rank, uint32_t *shard_id,
-			unsigned int array_size)
+jump_map_obj_find_reint(struct pl_map *map, uint32_t gl_layout_ver, struct daos_obj_md *md,
+			struct daos_obj_shard_md *shard_md, uint32_t reint_ver,
+			uint32_t *tgt_rank, uint32_t *shard_id, unsigned int array_size)
 {
 	struct pl_jump_map              *jmap;
 	struct pl_obj_layout            *layout = NULL;
@@ -1301,11 +1299,9 @@ out:
 }
 
 static int
-jump_map_obj_find_addition(struct pl_map *map, struct daos_obj_md *md,
-			   struct daos_obj_shard_md *shard_md,
-			   uint32_t reint_ver,
-			   uint32_t *tgt_rank, uint32_t *shard_id,
-			   unsigned int array_size)
+jump_map_obj_find_addition(struct pl_map *map, uint32_t gl_layout_ver, struct daos_obj_md *md,
+			   struct daos_obj_shard_md *shard_md, uint32_t reint_ver,
+			   uint32_t *tgt_rank, uint32_t *shard_id, unsigned int array_size)
 {
 	struct pl_jump_map              *jmap;
 	struct pl_obj_layout            *layout = NULL;

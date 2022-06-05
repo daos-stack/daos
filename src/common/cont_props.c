@@ -32,6 +32,7 @@ daos_props_2cont_props(daos_prop_t *props, struct cont_props *cont_prop)
 	    daos_prop_entry_get(props, DAOS_PROP_CO_EC_CELL_SZ) == NULL	     ||
 	    daos_prop_entry_get(props, DAOS_PROP_CO_EC_PDA) == NULL	     ||
 	    daos_prop_entry_get(props, DAOS_PROP_CO_GLOBAL_VERSION) == NULL  ||
+	    daos_prop_entry_get(props, DAOS_PROP_CO_OBJ_VERSION) == NULL     ||
 	    daos_prop_entry_get(props, DAOS_PROP_CO_RP_PDA) == NULL)
 		D_DEBUG(DB_TRACE, "some prop entry type not found, "
 			"use default value.\n");
@@ -73,6 +74,8 @@ daos_props_2cont_props(daos_prop_t *props, struct cont_props *cont_prop)
 
 	/** global version */
 	cont_prop->dcp_global_version   = daos_cont_prop2global_version(props);
+	/** object version */
+	cont_prop->dcp_obj_version   = daos_cont_prop2obj_version(props);
 }
 
 uint16_t
@@ -264,6 +267,15 @@ daos_cont_prop2global_version(daos_prop_t *props)
 {
 	struct daos_prop_entry *prop =
 		daos_prop_entry_get(props, DAOS_PROP_CO_GLOBAL_VERSION);
+
+	return prop == NULL ? 0 : (uint32_t)prop->dpe_val;
+}
+
+uint32_t
+daos_cont_prop2obj_version(daos_prop_t *props)
+{
+	struct daos_prop_entry *prop =
+		daos_prop_entry_get(props, DAOS_PROP_CO_OBJ_VERSION);
 
 	return prop == NULL ? 0 : (uint32_t)prop->dpe_val;
 }

@@ -125,8 +125,8 @@ typedef struct {
 	daos_obj_id_t		id_pub;
 	/** Private section, object shard identifier */
 	uint32_t		id_shard;
-	/** Padding */
-	uint32_t		id_pad_32;
+	/** object layout version */
+	uint32_t		id_layout_ver;
 } daos_unit_oid_t;
 
 /** object metadata stored in the global OI table of container */
