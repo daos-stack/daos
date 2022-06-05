@@ -42,8 +42,8 @@
 #define DF_OID		DF_U64"."DF_U64
 #define DP_OID(o)	(o).hi, (o).lo
 
-#define DF_UOID		DF_OID".%u"
-#define DP_UOID(uo)	DP_OID((uo).id_pub), (uo).id_shard
+#define DF_UOID		DF_OID".%u.%u"
+#define DP_UOID(uo)	DP_OID((uo).id_pub), (uo).id_shard, (uo).id_layout_ver
 #define DF_BOOL "%s"
 #define DP_BOOL(b) ((b) ? "true" : "false")
 #define DF_IOV "<%p, %zu/%zu>"

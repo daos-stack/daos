@@ -603,6 +603,24 @@ var propHdlrs = propHdlrMap{
 		},
 		true,
 	},
+	C.DAOS_PROP_ENTRY_OBJ_VERSION: {
+		C.DAOS_PROP_CO_OBJ_VERSION,
+		"Object Version",
+		nil, nil,
+		func(e *C.struct_daos_prop_entry, name string) string {
+			if e == nil {
+				return propNotFound(name)
+			}
+			if C.dpe_is_negative(e) {
+				return fmt.Sprintf("not set")
+			}
+
+			value := C.get_dpe_val(e)
+			return fmt.Sprintf("%d", value)
+		},
+		true,
+	},
+
 }
 
 // NB: Most feature work should not require modification to the code

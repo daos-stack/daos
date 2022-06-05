@@ -297,11 +297,9 @@ dc_rw_cb_csum_verify(const struct rw_cb_args *rw_args)
 
 	reasb_req = rw_args->shard_args->reasb_req;
 	if (obj_is_ec(rw_args->shard_args->auxi.obj_auxi->obj)) {
-		shard_idx = obj_ec_shard_off(
-				obj_ec_dkey_hash_get(rw_args->shard_args->auxi.obj_auxi->obj,
-						     rw_args->shard_args->auxi.obj_auxi->dkey_hash),
-				&rw_args->shard_args->auxi.obj_auxi->obj->cob_oca,
-				orw->orw_oid.id_shard);
+		shard_idx = obj_ec_shard_off(rw_args->shard_args->auxi.obj_auxi->obj,
+					     rw_args->shard_args->auxi.obj_auxi->dkey_hash,
+					     orw->orw_oid.id_shard);
 	} else {
 		shard_idx = rw_args->shard_args->auxi.shard -
 			    rw_args->shard_args->auxi.start_shard;
@@ -461,7 +459,8 @@ obj_ec_iom_merge(struct obj_reasb_req *reasb_req, uint64_t dkey_hash,
 	bool			 done;
 	int			 rc = 0;
 
-	tgt_off = obj_ec_shard_off(dkey_hash, oca, tgt_idx);
+	D_ASSERT(reasb_req->orr_args);
+	tgt_off = obj_ec_shard_off(obj_hdl2ptr(reasb_req->orr_args->oh), dkey_hash, tgt_idx);
 	D_ASSERTF(tgt_off < obj_ec_data_tgt_nr(oca), "tgt_off %d, tgt_nr %d\n",
 		  tgt_off, obj_ec_data_tgt_nr(oca));
 
@@ -742,7 +741,6 @@ dc_shard_update_size(struct rw_cb_args *rw_args, int fetch_rc)
 		uint32_t		shard;
 		struct daos_oclass_attr	*oca;
 		struct shard_fetch_stat	*fetch_stat;
-		uint64_t		dkey_hash;
 		bool			conflict = false;
 
 		D_DEBUG(DB_IO, DF_UOID" size "DF_U64" eph "DF_U64"\n", DP_UOID(orw->orw_oid),
@@ -775,10 +773,10 @@ dc_shard_update_size(struct rw_cb_args *rw_args, int fetch_rc)
 		 */
 		shard = orw->orw_oid.id_shard %
 			obj_get_grp_size(rw_args->shard_args->auxi.obj_auxi->obj);
-		dkey_hash = obj_ec_dkey_hash_get(rw_args->shard_args->auxi.obj_auxi->obj,
-						 orw->orw_dkey_hash);
-		if (shard == obj_ec_singv_small_idx(oca, dkey_hash, iod) ||
-		    is_ec_parity_shard(orw->orw_oid.id_shard, dkey_hash, oca)) {
+		if (shard == obj_ec_singv_small_idx(rw_args->shard_args->auxi.obj_auxi->obj,
+						    orw->orw_dkey_hash, iod) ||
+		    is_ec_parity_shard(rw_args->shard_args->auxi.obj_auxi->obj, orw->orw_dkey_hash,
+				       orw->orw_oid.id_shard)) {
 			if (uiod->iod_size != 0 && uiod->iod_size < sizes[i] && fetch_rc == 0) {
 				rec2big = true;
 				rc = -DER_REC2BIG;
@@ -1141,12 +1139,9 @@ dc_rw_cb(tse_task_t *task, void *arg)
 				if (is_ec_obj &&
 				    reply_maps->iom_type == DAOS_IOD_ARRAY) {
 					struct obj_auxi_args	*obj_auxi;
-					uint64_t		dkey_hash;
 
 					obj_auxi = rw_args->shard_args->auxi.obj_auxi;
-					dkey_hash = obj_ec_dkey_hash_get(obj_auxi->obj,
-									 obj_auxi->dkey_hash);
-					rc = obj_ec_iom_merge(reasb_req, dkey_hash,
+					rc = obj_ec_iom_merge(reasb_req, obj_auxi->dkey_hash,
 							      orw->orw_oid.id_shard,
 							      orw->orw_tgt_idx, reply_maps,
 							      &rw_args->maps[i], recov_list);
@@ -2042,7 +2037,6 @@ obj_shard_query_recx_post(struct obj_query_key_cb_args *cb_args, uint32_t shard,
 	uint32_t		 tgt_off;
 	bool			 from_data_tgt;
 	struct daos_oclass_attr	*oca;
-	uint64_t		 dkey_hash;
 	uint64_t		 stripe_rec_nr, cell_rec_nr;
 
 	oca = obj_get_oca(cb_args->obj);
@@ -2051,9 +2045,8 @@ obj_shard_query_recx_post(struct obj_query_key_cb_args *cb_args, uint32_t shard,
 		return;
 	}
 
-	dkey_hash = obj_ec_dkey_hash_get(cb_args->obj, cb_args->dkey_hash);
-	from_data_tgt = is_ec_data_shard(shard, dkey_hash, oca);
-	tgt_off = obj_ec_shard_off(dkey_hash, oca, shard);
+	tgt_off = obj_ec_shard_off(cb_args->obj, cb_args->dkey_hash, shard);
+	from_data_tgt = is_ec_data_shard_by_tgt_off(tgt_off, oca);
 	stripe_rec_nr = obj_ec_stripe_rec_nr(oca);
 	cell_rec_nr = obj_ec_cell_rec_nr(oca);
 	D_ASSERT(!(reply_recx->rx_idx & PARITY_INDICATOR));

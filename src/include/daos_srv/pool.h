@@ -25,6 +25,17 @@
 #include <daos_srv/policy.h>
 
 /*
+ * Aggregation of pool/container/object/keys disk format change.
+ */
+#define DS_POOL_GLOBAL_VERSION		1
+
+/**
+ * Each individual object layout format, like oid layout, dkey to group,
+ * dkey to EC group start.
+ */
+#define DS_POOL_OBJ_VERSION		0
+
+/*
  * Pool object
  *
  * Caches per-pool information, such as the pool map.
@@ -99,6 +110,7 @@ struct ds_pool_hdl {
 	uint64_t		sph_flags;	/* user-provided flags */
 	uint64_t		sph_sec_capas;	/* access capabilities */
 	uint32_t		sph_global_ver; /* pool global version */
+	uint32_t		sph_obj_ver;	/* pool obj layout version */
 	struct ds_pool	       *sph_pool;
 	int			sph_ref;
 	d_iov_t			sph_cred;
