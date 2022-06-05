@@ -69,6 +69,7 @@ struct pool_iv_prop {
 	uint32_t	pip_global_version;
 	uint32_t	pip_upgrade_status;
 	uint64_t	pip_svc_redun_fac;
+	uint32_t	pip_obj_version;
 	struct daos_acl	*pip_acl;
 	d_rank_list_t   pip_svc_list;
 	uint32_t	pip_acl_offset;
@@ -82,6 +83,7 @@ struct pool_iv_conn {
 	uint64_t	pic_capas;
 	uint32_t	pic_cred_size;
 	uint32_t	pic_global_ver;
+	uint32_t	pic_obj_ver;
 	char		pic_creds[0];
 };
 
@@ -189,7 +191,7 @@ void ds_pool_map_refresh_ult(void *arg);
 
 int ds_pool_iv_conn_hdl_update(struct ds_pool *pool, uuid_t hdl_uuid,
 			       uint64_t flags, uint64_t capas, d_iov_t *cred,
-			       uint32_t global_ver);
+			       uint32_t global_ver, uint32_t obj_layout_ver);
 
 int ds_pool_iv_srv_hdl_update(struct ds_pool *pool, uuid_t pool_hdl_uuid,
 			      uuid_t cont_hdl_uuid);

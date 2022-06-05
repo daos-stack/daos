@@ -337,6 +337,10 @@ cont_iv_prop_l2g(daos_prop_t *prop, struct cont_iv_prop *iv_prop)
 			iv_prop->cip_global_version = prop_entry->dpe_val;
 			bits |= DAOS_CO_QUERY_PROP_GLOBAL_VERSION;
 			break;
+		case DAOS_PROP_CO_OBJ_VERSION:
+			iv_prop->cip_obj_version = prop_entry->dpe_val;
+			bits |= DAOS_CO_QUERY_PROP_OBJ_VERSION;
+			break;
 		case DAOS_PROP_CO_ACL:
 			acl = prop_entry->dpe_val_ptr;
 			if (acl != NULL)
@@ -1230,6 +1234,11 @@ cont_iv_prop_g2l(struct cont_iv_prop *iv_prop, daos_prop_t **prop_out)
 		prop_entry = &prop->dpp_entries[i++];
 		prop_entry->dpe_val = iv_prop->cip_global_version;
 		prop_entry->dpe_type = DAOS_PROP_CO_GLOBAL_VERSION;
+	}
+	if (bits & DAOS_CO_QUERY_PROP_OBJ_VERSION) {
+		prop_entry = &prop->dpp_entries[i++];
+		prop_entry->dpe_val = iv_prop->cip_obj_version;
+		prop_entry->dpe_type = DAOS_PROP_CO_OBJ_VERSION;
 	}
 	if (bits & DAOS_CO_QUERY_PROP_ACL) {
 		prop_entry = &prop->dpp_entries[i++];

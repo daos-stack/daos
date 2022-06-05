@@ -841,7 +841,8 @@ dc_cont_open_internal(tse_task_t *task, const char *label, struct dc_pool *pool)
 				  DAOS_CO_QUERY_PROP_EC_CELL_SZ |
 				  DAOS_CO_QUERY_PROP_EC_PDA |
 				  DAOS_CO_QUERY_PROP_RP_PDA |
-				  DAOS_CO_QUERY_PROP_GLOBAL_VERSION;
+				  DAOS_CO_QUERY_PROP_GLOBAL_VERSION |
+				  DAOS_CO_QUERY_PROP_OBJ_VERSION;
 
 	/* open bylabel RPC input */
 	if (label) {
@@ -1264,6 +1265,9 @@ cont_query_bits(daos_prop_t *prop)
 			break;
 		case DAOS_PROP_CO_SCRUBBER_DISABLED:
 			bits |= DAOS_CO_QUERY_PROP_SCRUB_DIS;
+			break;
+		case DAOS_PROP_CO_OBJ_VERSION:
+			bits |= DAOS_CO_QUERY_PROP_OBJ_VERSION;
 			break;
 		default:
 			D_ERROR("ignore bad dpt_type %d.\n", entry->dpe_type);

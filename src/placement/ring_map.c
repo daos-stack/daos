@@ -1102,9 +1102,8 @@ out:
 }
 
 static int
-ring_obj_place(struct pl_map *map, struct daos_obj_md *md,
-	       unsigned int mode, uint32_t rebuild_ver,
-	       struct daos_obj_shard_md *shard_md,
+ring_obj_place(struct pl_map *map, uint32_t gl_layout_ver, struct daos_obj_md *md,
+	       unsigned int mode, uint32_t rebuild_ver, struct daos_obj_shard_md *shard_md,
 	       struct pl_obj_layout **layout_pp)
 {
 	struct ring_obj_placement  rop;
@@ -1144,9 +1143,8 @@ ring_obj_place(struct pl_map *map, struct daos_obj_md *md,
 
 #define SHARDS_ON_STACK_COUNT	128
 int
-ring_obj_find_rebuild(struct pl_map *map, struct daos_obj_md *md,
-		      struct daos_obj_shard_md *shard_md,
-		      uint32_t rebuild_ver, uint32_t *tgt_id,
+ring_obj_find_rebuild(struct pl_map *map, uint32_t gl_layout_ver, struct daos_obj_md *md,
+		      struct daos_obj_shard_md *shard_md, uint32_t rebuild_ver, uint32_t *tgt_id,
 		      uint32_t *shard_idx, unsigned int array_size)
 {
 	struct ring_obj_placement  rop;
@@ -1208,10 +1206,9 @@ out:
 
 /** see \a dsr_obj_find_reint */
 int
-ring_obj_find_reint(struct pl_map *map, struct daos_obj_md *md,
-			struct daos_obj_shard_md *shard_md,
-			uint32_t reint_ver, uint32_t *tgt_rank,
-			uint32_t *shard_id, unsigned int array_size)
+ring_obj_find_reint(struct pl_map *map, uint32_t gl_layout_ver, struct daos_obj_md *md,
+		    struct daos_obj_shard_md *shard_md, uint32_t reint_ver, uint32_t *tgt_rank,
+		    uint32_t *shard_id, unsigned int array_size)
 {
 	uint32_t                   reint_shard_cnt = SHARDS_ON_STACK_COUNT / 2;
 	struct ring_obj_placement  rop;
