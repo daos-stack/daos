@@ -2140,6 +2140,11 @@ dc_tx_local_open(daos_handle_t coh, daos_epoch_t epoch, uint32_t flags,
 	struct dc_tx	*tx = NULL;
 	int		 rc;
 
+	if (epoch == 0 || epoch == DAOS_EPOCH_MAX) {
+		D_ERROR("Invalid epoch for tx_local_open\n");
+		return -DER_INVAL;
+	}
+
 	/* local TX must be read-only. */
 	rc = dc_tx_alloc(coh, epoch, flags | DAOS_TF_RDONLY, &tx);
 	if (rc == 0)

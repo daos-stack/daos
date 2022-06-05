@@ -95,9 +95,7 @@ struct obj_auxi_args {
 					 /* degraded fetch */
 					 deg_fetch:1,
 					 /* conf_fetch split to multiple sub-tasks */
-					 cond_fetch_split:1,
-					 /* local TX created by dc_tx_local_open() */
-					 tx_local:1;
+					 cond_fetch_split:1;
 	/* request flags. currently only: ORF_RESEND */
 	uint32_t			 flags;
 	uint32_t			 specified_shard;
@@ -4528,13 +4526,6 @@ obj_reasb_io_fini(struct obj_auxi_args *obj_auxi, bool retry)
 	obj_reasb_req_fini(&obj_auxi->reasb_req, obj_auxi->iod_nr);
 
 	if (!retry) {
-		if (obj_auxi->tx_local) {
-			D_ASSERT(obj_is_fetch_opc(obj_auxi->opc));
-			D_ASSERT(daos_handle_is_valid(obj_auxi->th));
-			dc_tx_local_close(obj_auxi->th);
-			obj_auxi->tx_local = 0;
-			obj_auxi->rw_args.api_args->th = DAOS_HDL_INVAL;
-		}
 		/* zero it as user might reuse/resched the task, for example dac_array_set_size() */
 		memset(obj_auxi, 0, sizeof(*obj_auxi));
 	}
@@ -4650,6 +4641,7 @@ obj_comp_cb(tse_task_t *task, void *data)
 			args->sgls = obj_auxi->reasb_req.orr_usgls;
 			obj_reasb_req_fini(&obj_auxi->reasb_req, obj_auxi->iod_nr);
 			obj_auxi->req_reasbed = 0;
+			memset(&obj_auxi->rw_args, 0, sizeof(obj_auxi->rw_args));
 			args->extra_flags |= DIOF_CHECK_EXISTENCE;
 			obj_auxi->io_retry = 1;
 		}
@@ -4711,7 +4703,7 @@ obj_comp_cb(tse_task_t *task, void *data)
 			 * can destroy now
 			 */
 			obj_rw_csum_destroy(obj, obj_auxi);
-			if (daos_handle_is_valid(obj_auxi->th) && !obj_auxi->tx_local &&
+			if (daos_handle_is_valid(obj_auxi->th) &&
 			    !(args->extra_flags & DIOF_CHECK_EXISTENCE) &&
 				 (task->dt_result == 0 ||
 				  task->dt_result == -DER_NONEXIST)) {
@@ -4828,8 +4820,7 @@ obj_task_init_common(tse_task_t *task, int opc, uint32_t map_ver,
 	obj_auxi->opc = opc;
 	obj_auxi->map_ver_req = map_ver;
 	obj_auxi->obj_task = task;
-	if (!obj_auxi->tx_local)
-		obj_auxi->th = th;
+	obj_auxi->th = th;
 	obj_auxi->obj = obj;
 	obj_auxi->is_ec_obj = obj_is_ec(obj);
 	shard_task_list_init(obj_auxi);
@@ -5134,11 +5125,9 @@ obj_retry_next_shard(struct dc_object *obj, struct obj_auxi_args *obj_auxi,
 	return 0;
 }
 
-/* some pre-process for cond_fetch -
- * 1. create local TX if it is no in a user transaction - to ensure all the fetches on same epoch
- *    chosen by first operation (reuse dtx_epoch_chosen related logic).
- * 2. for multiple-akeys case, split obj task to multiple sub-tasks each for one akey. For this
- *    case return 1 to indicate wait sub-tasks' completion.
+/* pre-process for cond_fetch -
+ * for multiple-akeys case, split obj task to multiple sub-tasks each for one akey. For this
+ * case return 1 to indicate wait sub-tasks' completion.
  */
 static int
 obj_cond_fetch_prep(tse_task_t *task, struct obj_auxi_args *obj_auxi)
@@ -5151,20 +5140,6 @@ obj_cond_fetch_prep(tse_task_t *task, struct obj_auxi_args *obj_auxi)
 	uint64_t		 fetch_flags;
 	uint32_t		 i;
 	int			 rc = 0;
-
-	if (!daos_handle_is_valid(obj_auxi->th)) {
-		D_ASSERT(!obj_auxi->tx_local);
-		D_ASSERT(!daos_handle_is_valid(args->th));
-		rc = dc_tx_local_open(obj_auxi->obj->cob_coh, 0, 0, &obj_auxi->th);
-		if (rc) {
-			D_ERROR("task %p "DF_OID" dc_tx_local_open failed "
-				DF_RC"\n", task, DP_OID(obj_auxi->obj->cob_md.omd_id),
-				DP_RC(rc));
-			return rc;
-		}
-		args->th = obj_auxi->th;
-		obj_auxi->tx_local = 1;
-	}
 
 	if (args->nr <= 1 || (args->flags & (DAOS_COND_AKEY_FETCH | DAOS_COND_PER_AKEY)) == 0)
 		return rc;
