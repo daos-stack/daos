@@ -90,7 +90,7 @@ ds_cont_get_props(struct cont_props *cont_props, uuid_t pool_uuid,
 	/* The provided prop entry types should cover the types used in
 	 * daos_props_2cont_props().
 	 */
-	props = daos_prop_alloc(14);
+	props = daos_prop_alloc(15);
 	if (props == NULL)
 		return -DER_NOMEM;
 
@@ -108,6 +108,7 @@ ds_cont_get_props(struct cont_props *cont_props, uuid_t pool_uuid,
 	props->dpp_entries[11].dpe_type = DAOS_PROP_CO_RP_PDA;
 	props->dpp_entries[12].dpe_type = DAOS_PROP_CO_GLOBAL_VERSION;
 	props->dpp_entries[13].dpe_type = DAOS_PROP_CO_REDUN_LVL;
+	props->dpp_entries[14].dpe_type = DAOS_PROP_CO_OBJ_VERSION;
 
 	rc = cont_iv_prop_fetch(pool_uuid, cont_uuid, props);
 	if (rc == DER_SUCCESS)

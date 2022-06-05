@@ -491,20 +491,20 @@ find_rebuild_shards(unsigned int *tgt_stack_array,
 		}
 
 		if (rebuild_op == RB_OP_FAIL) {
-			rc = pl_obj_find_rebuild(map, md, NULL,
+			rc = pl_obj_find_rebuild(map, 0, md, NULL,
 						 rebuild_ver,
 						 *tgts, *shards,
 						 max_shards);
 		} else if (rebuild_op == RB_OP_DRAIN) {
-			rc = pl_obj_find_drain(map, md, NULL, rebuild_ver,
+			rc = pl_obj_find_drain(map, 0, md, NULL, rebuild_ver,
 					       *tgts, *shards, max_shards);
 		} else if (rebuild_op == RB_OP_REINT) {
-			rc = pl_obj_find_reint(map, md, NULL,
+			rc = pl_obj_find_reint(map, 0, md, NULL,
 					       rebuild_ver,
 					       *tgts, *shards,
 					       max_shards);
 		} else if (rebuild_op == RB_OP_EXTEND) {
-			rc = pl_obj_find_addition(map, md, NULL,
+			rc = pl_obj_find_addition(map, 0, md, NULL,
 						  rebuild_ver,
 						  *tgts, *shards,
 						  max_shards);
@@ -613,7 +613,7 @@ rebuild_obj_scan_cb(daos_handle_t ch, vos_iter_entry_t *ent,
 		 * still includes the current rank. If not, the object can be
 		 * deleted/reclaimed because it is no longer reachable
 		 */
-		rc = pl_obj_place(map, &md, DAOS_OO_RO, rpt->rt_rebuild_ver, NULL, &layout);
+		rc = pl_obj_place(map, 0, &md, DAOS_OO_RO, rpt->rt_rebuild_ver, NULL, &layout);
 		if (rc != 0)
 			D_GOTO(out, rc);
 

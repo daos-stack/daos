@@ -42,7 +42,7 @@ dts_unit_oid_gen(enum daos_otype_t type, uint32_t shard)
 	uoid.id_pub	= dts_oid_gen((unsigned int)(time(NULL) & 0xFFFFFFFFUL));
 	daos_obj_set_oid(&uoid.id_pub, type, DTS_OCLASS_DEF, shard + 1, 0);
 	uoid.id_shard	= shard;
-	uoid.id_pad_32	= 0;
+	uoid.id_layout_ver = 0;
 
 	return uoid;
 }

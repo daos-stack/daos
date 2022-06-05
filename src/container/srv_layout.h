@@ -109,6 +109,7 @@ extern d_iov_t ds_cont_prop_rp_pda;		/* uint64_t */
 extern d_iov_t ds_cont_prop_cont_global_version;/* uint32_t */
 extern d_iov_t ds_cont_prop_scrubber_disabled;	/* uint64_t */
 extern d_iov_t ds_cont_prop_co_md_times;	/* co_md_times */
+extern d_iov_t ds_cont_prop_cont_obj_version;	/* uint32_t */
 /* Please read the IMPORTANT notes above before adding new keys. */
 
 struct co_md_times {

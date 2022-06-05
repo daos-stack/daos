@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2018-2021 Intel Corporation.
+ * (C) Copyright 2018-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -14,6 +14,7 @@
 #include <daos/container.h>
 #include <daos/pool.h>
 #include <daos/task.h>
+#include "obj_rpc.h"
 #include "obj_internal.h"
 
 int
