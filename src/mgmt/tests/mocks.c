@@ -312,6 +312,63 @@ mock_ds_mgmt_pool_query_setup(void)
 	ds_mgmt_pool_query_ranks_out = NULL;
 }
 
+int			ds_mgmt_pool_query_targets_return;
+uuid_t			ds_mgmt_pool_query_targets_uuid;
+daos_target_info_t	*ds_mgmt_pool_query_targets_info_out;
+
+int
+ds_mgmt_pool_query_targets(uuid_t pool_uuid, d_rank_list_t *svc_ranks, d_rank_t rank,
+			   d_rank_list_t *tgts, daos_target_info_t **infos)
+{
+	/* If function is to return with an error, infos will not be filled. */
+	if (ds_mgmt_pool_query_targets_return != 0)
+		return ds_mgmt_pool_query_targets_return;
+
+	uuid_copy(ds_mgmt_pool_query_targets_uuid, pool_uuid);
+	if (infos != NULL && ds_mgmt_pool_query_targets_info_out != NULL) {
+		D_ALLOC_ARRAY(*infos, tgts->rl_nr);
+		memcpy(*infos, ds_mgmt_pool_query_targets_info_out,
+		       tgts->rl_nr * sizeof(daos_target_info_t));
+	}
+
+	return ds_mgmt_pool_query_targets_return;	/* 0 */
+}
+
+void
+mock_ds_mgmt_pool_query_targets_gen_infos(uint32_t n_infos)
+{
+	uint32_t		 i;
+	daos_target_info_t	*infos;
+
+	D_ALLOC_ARRAY(infos, n_infos);
+	for (i = 0; i < n_infos; i++) {
+		infos[i].ta_type = DAOS_TP_UNKNOWN;
+		infos[i].ta_state = (i == 0) ? DAOS_TS_DOWN_OUT : DAOS_TS_UP_IN;
+		infos[i].ta_space.s_total[DAOS_MEDIA_SCM] = 1000000000;
+		infos[i].ta_space.s_free[DAOS_MEDIA_SCM] = 800000000 + i;
+		infos[i].ta_space.s_total[DAOS_MEDIA_NVME] = 9000000000;
+		infos[i].ta_space.s_free[DAOS_MEDIA_NVME] = 600000000 + i;
+	}
+	ds_mgmt_pool_query_targets_info_out = infos;
+}
+
+void
+mock_ds_mgmt_pool_query_targets_setup(void)
+{
+	ds_mgmt_pool_query_targets_return = 0;
+	uuid_clear(ds_mgmt_pool_query_targets_uuid);
+	ds_mgmt_pool_query_targets_info_out = NULL;
+}
+
+void
+mock_ds_mgmt_pool_query_targets_teardown(void)
+{
+	if (ds_mgmt_pool_query_targets_info_out != NULL) {
+		D_FREE(ds_mgmt_pool_query_targets_info_out);
+		ds_mgmt_pool_query_targets_info_out = NULL;
+	}
+}
+
 int	ds_mgmt_cont_set_owner_return;
 uuid_t	ds_mgmt_cont_set_owner_pool;
 uuid_t	ds_mgmt_cont_set_owner_cont;

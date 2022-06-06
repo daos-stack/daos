@@ -21,10 +21,10 @@ def scons():
     Import('env', 'prereqs', 'cart_targets', 'swim_targets', 'gurt_targets')
     # pylint: enable=too-many-locals
 
-    #Use full path to wrap_cmocka.h for configure test.  Since standalone
-    #cmocka header can't be included without including other headers,
-    #this test can't be generalized
-    env.AppendUnique(CPPPATH=[Dir('.')])
+    # Use full path to wrap_cmocka.h for configure test.  Since standalone
+    # cmocka header can't be included without including other headers,
+    # this test can't be generalized
+    env.AppendUnique(CPPPATH=[Dir('.').srcnode()])
     wrap_cmocka = os.path.join(Dir('.').srcnode().abspath, 'wrap_cmocka.h')
     prereqs.define('cmockawrap', headers=[wrap_cmocka], libs=['cmocka'],
                    package='libcmocka-devel')
@@ -39,7 +39,6 @@ def scons():
     test_env = env.Clone()
     prereqs.require(test_env, "mercury", "uuid", "cmocka")
     test_env.AppendUnique(LIBS=['pthread', 'm'])
-    test_env.AppendUnique(CPPPATH=['../../../include'])
     test_env.AppendUnique(CXXFLAGS=['-std=c++0x'])
     test_env.AppendUnique(LIBPATH=LIBPATH)
     test_env.AppendUnique(RPATH_FULL=LIBPATH)
