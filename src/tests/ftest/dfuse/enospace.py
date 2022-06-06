@@ -10,6 +10,7 @@ import errno
 
 from dfuse_test_base import DfuseTestBase
 
+
 class Enospace(DfuseTestBase):
     # pylint: disable=too-many-ancestors,too-few-public-methods
     """Dfuse ENOSPC File base class.
@@ -54,12 +55,17 @@ class Enospace(DfuseTestBase):
             file_size = 0
             while True:
                 stat_pre = os.fstat(fd.fileno())
+                # Do this for every iteration not to check how it logs, but add the conditional
+                # before landing.
+                # if stat_pre.st_size != file_size:
+                self.log.info('file size is %d' % file_size)
+                self.log.info('file stat is %s' % stat_pre)
                 self.assertTrue(stat_pre.st_size == file_size)
                 try:
                     fd.write(bytearray(write_size))
                     file_size += write_size
-                except OSError as e:
-                    if e.errno != errno.ENOSPC:
+                except OSError as error:
+                    if error.errno != errno.ENOSPC:
                         raise
                     self.log.info('File write returned ENOSPACE')
                     stat_post = os.fstat(fd.fileno())
@@ -71,6 +77,6 @@ class Enospace(DfuseTestBase):
         # so this is expected to fail.
         try:
             os.unlink(target_file)
-        except OSError as e:
-            if e.errno != errno.ENOSPC:
+        except OSError as error:
+            if error.errno != errno.ENOSPC:
                 raise
