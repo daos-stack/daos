@@ -8,8 +8,6 @@
 import logging
 import sys
 
-# pylint: disable=import-error,no-name-in-module
-
 from argparse import ArgumentParser, RawDescriptionHelpFormatter
 from util.command_utils_base import CommonConfig
 from util.exception_utils import CommandFailure

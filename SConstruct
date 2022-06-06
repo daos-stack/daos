@@ -75,7 +75,7 @@ def update_rpm_version(version, tag):
         if line == "%changelog\n":
             cmd = 'rpmdev-packager'
             try:
-                # pylint: disable-next=consider-using-with
+                # pylint: disable=consider-using-with
                 pkg_st = subprocess.Popen(cmd, stdout=subprocess.PIPE)  # nosec
                 packager = pkg_st.communicate()[0].strip().decode('UTF-8')
             except OSError:
