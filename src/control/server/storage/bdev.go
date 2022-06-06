@@ -6,12 +6,6 @@
 
 package storage
 
-/*
-#include "stdlib.h"
-#include "daos_srv/control.h"
-*/
-import "C"
-
 import (
 	"context"
 	"encoding/json"
@@ -31,10 +25,37 @@ import (
 	"github.com/daos-stack/daos/src/control/system"
 )
 
+/*
+#include "stdlib.h"
+#include "daos_srv/control.h"
+*/
+import "C"
+
 // BdevPciAddrSep defines the separator used between PCI addresses in string lists.
 const (
 	BdevPciAddrSep = " "
 	NilBdevAddress = "<nil>"
+)
+
+// JSON config file constants.
+const (
+	ConfBdevSetOptions           = "bdev_set_options"
+	ConfBdevNvmeSetOptions       = "bdev_nvme_set_options"
+	ConfBdevNvmeSetHotplug       = "bdev_nvme_set_hotplug"
+	ConfBdevAioCreate            = "bdev_aio_create"
+	ConfBdevNvmeAttachController = C.NVME_CONF_ATTACH_CONTROLLER
+	ConfVmdEnable                = C.NVME_CONF_ENABLE_VMD
+	ConfSetHotplugBusidRange     = C.NVME_CONF_SET_HOTPLUG_RANGE
+	ConfSetAccelProps            = C.NVME_CONF_SET_ACCEL_PROPS
+)
+
+// Acceleration related constants for engine setting and optional capabilities.
+const (
+	AccelEngineNone  = C.NVME_ACCEL_NONE
+	AccelEngineSPDK  = C.NVME_ACCEL_SPDK
+	AccelEngineDML   = C.NVME_ACCEL_DML
+	AccelOptMoveFlag = C.NVME_ACCEL_FLAG_MOVE
+	AccelOptCRCFlag  = C.NVME_ACCEL_FLAG_CRC
 )
 
 // NvmeDevState represents the health state of NVMe device as reported by DAOS engine BIO module.
@@ -413,6 +434,7 @@ type (
 		HotplugBusidEnd   uint8
 		Hostname          string
 		BdevCache         *BdevScanResponse
+		AccelProps        AccelProps
 	}
 
 	// BdevWriteConfigResponse contains the result of a WriteConfig operation.

@@ -33,7 +33,6 @@ import os
 import traceback
 import hashlib
 import time
-import sys
 import errno
 import shutil
 from build_info import BuildInfo
@@ -57,17 +56,9 @@ from SCons.Errors import UserError
 # pylint: enable=import-error
 from prereq_tools import mocked_tests
 import subprocess  # nosec
-try:
-    from subprocess import DEVNULL  # nosec
-except ImportError:
-    DEVNULL = open(os.devnull, "wb")
 import tarfile
 import copy
-if sys.version_info < (3, 0):
-    # pylint: disable=import-error
-    import ConfigParser
-else:
-    import configparser as ConfigParser
+import configparser
 
 
 class DownloadFailure(Exception):
@@ -309,8 +300,9 @@ def default_libpath():
         print('No dpkg-architecture found in path.')
         return []
     try:
+        # pylint: disable=consider-using-with
         pipe = subprocess.Popen([dpkgarchitecture, '-qDEB_HOST_MULTIARCH'],
-                                stdout=subprocess.PIPE, stderr=DEVNULL)
+                                stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
         (stdo, _) = pipe.communicate()
         if pipe.returncode == 0:
             archpath = stdo.decode().strip()
@@ -340,10 +332,13 @@ class GitRepoRetriever():
     def apply_patches(self, subdir, patches):
         """ git-apply a certain hash """
         if patches is not None:
-            for patch in patches:
+            for patch in patches.keys():
                 print("Applying patch %s" % (patch))
-                commands = [['git', 'apply', patch]]
-                if not RUNNER.run_commands(commands, subdir=subdir):
+                command = ['git', 'apply']
+                if patches[patch] is not None:
+                    command.extend(['--directory', patches[patch]])
+                command.append(patch)
+                if not RUNNER.run_commands([command], subdir=subdir):
                     raise DownloadFailure(self.url, subdir)
 
     def update_submodules(self, subdir):
@@ -406,9 +401,9 @@ build with random upstream changes.
         command = [['git', 'reset', '--hard', 'HEAD']]
         if not RUNNER.run_commands(command, subdir=subdir):
             raise DownloadFailure(self.url, subdir)
-        # Now apply any patches specified
-        self.apply_patches(subdir, kw.get("patches", None))
         self.update_submodules(subdir)
+        # Now apply any patches specified
+        self.apply_patches(subdir, kw.get("patches", {}))
 
 
 class WebRetriever():
@@ -501,12 +496,15 @@ class WebRetriever():
 def check_flag_helper(context, compiler, ext, flag):
     """Helper function to allow checking for compiler flags"""
     if compiler in ["icc", "icpc"]:
-        flags = ["-diag-error=10006", "-diag-error=10148",
-                 "-Werror-all", flag]
+        flags = ["-diag-error=10006", "-diag-error=10148", "-Werror-all", flag]
         # bug in older scons, need CFLAGS to exist, -O2 is default.
         context.env.Replace(CFLAGS=['-O2'])
     elif compiler in ["gcc", "g++"]:
         # remove -no- for test
+        # There is a issue here when mpicc is a wrapper around gcc, in that we can pass -Wno-
+        # options to the compiler even if it doesn't understand them but.  This would be tricky
+        # to fix gcc only complains about unknown -Wno- warning options if the compile Fails
+        # for other reasons anyway.
         test_flag = flag.replace("-Wno-", "-W")
         flags = ["-Werror", test_flag]
     else:
@@ -537,17 +535,18 @@ def check_flags(env, config, key, value):
     if GetOption('help') or GetOption('clean'):
         return
     checked = []
+    cxx = env.get('CXX')
     for flag in value:
         if flag in checked:
             continue
         insert = False
         if key == "CCFLAGS":
-            if config.CheckFlag(flag) and config.CheckFlagCC(flag):
+            if config.CheckFlag(flag) and (cxx is None or config.CheckFlagCC(flag)):
                 insert = True
         elif key == "CFLAGS":
             if config.CheckFlag(flag):
                 insert = True
-        elif config.CheckFlagCC(flag):
+        elif cxx is not None and config.CheckFlagCC(flag):
             insert = True
         if insert:
             env.AppendUnique(**{key: [flag]})
@@ -721,7 +720,7 @@ class PreReqComponent():
 
         self.config_file = config_file
         if config_file is not None:
-            self.configs = ConfigParser.ConfigParser()
+            self.configs = configparser.ConfigParser()
             self.configs.read(config_file)
 
         self.installed = env.subst("$USE_INSTALLED").split(",")
@@ -1365,17 +1364,20 @@ class _Component():
         patchnum = 1
         patchstr = self.prereqs.get_config("patch_versions", self.name)
         if patchstr is None:
-            return []
-        patches = []
+            return {}
+        patches = {}
         patch_strs = patchstr.split(",")
         for raw in patch_strs:
+            patch_subdir = None
+            if "^" in raw:
+                (patch_subdir, raw) = raw.split('^')
             if "https://" not in raw:
-                patches.append(raw)
+                patches[raw] = patch_subdir
                 continue
             patch_name = "%s_patch_%03d" % (self.name, patchnum)
             patch_path = os.path.join(self.patch_path, patch_name)
             patchnum += 1
-            patches.append(patch_path)
+            patches[patch_path] = patch_subdir
             if os.path.exists(patch_path):
                 continue
             command = [['curl', '-sSfL', '--retry', '10', '--retry-max-time', '60',

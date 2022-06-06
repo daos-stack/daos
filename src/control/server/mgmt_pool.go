@@ -754,6 +754,28 @@ func (svc *mgmtSvc) PoolQuery(ctx context.Context, req *mgmtpb.PoolQueryReq) (*m
 	return resp, nil
 }
 
+// PoolQueryTarget forwards a pool query targets request to the I/O Engine.
+func (svc *mgmtSvc) PoolQueryTarget(ctx context.Context, req *mgmtpb.PoolQueryTargetReq) (*mgmtpb.PoolQueryTargetResp, error) {
+	if err := svc.checkReplicaRequest(req); err != nil {
+		return nil, err
+	}
+	svc.log.Debugf("MgmtSvc.PoolQueryTarget dispatch, req:%+v\n", req)
+
+	dresp, err := svc.makePoolServiceCall(ctx, drpc.MethodPoolQueryTarget, req)
+	if err != nil {
+		return nil, err
+	}
+
+	resp := &mgmtpb.PoolQueryTargetResp{}
+	if err = proto.Unmarshal(dresp.Body, resp); err != nil {
+		return nil, errors.Wrap(err, "unmarshal PoolQueryTarget response")
+	}
+
+	svc.log.Debugf("MgmtSvc.PoolQueryTarget dispatch, resp:%+v\n", resp)
+
+	return resp, nil
+}
+
 // PoolUpgrade forwards a pool upgrade request to the I/O Engine.
 func (svc *mgmtSvc) PoolUpgrade(ctx context.Context, req *mgmtpb.PoolUpgradeReq) (*mgmtpb.PoolUpgradeResp, error) {
 	if err := svc.checkLeaderRequest(req); err != nil {
