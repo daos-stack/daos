@@ -78,13 +78,13 @@ class ContainerDestroyTest(TestWithServers):
         else:
             poh = self.pool.pool.handle
 
-        uuid_str = None
+        con_uuid = None
         # Update container UUID used during destroy based on the variant.
         if change_uuid:
-            uuid_str = str(uuid.uuid4())
+            con_uuid = uuid.uuid4()
 
         try:
-            self.container.container.destroy(force=force, poh=poh, uuid_str=uuid_str)
+            self.container.container.destroy(force=force, poh=poh, con_uuid=con_uuid)
             passed = True
         except DaosApiError:
             self.log.info(traceback.format_exc())
