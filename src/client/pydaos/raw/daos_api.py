@@ -1591,15 +1591,15 @@ class DaosContainer():
                                             self))
             thread.start()
 
-    def destroy(self, force=1, poh=None, cb_func=None):
+    def destroy(self, force=1, poh=None, uuid_str=None, cb_func=None):
         """Send a container destroy request to the daos server group."""
         # caller can override pool handle and uuid
         if poh is not None:
             self.poh = poh
         if self.uuid is None:
             raise DaosApiError("Fail to destroy a container with uuid as none.")
-        uuid_str = self.get_uuid_str()
-
+        if uuid_str is None:
+            uuid_str = self.get_uuid_str()
         c_force = ctypes.c_uint(force)
 
         func = self.context.get_function('destroy-cont')
