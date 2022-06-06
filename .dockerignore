@@ -16,7 +16,7 @@
 !ci/rpm/install_maldet.sh
 !ci/rpm/distro_info.sh
 !ci/rpm/install-base-*.sh
-!ci/ci/provisioning/post_provision_common_functions.sh
+!ci/provisioning/post_provision_common_functions.sh
 
 # Now disallow extra files which may be present but are not required.
 # Include the rdb repo as well.
