@@ -94,13 +94,13 @@ pipeline {
                      description: 'Run the functional Ubuntu 20 CI tests')
         booleanParam(name: 'CI_small_TEST',
                      defaultValue: true,
-                     description: 'Run the Small Cluster CI tests')
+                     description: 'Run the CI Functional Hardware Small test stage')
         booleanParam(name: 'CI_medium_TEST',
                      defaultValue: true,
-                     description: 'Run the Medium Cluster CI tests')
+                     description: 'Run the CI Functional Hardware Medium test stage')
         booleanParam(name: 'CI_large_TEST',
                      defaultValue: true,
-                     description: 'Run the Large Cluster CI tests')
+                     description: 'Run the CI Functional Hardware Large test stage')
         booleanParam(name: 'CI_small_tcp_TEST',
                      defaultValue: true,
                      description: 'Run the CI Functional Hardware Small TCP test stage')
