@@ -101,22 +101,22 @@ pipeline {
         booleanParam(name: 'CI_large_TEST',
                      defaultValue: true,
                      description: 'Run the Large Cluster CI tests')
-        booleanParam(name: 'CI_FUNCTIONAL_HARDWARE_SMALL_TCP',
+        booleanParam(name: 'CI_small_tcp_TEST',
                      defaultValue: true,
                      description: 'Run the CI Functional Hardware Small TCP test stage')
-        booleanParam(name: 'CI_FUNCTIONAL_HARDWARE_MEDIUM_TCP',
+        booleanParam(name: 'CI_medium_tcp_TEST',
                      defaultValue: true,
                      description: 'Run the CI Functional Hardware Medium TCP test stage')
-        booleanParam(name: 'CI_FUNCTIONAL_HARDWARE_LARGE_TCP',
+        booleanParam(name: 'CI_large_tcp_TEST',
                      defaultValue: true,
                      description: 'Run the CI Functional Hardware Large TCP test stage')
-        booleanParam(name: 'CI_FUNCTIONAL_HARDWARE_SMALL_UCX',
+        booleanParam(name: 'CI_small_ucx_TEST',
                      defaultValue: false,
                      description: 'Run the CI Functional Hardware Small UCX test stage')
-        booleanParam(name: 'CI_FUNCTIONAL_HARDWARE_MEDIUM_UCX',
+        booleanParam(name: 'CI_medium_ucx_TEST',
                      defaultValue: false,
                      description: 'Run the CI Functional Hardware Medium UCX test stage')
-        booleanParam(name: 'CI_FUNCTIONAL_HARDWARE_LARGE_UCX',
+        booleanParam(name: 'CI_large_ucx_TEST',
                      defaultValue: false,
                      description: 'Run the CI Functional Hardware Large UCX test stage')
         string(name: 'CI_FUNCTIONAL_VM9_LABEL',
