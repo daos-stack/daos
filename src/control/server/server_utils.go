@@ -188,16 +188,13 @@ func prepBdevStorage(srv *server, iommuEnabled bool) error {
 
 	bdevCfgs := getBdevCfgsFromSrvCfg(srv.cfg)
 
-	if bdevCfgs.HaveNVMe() {
-		// Perform these checks only if non-emulated NVMe is used.
-		if srv.runningUser.Username != "root" {
-			if srv.cfg.DisableVFIO {
-				return FaultVfioDisabled
-			}
-
-			if !iommuEnabled {
-				return FaultIommuDisabled
-			}
+	// Perform these checks only if non-emulated NVMe is used and user is unprivileged.
+	if bdevCfgs.HaveNVMe() && srv.runningUser.Username != "root" {
+		if srv.cfg.DisableVFIO {
+			return FaultVfioDisabled
+		}
+		if !iommuEnabled {
+			return FaultIommuDisabled
 		}
 	}
 
