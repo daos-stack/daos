@@ -8,7 +8,7 @@ import traceback
 import uuid
 
 from apricot import TestWithServers
-from pydaos.raw import DaosApiError, conversion
+from pydaos.raw import DaosApiError
 
 
 class ContainerDestroyTest(TestWithServers):
