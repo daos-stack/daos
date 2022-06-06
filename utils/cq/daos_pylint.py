@@ -2,13 +2,166 @@
 """Wrapper script for calling pylint"""
 
 import os
+import re
 from collections import Counter
 import subprocess  # nosec
 import argparse
+import tempfile
 from pylint.lint import Run
 from pylint.reporters.collecting_reporter import CollectingReporter
 from pylint.lint import pylinter
-import check_script
+
+# Pylint checking for the DAOS project.
+
+# Wrapper script for pylint that does the following:
+#  Wraps scons commands and adjusts report line numbers
+#  Sets python-path or similar as required
+#  Runs in parallel across whole tree
+#  Supports minimum python version
+#  Supports venv usage
+#  Can be used by atom.io live
+#  Outputs directly to github annotations
+# To be added:
+#  Can be used in Jenkins to report regressions
+#  Can be used as a commit-hook
+#  flake8 style --diff option
+
+# For now this spilts code into one of three types, build (scons), ftest or other.  For build code
+# it enforces all style warnings except f-strings, for ftest it sets PYTHONPATH correctly and
+# does not warn about f-strings, for others it runs without any special flags.
+
+# Errors are reported as annotations to PRs and will fail the build, as do warnings in the build
+# code.  The next step is to enable warnings elsewhere to be logged, but due to the large number
+# that currently exist in the codebase we need to restrict this to modified code.  Spellings can
+# also be enabled shortly however we have a number to correct or whitelist before enabling.
+
+
+class WrapScript():
+    """Create a wrapper for a scons file and maintain a line mapping"""
+
+    def __init__(self, fname):
+
+        self.line_map = {}
+
+        # This file needs to live for as long as the object, so do not use with here.
+        # pylint: disable-next=consider-using-with
+        self.outfile = tempfile.NamedTemporaryFile(mode='w+', encoding='utf-8')
+        self.wrap_file = self.outfile.name
+        with open(fname, 'r') as infile:
+            self._read_files(infile, self.outfile)
+
+    def _read_files(self, infile, outfile):
+        old_lineno = 1
+        new_lineno = 1
+        scons_header = False
+
+        def _remap_count():
+            for iline in range(new_lineno, new_lineno + added):
+                self.line_map[iline] = old_lineno - 1
+
+        for line in infile.readlines():
+            outfile.write(line)
+            self.line_map[new_lineno] = old_lineno
+            old_lineno += 1
+            new_lineno += 1
+
+            match = re.search(r'^(\s*)Import\(.(.*).\)', line)
+            if match:
+                if not scons_header:
+                    scons_header = True
+                    new_lineno += self.write_header(outfile)
+                variables = []
+                for var in match.group(2).split():
+                    newvar = var.strip("\",     '")
+                    variables.append(newvar)
+                added = self.write_variables(outfile, match.group(1), variables)
+                _remap_count()
+                new_lineno += added
+
+            match = re.search(r'^(\s*)Export\(.(.*).\)', line)
+            if not match:
+                match = re.search(r'^(\s*).*exports=[.(.*).]', line)
+            if match:
+                if not scons_header:
+                    scons_header = True
+                    new_lineno += self.write_header(outfile)
+                variables = []
+                for var in match.group(2).split():
+                    newvar = var.strip("\",     '")
+                    variables.append(newvar)
+                added = self.read_variables(outfile, match.group(1), variables)
+                _remap_count()
+                new_lineno += added
+
+            if not scons_header:
+                # Insert out header after the first blank line.  It is possible to have valid
+                # python files which do not have blank lines until inside the first function
+                # which breaks this logic as the inserted code is at the wrong indentation however
+                # such code throws flake errors and we trap for that so whilst the logic here is
+                # not universally correct it should be correct for all flake clean code.
+                if line.strip() == '':
+                    added = self.write_header(outfile)
+                    _remap_count()
+                    new_lineno += added
+                    scons_header = True
+
+    @staticmethod
+    def read_variables(outfile, prefix, variables):
+        """Add code to define fake variables for pylint"""
+        newlines = 0
+        for variable in variables:
+            outfile.write('# pylint: disable-next=consider-using-f-string\n')
+            outfile.write(f"{prefix}print('%s' % str({variable}))\n")
+            newlines += 2
+        return newlines
+
+    @staticmethod
+    def write_variables(outfile, prefix, variables):
+        """Add code to define fake variables for pylint"""
+        newlines = 0
+
+        for variable in variables:
+            if variable.upper() == 'PREREQS':
+                newlines += 1
+# pylint: disable-next=line-too-long
+                outfile.write(f'{prefix}{variable} = PreReqComponent(DefaultEnvironment(), Variables())\n')  # noqa: E501
+                variables.remove(variable)
+        for variable in variables:
+            if "ENV" in variable.upper():
+                newlines += 1
+                outfile.write("%s%s = DefaultEnvironment()\n" % (prefix, variable))
+            elif "OPTS" in variable.upper():
+                newlines += 1
+                outfile.write("%s%s = Variables()\n" % (prefix, variable))
+            elif "PREFIX" in variable.upper():
+                newlines += 1
+                outfile.write("%s%s = ''\n" % (prefix, variable))
+            elif "TARGETS" in variable.upper() or "TGTS" in variable.upper():
+                newlines += 1
+                outfile.write("%s%s = ['fake']\n" % (prefix, variable))
+            else:
+                newlines += 1
+                outfile.write("%s%s = None\n" % (prefix, variable))
+
+        return newlines
+
+    @staticmethod
+    def write_header(outfile):
+        """write the header"""
+
+        # Always import PreReqComponent here, but it'll only be used in some cases.  This causes
+        # errors in the toplevel SConstruct which are suppressed, the alternative would be to do
+        # two passes and only add the include if needed later.
+        outfile.write("""# pylint: disable-next=unused-wildcard-import,wildcard-import
+from SCons.Script import * # pylint: disable=import-outside-toplevel
+# pylint: disable-next=import-outside-toplevel,unused-wildcard-import,wildcard-import
+from SCons.Variables import *
+from prereq_tools import PreReqComponent # pylint: disable=unused-import\n""")
+        return 5
+
+    def convert_line(self, line):
+        """Convert from a line number in the report to a line number in the input file"""
+        return self.line_map[line]
 
 
 class FileTypeList():
@@ -32,8 +185,9 @@ class FileTypeList():
                 return True
             if filename.endswith('SConscript'):
                 return True
-            # There may be more files needed here, but just this one is reporting errors.
-            if filename.endswith('site_scons/site_tools/protoc/__init__.py'):
+            # Not all files in this directory need wrapping for SCons functions but there is no
+            # harm in adding them all.
+            if 'site_scons/site_tools' in filename:
                 return True
             return False
 
@@ -85,7 +239,7 @@ def parse_file(args, target_file, ftest=False, scons=False):
         target = list(target_file)
         target.extend(['--jobs', str(min(len(target_file), 20))])
     elif scons:
-        wrapper = check_script.WrapScript(target_file, output=f'{target_file}.pycheck')
+        wrapper = WrapScript(target_file)
         target = [wrapper.wrap_file]
         # Do not warn on module name for SConstruct files, we don't get to pick their name.
         target.extend(['--disable', 'invalid-name'])
@@ -120,7 +274,7 @@ sys.path.append('site_scons')"""
     for msg in results.linter.reporter.messages:
         vals = {}
         # Spelling mistake, do not complain about message tags.
-        if msg.msg_id in ('C0401', 'C0402'):
+        if ftest and msg.msg_id in ('C0401', 'C0402'):
             if ":avocado:" in msg.msg:
                 continue
         # Inserting code can cause wrong-module-order.

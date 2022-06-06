@@ -207,7 +207,7 @@ def scons():  # pylint: disable=too-many-locals,too-many-branches
             version = tag
 
         try:
-            # pylint: disable-next=consider-using-with
+            # pylint: disable=consider-using-with
             token = yaml.safe_load(open(os.path.join(os.path.expanduser("~"),
                                                      ".config", "hub"), 'r')
                                    )['github.com'][0]['oauth_token']

@@ -1,7 +1,7 @@
 name: Pylint
 
 # Always run on Pull Requests as then this check can be makred as required.  It takes less than
-# three minutes to run and we can probably decrease this over time as well.
+# two minutes to run and we can probably decrease this over time.
 on:
   pull_request:
 
@@ -20,5 +20,5 @@ jobs:
         run: python3 -m pip install --requirement utils/cq/requirements.txt
       - name: Install enchant
         run: sudo apt-get update && sudo apt-get -y install enchant
-      - name: Start
+      - name: Run pylint check.
         run: ./utils/cq/daos_pylint.py --git --format github
