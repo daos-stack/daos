@@ -173,7 +173,42 @@ out:
 }
 
 int
-crt_context_provider_create(crt_context_t *crt_ctx, int provider)
+crt_context_provider_create(crt_context_t *crt_ctx, crt_provider_t provider, bool primary);
+
+int
+crt_context_create_on_provider(crt_context_t *crt_ctx, const char *provider, bool primary)
+{
+	int	provider_idx = -1;
+
+	provider_idx = crt_str_to_provider(provider);
+	if (provider_idx == -1) {
+		D_ERROR("Invalid requested provider '%s'\n", provider);
+		return -DER_INVAL;
+	}
+
+	return crt_context_provider_create(crt_ctx, provider_idx, primary);
+}
+
+int
+crt_context_uri_get(crt_context_t crt_ctx, char **uri)
+{
+	struct crt_context	*ctx = NULL;
+
+	if (crt_ctx == NULL || uri == NULL) {
+		D_ERROR("Invalid null parameters\n");
+		return -DER_INVAL;
+	}
+
+	ctx = crt_ctx;
+	D_STRNDUP(*uri, ctx->cc_self_uri, CRT_ADDR_STR_MAX_LEN);
+	if (*uri == NULL)
+		return DER_NOMEM;
+
+	return DER_SUCCESS;
+}
+
+int
+crt_context_provider_create(crt_context_t *crt_ctx, crt_provider_t provider, bool primary)
 {
 	struct crt_context	*ctx = NULL;
 	int			rc = 0;
@@ -210,6 +245,7 @@ crt_context_provider_create(crt_context_t *crt_ctx, int provider)
 		D_GOTO(out, rc);
 	}
 
+	ctx->cc_primary = primary;
 	D_RWLOCK_WRLOCK(&crt_gdata.cg_rwlock);
 
 	rc = crt_hg_ctx_init(&ctx->cc_hg_ctx, provider, cur_ctx_num);
@@ -221,15 +257,13 @@ crt_context_provider_create(crt_context_t *crt_ctx, int provider)
 		D_GOTO(out, rc);
 	}
 
-	if (crt_is_service()) {
-		rc = crt_hg_get_addr(ctx->cc_hg_ctx.chc_hgcla,
-				     ctx->cc_self_uri, &uri_len);
-		if (rc != 0) {
-			D_ERROR("ctx_hg_get_addr() failed; rc: %d.\n", rc);
-			D_RWLOCK_UNLOCK(&crt_gdata.cg_rwlock);
-			crt_context_destroy(ctx, true);
-			D_GOTO(out, rc);
-		}
+	rc = crt_hg_get_addr(ctx->cc_hg_ctx.chc_hgcla,
+			     ctx->cc_self_uri, &uri_len);
+	if (rc != 0) {
+		D_ERROR("ctx_hg_get_addr() failed; rc: %d.\n", rc);
+		D_RWLOCK_UNLOCK(&crt_gdata.cg_rwlock);
+		crt_context_destroy(ctx, true);
+		D_GOTO(out, rc);
 	}
 
 	ctx->cc_idx = cur_ctx_num;
@@ -284,7 +318,7 @@ crt_context_provider_create(crt_context_t *crt_ctx, int provider)
 			D_GOTO(out, rc);
 		}
 
-		if (provider == CRT_NA_OFI_SOCKETS || provider == CRT_NA_OFI_TCP_RXM) {
+		if (provider == CRT_PROV_OFI_SOCKETS || provider == CRT_PROV_OFI_TCP_RXM) {
 			struct crt_grp_priv	*grp_priv = crt_gdata.cg_grp->gg_primary_grp;
 			struct crt_swim_membs	*csm = &grp_priv->gp_membs_swim;
 
@@ -306,10 +340,40 @@ out:
 	return rc;
 }
 
+bool
+crt_context_is_primary(crt_context_t crt_ctx)
+{
+	struct crt_context *ctx;
+
+	ctx = crt_ctx;
+
+	return ctx->cc_primary;
+}
+
 int
 crt_context_create(crt_context_t *crt_ctx)
 {
-	return crt_context_provider_create(crt_ctx, crt_gdata.cg_init_prov);
+	return crt_context_provider_create(crt_ctx, crt_gdata.cg_primary_prov, true);
+}
+
+int
+crt_context_create_secondary(crt_context_t *crt_ctx, int idx)
+{
+	crt_provider_t sec_prov;
+
+	if (crt_gdata.cg_secondary_provs == NULL) {
+		D_ERROR("Secondary provider not initialized\n");
+		return -DER_INVAL;
+	}
+
+	/* TODO: Use idx later to ref other providers */
+	sec_prov = crt_gdata.cg_secondary_provs[0];
+	if (sec_prov == CRT_PROV_UNKNOWN) {
+		D_ERROR("Unknown secondary provider\n");
+		return -DER_INVAL;
+	}
+
+	return crt_context_provider_create(crt_ctx, sec_prov, false);
 }
 
 int
@@ -649,7 +713,8 @@ crt_rank_abort(d_rank_t rank)
 
 	D_RWLOCK_RDLOCK(&crt_gdata.cg_rwlock);
 
-	ctx_list = crt_provider_get_ctx_list(crt_gdata.cg_init_prov);
+	/* TODO: Do we need to handle secondary providers? */
+	ctx_list = crt_provider_get_ctx_list(crt_gdata.cg_primary_prov);
 	d_list_for_each_entry(ctx, ctx_list, cc_link) {
 		rc = 0;
 		D_MUTEX_LOCK(&ctx->cc_mutex);
@@ -1193,7 +1258,7 @@ crt_context_lookup_locked(int ctx_idx)
 	struct crt_context	*ctx;
 	d_list_t		*ctx_list;
 
-	ctx_list = crt_provider_get_ctx_list(crt_gdata.cg_init_prov);
+	ctx_list = crt_provider_get_ctx_list(crt_gdata.cg_primary_prov);
 
 	d_list_for_each_entry(ctx, ctx_list, cc_link) {
 		if (ctx->cc_idx == ctx_idx)
@@ -1213,7 +1278,7 @@ crt_context_lookup(int ctx_idx)
 
 	D_RWLOCK_RDLOCK(&crt_gdata.cg_rwlock);
 
-	ctx_list = crt_provider_get_ctx_list(crt_gdata.cg_init_prov);
+	ctx_list = crt_provider_get_ctx_list(crt_gdata.cg_primary_prov);
 
 	d_list_for_each_entry(ctx, ctx_list, cc_link) {
 		if (ctx->cc_idx == ctx_idx) {
@@ -1279,7 +1344,7 @@ crt_context_num(int *ctx_num)
 		return -DER_INVAL;
 	}
 
-	*ctx_num = crt_gdata.cg_prov_gdata[crt_gdata.cg_init_prov].cpg_ctx_num;
+	*ctx_num = crt_gdata.cg_prov_gdata[crt_gdata.cg_primary_prov].cpg_ctx_num;
 	return 0;
 }
 

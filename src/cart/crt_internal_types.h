@@ -26,7 +26,7 @@
 struct crt_hg_gdata;
 struct crt_grp_gdata;
 
-struct crt_na_ofi_config {
+struct crt_na_config {
 	int32_t		 noc_port;
 	char		*noc_interface;
 	char		*noc_domain;
@@ -38,7 +38,7 @@ struct crt_prov_gdata {
 	/** NA plugin type */
 	int			cpg_provider;
 
-	struct crt_na_ofi_config cpg_na_ofi_config;
+	struct crt_na_config	cpg_na_config;
 	/** Context0 URI */
 	char			cpg_addr[CRT_ADDR_STR_MAX_LEN];
 
@@ -55,6 +55,7 @@ struct crt_prov_gdata {
 
 	/** Set of flags */
 	unsigned int		cpg_sep_mode		: 1,
+				cpg_primary		: 1,
 				cpg_contig_ports	: 1,
 				cpg_inited		: 1;
 };
@@ -62,11 +63,13 @@ struct crt_prov_gdata {
 
 /* CaRT global data */
 struct crt_gdata {
-	/** Provider initialized at crt_init() time */
-	int			cg_init_prov;
+	/** Providers iinitialized at crt_init() time */
+	int			cg_primary_prov;
+	int			cg_num_secondary_provs;
+	int			*cg_secondary_provs;
 
 	/** Provider specific data */
-	struct crt_prov_gdata	cg_prov_gdata[CRT_NA_COUNT];
+	struct crt_prov_gdata	cg_prov_gdata[CRT_PROV_COUNT];
 
 	/** global timeout value (second) for all RPCs */
 	uint32_t		cg_timeout;
@@ -167,6 +170,7 @@ struct crt_context {
 	d_list_t		 cc_link;	/** link to gdata.cg_ctx_list */
 	int			 cc_idx;	/** context index */
 	struct crt_hg_context	 cc_hg_ctx;	/** HG context */
+	bool			 cc_primary;	/** primary provider flag */
 
 	/* callbacks */
 	void			*cc_rpc_cb_arg;
@@ -283,7 +287,6 @@ struct crt_opc_map {
 };
 
 
-int crt_na_ofi_config_init(int provider, crt_init_options_t *opt);
-void crt_na_ofi_config_fini(int provider);
+void crt_na_config_fini(int provider);
 
 #endif /* __CRT_INTERNAL_TYPES_H__ */

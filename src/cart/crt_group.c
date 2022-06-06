@@ -383,7 +383,7 @@ grp_li_uri_set(struct crt_lookup_item *li, int tag, const char *uri)
 	d_rank_t		rank;
 	int			rc = 0;
 	int			i;
-	enum crt_na_type	prov_type;
+	crt_provider_t		provider;
 
 	rank = li->li_rank;
 	grp_priv = li->li_grp_priv;
@@ -400,20 +400,20 @@ grp_li_uri_set(struct crt_lookup_item *li, int tag, const char *uri)
 		ui->ui_initialized = 1;
 		ui->ui_rank = li->li_rank;
 
-		rc = crt_hg_parse_uri(uri, &prov_type, base_addr);
+		rc = crt_hg_parse_uri(uri, &provider, base_addr);
 		if (rc)
 			D_GOTO(exit, rc);
 
 		D_DEBUG(DB_NET, "Parsed uri '%s', base_addr='%s' prov=%d\n",
-			uri, base_addr, prov_type);
+			uri, base_addr, provider);
 
-		if (crt_provider_is_contig_ep(prov_type)) {
-			if (crt_provider_is_port_based(prov_type)) {
-				rc = generate_port_based_uris(prov_type, base_addr, tag, ui);
-			} else if (prov_type == CRT_NA_OFI_CXI) {
-				rc = generate_cxi_uris(prov_type, base_addr, tag, ui);
+		if (crt_provider_is_contig_ep(provider)) {
+			if (crt_provider_is_port_based(provider)) {
+				rc = generate_port_based_uris(provider, base_addr, tag, ui);
+			} else if (provider == CRT_PROV_OFI_CXI) {
+				rc = generate_cxi_uris(provider, base_addr, tag, ui);
 			} else {
-				D_ERROR("Unknown provider %d for uri='%s'\n", prov_type, uri);
+				D_ERROR("Unknown provider %d for uri='%s'\n", provider, uri);
 				rc = -DER_INVAL;
 			}
 
@@ -434,7 +434,7 @@ grp_li_uri_set(struct crt_lookup_item *li, int tag, const char *uri)
 		if (rc != 0) {
 			D_ERROR("Entry already present\n");
 
-			if (crt_provider_is_contig_ep(prov_type)) {
+			if (crt_provider_is_contig_ep(provider)) {
 				for (i = 0; i < CRT_SRV_CONTEXT_NUM; i++)
 					D_FREE(ui->ui_uri[i]);
 			} else {
@@ -926,6 +926,7 @@ crt_grp_lc_lookup(struct crt_grp_priv *grp_priv, int ctx_idx,
 	struct crt_lookup_item	*li;
 	d_list_t		*rlink;
 	struct crt_grp_priv	*default_grp_priv;
+	crt_provider_t		provider;
 
 	D_ASSERT(grp_priv != NULL);
 
@@ -933,8 +934,10 @@ crt_grp_lc_lookup(struct crt_grp_priv *grp_priv, int ctx_idx,
 	D_ASSERT(uri != NULL || hg_addr != NULL);
 	D_ASSERT(ctx_idx >= 0 && ctx_idx < CRT_SRV_CONTEXT_NUM);
 
+	provider = crt_gdata.cg_primary_prov;
+
 	/* TODO: Derive from context */
-	if (crt_provider_is_sep(crt_gdata.cg_init_prov))
+	if (crt_provider_is_sep(provider))
 		tag = 0;
 
 	default_grp_priv = grp_priv;
@@ -1902,7 +1905,7 @@ crt_group_config_save(crt_group_t *grp, bool forall)
 	rank = grp_priv->gp_self;
 
 	/* TODO: Per provider address needs to be stored in future */
-	addr = crt_gdata.cg_prov_gdata[crt_gdata.cg_init_prov].cpg_addr;
+	addr = crt_gdata.cg_prov_gdata[crt_gdata.cg_primary_prov].cpg_addr;
 
 	grpid = grp_priv->gp_pub.cg_grpid;
 	filename = crt_grp_attach_info_filename(grp_priv);
@@ -2528,7 +2531,7 @@ crt_rank_self_set(d_rank_t rank)
 
 	D_RWLOCK_RDLOCK(&crt_gdata.cg_rwlock);
 
-	ctx_list = crt_provider_get_ctx_list(crt_gdata.cg_init_prov);
+	ctx_list = crt_provider_get_ctx_list(crt_gdata.cg_primary_prov);
 
 	d_list_for_each_entry(ctx, ctx_list, cc_link) {
 		hg_class =  ctx->cc_hg_ctx.chc_hgcla;

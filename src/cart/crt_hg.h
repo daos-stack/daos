@@ -31,51 +31,26 @@ struct crt_rpc_priv;
 struct crt_common_hdr;
 struct crt_corpc_hdr;
 
-/** type of NA plugin */
-enum crt_na_type {
-	CRT_NA_SM		= 0,
-	CRT_NA_OFI_SOCKETS	= 1,
-	CRT_NA_OFI_VERBS_RXM	= 2,
-	CRT_NA_OFI_GNI		= 3,
-	CRT_NA_OFI_PSM2		= 4,
-	CRT_NA_OFI_TCP_RXM	= 5,
-	CRT_NA_OFI_CXI		= 6,
-	CRT_NA_OFI_LAST         = CRT_NA_OFI_CXI,
-	CRT_NA_UCX_RC		= 7,
-	CRT_NA_UCX_UD		= 8,
-	CRT_NA_UCX_RC_UD	= 9,
-	CRT_NA_UCX_RC_O		= 10,
-	CRT_NA_UCX_UD_O		= 11,
-	CRT_NA_UCX_RC_UD_O	= 12,
-	CRT_NA_UCX_RC_X		= 13,
-	CRT_NA_UCX_UD_X		= 14,
-	CRT_NA_UCX_RC_UD_X      = 15,
-	CRT_NA_UCX_DC_X         = 16,
 
-	/* Note: This entry should be the last valid one in enum */
-	CRT_NA_COUNT,
-	CRT_NA_UNKNOWN = -1,
-};
-
-enum crt_na_type
-crt_prov_str_to_na_type(const char *prov_str);
+crt_provider_t
+crt_prov_str_to_prov(const char *prov_str);
 
 int
-crt_hg_parse_uri(const char *uri, enum crt_na_type *prov, char *addr);
+crt_hg_parse_uri(const char *uri, crt_provider_t *prov, char *addr);
 
 static inline bool
-crt_na_type_is_ucx(int na_type)
+crt_provider_is_ucx(crt_provider_t prov)
 {
 
-	return (na_type >= CRT_NA_UCX_RC) &&
-	       (na_type < CRT_NA_COUNT);
+	return (prov >= CRT_PROV_UCX_RC) &&
+	       (prov <= CRT_PROV_UCX_LAST);
 }
 
 static inline bool
-crt_na_type_is_ofi(int na_type)
+crt_provider_is_ofi(crt_provider_t prov)
 {
-	return (na_type >= CRT_NA_OFI_SOCKETS) &&
-	       (na_type <= CRT_NA_OFI_LAST);
+	return (prov >= CRT_PROV_OFI_SOCKETS) &&
+	       (prov <= CRT_PROV_OFI_LAST);
 }
 
 struct crt_na_dict {
