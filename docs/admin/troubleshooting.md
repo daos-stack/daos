@@ -921,7 +921,8 @@ pool header correct
 
 ## Syslog
 
-RAS events are printed to the Syslog by 'daos_server' processes via the golang standard library API.
+[`RAS events`](https://docs.daos.io/v2.2/admin/administration/#ras-events) are printed to the Syslog
+by 'daos_server' processes via the Go standard library API.
 If no Syslog daemon is configured on the host, errors will be printed to the 'daos_server' log file:
 
 ```
