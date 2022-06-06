@@ -2394,14 +2394,14 @@ delet_container_during_aggregation(void **state)
 	test_arg_t	*arg = *state;
 	daos_obj_id_t	 oid;
 	daos_pool_info_t pinfo;
-	int		i;
-	int		rc;
+	int		 i;
+	int		 rc;
 
 	/* Prepare records */
 	oid = daos_test_oid_gen(arg->coh, OC_SX, 0, 0, arg->myrank);
 
 	print_message("Initial Pool Query\n");
-	pool_storage_info(state, &pinfo);
+	pool_storage_info(arg, &pinfo);
 
 	/* Aggregation will be Hold */
 	daos_debug_set_params(arg->group, -1, DMG_KEY_FAIL_LOC,
@@ -2418,7 +2418,7 @@ delet_container_during_aggregation(void **state)
 	 * Aggregation will be ready to run by this time
 	 */
 	for (i = 0; i <= 5; i++) {
-		pool_storage_info(state, &pinfo);
+		pool_storage_info(arg, &pinfo);
 		sleep(5);
 	}
 
@@ -2430,7 +2430,7 @@ delet_container_during_aggregation(void **state)
 	assert_rc_equal(rc, 0);
 
 	/* Run Pool query at the end */
-	pool_storage_info(state, &pinfo);
+	pool_storage_info(arg, &pinfo);
 }
 
 static void
