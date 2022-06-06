@@ -84,4 +84,6 @@ RUN [ -z "$CACHEBUST" ] || {                                                    
 ARG BUILD_URL
 COPY ci/rpm/distro_info.sh /tmp/distro_info.sh
 COPY ci/rpm/install_maldet.sh /tmp/install_maldet.sh
+COPY ci/provisioning/post_provision_common_functions.sh \
+     /tmp/post_provision_common_functions.sh
 RUN /tmp/install_maldet.sh

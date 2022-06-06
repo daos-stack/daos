@@ -6,9 +6,11 @@ mydir="$(cd "$(dirname "${BASH_SOURCE[0]}")" >/dev/null 2>&1 && pwd)"
 # at some point we want to use: shellcheck source=ci/rpm/distro_info.sh
 # shellcheck disable=SC1091
 source "$mydir/distro_info.sh"
+# shellcheck disable=SC1091
+source "$mydir/post_provision_common_functions.sh"
 
 if command -v dnf; then
-  sudo dnf -y install \
+  sudo retry_cmd 360 dnf -y install \
     daos{,-{client,server,tests,debuginfo,devel}}-"${DAOS_PKG_VERSION}"
 elif command -v apt-get; then
   echo "Ubuntu not implemented yet."

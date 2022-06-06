@@ -5,12 +5,13 @@
 # This is for a daos test install environment, not a build environment.
 # Switch to dnf as it seems a bit faster.
 # *** Keep these in as much alphbetical order as possible ***
-
+# CI environment expects git command to be present.
 dnf --nodocs install \
     bzip2 \
     curl \
     clang \
     flex \
+    git \
     go1.14 \
     go1.14-race \
     gzip \

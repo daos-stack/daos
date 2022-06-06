@@ -8,6 +8,7 @@
 # interactively then these two commands can be used to set dnf into automatic mode.
 # dnf --assumeyes install dnf-plugins-core
 # dnf config-manager --save --setopt=assumeyes=True
+# CI environment expects git command to be present.
 
 dnf --nodocs install \
     bzip2 \
@@ -16,6 +17,7 @@ dnf --nodocs install \
     file \
     flex \
     fuse3 \
+    git \
     glibc-langpack-en \
     golang \
     ipmctl \

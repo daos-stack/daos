@@ -6,12 +6,14 @@
 # Switch to dnf as it seems a bit faster.
 # *** Keep these in as much alphbetical order as possible ***
 
+# CI environment expects git command to be present.
 dnf --nodocs install \
     bzip2 \
     e2fsprogs \
     file \
     flex \
     fuse3 \
+    git \
     golang \
     ipmctl \
     java-1.8.0-openjdk \
