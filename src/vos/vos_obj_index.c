@@ -503,6 +503,7 @@ oi_iter_match_probe(struct vos_iterator *iter, daos_anchor_t *anchor, uint32_t f
 {
 	uint64_t		 start_seq;
 	struct vos_oi_iter	*oiter	= iter2oiter(iter);
+	struct dtx_handle	*dth;
 	char			*str	= NULL;
 	vos_iter_desc_t		 desc;
 	uint64_t		 feats;
@@ -539,8 +540,13 @@ oi_iter_match_probe(struct vos_iterator *iter, daos_anchor_t *anchor, uint32_t f
 			}
 			acts = 0;
 			start_seq = vos_sched_seq();
+			dth = vos_dth_get();
+			if (dth != NULL)
+				vos_dth_set(NULL);
 			rc = iter->it_filter_cb(vos_iter2hdl(iter), &desc, iter->it_filter_arg,
 						&acts);
+			if (dth != NULL)
+				vos_dth_set(dth);
 			if (rc != 0)
 				goto failed;
 			if (start_seq != vos_sched_seq())

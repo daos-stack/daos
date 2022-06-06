@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2021 Intel Corporation.
+ * (C) Copyright 2021-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -298,55 +298,6 @@ ds_start_scrubbing_ult(struct ds_pool_child *child)
 
 	return 0;
 }
-//
-///** Setup and create the scrubbing ult */
-//int
-//ds_start_scrubbing_ult(struct ds_pool_child *child)
-//{
-//	struct dss_module_info	*dmi = dss_get_module_info();
-//	struct sched_req_attr	 attr = {0};
-//	ABT_thread		 thread = ABT_THREAD_NULL;
-//	int			 rc;
-//
-//	D_ASSERT(child != NULL);
-//	D_ASSERT(child->spc_scrubbing_req == NULL);
-//
-//	/** Don't even create the ULT if scrubbing is disabled. */
-//	if (!scrubbing_is_enabled()) {
-//		C_TRACE(DF_PTGT": Checksum scrubbing DISABLED.\n",
-//			DP_PTGT(child->spc_uuid, dmi->dmi_tgt_id));
-//		return 0;
-//	}
-//
-//	C_TRACE(DF_PTGT": Checksum scrubbing Enabled. Creating ULT.\n",
-//		DP_PTGT(child->spc_uuid, dmi->dmi_tgt_id));
-//
-//	/* There will be several levels iteration, such as pool, container,
-//	 * object, and lower, and so on. Let's use DSS_DEEP_STACK_SZ to avoid
-//	 * ULT overflow.
-//	 */
-//	rc = dss_ult_create(scrubbing_ult, child, DSS_XS_SELF, 0,
-//			    DSS_DEEP_STACK_SZ, &thread);
-//
-//	if (rc) {
-//		D_ERROR(DF_PTGT": Failed to create Scrubbing ULT. "DF_RC"\n",
-//			DP_PTGT(child->spc_uuid, dmi->dmi_tgt_id), DP_RC(rc));
-//		return rc;
-//	}
-//
-//	D_ASSERT(thread != ABT_THREAD_NULL);
-//
-//	sched_req_attr_init(&attr, SCHED_REQ_SCRUB, &child->spc_uuid);
-//	child->spc_scrubbing_req = sched_req_get(&attr, thread);
-//	if (child->spc_scrubbing_req == NULL) {
-//		D_CRIT(DF_PTGT": Failed to get req for Scrubbing ULT\n",
-//		       DP_PTGT(child->spc_uuid, dmi->dmi_tgt_id));
-//		ABT_thread_join(thread);
-//		return -DER_NOMEM;
-//	}
-//
-//	return 0;
-//}
 
 void
 ds_stop_scrubbing_ult(struct ds_pool_child *child)

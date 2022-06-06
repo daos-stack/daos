@@ -14,8 +14,8 @@ import (
 	"github.com/google/go-cmp/cmp"
 	"github.com/pkg/errors"
 
-	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/common/proto"
+	"github.com/daos-stack/daos/src/control/common/test"
 	"github.com/daos-stack/daos/src/control/lib/ipmctl"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/server/storage"
@@ -142,7 +142,7 @@ func TestIpmctl_checkIpmctl(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
-			defer common.ShowBufferOnFailure(t, buf)
+			defer test.ShowBufferOnFailure(t, buf)
 
 			mockRun := func(_ string) (string, error) {
 				return preTxt + tc.verOut, nil
@@ -152,7 +152,7 @@ func TestIpmctl_checkIpmctl(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			common.CmpErr(t, tc.expErr, cr.checkIpmctl(tc.badVers))
+			test.CmpErr(t, tc.expErr, cr.checkIpmctl(tc.badVers))
 		})
 	}
 }
@@ -244,7 +244,7 @@ func TestIpmctl_getRegionStateFromCLI(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
-			defer common.ShowBufferOnFailure(t, buf)
+			defer test.ShowBufferOnFailure(t, buf)
 
 			callIdx := 0
 
@@ -270,7 +270,7 @@ func TestIpmctl_getRegionStateFromCLI(t *testing.T) {
 			}
 
 			scmState, err := cr.getRegionState()
-			common.CmpErr(t, tc.expErr, err)
+			test.CmpErr(t, tc.expErr, err)
 			if tc.expErr != nil {
 				return
 			}
@@ -356,7 +356,7 @@ func TestIpmctl_getRegionState(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
-			defer common.ShowBufferOnFailure(t, buf)
+			defer test.ShowBufferOnFailure(t, buf)
 
 			mockLookPath := func(string) (string, error) {
 				return "", nil
@@ -373,7 +373,7 @@ func TestIpmctl_getRegionState(t *testing.T) {
 			}
 
 			scmState, err := cr.getRegionStateFromBindings()
-			common.CmpErr(t, tc.expErr, err)
+			test.CmpErr(t, tc.expErr, err)
 			if tc.expErr != nil {
 				return
 			}
@@ -831,7 +831,7 @@ func TestIpmctl_prep(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
-			defer common.ShowBufferOnFailure(t, buf)
+			defer test.ShowBufferOnFailure(t, buf)
 
 			var calls []string
 			var callIdx int
@@ -874,7 +874,7 @@ func TestIpmctl_prep(t *testing.T) {
 
 			resp, err := cr.prep(*tc.prepReq, tc.scanResp)
 			log.Debugf("calls made %+v", calls)
-			common.CmpErr(t, tc.expErr, err)
+			test.CmpErr(t, tc.expErr, err)
 
 			if diff := cmp.Diff(tc.expPrepResp, resp); diff != "" {
 				t.Fatalf("unexpected response (-want, +got):\n%s\n", diff)
@@ -1036,7 +1036,7 @@ func TestIpmctl_prepReset(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
-			defer common.ShowBufferOnFailure(t, buf)
+			defer test.ShowBufferOnFailure(t, buf)
 
 			var calls []string
 
@@ -1065,7 +1065,7 @@ func TestIpmctl_prepReset(t *testing.T) {
 			}
 
 			resp, err := cr.prepReset(tc.scanResp)
-			common.CmpErr(t, tc.expErr, err)
+			test.CmpErr(t, tc.expErr, err)
 
 			if diff := cmp.Diff(tc.expPrepResp, resp); diff != "" {
 				t.Fatalf("unexpected response (-want, +got):\n%s\n", diff)
@@ -1142,7 +1142,7 @@ func TestIpmctl_parseNamespaces(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			gotNamespaces, gotErr := parseNamespaces(tc.in)
 
-			common.CmpErr(t, tc.expErr, gotErr)
+			test.CmpErr(t, tc.expErr, gotErr)
 			if diff := cmp.Diff(tc.expNamespaces, gotNamespaces); diff != "" {
 				t.Fatalf("unexpected namespace result (-want, +got):\n%s\n", diff)
 			}
@@ -1207,7 +1207,7 @@ func TestIpmctl_getNamespaces(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.desc, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
-			defer common.ShowBufferOnFailure(t, buf)
+			defer test.ShowBufferOnFailure(t, buf)
 
 			mockLookPath := func(string) (s string, err error) {
 				if tt.lookPathErrMsg != "" {
@@ -1239,14 +1239,14 @@ func TestIpmctl_getNamespaces(t *testing.T) {
 			namespaces, err := cr.getNamespaces()
 			if err != nil {
 				if tt.lookPathErrMsg != "" {
-					common.ExpectError(t, err, tt.lookPathErrMsg, tt.desc)
+					test.ExpectError(t, err, tt.lookPathErrMsg, tt.desc)
 					return
 				}
 				t.Fatal(tt.desc + ": GetPmemNamespaces: " + err.Error())
 			}
 
-			common.AssertEqual(t, commands, tt.expCommands, tt.desc+": unexpected list of commands run")
-			common.AssertEqual(t, namespaces, tt.expNamespaces, tt.desc+": unexpected list of pmem device file names")
+			test.AssertEqual(t, commands, tt.expCommands, tt.desc+": unexpected list of commands run")
+			test.AssertEqual(t, namespaces, tt.expNamespaces, tt.desc+": unexpected list of pmem device file names")
 		})
 	}
 }
@@ -1288,7 +1288,7 @@ func TestIpmctl_getModules(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
-			defer common.ShowBufferOnFailure(t, buf)
+			defer test.ShowBufferOnFailure(t, buf)
 
 			mockBinding := newMockIpmctl(tc.cfg)
 			cr, err := newCmdRunner(log, mockBinding, nil, nil)
@@ -1298,7 +1298,7 @@ func TestIpmctl_getModules(t *testing.T) {
 
 			result, err := cr.getModules()
 
-			common.CmpErr(t, tc.expErr, err)
+			test.CmpErr(t, tc.expErr, err)
 			if diff := cmp.Diff(tc.expResult, result); diff != "" {
 				t.Errorf("wrong firmware info (-want, +got):\n%s\n", diff)
 			}
@@ -1335,7 +1335,7 @@ func TestIpmctl_fwInfoStatusToUpdateStatus(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			result := scmFirmwareUpdateStatusFromIpmctl(tc.input)
 
-			common.AssertEqual(t, tc.expResult, result, "didn't match")
+			test.AssertEqual(t, tc.expResult, result, "didn't match")
 		})
 	}
 }
@@ -1401,7 +1401,7 @@ func TestIpmctl_GetFirmwareStatus(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
-			defer common.ShowBufferOnFailure(t, buf)
+			defer test.ShowBufferOnFailure(t, buf)
 
 			mockBinding := newMockIpmctl(tc.cfg)
 			cr, err := newCmdRunner(log, mockBinding, nil, nil)
@@ -1411,7 +1411,7 @@ func TestIpmctl_GetFirmwareStatus(t *testing.T) {
 
 			result, err := cr.GetFirmwareStatus(tc.inputUID)
 
-			common.CmpErr(t, tc.expErr, err)
+			test.CmpErr(t, tc.expErr, err)
 			if diff := cmp.Diff(tc.expResult, result); diff != "" {
 				t.Errorf("wrong firmware info (-want, +got):\n%s\n", diff)
 			}
@@ -1444,7 +1444,7 @@ func TestIpmctl_UpdateFirmware(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
-			defer common.ShowBufferOnFailure(t, buf)
+			defer test.ShowBufferOnFailure(t, buf)
 
 			mockBinding := newMockIpmctl(tc.cfg)
 			cr, err := newCmdRunner(log, mockBinding, nil, nil)
@@ -1453,7 +1453,7 @@ func TestIpmctl_UpdateFirmware(t *testing.T) {
 			}
 
 			err = cr.UpdateFirmware(tc.inputUID, "/dont/care")
-			common.CmpErr(t, tc.expErr, err)
+			test.CmpErr(t, tc.expErr, err)
 		})
 	}
 }

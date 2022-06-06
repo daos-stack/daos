@@ -92,7 +92,7 @@ cont_df_rec_alloc(struct btr_instance *tins, d_iov_t *key_iov,
 	cont_df = umem_off2ptr(&tins->ti_umm, offset);
 	uuid_copy(cont_df->cd_id, ukey->uuid);
 
-	rc = dbtree_create_inplace_ex(VOS_BTR_OBJ_TABLE, VOS_TF_AGG_OPT, VOS_OBJ_ORDER,
+	rc = dbtree_create_inplace_ex(VOS_BTR_OBJ_TABLE, 0, VOS_OBJ_ORDER,
 				      &pool->vp_uma, &cont_df->cd_obj_root,
 				      DAOS_HDL_INVAL, pool, &hdl);
 	if (rc) {

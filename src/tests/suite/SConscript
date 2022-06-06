@@ -1,15 +1,8 @@
 """Build test suite"""
 import sys
-
 import subprocess
-#hack to handle old subprocess version
-try:
-    from subprocess import DEVNULL
-except ImportError:
-    import os
-    DEVNULL = open(os.devnull, "wb")
-
 import daos_build
+import compiler_setup
 
 test_cmocka_skip = """
 #include <stdarg.h>
@@ -45,9 +38,9 @@ def CheckCmockaSkip(context):
         return rc
     prog = context.lastTarget
     pname = prog.get_abspath()
-    rc = subprocess.call(pname, env={"CMOCKA_TEST_ABORT": "1"}, stdout=DEVNULL,
-                         stderr=DEVNULL)
-    #in case of abort rc is -6 instead of 134 (128+6) with shell ...
+    rc = subprocess.call(pname, env={"CMOCKA_TEST_ABORT": "1"},
+                         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    # in case of abort rc is -6 instead of 134 (128+6) with shell ...
     if rc == -6:
         sys.stdout.write(" (Bug reproduced) ")
     else:
@@ -77,12 +70,17 @@ def configure_cmocka(nenv):
 #
 def scons():
     """Execute build"""
-    Import('denv')
+    Import('denv', 'base_env')
 
     libraries = ['daos', 'dfs', 'daos_tests', 'gurt', 'cart']
     libraries += ['uuid', 'cmocka', 'pthread', 'isal', 'dpar']
 
-    denv.AppendUnique(CPPPATH=["#/src/client/dfs"])
+    dfuse_env = base_env.Clone()
+    compiler_setup.base_setup(dfuse_env)
+    dfusetest = daos_build.program(dfuse_env, File("dfuse_test.c"), LIBS='cmocka')
+    denv.Install('$PREFIX/bin/', dfusetest)
+
+    denv.AppendUnique(CPPPATH=[Dir('../../client/dfs').srcnode()])
     denv.AppendUnique(CPPPATH=[Dir('../../mgmt').srcnode()])
 
     daos_test_tgt = denv.SharedObject(['daos_test_common.c'])
@@ -107,13 +105,13 @@ def scons():
                     daos_aggregate_ec.c daos_degrade_ec.c
                     daos_extend_simple.c daos_obj_ec.c""")
 
-    newenv.AppendUnique(LIBPATH=["$BUILD_DIR/src/client/dfs"])
+    newenv.AppendUnique(LIBPATH=[Dir('../../client/dfs')])
     daostest = daos_build.program(newenv, 'daos_test', c_files + daos_test_tgt,
                                   LIBS=['daos_common'] + libraries)
 
     c_files = Split("""dfs_unit_test.c dfs_par_test.c dfs_test.c """
                     """dfs_sys_unit_test.c""")
-    newenv.AppendUnique(CPPPATH=["#/src/client/dfs"])
+    newenv.AppendUnique(CPPPATH=[Dir('../../client/dfs').srcnode()])
     dfstest = daos_build.program(newenv, 'dfs_test', c_files + daos_test_tgt,
                                  LIBS=['daos_common'] + libraries)
 

@@ -28,25 +28,19 @@ import (
 
 	"github.com/daos-stack/daos/src/control/build"
 	"github.com/daos-stack/daos/src/control/common"
+	"github.com/daos-stack/daos/src/control/common/test"
 	"github.com/daos-stack/daos/src/control/events"
 	"github.com/daos-stack/daos/src/control/logging"
+	"github.com/daos-stack/daos/src/control/system"
 	. "github.com/daos-stack/daos/src/control/system"
 )
 
-func waitForLeadership(ctx context.Context, t *testing.T, db *Database, gained bool, timeout time.Duration) {
+func waitForLeadership(ctx context.Context, t *testing.T, db *Database, gained bool) {
 	t.Helper()
-	timer := time.NewTimer(timeout)
 	for {
 		select {
 		case <-ctx.Done():
 			t.Fatal(ctx.Err())
-			return
-		case <-timer.C:
-			state := "gained"
-			if !gained {
-				state = "lost"
-			}
-			t.Fatalf("leadership was not %s before timeout", state)
 			return
 		default:
 			if db.IsLeader() == gained {
@@ -59,7 +53,7 @@ func waitForLeadership(ctx context.Context, t *testing.T, db *Database, gained b
 
 func TestSystem_Database_filterMembers(t *testing.T) {
 	log, buf := logging.NewTestLogger(t.Name())
-	defer common.ShowBufferOnFailure(t, buf)
+	defer test.ShowBufferOnFailure(t, buf)
 
 	db := MockDatabase(t, log)
 	memberStates := []MemberState{
@@ -117,10 +111,10 @@ func TestSystem_Database_filterMembers(t *testing.T) {
 	}
 }
 
-func TestSystem_Database_Cancel(t *testing.T) {
+func TestSystem_Database_LeadershipCallbacks(t *testing.T) {
 	localhost := common.LocalhostCtrlAddr()
 	log, buf := logging.NewTestLogger(t.Name())
-	defer common.ShowBufferOnFailure(t, buf)
+	defer test.ShowBufferOnFailure(t, buf)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -142,9 +136,9 @@ func TestSystem_Database_Cancel(t *testing.T) {
 		return nil
 	})
 
-	waitForLeadership(ctx, t, db, true, 15*time.Second)
+	waitForLeadership(ctx, t, db, true)
 	dbCancel()
-	waitForLeadership(ctx, t, db, false, 15*time.Second)
+	waitForLeadership(ctx, t, db, false)
 
 	if atomic.LoadUint32(&onGainedCalled) != 1 {
 		t.Fatal("OnLeadershipGained callbacks didn't execute")
@@ -231,9 +225,10 @@ func (tss *testSnapshotSink) Reader() io.ReadCloser {
 func TestSystem_Database_SnapshotRestore(t *testing.T) {
 	maxRanks := 2048
 	maxPools := 1024
+	maxAttrs := 4096
 
 	log, buf := logging.NewTestLogger(t.Name())
-	defer common.ShowBufferOnFailure(t, buf)
+	defer test.ShowBufferOnFailure(t, buf)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -286,6 +281,19 @@ func TestSystem_Database_SnapshotRestore(t *testing.T) {
 		(*fsm)(db0).Apply(rl)
 	}
 
+	attrs := make(map[string]string)
+	for i := 0; i < maxAttrs; i++ {
+		attrs[fmt.Sprintf("prop%04d", i)] = fmt.Sprintf("value%04d", i)
+	}
+	data, err := createRaftUpdate(raftOpUpdateSystemAttrs, attrs)
+	if err != nil {
+		t.Fatal(err)
+	}
+	rl := &raft.Log{
+		Data: data,
+	}
+	(*fsm)(db0).Apply(rl)
+
 	snap, err := (*fsm)(db0).Snapshot()
 	if err != nil {
 		t.Fatal(err)
@@ -314,7 +322,7 @@ func TestSystem_Database_SnapshotRestore(t *testing.T) {
 
 func TestSystem_Database_SnapshotRestoreBadVersion(t *testing.T) {
 	log, buf := logging.NewTestLogger(t.Name())
-	defer common.ShowBufferOnFailure(t, buf)
+	defer test.ShowBufferOnFailure(t, buf)
 
 	db0, cleanup0 := TestDatabase(t, log, nil)
 	defer cleanup0()
@@ -334,7 +342,7 @@ func TestSystem_Database_SnapshotRestoreBadVersion(t *testing.T) {
 
 	wantErr := errors.Errorf("%d != %d", db0.data.SchemaVersion, CurrentSchemaVersion)
 	gotErr := (*fsm)(db1).Restore(sink.Reader())
-	common.CmpErr(t, wantErr, gotErr)
+	test.CmpErr(t, wantErr, gotErr)
 }
 
 func TestSystem_Database_BadApply(t *testing.T) {
@@ -360,7 +368,7 @@ func TestSystem_Database_BadApply(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
-			defer common.ShowBufferOnFailure(t, buf)
+			defer test.ShowBufferOnFailure(t, buf)
 
 			db := MockDatabase(t, log)
 			rl := &raft.Log{
@@ -503,7 +511,7 @@ func TestSystem_Database_memberRaftOps(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
-			defer common.ShowBufferOnFailure(t, buf)
+			defer test.ShowBufferOnFailure(t, buf)
 
 			db := MockDatabase(t, log)
 
@@ -616,7 +624,7 @@ func TestSystem_Database_FaultDomainTree(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
-			defer common.ShowBufferOnFailure(t, buf)
+			defer test.ShowBufferOnFailure(t, buf)
 
 			db := MockDatabase(t, log)
 			db.data.Members.FaultDomains = tc.fdTree
@@ -629,6 +637,77 @@ func TestSystem_Database_FaultDomainTree(t *testing.T) {
 
 			if result != nil && result == db.data.Members.FaultDomains {
 				t.Fatal("expected fault domain tree to be a copy")
+			}
+		})
+	}
+}
+
+func raftUpdateSystemAttrs(t *testing.T, db *Database, attrs map[string]string) {
+	t.Helper()
+	data, err := createRaftUpdate(raftOpUpdateSystemAttrs, attrs)
+	if err != nil {
+		t.Fatal(err)
+	}
+	rl := &raft.Log{
+		Data: data,
+	}
+	(*fsm)(db).Apply(rl)
+}
+
+func TestSystem_Database_SystemAttrs(t *testing.T) {
+	for name, tc := range map[string]struct {
+		startAttrs  map[string]string
+		attrsUpdate map[string]string
+		searchKeys  []string
+		expAttrs    map[string]string
+		expErr      error
+	}{
+		"add success": {
+			startAttrs:  map[string]string{},
+			attrsUpdate: map[string]string{"foo": "bar"},
+			expAttrs:    map[string]string{"foo": "bar"},
+		},
+		"remove success": {
+			startAttrs:  map[string]string{"bye": "gone"},
+			attrsUpdate: map[string]string{"bye": ""},
+			expAttrs:    map[string]string{},
+		},
+		"update success": {
+			startAttrs:  map[string]string{"foo": "baz"},
+			attrsUpdate: map[string]string{"foo": "bar"},
+			expAttrs:    map[string]string{"foo": "bar"},
+		},
+		"get bad key": {
+			startAttrs:  map[string]string{},
+			attrsUpdate: map[string]string{"foo": "bar"},
+			expAttrs:    map[string]string{"foo": "bar"},
+			searchKeys:  []string{"whoops"},
+			expErr:      system.ErrSystemAttrNotFound("whoops"),
+		},
+		"get good key": {
+			startAttrs:  map[string]string{"foo": "bar", "baz": "qux"},
+			attrsUpdate: map[string]string{"foo": "quux"},
+			expAttrs:    map[string]string{"baz": "qux"},
+			searchKeys:  []string{"baz"},
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(t.Name())
+			defer test.ShowBufferOnFailure(t, buf)
+
+			db := MockDatabase(t, log)
+
+			db.data.System.Attributes = tc.startAttrs
+			db.SetSystemAttrs(tc.attrsUpdate)
+
+			gotAttrs, gotErr := db.GetSystemAttrs(tc.searchKeys, nil)
+			test.CmpErr(t, tc.expErr, gotErr)
+			if tc.expErr != nil {
+				return
+			}
+
+			if diff := cmp.Diff(tc.expAttrs, gotAttrs); diff != "" {
+				t.Fatalf("unexpected system properties (-want, +got):\n%s\n", diff)
 			}
 		})
 	}
@@ -694,7 +773,7 @@ func TestSystem_Database_OnEvent(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
-			defer common.ShowBufferOnFailure(t, buf)
+			defer test.ShowBufferOnFailure(t, buf)
 
 			db := MockDatabase(t, log)
 			for _, ps := range tc.poolSvcs {
@@ -774,7 +853,7 @@ func TestSystemDatabase_PoolServiceList(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
-			defer common.ShowBufferOnFailure(t, buf)
+			defer test.ShowBufferOnFailure(t, buf)
 
 			db := MockDatabase(t, log)
 			for _, ps := range tc.poolSvcs {
@@ -864,7 +943,7 @@ func TestSystem_Database_GroupMap(t *testing.T) {
 		},
 		"unset fabric URI skipped": {
 			members: append([]*Member{
-				NewMember(2, common.MockUUID(2), "", MockControlAddr(t, 2), MemberStateJoined),
+				NewMember(2, test.MockUUID(2), "", MockControlAddr(t, 2), MemberStateJoined),
 			}, membersWithStates(MemberStateJoined)...),
 			expGroupMap: &GroupMap{
 				Version: 2,
@@ -876,7 +955,7 @@ func TestSystem_Database_GroupMap(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
-			defer common.ShowBufferOnFailure(t, buf)
+			defer test.ShowBufferOnFailure(t, buf)
 
 			db := MockDatabase(t, log)
 			for _, m := range tc.members {
@@ -886,7 +965,7 @@ func TestSystem_Database_GroupMap(t *testing.T) {
 			}
 
 			gotGroupMap, gotErr := db.GroupMap()
-			common.CmpErr(t, tc.expErr, gotErr)
+			test.CmpErr(t, tc.expErr, gotErr)
 			if tc.expErr != nil {
 				return
 			}

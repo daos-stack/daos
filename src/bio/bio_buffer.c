@@ -952,7 +952,7 @@ nvme_rw(struct bio_desc *biod, struct bio_rsrvd_region *rg)
 	struct spdk_io_channel	*channel;
 	struct spdk_blob	*blob;
 	struct bio_xs_context	*xs_ctxt;
-	uint64_t		 pg_idx, pg_cnt;
+	uint64_t		 pg_idx, pg_cnt, rw_cnt;
 	void			*payload;
 
 	D_ASSERT(biod->bd_ctxt->bic_xs_ctxt);
@@ -979,29 +979,36 @@ nvme_rw(struct bio_desc *biod, struct bio_rsrvd_region *rg)
 	D_ASSERT(pg_cnt > pg_idx);
 	pg_cnt -= pg_idx;
 
-	/* NVMe poll needs be scheduled */
-	if (bio_need_nvme_poll(xs_ctxt))
-		bio_yield();
+	while (pg_cnt > 0) {
+		/* NVMe poll needs be scheduled */
+		if (bio_need_nvme_poll(xs_ctxt))
+			bio_yield();
 
-	biod->bd_inflights++;
-	xs_ctxt->bxc_blob_rw++;
+		biod->bd_inflights++;
+		xs_ctxt->bxc_blob_rw++;
 
-	D_DEBUG(DB_IO, "%s blob:%p payload:%p, pg_idx:"DF_U64", "
-		"pg_cnt:"DF_U64"\n",
-		biod->bd_type == BIO_IOD_TYPE_UPDATE ? "Write" : "Read",
-		blob, payload, pg_idx, pg_cnt);
+		rw_cnt = (pg_cnt > bio_chk_sz) ? bio_chk_sz : pg_cnt;
 
-	D_ASSERT(biod->bd_type < BIO_IOD_TYPE_GETBUF);
-	if (biod->bd_type == BIO_IOD_TYPE_UPDATE)
-		spdk_blob_io_write(blob, channel, payload,
-				   page2io_unit(biod->bd_ctxt, pg_idx),
-				   page2io_unit(biod->bd_ctxt, pg_cnt),
-				   rw_completion, biod);
-	else
-		spdk_blob_io_read(blob, channel, payload,
-				  page2io_unit(biod->bd_ctxt, pg_idx),
-				  page2io_unit(biod->bd_ctxt, pg_cnt),
-				  rw_completion, biod);
+		D_DEBUG(DB_IO, "%s blob:%p payload:%p, pg_idx:"DF_U64", pg_cnt:"DF_U64"/"DF_U64"\n",
+			biod->bd_type == BIO_IOD_TYPE_UPDATE ? "Write" : "Read",
+			blob, payload, pg_idx, pg_cnt, rw_cnt);
+
+		D_ASSERT(biod->bd_type < BIO_IOD_TYPE_GETBUF);
+		if (biod->bd_type == BIO_IOD_TYPE_UPDATE)
+			spdk_blob_io_write(blob, channel, payload,
+					   page2io_unit(biod->bd_ctxt, pg_idx),
+					   page2io_unit(biod->bd_ctxt, rw_cnt),
+					   rw_completion, biod);
+		else
+			spdk_blob_io_read(blob, channel, payload,
+					  page2io_unit(biod->bd_ctxt, pg_idx),
+					  page2io_unit(biod->bd_ctxt, rw_cnt),
+					  rw_completion, biod);
+
+		pg_cnt -= rw_cnt;
+		pg_idx += rw_cnt;
+		payload += (rw_cnt * BIO_DMA_PAGE_SZ);
+	}
 }
 
 static void
@@ -1035,7 +1042,7 @@ dma_rw(struct bio_desc *biod)
 			nvme_rw(biod, rg);
 	}
 
-	if (xs_ctxt->bxc_tgt_id == -1) {
+	if (xs_ctxt->bxc_self_polling) {
 		D_DEBUG(DB_IO, "Self poll completion\n");
 		xs_poll_completion(xs_ctxt, &biod->bd_inflights, 0);
 	} else {

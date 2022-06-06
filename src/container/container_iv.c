@@ -587,13 +587,6 @@ cont_iv_ent_update(struct ds_iv_entry *entry, struct ds_iv_key *key,
 	d_iov_set(&key_iov, &civ_key->cont_uuid, sizeof(civ_key->cont_uuid));
 	if (src == NULL) {
 		/* If src == NULL, it is invalidate */
-		if (entry->iv_class->iv_class_id == IV_CONT_CAPA &&
-		    !uuid_is_null(civ_key->cont_uuid)) {
-			rc = ds_cont_tgt_close(civ_key->cont_uuid);
-			if (rc)
-				D_GOTO(out, rc);
-		}
-
 		if (uuid_is_null(civ_key->cont_uuid)) {
 			rc = dbtree_empty(root_hdl);
 			if (rc)
@@ -603,6 +596,12 @@ cont_iv_ent_update(struct ds_iv_entry *entry, struct ds_iv_key *key,
 					   NULL);
 			if (rc == -DER_NONEXIST)
 				rc = 0;
+		}
+		if (entry->iv_class->iv_class_id == IV_CONT_CAPA &&
+		    !uuid_is_null(civ_key->cont_uuid)) {
+			rc = ds_cont_tgt_close(civ_key->cont_uuid);
+			if (rc)
+				D_GOTO(out, rc);
 		}
 	} else {
 		struct cont_iv_entry *iv_entry;

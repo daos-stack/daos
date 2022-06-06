@@ -31,8 +31,8 @@ extent_key_from_test_args(struct extent_key *k,
 	/* Set up dkey and akey */
 	dts_key_gen(&k->dkey_buf[0], args->dkey_size, args->dkey);
 	dts_key_gen(&k->akey_buf[0], args->akey_size, args->akey);
-	set_iov(&k->dkey, &k->dkey_buf[0], args->ofeat & DAOS_OF_DKEY_UINT64);
-	set_iov(&k->akey, &k->akey_buf[0], args->ofeat & DAOS_OF_AKEY_UINT64);
+	set_iov(&k->dkey, &k->dkey_buf[0], is_daos_obj_type_set(args->otype, DAOS_OT_DKEY_UINT64));
+	set_iov(&k->akey, &k->akey_buf[0], is_daos_obj_type_set(args->otype, DAOS_OT_AKEY_UINT64));
 
 	k->container_hdl = args->ctx.tc_co_hdl;
 	k->object_id = args->oid;

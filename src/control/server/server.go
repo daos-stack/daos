@@ -25,6 +25,7 @@ import (
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	"github.com/daos-stack/daos/src/control/events"
 	"github.com/daos-stack/daos/src/control/lib/control"
+	"github.com/daos-stack/daos/src/control/lib/daos"
 	"github.com/daos-stack/daos/src/control/lib/hardware"
 	"github.com/daos-stack/daos/src/control/lib/hardware/hwprov"
 	"github.com/daos-stack/daos/src/control/logging"
@@ -36,6 +37,16 @@ import (
 	"github.com/daos-stack/daos/src/control/system/raft"
 )
 
+func genFiAffFn(fis *hardware.FabricInterfaceSet) config.EngineAffinityFn {
+	return func(l logging.Logger, e *engine.Config) (uint, error) {
+		fi, err := fis.GetInterfaceOnNetDevice(e.Fabric.Interface, e.Fabric.Provider)
+		if err != nil {
+			return 0, err
+		}
+		return fi.NUMANode, nil
+	}
+}
+
 func processConfig(log logging.Logger, cfg *config.Server, fis *hardware.FabricInterfaceSet) error {
 	processFabricProvider(cfg)
 
@@ -44,7 +55,16 @@ func processConfig(log logging.Logger, cfg *config.Server, fis *hardware.FabricI
 		return errors.Wrapf(err, "retrieve hugepage info")
 	}
 
-	if err := cfg.Validate(log, hpi.PageSizeKb, fis); err != nil {
+	affinitySources := []config.EngineAffinityFn{
+		// TODO: Add pmem as the primary source of NUMA affinity, if available,
+		// then fall back to other sources as necessary.
+		genFiAffFn(fis),
+	}
+	if err := cfg.SetEngineAffinities(log, affinitySources...); err != nil {
+		return errors.Wrap(err, "failed to set engine affinities")
+	}
+
+	if err := cfg.Validate(log, hpi.PageSizeKb); err != nil {
 		return errors.Wrapf(err, "%s: validation failed", cfg.Path)
 	}
 
@@ -184,6 +204,12 @@ func (srv *server) createServices(ctx context.Context) error {
 		hwprov.DefaultFabricScanner(srv.log))
 	srv.mgmtSvc = newMgmtSvc(srv.harness, srv.membership, sysdb, rpcClient, srv.pubSub)
 
+	if err := srv.mgmtSvc.systemProps.UpdateCompPropVal(daos.SystemPropertyDaosSystem, func() string {
+		return srv.cfg.SystemName
+	}); err != nil {
+		return err
+	}
+
 	return nil
 }
 
@@ -265,8 +291,13 @@ func (srv *server) addEngines(ctx context.Context) error {
 	var allStarted sync.WaitGroup
 	registerTelemetryCallbacks(ctx, srv)
 
+	iommuEnabled, err := hwprov.DefaultIOMMUDetector(srv.log).IsIOMMUEnabled()
+	if err != nil {
+		return err
+	}
+
 	// Allocate hugepages and rebind NVMe devices to userspace drivers.
-	if err := prepBdevStorage(srv, iommuDetected()); err != nil {
+	if err := prepBdevStorage(srv, iommuEnabled); err != nil {
 		return err
 	}
 
@@ -287,7 +318,9 @@ func (srv *server) addEngines(ctx context.Context) error {
 			return errors.Wrap(err, "creating engine instances")
 		}
 
-		engine.storage.SetBdevCache(*nvmeScanResp)
+		if err := engine.storage.SetBdevCache(*nvmeScanResp); err != nil {
+			return errors.Wrap(err, "setting engine storage bdev cache")
+		}
 
 		registerEngineEventCallbacks(srv, engine, &allStarted)
 
@@ -437,8 +470,13 @@ func waitFabricReady(ctx context.Context, log logging.Logger, cfg *config.Server
 		ifaces = append(ifaces, eng.Fabric.Interface)
 	}
 
+	// Skip wait if no fabric interfaces specified in config.
+	if len(ifaces) == 0 {
+		return nil
+	}
+
 	if err := hardware.WaitFabricReady(ctx, log, hardware.WaitFabricReadyParams{
-		Checker:        hwprov.DefaultFabricReadyChecker(log),
+		StateProvider:  hwprov.DefaultNetDevStateProvider(log),
 		FabricIfaces:   ifaces,
 		IterationSleep: time.Second,
 	}); err != nil {

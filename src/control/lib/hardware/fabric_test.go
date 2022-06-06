@@ -16,68 +16,9 @@ import (
 	"github.com/pkg/errors"
 
 	"github.com/daos-stack/daos/src/control/common"
+	"github.com/daos-stack/daos/src/control/common/test"
 	"github.com/daos-stack/daos/src/control/logging"
 )
-
-func TestHardware_IsUnsupportedFabric(t *testing.T) {
-	for name, tc := range map[string]struct {
-		err       error
-		expResult bool
-	}{
-		"nil": {},
-		"true": {
-			err:       ErrUnsupportedFabric("dontcare"),
-			expResult: true,
-		},
-		"false": {
-			err: errors.New("something else"),
-		},
-	} {
-		t.Run(name, func(t *testing.T) {
-			common.AssertEqual(t, tc.expResult, IsUnsupportedFabric(tc.err), "")
-		})
-	}
-}
-
-func TestHardware_IsFabricNotReady(t *testing.T) {
-	for name, tc := range map[string]struct {
-		err       error
-		expResult bool
-	}{
-		"nil": {},
-		"true": {
-			err:       ErrFabricNotReady("dontcare"),
-			expResult: true,
-		},
-		"false": {
-			err: errors.New("something else"),
-		},
-	} {
-		t.Run(name, func(t *testing.T) {
-			common.AssertEqual(t, tc.expResult, IsFabricNotReady(tc.err), "")
-		})
-	}
-}
-
-func TestHardware_IsProviderNotOnDevice(t *testing.T) {
-	for name, tc := range map[string]struct {
-		err       error
-		expResult bool
-	}{
-		"nil": {},
-		"true": {
-			err:       ErrProviderNotOnDevice("dontcare", "dontcare"),
-			expResult: true,
-		},
-		"false": {
-			err: errors.New("something else"),
-		},
-	} {
-		t.Run(name, func(t *testing.T) {
-			common.AssertEqual(t, tc.expResult, IsProviderNotOnDevice(tc.err), "")
-		})
-	}
-}
 
 func TestHardware_FabricInterface_String(t *testing.T) {
 	for name, tc := range map[string]struct {
@@ -100,33 +41,33 @@ func TestHardware_FabricInterface_String(t *testing.T) {
 		},
 		"with net interface": {
 			fi: &FabricInterface{
-				Name:         "test0",
-				NetInterface: "os_test0",
-				Providers:    common.NewStringSet("p1", "p2"),
+				Name:          "test0",
+				NetInterfaces: common.NewStringSet("os_test0"),
+				Providers:     common.NewStringSet("p1", "p2"),
 			},
 			expResult: "test0 (interface: os_test0) (providers: p1, p2)",
 		},
 		"different OS name": {
 			fi: &FabricInterface{
-				Name:         "test0:1",
-				OSName:       "test0",
-				NetInterface: "os_test0",
-				Providers:    common.NewStringSet("p1", "p2"),
+				Name:          "test0:1",
+				OSName:        "test0",
+				NetInterfaces: common.NewStringSet("os_test0"),
+				Providers:     common.NewStringSet("p1", "p2"),
 			},
 			expResult: "test0:1 (OS name: test0) (interface: os_test0) (providers: p1, p2)",
 		},
 		"OS name": {
 			fi: &FabricInterface{
-				Name:         "test0",
-				OSName:       "test0",
-				NetInterface: "os_test0",
-				Providers:    common.NewStringSet("p1", "p2"),
+				Name:          "test0",
+				OSName:        "test0",
+				NetInterfaces: common.NewStringSet("os_test0"),
+				Providers:     common.NewStringSet("p1", "p2"),
 			},
 			expResult: "test0 (interface: os_test0) (providers: p1, p2)",
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
-			common.AssertEqual(t, tc.expResult, tc.fi.String(), "")
+			test.AssertEqual(t, tc.expResult, tc.fi.String(), "")
 		})
 	}
 }
@@ -183,7 +124,7 @@ func TestHardware_FabricInterface_SupportsProvider(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			result := tc.fi.SupportsProvider(tc.in)
 
-			common.AssertEqual(t, tc.expResult, result, "")
+			test.AssertEqual(t, tc.expResult, result, "")
 		})
 	}
 }
@@ -218,8 +159,8 @@ func TestHardware_FabricInterface_TopologyName(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			result, err := tc.fi.TopologyName()
 
-			common.AssertEqual(t, tc.expResult, result, "")
-			common.CmpErr(t, tc.expErr, err)
+			test.AssertEqual(t, tc.expResult, result, "")
+			test.CmpErr(t, tc.expErr, err)
 		})
 	}
 }
@@ -238,48 +179,48 @@ func TestHardware_NewFabricInterfaceSet(t *testing.T) {
 		"input added": {
 			input: []*FabricInterface{
 				{
-					Name:         "test0",
-					NetInterface: "os_test0",
+					Name:          "test0",
+					NetInterfaces: common.NewStringSet("os_test0"),
 				},
 				{
-					Name:         "test1",
-					NetInterface: "os_test1",
+					Name:          "test1",
+					NetInterfaces: common.NewStringSet("os_test1"),
 				},
 				{
-					Name:         "os_test1",
-					NetInterface: "os_test1",
+					Name:          "os_test1",
+					NetInterfaces: common.NewStringSet("os_test1"),
 				},
 			},
 			expResult: &FabricInterfaceSet{
 				byName: fabricInterfaceMap{
 					"test0": {
-						Name:         "test0",
-						NetInterface: "os_test0",
+						Name:          "test0",
+						NetInterfaces: common.NewStringSet("os_test0"),
 					},
 					"test1": {
-						Name:         "test1",
-						NetInterface: "os_test1",
+						Name:          "test1",
+						NetInterfaces: common.NewStringSet("os_test1"),
 					},
 					"os_test1": {
-						Name:         "os_test1",
-						NetInterface: "os_test1",
+						Name:          "os_test1",
+						NetInterfaces: common.NewStringSet("os_test1"),
 					},
 				},
 				byNetDev: map[string]fabricInterfaceMap{
 					"os_test0": {
 						"test0": {
-							Name:         "test0",
-							NetInterface: "os_test0",
+							Name:          "test0",
+							NetInterfaces: common.NewStringSet("os_test0"),
 						},
 					},
 					"os_test1": {
 						"test1": {
-							Name:         "test1",
-							NetInterface: "os_test1",
+							Name:          "test1",
+							NetInterfaces: common.NewStringSet("os_test1"),
 						},
 						"os_test1": {
-							Name:         "os_test1",
-							NetInterface: "os_test1",
+							Name:          "os_test1",
+							NetInterfaces: common.NewStringSet("os_test1"),
 						},
 					},
 				},
@@ -313,24 +254,24 @@ func TestHardware_FabricInterfaceSet_Names(t *testing.T) {
 		"one": {
 			fis: NewFabricInterfaceSet(
 				&FabricInterface{
-					Name:         "test0",
-					NetInterface: "os_test0",
+					Name:          "test0",
+					NetInterfaces: common.NewStringSet("os_test0"),
 				}),
 			expResult: []string{"test0"},
 		},
 		"multiple": {
 			fis: NewFabricInterfaceSet(
 				&FabricInterface{
-					Name:         "test0",
-					NetInterface: "os_test0",
+					Name:          "test0",
+					NetInterfaces: common.NewStringSet("os_test0"),
 				},
 				&FabricInterface{
-					Name:         "test1",
-					NetInterface: "os_test1",
+					Name:          "test1",
+					NetInterfaces: common.NewStringSet("os_test1"),
 				},
 				&FabricInterface{
-					Name:         "test2",
-					NetInterface: "os_test2",
+					Name:          "test2",
+					NetInterfaces: common.NewStringSet("os_test2"),
 				}),
 			expResult: []string{"test0", "test1", "test2"},
 		},
@@ -338,7 +279,7 @@ func TestHardware_FabricInterfaceSet_Names(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			result := tc.fis.Names()
 
-			common.AssertEqual(t, len(tc.expResult), tc.fis.NumFabricInterfaces(), "")
+			test.AssertEqual(t, len(tc.expResult), tc.fis.NumFabricInterfaces(), "")
 			if diff := cmp.Diff(tc.expResult, result); diff != "" {
 				t.Fatalf("(-want, +got)\n%s\n", diff)
 			}
@@ -361,40 +302,40 @@ func TestHardware_FabricInterfaceSet_NetDevices(t *testing.T) {
 		"one": {
 			fis: NewFabricInterfaceSet(
 				&FabricInterface{
-					Name:         "test0",
-					NetInterface: "os_test0",
+					Name:          "test0",
+					NetInterfaces: common.NewStringSet("os_test0"),
 				}),
 			expResult: []string{"os_test0"},
 		},
 		"multiple": {
 			fis: NewFabricInterfaceSet(
 				&FabricInterface{
-					Name:         "test0",
-					NetInterface: "os_test0",
+					Name:          "test0",
+					NetInterfaces: common.NewStringSet("os_test0"),
 				},
 				&FabricInterface{
-					Name:         "test1",
-					NetInterface: "os_test1",
+					Name:          "test1",
+					NetInterfaces: common.NewStringSet("os_test1"),
 				},
 				&FabricInterface{
-					Name:         "test2",
-					NetInterface: "os_test2",
+					Name:          "test2",
+					NetInterfaces: common.NewStringSet("os_test2"),
 				}),
 			expResult: []string{"os_test0", "os_test1", "os_test2"},
 		},
 		"same net device": {
 			fis: NewFabricInterfaceSet(
 				&FabricInterface{
-					Name:         "test0",
-					NetInterface: "os_test0",
+					Name:          "test0",
+					NetInterfaces: common.NewStringSet("os_test0"),
 				},
 				&FabricInterface{
-					Name:         "test1",
-					NetInterface: "os_test0",
+					Name:          "test1",
+					NetInterfaces: common.NewStringSet("os_test0"),
 				},
 				&FabricInterface{
-					Name:         "test2",
-					NetInterface: "os_test0",
+					Name:          "test2",
+					NetInterfaces: common.NewStringSet("os_test0"),
 				}),
 			expResult: []string{"os_test0"},
 		},
@@ -402,7 +343,7 @@ func TestHardware_FabricInterfaceSet_NetDevices(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			result := tc.fis.NetDevices()
 
-			common.AssertEqual(t, len(tc.expResult), tc.fis.NumNetDevices(), "")
+			test.AssertEqual(t, len(tc.expResult), tc.fis.NumNetDevices(), "")
 			if diff := cmp.Diff(tc.expResult, result); diff != "" {
 				t.Fatalf("(-want, +got)\n%s\n", diff)
 			}
@@ -431,85 +372,85 @@ func TestHardware_FabricInterfaceSet_Update(t *testing.T) {
 		"add to empty set": {
 			fis: NewFabricInterfaceSet(),
 			input: &FabricInterface{
-				Name:         "one",
-				NetInterface: "dev1",
+				Name:          "one",
+				NetInterfaces: common.NewStringSet("dev1"),
 			},
 			expResult: NewFabricInterfaceSet(
 				&FabricInterface{
-					Name:         "one",
-					NetInterface: "dev1",
+					Name:          "one",
+					NetInterfaces: common.NewStringSet("dev1"),
 				},
 			),
 		},
 		"add": {
 			fis: NewFabricInterfaceSet(
 				&FabricInterface{
-					Name:         "one",
-					NetInterface: "dev1",
+					Name:          "one",
+					NetInterfaces: common.NewStringSet("dev1"),
 				},
 				&FabricInterface{
-					Name:         "two",
-					NetInterface: "dev2",
+					Name:          "two",
+					NetInterfaces: common.NewStringSet("dev2"),
 				},
 			),
 			input: &FabricInterface{
-				Name:         "three",
-				NetInterface: "dev3",
+				Name:          "three",
+				NetInterfaces: common.NewStringSet("dev3"),
 			},
 			expResult: NewFabricInterfaceSet(
 				&FabricInterface{
-					Name:         "one",
-					NetInterface: "dev1",
+					Name:          "one",
+					NetInterfaces: common.NewStringSet("dev1"),
 				},
 				&FabricInterface{
-					Name:         "two",
-					NetInterface: "dev2",
+					Name:          "two",
+					NetInterfaces: common.NewStringSet("dev2"),
 				},
 				&FabricInterface{
-					Name:         "three",
-					NetInterface: "dev3",
+					Name:          "three",
+					NetInterfaces: common.NewStringSet("dev3"),
 				},
 			),
 		},
 		"update": {
 			fis: NewFabricInterfaceSet(
 				&FabricInterface{
-					Name:         "one",
-					NetInterface: "dev1",
+					Name:          "one",
+					NetInterfaces: common.NewStringSet("dev1"),
 				},
 				&FabricInterface{
-					Name:         "two",
-					NetInterface: "dev2",
+					Name:          "two",
+					NetInterfaces: common.NewStringSet("dev2"),
 				},
 			),
 			input: &FabricInterface{
-				Name:         "two",
-				NetInterface: "dev2",
-				DeviceClass:  Ether,
-				NUMANode:     1,
-				Providers:    common.NewStringSet("p1", "p2"),
+				Name:          "two",
+				NetInterfaces: common.NewStringSet("dev2"),
+				DeviceClass:   Ether,
+				NUMANode:      1,
+				Providers:     common.NewStringSet("p1", "p2"),
 			},
 			expResult: NewFabricInterfaceSet(
 				&FabricInterface{
-					Name:         "one",
-					NetInterface: "dev1",
+					Name:          "one",
+					NetInterfaces: common.NewStringSet("dev1"),
 				},
 				&FabricInterface{
-					Name:         "two",
-					NetInterface: "dev2",
-					DeviceClass:  Ether,
-					NUMANode:     1,
-					Providers:    common.NewStringSet("p1", "p2"),
+					Name:          "two",
+					NetInterfaces: common.NewStringSet("dev2"),
+					DeviceClass:   Ether,
+					NUMANode:      1,
+					Providers:     common.NewStringSet("p1", "p2"),
 				},
 			),
 		},
 		"can't override nonzero": {
 			fis: NewFabricInterfaceSet(
 				&FabricInterface{
-					Name:         "one",
-					NetInterface: "dev1",
-					DeviceClass:  Ether,
-					NUMANode:     2,
+					Name:          "one",
+					NetInterfaces: common.NewStringSet("dev1"),
+					DeviceClass:   Ether,
+					NUMANode:      2,
 				},
 			),
 			input: &FabricInterface{
@@ -517,64 +458,64 @@ func TestHardware_FabricInterfaceSet_Update(t *testing.T) {
 			},
 			expResult: NewFabricInterfaceSet(
 				&FabricInterface{
-					Name:         "one",
-					NetInterface: "dev1",
-					DeviceClass:  Ether,
-					NUMANode:     2,
+					Name:          "one",
+					NetInterfaces: common.NewStringSet("dev1"),
+					DeviceClass:   Ether,
+					NUMANode:      2,
 				},
 			),
 		},
 		"add to providers": {
 			fis: NewFabricInterfaceSet(
 				&FabricInterface{
-					Name:         "one",
-					NetInterface: "dev1",
-					DeviceClass:  Ether,
-					NUMANode:     2,
-					Providers:    common.NewStringSet("p0", "p1"),
+					Name:          "one",
+					NetInterfaces: common.NewStringSet("dev1"),
+					DeviceClass:   Ether,
+					NUMANode:      2,
+					Providers:     common.NewStringSet("p0", "p1"),
 				},
 			),
 			input: &FabricInterface{
-				Name:         "one",
-				NetInterface: "dev1",
-				DeviceClass:  Ether,
-				NUMANode:     2,
-				Providers:    common.NewStringSet("p2", "p3"),
+				Name:          "one",
+				NetInterfaces: common.NewStringSet("dev1"),
+				DeviceClass:   Ether,
+				NUMANode:      2,
+				Providers:     common.NewStringSet("p2", "p3"),
 			},
 			expResult: NewFabricInterfaceSet(
 				&FabricInterface{
-					Name:         "one",
-					NetInterface: "dev1",
-					DeviceClass:  Ether,
-					NUMANode:     2,
-					Providers:    common.NewStringSet("p0", "p1", "p2", "p3"),
+					Name:          "one",
+					NetInterfaces: common.NewStringSet("dev1"),
+					DeviceClass:   Ether,
+					NUMANode:      2,
+					Providers:     common.NewStringSet("p0", "p1", "p2", "p3"),
 				},
 			),
 		},
 		"add duplicate providers": {
 			fis: NewFabricInterfaceSet(
 				&FabricInterface{
-					Name:         "one",
-					NetInterface: "dev1",
-					DeviceClass:  Ether,
-					NUMANode:     2,
-					Providers:    common.NewStringSet("p0", "p1"),
+					Name:          "one",
+					NetInterfaces: common.NewStringSet("dev1"),
+					DeviceClass:   Ether,
+					NUMANode:      2,
+					Providers:     common.NewStringSet("p0", "p1"),
 				},
 			),
 			input: &FabricInterface{
-				Name:         "one",
-				NetInterface: "dev1",
-				DeviceClass:  Ether,
-				NUMANode:     2,
-				Providers:    common.NewStringSet("p1", "p2"),
+				Name:          "one",
+				NetInterfaces: common.NewStringSet("dev1"),
+				DeviceClass:   Ether,
+				NUMANode:      2,
+				Providers:     common.NewStringSet("p1", "p2"),
 			},
 			expResult: NewFabricInterfaceSet(
 				&FabricInterface{
-					Name:         "one",
-					NetInterface: "dev1",
-					DeviceClass:  Ether,
-					NUMANode:     2,
-					Providers:    common.NewStringSet("p0", "p1", "p2"),
+					Name:          "one",
+					NetInterfaces: common.NewStringSet("dev1"),
+					DeviceClass:   Ether,
+					NUMANode:      2,
+					Providers:     common.NewStringSet("p0", "p1", "p2"),
 				},
 			),
 		},
@@ -608,42 +549,42 @@ func TestHardware_FabricInterfaceSet_Remove(t *testing.T) {
 		"not found": {
 			fis: NewFabricInterfaceSet(
 				&FabricInterface{
-					Name:         "fi0",
-					NetInterface: "net0",
+					Name:          "fi0",
+					NetInterfaces: common.NewStringSet("net0"),
 				},
 			),
 			input: "fi1",
 			expResult: NewFabricInterfaceSet(
 				&FabricInterface{
-					Name:         "fi0",
-					NetInterface: "net0",
+					Name:          "fi0",
+					NetInterfaces: common.NewStringSet("net0"),
 				},
 			),
 		},
 		"removed": {
 			fis: NewFabricInterfaceSet(
 				&FabricInterface{
-					Name:         "fi0",
-					NetInterface: "net0",
+					Name:          "fi0",
+					NetInterfaces: common.NewStringSet("net0"),
 				},
 				&FabricInterface{
-					Name:         "fi1",
-					NetInterface: "net0",
+					Name:          "fi1",
+					NetInterfaces: common.NewStringSet("net0"),
 				},
 			),
 			input: "fi1",
 			expResult: NewFabricInterfaceSet(
 				&FabricInterface{
-					Name:         "fi0",
-					NetInterface: "net0",
+					Name:          "fi0",
+					NetInterfaces: common.NewStringSet("net0"),
 				},
 			),
 		},
 		"remove only item": {
 			fis: NewFabricInterfaceSet(
 				&FabricInterface{
-					Name:         "fi0",
-					NetInterface: "net0",
+					Name:          "fi0",
+					NetInterfaces: common.NewStringSet("net0"),
 				},
 			),
 			input:     "fi0",
@@ -685,16 +626,16 @@ func TestHardware_FabricInterfaceSet_GetInterface(t *testing.T) {
 		"not found": {
 			fis: NewFabricInterfaceSet(
 				&FabricInterface{
-					Name:         "test0",
-					NetInterface: "os_test0",
+					Name:          "test0",
+					NetInterfaces: common.NewStringSet("os_test0"),
 				},
 				&FabricInterface{
-					Name:         "test1",
-					NetInterface: "os_test1",
+					Name:          "test1",
+					NetInterfaces: common.NewStringSet("os_test1"),
 				},
 				&FabricInterface{
-					Name:         "test2",
-					NetInterface: "os_test2",
+					Name:          "test2",
+					NetInterfaces: common.NewStringSet("os_test2"),
 				},
 			),
 			name:   "test10",
@@ -703,29 +644,29 @@ func TestHardware_FabricInterfaceSet_GetInterface(t *testing.T) {
 		"success": {
 			fis: NewFabricInterfaceSet(
 				&FabricInterface{
-					Name:         "test0",
-					NetInterface: "os_test0",
+					Name:          "test0",
+					NetInterfaces: common.NewStringSet("os_test0"),
 				},
 				&FabricInterface{
-					Name:         "test1",
-					NetInterface: "os_test1",
+					Name:          "test1",
+					NetInterfaces: common.NewStringSet("os_test1"),
 				},
 				&FabricInterface{
-					Name:         "test2",
-					NetInterface: "os_test2",
+					Name:          "test2",
+					NetInterfaces: common.NewStringSet("os_test2"),
 				},
 			),
 			name: "test1",
 			expResult: &FabricInterface{
-				Name:         "test1",
-				NetInterface: "os_test1",
+				Name:          "test1",
+				NetInterfaces: common.NewStringSet("os_test1"),
 			},
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			result, err := tc.fis.GetInterface(tc.name)
 
-			common.CmpErr(t, tc.expErr, err)
+			test.CmpErr(t, tc.expErr, err)
 			if diff := cmp.Diff(tc.expResult, result); diff != "" {
 				t.Fatalf("(-want, +got)\n%s\n", diff)
 			}
@@ -759,12 +700,12 @@ func TestHardware_FabricInterfaceSet_GetInterfaceOnNetDevice(t *testing.T) {
 		"net device not found": {
 			fis: NewFabricInterfaceSet(
 				&FabricInterface{
-					Name:         "test0",
-					NetInterface: "os_test0",
+					Name:          "test0",
+					NetInterfaces: common.NewStringSet("os_test0"),
 				},
 				&FabricInterface{
-					Name:         "test1",
-					NetInterface: "os_test1",
+					Name:          "test1",
+					NetInterfaces: common.NewStringSet("os_test1"),
 				},
 			),
 			netDev:   "notfound",
@@ -774,19 +715,19 @@ func TestHardware_FabricInterfaceSet_GetInterfaceOnNetDevice(t *testing.T) {
 		"provider not found on device": {
 			fis: NewFabricInterfaceSet(
 				&FabricInterface{
-					Name:         "test0",
-					NetInterface: "os_test0",
-					Providers:    common.NewStringSet("p1", "p2"),
+					Name:          "test0",
+					NetInterfaces: common.NewStringSet("os_test0"),
+					Providers:     common.NewStringSet("p1", "p2"),
 				},
 				&FabricInterface{
-					Name:         "test1",
-					NetInterface: "os_test0",
-					Providers:    common.NewStringSet("p3"),
+					Name:          "test1",
+					NetInterfaces: common.NewStringSet("os_test0"),
+					Providers:     common.NewStringSet("p3"),
 				},
 				&FabricInterface{
-					Name:         "test2",
-					NetInterface: "os_test2",
-					Providers:    common.NewStringSet("p4"),
+					Name:          "test2",
+					NetInterfaces: common.NewStringSet("os_test2"),
+					Providers:     common.NewStringSet("p4"),
 				},
 			),
 			netDev:   "os_test0",
@@ -796,71 +737,71 @@ func TestHardware_FabricInterfaceSet_GetInterfaceOnNetDevice(t *testing.T) {
 		"success": {
 			fis: NewFabricInterfaceSet(
 				&FabricInterface{
-					Name:         "test0",
-					NetInterface: "os_test0",
-					Providers:    common.NewStringSet("p1", "p2"),
+					Name:          "test0",
+					NetInterfaces: common.NewStringSet("os_test0"),
+					Providers:     common.NewStringSet("p1", "p2"),
 				},
 				&FabricInterface{
-					Name:         "test1",
-					NetInterface: "os_test0",
-					Providers:    common.NewStringSet("p3"),
+					Name:          "test1",
+					NetInterfaces: common.NewStringSet("os_test0"),
+					Providers:     common.NewStringSet("p3"),
 				},
 				&FabricInterface{
-					Name:         "test2",
-					NetInterface: "os_test2",
-					Providers:    common.NewStringSet("p4"),
+					Name:          "test2",
+					NetInterfaces: common.NewStringSet("os_test2"),
+					Providers:     common.NewStringSet("p4"),
 				},
 			),
 			netDev:   "os_test0",
 			provider: "p3",
 			expResult: &FabricInterface{
-				Name:         "test1",
-				NetInterface: "os_test0",
-				Providers:    common.NewStringSet("p3"),
+				Name:          "test1",
+				NetInterfaces: common.NewStringSet("os_test0"),
+				Providers:     common.NewStringSet("p3"),
 			},
 		},
 		"provider helper specified, success": {
 			fis: NewFabricInterfaceSet(
 				&FabricInterface{
-					Name:         "test0",
-					NetInterface: "os_test0",
-					Providers:    common.NewStringSet("p1", "p2", "p3"),
+					Name:          "test0",
+					NetInterfaces: common.NewStringSet("os_test0"),
+					Providers:     common.NewStringSet("p1", "p2", "p3"),
 				},
 				&FabricInterface{
-					Name:         "test1",
-					NetInterface: "os_test0",
-					Providers:    common.NewStringSet("p3;h1"),
+					Name:          "test1",
+					NetInterfaces: common.NewStringSet("os_test0"),
+					Providers:     common.NewStringSet("p3;h1"),
 				},
 				&FabricInterface{
-					Name:         "test2",
-					NetInterface: "os_test2",
-					Providers:    common.NewStringSet("p4"),
+					Name:          "test2",
+					NetInterfaces: common.NewStringSet("os_test2"),
+					Providers:     common.NewStringSet("p4"),
 				},
 			),
 			netDev:   "os_test0",
 			provider: "p3;h1",
 			expResult: &FabricInterface{
-				Name:         "test1",
-				NetInterface: "os_test0",
-				Providers:    common.NewStringSet("p3;h1"),
+				Name:          "test1",
+				NetInterfaces: common.NewStringSet("os_test0"),
+				Providers:     common.NewStringSet("p3;h1"),
 			},
 		},
 		"provider helper specified, not found": {
 			fis: NewFabricInterfaceSet(
 				&FabricInterface{
-					Name:         "test0",
-					NetInterface: "os_test0",
-					Providers:    common.NewStringSet("p1", "p2"),
+					Name:          "test0",
+					NetInterfaces: common.NewStringSet("os_test0"),
+					Providers:     common.NewStringSet("p1", "p2"),
 				},
 				&FabricInterface{
-					Name:         "test1",
-					NetInterface: "os_test0",
-					Providers:    common.NewStringSet("p3;h1", "p3"),
+					Name:          "test1",
+					NetInterfaces: common.NewStringSet("os_test0"),
+					Providers:     common.NewStringSet("p3;h1", "p3"),
 				},
 				&FabricInterface{
-					Name:         "test2",
-					NetInterface: "os_test2",
-					Providers:    common.NewStringSet("p4"),
+					Name:          "test2",
+					NetInterfaces: common.NewStringSet("os_test2"),
+					Providers:     common.NewStringSet("p4"),
 				},
 			),
 			netDev:   "os_test0",
@@ -871,7 +812,7 @@ func TestHardware_FabricInterfaceSet_GetInterfaceOnNetDevice(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			result, err := tc.fis.GetInterfaceOnNetDevice(tc.netDev, tc.provider)
 
-			common.CmpErr(t, tc.expErr, err)
+			test.CmpErr(t, tc.expErr, err)
 			if diff := cmp.Diff(tc.expResult, result); diff != "" {
 				t.Fatalf("(-want, +got)\n%s\n", diff)
 			}
@@ -958,7 +899,7 @@ func TestHardware_NetDevClass_String(t *testing.T) {
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
-			common.AssertEqual(t, tc.expResult, tc.ndc.String(), "")
+			test.AssertEqual(t, tc.expResult, tc.ndc.String(), "")
 		})
 	}
 }
@@ -1019,7 +960,7 @@ func TestHardware_FabricScannerConfig_IsValid(t *testing.T) {
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
-			common.CmpErr(t, tc.expErr, tc.config.Validate())
+			test.CmpErr(t, tc.expErr, tc.config.Validate())
 		})
 	}
 }
@@ -1042,11 +983,11 @@ func TestHardware_NewFabricScanner(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
-			defer common.ShowBufferOnFailure(t, buf)
+			defer test.ShowBufferOnFailure(t, buf)
 
 			result, err := NewFabricScanner(log, tc.config)
 
-			common.CmpErr(t, tc.expErr, err)
+			test.CmpErr(t, tc.expErr, err)
 
 			if diff := cmp.Diff(tc.expResult, result,
 				cmp.AllowUnexported(
@@ -1055,7 +996,7 @@ func TestHardware_NewFabricScanner(t *testing.T) {
 					MockFabricInterfaceProvider{},
 					MockNetDevClassProvider{},
 				),
-				common.CmpOptIgnoreFieldAnyType("log"),
+				test.CmpOptIgnoreFieldAnyType("log"),
 				cmpopts.IgnoreFields(FabricScanner{}, "mutex"),
 			); diff != "" {
 				t.Fatalf("(-want, +got)\n%s\n", diff)
@@ -1077,8 +1018,8 @@ func TestHardware_FabricScanner_Scan(t *testing.T) {
 
 	testFis := NewFabricInterfaceSet(
 		&FabricInterface{
-			Name:         "test01",
-			NetInterface: "os_test01",
+			Name:          "test01",
+			NetInterfaces: common.NewStringSet("os_test01"),
 		},
 	)
 
@@ -1172,8 +1113,8 @@ func TestHardware_FabricScanner_Scan(t *testing.T) {
 			// we ignore the error in this case
 			expResult: NewFabricInterfaceSet(
 				&FabricInterface{
-					Name:         "test01",
-					NetInterface: "os_test01",
+					Name:          "test01",
+					NetInterfaces: common.NewStringSet("os_test01"),
 				},
 			),
 		},
@@ -1198,9 +1139,9 @@ func TestHardware_FabricScanner_Scan(t *testing.T) {
 			},
 			expResult: NewFabricInterfaceSet(
 				&FabricInterface{
-					Name:         "test01",
-					NetInterface: "os_test01",
-					DeviceClass:  Ether,
+					Name:          "test01",
+					NetInterfaces: common.NewStringSet("os_test01"),
+					DeviceClass:   Ether,
 				},
 			),
 		},
@@ -1226,16 +1167,16 @@ func TestHardware_FabricScanner_Scan(t *testing.T) {
 			cacheTopology: testTopo,
 			expResult: NewFabricInterfaceSet(
 				&FabricInterface{
-					Name:         "test01",
-					NetInterface: "os_test01",
-					DeviceClass:  Ether,
+					Name:          "test01",
+					NetInterfaces: common.NewStringSet("os_test01"),
+					DeviceClass:   Ether,
 				},
 			),
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
-			defer common.ShowBufferOnFailure(t, buf)
+			defer test.ShowBufferOnFailure(t, buf)
 
 			var scanner *FabricScanner
 			if !tc.nilScanner {
@@ -1254,7 +1195,7 @@ func TestHardware_FabricScanner_Scan(t *testing.T) {
 
 			result, err := scanner.Scan(context.TODO())
 
-			common.CmpErr(t, tc.expErr, err)
+			test.CmpErr(t, tc.expErr, err)
 			if diff := cmp.Diff(tc.expResult, result, cmp.AllowUnexported(FabricInterfaceSet{})); diff != "" {
 				t.Fatalf("(-want, +got)\n%s\n", diff)
 			}
@@ -1264,7 +1205,7 @@ func TestHardware_FabricScanner_Scan(t *testing.T) {
 				if !ok {
 					t.Fatalf("bad test setup: test builders aren't mocks")
 				}
-				common.AssertEqual(t, 1, mock.buildPartCalled, "")
+				test.AssertEqual(t, 1, mock.buildPartCalled, "")
 			}
 		})
 	}
@@ -1302,7 +1243,7 @@ func TestHardware_FabricScanner_CacheTopology(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
-			defer common.ShowBufferOnFailure(t, buf)
+			defer test.ShowBufferOnFailure(t, buf)
 
 			if tc.fs != nil {
 				tc.fs.log = log
@@ -1310,7 +1251,7 @@ func TestHardware_FabricScanner_CacheTopology(t *testing.T) {
 
 			err := tc.fs.CacheTopology(tc.topo)
 
-			common.CmpErr(t, tc.expErr, err)
+			test.CmpErr(t, tc.expErr, err)
 
 			if tc.fs == nil {
 				return
@@ -1343,7 +1284,7 @@ func TestHardware_defaultFabricInterfaceSetBuilders(t *testing.T) {
 	}
 
 	log, buf := logging.NewTestLogger(t.Name())
-	defer common.ShowBufferOnFailure(t, buf)
+	defer test.ShowBufferOnFailure(t, buf)
 
 	result := defaultFabricInterfaceSetBuilders(log, config)
 
@@ -1354,7 +1295,7 @@ func TestHardware_defaultFabricInterfaceSetBuilders(t *testing.T) {
 		cmp.AllowUnexported(NetworkDeviceBuilder{}),
 		cmp.AllowUnexported(MockFabricInterfaceProvider{}),
 		cmp.AllowUnexported(MockNetDevClassProvider{}),
-		common.CmpOptIgnoreFieldAnyType("log"),
+		test.CmpOptIgnoreFieldAnyType("log"),
 	); diff != "" {
 		t.Fatalf("(-want, +got)\n%s\n", diff)
 	}
@@ -1479,7 +1420,7 @@ func TestHardware_FabricInterfaceBuilder_BuildPart(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
-			defer common.ShowBufferOnFailure(t, buf)
+			defer test.ShowBufferOnFailure(t, buf)
 
 			if tc.builder != nil {
 				tc.builder.log = log
@@ -1487,7 +1428,7 @@ func TestHardware_FabricInterfaceBuilder_BuildPart(t *testing.T) {
 
 			err := tc.builder.BuildPart(context.Background(), tc.set)
 
-			common.CmpErr(t, tc.expErr, err)
+			test.CmpErr(t, tc.expErr, err)
 			if diff := cmp.Diff(tc.expResult, tc.set,
 				cmp.AllowUnexported(FabricInterfaceSet{}),
 			); diff != "" {
@@ -1529,6 +1470,22 @@ func TestHardware_NetDeviceBuilder_BuildPart(t *testing.T) {
 					PCIAddr: *MustNewPCIAddress("0000:00:01.1"),
 				},
 			}),
+		},
+	}
+
+	testTopo.VirtualDevices = []*VirtualDevice{
+		{
+			Name: "virt0",
+			Type: DeviceTypeNetInterface,
+		},
+		{
+			Name:          "net2.100",
+			Type:          DeviceTypeNetInterface,
+			BackingDevice: testTopo.AllDevices()["net2"].(*PCIDevice),
+		},
+		{
+			Name: "lo",
+			Type: DeviceTypeNetInterface,
 		},
 	}
 
@@ -1586,8 +1543,22 @@ func TestHardware_NetDeviceBuilder_BuildPart(t *testing.T) {
 			),
 			expResult: NewFabricInterfaceSet(
 				&FabricInterface{
-					Name:         "net1",
-					NetInterface: "net1",
+					Name:          "net1",
+					NetInterfaces: common.NewStringSet("net1"),
+				},
+			),
+		},
+		"virtual net device": {
+			builder: newNetworkDeviceBuilder(nil, testTopo),
+			set: NewFabricInterfaceSet(
+				&FabricInterface{
+					Name: "virt0",
+				},
+			),
+			expResult: NewFabricInterfaceSet(
+				&FabricInterface{
+					Name:          "virt0",
+					NetInterfaces: common.NewStringSet("virt0"),
 				},
 			),
 		},
@@ -1600,8 +1571,22 @@ func TestHardware_NetDeviceBuilder_BuildPart(t *testing.T) {
 			),
 			expResult: NewFabricInterfaceSet(
 				&FabricInterface{
-					Name:         "ofi0",
-					NetInterface: "net0",
+					Name:          "ofi0",
+					NetInterfaces: common.NewStringSet("net0"),
+				},
+			),
+		},
+		"OFI domain with virtual net device": {
+			builder: newNetworkDeviceBuilder(nil, testTopo),
+			set: NewFabricInterfaceSet(
+				&FabricInterface{
+					Name: "ofi2",
+				},
+			),
+			expResult: NewFabricInterfaceSet(
+				&FabricInterface{
+					Name:          "ofi2",
+					NetInterfaces: common.NewStringSet("net2", "net2.100"),
 				},
 			),
 		},
@@ -1615,9 +1600,9 @@ func TestHardware_NetDeviceBuilder_BuildPart(t *testing.T) {
 			),
 			expResult: NewFabricInterfaceSet(
 				&FabricInterface{
-					Name:         "ofi0:1",
-					OSName:       "ofi0",
-					NetInterface: "net0",
+					Name:          "ofi0:1",
+					OSName:        "ofi0",
+					NetInterfaces: common.NewStringSet("net0"),
 				},
 			),
 		},
@@ -1631,9 +1616,9 @@ func TestHardware_NetDeviceBuilder_BuildPart(t *testing.T) {
 			),
 			expResult: NewFabricInterfaceSet(
 				&FabricInterface{
-					Name:         "lo",
-					NetInterface: "lo",
-					DeviceClass:  Loopback,
+					Name:          "lo",
+					NetInterfaces: common.NewStringSet("lo"),
+					DeviceClass:   Loopback,
 				},
 			),
 		},
@@ -1646,12 +1631,12 @@ func TestHardware_NetDeviceBuilder_BuildPart(t *testing.T) {
 			),
 			expResult: NewFabricInterfaceSet(
 				&FabricInterface{
-					Name:         "lo",
-					NetInterface: "lo",
+					Name:          "lo",
+					NetInterfaces: common.NewStringSet("lo"),
 				},
 			),
 		},
-		"multiple": {
+		"multiple FIs": {
 			builder: newNetworkDeviceBuilder(nil, testTopo),
 			set: NewFabricInterfaceSet(
 				&FabricInterface{
@@ -1672,31 +1657,31 @@ func TestHardware_NetDeviceBuilder_BuildPart(t *testing.T) {
 			),
 			expResult: NewFabricInterfaceSet(
 				&FabricInterface{
-					Name:         "ofi0",
-					NetInterface: "net0",
+					Name:          "ofi0",
+					NetInterfaces: common.NewStringSet("net0"),
 				},
 				&FabricInterface{
-					Name:         "net0",
-					NetInterface: "net0",
+					Name:          "net0",
+					NetInterfaces: common.NewStringSet("net0"),
 				},
 				&FabricInterface{
-					Name:         "net1",
-					NetInterface: "net1",
+					Name:          "net1",
+					NetInterfaces: common.NewStringSet("net1"),
 				},
 				&FabricInterface{
-					Name:         "ofi2",
-					NetInterface: "net2",
+					Name:          "ofi2",
+					NetInterfaces: common.NewStringSet("net2", "net2.100"),
 				},
 				&FabricInterface{
-					Name:         "net2",
-					NetInterface: "net2",
+					Name:          "net2",
+					NetInterfaces: common.NewStringSet("net2"),
 				},
 			),
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
-			defer common.ShowBufferOnFailure(t, buf)
+			defer test.ShowBufferOnFailure(t, buf)
 
 			if tc.builder != nil {
 				tc.builder.log = log
@@ -1704,7 +1689,7 @@ func TestHardware_NetDeviceBuilder_BuildPart(t *testing.T) {
 
 			err := tc.builder.BuildPart(context.Background(), tc.set)
 
-			common.CmpErr(t, tc.expErr, err)
+			test.CmpErr(t, tc.expErr, err)
 			if diff := cmp.Diff(tc.expResult, tc.set,
 				cmp.AllowUnexported(FabricInterfaceSet{}),
 			); diff != "" {
@@ -1850,7 +1835,7 @@ func TestHardware_NUMAAffinityBuilder_BuildPart(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
-			defer common.ShowBufferOnFailure(t, buf)
+			defer test.ShowBufferOnFailure(t, buf)
 
 			if tc.builder != nil {
 				tc.builder.log = log
@@ -1858,7 +1843,7 @@ func TestHardware_NUMAAffinityBuilder_BuildPart(t *testing.T) {
 
 			err := tc.builder.BuildPart(context.Background(), tc.set)
 
-			common.CmpErr(t, tc.expErr, err)
+			test.CmpErr(t, tc.expErr, err)
 			if diff := cmp.Diff(tc.expResult, tc.set,
 				cmp.AllowUnexported(FabricInterfaceSet{}),
 			); diff != "" {
@@ -1916,33 +1901,33 @@ func TestHardware_NetDevClassBuilder_BuildPart(t *testing.T) {
 			),
 			set: NewFabricInterfaceSet(
 				&FabricInterface{
-					Name:         "net1",
-					NetInterface: "net1",
+					Name:          "net1",
+					NetInterfaces: common.NewStringSet("net1"),
 				},
 				&FabricInterface{
-					Name:         "ofi2",
-					NetInterface: "net2",
+					Name:          "ofi2",
+					NetInterfaces: common.NewStringSet("net2"),
 				},
 				&FabricInterface{
-					Name:         "net2",
-					NetInterface: "net2",
+					Name:          "net2",
+					NetInterfaces: common.NewStringSet("net2"),
 				},
 			),
 			expResult: NewFabricInterfaceSet(
 				&FabricInterface{
-					Name:         "net1",
-					NetInterface: "net1",
-					DeviceClass:  Ether,
+					Name:          "net1",
+					NetInterfaces: common.NewStringSet("net1"),
+					DeviceClass:   Ether,
 				},
 				&FabricInterface{
-					Name:         "ofi2",
-					NetInterface: "net2",
-					DeviceClass:  Infiniband,
+					Name:          "ofi2",
+					NetInterfaces: common.NewStringSet("net2"),
+					DeviceClass:   Infiniband,
 				},
 				&FabricInterface{
-					Name:         "net2",
-					NetInterface: "net2",
-					DeviceClass:  Infiniband,
+					Name:          "net2",
+					NetInterfaces: common.NewStringSet("net2"),
+					DeviceClass:   Infiniband,
 				},
 			),
 		},
@@ -1967,39 +1952,39 @@ func TestHardware_NetDevClassBuilder_BuildPart(t *testing.T) {
 			),
 			set: NewFabricInterfaceSet(
 				&FabricInterface{
-					Name:         "net1",
-					NetInterface: "net1",
+					Name:          "net1",
+					NetInterfaces: common.NewStringSet("net1"),
 				},
 				&FabricInterface{
-					Name:         "ofi2",
-					NetInterface: "net2",
+					Name:          "ofi2",
+					NetInterfaces: common.NewStringSet("net2"),
 				},
 				&FabricInterface{
-					Name:         "net2",
-					NetInterface: "net2",
+					Name:          "net2",
+					NetInterfaces: common.NewStringSet("net2"),
 				},
 			),
 			expResult: NewFabricInterfaceSet(
 				&FabricInterface{
-					Name:         "net1",
-					NetInterface: "net1",
+					Name:          "net1",
+					NetInterfaces: common.NewStringSet("net1"),
 				},
 				&FabricInterface{
-					Name:         "ofi2",
-					NetInterface: "net2",
-					DeviceClass:  Infiniband,
+					Name:          "ofi2",
+					NetInterfaces: common.NewStringSet("net2"),
+					DeviceClass:   Infiniband,
 				},
 				&FabricInterface{
-					Name:         "net2",
-					NetInterface: "net2",
-					DeviceClass:  Infiniband,
+					Name:          "net2",
+					NetInterfaces: common.NewStringSet("net2"),
+					DeviceClass:   Infiniband,
 				},
 			),
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
-			defer common.ShowBufferOnFailure(t, buf)
+			defer test.ShowBufferOnFailure(t, buf)
 
 			if tc.builder != nil {
 				tc.builder.log = log
@@ -2007,7 +1992,7 @@ func TestHardware_NetDevClassBuilder_BuildPart(t *testing.T) {
 
 			err := tc.builder.BuildPart(context.Background(), tc.set)
 
-			common.CmpErr(t, tc.expErr, err)
+			test.CmpErr(t, tc.expErr, err)
 			if diff := cmp.Diff(tc.expResult, tc.set,
 				cmp.AllowUnexported(FabricInterfaceSet{}),
 			); diff != "" {
@@ -2019,94 +2004,131 @@ func TestHardware_NetDevClassBuilder_BuildPart(t *testing.T) {
 
 func TestHardware_WaitFabricReady(t *testing.T) {
 	for name, tc := range map[string]struct {
-		checker *mockFabricReadyChecker
-		ifaces  []string
-		timeout time.Duration
-		expErr  error
+		stateProv      *MockNetDevStateProvider
+		ifaces         []string
+		ignoreUnusable bool
+		timeout        time.Duration
+		expErr         error
 	}{
 		"nil checker": {
 			ifaces: []string{"fi0"},
 			expErr: errors.New("nil"),
 		},
 		"no interfaces": {
-			checker: &mockFabricReadyChecker{},
-			expErr:  errors.New("no fabric interfaces"),
+			stateProv: &MockNetDevStateProvider{},
+			expErr:    errors.New("no fabric interfaces"),
 		},
 		"instant success": {
-			checker: &mockFabricReadyChecker{},
-			ifaces:  []string{"fi0"},
+			stateProv: &MockNetDevStateProvider{},
+			ifaces:    []string{"fi0"},
 		},
 		"instant failure": {
-			checker: &mockFabricReadyChecker{
-				isReadyErr: []error{errors.New("mock CheckFabricReady")},
+			stateProv: &MockNetDevStateProvider{
+				GetStateReturn: []MockNetDevStateResult{
+					{Err: errors.New("mock GetNetDevState")},
+				},
 			},
 			ifaces: []string{"fi0"},
-			expErr: errors.New("mock CheckFabricReady"),
+			expErr: errors.New("mock GetNetDevState"),
 		},
 		"success after tries": {
-			checker: &mockFabricReadyChecker{
-				isReadyErr: []error{
-					ErrFabricNotReady("fi0"),
-					ErrFabricNotReady("fi0"),
-					ErrFabricNotReady("fi0"),
-					nil,
+			stateProv: &MockNetDevStateProvider{
+				GetStateReturn: []MockNetDevStateResult{
+					{State: NetDevStateNotReady},
+					{State: NetDevStateNotReady},
+					{State: NetDevStateReady},
 				},
 			},
 			ifaces: []string{"fi0"},
 		},
 		"failure after tries": {
-			checker: &mockFabricReadyChecker{
-				isReadyErr: []error{
-					ErrFabricNotReady("fi0"),
-					ErrFabricNotReady("fi0"),
-					errors.New("mock CheckFabricReady"),
+			stateProv: &MockNetDevStateProvider{
+				GetStateReturn: []MockNetDevStateResult{
+					{State: NetDevStateNotReady},
+					{State: NetDevStateNotReady},
+					{Err: errors.New("mock GetNetDevState")},
 				},
 			},
 			ifaces: []string{"fi0"},
-			expErr: errors.New("mock CheckFabricReady"),
+			expErr: errors.New("mock GetNetDevState"),
 		},
 		"multi iface with failure": {
-			checker: &mockFabricReadyChecker{
-				isReadyErr: []error{
-					ErrFabricNotReady("fi0"),
-					ErrFabricNotReady("fi1"),
-					nil,
-					errors.New("mock CheckFabricReady"),
+			stateProv: &MockNetDevStateProvider{
+				GetStateReturn: []MockNetDevStateResult{
+					{State: NetDevStateNotReady},
+					{State: NetDevStateNotReady},
+					{State: NetDevStateReady},
+					{Err: errors.New("mock GetNetDevState")},
 				},
 			},
 			ifaces: []string{"fi0", "fi1"},
-			expErr: errors.New("mock CheckFabricReady"),
+			expErr: errors.New("mock GetNetDevState"),
 		},
 		"multi iface success": {
-			checker: &mockFabricReadyChecker{
-				isReadyErr: []error{
-					ErrFabricNotReady("fi0"),
-					ErrFabricNotReady("fi1"),
-					nil,
-					ErrFabricNotReady("fi1"),
-					nil,
+			stateProv: &MockNetDevStateProvider{
+				GetStateReturn: []MockNetDevStateResult{
+					{State: NetDevStateNotReady},
+					{State: NetDevStateNotReady},
+					{State: NetDevStateReady},
+					{State: NetDevStateNotReady},
+					{State: NetDevStateReady},
 				},
 			},
 			ifaces: []string{"fi0", "fi1"},
 		},
 		"duplicates": {
-			checker: &mockFabricReadyChecker{},
-			ifaces:  []string{"fi0", "fi0"},
+			stateProv: &MockNetDevStateProvider{},
+			ifaces:    []string{"fi0", "fi0"},
 		},
 		"timeout": {
-			checker: &mockFabricReadyChecker{
-				isReadyErr: []error{
-					ErrFabricNotReady("fi0"),
+			stateProv: &MockNetDevStateProvider{
+				GetStateReturn: []MockNetDevStateResult{
+					{State: NetDevStateNotReady},
 				},
 			},
 			timeout: time.Millisecond,
 			ifaces:  []string{"fi0"},
 			expErr:  errors.New("context deadline"),
 		},
+		"requested interface unusable": {
+			stateProv: &MockNetDevStateProvider{
+				GetStateReturn: []MockNetDevStateResult{
+					{State: NetDevStateNotReady},
+					{State: NetDevStateDown},
+				},
+			},
+			ifaces: []string{"fi0", "fi1"},
+			expErr: errors.New("unusable"),
+		},
+		"ignore unusable": {
+			stateProv: &MockNetDevStateProvider{
+				GetStateReturn: []MockNetDevStateResult{
+					{State: NetDevStateNotReady},
+					{State: NetDevStateDown},
+					{State: NetDevStateUnknown},
+					{State: NetDevStateReady},
+					{State: NetDevStateDown},
+					{State: NetDevStateUnknown},
+				},
+			},
+			ignoreUnusable: true,
+			ifaces:         []string{"fi0", "fi1", "fi2"},
+		},
+		"all unusable": {
+			stateProv: &MockNetDevStateProvider{
+				GetStateReturn: []MockNetDevStateResult{
+					{State: NetDevStateDown},
+					{State: NetDevStateUnknown},
+				},
+			},
+			ignoreUnusable: true,
+			ifaces:         []string{"fi0", "fi1"},
+			expErr:         errors.New("no usable fabric interfaces"),
+		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
-			defer common.ShowBufferOnFailure(t, buf)
+			defer test.ShowBufferOnFailure(t, buf)
 
 			var ctx context.Context
 
@@ -2119,11 +2141,12 @@ func TestHardware_WaitFabricReady(t *testing.T) {
 			}
 
 			err := WaitFabricReady(ctx, log, WaitFabricReadyParams{
-				Checker:      tc.checker,
-				FabricIfaces: tc.ifaces,
+				StateProvider:  tc.stateProv,
+				FabricIfaces:   tc.ifaces,
+				IgnoreUnusable: tc.ignoreUnusable,
 			})
 
-			common.CmpErr(t, tc.expErr, err)
+			test.CmpErr(t, tc.expErr, err)
 		})
 	}
 }

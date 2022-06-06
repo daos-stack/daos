@@ -49,10 +49,9 @@ def build_vos_internal(env):
 
 def scons():
     """Execute build"""
-    Import('env', 'base_env', 'prereqs')
+    Import('env', 'prereqs')
 
     env.AppendUnique(LIBPATH=[Dir('.')])
-    base_env.AppendUnique(LIBPATH=[Dir('.')])
 
     if not prereqs.server_requested():
         return
