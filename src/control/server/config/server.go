@@ -313,8 +313,9 @@ func (cfg *Server) Load() error {
 	}
 
 	if err = yaml.UnmarshalStrict(bytes, cfg); err != nil {
-		return errors.WithMessage(err, "parse failed; config contains invalid "+
-			"parameters and may be out of date, see server config examples")
+		return errors.WithMessagef(err, "parse of %q failed; config contains invalid "+
+			"parameters and may be out of date, see server config examples",
+			cfg.Path)
 	}
 
 	// propagate top-level settings to server configs
