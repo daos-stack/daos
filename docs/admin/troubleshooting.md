@@ -926,7 +926,7 @@ by 'daos_server' processes via the Go standard library API.
 If no Syslog daemon is configured on the host, errors will be printed to the 'daos_server' log file:
 
 ```
-ERROR: failed to create syslogger with priority %!s(syslog.Priority=24): Unix syslog delivery error
+ERROR: failed to create syslogger with priority 30 (severity=ERROR, facility=DAEMON): Unix syslog delivery error
 ```
 
 These errors will not prevent DAOS from running as expected but indicate that no Syslog messages
