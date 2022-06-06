@@ -11,6 +11,9 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"path/filepath"
+	"reflect"
+	"runtime"
 	"strings"
 	"time"
 
@@ -564,6 +567,27 @@ func (svc *mgmtSvc) rpcFanout(ctx context.Context, req *fanoutRequest, resp *fan
 	ranksReq := &control.RanksReq{
 		Ranks: req.Ranks.String(), Force: req.Force,
 	}
+
+	funcName := func(i interface{}) string {
+		return filepath.Base(runtime.FuncForPC(reflect.ValueOf(i).Pointer()).Name())
+	}
+
+	waiting := system.RankSetFromRanks(req.Ranks.Ranks())
+	finished := system.MustCreateRankSet("")
+	ranksReq.SetReportCb(func(hr *control.HostResponse) {
+		rs, ok := hr.Message.(interface{ GetResults() []*sharedpb.RankResult })
+		if !ok {
+			svc.log.Errorf("unexpected message type in HostResponse: %T", hr.Message)
+			return
+		}
+
+		for _, rr := range rs.GetResults() {
+			waiting.Delete(system.Rank(rr.Rank))
+			finished.Add(system.Rank(rr.Rank))
+		}
+
+		svc.log.Infof("%s: finished: %s; waiting: %s", funcName(req.Method), finished, waiting)
+	})
 
 	// Not strictly necessary but helps with debugging.
 	dl, ok := ctx.Deadline()
