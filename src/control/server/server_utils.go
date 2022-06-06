@@ -155,7 +155,7 @@ func getControlAddr(params ctlAddrParams) (*net.TCPAddr, error) {
 
 func createListener(ctlAddr *net.TCPAddr, listener netListenFn) (net.Listener, error) {
 	// Create and start listener on management network.
-	lis, err := listener("tcp", fmt.Sprintf("0.0.0.0:%d", ctlAddr.Port))
+	lis, err := listener("tcp4", fmt.Sprintf("0.0.0.0:%d", ctlAddr.Port))
 	if err != nil {
 		return nil, errors.Wrap(err, "unable to listen on management interface")
 	}
