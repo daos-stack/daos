@@ -107,7 +107,8 @@ class NetworkFailureTest(IorTestBase):
         return {result["stdout"][0]: str(result["hosts"]) for result in results}
 
     def verify_network_failure(self, ior_namespace, container_namespace):
-        """Verify network failure can be recovered without intervention in DAOS side.
+        """Verify network failure can be recovered with some user interventions with
+        DAOS.
 
         1. Create a pool and a container. Create a container with or without redundancy
         factor based on container_namespace.
@@ -153,7 +154,7 @@ class NetworkFailureTest(IorTestBase):
                 interface=self.interface, state="down", host=self.network_down_host,
                 errors=errors)
         else:
-            # Aurora
+            # Aurora. Manually run the command.
             command = f"sudo ip link set {self.interface} down"
             self.log.debug("## Call %s on %s", command, self.network_down_host)
             time.sleep(20)
@@ -388,7 +389,7 @@ class NetworkFailureTest(IorTestBase):
                 interface=self.interface, state="up", host=self.network_down_host,
                 errors=errors)
         else:
-            # Aurora
+            # Aurora. Manually run the command.
             command = "sudo ip link set {} {}".format(self.interface, "up")
             self.log.debug("## Call %s on %s", command, self.network_down_host)
             time.sleep(20)
