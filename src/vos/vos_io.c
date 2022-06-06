@@ -1208,7 +1208,9 @@ akey_fetch(struct vos_io_context *ioc, daos_handle_t ak_toh)
 
 	rc = key_tree_prepare(ioc->ic_obj, ak_toh,
 			      VOS_BTR_AKEY, &iod->iod_name, flags,
-			      DAOS_INTENT_DEFAULT, &krec, &toh, ioc->ic_ts_set);
+			      DAOS_INTENT_DEFAULT, &krec,
+			      (ioc->ic_check_existence || ioc->ic_read_ts_only) ? NULL : &toh,
+			      ioc->ic_ts_set);
 
 	if (stop_check(ioc, VOS_OF_COND_AKEY_FETCH, iod, &rc, true)) {
 		if (rc == 0 && !ioc->ic_read_ts_only)
