@@ -74,7 +74,7 @@ gpgcheck=False\n" >> /etc/dnf/repos.d/$repo:$branch:$build_number.repo;   \
     done
 
 # Install OS updates and package.  Include basic tools and daos dependencies
-COPY ./ci/rpm/install-leap15.sh /tmp/install.sh
+COPY ./ci/rpm/install-base-leap15.sh /tmp/install.sh
 RUN chmod +x /tmp/install.sh && dnf upgrade &&          \
     if [ -n "$REPO_FILE_URL" ]; then                    \
         cd /etc/dnf/repos.d/ &&                         \
