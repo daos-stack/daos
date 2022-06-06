@@ -179,9 +179,19 @@ func (tc *TierConfig) WithBdevBusidRange(rangeStr string) *TierConfig {
 
 type TierConfigs []*TierConfig
 
-func (tcs TierConfigs) CfgHasBdevs() bool {
+func (tcs TierConfigs) HaveBdevs() bool {
 	for _, bc := range tcs.BdevConfigs() {
 		if bc.Bdev.DeviceList.Len() > 0 {
+			return true
+		}
+	}
+
+	return false
+}
+
+func (tcs TierConfigs) HaveNVMe() bool {
+	for _, bc := range tcs.BdevConfigs() {
+		if bc.Bdev.DeviceList.Len() > 0 && bc.Class == ClassNvme {
 			return true
 		}
 	}
@@ -198,7 +208,7 @@ func (tcs TierConfigs) Validate() error {
 	return nil
 }
 
-func (tcs TierConfigs) ScmConfigs() (out []*TierConfig) {
+func (tcs TierConfigs) ScmConfigs() (out TierConfigs) {
 	for _, cfg := range tcs {
 		if cfg.IsSCM() {
 			out = append(out, cfg)
@@ -208,7 +218,7 @@ func (tcs TierConfigs) ScmConfigs() (out []*TierConfig) {
 	return
 }
 
-func (tcs TierConfigs) BdevConfigs() (out []*TierConfig) {
+func (tcs TierConfigs) BdevConfigs() (out TierConfigs) {
 	for _, cfg := range tcs {
 		if cfg.IsBdev() {
 			out = append(out, cfg)
