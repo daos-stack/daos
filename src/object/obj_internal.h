@@ -103,6 +103,7 @@ struct dc_object {
 	uint64_t		*cob_time_fetch_leader;
 	/** shard object ptrs */
 	struct dc_obj_layout	*cob_shards;
+	uint32_t		cob_ec_parity_rotate:1;
 };
 
 /* to record EC singv fetch stat from different shards */
@@ -153,6 +154,8 @@ struct obj_reasb_req {
 	uint32_t			 orr_iom_tgt_nr;
 	/* number of iom extends */
 	uint32_t			 orr_iom_nr;
+	/* #iods of IO req */
+	uint32_t			 orr_iod_nr;
 	struct daos_oclass_attr		*orr_oca;
 	struct obj_ec_codec		*orr_codec;
 	pthread_mutex_t			 orr_mutex;
@@ -166,8 +169,6 @@ struct obj_reasb_req {
 	/* parity recx list (to compare parity ext/epoch when data recovery) */
 	struct daos_recx_ep_list	*orr_parity_lists;
 	uint32_t			 orr_parity_list_nr;
-	/* #iods of IO req */
-	uint32_t			 orr_iod_nr;
 	/* for data recovery flag */
 	uint32_t			 orr_recov:1,
 	/* for snapshot data recovery flag */
@@ -206,7 +207,6 @@ typedef int (*shard_io_cb_t)(struct dc_obj_shard *shard, enum obj_rpc_opc opc,
  * shard_rw_args and shard_punch_args.
  */
 struct shard_auxi_args {
-	struct dc_object	*obj;
 	struct obj_auxi_args	*obj_auxi;
 	shard_io_cb_t		 shard_io_cb;
 	struct dtx_epoch	 epoch;
@@ -224,10 +224,8 @@ struct shard_auxi_args {
 
 struct shard_rw_args {
 	struct shard_auxi_args	 auxi;
-	daos_obj_rw_t		*api_args;
 	d_sg_list_t		*sgls_dup;
 	struct dtx_id		 dti;
-	uint64_t		 dkey_hash;
 	crt_bulk_t		*bulks;
 	struct obj_io_desc	*oiods;
 	uint64_t		*offs;
@@ -238,10 +236,8 @@ struct shard_rw_args {
 
 struct shard_punch_args {
 	struct shard_auxi_args	 pa_auxi;
-	daos_obj_punch_t	*pa_api_args;
 	uuid_t			 pa_coh_uuid;
 	uuid_t			 pa_cont_uuid;
-	uint64_t		 pa_dkey_hash;
 	struct dtx_id		 pa_dti;
 	uint32_t		 pa_opc;
 };
@@ -270,7 +266,6 @@ struct shard_anchors {
 
 struct shard_list_args {
 	struct shard_auxi_args	 la_auxi;
-	daos_obj_list_t		*la_api_args;
 	struct dtx_id		 la_dti;
 	daos_recx_t		*la_recxs;
 	uint32_t		la_nr;
@@ -307,6 +302,121 @@ int
 obj_enum_iterate(daos_key_desc_t *kdss, d_sg_list_t *sgl, int nr,
 		 unsigned int type, obj_enum_process_cb_t cb,
 		 void *cb_arg);
+#define CLI_OBJ_IO_PARMS	8
+
+#define OBJ_TGT_INLINE_NR	9
+#define OBJ_INLINE_BTIMAP	4
+
+struct obj_req_tgts {
+	/* to save memory allocation if #targets <= OBJ_TGT_INLINE_NR */
+	struct daos_shard_tgt	 ort_tgts_inline[OBJ_TGT_INLINE_NR];
+	/* Shard target array, with (ort_grp_nr * ort_grp_size) targets.
+	 * If #targets <= OBJ_TGT_INLINE_NR then it points to ort_tgts_inline.
+	 * Within the array, [0, ort_grp_size - 1] is for the first group,
+	 * [ort_grp_size, ort_grp_size * 2 - 1] is the 2nd group and so on.
+	 * If (ort_srv_disp == 1) then within each group the first target is the
+	 * leader shard and following (ort_grp_size - 1) targets are the forward
+	 * non-leader shards.
+	 * Now there is only one case for (ort_grp_nr > 1) that for object
+	 * punch, all other cases with (ort_grp_nr == 1).
+	 */
+	struct daos_shard_tgt	*ort_shard_tgts;
+	uint32_t		 ort_grp_nr;
+	/* ort_grp_size is the size of the group that is sent as forwarded
+	 * shards
+	 */
+	uint32_t		 ort_grp_size;
+	/* ort_start_shard is only for EC object, it is the start shard number
+	 * of the EC stripe. To facilitate calculate the offset of different
+	 * shards in the stripe.
+	 */
+	uint32_t		 ort_start_shard;
+	/* flag of server dispatch */
+	uint32_t		 ort_srv_disp:1;
+};
+
+struct obj_auxi_tgt_list {
+	/** array of target ID */
+	uint32_t	*tl_tgts;
+	/** number of ranks & tgts */
+	uint32_t	tl_nr;
+};
+
+struct shard_sync_args {
+	struct shard_auxi_args	 sa_auxi;
+	daos_epoch_t		*sa_epoch;
+};
+
+/* Auxiliary args for object I/O */
+struct obj_auxi_args {
+	tse_task_t			*obj_task;
+	daos_handle_t			 th;
+	struct dc_object		*obj;
+	int				 opc;
+	int				 result;
+	uint32_t			 map_ver_req;
+	uint32_t			 map_ver_reply;
+	/* flags for the obj IO task.
+	 * ec_wait_recov -- obj fetch wait another EC recovery task,
+	 * ec_in_recov -- a EC recovery task
+	 */
+	uint32_t			 io_retry:1,
+					 args_initialized:1,
+					 to_leader:1,
+					 spec_shard:1,
+					 spec_group:1,
+					 req_reasbed:1,
+					 is_ec_obj:1,
+					 csum_retry:1,
+					 csum_report:1,
+					 tx_uncertain:1,
+					 no_retry:1,
+					 ec_wait_recov:1,
+					 ec_in_recov:1,
+					 new_shard_tasks:1,
+					 reset_param:1,
+					 force_degraded:1,
+					 shards_scheded:1,
+					 sub_anchors:1,
+					 ec_degrade_fetch:1,
+					 tx_convert:1,
+					 cond_modify:1;
+	/* request flags. currently only: ORF_RESEND */
+	uint32_t			 flags;
+	uint32_t			 specified_shard;
+	/* 64-bits alignment, bitmap for retry next replicas. */
+	struct obj_req_tgts		 req_tgts;
+	d_sg_list_t			*sgls_dup;
+	crt_bulk_t			*bulks;
+	uint32_t			 iod_nr;
+	uint32_t			 initial_shard;
+	d_list_t			 shard_task_head;
+	struct obj_reasb_req		 reasb_req;
+	struct obj_auxi_tgt_list	*failed_tgt_list;
+	uint64_t			dkey_hash;
+	/* one shard_args embedded to save one memory allocation if the obj
+	 * request only targets for one shard.
+	 */
+	union {
+		struct shard_rw_args	 rw_args;
+		struct shard_punch_args	 p_args;
+		struct shard_list_args	 l_args;
+		struct shard_sync_args	 s_args;
+	};
+};
+
+#define obj_ec_dkey_hash_get(obj, dkey_hash)	\
+	(obj->cob_ec_parity_rotate ? dkey_hash : 0)
+/**
+ * task memory space should enough to use -
+ * obj API task with daos_task_args + obj_auxi_args,
+ * shard sub-task with shard_auxi_args + obj_auxi_args.
+ * When it exceed the limit, can reduce OBJ_TGT_INLINE_NR or enlarge tse_task.
+ */
+D_CASSERT(sizeof(struct obj_auxi_args) + sizeof(struct shard_auxi_args) <=
+	  TSE_TASK_ARG_LEN);
+D_CASSERT(sizeof(struct obj_auxi_args) + sizeof(struct daos_task_args) <=
+	  TSE_TASK_ARG_LEN);
 
 int
 merge_recx(d_list_t *head, uint64_t offset, uint64_t size, daos_epoch_t eph);
@@ -336,11 +446,6 @@ ec_bulk_spec_get_skip(int index, struct ec_bulk_spec *skip_list)
 {
 	return skip_list[index].is_skip;
 }
-struct shard_sync_args {
-	struct shard_auxi_args	 sa_auxi;
-	daos_epoch_t		*sa_epoch;
-};
-
 #define DOVA_NUM	32
 #define DOVA_BUF_LEN	4096
 
@@ -362,7 +467,8 @@ struct dc_obj_verify_args {
 	uint32_t			 num;
 	unsigned int			 eof:1,
 					 non_exist:1,
-					 data_fetched:1;
+					 data_fetched:1,
+					 ec_parity_rotate:1;
 	daos_key_desc_t			 kds[DOVA_NUM];
 	d_sg_list_t			 list_sgl;
 	d_sg_list_t			 fetch_sgl;
@@ -420,8 +526,9 @@ int dc_obj_shard_sync(struct dc_obj_shard *shard, enum obj_rpc_opc opc,
 int dc_obj_verify_rdg(struct dc_object *obj, struct dc_obj_verify_args *dova,
 		      uint32_t rdg_idx, uint32_t reps, daos_epoch_t epoch);
 bool obj_op_is_ec_fetch(struct obj_auxi_args *obj_auxi);
-int obj_recx_ec2_daos(struct daos_oclass_attr *oca, int shard, daos_recx_t **recxs_p,
-		      daos_epoch_t **recx_ephs_p, unsigned int *nr, bool convert_parity);
+int obj_recx_ec2_daos(struct daos_oclass_attr *oca, uint64_t dkey_hash, int shard,
+		      daos_recx_t **recxs_p, daos_epoch_t **recx_ephs_p,
+		      unsigned int *nr, bool convert_parity);
 int obj_reasb_req_init(struct obj_reasb_req *reasb_req, struct dc_object *obj,
 		       daos_iod_t *iods, uint32_t iod_nr, struct daos_oclass_attr *oca);
 void obj_reasb_req_fini(struct obj_reasb_req *reasb_req, uint32_t iod_nr);
@@ -439,21 +546,31 @@ int obj_pool_query_task(tse_sched_t *sched, struct dc_object *obj,
 bool obj_csum_dedup_candidate(struct cont_props *props, daos_iod_t *iods,
 			      uint32_t iod_nr);
 
-int obj_grp_leader_get(struct dc_object *obj, int grp_idx,
-		       unsigned int map_ver, bool has_condition, uint8_t *bit_map);
+int obj_grp_leader_get(struct dc_object *obj, int grp_idx, uint64_t dkey_hash,
+		       bool has_condition, unsigned int map_ver, uint8_t *bit_map);
 #define obj_shard_close(shard)	dc_obj_shard_close(shard)
-int obj_recx_ec_daos2shard(struct daos_oclass_attr *oca, int shard, daos_recx_t **recxs_p,
-			   daos_epoch_t **recx_ephs_p, unsigned int *iod_nr);
+int obj_recx_ec_daos2shard(struct daos_oclass_attr *oca, uint64_t dkey_hash, int shard,
+			   daos_recx_t **recxs_p, daos_epoch_t **recx_ephs_p,
+			   unsigned int *iod_nr);
 int obj_ec_singv_encode_buf(daos_unit_oid_t oid, struct daos_oclass_attr *oca,
-			    daos_iod_t *iod, d_sg_list_t *sgl, d_iov_t *e_iov);
+			    uint64_t dkey_hash, daos_iod_t *iod, d_sg_list_t *sgl,
+			    d_iov_t *e_iov);
 int obj_ec_singv_split(daos_unit_oid_t oid, struct daos_oclass_attr *oca,
-		       daos_size_t iod_size, d_sg_list_t *sgl);
+		       uint64_t dkey_hash, daos_size_t iod_size, d_sg_list_t *sgl);
+
 int
 obj_singv_ec_rw_filter(daos_unit_oid_t oid, struct daos_oclass_attr *oca,
-		       daos_iod_t *iods, uint64_t *offs, daos_epoch_t epoch,
-		       uint32_t flags, uint32_t start_shard,
-		       uint32_t nr, bool for_update, bool deg_fetch,
+		       uint64_t dkey_hash, daos_iod_t *iods, uint64_t *offs,
+		       daos_epoch_t epoch, uint32_t flags, uint32_t nr,
+		       bool for_update, bool deg_fetch,
 		       struct daos_recx_ep_list **recov_lists_ptr);
+int
+obj_ec_encode_buf(daos_obj_id_t oid, struct daos_oclass_attr *oca,
+		  daos_size_t iod_size, unsigned char *buffer,
+		  unsigned char *p_bufs[]);
+
+int
+obj_ec_parity_alive(daos_handle_t oh, uint64_t dkey_hash, uint32_t map_ver);
 
 static inline struct pl_obj_shard*
 obj_get_shard(void *data, int idx)
@@ -546,7 +663,8 @@ struct obj_io_context {
 	uint32_t		 ioc_began:1,
 				 ioc_free_sgls:1,
 				 ioc_lost_reply:1,
-				 ioc_fetch_snap:1;
+				 ioc_fetch_snap:1,
+				 ioc_ec_rotate_parity:1;
 };
 
 static inline uint64_t
