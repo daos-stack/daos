@@ -3,9 +3,9 @@
 set -uex
 
 mydir="$(cd "$(dirname "${BASH_SOURCE[0]}")" >/dev/null 2>&1 && pwd)"
-# at some point we want to use: shellcheck source=ci/rpm/daos_info.sh
+# at some point we want to use: shellcheck source=ci/rpm/distro_info.sh
 # shellcheck disable=SC1091
-source "$mydir/daos_info.sh"
+source "$mydir/distro_info.sh"
 
 : "{BUILD_URL:=}"
 if command -v dnf; then
