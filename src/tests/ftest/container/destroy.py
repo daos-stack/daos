@@ -5,10 +5,9 @@
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 import traceback
-import uuid
 
 from apricot import TestWithServers
-from pydaos.raw import DaosApiError, conversion
+from pydaos.raw import DaosApiError
 
 
 class ContainerDestroyTest(TestWithServers):
@@ -30,7 +29,6 @@ class ContainerDestroyTest(TestWithServers):
         expected_for_param = []
         change_result_uuid = self.params.get(
             "change_result", '/run/destroy_variants/destroy_uuid/*/')
-        change_uuid = change_result_uuid[0]
         expected_for_param.append(change_result_uuid[1])
 
         validity_result_poh = self.params.get(
