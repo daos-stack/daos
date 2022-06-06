@@ -84,8 +84,10 @@
 #
 #
 ## Control plane network interface
-## Use a specific network interface for communications with this control plane
-## server.
+## Optional. Use a specific network interface for communications with this
+## control plane server.
+## This parameter should be set if the machine has multiple interfaces
+## connected the management network.
 #
 #control_iface: eth0
 #

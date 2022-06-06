@@ -38,7 +38,7 @@ const (
 // See utils/config/daos_server.yml for parameter descriptions.
 type Server struct {
 	// control-specific
-	ControlInterface string                    `yaml:"control_iface"`
+	ControlInterface string                    `yaml:"control_iface,omitempty"`
 	ControlPort      int                       `yaml:"port"`
 	TransportConfig  *security.TransportConfig `yaml:"transport_config"`
 	// Detect outdated "servers" config, to direct users to change their config file
