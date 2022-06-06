@@ -55,11 +55,8 @@ class Enospace(DfuseTestBase):
             file_size = 0
             while True:
                 stat_pre = os.fstat(fd.fileno())
-                # Do this for every iteration not to check how it logs, but add the conditional
-                # before landing.
-                # if stat_pre.st_size != file_size:
-                self.log.info('file size is %d' % file_size)
-                self.log.info('file stat is %s' % stat_pre)
+                if stat_pre.st_size != file_size:
+                    self.log.info('file size is %d, %s', file_size, stat_pre)
                 self.assertTrue(stat_pre.st_size == file_size)
                 try:
                     fd.write(bytearray(write_size))
