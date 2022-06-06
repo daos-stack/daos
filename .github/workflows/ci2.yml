@@ -16,11 +16,10 @@ jobs:
     runs-on: ubuntu-20.04
     strategy:
       matrix:
-        # This should be ubuntu however GitHub needs reconfiguring for the new job name.
-        distro: [ubuntu.20.04]
+        distro: [ubuntu]
         include:
-          - distro: ubuntu.20.04
-            base: ubuntu.20.04
+          - distro: ubuntu
+            base: ubuntu
             with: ubuntu:22.04
     env:
       DEPS_JOBS: 10
