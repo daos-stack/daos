@@ -20,10 +20,6 @@ destroy_variants:
       change_result:
         - FALSE
         - PASS
-    nonexisting_uuid:
-      change_result:
-        - TRUE
-        - FAIL
 
   connection_open: !mux
     # opened=TRUE and force=0 should FAIL (noForce below causes FAIL)
