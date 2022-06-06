@@ -220,8 +220,7 @@ def scons():
         agentbin = install_go_bin(denv, gosrc, None, "daos_agent", "daos_agent")
         dmgbin = install_go_bin(denv, gosrc, None, "dmg", "dmg")
         if prereqs.test_requested():
-            drpcbin = install_go_bin(denv, gosrc, None, "drpc_test",
-                                     "hello_drpc")
+            drpcbin = install_go_bin(denv, gosrc, None, "drpc_test", "hello_drpc")
             AlwaysBuild(drpcbin)
 
         AlwaysBuild([agentbin, dmgbin])
