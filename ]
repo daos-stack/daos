@@ -14,8 +14,13 @@
 %endif
 
 Name:          daos
+<<<<<<< HEAD
 Version:       2.1.102
-Release:       5%{?relval}%{?dist}
+Release:       4%{?relval}%{?dist}
+=======
+Version:       2.3.100
+Release:       12%{?relval}%{?dist}
+>>>>>>> fbb87b19c (DAOS-10674 build: Add UCX builder, similar to other dependencies (#9190))
 Summary:       DAOS Storage Engine
 
 License:       BSD-2-Clause-Patent
