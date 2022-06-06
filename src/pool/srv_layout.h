@@ -17,7 +17,7 @@
  *       Pool handle KVS (GENERIC)
  *       Pool user attribute KVS (GENERIC)
  *
- * The version of the whole layout is stored in ds_pool_prop_version.
+ * The version of the whole layout is stored in ds_pool_prop_global_version.
  */
 
 #ifndef __POOL_SRV_LAYOUT_H__
@@ -25,17 +25,11 @@
 
 #include <daos_types.h>
 
-/* Default layout version */
-#define DS_POOL_MD_VERSION 8
-
-/* Lowest compatible layout version */
-#define DS_POOL_MD_VERSION_LOW 4
-
 /*
  * Root KVS (RDB_KVS_GENERIC): pool properties
  *
- * The ds_pool_prop_version property stores the version of the whole layout,
- * including that of the container metadata..
+ * The ds_pool_prop_global_version property stores the version of the whole
+ * layout, including that of the container metadata..
  *
  * The ds_pool_prop_map_buffer property stores the pool map in pool_buf format,
  * because version is absent from pool_buf, it has to be stored separately in
@@ -53,7 +47,6 @@
  *   usage shall be described above in this comment following existing
  *   examples. If the value is another KVS, its type shall be the KVS name.
  */
-extern d_iov_t ds_pool_prop_version;		/* uint32_t */
 extern d_iov_t ds_pool_prop_map_version;	/* uint32_t */
 extern d_iov_t ds_pool_prop_map_buffer;		/* pool_buf */
 extern d_iov_t ds_pool_prop_label;		/* string */

@@ -477,7 +477,6 @@ init_pool_metadata(struct rdb_tx *tx, const rdb_path_t *kvs, uint32_t nnodes, co
 		   const d_rank_list_t *ranks, daos_prop_t *prop, uint32_t ndomains,
 		   const uint32_t *domains)
 {
-	uint32_t		version = DS_POOL_MD_VERSION;
 	struct pool_buf	       *map_buf;
 	uint32_t		map_version = 1;
 	uint32_t		connectable;
@@ -487,14 +486,6 @@ init_pool_metadata(struct rdb_tx *tx, const rdb_path_t *kvs, uint32_t nnodes, co
 	int			ntargets = nnodes * dss_tgt_nr;
 	uint32_t		upgrade_global_version = DS_POOL_GLOBAL_VERSION;
 	int			rc;
-
-	/* Initialize the layout version. */
-	d_iov_set(&value, &version, sizeof(version));
-	rc = rdb_tx_update(tx, kvs, &ds_pool_prop_version, &value);
-	if (rc != 0) {
-		D_ERROR("failed to update version, "DF_RC"\n", DP_RC(rc));
-		goto out;
-	}
 
 	/* Generate the pool buffer. */
 	rc = gen_pool_buf(NULL /* map */, &map_buf, map_version, ndomains, nnodes, ntargets,
@@ -1214,8 +1205,8 @@ read_db_for_stepping_up(struct pool_svc *svc, struct pool_buf **map_buf,
 {
 	struct rdb_tx	tx;
 	d_iov_t		value;
+	uint32_t	global_version;
 	bool		version_exists = false;
-	uint32_t	version, global_version;
 	int		rc;
 
 	rc = rdb_tx_begin(svc->ps_rsvc.s_db, svc->ps_rsvc.s_term, &tx);
@@ -1224,8 +1215,8 @@ read_db_for_stepping_up(struct pool_svc *svc, struct pool_buf **map_buf,
 	ABT_rwlock_rdlock(svc->ps_lock);
 
 	/* Check the layout version. */
-	d_iov_set(&value, &version, sizeof(version));
-	rc = rdb_tx_lookup(&tx, &svc->ps_root, &ds_pool_prop_version, &value);
+	d_iov_set(&value, &global_version, sizeof(global_version));
+	rc = rdb_tx_lookup(&tx, &svc->ps_root, &ds_pool_prop_global_version, &value);
 	if (rc == -DER_NONEXIST) {
 		/*
 		 * This DB may be new or incompatible. Check the existence of
@@ -1241,7 +1232,12 @@ read_db_for_stepping_up(struct pool_svc *svc, struct pool_buf **map_buf,
 		goto out_lock;
 	}
 	version_exists = true;
-	if (version < DS_POOL_MD_VERSION_LOW || version > DS_POOL_MD_VERSION) {
+
+	/**
+	 * downgrading the DAOS software of an upgraded pool report
+	 * a proper RAS error.
+	 */
+	if (global_version > DS_POOL_GLOBAL_VERSION) {
 		ds_notify_ras_eventf(RAS_POOL_DF_INCOMPAT, RAS_TYPE_INFO,
 				     RAS_SEV_ERROR, NULL /* hwid */,
 				     NULL /* rank */, NULL /* inc */,
@@ -1249,10 +1245,9 @@ read_db_for_stepping_up(struct pool_svc *svc, struct pool_buf **map_buf,
 				     &svc->ps_uuid, NULL /* cont */,
 				     NULL /* objid */, NULL /* ctlop */,
 				     NULL /* data */,
-				     "incompatible layout version: %u not in "
-				     "[%u, %u]", version,
-				     DS_POOL_MD_VERSION_LOW,
-				     DS_POOL_MD_VERSION);
+				     "incompatible layout version: %u larger than "
+				     "%u", global_version,
+				     DS_POOL_GLOBAL_VERSION);
 		rc = -DER_DF_INCOMPT;
 		goto out_lock;
 	}
@@ -1275,45 +1270,10 @@ check_map:
 		}
 		goto out_lock;
 	}
-	if (!version_exists) {
-		/* This DB is not new and uses a layout that lacks a version. */
-		ds_notify_ras_eventf(RAS_POOL_DF_INCOMPAT, RAS_TYPE_INFO,
-				     RAS_SEV_ERROR, NULL /* hwid */,
-				     NULL /* rank */, NULL /* inc */,
-				     NULL /* jobid */,
-				     &svc->ps_uuid, NULL /* cont */,
-				     NULL /* objid */, NULL /* ctlop */,
-				     NULL /* data */,
-				     "incompatible layout version");
-		rc = -DER_DF_INCOMPT;
-		goto out_lock;
-	}
 
-	d_iov_set(&value, &global_version, sizeof(global_version));
-	rc = rdb_tx_lookup(&tx, &svc->ps_root, &ds_pool_prop_global_version, &value);
-	if (rc == -DER_NONEXIST)
-		global_version = 0;
-	else if (rc)
-		goto out_lock;
-
-	/**
-	 * downgrading the DAOS software of an upgraded pool report
-	 * a proper RAS error.
-	 */
-	if (global_version > DS_POOL_GLOBAL_VERSION) {
-		ds_notify_ras_eventf(RAS_POOL_DF_INCOMPAT, RAS_TYPE_INFO,
-				     RAS_SEV_ERROR, NULL /* hwid */,
-				     NULL /* rank */, NULL /* inc */,
-				     NULL /* jobid */,
-				     &svc->ps_uuid, NULL /* cont */,
-				     NULL /* objid */, NULL /* ctlop */,
-				     NULL /* data */,
-				     "incompatible layout version: %u larger than "
-				     "%u", global_version,
-				     DS_POOL_GLOBAL_VERSION);
-		rc = -DER_DF_INCOMPT;
-		goto out_lock;
-	}
+	if (!version_exists)
+		/* This could also be a 1.x pool, which we assume nobody cares. */
+		D_DEBUG(DB_MD, DF_UUID": assuming 2.0\n", DP_UUID(svc->ps_uuid));
 
 	rc = pool_prop_read(&tx, svc, DAOS_PO_QUERY_PROP_ALL, prop);
 	if (rc != 0)
@@ -1663,8 +1623,8 @@ int ds_pool_failed_add(uuid_t uuid, int rc)
 	uuid_copy(psf->psf_uuid, uuid);
 	psf->psf_error = rc;
 	d_list_add_tail(&psf->psf_link, &pool_svc_failed_list);
-	D_RWLOCK_UNLOCK(&psfl_rwlock);
 out:
+	D_RWLOCK_UNLOCK(&psfl_rwlock);
 	return ret;
 }
 
