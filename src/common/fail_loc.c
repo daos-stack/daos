@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2021 Intel Corporation.
+ * (C) Copyright 2016-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -119,23 +119,27 @@ daos_shard_fail_value(uint16_t *shards, int nr)
 		D_ERROR("ignore nr %d, should within [1, 4].\n", nr);
 		return fail_val;
 	}
-	for (i = 0; i < nr; i++)
-		fail_val |= ((uint64_t)shards[i] << (16 * i));
+
+	for (i = 0; i < nr; i++) {
+		D_ASSERT(shards[i] != 0xffff);
+		fail_val |= ((shards[i] + 1) << (16 * i));
+	}
+
 	return fail_val;
 }
 
 bool
 daos_shard_in_fail_value(uint16_t shard)
 {
-	int		i;
 	uint64_t	mask = 0xFFFF;
 	uint64_t	fail_val = daos_fail_value_get();
+	int		i;
 
+	D_ASSERT(shard != 0xffff);
 	for (i = 0; i < 4; i++) {
-		if (shard == ((fail_val & (mask << (i * 16))) >> (i * 16)))
+		if ((shard + 1) == (fail_val & (mask << (i * 16))))
 			return true;
 	}
-
 	return false;
 }
 
