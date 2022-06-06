@@ -411,7 +411,7 @@ dfs_test_open_stat(void **state)
 
 	/** Create /file1 */
 	rc = dfs_open_stat(dfs_mt, NULL, filename_file1, create_mode | S_IFREG,
-		      create_flags, 0, 0, NULL, &obj, NULL);
+			   create_flags, 0, 0, NULL, &obj, NULL);
 	assert_int_equal(rc, 0);
 
 	rc = dfs_release(obj);
@@ -427,7 +427,7 @@ dfs_test_open_stat(void **state)
 	stbuf2.st_uid = 14;
 	stbuf2.st_gid = 15;
 	rc = dfs_open_stat(dfs_mt, NULL, filename_file2, create_mode | S_IFREG,
-		      create_flags, 0, 0, NULL, &obj, &stbuf2);
+			   create_flags, 0, 0, NULL, &obj, &stbuf2);
 	assert_int_equal(rc, 0);
 
 	assert_int_equal(stbuf2.st_uid, 14);
