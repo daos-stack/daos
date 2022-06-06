@@ -220,8 +220,8 @@ func PoolPolicyIsValid(polStr string) bool {
 // PerfDomainIsValid return a boolean indicating whether or not the
 // pool performance domain string is valid.
 func PerfDomainIsValid(perfdomain string) bool {
-       cPerfDomain := C.CString(perfdomain)
-       defer C.free(unsafe.Pointer(cPerfDomain))
+	cPerfDomain := C.CString(perfdomain)
+	defer C.free(unsafe.Pointer(cPerfDomain))
 
-       return bool(C.daos_perf_domain_is_valid(cPerfDomain))
+	return bool(C.daos_perf_domain_is_valid(cPerfDomain))
 }
