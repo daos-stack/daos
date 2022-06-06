@@ -128,6 +128,7 @@ func getControlAddr(params ctlAddrParams) (*net.TCPAddr, error) {
 			return nil, errors.Wrap(err, "getting interface addresses")
 		}
 
+		var found bool
 		for _, addr := range addrs {
 			switch t := addr.(type) {
 			case *net.IPNet:
@@ -135,12 +136,16 @@ func getControlAddr(params ctlAddrParams) (*net.TCPAddr, error) {
 				// about the address being IPv4.
 				if ip4 := t.IP.To4(); ip4 != nil {
 					ipStr = ip4.String()
-					break
+					found = true
 				}
+			}
+
+			if found {
+				break
 			}
 		}
 
-		if ipStr == "0.0.0.0" {
+		if !found {
 			return nil, errors.Errorf("no usable IPv4 addresses found on interface %s", params.iface)
 		}
 	}
