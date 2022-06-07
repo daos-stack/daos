@@ -1,5 +1,11 @@
 #!/bin/bash
 
+# Installs maldet, clamAV and uses the current Jenkins job
+# as an artifact server.
+#
+# Makes an effort to update the current maldet database.
+# it is not fatal if the maldet database can not be updated.
+
 set -uex
 
 mydir="$(cd "$(dirname "${BASH_SOURCE[0]}")" >/dev/null 2>&1 && pwd)"
