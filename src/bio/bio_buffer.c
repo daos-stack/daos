@@ -1187,7 +1187,7 @@ flush_one(struct bio_desc *biod, struct bio_iov *biov, void *arg)
 	if (bio_addr_is_hole(&biov->bi_addr))
 		return 0;
 
-	if (biov->bi_addr.ba_type != DAOS_MEDIA_SCM)
+	if (!direct_scm_access(biod, biov))
 		return 0;
 
 	D_ASSERT(bio_iov2raw_buf(biov) != NULL);
