@@ -70,12 +70,17 @@
 #
 ## Network provider
 #
-## Force a specific libfabric provider to be used by all the engines.
-## The default provider depends on the interfaces that will be auto-detected:
-##  ofi+verbs for Infiniband/RoCE and
-##  ofi+tcp for non-RDMA-capable Ethernet.
+## Set the network provider to be used by all the engines.
+## There is no default - run "daos_server network scan" to list the
+## providers that are supported on the fabric interfaces. Examples:
+##
+##   ofi+verbs;ofi_rxm  for libfabric with Infiniband/RoCE
+##   ofi+tcp;ofi_rxm    for libfabric with non-RDMA-capable fabrics
+##
+## (Starting with DAOS 2.2, ofi_rxm will be automatically added to the
+## libfabric verbs and tcp providers, if not explicitly specified.)
 #
-#provider: ofi+verbs
+#provider: ofi+verbs;ofi_rxm
 #
 #
 ## CART: Whether to enable share address in the network stack
@@ -195,11 +200,15 @@
 #
 ## Example: (2 engines * (16 targets/engine * 1GiB)) / 2MiB hugepage size = 16834
 #
-## Hugepages are mandatory with NVME SSDs configured and optional without.
-## To disabled the use of hugepages when no NVMe SSDs are configured, set
-## nr_hugepages to -1.
+## default: 0
+#nr_hugepages: 0
 #
-##nr_hugepages: -1
+## Hugepages are mandatory with NVME SSDs configured and optional without.
+## To disable the use of hugepages when no NVMe SSDs are configured, set
+## disable_hugepages to true.
+#
+## default: false
+#disable_hugepages: false
 #
 #
 ## Set specific debug mask for daos_server (control plane).
@@ -327,7 +336,7 @@
 #  # Empty by default. Values should be supplied without encapsulating quotes.
 #
 #  env_vars:
-#      - CRT_TIMEOUT=30
+#    - CRT_TIMEOUT=30
 #
 #  storage:
 #  -
@@ -380,7 +389,29 @@
 #    # will not be processed by this engine. Empty or unset range signifies allow all.
 #    bdev_busid_range: 0x80-0x8f
 #    #bdev_busid_range: 128-143
-
+#
+#
+#  # Specify accelerator engine setting (experimental).
+#
+#  # Acceleration engine options are:
+#  # - "none" do not use an acceleration engine. (default)
+#  # - "spdk" to assigned management of hardware/software acceleration to SPDK.
+#  # - "dml" te set DML as accelerator engine.
+#
+#  # Optional capability settings are:
+#  # - "move" to enable acceleration of MOVE instructions.
+#  # - "crc" to enable acceleration of CRC instructions.
+#
+#  # If acceleration engine setting is "none" (or unset) then optional capabilities are all set to
+#  # false. If set to "spdk" or "dml" then optional capabilities are set to "true" by default.
+#
+#  acceleration:
+#    engine: spdk
+#    options:
+#    - move
+#    - crc
+#
+#
 #-
 #  # Rank to be assigned as identifier for this engine.
 #  # Immutable after running "dmg storage format".
@@ -527,3 +558,23 @@
 #    # will not be processed by this engine. Empty or unset range signifies allow all.
 #    #bdev_busid_range: 0xd0-0xdf
 #    #bdev_busid_range: 208-223
+#
+#
+#  # Specify accelerator engine setting (experimental).
+#
+#  # Acceleration engine options are:
+#  # - "none" do not use an acceleration engine. (default)
+#  # - "spdk" to assigned management of hardware/software acceleration to SPDK.
+#  # - "dml" te set DML as accelerator engine.
+#
+#  # Optional capability settings are:
+#  # - "move" to enable acceleration of MOVE instructions.
+#  # - "crc" to enable acceleration of CRC instructions.
+#
+#  # If acceleration engine setting is "none" (or unset) then optional capabilities are all set to
+#  # false. If set to "spdk" or "dml" then optional capabilities are set to "true" by default.
+#
+#  acceleration:
+#    engine: dml
+#    options:
+#    - crc

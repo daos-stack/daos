@@ -49,6 +49,25 @@ func FaultBdevNotFound(bdevs ...string) *fault.Fault {
 	)
 }
 
+// FaultBdevAccelEngineUnknown creates a Fault when an unrecognized acceleration engine setting is
+// detected.
+func FaultBdevAccelEngineUnknown(input string, options ...string) *fault.Fault {
+	return storageFault(
+		code.BdevAccelEngineUnknown,
+		fmt.Sprintf("unknown acceleration engine setting %q", input),
+		fmt.Sprintf("supported settings are %v, update server config file and restart daos_server",
+			options))
+}
+
+// FaultBdevAccelOptUnknown creates a Fault when an unrecognized acceleration option is detected.
+func FaultBdevAccelOptionUnknown(input string, options ...string) *fault.Fault {
+	return storageFault(
+		code.BdevAccelOptionUnknown,
+		fmt.Sprintf("unknown acceleration option %q", input),
+		fmt.Sprintf("supported options are %v, update server config file and restart daos_server",
+			options))
+}
+
 func storageFault(code code.Code, desc, res string) *fault.Fault {
 	return &fault.Fault{
 		Domain:      "storage",

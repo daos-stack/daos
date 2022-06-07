@@ -211,7 +211,6 @@ type containerCreateCmd struct {
 	ACLFile     string               `long:"acl-file" short:"A" description:"input file containing ACL"`
 	User        string               `long:"user" short:"u" description:"user who will own the container (username@[domain])"`
 	Group       string               `long:"group" short:"g" description:"group who will own the container (group@[domain])"`
-	ContFlag    ContainerID          `long:"cont" short:"c" description:"container UUID (optional)"`
 }
 
 func (cmd *containerCreateCmd) Execute(_ []string) (err error) {
@@ -220,13 +219,6 @@ func (cmd *containerCreateCmd) Execute(_ []string) (err error) {
 		return err
 	}
 	defer deallocCmdArgs()
-
-	if cmd.ContFlag.HasUUID() {
-		cmd.contUUID = cmd.ContFlag.UUID
-		if err := copyUUID(&ap.c_uuid, cmd.contUUID); err != nil {
-			return err
-		}
-	}
 
 	if cmd.PoolID().Empty() {
 		if cmd.Path == "" {
