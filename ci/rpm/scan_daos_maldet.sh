@@ -7,7 +7,7 @@ mydir="$(cd "$(dirname "${BASH_SOURCE[0]}")" >/dev/null 2>&1 && pwd)"
 # shellcheck disable=SC1091
 source "$mydir/distro_info.sh"
 # shellcheck disable=SC1091
-source "$mydir/post_provision_config_common_functions.sh"
+source "${mydir%/*}/provisioning/post_provision_config_common_functions.sh"
 
 if command -v dnf; then
   sudo retry_cmd 360 dnf -y install \
