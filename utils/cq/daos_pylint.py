@@ -187,9 +187,8 @@ class FileTypeList():
                 return True
             if filename.endswith('SConscript'):
                 return True
-            # Not all files in this directory need wrapping for SCons functions but there is no
-            # harm in adding them all.
-            if 'site_scons/site_tools' in filename:
+            # There may be more files needed here, but just this one is reporting errors.
+            if filename.endswith('site_scons/site_tools/protoc/__init__.py'):
                 return True
             return False
 
