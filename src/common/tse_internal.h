@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2021 Intel Corporation.
+ * (C) Copyright 2016-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -17,6 +17,7 @@
  */
 
 #include <daos/tse.h>
+#include <gurt/atomic.h>
 
 struct tse_task_private {
 	struct tse_sched_private	*dtp_sched;
@@ -46,13 +47,6 @@ struct tse_task_private {
 					 * be re-initialized.
 					 */
 					 dtp_completed:1,
-					/* task is being completed, before those
-					 * complete callbacks are being called,
-					 * if the task is re-initialized, then
-					 * this dtp_completing will be reset
-					 * to 0.
-					 */
-					 dtp_completing:1,
 					/* task is in running state */
 					 dtp_running:1,
 					 dtp_dep_cnt:29;
@@ -78,8 +72,10 @@ struct tse_task_private {
 	 * The sum of dtp_stack_top and dtp_embed_top should not exceed
 	 * TSE_TASK_ARG_LEN.
 	 */
-	uint32_t			 dtp_stack_top;
-	uint32_t			 dtp_embed_top;
+	uint16_t			 dtp_stack_top;
+	uint16_t			 dtp_embed_top;
+	/* generation of the task, +1 every time when task re-init */
+	ATOMIC uint32_t			 dtp_generation;
 	char				 dtp_buf[TSE_TASK_ARG_LEN];
 };
 
@@ -93,8 +89,6 @@ struct tse_task_cb {
 struct tse_sched_private {
 	/* lock to protect schedule status and sub task list */
 	pthread_mutex_t dsp_lock;
-	/* lock to protect sub task's dtp_comp_cb_list */
-	pthread_mutex_t dsp_comp_lock;
 
 	/* The task will be added to init list when it is initially
 	 * added to scheduler without any delay. A task with a delay

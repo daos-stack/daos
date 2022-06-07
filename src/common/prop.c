@@ -552,7 +552,7 @@ daos_prop_entry_copy(struct daos_prop_entry *entry,
 	case DAOS_PROP_CO_ROOTS:
 		rc = daos_prop_entry_dup_co_roots(entry_dup, entry);
 		if (rc) {
-			D_ERROR("failed to dup roots\n");
+			D_ERROR("failed to dup roots "DF_RC"\n", DP_RC(rc));
 			return rc;
 		}
 		break;
