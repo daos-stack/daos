@@ -111,13 +111,13 @@ pipeline {
                      defaultValue: true,
                      description: 'Run the CI Functional Hardware Large TCP test stage')
         booleanParam(name: 'CI_small_ucx_TEST',
-                     defaultValue: false,
+                     defaultValue: true,
                      description: 'Run the CI Functional Hardware Small UCX test stage')
         booleanParam(name: 'CI_medium_ucx_TEST',
-                     defaultValue: false,
+                     defaultValue: true,
                      description: 'Run the CI Functional Hardware Medium UCX test stage')
         booleanParam(name: 'CI_large_ucx_TEST',
-                     defaultValue: false,
+                     defaultValue: true,
                      description: 'Run the CI Functional Hardware Large UCX test stage')
         string(name: 'CI_FUNCTIONAL_VM9_LABEL',
                defaultValue: 'ci_vm9',
