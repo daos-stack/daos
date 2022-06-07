@@ -294,7 +294,7 @@ Other container layouts are created by various user communities that are
 implementing their own domain-specific storage middleware on top of DAOS.
 
 The known DAOS container types are maintained as an enumerated list in the
-[`daos_prop.h`](https://github.com/daos-stack/daos/blob/master/src/include/daos_prop.h#L284)
+[`daos_prop.h`](https://github.com/daos-stack/daos/blob/release/2.0/src/include/daos_prop.h#L217)
 header file. The following container types are currently defined,
 and can be used with the `daos cont create --type` command option:
 
