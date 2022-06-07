@@ -191,8 +191,6 @@ class FileTypeList():
             # harm in adding them all.
             if 'site_scons/site_tools' in filename:
                 return True
-            if 'utils/sl/fake_scons/SCons' in filename:
-                return True
             return False
 
         if is_scons_file(file):
