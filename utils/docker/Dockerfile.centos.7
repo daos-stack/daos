@@ -33,8 +33,8 @@ RUN set -e;                                                      \
     if [ -n "$REPO_FILE_URL" ]; then                             \
         dnf --quiet config-manager --disable epel;               \
     fi;                                                          \
-    dnf update epel-release;                                     \
-    dnf clean all
+    dnf -y update epel-release;                                  \
+    dnf -y clean all
 
 ARG JENKINS_URL
 ARG REPOS
@@ -70,10 +70,7 @@ RUN useradd --no-log-init --uid $UID --user-group --create-home --shell /bin/bas
 RUN echo "daos_server:daos_server" | chpasswd
 RUN useradd --no-log-init --user-group --create-home --shell /bin/bash daos_agent
 RUN echo "daos_agent:daos_agent" | chpasswd
-RUN echo "daos_server ALL=(root) NOPASSWD: ALL" >> /etc/sudoers.d/daos_sudo_setup; \
-    chmod 0440 /etc/sudoers.d/daos_sudo_setup;                                     \
-    visudo -c;                                                                     \
-    sudo -l -U daos_server
+RUN echo "daos_server ALL=(root) NOPASSWD: ALL" >> /etc/sudoers.d/daos_sudo_setup
 
 # Create directory for DAOS backend storage
 RUN mkdir -p /opt/daos /mnt/daos /var/run/daos_server /var/run/daos_agent /home/daos/pre /home/daos/daos &&   \
