@@ -645,12 +645,10 @@ fill_rec(daos_handle_t ih, vos_iter_entry_t *key_ent, struct ds_obj_enum_arg *ar
 		/* Check if there are still space */
 		if (is_sgl_full(arg, size) || arg->kds_len >= arg->kds_cap) {
 			/* NB: if it is rebuild object iteration, let's
-			 * check if there are any recxs being packed, otherwise
-			 * it will need return -DER_KEY2BIG to re-allocate
-			 * the buffer and retry.
+			 * check if both dkey & akey was already packed
+			 * (kds_len < 3) before return KEY2BIG.
 			 */
-			if (arg->chk_key2big &&
-			    (arg->kds_len < 3 || (arg->kds_len == 3 && !bump_kds_len))) {
+			if ((arg->chk_key2big && arg->kds_len < 3)) {
 				if (arg->kds[0].kd_key_len < size)
 					arg->kds[0].kd_key_len = size;
 				D_GOTO(out, rc = -DER_KEY2BIG);

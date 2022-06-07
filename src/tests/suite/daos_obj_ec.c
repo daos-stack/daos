@@ -297,23 +297,6 @@ ec_rec_list_punch(void **state)
 	ioreq_fini(&req);
 }
 
-#define ec_parity_rotate	0
-
-uint32_t
-test_ec_get_parity_off(daos_key_t *dkey, struct daos_oclass_attr *oca)
-{
-	uint64_t dkey_hash;
-	uint32_t grp_size;
-
-	grp_size = oca->u.ec.e_p + oca->u.ec.e_k;
-	if (ec_parity_rotate)
-		dkey_hash = d_hash_murmur64((unsigned char *)dkey->iov_buf, dkey->iov_len, 5731);
-	else
-		dkey_hash = 0;
-
-	return (dkey_hash % grp_size + oca->u.ec.e_k) % grp_size;
-}
-
 static void
 ec_agg_check_replica_on_parity(test_arg_t *arg, daos_obj_id_t oid, char *dkey,
 			       char *akey, daos_off_t offset, daos_size_t size,
@@ -327,10 +310,7 @@ ec_agg_check_replica_on_parity(test_arg_t *arg, daos_obj_id_t oid, char *dkey,
 	daos_handle_t	oh;
 	char		*buf;
 	struct daos_oclass_attr *oca;
-	uint32_t	shard;
-	uint32_t	p_shard_off;
-	uint32_t	grp_size;
-	int		i;
+	uint64_t	shard;
 	int		rc;
 
 	rc = daos_obj_open(arg->coh, oid, 0, &oh, NULL);
@@ -358,11 +338,8 @@ ec_agg_check_replica_on_parity(test_arg_t *arg, daos_obj_id_t oid, char *dkey,
 
 	daos_obj_verify(arg->coh, oid, DAOS_EPOCH_MAX);
 	assert_true(oid_is_ec(oid, &oca));
-
-	grp_size = oca->u.ec.e_p + oca->u.ec.e_k;
-	p_shard_off = test_ec_get_parity_off(&dkey_iov, oca);
-	for (i = 0, shard = p_shard_off; i < oca->u.ec.e_p;
-	     shard = (shard + 1) % grp_size, i++) {
+	for (shard = oca->u.ec.e_k; shard < oca->u.ec.e_k + oca->u.ec.e_p;
+	     shard++) {
 		tse_task_t	*task = NULL;
 
 		iod.iod_size = 1;
@@ -388,22 +365,49 @@ trigger_and_wait_ec_aggreation(test_arg_t *arg, daos_obj_id_t *oids,
 			       daos_off_t offset, daos_size_t size,
 			       uint64_t fail_loc)
 {
+	d_rank_t  ec_agg_ranks[10];
 	int i;
 
-	daos_debug_set_params(arg->group, -1, DMG_KEY_FAIL_LOC,
-			      fail_loc | DAOS_FAIL_ALWAYS, 0, NULL);
+	for (i = 0; i < oids_nr; i++) {
+		struct daos_oclass_attr *oca;
+		int parity_nr;
+		int j;
+
+		assert_true(oid_is_ec(oids[i], &oca));
+		parity_nr = oca->u.ec.e_p;
+		assert_true(parity_nr < 10);
+
+		get_killing_rank_by_oid(arg, oids[i], 0, parity_nr,
+					ec_agg_ranks, NULL);
+		for (j = 0; j < parity_nr; j++)
+			daos_debug_set_params(arg->group, ec_agg_ranks[j],
+					      DMG_KEY_FAIL_LOC,
+					      fail_loc | DAOS_FAIL_ALWAYS,
+					      0, NULL);
+	}
 
 	print_message("wait for 30 seconds for EC aggregation.\n");
 	sleep(30);
 
 	for (i = 0; i < oids_nr; i++) {
+		struct daos_oclass_attr *oca;
+		int parity_nr;
+		int j;
+
 		if (size > 0 && fail_loc == DAOS_FORCE_EC_AGG)
 			ec_agg_check_replica_on_parity(arg, oids[i], dkey,
 						       akey, offset, size,
 						       false);
-	}
+		assert_true(oid_is_ec(oids[i], &oca));
+		parity_nr = oca->u.ec.e_p;
+		assert_true(parity_nr < 10);
 
-	daos_debug_set_params(arg->group, -1, DMG_KEY_FAIL_LOC, 0, 0, NULL);
+		get_killing_rank_by_oid(arg, oids[i], 0, parity_nr,
+					ec_agg_ranks, NULL);
+		for (j = 0; j < parity_nr; j++)
+			daos_debug_set_params(arg->group, ec_agg_ranks[j],
+					      DMG_KEY_FAIL_LOC, 0, 0, NULL);
+	}
 }
 
 void
@@ -742,6 +746,7 @@ dfs_ec_check_size_internal(void **state, unsigned fail_loc)
 		assert_int_equal(rc, 0);
 		assert_int_equal(st.st_size, 30 * buf_size);
 	}
+
 	for (i = 30; i > 10; i--) {
 		daos_fail_loc_set(0);
 		rc = dfs_punch(dfs_mt, obj, (daos_off_t)((i - 1) * buf_size),
@@ -1410,8 +1415,8 @@ ec_singv_size_fetch_oc(void **state, unsigned int ec_oc, uint32_t old_len, uint3
 deg_test:
 	size = new_len != 0 ? new_len : old_len;
 	if (degraded_test) {
-		fail_shards[0] = 0;
-		fail_shards[1] = 3;
+		fail_shards[0] = 1;
+		fail_shards[1] = 4;
 		fail_val = daos_shard_fail_value(fail_shards, 2);
 		daos_fail_value_set(fail_val);
 		daos_fail_loc_set(DAOS_FAIL_SHARD_OPEN | DAOS_FAIL_ALWAYS);

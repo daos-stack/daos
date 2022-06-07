@@ -650,13 +650,9 @@ dc_obj_verify_ec_cb(struct dc_obj_enum_unpack_io *io, void *arg)
 	int				rc;
 
 	D_ASSERT(obj != NULL);
-	if (!dova->ec_parity_rotate)
-		io->ui_dkey_hash = 0;
-
-	D_DEBUG(DB_TRACE, "compare "DF_KEY" nr %d shard "DF_U64" dkey_hash "DF_U64
-		"start EC "DF_U64"\n", DP_KEY(&io->ui_dkey), nr, shard, io->ui_dkey_hash,
-		obj_ec_shard_off(io->ui_dkey_hash, obj_get_oca(obj), io->ui_oid.id_shard));
-	if (nr == 0 || is_ec_parity_shard(io->ui_oid.id_shard, io->ui_dkey_hash, obj_get_oca(obj)))
+	D_DEBUG(DB_TRACE, "compare "DF_KEY" nr %d shard "DF_U64"\n", DP_KEY(&io->ui_dkey),
+		nr, shard);
+	if (nr == 0)
 		return 0;
 
 	for (i = 0; i < nr; i++) {
@@ -689,9 +685,8 @@ dc_obj_verify_ec_cb(struct dc_obj_enum_unpack_io *io, void *arg)
 		sgls_verify[idx].sg_nr_out = 1;
 		sgls_verify[idx].sg_iovs = &iovs_verify[idx];
 		if (iod->iod_type == DAOS_IOD_ARRAY) {
-			rc = obj_recx_ec2_daos(obj_get_oca(obj), io->ui_dkey_hash,
-					       io->ui_oid.id_shard, &iod->iod_recxs,
-					       NULL, &iod->iod_nr, true);
+			rc = obj_recx_ec2_daos(obj_get_oca(obj), io->ui_oid.id_shard,
+					       &iod->iod_recxs, NULL, &iod->iod_nr, true);
 			if (rc != 0)
 				D_GOTO(out, rc);
 		}
@@ -769,15 +764,15 @@ dc_obj_verify_ec_rdg(struct dc_object *obj, struct dc_obj_verify_args *dova,
 {
 	struct daos_oclass_attr *oca;
 	uint32_t		start;
-	int			tgt_nr;
+	int			data_nr;
 	int			i;
 	int			rc = 0;
 
 	oca = obj_get_oca(obj);
 	D_ASSERT(oca->ca_resil == DAOS_RES_EC);
-	tgt_nr = obj_ec_tgt_nr(oca);
+	data_nr = obj_ec_data_tgt_nr(oca);
 	start = rdg_idx * obj_ec_tgt_nr(oca);
-	for (i = 0; i < tgt_nr; i++) {
+	for (i = 0; i < data_nr; i++) {
 		struct dc_obj_verify_cursor	*cursor = &dova->cursor;
 		daos_unit_oid_t			oid;
 
