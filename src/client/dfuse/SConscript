@@ -92,7 +92,6 @@ def build_client_libs_static(env, common):
 
     ilenv = env.Clone()
 
-
     il_obj = []
     for src in IOIL_SRC:
         il_obj += ilenv.Object(os.path.join('il', src))
