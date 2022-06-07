@@ -2984,16 +2984,16 @@ out:
 	crt_reply_send(rpc);
 }
 
-void
-ds_pool_query_handler(crt_rpc_t *rpc)
+static void
+ds_pool_query_handler(crt_rpc_t *rpc, bool return_pool_ver)
 {
-	struct pool_query_in   *in = crt_req_get(rpc);
-	struct pool_query_out  *out = crt_reply_get(rpc);
-	daos_prop_t	       *prop = NULL;
-	struct pool_buf	       *map_buf;
+	struct pool_query_1_in	*in = crt_req_get(rpc);
+	struct pool_query_1_out	*out = crt_reply_get(rpc);
+	daos_prop_t		*prop = NULL;
+	struct pool_buf		*map_buf;
 	uint32_t		map_version = 0;
-	struct pool_svc	       *svc;
-	struct pool_metrics    *metrics;
+	struct pool_svc		*svc;
+	struct pool_metrics	*metrics;
 	struct rdb_tx		tx;
 	d_iov_t			key;
 	d_iov_t			value;
@@ -3038,22 +3038,24 @@ ds_pool_query_handler(crt_rpc_t *rpc)
 		}
 	}
 
-	rc = pool_prop_read(&tx, svc, DAOS_PO_QUERY_PROP_GLOBAL_VERSION, &prop);
-	if (rc != 0)
-		D_GOTO(out_lock, rc);
+	if (return_pool_ver) {
+		rc = pool_prop_read(&tx, svc, DAOS_PO_QUERY_PROP_GLOBAL_VERSION, &prop);
+		if (rc != 0)
+			D_GOTO(out_lock, rc);
 
-	entry = daos_prop_entry_get(prop, DAOS_PROP_PO_GLOBAL_VERSION);
-	D_ASSERT(entry != NULL);
-	out->pqo_pool_layout_ver = entry->dpe_val;
-	daos_prop_free(prop);
-	prop = NULL;
+		entry = daos_prop_entry_get(prop, DAOS_PROP_PO_GLOBAL_VERSION);
+		D_ASSERT(entry != NULL);
+		out->pqo_pool_layout_ver = entry->dpe_val;
+		out->pqo_upgrade_layout_ver = DS_POOL_GLOBAL_VERSION;
+		daos_prop_free(prop);
+		prop = NULL;
+	}
 
 	/* read optional properties */
 	rc = pool_prop_read(&tx, svc, in->pqi_query_bits, &prop);
 	if (rc != 0)
 		D_GOTO(out_lock, rc);
 	out->pqo_prop = prop;
-	out->pqo_upgrade_layout_ver = DS_POOL_GLOBAL_VERSION;
 
 	if (unlikely(DAOS_FAIL_CHECK(DAOS_FORCE_PROP_VERIFY) && prop != NULL)) {
 		daos_prop_t		*iv_prop = NULL;
@@ -3195,6 +3197,18 @@ out:
 		DP_UUID(in->pqi_op.pi_uuid), rpc, DP_RC(rc));
 	crt_reply_send(rpc);
 	daos_prop_free(prop);
+}
+
+void
+ds_pool_query_handler_0(crt_rpc_t *rpc)
+{
+	ds_pool_query_handler(rpc, false);
+}
+
+void
+ds_pool_query_handler_1(crt_rpc_t *rpc)
+{
+	ds_pool_query_handler(rpc, true);
 }
 
 /* Convert pool_comp_state_t to daos_target_state_t */
@@ -3402,8 +3416,8 @@ ds_pool_svc_query(uuid_t pool_uuid, d_rank_list_t *ps_ranks, d_rank_list_t **ran
 	crt_endpoint_t		ep;
 	struct dss_module_info	*info = dss_get_module_info();
 	crt_rpc_t		*rpc;
-	struct pool_query_in	*in;
-	struct pool_query_out	*out;
+	struct pool_query_1_in	*in;
+	struct pool_query_1_out	*out;
 	struct pool_buf		*map_buf;
 	uint32_t		map_size = 0;
 
