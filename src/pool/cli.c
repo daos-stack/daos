@@ -37,6 +37,7 @@ struct pool_proto {
 	int			rc;
 	bool			completed;
 };
+
 int	dc_pool_proto_version;
 
 static void
@@ -106,8 +107,8 @@ dc_pool_init(void)
 		D_GOTO(out_rsvc, rc);
 	}
 
-	rc = crt_proto_query_with_ctx(&pproto->ep, pool_proto_fmt_0.cpf_base, ver_array, 2, query_cb,
-				      pproto, ctx);
+	rc = crt_proto_query_with_ctx(&pproto->ep, pool_proto_fmt_0.cpf_base, ver_array, 2,
+				      query_cb, pproto, ctx);
 	if (rc) {
 		D_ERROR("crt_proto_query_with_ctx() failed: "DF_RC"\n", DP_RC(rc));
 		D_GOTO(out_rsvc, rc);
