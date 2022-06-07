@@ -10,7 +10,7 @@ source "$mydir/distro_info.sh"
 source "${mydir%/*}/provisioning/post_provision_config_common_functions.sh"
 
 if command -v dnf; then
-  sudo retry_cmd 360 dnf -y install \
+  retry_cmd 360 sudo dnf -y install \
     daos{,-{client,server,tests,debuginfo,devel}}-"${DAOS_PKG_VERSION}"
 elif command -v apt-get; then
   echo "Ubuntu not implemented yet."
