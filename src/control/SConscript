@@ -9,7 +9,7 @@ from os.path import join, isdir
 from os import urandom
 from binascii import b2a_hex
 
-Import('env', 'prereqs', 'daos_version', 'conf_dir', 'gurt_lib', 'cart_lib', 'common')
+Import('env', 'prereqs', 'daos_version', 'conf_dir', 'gurt_lib', 'cart_lib', 'client_common')
 
 GO_COMPILER = 'go'
 MIN_GO_VERSION = '1.12.0'
@@ -43,21 +43,12 @@ def is_firmware_mgmt_build(benv):
     "Check whether this build has firmware management enabled."
     return benv["FIRMWARE_MGMT"] == 1
 
-
-def is_ucx_build(benv):
-    "Check whether this build has UCX enabled."
-    return benv["UCX"] == 1
-
-
 def get_build_tags(benv):
     "Get custom go build tags."
     tags = []
     if is_firmware_mgmt_build(benv):
         tags.append("firmware")
-    if is_ucx_build(benv):
-        tags.append("ucx")
-    if len(tags) == 0:
-        return ""
+    tags.append("ucx")
     return "-tags {}".format(','.join(tags))
 
 
@@ -137,7 +128,7 @@ def install_go_bin(denv, gosrc, libs, name, install_name):
                   get_build_tags(denv), build_bin, install_src))
     # Use the intermediate build location in order to play nicely
     # with --install-sandbox.
-    denv.Requires(build_bin, [common])
+    denv.Requires(build_bin, [client_common])
     denv.InstallAs(install_bin, build_bin)
     return install_bin
 # pylint: enable=too-many-arguments
@@ -218,6 +209,7 @@ def scons():
     gosrc = Dir('.').srcnode().abspath
 
     prereqs.require(denv, 'ofi', 'hwloc')
+    prereqs.require(denv, 'ucx')
     # Sets CGO_LDFLAGS for rpath options
     daos_build.add_rpaths(denv, "..", True, True)
     denv.AppendENVPath("CGO_CFLAGS", denv.subst("$_CPPINCFLAGS"), sep=" ")
@@ -255,7 +247,6 @@ def scons():
 
     SConscript('lib/spdk/SConscript', exports='denv')
 
-    prereqs.require(senv, 'ofi', 'hwloc')
     daos_build.add_rpaths(denv, "..", True, True)
 
     # Copy setup_spdk.sh script to be executed at daos_server runtime.

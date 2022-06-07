@@ -6,7 +6,7 @@ import subprocess
 import time
 import errno
 import SCons.Warnings
-from SCons.Script import BUILD_TARGETS
+from SCons.Script import WhereIs
 
 if sys.version_info.major < 3:
     print(""""Python 2.7 is no longer supported in the DAOS build.
@@ -50,7 +50,7 @@ API_VERSION = "{}.{}.{}".format(API_VERSION_MAJOR, API_VERSION_MINOR,
 
 def update_rpm_version(version, tag):
     """ Update the version (and release) in the RPM specfile """
-    spec = open("utils/rpms/daos.spec", "r").readlines()
+    spec = open("utils/rpms/daos.spec", "r").readlines()  # pylint: disable=consider-using-with
     current_version = 0
     release = 0
     for line_num, line in enumerate(spec):
@@ -74,7 +74,8 @@ def update_rpm_version(version, tag):
         if line == "%changelog\n":
             cmd = 'rpmdev-packager'
             try:
-                pkg_st = subprocess.Popen(cmd, stdout=subprocess.PIPE) # nosec
+                # pylint: disable=consider-using-with
+                pkg_st = subprocess.Popen(cmd, stdout=subprocess.PIPE)  # nosec
                 packager = pkg_st.communicate()[0].strip().decode('UTF-8')
             except OSError:
                 print("You need to have the rpmdev-packager tool (from the "
@@ -89,12 +90,12 @@ def update_rpm_version(version, tag):
             spec.insert(line_num + 1,
                         "- Version bump up to {}\n".format(tag))
             spec.insert(line_num + 1,
-                        u'* {} {} - {}-{}\n'.format(date_str,
-                                                    packager,
-                                                    version,
-                                                    release))
+                        '* {} {} - {}-{}\n'.format(date_str,
+                                                   packager,
+                                                   version,
+                                                   release))
             break
-    open("utils/rpms/daos.spec", "w").writelines(spec)
+    open("utils/rpms/daos.spec", "w").writelines(spec)  # pylint: disable=consider-using-with
 
     return True
 
@@ -131,17 +132,23 @@ def set_defaults(env, daos_version):
     env.Append(CCFLAGS=['-DDAOS_VERSION=\\"' + daos_version + '\\"'])
     env.Append(CCFLAGS=['-DAPI_VERSION=\\"' + API_VERSION + '\\"'])
 
-def build_misc():
+def build_misc(build_prefix):
     """Build miscellaneous items"""
     # install the configuration files
-    SConscript('utils/config/SConscript')
+    common = os.path.join('utils', 'config')
+    path = os.path.join(build_prefix, common)
+    SConscript(os.path.join(common, 'SConscript'), variant_dir=path, duplicate=0)
 
     # install certificate generation files
-    SConscript('utils/certs/SConscript')
+    common = os.path.join('utils', 'certs')
+    path = os.path.join(build_prefix, common)
+    SConscript(os.path.join(common, 'SConscript'), variant_dir=path, duplicate=0)
 
     # install man pages
     try:
-        SConscript('doc/man/SConscript', must_exist=0)
+        common = os.path.join('doc', 'man')
+        path = os.path.join(build_prefix, common)
+        SConscript(os.path.join(common, 'SConscript'), variant_dir=path, must_exist=0, duplicate=0)
     except SCons.Warnings.MissingSConscriptWarning as _warn:
         print("Missing doc/man/SConscript...")
 
@@ -197,6 +204,7 @@ def scons():  # pylint: disable=too-many-locals,too-many-branches
             version = tag
 
         try:
+            # pylint: disable=consider-using-with
             token = yaml.safe_load(open(os.path.join(os.path.expanduser("~"),
                                                      ".config", "hub"), 'r')
                                   )['github.com'][0]['oauth_token']
@@ -367,8 +375,6 @@ def scons():  # pylint: disable=too-many-locals,too-many-branches
         env['ENV']['VIRTUAL_ENV'] = os.environ['VIRTUAL_ENV']
 
     prereqs = PreReqComponent(env, opts, commits_file)
-    if not GetOption('help') and not GetOption('clean'):
-        daos_build.load_mpi_path(env)
     build_prefix = prereqs.get_src_build_dir()
     prereqs.init_build_targets(build_prefix)
     prereqs.load_defaults(platform_arm)
@@ -384,8 +390,7 @@ def scons():  # pylint: disable=too-many-locals,too-many-branches
     prereqs.add_opts(('GO_BIN', 'Full path to go binary', None))
     opts.Save(opts_file, env)
 
-    res = GetOption('deps_only')
-    if res:
+    if GetOption('deps_only'):
         print('Exiting because deps-only was set')
         Exit(0)
 
@@ -398,7 +403,16 @@ def scons():  # pylint: disable=too-many-locals,too-many-branches
 
     base_env = env.Clone()
 
+    base_env_mpi = env.Clone()
+
     compiler_setup.base_setup(env, prereqs=prereqs)
+
+    if not GetOption('help') and not GetOption('clean'):
+        mpi = daos_build.configure_mpi(base_env_mpi)
+        if not mpi:
+            print("\nSkipping compilation for tests that need MPI")
+            print("Install and load mpich or openmpi\n")
+            base_env_mpi = None
 
     args = GetOption('analyze_stack')
     if args is not None:
@@ -406,12 +420,12 @@ def scons():  # pylint: disable=too-many-locals,too-many-branches
         analyzer.analyze_on_exit()
 
     # Export() is handled specially by pylint so do not merge these two lines.
-    Export('daos_version', 'API_VERSION', 'env', 'base_env', 'prereqs')
+    Export('daos_version', 'API_VERSION', 'env', 'base_env', 'base_env_mpi', 'prereqs')
     Export('platform_arm', 'conf_dir')
 
     # generate targets in specific build dir to avoid polluting the source code
-    VariantDir(build_prefix, '.', duplicate=0)
-    SConscript('{}/src/SConscript'.format(build_prefix))
+    path = os.path.join(build_prefix, 'src')
+    SConscript(os.path.join('src', 'SConscript'), variant_dir=path, duplicate=0)
 
     buildinfo = prereqs.get_build_info()
     buildinfo.gen_script('.build_vars.sh')
@@ -428,13 +442,12 @@ def scons():  # pylint: disable=too-many-locals,too-many-branches
     env.Install("$PREFIX/lib64/daos", "VERSION")
 
     if prereqs.client_requested():
-        api_version = env.Command("%s/API_VERSION" % build_prefix,
-                                  "%s/SConstruct" % build_prefix,
-                                  "echo %s > $TARGET" % (API_VERSION))
+        api_version = env.Command(os.path.join(build_prefix, 'API_VERSION'),
+                                  "SConstruct", f"echo {API_VERSION} > $TARGET")
         env.Install("$PREFIX/lib64/daos", api_version)
     env.Install(conf_dir + '/bash_completion.d', ['utils/completion/daos.bash'])
 
-    build_misc()
+    build_misc(build_prefix)
 
     Default(build_prefix)
 
