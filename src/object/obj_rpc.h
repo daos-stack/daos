@@ -307,6 +307,7 @@ CRT_RPC_DECLARE(obj_punch, DAOS_ISEQ_OBJ_PUNCH, DAOS_OSEQ_OBJ_PUNCH)
 	((daos_key_t)		(okqo_akey)		CRT_VAR) \
 	/* recx for visible extent */				 \
 	((daos_recx_t)		(okqo_recx)		CRT_VAR) \
+	/* okqo_recx_parity/okqo_recx_punched not used after 2.2 */ \
 	/* recx for EC parity space */				 \
 	((daos_recx_t)		(okqo_recx_parity)	CRT_VAR) \
 	/* recx for punched EC extents */			 \

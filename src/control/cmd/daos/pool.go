@@ -336,12 +336,16 @@ func convertPoolTargetInfo(ptinfo *C.daos_target_info_t) (*control.PoolQueryTarg
 	pqti.Type = control.PoolQueryTargetType(ptinfo.ta_type)
 	pqti.State = control.PoolQueryTargetState(ptinfo.ta_state)
 	pqti.Space = []*control.StorageTargetUsage{
-		{uint64(ptinfo.ta_space.s_total[C.DAOS_MEDIA_SCM]),
-			uint64(ptinfo.ta_space.s_free[C.DAOS_MEDIA_SCM]),
-			C.DAOS_MEDIA_SCM},
-		{uint64(ptinfo.ta_space.s_total[C.DAOS_MEDIA_NVME]),
-			uint64(ptinfo.ta_space.s_free[C.DAOS_MEDIA_NVME]),
-			C.DAOS_MEDIA_NVME},
+		{
+			Total:     uint64(ptinfo.ta_space.s_total[C.DAOS_MEDIA_SCM]),
+			Free:      uint64(ptinfo.ta_space.s_free[C.DAOS_MEDIA_SCM]),
+			MediaType: C.DAOS_MEDIA_SCM,
+		},
+		{
+			Total:     uint64(ptinfo.ta_space.s_total[C.DAOS_MEDIA_NVME]),
+			Free:      uint64(ptinfo.ta_space.s_free[C.DAOS_MEDIA_NVME]),
+			MediaType: C.DAOS_MEDIA_NVME,
+		},
 	}
 
 	return pqti, nil
