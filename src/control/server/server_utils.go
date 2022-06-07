@@ -461,7 +461,7 @@ func registerFollowerSubscriptions(srv *server) {
 }
 
 // registerLeaderSubscriptions stops forwarding events to MS and instead starts
-// handling received forwardede(and local) events.
+// handling received forwarded (and local) events.
 func registerLeaderSubscriptions(srv *server) {
 	srv.pubSub.Reset()
 	srv.pubSub.Subscribe(events.RASTypeAny, srv.evtLogger)
@@ -484,6 +484,11 @@ func registerLeaderSubscriptions(srv *server) {
 				}
 			}
 		}))
+
+	// Add a debounce to throttle multiple SWIM Rank Dead events for the same rank/incarnation.
+	srv.pubSub.Debounce(events.RASSwimRankDead, 0, func(ev *events.RASEvent) string {
+		return strconv.FormatUint(uint64(ev.Rank), 10) + ":" + strconv.FormatUint(ev.Incarnation, 10)
+	})
 }
 
 func getGrpcOpts(cfgTransport *security.TransportConfig) ([]grpc.ServerOption, error) {
