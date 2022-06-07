@@ -103,6 +103,10 @@ RUN echo "daos_server ALL=(root) NOPASSWD: ALL" >> /etc/sudoers.d/daos_sudo_setu
     visudo -c;                                                                     \
     sudo -l -U daos_server
 
+COPY ci/rpm/install_maldet.sh /tmp/install_maldet.sh
+COPY ci/rpm/distro_info.sh /tmp/distro_info.sh
+RUN /tmp/install_maldet.sh
+
 # force an upgrade to get any newly built RPMs, but only if CACHEBUST is set.
 ARG CACHEBUST
 RUN [ -z "$CACHEBUST" ] || {                                                                 \
@@ -120,6 +124,9 @@ RUN [ -z "$CACHEBUST" ] || {                                                    
     }
 
 ARG BUILD_URL
-COPY ci/rpm/install_maldet.sh /tmp/install_maldet.sh
+# The BUILD_URL argument is a docker build cache buster.
+# files copied to /tmp in a previously cached layer may get
+# deleted before this point if they are too old.
+COPY ci/rpm/build_url_repo.sh /tmp/build_url_repo.sh
 COPY ci/rpm/distro_info.sh /tmp/distro_info.sh
-RUN /tmp/install_maldet.sh
+RUN /tmp/build_url_repo.sh
