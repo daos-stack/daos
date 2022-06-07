@@ -29,12 +29,10 @@
 /* Parse command line options for the 'ls' command */
 static int
 ls_option_parse(struct ddb_ctx *ctx, struct ls_options *cmd_args,
-		struct argv_parsed *argc_v)
+		uint32_t argc, char **argv)
 {
 	char		 *options_short = "r";
 	int		  index = 0, opt;
-	uint32_t	  argc = argc_v->ap_argc;
-	char		**argv = argc_v->ap_argv;
 	struct option	  options_long[] = {
 		{ "recursive", no_argument, NULL, 'r' },
 		{ NULL }
@@ -58,10 +56,6 @@ ls_option_parse(struct ddb_ctx *ctx, struct ls_options *cmd_args,
 	}
 
 	index = optind;
-
-	D_ASSERT(argc > index);
-	D_ASSERT(same(argv[index], COMMAND_NAME_LS));
-	index++;
 	if (argc - index > 0) {
 		cmd_args->path = argv[index];
 		index++;
@@ -78,12 +72,10 @@ ls_option_parse(struct ddb_ctx *ctx, struct ls_options *cmd_args,
 /* Parse command line options for the 'open' command */
 static int
 open_option_parse(struct ddb_ctx *ctx, struct open_options *cmd_args,
-		  struct argv_parsed *argc_v)
+		  uint32_t argc, char **argv)
 {
 	char		 *options_short = "w";
 	int		  index = 0, opt;
-	uint32_t	  argc = argc_v->ap_argc;
-	char		**argv = argc_v->ap_argv;
 	struct option	  options_long[] = {
 		{ "write_mode", no_argument, NULL, 'w' },
 		{ NULL }
@@ -107,10 +99,6 @@ open_option_parse(struct ddb_ctx *ctx, struct open_options *cmd_args,
 	}
 
 	index = optind;
-
-	D_ASSERT(argc > index);
-	D_ASSERT(same(argv[index], COMMAND_NAME_OPEN));
-	index++;
 	if (argc - index > 0) {
 		cmd_args->vos_pool_shard = argv[index];
 		index++;
@@ -130,12 +118,10 @@ open_option_parse(struct ddb_ctx *ctx, struct open_options *cmd_args,
 /* Parse command line options for the 'dump_value' command */
 static int
 dump_value_option_parse(struct ddb_ctx *ctx, struct dump_value_options *cmd_args,
-			struct argv_parsed *argc_v)
+			uint32_t argc, char **argv)
 {
 	char		 *options_short = "";
-	int		  index = 0, opt;
-	uint32_t	  argc = argc_v->ap_argc;
-	char		**argv = argc_v->ap_argv;
+	int		  index = 0;
 	struct option	  options_long[] = {
 		{ NULL }
 	};
@@ -145,20 +131,12 @@ dump_value_option_parse(struct ddb_ctx *ctx, struct dump_value_options *cmd_args
 	/* Restart getopt */
 	optind = 1;
 	opterr = 0;
-	while ((opt = getopt_long(argc, argv, options_short, options_long, &index)) != -1) {
-		switch (opt) {
-		case '?':
-			ddb_printf(ctx, "Unknown option: '%c'\n", optopt);
-		default:
-			return -DER_INVAL;
-		}
+	if (getopt_long(argc, argv, options_short, options_long, &index) != -1) {
+		ddb_printf(ctx, "Unknown option: '%c'\n", optopt);
+		return -DER_INVAL;
 	}
 
 	index = optind;
-
-	D_ASSERT(argc > index);
-	D_ASSERT(same(argv[index], COMMAND_NAME_DUMP_VALUE));
-	index++;
 	if (argc - index > 0) {
 		cmd_args->path = argv[index];
 		index++;
@@ -185,12 +163,10 @@ dump_value_option_parse(struct ddb_ctx *ctx, struct dump_value_options *cmd_args
 /* Parse command line options for the 'rm' command */
 static int
 rm_option_parse(struct ddb_ctx *ctx, struct rm_options *cmd_args,
-		struct argv_parsed *argc_v)
+		uint32_t argc, char **argv)
 {
 	char		 *options_short = "";
-	int		  index = 0, opt;
-	uint32_t	  argc = argc_v->ap_argc;
-	char		**argv = argc_v->ap_argv;
+	int		  index = 0;
 	struct option	  options_long[] = {
 		{ NULL }
 	};
@@ -200,20 +176,12 @@ rm_option_parse(struct ddb_ctx *ctx, struct rm_options *cmd_args,
 	/* Restart getopt */
 	optind = 1;
 	opterr = 0;
-	while ((opt = getopt_long(argc, argv, options_short, options_long, &index)) != -1) {
-		switch (opt) {
-		case '?':
-			ddb_printf(ctx, "Unknown option: '%c'\n", optopt);
-		default:
-			return -DER_INVAL;
-		}
+	if (getopt_long(argc, argv, options_short, options_long, &index) != -1) {
+		ddb_printf(ctx, "Unknown option: '%c'\n", optopt);
+		return -DER_INVAL;
 	}
 
 	index = optind;
-
-	D_ASSERT(argc > index);
-	D_ASSERT(same(argv[index], COMMAND_NAME_RM));
-	index++;
 	if (argc - index > 0) {
 		cmd_args->path = argv[index];
 		index++;
@@ -233,12 +201,10 @@ rm_option_parse(struct ddb_ctx *ctx, struct rm_options *cmd_args,
 /* Parse command line options for the 'load' command */
 static int
 load_option_parse(struct ddb_ctx *ctx, struct load_options *cmd_args,
-		  struct argv_parsed *argc_v)
+		  uint32_t argc, char **argv)
 {
 	char		 *options_short = "";
-	int		  index = 0, opt;
-	uint32_t	  argc = argc_v->ap_argc;
-	char		**argv = argc_v->ap_argv;
+	int		  index = 0;
 	struct option	  options_long[] = {
 		{ NULL }
 	};
@@ -248,20 +214,12 @@ load_option_parse(struct ddb_ctx *ctx, struct load_options *cmd_args,
 	/* Restart getopt */
 	optind = 1;
 	opterr = 0;
-	while ((opt = getopt_long(argc, argv, options_short, options_long, &index)) != -1) {
-		switch (opt) {
-		case '?':
-			ddb_printf(ctx, "Unknown option: '%c'\n", optopt);
-		default:
-			return -DER_INVAL;
-		}
+	if (getopt_long(argc, argv, options_short, options_long, &index) != -1) {
+		ddb_printf(ctx, "Unknown option: '%c'\n", optopt);
+		return -DER_INVAL;
 	}
 
 	index = optind;
-
-	D_ASSERT(argc > index);
-	D_ASSERT(same(argv[index], COMMAND_NAME_LOAD));
-	index++;
 	if (argc - index > 0) {
 		cmd_args->src = argv[index];
 		index++;
@@ -295,12 +253,10 @@ load_option_parse(struct ddb_ctx *ctx, struct load_options *cmd_args,
 /* Parse command line options for the 'dump_ilog' command */
 static int
 dump_ilog_option_parse(struct ddb_ctx *ctx, struct dump_ilog_options *cmd_args,
-		       struct argv_parsed *argc_v)
+		       uint32_t argc, char **argv)
 {
 	char		 *options_short = "";
-	int		  index = 0, opt;
-	uint32_t	  argc = argc_v->ap_argc;
-	char		**argv = argc_v->ap_argv;
+	int		  index = 0;
 	struct option	  options_long[] = {
 		{ NULL }
 	};
@@ -310,20 +266,12 @@ dump_ilog_option_parse(struct ddb_ctx *ctx, struct dump_ilog_options *cmd_args,
 	/* Restart getopt */
 	optind = 1;
 	opterr = 0;
-	while ((opt = getopt_long(argc, argv, options_short, options_long, &index)) != -1) {
-		switch (opt) {
-		case '?':
-			ddb_printf(ctx, "Unknown option: '%c'\n", optopt);
-		default:
-			return -DER_INVAL;
-		}
+	if (getopt_long(argc, argv, options_short, options_long, &index) != -1) {
+		ddb_printf(ctx, "Unknown option: '%c'\n", optopt);
+		return -DER_INVAL;
 	}
 
 	index = optind;
-
-	D_ASSERT(argc > index);
-	D_ASSERT(same(argv[index], COMMAND_NAME_DUMP_ILOG));
-	index++;
 	if (argc - index > 0) {
 		cmd_args->path = argv[index];
 		index++;
@@ -343,12 +291,10 @@ dump_ilog_option_parse(struct ddb_ctx *ctx, struct dump_ilog_options *cmd_args,
 /* Parse command line options for the 'commit_ilog' command */
 static int
 commit_ilog_option_parse(struct ddb_ctx *ctx, struct commit_ilog_options *cmd_args,
-			 struct argv_parsed *argc_v)
+			 uint32_t argc, char **argv)
 {
 	char		 *options_short = "";
-	int		  index = 0, opt;
-	uint32_t	  argc = argc_v->ap_argc;
-	char		**argv = argc_v->ap_argv;
+	int		  index = 0;
 	struct option	  options_long[] = {
 		{ NULL }
 	};
@@ -358,20 +304,12 @@ commit_ilog_option_parse(struct ddb_ctx *ctx, struct commit_ilog_options *cmd_ar
 	/* Restart getopt */
 	optind = 1;
 	opterr = 0;
-	while ((opt = getopt_long(argc, argv, options_short, options_long, &index)) != -1) {
-		switch (opt) {
-		case '?':
-			ddb_printf(ctx, "Unknown option: '%c'\n", optopt);
-		default:
-			return -DER_INVAL;
-		}
+	if (getopt_long(argc, argv, options_short, options_long, &index) != -1) {
+		ddb_printf(ctx, "Unknown option: '%c'\n", optopt);
+		return -DER_INVAL;
 	}
 
 	index = optind;
-
-	D_ASSERT(argc > index);
-	D_ASSERT(same(argv[index], COMMAND_NAME_COMMIT_ILOG));
-	index++;
 	if (argc - index > 0) {
 		cmd_args->path = argv[index];
 		index++;
@@ -391,12 +329,10 @@ commit_ilog_option_parse(struct ddb_ctx *ctx, struct commit_ilog_options *cmd_ar
 /* Parse command line options for the 'rm_ilog' command */
 static int
 rm_ilog_option_parse(struct ddb_ctx *ctx, struct rm_ilog_options *cmd_args,
-		     struct argv_parsed *argc_v)
+		     uint32_t argc, char **argv)
 {
 	char		 *options_short = "";
-	int		  index = 0, opt;
-	uint32_t	  argc = argc_v->ap_argc;
-	char		**argv = argc_v->ap_argv;
+	int		  index = 0;
 	struct option	  options_long[] = {
 		{ NULL }
 	};
@@ -406,20 +342,12 @@ rm_ilog_option_parse(struct ddb_ctx *ctx, struct rm_ilog_options *cmd_args,
 	/* Restart getopt */
 	optind = 1;
 	opterr = 0;
-	while ((opt = getopt_long(argc, argv, options_short, options_long, &index)) != -1) {
-		switch (opt) {
-		case '?':
-			ddb_printf(ctx, "Unknown option: '%c'\n", optopt);
-		default:
-			return -DER_INVAL;
-		}
+	if (getopt_long(argc, argv, options_short, options_long, &index) != -1) {
+		ddb_printf(ctx, "Unknown option: '%c'\n", optopt);
+		return -DER_INVAL;
 	}
 
 	index = optind;
-
-	D_ASSERT(argc > index);
-	D_ASSERT(same(argv[index], COMMAND_NAME_RM_ILOG));
-	index++;
 	if (argc - index > 0) {
 		cmd_args->path = argv[index];
 		index++;
@@ -439,12 +367,10 @@ rm_ilog_option_parse(struct ddb_ctx *ctx, struct rm_ilog_options *cmd_args,
 /* Parse command line options for the 'dump_dtx' command */
 static int
 dump_dtx_option_parse(struct ddb_ctx *ctx, struct dump_dtx_options *cmd_args,
-		      struct argv_parsed *argc_v)
+		      uint32_t argc, char **argv)
 {
 	char		 *options_short = "ac";
 	int		  index = 0, opt;
-	uint32_t	  argc = argc_v->ap_argc;
-	char		**argv = argc_v->ap_argv;
 	struct option	  options_long[] = {
 		{ "active", no_argument, NULL, 'a' },
 		{ "committed", no_argument, NULL, 'c' },
@@ -472,10 +398,6 @@ dump_dtx_option_parse(struct ddb_ctx *ctx, struct dump_dtx_options *cmd_args,
 	}
 
 	index = optind;
-
-	D_ASSERT(argc > index);
-	D_ASSERT(same(argv[index], COMMAND_NAME_DUMP_DTX));
-	index++;
 	if (argc - index > 0) {
 		cmd_args->path = argv[index];
 		index++;
@@ -495,12 +417,10 @@ dump_dtx_option_parse(struct ddb_ctx *ctx, struct dump_dtx_options *cmd_args,
 /* Parse command line options for the 'clear_cmt_dtx' command */
 static int
 clear_cmt_dtx_option_parse(struct ddb_ctx *ctx, struct clear_cmt_dtx_options *cmd_args,
-			   struct argv_parsed *argc_v)
+			   uint32_t argc, char **argv)
 {
 	char		 *options_short = "";
-	int		  index = 0, opt;
-	uint32_t	  argc = argc_v->ap_argc;
-	char		**argv = argc_v->ap_argv;
+	int		  index = 0;
 	struct option	  options_long[] = {
 		{ NULL }
 	};
@@ -510,20 +430,12 @@ clear_cmt_dtx_option_parse(struct ddb_ctx *ctx, struct clear_cmt_dtx_options *cm
 	/* Restart getopt */
 	optind = 1;
 	opterr = 0;
-	while ((opt = getopt_long(argc, argv, options_short, options_long, &index)) != -1) {
-		switch (opt) {
-		case '?':
-			ddb_printf(ctx, "Unknown option: '%c'\n", optopt);
-		default:
-			return -DER_INVAL;
-		}
+	if (getopt_long(argc, argv, options_short, options_long, &index) != -1) {
+		ddb_printf(ctx, "Unknown option: '%c'\n", optopt);
+		return -DER_INVAL;
 	}
 
 	index = optind;
-
-	D_ASSERT(argc > index);
-	D_ASSERT(same(argv[index], COMMAND_NAME_CLEAR_CMT_DTX));
-	index++;
 	if (argc - index > 0) {
 		cmd_args->path = argv[index];
 		index++;
@@ -541,9 +453,9 @@ clear_cmt_dtx_option_parse(struct ddb_ctx *ctx, struct clear_cmt_dtx_options *cm
 }
 
 int
-ddb_parse_cmd_args(struct ddb_ctx *ctx, struct argv_parsed *parsed, struct ddb_cmd_info *info)
+ddb_parse_cmd_args(struct ddb_ctx *ctx, uint32_t argc, char **argv, struct ddb_cmd_info *info)
 {
-	char *cmd = parsed->ap_argv[1];
+	char *cmd = argv[0];
 
 	if (same(cmd, COMMAND_NAME_HELP)) {
 		info->dci_cmd = DDB_CMD_HELP;
@@ -555,11 +467,13 @@ ddb_parse_cmd_args(struct ddb_ctx *ctx, struct argv_parsed *parsed, struct ddb_c
 	}
 	if (same(cmd, COMMAND_NAME_LS)) {
 		info->dci_cmd = DDB_CMD_LS;
-		return ls_option_parse(ctx, &info->dci_cmd_option.dci_ls, parsed);
+		return ls_option_parse(ctx, &info->dci_cmd_option.dci_ls,
+		       argc, argv);
 	}
 	if (same(cmd, COMMAND_NAME_OPEN)) {
 		info->dci_cmd = DDB_CMD_OPEN;
-		return open_option_parse(ctx, &info->dci_cmd_option.dci_open, parsed);
+		return open_option_parse(ctx, &info->dci_cmd_option.dci_open,
+		       argc, argv);
 	}
 	if (same(cmd, COMMAND_NAME_CLOSE)) {
 		info->dci_cmd = DDB_CMD_CLOSE;
@@ -571,36 +485,43 @@ ddb_parse_cmd_args(struct ddb_ctx *ctx, struct argv_parsed *parsed, struct ddb_c
 	}
 	if (same(cmd, COMMAND_NAME_DUMP_VALUE)) {
 		info->dci_cmd = DDB_CMD_DUMP_VALUE;
-		return dump_value_option_parse(ctx, &info->dci_cmd_option.dci_dump_value, parsed);
+		return dump_value_option_parse(ctx, &info->dci_cmd_option.dci_dump_value,
+		       argc, argv);
 	}
 	if (same(cmd, COMMAND_NAME_RM)) {
 		info->dci_cmd = DDB_CMD_RM;
-		return rm_option_parse(ctx, &info->dci_cmd_option.dci_rm, parsed);
+		return rm_option_parse(ctx, &info->dci_cmd_option.dci_rm,
+		       argc, argv);
 	}
 	if (same(cmd, COMMAND_NAME_LOAD)) {
 		info->dci_cmd = DDB_CMD_LOAD;
-		return load_option_parse(ctx, &info->dci_cmd_option.dci_load, parsed);
+		return load_option_parse(ctx, &info->dci_cmd_option.dci_load,
+		       argc, argv);
 	}
 	if (same(cmd, COMMAND_NAME_DUMP_ILOG)) {
 		info->dci_cmd = DDB_CMD_DUMP_ILOG;
-		return dump_ilog_option_parse(ctx, &info->dci_cmd_option.dci_dump_ilog, parsed);
+		return dump_ilog_option_parse(ctx, &info->dci_cmd_option.dci_dump_ilog,
+		       argc, argv);
 	}
 	if (same(cmd, COMMAND_NAME_COMMIT_ILOG)) {
 		info->dci_cmd = DDB_CMD_COMMIT_ILOG;
-		return commit_ilog_option_parse(ctx, &info->dci_cmd_option.dci_commit_ilog, parsed);
+		return commit_ilog_option_parse(ctx, &info->dci_cmd_option.dci_commit_ilog,
+		       argc, argv);
 	}
 	if (same(cmd, COMMAND_NAME_RM_ILOG)) {
 		info->dci_cmd = DDB_CMD_RM_ILOG;
-		return rm_ilog_option_parse(ctx, &info->dci_cmd_option.dci_rm_ilog, parsed);
+		return rm_ilog_option_parse(ctx, &info->dci_cmd_option.dci_rm_ilog,
+		       argc, argv);
 	}
 	if (same(cmd, COMMAND_NAME_DUMP_DTX)) {
 		info->dci_cmd = DDB_CMD_DUMP_DTX;
-		return dump_dtx_option_parse(ctx, &info->dci_cmd_option.dci_dump_dtx, parsed);
+		return dump_dtx_option_parse(ctx, &info->dci_cmd_option.dci_dump_dtx,
+		       argc, argv);
 	}
 	if (same(cmd, COMMAND_NAME_CLEAR_CMT_DTX)) {
 		info->dci_cmd = DDB_CMD_CLEAR_CMT_DTX;
 		return clear_cmt_dtx_option_parse(ctx, &info->dci_cmd_option.dci_clear_cmt_dtx,
-						  parsed);
+		       argc, argv);
 	}
 	if (same(cmd, COMMAND_NAME_SMD_SYNC)) {
 		info->dci_cmd = DDB_CMD_SMD_SYNC;
@@ -635,10 +556,10 @@ ddb_run_help(struct ddb_ctx *ctx)
 	ddb_print(ctx, "   rm                Remove a branch of the VOS tree\n");
 	ddb_print(ctx, "   load              Load an updated or new value\n");
 	ddb_print(ctx, "   dump_ilog         Dump the ilog\n");
-	ddb_print(ctx, "   commit_ilog      Process the ilog\n");
+	ddb_print(ctx, "   commit_ilog       Process the ilog\n");
 	ddb_print(ctx, "   rm_ilog           Remove all the ilog entries\n");
 	ddb_print(ctx, "   dump_dtx          Dump the dtx tables\n");
-	ddb_print(ctx, "   clear_cmt_dtx         Clear the dtx committed table\n");
+	ddb_print(ctx, "   clear_cmt_dtx     Clear the dtx committed table\n");
 	ddb_print(ctx, "   smd_sync          Restore the SMD file with backup from blob\n");
 
 	return 0;

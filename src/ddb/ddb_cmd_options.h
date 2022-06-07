@@ -90,7 +90,7 @@ struct ddb_cmd_info {
 	} dci_cmd_option;
 };
 
-int ddb_parse_cmd_args(struct ddb_ctx *ctx, struct argv_parsed *parsed, struct ddb_cmd_info *info);
+int ddb_parse_cmd_args(struct ddb_ctx *ctx, uint32_t argc, char **argv, struct ddb_cmd_info *info);
 
 /* Run commands ... */
 int ddb_run_help(struct ddb_ctx *ctx);
