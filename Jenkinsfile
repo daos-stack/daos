@@ -1,7 +1,4 @@
 #!/usr/bin/groovy
-// groovylint-disable DuplicateMapLiteral, DuplicateNumberLiteral
-// groovylint-disable DuplicateStringLiteral, NestedBlockDepth
-
 /* Copyright 2019-2022 Intel Corporation
  * All rights reserved.
  *
@@ -845,7 +842,7 @@ pipeline {
                     }
                     post {
                         always {
-                            junit 'maldetect_el7.xml'
+                            junit 'maldetect_centos7.xml'
                         }
                     }
                 } // stage('Scan CentOS 7 RPMs')
