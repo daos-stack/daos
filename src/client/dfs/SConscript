@@ -37,8 +37,6 @@ def scons():
 
     libraries = ['daos_common', 'daos', 'uuid', 'gurt']
 
-    base_env.AppendUnique(LIBPATH=[Dir('.')])
-
     dfs_src = ['dfs.c', 'dfs_sys.c', 'dfs_internal.c']
     dfs = daos_build.library(denv, 'dfs', dfs_src, LIBS=libraries)
     denv.Install('$PREFIX/lib64/', dfs)
@@ -49,6 +47,7 @@ def scons():
 
     duns = daos_build.library(denv, 'duns', 'duns.c', LIBS=libraries)
     denv.Install('$PREFIX/lib64/', duns)
+
 
 if __name__ == "SCons.Script":
     scons()

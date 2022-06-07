@@ -38,6 +38,7 @@ OPS_SRC = ['create',
 
 IOIL_SRC = ['int_posix.c', 'int_read.c', 'int_write.c']
 
+
 def build_common(env, files, is_shared):
     """Build the common objects as shared or static"""
     common = []
@@ -49,6 +50,7 @@ def build_common(env, files, is_shared):
             common += env.Object(src_file)
 
     return common
+
 
 def build_client_libs_shared(env, prereqs):
     """build the shared interception library"""
@@ -84,6 +86,7 @@ def build_client_libs_shared(env, prereqs):
 
     return dfuse_lib + il_lib
 
+
 def build_client_libs_static(env, common):
     """build the static interception library"""
 
@@ -109,6 +112,7 @@ def build_client_libs_static(env, common):
 
     return il_lib + dfuse_lib
 
+
 def check_struct_member(context, text, struct, member):
     """scons check for a struct member existing"""
 
@@ -119,6 +123,7 @@ def check_struct_member(context, text, struct, member):
     rc = context.TryCompile(src, '.c')
     context.Result(rc)
     return rc
+
 
 def check_ioctl_def(context, ctype):
     """scons check for a struct member existing"""
@@ -139,6 +144,7 @@ struct fuse_lowlevel_ops ops = {.ioctl = my_ioctl};
     rc = context.TryCompile(src, '.c')
     context.Result(rc)
     return rc
+
 
 def configure_fuse(cenv):
     """Configure for specific version of fuse"""
