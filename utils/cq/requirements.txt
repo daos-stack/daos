@@ -4,7 +4,6 @@ avocado-framework<94
 avocado-framework-plugin-result-html<94
 avocado-framework-plugin-varianter-yaml-to-mux<94
 clustershell
-jira
 paramiko
 pyenchant
 pylint
