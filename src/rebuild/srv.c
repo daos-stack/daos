@@ -2111,19 +2111,9 @@ rebuild_tgt_prepare(crt_rpc_t *rpc, struct rebuild_tgt_pool_tracker **p_rpt)
 		D_GOTO(out, rc = -DER_BUSY);
 	}
 
-	if (pool->sp_group == NULL) {
-		char id[DAOS_UUID_STR_SIZE];
-
-		uuid_unparse_lower(pool->sp_uuid, id);
-		pool->sp_group = crt_group_lookup(id);
-		if (pool->sp_group == NULL) {
-			D_ERROR(DF_UUID": pool group not found\n",
-				DP_UUID(pool->sp_uuid));
-			D_GOTO(out, rc = -DER_INVAL);
-		}
-	}
-
+	D_ASSERT(pool->sp_group != NULL);
 	D_ASSERT(pool->sp_iv_ns != NULL);
+
 	/* Let's invalidate local snapshot cache before
 	 * rebuild, so to make sure rebuild will use the updated
 	 * snapshot during rebuild fetch, otherwise it may cause
