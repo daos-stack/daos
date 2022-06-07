@@ -6,7 +6,6 @@ import re
 from collections import Counter
 import subprocess  # nosec
 import argparse
-import tempfile
 from pylint.lint import Run
 from pylint.reporters.collecting_reporter import CollectingReporter
 from pylint.lint import pylinter
@@ -41,14 +40,17 @@ class WrapScript():
 
     def __init__(self, fname):
 
-        self.line_map = {}
+        # TODO: Use a NamedTemporaryFile file here, it's an easy change to make but there appears
+        # to be some weird utf-8 errors in the tree somewhere which is causing spurious issues.
 
-        # This file needs to live for as long as the object, so do not use with here.
-        # pylint: disable-next=consider-using-with
-        self.outfile = tempfile.NamedTemporaryFile(mode='w+', encoding='utf-8')
-        self.wrap_file = self.outfile.name
-        with open(fname, 'r') as infile:
-            self._read_files(infile, self.outfile)
+        self.line_map = {}
+        self.wrap_file = f'{fname}.tmp'
+        with open(self.wrap_file, 'w') as outfile:
+            with open(fname, 'r') as infile:
+                self._read_files(infile, outfile)
+
+    def __del__(self):
+        os.unlink(self.wrap_file)
 
     def _read_files(self, infile, outfile):
         old_lineno = 1
