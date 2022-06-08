@@ -108,6 +108,7 @@ dma_buffer_destroy(struct bio_dma_buffer *buf)
 	dma_buffer_shrink(buf, buf->bdb_tot_cnt);
 
 	D_ASSERT(buf->bdb_tot_cnt == 0);
+	D_ASSERT(buf->bdb_huge_pgs == 0);
 	ABT_mutex_free(&buf->bdb_mutex);
 	ABT_cond_free(&buf->bdb_wait_iods);
 
@@ -126,6 +127,7 @@ dma_buffer_create(unsigned int init_cnt)
 
 	D_INIT_LIST_HEAD(&buf->bdb_idle_list);
 	D_INIT_LIST_HEAD(&buf->bdb_used_list);
+	buf->bdb_huge_pgs = 0;
 	buf->bdb_tot_cnt = 0;
 	buf->bdb_active_iods = 0;
 
@@ -273,6 +275,9 @@ iod_release_buffer(struct bio_desc *biod)
 			chunk->bdc_type);
 
 		if (dma_chunk_is_huge(chunk)) {
+			D_ASSERT(bdb->bdb_huge_pgs >= chunk->bdc_pg_idx);
+			bdb->bdb_huge_pgs -= chunk->bdc_pg_idx;
+			chunk->bdc_pg_idx = 0;
 			dma_free_chunk(chunk);
 		} else if (chunk->bdc_ref == 0) {
 			chunk->bdc_pg_idx = 0;
@@ -489,7 +494,7 @@ chunk_get_idle(struct bio_dma_buffer *bdb, struct bio_dma_chunk **chk_ptr)
 
 	if (d_list_empty(&bdb->bdb_idle_list)) {
 		/* Try grow buffer first */
-		if (bdb->bdb_tot_cnt < bio_chk_cnt_max) {
+		if (!dma_buffer_full(bdb)) {
 			rc = dma_buffer_grow(bdb, 1);
 			if (rc == 0)
 				goto done;
@@ -507,6 +512,71 @@ done:
 	d_list_move_tail(&chk->bdc_link, &bdb->bdb_used_list);
 	*chk_ptr = chk;
 
+	return 0;
+}
+
+static unsigned int
+consumed_pgs(struct bio_dma_buffer *bdb)
+{
+	return (bdb->bdb_tot_cnt * bio_chk_sz) + bdb->bdb_huge_pgs;
+}
+
+static int
+chunk_get_huge(struct bio_desc *biod, unsigned int pg_cnt, struct bio_dma_chunk **chk_ptr)
+{
+	struct bio_dma_buffer	*bdb = iod_dma_buf(biod);
+	struct bio_dma_chunk	*chk;
+	unsigned int		 tot_pgs = bio_chk_cnt_max * bio_chk_sz;
+	unsigned int		 reclaim_chks, reclaim_pgs;
+
+	if (pg_cnt > (tot_pgs * 2 / 3)) {
+		D_ERROR("IOV (%u pages) is too large for DMA buffer (%u pages)\n",
+			pg_cnt, tot_pgs);
+		return -DER_REC2BIG;
+	}
+
+	D_ASSERT(bio_chk_sz > 0);
+	reclaim_chks = ((pg_cnt + bio_chk_sz - 1) / bio_chk_sz) * 2;
+	reclaim_pgs = reclaim_chks * bio_chk_sz;
+retry:
+	/* Try to reclaim some idle chunks first */
+	if (reclaim_chks == UINT32_MAX || (consumed_pgs(bdb) + reclaim_pgs) > tot_pgs)
+		dma_buffer_shrink(bdb, reclaim_chks);
+
+	/* Try to reclaim unused bulk cache */
+	if (reclaim_chks == UINT32_MAX || (consumed_pgs(bdb) + reclaim_pgs) > tot_pgs) {
+		unsigned int	reclaimed = 0;
+		int		rc;
+
+		while (reclaimed < reclaim_chks) {
+			rc = bulk_reclaim_chunk(bdb, NULL);
+			if (rc)
+				break;
+			reclaimed++;
+		}
+		dma_buffer_shrink(bdb, reclaimed);
+	}
+
+	/*
+	 * Restrict per-xstream allocated size to 2/3 upper bound, otherwise, large size
+	 * allocation could fail when we are short on free memory.
+	 */
+	if ((consumed_pgs(bdb) + pg_cnt) > (tot_pgs * 2 / 3)) {
+		if (reclaim_chks != UINT32_MAX) {
+			reclaim_chks = UINT32_MAX;
+			goto retry;
+		}
+		return -DER_AGAIN;
+	}
+
+	chk = dma_alloc_chunk(pg_cnt);
+	if (chk == NULL) {
+		*chk_ptr = NULL;
+		return -DER_NOMEM;
+	}
+
+	chk->bdc_pg_idx = pg_cnt;
+	*chk_ptr = chk;
 	return 0;
 }
 
@@ -729,16 +799,27 @@ dma_map_one(struct bio_desc *biod, struct bio_iov *biov, void *arg)
 	 * be high contention over the SPDK huge page cache.
 	 */
 	if (pg_cnt > bio_chk_sz) {
-		chk = dma_alloc_chunk(pg_cnt);
-		if (chk == NULL)
-			return -DER_NOMEM;
+		rc = chunk_get_huge(biod, pg_cnt, &chk);
+		if (rc) {
+			if (rc == -DER_AGAIN) {
+				D_ERROR("DMA buffer isn't sufficient to sustain workload\n");
+				biod->bd_retry = 1;
+			} else {
+				D_ERROR("Failed to get huge chunk. "DF_RC"\n", DP_RC(rc));
+			}
+
+			dump_dma_info(bdb);
+			return rc;
+		}
 
 		chk->bdc_type = biod->bd_chk_type;
 		rc = iod_add_chunk(biod, chk);
 		if (rc) {
+			chk->bdc_pg_idx = 0;
 			dma_free_chunk(chk);
 			return rc;
 		}
+		bdb->bdb_huge_pgs += pg_cnt;
 		bio_iov_set_raw_buf(biov, chk->bdc_ptr + pg_off);
 		chk_pg_idx = 0;
 

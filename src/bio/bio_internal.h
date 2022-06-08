@@ -74,7 +74,10 @@ struct bio_dma_chunk {
 	d_list_t	 bdc_link;
 	/* Base pointer of the chunk address */
 	void		*bdc_ptr;
-	/* Page offset (4K page) to unused fraction */
+	/*
+	 * Page offset (4K page) to unused fraction. For huge chunk, this field
+	 * is used to store chunk size (in pages)
+	 */
 	unsigned int	 bdc_pg_idx;
 	/* Being used by how many I/O descriptors */
 	unsigned int	 bdc_ref;
@@ -107,6 +110,7 @@ struct bio_dma_buffer {
 	d_list_t		 bdb_used_list;
 	struct bio_dma_chunk	*bdb_cur_chk[BIO_CHK_TYPE_MAX];
 	unsigned int		 bdb_used_cnt[BIO_CHK_TYPE_MAX];
+	unsigned int		 bdb_huge_pgs;	/* inflight huge chunk size (in pages) */
 	unsigned int		 bdb_tot_cnt;
 	unsigned int		 bdb_active_iods;
 	ABT_cond		 bdb_wait_iods;
@@ -526,6 +530,15 @@ int iod_add_region(struct bio_desc *biod, struct bio_dma_chunk *chk,
 		   uint64_t end, uint8_t media);
 int dma_buffer_grow(struct bio_dma_buffer *buf, unsigned int cnt);
 
+static inline bool
+dma_buffer_full(struct bio_dma_buffer *bdb)
+{
+	unsigned int huge_chks;
+
+	huge_chks = (bdb->bdb_huge_pgs + bio_chk_sz - 1) / bio_chk_sz;
+	return (bdb->bdb_tot_cnt + huge_chks) >= bio_chk_cnt_max;
+}
+
 static inline struct bio_dma_buffer *
 iod_dma_buf(struct bio_desc *biod)
 {
@@ -568,11 +581,11 @@ dump_dma_info(struct bio_dma_buffer *bdb)
 	struct bio_bulk_group	*bbg;
 	int			 i, bulk_grps = 0, bulk_chunks = 0;
 
-	D_EMIT("chk_size:%u, tot_chk:%u/%u, active_iods:%u, used:%u,%u,%u\n",
-		bio_chk_sz, bdb->bdb_tot_cnt, bio_chk_cnt_max,
-		bdb->bdb_active_iods, bdb->bdb_used_cnt[BIO_CHK_TYPE_IO],
-		bdb->bdb_used_cnt[BIO_CHK_TYPE_LOCAL],
-		bdb->bdb_used_cnt[BIO_CHK_TYPE_REBUILD]);
+	D_EMIT("chk_size:%u, huge_pgs:%u tot_chk:%u/%u, active_iods:%u, used:%u,%u,%u\n",
+	       bio_chk_sz, bdb->bdb_huge_pgs, bdb->bdb_tot_cnt, bio_chk_cnt_max,
+	       bdb->bdb_active_iods, bdb->bdb_used_cnt[BIO_CHK_TYPE_IO],
+	       bdb->bdb_used_cnt[BIO_CHK_TYPE_LOCAL],
+	       bdb->bdb_used_cnt[BIO_CHK_TYPE_REBUILD]);
 
 	/* cached bulk info */
 	for (i = 0; i < bbc->bbc_grp_cnt; i++) {
@@ -585,7 +598,7 @@ dump_dma_info(struct bio_dma_buffer *bdb)
 		bulk_chunks += bbg->bbg_chk_cnt;
 
 		D_EMIT("bulk_grp %d: bulk_size:%u, chunks:%u\n",
-			i, bbg->bbg_bulk_pgs, bbg->bbg_chk_cnt);
+		       i, bbg->bbg_bulk_pgs, bbg->bbg_chk_cnt);
 	}
 	D_EMIT("bulk_grps:%d, bulk_chunks:%d\n", bulk_grps, bulk_chunks);
 }
