@@ -188,6 +188,18 @@ pool_iv_prop_l2g(daos_prop_t *prop, struct pool_iv_prop *iv_prop)
 		case DAOS_PROP_PO_UPGRADE_STATUS:
 			iv_prop->pip_upgrade_status = prop_entry->dpe_val;
 			break;
+		case DAOS_PROP_PO_SCRUB_SCHED:
+			iv_prop->pip_scrub_sched = prop_entry->dpe_val;
+			break;
+		case DAOS_PROP_PO_SCRUB_FREQ:
+			iv_prop->pip_scrub_freq = prop_entry->dpe_val;
+			break;
+		case DAOS_PROP_PO_SCRUB_CREDITS:
+			iv_prop->pip_scrub_cred = prop_entry->dpe_val;
+			break;
+		case DAOS_PROP_PO_SCRUB_THRESH:
+			iv_prop->pip_scrub_thresh = prop_entry->dpe_val;
+			break;
 		default:
 			D_ASSERTF(0, "bad dpe_type %d\n", prop_entry->dpe_type);
 			break;
@@ -246,6 +258,18 @@ pool_iv_prop_g2l(struct pool_iv_prop *iv_prop, daos_prop_t *prop)
 			break;
 		case DAOS_PROP_PO_SELF_HEAL:
 			prop_entry->dpe_val = iv_prop->pip_self_heal;
+			break;
+		case DAOS_PROP_PO_SCRUB_SCHED:
+			prop_entry->dpe_val = iv_prop->pip_scrub_sched;
+			break;
+		case DAOS_PROP_PO_SCRUB_FREQ:
+			prop_entry->dpe_val = iv_prop->pip_scrub_freq;
+			break;
+		case DAOS_PROP_PO_SCRUB_CREDITS:
+			prop_entry->dpe_val = iv_prop->pip_scrub_cred;
+			break;
+		case DAOS_PROP_PO_SCRUB_THRESH:
+			prop_entry->dpe_val = iv_prop->pip_scrub_thresh;
 			break;
 		case DAOS_PROP_PO_RECLAIM:
 			prop_entry->dpe_val = iv_prop->pip_reclaim;

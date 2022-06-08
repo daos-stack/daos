@@ -228,6 +228,7 @@ func extractLabels(in string) (labels labelMap, name string) {
 		func(labels labelMap, matches []string) {
 			labels["pool"] = strings.Replace(matches[1], "_", "-", -1)
 		})
+
 	return
 }
 

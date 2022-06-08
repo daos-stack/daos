@@ -557,7 +557,7 @@ done:
 		d_sg_list_t		 fsgl;
 		int			*fbuffer;
 
-		D_DEBUG(DB_IO, "Data corruption after RDMA\n");
+		D_ERROR("csum: Corrupting data after RDMA\n");
 		fbsgl = vos_iod_sgl_at(ioh, 0);
 		bio_sgl_convert(fbsgl, &fsgl);
 		fbuffer = (int *)fsgl.sg_iovs[0].iov_buf;
@@ -840,10 +840,6 @@ csum_add2iods(daos_handle_t ioh, daos_iod_t *iods, uint32_t iods_nr,
 	for (i = 0; i < iods_nr; i++) {
 		if (biov_csums_idx >= csum_info_nr)
 			break; /** no more csums to add */
-		D_DEBUG(DB_CSUM, DF_C_UOID_DKEY"Adding fetched to IOD: "
-				 DF_C_IOD", csum: "DF_CI"\n",
-			DP_C_UOID_DKEY(oid, dkey),
-			DP_C_IOD(&iods[i]), DP_CI(*dcs_csum_info_get(csum_infos, 0)));
 		csum_infos->dcl_csum_offset += biov_csums_used;
 		rc = ds_csum_add2iod(
 			&iods[i], csummer,

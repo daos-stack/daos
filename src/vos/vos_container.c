@@ -768,7 +768,7 @@ cont_iter_probe(struct vos_iterator *iter, daos_anchor_t *anchor, uint32_t flags
 }
 
 static int
-cont_iter_delete(struct vos_iterator *iter, void *args)
+cont_iter_process(struct vos_iterator *iter, vos_iter_proc_op op, void *args)
 {
 	D_ASSERT(iter->it_type == VOS_ITER_COUUID);
 
@@ -781,5 +781,5 @@ struct vos_iter_ops vos_cont_iter_ops = {
 	.iop_probe   = cont_iter_probe,
 	.iop_next    = cont_iter_next,
 	.iop_fetch   = cont_iter_fetch,
-	.iop_delete  = cont_iter_delete,
+	.iop_process  = cont_iter_process,
 };

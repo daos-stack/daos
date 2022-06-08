@@ -1045,6 +1045,22 @@ func TestPoolGetProp(t *testing.T) {
 							Number: propWithVal("policy", "").Number,
 							Value:  &mgmtpb.PoolProperty_Strval{"type=io_size"},
 						},
+						{
+							Number: propWithVal("scrub", "").Number,
+							Value:  &mgmtpb.PoolProperty_Numval{daos.PoolScrubSchedContinuous},
+						},
+						{
+							Number: propWithVal("scrub-freq", "").Number,
+							Value:  &mgmtpb.PoolProperty_Numval{1024},
+						},
+						{
+							Number: propWithVal("scrub-thresh", "").Number,
+							Value:  &mgmtpb.PoolProperty_Numval{0},
+						},
+						{
+							Number: propWithVal("scrub-cred", "").Number,
+							Value:  &mgmtpb.PoolProperty_Numval{1},
+						},
 					},
 				}),
 			},
@@ -1060,6 +1076,10 @@ func TestPoolGetProp(t *testing.T) {
 				propWithVal("reclaim", "disabled"),
 				propWithVal("rf", "1"),
 				propWithVal("rp_pda", "2"),
+				propWithVal("scrub", "continuous"),
+				propWithVal("scrub-cred", "1"),
+				propWithVal("scrub-freq", "1024"),
+				propWithVal("scrub-thresh", "0"),
 				propWithVal("self_heal", "exclude"),
 				propWithVal("space_rb", "42"),
 				propWithVal("upgrade_status", "in progress"),

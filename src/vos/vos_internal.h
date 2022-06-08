@@ -993,8 +993,8 @@ struct vos_iter_ops {
 	int	(*iop_copy)(struct vos_iterator *iter,
 			    vos_iter_entry_t *it_entry, d_iov_t *iov_out);
 	/** Delete the record that the cursor points to */
-	int	(*iop_delete)(struct vos_iterator *iter,
-			      void *args);
+	int	(*iop_process)(struct vos_iterator *iter, vos_iter_proc_op op,
+			       void *args);
 	/**
 	 * Optional, the iterator has no element.
 	 *

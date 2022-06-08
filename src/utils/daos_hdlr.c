@@ -14,7 +14,7 @@
 #define ENUM_DESC_NR		5 /* number of keys/records returned by enum */
 #define ENUM_DESC_BUF		512 /* all keys/records returned by enum */
 #define LIBSERIALIZE		"libdaos_serialize.so"
-#define NUM_SERIALIZE_PROPS	17
+#define NUM_SERIALIZE_PROPS	18
 
 #include <stdio.h>
 #include <dirent.h>
@@ -1602,6 +1602,7 @@ dm_cont_get_all_props(struct cmd_args_s *ap, daos_handle_t coh, daos_prop_t **_p
 	props->dpp_entries[14].dpe_type = DAOS_PROP_CO_DEDUP_THRESHOLD;
 	props->dpp_entries[15].dpe_type = DAOS_PROP_CO_EC_PDA;
 	props->dpp_entries[16].dpe_type = DAOS_PROP_CO_RP_PDA;
+	props->dpp_entries[17].dpe_type = DAOS_PROP_CO_SCRUBBER_DISABLED;
 
 	/* Conditionally get the OID. Should always be true for serialization. */
 	if (get_oid) {

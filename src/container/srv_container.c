@@ -417,6 +417,7 @@ cont_create_prop_prepare(struct ds_pool_hdl *pool_hdl,
 		case DAOS_PROP_CO_DEDUP_THRESHOLD:
 		case DAOS_PROP_CO_EC_PDA:
 		case DAOS_PROP_CO_RP_PDA:
+		case DAOS_PROP_CO_SCRUBBER_DISABLED:
 			entry_def->dpe_val = entry->dpe_val;
 			break;
 		case DAOS_PROP_CO_REDUN_FAC:
@@ -693,6 +694,15 @@ cont_prop_write(struct rdb_tx *tx, const rdb_path_t *kvs, daos_prop_t *prop,
 				  sizeof(entry->dpe_val));
 			rc = rdb_tx_update(tx, kvs, &ds_cont_prop_alloced_oid,
 					   &value);
+			break;
+		case DAOS_PROP_CO_SCRUBBER_DISABLED:
+			d_iov_set(&value, &entry->dpe_val,
+				  sizeof(entry->dpe_val));
+			rc = rdb_tx_update(tx, kvs,
+					   &ds_cont_prop_scrubber_disabled,
+					   &value);
+			if (rc)
+				return rc;
 			break;
 		default:
 			D_ERROR("bad dpe_type %d.\n", entry->dpe_type);
@@ -2193,6 +2203,18 @@ cont_prop_read(struct rdb_tx *tx, struct cont *cont, uint64_t bits,
 		prop->dpp_entries[idx].dpe_val = val;
 		idx++;
 	}
+	if (bits & DAOS_CO_QUERY_PROP_SCRUB_DIS) {
+		d_iov_set(&value, &val, sizeof(val));
+		rc = rdb_tx_lookup(tx, &cont->c_prop,
+				   &ds_cont_prop_scrubber_disabled, &value);
+		if (rc != 0)
+			D_GOTO(out, rc);
+		D_ASSERT(idx < nr);
+		prop->dpp_entries[idx].dpe_type =
+			DAOS_PROP_CO_SCRUBBER_DISABLED;
+		prop->dpp_entries[idx].dpe_val = val;
+		idx++;
+	}
 	if (bits & DAOS_CO_QUERY_PROP_REDUN_FAC) {
 		d_iov_set(&value, &val, sizeof(val));
 		rc = rdb_tx_lookup(tx, &cont->c_prop, &ds_cont_prop_redun_fac,
@@ -2655,6 +2677,7 @@ cont_query(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl, struct cont *cont,
 			case DAOS_PROP_CO_EC_PDA:
 			case DAOS_PROP_CO_RP_PDA:
 			case DAOS_PROP_CO_GLOBAL_VERSION:
+			case DAOS_PROP_CO_SCRUBBER_DISABLED:
 				if (entry->dpe_val != iv_entry->dpe_val) {
 					D_ERROR("type %d mismatch "DF_U64" - "
 						DF_U64".\n", entry->dpe_type,

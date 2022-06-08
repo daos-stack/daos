@@ -356,9 +356,23 @@ daos_prop_valid(daos_prop_t *prop, bool pool, bool input)
 				prop->dpp_entries[i].dpe_str))
 				return false;
 			break;
-		/* container-only properties */
 		case DAOS_PROP_PO_SVC_LIST:
 			break;
+		case DAOS_PROP_PO_SCRUB_SCHED:
+			val = prop->dpp_entries[i].dpe_val;
+			if (val >= DAOS_SCRUB_SCHED_INVALID)
+				return false;
+			break;
+		case DAOS_PROP_PO_SCRUB_FREQ:
+			/* accepting any number of seconds for now */
+			break;
+		case DAOS_PROP_PO_SCRUB_CREDITS:
+			/* accepting any number of credits for now */
+			break;
+		case DAOS_PROP_PO_SCRUB_THRESH:
+			/* accepting any number for threshold for now */
+			break;
+		/* container-only properties */
 		case DAOS_PROP_CO_LAYOUT_TYPE:
 			val = prop->dpp_entries[i].dpe_val;
 			if (val >= DAOS_PROP_CO_LAYOUT_MAX) {
@@ -384,6 +398,9 @@ daos_prop_valid(daos_prop_t *prop, bool pool, bool input)
 					DF_U64". Should be < 2GiB\n", val);
 				return false;
 			}
+			break;
+		case DAOS_PROP_CO_SCRUBBER_DISABLED:
+			/* Placeholder */
 			break;
 		case DAOS_PROP_CO_CSUM_SERVER_VERIFY:
 			val = prop->dpp_entries[i].dpe_val;

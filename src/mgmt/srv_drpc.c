@@ -258,7 +258,7 @@ conv_req_props(daos_prop_t **out_prop, bool set_props,
 			}
 
 			D_STRNDUP(entry->dpe_str, req_props[i]->strval,
-				DAOS_PROP_LABEL_MAX_LEN);
+				  DAOS_PROP_LABEL_MAX_LEN);
 			if (entry->dpe_str == NULL)
 				D_GOTO(out, rc = -DER_NOMEM);
 			break;

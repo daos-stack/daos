@@ -29,7 +29,7 @@ struct vos_io_context {
 	daos_unit_oid_t		 ic_oid;
 	struct vos_container	*ic_cont;
 	daos_iod_t		*ic_iods;
-	struct dcs_iod_csums	*iod_csums;
+	struct dcs_iod_csums	*ic_iod_csums;
 	/** reference on the object */
 	struct vos_object	*ic_obj;
 	/** BIO descriptor, has ic_iod_nr SGLs */
@@ -428,7 +428,7 @@ vos_dedup_dup_bsgl(struct vos_io_context *ioc, unsigned int sgl_idx,
 		biov_dup->bi_buf = bio_buf_addr(buf);
 		D_ASSERT(biov_dup->bi_buf != NULL);
 
-		BIO_ADDR_SET_NOT_DEDUP(&biov_dup->bi_addr);
+		BIO_ADDR_CLEAR_DEDUP(&biov_dup->bi_addr);
 		BIO_ADDR_SET_DEDUP_BUF(&biov_dup->bi_addr);
 		biov_dup->bi_addr.ba_off = UMOFF_NULL;
 next:
@@ -645,7 +645,7 @@ vos_ioc_create(daos_handle_t coh, daos_unit_oid_t oid, bool read_only,
 	ioc->ic_remove = ((vos_flags & VOS_OF_REMOVE) != 0);
 	ioc->ic_ec = ((vos_flags & VOS_OF_EC) != 0);
 	ioc->ic_umoffs_cnt = ioc->ic_umoffs_at = 0;
-	ioc->iod_csums = iod_csums;
+	ioc->ic_iod_csums = iod_csums;
 	vos_ilog_fetch_init(&ioc->ic_dkey_info);
 	vos_ilog_fetch_init(&ioc->ic_akey_info);
 	D_INIT_LIST_HEAD(&ioc->ic_blk_exts);
@@ -831,6 +831,11 @@ akey_fetch_single(daos_handle_t toh, const daos_epoch_range_t *epr,
 	if (ci_is_valid(&csum_info))
 		save_csum(ioc, &csum_info, NULL, 0);
 
+	if (BIO_ADDR_IS_CORRUPTED(&rbund.rb_biov->bi_addr)) {
+		D_DEBUG(DB_CSUM, "Found corrupted record\n");
+		return -DER_CSUM;
+	}
+
 	rc = iod_fetch(ioc, &biov);
 	if (rc != 0)
 		goto out;
@@ -947,6 +952,13 @@ akey_fetch_recx(daos_handle_t toh, const daos_epoch_range_t *epr,
 		D_ASSERT(hi >= lo);
 		nr = hi - lo + 1;
 
+		if (BIO_ADDR_IS_CORRUPTED(&ent->en_addr)) {
+			D_DEBUG(DB_CSUM, "Found corrupted entity: "DF_ENT"\n",
+				DP_ENT(ent));
+			rc = -DER_CSUM;
+			goto failed;
+		}
+
 		if (lo != index) {
 			D_ASSERTF(lo > index,
 				  DF_U64"/"DF_U64", "DF_EXT", "DF_ENT"\n",
@@ -994,7 +1006,7 @@ akey_fetch_recx(daos_handle_t toh, const daos_epoch_range_t *epr,
 		if (ci_is_valid(&ent->en_csum)) {
 			rc = save_csum(ioc, &ent->en_csum, ent, rsize);
 			if (rc != 0)
-				return rc;
+				goto failed;
 			biov_align_lens(&biov, ent, rsize);
 			csum_enabled = true;
 		} else {
@@ -1539,6 +1551,7 @@ akey_update_single(daos_handle_t toh, uint32_t pm_ver, daos_size_t rsize,
 	struct dcs_csum_info	 csum;
 	d_iov_t			 kiov, riov;
 	struct bio_iov		*biov;
+	struct dcs_csum_info	*value_csum;
 	umem_off_t		 umoff;
 	daos_epoch_t		 epoch = ioc->ic_epr.epr_hi;
 	int			 rc;
@@ -1556,18 +1569,18 @@ akey_update_single(daos_handle_t toh, uint32_t pm_ver, daos_size_t rsize,
 
 	tree_rec_bundle2iov(&rbund, &riov);
 
-	struct dcs_csum_info *value_csum = vos_csum_at(ioc->iod_csums, ioc->ic_sgl_at);
+	value_csum = vos_csum_at(ioc->ic_iod_csums, ioc->ic_sgl_at);
 
 	if (value_csum != NULL)
 		rbund.rb_csum	= value_csum;
 	else
 		rbund.rb_csum	= &csum;
 
-	rbund.rb_biov	= biov;
-	rbund.rb_rsize	= rsize;
-	rbund.rb_gsize	= gsize;
-	rbund.rb_off	= umoff;
-	rbund.rb_ver	= pm_ver;
+	rbund.rb_biov		= biov;
+	rbund.rb_rsize		= rsize;
+	rbund.rb_gsize		= gsize;
+	rbund.rb_off		= umoff;
+	rbund.rb_ver		= pm_ver;
 
 	rc = dbtree_update(toh, &kiov, &riov);
 	if (rc != 0)
@@ -1608,7 +1621,7 @@ akey_update_recx(daos_handle_t toh, uint32_t pm_ver, daos_recx_t *recx,
 	biov = iod_update_biov(ioc);
 	ent.ei_addr = biov->bi_addr;
 	/* Don't make this flag persistent */
-	BIO_ADDR_SET_NOT_DEDUP(&ent.ei_addr);
+	BIO_ADDR_CLEAR_DEDUP(&ent.ei_addr);
 
 	if (ioc->ic_remove)
 		return evt_remove_all(toh, &ent.ei_rect.rc_ex, &ioc->ic_epr);
@@ -1698,7 +1711,7 @@ akey_update(struct vos_io_context *ioc, uint32_t pm_ver, daos_handle_t ak_toh,
 	struct vos_object	*obj = ioc->ic_obj;
 	struct vos_krec_df	*krec = NULL;
 	daos_iod_t		*iod = &ioc->ic_iods[ioc->ic_sgl_at];
-	struct dcs_csum_info	*iod_csums = vos_csum_at(ioc->iod_csums, ioc->ic_sgl_at);
+	struct dcs_csum_info	*iod_csums = vos_csum_at(ioc->ic_iod_csums, ioc->ic_sgl_at);
 	struct dcs_csum_info	*recx_csum;
 	uint32_t		 update_cond = 0;
 	bool			 is_array = (iod->iod_type == DAOS_IOD_ARRAY);
@@ -2038,7 +2051,7 @@ vos_reserve_single(struct vos_io_context *ioc, uint16_t media,
 	struct bio_iov		 biov;
 	uint64_t		 off = 0;
 	int			 rc;
-	struct dcs_csum_info	*value_csum = vos_csum_at(ioc->iod_csums, ioc->ic_sgl_at);
+	struct dcs_csum_info	*value_csum = vos_csum_at(ioc->ic_iod_csums, ioc->ic_sgl_at);
 
 	/*
 	 * TODO:
@@ -2146,7 +2159,7 @@ done:
 static int
 akey_update_begin(struct vos_io_context *ioc)
 {
-	struct dcs_csum_info	*iod_csums = vos_csum_at(ioc->iod_csums, ioc->ic_sgl_at);
+	struct dcs_csum_info	*iod_csums = vos_csum_at(ioc->ic_iod_csums, ioc->ic_sgl_at);
 	struct dcs_csum_info	*recx_csum;
 	daos_iod_t *iod = &ioc->ic_iods[ioc->ic_sgl_at];
 	int i, rc;
@@ -2573,7 +2586,7 @@ vos_set_io_csum(daos_handle_t ioh, struct dcs_iod_csums *csums)
 
 	D_ASSERT(ioc != NULL);
 
-	ioc->iod_csums = csums;
+	ioc->ic_iod_csums = csums;
 }
 
 /*
@@ -2683,7 +2696,7 @@ vos_dedup_verify(daos_handle_t ioh)
 							   oid);
 			biov->bi_buf = umem_off2ptr(vos_ioc2umm(ioc),
 						bio_iov2off(biov));
-			BIO_ADDR_SET_NOT_DEDUP(&biov->bi_addr);
+			BIO_ADDR_CLEAR_DEDUP(&biov->bi_addr);
 
 			pmemobj_memcpy_persist(vos_ioc2umm(ioc)->umm_pool,
 					       biov->bi_buf, biov_dup->bi_buf,

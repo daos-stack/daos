@@ -55,7 +55,21 @@ class TelemetryUtils():
         "engine_pool_restarted",
         "engine_pool_started_at",
         "engine_pool_xferred_fetch",
-        "engine_pool_xferred_update"]
+        "engine_pool_xferred_update",
+        'engine_pool_scrubber_corruption_current',
+        'engine_pool_scrubber_corruption_total',
+        'engine_pool_scrubber_csums_current',
+        'engine_pool_scrubber_csums_prev',
+        'engine_pool_scrubber_csums_total',
+        'engine_pool_scrubber_last_duration',
+        'engine_pool_scrubber_last_duration_max',
+        'engine_pool_scrubber_last_duration_mean',
+        'engine_pool_scrubber_last_duration_min',
+        'engine_pool_scrubber_last_duration_stddev',
+        'engine_pool_scrubber_scrubber_started',
+        'engine_pool_scrubber_ult_start',
+        'engine_pool_scrubber_wait_gauge',
+    ]
     ENGINE_EVENT_METRICS = [
         "engine_events_dead_ranks",
         "engine_events_last_event_ts",

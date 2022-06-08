@@ -40,11 +40,11 @@ pack within the RPC message to the client. The client will verify the keys
 received.
 
 !!! note
-    Checksums for keys are not stored on the server. A hash of the key is
-    calculated and used to index the key in the server tree of the keys
-    (see [VOS Key Array Stores](https://github.com/daos-stack/daos/blob/master/src/vos/README.md#key-array-stores)).
-    It is also expected that keys are stored only in Storage Class Memory which
-    has reliable data integrity protection.
+Checksums for keys are not stored on the server. A hash of the key is
+calculated and used to index the key in the server tree of the keys
+(see [VOS Key Array Stores](https://github.com/daos-stack/daos/blob/master/src/vos/README.md#key-array-stores)).
+It is also expected that keys are stored only in Storage Class Memory which
+has reliable data integrity protection.
 
 ### Values
 On an update, the client will calculate a checksum for the data of the value and
@@ -64,8 +64,8 @@ an attempt to get uncorrupted data.
 
 There are some slight variations to this approach for the two different types
 of values. The following diagram illustrates a basic example.
- (See [Storage Model](storage.md) for more details about the single value
- and array value types)
+(See [Storage Model](storage.md) for more details about the single value
+and array value types)
 
 ![Basic Checksum Flow](../graph/data_integrity/basic_checksum_flow.png)
 
@@ -119,7 +119,7 @@ for more details about the checksum process on object update and fetch)
 
 ## Checksum calculations
 The actual checksum calculations are done by the
- [isa-l](https://github.com/intel/isa-l)
+[isa-l](https://github.com/intel/isa-l)
 and [isa-l_crypto](https://github.com/intel/isa-l_crypto) libraries. However,
 these libraries are abstracted away from much of DAOS and a common checksum
 library is used with appropriate adapters to the actual isa-l implementations.
@@ -127,9 +127,9 @@ library is used with appropriate adapters to the actual isa-l implementations.
 
 ## Performance Impact
 Calculating checksums can be CPU intensive and will impact performance. To
- mitigate performance impact, checksum types with hardware acceleration should
- be chosen. For example, CRC32C is supported by recent Intel CPUs, and many are
- accelerated via SIMD.
+mitigate performance impact, checksum types with hardware acceleration should
+be chosen. For example, CRC32C is supported by recent Intel CPUs, and many are
+accelerated via SIMD.
 
 ## Quality
 Unit and functional testing is performed at many layers.
@@ -148,10 +148,186 @@ Unit and functional testing is performed at many layers.
 ./commont_test
 ./vos_test -z
 ./srv_checksum_tests
+./pool_scrubbing_tests
 ```
 **With daos_server running**
 ```
 export DAOS_CSUM_TEST_ALL_TYPE=1
 ./daos_server -z
 ./daos_server -i --csum_type crc64
+```
+
+---
+
+# Checksum Scrubbing (In Development)
+A background task will scan (when the storage server is idle to limit
+performance impact) the Version Object Store (VOS) trees to verify the data
+integrity with the checksums. Corrective actions can be taken when corruption is
+detected. See [Corrective Actions](#corrective-actions)
+
+## (Not Implemented) Scanner
+### Goals/Requirements
+- **Detect Silent Data Corruption Proactively** - The whole point of the
+  scrubber is to detect silent data corruption before it is fetched.
+- **Minimize CPU and I/O Bandwidth** - Checksum scrubbing scanner will impact
+  CPU and the I/O bandwidth because it must iterate the VOS tree (I/O to SCM)
+  fetch data (I/O to SSD) and calculate checksums (CPU intensive). To minimize
+  both of these impacts, the server scheduler must be able to throttled the
+  scrubber's I/O and CPU usage.
+- **Continuous** - The background task will be a continuous processes instead of
+  running on a schedule. Once complete immediately start over. Throttling
+  approaches should prevent from scrubbing same objects too frequently.
+
+### High Level Design
+- Per Pool ULT (I/O xstream) that will iterate containers. If checksums and
+  scrubber is enabled then iterate the object tree. If a record value (SV or
+  array) is not marked corrupted then scan.
+  - Fetch the data.
+  - Create new ULTs (helper xstream) to calculate checksum for data
+  - Compare calculated checksum with stored checksum.
+  - After every checksum is calculated, determine if need to
+    [sleep or yield](#sleep-or-yield).
+  - If checksums don't match confirm record is still there (not deleted by
+    aggregation) then update record as corrupted
+- After each object scanned yield to allow the server scheduler to reschedule
+  the next appropriate I/O.
+
+#### Sleep or Yield
+Sleep for sufficient amount of time to ensure that scanning completes no sooner
+than configured interval (i.e. once a week or month). For example, if the
+interval is 1 week and there are 70 checksums that need to be calculated, then
+at a maximum 10 checksums are calculated a day, spaced roughly every 2.4 hours.
+If it doesn't need to sleep, then it will yield to allow the server scheduler to
+prioritize other jobs.
+
+## Corrective Actions
+There are two main options for corrective actions when data corruption is
+discovered, in place data repair and SSD eviction.
+
+### In Place Data Repair
+If enabled, when corruption is detected, the value identifier (dkey, akey, recx)
+will be placed in a queue. When there are available cycles, the value identifier
+will be used to request the data from a replica if exists and rewrite the data
+locally. This will continue until the SSD Eviction threshold is reached, in
+which case, the SSD is assumed to be bad enough that it isn't worth fixing
+locally and it will be requested to be evicted.
+
+### SSD Eviction
+If enabled, when the SSD Eviction Threshold is reached the SSD will be evicted.
+Current eviction methods are pool and target based so there will need to be a
+mapping and mechanism in place to evict an SSD. When an SSD is evicted, the
+rebuild protocol will be invoked.
+
+Also, once the SSD Eviction Threshold is reached, the scanner should quit
+scanning anything on that SSD.
+
+## Additional Checksum Properties
+### Pool Properties (-> doc/admin/pool_operations.md, src/control/lib/control/pool_property.go)
+These properties are provided when a pool is created, but should
+also be able to update them. When updated, they should be active right away.
+
+- **Pool Scrubber Mode** - How the scrubber will run for each pool target. The
+  container configuration can disable scrubbing for the container, but it cannot
+  alter the mode.
+    - **OFF** - The Scrubber will not run.
+    - **Run & Wait** - Will run the scrubber to completion, yielding after
+      consuming configured "credits". Then, if completed before configured
+      frequency, will sleep until it's time to start again.
+    - **Continuous** - Will run the scanner, sleeping in between object scrubs so
+      that the duration of the scrubber takes whole frequency time and will
+      start again as soon as it completes. Knowing how many objects are in the
+      system is required for this approach to work. The scrubber will use the
+      previous scrubber count of objects as best guess for current.
+    - **Run Once** - Run the scrubber once then turn off. Useful for better
+      control by external scripts to control the schedule. Will still yield after
+      consuming "credits".
+- **Pool Scrubber Frequency** - How frequently the scrubber should run in
+  number of seconds. If a scan takes longer than frequency, it would start
+  again as soon as the previous scan completes.
+- **Pool Credits** - Number of credits consumed before the scrubber yields. Each
+  time a checksum is calculated to verify object data, a credit is consumed.
+- **In Place Correction** - If the number checksum errors is below the Eviction
+  Threshold, DAOS will attempt to repair the corrupted data using replicas if
+  they exist.
+
+The command to create a pool with scrubbing enabled might look like this:
+```bash
+dmg pool create --scm-size 1G --properties=scrub:continuous,scrub-freq:1,scrub-cred:10
+# or
+dmg pool create --scm-size 1G
+dmg pool set-prop ${POOL} --properties=scrub:run_wait
+```
+
+### Container Properties (-> doc/user/container.md)
+- **Container Disable Scrubbing** - If scrubbing is enabled for a pool, a
+  container can disable it for itself.
+
+### Server Config (-> utils/config/daos_server.yml)
+- **Engine SSD Eviction Threshold** - number of distinct silent data corruption
+  events. When a target hits the threshold its corresponding NVMe storage device
+  will be evicted. (Note this is not a pool or container property. It will be
+  configured in the server.yaml configuration file. If this value is 0, then SSD
+  Auto Eviction will not occur. - Default: 10
+
+## Telemetry
+The following telemetry metrics are gathered and can be reported for better
+understanding of how the scrubber is running. They will be gathered at both the
+pool and container level, with the exception of the Scrubber ULT Start.
+### Schedule
+- Scrubber ULT Start - datetime the scrubber service started
+- Scrubber Current Start - datetime the current scrubbing job started
+- Last Duration - how long the last scrubber took to run to completion.
+### Checksum Calculated Counts
+- Total Checksum Count - Total number of checksums calculated over the life
+  of the scrubber.
+- Last Checksum Count - number of checksums calculated during last scrubber job
+- Current Checksum Count - number of checksums calculated so far for the
+  current scrubber job
+### Silent Data Corruption Counts
+- Total Silent Data Corruption - Total number of silent data corruption
+  found while scrubbing object values.
+- Current Silent Data Corruption - number of silent data corruption found so far
+  for the current scrubber job
+
+
+## Design Details & Implementation
+
+### Pool ULT
+The code for the pool ULT is found in `srv_pool_scrub.c`. It can be a bit
+difficult to follow because there are several layers of callback functions due
+to the nature of how ULTs and the vos_iterator work, but the file is organized
+such that functions typically call the function above it (either directly or
+indirectly as a callback). For example (~> is an indirect call, -> is a direct
+call):
+
+```
+ds_start_scrubbing_ult ~> scrubbing_ult -> scrub_pool ~> cont_iter_scrub_cb ->
+    scrub_cont ~> obj_iter_scrub_cb ...
+```
+
+### VOS Layer
+- In order to mark data as corrupted a flag field is added to bio_addr_t which
+  includes a CORRUPTED bit.
+- The vos update api already accepts a flag, so a CORRUPTED flag is added and
+  handled during an update so that, if set, the bio address will be updated to
+  be corrupted. (Documented in src/vos/README.md)
+- On fetch, if a value is already marked corrupted, return -DER_CSUM
+
+### Object Layer
+- When corruption is detected on the server during a fetch, aggregation, or
+  rebuild the server calls VOS to update value as corrupted.
+- (TBD) Add Server Side Verifying on fetch so can know if media or network
+  corruption (note: need something so extents aren't double verified?)
+
+## Testing
+- pool_scrubbing_tests
+- Add scrubbing status to daos_pool_info_t so it can be queried
+
+
+## Debugging
+- In the server.yml configuration file set the following env_vars
+```
+- D_LOG_MASK=DEBUG
+- DD_SUBSYS=pool
+- DD_MASK=csum
 ```

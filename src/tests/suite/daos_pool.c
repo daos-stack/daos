@@ -14,6 +14,15 @@
 #include "daos_test.h"
 #include "daos_iotest.h"
 
+/* To make test indexing with "-u" prop 0 based without changing the test
+ * number of all existing pool tests
+ */
+static void
+do_nothing_test(void **state)
+{
+	return;
+}
+
 /** connect to non-existing pool */
 static void
 pool_connect_nonexist(void **state)
@@ -512,13 +521,16 @@ pool_properties(void **state)
 			SMALL_POOL_SIZE, 0, NULL);
 	assert_rc_equal(rc, 0);
 
-	prop = daos_prop_alloc(1);
+	prop = daos_prop_alloc(2);
 	/* label - set arg->pool_label to use daos_pool_connect() */
 	prop->dpp_entries[0].dpe_type = DAOS_PROP_PO_LABEL;
 	D_STRNDUP_S(prop->dpp_entries[0].dpe_str, label);
 	assert_ptr_not_equal(prop->dpp_entries[0].dpe_str, NULL);
 	D_STRNDUP_S(arg->pool_label, label);
 	assert_ptr_not_equal(arg->pool_label, NULL);
+
+	prop->dpp_entries[1].dpe_type = DAOS_PROP_PO_SCRUB_SCHED;
+	prop->dpp_entries[1].dpe_val = DAOS_SCRUB_SCHED_CONTINUOUS;
 
 #if 0 /* DAOS-5456 space_rb props not supported with dmg pool create */
 	/* change daos_prop_alloc() above, specify 2 entries not 1 */
@@ -597,6 +609,28 @@ pool_properties(void **state)
 	    strncmp(entry->dpe_str, expected_group,
 		    DAOS_ACL_MAX_PRINCIPAL_LEN)) {
 		print_message("Owner-group prop verification failed.\n");
+		assert_int_equal(rc, 1); /* fail the test */
+	}
+
+	entry = daos_prop_entry_get(prop_query, DAOS_PROP_PO_SCRUB_SCHED);
+	if (entry == NULL || entry->dpe_val != DAOS_SCRUB_SCHED_OFF)
+		fail_msg("scrubber sched verification failed.\n");
+
+	entry = daos_prop_entry_get(prop_query, DAOS_PROP_PO_SCRUB_FREQ);
+	if (entry == NULL) {
+		print_message("scrubber frequency verification failed.\n");
+		assert_int_equal(rc, 1); /* fail the test */
+	}
+
+	entry = daos_prop_entry_get(prop_query, DAOS_PROP_PO_SCRUB_CREDITS);
+	if (entry == NULL) {
+		print_message("scrubber credits verification failed.\n");
+		assert_int_equal(rc, 1); /* fail the test */
+	}
+
+	entry = daos_prop_entry_get(prop_query, DAOS_PROP_PO_SCRUB_THRESH);
+	if (entry == NULL) {
+		print_message("scrubber threshold verification failed.\n");
 		assert_int_equal(rc, 1); /* fail the test */
 	}
 
@@ -1264,6 +1298,7 @@ pool_map_refreshes_setup(void **state)
 }
 
 static const struct CMUnitTest pool_tests[] = {
+	{ "POOL0: No-Test", do_nothing_test, NULL, NULL},
 	{ "POOL1: connect to non-existing pool",
 	  pool_connect_nonexist, NULL, test_case_teardown},
 	{ "POOL2: connect/disconnect to pool",

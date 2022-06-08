@@ -1259,6 +1259,9 @@ cont_query_bits(daos_prop_t *prop)
 		case DAOS_PROP_CO_GLOBAL_VERSION:
 			bits |= DAOS_CO_QUERY_PROP_GLOBAL_VERSION;
 			break;
+		case DAOS_PROP_CO_SCRUBBER_DISABLED:
+			bits |= DAOS_CO_QUERY_PROP_SCRUB_DIS;
+			break;
 		default:
 			D_ERROR("ignore bad dpt_type %d.\n", entry->dpe_type);
 			break;

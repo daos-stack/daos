@@ -422,20 +422,19 @@ vos_iter_copy(daos_handle_t ih, vos_iter_entry_t *it_entry,
 }
 
 int
-vos_iter_delete(daos_handle_t ih, void *args)
+vos_iter_process(daos_handle_t ih, vos_iter_proc_op op, void *args)
 {
-	struct vos_iterator *iter = vos_hdl2iter(ih);
-	int rc;
+	struct vos_iterator	*iter = vos_hdl2iter(ih);
+	int			 rc = 0;
+
+	if (iter->it_ops->iop_process == NULL)
+		return -DER_NOSYS;
 
 	rc = iter_verify_state(iter);
 	if (rc)
 		return rc;
 
-	D_ASSERT(iter->it_ops != NULL);
-	if (iter->it_ops->iop_delete == NULL)
-		return -DER_NOSYS;
-
-	return iter->it_ops->iop_delete(iter, args);
+	return iter->it_ops->iop_process(iter, op, args);
 }
 
 int

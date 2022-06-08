@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2020-2021 Intel Corporation.
+ * (C) Copyright 2020-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -1633,6 +1633,8 @@ d_tm_mark_duration_start(struct d_tm_node_t *metric, int clk_id)
 			metric->dtn_name, DP_RC(-DER_OP_NOT_PERMITTED));
 		return;
 	}
+
+	metric->dtn_type = D_TM_DURATION | clk_id;
 
 	d_tm_node_lock(metric);
 	clock_gettime(d_tm_clock_id(metric->dtn_type & ~D_TM_DURATION),

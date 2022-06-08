@@ -983,9 +983,10 @@ vos_iter_copy(daos_handle_t ih, vos_iter_entry_t *entry,
 	      d_iov_t *iov_out);
 
 /**
- * Delete the current data entry of the iterator
+ * Process the operation for the current cursor.
  *
- * \param ih	[IN]	Iterator handle
+ * \param ih	[IN]	Iterator open handle.
+ * \param op	[IN]	op code to process. See vos_iter_proc_op
  * \param args	[IN/OUT]
  *			Optional, Provide additional hints while
  *			deletion to handle special cases.
@@ -995,10 +996,9 @@ vos_iter_copy(daos_handle_t ih, vos_iter_entry_t *entry,
  * \return		Zero on Success
  *			-DER_NONEXIST if cursor does
  *			not exist. negative value if error
- *
  */
 int
-vos_iter_delete(daos_handle_t ih, void *args);
+vos_iter_process(daos_handle_t ih, vos_iter_proc_op op, void *args);
 
 /**
  * If the iterator has any element. The condition provided to vos_iter_prepare
@@ -1188,5 +1188,166 @@ int vos_db_init(const char *db_path);
 int vos_db_init_ex(const char *db_path, const char *db_name, bool force_create,
 		   bool destroy_db_on_fini);
 void vos_db_fini(void);
+
+/**
+ * The following declarations are for checksum scrubbing functions. The function
+ * types provide an interface for injecting dependencies into the
+ * scrubber (srv_pool_scrub.c) from the schedule/ult management
+ * so that it can be more easily tested without depending on the entire daos
+ * engine to be running or waiting for schedules to run.
+ */
+
+struct cont_scrub {
+	struct daos_csummer	*scs_cont_csummer;
+	void			*scs_cont_src;
+	daos_handle_t		 scs_cont_hdl;
+	uuid_t			 scs_cont_uuid;
+};
+
+/*
+ * Because the scrubber operates at the pool level, it will need a way to
+ * get some info for each container within the pool as it's scrubbed.
+ */
+typedef int(*sc_get_cont_fn_t)(uuid_t pool_uuid, uuid_t cont_uuid, void *arg,
+			       struct cont_scrub *cont);
+typedef void(*sc_put_cont_fn_t)(void *cont);
+typedef bool(*sc_cont_is_stopping_fn_t)(void *cont);
+
+typedef int (*sc_sleep_fn_t)(void *, uint32_t msec);
+typedef int (*sc_yield_fn_t)(void *);
+typedef int (*ds_pool_tgt_drain)(struct ds_pool *pool);
+
+
+enum scrub_status {
+	SCRUB_STATUS_UNKNOWN = 0,
+	SCRUB_STATUS_RUNNING = 1,
+	SCRUB_STATUS_NOT_RUNNING = 2,
+};
+
+/*
+ * telemetry metrics for the scrubber
+ * The target must be parsed out by
+ * lib/telemetry/promexp/collector.go:extractLabels(). If the format here
+ * changes, extractLabels() must be updated as well.
+ */
+#define DF_POOL_DIR "%s/tgt_%d/scrubber"
+#define DP_POOL_DIR(ctx) (ctx)->sc_pool->sp_path, \
+			(ctx)->sc_dmi->dmi_tgt_id
+
+#define M_CSUM_COUNTER "csums/current"
+#define M_CSUM_TOTAL_COUNTER "csums/total"
+#define M_CSUM_PREV_COUNTER "csums/prev"
+#define M_CSUM_CORRUPTION "corruption/current"
+#define M_CSUM_TOTAL_CORRUPTION "corruption/total"
+#define M_STARTED "scrubber_started"
+#define M_ENDED "scrubber_finished"
+#define M_LAST_DURATION "last_duration"
+
+#define m_inc_counter(m) d_tm_inc_counter((m), 1)
+#define m_reset_counter(m) d_tm_set_counter((m), 0)
+
+struct scrub_ctx_metrics {
+	struct d_tm_node_t *scm_pool_ult_wait_time;
+	struct d_tm_node_t *scm_start;
+	struct d_tm_node_t *scm_end;
+	struct d_tm_node_t *scm_last_duration;
+	struct d_tm_node_t *scm_csum_calcs;
+	struct d_tm_node_t *scm_total_csum_calcs;
+	struct d_tm_node_t *scm_last_csum_calcs;
+	struct d_tm_node_t *scm_corruption;
+	struct d_tm_node_t *scm_total_corruption;
+	struct d_tm_node_t *scm_scrub_count;
+};
+
+/* Scrub the pool */
+struct scrub_ctx {
+	/**
+	 * Metrics gathered during scrubbing process
+	 */
+	struct scrub_ctx_metrics sc_metrics;
+
+	struct dss_module_info	*sc_dmi;
+
+	/**
+	 * Pool
+	 **/
+	uuid_t			 sc_pool_uuid;
+	daos_handle_t		 sc_vos_pool_hdl;
+	struct ds_pool		*sc_pool; /* Used to get properties */
+	struct timespec		 sc_pool_start_scrub;
+	int			 sc_pool_last_csum_calcs;
+	int			 sc_pool_csum_calcs;
+	uint32_t		 sc_pool_tgt_corrupted_detected;
+	ds_pool_tgt_drain	 sc_drain_pool_tgt_fn;
+
+	/**
+	 * Container
+	 **/
+	/* callback function that will provide the csummer for the container */
+	sc_get_cont_fn_t	 sc_cont_lookup_fn;
+	sc_put_cont_fn_t	 sc_cont_put_fn;
+	sc_cont_is_stopping_fn_t sc_cont_is_stopping_fn;
+	struct cont_scrub	 sc_cont;
+	uuid_t			 sc_cont_uuid;
+
+	/** Number of msec between checksum calculations */
+	daos_size_t		 sc_msec_between_calcs;
+
+	/**
+	 * Object
+	 */
+	daos_unit_oid_t		 sc_cur_oid;
+	daos_key_t		 sc_dkey;
+	struct dcs_csum_info	*sc_csum_to_verify;
+	daos_epoch_t		 sc_epoch;
+	uint16_t		 sc_minor_epoch;
+	daos_iod_t		 sc_iod;
+
+	/* Current vos object iterator */
+	daos_handle_t		 sc_vos_iter_handle;
+
+	/* Schedule controlling function pointers and arg */
+	uint32_t		 sc_credits_left;
+	sc_sleep_fn_t		 sc_sleep_fn;
+	sc_yield_fn_t		 sc_yield_fn;
+	void			*sc_sched_arg;
+
+	enum scrub_status	 sc_status;
+	bool			 sc_did_yield;
+};
+
+/*
+ * It is expected that the pool uuid/handle and any functional dependencies are
+ * set in the scrubbing context. The container/object info should not be set.
+ * This function will iterate over all of the containers in the pool and if
+ * checksums are enabled on the pool, each object in the container will be
+ * scrubbed.
+ */
+int vos_scrub_pool(struct scrub_ctx *ctx);
+
+/*
+ * A generic utility function that, given a start time, duration, number of
+ * periods that can be processed, and the current period index, calculate how
+ * long the caller should wait/sleep in order to fill the space of the current
+ * period.
+ *
+ * Returns number of milliseconds to wait
+ */
+uint64_t
+get_ms_between_periods(struct timespec start_time, struct timespec cur_time,
+		       uint64_t duration_seconds, uint64_t periods_nr,
+		       uint64_t per_idx);
+
+void
+sc_yield_or_sleep(struct scrub_ctx *ctx);
+void
+sc_yield_sleep_while_running(struct scrub_ctx *ctx);
+
+/*
+ * Based on the schedule type, number of checksums already calculated, credits
+ * consumed, might need yield or sleep for a certain amount of time.
+ */
+void
+sc_scrub_sched_control(struct scrub_ctx *ctx);
 
 #endif /* __VOS_API_H */

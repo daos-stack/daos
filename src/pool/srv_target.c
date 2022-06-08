@@ -34,6 +34,7 @@
 #include <daos_srv/daos_mgmt_srv.h>
 #include <daos_srv/vos.h>
 #include <daos_srv/rebuild.h>
+#include <daos_srv/srv_csum.h>
 #include "rpc.h"
 #include "srv_internal.h"
 
@@ -1509,6 +1510,13 @@ ds_pool_tgt_prop_update(struct ds_pool *pool, struct pool_iv_prop *iv_prop)
 		return -DER_MISMATCH;
 	}
 	ret = dss_thread_collective(update_vos_prop_on_targets, pool, 0);
+
+	D_DEBUG(DB_CSUM, "Updating pool to sched: %lu\n",
+		iv_prop->pip_scrub_sched);
+	pool->sp_scrub_sched = iv_prop->pip_scrub_sched;
+	pool->sp_scrub_freq_sec = iv_prop->pip_scrub_freq;
+	pool->sp_scrub_cred = iv_prop->pip_scrub_cred;
+	pool->sp_scrub_thresh = iv_prop->pip_scrub_thresh;
 
 	return ret;
 }
