@@ -231,8 +231,9 @@ int
 daos_event_parent_barrier(struct daos_event *ev);
 
 /**
- * Try to abort operations associated with this event. This currently does not abort any internal
- * DAOS operations and is effectively a no-op.
+ * Try to abort operations associated with this event. The user is still required to wait or poll on
+ * the event after this call.
+ * This currently does not abort any internal DAOS operation and is effectively a no-op.
  *
  * \param ev [IN]	Event (operation) to abort
  *
