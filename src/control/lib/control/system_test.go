@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2021 Intel Corporation.
+// (C) Copyright 2020-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -621,10 +621,18 @@ func TestControl_SystemQuery(t *testing.T) {
 			),
 			expResp: &SystemQueryResp{
 				Members: system.Members{
-					system.NewMember(1, test.MockUUID(1), "", test.MockHostAddr(1), system.MemberStateReady).WithFaultDomain(fds[1]),
-					system.NewMember(2, test.MockUUID(2), "", test.MockHostAddr(1), system.MemberStateReady).WithFaultDomain(fds[2]),
-					system.NewMember(0, test.MockUUID(0), "", test.MockHostAddr(2), system.MemberStateStopped).WithFaultDomain(fds[0]),
-					system.NewMember(3, test.MockUUID(3), "", test.MockHostAddr(2), system.MemberStateStopped).WithFaultDomain(fds[3]),
+					system.MockMemberFullSpec(t, 1, test.MockUUID(1), "",
+						test.MockHostAddr(1), system.MemberStateReady).
+						WithFaultDomain(fds[1]),
+					system.MockMemberFullSpec(t, 2, test.MockUUID(2), "",
+						test.MockHostAddr(1), system.MemberStateReady).
+						WithFaultDomain(fds[2]),
+					system.MockMemberFullSpec(t, 0, test.MockUUID(0), "",
+						test.MockHostAddr(2), system.MemberStateStopped).
+						WithFaultDomain(fds[0]),
+					system.MockMemberFullSpec(t, 3, test.MockUUID(3), "",
+						test.MockHostAddr(2), system.MemberStateStopped).
+						WithFaultDomain(fds[3]),
 				},
 			},
 		},
