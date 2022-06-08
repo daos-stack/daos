@@ -82,16 +82,16 @@ pipeline {
                description: 'The base branch to run weekly-testing against (i.e. master, or a PR\'s branch)')
         booleanParam(name: 'CI_FUNCTIONAL_el7_TEST',
                      defaultValue: true,
-                     description: 'Run the functional CentOS 7 CI tests')
+                     description: 'Run the Functional on CentOS 7 test stage')
         booleanParam(name: 'CI_FUNCTIONAL_el8_TEST',
                      defaultValue: true,
-                     description: 'Run the functional EL 8 CI tests')
+                     description: 'Run the Functional on EL 8 test stage')
         booleanParam(name: 'CI_FUNCTIONAL_leap15_TEST',
                      defaultValue: true,
-                     description: 'Run the functional OpenSUSE Leap 15 CI tests')
+                     description: 'Run the Functional on Leap 15 test stage')
         booleanParam(name: 'CI_FUNCTIONAL_ubuntu20_TEST',
                      defaultValue: false,
-                     description: 'Run the functional Ubuntu 20 CI tests')
+                     description: 'Run the Functional on Ubuntu 20 test stage')
         booleanParam(name: 'CI_small_TEST',
                      defaultValue: true,
                      description: 'Run the CI Functional Hardware Small test stage')
