@@ -585,7 +585,8 @@ def pcmd(hosts, command, verbose=True, timeout=None, expect_rc=0):
     return exit_status
 
 
-def check_file_exists(hosts, filename, user=None, directory=False):
+def check_file_exists(hosts, filename, user=None, directory=False,
+                      sudo=False):
     """Check if a specified file exist on each specified hosts.
 
     If specified, verify that the file exists and is owned by the user.
@@ -594,6 +595,8 @@ def check_file_exists(hosts, filename, user=None, directory=False):
         hosts (list): list of hosts
         filename (str): file to check for the existence of on each host
         user (str, optional): owner of the file. Defaults to None.
+        sudo (bool, optional): whether to run the command via sudo. Defaults to
+            False.
 
     Returns:
         (bool, NodeSet): A tuple of:
@@ -609,6 +612,9 @@ def check_file_exists(hosts, filename, user=None, directory=False):
         command = "test -O {0} && test -d {0}".format(filename)
     elif directory:
         command = "test -d '{0}'".format(filename)
+
+    if sudo:
+        command = "sudo " + command
 
     task = run_task(hosts, command)
     for ret_code, node_list in task.iter_retcodes():
@@ -720,7 +726,7 @@ def check_pool_files(log, hosts, uuid):
     log.info("Checking for pool data on %s", NodeSet.fromlist(hosts))
     pool_files = [uuid, "superblock"]
     for filename in ["/mnt/daos/{}".format(item) for item in pool_files]:
-        result = check_file_exists(hosts, filename)
+        result = check_file_exists(hosts, filename, sudo=True)
         if not result[0]:
             log.error("%s: %s not found", result[1], filename)
             status = False
