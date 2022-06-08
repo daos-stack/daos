@@ -20,6 +20,7 @@ class ConfigGenerateRun(TestWithServers):
 
     :avocado: recursive
     """
+
     def test_config_generate_run(self):
         """Run daos_server with generated server config file.
 
