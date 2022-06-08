@@ -509,7 +509,7 @@ func TestServer_prepBdevStorage(t *testing.T) {
 			}
 
 			// test only with 2M hugepage size
-			if err := cfg.Validate(log, config.ValidateParams{HugePageSize: 2048}); err != nil {
+			if err := cfg.Validate(log, 2048); err != nil {
 				t.Fatal(err)
 			}
 
@@ -626,7 +626,7 @@ func TestServer_scanBdevStorage(t *testing.T) {
 				WithDisableHugePages(tc.disableHugepages)
 
 			// test only with 2M hugepage size
-			if err := cfg.Validate(log, config.ValidateParams{HugePageSize: 2048}); err != nil {
+			if err := cfg.Validate(log, 2048); err != nil {
 				t.Fatal(err)
 			}
 

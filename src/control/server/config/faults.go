@@ -95,11 +95,6 @@ var (
 		"hugepages cannot be disabled if bdevs have been specified in config",
 		"remove nr_hugepages parameter from config to have the value automatically calculated",
 	)
-	FaultConfigControlIfaceRequired = serverConfigFault(
-		code.ServerConfigControlIfaceRequired,
-		"unable to select control plane network interface from multiple interfaces on the same subnet",
-		"specify the control plane network interface with the control_iface parameter in the config",
-	)
 )
 
 func FaultConfigDuplicateFabric(curIdx, seenIdx int) *fault.Fault {

@@ -165,7 +165,6 @@ const (
 	ServerConfigNrHugepagesOutOfRange
 	ServerConfigHugepagesDisabled
 	ServerConfigBadControlIface
-	ServerConfigControlIfaceRequired
 )
 
 // SPDK library bindings codes

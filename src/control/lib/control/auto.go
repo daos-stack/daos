@@ -694,5 +694,5 @@ func genConfig(log logging.Logger, newEngineCfg newEngineCfgFn, accessPoints []s
 		return nil, errors.Wrap(err, "setting engine affinities")
 	}
 
-	return cfg, cfg.Validate(log, config.ValidateParams{HugePageSize: sd.hugePageSize})
+	return cfg, cfg.Validate(log, sd.hugePageSize)
 }

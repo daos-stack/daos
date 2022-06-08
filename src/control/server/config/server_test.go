@@ -24,7 +24,6 @@ import (
 	"github.com/pkg/errors"
 
 	"github.com/daos-stack/daos/src/control/common"
-	"github.com/daos-stack/daos/src/control/common/test"
 	. "github.com/daos-stack/daos/src/control/common/test"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/security"
@@ -118,17 +117,6 @@ func mockConfigFromFile(t *testing.T, path string) (*Server, error) {
 	return c, c.Load()
 }
 
-func testDefaultGetInterfaceAddrs() (map[string][]net.Addr, error) {
-	return map[string][]net.Addr{
-		"net0": {
-			&net.IPNet{
-				IP:   net.ParseIP("127.0.0.1"),
-				Mask: net.IPv4Mask(0xff, 0, 0, 0),
-			},
-		},
-	}, nil
-}
-
 func TestServerConfig_MarshalUnmarshal(t *testing.T) {
 	for name, tt := range map[string]struct {
 		inPath string
@@ -160,10 +148,7 @@ func TestServerConfig_MarshalUnmarshal(t *testing.T) {
 			configA.Path = tt.inPath
 			err := configA.Load()
 			if err == nil {
-				err = configA.Validate(log, ValidateParams{
-					HugePageSize:      defHugePageInfo.PageSizeKb,
-					getInterfaceAddrs: testDefaultGetInterfaceAddrs,
-				})
+				err = configA.Validate(log, defHugePageInfo.PageSizeKb)
 			}
 
 			CmpErr(t, tt.expErr, err)
@@ -194,10 +179,7 @@ func TestServerConfig_MarshalUnmarshal(t *testing.T) {
 
 			err = configB.Load()
 			if err == nil {
-				err = configB.Validate(log, ValidateParams{
-					HugePageSize:      defHugePageInfo.PageSizeKb,
-					getInterfaceAddrs: testDefaultGetInterfaceAddrs,
-				})
+				err = configB.Validate(log, defHugePageInfo.PageSizeKb)
 			}
 
 			if err != nil {
@@ -354,10 +336,9 @@ func TestServerConfig_Validation(t *testing.T) {
 	noopExtra := func(c *Server) *Server { return c }
 
 	for name, tt := range map[string]struct {
-		extraConfig   func(c *Server) *Server
-		getIfaceAddrs func() (map[string][]net.Addr, error)
-		expConfig     *Server
-		expErr        error
+		extraConfig func(c *Server) *Server
+		expConfig   *Server
+		expErr      error
 	}{
 		"example config": {},
 		"nil engine entry": {
@@ -740,36 +721,6 @@ func TestServerConfig_Validation(t *testing.T) {
 					),
 				),
 		},
-		"multiple ifaces on the same subnet": {
-			extraConfig: func(c *Server) *Server {
-				return c.WithControlInterface("").
-					WithEngines(defaultEngineCfg().
-						WithStorage(
-							storage.NewTierConfig().
-								WithStorageClass("ram").
-								WithScmRamdiskSize(1).
-								WithScmMountPoint("/foo"),
-						),
-					)
-			},
-			getIfaceAddrs: func() (map[string][]net.Addr, error) {
-				return map[string][]net.Addr{
-					"net0": {
-						&net.IPNet{
-							IP:   net.ParseIP("10.2.3.1"),
-							Mask: net.IPv4Mask(0xff, 0xff, 0, 0),
-						},
-					},
-					"net1": {
-						&net.IPNet{
-							IP:   net.ParseIP("10.2.4.5"),
-							Mask: net.IPv4Mask(0xff, 0xff, 0, 0),
-						},
-					},
-				}, nil
-			},
-			expErr: FaultConfigControlIfaceRequired,
-		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
@@ -779,17 +730,10 @@ func TestServerConfig_Validation(t *testing.T) {
 				tt.extraConfig = noopExtra
 			}
 
-			if tt.getIfaceAddrs == nil {
-				tt.getIfaceAddrs = testDefaultGetInterfaceAddrs
-			}
-
 			// Apply extra config test case
 			dupe := tt.extraConfig(baseCfg())
 
-			CmpErr(t, tt.expErr, dupe.Validate(log, ValidateParams{
-				HugePageSize:      defHugePageInfo.PageSizeKb,
-				getInterfaceAddrs: tt.getIfaceAddrs,
-			}))
+			CmpErr(t, tt.expErr, dupe.Validate(log, defHugePageInfo.PageSizeKb))
 			if tt.expErr != nil || tt.expConfig == nil {
 				return
 			}
@@ -1089,10 +1033,7 @@ func TestServerConfig_Parsing(t *testing.T) {
 			}
 
 			config = tt.extraConfig(config)
-			CmpErr(t, tt.expValidateErr, config.Validate(log, ValidateParams{
-				HugePageSize:      defHugePageInfo.PageSizeKb,
-				getInterfaceAddrs: testDefaultGetInterfaceAddrs,
-			}))
+			CmpErr(t, tt.expValidateErr, config.Validate(log, defHugePageInfo.PageSizeKb))
 
 			if tt.expCheck != nil {
 				if err := tt.expCheck(config); err != nil {
@@ -1295,10 +1236,7 @@ func TestServerConfig_DuplicateValues(t *testing.T) {
 				WithFabricProvider("test").
 				WithEngines(tc.configA, tc.configB)
 
-			gotErr := conf.Validate(log, ValidateParams{
-				HugePageSize:      defHugePageInfo.PageSizeKb,
-				getInterfaceAddrs: testDefaultGetInterfaceAddrs,
-			})
+			gotErr := conf.Validate(log, defHugePageInfo.PageSizeKb)
 			CmpErr(t, tc.expErr, gotErr)
 		})
 	}
@@ -1661,98 +1599,6 @@ func TestConfig_SetEngineAffinities(t *testing.T) {
 					t.Errorf("unexpected fabric numa node set (-want +got):\n%s", diff)
 				}
 			}
-		})
-	}
-}
-
-func TestConfig_interfacesOnSameSubnet(t *testing.T) {
-	ip6Mask := [16]byte{}
-	ip6Mask[0] = 0xff
-
-	for name, tc := range map[string]struct {
-		ifaceAddrs map[string][]net.Addr
-		expResult  bool
-	}{
-		"empty": {},
-		"single interface": {
-			ifaceAddrs: map[string][]net.Addr{
-				"net0": {
-					&net.IPNet{
-						IP:   net.ParseIP("127.0.0.1"),
-						Mask: net.IPv4Mask(0xff, 0, 0, 0),
-					},
-					&net.IPNet{
-						IP:   net.ParseIP("127.0.0.2"),
-						Mask: net.IPv4Mask(0xff, 0, 0, 0),
-					},
-				},
-			},
-		},
-		"interface subnet match": {
-			ifaceAddrs: map[string][]net.Addr{
-				"net0": {
-					&net.IPNet{
-						IP:   net.ParseIP("127.0.0.1"),
-						Mask: net.IPv4Mask(0xff, 0, 0, 0),
-					},
-				},
-				"net1": {
-					&net.IPNet{
-						IP:   net.ParseIP("127.0.0.2"),
-						Mask: net.IPv4Mask(0xff, 0, 0, 0),
-					},
-				},
-			},
-			expResult: true,
-		},
-		"interface subnets don't match": {
-			ifaceAddrs: map[string][]net.Addr{
-				"net0": {
-					&net.IPNet{
-						IP:   net.ParseIP("127.0.0.1"),
-						Mask: net.IPv4Mask(0xff, 0, 0, 0),
-					},
-				},
-				"net1": {
-					&net.IPNet{
-						IP:   net.ParseIP("10.0.0.2"),
-						Mask: net.IPv4Mask(0xff, 0, 0, 0),
-					},
-				},
-			},
-		},
-		"only ipv6 matches": {
-			ifaceAddrs: map[string][]net.Addr{
-				"net0": {
-					&net.IPNet{
-						IP:   net.ParseIP("127.0.0.1"),
-						Mask: net.IPv4Mask(0xff, 0, 0, 0),
-					},
-					&net.IPNet{
-						IP:   net.ParseIP("fe80::21e:67ff:fefc:fdc2"),
-						Mask: ip6Mask[:],
-					},
-				},
-				"net1": {
-					&net.IPNet{
-						IP:   net.ParseIP("10.0.0.2"),
-						Mask: net.IPv4Mask(0xff, 0, 0, 0),
-					},
-					&net.IPNet{
-						IP:   net.ParseIP("fe80::211:7501:176:b851"),
-						Mask: ip6Mask[:],
-					},
-				},
-			},
-		},
-	} {
-		t.Run(name, func(t *testing.T) {
-			log, buf := logging.NewTestLogger(t.Name())
-			defer ShowBufferOnFailure(t, buf)
-
-			result := interfacesOnSameSubnet(log, tc.ifaceAddrs)
-
-			test.AssertEqual(t, tc.expResult, result, "")
 		})
 	}
 }
