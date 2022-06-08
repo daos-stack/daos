@@ -1,6 +1,6 @@
 #!/usr/bin/python3
 """
-(C) Copyright 2021 Intel Corporation.
+(C) Copyright 2021-2022 Intel Corporation.
 
 SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -82,7 +82,7 @@ class TestWithScrubber(IorTestBase):
             self.add_pool()
         self.add_container(pool=self.pool, create=False)
         if pool_prop is None:
-            pool_prop = "scrub:continuous,scrub-freq:1,scrub-cred:10"
+            pool_prop = "scrub:timed,scrub-freq:1"
         if cont_prop is None:
             cont_prop = "cksum:crc16"
         x = pool_prop.split(",")
