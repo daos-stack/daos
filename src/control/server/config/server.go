@@ -14,6 +14,7 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 
 	"github.com/pkg/errors"
 	yaml "gopkg.in/yaml.v2"
@@ -180,7 +181,7 @@ func (cfg *Server) WithAccessPoints(aps ...string) *Server {
 	return cfg
 }
 
-// WithControlPort sets the network interface for control plane communications.
+// WithControlInterface sets the network interface for control plane communications.
 func (cfg *Server) WithControlInterface(iface string) *Server {
 	cfg.ControlInterface = iface
 	return cfg
@@ -412,8 +413,15 @@ func getAccessPointAddrWithPort(log logging.Logger, addr string, portDefault int
 	return addr, nil
 }
 
+// ValidateParams contains the parameters for the Validate function.
+type ValidateParams struct {
+	HugePageSize int
+
+	getInterfaceAddrs func() (map[string][]net.Addr, error)
+}
+
 // Validate asserts that config meets minimum requirements.
-func (cfg *Server) Validate(log logging.Logger, hugePageSize int) (err error) {
+func (cfg *Server) Validate(log logging.Logger, params ValidateParams) (err error) {
 	msg := "validating config file"
 	if cfg.Path != "" {
 		msg += fmt.Sprintf(" read from %q", cfg.Path)
@@ -435,7 +443,7 @@ func (cfg *Server) Validate(log logging.Logger, hugePageSize int) (err error) {
 			"\"engines\" instead")
 	}
 
-	if err := cfg.validateControlIface(log); err != nil {
+	if err := cfg.validateControlIface(log, params); err != nil {
 		return err
 	}
 
@@ -556,7 +564,7 @@ func (cfg *Server) Validate(log logging.Logger, hugePageSize int) (err error) {
 		}
 
 		// Calculate minimum number of hugepages for all configured engines.
-		minHugePages, err := common.CalcMinHugePages(hugePageSize, cfgTargetCount)
+		minHugePages, err := common.CalcMinHugePages(params.HugePageSize, cfgTargetCount)
 		if err != nil {
 			return err
 		}
@@ -583,8 +591,20 @@ func (cfg *Server) Validate(log logging.Logger, hugePageSize int) (err error) {
 	return nil
 }
 
-func (cfg *Server) validateControlIface(log logging.Logger) error {
+func (cfg *Server) validateControlIface(log logging.Logger, params ValidateParams) error {
 	if cfg.ControlInterface == "" {
+		if params.getInterfaceAddrs == nil {
+			params.getInterfaceAddrs = getInterfaceAddrs
+		}
+
+		ifaceAddrs, err := params.getInterfaceAddrs()
+		if err != nil {
+			return err
+		}
+
+		if interfacesOnSameSubnet(log, ifaceAddrs) {
+			return FaultConfigControlIfaceRequired
+		}
 		return nil
 	}
 
@@ -595,6 +615,50 @@ func (cfg *Server) validateControlIface(log logging.Logger) error {
 	}
 
 	return nil
+}
+
+func getInterfaceAddrs() (map[string][]net.Addr, error) {
+	ifaces, err := net.Interfaces()
+	if err != nil {
+		return nil, err
+	}
+
+	addrs := make(map[string][]net.Addr, 0)
+	for _, iface := range ifaces {
+		ifaceAddrs, err := iface.Addrs()
+		if err != nil {
+			return nil, err
+		}
+		addrs[iface.Name] = ifaceAddrs
+	}
+	return addrs, nil
+}
+
+func interfacesOnSameSubnet(log logging.Logger, ifaceAddrs map[string][]net.Addr) bool {
+	subnets := make(map[string]common.StringSet)
+	for iface, addrs := range ifaceAddrs {
+		for _, addr := range addrs {
+			if ipNet, ok := addr.(*net.IPNet); ok {
+				if ip4 := ipNet.IP.To4(); ip4 == nil {
+					// FIXME: Skip IPv6 addresses - We use exclusively IPv4.
+					continue
+				}
+
+				subnet := ipNet.IP.Mask(ipNet.Mask).String()
+				if _, exists := subnets[subnet]; !exists {
+					subnets[subnet] = common.NewStringSet(iface)
+				}
+				subnets[subnet].Add(iface)
+				log.Debugf("interface %s, subnet %s", iface, subnet)
+				if len(subnets[subnet]) > 1 {
+					log.Errorf("interfaces [%s] are on the same subnet [%s]",
+						strings.Join(subnets[subnet].ToSlice(), ", "), subnet)
+					return true
+				}
+			}
+		}
+	}
+	return false
 }
 
 // validateMultiServerConfig performs an extra level of validation for multi-server configs. The
