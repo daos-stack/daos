@@ -1236,10 +1236,13 @@ enum scrub_status {
 			(ctx)->sc_dmi->dmi_tgt_id
 
 #define M_CSUM_COUNTER "csums/current"
-#define M_CSUM_TOTAL_COUNTER "csums/total"
-#define M_CSUM_PREV_COUNTER "csums/prev"
+#define M_CSUM_COUNTER_TOTAL "csums/total"
+#define M_CSUM_COUNTER_PREV "csums/prev"
+#define M_BYTES_SCRUBBED "bytes_scrubbed/current"
+#define M_BYTES_SCRUBBED_TOTAL "bytes_scrubbed/total"
+#define M_BYTES_SCRUBBED_PREV "bytes_scrubbed/prev"
 #define M_CSUM_CORRUPTION "corruption/current"
-#define M_CSUM_TOTAL_CORRUPTION "corruption/total"
+#define M_CSUM_CORRUPTION_TOTAL "corruption/total"
 #define M_STARTED "scrubber_started"
 #define M_ENDED "scrubber_finished"
 #define M_LAST_DURATION "last_duration"
@@ -1253,10 +1256,13 @@ struct scrub_ctx_metrics {
 	struct d_tm_node_t *scm_end;
 	struct d_tm_node_t *scm_last_duration;
 	struct d_tm_node_t *scm_csum_calcs;
-	struct d_tm_node_t *scm_total_csum_calcs;
-	struct d_tm_node_t *scm_last_csum_calcs;
+	struct d_tm_node_t *scm_csum_calcs_last;
+	struct d_tm_node_t *scm_csum_calcs_total;
+	struct d_tm_node_t *scm_bytes_scrubbed;
+	struct d_tm_node_t *scm_bytes_scrubbed_last;
+	struct d_tm_node_t *scm_bytes_scrubbed_total;
 	struct d_tm_node_t *scm_corruption;
-	struct d_tm_node_t *scm_total_corruption;
+	struct d_tm_node_t *scm_corruption_total;
 	struct d_tm_node_t *scm_scrub_count;
 };
 
@@ -1279,6 +1285,7 @@ struct scrub_ctx {
 	struct timespec		 sc_pool_start_scrub;
 	int			 sc_pool_last_csum_calcs;
 	int			 sc_pool_csum_calcs;
+	uint64_t		 sc_bytes_scrubbed;
 	uint32_t		 sc_pool_tgt_corrupted_detected;
 	ds_pool_tgt_drain	 sc_drain_pool_tgt_fn;
 

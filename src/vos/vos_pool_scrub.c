@@ -31,6 +31,22 @@ sc_scrub_count_inc(struct scrub_ctx *ctx)
 	ctx->sc_pool_scrub_count++;
 }
 
+static inline void
+sc_scrub_bytes_scrubbed(struct scrub_ctx *ctx, uint64_t bytes)
+{
+	ctx->sc_bytes_scrubbed += bytes;
+	d_tm_inc_counter(ctx->sc_metrics.scm_bytes_scrubbed, bytes);
+	d_tm_inc_counter(ctx->sc_metrics.scm_bytes_scrubbed_total, bytes);
+}
+
+static inline void
+sc_scrub_bytes_scrubbed_reset(struct scrub_ctx *ctx)
+{
+	d_tm_set_counter(ctx->sc_metrics.scm_bytes_scrubbed_last, ctx->sc_bytes_scrubbed);
+	d_tm_set_counter(ctx->sc_metrics.scm_bytes_scrubbed, 0);
+	ctx->sc_bytes_scrubbed = 0;
+}
+
 static inline bool
 sc_is_idle(struct scrub_ctx *ctx)
 {
@@ -55,7 +71,7 @@ sc_m_pool_stop(struct scrub_ctx *ctx)
 	ctx->sc_pool_last_csum_calcs = ctx->sc_pool_csum_calcs;
 
 	d_tm_mark_duration_end(ctx->sc_metrics.scm_last_duration);
-	d_tm_set_counter(ctx->sc_metrics.scm_last_csum_calcs, ctx->sc_pool_last_csum_calcs);
+	d_tm_set_counter(ctx->sc_metrics.scm_csum_calcs_last, ctx->sc_pool_last_csum_calcs);
 
 	d_tm_record_timestamp(ctx->sc_metrics.scm_end);
 }
@@ -64,14 +80,14 @@ static void
 sc_m_pool_csum_inc(struct scrub_ctx *ctx)
 {
 	m_inc_counter(ctx->sc_metrics.scm_csum_calcs);
-	m_inc_counter(ctx->sc_metrics.scm_total_csum_calcs);
+	m_inc_counter(ctx->sc_metrics.scm_csum_calcs_total);
 }
 
 static void
 sc_m_pool_corr_inc(struct scrub_ctx *ctx)
 {
 	m_inc_counter(ctx->sc_metrics.scm_corruption);
-	m_inc_counter(ctx->sc_metrics.scm_total_corruption);
+	m_inc_counter(ctx->sc_metrics.scm_corruption_total);
 }
 
 static void
@@ -307,7 +323,7 @@ sc_handle_corruption(struct scrub_ctx *ctx)
 			ctx->sc_pool_tgt_corrupted_detected,
 			sc_thresh(ctx));
 		d_tm_set_counter(ctx->sc_metrics.scm_csum_calcs, 0);
-		d_tm_set_counter(ctx->sc_metrics.scm_last_csum_calcs, 0);
+		d_tm_set_counter(ctx->sc_metrics.scm_csum_calcs_last, 0);
 		rc = sc_pool_drain(ctx);
 		if (rc != 0)
 			D_ERROR("Drain error: "DF_RC"\n", DP_RC(rc));
@@ -370,12 +386,13 @@ sc_verify_recx(struct scrub_ctx *ctx, d_iov_t *data)
 			  rec_in_chunk * rec_len);
 		D_ASSERT(processed_bytes + chunk_iov.iov_len <= data->iov_len);
 
-		rc = daos_csummer_calc_for_iov(sc_csummer(ctx), &chunk_iov,
-					       csum_buf, csum_len);
+		rc = daos_csummer_calc_for_iov(sc_csummer(ctx), &chunk_iov, csum_buf, csum_len);
 		if (rc != 0) {
 			D_ERROR("daos_csummer_calc_for_iov error: "DF_RC"\n", DP_RC(rc));
 			D_GOTO(done, rc);
 		}
+
+		sc_scrub_bytes_scrubbed(ctx, chunk_iov.iov_len);
 
 		match = daos_csummer_csum_compare(sc_csummer(ctx), orig_csum, csum_buf, csum_len);
 
@@ -413,6 +430,8 @@ sc_verify_sv(struct scrub_ctx *ctx, d_iov_t *data)
 	if (rc == -DER_CSUM)
 		rc = sc_handle_corruption(ctx);
 	sc_verify_finish(ctx);
+
+	sc_scrub_bytes_scrubbed(ctx, data->iov_len);
 
 	return rc;
 }
@@ -753,6 +772,7 @@ sc_pool_start(struct scrub_ctx *ctx)
 
 	sc_m_pool_csum_reset(ctx);
 	sc_m_pool_start(ctx);
+	sc_scrub_bytes_scrubbed_reset(ctx);
 	ctx->sc_status = SCRUB_STATUS_RUNNING;
 	sc_reset_iterator_checks(ctx);
 }
