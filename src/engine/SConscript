@@ -10,8 +10,6 @@ def scons():
 
     denv = env.Clone()
 
-    if denv["STACK_MMAP"] == 1:
-        denv.Append(CCFLAGS=['-DULT_MMAP_STACK'])
     denv.Append(CPPDEFINES=['-DDAOS_PMEM_BUILD'])
     libraries = ['daos_common_pmem', 'gurt', 'cart', 'vos_srv']
     libraries += ['bio', 'dl', 'uuid', 'pthread', 'abt']
@@ -26,16 +24,21 @@ def scons():
     # Add runtime paths for daos libraries
     denv.AppendUnique(RPATH_FULL=['$PREFIX/lib64/daos_srv'])
 
+    sources = ['drpc_client.c', 'drpc_ras.c',
+               'drpc_handler.c', 'drpc_listener.c',
+               'drpc_progress.c', 'init.c', 'module.c',
+               'srv_cli.c', 'profile.c', 'rpc.c',
+               'server_iv.c', 'srv.c', 'srv.pb-c.c', 'tls.c',
+               'sched.c', 'ult.c', 'event.pb-c.c',
+               'srv_metrics.c'] + libdaos_tgts
+
+    if denv["STACK_MMAP"] == 1:
+        denv.Append(CCFLAGS=['-DULT_MMAP_STACK'])
+        sources += ['stack_mmap_XStream.c']
+
     # Generate I/O Engine program
     engine = daos_build.program(denv, 'daos_engine',
-                                ['drpc_client.c', 'drpc_ras.c',
-                                 'drpc_handler.c', 'drpc_listener.c',
-                                 'drpc_progress.c', 'init.c', 'module.c',
-                                 'srv_cli.c', 'profile.c', 'rpc.c',
-                                 'server_iv.c', 'srv.c', 'srv.pb-c.c', 'tls.c',
-                                 'sched.c', 'ult.c', 'event.pb-c.c',
-                                 'srv_metrics.c', 'stack_mmap.c'] + libdaos_tgts,
-                                LIBS=libraries)
+                                sources, LIBS=libraries)
     denv.Install('$PREFIX/bin', engine)
 
     if prereqs.test_requested():

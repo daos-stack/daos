@@ -38,6 +38,10 @@ daos_unit_oid_t	*ts_uoids;	/* object shard IDs */
 bool		ts_in_ult;	/* Run tests in ULT mode */
 static ABT_xstream	abt_xstream;
 
+#ifdef ULT_MMAP_STACK
+struct stack_pool *sp;
+#endif
+
 static int
 ts_abt_init(void)
 {
@@ -202,7 +206,7 @@ vos_update_or_fetch(int obj_idx, enum ts_op_type op_type,
 	ult_arg.epoch = epoch;
 	ult_arg.duration = duration;
 	ult_arg.obj_idx = obj_idx;
-	rc = daos_abt_thread_create_on_xstream(abt_xstream,
+	rc = daos_abt_thread_create_on_xstream(sp, abt_xstream,
 					       vos_update_or_fetch_ult,
 					       &ult_arg, ABT_THREAD_ATTR_NULL,
 					       &thread);
@@ -854,6 +858,12 @@ main(int argc, char **argv)
 
 	ts_update_or_fetch_fn = vos_update_or_fetch;
 
+#ifdef ULT_MMAP_STACK
+	rc = stack_pool_create(&sp);
+	if (rc)
+		return -1;
+#endif
+
 	rc = dts_ctx_init(&ts_ctx, &vos_engine);
 	if (rc)
 		return -1;
@@ -916,6 +926,9 @@ main(int argc, char **argv)
 	stride_buf_fini();
 	dts_ctx_fini(&ts_ctx);
 
+#ifdef ULT_MMAP_STACK
+	stack_pool_destroy(sp);
+#endif
 	MPI_Finalize();
 
 	if (ts_uoids)

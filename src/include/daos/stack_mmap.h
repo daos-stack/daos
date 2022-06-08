@@ -6,7 +6,7 @@
 /**
  * This file is part of daos
  *
- * src/include/daos/stack_mmap.h
+ * src/engine/stack_mmap.h
  */
 
 /*
@@ -23,19 +23,65 @@
  * the requested stack size.
  * The free stacks list is drained upon a certain number of free stacks or
  * upon a certain percentage of free stacks.
+ * There is one stacks free-list per-engine to allow lock-less management.
  */
 
 #ifdef ULT_MMAP_STACK
 #include <sys/mman.h>
+#include <search.h>
 #include <abt.h>
+#include <gurt/atomic.h>
+
+/* the minimum value for vm.max_map_count to allow for mmap()'ed ULT stacks
+ * usage. In fact, DEFAULT_MAX_MAP_COUNT, the Kernel's default value !!
+ */
+#define MIN_VM_MAX_MAP_COUNT 65530
+
+/* max percent of free stacks vs total currently allocated */
+#define MAX_PERCENT_FREE_STACKS 20
+
+/* max nb of free stacks per-XStream */
+#define MAX_NUMBER_FREE_STACKS 2000
+
+/* per-engine max number of mmap()'ed ULTs stacks */
+extern int max_nb_mmap_stacks;
+
+/* engine's current number of mmap()'ed ULTs stacks */
+extern ATOMIC int nb_mmap_stacks;
+
+/* engine's current number of free mmap()'ed ULTs stacks */
+extern ATOMIC int nb_free_stacks;
 
 /* mmap()'ed stacks can allow for a bigger size with no impact on
  * memory footprint if unused
  */
-#define MMAPED_ULT_STACK_SIZE (2 * 1024 * 1024)
+#define MMAPED_ULT_STACK_SIZE (1 * 1024 * 1024)
 
 /* ABT_key for mmap()'ed ULT stacks */
 extern ABT_key stack_key;
+
+extern bool daos_ult_mmap_stack;
+
+/* pool of free stacks, is a binary tree */
+struct stack_pool_by_size {
+	/* size of stacks in sub-pool */
+	size_t stack_size;
+	/* list of sizes */
+	d_list_t size_list;
+	/* per-size free-list of stacks */
+	d_list_t stack_free_list;
+};
+
+struct stack_pool {
+	/* root of binary tree */
+	void *root;
+	/* nb of free stacks in pool */
+	uint64_t free_stacks;
+	/* nb of sizes in pool */
+	uint nb_sizes;
+	/* list of sizes */
+	d_list_t stack_size_list;
+};
 
 /* since being allocated before start of stack its size must be a
  * multiple of (void *) !!
@@ -45,27 +91,35 @@ typedef struct {
 	size_t stack_size;
 	void (*thread_func)(void *);
 	void *thread_arg;
+	/* per-size free-list of stacks */
 	d_list_t stack_list;
+	/* pool of stack */
+	struct stack_pool *sp;
 } mmap_stack_desc_t;
 
-/* pool of free stacks */
-extern pthread_mutex_t stack_free_list_lock;
-extern d_list_t stack_free_list;
-
+/* these functions have 2 versions, with or without XStream aupport */
 void free_stack(void *arg);
+void mmap_stack_wrapper(void *arg);
 
-int mmap_stack_thread_create(ABT_pool pool, void (*thread_func)(void *),
-			     void *thread_arg, ABT_thread_attr attr,
-			     ABT_thread *newthread);
+void free_stack_in_pool(mmap_stack_desc_t *desc, struct stack_pool *sp);
 
-int mmap_stack_thread_create_on_xstream(ABT_xstream xstream,
+int mmap_stack_thread_create(struct stack_pool *sp, ABT_pool pool,
+			     void (*thread_func)(void *), void *thread_arg,
+			     ABT_thread_attr attr, ABT_thread *newthread);
+
+int mmap_stack_thread_create_on_xstream(struct stack_pool *sp,
+					ABT_xstream xstream,
 					void (*thread_func)(void *),
 					void *thread_arg, ABT_thread_attr attr,
 					ABT_thread *newthread);
 
+int stack_pool_create(struct stack_pool **sp);
+
+void stack_pool_destroy(struct stack_pool *sp);
+
 #define daos_abt_thread_create mmap_stack_thread_create
 #define daos_abt_thread_create_on_xstream mmap_stack_thread_create_on_xstream
-#else
-#define daos_abt_thread_create ABT_thread_create
-#define daos_abt_thread_create_on_xstream ABT_thread_create_on_xstream
+#else /* !defined(ULT_MMAP_STACK) */
+#define daos_abt_thread_create(sc, ...) ABT_thread_create(__VA_ARGS__)
+#define daos_abt_thread_create_on_xstream(sc, ...) ABT_thread_create_on_xstream(__VA_ARGS__)
 #endif

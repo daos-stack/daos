@@ -26,11 +26,12 @@ def build_daos_common(env, client, prereqs):
         denv.Append(OBJPREFIX="v_")
         libname = 'libdaos_common_pmem'
         prereqs.require(denv, 'pmdk')
-        if denv["STACK_MMAP"] == 1:
-            common_libs.extend(['abt'])
-            COMMON_FILES_COPY.append('stack_mmap.c')
-            prereqs.require(denv, 'argobots')
-            denv.Append(CCFLAGS=['-DULT_MMAP_STACK'])
+
+    if denv["STACK_MMAP"] == 1:
+        common_libs.extend(['abt'])
+        COMMON_FILES_COPY.extend(['stack_mmap.c', 'stack_mmap_noXStream.c'])
+        prereqs.require(denv, 'argobots')
+        denv.Append(CCFLAGS=['-DULT_MMAP_STACK'])
 
     common = daos_build.library(denv, libname, COMMON_FILES_COPY,
                                 LIBS=common_libs)

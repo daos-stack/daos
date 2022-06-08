@@ -31,6 +31,7 @@ static int		opt_stack;
 static int		opt_cr_type;
 #ifdef ULT_MMAP_STACK
 static int		opt_mmap;
+static struct stack_pool *sp;
 #endif
 
 static inline uint64_t
@@ -54,7 +55,7 @@ abt_thread_1(void *arg)
 
 #ifdef ULT_MMAP_STACK
 		if (opt_mmap)
-			mmap_stack_thread_create(abt_pool, abt_thread_1, NULL,
+			mmap_stack_thread_create(sp, abt_pool, abt_thread_1, NULL,
 						 abt_attr, NULL);
 		else
 #endif
@@ -117,7 +118,7 @@ abt_ult_create_rate(void)
 
 #ifdef ULT_MMAP_STACK
 		if (opt_mmap)
-			rc = mmap_stack_thread_create(abt_pool, abt_thread_1,
+			rc = mmap_stack_thread_create(sp, abt_pool, abt_thread_1,
 						      NULL, abt_attr, NULL);
 		else
 #endif
@@ -200,7 +201,7 @@ abt_sched_rate(void)
 
 #ifdef ULT_MMAP_STACK
 		if (opt_mmap)
-			rc = mmap_stack_thread_create(abt_pool, abt_thread_2,
+			rc = mmap_stack_thread_create(sp, abt_pool, abt_thread_2,
 						      NULL,
 						      ABT_THREAD_ATTR_NULL,
 						      NULL);
@@ -423,6 +424,13 @@ main(int argc, char **argv)
 #endif
 	}
 
+#ifdef ULT_MMAP_STACK
+	rc = stack_pool_create(&sp);
+	if (rc) {
+		fprintf(stderr, "unable to create stack pool: %d\n", rc);
+		return -1;
+	}
+#endif
 	switch (test_id) {
 	default:
 		break;
@@ -463,7 +471,7 @@ main(int argc, char **argv)
 	abt_waiting = true;
 #ifdef ULT_MMAP_STACK
 	if (opt_mmap)
-		rc = mmap_stack_thread_create(abt_pool, abt_lock_create_rate,
+		rc = mmap_stack_thread_create(sp, abt_pool, abt_lock_create_rate,
 					      NULL, ABT_THREAD_ATTR_NULL, NULL);
 	else
 #endif
@@ -482,5 +490,8 @@ out:
 	ABT_mutex_free(&abt_lock);
 	ABT_cond_free(&abt_cond);
 	ABT_finalize();
+#ifdef ULT_MMAP_STACK
+	stack_pool_destroy(sp);
+#endif
 	return 0;
 }

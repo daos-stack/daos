@@ -7,7 +7,7 @@
 #define __DAOS_SRV_INTERNAL__
 
 #include <daos_srv/daos_engine.h>
-#include "stack_mmap.h"
+#include <daos/stack_mmap.h>
 #include <gurt/telemetry_common.h>
 
 /**
@@ -82,8 +82,7 @@ struct dss_xstream {
 	bool			dx_dsc_started;	/* DSC progress ULT started */
 #ifdef ULT_MMAP_STACK
 	/* per-xstream pool of free stacks */
-	d_list_t		stack_free_list;
-	uint64_t		free_stacks;
+	struct stack_pool	*dx_sp;
 #endif
 	bool			dx_progress_started;	/* Network poll started */
 };
@@ -262,7 +261,7 @@ sched_create_thread(struct dss_xstream *dx, void (*func)(void *), void *arg,
 		/* Atomic integer assignment from different xstream */
 		info->si_stats.ss_busy_ts = info->si_cur_ts;
 
-	rc = daos_abt_thread_create(dx, abt_pool, func, arg, t_attr, thread);
+	rc = daos_abt_thread_create(dx->dx_sp, abt_pool, func, arg, t_attr, thread);
 	return dss_abterr2der(rc);
 }
 
