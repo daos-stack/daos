@@ -7,18 +7,6 @@
 %global libfabric_version 1.15.1-1
 %global __python %{__python3}
 
-%if 0%{?rhel} > 0
-%if 0%{?rhel} > 7
-# only RHEL 8+ has a new enough ucx-devel
-%global ucx 1
-%else
-%global ucx 0
-%endif
-%else
-# but assume that anything else does also
-%global ucx 1
-%endif
-
 %if (0%{?rhel} >= 8)
 # https://bugzilla.redhat.com/show_bug.cgi?id=1955184
 %define _use_internal_dependency_generator 0
@@ -27,7 +15,7 @@
 
 Name:          daos
 Version:       2.1.102
-Release:       4%{?relval}%{?dist}
+Release:       5%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       BSD-2-Clause-Patent
@@ -143,14 +131,13 @@ BuildRequires: libpsm_infinipath1
 %endif
 %endif
 %endif
-%if 0%{ucx} > 0
+
 %if (0%{?suse_version} > 0)
 BuildRequires: libucp-devel
 BuildRequires: libucs-devel
 BuildRequires: libuct-devel
 %else
 BuildRequires: ucx-devel
-%endif
 %endif
 
 Requires: protobuf-c
@@ -574,6 +561,9 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 # No files in a shim package
 
 %changelog
+* Thu Jun 2 2022 Jeff Olivier <jeffrey.v.olivier@intel.com> 2.1.102-5
+- Make ucx required for build on all platforms
+
 * Fri May 27 2022 Lei Huang <lei.huang@intel.com> 2.1.102-4
 - Update libfabric to v1.15.1-1 to include critical performance patches
 
