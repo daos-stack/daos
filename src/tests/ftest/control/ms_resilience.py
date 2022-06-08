@@ -108,16 +108,11 @@ class ManagementServiceResilience(TestWithServers):
 
         """
         l_hostname = self.get_leader()
-        self.log.debug("<<<verify_leader>>> replicas                       = %s", replicas)
-        self.log.debug("<<<verify_leader>>> l_hostname                     = %s", l_hostname)
-        self.log.debug("<<<verify_leader>>> l_hostname.issubset(replicas)  = %s", l_hostname.issubset(replicas))
         start = time.time()
-        while not l_hostname.issubset(replicas) and (time.time() - start) < self.L_QUERY_TIMER:
+        while not l_hostname.intersection(replicas) and (time.time() - start) < self.L_QUERY_TIMER:
             self.log.info("Current leader: <%s>; waiting for new leader to step up", l_hostname)
             time.sleep(1)
             l_hostname = self.get_leader()
-            self.log.debug("<<<verify_leader>>> l_hostname                     = %s", l_hostname)
-            self.log.debug("<<<verify_leader>>> l_hostname.issubset(replicas)  = %s", l_hostname.issubset(replicas))
 
         elapsed = time.time() - start
         if not l_hostname:
@@ -208,7 +203,7 @@ class ManagementServiceResilience(TestWithServers):
 
         """
         kill_list = NodeSet.fromlist(random.sample(list(replicas), N))
-        if not leader.issubset(kill_list):
+        if not leader.intersection(kill_list):
             kill_list.remove(kill_list[-1])
             kill_list.add(leader)
         self.log.info("*** stopping leader (%s) + %d others: %s", leader, N-1, kill_list)
