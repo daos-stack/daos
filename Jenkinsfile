@@ -734,22 +734,6 @@ pipeline {
                         }
                     } // post
                 } // stage('Functional on Ubuntu 20.04')
-<<<<<<< HEAD
-                stage('Test CentOS 7 RPMs') {
-                    when {
-                        beforeAgent true
-                        expression { ! skipStage() }
-                    }
-                    agent {
-                        label params.CI_UNIT_VM1_LABEL
-                    }
-                    steps {
-                        testRpm inst_repos: daosRepos(),
-                                daos_pkg_version: daosPackagesVersion(next_version)
-                   }
-                } // stage('Test CentOS 7 RPMs')
-=======
->>>>>>> master
                 stage('Scan EL 8 RPMs') {
                     when {
                         beforeAgent true
