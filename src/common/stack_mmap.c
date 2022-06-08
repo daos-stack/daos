@@ -80,7 +80,8 @@ static int compare_stack_size(const void *arg1, const void *arg2)
 		return -1;
 	else if (size1->stack_size > size2->stack_size)
 		return 1;
-	else return 0;
+	else
+		return 0;
 }
 
 void stack_pool_by_size_destroy(struct stack_pool *sp, struct stack_pool_by_size *spb)
@@ -89,7 +90,8 @@ void stack_pool_by_size_destroy(struct stack_pool *sp, struct stack_pool_by_size
 	mmap_stack_desc_t *desc;
 
 	D_ASSERT(sp->nb_sizes != 0 && (!d_list_empty(&sp->stack_size_list) || sp->nb_sizes == 1));
-	while ((desc = d_list_pop_entry(&spb->stack_free_list, mmap_stack_desc_t, stack_list)) != NULL) {
+	while ((desc = d_list_pop_entry(&spb->stack_free_list, mmap_stack_desc_t,
+					stack_list)) != NULL) {
 		D_DEBUG(DB_MEM,
 			"Draining a mmap()'ed stack at %p of size %zd, sub-pool=%p, pool=%p, remaining free stacks in pool="DF_U64"\n",
 			desc->stack, desc->stack_size, spb, sp, sp->free_stacks);
@@ -108,7 +110,8 @@ void stack_pool_by_size_destroy(struct stack_pool *sp, struct stack_pool_by_size
 	D_FREE(spb);
 }
 
-int stack_pool_by_size_find_or_create(struct stack_pool *sp, struct stack_pool_by_size **spb, size_t size)
+int stack_pool_by_size_find_or_create(struct stack_pool *sp, struct stack_pool_by_size **spb,
+				      size_t size)
 {
 	void *item;
 	struct stack_pool_by_size dummy = {.stack_size = size};
@@ -139,12 +142,13 @@ int stack_pool_by_size_find_or_create(struct stack_pool *sp, struct stack_pool_b
 			*spb, sp, size);
 	} else {
 		/* this should not happen, size finally exists! so no need new/same one */
-		D_DEBUG(DB_MEM, "sub-pool by-size %p of size %zu already exists in pool %p finally..., so freeing %p\n",
+		D_DEBUG(DB_MEM,
+			"sub-pool by-size %p of size %zu already exists in pool %p finally..., so freeing %p\n",
 			*((void **)item), size, sp, *spb);
 		D_FREE(*spb);
 		*spb = *((void **)item);
 	}
-	
+
 	return 0;
 }
 
@@ -300,8 +304,8 @@ int mmap_stack_thread_create(struct stack_pool *sp, ABT_pool pool,
 }
 
 int mmap_stack_thread_create_on_xstream(struct stack_pool *sp, ABT_xstream xstream,
-			     void (*thread_func)(void *), void *thread_arg,
-			     ABT_thread_attr attr, ABT_thread *newthread)
+					void (*thread_func)(void *), void *thread_arg,
+					ABT_thread_attr attr, ABT_thread *newthread)
 {
 	return mmap_stack_thread_create_common(sp, ON_XSTREAM, (void *)xstream, thread_func,
 					       thread_arg, attr, newthread);
@@ -379,7 +383,7 @@ void free_stack_in_pool(mmap_stack_desc_t *desc, struct stack_pool *sp)
 
 	/* too many free stacks in pool ? */
 	if (sp->free_stacks > MAX_NUMBER_FREE_STACKS &&
-	    sp->free_stacks/nb_mmap_stacks * 100 > MAX_PERCENT_FREE_STACKS) {
+	    sp->free_stacks / nb_mmap_stacks * 100 > MAX_PERCENT_FREE_STACKS) {
 		do_munmap = true;
 		atomic_fetch_sub(&nb_mmap_stacks, 1);
 	} else {
