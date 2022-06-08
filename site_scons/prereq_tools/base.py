@@ -1467,7 +1467,7 @@ class _Component():
             env.SetOption('no_exec', True)
         return False
 
-    def parse_config(self, env, opts, refresh=True):
+    def parse_config(self, env, opts):
         """Parse a pkg-config file"""
         if self.pkgconfig is None:
             return
