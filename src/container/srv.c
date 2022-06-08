@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2021 Intel Corporation.
+ * (C) Copyright 2016-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -148,6 +148,7 @@ struct dss_module cont_module =  {
 	.sm_name	= "cont",
 	.sm_mod_id	= DAOS_CONT_MODULE,
 	.sm_ver		= DAOS_CONT_VERSION,
+	.sm_proto_count	= 1,
 	.sm_init	= init,
 	.sm_fini	= fini,
 	.sm_proto_fmt	= &cont_proto_fmt,

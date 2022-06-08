@@ -1,27 +1,25 @@
-#!/usr/bin/python3 -u
+#!/usr/bin/env python3
 """
   (C) Copyright 2018-2022 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 # pylint: disable=too-many-lines
-# this needs to be disabled as list_tests.py is still using python2
-# pylint: disable=raise-missing-from
-
 
 from argparse import ArgumentParser, RawDescriptionHelpFormatter
 from collections import OrderedDict
 from datetime import datetime
+from tempfile import TemporaryDirectory
 import errno
 import json
 import os
 import re
 import socket
-import subprocess #nosec
+import subprocess   # nosec
 import site
 import sys
 import time
-from xml.etree.ElementTree import Element, SubElement, tostring #nosec
+from xml.etree.ElementTree import Element, SubElement, tostring     # nosec
 import yaml
 from defusedxml import minidom
 import defusedxml.ElementTree as ET
@@ -33,31 +31,6 @@ from ClusterShell.Task import task_self
 ET.Element = Element
 ET.SubElement = SubElement
 ET.tostring = tostring
-
-try:
-    # For python versions >= 3.2
-    from tempfile import TemporaryDirectory
-
-except ImportError:
-    # Basic implementation of TemporaryDirectory for python versions < 3.2
-    from tempfile import mkdtemp
-    from shutil import rmtree
-
-    class TemporaryDirectory(object):
-        # pylint: disable=too-few-public-methods
-        """Create a temporary directory.
-
-        When the last reference of this object goes out of scope the directory
-        and its contents are removed.
-        """
-
-        def __init__(self):
-            """Initialize a TemporaryDirectory object."""
-            self.name = mkdtemp()
-
-        def __del__(self):
-            """Destroy a TemporaryDirectory object."""
-            rmtree(self.name)
 
 DEFAULT_DAOS_TEST_LOG_DIR = "/var/tmp/daos_testing"
 YAML_KEYS = OrderedDict(
@@ -74,12 +47,15 @@ YAML_KEYS = OrderedDict(
         ("pool_query_timeout", "timeout_multiplier"),
         ("rebuild_timeout", "timeout_multiplier"),
         ("srv_timeout", "timeout_multiplier"),
+        ("storage_prepare_timeout", "timeout_multiplier"),
+        ("storage_format_timeout", "timeout_multiplier"),
     ]
 )
 PROVIDER_KEYS = OrderedDict(
     [
         ("cxi", "ofi+cxi"),
         ("verbs", "ofi+verbs"),
+        ("ucx", "ucx+dc_x"),
         ("tcp", "ofi+tcp"),
     ]
 )
@@ -114,9 +90,8 @@ def get_build_environment(args):
         dict: a dictionary of DAOS build environment variable names and values
 
     """
-    build_vars_file = os.path.join(
-        os.path.dirname(os.path.realpath(__file__)),
-        "../../.build_vars.json")
+    build_vars_file = os.path.join(os.path.dirname(os.path.realpath(__file__)),
+                                   "../../.build_vars.json")
     try:
         with open(build_vars_file) as vars_file:
             return json.load(vars_file)
@@ -129,6 +104,8 @@ def get_build_environment(args):
             if not args.list:
                 raise
             return json.loads('{{"PREFIX": "{}"}}'.format(os.getcwd()))
+    # Pylint warns about possible return types if we take this path, so ensure we do not.
+    assert False
 
 
 def get_temporary_directory(args, base_dir=None):
@@ -344,7 +321,10 @@ def set_provider_environment(interface, args):
         interface (str): the current interface being used.
     """
     # Use the detected provider if one is not set
-    provider = os.environ.get("CRT_PHY_ADDR_STR")
+    if args.provider:
+        provider = args.provider
+    else:
+        provider = os.environ.get("CRT_PHY_ADDR_STR")
     if provider is None:
         print("Detecting provider for {} - CRT_PHY_ADDR_STR not set".format(interface))
 
@@ -437,14 +417,12 @@ def run_command(cmd):
     print("Running {}".format(" ".join(cmd)))
 
     try:
-        # pylint: disable=consider-using-with
-        process = subprocess.Popen(
-            cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
-            universal_newlines=True)
-        stdout, _ = process.communicate()
-        retcode = process.poll()
+        with subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                              universal_newlines=True) as process:
+            stdout, _ = process.communicate()
+            retcode = process.poll()
     except Exception as error:
-        raise RuntimeError("Error executing '{}':\n\t{}".format(" ".join(cmd), error))
+        raise RuntimeError("Error executing '{}':\n\t{}".format(" ".join(cmd), error)) from error
     if retcode:
         raise RuntimeError(
             "Error executing '{}' (rc={}):\n\tOutput:\n{}".format(" ".join(cmd), retcode, stdout))
@@ -731,7 +709,7 @@ def get_test_files(test_list, args, yaml_dir, vmd_flag=False):
         test_list (list): list of test scripts to run
         args (argparse.Namespace): command line arguments for this program
         yaml_dir (str): directory in which to write the modified yaml files
-        vmd_flag (bool): PCI address list contains VMD address.
+        vmd_flag (bool): whether server hosts contains VMD drives.
 
     Returns:
         list: a list of dictionaries of each test script and yaml file; If
@@ -740,18 +718,14 @@ def get_test_files(test_list, args, yaml_dir, vmd_flag=False):
 
     """
     # Replace any placeholders in the extra yaml file, if provided
-    extra_env_vars = {}
     if args.extra_yaml:
-        args.extra_yaml, env_vars = replace_yaml_file(args.extra_yaml, args, yaml_dir, vmd_flag)
-        extra_env_vars.update(env_vars)
+        args.extra_yaml = replace_yaml_file(args.extra_yaml, args, yaml_dir)
 
     test_files = [{"py": test, "yaml": None, "env": {}} for test in test_list]
     for test_file in test_files:
         base, _ = os.path.splitext(test_file["py"])
-        yaml_file, env_vars = replace_yaml_file("{}.yaml".format(base), args, yaml_dir, vmd_flag)
+        yaml_file = replace_yaml_file("{}.yaml".format(base), args, yaml_dir)
         test_file["yaml"] = yaml_file
-        test_file["env"] = extra_env_vars.copy()
-        test_file["env"].update(env_vars)
 
         # Display the modified yaml file variants with debug
         command = ["avocado", "variants", "--mux-yaml", test_file["yaml"]]
@@ -864,7 +838,9 @@ def auto_detect_devices(host_list, device_type, length, device_filter=None):
             "/sbin/lspci -D",
             "grep -E '^[0-9a-f]{{{0}}}:[0-9a-f]{{2}}:[0-9a-f]{{2}}.[0-9a-f] '".format(length),
             "grep -E 'Non-Volatile memory controller:'"]
-        if device_filter:
+        if device_filter and device_filter.startswith("-"):
+            command_list.append("grep -v '{}'".format(device_filter[1:]))
+        elif device_filter:
             command_list.append("grep '{}'".format(device_filter))
     else:
         print("ERROR: Invalid 'device_type' for NVMe/VMD auto-detection: {}".format(device_type))
@@ -939,7 +915,7 @@ def find_pci_address(value):
     return re.findall(pattern, str(value))
 
 
-def replace_yaml_file(yaml_file, args, yaml_dir, vmd_flag=False):
+def replace_yaml_file(yaml_file, args, yaml_dir):
     # pylint: disable=too-many-nested-blocks
     """Create a temporary test yaml file with any requested values replaced.
 
@@ -969,19 +945,13 @@ def replace_yaml_file(yaml_file, args, yaml_dir, vmd_flag=False):
         yaml_file (str): test yaml file
         args (argparse.Namespace): command line arguments for this program
         yaml_dir (str): directory in which to write the modified yaml files
-        vmd_flag (bool): PCI address includes VMD address (True)
-                         PCI address doesn't include VMD address (False).
-                         Defaults to False
 
     Returns:
         str: the test yaml file; None if the yaml file contains placeholders
             w/o replacements
-        env_vars (dict): Returns environment variable dictionary. Presently,
-            returns DAOS_ENABLE_VMD: "False" or "True" dictionary.
 
     """
     replacements = {}
-    env_vars = {"DAOS_ENABLE_VMD": "False"}
 
     if args.test_servers or args.nvme or args.timeout_multiplier:
         # Find the test yaml keys and values that match the replaceable fields
@@ -1034,10 +1004,6 @@ def replace_yaml_file(yaml_file, args, yaml_dir, vmd_flag=False):
                     #   0000:81:00.0 --> 0000:12:00.0
                     value_format = "\"{}\""
                     values_to_replace = [value_format.format(item) for item in yaml_find[key]]
-                    # if VMD pci address in present under nvme_data,
-                    # set DAOS_ENABLE_VMD to True
-                    if vmd_flag is True:
-                        env_vars["DAOS_ENABLE_VMD"] = "True"
 
                 else:
                     # Timeouts - replace the entire timeout entry (key + value)
@@ -1105,7 +1071,7 @@ def replace_yaml_file(yaml_file, args, yaml_dir, vmd_flag=False):
             print(
                 "Error: Placeholders missing replacements in {}:\n  {}".format(
                     yaml_file, ", ".join(missing_replacements)))
-            return None, env_vars
+            return None
 
         # Write the modified yaml file into a temporary file.  Use the path to
         # ensure unique yaml files for tests with the same filename.
@@ -1122,7 +1088,7 @@ def replace_yaml_file(yaml_file, args, yaml_dir, vmd_flag=False):
             print(get_output(cmd, False))
 
     # Return the untouched or modified yaml file
-    return yaml_file, env_vars
+    return yaml_file
 
 
 def setup_test_directory(args, mode="all"):
@@ -1390,7 +1356,8 @@ def run_tests(test_files, tag_filter, args):
 
 
 def get_yaml_data(yaml_file):
-    """Get the contents of a yaml file as a dictionary.
+    """Get the contents of a yaml file as a dictionary, removing any mux tags and ignoring any
+    other tags present.
 
     Args:
         yaml_file (str): yaml file to read
@@ -1402,12 +1369,25 @@ def get_yaml_data(yaml_file):
         dict: the contents of the yaml file
 
     """
+    class DaosLoader(yaml.SafeLoader):  # pylint: disable=too-many-ancestors
+        """Helper class for parsing avocado yaml files"""
+
+        def forward_mux(self, node):
+            """Pass on mux tags unedited"""
+            return self.construct_mapping(node)
+
+        def ignore_unknown(self, node):  # pylint: disable=no-self-use,unused-argument
+            """Drop any other tag"""
+            return None
+
+    DaosLoader.add_constructor('!mux', DaosLoader.forward_mux)
+    DaosLoader.add_constructor(None, DaosLoader.ignore_unknown)
+
     yaml_data = {}
     if os.path.isfile(yaml_file):
         with open(yaml_file, "r") as open_file:
             try:
-                file_data = open_file.read()
-                yaml_data = yaml.safe_load(file_data.replace("!mux", ""))
+                yaml_data = yaml.load(open_file.read(), Loader=DaosLoader)
             except yaml.YAMLError as error:
                 print("Error reading {}: {}".format(yaml_file, error))
                 sys.exit(1)
@@ -1849,7 +1829,7 @@ def resolve_debuginfo(pkg):
 
 
 def is_el(distro):
-    """Return True if a distro is an EL"""
+    """Return True if a distro is an EL."""
     return [d for d in ["almalinux", "rocky", "centos", "rhel"] if d in distro.name.lower()]
 
 
@@ -1936,7 +1916,7 @@ def install_debuginfos():
 
     # Now install a few pkgs that debuginfo-install wouldn't
     cmd = ["sudo", "dnf", "-y"]
-    if is_el(distro_info):
+    if is_el(distro_info) or "suse" in distro_info.name.lower():
         cmd.append("--enablerepo=*debug*")
     cmd.append("install")
     for pkg in install_pkgs:
@@ -1961,7 +1941,7 @@ def install_debuginfos():
     if retry:
         print("Going to refresh caches and try again")
         cmd_prefix = ["sudo", "dnf"]
-        if is_el(distro_info):
+        if is_el(distro_info) or "suse" in distro_info.name.lower():
             cmd_prefix.append("--enablerepo=*debug*")
         cmds.insert(0, cmd_prefix + ["clean", "all"])
         cmds.insert(1, cmd_prefix + ["makecache"])
@@ -2388,6 +2368,14 @@ def main():
         "-p", "--process_cores",
         action="store_true",
         help="process core files from tests")
+    parser.add_argument(
+        "-pr", "--provider",
+        action="store",
+        choices=[None] + list(PROVIDER_KEYS.values()),
+        default=None,
+        type=str,
+        help="default provider to use in the test daos_server config file, e.g. {}".format(
+            ", ".join(list(PROVIDER_KEYS.values()))))
     parser.add_argument(
         "-r", "--rename",
         action="store_true",

@@ -40,11 +40,12 @@ def getuid() {
                         returnStdout: true).trim()
     return cached_uid
 }
+
 pipeline {
     agent { label 'lightweight' }
 
     triggers {
-        cron(env.BRANCH_NAME == 'master' ? 'TZ=America/Toronto\n0 0 * * *\n' : '' +
+        cron(env.BRANCH_NAME == 'master' ? 'TZ=UTC\n0 0 * * *\n' : '' +
              env.BRANCH_NAME == 'weekly-testing' ? 'H 0 * * 6' : '' )
     }
 
@@ -55,6 +56,7 @@ pipeline {
         CLUSH_ARGS = "-o$SSH_KEY_ARGS"
         TEST_RPMS = cachedCommitPragma(pragma: 'RPM-test', def_val: 'true')
         COVFN_DISABLED = cachedCommitPragma(pragma: 'Skip-fnbullseye', def_val: 'true')
+        REPO_FILE_URL = repoFileUrl(env.REPO_FILE_URL)
         SCONS_FAULTS_ARGS = sconsFaultsArgs()
     }
 
@@ -82,6 +84,12 @@ pipeline {
                             'CAUTION: only use in combination with a reduced ' +
                             'number of tests specified with the TestTag ' +
                             'parameter.')
+        string(name: 'TestProvider',
+               defaultValue: "",
+               description: 'Test-provider to use for this run.  Specifies the default provider ' +
+                            'to use the daos_server config file when running functional tests' +
+                            '(the launch.py --provider argument;  i.e. "ucx+dc_x", "ofi+verbs", '+
+                            '"ofi+tcp")')
         booleanParam(name: 'CI_BUILD_PACKAGES_ONLY',
                      defaultValue: false,
                      description: 'Only build RPM and DEB packages, Skip unit tests.')
@@ -94,9 +102,9 @@ pipeline {
         string(name: 'CI_CENTOS7_TARGET',
                defaultValue: '',
                description: 'Image to used for Centos 7 CI tests.  I.e. el7, el7.9, etc.')
-        string(name: 'CI_CENTOS8_TARGET',
+        string(name: 'CI_EL8_TARGET',
                defaultValue: '',
-               description: 'Image to used for Centos 8 CI tests.  I.e. el8, el8.3, etc.')
+               description: 'Image to used for EL 8 CI tests.  I.e. el8, el8.3, etc.')
         string(name: 'CI_LEAP15_TARGET',
                defaultValue: '',
                description: 'Image to use for OpenSUSE Leap CI tests.  I.e. leap15, leap15.2, etc.')
@@ -108,7 +116,7 @@ pipeline {
                      description: 'Do not build RPM packages for CentOS 7')
         booleanParam(name: 'CI_RPM_el8_NOBUILD',
                      defaultValue: false,
-                     description: 'Do not build RPM packages for CentOS 8')
+                     description: 'Do not build RPM packages for EL 8')
         booleanParam(name: 'CI_RPM_leap15_NOBUILD',
                      defaultValue: false,
                      description: 'Do not build RPM packages for Leap 15')
@@ -132,7 +140,7 @@ pipeline {
                      description: 'Enable more distros for functional CI tests')
         booleanParam(name: 'CI_FUNCTIONAL_el8_TEST',
                      defaultValue: true,
-                     description: 'Run the functional CentOS 8 CI tests' +
+                     description: 'Run the functional EL 8 CI tests' +
                                   '  Requires CI_MORE_FUNCTIONAL_PR_TESTS')
         booleanParam(name: 'CI_FUNCTIONAL_leap15_TEST',
                      defaultValue: true,
@@ -189,6 +197,23 @@ pipeline {
                 }
             }
         }
+        stage('Check PR') {
+            when { changeRequest() }
+            steps {
+                catchError(stageResult: 'UNSTABLE', buildResult: 'SUCCESS',
+                           message: "PR did not get committed with required git hooks.  Please see utils/githooks/README.md.") {
+                    sh 'if ! ' + cachedCommitPragma('Required-githooks', 'false') + '''; then
+                           echo "PR did not get committed with required git hooks.  Please see utils/githooks/README.md."
+                           exit 1
+                        fi'''
+                }
+            }
+            post {
+                unsuccessful {
+                    echo "PR did not get committed with required git hooks.  Please see utils/githooks/README.md."
+                }
+            }
+        }
         stage('Cancel Previous Builds') {
             when { changeRequest() }
             steps {
@@ -218,16 +243,10 @@ pipeline {
                         checkPatch user: GITHUB_USER_USR,
                                    password: GITHUB_USER_PSW,
                                    ignored_files: "src/control/vendor/*:" +
-                                                  "src/include/daos/*.pb-c.h:" +
-                                                  "src/common/*.pb-c.[ch]:" +
-                                                  "src/mgmt/*.pb-c.[ch]:" +
-                                                  "src/engine/*.pb-c.[ch]:" +
-                                                  "src/security/*.pb-c.[ch]:" +
+                                                  "*.pb-c.[ch]:" +
                                                   "src/client/java/daos-java/src/main/java/io/daos/dfs/uns/*:" +
                                                   "src/client/java/daos-java/src/main/java/io/daos/obj/attr/*:" +
                                                   "src/client/java/daos-java/src/main/native/include/daos_jni_common.h:" +
-                                                  "src/client/java/daos-java/src/main/native/*.pb-c.[ch]:" +
-                                                  "src/client/java/daos-java/src/main/native/include/*.pb-c.[ch]:" +
                                                   "*.crt:" +
                                                   "*.pem:" +
                                                   "*_test.go:" +
@@ -314,9 +333,9 @@ pipeline {
                         dockerfile {
                             filename 'Dockerfile.mockbuild'
                             dir 'utils/rpms/packaging'
-                            label 'docker_ce_runner'
+                            label 'docker_runner'
                             additionalBuildArgs dockerBuildArgs()
-                            args  '--group-add mock --cap-add=SYS_ADMIN --privileged=true'
+                            args  '--cap-add=SYS_ADMIN'
                         }
                     }
                     steps {
@@ -340,7 +359,7 @@ pipeline {
                         }
                     }
                 }
-                stage('Build RPM on CentOS 8') {
+                stage('Build RPM on EL 8') {
                     when {
                         beforeAgent true
                         expression { ! skipStage() }
@@ -349,9 +368,9 @@ pipeline {
                         dockerfile {
                             filename 'Dockerfile.mockbuild'
                             dir 'utils/rpms/packaging'
-                            label 'docker_ce_runner'
+                            label 'docker_runner'
                             additionalBuildArgs dockerBuildArgs()
-                            args  '--group-add mock --cap-add=SYS_ADMIN --privileged=true'
+                            args  '--cap-add=SYS_ADMIN'
                         }
                     }
                     steps {
@@ -384,9 +403,9 @@ pipeline {
                         dockerfile {
                             filename 'Dockerfile.mockbuild'
                             dir 'utils/rpms/packaging'
-                            label 'docker_ce_runner'
+                            label 'docker_runner'
                             additionalBuildArgs dockerBuildArgs()
-                            args  '--group-add mock --cap-add=SYS_ADMIN --privileged=true'
+                            args  '--cap-add=SYS_ADMIN'
                         }
                     }
                     steps {
@@ -421,7 +440,7 @@ pipeline {
                             dir 'utils/rpms/packaging'
                             label 'docker_runner'
                             additionalBuildArgs dockerBuildArgs()
-                            args  '--cap-add=SYS_ADMIN --privileged=true'
+                            args  '--cap-add=SYS_ADMIN'
                         }
                     }
                     steps {
@@ -465,7 +484,6 @@ pipeline {
                     steps {
                         sconsBuild parallel_build: parallelBuild(),
                                    stash_files: 'ci/test_files_to_stash.txt',
-                                   scons_exe: 'scons-3',
                                    scons_args: sconsFaultsArgs()
                     }
                     post {
@@ -499,7 +517,6 @@ pipeline {
                     steps {
                         sconsBuild parallel_build: parallelBuild(),
                                    stash_files: 'ci/test_files_to_stash.txt',
-                                   scons_exe: 'scons-3',
                                    scons_args: sconsFaultsArgs()
                     }
                     post {
@@ -677,8 +694,7 @@ pipeline {
                     }
                     steps {
                         sconsBuild coverity: "daos-stack/daos",
-                                   parallel_build: parallelBuild(),
-                                   scons_exe: 'scons-3'
+                                   parallel_build: parallelBuild()
                     }
                     post {
                         success {
@@ -699,7 +715,7 @@ pipeline {
                     }
                     steps {
                         functionalTest inst_repos: daosRepos(),
-                                       inst_rpms: functionalPackages(1, next_version),
+                                       inst_rpms: functionalPackages(1, next_version, "client-tests-openmpi"),
                                        test_function: 'runTestFunctionalV2'
                     }
                     post {
@@ -708,7 +724,7 @@ pipeline {
                         }
                     }
                 } // stage('Functional on CentOS 7')
-                stage('Functional on CentOS 8 with Valgrind') {
+                stage('Functional on EL 8 with Valgrind') {
                     when {
                         beforeAgent true
                         expression { ! skipStage() }
@@ -718,7 +734,7 @@ pipeline {
                     }
                     steps {
                         functionalTest inst_repos: daosRepos(),
-                                       inst_rpms: functionalPackages(1, next_version),
+                                       inst_rpms: functionalPackages(1, next_version, "client-tests-openmpi"),
                                        test_function: 'runTestFunctionalV2'
                     }
                     post {
@@ -726,8 +742,8 @@ pipeline {
                             functionalTestPostV2()
                         }
                     }
-                } // stage('Functional on CentOS 8 with Valgrind')
-                stage('Functional on CentOS 8') {
+                } // stage('Functional on EL 8 with Valgrind')
+                stage('Functional on EL 8') {
                     when {
                         beforeAgent true
                         expression { ! skipStage() }
@@ -737,7 +753,7 @@ pipeline {
                     }
                     steps {
                         functionalTest inst_repos: daosRepos(),
-                                       inst_rpms: functionalPackages(1, next_version),
+                                       inst_rpms: functionalPackages(1, next_version, "client-tests-openmpi"),
                                        test_function: 'runTestFunctionalV2'
                     }
                     post {
@@ -745,7 +761,7 @@ pipeline {
                             functionalTestPostV2()
                         }
                     }
-                } // stage('Functional on CentOS 8')
+                } // stage('Functional on EL 8')
                 stage('Functional on Leap 15') {
                     when {
                         beforeAgent true
@@ -756,7 +772,7 @@ pipeline {
                     }
                     steps {
                         functionalTest inst_repos: daosRepos(),
-                                       inst_rpms: functionalPackages(1, next_version),
+                                       inst_rpms: functionalPackages(1, next_version, "client-tests-openmpi"),
                                        test_function: 'runTestFunctionalV2'
                     }
                     post {
@@ -775,7 +791,7 @@ pipeline {
                     }
                     steps {
                         functionalTest inst_repos: daosRepos(),
-                                       inst_rpms: functionalPackages(1, next_version),
+                                       inst_rpms: functionalPackages(1, next_version, "client-tests-openmpi"),
                                        test_function: 'runTestFunctionalV2'
                     }
                     post {
@@ -797,34 +813,6 @@ pipeline {
                                 daos_pkg_version: daosPackagesVersion(next_version)
                    }
                 } // stage('Test CentOS 7 RPMs')
-                stage('Test CentOS 8.3.2011 RPMs') {
-                    when {
-                        beforeAgent true
-                        expression { ! skipStage() }
-                    }
-                    agent {
-                        label params.CI_UNIT_VM1_LABEL
-                    }
-                    steps {
-                        testRpm inst_repos: daosRepos(),
-                                target: 'el8.3',
-                                daos_pkg_version: daosPackagesVersion("centos8", next_version)
-                   }
-                } // stage('Test CentOS 7 RPMs')
-                stage('Test Leap 15.2 RPMs') {
-                    when {
-                        beforeAgent true
-                        expression { ! skipStage() }
-                    }
-                    agent {
-                        label params.CI_UNIT_VM1_LABEL
-                    }
-                    steps {
-                        testRpm inst_repos: daosRepos(),
-                                target: 'leap15.2',
-                                daos_pkg_version: daosPackagesVersion(next_version)
-                   }
-                } // stage('Test Leap 15 RPMs')
                 stage('Scan CentOS 7 RPMs') {
                     when {
                         beforeAgent true
@@ -843,7 +831,7 @@ pipeline {
                         }
                     }
                 } // stage('Scan CentOS 7 RPMs')
-                stage('Scan CentOS 8 RPMs') {
+                stage('Scan EL 8 RPMs') {
                     when {
                         beforeAgent true
                         expression { ! skipStage() }
@@ -860,7 +848,7 @@ pipeline {
                             junit 'maldetect.xml'
                         }
                     }
-                } // stage('Scan CentOS 8 RPMs')
+                } // stage('Scan EL 8 RPMs')
                 stage('Scan Leap 15 RPMs') {
                     when {
                         beforeAgent true
@@ -896,7 +884,6 @@ pipeline {
                     }
                     steps {
                         sconsBuild parallel_build: true,
-                                   scons_exe: 'scons-3',
                                    scons_args: "PREFIX=/opt/daos TARGET_TYPE=release BUILD_TYPE=debug",
                                    build_deps: "no"
                         sh (script:"""./utils/docker_nlt.sh --class-name centos7.fault-injection fi""",
@@ -937,7 +924,7 @@ pipeline {
             }
             steps {
                 storagePrepTest inst_repos: daosRepos(),
-                                inst_rpms: functionalPackages(1, next_version)
+                                inst_rpms: functionalPackages(1, next_version, "client-tests-openmpi")
             }
         } // stage('Test Storage Prep')
         stage('Test Hardware') {
@@ -957,7 +944,7 @@ pipeline {
                     }
                     steps {
                         functionalTest inst_repos: daosRepos(),
-                                       inst_rpms: functionalPackages(1, next_version),
+                                       inst_rpms: functionalPackages(1, next_version, "client-tests-openmpi"),
                                        test_function: 'runTestFunctionalV2'
                     }
                     post {
@@ -977,7 +964,7 @@ pipeline {
                     }
                     steps {
                         functionalTest inst_repos: daosRepos(),
-                                       inst_rpms: functionalPackages(1, next_version),
+                                       inst_rpms: functionalPackages(1, next_version, "client-tests-openmpi"),
                                        test_function: 'runTestFunctionalV2'
                    }
                     post {
@@ -997,7 +984,7 @@ pipeline {
                     }
                     steps {
                         functionalTest inst_repos: daosRepos(),
-                                       inst_rpms: functionalPackages(1, next_version),
+                                       inst_rpms: functionalPackages(1, next_version, "client-tests-openmpi"),
                                        test_function: 'runTestFunctionalV2'
                     }
                     post {

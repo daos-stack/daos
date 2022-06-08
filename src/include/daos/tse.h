@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2015-2021 Intel Corporation.
+ * (C) Copyright 2015-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -14,15 +14,13 @@
 #define __TSE_SCHEDULE_H__
 
 #include <gurt/list.h>
-/**
- * tse_task is used to track single asynchronous operation.
- * 1K bytes all together.
- */
-#define TSE_TASK_SIZE		1024
-/* 8 bytes used for public members */
-#define TSE_PRIV_SIZE		1016
-/* tse_task arguments max length */
-#define TSE_TASK_ARG_LEN		880
+
+/* tse_task arguments max length (pthread_mutex_t is of different size between x86 and aarch64). */
+#define TSE_TASK_ARG_LEN	(840 + sizeof(pthread_mutex_t))
+/* internal tse private data size (struct tse_task_private) */
+#define TSE_PRIV_SIZE		(TSE_TASK_ARG_LEN + 136)
+/* tse_task is used to track single asynchronous operation (8 bytes used for public members). */
+#define TSE_TASK_SIZE		(TSE_PRIV_SIZE + 8)
 
 typedef struct tse_task {
 	int			dt_result;

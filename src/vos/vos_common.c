@@ -234,12 +234,21 @@ vos_tx_begin(struct dtx_handle *dth, struct umem_instance *umm)
 	if (dth == NULL)
 		return umem_tx_begin(umm, vos_txd_get());
 
-	if (dth->dth_local_tx_started)
+	/** Note: On successful return, dth tls gets set and will be cleared by the corresponding
+	 *        call to vos_tx_end.  This is to avoid ever keeping that set after a call to
+	 *        umem_tx_end, which may yield for bio operations.
+	 */
+
+	if (dth->dth_local_tx_started) {
+		vos_dth_set(dth);
 		return 0;
+	}
 
 	rc = umem_tx_begin(umm, vos_txd_get());
-	if (rc == 0)
+	if (rc == 0) {
 		dth->dth_local_tx_started = 1;
+		vos_dth_set(dth);
+	}
 
 	return rc;
 }
@@ -278,8 +287,10 @@ vos_tx_end(struct vos_container *cont, struct dtx_handle *dth_in,
 		goto cancel;
 
 	/* Not the last modification. */
-	if (err == 0 && dth->dth_modification_cnt > dth->dth_op_seq)
+	if (err == 0 && dth->dth_modification_cnt > dth->dth_op_seq) {
+		vos_dth_set(NULL);
 		return 0;
+	}
 
 	dth->dth_local_tx_started = 0;
 
@@ -288,6 +299,8 @@ vos_tx_end(struct vos_container *cont, struct dtx_handle *dth_in,
 
 	if (err == 0)
 		err = vos_tx_publish(dth, true);
+
+	vos_dth_set(NULL);
 
 	err = umem_tx_end(vos_cont2umm(cont), err);
 
@@ -561,7 +574,7 @@ vos_metrics_alloc(const char *path, int tgt_id)
 		D_WARN("Failed to create 'epr_duration' telemetry: "DF_RC"\n", DP_RC(rc));
 
 	/* VOS aggregation scanned/skipped/deleted objs/dkeys/akeys */
-	for (i = 0; i < AGG_OP_MAX; i++) {
+	for (i = 0; i < AGG_OP_MERGE; i++) {
 		snprintf(desc, sizeof(desc), "%s objs", agg_op2str(i));
 		rc = d_tm_add_metric(&vam->vam_obj[i], D_TM_COUNTER, desc, NULL,
 				     "%s/%s/obj_%s/tgt_%u", path, VOS_AGG_DIR,
@@ -637,6 +650,7 @@ struct dss_module vos_srv_module =  {
 	.sm_name	= "vos_srv",
 	.sm_mod_id	= DAOS_VOS_MODULE,
 	.sm_ver		= 1,
+	.sm_proto_count	= 1,
 	.sm_init	= vos_mod_init,
 	.sm_fini	= vos_mod_fini,
 	.sm_key		= &vos_module_key,
@@ -657,17 +671,20 @@ vos_self_nvme_fini(void)
 }
 
 /* Storage path, NVMe config & numa node used by standalone VOS */
-#define VOS_NVME_CONF		"/etc/daos_nvme.conf"
+#define VOS_NVME_CONF		"daos_nvme.conf"
 #define VOS_NVME_NUMA_NODE	DAOS_NVME_NUMANODE_NONE
 #define VOS_NVME_MEM_SIZE	1024
 #define VOS_NVME_HUGEPAGE_SIZE	2	/* 2MB */
 #define VOS_NVME_NR_TARGET	1
 
 static int
-vos_self_nvme_init()
+vos_self_nvme_init(const char *vos_path, uint32_t tgt_id)
 {
-	int rc;
-	int fd;
+	char	nvme_conf[128];
+	int	rc, fd;
+
+	D_ASSERT(vos_path != NULL);
+	snprintf(nvme_conf, sizeof(nvme_conf), "%s/%s", vos_path, VOS_NVME_CONF);
 
 	/* IV tree used by VEA */
 	rc = dbtree_class_register(DBTREE_CLASS_IV,
@@ -677,12 +694,12 @@ vos_self_nvme_init()
 		return rc;
 
 	/* Only use hugepages if NVME SSD configuration existed. */
-	fd = open(VOS_NVME_CONF, O_RDONLY, 0600);
+	fd = open(nvme_conf, O_RDONLY, 0600);
 	if (fd < 0) {
 		rc = bio_nvme_init(NULL, VOS_NVME_NUMA_NODE, 0, 0,
 				   VOS_NVME_NR_TARGET, vos_db_get(), true);
 	} else {
-		rc = bio_nvme_init(VOS_NVME_CONF, VOS_NVME_NUMA_NODE,
+		rc = bio_nvme_init(nvme_conf, VOS_NVME_NUMA_NODE,
 				   VOS_NVME_MEM_SIZE, VOS_NVME_HUGEPAGE_SIZE,
 				   VOS_NVME_NR_TARGET, vos_db_get(), true);
 		close(fd);
@@ -692,7 +709,7 @@ vos_self_nvme_init()
 		return rc;
 
 	self_mode.self_nvme_init = true;
-	rc = bio_xsctxt_alloc(&self_mode.self_xs_ctxt, -1 /* Self poll */);
+	rc = bio_xsctxt_alloc(&self_mode.self_xs_ctxt, tgt_id, true);
 	return rc;
 }
 
@@ -728,7 +745,7 @@ vos_self_fini(void)
 }
 
 int
-vos_self_init(const char *db_path)
+vos_self_init(const char *db_path, bool use_sys_db, int tgt_id)
 {
 	char	*evt_mode;
 	int	 rc = 0;
@@ -759,22 +776,28 @@ vos_self_init(const char *db_path)
 	if (rc)
 		D_GOTO(failed, rc);
 
-	rc = vos_db_init(db_path, "self_db", true);
+	if (use_sys_db)
+		rc = vos_db_init(db_path);
+	else
+		rc = vos_db_init_ex(db_path, "self_db", true, true);
 	if (rc)
 		D_GOTO(failed, rc);
 
-	rc = vos_self_nvme_init();
+	rc = vos_self_nvme_init(db_path, tgt_id);
 	if (rc)
 		D_GOTO(failed, rc);
 
 	evt_mode = getenv("DAOS_EVTREE_MODE");
 	if (evt_mode) {
-		if (strcasecmp("soff", evt_mode) == 0)
-			vos_evt_feats = EVT_FEAT_SORT_SOFF;
-		else if (strcasecmp("dist_even", evt_mode) == 0)
-			vos_evt_feats = EVT_FEAT_SORT_DIST_EVEN;
+		if (strcasecmp("soff", evt_mode) == 0) {
+			vos_evt_feats &= ~EVT_FEATS_SUPPORTED;
+			vos_evt_feats |= EVT_FEAT_SORT_SOFF;
+		} else if (strcasecmp("dist_even", evt_mode) == 0) {
+			vos_evt_feats &= ~EVT_FEATS_SUPPORTED;
+			vos_evt_feats |= EVT_FEAT_SORT_DIST_EVEN;
+		}
 	}
-	switch (vos_evt_feats) {
+	switch (vos_evt_feats & EVT_FEATS_SUPPORTED) {
 	case EVT_FEAT_SORT_SOFF:
 		D_INFO("Using start offset sort for evtree\n");
 		break;

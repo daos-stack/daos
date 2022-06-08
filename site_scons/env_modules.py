@@ -1,4 +1,3 @@
-#!/usr/bin/python3
 # Copyright 2019-2022 Intel Corporation
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
@@ -19,7 +18,7 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 """Wrapper for Modules so we can load an MPI before builds or tests"""
-from __future__ import print_function
+
 import os
 import sys
 import errno
@@ -168,9 +167,9 @@ class _env_module(): # pylint: disable=invalid-name
             print("Could not invoke module avail")
         return output
 
-    def get_map(self):
+    def get_map(self, key):
         """return the mpi map"""
-        return self._mpi_map
+        return self._mpi_map[key]
 
 def load_mpi(mpi):
     """global function to load MPI into os.environ"""
@@ -210,4 +209,4 @@ def get_module_list(key):
     """ global function to show the modules that map to a key"""
     if _env_module.env_module_init is None:
         _env_module.env_module_init = _env_module()
-    return _env_module.get_map(key)
+    return _env_module.env_module_init.get_map(key)

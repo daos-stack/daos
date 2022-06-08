@@ -30,9 +30,12 @@ fi
 sudo chown root /usr/bin/daos_admin
 sudo chmod 4755 /usr/bin/daos_admin
 /bin/rm "$DAOS_BASE/install/bin/daos_admin"
-sudo ln -sf "$SL_PREFIX/share/spdk/scripts/setup.sh" /usr/share/spdk/scripts
-sudo ln -sf "$SL_PREFIX/share/spdk/scripts/common.sh" /usr/share/spdk/scripts
+sudo mkdir -p /usr/share/spdk/scripts/
+sudo ln -sf "$SL_PREFIX/share/spdk/scripts/setup.sh" /usr/share/spdk/scripts/
+sudo ln -sf "$SL_PREFIX/share/spdk/scripts/common.sh" /usr/share/spdk/scripts/
 sudo ln -s "$SL_PREFIX/include"  /usr/share/spdk/include
+
+sudo bash -c 'echo 1024 > /proc/sys/vm/nr_hugepages'
 
 # set CMOCKA envs here
 export CMOCKA_MESSAGE_OUTPUT=xml

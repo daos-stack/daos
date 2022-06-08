@@ -13,7 +13,7 @@ the Linux kernel. Exact details depend on the distribution, but the following
 example should be illustrative:
 
 ```bash
-# Enable IOMMU on CentOS 7
+# Enable IOMMU on CentOS 7 and EL 8
 # All commands must be run as root/sudo!
 
 $ sudo vi /etc/default/grub # add the following line:
@@ -98,10 +98,10 @@ Since all engines need to be able to communicate, the different network
 interfaces must be on the same subnet or you must configuring routing
 across the different subnets.
 
-### Infiniband Settings
+### Interface Settings
 
-Some special configuration is required to use librdmacm with multiple
-interfaces.
+Some special configuration is required for the `verbs` provider to use librdmacm
+with multiple interfaces, and the same configuration is required for the `tcp` provider.
 
 First, the accept_local feature must be enabled on the network interfaces
 to be used by DAOS. This can be done using the following command (<ifaces> must
@@ -129,7 +129,7 @@ $ sysctl -w net.ipv4.conf.all.arp_ignore=1
 ```
 
 Finally, the rp_filter is set to 1 by default on several distributions (e.g. on
-CentOS 7) and should be set to either 0 or 2, with 2 being more secure. This is
+CentOS 7 and EL 8) and should be set to either 0 or 2, with 2 being more secure. This is
 true even if the configuration uses a single logical subnet.
 
 ```

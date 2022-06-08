@@ -142,8 +142,12 @@ struct dfs {
 	int			amode;
 	/** Open pool handle of the DFS mount */
 	daos_handle_t		poh;
+	/** refcount on pool handle that through the DFS API */
+	uint32_t		poh_refcount;
 	/** Open container handle of the DFS mount */
 	daos_handle_t		coh;
+	/** refcount on cont handle that through the DFS API */
+	uint32_t		coh_refcount;
 	/** Object ID reserved for this DFS (see oid_gen below) */
 	daos_obj_id_t		oid;
 	/** superblock object OID */
@@ -744,15 +748,18 @@ entry_stat(dfs_t *dfs, daos_handle_t th, daos_handle_t oh, const char *name,
 	switch (entry.mode & S_IFMT) {
 	case S_IFDIR:
 		size = sizeof(entry);
+		stbuf->st_mtim.tv_sec = entry.mtime;
 		break;
 	case S_IFREG:
 	{
+		daos_array_stbuf_t	array_stbuf = {0};
+
 		if (obj) {
-			rc = daos_array_get_size(obj->oh, th, &size, NULL);
+			rc = daos_array_stat(obj->oh, th, &array_stbuf, NULL);
 			if (rc)
 				return daos_der2errno(rc);
 		} else {
-			daos_handle_t file_oh;
+			daos_handle_t	file_oh;
 
 			rc = daos_array_open_with_attr(dfs->coh, entry.oid, th, DAOS_OO_RO, 1,
 						       entry.chunk_size ? entry.chunk_size :
@@ -762,7 +769,7 @@ entry_stat(dfs_t *dfs, daos_handle_t th, daos_handle_t oh, const char *name,
 				return daos_der2errno(rc);
 			}
 
-			rc = daos_array_get_size(file_oh, th, &size, NULL);
+			rc = daos_array_stat(file_oh, th, &array_stbuf, NULL);
 			if (rc) {
 				daos_array_close(file_oh, NULL);
 				return daos_der2errno(rc);
@@ -772,18 +779,30 @@ entry_stat(dfs_t *dfs, daos_handle_t th, daos_handle_t oh, const char *name,
 			if (rc)
 				return daos_der2errno(rc);
 		}
+
+		size = array_stbuf.st_size;
+		if (array_stbuf.st_max_epoch) {
+			rc = crt_hlc2timespec(array_stbuf.st_max_epoch, &stbuf->st_mtim);
+			if (rc) {
+				D_ERROR("crt_hlc2timespec() failed "DF_RC"\n", DP_RC(rc));
+				return daos_der2errno(rc);
+			}
+		} else {
+			stbuf->st_mtim.tv_sec = entry.mtime;
+		}
+
 		/*
 		 * TODO - this is not accurate since it does not account for
 		 * sparse files or file metadata or xattributes.
 		 */
 		stbuf->st_blocks = (size + (1 << 9) - 1) >> 9;
-		stbuf->st_blksize = entry.chunk_size ? entry.chunk_size :
-			dfs->attr.da_chunk_size;
+		stbuf->st_blksize = entry.chunk_size ? entry.chunk_size : dfs->attr.da_chunk_size;
 		break;
 	}
 	case S_IFLNK:
 		size = entry.value_len;
 		D_FREE(entry.value);
+		stbuf->st_mtim.tv_sec = entry.mtime;
 		break;
 	default:
 		D_ERROR("Invalid entry type (not a dir, file, symlink).\n");
@@ -796,7 +815,6 @@ entry_stat(dfs_t *dfs, daos_handle_t th, daos_handle_t oh, const char *name,
 	stbuf->st_uid = entry.uid;
 	stbuf->st_gid = entry.gid;
 	stbuf->st_atim.tv_sec = entry.atime;
-	stbuf->st_mtim.tv_sec = entry.mtime;
 	stbuf->st_ctim.tv_sec = entry.ctime;
 
 	return 0;
@@ -1357,9 +1375,13 @@ dfs_get_sb_layout(daos_key_t *dkey, daos_iod_t *iods[], int *akey_count,
 	return 0;
 }
 
-static int
-dfs_cont_create_int(daos_handle_t poh, uuid_t *cuuid, bool uuid_is_set, uuid_t in_uuid,
-		    dfs_attr_t *attr, daos_handle_t *_coh, dfs_t **_dfs)
+/**
+ * Real latest & greatest implementation of container create. Used by anyone including the
+ * daos_fs.h header file.
+ */
+int
+dfs_cont_create(daos_handle_t poh, uuid_t *cuuid, dfs_attr_t *attr,
+		daos_handle_t *_coh, dfs_t **_dfs)
 {
 	daos_handle_t		coh, super_oh;
 	struct dfs_entry	entry = {0};
@@ -1459,10 +1481,7 @@ dfs_cont_create_int(daos_handle_t poh, uuid_t *cuuid, bool uuid_is_set, uuid_t i
 	prop->dpp_entries[prop->dpp_nr - 1].dpe_type = DAOS_PROP_CO_LAYOUT_TYPE;
 	prop->dpp_entries[prop->dpp_nr - 1].dpe_val = DAOS_PROP_CO_LAYOUT_POSIX;
 
-	if (uuid_is_set)
-		rc = daos_cont_create(poh, in_uuid, prop, NULL);
-	else
-		rc = daos_cont_create(poh, cuuid, prop, NULL);
+	rc = daos_cont_create(poh, cuuid, prop, NULL);
 	if (rc) {
 		D_ERROR("daos_cont_create() failed "DF_RC"\n", DP_RC(rc));
 		D_GOTO(err_prop, rc = daos_der2errno(rc));
@@ -1549,44 +1568,6 @@ err_prop:
 	return rc;
 }
 
-/** Disable backward compat code */
-#undef dfs_cont_create
-
-/** Kept for backward ABI compatibility when a UUID is provided by the caller */
-int
-dfs_cont_create(daos_handle_t poh, uuid_t *cuuid, dfs_attr_t *attr, daos_handle_t *coh, dfs_t **dfs)
-{
-	const unsigned char     *uuid = (const unsigned char *)cuuid;
-	uuid_t			co_uuid;
-
-	if (!daos_uuid_valid(uuid))
-		return EINVAL;
-
-	uuid_copy(co_uuid, uuid);
-	return dfs_cont_create_int(poh, cuuid, true, co_uuid, attr, coh, dfs);
-}
-
-/** API version for when the uuid is required to be passed in. */
-int
-dfs_cont_create1(daos_handle_t poh, const uuid_t cuuid, dfs_attr_t *attr, daos_handle_t *coh,
-		 dfs_t **dfs)
-{
-	uuid_t *u = (uuid_t *)((unsigned char *)cuuid);
-
-	return dfs_cont_create(poh, u, attr, coh, dfs);
-}
-
-/*
- * Real latest & greatest implementation of container create. Used by anyone including the
- * daos_fs.h header file.
- */
-int
-dfs_cont_create2(daos_handle_t poh, uuid_t *cuuid, dfs_attr_t *attr, daos_handle_t *coh,
-		 dfs_t **dfs)
-{
-	return dfs_cont_create_int(poh, cuuid, false, NULL, attr, coh, dfs);
-}
-
 int
 dfs_cont_create_with_label(daos_handle_t poh, const char *label, dfs_attr_t *attr,
 			   uuid_t *cuuid, daos_handle_t *coh, dfs_t **dfs)
@@ -1622,9 +1603,9 @@ dfs_cont_create_with_label(daos_handle_t poh, const char *label, dfs_attr_t *att
 	if (cuuid == NULL) {
 		uuid_t u;
 
-		rc = dfs_cont_create_int(poh, &u, false, NULL, attr, coh, dfs);
+		rc = dfs_cont_create(poh, &u, attr, coh, dfs);
 	} else {
-		rc = dfs_cont_create_int(poh, cuuid, false, NULL, attr, coh, dfs);
+		rc = dfs_cont_create(poh, cuuid, attr, coh, dfs);
 	}
 	attr->da_props = orig;
 	daos_prop_free(merged_props);
@@ -1966,13 +1947,97 @@ dfs_umount(dfs_t *dfs)
 		return EINVAL;
 	}
 
+	D_MUTEX_LOCK(&dfs->lock);
+	if (dfs->poh_refcount != 0) {
+		D_ERROR("Pool open handle refcount not 0\n");
+		D_MUTEX_UNLOCK(&dfs->lock);
+		return EBUSY;
+	}
+	if (dfs->coh_refcount != 0) {
+		D_ERROR("Cont open handle refcount not 0\n");
+		D_MUTEX_UNLOCK(&dfs->lock);
+		return EBUSY;
+	}
+	D_MUTEX_UNLOCK(&dfs->lock);
+
 	daos_obj_close(dfs->root.oh, NULL);
 	daos_obj_close(dfs->super_oh, NULL);
 
 	D_FREE(dfs->prefix);
-
 	D_MUTEX_DESTROY(&dfs->lock);
 	D_FREE(dfs);
+
+	return 0;
+}
+
+int
+dfs_pool_get(dfs_t *dfs, daos_handle_t *poh)
+{
+	if (dfs == NULL || !dfs->mounted)
+		return EINVAL;
+
+	D_MUTEX_LOCK(&dfs->lock);
+	dfs->poh_refcount++;
+	D_MUTEX_UNLOCK(&dfs->lock);
+
+	*poh = dfs->poh;
+	return 0;
+}
+
+int
+dfs_pool_put(dfs_t *dfs, daos_handle_t poh)
+{
+	if (dfs == NULL || !dfs->mounted)
+		return EINVAL;
+	if (poh.cookie != dfs->poh.cookie) {
+		D_ERROR("Pool handle is not the same as the DFS Mount handle\n");
+		return EINVAL;
+	}
+
+	D_MUTEX_LOCK(&dfs->lock);
+	if (dfs->poh_refcount <= 0) {
+		D_ERROR("Invalid pool handle refcount\n");
+		D_MUTEX_UNLOCK(&dfs->lock);
+		return EINVAL;
+	}
+	dfs->poh_refcount--;
+	D_MUTEX_UNLOCK(&dfs->lock);
+
+	return 0;
+}
+
+int
+dfs_cont_get(dfs_t *dfs, daos_handle_t *coh)
+{
+	if (dfs == NULL || !dfs->mounted)
+		return EINVAL;
+
+	D_MUTEX_LOCK(&dfs->lock);
+	dfs->coh_refcount++;
+	D_MUTEX_UNLOCK(&dfs->lock);
+
+	*coh = dfs->coh;
+	return 0;
+}
+
+int
+dfs_cont_put(dfs_t *dfs, daos_handle_t coh)
+{
+	if (dfs == NULL || !dfs->mounted)
+		return EINVAL;
+	if (coh.cookie != dfs->coh.cookie) {
+		D_ERROR("Cont handle is not the same as the DFS Mount handle\n");
+		return EINVAL;
+	}
+
+	D_MUTEX_LOCK(&dfs->lock);
+	if (dfs->coh_refcount <= 0) {
+		D_ERROR("Invalid cont handle refcount\n");
+		D_MUTEX_UNLOCK(&dfs->lock);
+		return EINVAL;
+	}
+	dfs->coh_refcount--;
+	D_MUTEX_UNLOCK(&dfs->lock);
 
 	return 0;
 }
@@ -2066,7 +2131,7 @@ dfs_local2global(dfs_t *dfs, d_iov_t *glob)
 		return daos_der2errno(rc);
 
 	if (glob->iov_buf_len < glob_buf_size) {
-		D_DEBUG(DF_DSMC, "Larger glob buffer needed ("DF_U64" bytes "
+		D_DEBUG(DB_ANY, "Larger glob buffer needed ("DF_U64" bytes "
 			"provided, "DF_U64" required).\n", glob->iov_buf_len,
 			glob_buf_size);
 		glob->iov_buf_len = glob_buf_size;
@@ -3539,14 +3604,15 @@ dfs_open_stat(dfs_t *dfs, dfs_obj_t *parent, const char *name, mode_t mode,
 			D_DEBUG(DB_TRACE, "Failed to open dir (%d)\n", rc);
 			D_GOTO(out, rc);
 		}
+		file_size = sizeof(entry);
 		break;
 	case S_IFLNK:
-		rc = open_symlink(dfs, parent, flags, cid, value, &entry, len,
-				  obj);
+		rc = open_symlink(dfs, parent, flags, cid, value, &entry, len, obj);
 		if (rc) {
 			D_DEBUG(DB_TRACE, "Failed to open symlink (%d)\n", rc);
 			D_GOTO(out, rc);
 		}
+		file_size = entry.value_len;
 		break;
 	default:
 		D_ERROR("Invalid entry type (not a dir, file, symlink).\n");
@@ -3714,7 +3780,7 @@ dfs_obj_local2global(dfs_t *dfs, dfs_obj_t *obj, d_iov_t *glob)
 		return daos_der2errno(rc);
 
 	if (glob->iov_buf_len < glob_buf_size) {
-		D_DEBUG(DF_DSMC, "Larger glob buffer needed ("DF_U64" bytes "
+		D_DEBUG(DB_ANY, "Larger glob buffer needed ("DF_U64" bytes "
 			"provided, "DF_U64" required).\n", glob->iov_buf_len,
 			glob_buf_size);
 		glob->iov_buf_len = glob_buf_size;

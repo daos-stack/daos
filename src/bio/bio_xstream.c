@@ -50,6 +50,8 @@ static unsigned int bio_chk_cnt_init;
 bool bio_scm_rdma;
 /* Whether SPDK inited */
 bool bio_spdk_inited;
+/* SPDK subsystem fini timeout */
+unsigned int bio_spdk_subsys_timeout = 9000;	/* ms */
 
 struct bio_nvme_data {
 	ABT_mutex		 bd_mutex;
@@ -110,6 +112,12 @@ bio_spdk_env_init(void)
 		rc = bio_set_hotplug_filter(nvme_glb.bd_nvme_conf);
 		if (rc != 0) {
 			D_ERROR("Failed to set hotplug filter, "DF_RC"\n", DP_RC(rc));
+			goto out;
+		}
+
+		rc = bio_read_accel_props(nvme_glb.bd_nvme_conf);
+		if (rc != 0) {
+			D_ERROR("Failed to read acceleration properties, "DF_RC"\n", DP_RC(rc));
 			goto out;
 		}
 	}
@@ -190,6 +198,9 @@ bio_nvme_init(const char *nvme_conf, int numa_node, unsigned int mem_size,
 
 	d_getenv_bool("DAOS_SCM_RDMA_ENABLED", &bio_scm_rdma);
 	D_INFO("RDMA to SCM is %s\n", bio_scm_rdma ? "enabled" : "disabled");
+
+	d_getenv_int("DAOS_SPDK_SUBSYS_TIMEOUT", &bio_spdk_subsys_timeout);
+	D_INFO("SPDK subsystem fini timeout is %u ms\n", bio_spdk_subsys_timeout);
 
 	/* Hugepages disabled */
 	if (mem_size == 0) {
@@ -1235,7 +1246,7 @@ bio_xsctxt_free(struct bio_xs_context *ctxt)
 			 * temporary workaround.
 			 */
 			rc = xs_poll_completion(ctxt, &cp_arg.cca_inflights,
-						9000 /*ms*/);
+						bio_spdk_subsys_timeout);
 			D_CDEBUG(rc == 0, DB_MGMT, DLOG_ERR,
 				 "SPDK subsystems finalized. "DF_RC"\n",
 				 DP_RC(rc));
@@ -1273,7 +1284,7 @@ bio_xsctxt_free(struct bio_xs_context *ctxt)
 }
 
 int
-bio_xsctxt_alloc(struct bio_xs_context **pctxt, int tgt_id)
+bio_xsctxt_alloc(struct bio_xs_context **pctxt, int tgt_id, bool self_polling)
 {
 	struct bio_xs_context	*ctxt;
 	char			 th_name[32];
@@ -1285,6 +1296,7 @@ bio_xsctxt_alloc(struct bio_xs_context **pctxt, int tgt_id)
 
 	D_INIT_LIST_HEAD(&ctxt->bxc_io_ctxts);
 	ctxt->bxc_tgt_id = tgt_id;
+	ctxt->bxc_self_polling = self_polling;
 
 	/* Skip NVMe context setup if the daos_nvme.conf isn't present */
 	if (!bio_nvme_configured()) {

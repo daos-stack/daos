@@ -7,16 +7,19 @@ centos7/daos-client-tests-openmpi*.rpm
 centos7/daos-firmware*.rpm
 centos7/daos-serialize*.rpm
 centos7/daos-server-tests-openmpi*.rpm
+centos7/daos-tests-internal*.rpm
 
-centos8/daos-client-tests-openmpi*.rpm
-centos8/daos-firmware*.rpm
-centos8/daos-serialize*.rpm
-centos8/daos-server-tests-openmpi*.rpm
+el8/daos-client-tests-openmpi*.rpm
+el8/daos-firmware*.rpm
+el8/daos-serialize*.rpm
+el8/daos-server-tests-openmpi*.rpm
+el8/daos-tests-internal*.rpm
 
 leap15/daos-client-tests-openmpi*.rpm
 leap15/daos-firmware*.rpm
 leap15/daos-serialize*.rpm
 leap15/daos-server-tests-openmpi*.rpm
+leap15/daos-tests-internal*.rpm
 
 ubuntu20.04/daos-*.deb
 ubuntu20.04/libdaos*.deb

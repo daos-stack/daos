@@ -9,8 +9,8 @@ package server
 import (
 	"context"
 	"fmt"
-	"io/ioutil"
 	"net"
+	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -30,6 +30,7 @@ import (
 	"github.com/daos-stack/daos/src/control/server/engine"
 	"github.com/daos-stack/daos/src/control/server/storage"
 	"github.com/daos-stack/daos/src/control/system"
+	"github.com/daos-stack/daos/src/control/system/raft"
 )
 
 // netListenerFn is a type alias for the net.Listener function signature.
@@ -38,10 +39,7 @@ type netListenFn func(string, string) (net.Listener, error)
 // resolveTCPFn is a type alias for the net.ResolveTCPAddr function signature.
 type resolveTCPFn func(string, string) (*net.TCPAddr, error)
 
-const (
-	iommuPath            = "/sys/class/iommu"
-	scanMinHugePageCount = 128
-)
+const scanMinHugePageCount = 128
 
 func engineCfgGetBdevs(engineCfg *engine.Config) *storage.BdevDeviceList {
 	bdevs := []string{}
@@ -89,15 +87,21 @@ func cfgGetRaftDir(cfg *config.Server) string {
 	return filepath.Join(cfg.Engines[0].Storage.Tiers.ScmConfigs()[0].Scm.MountPoint, "control_raft")
 }
 
-func iommuDetected() bool {
-	// Simple test for now -- if the path exists and contains
-	// DMAR entries, we assume that's good enough.
-	dmars, err := ioutil.ReadDir(iommuPath)
+func writeCoreDumpFilter(log logging.Logger, path string, filter uint8) error {
+	f, err := os.OpenFile(path, os.O_WRONLY, 0644)
 	if err != nil {
-		return false
+		// Work around a testing oddity that seems to be related to launching
+		// the server via SSH, with the result that the /proc file is unwritable.
+		if os.IsPermission(err) {
+			log.Debugf("Unable to write core dump filter to %s: %s", path, err)
+			return nil
+		}
+		return errors.Wrapf(err, "unable to open core dump filter file %s", path)
 	}
+	defer f.Close()
 
-	return len(dmars) > 0
+	_, err = f.WriteString(fmt.Sprintf("0x%x\n", filter))
+	return err
 }
 
 func createListener(ctlPort int, resolver resolveTCPFn, listener netListenFn) (*net.TCPAddr, net.Listener, error) {
@@ -176,6 +180,8 @@ func getEngineNUMANodes(log logging.Logger, engineCfgs []*engine.Config) []strin
 }
 
 func prepBdevStorage(srv *server, iommuEnabled bool) error {
+	defer srv.logDuration(track("time to prepare bdev storage"))
+
 	hasBdevs := cfgHasBdevs(srv.cfg)
 
 	if hasBdevs {
@@ -190,8 +196,8 @@ func prepBdevStorage(srv *server, iommuEnabled bool) error {
 				return FaultIommuDisabled
 			}
 		}
-	} else if srv.cfg.NrHugepages < 0 {
-		srv.log.Debugf("skip nvme prepare as no bdevs in cfg and nr_hugepages: -1 in config")
+	} else if srv.cfg.DisableHugepages {
+		srv.log.Debugf("skip nvme prepare as no bdevs in cfg and disable_hugepages: true in config")
 		return nil
 	}
 
@@ -200,14 +206,15 @@ func prepBdevStorage(srv *server, iommuEnabled bool) error {
 		PCIAllowList: strings.Join(srv.cfg.BdevInclude, storage.BdevPciAddrSep),
 		PCIBlockList: strings.Join(srv.cfg.BdevExclude, storage.BdevPciAddrSep),
 		DisableVFIO:  srv.cfg.DisableVFIO,
-		EnableVMD:    srv.cfg.EnableVMD && !srv.cfg.DisableVFIO && iommuEnabled,
-		Reset_:       true, // Run prepare with reset first to release resources.
 	}
 
-	// Perform prepare reset based on the values in the config file.
-	// Note that prepare reset will not allocate hugepages.
-	if _, err := srv.ctlSvc.NvmePrepare(prepReq); err != nil {
-		srv.log.Errorf("automatic NVMe prepare reset failed: %s", err)
+	switch {
+	case !srv.cfg.DisableVMD && srv.cfg.DisableVFIO:
+		srv.log.Info("VMD not enabled because VFIO disabled in config")
+	case !srv.cfg.DisableVMD && !iommuEnabled:
+		srv.log.Info("VMD not enabled because IOMMU disabled on system")
+	default:
+		prepReq.EnableVMD = !srv.cfg.DisableVMD
 	}
 
 	if hasBdevs {
@@ -247,7 +254,6 @@ func prepBdevStorage(srv *server, iommuEnabled bool) error {
 	//
 	// TODO: should be passing root context into prepare request to
 	//       facilitate cancellation.
-	prepReq.Reset_ = false
 	if _, err := srv.ctlSvc.NvmePrepare(prepReq); err != nil {
 		srv.log.Errorf("automatic NVMe prepare failed: %s", err)
 	}
@@ -257,7 +263,9 @@ func prepBdevStorage(srv *server, iommuEnabled bool) error {
 
 // scanBdevStorage performs discovery and validates existence of configured NVMe SSDs.
 func scanBdevStorage(srv *server) (*storage.BdevScanResponse, error) {
-	if srv.cfg.NrHugepages < 0 {
+	defer srv.logDuration(track("time to scan bdev storage"))
+
+	if srv.cfg.DisableHugepages {
 		srv.log.Debugf("skip nvme scan as hugepages have been disabled in config")
 		return &storage.BdevScanResponse{}, nil
 	}
@@ -385,7 +393,7 @@ func registerEngineEventCallbacks(srv *server, engine *EngineInstance, allStarte
 	})
 }
 
-func configureFirstEngine(ctx context.Context, engine *EngineInstance, sysdb *system.Database, joinFn systemJoinFn) {
+func configureFirstEngine(ctx context.Context, engine *EngineInstance, sysdb *raft.Database, joinFn systemJoinFn) {
 	if !sysdb.IsReplica() {
 		return
 	}
@@ -454,7 +462,7 @@ func registerFollowerSubscriptions(srv *server) {
 }
 
 // registerLeaderSubscriptions stops forwarding events to MS and instead starts
-// handling received forwardede(and local) events.
+// handling received forwarded (and local) events.
 func registerLeaderSubscriptions(srv *server) {
 	srv.pubSub.Reset()
 	srv.pubSub.Subscribe(events.RASTypeAny, srv.evtLogger)
@@ -477,6 +485,11 @@ func registerLeaderSubscriptions(srv *server) {
 				}
 			}
 		}))
+
+	// Add a debounce to throttle multiple SWIM Rank Dead events for the same rank/incarnation.
+	srv.pubSub.Debounce(events.RASSwimRankDead, 0, func(ev *events.RASEvent) string {
+		return strconv.FormatUint(uint64(ev.Rank), 10) + ":" + strconv.FormatUint(ev.Incarnation, 10)
+	})
 }
 
 func getGrpcOpts(cfgTransport *security.TransportConfig) ([]grpc.ServerOption, error) {

@@ -228,8 +228,7 @@ modules_load(void)
 
 		rc = dss_module_load(mod);
 		if (rc != 0) {
-			D_ERROR("Failed to load module %s: %d\n",
-				mod, rc);
+			D_ERROR("Failed to load module %s: %d\n", mod, rc);
 			break;
 		}
 
@@ -635,7 +634,7 @@ server_init(int argc, char *argv[])
 	gethostname(dss_hostname, DSS_HOSTNAME_MAX_LEN);
 
 	daos_debug_set_id_cb(server_id_cb);
-	rc = daos_debug_init(DAOS_LOG_DEFAULT);
+	rc = daos_debug_init_ex(DAOS_LOG_DEFAULT, DLOG_INFO);
 	if (rc != 0)
 		return rc;
 
@@ -830,12 +829,27 @@ static void
 server_fini(bool force)
 {
 	D_INFO("Service is shutting down\n");
+	/*
+	 * The first thing to do is to inform every xstream that the engine is
+	 * shutting down, so that we can avoid allocating new resources or
+	 * taking new references on existing ones if necessary. Note that
+	 * xstreams won't start shutting down until we call dss_srv_fini below.
+	 */
+	dss_srv_set_shutting_down();
 	crt_unregister_event_cb(dss_crt_event_cb, NULL);
 	D_INFO("unregister event callbacks done\n");
+	/*
+	 * Cleaning up modules needs to create ULTs on other xstreams; must be
+	 * called before shutting down the xstreams.
+	 */
 	dss_module_cleanup_all();
 	D_INFO("dss_module_cleanup_all() done\n");
 	server_init_state_fini();
 	D_INFO("server_init_state_fini() done\n");
+	/*
+	 * All other xstreams start shutting down here. ULT/tasklet creations
+	 * on them are no longer possible.
+	 */
 	dss_srv_fini(force);
 	D_INFO("dss_srv_fini() done\n");
 	ds_iv_fini();

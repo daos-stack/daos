@@ -204,8 +204,8 @@ rebuild_ec_multi_stripes(void **state)
 
 	/* test EC degraded fetch and verify data */
 	ioreq_init(&req, arg->coh, oid, DAOS_IOD_ARRAY, arg);
-	fail_shards[0] = 2;
-	fail_shards[1] = 1;
+	fail_shards[0] = 1;
+	fail_shards[1] = 0;
 	daos_fail_value_set(daos_shard_fail_value(fail_shards, 2));
 	daos_fail_loc_set(DAOS_FAIL_SHARD_OPEN | DAOS_FAIL_ALWAYS);
 	for (i = 0; i < TEST_STRIPE_NR; i++) {
@@ -1123,7 +1123,7 @@ run_daos_rebuild_simple_ec_test(int rank, int size, int *sub_tests,
 {
 	int rc = 0;
 
-	MPI_Barrier(MPI_COMM_WORLD);
+	par_barrier(PAR_COMM_WORLD);
 	if (sub_tests_size == 0) {
 		sub_tests_size = ARRAY_SIZE(rebuild_tests);
 		sub_tests = NULL;
@@ -1133,7 +1133,7 @@ run_daos_rebuild_simple_ec_test(int rank, int size, int *sub_tests,
 				ARRAY_SIZE(rebuild_tests), sub_tests,
 				sub_tests_size);
 
-	MPI_Barrier(MPI_COMM_WORLD);
+	par_barrier(PAR_COMM_WORLD);
 
 	return rc;
 }

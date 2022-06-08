@@ -14,7 +14,7 @@
 #include <daos/btree.h>
 #include <daos_types.h>
 #include <daos_srv/vos.h>
-#include <daos_api.h> /* For ofeat bits */
+#include <daos_api.h> /* For otype bits */
 #include <daos/checksum.h>
 #include "vos_internal.h"
 #include "vos_ts.h"
@@ -473,13 +473,12 @@ out:
 }
 
 static int
-query_recx(struct open_query *query, daos_recx_t *recxs)
+query_recx(struct open_query *query, daos_recx_t *recx)
 {
 	if (!(query->qt_flags & VOS_GET_RECX_EC))
-		return query_normal_recx(query, &recxs[0]);
+		return query_normal_recx(query, recx);
 
-	memset(&recxs[1], 0, sizeof(recxs[1]) * 2);
-	return query_ec_recx(query, &recxs[0]);
+	return query_ec_recx(query, recx);
 }
 
 static int
@@ -586,6 +585,9 @@ vos_obj_query_key(daos_handle_t coh, daos_unit_oid_t oid, uint32_t flags,
 
 	obj_epr.epr_hi = dtx_is_valid_handle(dth) ? dth->dth_epoch : epoch;
 	bound = dtx_is_valid_handle(dth) ? dth->dth_epoch_bound : epoch;
+
+	if (max_write != NULL)
+		*max_write = 0;
 
 	if ((flags & VOS_GET_MAX) && (flags & VOS_GET_MIN)) {
 		D_ERROR("Ambiguous query.  Please select either VOS_GET_MAX"
@@ -775,7 +777,6 @@ out:
 	if (obj != NULL)
 		vos_obj_release(vos_obj_cache_current(), obj, false);
 
-	vos_dth_set(NULL);
 	if (rc == 0 || rc == -DER_NONEXIST) {
 		if (vos_ts_wcheck(query->qt_ts_set, obj_epr.epr_hi,
 				  query->qt_bound))
@@ -787,6 +788,7 @@ out:
 
 	vos_ts_set_free(query->qt_ts_set);
 free_query:
+	vos_dth_set(NULL);
 	D_FREE(query);
 
 	return rc;

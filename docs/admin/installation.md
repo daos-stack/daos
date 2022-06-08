@@ -10,7 +10,7 @@ half of 2022).
 
 ## DAOS from Scratch
 
-The following instructions have been verified with CentOS. Installations on other
+The following instructions have been verified with CentOS7 and EL8. Installations on other
 Linux distributions might be similar with some variations.
 Developers of DAOS may want to review the additional sections below before beginning,
 for suggestions related specifically to development. Contact us in our
@@ -20,24 +20,24 @@ for suggestions related specifically to development. Contact us in our
 
 To build DAOS and its dependencies, several software packages must be installed
 on the system. This includes scons, libuuid, cmocka, ipmctl, and several other
-packages usually available on all the Linux distributions. Moreover, a Go
-version of at least 1.10 is required.
+packages usually available on all the Linux distributions.
 
-An exhaustive list of packages for each supported Linux distribution is
-maintained in the Docker files (please click on the link):
+A script is provided for each Linux distribution to install the packages required, and the Docker
+install process calls out to this script as part of the install process.
+Check the [utils/docker](https://github.com/daos-stack/daos/blob/master/utils/docker) directory for
+different Linux distribution versions.
 
--    [CentOS 7](https://github.com/daos-stack/daos/blob/master/utils/docker/Dockerfile.centos.7#L19-L79)
--    [openSUSE Leap 15](https://github.com/daos-stack/daos/blob/master/utils/docker/Dockerfile.leap.15#L36-L85)
--    [Ubuntu 20.04](https://github.com/daos-stack/daos/blob/master/1.2/utils/docker/Dockerfile.ubuntu.20.04#L14-L22)
-
-The command lines to install the required packages can be extracted from
-the Docker files by removing the "RUN" command, which is specific to Docker.
-Check the [utils/docker](https://github.com/daos-stack/daos/blob/master/utils/docker)
-directory for different Linux distribution versions.
+-    [EL 8](https://github.com/daos-stack/daos/blob/master/utils/scripts/install-el8.sh)
+-    [CentOS 7](https://github.com/daos-stack/daos/blob/master/utils/scripts/install-centos7.sh)
+-    [openSUSE Leap 15](https://github.com/daos-stack/daos/blob/master/utils/scripts/install-leap15.sh)
+-    [Ubuntu 20.04](https://github.com/daos-stack/daos/blob/master/utils/scripts/install-ubuntu20.sh)
 
 Some DAOS tests use MPI. The DAOS build process uses the environment modules
 package to detect the presence of MPI. If none is found, the build will skip
 building those tests.
+
+In addition some python packages are required, which can be installed via the Linux distribution
+or installed by [pip](https://pip.pypa.io/en/stable/) after the source code is available.
 
 ### DAOS Source Code
 
@@ -54,11 +54,25 @@ below) and initializes all the submodules automatically.
 
 ### Building DAOS & Dependencies
 
+Once the source code is checked out then you can use this to install the python requirements, this
+can be done via a python [virtual environment](https://packaging.python.org/en/latest/guides/installing-using-pip-and-virtual-environments/) or installed system wide.
+
+To install a virtual environment for building DAOS use the following commands, this will only need
+to be done once, for a new shell only the `source venv/bin/activate` command will be required.
+Alternatively the packages can be installed via pip as root which will install onto PATH, or as
+the user outside of a virtual environment, in which case `~/.local/bin` will need to be added to
+PATH.
+```bash
+$ python3 -m venv venv
+$ source venv/bin/activate
+$ python3 -m pip install -f requirements.txt
+```
+
 If all the software dependencies listed previously are already satisfied, then
 type the following command in the top source directory to build the DAOS stack:
 
 ```bash
-$ scons-3 --config=force install
+$ scons --config=force install
 ```
 
 If you are a developer of DAOS, we recommend following the instructions in the
@@ -69,7 +83,7 @@ Otherwise, the missing dependencies can be built automatically by invoking scons
 with the following parameters:
 
 ```bash
-$ scons-3 --config=force --build-deps=yes install
+$ scons --config=force --build-deps=yes install
 ```
 
 By default, DAOS and its dependencies are installed under ${daospath}/install.
@@ -78,7 +92,7 @@ command line (e.g., PREFIX=/usr/local).
 
 !!! note
     Several parameters can be set (e.g., COMPILER=clang or COMPILER=icc) on the
-    scons command line. Please see `scons-3 --help` for all the possible options.
+    scons command line. Please see `scons --help` for all the possible options.
     Those options are also saved for future compilations.
 
 ### Environment setup
