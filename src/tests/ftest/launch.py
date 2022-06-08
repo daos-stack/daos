@@ -2259,12 +2259,20 @@ def reset_server_storage(test_file, args):
 
     """
     server_hosts = get_hosts_from_yaml(test_file["yaml"], args, YAML_KEYS["test_servers"])
-    commands = ["daos_server storage prepare -n --reset", "rmmod vfio_pci", "modprobe vfio_pci"]
     print("-" * 80)
-    print(
-        "Resetting server storage on {} after running '{}'".format(
-            NodeSet.fromlist(server_hosts), test_file["py"]))
-    spawn_commands(server_hosts, " && ".join(commands), timeout=600)
+    if server_hosts:
+        commands = [
+            "if lspci | grep -i nvme",
+            "then daos_server storage prepare -n --reset && rmmod vfio_pci && modprobe vfio_pci",
+            "fi"]
+        print(
+            "Resetting server storage on {} after running '{}'".format(
+                NodeSet.fromlist(server_hosts), test_file["py"]))
+        spawn_commands(server_hosts, "bash -c '{}'".format(";".join(commands)), timeout=600)
+    else:
+        print(
+            "Skipping resetting server storage after running '{}' - no server hosts".format(
+                test_file["py"]))
     return 0
 
 
