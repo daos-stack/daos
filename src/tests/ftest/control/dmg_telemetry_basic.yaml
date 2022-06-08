@@ -10,9 +10,9 @@ timeouts:
 server_config:
   name: daos_server
   servers:
-    scm_size: 16
+    scm_size: 4
 pool:
-  scm_size: 8G
+  scm_size: 2G
   control_method: dmg
 container:
   control_method: daos
