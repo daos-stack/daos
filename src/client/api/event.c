@@ -360,7 +360,7 @@ daos_event_complete_locked(struct daos_eq_private *eqx,
 
 		/* If the parent was completed or aborted, we can return */
 		if (parent_evx->evx_status == DAOS_EVS_COMPLETED ||
-		    parent_evx->evx_status == DAOS_EVS_ABORTING)
+		    parent_evx->evx_status == DAOS_EVS_ABORTED)
 			goto out;
 
 		/* If the parent is not a barrier it will complete on its own */
@@ -476,10 +476,11 @@ daos_event_complete(struct daos_event *ev, int rc)
 		D_MUTEX_LOCK(&eqx->eqx_lock);
 	}
 
-	if (evx->evx_status == DAOS_EVS_READY || evx->evx_status == DAOS_EVS_COMPLETED)
+	if (evx->evx_status == DAOS_EVS_READY || evx->evx_status == DAOS_EVS_COMPLETED ||
+	    evx->evx_status == DAOS_EVS_ABORTED)
 		goto out;
 
-	D_ASSERT(evx->evx_status == DAOS_EVS_RUNNING || evx->evx_status == DAOS_EVS_ABORTING);
+	D_ASSERT(evx->evx_status == DAOS_EVS_RUNNING);
 
 	daos_event_complete_locked(eqx, evx, rc);
 
@@ -509,7 +510,7 @@ ev_progress_cb(void *arg)
 		return 1;
 
 	/** Event is still in-flight */
-	if (evx->evx_status != DAOS_EVS_COMPLETED)
+	if (evx->evx_status != DAOS_EVS_COMPLETED && evx->evx_status != DAOS_EVS_ABORTED)
 		return 0;
 
 	/** If there are children in flight, then return in-flight */
@@ -542,7 +543,7 @@ ev_progress_cb(void *arg)
 	 * Check again if the event is still in completed state, then remove it from the event
 	 * queue.
 	 */
-	if (evx->evx_status == DAOS_EVS_COMPLETED) {
+	if (evx->evx_status == DAOS_EVS_COMPLETED || evx->evx_status == DAOS_EVS_ABORTED) {
 		struct daos_eq *eq = daos_eqx2eq(eqx);
 
 		evx->evx_status = DAOS_EVS_READY;
@@ -663,7 +664,8 @@ eq_progress_cb(void *arg)
 		eq->eq_n_comp--;
 
 		d_list_del_init(&evx->evx_link);
-		D_ASSERT(evx->evx_status == DAOS_EVS_COMPLETED);
+		D_ASSERT(evx->evx_status == DAOS_EVS_COMPLETED ||
+			 evx->evx_status == DAOS_EVS_ABORTED);
 		evx->evx_status = DAOS_EVS_READY;
 
 		if (epa->events != NULL) {
@@ -791,34 +793,14 @@ out:
 	return count;
 }
 
-static void
-daos_event_abort_one(struct daos_event_private *evx)
-{
-	/* NB: ev::ev_error will be set by daos_event_complete(),
-	 * so user can decide to not set error if operation has already
-	 * finished while trying to abort */
-	/* NB: always set ev_status to DAOS_EVS_ABORTING even w/o callback,
-	 * so aborted parent event can be marked as COMPLETE right after
-	 * completion all launched events other than completion of all
-	 * children. See daos_parent_event_can_complete for details. */
-	evx->evx_status = DAOS_EVS_ABORTING;
-	daos_event_complete_cb(evx, -DER_CANCELED);
-}
-
 static int
 daos_event_abort_locked(struct daos_eq_private *eqx,
 			struct daos_event_private *evx)
 {
-	struct daos_event_private	*child;
-
 	if (evx->evx_status != DAOS_EVS_RUNNING)
 		return -DER_NO_PERM;
 
-	daos_event_abort_one(evx);
-	/* abort all children if he has */
-	d_list_for_each_entry(child, &evx->evx_child, evx_link)
-		daos_event_abort_one(child);
-
+	/** Since we don't support task and RPC abort, this is a no-op for now */
 	return 0;
 }
 
@@ -1089,11 +1071,13 @@ daos_event_fini(struct daos_event *ev)
 		tmp = d_list_entry(evx->evx_child.next,
 				   struct daos_event_private, evx_link);
 		D_ASSERTF(tmp->evx_status == DAOS_EVS_READY ||
-			  tmp->evx_status == DAOS_EVS_COMPLETED,
+			  tmp->evx_status == DAOS_EVS_COMPLETED ||
+			  tmp->evx_status == DAOS_EVS_ABORTED,
 			 "EV %p status: %d\n", tmp, tmp->evx_status);
 
 		if (tmp->evx_status != DAOS_EVS_READY &&
-		    tmp->evx_status != DAOS_EVS_COMPLETED) {
+		    tmp->evx_status != DAOS_EVS_COMPLETED &&
+		    tmp->evx_status != DAOS_EVS_ABORTED) {
 			D_ERROR("Child event %p launched: %d\n", daos_evx2ev(tmp), tmp->evx_status);
 			rc = -DER_INVAL;
 			goto out;
