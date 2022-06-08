@@ -539,8 +539,7 @@ class TestPool(TestDaosApiBase):
             for index, item in enumerate(val)]
         return self._check_info(checks)
 
-    def check_free_space(self, expected_scm=None, expected_nvme=None,
-                         timeout=30):
+    def check_free_space(self, expected_scm=None, expected_nvme=None, timeout=30):
         """Check pool free space with expected value.
         Args:
             expected_scm (int, optional): pool expected SCM free space.
@@ -551,6 +550,15 @@ class TestPool(TestDaosApiBase):
             Arguments may also be provided as a string with a number preceded
             by '<', '<=', '>', or '>=' for other comparisons besides the
             default '=='.
+
+        Raises:
+            DaosTestError: if scm or nvme free space doesn't match expected
+            values within timeout.
+
+        Returns:
+            bool: True if expected value is specified and all the
+                specified values match; False if no space parameters specified.
+
         """
         if not expected_scm and not expected_nvme:
             self.log.error("at least one space parameter must be specified")
