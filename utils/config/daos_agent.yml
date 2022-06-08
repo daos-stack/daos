@@ -60,11 +60,25 @@
 ## default: INFO
 #control_log_mask: DEBUG
 
+## Disable automatic eviction of open pool handles on agent shutdown. By default,
+## the agent will evict all open pool handles for local processes on shutdown.
+## Note that this implies that stopping or restarting the agent will result
+## in interruption of DAOS I/O for any local DAOS client processes that have
+## an open pool handle.
+# disable_auto_evict: true
+
+## Disable the agent's internal caches. If set to true, the agent will query the
+## server access point and local hardware data every time a client requests
+## rank connection information.
+#
+## default: false
+#disable_caching: true
+
 # Manually define the fabric interfaces and domains to be used by the agent,
 # organized by NUMA node.
 # If not defined, the agent will automatically detect all fabric interfaces and
 # select appropriate ones based on the server preferences.
-# 
+#
 #fabric_ifaces:
 #-
 #  numa_node: 0

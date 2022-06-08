@@ -40,8 +40,8 @@ array_oh_share(daos_handle_t coh, int rank, daos_handle_t *oh)
 	}
 
 	/** broadcast size of global handle to all peers */
-	rc = MPI_Bcast(&ghdl.iov_buf_len, 1, MPI_UINT64_T, 0, MPI_COMM_WORLD);
-	assert_int_equal(rc, MPI_SUCCESS);
+	rc = par_bcast(PAR_COMM_WORLD, &ghdl.iov_buf_len, 1, PAR_UINT64, 0);
+	assert_int_equal(rc, 0);
 
 	/** allocate buffer for global pool handle */
 	D_ALLOC(ghdl.iov_buf, ghdl.iov_buf_len);
@@ -54,8 +54,8 @@ array_oh_share(daos_handle_t coh, int rank, daos_handle_t *oh)
 	}
 
 	/** broadcast global handle to all peers */
-	rc = MPI_Bcast(ghdl.iov_buf, ghdl.iov_len, MPI_BYTE, 0, MPI_COMM_WORLD);
-	assert_int_equal(rc, MPI_SUCCESS);
+	rc = par_bcast(PAR_COMM_WORLD, ghdl.iov_buf, ghdl.iov_len, PAR_BYTE, 0);
+	assert_int_equal(rc, 0);
 
 	if (rank != 0) {
 		/** unpack global handle */
@@ -65,7 +65,7 @@ array_oh_share(daos_handle_t coh, int rank, daos_handle_t *oh)
 
 	D_FREE(ghdl.iov_buf);
 
-	MPI_Barrier(MPI_COMM_WORLD);
+	par_barrier(PAR_COMM_WORLD);
 }
 
 static void
@@ -85,7 +85,7 @@ simple_array_mgmt(void **state)
 	assert_rc_equal(rc, -DER_INVAL);
 
 	/** create the array with LEXICAL DKEY, should FAIL */
-	oid = daos_test_oid_gen(arg->coh, OC_SX, DAOS_OF_DKEY_LEXICAL, 0,
+	oid = daos_test_oid_gen(arg->coh, OC_SX, DAOS_OT_DKEY_LEXICAL, 0,
 			  arg->myrank);
 	rc = daos_array_create(arg->coh, oid, DAOS_TX_NONE, 4, chunk_size,
 			       &oh, NULL);
@@ -204,7 +204,7 @@ simple_array_mgmt(void **state)
 	rc = daos_array_close(oh, NULL);
 	assert_rc_equal(rc, 0);
 
-	MPI_Barrier(MPI_COMM_WORLD);
+	par_barrier(PAR_COMM_WORLD);
 } /* End simple_array_mgmt */
 
 #define BUFLEN 80
@@ -223,7 +223,7 @@ small_io(void **state)
 	daos_size_t	array_size;
 	int		rc;
 
-	MPI_Barrier(MPI_COMM_WORLD);
+	par_barrier(PAR_COMM_WORLD);
 	oid = daos_test_oid_gen(arg->coh, OC_SX, type, 0, arg->myrank);
 
 	/** create the array */
@@ -263,7 +263,7 @@ small_io(void **state)
 
 	rc = daos_array_close(oh, NULL);
 	assert_rc_equal(rc, 0);
-	MPI_Barrier(MPI_COMM_WORLD);
+	par_barrier(PAR_COMM_WORLD);
 } /* End small_io */
 
 static int
@@ -273,7 +273,7 @@ change_array_size(test_arg_t *arg, daos_handle_t oh, daos_size_t array_size)
 	daos_size_t new_size, i;
 	int rc;
 
-	MPI_Barrier(MPI_COMM_WORLD);
+	par_barrier(PAR_COMM_WORLD);
 
 	if (arg->myrank != 0)
 		goto out;
@@ -333,7 +333,7 @@ change_array_size(test_arg_t *arg, daos_handle_t oh, daos_size_t array_size)
 	}
 
 out:
-	MPI_Bcast(&rc, 1, MPI_INT, 0, MPI_COMM_WORLD);
+	par_bcast(PAR_COMM_WORLD, &rc, 1, PAR_INT, 0);
 	return rc;
 }
 
@@ -352,7 +352,7 @@ contig_mem_contig_arr_io_helper(void **state, daos_size_t cell_size)
 	daos_event_t	ev, *evp;
 	int		rc;
 
-	MPI_Barrier(MPI_COMM_WORLD);
+	par_barrier(PAR_COMM_WORLD);
 	/** create the array on rank 0 and share the oh. */
 	if (arg->myrank == 0) {
 		oid = daos_test_oid_gen(arg->coh, OC_SX,
@@ -437,7 +437,7 @@ contig_mem_contig_arr_io_helper(void **state, daos_size_t cell_size)
 	D_FREE(rbuf);
 	D_FREE(wbuf);
 
-	MPI_Barrier(MPI_COMM_WORLD);
+	par_barrier(PAR_COMM_WORLD);
 
 	daos_size_t array_size;
 	daos_size_t expected_size;
@@ -461,7 +461,7 @@ contig_mem_contig_arr_io_helper(void **state, daos_size_t cell_size)
 	rc = daos_array_punch(oh, DAOS_TX_NONE, &iod, NULL);
 	assert_rc_equal(rc, 0);
 
-	MPI_Barrier(MPI_COMM_WORLD);
+	par_barrier(PAR_COMM_WORLD);
 
 	/** Verify size is still the same */
 	rc = daos_array_get_size(oh, DAOS_TX_NONE, &array_size, NULL);
@@ -484,7 +484,7 @@ contig_mem_contig_arr_io_helper(void **state, daos_size_t cell_size)
 		rc = daos_event_fini(&ev);
 		assert_rc_equal(rc, 0);
 	}
-	MPI_Barrier(MPI_COMM_WORLD);
+	par_barrier(PAR_COMM_WORLD);
 } /* End contig_mem_contig_arr_io_helper */
 
 static void
@@ -509,7 +509,7 @@ contig_mem_str_arr_io_helper(void **state, daos_size_t cell_size)
 	daos_event_t	ev, *evp;
 	int		rc;
 
-	MPI_Barrier(MPI_COMM_WORLD);
+	par_barrier(PAR_COMM_WORLD);
 
 	/** create the array on rank 0 and share the oh. */
 	if (arg->myrank == 0) {
@@ -600,7 +600,7 @@ contig_mem_str_arr_io_helper(void **state, daos_size_t cell_size)
 	D_FREE(rbuf);
 	D_FREE(wbuf);
 
-	MPI_Barrier(MPI_COMM_WORLD);
+	par_barrier(PAR_COMM_WORLD);
 
 	daos_size_t expected_size;
 	daos_size_t array_size = 0;
@@ -643,7 +643,7 @@ contig_mem_str_arr_io_helper(void **state, daos_size_t cell_size)
 	}
 
 	D_FREE(iod.arr_rgs);
-	MPI_Barrier(MPI_COMM_WORLD);
+	par_barrier(PAR_COMM_WORLD);
 } /* End contig_mem_str_arr_io_helper */
 
 static void
@@ -667,7 +667,7 @@ str_mem_str_arr_io_helper(void **state, daos_size_t cell_size)
 	daos_event_t	ev, *evp;
 	int		rc;
 
-	MPI_Barrier(MPI_COMM_WORLD);
+	par_barrier(PAR_COMM_WORLD);
 	/** create the array on rank 0 and share the oh. */
 	if (arg->myrank == 0) {
 		oid = daos_test_oid_gen(arg->coh, OC_SX,
@@ -773,7 +773,7 @@ str_mem_str_arr_io_helper(void **state, daos_size_t cell_size)
 	D_FREE(iod.arr_rgs);
 	D_FREE(sgl.sg_iovs);
 
-	MPI_Barrier(MPI_COMM_WORLD);
+	par_barrier(PAR_COMM_WORLD);
 
 	daos_size_t array_size;
 	daos_size_t expected_size;
@@ -798,7 +798,7 @@ str_mem_str_arr_io_helper(void **state, daos_size_t cell_size)
 		rc = daos_event_fini(&ev);
 		assert_rc_equal(rc, 0);
 	}
-	MPI_Barrier(MPI_COMM_WORLD);
+	par_barrier(PAR_COMM_WORLD);
 } /* End str_mem_str_arr_io */
 
 static void
@@ -823,7 +823,7 @@ read_empty_records(void **state)
 	daos_event_t	ev;
 	int		rc;
 
-	MPI_Barrier(MPI_COMM_WORLD);
+	par_barrier(PAR_COMM_WORLD);
 	oid = daos_test_oid_gen(arg->coh, OC_SX, typeb, 0, arg->myrank);
 
 	if (arg->async) {
@@ -867,7 +867,7 @@ read_empty_records(void **state)
 	assert_rc_equal(rc, 0);
 	assert_int_equal(iod.arr_nr_short_read, NUM_ELEMS * sizeof(int));
 
-	MPI_Barrier(MPI_COMM_WORLD);
+	par_barrier(PAR_COMM_WORLD);
 
 	/** Verify data - rbuf should not be touched */
 	for (i = 0; i < NUM_ELEMS; i++) {
@@ -889,7 +889,7 @@ read_empty_records(void **state)
 	rc = daos_array_write(oh, DAOS_TX_NONE, &iod, &sgl, NULL);
 	assert_rc_equal(rc, 0);
 
-	MPI_Barrier(MPI_COMM_WORLD);
+	par_barrier(PAR_COMM_WORLD);
 
 	/** Read from empty records */
 	for (i = 0; i < NUM_ELEMS; i++) {
@@ -919,7 +919,7 @@ read_empty_records(void **state)
 		rc = daos_event_fini(&ev);
 		assert_rc_equal(rc, 0);
 	}
-	MPI_Barrier(MPI_COMM_WORLD);
+	par_barrier(PAR_COMM_WORLD);
 } /* End read_empty_records */
 
 #define NUM 5000
@@ -936,7 +936,7 @@ strided_array(void **state)
 	daos_size_t	i, j, nerrors = 0;
 	int		rc;
 
-	MPI_Barrier(MPI_COMM_WORLD);
+	par_barrier(PAR_COMM_WORLD);
 	oid = daos_test_oid_gen(arg->coh, OC_SX, typeb, 0, arg->myrank);
 
 	/** create the array */
@@ -1010,7 +1010,7 @@ strided_array(void **state)
 	assert_rc_equal(rc, 0);
 
 	assert_int_equal(nerrors, 0);
-	MPI_Barrier(MPI_COMM_WORLD);
+	par_barrier(PAR_COMM_WORLD);
 } /* End str_mem_str_arr_io */
 
 static void
@@ -1028,7 +1028,7 @@ truncate_array(void **state)
 	uint64_t		prev;
 	int			rc;
 
-	MPI_Barrier(MPI_COMM_WORLD);
+	par_barrier(PAR_COMM_WORLD);
 	oid = daos_test_oid_gen(arg->coh, OC_SX, typeb, 0, arg->myrank);
 
 	/** create the array */
@@ -1099,7 +1099,7 @@ truncate_array(void **state)
 
 	D_FREE(buf);
 
-	MPI_Barrier(MPI_COMM_WORLD);
+	par_barrier(PAR_COMM_WORLD);
 } /* End truncate_array */
 
 static const struct CMUnitTest array_api_tests[] = {
@@ -1143,6 +1143,6 @@ run_daos_array_test(int rank, int size)
 					 array_api_tests, daos_array_setup,
 					 test_teardown);
 
-	MPI_Barrier(MPI_COMM_WORLD);
+	par_barrier(PAR_COMM_WORLD);
 	return rc;
 }

@@ -1,4 +1,3 @@
-#!/usr/bin/python3
 # Copyright 2019-2022 Intel Corporation
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
@@ -19,7 +18,7 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 """Wrapper for Modules so we can load an MPI before builds or tests"""
-from __future__ import print_function
+
 import os
 import sys
 import errno

@@ -90,7 +90,7 @@ ds_cont_get_props(struct cont_props *cont_props, uuid_t pool_uuid,
 	/* The provided prop entry types should cover the types used in
 	 * daos_props_2cont_props().
 	 */
-	props = daos_prop_alloc(12);
+	props = daos_prop_alloc(13);
 	if (props == NULL)
 		return -DER_NOMEM;
 
@@ -106,6 +106,7 @@ ds_cont_get_props(struct cont_props *cont_props, uuid_t pool_uuid,
 	props->dpp_entries[9].dpe_type = DAOS_PROP_CO_EC_CELL_SZ;
 	props->dpp_entries[10].dpe_type = DAOS_PROP_CO_EC_PDA;
 	props->dpp_entries[11].dpe_type = DAOS_PROP_CO_RP_PDA;
+	props->dpp_entries[12].dpe_type = DAOS_PROP_CO_GLOBAL_VERSION;
 
 	rc = cont_iv_prop_fetch(pool_uuid, cont_uuid, props);
 	if (rc == DER_SUCCESS)
@@ -600,7 +601,7 @@ cont_child_alloc_ref(void *co_uuid, unsigned int ksize, void *po_uuid,
 	int			rc;
 
 	D_ASSERT(po_uuid != NULL);
-	D_DEBUG(DF_DSMS, DF_CONT": opening\n", DP_CONT(po_uuid, co_uuid));
+	D_DEBUG(DB_MD, DF_CONT": opening\n", DP_CONT(po_uuid, co_uuid));
 
 	D_ALLOC_PTR(cont);
 	if (cont == NULL)
@@ -640,6 +641,7 @@ cont_child_alloc_ref(void *co_uuid, unsigned int ksize, void *po_uuid,
 	cont->sc_snapshots = NULL;
 	cont->sc_dtx_cos_hdl = DAOS_HDL_INVAL;
 	D_INIT_LIST_HEAD(&cont->sc_link);
+	D_INIT_LIST_HEAD(&cont->sc_open_hdls);
 
 	*link = &cont->sc_list;
 	return 0;
@@ -662,8 +664,9 @@ cont_child_free_ref(struct daos_llink *llink)
 
 	D_ASSERT(cont->sc_pool != NULL);
 	D_ASSERT(daos_handle_is_valid(cont->sc_hdl));
+	D_ASSERT(d_list_empty(&cont->sc_open_hdls));
 
-	D_DEBUG(DF_DSMS, DF_CONT": freeing\n",
+	D_DEBUG(DB_MD, DF_CONT": freeing\n",
 		DP_CONT(cont->sc_pool->spc_uuid, cont->sc_uuid));
 
 	vos_cont_close(cont->sc_hdl);
@@ -744,7 +747,7 @@ cont_child_lookup(struct daos_lru_cache *cache, const uuid_t co_uuid,
 			       create ? (void *)po_uuid : NULL, &llink);
 	if (rc != 0) {
 		if (rc == -DER_NONEXIST)
-			D_DEBUG(DF_DSMS, DF_CONT": failed to lookup%s "
+			D_DEBUG(DB_MD, DF_CONT": failed to lookup%s "
 				"container: "DF_RC"\n",
 				DP_CONT(po_uuid, co_uuid),
 				po_uuid == NULL ? "" : "/create", DP_RC(rc));
@@ -772,14 +775,26 @@ cont_child_started(struct ds_cont_child *cont_child)
 	return !d_list_empty(&cont_child->sc_link);
 }
 
+static int cont_close_hdl(uuid_t cont_hdl_uuid);
+
 static void
 cont_child_stop(struct ds_cont_child *cont_child)
 {
+	struct ds_cont_hdl	*hdl;
+
+	while ((hdl = d_list_pop_entry(&cont_child->sc_open_hdls,
+				       struct ds_cont_hdl, sch_link)) != NULL) {
+		D_DEBUG(DB_MD, "Force closing container open handle "DF_UUID"/"DF_UUID"\n",
+			DP_UUID(cont_child->sc_uuid), DP_UUID(hdl->sch_uuid));
+
+		cont_close_hdl(hdl->sch_uuid);
+	}
+
 	/* Some ds_cont_child will only created by ds_cont_child_lookup().
 	 * never be started at all
 	 */
 	if (cont_child_started(cont_child)) {
-		D_DEBUG(DF_DSMS, DF_CONT"[%d]: Stopping container\n",
+		D_DEBUG(DB_MD, DF_CONT"[%d]: Stopping container\n",
 			DP_CONT(cont_child->sc_pool->spc_uuid,
 				cont_child->sc_uuid),
 			dss_get_module_info()->dmi_tgt_id);
@@ -801,11 +816,9 @@ ds_cont_child_stop_all(struct ds_pool_child *pool_child)
 	d_list_t		*cont_list;
 	struct ds_cont_child	*cont_child;
 
-	D_DEBUG(DF_DSMS, DF_UUID"[%d]: Stopping all containers\n",
+	D_DEBUG(DB_MD, DF_UUID"[%d]: Stopping all containers\n",
 		DP_UUID(pool_child->spc_uuid),
 		dss_get_module_info()->dmi_tgt_id);
-
-	D_ASSERT(d_list_empty(&pool_child->spc_list));
 
 	cont_list = &pool_child->spc_cont_list;
 	while (!d_list_empty(cont_list)) {
@@ -824,14 +837,14 @@ cont_child_start(struct ds_pool_child *pool_child, const uuid_t co_uuid,
 	int			 tgt_id = dss_get_module_info()->dmi_tgt_id;
 	int			 rc;
 
-	D_DEBUG(DF_DSMS, DF_CONT"[%d]: Starting container\n",
+	D_DEBUG(DB_MD, DF_CONT"[%d]: Starting container\n",
 		DP_CONT(pool_child->spc_uuid, co_uuid), tgt_id);
 
 	rc = cont_child_lookup(tls->dt_cont_cache, co_uuid,
 			       pool_child->spc_uuid, true /* create */,
 			       &cont_child);
 	if (rc) {
-		D_CDEBUG(rc != -DER_NONEXIST, DLOG_ERR, DF_DSMS,
+		D_CDEBUG(rc != -DER_NONEXIST, DLOG_ERR, DB_MD,
 			 DF_CONT"[%d]: Load container error:%d\n",
 			 DP_CONT(pool_child->spc_uuid, co_uuid), tgt_id, rc);
 		return rc;
@@ -890,7 +903,7 @@ ds_cont_child_start_all(struct ds_pool_child *pool_child)
 	struct vos_iter_anchors	anchors = { 0 };
 	int			rc;
 
-	D_DEBUG(DF_DSMS, DF_UUID"[%d]: Starting all containers\n",
+	D_DEBUG(DB_MD, DF_UUID"[%d]: Starting all containers\n",
 		DP_UUID(pool_child->spc_uuid),
 		dss_get_module_info()->dmi_tgt_id);
 
@@ -942,10 +955,11 @@ cont_hdl_rec_free(struct d_hash_table *htable, d_list_t *rlink)
 
 	D_ASSERT(d_hash_rec_unlinked(&hdl->sch_entry));
 	D_ASSERTF(hdl->sch_ref == 0, "%d\n", hdl->sch_ref);
-	D_DEBUG(DF_DSMS, "freeing "DF_UUID"\n", DP_UUID(hdl->sch_uuid));
+	D_ASSERT(d_list_empty(&hdl->sch_link));
+	D_DEBUG(DB_MD, "freeing "DF_UUID"\n", DP_UUID(hdl->sch_uuid));
 	/* The sch_cont is NULL for global rebuild cont handle */
 	if (hdl->sch_cont != NULL) {
-		D_DEBUG(DF_DSMS, DF_CONT": freeing\n",
+		D_DEBUG(DB_MD, DF_CONT": freeing\n",
 			DP_CONT(hdl->sch_cont->sc_pool->spc_uuid,
 			hdl->sch_cont->sc_uuid));
 		cont_child_put(tls->dt_cont_cache, hdl->sch_cont);
@@ -978,8 +992,14 @@ ds_cont_hdl_hash_destroy(struct d_hash_table *hash)
 static int
 cont_hdl_add(struct d_hash_table *hash, struct ds_cont_hdl *hdl)
 {
-	return d_hash_rec_insert(hash, hdl->sch_uuid, sizeof(uuid_t),
-				 &hdl->sch_entry, true /* exclusive */);
+	int	rc;
+
+	rc = d_hash_rec_insert(hash, hdl->sch_uuid, sizeof(uuid_t),
+			       &hdl->sch_entry, true /* exclusive */);
+	if (rc == 0 && hdl->sch_cont != NULL)
+		d_list_add_tail(&hdl->sch_link, &hdl->sch_cont->sc_open_hdls);
+
+	return rc;
 }
 
 static void
@@ -987,6 +1007,7 @@ cont_hdl_delete(struct d_hash_table *hash, struct ds_cont_hdl *hdl)
 {
 	bool deleted;
 
+	d_list_del_init(&hdl->sch_link);
 	deleted = d_hash_rec_delete(hash, hdl->sch_uuid, sizeof(uuid_t));
 	D_ASSERT(deleted == true);
 }
@@ -1068,7 +1089,7 @@ cont_destroy_wait(struct ds_pool_child *child, uuid_t co_uuid)
 	struct sched_req_attr	 attr;
 	struct sched_request	*req;
 
-	D_DEBUG(DF_DSMS, DF_CONT": wait container destroy\n",
+	D_DEBUG(DB_MD, DF_CONT": wait container destroy\n",
 		DP_CONT(child->spc_uuid, co_uuid));
 
 	D_ASSERT(child != NULL);
@@ -1087,7 +1108,7 @@ cont_destroy_wait(struct ds_pool_child *child, uuid_t co_uuid)
 	}
 	sched_req_put(req);
 
-	D_DEBUG(DF_DSMS, DF_CONT": container destroy done\n",
+	D_DEBUG(DB_MD, DF_CONT": container destroy done\n",
 		DP_CONT(child->spc_uuid, co_uuid));
 #endif
 }
@@ -1147,7 +1168,7 @@ cont_child_destroy_one(void *vin)
 		} /* else: resync should have completed, try again */
 	}
 
-	D_DEBUG(DF_DSMS, DF_CONT": destroying vos container\n",
+	D_DEBUG(DB_MD, DF_CONT": destroying vos container\n",
 		DP_CONT(pool->spc_uuid, in->tdi_uuid));
 
 	rc = vos_cont_destroy(pool->spc_hdl, in->tdi_uuid);
@@ -1202,12 +1223,12 @@ ds_cont_tgt_destroy_handler(crt_rpc_t *rpc)
 	struct cont_tgt_destroy_out    *out = crt_reply_get(rpc);
 	int				rc = 0;
 
-	D_DEBUG(DF_DSMS, DF_CONT": handling rpc %p\n",
+	D_DEBUG(DB_MD, DF_CONT": handling rpc %p\n",
 		DP_CONT(in->tdi_pool_uuid, in->tdi_uuid), rpc);
 
 	rc = ds_cont_tgt_destroy(in->tdi_pool_uuid, in->tdi_uuid);
 	out->tdo_rc = (rc == 0 ? 0 : 1);
-	D_DEBUG(DF_DSMS, DF_CONT": replying rpc %p: %d "DF_RC"\n",
+	D_DEBUG(DB_MD, DF_CONT": replying rpc %p: %d "DF_RC"\n",
 		DP_CONT(in->tdi_pool_uuid, in->tdi_uuid), rpc, out->tdo_rc,
 		DP_RC(rc));
 	crt_reply_send(rpc);
@@ -1264,7 +1285,7 @@ cont_child_create_start(uuid_t pool_uuid, uuid_t cont_uuid, uint32_t pm_ver,
 		return rc;
 	}
 
-	D_DEBUG(DF_DSMS, DF_CONT": creating new vos container\n",
+	D_DEBUG(DB_MD, DF_CONT": creating new vos container\n",
 		DP_CONT(pool_uuid, cont_uuid));
 
 	rc = vos_cont_create(pool_child->spc_hdl, cont_uuid);
@@ -1378,7 +1399,7 @@ ds_cont_local_open(uuid_t pool_uuid, uuid_t cont_hdl_uuid, uuid_t cont_uuid,
 					DP_UUID(cont_hdl_uuid), flags);
 				rc = -DER_EXIST;
 			} else {
-				D_DEBUG(DF_DSMS, DF_CONT": found compatible"
+				D_DEBUG(DB_MD, DF_CONT": found compatible"
 					" container handle: hdl="DF_UUID
 					" capas="DF_U64"\n",
 				      DP_CONT(pool_uuid, cont_uuid),
@@ -1397,6 +1418,7 @@ ds_cont_local_open(uuid_t pool_uuid, uuid_t cont_hdl_uuid, uuid_t cont_uuid,
 	if (hdl == NULL)
 		return -DER_NOMEM;
 
+	D_INIT_LIST_HEAD(&hdl->sch_link);
 	D_ASSERT(pool_uuid != NULL);
 
 	/* cont_uuid is NULL when open rebuild global cont handle */
@@ -1465,6 +1487,9 @@ ds_cont_local_open(uuid_t pool_uuid, uuid_t cont_hdl_uuid, uuid_t cont_uuid,
 
 		rc = dtx_cont_open(hdl->sch_cont);
 		if (rc != 0) {
+			D_ASSERTF(hdl->sch_cont->sc_open == 1, "Unexpected open count for cont "
+				  DF_UUID": %d\n", DP_UUID(cont_uuid), hdl->sch_cont->sc_open);
+
 			hdl->sch_cont->sc_open--;
 			D_GOTO(err_cont, rc);
 		}
@@ -1499,15 +1524,17 @@ opened:
 	return 0;
 
 err_dtx:
-	D_ASSERT(hdl->sch_cont->sc_open > 0);
+	D_ASSERTF(hdl->sch_cont->sc_open == 1, "Unexpected open count for cont "
+		  DF_UUID": %d\n", DP_UUID(cont_uuid), hdl->sch_cont->sc_open);
+
 	hdl->sch_cont->sc_open--;
-	if (hdl->sch_cont->sc_open == 0)
-		dtx_cont_close(hdl->sch_cont);
+	dtx_cont_close(hdl->sch_cont);
+
 err_cont:
 	if (daos_handle_is_valid(poh)) {
 		int rc_tmp;
 
-		D_DEBUG(DF_DSMS, DF_CONT": destroying new vos container\n",
+		D_DEBUG(DB_MD, DF_CONT": destroying new vos container\n",
 			DP_CONT(pool_uuid, cont_uuid));
 
 		D_ASSERT(hdl != NULL);
@@ -1620,7 +1647,7 @@ cont_close_hdl(uuid_t cont_hdl_uuid)
 	hdl = cont_hdl_lookup_internal(&tls->dt_cont_hdl_hash, cont_hdl_uuid);
 
 	if (hdl == NULL) {
-		D_DEBUG(DF_DSMS, DF_CONT": already closed: hdl="DF_UUID"\n",
+		D_DEBUG(DB_MD, DF_CONT": already closed: hdl="DF_UUID"\n",
 			DP_CONT(NULL, NULL), DP_UUID(cont_hdl_uuid));
 		return 0;
 	}
@@ -1630,7 +1657,7 @@ cont_close_hdl(uuid_t cont_hdl_uuid)
 
 	cont_child = hdl->sch_cont;
 	if (cont_child != NULL) {
-		D_DEBUG(DF_DSMS, DF_CONT": closing (%d): hdl="DF_UUID"\n",
+		D_DEBUG(DB_MD, DF_CONT": closing (%d): hdl="DF_UUID"\n",
 			DP_CONT(cont_child->sc_pool->spc_uuid,
 				cont_child->sc_uuid),
 			cont_child->sc_open, DP_UUID(cont_hdl_uuid));
@@ -1791,7 +1818,7 @@ ds_cont_tgt_query_handler(crt_rpc_t *rpc)
 	out->tqo_hae	= MIN(out->tqo_hae, pack_args.xcq_hae);
 	out->tqo_rc	= (rc == 0 ? 0 : 1);
 
-	D_DEBUG(DF_DSMS, DF_CONT": replying rpc %p: %d "DF_RC"\n",
+	D_DEBUG(DB_MD, DF_CONT": replying rpc %p: %d "DF_RC"\n",
 		DP_CONT(NULL, NULL), rpc, out->tqo_rc, DP_RC(rc));
 	crt_reply_send(rpc);
 }
@@ -1988,12 +2015,12 @@ ds_cont_tgt_epoch_aggregate_handler(crt_rpc_t *rpc)
 	struct cont_tgt_epoch_aggregate_out	*out = crt_reply_get(rpc);
 	int					 rc;
 
-	D_DEBUG(DF_DSMS, DF_CONT": handling rpc %p: epr (%p) [#"DF_U64"]\n",
+	D_DEBUG(DB_MD, DF_CONT": handling rpc %p: epr (%p) [#"DF_U64"]\n",
 		DP_CONT(in->tai_pool_uuid, in->tai_cont_uuid), rpc,
 		in->tai_epr_list.ca_arrays, in->tai_epr_list.ca_count);
 	/* Reply without waiting for the aggregation ULTs to finish. */
 	out->tao_rc = 0;
-	D_DEBUG(DF_DSMS, DF_CONT": replying rpc %p: "DF_RC"\n",
+	D_DEBUG(DB_MD, DF_CONT": replying rpc %p: "DF_RC"\n",
 		DP_CONT(in->tai_pool_uuid, in->tai_cont_uuid), rpc,
 		DP_RC(out->tao_rc));
 	crt_reply_send(rpc);
@@ -2139,7 +2166,7 @@ cont_oid_alloc(struct ds_pool_hdl *pool_hdl, crt_rpc_t *rpc)
 		rg.oid, rg.num_oids);
 out:
 	out->coao_op.co_rc = rc;
-	D_DEBUG(DF_DSMS, DF_CONT": replying rpc %p: "DF_RC"\n",
+	D_DEBUG(DB_MD, DF_CONT": replying rpc %p: "DF_RC"\n",
 		DP_CONT(pool_hdl->sph_pool->sp_uuid, in->coai_op.ci_uuid), rpc, DP_RC(rc));
 
 	return rc;
@@ -2158,7 +2185,7 @@ ds_cont_oid_alloc_handler(crt_rpc_t *rpc)
 	if (pool_hdl == NULL)
 		D_GOTO(out, rc = -DER_NO_HDL);
 
-	D_DEBUG(DF_DSMS, DF_CONT": processing rpc %p: hdl="DF_UUID" opc=%u\n",
+	D_DEBUG(DB_MD, DF_CONT": processing rpc %p: hdl="DF_UUID" opc=%u\n",
 		DP_CONT(pool_hdl->sph_pool->sp_uuid, in->ci_uuid), rpc,
 		DP_UUID(in->ci_hdl), opc);
 
@@ -2166,7 +2193,7 @@ ds_cont_oid_alloc_handler(crt_rpc_t *rpc)
 
 	rc = cont_oid_alloc(pool_hdl, rpc);
 
-	D_DEBUG(DF_DSMS, DF_CONT": replying rpc %p: hdl="DF_UUID
+	D_DEBUG(DB_MD, DF_CONT": replying rpc %p: hdl="DF_UUID
 		" opc=%u rc="DF_RC"\n",
 		DP_CONT(pool_hdl->sph_pool->sp_uuid, in->ci_uuid), rpc,
 		DP_UUID(in->ci_hdl), opc, DP_RC(rc));

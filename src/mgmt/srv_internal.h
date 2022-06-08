@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2021 Intel Corporation.
+ * (C) Copyright 2016-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -87,6 +87,7 @@ int ds_mgmt_pool_set_prop(uuid_t pool_uuid, d_rank_list_t *svc_ranks,
 			  daos_prop_t *prop);
 int ds_mgmt_pool_get_prop(uuid_t pool_uuid, d_rank_list_t *svc_ranks,
 			  daos_prop_t *prop);
+int ds_mgmt_pool_upgrade(uuid_t pool_uuid, d_rank_list_t *svc_ranks);
 int ds_mgmt_pool_get_acl(uuid_t pool_uuid, d_rank_list_t *svc_ranks,
 			 daos_prop_t **access_prop);
 int ds_mgmt_pool_overwrite_acl(uuid_t pool_uuid, d_rank_list_t *svc_ranks,
@@ -100,6 +101,9 @@ int ds_mgmt_pool_list_cont(uuid_t uuid, d_rank_list_t *svc_ranks,
 			   uint64_t *ncontainers);
 int ds_mgmt_pool_query(uuid_t pool_uuid, d_rank_list_t *svc_ranks, d_rank_list_t **ranks,
 		       daos_pool_info_t *pool_info);
+int ds_mgmt_pool_query_targets(uuid_t pool_uuid, d_rank_list_t *svc_ranks, d_rank_t rank,
+			       d_rank_list_t *tgts, daos_target_info_t **infos);
+
 int ds_mgmt_cont_set_owner(uuid_t pool_uuid, d_rank_list_t *svc_ranks,
 			   uuid_t cont_uuid, const char *user,
 			   const char *group);

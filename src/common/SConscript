@@ -26,49 +26,61 @@ def build_daos_common(env, client, prereqs):
         denv.Append(OBJPREFIX="v_")
         libname = 'libdaos_common_pmem'
         prereqs.require(denv, 'pmdk')
-        if denv["STACK_MMAP"] == 1:
-            common_libs.extend(['abt'])
-            COMMON_FILES_COPY.append('stack_mmap.c')
-            prereqs.require(denv, 'argobots')
-            denv.Append(CCFLAGS=['-DULT_MMAP_STACK'])
+
+    if denv["STACK_MMAP"] == 1:
+        common_libs.extend(['abt'])
+        COMMON_FILES_COPY.extend(['stack_mmap.c', 'stack_mmap_noXStream.c'])
+        prereqs.require(denv, 'argobots')
+        denv.Append(CCFLAGS=['-DULT_MMAP_STACK'])
 
     common = daos_build.library(denv, libname, COMMON_FILES_COPY,
                                 LIBS=common_libs)
     denv.Install('$PREFIX/lib64/', common)
+    return common
 
-def build_dts_library(env):
+
+def build_dpar(env, mpi_env):
     """Build libdts library"""
-    Import('prereqs')
+
+    serial_lib = daos_build.library(env, 'libdpar', ['dpar_stub.c'], LIBS=['pthread', 'dl'])
+    env.Install('$PREFIX/lib64/', serial_lib)
+
+    if mpi_env is None:
+        return
+
+    denv = mpi_env.Clone()
+
+    mpi_lib = daos_build.library(denv, 'libdpar_mpi', ['dpar_mpi.c'])
+    denv.Install('$PREFIX/lib64/', mpi_lib)
+
+
+def build_dts_library(env, prereqs):
+    """Build libdts library"""
 
     denv = env.Clone()
 
     prereqs.require(denv, 'argobots', 'protobufc')
 
-    if not GetOption('help') and not GetOption('clean'):
-        mpi = daos_build.configure_mpi(denv, [])
-        if mpi is None:
-            print("\nSkipping compilation for tests that need MPI")
-            print("Install and load mpich or openmpi\n")
-            return
-
-    libraries = ['cmocka', 'daos', 'daos_tests']
+    libraries = ['cmocka', 'daos', 'daos_tests', 'dpar']
 
     # Add runtime paths for daos libraries
-    denv.AppendUnique(LIBPATH=["../client/api"])
-    denv.AppendUnique(CPPPATH=["../tests/suite"])
-    denv.AppendUnique(CPPPATH=["../mgmt"])
+    denv.AppendUnique(LIBPATH=[Dir('../client/api')])
+    denv.AppendUnique(LIBPATH=[Dir('../common')])
+    denv.AppendUnique(CPPPATH=[Dir('../tests/suite').srcnode()])
+    denv.AppendUnique(CPPPATH=[Dir('../mgmt').srcnode()])
+    denv.AppendUnique(CPPPATH=[Dir('../include').srcnode()])
 
     denv.Replace(SHOBJPREFIX='mpi_')
     mpi_cmd_parser = denv.SharedObject(['cmd_parser.c'])
     Export('mpi_cmd_parser')
 
-    dts_lib = daos_build.library(denv, 'libdts', ['credit.c', 'dts.c'],
-                                 LIBS=libraries)
+    dts_lib = daos_build.library(denv, 'libdts', ['credit.c', 'dts.c'], LIBS=libraries)
     denv.Install('$PREFIX/lib64/', dts_lib)
+
 
 def scons():
     """Execute build"""
-    Import('env', 'base_env', 'prereqs')
+    Import('env', 'base_env', 'base_env_mpi', 'prereqs')
 
     env.AppendUnique(LIBPATH=[Dir('.')])
     base_env.AppendUnique(LIBPATH=[Dir('.')])
@@ -87,7 +99,8 @@ def scons():
     denv = env.Clone(LIBS=[])
     prereqs.require(denv, 'isal', 'isal_crypto', 'protobufc')
     denv.AppendUnique(LIBS=['cart', 'gurt', 'lz4'])
-    build_daos_common(denv, True, prereqs)
+    client_common = build_daos_common(denv, True, prereqs)
+    Export('client_common')
 
     control_tgts = [File('control.c')]
     Export('control_tgts')
@@ -115,7 +128,9 @@ def scons():
     prereqs.require(tenv, 'pmdk')
     SConscript('tests/SConscript', exports='tenv')
 
-    build_dts_library(base_env)
+    build_dpar(base_env, base_env_mpi)
+    build_dts_library(base_env, prereqs)
+
 
 if __name__ == "SCons.Script":
     scons()

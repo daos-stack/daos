@@ -8,6 +8,7 @@ package server
 
 import (
 	"fmt"
+	"math"
 	"os/user"
 	"strconv"
 
@@ -17,8 +18,9 @@ import (
 
 	"github.com/daos-stack/daos/src/control/common/proto"
 	"github.com/daos-stack/daos/src/control/common/proto/convert"
+	"github.com/daos-stack/daos/src/control/common/proto/ctl"
 	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
-	"github.com/daos-stack/daos/src/control/drpc"
+	"github.com/daos-stack/daos/src/control/lib/daos"
 	"github.com/daos-stack/daos/src/control/server/engine"
 	"github.com/daos-stack/daos/src/control/server/storage"
 )
@@ -154,9 +156,7 @@ func (c *ControlService) scanScm(ctx context.Context, req *ctlpb.ScanScmReq) (*c
 		return nil, errors.New("nil scm request")
 	}
 
-	// scan SCM, rescan scm storage details by default
-	scmReq := storage.ScmScanRequest{Rescan: true}
-	ssr, scanErr := c.ScmScan(scmReq)
+	ssr, scanErr := c.ScmScan(storage.ScmScanRequest{})
 
 	if scanErr != nil || !req.GetUsage() {
 		return newScanScmResp(ssr, scanErr)
@@ -167,28 +167,52 @@ func (c *ControlService) scanScm(ctx context.Context, req *ctlpb.ScanScmReq) (*c
 
 // Adjust the NVME available size to its real usable size.
 func (c *ControlService) adjustNvmeSize(resp *ctlpb.ScanNvmeResp) {
-	for _, ctl := range resp.GetCtrlrs() {
-		for _, dev := range ctl.GetSmdDevices() {
+	type deviceSizeStat struct {
+		size    uint64
+		devices []*ctl.NvmeController_SmdDevice
+	}
+
+	devicesToAdjust := make(map[uint32]*deviceSizeStat, 0)
+	for _, ctlr := range resp.GetCtrlrs() {
+		for _, dev := range ctlr.GetSmdDevices() {
 			if dev.GetDevState() != "NORMAL" {
 				c.log.Debugf("Adjusting available size of unusable SMD device %s "+
 					"(ctlr %s) to O Bytes: device state %q",
-					dev.GetUuid(), ctl.GetPciAddr(), dev.GetDevState())
+					dev.GetUuid(), ctlr.GetPciAddr(), dev.GetDevState())
 				dev.AvailBytes = 0
 				continue
 			}
+
 			if dev.GetClusterSize() == 0 || len(dev.GetTgtIds()) == 0 {
 				c.log.Errorf("Skipping device %s (%s) with missing storage info",
-					dev.GetUuid(), ctl.GetPciAddr())
+					dev.GetUuid(), ctlr.GetPciAddr())
 				continue
 			}
 
+			rank := dev.GetRank()
+			if devicesToAdjust[rank] == nil {
+				devicesToAdjust[rank] = &deviceSizeStat{
+					size: math.MaxUint64,
+				}
+			}
 			targetCount := uint64(len(dev.GetTgtIds()))
 			unalignedBytes := dev.GetAvailBytes() % (targetCount * dev.GetClusterSize())
-			c.log.Debugf("Adjusting available size of SMD device %s (ctlr %s): "+
-				"excluding %s (%d Bytes) of unaligned storage",
-				dev.GetUuid(), ctl.GetPciAddr(),
-				humanize.Bytes(unalignedBytes), unalignedBytes)
-			dev.AvailBytes -= unalignedBytes
+			availBytes := dev.AvailBytes - unalignedBytes
+			if availBytes < devicesToAdjust[rank].size {
+				devicesToAdjust[rank].size = availBytes
+			}
+			devicesToAdjust[rank].devices = append(devicesToAdjust[rank].devices, dev)
+		}
+	}
+
+	for rank, item := range devicesToAdjust {
+		for _, dev := range item.devices {
+			unusedBytes := dev.AvailBytes - item.size
+			c.log.Debugf("Adjusting available size of SMD device %s from rank %d: "+
+				"excluding %s (%d Bytes) of unusable storage",
+				dev.GetUuid(), rank,
+				humanize.Bytes(unusedBytes), unusedBytes)
+			dev.AvailBytes = item.size
 		}
 	}
 }
@@ -215,11 +239,11 @@ func (c *ControlService) getMetadataCapacity(mountPoint string) (uint64, error) 
 		return 0, errors.Errorf("unknown SCM mount point %s", mountPoint)
 	}
 
-	mdCapStr, err := engineCfg.GetEnvVar(drpc.DaosMdCapEnv)
+	mdCapStr, err := engineCfg.GetEnvVar(daos.DaosMdCapEnv)
 	if err != nil {
 		c.log.Debugf("using default metadata capacity with SCM %s: %s (%d Bytes)", mountPoint,
-			humanize.Bytes(drpc.DefaultDaosMdCapSize), drpc.DefaultDaosMdCapSize)
-		return uint64(drpc.DefaultDaosMdCapSize), nil
+			humanize.Bytes(daos.DefaultDaosMdCapSize), daos.DefaultDaosMdCapSize)
+		return uint64(daos.DefaultDaosMdCapSize), nil
 	}
 
 	mdCap, err := strconv.ParseUint(mdCapStr, 10, 64)

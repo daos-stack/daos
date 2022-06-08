@@ -12,7 +12,6 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
-	"sync"
 
 	"github.com/pkg/errors"
 	"golang.org/x/sys/unix"
@@ -46,11 +45,11 @@ const (
 type (
 	// Backend defines a set of methods to be implemented by a SCM backend.
 	Backend interface {
-		Discover() (storage.ScmModules, error)
-		Prep(storage.ScmState) (bool, storage.ScmNamespaces, error)
-		PrepReset(storage.ScmState) (bool, error)
-		GetPmemState() (storage.ScmState, error)
-		GetPmemNamespaces() (storage.ScmNamespaces, error)
+		getModules() (storage.ScmModules, error)
+		getRegionState() (storage.ScmState, error)
+		getNamespaces() (storage.ScmNamespaces, error)
+		prep(storage.ScmPrepareRequest, *storage.ScmScanResponse) (*storage.ScmPrepareResponse, error)
+		prepReset(*storage.ScmScanResponse) (*storage.ScmPrepareResponse, error)
 		GetFirmwareStatus(deviceUID string) (*storage.ScmFirmwareInfo, error)
 		UpdateFirmware(deviceUID string, firmwarePath string) error
 	}
@@ -64,6 +63,7 @@ type (
 		Mkfs(fsType, device string, force bool) error
 		Getfs(device string) (string, error)
 		Stat(string) (os.FileInfo, error)
+		Chmod(string, os.FileMode) error
 	}
 
 	defaultSystemProvider struct {
@@ -73,12 +73,6 @@ type (
 	// Provider encapsulates configuration and logic for
 	// providing SCM management and interrogation.
 	Provider struct {
-		sync.RWMutex
-		scanCompleted bool
-		lastState     storage.ScmState
-		modules       storage.ScmModules
-		namespaces    storage.ScmNamespaces
-
 		log     logging.Logger
 		backend Backend
 		sys     SystemProvider
@@ -242,9 +236,15 @@ func (dsp *defaultSystemProvider) Stat(path string) (os.FileInfo, error) {
 	return os.Stat(path)
 }
 
+// Chmod changes the mode of the specified path.
+func (dsp *defaultSystemProvider) Chmod(path string, mode os.FileMode) error {
+	return os.Chmod(path, mode)
+}
+
 func parseFsType(input string) string {
 	// /dev/pmem0: Linux rev 1.0 ext4 filesystem data, UUID=09619a0d-0c9e-46b4-add5-faf575dd293d
 	// /dev/pmem1: data
+	// /dev/pmem1: COM executable for DOS
 	fields := strings.Fields(input)
 	switch {
 	case len(fields) == 2 && fields[1] == parseFsUnformatted:
@@ -275,112 +275,63 @@ func NewProvider(log logging.Logger, backend Backend, sys SystemProvider) *Provi
 	return p
 }
 
-func (p *Provider) isInitialized() bool {
-	p.RLock()
-	defer p.RUnlock()
-	return p.scanCompleted
-}
-
-func (p *Provider) currentState() storage.ScmState {
-	p.RLock()
-	defer p.RUnlock()
-	return p.lastState
-}
-
-func (p *Provider) updateState() (state storage.ScmState, err error) {
-	state, err = p.backend.GetPmemState()
-	if err != nil {
-		return
-	}
-
-	p.Lock()
-	p.lastState = state
-	p.Unlock()
-
-	return
-}
-
-// GetPmemState returns the current state of DCPM namespaces, if available.
-func (p *Provider) GetPmemState() (storage.ScmState, error) {
-	if !p.isInitialized() {
-		if _, err := p.Scan(storage.ScmScanRequest{}); err != nil {
-			return p.lastState, err
-		}
-	}
-
-	return p.currentState(), nil
-}
-
-func (p *Provider) createScanResponse() *storage.ScmScanResponse {
-	p.RLock()
-	defer p.RUnlock()
-
-	return &storage.ScmScanResponse{
-		State:      p.lastState,
-		Modules:    p.modules,
-		Namespaces: p.namespaces,
-	}
-}
-
 // Scan attempts to scan the system for SCM storage components.
 func (p *Provider) Scan(req storage.ScmScanRequest) (*storage.ScmScanResponse, error) {
-	if p.isInitialized() && !req.Rescan {
-		return p.createScanResponse(), nil
-	}
-
-	modules, err := p.backend.Discover()
+	modules, err := p.backend.getModules()
 	if err != nil {
 		return nil, err
 	}
-
-	p.Lock()
-	p.scanCompleted = true
-	p.modules = modules
-	p.Unlock()
+	p.log.Debugf("scm backend: %d modules", len(modules))
 
 	// If there are no modules, don't bother with the rest of the scan.
 	if len(modules) == 0 {
-		return p.createScanResponse(), nil
+		return &storage.ScmScanResponse{
+			State: storage.ScmStateNoModules,
+		}, nil
 	}
 
-	namespaces, err := p.backend.GetPmemNamespaces()
+	namespaces, err := p.backend.getNamespaces()
 	if err != nil {
-		return p.createScanResponse(), err
+		return nil, err
 	}
+	p.log.Debugf("scm backend: namespaces %+v", namespaces)
 
-	state, err := p.backend.GetPmemState()
+	state, err := p.backend.getRegionState()
+	if err != nil {
+		return nil, err
+	}
+	p.log.Debugf("scm backend: state %q", state)
+
+	return &storage.ScmScanResponse{
+		State:      state,
+		Modules:    modules,
+		Namespaces: namespaces,
+	}, nil
+}
+
+type scanFn func(storage.ScmScanRequest) (*storage.ScmScanResponse, error)
+
+func (p *Provider) prepare(req storage.ScmPrepareRequest, scan scanFn) (*storage.ScmPrepareResponse, error) {
+	p.log.Debug("scm provider prepare: calling provider scan")
+
+	scanReq := storage.ScmScanRequest{}
+
+	scanResp, err := scan(scanReq)
 	if err != nil {
 		return nil, err
 	}
 
-	p.Lock()
-	p.lastState = state
-	p.namespaces = namespaces
-	p.Unlock()
-
-	return p.createScanResponse(), nil
-}
-
-// Prepare attempts to fulfill a SCM Prepare request.
-func (p *Provider) Prepare(req storage.ScmPrepareRequest) (res *storage.ScmPrepareResponse, err error) {
-	if !p.isInitialized() {
-		if _, err := p.Scan(storage.ScmScanRequest{}); err != nil {
-			return nil, err
-		}
-	}
-
-	res = &storage.ScmPrepareResponse{}
-	if sr := p.createScanResponse(); len(sr.Modules) == 0 {
-		p.log.Info("skipping SCM prepare; no modules detected")
-		res.State = sr.State
-
-		return res, nil
+	if scanResp.State == storage.ScmStateNoModules {
+		return &storage.ScmPrepareResponse{
+			State:      scanResp.State,
+			Namespaces: storage.ScmNamespaces{},
+		}, nil
 	}
 
 	if req.Reset {
-		// Ensure that namespace block devices are unmounted first.
-		if sr := p.createScanResponse(); len(sr.Namespaces) > 0 {
-			for _, ns := range sr.Namespaces {
+		// Unmount PMem namespaces before removing them.
+		if len(scanResp.Namespaces) > 0 {
+			for _, ns := range scanResp.Namespaces {
 				nsDev := "/dev/" + ns.BlockDevice
 				isMounted, err := p.IsMounted(nsDev)
 				if err != nil {
@@ -399,28 +350,17 @@ func (p *Provider) Prepare(req storage.ScmPrepareRequest) (res *storage.ScmPrepa
 			}
 		}
 
-		res.RebootRequired, err = p.backend.PrepReset(p.currentState())
-		if err != nil {
-			res = nil
-			return
-		}
-		res.State, err = p.updateState()
-		if err != nil {
-			res = nil
-		}
-		return
+		p.log.Debug("scm provider prepare: calling backend prepReset")
+		return p.backend.prepReset(scanResp)
 	}
 
-	res.RebootRequired, res.Namespaces, err = p.backend.Prep(p.currentState())
-	if err != nil {
-		res = nil
-		return
-	}
-	res.State, err = p.updateState()
-	if err != nil {
-		res = nil
-	}
-	return
+	p.log.Debug("scm provider prepare: calling backend prep")
+	return p.backend.prep(req, scanResp)
+}
+
+// Prepare attempts to fulfill a SCM Prepare request.
+func (p *Provider) Prepare(req storage.ScmPrepareRequest) (*storage.ScmPrepareResponse, error) {
+	return p.prepare(req, p.Scan)
 }
 
 // CheckFormat attempts to determine whether or not the SCM specified in the
@@ -450,12 +390,6 @@ func (p *Provider) CheckFormat(req storage.ScmFormatRequest) (*storage.ScmFormat
 		// ramdisk
 		res.Formatted = false
 		return res, nil
-	}
-
-	if !p.isInitialized() {
-		if _, err := p.Scan(storage.ScmScanRequest{}); err != nil {
-			return nil, err
-		}
 	}
 
 	fsType, err := p.sys.Getfs(req.Dcpm.Device)
@@ -692,6 +626,11 @@ func (p *Provider) mount(src, target, fsType string, flags uintptr, opts string)
 	p.log.Debugf("mount %s->%s (%s) (%s)", src, target, fsType, opts)
 	if err := p.sys.Mount(src, target, fsType, flags, opts); err != nil {
 		return nil, errors.Wrapf(err, "mount %s->%s failed", src, target)
+	}
+
+	// Adjust permissions on the mounted filesystem.
+	if err := p.sys.Chmod(target, defaultMountPointPerms); err != nil {
+		return nil, errors.Wrapf(err, "failed to set permissions on %s", target)
 	}
 
 	return &storage.ScmMountResponse{

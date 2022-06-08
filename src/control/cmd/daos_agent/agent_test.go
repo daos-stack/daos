@@ -18,8 +18,9 @@ import (
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/testing/protocmp"
 
-	"github.com/daos-stack/daos/src/control/common"
+	"github.com/daos-stack/daos/src/control/common/cmdutil"
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
+	"github.com/daos-stack/daos/src/control/common/test"
 	"github.com/daos-stack/daos/src/control/drpc"
 	"github.com/daos-stack/daos/src/control/lib/control"
 	"github.com/daos-stack/daos/src/control/lib/hardware"
@@ -120,9 +121,9 @@ func TestMain(m *testing.M) {
 func TestAgent_MultiProcess_AttachInfoCache(t *testing.T) {
 	t.Skip("DAOS-8967")
 	log, buf := logging.NewTestLogger(t.Name())
-	defer common.ShowBufferOnFailure(t, buf)
+	defer test.ShowBufferOnFailure(t, buf)
 
-	tmpDir, cleanup := common.CreateTestDir(t)
+	tmpDir, cleanup := test.CreateTestDir(t)
 	defer cleanup()
 
 	srvResp := &mgmtpb.GetAttachInfoResp{
@@ -138,8 +139,8 @@ func TestAgent_MultiProcess_AttachInfoCache(t *testing.T) {
 		UnaryResponse: control.MockMSResponse("localhost", nil, srvResp),
 	})
 	testAgentStart := &startCmd{
-		logCmd: logCmd{
-			log: log,
+		LogCmd: cmdutil.LogCmd{
+			Logger: log,
 		},
 		configCmd: configCmd{
 			cfg: agentCfg,
@@ -189,7 +190,7 @@ func TestAgent_MultiProcess_AttachInfoCache(t *testing.T) {
 	// We don't really care about the interface chosen for this test; the main
 	// thing we want to verify is that the responses look valid and that the
 	// cache is working correctly (i.e. only 1 invocation of the RPC).
-	cmpOpts := append(common.DefaultCmpOpts(),
+	cmpOpts := append(test.DefaultCmpOpts(),
 		protocmp.IgnoreFields(&mgmtpb.ClientNetHint{}, "domain", "interface"))
 	for i := 0; i < maxIter; i++ {
 		select {
@@ -202,5 +203,5 @@ func TestAgent_MultiProcess_AttachInfoCache(t *testing.T) {
 		}
 	}
 
-	common.AssertEqual(t, client.GetInvokeCount(), 1, "unexpected number of GetAttachInfo RPC invocations")
+	test.AssertEqual(t, client.GetInvokeCount(), 1, "unexpected number of GetAttachInfo RPC invocations")
 }

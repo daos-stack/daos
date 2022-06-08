@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2021 Intel Corporation.
+ * (C) Copyright 2016-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -415,7 +415,7 @@ ds_mgmt_pool_list_cont(uuid_t uuid, d_rank_list_t *svc_ranks,
 /**
  * Calls into the pool svc to query a pool by UUID.
  *
- * \param[in]		pool_uuid	UUID of the pool
+ * \param[in]		pool_uuid	UUID of the pool.
  * \param[in]		svc_ranks	Ranks of pool svc replicas.
  * \param[out]		ranks		Optional, returned storage ranks in this pool.
  *					If #pool_info is NULL, engines with disabled targets.
@@ -441,6 +441,58 @@ ds_mgmt_pool_query(uuid_t pool_uuid, d_rank_list_t *svc_ranks, d_rank_list_t **r
 	D_DEBUG(DB_MGMT, "Querying pool "DF_UUID"\n", DP_UUID(pool_uuid));
 
 	return ds_pool_svc_query(pool_uuid, svc_ranks, ranks, pool_info);
+}
+
+/**
+ * Calls into the pool svc to query one or more targets of a pool storage engine.
+ *
+ * \param[in]		pool_uuid	UUID of the pool.
+ * \param[in]		svc_ranks	Ranks of pool svc replicas.
+ * \param[in]		rank		Rank of the pool storage engine.
+ * \param[in]		tgts		Target indices of the engine.
+ * \param[out]		infos		State, storage  capacity/usage per target in \a tgts.
+ *					Allocated if returning 0. Caller frees with D_FREE().
+ *
+ * \return		0		Success
+ *			-DER_INVAL	Invalid inputs
+ *			Negative value	Other error
+ */
+int
+ds_mgmt_pool_query_targets(uuid_t pool_uuid, d_rank_list_t *svc_ranks, d_rank_t rank,
+			   d_rank_list_t *tgts, daos_target_info_t **infos)
+{
+	int			rc = 0;
+	uint32_t		i;
+	daos_target_info_t	*out_infos = NULL;
+
+	if (infos == NULL) {
+		D_ERROR("infos argument was NULL\n");
+		return -DER_INVAL;
+	}
+
+	D_ALLOC_ARRAY(out_infos, tgts->rl_nr);
+	if (out_infos == NULL)
+		D_GOTO(out, rc = -DER_NOMEM);
+
+	for (i = 0; i < tgts->rl_nr; i++) {
+		D_DEBUG(DB_MGMT, "Querying pool "DF_UUID" rank %u tgt %u\n", DP_UUID(pool_uuid),
+			rank, tgts->rl_ranks[i]);
+		rc = ds_pool_svc_query_target(pool_uuid, svc_ranks, rank, tgts->rl_ranks[i],
+					      &out_infos[i]);
+		if (rc != 0) {
+			D_ERROR(DF_UUID": ds_pool_svc_query_target() failed rank %u tgt %u\n",
+				DP_UUID(pool_uuid), rank, tgts->rl_ranks[i]);
+			goto out;
+		}
+	}
+
+out:
+	if (rc)
+		D_FREE(out_infos);
+	else
+		*infos = out_infos;
+
+	return rc;
 }
 
 static int
@@ -582,6 +634,14 @@ ds_mgmt_pool_set_prop(uuid_t pool_uuid, d_rank_list_t *svc_ranks,
 
 out:
 	return rc;
+}
+
+int ds_mgmt_pool_upgrade(uuid_t pool_uuid, d_rank_list_t *svc_ranks)
+{
+	D_DEBUG(DB_MGMT, "Upgrading pool "DF_UUID"\n",
+		DP_UUID(pool_uuid));
+
+	return ds_pool_svc_upgrade(pool_uuid, svc_ranks);
 }
 
 int

@@ -323,6 +323,8 @@ class DmgCommandBase(YamlCommand):
                 """Create a dmg pool query command object."""
                 super().__init__("/run/dmg/pool/query/*", "query")
                 self.pool = FormattedParameter("{}", None)
+                self.show_enabled = FormattedParameter("--show-enabled", False)
+                self.show_disabled = FormattedParameter("--show-disabled", False)
 
         class SetPropSubCommand(CommandWithParameters):
             """Defines an object for the dmg pool set-prop command."""
@@ -381,7 +383,6 @@ class DmgCommandBase(YamlCommand):
                 """Create a dmg storage format command object."""
                 super().__init__("/run/dmg/storage/format/*", "format")
                 self.verbose = FormattedParameter("--verbose", False)
-                self.reformat = FormattedParameter("--reformat", False)
                 self.force = FormattedParameter("--force", False)
 
         class QuerySubCommand(CommandWithSubCommand):

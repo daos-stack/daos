@@ -38,6 +38,10 @@ daos_unit_oid_t	*ts_uoids;	/* object shard IDs */
 bool		ts_in_ult;	/* Run tests in ULT mode */
 static ABT_xstream	abt_xstream;
 
+#ifdef ULT_MMAP_STACK
+struct stack_pool *sp;
+#endif
+
 static int
 ts_abt_init(void)
 {
@@ -202,7 +206,7 @@ vos_update_or_fetch(int obj_idx, enum ts_op_type op_type,
 	ult_arg.epoch = epoch;
 	ult_arg.duration = duration;
 	ult_arg.obj_idx = obj_idx;
-	rc = daos_abt_thread_create_on_xstream(abt_xstream,
+	rc = daos_abt_thread_create_on_xstream(sp, abt_xstream,
 					       vos_update_or_fetch_ult,
 					       &ult_arg, ABT_THREAD_ATTR_NULL,
 					       &thread);
@@ -469,11 +473,15 @@ pf_aggregate(struct pf_test *ts, struct pf_param *param)
 	daos_epoch_range_t	epr = {0, ++epoch};
 	int			rc = 0;
 	uint64_t		start = 0;
+	uint64_t		flags = 0;
 
 	TS_TIME_START(&param->pa_duration, start);
 
-	rc = vos_aggregate(ts_ctx.tsc_coh, &epr, NULL, NULL,
-			   VOS_AGG_FL_FORCE_SCAN | VOS_AGG_FL_FORCE_MERGE);
+	if (param->pa_agg.full_scan)
+		flags |= VOS_AGG_FL_FORCE_SCAN;
+	if (param->pa_agg.force_merge)
+		flags |= VOS_AGG_FL_FORCE_MERGE;
+	rc = vos_aggregate(ts_ctx.tsc_coh, &epr, NULL, NULL, flags);
 
 	TS_TIME_END(&param->pa_duration, start);
 
@@ -547,7 +555,7 @@ pf_query(struct pf_test *ts, struct pf_param *param)
 {
 	int rc;
 
-	if ((ts_flags & DAOS_OF_DKEY_UINT64) == 0) {
+	if (ts_flags != DAOS_OT_DKEY_UINT64) {
 		fprintf(stderr, "Integer dkeys required for query test (-i)\n");
 		return -1;
 	}
@@ -615,10 +623,41 @@ pf_parse_iterate(char *str, struct pf_param *pa, char **strp)
 	return pf_parse_common(str, pa, pf_parse_iterate_cb, strp);
 }
 
+/**
+ * Example: "U;p A;p;f;m"
+ * 'U' is update test.  Integer dkey required
+ *	'p': parameter of update and it means outputting performance result
+ *
+ * 'A' is aggregate test
+ *	'p': parameter of query and it means outputting performance result
+ *	'v': enables verbosity
+ *	'f': Force full scan
+ *	'm': Force merge of adjacent recx
+ */
+static int
+pf_parse_aggregate_cb(char *str, struct pf_param *pa, char **strp)
+{
+	switch (*str) {
+	default:
+		str++;
+		break;
+	case 'f':
+		pa->pa_agg.full_scan = true;
+		str++;
+		break;
+	case 'm':
+		pa->pa_agg.force_merge = true;
+		str++;
+		break;
+	}
+	*strp = str;
+	return 0;
+}
+
 static int
 pf_parse_aggregate(char *str, struct pf_param *pa, char **strp)
 {
-	return pf_parse_common(str, pa, NULL, strp);
+	return pf_parse_common(str, pa, pf_parse_aggregate_cb, strp);
 }
 
 /* predefined test cases */
@@ -733,9 +772,9 @@ main(int argc, char **argv)
 	ts_dkey_prefix = PF_DKEY_PREF;
 	ts_flags = 0;
 
-	MPI_Init(&argc, &argv);
-	MPI_Comm_rank(MPI_COMM_WORLD, &ts_ctx.tsc_mpi_rank);
-	MPI_Comm_size(MPI_COMM_WORLD, &ts_ctx.tsc_mpi_size);
+	par_init(&argc, &argv);
+	par_rank(PAR_COMM_WORLD, &ts_ctx.tsc_mpi_rank);
+	par_size(PAR_COMM_WORLD, &ts_ctx.tsc_mpi_size);
 
 	rc = perf_alloc_opts(perf_vos_opts, ARRAY_SIZE(perf_vos_opts),
 			     perf_vos_optstr, &ts_opts, &ts_optstr);
@@ -769,7 +808,7 @@ main(int argc, char **argv)
 			ts_zero_copy = true;
 			break;
 		case 'i':
-			ts_flags |= DAOS_OF_DKEY_UINT64;
+			ts_flags = DAOS_OT_DKEY_UINT64;
 			ts_dkey_prefix = NULL;
 			break;
 		case 'I':
@@ -854,6 +893,12 @@ main(int argc, char **argv)
 
 	ts_update_or_fetch_fn = vos_update_or_fetch;
 
+#ifdef ULT_MMAP_STACK
+	rc = stack_pool_create(&sp);
+	if (rc)
+		return -1;
+#endif
+
 	rc = dts_ctx_init(&ts_ctx, &vos_engine);
 	if (rc)
 		return -1;
@@ -904,7 +949,7 @@ main(int argc, char **argv)
 		return -1;
 	}
 
-	MPI_Barrier(MPI_COMM_WORLD);
+	par_barrier(PAR_COMM_WORLD);
 
 	rc = run_commands(cmds, pf_tests);
 
@@ -916,7 +961,10 @@ main(int argc, char **argv)
 	stride_buf_fini();
 	dts_ctx_fini(&ts_ctx);
 
-	MPI_Finalize();
+#ifdef ULT_MMAP_STACK
+	stack_pool_destroy(sp);
+#endif
+	par_fini();
 
 	if (ts_uoids)
 		free(ts_uoids);

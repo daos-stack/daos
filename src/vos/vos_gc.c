@@ -29,7 +29,7 @@ enum {
  * - each item consumes 16 bytes, 250 * 16 = 4000 bytes
  * - together is 4080 bytes, reserve 16 bytes for future use
  */
-static int gc_bag_size	= 250;
+static int gc_bag_size	= 250 + 3 * 256;
 
 /** VOS garbage collector */
 struct vos_gc {
@@ -130,7 +130,7 @@ gc_drain_evt(struct vos_gc *gc, struct vos_pool *pool, daos_handle_t coh,
 
 	D_DEBUG(DB_TRACE, "drain %s evtree, creds=%d\n", gc->gc_name, *credits);
 	rc = evt_drain(toh, credits, empty);
-	evt_close(toh);
+	D_ASSERT(evt_close(toh) == 0);
 	if (rc)
 		goto failed;
 
@@ -706,10 +706,16 @@ gc_reclaim_pool(struct vos_pool *pool, int *credits, bool *empty_ret)
 		return 0;
 	}
 
+	/* take an extra ref to avoid concurrent container destroy/free */
+	if (cont != NULL)
+		vos_cont_addref(cont);
+
 	rc = umem_tx_begin(&pool->vp_umm, NULL);
 	if (rc) {
 		D_ERROR("Failed to start transacton for "DF_UUID": %s\n",
 			DP_UUID(pool->vp_id), d_errstr(rc));
+		if (cont != NULL)
+			vos_cont_decref(cont);
 		return rc;
 	}
 
@@ -728,13 +734,19 @@ gc_reclaim_pool(struct vos_pool *pool, int *credits, bool *empty_ret)
 				if (gc->gc_type == GC_OBJ) { /* top level GC */
 					D_DEBUG(DB_TRACE, "container %p objects"
 						" reclaimed\n", cont);
+					vos_cont_decref(cont);
 					cont = gc_get_container(pool);
+					/* take a ref on new cont */
+					if (cont != NULL)
+						vos_cont_addref(cont);
 					gc = &gc_table[0]; /* reset to akey */
 					continue;
 				}
 			} else if (gc->gc_type == GC_CONT) { /* top level GC */
 				D_DEBUG(DB_TRACE, "Nothing to reclaim\n");
 				*empty_ret = true;
+				if (cont != NULL)
+					vos_cont_decref(cont);
 				cont = NULL;
 				break;
 			}
@@ -796,6 +808,10 @@ gc_reclaim_pool(struct vos_pool *pool, int *credits, bool *empty_ret)
 		d_list_add_tail(&cont->vc_gc_link, &pool->vp_gc_cont);
 	}
 
+	/* hopefully if last ref cont_free() will dequeue it */
+	if (cont != NULL)
+		vos_cont_decref(cont);
+
 	return rc;
 }
 
@@ -808,7 +824,10 @@ gc_reclaim_pool(struct vos_pool *pool, int *credits, bool *empty_ret)
 int
 gc_init_pool(struct umem_instance *umm, struct vos_pool_df *pd)
 {
-	int	i;
+	int		i;
+	umem_off_t	bag_id;
+	int		size;
+	int		rc;
 
 	D_DEBUG(DB_IO, "Init garbage bins for pool="DF_UUID"\n",
 		DP_UUID(pd->pd_id));
@@ -816,10 +835,19 @@ gc_init_pool(struct umem_instance *umm, struct vos_pool_df *pd)
 	for (i = 0; i < GC_MAX; i++) {
 		struct vos_gc_bin_df *bin = &pd->pd_gc_bins[i];
 
-		bin->bin_bag_first = UMOFF_NULL;
-		bin->bin_bag_last  = UMOFF_NULL;
+		size = offsetof(struct vos_gc_bag_df, bag_items[gc_bag_size]);
+		bag_id = umem_zalloc(umm, size);
+		if (UMOFF_IS_NULL(bag_id))
+			return -DER_NOMEM;
+
+		rc = umem_tx_add_ptr(umm, bin, sizeof(*bin));
+		if (rc != 0)
+			return rc;
+
 		bin->bin_bag_size  = gc_bag_size;
-		bin->bin_bag_nr	   = 0;
+		bin->bin_bag_first = bag_id;
+		bin->bin_bag_last = bag_id;
+		bin->bin_bag_nr = 1;
 	}
 	return 0;
 }
@@ -1083,6 +1111,9 @@ vos_gc_yield(void *arg)
 {
 	struct vos_gc_param	*param = arg;
 	int			 rc;
+
+	/* Current DTX handle must be NULL, since GC runs under non-DTX mode. */
+	D_ASSERT(vos_dth_get() == NULL);
 
 	if (param->vgc_yield_func == NULL) {
 		param->vgc_credits = GC_CREDS_TIGHT;

@@ -173,8 +173,8 @@ dtx_is_leader(struct ds_pool *pool, struct dtx_resync_args *dra,
 		return 1;
 
 	rc = dtx_leader_get(pool, mbs, &target);
-	if (rc != 0)
-		return 0;
+	if (rc < 0)
+		D_GOTO(out, rc);
 
 	D_ASSERT(target != NULL);
 	rc = crt_group_rank(NULL, &myrank);

@@ -47,7 +47,7 @@ stop_gc_ult(struct ds_pool_child *child)
 	if (child->spc_gc_req == NULL)
 		return;
 
-	D_DEBUG(DF_DSMS, DF_UUID"[%d]: Stopping GC ULT\n",
+	D_DEBUG(DB_MGMT, DF_UUID"[%d]: Stopping GC ULT\n",
 		DP_UUID(child->spc_uuid), dss_get_module_info()->dmi_tgt_id);
 
 	sched_req_wait(child->spc_gc_req, true);
@@ -83,7 +83,7 @@ ds_pool_child_put(struct ds_pool_child *child)
 	D_ASSERTF(child->spc_ref > 0, "%d\n", child->spc_ref);
 	child->spc_ref--;
 	if (child->spc_ref == 0) {
-		D_DEBUG(DF_DSMS, DF_UUID": destroying\n",
+		D_DEBUG(DB_MGMT, DF_UUID": destroying\n",
 			DP_UUID(child->spc_uuid));
 		D_ASSERT(d_list_empty(&child->spc_list));
 		D_ASSERT(d_list_empty(&child->spc_cont_list));
@@ -141,7 +141,7 @@ gc_ult(void *arg)
 	struct dss_module_info	*dmi = dss_get_module_info();
 	int			 rc;
 
-	D_DEBUG(DF_DSMS, DF_UUID"[%d]: GC ULT started\n",
+	D_DEBUG(DB_MGMT, DF_UUID"[%d]: GC ULT started\n",
 		DP_UUID(child->spc_uuid), dmi->dmi_tgt_id);
 
 	if (child->spc_gc_req == NULL)
@@ -164,7 +164,7 @@ gc_ult(void *arg)
 			sched_req_sleep(child->spc_gc_req, 10UL * 1000);
 	}
 out:
-	D_DEBUG(DF_DSMS, DF_UUID"[%d]: GC ULT stopped\n",
+	D_DEBUG(DB_MGMT, DF_UUID"[%d]: GC ULT stopped\n",
 		DP_UUID(child->spc_uuid), dmi->dmi_tgt_id);
 }
 
@@ -216,7 +216,7 @@ pool_child_add_one(void *varg)
 		return 0;
 	}
 
-	D_DEBUG(DF_DSMS, DF_UUID": creating\n", DP_UUID(arg->pla_uuid));
+	D_DEBUG(DB_MGMT, DF_UUID": creating\n", DP_UUID(arg->pla_uuid));
 
 	D_ALLOC_PTR(child);
 	if (child == NULL)
@@ -309,8 +309,8 @@ pool_child_delete_one(void *uuid)
 	if (child == NULL)
 		return 0;
 
+	D_ASSERT(d_list_empty(&child->spc_cont_list));
 	d_list_del_init(&child->spc_list);
-	ds_cont_child_stop_all(child);
 	ds_stop_scrubbing_ult(child);
 	ds_pool_child_put(child); /* -1 for the list */
 
@@ -363,7 +363,7 @@ pool_alloc_ref(void *key, unsigned int ksize, void *varg,
 		goto err;
 	}
 
-	D_DEBUG(DF_DSMS, DF_UUID": creating\n", DP_UUID(key));
+	D_DEBUG(DB_MGMT, DF_UUID": creating\n", DP_UUID(key));
 
 	D_ALLOC_PTR(pool);
 	if (pool == NULL)
@@ -459,7 +459,7 @@ pool_free_ref(struct daos_llink *llink)
 	struct ds_pool *pool = pool_obj(llink);
 	int		rc;
 
-	D_DEBUG(DF_DSMS, DF_UUID": freeing\n", DP_UUID(pool->sp_uuid));
+	D_DEBUG(DB_MGMT, DF_UUID": freeing\n", DP_UUID(pool->sp_uuid));
 
 	rc = dss_thread_collective(pool_child_delete_one, pool->sp_uuid, 0);
 	if (rc == -DER_CANCELED)
@@ -738,6 +738,36 @@ failure_pool:
 }
 
 /*
+ * Called via dss_thread_collective() to stop all container services
+ * on the current xstream.
+ */
+static int
+pool_child_stop_containers(void *uuid)
+{
+	struct ds_pool_child *child;
+
+	child = ds_pool_child_lookup(uuid);
+	if (child == NULL)
+		return 0;
+
+	ds_cont_child_stop_all(child);
+	ds_pool_child_put(child); /* -1 for the list */
+	return 0;
+}
+
+static int
+ds_pool_stop_all_containers(struct ds_pool *pool)
+{
+	int rc;
+
+	rc = dss_thread_collective(pool_child_stop_containers, pool->sp_uuid, 0);
+	if (rc != 0)
+		D_ERROR(DF_UUID": failed to stop container service: "DF_RC"\n",
+			DP_UUID(pool->sp_uuid), DP_RC(rc));
+	return rc;
+}
+
+/*
  * Stop a pool. Must be called on the system xstream. Release the ds_pool
  * object reference held by ds_pool_start. Only for mgmt and pool modules.
  */
@@ -745,6 +775,8 @@ void
 ds_pool_stop(uuid_t uuid)
 {
 	struct ds_pool *pool;
+
+	ds_pool_failed_remove(uuid);
 
 	pool = ds_pool_lookup(uuid);
 	if (pool == NULL)
@@ -754,10 +786,16 @@ ds_pool_stop(uuid_t uuid)
 	pool->sp_stopping = 1;
 
 	ds_iv_ns_stop(pool->sp_iv_ns);
+
+	/* Though all containers started in pool_alloc_ref, we need stop all
+	 * containers service before tgt_ec_eqh_query_ult(), otherwise container
+	 * EC aggregation ULT might try to access ec_eqh_query structure.
+	 */
+	ds_pool_stop_all_containers(pool);
 	ds_pool_tgt_ec_eph_query_abort(pool);
 	pool_fetch_hdls_ult_abort(pool);
 
-	ds_rebuild_abort(pool->sp_uuid, -1);
+	ds_rebuild_abort(pool->sp_uuid, -1, -1);
 	ds_migrate_stop(pool, -1);
 	ds_pool_put(pool); /* held by ds_pool_start */
 	ds_pool_put(pool);
@@ -822,7 +860,7 @@ pool_hdl_rec_free(struct d_hash_table *htable, d_list_t *rlink)
 {
 	struct ds_pool_hdl *hdl = pool_hdl_obj(rlink);
 
-	D_DEBUG(DF_DSMS, DF_UUID": freeing "DF_UUID"\n",
+	D_DEBUG(DB_MD, DF_UUID": freeing "DF_UUID"\n",
 		DP_UUID(hdl->sph_pool->sp_uuid), DP_UUID(hdl->sph_uuid));
 	D_ASSERT(d_hash_rec_unlinked(&hdl->sph_entry));
 	D_ASSERTF(hdl->sph_ref == 0, "%d\n", hdl->sph_ref);
@@ -1115,7 +1153,7 @@ ds_pool_tgt_connect(struct ds_pool *pool, struct pool_iv_conn *pic)
 	hdl = ds_pool_hdl_lookup(pic->pic_hdl);
 	if (hdl != NULL) {
 		if (hdl->sph_sec_capas == pic->pic_capas) {
-			D_DEBUG(DF_DSMS, DF_UUID": found compatible pool "
+			D_DEBUG(DB_MD, DF_UUID": found compatible pool "
 				"handle: hdl="DF_UUID" capas="DF_U64"\n",
 				DP_UUID(pool->sp_uuid), DP_UUID(pic->pic_hdl),
 				hdl->sph_sec_capas);
@@ -1138,6 +1176,7 @@ ds_pool_tgt_connect(struct ds_pool *pool, struct pool_iv_conn *pic)
 	uuid_copy(hdl->sph_uuid, pic->pic_hdl);
 	hdl->sph_flags = pic->pic_flags;
 	hdl->sph_sec_capas = pic->pic_capas;
+	hdl->sph_global_ver = pic->pic_global_ver;
 	ds_pool_get(pool);
 	hdl->sph_pool = pool;
 
@@ -1161,7 +1200,7 @@ out:
 	if (rc != 0)
 		D_FREE(hdl);
 
-	D_DEBUG(DF_DSMS, DF_UUID": connect "DF_RC"\n",
+	D_DEBUG(DB_MD, DF_UUID": connect "DF_RC"\n",
 		DP_UUID(pool->sp_uuid), DP_RC(rc));
 	return rc;
 }
@@ -1173,7 +1212,7 @@ ds_pool_tgt_disconnect(uuid_t uuid)
 
 	hdl = ds_pool_hdl_lookup(uuid);
 	if (hdl == NULL) {
-		D_DEBUG(DF_DSMS, "handle "DF_UUID" does not exist\n",
+		D_DEBUG(DB_MD, "handle "DF_UUID" does not exist\n",
 			DP_UUID(uuid));
 		return;
 	}
@@ -1199,7 +1238,7 @@ ds_pool_tgt_disconnect_handler(crt_rpc_t *rpc)
 	if (in->tdi_hdls.ca_arrays == NULL)
 		D_GOTO(out, rc = -DER_INVAL);
 
-	D_DEBUG(DF_DSMS, DF_UUID": handling rpc %p: hdls[0]="DF_UUID" nhdls="
+	D_DEBUG(DB_MD, DF_UUID": handling rpc %p: hdls[0]="DF_UUID" nhdls="
 		DF_U64"\n", DP_UUID(in->tdi_uuid), rpc, DP_UUID(hdl_uuids),
 		in->tdi_hdls.ca_count);
 
@@ -1207,7 +1246,7 @@ ds_pool_tgt_disconnect_handler(crt_rpc_t *rpc)
 		ds_pool_tgt_disconnect(hdl_uuids[i]);
 out:
 	out->tdo_rc = (rc == 0 ? 0 : 1);
-	D_DEBUG(DF_DSMS, DF_UUID": replying rpc %p: %d "DF_RC"\n",
+	D_DEBUG(DB_MD, DF_UUID": replying rpc %p: %d "DF_RC"\n",
 		DP_UUID(in->tdi_uuid), rpc, out->tdo_rc, DP_RC(rc));
 	crt_reply_send(rpc);
 }
@@ -1235,7 +1274,8 @@ update_pool_group(struct ds_pool *pool, struct pool_map *map)
 	D_DEBUG(DB_MD, DF_UUID": %u -> %u\n", DP_UUID(pool->sp_uuid), version,
 		pool_map_get_version(map));
 
-	rc = map_ranks_init(map, MAP_RANKS_UP, &ranks);
+	rc = map_ranks_init(map, PO_COMP_ST_UP | PO_COMP_ST_UPIN |
+				 PO_COMP_ST_DRAIN | PO_COMP_ST_NEW, &ranks);
 	if (rc != 0)
 		return rc;
 
@@ -1432,6 +1472,7 @@ update_vos_prop_on_targets(void *in)
 	struct ds_pool_child		*child = NULL;
 	struct policy_desc_t		policy_desc = {0};
 	int				ret = 0;
+	uint64_t			features = 0;
 
 	child = ds_pool_child_lookup(pool->sp_uuid);
 	if (child == NULL)
@@ -1439,6 +1480,10 @@ update_vos_prop_on_targets(void *in)
 
 	policy_desc = pool->sp_policy_desc;
 	ret = vos_pool_ctl(child->spc_hdl, VOS_PO_CTL_SET_POLICY, &policy_desc);
+
+	if (pool->sp_global_version >= 1)
+		features = VOS_POOL_FEAT_AGG_OPT;
+	vos_pool_features_set(child->spc_hdl, features);
 	ds_pool_child_put(child);
 
 	return ret;
@@ -1451,6 +1496,7 @@ ds_pool_tgt_prop_update(struct ds_pool *pool, struct pool_iv_prop *iv_prop)
 
 	D_ASSERT(dss_get_module_info()->dmi_xs_id == 0);
 	pool->sp_ec_cell_sz = iv_prop->pip_ec_cell_sz;
+	pool->sp_global_version = iv_prop->pip_global_version;
 	pool->sp_reclaim = iv_prop->pip_reclaim;
 	pool->sp_redun_fac = iv_prop->pip_redun_fac;
 	pool->sp_ec_pda = iv_prop->pip_ec_pda;

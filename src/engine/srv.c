@@ -310,8 +310,10 @@ dss_nvme_poll_ult(void *args)
  * be destroyed on server handler ULT exiting.
  */
 static void
-wait_all_exited(struct dss_xstream *dx)
+wait_all_exited(struct dss_xstream *dx, struct dss_module_info *dmi)
 {
+	int	rc;
+
 	D_DEBUG(DB_TRACE, "XS(%d) draining ULTs.\n", dx->dx_xs_id);
 
 	sched_stop(dx);
@@ -322,7 +324,6 @@ wait_all_exited(struct dss_xstream *dx)
 
 		for (i = 0; i < DSS_POOL_CNT; i++) {
 			size_t	pool_size;
-			int	rc;
 			rc = ABT_pool_get_total_size(dx->dx_pools[i],
 						     &pool_size);
 			D_ASSERTF(rc == ABT_SUCCESS, "%d\n", rc);
@@ -334,6 +335,17 @@ wait_all_exited(struct dss_xstream *dx)
 		 */
 		if (total_size == 0)
 			break;
+
+		/*
+		 * Call progress in case any replies are pending in the
+		 * queue which might block some ULTs forever.
+		 */
+		if (dx->dx_comm) {
+			rc = crt_progress(dmi->dmi_ctx, 0);
+			if (rc != 0 && rc != -DER_TIMEDOUT)
+				D_ERROR("failed to progress CART context: %d\n",
+					rc);
+		}
 
 		ABT_thread_yield();
 	}
@@ -446,7 +458,7 @@ dss_srv_handler(void *arg)
 		ABT_thread_attr attr;
 
 		/* Initialize NVMe context for main XS which accesses NVME */
-		rc = bio_xsctxt_alloc(&dmi->dmi_nvme_ctxt, dmi->dmi_tgt_id);
+		rc = bio_xsctxt_alloc(&dmi->dmi_nvme_ctxt, dmi->dmi_tgt_id, false);
 		if (rc != 0) {
 			D_ERROR("failed to init spdk context for xstream(%d) "
 				"rc:%d\n", dmi->dmi_xs_id, rc);
@@ -466,13 +478,13 @@ dss_srv_handler(void *arg)
 			D_GOTO(nvme_fini, rc = dss_abterr2der(rc));
 		}
 
-		rc = daos_abt_thread_create(dx, dx->dx_pools[DSS_POOL_NVME_POLL],
+		rc = daos_abt_thread_create(dx->dx_sp, dx->dx_pools[DSS_POOL_NVME_POLL],
 					    dss_nvme_poll_ult, NULL, attr, NULL);
 		ABT_thread_attr_free(&attr);
 		if (rc != ABT_SUCCESS) {
 			D_ERROR("create NVMe poll ULT failed: %d\n", rc);
 			ABT_future_set(dx->dx_shutdown, dx);
-			wait_all_exited(dx);
+			wait_all_exited(dx, dmi);
 			D_GOTO(nvme_fini, rc = dss_abterr2der(rc));
 		}
 	}
@@ -523,7 +535,7 @@ dss_srv_handler(void *arg)
 	if (dx->dx_comm)
 		dx->dx_progress_started = false;
 
-	wait_all_exited(dx);
+	wait_all_exited(dx, dmi);
 	if (dmi->dmi_dp) {
 		daos_profile_destroy(dmi->dmi_dp);
 		dmi->dmi_dp = NULL;
@@ -562,6 +574,17 @@ dss_xstream_alloc(hwloc_cpuset_t cpus)
 		D_ERROR("Can not allocate execution stream.\n");
 		return NULL;
 	}
+
+#ifdef ULT_MMAP_STACK
+	if (daos_ult_mmap_stack == true) {
+		rc = stack_pool_create(&dx->dx_sp);
+		if (rc != 0) {
+			D_ERROR("failed to create stack pool\n");
+			D_GOTO(err_free, rc);
+		}
+	}
+#endif
+
 	dx->dx_stopping = ABT_FUTURE_NULL;
 	dx->dx_shutdown = ABT_FUTURE_NULL;
 
@@ -589,10 +612,6 @@ dss_xstream_alloc(hwloc_cpuset_t cpus)
 	dx->dx_xstream	= ABT_XSTREAM_NULL;
 	dx->dx_sched	= ABT_SCHED_NULL;
 	dx->dx_progress	= ABT_THREAD_NULL;
-#ifdef ULT_MMAP_STACK
-	D_INIT_LIST_HEAD(&dx->stack_free_list);
-	dx->free_stacks = 0;
-#endif
 
 	return dx;
 
@@ -610,22 +629,12 @@ static inline void
 dss_xstream_free(struct dss_xstream *dx)
 {
 #ifdef ULT_MMAP_STACK
-	mmap_stack_desc_t *mmap_stack_desc;
-	int	nb_freed_stacks = 0;
+	struct stack_pool *sp = dx->dx_sp;
 
-	while ((mmap_stack_desc = d_list_pop_entry(&dx->stack_free_list,
-						   mmap_stack_desc_t,
-						   stack_list)) != NULL) {
-		D_DEBUG(DB_MEM, "Draining a mmap()'ed stack at %p of size %zd, dx=%p, free="DF_U64"\n",
-			mmap_stack_desc->stack, mmap_stack_desc->stack_size,
-			dx, dx->free_stacks);
-		munmap(mmap_stack_desc->stack, mmap_stack_desc->stack_size);
-		--dx->free_stacks;
-		atomic_fetch_sub(&nb_mmap_stacks, 1);
-		nb_freed_stacks++;
+	if (daos_ult_mmap_stack == true) {
+		stack_pool_destroy(sp);
+		dx->dx_sp = NULL;
 	}
-	D_INFO("freed/mmap()'ed %d stacks, %d remaining allocated\n",
-	       nb_freed_stacks, atomic_load_relaxed(&nb_mmap_stacks)); 
 #endif
 	hwloc_bitmap_free(dx->dx_cpuset);
 	D_FREE(dx);
@@ -742,7 +751,7 @@ dss_start_one_xstream(hwloc_cpuset_t cpus, int xs_id)
 	}
 
 	/** start progress ULT */
-	rc = daos_abt_thread_create(dx, dx->dx_pools[DSS_POOL_NET_POLL],
+	rc = daos_abt_thread_create(dx->dx_sp, dx->dx_pools[DSS_POOL_NET_POLL],
 				    dss_srv_handler, dx, attr,
 				    &dx->dx_progress);
 	if (rc != ABT_SUCCESS) {
@@ -948,6 +957,12 @@ dss_xstreams_init(void)
 	if (sched_prio_disabled)
 		D_INFO("ULT prioritizing is disabled.\n");
 
+#ifdef ULT_MMAP_STACK
+	d_getenv_bool("DAOS_ULT_MMAP_STACK", &daos_ult_mmap_stack);
+	if (daos_ult_mmap_stack == false)
+		D_INFO("ULT mmap()'ed stack allocation is disabled.\n");
+#endif
+
 	d_getenv_int("DAOS_SCHED_RELAX_INTVL", &sched_relax_intvl);
 	if (sched_relax_intvl == 0 ||
 	    sched_relax_intvl > SCHED_RELAX_INTVL_MAX) {
@@ -1148,15 +1163,6 @@ dss_parameters_set(unsigned int key_id, uint64_t value)
 	case DMG_KEY_FAIL_NUM:
 		daos_fail_num_set(value);
 		break;
-	case DMG_KEY_REBUILD_THROTTLING:
-		if (value >= 100) {
-			D_ERROR("invalid value "DF_U64"\n", value);
-			rc = -DER_INVAL;
-			break;
-		}
-		D_WARN("set rebuild percentage to "DF_U64"\n", value);
-		rc = sched_set_throttle(SCHED_REQ_MIGRATE, value);
-		break;
 	default:
 		D_ERROR("invalid key_id %d\n", key_id);
 		rc = -DER_INVAL;
@@ -1272,7 +1278,7 @@ dss_srv_init(void)
 		D_GOTO(failed, rc);
 	xstream_data.xd_init_step = XD_INIT_TLS_INIT;
 
-	rc = vos_db_init(dss_storage_path, NULL, false);
+	rc = vos_db_init(dss_storage_path);
 	if (rc != 0)
 		D_GOTO(failed, rc);
 	xstream_data.xd_init_step = XD_INIT_SYS_DB;

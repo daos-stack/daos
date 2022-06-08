@@ -82,6 +82,7 @@ class ErasureCodeIor(ServerFillUp):
         self.cont_uuid = []
         self.cont_number = 0
         self.read_set_from_beginning = True
+        self.nvme_local_cont = None
 
     def setUp(self):
         """Set up each test case."""
@@ -108,12 +109,14 @@ class ErasureCodeIor(ServerFillUp):
         # update object class for container create, if supplied explicitly.
         ec_object = get_data_parity_number(self.log, oclass)
         rf = "rf:{}".format(ec_object['parity'])
-        if self.container.properties.value is None:
+        if self.ec_container.properties.value is None:
             self.ec_container.properties.update(rf)
         else:
-            self.ec_container.properties.update("{},{}".format(self.container.properties.value, rf))
+            self.ec_container.properties.update("{},{}"
+                                                .format(self.ec_container.properties.value, rf))
         # create container
         self.ec_container.create()
+        self.nvme_local_cont = self.ec_container
 
     def ior_param_update(self, oclass, sizes):
         """Update the IOR command parameters.
@@ -122,11 +125,11 @@ class ErasureCodeIor(ServerFillUp):
             oclass(list): list of the obj class to use with IOR
             sizes(list): Update Transfer, Chunk and Block sizes
         """
-        self.ior_cmd.dfs_chunk.update(sizes[0])
-        self.ior_cmd.block_size.update(sizes[1])
-        self.ior_cmd.transfer_size.update(sizes[2])
-        self.ior_cmd.dfs_oclass.update(oclass[0])
-        self.ior_cmd.dfs_dir_oclass.update(oclass[0])
+        self.ior_local_cmd.dfs_chunk.update(sizes[0])
+        self.ior_local_cmd.block_size.update(sizes[1])
+        self.ior_local_cmd.transfer_size.update(sizes[2])
+        self.ior_local_cmd.dfs_oclass.update(oclass[0])
+        self.ior_local_cmd.dfs_dir_oclass.update(oclass[0])
 
     def ior_write_single_dataset(self, oclass, sizes, storage='NVMe', operation="WriteRead",
                                  percent=1):
@@ -154,11 +157,10 @@ class ErasureCodeIor(ServerFillUp):
         self.update_ior_cmd_with_pool(create_cont=False)
 
         # Start IOR Write
-        self.container.uuid = self.ec_container.uuid
         self.start_ior_load(storage, operation, percent, create_cont=False)
 
         # Store the container UUID for future reading
-        self.cont_uuid.append(self.ior_cmd.dfs_cont.value)
+        self.cont_uuid.append(self.ior_local_cmd.dfs_cont.value)
 
     def ior_write_dataset(self, storage='NVMe', operation="WriteRead", percent=1):
         """Write IOR data set with different EC object and different sizes.
@@ -192,7 +194,7 @@ class ErasureCodeIor(ServerFillUp):
         self.ior_param_update(oclass, sizes)
 
         # retrieve the container UUID to read the existing data
-        self.container.uuid = self.cont_uuid[self.cont_number]
+        self.nvme_local_cont.uuid = self.cont_uuid[self.cont_number]
 
         # Start IOR Read
         self.start_ior_load(storage, operation, percent, create_cont=False)

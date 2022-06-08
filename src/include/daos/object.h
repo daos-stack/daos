@@ -174,6 +174,12 @@ struct daos_obj_layout {
  * update DAOS_OBJ_REPL_MAX obj with some target failed case.
  */
 #define DAOS_TGT_IGNORE		((d_rank_t)-1)
+
+enum daos_tgt_flags {
+	/* When leader forward IO RPC to non-leaders, delay the target until the others replied. */
+	DTF_DELAY_FORWARD	= (1 << 0),
+};
+
 /** to identify each obj shard's target */
 struct daos_shard_tgt {
 	uint32_t		st_rank;	/* rank of the shard */
@@ -181,8 +187,9 @@ struct daos_shard_tgt {
 	uint32_t		st_shard_id;	/* shard id */
 	uint32_t		st_tgt_id;	/* target id */
 	uint16_t		st_tgt_idx;	/* target xstream index */
-	/* target idx for EC obj, only used for client */
-	uint16_t		st_ec_tgt;
+	/* Target idx for EC obj, only used for client, consider OBJ_EC_MAX_M, 8-bits is enough. */
+	uint8_t			st_ec_tgt;
+	uint8_t			st_flags;	/* see daos_tgt_flags */
 };
 
 static inline bool
@@ -229,8 +236,10 @@ unsigned int daos_oclass_grp_nr(struct daos_oclass_attr *oc_attr,
 int daos_oclass_fit_max(daos_oclass_id_t oc_id, int domain_nr, int target_nr,
 			enum daos_obj_redun *ord, uint32_t *nr);
 bool daos_oclass_is_valid(daos_oclass_id_t oc_id);
-daos_oclass_id_t daos_obj_get_oclass(daos_handle_t coh, daos_ofeat_t ofeats,
+daos_oclass_id_t daos_obj_get_oclass(daos_handle_t coh, enum daos_otype_t type,
 				   daos_oclass_hints_t hints, uint32_t args);
+#define daos_oclass_grp_off_by_shard(oca, shard)				\
+	(rounddown(shard, daos_oclass_grp_size(oca)))
 
 /** bits for the specified rank */
 #define DAOS_OC_SR_SHIFT	24
@@ -323,37 +332,37 @@ daos_oid_is_oit(daos_obj_id_t oid)
 	return daos_obj_id2type(oid) == DAOS_OT_OIT;
 }
 
-/**
- * For backward compatibility purpose
- */
-static inline enum daos_otype_t
-daos_obj_feat2type(daos_ofeat_t feat)
+static inline int
+is_daos_obj_type_set(enum daos_otype_t type, enum daos_otype_t sub_type)
 {
-	if (feat == (DAOS_OF_AKEY_UINT64 | DAOS_OF_DKEY_UINT64))
-		return DAOS_OT_MULTI_UINT64;
-	else if (feat == DAOS_OF_AKEY_UINT64)
-		return DAOS_OT_AKEY_UINT64;
-	else if (feat == DAOS_OF_DKEY_UINT64)
-		return DAOS_OT_DKEY_UINT64;
-	else if (feat == DAOS_OF_DKEY_LEXICAL)
-		return DAOS_OT_DKEY_LEXICAL;
-	else if (feat == DAOS_OF_AKEY_LEXICAL)
-		return DAOS_OT_AKEY_LEXICAL;
-	else if (feat == (DAOS_OF_DKEY_LEXICAL | DAOS_OF_AKEY_LEXICAL))
-		return DAOS_OT_MULTI_LEXICAL;
-	else if (feat == (DAOS_OF_DKEY_UINT64 | DAOS_OF_KV_FLAT | DAOS_OF_ARRAY))
-		return DAOS_OT_ARRAY;
-	else if (feat == (DAOS_OF_DKEY_UINT64 | DAOS_OF_KV_FLAT | DAOS_OF_ARRAY_BYTE))
-		return DAOS_OT_ARRAY_BYTE;
-	else if (feat == (DAOS_OF_DKEY_UINT64 | DAOS_OF_KV_FLAT))
-		return DAOS_OT_ARRAY_ATTR;
-	else if (feat == DAOS_OF_KV_FLAT)
-		return DAOS_OT_KV_HASHED;
-	else if (feat == (DAOS_OF_KV_FLAT | DAOS_OF_DKEY_LEXICAL))
-		return DAOS_OT_KV_LEXICAL;
+	int is_type_set = 0;
 
-	/** default */
-	return DAOS_OT_MULTI_HASHED;
+	switch (sub_type) {
+	case DAOS_OT_AKEY_UINT64:
+		if ((type == DAOS_OT_MULTI_UINT64) || (type == DAOS_OT_AKEY_UINT64))
+			is_type_set = DAOS_OT_AKEY_UINT64;
+		break;
+	case DAOS_OT_DKEY_UINT64:
+		if ((type == DAOS_OT_MULTI_UINT64) || (type == DAOS_OT_DKEY_UINT64) ||
+		    (type == DAOS_OT_ARRAY) || (type == DAOS_OT_ARRAY_BYTE) ||
+		    (type == DAOS_OT_ARRAY_ATTR))
+			is_type_set = DAOS_OT_DKEY_UINT64;
+		break;
+	case DAOS_OT_AKEY_LEXICAL:
+		if ((type == DAOS_OT_AKEY_LEXICAL) || (type == DAOS_OT_MULTI_LEXICAL))
+			is_type_set = DAOS_OT_AKEY_LEXICAL;
+		break;
+	case DAOS_OT_DKEY_LEXICAL:
+		if ((type == DAOS_OT_DKEY_LEXICAL) || (type == DAOS_OT_MULTI_LEXICAL) ||
+		    (type == DAOS_OT_KV_LEXICAL))
+			is_type_set = DAOS_OT_DKEY_LEXICAL;
+		break;
+	default:
+		D_ERROR("Unexpected parameter.\n");
+		break;
+	}
+
+	return is_type_set;
 }
 
 /*
@@ -741,4 +750,50 @@ daos_recx_ep_list_dump(struct daos_recx_ep_list *lists, unsigned int nr)
 	}
 }
 
+/** Maximal number of iods (i.e., akeys) in dc_obj_enum_unpack_io.ui_iods */
+#define OBJ_ENUM_UNPACK_MAX_IODS 16
+
+/**
+ * Used by ds_obj_enum_unpack to accumulate recxs that can be stored with a single
+ * VOS update.
+ *
+ * ui_oid and ui_dkey are only filled by ds_obj_enum_unpack for certain
+ * enumeration types, as commented after each field. Callers may fill ui_oid,
+ * for instance, when the enumeration type is VOS_ITER_DKEY, to pass the object
+ * ID to the callback.
+ *
+ * ui_iods, ui_recxs_caps, and ui_sgls are arrays of the same capacity
+ * (ui_iods_cap) and length (ui_iods_len). That is, the iod in ui_iods[i] can
+ * hold at most ui_recxs_caps[i] recxs, which have their inline data described
+ * by ui_sgls[i]. ui_sgls is optional. If ui_iods[i].iod_recxs[j] has no inline
+ * data, then ui_sgls[i].sg_iovs[j] will be empty.
+ */
+struct dc_obj_enum_unpack_io {
+	daos_unit_oid_t		 ui_oid;	/**< type <= OBJ */
+	daos_key_t		 ui_dkey;	/**< type <= DKEY */
+	uint64_t		 ui_dkey_hash;
+	daos_iod_t		*ui_iods;
+	d_iov_t			 ui_csum_iov;
+	/* punched epochs per akey */
+	daos_epoch_t		*ui_akey_punch_ephs;
+	daos_epoch_t		*ui_rec_punch_ephs;
+	daos_epoch_t		**ui_recx_ephs;
+	int			 ui_iods_cap;
+	int			 ui_iods_top;
+	int			*ui_recxs_caps;
+	/* punched epoch for object */
+	daos_epoch_t		ui_obj_punch_eph;
+	/* punched epochs for dkey */
+	daos_epoch_t		ui_dkey_punch_eph;
+	d_sg_list_t		*ui_sgls;	/**< optional */
+	uint32_t		ui_version;
+	uint32_t		ui_type;
+};
+
+typedef int (*dc_obj_enum_unpack_cb_t)(struct dc_obj_enum_unpack_io *io, void *arg);
+
+int
+dc_obj_enum_unpack(daos_unit_oid_t oid, daos_key_desc_t *kds, int kds_num,
+		   d_sg_list_t *sgl, d_iov_t *csum, dc_obj_enum_unpack_cb_t cb,
+		   void *cb_arg);
 #endif /* __DD_OBJ_H__ */
