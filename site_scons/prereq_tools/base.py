@@ -1480,6 +1480,7 @@ class _Component():
                 config = os.path.join(self.component_prefix, path, "pkgconfig")
                 if not os.path.exists(config):
                     continue
+                path_found = True
                 env.AppendENVPath("PKG_CONFIG_PATH", config)
             if not path_found:
                 return
