@@ -16,29 +16,9 @@
 #include "rpc.h"
 #include "srv_internal.h"
 
-static inline int
-map_ranks_include(enum map_ranks_class class, int status)
-{
-	switch (class) {
-	case MAP_RANKS_UP:
-		return status == PO_COMP_ST_UP ||
-		       status == PO_COMP_ST_UPIN ||
-		       status == PO_COMP_ST_NEW;
-	case MAP_RANKS_DOWN:
-		return status == PO_COMP_ST_DOWN ||
-		       status == PO_COMP_ST_DOWNOUT ||
-		       status == PO_COMP_ST_DRAIN;
-	default:
-		D_ASSERTF(0, "%d\n", class);
-	}
-
-	return 0;
-}
-
 /* Build a rank list of targets with certain status. */
 int
-map_ranks_init(const struct pool_map *map, enum map_ranks_class class,
-	       d_rank_list_t *ranks)
+map_ranks_init(const struct pool_map *map, unsigned int status, d_rank_list_t *ranks)
 {
 	struct pool_domain     *domains = NULL;
 	int			nnodes;
@@ -54,7 +34,7 @@ map_ranks_init(const struct pool_map *map, enum map_ranks_class class,
 	}
 
 	for (i = 0; i < nnodes; i++) {
-		if (map_ranks_include(class, domains[i].do_comp.co_status))
+		if (status & domains[i].do_comp.co_status)
 			n++;
 	}
 
@@ -73,7 +53,7 @@ map_ranks_init(const struct pool_map *map, enum map_ranks_class class,
 
 	n = 0;
 	for (i = 0; i < nnodes; i++) {
-		if (map_ranks_include(class, domains[i].do_comp.co_status)) {
+		if (status & domains[i].do_comp.co_status) {
 			D_ASSERT(n < ranks->rl_nr);
 			ranks->rl_ranks[n] = domains[i].do_comp.co_rank;
 			n++;
@@ -88,73 +68,11 @@ void
 map_ranks_fini(d_rank_list_t *ranks)
 {
 	if (ranks->rl_ranks != NULL) {
-		D_ASSERT(ranks->rl_nr != 0);
 		D_FREE(ranks->rl_ranks);
+		ranks->rl_nr = 0;
 	} else {
 		D_ASSERT(ranks->rl_nr == 0);
 	}
-}
-
-static int
-map_ranks_merge(d_rank_list_t *src_ranks, d_rank_list_t *ranks_merge)
-{
-	d_rank_t	*rs;
-	int		*indexes;
-	int		num = 0;
-	int		src_num;
-	int		i;
-	int		j;
-	int		rc = 0;
-
-	if (ranks_merge == NULL || src_ranks == NULL)
-		return 0;
-
-	src_num = src_ranks->rl_nr;
-	D_ALLOC_ARRAY(indexes, ranks_merge->rl_nr);
-	if (indexes == NULL)
-		return -DER_NOMEM;
-
-	for (i = 0; i < ranks_merge->rl_nr; i++) {
-		bool included = false;
-
-		for (j = 0; j < src_num; j++) {
-			if (src_ranks->rl_ranks[j] ==
-			    ranks_merge->rl_ranks[i]) {
-				included = true;
-				break;
-			}
-		}
-
-		if (!included) {
-			indexes[num] = i;
-			num++;
-		}
-	}
-
-	if (num == 0)
-		D_GOTO(free, rc = 0);
-
-	D_ALLOC_ARRAY(rs, (num + src_ranks->rl_nr));
-	if (rs == NULL)
-		D_GOTO(free, rc = -DER_NOMEM);
-
-	for (i = 0; i < src_num; i++)
-		rs[i] = src_ranks->rl_ranks[i];
-
-	for (i = src_num, j = 0; i < src_num + num; i++, j++) {
-		int idx = indexes[j];
-
-		rs[i] = ranks_merge->rl_ranks[idx];
-	}
-
-	map_ranks_fini(src_ranks);
-
-	src_ranks->rl_nr = num + src_num;
-	src_ranks->rl_ranks = rs;
-
-free:
-	D_FREE(indexes);
-	return rc;
 }
 
 int
@@ -168,7 +86,7 @@ ds_pool_bcast_create(crt_context_t ctx, struct ds_pool *pool,
 	int			rc;
 
 	ABT_rwlock_rdlock(pool->sp_lock);
-	rc = map_ranks_init(pool->sp_map, MAP_RANKS_DOWN, &excluded);
+	rc = map_ranks_init(pool->sp_map, PO_COMP_ST_DOWN | PO_COMP_ST_DOWNOUT, &excluded);
 	ABT_rwlock_unlock(pool->sp_lock);
 	if (rc != 0) {
 		D_ERROR(DF_UUID": failed to create rank list: %d\n",
@@ -176,8 +94,14 @@ ds_pool_bcast_create(crt_context_t ctx, struct ds_pool *pool,
 		return rc;
 	}
 
-	if (excluded_list != NULL)
-		map_ranks_merge(&excluded, excluded_list);
+	if (excluded_list != NULL && excluded_list->rl_nr > 0) {
+		rc = daos_rank_list_merge(&excluded, excluded_list);
+		if (rc != 0) {
+			D_ERROR(DF_UUID": failed to merge rank list: %d\n",
+				DP_UUID(pool->sp_uuid), rc);
+			D_GOTO(out, rc);
+		}
+	}
 
 	opc = DAOS_RPC_OPCODE(opcode, module, version);
 	rc = crt_corpc_req_create(ctx, pool->sp_group,
@@ -186,6 +110,7 @@ ds_pool_bcast_create(crt_context_t ctx, struct ds_pool *pool,
 			  0 /* flags */, crt_tree_topo(CRT_TREE_KNOMIAL, 32),
 			  rpc);
 
+out:
 	map_ranks_fini(&excluded);
 	return rc;
 }
@@ -283,6 +208,8 @@ out:
  * is responsible for freeing *to_add_out and *to_remove_out with
  * d_rank_list_free.
  *
+ * We try to keep PS replicas on UP and UPIN, but not DRAIN, ranks.
+ *
  * We try to achieve the PS RF by putting available ranks to *to_add_out. If
  * there are not enough ranks, we try to achieve an odd number of replicas.
  *
@@ -305,6 +232,7 @@ ds_pool_plan_svc_reconfs(int svc_rf, struct pool_map *map, d_rank_list_t *replic
 			 d_rank_list_t **to_add_out, d_rank_list_t **to_remove_out)
 {
 	const int		 svc_rf_default = 2;
+	const pool_comp_state_t	 desired_states = PO_COMP_ST_UP | PO_COMP_ST_UPIN;
 	struct pool_domain	*nodes = NULL;
 	int			 nnodes;
 	int			 objective;
@@ -329,7 +257,7 @@ ds_pool_plan_svc_reconfs(int svc_rf, struct pool_map *map, d_rank_list_t *replic
 	}
 
 	/*
-	 * Fill to_keep and to_remove with all UP and DOWN replicas,
+	 * Fill to_keep and to_remove with all desired and undesired replicas,
 	 * respectively.
 	 */
 	for (i = 0; i < replicas->rl_nr; i++) {
@@ -341,10 +269,10 @@ ds_pool_plan_svc_reconfs(int svc_rf, struct pool_map *map, d_rank_list_t *replic
 				break;
 		if (j == nnodes) /* not found (hypothetical) */
 			list = to_remove;
-		else if (map_ranks_include(MAP_RANKS_DOWN, nodes[j].do_comp.co_status)) /* DOWN */
-			list = to_remove;
-		else /* UP */
+		else if (nodes[j].do_comp.co_status & desired_states)
 			list = to_keep;
+		else
+			list = to_remove;
 		rc = d_rank_list_append(list, replicas->rl_ranks[i]);
 		if (rc != 0)
 			goto out;
@@ -357,7 +285,7 @@ ds_pool_plan_svc_reconfs(int svc_rf, struct pool_map *map, d_rank_list_t *replic
 	if (to_keep->rl_nr < objective) {
 		/* More replicas needed. Add new ranks to to_add. */
 		for (i = 0; i < nnodes; i++) {
-			if (!map_ranks_include(MAP_RANKS_UP, nodes[i].do_comp.co_status))
+			if (!(nodes[i].do_comp.co_status & desired_states))
 				continue;
 			/* May be found in replicas but never in to_add. */
 			if (d_rank_list_find(replicas, nodes[i].do_comp.co_rank, NULL /* idx */))

@@ -23,7 +23,7 @@
  *       ... (more container property KVSs)
  *     Container handle KVS (GENERIC)
  *
- * The version of the whole layout is defined by ds_pool_prop_version.
+ * The version of the whole layout is defined by ds_pool_prop_global_version.
  */
 
 #ifndef __CONTAINER_SRV_LAYOUT_H__
