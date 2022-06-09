@@ -346,7 +346,8 @@ def set_provider_environment(interface, args):
         interface (str): the current interface being used.
     """
     # Use the detected provider if one is not set
-    provider = os.environ.get("CRT_PHY_ADDR_STR")
+    provider = "ofi+tcp;ofi_rxm"
+#    provider = os.environ.get("CRT_PHY_ADDR_STR")
     if provider is None:
         print("Detecting provider for {} - CRT_PHY_ADDR_STR not set".format(interface))
 
