@@ -16,7 +16,8 @@ def scons():
     prereqs.require(denv, 'pmdk')
 
     denv.Append(CPPDEFINES=['-DDAOS_PMEM_BUILD'])
-    denv.Library('vea', FILES, LIBS=['daos_common_pmem', 'gurt'])
+    vea_lib = denv.Library('vea', FILES, LIBS=['daos_common_pmem', 'gurt'])
+    Export('vea_lib')
 
     if prereqs.test_requested():
         SConscript('tests/SConscript', exports='denv')

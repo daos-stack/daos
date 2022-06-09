@@ -5,6 +5,7 @@ from SCons.Subst import Literal
 from SCons.Script import Dir
 from SCons.Script import GetOption
 from SCons.Script import WhereIs
+from SCons.Script import Export
 from env_modules import load_mpi
 import compiler_setup
 
@@ -78,7 +79,14 @@ def library(env, *args, **kwargs):
     denv = env.Clone()
     denv.Replace(RPATH=[])
     add_rpaths(denv, kwargs.get('install_off', '..'), False, False)
-    return denv.SharedLibrary(*args, **kwargs)
+    lib = denv.SharedLibrary(*args, **kwargs)
+    if 'target' in kwargs:
+        return lib
+    libname = os.path.basename(args[0])
+    varname = f"{libname}_lib"
+    globals()[varname] = lib
+    Export(varname)
+    return lib
 
 
 def program(env, *args, **kwargs):

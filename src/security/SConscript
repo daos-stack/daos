@@ -12,7 +12,7 @@ def get_objects(cache, *args):
 
 def scons():
     """Execute build"""
-    Import('env', 'prereqs')
+    Import('env', 'prereqs', 'gurt_lib', 'libdaos_tgts')
 
     env.AppendUnique(LIBPATH=[Dir('.')])
     denv = env.Clone()
@@ -27,6 +27,7 @@ def scons():
     # dc_security: Security Client
     dc_security_tgts = get_objects(cache, 'cli_security.c', 'auth.pb-c.c')
     Export('dc_security_tgts')
+    libdaos_tgts.extend(dc_security_tgts)
 
     if not prereqs.server_requested():
         return
@@ -35,6 +36,7 @@ def scons():
     ds_sec = daos_build.library(denv, 'security',
                                 get_objects(cache, 'srv.c', 'srv_acl.c'),
                                 install_off="../..")
+    denv.Requires(ds_sec, [gurt_lib])
     denv.Install('$PREFIX/lib64/daos_srv', ds_sec)
 
     dc_sectest_tgts = get_objects(cache, 'srv_acl.c', 'cli_security.c',

@@ -29,10 +29,12 @@ def build_vos(env, standalone):
 
     vos = daos_build.library(denv, libname, files, install_off='../..',
                              LIBS=['vea'])
+    denv.Requires(vos, [vea_lib])
     denv.Install('$PREFIX/lib64/daos_srv', vos)
 
 def build_vos_internal(env):
     """build vos internal"""
+    Import('vos_lib')
     denv = env.Clone()
 
     libraries = ['vos', 'bio', 'abt', 'daos_common_pmem', 'gurt']
@@ -43,12 +45,13 @@ def build_vos_internal(env):
 
     vos_size = daos_build.library(denv, 'vos_size', ['vos_size.c'],
                                   LIBS=libraries, install_off='../..')
+    denv.Requires(vos_size, [vos_lib, bio_lib, daos_common_pmem_lib])
 
     denv.Install('$PREFIX/lib64/daos_srv', vos_size)
 
 def scons():
     """Execute build"""
-    Import('env', 'prereqs')
+    Import('env', 'prereqs', 'vea_lib', 'bio_lib', 'daos_common_pmem_lib')
 
     env.AppendUnique(LIBPATH=[Dir('.')])
 

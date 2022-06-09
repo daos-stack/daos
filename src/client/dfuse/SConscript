@@ -68,9 +68,11 @@ def build_client_libs_shared(env, prereqs):
     common = build_common(penv, COMMON_SRC, True)
 
     # Now build the interception library
-    il_lib = daos_build.library(ilenv, 'il/libioil', il_obj + common)
+    il_lib = daos_build.library(ilenv, 'ioil', il_obj + common)
+    ilenv.Requires(il_lib, [dfs_lib])
     env.InstallVersionedLib(os.path.join("$PREFIX", 'lib64'), il_lib)
-    dfuse_lib = daos_build.library(ilenv, 'common/libdfuse', common)
+    dfuse_lib = daos_build.library(ilenv, 'dfuse', common)
+    ilenv.Requires(dfuse_lib, [dfs_lib])
 
     gen_script = daos_build.program(ilenv, 'il/gen_script', ['il/gen_script.c'], LIBS=[])
     if prereqs.test_requested():
@@ -167,7 +169,7 @@ def configure_fuse(cenv):
 def scons():
     """Scons function"""
 
-    Import('env', 'prereqs')
+    Import('env', 'prereqs', 'dfs_lib', 'duns_lib')
 
     if env['CC'] == 'gcc':
         il_env = env.Clone()
@@ -214,6 +216,7 @@ def scons():
         dfuse_obj += cenv.Object(os.path.join('ops', '%s.c' % src))
     cenv.AppendUnique(LIBS=['gurt'])
     progs = daos_build.program(cenv, 'dfuse/dfuse', common + dfuse_obj)
+    cenv.Requires(progs, [duns_lib])
 
     Default(progs + libs)
 

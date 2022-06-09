@@ -3,7 +3,7 @@ import daos_build
 
 def scons():
     """Execute build"""
-    Import('env', 'prereqs')
+    Import('env', 'prereqs', 'libdaos_tgts')
 
     env.AppendUnique(LIBPATH=[Dir('.')])
     env.AppendUnique(CPPPATH=[Dir('../mgmt').srcnode()])
@@ -14,8 +14,7 @@ def scons():
     common = denv.SharedObject(['rpc.c'])
 
     # dc_pool: Pool Client
-    dc_pool_tgts = denv.SharedObject(['cli.c']) + common
-    Export('dc_pool_tgts')
+    libdaos_tgts.extend(denv.SharedObject(['cli.c']) + common)
 
     if not prereqs.server_requested():
         return

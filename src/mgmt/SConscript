@@ -3,7 +3,7 @@ import daos_build
 
 def scons():
     """Execute build"""
-    Import('env', 'prereqs')
+    Import('env', 'prereqs', 'libdaos_tgts')
 
     env.AppendUnique(LIBPATH=[Dir('.')])
 
@@ -20,9 +20,7 @@ def scons():
     common = denv.SharedObject(['rpc.c']) + pb
 
     # Management client library
-    dc_mgmt_tgts = common + denv.SharedObject(['cli_mgmt.c', 'cli_query.c',
-                                               'cli_debug.c'])
-    Export('dc_mgmt_tgts')
+    libdaos_tgts.extend(common + denv.SharedObject(['cli_mgmt.c', 'cli_query.c', 'cli_debug.c']))
 
     if not prereqs.server_requested():
         return

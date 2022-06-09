@@ -3,17 +3,21 @@ import daos_build
 
 def scons():
     """Execute build"""
-    Import('denv')
+    Import('denv', 'daos_lib')
 
     eq_tests = daos_build.test(denv, 'eq_tests', 'eq_tests.c',
                                LIBS=['daos', 'daos_common', 'gurt', 'cart',
                                      'pthread', 'cmocka'])
+    denv.Requires(eq_tests, [daos_lib])
     agent_tests = daos_build.test(denv, 'agent_tests', 'agent_tests.c',
                                   LIBS=['daos', 'daos_common', 'gurt', 'cart',
                                         'pthread', 'cmocka'])
+    denv.Requires(agent_tests, [daos_lib])
     job_tests = daos_build.test(denv, 'job_tests', 'job_tests.c',
                                 LIBS=['daos', 'daos_common', 'gurt', 'cart',
                                       'pthread', 'cmocka'])
+    denv.Requires(job_tests, [daos_lib])
+
 
     denv.Install('$PREFIX/bin/', [eq_tests, agent_tests, job_tests])
 

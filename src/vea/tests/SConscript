@@ -4,7 +4,7 @@ import daos_build
 
 def scons():
     """Execute build"""
-    Import('denv')
+    Import('denv', 'vea_lib', 'daos_common_pmem_lib')
 
     libraries = ['vea', 'gurt', 'cart', 'pmemobj', 'cmocka', 'daos_common_pmem']
 
@@ -12,7 +12,9 @@ def scons():
 
     env.AppendUnique(LIBPATH=[Dir('..')])
     vea_ut = daos_build.test(env, 'vea_ut', 'vea_ut.c', LIBS=libraries)
+    env.Requires(vea_ut, [daos_common_pmem_lib, vea_lib])
     vea_stress = daos_build.test(env, 'vea_stress', 'vea_stress.c', LIBS=libraries)
+    env.Requires(vea_stress, [daos_common_pmem_lib, vea_lib])
     env.Install('$PREFIX/bin/', vea_ut)
     env.Install('$PREFIX/bin/', vea_stress)
 

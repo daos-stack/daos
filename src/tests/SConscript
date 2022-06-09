@@ -7,8 +7,8 @@ def build_tests(prereqs, env, client_libs):
     denv = env.Clone()
     compiler_setup.base_setup(denv)
 
-    libs_server = ['daos', 'daos_common_pmem', 'gurt', 'm', 'cart', 'uuid', 'cmocka', 'daos_tests',
-                   'pthread', 'dts', 'dpar']
+    libs_server = ['daos_common_pmem', 'gurt', 'm', 'cart', 'uuid', 'cmocka', 'daos_tests',
+                   'pthread', 'dts', 'dpar', 'isal', 'protobuf-c']
     libs_client = client_libs + ['pthread', 'dts', 'dpar']
 
     denv.AppendUnique(CPPPATH=[Dir('suite').srcnode()])
@@ -21,10 +21,13 @@ def build_tests(prereqs, env, client_libs):
     denv.AppendUnique(LIBPATH=[Dir('../client/api')])
 
     prereqs.require(denv, 'argobots', 'hwloc', 'protobufc', 'pmdk', 'isal')
+    client_requires = [daos_lib, daos_tests_lib, dpar_lib, dts_lib]
+    server_requires = [daos_common_pmem_lib, daos_tests_lib, dts_lib, dpar_lib]
 
     daos_racer = daos_build.program(denv, 'daos_racer',
                                     ['daos_racer.c'],
                                     LIBS=libs_client)
+    denv.Requires(daos_racer, client_requires)
     denv.Install('$PREFIX/bin/', daos_racer)
 
     perf_common = denv.StaticObject(['perf_common.c'])
@@ -32,23 +35,27 @@ def build_tests(prereqs, env, client_libs):
     daos_perf = daos_build.program(denv, 'daos_perf',
                                    ['daos_perf.c', perf_common],
                                    LIBS=libs_client)
+    denv.Requires(daos_perf, client_requires)
     denv.Install('$PREFIX/bin/', daos_perf)
 
     libs_server += ['vos', 'bio', 'abt']
     vos_engine = denv.StaticObject(['vos_engine.c'])
 
     vos_perf = daos_build.program(denv, 'vos_perf',
-                                  ['vos_perf.c', perf_common, vos_engine],
+                                  ['vos_perf.c', perf_common, vos_engine] + libdaos_tgts,
                                   LIBS=libs_server)
+    denv.Requires(vos_perf, server_requires)
     denv.Install('$PREFIX/bin/', vos_perf)
 
     Import('mpi_cmd_parser')
     obj_ctl = daos_build.program(denv, 'obj_ctl',
-                                 ['obj_ctl.c', mpi_cmd_parser, vos_engine],
+                                 ['obj_ctl.c', mpi_cmd_parser, vos_engine] + libdaos_tgts,
                                  LIBS=libs_server)
+    denv.Requires(obj_ctl, server_requires)
     denv.Install('$PREFIX/bin/', obj_ctl)
 
     jobtest = daos_build.program(denv, 'jobtest', ['jobtest.c'], LIBS=libs_client)
+    denv.Requires(jobtest, client_requires)
     denv.Install('$PREFIX/bin/', jobtest)
 
     # tests
@@ -66,7 +73,8 @@ def build_tests(prereqs, env, client_libs):
 
 def scons():
     """Execute build"""
-    Import('base_env', 'base_env_mpi', 'prereqs')
+    Import('base_env', 'base_env_mpi', 'prereqs', 'libdaos_tgts', 'daos_lib',
+           'daos_common_pmem_lib', 'daos_tests_lib', 'dts_lib', 'dpar_lib')
 
     if not prereqs.test_requested():
         return
@@ -89,8 +97,10 @@ def scons():
     denv.AppendUnique(LIBPATH=[Dir('../client/api')])
     denv.AppendUnique(LIBPATH=[Dir('../cart')])
 
-    daos_build.program(denv, 'simple_array', 'simple_array.c', LIBS=libs_client)
-    daos_build.program(denv, 'simple_obj', 'simple_obj.c', LIBS=libs_client)
+    simple_array = daos_build.program(denv, 'simple_array', 'simple_array.c', LIBS=libs_client)
+    denv.Requires(simple_array, [daos_lib, daos_tests_lib])
+    simple_test = daos_build.program(denv, 'simple_obj', 'simple_obj.c', LIBS=libs_client)
+    denv.Requires(simple_test, [daos_lib, daos_tests_lib])
 
 if __name__ == "SCons.Script":
     scons()

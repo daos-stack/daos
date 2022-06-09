@@ -10,7 +10,8 @@ def scons():
     denv.Append(CPPDEFINES=['-DDAOS_PMEM_BUILD'])
     prereqs.require(denv, 'pmdk', 'argobots', 'protobufc')
 
-    denv.Library('smd', FILES, LIBS=[])
+    smd_lib = denv.Library('smd', FILES, LIBS=[])
+    Export('smd_lib')
 
     if prereqs.test_requested():
         SConscript('tests/SConscript', exports='denv')

@@ -5,7 +5,7 @@ import daos_build
 def scons():
     """Execute build"""
 
-    Import('env', 'prereqs')
+    Import('env', 'prereqs', 'duns_lib')
 
     if not prereqs.client_requested():
         return
@@ -34,10 +34,9 @@ def scons():
 
     daos_hdlrs_src = ['daos_hdlr.c', 'daos_autotest.c', 'daos_dfs_hdlr.c']
     daos_hdlrs_lib = daos_build.library(denv, 'daos_cmd_hdlrs', daos_hdlrs_src, LIBS=libs)
+    denv.Requires(daos_hdlrs_lib, [duns_lib])
     env.Install('$PREFIX/lib64/', daos_hdlrs_lib)
     libs += ['daos_cmd_hdlrs']
-
-    Export('daos_hdlrs_lib')
 
 if __name__ == "SCons.Script":
     scons()

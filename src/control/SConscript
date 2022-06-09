@@ -9,7 +9,8 @@ from os.path import join, isdir
 from os import urandom
 from binascii import b2a_hex
 
-Import('env', 'prereqs', 'daos_version', 'conf_dir', 'gurt_lib', 'cart_lib', 'client_common')
+Import('env', 'prereqs', 'daos_version', 'conf_dir', 'gurt_lib', 'cart_lib', 'daos_common_lib')
+Import('daos_cmd_hdlrs_lib')
 
 GO_COMPILER = 'go'
 MIN_GO_VERSION = '1.12.0'
@@ -122,14 +123,14 @@ def install_go_bin(denv, gosrc, libs, name, install_name):
     # Propagate useful GO environment variables from the caller
     if 'GOCACHE' in os.environ:
         denv['ENV']['GOCACHE'] = os.environ['GOCACHE']
-    denv.Command(build_bin, src + libs,
-                 'cd %s; %s build -mod vendor %s %s %s -o %s %s' %
-                 (gosrc, GO_BIN, go_ldflags(), get_build_flags(denv),
-                  get_build_tags(denv), build_bin, install_src))
+    target = denv.Command(build_bin, src + libs,
+                          'cd %s; %s build -mod vendor %s %s %s -o %s %s' %
+                          (gosrc, GO_BIN, go_ldflags(), get_build_flags(denv),
+                          get_build_tags(denv), build_bin, install_src))
     # Use the intermediate build location in order to play nicely
     # with --install-sandbox.
-    denv.Requires(build_bin, [client_common])
-    denv.InstallAs(install_bin, build_bin)
+    denv.Requires(target, libs)
+    denv.InstallAs(install_bin, target)
     return install_bin
 # pylint: enable=too-many-arguments
 
@@ -223,14 +224,13 @@ def scons():
 
         AlwaysBuild([agentbin, dmgbin])
 
-        Import('daos_hdlrs_lib')
         dbenv = denv.Clone()
         dblibs = dbenv.subst("-L$BUILD_DIR/src/gurt "
                              "-L$BUILD_DIR/src/cart "
                              "-L$BUILD_DIR/src/client/dfs "
                              "-L$BUILD_DIR/src/utils $_RPATH")
         dbenv.AppendENVPath("CGO_LDFLAGS", dblibs, sep=" ")
-        daosbin = install_go_bin(dbenv, gosrc, [daos_hdlrs_lib], "daos", "daos")
+        daosbin = install_go_bin(dbenv, gosrc, [daos_cmd_hdlrs_lib], "daos", "daos")
         AlwaysBuild([daosbin])
 
         menv = denv.Clone()

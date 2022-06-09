@@ -3,19 +3,19 @@ import daos_build
 
 def scons():
     """Execute build"""
-    Import('denv', 'dc_security_tgts')
+    Import('denv', 'dc_security_tgts', 'daos_common_lib')
 
     mocks = denv.Object('drpc_mocks.c')
     # Isolated unit tests
-    daos_build.test(denv, 'cli_security_tests',
-                    source=['cli_security_tests.c', dc_security_tgts,
-                            mocks],
-                    LIBS=['cmocka', 'protobuf-c', 'daos_common', 'gurt'])
+    test = daos_build.test(denv, 'cli_security_tests',
+                           source=['cli_security_tests.c', dc_security_tgts, mocks],
+                           LIBS=['cmocka', 'protobuf-c', 'daos_common', 'gurt'])
+    denv.Requires(test, [daos_common_lib])
 
-    daos_build.test(denv, 'srv_acl_tests',
-                    source=['srv_acl_tests.c', '../srv_acl.c',
-                            '../auth.pb-c.c', mocks],
-                    LIBS=['cmocka', 'protobuf-c', 'daos_common', 'gurt'])
+    test = daos_build.test(denv, 'srv_acl_tests',
+                           source=['srv_acl_tests.c', '../srv_acl.c', '../auth.pb-c.c', mocks],
+                           LIBS=['cmocka', 'protobuf-c', 'daos_common', 'gurt'])
+    denv.Requires(test, [daos_common_lib])
 
 if __name__ == "SCons.Script":
     scons()
