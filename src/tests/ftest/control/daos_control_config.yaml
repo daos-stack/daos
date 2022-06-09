@@ -96,3 +96,8 @@ control_config_val: !mux
        - "key"
        - /tmp/does_not_exist.ext
        - "PASS"
+  control_iface_does_not_exist:
+    config_val:
+       - "control_iface"
+       - "fakeiface"
+       - "FAIL"

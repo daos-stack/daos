@@ -117,6 +117,7 @@ class DaosServerYamlParameters(YamlParameters):
         self.helper_log_file = LogParameter(log_dir, None, "daos_admin.log")
         self.telemetry_port = BasicParameter(None, 9191)
         self.disable_vmd = BasicParameter(None)
+        self.control_iface = BasicParameter(None)
 
         # Used to drop privileges before starting data plane
         # (if started as root to perform hardware provisioning)
