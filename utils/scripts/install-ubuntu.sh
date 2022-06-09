@@ -40,6 +40,7 @@ apt-get install \
     libyaml-dev \
     locales \
     maven \
+    meson \
     numactl \
     openjdk-8-jdk \
     patchelf \
@@ -47,6 +48,7 @@ apt-get install \
     pkg-config \
     python3-dev \
     python3-venv \
+    python3-pyelftools \
     uuid-dev \
     valgrind \
     yasm
