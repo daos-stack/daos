@@ -359,18 +359,18 @@ class DaosServerManager(SubprocessManager):
                 "Failed to start servers before format: {}".format(
                     error)) from error
 
-    def detect_engine_start(self, host_qty=None):
+    def detect_engine_start(self, hosts_qty=None):
         """Detect when all the engines have started.
 
         Args:
-            host_qty (int): number of servers expected to have been started.
+            hosts_qty (int): number of servers expected to have been started.
 
         Raises:
             ServerFailed: if there was an error starting the servers after
                 formatting.
 
         """
-        if host_qty is None:
+        if hosts_qty is None:
             hosts_qty = len(self._hosts)
 
         if self.detect_start_via_dmg:
