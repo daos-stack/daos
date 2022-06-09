@@ -14,8 +14,8 @@
 %endif
 
 Name:          daos
-Version:       2.1.102
-Release:       5%{?relval}%{?dist}
+Version:       2.1.103
+Release:       1%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       BSD-2-Clause-Patent
@@ -561,6 +561,9 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 # No files in a shim package
 
 %changelog
+* Thu Jun 9 2022 Johann Lombardi <johann.lombardi@intel.com> 2.1.103-1
+- Bump version to 2.1.103
+
 * Thu Jun 2 2022 Jeff Olivier <jeffrey.v.olivier@intel.com> 2.1.102-5
 - Make ucx required for build on all platforms
 

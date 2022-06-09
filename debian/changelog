@@ -1,3 +1,9 @@
+daos (2.1.103-1) unstable; urgency=medium
+  [ Johann Lombardi ]
+  * Bump version to 2.1.103
+
+ -- Johann Lombardi <johann.lombardi@intel.com>  Thu, 09 Jun 2022 08:00:00 -0100
+
 daos (2.1.102-5) unstable; urgency=medium
   [ Jeff Olivier ]
   * Make ucx required for build on all platforms
