@@ -1682,7 +1682,7 @@ obj_shard_is_invalid(struct dc_object *obj, uint32_t shard_idx, uint32_t opc)
  * 1: alive,  0: no alive  < 0: failure.
  */
 int
-obj_ec_parity_alive(daos_handle_t oh, uint64_t dkey_hash, uint32_t map_ver)
+obj_ec_parity_alive(daos_handle_t oh, uint64_t dkey_hash)
 {
 	struct daos_oclass_attr *oca;
 	struct dc_object	*obj;
@@ -1692,7 +1692,7 @@ obj_ec_parity_alive(daos_handle_t oh, uint64_t dkey_hash, uint32_t map_ver)
 	int			rc = 0;
 
 	obj = obj_hdl2ptr(oh);
-	grp_idx = obj_dkey2grpidx(obj, dkey_hash, map_ver);
+	grp_idx = obj_dkey2grpidx(obj, dkey_hash, obj->cob_version);
 	if (grp_idx < 0)
 		D_GOTO(out_put, rc = grp_idx);
 
