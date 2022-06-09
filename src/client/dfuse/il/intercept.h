@@ -77,7 +77,8 @@
 	ACTION(int,     fscanf,    (FILE *, const char *, ...))               \
 	ACTION(int,     vfscanf,   (FILE *, const char *, va_list))           \
 	ACTION(int,     fprintf,   (FILE *, const char *, ...))               \
-	ACTION(int,     vfprintf,   (FILE *, const char *, va_list ap))
+	ACTION(int,     vfprintf,  (FILE *, const char *, va_list ap))        \
+	ACTION(int,     __uflow,   (FILE *))
 
 #define FOREACH_INTERCEPT(ACTION)            \
 	FOREACH_SINGLE_INTERCEPT(ACTION)     \

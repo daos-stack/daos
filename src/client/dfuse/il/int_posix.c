@@ -2155,6 +2155,32 @@ do_real_clearerr:
 	__real_clearerr(stream);
 }
 
+DFUSE_PUBLIC int
+dfuse___uflow(FILE *stream)
+{
+	struct fd_entry	*entry = NULL;
+	int fd;
+	int rc;
+
+	fd = fileno(stream);
+	if (fd == -1)
+		goto do_real_uflow;
+
+	rc = vector_get(&fd_table, fd, &entry);
+	if (rc != 0)
+		goto do_real_uflow;
+
+	if (drop_reference_if_disabled(entry))
+		goto do_real_uflow;
+
+	D_ERROR("uflow called, something missing %d %p\n", fd, stream);
+	entry->fd_status = DFUSE_IO_DIS_STREAM;
+	vector_decref(&fd_table, entry);
+
+do_real_uflow:
+	return __real___uflow(stream);
+}
+
 DFUSE_PUBLIC long
 dfuse_ftell(FILE *stream)
 {
@@ -2174,12 +2200,18 @@ dfuse_ftell(FILE *stream)
 	if (drop_reference_if_disabled(entry))
 		goto do_real_ftell;
 
+	/* Load the position from the interception library */
 	off = entry->fd_pos;
 
+	/* If the interception library hasn't seen any I/O then double check with libc, there
+	 * can be cases where previous interception calls have been missed which will result in
+	 * libc reporting a non-zero value.  If this is the case then we have to identify and
+	 * intercept whatever functions are missing.
+	 */
 	if (off == 0) {
 		off =  __real_ftell(stream);
 		if (off != 0) {
-			D_ERROR("Missing interception, patching up %p\n", stream);
+			D_ERROR("Missing interception, patching up %d %p\n", fd, stream);
 			entry->fd_status = DFUSE_IO_DIS_STREAM;
 		}
 	}
