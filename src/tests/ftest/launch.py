@@ -2263,12 +2263,14 @@ def reset_server_storage(test_file, args):
     if server_hosts:
         commands = [
             "if lspci | grep -i nvme",
-            "then daos_server storage prepare -n --reset && rmmod vfio_pci && modprobe vfio_pci",
+            "then daos_server storage prepare -n --reset && " +
+            "sudo rmmod vfio_pci && sudo modprobe vfio_pci",
             "fi"]
         print(
             "Resetting server storage on {} after running '{}'".format(
                 NodeSet.fromlist(server_hosts), test_file["py"]))
-        spawn_commands(server_hosts, "bash -c '{}'".format(";".join(commands)), timeout=600)
+        if not spawn_commands(server_hosts, "bash -c '{}'".format(";".join(commands)), timeout=600):
+            print(indent_text(2, "Ignoring any errors from these workaround commands"))
     else:
         print(
             "Skipping resetting server storage after running '{}' - no server hosts".format(
