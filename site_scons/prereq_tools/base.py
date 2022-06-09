@@ -60,6 +60,8 @@ import tarfile
 import copy
 import configparser
 
+OPTIONAL_COMPS = ['psm2']
+
 
 class DownloadFailure(Exception):
     """Exception raised when source can't be downloaded
@@ -262,11 +264,13 @@ class Runner():
         self.env = env
         self.__dry_run = env.GetOption('no_exec')
 
-    def run_commands(self, commands, subdir=None):
+    def run_commands(self, commands, subdir=None, env=None):
         """Runs a set of commands in specified directory"""
         if not self.env:
             raise Exception("PreReqComponent not initialized")
         retval = True
+
+        passed_env = env or self.env
 
         if subdir:
             print('Running commands in {}'.format(subdir))
@@ -282,7 +286,7 @@ class Runner():
                 retval = True
             else:
                 print('RUN: %s' % ' '.join(cmd))
-                if subprocess.call(cmd, shell=False, cwd=subdir, env=self.env['ENV']) != 0:
+                if subprocess.call(cmd, shell=False, cwd=subdir, env=passed_env['ENV']) != 0:
                     retval = False
                     break
         return retval
@@ -701,7 +705,7 @@ class PreReqComponent():
                         'Comma separated list of preinstalled dependencies',
                         'none')
         self.add_opts(ListVariable('INCLUDE', "Optional components to build",
-                                   'none', ['psm2']))
+                                   'none', OPTIONAL_COMPS))
         self.add_opts(('MPI_PKG',
                        'Specifies name of pkg-config to load for MPI', None))
         self.add_opts(BoolVariable('FIRMWARE_MGMT',
@@ -998,6 +1002,7 @@ class PreReqComponent():
     Keyword arguments:
         libs -- A list of libraries to add to dependent components
         libs_cc -- Optional CC command to test libs with.
+        functions -- A list of expected functions
         headers -- A list of expected headers
         pkgconfig -- name of pkgconfig to load for installation check
         requires -- A list of names of required component definitions
@@ -1142,12 +1147,23 @@ class PreReqComponent():
                     changes = True
                 else:
                     self.modify_prefix(comp_def, env)
+                # If we get here, just set the environment again, new directories may be present
+                comp_def.set_environment(env, needed_libs)
             except Exception as error:
                 # Save the exception in case the component is requested again
                 self.__errors[comp] = error
                 raise error
 
         return changes
+
+    def included(self, *comps):
+        """Returns true if the components are included in the build"""
+        for comp in comps:
+            if comp not in OPTIONAL_COMPS:
+                continue
+            if not set([comp, 'all']).intersection(set(self.include)):
+                return False
+        return True
 
     def check_component(self, *comps, **kw):
         """Returns True if a component is available"""
@@ -1296,6 +1312,7 @@ class _Component():
     Keyword arguments:
         libs -- A list of libraries to add to dependent components
         libs_cc -- Optional compiler for testing libs
+        functions -- A list of expected functions
         headers -- A list of expected headers
         requires -- A list of names of required component definitions
         commands -- A list of commands to run to build the component
@@ -1328,6 +1345,7 @@ class _Component():
         self.progs = kw.get("progs", [])
         self.libs = kw.get("libs", [])
         self.libs_cc = kw.get("libs_cc", None)
+        self.functions = kw.get("functions", {})
         self.config_cb = kw.get("config_cb", None)
         self.required_libs = kw.get("required_libs", [])
         self.required_progs = kw.get("required_progs", [])
@@ -1455,7 +1473,7 @@ class _Component():
             return False
 
         path = os.environ.get("PKG_CONFIG_PATH", None)
-        if path is not None:
+        if path and "PKG_CONFIG_PATH" not in env["ENV"]:
             env["ENV"]["PKG_CONFIG_PATH"] = path
         if self.component_prefix:
             for path in ["lib", "lib64"]:
@@ -1487,10 +1505,8 @@ class _Component():
             print("Would check for missing build targets")
             return True
 
-        if self.parse_config(env, "--cflags"):
-            if self.__check_only:
-                env.SetOption('no_exec', True)
-            return True
+        # No need to fail here if we can't find the config, it may not always be generated
+        self.parse_config(env, "--cflags")
 
         if GetOption('help'):
             return True
@@ -1531,6 +1547,18 @@ class _Component():
                 if self.__check_only:
                     env.SetOption('no_exec', True)
                 return True
+
+        for lib, functions in self.functions.items():
+            saved_env = config.env.Clone()
+            config.env.AppendUnique(LIBS=[lib])
+            for function in functions:
+                result = config.CheckFunc(function)
+                if not result:
+                    config.Finish()
+                    if self.__check_only:
+                        env.SetOption('no_exec', True)
+                    return True
+            config.env = saved_env
 
         config.Finish()
         self.targets_found = True
@@ -1761,7 +1789,7 @@ class _Component():
             changes = True
             if self.out_of_src_build:
                 self._rm_old_dir(self.build_path)
-            if not RUNNER.run_commands(self.build_commands, subdir=self.build_path):
+            if not RUNNER.run_commands(self.build_commands, subdir=self.build_path, env=envcopy):
                 raise BuildFailure(self.name)
 
         # set environment one more time as new directories may be present

@@ -2106,7 +2106,7 @@ migrate_enum_unpack_cb(struct dc_obj_enum_unpack_io *io, void *data)
 	 * If parity shard alive for this dkey, then ignore the data shard enumeration
 	 * from data shard.
 	 */
-	rc = obj_ec_parity_alive(arg->oh, io->ui_dkey_hash, arg->version);
+	rc = obj_ec_parity_alive(arg->oh, io->ui_dkey_hash);
 	if (rc < 0)
 		return rc;
 
