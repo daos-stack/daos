@@ -14,6 +14,7 @@
 // To use a test branch (i.e. PR) until it lands to master
 // I.e. for testing library changes
 //@Library(value="pipeline-lib@your_branch") _
+@Library(value="pipeline-lib@DAOS-9979") _
 
 // Should try to figure this out automatically
 /* groovylint-disable-next-line CompileStatic, VariableName */
@@ -396,7 +397,7 @@ pipeline {
                                     branch: env.BaseBranch,
                                     withSubmodules: true
                         functionalTest inst_repos: daosRepos(),
-                                       inst_rpms: "mercury-ucx " + functionalPackages(1, next_version, "tests-internal"),
+                                       inst_rpms: functionalPackages(1, next_version, "tests-internal"),
                                        test_function: 'runTestFunctionalV2'
                     }
                     post {
@@ -420,7 +421,7 @@ pipeline {
                                     branch: env.BaseBranch,
                                     withSubmodules: true
                         functionalTest inst_repos: daosRepos(),
-                                       inst_rpms: "mercury-ucx " + functionalPackages(1, next_version, "tests-internal"),
+                                       inst_rpms: functionalPackages(1, next_version, "tests-internal"),
                                        test_function: 'runTestFunctionalV2'
                     }
                     post {
@@ -444,7 +445,7 @@ pipeline {
                                     branch: env.BaseBranch,
                                     withSubmodules: true
                         functionalTest inst_repos: daosRepos(),
-                                       inst_rpms: "mercury-ucx " + functionalPackages(1, next_version, "tests-internal"),
+                                       inst_rpms: functionalPackages(1, next_version, "tests-internal"),
                                        test_function: 'runTestFunctionalV2'
                     }
                     post {
