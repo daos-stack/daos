@@ -91,6 +91,11 @@ hwloc_obj_t node_get_child(hwloc_obj_t node, int idx)
 	}
 	return child;
 }
+
+const char * node_get_subtype(hwloc_obj_t node)
+{
+	return node->subtype;
+}
 #else
 int topo_setFlags(hwloc_topology_t topology)
 {
@@ -116,12 +121,18 @@ hwloc_obj_t node_get_child(hwloc_obj_t node, int idx)
 {
 	return node->children[idx];
 }
+
+const char * node_get_subtype(hwloc_obj_t node)
+{
+	return "";
+}
 #endif
 */
 import "C"
 
 import (
 	"fmt"
+	"strconv"
 	"sync"
 	"unsafe"
 
@@ -372,6 +383,17 @@ func (o *object) objType() int {
 	return int(o.cObj._type)
 }
 
+func (o *object) objSubTypeString() string {
+	o.topo.RLock()
+	defer o.topo.RUnlock()
+
+	typeStr := C.GoString(C.node_get_subtype(o.cObj))
+	if typeStr == "" {
+		typeStr = "unknown"
+	}
+	return typeStr
+}
+
 func (o *object) objTypeString() string {
 	switch o.objType() {
 	case objTypeNUMANode:
@@ -452,6 +474,56 @@ func (o *object) pciAddr() (*hardware.PCIAddress, error) {
 	}
 	return hardware.NewPCIAddress(fmt.Sprintf("%04x:%02x:%02x.%01x", pciDevAttr.domain, pciDevAttr.bus,
 		pciDevAttr.dev, pciDevAttr._func))
+}
+
+func (o *object) blockDevice() (*hardware.BlockDevice, error) {
+	o.topo.RLock()
+	defer o.topo.RUnlock()
+
+	devType, err := o.osDevType()
+	if err != nil {
+		return nil, err
+	}
+	if devType != osDevTypeBlock {
+		return nil, errors.Errorf("device %q is not a block device", o.name())
+	}
+
+	bd := &hardware.BlockDevice{
+		Name: o.name(),
+		Type: o.objSubTypeString(),
+	}
+	// https://www.open-mpi.org/projects/hwloc/doc/v2.7.0/a00365.php (OS Device Information)
+	infoKeys := map[string]unsafe.Pointer{
+		"LinuxDeviceID": unsafe.Pointer(&bd.LinuxDeviceID),
+		"Vendor":        unsafe.Pointer(&bd.Vendor),
+		"Model":         unsafe.Pointer(&bd.Model),
+		"Revision":      unsafe.Pointer(&bd.Revision),
+		"SerialNumber":  unsafe.Pointer(&bd.SerialNumber),
+		"Size":          unsafe.Pointer(&bd.Size),
+		"SectorSize":    unsafe.Pointer(&bd.SectorSize),
+	}
+
+	for key, ptr := range infoKeys {
+		keyStr := C.CString(key)
+		defer C.free(unsafe.Pointer(keyStr))
+		cVal := C.hwloc_obj_get_info_by_name(o.cObj, keyStr)
+		if cVal == nil {
+			continue
+		}
+		goVal := C.GoString(cVal)
+
+		switch key {
+		case "Size", "SectorSize":
+			size, err := strconv.ParseUint(goVal, 10, 64)
+			if err != nil {
+				return nil, errors.Errorf("device %q has invalid size %q", o.name(), goVal)
+			}
+			*(*uint64)(ptr) = size
+		default:
+			*(*string)(ptr) = goVal
+		}
+	}
+	return bd, nil
 }
 
 func (o *object) linkSpeed() (float64, error) {
