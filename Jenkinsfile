@@ -14,7 +14,6 @@
 // To use a test branch (i.e. PR) until it lands to master
 // I.e. for testing library changes
 //@Library(value="pipeline-lib@your_branch") _
-@Library(value="pipeline-lib@DAOS-9989") _
 
 // Should try to figure this out automatically
 /* groovylint-disable-next-line CompileStatic, VariableName */
@@ -80,9 +79,6 @@ pipeline {
         string(name: 'BaseBranch',
                defaultValue: base_branch,
                description: 'The base branch to run weekly-testing against (i.e. master, or a PR\'s branch)')
-        booleanParam(name: 'CI_FUNCTIONAL_el7_TEST',
-                     defaultValue: true,
-                     description: 'Run the Functional on CentOS 7 test stage')
         booleanParam(name: 'CI_FUNCTIONAL_el8_TEST',
                      defaultValue: true,
                      description: 'Run the Functional on EL 8 test stage')
@@ -172,30 +168,7 @@ pipeline {
                 expression { !skipStage() }
             }
             parallel {
-                stage('Functional on CentOS 7') {
-                    when {
-                        beforeAgent true
-                        expression { !skipStage() }
-                    }
-                    agent {
-                        label params.CI_FUNCTIONAL_VM9_LABEL
-                    }
-                    steps {
-                        // Need to get back onto base_branch for ci/
-                        checkoutScm url: 'https://github.com/daos-stack/daos.git',
-                                    branch: env.BaseBranch,
-                                    withSubmodules: true
-                        functionalTest inst_repos: daosRepos(),
-                                       inst_rpms: functionalPackages(1, next_version, "tests-internal"),
-                                       test_function: 'runTestFunctionalV2'
-                    }
-                    post {
-                        always {
-                            functionalTestPostV2()
-                        }
-                    }
-                } // stage('Functional on CentOS 7')
-                stage('Functional on CentOS 8') {
+                 stage('Functional on CentOS 8') {
                     when {
                         beforeAgent true
                         expression { !skipStage() }
@@ -423,7 +396,7 @@ pipeline {
                                     branch: env.BaseBranch,
                                     withSubmodules: true
                         functionalTest inst_repos: daosRepos(),
-                                       inst_rpms: functionalPackages(1, next_version, "tests-internal") + "mercury-ucx",
+                                       inst_rpms: "mercury-ucx " + functionalPackages(1, next_version, "tests-internal"),
                                        test_function: 'runTestFunctionalV2'
                     }
                     post {
@@ -447,7 +420,7 @@ pipeline {
                                     branch: env.BaseBranch,
                                     withSubmodules: true
                         functionalTest inst_repos: daosRepos(),
-                                       inst_rpms: functionalPackages(1, next_version, "tests-internal") + "mercury-ucx",
+                                       inst_rpms: "mercury-ucx " + functionalPackages(1, next_version, "tests-internal"),
                                        test_function: 'runTestFunctionalV2'
                     }
                     post {
@@ -471,7 +444,7 @@ pipeline {
                                     branch: env.BaseBranch,
                                     withSubmodules: true
                         functionalTest inst_repos: daosRepos(),
-                                       inst_rpms: functionalPackages(1, next_version, "tests-internal") + "mercury-ucx",
+                                       inst_rpms: "mercury-ucx " + functionalPackages(1, next_version, "tests-internal"),
                                        test_function: 'runTestFunctionalV2'
                     }
                     post {
