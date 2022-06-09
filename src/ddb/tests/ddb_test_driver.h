@@ -69,6 +69,7 @@ size_t dvt_fake_get_file_size(const char *path);
 extern bool dvt_fake_get_file_exists_result;
 bool dvt_fake_get_file_exists(const char *path);
 
+extern uint32_t dvt_fake_read_file_called;
 extern size_t dvt_fake_read_file_result;
 extern char dvt_fake_read_file_buf[64];
 size_t dvt_fake_read_file(const char *src_path, d_iov_t *contents);

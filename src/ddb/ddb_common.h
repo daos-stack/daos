@@ -17,8 +17,8 @@
 #define SUCCESS(rc) ((rc) == DER_SUCCESS)
 
 #define ddb_print(ctx, str) \
-	do { if (ctx->dc_io_ft.ddb_print_message) \
-		ctx->dc_io_ft.ddb_print_message(str); \
+	do { if ((ctx)->dc_io_ft.ddb_print_message) \
+		(ctx)->dc_io_ft.ddb_print_message(str); \
 	else \
 		printf(str); } while (0)
 
@@ -42,6 +42,8 @@
 		printf(fmt, __VA_ARGS__); \
 	} while (0)
 
+
+typedef int (*ddb_io_line_cb)(void *cb_args, char *line, uint32_t str_len);
 
 struct ddb_io_ft {
 	/**
@@ -102,13 +104,23 @@ struct ddb_io_ft {
 	 * @return		number of bytes read from the src_path
 	 */
 	size_t (*ddb_read_file)(const char *src_path, d_iov_t *contents);
+
+	/**
+	 * Read contents of a file line by line. For each line, the line_cb will be called.
+	 * @param path		Path of the file to read
+	 * @param line_cb	Callback function used for each line
+	 * @param cb_args	Caller arguments passed to the callback function
+	 * @return		0 on success, else an error code
+	 */
+	int (*ddb_get_lines)(const char *path, ddb_io_line_cb line_cb, void *cb_args);
+
 };
 
 struct ddb_ctx {
 	struct ddb_io_ft	 dc_io_ft;
 	daos_handle_t		 dc_poh;
-	daos_handle_t		 dc_coh;
 	bool			 dc_should_quit;
+	bool			 dc_write_mode;
 };
 
 struct dv_tree_path {

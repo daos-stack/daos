@@ -12,10 +12,9 @@
 #include "ddb_test_driver.h"
 
 #define test_run_inval_cmd(...) \
-	assert_rc_equal(-DER_INVAL, __test_run_cmd(NULL, (char *[]){"prog_name", \
-	__VA_ARGS__, NULL}))
+	assert_rc_equal(-DER_INVAL, __test_run_cmd(NULL, (char *[]){__VA_ARGS__, NULL}))
 #define test_run_cmd(ctx, ...) \
-	assert_success(__test_run_cmd(ctx, (char *[]){"prog_name", __VA_ARGS__, NULL}))
+	assert_success(__test_run_cmd(ctx, (char *[]){__VA_ARGS__, NULL}))
 
 static int
 fake_print(const char *fmt, ...)
@@ -51,7 +50,7 @@ __test_run_cmd(struct ddb_cmd_info *info, char *argv[])
 	parse_args.ap_argv = argv;
 	parse_args.ap_argc = argc;
 
-	rc = ddb_parse_cmd_args(&ctx, &parse_args, info);
+	rc = ddb_parse_cmd_args(&ctx, parse_args.ap_argc, parse_args.ap_argv, info);
 
 	if (!SUCCESS(rc))
 		return rc;

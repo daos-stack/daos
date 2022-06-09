@@ -66,29 +66,11 @@ run_cmd ddb $vos_file -R "dump_value $vos_path /tmp/ddb_value_dump"
 run_cmd cat /tmp/ddb_value_dump
 run_cmd diff /tmp/ddb_new_value /tmp/ddb_value_dump
 
-msg "'load' to new key"
-vos_path="[0]/[0]/[0]/\'new_new_new_new_key\'"
 
-run_cmd ddb $vos_file -R "load /tmp/ddb_new_value $vos_path 1"
-run_cmd ddb $vos_file -R "dump_value $vos_path /tmp/ddb_value_dump"
-run_cmd cat /tmp/ddb_value_dump
-run_cmd ddb $vos_file -R 'ls [0]/[0]/[0] -r'
-diff /tmp/ddb_new_value /tmp/ddb_value_dump
-
-msg "'rm'"
-run_cmd ddb $vos_file -R 'ls'
-run_cmd ddb $vos_file -R 'rm [1]'
-run_cmd ddb $vos_file -R 'ls'
-
-
-msg "'superblock', 'ilog' and 'dtx' dumps"
-run_cmd ddb $vos_file -R 'dump_superblock'
-run_cmd ddb $vos_file -R 'dump_ilog [0]/[0]'
-run_cmd ddb $vos_file -R 'dump_ilog [0]/[0]/[0]'
-run_cmd ddb $vos_file -R 'dump_ilog [0]/[0]/[0]/[0]'
-run_cmd ddb $vos_file -R 'commit_ilog [0]/[0]/[0]/[0]'
-run_cmd ddb $vos_file -R 'rm_ilog [1]/[0]/[0]'
-
-run_cmd ddb $vos_file -R 'dump_dtx [0]'
-run_cmd ddb $vos_file -R 'clear_cmt_dtx [0]'
-run_cmd ddb $vos_file -R 'dump_dtx [0]'
+rm -f /tmp/ddb_commands
+touch /tmp/ddb_commands
+echo "ls" >> /tmp/ddb_commands
+echo "ls [0]" >> /tmp/ddb_commands
+echo "ls [0]/[0]" >> /tmp/ddb_commands
+echo "dump_superblock" >> /tmp/ddb_commands
+run_cmd ddb $vos_file -f /tmp/ddb_commands

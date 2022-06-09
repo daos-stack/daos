@@ -175,6 +175,7 @@ dvt_fake_get_file_exists(const char *path)
 	return dvt_fake_get_file_exists_result;
 }
 
+uint32_t dvt_fake_read_file_called;
 size_t dvt_fake_read_file_result;
 char dvt_fake_read_file_buf[64];
 
@@ -183,6 +184,7 @@ dvt_fake_read_file(const char *src_path, d_iov_t *contents)
 {
 	size_t to_copy = min(contents->iov_buf_len, ARRAY_SIZE(dvt_fake_read_file_buf));
 
+	dvt_fake_read_file_called++;
 	memcpy(contents->iov_buf, dvt_fake_read_file_buf, to_copy);
 	contents->iov_len = to_copy;
 

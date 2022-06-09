@@ -81,6 +81,10 @@ type dbCfgCmd struct {
 }
 
 func (cmd *dbCfgCmd) getDatabaseConfig() (*sdb.DatabaseConfig, error) {
+	if err := cmd.config.Validate(cmd.Logger, 0); err != nil {
+		return nil, err
+	}
+
 	dbCfg, err := server.CreateDatabaseConfig(cmd.config)
 	if err != nil {
 		if system.IsNotReplica(err) {
