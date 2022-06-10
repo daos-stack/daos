@@ -24,7 +24,7 @@ def build_static_tests(env):
 
         il_test = []
         for test in IOIL_TEST_SRC:
-            il_test += ilenv.Program(test)
+            il_test += daos_build.program(ilenv, test)
 
         return il_test
 

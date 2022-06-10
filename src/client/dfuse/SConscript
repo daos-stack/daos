@@ -98,7 +98,7 @@ def build_client_libs_static(env, common):
     il_lib_src = daos_build.static_library(ilenv, 'il/libioil_source', il_obj + common)
     il_lib = ilenv.Command('il/libioil.a', il_lib_src,
                            'objcopy --localize-hidden $SOURCE $TARGET')
-    daos_build.add_static_library(ilenv, 'ioil', il_lib)
+    daos_build.add_static_library('ioil', il_lib)
 
     env.Install('$PREFIX/lib64', il_lib)
 
@@ -106,7 +106,7 @@ def build_client_libs_static(env, common):
     dfuse_lib_src = daos_build.static_library(ilenv, 'common/libdfuse_source', common)
     dfuse_lib = ilenv.Command('common/libdfuse.a', dfuse_lib_src,
                               'objcopy --localize-hidden $SOURCE $TARGET')
-    daos_build.add_static_library(ilenv, 'dfuse', dfuse_lib)
+    daos_build.add_static_library('dfuse', dfuse_lib)
     env.Install('$PREFIX/lib64', dfuse_lib)
 
     return il_lib + dfuse_lib

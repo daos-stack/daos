@@ -1,5 +1,6 @@
 """Common DAOS build functions"""
 import os
+import sys
 
 from SCons.Subst import Literal
 from SCons.Script import Dir
@@ -85,7 +86,11 @@ def _known_deps(env, **kwargs):
 
     known_libs = libs.intersection(set(libraries.keys()))
     for item in known_libs:
-        known.append(libraries[item])
+        shared = libraries[item].get('shared', None)
+        if shared is not None:
+            known.append(shared)
+            continue
+        known.append(libraries[item].get('static'))
     return known
 
 
@@ -100,6 +105,13 @@ def _get_libname(*args, **kwargs):
     return libname
 
 
+def _add_lib(libtype, libname, target):
+    """Add library to our db"""
+    if libname not in libraries:
+        libraries[libname] = {}
+    libraries[libname][libtype] = target
+
+
 def run_command(env, target, sources, daos_libs, command):
     """Run Command builder"""
     deps = _known_deps(env, LIBS=daos_libs)
@@ -111,7 +123,7 @@ def static_library(env, *args, **kwargs):
     """build SharedLibrary with relative RPATH"""
     lib = env.StaticLibrary(*args, **kwargs)
     libname = _get_libname(*args, **kwargs)
-    libraries[libname] = lib
+    _add_lib('static', libname, lib)
     deps = _known_deps(env, **kwargs)
     env.Requires(lib, deps)
     return lib
@@ -124,7 +136,7 @@ def library(env, *args, **kwargs):
     add_rpaths(denv, kwargs.get('install_off', '..'), False, False)
     lib = denv.SharedLibrary(*args, **kwargs)
     libname = _get_libname(*args, **kwargs)
-    libraries[libname] = lib
+    _add_lib('shared', libname, lib)
     deps = _known_deps(denv, **kwargs)
     denv.Requires(lib, deps)
     return lib
@@ -152,9 +164,9 @@ def test(env, *args, **kwargs):
     return testbuild
 
 
-def add_static_library(env, name, library):
+def add_static_library(name, target):
     """Add a static library to our db"""
-    libraries[name] = library
+    _add_lib('static', name, target)
 
 
 def install(env, subdir, files):
