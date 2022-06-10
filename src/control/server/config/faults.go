@@ -216,6 +216,15 @@ func FaultConfigInsufficientHugePages(min, req int) *fault.Fault {
 	)
 }
 
+// FaultConfigBadControlIface creates a fault describing a bad control plane network interface.
+func FaultConfigBadControlIface(iface string) *fault.Fault {
+	return serverConfigFault(
+		code.ServerConfigBadControlIface,
+		fmt.Sprintf("requested control interface %q is not valid", iface),
+		"update the 'control_iface' parameter with a valid network interface",
+	)
+}
+
 func serverConfigFault(code code.Code, desc, res string) *fault.Fault {
 	return &fault.Fault{
 		Domain:      "serverconfig",
