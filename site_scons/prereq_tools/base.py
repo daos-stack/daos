@@ -304,14 +304,6 @@ def default_libpath():
         print('No dpkg-architecture found in path.')
         return []
     try:
-<<<<<<< HEAD
-        with subprocess.Popen([dpkgarchitecture, '-qDEB_HOST_MULTIARCH'],
-                              stdout=subprocess.PIPE, stderr=DEVNULL) as pipe:
-            (stdo, _) = pipe.communicate()
-            if pipe.returncode == 0:
-                archpath = stdo.decode().strip()
-                return ['lib/' + archpath]
-=======
         # pylint: disable=consider-using-with
         pipe = subprocess.Popen([dpkgarchitecture, '-qDEB_HOST_MULTIARCH'],
                                 stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
@@ -319,7 +311,6 @@ def default_libpath():
         if pipe.returncode == 0:
             archpath = stdo.decode().strip()
             return ['lib/' + archpath]
->>>>>>> master
     except Exception:
         print('default_libpath, Exception: subprocess.Popen dpkg-architecture')
     return []

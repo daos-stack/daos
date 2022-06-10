@@ -185,15 +185,6 @@ def scons():
         compiler_setup.base_setup(il_env)
 
     # Set options which are used throughout the src.
-<<<<<<< HEAD
-    dfuse_env = env.Clone()
-    dfuse_env.AppendUnique(CPPPATH=['.'])
-    dfuse_env.AppendUnique(CFLAGS=['-pthread'])
-    dfuse_env.AppendUnique(LIBS=['pthread', 'daos', 'daos_common', 'uuid'])
-
-    gcc_env = il_env.Clone()
-    gcc_env.AppendUnique(CPPPATH=['.'])
-=======
     dfuse_env = env.Clone(LIBS=[])
     dfuse_env.AppendUnique(CPPPATH=[Dir('.').srcnode()])
     dfuse_env.AppendUnique(CFLAGS=['-pthread'])
@@ -201,7 +192,6 @@ def scons():
 
     gcc_env = il_env.Clone(LIBS=[])
     gcc_env.AppendUnique(CPPPATH=[Dir('.').srcnode()])
->>>>>>> master
     gcc_env.AppendUnique(CFLAGS=['-pthread', '-fvisibility=hidden'])
     gcc_env.AppendUnique(LIBS=['pthread', 'daos', 'daos_common'])
 

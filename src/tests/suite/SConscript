@@ -23,6 +23,7 @@ int main(int argc, char **argv)
 }
 """
 
+
 def CheckCmockaSkip(context):
     """Configure check for cmocka bug"""
     context.Message('Checking if cmocka skip() bug is present ... ')
