@@ -109,7 +109,7 @@ def run_command(env, target, sources, daos_libs, command):
 
 def static_library(env, *args, **kwargs):
     """build SharedLibrary with relative RPATH"""
-    lib = env.Library(*args, **kwargs)
+    lib = env.StaticLibrary(*args, **kwargs)
     libname = _get_libname(*args, **kwargs)
     libraries[libname] = lib
     deps = _known_deps(env, **kwargs)
@@ -150,6 +150,11 @@ def test(env, *args, **kwargs):
     deps = _known_deps(denv, **kwargs)
     denv.Requires(testbuild, deps)
     return testbuild
+
+
+def add_static_library(env, name, library):
+    """Add a static library to our db"""
+    libraries[name] = library
 
 
 def install(env, subdir, files):
