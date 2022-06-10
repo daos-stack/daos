@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2018-2021 Intel Corporation.
+ * (C) Copyright 2018-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -22,8 +22,9 @@ test_run(d_rank_t my_rank)
 	opt.cio_use_credits = 1;
 	opt.cio_ep_credits = test.tg_credits;
 
-	crtu_srv_start_basic(test.tg_local_group_name, &test.tg_crt_ctx,
-			     &test.tg_tid, &grp, &grp_size, &opt);
+	rc = crtu_srv_start_basic(test.tg_local_group_name, &test.tg_crt_ctx,
+				  &test.tg_tid, &grp, &grp_size, &opt);
+	D_ASSERT(rc == 0);
 
 	DBG_PRINT("Server started, grp_size = %d\n", grp_size);
 	rc = sem_init(&test.tg_token_to_proceed, 0, 0);
