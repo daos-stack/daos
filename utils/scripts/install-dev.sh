@@ -23,7 +23,7 @@ case "$distro" in
 esac
 
 # Install dependencies from the OS repos.
-SCRIPT_DIR="$(dirname "$(realpath -e "$BASH_SOURCE")")"
+SCRIPT_DIR="$(dirname "$(realpath -e "${BASH_SOURCE[0]}")")"
 sudo "$SCRIPT_DIR/install-$distro.sh" && \
 # Install user dependencies
 python3 -m pip install -r "$SCRIPT_DIR/../../requirements.txt"
