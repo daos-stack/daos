@@ -26,6 +26,7 @@ typedef enum {
 	RB_OP_REINT,
 	RB_OP_EXTEND,
 	RB_OP_RECLAIM,
+	RB_OP_UPGRADE,
 } daos_rebuild_opc_t;
 
 #define RB_OP_STR(rb_op) ((rb_op) == RB_OP_FAIL ? "Rebuild" : \
@@ -33,11 +34,12 @@ typedef enum {
 			  (rb_op) == RB_OP_REINT ? "Reintegrate" : \
 			  (rb_op) == RB_OP_EXTEND ? "Extend" : \
 			  (rb_op) == RB_OP_RECLAIM ? "Reclaim" : \
+			  (rb_op) == RB_OP_UPGRADE ? "Upgrade" : \
 			  "Unknown")
 
 int ds_rebuild_schedule(struct ds_pool *pool, uint32_t map_ver,
 			uint32_t rebuild_gen, daos_epoch_t stable_eph,
-			struct pool_target_id_list *tgts,
+			uint32_t layout_version, struct pool_target_id_list *tgts,
 			daos_rebuild_opc_t rebuild_op, uint64_t delay_sec);
 int ds_rebuild_query(uuid_t pool_uuid,
 		     struct daos_rebuild_status *status);
