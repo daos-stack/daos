@@ -1,4 +1,6 @@
 #!/usr/bin/env python
+"""SCons Tools for useful features"""
+
 # Copyright 2018-2022 Intel Corporation
 
 # Permission is hereby granted, free of charge, to any person obtaining a copy
@@ -19,7 +21,5 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 #
-#
-"""SCons Tools for useful features"""
 
-from .extra import generate, exists # noqa: F401
+from .extra import generate, exists  # noqa: F401

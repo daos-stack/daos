@@ -15,5 +15,6 @@ def scons():
     if prereqs.test_requested():
         SConscript('tests/SConscript', exports='denv')
 
+
 if __name__ == "SCons.Script":
     scons()
