@@ -390,6 +390,7 @@ int d_rank_list_dup(d_rank_list_t **dst, const d_rank_list_t *src);
 int d_rank_list_dup_sort_uniq(d_rank_list_t **dst, const d_rank_list_t *src);
 void d_rank_list_filter(d_rank_list_t *src_set, d_rank_list_t *dst_set,
 			bool exclude);
+int d_rank_list_merge(d_rank_list_t *src_set, d_rank_list_t *merge_set);
 d_rank_list_t *d_rank_list_alloc(uint32_t size);
 d_rank_list_t *d_rank_list_realloc(d_rank_list_t *ptr, uint32_t size);
 void d_rank_list_free(d_rank_list_t *rank_list);

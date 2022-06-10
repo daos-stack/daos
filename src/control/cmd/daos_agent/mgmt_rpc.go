@@ -19,7 +19,10 @@ import (
 	"github.com/daos-stack/daos/src/control/common/proto/convert"
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	"github.com/daos-stack/daos/src/control/drpc"
+	"github.com/daos-stack/daos/src/control/fault"
+	"github.com/daos-stack/daos/src/control/fault/code"
 	"github.com/daos-stack/daos/src/control/lib/control"
+	"github.com/daos-stack/daos/src/control/lib/daos"
 	"github.com/daos-stack/daos/src/control/lib/hardware"
 	"github.com/daos-stack/daos/src/control/logging"
 )
@@ -61,6 +64,11 @@ func (mod *mgmtModule) HandleCall(ctx context.Context, session *drpc.Session, me
 	cred, err := unix.GetsockoptUcred(fd, unix.SOL_SOCKET, unix.SO_PEERCRED)
 	if err != nil {
 		return nil, err
+	}
+
+	if agentIsShuttingDown(ctx) {
+		mod.log.Errorf("agent is shutting down, dropping %s", method)
+		return nil, drpc.NewFailureWithMessage("agent is shutting down")
 	}
 
 	switch method {
@@ -108,7 +116,7 @@ func (mod *mgmtModule) handleGetAttachInfo(ctx context.Context, reqb []byte, pid
 	// system name indicates such, and hence skip the check.
 	if pbReq.Sys != "" && pbReq.Sys != mod.sys {
 		mod.log.Errorf("GetAttachInfo: %s: unknown system name", pbReq.Sys)
-		respb, err := proto.Marshal(&mgmtpb.GetAttachInfoResp{Status: int32(drpc.DaosInvalidInput)})
+		respb, err := proto.Marshal(&mgmtpb.GetAttachInfoResp{Status: int32(daos.InvalidInput)})
 		if err != nil {
 			return nil, drpc.MarshalingFailure()
 		}
@@ -124,7 +132,9 @@ func (mod *mgmtModule) handleGetAttachInfo(ctx context.Context, reqb []byte, pid
 	mod.log.Debugf("client process NUMA node %d", numaNode)
 
 	resp, err := mod.getAttachInfo(ctx, int(numaNode), pbReq.Sys)
-	if err != nil {
+	if fault.IsFaultCode(err, code.ServerWrongSystem) {
+		resp = &mgmtpb.GetAttachInfoResp{Status: int32(daos.ControlIncompatible)}
+	} else if err != nil {
 		return nil, err
 	}
 

@@ -1,19 +1,12 @@
-#!python
-# (C) Copyright 2016-2021 Intel Corporation.
+# (C) Copyright 2016-2022 Intel Corporation.
 #
 # SPDX-License-Identifier: BSD-2-Clause-Patent
 #
 """Build CaRT components"""
 
 import os
-import sys
 import daos_build
-# pylint: disable=no-name-in-module
-# pylint: disable=import-error
-# pylint: disable=ungrouped-imports
 import SCons.Action
-
-HEADERS = ['api.h', 'iv.h', 'types.h', 'swim.h']
 
 SRC = ['crt_bulk.c', 'crt_context.c', 'crt_corpc.c',
        'crt_ctl.c', 'crt_debug.c', 'crt_group.c', 'crt_hg.c', 'crt_hg_proc.c',
@@ -21,6 +14,7 @@ SRC = ['crt_bulk.c', 'crt_context.c', 'crt_corpc.c',
        'crt_rpc.c', 'crt_self_test_client.c', 'crt_self_test_service.c',
        'crt_swim.c', 'crt_tree.c', 'crt_tree_flat.c', 'crt_tree_kary.c',
        'crt_tree_knomial.c', 'crt_hlc.c', 'crt_hlct.c']
+
 
 # pylint: disable=unused-argument
 def macro_expand(target, source, env):
@@ -60,22 +54,15 @@ def scons():
     SConscript('swim/SConscript')
     Default('swim')
 
-    Import('env', 'prereqs', 'swim_targets', 'gurt_lib', 'CART_VERSION')
-    Import('conf_dir', 'base_env')
+    Import('env', 'prereqs', 'swim_targets', 'gurt_lib', 'CART_VERSION', 'conf_dir')
 
-    daos_build.add_build_rpath(base_env)
     daos_build.add_build_rpath(env)
-    base_env.AppendUnique(LIBPATH=[Dir('.')])
 
     env.Alias('install', '$PREFIX')
 
     # There is probably a better way to do this but let's get it linking first
     env.AppendUnique(LIBPATH=[Dir('.')])
     env.AppendUnique(CPPPATH=[Dir('.').srcnode()])
-    env.AppendUnique(CPPPATH=[Dir('include').srcnode()])
-    for header in HEADERS:
-        env.Install(os.path.join('$PREFIX', 'include', 'cart'),
-                    os.path.join('../include', 'cart', header))
 
     prereqs.require(env, 'mercury', headers_only=True)
 
@@ -103,22 +90,6 @@ def scons():
 
     Default(cart_lib)
     Export('cart_lib', 'cart_targets')
-
-    if not env.GetOption('clean') and not env.GetOption('help'):
-
-        print("Checking local headers can be included")
-        broken_includes = False
-        config_env = env.Clone()
-        config = Configure(config_env)
-        for header in HEADERS:
-            if not config.CheckHeader(os.path.join('cart', header)):
-                broken_includes = True
-        config.Finish()
-
-        if broken_includes:
-            print("Broken local header files, cannot continue")
-            Exit(2)
-
     Export('env', 'prereqs')
 
     env.Install(conf_dir, ['utils/memcheck-cart.supp',

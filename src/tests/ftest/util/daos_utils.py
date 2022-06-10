@@ -258,12 +258,12 @@ class DaosCommand(DaosCommandBase):
         # {
         #   "response": [
         #     {
-        #       "UUID": "bad80a98-aabd-498c-b001-6547cd061c8c",
-        #       "Label": "container_label_not_set"
+        #       "uuid": "bad80a98-aabd-498c-b001-6547cd061c8c",
+        #       "label": "container_label_not_set"
         #     },
         #     {
-        #       "UUID": "dd9fc365-5729-4736-9d34-e46504a4a92d",
-        #       "Label": "mkc1"
+        #       "uuid": "dd9fc365-5729-4736-9d34-e46504a4a92d",
+        #       "label": "mkc1"
         #     }
         #   ],
         #   "error": null,

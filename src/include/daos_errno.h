@@ -250,9 +250,9 @@ extern "C" {
 	/** Agent is incompatible with libdaos */			\
 	ACTION(DER_AGENT_INCOMPAT,	(DER_ERR_DAOS_BASE + 29),	\
 	       Agent is incompatible with libdaos)			\
-	/** Multiple shards locate on the same target */		\
-	ACTION(DER_SHARDS_OVERLAP,	(DER_ERR_DAOS_BASE + 30),	\
-	       Shards overlap)						\
+	/** Needs to be handled via distributed transaction. */		\
+	ACTION(DER_NEED_TX,		(DER_ERR_DAOS_BASE + 30),	\
+	       To be handled via distributed transaction)		\
 	/** #failures exceed RF(Redundancy Factor), data possibly lost */ \
 	ACTION(DER_RF,			(DER_ERR_DAOS_BASE + 31),	\
 	       Failures exceed RF)					\
@@ -273,8 +273,13 @@ extern "C" {
 		Retry with other target)				\
 	ACTION(DER_NOTSUPPORTED,	(DER_ERR_DAOS_BASE + 37),	\
 	       Operation not supported)					\
+	ACTION(DER_CONTROL_INCOMPAT,	(DER_ERR_DAOS_BASE + 38),	\
+	       One or more control plane components are incompatible)	\
+	/** No service available */					\
+	ACTION(DER_NO_SERVICE,		(DER_ERR_DAOS_BASE + 39),	\
+	       No service available)					\
 	/** Division by zero. */					\
-	ACTION(DER_DIV_BY_ZERO,		(DER_ERR_DAOS_BASE + 38),	\
+	ACTION(DER_DIV_BY_ZERO,		(DER_ERR_DAOS_BASE + 40),	\
 	       Division by zero)					\
 
 /** Defines the gurt error codes */

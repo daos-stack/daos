@@ -310,8 +310,10 @@ dss_nvme_poll_ult(void *args)
  * be destroyed on server handler ULT exiting.
  */
 static void
-wait_all_exited(struct dss_xstream *dx)
+wait_all_exited(struct dss_xstream *dx, struct dss_module_info *dmi)
 {
+	int	rc;
+
 	D_DEBUG(DB_TRACE, "XS(%d) draining ULTs.\n", dx->dx_xs_id);
 
 	sched_stop(dx);
@@ -322,7 +324,6 @@ wait_all_exited(struct dss_xstream *dx)
 
 		for (i = 0; i < DSS_POOL_CNT; i++) {
 			size_t	pool_size;
-			int	rc;
 			rc = ABT_pool_get_total_size(dx->dx_pools[i],
 						     &pool_size);
 			D_ASSERTF(rc == ABT_SUCCESS, "%d\n", rc);
@@ -334,6 +335,17 @@ wait_all_exited(struct dss_xstream *dx)
 		 */
 		if (total_size == 0)
 			break;
+
+		/*
+		 * Call progress in case any replies are pending in the
+		 * queue which might block some ULTs forever.
+		 */
+		if (dx->dx_comm) {
+			rc = crt_progress(dmi->dmi_ctx, 0);
+			if (rc != 0 && rc != -DER_TIMEDOUT)
+				D_ERROR("failed to progress CART context: %d\n",
+					rc);
+		}
 
 		ABT_thread_yield();
 	}
@@ -446,7 +458,7 @@ dss_srv_handler(void *arg)
 		ABT_thread_attr attr;
 
 		/* Initialize NVMe context for main XS which accesses NVME */
-		rc = bio_xsctxt_alloc(&dmi->dmi_nvme_ctxt, dmi->dmi_tgt_id);
+		rc = bio_xsctxt_alloc(&dmi->dmi_nvme_ctxt, dmi->dmi_tgt_id, false);
 		if (rc != 0) {
 			D_ERROR("failed to init spdk context for xstream(%d) "
 				"rc:%d\n", dmi->dmi_xs_id, rc);
@@ -472,7 +484,7 @@ dss_srv_handler(void *arg)
 		if (rc != ABT_SUCCESS) {
 			D_ERROR("create NVMe poll ULT failed: %d\n", rc);
 			ABT_future_set(dx->dx_shutdown, dx);
-			wait_all_exited(dx);
+			wait_all_exited(dx, dmi);
 			D_GOTO(nvme_fini, rc = dss_abterr2der(rc));
 		}
 	}
@@ -523,7 +535,7 @@ dss_srv_handler(void *arg)
 	if (dx->dx_comm)
 		dx->dx_progress_started = false;
 
-	wait_all_exited(dx);
+	wait_all_exited(dx, dmi);
 	if (dmi->dmi_dp) {
 		daos_profile_destroy(dmi->dmi_dp);
 		dmi->dmi_dp = NULL;
@@ -1241,7 +1253,7 @@ dss_srv_init(void)
 		D_GOTO(failed, rc);
 	xstream_data.xd_init_step = XD_INIT_TLS_INIT;
 
-	rc = vos_db_init(dss_storage_path, NULL, false);
+	rc = vos_db_init(dss_storage_path);
 	if (rc != 0)
 		D_GOTO(failed, rc);
 	xstream_data.xd_init_step = XD_INIT_SYS_DB;

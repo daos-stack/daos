@@ -1,4 +1,6 @@
 #!/usr/bin/env python
+"""SCons extra features"""
+
 # Copyright 2018-2022 Intel Corporation
 
 # Permission is hereby granted, free of charge, to any person obtaining a copy
@@ -18,10 +20,8 @@
 # LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
-"""SCons extra features"""
-from __future__ import print_function
 
-import subprocess #nosec
+import subprocess  # nosec
 import re
 import os
 
@@ -31,6 +31,7 @@ from SCons.Script import WhereIs
 # Minimum version of clang-format that we use the configuration file for.  With clang-format
 # versions older than this it's still used, but without loading our config.
 MIN_FORMAT_VERSION = 12
+
 
 def _supports_custom_format(clang_exe):
     """Get the version of clang-format"""
@@ -49,6 +50,7 @@ def _supports_custom_format(clang_exe):
     print('Custom .clang-format wants version {}+. Using Mozilla style.'.format(MIN_FORMAT_VERSION))
     return False
 
+
 def _find_indent():
     """find clang-format"""
     indent = WhereIs("clang-format")
@@ -59,6 +61,7 @@ def _find_indent():
     else:
         style = "Mozilla"
     return "%s --style=%s" % (indent, style)
+
 
 def _pp_gen(source, target, env, indent):
     """generate commands for preprocessor builder"""
@@ -76,8 +79,9 @@ def _preprocess_emitter(source, target, env):
     """generate target list for preprocessor builder"""
     target = []
     for src in source:
+        dirname = os.path.dirname(src.abspath)
         basename = os.path.basename(src.abspath)
-        (base, _ext) = os.path.splitext(basename)
+        (base, ext) = os.path.splitext(basename)
         prefix = ""
         for var in ["OBJPREFIX", "OBJSUFFIX", "SHOBJPREFIX", "SHOBJSUFFIX"]:
             mod = env.subst("$%s" % var)
@@ -87,21 +91,38 @@ def _preprocess_emitter(source, target, env):
                 continue
             if mod != "":
                 prefix = prefix + "_" + mod
-        target.append(prefix + base + "_pp.c")
+        newtarget = os.path.join(dirname, '{}{}_pp{}'.format(prefix, base, ext))
+        target.append(newtarget)
     return target, source
+
+
+def _ch_emitter(source, target, **_kw):
+    """generate target list for check header builder"""
+    target = []
+    for src in source:
+        (base, _ext) = os.path.splitext(src.abspath)
+        target.append(f"{base}_check_header$OBJSUFFIX")
+    return target, source
+
 
 def generate(env):
     """Setup the our custom tools"""
 
     indent = _find_indent()
 
-    generator = lambda source, target, env, for_signature: _pp_gen(source, target, env, indent)
+    # In order to pass the indent function to the generator and only execute _find_indent
+    # once, we create a lambda function to wrap our own that takes indent as argument.
+    pp_generator = lambda source, target, env, for_signature: _pp_gen(source, target, env,  # noqa
+                                                                      indent)  # noqa
 
     # Only handle C for now
-    preprocess = Builder(generator=generator, suffix="_pp.c",
-                         emitter=_preprocess_emitter, src_suffix=".c")
+    preprocess = Builder(generator=pp_generator, emitter=_preprocess_emitter)
+    # Workaround for SCons issue #2757.   Avoid using Configure for internal headers
+    check_header = Builder(action='$CCCOM', emitter=_ch_emitter)
 
-    env.Append(BUILDERS={"Preprocess":preprocess})
+    env.Append(BUILDERS={"Preprocess": preprocess})
+    env.Append(BUILDERS={"CheckHeader": check_header})
+
 
 def exists(_env):
     """assert existence of tool"""
