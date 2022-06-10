@@ -39,13 +39,45 @@ obj_pl_place(struct pl_map *map, uint32_t layout_gl_ver, struct daos_obj_md *md,
 
 /* Find out the difference between different layouts */
 int
-obj_layout_diff(daos_unit_oid_t oid, uint32_t new_ver, uint32_t old_ver,
-		uint32_t *tgts, uint32_t *shard)
+obj_layout_diff(struct pl_map *map, daos_unit_oid_t oid, uint32_t new_ver, uint32_t old_ver,
+		struct daos_obj_md *md, uint32_t *tgt, uint32_t *shard_p)
 {
+	struct pl_obj_layout	*new_layout = NULL;
+	struct pl_obj_layout	*old_layout = NULL;
+	uint32_t		shard = oid.id_shard;
+	int			rc;
+
+	if (new_ver == old_ver)
+		return 0;
+
+	rc = pl_obj_place(map, new_ver, md, 0, -1, NULL, &new_layout);
+	if (rc)
+		D_GOTO(out, rc);
+
+	rc = pl_obj_place(map, old_ver, md, 0, -1, NULL, &old_layout);
+	if (rc)
+		D_GOTO(out, rc);
+
+	if (new_layout->ol_shards[shard].po_target != old_layout->ol_shards[shard].po_target) {
+		*tgt = new_layout->ol_shards[shard].po_target;
+		*shard_p = shard;
+		D_GOTO(out, rc = 1);
+	}
+
 	/* If the new layout changes dkey placement, i.e. dkey->grp, dkey->ec_start changes,
 	 * then all shards needs to be changed.
 	 */
-	D_ASSERT(new_ver != old_ver);
+	if (new_ver == 1) { /* LAYOUT_VER == 1 change dkey mapping */
+		*tgt = new_layout->ol_shards[shard].po_target;
+		*shard_p = shard;
+		D_GOTO(out, rc = 1);
+	}
 
-	return 0;
+out:
+	if (new_layout)
+		pl_obj_layout_free(new_layout);
+	if (old_layout != NULL)
+		pl_obj_layout_free(old_layout);
+
+	return rc;
 }
