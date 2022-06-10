@@ -56,7 +56,7 @@ pool:
   control_method: dmg
   rebuild_timeout: 120
   pool_query_timeout: 30
-  properties: "scrub:continuous,scrub-freq:1,scrub-cred:10"
+  properties: "scrub:timed,scrub-freq:1"
 container:
   type: POSIX
   control_method: daos

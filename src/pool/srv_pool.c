@@ -274,13 +274,10 @@ pool_prop_default_copy(daos_prop_t *prop_def, daos_prop_t *prop)
 					return rc;
 			}
 			break;
-		case DAOS_PROP_PO_SCRUB_SCHED:
+		case DAOS_PROP_PO_SCRUB_MODE:
 			entry_def->dpe_val = entry->dpe_val;
 			break;
 		case DAOS_PROP_PO_SCRUB_FREQ:
-			entry_def->dpe_val = entry->dpe_val;
-			break;
-		case DAOS_PROP_PO_SCRUB_CREDITS:
 			entry_def->dpe_val = entry->dpe_val;
 			break;
 		case DAOS_PROP_PO_SCRUB_THRESH:
@@ -432,7 +429,7 @@ pool_prop_write(struct rdb_tx *tx, const rdb_path_t *kvs, daos_prop_t *prop,
 			rc = rdb_tx_update(tx, kvs, &ds_pool_prop_rp_pda,
 					   &value);
 			break;
-		case DAOS_PROP_PO_SCRUB_SCHED:
+		case DAOS_PROP_PO_SCRUB_MODE:
 			d_iov_set(&value, &entry->dpe_val,
 				  sizeof(entry->dpe_val));
 			rc = rdb_tx_update(tx, kvs, &ds_pool_prop_scrub_sched,
@@ -444,14 +441,6 @@ pool_prop_write(struct rdb_tx *tx, const rdb_path_t *kvs, daos_prop_t *prop,
 			d_iov_set(&value, &entry->dpe_val,
 				  sizeof(entry->dpe_val));
 			rc = rdb_tx_update(tx, kvs, &ds_pool_prop_scrub_freq,
-					   &value);
-			if (rc)
-				return rc;
-			break;
-		case DAOS_PROP_PO_SCRUB_CREDITS:
-			d_iov_set(&value, &entry->dpe_val,
-				  sizeof(entry->dpe_val));
-			rc = rdb_tx_update(tx, kvs, &ds_pool_prop_scrub_cred,
 					   &value);
 			if (rc)
 				return rc;
@@ -2151,14 +2140,14 @@ pool_prop_read(struct rdb_tx *tx, const struct pool_svc *svc, uint64_t bits,
 		}
 		idx++;
 	}
-	if (bits & DAOS_PO_QUERY_PROP_SCRUB_SCHED) {
+	if (bits & DAOS_PO_QUERY_PROP_SCRUB_MODE) {
 		d_iov_set(&value, &val, sizeof(val));
 		rc = rdb_tx_lookup(tx, &svc->ps_root, &ds_pool_prop_scrub_sched,
 				   &value);
 		if (rc != 0)
 			return rc;
 		D_ASSERT(idx < nr);
-		prop->dpp_entries[idx].dpe_type = DAOS_PROP_PO_SCRUB_SCHED;
+		prop->dpp_entries[idx].dpe_type = DAOS_PROP_PO_SCRUB_MODE;
 		prop->dpp_entries[idx].dpe_val = val;
 		idx++;
 	}
@@ -2170,17 +2159,6 @@ pool_prop_read(struct rdb_tx *tx, const struct pool_svc *svc, uint64_t bits,
 			return rc;
 		D_ASSERT(idx < nr);
 		prop->dpp_entries[idx].dpe_type = DAOS_PROP_PO_SCRUB_FREQ;
-		prop->dpp_entries[idx].dpe_val = val;
-		idx++;
-	}
-	if (bits & DAOS_PO_QUERY_PROP_SCRUB_CRED) {
-		d_iov_set(&value, &val, sizeof(val));
-		rc = rdb_tx_lookup(tx, &svc->ps_root, &ds_pool_prop_scrub_cred,
-				   &value);
-		if (rc != 0)
-			return rc;
-		D_ASSERT(idx < nr);
-		prop->dpp_entries[idx].dpe_type = DAOS_PROP_PO_SCRUB_CREDITS;
 		prop->dpp_entries[idx].dpe_val = val;
 		idx++;
 	}
@@ -3228,9 +3206,8 @@ ds_pool_query_handler(crt_rpc_t *rpc)
 			case DAOS_PROP_PO_RP_PDA:
 			case DAOS_PROP_PO_GLOBAL_VERSION:
 			case DAOS_PROP_PO_UPGRADE_STATUS:
-			case DAOS_PROP_PO_SCRUB_SCHED:
+			case DAOS_PROP_PO_SCRUB_MODE:
 			case DAOS_PROP_PO_SCRUB_FREQ:
-			case DAOS_PROP_PO_SCRUB_CREDITS:
 			case DAOS_PROP_PO_SCRUB_THRESH:
 				if (entry->dpe_val != iv_entry->dpe_val) {
 					D_ERROR("type %d mismatch "DF_U64" - "

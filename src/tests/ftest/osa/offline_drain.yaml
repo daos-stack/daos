@@ -51,7 +51,7 @@ pool:
     svcn: 4
     control_method: dmg
     rebuild_timeout: 240
-    properties: scrub:continuous
+    properties: scrub:timed
 container:
     type: POSIX
     control_method: daos

@@ -34,8 +34,7 @@ def scons():
 
     libraries = ['daos_common_pmem', 'daos_tests', 'gurt', 'cart', 'cmocka',
                  'vos', 'uuid', 'pmem', 'pmemobj', 'bio', 'pthread', 'abt']
-    src = ['pool_scrubbing_tests.c', '../vos_pool_scrub.c',
-           'scrubbing_sched_tests.c']
+    src = ['pool_scrubbing_tests.c', '../vos_pool_scrub.c']
     pool_scrubbing_tests = daos_build.test(unit_env, 'pool_scrubbing_tests',
                                            src, LIBS=libraries)
     unit_env.Install('$PREFIX/bin/', [pool_scrubbing_tests])
