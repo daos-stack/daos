@@ -871,6 +871,17 @@ crt_rpc_handler_common(hg_handle_t hg_hdl)
 	int			 rc = 0;
 	struct crt_rpc_priv	 rpc_tmp = {0};
 
+	/*
+	 * Even if we ask hg not to listen, we may still get incoming requests,
+	 * for some na implementations, such as na_ofi, do not honor the
+	 * "listen" parameter of the na initialization callback. Until this is
+	 * fixed in hg or na, drop them ourself.
+	 */
+	if (!crt_is_service()) {
+		D_DEBUG(DB_NET, "dropping unexpected request to client\n");
+		D_GOTO(out, hg_ret = HG_PROTOCOL_ERROR);
+	}
+
 	hg_info = HG_Get_info(hg_hdl);
 	if (unlikely(hg_info == NULL)) {
 		D_ERROR("HG_Get_info failed.\n");
