@@ -167,8 +167,8 @@ class UpgradeDowngradeTest(IorTestBase):
         cmds = [
                 "daos version",
                 "dmg version",
-                "daos pool query 'TestLabel_1'",
-                ]
+                "daos pool query 'TestLabel_1'"
+               ]
         for cmd in cmds:
             self.log.info("==cmd= %s", cmd)
             result = pcmd(host, cmd, False)
@@ -180,7 +180,6 @@ class UpgradeDowngradeTest(IorTestBase):
                 raise CommandFailure("##Error occurred running '{}' on {}".format(
                     cmd, host))
             self.log.info("==>%s result= %s", cmd, result)
-
 
     def test_upgrade_downgrade(self):
         """
@@ -208,8 +207,8 @@ class UpgradeDowngradeTest(IorTestBase):
         hosts_client = self.hostlist_clients
         hosts_server = self.hostlist_servers
         all_hosts = include_local_host(hosts_server)
-        upgd_rpms =  self.params.get("upgrade_rpms", '/run/interop/*')
-        downgd_rpms =  self.params.get("downgrade_rpms", '/run/interop/*')
+        upgd_rpms = self.params.get("upgrade_rpms", '/run/interop/*')
+        downgd_rpms = self.params.get("downgrade_rpms", '/run/interop/*')
         num_attributes = self.params.get("num_attributes", '/run/attrtests/*')
         self.log.info("(1)==Show rpm, dmg and daos versions on all hosts.")
         self.show_daos_version(all_hosts, hosts_client)
