@@ -388,7 +388,7 @@ main(int argc, char **argv)
 	/** create/open object */
 	oid.hi = 0;
 	oid.lo = 4;
-	daos_obj_generate_oid(coh, &oid, DAOS_OF_KV_FLAT, OC_SX, 0, 0);
+	daos_obj_generate_oid(coh, &oid, DAOS_OT_MULTI_LEXICAL, OC_SX, 0, 0);
 
 	rc = daos_obj_open(coh, oid, DAOS_OO_RW, &oh, NULL);
 	ASSERT(rc == 0, "Obj open failed with %d", rc);
