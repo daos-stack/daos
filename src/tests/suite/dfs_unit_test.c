@@ -394,56 +394,6 @@ dfs_test_lookup(void **state)
 }
 
 static void
-dfs_test_open_stat(void **state)
-{
-	test_arg_t		*arg = *state;
-	dfs_obj_t		*obj;
-	char			*filename_file1 = "file1";
-	char			*filename_file2 = "file2";
-	mode_t			create_mode = S_IWUSR | S_IRUSR;
-	struct stat		stbuf;
-	struct stat		stbuf2;
-	int			create_flags = O_RDWR | O_CREAT | O_EXCL;
-	int			rc;
-
-	if (arg->myrank != 0)
-		return;
-
-	/** Create /file1 */
-	rc = dfs_open_stat(dfs_mt, NULL, filename_file1, create_mode | S_IFREG,
-			   create_flags, 0, 0, NULL, &obj, NULL);
-	assert_int_equal(rc, 0);
-
-	rc = dfs_release(obj);
-	assert_int_equal(rc, 0);
-
-	/** verify ownership */
-	rc = dfs_stat(dfs_mt, NULL, filename_file1, &stbuf);
-	assert_int_equal(rc, 0);
-	assert_int_equal(stbuf.st_uid, geteuid());
-	assert_int_equal(stbuf.st_uid, getegid());
-
-	/* Now do a create with uid/gid set */
-	stbuf2.st_uid = 14;
-	stbuf2.st_gid = 15;
-	rc = dfs_open_stat(dfs_mt, NULL, filename_file2, create_mode | S_IFREG,
-			   create_flags, 0, 0, NULL, &obj, &stbuf2);
-	assert_int_equal(rc, 0);
-
-	assert_int_equal(stbuf2.st_uid, 14);
-	assert_int_equal(stbuf2.st_gid, 15);
-
-	rc = dfs_release(obj);
-	assert_int_equal(rc, 0);
-
-	/** verify ownership */
-	rc = dfs_stat(dfs_mt, NULL, filename_file2, &stbuf);
-	assert_int_equal(rc, 0);
-	assert_int_equal(stbuf.st_uid, stbuf2.st_uid);
-	assert_int_equal(stbuf.st_uid, stbuf2.st_gid);
-}
-
-static void
 dfs_test_syml(void **state)
 {
 	test_arg_t		*arg = *state;
@@ -1259,9 +1209,14 @@ dfs_test_chown(void **state)
 	char		*filename = "chown_test";
 	char		*symname = "sym_chown_test";
 	struct stat	stbuf;
+	struct stat	stbuf2;
 	uid_t		orig_uid;
 	gid_t		orig_gid;
 	int		rc;
+	char		*filename_file1 = "open_stat1";
+	char		*filename_file2 = "open_stat2";
+	mode_t		create_mode = S_IWUSR | S_IRUSR;
+	int		create_flags = O_RDWR | O_CREAT | O_EXCL;
 
 	if (arg->myrank != 0)
 		return;
@@ -1348,6 +1303,40 @@ dfs_test_chown(void **state)
 	assert_int_equal(rc, 0);
 	rc = dfs_release(sym);
 	assert_int_equal(rc, 0);
+
+	/* Test the open_stat call with passing in uid/gid */
+	/** Create /file1 */
+	rc = dfs_open_stat(dfs_mt, NULL, filename_file1, create_mode | S_IFREG,
+			   create_flags, 0, 0, NULL, &obj, NULL);
+	assert_int_equal(rc, 0);
+
+	rc = dfs_release(obj);
+	assert_int_equal(rc, 0);
+
+	/** verify ownership */
+	rc = dfs_stat(dfs_mt, NULL, filename_file1, &stbuf);
+	assert_int_equal(rc, 0);
+	assert_int_equal(stbuf.st_uid, geteuid());
+	assert_int_equal(stbuf.st_uid, getegid());
+
+	/* Now do a create with uid/gid set */
+	stbuf2.st_uid = 14;
+	stbuf2.st_gid = 15;
+	rc = dfs_open_stat(dfs_mt, NULL, filename_file2, create_mode | S_IFREG,
+			   create_flags, 0, 0, NULL, &obj, &stbuf2);
+	assert_int_equal(rc, 0);
+
+	assert_int_equal(stbuf2.st_uid, 14);
+	assert_int_equal(stbuf2.st_gid, 15);
+
+	rc = dfs_release(obj);
+	assert_int_equal(rc, 0);
+
+	/** verify ownership */
+	rc = dfs_stat(dfs_mt, NULL, filename_file2, &stbuf);
+	assert_int_equal(rc, 0);
+	assert_int_equal(stbuf.st_uid, stbuf2.st_uid);
+	assert_int_equal(stbuf.st_uid, stbuf2.st_gid);
 }
 
 static bool
@@ -1607,8 +1596,6 @@ static const struct CMUnitTest dfs_unit_tests[] = {
 	  dfs_test_mtime, async_disable, test_case_teardown},
 	{ "DFS_UNIT_TEST17: multi-threads async IO",
 	  dfs_test_async_io_th, async_disable, test_case_teardown},
-	{ "DFS_UNIT_TEST18: DFS open_stat",
-	dfs_test_open_stat, async_disable, test_case_teardown},
 };
 
 static int
