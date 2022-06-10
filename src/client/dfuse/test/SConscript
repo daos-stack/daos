@@ -67,9 +67,9 @@ def scons():
     il_test += build_static_tests(lfenv)
 
     tenv.AppendUnique(OBJPREFIX='s_')
-    tenv.AppendUnique(LIBS=['ioil', 'daos'])
+    tenv.AppendUnique(LIBS=['ioil', 'daos', 'gurt'])
     lfenv.AppendUnique(OBJPREFIX='s_')
-    lfenv.AppendUnique(LIBS=['ioil', 'daos'])
+    lfenv.AppendUnique(LIBS=['ioil', 'daos', 'gurt'])
 
     for test in IOIL_TEST_SRC:
         il_test += daos_build.test(tenv, test, install_off="../../../..")

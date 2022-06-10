@@ -81,8 +81,11 @@ def library(env, *args, **kwargs):
     add_rpaths(denv, kwargs.get('install_off', '..'), False, False)
     lib = denv.SharedLibrary(*args, **kwargs)
     if 'target' in kwargs:
-        return lib
-    libname = os.path.basename(args[0])
+        libname = os.path.basename(kwargs['target'])
+    else:
+        libname = os.path.basename(args[0])
+    if libname.startswith('lib'):
+        libname = libname[3:]
     varname = f"{libname}_lib"
     globals()[varname] = lib
     Export(varname)

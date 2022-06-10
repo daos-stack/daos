@@ -15,7 +15,8 @@ def scons():
 
     # rdbt client
     rdbt = daos_build.program(tenv, 'rdbt', ['rdbt.c', 'rpc.c'] + libdaos_tgts,
-                              LIBS=['daos_common_pmem', 'cart', 'gurt', 'uuid', 'isal', 'protobuf-c'])
+                              LIBS=['daos_common_pmem', 'cart', 'gurt', 'uuid', 'isal', 'protobuf-c',
+                                    'pthread'])
     tenv.Requires(rdbt, [daos_common_pmem_lib])
     tenv.Install('$PREFIX/bin', rdbt)
 

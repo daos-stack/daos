@@ -68,7 +68,7 @@ def build_client_libs_shared(env, prereqs):
     common = build_common(penv, COMMON_SRC, True)
 
     # Now build the interception library
-    il_lib = daos_build.library(ilenv, 'ioil', il_obj + common)
+    il_lib = daos_build.library(ilenv, 'il/libioil', il_obj + common)
     ilenv.Requires(il_lib, [dfs_lib])
     env.InstallVersionedLib(os.path.join("$PREFIX", 'lib64'), il_lib)
     dfuse_lib = daos_build.library(ilenv, 'dfuse', common)
