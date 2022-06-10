@@ -38,13 +38,12 @@ def build_dts_library(env, prereqs, tests_lib, dpar_lib):
     Export('mpi_cmd_parser')
 
     dts_lib = daos_build.library(denv, 'dts', ['credit.c', 'dts.c'], LIBS=libraries)
-    denv.Requires(dts_lib, [daos_lib, tests_lib, dpar_lib])
     denv.Install('$PREFIX/lib64/', dts_lib)
 
 
 def scons():
     """Execute build"""
-    Import('env', 'base_env', 'base_env_mpi', 'prereqs', 'daos_lib', 'cart_lib')
+    Import('env', 'base_env', 'base_env_mpi', 'prereqs')
 
     env.AppendUnique(LIBPATH=[Dir('.')])
     base_env.AppendUnique(LIBPATH=[Dir('.')])
@@ -72,7 +71,6 @@ def scons():
 
     tests_lib_src = ['tests_lib.c', 'tests_dmg_helpers.c']
     tests_lib = daos_build.library(denv, 'daos_tests', tests_lib_src)
-    denv.Requires(tests_lib, [cart_lib])
 
     denv.Install('$PREFIX/lib64/', tests_lib)
 

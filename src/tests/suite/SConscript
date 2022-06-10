@@ -70,7 +70,7 @@ def configure_cmocka(nenv):
 #
 def scons():
     """Execute build"""
-    Import('denv', 'base_env', 'dfs_lib', 'daos_tests_lib', 'dpar_lib')
+    Import('denv', 'base_env')
 
     libraries = ['daos', 'dfs', 'daos_tests', 'gurt', 'cart']
     libraries += ['uuid', 'cmocka', 'pthread', 'isal', 'dpar']
@@ -108,14 +108,12 @@ def scons():
     newenv.AppendUnique(LIBPATH=[Dir('../../client/dfs')])
     daostest = daos_build.program(newenv, 'daos_test', c_files + daos_test_tgt,
                                   LIBS=['daos_common'] + libraries)
-    newenv.Requires(daostest, [dfs_lib, daos_tests_lib, dpar_lib])
 
     c_files = Split("""dfs_unit_test.c dfs_par_test.c dfs_test.c """
                     """dfs_sys_unit_test.c""")
     newenv.AppendUnique(CPPPATH=[Dir('../../client/dfs').srcnode()])
     dfstest = daos_build.program(newenv, 'dfs_test', c_files + daos_test_tgt,
                                  LIBS=['daos_common'] + libraries)
-    newenv.Requires(dfstest, [dfs_lib, daos_tests_lib, dpar_lib])
 
     denv.Install('$PREFIX/bin/', daostest)
     denv.Install('$PREFIX/bin/', dfstest)

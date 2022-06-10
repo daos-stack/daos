@@ -3,7 +3,7 @@ import daos_build
 
 def scons():
     """Execute build"""
-    Import('denv', 'prereqs', 'libdaos_tgts', 'daos_common_pmem_lib')
+    Import('denv', 'prereqs', 'libdaos_tgts')
 
     tenv = denv.Clone()
     prereqs.require(tenv, 'isal')
@@ -17,7 +17,6 @@ def scons():
     rdbt = daos_build.program(tenv, 'rdbt', ['rdbt.c', 'rpc.c'] + libdaos_tgts,
                               LIBS=['daos_common_pmem', 'cart', 'gurt', 'uuid', 'isal', 'protobuf-c',
                                     'pthread'])
-    tenv.Requires(rdbt, [daos_common_pmem_lib])
     tenv.Install('$PREFIX/bin', rdbt)
 
 if __name__ == "SCons.Script":

@@ -1,4 +1,5 @@
 """Build Per-server Metadata"""
+import daos_build
 
 FILES = ['smd_device.c', 'smd_pool.c', 'smd_store.c']
 
@@ -10,8 +11,7 @@ def scons():
     denv.Append(CPPDEFINES=['-DDAOS_PMEM_BUILD'])
     prereqs.require(denv, 'pmdk', 'argobots', 'protobufc')
 
-    smd_lib = denv.Library('smd', FILES, LIBS=[])
-    Export('smd_lib')
+    daos_build.static_library(denv, 'smd', FILES, LIBS=[])
 
     if prereqs.test_requested():
         SConscript('tests/SConscript', exports='denv')

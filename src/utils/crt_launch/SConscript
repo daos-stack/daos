@@ -11,7 +11,7 @@ CRT_LAUNCH = 'crt_launch.c'
 
 def scons():
     """scons function"""
-    Import('base_env_mpi', 'prereqs', 'dpar_lib', 'cart_lib')
+    Import('base_env_mpi', 'prereqs')
 
     if base_env_mpi is None:
         return
@@ -30,7 +30,6 @@ def scons():
     tenv.AppendUnique(FLAGS='-pthread')
 
     crt_launch = daos_build.program(tenv, CRT_LAUNCH, LIBS=libs)
-    tenv.Requires(crt_launch, [dpar_lib, cart_lib])
 
     tenv.Install(os.path.join("$PREFIX", 'bin'), crt_launch)
 

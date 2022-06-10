@@ -3,7 +3,7 @@ import daos_build
 
 def scons():
     """Execute build"""
-    Import('denv', 'prereqs', 'daos_common_pmem_lib', 'vos_lib', 'bio_lib')
+    Import('denv', 'prereqs')
 
     unit_env = denv.Clone()
 
@@ -16,7 +16,6 @@ def scons():
                                           '../srv_csum.c'],
                                          LIBS=['daos_common_pmem', 'gurt',
                                                'cmocka', 'vos', 'bio', 'abt'])
-    unit_env.Requires(srv_checksum_tests, [daos_common_pmem_lib, vos_lib, bio_lib])
     unit_env.Install('$PREFIX/bin/', [srv_checksum_tests])
 
 if __name__ == "SCons.Script":

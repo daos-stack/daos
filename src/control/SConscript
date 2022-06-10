@@ -9,8 +9,7 @@ from os.path import join, isdir
 from os import urandom
 from binascii import b2a_hex
 
-Import('env', 'prereqs', 'daos_version', 'conf_dir', 'daos_common_lib', 'daos_cmd_hdlrs_lib')
-Import('cart_lib', 'gurt_lib', 'duns_lib', 'dfs_lib')
+Import('env', 'prereqs', 'daos_version', 'conf_dir')
 
 GO_COMPILER = 'go'
 MIN_GO_VERSION = '1.12.0'
@@ -96,7 +95,7 @@ def install_go_bin(denv, gosrc, libs, name, install_name):
 
     if libs is None:
         libs = []
-    libs.extend([daos_common_lib, cart_lib, gurt_lib])
+    libs.extend(['daos_common', 'cart', 'gurt'])
 
     def gen_build_id():
         """generate a unique build id per binary for use by RPM
@@ -121,7 +120,7 @@ def install_go_bin(denv, gosrc, libs, name, install_name):
     # Propagate useful GO environment variables from the caller
     if 'GOCACHE' in os.environ:
         denv['ENV']['GOCACHE'] = os.environ['GOCACHE']
-    target = denv.Command(build_bin, src + libs,
+    target = daos_build.run_command(denv, build_bin, src, libs,
                           f'cd {gosrc}; {GO_BIN} build -v -mod vendor {go_ldflags()} ' +
                           f'{get_build_flags(denv)} {get_build_tags(denv)} ' +
                           f'-o {build_bin} {install_src}')
@@ -226,7 +225,7 @@ def scons():
                              "-L$BUILD_DIR/src/client/dfs "
                              "-L$BUILD_DIR/src/utils $_RPATH")
         dbenv.AppendENVPath("CGO_LDFLAGS", dblibs, sep=" ")
-        daosbin = install_go_bin(dbenv, gosrc, [daos_cmd_hdlrs_lib, dfs_lib, duns_lib], "daos", "daos")
+        daosbin = install_go_bin(dbenv, gosrc, ['daos_cmd_hdlrs', 'dfs', 'duns'], "daos", "daos")
 
         menv = denv.Clone()
         install_go_manpage(menv, "dmg", dmgbin)
@@ -274,11 +273,11 @@ def scons():
 
     # Sets CGO_LDFLAGS for rpath
     daos_build.add_rpaths(aenv, None, True, True)
-    install_go_bin(aenv, gosrc, [denv.nvmecontrol], "daos_admin", "daos_admin")
+    install_go_bin(aenv, gosrc, ['nvme_control'], "daos_admin", "daos_admin")
 
     if is_firmware_mgmt_build(denv):
         print("(EXPERIMENTAL) Building DAOS firmware tools")
-        install_go_bin(aenv, gosrc, [denv.nvmecontrol], "daos_firmware", "daos_firmware")
+        install_go_bin(aenv, gosrc, ['nvme_control'], "daos_firmware", "daos_firmware")
 
 if __name__ == "SCons.Script":
     scons()

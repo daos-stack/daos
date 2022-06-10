@@ -27,13 +27,12 @@ def build_daos_common(env, client, prereqs):
         prereqs.require(denv, 'pmdk')
 
     common = daos_build.library(denv, libname, COMMON_FILES, LIBS=common_libs)
-    denv.Requires(common, [cart_lib])
     denv.Install('$PREFIX/lib64/', common)
     return common
 
 def scons():
     """Execute build"""
-    Import('env', 'base_env', 'base_env_mpi', 'prereqs', 'cart_lib')
+    Import('env', 'base_env', 'base_env_mpi', 'prereqs')
 
     env.AppendUnique(LIBPATH=[Dir('.')])
     base_env.AppendUnique(LIBPATH=[Dir('.')])

@@ -5,10 +5,10 @@ from SCons.Subst import Literal
 from SCons.Script import Dir
 from SCons.Script import GetOption
 from SCons.Script import WhereIs
-from SCons.Script import Export
 from env_modules import load_mpi
 import compiler_setup
 
+libraries = {}
 
 class DaosLiteral(Literal):
     """A wrapper for a Literal."""
@@ -74,21 +74,58 @@ def add_build_rpath(env, pathin="."):
     env.AppendENVPath("LD_LIBRARY_PATH", path)
 
 
-def library(env, *args, **kwargs):
-    """build SharedLibrary with relative RPATH"""
-    denv = env.Clone()
-    denv.Replace(RPATH=[])
-    add_rpaths(denv, kwargs.get('install_off', '..'), False, False)
-    lib = denv.SharedLibrary(*args, **kwargs)
+def _known_deps(env, **kwargs):
+    """Get list of known libraries"""
+    known = []
+    if 'LIBS' in kwargs:
+        libs = set(kwargs['LIBS'])
+    else:
+        libs = set(env.get('LIBS', []))
+
+    known_libs = libs.intersection(set(libraries.keys()))
+    for item in known_libs:
+        known.append(libraries[item])
+    return known
+
+
+def _get_libname(*args, **kwargs):
+    """Work out the basic library name from library builder args"""
     if 'target' in kwargs:
         libname = os.path.basename(kwargs['target'])
     else:
         libname = os.path.basename(args[0])
     if libname.startswith('lib'):
         libname = libname[3:]
-    varname = f"{libname}_lib"
-    globals()[varname] = lib
-    Export(varname)
+    return libname
+
+
+def run_command(env, target, sources, daos_libs, command):
+    """Run Command builder"""
+    deps = _known_deps(env, LIBS=daos_libs)
+    result = env.Command(target, sources + deps, command)
+    return result
+
+
+def static_library(env, *args, **kwargs):
+    """build SharedLibrary with relative RPATH"""
+    lib = env.Library(*args, **kwargs)
+    libname = _get_libname(*args, **kwargs)
+    libraries[libname] = lib
+    deps = _known_deps(env, **kwargs)
+    env.Requires(lib, deps)
+    return lib
+
+
+def library(env, *args, **kwargs):
+    """build SharedLibrary with relative RPATH"""
+    denv = env.Clone()
+    denv.Replace(RPATH=[])
+    add_rpaths(denv, kwargs.get('install_off', '..'), False, False)
+    lib = denv.SharedLibrary(*args, **kwargs)
+    libname = _get_libname(*args, **kwargs)
+    libraries[libname] = lib
+    deps = _known_deps(denv, **kwargs)
+    denv.Requires(lib, deps)
     return lib
 
 
@@ -97,7 +134,10 @@ def program(env, *args, **kwargs):
     denv = env.Clone()
     denv.Replace(RPATH=[])
     add_rpaths(denv, kwargs.get('install_off', '..'), False, True)
-    return denv.Program(*args, **kwargs)
+    prog = denv.Program(*args, **kwargs)
+    deps = _known_deps(denv, **kwargs)
+    denv.Requires(prog, deps)
+    return prog
 
 
 def test(env, *args, **kwargs):
@@ -105,7 +145,10 @@ def test(env, *args, **kwargs):
     denv = env.Clone()
     denv.Replace(RPATH=[])
     add_rpaths(denv, kwargs.get("install_off", None), False, True)
-    return denv.Program(*args, **kwargs)
+    test = denv.Program(*args, **kwargs)
+    deps = _known_deps(denv, **kwargs)
+    denv.Requires(test, deps)
+    return test
 
 
 def install(env, subdir, files):

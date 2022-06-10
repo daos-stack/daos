@@ -3,7 +3,7 @@ import daos_build
 
 def scons():
     """Execute build"""
-    Import('denv', 'prereqs', 'smd_lib', 'daos_common_pmem_lib')
+    Import('denv', 'prereqs')
 
     denv.Append(CPPDEFINES=['-DDAOS_PMEM_BUILD'])
     libraries = ['smd', 'pmemobj', 'cmocka', 'daos_common_pmem',
@@ -14,7 +14,6 @@ def scons():
 
     tenv.AppendUnique(LIBPATH=[Dir('..')])
     smd_ut = daos_build.test(tenv, 'smd_ut', 'smd_ut.c', LIBS=libraries)
-    tenv.Requires(smd_ut, [daos_common_pmem_lib, smd_lib])
     tenv.Install('$PREFIX/bin/', smd_ut)
 
 if __name__ == "SCons.Script":

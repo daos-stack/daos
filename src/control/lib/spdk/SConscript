@@ -1,6 +1,7 @@
 #!/bin/env python
 """Build DAOS SPDK Go bindings"""
 from os.path import join
+import daos_build
 
 def scons():
     """Execute build"""
@@ -19,18 +20,17 @@ def scons():
 
     # Explicitly link RTE & SPDK libs for CGO access
     libs = ['spdk_log', 'spdk_env_dpdk', 'spdk_nvme', 'spdk_vmd', 'rte_mempool']
-    libs += ['rte_mempool_ring', 'rte_bus_pci', 'nvme_control']
+    libs += ['rte_mempool_ring', 'rte_bus_pci']
 
     # Other libs
     libs += ['numa', 'dl']
 
     senv.nc = senv.Object("src/nvme_control.c")
     senv.ncc = senv.Object("src/nvme_control_common.c")
-    denv.nvmecontrol = senv.StaticLibrary("nvme_control",
-                                          [senv.nc, senv.ncc] + control_tgts,
-                                          LIBS=libs)
+    nvmecontrol = daos_build.static_library(senv, "nvme_control",
+                                            [senv.nc, senv.ncc] + control_tgts, LIBS=libs)
 
-    senv.Install(join(senv.subst("$PREFIX"), "lib64"), denv.nvmecontrol)
+    senv.Install(join(senv.subst("$PREFIX"), "lib64"), nvmecontrol)
 
     if prereqs.test_requested():
         SConscript('ctests/SConscript', exports='senv')

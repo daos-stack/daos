@@ -58,7 +58,7 @@ def scons():
     SConscript('swim/SConscript')
     Default('swim')
 
-    Import('env', 'prereqs', 'swim_targets', 'gurt_lib', 'CART_VERSION', 'conf_dir')
+    Import('env', 'prereqs', 'swim_targets', 'CART_VERSION', 'conf_dir')
 
     daos_build.add_build_rpath(env)
 
@@ -88,7 +88,6 @@ def scons():
 
     cart_lib = daos_build.library(denv, 'cart', [cart_targets, swim_targets],
                                   SHLIBVERSION=CART_VERSION)
-    denv.Requires(cart_lib, [swim_targets, gurt_lib])
     denv.InstallVersionedLib('$PREFIX/lib64/', cart_lib,
                              SHLIBVERSION=CART_VERSION)
 

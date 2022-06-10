@@ -20,7 +20,6 @@ def scons():
     prereqs.require(denv, 'pmdk', 'spdk', 'argobots', 'protobufc', 'hwloc')
 
     SConscript('smd/SConscript')
-    Import('smd_lib')
     denv.AppendUnique(OBJPREFIX='b_')
 
     # SPDK related libs
@@ -37,7 +36,6 @@ def scons():
 
     tgts = FILES + control_tgts
     bio = daos_build.library(denv, "bio", tgts, install_off="../..", LIBS=libs)
-    denv.Requires(bio, [smd_lib])
     denv.Install('$PREFIX/lib64/daos_srv', bio)
 
 if __name__ == "SCons.Script":

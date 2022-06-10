@@ -3,7 +3,7 @@ import daos_build
 
 def scons():
     """Execute build"""
-    Import('denv', 'drpc_test_utils', 'daos_common_lib')
+    Import('denv', 'drpc_test_utils')
 
     unit_env = denv.Clone()
     unit_env.AppendUnique(OBJPREFIX='utest_')
@@ -12,33 +12,30 @@ def scons():
     unit_env.AppendUnique(LINKFLAGS=['-Wl,@%s' % common_mock_ld_script])
 
     Depends('drpc_progress_tests', common_mock_ld_script)
-    progress_tests = daos_build.test(unit_env, 'drpc_progress_tests',
-                                     ['drpc_progress_tests.c', drpc_test_utils,
-                                      '../drpc_progress.c'],
-                                     LIBS=['daos_common', 'protobuf-c', 'gurt', 'cmocka'])
-    unit_env.Requires(progress_tests, [daos_common_lib])
+    daos_build.test(unit_env, 'drpc_progress_tests',
+                    ['drpc_progress_tests.c', drpc_test_utils,
+                     '../drpc_progress.c'],
+                    LIBS=['daos_common', 'protobuf-c', 'gurt', 'cmocka'])
 
     Depends('drpc_handler_tests', common_mock_ld_script)
-    handler_tests = daos_build.test(unit_env, 'drpc_handler_tests',
-                                    ['drpc_handler_tests.c', drpc_test_utils,
-                                     '../drpc_handler.c'],
-                                    LIBS=['daos_common', 'protobuf-c', 'gurt', 'cmocka'])
-    unit_env.Requires(handler_tests, [daos_common_lib])
+    daos_build.test(unit_env, 'drpc_handler_tests',
+                    ['drpc_handler_tests.c', drpc_test_utils,
+                     '../drpc_handler.c'],
+                    LIBS=['daos_common', 'protobuf-c', 'gurt', 'cmocka'])
 
     Depends('drpc_listener_tests', common_mock_ld_script)
-    listener_tests = daos_build.test(unit_env, 'drpc_listener_tests',
-                                     ['drpc_listener_tests.c', drpc_test_utils,
-                                      '../drpc_listener.c'],
-                                     LIBS=['daos_common', 'protobuf-c', 'gurt', 'cmocka'])
-    unit_env.Requires(listener_tests, [daos_common_lib])
+    daos_build.test(unit_env, 'drpc_listener_tests',
+                    ['drpc_listener_tests.c', drpc_test_utils,
+                     '../drpc_listener.c'],
+                    LIBS=['daos_common', 'protobuf-c', 'gurt', 'cmocka'])
 
     Depends('drpc_client_tests', common_mock_ld_script)
-    client_tests = daos_build.test(unit_env, 'drpc_client_tests',
-                                   ['drpc_client_tests.c', drpc_test_utils, '../drpc_client.c',
-                                    '../drpc_ras.c', '../srv.pb-c.c', '../event.pb-c.c'],
-                                   LIBS=['daos_common', 'protobuf-c', 'gurt', 'cmocka', 'uuid',
-                                         'pthread', 'abt', 'cart'])
-    unit_env.Requires(client_tests, [daos_common_lib])
+    daos_build.test(unit_env, 'drpc_client_tests',
+                    ['drpc_client_tests.c', drpc_test_utils,
+                     '../drpc_client.c', '../drpc_ras.c', '../srv.pb-c.c',
+                     '../event.pb-c.c'],
+                    LIBS=['daos_common', 'protobuf-c', 'gurt', 'cmocka',
+                          'uuid', 'pthread', 'abt', 'cart'])
 
 if __name__ == "SCons.Script":
     scons()

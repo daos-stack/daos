@@ -3,7 +3,7 @@ import daos_build
 
 def scons():
     """Execute build"""
-    Import('env', 'prereqs', 'dc_sectest_tgts', 'daos_lib')
+    Import('env', 'prereqs', 'dc_sectest_tgts')
 
     libs = ['$LIBS', 'daos', 'daos_common', 'gurt']
     sec_sources = ['security_test.c', dc_sectest_tgts]
@@ -17,12 +17,10 @@ def scons():
 
     security_test = daos_build.program(denv, 'security_test', sec_sources,
                                        LIBS=libs)
-    denv.Requires(security_test, [daos_lib])
     env.Install('$PREFIX/bin/', security_test)
 
     acl_dump_test = daos_build.program(denv, 'acl_dump_test', acl_sources,
                                        LIBS=libs)
-    denv.Requires(acl_dump_test, [daos_lib])
     env.Install('$PREFIX/bin/', acl_dump_test)
 
 if __name__ == "SCons.Script":

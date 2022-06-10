@@ -3,7 +3,7 @@ import daos_build
 
 def scons():
     """Execute build"""
-    Import('denv', 'prereqs', 'pb', 'daos_common_pmem_lib')
+    Import('denv', 'prereqs', 'pb')
 
     prereqs.require(denv, 'protobufc')
 
@@ -11,10 +11,10 @@ def scons():
 
     denv.Append(CPPDEFINES={'DRPC_TEST' : '1'})
     # Isolated unit tests
-    test = daos_build.test(denv, 'srv_drpc_tests',
-                           source=[pb, mocks, 'srv_drpc_tests.c', '../srv_drpc.c'],
-                           LIBS=['cmocka', 'protobuf-c', 'daos_common_pmem', 'gurt', 'uuid'])
-    denv.Requires(test, [daos_common_pmem_lib])
+    daos_build.test(denv, 'srv_drpc_tests',
+                    source=[pb, mocks, 'srv_drpc_tests.c', '../srv_drpc.c'],
+                    LIBS=['cmocka', 'protobuf-c', 'daos_common_pmem', 'gurt',
+                          'uuid'])
 
 if __name__ == "SCons.Script":
     scons()

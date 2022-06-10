@@ -13,7 +13,7 @@ SELF_TEST = 'self_test.c'
 def scons():
     """scons function"""
 
-    Import('env', 'prereqs', 'cart_utils_objs', 'daos_lib')
+    Import('env', 'prereqs', 'cart_utils_objs')
 
     tenv = env.Clone(LIBS=[])
 
@@ -22,7 +22,6 @@ def scons():
     tenv.AppendUnique(FLAGS='-pthread')
 
     self_test = daos_build.program(tenv, [SELF_TEST, cart_utils_objs])
-    tenv.Requires(self_test, [daos_lib])
     tenv.Install(os.path.join("$PREFIX", 'bin'), self_test)
 
 if __name__ == "SCons.Script":

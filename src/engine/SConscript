@@ -3,7 +3,7 @@ import daos_build
 
 def scons():
     """Execute build"""
-    Import('env', 'prereqs', 'libdaos_tgts', 'daos_common_pmem_lib', 'vos_srv_lib', 'bio_lib')
+    Import('env', 'prereqs', 'libdaos_tgts')
 
     if not prereqs.server_requested():
         return
@@ -34,7 +34,6 @@ def scons():
                                  'sched.c', 'ult.c', 'event.pb-c.c',
                                  'srv_metrics.c'] + libdaos_tgts,
                                 LIBS=libraries)
-    denv.Requires(engine, [daos_common_pmem_lib, vos_srv_lib, bio_lib])
     denv.Install('$PREFIX/bin', engine)
 
     if prereqs.test_requested():

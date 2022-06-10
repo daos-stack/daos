@@ -62,7 +62,7 @@ FAULT_STATUS_TEST = 'fault_status.c'
 def scons():
     """scons function"""
 
-    Import('env', 'prereqs', 'daos_lib')
+    Import('env', 'prereqs')
     Import('cart_utils_objs')
 
     ##############################
@@ -79,43 +79,36 @@ def scons():
     for test in SIMPLE_TEST_SRC:
         target = daos_build.test(tenv, [test, cart_utils_objs],
                                  install_off='../../../../')
-        tenv.Requires(target, [daos_lib])
         tenv.Install(tests_dir, target)
 
     for test in IV_TESTS:
         target = daos_build.test(tenv, [test, cart_utils_objs],
                                  install_off='../../../../')
-        tenv.Requires(target, [daos_lib])
         tenv.Install(tests_dir, target)
 
     for test in SWIM_TESTS:
         target = daos_build.test(tenv, [test, cart_utils_objs],
                                  install_off='../../../../')
-        tenv.Requires(target, [daos_lib])
         tenv.Install(tests_dir, target)
 
     for test in HLC_TESTS:
         target = daos_build.test(tenv, [test, cart_utils_objs],
                                  install_off='../../../../')
-        tenv.Requires(target, [daos_lib])
         tenv.Install(tests_dir, target)
 
     for test in TEST_GROUP_NP_TESTS:
         target = daos_build.test(tenv, [test, cart_utils_objs],
                                  install_off='../../../../')
-        tenv.Requires(target, [daos_lib])
         tenv.Install(tests_dir, target)
 
     # Build FAULT_STATUS_TEST separately and install it into bin/
     target = daos_build.test(tenv, FAULT_STATUS_TEST)
-    tenv.Requires(target, [daos_lib])
     tenv.Install(os.path.join("$PREFIX", 'bin'), target)
 
     benv = tenv.Clone()
 
     benv.AppendUnique(CFLAGS=['-std=gnu99', '-pedantic'])
     basic_target = daos_build.test(tenv, BASIC_SRC)
-    benv.Requires(basic_target, [daos_lib])
     benv.Requires(basic_target, [cart_utils_objs])
 
     # Call scons on unit test directory

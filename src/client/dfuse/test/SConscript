@@ -33,7 +33,7 @@ def build_static_tests(env):
 def scons():
     """Scons function"""
 
-    Import('dfuse_env', 'prereqs', 'daos_lib', 'ioil_lib')
+    Import('dfuse_env', 'prereqs')
 
     if not prereqs.check_component('cunit'):
         print("\n************************************************")
@@ -75,7 +75,6 @@ def scons():
         il_test += daos_build.test(tenv, test, install_off="../../../..")
         il_test += daos_build.test(lfenv, test, install_off="../../../..")
 
-    tenv.Requires(il_test, [daos_lib, ioil_lib])
     Default(il_test)
 
     tenv.Install('$PREFIX/lib/daos/TESTING/tests', il_test)

@@ -1,5 +1,6 @@
 """Build versioned extent allocator"""
 import os
+import daos_build
 
 FILES = ['vea_alloc.c', 'vea_api.c', 'vea_free.c', 'vea_hint.c', 'vea_init.c', 'vea_util.c']
 
@@ -16,8 +17,7 @@ def scons():
     prereqs.require(denv, 'pmdk')
 
     denv.Append(CPPDEFINES=['-DDAOS_PMEM_BUILD'])
-    vea_lib = denv.Library('vea', FILES, LIBS=['daos_common_pmem', 'gurt'])
-    Export('vea_lib')
+    daos_build.static_library(denv, 'vea', FILES, LIBS=['daos_common_pmem'])
 
     if prereqs.test_requested():
         SConscript('tests/SConscript', exports='denv')

@@ -8,13 +8,12 @@ import daos_build
 
 def scons():
     """Execute build"""
-    Import('env', 'gurt_lib')
+    Import('env')
 
     denv = env.Clone()
 
     daos_metrics = daos_build.program(denv, 'daos_metrics',
                                       ['daos_metrics.c'], LIBS=['gurt'])
-    denv.Requires(daos_metrics, [gurt_lib])
 
     denv.Install('$PREFIX/bin', daos_metrics)
 
