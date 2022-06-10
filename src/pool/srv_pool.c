@@ -458,7 +458,6 @@ init_pool_metadata(struct rdb_tx *tx, const rdb_path_t *kvs, uint32_t nnodes, co
 		   const d_rank_list_t *ranks, daos_prop_t *prop, uint32_t ndomains,
 		   const uint32_t *domains)
 {
-	uint32_t		version = DS_POOL_MD_VERSION;
 	struct pool_buf	       *map_buf;
 	uint32_t		map_version = 1;
 	uint32_t		connectable;
@@ -468,14 +467,6 @@ init_pool_metadata(struct rdb_tx *tx, const rdb_path_t *kvs, uint32_t nnodes, co
 	int			ntargets = nnodes * dss_tgt_nr;
 	uint32_t		upgrade_global_version = DS_POOL_GLOBAL_VERSION;
 	int			rc;
-
-	/* Initialize the layout version. */
-	d_iov_set(&value, &version, sizeof(version));
-	rc = rdb_tx_update(tx, kvs, &ds_pool_prop_version, &value);
-	if (rc != 0) {
-		D_ERROR("failed to update version, "DF_RC"\n", DP_RC(rc));
-		goto out;
-	}
 
 	/* Generate the pool buffer. */
 	rc = gen_pool_buf(NULL /* map */, &map_buf, map_version, ndomains, nnodes, ntargets,
@@ -1172,7 +1163,6 @@ static void
 fini_svc_pool(struct pool_svc *svc)
 {
 	D_ASSERT(svc->ps_pool != NULL);
-	ds_pool_iv_ns_update(svc->ps_pool, -1 /* master_rank */);
 	ds_pool_put(svc->ps_pool);
 	svc->ps_pool = NULL;
 }
@@ -1201,7 +1191,6 @@ ds_pool_svc_load(struct rdb_tx *tx, uuid_t uuid, rdb_path_t *root, struct pool_b
 	uuid_t			uuid_tmp;
 	d_iov_t			value;
 	bool			version_exists = false;
-	uint32_t		version;
 	uint32_t		global_version;
 	struct pool_buf	       *map_buf;
 	uint32_t		map_version;
@@ -1214,8 +1203,8 @@ ds_pool_svc_load(struct rdb_tx *tx, uuid_t uuid, rdb_path_t *root, struct pool_b
 	uuid_copy(uuid_tmp, uuid);
 
 	/* Check the layout version. */
-	d_iov_set(&value, &version, sizeof(version));
-	rc = rdb_tx_lookup(tx, root, &ds_pool_prop_version, &value);
+	d_iov_set(&value, &global_version, sizeof(global_version));
+	rc = rdb_tx_lookup(tx, root, &ds_pool_prop_global_version, &value);
 	if (rc == -DER_NONEXIST) {
 		/*
 		 * This DB may be new or incompatible. Check the existence of
@@ -1230,7 +1219,12 @@ ds_pool_svc_load(struct rdb_tx *tx, uuid_t uuid, rdb_path_t *root, struct pool_b
 		goto out;
 	}
 	version_exists = true;
-	if (version < DS_POOL_MD_VERSION_LOW || version > DS_POOL_MD_VERSION) {
+
+	/**
+	 * downgrading the DAOS software of an upgraded pool report
+	 * a proper RAS error.
+	 */
+	if (global_version > DS_POOL_GLOBAL_VERSION) {
 		ds_notify_ras_eventf(RAS_POOL_DF_INCOMPAT, RAS_TYPE_INFO,
 				     RAS_SEV_ERROR, NULL /* hwid */,
 				     NULL /* rank */, NULL /* inc */,
@@ -1238,10 +1232,9 @@ ds_pool_svc_load(struct rdb_tx *tx, uuid_t uuid, rdb_path_t *root, struct pool_b
 				     &uuid_tmp, NULL /* cont */,
 				     NULL /* objid */, NULL /* ctlop */,
 				     NULL /* data */,
-				     "incompatible layout version: %u not in "
-				     "[%u, %u]", version,
-				     DS_POOL_MD_VERSION_LOW,
-				     DS_POOL_MD_VERSION);
+				     "incompatible layout version: %u larger than "
+				     "%u", global_version,
+				     DS_POOL_GLOBAL_VERSION);
 		rc = -DER_DF_INCOMPT;
 		goto out;
 	}
@@ -1263,6 +1256,7 @@ check_map:
 		}
 		goto out;
 	}
+
 	if (!version_exists) {
 		/* This DB is not new and uses a layout that lacks a version. */
 		ds_notify_ras_eventf(RAS_POOL_DF_INCOMPAT, RAS_TYPE_INFO,
@@ -1695,8 +1689,8 @@ int ds_pool_failed_add(uuid_t uuid, int rc)
 	uuid_copy(psf->psf_uuid, uuid);
 	psf->psf_error = rc;
 	d_list_add_tail(&psf->psf_link, &pool_svc_failed_list);
-	D_RWLOCK_UNLOCK(&psfl_rwlock);
 out:
+	D_RWLOCK_UNLOCK(&psfl_rwlock);
 	return ret;
 }
 
@@ -6029,7 +6023,10 @@ ds_pool_ranks_get_handler(crt_rpc_t *rpc)
 	if (daos_rpc_from_client(rpc))
 		D_GOTO(out, rc = -DER_INVAL);
 
-	rc = ds_pool_get_ranks(in->prgi_op.pi_uuid, MAP_RANKS_UP, &out_ranks);
+	/* Get available ranks */
+	rc = ds_pool_get_ranks(in->prgi_op.pi_uuid,
+			       PO_COMP_ST_UP | PO_COMP_ST_UPIN | PO_COMP_ST_DRAIN | PO_COMP_ST_NEW,
+			       &out_ranks);
 	if (rc != 0) {
 		D_ERROR(DF_UUID ": get ranks failed, " DF_RC "\n",
 			DP_UUID(in->prgi_op.pi_uuid), DP_RC(rc));
@@ -6524,4 +6521,3 @@ ds_pool_target_status_check(struct ds_pool *pool, uint32_t id, uint8_t matched_s
 
 	return target->ta_comp.co_status == matched_status ? 1 : 0;
 }
-

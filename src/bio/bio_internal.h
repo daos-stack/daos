@@ -616,4 +616,5 @@ int fill_in_traddr(struct bio_dev_info *b_info, char *dev_name);
 /* bio_config.c */
 int bio_add_allowed_alloc(const char *nvme_conf, struct spdk_env_opts *opts);
 int bio_set_hotplug_filter(const char *nvme_conf);
+int bio_read_accel_props(const char *nvme_conf);
 #endif /* __BIO_INTERNAL_H__ */

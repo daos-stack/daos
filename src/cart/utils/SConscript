@@ -34,7 +34,6 @@ def scons():
     # There is probably a better way to do this but let's get it linking first
     env.AppendUnique(LIBPATH=[Dir('.')])
     env.AppendUnique(CPPPATH=[Dir('.').srcnode()])
-    env.AppendUnique(CPPPATH=[Dir('include').srcnode()])
     env.AppendUnique(CPPPATH=[Dir('../../mgmt').srcnode()])
 
     # Generate cart utility shared objects
