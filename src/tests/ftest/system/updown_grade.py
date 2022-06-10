@@ -9,15 +9,15 @@ import random
 import base64
 import time
 
-from general_utils import get_random_bytes
+from general_utils import get_random_bytes, pcmd, run_pcmd
 from pydaos.raw import DaosApiError
 from daos_utils import DaosCommand
 from agent_utils import include_local_host
-from general_utils import pcmd, run_pcmd
 from command_utils_base import CommandFailure
 from ior_test_base import IorTestBase
 
 # pylint: disable = global-variable-not-assigned, global-statement
+# pylint: disable=too-many-ancestors
 class UpgradeDowngradeTest(IorTestBase):
     """
     Tests DAOS container attribute get/set/list.
@@ -111,7 +111,7 @@ class UpgradeDowngradeTest(IorTestBase):
                     "val={} and received val={}".format(attr, value,
                                         decoded.get(attr.decode(), None)))
 
-    def check_result(self, result):
+    def check_result(result):
         """check for command result, raise failure when error cncountered
 
         Args:
@@ -131,8 +131,11 @@ class UpgradeDowngradeTest(IorTestBase):
             hosts_client (list of String): client hosts to show daos and dmg version.
         """
         result = run_pcmd(all_hosts, "rpm -qa | grep daos")
+        self.check_result(result)
         result = run_pcmd(hosts_client, "dmg version")
+        self.check_result(result)
         result = run_pcmd(hosts_client, "daos version")
+        self.check_result(result)
 
     def updowngrade(self, hosts, updown, rpms):
         """Upgrade downgrade hosts
@@ -244,7 +247,6 @@ class UpgradeDowngradeTest(IorTestBase):
         result = run_pcmd(hosts_client, "mkdir -p /tmp/daos_dfuse1")
         ior_timeout = self.params.get("ior_timeout", '/run/ior/*')
         iorflags_write = self.params.get("write_flg", '/run/ior/iorflags/')
-        dfuse_mount_dir = self.params.get("mount_dir", "/run/dfuse/*")
         dfs_oclass = self.params.get("dfs_oclass", '/run/ior/*')
         self.ior_cmd.dfs_oclass.update(dfs_oclass)
         self.ior_cmd.flags.update(iorflags_write)
