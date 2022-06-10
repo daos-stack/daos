@@ -225,7 +225,7 @@ def scons():
                              "-L$BUILD_DIR/src/client/dfs "
                              "-L$BUILD_DIR/src/utils $_RPATH")
         dbenv.AppendENVPath("CGO_LDFLAGS", dblibs, sep=" ")
-        daosbin = install_go_bin(dbenv, gosrc, ['daos_cmd_hdlrs', 'dfs', 'duns'], "daos", "daos")
+        daosbin = install_go_bin(dbenv, gosrc, ['daos_cmd_hdlrs', 'dfs', 'duns', 'daos'], "daos", "daos")
 
         menv = denv.Clone()
         install_go_manpage(menv, "dmg", dmgbin)

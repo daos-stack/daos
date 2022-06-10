@@ -109,7 +109,7 @@ def scons():
 
     benv.AppendUnique(CFLAGS=['-std=gnu99', '-pedantic'])
     basic_target = daos_build.test(tenv, BASIC_SRC)
-    benv.Requires(basic_target, [cart_utils_objs])
+    Depends(basic_target, [cart_utils_objs])
 
     # Call scons on unit test directory
     SConscript('utest/SConscript')

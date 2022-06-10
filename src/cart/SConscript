@@ -84,7 +84,7 @@ def scons():
         pp_files = pp_env.Preprocess(SRC)
         pp_env.AddPostAction(pp_files, SCons.Action.Action(macro_expand, None))
 
-        denv.Requires(cart_targets, pp_files)
+        Depends(cart_targets, pp_files)
 
     cart_lib = daos_build.library(denv, 'cart', [cart_targets, swim_targets],
                                   SHLIBVERSION=CART_VERSION)
