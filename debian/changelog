@@ -1,8 +1,14 @@
-daos (2.3.100-12) unstable; urgency=medium
+daos (2.3.100-13) unstable; urgency=medium
   [ Tom Nabarro ]
   * Update SPDK dependency requirement to greater than or equal to 22.01.1.
 
- -- Tom Nabarro <Tom Nabarro <tom.nabarro@intel.com>  Sat, 4 Jun 2022 12:43:00 -0400
+ -- Tom Nabarro <Tom Nabarro <tom.nabarro@intel.com>  Fri, 10 Jun 2022 12:43:00 -0400
+
+daos (2.3.100-12) unstable; urgency=medium
+  [ Jeff Olivier ]
+  * Make ucx required for build on all platforms
+
+ -- Jeff Olivier <jeffrey.v.olivier@intel.com> Thu, 02 Jun 2022 16:30:00 -0500
 
 daos (2.3.100-11) unstable; urgency=medium
   [ Michael MacDonald ]

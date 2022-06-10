@@ -570,7 +570,7 @@ obj_ec_encode_buf(daos_obj_id_t oid, struct daos_oclass_attr *oca,
 		  unsigned char *p_bufs[]);
 
 int
-obj_ec_parity_alive(daos_handle_t oh, uint64_t dkey_hash, uint32_t map_ver);
+obj_ec_parity_alive(daos_handle_t oh, uint64_t dkey_hash);
 
 static inline struct pl_obj_shard*
 obj_get_shard(void *data, int idx)
@@ -587,7 +587,7 @@ obj_retry_error(int err)
 	       err == -DER_INPROGRESS || err == -DER_GRPVER ||
 	       err == -DER_EXCLUDED || err == -DER_CSUM ||
 	       err == -DER_TX_BUSY || err == -DER_TX_UNCERTAIN ||
-	       err == -DER_NEED_TX ||
+	       err == -DER_NEED_TX || err == -DER_NOTLEADER ||
 	       daos_crt_network_error(err);
 }
 
