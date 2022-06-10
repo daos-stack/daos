@@ -32,7 +32,7 @@ def build_daos_common(env, client, prereqs):
 
 def scons():
     """Execute build"""
-    Import('env', 'base_env', 'base_env_mpi', 'prereqs')
+    Import('env', 'base_env', 'prereqs')
 
     env.AppendUnique(LIBPATH=[Dir('.')])
     base_env.AppendUnique(LIBPATH=[Dir('.')])

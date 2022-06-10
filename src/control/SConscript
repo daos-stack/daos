@@ -211,7 +211,7 @@ def scons():
         install_go_bin(denv, gosrc, None, "daos_agent", "daos_agent")
         dmgbin = install_go_bin(denv, gosrc, None, "dmg", "dmg")
         if prereqs.test_requested():
-            drpcbin = install_go_bin(denv, gosrc, None, "drpc_test", "hello_drpc")
+            install_go_bin(denv, gosrc, None, "drpc_test", "hello_drpc")
 
         dbenv = denv.Clone()
         dblibs = dbenv.subst("-L$BUILD_DIR/src/gurt "
@@ -220,7 +220,8 @@ def scons():
                              "-L$BUILD_DIR/src/client/dfs "
                              "-L$BUILD_DIR/src/utils $_RPATH")
         dbenv.AppendENVPath("CGO_LDFLAGS", dblibs, sep=" ")
-        daosbin = install_go_bin(dbenv, gosrc, ['daos_cmd_hdlrs', 'dfs', 'duns', 'daos'], "daos", "daos")
+        daosbin = install_go_bin(dbenv, gosrc, ['daos_cmd_hdlrs', 'dfs', 'duns', 'daos'],
+                                 "daos", "daos")
 
         menv = denv.Clone()
         install_go_manpage(menv, "dmg", dmgbin)
