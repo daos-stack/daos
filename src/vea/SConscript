@@ -1,8 +1,8 @@
 """Build versioned extent allocator"""
-import os
 import daos_build
 
 FILES = ['vea_alloc.c', 'vea_api.c', 'vea_free.c', 'vea_hint.c', 'vea_init.c', 'vea_util.c']
+
 
 def scons():
     """Execute build"""
@@ -21,6 +21,7 @@ def scons():
 
     if prereqs.test_requested():
         SConscript('tests/SConscript', exports='denv')
+
 
 if __name__ == "SCons.Script":
     scons()

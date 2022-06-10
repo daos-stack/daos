@@ -6,9 +6,9 @@
 """
 
 import os
-import distro
 import general_utils
 from collections import OrderedDict
+import distro
 
 from avocado import skip
 from dfuse_test_base import DfuseTestBase

@@ -1,4 +1,5 @@
-"""Build DAOS Addons"""
+"""Build DAOS Add owns"""
+
 
 def scons():
     """Execute build"""
@@ -9,6 +10,7 @@ def scons():
     denv.AppendUnique(LIBPATH=[Dir('.')])
 
     libdaos_tgts.extend(denv.SharedObject(['dc_kv.c']))
+
 
 if __name__ == "SCons.Script":
     scons()
