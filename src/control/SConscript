@@ -74,7 +74,7 @@ def install_go_manpage(menv, name, binary):
     name_ver = f'{name}.8'
     build_path = join('$BUILD_DIR', 'src/control', name_ver)
     install_path = join(menv.subst("$PREFIX"), 'share/man/man8', name_ver)
-    target = menv.Command(build_path, [gen_bin, binary], f'{gen_bin} manpage -o {build_path}')
+    menv.Command(build_path, [gen_bin, binary], f'{gen_bin} manpage -o {build_path}')
     menv.InstallAs(install_path, build_path)
 
 # pylint: disable=too-many-arguments

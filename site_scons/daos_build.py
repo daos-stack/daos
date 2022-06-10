@@ -146,10 +146,10 @@ def test(env, *args, **kwargs):
     denv = env.Clone()
     denv.Replace(RPATH=[])
     add_rpaths(denv, kwargs.get("install_off", None), False, True)
-    test = denv.Program(*args, **kwargs)
+    testbuild = denv.Program(*args, **kwargs)
     deps = _known_deps(denv, **kwargs)
-    denv.Requires(test, deps)
-    return test
+    denv.Requires(testbuild, deps)
+    return testbuild
 
 
 def install(env, subdir, files):

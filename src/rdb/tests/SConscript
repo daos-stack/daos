@@ -15,8 +15,8 @@ def scons():
 
     # rdbt client
     rdbt = daos_build.program(tenv, 'rdbt', ['rdbt.c', 'rpc.c'] + libdaos_tgts,
-                              LIBS=['daos_common_pmem', 'cart', 'gurt', 'uuid', 'isal', 'protobuf-c',
-                                    'pthread'])
+                              LIBS=['daos_common_pmem', 'cart', 'gurt', 'uuid', 'isal',
+                                    'protobuf-c', 'pthread'])
     tenv.Install('$PREFIX/bin', rdbt)
 
 if __name__ == "SCons.Script":

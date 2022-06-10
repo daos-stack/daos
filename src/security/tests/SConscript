@@ -11,9 +11,9 @@ def scons():
                            source=['cli_security_tests.c', dc_security_tgts, mocks],
                            LIBS=['cmocka', 'protobuf-c', 'daos_common', 'gurt'])
 
-    test = daos_build.test(denv, 'srv_acl_tests',
-                           source=['srv_acl_tests.c', '../srv_acl.c', '../auth.pb-c.c', mocks],
-                           LIBS=['cmocka', 'protobuf-c', 'daos_common', 'gurt'])
+    daos_build.test(denv, 'srv_acl_tests',
+                    source=['srv_acl_tests.c', '../srv_acl.c', '../auth.pb-c.c', mocks],
+                    LIBS=['cmocka', 'protobuf-c', 'daos_common', 'gurt'])
 
 if __name__ == "SCons.Script":
     scons()
