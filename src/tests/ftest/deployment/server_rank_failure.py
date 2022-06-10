@@ -138,16 +138,16 @@ class ServerRankFailure(IorTestBase, TestWithTelemetry):
         1. Create a pool and a container. Create a container with or without redundancy
         factor based on container_namespace.
         2. Get the amount of IO inflow to each rank. We expect them to be 0.
-        3. Run IOR with given object class (IO experiment run).
+        3. Run IOR with given object class and let it run through step 7.
         4. Get the amount of IO inflow again.
         5. Get the rank with the largest amount of inflow. Find out its hostname. We'll
         kill engines here. If we use replication, some ranks receive more data than
         others. e.g., With RP_2G1, two ranks get most of the data.
-        6. Run IOR with given object class (Main test run).
-        7. While IOR is running, kill daos_engine processes from the node to simulate a
+        6. While IOR is running, kill daos_engine processes from the node to simulate a
         node failure. (Two engines per node.)
+        7. Wait for IOR to complete.
         8. Verify that IOR failed.
-        9. Restart daos_server service on the two nodes.
+        9. Restart daos_server service.
         10. Verify the system status by calling dmg system query.
         11. Verify that the container Health is HEALTHY.
         12. Run IOR to the same container and verify that it works.
@@ -163,19 +163,27 @@ class ServerRankFailure(IorTestBase, TestWithTelemetry):
         self.add_container(pool=self.pool, namespace=container_namespace)
 
         # 2. Get the amount of IO inflow to each rank.
-        metric = "engine_pool_ops_fetch"
+        metric = "engine_pool_ops_update"
         agg_metrics_before = self.get_aggregate_metrics(metrics=[metric])[metric]
         self.log.info("agg_metrics_before = %s", agg_metrics_before)
 
-        # 3. Run IOR with given object class (IO experiment run).
+        # 3. Run IOR with given object class and let it run through step 7.
         ior_results = {}
         errors = []
         job_num = 1
-        self.run_ior_report_error(
-            job_num=job_num, results=ior_results, file_name="test_file_1",
-            pool=self.pool, container=self.container, namespace=ior_namespace)
-        # Verify just in case.
-        self.verify_ior_worked(ior_results=ior_results, job_num=job_num, errors=errors)
+        mpirun_timeout = self.params.get('sw_deadline', ior_namespace)
+        self.log.info(
+            "Running Mpirun-IOR with Mpirun timeout of %s sec", mpirun_timeout)
+        ior_thread = threading.Thread(
+            target=self.run_ior_report_error,
+            args=[ior_results, job_num, "test_file_1", self.pool, self.container,
+                  ior_namespace, mpirun_timeout])
+
+        ior_thread.start()
+
+        # Wait for a few seconds for IOR to start.
+        self.log.info("Waiting 5 sec for IOR to start writing data...")
+        time.sleep(5)
 
         # 4. Get the amount of IO inflow again.
         agg_metrics_after = self.get_aggregate_metrics(metrics=[metric])[metric]
@@ -200,36 +208,16 @@ class ServerRankFailure(IorTestBase, TestWithTelemetry):
         engine_kill_host = rank_to_host[rank_agg_diffs[-1][0]]
         self.log.info("engine_kill_host = %s", engine_kill_host)
 
-        # 6. Run IOR with given object class (Main test run).
-        job_num = 2
-        # If we don't use timeout, when the engines are killed, Mpirun gets stuck and
-        # waits forever. If we use timeout that's too long, the daos container command
-        # after the server restart will get stuck, so use 10 sec timeout, which is the
-        # same as deadlineForStonewalling in IOR.
-        mpirun_timeout = self.params.get('sw_deadline', ior_namespace)
-        self.log.info(
-            "Running Mpirun-IOR with Mpirun timeout of %s sec", mpirun_timeout)
-        ior_thread = threading.Thread(
-            target=self.run_ior_report_error,
-            args=[ior_results, job_num, "test_file_2", self.pool, self.container,
-                  ior_namespace, mpirun_timeout])
-
-        ior_thread.start()
-
-        # Wait for a few seconds for IOR to start.
-        self.log.info("Waiting 5 sec for IOR to start writing data...")
-        time.sleep(5)
-
-        # 7. While IOR is running, kill daos_engine from two of the ranks.
-        # Arbitrarily select node index, say index 1.
+        # 6. While IOR is running, kill daos_engine from two of the ranks in
+        # engine_kill_host.
         self.kill_engine(engine_kill_host=engine_kill_host)
 
-        # Wait for IOR to complete.
+        # 7. Wait for IOR to complete.
         ior_thread.join()
 
         # 8. Verify that IOR failed.
         self.log.info("----- IOR results %d -----", job_num)
-        self.log.info(ior_results)
+        self.log.info(ior_results[job_num])
         if job_num not in ior_results or ior_results[job_num][0]:
             errors.append("First IOR didn't fail as expected!")
 
@@ -250,9 +238,9 @@ class ServerRankFailure(IorTestBase, TestWithTelemetry):
             errors.append("Container health isn't HEALTHY after server restart!")
 
         # 12. Run IOR and verify that it works.
-        job_num = 3
+        job_num = 2
         self.run_ior_report_error(
-            job_num=job_num, results=ior_results, file_name="test_file_3",
+            job_num=job_num, results=ior_results, file_name="test_file_2",
             pool=self.pool, container=self.container, namespace=ior_namespace)
 
         self.log.info("----- IOR results %d -----", job_num)
@@ -269,7 +257,7 @@ class ServerRankFailure(IorTestBase, TestWithTelemetry):
         verify_rank_failure() for test steps.
 
         :avocado: tags=all,full_regression
-        :avocado: tags=hw,medium,ib2
+        :avocado: tags=hw,medium
         :avocado: tags=deployment,rank_failure
         :avocado: tags=rank_failure_wo_rf
         """
@@ -284,7 +272,7 @@ class ServerRankFailure(IorTestBase, TestWithTelemetry):
         verify_rank_failure() for test steps.
 
         :avocado: tags=all,full_regression
-        :avocado: tags=hw,medium,ib2
+        :avocado: tags=hw,medium
         :avocado: tags=deployment,rank_failure
         :avocado: tags=rank_failure_with_rp
         """
@@ -297,7 +285,7 @@ class ServerRankFailure(IorTestBase, TestWithTelemetry):
         Test rank failure with redundancy factor and EC_2P1G1 object class. See
         verify_rank_failure() for test steps.
         :avocado: tags=all,full_regression
-        :avocado: tags=hw,medium,ib2
+        :avocado: tags=hw,medium
         :avocado: tags=deployment,rank_failure
         :avocado: tags=rank_failure_with_ec
         """
@@ -327,7 +315,7 @@ class ServerRankFailure(IorTestBase, TestWithTelemetry):
         killed.
 
         :avocado: tags=all,full_regression
-        :avocado: tags=hw,medium,ib2
+        :avocado: tags=hw,medium
         :avocado: tags=deployment,rank_failure
         :avocado: tags=rank_failure_isolation
         """

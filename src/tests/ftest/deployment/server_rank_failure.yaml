@@ -67,7 +67,7 @@ ior: &ior_base
     transfer_size: 512K
     # Total size is block_size * ppn.
     block_size: 50G
-    sw_deadline: 10
+    sw_deadline: 300
 ior_wo_rf:
   <<: *ior_base
   dfs_oclass: SX
