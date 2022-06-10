@@ -1244,12 +1244,15 @@ dfuse_write(int fd, const void *buf, size_t len)
 	if (rc != 0)
 		goto do_real_write;
 
+	if (drop_reference_if_disabled(entry))
+		goto do_real_write;
+
+	/* This function might get called from daos logging itself so do not log anything until
+	 * after the disabled check above or the logging will recurse and deadlock.
+	 */
 	DFUSE_LOG_DEBUG("write(fd=%d, buf=%p, len=%zu) "
 			"intercepted, bypass=%s", fd,
 			buf, len, bypass_status[entry->fd_status]);
-
-	if (drop_reference_if_disabled(entry))
-		goto do_real_write;
 
 	oldpos = entry->fd_pos;
 	bytes_written = pwrite_rpc(entry, buf, len, entry->fd_pos);
@@ -1432,10 +1435,14 @@ dfuse_fseeko(FILE *stream, off_t offset, int whence)
 	if (drop_reference_if_disabled(entry))
 		goto do_real_fseeko;
 
+	DFUSE_TRA_ERROR(entry->fd_dfsoh, "Old offset %zd %zd %d", new_offset, entry->fd_pos, errno);
+
 	if (whence == SEEK_SET) {
+#if 0
 		off_t ni = __real_fseeko(stream, offset, whence);
 
 		DFUSE_TRA_ERROR(entry->fd_dfsoh, "Patching up, offset %#zx", ni);
+#endif
 		new_offset = offset;
 		entry->fd_eof = false;
 
@@ -1452,12 +1459,16 @@ dfuse_fseeko(FILE *stream, off_t offset, int whence)
 		goto cleanup;
 	}
 
+	DFUSE_TRA_ERROR(entry->fd_dfsoh, "Middle offset %zd %zd %d", new_offset, entry->fd_pos, errno);
+
 	if (new_offset < 0) {
 		new_offset = (off_t)-1;
 		errno = EINVAL;
 	} else {
 		entry->fd_pos = new_offset;
 	}
+
+	DFUSE_TRA_ERROR(entry->fd_dfsoh, "New offset %zd %zd %d", new_offset, entry->fd_pos, errno);
 
 cleanup:
 
@@ -1998,7 +2009,7 @@ dfuse_fread(void *ptr, size_t size, size_t nmemb, FILE *stream)
 	if (drop_reference_if_disabled(entry))
 		goto do_real_fread;
 
-	DFUSE_TRA_INFO(entry->fd_dfsoh, "performing fread from %#zx", entry->fd_pos);
+	DFUSE_TRA_INFO(entry->fd_dfsoh, "performing fread from %#zx %zi %zi", entry->fd_pos, size, nmemb);
 
 	len = nmemb * size;
 
@@ -2021,6 +2032,10 @@ dfuse_fread(void *ptr, size_t size, size_t nmemb, FILE *stream)
 	}
 
 	vector_decref(&fd_table, entry);
+
+	char *_ptr = ptr;
+
+	DFUSE_TRA_INFO(entry->fd_dfsoh, "read %zi %x", nread, (int)_ptr[0]);
 	return nread;
 
 do_real_fread:
@@ -2260,8 +2275,6 @@ dfuse_fputc(int c, FILE *stream)
 	int fd;
 	int rc;
 
-	D_ERROR("Unsupported function %p\n", stream);
-
 	fd = fileno(stream);
 	if (fd == -1)
 		goto do_real_fn;
@@ -2416,7 +2429,7 @@ dfuse_fgets(char *str, int n, FILE *stream)
 	if (drop_reference_if_disabled(entry))
 		goto do_real_fn;
 
-	D_ERROR("Unsupported function, disabling streaming %p\n", stream);
+	D_INFO("Unsupported function, disabling streaming %p\n", stream);
 	entry->fd_status = DFUSE_IO_DIS_STREAM;
 
 	vector_decref(&fd_table, entry);
