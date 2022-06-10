@@ -302,6 +302,8 @@ def run_task(hosts, command, timeout=None, verbose=False):
 
     """
     if not isinstance(hosts, NodeSet):
+        if not isinstance(hosts, list):
+            hosts = [hosts]
         hosts = NodeSet.fromlist(hosts)
     task = task_self()
     # Enable forwarding of the ssh authentication agent connection
@@ -614,7 +616,7 @@ def check_file_exists(hosts, filename, user=None, directory=False,
     if sudo:
         command = "sudo " + command
 
-    task = run_task(hosts, command)
+    task = run_task(hosts, command, verbose=True)
     for ret_code, node_list in task.iter_retcodes():
         if ret_code != 0:
             missing_file.add(NodeSet.fromlist(node_list))

@@ -1,12 +1,12 @@
 #!/usr/bin/python
 """
-  (C) Copyright 2017-2021 Intel Corporation.
+  (C) Copyright 2017-2022 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 
 
-from general_utils import run_command
+from general_utils import run_command, check_file_exists
 
 
 def check_for_pool(host, uuid):
@@ -17,16 +17,16 @@ def check_for_pool(host, uuid):
         uuid: Pool uuid to check if exists
 
     Returns:
-        int: subprocess return code
+        bool: True if pool folder exists, False otherwise
 
     """
-    cmd = "/usr/bin/ssh {} test -e /mnt/daos/{}".format(host, uuid)
-    result = run_command(cmd, raise_exception=False)
-    if result.exit_status == 0:
-        print("{} exists".format(uuid))
+    pool_dir = "/mnt/daos/{}".format(uuid)
+    result = check_file_exists(host, pool_dir, directory=True, sudo=True)
+    if result[0]:
+        print("{} exists on {}".format(pool_dir, host))
     else:
-        print("{} does not exist".format(uuid))
-    return result.exit_status
+        print("{} does not exist on {}".format(pool_dir, host))
+    return result[0]
 
 
 def cleanup_pools(hosts):
@@ -37,4 +37,4 @@ def cleanup_pools(hosts):
 
     """
     for host in hosts:
-        run_command("/usr/bin/ssh {} rm -rf /mnt/daos/*".format(host))
+        run_command("/usr/bin/ssh {} sudo rm -rf /mnt/daos/*".format(host))
