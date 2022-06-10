@@ -40,7 +40,7 @@ def CheckCmockaSkip(context):
     pname = prog.get_abspath()
     rc = subprocess.call(pname, env={"CMOCKA_TEST_ABORT": "1"},
                          stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-    #in case of abort rc is -6 instead of 134 (128+6) with shell ...
+    # in case of abort rc is -6 instead of 134 (128+6) with shell ...
     if rc == -6:
         sys.stdout.write(" (Bug reproduced) ")
     else:
@@ -81,7 +81,7 @@ def scons():
     dfusetest = daos_build.program(dfuse_env, File("dfuse_test.c"), LIBS=['cmocka'])
     denv.Install('$PREFIX/bin/', dfusetest)
 
-    denv.AppendUnique(CPPPATH=["#/src/client/dfs"])
+    denv.AppendUnique(CPPPATH=[Dir('../../client/dfs').srcnode()])
     denv.AppendUnique(CPPPATH=[Dir('../../mgmt').srcnode()])
 
     daos_test_tgt = denv.SharedObject(['daos_test_common.c'])
@@ -106,23 +106,23 @@ def scons():
                     daos_aggregate_ec.c daos_degrade_ec.c
                     daos_extend_simple.c daos_obj_ec.c""")
 
-    newenv.AppendUnique(LIBPATH=["$BUILD_DIR/src/client/dfs"])
+    newenv.AppendUnique(LIBPATH=[Dir('../../client/dfs')])
     daostest = daos_build.program(newenv, 'daos_test', c_files + daos_test_tgt,
                                   LIBS=['daos_common'] + libraries)
 
     c_files = Split("""dfs_unit_test.c dfs_par_test.c dfs_test.c """
                     """dfs_sys_unit_test.c""")
-    newenv.AppendUnique(CPPPATH=["#/src/client/dfs"])
+    newenv.AppendUnique(CPPPATH=[Dir('../../client/dfs').srcnode()])
     dfstest = daos_build.program(newenv, 'dfs_test', c_files + daos_test_tgt,
                                  LIBS=['daos_common'] + libraries)
 
     denv.Install('$PREFIX/bin/', daostest)
     denv.Install('$PREFIX/bin/', dfstest)
-    denv.Install('$PREFIX/bin/io_conf', Glob('io_conf/daos_io_conf_1'))
-    denv.Install('$PREFIX/bin/io_conf', Glob('io_conf/daos_io_conf_2'))
-    denv.Install('$PREFIX/bin/io_conf', Glob('io_conf/daos_io_conf_3'))
-    denv.Install('$PREFIX/bin/io_conf', Glob('io_conf/daos_io_conf_4'))
-    denv.Install('$PREFIX/bin/io_conf', Glob('io_conf/daos_io_conf_5'))
+    denv.Install('$PREFIX/bin/io_conf', 'io_conf/daos_io_conf_1')
+    denv.Install('$PREFIX/bin/io_conf', 'io_conf/daos_io_conf_2')
+    denv.Install('$PREFIX/bin/io_conf', 'io_conf/daos_io_conf_3')
+    denv.Install('$PREFIX/bin/io_conf', 'io_conf/daos_io_conf_4')
+    denv.Install('$PREFIX/bin/io_conf', 'io_conf/daos_io_conf_5')
     SConscript('io_conf/SConscript', exports='denv')
 
 if __name__ == "SCons.Script":

@@ -776,6 +776,8 @@ ds_pool_stop(uuid_t uuid)
 {
 	struct ds_pool *pool;
 
+	ds_pool_failed_remove(uuid);
+
 	pool = ds_pool_lookup(uuid);
 	if (pool == NULL)
 		return;
@@ -1272,7 +1274,8 @@ update_pool_group(struct ds_pool *pool, struct pool_map *map)
 	D_DEBUG(DB_MD, DF_UUID": %u -> %u\n", DP_UUID(pool->sp_uuid), version,
 		pool_map_get_version(map));
 
-	rc = map_ranks_init(map, MAP_RANKS_UP, &ranks);
+	rc = map_ranks_init(map, PO_COMP_ST_UP | PO_COMP_ST_UPIN |
+				 PO_COMP_ST_DRAIN | PO_COMP_ST_NEW, &ranks);
 	if (rc != 0)
 		return rc;
 

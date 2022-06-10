@@ -279,6 +279,14 @@
    fun:par_init
 }
 {
+   memalign issue in MPI
+   Memcheck:Leak
+   match-leak-kinds: all
+   fun:memalign
+   ...
+   fun:par_init
+}
+{
    par_fini mpi leak
    Memcheck:Leak
    match-leak-kinds: all

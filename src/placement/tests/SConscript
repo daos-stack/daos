@@ -5,7 +5,7 @@ def scons():
     """Execute build"""
     Import('denv', 'common_tgts')
 
-    denv.AppendUnique(LIBPATH=['../../client/api'])
+    denv.AppendUnique(LIBPATH=[Dir('../../client/api')])
 
     denv.AppendUnique(RPATH_FULL=['$PREFIX/lib64/daos_srv'])
 
