@@ -10,6 +10,7 @@ import daos_build
 
 SELF_TEST = 'self_test.c'
 
+
 def scons():
     """scons function"""
 
@@ -23,6 +24,7 @@ def scons():
 
     self_test = daos_build.program(tenv, [SELF_TEST, cart_utils_objs])
     tenv.Install(os.path.join("$PREFIX", 'bin'), self_test)
+
 
 if __name__ == "SCons.Script":
     scons()

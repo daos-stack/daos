@@ -1,6 +1,7 @@
 """Build object tests"""
 import daos_build
 
+
 def scons():
     """Execute build"""
     Import('env', 'prereqs')
@@ -35,6 +36,7 @@ def scons():
     denv.Install('$PREFIX/bin/', ring_pl_test)
     denv.Install('$PREFIX/bin/', jump_pl_test)
     denv.Install('$PREFIX/bin/', pl_bench)
+
 
 if __name__ == "SCons.Script":
     scons()

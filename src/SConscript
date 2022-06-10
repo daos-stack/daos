@@ -133,5 +133,6 @@ def scons():
     SConscript('placement/tests/SConscript')
     SConscript('tests/SConscript')
 
+
 if __name__ == "SCons.Script":
     scons()

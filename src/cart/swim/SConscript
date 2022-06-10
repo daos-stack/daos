@@ -23,5 +23,6 @@ def scons():
     Default(swim_targets)
     Export('swim_targets')
 
+
 if __name__ == "SCons.Script":
     scons()

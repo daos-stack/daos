@@ -38,5 +38,6 @@ def scons():
     env.Install('$PREFIX/lib64/', daos_hdlrs_lib)
     libs += ['daos_cmd_hdlrs']
 
+
 if __name__ == "SCons.Script":
     scons()

@@ -1,6 +1,7 @@
 """Build container library"""
 import daos_build
 
+
 def scons():
     """Execute build"""
     Import('env', 'prereqs', 'libdaos_tgts')
@@ -29,6 +30,7 @@ def scons():
                                   'srv_metrics.c', common],
                                  install_off="../..")
     senv.Install('$PREFIX/lib64/daos_srv', ds_cont)
+
 
 if __name__ == "SCons.Script":
     scons()

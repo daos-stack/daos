@@ -1,6 +1,7 @@
 """Build rdb tests"""
 import daos_build
 
+
 def scons():
     """Execute build"""
     Import('denv', 'prereqs', 'libdaos_tgts')
@@ -18,6 +19,7 @@ def scons():
                               LIBS=['daos_common_pmem', 'cart', 'gurt', 'uuid', 'isal',
                                     'protobuf-c', 'pthread'])
     tenv.Install('$PREFIX/bin', rdbt)
+
 
 if __name__ == "SCons.Script":
     scons()

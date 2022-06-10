@@ -1,6 +1,7 @@
 """Build daos security tests"""
 import daos_build
 
+
 def scons():
     """Execute build"""
     Import('denv', 'dc_security_tgts')
@@ -14,6 +15,7 @@ def scons():
     daos_build.test(denv, 'srv_acl_tests',
                     source=['srv_acl_tests.c', '../srv_acl.c', '../auth.pb-c.c', mocks],
                     LIBS=['cmocka', 'protobuf-c', 'daos_common', 'gurt'])
+
 
 if __name__ == "SCons.Script":
     scons()

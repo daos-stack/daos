@@ -78,6 +78,7 @@ def install_go_manpage(menv, name, binary):
     menv.Command(build_path, [gen_bin, binary], f'{gen_bin} manpage -o {build_path}')
     menv.InstallAs(install_path, build_path)
 
+
 # pylint: disable=too-many-arguments
 def install_go_bin(denv, gosrc, libs, name, install_name):
     """
@@ -117,9 +118,9 @@ def install_go_bin(denv, gosrc, libs, name, install_name):
     if 'GOCACHE' in os.environ:
         denv['ENV']['GOCACHE'] = os.environ['GOCACHE']
     target = daos_build.run_command(denv, build_bin, src, libs,
-                          f'cd {gosrc}; {GO_BIN} build -v -mod vendor {go_ldflags()} ' +
-                          f'{get_build_flags(denv)} {get_build_tags(denv)} ' +
-                          f'-o {build_bin} {install_src}')
+                                    f'cd {gosrc}; {GO_BIN} build -v -mod vendor {go_ldflags()} ' +
+                                    f'{get_build_flags(denv)} {get_build_tags(denv)} ' +
+                                    f'-o {build_bin} {install_src}')
     # Use the intermediate build location in order to play nicely
     # with --install-sandbox.
     AlwaysBuild(target)
@@ -274,6 +275,7 @@ def scons():
     if is_firmware_mgmt_build(denv):
         print("(EXPERIMENTAL) Building DAOS firmware tools")
         install_go_bin(aenv, gosrc, ['nvme_control'], "daos_firmware", "daos_firmware")
+
 
 if __name__ == "SCons.Script":
     scons()

@@ -3,6 +3,7 @@ import daos_build
 
 FILES = ['smd_device.c', 'smd_pool.c', 'smd_store.c']
 
+
 def scons():
     """Execute build"""
     Import('env', 'prereqs')

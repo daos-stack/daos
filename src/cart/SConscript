@@ -47,6 +47,7 @@ def macro_expand(target, source, env):
                   % (tgts, grepv, sed_d, h_file))
 # pylint: enable=unused-argument
 
+
 def scons():
     """Scons function"""
 

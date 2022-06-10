@@ -15,8 +15,8 @@ def scons():
                                 LIBS=['daos', 'daos_common', 'gurt', 'cart',
                                       'pthread', 'cmocka'])
 
-
     denv.Install('$PREFIX/bin/', [eq_tests, agent_tests, job_tests])
+
 
 if __name__ == "SCons.Script":
     scons()

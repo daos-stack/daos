@@ -30,6 +30,7 @@ def build_daos_common(env, client, prereqs):
     denv.Install('$PREFIX/lib64/', common)
     return common
 
+
 def scons():
     """Execute build"""
     Import('env', 'base_env', 'prereqs')

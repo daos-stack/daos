@@ -30,6 +30,7 @@ def build_static_tests(env):
 
     return []
 
+
 def scons():
     """Scons function"""
 
@@ -78,6 +79,7 @@ def scons():
     Default(il_test)
 
     tenv.Install('$PREFIX/lib/daos/TESTING/tests', il_test)
+
 
 if __name__ == "SCons.Script":
     scons()

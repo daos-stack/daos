@@ -1,6 +1,7 @@
 """Build placement code"""
 import daos_build
 
+
 def scons():
     """Execute build"""
     Import('env', 'prereqs', 'libdaos_tgts')
@@ -27,6 +28,7 @@ def scons():
     srv = daos_build.library(denv, 'placement', common_tgts,
                              install_off="../..", LIBS=libraries)
     denv.Install('$PREFIX/lib64/daos_srv', srv)
+
 
 if __name__ == "SCons.Script":
     scons()

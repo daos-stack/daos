@@ -34,5 +34,6 @@ def scons():
     SConscript('examples/SConscript')
     SConscript('tests/SConscript')
 
+
 if __name__ == "SCons.Script":
     scons()

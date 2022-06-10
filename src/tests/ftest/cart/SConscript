@@ -59,6 +59,7 @@ TEST_GROUP_NP_TESTS = ['test_group_np_srv.c', 'test_group_np_cli.c',
                        'no_pmix_group_version.c']
 FAULT_STATUS_TEST = 'fault_status.c'
 
+
 def scons():
     """scons function"""
 
@@ -113,6 +114,7 @@ def scons():
 
     # Call scons on unit test directory
     SConscript('utest/SConscript')
+
 
 if __name__ == "SCons.Script":
     scons()

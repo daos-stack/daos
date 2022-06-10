@@ -1,6 +1,7 @@
 """Build pool library"""
 import daos_build
 
+
 def scons():
     """Execute build"""
     Import('env', 'prereqs', 'libdaos_tgts')
@@ -27,6 +28,7 @@ def scons():
                                   'srv_pool_map.c', 'srv_metrics.c', common],
                                  install_off="../..")
     denv.Install('$PREFIX/lib64/daos_srv', ds_pool)
+
 
 if __name__ == "SCons.Script":
     scons()

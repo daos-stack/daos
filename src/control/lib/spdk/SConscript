@@ -3,6 +3,7 @@
 from os.path import join
 import daos_build
 
+
 def scons():
     """Execute build"""
     Import('denv', 'prereqs', 'control_tgts')
@@ -12,7 +13,7 @@ def scons():
     senv = denv.Clone()
     prereqs.require(senv, 'pmdk', 'spdk', 'ofi', 'hwloc')
     if senv["CC"] == 'icx':
-        #Avoid need to link Intel libraries in go build
+        # Avoid need to link Intel libraries in go build
         senv["CC"] = "gcc"
 
     senv.AppendUnique(CPPPATH=[join(Dir('.').srcnode().abspath, "include")])
@@ -34,6 +35,7 @@ def scons():
 
     if prereqs.test_requested():
         SConscript('ctests/SConscript', exports='senv')
+
 
 if __name__ == "SCons.Script":
     scons()
