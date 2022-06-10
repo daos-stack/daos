@@ -758,3 +758,92 @@ func TestServer_getNetDevClass(t *testing.T) {
 		})
 	}
 }
+
+func TestServerUtils_getControlAddr(t *testing.T) {
+	testTCPAddr := &net.TCPAddr{
+		IP:   net.ParseIP("127.0.0.1"),
+		Port: 1234,
+	}
+
+	for name, tc := range map[string]struct {
+		params  ctlAddrParams
+		expAddr *net.TCPAddr
+		expErr  error
+	}{
+		"success (no iface)": {
+			params: ctlAddrParams{
+				port: testTCPAddr.Port,
+				resolveAddr: func(net, addr string) (*net.TCPAddr, error) {
+					test.AssertEqual(t, "tcp", net, "")
+					test.AssertEqual(t, "[0.0.0.0]:1234", addr, "")
+					return testTCPAddr, nil
+				},
+			},
+			expAddr: testTCPAddr,
+		},
+		"resolve fails": {
+			params: ctlAddrParams{
+				resolveAddr: func(_, _ string) (*net.TCPAddr, error) {
+					return nil, errors.New("mock resolve")
+				},
+			},
+			expErr: errors.New("mock resolve"),
+		},
+		"get iface addrs fails": {
+			params: ctlAddrParams{
+				iface: "net0",
+				port:  1234,
+				getIfaceAddrs: func(_ string) ([]net.Addr, error) {
+					return nil, errors.New("mock getIfaceAddrs")
+				},
+			},
+			expErr: errors.New("mock getIfaceAddrs"),
+		},
+		"iface addrs not usable": {
+			params: ctlAddrParams{
+				iface: "net0",
+				port:  1234,
+				getIfaceAddrs: func(_ string) ([]net.Addr, error) {
+					return []net.Addr{
+						&net.IPNet{
+							IP: net.ParseIP("::1"), // IPv6
+						},
+						&net.UnixAddr{}, // unsupported type
+					}, nil
+				},
+			},
+			expErr: errors.New("no usable IPv4 addresses"),
+		},
+		"success with iface": {
+			params: ctlAddrParams{
+				iface: "net0",
+				port:  1234,
+				getIfaceAddrs: func(iface string) ([]net.Addr, error) {
+					test.AssertEqual(t, "net0", iface, "")
+					return []net.Addr{
+						&net.IPNet{
+							IP: net.ParseIP("::1"), // IPv6
+						},
+						&net.IPNet{
+							IP: testTCPAddr.IP,
+						},
+					}, nil
+				},
+			},
+			expAddr: testTCPAddr,
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			if tc.params.resolveAddr == nil {
+				tc.params.resolveAddr = func(_, _ string) (*net.TCPAddr, error) {
+					return testTCPAddr, nil
+				}
+			}
+
+			addr, err := getControlAddr(tc.params)
+
+			test.CmpErr(t, tc.expErr, err)
+			test.AssertEqual(t, tc.expAddr.String(), addr.String(), "")
+		})
+	}
+}
