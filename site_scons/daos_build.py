@@ -1,6 +1,5 @@
 """Common DAOS build functions"""
 import os
-import sys
 
 from SCons.Subst import Literal
 from SCons.Script import Dir
