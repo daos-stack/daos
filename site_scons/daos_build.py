@@ -78,7 +78,8 @@ def add_build_rpath(env, pathin="."):
 
 def _known_deps(env, **kwargs):
     """Get list of known libraries"""
-    known = []
+    shared_libs = []
+    static_libs = []
     if 'LIBS' in kwargs:
         libs = set(kwargs['LIBS'])
     else:
@@ -88,10 +89,10 @@ def _known_deps(env, **kwargs):
     for item in known_libs:
         shared = libraries[item].get('shared', None)
         if shared is not None:
-            known.append(shared)
+            shared_libs.append(shared)
             continue
-        known.append(libraries[item].get('static'))
-    return known
+        static_libs.append(libraries[item].get('static'))
+    return (static_libs, shared_libs)
 
 
 def _get_libname(*args, **kwargs):
@@ -114,10 +115,10 @@ def _add_lib(libtype, libname, target):
 
 def run_command(env, target, sources, daos_libs, command):
     """Run Command builder"""
-    deps = _known_deps(env, LIBS=daos_libs)
-    result = env.Command(target, sources + deps, command)
+    static_deps, shared_deps = _known_deps(env, LIBS=daos_libs)
+    result = env.Command(target, sources + static_deps + shared_deps, command)
     # Libraries in this case are used to force rebuild, so use Depends
-    Depends(result, deps)
+    Depends(result, static_deps + shared_deps)
     return result
 
 
@@ -126,8 +127,9 @@ def static_library(env, *args, **kwargs):
     lib = env.StaticLibrary(*args, **kwargs)
     libname = _get_libname(*args, **kwargs)
     _add_lib('static', libname, lib)
-    deps = _known_deps(env, **kwargs)
-    env.Requires(lib, deps)
+    static_deps, shared_deps = _known_deps(env, **kwargs)
+    Depends(lib, static_deps)
+    env.Requires(lib, shared_deps)
     return lib
 
 
@@ -139,8 +141,9 @@ def library(env, *args, **kwargs):
     lib = denv.SharedLibrary(*args, **kwargs)
     libname = _get_libname(*args, **kwargs)
     _add_lib('shared', libname, lib)
-    deps = _known_deps(denv, **kwargs)
-    env.Requires(lib, deps)
+    static_deps, shared_deps = _known_deps(denv, **kwargs)
+    Depends(lib, static_deps)
+    env.Requires(lib, shared_deps)
     return lib
 
 
@@ -150,8 +153,9 @@ def program(env, *args, **kwargs):
     denv.Replace(RPATH=[])
     add_rpaths(denv, kwargs.get('install_off', '..'), False, True)
     prog = denv.Program(*args, **kwargs)
-    deps = _known_deps(denv, **kwargs)
-    env.Requires(prog, deps)
+    static_deps, shared_deps = _known_deps(env, **kwargs)
+    Depends(prog, static_deps)
+    env.Requires(prog, shared_deps)
     return prog
 
 
@@ -161,8 +165,9 @@ def test(env, *args, **kwargs):
     denv.Replace(RPATH=[])
     add_rpaths(denv, kwargs.get("install_off", None), False, True)
     testbuild = denv.Program(*args, **kwargs)
-    deps = _known_deps(denv, **kwargs)
-    env.Requires(testbuild, deps)
+    static_deps, shared_deps = _known_deps(env, **kwargs)
+    Depends(testbuild, static_deps)
+    env.Requires(testbuild, shared_deps)
     return testbuild
 
 
