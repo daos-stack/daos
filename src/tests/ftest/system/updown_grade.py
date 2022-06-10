@@ -111,7 +111,7 @@ class UpgradeDowngradeTest(IorTestBase):
                     "val={} and received val={}".format(attr, value,
                                         decoded.get(attr.decode(), None)))
 
-    def check_result(result):
+    def check_result(self, result):
         """check for command result, raise failure when error cncountered
 
         Args:
