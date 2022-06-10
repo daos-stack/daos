@@ -23,7 +23,7 @@ def scons():
     if not prereqs.server_requested():
         return
 
-    # generate server module - may be removed in future
+    # generate server module
     print("libs = %s" % denv.subst("$LIBS"))
     srv = daos_build.library(denv, 'placement', common_tgts,
                              install_off="../..", LIBS=libraries)
