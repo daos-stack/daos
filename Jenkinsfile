@@ -45,7 +45,7 @@ pipeline {
     agent { label 'lightweight' }
 
     triggers {
-        cron(env.BRANCH_NAME == 'master' ? 'TZ=America/Toronto\n0 0 * * *\n' : '' +
+        cron(env.BRANCH_NAME == 'master' ? 'TZ=UTC\n0 0 * * *\n' : '' +
              env.BRANCH_NAME == 'weekly-testing' ? 'H 0 * * 6' : '' )
     }
 
@@ -84,6 +84,12 @@ pipeline {
                             'CAUTION: only use in combination with a reduced ' +
                             'number of tests specified with the TestTag ' +
                             'parameter.')
+        string(name: 'TestProvider',
+               defaultValue: "",
+               description: 'Test-provider to use for this run.  Specifies the default provider ' +
+                            'to use the daos_server config file when running functional tests' +
+                            '(the launch.py --provider argument;  i.e. "ucx+dc_x", "ofi+verbs", '+
+                            '"ofi+tcp")')
         booleanParam(name: 'CI_BUILD_PACKAGES_ONLY',
                      defaultValue: false,
                      description: 'Only build RPM and DEB packages, Skip unit tests.')
@@ -105,9 +111,6 @@ pipeline {
         string(name: 'CI_UBUNTU20.04_TARGET',
                defaultValue: '',
                description: 'Image to used for Ubuntu 20 CI tests.  I.e. ubuntu20.04, etc.')
-        booleanParam(name: 'CI_RPM_el7_NOBUILD',
-                     defaultValue: false,
-                     description: 'Do not build RPM packages for CentOS 7')
         booleanParam(name: 'CI_RPM_el8_NOBUILD',
                      defaultValue: false,
                      description: 'Do not build RPM packages for EL 8')
@@ -126,9 +129,6 @@ pipeline {
         booleanParam(name: 'CI_UNIT_TEST_MEMCHECK',
                      defaultValue: true,
                      description: 'Run the Unit Memcheck CI tests')
-        booleanParam(name: 'CI_FUNCTIONAL_el7_TEST',
-                     defaultValue: true,
-                     description: 'Run the functional CentOS 7 CI tests')
         booleanParam(name: 'CI_MORE_FUNCTIONAL_PR_TESTS',
                      defaultValue: false,
                      description: 'Enable more distros for functional CI tests')
@@ -144,12 +144,6 @@ pipeline {
                      defaultValue: false,
                      description: 'Run the functional Ubuntu 20 CI tests' +
                                   '  Requires CI_MORE_FUNCTIONAL_PR_TESTS')
-        booleanParam(name: 'CI_RPMS_el7_TEST',
-                     defaultValue: true,
-                     description: 'Run the CentOS 7 RPM CI tests')
-        booleanParam(name: 'CI_SCAN_RPMS_el7_TEST',
-                     defaultValue: true,
-                     description: 'Run the Malware Scan for CentOS 7 RPM CI tests')
         booleanParam(name: 'CI_small_TEST',
                      defaultValue: true,
                      description: 'Run the Small Cluster CI tests')
@@ -188,6 +182,23 @@ pipeline {
                 script {
                     env.COMMIT_MESSAGE = sh(script: 'git show -s --format=%B',
                                             returnStdout: true).trim()
+                }
+            }
+        }
+        stage('Check PR') {
+            when { changeRequest() }
+            steps {
+                catchError(stageResult: 'UNSTABLE', buildResult: 'SUCCESS',
+                           message: "PR did not get committed with required git hooks.  Please see utils/githooks/README.md.") {
+                    sh 'if ! ' + cachedCommitPragma('Required-githooks', 'false') + '''; then
+                           echo "PR did not get committed with required git hooks.  Please see utils/githooks/README.md."
+                           exit 1
+                        fi'''
+                }
+            }
+            post {
+                unsuccessful {
+                    echo "PR did not get committed with required git hooks.  Please see utils/githooks/README.md."
                 }
             }
         }
@@ -301,41 +312,6 @@ pipeline {
                 expression { ! skipStage() }
             }
             parallel {
-                stage('Build RPM on CentOS 7') {
-                    when {
-                        beforeAgent true
-                        expression { ! skipStage() }
-                    }
-                    agent {
-                        dockerfile {
-                            filename 'Dockerfile.mockbuild'
-                            dir 'utils/rpms/packaging'
-                            label 'docker_runner'
-                            additionalBuildArgs dockerBuildArgs()
-                            args  '--cap-add=SYS_ADMIN'
-                        }
-                    }
-                    steps {
-                        buildRpm()
-                    }
-                    post {
-                        success {
-                            buildRpmPost condition: 'success'
-                        }
-                        unstable {
-                            buildRpmPost condition: 'unstable'
-                        }
-                        failure {
-                            buildRpmPost condition: 'failure'
-                        }
-                        unsuccessful {
-                            buildRpmPost condition: 'unsuccessful'
-                        }
-                        cleanup {
-                            buildRpmPost condition: 'cleanup'
-                        }
-                    }
-                }
                 stage('Build RPM on EL 8') {
                     when {
                         beforeAgent true
@@ -461,7 +437,6 @@ pipeline {
                     steps {
                         sconsBuild parallel_build: parallelBuild(),
                                    stash_files: 'ci/test_files_to_stash.txt',
-                                   scons_exe: 'scons-3',
                                    scons_args: sconsFaultsArgs()
                     }
                     post {
@@ -495,7 +470,6 @@ pipeline {
                     steps {
                         sconsBuild parallel_build: parallelBuild(),
                                    stash_files: 'ci/test_files_to_stash.txt',
-                                   scons_exe: 'scons-3',
                                    scons_args: sconsFaultsArgs()
                     }
                     post {
@@ -673,8 +647,7 @@ pipeline {
                     }
                     steps {
                         sconsBuild coverity: "daos-stack/daos",
-                                   parallel_build: parallelBuild(),
-                                   scons_exe: 'scons-3'
+                                   parallel_build: parallelBuild()
                     }
                     post {
                         success {
@@ -685,25 +658,6 @@ pipeline {
                         }
                     }
                 } // stage('Coverity on CentOS 7')
-                stage('Functional on CentOS 7') {
-                    when {
-                        beforeAgent true
-                        expression { ! skipStage() }
-                    }
-                    agent {
-                        label params.CI_FUNCTIONAL_VM9_LABEL
-                    }
-                    steps {
-                        functionalTest inst_repos: daosRepos(),
-                                       inst_rpms: functionalPackages(1, next_version),
-                                       test_function: 'runTestFunctionalV2'
-                    }
-                    post {
-                        always {
-                            functionalTestPostV2()
-                        }
-                    }
-                } // stage('Functional on CentOS 7')
                 stage('Functional on EL 8 with Valgrind') {
                     when {
                         beforeAgent true
@@ -714,7 +668,7 @@ pipeline {
                     }
                     steps {
                         functionalTest inst_repos: daosRepos(),
-                                       inst_rpms: functionalPackages(1, next_version),
+                                       inst_rpms: functionalPackages(1, next_version, "client-tests-openmpi"),
                                        test_function: 'runTestFunctionalV2'
                     }
                     post {
@@ -733,7 +687,7 @@ pipeline {
                     }
                     steps {
                         functionalTest inst_repos: daosRepos(),
-                                       inst_rpms: functionalPackages(1, next_version),
+                                       inst_rpms: functionalPackages(1, next_version, "client-tests-openmpi"),
                                        test_function: 'runTestFunctionalV2'
                     }
                     post {
@@ -752,7 +706,7 @@ pipeline {
                     }
                     steps {
                         functionalTest inst_repos: daosRepos(),
-                                       inst_rpms: functionalPackages(1, next_version),
+                                       inst_rpms: functionalPackages(1, next_version, "client-tests-openmpi"),
                                        test_function: 'runTestFunctionalV2'
                     }
                     post {
@@ -771,7 +725,7 @@ pipeline {
                     }
                     steps {
                         functionalTest inst_repos: daosRepos(),
-                                       inst_rpms: functionalPackages(1, next_version),
+                                       inst_rpms: functionalPackages(1, next_version, "client-tests-openmpi"),
                                        test_function: 'runTestFunctionalV2'
                     }
                     post {
@@ -780,37 +734,6 @@ pipeline {
                         }
                     } // post
                 } // stage('Functional on Ubuntu 20.04')
-                stage('Test CentOS 7 RPMs') {
-                    when {
-                        beforeAgent true
-                        expression { ! skipStage() }
-                    }
-                    agent {
-                        label params.CI_UNIT_VM1_LABEL
-                    }
-                    steps {
-                        testRpm inst_repos: daosRepos(),
-                                daos_pkg_version: daosPackagesVersion(next_version)
-                   }
-                } // stage('Test CentOS 7 RPMs')
-                stage('Scan CentOS 7 RPMs') {
-                    when {
-                        beforeAgent true
-                        expression { ! skipStage() }
-                    }
-                    agent {
-                        label params.CI_UNIT_VM1_LABEL
-                    }
-                    steps {
-                        scanRpms inst_repos: daosRepos(),
-                                 daos_pkg_version: daosPackagesVersion(next_version)
-                    }
-                    post {
-                        always {
-                            junit 'maldetect.xml'
-                        }
-                    }
-                } // stage('Scan CentOS 7 RPMs')
                 stage('Scan EL 8 RPMs') {
                     when {
                         beforeAgent true
@@ -864,7 +787,6 @@ pipeline {
                     }
                     steps {
                         sconsBuild parallel_build: true,
-                                   scons_exe: 'scons-3',
                                    scons_args: "PREFIX=/opt/daos TARGET_TYPE=release BUILD_TYPE=debug",
                                    build_deps: "no"
                         sh (script:"""./utils/docker_nlt.sh --class-name centos7.fault-injection fi""",
@@ -905,7 +827,7 @@ pipeline {
             }
             steps {
                 storagePrepTest inst_repos: daosRepos(),
-                                inst_rpms: functionalPackages(1, next_version)
+                                inst_rpms: functionalPackages(1, next_version, "client-tests-openmpi")
             }
         } // stage('Test Storage Prep')
         stage('Test Hardware') {
@@ -925,7 +847,7 @@ pipeline {
                     }
                     steps {
                         functionalTest inst_repos: daosRepos(),
-                                       inst_rpms: functionalPackages(1, next_version),
+                                       inst_rpms: functionalPackages(1, next_version, "client-tests-openmpi"),
                                        test_function: 'runTestFunctionalV2'
                     }
                     post {
@@ -945,7 +867,7 @@ pipeline {
                     }
                     steps {
                         functionalTest inst_repos: daosRepos(),
-                                       inst_rpms: functionalPackages(1, next_version),
+                                       inst_rpms: functionalPackages(1, next_version, "client-tests-openmpi"),
                                        test_function: 'runTestFunctionalV2'
                    }
                     post {
@@ -965,7 +887,7 @@ pipeline {
                     }
                     steps {
                         functionalTest inst_repos: daosRepos(),
-                                       inst_rpms: functionalPackages(1, next_version),
+                                       inst_rpms: functionalPackages(1, next_version, "client-tests-openmpi"),
                                        test_function: 'runTestFunctionalV2'
                     }
                     post {

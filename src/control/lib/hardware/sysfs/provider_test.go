@@ -1096,3 +1096,56 @@ func TestSysfs_condenseNetDevState(t *testing.T) {
 		})
 	}
 }
+
+func setupTestIsIOMMUEnabled(t *testing.T, root string, extraDirs ...string) {
+	t.Helper()
+
+	dirs := append([]string{root}, extraDirs...)
+
+	path := filepath.Join(dirs...)
+	os.MkdirAll(path, 0755)
+}
+
+func TestSysfs_Provider_IsIOMMUEnabled(t *testing.T) {
+	for name, tc := range map[string]struct {
+		nilProvider bool
+		extraDirs   []string
+		expResult   bool
+		expErr      error
+	}{
+		"nil provider": {
+			nilProvider: true,
+			expErr:      errors.New("provider is nil"),
+		},
+		"missing iommu dir": {
+			extraDirs: []string{"class"},
+		},
+		"iommu disabled": {
+			extraDirs: []string{"class", "iommu"},
+		},
+		"iommu enabled": {
+			extraDirs: []string{"class", "iommu", "dmar0"},
+			expResult: true,
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			testDir, cleanupTestDir := test.CreateTestDir(t)
+			defer cleanupTestDir()
+
+			log, buf := logging.NewTestLogger(name)
+			defer test.ShowBufferOnFailure(t, buf)
+
+			var p *Provider
+			if !tc.nilProvider {
+				p = NewProvider(log)
+				p.root = testDir
+				setupTestIsIOMMUEnabled(t, testDir, tc.extraDirs...)
+			}
+
+			result, err := p.IsIOMMUEnabled()
+
+			test.CmpErr(t, tc.expErr, err)
+			test.AssertEqual(t, tc.expResult, result, "")
+		})
+	}
+}
