@@ -6,7 +6,7 @@
 # Requirements:
 # - Run as a non-root user with sudo access.
 
-if [ `whoami` == "root" ]; then
+if [ "$(whoami)" == "root" ]; then
 	echo "Run this script as the non-root user you will use to build DAOS"
 	exit 1
 fi
@@ -23,12 +23,7 @@ case "$distro" in
 esac
 
 # Install dependencies from the OS repos.
-SCRIPT_DIR="$(dirname -- "$(readlink -f "$BASH_SOURCE")")"
-sudo "$SCRIPT_DIR/install-$distro.sh"
-
-if [ $? -ne 0 ]; then
-	exit $?
-fi
-
+SCRIPT_DIR="$(dirname "$(realpath -e "$BASH_SOURCE")")"
+sudo "$SCRIPT_DIR/install-$distro.sh" && \
 # Install user dependencies
 python3 -m pip install -r "$SCRIPT_DIR/../../requirements.txt"
