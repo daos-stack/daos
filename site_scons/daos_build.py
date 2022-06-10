@@ -10,6 +10,7 @@ import compiler_setup
 
 libraries = {}
 
+
 class DaosLiteral(Literal):
     """A wrapper for a Literal."""
     # pylint: disable=too-few-public-methods
