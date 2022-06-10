@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2021 Intel Corporation.
+ * (C) Copyright 2016-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -70,6 +70,10 @@ dfuse_fuse_init(void *arg, struct fuse_conn_info *conn)
 	DFUSE_TRA_INFO(fs_handle, "max read %#x", conn->max_read);
 	DFUSE_TRA_INFO(fs_handle, "max write %#x", conn->max_write);
 	DFUSE_TRA_INFO(fs_handle, "readahead %#x", conn->max_readahead);
+
+#if HAVE_CACHE_READDIR
+	DFUSE_TRA_INFO(fs_handle, "kernel readdir cache support compiled in");
+#endif
 
 	DFUSE_TRA_INFO(fs_handle, "Capability supported by kernel %#x",
 		       conn->capable);
