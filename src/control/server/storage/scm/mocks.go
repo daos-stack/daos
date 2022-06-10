@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2021 Intel Corporation.
+// (C) Copyright 2019-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -34,6 +34,7 @@ type (
 		MountErr        error
 		UnmountErr      error
 		MkfsErr         error
+		ChmodErr        error
 		GetfsStr        string
 		GetfsErr        error
 		SourceToTarget  map[string]string
@@ -112,6 +113,10 @@ func (msp *MockSysProvider) Unmount(target string, _ int) error {
 
 func (msp *MockSysProvider) Mkfs(_, _ string, _ bool) error {
 	return msp.cfg.MkfsErr
+}
+
+func (msp *MockSysProvider) Chmod(string, os.FileMode) error {
+	return msp.cfg.ChmodErr
 }
 
 func (msp *MockSysProvider) Getfs(_ string) (string, error) {

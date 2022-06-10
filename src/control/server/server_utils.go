@@ -195,8 +195,8 @@ func prepBdevStorage(srv *server, iommuEnabled bool) error {
 				return FaultIommuDisabled
 			}
 		}
-	} else if srv.cfg.NrHugepages < 0 {
-		srv.log.Debugf("skip nvme prepare as no bdevs in cfg and nr_hugepages: -1 in config")
+	} else if srv.cfg.DisableHugepages {
+		srv.log.Debugf("skip nvme prepare as no bdevs in cfg and disable_hugepages: true in config")
 		return nil
 	}
 
@@ -264,7 +264,7 @@ func prepBdevStorage(srv *server, iommuEnabled bool) error {
 func scanBdevStorage(srv *server) (*storage.BdevScanResponse, error) {
 	defer srv.logDuration(track("time to scan bdev storage"))
 
-	if srv.cfg.NrHugepages < 0 {
+	if srv.cfg.DisableHugepages {
 		srv.log.Debugf("skip nvme scan as hugepages have been disabled in config")
 		return &storage.BdevScanResponse{}, nil
 	}
