@@ -6,7 +6,11 @@ import subprocess
 import time
 import errno
 import SCons.Warnings
-from SCons.Script import WhereIs
+import daos_build
+import compiler_setup
+from prereq_tools import PreReqComponent
+import stack_analyzer
+# pylint: disable=reimported,ungrouped-imports
 
 if sys.version_info.major < 3:
     print(""""Python 2.7 is no longer supported in the DAOS build.
@@ -19,14 +23,10 @@ wrap scons-3.""")
 SCons.Warnings.warningAsException()
 
 try:
-    input = raw_input # pylint: disable=redefined-builtin
+    input = raw_input  # pylint: disable=redefined-builtin
 except NameError:
     pass
 
-import daos_build
-import compiler_setup
-from prereq_tools import PreReqComponent
-import stack_analyzer
 
 def get_version(env):
     """ Read version from VERSION file """
@@ -48,14 +48,15 @@ API_VERSION_FIX = "0"
 API_VERSION = "{}.{}.{}".format(API_VERSION_MAJOR, API_VERSION_MINOR,
                                 API_VERSION_FIX)
 
+
 def update_rpm_version(version, tag):
-    """ Update the version (and release) in the RPM specfile """
+    """ Update the version (and release) in the RPM spec file """
     spec = open("utils/rpms/daos.spec", "r").readlines()  # pylint: disable=consider-using-with
     current_version = 0
     release = 0
     for line_num, line in enumerate(spec):
         if line.startswith("Version:"):
-            current_version = line[line.rfind(' ')+1:].rstrip()
+            current_version = line[line.rfind(' ') + 1:].rstrip()
             if version < current_version:
                 print("You cannot create a new version ({}) lower than the RPM "
                       "spec file has currently ({})".format(version,
@@ -65,7 +66,7 @@ def update_rpm_version(version, tag):
                 spec[line_num] = "Version:       {}\n".format(version)
         if line.startswith("Release:"):
             if version == current_version:
-                current_release = int(line[line.rfind(' ')+1:line.find('%')])
+                current_release = int(line[line.rfind(' ') + 1:line.find('%')])
                 release = current_release + 1
             else:
                 release = 1
@@ -99,6 +100,7 @@ def update_rpm_version(version, tag):
 
     return True
 
+
 def is_platform_arm():
     """Detect if platform is ARM"""
     processor = platform.machine()
@@ -106,6 +108,7 @@ def is_platform_arm():
     if processor.lower() in arm_list:
         return True
     return False
+
 
 def set_defaults(env, daos_version):
     """set compiler defaults"""
@@ -131,6 +134,7 @@ def set_defaults(env, daos_version):
 
     env.Append(CCFLAGS=['-DDAOS_VERSION=\\"' + daos_version + '\\"'])
     env.Append(CCFLAGS=['-DAPI_VERSION=\\"' + API_VERSION + '\\"'])
+
 
 def build_misc(build_prefix):
     """Build miscellaneous items"""
@@ -161,7 +165,6 @@ def scons():  # pylint: disable=too-many-locals,too-many-branches
             import pygit2
             import github
             import yaml
-            # pylint: enable=import-outside-toplevel
         except ImportError:
             print("You need yaml, pygit2 and pygithub python modules to "
                   "create releases")
@@ -188,7 +191,7 @@ def scons():  # pylint: disable=too-many-locals,too-many-branches
             print("Usage: scons RELEASE=x.y.z release")
             Exit(1)
 
-        dash = tag.find('-')    # pylint: disable=no-member
+        dash = tag.find('-')
         if dash > 0:
             version = tag[0:dash]
         else:
@@ -207,7 +210,7 @@ def scons():  # pylint: disable=too-many-locals,too-many-branches
             # pylint: disable=consider-using-with
             token = yaml.safe_load(open(os.path.join(os.path.expanduser("~"),
                                                      ".config", "hub"), 'r')
-                                  )['github.com'][0]['oauth_token']
+                                   )['github.com'][0]['oauth_token']
         except IOError as excpn:
             if excpn.errno == errno.ENOENT:
                 print("You need to install hub (from the hub RPM on EL7) to "
@@ -266,42 +269,28 @@ def scons():  # pylint: disable=too-many-locals,too-many-branches
         author = repo.default_signature
         committer = repo.default_signature
         summary = "Update version to v{}".format(tag)
-        # pylint: disable=no-member
         message = "{}\n\n" \
                   "Signed-off-by: {} <{}>".format(summary,
                                                   repo.default_signature.name,
                                                   repo.default_signature.email)
-        # pylint: enable=no-member
         index.add("utils/rpms/daos.spec")
         index.add("VERSION")
         index.add("TAG")
         index.write()
         tree = index.write_tree()
-        # pylint: disable=no-member
         repo.create_commit('HEAD', author, committer, message, tree,
                            [repo.head.target])
-        # pylint: enable=no-member
 
         # set up authentication callback
-        class MyCallbacks(pygit2.RemoteCallbacks): # pylint: disable=too-few-public-methods
+        class MyCallbacks(pygit2.RemoteCallbacks):  # pylint: disable=too-few-public-methods
             """ Callbacks for pygit2 """
             @staticmethod
-            def credentials(_url, username_from_url, allowed_types): # pylint: disable=method-hidden
+            def credentials(_url, username_from_url, allowed_types):
                 """setup credentials"""
                 if allowed_types & pygit2.credentials.GIT_CREDTYPE_SSH_KEY:
                     if "SSH_AUTH_SOCK" in os.environ:
                         # Use ssh agent for authentication
                         return pygit2.KeypairFromAgent(username_from_url)
-                    #else:
-                    # need to determine if key is passphrase protected and ask
-                    # for the passphrase in order to use this method
-                    #    ssh_key = os.path.join(os.path.expanduser("~"),
-                    #                           ".ssh", "id_rsa")
-                    #    return pygit2.Keypair("git", ssh_key + ".pub",
-                    #                          ssh_key, "")
-                #elif allowed_types & pygit2.credentials.GIT_CREDTYPE_USERNAME:
-                # this is not really useful in the GitHub context
-                #    return pygit2.Username("git")
                 else:
                     raise Exception("No supported credential types allowed "
                                     "by remote end.  SSH_AUTH_SOCK not found "
@@ -312,14 +301,12 @@ def scons():  # pylint: disable=too-many-locals,too-many-branches
         # and push it
         print("Pushing the changes to GitHub...")
         remote = repo.remotes[remote_name]
-        # pylint: disable=no-member
         try:
             remote.push(['refs/heads/{}'.format(branch)],
                         callbacks=MyCallbacks())
         except pygit2.GitError as excpt:
             print("Error pushing branch: {}".format(excpt))
             Exit(1)
-        # pylint: enable=no-member
 
         print("Creating the PR...")
         # now create a PR for it
@@ -445,7 +432,7 @@ def scons():  # pylint: disable=too-many-locals,too-many-branches
         api_version = env.Command(os.path.join(build_prefix, 'API_VERSION'),
                                   "SConstruct", f"echo {API_VERSION} > $TARGET")
         env.Install("$PREFIX/lib64/daos", api_version)
-    env.Install(conf_dir + '/bash_completion.d', ['utils/completion/daos.bash'])
+    env.Install(os.path.join(conf_dir, 'bash_completion.d'), 'utils/completion/daos.bash')
 
     build_misc(build_prefix)
 
@@ -454,11 +441,8 @@ def scons():  # pylint: disable=too-many-locals,too-many-branches
     # an "rpms" target
     env.Command('rpms', '', 'make -C utils/rpms rpms')
 
-    try:
-        #if using SCons 2.4+, provide a more complete help
-        Help(opts.GenerateHelpText(env), append=True)
-    except TypeError:
-        Help(opts.GenerateHelpText(env))
+    Help(opts.GenerateHelpText(env), append=True)
+
 
 if __name__ == "SCons.Script":
     scons()

@@ -1,5 +1,4 @@
 """Build versioned object store"""
-import os
 import daos_build
 
 FILES = ["evt_iter.c", "vos_common.c", "vos_iterator.c", "vos_io.c",
@@ -9,12 +8,13 @@ FILES = ["evt_iter.c", "vos_common.c", "vos_iterator.c", "vos_io.c",
          "vos_dtx_iter.c", "vos_gc.c", "vos_ilog.c", "ilog.c", "vos_ts.c",
          "lru_array.c", "vos_space.c", "sys_db.c", "vos_policy.c", "vos_csum_recalc.c"]
 
+
 def build_vos(env, standalone):
     """build vos"""
     denv = env.Clone()
 
     if standalone:
-        denv.Append(CPPDEFINES={'VOS_STANDALONE' : '1'})
+        denv.Append(CPPDEFINES={'VOS_STANDALONE': '1'})
         denv.Append(OBJPREFIX="s_")
         libname = 'vos'
     else:
@@ -31,6 +31,7 @@ def build_vos(env, standalone):
                              LIBS=['vea'])
     denv.Install('$PREFIX/lib64/daos_srv', vos)
 
+
 def build_vos_internal(env):
     """build vos internal"""
     denv = env.Clone()
@@ -40,11 +41,11 @@ def build_vos_internal(env):
     # Add runtime paths for daos libraries
     denv.AppendUnique(RPATH_FULL=['$PREFIX/lib64/daos_srv'])
 
-
     vos_size = daos_build.library(denv, 'vos_size', ['vos_size.c'],
                                   LIBS=libraries, install_off='../..')
 
     denv.Install('$PREFIX/lib64/daos_srv', vos_size)
+
 
 def scons():
     """Execute build"""
@@ -69,6 +70,7 @@ def scons():
     if prereqs.test_requested():
         SConscript('tests/SConscript', exports='denv')
     SConscript('storage_estimator/SConscript')
+
 
 if __name__ == "SCons.Script":
     scons()
