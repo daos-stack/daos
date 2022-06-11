@@ -200,11 +200,15 @@
 #
 ## Example: (2 engines * (16 targets/engine * 1GiB)) / 2MiB hugepage size = 16834
 #
-## Hugepages are mandatory with NVME SSDs configured and optional without.
-## To disabled the use of hugepages when no NVMe SSDs are configured, set
-## nr_hugepages to -1.
+## default: 0
+#nr_hugepages: 0
 #
-##nr_hugepages: -1
+## Hugepages are mandatory with NVME SSDs configured and optional without.
+## To disable the use of hugepages when no NVMe SSDs are configured, set
+## disable_hugepages to true.
+#
+## default: false
+#disable_hugepages: false
 #
 #
 ## Set specific debug mask for daos_server (control plane).
