@@ -60,8 +60,13 @@ enum pool_component_flags {
 	/**
 	 * indicate when in status PO_COMP_ST_DOWNOUT, it is changed from
 	 * PO_COMP_ST_DOWN (rather than from PO_COMP_ST_DRAIN).
+	 * PO_COMPF_COMMAND used to indicate whether the target state change is
+	 * triggered by swim detection or forced by the user.If user forces 
+	 * the target down through the command(exclude/drain), even if swim detects 
+	 * that the rank is alive, the target should not be marked as up
 	 */
 	PO_COMPF_DOWN2OUT	= 1,
+	PO_COMPF_COMMAND	= 1 << 1,
 };
 
 #define co_in_ver	co_out_ver

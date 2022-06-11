@@ -18,7 +18,7 @@
 static int
 update_one_tgt(struct pool_map *map, struct pool_target *target,
 	       struct pool_domain *dom, int opc, uint32_t *version,
-	       bool print_changes)
+	       bool print_changes, bool is_command)
 {
 	int rc;
 
@@ -46,6 +46,11 @@ update_one_tgt(struct pool_map *map, struct pool_target *target,
 				DP_TARGET(target), map);
 			target->ta_comp.co_status = PO_COMP_ST_DOWN;
 			target->ta_comp.co_fseq = ++(*version);
+			if (is_command) {
+				target->ta_comp.co_flags |= PO_COMPF_COMMAND;
+				D_DEBUG(DB_MD, DF_TARGET" add flag %d\n",
+				DP_TARGET(target), target->ta_comp.co_flags);
+			}
 			if (print_changes)
 				D_PRINT(DF_TARGET " is down.\n",
 					DP_TARGET(target));
@@ -87,6 +92,8 @@ update_one_tgt(struct pool_map *map, struct pool_target *target,
 				DP_TARGET(target), map);
 			target->ta_comp.co_status = PO_COMP_ST_DRAIN;
 			target->ta_comp.co_fseq = ++(*version);
+			if (is_command)
+				target->ta_comp.co_flags |= PO_COMPF_COMMAND; 
 			if (print_changes)
 				D_PRINT(DF_TARGET " is draining.\n",
 					DP_TARGET(target));
@@ -116,10 +123,20 @@ update_one_tgt(struct pool_map *map, struct pool_target *target,
 				DP_TARGET(target));
 			return -DER_BUSY;
 		case PO_COMP_ST_DOWNOUT:
+			if (!is_command && target->ta_comp.co_flags & PO_COMPF_COMMAND) {
+				D_DEBUG(DB_MD, DF_TARGET" must be reinted by admin command\n",
+					DP_TARGET(target));
+				return -DER_NO_PERM;
+			}
 			D_DEBUG(DB_MD, "change "DF_TARGET" to UP %p\n",
 				DP_TARGET(target), map);
 			target->ta_comp.co_status = PO_COMP_ST_UP;
 			target->ta_comp.co_in_ver = ++(*version);
+			if (is_command) {
+				target->ta_comp.co_flags &= ~PO_COMPF_COMMAND;
+				D_DEBUG(DB_MD, DF_TARGET" after clear PO_COMP_COMMAND flag, co_flags is %d\n",
+					DP_TARGET(target), target->ta_comp.co_flags);
+			}
 			if (print_changes)
 				D_PRINT(DF_TARGET " start reintegration.\n",
 					DP_TARGET(target));
@@ -129,12 +146,13 @@ update_one_tgt(struct pool_map *map, struct pool_target *target,
 			D_DEBUG(DB_MD, "change rank %u to UP\n",
 				dom->do_comp.co_rank);
 			dom->do_comp.co_status = PO_COMP_ST_UP;
-			dom->do_comp.co_flags = 0;
+			dom->do_comp.co_flags &= ~PO_COMPF_DOWN2OUT;
 			break;
 		}
 		break;
 
 	case POOL_ADD_IN:
+		D_ASSERT(!is_command);
 		switch (target->ta_comp.co_status) {
 		case PO_COMP_ST_UPIN:
 			/* Nothing to do, already UPIN */
@@ -171,6 +189,7 @@ update_one_tgt(struct pool_map *map, struct pool_target *target,
 		break;
 
 	case POOL_EXCLUDE_OUT:
+		D_ASSERT(!is_command);
 		switch (target->ta_comp.co_status) {
 		case PO_COMP_ST_DOWNOUT:
 			/* Nothing to do, already DOWNOUT */
@@ -187,8 +206,11 @@ update_one_tgt(struct pool_map *map, struct pool_target *target,
 		case PO_COMP_ST_DRAIN:
 			D_DEBUG(DB_MD, "change "DF_TARGET" to DOWNOUT %p\n",
 				DP_TARGET(target), map);
-			if (target->ta_comp.co_status == PO_COMP_ST_DOWN)
-				target->ta_comp.co_flags = PO_COMPF_DOWN2OUT;
+			if (target->ta_comp.co_status == PO_COMP_ST_DOWN) {
+				target->ta_comp.co_flags |= PO_COMPF_DOWN2OUT;
+				D_DEBUG(DB_MD, DF_TARGET" flag is  %d\n",
+				DP_TARGET(target), target->ta_comp.co_flags);
+			}
 			target->ta_comp.co_status = PO_COMP_ST_DOWNOUT;
 			target->ta_comp.co_out_ver = ++(*version);
 			if (print_changes)
@@ -209,12 +231,15 @@ update_one_tgt(struct pool_map *map, struct pool_target *target,
 
 /*
  * Update "tgts" in "map". A new map version is generated only if actual
- * changes have been made.
+ * changes have been made. There are two ways to change the tgts state:
+ * user command and swim failure detection. is_command is used to identify
+ * whether it is a user command to change the status. swim cannot change 
+ * the status that user command requires
  */
 int
 ds_pool_map_tgts_update(struct pool_map *map, struct pool_target_id_list *tgts,
 			int opc, bool exclude_rank, uint32_t *tgt_map_ver,
-			bool print_changes)
+			bool print_changes, bool is_command)
 {
 	uint32_t	version;
 	int		i;
@@ -248,7 +273,7 @@ ds_pool_map_tgts_update(struct pool_map *map, struct pool_target_id_list *tgts,
 		}
 
 		rc = update_one_tgt(map, target, dom, opc, &version,
-				    print_changes);
+				    print_changes, is_command);
 		if (rc != 0)
 			return rc;
 
@@ -266,7 +291,7 @@ ds_pool_map_tgts_update(struct pool_map *map, struct pool_target_id_list *tgts,
 					target->ta_comp.co_fseq;
 			} else if (opc == POOL_EXCLUDE_OUT) {
 				dom->do_comp.co_status = PO_COMP_ST_DOWNOUT;
-				dom->do_comp.co_flags = PO_COMPF_DOWN2OUT;
+				dom->do_comp.co_flags |= PO_COMPF_DOWN2OUT;
 				dom->do_comp.co_out_ver =
 					target->ta_comp.co_out_ver;
 			} else
