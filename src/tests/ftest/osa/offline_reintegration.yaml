@@ -25,7 +25,7 @@ server_config:
       scm_mount: /mnt/daos0
       log_mask: DEBUG,MEM=ERR
       env_vars:
-        - DD_MASK=mgmt,md,rebuild
+        - DD_MASK=mgmt,md,io,rebuild
     1:
       pinned_numa_node: 1
       nr_xs_helpers: 1
@@ -39,7 +39,7 @@ server_config:
       scm_mount: /mnt/daos1
       log_mask: DEBUG,MEM=ERR
       env_vars:
-        - DD_MASK=mgmt,md,rebuild
+        - DD_MASK=mgmt,md,io,rebuild
   transport_config:
     allow_insecure: True
 agent_config:
@@ -100,10 +100,6 @@ mdtest:
 test_obj_class:
   oclass:
     - RP_2G8
-    - RP_3G6
-    - RP_4G1
-    - S1
-    - EC_2P1G1
 loop_test:
   iterations: 3
 aggregation:
