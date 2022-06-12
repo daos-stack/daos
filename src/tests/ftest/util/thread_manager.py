@@ -1,6 +1,6 @@
 #!/usr/bin/python3
 """
-(C) Copyright 2021 Intel Corporation.
+(C) Copyright 2021-2022 Intel Corporation.
 
 SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -127,6 +127,7 @@ class ThreadManager():
             except TimeoutError as error:
                 for future in futures:
                     if not future.done():
+                        # pylint: disable-next=invalid-sequence-index
                         results.append(ThreadResult(id, False, self.job_kwargs[id], str(error)))
                         self.log.info("Thread %d timed out: %s", id, results[-1])
         return results

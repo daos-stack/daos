@@ -146,4 +146,6 @@ const (
 	NotReplica Status = -C.DER_NOTREPLICA
 	// ChecksumError indicates a checksum error
 	ChecksumError Status = -C.DER_CSUM
+	// ControlIncompatible indicates that one or more control plane components are incompatible
+	ControlIncompatible Status = -C.DER_CONTROL_INCOMPAT
 )

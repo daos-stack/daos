@@ -357,8 +357,6 @@ ch_decref(struct d_hash_table *htable, d_list_t *link)
 static void
 _ch_free(struct dfuse_projection_info *fs_handle, struct dfuse_cont *dfc)
 {
-	D_MUTEX_DESTROY(&dfc->dfs_read_mutex);
-
 	if (daos_handle_is_valid(dfc->dfs_coh)) {
 		int rc;
 
@@ -914,7 +912,6 @@ dfuse_cont_open(struct dfuse_projection_info *fs_handle, struct dfuse_pool *dfp,
 
 	dfc->dfs_ino = atomic_fetch_add_relaxed(&fs_handle->dpi_ino_next, 1);
 	dfc->dfs_ino = (dfc->dfs_ino << 1) | 0x1;
-	D_MUTEX_INIT(&dfc->dfs_read_mutex, NULL);
 
 	/* Take a reference on the pool */
 	d_hash_rec_addref(&fs_handle->dpi_pool_table, &dfp->dfp_entry);

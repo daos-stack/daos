@@ -94,6 +94,8 @@ func TestBackend_writeJSONFile(t *testing.T) {
 		enableVmd         bool
 		enableHotplug     bool
 		hotplugBusidRange string
+		accelEngine       string
+		accelOptMask      storage.AccelOptionBits
 		expErr            error
 		expOut            string
 	}{
@@ -444,6 +446,186 @@ func TestBackend_writeJSONFile(t *testing.T) {
 }
 `,
 		},
+		"nvme; single controller; acceleration set to none; move and crc opts specified": {
+			confIn: storage.TierConfig{
+				Tier:  tierID,
+				Class: storage.ClassNvme,
+				Bdev: storage.BdevConfig{
+					DeviceList: storage.MustNewBdevDeviceList(test.MockPCIAddrs(1)...),
+				},
+			},
+			// Verify default "none" acceleration setting is ignored.
+			accelEngine:  storage.AccelEngineNone,
+			accelOptMask: storage.AccelOptCRCFlag | storage.AccelOptMoveFlag,
+			expOut: `
+{
+  "daos_data": {
+    "config": []
+  },
+  "subsystems": [
+    {
+      "subsystem": "bdev",
+      "config": [
+        {
+          "params": {
+            "bdev_io_pool_size": 65536,
+            "bdev_io_cache_size": 256
+          },
+          "method": "bdev_set_options"
+        },
+        {
+          "params": {
+            "retry_count": 4,
+            "timeout_us": 0,
+            "nvme_adminq_poll_period_us": 100000,
+            "action_on_timeout": "none",
+            "nvme_ioq_poll_period_us": 0
+          },
+          "method": "bdev_nvme_set_options"
+        },
+        {
+          "params": {
+            "enable": false,
+            "period_us": 0
+          },
+          "method": "bdev_nvme_set_hotplug"
+        },
+        {
+          "params": {
+            "trtype": "PCIe",
+            "name": "Nvme_hostfoo_0_84",
+            "traddr": "0000:01:00.0"
+          },
+          "method": "bdev_nvme_attach_controller"
+        }
+      ]
+    }
+  ]
+}
+`,
+		},
+		"nvme; single controller; acceleration set to spdk; no opts specified": {
+			confIn: storage.TierConfig{
+				Tier:  tierID,
+				Class: storage.ClassNvme,
+				Bdev: storage.BdevConfig{
+					DeviceList: storage.MustNewBdevDeviceList(test.MockPCIAddrs(1)...),
+				},
+			},
+			// Verify default "spdk" acceleration setting with no enable options is ignored.
+			accelEngine: storage.AccelEngineSPDK,
+			expOut: `
+{
+  "daos_data": {
+    "config": []
+  },
+  "subsystems": [
+    {
+      "subsystem": "bdev",
+      "config": [
+        {
+          "params": {
+            "bdev_io_pool_size": 65536,
+            "bdev_io_cache_size": 256
+          },
+          "method": "bdev_set_options"
+        },
+        {
+          "params": {
+            "retry_count": 4,
+            "timeout_us": 0,
+            "nvme_adminq_poll_period_us": 100000,
+            "action_on_timeout": "none",
+            "nvme_ioq_poll_period_us": 0
+          },
+          "method": "bdev_nvme_set_options"
+        },
+        {
+          "params": {
+            "enable": false,
+            "period_us": 0
+          },
+          "method": "bdev_nvme_set_hotplug"
+        },
+        {
+          "params": {
+            "trtype": "PCIe",
+            "name": "Nvme_hostfoo_0_84",
+            "traddr": "0000:01:00.0"
+          },
+          "method": "bdev_nvme_attach_controller"
+        }
+      ]
+    }
+  ]
+}
+`,
+		},
+		"nvme; single controller; acceleration set to spdk; move and crc opts specified": {
+			confIn: storage.TierConfig{
+				Tier:  tierID,
+				Class: storage.ClassNvme,
+				Bdev: storage.BdevConfig{
+					DeviceList: storage.MustNewBdevDeviceList(test.MockPCIAddrs(1)...),
+				},
+			},
+			accelEngine:  storage.AccelEngineSPDK,
+			accelOptMask: storage.AccelOptCRCFlag | storage.AccelOptMoveFlag,
+			expOut: `
+{
+  "daos_data": {
+    "config": [
+      {
+        "params": {
+          "accel_engine": "spdk",
+          "accel_opts": 3
+        },
+        "method": "accel_props"
+      }
+    ]
+  },
+  "subsystems": [
+    {
+      "subsystem": "bdev",
+      "config": [
+        {
+          "params": {
+            "bdev_io_pool_size": 65536,
+            "bdev_io_cache_size": 256
+          },
+          "method": "bdev_set_options"
+        },
+        {
+          "params": {
+            "retry_count": 4,
+            "timeout_us": 0,
+            "nvme_adminq_poll_period_us": 100000,
+            "action_on_timeout": "none",
+            "nvme_ioq_poll_period_us": 0
+          },
+          "method": "bdev_nvme_set_options"
+        },
+        {
+          "params": {
+            "enable": false,
+            "period_us": 0
+          },
+          "method": "bdev_nvme_set_hotplug"
+        },
+        {
+          "params": {
+            "trtype": "PCIe",
+            "name": "Nvme_hostfoo_0_84",
+            "traddr": "0000:01:00.0"
+          },
+          "method": "bdev_nvme_attach_controller"
+        }
+      ]
+    }
+  ]
+}
+`,
+		},
 	}
 
 	for name, tc := range tests {
@@ -467,7 +649,8 @@ func TestBackend_writeJSONFile(t *testing.T) {
 					&tc.confIn,
 				).
 				WithStorageConfigOutputPath(cfgOutputPath).
-				WithStorageEnableHotplug(tc.enableHotplug)
+				WithStorageEnableHotplug(tc.enableHotplug).
+				WithStorageAccelProps(tc.accelEngine, tc.accelOptMask)
 
 			req, err := storage.BdevWriteConfigRequestFromConfig(context.TODO(), log,
 				&engineConfig.Storage, tc.enableVmd, storage.MockGetTopology)
@@ -475,7 +658,7 @@ func TestBackend_writeJSONFile(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			gotErr := writeJsonConfig(log, &req)
+			gotErr := writeJsonConfig(log, req)
 			test.CmpErr(t, tc.expErr, gotErr)
 			if tc.expErr != nil {
 				return

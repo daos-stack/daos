@@ -12,6 +12,7 @@ import (
 	"strings"
 
 	"github.com/daos-stack/daos/src/control/cmd/dmg/pretty"
+	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/common/cmdutil"
 	"github.com/daos-stack/daos/src/control/lib/control"
 	"github.com/daos-stack/daos/src/control/lib/hardware"
@@ -75,18 +76,21 @@ func fabricInterfaceSetToHostFabric(fis *hardware.FabricInterfaceSet, filterProv
 			continue
 		}
 
-		name := fi.NetInterface
-		if name == "" {
-			name = fi.Name
+		netIFs := common.NewStringSet(fi.NetInterfaces.ToSlice()...)
+		if len(fi.NetInterfaces) == 0 {
+			netIFs.Add(fi.Name)
 		}
-		for _, provider := range fi.Providers.ToSlice() {
-			if filterProvider == "all" || strings.HasPrefix(provider, filterProvider) {
-				hf.AddInterface(&control.HostFabricInterface{
-					Provider:    provider,
-					Device:      name,
-					NumaNode:    uint32(fi.NUMANode),
-					NetDevClass: fi.DeviceClass,
-				})
+
+		for _, name := range netIFs.ToSlice() {
+			for _, provider := range fi.Providers.ToSlice() {
+				if filterProvider == "all" || strings.HasPrefix(provider, filterProvider) {
+					hf.AddInterface(&control.HostFabricInterface{
+						Provider:    provider,
+						Device:      name,
+						NumaNode:    uint32(fi.NUMANode),
+						NetDevClass: fi.DeviceClass,
+					})
+				}
 			}
 		}
 	}
