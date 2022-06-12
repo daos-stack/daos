@@ -101,7 +101,7 @@ ih_key_hash(struct d_hash_table *htable, const void *key,
 	uint32_t hash = ino ^ (ino >> 32);
 
 	/* Shift everything left, then use the rightmost bit to embed directory status */
-	hash              = hash << 1;
+	hash = hash << 1;
 	hash |= (ino | 0x1);
 	return hash;
 }
@@ -1233,7 +1233,7 @@ dfuse_fs_stop(struct dfuse_projection_info *fs_handle)
 	d_hash_table_debug(&fs_handle->dpi_iet);
 
 	/* Flush anything we can */
-	rc                      = d_hash_table_traverse(&fs_handle->dpi_iet, ino_flush, fs_handle);
+	rc = d_hash_table_traverse(&fs_handle->dpi_iet, ino_flush, fs_handle);
 
 	fs_handle->dpi_shutdown = true;
 	sem_post(&fs_handle->dpi_sem);
