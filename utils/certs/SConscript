@@ -1,5 +1,5 @@
 """Build DAOS Certificate Generation"""
-import os
+
 
 def scons():
     """Execute build"""
@@ -10,6 +10,7 @@ def scons():
                                                'ca.cnf',
                                                'server.cnf',
                                                'gen_certificates.sh'])
+
 
 if __name__ == "SCons.Script":
     scons()
