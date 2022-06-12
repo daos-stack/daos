@@ -6,9 +6,9 @@
 """
 
 import os
-import distro
 import general_utils
 from collections import OrderedDict
+import distro
 
 from avocado import skip
 from dfuse_test_base import DfuseTestBase
@@ -46,7 +46,7 @@ class DaosBuild(DfuseTestBase):
             Create Posix container
             Mount dfuse
             Checkout and build DAOS sources.
-        :avocado: tags=all,daily_regression
+        :avocado: tags=all,full_regression
         :avocado: tags=vm
         :avocado: tags=daosio,dfuse
         :avocado: tags=dfusedaosbuild
@@ -61,6 +61,7 @@ class DaosBuild(DfuseTestBase):
         cont_attrs = OrderedDict()
 
         cache_mode = self.params.get('name', '/run/dfuse/*')
+        intercept = self.params.get('use_intercept', '/run/intercept/*', default=False)
 
         # How long to cache things for, if caching is enabled.
         cache_time = '30m'
@@ -76,13 +77,15 @@ class DaosBuild(DfuseTestBase):
             cont_attrs['dfuse-attr-time'] = cache_time
             cont_attrs['dfuse-dentry-time'] = cache_time
             cont_attrs['dfuse-ndentry-time'] = cache_time
+            if intercept:
+                build_time = 120
         elif cache_mode == 'metadata':
             cont_attrs['dfuse-data-cache'] = 'off'
             cont_attrs['dfuse-attr-time'] = cache_time
             cont_attrs['dfuse-dentry-time'] = cache_time
             cont_attrs['dfuse-ndentry-time'] = cache_time
         elif cache_mode == 'nocache':
-            build_time = 150
+            build_time = 210
             cont_attrs['dfuse-data-cache'] = 'off'
             cont_attrs['dfuse-attr-time'] = '0'
             cont_attrs['dfuse-dentry-time'] = '0'
@@ -99,8 +102,6 @@ class DaosBuild(DfuseTestBase):
         mount_dir = self.dfuse.mount_dir.value
         build_dir = os.path.join(mount_dir, 'daos')
 
-        intercept = self.params.get('use_intercept', '/run/intercept/*', default=False)
-
         remote_env = OrderedDict()
         remote_env['PATH'] = '{}:$PATH'.format(os.path.join(mount_dir, 'venv', 'bin'))
         remote_env['VIRTUAL_ENV'] = os.path.join(mount_dir, 'venv')
@@ -110,19 +111,22 @@ class DaosBuild(DfuseTestBase):
             remote_env['D_LOG_FILE'] = '/var/tmp/daos_testing/daos-il.log'
             remote_env['DD_MASK'] = 'all'
             remote_env['DD_SUBSYS'] = 'all'
-            remote_env['D_LOG_MASK'] = 'INFO,IL=DEBUG'
+            remote_env['D_LOG_MASK'] = 'INFO'
 
         envs = ['export {}={}'.format(env, value) for env, value in remote_env.items()]
 
         preload_cmd = ';'.join(envs)
 
+        # Run the deps build in parallel for speed/coverage however the daos build itself does
+        # not yet work, so run this part in serial.
         cmds = ['python3 -m venv {}/venv'.format(mount_dir),
                 'git clone https://github.com/daos-stack/daos.git {}'.format(build_dir),
                 'git -C {} submodule init'.format(build_dir),
                 'git -C {} submodule update'.format(build_dir),
                 'python3 -m pip install pip --upgrade',
                 'python3 -m pip install -r {}/requirements.txt'.format(build_dir),
-                'scons -C {} --jobs 50 build --build-deps=yes'.format(build_dir)]
+                'scons -C {} --jobs 50 build --build-deps=yes --deps-only'.format(build_dir),
+                'scons -C {} build'.format(build_dir)]
         for cmd in cmds:
             try:
                 command = '{};{}'.format(preload_cmd, cmd)
