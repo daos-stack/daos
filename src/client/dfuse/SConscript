@@ -112,10 +112,9 @@ def build_client_libs_static(env, common):
 def check_struct_member(context, text, struct, member):
     """scons check for a struct member existing"""
 
-    context.Message('Checking for {} in {} '.format(member, struct))
+    context.Message(f'Checking for {member} in {struct} ')
 
-    src = '{0}\n{1} val = {{.{2} = 0}};\nint main() {{}}'.format(text, struct,
-                                                                 member)
+    src = '{0}\n{1} val = {{.{2} = 0}};\nint main() {{}}'.format(text, struct, member)
     rc = context.TryCompile(src, '.c')
     context.Result(rc)
     return rc
@@ -124,7 +123,7 @@ def check_struct_member(context, text, struct, member):
 def check_ioctl_def(context, ctype):
     """scons check for a struct member existing"""
 
-    context.Message('Checking if fuse ioctl is type {} '.format(ctype))
+    context.Message(f'Checking if fuse ioctl is type {ctype} ')
 
     src = """#include <fuse3/fuse_lowlevel.h>
 
@@ -154,17 +153,18 @@ def configure_fuse(cenv):
     if check.CheckStructMember('#include <fuse3/fuse.h>',
                                'struct fuse_file_info',
                                'cache_readdir'):
-        cenv.AppendUnique(CPPDEFINES={'HAVE_CACHE_READDIR':'1'})
+        cenv.AppendUnique(CPPDEFINES={'HAVE_CACHE_READDIR': '1'})
 
     if check.CheckFuseIoctl('unsigned int'):
         pass
     elif check.CheckFuseIoctl('int'):
-        cenv.AppendUnique(CPPDEFINES={'FUSE_IOCTL_USE_INT':'1'})
+        cenv.AppendUnique(CPPDEFINES={'FUSE_IOCTL_USE_INT': '1'})
     else:
         print('Could not determine type of fuse ioctl type')
         Exit(2)
 
     check.Finish()
+
 
 def scons():
     """Scons function"""
@@ -213,7 +213,7 @@ def scons():
     for src in DFUSE_SRC:
         dfuse_obj += cenv.Object(src)
     for src in OPS_SRC:
-        dfuse_obj += cenv.Object(os.path.join('ops', '%s.c' % src))
+        dfuse_obj += cenv.Object(os.path.join('ops', f'{src}.c'))
     cenv.AppendUnique(LIBS=['gurt'])
     progs = daos_build.program(cenv, 'dfuse/dfuse', common + dfuse_obj)
 
@@ -221,14 +221,11 @@ def scons():
 
     cenv.Install(os.path.join("$PREFIX", 'bin'), progs)
 
-    # Do not install headers currently.
-    # for header in HEADERS:
-    #  dfuse_env.Install(os.path.join("$PREFIX", 'include'), 'il/%s' % header)
-
     Export('dfuse_env')
 
     if prereqs.test_requested():
         SConscript('test/SConscript')
+
 
 if __name__ == "SCons.Script":
     scons()
