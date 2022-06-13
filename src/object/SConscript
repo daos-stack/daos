@@ -1,6 +1,8 @@
 """Build objects"""
+
 import daos_build
 Import('env', 'prereqs')
+
 
 def scons():
     """Execute build"""
@@ -33,7 +35,7 @@ def scons():
     srv = daos_build.library(senv, 'obj',
                              common_tgts + ['srv_obj.c', 'srv_mod.c',
                                             'srv_obj_remote.c', 'srv_ec.c',
-                                            'srv_obj_migrate.c',
+                                            'srv_obj_migrate.c', 'srv_enum.c',
                                             'srv_cli.c', 'srv_ec_aggregate.c',
                                             'srv_csum.c', 'srv_io_map.c'],
                              install_off="../..")
@@ -41,6 +43,7 @@ def scons():
 
     if prereqs.test_requested():
         SConscript('tests/SConscript', exports='denv')
+
 
 if __name__ == "SCons.Script":
     scons()

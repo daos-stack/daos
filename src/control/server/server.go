@@ -25,6 +25,7 @@ import (
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	"github.com/daos-stack/daos/src/control/events"
 	"github.com/daos-stack/daos/src/control/lib/control"
+	"github.com/daos-stack/daos/src/control/lib/daos"
 	"github.com/daos-stack/daos/src/control/lib/hardware"
 	"github.com/daos-stack/daos/src/control/lib/hardware/hwprov"
 	"github.com/daos-stack/daos/src/control/logging"
@@ -36,16 +37,35 @@ import (
 	"github.com/daos-stack/daos/src/control/system/raft"
 )
 
-func processConfig(log *logging.LeveledLogger, cfg *config.Server, fis *hardware.FabricInterfaceSet) (*system.FaultDomain, error) {
+func genFiAffFn(fis *hardware.FabricInterfaceSet) config.EngineAffinityFn {
+	return func(l logging.Logger, e *engine.Config) (uint, error) {
+		fi, err := fis.GetInterfaceOnNetDevice(e.Fabric.Interface, e.Fabric.Provider)
+		if err != nil {
+			return 0, err
+		}
+		return fi.NUMANode, nil
+	}
+}
+
+func processConfig(log logging.Logger, cfg *config.Server, fis *hardware.FabricInterfaceSet) error {
 	processFabricProvider(cfg)
 
 	hpi, err := common.GetHugePageInfo()
 	if err != nil {
-		return nil, errors.Wrapf(err, "retrieve hugepage info")
+		return errors.Wrapf(err, "retrieve hugepage info")
 	}
 
-	if err := cfg.Validate(log, hpi.PageSizeKb, fis); err != nil {
-		return nil, errors.Wrapf(err, "%s: validation failed", cfg.Path)
+	affinitySources := []config.EngineAffinityFn{
+		// TODO: Add pmem as the primary source of NUMA affinity, if available,
+		// then fall back to other sources as necessary.
+		genFiAffFn(fis),
+	}
+	if err := cfg.SetEngineAffinities(log, affinitySources...); err != nil {
+		return errors.Wrap(err, "failed to set engine affinities")
+	}
+
+	if err := cfg.Validate(log, hpi.PageSizeKb); err != nil {
+		return errors.Wrapf(err, "%s: validation failed", cfg.Path)
 	}
 
 	lookupNetIF := func(name string) (netInterface, error) {
@@ -55,29 +75,24 @@ func processConfig(log *logging.LeveledLogger, cfg *config.Server, fis *hardware
 		}
 		return iface, nil
 	}
+
 	for _, ec := range cfg.Engines {
 		if err := checkFabricInterface(ec.Fabric.Interface, lookupNetIF); err != nil {
-			return nil, err
+			return err
 		}
 
 		if err := updateFabricEnvars(log, ec, fis); err != nil {
-			return nil, errors.Wrap(err, "update engine fabric envars")
+			return errors.Wrap(err, "update engine fabric envars")
 		}
 	}
 
 	cfg.SaveActiveConfig(log)
 
 	if err := setDaosHelperEnvs(cfg, os.Setenv); err != nil {
-		return nil, err
+		return err
 	}
 
-	faultDomain, err := getFaultDomain(cfg)
-	if err != nil {
-		return nil, err
-	}
-	log.Debugf("fault domain: %s", faultDomain.String())
-
-	return faultDomain, nil
+	return nil
 }
 
 func processFabricProvider(cfg *config.Server) {
@@ -97,7 +112,7 @@ func shouldAppendRXM(provider string) bool {
 
 // server struct contains state and components of DAOS Server.
 type server struct {
-	log         *logging.LeveledLogger
+	log         logging.Logger
 	cfg         *config.Server
 	hostname    string
 	runningUser *user.User
@@ -121,7 +136,7 @@ type server struct {
 	onShutdown       []func()
 }
 
-func newServer(log *logging.LeveledLogger, cfg *config.Server, faultDomain *system.FaultDomain) (*server, error) {
+func newServer(log logging.Logger, cfg *config.Server, faultDomain *system.FaultDomain) (*server, error) {
 	hostname, err := os.Hostname()
 	if err != nil {
 		return nil, errors.Wrap(err, "get hostname")
@@ -188,6 +203,12 @@ func (srv *server) createServices(ctx context.Context) error {
 	srv.ctlSvc = NewControlService(srv.log, srv.harness, srv.cfg, srv.pubSub,
 		hwprov.DefaultFabricScanner(srv.log))
 	srv.mgmtSvc = newMgmtSvc(srv.harness, srv.membership, sysdb, rpcClient, srv.pubSub)
+
+	if err := srv.mgmtSvc.systemProps.UpdateCompPropVal(daos.SystemPropertyDaosSystem, func() string {
+		return srv.cfg.SystemName
+	}); err != nil {
+		return err
+	}
 
 	return nil
 }
@@ -270,8 +291,13 @@ func (srv *server) addEngines(ctx context.Context) error {
 	var allStarted sync.WaitGroup
 	registerTelemetryCallbacks(ctx, srv)
 
+	iommuEnabled, err := hwprov.DefaultIOMMUDetector(srv.log).IsIOMMUEnabled()
+	if err != nil {
+		return err
+	}
+
 	// Allocate hugepages and rebind NVMe devices to userspace drivers.
-	if err := prepBdevStorage(srv, iommuDetected()); err != nil {
+	if err := prepBdevStorage(srv, iommuEnabled); err != nil {
 		return err
 	}
 
@@ -292,7 +318,9 @@ func (srv *server) addEngines(ctx context.Context) error {
 			return errors.Wrap(err, "creating engine instances")
 		}
 
-		engine.storage.SetBdevCache(*nvmeScanResp)
+		if err := engine.storage.SetBdevCache(*nvmeScanResp); err != nil {
+			return errors.Wrap(err, "setting engine storage bdev cache")
+		}
 
 		registerEngineEventCallbacks(srv, engine, &allStarted)
 
@@ -436,8 +464,30 @@ func (srv *server) start(ctx context.Context, shutdown context.CancelFunc) error
 		"%s harness exited", build.ControlPlaneName)
 }
 
+func waitFabricReady(ctx context.Context, log logging.Logger, cfg *config.Server) error {
+	ifaces := make([]string, 0, len(cfg.Engines))
+	for _, eng := range cfg.Engines {
+		ifaces = append(ifaces, eng.Fabric.Interface)
+	}
+
+	// Skip wait if no fabric interfaces specified in config.
+	if len(ifaces) == 0 {
+		return nil
+	}
+
+	if err := hardware.WaitFabricReady(ctx, log, hardware.WaitFabricReadyParams{
+		StateProvider:  hwprov.DefaultNetDevStateProvider(log),
+		FabricIfaces:   ifaces,
+		IterationSleep: time.Second,
+	}); err != nil {
+		return err
+	}
+
+	return nil
+}
+
 // Start is the entry point for a daos_server instance.
-func Start(log *logging.LeveledLogger, cfg *config.Server) error {
+func Start(log logging.Logger, cfg *config.Server) error {
 	// Create the root context here. All contexts should inherit from this one so
 	// that they can be shut down from one place.
 	ctx, shutdown := context.WithCancel(context.Background())
@@ -449,16 +499,27 @@ func Start(log *logging.LeveledLogger, cfg *config.Server) error {
 	}
 	defer hwprovFini()
 
+	if err := waitFabricReady(ctx, log, cfg); err != nil {
+		return err
+	}
+
 	scanner := hwprov.DefaultFabricScanner(log)
+
 	fiSet, err := scanner.Scan(ctx)
 	if err != nil {
 		return errors.Wrap(err, "scan fabric")
 	}
 
-	faultDomain, err := processConfig(log, cfg, fiSet)
+	err = processConfig(log, cfg, fiSet)
 	if err != nil {
 		return err
 	}
+
+	faultDomain, err := getFaultDomain(cfg)
+	if err != nil {
+		return err
+	}
+	log.Debugf("fault domain: %s", faultDomain.String())
 
 	srv, err := newServer(log, cfg, faultDomain)
 	if err != nil {

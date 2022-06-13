@@ -603,10 +603,11 @@ ctl_init()
 			DF_RC"\n", DP_RC(rc));
 	}
 
-	crtu_cli_start_basic("crt_ctl", ctl_gdata.cg_group_name, &grp,
-			     &rank_list, &ctl_gdata.cg_crt_ctx,
-			     &ctl_gdata.cg_tid, 1, true, NULL,
-			     ctl_gdata.cg_use_daos_agent_env);
+	rc = crtu_cli_start_basic("crt_ctl", ctl_gdata.cg_group_name, &grp,
+				  &rank_list, &ctl_gdata.cg_crt_ctx,
+				  &ctl_gdata.cg_tid, 1, true, NULL,
+				  ctl_gdata.cg_use_daos_agent_env);
+	D_ASSERTF(rc == 0, "crtu_cli_start_basic() failed\n");
 
 	rc = sem_init(&ctl_gdata.cg_num_reply, 0, 0);
 	D_ASSERTF(rc == 0, "Could not initialize semaphore. rc %d\n", rc);
@@ -734,7 +735,8 @@ main(int argc, char **argv)
 {
 	int		rc = 0;
 
-	d_log_init();
+	rc = d_log_init();
+	D_ASSERTF(rc == 0, "d_log_init failed, rc=%d\n", rc);
 
 	rc = parse_args(argc, argv);
 	D_ASSERTF(rc == 0, "parse_args() failed. rc %d\n", rc);

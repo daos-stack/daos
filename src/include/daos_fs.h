@@ -218,6 +218,52 @@ int
 dfs_umount(dfs_t *dfs);
 
 /**
+ * Retrieve the open pool handle on the DFS mount. This is refcounted internally and must be
+ * released with dfs_pool_put().
+ *
+ * \param[in]	dfs	Pointer to the mounted file system.
+ * \param[out]	poh	Open pool handle.
+ *
+ * \return		0 on success, errno code on failure.
+ */
+int
+dfs_pool_get(dfs_t *dfs, daos_handle_t *poh);
+
+/**
+ * Release refcount of pool handle taken by dfs_pool_get().
+ *
+ * \param[in]	dfs	Pointer to the mounted file system.
+ * \param[out]	poh	Pool handle that was returned from dfs_pool_get().
+ *
+ * \return		0 on success, errno code on failure.
+ */
+int
+dfs_pool_put(dfs_t *dfs, daos_handle_t poh);
+
+/**
+ * Retrieve the open cont handle on the DFS mount. This is refcounted internally and must be
+ * released with dfs_cont_put().
+ *
+ * \param[in]	dfs	Pointer to the mounted file system.
+ * \param[out]	coh	Open cont handle.
+ *
+ * \return		0 on success, errno code on failure.
+ */
+int
+dfs_cont_get(dfs_t *dfs, daos_handle_t *coh);
+
+/**
+ * Release refcount of cont handle taken by dfs_cont_get().
+ *
+ * \param[in]	dfs	Pointer to the mounted file system.
+ * \param[out]	coh	Cont handle that was returned from dfs_cont_get().
+ *
+ * \return		0 on success, errno code on failure.
+ */
+int
+dfs_cont_put(dfs_t *dfs, daos_handle_t coh);
+
+/**
  * Query attributes of a DFS mount.
  *
  * \param[in]	dfs	Pointer to the mounted file system.
@@ -1010,57 +1056,7 @@ dfs_removexattr(dfs_t *dfs, dfs_obj_t *obj, const char *name);
 int
 dfs_listxattr(dfs_t *dfs, dfs_obj_t *obj, char *list, daos_size_t *size);
 
-/**
- * Backward compatibility code.
- * Please don't use directly
- */
-int
-dfs_cont_create2(daos_handle_t poh, uuid_t *cuuid, dfs_attr_t *attr, daos_handle_t *coh,
-		 dfs_t **dfs);
-/**
- * Backward compatibility code.
- * Please don't use directly
- */
-int
-dfs_cont_create1(daos_handle_t poh, const uuid_t cuuid, dfs_attr_t *attr, daos_handle_t *coh,
-		 dfs_t **dfs);
-
 #if defined(__cplusplus)
 }
-
-#define dfs_cont_create dfs_cont_create_cpp
-static inline int
-dfs_cont_create_cpp(daos_handle_t poh, uuid_t *cuuid, dfs_attr_t *attr, daos_handle_t *coh,
-		    dfs_t **dfs)
-{
-	return dfs_cont_create2(poh, cuuid, attr, coh, dfs);
-}
-
-static inline int
-dfs_cont_create_cpp(daos_handle_t poh, const uuid_t cuuid, dfs_attr_t *attr, daos_handle_t *coh,
-		    dfs_t **dfs)
-{
-	return dfs_cont_create1(poh, cuuid, attr, coh, dfs);
-};
-#else
-/**
- * for backward compatibility, support old api where a const uuid_t was required to be passed in for
- * the container to be created.
- */
-#define dfs_cont_create(poh, co, ...)					\
-	({								\
-		int _ret;						\
-		uuid_t *_u;						\
-		if (d_is_uuid(co)) {					\
-			_u = (uuid_t *)((unsigned char *)(co));		\
-			_ret = dfs_cont_create((poh), _u, __VA_ARGS__);	\
-		} else {						\
-			_u = (uuid_t *)(co);				\
-			_ret = dfs_cont_create2((poh), _u, __VA_ARGS__); \
-		}							\
-		_ret;							\
-	})
-
-
 #endif /* __cplusplus */
 #endif /* __DAOS_FS_H__ */

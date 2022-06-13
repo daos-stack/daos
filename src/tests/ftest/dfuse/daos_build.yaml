@@ -3,8 +3,8 @@ hosts:
     - server-A
   test_clients:
     - client-C
-# Test typically takes around 15 minutes, set timeout for 30.
-timeout: 1800
+# Hard limit the test at three hours, however individual tests have lower timeouts.
+timeout: 10800
 server_config:
   name: daos_server
 pool:
@@ -13,5 +13,28 @@ pool:
 container:
   type: POSIX
   control_method: daos
-dfuse:
-  mount_dir: "/tmp/daos_dfuse/"
+dfuse: !mux
+  writeback:
+    !filter-only : "/run/intercept/off"  # yamllint disable-line rule:colons
+    mount_dir: "/tmp/daos_dfuse/"
+    name: "writeback"
+  writethrough:
+    mount_dir: "/tmp/daos_dfuse/"
+    disable_wb_cache: true
+    name: "writethrough"
+  metadata:
+    !filter-only : "/run/intercept/off"  # yamllint disable-line rule:colons
+    mount_dir: "/tmp/daos_dfuse"
+    disable_wb_cache: true
+    name: "metadata"
+  nocache:
+    !filter-only : "/run/intercept/off"  # yamllint disable-line rule:colons
+    mount_dir: "/tmp/daos_dfuse/"
+    disable_wb_cache: true
+    disable_caching: true
+    name: "nocache"
+intercept: !mux
+  off:
+    use_intercept: false
+  on:
+    use_intercept: true

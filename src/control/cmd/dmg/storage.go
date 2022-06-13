@@ -31,7 +31,7 @@ type storageCmd struct {
 
 // storageScanCmd is the struct representing the scan storage subcommand.
 type storageScanCmd struct {
-	logCmd
+	baseCmd
 	ctlInvokerCmd
 	hostListCmd
 	jsonOutputCmd
@@ -59,14 +59,14 @@ func (cmd *storageScanCmd) Execute(_ []string) error {
 	}
 	req.SetHostList(cmd.hostlist)
 
-	cmd.log.Debugf("storage scan request: %+v", req)
+	cmd.Debugf("storage scan request: %+v", req)
 
 	resp, err := control.StorageScan(context.Background(), cmd.ctlInvoker, req)
 	if err != nil {
 		return err
 	}
 
-	cmd.log.Debugf("storage scan response: %+v", resp.HostStorage)
+	cmd.Debugf("storage scan response: %+v", resp.HostStorage)
 
 	if cmd.jsonOutputEnabled() {
 		return cmd.outputJSON(resp, resp.Errors())
@@ -77,7 +77,7 @@ func (cmd *storageScanCmd) Execute(_ []string) error {
 		return err
 	}
 	if outErr.Len() > 0 {
-		cmd.log.Error(outErr.String())
+		cmd.Error(outErr.String())
 	}
 
 	var out strings.Builder
@@ -96,14 +96,14 @@ func (cmd *storageScanCmd) Execute(_ []string) error {
 			return err
 		}
 	}
-	cmd.log.Info(out.String())
+	cmd.Info(out.String())
 
 	return resp.Errors()
 }
 
 // storageFormatCmd is the struct representing the format storage subcommand.
 type storageFormatCmd struct {
-	logCmd
+	baseCmd
 	ctlInvokerCmd
 	hostListCmd
 	jsonOutputCmd
@@ -138,7 +138,7 @@ func (cmd *storageFormatCmd) printFormatResp(resp *control.StorageFormatResp) er
 		return err
 	}
 	if outErr.Len() > 0 {
-		cmd.log.Error(outErr.String())
+		cmd.Error(outErr.String())
 	}
 
 	var out strings.Builder
@@ -146,14 +146,14 @@ func (cmd *storageFormatCmd) printFormatResp(resp *control.StorageFormatResp) er
 	if err := pretty.PrintStorageFormatMap(resp.HostStorage, &out, verbose); err != nil {
 		return err
 	}
-	cmd.log.Info(out.String())
+	cmd.Info(out.String())
 
 	return resp.Errors()
 }
 
 // nvmeRebindCmd is the struct representing the nvme-rebind storage subcommand.
 type nvmeRebindCmd struct {
-	logCmd
+	baseCmd
 	ctlInvokerCmd
 	hostListCmd
 	jsonOutputCmd
@@ -187,9 +187,9 @@ func (cmd *nvmeRebindCmd) Execute(args []string) error {
 		return err
 	}
 	if outErr.Len() > 0 {
-		cmd.log.Error(outErr.String())
+		cmd.Error(outErr.String())
 	} else {
-		cmd.log.Info("Command completed successfully")
+		cmd.Info("Command completed successfully")
 	}
 
 	return resp.Errors()
@@ -200,7 +200,7 @@ func (cmd *nvmeRebindCmd) Execute(args []string) error {
 // StorageTierIndex is by default set -1 to signal the server to add the device to the first
 // configured bdev tier.
 type nvmeAddDeviceCmd struct {
-	logCmd
+	baseCmd
 	ctlInvokerCmd
 	hostListCmd
 	jsonOutputCmd
@@ -226,7 +226,7 @@ func (cmd *nvmeAddDeviceCmd) Execute(args []string) error {
 	}
 	req.SetHostList(cmd.hostlist)
 
-	cmd.log.Debugf("nvme add device req: %+v", req)
+	cmd.Debugf("nvme add device req: %+v", req)
 	resp, err := control.StorageNvmeAddDevice(ctx, cmd.ctlInvoker, req)
 	if err != nil {
 		return err
@@ -241,9 +241,9 @@ func (cmd *nvmeAddDeviceCmd) Execute(args []string) error {
 		return err
 	}
 	if outErr.Len() > 0 {
-		cmd.log.Error(outErr.String())
+		cmd.Error(outErr.String())
 	} else {
-		cmd.log.Info("Command completed successfully")
+		cmd.Info("Command completed successfully")
 	}
 
 	return resp.Errors()
@@ -264,12 +264,12 @@ type nvmeSetFaultyCmd struct {
 // Execute is run when nvmeSetFaultyCmd activates
 // Set the SMD device state of the given device to "FAULTY"
 func (cmd *nvmeSetFaultyCmd) Execute(_ []string) error {
-	cmd.log.Info("WARNING: This command will permanently mark the device as unusable!")
+	cmd.Info("WARNING: This command will permanently mark the device as unusable!")
 	if !cmd.Force {
 		if cmd.jsonOutputEnabled() {
 			return errors.New("Cannot use --json without --force")
 		}
-		if !common.GetConsent(cmd.log) {
+		if !common.GetConsent(cmd.Logger) {
 			return errors.New("consent not given")
 		}
 	}
@@ -298,12 +298,12 @@ type nvmeReplaceCmd struct {
 // Replace a hot-removed device with a newly plugged device, or reuse a FAULTY device
 func (cmd *nvmeReplaceCmd) Execute(_ []string) error {
 	if cmd.OldDevUUID == cmd.NewDevUUID {
-		cmd.log.Info("WARNING: Attempting to reuse a previously set FAULTY device!")
+		cmd.Info("WARNING: Attempting to reuse a previously set FAULTY device!")
 	}
 
 	// TODO: Implement no-reint flag option
 	if cmd.NoReint {
-		cmd.log.Info("NoReint is not currently implemented")
+		cmd.Info("NoReint is not currently implemented")
 	}
 
 	req := &control.SmdQueryReq{

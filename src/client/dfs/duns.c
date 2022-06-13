@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2019-2021 Intel Corporation.
+ * (C) Copyright 2019-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -676,10 +676,7 @@ create_cont(daos_handle_t poh, struct duns_attr_t *attrp, bool create_with_label
 		if (create_with_label)
 			rc = dfs_cont_create_with_label(poh, attrp->da_cont, &dfs_attr,
 							&attrp->da_cuuid, NULL, NULL);
-		else if (!uuid_is_null(attrp->da_cuuid))
-			rc = dfs_cont_create(poh, attrp->da_cuuid, &dfs_attr, NULL, NULL);
-		else
-			rc = dfs_cont_create(poh, &attrp->da_cuuid, &dfs_attr, NULL, NULL);
+		rc = dfs_cont_create(poh, &attrp->da_cuuid, &dfs_attr, NULL, NULL);
 	} else {
 		daos_prop_t	*prop;
 		int		 nr = 1;
@@ -705,8 +702,6 @@ create_cont(daos_handle_t poh, struct duns_attr_t *attrp, bool create_with_label
 		if (create_with_label)
 			rc = daos_cont_create_with_label(poh, attrp->da_cont, prop,
 							 &attrp->da_cuuid, NULL);
-		else if (!uuid_is_null(attrp->da_cuuid))
-			rc = daos_cont_create(poh, attrp->da_cuuid, prop, NULL);
 		else
 			rc = daos_cont_create(poh, &attrp->da_cuuid, prop, NULL);
 		if (rc)
