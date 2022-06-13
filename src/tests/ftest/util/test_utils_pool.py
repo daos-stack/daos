@@ -19,6 +19,7 @@ from server_utils_base import ServerFailed, AutosizeCancel
 from dmg_utils import DmgCommand
 
 POOL_NAMESPACE = "/run/pool/*"
+POOL_TIMEOUT_INCREMENT = 200
 
 
 def add_pool(test, namespace=POOL_NAMESPACE, create=True, connect=True, index=0, **params):
@@ -49,7 +50,7 @@ def add_pool(test, namespace=POOL_NAMESPACE, create=True, connect=True, index=0,
 
     # Add a step to remove this pool when the test completes and ensure their is enough time for the
     # pool destroy to be attempted - accounting for a possible dmg command timeout
-    test.increment_timeout(200)
+    test.increment_timeout(POOL_TIMEOUT_INCREMENT)
     test.register_cleanup(remove_pool, test=test, pool=pool)
 
     return pool

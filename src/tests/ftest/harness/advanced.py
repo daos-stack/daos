@@ -9,6 +9,7 @@ from re import findall
 
 from apricot import TestWithServers
 from general_utils import run_pcmd, get_avocado_config_value
+from test_utils_pool import POOL_TIMEOUT_INCREMENT
 
 
 class HarnessAdvancedTest(TestWithServers):
@@ -72,7 +73,7 @@ class HarnessAdvancedTest(TestWithServers):
         This test can be run in any CI stage: vm, small, medium, large
 
         :avocado: tags=all
-        :avocado: tags=hw,small,medium,ib2,large
+        :avocado: tags=hw,small,medium,large
         :avocado: tags=harness,harness_advanced_test,core_files
         :avocado: tags=test_core_files_hw
         """
@@ -107,7 +108,7 @@ class HarnessAdvancedTest(TestWithServers):
 
         for key in sorted(timeouts):
             self.assertEqual(
-                int(timeouts[key][1]) - int(timeouts[key][0]), 600,
+                int(timeouts[key][1]) - int(timeouts[key][0]), POOL_TIMEOUT_INCREMENT * 3,
                 "Incorrect {}.{} value detected after adding 3 pools".format(namespace, key))
 
         self.log.info("Test passed")
@@ -119,7 +120,7 @@ class HarnessAdvancedTest(TestWithServers):
         runner.timeout.process_alive, and runner.timeout.process_died timeouts by 200 seconds each.
 
         :avocado: tags=all
-        :avocado: tags=hw,small,medium,ib2,large
+        :avocado: tags=hw,small,medium,large
         :avocado: tags=harness,harness_advanced_test,pool_timeout
         :avocado: tags=test_pool_timeout_hw
         """
