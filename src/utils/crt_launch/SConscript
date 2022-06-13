@@ -9,6 +9,7 @@ import daos_build
 
 CRT_LAUNCH = 'crt_launch.c'
 
+
 def scons():
     """scons function"""
     Import('base_env_mpi', 'prereqs')
@@ -32,6 +33,7 @@ def scons():
     crt_launch = daos_build.program(tenv, CRT_LAUNCH, LIBS=libs)
 
     tenv.Install(os.path.join("$PREFIX", 'bin'), crt_launch)
+
 
 if __name__ == "SCons.Script":
     scons()
