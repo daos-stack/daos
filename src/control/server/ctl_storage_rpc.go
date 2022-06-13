@@ -170,8 +170,8 @@ func (c *ControlService) scanScm(ctx context.Context, req *ctlpb.ScanScmReq) (*c
 // Adjust the NVME available size to its real usable size.
 func (c *ControlService) adjustNvmeSize(resp *ctlpb.ScanNvmeResp) {
 	type deviceSizeStat struct {
-		size    uint64
-		devices []*ctl.NvmeController_SmdDevice
+		clusterCount uint64 // Number of SPDK cluster for each target
+		devices      []*ctl.NvmeController_SmdDevice
 	}
 
 	devicesToAdjust := make(map[uint32]*deviceSizeStat, 0)
@@ -194,14 +194,13 @@ func (c *ControlService) adjustNvmeSize(resp *ctlpb.ScanNvmeResp) {
 			rank := dev.GetRank()
 			if devicesToAdjust[rank] == nil {
 				devicesToAdjust[rank] = &deviceSizeStat{
-					size: math.MaxUint64,
+					clusterCount: math.MaxUint64,
 				}
 			}
 			targetCount := uint64(len(dev.GetTgtIds()))
-			unalignedBytes := dev.GetAvailBytes() % (targetCount * dev.GetClusterSize())
-			availBytes := dev.AvailBytes - unalignedBytes
-			if availBytes < devicesToAdjust[rank].size {
-				devicesToAdjust[rank].size = availBytes
+			clusterCount := dev.GetAvailBytes() / (targetCount * dev.GetClusterSize())
+			if clusterCount < devicesToAdjust[rank].clusterCount {
+				devicesToAdjust[rank].clusterCount = clusterCount
 			}
 			devicesToAdjust[rank].devices = append(devicesToAdjust[rank].devices, dev)
 		}
@@ -209,12 +208,16 @@ func (c *ControlService) adjustNvmeSize(resp *ctlpb.ScanNvmeResp) {
 
 	for rank, item := range devicesToAdjust {
 		for _, dev := range item.devices {
-			unusedBytes := dev.AvailBytes - item.size
-			c.log.Debugf("Adjusting available size of SMD device %s from rank %d: "+
-				"excluding %s (%d Bytes) of unusable storage",
-				dev.GetUuid(), rank,
-				humanize.Bytes(unusedBytes), unusedBytes)
-			dev.AvailBytes = item.size
+			targetCount := uint64(len(dev.GetTgtIds()))
+			availBytes := targetCount * item.clusterCount * dev.GetClusterSize()
+			if availBytes != dev.GetAvailBytes() {
+				c.log.Debugf("Adjusting available size of SMD device %s from rank %d "+
+					"(targets: %d): from %s (%d Bytes) to %s (%d bytes)",
+					dev.GetUuid(), rank, dev.GetTgtIds(),
+					humanize.Bytes(dev.GetAvailBytes()), dev.GetAvailBytes(),
+					humanize.Bytes(availBytes), availBytes)
+				dev.AvailBytes = availBytes
+			}
 		}
 	}
 }
