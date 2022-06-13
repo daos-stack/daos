@@ -1128,7 +1128,7 @@ d_tm_print_node(struct d_tm_context *ctx, struct d_tm_node_t *node, int level,
 	uint64_t		val;
 	time_t			clk;
 	char			time_buff[D_TM_TIME_BUFF_LEN];
-	char			*timestamp = NULL;
+	char                    *timestamp      = NULL;
 	char			*name = NULL;
 	char			*desc = NULL;
 	char			*units = NULL;

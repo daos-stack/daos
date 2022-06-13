@@ -105,7 +105,7 @@ static d_list_t	d_log_caches;
 static const char *default_fac0name = "CLOG";
 
 /* whether we should merge log and stderr */
-static bool merge_stderr;
+static bool               merge_stderr;
 
 #ifdef DLOG_MUTEX
 #define clog_lock()		D_MUTEX_LOCK(&mst.clogmux)
@@ -447,7 +447,7 @@ d_log_write(char *msg, int len, bool flush)
 				return -1;
 			}
 		} else {
-			mst.log_fd = open(mst.log_file,  O_RDWR | O_CREAT | O_CLOEXEC, 0644);
+			mst.log_fd = open(mst.log_file, O_RDWR | O_CREAT | O_CLOEXEC, 0644);
 			if (mst.log_fd < 0) {
 				fprintf(stderr, "d_log_write(): failed to recreate log file %s: %s\n",
 					mst.log_file, strerror(errno));
@@ -455,7 +455,8 @@ d_log_write(char *msg, int len, bool flush)
 			}
 			rc = fcntl(mst.log_fd, F_DUPFD, 128);
 			if (rc < 0) {
-				fprintf(stderr, "d_log_write(): failed to recreate log file %s: %s\n",
+				fprintf(stderr,
+					"d_log_write(): failed to recreate log file %s: %s\n",
 					mst.log_file, strerror(errno));
 				close(mst.log_fd);
 				return -1;
@@ -890,7 +891,7 @@ d_log_open(char *tag, int maxfac_hint, int default_mask, int stderr_mask,
 	mst.def_mask = default_mask;
 	mst.stderr_mask = stderr_mask;
 	if (logfile) {
-		int log_flags = O_RDWR | O_CREAT | O_CLOEXEC;
+		int         log_flags = O_RDWR | O_CREAT | O_CLOEXEC;
 		struct stat st;
 
 		env = getenv(D_LOG_STDERR_IN_LOG_ENV);
@@ -931,7 +932,7 @@ d_log_open(char *tag, int maxfac_hint, int default_mask, int stderr_mask,
 		rc = fcntl(mst.log_fd, F_DUPFD, 128);
 		if (rc < 0) {
 			fprintf(stderr, "d_log_write(): failed to recreate log file %s: %s\n",
-					 mst.log_file, strerror(errno));
+				mst.log_file, strerror(errno));
 			close(mst.log_fd);
 			return -1;
 		}

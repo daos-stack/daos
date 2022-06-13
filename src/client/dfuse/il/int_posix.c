@@ -367,8 +367,9 @@ ioil_show_summary()
 		return;
 
 	__real_fprintf(stderr,
-		"[libioil] Performed %"PRIu64" reads and %"PRIu64" writes from %"PRIu64" files\n",
-		ioil_iog.iog_read_count, ioil_iog.iog_write_count, ioil_iog.iog_file_count);
+		       "[libioil] Performed %" PRIu64 " reads and %" PRIu64 " writes from %" PRIu64
+		       " files\n",
+		       ioil_iog.iog_read_count, ioil_iog.iog_write_count, ioil_iog.iog_file_count);
 }
 
 static __attribute__((destructor)) void
@@ -827,8 +828,8 @@ get_file:
 	else if (rc)
 		D_GOTO(shrink, rc);
 
-	DFUSE_LOG_DEBUG("fd:%d flags %#lx fstat %s",
-			fd, il_reply.fir_flags, entry->fd_fstat ? "yes" : "no");
+	DFUSE_LOG_DEBUG("fd:%d flags %#lx fstat %s", fd, il_reply.fir_flags,
+			entry->fd_fstat ? "yes" : "no");
 
 	rc = vector_set(&fd_table, fd, entry);
 	if (rc != 0) {
@@ -1310,8 +1311,8 @@ dfuse_lseek(int fd, off_t offset, int whence)
 	if (rc != 0)
 		goto do_real_lseek;
 
-	DFUSE_LOG_DEBUG("lseek(fd=%d, offset=%zd, whence=%#x) intercepted, bypass=%s",
-			fd, offset, whence, bypass_status[entry->fd_status]);
+	DFUSE_LOG_DEBUG("lseek(fd=%d, offset=%zd, whence=%#x) intercepted, bypass=%s", fd, offset,
+			whence, bypass_status[entry->fd_status]);
 
 	if (drop_reference_if_disabled(entry))
 		goto do_real_lseek;
@@ -1355,9 +1356,9 @@ DFUSE_PUBLIC int
 dfuse_fseek(FILE *stream, long offset, int whence)
 {
 	struct fd_entry *entry;
-	off_t new_offset = -1;
-	int rc;
-	int fd;
+	off_t            new_offset = -1;
+	int              rc;
+	int              fd;
 
 	fd = fileno(stream);
 	if (fd == -1)
@@ -1367,17 +1368,17 @@ dfuse_fseek(FILE *stream, long offset, int whence)
 	if (rc != 0)
 		goto do_real_fseek;
 
-	DFUSE_LOG_DEBUG("fseek(fd=%d, offset=%zd, whence=%#x) intercepted, bypass=%s",
-			fd, offset, whence, bypass_status[entry->fd_status]);
+	DFUSE_LOG_DEBUG("fseek(fd=%d, offset=%zd, whence=%#x) intercepted, bypass=%s", fd, offset,
+			whence, bypass_status[entry->fd_status]);
 
 	if (drop_reference_if_disabled(entry))
 		goto do_real_fseek;
 
 	if (whence == SEEK_SET) {
-		new_offset = offset;
+		new_offset    = offset;
 		entry->fd_eof = false;
 	} else if (whence == SEEK_CUR) {
-		new_offset = entry->fd_pos + offset;
+		new_offset    = entry->fd_pos + offset;
 		entry->fd_eof = false;
 	} else {
 		/* Let the system handle SEEK_END as well as non-standard
@@ -1391,7 +1392,7 @@ dfuse_fseek(FILE *stream, long offset, int whence)
 
 	if (new_offset < 0) {
 		new_offset = (off_t)-1;
-		errno = EINVAL;
+		errno      = EINVAL;
 	} else {
 		entry->fd_pos = new_offset;
 	}
@@ -1416,9 +1417,9 @@ DFUSE_PUBLIC int
 dfuse_fseeko(FILE *stream, off_t offset, int whence)
 {
 	struct fd_entry *entry;
-	off_t new_offset = -1;
-	int rc;
-	int fd;
+	off_t            new_offset = -1;
+	int              rc;
+	int              fd;
 
 	fd = fileno(stream);
 	if (fd == -1)
@@ -1429,8 +1430,8 @@ dfuse_fseeko(FILE *stream, off_t offset, int whence)
 		goto do_real_fseeko;
 
 	DFUSE_TRA_DEBUG(entry->fd_dfsoh,
-			"fseeko(fd=%d, offset=%zd, whence=%#x) intercepted, bypass=%s",
-			fd, offset, whence, bypass_status[entry->fd_status]);
+			"fseeko(fd=%d, offset=%zd, whence=%#x) intercepted, bypass=%s", fd, offset,
+			whence, bypass_status[entry->fd_status]);
 
 	if (drop_reference_if_disabled(entry))
 		goto do_real_fseeko;
@@ -1439,11 +1440,11 @@ dfuse_fseeko(FILE *stream, off_t offset, int whence)
 		off_t ni = __real_fseeko(stream, offset, whence);
 
 		DFUSE_TRA_ERROR(entry->fd_dfsoh, "Patching up, offset %#zx", ni);
-		new_offset = offset;
+		new_offset    = offset;
 		entry->fd_eof = false;
 
 	} else if (whence == SEEK_CUR) {
-		new_offset = entry->fd_pos + offset;
+		new_offset    = entry->fd_pos + offset;
 		entry->fd_eof = false;
 	} else {
 		/* Let the system handle SEEK_END as well as non-standard
@@ -1457,7 +1458,7 @@ dfuse_fseeko(FILE *stream, off_t offset, int whence)
 
 	if (new_offset < 0) {
 		new_offset = (off_t)-1;
-		errno = EINVAL;
+		errno      = EINVAL;
 	} else {
 		entry->fd_pos = new_offset;
 	}
@@ -1482,9 +1483,9 @@ DFUSE_PUBLIC void
 dfuse_rewind(FILE *stream)
 {
 	struct fd_entry *entry;
-	off_t new_offset = -1;
-	int rc;
-	int fd;
+	off_t            new_offset = -1;
+	int              rc;
+	int              fd;
 
 	fd = fileno(stream);
 	if (fd == -1)
@@ -1494,8 +1495,8 @@ dfuse_rewind(FILE *stream)
 	if (rc != 0)
 		goto do_real_rewind;
 
-	DFUSE_LOG_DEBUG("rewind(fd=%d) intercepted, bypass=%s",
-			fd, bypass_status[entry->fd_status]);
+	DFUSE_LOG_DEBUG("rewind(fd=%d) intercepted, bypass=%s", fd,
+			bypass_status[entry->fd_status]);
 
 	if (drop_reference_if_disabled(entry))
 		goto do_real_rewind;
@@ -1884,8 +1885,8 @@ dfuse_fopen(const char *path, const char *mode)
 	atomic_fetch_add_relaxed(&ioil_iog.iog_file_count, 1);
 
 	DFUSE_TRA_DEBUG(entry.fd_dfsoh,
-			"fopen(path='%s', mode=%s) = %p(fd=%d) intercepted, bypass=%s",
-			path, mode, fp, fd, bypass_status[entry.fd_status]);
+			"fopen(path='%s', mode=%s) = %p(fd=%d) intercepted, bypass=%s", path, mode,
+			fp, fd, bypass_status[entry.fd_status]);
 
 	return fp;
 }
@@ -1920,9 +1921,8 @@ dfuse_freopen(const char *path, const char *mode, FILE *stream)
 		if (rc == 0) {
 			DFUSE_LOG_DEBUG("freopen(path='%s', mode=%s, stream=%p"
 					"(fd=%d) = %p(fd=%d) "
-					"intercepted, bypass=%s", path, mode,
-					stream, oldfd,
-					newstream, newfd,
+					"intercepted, bypass=%s",
+					path, mode, stream, oldfd, newstream, newfd,
 					bypass_status[DFUSE_IO_DIS_STREAM]);
 			vector_decref(&fd_table, old_entry);
 		}
@@ -1931,15 +1931,15 @@ dfuse_freopen(const char *path, const char *mode, FILE *stream)
 
 	if (rc == 0) {
 		DFUSE_LOG_DEBUG("freopen(path='%s', mode=%s, stream=%p(fd=%d) = %p(fd=%d)"
-				" intercepted, bypass=%s", path, mode, stream,
-				oldfd, newstream, newfd,
+				" intercepted, bypass=%s",
+				path, mode, stream, oldfd, newstream, newfd,
 				bypass_status[DFUSE_IO_DIS_STREAM]);
 		vector_decref(&fd_table, old_entry);
 	} else {
 		DFUSE_LOG_DEBUG("freopen(path='%s', mode=%s, stream=%p(fd=%d)) "
 				"= %p(fd=%d) intercepted, "
-				"bypass=%s", path, mode, stream, oldfd,
-				newstream, newfd,
+				"bypass=%s",
+				path, mode, stream, oldfd, newstream, newfd,
 				bypass_status[DFUSE_IO_DIS_STREAM]);
 	}
 
@@ -1980,15 +1980,15 @@ do_real_fclose:
 DFUSE_PUBLIC size_t
 dfuse_fread(void *ptr, size_t size, size_t nmemb, FILE *stream)
 {
-	struct fd_entry	*entry = NULL;
-	ssize_t bytes_read;
-	off_t oldpos;
-	size_t nread = 0;
-	size_t len;
-	int fd;
-	int rc;
-	int errcode = EIO;
-	int counter;
+	struct fd_entry *entry = NULL;
+	ssize_t          bytes_read;
+	off_t            oldpos;
+	size_t           nread = 0;
+	size_t           len;
+	int              fd;
+	int              rc;
+	int              errcode = EIO;
+	int              counter;
 
 	fd = fileno(stream);
 	if (fd == -1)
@@ -2003,17 +2003,17 @@ dfuse_fread(void *ptr, size_t size, size_t nmemb, FILE *stream)
 
 	DFUSE_TRA_INFO(entry->fd_dfsoh, "performing fread from %#zx", entry->fd_pos);
 
-	len = nmemb * size;
+	len     = nmemb * size;
 
 	counter = atomic_fetch_add_relaxed(&ioil_iog.iog_read_count, 1);
 
 	if (counter < ioil_iog.iog_report_count)
 		__real_fprintf(stderr, "[libioil] Intercepting fread of size %zi\n", len);
 
-	oldpos = entry->fd_pos;
+	oldpos     = entry->fd_pos;
 	bytes_read = ioil_do_pread(ptr, len, oldpos, entry, &errcode);
 	if (bytes_read > 0) {
-		nread = bytes_read / size;
+		nread         = bytes_read / size;
 		entry->fd_pos = oldpos + (nread * size);
 		if (nread != nmemb)
 			entry->fd_eof = true;
@@ -2034,17 +2034,17 @@ do_real_fread:
 DFUSE_PUBLIC size_t
 dfuse_fwrite(const void *ptr, size_t size, size_t nmemb, FILE *stream)
 {
-	struct fd_entry	*entry = NULL;
-	size_t len;
-	int fd;
-	off_t oldpos;
-	int rc;
-	int errcode = EIO;
-	int counter;
-	ssize_t bytes_written;
-	size_t nwrite = 0;
+	struct fd_entry *entry = NULL;
+	size_t           len;
+	int              fd;
+	off_t            oldpos;
+	int              rc;
+	int              errcode = EIO;
+	int              counter;
+	ssize_t          bytes_written;
+	size_t           nwrite = 0;
 
-	fd = fileno(stream);
+	fd                      = fileno(stream);
 	if (fd == -1)
 		goto do_real_fwrite;
 
@@ -2055,7 +2055,7 @@ dfuse_fwrite(const void *ptr, size_t size, size_t nmemb, FILE *stream)
 	if (drop_reference_if_disabled(entry))
 		goto do_real_fwrite;
 
-	len = nmemb * size;
+	len     = nmemb * size;
 
 	counter = atomic_fetch_add_relaxed(&ioil_iog.iog_write_count, 1);
 
@@ -2063,10 +2063,10 @@ dfuse_fwrite(const void *ptr, size_t size, size_t nmemb, FILE *stream)
 		__real_fprintf(stderr, "[libioil] Intercepting fwrite of size %zi\n", len);
 
 	DFUSE_TRA_INFO(entry->fd_dfsoh, "Doing fwrite to %p at %#zx", stream, entry->fd_pos);
-	oldpos = entry->fd_pos;
+	oldpos        = entry->fd_pos;
 	bytes_written = ioil_do_writex(ptr, len, oldpos, entry, &errcode);
 	if (bytes_written > 0) {
-		nwrite = bytes_written / size;
+		nwrite        = bytes_written / size;
 		entry->fd_pos = oldpos + (nwrite * size);
 	} else if (bytes_written < 0) {
 		entry->fd_err = bytes_written;
@@ -2082,9 +2082,9 @@ do_real_fwrite:
 DFUSE_PUBLIC int
 dfuse_feof(FILE *stream)
 {
-	struct fd_entry	*entry = NULL;
-	int fd;
-	int rc;
+	struct fd_entry *entry = NULL;
+	int              fd;
+	int              rc;
 
 	fd = fileno(stream);
 	if (fd == -1)
@@ -2109,9 +2109,9 @@ do_real_feof:
 DFUSE_PUBLIC int
 dfuse_ferror(FILE *stream)
 {
-	struct fd_entry	*entry = NULL;
-	int fd;
-	int rc;
+	struct fd_entry *entry = NULL;
+	int              fd;
+	int              rc;
 
 	fd = fileno(stream);
 	if (fd == -1)
@@ -2136,9 +2136,9 @@ do_real_ferror:
 DFUSE_PUBLIC void
 dfuse_clearerr(FILE *stream)
 {
-	struct fd_entry	*entry = NULL;
-	int fd;
-	int rc;
+	struct fd_entry *entry = NULL;
+	int              fd;
+	int              rc;
 
 	fd = fileno(stream);
 	if (fd == -1)
@@ -2162,9 +2162,9 @@ do_real_clearerr:
 DFUSE_PUBLIC int
 dfuse___uflow(FILE *stream)
 {
-	struct fd_entry	*entry = NULL;
-	int fd;
-	int rc;
+	struct fd_entry *entry = NULL;
+	int              fd;
+	int              rc;
 
 	fd = fileno(stream);
 	if (fd == -1)
@@ -2188,10 +2188,10 @@ do_real_uflow:
 DFUSE_PUBLIC long
 dfuse_ftell(FILE *stream)
 {
-	struct fd_entry	*entry = NULL;
-	int fd;
-	int rc;
-	long off;
+	struct fd_entry *entry = NULL;
+	int              fd;
+	int              rc;
+	long             off;
 
 	fd = fileno(stream);
 	if (fd == -1)
@@ -2213,7 +2213,7 @@ dfuse_ftell(FILE *stream)
 	 * intercept whatever functions are missing.
 	 */
 	if (off == 0) {
-		off =  __real_ftell(stream);
+		off = __real_ftell(stream);
 		if (off != 0) {
 			D_ERROR("Missing interception, patching up %d %p\n", fd, stream);
 			entry->fd_status = DFUSE_IO_DIS_STREAM;
@@ -2232,10 +2232,10 @@ do_real_ftell:
 DFUSE_PUBLIC off_t
 dfuse_ftello(FILE *stream)
 {
-	struct fd_entry	*entry = NULL;
-	int fd;
-	int rc;
-	off_t off;
+	struct fd_entry *entry = NULL;
+	int              fd;
+	int              rc;
+	off_t            off;
 
 	fd = fileno(stream);
 	if (fd == -1)
@@ -2260,9 +2260,9 @@ do_real_ftello:
 DFUSE_PUBLIC int
 dfuse_fputc(int c, FILE *stream)
 {
-	struct fd_entry	*entry = NULL;
-	int fd;
-	int rc;
+	struct fd_entry *entry = NULL;
+	int              fd;
+	int              rc;
 
 	fd = fileno(stream);
 	if (fd == -1)
@@ -2287,9 +2287,9 @@ do_real_fn:
 DFUSE_PUBLIC int
 dfuse_fputs(char *__str, FILE *stream)
 {
-	struct fd_entry	*entry = NULL;
-	int fd;
-	int rc;
+	struct fd_entry *entry = NULL;
+	int              fd;
+	int              rc;
 
 	fd = fileno(stream);
 	if (fd == -1)
@@ -2318,9 +2318,9 @@ do_real_fn:
 DFUSE_PUBLIC int
 dfuse_fputws(const wchar_t *ws, FILE *stream)
 {
-	struct fd_entry	*entry = NULL;
-	int fd;
-	int rc;
+	struct fd_entry *entry = NULL;
+	int              fd;
+	int              rc;
 
 	D_ERROR("Unsupported function\n");
 
@@ -2349,9 +2349,9 @@ do_real_fn:
 DFUSE_PUBLIC int
 dfuse_fgetc(FILE *stream)
 {
-	struct fd_entry	*entry = NULL;
-	int fd;
-	int rc;
+	struct fd_entry *entry = NULL;
+	int              fd;
+	int              rc;
 
 	fd = fileno(stream);
 	if (fd == -1)
@@ -2375,9 +2375,9 @@ do_real_fn:
 DFUSE_PUBLIC int
 dfuse_getc(FILE *stream)
 {
-	struct fd_entry	*entry = NULL;
-	int fd;
-	int rc;
+	struct fd_entry *entry = NULL;
+	int              fd;
+	int              rc;
 
 	fd = fileno(stream);
 	if (fd == -1)
@@ -2402,9 +2402,9 @@ do_real_fn:
 DFUSE_PUBLIC char *
 dfuse_fgets(char *str, int n, FILE *stream)
 {
-	struct fd_entry	*entry = NULL;
-	int fd;
-	int rc;
+	struct fd_entry *entry = NULL;
+	int              fd;
+	int              rc;
 
 	fd = fileno(stream);
 
@@ -2430,9 +2430,9 @@ do_real_fn:
 DFUSE_PUBLIC wchar_t *
 dfuse_fgetws(const wchar_t *ws, FILE *stream)
 {
-	struct fd_entry	*entry = NULL;
-	int fd;
-	int rc;
+	struct fd_entry *entry = NULL;
+	int              fd;
+	int              rc;
 
 	D_ERROR("Unsupported function\n");
 
@@ -2461,9 +2461,9 @@ do_real_fn:
 DFUSE_PUBLIC int
 dfuse_ungetc(int c, FILE *stream)
 {
-	struct fd_entry	*entry = NULL;
-	int fd;
-	int rc;
+	struct fd_entry *entry = NULL;
+	int              fd;
+	int              rc;
 
 	fd = fileno(stream);
 	if (fd == -1)
@@ -2488,10 +2488,10 @@ do_real_fn:
 DFUSE_PUBLIC int
 dfuse_fscanf(FILE *stream, const char *format, ...)
 {
-	struct fd_entry	*entry = NULL;
-	va_list ap;
-	int fd;
-	int rc;
+	struct fd_entry *entry = NULL;
+	va_list          ap;
+	int              fd;
+	int              rc;
 
 	D_ERROR("Unsupported function\n");
 
@@ -2520,9 +2520,9 @@ do_real_fn:
 DFUSE_PUBLIC int
 dfuse_vfscanf(FILE *stream, const char *format, va_list arg)
 {
-	struct fd_entry	*entry = NULL;
-	int fd;
-	int rc;
+	struct fd_entry *entry = NULL;
+	int              fd;
+	int              rc;
 
 	D_ERROR("Unsupported function\n");
 
@@ -2547,10 +2547,10 @@ do_real_fn:
 DFUSE_PUBLIC int
 dfuse_fprintf(FILE *stream, const char *format, ...)
 {
-	struct fd_entry	*entry = NULL;
-	va_list ap;
-	int fd;
-	int rc;
+	struct fd_entry *entry = NULL;
+	va_list          ap;
+	int              fd;
+	int              rc;
 
 	fd = fileno(stream);
 	if (fd == -1)
@@ -2577,9 +2577,9 @@ do_real_fn:
 DFUSE_PUBLIC int
 dfuse_vfprintf(FILE *stream, const char *format, va_list arg)
 {
-	struct fd_entry	*entry = NULL;
-	int fd;
-	int rc;
+	struct fd_entry *entry = NULL;
+	int              fd;
+	int              rc;
 
 	D_ERROR("Unsupported function\n");
 
