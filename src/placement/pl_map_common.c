@@ -46,6 +46,7 @@ remap_add_one(d_list_t *remap_list, struct failed_shard *f_new)
 		d_list_add(&f_new->fs_list, tmp);
 		return;
 	}
+
 	d_list_add(&f_new->fs_list, remap_list);
 }
 

@@ -48,6 +48,8 @@ func PoolProperties() PoolPropertyMap {
 						return "exclude"
 					case n&daos.PoolSelfHealingAutoRebuild > 0:
 						return "rebuild"
+					case n&daos.PoolSelfHealingAutoReint > 0:
+						return "reint"
 					default:
 						return "unknown"
 					}
@@ -56,6 +58,7 @@ func PoolProperties() PoolPropertyMap {
 			values: map[string]uint64{
 				"exclude": daos.PoolSelfHealingAutoExclude,
 				"rebuild": daos.PoolSelfHealingAutoRebuild,
+				"reint":   daos.PoolSelfHealingAutoReint,
 			},
 		},
 		"space_rb": {
