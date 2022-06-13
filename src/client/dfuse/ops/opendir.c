@@ -34,10 +34,10 @@ dfuse_cb_opendir(fuse_req_t req, struct dfuse_inode_entry *ie, struct fuse_file_
 	/* TODO: Keep track of age of cache and selectively enable this bit.
 	 * The kernel keeps the readdir data in the page cache which has no time based
 	 * expiry mechanism, it would be better to keep track of when the last successful
-	 * opendir/readir/closedir calls (excudling where seekdir was used) happened
+	 * opendir/readir/closedir calls (excluding where seekdir was used) happened
 	 * and set the keep_cache bit here based on how old the data in cache is.
 	 * fuse can peek into the page cache so we could identify if there is data in cache
-	 * or not but it's not possible to know which calls popultaed it so getting
+	 * or not but it's not possible to know which calls populated it so getting
 	 * absolute timings is likely impossible but if dfuse assumes worst-case in terms
 	 * of age this will mean that the cache timeouts are slightly shorter than
 	 * configured which is unlikely to be a problem.
