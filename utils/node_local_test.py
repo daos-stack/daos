@@ -1551,6 +1551,7 @@ def needs_dfuse(method):
 
     return _helper
 
+
 class needs_dfuse_with_opt():
     """Decorator class for starting dfuse under posix_tests class
 
@@ -1595,6 +1596,7 @@ class needs_dfuse_with_opt():
                     obj.fatal_errors = True
             return rc
         return _helper
+
 
 class print_stat():
     """Class for nicely showing file 'stat' data, similar to ls -l"""

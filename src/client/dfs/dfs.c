@@ -976,7 +976,7 @@ restart:
 			rc2 = daos_array_close(file->oh, NULL);
 			if (rc2 == -DER_NOMEM)
 				daos_array_close(file->oh, NULL);
-			D_DEBUG(DB_TRACE, "Insert file entry %s failed (%d)\n",	file->name, rc);
+			D_DEBUG(DB_TRACE, "Insert file entry %s failed (%d)\n", file->name, rc);
 			D_GOTO(out, rc);
 		} else {
 			/** Success, commit */
@@ -3931,7 +3931,7 @@ read_cb(tse_task_t *task, void *data)
 	D_ASSERT(params != NULL);
 
 	if (rc != 0) {
-		D_ERROR("Failed to read from array object, "DF_RC"\n", DP_RC(rc));
+		D_ERROR("Failed to read from array object, " DF_RC "\n", DP_RC(rc));
 		D_GOTO(out, rc);
 	}
 
@@ -5463,7 +5463,7 @@ dfs_removexattr(dfs_t *dfs, dfs_obj_t *obj, const char *name)
 	rc = daos_obj_punch_akeys(oh, th, cond, &dkey, 1, &akey, NULL);
 	if (rc) {
 		D_CDEBUG(rc == -DER_NONEXIST, DLOG_INFO, DLOG_ERR,
-			 "Failed to punch extended attribute '%s' "DF_RC"\n", name, DP_RC(rc));
+			 "Failed to punch extended attribute '%s' " DF_RC "\n", name, DP_RC(rc));
 		D_GOTO(out, rc = daos_der2errno(rc));
 	}
 

@@ -53,9 +53,10 @@ daos_fail_check(uint64_t fail_loc)
 	}
 
 	if (attr == NULL) {
-		D_DEBUG(DB_ANY, "No attr fail_loc="DF_X64" value="DF_U64
-			", input_loc="DF_X64" idx %d\n", daos_fail_loc,
-			daos_fail_value, fail_loc, grp);
+		D_DEBUG(DB_ANY,
+			"No attr fail_loc=" DF_X64 " value=" DF_U64 ", input_loc=" DF_X64
+			" idx %d\n",
+			daos_fail_loc, daos_fail_value, fail_loc, grp);
 		return 0;
 	}
 

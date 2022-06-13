@@ -397,13 +397,13 @@ d_hash_table_ops_t cont_hops = {
 void
 dfuse_dfs_release(struct dfuse_projection_info *fs_handle, dfs_obj_t *obj, void **ptr)
 {
-	struct dfuse_dfs_list	*ddl;
-	void			*_ptr = *ptr;
-	int			rc;
+	struct dfuse_dfs_list *ddl;
+	void                  *_ptr = *ptr;
+	int                    rc;
 
 	*ptr = NULL;
 
-	rc = dfs_release(obj);
+	rc   = dfs_release(obj);
 	if (rc == 0) {
 		D_FREE(_ptr);
 		return;
@@ -436,8 +436,8 @@ dfuse_dfs_release(struct dfuse_projection_info *fs_handle, dfs_obj_t *obj, void 
 void
 dfuse_release_check(struct dfuse_projection_info *fs_handle)
 {
-	struct dfuse_dfs_list	*ddl;
-	int rc;
+	struct dfuse_dfs_list *ddl;
+	int                    rc;
 
 	/* Do an initial check without taking the mutex */
 	if (d_list_empty(&fs_handle->dpi_free_ino))
@@ -467,19 +467,19 @@ dfuse_release_check(struct dfuse_projection_info *fs_handle)
 int
 dfuse_release_check_all(struct dfuse_projection_info *fs_handle)
 {
-	struct dfuse_dfs_list		*ddl;
-	int				rc = -DER_SUCCESS;
-	int				rc2;
-	d_list_t			tmp_list;
-	int				count = 0;
-	int				fcount = 0;
+	struct dfuse_dfs_list *ddl;
+	int                    rc = -DER_SUCCESS;
+	int                    rc2;
+	d_list_t               tmp_list;
+	int                    count  = 0;
+	int                    fcount = 0;
 
 	D_INIT_LIST_HEAD(&tmp_list);
 
 	D_MUTEX_LOCK(&fs_handle->dpi_free_mutex);
 
-	while ((ddl = d_list_pop_entry(&fs_handle->dpi_free_ino, struct dfuse_dfs_list,
-				       ddl_list))) {
+	while (
+	    (ddl = d_list_pop_entry(&fs_handle->dpi_free_ino, struct dfuse_dfs_list, ddl_list))) {
 		count++;
 
 		rc2 = dfs_release(ddl->ddl_obj);
@@ -499,8 +499,8 @@ dfuse_release_check_all(struct dfuse_projection_info *fs_handle)
 
 	DFUSE_TRA_INFO(fs_handle, "Released %d/%d descriptors\n", count - fcount, count);
 	if (rc)
-		DFUSE_TRA_ERROR(fs_handle,
-				"Failed to flush free inodes: %d (%s)", rc, strerror(rc));
+		DFUSE_TRA_ERROR(fs_handle, "Failed to flush free inodes: %d (%s)", rc,
+				strerror(rc));
 	return rc;
 }
 
@@ -1123,8 +1123,8 @@ void
 dfuse_ie_close(struct dfuse_projection_info *fs_handle,
 	       struct dfuse_inode_entry *ie)
 {
-	struct dfuse_cont	*dfc = NULL;
-	int			ref;
+	struct dfuse_cont *dfc = NULL;
+	int                ref;
 
 	ref = atomic_load_relaxed(&ie->ie_ref);
 	DFUSE_TRA_DEBUG(ie,
@@ -1154,8 +1154,7 @@ dfuse_ie_close(struct dfuse_projection_info *fs_handle,
 		/* Flush the free list of dfs descriptors to drop any references on the container */
 		dfuse_release_check_all(fs_handle);
 
-		DFUSE_TRA_INFO(dfc, "Closing poh %d coh %d",
-			       daos_handle_is_valid(dfp->dfp_poh),
+		DFUSE_TRA_INFO(dfc, "Closing poh %d coh %d", daos_handle_is_valid(dfp->dfp_poh),
 			       daos_handle_is_valid(dfc->dfs_coh));
 
 		d_hash_rec_decref(&dfp->dfp_cont_table, &dfc->dfs_entry);

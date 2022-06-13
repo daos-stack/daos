@@ -48,8 +48,8 @@ struct dfuse_projection_info {
 	sem_t				dpi_sem;
 	pthread_t			dpi_thread;
 
-	pthread_mutex_t			dpi_free_mutex;
-	d_list_t			dpi_free_ino;
+	pthread_mutex_t                  dpi_free_mutex;
+	d_list_t                         dpi_free_ino;
 
 	bool				dpi_shutdown;
 };
@@ -115,8 +115,8 @@ struct dfuse_obj_hdl {
  * point here, and it means that either inodes or open files can be added to the same list.
  */
 struct dfuse_dfs_list {
-	d_list_t	ddl_list;
-	dfs_obj_t	*ddl_obj;
+	d_list_t   ddl_list;
+	dfs_obj_t *ddl_obj;
 };
 
 struct dfuse_inode_ops {

@@ -534,7 +534,7 @@ class LogTest():
             rpc_r.report()
 
         # This isn't currently used anyway.
-        #if not have_debug:
+        # if not have_debug:
         #    print('DEBUG not enabled, No log consistency checking possible')
 
         total_lines = trace_lines + non_trace_lines

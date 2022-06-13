@@ -189,14 +189,14 @@ dfuse_launch_fuse(struct dfuse_projection_info *fs_handle, struct fuse_args *arg
 	 */
 	if (D_SHOULD_FAIL(start_fault_attr)) {
 		struct d_fault_attr_t *d_fault_mem = NULL;
-		struct d_fault_attr_t fault_copy;
+		struct d_fault_attr_t  fault_copy;
 
 		if (start_fault_attr->fa_err_code == 0)
 			return -DER_SUCCESS;
 
-		d_fault_mem = d_fault_attr_lookup(0);
+		d_fault_mem                 = d_fault_attr_lookup(0);
 
-		fault_copy = *d_fault_mem;
+		fault_copy                  = *d_fault_mem;
 		fault_copy.fa_probability_x = 1;
 		d_fault_attr_set(0, fault_copy);
 	}
