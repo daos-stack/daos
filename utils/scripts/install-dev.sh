@@ -25,5 +25,13 @@ esac
 # Install dependencies from the OS repos.
 SCRIPT_DIR="$(dirname "$(realpath -e "${BASH_SOURCE[0]}")")"
 sudo "$SCRIPT_DIR/install-$distro.sh"
+
 # Install user dependencies
+VENV_DIR="$HOME/.venvs/daosbuild"
+python3 -m venv "$VENV_DIR"
+source "$VENV_DIR/bin/activate"
 python3 -m pip install -r "$SCRIPT_DIR/../../requirements.txt"
+
+echo "=> Add the following line to your .bashrc or similar to ensure you are using"\
+	"this Python virtualenv for your session:"
+echo "source \"$VENV_DIR/bin/activate\""
