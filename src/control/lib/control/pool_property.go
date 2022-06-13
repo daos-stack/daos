@@ -48,8 +48,6 @@ func PoolProperties() PoolPropertyMap {
 						return "exclude"
 					case n&drpc.PoolSelfHealingAutoRebuild > 0:
 						return "rebuild"
-					case n&drpc.PoolSelfHealingAutoReint > 0:
-						return "reint"
 					default:
 						return "unknown"
 					}
@@ -58,7 +56,6 @@ func PoolProperties() PoolPropertyMap {
 			values: map[string]uint64{
 				"exclude": drpc.PoolSelfHealingAutoExclude,
 				"rebuild": drpc.PoolSelfHealingAutoRebuild,
-				"reint":   drpc.PoolSelfHealingAutoReint,
 			},
 		},
 		"space_rb": {

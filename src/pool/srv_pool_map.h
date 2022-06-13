@@ -10,5 +10,5 @@
 int
 ds_pool_map_tgts_update(struct pool_map *map, struct pool_target_id_list *tgts,
 			int opc, bool evict_rank, uint32_t *tgt_map_ver,
-			bool print_changes, bool is_command);
+			bool print_changes);
 #endif /* DAOS_SRV_POOL_MAP_H */

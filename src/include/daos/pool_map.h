@@ -62,7 +62,6 @@ enum pool_component_flags {
 	 * PO_COMP_ST_DOWN (rather than from PO_COMP_ST_DRAIN).
 	 */
 	PO_COMPF_DOWN2OUT	= 1,
-	PO_COMPF_COMMAND	= 1 << 1,
 };
 
 #define co_in_ver	co_out_ver

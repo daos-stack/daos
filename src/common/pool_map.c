@@ -2332,7 +2332,7 @@ pmap_comp_failed(struct pool_component *comp)
 {
 	return (comp->co_status == PO_COMP_ST_DOWN) ||
 	       (comp->co_status == PO_COMP_ST_DOWNOUT &&
-		comp->co_flags & PO_COMPF_DOWN2OUT);
+		comp->co_flags == PO_COMPF_DOWN2OUT);
 }
 
 static bool
