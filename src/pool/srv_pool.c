@@ -16,6 +16,7 @@
 
 #include <daos_srv/pool.h>
 
+
 #include <fcntl.h>
 #include <sys/stat.h>
 #include <gurt/telemetry_common.h>
