@@ -2,6 +2,7 @@
 import daos_build
 import compiler_setup
 
+
 def build_tests(prereqs, env, client_libs):
     """build the tests"""
     denv = env.Clone()
@@ -91,6 +92,7 @@ def scons():
 
     daos_build.program(denv, 'simple_array', 'simple_array.c', LIBS=libs_client)
     daos_build.program(denv, 'simple_obj', 'simple_obj.c', LIBS=libs_client)
+
 
 if __name__ == "SCons.Script":
     scons()

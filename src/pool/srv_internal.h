@@ -120,6 +120,7 @@ void ds_pool_rsvc_class_unregister(void);
 int ds_pool_start_all(void);
 int ds_pool_stop_all(void);
 int ds_pool_svc_rf_to_nreplicas(int svc_rf);
+int ds_pool_hdl_is_from_srv(struct ds_pool *pool, uuid_t hdl);
 void ds_pool_create_handler(crt_rpc_t *rpc);
 void ds_pool_connect_handler(crt_rpc_t *rpc);
 void ds_pool_disconnect_handler(crt_rpc_t *rpc);
