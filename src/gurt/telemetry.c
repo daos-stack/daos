@@ -1633,6 +1633,8 @@ d_tm_mark_duration_start(struct d_tm_node_t *metric, int clk_id)
 		return;
 	}
 
+	metric->dtn_type = D_TM_DURATION | clk_id;
+
 	d_tm_node_lock(metric);
 	clock_gettime(d_tm_clock_id(metric->dtn_type & ~D_TM_DURATION),
 		      &metric->dtn_metric->dtm_data.tms[1]);

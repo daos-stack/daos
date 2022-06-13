@@ -101,6 +101,12 @@ const (
 	PoolPropertyGlobalVersion = C.DAOS_PROP_PO_GLOBAL_VERSION
 	//PoolPropertyUpgradeStatus is pool upgrade status
 	PoolPropertyUpgradeStatus = C.DAOS_PROP_PO_UPGRADE_STATUS
+	// PoolPropertyScrubMode Checksum scrubbing schedule
+	PoolPropertyScrubMode = C.DAOS_PROP_PO_SCRUB_MODE
+	// PoolPropertyScrubFreq Checksum scrubbing frequency
+	PoolPropertyScrubFreq = C.DAOS_PROP_PO_SCRUB_FREQ
+	// PoolPropertyScrubThresh Checksum scrubbing threshold
+	PoolPropertyScrubThresh = C.DAOS_PROP_PO_SCRUB_THRESH
 )
 
 const (
@@ -214,3 +220,9 @@ func PoolPolicyIsValid(polStr string) bool {
 
 	return bool(C.daos_policy_try_parse(cStr, &polDesc))
 }
+
+const (
+	PoolScrubModeOff   = C.DAOS_SCRUB_MODE_OFF
+	PoolScrubModeLazy  = C.DAOS_SCRUB_MODE_LAZY
+	PoolScrubModeTimed = C.DAOS_SCRUB_MODE_TIMED
+)

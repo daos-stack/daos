@@ -1968,6 +1968,60 @@ exit:
 	return rc;
 }
 
+/*
+ * For a single value btree, grab the value of the current iter cursor, and use
+ * the offset to get the durable format (pmem) structure with the bio_addr. Then
+ * set it to corrupt.
+ */
+static int
+sv_iter_corrupt(struct vos_obj_iter *oiter)
+{
+	struct umem_instance	*umm;
+	struct vos_svt_key	 skey = {0};
+	struct vos_rec_bundle	 rbund = {0};
+	struct bio_iov		 biov = {0};
+	daos_anchor_t		 anchor = {0};
+	d_iov_t			 key, val;
+	size_t			 addr_offset;
+	struct vos_irec_df	*irec;
+	int			 rc = 0;
+
+	umm = vos_obj2umm(oiter->it_obj);
+
+	rc = umem_tx_begin(umm, NULL);
+	if (rc != 0)
+		return rc;
+
+	/* Bundle the key and value structures into appropriate iovs */
+	tree_rec_bundle2iov(&rbund, &val);
+	rbund.rb_biov = &biov;
+	d_iov_set(&key, &skey, sizeof(skey));
+
+	/* Fetch the key/value for the current iter cursor */
+	rc = dbtree_iter_fetch(oiter->it_hdl, &key, &val, &anchor);
+	if (rc != 0) {
+		D_ERROR("dbtree_iter_fetch failed: "DF_RC"\n", DP_RC(rc));
+		rc = umem_tx_end(umm, rc);
+		return rc;
+	}
+
+	addr_offset = offsetof(struct vos_irec_df, ir_ex_addr);
+	rc = umem_tx_add(umm, rbund.rb_off + addr_offset,
+			 sizeof(*irec) - addr_offset);
+	if (rc != 0) {
+		D_ERROR("umem_tx_add failed: "DF_RC"\n", DP_RC(rc));
+		rc = umem_tx_end(umm, rc);
+		return rc;
+	}
+
+	D_DEBUG(DB_IO, "Setting record bio_addr flag to corrupted\n");
+	irec = umem_off2ptr(umm, rbund.rb_off);
+	BIO_ADDR_SET_CORRUPTED(&irec->ir_ex_addr);
+
+	rc = umem_tx_end(umm, rc);
+	return rc;
+}
+
 int
 vos_obj_iter_check_punch(daos_handle_t ih)
 {
@@ -2080,23 +2134,33 @@ exit:
 }
 
 static int
-vos_obj_iter_delete(struct vos_iterator *iter, void *args)
+vos_obj_iter_process(struct vos_iterator *iter, vos_iter_proc_op_t op,
+		     void *args)
 {
 	struct vos_obj_iter *oiter = vos_iter2oiter(iter);
 
-	switch (iter->it_type) {
+	switch (op) {
+	case VOS_ITER_PROC_OP_DELETE:
+		switch (iter->it_type) {
+		default:
+			D_ASSERT(0);
+			return -DER_INVAL;
+		case VOS_ITER_DKEY:
+		case VOS_ITER_AKEY:
+		case VOS_ITER_SINGLE:
+			return obj_iter_delete(oiter, args);
+		case VOS_ITER_RECX:
+			return evt_iter_delete(oiter->it_hdl, NULL);
+		}
+	case VOS_ITER_PROC_OP_MARK_CORRUPT:
+		if (iter->it_type == VOS_ITER_SINGLE)
+			return sv_iter_corrupt(oiter);
+		if (iter->it_type == VOS_ITER_RECX)
+			return evt_iter_corrupt(oiter->it_hdl);
 	default:
 		D_ASSERT(0);
-		return -DER_INVAL;
-
-	case VOS_ITER_DKEY:
-	case VOS_ITER_AKEY:
-	case VOS_ITER_SINGLE:
-		return obj_iter_delete(oiter, args);
-
-	case VOS_ITER_RECX:
-		return evt_iter_delete(oiter->it_hdl, NULL);
 	}
+	return 0;
 }
 
 static int
@@ -2129,7 +2193,7 @@ struct vos_iter_ops	vos_obj_iter_ops = {
 	.iop_next		= vos_obj_iter_next,
 	.iop_fetch		= vos_obj_iter_fetch,
 	.iop_copy		= vos_obj_iter_copy,
-	.iop_delete		= vos_obj_iter_delete,
+	.iop_process		= vos_obj_iter_process,
 	.iop_empty		= vos_obj_iter_empty,
 };
 /**

@@ -532,6 +532,7 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %{_bindir}/ring_pl_map
 %{_bindir}/smd_ut
 %{_bindir}/srv_checksum_tests
+%{_bindir}/pool_scrubbing_tests
 %{_bindir}/vea_ut
 %{_bindir}/vos_tests
 %{_bindir}/vea_stress
