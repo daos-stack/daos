@@ -25,7 +25,7 @@ server_config:
       scm_mount: /mnt/daos0
       log_mask: DEBUG,MEM=ERR
       env_vars:
-        - DD_MASK=mgmt,md,io,rebuild
+        - DD_MASK=mgmt,md,io,rebuild,trace
     1:
       pinned_numa_node: 1
       nr_xs_helpers: 1
@@ -39,7 +39,7 @@ server_config:
       scm_mount: /mnt/daos1
       log_mask: DEBUG,MEM=ERR
       env_vars:
-        - DD_MASK=mgmt,md,io,rebuild
+        - DD_MASK=mgmt,md,io,rebuild,trace
   transport_config:
     allow_insecure: True
 agent_config:
