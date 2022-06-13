@@ -429,6 +429,18 @@ int
 crt_req_src_rank_get(crt_rpc_t *req, d_rank_t *rank);
 
 /**
+ * Return whether originator runs from a primary provider or not
+ *
+ * \param[in] req              Pointer to RPC request
+ * \param[out] result          Returned result
+ *
+ * \return                     DER_SUCCESS on success or error
+ *                             on failure
+ */
+int
+crt_req_src_provider_is_primary(crt_rpc_t *req, bool *result);
+
+/**
  * Return destination rank
  *
  * \param[in] req              Pointer to RPC request

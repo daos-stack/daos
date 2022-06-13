@@ -98,7 +98,9 @@ struct crt_gdata {
 				/** whether it is a client or server */
 				cg_server		: 1,
 				/** whether scalable endpoint is enabled */
-				cg_use_sensors		: 1;
+				cg_use_sensors		: 1,
+				/** whether we are on a primary provider */
+				cg_provider_is_primary	: 1;
 
 	ATOMIC uint64_t		cg_rpcid; /* rpc id */
 
