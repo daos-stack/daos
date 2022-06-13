@@ -2243,11 +2243,10 @@ struct pmap_fail_stat {
 static void
 pmap_fail_node_init(struct pmap_fail_node *fnode)
 {
+	memset(fnode, 0, sizeof(*fnode));
 	fnode->pf_vers = fnode->pf_ver_inline;
 	fnode->pf_ver_total = PMAP_FAIL_INLINE_NR;
 	fnode->pf_ver_nr = 0;
-	memset(fnode->pf_vers, 0,
-	       sizeof(struct pmap_fail_ver) * fnode->pf_ver_total);
 }
 
 static void
@@ -2295,6 +2294,7 @@ pmap_fail_node_get(struct pmap_fail_stat *fstat)
 
 	D_ASSERT(fstat->pf_node_nr < fstat->pf_node_total);
 	fnode = &fstat->pf_nodes[fstat->pf_node_nr++];
+	pmap_fail_node_init(fnode);
 	return fnode;
 }
 
