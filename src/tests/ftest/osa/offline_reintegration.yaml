@@ -5,9 +5,9 @@ hosts:
     - server-C
   test_clients:
     - client-D
-timeout: 900
+timeout: 1300
 timeouts:
-  test_osa_offline_reintegrate_with_less_pool_space: 1300
+  test_osa_offline_reintegrate_with_less_pool_space: 1800
 setup:
   start_servers_once: False
 skip_add_log_msg: True
@@ -26,9 +26,9 @@ server_config:
       scm_class: dcpm
       scm_list: ["/dev/pmem0"]
       scm_mount: /mnt/daos0
-      log_mask: DEBUG,MEM=ERR
+      log_mask: INFO,MEM=ERR
       env_vars:
-        - DD_MASK=mgmt,md,rebuild
+        - DD_MASK=mgmt,md
     1:
       pinned_numa_node: 1
       nr_xs_helpers: 1
@@ -40,9 +40,9 @@ server_config:
       scm_class: dcpm
       scm_list: ["/dev/pmem1"]
       scm_mount: /mnt/daos1
-      log_mask: DEBUG,MEM=ERR
+      log_mask: INFO,MEM=ERR
       env_vars:
-        - DD_MASK=mgmt,md,rebuild
+        - DD_MASK=mgmt,md
   transport_config:
     allow_insecure: True
 agent_config:
@@ -119,6 +119,6 @@ blank_node:
 snapshot:
   test_with_snapshot: True
 pool_capacity:
-  pool_fillup: 50
-  pool_test_oclass: RP_3GX
+  pool_fillup: 10
+  pool_test_oclass: RP_2GX
   pool_test_repetitions: 1

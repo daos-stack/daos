@@ -93,10 +93,8 @@ func parseOpts(args []string, opts *mainOpts, log *logging.LeveledLogger) error 
 
 		if cfgCmd, ok := cmd.(cfgLoader); ok {
 			if opts.ConfigPath == "" {
-				defaultConfigPath := path.Join(build.ConfigDir, defaultConfigFile)
-				if _, err := os.Stat(defaultConfigPath); err == nil {
-					opts.ConfigPath = defaultConfigPath
-				}
+				log.Debugf("Using build config directory %q", build.ConfigDir)
+				opts.ConfigPath = path.Join(build.ConfigDir, defaultConfigFile)
 			}
 
 			if err := cfgCmd.loadConfig(opts.ConfigPath); err != nil {
@@ -110,7 +108,8 @@ func parseOpts(args []string, opts *mainOpts, log *logging.LeveledLogger) error 
 				}
 			}
 		} else if opts.ConfigPath != "" {
-			return errors.Errorf("DAOS Server config has been supplied but this command will not use it")
+			return errors.Errorf("DAOS Server config filepath has been supplied but " +
+				"this command will not use it")
 		}
 
 		if err := cmd.Execute(cmdArgs); err != nil {

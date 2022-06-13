@@ -15,6 +15,7 @@ import (
 	"github.com/google/go-cmp/cmp"
 
 	"github.com/daos-stack/daos/src/control/common"
+	"github.com/daos-stack/daos/src/control/common/test"
 	"github.com/daos-stack/daos/src/control/logging"
 )
 
@@ -29,7 +30,7 @@ func TestUCX_Provider_GetFabricInterfaces_Integrated(t *testing.T) {
 	// error on the normal happy path.
 
 	log, buf := logging.NewTestLogger(t.Name())
-	defer common.ShowBufferOnFailure(t, buf)
+	defer test.ShowBufferOnFailure(t, buf)
 
 	p := NewProvider(log)
 
@@ -51,24 +52,24 @@ func TestUCX_Provider_getProviderSet(t *testing.T) {
 	}{
 		"dc": {
 			in:     "dc_mlx5",
-			expSet: common.NewStringSet("ucx+dc_x", "ucx+dc"),
+			expSet: common.NewStringSet("ucx+dc_x", "ucx+dc", "ucx+all"),
 		},
 		"tcp": {
 			in:     "tcp",
-			expSet: common.NewStringSet("ucx+tcp"),
+			expSet: common.NewStringSet("ucx+tcp", "ucx+all"),
 		},
 		"add generic rc": {
 			in:     "rc_verbs",
-			expSet: common.NewStringSet("ucx+rc_v", "ucx+rc"),
+			expSet: common.NewStringSet("ucx+rc_v", "ucx+rc", "ucx+all"),
 		},
 		"add generic ud": {
 			in:     "ud_mlx5",
-			expSet: common.NewStringSet("ucx+ud_x", "ucx+ud"),
+			expSet: common.NewStringSet("ucx+ud_x", "ucx+ud", "ucx+all"),
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
-			defer common.ShowBufferOnFailure(t, buf)
+			defer test.ShowBufferOnFailure(t, buf)
 
 			p := NewProvider(log)
 
@@ -124,7 +125,51 @@ func TestUCX_transportToDAOSProvider(t *testing.T) {
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
-			common.AssertEqual(t, tc.exp, transportToDAOSProvider(tc.in), "")
+			test.AssertEqual(t, tc.exp, transportToDAOSProvider(tc.in), "")
+		})
+	}
+}
+
+func TestUCX_getExternalName(t *testing.T) {
+	for name, tc := range map[string]struct {
+		devName   string
+		devComp   string
+		allDevs   []string
+		expResult string
+	}{
+		"single IB device": {
+			devName:   "d1",
+			devComp:   compInfiniband,
+			expResult: "d1",
+		},
+		"multiple IB devices": {
+			devName:   "d1",
+			devComp:   compInfiniband,
+			allDevs:   []string{"d0"},
+			expResult: "d1,d0",
+		},
+		"IB duplicates ignored": {
+			devName:   "d1",
+			devComp:   compInfiniband,
+			allDevs:   []string{"d0", "d1", "d2"},
+			expResult: "d1,d0,d2",
+		},
+		"single TCP device": {
+			devName:   "d1",
+			devComp:   compTCP,
+			expResult: "d1",
+		},
+		"multiple TCP devices": {
+			devName:   "d1",
+			devComp:   compTCP,
+			allDevs:   []string{"d0"},
+			expResult: "d1",
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			result := getExternalName(tc.devComp, tc.devName, tc.allDevs)
+
+			test.AssertEqual(t, tc.expResult, result, "")
 		})
 	}
 }

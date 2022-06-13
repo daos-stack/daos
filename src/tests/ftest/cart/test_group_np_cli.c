@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2021 Intel Corporation.
+ * (C) Copyright 2016-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -94,11 +94,12 @@ test_run(void)
 				  "crt_group_config_path_set failed %d\n", rc);
 		}
 
-		crtu_cli_start_basic(test_g.t_local_group_name,
-				     test_g.t_remote_group_name,
-				     &grp, &rank_list, &test_g.t_crt_ctx[0],
-				     &test_g.t_tid[0], test_g.t_srv_ctx_num,
-				     test_g.t_use_cfg, NULL, test_g.t_use_daos_agent_env);
+		rc = crtu_cli_start_basic(test_g.t_local_group_name,
+					  test_g.t_remote_group_name,
+					  &grp, &rank_list, &test_g.t_crt_ctx[0],
+					  &test_g.t_tid[0], test_g.t_srv_ctx_num,
+					  test_g.t_use_cfg, NULL, test_g.t_use_daos_agent_env);
+		D_ASSERTF(rc == 0, "crtu_cli_start_basic() failed\n");
 
 		rc = sem_init(&test_g.t_token_to_proceed, 0, 0);
 		D_ASSERTF(rc == 0, "sem_init() failed.\n");
@@ -127,7 +128,7 @@ test_run(void)
 					 rank_list,
 					 test_g.t_srv_ctx_num - 1,
 					 test_g.t_srv_ctx_num,
-					 5,
+					 50,
 					 test_g.t_wait_ranks_time);
 		D_ASSERTF(rc == 0, "wait_for_ranks() failed; rc=%d\n", rc);
 	}

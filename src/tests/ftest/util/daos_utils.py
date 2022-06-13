@@ -258,12 +258,12 @@ class DaosCommand(DaosCommandBase):
         # {
         #   "response": [
         #     {
-        #       "UUID": "bad80a98-aabd-498c-b001-6547cd061c8c",
-        #       "Label": "container_label_not_set"
+        #       "uuid": "bad80a98-aabd-498c-b001-6547cd061c8c",
+        #       "label": "container_label_not_set"
         #     },
         #     {
-        #       "UUID": "dd9fc365-5729-4736-9d34-e46504a4a92d",
-        #       "Label": "mkc1"
+        #       "uuid": "dd9fc365-5729-4736-9d34-e46504a4a92d",
+        #       "label": "mkc1"
         #     }
         #   ],
         #   "error": null,
@@ -372,12 +372,13 @@ class DaosCommand(DaosCommandBase):
             ("container", "set-prop"),
             pool=pool, cont=cont, prop=prop_value)
 
-    def container_get_prop(self, pool, cont):
+    def container_get_prop(self, pool, cont, properties=None):
         """Call daos container get-prop.
 
         Args:
             pool (str): Pool UUID.
             cont (str): Container UUID.
+            properties (list): "name" field(s). Defaults to None.
 
         Returns:
             str: JSON that contains the command output.
@@ -388,111 +389,128 @@ class DaosCommand(DaosCommandBase):
         """
         # Sample output
         # {
-        #     "response": [
-        #         {
-        #             "value": 0,
-        #             "name": "alloc_oid",
-        #             "description": "Highest Allocated OID"
-        #         },
-        #         {
-        #             "value": "off",
-        #             "name": "cksum",
-        #             "description": "Checksum"
-        #         },
-        #         {
-        #             "value": 32768,
-        #             "name": "cksum_size",
-        #             "description": "Checksum Chunk Size"
-        #         },
-        #         {
-        #             "value": "off",
-        #             "name": "compression",
-        #             "description": "Compression"
-        #         },
-        #         {
-        #             "value": "off",
-        #             "name": "dedup",
-        #             "description": "Deduplication"
-        #         },
-        #         {
-        #             "value": 4096,
-        #             "name": "dedup_threshold",
-        #             "description": "Dedupe Threshold"
-        #         },
-        #         {
-        #             "value": 65536,
-        #             "name": "ec_cell",
-        #             "description": "EC Cell Size"
-        #         },
-        #         {
-        #             "value": "off",
-        #             "name": "encryption",
-        #             "description": "Encryption"
-        #         },
-        #         {
-        #             "value": "mkano@",
-        #             "name": "group",
-        #             "description": "Group"
-        #         },
-        #         {
-        #             "value": "mkc1",
-        #             "name": "label",
-        #             "description": "Label"
-        #         },
-        #         {
-        #             "value": "POSIX (1)",
-        #             "name": "layout_type",
-        #             "description": "Layout Type"
-        #         },
-        #         {
-        #             "value": 1,
-        #             "name": "layout_version",
-        #             "description": "Layout Version"
-        #         },
-        #         {
-        #             "value": 0,
-        #             "name": "max_snapshot",
-        #             "description": "Max Snapshot"
-        #         },
-        #         {
-        #             "value": "mkano@",
-        #             "name": "owner",
-        #             "description": "Owner"
-        #         },
-        #         {
-        #             "value": "rf0",
-        #             "name": "rf",
-        #             "description": "Redundancy Factor"
-        #         },
-        #         {
-        #             "value": "rank (1)",
-        #             "name": "rf_lvl",
-        #             "description": "Redundancy Level"
-        #         },
-        #         {
-        #             "value": "off",
-        #             "name": "srv_cksum",
-        #             "description": "Server Checksumming"
-        #         },
-        #         {
-        #             "value": "HEALTHY",
-        #             "name": "status",
-        #             "description": "Health"
-        #         },
-        #         {
-        #             "value": [
-        #                 "A::OWNER@:rwdtTaAo",
-        #                 "A:G:GROUP@:rwtT"
-        #             ],
-        #             "name": "acl",
-        #             "description": "Access Control List"
-        #         }
-        #     ],
-        #     "error": null,
-        #     "status": 0
+        #   "response": [
+        #     {
+        #       "value": 0,
+        #       "name": "alloc_oid",
+        #       "description": "Highest Allocated OID"
+        #     },
+        #     {
+        #       "value": "off",
+        #       "name": "cksum",
+        #       "description": "Checksum"
+        #     },
+        #     {
+        #       "value": 32768,
+        #       "name": "cksum_size",
+        #       "description": "Checksum Chunk Size"
+        #     },
+        #     {
+        #       "value": "off",
+        #       "name": "compression",
+        #       "description": "Compression"
+        #     },
+        #     {
+        #       "value": "off",
+        #       "name": "dedup",
+        #       "description": "Deduplication"
+        #     },
+        #     {
+        #       "value": 4096,
+        #       "name": "dedup_threshold",
+        #       "description": "Dedupe Threshold"
+        #     },
+        #     {
+        #       "value": 65536,
+        #       "name": "ec_cell_sz",
+        #       "description": "EC Cell Size"
+        #     },
+        #     {
+        #       "value": "1",
+        #       "name": "ec_pda",
+        #       "description": "Performance domain affinity level of EC"
+        #     },
+        #     {
+        #       "value": "off",
+        #       "name": "encryption",
+        #       "description": "Encryption"
+        #     },
+        #     {
+        #       "value": "1",
+        #       "name": "global_version",
+        #       "description": "Global Version"
+        #     },
+        #     {
+        #       "value": "mkano@",
+        #       "name": "group",
+        #       "description": "Group"
+        #     },
+        #     {
+        #       "value": "mkc1",
+        #       "name": "label",
+        #       "description": "Label"
+        #     },
+        #     {
+        #       "value": "unknown (0)",
+        #       "name": "layout_type",
+        #       "description": "Layout Type"
+        #     },
+        #     {
+        #       "value": 1,
+        #       "name": "layout_version",
+        #       "description": "Layout Version"
+        #     },
+        #     {
+        #       "value": 0,
+        #       "name": "max_snapshot",
+        #       "description": "Max Snapshot"
+        #     },
+        #     {
+        #       "value": "mkano@",
+        #       "name": "owner",
+        #       "description": "Owner"
+        #     },
+        #     {
+        #       "value": "rf0",
+        #       "name": "rf",
+        #       "description": "Redundancy Factor"
+        #     },
+        #     {
+        #       "value": "rank (1)",
+        #       "name": "rf_lvl",
+        #       "description": "Redundancy Level"
+        #     },
+        #     {
+        #       "value": "3",
+        #       "name": "rp_pda",
+        #       "description": "Performance domain affinity level of RP"
+        #     },
+        #     {
+        #       "value": "off",
+        #       "name": "srv_cksum",
+        #       "description": "Server Checksumming"
+        #     },
+        #     {
+        #       "value": "HEALTHY",
+        #       "name": "status",
+        #       "description": "Health"
+        #     },
+        #     {
+        #       "value": [
+        #         "A::OWNER@:rwdtTaAo",
+        #         "A:G:GROUP@:rwtT"
+        #       ],
+        #       "name": "acl",
+        #       "description": "Access Control List"
+        #     }
+        #   ],
+        #   "error": null,
+        #   "status": 0
         # }
+        props = ','.join(properties) if properties else None
+
         return self._get_json_result(
-            ("container", "get-prop"), pool=pool, cont=cont)
+            ("container", "get-prop"), pool=pool, cont=cont, prop=props)
 
     def container_set_owner(self, pool, cont, user, group):
         """Call daos container set-owner.

@@ -354,8 +354,6 @@ ch_decref(struct d_hash_table *htable, d_list_t *link)
 static void
 _ch_free(struct dfuse_projection_info *fs_handle, struct dfuse_cont *dfc)
 {
-	D_MUTEX_DESTROY(&dfc->dfs_read_mutex);
-
 	if (daos_handle_is_valid(dfc->dfs_coh)) {
 		int rc;
 
@@ -1025,7 +1023,6 @@ dfuse_cont_open(struct dfuse_projection_info *fs_handle, struct dfuse_pool *dfp,
 	}
 
 	dfc->dfs_ino = atomic_fetch_add_relaxed(&fs_handle->dpi_ino_next, 1);
-	D_MUTEX_INIT(&dfc->dfs_read_mutex, NULL);
 
 	/* Take a reference on the pool */
 	d_hash_rec_addref(&fs_handle->dpi_pool_table, &dfp->dfp_entry);
@@ -1130,12 +1127,13 @@ dfuse_ie_close(struct dfuse_projection_info *fs_handle,
 	int			ref;
 
 	ref = atomic_load_relaxed(&ie->ie_ref);
-
 	DFUSE_TRA_DEBUG(ie,
 			"closing, inode %#lx ref %u, name '%s', parent %#lx",
 			ie->ie_stat.st_ino, ref, ie->ie_name, ie->ie_parent);
 
 	D_ASSERT(ref == 0);
+	D_ASSERT(atomic_load_relaxed(&ie->ie_il_count) == 0);
+	D_ASSERT(atomic_load_relaxed(&ie->ie_open_count) == 0);
 
 	if (ie->ie_obj == NULL) {
 		D_FREE(ie);
