@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/bin/bash -ue
 
 # This script sets up a new development node with all dependencies needed to
 # build DAOS from source.
@@ -24,6 +24,6 @@ esac
 
 # Install dependencies from the OS repos.
 SCRIPT_DIR="$(dirname "$(realpath -e "${BASH_SOURCE[0]}")")"
-sudo "$SCRIPT_DIR/install-$distro.sh" && \
+sudo "$SCRIPT_DIR/install-$distro.sh"
 # Install user dependencies
 python3 -m pip install -r "$SCRIPT_DIR/../../requirements.txt"
