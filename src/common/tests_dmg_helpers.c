@@ -124,11 +124,12 @@ daos_dmg_json_pipe(const char *dmg_cmd, const char *dmg_config_file,
 	json_tokener		*tok = NULL;
 	FILE			*fp = NULL;
 	int			pc_rc, rc = 0;
+	const char		*debug_flags = "-d --log-file=/tmp/suite_dmg.log";
 
 	if (dmg_config_file == NULL)
-		D_ASPRINTF(cmd_base, "dmg -j -i %s ", dmg_cmd);
+		D_ASPRINTF(cmd_base, "dmg -j -i %s %s ", debug_flags, dmg_cmd);
 	else
-		D_ASPRINTF(cmd_base, "dmg -j -o %s %s ",
+		D_ASPRINTF(cmd_base, "dmg -j %s -o %s %s ", debug_flags,
 			   dmg_config_file, dmg_cmd);
 	if (cmd_base == NULL)
 		return -DER_NOMEM;
