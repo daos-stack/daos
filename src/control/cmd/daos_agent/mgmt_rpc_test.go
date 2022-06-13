@@ -9,16 +9,22 @@ package main
 import (
 	"context"
 	"net"
+	"os"
 	"sync"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/pkg/errors"
+	"google.golang.org/protobuf/proto"
 
 	"github.com/daos-stack/daos/src/control/common"
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
+	"github.com/daos-stack/daos/src/control/common/test"
+	"github.com/daos-stack/daos/src/control/fault"
+	"github.com/daos-stack/daos/src/control/fault/code"
 	"github.com/daos-stack/daos/src/control/lib/control"
+	"github.com/daos-stack/daos/src/control/lib/daos"
 	"github.com/daos-stack/daos/src/control/lib/hardware"
 	"github.com/daos-stack/daos/src/control/logging"
 )
@@ -60,48 +66,103 @@ func TestAgent_mgmtModule_getAttachInfo(t *testing.T) {
 		return result
 	}
 
-	testFI := fabricInterfaceFromHardware(&hardware.FabricInterface{
-		Name:         "test0",
-		NetInterface: "test0",
-		DeviceClass:  hardware.Ether,
-		Providers:    common.NewStringSet("ofi+tcp"),
+	testFI := fabricInterfacesFromHardware(&hardware.FabricInterface{
+		Name:          "test0",
+		NetInterfaces: common.NewStringSet("test0"),
+		DeviceClass:   hardware.Ether,
+		Providers:     common.NewStringSet("ofi+tcp"),
 	})
 
 	hintResp := func(resp *mgmtpb.GetAttachInfoResp) *mgmtpb.GetAttachInfoResp {
 		withHint := new(mgmtpb.GetAttachInfoResp)
-		*withHint = *testResps[0]
-		withHint.ClientNetHint.Interface = testFI.Name
-		withHint.ClientNetHint.Domain = testFI.Name
+		*withHint = *resp
+		withHint.ClientNetHint.Interface = testFI[0].Name
+		withHint.ClientNetHint.Domain = testFI[0].Name
 
 		return withHint
+	}
+
+	unaryResps := func(hostResps []*control.HostResponse) []*control.UnaryResponse {
+		ur := make([]*control.UnaryResponse, 0, len(hostResps))
+		for _, hr := range hostResps {
+			ur = append(ur, &control.UnaryResponse{
+				Responses: []*control.HostResponse{hr},
+			})
+		}
+		return ur
+	}
+
+	type attachInfoResult struct {
+		resp *mgmtpb.GetAttachInfoResp
+		err  error
 	}
 
 	for name, tc := range map[string]struct {
 		cacheDisabled bool
 		rpcResps      []*control.HostResponse
-		expResps      []*mgmtpb.GetAttachInfoResp
+		expResult     []attachInfoResult
 	}{
+		"error": {
+			rpcResps: []*control.HostResponse{
+				{
+					Error: errors.New("host response"),
+				},
+			},
+			expResult: []attachInfoResult{
+				{
+					err: errors.New("host response"),
+				},
+			},
+		},
+		"incompatible fault": {
+			rpcResps: []*control.HostResponse{
+				{
+					Error: &fault.Fault{
+						Code: code.ServerWrongSystem,
+					},
+				},
+			},
+			expResult: []attachInfoResult{
+				{
+					resp: &mgmtpb.GetAttachInfoResp{
+						Status: int32(daos.ControlIncompatible),
+					},
+				},
+			},
+		},
 		"cache disabled": {
 			cacheDisabled: true,
 			rpcResps:      hostResps(testResps),
-			expResps: []*mgmtpb.GetAttachInfoResp{
-				hintResp(testResps[0]),
-				hintResp(testResps[1]),
-				hintResp(testResps[2]),
+			expResult: []attachInfoResult{
+				{
+					resp: hintResp(testResps[0]),
+				},
+				{
+					resp: hintResp(testResps[1]),
+				},
+				{
+					resp: hintResp(testResps[2]),
+				},
 			},
 		},
 		"cached": {
 			rpcResps: hostResps(testResps),
-			expResps: []*mgmtpb.GetAttachInfoResp{
-				hintResp(testResps[0]),
-				hintResp(testResps[0]),
-				hintResp(testResps[0]),
+			expResult: []attachInfoResult{
+				{
+					resp: hintResp(testResps[0]),
+				},
+				{
+					resp: hintResp(testResps[0]),
+				},
+				{
+					resp: hintResp(testResps[0]),
+				},
 			},
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
-			defer common.ShowBufferOnFailure(t, buf)
+			defer test.ShowBufferOnFailure(t, buf)
 
 			sysName := "dontcare"
 			mod := &mgmtModule{
@@ -110,26 +171,43 @@ func TestAgent_mgmtModule_getAttachInfo(t *testing.T) {
 				fabricInfo: newTestFabricCache(t, log, &NUMAFabric{
 					log: log,
 					numaMap: map[int][]*FabricInterface{
-						0: {
-							testFI,
-						},
+						0: testFI,
 					},
 				}),
 				attachInfo: newAttachInfoCache(log, !tc.cacheDisabled),
 				ctlInvoker: control.NewMockInvoker(log, &control.MockInvokerConfig{
-					Sys: sysName,
-					UnaryResponse: &control.UnaryResponse{
-						Responses: tc.rpcResps,
-					},
+					Sys:              sysName,
+					UnaryResponseSet: unaryResps(tc.rpcResps),
 				}),
+				numaGetter: &mockNUMAProvider{},
 			}
 
-			for _, expResp := range tc.expResps {
-				resp, err := mod.getAttachInfo(context.Background(), 0, sysName)
+			reqBytes, err := proto.Marshal(&mgmtpb.GetAttachInfoReq{
+				Sys: sysName,
+			})
+			if err != nil {
+				t.Fatal(err)
+			}
 
-				common.CmpErr(t, nil, err)
+			for i, exp := range tc.expResult {
+				t.Logf("iteration %d\n", i)
+				respBytes, err := mod.handleGetAttachInfo(context.Background(), reqBytes, int32(os.Getpid()))
 
-				if diff := cmp.Diff(expResp, resp, cmpopts.IgnoreUnexported(mgmtpb.GetAttachInfoResp{}, mgmtpb.ClientNetHint{})); diff != "" {
+				test.CmpErr(t, exp.err, err)
+
+				var resp mgmtpb.GetAttachInfoResp
+				if err := proto.Unmarshal(respBytes, &resp); err != nil {
+					t.Fatal(err)
+				}
+
+				if exp.resp == nil {
+					if respBytes == nil {
+						return
+					}
+					t.Fatalf("expected nil response, got:\n%+v\n", &resp)
+				}
+
+				if diff := cmp.Diff(exp.resp, &resp, cmpopts.IgnoreUnexported(mgmtpb.GetAttachInfoResp{}, mgmtpb.ClientNetHint{})); diff != "" {
 					t.Fatalf("-want, +got:\n%s", diff)
 				}
 			}
@@ -140,7 +218,7 @@ func TestAgent_mgmtModule_getAttachInfo(t *testing.T) {
 
 func TestAgent_mgmtModule_getAttachInfo_Parallel(t *testing.T) {
 	log, buf := logging.NewTestLogger(t.Name())
-	defer common.ShowBufferOnFailure(t, buf)
+	defer test.ShowBufferOnFailure(t, buf)
 
 	sysName := "dontcare"
 
@@ -150,14 +228,12 @@ func TestAgent_mgmtModule_getAttachInfo_Parallel(t *testing.T) {
 		fabricInfo: newTestFabricCache(t, log, &NUMAFabric{
 			log: log,
 			numaMap: map[int][]*FabricInterface{
-				0: {
-					fabricInterfaceFromHardware(&hardware.FabricInterface{
-						Name:         "test0",
-						NetInterface: "test0",
-						DeviceClass:  hardware.Ether,
-						Providers:    common.NewStringSet("ofi+tcp"),
-					}),
-				},
+				0: fabricInterfacesFromHardware(&hardware.FabricInterface{
+					Name:          "test0",
+					NetInterfaces: common.NewStringSet("test0"),
+					DeviceClass:   hardware.Ether,
+					Providers:     common.NewStringSet("ofi+tcp"),
+				}),
 			},
 		}),
 		attachInfo: newAttachInfoCache(log, true),
@@ -237,7 +313,7 @@ func TestAgent_mgmtModule_getNUMANode(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
-			defer common.ShowBufferOnFailure(t, buf)
+			defer test.ShowBufferOnFailure(t, buf)
 
 			mod := &mgmtModule{
 				log:            log,
@@ -247,8 +323,8 @@ func TestAgent_mgmtModule_getNUMANode(t *testing.T) {
 
 			result, err := mod.getNUMANode(context.Background(), 123)
 
-			common.AssertEqual(t, tc.expResult, result, "")
-			common.CmpErr(t, tc.expErr, err)
+			test.AssertEqual(t, tc.expResult, result, "")
+			test.CmpErr(t, tc.expErr, err)
 		})
 	}
 }
@@ -333,7 +409,7 @@ func TestAgent_mgmtModule_waitFabricReady(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
-			defer common.ShowBufferOnFailure(t, buf)
+			defer test.ShowBufferOnFailure(t, buf)
 
 			if tc.netIfacesFn == nil {
 				tc.netIfacesFn = defaultNetIfaceFn
@@ -356,7 +432,7 @@ func TestAgent_mgmtModule_waitFabricReady(t *testing.T) {
 
 			err := mod.waitFabricReady(context.Background(), tc.netDevClass)
 
-			common.CmpErr(t, tc.expErr, err)
+			test.CmpErr(t, tc.expErr, err)
 			if diff := cmp.Diff(tc.expChecked, tc.devStateProv.GetStateCalled); diff != "" {
 				t.Fatalf("-want, +got:\n%s", diff)
 			}

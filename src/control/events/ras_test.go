@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2021 Intel Corporation.
+// (C) Copyright 2020-2022 Intel Corporation.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -32,12 +32,12 @@ import (
 	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/pkg/errors"
 
-	"github.com/daos-stack/daos/src/control/common"
 	sharedpb "github.com/daos-stack/daos/src/control/common/proto/shared"
+	"github.com/daos-stack/daos/src/control/common/test"
 	"github.com/daos-stack/daos/src/control/logging"
 )
 
-var defEvtCmpOpts = append(common.DefaultCmpOpts(),
+var defEvtCmpOpts = append(test.DefaultCmpOpts(),
 	cmpopts.IgnoreUnexported(RASEvent{}),
 )
 
@@ -50,12 +50,12 @@ func TestEvents_HandleClusterEvent(t *testing.T) {
 	pbPSREvent, _ := psrEvent.ToProto()
 
 	for name, tc := range map[string]struct {
-		req         *sharedpb.ClusterEventReq
-		subType     RASTypeID
-		fwded       bool
-		expEvtTypes []string
-		expResp     *sharedpb.ClusterEventResp
-		expErr      error
+		req     *sharedpb.ClusterEventReq
+		subType RASTypeID
+		fwded   bool
+		expEvts []string
+		expResp *sharedpb.ClusterEventResp
+		expErr  error
 	}{
 		"nil req": {
 			expErr: errors.New("nil request"),
@@ -68,9 +68,9 @@ func TestEvents_HandleClusterEvent(t *testing.T) {
 			req: &sharedpb.ClusterEventReq{
 				Event: pbGenericEvent,
 			},
-			subType:     RASTypeInfoOnly,
-			expEvtTypes: []string{RASTypeInfoOnly.String()},
-			expResp:     &sharedpb.ClusterEventResp{},
+			subType: RASTypeInfoOnly,
+			expEvts: []string{genericEvent.String()},
+			expResp: &sharedpb.ClusterEventResp{},
 		},
 		"filtered generic event": {
 			req: &sharedpb.ClusterEventReq{
@@ -83,9 +83,9 @@ func TestEvents_HandleClusterEvent(t *testing.T) {
 			req: &sharedpb.ClusterEventReq{
 				Event: pbEngineDiedEvent,
 			},
-			subType:     RASTypeStateChange,
-			expEvtTypes: []string{RASTypeStateChange.String()},
-			expResp:     &sharedpb.ClusterEventResp{},
+			subType: RASTypeStateChange,
+			expEvts: []string{engineDiedEvent.String()},
+			expResp: &sharedpb.ClusterEventResp{},
 		},
 		"filtered rank down event": {
 			req: &sharedpb.ClusterEventReq{
@@ -98,9 +98,9 @@ func TestEvents_HandleClusterEvent(t *testing.T) {
 			req: &sharedpb.ClusterEventReq{
 				Event: pbPSREvent,
 			},
-			subType:     RASTypeStateChange,
-			expEvtTypes: []string{RASTypeStateChange.String()},
-			expResp:     &sharedpb.ClusterEventResp{},
+			subType: RASTypeStateChange,
+			expEvts: []string{psrEvent.String()},
+			expResp: &sharedpb.ClusterEventResp{},
 		},
 		"filtered pool svc replica update event": {
 			req: &sharedpb.ClusterEventReq{
@@ -112,19 +112,19 @@ func TestEvents_HandleClusterEvent(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
-			defer common.ShowBufferOnFailure(t, buf)
+			defer test.ShowBufferOnFailure(t, buf)
 
 			ctx := context.Background()
 
 			ps := NewPubSub(ctx, log)
 			defer ps.Close()
 
-			tly1 := newTally(len(tc.expEvtTypes))
+			tly1 := newTally(len(tc.expEvts))
 
 			ps.Subscribe(tc.subType, tly1)
 
 			resp, err := ps.HandleClusterEvent(tc.req, tc.fwded)
-			common.CmpErr(t, tc.expErr, err)
+			test.CmpErr(t, tc.expErr, err)
 			if err != nil {
 				return
 			}
@@ -134,7 +134,7 @@ func TestEvents_HandleClusterEvent(t *testing.T) {
 			case <-tly1.finished:
 			}
 
-			common.AssertStringsEqual(t, tc.expEvtTypes, tly1.getRx(),
+			test.AssertStringsEqual(t, tc.expEvts, tly1.getRx(),
 				"unexpected received events")
 
 			if diff := cmp.Diff(tc.expResp, resp, defEvtCmpOpts...); diff != "" {

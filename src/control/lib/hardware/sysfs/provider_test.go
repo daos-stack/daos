@@ -19,13 +19,14 @@ import (
 	"github.com/google/go-cmp/cmp"
 
 	"github.com/daos-stack/daos/src/control/common"
+	"github.com/daos-stack/daos/src/control/common/test"
 	"github.com/daos-stack/daos/src/control/lib/hardware"
 	"github.com/daos-stack/daos/src/control/logging"
 )
 
 func TestSysfs_NewProvider(t *testing.T) {
 	log, buf := logging.NewTestLogger(t.Name())
-	defer common.ShowBufferOnFailure(t, buf)
+	defer test.ShowBufferOnFailure(t, buf)
 
 	p := NewProvider(log)
 
@@ -33,7 +34,7 @@ func TestSysfs_NewProvider(t *testing.T) {
 		t.Fatal("nil provider returned")
 	}
 
-	common.AssertEqual(t, "/sys", p.root, "")
+	test.AssertEqual(t, "/sys", p.root, "")
 }
 
 func setupTestNetDevClasses(t *testing.T, root string, devClasses map[string]uint32) {
@@ -77,7 +78,7 @@ func setupTestNetDevOperStates(t *testing.T, root string, devStates map[string]s
 }
 
 func TestSysfs_Provider_GetNetDevClass(t *testing.T) {
-	testDir, cleanupTestDir := common.CreateTestDir(t)
+	testDir, cleanupTestDir := test.CreateTestDir(t)
 	defer cleanupTestDir()
 
 	devs := map[string]uint32{
@@ -110,15 +111,15 @@ func TestSysfs_Provider_GetNetDevClass(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(name)
-			defer common.ShowBufferOnFailure(t, buf)
+			defer test.ShowBufferOnFailure(t, buf)
 
 			p := NewProvider(log)
 			p.root = testDir
 
 			result, err := p.GetNetDevClass(tc.in)
 
-			common.CmpErr(t, tc.expErr, err)
-			common.AssertEqual(t, tc.expResult, result, "")
+			test.CmpErr(t, tc.expErr, err)
+			test.AssertEqual(t, tc.expResult, result, "")
 		})
 	}
 }
@@ -178,6 +179,28 @@ func setupNUMANode(t *testing.T, devPath, numaStr string) {
 
 func TestProvider_GetTopology(t *testing.T) {
 	validPCIAddr := "0000:02:00.0"
+	testTopo := &hardware.Topology{
+		NUMANodes: hardware.NodeMap{
+			2: hardware.MockNUMANode(2, 0).
+				WithDevices([]*hardware.PCIDevice{
+					{
+						Name:    "cxi0",
+						Type:    hardware.DeviceTypeOFIDomain,
+						PCIAddr: *hardware.MustNewPCIAddress(validPCIAddr),
+					},
+					{
+						Name:    "mlx0",
+						Type:    hardware.DeviceTypeOFIDomain,
+						PCIAddr: *hardware.MustNewPCIAddress(validPCIAddr),
+					},
+					{
+						Name:    "net0",
+						Type:    hardware.DeviceTypeNetInterface,
+						PCIAddr: *hardware.MustNewPCIAddress(validPCIAddr),
+					},
+				}),
+		},
+	}
 
 	for name, tc := range map[string]struct {
 		setup     func(*testing.T, string)
@@ -228,7 +251,7 @@ func TestProvider_GetTopology(t *testing.T) {
 					name  string
 				}{
 					{class: "net", name: "net0"},
-					{class: "infiniband", name: "ib0"},
+					{class: "infiniband", name: "mlx0"},
 					{class: "cxi", name: "cxi0"},
 				} {
 					path := setupPCIDev(t, root, validPCIAddr, dev.class, dev.name)
@@ -236,29 +259,8 @@ func TestProvider_GetTopology(t *testing.T) {
 					setupNUMANode(t, path, "2\n")
 				}
 			},
-			p: &Provider{},
-			expResult: &hardware.Topology{
-				NUMANodes: hardware.NodeMap{
-					2: hardware.MockNUMANode(2, 0).
-						WithDevices([]*hardware.PCIDevice{
-							{
-								Name:    "cxi0",
-								Type:    hardware.DeviceTypeOFIDomain,
-								PCIAddr: *hardware.MustNewPCIAddress(validPCIAddr),
-							},
-							{
-								Name:    "ib0",
-								Type:    hardware.DeviceTypeOFIDomain,
-								PCIAddr: *hardware.MustNewPCIAddress(validPCIAddr),
-							},
-							{
-								Name:    "net0",
-								Type:    hardware.DeviceTypeNetInterface,
-								PCIAddr: *hardware.MustNewPCIAddress(validPCIAddr),
-							},
-						}),
-				},
-			},
+			p:         &Provider{},
+			expResult: testTopo,
 		},
 		"exclude non-specified classes": {
 			setup: func(t *testing.T, root string) {
@@ -279,31 +281,10 @@ func TestProvider_GetTopology(t *testing.T) {
 					setupNUMANode(t, path, "2\n")
 				}
 			},
-			p: &Provider{},
-			expResult: &hardware.Topology{
-				NUMANodes: hardware.NodeMap{
-					2: hardware.MockNUMANode(2, 0).
-						WithDevices([]*hardware.PCIDevice{
-							{
-								Name:    "cxi0",
-								Type:    hardware.DeviceTypeOFIDomain,
-								PCIAddr: *hardware.MustNewPCIAddress(validPCIAddr),
-							},
-							{
-								Name:    "mlx0",
-								Type:    hardware.DeviceTypeOFIDomain,
-								PCIAddr: *hardware.MustNewPCIAddress(validPCIAddr),
-							},
-							{
-								Name:    "net0",
-								Type:    hardware.DeviceTypeNetInterface,
-								PCIAddr: *hardware.MustNewPCIAddress(validPCIAddr),
-							},
-						}),
-				},
-			},
+			p:         &Provider{},
+			expResult: testTopo,
 		},
-		"virtual device": {
+		"virtual devices": {
 			setup: func(t *testing.T, root string) {
 				for _, dev := range []struct {
 					class string
@@ -318,43 +299,41 @@ func TestProvider_GetTopology(t *testing.T) {
 					setupNUMANode(t, path, "2\n")
 				}
 
-				virtPath := filepath.Join(root, "devices", "virtual", "net", "virt_net0")
+				// Virtual device with a physical device backing it
+				virtPath1 := filepath.Join(root, "devices", "virtual", "net", "virt_net0")
+				if err := os.MkdirAll(virtPath1, 0755); err != nil {
+					t.Fatal(err)
+				}
+
+				backingDevPath := filepath.Join(root, "class", "net", "net0")
+				if err := os.Symlink(backingDevPath, filepath.Join(virtPath1, "lower_net0")); err != nil {
+					t.Fatal(err)
+				}
+
+				setupClassLink(t, root, "net", virtPath1)
+
+				// Virtual device with no physical device
+				virtPath := filepath.Join(root, "devices", "virtual", "net", "virt0")
 				if err := os.MkdirAll(virtPath, 0755); err != nil {
 					t.Fatal(err)
 				}
 
-				if err := os.Symlink(getPCIPath(root, validPCIAddr), filepath.Join(virtPath, "device")); err != nil {
-					t.Fatal(err)
-				}
-
 				setupClassLink(t, root, "net", virtPath)
+
 			},
 			p: &Provider{},
 			expResult: &hardware.Topology{
-				NUMANodes: hardware.NodeMap{
-					2: hardware.MockNUMANode(2, 0).
-						WithDevices([]*hardware.PCIDevice{
-							{
-								Name:    "cxi0",
-								Type:    hardware.DeviceTypeOFIDomain,
-								PCIAddr: *hardware.MustNewPCIAddress(validPCIAddr),
-							},
-							{
-								Name:    "mlx0",
-								Type:    hardware.DeviceTypeOFIDomain,
-								PCIAddr: *hardware.MustNewPCIAddress(validPCIAddr),
-							},
-							{
-								Name:    "net0",
-								Type:    hardware.DeviceTypeNetInterface,
-								PCIAddr: *hardware.MustNewPCIAddress(validPCIAddr),
-							},
-							{
-								Name:    "virt_net0",
-								Type:    hardware.DeviceTypeNetInterface,
-								PCIAddr: *hardware.MustNewPCIAddress(validPCIAddr),
-							},
-						}),
+				NUMANodes: testTopo.NUMANodes,
+				VirtualDevices: []*hardware.VirtualDevice{
+					{
+						Name: "virt0",
+						Type: hardware.DeviceTypeNetInterface,
+					},
+					{
+						Name:          "virt_net0",
+						Type:          hardware.DeviceTypeNetInterface,
+						BackingDevice: testTopo.AllDevices()["net0"].(*hardware.PCIDevice),
+					},
 				},
 			},
 		},
@@ -482,9 +461,9 @@ func TestProvider_GetTopology(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(name)
-			defer common.ShowBufferOnFailure(t, buf)
+			defer test.ShowBufferOnFailure(t, buf)
 
-			testDir, cleanupTestDir := common.CreateTestDir(t)
+			testDir, cleanupTestDir := test.CreateTestDir(t)
 			defer cleanupTestDir()
 
 			if tc.setup == nil {
@@ -502,7 +481,7 @@ func TestProvider_GetTopology(t *testing.T) {
 
 			result, err := tc.p.GetTopology(context.Background())
 
-			common.CmpErr(t, tc.expErr, err)
+			test.CmpErr(t, tc.expErr, err)
 
 			if diff := cmp.Diff(tc.expResult, result); diff != "" {
 				t.Errorf("(-want, +got)\n%s\n", diff)
@@ -552,9 +531,9 @@ func TestSysfs_Provider_GetFabricInterfaces(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(name)
-			defer common.ShowBufferOnFailure(t, buf)
+			defer test.ShowBufferOnFailure(t, buf)
 
-			testDir, cleanupTestDir := common.CreateTestDir(t)
+			testDir, cleanupTestDir := test.CreateTestDir(t)
 			defer cleanupTestDir()
 
 			if tc.setup == nil {
@@ -571,7 +550,7 @@ func TestSysfs_Provider_GetFabricInterfaces(t *testing.T) {
 
 			result, err := tc.p.GetFabricInterfaces(context.Background())
 
-			common.CmpErr(t, tc.expErr, err)
+			test.CmpErr(t, tc.expErr, err)
 
 			if diff := cmp.Diff(tc.expResult, result,
 				cmp.AllowUnexported(hardware.FabricInterfaceSet{}),
@@ -977,9 +956,9 @@ func TestSysfs_Provider_GetNetDevState(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(name)
-			defer common.ShowBufferOnFailure(t, buf)
+			defer test.ShowBufferOnFailure(t, buf)
 
-			testDir, cleanupTestDir := common.CreateTestDir(t)
+			testDir, cleanupTestDir := test.CreateTestDir(t)
 			defer cleanupTestDir()
 
 			if tc.p != nil {
@@ -996,8 +975,8 @@ func TestSysfs_Provider_GetNetDevState(t *testing.T) {
 
 			state, err := tc.p.GetNetDevState(tc.iface)
 
-			common.CmpErr(t, tc.expErr, err)
-			common.AssertEqual(t, tc.expState, state, "")
+			test.CmpErr(t, tc.expErr, err)
+			test.AssertEqual(t, tc.expState, state, "")
 		})
 	}
 }
@@ -1041,12 +1020,12 @@ func TestSysfs_Provider_ibStateToNetDevState(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(name)
-			defer common.ShowBufferOnFailure(t, buf)
+			defer test.ShowBufferOnFailure(t, buf)
 
 			p := &Provider{log: log}
 			result := p.ibStateToNetDevState(tc.input)
 
-			common.AssertEqual(t, tc.expResult, result, "")
+			test.AssertEqual(t, tc.expResult, result, "")
 		})
 	}
 }
@@ -1113,7 +1092,60 @@ func TestSysfs_condenseNetDevState(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			result := condenseNetDevState(tc.input)
 
-			common.AssertEqual(t, tc.expResult, result, "")
+			test.AssertEqual(t, tc.expResult, result, "")
+		})
+	}
+}
+
+func setupTestIsIOMMUEnabled(t *testing.T, root string, extraDirs ...string) {
+	t.Helper()
+
+	dirs := append([]string{root}, extraDirs...)
+
+	path := filepath.Join(dirs...)
+	os.MkdirAll(path, 0755)
+}
+
+func TestSysfs_Provider_IsIOMMUEnabled(t *testing.T) {
+	for name, tc := range map[string]struct {
+		nilProvider bool
+		extraDirs   []string
+		expResult   bool
+		expErr      error
+	}{
+		"nil provider": {
+			nilProvider: true,
+			expErr:      errors.New("provider is nil"),
+		},
+		"missing iommu dir": {
+			extraDirs: []string{"class"},
+		},
+		"iommu disabled": {
+			extraDirs: []string{"class", "iommu"},
+		},
+		"iommu enabled": {
+			extraDirs: []string{"class", "iommu", "dmar0"},
+			expResult: true,
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			testDir, cleanupTestDir := test.CreateTestDir(t)
+			defer cleanupTestDir()
+
+			log, buf := logging.NewTestLogger(name)
+			defer test.ShowBufferOnFailure(t, buf)
+
+			var p *Provider
+			if !tc.nilProvider {
+				p = NewProvider(log)
+				p.root = testDir
+				setupTestIsIOMMUEnabled(t, testDir, tc.extraDirs...)
+			}
+
+			result, err := p.IsIOMMUEnabled()
+
+			test.CmpErr(t, tc.expErr, err)
+			test.AssertEqual(t, tc.expResult, result, "")
 		})
 	}
 }

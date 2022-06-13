@@ -20,7 +20,7 @@ fi
 echo "Checking uncommitted code with flake."
 git diff -u | flake8 --diff
 
-if ! BRANCH=$(git rev-parse --abbrev-ref HEAD > /dev/null 2>&1); then
+if ! BRANCH=$(git rev-parse --abbrev-ref HEAD 2>/dev/null); then
     echo "Failed to determine branch with git rev-parse"
     exit 1
 fi
@@ -47,5 +47,8 @@ else
     fi
 
     echo "Checking against branch ${TARGET}"
-    git diff $TARGET... -u | flake8 --diff
+    git diff $TARGET... -U10 | flake8 --diff
+
+    echo "Checking scons code against branch ${TARGET}"
+    git diff $TARGET... -U10 | flake8 --config .flake8-scons --diff
 fi

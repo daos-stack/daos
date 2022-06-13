@@ -17,7 +17,7 @@ import (
 	"github.com/google/go-cmp/cmp"
 	"github.com/pkg/errors"
 
-	"github.com/daos-stack/daos/src/control/common"
+	"github.com/daos-stack/daos/src/control/common/test"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/server/storage"
 )
@@ -87,12 +87,12 @@ func TestProvider_Scan(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
-			defer common.ShowBufferOnFailure(t, buf)
+			defer test.ShowBufferOnFailure(t, buf)
 
 			p := NewMockProvider(log, tc.mbc, nil)
 
 			resp, err := p.Scan(storage.ScmScanRequest{})
-			common.CmpErr(t, tc.expErr, err)
+			test.CmpErr(t, tc.expErr, err)
 			if tc.expErr != nil {
 				return
 			}
@@ -215,7 +215,7 @@ func TestProvider_Prepare(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
-			defer common.ShowBufferOnFailure(t, buf)
+			defer test.ShowBufferOnFailure(t, buf)
 
 			p := NewMockProvider(log, tc.mbc, nil)
 
@@ -233,7 +233,7 @@ func TestProvider_Prepare(t *testing.T) {
 				Reset: tc.reset,
 			}, mockScan)
 
-			common.CmpErr(t, tc.expErr, err)
+			test.CmpErr(t, tc.expErr, err)
 			if tc.expErr != nil {
 				return
 			}
@@ -246,7 +246,7 @@ func TestProvider_Prepare(t *testing.T) {
 				if err != nil {
 					t.Fatal(err)
 				}
-				common.AssertEqual(t, !tc.reset, isMounted,
+				test.AssertEqual(t, !tc.reset, isMounted,
 					fmt.Sprintf("unexpected ns %s mounted state, want %v got %v",
 						ns.BlockDevice, !tc.reset, isMounted))
 			}
@@ -372,7 +372,7 @@ func TestProvider_CheckFormat(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
-			defer common.ShowBufferOnFailure(t, buf)
+			defer test.ShowBufferOnFailure(t, buf)
 
 			msc := &MockSysConfig{
 				IsMountedBool: tc.alreadyMounted,
@@ -473,7 +473,7 @@ func TestProvider_makeMountPath(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
-			defer common.ShowBufferOnFailure(t, buf)
+			defer test.ShowBufferOnFailure(t, buf)
 
 			testCaseDir := filepath.Join(testDir, "tc")
 			if err := os.Mkdir(testCaseDir, defaultMountPointPerms); err != nil {
@@ -505,7 +505,7 @@ func TestProvider_makeMountPath(t *testing.T) {
 			tMntpt := filepath.Join(testCaseDir, tc.mntpt)
 
 			gotErr := p.makeMountPath(tMntpt, os.Getuid(), os.Getgid())
-			common.CmpErr(t, tc.expErr, gotErr)
+			test.CmpErr(t, tc.expErr, gotErr)
 			if tc.expErr != nil || tc.expCreate == false {
 				return
 			}
@@ -539,6 +539,7 @@ func TestProvider_Format(t *testing.T) {
 		mountErr       error
 		unmountErr     error
 		mkfsErr        error
+		chmodErr       error
 		request        *storage.ScmFormatRequest
 		expResponse    *storage.ScmFormatResponse
 		expErr         error
@@ -648,6 +649,16 @@ func TestProvider_Format(t *testing.T) {
 			},
 			alreadyMounted: true,
 			unmountErr:     errors.New("unmount failed"),
+		},
+		"ramdisk: format succeeds, chmod fails": {
+			request: &storage.ScmFormatRequest{
+				Mountpoint: goodMountPoint,
+				Ramdisk: &storage.RamdiskParams{
+					Size: 1,
+				},
+			},
+			chmodErr: errors.New("chmod failed"),
+			expErr:   errors.New("chmod failed"),
 		},
 		"ramdisk: already mounted; reformat; mount fails": {
 			request: &storage.ScmFormatRequest{
@@ -805,6 +816,17 @@ func TestProvider_Format(t *testing.T) {
 			getFsStr: fsTypeNone,
 			mountErr: errors.New("mount failed"),
 		},
+		"dcpm: format succeeds, chmod fails": {
+			request: &storage.ScmFormatRequest{
+				Mountpoint: goodMountPoint,
+				Dcpm: &storage.DcpmParams{
+					Device: goodDevice,
+				},
+			},
+			getFsStr: fsTypeNone,
+			chmodErr: errors.New("chmod failed"),
+			expErr:   errors.New("chmod failed"),
+		},
 		"dcpm: missing device": {
 			request: &storage.ScmFormatRequest{
 				Mountpoint: goodMountPoint,
@@ -851,9 +873,9 @@ func TestProvider_Format(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
-			defer common.ShowBufferOnFailure(t, buf)
+			defer test.ShowBufferOnFailure(t, buf)
 
-			testDir, clean := common.CreateTestDir(t)
+			testDir, clean := test.CreateTestDir(t)
 			defer clean()
 
 			msc := &MockSysConfig{
@@ -862,6 +884,7 @@ func TestProvider_Format(t *testing.T) {
 				GetfsStr:      tc.getFsStr,
 				GetfsErr:      tc.getFsErr,
 				MkfsErr:       tc.mkfsErr,
+				ChmodErr:      tc.chmodErr,
 				MountErr:      tc.mountErr,
 				UnmountErr:    tc.unmountErr,
 			}

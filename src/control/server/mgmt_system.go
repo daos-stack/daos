@@ -11,6 +11,9 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"path/filepath"
+	"reflect"
+	"runtime"
 	"strings"
 	"time"
 
@@ -28,7 +31,9 @@ import (
 	"github.com/daos-stack/daos/src/control/drpc"
 	"github.com/daos-stack/daos/src/control/events"
 	"github.com/daos-stack/daos/src/control/lib/control"
+	"github.com/daos-stack/daos/src/control/lib/daos"
 	"github.com/daos-stack/daos/src/control/lib/hostlist"
+	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/system"
 )
 
@@ -372,7 +377,7 @@ func (svc *mgmtSvc) doGroupUpdate(ctx context.Context, forced bool) error {
 	}
 
 	if resp.GetStatus() != 0 {
-		return drpc.DaosStatus(resp.GetStatus())
+		return daos.Status(resp.GetStatus())
 	}
 	return nil
 }
@@ -494,6 +499,49 @@ func (svc *mgmtSvc) resolveRanks(hosts, ranks string) (hitRS, missRS *system.Ran
 	return
 }
 
+// synthesise "Stopped" rank results for any harness host errors
+func addUnresponsiveResults(log logging.Logger, hostRanks map[string][]system.Rank, rr *control.RanksResp, resp *fanoutResponse) {
+	for _, hes := range rr.HostErrors {
+		for _, addr := range strings.Split(hes.HostSet.DerangedString(), ",") {
+			for _, rank := range hostRanks[addr] {
+				resp.Results = append(resp.Results,
+					&system.MemberResult{
+						Rank: rank, Msg: hes.HostError.Error(),
+						State: system.MemberStateUnresponsive,
+					})
+			}
+			log.Debugf("harness %s (ranks %v) host error: %s", addr, hostRanks[addr],
+				hes.HostError)
+		}
+	}
+}
+
+// Remove any duplicate results from response.
+func removeDuplicateResults(log logging.Logger, resp *fanoutResponse) {
+	seenResults := make(map[uint32]*system.MemberResult)
+	for _, res := range resp.Results {
+		if res == nil {
+			continue
+		}
+		rID := res.Rank.Uint32()
+		if extant, existing := seenResults[rID]; !existing {
+			seenResults[rID] = res
+		} else if !extant.Equals(res) {
+			log.Errorf("nonidentical result for same rank: %+v != %+v", *extant, *res)
+		}
+	}
+
+	if len(seenResults) == len(resp.Results) {
+		return
+	}
+
+	newResults := make(system.MemberResults, 0, len(seenResults))
+	for _, res := range seenResults {
+		newResults = append(newResults, res)
+	}
+	resp.Results = newResults
+}
+
 // rpcFanout sends requests to ranks in list on their respective host
 // addresses through functions implementing UnaryInvoker.
 //
@@ -521,10 +569,31 @@ func (svc *mgmtSvc) rpcFanout(ctx context.Context, req *fanoutRequest, resp *fan
 		Ranks: req.Ranks.String(), Force: req.Force,
 	}
 
+	funcName := func(i interface{}) string {
+		return filepath.Base(runtime.FuncForPC(reflect.ValueOf(i).Pointer()).Name())
+	}
+
+	waiting := system.RankSetFromRanks(req.Ranks.Ranks())
+	finished := system.MustCreateRankSet("")
+	ranksReq.SetReportCb(func(hr *control.HostResponse) {
+		rs, ok := hr.Message.(interface{ GetResults() []*sharedpb.RankResult })
+		if !ok {
+			svc.log.Errorf("unexpected message type in HostResponse: %T", hr.Message)
+			return
+		}
+
+		for _, rr := range rs.GetResults() {
+			waiting.Delete(system.Rank(rr.Rank))
+			finished.Add(system.Rank(rr.Rank))
+		}
+
+		svc.log.Infof("%s: finished: %s; waiting: %s", funcName(req.Method), finished, waiting)
+	})
+
 	// Not strictly necessary but helps with debugging.
 	dl, ok := ctx.Deadline()
 	if ok {
-		ranksReq.SetTimeout(dl.Sub(time.Now()))
+		ranksReq.SetTimeout(time.Until(dl))
 	}
 
 	ranksReq.SetHostList(svc.membership.HostList(req.Ranks))
@@ -535,21 +604,9 @@ func (svc *mgmtSvc) rpcFanout(ctx context.Context, req *fanoutRequest, resp *fan
 
 	resp.Results = ranksResp.RankResults
 
-	// synthesise "Stopped" rank results for any harness host errors
-	hostRanks := svc.membership.HostRanks(req.Ranks)
-	for _, hes := range ranksResp.HostErrors {
-		for _, addr := range strings.Split(hes.HostSet.DerangedString(), ",") {
-			for _, rank := range hostRanks[addr] {
-				resp.Results = append(resp.Results,
-					&system.MemberResult{
-						Rank: rank, Msg: hes.HostError.Error(),
-						State: system.MemberStateUnresponsive,
-					})
-			}
-			svc.log.Debugf("harness %s (ranks %v) host error: %s",
-				addr, hostRanks[addr], hes.HostError)
-		}
-	}
+	addUnresponsiveResults(svc.log, svc.membership.HostRanks(req.Ranks), ranksResp, resp)
+
+	removeDuplicateResults(svc.log, resp)
 
 	if len(resp.Results) != req.Ranks.Count() {
 		svc.log.Debugf("expected %d results, got %d",
@@ -947,12 +1004,12 @@ func (svc *mgmtSvc) SystemCleanup(ctx context.Context, req *mgmtpb.SystemCleanup
 
 		res := &mgmtpb.PoolEvictResp{}
 		if err = proto.Unmarshal(dresp.Body, res); err != nil {
-			res.Status = int32(drpc.DaosIOInvalid)
+			res.Status = int32(daos.IOInvalid)
 			errmsg = errors.Wrap(err, "unmarshal PoolEvict response").Error()
 			res.Count = 0
 		}
 
-		if res.Status != int32(drpc.DaosSuccess) {
+		if res.Status != int32(daos.Success) {
 			errmsg = fmt.Sprintf("Unable to clean up handles for machine %s on pool %s", evictReq.Machine, evictReq.Id)
 		}
 
@@ -1003,5 +1060,41 @@ func (svc *mgmtSvc) SystemGetAttr(ctx context.Context, req *mgmtpb.SystemGetAttr
 	}
 
 	resp = &mgmtpb.SystemGetAttrResp{Attributes: props}
+	return
+}
+
+// SystemSetProp sets user-visible system properties.
+func (svc *mgmtSvc) SystemSetProp(ctx context.Context, req *mgmtpb.SystemSetPropReq) (_ *mgmtpb.DaosResp, err error) {
+	if err := svc.checkLeaderRequest(req); err != nil {
+		return nil, err
+	}
+	svc.log.Debugf("Received SystemSetProp RPC: %+v", req)
+	defer func() {
+		svc.log.Debugf("Responding to SystemSetProp RPC: (%v)", err)
+	}()
+
+	if err := system.SetUserProperties(svc.sysdb, svc.systemProps, req.GetProperties()); err != nil {
+		return nil, err
+	}
+
+	return &mgmtpb.DaosResp{}, nil
+}
+
+// SystemGetProp gets user-visible system properties.
+func (svc *mgmtSvc) SystemGetProp(ctx context.Context, req *mgmtpb.SystemGetPropReq) (resp *mgmtpb.SystemGetPropResp, err error) {
+	if err := svc.checkReplicaRequest(req); err != nil {
+		return nil, err
+	}
+	svc.log.Debugf("Received SystemGetProp RPC: %+v", req)
+	defer func() {
+		svc.log.Debugf("Responding to SystemGetProp RPC: %+v (%v)", resp, err)
+	}()
+
+	props, err := system.GetUserProperties(svc.sysdb, svc.systemProps, req.GetKeys())
+	if err != nil {
+		return nil, err
+	}
+
+	resp = &mgmtpb.SystemGetPropResp{Properties: props}
 	return
 }
