@@ -1435,14 +1435,10 @@ dfuse_fseeko(FILE *stream, off_t offset, int whence)
 	if (drop_reference_if_disabled(entry))
 		goto do_real_fseeko;
 
-	DFUSE_TRA_ERROR(entry->fd_dfsoh, "Old offset %zd %zd %d", new_offset, entry->fd_pos, errno);
-
 	if (whence == SEEK_SET) {
-#if 0
 		off_t ni = __real_fseeko(stream, offset, whence);
 
 		DFUSE_TRA_ERROR(entry->fd_dfsoh, "Patching up, offset %#zx", ni);
-#endif
 		new_offset = offset;
 		entry->fd_eof = false;
 
@@ -1459,16 +1455,12 @@ dfuse_fseeko(FILE *stream, off_t offset, int whence)
 		goto cleanup;
 	}
 
-	DFUSE_TRA_ERROR(entry->fd_dfsoh, "Middle offset %zd %zd %d", new_offset, entry->fd_pos, errno);
-
 	if (new_offset < 0) {
 		new_offset = (off_t)-1;
 		errno = EINVAL;
 	} else {
 		entry->fd_pos = new_offset;
 	}
-
-	DFUSE_TRA_ERROR(entry->fd_dfsoh, "New offset %zd %zd %d", new_offset, entry->fd_pos, errno);
 
 cleanup:
 
@@ -2009,7 +2001,7 @@ dfuse_fread(void *ptr, size_t size, size_t nmemb, FILE *stream)
 	if (drop_reference_if_disabled(entry))
 		goto do_real_fread;
 
-	DFUSE_TRA_INFO(entry->fd_dfsoh, "performing fread from %#zx %zi %zi", entry->fd_pos, size, nmemb);
+	DFUSE_TRA_INFO(entry->fd_dfsoh, "performing fread from %#zx", entry->fd_pos);
 
 	len = nmemb * size;
 
@@ -2033,9 +2025,6 @@ dfuse_fread(void *ptr, size_t size, size_t nmemb, FILE *stream)
 
 	vector_decref(&fd_table, entry);
 
-	char *_ptr = ptr;
-
-	DFUSE_TRA_INFO(entry->fd_dfsoh, "read %zi %x", nread, (int)_ptr[0]);
 	return nread;
 
 do_real_fread:
