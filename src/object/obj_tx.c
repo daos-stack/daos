@@ -3217,23 +3217,3 @@ out:
 
 	return rc;
 }
-
-int
-dc_tx_hdl2dti(daos_handle_t th, struct dtx_id *dti)
-{
-	return dc_tx_get_dti(th, dti);
-}
-
-int
-dc_tx_hdl2epoch_pmv(daos_handle_t th, struct dtx_epoch *epoch,
-				      uint32_t *pm_ver)
-{
-	return dc_tx_hdl2epoch_and_pmv(th, epoch, pm_ver);
-}
-
-void
-dc_io_set_epoch(struct dtx_epoch *epoch)
-{
-	dc_io_epoch_set(epoch);
-}
-
