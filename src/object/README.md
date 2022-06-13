@@ -119,7 +119,7 @@ and any of the following sharding hints (percentage based on number of targets):
 DAOS object supports two data protection methods: replication(RP) and Erasure Code(EC).
 A set replicated shard, or a set of data and parity shards belonging to the same parity group is
 called redundancy group. An object can be chunked into many redundancy groups in order to achieve
-higher I/O concurrency for better performance and large capactiy because redundacy groups spread
+higher I/O concurrency for better performance and large capactiy because redundancy groups spread
 across different storage engines.
 
 DAOS has over a hundred pre-defined object classes and specific naming conventions for these
