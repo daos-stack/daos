@@ -1,0 +1,33 @@
+[MASTER]
+extension-pkg-allow-list=xattr
+persistent=no
+
+py-version=3.6
+
+[BASIC]
+good-names=rc,ret,fd
+
+[MESSAGES CONTROL]
+disable=locally-disabled,locally-enabled,star-args,global-statement,bad-option-value,
+        wrong-import-position,modified-iterating-list,duplicate-code,unspecified-encoding
+
+[SPELLING]
+spelling-dict=en_US
+spelling-private-dict-file=utils/cq/words.dict
+
+[FORMAT]
+max-line-length=100
+max-locals=30
+max-args=10
+min-similarity-lines=10
+max-branches=25
+max-statements=200
+max-attributes=30
+
+[MISCELLANEOUS]
+# List of note tags to take in consideration, separated by a comma.
+notes=FIXME,XXX,TODO
+
+[REPORTS]
+reports=no
+score=no

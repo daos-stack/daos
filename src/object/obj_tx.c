@@ -785,6 +785,7 @@ dc_tx_get_epoch(tse_task_t *task, daos_handle_t th, struct dtx_epoch *epoch)
 		 * already choosing it. We'll "wait" for that "epoch task" to
 		 * complete.
 		 */
+		tse_disable_propagate(task);
 		D_DEBUG(DB_IO, DF_X64"/%p: waiting for epoch task %p\n",
 			th.cookie, task, tx->tx_epoch_task);
 		rc = tse_task_register_deps(task, 1, &tx->tx_epoch_task);
@@ -1067,6 +1068,7 @@ dc_tx_classify_update(struct dc_tx *tx, struct daos_cpd_sub_req *dcsr,
 			return rc;
 
 		rc = obj_ec_req_reasb(dcu->dcu_iod_array.oia_iods,
+				      obj_ec_dkey_hash_get(obj, dcsr->dcsr_dkey_hash),
 				      dcsr->dcsr_sgls, obj->cob_md.omd_id, oca,
 				      dcsr->dcsr_reasb, dcsr->dcsr_nr, true);
 		if (rc != 0)
@@ -1623,7 +1625,9 @@ dc_tx_commit_prepare(struct dc_tx *tx, tse_task_t *task)
 		else
 			bit_map = NIL_BITMAP;
 
-		i = obj_grp_leader_get(obj, grp_idx, tx->tx_pm_ver, false, bit_map);
+		i = obj_grp_leader_get(obj, grp_idx,
+				       obj_ec_dkey_hash_get(obj, dcsr->dcsr_dkey_hash),
+				       false, tx->tx_pm_ver, bit_map);
 		if (i < 0)
 			D_GOTO(out, rc = i);
 
