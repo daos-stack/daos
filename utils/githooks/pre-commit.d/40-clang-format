@@ -1,0 +1,24 @@
+#!/bin/bash
+
+set -ue
+
+if [ -e .git/MERGE_HEAD ]
+then
+    echo Merge commit
+    exit 0
+fi
+
+if ! command -v git-clang-format > /dev/null 2>&1
+then
+    echo "No git-clang-format checking"
+    exit 0
+fi
+if ! command -v clang-format > /dev/null 2>&1
+then
+    echo "No clang-format checking"
+    exit 0
+fi
+
+# TODO: Check version of clang-format.
+
+git-clang-format --staged src
