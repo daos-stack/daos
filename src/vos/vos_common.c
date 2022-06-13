@@ -680,18 +680,20 @@ vos_self_nvme_fini(void)
 static int
 vos_self_nvme_init(const char *vos_path)
 {
-	char	nvme_conf[128];
-	int	rc, fd;
+	char	*nvme_conf;
+	int	 rc, fd;
 
 	D_ASSERT(vos_path != NULL);
-	snprintf(nvme_conf, sizeof(nvme_conf), "%s/%s", vos_path, VOS_NVME_CONF);
+	D_ASPRINTF(nvme_conf, "%s/%s", vos_path, VOS_NVME_CONF);
+	if (nvme_conf == NULL)
+		return -DER_NOMEM;
 
 	/* IV tree used by VEA */
 	rc = dbtree_class_register(DBTREE_CLASS_IV,
 				   BTR_FEAT_UINT_KEY | BTR_FEAT_DIRECT_KEY,
 				   &dbtree_iv_ops);
 	if (rc != 0 && rc != -DER_EXIST)
-		return rc;
+		goto out;
 
 	/* Only use hugepages if NVME SSD configuration existed. */
 	fd = open(nvme_conf, O_RDONLY, 0600);
@@ -706,10 +708,12 @@ vos_self_nvme_init(const char *vos_path)
 	}
 
 	if (rc)
-		return rc;
+		goto out;
 
 	self_mode.self_nvme_init = true;
 	rc = bio_xsctxt_alloc(&self_mode.self_xs_ctxt, -1 /* Self poll */);
+out:
+	D_FREE(nvme_conf);
 	return rc;
 }
 
