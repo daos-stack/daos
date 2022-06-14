@@ -19,6 +19,8 @@ from getpass import getuser
 from importlib import import_module
 from socket import gethostname
 
+from avocado.core.settings import settings
+from avocado.core.version import MAJOR
 from avocado.utils import process
 from ClusterShell.Task import task_self
 from ClusterShell.NodeSet import NodeSet, NodeSetParseError
@@ -1425,8 +1427,12 @@ def get_primary_group(user=None):
     """
     if user is None:
         user = getuser()
-    gid = pwd.getpwnam(user).pw_gid
-    return grp.getgrgid(gid).gr_name
+    try:
+        gid = pwd.getpwnam(user).pw_gid
+        return grp.getgrgid(gid).gr_name
+    except KeyError:
+        # User may not exist on this host, e.g. daos_server, so just return the user name
+        return user
 
 
 def get_journalctl(hosts, since, until, journalctl_type):
@@ -1450,3 +1456,34 @@ def get_journalctl(hosts, since, until, journalctl_type):
     results = get_host_data(hosts=hosts, command=command, text="journalctl", error=err)
 
     return results
+
+
+def get_avocado_config_value(section, key):
+    """Get an avocado configuration value.
+
+    Args:
+        section (str): the configuration section, e.g. 'runner.timeout'
+        key (str): the configuration key, e.g. 'process_died'
+
+    Returns:
+        object: the value of the requested config key in the specified section
+
+    """
+    if int(MAJOR) >= 82:
+        config = settings.as_dict()
+        return config.get(".".join([section, key]))
+    return settings.get_value(section, key)     # pylint: disable=no-member
+
+
+def set_avocado_config_value(section, key, value):
+    """Set an avocado configuration value.
+
+    Args:
+        section (str): the configuration section, e.g. 'runner.timeout'
+        key (str): the configuration key, e.g. 'process_died'
+        value (object): the value to set
+    """
+    if int(MAJOR) >= 82:
+        settings.update_option(".".join([section, key]), value)
+    else:
+        settings.config.set(section, key, str(value))
