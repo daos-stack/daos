@@ -96,6 +96,12 @@ smoke:
         - fio_smoke
         - daos_racer
         - mdtest_smoke
+<<<<<<< HEAD
+=======
+        #- vpic_smoke
+        #- lammps_smoke
+        - macsio_smoke
+>>>>>>> fe9a6411a (DAOS-5181 test: Add vpic and lammps to soak (#6858))
     # num of bytes to write to reserved container
     resv_bytes: 500
 # Commandline parameters
@@ -167,6 +173,33 @@ fio_smoke:
         mount_dir: "/tmp/daos_dfuse/fio/"
 daos_racer:
     runtime: 120
+vpic_smoke:
+    job_timeout: 10
+    nodesperjob:
+        - 1
+    taskspernode:
+        - 1
+    cmdline: "/home/mjean/vpic-install/bin/harris.Linux"
+    posix: True
+    workdir: "/tmp/daos_dfuse/vpic/"
+    module: "mpi/latest"
+    dfuse:
+        mount_dir: "/tmp/daos_dfuse/vpic/"
+    oclass:
+        - "EC_2P1GX"
+lammps_smoke:
+    job_timeout: 10
+    nodesperjob:
+        - 1
+    taskspernode:
+        - 1
+    cmdline: "/home/mjean/lammps/src/lmp_mpi -i /home/mjean/lammps/bench/in.lj.smoke"
+    posix: True
+    workdir: "/tmp/daos_dfuse/lammps/"
+    dfuse:
+        mount_dir: "/tmp/daos_dfuse/lammps/"
+    oclass:
+        - "EC_2P1GX"
 mdtest_smoke:
     # maximum timeout for a single job in test in minutes
     job_timeout: 10
