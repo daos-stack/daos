@@ -116,7 +116,7 @@ def scons():
                                  LIBS=['daos_common'] + libraries)
 
     c_files = Split("""daos_debug_set_params.c""")
-    newenv.AppendUnique(CPPPATH=["#/src/client/dfs"])
+    newenv.AppendUnique(CPPPATH=[Dir('../../client/dfs').srcnode()])
     daosdebug = daos_build.program(newenv, 'daos_debug_set_params',
                                    c_files + daos_test_tgt,
                                    LIBS=['daos_common'] + libraries)
