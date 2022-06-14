@@ -380,7 +380,9 @@ struct obj_auxi_args {
 					 sub_anchors:1,
 					 ec_degrade_fetch:1,
 					 tx_convert:1,
-					 cond_modify:1;
+					 cond_modify:1,
+					 /* conf_fetch split to multiple sub-tasks */
+					 cond_fetch_split:1;
 	/* request flags. currently only: ORF_RESEND */
 	uint32_t			 flags;
 	uint32_t			 specified_shard;
@@ -600,10 +602,22 @@ obj_ptr2hdl(struct dc_object *obj)
 	return oh;
 }
 
-static inline void
-dc_io_epoch_set(struct dtx_epoch *epoch)
+static inline int
+shard_task_abort(tse_task_t *task, void *arg)
 {
-	if (srv_io_mode == DIM_CLIENT_DISPATCH) {
+	int	rc = *((int *)arg);
+
+	tse_task_list_del(task);
+	tse_task_decref(task);
+	tse_task_complete(task, rc);
+
+	return 0;
+}
+
+static inline void
+dc_io_epoch_set(struct dtx_epoch *epoch, uint32_t opc)
+{
+	if (srv_io_mode == DIM_CLIENT_DISPATCH && obj_is_modification_opc(opc)) {
 		epoch->oe_value = crt_hlc_get();
 		epoch->oe_first = epoch->oe_value;
 		/* DIM_CLIENT_DISPATCH doesn't promise consistency. */
