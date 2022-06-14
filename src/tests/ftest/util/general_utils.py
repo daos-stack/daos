@@ -302,8 +302,6 @@ def run_task(hosts, command, timeout=None, verbose=False):
 
     """
     if not isinstance(hosts, NodeSet):
-        if not isinstance(hosts, list):
-            hosts = [hosts]
         hosts = NodeSet.fromlist(hosts)
     task = task_self()
     # Enable forwarding of the ssh authentication agent connection

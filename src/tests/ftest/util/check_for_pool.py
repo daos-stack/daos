@@ -21,7 +21,7 @@ def check_for_pool(host, uuid):
 
     """
     pool_dir = "/mnt/daos/{}".format(uuid)
-    result = check_file_exists(host, pool_dir, directory=True, sudo=True)
+    result = check_file_exists([host], pool_dir, directory=True, sudo=True)
     if result[0]:
         print("{} exists on {}".format(pool_dir, host))
     else:
