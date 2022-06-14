@@ -29,6 +29,7 @@ import subprocess  # nosec
 import re
 import os
 import sys
+from packaging import version
 
 from SCons.Builder import Builder
 from SCons.Script import WhereIs
@@ -50,8 +51,9 @@ def _supports_custom_format(clang_exe):
         return False
 
     match = re.search(r"version (\d+)\.", output)
-    if match and int(match.group(1)) >= MIN_FORMAT_VERSION:
-        return True
+    if match:
+        if version.parse(match.group(1)) >= version.parse(MIN_FORMAT_VERSION):
+            return True
 
     print(f'Custom .clang-format wants version {MIN_FORMAT_VERSION}+. Using Mozilla style.')
     return False
@@ -69,14 +71,8 @@ def _supports_correct_style(clang_exe):
 
     match = re.search(r'version ([\d+\.]+) ', output)
     if match:
-        parts = match.group(1).split('.')
-        if int(parts[0]) < 14:
-            return False
-        if int(parts[1]) > 0:
+        if version.parse(match.group(1)) >= version.parse('14.0.5'):
             return True
-        if int(parts[2]) < 5:
-            return False
-        return True
 
     return False
 
