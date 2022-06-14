@@ -103,19 +103,39 @@ func writeCoreDumpFilter(log logging.Logger, path string, filter uint8) error {
 	return err
 }
 
-func createListener(ctlPort int, resolver resolveTCPFn, listener netListenFn) (*net.TCPAddr, net.Listener, error) {
-	ctlAddr, err := resolver("tcp", fmt.Sprintf("0.0.0.0:%d", ctlPort))
-	if err != nil {
-		return nil, nil, errors.Wrap(err, "unable to resolve daos_server control address")
+type replicaAddrGetter interface {
+	ReplicaAddr() (*net.TCPAddr, error)
+}
+
+type ctlAddrParams struct {
+	port           int
+	replicaAddrSrc replicaAddrGetter
+	resolveAddr    resolveTCPFn
+}
+
+func getControlAddr(params ctlAddrParams) (*net.TCPAddr, error) {
+	ipStr := "0.0.0.0"
+
+	if repAddr, err := params.replicaAddrSrc.ReplicaAddr(); err == nil {
+		ipStr = repAddr.IP.String()
 	}
 
+	ctlAddr, err := params.resolveAddr("tcp", fmt.Sprintf("[%s]:%d", ipStr, params.port))
+	if err != nil {
+		return nil, errors.Wrap(err, "resolving control address")
+	}
+
+	return ctlAddr, nil
+}
+
+func createListener(ctlAddr *net.TCPAddr, listener netListenFn) (net.Listener, error) {
 	// Create and start listener on management network.
-	lis, err := listener("tcp4", ctlAddr.String())
+	lis, err := listener("tcp4", fmt.Sprintf("0.0.0.0:%d", ctlAddr.Port))
 	if err != nil {
-		return nil, nil, errors.Wrap(err, "unable to listen on management interface")
+		return nil, errors.Wrap(err, "unable to listen on management interface")
 	}
 
-	return ctlAddr, lis, nil
+	return lis, nil
 }
 
 // updateFabricEnvars adjusts the engine fabric configuration.
