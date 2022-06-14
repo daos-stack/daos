@@ -155,6 +155,8 @@ int dm_copy_usr_attrs(struct cmd_args_s *ap, daos_handle_t src_coh, daos_handle_
 int fs_copy_hdlr(struct cmd_args_s *ap);
 int fs_dfs_hdlr(struct cmd_args_s *ap);
 int fs_dfs_get_attr_hdlr(struct cmd_args_s *ap, dfs_obj_info_t *attrs);
+int fs_dfs_resolve_pool(struct cmd_args_s *ap);
+int fs_dfs_resolve_path(struct cmd_args_s *ap);
 int parse_filename_dfs(const char *path, char **_obj_name, char **_cont_name);
 
 /* Container operations */

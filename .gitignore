@@ -19,6 +19,7 @@ src/tests/ftest/*/*.yaml.dist
 Gopkg.lock
 /src/control/server/testdata/.*.yml
 /src/control/github.com/daos-stack
+src/control/common/test/*/*.so
 *.os
 *.o
 /src/control/vendor/**/*.os

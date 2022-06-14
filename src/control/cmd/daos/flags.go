@@ -12,6 +12,7 @@ import (
 	"strings"
 
 	"github.com/dustin/go-humanize"
+	"github.com/jessevdk/go-flags"
 	"github.com/pkg/errors"
 )
 
@@ -99,7 +100,7 @@ func (f *ChunkSizeFlag) UnmarshalFlag(fv string) error {
 
 	size, err := humanize.ParseBytes(fv)
 	if err != nil {
-		return err
+		return errors.Errorf("invalid chunk size %q", fv)
 	}
 	f.Size = C.uint64_t(size)
 
@@ -134,10 +135,27 @@ func (f *ObjClassFlag) UnmarshalFlag(fv string) error {
 }
 
 func (f *ObjClassFlag) String() string {
-	var oclass [10]C.char
+	var oclass [32]C.char
 
 	C.daos_oclass_id2name(f.Class, &oclass[0])
 	return C.GoString(&oclass[0])
+}
+
+func (f *ObjClassFlag) Complete(match string) (comps []flags.Completion) {
+	listStrSz := C.size_t(16 << 10)
+	listStr := (*C.char)(C.malloc(listStrSz))
+
+	defer freeString(listStr)
+	C.daos_oclass_names_list(listStrSz, listStr)
+
+	for _, name := range strings.Split(C.GoString(listStr), ",") {
+		name = strings.TrimSpace(name)
+		if strings.HasPrefix(name, match) {
+			comps = append(comps, flags.Completion{Item: name})
+		}
+	}
+
+	return
 }
 
 func makeOid(hi, lo uint64) C.daos_obj_id_t {

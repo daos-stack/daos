@@ -78,6 +78,10 @@ type fsAttrCmd struct {
 }
 
 func setupFSAttrCmd(cmd *fsAttrCmd) (*C.struct_cmd_args_s, func(), error) {
+	if err := cmd.processArguments(); err != nil {
+		return nil, nil, err
+	}
+
 	ap, deallocCmdArgs, err := allocCmdArgs(cmd.Logger)
 	if err != nil {
 		return nil, nil, err

@@ -238,6 +238,7 @@ pipeline {
                                                   "*.crt:" +
                                                   "*.pem:" +
                                                   "*_test.go:" +
+                                                  "src/control/common/test/libdaos_mocks/libdaos_mocks.h:" +
                                                   "src/cart/_structures_from_macros_.h:" +
                                                   "src/tests/ftest/*.patch:" +
                                                   "src/tests/ftest/large_stdout.txt"

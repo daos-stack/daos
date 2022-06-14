@@ -150,6 +150,30 @@ function get_test_runner()
 	echo "$test_runner $test_args"
 }
 
+function setup_mocks()
+{
+	srcdir=${1:-"./"}
+	MOCKS=("libdaos_mocks")
+
+	LD_PRELOAD=${LD_PRELOAD:-}
+	if [ -n "${LD_PRELOAD}" ]; then
+		LD_PRELOAD+=":"
+	fi
+	for mock in "${MOCKS[@]}"; do
+		mockdir="$srcdir/common/test/${mock}"
+		if [ -d "${mockdir}" ]; then
+			pushd "${mockdir}" >/dev/null
+			make CGO_CFLAGS="${CGO_CFLAGS}" CGO_LDFLAGS="${CGO_LDFLAGS}" >/dev/null
+			popd >/dev/null
+			LD_PRELOAD+="${mockdir}/${mock}.so:"
+		else
+			echo "Mock not found: ${mock}"
+		fi
+	done
+
+	LD_PRELOAD=${LD_PRELOAD::${#LD_PRELOAD}-1}
+}
+
 check=$(check_environment)
 
 if [ "$check" == "false" ]; then
@@ -164,9 +188,11 @@ GO_TEST_RUNNER=$(get_test_runner)
 controldir="$(readlink -f "$(dirname "${BASH_SOURCE[0]}")")"
 
 check_formatting "$controldir"
+setup_mocks "$controldir"
 
 echo "Environment:"
 echo "  GO VERSION: $(go version | awk '{print $3" "$4}')"
+echo "  LD_PRELOAD: $LD_PRELOAD"
 echo "  LD_LIBRARY_PATH: $LD_LIBRARY_PATH"
 echo "  CGO_LDFLAGS: $CGO_LDFLAGS"
 echo "  CGO_CFLAGS: $CGO_CFLAGS"
@@ -176,6 +202,7 @@ echo
 echo "Running all tests under $controldir..."
 pushd "$controldir" >/dev/null
 set +e
+LD_PRELOAD="$LD_PRELOAD" \
 LD_LIBRARY_PATH="$LD_LIBRARY_PATH" \
 CGO_LDFLAGS="$CGO_LDFLAGS" \
 CGO_CFLAGS="$CGO_CFLAGS" \

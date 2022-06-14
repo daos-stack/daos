@@ -34,6 +34,12 @@ type LabelOrUUIDFlag struct {
 	Label string    `json:"label"`
 }
 
+// Clear unsets the flag values.
+func (f *LabelOrUUIDFlag) Clear() {
+	f.UUID = uuid.Nil
+	f.Label = ""
+}
+
 // Empty returns true if neither UUID or Label were set.
 func (f LabelOrUUIDFlag) Empty() bool {
 	return !f.HasLabel() && !f.HasUUID()
@@ -106,6 +112,13 @@ type SetPropertiesFlag struct {
 	ParsedProps  map[string]string
 	settableKeys common.StringSet
 	completions  CompletionMap
+}
+
+// Replace replaces the current properties with the supplied ones.
+func (f *SetPropertiesFlag) Replace(other *SetPropertiesFlag) {
+	f.ParsedProps = other.ParsedProps
+	f.settableKeys = other.settableKeys
+	f.completions = other.completions
 }
 
 // SettableKeys accepts a list of property keys that are settable.
@@ -213,6 +226,13 @@ type GetPropertiesFlag struct {
 	ParsedProps  common.StringSet
 	gettableKeys common.StringSet
 	completions  CompletionMap
+}
+
+// Replace replaces the current properties with the supplied ones.
+func (f *GetPropertiesFlag) Replace(other *GetPropertiesFlag) {
+	f.ParsedProps = other.ParsedProps
+	f.gettableKeys = other.gettableKeys
+	f.completions = other.completions
 }
 
 // GettableKeys accepts a list of property keys that are gettable.

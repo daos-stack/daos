@@ -69,6 +69,14 @@ type containerBaseCmd struct {
 	cContHandle C.daos_handle_t
 }
 
+func (cmd *containerBaseCmd) processArguments() error {
+	if err := cmd.poolBaseCmd.processArguments(); err != nil {
+		return err
+	}
+
+	return nil
+}
+
 func (cmd *containerBaseCmd) contUUIDPtr() *C.uchar {
 	if cmd.contUUID == uuid.Nil {
 		cmd.Error("contUUIDPtr(): nil UUID")
@@ -128,7 +136,7 @@ func (cmd *containerBaseCmd) closeContainer() {
 
 func (cmd *containerBaseCmd) queryContainer() (*containerInfo, error) {
 	ci := newContainerInfo(&cmd.poolUUID, &cmd.contUUID)
-	var cType [10]C.char
+	var cType [32]C.char
 
 	props, entries, err := allocProps(2)
 	if err != nil {
@@ -159,7 +167,7 @@ func (cmd *containerBaseCmd) queryContainer() (*containerInfo, error) {
 	if lType == C.DAOS_PROP_CO_LAYOUT_POSIX {
 		var dfs *C.dfs_t
 		var attr C.dfs_attr_t
-		var oclass [10]C.char
+		var oclass [32]C.char
 
 		rc := C.dfs_mount(cmd.cPoolHandle, cmd.cContHandle, C.O_RDONLY, &dfs)
 		if err := dfsError(rc); err != nil {
@@ -214,6 +222,10 @@ type containerCreateCmd struct {
 }
 
 func (cmd *containerCreateCmd) Execute(_ []string) (err error) {
+	if err := cmd.processArguments(); err != nil {
+		return err
+	}
+
 	ap, deallocCmdArgs, err := allocCmdArgs(cmd.Logger)
 	if err != nil {
 		return err
@@ -226,10 +238,10 @@ func (cmd *containerCreateCmd) Execute(_ []string) (err error) {
 		}
 
 		ap.path = C.CString(cmd.Path)
-		rc := C.resolve_duns_pool(ap)
+		rc := C.fs_dfs_resolve_pool(ap)
 		freeString(ap.path)
 		if err := daosError(rc); err != nil {
-			return errors.Wrapf(err, "failed to resolve pool id from %q; use --pool <id>", filepath.Dir(cmd.Path))
+			return errors.Wrapf(err, "failed to resolve pool id from %q", filepath.Dir(cmd.Path))
 		}
 
 		pu, err := uuidFromC(ap.p_uuid)
@@ -241,7 +253,7 @@ func (cmd *containerCreateCmd) Execute(_ []string) (err error) {
 
 	disconnectPool, err := cmd.connectPool(C.DAOS_PC_RW, ap)
 	if err != nil {
-		return err
+		return errors.Wrapf(err, "failed to connect to pool %q", cmd.PoolID())
 	}
 	defer disconnectPool()
 
@@ -363,21 +375,52 @@ type existingContainerCmd struct {
 	} `positional-args:"yes"`
 }
 
-func (cmd *existingContainerCmd) ContainerID() ContainerID {
-	if !cmd.ContFlag.Empty() {
-		return cmd.ContFlag
+func (cmd *existingContainerCmd) processArguments() error {
+	// Before we do any other arg processing, check to see if a path
+	// was specified. If so, we expect that the caller will have already
+	// taken care of grabbing any positional arguments that were consumed
+	// by the pool or container arguments.
+	if cmd.Path != "" {
+		if !cmd.poolBaseCmd.Args.Pool.Empty() {
+			return errors.Errorf("unexpected arguments %q", cmd.poolBaseCmd.Args.Pool)
+		}
+		if !cmd.Args.Container.Empty() {
+			return errors.Errorf("unexpected arguments %q", cmd.Args.Container)
+		}
 	}
+
+	if err := cmd.containerBaseCmd.processArguments(); err != nil {
+		return err
+	}
+
+	// Handle deprecated --pool/--cont flags.
+	if !cmd.ContFlag.Empty() {
+		if cmd.poolBaseCmd.PoolFlag.Empty() {
+			return errors.New("--cont flag requires --pool")
+		}
+		cmd.Args.Container = cmd.ContFlag
+	} else if !cmd.PoolFlag.Empty() {
+		return errors.New("--pool flag requires --cont")
+	}
+
+	if cmd.Path != "" {
+		if !(cmd.poolBaseCmd.Args.Pool.Empty() && cmd.Args.Container.Empty()) {
+			return errors.New("--path flag may not be set with pool or container IDs")
+		}
+	} else {
+		if cmd.poolBaseCmd.Args.Pool.Empty() || cmd.Args.Container.Empty() {
+			return errors.New("pool and container IDs must be specified if --path is not set")
+		}
+	}
+
+	return nil
+}
+
+func (cmd *existingContainerCmd) ContainerID() ContainerID {
 	return cmd.Args.Container
 }
 
 func (cmd *existingContainerCmd) resolveContainer(ap *C.struct_cmd_args_s) (err error) {
-	switch {
-	case cmd.Path != "" && !(cmd.PoolID().Empty() && cmd.ContainerID().Empty()):
-		return errors.New("can't specify --path with pool ID or container ID")
-	case cmd.Path == "" && (cmd.PoolID().Empty() || cmd.ContainerID().Empty()):
-		return errors.New("pool and container ID must be specified if --path not used")
-	}
-
 	if cmd.Path != "" {
 		if ap == nil {
 			return errors.New("ap cannot be nil with --path")
@@ -386,9 +429,26 @@ func (cmd *existingContainerCmd) resolveContainer(ap *C.struct_cmd_args_s) (err 
 			return
 		}
 
+		cmd.poolBaseCmd.Args.Pool.UUID, err = uuidFromC(ap.p_uuid)
+		if err != nil {
+			return
+		}
+		cmd.poolBaseCmd.poolUUID = cmd.poolBaseCmd.Args.Pool.UUID
 		cmd.poolBaseCmd.Args.Pool.Label = C.GoString(&ap.pool_str[0])
-		cmd.contLabel = C.GoString(&ap.cont_str[0])
+		if cmd.poolBaseCmd.Args.Pool.Label != "" {
+			cmd.poolBaseCmd.poolLabel = C.CString(cmd.poolBaseCmd.Args.Pool.Label)
+		}
+
+		cmd.Args.Container.UUID, err = uuidFromC(ap.c_uuid)
+		if err != nil {
+			return
+		}
 		cmd.contUUID = cmd.Args.Container.UUID
+		cmd.Args.Container.Label = C.GoString(&ap.cont_str[0])
+		if cmd.Args.Container.Label != "" {
+			cmd.contLabel = cmd.Args.Container.Label
+		}
+		cmd.Debugf("resolved %s into pool %s and container %s", cmd.Path, cmd.poolBaseCmd.Args.Pool, cmd.Args.Container)
 	} else {
 		switch {
 		case cmd.ContainerID().HasLabel():
@@ -525,6 +585,10 @@ func printContainers(out io.Writer, contIDs []*ContainerID) {
 }
 
 func (cmd *containerListCmd) Execute(_ []string) error {
+	if err := cmd.processArguments(); err != nil {
+		return err
+	}
+
 	cleanup, err := cmd.resolveAndConnect(C.DAOS_PC_RO, nil)
 	if err != nil {
 		return err
@@ -555,6 +619,10 @@ type containerDestroyCmd struct {
 }
 
 func (cmd *containerDestroyCmd) Execute(_ []string) error {
+	if err := cmd.processArguments(); err != nil {
+		return err
+	}
+
 	ap, deallocCmdArgs, err := allocCmdArgs(cmd.Logger)
 	if err != nil {
 		return err
@@ -622,6 +690,10 @@ type containerListObjectsCmd struct {
 }
 
 func (cmd *containerListObjectsCmd) Execute(_ []string) error {
+	if err := cmd.processArguments(); err != nil {
+		return err
+	}
+
 	ap, deallocCmdArgs, err := allocCmdArgs(cmd.Logger)
 	if err != nil {
 		return err
@@ -653,6 +725,10 @@ type containerStatCmd struct {
 }
 
 func (cmd *containerStatCmd) Execute(_ []string) error {
+	if err := cmd.processArguments(); err != nil {
+		return err
+	}
+
 	return nil
 }
 
@@ -725,6 +801,10 @@ type containerQueryCmd struct {
 }
 
 func (cmd *containerQueryCmd) Execute(_ []string) error {
+	if err := cmd.processArguments(); err != nil {
+		return err
+	}
+
 	ap, deallocCmdArgs, err := allocCmdArgs(cmd.Logger)
 	if err != nil {
 		return err
@@ -801,6 +881,10 @@ type containerCheckCmd struct {
 }
 
 func (cmd *containerCheckCmd) Execute(_ []string) error {
+	if err := cmd.processArguments(); err != nil {
+		return err
+	}
+
 	ap, deallocCmdArgs, err := allocCmdArgs(cmd.Logger)
 	if err != nil {
 		return err
@@ -834,6 +918,10 @@ type containerListAttrsCmd struct {
 }
 
 func (cmd *containerListAttrsCmd) Execute(args []string) error {
+	if err := cmd.processArguments(); err != nil {
+		return err
+	}
+
 	ap, deallocCmdArgs, err := allocCmdArgs(cmd.Logger)
 	if err != nil {
 		return err
@@ -878,12 +966,33 @@ type containerDelAttrCmd struct {
 	} `positional-args:"yes"`
 }
 
-func (cmd *containerDelAttrCmd) Execute(args []string) error {
+func (cmd *containerDelAttrCmd) processArguments() error {
+	// Special handling for deprecated --attr flag.
 	if cmd.FlagAttr != "" {
+		// Don't allow mixture of positional and deprecated flag arguments.
+		if cmd.Path == "" && (cmd.PoolFlag.Empty() || cmd.ContFlag.Empty()) {
+			return errors.New("--attr requires both --pool and --cont")
+		}
+
 		cmd.Args.Attr = cmd.FlagAttr
+	} else if !(cmd.PoolFlag.Empty() && cmd.ContFlag.Empty()) {
+		return errors.New("--attr is required when --pool and --cont are specified")
 	}
-	if cmd.Args.Attr == "" {
-		return errors.New("attribute name is required")
+
+	if cmd.Path != "" {
+		if !cmd.PoolID().Empty() {
+			// Special case, handle attribute as positional arg with --path
+			cmd.Args.Attr = cmd.PoolID().String()
+			cmd.poolBaseCmd.Args.Pool.Clear()
+		}
+	}
+
+	return cmd.existingContainerCmd.processArguments()
+}
+
+func (cmd *containerDelAttrCmd) Execute(args []string) error {
+	if err := cmd.processArguments(); err != nil {
+		return err
 	}
 
 	ap, deallocCmdArgs, err := allocCmdArgs(cmd.Logger)
@@ -916,12 +1025,41 @@ type containerGetAttrCmd struct {
 	} `positional-args:"yes"`
 }
 
-func (cmd *containerGetAttrCmd) Execute(args []string) error {
+func (cmd *containerGetAttrCmd) processArguments() error {
+	// Special handling for deprecated --attr flag.
 	if cmd.FlagAttr != "" {
+		// Don't allow mixture of positional and deprecated flag arguments.
+		if cmd.Path == "" && (cmd.PoolFlag.Empty() || cmd.ContFlag.Empty()) {
+			return errors.New("--attr requires both --pool and --cont")
+		}
+
 		cmd.Args.Attr = cmd.FlagAttr
+	} else if !(cmd.PoolFlag.Empty() && cmd.ContFlag.Empty()) {
+		return errors.New("--attr is required when --pool and --cont are specified")
 	}
+
+	if cmd.Path != "" {
+		if !cmd.PoolID().Empty() {
+			// Special case, handle attribute as positional arg with --path
+			cmd.Args.Attr = cmd.PoolID().String()
+			cmd.poolBaseCmd.Args.Pool.Clear()
+		}
+	}
+
+	if err := cmd.existingContainerCmd.processArguments(); err != nil {
+		return err
+	}
+
 	if cmd.Args.Attr == "" {
 		return errors.New("attribute name is required")
+	}
+
+	return nil
+}
+
+func (cmd *containerGetAttrCmd) Execute(args []string) error {
+	if err := cmd.processArguments(); err != nil {
+		return err
 	}
 
 	ap, deallocCmdArgs, err := allocCmdArgs(cmd.Logger)
@@ -967,19 +1105,64 @@ type containerSetAttrCmd struct {
 	} `positional-args:"yes"`
 }
 
-func (cmd *containerSetAttrCmd) Execute(args []string) error {
+func (cmd *containerSetAttrCmd) processArguments() error {
+	// Special handling for deprecated --attr flag.
 	if cmd.FlagAttr != "" {
+		if cmd.FlagValue == "" {
+			return errors.New("--attr requires --value")
+		}
+
+		// Don't allow mixture of positional and deprecated flag arguments.
+		if cmd.Path == "" {
+			if cmd.PoolFlag.Empty() || cmd.ContFlag.Empty() {
+				return errors.New("--attr requires both --pool and --cont")
+			}
+		}
+
 		cmd.Args.Attr = cmd.FlagAttr
+	} else if !(cmd.PoolFlag.Empty() && cmd.ContFlag.Empty()) {
+		return errors.New("--attr is required when --pool and --cont are specified")
 	}
+
+	// Special handling for deprecated --value flag.
 	if cmd.FlagValue != "" {
+		if cmd.FlagAttr == "" {
+			return errors.New("--value requires --attr")
+		}
+
 		cmd.Args.Value = cmd.FlagValue
 	}
 
+	if cmd.Path != "" {
+		if !cmd.PoolID().Empty() {
+			// Special case, handle attribute as positional arg with --path
+			cmd.Args.Attr = cmd.PoolID().String()
+			cmd.poolBaseCmd.Args.Pool.Clear()
+		}
+		if !cmd.ContainerID().Empty() {
+			// Special case, handle value as positional arg with --path
+			cmd.Args.Value = cmd.ContainerID().String()
+			cmd.existingContainerCmd.Args.Container.Clear()
+		}
+	}
+
+	if err := cmd.existingContainerCmd.processArguments(); err != nil {
+		return err
+	}
+
 	if cmd.Args.Attr == "" {
-		return errors.New("attribute name is required")
+		return errors.New("attribute name and value are required")
 	}
 	if cmd.Args.Value == "" {
-		return errors.New("attribute value is required")
+		return errors.New("attribute name and value are required")
+	}
+
+	return nil
+}
+
+func (cmd *containerSetAttrCmd) Execute(args []string) error {
+	if err := cmd.processArguments(); err != nil {
+		return err
 	}
 
 	ap, deallocCmdArgs, err := allocCmdArgs(cmd.Logger)
@@ -1009,10 +1192,54 @@ func (cmd *containerSetAttrCmd) Execute(args []string) error {
 type containerGetPropCmd struct {
 	existingContainerCmd
 
-	Properties GetPropertiesFlag `long:"properties" description:"container properties to get" default:"all"`
+	PropertiesFlag GetPropertiesFlag `long:"properties" description:"container properties to get (deprecated; use positional argument)"`
+	Args           struct {
+		Properties GetPropertiesFlag `positional-arg-name:"container properties to get (key[,key...])"`
+	} `positional-args:"yes"`
+}
+
+func (cmd *containerGetPropCmd) processArguments() error {
+	// Special handling for deprecated --properties flag.
+	if len(cmd.PropertiesFlag.names) > 0 {
+		// Don't allow mixture of positional and deprecated flag arguments.
+		if cmd.Path == "" {
+			if cmd.PoolFlag.Empty() || cmd.ContFlag.Empty() {
+				return errors.New("--properties requires both --pool and --cont")
+			}
+		}
+
+		cmd.Args.Properties.Replace(&cmd.PropertiesFlag)
+	} else if !(cmd.PoolFlag.Empty() && cmd.ContFlag.Empty()) {
+		if len(cmd.Args.Properties.names) > 0 || !(cmd.PoolID().Empty() && cmd.ContainerID().Empty()) {
+			return errors.New("--properties is required when --pool and --cont are specified")
+		}
+	}
+
+	if cmd.Path != "" {
+		if !cmd.PoolID().Empty() {
+			// Special case, handle prop as positional arg with --path
+			if err := cmd.Args.Properties.UnmarshalFlag(cmd.PoolID().String()); err != nil {
+				return err
+			}
+			cmd.poolBaseCmd.Args.Pool.Clear()
+		}
+	}
+
+	// Handle optional positional argument.
+	if len(cmd.Args.Properties.names) == 0 {
+		if err := cmd.Args.Properties.UnmarshalFlag("all"); err != nil {
+			return err
+		}
+	}
+
+	return cmd.existingContainerCmd.processArguments()
 }
 
 func (cmd *containerGetPropCmd) Execute(args []string) error {
+	if err := cmd.processArguments(); err != nil {
+		return err
+	}
+
 	ap, deallocCmdArgs, err := allocCmdArgs(cmd.Logger)
 	if err != nil {
 		return err
@@ -1025,7 +1252,7 @@ func (cmd *containerGetPropCmd) Execute(args []string) error {
 	}
 	defer cleanup()
 
-	props, freeProps, err := getContainerProperties(cmd.cContHandle, cmd.Properties.names...)
+	props, freeProps, err := getContainerProperties(cmd.cContHandle, cmd.Args.Properties.names...)
 	defer freeProps()
 	if err != nil {
 		return errors.Wrapf(err,
@@ -1033,7 +1260,7 @@ func (cmd *containerGetPropCmd) Execute(args []string) error {
 			cmd.ContainerID())
 	}
 
-	if len(cmd.Properties.names) == len(propHdlrs) {
+	if len(cmd.Args.Properties.names) == len(propHdlrs) {
 		aclProps, cleanupAcl, err := getContAcl(cmd.cContHandle)
 		if err != nil && err != daos.NoPermission {
 			return errors.Wrapf(err,
@@ -1067,10 +1294,45 @@ func (cmd *containerGetPropCmd) Execute(args []string) error {
 type containerSetPropCmd struct {
 	existingContainerCmd
 
-	Properties SetPropertiesFlag `long:"properties" required:"1" description:"container properties to set"`
+	PropertiesFlag SetPropertiesFlag `long:"properties" description:"container properties to set (deprecated; use positional argument)"`
+	Args           struct {
+		Properties SetPropertiesFlag `positional-arg-name:"container properties to set (key:val[,key:val...])"`
+	} `positional-args:"yes"`
+}
+
+func (cmd *containerSetPropCmd) processArguments() error {
+	// Special handling for deprecated --properties flag.
+	if len(cmd.PropertiesFlag.ParsedProps) > 0 {
+		// Don't allow mixture of positional and deprecated flag arguments.
+		if cmd.Path == "" {
+			if cmd.PoolFlag.Empty() || cmd.ContFlag.Empty() {
+				return errors.New("--properties requires both --pool and --cont")
+			}
+		}
+
+		cmd.Args.Properties.Replace(&cmd.PropertiesFlag)
+	} else if !(cmd.PoolFlag.Empty() && cmd.ContFlag.Empty()) {
+		return errors.New("--properties is required when --pool and --cont are specified")
+	}
+
+	if cmd.Path != "" {
+		if !cmd.PoolID().Empty() {
+			// Special case, handle prop as positional arg with --path
+			if err := cmd.Args.Properties.UnmarshalFlag(cmd.PoolID().String()); err != nil {
+				return err
+			}
+			cmd.poolBaseCmd.Args.Pool.Clear()
+		}
+	}
+
+	return cmd.existingContainerCmd.processArguments()
 }
 
 func (cmd *containerSetPropCmd) Execute(args []string) error {
+	if err := cmd.processArguments(); err != nil {
+		return err
+	}
+
 	ap, deallocCmdArgs, err := allocCmdArgs(cmd.Logger)
 	if err != nil {
 		return err
@@ -1083,11 +1345,11 @@ func (cmd *containerSetPropCmd) Execute(args []string) error {
 	}
 	defer cleanup()
 
-	ap.props = cmd.Properties.props
+	ap.props = cmd.Args.Properties.props
 
 	rc := C.cont_set_prop_hdlr(ap)
 	if err := daosError(rc); err != nil {
-		return errors.Errorf("failed to set properties on container %s",
+		return errors.Wrapf(err, "failed to set properties on container %s",
 			cmd.ContainerID())
 	}
 

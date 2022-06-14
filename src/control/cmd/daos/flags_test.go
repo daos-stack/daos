@@ -7,6 +7,7 @@
 package main
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
@@ -227,7 +228,7 @@ func TestFlags_ChunkSizeFlag(t *testing.T) {
 		},
 		"not a size": {
 			arg:    "snausages",
-			expErr: errors.New("ParseFloat"),
+			expErr: errors.New("invalid chunk size"),
 		},
 		// TODO: More validation of allowed sizes?
 	} {
@@ -301,6 +302,34 @@ func TestFlags_OidFlag(t *testing.T) {
 
 			test.AssertEqual(t, tc.expString, f.String(), "unexpected String()")
 		})
+	}
+}
+
+func TestFlags_ObjClassFlag_Completions(t *testing.T) {
+	f := ObjClassFlag{}
+
+	flagTestFini, err := flagTestInit()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer flagTestFini()
+
+	comps := f.Complete("")
+	if len(comps) == 0 {
+		t.Fatal("no completions generated")
+	}
+
+	for _, comp := range comps {
+		if !strings.Contains(comp.Item, "_") {
+			continue
+		}
+
+		pair := strings.SplitN(comp.Item, "_", 2)
+		comps = f.Complete(pair[0])
+		if len(comps) == 0 {
+			t.Fatalf("no completions generated from %q", pair[0])
+		}
+		break
 	}
 }
 

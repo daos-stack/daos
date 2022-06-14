@@ -798,6 +798,10 @@ func allocProps(numProps int) (props *C.daos_prop_t, entries propSlice, err erro
 }
 
 func getContainerProperties(hdl C.daos_handle_t, names ...string) (out []*property, cleanup func(), err error) {
+	if len(names) == 0 {
+		return nil, func() {}, errors.New("names must be >= 1")
+	}
+
 	props, entries, err := allocProps(len(names))
 	if err != nil {
 		return nil, func() {}, err
@@ -840,6 +844,11 @@ type PropertiesFlag struct {
 	ui.SetPropertiesFlag
 
 	props *C.daos_prop_t
+}
+
+func (f *PropertiesFlag) Replace(other *PropertiesFlag) {
+	f.SetPropertiesFlag.Replace(&other.SetPropertiesFlag)
+	f.props = other.props
 }
 
 func (f *PropertiesFlag) Complete(match string) []flags.Completion {
@@ -976,6 +985,10 @@ type SetPropertiesFlag struct {
 	PropertiesFlag
 }
 
+func (f *SetPropertiesFlag) Replace(other *SetPropertiesFlag) {
+	f.PropertiesFlag.Replace(&other.PropertiesFlag)
+}
+
 func (f *SetPropertiesFlag) Complete(match string) []flags.Completion {
 	f.SettableKeys("label", "status")
 
@@ -996,6 +1009,11 @@ type GetPropertiesFlag struct {
 	PropertiesFlag
 
 	names []string
+}
+
+func (f *GetPropertiesFlag) Replace(other *GetPropertiesFlag) {
+	f.PropertiesFlag.Replace(&other.PropertiesFlag)
+	f.names = other.names
 }
 
 func (f *GetPropertiesFlag) UnmarshalFlag(fv string) error {

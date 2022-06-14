@@ -68,6 +68,10 @@ func getContAcl(hdl C.daos_handle_t) ([]*property, func(), error) {
 	if err := daosError(rc); err != nil {
 		return nil, nil, err
 	}
+	if props == nil {
+		return nil, nil, errors.New("nil ACL props")
+	}
+
 	if props.dpp_nr != C.uint(expPropNr) {
 		return nil, nil, errors.Errorf("invalid number of ACL props (%d != %d)",
 			props.dpp_nr, expPropNr)
