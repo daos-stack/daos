@@ -27,7 +27,7 @@ fi
 id=$(lsb_release -si)
 release=$(lsb_release -sr)
 # shellcheck disable=SC2034
-EXCLUDE_UPGRADE=mercury,daos,daos-\*
+EXCLUDE_UPGRADE=mercury,libfabric,daos,daos-\*
 if rpm -qa | grep mlnx; then
     # packages not to allow upgrading if MLNX OFED is installed
     EXCLUDE_UPGRADE+=,openmpi,\*mlnx\*,\*ucx\*
