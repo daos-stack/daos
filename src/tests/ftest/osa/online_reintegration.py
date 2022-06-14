@@ -8,8 +8,7 @@ import time
 import random
 import threading
 
-from test_utils_pool import TestPool
-from test_utils_base import LabelGenerator
+from test_utils_pool import add_pool
 from write_host_file import write_host_file
 from daos_racer_utils import DaosRacerCommand
 from osa_utils import OSAUtils
@@ -71,7 +70,6 @@ class OSAOnlineReintegration(OSAUtils):
             oclass = self.ior_cmd.dfs_oclass.value
         test_seq = self.ior_test_sequence[0]
         # Create a pool
-        label_generator = LabelGenerator()
         pool = {}
         exclude_servers = (len(self.hostlist_servers) * 2) - 1
 
@@ -85,11 +83,7 @@ class OSAOnlineReintegration(OSAUtils):
             time.sleep(30)
 
         for val in range(0, num_pool):
-            pool[val] = TestPool(
-                context=self.context, dmg_command=self.get_dmg_command(),
-                label_generator=label_generator)
-            pool[val].get_params(self)
-            pool[val].create()
+            pool[val] = add_pool(self, connect=False)
             pool[val].set_property("reclaim", "disabled")
 
         # Exclude and reintegrate the pool_uuid, rank and targets
