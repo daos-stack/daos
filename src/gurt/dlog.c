@@ -936,7 +936,6 @@ d_log_open(char *tag, int maxfac_hint, int default_mask, int stderr_mask,
 			close(mst.log_fd);
 			return -1;
 		}
-		fprintf(stderr, "Opened log as %d/%d\n", mst.log_fd, rc);
 		close(mst.log_fd);
 		mst.log_fd = rc;
 
