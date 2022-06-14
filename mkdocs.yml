@@ -13,6 +13,8 @@ copyright: Copyright &copy; 2016 - 2022 Intel Corporation
 # Theme
 theme:
     name: 'material'
+    logo: daos_logo_wh.png
+    favicon: daos_logo_wh.png
     font:
         text: 'Ubuntu'
         code: 'Ubuntu Mono'
