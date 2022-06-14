@@ -138,9 +138,12 @@ class DaosECAggregationBasic(IorTestBase):
             self.assertTrue(free_space_after_aggregate ==
                             free_space_after_first_ior,
                             "Aggregation did not reclaim the space")
+            # Destroy all containers and pools and start once again.
+            self.destroy_containers(self.container)
+            self.destroy_pools(self.pool)
             finish_time = time.time()
 
-    def test_ec_aggregation_single(self):
+    def test_ec_aggregation_single_pool(self):
         """Jira ID: DAOS-7326
 
         Test Description:
@@ -161,13 +164,12 @@ class DaosECAggregationBasic(IorTestBase):
 
         :avocado: tags=all,manual
         :avocado: tags=hw,large
-        :avocado: tags=aggregate
-        :avocado: tags=ecaggregatetimed
+        :avocado: tags=ecaggregate
         :avocado: tags=DAOS_7326
         """
         self.test_ec_aggregation(1, 2)
 
-    def test_ec_aggregation_multiple(self):
+    def test_ec_aggregation_multiple_pools(self):
         """Jira ID: DAOS-7326
 
         Test Description:
@@ -188,8 +190,7 @@ class DaosECAggregationBasic(IorTestBase):
 
         :avocado: tags=all,manual
         :avocado: tags=hw,large
-        :avocado: tags=aggregate
-        :avocado: tags=ecaggregatetimed
+        :avocado: tags=ecaggregate
         :avocado: tags=DAOS_7326
         """
         self.test_ec_aggregation(2, 3)
