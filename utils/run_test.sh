@@ -99,6 +99,23 @@ if [ -d "/mnt/daos" ]; then
         run_test src/common/tests/btree.sh dyn perf -s 20000
         run_test src/common/tests/btree.sh dyn perf ukey -s 20000
         BTREE_SIZE=20000
+
+        COMP="UTEST_vos"
+        cat /proc/meminfo
+        # Setup AIO device
+        AIO_DEV=$(mktemp /tmp/aio_dev_XXXXX)
+        dd if=/dev/zero of="${AIO_DEV}" bs=1G count=4
+
+        # Setup daos_nvme.conf
+        NVME_CONF="/mnt/daos/daos_nvme.conf"
+        cp -f src/vos/tests/daos_nvme.conf ${NVME_CONF}
+        sed -i "s+\"filename\": \".*\"+\"filename\": \"${AIO_DEV}\"+g" ${NVME_CONF}
+
+        export VOS_BDEV_CLASS="AIO"
+        run_test "sudo -E ${SL_PREFIX}/bin/vos_tests" -a
+
+        rm -f "${AIO_DEV}"
+        rm -f "${NVME_CONF}"
     else
         if [ "$RUN_TEST_VALGRIND" = "memcheck" ]; then
             [ -z "$VALGRIND_SUPP" ] &&

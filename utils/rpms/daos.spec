@@ -14,8 +14,8 @@
 %endif
 
 Name:          daos
-Version:       2.1.102
-Release:       6%{?relval}%{?dist}
+Version:       2.1.103
+Release:       1%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       BSD-2-Clause-Patent
@@ -572,6 +572,9 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 # No files in a shim package
 
 %changelog
+* Mon Jun 13 2022 Johann Lombardi <johann.lombardi@intel.com> 2.1.103-1
+- Bump version to 2.1.103
+
 * Wed Jun 8 2022 Michael MacDonald <mjmac.macdonald@intel.com> 2.1.102-6
 - Move dmg to new daos-admin RPM
 

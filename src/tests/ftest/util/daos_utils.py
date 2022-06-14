@@ -422,7 +422,7 @@ class DaosCommand(DaosCommandBase):
         #     },
         #     {
         #       "value": 65536,
-        #       "name": "ec_cell",
+        #       "name": "ec_cell_sz",
         #       "description": "EC Cell Size"
         #     },
         #     {
