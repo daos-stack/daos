@@ -1645,6 +1645,9 @@ map_refresh_cb(tse_task_t *task, void *varg)
 		pool->dp_map_sz = out->tmo_map_buf_size;
 		reinit = true;
 		goto out;
+	} else if (rc == -DER_AGAIN) {
+		reinit = true;
+		goto out;
 	} else if (rc != 0) {
 		D_ERROR(DF_UUID": failed to fetch pool map: "DF_RC"\n",
 			DP_UUID(pool->dp_pool), DP_RC(rc));
