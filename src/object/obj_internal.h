@@ -380,7 +380,9 @@ struct obj_auxi_args {
 					 sub_anchors:1,
 					 ec_degrade_fetch:1,
 					 tx_convert:1,
-					 cond_modify:1;
+					 cond_modify:1,
+					 /* conf_fetch split to multiple sub-tasks */
+					 cond_fetch_split:1;
 	/* request flags. currently only: ORF_RESEND */
 	uint32_t			 flags;
 	uint32_t			 specified_shard;
@@ -570,7 +572,7 @@ obj_ec_encode_buf(daos_obj_id_t oid, struct daos_oclass_attr *oca,
 		  unsigned char *p_bufs[]);
 
 int
-obj_ec_parity_alive(daos_handle_t oh, uint64_t dkey_hash, uint32_t map_ver);
+obj_ec_parity_alive(daos_handle_t oh, uint64_t dkey_hash);
 
 static inline struct pl_obj_shard*
 obj_get_shard(void *data, int idx)
@@ -587,7 +589,7 @@ obj_retry_error(int err)
 	       err == -DER_INPROGRESS || err == -DER_GRPVER ||
 	       err == -DER_EXCLUDED || err == -DER_CSUM ||
 	       err == -DER_TX_BUSY || err == -DER_TX_UNCERTAIN ||
-	       err == -DER_NEED_TX ||
+	       err == -DER_NEED_TX || err == -DER_NOTLEADER ||
 	       daos_crt_network_error(err);
 }
 
@@ -600,10 +602,22 @@ obj_ptr2hdl(struct dc_object *obj)
 	return oh;
 }
 
-static inline void
-dc_io_epoch_set(struct dtx_epoch *epoch)
+static inline int
+shard_task_abort(tse_task_t *task, void *arg)
 {
-	if (srv_io_mode == DIM_CLIENT_DISPATCH) {
+	int	rc = *((int *)arg);
+
+	tse_task_list_del(task);
+	tse_task_decref(task);
+	tse_task_complete(task, rc);
+
+	return 0;
+}
+
+static inline void
+dc_io_epoch_set(struct dtx_epoch *epoch, uint32_t opc)
+{
+	if (srv_io_mode == DIM_CLIENT_DISPATCH && obj_is_modification_opc(opc)) {
 		epoch->oe_value = crt_hlc_get();
 		epoch->oe_first = epoch->oe_value;
 		/* DIM_CLIENT_DISPATCH doesn't promise consistency. */
