@@ -3801,6 +3801,8 @@ class AllocFailTestRun():
             assert self.returncode == 0, self
 
             if self.aft.check_post_stdout:
+                if self.stderr != b'':
+                    print(f'Failing stderr is "{self.stderr}"')
                 assert self.stderr == b''
                 if self.aft.expected_stdout is not None:
                     assert self.stdout == self.aft.expected_stdout
