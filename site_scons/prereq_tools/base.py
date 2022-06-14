@@ -1485,7 +1485,8 @@ class _Component():
         path = os.environ.get("PKG_CONFIG_PATH", None)
         if path and "PKG_CONFIG_PATH" not in env["ENV"]:
             env["ENV"]["PKG_CONFIG_PATH"] = path
-        if not self.use_installed and not self.component_prefix == "/usr":
+        if (not self.use_installed and self.component_prefix is not None
+                                   and not self.component_prefix == "/usr"):
             path_found = False
             for path in ["lib", "lib64"]:
                 config = os.path.join(self.component_prefix, path, "pkgconfig")
