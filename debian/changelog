@@ -1,3 +1,10 @@
+daos (2.3.100-13) unstable; urgency=medium
+  [ Ashley ]
+  * Downgrade libfabric from v1.15.1-1 to test stability.
+
+ -- Ashley Pittman <ashley.m.pittman@intel.com> Tue, 14 Jun 2022 15:10:00 -100
+ -- Lei Huang <lei.huang@intel.com> Wed, 18 May 2022 16:30:00 -0500
+
 daos (2.3.100-12) unstable; urgency=medium
   [ Jeff Olivier ]
   * Make ucx required for build on all platforms

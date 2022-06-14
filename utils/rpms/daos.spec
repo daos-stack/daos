@@ -4,7 +4,7 @@
 %define sysctl_script_name 10-daos_server.conf
 
 %global mercury_version 2.1.0~rc4-9%{?dist}
-%global libfabric_version 1.15.1-1
+%global libfabric_version 1.15.0~rc3-1
 %global __python %{__python3}
 
 %if (0%{?rhel} >= 8)
@@ -15,7 +15,7 @@
 
 Name:          daos
 Version:       2.3.100
-Release:       12%{?relval}%{?dist}
+Release:       13%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       BSD-2-Clause-Patent
@@ -563,6 +563,9 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 # No files in a shim package
 
 %changelog
+* Tue Jun 14 2022 Ashley Pittman <ashley.m.pittman@intel.com> 2.3.100-13
+- Downgrade libfabric to test stability.
+
 * Thu Jun 2 2022 Jeff Olivier <jeffrey.v.olivier@intel.com> 2.3.100-12
 - Make ucx required for build on all platforms
 
