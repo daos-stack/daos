@@ -1400,7 +1400,7 @@ cont_agg_eph_leader_ult(void *arg)
 	while (!dss_ult_exiting(svc->cs_ec_leader_ephs_req)) {
 		d_rank_list_t		fail_ranks = { 0 };
 
-		rc = map_ranks_init(pool->sp_map, MAP_RANKS_DOWN,
+		rc = map_ranks_init(pool->sp_map, PO_COMP_ST_DOWNOUT | PO_COMP_ST_DOWN,
 				    &fail_ranks);
 		if (rc) {
 			D_ERROR(DF_UUID": ranks init failed: %d\n",
@@ -3477,7 +3477,7 @@ upgrade_cont_cb(daos_handle_t ih, d_iov_t *key, d_iov_t *val, void *varg)
 	uint64_t			 pda;
 	int				 rc;
 	bool				 upgraded = false;
-	uint32_t			 global_ver;
+	uint32_t			 global_ver = 0;
 	daos_prop_t			*prop = NULL;
 	struct daos_prop_entry		*entry;
 	(void)val;
@@ -3518,6 +3518,21 @@ upgrade_cont_cb(daos_handle_t ih, d_iov_t *key, d_iov_t *val, void *varg)
 	rc = cont_prop_read(ap->tx, cont, DAOS_CO_QUERY_PROP_ALL, &prop, false);
 	if (rc)
 		goto out;
+
+	global_ver = DS_POOL_GLOBAL_VERSION;
+	rc = rdb_tx_update(ap->tx, &cont->c_prop,
+			   &ds_cont_prop_cont_global_version, &value);
+	if (rc) {
+		D_ERROR("failed to upgrade container global version pool/cont: "DF_CONTF"\n",
+			DP_CONT(ap->pool_uuid, cont_uuid));
+		goto out;
+	}
+	upgraded = true;
+	entry = daos_prop_entry_get(prop, DAOS_PROP_CO_GLOBAL_VERSION);
+	D_ASSERT(entry != NULL);
+	D_ASSERT(daos_prop_is_set(entry) == false);
+	entry->dpe_flags &= ~DAOS_PROP_ENTRY_NOT_SET;
+	entry->dpe_val = global_ver;
 
 	d_iov_set(&value, &pda, sizeof(pda));
 	rc = rdb_tx_lookup(ap->tx, &cont->c_prop,
