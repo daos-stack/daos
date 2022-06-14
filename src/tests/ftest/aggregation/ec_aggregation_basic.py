@@ -7,7 +7,7 @@
 
 import time
 from ior_utils import run_ior
-from iot_test_base import IorTestBase
+from ior_test_base import IorTestBase
 from exception_utils import CommandFailure
 from job_manager_utils import get_job_manager
 
@@ -17,7 +17,7 @@ class DaosECAggregationBasic(IorTestBase):
     """Test class Description:
 
        Run IOR with same file option to verify the
-       aggregation and 
+       aggregation.
 
     :avocado: recursive
     """
@@ -43,7 +43,8 @@ class DaosECAggregationBasic(IorTestBase):
         """
         # test params
         test_oclass = self.params.get("oclass", '/run/aggregation_test/*')
-        total_runtime = self.params.get("total_runtime", 
+        processes = self.params.get("np", '/run/ior/*')
+        total_runtime = self.params.get("total_runtime",
                                         '/run/aggregation_test/*')
         pool_qty = total_pools
         container_qty = total_containers_per_pool
@@ -72,15 +73,15 @@ class DaosECAggregationBasic(IorTestBase):
 
             # Run ior on each container sequentially
             for container in self.container:
-                ior_log = "{}_{}_{}_ior.log".format(self.test_id,
+                ior_log = "{}_{}_{}_ior1.log".format(self.test_id,
                                                     container.pool.uid,
                                                     container.uuid)
                 try:
                     self.ior_cmd.dfs_oclass.update(test_oclass)
                     self.ior_cmd.dfs_dir_oclass.update(test_oclass)
                     result = run_ior(self, job_manager, ior_log, self.hostlist_clients,
-                                     self.workdir, None, self.server_group, 
-                                     container.pool, container)
+                                     self.workdir, None, self.server_group,
+                                     container.pool, container, processes)
                     self.log.info(result)
                 except CommandFailure as error:
                     self.log.info(error)
@@ -94,15 +95,17 @@ class DaosECAggregationBasic(IorTestBase):
 
             # Run ior on each container sequentially
             for container in self.container:
-                ior_log = "{}_{}_{}_ior.log".format(self.test_id, container.pool.uid, container.uuid)
+                ior_log = "{}_{}_{}_ior2.log".format(self.test_id,
+                                                    container.pool.uid,
+                                                    container.uuid)
                 try:
                     self.ior_cmd.dfs_oclass.update(test_oclass)
                     self.ior_cmd.dfs_dir_oclass.update(test_oclass)
                     # Run ior the second time on the same pool and container, so another
                     # copy of the file is inserted in DAOS.
                     result = run_ior(self, job_manager, ior_log, self.hostlist_clients,
-                                     self.workdir, None, self.server_group, 
-                                     container.pool, container)
+                                     self.workdir, None, self.server_group,
+                                     container.pool, container, processes)
                     self.log.info(result)
                 except CommandFailure as error:
                     self.log.info(error)
