@@ -22,7 +22,7 @@ leap15/daos-firmware*.rpm
 leap15/daos-serialize*.rpm
 leap15/daos-server-tests-openmpi*.rpm
 leap15/daos-tests-internal*.rpm
-leap15/ucx*.rpm
+leap15/openucx*.rpm
 
 ubuntu20.04/daos-*.deb
 ubuntu20.04/libdaos*.deb
