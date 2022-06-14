@@ -315,7 +315,7 @@ With no options specified attr and dentry timeouts will be 1 second, dentry-dir
 and ndentry timeouts will be 5 seconds, and data caching will be enabled.
 
 Readir caching will be enabled when the dfuse-dentry-time setting is non-zero and when supported by
-libfuse however on many distributions the system libfuse is not able to support this feature.
+libfuse; however, on many distributions the system libfuse is not able to support this feature.
 Libfuse version 3.5.0 or newer is required at both compile and run-time.  Use `dfuse --version` or
 the runtime logs to see the fuse version used and if the feature is compiled into dfuse.
 

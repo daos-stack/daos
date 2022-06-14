@@ -1083,6 +1083,7 @@ class DFuse():
         self.wbcache = wbcache
         self.use_valgrind = True
         self._sp = None
+        self.log_flush = False
 
         self.log_file = None
 
@@ -1097,7 +1098,7 @@ class DFuse():
         else:
             running = 'not running'
 
-        return 'DFuse instance at {} ({})'.format(self.dir, running)
+        return f'DFuse instance at {self.dir} ({running})'
 
     def start(self, v_hint=None, single_threaded=False):
         """Start a dfuse instance"""
@@ -1112,10 +1113,13 @@ class DFuse():
         if self.conf.args.dfuse_debug:
             my_env['D_LOG_MASK'] = self.conf.args.dfuse_debug
 
+        if self.log_flush:
+            my_env['D_LOG_FLUSH'] = 'DEBUG'
+
         if v_hint is None:
             v_hint = get_inc_id()
 
-        prefix = 'dnt_dfuse_{}_'.format(v_hint)
+        prefix = f'dnt_dfuse_{v_hint}_'
         log_file = tempfile.NamedTemporaryFile(prefix=prefix,
                                                suffix='.log',
                                                delete=False)
@@ -3338,6 +3342,7 @@ def run_dfuse(server, conf):
         print('Reached the end, no errors')
     return fatal_errors.errors
 
+
 def run_in_fg(server, conf):
     """Run dfuse in the foreground.
 
@@ -3358,18 +3363,20 @@ def run_in_fg(server, conf):
         container = create_cont(conf, pool.uuid, label=label, ctype="POSIX")
 
     dfuse = DFuse(server, conf, pool=pool.uuid, caching=True, wbcache=False)
+    dfuse.log_flush = True
     dfuse.start()
 
-    run_daos_cmd(conf,
-                 ['container', 'set-attr',
-                  pool.label, container,
-                  '--attr', 'dfuse-direct-io-disable', '--value', 'off'],
-                 show_stdout=True)
-    run_daos_cmd(conf,
-                 ['container', 'set-attr',
-                  pool.label, container,
-                  '--attr', 'dfuse-data-cache', '--value', 'off'],
-                 show_stdout=True)
+    cont_attrs = OrderedDict()
+    cont_attrs['dfuse-data-cache'] = "on"
+    cont_attrs['dfuse-attr-time'] = 60
+    cont_attrs['dfuse-dentry-time'] = 60
+    cont_attrs['dfuse-ndentry-time'] = 60
+    cont_attrs['dfuse-direct-io-disable'] = "off"
+
+    for key, value in cont_attrs.items():
+        run_daos_cmd(conf, ['container', 'set-attr', pool.label, container,
+                            '--attr', key, '--value', str(value)],
+                     show_stdout=True)
 
     t_dir = join(dfuse.dir, container)
 
