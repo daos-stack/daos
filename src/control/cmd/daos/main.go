@@ -184,6 +184,12 @@ or query/manage an object inside a container.`
 			}
 		}
 
+		if argProcessor, ok := cmd.(interface{ processArguments() error }); ok {
+			if err := argProcessor.processArguments(); err != nil {
+				return err
+			}
+		}
+
 		if err := cmd.Execute(args); err != nil {
 			return err
 		}

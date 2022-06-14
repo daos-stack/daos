@@ -10,8 +10,17 @@ import (
 	"fmt"
 	"math"
 	"net"
+	"os"
 	"strings"
+	"testing"
 )
+
+// SkipWithoutMockLibrary skips the test if the mock library is not available.
+func SkipWithoutMockLibrary(t *testing.T, library string) {
+	if !strings.Contains(os.Getenv("LD_PRELOAD"), library) {
+		t.Skipf("skipping test because LD_PRELOAD does not contain %s", library)
+	}
+}
 
 var hostAddrs = make(map[int32]*net.TCPAddr)
 

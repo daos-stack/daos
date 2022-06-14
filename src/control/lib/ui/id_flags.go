@@ -25,6 +25,12 @@ type LabelOrUUIDFlag struct {
 	Label string    `json:"label"`
 }
 
+// Clear unsets the flag values.
+func (f *LabelOrUUIDFlag) Clear() {
+	f.UUID = uuid.Nil
+	f.Label = ""
+}
+
 // Empty returns true if neither UUID or Label were set.
 func (f LabelOrUUIDFlag) Empty() bool {
 	return !f.HasLabel() && !f.HasUUID()

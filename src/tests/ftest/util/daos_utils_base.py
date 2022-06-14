@@ -345,7 +345,7 @@ class DaosCommandBase(CommandWithSubCommand):
             def __init__(self):
                 """Create a daos container get-prop command object."""
                 super().__init__("get-prop")
-                self.prop = FormattedParameter("--properties={}")
+                self.prop = BasicParameter(position=3)
 
         class ListSubCommand(CommandWithParameters):
             """Defines an object for the daos container list command."""
@@ -427,7 +427,7 @@ class DaosCommandBase(CommandWithSubCommand):
             def __init__(self):
                 """Create a daos container set-prop command object."""
                 super().__init__("set-prop")
-                self.prop = FormattedParameter("--properties={}")
+                self.prop = BasicParameter(position=3)
 
         class StatSubCommand(CommonContainerSubCommand):
             """Defines an object for the daos container stat command."""

@@ -183,9 +183,8 @@ func freeCmdArgs(ap *C.struct_cmd_args_s) {
 	}
 
 	freeString(ap.sysname)
-
-	C.free(unsafe.Pointer(ap.dfs_path))
-	C.free(unsafe.Pointer(ap.dfs_prefix))
+	freeString(ap.dfs_prefix)
+	freeString(ap.dfs_path)
 
 	if ap.props != nil {
 		C.daos_prop_free(ap.props)
@@ -267,7 +266,7 @@ func resolveDunsPath(path string, ap *C.struct_cmd_args_s) error {
 	ap.path = C.CString(path)
 	defer freeString(ap.path)
 
-	rc := C.resolve_duns_path(ap)
+	rc := C.fs_dfs_resolve_path(ap)
 	if err := daosError(rc); err != nil {
 		return errors.Wrapf(err, "failed to resolve path %s", path)
 	}

@@ -59,6 +59,13 @@ type SetPropertiesFlag struct {
 	settableKeys common.StringSet
 }
 
+// Replace replaces the current properties with the supplied ones.
+func (f *SetPropertiesFlag) Replace(other *SetPropertiesFlag) {
+	f.ParsedProps = other.ParsedProps
+	f.settableKeys = other.settableKeys
+	f.completions = other.completions
+}
+
 // SettableKeys accepts a list of property keys that are settable.
 func (f *SetPropertiesFlag) SettableKeys(keys ...string) {
 	f.settableKeys = make(common.StringSet)
@@ -175,6 +182,13 @@ type GetPropertiesFlag struct {
 	PropertiesFlag
 	ParsedProps  common.StringSet
 	gettableKeys common.StringSet
+}
+
+// Replace replaces the current properties with the supplied ones.
+func (f *GetPropertiesFlag) Replace(other *GetPropertiesFlag) {
+	f.ParsedProps = other.ParsedProps
+	f.gettableKeys = other.gettableKeys
+	f.completions = other.completions
 }
 
 // GettableKeys accepts a list of property keys that are gettable.

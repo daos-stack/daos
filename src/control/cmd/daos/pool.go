@@ -69,12 +69,12 @@ func (cmd *poolBaseCmd) connectPool(flags C.uint) error {
 
 	var rc C.int
 	switch {
-	case cmd.PoolID().HasLabel():
+	case cmd.Args.Pool.HasLabel():
 		var poolInfo C.daos_pool_info_t
-		cLabel := C.CString(cmd.PoolID().Label)
+		cLabel := C.CString(cmd.Args.Pool.Label)
 		defer freeString(cLabel)
 
-		cmd.Debugf("connecting to pool: %s", cmd.PoolID().Label)
+		cmd.Debugf("connecting to pool: %s", cmd.Args.Pool.Label)
 		rc = C.daos_pool_connect(cLabel, cSysName, flags,
 			&cmd.cPoolHandle, &poolInfo, nil)
 		if rc == 0 {
@@ -85,8 +85,8 @@ func (cmd *poolBaseCmd) connectPool(flags C.uint) error {
 				return err
 			}
 		}
-	case cmd.PoolID().HasUUID():
-		cmd.poolUUID = cmd.PoolID().UUID
+	case cmd.Args.Pool.HasUUID():
+		cmd.poolUUID = cmd.Args.Pool.UUID
 		cmd.Debugf("connecting to pool: %s", cmd.poolUUID)
 		cUUIDstr := C.CString(cmd.poolUUID.String())
 		defer freeString(cUUIDstr)
@@ -100,7 +100,7 @@ func (cmd *poolBaseCmd) connectPool(flags C.uint) error {
 }
 
 func (cmd *poolBaseCmd) disconnectPool() {
-	cmd.Debugf("disconnecting pool %s", cmd.PoolID())
+	cmd.Debugf("disconnecting pool %s", cmd.Args.Pool)
 	// Hack for NLT fault injection testing: If the rc
 	// is -DER_NOMEM, retry once in order to actually
 	// shut down and release resources.
@@ -121,7 +121,7 @@ func (cmd *poolBaseCmd) disconnectPool() {
 func (cmd *poolBaseCmd) resolveAndConnect(flags C.uint, ap *C.struct_cmd_args_s) (func(), error) {
 	if err := cmd.connectPool(flags); err != nil {
 		return nil, errors.Wrapf(err,
-			"failed to connect to pool %s", cmd.PoolID())
+			"failed to connect to pool %s", cmd.Args.Pool)
 	}
 
 	if ap != nil {
@@ -130,11 +130,11 @@ func (cmd *poolBaseCmd) resolveAndConnect(flags C.uint, ap *C.struct_cmd_args_s)
 		}
 		ap.pool = cmd.cPoolHandle
 		switch {
-		case cmd.PoolID().HasLabel():
-			pLabel := C.CString(cmd.PoolID().Label)
+		case cmd.Args.Pool.HasLabel():
+			pLabel := C.CString(cmd.Args.Pool.Label)
 			defer freeString(pLabel)
 			C.strncpy(&ap.pool_str[0], pLabel, C.DAOS_PROP_LABEL_MAX_LEN)
-		case cmd.PoolID().HasUUID():
+		case cmd.Args.Pool.HasUUID():
 			pUUIDstr := C.CString(cmd.poolUUID.String())
 			defer freeString(pUUIDstr)
 			C.strncpy(&ap.pool_str[0], pUUIDstr, C.DAOS_PROP_LABEL_MAX_LEN)
@@ -258,6 +258,14 @@ func generateRankSet(ranklist *C.d_rank_list_t) string {
 	}
 	rankset += "]"
 	return rankset
+}
+
+func (cmd *poolQueryCmd) processArguments() error {
+	if cmd.Args.Pool.Empty() {
+		return errors.New("pool ID is required")
+	}
+
+	return nil
 }
 
 func (cmd *poolQueryCmd) Execute(_ []string) error {
@@ -397,6 +405,14 @@ type poolListAttrsCmd struct {
 	Verbose bool `long:"verbose" short:"V" description:"Include values"`
 }
 
+func (cmd *poolListAttrsCmd) processArguments() error {
+	if cmd.poolBaseCmd.Args.Pool.Empty() {
+		return errors.New("pool ID is required")
+	}
+
+	return nil
+}
+
 func (cmd *poolListAttrsCmd) Execute(_ []string) error {
 	cleanup, err := cmd.resolveAndConnect(C.DAOS_PC_RO, nil)
 	if err != nil {
@@ -429,9 +445,23 @@ func (cmd *poolListAttrsCmd) Execute(_ []string) error {
 type poolGetAttrCmd struct {
 	poolBaseCmd
 
-	Args struct {
+	FlagAttr string `long:"attr" short:"a" description:"attribute name (deprecated; use positional argument)"`
+	Args     struct {
 		Name string `positional-arg-name:"<attribute name>"`
-	} `positional-args:"yes" required:"yes"`
+	} `positional-args:"yes"`
+}
+
+func (cmd *poolGetAttrCmd) processArguments() error {
+	// Special handling for deprecated --attr flag.
+	if cmd.FlagAttr != "" {
+		cmd.Args.Name = cmd.FlagAttr
+	}
+
+	if cmd.poolBaseCmd.Args.Pool.Empty() || cmd.Args.Name == "" {
+		return errors.New("pool ID and attribute name are required")
+	}
+
+	return nil
 }
 
 func (cmd *poolGetAttrCmd) Execute(_ []string) error {
@@ -464,10 +494,41 @@ func (cmd *poolGetAttrCmd) Execute(_ []string) error {
 type poolSetAttrCmd struct {
 	poolBaseCmd
 
-	Args struct {
+	FlagAttr  string `long:"attr" short:"a" description:"attribute name (deprecated; use positional argument)"`
+	FlagValue string `long:"value" short:"v" description:"attribute value (deprecated; use positional argument)"`
+	Args      struct {
 		Name  string `positional-arg-name:"<attribute name>"`
 		Value string `positional-arg-name:"<attribute value>"`
-	} `positional-args:"yes" required:"yes"`
+	} `positional-args:"yes"`
+}
+
+func (cmd *poolSetAttrCmd) processArguments() error {
+	// Special handling for deprecated --attr flag.
+	if cmd.FlagAttr != "" {
+		if cmd.FlagValue == "" {
+			return errors.New("--attr requires --value")
+		}
+
+		cmd.Args.Name = cmd.FlagAttr
+	}
+
+	// Special handling for deprecated --value flag.
+	if cmd.FlagValue != "" {
+		if cmd.FlagAttr == "" {
+			return errors.New("--value requires --attr")
+		}
+
+		cmd.Args.Value = cmd.FlagValue
+	}
+
+	if cmd.Args.Name == "" {
+		return errors.New("attribute name and value are required")
+	}
+	if cmd.Args.Value == "" {
+		return errors.New("attribute name and value are required")
+	}
+
+	return nil
 }
 
 func (cmd *poolSetAttrCmd) Execute(_ []string) error {
@@ -492,9 +553,23 @@ func (cmd *poolSetAttrCmd) Execute(_ []string) error {
 type poolDelAttrCmd struct {
 	poolBaseCmd
 
-	Args struct {
+	FlagAttr string `long:"attr" short:"a" description:"attribute name (deprecated; use positional argument)"`
+	Args     struct {
 		Name string `positional-arg-name:"<attribute name>"`
-	} `positional-args:"yes" required:"yes"`
+	} `positional-args:"yes"`
+}
+
+func (cmd *poolDelAttrCmd) processArguments() error {
+	// Special handling for deprecated --attr flag.
+	if cmd.FlagAttr != "" {
+		cmd.Args.Name = cmd.FlagAttr
+	}
+
+	if cmd.poolBaseCmd.Args.Pool.Empty() || cmd.Args.Name == "" {
+		return errors.New("pool ID and attribute name are required")
+	}
+
+	return nil
 }
 
 func (cmd *poolDelAttrCmd) Execute(_ []string) error {

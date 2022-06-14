@@ -14,7 +14,6 @@
 
 #include <stdio.h>
 #include <stdlib.h>
-#include <sys/ioctl.h>
 #include <errno.h>
 #include <sys/types.h>
 #include <sys/stat.h>
@@ -28,12 +27,8 @@
 #include "daos_api.h"
 #include "daos_fs.h"
 #include "daos_uns.h"
-#include "dfuse_ioctl.h"
 
 #include "daos_hdlr.h"
-
-int resolve_duns_path(struct cmd_args_s *ap);
-int resolve_duns_pool(struct cmd_args_s *ap);
 
 /* cgo is unable to work directly with preprocessor macros
  * so we have to provide these glue helpers.
