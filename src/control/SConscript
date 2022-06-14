@@ -3,11 +3,11 @@
 # pylint: disable=too-many-locals
 import sys
 import os
-import daos_build
 import subprocess
 from os.path import join, isdir
 from os import urandom
 from binascii import b2a_hex
+import daos_build
 
 Import('env', 'prereqs', 'daos_version', 'conf_dir', 'gurt_lib', 'cart_lib', 'client_common')
 
@@ -43,6 +43,7 @@ def is_firmware_mgmt_build(benv):
     "Check whether this build has firmware management enabled."
     return benv["FIRMWARE_MGMT"] == 1
 
+
 def get_build_tags(benv):
     "Get custom go build tags."
     tags = []
@@ -68,7 +69,7 @@ def get_build_flags(benv):
 
 def install_go_manpage(menv, name):
     """
-    Dynamically generate a manpage for a tool.
+    Dynamically generate a man-page for a tool.
     """
     gen_bin = join('$BUILD_DIR', 'src/control/bin', name)
     name_ver = f'{name}.8'
@@ -103,11 +104,6 @@ def install_go_bin(denv, gosrc, libs, name, install_name):
         """generate a unique build id per binary for use by RPM
            https://fedoraproject.org/wiki/PackagingDrafts/Go#Build_ID"""
         buildid = b2a_hex(urandom(20))
-        if isinstance(buildid, str):
-            # Python 2 is a str already, using decode() here transforms it
-            # into a 'unicode' type
-            return '0x' + buildid
-        # Python 3 is a bytes, decode() it to a str
         return '0x' + buildid.decode()
 
     def go_ldflags():
@@ -155,7 +151,7 @@ def configure_go(denv):
             context.Result('failed to get version from "%s"' % out)
             return 0
 
-        # go version go1.2.3 linux/amd64
+        # go version go1.2.3 Linux/amd64
         go_version = out.split(' ')[2].replace('go', '')
         if len([x for x, y in
                 zip(go_version.split('.'), MIN_GO_VERSION.split('.'))
@@ -217,8 +213,7 @@ def scons():
         agentbin = install_go_bin(denv, gosrc, None, "daos_agent", "daos_agent")
         dmgbin = install_go_bin(denv, gosrc, None, "dmg", "dmg")
         if prereqs.test_requested():
-            drpcbin = install_go_bin(denv, gosrc, None, "drpc_test",
-                                     "hello_drpc")
+            drpcbin = install_go_bin(denv, gosrc, None, "drpc_test", "hello_drpc")
             AlwaysBuild(drpcbin)
 
         AlwaysBuild([agentbin, dmgbin])

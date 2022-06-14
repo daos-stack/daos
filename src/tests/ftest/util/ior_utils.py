@@ -256,6 +256,7 @@ class IorCommand(ExecutableCommand):
         # Account for any replicas, except for the ones with no replication
         # i.e all object classes starting with "S". Eg: S1,S2,...,SX.
         if not self.dfs_oclass.value.startswith("S"):
+            replica_qty = 1
             try:
                 # Extract the replica quantity from the object class string
                 replica_qty = int(re.findall(r"\d+", self.dfs_oclass.value)[0])
@@ -263,7 +264,7 @@ class IorCommand(ExecutableCommand):
                 # If the daos object class is undefined (TypeError) or it does
                 # not contain any numbers (IndexError) then there is only one
                 # replica.
-                replica_qty = 1
+                pass
             finally:
                 total *= replica_qty
 

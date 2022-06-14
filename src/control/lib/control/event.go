@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2021 Intel Corporation.
+// (C) Copyright 2021-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -159,8 +159,8 @@ func newEventLogger(logBasic logging.Logger, newSyslogger newSysloggerFn) *Event
 	} {
 		sl, err := newSyslogger(sev.SyslogPriority(), flags)
 		if err != nil {
-			logBasic.Errorf("failed to create syslogger with priority %s: %s",
-				sev.SyslogPriority(), err)
+			logBasic.Errorf("failed to create syslogger with priority %d (severity=%s,"+
+				" facility=DAEMON): %s", sev.SyslogPriority(), sev, err)
 			continue
 		}
 		el.sysloggers[sev] = sl
