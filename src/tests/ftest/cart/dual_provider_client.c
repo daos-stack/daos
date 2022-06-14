@@ -96,6 +96,11 @@ int main(int argc, char **argv)
 		}
 	}
 
+	if (use_primary)
+		unsetenv("CRT_SECONDARY_PROVIDER");
+	else
+		setenv("CRT_SECONDARY_PROVIDER", "1", 1);
+
 	rc = d_log_init();
 	assert(rc == 0);
 	/* rank, num_attach_retries, is_server, assert_on_error */
