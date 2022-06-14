@@ -733,8 +733,6 @@ create_cont(daos_handle_t poh, struct duns_attr_t *attrp, bool create_with_label
 		if (create_with_label)
 			rc = dfs_cont_create_with_label(poh, attrp->da_cont, &dfs_attr,
 							&attrp->da_cuuid, ch, NULL);
-		else if (!uuid_is_null(attrp->da_cuuid))
-			rc = dfs_cont_create(poh, attrp->da_cuuid, &dfs_attr, ch, NULL);
 		else
 			rc = dfs_cont_create(poh, &attrp->da_cuuid, &dfs_attr, ch, NULL);
 		if (rc == -DER_SUCCESS && dur) {

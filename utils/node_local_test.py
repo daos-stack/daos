@@ -951,6 +951,7 @@ class DaosServer():
 
         return self.test_pool.id()
 
+
 def il_cmd(dfuse, cmd, check_read=True, check_write=True, check_fstat=True):
     """Run a command under the interception library
 
@@ -1054,6 +1055,7 @@ class ValgrindHelper():
                     else:
                         ofd.write(line)
         os.unlink(self._xml_file)
+
 
 class DFuse():
     """Manage a dfuse instance"""
@@ -4369,6 +4371,7 @@ def run(wf, args):
     print('Total time in log analysis: {:.2f} seconds'.format(conf.lt.total))
     print('Total time in log compression: {:.2f} seconds'.format(conf.lt_compress.total))
     return fatal_errors
+
 
 def main():
     """Wrap the core function, and catch/report any exceptions
