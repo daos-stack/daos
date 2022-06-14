@@ -16,6 +16,7 @@ from command_utils import ExecutableCommand
 from exception_utils import CommandFailure
 from agent_utils import include_local_host
 from job_manager_utils import get_job_manager
+from test_utils_pool import POOL_TIMEOUT_INCREMENT
 
 
 class DaosCoreBase(TestWithServers):
@@ -116,6 +117,8 @@ class DaosCoreBase(TestWithServers):
         nvme_size = self.params.get("nvme_size", '/run/pool/*')
         args = self.get_test_param("args", "")
         stopped_ranks = self.get_test_param("stopped_ranks", [])
+        pools_created = self.get_test_param("pools_created", 1)
+        self.increment_timeout(POOL_TIMEOUT_INCREMENT * pools_created)
         dmg = self.get_dmg_command()
         dmg_config_file = dmg.yaml.filename
         if self.hostlist_clients:
