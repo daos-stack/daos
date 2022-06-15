@@ -103,8 +103,8 @@ free_filters(daos_filter_t **filters, uint32_t nfilters)
 			D_ASSERT(filters[i]->parts != NULL);
 
 		free_parts(filters[i]->parts, filters[i]->num_parts);
-		D_FREE(filters[i]->parts);
-		D_FREE(filters[i]);
+		if (filters[i]->num_parts > 0)
+			D_FREE(filters[i]->parts);
 	}
 }
 
