@@ -27,10 +27,27 @@ free_filter_data(daos_filter_t **filters, uint32_t nfilters)
 void
 free_pipeline(daos_pipeline_t *pipe)
 {
+	daos_filter_t  **filters_to_free;
+	uint32_t         total_filters;
+	uint32_t         i;
+
+	/** saving filter ptrs so we can free them later */
+	total_filters   = pipe->num_filters + pipe->num_aggr_filters;
+	filters_to_free = malloc(sizeof(*filters_to_free) * total_filters);
+
+	memcpy(filters_to_free, pipe->filters, sizeof(*filters_to_free) * pipe->num_filters);
+	memcpy(&filters_to_free[pipe->num_filters], pipe->aggr_filters,
+	       sizeof(*filters_to_free) * pipe->num_aggr_filters);
+
 	/** freeing objects allocated by client */
 	free_filter_data(pipe->filters, pipe->num_filters);
 	free_filter_data(pipe->aggr_filters, pipe->num_aggr_filters);
 
 	/** freeing objects allocated by DAOS */
 	daos_pipeline_free(pipe);
+
+	/** freeing filters */
+	for (i = 0; i < total_filters; i++)
+		free(filters_to_free[i]);
+	free(filters_to_free);
 }
