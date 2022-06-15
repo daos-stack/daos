@@ -1051,41 +1051,22 @@ static void
 dfs_test_compat(void **state)
 {
 	test_arg_t	*arg = *state;
-	uuid_t		uuid1;
-	uuid_t		uuid2;
+	uuid_t		uuid;
 	daos_handle_t	coh;
 	dfs_t		*dfs;
 	int		rc;
 	char		uuid_str[37];
 
-	uuid_generate(uuid1);
-	uuid_clear(uuid2);
+	uuid_clear(uuid);
 
 	if (arg->myrank != 0)
 		return;
 
-	print_message("creating DFS container with set uuid "DF_UUIDF" ...\n", DP_UUID(uuid1));
-	rc = dfs_cont_create(arg->pool.poh, uuid1, NULL, NULL, NULL);
-	assert_int_equal(rc, 0);
-	print_message("Created POSIX Container "DF_UUIDF"\n", DP_UUID(uuid1));
-	uuid_unparse(uuid1, uuid_str);
-	rc = daos_cont_open(arg->pool.poh, uuid_str, DAOS_COO_RW, &coh, NULL, NULL);
-	assert_rc_equal(rc, 0);
-	rc = dfs_mount(arg->pool.poh, coh, O_RDWR, &dfs);
-	assert_int_equal(rc, 0);
-	rc = dfs_umount(dfs);
-	assert_int_equal(rc, 0);
-	rc = daos_cont_close(coh, NULL);
-	assert_rc_equal(rc, 0);
-	rc = daos_cont_destroy(arg->pool.poh, uuid_str, 1, NULL);
-	assert_rc_equal(rc, 0);
-	print_message("Destroyed POSIX Container "DF_UUIDF"\n", DP_UUID(uuid1));
-
 	print_message("creating DFS container with a uuid pointer (not set by caller) ...\n");
-	rc = dfs_cont_create(arg->pool.poh, &uuid2, NULL, NULL, NULL);
+	rc = dfs_cont_create(arg->pool.poh, &uuid, NULL, NULL, NULL);
 	assert_int_equal(rc, 0);
-	print_message("Created POSIX Container "DF_UUIDF"\n", DP_UUID(uuid2));
-	uuid_unparse(uuid2, uuid_str);
+	print_message("Created POSIX Container "DF_UUIDF"\n", DP_UUID(uuid));
+	uuid_unparse(uuid, uuid_str);
 	rc = daos_cont_open(arg->pool.poh, uuid_str, DAOS_COO_RW, &coh, NULL, NULL);
 	assert_rc_equal(rc, 0);
 	rc = dfs_mount(arg->pool.poh, coh, O_RDWR, &dfs);
@@ -1096,7 +1077,7 @@ dfs_test_compat(void **state)
 	assert_rc_equal(rc, 0);
 	rc = daos_cont_destroy(arg->pool.poh, uuid_str, 1, NULL);
 	assert_rc_equal(rc, 0);
-	print_message("Destroyed POSIX Container "DF_UUIDF"\n", DP_UUID(uuid2));
+	print_message("Destroyed POSIX Container "DF_UUIDF"\n", DP_UUID(uuid));
 
 	print_message("creating DFS container with a NULL pointer, should fail ...\n");
 	rc = dfs_cont_create(arg->pool.poh, NULL, NULL, &coh, &dfs);
@@ -1228,9 +1209,14 @@ dfs_test_chown(void **state)
 	char		*filename = "chown_test";
 	char		*symname = "sym_chown_test";
 	struct stat	stbuf;
+	struct stat	stbuf2;
 	uid_t		orig_uid;
 	gid_t		orig_gid;
 	int		rc;
+	char		*filename_file1 = "open_stat1";
+	char		*filename_file2 = "open_stat2";
+	mode_t		create_mode = S_IWUSR | S_IRUSR;
+	int		create_flags = O_RDWR | O_CREAT | O_EXCL;
 
 	if (arg->myrank != 0)
 		return;
@@ -1317,6 +1303,40 @@ dfs_test_chown(void **state)
 	assert_int_equal(rc, 0);
 	rc = dfs_release(sym);
 	assert_int_equal(rc, 0);
+
+	/* Test the open_stat call with passing in uid/gid */
+	/** Create /file1 */
+	rc = dfs_open_stat(dfs_mt, NULL, filename_file1, create_mode | S_IFREG,
+			   create_flags, 0, 0, NULL, &obj, NULL);
+	assert_int_equal(rc, 0);
+
+	rc = dfs_release(obj);
+	assert_int_equal(rc, 0);
+
+	/** verify ownership */
+	rc = dfs_stat(dfs_mt, NULL, filename_file1, &stbuf);
+	assert_int_equal(rc, 0);
+	assert_int_equal(stbuf.st_uid, geteuid());
+	assert_int_equal(stbuf.st_uid, getegid());
+
+	/* Now do a create with uid/gid set */
+	stbuf2.st_uid = 14;
+	stbuf2.st_gid = 15;
+	rc = dfs_open_stat(dfs_mt, NULL, filename_file2, create_mode | S_IFREG,
+			   create_flags, 0, 0, NULL, &obj, &stbuf2);
+	assert_int_equal(rc, 0);
+
+	assert_int_equal(stbuf2.st_uid, 14);
+	assert_int_equal(stbuf2.st_gid, 15);
+
+	rc = dfs_release(obj);
+	assert_int_equal(rc, 0);
+
+	/** verify ownership */
+	rc = dfs_stat(dfs_mt, NULL, filename_file2, &stbuf);
+	assert_int_equal(rc, 0);
+	assert_int_equal(stbuf.st_uid, stbuf2.st_uid);
+	assert_int_equal(stbuf.st_uid, stbuf2.st_gid);
 }
 
 static bool

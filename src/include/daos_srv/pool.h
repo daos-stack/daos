@@ -189,6 +189,8 @@ int ds_pool_svc_delete_acl(uuid_t pool_uuid, d_rank_list_t *ranks,
 
 int ds_pool_svc_query(uuid_t pool_uuid, d_rank_list_t *ps_ranks, d_rank_list_t **ranks,
 		      daos_pool_info_t *pool_info);
+int ds_pool_svc_query_target(uuid_t pool_uuid, d_rank_list_t *ps_ranks, d_rank_t rank,
+			     uint32_t tgt_idx, daos_target_info_t *ti);
 
 int ds_pool_prop_fetch(struct ds_pool *pool, unsigned int bit,
 		       daos_prop_t **prop_out);
@@ -234,14 +236,8 @@ ds_pool_child_map_refresh_sync(struct ds_pool_child *dpc);
 int
 ds_pool_child_map_refresh_async(struct ds_pool_child *dpc);
 
-enum map_ranks_class {
-	MAP_RANKS_UP,
-	MAP_RANKS_DOWN
-};
-
 int
-map_ranks_init(const struct pool_map *map, enum map_ranks_class class,
-	       d_rank_list_t *ranks);
+map_ranks_init(const struct pool_map *map, unsigned int status, d_rank_list_t *ranks);
 
 void
 map_ranks_fini(d_rank_list_t *ranks);

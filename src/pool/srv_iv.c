@@ -341,6 +341,9 @@ pool_iv_conn_lookup(struct pool_iv_conns *conns, uuid_t uuid)
 	struct pool_iv_conn	*conn = conns->pic_conns;
 	char			*end = (char *)conn + conns->pic_size;
 
+	if (conns->pic_size == (uint32_t)(-1))
+		return NULL;
+
 	while (pool_iv_conn_valid(conn, end)) {
 		if (uuid_compare(conn->pic_hdl, uuid) == 0)
 			return conn;
@@ -410,6 +413,7 @@ pool_iv_conns_buf_insert(struct pool_iv_conns *dst_conns,
 	int			rc = 0;
 
 	/* Insert all connections from src_conns to dst_sgl */
+	D_ASSERT(src_conns->pic_size != (uint32_t)(-1));
 	conn = src_conns->pic_conns;
 	end = (char *)conn + src_conns->pic_size;
 	while (pool_iv_conn_valid(conn, end)) {
