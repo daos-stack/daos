@@ -459,7 +459,7 @@ interception library with all the POSIX based engines like sync and libaio.
 ### daos\_perf
 
 Finally, DAOS provides a tool called `daos_perf` which allows benchmarking to the
-DAOS object API directly. It has a similar syntac as `vos_perf` and, like IOR,
+DAOS object API directly. It has a similar syntax as `vos_perf` and, like IOR,
 can be run as an MPI application. For a full description of `daos_perf` usage,
 please run:
 
