@@ -91,16 +91,6 @@ cmd_string(const char *cmd_base, char *args[], int argcount)
 		old = size;
 	}
 
-	/* Tack on stderr redirect */
-	size += 6;
-	D_REALLOC(tmp, cmd_str, old, size);
-	if (tmp == NULL) {
-		D_FREE(cmd_str);
-		return NULL;
-	}
-	strncat(tmp, " 2>&1", size);
-	cmd_str = tmp;
-
 	return cmd_str;
 }
 
