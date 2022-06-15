@@ -416,17 +416,10 @@ class TestPool(TestDaosApiBase):
         Sets the self.info attribute.
         """
         if self.pool:
-            daos_cmd = DaosCommand(self.dmg.command_path)
             self.connect()
             self.log.info("Querying pool %s", self.identifier)
             self._call_method(self.pool.pool_query, {})
             self.info = self.pool.pool_info
-            daos_pool_query_result = daos_cmd.pool_query(pool=self.pool.get_uuid_str())
-            self.log.info("pydaos/libdaos pool_info rebuild status rs_obj_nr=%d, rs_rec_nr=%d\n", self.info.pi_rebuild_st.rs_obj_nr, self.info.pi_rebuild_st.rs_rec_nr)
-            daos_pool_query_obj_nr = daos_pool_query_result["response"]["rebuild"]["objects"]
-            daos_pool_query_rec_nr = daos_pool_query_result["response"]["rebuild"]["records"]
-            self.log.info("(alternate) daos pool query rebuild status rs_obj_nr=%d, rs_rec_nr=%d\n", daos_pool_query_obj_nr, daos_pool_query_rec_nr)
-            self.log.info("(alternate) daos pool query full result:\n%s", daos_pool_query_result)
 
     def check_pool_info(self, pi_uuid=None, pi_ntargets=None, pi_nnodes=None,
                         pi_ndisabled=None, pi_map_ver=None, pi_leader=None,
@@ -466,7 +459,18 @@ class TestPool(TestDaosApiBase):
              val)
             for key, val in list(locals().items())
             if key != "self" and val is not None]
-        return self._check_info(checks)
+        matched = self._check_info(checks)
+        if not matched:
+            daos_cmd = DaosCommand(self.dmg.command_path)
+            daos_pool_query_result = daos_cmd.pool_query(pool=self.pool.get_uuid_str())
+            self.log.info("pydaos/libdaos pool_info rebuild status rs_obj_nr=%d, rs_rec_nr=%d\n", self.info.pi_rebuild_st.rs_obj_nr, self.info.pi_rebuild_st.rs_rec_nr)
+            daos_pool_query_obj_nr = daos_pool_query_result["response"]["rebuild"]["objects"]
+            daos_pool_query_rec_nr = daos_pool_query_result["response"]["rebuild"]["records"]
+            self.log.info("(alternate) daos pool query rebuild status rs_obj_nr=%d, rs_rec_nr=%d\n", daos_pool_query_obj_nr, daos_pool_query_rec_nr)
+            self.log.info("(alternate) daos pool query full result:\n%s", daos_pool_query_result)
+
+
+        return matched
 
     def check_pool_space(self, ps_free_min=None, ps_free_max=None,
                          ps_free_mean=None, ps_ntargets=None, ps_padding=None):

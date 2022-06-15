@@ -12,11 +12,12 @@ timeout: 900
 server_config:
   name: daos_server
   servers:
-    0:
-      targets: 2
-      log_mask: DEBUG,MEM=ERR
-      env_vars:
-        - DD_MASK=group_metadata,rebuild
+    targets: 2
+    #0:
+    #  targets: 2
+    #  log_mask: DEBUG,MEM=ERR
+    #  env_vars:
+    #    - DD_MASK=group_metadata,rebuild
 pool:
   mode: 511
   name: daos_server

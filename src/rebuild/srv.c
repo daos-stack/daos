@@ -521,10 +521,10 @@ ds_rebuild_query(uuid_t pool_uuid, struct daos_rebuild_status *status)
 	}
 
 out:
-	D_DEBUG(DB_REBUILD, "rebuild "DF_UUID" state %d rec "DF_U64" obj "
-		DF_U64" ver %d err %d\n", DP_UUID(pool_uuid),
-		status->rs_state, status->rs_rec_nr, status->rs_obj_nr,
-		status->rs_version, status->rs_errno);
+	D_INFO("rebuild "DF_UUID" state %d rec "DF_U64" obj "
+	       DF_U64" ver %d err %d\n", DP_UUID(pool_uuid),
+	       status->rs_state, status->rs_rec_nr, status->rs_obj_nr,
+	       status->rs_version, status->rs_errno);
 
 	return rc;
 }
