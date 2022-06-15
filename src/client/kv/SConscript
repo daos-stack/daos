@@ -1,4 +1,5 @@
-"""Build DAOS Addons"""
+"""Build DAOS Add owns"""
+
 
 def scons():
     """Execute build"""
@@ -11,6 +12,7 @@ def scons():
     dc_kv_tgts = denv.SharedObject(['dc_kv.c'])
 
     Export('dc_kv_tgts')
+
 
 if __name__ == "SCons.Script":
     scons()

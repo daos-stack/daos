@@ -1,4 +1,6 @@
 #!/usr/bin/env python
+"""SCons extra features"""
+
 # Copyright 2018-2022 Intel Corporation
 
 # Permission is hereby granted, free of charge, to any person obtaining a copy
@@ -18,10 +20,8 @@
 # LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
-"""SCons extra features"""
-from __future__ import print_function
 
-import subprocess #nosec
+import subprocess  # nosec
 import re
 import os
 
@@ -31,6 +31,7 @@ from SCons.Script import WhereIs
 # Minimum version of clang-format that we use the configuration file for.  With clang-format
 # versions older than this it's still used, but without loading our config.
 MIN_FORMAT_VERSION = 12
+
 
 def _supports_custom_format(clang_exe):
     """Get the version of clang-format"""
@@ -49,6 +50,7 @@ def _supports_custom_format(clang_exe):
     print('Custom .clang-format wants version {}+. Using Mozilla style.'.format(MIN_FORMAT_VERSION))
     return False
 
+
 def _find_indent():
     """find clang-format"""
     indent = WhereIs("clang-format")
@@ -59,6 +61,7 @@ def _find_indent():
     else:
         style = "Mozilla"
     return "%s --style=%s" % (indent, style)
+
 
 def _pp_gen(source, target, env, indent):
     """generate commands for preprocessor builder"""
