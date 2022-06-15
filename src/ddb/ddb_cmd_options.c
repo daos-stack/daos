@@ -62,7 +62,7 @@ ls_option_parse(struct ddb_ctx *ctx, struct ls_options *cmd_args,
 	}
 
 	if (argc - index > 0) {
-		ddb_printf(ctx, "Unexpected argument: %s\\n", argv[index]);
+		ddb_printf(ctx, "Unexpected argument: %s\n", argv[index]);
 		return -DER_INVAL;
 	}
 
@@ -103,12 +103,12 @@ open_option_parse(struct ddb_ctx *ctx, struct open_options *cmd_args,
 		cmd_args->vos_pool_shard = argv[index];
 		index++;
 	} else {
-		ddb_print(ctx, "Expected argument 'vos_pool_shard'");
+		ddb_print(ctx, "Expected argument 'vos_pool_shard'\n");
 		return -DER_INVAL;
 	}
 
 	if (argc - index > 0) {
-		ddb_printf(ctx, "Unexpected argument: %s\\n", argv[index]);
+		ddb_printf(ctx, "Unexpected argument: %s\n", argv[index]);
 		return -DER_INVAL;
 	}
 
@@ -141,19 +141,19 @@ dump_value_option_parse(struct ddb_ctx *ctx, struct dump_value_options *cmd_args
 		cmd_args->path = argv[index];
 		index++;
 	} else {
-		ddb_print(ctx, "Expected argument 'path'");
+		ddb_print(ctx, "Expected argument 'path'\n");
 		return -DER_INVAL;
 	}
 	if (argc - index > 0) {
 		cmd_args->dst = argv[index];
 		index++;
 	} else {
-		ddb_print(ctx, "Expected argument 'dst'");
+		ddb_print(ctx, "Expected argument 'dst'\n");
 		return -DER_INVAL;
 	}
 
 	if (argc - index > 0) {
-		ddb_printf(ctx, "Unexpected argument: %s\\n", argv[index]);
+		ddb_printf(ctx, "Unexpected argument: %s\n", argv[index]);
 		return -DER_INVAL;
 	}
 
@@ -186,12 +186,12 @@ rm_option_parse(struct ddb_ctx *ctx, struct rm_options *cmd_args,
 		cmd_args->path = argv[index];
 		index++;
 	} else {
-		ddb_print(ctx, "Expected argument 'path'");
+		ddb_print(ctx, "Expected argument 'path'\n");
 		return -DER_INVAL;
 	}
 
 	if (argc - index > 0) {
-		ddb_printf(ctx, "Unexpected argument: %s\\n", argv[index]);
+		ddb_printf(ctx, "Unexpected argument: %s\n", argv[index]);
 		return -DER_INVAL;
 	}
 
@@ -224,26 +224,19 @@ load_option_parse(struct ddb_ctx *ctx, struct load_options *cmd_args,
 		cmd_args->src = argv[index];
 		index++;
 	} else {
-		ddb_print(ctx, "Expected argument 'src'");
+		ddb_print(ctx, "Expected argument 'src'\n");
 		return -DER_INVAL;
 	}
 	if (argc - index > 0) {
 		cmd_args->dst = argv[index];
 		index++;
 	} else {
-		ddb_print(ctx, "Expected argument 'dst'");
-		return -DER_INVAL;
-	}
-	if (argc - index > 0) {
-		cmd_args->epoch = argv[index];
-		index++;
-	} else {
-		ddb_print(ctx, "Expected argument 'epoch'");
+		ddb_print(ctx, "Expected argument 'dst'\n");
 		return -DER_INVAL;
 	}
 
 	if (argc - index > 0) {
-		ddb_printf(ctx, "Unexpected argument: %s\\n", argv[index]);
+		ddb_printf(ctx, "Unexpected argument: %s\n", argv[index]);
 		return -DER_INVAL;
 	}
 
@@ -276,12 +269,12 @@ dump_ilog_option_parse(struct ddb_ctx *ctx, struct dump_ilog_options *cmd_args,
 		cmd_args->path = argv[index];
 		index++;
 	} else {
-		ddb_print(ctx, "Expected argument 'path'");
+		ddb_print(ctx, "Expected argument 'path'\n");
 		return -DER_INVAL;
 	}
 
 	if (argc - index > 0) {
-		ddb_printf(ctx, "Unexpected argument: %s\\n", argv[index]);
+		ddb_printf(ctx, "Unexpected argument: %s\n", argv[index]);
 		return -DER_INVAL;
 	}
 
@@ -314,12 +307,12 @@ commit_ilog_option_parse(struct ddb_ctx *ctx, struct commit_ilog_options *cmd_ar
 		cmd_args->path = argv[index];
 		index++;
 	} else {
-		ddb_print(ctx, "Expected argument 'path'");
+		ddb_print(ctx, "Expected argument 'path'\n");
 		return -DER_INVAL;
 	}
 
 	if (argc - index > 0) {
-		ddb_printf(ctx, "Unexpected argument: %s\\n", argv[index]);
+		ddb_printf(ctx, "Unexpected argument: %s\n", argv[index]);
 		return -DER_INVAL;
 	}
 
@@ -352,12 +345,12 @@ rm_ilog_option_parse(struct ddb_ctx *ctx, struct rm_ilog_options *cmd_args,
 		cmd_args->path = argv[index];
 		index++;
 	} else {
-		ddb_print(ctx, "Expected argument 'path'");
+		ddb_print(ctx, "Expected argument 'path'\n");
 		return -DER_INVAL;
 	}
 
 	if (argc - index > 0) {
-		ddb_printf(ctx, "Unexpected argument: %s\\n", argv[index]);
+		ddb_printf(ctx, "Unexpected argument: %s\n", argv[index]);
 		return -DER_INVAL;
 	}
 
@@ -402,12 +395,12 @@ dump_dtx_option_parse(struct ddb_ctx *ctx, struct dump_dtx_options *cmd_args,
 		cmd_args->path = argv[index];
 		index++;
 	} else {
-		ddb_print(ctx, "Expected argument 'path'");
+		ddb_print(ctx, "Expected argument 'path'\n");
 		return -DER_INVAL;
 	}
 
 	if (argc - index > 0) {
-		ddb_printf(ctx, "Unexpected argument: %s\\n", argv[index]);
+		ddb_printf(ctx, "Unexpected argument: %s\n", argv[index]);
 		return -DER_INVAL;
 	}
 
@@ -440,12 +433,12 @@ clear_cmt_dtx_option_parse(struct ddb_ctx *ctx, struct clear_cmt_dtx_options *cm
 		cmd_args->path = argv[index];
 		index++;
 	} else {
-		ddb_print(ctx, "Expected argument 'path'");
+		ddb_print(ctx, "Expected argument 'path'\n");
 		return -DER_INVAL;
 	}
 
 	if (argc - index > 0) {
-		ddb_printf(ctx, "Unexpected argument: %s\\n", argv[index]);
+		ddb_printf(ctx, "Unexpected argument: %s\n", argv[index]);
 		return -DER_INVAL;
 	}
 

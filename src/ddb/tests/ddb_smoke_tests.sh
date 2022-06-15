@@ -61,11 +61,10 @@ run_cmd cat /tmp/ddb_value_dump
 run_cmd ddb $vos_file -R "dump_value [0]/[0]/[0]/[1]/[0] /tmp/ddb_value_dump"
 run_cmd cat /tmp/ddb_value_dump
 
-run_cmd ddb $vos_file -R "load /tmp/ddb_new_value $vos_path 2"
+run_cmd ddb $vos_file -R "load /tmp/ddb_new_value $vos_path"
 run_cmd ddb $vos_file -R "dump_value $vos_path /tmp/ddb_value_dump"
 run_cmd cat /tmp/ddb_value_dump
 run_cmd diff /tmp/ddb_new_value /tmp/ddb_value_dump
-
 
 rm -f /tmp/ddb_commands
 touch /tmp/ddb_commands

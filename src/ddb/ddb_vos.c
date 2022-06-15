@@ -1280,12 +1280,14 @@ dv_delete(daos_handle_t poh, struct dv_tree_path *vtp)
 	return rc;
 }
 
-int dv_update(daos_handle_t poh, struct dv_tree_path *vtp, d_iov_t *iov, daos_epoch_t epoch)
+int
+dv_update(daos_handle_t poh, struct dv_tree_path *vtp, d_iov_t *iov)
 {
 	daos_iod_t	iod = {0};
 	d_sg_list_t	sgl = {0};
 	uint64_t	flags = 0;
 	daos_handle_t	coh;
+	daos_epoch_t	epoch;
 	uint32_t	pool_ver = 0;
 	int		rc;
 
@@ -1311,6 +1313,7 @@ int dv_update(daos_handle_t poh, struct dv_tree_path *vtp, d_iov_t *iov, daos_ep
 		iod.iod_size = 1;
 	}
 
+	epoch = crt_hlc_get();
 	rc = vos_obj_update(coh, vtp->vtp_oid, epoch, pool_ver, flags,
 			    &vtp->vtp_dkey, 1, &iod, NULL, &sgl);
 	if (rc == -DER_NO_PERM)

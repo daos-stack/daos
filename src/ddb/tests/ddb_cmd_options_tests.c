@@ -138,14 +138,13 @@ load_options_parsing(void **state)
 	struct load_options	*options = &info.dci_cmd_option.dci_load;
 
 	/* test invalid arguments and options */
-	test_run_inval_cmd("load", "src", "dst", "epoch", "extra"); /* too many argument */
+	test_run_inval_cmd("load", "src", "dst", "extra"); /* too many argument */
 	test_run_inval_cmd("load", "-z"); /* invalid option */
 
 	/* test all arguments */
-	test_run_cmd(&info, "load", "src", "dst", "epoch");
+	test_run_cmd(&info, "load", "src", "dst");
 	assert_non_null(options->src);
 	assert_non_null(options->dst);
-	assert_non_null(options->epoch);
 }
 
 static void
