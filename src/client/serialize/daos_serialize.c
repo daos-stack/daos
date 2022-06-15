@@ -797,7 +797,8 @@ deserialize_props(daos_handle_t poh, hid_t file_id, daos_prop_t **_prop, uint64_
 			} else if (rc != 0) {
 				D_GOTO(out, rc);
 			}  else {
-				D_PRINT("Container label already exists in pool and cannot be set\n");
+				D_PRINT("Container label already exists in pool and "
+					"cannot be set\n");
 			}
 		} else {
 			close_cont = false;
