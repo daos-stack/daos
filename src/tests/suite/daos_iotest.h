@@ -150,7 +150,7 @@ obj_teardown(void **state);
 
 int io_conf_run(test_arg_t *arg, const char *io_conf);
 
-int pool_storage_info(void **state, daos_pool_info_t *pinfo);
+int pool_storage_info(test_arg_t *arg, daos_pool_info_t *pinfo);
 
 /* below list the structure defined for epoch io testing */
 

@@ -1,7 +1,8 @@
 """Build pydaos client"""
-import daos_build
 import sys
+import daos_build
 import compiler_setup
+
 
 def build_shim_module():
     """Build PyDAOS shim module for the specified python version"""
@@ -10,9 +11,6 @@ def build_shim_module():
         return
 
     version = "{}.{}".format(sys.version_info.major, sys.version_info.minor)
-
-    if sys.version_info.major != 3:
-        raise Exception(f'Unsupported python version {version}')
 
     Import('base_env')
 
@@ -46,7 +44,6 @@ def build_shim_module():
     install_path += "/raw"
     new_env.Install(install_path, "raw/__init__.py")
     new_env.Install(install_path, "raw/daos_api.py")
-    new_env.Install(install_path, "raw/daos_io.py")
     new_env.Install(install_path, "raw/conversion.py")
     new_env.Install(install_path, "raw/daos_cref.py")
 
