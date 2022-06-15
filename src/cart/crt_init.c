@@ -117,6 +117,7 @@ static int data_init(int server, crt_init_options_t *opt)
 	D_DEBUG(DB_ALL, "initializing crt_gdata...\n");
 
 	dump_envariables();
+	setenv("RDMAV_HUGEPAGES_SAFE", "1", 1);
 
 	/*
 	 * avoid size mis-matching between client/server side
