@@ -27,6 +27,7 @@ def build_tests(prereqs, env, client_libs):
     libs_client = client_libs + ['pthread', 'dts', 'dpar']
 
     denv.AppendUnique(CPPPATH=[Dir('suite').srcnode()])
+    denv.AppendUnique(LIBPATH=[Dir('.')])
 
     prereqs.require(denv, 'argobots', 'hwloc', 'protobufc', 'pmdk', 'isal')
 
