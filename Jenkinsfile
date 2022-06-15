@@ -12,7 +12,7 @@
 
 // To use a test branch (i.e. PR) until it lands to master
 // I.e. for testing library changes
-//@Library(value="pipeline-lib@your_branch") _
+@Library(value="pipeline-lib@dbohning-daos-10847") _
 
 // Should try to figure this out automatically
 String base_branch = "release/2.0"
@@ -147,129 +147,129 @@ pipeline {
                         }
                     }
                 } // stage('Functional on EL 8')
-                stage('Functional on Leap 15') {
-                    when {
-                        beforeAgent true
-                        expression { ! skipStage() }
-                    }
-                    agent {
-                        label params.CI_FUNCTIONAL_VM9_LABEL
-                    }
-                    steps {
-                        // Need to get back onto base_branch for ci/
-                        checkoutScm url: 'https://github.com/daos-stack/daos.git',
-                                    branch: base_branch,
-                                    withSubmodules: true
-                        functionalTest inst_repos: daosRepos(),
-                                       inst_rpms: functionalPackages(1, next_version,
-                                                                     "{client,server}-tests-openmpi"),
-                                       test_function: 'runTestFunctionalV2'
-                    }
-                    post {
-                        always {
-                            functionalTestPostV2()
-                        }
-                    } // post
-                } // stage('Functional on Leap 15')
-                stage('Functional on Ubuntu 20.04') {
-                    when {
-                        beforeAgent true
-                        expression { ! skipStage() }
-                    }
-                    agent {
-                        label params.CI_FUNCTIONAL_VM9_LABEL
-                    }
-                    steps {
-                        // Need to get back onto base_branch for ci/
-                        checkoutScm url: 'https://github.com/daos-stack/daos.git',
-                                    branch: base_branch,
-                                    withSubmodules: true
-                        functionalTest inst_repos: daosRepos(),
-                                       inst_rpms: functionalPackages(1, next_version,
-                                                                     "{client,server}-tests-openmpi"),
-                                       test_function: 'runTestFunctionalV2'
-                    }
-                    post {
-                        always {
-                            functionalTestPostV2()
-                        }
-                    } // post
-                } // stage('Functional on Ubuntu 20.04')
-                stage('Functional Hardware Small') {
-                    when {
-                        beforeAgent true
-                        expression { ! skipStage() }
-                    }
-                    agent {
-                        // 2 node cluster with 1 IB/node + 1 test control node
-                        label params.CI_NVME_3_LABEL
-                    }
-                    steps {
-                        // Need to get back onto base_branch for ci/
-                        checkoutScm url: 'https://github.com/daos-stack/daos.git',
-                                    branch: base_branch,
-                                    withSubmodules: true
-                        functionalTest inst_repos: daosRepos(),
-                                       inst_rpms: functionalPackages(1, next_version,
-                                                                     "{client,server}-tests-openmpi"),
-                                       test_function: 'runTestFunctionalV2'
-                    }
-                    post {
-                        always {
-                            functionalTestPostV2()
-                        }
-                    }
-                } // stage('Functional_Hardware_Small')
-                stage('Functional Hardware Medium') {
-                    when {
-                        beforeAgent true
-                        expression { ! skipStage() }
-                    }
-                    agent {
-                        // 4 node cluster with 2 IB/node + 1 test control node
-                        label params.CI_NVME_5_LABEL
-                    }
-                    steps {
-                        // Need to get back onto base_branch for ci/
-                        checkoutScm url: 'https://github.com/daos-stack/daos.git',
-                                    branch: base_branch,
-                                    withSubmodules: true
-                        functionalTest inst_repos: daosRepos(),
-                                       inst_rpms: functionalPackages(1, next_version,
-                                                                     "{client,server}-tests-openmpi"),
-                                       test_function: 'runTestFunctionalV2'
-                    }
-                    post {
-                        always {
-                            functionalTestPostV2()
-                        }
-                    }
-                } // stage('Functional_Hardware_Medium')
-                stage('Functional Hardware Large') {
-                    when {
-                        beforeAgent true
-                        expression { ! skipStage() }
-                    }
-                    agent {
-                        // 8+ node cluster with 1 IB/node + 1 test control node
-                        label params.CI_NVME_9_LABEL
-                    }
-                    steps {
-                        // Need to get back onto base_branch for ci/
-                        checkoutScm url: 'https://github.com/daos-stack/daos.git',
-                                    branch: base_branch,
-                                    withSubmodules: true
-                        functionalTest inst_repos: daosRepos(),
-                                       inst_rpms: functionalPackages(1, next_version,
-                                                                     "{client,server}-tests-openmpi"),
-                                       test_function: 'runTestFunctionalV2'
-                    }
-                    post {
-                        always {
-                            functionalTestPostV2()
-                        }
-                    }
-                } // stage('Functional_Hardware_Large')
+                // stage('Functional on Leap 15') {
+                //     when {
+                //         beforeAgent true
+                //         expression { ! skipStage() }
+                //     }
+                //     agent {
+                //         label params.CI_FUNCTIONAL_VM9_LABEL
+                //     }
+                //     steps {
+                //         // Need to get back onto base_branch for ci/
+                //         checkoutScm url: 'https://github.com/daos-stack/daos.git',
+                //                     branch: base_branch,
+                //                     withSubmodules: true
+                //         functionalTest inst_repos: daosRepos(),
+                //                        inst_rpms: functionalPackages(1, next_version,
+                //                                                      "{client,server}-tests-openmpi"),
+                //                        test_function: 'runTestFunctionalV2'
+                //     }
+                //     post {
+                //         always {
+                //             functionalTestPostV2()
+                //         }
+                //     } // post
+                // } // stage('Functional on Leap 15')
+                // stage('Functional on Ubuntu 20.04') {
+                //     when {
+                //         beforeAgent true
+                //         expression { ! skipStage() }
+                //     }
+                //     agent {
+                //         label params.CI_FUNCTIONAL_VM9_LABEL
+                //     }
+                //     steps {
+                //         // Need to get back onto base_branch for ci/
+                //         checkoutScm url: 'https://github.com/daos-stack/daos.git',
+                //                     branch: base_branch,
+                //                     withSubmodules: true
+                //         functionalTest inst_repos: daosRepos(),
+                //                        inst_rpms: functionalPackages(1, next_version,
+                //                                                      "{client,server}-tests-openmpi"),
+                //                        test_function: 'runTestFunctionalV2'
+                //     }
+                //     post {
+                //         always {
+                //             functionalTestPostV2()
+                //         }
+                //     } // post
+                // } // stage('Functional on Ubuntu 20.04')
+                // stage('Functional Hardware Small') {
+                //     when {
+                //         beforeAgent true
+                //         expression { ! skipStage() }
+                //     }
+                //     agent {
+                //         // 2 node cluster with 1 IB/node + 1 test control node
+                //         label params.CI_NVME_3_LABEL
+                //     }
+                //     steps {
+                //         // Need to get back onto base_branch for ci/
+                //         checkoutScm url: 'https://github.com/daos-stack/daos.git',
+                //                     branch: base_branch,
+                //                     withSubmodules: true
+                //         functionalTest inst_repos: daosRepos(),
+                //                        inst_rpms: functionalPackages(1, next_version,
+                //                                                      "{client,server}-tests-openmpi"),
+                //                        test_function: 'runTestFunctionalV2'
+                //     }
+                //     post {
+                //         always {
+                //             functionalTestPostV2()
+                //         }
+                //     }
+                // } // stage('Functional_Hardware_Small')
+                // stage('Functional Hardware Medium') {
+                //     when {
+                //         beforeAgent true
+                //         expression { ! skipStage() }
+                //     }
+                //     agent {
+                //         // 4 node cluster with 2 IB/node + 1 test control node
+                //         label params.CI_NVME_5_LABEL
+                //     }
+                //     steps {
+                //         // Need to get back onto base_branch for ci/
+                //         checkoutScm url: 'https://github.com/daos-stack/daos.git',
+                //                     branch: base_branch,
+                //                     withSubmodules: true
+                //         functionalTest inst_repos: daosRepos(),
+                //                        inst_rpms: functionalPackages(1, next_version,
+                //                                                      "{client,server}-tests-openmpi"),
+                //                        test_function: 'runTestFunctionalV2'
+                //     }
+                //     post {
+                //         always {
+                //             functionalTestPostV2()
+                //         }
+                //     }
+                // } // stage('Functional_Hardware_Medium')
+                // stage('Functional Hardware Large') {
+                //     when {
+                //         beforeAgent true
+                //         expression { ! skipStage() }
+                //     }
+                //     agent {
+                //         // 8+ node cluster with 1 IB/node + 1 test control node
+                //         label params.CI_NVME_9_LABEL
+                //     }
+                //     steps {
+                //         // Need to get back onto base_branch for ci/
+                //         checkoutScm url: 'https://github.com/daos-stack/daos.git',
+                //                     branch: base_branch,
+                //                     withSubmodules: true
+                //         functionalTest inst_repos: daosRepos(),
+                //                        inst_rpms: functionalPackages(1, next_version,
+                //                                                      "{client,server}-tests-openmpi"),
+                //                        test_function: 'runTestFunctionalV2'
+                //     }
+                //     post {
+                //         always {
+                //             functionalTestPostV2()
+                //         }
+                //     }
+                // } // stage('Functional_Hardware_Large')
             } // parallel
         } // stage('Test')
     } //stages
