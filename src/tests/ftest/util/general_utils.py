@@ -614,7 +614,7 @@ def check_file_exists(hosts, filename, user=None, directory=False,
     if sudo:
         command = "sudo " + command
 
-    task = run_task(hosts, command)
+    task = run_task(hosts, command, verbose=True)
     for ret_code, node_list in task.iter_retcodes():
         if ret_code != 0:
             missing_file.add(NodeSet.fromlist(node_list))
