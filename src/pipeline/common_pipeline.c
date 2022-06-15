@@ -570,19 +570,24 @@ d_pipeline_check(daos_pipeline_t *pipeline)
 		p            = 0;
 		data_type    = NULL;
 		data_type_s  = 0;
-		res = pipeline_filter_checkops(ftr, &p, &data_type, &data_type_s);
-		if (!res) {
-			D_ERROR("filter %zu: wrong type for some part operands\n", i);
-			return -DER_INVAL;
+		if (ftr->num_parts > 0) {
+			res = pipeline_filter_checkops(ftr, &p, &data_type, &data_type_s);
+			if (!res) {
+				D_ERROR("filter %zu: wrong type for some part operands\n", i);
+				return -DER_INVAL;
+			}
 		}
 
 		/** 9 */
 
 		p = 0;
-		res = pipeline_filter_check_array_constants(ftr, &p);
-		if (!res) {
-			D_ERROR("filter %zu: array of constants placed in wrong operand\n", i);
-			return -DER_INVAL;
+		if (ftr->num_parts > 0) {
+			res = pipeline_filter_check_array_constants(ftr, &p);
+			if (!res) {
+				D_ERROR("filter %zu: array of constants placed in wrong operand\n",
+					i);
+				return -DER_INVAL;
+			}
 		}
 	}
 
