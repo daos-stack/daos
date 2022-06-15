@@ -42,9 +42,8 @@ dfuse_cb_opendir(fuse_req_t req, struct dfuse_inode_entry *ie, struct fuse_file_
 	 * of age this will mean that the cache timeouts are slightly shorter than
 	 * configured which is unlikely to be a problem.
 	 */
-	if (ie->ie_dfs->dfc_dentry_timeout > 0) {
+	if (ie->ie_dfs->dfc_dentry_timeout > 0)
 		fi_out.cache_readdir = 1;
-	}
 #endif
 
 	atomic_fetch_add_relaxed(&ie->ie_open_count, 1);
