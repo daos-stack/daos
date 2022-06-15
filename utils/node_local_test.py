@@ -3366,21 +3366,23 @@ def run_in_fg(server, conf):
     if not container:
         container = create_cont(conf, pool.uuid, label=label, ctype="POSIX")
 
+        # Only set the container cache attributes when the container is initially created so they
+        # can be modified later.
+        cont_attrs = OrderedDict()
+        cont_attrs['dfuse-data-cache'] = False
+        cont_attrs['dfuse-attr-time'] = 60
+        cont_attrs['dfuse-dentry-time'] = 60
+        cont_attrs['dfuse-ndentry-time'] = 60
+        cont_attrs['dfuse-direct-io-disable'] = False
+
+        for key, value in cont_attrs.items():
+            run_daos_cmd(conf, ['container', 'set-attr', pool.label, container,
+                                '--attr', key, '--value', str(value)],
+                         show_stdout=True)
+
     dfuse = DFuse(server, conf, pool=pool.uuid, caching=True, wbcache=False)
     dfuse.log_flush = True
     dfuse.start()
-
-    cont_attrs = OrderedDict()
-    cont_attrs['dfuse-data-cache'] = False
-    cont_attrs['dfuse-attr-time'] = 60
-    cont_attrs['dfuse-dentry-time'] = 60
-    cont_attrs['dfuse-ndentry-time'] = 60
-    cont_attrs['dfuse-direct-io-disable'] = False
-
-    for key, value in cont_attrs.items():
-        run_daos_cmd(conf, ['container', 'set-attr', pool.label, container,
-                            '--attr', key, '--value', str(value)],
-                     show_stdout=True)
 
     t_dir = join(dfuse.dir, container)
 
