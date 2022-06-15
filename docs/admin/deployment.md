@@ -485,14 +485,19 @@ storage selection.
 
 #### Discovery
 
-`dmg storage scan` can be run to query remote running `daos_server`
-processes over the management network.
+DAOS tools will discover NVMe SSDs and Persistent Memory Modules using the storage scan commands.
 
-`daos_server storage scan` can be used to query local `daos_server` instances
-directly (scans locally-attached SSDs and Intel Persistent Memory Modules usable
-by DAOS).
-NVMe SSDs need to be made accessible first by running
-`daos_server storage prepare --nvme-only`.
+`dmg storage scan` can be run to query remote running `daos_server` processes over the management
+network.
+
+`daos_server storage scan` can be used to query storage on local hosts directly.
+
+NVMe SSDs need to be made accessible first by running `daos_server storage prepare --nvme-only`.
+The default way for DAOS to access NVMe storage is through SPDK via the VFIO user-space driver.
+To use an alternative driver with SPDK, set `--disable-vfio` in the storage prepare command to
+fallback to using UIO user-space driver with SPDK instead.
+If IOMMU and VFIO are not enabled in the BIOS, the alternative driver will be used by default.
+
 The output will be equivalent running `dmg storage scan --verbose` remotely.
 
 ```bash
@@ -747,6 +752,17 @@ For class == "dcpm", the following parameters should be populated:
 For class == "nvme", the following parameters should be populated:
 
 - `bdev_list` should be populated with NVMe PCI addresses.
+
+The default way for DAOS to access NVMe storage is through SPDK via the VFIO user-space driver.
+To use an alternative driver with SPDK, set `disable-vfio: true` in the global section of the
+server config file to fallback to using UIO user-space driver with SPDK instead.
+If IOMMU and VFIO are not enabled in the BIOS, the alternative driver will be used by default.
+
+If VMD is enabled on a host, its usage will be enabled by default meaning that the `bdev_list`
+device addresses will be interpreted as VMD endpoints and storage scan will report the details of
+the physical NVMe backing devices that belong to each VMD endpoint. To disable the use of VMD on a
+VMD-enabled host, set `disable-vmd: true` in the global section of the config to fallback to using
+physical NVMe devices only.
 
 #### Example Configurations
 
