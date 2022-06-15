@@ -761,7 +761,10 @@ class DaosServer():
         ret = self._agent.wait(timeout=5)
         print(f'rc from agent is {ret}')
         self._agent = None
-        os.unlink(join(self.agent_dir, 'daos_agent.sock'))
+        try:
+            os.unlink(join(self.agent_dir, 'daos_agent.sock'))
+        except FileNotFoundError:
+            pass
 
     def stop(self, wf):
         """Stop a previously started DAOS server"""
