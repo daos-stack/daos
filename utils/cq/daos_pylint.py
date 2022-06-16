@@ -43,10 +43,11 @@ class WrapScript():
 
         self.line_map = {}
         # pylint: disable-next=consider-using-with
-        self._outfile = tempfile.NamedTemporaryFile(mode='w+', prefix='daos_pylint_', delete=False)
+        self._outfile = tempfile.NamedTemporaryFile(mode='w+', prefix='daos_pylint_')
         self.wrap_file = self._outfile.name
         with open(fname, 'r') as infile:
             self._read_files(infile, self._outfile)
+            self._outfile.flush()
 
     def _read_files(self, infile, outfile):
         old_lineno = 1
@@ -186,10 +187,10 @@ class FileTypeList():
             # There may be more files needed here, but just this one is reporting errors.
             if filename.endswith('site_scons/site_tools/protoc/__init__.py'):
                 return True
-            # This file is reporting errors locally but not in GHA, however when treated as a scons
-            # file then consider-using-f-string messages are lost so more work is needed here.
-            # if filename.endswith('site_scons/stack_analyzer.py'):
-            #     return True
+            if filename.endswith('site_scons/stack_analyzer.py'):
+                return True
+            if 'utils/sl/fake_scons' in filename:
+                return True
             return False
 
         if is_scons_file(file):
@@ -243,7 +244,7 @@ def parse_file(args, target_file, ftest=False, scons=False):
         wrapper = WrapScript(target_file)
         target = [wrapper.wrap_file]
         # Do not warn on module name for SConstruct files, we don't get to pick their name.
-        target.extend(['--disable', 'invalid-name'])
+        target.extend(['--disable', 'invalid-name,function-redefined,too-few-public-methods'])
         init_hook = """import sys
 sys.path.append('site_scons')
 sys.path.insert(0, 'utils/sl/fake_scons')"""

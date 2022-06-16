@@ -414,7 +414,6 @@ def scons():  # pylint: disable=too-many-locals,too-many-branches
     path = os.path.join(build_prefix, 'src')
     SConscript(os.path.join('src', 'SConscript'), variant_dir=path, duplicate=0)
 
-    # pylint: disable-next=unsed-variable
     buildinfo = prereqs.get_build_info()
     buildinfo.gen_script('.build_vars.sh')
     buildinfo.save('.build_vars.json')
