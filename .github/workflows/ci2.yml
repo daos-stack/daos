@@ -117,7 +117,7 @@ jobs:
                             --build-arg DAOS_JAVA_BUILD=no
                             --build-arg COMPILER
                             --build-arg DAOS_KEEP_SRC=yes
-                            --build-dep DAOS_ALT_PREFIX=yes
+                            --build-arg DAOS_ALT_PREFIX=yes
                             --tag build-image
       - name: Build in docker.
         if: ${{ matrix.distro }} != "fedora"
