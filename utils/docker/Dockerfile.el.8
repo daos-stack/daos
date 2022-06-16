@@ -145,10 +145,10 @@ ARG DEPS_JOBS=1
 
 # Keep it simple, build one dep (ofi) in alternative location.  Set ALT_PREFIX here
 # so it sticks for subsequent commands
-RUN [ "$DAOS_DEPS_BUILD" != "yes" || "$DAOS_ALT_PREFIX" != "yes" ] || { \
-        scons --build-deps=yes --jobs $DEPS_JOBS PREFIX=/opt/daos_dep   \
-              TARGET_TYPE=$DAOS_TARGET_TYPE --deps-only DEPS=ofi        \
-              ALT_PREFIX=/opt/daos_dep/prereq/$DAOS_TARGET_TYPE/ofi     \
+RUN [ "$DAOS_DEPS_BUILD" != "yes" ] || [ "$DAOS_ALT_PREFIX" != "yes" ] || { \
+        scons --build-deps=yes --jobs $DEPS_JOBS PREFIX=/opt/daos_dep       \
+              TARGET_TYPE=$DAOS_TARGET_TYPE --deps-only DEPS=ofi            \
+              ALT_PREFIX=/opt/daos_dep/prereq/$DAOS_TARGET_TYPE/ofi         \
     }
 
 RUN [ "$DAOS_DEPS_BUILD" != "yes" ] || {                            \
