@@ -14,4 +14,4 @@ container:
   control_method: daos
 dfuse:
   mount_dir: "/tmp/daos_dfuse/"
-  disable_caching: True
+  disable_caching: true
