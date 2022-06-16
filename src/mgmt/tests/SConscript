@@ -1,6 +1,7 @@
 """Build daos mgmt tests"""
 import daos_build
 
+
 def scons():
     """Execute build"""
     Import('denv', 'prereqs', 'pb')
@@ -13,8 +14,8 @@ def scons():
     # Isolated unit tests
     daos_build.test(denv, 'srv_drpc_tests',
                     source=[pb, mocks, 'srv_drpc_tests.c', '../srv_drpc.c'],
-                    LIBS=['cmocka', 'protobuf-c', 'daos_common_pmem', 'gurt',
-                          'uuid'])
+                    LIBS=['cmocka', 'protobuf-c', 'daos_common_pmem', 'gurt', 'uuid'])
+
 
 if __name__ == "SCons.Script":
     scons()
