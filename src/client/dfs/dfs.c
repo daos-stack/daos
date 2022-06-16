@@ -958,8 +958,6 @@ restart:
 		entry->mode = file->mode;
 		entry->atime = entry->mtime = entry->ctime = time(NULL);
 		entry->chunk_size = chunk_size;
-		entry->uid = geteuid();
-		entry->gid = getegid();
 
 		rc = insert_entry(dfs->layout_v, parent->oh, th, file->name, len,
 				  (!dfs->use_dtx || oexcl) ? DAOS_COND_DKEY_INSERT : 0, entry);
@@ -1103,8 +1101,6 @@ open_dir(dfs_t *dfs, dfs_obj_t *parent, int flags, daos_oclass_id_t cid,
 		entry->atime = entry->mtime = entry->ctime = time(NULL);
 		entry->chunk_size = parent->d.chunk_size;
 		entry->oclass = parent->d.oclass;
-		entry->uid = geteuid();
-		entry->gid = getegid();
 
 		/** since it's a single conditional op, we don't need a DTX */
 		rc = insert_entry(dfs->layout_v, parent->oh, DAOS_TX_NONE, dir->name, len,
@@ -1191,8 +1187,6 @@ open_symlink(dfs_t *dfs, dfs_obj_t *parent, int flags, daos_oclass_id_t cid,
 		oid_cp(&entry->oid, sym->oid);
 		entry->mode = sym->mode | S_IRWXO | S_IRWXU | S_IRWXG;
 		entry->atime = entry->mtime = entry->ctime = time(NULL);
-		entry->uid = geteuid();
-		entry->gid = getegid();
 		D_STRNDUP(sym->value, value, value_len + 1);
 		if (sym->value == NULL)
 			return ENOMEM;
@@ -3584,6 +3578,16 @@ dfs_open_stat(dfs_t *dfs, dfs_obj_t *parent, const char *name, mode_t mode,
 	if (obj == NULL)
 		return ENOMEM;
 
+	if (flags & O_CREAT) {
+		if (stbuf) {
+			entry.uid = stbuf->st_uid;
+			entry.gid = stbuf->st_gid;
+		} else {
+			entry.uid = geteuid();
+			entry.gid = getegid();
+		}
+	}
+
 	strncpy(obj->name, name, len + 1);
 	obj->mode = mode;
 	obj->flags = flags;
@@ -4375,7 +4379,7 @@ dfs_chmod(dfs_t *dfs, dfs_obj_t *parent, const char *name, mode_t mode)
 	/** sticky bit, set-user-id and set-group-id, are not supported */
 	if (mode & S_ISVTX || mode & S_ISGID || mode & S_ISUID) {
 		D_ERROR("setuid, setgid, & sticky bit are not supported.\n");
-		return EINVAL;
+		return ENOTSUP;
 	}
 
 	/* Check if parent has the entry */
