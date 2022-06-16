@@ -14,7 +14,7 @@
 
 Name:          daos
 Version:       2.0.3
-Release:       3%{?relval}%{?dist}
+Release:       4%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       BSD-2-Clause-Patent
@@ -528,6 +528,9 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 # No files in a meta-package
 
 %changelog
+* Thu Jun 16 2022 Johann Lombardi <johann.lombardi@intel.com> 2.0.3-4
+- Version bump to 2.0.3 (rc4)
+
 * Sat Jun 04 2022 Johann Lombardi <johann.lombardi@intel.com> 2.0.3-3
 - Version bump to 2.0.3 (rc3)
 
