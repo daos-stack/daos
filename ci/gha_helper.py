@@ -23,6 +23,7 @@ def set_output(key, value):
 
     print('::set-output name={}::{}'.format(key, value))
 
+
 def main():
     """Parse git histrory to load caches for GHA"""
 
@@ -67,8 +68,6 @@ def main():
         cmd.append(dockerfile)
 
         install_helper = docker_distro.replace('.', '')
-        if install_helper == 'ubuntu2004':
-            install_helper = install_helper[:-2]
         install_script = join('utils', 'scripts', 'install-{}.sh'.format(install_helper))
 
         assert os.path.exists(install_script)

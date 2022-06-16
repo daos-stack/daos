@@ -681,7 +681,7 @@ crt_hg_class_init(int provider, int idx, hg_class_t **ret_hg_class)
 	struct hg_init_info	init_info = HG_INIT_INFO_INITIALIZER;
 	hg_class_t		*hg_class = NULL;
 	char			addr_str[CRT_ADDR_STR_MAX_LEN] = {'\0'};
-	na_size_t		str_size = CRT_ADDR_STR_MAX_LEN;
+	size_t			str_size = CRT_ADDR_STR_MAX_LEN;
 	struct crt_prov_gdata	*prov_data;
 	int			rc = DER_SUCCESS;
 

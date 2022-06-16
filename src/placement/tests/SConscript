@@ -1,11 +1,19 @@
 """Build object tests"""
 import daos_build
 
+
 def scons():
     """Execute build"""
-    Import('denv', 'common_tgts')
+    Import('env', 'prereqs')
 
-    denv.AppendUnique(LIBPATH=['../../client/api'])
+    if not prereqs.test_requested():
+        return
+
+    denv = env.Clone()
+
+    prereqs.require(denv, 'isal')
+
+    denv.AppendUnique(LIBPATH=[Dir('../../client/api')])
 
     denv.AppendUnique(RPATH_FULL=['$PREFIX/lib64/daos_srv'])
 
@@ -16,27 +24,19 @@ def scons():
                                        'placement_test.c'])
     pl_bench_tgt = denv.SharedObject(['pl_bench.c', 'place_obj_common.c'])
 
-    ring_pl_test = daos_build.program(denv, 'ring_pl_map',
-                                      ring_test_tgt + common_tgts,
-                                      LIBS=['daos', 'daos_common', 'gurt',
-                                            'cart', 'placement', 'uuid',
-                                            'pthread', 'isal', 'cmocka'])
+    libraries = ['daos', 'daos_common', 'gurt', 'uuid', 'cmocka', 'isal']
+
+    ring_pl_test = daos_build.program(denv, 'ring_pl_map', ring_test_tgt, LIBS=libraries)
 
     jump_pl_test = daos_build.program(denv, 'jump_pl_map',
-                                      jump_test_tgt + common_tgts +
-                                      ['../../pool/srv_pool_map.c'],
-                                      LIBS=['daos', 'daos_common', 'gurt',
-                                            'cart', 'placement', 'uuid',
-                                            'pthread', 'isal', 'cmocka'])
+                                      jump_test_tgt + ['../../pool/srv_pool_map.c'], LIBS=libraries)
 
-    pl_bench = daos_build.program(denv, 'pl_bench', pl_bench_tgt + common_tgts,
-                                  LIBS=['daos', 'daos_common', 'gurt', 'cart',
-                                        'placement', 'uuid', 'pthread', 'isal',
-                                        'cmocka'])
+    pl_bench = daos_build.program(denv, 'pl_bench', pl_bench_tgt, LIBS=libraries)
 
     denv.Install('$PREFIX/bin/', ring_pl_test)
     denv.Install('$PREFIX/bin/', jump_pl_test)
     denv.Install('$PREFIX/bin/', pl_bench)
+
 
 if __name__ == "SCons.Script":
     scons()
