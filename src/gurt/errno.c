@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2021 Intel Corporation.
+ * (C) Copyright 2016-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -92,7 +92,7 @@ out:
 int
 d_get_errstr(int rc, char **code)
 {
-	struct d_error_reg	*entry;
+	struct d_error_reg *entry;
 
 	if (rc == 0) {
 		*code = (char *)&"DER_SUCCESS";

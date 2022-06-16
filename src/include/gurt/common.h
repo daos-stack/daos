@@ -302,7 +302,8 @@ char *d_realpath(const char *path, char *resolved_path);
 
 #define maybe_derrcode(x) _Generic((x), int : true, default : false)
 
-#define DG_FMT(x) _Generic(__rc,					\
+#define DG_FMT(x)                                                                                  \
+	_Generic(__rc,					\
 int : "%d",				\
 				unsigned int: "%u",			\
 				unsigned long: "%lu",			\
@@ -315,33 +316,36 @@ int : "%d",				\
 
 #define GOTO_MSG_LEN 21
 
-#define D_GOTO(label, rc)						\
-	do {								\
-		__typeof__(rc) __rc = (rc);				\
-		if (D_LOG_ENABLED(DB_GOTO)) {				\
-			char __result[GOTO_MSG_LEN] = {0};		\
-			char *__errcode = NULL;				\
-			int __rcs = -DER_INVAL;				\
-			if (maybe_derrcode(__rc))			\
-				__rcs = d_get_errstr((intptr_t)__rc, &__errcode); \
-			snprintf(__result, GOTO_MSG_LEN, DG_FMT(__rc), __rc); \
-			if (__rcs == -DER_SUCCESS) {			\
-				D_DEBUG(DB_GOTO, "Jumping to " #label " '" #rc "' result '%s': %s\n", __result, __errcode); \
-			} else {					\
-				D_DEBUG(DB_GOTO, "Jumping to " #label " '" #rc "' result '%s'\n", __result); \
-			}						\
-		}							\
-		(void)(__rc);						\
-		goto label;						\
+#define D_GOTO(label, rc)                                                                          \
+	do {                                                                                       \
+		__typeof__(rc) __rc = (rc);                                                        \
+		if (D_LOG_ENABLED(DB_GOTO)) {                                                      \
+			char  __result[GOTO_MSG_LEN] = {0};                                        \
+			char *__errcode              = NULL;                                       \
+			int   __rcs                  = -DER_INVAL;                                 \
+			if (maybe_derrcode(__rc))                                                  \
+				__rcs = d_get_errstr((intptr_t)__rc, &__errcode);                  \
+			snprintf(__result, GOTO_MSG_LEN, DG_FMT(__rc), __rc);                      \
+			if (__rcs == -DER_SUCCESS) {                                               \
+				D_DEBUG(DB_GOTO,                                                   \
+					"Jumping to " #label " '" #rc "' result '%s': %s\n",       \
+					__result, __errcode);                                      \
+			} else {                                                                   \
+				D_DEBUG(DB_GOTO, "Jumping to " #label " '" #rc "' result '%s'\n",  \
+					__result);                                                 \
+			}                                                                          \
+		}                                                                                  \
+		(void)(__rc);                                                                      \
+		goto label;                                                                        \
 	} while (0)
 
 #else /* VERBOSE_GOTO */
 
-#define D_GOTO(label, rc)						\
-	do {								\
-		__typeof__(rc) __rc = (rc);				\
-		(void)(__rc);						\
-		goto label;						\
+#define D_GOTO(label, rc)                                                                          \
+	do {                                                                                       \
+		__typeof__(rc) __rc = (rc);                                                        \
+		(void)(__rc);                                                                      \
+		goto label;                                                                        \
 	} while (0)
 
 #endif /* VERBOSE_GOTO */

@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2019-2021 Intel Corporation.
+ * (C) Copyright 2019-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -41,23 +41,23 @@
  *       wants to always log, when any debug is enabled, use DB_ALL instead of
  *       DB_ANY.
  */
-#define D_FOREACH_GURT_DB(ACTION, arg)          \
-	/** Set all debug bits */               \
-	ACTION(DB_ALL,   all,   all,   0, arg)  \
-	/** Stream for uncategorized messages */\
-	ACTION(DB_ANY,   any,   any,   0, arg)  \
-	/** Extremely verbose debug stream */   \
-	ACTION(DB_TRACE, trace, trace, 0, arg)  \
-	/** Logging of D_GOTO calls */		\
-	ACTION(DB_GOTO, trace, trace, 0, arg)	\
-	/** Memory operations */                \
-	ACTION(DB_MEM,   mem,   mem,   0, arg)  \
-	/** Network operations */               \
-	ACTION(DB_NET,   net,   net,   0, arg)  \
-	/** I/O operations */                   \
-	ACTION(DB_IO,    io,    io,    0, arg)  \
-	/** Test debug stream */                \
-	ACTION(DB_TEST,  test,  test,  0, arg)
+#define D_FOREACH_GURT_DB(ACTION, arg)                                                             \
+	/** Set all debug bits */                                                                  \
+	ACTION(DB_ALL, all, all, 0, arg)                                                           \
+	/** Stream for uncategorized messages */                                                   \
+	ACTION(DB_ANY, any, any, 0, arg)                                                           \
+	/** Extremely verbose debug stream */                                                      \
+	ACTION(DB_TRACE, trace, trace, 0, arg)                                                     \
+	/** Logging of D_GOTO calls */                                                             \
+	ACTION(DB_GOTO, trace, trace, 0, arg)                                                      \
+	/** Memory operations */                                                                   \
+	ACTION(DB_MEM, mem, mem, 0, arg)                                                           \
+	/** Network operations */                                                                  \
+	ACTION(DB_NET, net, net, 0, arg)                                                           \
+	/** I/O operations */                                                                      \
+	ACTION(DB_IO, io, io, 0, arg)                                                              \
+	/** Test debug stream */                                                                   \
+	ACTION(DB_TEST, test, test, 0, arg)
 
 /** A few internal macros for argument manipulation */
 #define DD_CONCAT_CACHE(x, y) x ##_cache

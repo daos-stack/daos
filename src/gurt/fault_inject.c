@@ -399,7 +399,7 @@ seed_parse(yaml_parser_t *parser)
 	if (event.type != YAML_SCALAR_EVENT)
 		D_GOTO(out, rc = -DER_INVAL);
 
-	val_str = (const char *)event.data.scalar.value;
+	val_str             = (const char *)event.data.scalar.value;
 	d_fault_inject_seed = strtoul(val_str, NULL, 10);
 
 out:
@@ -507,14 +507,13 @@ d_fault_inject_init(void)
 			continue;
 		}
 
-		if (!strncmp((char *)event.data.scalar.value,
-			     "fault_config", strlen("fault_config") + 1)) {
+		if (!strncmp((char *)event.data.scalar.value, "fault_config",
+			     strlen("fault_config") + 1)) {
 			rc = fault_attr_parse(&parser);
 			if (rc != DER_SUCCESS)
 				D_ERROR("fault_attr_parse() failed. rc %d\n",
 					rc);
-		} else if (!strncmp((char *)event.data.scalar.value,
-				    "seed", strlen("seed") + 1)) {
+		} else if (!strncmp((char *)event.data.scalar.value, "seed", strlen("seed") + 1)) {
 			rc = seed_parse(&parser);
 			if (rc != DER_SUCCESS)
 				D_ERROR("seed_parse() failed. rc %d\n", rc);

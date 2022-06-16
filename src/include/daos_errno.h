@@ -165,7 +165,7 @@ extern "C" {
 #define D_FOREACH_DAOS_ERR(ACTION)					\
 	/** Generic I/O error */					\
 	ACTION(DER_IO,			(DER_ERR_DAOS_BASE + 1),	\
-	       I/O error)						\
+	       I / O error)						\
 	/** Memory free error */					\
 	ACTION(DER_FREE_MEM,		(DER_ERR_DAOS_BASE + 2),	\
 	       Memory free error)					\
@@ -204,7 +204,7 @@ extern "C" {
 	       Record is too large)					\
 	/** IO buffers can't match object extents */			\
 	ACTION(DER_IO_INVAL,		(DER_ERR_DAOS_BASE + 14),	\
-	       I/O buffers do not match object extents)			\
+	       I / O buffers do not match object extents)			\
 	/** Event queue is busy */					\
 	ACTION(DER_EQ_BUSY,		(DER_ERR_DAOS_BASE + 15),	\
 	       Event queue is busy)					\
@@ -341,7 +341,8 @@ const char *d_errstr(int rc);
  *
  * \return	0 if found, -DER_NONEXIST if not
  */
-int d_get_errstr(int rc, char **code);
+int
+	    d_get_errstr(int rc, char **code);
 
 /** Register error codes with gurt.  Use D_REGISTER_RANGE.
  *

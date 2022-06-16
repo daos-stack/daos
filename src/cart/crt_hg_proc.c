@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2021 Intel Corporation.
+ * (C) Copyright 2016-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -12,19 +12,18 @@
 #include "crt_internal.h"
 
 #define CRT_PROC_NULL (NULL)
-#define CRT_PROC_TYPE_FUNC(type)				\
-	int crt_proc_##type(crt_proc_t proc,			\
-			crt_proc_op_t proc_op, type * data)	\
-	{							\
-		type *buf;					\
-		if (FREEING(proc_op))				\
-			return 0;				\
-		buf = hg_proc_save_ptr(proc, sizeof(*buf));	\
-		if (ENCODING(proc_op))				\
-			*buf = *data;				\
-		else /* DECODING(proc_op) */			\
-			*data = *buf;				\
-		return 0;					\
+#define CRT_PROC_TYPE_FUNC(type)                                                                   \
+	int crt_proc_##type(crt_proc_t proc, crt_proc_op_t proc_op, type * data)                    \
+	{                                                                                          \
+		type *buf;                                                                         \
+		if (FREEING(proc_op))                                                              \
+			return 0;                                                                  \
+		buf = hg_proc_save_ptr(proc, sizeof(*buf));                                        \
+		if (ENCODING(proc_op))                                                             \
+			*buf = *data;                                                              \
+		else /* DECODING(proc_op) */                                                       \
+			*data = *buf;                                                              \
+		return 0;                                                                          \
 	}
 
 int
