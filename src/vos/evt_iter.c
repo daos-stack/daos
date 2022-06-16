@@ -66,7 +66,6 @@ evt_iter_prepare(daos_handle_t toh, unsigned int options,
 		evt_tcx_decref(tcx); /* -1 for clone */
 	}
 
-
 	iter->it_state = EVT_ITER_INIT;
 	iter->it_options = options;
 	iter->it_forward = true;
@@ -331,7 +330,7 @@ evt_iter_probe_sorted(struct evt_context *tcx, struct evt_iterator *iter,
 	struct evt_entry_array	*enta;
 	struct evt_entry	*entry;
 	struct evt_filter	filter;
-	struct evt_rect		 rtmp = {};
+	struct evt_rect          rtmp = {};
 	uint32_t		 intent;
 	int			 flags = 0;
 	int			 rc = 0;
@@ -541,7 +540,6 @@ int evt_iter_delete(daos_handle_t ih, struct evt_entry *ent)
 	rc = evt_iter_is_ready(iter);
 	if (rc != 0)
 		return rc;
-
 
 	if (ent != NULL) {
 		unsigned int inob;

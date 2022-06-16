@@ -485,8 +485,8 @@ prealloc_requests(struct sched_info *info, int cnt)
 	return 0;
 }
 
-#define SCHED_PREALLOC_INIT_CNT	        16
-#define SCHED_PREALLOC_BATCH_CNT	8
+#define SCHED_PREALLOC_INIT_CNT  16
+#define SCHED_PREALLOC_BATCH_CNT 8
 
 static void
 sched_metrics_init(struct dss_xstream *dx)
@@ -602,7 +602,6 @@ cur_pool_info(struct sched_info *info, uuid_t pool_uuid)
 	D_ASSERT(spi->spi_ref == 1);
 	return spi;
 }
-
 
 static struct sched_request *
 req_get(struct dss_xstream *dx, struct sched_req_attr *attr,

@@ -520,7 +520,7 @@ crt_context_destroy(crt_context_t crt_ctx, int force)
 	struct crt_context	*ctx;
 	uint32_t		 timeout_sec;
 	int			 flags;
-	int			 provider;
+	int                      provider;
 	int			 rc = 0;
 	int			 i;
 
@@ -586,7 +586,7 @@ crt_context_destroy(crt_context_t crt_ctx, int force)
 
 	rc = crt_hg_ctx_fini(&ctx->cc_hg_ctx);
 	if (rc) {
-		D_ERROR("crt_hg_ctx_fini failed() rc: "DF_RC"\n", DP_RC(rc));
+		D_ERROR("crt_hg_ctx_fini failed() rc: " DF_RC "\n", DP_RC(rc));
 		D_GOTO(out, rc);
 	}
 
@@ -1019,8 +1019,7 @@ crt_context_req_track(struct crt_rpc_priv *rpc_priv)
 	RPC_ADDREF(rpc_priv);
 
 	if (crt_gdata.cg_credit_ep_ctx != 0 &&
-	    (epi->epi_req_num - epi->epi_reply_num) >=
-	     crt_gdata.cg_credit_ep_ctx) {
+	    (epi->epi_req_num - epi->epi_reply_num) >= crt_gdata.cg_credit_ep_ctx) {
 		if (rpc_priv->crp_opc_info->coi_queue_front) {
 			d_list_add(&rpc_priv->crp_epi_link,
 					&epi->epi_req_waitq);
@@ -1167,9 +1166,7 @@ crt_context_req_untrack(struct crt_rpc_priv *rpc_priv)
 	D_MUTEX_UNLOCK(&epi->epi_mutex);
 
 	/* re-submit the rpc req */
-	while ((tmp_rpc = d_list_pop_entry(&submit_list,
-					    struct crt_rpc_priv,
-					    crp_tmp_link))) {
+	while ((tmp_rpc = d_list_pop_entry(&submit_list, struct crt_rpc_priv, crp_tmp_link))) {
 		rc = crt_req_send_internal(tmp_rpc);
 		if (rc == 0)
 			continue;
