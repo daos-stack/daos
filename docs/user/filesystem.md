@@ -277,7 +277,7 @@ The following types of data will be cached by default.
 * Kernel caching of negative dentries
 * Kernel caching of inodes (file sizes, permissions etc)
 * Kernel caching of file contents
-* Readahead in dfuse and inserting data into kernel cache
+* Kernel caching of directory contents (when supported by libfuse)
 * MMAP write optimization
 
 !!! warning
@@ -313,6 +313,11 @@ files will use the page cache.  This default value for this is disabled.
 
 With no options specified attr and dentry timeouts will be 1 second, dentry-dir
 and ndentry timeouts will be 5 seconds, and data caching will be enabled.
+
+Readir caching will be enabled when the dfuse-dentry-time setting is non-zero and when supported by
+libfuse; however, on many distributions the system libfuse is not able to support this feature.
+Libfuse version 3.5.0 or newer is required at both compile and run-time.  Use `dfuse --version` or
+the runtime logs to see the fuse version used and if the feature is compiled into dfuse.
 
 These are two command line options to control the DFuse process itself.
 
