@@ -152,11 +152,15 @@ struct dtx_leader_handle {
 	uint32_t			dlh_dti_cos_count;
 	struct dtx_id			*dlh_dti_cos;
 
-	/* The future to wait for all sub handle to finish */
+	/* The future to wait for sub requests to finish. */
 	ABT_future			dlh_future;
 
-	/* How many sub leader transaction */
-	uint32_t			dlh_sub_cnt;
+	/* Normal sub requests have been processed. */
+	uint32_t			dlh_normal_sub_done:1;
+	/* How many normal sub request. */
+	uint32_t			dlh_normal_sub_cnt;
+	/* How many delay forward sub request. */
+	uint32_t			dlh_delay_sub_cnt;
 	/* Sub transaction handle to manage the dtx leader */
 	struct dtx_sub_status		*dlh_subs;
 	dtx_agg_cb_t			dlh_agg_cb;
