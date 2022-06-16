@@ -100,7 +100,6 @@ mdtest:
 test_obj_class:
   oclass:
     - RP_3G6
-    - EC_3P1G1
 loop_test:
   iterations: 3
 aggregation:
