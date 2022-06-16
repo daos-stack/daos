@@ -23,7 +23,7 @@ import (
 
 	"github.com/daos-stack/daos/src/control/common/proto/convert"
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
-	"github.com/daos-stack/daos/src/control/drpc"
+	"github.com/daos-stack/daos/src/control/lib/daos"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/security/auth"
 	"github.com/daos-stack/daos/src/control/system"
@@ -34,7 +34,7 @@ const (
 	// request can take before being timed out.
 	PoolCreateTimeout = 10 * time.Minute // be generous for large pools
 	// DefaultPoolTimeout is the default timeout for a pool request.
-	DefaultPoolTimeout = drpc.DefaultCartTimeout * 3
+	DefaultPoolTimeout = daos.DefaultCartTimeout * 3
 )
 
 // checkUUID is a helper function for validating that the supplied
@@ -194,12 +194,12 @@ func (r *poolRequest) canRetry(reqErr error, try uint) bool {
 
 	// Otherwise, apply a default retry test to all pool requests.
 	switch e := reqErr.(type) {
-	case drpc.DaosStatus:
+	case daos.Status:
 		switch e {
 		// These pool errors can be retried.
-		case drpc.DaosTimedOut, drpc.DaosGroupVersionMismatch,
-			drpc.DaosTryAgain, drpc.DaosOutOfGroup, drpc.DaosUnreachable,
-			drpc.DaosExcluded:
+		case daos.TimedOut, daos.GroupVersionMismatch,
+			daos.TryAgain, daos.OutOfGroup, daos.Unreachable,
+			daos.Excluded:
 			return true
 		default:
 			return false
@@ -596,6 +596,47 @@ func PoolQuery(ctx context.Context, rpcClient UnaryInvoker, req *PoolQueryReq) (
 	return pqr, convertMSResponse(ur, pqr)
 }
 
+// PoolQueryTargets performs a pool query targets operation on a DAOS Management Server instance,
+// for the specified pool ID, pool engine rank, and target indices.
+func PoolQueryTargets(ctx context.Context, rpcClient UnaryInvoker, req *PoolQueryTargetReq) (*PoolQueryTargetResp, error) {
+	req.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
+		return mgmtpb.NewMgmtSvcClient(conn).PoolQueryTarget(ctx, &mgmtpb.PoolQueryTargetReq{
+			Sys:     req.getSystem(rpcClient),
+			Id:      req.ID,
+			Rank:    uint32(req.Rank),
+			Targets: req.Targets,
+		})
+	})
+
+	rpcClient.Debugf("Query DAOS pool targets request: %v\n", req)
+	ur, err := rpcClient.InvokeUnaryRPC(ctx, req)
+	if err != nil {
+		return nil, err
+	}
+
+	pqtr := new(PoolQueryTargetResp)
+
+	msResp, err := ur.getMSResponse()
+	if err != nil {
+		return nil, err
+	}
+
+	pbResp, ok := msResp.(*mgmtpb.PoolQueryTargetResp)
+	if !ok {
+		return nil, errors.New("unable to extract PoolQueryTargetResp from MS response")
+	}
+
+	pqtr.Status = pbResp.Status
+	for tgt := 0; tgt < len(pbResp.Infos); tgt++ {
+		tgtInfo, err := convertPoolTargetInfo(pbResp.Infos[tgt])
+		if err != nil {
+			return nil, err
+		}
+		pqtr.Infos = append(pqtr.Infos, tgtInfo)
+	}
+	return pqtr, nil
+}
+
 func (smt StorageMediaType) MarshalJSON() ([]byte, error) {
 	typeStr, ok := mgmtpb.StorageMediaType_name[int32(smt)]
 	if !ok {
@@ -658,6 +699,27 @@ func (pts PoolQueryTargetState) String() string {
 		return "invalid"
 	}
 	return strings.ToLower(ptss)
+}
+
+// For using the pretty printer that dmg uses for this target info.
+func convertPoolTargetInfo(pbInfo *mgmtpb.PoolQueryTargetInfo) (*PoolQueryTargetInfo, error) {
+	pqti := new(PoolQueryTargetInfo)
+	pqti.Type = PoolQueryTargetType(pbInfo.Type)
+	pqti.State = PoolQueryTargetState(pbInfo.State)
+	pqti.Space = []*StorageTargetUsage{
+		{
+			Total:     uint64(pbInfo.Space[StorageMediaTypeScm].Total),
+			Free:      uint64(pbInfo.Space[StorageMediaTypeScm].Free),
+			MediaType: StorageMediaTypeScm,
+		},
+		{
+			Total:     uint64(pbInfo.Space[StorageMediaTypeNvme].Total),
+			Free:      uint64(pbInfo.Space[StorageMediaTypeNvme].Free),
+			MediaType: StorageMediaTypeNvme,
+		},
+	}
+
+	return pqti, nil
 }
 
 // PoolSetPropReq contains pool set-prop parameters.
@@ -1132,7 +1194,7 @@ func ListPools(ctx context.Context, rpcClient UnaryInvoker, req *ListPoolsReq) (
 			continue
 		}
 		if resp.Status != 0 {
-			p.QueryStatusMsg = drpc.DaosStatus(resp.Status).Error()
+			p.QueryStatusMsg = daos.Status(resp.Status).Error()
 			if p.QueryStatusMsg == "" {
 				p.QueryStatusMsg = "unknown error"
 			}

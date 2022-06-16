@@ -7,7 +7,7 @@ hosts:
     - server-C
   test_clients:
     - client-D
-timeout: 1800
+timeout: 2400
 setup:
   start_servers_once: False
 skip_add_log_msg: True
@@ -26,9 +26,9 @@ server_config:
       scm_class: dcpm
       scm_list: ["/dev/pmem0"]
       scm_mount: /mnt/daos0
-      log_mask: DEBUG,MEM=ERR
+      log_mask: INFO,MEM=ERR
       env_vars:
-        - DD_MASK=mgmt,md,rebuild
+        - DD_MASK=mgmt,md
     1:
       pinned_numa_node: 1
       nr_xs_helpers: 1
@@ -40,9 +40,9 @@ server_config:
       scm_class: dcpm
       scm_list: ["/dev/pmem1"]
       scm_mount: /mnt/daos1
-      log_mask: DEBUG,MEM=ERR
+      log_mask: INFO,MEM=ERR
       env_vars:
-        - DD_MASK=mgmt,md,rebuild
+        - DD_MASK=mgmt,md
 pool:
     mode: 146
     name: daos_server
@@ -54,8 +54,8 @@ pool:
 container:
     type: POSIX
     control_method: daos
-    oclass: RP_2G1
-    properties: cksum:crc64,cksum_size:16384,srv_cksum:on
+    oclass: RP_3G6
+    properties: cksum:crc64,cksum_size:16384,srv_cksum:on,rf:2
 dkeys:
   single:
     no_of_dkeys:
@@ -78,8 +78,8 @@ ior:
       write_flags: "-w -F -k -G 1"
       read_flags: "-F -r -R -k -G 1"
       api: DFS
-      dfs_oclass: RP_2G1
-      dfs_dir_oclass: RP_2G1
+      dfs_oclass: RP_3G6
+      dfs_dir_oclass: RP_3G6
     ior_test_sequence:
     #   - [scmsize, nvmesize, transfersize, blocksize]
     #    The values are set to be in the multiples of 10.
@@ -93,8 +93,8 @@ mdtest:
   test_dir: "/"
   iteration: 1
   dfs_destroy: False
-  dfs_oclass: RP_2G1
-  dfs_dir_oclass: RP_2G1
+  dfs_oclass: RP_3G6
+  dfs_dir_oclass: RP_3G6
   manager: "MPICH"
   flags: "-u"
   wr_size:
@@ -106,7 +106,6 @@ mdtest:
 test_obj_class:
   oclass:
     - RP_2G8
-    - RP_3G6
     - RP_4G1
     - EC_2P1G1
 aggregation:
@@ -120,5 +119,5 @@ snapshot:
 test_ranks:
   rank_list: ["2","5"]
 pool_capacity:
-  pool_fillup: 50
+  pool_fillup: 10
   pool_test_oclass: RP_2GX

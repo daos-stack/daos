@@ -6,7 +6,8 @@
 #
 
 # Pull base image
-FROM opensuse/leap:15.3
+ARG BASE_DISTRO=opensuse/leap:15.3
+FROM $BASE_DISTRO
 LABEL maintainer="daos@daos.groups.io"
 
 # Intermittent cache-bust.  Used to reduce load on the actual CACHEBUST later.
@@ -31,7 +32,10 @@ RUN set -e;                                                      \
     for file in *.repo; do                                       \
         sed -e '/type=NONE/d' < $file > /etc/dnf/repos.d/$file;  \
     done;                                                        \
-    zypper --non-interactive clean --all
+    zypper --non-interactive clean --all;                        \
+    dnf config-manager --save --setopt=assumeyes=True;           \
+    dnf config-manager --save --setopt=install_weak_deps=False
+
 ARG JENKINS_URL
 ARG REPOS
 RUN for repo in $REPOS; do                                                                                 \
@@ -51,13 +55,11 @@ baseurl=${JENKINS_URL}job/daos-stack/job/$repo/job/$branch/$build_number/artifac
 enabled=1\n\
 gpgcheck=False\n" >> /etc/dnf/repos.d/$repo:$branch:$build_number.repo;   \
         cat /etc/dnf/repos.d/$repo:$branch:$build_number.repo; \
-        dnf -y repolist; \
-        dnf --disablerepo=\* --enablerepo=$repo:$branch:$build_number makecache; \
     done
 
 # Install OS updates and package.  Include basic tools and daos dependencies
 COPY ./utils/scripts/install-leap15.sh /tmp/install.sh
-RUN chmod +x /tmp/install.sh && dnf -y upgrade && /tmp/install.sh && dnf -y clean all && \
+RUN chmod +x /tmp/install.sh && dnf upgrade && /tmp/install.sh && dnf clean all && \
     rm -f /tmp/install.sh
 RUN if ! grep MODULEPATH=.*/usr/share/modules /etc/profile.d/lmod.sh; then \
         sed -e '/MODULEPATH=/s/$/:\/usr\/share\/modules/'                  \
@@ -81,19 +83,30 @@ RUN mkdir -p /opt/daos /mnt/daos /var/run/daos_server /var/run/daos_agent /home/
     chown -R daos_server.daos_server /opt/daos /mnt/daos /var/run/daos_server /home/daos &&  \
     chown daos_agent.daos_agent /var/run/daos_agent
 
-ENV PATH=/home/daos/.local/bin:$PATH
-
 ARG QUICKBUILD=false
 ARG QUICKBUILD_DEPS
 
 RUN if $QUICKBUILD; then                                          \
         echo "Installing: $QUICKBUILD_DEPS";                      \
         echo "$QUICKBUILD_DEPS" | sed -e '/^$/d' | tr '\n' '\0' | \
-          xargs -0 dnf -y install;                                \
-        dnf -y clean all;                                         \
+          xargs -0 dnf install;                                   \
+        dnf clean all;                                            \
     fi
 
 USER daos_server:daos_server
+
+# Setup a python venv so that python packages can be installed locally.
+RUN python3 -m venv /home/daos/venv
+ENV PATH=/home/daos/venv/bin:$PATH
+ENV VIRTUAL_ENV=/home/daos/venv/
+
+# Install latest versions of python tools.
+# wheel is needed first to avoid a warning when installing pyyaml.
+COPY requirements.txt .
+RUN python3 -m pip --no-cache-dir install --upgrade pip && \
+    python3 -m pip --no-cache-dir install wheel && \
+    python3 -m pip --no-cache-dir install -r requirements.txt
+
 WORKDIR /home/daos/pre
 COPY --chown=daos_server:daos_server SConstruct .
 COPY --chown=daos_server:daos_server site_scons site_scons
@@ -111,9 +124,9 @@ ARG DAOS_TARGET_TYPE=release
 # ensure that latest dependencies are used.
 USER root:root
 RUN [ "$DAOS_DEPS_BUILD" != "yes" ] || {                                                  \
-        dnf -y upgrade                                                                    \
+        dnf upgrade                                                                       \
             --exclude=fuse,fuse-libs,fuse-devel,libraft0,raft-devel,mercury,mercury-devel \
-        dnf -y clean all;                                                                 \
+        dnf clean all;                                                                    \
     }
 USER daos_server:daos_server
 
@@ -139,17 +152,17 @@ ARG COMPILER=gcc
 RUN if [ "$COMPILER" = "icc" ]; then                                                                     \
         if [ -z "$REPO_FILE_URL" ] || true; then                                                         \
             rpm --import https://yum.repos.intel.com/intel-gpg-keys/GPG-PUB-KEY-INTEL-SW-PRODUCTS.PUB && \
-            dnf -y config-manager --add-repo https://yum.repos.intel.com/oneapi oneAPI;                  \
+            dnf config-manager --add-repo https://yum.repos.intel.com/oneapi oneAPI;                     \
         fi;                                                                                              \
-        dnf -y install intel-oneapi-compiler-dpcpp-cpp &&                                                \
-        dnf -y clean all;                                                                                \
+        dnf install intel-oneapi-compiler-dpcpp-cpp &&                                                   \
+        dnf clean all;                                                                                   \
     fi
 
 # force an upgrade to get any newly built RPMs, but only if CACHEBUST is set.
 ARG CACHEBUST
-RUN [ -z "$CACHEBUST" ] || {                                                                            \
-        dnf -y upgrade --exclude=fuse,fuse-libs,fuse-devel,libraft0,raft-devel,mercury,mercury-devel && \
-        dnf -y clean all;                                                                               \
+RUN [ -z "$CACHEBUST" ] || {                                                                         \
+        dnf upgrade --exclude=fuse,fuse-libs,fuse-devel,libraft0,raft-devel,mercury,mercury-devel && \
+        dnf clean all;                                                                               \
     }
 USER daos_server:daos_server
 

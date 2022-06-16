@@ -28,8 +28,8 @@ type FabricInterface struct {
 	Name string `json:"name"`
 	// OSName is the device name as reported by the operating system.
 	OSName string `json:"os_name"`
-	// NetInterface is the corresponding OS-level network interface device.
-	NetInterface string `json:"net_interface"`
+	// NetInterface is the set of corresponding OS-level network interface device.
+	NetInterfaces common.StringSet `json:"net_interface"`
 	// Providers is the set of supported providers.
 	Providers common.StringSet `json:"providers"`
 	// DeviceClass is the type of the network interface.
@@ -54,8 +54,8 @@ func (fi *FabricInterface) String() string {
 	}
 
 	var netIF string
-	if fi.NetInterface != "" {
-		netIF = fmt.Sprintf(" (interface: %s)", fi.NetInterface)
+	if len(fi.NetInterfaces) > 0 {
+		netIF = fmt.Sprintf(" (interface: %s)", strings.Join(fi.NetInterfaces.ToSlice(), ", "))
 	}
 
 	providers := "none"
@@ -126,9 +126,6 @@ func (s fabricInterfaceMap) update(name string, fi *FabricInterface) {
 
 	if cur, found := s[name]; found {
 		// once these values are set to something nonzero, they are immutable
-		if cur.NetInterface == "" {
-			cur.NetInterface = fi.NetInterface
-		}
 		if cur.NUMANode == 0 {
 			cur.NUMANode = fi.NUMANode
 		}
@@ -136,12 +133,18 @@ func (s fabricInterfaceMap) update(name string, fi *FabricInterface) {
 			cur.DeviceClass = fi.DeviceClass
 		}
 
-		// always possible to add to providers
+		// always possible to add to providers or net interfaces
 		if fi.Providers != nil {
 			if cur.Providers == nil {
 				cur.Providers = common.NewStringSet()
 			}
 			cur.Providers.Add(fi.Providers.ToSlice()...)
+		}
+		if fi.NetInterfaces != nil {
+			if cur.NetInterfaces == nil {
+				cur.NetInterfaces = common.NewStringSet()
+			}
+			cur.NetInterfaces.Add(fi.NetInterfaces.ToSlice()...)
 		}
 		return
 	}
@@ -172,14 +175,16 @@ func (m netMap) update(name string, fi *FabricInterface) {
 }
 
 func (m netMap) remove(fi *FabricInterface) {
-	if fi == nil || fi.NetInterface == "" {
+	if fi == nil || len(fi.NetInterfaces) == 0 {
 		return
 	}
 
-	if devices, exists := m[fi.NetInterface]; exists {
-		delete(devices, fi.Name)
-		if len(devices) == 0 {
-			delete(m, fi.NetInterface)
+	for netIface := range fi.NetInterfaces {
+		if devices, exists := m[netIface]; exists {
+			delete(devices, fi.Name)
+			if len(devices) == 0 {
+				delete(m, netIface)
+			}
 		}
 	}
 }
@@ -260,12 +265,9 @@ func (s *FabricInterfaceSet) Update(fi *FabricInterface) {
 	name := fi.Name
 	s.byName.update(name, fi)
 
-	osDev := fi.NetInterface
-	if osDev == "" {
-		return
+	for osDev := range fi.NetInterfaces {
+		s.byNetDev.update(osDev, fi)
 	}
-
-	s.byNetDev.update(osDev, fi)
 }
 
 // Remove deletes a FabricInterface from the set.
@@ -498,13 +500,6 @@ func (o *NetworkDeviceBuilder) BuildPart(ctx context.Context, fis *FabricInterfa
 			continue
 		}
 
-		if fi.DeviceClass == Loopback || fi.Name == "lo" {
-			// Loopback is not a hardware device
-			fi.NetInterface = name
-			fis.Update(fi)
-			continue
-		}
-
 		topoName, err := fi.TopologyName()
 		if err != nil {
 			o.log.Errorf("can't get topology name for %q: %s", name, err.Error())
@@ -518,27 +513,53 @@ func (o *NetworkDeviceBuilder) BuildPart(ctx context.Context, fis *FabricInterfa
 			continue
 		}
 
-		if dev.Type == DeviceTypeNetInterface {
-			fi.NetInterface = name
+		if fi.NetInterfaces == nil {
+			fi.NetInterfaces = common.NewStringSet()
+		}
+
+		if dev.DeviceType() == DeviceTypeNetInterface {
+			fi.NetInterfaces.Add(name)
 			fis.Update(fi)
 			continue
 		}
 
-		siblings := o.topo.NUMANodes[dev.NUMANode.ID].PCIDevices[dev.PCIAddr]
-		for _, sib := range siblings {
-			if sib.Type == DeviceTypeNetInterface {
-				fi.NetInterface = sib.Name
-				fis.Update(fi)
-				break
-			}
-		}
+		if pciDev := dev.PCIDevice(); pciDev != nil {
+			netDevs := o.getNetDevsForPCIDevice(pciDev)
+			fi.NetInterfaces.Add(netDevs.ToSlice()...)
 
-		if fi.NetInterface == "" {
-			o.log.Errorf("no network device sibling found for fabric %q", name)
+			if len(fi.NetInterfaces) == 0 {
+				o.log.Errorf("no network devices found for fabric %q", name)
+			} else {
+				fis.Update(fi)
+			}
 		}
 	}
 
 	return nil
+}
+
+func (o *NetworkDeviceBuilder) getNetDevsForPCIDevice(pciDev *PCIDevice) common.StringSet {
+	devNames := common.NewStringSet()
+
+	siblings := o.topo.NUMANodes[pciDev.NUMANode.ID].PCIDevices[pciDev.PCIAddr]
+	for _, sib := range siblings {
+		if sib.Type == DeviceTypeNetInterface {
+			devNames.Add(sib.Name)
+		}
+	}
+
+	// See if any virtual devices are attached to the hardware devices
+	for _, virtDev := range o.topo.VirtualDevices {
+		if virtDev.BackingDevice == nil {
+			continue
+		}
+
+		if devNames.Has(virtDev.BackingDevice.Name) {
+			devNames.Add(virtDev.Name)
+		}
+	}
+
+	return devNames
 }
 
 func newNetworkDeviceBuilder(log logging.Logger, topo *Topology) *NetworkDeviceBuilder {
@@ -554,7 +575,7 @@ type NUMAAffinityBuilder struct {
 	topo *Topology
 }
 
-// BuildPart updates existing FabricInterface structures in the setto include a
+// BuildPart updates existing FabricInterface structures in the set to include a
 // NUMA node affinity, if available.
 func (n *NUMAAffinityBuilder) BuildPart(ctx context.Context, fis *FabricInterfaceSet) error {
 	if n == nil {
@@ -595,7 +616,10 @@ func (n *NUMAAffinityBuilder) BuildPart(ctx context.Context, fis *FabricInterfac
 			continue
 		}
 
-		fi.NUMANode = dev.NUMANode.ID
+		pciDev := dev.PCIDevice()
+		if pciDev != nil {
+			fi.NUMANode = pciDev.NUMANode.ID
+		}
 	}
 	return nil
 }
@@ -634,12 +658,12 @@ func (n *NetDevClassBuilder) BuildPart(ctx context.Context, fis *FabricInterface
 			return err
 		}
 
-		if fi.NetInterface == "" {
+		if len(fi.NetInterfaces) == 0 {
 			n.log.Debugf("fabric interface %q has no corresponding OS-level device", name)
 			continue
 		}
 
-		ndc, err := n.provider.GetNetDevClass(fi.NetInterface)
+		ndc, err := n.provider.GetNetDevClass(fi.NetInterfaces.ToSlice()[0])
 		if err != nil {
 			n.log.Debugf("failed to get device class for %q: %s", name, err.Error())
 		}

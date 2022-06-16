@@ -44,4 +44,4 @@ pool:
     name: daos_server
     control_method: dmg
     number_of_pools: 40
-    pool_used_percentage: 75
+    pool_used_percentage: 90

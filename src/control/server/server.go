@@ -25,6 +25,7 @@ import (
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	"github.com/daos-stack/daos/src/control/events"
 	"github.com/daos-stack/daos/src/control/lib/control"
+	"github.com/daos-stack/daos/src/control/lib/daos"
 	"github.com/daos-stack/daos/src/control/lib/hardware"
 	"github.com/daos-stack/daos/src/control/lib/hardware/hwprov"
 	"github.com/daos-stack/daos/src/control/logging"
@@ -203,6 +204,12 @@ func (srv *server) createServices(ctx context.Context) error {
 		hwprov.DefaultFabricScanner(srv.log))
 	srv.mgmtSvc = newMgmtSvc(srv.harness, srv.membership, sysdb, rpcClient, srv.pubSub)
 
+	if err := srv.mgmtSvc.systemProps.UpdateCompPropVal(daos.SystemPropertyDaosSystem, func() string {
+		return srv.cfg.SystemName
+	}); err != nil {
+		return err
+	}
+
 	return nil
 }
 
@@ -249,7 +256,16 @@ func (srv *server) setCoreDumpFilter() error {
 func (srv *server) initNetwork() error {
 	defer srv.logDuration(track("time to init network"))
 
-	ctlAddr, listener, err := createListener(srv.cfg.ControlPort, net.ResolveTCPAddr, net.Listen)
+	ctlAddr, err := getControlAddr(ctlAddrParams{
+		port:           srv.cfg.ControlPort,
+		replicaAddrSrc: srv.sysdb,
+		resolveAddr:    net.ResolveTCPAddr,
+	})
+	if err != nil {
+		return err
+	}
+
+	listener, err := createListener(ctlAddr, net.Listen)
 	if err != nil {
 		return err
 	}
@@ -284,8 +300,13 @@ func (srv *server) addEngines(ctx context.Context) error {
 	var allStarted sync.WaitGroup
 	registerTelemetryCallbacks(ctx, srv)
 
+	iommuEnabled, err := hwprov.DefaultIOMMUDetector(srv.log).IsIOMMUEnabled()
+	if err != nil {
+		return err
+	}
+
 	// Allocate hugepages and rebind NVMe devices to userspace drivers.
-	if err := prepBdevStorage(srv, iommuDetected()); err != nil {
+	if err := prepBdevStorage(srv, iommuEnabled); err != nil {
 		return err
 	}
 
@@ -306,7 +327,9 @@ func (srv *server) addEngines(ctx context.Context) error {
 			return errors.Wrap(err, "creating engine instances")
 		}
 
-		engine.storage.SetBdevCache(*nvmeScanResp)
+		if err := engine.storage.SetBdevCache(*nvmeScanResp); err != nil {
+			return errors.Wrap(err, "setting engine storage bdev cache")
+		}
 
 		registerEngineEventCallbacks(srv, engine, &allStarted)
 

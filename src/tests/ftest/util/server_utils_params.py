@@ -5,7 +5,6 @@
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 import os
-import ast
 
 from command_utils_base import \
     BasicParameter, LogParameter, YamlParameters, TransportCredentials
@@ -117,9 +116,7 @@ class DaosServerYamlParameters(YamlParameters):
         self.control_log_file = LogParameter(log_dir, None, "daos_control.log")
         self.helper_log_file = LogParameter(log_dir, None, "daos_admin.log")
         self.telemetry_port = BasicParameter(None, 9191)
-        default_enable_vmd_val = os.environ.get("DAOS_ENABLE_VMD", "False")
-        default_enable_vmd = ast.literal_eval(default_enable_vmd_val)
-        self.enable_vmd = BasicParameter(None, default_enable_vmd)
+        self.disable_vmd = BasicParameter(None)
 
         # Used to drop privileges before starting data plane
         # (if started as root to perform hardware provisioning)
@@ -390,6 +387,7 @@ class DaosServerYamlParameters(YamlParameters):
                 "ABT_ENV_MAX_NUM_XSTREAMS=100",
                 "ABT_MAX_NUM_XSTREAMS=100",
                 "DAOS_MD_CAP=1024",
+                "DAOS_SCHED_WATCHDOG_ALL=1",
                 "DD_MASK=mgmt,io,md,epc,rebuild",
             ]
             default_env_vars.extend(self.REQUIRED_ENV_VARS["common"])

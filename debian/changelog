@@ -1,3 +1,34 @@
+daos (2.3.100-12) unstable; urgency=medium
+  [ Jeff Olivier ]
+  * Make ucx required for build on all platforms
+
+ -- Jeff Olivier <jeffrey.v.olivier@intel.com> Thu, 02 Jun 2022 16:30:00 -0500
+
+daos (2.3.100-11) unstable; urgency=medium
+  [ Michael MacDonald ]
+  * Move dmg to new daos-admin package
+
+ -- Michael MacDonald <mjmac.macdonald@intel.com>  Wed, 01 Jun 2022 13:58:03 -0000
+
+daos (2.3.100-10) unstable; urgency=medium
+  [ Lei Huang ]
+  * Update libfabric to v1.15.1-1 to include critical performance patches
+
+ -- Lei Huang <lei.huang@intel.com> Wed, 18 May 2022 16:30:00 -0500
+
+daos (2.3.100-9) unstable; urgency=medium
+  [ Phillip Henderson ]
+  * Remove doas-client-tests-openmpi dependency from daos-tests
+  * Add daos-tests-internal package
+
+ -- Phillip Henderson <phillip.henderson@intel.com>  Tue, 17 May 2022 12:43:00 -0400
+
+daos (2.3.100-8) unstable; urgency=medium
+  [ Ashley Pittman ]
+  * Extend dfusedaosbuild test to run in different configurations.
+
+ -- Ashley Pittman <ashley.m.pittman@intel.com>  Mon, 9 May 2022 22:34:00 -0100
+
 daos (2.3.100-7) unstable; urgency=medium
   [ Ashley Pittman ]
   * Add dfuse unit-test binary to call from ftest.

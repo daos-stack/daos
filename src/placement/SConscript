@@ -1,9 +1,10 @@
 """Build placement code"""
 import daos_build
 
+
 def scons():
     """Execute build"""
-    Import('env', 'prereqs')
+    Import('env', 'prereqs', 'libdaos_tgts')
 
     env.AppendUnique(LIBPATH=[Dir('.')])
 
@@ -17,8 +18,7 @@ def scons():
     common_tgts = denv.SharedObject(['pl_map.c', 'ring_map.c',
                                      'jump_map.c', 'pl_map_common.c'])
     # placement client library
-    dc_placement_tgts = common_tgts
-    Export("dc_placement_tgts")
+    libdaos_tgts.extend(common_tgts)
 
     if not prereqs.server_requested():
         return
@@ -29,9 +29,6 @@ def scons():
                              install_off="../..", LIBS=libraries)
     denv.Install('$PREFIX/lib64/daos_srv', srv)
 
-    if prereqs.test_requested():
-        # Build tests
-        SConscript('tests/SConscript', exports=['denv', 'common_tgts'])
 
 if __name__ == "SCons.Script":
     scons()
