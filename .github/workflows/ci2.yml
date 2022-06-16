@@ -137,6 +137,17 @@ jobs:
                             --build-arg DAOS_JAVA_BUILD=no
                             --build-arg DAOS_BUILD_TYPE=dev
                             --build-arg COMPILER
+      - name: Build with ALT_PREFIX in docker.
+        with:
+          distro: [rocky, fedora]
+        run: docker build . --file utils/docker/Dockerfile.${{ matrix.base }}
+                            --build-dep DAOS_ALT_PREFIX=yes
+                            --build-arg DEPS_JOBS
+                            --build-arg BASE_DISTRO
+                            --build-arg DAOS_JAVA_BUILD=no
+                            --build-arg DAOS_BUILD_TYPE=release
+                            --build-arg COMPILER
+
 # Should work, but enable on master only for now.
 #    - name: Run NLT
 #      run: docker run --mount type=tmpfs,destination=/mnt/daos_0,tmpfs-mode=1777 --user root:root

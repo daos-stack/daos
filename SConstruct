@@ -368,12 +368,6 @@ def scons():  # pylint: disable=too-many-locals,too-many-branches
     if prereqs.check_component('valgrind_devel'):
         env.AppendUnique(CPPDEFINES=["D_HAS_VALGRIND"])
 
-    AddOption('--deps-only',
-              dest='deps_only',
-              action='store_true',
-              default=False,
-              help='Download and build dependencies only, do not build daos')
-
     prereqs.add_opts(('GO_BIN', 'Full path to go binary', None))
     opts.Save(opts_file, env)
 

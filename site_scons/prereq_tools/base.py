@@ -905,6 +905,12 @@ class PreReqComponent():
     def add_options(self):
         """Add common options to environment"""
 
+        AddOption('--deps-only',
+                  dest='deps_only',
+                  action='store_true',
+                  default=False,
+                  help='Download and build dependencies only, do not build daos')
+
         AddOption('--require-optional',
                   dest='require_optional',
                   action='store_true',
@@ -1069,6 +1075,11 @@ class PreReqComponent():
             reqs.extend(server_reqs)
         if self.client_requested():
             reqs.extend(client_reqs)
+        self.add_opts(ListVariable('DEPS', "Dependencies to build by default",
+                                   'none', reqs))
+        if GetOption('deps_only'):
+            # Optionally, limit the deps we build in this pass
+            reqs = self.__env.get('DEPS')
         self.load_definitions(prebuild=reqs)
 
     def server_requested(self):
