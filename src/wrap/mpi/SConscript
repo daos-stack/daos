@@ -3,7 +3,7 @@ import daos_build
 
 
 def build_dpar(env, mpi_env):
-    """Build libdpar and libdpar_mpi"""
+    """Build MPI abstraction library"""
 
     serial_lib = daos_build.library(env, 'dpar', ['dpar_stub.c'], LIBS=['pthread', 'dl'])
     env.Install('$PREFIX/lib64/', serial_lib)
