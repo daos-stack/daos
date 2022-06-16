@@ -665,15 +665,13 @@ err:
 static int
 duns_set_fuse_acl(struct dfuse_user_reply *dur, daos_handle_t coh)
 {
-	int		 rc = 0;
+	int              rc = 0;
 	struct daos_acl *acl;
 	struct daos_ace *ace;
-	int		 uid;
-	char		*name;
+	int              uid;
+	char            *name;
 
 	uid = geteuid();
-
-	D_ERROR("Uids are %d %d\n", uid, dur->uid);
 
 	if (uid == dur->uid) {
 		D_DEBUG(DB_TRACE, "Same user, returning\n");

@@ -1139,7 +1139,7 @@ err_ie_remove:
 	dfs_release(ie->ie_obj);
 	d_hash_rec_delete_at(&fs_handle->dpi_iet, &ie->ie_htl);
 err:
-	DFUSE_TRA_ERROR(fs_handle, "Failed to start dfuse, rc: "DF_RC, DP_RC(rc));
+	DFUSE_TRA_ERROR(fs_handle, "Failed to start dfuse, rc: " DF_RC, DP_RC(rc));
 	D_FREE(ie);
 	return rc;
 }

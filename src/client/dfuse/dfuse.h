@@ -24,15 +24,15 @@
 #include "dfuse_common.h"
 
 struct dfuse_info {
-	struct fuse_session		*di_session;
-	char				*di_group;
-	char				*di_mountpoint;
-	uint32_t			di_thread_count;
-	bool				di_threaded;
-	bool				di_foreground;
-	bool				di_caching;
-	bool				di_multi_user;
-	bool				di_wb_cache;
+	struct fuse_session *di_session;
+	char                *di_group;
+	char                *di_mountpoint;
+	uint32_t             di_thread_count;
+	bool                 di_threaded;
+	bool                 di_foreground;
+	bool                 di_caching;
+	bool                 di_multi_user;
+	bool                 di_wb_cache;
 };
 
 struct dfuse_projection_info {

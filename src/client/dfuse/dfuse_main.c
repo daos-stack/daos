@@ -294,24 +294,22 @@ main(int argc, char **argv)
 	char			*path = NULL;
 	bool			have_thread_count = false;
 
-	struct option long_options[] = {
-		{"mountpoint",		required_argument, 0, 'm'},
-		{"multi-user",		no_argument,	   0, 'M'},
-		{"path",		required_argument, 0, 'P'},
-		{"pool",		required_argument, 0, 'p'},
-		{"container",		required_argument, 0, 'c'},
-		{"sys-name",		required_argument, 0, 'G'},
-		{"singlethread",	no_argument,	   0, 'S'},
-		{"thread-count",	required_argument, 0, 't'},
-		{"foreground",		no_argument,	   0, 'f'},
-		{"enable-caching",	no_argument,	   0, 'E'},
-		{"enable-wb-cache",	no_argument,	   0, 'F'},
-		{"disable-caching",	no_argument,	   0, 'A'},
-		{"disable-wb-cache",	no_argument,	   0, 'B'},
-		{"version",		no_argument,	   0, 'v'},
-		{"help",		no_argument,	   0, 'h'},
-		{0, 0, 0, 0}
-	};
+	struct option long_options[] = {{"mountpoint", required_argument, 0, 'm'},
+					{"multi-user", no_argument, 0, 'M'},
+					{"path", required_argument, 0, 'P'},
+					{"pool", required_argument, 0, 'p'},
+					{"container", required_argument, 0, 'c'},
+					{"sys-name", required_argument, 0, 'G'},
+					{"singlethread", no_argument, 0, 'S'},
+					{"thread-count", required_argument, 0, 't'},
+					{"foreground", no_argument, 0, 'f'},
+					{"enable-caching", no_argument, 0, 'E'},
+					{"enable-wb-cache", no_argument, 0, 'F'},
+					{"disable-caching", no_argument, 0, 'A'},
+					{"disable-wb-cache", no_argument, 0, 'B'},
+					{"version", no_argument, 0, 'v'},
+					{"help", no_argument, 0, 'h'},
+					{0, 0, 0, 0} };
 
 	rc = daos_debug_init(DAOS_LOG_DEFAULT);
 	if (rc != 0)
