@@ -1421,13 +1421,18 @@ dfuse_fseeko(FILE *stream, off_t offset, int whence)
 	int              rc;
 	int              fd;
 
+	DFUSE_TRA_DEBUG(stream, "fseeko(offset=%zd, whence=%#x) skipped", offset, whence);
+
 	fd = fileno(stream);
 	if (fd == -1)
 		goto do_real_fseeko;
 
 	rc = vector_get(&fd_table, fd, &entry);
-	if (rc != 0)
+	if (rc != 0) {
+		DFUSE_TRA_DEBUG(stream, "fseeko(fd=%d, offset=%zd, whence=%#x) skipped", fd, offset,
+				whence);
 		goto do_real_fseeko;
+	}
 
 	DFUSE_TRA_DEBUG(entry->fd_dfsoh,
 			"fseeko(fd=%d, offset=%zd, whence=%#x) intercepted, bypass=%s", fd, offset,
@@ -1437,9 +1442,11 @@ dfuse_fseeko(FILE *stream, off_t offset, int whence)
 		goto do_real_fseeko;
 
 	if (whence == SEEK_SET) {
+#if 0
 		off_t ni = __real_fseeko(stream, offset, whence);
 
 		DFUSE_TRA_ERROR(entry->fd_dfsoh, "Patching up, offset %#zx", ni);
+#endif
 		new_offset    = offset;
 		entry->fd_eof = false;
 
@@ -1473,10 +1480,14 @@ cleanup:
 
 	if (new_offset > 0)
 		return 0;
-	return new_offset;
+	rc = new_offset;
+	DFUSE_TRA_DEBUG(stream, "returning %d", rc);
+	return rc;
 
 do_real_fseeko:
-	return __real_fseeko(stream, offset, whence);
+	rc = __real_fseeko(stream, offset, whence);
+	DFUSE_TRA_DEBUG(stream, "returning %d", rc);
+	return rc;
 }
 
 DFUSE_PUBLIC void
@@ -1977,6 +1988,15 @@ do_real_fclose:
 	return __real_fclose(stream);
 }
 
+void
+memdump(char *ptr, int len)
+{
+	int i;
+
+	for (i = 0; i < len; i++)
+		DFUSE_TRA_INFO(ptr, "data is %d", ptr[i]);
+}
+
 DFUSE_PUBLIC size_t
 dfuse_fread(void *ptr, size_t size, size_t nmemb, FILE *stream)
 {
@@ -1994,9 +2014,15 @@ dfuse_fread(void *ptr, size_t size, size_t nmemb, FILE *stream)
 	if (fd == -1)
 		goto do_real_fread;
 
+	DFUSE_TRA_INFO(stream, "performing fread of %#zx %#zx", size, nmemb);
+
 	rc = vector_get(&fd_table, fd, &entry);
-	if (rc != 0)
+	if (rc != 0) {
+		off_t offset = ftello(stream);
+
+		DFUSE_TRA_INFO(stream, "forwarding fread from %#zx", offset);
 		goto do_real_fread;
+	}
 
 	if (drop_reference_if_disabled(entry))
 		goto do_real_fread;
@@ -2025,10 +2051,20 @@ dfuse_fread(void *ptr, size_t size, size_t nmemb, FILE *stream)
 
 	vector_decref(&fd_table, entry);
 
+	DFUSE_TRA_INFO(entry->fd_dfsoh, "performed %#zx reads", nread);
+
+	memdump(ptr, nread * size);
+
 	return nread;
 
 do_real_fread:
-	return __real_fread(ptr, size, nmemb, stream);
+	nread = __real_fread(ptr, size, nmemb, stream);
+
+	DFUSE_TRA_INFO(stream, "performed %#zx reads", nread);
+
+	memdump(ptr, nread * size);
+
+	return nread;
 }
 
 DFUSE_PUBLIC size_t
