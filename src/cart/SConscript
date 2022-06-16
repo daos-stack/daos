@@ -20,7 +20,6 @@ def parse_pp(env, pp_targets):
     results = []
     scope = r"'/struct [^ ]*_\(in\|out\) {/,/};/p'"
     sed_e = r"-e 's/\s\s*/ /g' -e 's/};struct /};\nstruct /g'"
-    tgts = ""
     for tgt in pp_targets:
         fname = f"{tgt.abspath}_grep"
         cmd = f"sed -n {scope} $SOURCE | tr -d '\\n' | sed {sed_e} > $TARGET"

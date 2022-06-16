@@ -309,11 +309,13 @@ class Configure():
     def Finish(self):
         """Fake finish"""
 
+
 class Literal():
     """Fake Literal"""
 
     def __init__(self, *_args, **_kw):
         """constructor"""
+
 
 class Dir():
     """Fake Dir"""
@@ -325,80 +327,101 @@ class Dir():
         """Fake srcnode"""
         return self
 
+
 class File():
     """Fake File"""
 
+
 def VariantDir(*_args, **_kw):
     """Fake VariantDir"""
+
 
 def AddOption(*_args, **_kw):
     """Fake AddOption"""
     return True
 
+
 def GetOption(*_args, **_kw):
     """Fake GetOption"""
     return []
 
+
 def SetOption(*_args, **_kw):
     """Fake SetOption"""
     return True
+
 
 class Help():
     """Fake Help"""
     def __init__(self, *_args, **_kw):
         """constructor"""
 
+
 def Glob(*_args):
     """Fake Glob"""
     return []
+
 
 def Split(*_args):
     """Fake Split"""
     return []
 
+
 def Exit(status):
     """Fake Exit"""
     sys.exit(status)
 
+
 def Import(*_args):
     """Fake Import"""
+
 
 def Export(*_args):
     """Fake Export"""
 
+
 def Default(*_args):
     """Fake Default"""
+
 
 def Delete(*_args, **_kw):
     """Fake Delete"""
     return ["fake"]
 
+
 def AlwaysBuild(*_args):
     """Fake AlwaysBuild"""
+
 
 def Copy(*_args, **_kw):
     """Fake Copy"""
     return ["fake"]
 
+
 def Command(*_args, **_kw):
     """Fake Command"""
     return ["fake"]
+
 
 def Execute(*_args, **_kw):
     """Fake Execute"""
     return ["fake"]
 
+
 def Builder(*_args, **_kw):
     """Fake Builder"""
     return ["fake"]
+
 
 def WhereIs(path):
     """Fake WhereIs"""
     return ''
 
+
 def Platform():
     """Fake Platform"""
     return ''
+
 
 def Depends(*_args, **_kw):
     """Fake Depends"""
