@@ -46,7 +46,7 @@ class DaosBuild(DfuseTestBase):
             Create Posix container
             Mount dfuse
             Checkout and build DAOS sources.
-        :avocado: tags=all,full_regression
+        :avocado: tags=all,daily_regression
         :avocado: tags=vm
         :avocado: tags=daosio,dfuse
         :avocado: tags=dfusedaosbuild
@@ -65,7 +65,7 @@ class DaosBuild(DfuseTestBase):
 
         # How long to cache things for, if caching is enabled.
         cache_time = '30m'
-        build_time = 15
+        build_time = 30
 
         if cache_mode == 'writeback':
             cont_attrs['dfuse-data-cache'] = 'on'

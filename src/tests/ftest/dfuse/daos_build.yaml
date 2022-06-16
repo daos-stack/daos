@@ -1,14 +1,17 @@
 hosts:
   test_servers:
     - server-A
+    - server-B
+    - server-C
+    - server-D
   test_clients:
-    - client-C
+    - client-E
 # Hard limit the test at three hours, however individual tests have lower timeouts.
 timeout: 10800
 server_config:
   name: daos_server
 pool:
-  size: 5GiB
+  size: 8GiB
   control_method: dmg
 container:
   type: POSIX
@@ -27,12 +30,12 @@ dfuse: !mux
     mount_dir: "/tmp/daos_dfuse"
     disable_wb_cache: true
     name: "metadata"
-  nocache:
-    !filter-only : "/run/intercept/off"  # yamllint disable-line rule:colons
-    mount_dir: "/tmp/daos_dfuse/"
-    disable_wb_cache: true
-    disable_caching: true
-    name: "nocache"
+#  nocache:
+#    !filter-only : "/run/intercept/off"  # yamllint disable-line rule:colons
+#    mount_dir: "/tmp/daos_dfuse/"
+#    disable_wb_cache: true
+#    disable_caching: true
+#    name: "nocache"
 intercept: !mux
   off:
     use_intercept: false
