@@ -113,7 +113,7 @@ dfuse_cb_setattr(fuse_req_t req, struct dfuse_inode_entry *ie, struct stat *attr
 
 	attr->st_ino = ie->ie_stat.st_ino;
 
-	ie->ie_stat  = *attr;
+	ie->ie_stat = *attr;
 
 	DFUSE_REPLY_ATTR(ie, req, attr);
 	return;

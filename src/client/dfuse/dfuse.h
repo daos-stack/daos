@@ -368,13 +368,13 @@ struct fuse_lowlevel_ops dfuse_ops;
 
 #define DFUSE_REPLY_ATTR(ie, req, attr)                                                            \
 	do {                                                                                       \
-		int             __rc;                                                              \
+		int    __rc;                                                                       \
 		double timeout = 0;                                                                \
 		DFUSE_TRA_DEBUG(ie, "Returning attr inode %#lx mode %#o size %zi", (attr)->st_ino, \
 				(attr)->st_mode, (attr)->st_size);                                 \
-		if (atomic_load_relaxed(&(ie)->ie_il_count) == 0) {	                           \
+		if (atomic_load_relaxed(&(ie)->ie_il_count) == 0) {                                \
 			struct timespec now;                                                       \
-			timeout = (ie)->ie_dfs->dfc_attr_timeout;	                           \
+			timeout = (ie)->ie_dfs->dfc_attr_timeout;                                  \
 			clock_gettime(CLOCK_MONOTONIC_COARSE, &now);                               \
 			(ie)->ie_attr_last_update = now;                                           \
 		}                                                                                  \
